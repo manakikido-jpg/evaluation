@@ -1,0 +1,7 @@
+# 自分のパソコンで試す用（ドメイン・HTTPS なし）
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build db bot web
+# 管理画面は http://localhost:3000 で開く（.env の WEB_BASE_URL も http://localhost:3000 にする）
+services:
+  web:
+    ports:
+      - "127.0.0.1:3000:3000"
