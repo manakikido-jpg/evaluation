@@ -62,6 +62,10 @@
    （権限: チャンネルを見る・メッセージ送信・埋め込みリンク・メッセージ履歴を読む・ロールの管理・メンバーをキック・メンバーを BAN）
 
 ### 2. サーバー側の準備
+
+**自動（おすすめ）**: BOT のロールに「管理者」を付けてから `docker compose run --rm setup --guild （サーバー ID）` を実行すると、下の 1〜3 と「3. ID を設定ファイルに書く」をまとめて行う（テスト用は `--minimal`、確認だけは `--dry-run`）。終わったら「管理者」を OFF に戻す。
+
+**手で作る場合**:
 1. ロールを作る: 🔰参拝者 / 🍃氏子 / 🎋世話役 / 🏮総代 / 🎐神職 / ⛩宮司 / 👹厄年
 2. **サーバー設定 → ロール** で、BOT のロールを 🔰参拝者〜🏮総代・👹厄年 より**上**に移動する（下にあると付け外しできない）
    - 🎐神職 のロールには「メンバーをタイムアウト」権限を付ける（神職用コマンドが表示されるようになる）
@@ -155,6 +159,7 @@ npm run db:generate # src/db/schema.ts を変えたらマイグレーション�
 | `src/services/admission.ts` / `applications.ts` / `soudan.ts` | 入鯖・宵参り申請、お参り期間、年齢区分、相談 |
 | `src/services/settings.ts` | 管理画面で変えた設定（ファイルの設定に重ねる） |
 | `src/discord/admission.ts` | 申請パネル・申請カード・相談・お参り判定（Discord 側） |
+| `src/setup/` / `src/scripts/setup-guild.ts` | ロールとチャンネルの自動作成（配置は `src/setup/layout.ts`） |
 | `src/web/` | 管理画面（社務所 Web） |
 | `src/db/schema.ts` / `drizzle/` | テーブル定義とマイグレーション |
 | `config/guild.example.json` | サーバーの ID と役職の設定例 |

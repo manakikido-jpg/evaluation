@@ -41,6 +41,16 @@ services:
       timeout: 5s
       start_period: 30s
 
+  # ロールとチャンネルを自動で作る（必要なときだけ実行）
+  #   docker compose run --rm setup --guild <サーバー ID> [--minimal] [--dry-run]
+  setup:
+    build: .
+    profiles: ["setup"]
+    entrypoint: ["node", "dist/scripts/setup-guild.js"]
+    env_file: .env
+    volumes:
+      - ./config:/app/config
+
   # HTTPS（証明書を自動で取得・更新）
   caddy:
     image: caddy:2

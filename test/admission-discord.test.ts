@@ -122,7 +122,7 @@ describe('入鯖申請（Discord）', () => {
     expect(denied.replies[0]?.content).toBe('神職・宮司のみ使えます。');
     const ok = command(STAFF, [ROLE.shinshoku], 'panel', { sub: 'apply' });
     await app.onInteraction(ok.i as never);
-    expect(sent[0]?.payload.components?.[0]?.components[0]?.data.custom_id).toBe('apply:start');
+    expect((sent[0]?.payload as unknown as { components: { components: { custom_id: string }[] }[] }).components[0]?.components[0]?.custom_id).toBe('apply:start');
   });
 
   it('ボタン → 年齢区分 → フォーム → #申請受付 にカード → 承認', async () => {

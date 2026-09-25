@@ -34,6 +34,7 @@ import { getMember } from '../services/members.js';
 import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
+import { panelMessage } from './panels.js';
 import { SHU } from './views.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -121,27 +122,7 @@ export class AdmissionApp {
     const kind = i.options.getSubcommand();
     const channel = i.channel;
     if (!channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', ...EPHEMERAL }));
-    if (kind === 'apply') {
-      const embed = new EmbedBuilder()
-        .setColor(SHU)
-        .setTitle('⛩ 社務所 ― 入鯖申請')
-        .setDescription(
-          [
-            '咲楽ノ宮へようこそ。下のボタンから入鯖を申請してください。',
-            '',
-            '・13 歳以上の方が参加できます',
-            '・申請の内容は神職だけが見ます',
-            '・承認されると 🔰参拝者 になり、お参り期間が始まります',
-          ].join('\n'),
-        );
-      await channel.send({ embeds: [embed.toJSON()], components: [row(btn('apply:start', '入鯖を申請する', ButtonStyle.Primary))] });
-    } else {
-      const embed = new EmbedBuilder()
-        .setColor(SHU)
-        .setTitle('🔞 宵参りの申請（18 歳以上）')
-        .setDescription('宵宮（18 歳以上だけのエリア）に入るための申請です。入鯖のときに「18 歳以上」と申告した方だけ申請できます。');
-      await channel.send({ embeds: [embed.toJSON()], components: [row(btn('yoimairi:start', '宵参りを申請する', ButtonStyle.Primary))] });
-    }
+    await channel.send(panelMessage(kind === 'apply' ? 'apply' : 'yoimairi'));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 

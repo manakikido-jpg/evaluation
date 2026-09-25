@@ -86,15 +86,13 @@ cd evaluation
 
 ---
 
-## 4. 設定ファイル
+## 4. 設定ファイルとサーバーの準備
 
-[test-checklist.md](test-checklist.md) の「0-1〜0-3」で、BOT・ロール・チャンネルを用意しておく。
+[test-checklist.md](test-checklist.md) の「0-1」で BOT を作り、サーバーに招待しておく。
 
 ```bash
 cp .env.example .env
 nano .env                       # 保存は Ctrl+O → Enter、終了は Ctrl+X
-cp config/guild.example.json config/guild.json
-nano config/guild.json
 ```
 
 `.env` に書くもの:
@@ -107,7 +105,18 @@ SHAMUSHO_DOMAIN=shamusho.（あなたのドメイン）
 ```
 > `.env` と `config/guild.json` は Git に入らない（`.gitignore` 済み）。トークンを他人に見せない・送らない。
 
----
+### ロール・チャンネル・`config/guild.json` を自動で作る
+1. Discord で BOT のロールに「**管理者**」を付ける（セットアップの間だけ）
+2. サーバー名を右クリック →「サーバー ID をコピー」（開発者モードを ON にしておく）
+3. 実行:
+```bash
+docker compose run --rm --build setup --guild （サーバー ID） --dry-run   # 何を作るか確認だけ
+docker compose run --rm setup --guild （サーバー ID）                     # 本当に作る（テスト用は --minimal を付ける）
+```
+- ロール 8 個・カテゴリ 7 個・チャンネル約 45 個を作り、見える範囲も設定する
+- `config/guild.json` に ID を書き込み、`#社務所` に申請ボタンを置く
+- 何度実行しても安全（同じ名前のものは作らない）。足りないものだけ作る
+4. 自分に「⛩ 宮司」ロールを付け、BOT の「管理者」を OFF に戻す
 
 ## 5. ドメイン
 
