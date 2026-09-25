@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sakura
+      POSTGRES_PASSWORD: sakura
+      POSTGRES_DB: sakuranomiya
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sakura -d sakuranomiya"]
+      interval: 5s
+      retries: 10
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./config/guild.json:/app/config/guild.json:ro
+
+volumes:
+  pgdata:

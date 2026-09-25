@@ -279,7 +279,7 @@
 |---|---|
 | 言語 | TypeScript + discord.js v14 |
 | DB | **PostgreSQL**（1000 人規模・集計が多いので SQLite ではなく最初から Postgres） |
-| ORM | Prisma |
+| ORM | Drizzle ORM（テストはメモリ上の PostgreSQL「PGlite」で動かせる） |
 | 実行 | Docker。VPS（メモリ 2GB 程度）で常時稼働 |
 | 監視 | ヘルスチェック + 外部の死活監視。落ちたら神職に通知 |
 | バックアップ | DB を毎日自動バックアップ（7 日分） |
@@ -374,17 +374,17 @@ erDiagram
 ```
 evaluation/
 ├─ src/
-│  ├─ index.ts
-│  ├─ config.ts
-│  ├─ commands/        # スラッシュコマンド・右クリックメニュー
-│  ├─ components/      # ボタン・モーダル（朱印・申請・判定・部屋操作・募集）
-│  ├─ events/          # guildMemberAdd/Remove, voiceStateUpdate（一時 VC）, messageCreate（絵馬）
-│  ├─ services/        # shuin, rank, title, application, omairi, tempvc, boshu, yaku, soudan
-│  ├─ jobs/            # 番付更新、お参り期間チェック、厄の自然消滅、空き部屋の掃除
-│  └─ lib/             # DB・ロガー・権限チェック
-├─ prisma/schema.prisma
+│  ├─ index.ts          # 起動
+│  ├─ config.ts         # 環境変数と config/guild.json の読み込み・検証
+│  ├─ domain/           # 役職・格・昇格の判定（Discord に依存しない）
+│  ├─ services/         # 朱印の保存・集計、押す手順
+│  ├─ discord/          # コマンド定義・ボタン・表示・ロール変更・発表
+│  ├─ db/               # テーブル定義・接続
+│  └─ lib/              # ロガー・排他処理
+├─ drizzle/             # マイグレーション（起動時に自動で適用）
+├─ config/guild.example.json
+├─ test/
 ├─ Dockerfile / docker-compose.yml
-├─ .env.example        # DISCORD_TOKEN, CLIENT_ID, GUILD_ID, DATABASE_URL
 └─ docs/
 ```
 
