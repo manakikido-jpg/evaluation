@@ -4,6 +4,7 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
+  type Guild,
   type GuildMember,
   type Interaction,
   type Message,
@@ -15,6 +16,8 @@ import { decidePromotion, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
+import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
+import { walletOf } from '../services/economy.js';
 import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf } from '../services/shuin.js';
 import { COMMAND, parseShuinId } from './ids.js';
@@ -56,6 +59,8 @@ export function toSnapshot(m: GuildMember): MemberSnapshot {
 export class ShuinApp {
   private readonly lock = new KeyedLock();
   private readonly activity: ActivityTracker;
+  /** 発言数（1 分ごとにまとめて DB へ） */
+  private messageCounts = new Map<string, number>();
 
   constructor(
     private readonly client: Client,
@@ -85,6 +90,29 @@ export class ShuinApp {
   async onMemberUpdate(m: GuildMember): Promise<void> {
     if (m.guild.id !== this.cfg.guildId) return;
     await upsertMember(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'upsertMember failed'));
+  }
+
+  /** 1 分ごと: 発言数を書き込み、通話している人に通話時間と花びらを足す */
+  async everyMinute(guild: Guild, now = new Date()): Promise<void> {
+    const counts = this.messageCounts;
+    this.messageCounts = new Map();
+    await addMessageCounts(this.db, counts, now).catch((err) => logger.warn({ err }, 'message count flush failed'));
+
+    const excluded = new Set(this.cfg.economy.excludedVoiceChannelIds);
+    if (guild.afkChannelId) excluded.add(guild.afkChannelId);
+    const channels = [...guild.channels.cache.values()]
+      .filter((c) => c.isVoiceBased())
+      .map((c) => ({
+        id: c.id,
+        members: [...c.members.values()].map((m) => ({ id: m.id, bot: m.user.bot, deaf: Boolean(m.voice.deaf) })),
+      }));
+    const ids = eligibleVoiceMembers(channels, excluded);
+    if (!ids.length) return;
+    const awarded = await voiceTick(this.db, this.cfg.economy, ids, now).catch((err) => {
+      logger.warn({ err }, 'voice tick failed');
+      return [];
+    });
+    if (awarded.length) logger.debug({ awarded: awarded.length }, 'voice coins awarded');
   }
 
   /** 発言・通話に入ったときに「最後の活動」を更新 */
@@ -131,6 +159,9 @@ export class ShuinApp {
 
   async onMessage(message: Message): Promise<void> {
     await this.onActivity(message.guildId, message.author.id, message.author.bot);
+    if (message.guildId === this.cfg.guildId && !message.author.bot) {
+      this.messageCounts.set(message.author.id, (this.messageCounts.get(message.author.id) ?? 0) + 1);
+    }
     const ema = this.cfg.channels.ema;
     if (!ema || message.channelId !== ema || message.author.bot || !message.inGuild()) return;
     // 返信や固定メッセージなどは除き、自己紹介の投稿にだけ付ける
@@ -192,7 +223,8 @@ export class ShuinApp {
     // 表示のついでに昇格漏れ（BOT 停止中・ロール付与の失敗など）を直す
     await this.lock.run(ownerId, () => this.ensurePromotion(owner));
 
-    const data = await goshuinchoOf(this.db, ownerId);
+    const [data, wallet] = await Promise.all([goshuinchoOf(this.db, ownerId), walletOf(this.db, ownerId)]);
+    const e = this.cfg.economy;
     await this.reply(
       interaction,
       goshuinchoReply(
@@ -204,6 +236,7 @@ export class ShuinApp {
           roleIds: [...owner.roles.cache.keys()],
         },
         data,
+        { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance },
       ),
     );
   }

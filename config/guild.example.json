@@ -9,11 +9,68 @@
     "yakudoshi": "000000000000000010"
   },
   "ranks": [
-    { "key": "sanpaisha", "name": "参拝者", "emoji": "🔰", "roleId": "000000000000000101", "weight": 1, "auto": true, "requiredGoen": 0 },
-    { "key": "ujiko", "name": "氏子", "emoji": "🍃", "roleId": "000000000000000102", "weight": 2, "auto": true, "requiredGoen": 20 },
-    { "key": "sewayaku", "name": "世話役", "emoji": "🎋", "roleId": "000000000000000103", "weight": 3, "auto": true, "requiredGoen": 100 },
-    { "key": "sodai", "name": "総代", "emoji": "🏮", "roleId": "000000000000000104", "weight": 4, "auto": true, "requiredGoen": 300 },
-    { "key": "shinshoku", "name": "神職", "emoji": "🎐", "roleId": "000000000000000105", "weight": 5, "auto": false },
-    { "key": "guji", "name": "宮司", "emoji": "⛩", "roleId": "000000000000000106", "weight": 10, "auto": false }
-  ]
+    {
+      "key": "sanpaisha",
+      "name": "参拝者",
+      "emoji": "🔰",
+      "roleId": "000000000000000101",
+      "weight": 1,
+      "auto": true,
+      "requiredGoen": 0
+    },
+    {
+      "key": "ujiko",
+      "name": "氏子",
+      "emoji": "🍃",
+      "roleId": "000000000000000102",
+      "weight": 2,
+      "auto": true,
+      "requiredGoen": 20
+    },
+    {
+      "key": "sewayaku",
+      "name": "世話役",
+      "emoji": "🎋",
+      "roleId": "000000000000000103",
+      "weight": 3,
+      "auto": true,
+      "requiredGoen": 100
+    },
+    {
+      "key": "sodai",
+      "name": "総代",
+      "emoji": "🏮",
+      "roleId": "000000000000000104",
+      "weight": 4,
+      "auto": true,
+      "requiredGoen": 300
+    },
+    {
+      "key": "shinshoku",
+      "name": "神職",
+      "emoji": "🎐",
+      "roleId": "000000000000000105",
+      "weight": 5,
+      "auto": false
+    },
+    {
+      "key": "guji",
+      "name": "宮司",
+      "emoji": "⛩",
+      "roleId": "000000000000000106",
+      "weight": 10,
+      "auto": false
+    }
+  ],
+  "economy": {
+    "currencyName": "花びら",
+    "currencyEmoji": "🌸",
+    "voicePer10Min": 5,
+    "voiceDailyCap": 150,
+    "excludedVoiceChannelIds": [],
+    "shuinGive": 3,
+    "shuinReceive": 5,
+    "menzaifuPrice": 300,
+    "menzaifuMaxUses": 1
+  }
 }

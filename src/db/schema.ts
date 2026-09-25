@@ -108,3 +108,85 @@ export type Member = typeof members.$inferSelect;
 export type MemberEvent = typeof memberEvents.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type AdminSession = typeof adminSessions.$inferSelect;
+
+/** 通貨（花びら）の残高。変更は必ず coin_tx と同じトランザクションで行う */
+export const wallets = pgTable(
+  'wallets',
+  {
+    memberId: text('member_id').primaryKey(),
+    balance: integer('balance').notNull().default(0),
+    /** これまでに貯めた合計（使っても減らない） */
+    lifetimeEarned: integer('lifetime_earned').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('wallets_balance_nonneg', sql`${t.balance} >= 0`)],
+);
+
+/** 通貨の入出金の記録 */
+export const coinTx = pgTable(
+  'coin_tx',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    /** 増えたら正、減ったら負 */
+    amount: integer('amount').notNull(),
+    /** voice / shuin_give / shuin_receive / shuin_revoke / menzaifu / adjust */
+    reason: text('reason').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('coin_tx_member_idx').on(t.memberId, t.at)],
+);
+
+/** 厄（警告）。cleared_at が null のものが「今ついている厄」 */
+export const yaku = pgTable(
+  'yaku',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    /** normal: 通常の厄 / instant_ban: 一発 BAN */
+    kind: text('kind').notNull().default('normal'),
+    reason: text('reason').notNull(),
+    issuedBy: text('issued_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    clearedAt: timestamp('cleared_at', { withTimezone: true }),
+    clearedBy: text('cleared_by'),
+    /** menzaifu: 免罪符 / staff: 神職が取り消し */
+    clearedReason: text('cleared_reason'),
+    clearedNote: text('cleared_note'),
+  },
+  (t) => [index('yaku_member_idx').on(t.memberId, t.createdAt)],
+);
+
+/** 神職どうしの申し送りメモ（本人には見えない） */
+export const memos = pgTable(
+  'memos',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    body: text('body').notNull(),
+    authorId: text('author_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('memos_member_idx').on(t.memberId, t.createdAt)],
+);
+
+/** 日ごとの活動（発言の本文は保存しない）。date は日本時間の日付 */
+export const activityDaily = pgTable(
+  'activity_daily',
+  {
+    memberId: text('member_id').notNull(),
+    date: text('date').notNull(),
+    messageCount: integer('message_count').notNull().default(0),
+    vcMinutes: integer('vc_minutes').notNull().default(0),
+    /** その日に通話で貯めた通貨（1 日の上限の判定用） */
+    vcCoins: integer('vc_coins').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.date] })],
+);
+
+export type Wallet = typeof wallets.$inferSelect;
+export type CoinTx = typeof coinTx.$inferSelect;
+export type Yaku = typeof yaku.$inferSelect;
+export type Memo = typeof memos.$inferSelect;
+export type ActivityDaily = typeof activityDaily.$inferSelect;

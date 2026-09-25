@@ -11,15 +11,23 @@ import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
 import { eventsOf, getMember, homeStats, listMembers, namesOf, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
+import { recentActivity } from '../services/activity.js';
+import { recentCoinTx, walletOf } from '../services/economy.js';
+import { checkTarget, clearYaku, giveYaku, instantBan, kickMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
+import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
+import type { DiscordActions } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
 import { createSession, deleteSession, findSession, markChecked, randomToken, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
+import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
 
 export type WebDeps = {
   db: Db;
   cfg: GuildConfig;
   api: DiscordApi;
+  /** ロール変更・DM・BAN・キック（BOT のトークンで行う） */
+  discord: DiscordActions;
   /** 例: https://shamusho.example.com（末尾の / なし） */
   baseUrl: string;
   now?: () => Date;
@@ -165,6 +173,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members', requireAdmin);
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
+  app.use('/yaku', requireAdmin);
   app.use('/logout', requireAdmin);
 
   app.post('/logout', requireCsrf, async (c) => {
@@ -177,7 +186,8 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/', async (c) => {
     const t = now();
-    const [stats, recent] = await Promise.all([homeStats(db, startOfTodayJst(t)), listAudit(db, { limit: 10 })]);
+    const [base, recent, yakuRows] = await Promise.all([homeStats(db, startOfTodayJst(t)), listAudit(db, { limit: 10 }), membersWithYaku(db)]);
+    const stats = { ...base, yaku: yakuRows.length };
     const names = await namesOf(db, recent.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
     return c.html(<HomePage session={c.get('session')} stats={stats} recent={recent} names={names} now={t} />);
   });
@@ -206,17 +216,29 @@ export function createWebApp(deps: WebDeps) {
     if (!/^\d{17,20}$/.test(id)) return c.html(<NotFoundPage session={c.get('session')} />, 404);
     const member = await getMember(db, id);
     if (!member) return c.html(<NotFoundPage session={c.get('session')} />, 404);
-    const [card, history, events, audits] = await Promise.all([
+    const session = c.get('session');
+    const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
       shuinHistory(db, id),
       eventsOf(db, id),
       listAudit(db, { targetId: id, limit: 50 }),
+      yakuHistory(db, id),
+      activeYakuCount(db, id),
+      menzaifuUsed(db, id),
+      walletOf(db, id),
+      recentCoinTx(db, id, 15),
+      recentActivity(db, id, 14),
+      memosOf(db, id),
+      checkTarget(modCtx, actorOf(session), id),
     ]);
     const names = await namesOf(db, [
       ...history.received.map((r) => r.other),
       ...history.given.map((r) => r.other),
       ...audits.map((a) => a.actorId),
+      ...yakuRows.flatMap((y) => [y.issuedBy, y.clearedBy ?? '']),
+      ...memoRows.map((m) => m.authorId),
     ]);
+    const flash = c.req.query('msg');
     return c.html(
       <MemberPage
         session={c.get('session')}
@@ -228,8 +250,152 @@ export function createWebApp(deps: WebDeps) {
         audits={audits}
         names={names}
         now={now()}
+        flash={flash && FLASH[flash] ? flash : undefined}
+        moderation={
+          <ModerationSection
+            cfg={cfg}
+            memberId={id}
+            csrf={session.csrfToken}
+            canModerate={!denied}
+            deniedText={denied ? FLASH[`denied_${denied}`]?.text : undefined}
+            yaku={yakuRows}
+            activeYaku={activeYaku}
+            menzaifuUsed={used}
+            wallet={wallet}
+            coinTx={coinTx}
+            activity={activity}
+            memos={memoRows}
+            names={names}
+          />
+        }
       />,
     );
+  });
+
+  // ───────── 厄・BAN・キック・メモ ─────────
+
+  const modCtx: ModCtx = { db, cfg, discord: deps.discord };
+  const actorOf = (s: AdminSession): Actor => ({ id: s.userId, level: s.level === 'guji' ? 'guji' : 'shinshoku', via: 'web' });
+  const back = (c: Context<Env>, id: string, msg: string) => c.redirect(`/members/${id}?msg=${msg}`);
+  const deniedCode = (d: Denied) => `denied_${d}`;
+  const field = (body: Record<string, unknown>, k: string, max = 300) =>
+    (typeof body[k] === 'string' ? (body[k] as string) : '').trim().slice(0, max);
+  const validId = (id: string) => /^\d{17,20}$/.test(id);
+
+  app.use('/members/:id/*', requireCsrf);
+
+  app.post('/members/:id/yaku', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const body = await c.req.parseBody();
+    const reason = field(body, 'reason');
+    const note = field(body, 'note');
+    if (!cfg.moderation.yakuReasons.includes(reason) && reason !== 'その他') return back(c, id, 'invalid');
+    if (reason === 'その他' && !note) return back(c, id, 'invalid');
+    const text = note ? (reason === 'その他' ? note : `${reason}（${note}）`) : reason;
+    const session = c.get('session');
+    const r = await giveYaku(modCtx, actorOf(session), id, text, body.confirm === 'yes');
+    if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
+    if (r.status === 'needs_confirm') {
+      const target = await getMember(db, id);
+      return c.html(
+        <ConfirmPage
+          session={session}
+          title="厄 2 つ目（BAN）"
+          message="この方にはすでに厄が 1 つあります。厄を付けると BAN になります。"
+          targetName={target?.displayName ?? id}
+          action={`/members/${id}/yaku`}
+          fields={{ reason, note }}
+          button="厄を付けて BAN する"
+          backUrl={`/members/${id}`}
+        />,
+      );
+    }
+    if (r.status === 'banned') return back(c, id, r.banOk ? 'banned' : 'ban_failed');
+    return back(c, id, r.dmSent ? 'warned' : 'warned_nodm');
+  });
+
+  app.post('/members/:id/yaku/clear', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const note = field(await c.req.parseBody(), 'note');
+    if (!note) return back(c, id, 'invalid');
+    const r = await clearYaku(modCtx, actorOf(c.get('session')), id, note);
+    if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
+    return back(c, id, r.status === 'cleared' ? 'cleared' : 'no_yaku');
+  });
+
+  app.post('/members/:id/ban', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const body = await c.req.parseBody();
+    const reason = field(body, 'reason');
+    const note = field(body, 'note');
+    if (!cfg.moderation.instantBanReasons.includes(reason)) return back(c, id, 'invalid');
+    const session = c.get('session');
+    if (body.confirm !== 'yes') {
+      const denied = await checkTarget(modCtx, actorOf(session), id);
+      if (denied) return back(c, id, deniedCode(denied));
+      const target = await getMember(db, id);
+      return c.html(
+        <ConfirmPage
+          session={session}
+          title="一発 BAN"
+          message="重大な違反として、厄を経ずに BAN します。本人には理由だけを DM で知らせます。"
+          targetName={target?.displayName ?? id}
+          action={`/members/${id}/ban`}
+          fields={{ reason, note }}
+          button="BAN する"
+          backUrl={`/members/${id}`}
+        />,
+      );
+    }
+    const r = await instantBan(modCtx, actorOf(session), id, reason, note);
+    if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
+    return back(c, id, r.banOk ? 'banned' : 'ban_failed');
+  });
+
+  app.post('/members/:id/kick', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const body = await c.req.parseBody();
+    const reason = field(body, 'reason');
+    if (!reason) return back(c, id, 'invalid');
+    const session = c.get('session');
+    if (body.confirm !== 'yes') {
+      const denied = await checkTarget(modCtx, actorOf(session), id);
+      if (denied) return back(c, id, deniedCode(denied));
+      const target = await getMember(db, id);
+      return c.html(
+        <ConfirmPage
+          session={session}
+          title="キック"
+          message="サーバーから退出させます（招待があればまた参加できます）。"
+          targetName={target?.displayName ?? id}
+          action={`/members/${id}/kick`}
+          fields={{ reason }}
+          button="キックする"
+          backUrl={`/members/${id}`}
+        />,
+      );
+    }
+    const r = await kickMember(modCtx, actorOf(session), id, reason);
+    if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
+    return back(c, id, r.kickOk ? 'kicked' : 'kick_failed');
+  });
+
+  app.post('/members/:id/memo', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const body = field(await c.req.parseBody(), 'body', 1000);
+    if (!body) return back(c, id, 'invalid');
+    const r = await writeMemo(modCtx, actorOf(c.get('session')), id, body);
+    return back(c, id, r === 'ok' ? 'memo' : 'denied_not_found');
+  });
+
+  app.get('/yaku', async (c) => {
+    const rows = await membersWithYaku(db);
+    return c.html(<YakuPage session={c.get('session')} rows={rows} now={now()} />);
   });
 
   app.get('/audit', async (c) => {

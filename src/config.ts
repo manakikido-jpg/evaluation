@@ -20,6 +20,44 @@ export const rankSchema = z.object({
 
 export type Rank = z.infer<typeof rankSchema>;
 
+export const economySchema = z.object({
+  /** 通貨の名前と絵文字 */
+  currencyName: z.string().default('花びら'),
+  currencyEmoji: z.string().default('🌸'),
+  /** 通話 10 分ごとにもらえる量（2 人以上いる通話のみ） */
+  voicePer10Min: z.number().int().min(0).default(5),
+  /** 通話でもらえる 1 日の上限 */
+  voiceDailyCap: z.number().int().min(0).default(150),
+  /** 数えない通話チャンネル（AFK など） */
+  excludedVoiceChannelIds: z.array(snowflake).default([]),
+  /** 朱印を押した人・押された人がもらえる量 */
+  shuinGive: z.number().int().min(0).default(3),
+  shuinReceive: z.number().int().min(0).default(5),
+  /** 免罪符の値段（考え中のため仮の値） */
+  menzaifuPrice: z.number().int().positive().default(300),
+  /** 免罪符を買える回数（1 人あたり、ずっと） */
+  menzaifuMaxUses: z.number().int().min(0).default(1),
+});
+
+export type EconomyConfig = z.infer<typeof economySchema>;
+
+/** 一発 BAN の理由（定型） */
+export const DEFAULT_INSTANT_BAN_REASONS = [
+  '18 歳未満への恋愛・性的な目的での接触',
+  '個人情報の晒し',
+  '荒らし・レイド・スパムの大量投稿',
+  'なりすまし・詐欺',
+  '違法な内容の投稿',
+];
+
+/** 厄の理由（定型） */
+export const DEFAULT_YAKU_REASONS = [
+  '誹謗中傷',
+  '迷惑行為（通話）',
+  '大人の話題を全年齢の場所で',
+  'スパム・宣伝',
+];
+
 export const guildConfigSchema = z
   .object({
     guildId: snowflake,
@@ -38,6 +76,13 @@ export const guildConfigSchema = z
       })
       .default({}),
     ranks: z.array(rankSchema).min(1),
+    economy: economySchema.default(economySchema.parse({})),
+    moderation: z
+      .object({
+        yakuReasons: z.array(z.string().min(1)).default(DEFAULT_YAKU_REASONS),
+        instantBanReasons: z.array(z.string().min(1)).default(DEFAULT_INSTANT_BAN_REASONS),
+      })
+      .default({ yakuReasons: DEFAULT_YAKU_REASONS, instantBanReasons: DEFAULT_INSTANT_BAN_REASONS }),
     /** 管理画面に入れるロール（省略時は役職キー shinshoku / guji のロール） */
     admin: z
       .object({
@@ -73,6 +118,11 @@ const envSchema = z.object({
   GUILD_CONFIG: z.string().default('config/guild.json'),
   HEALTH_PORT: z.coerce.number().int().min(0).default(8080),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  /** 管理画面の URL（/member の結果から管理画面へリンクする。任意） */
+  WEB_BASE_URL: z
+    .string()
+    .optional()
+    .transform((u) => (u ? u.replace(/\/+$/, '') : undefined)),
 });
 
 export type Env = z.infer<typeof envSchema>;

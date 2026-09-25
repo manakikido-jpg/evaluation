@@ -1,6 +1,7 @@
 import type { GuildConfig, Rank } from '../config.js';
 import type { Db } from '../db/client.js';
 import { decidePromotion, highestRank, type Promotion } from '../domain/ranks.js';
+import { addCoins } from './economy.js';
 import { giveShuin, revokeShuin } from './shuin.js';
 
 /**
@@ -47,6 +48,13 @@ export async function giveFlow(
     giverRank: giverRank.key,
   });
   if (res.status === 'already') return { kind: 'already', weight: res.weight, goen: res.goen };
+
+  // 通貨は同じ相手とは最初の 1 回だけ（取り消して押し直しても増えない）
+  if (!res.restamped) {
+    const detail = { giverId: giver.id, receiverId: receiver.id };
+    if (cfg.economy.shuinGive > 0) await addCoins(db, giver.id, cfg.economy.shuinGive, 'shuin_give', detail);
+    if (cfg.economy.shuinReceive > 0) await addCoins(db, receiver.id, cfg.economy.shuinReceive, 'shuin_receive', detail);
+  }
 
   const promotion = decidePromotion(cfg.ranks, receiver.roleIds, res.goen);
   return {

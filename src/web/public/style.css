@@ -129,3 +129,29 @@ table.compact td, table.compact th { padding: 6px 8px; font-size: .9rem; }
   .top nav { order: 3; flex-basis: 100%; }
   .profile { flex-direction: column; }
 }
+
+/* 操作 */
+a.stat { color: var(--ink); }
+a.stat:hover { border-color: var(--shu); text-decoration: none; }
+.flash { padding: 10px 14px; border-radius: 8px; margin: 8px 0 12px; }
+.flash.ok { background: #e7f5ea; color: #1f5f2e; }
+.flash.warn { background: var(--sakura-2); color: var(--shu-dark); }
+@media (prefers-color-scheme: dark) {
+  .flash.ok { background: #1f3a26; color: #bfe6c8; }
+}
+.actions { display: grid; gap: 14px; }
+.actions form, .memo-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.actions h3 { flex-basis: 100%; margin: 0; font-size: .95rem; }
+h3 { font-size: .95rem; margin: 14px 0 6px; }
+.actions input, .actions select, .memo-form textarea, .confirm button, .actions button, .memo-form button {
+  font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink);
+}
+.actions input[type=text] { flex: 1 1 200px; }
+.memo-form textarea { flex: 1 1 100%; resize: vertical; }
+button { cursor: pointer; }
+button.danger { background: var(--shu); color: #fff; border-color: var(--shu); }
+button.danger:hover { background: var(--shu-dark); }
+.confirm { max-width: 560px; margin: 24px auto; }
+.confirm form { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+.confirm .cancel { padding: 7px 10px; }
+strong.big { font-size: 1.6rem; color: var(--shu); }

@@ -3,6 +3,9 @@ import type { Db } from '../src/db/client.js';
 import { listAudit } from '../src/services/audit.js';
 import { recordJoin } from '../src/services/members.js';
 import type { DiscordApi } from '../src/web/discordApi.js';
+import type { DiscordActions } from '../src/lib/discordRest.js';
+import { addCoins } from '../src/services/economy.js';
+import { activeYakuCount, memosOf } from '../src/services/yaku.js';
 import { createWebApp } from '../src/web/app.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -18,6 +21,14 @@ let clock: Date;
 let app: ReturnType<typeof createWebApp>;
 /** 偽の Discord で「誰としてログインするか」 */
 let loginAs: string;
+let actions: string[];
+const fakeActions: DiscordActions = {
+  addRole: async (_g, u, r) => void actions.push(`addRole ${u} ${r}`),
+  removeRole: async (_g, u, r) => void actions.push(`removeRole ${u} ${r}`),
+  sendDm: async (u) => (actions.push(`dm ${u}`), true),
+  ban: async (_g, u) => void actions.push(`ban ${u}`),
+  kick: async (_g, u) => void actions.push(`kick ${u}`),
+};
 
 const fakeApi: DiscordApi = {
   authorizeUrl: (state, redirect) => `https://discord.com/oauth2/authorize?state=${state}&redirect_uri=${encodeURIComponent(redirect)}`,
@@ -37,7 +48,8 @@ beforeEach(async () => {
     [USER, [ROLE.sanpaisha]],
   ]);
   clock = new Date('2026-09-25T12:00:00Z');
-  app = createWebApp({ db, cfg, api: fakeApi, baseUrl: BASE, now: () => clock });
+  actions = [];
+  app = createWebApp({ db, cfg, api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
   await recordJoin(db, {
     id: USER,
     username: 'sakura',
@@ -256,5 +268,115 @@ describe('画面', () => {
     expect((await app.request('/static/style.css')).headers.get('content-type')).toContain('text/css');
     expect((await app.request('/static/htmx.min.js')).status).toBe(200);
     expect((await app.request('/static/../../package.json')).status).toBe(404);
+  });
+});
+
+
+describe('厄・BAN・キック・メモ（管理画面）', () => {
+  async function csrfOf(session: string): Promise<string> {
+    const html = await (await get('/', session)).text();
+    return /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+  }
+  const post = (path: string, session: string, form: Record<string, string>) =>
+    app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(form).toString(),
+    });
+
+  it('CSRF トークンがない操作は拒否', async () => {
+    const s = await login(STAFF);
+    const res = await post(`/members/${USER}/yaku`, s, { reason: '誹謗中傷' });
+    expect(res.status).toBe(403);
+    expect(await activeYakuCount(db, USER)).toBe(0);
+  });
+
+  it('厄 1 つ目 → 2 つ目は確認画面 → 確認して BAN', async () => {
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    const first = await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: '誹謗中傷', note: '' });
+    expect(first.headers.get('location')).toBe(`/members/${USER}?msg=warned`);
+    expect(actions).toContain(`addRole ${USER} ${ROLE.yakudoshi}`);
+
+    const page = await get(`/members/${USER}?msg=warned`, s);
+    const html = await page.text();
+    expect(html).toContain('厄を付けました（1 つ目・注意）');
+    expect(html).toContain('👹 今 1 つ');
+
+    const second = await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: 'スパム・宣伝', note: '' });
+    expect(second.status).toBe(200);
+    expect(await second.text()).toContain('厄を付けて BAN する');
+    expect(actions.some((a) => a.startsWith('ban'))).toBe(false);
+
+    const confirmed = await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: 'スパム・宣伝', note: '', confirm: 'yes' });
+    expect(confirmed.headers.get('location')).toBe(`/members/${USER}?msg=banned`);
+    expect(actions).toContain(`ban ${USER}`);
+  });
+
+  it('「その他」は補足が必須・一覧にない理由は拒否', async () => {
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    expect((await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: 'その他', note: '' })).headers.get('location')).toContain('msg=invalid');
+    expect((await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: '勝手な理由' })).headers.get('location')).toContain('msg=invalid');
+    expect((await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: 'その他', note: '通話で大声' })).headers.get('location')).toContain('msg=warned');
+  });
+
+  it('一発 BAN は確認画面を通す', async () => {
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    const ask = await post(`/members/${USER}/ban`, s, { _csrf: csrf, reason: '個人情報の晒し', note: '住所' });
+    expect(await ask.text()).toContain('BAN する');
+    expect(actions).toEqual([]);
+    const done = await post(`/members/${USER}/ban`, s, { _csrf: csrf, reason: '個人情報の晒し', note: '住所', confirm: 'yes' });
+    expect(done.headers.get('location')).toContain('msg=banned');
+    expect(actions).toEqual([`dm ${USER}`, `ban ${USER}`]);
+  });
+
+  it('神職は神職に操作できない（画面にも操作欄が出ない）', async () => {
+    await recordJoin(db, { id: GUJI, username: 'guji', displayName: '宮司さん', avatarUrl: null, roleIds: [ROLE.guji], isBot: false, joinedAt: null });
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    const res = await post(`/members/${GUJI}/kick`, s, { _csrf: csrf, reason: 'x' });
+    expect(res.headers.get('location')).toContain('msg=denied_protected');
+    const html = await (await get(`/members/${GUJI}`, s)).text();
+    expect(html).not.toContain('厄を付ける</button>');
+  });
+
+  it('キック・メモ・厄の取り消し', async () => {
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: '誹謗中傷' });
+    const clear = await post(`/members/${USER}/yaku/clear`, s, { _csrf: csrf, note: '間違い' });
+    expect(clear.headers.get('location')).toContain('msg=cleared');
+    expect(actions).toContain(`removeRole ${USER} ${ROLE.yakudoshi}`);
+
+    const memo = await post(`/members/${USER}/memo`, s, { _csrf: csrf, body: '<b>様子見</b>' });
+    expect(memo.headers.get('location')).toContain('msg=memo');
+    expect((await memosOf(db, USER))[0]?.body).toBe('<b>様子見</b>');
+    const html = await (await get(`/members/${USER}`, s)).text();
+    expect(html).toContain('&lt;b&gt;様子見&lt;/b&gt;');
+
+    const ask = await post(`/members/${USER}/kick`, s, { _csrf: csrf, reason: '迷惑行為' });
+    expect(await ask.text()).toContain('キックする');
+    const kick = await post(`/members/${USER}/kick`, s, { _csrf: csrf, reason: '迷惑行為', confirm: 'yes' });
+    expect(kick.headers.get('location')).toContain('msg=kicked');
+  });
+
+  it('厄の一覧ページとホームの数字', async () => {
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: '誹謗中傷' });
+    const list = await (await get('/yaku', s)).text();
+    expect(list).toContain('さくら&lt;script&gt;');
+    const home = await (await get('/', s)).text();
+    expect(home).toMatch(/厄が付いている方<\/div><div class="value">1/);
+  });
+
+  it('花びらが表示される', async () => {
+    await addCoins(db, USER, 77, 'adjust');
+    const s = await login(STAFF);
+    const html = await (await get(`/members/${USER}`, s)).text();
+    expect(html).toContain('77');
+    expect(html).toContain('花びらの出入り');
   });
 });

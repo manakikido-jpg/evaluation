@@ -4,6 +4,7 @@ import { connectDb } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { createWebApp } from './app.js';
 import { createDiscordApi } from './discordApi.js';
+import { createDiscordActions } from '../lib/discordRest.js';
 
 async function main(): Promise<void> {
   const env = loadWebEnv();
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
       clientSecret: env.DISCORD_CLIENT_SECRET,
       botToken: env.DISCORD_TOKEN,
     }),
+    discord: createDiscordActions(env.DISCORD_TOKEN),
     baseUrl: env.WEB_BASE_URL,
   });
 

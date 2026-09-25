@@ -15,6 +15,13 @@
       "when": 1790353466067,
       "tag": "0001_admin_base",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790354427414,
+      "tag": "0002_moderation_economy",
+      "breakpoints": true
     }
   ]
 }

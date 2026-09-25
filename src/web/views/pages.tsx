@@ -13,7 +13,9 @@ import {
   memberRankLabel,
   rankNameByKey,
 } from '../format.js';
+import type { Child } from 'hono/jsx';
 import { Avatar, Layout } from './layout.js';
+import { Flash } from './moderation.js';
 
 type Names = Map<string, string>;
 
@@ -50,7 +52,7 @@ export function LoginPage(props: { error?: string }) {
 
 export function HomePage(props: {
   session: AdminSession;
-  stats: { members: number; joined: number; left: number; promoted: number; shuin: number };
+  stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
   recent: AuditLog[];
   names: Names;
   now: Date;
@@ -65,6 +67,7 @@ export function HomePage(props: {
         <Stat label="今日の退出" value={`-${stats.left}`} unit="人" />
         <Stat label="今日の朱印" value={String(stats.shuin)} unit="件" />
         <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
+        <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href="/yaku" />
       </div>
 
       <section class="card">
@@ -78,15 +81,22 @@ export function HomePage(props: {
   );
 }
 
-function Stat(props: { label: string; value: string; unit: string }) {
-  return (
-    <div class="stat">
+function Stat(props: { label: string; value: string; unit: string; href?: string }) {
+  const body = (
+    <>
       <div class="label">{props.label}</div>
       <div class="value">
         {props.value}
         <small>{props.unit}</small>
       </div>
-    </div>
+    </>
+  );
+  return props.href ? (
+    <a class="stat" href={props.href}>
+      {body}
+    </a>
+  ) : (
+    <div class="stat">{body}</div>
   );
 }
 
@@ -262,6 +272,8 @@ export function MemberPage(props: {
   audits: AuditLog[];
   names: Names;
   now: Date;
+  flash?: string;
+  moderation?: Child;
 }) {
   const { member: m, card, cfg } = props;
   const auto = currentAutoRank(cfg.ranks, m.roleIds);
@@ -272,6 +284,7 @@ export function MemberPage(props: {
       <p class="crumbs">
         <a href="/members">メンバー</a> / {m.displayName}
       </p>
+      <Flash code={props.flash} />
       <section class="profile card">
         <Avatar url={m.avatarUrl} size={64} />
         <div>
@@ -321,6 +334,8 @@ export function MemberPage(props: {
           </dl>
         </div>
       </section>
+
+      {props.moderation}
 
       <div class="grid2">
         <section class="card">

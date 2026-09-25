@@ -45,6 +45,7 @@ export const EVENT_LABEL: Record<string, string> = {
   rejoin: '再参加',
   leave: '退出',
   promote: '昇格',
+  ban: 'BAN',
 };
 
 export const ACTION_LABEL: Record<string, string> = {
@@ -52,6 +53,12 @@ export const ACTION_LABEL: Record<string, string> = {
   'auth.logout': 'ログアウト',
   'auth.denied': 'ログインを拒否',
   'auth.revoked': '権限がなくなったためログアウト',
+  'yaku.add': '厄を付けた',
+  'yaku.clear': '厄を取り消した',
+  'yaku.menzaifu': '免罪符で厄を祓った',
+  'member.ban': 'BAN',
+  'member.kick': 'キック',
+  'memo.add': 'メモを書いた',
 };
 
 export function memberRankLabel(cfg: GuildConfig, roleIds: readonly string[]): string {

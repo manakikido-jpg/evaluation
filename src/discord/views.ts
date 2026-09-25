@@ -95,6 +95,7 @@ export function goshuinchoReply(
   ranks: readonly Rank[],
   owner: { id: string; displayName: string; avatarUrl?: string; roleIds: string[] },
   data: GoshuinchoData,
+  coins?: { emoji: string; name: string; balance: number },
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
@@ -115,6 +116,7 @@ export function goshuinchoReply(
       { name: '最近の朱印', value: recent },
       { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
     );
+  if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
 
   return { embeds: [embed.toJSON()], components: [row(giveButton(owner.id), listButton(owner.id))] };

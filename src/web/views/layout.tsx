@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
 import { LEVEL_LABEL } from '../format.js';
 
-type Nav = 'home' | 'members' | 'audit';
+type Nav = 'home' | 'members' | 'yaku' | 'audit';
 
 export function Layout(props: { title: string; session?: AdminSession; nav?: Nav; children: Child }) {
   const { session, nav } = props;
@@ -30,6 +30,9 @@ export function Layout(props: { title: string; session?: AdminSession; nav?: Nav
               </a>
               <a href="/members" class={nav === 'members' ? 'on' : ''}>
                 メンバー
+              </a>
+              <a href="/yaku" class={nav === 'yaku' ? 'on' : ''}>
+                厄
               </a>
               <a href="/audit" class={nav === 'audit' ? 'on' : ''}>
                 操作の記録
