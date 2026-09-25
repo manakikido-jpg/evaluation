@@ -1,0 +1,184 @@
+# VPS で動かす手順
+
+BOT・管理画面・データベースを 1 台の VPS で動かす。所要時間は 1〜2 時間。
+テストが終わるまでは **テスト用の Discord サーバー** で動かし、本番の咲楽ノ宮は後で作る（[test-checklist.md](test-checklist.md)）。
+
+---
+
+## 1. VPS を借りる
+
+| 項目 | おすすめ |
+|---|---|
+| 会社 | 国内なら ConoHa VPS / Xserver VPS / さくらの VPS など（どこでも動く） |
+| メモリ | **2GB**（1000 人規模まで余裕あり） |
+| OS | **Ubuntu 24.04 LTS** |
+| ログイン | **SSH 鍵**を登録する（パスワードだけのログインにしない） |
+
+借りたら、VPS の **IP アドレス**をメモする。
+
+---
+
+## 2. 最初の設定（1 回だけ）
+
+パソコンのターミナル（Windows は PowerShell）から VPS に入る:
+```bash
+ssh root@（VPS の IP アドレス）
+```
+
+### 2-1. 作業用ユーザーを作る
+```bash
+adduser shamusho            # パスワードを決める
+usermod -aG sudo shamusho
+mkdir -p /home/shamusho/.ssh
+cp ~/.ssh/authorized_keys /home/shamusho/.ssh/
+chown -R shamusho:shamusho /home/shamusho/.ssh
+```
+一度抜けて、`ssh shamusho@（IP）` で入れることを確かめる。以降はこのユーザーで作業する。
+
+### 2-2. 安全のための設定
+```bash
+# パスワードでの SSH ログインを禁止（鍵だけにする）
+sudo sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
+
+# ファイアウォール: SSH・HTTP・HTTPS だけ開ける
+sudo ufw allow OpenSSH
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw enable
+
+# セキュリティ更新を自動で入れる
+sudo apt update && sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+> VPS 会社の管理画面にも「ファイアウォール（セキュリティグループ）」がある場合は、22・80・443 を許可しておく。
+
+### 2-3. Docker を入れる
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker shamusho
+```
+一度抜けて入り直し、`docker run --rm hello-world` が動けば OK。
+
+---
+
+## 3. コードを置く
+
+リポジトリが **非公開** の場合は、VPS 専用の「読み取り専用の鍵（デプロイキー）」を使う:
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/sakuranomiya -N ""
+cat ~/.ssh/sakuranomiya.pub
+```
+表示された 1 行を GitHub のリポジトリ → **Settings → Deploy keys → Add deploy key** に貼る（「Allow write access」はチェックしない）。
+```bash
+cat >> ~/.ssh/config <<'EOF'
+Host github-sakuranomiya
+  HostName github.com
+  IdentityFile ~/.ssh/sakuranomiya
+EOF
+git clone git@github-sakuranomiya:manakikido-jpg/evaluation.git
+cd evaluation
+```
+公開リポジトリなら `git clone https://github.com/manakikido-jpg/evaluation.git` だけでよい。
+
+> コードは今 `claude/compassionate-sagan-8fqy8p` ブランチにある。`git branch` で確認し、違うブランチなら `git checkout claude/compassionate-sagan-8fqy8p`。
+
+---
+
+## 4. 設定ファイル
+
+[test-checklist.md](test-checklist.md) の「0-1〜0-3」で、BOT・ロール・チャンネルを用意しておく。
+
+```bash
+cp .env.example .env
+nano .env                       # 保存は Ctrl+O → Enter、終了は Ctrl+X
+cp config/guild.example.json config/guild.json
+nano config/guild.json
+```
+
+`.env` に書くもの:
+```
+DISCORD_TOKEN=（BOT のトークン）
+DISCORD_CLIENT_ID=（Client ID）
+DISCORD_CLIENT_SECRET=（Client Secret）
+WEB_BASE_URL=https://shamusho.（あなたのドメイン）
+SHAMUSHO_DOMAIN=shamusho.（あなたのドメイン）
+```
+> `.env` と `config/guild.json` は Git に入らない（`.gitignore` 済み）。トークンを他人に見せない・送らない。
+
+---
+
+## 5. ドメイン
+
+ドメインの管理画面（お名前.com・Cloudflare など）で **A レコード**を追加:
+
+| 名前 | 種類 | 値 |
+|---|---|---|
+| `shamusho` | A | VPS の IP アドレス |
+
+反映まで数分〜1 時間。`ping shamusho.（ドメイン）` で VPS の IP が出れば OK。
+> Cloudflare を使う場合、最初は「プロキシ（オレンジの雲）」を**オフ**にしておく（証明書の取得がうまくいかないことがあるため）。
+
+Discord Developer Portal → OAuth2 → **Redirects** に `https://shamusho.（ドメイン）/auth/callback` を追加。
+
+---
+
+## 6. 起動
+
+```bash
+docker compose up -d --build
+docker compose ps                 # db / bot / web / caddy が「running」「healthy」
+docker compose logs -f bot        # 「commands registered」「members synced」が出れば OK（Ctrl+C で抜ける）
+```
+ブラウザで `https://shamusho.（ドメイン）` → 「Discord でログイン」。
+
+### ドメインの準備ができる前に試したいとき
+BOT は先に動かせる。管理画面は SSH のトンネルで自分のパソコンから見られる:
+```bash
+# VPS 上（.env の WEB_BASE_URL は http://localhost:3000 にしておく）
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build db bot web
+# 自分のパソコンで（開いたままにする）
+ssh -L 3000:localhost:3000 shamusho@（IP）
+```
+→ パソコンのブラウザで http://localhost:3000。Developer Portal の Redirects に `http://localhost:3000/auth/callback` も追加しておく。
+
+---
+
+## 7. バックアップ（毎日自動）
+
+```bash
+crontab -e
+```
+いちばん下に追加（毎日 4 時にバックアップ、7 日分を残す）:
+```
+0 4 * * * /home/shamusho/evaluation/scripts/backup.sh >> /home/shamusho/backup.log 2>&1
+```
+- 手動でとるときは `./scripts/backup.sh`（`backups/` に保存）
+- 戻すときは `./scripts/restore.sh backups/（ファイル名）`（今のデータは消えるので注意）
+- VPS が壊れたときに備えて、VPS 会社の「自動バックアップ／スナップショット」も使うと安心
+
+---
+
+## 8. 更新（新しいコードにする）
+
+```bash
+cd ~/evaluation
+./scripts/update.sh      # バックアップ → 取り込み → 作り直して再起動
+```
+データベースの形が変わる更新も、起動時に自動で反映される。
+
+---
+
+## 9. 困ったとき
+
+| 症状 | コマンド・見るところ |
+|---|---|
+| 動いているか | `docker compose ps` |
+| BOT のログ | `docker compose logs --tail 100 bot` |
+| 管理画面のログ | `docker compose logs --tail 100 web` |
+| HTTPS にならない | `docker compose logs --tail 100 caddy`（ドメインの A レコード・80/443 番ポートが開いているか） |
+| 設定を変えたあと | `docker compose restart bot web` |
+| 全部止める / 動かす | `docker compose down` / `docker compose up -d` |
+
+ログを送るときは、**トークンや Client Secret が写っていないか確認してから**送ってください。

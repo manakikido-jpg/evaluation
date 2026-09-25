@@ -47,7 +47,9 @@
    WEB_BASE_URL=http://localhost:3000
    ```
 
-### 0-4. 起動（Docker Desktop が必要）
+### 0-4. 起動
+
+VPS で動かす場合は [deploy-vps.md](deploy-vps.md) の手順で。自分のパソコンで試す場合（Docker Desktop が必要）:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build db bot web
 docker compose logs -f bot     # 「commands registered」「members synced」が出れば OK

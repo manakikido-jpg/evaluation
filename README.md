@@ -3,6 +3,7 @@
 御朱印をコンセプトにした通話界隈の「評価鯖」と、その専用 BOT のリポジトリです。
 メンバーはいいと思った人に朱印を押し（1 人につき 1 回）、集まった「ご縁」で役職が上がっていきます。
 
+- **VPS で動かす手順: [docs/deploy-vps.md](docs/deploy-vps.md)**
 - **本番前のテスト手順: [docs/test-checklist.md](docs/test-checklist.md)**
 - 設計書: [docs/design.md](docs/design.md)（PDF: [docs/sakuranomiya-design.pdf](docs/sakuranomiya-design.pdf)）
 - コンセプト: [docs/concept.md](docs/concept.md)
