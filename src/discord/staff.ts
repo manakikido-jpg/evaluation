@@ -53,10 +53,17 @@ export class StaffApp {
   constructor(
     private readonly client: Client,
     private readonly db: Db,
-    private readonly cfg: GuildConfig,
+    cfg: GuildConfig | (() => GuildConfig),
     private readonly discord: DiscordActions,
     private readonly webBaseUrl?: string,
-  ) {}
+  ) {
+    this.getCfg = typeof cfg === 'function' ? cfg : () => cfg;
+  }
+
+  private readonly getCfg: () => GuildConfig;
+  private get cfg(): GuildConfig {
+    return this.getCfg();
+  }
 
   private get ctx(): ModCtx {
     return { db: this.db, cfg: this.cfg, discord: this.discord };

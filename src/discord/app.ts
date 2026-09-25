@@ -18,6 +18,7 @@ import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
 import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
+import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf } from '../services/shuin.js';
 import { COMMAND, parseShuinId } from './ids.js';
@@ -65,9 +66,16 @@ export class ShuinApp {
   constructor(
     private readonly client: Client,
     private readonly db: Db,
-    private readonly cfg: GuildConfig,
+    cfg: GuildConfig | (() => GuildConfig),
   ) {
     this.activity = new ActivityTracker(db);
+    this.getCfg = typeof cfg === 'function' ? cfg : () => cfg;
+  }
+
+  /** 管理画面で設定が変わると中身が入れ替わる（ConfigStore） */
+  private readonly getCfg: () => GuildConfig;
+  private get cfg(): GuildConfig {
+    return this.getCfg();
   }
 
   // ───────── メンバーの同期（管理画面用） ─────────
@@ -281,6 +289,8 @@ export class ShuinApp {
     await recordPromotion(this.db, member.id, promotion.from.key, promotion.to.key, goen).catch((err) =>
       logger.warn({ err }, 'recordPromotion failed'),
     );
+    // お参り期間中なら完了にする
+    await setOmairiStatus(this.db, member.id, 'promoted', 'system').catch((err) => logger.warn({ err }, 'omairi close failed'));
   }
 
   private async log(content: string): Promise<void> {

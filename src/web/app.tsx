@@ -21,10 +21,20 @@ import { startOfTodayJst } from './format.js';
 import { createSession, deleteSession, findSession, markChecked, randomToken, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
+import { ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
+import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecidedApplications } from '../services/applications.js';
+import { changeAgeGroup, closeSoudan, decide, decideOmairi, removeYoimairi, replySoudan, revealSoudanSender, type OmairiAction } from '../services/admission.js';
+import { getSoudan, listSoudan, soudanMessagesOf } from '../services/soudan.js';
+import { applyOverrides, overridesSchema, saveOverrides, type Overrides } from '../services/settings.js';
 
 export type WebDeps = {
   db: Db;
-  cfg: GuildConfig;
+  /** 設定（管理画面で変えた値を重ねたもの）。関数なら毎回読み直す */
+  cfg: GuildConfig | (() => GuildConfig);
+  /** 設定画面で保存したあとに呼ぶ（ConfigStore の読み直し） */
+  onSettingsSaved?: () => Promise<void>;
+  /** config/guild.json そのままの値（設定画面で「ファイルの値」として見せる） */
+  fileCfg?: GuildConfig;
   api: DiscordApi;
   /** ロール変更・DM・BAN・キック（BOT のトークンで行う） */
   discord: DiscordActions;
@@ -49,11 +59,20 @@ const STATIC: Record<string, { body: string; type: string }> = {
 };
 
 export function createWebApp(deps: WebDeps) {
-  const { db, cfg, api } = deps;
+  const { db, api } = deps;
+  const getCfg: () => GuildConfig = typeof deps.cfg === 'function' ? deps.cfg : ((c: GuildConfig) => () => c)(deps.cfg);
+  let cfg = getCfg();
   const now = deps.now ?? (() => new Date());
   const secure = deps.baseUrl.startsWith('https://');
   const redirectUri = `${deps.baseUrl}/auth/callback`;
   const app = new Hono<Env>();
+  const mod = (): ModCtx => ({ db, cfg, discord: deps.discord });
+
+  // リクエストごとに最新の設定を使う
+  app.use(async (_c, next) => {
+    cfg = getCfg();
+    await next();
+  });
 
   app.use(
     secureHeaders({
@@ -156,6 +175,7 @@ export function createWebApp(deps: WebDeps) {
   };
 
   const requireCsrf: MiddlewareHandler<Env> = async (c, next) => {
+    if (c.req.method !== 'POST') return next();
     const body = await c.req.parseBody();
     const sent = typeof body._csrf === 'string' ? body._csrf : (c.req.header('x-csrf-token') ?? '');
     if (!safeEqual(sent, c.get('session').csrfToken)) return c.text('不正なリクエストです（CSRF）。', 403);
@@ -174,6 +194,10 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
+  for (const p of ['/applications', '/applications/*', '/omairi', '/omairi/*', '/soudan', '/soudan/*', '/settings', '/settings/*']) {
+    app.use(p, requireAdmin);
+    app.use(p, requireCsrf);
+  }
   app.use('/logout', requireAdmin);
 
   app.post('/logout', requireCsrf, async (c) => {
@@ -186,10 +210,18 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/', async (c) => {
     const t = now();
-    const [base, recent, yakuRows] = await Promise.all([homeStats(db, startOfTodayJst(t)), listAudit(db, { limit: 10 }), membersWithYaku(db)]);
+    const [base, recent, yakuRows, pending, review, soudanOpen] = await Promise.all([
+      homeStats(db, startOfTodayJst(t)),
+      listAudit(db, { limit: 10 }),
+      membersWithYaku(db),
+      pendingApplications(db),
+      omairiList(db, ['review']),
+      listSoudan(db, ['open']),
+    ]);
     const stats = { ...base, yaku: yakuRows.length };
+    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length };
     const names = await namesOf(db, recent.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
-    return c.html(<HomePage session={c.get('session')} stats={stats} recent={recent} names={names} now={t} />);
+    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} />);
   });
 
   app.get('/members', async (c) => {
@@ -217,6 +249,7 @@ export function createWebApp(deps: WebDeps) {
     const member = await getMember(db, id);
     if (!member) return c.html(<NotFoundPage session={c.get('session')} />, 404);
     const session = c.get('session');
+    const [apps, omairiRow] = await Promise.all([applicationsOf(db, id), getOmairi(db, id)]);
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
       shuinHistory(db, id),
@@ -229,7 +262,7 @@ export function createWebApp(deps: WebDeps) {
       recentCoinTx(db, id, 15),
       recentActivity(db, id, 14),
       memosOf(db, id),
-      checkTarget(modCtx, actorOf(session), id),
+      checkTarget(mod(), actorOf(session), id),
     ]);
     const names = await namesOf(db, [
       ...history.received.map((r) => r.other),
@@ -237,6 +270,7 @@ export function createWebApp(deps: WebDeps) {
       ...audits.map((a) => a.actorId),
       ...yakuRows.flatMap((y) => [y.issuedBy, y.clearedBy ?? '']),
       ...memoRows.map((m) => m.authorId),
+      ...apps.map((a) => a.reviewedBy ?? ''),
     ]);
     const flash = c.req.query('msg');
     return c.html(
@@ -252,6 +286,18 @@ export function createWebApp(deps: WebDeps) {
         now={now()}
         flash={flash && FLASH[flash] ? flash : undefined}
         moderation={
+          <>
+          {flash && ADMISSION_FLASH[flash] && !FLASH[flash] && <p class={`flash ${ADMISSION_FLASH[flash]!.kind}`}>{ADMISSION_FLASH[flash]!.text}</p>}
+          <MemberAdmissionSection
+            session={session}
+            cfg={cfg}
+            memberId={id}
+            ageGroup={member.ageGroup}
+            roleIds={member.roleIds}
+            omairi={omairiRow}
+            applications={apps}
+            names={names}
+          />
           <ModerationSection
             cfg={cfg}
             memberId={id}
@@ -267,6 +313,7 @@ export function createWebApp(deps: WebDeps) {
             memos={memoRows}
             names={names}
           />
+          </>
         }
       />,
     );
@@ -274,7 +321,6 @@ export function createWebApp(deps: WebDeps) {
 
   // ───────── 厄・BAN・キック・メモ ─────────
 
-  const modCtx: ModCtx = { db, cfg, discord: deps.discord };
   const actorOf = (s: AdminSession): Actor => ({ id: s.userId, level: s.level === 'guji' ? 'guji' : 'shinshoku', via: 'web' });
   const back = (c: Context<Env>, id: string, msg: string) => c.redirect(`/members/${id}?msg=${msg}`);
   const deniedCode = (d: Denied) => `denied_${d}`;
@@ -294,7 +340,7 @@ export function createWebApp(deps: WebDeps) {
     if (reason === 'その他' && !note) return back(c, id, 'invalid');
     const text = note ? (reason === 'その他' ? note : `${reason}（${note}）`) : reason;
     const session = c.get('session');
-    const r = await giveYaku(modCtx, actorOf(session), id, text, body.confirm === 'yes');
+    const r = await giveYaku(mod(), actorOf(session), id, text, body.confirm === 'yes');
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
     if (r.status === 'needs_confirm') {
       const target = await getMember(db, id);
@@ -320,7 +366,7 @@ export function createWebApp(deps: WebDeps) {
     if (!validId(id)) return c.notFound();
     const note = field(await c.req.parseBody(), 'note');
     if (!note) return back(c, id, 'invalid');
-    const r = await clearYaku(modCtx, actorOf(c.get('session')), id, note);
+    const r = await clearYaku(mod(), actorOf(c.get('session')), id, note);
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
     return back(c, id, r.status === 'cleared' ? 'cleared' : 'no_yaku');
   });
@@ -334,7 +380,7 @@ export function createWebApp(deps: WebDeps) {
     if (!cfg.moderation.instantBanReasons.includes(reason)) return back(c, id, 'invalid');
     const session = c.get('session');
     if (body.confirm !== 'yes') {
-      const denied = await checkTarget(modCtx, actorOf(session), id);
+      const denied = await checkTarget(mod(), actorOf(session), id);
       if (denied) return back(c, id, deniedCode(denied));
       const target = await getMember(db, id);
       return c.html(
@@ -350,7 +396,7 @@ export function createWebApp(deps: WebDeps) {
         />,
       );
     }
-    const r = await instantBan(modCtx, actorOf(session), id, reason, note);
+    const r = await instantBan(mod(), actorOf(session), id, reason, note);
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
     return back(c, id, r.banOk ? 'banned' : 'ban_failed');
   });
@@ -363,7 +409,7 @@ export function createWebApp(deps: WebDeps) {
     if (!reason) return back(c, id, 'invalid');
     const session = c.get('session');
     if (body.confirm !== 'yes') {
-      const denied = await checkTarget(modCtx, actorOf(session), id);
+      const denied = await checkTarget(mod(), actorOf(session), id);
       if (denied) return back(c, id, deniedCode(denied));
       const target = await getMember(db, id);
       return c.html(
@@ -379,7 +425,7 @@ export function createWebApp(deps: WebDeps) {
         />,
       );
     }
-    const r = await kickMember(modCtx, actorOf(session), id, reason);
+    const r = await kickMember(mod(), actorOf(session), id, reason);
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
     return back(c, id, r.kickOk ? 'kicked' : 'kick_failed');
   });
@@ -389,13 +435,202 @@ export function createWebApp(deps: WebDeps) {
     if (!validId(id)) return c.notFound();
     const body = field(await c.req.parseBody(), 'body', 1000);
     if (!body) return back(c, id, 'invalid');
-    const r = await writeMemo(modCtx, actorOf(c.get('session')), id, body);
+    const r = await writeMemo(mod(), actorOf(c.get('session')), id, body);
     return back(c, id, r === 'ok' ? 'memo' : 'denied_not_found');
   });
 
   app.get('/yaku', async (c) => {
     const rows = await membersWithYaku(db);
     return c.html(<YakuPage session={c.get('session')} rows={rows} now={now()} />);
+  });
+
+
+  // ───────── 年齢区分・宵参り（メンバー詳細から） ─────────
+
+  app.post('/members/:id/age', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const age = field(await c.req.parseBody(), 'age');
+    if (age !== 'minor' && age !== 'adult' && age !== 'unknown') return back(c, id, 'invalid');
+    const r = await changeAgeGroup(mod(), actorOf(c.get('session')), id, age);
+    return back(c, id, r === 'ok' ? 'age_changed' : r === 'forbidden' ? 'forbidden' : 'denied_not_found');
+  });
+
+  app.post('/members/:id/yoimairi/remove', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const reason = field(await c.req.parseBody(), 'reason');
+    if (!reason) return back(c, id, 'invalid');
+    const r = await removeYoimairi(mod(), actorOf(c.get('session')), id, reason);
+    return back(c, id, r === 'ok' ? 'yoimairi_removed' : r === 'denied' ? 'denied_protected' : 'invalid');
+  });
+
+  // ───────── 申請 ─────────
+
+  app.get('/applications', async (c) => {
+    const [pending, decided] = await Promise.all([pendingApplications(db), recentDecidedApplications(db)]);
+    const names = await namesOf(db, decided.map((d) => d.app.reviewedBy ?? ''));
+    const flash = c.req.query('msg');
+    return c.html(
+      <ApplicationsPage session={c.get('session')} pending={pending} decided={decided} names={names} now={now()} flash={flash} />,
+    );
+  });
+
+  app.post('/applications/:id/decide', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) return c.notFound();
+    const body = await c.req.parseBody();
+    const approve = body.approve === 'yes';
+    const r = await decide(mod(), actorOf(c.get('session')), id, approve, field(body, 'note'));
+    const code = r.status === 'approved' || r.status === 'rejected' ? r.status : r.status === 'not_adult' ? 'not_adult' : 'already_decided';
+    return c.redirect(`/applications?msg=${code}`);
+  });
+
+  // ───────── お参り期間 ─────────
+
+  app.get('/omairi', async (c) => {
+    const [review, ongoing] = await Promise.all([omairiList(db, ['review']), omairiList(db, ['ongoing'])]);
+    return c.html(<OmairiPage session={c.get('session')} cfg={cfg} review={review} ongoing={ongoing} now={now()} flash={c.req.query('msg')} />);
+  });
+
+  app.post('/omairi/:memberId', async (c) => {
+    const memberId = c.req.param('memberId');
+    if (!validId(memberId)) return c.notFound();
+    const body = await c.req.parseBody();
+    const action = field(body, 'action');
+    if (action !== 'extend' && action !== 'promote' && action !== 'remove') return c.redirect('/omairi?msg=invalid');
+    // 退出（キック）は確認画面を通す
+    if (action === 'remove' && body.confirm !== 'yes') {
+      const target = await getMember(db, memberId);
+      return c.html(
+        <ConfirmPage
+          session={c.get('session')}
+          title="お参り期間の判定: 退出"
+          message="お参り期間が終わった方を退出（キック）させます。本人には DM で知らせます。"
+          targetName={target?.displayName ?? memberId}
+          action={`/omairi/${memberId}`}
+          fields={{ action: 'remove' }}
+          button="退出にする"
+          backUrl="/omairi"
+        />,
+      );
+    }
+    const r = await decideOmairi(mod(), actorOf(c.get('session')), memberId, action as OmairiAction, now());
+    return c.redirect(`/omairi?msg=${r === 'ok' ? 'omairi_ok' : 'omairi_missing'}`);
+  });
+
+  // ───────── 相談 ─────────
+
+  app.get('/soudan', async (c) => {
+    const status = c.req.query('status') === 'done' ? 'done' : 'active';
+    const rows = await listSoudan(db, status === 'done' ? ['done'] : ['open', 'in_progress']);
+    const names = await namesOf(db, rows.map((r) => r.assigneeId ?? ''));
+    return c.html(<SoudanListPage session={c.get('session')} rows={rows} status={status} names={names} now={now()} />);
+  });
+
+  const soudanPage = async (c: Context<Env>, id: number, extra: { revealed?: string; flash?: string } = {}) => {
+    const s = await getSoudan(db, id);
+    if (!s) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    const messages = await soudanMessagesOf(db, id);
+    const names = await namesOf(db, [...messages.map((m) => m.staffId ?? ''), extra.revealed ?? '']);
+    return c.html(<SoudanPage session={c.get('session')} soudan={s} messages={messages} names={names} {...extra} />);
+  };
+  const soudanId = (c: Context<Env>) => {
+    const id = Number(c.req.param('id'));
+    return Number.isInteger(id) && id > 0 ? id : undefined;
+  };
+
+  app.get('/soudan/:id', async (c) => {
+    const id = soudanId(c);
+    if (!id) return c.notFound();
+    return soudanPage(c, id, { flash: c.req.query('msg') });
+  });
+
+  app.post('/soudan/:id/reply', async (c) => {
+    const id = soudanId(c);
+    if (!id) return c.notFound();
+    const body = field(await c.req.parseBody(), 'body', 1500);
+    if (!body) return c.redirect(`/soudan/${id}?msg=invalid`);
+    const r = await replySoudan(mod(), actorOf(c.get('session')), id, body);
+    if (r.status === 'not_found') return c.notFound();
+    return c.redirect(`/soudan/${id}?msg=${r.dmSent ? 'replied' : 'replied_nodm'}`);
+  });
+
+  app.post('/soudan/:id/done', async (c) => {
+    const id = soudanId(c);
+    if (!id) return c.notFound();
+    await closeSoudan(mod(), actorOf(c.get('session')), id);
+    return c.redirect(`/soudan/${id}?msg=soudan_done`);
+  });
+
+  app.post('/soudan/:id/reveal', async (c) => {
+    const id = soudanId(c);
+    if (!id) return c.notFound();
+    const reason = field(await c.req.parseBody(), 'reason');
+    if (!reason) return c.redirect(`/soudan/${id}?msg=invalid`);
+    const r = await revealSoudanSender(mod(), actorOf(c.get('session')), id, reason);
+    if (r === 'forbidden') return c.redirect(`/soudan/${id}?msg=forbidden`);
+    if (r === 'not_found') return c.notFound();
+    return soudanPage(c, id, { revealed: r });
+  });
+
+  // ───────── 設定（宮司のみ） ─────────
+
+  const fileCfg = () => deps.fileCfg ?? cfg;
+  const gujiOnly = (c: Context<Env>) => c.get('session').level === 'guji';
+
+  app.get('/settings', (c) => {
+    if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} />);
+  });
+
+  app.post('/settings', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const num = (k: string) => Number(typeof body[k] === 'string' ? body[k] : NaN);
+    const raw = {
+      economy: {
+        currencyName: field(body, 'currencyName', 20),
+        currencyEmoji: field(body, 'currencyEmoji', 10),
+        menzaifuPrice: num('menzaifuPrice'),
+        menzaifuMaxUses: num('menzaifuMaxUses'),
+        voicePer10Min: num('voicePer10Min'),
+        voiceDailyCap: num('voiceDailyCap'),
+        shuinGive: num('shuinGive'),
+        shuinReceive: num('shuinReceive'),
+      },
+      ranks: Object.fromEntries(
+        cfg.ranks.map((r) => [r.key, { weight: num(`rank.${r.key}.weight`), ...(r.auto ? { requiredGoen: num(`rank.${r.key}.requiredGoen`) } : {}) }]),
+      ),
+      omairi: { days: num('omairiDays'), extendDays: num('omairiExtendDays') },
+      applications: { autoApproveAccountDays: num('autoApproveAccountDays'), kickOnReject: body.kickOnReject === 'yes' },
+    };
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse(raw);
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/settings?msg=settings_invalid');
+    }
+    const before = cfg;
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    const after = applyOverrides(fileCfg(), overrides);
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'settings.update',
+      detail: { economy: diff(before.economy, after.economy), omairi: diff(before.omairi, after.omairi), applications: diff(before.applications, after.applications), ranks: rankDiff(before, after) },
+      via: 'web',
+    });
+    return c.redirect('/settings?msg=saved');
+  });
+
+  app.post('/settings/reset', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    await saveOverrides(db, overridesSchema.parse({}), c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'settings.reset', via: 'web' });
+    return c.redirect('/settings?msg=saved');
   });
 
   app.get('/audit', async (c) => {
@@ -407,4 +642,22 @@ export function createWebApp(deps: WebDeps) {
   app.notFound((c) => c.html(<NotFoundPage />, 404));
 
   return app;
+}
+
+/** 変わった項目だけ（操作の記録用） */
+function diff<T extends Record<string, unknown>>(a: T, b: T): Record<string, [unknown, unknown]> {
+  const out: Record<string, [unknown, unknown]> = {};
+  for (const k of Object.keys(b)) if (a[k] !== b[k]) out[k] = [a[k], b[k]];
+  return out;
+}
+
+function rankDiff(a: GuildConfig, b: GuildConfig): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const r of b.ranks) {
+    const old = a.ranks.find((x) => x.key === r.key);
+    if (old && (old.weight !== r.weight || old.requiredGoen !== r.requiredGoen)) {
+      out[r.key] = { weight: [old.weight, r.weight], requiredGoen: [old.requiredGoen, r.requiredGoen] };
+    }
+  }
+  return out;
 }

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /**
  * 朱印（評価スタンプ）。
@@ -190,3 +190,93 @@ export type CoinTx = typeof coinTx.$inferSelect;
 export type Yaku = typeof yaku.$inferSelect;
 export type Memo = typeof memos.$inferSelect;
 export type ActivityDaily = typeof activityDaily.$inferSelect;
+
+/** 入鯖申請・宵参り申請 */
+export const applications = pgTable(
+  'applications',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    /** join: 入鯖 / yoimairi: 宵参り（成人エリア） */
+    kind: text('kind').notNull(),
+    answers: jsonb('answers').$type<Record<string, string>>().notNull().default({}),
+    /** pending / approved / rejected */
+    status: text('status').notNull().default('pending'),
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    note: text('note'),
+    /** #申請受付 に出したカード（あとで「承認済み」に書き換える） */
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('applications_status_idx').on(t.status, t.createdAt),
+    index('applications_member_idx').on(t.memberId),
+    // 同じ人の同じ種類の申請は、待ちが 1 件まで
+    uniqueIndex('applications_one_pending').on(t.memberId, t.kind).where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+/** お参り期間（新人期間） */
+export const omairi = pgTable('omairi', {
+  memberId: text('member_id').primaryKey(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+  extendedCount: integer('extended_count').notNull().default(0),
+  /** ongoing / promoted / review / removed */
+  status: text('status').notNull().default('ongoing'),
+  decidedBy: text('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+});
+
+/** 匿名相談 */
+export const soudan = pgTable(
+  'soudan',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** open / in_progress / done */
+    status: text('status').notNull().default('open'),
+    assigneeId: text('assignee_id'),
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('soudan_status_idx').on(t.status, t.updatedAt)],
+);
+
+/** 相談した人（神職には見せない。宮司が確認したときだけ読み、記録に残す） */
+export const soudanSenders = pgTable('soudan_senders', {
+  soudanId: bigint('soudan_id', { mode: 'number' }).primaryKey(),
+  senderId: text('sender_id').notNull(),
+});
+
+/** 相談のやり取り */
+export const soudanMessages = pgTable(
+  'soudan_messages',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    soudanId: bigint('soudan_id', { mode: 'number' }).notNull(),
+    /** sender: 相談した人 / staff: 神職 */
+    fromRole: text('from_role').notNull(),
+    /** 神職のときだけ入れる（相談した人の ID はここに入れない） */
+    staffId: text('staff_id'),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('soudan_messages_idx').on(t.soudanId, t.createdAt)],
+);
+
+/** 管理画面から変えた設定（config/guild.json の値を上書きする） */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<unknown>().notNull(),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Application = typeof applications.$inferSelect;
+export type Omairi = typeof omairi.$inferSelect;
+export type Soudan = typeof soudan.$inferSelect;
+export type SoudanMessage = typeof soudanMessages.$inferSelect;

@@ -4,15 +4,22 @@ import { loadEnv, loadGuildConfig } from './config.js';
 import { connectDb } from './db/client.js';
 import { ShuinApp } from './discord/app.js';
 import { StaffApp } from './discord/staff.js';
+import { AdmissionApp } from './discord/admission.js';
+import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
 import { logger } from './lib/logger.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const cfg = loadGuildConfig(env.GUILD_CONFIG);
+  const fileCfg = loadGuildConfig(env.GUILD_CONFIG);
   const { db, close } = await connectDb(env.DATABASE_URL);
   logger.info('database ready');
+  // 管理画面で変えた設定を重ねる（1 分ごとに読み直す）
+  const store = new ConfigStore(db, fileCfg);
+  await store.refresh();
+  store.start();
+  const cfg = () => store.current;
 
   const client = new Client({
     intents: [
@@ -23,23 +30,30 @@ async function main(): Promise<void> {
     ],
   });
   const app = new ShuinApp(client, db, cfg);
-  const staff = new StaffApp(client, db, cfg, createDiscordActions(env.DISCORD_TOKEN), env.WEB_BASE_URL);
+  const actions = createDiscordActions(env.DISCORD_TOKEN);
+  const staff = new StaffApp(client, db, cfg, actions, env.WEB_BASE_URL);
+  const admission = new AdmissionApp(client, db, cfg, actions);
   let ticker: NodeJS.Timeout | undefined;
+  let omairiTicker: NodeJS.Timeout | undefined;
 
   client.once(Events.ClientReady, async (c) => {
     logger.info({ user: c.user.tag }, 'logged in');
-    const guild = await c.guilds.fetch(cfg.guildId).catch(() => undefined);
+    const guild = await c.guilds.fetch(fileCfg.guildId).catch(() => undefined);
     if (!guild) {
-      logger.error({ guildId: cfg.guildId }, 'BOT がこのサーバーに参加していません');
+      logger.error({ guildId: fileCfg.guildId }, 'BOT がこのサーバーに参加していません');
       return;
     }
-    await guild.commands.set(commandDefinitions(cfg));
+    await guild.commands.set(commandDefinitions(cfg()));
     logger.info({ guild: guild.name }, 'commands registered');
     // 管理画面用に全員を同期（BOT が止まっていた間の参加・退出も反映）
     const all = await guild.members.fetch();
     await app.syncAll(all.values()).catch((err) => logger.error({ err }, 'member sync failed'));
     // 1 分ごと: 通話時間・花びら・発言数
     ticker = setInterval(() => void app.everyMinute(guild), 60_000);
+    // 10 分ごと: お参り期間の判定
+    const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));
+    omairi();
+    omairiTicker = setInterval(omairi, 10 * 60_000);
   });
   client.on(Events.GuildMemberAdd, (m) => void app.onMemberAdd(m));
   client.on(Events.GuildMemberRemove, (m) => void app.onMemberRemove(m.guild.id, m.id));
@@ -53,6 +67,7 @@ async function main(): Promise<void> {
   client.on(Events.InteractionCreate, (i) => {
     void app.onInteraction(i);
     void staff.onInteraction(i);
+    void admission.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => void app.onMessage(m));
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
@@ -70,6 +85,8 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'shutting down');
     health?.close();
     if (ticker) clearInterval(ticker);
+    if (omairiTicker) clearInterval(omairiTicker);
+    store.stop();
     await client.destroy();
     await close();
     process.exit(0);

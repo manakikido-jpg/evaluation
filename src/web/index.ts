@@ -5,15 +5,22 @@ import { logger } from '../lib/logger.js';
 import { createWebApp } from './app.js';
 import { createDiscordApi } from './discordApi.js';
 import { createDiscordActions } from '../lib/discordRest.js';
+import { ConfigStore } from '../services/settings.js';
 
 async function main(): Promise<void> {
   const env = loadWebEnv();
-  const cfg = loadGuildConfig(env.GUILD_CONFIG);
+  const fileCfg = loadGuildConfig(env.GUILD_CONFIG);
   const { db, close } = await connectDb(env.DATABASE_URL);
+  // 設定画面で変えた値を重ねる
+  const store = new ConfigStore(db, fileCfg);
+  await store.refresh();
+  store.start();
 
   const app = createWebApp({
     db,
-    cfg,
+    cfg: () => store.current,
+    fileCfg,
+    onSettingsSaved: () => store.refresh(),
     api: createDiscordApi({
       clientId: env.DISCORD_CLIENT_ID,
       clientSecret: env.DISCORD_CLIENT_SECRET,
@@ -30,6 +37,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'shutting down');
     server.close();
+    store.stop();
     await close();
     process.exit(0);
   };

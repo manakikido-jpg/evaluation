@@ -9,6 +9,8 @@ export interface DiscordActions {
   sendDm(userId: string, content: string): Promise<boolean>;
   ban(guildId: string, userId: string, reason: string): Promise<void>;
   kick(guildId: string, userId: string, reason: string): Promise<void>;
+  /** 投稿済みのメッセージを書き換える（申請カードを「承認済み」にするなど） */
+  editMessage(channelId: string, messageId: string, body: { content?: string; components?: unknown[] }): Promise<void>;
 }
 
 const API = 'https://discord.com/api/v10';
@@ -42,5 +44,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
     },
     ban: async (g, u, reason) => void (await call('PUT', `/guilds/${g}/bans/${u}`, { reason, body: { delete_message_seconds: 0 } })),
     kick: async (g, u, reason) => void (await call('DELETE', `/guilds/${g}/members/${u}`, { reason })),
+    editMessage: async (c, m, body) =>
+      void (await call('PATCH', `/channels/${c}/messages/${m}`, { body: { ...body, allowed_mentions: { parse: [] } } })),
   };
 }

@@ -53,6 +53,7 @@ export function LoginPage(props: { error?: string }) {
 export function HomePage(props: {
   session: AdminSession;
   stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
+  todo: { applications: number; omairi: number; soudan: number };
   recent: AuditLog[];
   names: Names;
   now: Date;
@@ -69,6 +70,30 @@ export function HomePage(props: {
         <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
         <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href="/yaku" />
       </div>
+
+      <section class="card">
+        <h2>対応待ち</h2>
+        <ul class="todo">
+          <li>
+            <a href="/applications" class={props.todo.applications ? '' : 'zero'}>
+              <span>申請（入鯖・宵参り）</span>
+              <strong>{props.todo.applications} 件</strong>
+            </a>
+          </li>
+          <li>
+            <a href="/omairi" class={props.todo.omairi ? '' : 'zero'}>
+              <span>お参り期間の判定待ち</span>
+              <strong>{props.todo.omairi} 人</strong>
+            </a>
+          </li>
+          <li>
+            <a href="/soudan" class={props.todo.soudan ? '' : 'zero'}>
+              <span>未対応の相談</span>
+              <strong>{props.todo.soudan} 件</strong>
+            </a>
+          </li>
+        </ul>
+      </section>
 
       <section class="card">
         <h2>最近の操作</h2>

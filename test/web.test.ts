@@ -28,6 +28,7 @@ const fakeActions: DiscordActions = {
   sendDm: async (u) => (actions.push(`dm ${u}`), true),
   ban: async (_g, u) => void actions.push(`ban ${u}`),
   kick: async (_g, u) => void actions.push(`kick ${u}`),
+  editMessage: async () => undefined,
 };
 
 const fakeApi: DiscordApi = {
@@ -378,5 +379,135 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     const html = await (await get(`/members/${USER}`, s)).text();
     expect(html).toContain('77');
     expect(html).toContain('花びらの出入り');
+  });
+});
+
+describe('申請・お参り期間・相談・設定（管理画面）', () => {
+  async function csrfOf(session: string): Promise<string> {
+    const html = await (await get('/', session)).text();
+    return /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+  }
+  const post = (path: string, session: string, form: Record<string, string>) =>
+    app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(form).toString(),
+    });
+  const NEWBIE = '700000000000000020';
+
+  async function pendingApplication(): Promise<number> {
+    const { submitApplication } = await import('../src/services/applications.js');
+    await recordJoin(db, { id: NEWBIE, username: 'newbie', displayName: 'しんじん', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    const r = await submitApplication(db, { memberId: NEWBIE, kind: 'join', answers: { name: 'しんじん', age: 'minor', purpose: '雑談', message: '' } });
+    return (r as { id: number }).id;
+  }
+
+  it('申請の一覧 → 承認', async () => {
+    const id = await pendingApplication();
+    const s = await login(STAFF);
+    const html = await (await get('/applications', s)).text();
+    expect(html).toContain('しんじん');
+    expect(html).toContain('13〜17 歳');
+    const res = await post(`/applications/${id}/decide`, s, { _csrf: await csrfOf(s), approve: 'yes', note: '' });
+    expect(res.headers.get('location')).toBe('/applications?msg=approved');
+    expect(actions).toContain(`addRole ${NEWBIE} ${ROLE.sanpaisha}`);
+    const again = await post(`/applications/${id}/decide`, s, { _csrf: await csrfOf(s), approve: 'no' });
+    expect(again.headers.get('location')).toBe('/applications?msg=already_decided');
+    // お参り期間の一覧
+    expect(await (await get('/omairi', s)).text()).toContain('しんじん');
+    // 退出は確認画面を通す
+    const ask = await post(`/omairi/${NEWBIE}`, s, { _csrf: await csrfOf(s), action: 'remove' });
+    expect(await ask.text()).toContain('退出にする');
+    expect(actions).not.toContain(`kick ${NEWBIE}`);
+    const done = await post(`/omairi/${NEWBIE}`, s, { _csrf: await csrfOf(s), action: 'remove', confirm: 'yes' });
+    expect(done.headers.get('location')).toBe('/omairi?msg=omairi_ok');
+    expect(actions).toContain(`kick ${NEWBIE}`);
+  });
+
+  it('ホームに対応待ちが出る', async () => {
+    await pendingApplication();
+    const s = await login(STAFF);
+    const html = await (await get('/', s)).text();
+    expect(html).toMatch(/申請（入鯖・宵参り）<\/span><strong>1 件/);
+  });
+
+  it('相談: 神職は送った人を見られない・宮司は理由を書いて確認できる', async () => {
+    const { createSoudan } = await import('../src/services/soudan.js');
+    const id = await createSoudan(db, USER, 'こまっています');
+    const s = await login(STAFF);
+    const list = await (await get('/soudan', s)).text();
+    expect(list).toContain('こまっています');
+    const page = await (await get(`/soudan/${id}`, s)).text();
+    expect(page).toContain('相談した人（匿名）');
+    expect(page).not.toContain('相談した人を確認');
+    expect(page).not.toContain(USER);
+
+    const reply = await post(`/soudan/${id}/reply`, s, { _csrf: await csrfOf(s), body: '大丈夫ですか' });
+    expect(reply.headers.get('location')).toBe(`/soudan/${id}?msg=replied`);
+    expect(actions).toContain(`dm ${USER}`);
+    const forbidden = await post(`/soudan/${id}/reveal`, s, { _csrf: await csrfOf(s), reason: 'x' });
+    expect(forbidden.headers.get('location')).toBe(`/soudan/${id}?msg=forbidden`);
+
+    const g = await login(GUJI);
+    const gpage = await (await get(`/soudan/${id}`, g)).text();
+    expect(gpage).toContain('相談した人を確認');
+    const revealed = await (await post(`/soudan/${id}/reveal`, g, { _csrf: await csrfOf(g), reason: '身の危険' })).text();
+    expect(revealed).toContain(`/members/${USER}`);
+  });
+
+  it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {
+    const s = await login(STAFF);
+    expect((await get('/settings', s)).status).toBe(403);
+    expect(await (await get('/', s)).text()).not.toContain('href="/settings"');
+
+    // 設定の読み直しを確かめるため、ConfigStore を使うアプリで試す
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const g = await login(GUJI);
+    const page = await (await get('/settings', g)).text();
+    expect(page).toContain('免罪符の値段');
+    const form: Record<string, string> = {
+      _csrf: await csrfOf(g),
+      currencyName: '花びら',
+      currencyEmoji: '🌸',
+      menzaifuPrice: '800',
+      menzaifuMaxUses: '1',
+      voicePer10Min: '5',
+      voiceDailyCap: '150',
+      shuinGive: '3',
+      shuinReceive: '5',
+      omairiDays: '14',
+      omairiExtendDays: '7',
+      autoApproveAccountDays: '0',
+      kickOnReject: 'yes',
+    };
+    for (const r of cfg.ranks) {
+      form[`rank.${r.key}.weight`] = String(r.weight);
+      if (r.auto) form[`rank.${r.key}.requiredGoen`] = String(r.requiredGoen);
+    }
+    const res = await post('/settings', g, form);
+    expect(res.headers.get('location')).toBe('/settings?msg=saved');
+    expect(store.current.economy.menzaifuPrice).toBe(800);
+    expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
+
+    // おかしな値（昇格ラインが重複）は保存しない
+    const bad = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'rank.ujiko.requiredGoen': '100' });
+    expect(bad.headers.get('location')).toBe('/settings?msg=settings_invalid');
+    expect(store.current.ranks.find((r) => r.key === 'ujiko')?.requiredGoen).toBe(20);
+
+    const reset = await post('/settings/reset', g, { _csrf: await csrfOf(g) });
+    expect(reset.headers.get('location')).toBe('/settings?msg=saved');
+    expect(store.current.economy.menzaifuPrice).toBe(300);
+  });
+
+  it('年齢区分の変更は宮司だけ', async () => {
+    const s = await login(STAFF);
+    const res = await post(`/members/${USER}/age`, s, { _csrf: await csrfOf(s), age: 'adult' });
+    expect(res.headers.get('location')).toBe(`/members/${USER}?msg=forbidden`);
+    const g = await login(GUJI);
+    const ok = await post(`/members/${USER}/age`, g, { _csrf: await csrfOf(g), age: 'adult' });
+    expect(ok.headers.get('location')).toBe(`/members/${USER}?msg=age_changed`);
+    expect(await (await get(`/members/${USER}?msg=age_changed`, g)).text()).toContain('年齢区分を変更しました');
   });
 });

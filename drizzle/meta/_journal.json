@@ -22,6 +22,13 @@
       "when": 1790354427414,
       "tag": "0002_moderation_economy",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790366402484,
+      "tag": "0003_applications_soudan_settings",
+      "breakpoints": true
     }
   ]
 }

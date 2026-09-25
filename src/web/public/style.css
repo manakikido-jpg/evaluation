@@ -155,3 +155,41 @@ button.danger:hover { background: var(--shu-dark); }
 .confirm form { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
 .confirm .cancel { padding: 7px 10px; }
 strong.big { font-size: 1.6rem; color: var(--shu); }
+
+/* 申請・相談・設定 */
+.application .who { flex-wrap: wrap; margin-bottom: 8px; }
+.facts .wide { grid-column: 1 / -1; }
+.inline-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.inline-actions input[type=text] { flex: 1 1 220px; }
+.inline-actions input, .inline-actions select, .inline-actions button, .settings input {
+  font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink);
+}
+button.ok { background: #2f7d45; color: #fff; border-color: #2f7d45; }
+button.ok:hover { background: #256437; }
+td.wrap { white-space: normal; }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tabs a { padding: 6px 12px; border-radius: 6px; color: var(--ink); border: 1px solid var(--line); }
+.tabs a.on { background: var(--sakura); border-color: var(--sakura-2); }
+.chat { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.chat li { padding: 10px 12px; border-radius: 10px; max-width: 85%; }
+.chat li.sender { background: var(--gray); }
+.chat li.staff { background: var(--sakura); margin-left: auto; }
+.chat .meta { font-size: .8rem; color: var(--muted); }
+.chat .body { white-space: pre-wrap; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field span { font-size: .9rem; }
+.field.check { flex-direction: row; align-items: center; gap: 8px; }
+.settings table input { width: 110px; }
+.settings > p { margin: 16px 0 8px; }
+.todo { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.todo a { display: flex; justify-content: space-between; padding: 8px 12px; border-radius: 8px; background: var(--sakura); color: var(--ink); }
+.todo a.zero { background: var(--gray); color: var(--muted); }
+
+main button { font: inherit; padding: 7px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+main button:hover { border-color: var(--shu); }
+main button.link { border: none; background: none; color: var(--shu); padding: 4px; }
+main button.danger { background: var(--shu); color: #fff; border-color: var(--shu); }
+main button.danger:hover { background: var(--shu-dark); }
+main button.ok { background: #2f7d45; color: #fff; border-color: #2f7d45; }
+main button.ok:hover { background: #256437; }

@@ -24,9 +24,9 @@ describe('customId', () => {
 describe('コマンド定義', () => {
   it('右クリックメニュー・全員用・神職用', () => {
     const defs = commandDefinitions(cfg);
-    expect(defs.map((d) => d.name)).toEqual(['朱印を押す', '御朱印帳を見る', 'goshuin', 'menzaifu', 'yaku', 'ban', 'kick', 'memo', 'member']);
+    expect(defs.map((d) => d.name)).toEqual(['朱印を押す', '御朱印帳を見る', 'goshuin', 'menzaifu', 'soudan', 'panel', 'yaku', 'ban', 'kick', 'memo', 'member']);
     // 神職用は「メンバーをタイムアウト」権限がある人にだけ表示
-    const staff = defs.filter((d) => ['yaku', 'ban', 'kick', 'memo', 'member'].includes(d.name));
+    const staff = defs.filter((d) => ['panel', 'yaku', 'ban', 'kick', 'memo', 'member'].includes(d.name));
     expect(staff.every((d) => d.default_member_permissions === '1099511627776')).toBe(true);
     const yaku = defs.find((d) => d.name === 'yaku') as { options: { options?: { name: string; choices?: { value: string }[] }[] }[] };
     expect(yaku.options[0]!.options!.find((o) => o.name === 'reason')!.choices!.map((c) => c.value)).toContain('その他');

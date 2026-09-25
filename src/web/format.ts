@@ -59,6 +59,18 @@ export const ACTION_LABEL: Record<string, string> = {
   'member.ban': 'BAN',
   'member.kick': 'キック',
   'memo.add': 'メモを書いた',
+  'application.approve': '申請を承認',
+  'application.reject': '申請を却下',
+  'member.age': '年齢区分を変更',
+  'member.yoimairi.remove': '宵参りを外した',
+  'omairi.extend': 'お参り期間を延長',
+  'omairi.promote': 'お参り期間の判定で昇格',
+  'omairi.remove': 'お参り期間の判定で退出',
+  'soudan.reply': '相談に返信',
+  'soudan.done': '相談を完了',
+  'soudan.reveal': '相談した人を確認',
+  'settings.update': '設定を変更',
+  'settings.reset': '設定をファイルの値に戻した',
 };
 
 export function memberRankLabel(cfg: GuildConfig, roleIds: readonly string[]): string {

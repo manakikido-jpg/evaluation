@@ -60,7 +60,41 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
+    new SlashCommandBuilder()
+      .setName('soudan')
+      .setNameLocalizations({ ja: '相談' })
+      .setDescription('Anonymous consultation with staff')
+      .setDescriptionLocalizations({ ja: '神職に匿名で相談する（返信は BOT から DM で届く）' })
+      .setContexts(InteractionContextType.Guild)
+      .addIntegerOption((o) =>
+        o
+          .setName('number')
+          .setNameLocalizations({ ja: '番号' })
+          .setDescription('Continue a previous consultation')
+          .setDescriptionLocalizations({ ja: '前の相談の続きを送るときは、その番号' })
+          .setMinValue(1),
+      )
+      .toJSON(),
+
     // ───── 神職用 ─────
+    new SlashCommandBuilder()
+      .setName('panel')
+      .setNameLocalizations({ ja: 'パネル' })
+      .setDescription('Post an application panel here')
+      .setDescriptionLocalizations({ ja: '申請ボタンをこのチャンネルに置く【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addSubcommand((s) =>
+        s.setName('apply').setNameLocalizations({ ja: '入鯖申請' }).setDescription('Join application').setDescriptionLocalizations({ ja: '入鯖申請のボタン（#社務所 用）' }),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('yoimairi')
+          .setNameLocalizations({ ja: '宵参り申請' })
+          .setDescription('Adult area application')
+          .setDescriptionLocalizations({ ja: '宵参り（18 歳以上のエリア）申請のボタン' }),
+      )
+      .toJSON(),
     new SlashCommandBuilder()
       .setName('yaku')
       .setNameLocalizations({ ja: '厄' })

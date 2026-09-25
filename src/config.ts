@@ -41,6 +41,23 @@ export const economySchema = z.object({
 
 export type EconomyConfig = z.infer<typeof economySchema>;
 
+export const applicationsSchema = z.object({
+  /**
+   * 半自動承認: Discord アカウントを作ってからこの日数以上たっている人は自動で承認する。
+   * 0 なら全員を神職が承認する（手動）
+   */
+  autoApproveAccountDays: z.number().int().min(0).default(0),
+  /** 却下した人をキックする */
+  kickOnReject: z.boolean().default(true),
+});
+
+export const omairiSchema = z.object({
+  /** お参り期間の日数 */
+  days: z.number().int().positive().default(14),
+  /** 期間内に氏子に届かなかったとき、1 回だけ自動で延ばす日数（0 で延ばさない） */
+  extendDays: z.number().int().min(0).default(7),
+});
+
 /** 一発 BAN の理由（定型） */
 export const DEFAULT_INSTANT_BAN_REASONS = [
   '18 歳未満への恋愛・性的な目的での接触',
@@ -68,15 +85,25 @@ export const guildConfigSchema = z
       log: snowflake.optional(),
       /** #絵馬: 自己紹介に御朱印帳ボタンを付ける（任意） */
       ema: snowflake.optional(),
+      /** #申請受付: 入鯖・宵参り申請のカードが届く（運営のみ） */
+      applications: snowflake.optional(),
+      /** #お参り判定: お参り期間が終わっても氏子に届かなかった人の通知（運営のみ） */
+      omairi: snowflake.optional(),
+      /** #相談窓口: 匿名相談が届く（運営のみ） */
+      soudan: snowflake.optional(),
     }),
     roles: z
       .object({
         /** 👹 厄年: 朱印を押せない（任意） */
         yakudoshi: snowflake.optional(),
+        /** 🔞 宵参り: 成人エリアに入れる（任意） */
+        yoimairi: snowflake.optional(),
       })
       .default({}),
     ranks: z.array(rankSchema).min(1),
     economy: economySchema.default(economySchema.parse({})),
+    applications: applicationsSchema.default(applicationsSchema.parse({})),
+    omairi: omairiSchema.default(omairiSchema.parse({})),
     moderation: z
       .object({
         yakuReasons: z.array(z.string().min(1)).default(DEFAULT_YAKU_REASONS),

@@ -23,7 +23,10 @@ import {
  */
 
 export type ModCtx = { db: Db; cfg: GuildConfig; discord: DiscordActions };
-export type Actor = { id: string; level: AdminLevel; via: 'web' | 'discord' };
+export type Actor = { id: string; level: AdminLevel; via: 'web' | 'discord' | 'system' };
+
+/** BOT が自動で行う操作（半自動承認・お参り期間の自動延長など） */
+export const SYSTEM: Actor = { id: 'system', level: 'guji', via: 'system' };
 
 export type Denied = 'self' | 'protected' | 'not_found';
 

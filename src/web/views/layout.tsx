@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
 import { LEVEL_LABEL } from '../format.js';
 
-type Nav = 'home' | 'members' | 'yaku' | 'audit';
+type Nav = 'home' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'settings';
 
 export function Layout(props: { title: string; session?: AdminSession; nav?: Nav; children: Child }) {
   const { session, nav } = props;
@@ -31,12 +31,23 @@ export function Layout(props: { title: string; session?: AdminSession; nav?: Nav
               <a href="/members" class={nav === 'members' ? 'on' : ''}>
                 メンバー
               </a>
+              <a href="/applications" class={nav === 'applications' ? 'on' : ''}>
+                申請
+              </a>
               <a href="/yaku" class={nav === 'yaku' ? 'on' : ''}>
                 厄
               </a>
-              <a href="/audit" class={nav === 'audit' ? 'on' : ''}>
-                操作の記録
+              <a href="/soudan" class={nav === 'soudan' ? 'on' : ''}>
+                相談
               </a>
+              <a href="/audit" class={nav === 'audit' ? 'on' : ''}>
+                記録
+              </a>
+              {session.level === 'guji' && (
+                <a href="/settings" class={nav === 'settings' ? 'on' : ''}>
+                  設定
+                </a>
+              )}
             </nav>
             <div class="me">
               {session.avatarUrl && <img src={session.avatarUrl} alt="" width="28" height="28" />}
