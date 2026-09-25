@@ -1,21 +1,41 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
-import { P, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { FULL, MINIMAL, P, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+
+export type ApiGuild = {
+  id: string;
+  name: string;
+  afk_channel_id: string | null;
+  features?: string[];
+  rules_channel_id?: string | null;
+  public_updates_channel_id?: string | null;
+  safety_alerts_channel_id?: string | null;
+};
+
+export type GuildPatch = {
+  afk_channel_id?: string;
+  afk_timeout?: number;
+  rules_channel_id?: string;
+  public_updates_channel_id?: string;
+  safety_alerts_channel_id?: string;
+};
 
 /** セットアップで使う Discord API（テストでは偽物に差し替える） */
 export interface SetupApi {
   me(): Promise<{ id: string }>;
-  guild(guildId: string): Promise<{ id: string; name: string; afk_channel_id: string | null }>;
+  guild(guildId: string): Promise<ApiGuild>;
   roles(guildId: string): Promise<ApiRole[]>;
   member(guildId: string, userId: string): Promise<{ roles: string[] }>;
   createRole(guildId: string, body: { name: string; color: number; hoist: boolean; permissions: string; mentionable: boolean }): Promise<ApiRole>;
   channels(guildId: string): Promise<ApiChannel[]>;
   createChannel(guildId: string, body: CreateChannelBody): Promise<ApiChannel>;
-  modifyGuild(guildId: string, body: { afk_channel_id: string; afk_timeout: number }): Promise<void>;
+  modifyGuild(guildId: string, body: GuildPatch): Promise<void>;
   sendMessage(channelId: string, body: unknown): Promise<void>;
+  deleteChannel(channelId: string): Promise<void>;
+  reorderChannels(guildId: string, body: { id: string; position: number }[]): Promise<void>;
 }
 
 export type ApiRole = { id: string; name: string; position: number; permissions: string; managed: boolean };
-export type ApiChannel = { id: string; name: string; type: number; parent_id: string | null };
+export type ApiChannel = { id: string; name: string; type: number; parent_id: string | null; position?: number };
 export type Overwrite = { id: string; type: 0 | 1; allow: string; deny: string };
 export type CreateChannelBody = {
   name: string;
@@ -179,6 +199,113 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
     await api.modifyGuild(guildId, { afk_channel_id: afkChannelId, afk_timeout: 1800 });
   }
   return result;
+}
+
+/** Discord がサーバーを作ったときに最初からあるもの */
+const DEFAULT_CATEGORIES = ['テキストチャンネル', 'ボイスチャンネル', 'text channels', 'voice channels'];
+const DEFAULT_CHANNELS = ['一般', 'general'];
+/** コミュニティにしたときに Discord が作るもの */
+const COMMUNITY_CHANNELS = ['rules', 'moderator-only'];
+
+/**
+ * 片付け（--tidy）: applyLayout のあとに実行する。
+ * - 全部の構成にしたとき、最小構成にしかないチャンネル（境内の 絵馬・慶事・通話テスト）を消す
+ * - コミュニティ設定のルール・お知らせを #しきたり・#寄合 にしてから、#rules・#moderator-only を消す
+ * - Discord が最初から作る「一般」と、空になったそのカテゴリを消す
+ * - カテゴリとチャンネルを配置どおりに並べる
+ * 配置にあるチャンネルと、上の名前のもの以外は消さない。
+ */
+export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, opts: { dryRun?: boolean } = {}): Promise<string[]> {
+  const done: string[] = [];
+  const guild = await api.guild(guildId);
+  let channels = await api.channels(guildId);
+  const isCategory = (c: ApiChannel) => c.type === TYPE.category;
+  const catOf = (c: ApiChannel) => channels.find((p) => p.id === c.parent_id);
+  const label = (c: ApiChannel) => `${catOf(c) ? `${catOf(c)!.name} / ` : ''}${c.name}`;
+  const specsIn = (l: Layout, catName: string) => l.categories.find((c) => c.name === catName)?.channels ?? [];
+  const matches = (c: ApiChannel, s: ChannelSpec) => c.type === TYPE[s.kind] && c.name === norm(s.name, s.kind);
+  const findIn = (catName: string, s: ChannelSpec) => {
+    const cat = channels.find((c) => isCategory(c) && c.name === catName);
+    return cat && channels.find((c) => c.parent_id === cat.id && matches(c, s));
+  };
+
+  // ── コミュニティ設定の付け替え（#rules などは、設定で使われている間は消せないので先に） ──
+  let communityMoved = false;
+  if (guild.features?.includes('COMMUNITY')) {
+    const rules = findIn('⛩ 鳥居', { name: 'しきたり', kind: 'text' });
+    const yoriai = findIn('🔒 社務所裏', { name: '寄合', kind: 'text' });
+    if (rules && yoriai) {
+      const patch: GuildPatch = {};
+      if (guild.rules_channel_id !== rules.id) patch.rules_channel_id = rules.id;
+      if (guild.public_updates_channel_id !== yoriai.id) patch.public_updates_channel_id = yoriai.id;
+      if (guild.safety_alerts_channel_id !== yoriai.id) patch.safety_alerts_channel_id = yoriai.id;
+      if (Object.keys(patch).length) {
+        if (!opts.dryRun) await api.modifyGuild(guildId, patch);
+        done.push('コミュニティ設定: ルール → #しきたり、お知らせ・セーフティ通知 → #寄合');
+      }
+      communityMoved = true;
+    }
+  }
+
+  // ── 消すものを決める ──
+  const remove = new Map<string, ApiChannel>();
+  // 全部の構成にしたとき、最小構成にしかなかったもの
+  if (layout === FULL) {
+    for (const cat of MINIMAL.categories) {
+      for (const s of cat.channels) {
+        if (specsIn(FULL, cat.name).some((f) => f.name === s.name && f.kind === s.kind)) continue;
+        const c = findIn(cat.name, s);
+        if (c) remove.set(c.id, c);
+      }
+    }
+  }
+  if (communityMoved) {
+    for (const c of channels.filter((c) => c.type === TYPE.text && COMMUNITY_CHANNELS.includes(c.name))) remove.set(c.id, c);
+  }
+  // Discord が最初から作るもの（中が空になるカテゴリも）
+  for (const cat of channels.filter((c) => isCategory(c) && DEFAULT_CATEGORIES.includes(c.name.toLowerCase()))) {
+    const children = channels.filter((c) => c.parent_id === cat.id);
+    const defaults = children.filter((c) => DEFAULT_CHANNELS.includes(c.name.toLowerCase()));
+    for (const c of defaults) remove.set(c.id, c);
+    if (children.every((c) => remove.has(c.id))) remove.set(cat.id, cat);
+  }
+  // 念のため: 配置にあるチャンネルは消さない
+  for (const cat of layout.categories) {
+    const c = channels.find((x) => isCategory(x) && x.name === cat.name);
+    if (c) remove.delete(c.id);
+    for (const s of cat.channels) {
+      const ch = findIn(cat.name, s);
+      if (ch) remove.delete(ch.id);
+    }
+  }
+
+  // 中のチャンネルを先に、カテゴリをあとに消す
+  for (const c of [...remove.values()].sort((a, b) => Number(isCategory(a)) - Number(isCategory(b)))) {
+    if (!opts.dryRun) await api.deleteChannel(c.id);
+    done.push(`削除: ${isCategory(c) ? 'カテゴリ ' : ''}${label(c)}`);
+  }
+  channels = channels.filter((c) => !remove.has(c.id));
+
+  // ── 並べ替え: 配置のカテゴリを上から順に、配置にないものはそのあと ──
+  const byPos = (a: ApiChannel, b: ApiChannel) => (a.position ?? 0) - (b.position ?? 0);
+  const order: { id: string; position: number }[] = [];
+  const layoutCats = layout.categories.map((cat) => channels.find((c) => isCategory(c) && c.name === cat.name)).filter((c): c is ApiChannel => Boolean(c));
+  const otherCats = channels.filter((c) => isCategory(c) && !layoutCats.includes(c)).sort(byPos);
+  [...layoutCats, ...otherCats].forEach((c, i) => order.push({ id: c.id, position: i }));
+  for (const cat of layout.categories) {
+    const parent = layoutCats.find((c) => c.name === cat.name);
+    if (!parent) continue;
+    const inLayout = cat.channels.map((s) => findIn(cat.name, s)).filter((c): c is ApiChannel => Boolean(c));
+    const others = channels.filter((c) => c.parent_id === parent.id && !inLayout.includes(c)).sort(byPos);
+    [...inLayout, ...others].forEach((c, i) => order.push({ id: c.id, position: i }));
+  }
+  const current = new Map(channels.map((c) => [c.id, c.position]));
+  const changed = order.filter((o) => current.get(o.id) !== o.position);
+  if (changed.length) {
+    if (!opts.dryRun) await api.reorderChannels(guildId, changed);
+    done.push(`並べ替え: カテゴリ・チャンネルを配置どおりの順に（${changed.length} 件）`);
+  }
+  return done;
 }
 
 /** 既存の設定（なければ見本）に、作ったロール・チャンネルの ID を書き込む */

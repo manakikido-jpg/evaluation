@@ -1,14 +1,17 @@
 /**
  * ロールとチャンネルを自動で作り、config/guild.json を書く。
  *
- *   npm run setup-guild -- --guild <サーバー ID> [--minimal] [--dry-run] [--post-panels]
+ *   npm run setup-guild -- --guild <サーバー ID> [--minimal] [--dry-run] [--post-panels] [--tidy]
  *   （Docker: docker compose run --rm setup --guild <サーバー ID>）
+ *
+ * --tidy: 使わなくなったチャンネル（最小構成の残り・Discord が最初から作る「一般」・#rules など）を消し、
+ *         コミュニティ設定を付け替えて、配置どおりに並べる
  *
  * 何度実行しても安全（同じ名前のロール・チャンネルがあれば作らずに使う）。
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseGuildConfig } from '../config.js';
-import { applyLayout, mergeIntoConfig, SetupError, type SetupApi } from '../setup/apply.js';
+import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type SetupApi } from '../setup/apply.js';
 import { FULL, MINIMAL } from '../setup/layout.js';
 
 const API = 'https://discord.com/api/v10';
@@ -46,6 +49,8 @@ function createSetupApi(token: string): SetupApi {
     createChannel: (g, body) => call('POST', `/guilds/${g}/channels`, body),
     modifyGuild: async (g, body) => void (await call('PATCH', `/guilds/${g}`, body)),
     sendMessage: async (c, body) => void (await call('POST', `/channels/${c}/messages`, body)),
+    deleteChannel: async (c) => void (await call('DELETE', `/channels/${c}`)),
+    reorderChannels: async (g, body) => void (await call('PATCH', `/guilds/${g}/channels`, body)),
   };
 }
 
@@ -66,9 +71,11 @@ async function main(): Promise<void> {
   }
   const layout = flag('minimal') ? MINIMAL : FULL;
   const dryRun = flag('dry-run');
+  const tidy = flag('tidy');
+  const api = createSetupApi(token);
 
   console.log(`⛩ セットアップを始めます（${flag('minimal') ? 'テスト用の最小構成' : '全部の構成'}${dryRun ? '・確認だけ' : ''}）`);
-  const r = await applyLayout(createSetupApi(token), guildId, layout, { postPanels: flag('post-panels'), dryRun });
+  const r = await applyLayout(api, guildId, layout, { postPanels: flag('post-panels'), dryRun });
 
   console.log(`\nサーバー: ${r.guildName}`);
   console.log(`ロール: 作成 ${r.created.roles.length} ・ 既存を使用 ${r.reused.roles}`);
@@ -78,8 +85,14 @@ async function main(): Promise<void> {
   for (const p of r.panelsPosted) console.log(`申請ボタンを置きました: ${p}`);
   for (const w of r.warnings) console.log(`\n⚠️  ${w}`);
 
+  const printTidy = (list: string[]) => {
+    console.log(`\n片付け: ${list.length ? '' : 'することはありません'}`);
+    for (const t of list) console.log(`  - ${t}`);
+  };
+
   if (dryRun) {
-    console.log('\n（確認だけなので、何も作っていません。--dry-run を外すと作ります）');
+    if (tidy) printTidy(await tidyGuild(api, guildId, layout, { dryRun: true }));
+    console.log('\n（確認だけなので、何も作ったり消したりしていません。--dry-run を外すと実行します）');
     return;
   }
 
@@ -88,9 +101,11 @@ async function main(): Promise<void> {
   parseGuildConfig(merged); // おかしな設定なら書き込まない
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
   console.log(`\n✅ ${configPath} に ID を書き込みました。`);
-  console.log('次にすること:');
+  if (tidy) printTidy(await tidyGuild(api, guildId, layout));
+  console.log('\n次にすること:');
   let n = 1;
   if (r.warnings.length) console.log(`  ${n++}. サーバー設定 → ロール で、BOT のロールをいちばん上にドラッグして保存（上の ⚠️ のとおり）`);
+  if (!tidy) console.log(`  ${n++}. （任意）使わないチャンネルの削除と並べ替えもするなら、--tidy を付けてもう一度実行`);
   console.log(`  ${n++}. 自分に「⛩ 宮司」ロールを付ける`);
   console.log(`  ${n++}. BOT の「管理者」権限を OFF に戻す（そのままでも動きます）`);
   console.log(`  ${n++}. BOT を起動（または再起動）: docker compose restart bot（初めてなら docs/deploy-vps.md の「6. 起動」）`);

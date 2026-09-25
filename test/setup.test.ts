@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig } from '../src/config.js';
-import { applyLayout, mergeIntoConfig, SetupError, type ApiChannel, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
+import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type ApiChannel, type ApiGuild, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
 import { FULL, MINIMAL, P } from '../src/setup/layout.js';
 import example from '../config/guild.example.json' with { type: 'json' };
 
@@ -9,7 +9,7 @@ const BOT = '960000000000000001';
 const BOT_ROLE = '960000000000000002';
 
 /** メモリ上の偽 Discord */
-function fakeDiscord(opts: { admin?: boolean } = {}) {
+function fakeDiscord(opts: { admin?: boolean; community?: boolean } = {}) {
   let seq = 100;
   const nextId = () => String(960000000000000000n + BigInt(seq++));
   const roles: ApiRole[] = [
@@ -19,9 +19,10 @@ function fakeDiscord(opts: { admin?: boolean } = {}) {
   const channels: (ApiChannel & { body?: CreateChannelBody })[] = [];
   const messages: { channelId: string; body: unknown }[] = [];
   let afk: string | null = null;
+  const guild: ApiGuild = { id: GUILD, name: 'テスト鯖', afk_channel_id: null, features: opts.community ? ['COMMUNITY'] : [] };
   const api: SetupApi = {
     me: async () => ({ id: BOT }),
-    guild: async () => ({ id: GUILD, name: 'テスト鯖', afk_channel_id: afk }),
+    guild: async () => ({ ...guild, afk_channel_id: afk }),
     roles: async () => roles.map((r) => ({ ...r })),
     member: async () => ({ roles: [BOT_ROLE] }),
     createRole: async (_g, body) => {
@@ -35,14 +36,35 @@ function fakeDiscord(opts: { admin?: boolean } = {}) {
     channels: async () => channels.map(({ body: _b, ...c }) => c),
     createChannel: async (_g, body) => {
       const name = body.type === 0 ? body.name.toLowerCase().replace(/\s+/g, '-') : body.name;
-      const ch = { id: nextId(), name, type: body.type, parent_id: body.parent_id ?? null, body };
+      // 本物と同じく、新しいチャンネルは同じ場所のいちばん下にできる
+      const ch = { id: nextId(), name, type: body.type, parent_id: body.parent_id ?? null, position: channels.length, body };
       channels.push(ch);
       return ch;
     },
-    modifyGuild: async (_g, body) => void (afk = body.afk_channel_id),
+    modifyGuild: async (_g, body) => {
+      if (body.afk_channel_id) afk = body.afk_channel_id;
+      Object.assign(guild, { ...body, afk_channel_id: null });
+    },
     sendMessage: async (channelId, body) => void messages.push({ channelId, body }),
+    deleteChannel: async (id) => {
+      // 本物と同じく、コミュニティ設定で使われているチャンネルは消せない
+      if ([guild.rules_channel_id, guild.public_updates_channel_id].includes(id)) throw new Error('50074 Cannot delete a channel required for Community Servers');
+      const i = channels.findIndex((c) => c.id === id);
+      if (i < 0) throw new Error('Unknown Channel');
+      channels.splice(i, 1);
+    },
+    reorderChannels: async (_g, body) => {
+      for (const o of body) channels.find((c) => c.id === o.id)!.position = o.position;
+    },
   };
-  return { api, roles, channels, messages, getAfk: () => afk };
+  /** Discord が最初から作るもの・自分で作ったものを置く */
+  const seed = (name: string, type: number, parentName?: string) => {
+    const parent = parentName ? channels.find((c) => c.type === 4 && c.name === parentName) : undefined;
+    const ch = { id: nextId(), name, type, parent_id: parent?.id ?? null, position: channels.length };
+    channels.push(ch);
+    return ch;
+  };
+  return { api, roles, channels, messages, guild, seed, getAfk: () => afk };
 }
 
 const find = (d: ReturnType<typeof fakeDiscord>, name: string, type?: number) => d.channels.find((c) => c.name === name && (type === undefined || c.type === type))!;
@@ -180,5 +202,103 @@ describe('セットアップ', () => {
     expect(cfg.ranks.find((x) => x.key === 'guji')?.roleId).toBe(r.roleIds.guji);
     // 見本の経済設定などはそのまま
     expect(cfg.economy.menzaifuPrice).toBe(300);
+  });
+});
+
+describe('片付け（--tidy）', () => {
+  const names = (d: ReturnType<typeof fakeDiscord>, catName: string) => {
+    const cat = find(d, catName, 4);
+    return d.channels.filter((c) => c.parent_id === cat.id).sort((a, b) => a.position! - b.position!).map((c) => c.name);
+  };
+
+  it('最小構成のあとで全部の構成にすると、境内に残った 絵馬・慶事・通話テスト を消す（設定の ID は新しいほう）', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, MINIMAL);
+    const r = await applyLayout(d.api, GUILD, FULL);
+    const done = await tidyGuild(d.api, GUILD, FULL);
+    expect(done).toContain('削除: 🌳 境内 / 絵馬');
+    expect(done).toContain('削除: 🌳 境内 / 慶事');
+    expect(done).toContain('削除: 🌳 境内 / 通話テスト');
+    expect(names(d, '🌳 境内')).not.toContain('絵馬');
+    expect(names(d, '🌳 境内')).toContain('境内');
+    expect(names(d, '📜 掲示')).toContain('絵馬');
+    expect(d.channels.some((c) => c.id === r.channelIds.ema)).toBe(true);
+    expect(d.channels.some((c) => c.id === r.channelIds.keiji)).toBe(true);
+  });
+
+  it('カテゴリとチャンネルを配置どおりに並べる', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, MINIMAL);
+    await applyLayout(d.api, GUILD, FULL);
+    // 最小構成のカテゴリが先にあるので、掲示・縁日・宿坊は下にできている
+    const cats = () => d.channels.filter((c) => c.type === 4).sort((a, b) => a.position! - b.position!).map((c) => c.name);
+    expect(cats().indexOf('📜 掲示')).toBeGreaterThan(cats().indexOf('🔒 社務所裏'));
+    await tidyGuild(d.api, GUILD, FULL);
+    expect(cats()).toEqual(FULL.categories.map((c) => c.name));
+    expect(names(d, '🔒 社務所裏').slice(0, 5)).toEqual(['寄合', '申請受付', 'お参り判定', '相談窓口', '記録']);
+    // 2 回目はすることがない
+    expect(await tidyGuild(d.api, GUILD, FULL)).toEqual([]);
+  });
+
+  it('Discord が最初から作る「一般」は消す。自分で作ったチャンネルとそのカテゴリは残す', async () => {
+    const d = fakeDiscord();
+    d.seed('テキストチャンネル', 4);
+    d.seed('一般', 0, 'テキストチャンネル');
+    d.seed('雑談部屋', 0, 'テキストチャンネル');
+    d.seed('ボイスチャンネル', 4);
+    d.seed('一般', 2, 'ボイスチャンネル');
+    await applyLayout(d.api, GUILD, FULL);
+    const done = await tidyGuild(d.api, GUILD, FULL);
+    expect(done).toContain('削除: テキストチャンネル / 一般');
+    expect(done).toContain('削除: ボイスチャンネル / 一般');
+    expect(done).toContain('削除: カテゴリ ボイスチャンネル');
+    expect(d.channels.some((c) => c.name === '雑談部屋')).toBe(true);
+    expect(d.channels.some((c) => c.name === 'テキストチャンネル')).toBe(true);
+    expect(d.channels.some((c) => c.name === 'ボイスチャンネル')).toBe(false);
+    // 配置にないカテゴリは、配置のカテゴリのあとに並ぶ
+    const cats = d.channels.filter((c) => c.type === 4).sort((a, b) => a.position! - b.position!).map((c) => c.name);
+    expect(cats.at(-1)).toBe('テキストチャンネル');
+  });
+
+  it('コミュニティ: ルール・お知らせを #しきたり・#寄合 に付け替えてから、#rules・#moderator-only を消す', async () => {
+    const d = fakeDiscord({ community: true });
+    d.seed('テキストチャンネル', 4);
+    const rules = d.seed('rules', 0, 'テキストチャンネル');
+    const mod = d.seed('moderator-only', 0, 'テキストチャンネル');
+    Object.assign(d.guild, { rules_channel_id: rules.id, public_updates_channel_id: mod.id });
+    await applyLayout(d.api, GUILD, FULL);
+    await tidyGuild(d.api, GUILD, FULL);
+    expect(d.guild.rules_channel_id).toBe(find(d, 'しきたり', 0).id);
+    expect(d.guild.public_updates_channel_id).toBe(find(d, '寄合', 0).id);
+    expect(d.guild.safety_alerts_channel_id).toBe(find(d, '寄合', 0).id);
+    expect(d.channels.some((c) => c.name === 'rules' || c.name === 'moderator-only')).toBe(false);
+    expect(d.channels.some((c) => c.name === 'テキストチャンネル')).toBe(false);
+  });
+
+  it('コミュニティでなければ、#rules という名前のチャンネルも消さない', async () => {
+    const d = fakeDiscord();
+    d.seed('rules', 0);
+    await applyLayout(d.api, GUILD, FULL);
+    await tidyGuild(d.api, GUILD, FULL);
+    expect(d.channels.some((c) => c.name === 'rules')).toBe(true);
+  });
+
+  it('最小構成のときは、全部の構成にしかないチャンネルを消さない', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, FULL);
+    const before = d.channels.length;
+    const done = await tidyGuild(d.api, GUILD, MINIMAL);
+    expect(done.filter((t) => t.startsWith('削除'))).toEqual([]);
+    expect(d.channels).toHaveLength(before);
+  });
+
+  it('確認だけ（--dry-run）は、何を消すかだけ出して何も変えない', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, MINIMAL);
+    await applyLayout(d.api, GUILD, FULL);
+    const snapshot = JSON.stringify(d.channels);
+    const done = await tidyGuild(d.api, GUILD, FULL, { dryRun: true });
+    expect(done).toContain('削除: 🌳 境内 / 絵馬');
+    expect(JSON.stringify(d.channels)).toBe(snapshot);
   });
 });
