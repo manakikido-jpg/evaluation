@@ -57,7 +57,8 @@ const flag = (name: string) => process.argv.includes(`--${name}`);
 
 async function main(): Promise<void> {
   const token = process.env.DISCORD_TOKEN;
-  const guildId = arg('guild');
+  // 「（123…）」のように手順書のかっこごと貼られても、数字だけ取り出す
+  const guildId = arg('guild')?.replace(/[\s()（）<>＜＞「」]/g, '');
   const configPath = arg('config') ?? process.env.GUILD_CONFIG ?? 'config/guild.json';
   if (!token) throw new SetupError('.env に DISCORD_TOKEN を書いてください。');
   if (!guildId || !/^\d{17,20}$/.test(guildId)) {
