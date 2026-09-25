@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { loadGuildConfig, loadWebEnv } from '../config.js';
 import { connectDb } from '../db/client.js';
 import { logger } from '../lib/logger.js';
+import { explainStartupError } from '../lib/startupErrors.js';
 import { createWebApp } from './app.js';
 import { createDiscordApi } from './discordApi.js';
 import { createDiscordActions } from '../lib/discordRest.js';
@@ -46,6 +47,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  // よくある設定ミスは、直し方を日本語で出す
+  const hint = explainStartupError(err);
+  if (hint) console.error(`\n❌ 起動できませんでした。\n${hint}\n`);
   logger.fatal({ err }, 'failed to start');
   process.exit(1);
 });

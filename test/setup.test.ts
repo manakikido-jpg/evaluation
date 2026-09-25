@@ -25,8 +25,9 @@ function fakeDiscord(opts: { admin?: boolean } = {}) {
     roles: async () => roles.map((r) => ({ ...r })),
     member: async () => ({ roles: [BOT_ROLE] }),
     createRole: async (_g, body) => {
-      // 新しいロールはいちばん下（@everyone のすぐ上）にできる
-      for (const r of roles) if (r.position >= 1) r.position++;
+      // 本物の Discord と同じく、新しいロールは BOT のロールより下にはならない
+      // （2026-09 の本番テストで確認。BOT のロールを先に上へ動かしておく必要がある）
+      for (const r of roles) if (r.position >= 1 && !r.managed) r.position++;
       const role = { id: nextId(), name: body.name, position: 1, permissions: body.permissions, managed: false };
       roles.push(role);
       return role;
@@ -61,12 +62,12 @@ describe('セットアップ', () => {
     expect(r.created.roles).toHaveLength(8);
     const total = FULL.categories.reduce((n, c) => n + 1 + c.channels.length, 0);
     expect(r.created.channels).toHaveLength(total);
-    expect(r.warnings).toEqual([]);
-    // ロールの並び: 宮司がいちばん上、参拝者がいちばん下（BOT のロールより下）
+    // ロールの並び: 宮司がいちばん上、参拝者がいちばん下
     const pos = (name: string) => d.roles.find((x) => x.name === name)!.position;
     expect(pos('⛩ 宮司')).toBeGreaterThan(pos('🎐 神職'));
     expect(pos('🏮 総代')).toBeGreaterThan(pos('🔰 参拝者'));
-    expect(pos('Sakura BOT')).toBeGreaterThan(pos('⛩ 宮司'));
+    // BOT のロールが下のままなので、上に動かすよう注意が出る（本番で実際に出たもの）
+    expect(r.warnings[0]).toContain('BOT のロールより上に');
     // AFK チャンネル
     expect(d.getAfk()).toBe(find(d, '奥の院').id);
   });
@@ -150,6 +151,13 @@ describe('セットアップ', () => {
     expect(d.roles).toHaveLength(2);
     expect(d.channels).toHaveLength(0);
     expect(d.messages).toHaveLength(0);
+  });
+
+  it('先に BOT のロールをいちばん上に動かしておけば、注意は出ない', async () => {
+    const d = fakeDiscord();
+    d.roles.find((r) => r.id === BOT_ROLE)!.position = 99;
+    const r = await applyLayout(d.api, GUILD, FULL);
+    expect(r.warnings).toEqual([]);
   });
 
   it('役職ロールが BOT のロールより上にあると注意を出す', async () => {

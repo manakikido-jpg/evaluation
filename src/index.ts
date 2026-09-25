@@ -9,6 +9,7 @@ import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
 import { logger } from './lib/logger.js';
+import { explainStartupError } from './lib/startupErrors.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -98,6 +99,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  // よくある設定ミスは、直し方を日本語で出す
+  const hint = explainStartupError(err);
+  if (hint) console.error(`\n❌ 起動できませんでした。\n${hint}\n`);
   logger.fatal({ err }, 'failed to start');
   process.exit(1);
 });

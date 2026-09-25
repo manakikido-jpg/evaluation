@@ -88,9 +88,11 @@ async function main(): Promise<void> {
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
   console.log(`\n✅ ${configPath} に ID を書き込みました。`);
   console.log('次にすること:');
-  console.log('  1. 自分に「⛩ 宮司」ロールを付ける');
-  console.log('  2. BOT の「管理者」権限を OFF に戻す（そのままでも動きます）');
-  console.log('  3. BOT を起動（または再起動）: docker compose up -d');
+  let n = 1;
+  if (r.warnings.length) console.log(`  ${n++}. サーバー設定 → ロール で、BOT のロールをいちばん上にドラッグして保存（上の ⚠️ のとおり）`);
+  console.log(`  ${n++}. 自分に「⛩ 宮司」ロールを付ける`);
+  console.log(`  ${n++}. BOT の「管理者」権限を OFF に戻す（そのままでも動きます）`);
+  console.log(`  ${n++}. BOT を起動（または再起動）: docker compose restart bot（初めてなら docs/deploy-vps.md の「6. 起動」）`);
 }
 
 main().catch((err) => {

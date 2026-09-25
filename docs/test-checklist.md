@@ -11,7 +11,8 @@
 1. Discord で新しいサーバーを作る（名前は何でもよい。例: 咲楽ノ宮テスト）
 2. [Discord Developer Portal](https://discord.com/developers/applications) → New Application → 名前を付ける
 3. **Bot** → Reset Token → トークンをメモ（誰にも見せない）
-4. 同じ画面の **SERVER MEMBERS INTENT** を ON
+4. 同じ画面を下にスクロールし、「**Privileged Gateway Intents**（特権ゲートウェイインテント）」の **SERVER MEMBERS INTENT**（サーバーメンバーインテント）の**スイッチ**を ON →「変更を保存する」
+   - チェックボックスが並んだ「ボットの権限」の欄ではなく、その上にあるスイッチ。OFF のままだと起動時に `Used disallowed intents` が出る
 5. **OAuth2** → Client ID と Client Secret をメモ。**Redirects** に `http://localhost:3000/auth/callback` を追加
 6. 次の URL の `CLIENT_ID` を置き換えて開き、テスト用サーバーに招待
    ```
@@ -19,7 +20,8 @@
    ```
 
 ### 0-2. ロール・チャンネル・設定ファイル（自動）
-1. サーバー設定 → ロール → BOT のロール →「**管理者**」を ON（セットアップの間だけ）
+1. サーバー設定 → ロール → BOT のロールを**いちばん上にドラッグ**して保存し、「**管理者**」を ON（管理者はセットアップの間だけ）
+   - 先に上へ動かしておかないと、作ったロールが BOT より上になり、BOT がロールを付け外しできない
 2. Discord の **設定 → 詳細設定 → 開発者モード** を ON → サーバー名を右クリック →「サーバー ID をコピー」
 3. `.env.example` をコピーして `.env` を作る
    ```
@@ -99,6 +101,7 @@ docker compose logs -f bot     # 「commands registered」「members synced」�
 
 | 症状 | 見るところ |
 |---|---|
+| 起動時に `Used disallowed intents` | Developer Portal → Bot →「SERVER MEMBERS INTENT」のスイッチを ON にして保存（上の 0-1 の 4） |
 | コマンドが出てこない | `docker compose logs bot` に「commands registered」が出ているか。Discord を再起動 |
 | ロールが付かない・外れない | BOT のロールが、付けたいロールより**上**にあるか（セットアップが注意を出す） |
 | セットアップで「管理者権限がありません」 | BOT のロールの「管理者」を ON にしてから、もう一度実行 |
