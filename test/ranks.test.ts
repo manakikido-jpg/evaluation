@@ -28,6 +28,11 @@ describe('autoRankForGoen / nextAutoRank', () => {
     expect(nextAutoRank(cfg.ranks, 72)).toMatchObject({ rank: { key: 'sewayaku' }, remaining: 28 });
     expect(nextAutoRank(cfg.ranks, 300)).toBeUndefined();
   });
+
+  it('取り消しでご縁が減っても、次の役職は今より上', () => {
+    const sewayaku = cfg.ranks.find((r) => r.key === 'sewayaku')!;
+    expect(nextAutoRank(cfg.ranks, 12, sewayaku)).toMatchObject({ rank: { key: 'sodai' }, remaining: 288 });
+  });
 });
 
 describe('decidePromotion', () => {

@@ -13,6 +13,7 @@ services:
       interval: 5s
       retries: 10
 
+  # 朱印 BOT
   bot:
     build: .
     restart: unless-stopped
@@ -23,5 +24,38 @@ services:
     volumes:
       - ./config/guild.json:/app/config/guild.json:ro
 
+  # 管理画面（社務所 Web）
+  web:
+    build: .
+    command: ["node", "dist/web/index.js"]
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./config/guild.json:/app/config/guild.json:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:'+(process.env.WEB_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+
+  # HTTPS（証明書を自動で取得・更新）
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SHAMUSHO_DOMAIN: ${SHAMUSHO_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - web
+
 volumes:
   pgdata:
+  caddy_data:

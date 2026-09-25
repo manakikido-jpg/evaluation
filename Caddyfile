@@ -1,0 +1,5 @@
+# 管理画面（社務所 Web）を HTTPS で公開する
+{$SHAMUSHO_DOMAIN} {
+	encode gzip
+	reverse_proxy web:3000
+}

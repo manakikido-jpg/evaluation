@@ -15,6 +15,7 @@ import { decidePromotion, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
+import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf } from '../services/shuin.js';
 import { COMMAND, parseShuinId } from './ids.js';
 import {
@@ -38,15 +39,59 @@ function toInfo(m: GuildMember): MemberInfo {
   return { id: m.id, isBot: m.user.bot, roleIds: [...m.roles.cache.keys()] };
 }
 
+export function toSnapshot(m: GuildMember): MemberSnapshot {
+  return {
+    id: m.id,
+    username: m.user.username,
+    displayName: m.displayName,
+    avatarUrl: m.displayAvatarURL({ size: 128 }),
+    // @everyone（サーバー ID と同じ）は除く
+    roleIds: [...m.roles.cache.keys()].filter((id) => id !== m.guild.id),
+    isBot: m.user.bot,
+    joinedAt: m.joinedAt,
+  };
+}
+
 /** 朱印 BOT の本体。Discord のイベントを受けて、services の処理と表示をつなぐ */
 export class ShuinApp {
   private readonly lock = new KeyedLock();
+  private readonly activity: ActivityTracker;
 
   constructor(
     private readonly client: Client,
     private readonly db: Db,
     private readonly cfg: GuildConfig,
-  ) {}
+  ) {
+    this.activity = new ActivityTracker(db);
+  }
+
+  // ───────── メンバーの同期（管理画面用） ─────────
+
+  async syncAll(guildMembers: Iterable<GuildMember>): Promise<void> {
+    const result = await syncAllMembers(this.db, [...guildMembers].map(toSnapshot));
+    logger.info(result, 'members synced');
+  }
+
+  async onMemberAdd(m: GuildMember): Promise<void> {
+    if (m.guild.id !== this.cfg.guildId) return;
+    await recordJoin(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'recordJoin failed'));
+  }
+
+  async onMemberRemove(guildId: string, userId: string): Promise<void> {
+    if (guildId !== this.cfg.guildId) return;
+    await recordLeave(this.db, userId).catch((err) => logger.error({ err }, 'recordLeave failed'));
+  }
+
+  async onMemberUpdate(m: GuildMember): Promise<void> {
+    if (m.guild.id !== this.cfg.guildId) return;
+    await upsertMember(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'upsertMember failed'));
+  }
+
+  /** 発言・通話に入ったときに「最後の活動」を更新 */
+  async onActivity(guildId: string | null, userId: string, isBot: boolean): Promise<void> {
+    if (guildId !== this.cfg.guildId || isBot) return;
+    await this.activity.touch(userId).catch((err) => logger.warn({ err }, 'activity update failed'));
+  }
 
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg.guildId) return;
@@ -85,6 +130,7 @@ export class ShuinApp {
   }
 
   async onMessage(message: Message): Promise<void> {
+    await this.onActivity(message.guildId, message.author.id, message.author.bot);
     const ema = this.cfg.channels.ema;
     if (!ema || message.channelId !== ema || message.author.bot || !message.inGuild()) return;
     // 返信や固定メッセージなどは除き、自己紹介の投稿にだけ付ける
@@ -199,6 +245,9 @@ export class ShuinApp {
     }
     await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen), [member.id]);
     await this.log(promotionLog(member.id, promotion, goen));
+    await recordPromotion(this.db, member.id, promotion.from.key, promotion.to.key, goen).catch((err) =>
+      logger.warn({ err }, 'recordPromotion failed'),
+    );
   }
 
   private async log(content: string): Promise<void> {

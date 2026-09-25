@@ -98,7 +98,7 @@ export function goshuinchoReply(
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
-  const next = auto ? nextAutoRank(ranks, data.goen) : undefined;
+  const next = auto ? nextAutoRank(ranks, data.goen, auto) : undefined;
   const nextText = next ? `（${next.rank.name}まで あと ${next.remaining}）` : '';
 
   const received = data.receivedCount

@@ -13,7 +13,12 @@ async function main(): Promise<void> {
   logger.info('database ready');
 
   const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildVoiceStates,
+    ],
   });
   const app = new ShuinApp(client, db, cfg);
 
@@ -26,6 +31,18 @@ async function main(): Promise<void> {
     }
     await guild.commands.set(commandDefinitions());
     logger.info({ guild: guild.name }, 'commands registered');
+    // 管理画面用に全員を同期（BOT が止まっていた間の参加・退出も反映）
+    const all = await guild.members.fetch();
+    await app.syncAll(all.values()).catch((err) => logger.error({ err }, 'member sync failed'));
+  });
+  client.on(Events.GuildMemberAdd, (m) => void app.onMemberAdd(m));
+  client.on(Events.GuildMemberRemove, (m) => void app.onMemberRemove(m.guild.id, m.id));
+  client.on(Events.GuildMemberUpdate, (_old, m) => void app.onMemberUpdate(m));
+  client.on(Events.VoiceStateUpdate, (before, after) => {
+    // 通話に入った・移動したとき
+    if (after.channelId && after.channelId !== before.channelId && after.member) {
+      void app.onActivity(after.guild.id, after.id, after.member.user.bot);
+    }
   });
   client.on(Events.InteractionCreate, (i) => void app.onInteraction(i));
   client.on(Events.MessageCreate, (m) => void app.onMessage(m));

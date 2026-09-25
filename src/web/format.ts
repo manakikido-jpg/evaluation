@@ -1,0 +1,64 @@
+import type { GuildConfig } from '../config.js';
+import { highestRank, rankLabel } from '../domain/ranks.js';
+
+const TZ = 'Asia/Tokyo';
+
+const dateTimeFmt = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const dateFmt = new Intl.DateTimeFormat('ja-JP', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+
+export const fmtDateTime = (d: Date | null | undefined) => (d ? dateTimeFmt.format(d) : '—');
+export const fmtDate = (d: Date | null | undefined) => (d ? dateFmt.format(d) : '—');
+
+/** 「3 日前」「たった今」など */
+export function fmtAgo(d: Date | null | undefined, now: Date): string {
+  if (!d) return '記録なし';
+  const sec = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (sec < 60) return 'たった今';
+  if (sec < 3600) return `${Math.floor(sec / 60)} 分前`;
+  if (sec < 86_400) return `${Math.floor(sec / 3600)} 時間前`;
+  const days = Math.floor(sec / 86_400);
+  if (days < 30) return `${days} 日前`;
+  if (days < 365) return `${Math.floor(days / 30)} か月前`;
+  return `${Math.floor(days / 365)} 年前`;
+}
+
+/** 日本時間の今日 0 時 */
+export function startOfTodayJst(now: Date): Date {
+  const jst = new Date(now.getTime() + 9 * 3_600_000);
+  jst.setUTCHours(0, 0, 0, 0);
+  return new Date(jst.getTime() - 9 * 3_600_000);
+}
+
+export const AGE_LABEL: Record<string, string> = { minor: '13〜17 歳', adult: '18 歳以上', unknown: '未申告' };
+
+export const LEVEL_LABEL: Record<string, string> = { guji: '⛩ 宮司', shinshoku: '🎐 神職' };
+
+export const EVENT_LABEL: Record<string, string> = {
+  join: '参加',
+  rejoin: '再参加',
+  leave: '退出',
+  promote: '昇格',
+};
+
+export const ACTION_LABEL: Record<string, string> = {
+  'auth.login': 'ログイン',
+  'auth.logout': 'ログアウト',
+  'auth.denied': 'ログインを拒否',
+  'auth.revoked': '権限がなくなったためログアウト',
+};
+
+export function memberRankLabel(cfg: GuildConfig, roleIds: readonly string[]): string {
+  return rankLabel(highestRank(cfg.ranks, roleIds));
+}
+
+export function rankNameByKey(cfg: GuildConfig, key: string): string {
+  const r = cfg.ranks.find((x) => x.key === key);
+  return r ? rankLabel(r) : key;
+}

@@ -9,15 +9,20 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && cp -r src/web/public dist/web/",
     "start": "node dist/index.js",
+    "start:web": "node dist/web/index.js",
+    "dev:web": "tsx watch src/web/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "discord.js": "^14.27.0",
     "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.9",
+    "htmx.org": "^2.0.11",
     "pg": "^8.23.0",
     "pino": "^10.3.1",
     "zod": "^4.6.5"

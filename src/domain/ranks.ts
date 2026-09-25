@@ -30,9 +30,17 @@ export function autoRankForGoen(ranks: readonly Rank[], goen: number): Rank | un
     .at(-1);
 }
 
-/** 次の自動役職と、あといくつ必要か。いちばん上なら undefined */
-export function nextAutoRank(ranks: readonly Rank[], goen: number): { rank: Rank; remaining: number } | undefined {
-  const next = autoRanks(ranks).find((r) => r.requiredGoen > goen);
+/**
+ * 次の自動役職と、あといくつ必要か。いちばん上なら undefined。
+ * 降格はしないので、ご縁が今の役職の基準より少なくても「今より上」の役職を返す。
+ */
+export function nextAutoRank(
+  ranks: readonly Rank[],
+  goen: number,
+  current?: Rank,
+): { rank: Rank; remaining: number } | undefined {
+  const floor = Math.max(goen, current?.requiredGoen ?? -1);
+  const next = autoRanks(ranks).find((r) => r.requiredGoen > floor);
   return next ? { rank: next, remaining: next.requiredGoen - goen } : undefined;
 }
 

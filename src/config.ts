@@ -38,6 +38,13 @@ export const guildConfigSchema = z
       })
       .default({}),
     ranks: z.array(rankSchema).min(1),
+    /** 管理画面に入れるロール（省略時は役職キー shinshoku / guji のロール） */
+    admin: z
+      .object({
+        shinshokuRoleIds: z.array(snowflake).default([]),
+        gujiRoleIds: z.array(snowflake).default([]),
+      })
+      .optional(),
   })
   .superRefine((cfg, ctx) => {
     const keys = new Set<string>();
@@ -72,6 +79,36 @@ export type Env = z.infer<typeof envSchema>;
 
 export function loadEnv(env: NodeJS.ProcessEnv = process.env): Env {
   return envSchema.parse(env);
+}
+
+const webEnvSchema = z.object({
+  DISCORD_TOKEN: z.string().min(1, 'DISCORD_TOKEN を設定してください'),
+  DISCORD_CLIENT_ID: z.string().regex(/^\d{17,20}$/, 'DISCORD_CLIENT_ID を設定してください'),
+  DISCORD_CLIENT_SECRET: z.string().min(1, 'DISCORD_CLIENT_SECRET を設定してください'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL を設定してください'),
+  GUILD_CONFIG: z.string().default('config/guild.json'),
+  /** 管理画面の URL（例: https://shamusho.example.com）。末尾の / なし */
+  WEB_BASE_URL: z.url().transform((u) => u.replace(/\/+$/, '')),
+  WEB_PORT: z.coerce.number().int().positive().default(3000),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+});
+
+export type WebEnv = z.infer<typeof webEnvSchema>;
+
+export function loadWebEnv(env: NodeJS.ProcessEnv = process.env): WebEnv {
+  return webEnvSchema.parse(env);
+}
+
+export type AdminLevel = 'shinshoku' | 'guji';
+
+/** ロールから管理画面の権限を決める（宮司が上） */
+export function adminLevelOf(cfg: GuildConfig, roleIds: readonly string[]): AdminLevel | undefined {
+  const byKey = (key: string) => cfg.ranks.filter((r) => r.key === key).map((r) => r.roleId);
+  const guji = cfg.admin?.gujiRoleIds.length ? cfg.admin.gujiRoleIds : byKey('guji');
+  const shinshoku = cfg.admin?.shinshokuRoleIds.length ? cfg.admin.shinshokuRoleIds : byKey('shinshoku');
+  if (roleIds.some((id) => guji.includes(id))) return 'guji';
+  if (roleIds.some((id) => shinshoku.includes(id))) return 'shinshoku';
+  return undefined;
 }
 
 export function parseGuildConfig(json: unknown): GuildConfig {

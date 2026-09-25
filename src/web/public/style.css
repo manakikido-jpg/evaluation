@@ -1,0 +1,131 @@
+:root {
+  --shu: #c8102e;
+  --shu-dark: #9e0c24;
+  --sakura: #fdecee;
+  --sakura-2: #f9d5da;
+  --ink: #2b2226;
+  --muted: #7a6d71;
+  --line: #eadfe1;
+  --bg: #fbf8f8;
+  --card: #fff;
+  --gray: #eceaea;
+  font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "IPAPGothic", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f1e9eb;
+    --muted: #b3a5a9;
+    --line: #3b3034;
+    --bg: #1b1618;
+    --card: #251e21;
+    --sakura: #3a2328;
+    --sakura-2: #4a2a31;
+    --gray: #3a3336;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; line-height: 1.6; background: var(--bg); }
+a { color: var(--shu); text-decoration: none; }
+a:hover { text-decoration: underline; }
+main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { font-size: 1.5rem; margin: 8px 0 16px; }
+h1 small { font-size: .9rem; color: var(--muted); font-weight: normal; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; border-left: 4px solid var(--shu); padding-left: 8px; }
+small { color: var(--muted); }
+.mono { font-family: ui-monospace, monospace; font-size: .9em; }
+
+/* ヘッダー */
+.top {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  padding: 10px 20px; background: var(--card); border-bottom: 3px solid var(--shu);
+}
+.brand { font-weight: bold; color: var(--ink); font-size: 1.1rem; }
+.brand small { margin-left: 6px; font-weight: normal; }
+.torii { color: var(--shu); }
+.top nav { display: flex; gap: 4px; flex: 1; }
+.top nav a { padding: 6px 12px; border-radius: 6px; color: var(--ink); }
+.top nav a.on, .top nav a:hover { background: var(--sakura); text-decoration: none; }
+.me { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
+.me img { border-radius: 50%; }
+.me span { display: flex; flex-direction: column; line-height: 1.2; }
+button.link { background: none; border: none; color: var(--shu); cursor: pointer; font: inherit; padding: 4px; }
+
+/* ログイン */
+.login { max-width: 420px; margin: 12vh auto 0; text-align: center; background: var(--card); padding: 40px 24px; border-radius: 16px; border: 1px solid var(--line); }
+.login h1 { margin: 4px 0; }
+.login .sub { color: var(--muted); margin-top: 0; }
+.torii.big { font-size: 56px; line-height: 1; }
+.error { background: var(--sakura); color: var(--shu-dark); padding: 10px; border-radius: 8px; }
+.note { color: var(--muted); font-size: .85rem; }
+.button { display: inline-block; padding: 10px 20px; border-radius: 8px; font-weight: bold; }
+.button.primary { background: #5865f2; color: #fff; margin: 12px 0; }
+.button.primary:hover { background: #4752c4; text-decoration: none; }
+
+/* 数字 */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.stat .label { color: var(--muted); font-size: .85rem; }
+.stat .value { font-size: 1.8rem; font-weight: bold; }
+.stat .value small { font-size: .9rem; margin-left: 4px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+.more { text-align: right; margin: 8px 0 0; }
+.empty { color: var(--muted); }
+.crumbs { color: var(--muted); font-size: .9rem; margin: 0; }
+
+/* 絞り込み */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.filters input, .filters select, .filters button {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink);
+}
+.filters input[type=search] { flex: 1 1 240px; }
+.count { color: var(--muted); margin: 4px 0 8px; }
+
+/* 表 */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; background: var(--card); }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+th { font-size: .85rem; color: var(--muted); font-weight: normal; background: var(--sakura); }
+td.num, th.num { text-align: right; }
+table.members { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+tr.left td { color: var(--muted); }
+tr.revoked td { color: var(--muted); text-decoration: line-through; }
+table.compact td, table.compact th { padding: 6px 8px; font-size: .9rem; }
+.reason { display: block; white-space: normal; }
+.who { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+.who span { display: flex; flex-direction: column; line-height: 1.25; }
+.avatar { border-radius: 50%; flex: none; }
+.avatar.blank { display: inline-block; background: var(--gray); }
+.avatar.s28 { width: 28px; height: 28px; }
+.avatar.s32 { width: 32px; height: 32px; }
+.avatar.s64 { width: 64px; height: 64px; }
+.pager { display: flex; gap: 16px; justify-content: center; align-items: center; margin-top: 12px; }
+
+.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .8rem; margin-left: 6px; }
+.tag.gray { background: var(--gray); color: var(--muted); margin-left: 0; }
+.tag.red { background: var(--sakura-2); color: var(--shu-dark); }
+
+/* メンバー詳細 */
+.profile { display: flex; gap: 16px; align-items: flex-start; }
+.profile > div { flex: 1; min-width: 0; }
+.profile h1 { margin: 0; }
+.profile .rank { margin: 4px 0 12px; font-size: 1.05rem; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 20px; margin: 0; }
+.facts dt { color: var(--muted); font-size: .8rem; }
+.facts dd { margin: 0; }
+.facts dd strong { font-size: 1.3rem; color: var(--shu); }
+.timeline { list-style: none; padding: 0; margin: 0; }
+.timeline li { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: .9rem; }
+.timeline time { color: var(--muted); white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .top { gap: 8px; padding: 10px 12px; }
+  .top nav { order: 3; flex-basis: 100%; }
+  .profile { flex-direction: column; }
+}

@@ -69,10 +69,36 @@ npm start
 
 ---
 
+## 管理画面（社務所 Web）の導入
+
+神職・宮司だけが Discord アカウントでログインできる管理ページです。いまできること:
+メンバーの一覧・検索・絞り込み（役職 / 年齢区分 / しばらく来ていない人 / 退出済み）、メンバーごとの詳細（ご縁・朱印の履歴・入退室・昇格）、操作の記録。
+
+1. **ドメインを用意**し、DNS に A レコードを追加して、管理画面用のサブドメイン（例: `shamusho.example.com`）をサーバーの IP に向ける
+2. Discord Developer Portal → **OAuth2**
+   - 「Client Secret」を発行してメモ
+   - **Redirects** に `https://shamusho.example.com/auth/callback` を追加
+3. `.env` に追記
+   ```
+   DISCORD_CLIENT_ID=（Client ID）
+   DISCORD_CLIENT_SECRET=（Client Secret）
+   WEB_BASE_URL=https://shamusho.example.com
+   SHAMUSHO_DOMAIN=shamusho.example.com
+   ```
+4. `docker compose up -d --build` → `https://shamusho.example.com` を開き「Discord でログイン」
+
+- HTTPS の証明書は Caddy が自動で取得・更新します（サーバーの 80・443 番ポートを開けておく）。
+- 入れるのは 🎐神職・⛩宮司 のロールを持つ人だけ。ロールを外すと最長 5 分で入れなくなります。
+- ログインは 12 時間で切れます。ログイン・ログアウトは「操作の記録」に残ります。
+- メンバーの情報は BOT が起動時と参加・退出・ロール変更のたびに記録します（発言の本文は保存しません）。
+
+---
+
 ## 開発
 
 ```bash
-npm run dev         # 変更を監視して起動
+npm run dev         # BOT を変更を監視して起動
+npm run dev:web     # 管理画面を変更を監視して起動
 npm test            # テスト（DB はメモリ上の PostgreSQL を使うので準備不要）
 npm run typecheck   # 型チェック
 npm run db:generate # src/db/schema.ts を変えたらマイグレーションを作る
@@ -84,5 +110,7 @@ npm run db:generate # src/db/schema.ts を変えたらマイグレーション�
 | `src/services/shuin.ts` | 朱印の保存・取り消し・集計 |
 | `src/services/flows.ts` | 「押せるか」の判定と押す手順 |
 | `src/discord/` | コマンド・ボタン・表示・ロール変更・発表 |
+| `src/services/members.ts` | メンバーの同期・検索（管理画面用） |
+| `src/web/` | 管理画面（社務所 Web） |
 | `src/db/schema.ts` / `drizzle/` | テーブル定義とマイグレーション |
 | `config/guild.example.json` | サーバーの ID と役職の設定例 |
