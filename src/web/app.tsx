@@ -739,6 +739,17 @@ export function createWebApp(deps: WebDeps) {
         giftDailyLimit: num('giftDailyLimit'),
         boostThanks: num('boostThanks'),
         boostDiscountPercent: num('boostDiscountPercent'),
+        coreTimePercent: num('coreTimePercent'),
+      },
+      coreTime: {
+        slots: [0, 1, 2, 3, 4, 5, 6].flatMap((day) => {
+          const start = field(body, `ct.${day}.start`, 5);
+          const end = field(body, `ct.${day}.end`, 5);
+          // 終わりの 00:00 は 24 時
+          return start && end ? [{ day, start, end: end === '00:00' ? '24:00' : end }] : [];
+        }),
+        noticeDayBefore: field(body, 'ctNoticeDayBefore', 5),
+        noticeMinutesBefore: num('ctNoticeMinutesBefore'),
       },
       boost: {
         // 空なら標準の文面に戻す
@@ -1006,9 +1017,11 @@ export function createWebApp(deps: WebDeps) {
     if (!channel) return c.redirect('/channels');
     const changes: string[] = [];
     try {
-      const patch: { topic?: string; name?: string } = {};
+      const patch: { topic?: string; name?: string; nsfw?: boolean } = {};
       if ((channel.topic ?? '') !== topic) patch.topic = topic;
       if (name && name !== channel.name) patch.name = name;
+      // 年齢制限のチェックは、フォームにあるときだけ（ない古いフォームでは変えない）
+      if (body.nsfwField === '1' && (body.nsfw === 'yes') !== Boolean(channel.nsfw)) patch.nsfw = body.nsfw === 'yes';
       if (Object.keys(patch).length) {
         await deps.discord.editChannel(id, patch);
         changes.push(...Object.keys(patch));
@@ -1029,6 +1042,7 @@ export function createWebApp(deps: WebDeps) {
         name: channel.name,
         newName: changes.includes('name') ? name : undefined,
         topic: changes.includes('topic') ? topic : undefined,
+        nsfw: changes.includes('nsfw') ? body.nsfw === 'yes' : undefined,
         mode: changes.includes('mode') ? mode : undefined,
       },
       via: 'web',
@@ -1040,18 +1054,28 @@ export function createWebApp(deps: WebDeps) {
   app.post('/channels/:id/name', async (c) => {
     const id = c.req.param('id');
     if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
-    const name = cleanChannelName((await c.req.parseBody()).name);
+    const body = await c.req.parseBody();
+    const name = cleanChannelName(body.name);
     if (!name) return c.redirect('/channels?msg=invalid');
     const channel = (await loadChannels(true)).find((ch) => ch.id === id);
     if (!channel) return c.redirect('/channels');
-    if (channel.name === name) return c.redirect('/channels?msg=unchanged');
+    const patch: { name?: string; nsfw?: boolean } = {};
+    if (channel.name !== name) patch.name = name;
+    // 通話の年齢制限（カテゴリには付けられない）
+    if (body.ageGateField === '1' && channel.type !== 4 && (body.nsfw === 'yes') !== Boolean(channel.nsfw)) patch.nsfw = body.nsfw === 'yes';
+    if (!Object.keys(patch).length) return c.redirect('/channels?msg=unchanged');
     try {
-      await deps.discord.editChannel(id, { name });
+      await deps.discord.editChannel(id, patch);
     } catch (err) {
       logger.warn({ err }, 'channel rename failed');
       return c.redirect('/channels?msg=failed');
     }
-    await audit(db, { actorId: c.get('session').userId, action: 'channel.update', detail: { channelId: id, name: channel.name, newName: name }, via: 'web' });
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'channel.update',
+      detail: { channelId: id, name: channel.name, newName: patch.name, nsfw: patch.nsfw },
+      via: 'web',
+    });
     return c.redirect('/channels?msg=saved');
   });
 

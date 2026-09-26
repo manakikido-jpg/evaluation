@@ -49,9 +49,30 @@ export const economySchema = z.object({
   boostThanks: z.number().int().min(0).default(1500),
   /** 奉納している人の授与品の割引（%。免罪符・贈り物はのぞく。0 で割引なし） */
   boostDiscountPercent: z.number().int().min(0).max(90).default(20),
+  /** コアタイム中の通話の花びら（%。150 で 1.5 倍。増えた分は 1 日の上限に数えない） */
+  coreTimePercent: z.number().int().min(100).max(500).default(150),
 });
 
 export type EconomyConfig = z.infer<typeof economySchema>;
+
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/, '時刻は 21:00 のように');
+
+/** コアタイム: みんなが集まる時間。通話の花びらが増え、#境内 で予告する（日本時間） */
+export const coreTimeSchema = z.object({
+  /** day: 0 = 日曜 … 6 = 土曜。start < end（日をまたがない） */
+  slots: z
+    .array(z.object({ day: z.number().int().min(0).max(6), start: hhmm, end: hhmm }).refine((s) => s.start < s.end, '終わりは始まりより後に'))
+    .max(14)
+    .default([
+      { day: 5, start: '21:00', end: '23:00' },
+      { day: 6, start: '21:00', end: '23:00' },
+    ]),
+  /** 前日のこの時刻に予告（空なら予告しない） */
+  noticeDayBefore: hhmm.or(z.literal('')).default('21:00'),
+  /** 始まる何分前に予告（0 なら予告しない） */
+  noticeMinutesBefore: z.number().int().min(0).max(720).default(60),
+});
+export type CoreTimeConfig = z.infer<typeof coreTimeSchema>;
 
 export const DEFAULT_BOOST_ANNOUNCE = '🏮 **{名前}** さんが、咲楽ノ宮に奉納（サーバーブースト）してくださいました。\nありがとうございます！';
 export const DEFAULT_BOOST_DM = '🏮 咲楽ノ宮に奉納（サーバーブースト）してくださり、ありがとうございます。';
@@ -153,6 +174,7 @@ export const guildConfigSchema = z
     omairi: omairiSchema.default(omairiSchema.parse({})),
     /** ブースト（奉納）のお礼の文面。{名前} は奉納した人（メンションになるが通知は飛ばない） */
     boost: boostSchema.default(boostSchema.parse({})),
+    coreTime: coreTimeSchema.default(coreTimeSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({

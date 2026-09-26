@@ -12,6 +12,7 @@ import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
 import { BoostApp } from './discord/boost.js';
+import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
 import { ConfigStore } from './services/settings.js';
@@ -83,6 +84,8 @@ async function main(): Promise<void> {
     ticker = setInterval(() => {
       void app.everyMinute(guild);
       void tempVoice.cleanup();
+      // コアタイムの予告（前日・始まる前に #境内 へ）
+      void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
     }, 60_000);
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));

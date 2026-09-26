@@ -21,7 +21,7 @@ export interface DiscordActions {
   /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
   guildChannels(guildId: string): Promise<GuildChannel[]>;
   /** チャンネルの名前・説明（トピック）を変える */
-  editChannel(channelId: string, body: { topic?: string; name?: string }): Promise<void>;
+  editChannel(channelId: string, body: { topic?: string; name?: string; nsfw?: boolean }): Promise<void>;
   /** チャンネルの権限の上書きを 1 つ書き換える（書き込める・読むだけの切り替え） */
   setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
   /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
@@ -39,6 +39,8 @@ export type GuildChannel = {
   parent_id: string | null;
   position: number;
   topic?: string | null;
+  /** Discord の年齢制限チャンネル */
+  nsfw?: boolean;
   permission_overwrites?: ChannelOverwrite[];
 };
 

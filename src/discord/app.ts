@@ -17,6 +17,7 @@ import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
 import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
+import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
@@ -116,7 +117,9 @@ export class ShuinApp {
       }));
     const ids = eligibleVoiceMembers(channels, excluded);
     if (!ids.length) return;
-    const awarded = await voiceTick(this.db, this.cfg.economy, ids, now).catch((err) => {
+    // コアタイム中は、10 分ごとの花びらが増える
+    const coreBonus = activeCoreTime(this.cfg.coreTime, now) ? coreTimeBonus(this.cfg.economy) : 0;
+    const awarded = await voiceTick(this.db, this.cfg.economy, ids, now, { coreBonus }).catch((err) => {
       logger.warn({ err }, 'voice tick failed');
       return [];
     });

@@ -15,14 +15,30 @@ function Flash(props: { code?: string }) {
   return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
 }
 
-/** 名前だけ変えるフォーム（カテゴリ・通話） */
-function RenameForm(props: { session: AdminSession; channel: GuildChannel; label: string }) {
+/** Discord の年齢制限（見るのに Discord の年齢確認が要る） */
+function AgeGate(props: { channel: GuildChannel }) {
+  return (
+    <label class="field check">
+      <input type="checkbox" name="nsfw" value="yes" checked={Boolean(props.channel.nsfw)} />
+      <span>🔞 Discord の年齢制限（見るのに Discord の年齢確認が要る）</span>
+    </label>
+  );
+}
+
+/** 名前を変えるフォーム（カテゴリ・通話。通話は年齢制限も） */
+function RenameForm(props: { session: AdminSession; channel: GuildChannel; label: string; ageGate?: boolean }) {
   return (
     <form method="post" action={`/channels/${props.channel.id}/name`} class="inline-actions rename">
       <input type="hidden" name="_csrf" value={props.session.csrfToken} />
       <span class="note">{props.label}</span>
       <input type="text" name="name" value={props.channel.name} maxlength={100} required aria-label={`${props.label}の名前`} />
-      <button type="submit">名前を変える</button>
+      {props.ageGate && (
+        <>
+          <input type="hidden" name="ageGateField" value="1" />
+          <AgeGate channel={props.channel} />
+        </>
+      )}
+      <button type="submit">保存</button>
     </form>
   );
 }
@@ -39,6 +55,9 @@ export function ChannelsPage(props: {
       <Flash code={props.flash} />
       <p class="note">
         チャンネル・カテゴリ・通話の名前、チャンネルの上に出る説明（トピック）、「書き込める／読むだけ」を変えられます。読むだけのチャンネルは、メッセージ・スレッドは送れず、リアクションだけ付けられます（神職・宮司と BOT は書けます）。見える範囲は変わりません。
+      </p>
+      <p class="note">
+        🔞 Discord の年齢制限を付けると、見るのに Discord の年齢確認が要ります。宵宮は、宵参り申請を運営が承認した人だけが見られるので、年齢制限は付けなくて大丈夫です（その代わり、性的な画像・動画・露骨な話は出さないでください。出す部屋を作るなら、その部屋にだけ年齢制限を付けます）。
       </p>
       <p class="note">
         名前を変えても BOT は同じチャンネルとして扱います（ID で覚えているため）。テキストチャンネルの名前は、Discord が英字を小文字に、空白を「-」に変えます。掲示の <code>{'{#絵馬}'}</code> のようなリンクは、飾り（絵文字・記号）を除いて同じ名前なら見つかります。まったく別の名前にしたときは、掲示の <code>{'{#…}'}</code> も新しい名前に直してください。
@@ -65,6 +84,8 @@ export function ChannelsPage(props: {
                     {channel.topic ?? ''}
                   </textarea>
                 </label>
+                <input type="hidden" name="nsfwField" value="1" />
+                <AgeGate channel={channel} />
                 <div class="inline-actions">
                   <label class="field check">
                     <input type="radio" name="mode" value="writable" checked={mode === 'writable'} />
@@ -84,7 +105,7 @@ export function ChannelsPage(props: {
           {g.voice.length > 0 && (
             <div class="voice-list">
               {g.voice.map((v) => (
-                <RenameForm session={session} channel={v} label="🔊 通話" />
+                <RenameForm session={session} channel={v} label="🔊 通話" ageGate />
               ))}
             </div>
           )}

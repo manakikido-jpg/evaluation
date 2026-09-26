@@ -8,6 +8,7 @@ import { audit } from './audit.js';
 import { coreName } from '../lib/names.js';
 import { DEFAULT_GUIDES, DEFAULT_NOTICES, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
 import { omikujiRange } from './omikuji.js';
+import { coreTimeRate, describeCoreTime } from './coreTime.js';
 
 /**
  * 掲示: #鳥居・#しきたり などに BOT が投稿する文面。
@@ -65,6 +66,8 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '朱印を頂くと', value: String(e.shuinReceive), note: '朱印を頂くともらえる量' },
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
     { name: 'おみくじの花びら', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
+    { name: 'コアタイム', value: describeCoreTime(cfg.coreTime), note: 'コアタイムの曜日と時間' },
+    { name: 'コアタイム倍率', value: coreTimeRate(e), note: 'コアタイムの通話の花びらの倍率' },
     { name: '奉納のお礼', value: String(e.boostThanks), note: 'ブースト 1 回ごとに贈る量' },
     { name: '奉納割引', value: String(e.boostDiscountPercent), note: 'ブーストしている人の授与品の割引（%）' },
     { name: 'お参り期間', value: String(cfg.omairi.days), note: '日数' },

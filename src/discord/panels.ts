@@ -6,7 +6,6 @@
 const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
-export const DISCORD_AGE_NOTE = '宵宮を見るには、Discord の年齢確認が必要な場合があります（ユーザー設定から。多くの方は自動で済んでいます）。';
 
 export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop';
 
@@ -46,7 +45,7 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
         description: [
           '宵宮（18 歳以上だけのエリア）に入るための申請です。入鯖のときに「18 歳以上」と申告した方だけ申請できます。',
           '',
-          `-# ${DISCORD_AGE_NOTE}`,
+          '-# 神職が確認して承認すると、宵宮が見えるようになります',
         ].join('\n'),
         color: SHU,
       },

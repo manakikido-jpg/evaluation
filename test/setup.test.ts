@@ -119,7 +119,7 @@ describe('セットアップ', () => {
     expect(d.getAfk()).toBe(find(d, '奥の院').id);
   });
 
-  it('見える範囲: 入口は全員、境内は参拝者以上、社務所裏は神職・宮司、宵宮は宵参り（年齢制限）', async () => {
+  it('見える範囲: 入口は全員、境内は参拝者以上、社務所裏は神職・宮司、宵宮は宵参りの人だけ', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL);
     const ids = r.roleIds;
@@ -140,7 +140,8 @@ describe('セットアップ', () => {
     expect(ow(staff, ids.sanpaisha)).toBeUndefined();
 
     const yoimiya = d.channels.find((c) => c.name === '宵宮' && c.type === 0)!;
-    expect(yoimiya.body?.nsfw).toBe(true);
+    // Discord の年齢制限は付けない（宵参り申請を運営が承認した人だけが見られる。2026-09 に変えた）
+    expect(yoimiya.body?.nsfw).toBeUndefined();
     expect(has(ow(yoimiya, ids.yoimairi)?.allow, P.ViewChannel)).toBe(true);
     expect(ow(yoimiya, ids.sanpaisha)).toBeUndefined();
 

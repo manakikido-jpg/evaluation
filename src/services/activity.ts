@@ -53,7 +53,10 @@ export async function voiceTick(
   economy: EconomyConfig,
   memberIds: string[],
   now: Date,
+  /** コアタイム中なら、10 分ごとに増える分（1 日の上限に数えない） */
+  opts: { coreBonus?: number } = {},
 ): Promise<{ memberId: string; amount: number }[]> {
+  const bonus = Math.max(0, opts.coreBonus ?? 0);
   const date = jstDate(now);
   const awarded: { memberId: string; amount: number }[] = [];
   for (const memberId of new Set(memberIds)) {
@@ -67,26 +70,32 @@ export async function voiceTick(
       .returning({ vcMinutes: activityDaily.vcMinutes, vcCoins: activityDaily.vcCoins });
     if (!row || row.vcMinutes % 10 !== 0) continue;
 
-    const amount = Math.min(economy.voicePer10Min, economy.voiceDailyCap - row.vcCoins);
-    if (amount <= 0) continue;
+    const amount = Math.max(0, Math.min(economy.voicePer10Min, economy.voiceDailyCap - row.vcCoins));
+    if (amount + bonus <= 0) continue;
     // 上限の判定と加算を同時に行う（二重に渡さない）。今日の枠と花びらは一緒に記録する
     const paid = await db.transaction(async (tx) => {
-      const updated = await tx
-        .update(activityDaily)
-        .set({ vcCoins: sql`${activityDaily.vcCoins} + ${amount}` })
-        .where(
-          and(
-            eq(activityDaily.memberId, memberId),
-            eq(activityDaily.date, date),
-            sql`${activityDaily.vcCoins} + ${amount} <= ${economy.voiceDailyCap}`,
-          ),
-        )
-        .returning({ vcCoins: activityDaily.vcCoins });
-      if (!updated.length) return false;
-      await addCoins(tx, memberId, amount, 'voice', { date, minutes: row.vcMinutes });
-      return true;
+      let base = 0;
+      if (amount > 0) {
+        const updated = await tx
+          .update(activityDaily)
+          .set({ vcCoins: sql`${activityDaily.vcCoins} + ${amount}` })
+          .where(
+            and(
+              eq(activityDaily.memberId, memberId),
+              eq(activityDaily.date, date),
+              sql`${activityDaily.vcCoins} + ${amount} <= ${economy.voiceDailyCap}`,
+            ),
+          )
+          .returning({ vcCoins: activityDaily.vcCoins });
+        if (updated.length) base = amount;
+      }
+      // コアタイムで増えた分は、上限に届いていてももらえる
+      const total = base + bonus;
+      if (total <= 0) return 0;
+      await addCoins(tx, memberId, total, 'voice', { date, minutes: row.vcMinutes, ...(bonus ? { coreTime: bonus } : {}) });
+      return total;
     });
-    if (paid) awarded.push({ memberId, amount });
+    if (paid) awarded.push({ memberId, amount: paid });
   }
   return awarded;
 }

@@ -267,7 +267,6 @@ export async function applyLayout(
           type,
           parent_id: parent.id,
           ...(ch.topic && ch.kind === 'text' ? { topic: ch.topic } : {}),
-          ...(cat.visibility === 'adult' ? { nsfw: true } : {}),
           permission_overwrites: overwrites(cat.visibility, Boolean(ch.readOnly)),
         });
         isNew = true;

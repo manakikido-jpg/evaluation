@@ -39,7 +39,7 @@ const fakeActions: DiscordActions = {
     { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
   ],
   guildRoles: async () => [],
-  editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}`),
+  editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}${b.nsfw !== undefined ? ` nsfw=${b.nsfw}` : ''}`),
   setChannelOverwrite: async (c, o) => void actions.push(`overwrite ${c} ${o.id} allow=${o.allow} deny=${o.deny}`),
   pinMessage: async (c, m, pin) => void actions.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`),
 };
@@ -524,6 +524,11 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       giftDailyLimit: '1000',
       boostThanks: '1500',
       boostDiscountPercent: '20',
+      coreTimePercent: '150',
+      'ct.5.start': '21:00',
+      'ct.5.end': '23:00',
+      ctNoticeDayBefore: '21:00',
+      ctNoticeMinutesBefore: '60',
       omairiDays: '14',
       omairiExtendDays: '7',
       autoApproveAccountDays: '0',
@@ -622,6 +627,11 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       giftDailyLimit: '1000',
       boostThanks: '1500',
       boostDiscountPercent: '20',
+      coreTimePercent: '150',
+      'ct.5.start': '21:00',
+      'ct.5.end': '23:00',
+      ctNoticeDayBefore: '21:00',
+      ctNoticeMinutesBefore: '60',
       omairiDays: '14',
       omairiExtendDays: '7',
       autoApproveAccountDays: '0',
@@ -868,6 +878,22 @@ describe('チャンネル（管理画面）', () => {
     const s2 = await login(STAFF);
     expect((await form(s2, `/channels/${CAT}/name`, { name: 'x' })).status).toBe(403);
     expect((await listAudit(db, { action: 'channel.update' })).length).toBe(2);
+  });
+
+  it('Discord の年齢制限を付け外しできる（チェックがあるフォームのときだけ）', async () => {
+    const g = await login(GUJI);
+    await form(g, `/channels/${TORII}`, { topic: 'ようこそ', mode: 'writable', nsfwField: '1', nsfw: 'yes' });
+    expect(actions).toContain(`editChannel ${TORII}  nsfw=true`);
+    actions.length = 0;
+    await form(g, `/channels/${TORII}`, { topic: 'ようこそ', mode: 'writable' });
+    expect(actions.filter((a) => a.startsWith('editChannel'))).toEqual([]);
+  });
+
+  it('コアタイムの設定が設定ページに出る', async () => {
+    const g = await login(GUJI);
+    const page = await (await get('/settings', g)).text();
+    expect(page).toContain('コアタイム');
+    expect(page).toMatch(/name="ct\.5\.start" value="21:00"/);
   });
 
   it('掲示: チャンネルの案内を入れる・ピン留めを選べる', async () => {

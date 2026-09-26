@@ -18,7 +18,6 @@ import { getMember } from './members.js';
 import { activeYakuCount } from './yaku.js';
 import { grantJoinBonus } from './economy.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
-import { DISCORD_AGE_NOTE } from '../discord/panels.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
 
 /**
@@ -143,7 +142,7 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
     dmSent = await ctx.discord.sendDm(
       app.memberId,
       approve
-        ? [SIGN, '🔞 宵参りの申請を承認しました。宵宮（18 歳以上のエリア）に入れるようになりました。', DISCORD_AGE_NOTE].join('\n')
+        ? [SIGN, '🔞 宵参りの申請を承認しました。宵宮（18 歳以上のエリア）に入れるようになりました。'].join('\n')
         : [SIGN, '宵参りの申請は、今回はお見送りとなりました。'].join('\n'),
     );
   }

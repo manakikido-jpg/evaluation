@@ -475,6 +475,48 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </div>
         </section>
         <section class="card">
+          <h2>🏮 コアタイム</h2>
+          <p class="note">
+            みんなが集まる時間（日本時間）。この間の通話は{e.currencyName}が増えます（増えた分は 1 日の上限に数えません。端数は四捨五入）。#境内 に、前日と始まる少し前に予告を出します。曜日ごとに 1 つ。空けた曜日はコアタイムなし。終わりを 00:00 にすると 24 時まで。
+          </p>
+          <table class="compact coretime">
+            <thead>
+              <tr>
+                <th>曜日</th>
+                <th>始まり</th>
+                <th>終わり</th>
+              </tr>
+            </thead>
+            <tbody>
+              {['日', '月', '火', '水', '木', '金', '土'].map((w, d) => {
+                const slot = cfg.coreTime.slots.find((s) => s.day === d);
+                return (
+                  <tr>
+                    <td>{w}曜</td>
+                    <td>
+                      <input type="time" name={`ct.${d}.start`} value={slot?.start ?? ''} aria-label={`${w}曜の始まり`} />
+                    </td>
+                    <td>
+                      <input type="time" name={`ct.${d}.end`} value={slot ? (slot.end === '24:00' ? '00:00' : slot.end) : ''} aria-label={`${w}曜の終わり`} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div class="fields">
+            <Num name="coreTimePercent" label="通話の花びら（%。150 で 1.5 倍）" value={e.coreTimePercent} file={f.coreTimePercent} min={100} />
+            <label class="field">
+              <span>前日の予告の時刻（空で出さない）</span>
+              <input type="time" name="ctNoticeDayBefore" value={cfg.coreTime.noticeDayBefore} />
+            </label>
+            <label class="field">
+              <span>始まる何分前に予告（0 で出さない）</span>
+              <input type="number" name="ctNoticeMinutesBefore" value={String(cfg.coreTime.noticeMinutesBefore)} min={0} max={720} required />
+            </label>
+          </div>
+        </section>
+        <section class="card">
           <h2>🏮 ブースト（奉納）のお礼</h2>
           <p class="note">
             ブースト 1 回ごとに、#慶事 でお知らせ・本人に DM・{e.currencyName}を贈ります（2 回なら 2 回分）。続けてくれている間は 30 日ごとにまた贈ります（1 人 1 回分）。割引は何回ブーストしても同じです。#番付 に今奉納してくれている人の「奉納板」も出します。

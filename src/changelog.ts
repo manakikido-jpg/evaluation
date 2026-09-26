@@ -20,6 +20,30 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-coretime',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: 'コアタイム',
+    items: [
+      '金曜・土曜の 21:00〜23:00 はコアタイム。通話の花びらが 1.5 倍（10 分 5 枚 → 8 枚。増えた分は 1 日の上限に数えない）',
+      '#境内 に、前日の 21 時と、始まる 1 時間前に予告',
+      '曜日・時間・倍率・予告の時刻は「設定」で変えられる。掲示では {コアタイム} {コアタイム倍率} が使える',
+    ],
+  },
+  {
+    id: '2026-09-26-yoimiya-no-age-gate',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '宵宮は運営の承認だけで入れるように',
+    items: [
+      '宵宮に Discord の年齢制限（Discord の年齢確認）を付けないように。宵参り申請を運営が承認した人だけが見られる',
+      '「チャンネル」ページで、Discord の年齢制限を付け外しできる',
+      '宵宮でも、性的な画像・動画・露骨な話は禁止（しきたりに追記）',
+    ],
+  },
+  {
     id: '2026-09-26-vc-panel',
     date: '2026-09-26',
     kind: 'new',
