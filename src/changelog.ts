@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-board-boost-count',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '奉納板にブーストの回数',
+    items: ['#番付 の奉納板に、今の奉納でブーストしてくれた回数を載せる（「ブーストしました」のお知らせで数える）'],
+  },
+  {
     id: '2026-09-26-gender-intro',
     date: '2026-09-26',
     kind: 'new',

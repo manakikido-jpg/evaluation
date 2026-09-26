@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { boostMessages, boostThanks, members, settings } from '../db/schema.js';
@@ -78,14 +78,27 @@ export async function thankBooster(
 }
 
 /** 今奉納してくれている人（在籍中・BOT でない。始めた順） */
-export async function currentBoosters(db: Db): Promise<{ id: string; name: string; since: Date }[]> {
+export async function currentBoosters(db: Db): Promise<{ id: string; name: string; since: Date; boosts: number }[]> {
   const rows = await db
     .select({ id: members.id, name: members.displayName, since: members.boostingSince })
     .from(members)
     .where(and(isNotNull(members.boostingSince), isNull(members.leftAt), eq(members.isBot, false)))
     .orderBy(asc(members.boostingSince), asc(members.id));
-  return rows.map((r) => ({ ...r, since: r.since! }));
+  if (!rows.length) return [];
+  const msgs = await db
+    .select({ memberId: boostMessages.memberId, count: boostMessages.count, at: boostMessages.at })
+    .from(boostMessages)
+    .where(inArray(boostMessages.memberId, rows.map((r) => r.id)));
+  return rows.map((r) => {
+    // 今の奉納（始めた日時より後）の「ブーストしました」の回数。数えられていなければ 1 回
+    const since = r.since!;
+    const counted = msgs.filter((m) => m.memberId === r.id && m.at.getTime() >= since.getTime() - SINCE_SLACK_MS).reduce((n, m) => n + m.count, 0);
+    return { id: r.id, name: r.name, since, boosts: Math.max(1, counted) };
+  });
 }
+
+/** Discord の「ブーストを始めた日時」と「ブーストしました」のメッセージの時刻のずれ */
+const SINCE_SLACK_MS = 10 * 60_000;
 
 /** {名前} などを置き換える */
 function fill(text: string, memberId: string, cfg: GuildConfig): string {
@@ -190,9 +203,9 @@ const fmtMonth = (d: Date) => {
   return `${j.getUTCFullYear()}年${j.getUTCMonth() + 1}月`;
 };
 
-export function renderBoard(boosters: { id: string; since: Date }[]): MessageBody {
+export function renderBoard(boosters: { id: string; since: Date; boosts?: number }[]): MessageBody {
   const list = boosters.length
-    ? boosters.map((b) => `- <@${b.id}> … ${fmtMonth(b.since)}から`).join('\n')
+    ? boosters.map((b) => `- <@${b.id}> … ${fmtMonth(b.since)}から・ブースト ${b.boosts ?? 1} 回`).join('\n')
     : '-# いまはいません。サーバーブーストで奉納してくださると、ここにお名前が載ります';
   return {
     content: '',

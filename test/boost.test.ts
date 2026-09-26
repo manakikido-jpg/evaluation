@@ -131,7 +131,13 @@ describe('お知らせ・DM・奉納板', () => {
     expect(messages.get('m1')).toContain('いまはいません');
     await recordJoin(db, snap(A, at(0)));
     expect(await updateBoard(ctx)).toBe('edited');
-    expect(messages.get('m1')).toContain(`<@${A}> … 2026年9月から`);
+    expect(messages.get('m1')).toContain(`<@${A}> … 2026年9月から・ブースト 1 回`);
+    // 「ブーストしました」で数えた回数（今の奉納の分だけ）
+    await thankBoostMessage({ db, cfg, discord }, { messageId: 'old', memberId: A, count: 5 }, at(-30));
+    await thankBoostMessage({ db, cfg, discord }, { messageId: 'b1', memberId: A, count: 1 }, at(0));
+    await thankBoostMessage({ db, cfg, discord }, { messageId: 'b2', memberId: A, count: 2 }, at(1));
+    expect(await updateBoard(ctx)).toBe('edited');
+    expect(messages.get('m1')).toContain(`<@${A}> … 2026年9月から・ブースト 3 回`);
     expect(await updateBoard(ctx)).toBe('unchanged');
     await upsertMember(db, snap(A, null));
     expect(await updateBoard(ctx)).toBe('edited');
