@@ -24,7 +24,7 @@ describe('customId', () => {
 describe('コマンド定義', () => {
   it('右クリックメニュー・全員用・神職用', () => {
     const defs = commandDefinitions(cfg);
-    expect(defs.map((d) => d.name)).toEqual(['朱印を押す', '御朱印帳を見る', 'goshuin', 'menzaifu', 'soudan', 'panel', 'yaku', 'ban', 'kick', 'memo', 'member']);
+    expect(defs.map((d) => d.name)).toEqual(['朱印を押す', '御朱印帳を見る', 'goshuin', 'menzaifu', 'omikuji', 'soudan', 'panel', 'yaku', 'ban', 'kick', 'memo', 'member']);
     // 神職用は「メンバーをタイムアウト」権限がある人にだけ表示
     const staff = defs.filter((d) => ['panel', 'yaku', 'ban', 'kick', 'memo', 'member'].includes(d.name));
     expect(staff.every((d) => d.default_member_permissions === '1099511627776')).toBe(true);
