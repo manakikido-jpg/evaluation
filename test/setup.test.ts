@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig } from '../src/config.js';
 import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type ApiChannel, type ApiGuild, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
-import { FULL, MINIMAL, P } from '../src/setup/layout.js';
+import { FULL, MINIMAL, P, RETIRED } from '../src/setup/layout.js';
 import example from '../config/guild.example.json' with { type: 'json' };
 
 const GUILD = '960000000000000000';
@@ -9,12 +9,18 @@ const BOT = '960000000000000001';
 const BOT_ROLE = '960000000000000002';
 
 /** メモリ上の偽 Discord */
-function fakeDiscord(opts: { admin?: boolean; community?: boolean } = {}) {
+function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: boolean } = {}) {
   let seq = 100;
   const nextId = () => String(960000000000000000n + BigInt(seq++));
   const roles: ApiRole[] = [
     { id: GUILD, name: '@everyone', position: 0, permissions: String(P.ViewChannel | P.SendMessages), managed: false },
-    { id: BOT_ROLE, name: 'Sakura BOT', position: 1, permissions: String(opts.admin === false ? 0n : P.Administrator), managed: true },
+    {
+      id: BOT_ROLE,
+      name: 'Sakura BOT',
+      position: 1,
+      permissions: String(opts.admin === false ? 0n : P.Administrator | (opts.hubPerms === false ? 0n : P.ManageChannels | P.MoveMembers)),
+      managed: true,
+    },
   ];
   const channels: (ApiChannel & { body?: CreateChannelBody })[] = [];
   const messages: { channelId: string; body: unknown }[] = [];
@@ -300,5 +306,40 @@ describe('片付け（--tidy）', () => {
     const done = await tidyGuild(d.api, GUILD, FULL, { dryRun: true });
     expect(done).toContain('削除: 🌳 境内 / 絵馬');
     expect(JSON.stringify(d.channels)).toBe(snapshot);
+  });
+});
+
+describe('自分の通話部屋（➕ ○○をひらく）', () => {
+  it('入口の通話を作り、設定ファイルの tempVoice.hubs に書く', async () => {
+    const d = fakeDiscord();
+    const r = await applyLayout(d.api, GUILD, FULL);
+    expect(r.hubs.map((h) => h.name)).toEqual(['🍵 {name}の縁側', '🎮 {name}の屋台', '🌙 {name}の宿坊', '🍶 {name}の部屋']);
+    expect(r.hubs[0]!.channelId).toBe(find(d, '➕ 縁側をひらく', 2).id);
+    const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
+    expect(cfg.tempVoice.hubs).toEqual(r.hubs);
+  });
+
+  it('BOT に「チャンネルの管理」「メンバーを移動」がなければ注意を出す', async () => {
+    const d = fakeDiscord({ hubPerms: false });
+    d.roles.find((x) => x.id === BOT_ROLE)!.position = 99;
+    const r = await applyLayout(d.api, GUILD, FULL);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain('チャンネルの管理');
+  });
+
+  it('片付けで、前の版の固定の通話（縁側 一 など）を消す。今の配置の通話は残す', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, FULL);
+    // 前の版で作られていた通話
+    for (const r of RETIRED) d.seed(r.name, 2, r.category);
+    d.seed('みんなの部屋', 2, '🌳 境内');
+    const done = await tidyGuild(d.api, GUILD, FULL);
+    expect(done).toContain('削除: 🌳 境内 / 縁側 一');
+    expect(done).toContain('削除: 🔞 宵宮 / 御神酒処');
+    for (const r of RETIRED) expect(d.channels.some((c) => c.name === r.name && c.type === 2), r.name).toBe(false);
+    // 同じ名前のテキストチャンネル（#御神酒処）と、自分で作った通話は残る
+    expect(d.channels.some((c) => c.name === '御神酒処' && c.type === 0)).toBe(true);
+    expect(d.channels.some((c) => c.name === 'みんなの部屋')).toBe(true);
+    expect(d.channels.some((c) => c.name === '➕ 縁側をひらく')).toBe(true);
   });
 });

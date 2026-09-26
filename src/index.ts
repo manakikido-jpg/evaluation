@@ -5,6 +5,7 @@ import { connectDb } from './db/client.js';
 import { ShuinApp } from './discord/app.js';
 import { StaffApp } from './discord/staff.js';
 import { AdmissionApp } from './discord/admission.js';
+import { TempVoiceApp } from './discord/tempVoice.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -34,6 +35,7 @@ async function main(): Promise<void> {
   const actions = createDiscordActions(env.DISCORD_TOKEN);
   const staff = new StaffApp(client, db, cfg, actions, env.WEB_BASE_URL);
   const admission = new AdmissionApp(client, db, cfg, actions);
+  const tempVoice = new TempVoiceApp(db, cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -49,8 +51,13 @@ async function main(): Promise<void> {
     // 管理画面用に全員を同期（BOT が止まっていた間の参加・退出も反映）
     const all = await guild.members.fetch();
     await app.syncAll(all.values()).catch((err) => logger.error({ err }, 'member sync failed'));
-    // 1 分ごと: 通話時間・花びら・発言数
-    ticker = setInterval(() => void app.everyMinute(guild), 60_000);
+    // 自分の通話部屋: 止まっていた間に空になったものを消す
+    await tempVoice.attach(guild);
+    // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
+    ticker = setInterval(() => {
+      void app.everyMinute(guild);
+      void tempVoice.cleanup();
+    }, 60_000);
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));
     omairi();
@@ -64,6 +71,7 @@ async function main(): Promise<void> {
     if (after.channelId && after.channelId !== before.channelId && after.member) {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
     }
+    void tempVoice.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
     void app.onInteraction(i);

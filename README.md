@@ -24,6 +24,7 @@
 | 入鯖申請 | `#社務所` のボタン → 年齢区分 → フォーム → 神職が `#申請受付` か管理画面で承認 → 🔰参拝者・お参り期間スタート |
 | 宵参り申請 | 18 歳以上と申告した人だけ。承認で 🔞宵参り ロール |
 | お参り期間 | 14 日で氏子に届かなければ 1 回だけ 7 日延長、それでもなら `#お参り判定` に出す（神職が 延長 / 昇格 / 退出） |
+| 自分の通話部屋 | `➕ 縁側をひらく` などの通話に入ると、自分の通話（例: 🍵 さくらの縁側）ができて移動する。名前・人数は自分で変えられる。全員抜けると消える（BOT のロールに「チャンネルの管理」「メンバーを移動」が必要） |
 | 匿名相談 | `/soudan`（`/相談`）: 神職に匿名で相談。返信は BOT から DM。続きは `番号` を指定 |
 
 神職用コマンド（「メンバーをタイムアウト」権限を持つ人にだけ表示。実際に使えるのは 🎐神職・⛩宮司 だけ）:
@@ -57,9 +58,9 @@
 4. 左の **OAuth2** で「Client ID」をメモ
 5. 次の URL の `CLIENT_ID` を置き換えて開き、咲楽ノ宮に招待する
    ```
-   https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot%20applications.commands&permissions=268520454
+   https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot%20applications.commands&permissions=286346262
    ```
-   （権限: チャンネルを見る・メッセージ送信・埋め込みリンク・メッセージ履歴を読む・ロールの管理・メンバーをキック・メンバーを BAN）
+   （権限: チャンネルを見る・メッセージ送信・埋め込みリンク・メッセージ履歴を読む・ロールの管理・メンバーをキック・メンバーを BAN・チャンネルの管理・メンバーを移動・接続）
 
 ### 2. サーバー側の準備
 
@@ -161,6 +162,7 @@ npm run db:generate # src/db/schema.ts を変えたらマイグレーション�
 | `src/services/settings.ts` | 管理画面で変えた設定（ファイルの設定に重ねる） |
 | `src/services/notices.ts` / `noticeDefaults.ts` | 掲示（BOT が投稿する文面・差し込み・標準の文面） |
 | `src/discord/admission.ts` | 申請パネル・申請カード・相談・お参り判定（Discord 側） |
+| `src/services/tempVoice.ts` / `src/discord/tempVoice.ts` | 自分の通話部屋 |
 | `src/setup/` / `src/scripts/setup-guild.ts` | ロールとチャンネルの自動作成（配置は `src/setup/layout.ts`） |
 | `src/web/` | 管理画面（社務所 Web） |
 | `src/db/schema.ts` / `drizzle/` | テーブル定義とマイグレーション |

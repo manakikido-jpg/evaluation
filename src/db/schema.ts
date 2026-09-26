@@ -310,3 +310,11 @@ export const notices = pgTable(
 );
 
 export type Notice = typeof notices.$inferSelect;
+
+/** 自分の通話部屋（➕ の通話に入るとできる。全員抜けたら消して、行も消す） */
+export const tempVoice = pgTable('temp_voice', {
+  channelId: text('channel_id').primaryKey(),
+  ownerId: text('owner_id').notNull(),
+  hubId: text('hub_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

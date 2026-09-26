@@ -1,5 +1,5 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
-import { FULL, MINIMAL, P, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { FULL, MINIMAL, P, RETIRED, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
 
 export type ApiGuild = {
   id: string;
@@ -59,6 +59,8 @@ export type SetupResult = {
   reused: { roles: number; channels: number };
   panelsPosted: string[];
   warnings: string[];
+  /** 自分の通話部屋の入口（config の tempVoice.hubs に書く） */
+  hubs: { channelId: string; name: string }[];
 };
 
 /** Discord はテキストチャンネル名を小文字・空白→ハイフンにするので、比べるときはそろえる */
@@ -80,6 +82,14 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
     );
   }
 
+  // 自分の通話部屋を作るには、管理者を外したあとも「チャンネルの管理」「メンバーを移動」が要る
+  const needsHub = layout.categories.some((c) => c.channels.some((ch) => ch.hub));
+  const HUB_PERMS = P.ManageChannels | P.MoveMembers;
+  const hubWarning =
+    needsHub && (perms & HUB_PERMS) !== HUB_PERMS
+      ? 'BOT のロールに「チャンネルの管理」「メンバーを移動」の権限がありません。自分の通話部屋（➕ ○○をひらく）を使うには、サーバー設定 → ロール → BOT のロールでこの 2 つを ON にしてください（「管理者」を OFF にしても動くように）。'
+      : undefined;
+
   const result: SetupResult = {
     guildName: guild.name,
     roleIds: {} as Record<RoleKey, string>,
@@ -87,7 +97,8 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
     created: { roles: [], channels: [] },
     reused: { roles: 0, channels: 0 },
     panelsPosted: [],
-    warnings: [],
+    warnings: hubWarning ? [hubWarning] : [],
+    hubs: [],
   };
 
   // ── ロール（上から順に作る。新しいロールはいちばん下にできるので、この順で作ると並びが正しくなる） ──
@@ -186,6 +197,7 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
       }
       if (ch.configKey) result.channelIds[ch.configKey] = found.id;
       if (ch.afk) afkChannelId = found.id;
+      if (ch.hub) result.hubs.push({ channelId: found.id, name: ch.hub });
       if (ch.panels && (isNew || opts.postPanels) && !opts.dryRun) {
         for (const kind of ch.panels as PanelKind[]) {
           await api.sendMessage(found.id, panelMessage(kind));
@@ -249,6 +261,13 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
 
   // ── 消すものを決める ──
   const remove = new Map<string, ApiChannel>();
+  // 前の版の配置にあって、今はなくしたもの（固定の通話など）
+  if (layout === FULL) {
+    for (const r of RETIRED) {
+      const c = findIn(r.category, { name: r.name, kind: r.kind });
+      if (c) remove.set(c.id, c);
+    }
+  }
   // 全部の構成にしたとき、最小構成にしかなかったもの
   if (layout === FULL) {
     for (const cat of MINIMAL.categories) {
@@ -317,5 +336,6 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
     channels: { ...(base.channels as object), ...r.channelIds },
     roles: { ...(base.roles as object), yakudoshi: r.roleIds.yakudoshi, yoimairi: r.roleIds.yoimairi },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
+    tempVoice: { ...(base.tempVoice as object), hubs: r.hubs },
   };
 }

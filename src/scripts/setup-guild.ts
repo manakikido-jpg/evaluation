@@ -104,7 +104,8 @@ async function main(): Promise<void> {
   if (tidy) printTidy(await tidyGuild(api, guildId, layout));
   console.log('\n次にすること:');
   let n = 1;
-  if (r.warnings.length) console.log(`  ${n++}. サーバー設定 → ロール で、BOT のロールをいちばん上にドラッグして保存（上の ⚠️ のとおり）`);
+  if (r.warnings.some((w) => w.includes('より上に'))) console.log(`  ${n++}. サーバー設定 → ロール で、BOT のロールをいちばん上にドラッグして保存（上の ⚠️ のとおり）`);
+  if (r.warnings.some((w) => w.includes('チャンネルの管理'))) console.log(`  ${n++}. BOT のロールで「チャンネルの管理」「メンバーを移動」を ON（上の ⚠️ のとおり）`);
   if (!tidy) console.log(`  ${n++}. （任意）使わないチャンネルの削除と並べ替えもするなら、--tidy を付けてもう一度実行`);
   console.log(`  ${n++}. 自分に「⛩ 宮司」ロールを付ける`);
   console.log(`  ${n++}. BOT の「管理者」権限を OFF に戻す（そのままでも動きます）`);

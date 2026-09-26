@@ -16,7 +16,7 @@
 5. **OAuth2** → Client ID と Client Secret をメモ。**Redirects** に `http://localhost:3000/auth/callback` を追加
 6. 次の URL の `CLIENT_ID` を置き換えて開き、テスト用サーバーに招待
    ```
-   https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot%20applications.commands&permissions=268520454
+   https://discord.com/oauth2/authorize?client_id=CLIENT_ID&scope=bot%20applications.commands&permissions=286346262
    ```
 
 ### 0-2. ロール・チャンネル・設定ファイル（自動）

@@ -26,6 +26,8 @@ export type ChannelSpec = {
   panels?: ('apply' | 'yoimairi')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
+  /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
+  hub?: string;
 };
 
 export type CategorySpec = { name: string; visibility: Visibility; channels: ChannelSpec[] };
@@ -101,10 +103,7 @@ export const FULL: Layout = {
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
         { name: 'おみくじ', kind: 'text', topic: 'BOT のコマンド用' },
         { name: '拝殿', kind: 'voice' },
-        { name: '縁側 一', kind: 'voice' },
-        { name: '縁側 二', kind: 'voice' },
-        { name: '茶屋 一', kind: 'voice' },
-        { name: '茶屋 二', kind: 'voice' },
+        { name: '➕ 縁側をひらく', kind: 'voice', hub: '🍵 {name}の縁側' },
         { name: '奥の院', kind: 'voice', afk: true },
       ],
     },
@@ -114,13 +113,7 @@ export const FULL: Layout = {
       channels: [
         { name: '縁日', kind: 'text', topic: 'ゲームの募集' },
         { name: '屋台', kind: 'text', topic: 'ゲームの話題' },
-        { name: '射的 一', kind: 'voice' },
-        { name: '射的 二', kind: 'voice' },
-        { name: '射的 三', kind: 'voice' },
-        { name: '輪投げ 一', kind: 'voice' },
-        { name: '輪投げ 二', kind: 'voice' },
-        { name: '金魚すくい 一', kind: 'voice' },
-        { name: '金魚すくい 二', kind: 'voice' },
+        { name: '➕ 屋台をひらく', kind: 'voice', hub: '🎮 {name}の屋台' },
         { name: '神楽殿', kind: 'voice' },
       ],
     },
@@ -129,11 +122,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '宿帳', kind: 'text', topic: '寝落ち通話の募集・おやすみの挨拶' },
-        { name: '宿坊 一の間', kind: 'voice' },
-        { name: '宿坊 二の間', kind: 'voice' },
-        { name: '宿坊 三の間', kind: 'voice' },
-        { name: '宿坊 四の間', kind: 'voice' },
-        { name: '宿坊 五の間', kind: 'voice' },
+        { name: '➕ 宿坊をひらく', kind: 'voice', hub: '🌙 {name}の宿坊' },
       ],
     },
     {
@@ -143,9 +132,7 @@ export const FULL: Layout = {
         { name: '宵宮', kind: 'text', topic: '18 歳以上の雑談' },
         { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集' },
         { name: '宵宮', kind: 'voice' },
-        { name: '御神酒処', kind: 'voice' },
-        { name: '宵宮の宿坊 一', kind: 'voice' },
-        { name: '宵宮の宿坊 二', kind: 'voice' },
+        { name: '➕ 宵宮の部屋をひらく', kind: 'voice', hub: '🍶 {name}の部屋' },
       ],
     },
     {
@@ -176,6 +163,7 @@ export const MINIMAL: Layout = {
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji' },
         { name: '境内', kind: 'text' },
         { name: '通話テスト', kind: 'voice' },
+        { name: '➕ 通話をひらく', kind: 'voice', hub: '🌸 {name}の部屋' },
       ],
     },
     { name: '🔞 宵宮', visibility: 'adult', channels: [{ name: '宵宮', kind: 'text' }] },
@@ -191,3 +179,18 @@ export const MINIMAL: Layout = {
     },
   ],
 };
+
+/**
+ * 前の版の配置にあって、今はなくしたもの（--tidy で消す）。
+ * 固定の通話を減らし、「➕ ○○をひらく」で自分の通話部屋を作る形にした（2026-09）。
+ */
+export const RETIRED: { category: string; name: string; kind: 'text' | 'voice' }[] = [
+  ...['縁側 一', '縁側 二', '茶屋 一', '茶屋 二'].map((name) => ({ category: '🌳 境内', name, kind: 'voice' as const })),
+  ...['射的 一', '射的 二', '射的 三', '輪投げ 一', '輪投げ 二', '金魚すくい 一', '金魚すくい 二'].map((name) => ({
+    category: '🎮 縁日',
+    name,
+    kind: 'voice' as const,
+  })),
+  ...['宿坊 一の間', '宿坊 二の間', '宿坊 三の間', '宿坊 四の間', '宿坊 五の間'].map((name) => ({ category: '🌙 宿坊', name, kind: 'voice' as const })),
+  ...['御神酒処', '宵宮の宿坊 一', '宵宮の宿坊 二'].map((name) => ({ category: '🔞 宵宮', name, kind: 'voice' as const })),
+];

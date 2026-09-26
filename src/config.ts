@@ -104,6 +104,20 @@ export const guildConfigSchema = z
     economy: economySchema.default(economySchema.parse({})),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),
+    /** 自分の通話部屋: ここに入ると、その人の通話が同じカテゴリにでき、全員抜けると消える */
+    tempVoice: z
+      .object({
+        hubs: z
+          .array(
+            z.object({
+              channelId: snowflake,
+              /** できる通話の名前。{name} が入った人の表示名になる */
+              name: z.string().min(1).max(90),
+            }),
+          )
+          .default([]),
+      })
+      .default({ hubs: [] }),
     moderation: z
       .object({
         yakuReasons: z.array(z.string().min(1)).default(DEFAULT_YAKU_REASONS),
