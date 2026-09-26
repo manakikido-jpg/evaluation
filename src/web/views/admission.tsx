@@ -558,14 +558,13 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </div>
         </section>
         <section class="card">
-          <h2>🏮 ブースト（奉納）のお礼</h2>
+          <h2>🏮 ブースト（奉納）のお礼と特典</h2>
           <p class="note">
-            ブースト 1 回ごとに、#慶事 でお知らせ・本人に DM・{e.currencyName}を贈ります（2 回なら 2 回分）。続けてくれている間は 30 日ごとにまた贈ります（1 人 1 回分）。割引は何回ブーストしても同じです。#番付 に今奉納してくれている人の「奉納板」も出します。
+            ブースト 1 回ごとに、#慶事 でお知らせ・本人に DM を送ります（お金・{e.currencyName}は渡しません）。#番付 に今奉納してくれている人の「奉納板」を出します。奉納している間は授与品が割引になります（何回ブーストしても同じ）。
             <br />
             ブースト 1 回ごとに数えるには、Discord のサーバー設定 →「システムメッセージチャンネル」を選び、「サーバーがブーストされた時にメッセージを送信する」を ON にしてください（OFF だと 1 人 1 回分になります）。
           </p>
           <div class="fields">
-            <Num name="boostThanks" label={`お礼の${e.currencyName}（ブースト 1 回あたり。0 で贈らない）`} value={e.boostThanks} file={f.boostThanks} />
             <Num name="boostDiscountPercent" label="授与品の割引 %（免罪符・贈り物はのぞく。0 で割引なし。90 まで）" value={e.boostDiscountPercent} file={f.boostDiscountPercent} />
           </div>
           <label class="field">

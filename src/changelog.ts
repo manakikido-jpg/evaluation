@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-boost-no-money',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: 'ブーストのお礼に花びらを渡さないように',
+    items: ['ブーストしてくれた人に花びらを渡すのをやめた（1 回ごと・30 日ごと）。#慶事 のお知らせ・DM・奉納板・授与品の割引はそのまま', '設定の「お礼の花びら」をなくした'],
+  },
+  {
     id: '2026-09-26-roles-page',
     date: '2026-09-26',
     kind: 'new',

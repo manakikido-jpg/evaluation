@@ -70,58 +70,40 @@ afterEach(async () => {
   await close();
 });
 
-describe('お礼の花びら', () => {
-  it('始めたらお知らせ＋花びら。続けている間は 30 日ごと。同じ日に何度呼んでも 1 回', async () => {
+describe('奉納の記録', () => {
+  it('始めたらお知らせ（同じ奉納は 1 回だけ）。お金（花びら）は渡さない', async () => {
     const since = at(0);
-    expect(await thankBooster(db, cfg, A, since, at(0))).toEqual({ kind: 'new', granted: 1500 });
-    expect(await thankBooster(db, cfg, A, since, at(0.01))).toEqual({ kind: 'none', granted: 0 });
-    expect(await thankBooster(db, cfg, A, since, at(29.9))).toEqual({ kind: 'none', granted: 0 });
-    expect(await thankBooster(db, cfg, A, since, at(30))).toEqual({ kind: 'monthly', granted: 1500 });
-    expect((await walletOf(db, A)).balance).toBe(3000);
-    expect((await recentCoinTx(db, A))[0]).toMatchObject({ reason: 'boost', amount: 1500 });
-  });
-
-  it('やめてすぐ始め直すと、お知らせはするが花びらは 30 日たつまで贈らない', async () => {
-    await thankBooster(db, cfg, A, at(0), at(0));
-    expect(await thankBooster(db, cfg, A, at(5), at(5))).toEqual({ kind: 'new', granted: 0 });
-    expect(await thankBooster(db, cfg, A, at(5), at(10))).toEqual({ kind: 'none', granted: 0 });
-    expect(await thankBooster(db, cfg, A, at(5), at(30))).toEqual({ kind: 'monthly', granted: 1500 });
-    expect((await walletOf(db, A)).balance).toBe(3000);
-  });
-
-  it('お礼を 0 にすると、お知らせだけで花びらは贈らない', async () => {
-    const zero: GuildConfig = { ...cfg, economy: { ...cfg.economy, boostThanks: 0 } };
-    expect(await thankBooster(db, zero, A, at(0), at(0))).toEqual({ kind: 'new', granted: 0 });
-    expect(await thankBooster(db, zero, A, at(0), at(40))).toEqual({ kind: 'none', granted: 0 });
+    expect(await thankBooster(db, A, since, at(0))).toEqual({ kind: 'new' });
+    expect(await thankBooster(db, A, since, at(30))).toEqual({ kind: 'none' });
+    // やめて始め直すと、また新しい奉納
+    expect(await thankBooster(db, A, at(40), at(40))).toEqual({ kind: 'new' });
     expect((await walletOf(db, A)).balance).toBe(0);
   });
 });
 
 describe('お知らせ・DM・奉納板', () => {
-  it('#慶事 にお知らせ、本人に DM（花びらと割引の案内つき）。2 回目は何もしない', async () => {
+  it('#慶事 にお知らせ、本人に DM（特典の案内つき・花びらはなし）。2 回目は何もしない', async () => {
     await recordJoin(db, snap(A, at(0)));
     await recordJoin(db, snap(B, null));
-    expect(await processBoosters({ db, cfg, discord }, at(0))).toEqual({ announced: 1, granted: 1 });
+    expect(await processBoosters({ db, cfg, discord }, at(0))).toEqual({ announced: 1 });
     const announce = log.find((l) => l.startsWith(`send ${cfg.channels.keiji}`))!;
     expect(announce).toContain(`<@${A}>`);
     expect(announce).toContain('奉納');
     const dm = log.find((l) => l.startsWith(`dm ${A}`))!;
-    expect(dm).toContain('1,500 枚');
     expect(dm).toContain('20% 引き');
+    expect(dm).toContain('奉納板');
+    expect(dm).not.toContain('枚');
     expect(log.some((l) => l.includes(B))).toBe(false);
+    expect((await walletOf(db, A)).balance).toBe(0);
 
     log.length = 0;
-    expect(await processBoosters({ db, cfg, discord }, at(1))).toEqual({ announced: 0, granted: 0 });
+    expect(await processBoosters({ db, cfg, discord }, at(40))).toEqual({ announced: 0 });
     expect(log).toEqual([]);
-    // 30 日後: 「今月も」の DM だけ
-    await processBoosters({ db, cfg, discord }, at(30));
-    expect(log).toHaveLength(1);
-    expect(log[0]).toMatch(/^dm .*今月も/);
   });
 
   it('DM: 割引 0 なら割引の案内を出さない。文面は設定で変えられる', () => {
     const c: GuildConfig = { ...cfg, economy: { ...cfg.economy, boostDiscountPercent: 0 }, boost: { ...cfg.boost, dmText: '{名前} さん、ありがとう！' } };
-    const text = boostDm(A, c, { kind: 'new', granted: 1500 });
+    const text = boostDm(A, c, { kind: 'new' });
     expect(text.startsWith(`<@${A}> さん、ありがとう！`)).toBe(true);
     expect(text).not.toContain('引き');
   });
@@ -158,36 +140,23 @@ describe('お知らせ・DM・奉納板', () => {
 });
 
 describe('ブースト 1 回ごとのお礼', () => {
-  it('「ブーストしました」1 件ごとに 1500 × 回数。同じメッセージでは 2 回贈らない', async () => {
+  it('「ブーストしました」1 件ごとにお知らせと DM（花びらはなし）。同じメッセージでは 2 回出さない', async () => {
     const ctx = { db, cfg, discord };
-    expect(await thankBoostMessage(ctx, { messageId: '1', memberId: A, count: 1 }, at(0))).toEqual({ status: 'ok', granted: 1500 });
-    expect(await thankBoostMessage(ctx, { messageId: '2', memberId: A, count: 1 }, at(0))).toEqual({ status: 'ok', granted: 1500 });
-    expect(await thankBoostMessage(ctx, { messageId: '3', memberId: A, count: 2 }, at(0))).toEqual({ status: 'ok', granted: 3000 });
-    expect(await thankBoostMessage(ctx, { messageId: '3', memberId: A, count: 2 }, at(0))).toEqual({ status: 'duplicate' });
-    expect((await walletOf(db, A)).balance).toBe(6000);
-    expect(log.filter((l) => l.startsWith(`send ${cfg.channels.keiji}`))).toHaveLength(3);
+    expect(await thankBoostMessage(ctx, { messageId: '1', memberId: A, count: 1 }, at(0))).toEqual({ status: 'ok' });
+    expect(await thankBoostMessage(ctx, { messageId: '2', memberId: A, count: 2 }, at(0))).toEqual({ status: 'ok' });
+    expect(await thankBoostMessage(ctx, { messageId: '2', memberId: A, count: 2 }, at(0))).toEqual({ status: 'duplicate' });
+    expect((await walletOf(db, A)).balance).toBe(0);
+    expect(log.filter((l) => l.startsWith(`send ${cfg.channels.keiji}`))).toHaveLength(2);
     expect(log.find((l) => l.includes('ブースト 2 回分'))).toBeDefined();
-    expect(log.filter((l) => l.startsWith(`dm ${A}`)).at(-1)).toContain('3,000 枚');
   });
 
-  it('メッセージで数えるときは、始めたときに重ねて贈らない。30 日ごとは続く', async () => {
+  it('メッセージで数えるときは、始めたときに重ねてお知らせしない', async () => {
     const ctx = { db, cfg, discord };
     await recordJoin(db, snap(A, at(0)));
     await thankBoostMessage(ctx, { messageId: '1', memberId: A, count: 1 }, at(0));
     log.length = 0;
-    expect(await processBoosters(ctx, at(0), undefined, { byMessage: true })).toEqual({ announced: 0, granted: 0 });
+    expect(await processBoosters(ctx, at(0), undefined, { byMessage: true })).toEqual({ announced: 0 });
     expect(log).toEqual([]);
-    expect((await walletOf(db, A)).balance).toBe(1500);
-    await processBoosters(ctx, at(29), undefined, { byMessage: true });
-    expect((await walletOf(db, A)).balance).toBe(1500);
-    await processBoosters(ctx, at(30), undefined, { byMessage: true });
-    expect((await walletOf(db, A)).balance).toBe(3000);
-    // もう 1 回ブーストすると、その分を贈り、30 日はそこから数え直す
-    await thankBoostMessage(ctx, { messageId: '2', memberId: A, count: 1 }, at(40));
-    await processBoosters(ctx, at(60), undefined, { byMessage: true });
-    expect((await walletOf(db, A)).balance).toBe(4500);
-    await processBoosters(ctx, at(70), undefined, { byMessage: true });
-    expect((await walletOf(db, A)).balance).toBe(6000);
   });
 
   it('回数は本文から（空なら 1 回）。読み直すのは動き始めた時より後だけ', async () => {

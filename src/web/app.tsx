@@ -742,7 +742,6 @@ export function createWebApp(deps: WebDeps) {
         giftMin: num('giftMin'),
         giftMax: num('giftMax'),
         giftDailyLimit: num('giftDailyLimit'),
-        boostThanks: num('boostThanks'),
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
       },

@@ -24,7 +24,6 @@ export const overridesSchema = z.object({
       giftMin: z.number().int().positive().max(1_000_000),
       giftMax: z.number().int().positive().max(1_000_000),
       giftDailyLimit: z.number().int().min(0).max(10_000_000),
-      boostThanks: z.number().int().min(0).max(1_000_000),
       boostDiscountPercent: z.number().int().min(0).max(90),
       coreTimePercent: z.number().int().min(100).max(500),
     })

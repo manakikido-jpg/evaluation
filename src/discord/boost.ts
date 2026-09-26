@@ -50,7 +50,7 @@ export class BoostApp {
     if (!BOOST_MESSAGE_TYPES.has(m.type) || m.guildId !== this.cfg().guildId || m.author.bot) return;
     try {
       const r = await thankBoostMessage(this.ctx(), { messageId: m.id, memberId: m.author.id, count: boostCountOf(m.content) });
-      if (r.status === 'ok') logger.info({ memberId: m.author.id, granted: r.granted }, 'boost thanked');
+      if (r.status === 'ok') logger.info({ memberId: m.author.id }, 'boost thanked');
       await updateBoard(this.ctx());
     } catch (err) {
       logger.warn({ err }, 'boost message thanks failed');
