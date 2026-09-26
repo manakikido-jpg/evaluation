@@ -15,6 +15,7 @@ export type CoinReason =
   | 'menzaifu'
   | 'omikuji'
   | 'join_bonus'
+  | 'onboarding'
   | 'shop'
   | 'shop_refund'
   | 'gift_send'

@@ -15,6 +15,7 @@ import {
   type MessageActionRowComponentBuilder,
   type ModalSubmitInteraction,
   type Guild,
+  type GuildMember,
 } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -58,6 +59,7 @@ import {
 import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
+import { coreName } from '../lib/names.js';
 import { panelMessage } from './panels.js';
 import { SHU } from './views.js';
 
@@ -164,7 +166,7 @@ export class AdmissionApp {
     let r: Awaited<ReturnType<typeof onIntroPosted>>;
     try {
       // 本文が空 = BOT が本文を読めない（Message Content がオフ）か、画像だけ。長さは確かめない
-      r = await onIntroPosted(this.ctx, { id: msg.author.id, roleIds: [...msg.member.roles.cache.keys()] }, msg.channelId, msg.content || undefined);
+      r = await onIntroPosted(this.ctx, { id: msg.author.id, roleIds: [...msg.member.roles.cache.keys()] }, msg.channelId, msg.content || undefined, new Date(), msg.id);
       if (r.status === 'completed') this.introDone.add(msg.author.id);
     } finally {
       this.introBusy.delete(msg.author.id);
@@ -199,7 +201,7 @@ export class AdmissionApp {
         if (msg.author.bot || done.includes(msg.author.id) || this.introDone.has(msg.author.id)) continue;
         const member = guild.members.cache.get(msg.author.id) ?? (await guild.members.fetch(msg.author.id).catch(() => undefined));
         if (!member?.roles.cache.has(pending)) continue;
-        const r = await onIntroPosted(this.ctx, { id: member.id, roleIds: [...member.roles.cache.keys()] }, channelId, msg.content || undefined);
+        const r = await onIntroPosted(this.ctx, { id: member.id, roleIds: [...member.roles.cache.keys()] }, channelId, msg.content || undefined, new Date(), msg.id);
         if (r.status !== 'completed') continue;
         this.introDone.add(member.id);
         done.push(member.id);
@@ -208,6 +210,32 @@ export class AdmissionApp {
     }
     if (done.length) logger.info({ count: done.length }, 'intro catch-up');
     return done;
+  }
+
+  /** 入った人に、はじめの流れを DM で案内（BOT・もう参拝者以上の人にはしない） */
+  async onMemberAdd(m: GuildMember): Promise<boolean> {
+    if (m.guild.id !== this.cfg.guildId || m.user.bot) return false;
+    if (this.cfg.ranks.some((r) => m.roles.cache.has(r.roleId))) return false;
+    const find = (name: string) => m.guild.channels.cache.find((c) => c.isTextBased() && coreName(c.name) === name)?.id;
+    const ch = (name: string) => {
+      const id = find(name);
+      return id ? `<#${id}>` : `#${name}`;
+    };
+    const intro = this.cfg.channels.ema || this.cfg.channels.emaFemale ? `${ch('絵馬-男性')}・${ch('絵馬-女性')}` : '#絵馬';
+    return this.discord.sendDm(
+      m.id,
+      [
+        '# ⛩ 咲楽ノ宮へようこそ！',
+        'はじめての方は、この順に進んでください（5 分ほどで終わります）。',
+        '',
+        `**① ルールを読む** … ${ch('しきたり')}`,
+        `**② 入鯖を申請する** … ${ch('社務所')} の「入鯖を申請する」ボタン（年齢・性別などを選んで、フォームに書く）`,
+        '**③ 承認を待つ** … 神職が確認すると、この DM でお知らせします',
+        `**④ 自己紹介を書く** … 自分の絵馬（${intro}）に書くと、全部のチャンネルが見えるようになります`,
+        '',
+        '-# このあとも BOT から DM が届きます。届かないときは、サーバー名を右クリック（スマホは長押し）→「プライバシー設定」→「ダイレクトメッセージ」を ON にしてください',
+      ].join('\n'),
+    );
   }
 
   /** そのチャンネルに少しだけ出して消す（DM が届かない人向け） */
@@ -241,9 +269,18 @@ export class AdmissionApp {
 
   // ───────── 入鯖申請 ─────────
 
+  /** 申請のステップの数（年齢・性別・DM・フレンド・フォーム。ロールがなければ DM・フレンドは聞かない） */
+  private get applySteps(): number {
+    return 3 + CONTACT_KINDS.filter((k) => contactEnabled(this.cfg, k)).length;
+  }
+
+  private step(n: number, label: string): string {
+    return `**入鯖申請 ― ステップ ${n}/${this.applySteps}：${label}**`;
+  }
+
   private async applyStart(i: ButtonInteraction<'cached'>): Promise<void> {
     await i.reply({
-      content: 'まず年齢区分を選んでください（生年月日は聞きません）。\n13 歳未満の方は Discord の規約により参加できません。',
+      content: `${this.step(1, '年齢')}\nまず年齢区分を選んでください（生年月日は聞きません）。\n13 歳未満の方は Discord の規約により参加できません。`,
       components: [row(btn('apply:age:minor', '13〜17 歳'), btn('apply:age:adult', '18 歳以上'))],
       ...EPHEMERAL,
     });
@@ -252,7 +289,7 @@ export class AdmissionApp {
   /** 年齢のあとに性別（自己紹介を書くチャンネル・ロールが決まる） */
   private async applyGender(i: ButtonInteraction<'cached'>, age: AgeGroup): Promise<void> {
     await i.update({
-      content: '性別を選んでください（自己紹介を書くチャンネルと、ロールが決まります）。',
+      content: `${this.step(2, '性別')}\n性別を選んでください（自己紹介を書くチャンネルと、ロールが決まります）。`,
       components: [row(btn(`apply:gender:${age}.male`, '♂ 男性'), btn(`apply:gender:${age}.female`, '♀ 女性'))],
     });
   }
@@ -281,6 +318,7 @@ export class AdmissionApp {
     const ask = (kind: ContactKind, to: (l: ContactLevel) => string) =>
       i.update({
         content: [
+          this.step(kind === 'dm' || !contactEnabled(this.cfg, 'dm') ? 3 : 4, kind === 'dm' ? 'DM' : 'フレンド追加'),
           kind === 'dm' ? 'ほかのメンバーからの **DM** は大丈夫ですか？' : 'ほかのメンバーからの **フレンド追加** は大丈夫ですか？',
           '-# ロールになってプロフィールに出ます。あとから #授与所 でいつでも変えられます',
           '-# ⭕ OK … 気軽にどうぞ ／ 💬 要相談 … 一声かけてから ／ ❌ NG … しないで',
@@ -295,7 +333,7 @@ export class AdmissionApp {
   private async applyModal(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender, state: string): Promise<void> {
     const modal = new ModalBuilder()
       .setCustomId(`apply:modal:${state}`)
-      .setTitle(`入鯖申請（${AGE_LABEL[age]}・${GENDER_LABEL[gender]}）`)
+      .setTitle(`入鯖申請 ${this.applySteps}/${this.applySteps}（${AGE_LABEL[age]}・${GENDER_LABEL[gender]}）`)
       .addComponents(
         textInput('name', '呼び名', TextInputStyle.Short, { max: 32 }),
         textInput('purpose', '主にやりたいこと', TextInputStyle.Short, { max: 100, placeholder: 'ゲーム・雑談・寝落ち など' }),
@@ -340,7 +378,15 @@ export class AdmissionApp {
       answers.message ? `ひとこと: ${answers.message}` : '',
       `Discord アカウント作成: ${ts(i.user.createdAt)} ・ 参加: ${i.member.joinedAt ? ts(i.member.joinedAt) : '—'}`,
     ]);
-    await i.editReply('申請を受け付けました。神職が確認するまで少しお待ちください。結果は BOT から DM でお知らせします。');
+    await i.editReply(
+      [
+        '✅ 申請を受け付けました。',
+        '**次は**: 神職が確認するまで少しお待ちください。結果は BOT から DM でお知らせします。',
+        this.cfg.roles.emaPending ? '-# 承認されたら、最後に自分の絵馬に自己紹介を書くと、全部のチャンネルが見えるようになります' : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
   }
 
   private async postApplicationCard(id: number, memberId: string, lines: string[]): Promise<void> {

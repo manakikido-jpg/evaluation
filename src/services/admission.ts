@@ -68,7 +68,7 @@ export function genderOfRoles(cfg: ModCtx['cfg'], roleIds: readonly string[]): G
  * 入鯖を仕上げる: 🔰参拝者 にして、お参り期間を始め、初期配布を渡し、ようこその DM を送る。
  * 自己紹介を書いたとき（絵馬待ちがあるとき）か、承認したとき（絵馬待ちがないとき）に呼ぶ。
  */
-export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date(), opts: { introChannelId?: string } = {}): Promise<boolean> {
+export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date(), opts: { introChannelId?: string; introUrl?: string } = {}): Promise<boolean> {
   const g = ctx.cfg.guildId;
   const first = autoRanks(ctx.cfg.ranks)[0];
   if (first) await safely('add first rank', () => ctx.discord.addRole(g, memberId, first.roleId, '入鯖（自己紹介を書いた・承認）'));
@@ -81,6 +81,15 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
   // 初期配布（1 人 1 回。入り直した人にはもう配らない）
   const e = ctx.cfg.economy;
   const bonus = await grantJoinBonus(ctx.db, memberId, e.joinBonus);
+  // #お出迎え に「参拝しました」（通知は飛ばさない）
+  const welcome = ctx.cfg.channels.welcome;
+  if (welcome) {
+    await safely('welcome post', () =>
+      ctx.discord.sendMessage(welcome, {
+        content: [`🌸 <@${memberId}> さんが参拝しました！`, 'みなさん、ひと声かけてあげてください。', ...(opts.introUrl ? [`📝 自己紹介: ${opts.introUrl}`] : [])].join('\n'),
+      }),
+    );
+  }
   return ctx.discord.sendDm(
     memberId,
     [
@@ -90,6 +99,8 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
       `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
       '相手の名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」でできます。',
       ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
+      '',
+      `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・朱印・通話・お守り）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,
     ].join('\n'),
   );
 }
@@ -109,6 +120,7 @@ export async function onIntroPosted(
   channelId: string,
   content: string | undefined,
   now = new Date(),
+  messageId?: string,
 ): Promise<IntroResult> {
   const pending = ctx.cfg.roles.emaPending;
   if (!pending || !author.roleIds.includes(pending)) return { status: 'not_pending' };
@@ -116,7 +128,7 @@ export async function onIntroPosted(
   if (expected && channelId !== expected) return { status: 'wrong_channel', expected };
   if (content !== undefined && content.replace(/\s/g, '').length < INTRO_MIN_CHARS) return { status: 'too_short' };
   await safely('remove ema pending', () => ctx.discord.removeRole(ctx.cfg.guildId, author.id, pending, '自己紹介を書いた'));
-  await completeJoin(ctx, author.id, now);
+  await completeJoin(ctx, author.id, now, messageId ? { introUrl: `https://discord.com/channels/${ctx.cfg.guildId}/${channelId}/${messageId}` } : {});
   await audit(ctx.db, { actorId: author.id, targetId: author.id, action: 'join.intro', detail: { channelId }, via: 'discord' });
   return { status: 'completed' };
 }

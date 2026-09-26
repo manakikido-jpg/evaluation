@@ -69,6 +69,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('hajimete')
+      .setNameLocalizations({ ja: 'はじめて' })
+      .setDescription('Getting started checklist')
+      .setDescriptionLocalizations({ ja: 'はじめての参拝（やってみること）の進み具合を見る' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('soudan')
       .setNameLocalizations({ ja: '相談' })
       .setDescription('Anonymous consultation with staff')

@@ -7,6 +7,8 @@ import { StaffApp } from './discord/staff.js';
 import { AdmissionApp } from './discord/admission.js';
 import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
+import { OnboardingApp } from './discord/onboarding.js';
+import { onboardingTick } from './services/onboarding.js';
 import { OmamoriApp } from './discord/omamori.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
@@ -51,6 +53,7 @@ async function main(): Promise<void> {
   const tempVoice = new TempVoiceApp(db, cfg, (channelId, ownerId) => rooms?.onCreated(channelId, ownerId) ?? Promise.resolve());
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
+  const onboarding = new OnboardingApp(db, cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
@@ -112,11 +115,17 @@ async function main(): Promise<void> {
       void boost.tick();
       // 市場: 期限が来た取引を売った人に渡す
       void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
+      // はじめての参拝: 全部できた人にお祝い
+      void onboardingTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'onboarding tick failed'));
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
   });
-  client.on(Events.GuildMemberAdd, (m) => void app.onMemberAdd(m));
+  client.on(Events.GuildMemberAdd, (m) => {
+    void app.onMemberAdd(m);
+    // 入った人に、はじめの流れを DM で案内
+    void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
+  });
   client.on(Events.GuildMemberRemove, (m) => void app.onMemberRemove(m.guild.id, m.id));
   client.on(Events.GuildMemberUpdate, (old, m) => {
     void (async () => {
@@ -141,6 +150,7 @@ async function main(): Promise<void> {
     void staff.onInteraction(i);
     void admission.onInteraction(i);
     void omikuji.onInteraction(i);
+    void onboarding.onInteraction(i);
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);
     void shop.onInteraction(i);

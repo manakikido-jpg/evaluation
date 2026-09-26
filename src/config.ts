@@ -49,6 +49,8 @@ export const economySchema = z.object({
   boostDiscountPercent: z.number().int().min(0).max(90).default(20),
   /** コアタイム中の通話の花びら（%。150 で 1.5 倍。増えた分は 1 日の上限に数えない） */
   coreTimePercent: z.number().int().min(100).max(500).default(150),
+  /** 「はじめての参拝」（おみくじ・朱印・通話・お守り）を全部できたときのお祝い（1 人 1 回。0 でなし） */
+  onboardingReward: z.number().int().min(0).default(300),
 });
 
 export type EconomyConfig = z.infer<typeof economySchema>;
@@ -154,6 +156,8 @@ export const guildConfigSchema = z
       emaFemale: snowflake.optional(),
       /** #運営紹介: 宮司・神職の紹介（任意） */
       staffIntro: snowflake.optional(),
+      /** #お出迎え: 新しく参拝した人のお知らせ（任意） */
+      welcome: snowflake.optional(),
       /** #市場: 開業権利を持つ人の出品（任意） */
       market: snowflake.optional(),
       /** #申請受付: 入鯖・宵参り申請のカードが届く（運営のみ） */

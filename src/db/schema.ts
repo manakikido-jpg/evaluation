@@ -495,3 +495,10 @@ export const marketOrders = pgTable(
   (t) => [index('market_orders_status_idx').on(t.status, t.autoReleaseAt)],
 );
 export type MarketOrder = typeof marketOrders.$inferSelect;
+
+/** 「はじめての参拝」を全部できた人（お祝いは 1 人 1 回） */
+export const onboardingDone = pgTable('onboarding_done', {
+  memberId: text('member_id').primaryKey(),
+  reward: integer('reward').notNull().default(0),
+  doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
+});

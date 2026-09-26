@@ -55,7 +55,7 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'market' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
+  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'welcome' | 'market' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
   /** 読むだけでも、スレッドの中では書ける（#市場 の取引のスレッド） */
   threadsOk?: boolean;
   /**
@@ -220,6 +220,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '境内', kind: 'text', topic: '雑談', configKey: 'keidai' },
+        { name: 'お出迎え', kind: 'text', configKey: 'welcome', topic: '新しく参拝した方のお知らせ。ひと声かけてあげてください 🌸' },
         { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: 'omamori_zatsudan' },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
         { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（花びらがもらえます）' },

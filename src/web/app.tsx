@@ -751,6 +751,7 @@ export function createWebApp(deps: WebDeps) {
         giftDailyLimit: num('giftDailyLimit'),
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
+        onboardingReward: num('onboardingReward'),
       },
       rooms: {
         ...Object.fromEntries(

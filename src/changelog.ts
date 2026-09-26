@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-onboarding',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['Discord', '社務所Web', '運用'],
+    title: 'はじめて入った人を分かりやすく',
+    items: [
+      '入った瞬間に、BOT が「しきたり → 社務所で申請 → 承認 → 自己紹介」の手順をリンク付きで DM',
+      '申請のボタンに「ステップ 1/5：年齢」のように今どこかを表示。受け付けたあとに次にすることを案内',
+      '新しいチャンネル #お出迎え: 参拝者になった人を自己紹介のリンク付きでお知らせ',
+      '/はじめて: おみくじ・朱印・通話・お守りのチェックリスト。全部できたらお祝いの花びら（設定で変えられる・1 人 1 回）',
+    ],
+  },
+  {
     id: '2026-09-26-settings-section-save',
     date: '2026-09-26',
     kind: 'improve',

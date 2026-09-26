@@ -127,6 +127,13 @@
       "when": 1790460023294,
       "tag": "0017_market",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790465884536,
+      "tag": "0018_onboarding",
+      "breakpoints": true
     }
   ]
 }

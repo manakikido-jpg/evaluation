@@ -494,6 +494,7 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             <Num name="giftMax" label="贈り物: 1 回に贈れる最大" value={e.giftMax} file={f.giftMax} min={1} />
             <Num name="giftDailyLimit" label="贈り物: 1 人が 1 日に贈れる合計" value={e.giftDailyLimit} file={f.giftDailyLimit} />
             <Num name="joinBonus" label="初期配布（入鯖が承認されたときに 1 回だけ。0 で配らない）" value={e.joinBonus} file={f.joinBonus} />
+            <Num name="onboardingReward" label="「はじめての参拝」を全部できたときのお祝い（1 人 1 回。0 でなし）" value={e.onboardingReward} file={f.onboardingReward} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
           </div>
           <Save at="coins" />

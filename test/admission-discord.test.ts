@@ -36,7 +36,7 @@ beforeEach(async () => {
     unban: async () => undefined,
     kick: async (_g, u) => void calls.push(`kick ${u}`),
     editMessage: async (c, m, b) => void calls.push(`edit ${c} ${m} ${b.content}`),
-    sendMessage: async () => ({ id: '0' }),
+    sendMessage: async (c, b) => (calls.push(`send ${c} ${b.content}`), { id: '0' }),
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
@@ -143,10 +143,12 @@ describe('入鯖申請（Discord）', () => {
     const start = button(USER, [], 'apply:start');
     await app.onInteraction(start.i as never);
     expect(start.replies[0]?.components?.[0]?.components.map((c) => c.data.custom_id)).toEqual(['apply:age:minor', 'apply:age:adult']);
+    expect(start.replies[0]?.content).toContain('ステップ 1/3：年齢');
 
     const age = button(USER, [], 'apply:age:adult');
     await app.onInteraction(age.i as never);
     expect(age.replies[0]?.components?.[0]?.components.map((c) => c.data.custom_id)).toEqual(['apply:gender:adult.male', 'apply:gender:adult.female']);
+    expect(age.replies[0]?.content).toContain('ステップ 2/3：性別');
 
     const gender = button(USER, [], 'apply:gender:adult.female');
     await app.onInteraction(gender.i as never);
@@ -184,10 +186,11 @@ describe('自己紹介を書くまでは 絵馬待ち', () => {
   const PENDING = '100000000000000073';
   const EMA_M = '900000000000000031';
   const EMA_F = '900000000000000032';
+  const WELCOME = '900000000000000033';
   const cfg2: GuildConfig = {
     ...cfg,
     roles: { ...cfg.roles, male: MALE, female: FEMALE, emaPending: PENDING },
-    channels: { ...cfg.channels, ema: EMA_M, emaFemale: EMA_F },
+    channels: { ...cfg.channels, ema: EMA_M, emaFemale: EMA_F, welcome: WELCOME },
   };
   const msg = (channelId: string, content: string, roleIds: string[]) => {
     const deleted: boolean[] = [];
@@ -243,12 +246,16 @@ describe('自己紹介を書くまでは 絵馬待ち', () => {
     expect(short.flashes[0]).toContain('もう少し詳しく');
     expect(calls).not.toContain(`removeRole ${USER} ${PENDING}`);
 
-    const good = msg(EMA_F, '【名前】さくら【一言】よろしくお願いします', roles);
+    const good = { ...msg(EMA_F, '【名前】さくら【一言】よろしくお願いします', roles) };
+    Object.assign(good.m, { id: '970000000000000001' });
     await app2.onMessage(good.m as never);
     expect(good.reacted).toEqual(['🌸']);
     expect(calls).toContain(`removeRole ${USER} ${PENDING}`);
     expect(calls).toContain(`addRole ${USER} ${ROLE.sanpaisha}`);
     expect((await getOmairi(db, USER))?.status).toBe('ongoing');
+    // #お出迎え に「参拝しました」と自己紹介のリンク（cfg3 に welcome があるとき）
+    expect(calls.some((c) => c.startsWith(`send ${WELCOME}`) && c.includes(`/${EMA_F}/970000000000000001`))).toBe(true);
+    expect(calls.find((c) => c.startsWith(`dm ${USER}`) && c.includes('ようこそ'))).toContain('/はじめて');
     // 続けて書いても、もう一度は仕上げない
     const n = calls.length;
     await app2.onMessage(msg(EMA_F, '追記です、よろしくお願いします！', roles).m as never);
@@ -322,6 +329,8 @@ describe('DM・フレンド追加', () => {
     const dm = button(USER, [], 'apply:c:adult.female.ok.-');
     await app3.onInteraction(dm.i as never);
     expect(dm.replies[0]?.content).toContain('フレンド追加');
+    expect(gender.replies[0]?.content).toContain('ステップ 3/5：DM');
+    expect(dm.replies[0]?.content).toContain('ステップ 4/5：フレンド追加');
     expect(ids(dm)).toEqual(['apply:c:adult.female.ok.ok', 'apply:c:adult.female.ok.ask', 'apply:c:adult.female.ok.ng']);
 
     const fr = button(USER, [], 'apply:c:adult.female.ok.ng');
@@ -363,6 +372,35 @@ describe('DM・フレンド追加', () => {
       ['contact:dm:ok', 'contact:dm:ask', 'contact:dm:ng'],
       ['contact:friend:ok', 'contact:friend:ask', 'contact:friend:ng'],
     ]);
+  });
+});
+
+describe('入ったときの案内 DM', () => {
+  const member = (roleIds: string[], bot = false) => ({
+    id: USER,
+    user: { bot },
+    guild: {
+      id: cfg.guildId,
+      channels: {
+        cache: [
+          { id: '910000000000000101', name: '📜｜しきたり', isTextBased: () => true },
+          { id: '910000000000000102', name: '社務所', isTextBased: () => true },
+        ],
+      },
+    },
+    roles: { cache: new Map(roleIds.map((r) => [r, {}])) },
+  });
+
+  it('しきたり・社務所のリンクと、4 つの手順を DM で送る。BOT・参拝者以上には送らない', async () => {
+    expect(await app.onMemberAdd(member([]) as never)).toBe(true);
+    const dm = calls.find((c) => c.startsWith(`dm ${USER}`))!;
+    expect(dm).toContain('<#910000000000000101>');
+    expect(dm).toContain('<#910000000000000102> の「入鯖を申請する」');
+    expect(dm).toContain('④ 自己紹介を書く');
+    calls.length = 0;
+    expect(await app.onMemberAdd(member([], true) as never)).toBe(false);
+    expect(await app.onMemberAdd(member([ROLE.ujiko]) as never)).toBe(false);
+    expect(calls).toEqual([]);
   });
 });
 
