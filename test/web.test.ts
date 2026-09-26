@@ -875,4 +875,12 @@ describe('推移（管理画面）', () => {
     expect(fallback).toMatch(/aria-current="page"[^>]*>30 日/);
     expect((await app.request('/stats')).status).toBe(302);
   });
+
+  it('ホームのいちばん上に、30 日の人数のグラフが出る', async () => {
+    const s = await login(STAFF);
+    const home = await (await get('/', s)).text();
+    expect(home.indexOf('メンバーの推移')).toBeGreaterThan(-1);
+    expect(home.indexOf('メンバーの推移')).toBeLessThan(home.indexOf('class="stats"'));
+    expect(home).toContain('<svg');
+  });
 });

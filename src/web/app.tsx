@@ -273,18 +273,19 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/', async (c) => {
     const t = now();
-    const [base, recent, yakuRows, pending, review, soudanOpen] = await Promise.all([
+    const [base, recent, yakuRows, pending, review, soudanOpen, trend] = await Promise.all([
       homeStats(db, startOfTodayJst(t)),
       listAudit(db, { limit: 10 }),
       membersWithYaku(db),
       pendingApplications(db),
       omairiList(db, ['review']),
       listSoudan(db, ['open']),
+      memberTrend(db, '30d', t),
     ]);
     const stats = { ...base, yaku: yakuRows.length };
     const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length };
     const names = await namesOf(db, recent.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
-    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} />);
+    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} />);
   });
 
   app.get('/members', async (c) => {

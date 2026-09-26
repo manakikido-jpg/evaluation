@@ -2,6 +2,8 @@ import type { GuildConfig } from '../../config.js';
 import { currentAutoRank, nextAutoRank } from '../../domain/ranks.js';
 import type { AdminSession, AuditLog, Member, MemberEvent } from '../../db/schema.js';
 import type { GoshuinchoData } from '../../services/shuin.js';
+import type { TrendBucket } from '../../services/stats.js';
+import { LineChart } from './charts.js';
 import type { MemberListQuery, MemberRow } from '../../services/members.js';
 import {
   ACTION_LABEL,
@@ -57,11 +59,27 @@ export function HomePage(props: {
   recent: AuditLog[];
   names: Names;
   now: Date;
+  /** 直近 30 日の人数（上のグラフ） */
+  trend?: TrendBucket[];
 }) {
-  const { stats } = props;
+  const { stats, trend } = props;
   return (
     <Layout title="ホーム" session={props.session} nav="home">
       <h1>今日の社務所</h1>
+      {trend && trend.length > 0 && (
+        <section class="card">
+          <h2>メンバーの推移（30 日）</h2>
+          <LineChart
+            points={trend.map((b) => ({ label: b.label, title: b.title }))}
+            values={trend.map((b) => b.members)}
+            unit="人"
+            label="直近 30 日のサーバーにいる人数"
+          />
+          <p class="more">
+            <a href="/stats">入った・抜けた・朱印・通話の推移も見る →</a>
+          </p>
+        </section>
+      )}
       <div class="stats">
         <Stat label="メンバー" value={stats.members.toLocaleString('ja-JP')} unit="人" />
         <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" />
@@ -70,9 +88,6 @@ export function HomePage(props: {
         <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
         <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href="/yaku" />
       </div>
-      <p class="more">
-        <a href="/stats">人数・朱印・通話の推移をグラフで見る →</a>
-      </p>
 
       <section class="card">
         <h2>対応待ち</h2>
