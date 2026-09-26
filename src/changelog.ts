@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-ema-template',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '#絵馬 の自己紹介のひな形',
+    items: ['#絵馬 の使い方に、コピーして使える自己紹介のひな形（名前・年齢・声質・好きなタイプ・一言・招待者）', '掲示の「チャンネルの案内を入れる」を押し直すと、標準の文面のままの案内は新しい文面になる'],
+  },
+  {
     id: '2026-09-26-boost-per-boost',
     date: '2026-09-26',
     kind: 'improve',

@@ -276,7 +276,21 @@ describe('チャンネルの案内とピン留め', () => {
       expect(out.unknown, n.title).toEqual([]);
       expect(out.text.length, n.title).toBeLessThanOrEqual(2000);
     }
-    expect(await seedChannelGuides(ctx, GUJI)).toEqual({ created: 0, missing: [] });
+    expect(await seedChannelGuides(ctx, GUJI)).toEqual({ created: 0, updated: 0, missing: [] });
+  });
+
+  it('前の版の標準の文面のままなら、押し直すと新しい文面になる（手を加えたものはそのまま）', async () => {
+    const { PREVIOUS_GUIDE_BODIES, DEFAULT_GUIDES } = await import('../src/services/noticeDefaults.js');
+    const d = fakeDiscord(FULL);
+    const ctx = { db, cfg, discord: d.discord };
+    const old = PREVIOUS_GUIDE_BODIES['絵馬\n使い方']![0]!;
+    const ema = await createNotice(db, { channelId: idOf('絵馬'), title: '使い方', body: old, pinned: true, by: GUJI });
+    const edited = await createNotice(db, { channelId: idOf('境内'), title: '使い方', body: '手で書いた', pinned: true, by: GUJI });
+    const r = await seedChannelGuides(ctx, GUJI);
+    expect(r.updated).toBe(1);
+    expect((await getNotice(db, ema.id))!.body).toBe(DEFAULT_GUIDES.find((t) => t.channelName === '絵馬')!.body);
+    expect((await getNotice(db, ema.id))!.body).toContain('【招待者】');
+    expect((await getNotice(db, edited.id))!.body).toBe('手で書いた');
   });
 
   it('標準の文面が入っていても、案内は入る（#しきたり の最後に足される）', async () => {

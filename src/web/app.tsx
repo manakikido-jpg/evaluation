@@ -892,7 +892,7 @@ export function createWebApp(deps: WebDeps) {
   app.post('/notices/seed-guides', async (c) => {
     return tryDiscord(c, '/notices', async () => {
       const r = await seedChannelGuides(noticeCtx(), c.get('session').userId);
-      return r.missing.length ? 'guides_missing' : r.created ? 'guides_seeded' : 'guides_none';
+      return r.missing.length ? 'guides_missing' : r.created || r.updated ? 'guides_seeded' : 'guides_none';
     });
   });
 

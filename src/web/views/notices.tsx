@@ -15,7 +15,10 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   deleted: { text: '削除しました（Discord のメッセージも消しました）。', kind: 'ok' },
   seeded: { text: '標準の文面を入れました。内容を確認して「すべて反映」を押すと Discord に投稿されます。', kind: 'ok' },
   seed_missing: { text: '#鳥居・#しきたり が見つからなかったため、見つかったチャンネルの分だけ入れました。', kind: 'warn' },
-  guides_seeded: { text: 'チャンネルの使い方の案内を入れました。内容を確認して「すべて反映」を押すと、各チャンネルに投稿してピン留めします。', kind: 'ok' },
+  guides_seeded: {
+    text: 'チャンネルの使い方の案内を入れました（標準の文面のままのものは新しい文面にしました）。内容を確認して「すべて反映」を押すと、各チャンネルに投稿してピン留めします。',
+    kind: 'ok',
+  },
   guides_none: { text: '入れる案内はありませんでした（もう入っています）。', kind: 'ok' },
   guides_missing: { text: '見つからないチャンネルがあったので、見つかったチャンネルの分だけ入れました。', kind: 'warn' },
   pin_failed: {
@@ -72,7 +75,7 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
       <details class="card">
         <summary>チャンネルの使い方の案内を入れる</summary>
         <p class="note">
-          #絵馬・#手水舎・#縁日・#宿帳・#おみくじ などに「使い方」のカードを入れて、ピン留めします（話が流れても 📌 から読めます）。#しきたり には全チャンネルの一覧「チャンネル案内」を入れます。入れたあと、ここで文面を直してから反映できます。もう入っているものは入れません。
+          #絵馬・#手水舎・#縁日・#宿帳・#おみくじ などに「使い方」のカードを入れて、ピン留めします（話が流れても 📌 から読めます）。#しきたり には全チャンネルの一覧「チャンネル案内」を入れます。入れたあと、ここで文面を直してから反映できます。もう入っているものは入れません（標準の文面のまま手を加えていないものは、新しい標準の文面にします）。
         </p>
         <form method="post" action="/notices/seed-guides">
           <Csrf session={session} />

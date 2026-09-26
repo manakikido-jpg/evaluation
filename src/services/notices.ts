@@ -6,7 +6,7 @@ import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageB
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { coreName } from '../lib/names.js';
-import { DEFAULT_GUIDES, DEFAULT_NOTICES, type NoticeTemplate } from './noticeDefaults.js';
+import { DEFAULT_GUIDES, DEFAULT_NOTICES, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
 import { omikujiRange } from './omikuji.js';
 
 /**
@@ -355,9 +355,22 @@ export async function seedDefaultNotices(ctx: NoticeCtx, by: string): Promise<{ 
  * チャンネルの使い方の案内（各チャンネルにピン留め）と、#しきたり の「チャンネル案内」を入れる。
  * 同じチャンネルに同じタイトルの掲示があれば入れない（何度押しても増えない）。
  */
-export async function seedChannelGuides(ctx: NoticeCtx, by: string): Promise<{ created: number; missing: string[] }> {
-  const have = new Set((await listNotices(ctx.db)).map((n) => `${n.channelId}\n${n.title}`));
-  return seedTemplates(ctx, DEFAULT_GUIDES, by, (ch, t) => !have.has(`${ch.id}\n${t.title}`));
+export async function seedChannelGuides(ctx: NoticeCtx, by: string): Promise<{ created: number; updated: number; missing: string[] }> {
+  const list = await listNotices(ctx.db);
+  const have = new Map(list.map((n) => [`${n.channelId}\n${n.title}`, n]));
+  // 前の版の標準の文面のまま（手を加えていない）なら、新しい標準の文面にする（反映は「すべて反映」で）
+  let updated = 0;
+  const channels = await guildChannelsCached(ctx.discord, ctx.cfg.guildId, true);
+  for (const t of DEFAULT_GUIDES) {
+    const ch = findChannel(channels, t.channelName);
+    const n = ch && have.get(`${ch.id}\n${t.title}`);
+    if (n && n.body !== t.body && (PREVIOUS_GUIDE_BODIES[`${t.channelName}\n${t.title}`] ?? []).includes(n.body)) {
+      await updateNotice(ctx.db, n.id, { title: n.title, body: t.body, by });
+      updated++;
+    }
+  }
+  const r = await seedTemplates(ctx, DEFAULT_GUIDES, by, (ch, t) => !have.has(`${ch.id}\n${t.title}`));
+  return { ...r, updated };
 }
 
 async function seedTemplates(
