@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-channel-rename',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: 'チャンネルの名前を変えられるように',
+    items: ['「チャンネル」ページで、チャンネル・カテゴリ・通話の名前を変えられる（BOT は ID で覚えているので、名前を変えても動きは変わらない）'],
+  },
+  {
     id: '2026-09-26-ema-template',
     date: '2026-09-26',
     kind: 'improve',

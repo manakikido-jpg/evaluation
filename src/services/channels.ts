@@ -58,16 +58,29 @@ export function planMode(channel: GuildChannel, cfg: GuildConfig, mode: ChannelM
   return out;
 }
 
-/** 管理画面に並べるチャンネル（テキストとお知らせ。カテゴリの順） */
-export function listTextChannels(channels: GuildChannel[]): { category: GuildChannel | null; items: GuildChannel[] }[] {
+/** テキスト・お知らせ */
+export const isText = (c: GuildChannel) => c.type === 0 || c.type === 5;
+/** 通話・ステージ */
+export const isVoice = (c: GuildChannel) => c.type === 2 || c.type === 13;
+
+/** 管理画面に並べるチャンネル（カテゴリの順。テキストと通話を分けて） */
+export function listTextChannels(
+  channels: GuildChannel[],
+): { category: GuildChannel | null; items: GuildChannel[]; voice: GuildChannel[] }[] {
   const cats = channels.filter((c) => c.type === 4).sort((a, b) => a.position - b.position);
-  const text = channels.filter((c) => c.type === 0 || c.type === 5).sort((a, b) => a.position - b.position);
-  const groups: { category: GuildChannel | null; items: GuildChannel[] }[] = [];
-  const top = text.filter((c) => !c.parent_id);
-  if (top.length) groups.push({ category: null, items: top });
-  for (const cat of cats) {
-    const items = text.filter((c) => c.parent_id === cat.id);
-    if (items.length) groups.push({ category: cat, items });
-  }
+  const byPos = (a: GuildChannel, b: GuildChannel) => a.position - b.position;
+  const text = channels.filter(isText).sort(byPos);
+  const voice = channels.filter(isVoice).sort(byPos);
+  const groups: { category: GuildChannel | null; items: GuildChannel[]; voice: GuildChannel[] }[] = [];
+  const top = { category: null, items: text.filter((c) => !c.parent_id), voice: voice.filter((c) => !c.parent_id) };
+  if (top.items.length || top.voice.length) groups.push(top);
+  for (const cat of cats) groups.push({ category: cat, items: text.filter((c) => c.parent_id === cat.id), voice: voice.filter((c) => c.parent_id === cat.id) });
   return groups;
+}
+
+/** 名前として使えるか（前後の空白を除いて 1〜100 文字） */
+export function cleanChannelName(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const name = v.replace(/[\r\n]+/g, ' ').trim();
+  return name.length >= 1 && name.length <= 100 ? name : undefined;
 }

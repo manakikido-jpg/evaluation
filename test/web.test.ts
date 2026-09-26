@@ -39,7 +39,7 @@ const fakeActions: DiscordActions = {
     { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
   ],
   guildRoles: async () => [],
-  editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic}`),
+  editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}`),
   setChannelOverwrite: async (c, o) => void actions.push(`overwrite ${c} ${o.id} allow=${o.allow} deny=${o.deny}`),
   pinMessage: async (c, m, pin) => void actions.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`),
 };
@@ -852,6 +852,22 @@ describe('チャンネル（管理画面）', () => {
     expect((await form(g, `/channels/${TORII}`, { topic: 'x'.repeat(1025), mode: 'writable' })).headers.get('location')).toBe('/channels?msg=invalid');
     expect((await form(g, `/channels/${TORII}`, { topic: 'x', mode: 'nope' })).headers.get('location')).toBe('/channels?msg=invalid');
     expect(actions.filter((a) => a.startsWith('editChannel') || a.startsWith('overwrite'))).toEqual([]);
+  });
+
+  it('名前を変えられる（チャンネル・カテゴリ）。空の名前は受けない', async () => {
+    const g = await login(GUJI);
+    const r = await form(g, `/channels/${TORII}`, { name: '⛩｜鳥居', topic: 'ようこそ', mode: 'writable' });
+    expect(r.headers.get('location')).toBe('/channels?msg=saved');
+    expect(actions).toContain(`editChannel ${TORII}  name=⛩｜鳥居`);
+    expect((await form(g, `/channels/${TORII}`, { name: '  ', topic: 'ようこそ', mode: 'writable' })).headers.get('location')).toBe('/channels?msg=invalid');
+    const CAT = '910000000000000001';
+    expect((await form(g, `/channels/${CAT}/name`, { name: '⛩ 鳥居 ⛩' })).headers.get('location')).toBe('/channels?msg=saved');
+    expect(actions).toContain(`editChannel ${CAT}  name=⛩ 鳥居 ⛩`);
+    expect((await form(g, `/channels/${CAT}/name`, { name: '⛩ 鳥居' })).headers.get('location')).toBe('/channels?msg=unchanged');
+    expect((await form(g, `/channels/${CAT}/name`, { name: '' })).headers.get('location')).toBe('/channels?msg=invalid');
+    const s2 = await login(STAFF);
+    expect((await form(s2, `/channels/${CAT}/name`, { name: 'x' })).status).toBe(403);
+    expect((await listAudit(db, { action: 'channel.update' })).length).toBe(2);
   });
 
   it('掲示: チャンネルの案内を入れる・ピン留めを選べる', async () => {

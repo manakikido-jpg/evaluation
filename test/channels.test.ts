@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GuildChannel } from '../src/lib/discordRest.js';
-import { listTextChannels, modeOf, planMode, WRITE } from '../src/services/channels.js';
+import { cleanChannelName, listTextChannels, modeOf, planMode, WRITE } from '../src/services/channels.js';
 import { cfg, ROLE } from './helpers.js';
 
 const G = cfg.guildId;
@@ -73,5 +73,13 @@ describe('書き込める／読むだけ', () => {
       ['鳥居', ['鳥居', 'しきたり']],
       ['掲示', ['絵馬']],
     ]);
+    expect(groups[1]!.voice.map((v) => v.name)).toEqual(['拝殿']);
+  });
+
+  it('名前: 前後の空白を除いて 1〜100 文字', () => {
+    expect(cleanChannelName('  🌸｜絵馬 ')).toBe('🌸｜絵馬');
+    expect(cleanChannelName('   ')).toBeUndefined();
+    expect(cleanChannelName('a'.repeat(101))).toBeUndefined();
+    expect(cleanChannelName(undefined)).toBeUndefined();
   });
 });

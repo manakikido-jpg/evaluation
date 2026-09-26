@@ -59,7 +59,7 @@ import {
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
-import { listTextChannels, modeOf as channelModeOf, planMode as planChannelMode } from '../services/channels.js';
+import { cleanChannelName, isText, listTextChannels, modeOf as channelModeOf, planMode as planChannelMode } from '../services/channels.js';
 import {
   createItem as createShopItem,
   deleteItem as deleteShopItem,
@@ -982,13 +982,13 @@ export function createWebApp(deps: WebDeps) {
     });
   });
 
-  // ───────── チャンネル（宮司のみ）: 説明と「書き込める／読むだけ」 ─────────
+  // ───────── チャンネル（宮司のみ）: 名前・説明と「書き込める／読むだけ」 ─────────
 
   app.use('/channels/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
 
   app.get('/channels', async (c) => {
     const channels = await loadChannels(true);
-    const groups = listTextChannels(channels).map((g) => ({ category: g.category, items: g.items.map((ch) => ({ channel: ch, mode: channelModeOf(ch, cfg) })) }));
+    const groups = listTextChannels(channels).map((g) => ({ ...g, items: g.items.map((ch) => ({ channel: ch, mode: channelModeOf(ch, cfg) })) }));
     return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} />);
   });
 
@@ -998,14 +998,19 @@ export function createWebApp(deps: WebDeps) {
     const body = await c.req.parseBody();
     const topic = typeof body.topic === 'string' ? body.topic.replace(/\r\n/g, '\n').trim() : undefined;
     const mode = body.mode === 'readonly' || body.mode === 'writable' ? body.mode : undefined;
-    if (topic === undefined || topic.length > 1024 || !mode) return c.redirect('/channels?msg=invalid');
-    const channel = (await loadChannels(true)).find((ch) => ch.id === id && (ch.type === 0 || ch.type === 5));
+    // 名前は、送られてきたときだけ変える
+    const name = body.name === undefined ? undefined : cleanChannelName(body.name);
+    if (topic === undefined || topic.length > 1024 || !mode || (body.name !== undefined && !name)) return c.redirect('/channels?msg=invalid');
+    const channel = (await loadChannels(true)).find((ch) => ch.id === id && isText(ch));
     if (!channel) return c.redirect('/channels');
     const changes: string[] = [];
     try {
-      if ((channel.topic ?? '') !== topic) {
-        await deps.discord.editChannel(id, { topic });
-        changes.push('topic');
+      const patch: { topic?: string; name?: string } = {};
+      if ((channel.topic ?? '') !== topic) patch.topic = topic;
+      if (name && name !== channel.name) patch.name = name;
+      if (Object.keys(patch).length) {
+        await deps.discord.editChannel(id, patch);
+        changes.push(...Object.keys(patch));
       }
       const plan = planChannelMode(channel, cfg, mode);
       for (const o of plan) await deps.discord.setChannelOverwrite(id, o, mode === 'readonly' ? '読むだけにした（管理画面）' : '書き込めるようにした（管理画面）');
@@ -1015,7 +1020,37 @@ export function createWebApp(deps: WebDeps) {
       return c.redirect('/channels?msg=failed');
     }
     if (!changes.length) return c.redirect('/channels?msg=unchanged');
-    await audit(db, { actorId: c.get('session').userId, action: 'channel.update', detail: { channelId: id, name: channel.name, topic: changes.includes('topic') ? topic : undefined, mode: changes.includes('mode') ? mode : undefined }, via: 'web' });
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'channel.update',
+      detail: {
+        channelId: id,
+        name: channel.name,
+        newName: changes.includes('name') ? name : undefined,
+        topic: changes.includes('topic') ? topic : undefined,
+        mode: changes.includes('mode') ? mode : undefined,
+      },
+      via: 'web',
+    });
+    return c.redirect('/channels?msg=saved');
+  });
+
+  /** カテゴリ・通話の名前だけ変える */
+  app.post('/channels/:id/name', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
+    const name = cleanChannelName((await c.req.parseBody()).name);
+    if (!name) return c.redirect('/channels?msg=invalid');
+    const channel = (await loadChannels(true)).find((ch) => ch.id === id);
+    if (!channel) return c.redirect('/channels');
+    if (channel.name === name) return c.redirect('/channels?msg=unchanged');
+    try {
+      await deps.discord.editChannel(id, { name });
+    } catch (err) {
+      logger.warn({ err }, 'channel rename failed');
+      return c.redirect('/channels?msg=failed');
+    }
+    await audit(db, { actorId: c.get('session').userId, action: 'channel.update', detail: { channelId: id, name: channel.name, newName: name }, via: 'web' });
     return c.redirect('/channels?msg=saved');
   });
 
