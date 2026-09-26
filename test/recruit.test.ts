@@ -53,6 +53,13 @@ describe('募集', () => {
     expect(noVoice.embeds[0]!.description).toContain(`<#${HUB}> に入ると部屋ができます`);
     expect(noVoice.embeds[0]!.description).not.toContain('>  ');
     expect(noVoice.components).toEqual([]);
+    expect(noVoice.embeds[0]).not.toHaveProperty('thumbnail');
+  });
+
+  it('カード: 募集した人のアイコンを右上と名前の横に出す', () => {
+    const icon = 'https://cdn.discordapp.com/avatars/U1/abc.png?size=256';
+    const card = recruitCard({ guildId: GUILD, panel: cfg.recruit.panels[0]!, userId: 'U1', name: 'さくら', message: '', avatarUrl: icon });
+    expect(card.embeds[0]).toMatchObject({ author: { name: 'さくら さん', icon_url: icon }, thumbnail: { url: icon } });
   });
 
   it('ボタンのパネル', () => {

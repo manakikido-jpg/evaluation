@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-recruit-icon',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '募集のカードにアイコン',
+    items: ['募集した人のアイコン（サーバー用のアイコンがあればそれ）を、カードの右上と名前の横に出すように'],
+  },
+  {
     id: '2026-09-26-contact-roles',
     date: '2026-09-26',
     kind: 'new',

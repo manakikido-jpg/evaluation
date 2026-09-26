@@ -44,7 +44,8 @@ export function decideRecruit(cfg: GuildConfig, channelId: string, memberRoleIds
 }
 
 /** 募集カード（お守りのロールに通知。通話にいれば、その通話へのボタンを付ける） */
-export function recruitCard(input: { guildId: string; panel: RecruitPanel; userId: string; name: string; message: string; voiceChannelId?: string | null }) {
+/** avatarUrl: 募集した人のアイコン（サーバーのアイコンがあればそれ）。カードの右上と名前の横に出す */
+export function recruitCard(input: { guildId: string; panel: RecruitPanel; userId: string; name: string; message: string; voiceChannelId?: string | null; avatarUrl?: string }) {
   const { panel } = input;
   const where = input.voiceChannelId
     ? `📞 <#${input.voiceChannelId}> にいます。下のボタンから入れます`
@@ -56,6 +57,7 @@ export function recruitCard(input: { guildId: string; panel: RecruitPanel; userI
     content: panel.roleId ? `<@&${panel.roleId}>` : '',
     embeds: [
       {
+        ...(input.avatarUrl ? { author: { name: `${input.name} さん`, icon_url: input.avatarUrl }, thumbnail: { url: input.avatarUrl } } : {}),
         title: `${panel.emoji} ${panel.label}の募集`.trim(),
         description: [`<@${input.userId}> さんが募集しています`, ...(message ? [`> ${message.replace(/\n+/g, ' ')}`] : []), '', where].join('\n'),
         color: SHU,

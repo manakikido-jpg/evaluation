@@ -114,6 +114,7 @@ export class RecruitApp {
         name: i.member.displayName,
         message: i.fields.getTextInputValue('message'),
         voiceChannelId: i.member.voice.channelId,
+        avatarUrl: i.member.displayAvatarURL({ size: 256 }),
       }),
     );
     // 投稿できてから「続けて募集できない」時間を数え始める
