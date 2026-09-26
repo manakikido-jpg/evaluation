@@ -109,7 +109,7 @@ export async function cleanupRooms(ctx: TempVoiceCtx, now = new Date()): Promise
   return removed;
 }
 
-async function removeRoom(ctx: TempVoiceCtx, channelId: string): Promise<void> {
+export async function removeRoom(ctx: TempVoiceCtx, channelId: string): Promise<void> {
   await ctx.ops.remove(channelId);
   await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
 }

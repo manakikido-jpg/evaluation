@@ -15,6 +15,7 @@ import { BoostApp } from './discord/boost.js';
 import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
+import { RoomApp } from './discord/rooms.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -44,7 +45,10 @@ async function main(): Promise<void> {
   const actions = createDiscordActions(env.DISCORD_TOKEN);
   const staff = new StaffApp(client, db, cfg, actions, env.WEB_BASE_URL);
   const admission = new AdmissionApp(client, db, cfg, actions);
-  const tempVoice = new TempVoiceApp(db, cfg);
+  // 宿坊・宵宮の部屋の設定（種類・人数・招待・花びら）
+  let rooms: RoomApp | undefined;
+  const tempVoice = new TempVoiceApp(db, cfg, (channelId, ownerId) => rooms?.onCreated(channelId, ownerId) ?? Promise.resolve());
+  rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
@@ -74,6 +78,7 @@ async function main(): Promise<void> {
       .catch((err) => logger.error({ err }, 'member sync failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
+    rooms.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // ブースト: 止まっていた間の「ブーストしました」を拾う
@@ -84,6 +89,8 @@ async function main(): Promise<void> {
     ticker = setInterval(() => {
       void app.everyMinute(guild);
       void tempVoice.cleanup();
+      // 1 時間ごとの部屋（宵宮）の支払い
+      void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
     }, 60_000);
@@ -128,6 +135,7 @@ async function main(): Promise<void> {
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);
     void shop.onInteraction(i);
+    void rooms.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);

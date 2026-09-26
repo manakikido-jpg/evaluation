@@ -55,6 +55,8 @@ export type ChannelSpec = {
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
   hub?: string;
+  /** 自分の通話部屋の種類と値段（once: ひらくたびに 1 回 / hourly: 1 時間ごと） */
+  plan?: 'once' | 'hourly';
   /** 「募集する」ボタンを置く（どのお守りの人に知らせるか） */
   recruit?: RoleKey;
 };
@@ -200,7 +202,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '宿帳', kind: 'text', topic: '寝落ち通話の募集・おやすみの挨拶', recruit: 'omamori_neochi' },
-        { name: '➕ 宿坊をひらく', kind: 'voice', hub: '🌙 {name}の宿坊' },
+        { name: '➕ 宿坊をひらく', kind: 'voice', hub: '🌙 {name}の宿坊', plan: 'once' },
       ],
     },
     {
@@ -209,7 +211,7 @@ export const FULL: Layout = {
       channels: [
         { name: '宵宮', kind: 'text', topic: '18 歳以上の雑談' },
         { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集', recruit: 'omamori_yoimiya' },
-        { name: '➕ 宵宮の部屋をひらく', kind: 'voice', hub: '🍶 {name}の部屋' },
+        { name: '➕ 宵宮の部屋をひらく', kind: 'voice', hub: '🍶 {name}の部屋', plan: 'hourly' },
       ],
     },
     {

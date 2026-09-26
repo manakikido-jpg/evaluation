@@ -325,6 +325,16 @@ export const tempVoice = pgTable('temp_voice', {
   ownerId: text('owner_id').notNull(),
   hubId: text('hub_id').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** 部屋の種類（宿坊・宵宮）: public 公開 / invite 招待限定 / secret シークレット / twoshot ツーショット */
+  kind: text('kind').$type<'public' | 'invite' | 'secret' | 'twoshot'>().notNull().default('public'),
+  /** この部屋で払った花びら（1 回払いの部屋で、種類を変えたときの差額に使う） */
+  paid: integer('paid').notNull().default(0),
+  /** 1 時間ごとの部屋: ここまで払ってある */
+  paidUntil: timestamp('paid_until', { withTimezone: true }),
+  /** 1 時間ごとの部屋: 払えなくなった時刻（5 分たったら閉じる） */
+  unpaidSince: timestamp('unpaid_since', { withTimezone: true }),
+  /** 招待した人 */
+  invited: text('invited').array().notNull().default(sql`'{}'::text[]`),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */

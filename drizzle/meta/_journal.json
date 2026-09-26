@@ -99,6 +99,13 @@
       "when": 1790448537415,
       "tag": "0013_notice_sticky",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790453358519,
+      "tag": "0014_room_kinds",
+      "breakpoints": true
     }
   ]
 }

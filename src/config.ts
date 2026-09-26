@@ -74,6 +74,20 @@ export const coreTimeSchema = z.object({
 });
 export type CoreTimeConfig = z.infer<typeof coreTimeSchema>;
 
+/** 部屋の種類ごとの値段（花びら。0 なら無料） */
+const roomPrices = z.object({
+  public: z.number().int().min(0).max(1_000_000).default(0),
+  invite: z.number().int().min(0).max(1_000_000).default(0),
+  secret: z.number().int().min(0).max(1_000_000).default(0),
+  twoshot: z.number().int().min(0).max(1_000_000).default(0),
+});
+/** 自分の通話部屋の値段: once = ひらくたびに 1 回、hourly = 1 時間ごと */
+export const roomsSchema = z.object({
+  once: roomPrices.default(roomPrices.parse({})),
+  hourly: roomPrices.default(roomPrices.parse({})),
+});
+export type RoomsConfig = z.infer<typeof roomsSchema>;
+
 export const DEFAULT_BOOST_ANNOUNCE = '🏮 **{名前}** さんが、咲楽ノ宮に奉納（サーバーブースト）してくださいました。\nありがとうございます！';
 export const DEFAULT_BOOST_DM = '🏮 咲楽ノ宮に奉納（サーバーブースト）してくださり、ありがとうございます。';
 
@@ -175,6 +189,7 @@ export const guildConfigSchema = z
     /** ブースト（奉納）のお礼の文面。{名前} は奉納した人（メンションになるが通知は飛ばない） */
     boost: boostSchema.default(boostSchema.parse({})),
     coreTime: coreTimeSchema.default(coreTimeSchema.parse({})),
+    rooms: roomsSchema.default(roomsSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({
@@ -214,6 +229,12 @@ export const guildConfigSchema = z
               channelId: snowflake,
               /** できる通話の名前。{name} が入った人の表示名になる */
               name: z.string().min(1).max(90),
+              /**
+               * 部屋の種類（公開・招待限定・シークレット・ツーショット）を選べて、花びらを払う入口。
+               * once: ひらくたびに 1 回（宿坊） / hourly: 1 時間ごと（宵宮） / none: 選べない・無料。
+               * 省略時は名前から決める（宿坊 → once、🍶・宵宮 → hourly）
+               */
+              plan: z.enum(['none', 'once', 'hourly']).optional(),
             }),
           )
           .default([]),

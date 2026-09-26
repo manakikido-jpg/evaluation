@@ -741,6 +741,12 @@ export function createWebApp(deps: WebDeps) {
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
       },
+      rooms: Object.fromEntries(
+        (['once', 'hourly'] as const).map((plan) => [
+          plan,
+          Object.fromEntries((['public', 'invite', 'secret', 'twoshot'] as const).map((k) => [k, num(`room.${plan}.${k}`)])),
+        ]),
+      ),
       coreTime: {
         slots: [0, 1, 2, 3, 4, 5, 6].flatMap((day) => {
           const start = field(body, `ct.${day}.start`, 5);

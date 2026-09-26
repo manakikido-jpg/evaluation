@@ -475,6 +475,40 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </div>
         </section>
         <section class="card">
+          <h2>🚪 通話部屋の値段（宿坊・宵宮）</h2>
+          <p class="note">
+            「➕ 宿坊をひらく」「➕ 宵宮の部屋をひらく」でできた部屋は、作った人が部屋のチャットの「⚙ 部屋の設定」から種類・人数・招待を選べます。値段は{e.currencyName}の枚数（0 で無料）。宿坊はひらくたびに 1 回（種類を変えたら差額）、宵宮は 1 時間ごと（払えなくなると、招待限定などは公開に戻り、公開も払えなければ 5 分後に閉じる）。
+          </p>
+          <table class="compact rooms">
+            <thead>
+              <tr>
+                <th></th>
+                <th>🔓 公開</th>
+                <th>🔒 招待限定</th>
+                <th>🤫 シークレット</th>
+                <th>💞 ツーショット</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ['once', '🌙 宿坊（ひらくたびに 1 回）'],
+                  ['hourly', '🍶 宵宮（1 時間ごと）'],
+                ] as const
+              ).map(([plan, label]) => (
+                <tr>
+                  <td>{label}</td>
+                  {(['public', 'invite', 'secret', 'twoshot'] as const).map((k) => (
+                    <td>
+                      <input type="number" name={`room.${plan}.${k}`} value={String(cfg.rooms[plan][k])} min={0} required aria-label={`${label} ${k}`} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+        <section class="card">
           <h2>🏮 コアタイム</h2>
           <p class="note">
             みんなが集まる時間（日本時間）。この間の通話は{e.currencyName}が増えます（増えた分は 1 日の上限に数えません。端数は四捨五入）。#境内 に、前日と始まる少し前に予告を出します。曜日ごとに 1 つ。空けた曜日はコアタイムなし。終わりを 00:00 にすると 24 時まで。

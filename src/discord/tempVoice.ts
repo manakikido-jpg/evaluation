@@ -2,10 +2,10 @@ import { ChannelType, DiscordAPIError, OverwriteType, PermissionFlagsBits, type 
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { cleanupRooms, onVoiceJoin, onVoiceLeave, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
+import { cleanupRooms, onVoiceJoin, onVoiceLeave, removeRoom, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
 
 /** 作った人ができること: 名前・人数の上限の変更、入っている人を抜けさせる */
-const OWNER_ALLOW = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.MoveMembers;
+export const OWNER_ALLOW = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.MoveMembers;
 
 export function discordVoiceOps(guild: Guild): VoiceOps {
   return {
@@ -57,7 +57,14 @@ export class TempVoiceApp {
   constructor(
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
+    /** 部屋ができたとき（宿坊・宵宮の部屋の設定を出す） */
+    private readonly onCreated?: (channelId: string, ownerId: string) => Promise<void>,
   ) {}
+
+  /** 部屋を閉じる（中の人は通話から抜ける） */
+  async close(channelId: string): Promise<void> {
+    if (this.ctx) await removeRoom(this.ctx, channelId);
+  }
 
   /** 起動したとき。権限を確かめて、止まっていた間に空になった部屋を消す */
   async attach(guild: Guild): Promise<void> {
@@ -87,6 +94,7 @@ export class TempVoiceApp {
       if (after.channelId && after.member && !after.member.user.bot) {
         const r = await onVoiceJoin(this.ctx, { userId: after.id, displayName: after.member.displayName, channelId: after.channelId });
         if (r.status === 'moved' || r.status === 'created') movedInto = r.channelId;
+        if (r.status === 'created') await this.onCreated?.(r.channelId, after.id).catch((err) => logger.warn({ err }, 'room created hook failed'));
       }
       // 自分の部屋から入口に入って、また自分の部屋に戻された: その部屋は空ではない
       if (before.channelId && before.channelId !== movedInto) await onVoiceLeave(this.ctx, before.channelId);

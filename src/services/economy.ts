@@ -20,6 +20,7 @@ export type CoinReason =
   | 'gift_send'
   | 'gift_receive'
   | 'boost'
+  | 'room'
   | 'admin_grant'
   | 'admin_take'
   | 'adjust';

@@ -68,7 +68,7 @@ export type SetupResult = {
   moved: string[];
   warnings: string[];
   /** 自分の通話部屋の入口（config の tempVoice.hubs に書く） */
-  hubs: { channelId: string; name: string }[];
+  hubs: { channelId: string; name: string; plan?: 'once' | 'hourly' }[];
   /** 「募集する」ボタンを置くチャンネル（config の recruit.panels に書く） */
   recruit: { channelId: string; omamori: RoleKey; hubId?: string }[];
 };
@@ -276,7 +276,7 @@ export async function applyLayout(
       if (ch.configKey) result.channelIds[ch.configKey] = found.id;
       if (ch.afk) afkChannelId = found.id;
       if (ch.hub) {
-        result.hubs.push({ channelId: found.id, name: ch.hub });
+        result.hubs.push({ channelId: found.id, name: ch.hub, ...(ch.plan ? { plan: ch.plan } : {}) });
         hubOfCategory.set(parent.id, found.id);
       }
       if (ch.recruit) recruitIn.push({ channelId: found.id, omamori: ch.recruit, parentId: parent.id });

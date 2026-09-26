@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, guildConfigSchema, type GuildConfig } from '../config.js';
+import { coreTimeSchema, guildConfigSchema, roomsSchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -39,6 +39,7 @@ export const overridesSchema = z.object({
     .default({}),
   omairi: z.object({ days: z.number().int().positive().max(365), extendDays: z.number().int().min(0).max(365) }).partial().default({}),
   coreTime: coreTimeSchema.partial().default({}),
+  rooms: roomsSchema.partial().default({}),
   boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
 });
@@ -55,6 +56,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     omairi: { ...base.omairi, ...o.omairi },
     boost: { ...base.boost, ...o.boost },
     coreTime: { ...base.coreTime, ...o.coreTime },
+    rooms: { ...base.rooms, ...o.rooms },
     applications: { ...base.applications, ...o.applications },
     ranks: base.ranks.map((r) => {
       const x = o.ranks[r.key] ?? {};
