@@ -3,8 +3,8 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import type { ShopItem } from '../src/db/schema.js';
 import { DiscordHttpError, type DiscordActions } from '../src/lib/discordRest.js';
-import { boostCatchupSince, boostCountOf, boostDm, currentBoosters, processBoosters, thankBoostMessage, thankBooster, updateBoard } from '../src/services/boost.js';
-import { recentCoinTx, walletOf } from '../src/services/economy.js';
+import { boostCatchupSince, boostCountOf, boostDm, currentBoosters, endBoosterOnlyRoles, processBoosters, thankBoostMessage, thankBooster, updateBoard } from '../src/services/boost.js';
+import { addCoins, recentCoinTx, walletOf } from '../src/services/economy.js';
 import { getMember, recordJoin, upsertMember, type MemberSnapshot } from '../src/services/members.js';
 import { priceOf } from '../src/services/shop.js';
 import { cfg, makeDb } from './helpers.js';
@@ -24,7 +24,7 @@ let messages: Map<string, string>;
 let seq: number;
 const discord: DiscordActions = {
   addRole: async () => undefined,
-  removeRole: async () => undefined,
+  removeRole: async (_g, u, r) => void log.push(`removeRole ${u} ${r}`),
   sendDm: async (u, text) => (log.push(`dm ${u} ${text}`), true),
   ban: async () => undefined,
   unban: async () => undefined,
@@ -180,3 +180,32 @@ describe('奉納割引', () => {
     expect(priceOf(item('role', 1500), { ...e, boostDiscountPercent: 0 }, true)).toBe(1500);
   });
 });
+
+describe('奉納限定のロール', () => {
+  it('奉納をやめた人の奉納限定ロールは外す（買ってすぐは外さない）。奉納中の人・ふつうの品物はそのまま', async () => {
+    const { seedDefaultItems, listItems, buyRole } = await import('../src/services/shop.js');
+    const KIN = '960000000000000077';
+    const SAKURA = '960000000000000078';
+    await seedDefaultItems(db, { colors: [{ roleId: KIN, name: '金色', emoji: '🏮', boosterOnly: true }, { roleId: SAKURA, name: '桜', emoji: '🌸' }], titles: [] });
+    const items = await listItems(db);
+    const kin = items.find((i) => i.roleId === KIN)!;
+    expect(kin).toMatchObject({ boosterOnly: true, price: 0, durationDays: null });
+    await recordJoin(db, snap(A, at(0)));
+    await recordJoin(db, snap(B, at(0)));
+    // B は桜を買ってから金色に（同じ色守りなので桜は外れる）
+    await addCoins(db, B, 2000, 'adjust');
+    await buyRole(db, items.find((i) => i.roleId === SAKURA)!, B);
+    await buyRole(db, kin, A);
+    await buyRole(db, kin, B);
+    // B は奉納をやめた
+    await upsertMember(db, snap(B, null));
+    const ctx = { db, cfg, discord };
+    // 買った時刻は本当の今
+    const later = (min: number) => new Date(Date.now() + min * 60_000);
+    expect(await endBoosterOnlyRoles(ctx, later(1))).toBe(0);
+    expect(await endBoosterOnlyRoles(ctx, later(20))).toBe(1);
+    expect(log.filter((l) => l.startsWith('removeRole'))).toEqual([`removeRole ${B} ${KIN}`]);
+    expect(await endBoosterOnlyRoles(ctx, later(30))).toBe(0);
+  });
+});
+

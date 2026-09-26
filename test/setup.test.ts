@@ -434,12 +434,14 @@ describe('名前を変えたあとでセットアップし直しても', () => {
 });
 
 describe('ショップのロール', () => {
-  it('色守り 6・称号 4 を作り、設定ファイルの shop に書く', async () => {
+  it('色守り 7・称号 5（奉納限定の 金色・奉納者 を含む）を作り、設定ファイルの shop に書く', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL);
     const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
-    expect(cfg.shop.colors.map((c) => c.name)).toEqual(['桜', '藤', '若草', '山吹', '空', '紅']);
-    expect(cfg.shop.titles.map((c) => c.name)).toEqual(['酒豪', '夜更かし', '勝負師', '歌い手']);
+    expect(cfg.shop.colors.map((c) => c.name)).toEqual(['桜', '藤', '若草', '山吹', '空', '紅', '金色']);
+    expect(cfg.shop.titles.map((c) => c.name)).toEqual(['酒豪', '夜更かし', '勝負師', '歌い手', '奉納者']);
+    expect(cfg.shop.colors.find((c) => c.name === '金色')?.boosterOnly).toBe(true);
+    expect(cfg.shop.titles.find((c) => c.name === '奉納者')?.boosterOnly).toBe(true);
     expect(cfg.channels.keidai).toBe(find(d, '境内', 0).id);
   });
 

@@ -6,6 +6,7 @@ import { roomPanel } from '../src/discord/rooms.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { addInvites, changeRoomKind, hourlyPerPerson, payEntry, planOf, roomOf, roomOverwrites, startRoom, type Overwrite } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
+import { members } from '../src/db/schema.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
 const NEOCHI = '960000000000000001';
@@ -32,6 +33,7 @@ const cfg: GuildConfig = {
   rooms: {
     once: { public: 50, invite: 200, secret: 300, twoshot: 400 },
     hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 },
+    boosterDiscountPercent: 100,
   },
 };
 const T0 = new Date('2026-09-26T12:00:00Z');
@@ -168,6 +170,17 @@ describe('支払い', () => {
     await open(YOIMIYA);
     expect(await payEntry(db, free, ROOM, OWNER, T0)).toEqual({ status: 'free', charged: 0 });
     expect(await hourlyPerPerson(db, free, [{ channelId: ROOM, memberIds: [OWNER] }], min(60))).toEqual([]);
+  });
+
+  it('奉納（ブースト）している人は部屋代が割引（100% なら無料）', async () => {
+    await db.insert(members).values({ id: FRIEND, username: 'f', displayName: 'f', boostingSince: T0 });
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await open(YOIMIYA);
+    expect(await payEntry(db, cfg, ROOM, FRIEND, T0)).toEqual({ status: 'free', charged: 0 });
+    expect(await payEntry(db, cfg, ROOM, OWNER, T0)).toEqual({ status: 'ok', charged: 100 });
+    const half: GuildConfig = { ...cfg, rooms: { ...cfg.rooms, boosterDiscountPercent: 50 } };
+    await addCoins(db, FRIEND, 100, 'adjust');
+    expect(await hourlyPerPerson(db, half, [{ channelId: ROOM, memberIds: [FRIEND] }], min(1))).toEqual([{ action: 'paid', channelId: ROOM, memberId: FRIEND, charged: 50 }]);
   });
 
   it('招待した人を覚える（重ならない）', async () => {

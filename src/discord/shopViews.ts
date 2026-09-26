@@ -12,7 +12,9 @@ const label = (i: ShopItem) => `${i.emoji ? `${i.emoji} ` : ''}${i.name}`;
 const discounted = (item: ShopItem, e: EconomyConfig, booster: boolean) => booster && discountable(item) && e.boostDiscountPercent > 0;
 
 export function priceText(item: ShopItem, e: EconomyConfig, booster = false): string {
+  if (item.boosterOnly && !booster) return '🏮 奉納している方だけ';
   if (item.kind === 'gift') return '好きな量';
+  if (booster && item.kind === 'ema_pin' && item.price > 0) return `0 枚（奉納の特典で無料）`;
   const now = `${priceOf(item, e, booster).toLocaleString('ja-JP')} 枚`;
   return discounted(item, e, booster) ? `${now}（${priceOf(item, e).toLocaleString('ja-JP')} 枚から奉納割引）` : now;
 }
@@ -57,9 +59,10 @@ export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, n
   const price = priceOf(item, e, booster);
   const lines = [
     item.description,
-    item.durationDays ? `期間: ${item.durationDays} 日` : item.kind === 'role' ? '期間: ずっと' : '',
+    item.durationDays ? `期間: ${item.durationDays} 日` : item.kind === 'role' ? (item.boosterOnly ? '期間: 奉納している間' : '期間: ずっと') : '',
     `値段: **${priceText(item, e, booster)}**（いま ${balance.toLocaleString('ja-JP')} 枚）`,
     note ?? '',
+    item.boosterOnly && !booster ? '-# 🏮 奉納（サーバーブースト）している方だけが受けられます' : '',
   ].filter(Boolean);
   return {
     embeds: [{ title: label(item), description: lines.join('\n'), color: SHU }],
@@ -67,7 +70,7 @@ export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, n
       {
         type: 1,
         components: [
-          { type: 2, style: 3, label: `${price.toLocaleString('ja-JP')} 枚で受ける`, custom_id: `shop:buy:${item.id}`, disabled: balance < price },
+          { type: 2, style: 3, label: `${price.toLocaleString('ja-JP')} 枚で受ける`, custom_id: `shop:buy:${item.id}`, disabled: balance < price || (item.boosterOnly && !booster) },
           { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
         ],
       },

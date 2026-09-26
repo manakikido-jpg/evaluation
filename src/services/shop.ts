@@ -35,14 +35,15 @@ export async function getItem(db: Db, id: number): Promise<ShopItem | undefined>
 /** 奉納（ブースト）割引が効く品物（免罪符・贈り物はのぞく） */
 export const discountable = (item: ShopItem) => item.kind !== 'menzaifu' && item.kind !== 'gift';
 
-/** 払う値段（免罪符は設定の値段。奉納している人は割引。1 枚未満は切り上げ） */
+/** 払う値段（免罪符は設定の値段。奉納している人は割引、絵馬の奉納は無料。1 枚未満は切り上げ） */
 export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
   const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
+  if (booster && item.kind === 'ema_pin') return 0;
   if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return base;
   return Math.ceil((base * (100 - economy.boostDiscountPercent)) / 100);
 };
 
-export type ItemPatch = Partial<Pick<ShopItem, 'name' | 'emoji' | 'description' | 'price' | 'durationDays' | 'enabled' | 'position' | 'roleId' | 'roleGroup'>>;
+export type ItemPatch = Partial<Pick<ShopItem, 'name' | 'emoji' | 'description' | 'price' | 'durationDays' | 'enabled' | 'position' | 'roleId' | 'roleGroup' | 'boosterOnly'>>;
 
 export async function updateItem(db: Db, id: number, patch: ItemPatch): Promise<void> {
   await db.update(shopItems).set({ ...patch, updatedAt: new Date() }).where(eq(shopItems.id, id));
@@ -60,7 +61,10 @@ export async function deleteItem(db: Db, id: number): Promise<void> {
 /** 最初から置く品物（ロールのものは、セットアップが作ったロールを渡す）。同じものがあれば作らない */
 export async function seedDefaultItems(
   db: Db,
-  roles: { colors: { roleId: string; name: string; emoji: string }[]; titles: { roleId: string; name: string; emoji: string }[] },
+  roles: {
+    colors: { roleId: string; name: string; emoji: string; boosterOnly?: boolean }[];
+    titles: { roleId: string; name: string; emoji: string; boosterOnly?: boolean }[];
+  },
 ): Promise<number> {
   const existing = await listItems(db);
   let pos = existing.reduce((n, i) => Math.max(n, i.position), 0);
@@ -69,12 +73,21 @@ export async function seedDefaultItems(
     await createItem(db, { ...item, position: ++pos });
     created++;
   };
+  const BOOSTER_NOTE = '奉納（ブースト）している方だけ。奉納をやめると外れます';
   for (const c of roles.colors) {
     if (existing.some((i) => i.roleId === c.roleId)) continue;
+    if (c.boosterOnly) {
+      await add({ kind: 'role', name: `色守り（${c.name}）`, emoji: c.emoji, description: `名前がこの色になる。${BOOSTER_NOTE}`, price: 0, roleId: c.roleId, roleGroup: 'color', durationDays: null, boosterOnly: true });
+      continue;
+    }
     await add({ kind: 'role', name: `色守り（${c.name}）`, emoji: c.emoji, description: '30 日間、名前がこの色になる（買い替えると前の色は外れる）', price: 1500, roleId: c.roleId, roleGroup: 'color', durationDays: 30 });
   }
   for (const t of roles.titles) {
     if (existing.some((i) => i.roleId === t.roleId)) continue;
+    if (t.boosterOnly) {
+      await add({ kind: 'role', name: `称号「${t.name}」`, emoji: t.emoji, description: `プロフィールに称号のロールが付く。${BOOSTER_NOTE}`, price: 0, roleId: t.roleId, roleGroup: 'title', durationDays: null, boosterOnly: true });
+      continue;
+    }
     await add({ kind: 'role', name: `称号「${t.name}」`, emoji: t.emoji, description: 'プロフィールに称号のロールが付く（ずっと）', price: 2000, roleId: t.roleId, roleGroup: 'title', durationDays: null });
   }
   const singles: Omit<typeof shopItems.$inferInsert, 'id' | 'updatedAt' | 'position'>[] = [

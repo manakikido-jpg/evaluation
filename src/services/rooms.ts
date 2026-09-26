@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { roomPayers, tempVoice } from '../db/schema.js';
+import { members, roomPayers, tempVoice } from '../db/schema.js';
 import { spendWithin } from './economy.js';
 
 /**
@@ -83,6 +83,21 @@ export function roomOverwrites(
 
 // ───────── 支払い ─────────
 
+/** 奉納（ブースト）している人か */
+async function isBoosting(db: Db, memberId: string): Promise<boolean> {
+  const [m] = await db.select({ since: members.boostingSince, left: members.leftAt }).from(members).where(eq(members.id, memberId));
+  return Boolean(m?.since && !m.left);
+}
+
+/** その人が払う値段（奉納している人は割引。100% なら無料） */
+async function priceFor(db: Db, cfg: GuildConfig, plan: RoomPlan, kind: RoomKind, memberId: string): Promise<number> {
+  const price = roomPrice(cfg, plan, kind);
+  if (price <= 0) return 0;
+  const off = cfg.rooms.boosterDiscountPercent;
+  if (off <= 0 || !(await isBoosting(db, memberId))) return price;
+  return Math.ceil((price * (100 - off)) / 100);
+}
+
 export type PayResult = { status: 'ok'; charged: number } | { status: 'insufficient'; price: number };
 
 const lockRoom = (tx: Db, channelId: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'room:' + channelId}))`);
@@ -96,7 +111,7 @@ export async function startRoom(db: Db, cfg: GuildConfig, channelId: string, now
     const plan = planOf(cfg, row.hubId);
     // 1 時間ごとの部屋は、入った人それぞれが払う（payEntry）
     if (plan !== 'once') return { status: 'ok' as const, charged: 0 };
-    const price = roomPrice(cfg, plan, 'public');
+    const price = await priceFor(tx, cfg, plan, 'public', row.ownerId);
     if (price > 0 && !(await spendWithin(tx, row.ownerId, price, 'room', { channelId, kind: 'public', plan }))) {
       return { status: 'insufficient' as const, price };
     }
@@ -115,8 +130,8 @@ export async function changeRoomKind(db: Db, cfg: GuildConfig, channelId: string
     const [row] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
     if (!row) return { status: 'not_found' as const };
     const plan = planOf(cfg, row.hubId);
-    const price = roomPrice(cfg, plan, kind);
-    const charge = plan === 'once' ? Math.max(0, price - row.paid) : Math.max(0, price - roomPrice(cfg, plan, row.kind));
+    const price = await priceFor(tx, cfg, plan, kind, row.ownerId);
+    const charge = plan === 'once' ? Math.max(0, price - row.paid) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, row.ownerId)));
     if (charge > 0 && !(await spendWithin(tx, row.ownerId, charge, 'room', { channelId, kind, plan }))) {
       return { status: 'insufficient' as const, price: charge };
     }
@@ -157,7 +172,7 @@ export async function payEntry(
 ): Promise<{ status: 'ok' | 'free' | 'already'; charged: number } | { status: 'insufficient'; price: number }> {
   const row = await roomOf(db, channelId);
   if (!row || planOf(cfg, row.hubId) !== 'hourly') return { status: 'free', charged: 0 };
-  const price = roomPrice(cfg, 'hourly', row.kind);
+  const price = await priceFor(db, cfg, 'hourly', row.kind, memberId);
   if (price <= 0) return { status: 'free', charged: 0 };
   return db.transaction(async (tx) => {
     await lockPayer(tx, channelId, memberId);
@@ -193,9 +208,10 @@ export async function hourlyPerPerson(
   for (const room of present) {
     const row = await roomOf(db, room.channelId);
     if (!row || planOf(cfg, row.hubId) !== 'hourly') continue;
-    const price = roomPrice(cfg, 'hourly', row.kind);
-    if (price <= 0) continue;
+    if (roomPrice(cfg, 'hourly', row.kind) <= 0) continue;
     for (const memberId of new Set(room.memberIds)) {
+      const price = await priceFor(db, cfg, 'hourly', row.kind, memberId);
+      if (price <= 0) continue;
       const a = await db.transaction(async (tx): Promise<PersonAction | undefined> => {
         await lockPayer(tx, room.channelId, memberId);
         const [payer] = await tx.select().from(roomPayers).where(and(eq(roomPayers.channelId, room.channelId), eq(roomPayers.memberId, memberId)));

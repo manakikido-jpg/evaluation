@@ -745,12 +745,15 @@ export function createWebApp(deps: WebDeps) {
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
       },
-      rooms: Object.fromEntries(
-        (['once', 'hourly'] as const).map((plan) => [
-          plan,
-          Object.fromEntries((['public', 'invite', 'secret', 'twoshot'] as const).map((k) => [k, num(`room.${plan}.${k}`)])),
-        ]),
-      ),
+      rooms: {
+        ...Object.fromEntries(
+          (['once', 'hourly'] as const).map((plan) => [
+            plan,
+            Object.fromEntries((['public', 'invite', 'secret', 'twoshot'] as const).map((k) => [k, num(`room.${plan}.${k}`)])),
+          ]),
+        ),
+        boosterDiscountPercent: num('roomBoosterDiscount'),
+      },
       coreTime: {
         slots: [0, 1, 2, 3, 4, 5, 6].flatMap((day) => {
           const start = field(body, `ct.${day}.start`, 5);
@@ -1227,6 +1230,7 @@ export function createWebApp(deps: WebDeps) {
       emoji: f.emoji,
       description: f.description,
       enabled: body.enabled === 'yes',
+      ...(item.kind !== 'menzaifu' && item.kind !== 'gift' ? { boosterOnly: body.boosterOnly === 'yes' } : {}),
       ...(f.price !== undefined && item.kind !== 'menzaifu' && item.kind !== 'gift' ? { price: f.price } : {}),
       ...(item.kind === 'role' || item.kind === 'ema_pin' ? { durationDays: item.kind === 'ema_pin' ? (f.durationDays ?? 7) : f.durationDays } : {}),
       ...(f.position !== undefined ? { position: f.position } : {}),
@@ -1254,6 +1258,7 @@ export function createWebApp(deps: WebDeps) {
       roleId,
       roleGroup: group,
       durationDays: f.durationDays,
+      boosterOnly: body.boosterOnly === 'yes',
       position: items.reduce((n, i) => Math.max(n, i.position), 0) + 1,
     });
     await audit(db, { actorId: c.get('session').userId, action: 'shop.create', detail: { id: item.id, name: f.name, roleId, price: f.price }, via: 'web' });

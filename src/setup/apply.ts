@@ -583,8 +583,12 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
     tempVoice: { ...(base.tempVoice as object), hubs: r.hubs },
     recruit: { ...(base.recruit as object), panels: recruitConfig(r) },
     shop: {
-      colors: SHOP_COLORS().filter((c) => r.roleIds[c.key]).map((c) => ({ roleId: r.roleIds[c.key], name: c.label, emoji: c.emoji })),
-      titles: SHOP_TITLES().filter((t) => r.roleIds[t.key]).map((t) => ({ roleId: r.roleIds[t.key], name: t.label, emoji: t.emoji })),
+      colors: SHOP_COLORS()
+        .filter((c) => r.roleIds[c.key])
+        .map((c) => ({ roleId: r.roleIds[c.key], name: c.label, emoji: c.emoji, ...(c.boosterOnly ? { boosterOnly: true } : {}) })),
+      titles: SHOP_TITLES()
+        .filter((t) => r.roleIds[t.key])
+        .map((t) => ({ roleId: r.roleIds[t.key], name: t.label, emoji: t.emoji, ...(t.boosterOnly ? { boosterOnly: true } : {}) })),
     },
   };
 }

@@ -15,6 +15,7 @@ const base: ShopItem = {
   durationDays: 30,
   enabled: true,
   position: 1,
+  boosterOnly: false,
   updatedAt: new Date(),
 };
 
@@ -44,3 +45,22 @@ describe('ショップの見た目', () => {
     expect(m.embeds[0]!.description).toContain('> おめでとう @everyone');
   });
 });
+
+describe('奉納（ブースト）の特典', () => {
+  it('奉納限定の品物: ほかの人には「奉納している方だけ」で受けられない。奉納している人は受けられる', () => {
+    const kin = { ...base, name: '色守り（金色）', price: 0, durationDays: null, boosterOnly: true };
+    expect(priceText(kin, cfg.economy)).toBe('🏮 奉納している方だけ');
+    const json = (b: boolean) => JSON.stringify(shopConfirm(kin, cfg.economy, 100, undefined, b));
+    expect(json(false)).toContain('"disabled":true');
+    expect(json(false)).toContain('奉納（サーバーブースト）している方だけ');
+    expect(json(true)).toContain('"disabled":false');
+    expect(json(true)).toContain('期間: 奉納している間');
+  });
+
+  it('絵馬の奉納（自己紹介のピン留め）は、奉納している人は無料', () => {
+    const pin = { ...base, kind: 'ema_pin' as const, price: 800, durationDays: 7 };
+    expect(priceText(pin, cfg.economy, true)).toContain('無料');
+    expect(priceText(pin, cfg.economy, false)).toBe('800 枚');
+  });
+});
+

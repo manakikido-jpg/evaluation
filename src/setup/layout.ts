@@ -26,6 +26,8 @@ export type RoleKey =
   | 'title_yofukashi'
   | 'title_shobushi'
   | 'title_utaite'
+  | 'color_kin'
+  | 'title_hounou'
   | 'male'
   | 'female'
   | 'ema_pending';
@@ -119,7 +121,7 @@ export const ROLES: RoleSpec[] = [
 ];
 
 /** 色守り（ショップで買う名前の色） */
-export function SHOP_COLORS(): { key: RoleKey; name: string; label: string; emoji: string; color: number }[] {
+export function SHOP_COLORS(): { key: RoleKey; name: string; label: string; emoji: string; color: number; boosterOnly?: boolean }[] {
   return [
     { key: 'color_sakura', name: '🎨 桜色', label: '桜', emoji: '🌸', color: 0xf4a7b9 },
     { key: 'color_fuji', name: '🎨 藤色', label: '藤', emoji: '💜', color: 0xa99ad6 },
@@ -127,16 +129,20 @@ export function SHOP_COLORS(): { key: RoleKey; name: string; label: string; emoj
     { key: 'color_yamabuki', name: '🎨 山吹色', label: '山吹', emoji: '🌼', color: 0xf8b500 },
     { key: 'color_sora', name: '🎨 空色', label: '空', emoji: '🩵', color: 0x7cc7e8 },
     { key: 'color_beni', name: '🎨 紅色', label: '紅', emoji: '❤️', color: 0xd7003a },
+    // 奉納（ブースト）している人だけ
+    { key: 'color_kin', name: '🎨 金色', label: '金色', emoji: '🏮', color: 0xd4af37, boosterOnly: true },
   ];
 }
 
 /** 称号（ショップで買うロール） */
-export function SHOP_TITLES(): { key: RoleKey; name: string; label: string; emoji: string }[] {
+export function SHOP_TITLES(): { key: RoleKey; name: string; label: string; emoji: string; boosterOnly?: boolean }[] {
   return [
     { key: 'title_shugo', name: '🍶 酒豪', label: '酒豪', emoji: '🍶' },
     { key: 'title_yofukashi', name: '🌙 夜更かし', label: '夜更かし', emoji: '🌙' },
     { key: 'title_shobushi', name: '🎮 勝負師', label: '勝負師', emoji: '🎮' },
     { key: 'title_utaite', name: '🎤 歌い手', label: '歌い手', emoji: '🎤' },
+    // 奉納（ブースト）している人だけ
+    { key: 'title_hounou', name: '🏮 奉納者', label: '奉納者', emoji: '🏮', boosterOnly: true },
   ];
 }
 

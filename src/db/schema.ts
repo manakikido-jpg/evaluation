@@ -374,6 +374,8 @@ export const shopItems = pgTable(
     durationDays: integer('duration_days'),
     enabled: boolean('enabled').notNull().default(true),
     position: integer('position').notNull().default(0),
+    /** 奉納（ブースト）している人だけが受けられる。ロールは奉納をやめると外れる */
+    boosterOnly: boolean('booster_only').notNull().default(false),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('shop_items_price', sql`${t.price} >= 0`)],

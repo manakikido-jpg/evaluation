@@ -83,6 +83,8 @@ const roomPrices = z.object({
 export const roomsSchema = z.object({
   once: roomPrices.default(roomPrices.parse({})),
   hourly: roomPrices.default(roomPrices.parse({})),
+  /** 奉納（ブースト）している人の部屋代の割引（%。100 で無料） */
+  boosterDiscountPercent: z.number().int().min(0).max(100).default(100),
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
@@ -219,8 +221,8 @@ export const guildConfigSchema = z
     /** ショップ: セットアップが作った色守り・称号のロール（BOT が起動時に品物として並べる） */
     shop: z
       .object({
-        colors: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default('') })).default([]),
-        titles: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default('') })).default([]),
+        colors: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default(''), boosterOnly: z.boolean().optional() })).default([]),
+        titles: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default(''), boosterOnly: z.boolean().optional() })).default([]),
       })
       .default({ colors: [], titles: [] }),
     /** 自分の通話部屋: ここに入ると、その人の通話が同じカテゴリにでき、全員抜けると消える */

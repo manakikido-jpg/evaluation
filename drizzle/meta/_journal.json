@@ -113,6 +113,13 @@
       "when": 1790454953873,
       "tag": "0015_room_payers",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790457961027,
+      "tag": "0016_booster_only",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "shop_items" ADD COLUMN "booster_only" boolean DEFAULT false NOT NULL;

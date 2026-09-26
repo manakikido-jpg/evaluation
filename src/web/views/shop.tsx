@@ -61,6 +61,7 @@ export function ShopPage(props: {
               <Csrf session={session} />
               <div class="shop-item-head">
                 <span class="tag gray">{KIND_LABEL[i.kind]}</span>
+                {i.boosterOnly && <span class="tag red">🏮 奉納限定</span>}
                 {i.kind === 'role' && <small>ロール: {roleName(i.roleId)}{i.roleGroup === 'color' ? '（色守り: 買い替えると前の色は外れる）' : ''}</small>}
               </div>
               <div class="fields">
@@ -102,6 +103,12 @@ export function ShopPage(props: {
                   <input type="checkbox" name="enabled" value="yes" checked={i.enabled} />
                   <span>販売する</span>
                 </label>
+                {i.kind !== 'menzaifu' && i.kind !== 'gift' && (
+                  <label class="field check">
+                    <input type="checkbox" name="boosterOnly" value="yes" checked={i.boosterOnly} />
+                    <span>🏮 奉納限定（ブーストしている人だけ。ロールは奉納をやめると外れる）</span>
+                  </label>
+                )}
                 <button type="submit" class="ok">
                   保存
                 </button>
@@ -176,6 +183,10 @@ export function ShopPage(props: {
           <label class="field">
             <span>説明</span>
             <input type="text" name="description" maxlength={100} />
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="boosterOnly" value="yes" />
+            <span>🏮 奉納限定（ブーストしている人だけ。奉納をやめると外れる）</span>
           </label>
           <button type="submit" class="ok">
             追加

@@ -49,6 +49,9 @@ export function roomPanel(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubI
     '',
     ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label} … ${priceLabel(cfg, plan, key)}（${ROOM_KINDS[key].description}）`),
     `-# 🌸 花びら: ${how}`,
+    ...(cfg.rooms.boosterDiscountPercent > 0
+      ? [`-# 🏮 奉納（ブースト）している人は、部屋代が${cfg.rooms.boosterDiscountPercent >= 100 ? '無料' : ` ${cfg.rooms.boosterDiscountPercent}% 引き`}`]
+      : []),
     '-# 招待限定・シークレット・ツーショットの部屋には、運営も入れません',
   ];
   return {

@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { boostMessages, boostThanks, members, settings } from '../db/schema.js';
+import { boostMessages, boostThanks, members, settings, shopItems, shopPurchases } from '../db/schema.js';
 import { DiscordHttpError, type DiscordActions, type MessageBody } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { banzukeChannelId } from './banzuke.js';
@@ -85,8 +85,12 @@ export function boostAnnouncement(memberId: string, cfg: GuildConfig, count = 1)
 /** 本人への DM。お礼の花びら・割引の案内を BOT が足す */
 export function boostDm(memberId: string, cfg: GuildConfig, r: ThankResult): string {
   const e = cfg.economy;
+  const room = cfg.rooms.boosterDiscountPercent;
   const perks = [
-    e.boostDiscountPercent > 0 ? `・#授与所 の授与品が **${e.boostDiscountPercent}% 引き**（免罪符・贈り物をのぞく）` : '',
+    '・#授与所 の「🏮 奉納限定」の授与品（金色の色守り・奉納者の称号など）が受けられます',
+    e.boostDiscountPercent > 0 ? `・授与品が **${e.boostDiscountPercent}% 引き**（免罪符・贈り物をのぞく）` : '',
+    '・「絵馬の奉納」（自己紹介のピン留め）が無料',
+    room >= 100 ? '・宿坊・宵宮の部屋代が無料' : room > 0 ? `・宿坊・宵宮の部屋代が **${room}% 引き**` : '',
     '・#番付 の「🏮 奉納板」にお名前が載ります',
   ].filter(Boolean);
   return [
@@ -219,6 +223,41 @@ export async function boostTick(ctx: BoostCtx, now = new Date(), only?: string, 
   } catch (err) {
     logger.warn({ err }, 'hounou board update failed');
   }
+  try {
+    const n = await endBoosterOnlyRoles(ctx, now);
+    if (n) logger.info({ ended: n }, 'booster-only roles removed');
+  } catch (err) {
+    logger.warn({ err }, 'booster-only roles check failed');
+  }
+}
+
+/** 買ってすぐは外さない（Discord からブーストのお知らせが届くまでの間） */
+const BOOSTER_GRACE_MS = 15 * 60_000;
+
+/** 奉納をやめた人の、奉納限定のロール（金色の色守り・奉納者の称号など）を外す */
+export async function endBoosterOnlyRoles(ctx: BoostCtx, now = new Date()): Promise<number> {
+  const rows = await ctx.db
+    .select({ id: shopPurchases.id, memberId: shopPurchases.memberId, roleId: shopPurchases.roleId, createdAt: shopPurchases.createdAt })
+    .from(shopPurchases)
+    .innerJoin(shopItems, eq(shopItems.id, shopPurchases.itemId))
+    .where(and(eq(shopItems.boosterOnly, true), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt)));
+  if (!rows.length) return 0;
+  const boosting = new Set((await currentBoosters(ctx.db)).map((b) => b.id));
+  let ended = 0;
+  for (const r of rows) {
+    if (boosting.has(r.memberId) || now.getTime() - r.createdAt.getTime() < BOOSTER_GRACE_MS) continue;
+    if (r.roleId) {
+      try {
+        await ctx.discord.removeRole(ctx.cfg.guildId, r.memberId, r.roleId, '奉納（ブースト）が終わった');
+      } catch (err) {
+        // 退出した人など
+        logger.debug({ err }, 'booster-only role remove failed');
+      }
+    }
+    await ctx.db.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, r.id));
+    ended++;
+  }
+  return ended;
 }
 
 /**

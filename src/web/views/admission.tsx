@@ -514,6 +514,12 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               ))}
             </tbody>
           </table>
+          <div class="fields">
+            <label class="field">
+              <span>🏮 奉納（ブースト）している人の部屋代の割引 %（100 で無料）</span>
+              <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
+            </label>
+          </div>
         </section>
         <section class="card">
           <h2>🏮 コアタイム</h2>

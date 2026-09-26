@@ -149,6 +149,7 @@ export class ShopApp {
   private async execute(i: Buyable, item: ShopItem, extra: { targetId?: string; message?: string } = {}): Promise<string> {
     const cfg = this.cfg();
     const userId = i.user.id;
+    if (item.boosterOnly && !isBooster(i)) return '🏮 この授与品は、奉納（サーバーブースト）している方だけが受けられます。';
     switch (item.kind) {
       case 'role':
         return this.role(i, item);

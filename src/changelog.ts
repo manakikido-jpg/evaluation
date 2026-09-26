@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-booster-perks',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['Discord', '社務所Web', '運用'],
+    title: 'ブースト（奉納）の特典',
+    items: [
+      '🏮 奉納限定の授与品: 色守り「金色」・称号「奉納者」（奉納している間だけ。やめると外れる）。ショップの管理画面で、ほかの品物にも「奉納限定」を付けられる',
+      '奉納している人は「絵馬の奉納」（自己紹介のピン留め）が無料、宿坊・宵宮の部屋代が無料（割引の % は設定で変えられる）',
+      '授与品の割引はそのまま。ブーストのお礼の DM に特典の案内',
+    ],
+  },
+  {
     id: '2026-09-26-boost-no-money',
     date: '2026-09-26',
     kind: 'improve',
