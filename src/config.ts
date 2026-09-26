@@ -91,6 +91,8 @@ export const guildConfigSchema = z
       omairi: snowflake.optional(),
       /** #相談窓口: 匿名相談が届く（運営のみ） */
       soudan: snowflake.optional(),
+      /** #番付: ご縁のランキングを BOT が貼る（省略時は「番付」という名前のチャンネル） */
+      banzuke: snowflake.optional(),
     }),
     roles: z
       .object({

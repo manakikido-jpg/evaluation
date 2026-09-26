@@ -6,6 +6,7 @@ import { ShuinApp } from './discord/app.js';
 import { StaffApp } from './discord/staff.js';
 import { AdmissionApp } from './discord/admission.js';
 import { TempVoiceApp } from './discord/tempVoice.js';
+import { updateBanzukeQuietly } from './services/banzuke.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -60,8 +61,14 @@ async function main(): Promise<void> {
     }, 60_000);
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));
-    omairi();
-    omairiTicker = setInterval(omairi, 10 * 60_000);
+    // 10 分ごと: 番付の書き換え
+    const banzuke = () => void updateBanzukeQuietly({ db, cfg: cfg(), discord: actions });
+    const every10 = () => {
+      omairi();
+      banzuke();
+    };
+    every10();
+    omairiTicker = setInterval(every10, 10 * 60_000);
   });
   client.on(Events.GuildMemberAdd, (m) => void app.onMemberAdd(m));
   client.on(Events.GuildMemberRemove, (m) => void app.onMemberRemove(m.guild.id, m.id));

@@ -21,7 +21,7 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan';
+  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke';
   /** 入鯖申請・宵参り申請のボタンを置く */
   panels?: ('apply' | 'yoimairi')[];
   /** サーバーの AFK チャンネルにする */
@@ -91,7 +91,7 @@ export const FULL: Layout = {
         { name: '御触書', kind: 'text', readOnly: true, topic: 'お知らせ' },
         { name: '絵馬', kind: 'text', configKey: 'ema', topic: '自己紹介（書くと御朱印帳ボタンが付きます）' },
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji', topic: '昇格・称号の発表' },
-        { name: '番付', kind: 'text', readOnly: true, topic: 'ランキング' },
+        { name: '番付', kind: 'text', readOnly: true, configKey: 'banzuke', topic: 'ご縁のランキング（BOT が 10 分ごとに更新）' },
       ],
     },
     {

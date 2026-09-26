@@ -18,7 +18,7 @@ export interface DiscordActions {
   guildChannels(guildId: string): Promise<GuildChannel[]>;
 }
 
-export type MessageBody = { content?: string; embeds?: { description?: string; color?: number }[]; components?: unknown[] };
+export type MessageBody = { content?: string; embeds?: { title?: string; description?: string; color?: number }[]; components?: unknown[] };
 
 export type GuildChannel = { id: string; name: string; type: number; parent_id: string | null; position: number };
 
