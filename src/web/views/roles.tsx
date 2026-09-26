@@ -10,6 +10,10 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   need_confirm: { text: '「管理者」を付けるときは、確認のチェックを入れてください。', kind: 'warn' },
   locked: { text: 'このロールは BOT からは変えられません（BOT のロールより上・BOT などの自動のロール）。Discord のサーバー設定から変えてください。', kind: 'warn' },
   failed: { text: 'Discord に反映できませんでした。BOT の「ロールの管理」権限と、BOT のロールの位置を確かめてください。', kind: 'warn' },
+  failed_some: { text: '一部のロールを Discord に反映できませんでした。BOT の「ロールの管理」権限と、BOT のロールの位置を確かめてください。', kind: 'warn' },
+  need_confirm_all: { text: 'まとめて変えるときは、確認のチェックを入れてください。', kind: 'warn' },
+  mentionable_on: { text: 'すべてのロールを、誰でも @ で呼べるようにしました（🔒 のロールはのぞく）。', kind: 'ok' },
+  mentionable_off: { text: 'すべてのロールを、@ で呼べないようにしました（🔒 のロールはのぞく）。', kind: 'ok' },
 };
 
 function Flash(props: { code?: string }) {
@@ -31,6 +35,9 @@ function Swatch(props: { color: number }) {
 export type RoleRow = { role: GuildRole; kind?: string; members: number; locked: boolean };
 
 export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash?: string; loadFailed?: boolean }) {
+  // @everyone は位置 0
+  const editable = props.rows.filter((r) => !r.locked && r.role.position !== 0);
+  const offCount = editable.filter((r) => !r.role.mentionable).length;
   return (
     <Layout title="ロール" session={props.session} nav="roles">
       <h1>ロール</h1>
@@ -40,12 +47,32 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
         Discord のロールと、持っている人数（今いる人・BOT を除く）、気をつける権限です。名前を押すと、権限の確認・変更と、持っている人の一覧が見られます。🔒 は BOT
         からは変えられないロールです（BOT のロールより上・BOT などの自動のロール）。
       </p>
+      <form method="post" action="/roles/mentionable-all" class="card">
+        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+        <h2>@ で呼べるようにする</h2>
+        <p class="note">
+          ロールを「誰でも @ で呼べる」にすると、メンバーが @ロール名 でそのロールの人全員に通知できます（今 @ で呼べないロール: {offCount} 個）。🔒 のロールと「みんな（@everyone）」は変えません。1 つずつ変えるときは、ロールの名前を押してください。
+        </p>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>すべてのロールをまとめて変える</span>
+        </label>
+        <div class="actions">
+          <button type="submit" name="mentionable" value="on" class="ok">
+            すべて @ で呼べるようにする
+          </button>
+          <button type="submit" name="mentionable" value="off">
+            すべて @ で呼べないようにする
+          </button>
+        </div>
+      </form>
       <div class="table-wrap">
         <table class="members roles">
           <thead>
             <tr>
               <th>ロール</th>
               <th>このサーバーでの役目</th>
+              <th>@</th>
               <th class="num">人数</th>
               <th>気をつける権限</th>
             </tr>
@@ -65,6 +92,7 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
                     </a>
                   </td>
                   <td>{kind ?? <small>—</small>}</td>
+                  <td>{role.mentionable ? '✅' : <small>—</small>}</td>
                   <td class="num">{members}</td>
                   <td class="wrap">
                     {danger.map((d) => (

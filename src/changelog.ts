@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-roles-mentionable',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['社務所Web', '運用'],
+    title: 'ロールをまとめて @ で呼べるように',
+    items: [
+      '「ロール」ページに「すべて @ で呼べるようにする」「すべて @ で呼べないようにする」（🔒 のロールと @everyone はのぞく）。一覧に @ の列',
+      'セットアップが新しく作るロールは、標準で誰でも @ で呼べる',
+    ],
+  },
+  {
     id: '2026-09-26-recruit-icon',
     date: '2026-09-26',
     kind: 'improve',

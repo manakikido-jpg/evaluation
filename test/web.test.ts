@@ -1055,6 +1055,20 @@ describe('ロール（管理画面）', () => {
     expect(detail).toMatch(/name="perm" value="11" checked/);
   });
 
+  it('すべてのロールをまとめて @ で呼べるように（🔒・@everyone はのぞく。確認が要る）', async () => {
+    roleList.push({ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0', mentionable: true });
+    const s = await login(STAFF);
+    expect((await form(s, '/roles/mentionable-all', [['mentionable', 'on'], ['confirm', 'yes']])).status).toBe(403);
+    const g = await login(GUJI);
+    expect(await (await get('/roles', g)).text()).toContain('今 @ で呼べないロール: 1 個');
+    expect((await form(g, '/roles/mentionable-all', [['mentionable', 'on']])).headers.get('location')).toBe('/roles?msg=need_confirm_all');
+    expect(actions.filter((a) => a.startsWith('editRole'))).toEqual([]);
+    const r = await form(g, '/roles/mentionable-all', [['mentionable', 'on'], ['confirm', 'yes']]);
+    expect(r.headers.get('location')).toBe('/roles?msg=mentionable_on');
+    expect(actions.filter((a) => a.startsWith('editRole'))).toEqual([`editRole ${ROLE.sanpaisha} {"mentionable":true}`]);
+    expect((await listAudit(db, { action: 'role.mentionable_all' }))[0]?.detail).toMatchObject({ mentionable: true, count: 1 });
+  });
+
   it('権限・名前・色を変えられる。管理者を付けるときは確認が要る。BOT より上は変えられない', async () => {
     const g = await login(GUJI);
     const r = await form(g, `/roles/${ROLE.sanpaisha}`, [

@@ -1143,6 +1143,32 @@ export function createWebApp(deps: WebDeps) {
     );
   });
 
+  /** すべてのロールの「誰でも @ で呼べる」をまとめて ON / OFF（@everyone・🔒 のロールはのぞく） */
+  app.post('/roles/mentionable-all', async (c) => {
+    const body = await c.req.parseBody();
+    const on = body.mentionable === 'on';
+    if (!on && body.mentionable !== 'off') return c.redirect('/roles');
+    if (body.confirm !== 'yes') return c.redirect('/roles?msg=need_confirm_all');
+    const roles = await loadRoles();
+    if (!roles) return c.redirect('/roles?msg=failed');
+    const targets = roles.filter((r) => r.id !== cfg.guildId && !roleLocked(r, roles) && Boolean(r.mentionable) !== on);
+    const done: string[] = [];
+    let failed = 0;
+    for (const r of targets) {
+      try {
+        await deps.discord.editRole(cfg.guildId, r.id, { mentionable: on }, '管理画面（ロール: まとめて @ で呼べる）');
+        done.push(r.name);
+      } catch (err) {
+        logger.warn({ err, roleId: r.id }, 'role mentionable update failed');
+        failed++;
+      }
+    }
+    if (done.length) {
+      await audit(db, { actorId: c.get('session').userId, action: 'role.mentionable_all', detail: { mentionable: on, count: done.length, roles: done }, via: 'web' });
+    }
+    return c.redirect(`/roles?msg=${failed ? 'failed_some' : done.length ? (on ? 'mentionable_on' : 'mentionable_off') : 'unchanged'}`);
+  });
+
   app.post('/roles/:id', async (c) => {
     const id = c.req.param('id');
     if (!/^\d{17,20}$/.test(id)) return c.redirect('/roles');

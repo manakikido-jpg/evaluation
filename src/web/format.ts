@@ -85,6 +85,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'market.dispute': '市場の取引に問題あり',
   'market.close': '市場の出品を終了',
   'role.update': 'ロールを変更',
+  'role.mentionable_all': 'ロールの @ をまとめて変更',
   'shop.create': 'ショップの品物を追加',
   'shop.delete': 'ショップの品物を削除',
 };

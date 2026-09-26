@@ -204,7 +204,8 @@ export async function applyLayout(
       color: spec.color,
       hoist: spec.hoist,
       permissions: spec.permissions.toString(),
-      mentionable: Boolean(spec.mentionable),
+      // 標準で誰でも @ で呼べる（2026-09〜。すべてのロール）
+      mentionable: spec.mentionable ?? true,
     });
     result.roleIds[spec.key] = r.id;
     result.created.roles.push(spec.name);
