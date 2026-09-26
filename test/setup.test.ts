@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig } from '../src/config.js';
-import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type ApiChannel, type ApiGuild, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
+import { applyLayout, coreName, dedupeGuild, mergeIntoConfig, SetupError, tidyGuild, type ApiChannel, type ApiGuild, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
 import { FULL, MINIMAL, P, RETIRED, ROLES, SHOP_COLORS } from '../src/setup/layout.js';
 import example from '../config/guild.example.json' with { type: 'json' };
 
@@ -25,6 +25,8 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
   const channels: (ApiChannel & { body?: CreateChannelBody })[] = [];
   const messages: { channelId: string; body: unknown }[] = [];
   const created: Parameters<SetupApi['createRole']>[1][] = [];
+  /** チャンネルごとの書き込み（書いた人の ID） */
+  const posts = new Map<string, string[]>();
   let afk: string | null = null;
   const guild: ApiGuild = { id: GUILD, name: 'テスト鯖', afk_channel_id: null, features: opts.community ? ['COMMUNITY'] : [] };
   const api: SetupApi = {
@@ -53,7 +55,10 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
       if (body.afk_channel_id) afk = body.afk_channel_id;
       Object.assign(guild, { ...body, afk_channel_id: null });
     },
-    sendMessage: async (channelId, body) => void messages.push({ channelId, body }),
+    sendMessage: async (channelId, body) => {
+      messages.push({ channelId, body });
+      posts.set(channelId, [...(posts.get(channelId) ?? []), BOT]);
+    },
     deleteChannel: async (id) => {
       // 本物と同じく、コミュニティ設定で使われているチャンネルは消せない
       if ([guild.rules_channel_id, guild.public_updates_channel_id].includes(id)) throw new Error('50074 Cannot delete a channel required for Community Servers');
@@ -61,12 +66,17 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
       if (i < 0) throw new Error('Unknown Channel');
       channels.splice(i, 1);
     },
+    recentMessages: async (c) => (posts.get(c) ?? []).map((author) => ({ author: { id: author, bot: author === BOT } })),
     reorderRoles: async (_g, body) => {
       // 本物と同じく、動かしたロールの位置に合わせて、ほかのロールの位置も詰め直す
       for (const o of body) roles.find((r) => r.id === o.id)!.position = o.position;
     },
     reorderChannels: async (_g, body) => {
-      for (const o of body) channels.find((c) => c.id === o.id)!.position = o.position;
+      for (const o of body) {
+        const c = channels.find((x) => x.id === o.id)!;
+        c.position = o.position;
+        if (o.parent_id) c.parent_id = o.parent_id;
+      }
     },
   };
   /** Discord が最初から作るもの・自分で作ったものを置く */
@@ -76,7 +86,7 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
     channels.push(ch);
     return ch;
   };
-  return { api, roles, channels, messages, guild, seed, created, getAfk: () => afk };
+  return { api, roles, channels, messages, guild, seed, created, posts, getAfk: () => afk };
 }
 
 const find = (d: ReturnType<typeof fakeDiscord>, name: string, type?: number) => d.channels.find((c) => c.name === name && (type === undefined || c.type === type))!;
@@ -441,5 +451,78 @@ describe('ショップのロール', () => {
     }
     // 2 回目はすることがない
     expect(await tidyGuild(d.api, GUILD, FULL)).not.toContain('並べ替え: 色守りのロールを、役職と宵参りより上に');
+  });
+});
+
+describe('見た目を変えた名前（「------📜 掲示 📜------」「📜｜授与所」など）', () => {
+  it('飾りを除いた名前で同じものだと分かる', () => {
+    expect(coreName('------📜 掲示 📜------')).toBe(coreName('📜 掲示'));
+    expect(coreName('📜｜授与所')).toBe('授与所');
+    expect(coreName('➕ 縁側をひらく')).toBe(coreName('➕｜縁側をひらく'));
+    expect(coreName('宿坊 一の間')).not.toBe(coreName('宿坊'));
+  });
+
+  it('名前を変えたあとにセットアップしても、作り直さない', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, FULL);
+    for (const c of d.channels) {
+      if (c.type === 4) c.name = `------${c.name}------`;
+      else c.name = `🌸｜${c.name}`;
+    }
+    const before = d.channels.length;
+    const r = await applyLayout(d.api, GUILD, FULL);
+    expect(r.created.channels).toEqual([]);
+    expect(d.channels).toHaveLength(before);
+  });
+
+  it('前の版が作ってしまった重複を片付ける: 空のもの・BOT の書き込みだけのものは消し、人の書き込みがあるものは残して知らせる', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, FULL);
+    const kept = new Map(d.channels.map((c) => [c.id, c.name]));
+    // 見た目を変えた
+    const keijiCat = find(d, '📜 掲示', 4);
+    keijiCat.name = '------📜 掲示 📜------';
+    const origJuyo = find(d, '授与所', 0);
+    origJuyo.name = '📜｜授与所';
+    // 前の版が、同じ名前で作り直してしまった（新しい ID）
+    const dupCat = d.seed('📜 掲示', 4);
+    const dupJuyo = d.seed('授与所', 0, '📜 掲示');
+    d.posts.set(dupJuyo.id, [BOT]); // BOT がボタンを置いただけ
+    const dupEma = d.seed('絵馬', 0, '📜 掲示');
+    d.posts.set(dupEma.id, ['800000000000000001']); // 人が書き込んだ
+    const onlyInDup = d.seed('🍵 さくらの縁側', 2, '📜 掲示'); // 重複のカテゴリにしかない
+    // 同じカテゴリの中の重複も
+    const dupShikitari = d.seed('しきたり', 0, '⛩ 鳥居');
+
+    const done = await dedupeGuild(d.api, GUILD, FULL);
+    expect(done).toContain('重複を削除: 📜 掲示 / 授与所');
+    expect(done).toContain('重複を削除: ⛩ 鳥居 / しきたり');
+    expect(done.some((x) => x.startsWith('⚠️ 消さなかった（人の書き込みあり）: 📜 掲示 / 絵馬'))).toBe(true);
+    expect(done).toContain('移動: 📜 掲示 / 🍵 さくらの縁側 → ------📜 掲示 📜------');
+    const ids = new Set(d.channels.map((c) => c.id));
+    expect(ids.has(dupJuyo.id)).toBe(false);
+    expect(ids.has(dupShikitari.id)).toBe(false);
+    expect(ids.has(dupEma.id)).toBe(true);
+    // 人の書き込みが残っているので、重複のカテゴリも残す
+    expect(ids.has(dupCat.id)).toBe(true);
+    expect(d.channels.find((c) => c.id === onlyInDup.id)?.parent_id).toBe(keijiCat.id);
+    // 前からあるものは 1 つも消していない
+    for (const id of kept.keys()) expect(ids.has(id), kept.get(id)).toBe(true);
+    // 片付けたあとのセットアップは、前からあるほうを使う
+    const r = await applyLayout(d.api, GUILD, FULL);
+    expect(r.created.channels).toEqual([]);
+    expect(r.recruit.length).toBeGreaterThan(0);
+  });
+
+  it('コミュニティ設定で使われている重複は、前からあるほうに付け替えてから消す', async () => {
+    const d = fakeDiscord({ community: true });
+    await applyLayout(d.api, GUILD, FULL);
+    const orig = find(d, 'しきたり', 0);
+    orig.name = '⛩｜しきたり';
+    const dup = d.seed('しきたり', 0, '⛩ 鳥居');
+    Object.assign(d.guild, { rules_channel_id: dup.id });
+    await dedupeGuild(d.api, GUILD, FULL);
+    expect(d.guild.rules_channel_id).toBe(orig.id);
+    expect(d.channels.some((c) => c.id === dup.id)).toBe(false);
   });
 });

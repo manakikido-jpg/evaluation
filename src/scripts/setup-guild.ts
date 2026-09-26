@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseGuildConfig } from '../config.js';
-import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type KnownIds, type SetupApi } from '../setup/apply.js';
+import { applyLayout, dedupeGuild, mergeIntoConfig, SetupError, tidyGuild, type KnownIds, type SetupApi } from '../setup/apply.js';
 import { FULL, MINIMAL } from '../setup/layout.js';
 
 const API = 'https://discord.com/api/v10';
@@ -52,6 +52,7 @@ function createSetupApi(token: string): SetupApi {
     deleteChannel: async (c) => void (await call('DELETE', `/channels/${c}`)),
     reorderChannels: async (g, body) => void (await call('PATCH', `/guilds/${g}/channels`, body)),
     reorderRoles: async (g, body) => void (await call('PATCH', `/guilds/${g}/roles`, body)),
+    recentMessages: (c) => call('GET', `/channels/${c}/messages?limit=50`),
   };
 }
 
@@ -100,6 +101,14 @@ async function main(): Promise<void> {
   const api = createSetupApi(token);
 
   console.log(`⛩ セットアップを始めます（${flag('minimal') ? 'テスト用の最小構成' : '全部の構成'}${dryRun ? '・確認だけ' : ''}）`);
+  // 片付け: 前の版が作ってしまった重複を、セットアップより先に消す（人の書き込みがあるものは消さない）
+  if (tidy) {
+    const dups = await dedupeGuild(api, guildId, layout, { dryRun });
+    if (dups.length) {
+      console.log('\n重複の片付け:');
+      for (const d of dups) console.log(`  - ${d}`);
+    }
+  }
   // 同じサーバーの設定ファイルがあれば、前に作ったロール・チャンネルを ID で探す（名前を変えていても作り直さない）
   const known = knownIdsFrom(configPath, guildId);
   const r = await applyLayout(api, guildId, layout, { postPanels: flag('post-panels'), dryRun, known });

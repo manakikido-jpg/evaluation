@@ -31,7 +31,9 @@ export interface SetupApi {
   modifyGuild(guildId: string, body: GuildPatch): Promise<void>;
   sendMessage(channelId: string, body: unknown): Promise<void>;
   deleteChannel(channelId: string): Promise<void>;
-  reorderChannels(guildId: string, body: { id: string; position: number }[]): Promise<void>;
+  reorderChannels(guildId: string, body: { id: string; position: number; parent_id?: string; lock_permissions?: boolean }[]): Promise<void>;
+  /** 最近のメッセージ（重複の片付けで、人の書き込みがないか確かめる） */
+  recentMessages(channelId: string): Promise<{ author: { id: string; bot?: boolean } }[]>;
   reorderRoles(guildId: string, body: { id: string; position: number }[]): Promise<void>;
 }
 
@@ -68,6 +70,25 @@ export type SetupResult = {
 
 /** Discord はテキストチャンネル名を小文字・空白→ハイフンにするので、比べるときはそろえる */
 const norm = (name: string, kind: 'text' | 'voice' | 'category') => (kind === 'text' ? name.toLowerCase().replace(/\s+/g, '-') : name);
+
+/**
+ * 飾り（絵文字・記号・区切り線・空白）を除いた名前。
+ * 「------📜 掲示 📜------」「📜｜授与所」のように見た目を変えても、同じチャンネルだと分かるように。
+ */
+export const coreName = (name: string) => name.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+
+/** 同じ名前（または飾りを除いて同じ名前）のものが複数あれば、いちばん古いもの（前からあるほう） */
+const oldest = <T extends { id: string }>(list: T[]): T | undefined => [...list].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1))[0];
+
+const sameName = (actual: string, want: string, kind: 'text' | 'voice' | 'category') => actual === norm(want, kind) || coreName(actual) === coreName(want);
+
+export function findCategory(channels: ApiChannel[], name: string): ApiChannel | undefined {
+  return oldest(channels.filter((c) => c.type === TYPE.category && sameName(c.name, name, 'category')));
+}
+
+export function findChild(channels: ApiChannel[], parentId: string, spec: { name: string; kind: 'text' | 'voice' }): ApiChannel | undefined {
+  return oldest(channels.filter((c) => c.type === TYPE[spec.kind] && c.parent_id === parentId && sameName(c.name, spec.name, spec.kind)));
+}
 
 /** 前に作ったロール・チャンネルの ID（config/guild.json）。名前が変えられていても、同じものを使い続ける */
 export type KnownIds = { roles?: Partial<Record<RoleKey, string>>; channels?: Partial<Record<NonNullable<ChannelSpec['configKey']>, string>> };
@@ -183,7 +204,7 @@ export async function applyLayout(
   const hubOfCategory = new Map<string, string>();
   const recruitIn: { channelId: string; omamori: RoleKey; parentId: string }[] = [];
   for (const cat of layout.categories) {
-    let parent = channels.find((c) => c.type === TYPE.category && c.name === cat.name);
+    let parent = findCategory(channels, cat.name);
     if (parent) {
       result.reused.channels++;
     } else if (opts.dryRun) {
@@ -200,8 +221,7 @@ export async function applyLayout(
       // 設定に ID があるチャンネル（#慶事 など）は ID で探す → なければ同じカテゴリの同じ名前
       const knownId = ch.configKey ? opts.known?.channels?.[ch.configKey] : undefined;
       let found =
-        channels.find((c) => c.id === knownId && c.type === type) ??
-        channels.find((c) => c.type === type && c.parent_id === parent!.id && c.name === norm(ch.name, ch.kind));
+        channels.find((c) => c.id === knownId && c.type === type) ?? findChild(channels, parent.id, ch);
       let isNew = false;
       if (found) {
         result.reused.channels++;
@@ -271,10 +291,9 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   const catOf = (c: ApiChannel) => channels.find((p) => p.id === c.parent_id);
   const label = (c: ApiChannel) => `${catOf(c) ? `${catOf(c)!.name} / ` : ''}${c.name}`;
   const specsIn = (l: Layout, catName: string) => l.categories.find((c) => c.name === catName)?.channels ?? [];
-  const matches = (c: ApiChannel, s: ChannelSpec) => c.type === TYPE[s.kind] && c.name === norm(s.name, s.kind);
   const findIn = (catName: string, s: ChannelSpec) => {
-    const cat = channels.find((c) => isCategory(c) && c.name === catName);
-    return cat && channels.find((c) => c.parent_id === cat.id && matches(c, s));
+    const cat = findCategory(channels, catName);
+    return cat && findChild(channels, cat.id, s);
   };
 
   // ── コミュニティ設定の付け替え（#rules などは、設定で使われている間は消せないので先に） ──
@@ -369,11 +388,11 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   // ── 並べ替え: 配置のカテゴリを上から順に、配置にないものはそのあと ──
   const byPos = (a: ApiChannel, b: ApiChannel) => (a.position ?? 0) - (b.position ?? 0);
   const order: { id: string; position: number }[] = [];
-  const layoutCats = layout.categories.map((cat) => channels.find((c) => isCategory(c) && c.name === cat.name)).filter((c): c is ApiChannel => Boolean(c));
+  const layoutCats = layout.categories.map((cat) => findCategory(channels, cat.name)).filter((c): c is ApiChannel => Boolean(c));
   const otherCats = channels.filter((c) => isCategory(c) && !layoutCats.includes(c)).sort(byPos);
   [...layoutCats, ...otherCats].forEach((c, i) => order.push({ id: c.id, position: i }));
   for (const cat of layout.categories) {
-    const parent = layoutCats.find((c) => c.name === cat.name);
+    const parent = findCategory(layoutCats, cat.name);
     if (!parent) continue;
     const inLayout = cat.channels.map((s) => findIn(cat.name, s)).filter((c): c is ApiChannel => Boolean(c));
     const others = channels.filter((c) => c.parent_id === parent.id && !inLayout.includes(c)).sort(byPos);
@@ -404,6 +423,89 @@ export function recruitConfig(r: Pick<SetupResult, 'recruit' | 'roleIds'>) {
     const roleId = r.roleIds[p.omamori];
     return { channelId: p.channelId, label: o.label, emoji: o.emoji, adultOnly: o.adultOnly, ...(roleId ? { roleId } : {}), ...(p.hubId ? { hubId: p.hubId } : {}) };
   });
+}
+
+/**
+ * 重複の片付け（--tidy のとき、セットアップの前に実行する）。
+ * 名前の見た目を変えたあとに、前の版のセットアップが同じカテゴリ・チャンネルを作り直してしまったもの。
+ * - 同じもの（飾りを除いて同じ名前・同じ種類）が複数あれば、いちばん古いもの（前からあるほう）を残す
+ * - 新しいほうは、中に人の書き込みがなければ消す（BOT の書き込みだけなら消してよい）。書き込みがあれば消さずに知らせる
+ * - 重複したカテゴリにしかないチャンネル（誰かが作った通話部屋など）は、残すほうのカテゴリへ移す
+ * - コミュニティ設定で使われていたら、先に残すほうへ付け替える
+ */
+export async function dedupeGuild(api: SetupApi, guildId: string, layout: Layout, opts: { dryRun?: boolean } = {}): Promise<string[]> {
+  const done: string[] = [];
+  const me = await api.me();
+  const guild = await api.guild(guildId);
+  const channels = await api.channels(guildId);
+  const byOld = (a: ApiChannel, b: ApiChannel) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1);
+  const childrenOf = (id: string) => channels.filter((c) => c.parent_id === id);
+  const sameKind = (a: ApiChannel, b: ApiChannel) => a.type === b.type && coreName(a.name) === coreName(b.name);
+
+  /** 人（BOT 以外）の書き込みがなければ true。確かめられなければ false（消さない） */
+  const emptyOfPeople = async (c: ApiChannel) => {
+    try {
+      return (await api.recentMessages(c.id)).every((m) => m.author.id === me.id || m.author.bot);
+    } catch {
+      return false;
+    }
+  };
+
+  const community: [keyof GuildPatch, string | null | undefined][] = [
+    ['rules_channel_id', guild.rules_channel_id],
+    ['public_updates_channel_id', guild.public_updates_channel_id],
+    ['safety_alerts_channel_id', guild.safety_alerts_channel_id],
+  ];
+
+  const removeDuplicate = async (dup: ApiChannel, keep: ApiChannel, where: string) => {
+    if (!(await emptyOfPeople(dup))) {
+      done.push(`⚠️ 消さなかった（人の書き込みあり）: ${where}${dup.name}。中身を確かめて、要らなければ手で消してください`);
+      return false;
+    }
+    const patch: GuildPatch = {};
+    for (const [k, v] of community) if (v === dup.id) (patch as Record<string, string>)[k] = keep.id;
+    if (Object.keys(patch).length && !opts.dryRun) await api.modifyGuild(guildId, patch);
+    if (!opts.dryRun) await api.deleteChannel(dup.id);
+    done.push(`重複を削除: ${where}${dup.name}`);
+    return true;
+  };
+
+  /** 残すカテゴリの中の、同じチャンネルの重複 */
+  const dedupeChildren = async (keep: ApiChannel) => {
+    const kids = childrenOf(keep.id).sort(byOld);
+    const seen: ApiChannel[] = [];
+    for (const k of kids) {
+      const first = seen.find((x) => sameKind(x, k));
+      if (!first) seen.push(k);
+      else await removeDuplicate(k, first, `${keep.name} / `);
+    }
+  };
+
+  for (const cat of layout.categories) {
+    const cats = channels.filter((c) => c.type === TYPE.category && sameName(c.name, cat.name, 'category')).sort(byOld);
+    const keep = cats[0];
+    if (!keep) continue;
+    for (const dup of cats.slice(1)) {
+      let left = 0;
+      for (const child of childrenOf(dup.id)) {
+        const counterpart = childrenOf(keep.id).find((k) => sameKind(k, child));
+        if (counterpart) {
+          if (!(await removeDuplicate(child, counterpart, `${dup.name} / `))) left++;
+        } else {
+          // 残すカテゴリにないもの（通話部屋など）は移す
+          if (!opts.dryRun) await api.reorderChannels(guildId, [{ id: child.id, position: 999, parent_id: keep.id, lock_permissions: false }]);
+          child.parent_id = keep.id;
+          done.push(`移動: ${dup.name} / ${child.name} → ${keep.name}`);
+        }
+      }
+      if (left === 0) {
+        if (!opts.dryRun) await api.deleteChannel(dup.id);
+        done.push(`重複を削除: カテゴリ ${dup.name}`);
+      }
+    }
+    await dedupeChildren(keep);
+  }
+  return done;
 }
 
 /** 既存の設定（なければ見本）に、作ったロール・チャンネルの ID を書き込む */
