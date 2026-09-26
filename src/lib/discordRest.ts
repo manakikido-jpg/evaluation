@@ -11,6 +11,23 @@ export interface DiscordActions {
   kick(guildId: string, userId: string, reason: string): Promise<void>;
   /** 投稿済みのメッセージを書き換える（申請カードを「承認済み」にするなど） */
   editMessage(channelId: string, messageId: string, body: { content?: string; components?: unknown[] }): Promise<void>;
+  /** チャンネルにメッセージを投稿する（掲示など）。メンションで通知は飛ばさない */
+  sendMessage(channelId: string, body: { content: string }): Promise<{ id: string }>;
+  deleteMessage(channelId: string, messageId: string): Promise<void>;
+  /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
+  guildChannels(guildId: string): Promise<GuildChannel[]>;
+}
+
+export type GuildChannel = { id: string; name: string; type: number; parent_id: string | null; position: number };
+
+/** Discord が失敗を返したとき（status で「メッセージが消されていた（404）」などを見分ける） */
+export class DiscordHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
 }
 
 const API = 'https://discord.com/api/v10';
@@ -21,12 +38,19 @@ export function createDiscordActions(botToken: string): DiscordActions {
     // Discord の監査ログに残る理由（日本語はエンコードが必要）
     if (opts.reason) headers['x-audit-log-reason'] = encodeURIComponent(opts.reason.slice(0, 400));
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers,
-      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-    });
-    if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status} ${await res.text().catch(() => '')}`);
+    let res: Response;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(`${API}${path}`, {
+        method,
+        headers,
+        ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+      });
+      // 続けて投稿すると（掲示をまとめて反映するときなど）「少し待って」と言われるので、言われた秒数だけ待つ
+      if (res.status !== 429 || attempt >= 5) break;
+      const j = (await res.json().catch(() => ({}))) as { retry_after?: number };
+      await new Promise((r) => setTimeout(r, Math.min(Math.ceil((j.retry_after ?? 1) * 1000) + 100, 30_000)));
+    }
+    if (!res.ok) throw new DiscordHttpError(`${method} ${path} failed: ${res.status} ${await res.text().catch(() => '')}`, res.status);
     return res.status === 204 ? undefined : res.json();
   };
 
@@ -46,5 +70,9 @@ export function createDiscordActions(botToken: string): DiscordActions {
     kick: async (g, u, reason) => void (await call('DELETE', `/guilds/${g}/members/${u}`, { reason })),
     editMessage: async (c, m, body) =>
       void (await call('PATCH', `/channels/${c}/messages/${m}`, { body: { ...body, allowed_mentions: { parse: [] } } })),
+    sendMessage: async (c, body) =>
+      (await call('POST', `/channels/${c}/messages`, { body: { ...body, allowed_mentions: { parse: [] } } })) as { id: string },
+    deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
+    guildChannels: async (g) => (await call('GET', `/guilds/${g}/channels`)) as GuildChannel[],
   };
 }

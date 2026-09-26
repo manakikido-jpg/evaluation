@@ -26,6 +26,27 @@ import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecid
 import { changeAgeGroup, closeSoudan, decide, decideOmairi, removeYoimairi, replySoudan, revealSoudanSender, type OmairiAction } from '../services/admission.js';
 import { getSoudan, listSoudan, soudanMessagesOf } from '../services/soudan.js';
 import { applyOverrides, overridesSchema, saveOverrides, type Overrides } from '../services/settings.js';
+import {
+  createNotice,
+  deleteNotice,
+  getNotice,
+  guildChannelsCached,
+  listNotices,
+  moveNotice,
+  noticeStatus,
+  noticeVariables,
+  postableChannels,
+  publishAll,
+  publishNotice,
+  renderNotice,
+  repostChannel,
+  seedDefaultNotices,
+  syncPostedNotices,
+  updateNotice,
+  type NoticeCtx,
+} from '../services/notices.js';
+import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
+import type { GuildChannel } from '../lib/discordRest.js';
 
 export type WebDeps = {
   db: Db;
@@ -194,7 +215,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
-  for (const p of ['/applications', '/applications/*', '/omairi', '/omairi/*', '/soudan', '/soudan/*', '/settings', '/settings/*']) {
+  for (const p of ['/applications', '/applications/*', '/omairi', '/omairi/*', '/soudan', '/soudan/*', '/settings', '/settings/*', '/notices', '/notices/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -616,21 +637,185 @@ export function createWebApp(deps: WebDeps) {
     await saveOverrides(db, overrides, c.get('session').userId);
     await deps.onSettingsSaved?.();
     const after = applyOverrides(fileCfg(), overrides);
+    // 投稿済みの掲示の数字（免罪符の値段など）も新しい値に書き換える
+    const noticesUpdated = await syncPostedNotices({ db, cfg: after, discord: deps.discord }, before);
     await audit(db, {
       actorId: c.get('session').userId,
       action: 'settings.update',
       detail: { economy: diff(before.economy, after.economy), omairi: diff(before.omairi, after.omairi), applications: diff(before.applications, after.applications), ranks: rankDiff(before, after) },
       via: 'web',
     });
-    return c.redirect('/settings?msg=saved');
+    return c.redirect(noticesUpdated > 0 ? '/settings?msg=saved_notices' : '/settings?msg=saved');
   });
 
   app.post('/settings/reset', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const before = cfg;
     await saveOverrides(db, overridesSchema.parse({}), c.get('session').userId);
     await deps.onSettingsSaved?.();
+    await syncPostedNotices({ db, cfg: applyOverrides(fileCfg(), overridesSchema.parse({})), discord: deps.discord }, before);
     await audit(db, { actorId: c.get('session').userId, action: 'settings.reset', via: 'web' });
     return c.redirect('/settings?msg=saved');
+  });
+
+  // ───────── 掲示（宮司のみ） ─────────
+
+  const noticeCtx = (): NoticeCtx => ({ db, cfg, discord: deps.discord });
+  const loadChannels = async (fresh = false): Promise<GuildChannel[]> => {
+    try {
+      return await guildChannelsCached(deps.discord, cfg.guildId, fresh);
+    } catch (err) {
+      logger.warn({ err }, 'could not load guild channels');
+      return [];
+    }
+  };
+  const noticeId = (c: Context<Env>) => {
+    const n = Number(c.req.param('id'));
+    return Number.isSafeInteger(n) && n > 0 ? n : undefined;
+  };
+  /** Discord に失敗したら、画面を壊さずに知らせる */
+  const tryDiscord = async (c: Context<Env>, back: string, fn: () => Promise<string>) => {
+    try {
+      return c.redirect(`${back}?msg=${await fn()}`);
+    } catch (err) {
+      logger.warn({ err }, 'notice discord action failed');
+      return c.redirect(`${back}?msg=discord_error`);
+    }
+  };
+
+  app.use('/notices', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+  app.use('/notices/*', async (c, next) => (gujiOnly(c) ? next() : c.text('宮司のみできる操作です。', 403)));
+
+  app.get('/notices', async (c) => {
+    const channels = await loadChannels(true);
+    const byId = new Map(channels.map((ch) => [ch.id, ch]));
+    const groups: NoticeGroup[] = [];
+    for (const n of await listNotices(db)) {
+      let g = groups.find((x) => x.channelId === n.channelId);
+      if (!g) groups.push((g = { channelId: n.channelId, channelName: byId.get(n.channelId)?.name ?? null, rows: [] }));
+      const text = renderNotice(n.body, cfg, channels).text;
+      const preview = renderNotice(n.body, cfg, channels, { forPreview: true });
+      g.rows.push({ notice: n, preview: preview.text, length: text.length, status: noticeStatus(n, text), unknown: preview.unknown });
+    }
+    // Discord のチャンネルの並び順に合わせる
+    const order = new Map(postableChannels(channels).map((ch, i) => [ch.id, i]));
+    groups.sort((a, b) => (order.get(a.channelId) ?? 999) - (order.get(b.channelId) ?? 999));
+    return c.html(<NoticesPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} now={now()} />);
+  });
+
+  const editPage = async (c: Context<Env>, notice: Awaited<ReturnType<typeof getNotice>>, body: string, error?: string) => {
+    const channels = await loadChannels();
+    const preview = renderNotice(body, cfg, channels, { forPreview: true });
+    const length = renderNotice(body, cfg, channels).text.length;
+    return c.html(
+      <NoticeEditPage
+        session={c.get('session')}
+        notice={notice}
+        channels={postableChannels(channels)}
+        channelName={notice ? (channels.find((ch) => ch.id === notice.channelId)?.name ?? null) : null}
+        vars={noticeVariables(cfg)}
+        preview={preview.text}
+        length={length}
+        unknown={preview.unknown}
+        error={error}
+      />,
+    );
+  };
+
+  app.get('/notices/new', (c) => editPage(c, undefined, ''));
+
+  app.post('/notices/preview', async (c) => {
+    const body = await c.req.parseBody();
+    const text = typeof body.body === 'string' ? body.body : '';
+    const channels = await loadChannels();
+    const preview = renderNotice(text, cfg, channels, { forPreview: true });
+    return c.html(<NoticePreview preview={preview.text} length={renderNotice(text, cfg, channels).text.length} unknown={preview.unknown} />);
+  });
+
+  app.post('/notices/seed', async (c) => {
+    return tryDiscord(c, '/notices', async () => {
+      const r = await seedDefaultNotices(noticeCtx(), c.get('session').userId);
+      return r.missing.length ? 'seed_missing' : 'seeded';
+    });
+  });
+
+  app.post('/notices/publish-all', async (c) => {
+    return tryDiscord(c, '/notices', async () => {
+      const r = await publishAll(noticeCtx(), c.get('session').userId);
+      return r.tooLong.length ? 'too_long' : 'published_all';
+    });
+  });
+
+  app.post('/notices', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = typeof body.channelId === 'string' ? body.channelId : '';
+    const title = field(body, 'title', 60);
+    const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
+    const channels = await loadChannels();
+    if (!title || !text || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
+    const n = await createNotice(db, { channelId, title, body: text, by: c.get('session').userId });
+    if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
+    return c.redirect('/notices?msg=saved');
+  });
+
+  app.get('/notices/:id', async (c) => {
+    const id = noticeId(c);
+    const n = id ? await getNotice(db, id) : undefined;
+    if (!n) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    return editPage(c, n, n.body);
+  });
+
+  app.post('/notices/:id', async (c) => {
+    const id = noticeId(c);
+    const n = id ? await getNotice(db, id) : undefined;
+    if (!n) return c.redirect('/notices');
+    const body = await c.req.parseBody();
+    const title = field(body, 'title', 60);
+    const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
+    if (!title || !text) return editPage(c, n, text || n.body, 'invalid');
+    await updateNotice(db, n.id, { title, body: text, by: c.get('session').userId });
+    if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
+    return c.redirect('/notices?msg=saved');
+  });
+
+  app.post('/notices/:id/publish', async (c) => {
+    const id = noticeId(c);
+    if (!id || !(await getNotice(db, id))) return c.redirect('/notices');
+    return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), id, c.get('session').userId));
+  });
+
+  app.post('/notices/:id/move', async (c) => {
+    const id = noticeId(c);
+    const body = await c.req.parseBody();
+    if (id && (body.dir === 'up' || body.dir === 'down')) await moveNotice(db, id, body.dir);
+    return c.redirect('/notices');
+  });
+
+  app.get('/notices/:id/delete', async (c) => {
+    const id = noticeId(c);
+    const n = id ? await getNotice(db, id) : undefined;
+    if (!n) return c.redirect('/notices');
+    const channels = await loadChannels();
+    return c.html(<NoticeDeletePage session={c.get('session')} notice={n} channelName={channels.find((ch) => ch.id === n.channelId)?.name ?? null} />);
+  });
+
+  app.post('/notices/:id/delete', async (c) => {
+    const id = noticeId(c);
+    if (!id) return c.redirect('/notices');
+    return tryDiscord(c, '/notices', async () => {
+      await deleteNotice(noticeCtx(), id, c.get('session').userId);
+      return 'deleted';
+    });
+  });
+
+  app.post('/notices/channel/:channelId/repost', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = c.req.param('channelId');
+    if (body.confirm !== 'yes' || !/^\d{17,20}$/.test(channelId)) return c.redirect('/notices');
+    return tryDiscord(c, '/notices', async () => {
+      const r = await repostChannel(noticeCtx(), channelId, c.get('session').userId);
+      return r.tooLong.length ? 'too_long' : 'reposted_channel';
+    });
   });
 
   app.get('/audit', async (c) => {

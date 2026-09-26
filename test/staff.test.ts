@@ -28,6 +28,9 @@ beforeEach(async () => {
     ban: async (_g, u) => void calls.push(`ban ${u}`),
     kick: async (_g, u) => void calls.push(`kick ${u}`),
     editMessage: async () => undefined,
+    sendMessage: async () => ({ id: '0' }),
+    deleteMessage: async () => undefined,
+    guildChannels: async () => [],
   };
   staff = new StaffApp({ channels: { fetch: async () => null } } as never, db, cfg, discord, 'https://shamusho.example.com');
   for (const [id, roles] of [

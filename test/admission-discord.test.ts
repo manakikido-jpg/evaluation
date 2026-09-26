@@ -33,6 +33,9 @@ beforeEach(async () => {
     ban: async (_g, u) => void calls.push(`ban ${u}`),
     kick: async (_g, u) => void calls.push(`kick ${u}`),
     editMessage: async (c, m, b) => void calls.push(`edit ${c} ${m} ${b.content}`),
+    sendMessage: async () => ({ id: '0' }),
+    deleteMessage: async () => undefined,
+    guildChannels: async () => [],
   };
   let n = 0;
   const client = {

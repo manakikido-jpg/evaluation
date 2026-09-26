@@ -26,6 +26,7 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   replied_nodm: { text: '返信を記録しましたが、DM が届きませんでした（DM を受け取らない設定の可能性）。', kind: 'warn' },
   soudan_done: { text: '完了にしました。', kind: 'ok' },
   saved: { text: '設定を保存しました。BOT には 1 分以内に反映されます。', kind: 'ok' },
+  saved_notices: { text: '設定を保存しました。BOT には 1 分以内に反映されます。投稿済みの掲示の数字も書き換えました。', kind: 'ok' },
   settings_invalid: { text: '設定を保存できませんでした。値を確認してください（昇格ラインは役職ごとに違う値にする必要があります）。', kind: 'warn' },
   age_changed: { text: '年齢区分を変更しました。', kind: 'ok' },
   yoimairi_removed: { text: '宵参りを外しました。', kind: 'ok' },

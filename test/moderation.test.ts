@@ -37,6 +37,9 @@ beforeEach(async () => {
     ban: async (_g, u, reason) => void calls.push(['ban', u, reason]),
     kick: async (_g, u, reason) => void calls.push(['kick', u, reason]),
     editMessage: async () => undefined,
+    sendMessage: async () => ({ id: '0' }),
+    deleteMessage: async () => undefined,
+    guildChannels: async () => [],
   };
   ctx = { db, cfg, discord };
   const join = (id: string, roleIds: string[]) =>

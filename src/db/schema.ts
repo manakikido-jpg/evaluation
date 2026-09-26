@@ -280,3 +280,29 @@ export type Application = typeof applications.$inferSelect;
 export type Omairi = typeof omairi.$inferSelect;
 export type Soudan = typeof soudan.$inferSelect;
 export type SoudanMessage = typeof soudanMessages.$inferSelect;
+
+/**
+ * 掲示（#鳥居・#しきたり などに BOT が投稿する文面）。管理画面（宮司）から編集する。
+ * body は {免罪符の値段} や {#しきたり} などの差し込みを含むひな形で、投稿するときに今の設定で置き換える。
+ */
+export const notices = pgTable(
+  'notices',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    channelId: text('channel_id').notNull(),
+    /** 同じチャンネルの中での順番（小さいほど上） */
+    position: integer('position').notNull(),
+    /** 管理画面で見分けるための名前（Discord には出ない） */
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** 投稿済みならそのメッセージ ID */
+    messageId: text('message_id'),
+    /** 最後に投稿・書き換えしたときの本文（差し込み後）。今の本文と違えば「未反映」 */
+    postedText: text('posted_text'),
+    updatedBy: text('updated_by').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('notices_channel_idx').on(t.channelId, t.position)],
+);
+
+export type Notice = typeof notices.$inferSelect;

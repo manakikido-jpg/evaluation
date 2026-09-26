@@ -7,6 +7,7 @@ import type { DiscordActions } from '../src/lib/discordRest.js';
 import { addCoins } from '../src/services/economy.js';
 import { activeYakuCount, memosOf } from '../src/services/yaku.js';
 import { createWebApp } from '../src/web/app.js';
+import { listNotices } from '../src/services/notices.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const STAFF = '700000000000000001';
@@ -28,7 +29,14 @@ const fakeActions: DiscordActions = {
   sendDm: async (u) => (actions.push(`dm ${u}`), true),
   ban: async (_g, u) => void actions.push(`ban ${u}`),
   kick: async (_g, u) => void actions.push(`kick ${u}`),
-  editMessage: async () => undefined,
+  editMessage: async (_c, m, b) => void actions.push(`edit ${m} ${b.content}`),
+  sendMessage: async (c, b) => (actions.push(`send ${c} ${b.content}`), { id: `m${actions.length}` }),
+  deleteMessage: async (_c, m) => void actions.push(`delete ${m}`),
+  guildChannels: async () => [
+    { id: '910000000000000001', name: '⛩ 鳥居', type: 4, parent_id: null, position: 0 },
+    { id: '910000000000000002', name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0 },
+    { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
+  ],
 };
 
 const fakeApi: DiscordApi = {
@@ -509,5 +517,76 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const ok = await post(`/members/${USER}/age`, g, { _csrf: await csrfOf(g), age: 'adult' });
     expect(ok.headers.get('location')).toBe(`/members/${USER}?msg=age_changed`);
     expect(await (await get(`/members/${USER}?msg=age_changed`, g)).text()).toContain('年齢区分を変更しました');
+  });
+
+  it('掲示は宮司だけ。標準の文面を入れて投稿し、編集して反映できる', async () => {
+    const s = await login(STAFF);
+    expect((await get('/notices', s)).status).toBe(403);
+    expect((await post('/notices/seed', s, { _csrf: await csrfOf(s) })).status).toBe(403);
+    expect(await (await get('/', s)).text()).not.toContain('href="/notices"');
+
+    const g = await login(GUJI);
+    expect(await (await get('/notices', g)).text()).toContain('標準の文面を入れる');
+    const seeded = await post('/notices/seed', g, { _csrf: await csrfOf(g) });
+    expect(seeded.headers.get('location')).toBe('/notices?msg=seeded');
+    const page = await (await get('/notices', g)).text();
+    expect(page).toContain('#しきたり');
+    expect(page).toContain('未反映の 6 件をすべて反映');
+    // プレビューは差し込み済み（{#しきたり} → #しきたり、{免罪符の値段} → 300）
+    expect(page).toContain('1. #しきたり を読む');
+    expect(page).toContain('300 枚・1 人 1 回まで');
+
+    const all = await post('/notices/publish-all', g, { _csrf: await csrfOf(g) });
+    expect(all.headers.get('location')).toBe('/notices?msg=published_all');
+    expect(actions.filter((a) => a.startsWith('send 910000000000000003'))).toHaveLength(5);
+    expect(actions.find((a) => a.startsWith('send 910000000000000002'))).toContain('<#910000000000000003>');
+
+    const [first] = await listNotices(db);
+    const edit = await (await get(`/notices/${first!.id}`, g)).text();
+    expect(edit).toContain('差し込める値');
+    const preview = await (await post('/notices/preview', g, { _csrf: await csrfOf(g), body: '値段 {免罪符の値段} {なぞ}' })).text();
+    expect(preview).toContain('値段 300');
+    expect(preview).toContain('置き換えられない名前');
+    actions = [];
+    const saved = await post(`/notices/${first!.id}`, g, { _csrf: await csrfOf(g), title: 'ようこそ', body: 'ようこそ！', then: 'publish' });
+    expect(saved.headers.get('location')).toBe('/notices?msg=edited');
+    expect(actions).toEqual([`edit ${first!.messageId} ようこそ！`]);
+
+    const del = await post(`/notices/${first!.id}/delete`, g, { _csrf: await csrfOf(g) });
+    expect(del.headers.get('location')).toBe('/notices?msg=deleted');
+    expect(actions).toContain(`delete ${first!.messageId}`);
+    expect((await listAudit(db)).map((a) => a.action)).toEqual(expect.arrayContaining(['notice.create', 'notice.publish', 'notice.update', 'notice.delete']));
+  });
+
+  it('設定で免罪符の値段を変えると、投稿済みの掲示も書き換わる', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const g = await login(GUJI);
+    await post('/notices', g, { _csrf: await csrfOf(g), channelId: '910000000000000003', title: '値段', body: '免罪符は {免罪符の値段} 枚', then: 'publish' });
+    expect(actions.at(-1)).toBe('send 910000000000000003 免罪符は 300 枚');
+
+    const form: Record<string, string> = {
+      _csrf: await csrfOf(g),
+      currencyName: '花びら',
+      currencyEmoji: '🌸',
+      menzaifuPrice: '800',
+      menzaifuMaxUses: '1',
+      voicePer10Min: '5',
+      voiceDailyCap: '150',
+      shuinGive: '3',
+      shuinReceive: '5',
+      omairiDays: '14',
+      omairiExtendDays: '7',
+      autoApproveAccountDays: '0',
+      kickOnReject: 'yes',
+    };
+    for (const r of cfg.ranks) {
+      form[`rank.${r.key}.weight`] = String(r.weight);
+      if (r.auto) form[`rank.${r.key}.requiredGoen`] = String(r.requiredGoen);
+    }
+    const res = await post('/settings', g, form);
+    expect(res.headers.get('location')).toBe('/settings?msg=saved_notices');
+    expect(actions.at(-1)).toMatch(/^edit m\d+ 免罪符は 800 枚$/);
   });
 });

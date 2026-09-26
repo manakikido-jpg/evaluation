@@ -115,6 +115,7 @@ npm start
 - 匿名相談への返信（送った人は宮司だけが理由を書いて確認できる。確認は記録に残る）
 - 年齢区分の変更（宮司）・宵参りを外す
 - 設定（宮司のみ）: 花びら・免罪符の値段と回数・朱印の格・昇格ライン・お参り期間・半自動承認。保存すると BOT にも 1 分以内に反映
+- 掲示（宮司のみ）: `#鳥居`・`#しきたり` などの文面を編集して BOT に投稿させる。`{免罪符の値段}` などの差し込みは設定を変えると自動で書き換わる。「標準の文面を入れる」でルール・朱印の仕組み・用語集が入る
 
 1. **ドメインを用意**し、DNS に A レコードを追加して、管理画面用のサブドメイン（例: `shamusho.example.com`）をサーバーの IP に向ける
 2. Discord Developer Portal → **OAuth2**
@@ -158,6 +159,7 @@ npm run db:generate # src/db/schema.ts を変えたらマイグレーション�
 | `src/discord/staff.ts` | 神職用コマンドと `/menzaifu` |
 | `src/services/admission.ts` / `applications.ts` / `soudan.ts` | 入鯖・宵参り申請、お参り期間、年齢区分、相談 |
 | `src/services/settings.ts` | 管理画面で変えた設定（ファイルの設定に重ねる） |
+| `src/services/notices.ts` / `noticeDefaults.ts` | 掲示（BOT が投稿する文面・差し込み・標準の文面） |
 | `src/discord/admission.ts` | 申請パネル・申請カード・相談・お参り判定（Discord 側） |
 | `src/setup/` / `src/scripts/setup-guild.ts` | ロールとチャンネルの自動作成（配置は `src/setup/layout.ts`） |
 | `src/web/` | 管理画面（社務所 Web） |

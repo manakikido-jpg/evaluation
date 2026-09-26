@@ -29,6 +29,13 @@
       "when": 1790366402484,
       "tag": "0003_applications_soudan_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790384443425,
+      "tag": "0004_notices",
+      "breakpoints": true
     }
   ]
 }
