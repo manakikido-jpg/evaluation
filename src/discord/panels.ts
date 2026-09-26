@@ -7,7 +7,7 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market' | 'contact';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
@@ -38,6 +38,35 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
         },
       ],
       components: [{ type: 1, components: [{ type: 2, style: 1, label: '出品する', custom_id: 'market:new', emoji: { name: '🏪' } }] }],
+    };
+  }
+  if (kind === 'contact') {
+    const levels = [
+      ['ok', 'OK', '⭕', 3],
+      ['ask', '要相談', '💬', 2],
+      ['ng', 'NG', '❌', 2],
+    ] as const;
+    const rowOf = (k: 'dm' | 'friend', label: string) => ({
+      type: 1 as const,
+      components: levels.map(([l, text, emoji, style]) => ({ type: 2 as const, style, label: `${label} ${text}`, custom_id: `contact:${k}:${l}`, emoji: { name: emoji } })),
+    });
+    return {
+      embeds: [
+        {
+          title: '📩 DM・フレンド追加',
+          description: [
+            'DM やフレンド追加をしてもいいかを選んでください。ロールになって、名前を押すとプロフィールに出ます。',
+            '',
+            '⭕ **OK** … 気軽にどうぞ',
+            '💬 **要相談** … サーバーの中で一声かけてから',
+            '❌ **NG** … しないでください',
+            '',
+            '-# いつでも押し直して変えられます。相手が NG・要相談なのに DM を送り続けるのは迷惑行為です',
+          ].join('\n'),
+          color: SHU,
+        },
+      ],
+      components: [rowOf('dm', 'DM'), rowOf('friend', 'フレンド')],
     };
   }
   if (kind === 'gender') {

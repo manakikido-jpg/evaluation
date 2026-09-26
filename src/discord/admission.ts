@@ -40,6 +40,20 @@ import {
   type OmairiAction,
 } from '../services/admission.js';
 import { getMember } from '../services/members.js';
+import {
+  CONTACT_KIND_LABEL,
+  CONTACT_KINDS,
+  CONTACT_LEVEL_EMOJI,
+  CONTACT_LEVEL_LABEL,
+  CONTACT_LEVELS,
+  contactEnabled,
+  contactSummary,
+  isContactKind,
+  isContactLevel,
+  setContact,
+  type ContactKind,
+  type ContactLevel,
+} from '../services/contact.js';
 import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
@@ -101,11 +115,15 @@ export class AdmissionApp {
         const [ns, action, arg] = interaction.customId.split(':');
         if (ns === 'apply' && action === 'start') return await this.applyStart(interaction);
         if (ns === 'apply' && action === 'age' && (arg === 'minor' || arg === 'adult')) return await this.applyGender(interaction, arg);
-        if (ns === 'apply' && action === 'gender') {
-          const [age, gender] = (arg ?? '').split('.');
-          if ((age === 'minor' || age === 'adult') && isGender(gender)) return await this.applyModal(interaction, age, gender);
+        if (ns === 'apply' && (action === 'gender' || action === 'c')) {
+          // apply:gender:<年齢>.<性別> → apply:c:<年齢>.<性別>.<DM>.<フレンド>（まだなら -）
+          const [age, gender, dm, fr] = (arg ?? '').split('.');
+          if ((age === 'minor' || age === 'adult') && isGender(gender)) {
+            return await this.applyNext(interaction, age, gender, isContactLevel(dm) ? dm : undefined, isContactLevel(fr) ? fr : undefined);
+          }
         }
         if (ns === 'gender' && isGender(action)) return await this.chooseGender(interaction, action);
+        if (ns === 'contact' && isContactKind(action) && isContactLevel(arg)) return await this.chooseContact(interaction, action, arg);
         if (ns === 'yoimairi' && action === 'start') return await this.yoimairiStart(interaction);
         if (ns === 'app' && (action === 'approve' || action === 'reject') && arg) return await this.decideApp(interaction, Number(arg), action === 'approve');
         if (ns === 'soudan' && action === 'reply' && arg) return await this.soudanReplyModal(interaction, Number(arg));
@@ -116,8 +134,10 @@ export class AdmissionApp {
       } else if (interaction.isModalSubmit()) {
         const [ns, action, arg] = interaction.customId.split(':');
         if (ns === 'apply' && action === 'modal') {
-          const [age, gender] = (arg ?? '').split('.');
-          if ((age === 'minor' || age === 'adult') && (gender === undefined || isGender(gender))) return await this.applySubmit(interaction, age, gender);
+          const [age, gender, dm, fr] = (arg ?? '').split('.');
+          if ((age === 'minor' || age === 'adult') && (gender === undefined || isGender(gender))) {
+            return await this.applySubmit(interaction, age, gender, { dm: isContactLevel(dm) ? dm : undefined, friend: isContactLevel(fr) ? fr : undefined });
+          }
         }
         if (ns === 'soudan' && action === 'modal') return await this.soudanSubmit(interaction, arg === 'new' ? undefined : Number(arg));
         if (ns === 'soudan' && action === 'replymodal' && arg) return await this.soudanReply(interaction, Number(arg));
@@ -179,7 +199,11 @@ export class AdmissionApp {
     if (kind === 'omamori' && !this.cfg.roles.omamori.length) {
       return void (await i.reply({ content: 'お守りのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
-    await channel.send(panelMessage(kind === 'apply' || kind === 'omamori' || kind === 'shop' || kind === 'gender' || kind === 'market' ? kind : 'yoimairi', { omamori: this.cfg.roles.omamori }));
+    if (kind === 'contact' && !CONTACT_KINDS.some((k) => contactEnabled(this.cfg, k))) {
+      return void (await i.reply({ content: 'DM・フレンドのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
+    }
+    const kinds = ['apply', 'omamori', 'shop', 'gender', 'market', 'contact'] as const;
+    await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { omamori: this.cfg.roles.omamori }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 
@@ -212,9 +236,33 @@ export class AdmissionApp {
     await i.reply({ content: `「${GENDER_LABEL[gender]}」にしました。${intro ? `自己紹介は <#${intro}> へどうぞ。` : ''}`, ...EPHEMERAL });
   }
 
-  private async applyModal(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender): Promise<void> {
+  /** パネルの DM・フレンド追加（押し直すと変わる） */
+  private async chooseContact(i: ButtonInteraction<'cached'>, kind: ContactKind, level: ContactLevel): Promise<void> {
+    await i.deferReply(EPHEMERAL);
+    const r = await setContact(this.ctx, i.user.id, kind, level, [...i.member.roles.cache.keys()]);
+    await i.editReply(r === 'ok' ? `${CONTACT_KIND_LABEL[kind]}を「${CONTACT_LEVEL_EMOJI[level]} ${CONTACT_LEVEL_LABEL[level]}」にしました。` : 'このロールはまだありません。神職に知らせてください。');
+  }
+
+  /** 性別のあと: DM → フレンド追加（ロールがあれば）→ フォーム */
+  private async applyNext(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender, dm?: ContactLevel, fr?: ContactLevel): Promise<void> {
+    const state = (d?: ContactLevel, f?: ContactLevel) => `${age}.${gender}.${d ?? '-'}.${f ?? '-'}`;
+    const ask = (kind: ContactKind, to: (l: ContactLevel) => string) =>
+      i.update({
+        content: [
+          kind === 'dm' ? 'ほかのメンバーからの **DM** は大丈夫ですか？' : 'ほかのメンバーからの **フレンド追加** は大丈夫ですか？',
+          '-# ロールになってプロフィールに出ます。あとから #授与所 でいつでも変えられます',
+          '-# ⭕ OK … 気軽にどうぞ ／ 💬 要相談 … 一声かけてから ／ ❌ NG … しないで',
+        ].join('\n'),
+        components: [row(...CONTACT_LEVELS.map((l) => btn(`apply:c:${to(l)}`, `${CONTACT_LEVEL_EMOJI[l]} ${CONTACT_LEVEL_LABEL[l]}`)))],
+      });
+    if (!dm && contactEnabled(this.cfg, 'dm')) return void (await ask('dm', (l) => state(l, fr)));
+    if (!fr && contactEnabled(this.cfg, 'friend')) return void (await ask('friend', (l) => state(dm, l)));
+    await this.applyModal(i, age, gender, state(dm, fr));
+  }
+
+  private async applyModal(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender, state: string): Promise<void> {
     const modal = new ModalBuilder()
-      .setCustomId(`apply:modal:${age}.${gender}`)
+      .setCustomId(`apply:modal:${state}`)
       .setTitle(`入鯖申請（${AGE_LABEL[age]}・${GENDER_LABEL[gender]}）`)
       .addComponents(
         textInput('name', '呼び名', TextInputStyle.Short, { max: 32 }),
@@ -224,12 +272,14 @@ export class AdmissionApp {
     await i.showModal(modal);
   }
 
-  private async applySubmit(i: ModalSubmitInteraction<'cached'>, age: AgeGroup, gender?: Gender): Promise<void> {
+  private async applySubmit(i: ModalSubmitInteraction<'cached'>, age: AgeGroup, gender: Gender | undefined, contact: { dm?: ContactLevel; friend?: ContactLevel }): Promise<void> {
     await i.deferReply(EPHEMERAL);
     const answers = {
       name: i.fields.getTextInputValue('name').trim(),
       age,
       ...(gender ? { gender } : {}),
+      ...(contact.dm ? { dm: contact.dm } : {}),
+      ...(contact.friend ? { friend: contact.friend } : {}),
       purpose: i.fields.getTextInputValue('purpose').trim(),
       message: i.fields.getTextInputValue('message').trim(),
     };
@@ -253,6 +303,7 @@ export class AdmissionApp {
       `呼び名: ${answers.name}`,
       `年齢区分: ${AGE_LABEL[age]}`,
       gender ? `性別: ${GENDER_LABEL[gender]}` : '',
+      contactSummary(answers),
       `やりたいこと: ${answers.purpose}`,
       answers.message ? `ひとこと: ${answers.message}` : '',
       `Discord アカウント作成: ${ts(i.user.createdAt)} ・ 参加: ${i.member.joinedAt ? ts(i.member.joinedAt) : '—'}`,

@@ -166,16 +166,16 @@ describe('セットアップ', () => {
   it('社務所に申請ボタンを置く（2 回目は置かない）', async () => {
     const d = fakeDiscord();
     const r1 = await applyLayout(d.api, GUILD, FULL);
-    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）', '#授与所（授与品）', '#市場（市場）']);
+    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）', '#授与所（授与品）', '#授与所（DM・フレンド）', '#市場（市場）']);
     expect(d.messages.filter((m) => m.channelId === find(d, '社務所', 0).id)).toHaveLength(2);
-    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(2);
+    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(3);
     expect(JSON.stringify(d.messages[0]!.body)).toContain('apply:start');
     expect(JSON.stringify(d.messages[1]!.body)).toContain('yoimairi:start');
 
     const r2 = await applyLayout(d.api, GUILD, FULL);
     expect(r2.panelsPosted).toEqual([]);
     const r3 = await applyLayout(d.api, GUILD, FULL, { postPanels: true });
-    expect(r3.panelsPosted).toHaveLength(5);
+    expect(r3.panelsPosted).toHaveLength(6);
   });
 
   it('何度実行しても同じものは作らない', async () => {
@@ -230,6 +230,8 @@ describe('セットアップ', () => {
     expect(cfg.channels.applications).toBe(find(d, '申請受付', 0).id);
     expect(cfg.channels.keiji).toBe(find(d, '慶事', 0).id);
     expect(cfg.roles.yoimairi).toBe(r.roleIds.yoimairi);
+    expect(cfg.roles.contact).toEqual({ dm: { ok: r.roleIds.dm_ok, ask: r.roleIds.dm_ask, ng: r.roleIds.dm_ng }, friend: { ok: r.roleIds.friend_ok, ask: r.roleIds.friend_ask, ng: r.roleIds.friend_ng } });
+    expect(r.roleIds.dm_ok).toBeTruthy();
     expect(cfg.ranks.find((x) => x.key === 'sanpaisha')?.roleId).toBe(r.roleIds.sanpaisha);
     expect(cfg.ranks.find((x) => x.key === 'guji')?.roleId).toBe(r.roleIds.guji);
     // 見本の経済設定などはそのまま

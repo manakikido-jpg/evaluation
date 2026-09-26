@@ -114,6 +114,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addSubcommand((s) =>
         s.setName('gender').setNameLocalizations({ ja: '性別' }).setDescription('Gender').setDescriptionLocalizations({ ja: '性別を選ぶボタン（前からいる方向け。#授与所 など）' }),
       )
+      .addSubcommand((s) =>
+        s.setName('contact').setNameLocalizations({ ja: 'dmとフレンド' }).setDescription('DM / friend requests').setDescriptionLocalizations({ ja: 'DM・フレンド追加の OK／要相談／NG を選ぶボタン（#授与所 用）' }),
+      )
       .toJSON(),
     new SlashCommandBuilder()
       .setName('yaku')

@@ -1,5 +1,5 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
-import { FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { CONTACT_SPECS, FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
 import { coreName } from '../lib/names.js';
 
 export type ApiGuild = {
@@ -508,7 +508,14 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
-const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品', gender: '性別', market: '市場' };
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品', gender: '性別', market: '市場', contact: 'DM・フレンド' };
+
+/** 作った（見つけた）DM・フレンドのロール → config の roles.contact */
+export function contactConfig(roleIds: Partial<Record<RoleKey, string>>) {
+  const out = { dm: {} as Record<string, string>, friend: {} as Record<string, string> };
+  for (const c of CONTACT_SPECS()) if (roleIds[c.key]) out[c.kind][c.level] = roleIds[c.key]!;
+  return out;
+}
 
 /** 作った（見つけた）お守りロール → config の roles.omamori */
 export function omamoriConfig(roleIds: Partial<Record<RoleKey, string>>) {
@@ -624,6 +631,7 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
       female: r.roleIds.female,
       emaPending: r.roleIds.ema_pending,
       merchant: r.roleIds.merchant,
+      contact: contactConfig(r.roleIds),
       omamori: omamoriConfig(r.roleIds),
     },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),

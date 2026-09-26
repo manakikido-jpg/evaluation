@@ -31,7 +31,13 @@ export type RoleKey =
   | 'merchant'
   | 'male'
   | 'female'
-  | 'ema_pending';
+  | 'ema_pending'
+  | 'dm_ok'
+  | 'dm_ask'
+  | 'dm_ng'
+  | 'friend_ok'
+  | 'friend_ask'
+  | 'friend_ng';
 
 export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint; /** 誰でも @ で呼べる（お守り） */ mentionable?: boolean };
 
@@ -58,7 +64,7 @@ export type ChannelSpec = {
    */
   formerly?: string[];
   /** 入鯖申請・宵参り申請・お守りのボタンを置く */
-  panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop' | 'market')[];
+  panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop' | 'market' | 'contact')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
@@ -119,6 +125,8 @@ export const ROLES: RoleSpec[] = [
   // 性別（入鯖申請で選ぶ）。色なし
   { key: 'male', name: '♂ 男性', color: 0, hoist: false, permissions: 0n },
   { key: 'female', name: '♀ 女性', color: 0, hoist: false, permissions: 0n },
+  // DM・フレンド追加（入鯖申請と #授与所 のボタンで選ぶ）。色なし
+  ...CONTACT_SPECS().map((c) => ({ key: c.key, name: c.name, color: 0, hoist: false, permissions: 0n })),
   // お守り（募集の通知を受け取るロール）。色なし・一覧で分けない。誰でも @ で呼べる
   ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: true })),
   // 称号（ショップ）。色なし
@@ -151,6 +159,18 @@ export function SHOP_TITLES(): { key: RoleKey; name: string; label: string; emoj
   ];
 }
 
+/** DM・フレンド追加の OK / 要相談 / NG のロール */
+export function CONTACT_SPECS(): { key: RoleKey; kind: 'dm' | 'friend'; level: 'ok' | 'ask' | 'ng'; name: string }[] {
+  return [
+    { key: 'dm_ok', kind: 'dm', level: 'ok', name: '📩 DM OK' },
+    { key: 'dm_ask', kind: 'dm', level: 'ask', name: '💬 DM 要相談' },
+    { key: 'dm_ng', kind: 'dm', level: 'ng', name: '🚫 DM NG' },
+    { key: 'friend_ok', kind: 'friend', level: 'ok', name: '🤝 フレンド OK' },
+    { key: 'friend_ask', kind: 'friend', level: 'ask', name: '💬 フレンド 要相談' },
+    { key: 'friend_ng', kind: 'friend', level: 'ng', name: '🚫 フレンド NG' },
+  ];
+}
+
 /** お守り（#授与所 のボタンで付け外しする、募集の通知用ロール） */
 export function OMAMORI_SPECS(): { key: RoleKey; name: string; label: string; emoji: string; description: string; adultOnly: boolean }[] {
   return [
@@ -179,7 +199,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '御触書', kind: 'text', readOnly: true, topic: 'お知らせ' },
-        { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）と授与品（ショップ）', panels: ['omamori', 'shop'] },
+        { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）と授与品（ショップ）・DM とフレンド追加', panels: ['omamori', 'shop', 'contact'] },
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji', topic: '昇格・称号の発表' },
         { name: '番付', kind: 'text', readOnly: true, configKey: 'banzuke', topic: 'ご縁のランキング（BOT が 10 分ごとに更新）' },
       ],

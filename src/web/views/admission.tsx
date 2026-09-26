@@ -1,4 +1,5 @@
 import type { GuildConfig } from '../../config.js';
+import { contactSummary } from '../../services/contact.js';
 import type { AdminSession, Application, Omairi, Soudan, SoudanMessage } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
 import { GENDER_LABEL, isGender } from '../../services/admission.js';
@@ -93,6 +94,12 @@ export function ApplicationsPage(props: {
                   <div>
                     <dt>性別</dt>
                     <dd>{GENDER_LABEL[app.answers.gender]}</dd>
+                  </div>
+                )}
+                {contactSummary(app.answers) && (
+                  <div>
+                    <dt>DM・フレンド</dt>
+                    <dd>{contactSummary(app.answers)}</dd>
                   </div>
                 )}
                 <div>

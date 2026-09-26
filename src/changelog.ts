@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-contact-roles',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['Discord', '社務所Web', '運用'],
+    title: 'DM・フレンド追加の OK／要相談／NG',
+    items: [
+      'ロール（📩 DM OK・💬 要相談・🚫 NG、🤝 フレンドも同じ）でプロフィールに出る',
+      '入鯖申請で性別のあとに選ぶ。申請カード・社務所Web の申請にも出て、承認でロールが付く',
+      '#授与所 のパネル（/パネル dmとフレンド）でいつでも変えられる。しきたり・チャンネル案内・用語集に追記',
+    ],
+  },
+  {
     id: '2026-09-26-market',
     date: '2026-09-26',
     kind: 'new',

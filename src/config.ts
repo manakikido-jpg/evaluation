@@ -182,6 +182,13 @@ export const guildConfigSchema = z
         emaPending: snowflake.optional(),
         /** 🏪 開業: 市場に出品できる（授与品「開業権利」で受ける）（任意） */
         merchant: snowflake.optional(),
+        /** DM・フレンド追加の OK / 要相談 / NG（入鯖申請と #授与所 のボタンで選ぶ。プロフィールに出る）（任意） */
+        contact: z
+          .object({
+            dm: z.object({ ok: snowflake.optional(), ask: snowflake.optional(), ng: snowflake.optional() }).default({}),
+            friend: z.object({ ok: snowflake.optional(), ask: snowflake.optional(), ng: snowflake.optional() }).default({}),
+          })
+          .optional(),
         /** お守り: 募集の通知を受け取りたい人が #授与所 のボタンで付け外しするロール */
         omamori: z
           .array(

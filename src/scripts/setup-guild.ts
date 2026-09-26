@@ -80,6 +80,12 @@ function knownIdsFrom(path: string, guildId: string): KnownIds | undefined {
         female: c.roles.female,
         ema_pending: c.roles.emaPending,
         merchant: c.roles.merchant,
+        dm_ok: c.roles.contact?.dm.ok,
+        dm_ask: c.roles.contact?.dm.ask,
+        dm_ng: c.roles.contact?.dm.ng,
+        friend_ok: c.roles.contact?.friend.ok,
+        friend_ask: c.roles.contact?.friend.ask,
+        friend_ng: c.roles.contact?.friend.ng,
       },
       channels: { ...c.channels },
     };

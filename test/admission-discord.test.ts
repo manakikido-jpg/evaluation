@@ -150,7 +150,7 @@ describe('入鯖申請（Discord）', () => {
 
     const gender = button(USER, [], 'apply:gender:adult.female');
     await app.onInteraction(gender.i as never);
-    expect(gender.modals[0]?.data.custom_id).toBe('apply:modal:adult.female');
+    expect(gender.modals[0]?.data.custom_id).toBe('apply:modal:adult.female.-.-');
 
     const submit = modal(USER, [], 'apply:modal:adult.female', { name: 'さくら', purpose: 'ゲーム', message: 'よろしく' });
     await app.onInteraction(submit.i as never);
@@ -266,6 +266,68 @@ describe('自己紹介を書くまでは 絵馬待ち', () => {
     const again = button(USER, [ROLE.ujiko, MALE], 'gender:female');
     await app2.onInteraction(again.i as never);
     expect(again.replies[0]?.content).toContain('もう「男性」');
+  });
+});
+
+describe('DM・フレンド追加', () => {
+  const C = { dmOk: '100000000000000081', dmAsk: '100000000000000082', dmNg: '100000000000000083', frOk: '100000000000000084', frAsk: '100000000000000085', frNg: '100000000000000086' };
+  const cfg3: GuildConfig = {
+    ...cfg,
+    roles: { ...cfg.roles, contact: { dm: { ok: C.dmOk, ask: C.dmAsk, ng: C.dmNg }, friend: { ok: C.frOk, ask: C.frAsk, ng: C.frNg } } },
+  };
+  const ids = (r: { replies: Reply[] }) => r.replies[0]?.components?.[0]?.components.map((c) => c.data.custom_id);
+
+  it('申請: 性別 → DM → フレンド追加 → フォーム。カードに出て、承認でロール', async () => {
+    const app3 = new AdmissionApp(client as never, db, () => cfg3, discord);
+    const gender = button(USER, [], 'apply:gender:adult.female');
+    await app3.onInteraction(gender.i as never);
+    expect(gender.replies[0]?.content).toContain('DM');
+    expect(ids(gender)).toEqual(['apply:c:adult.female.ok.-', 'apply:c:adult.female.ask.-', 'apply:c:adult.female.ng.-']);
+
+    const dm = button(USER, [], 'apply:c:adult.female.ok.-');
+    await app3.onInteraction(dm.i as never);
+    expect(dm.replies[0]?.content).toContain('フレンド追加');
+    expect(ids(dm)).toEqual(['apply:c:adult.female.ok.ok', 'apply:c:adult.female.ok.ask', 'apply:c:adult.female.ok.ng']);
+
+    const fr = button(USER, [], 'apply:c:adult.female.ok.ng');
+    await app3.onInteraction(fr.i as never);
+    expect(fr.modals[0]?.data.custom_id).toBe('apply:modal:adult.female.ok.ng');
+
+    const submit = modal(USER, [], 'apply:modal:adult.female.ok.ng', { name: 'さくら', purpose: 'ゲーム' });
+    await app3.onInteraction(submit.i as never);
+    const card = sent.find((s) => s.channelId === APPS)!;
+    expect(card.payload.embeds?.[0]?.description).toContain('DM: OK ・ フレンド追加: NG');
+    const ok = button(STAFF, [ROLE.shinshoku], card.payload.components?.[0]?.components[0]?.data.custom_id!);
+    await app3.onInteraction(ok.i as never);
+    expect(calls).toContain(`addRole ${USER} ${C.dmOk}`);
+    expect(calls).toContain(`addRole ${USER} ${C.frNg}`);
+    expect(calls).not.toContain(`addRole ${USER} ${C.dmNg}`);
+  });
+
+  it('ロールがなければ、性別のあとすぐフォーム', async () => {
+    const gender = button(USER, [], 'apply:gender:adult.male');
+    await app.onInteraction(gender.i as never);
+    expect(gender.modals[0]?.data.custom_id).toBe('apply:modal:adult.male.-.-');
+  });
+
+  it('パネルで押し直すと、同じ種類のほかのロールを外して付け替える', async () => {
+    const app3 = new AdmissionApp(client as never, db, () => cfg3, discord);
+    const b = button(USER, [ROLE.ujiko, C.dmOk, C.frOk], 'contact:dm:ask');
+    await app3.onInteraction(b.i as never);
+    expect(calls).toEqual([`addRole ${USER} ${C.dmAsk}`, `removeRole ${USER} ${C.dmOk}`]);
+    expect(b.replies.at(-1)?.content).toContain('DMを「💬 要相談」');
+
+    // パネルはロールがあるときだけ置ける
+    const none = command(STAFF, [ROLE.shinshoku], 'panel', { sub: 'contact' });
+    await app.onInteraction(none.i as never);
+    expect(none.replies[0]?.content).toContain('セットアップ');
+    const put = command(STAFF, [ROLE.shinshoku], 'panel', { sub: 'contact' });
+    await app3.onInteraction(put.i as never);
+    const panel = sent.at(-1)!.payload as unknown as { components: { components: { custom_id: string }[] }[] };
+    expect(panel.components.map((r) => r.components.map((c) => c.custom_id))).toEqual([
+      ['contact:dm:ok', 'contact:dm:ask', 'contact:dm:ng'],
+      ['contact:friend:ok', 'contact:friend:ask', 'contact:friend:ng'],
+    ]);
   });
 });
 
