@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseGuildConfig } from '../config.js';
-import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type SetupApi } from '../setup/apply.js';
+import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type KnownIds, type SetupApi } from '../setup/apply.js';
 import { FULL, MINIMAL } from '../setup/layout.js';
 
 const API = 'https://discord.com/api/v10';
@@ -54,6 +54,30 @@ function createSetupApi(token: string): SetupApi {
   };
 }
 
+function knownIdsFrom(path: string, guildId: string): KnownIds | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    const c = parseGuildConfig(JSON.parse(readFileSync(path, 'utf8')));
+    if (c.guildId !== guildId) return undefined;
+    const rank = (key: string) => c.ranks.find((r) => r.key === key)?.roleId;
+    return {
+      roles: {
+        guji: rank('guji'),
+        shinshoku: rank('shinshoku'),
+        sodai: rank('sodai'),
+        sewayaku: rank('sewayaku'),
+        ujiko: rank('ujiko'),
+        sanpaisha: rank('sanpaisha'),
+        yakudoshi: c.roles.yakudoshi,
+        yoimairi: c.roles.yoimairi,
+      },
+      channels: { ...c.channels },
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
@@ -75,7 +99,9 @@ async function main(): Promise<void> {
   const api = createSetupApi(token);
 
   console.log(`⛩ セットアップを始めます（${flag('minimal') ? 'テスト用の最小構成' : '全部の構成'}${dryRun ? '・確認だけ' : ''}）`);
-  const r = await applyLayout(api, guildId, layout, { postPanels: flag('post-panels'), dryRun });
+  // 同じサーバーの設定ファイルがあれば、前に作ったロール・チャンネルを ID で探す（名前を変えていても作り直さない）
+  const known = knownIdsFrom(configPath, guildId);
+  const r = await applyLayout(api, guildId, layout, { postPanels: flag('post-panels'), dryRun, known });
 
   console.log(`\nサーバー: ${r.guildName}`);
   console.log(`ロール: 作成 ${r.created.roles.length} ・ 既存を使用 ${r.reused.roles}`);

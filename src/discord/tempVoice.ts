@@ -83,10 +83,13 @@ export class TempVoiceApp {
     if (!this.ctx || before.channelId === after.channelId) return;
     this.ctx.cfg = this.cfg();
     try {
+      let movedInto: string | undefined;
       if (after.channelId && after.member && !after.member.user.bot) {
-        await onVoiceJoin(this.ctx, { userId: after.id, displayName: after.member.displayName, channelId: after.channelId });
+        const r = await onVoiceJoin(this.ctx, { userId: after.id, displayName: after.member.displayName, channelId: after.channelId });
+        if (r.status === 'moved' || r.status === 'created') movedInto = r.channelId;
       }
-      if (before.channelId) await onVoiceLeave(this.ctx, before.channelId);
+      // 自分の部屋から入口に入って、また自分の部屋に戻された: その部屋は空ではない
+      if (before.channelId && before.channelId !== movedInto) await onVoiceLeave(this.ctx, before.channelId);
     } catch (err) {
       logger.warn({ err }, 'temp voice failed');
     }

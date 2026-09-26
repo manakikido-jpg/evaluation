@@ -134,6 +134,21 @@ describe('宵参り', () => {
     expect(await decide(ctx, shinshoku, r.id, true)).toEqual({ status: 'not_adult' });
   });
 
+  it('13〜17 歳と記録された人は、入り直して「18 歳以上」と申告しても 13〜17 歳のまま', async () => {
+    await approveJoin('adult');
+    await changeAgeGroup(ctx, guji, NEW, 'minor');
+    // 退出して入り直し、もう一度申請して承認された
+    await approveJoin('adult');
+    expect((await getMember(db, NEW))?.ageGroup).toBe('minor');
+    expect(await submitYoimairi(ctx, NEW, [ROLE.sanpaisha])).toEqual({ status: 'not_adult' });
+  });
+
+  it('宮司はほかの宮司の年齢区分を変えられない', async () => {
+    const GUJI2 = '840000000000000003';
+    await recordJoin(db, snap(GUJI2, [ROLE.guji]));
+    expect(await changeAgeGroup(ctx, guji, GUJI2, 'minor')).toBe('forbidden');
+  });
+
   it('年齢区分の変更は宮司だけ。13〜17 歳にしたら宵参りを外す', async () => {
     await upsertMember(db, snap(NEW, [ROLE.sanpaisha, YOI]));
     expect(await changeAgeGroup(ctx, shinshoku, NEW, 'minor')).toBe('forbidden');
@@ -181,6 +196,15 @@ describe('お参り期間', () => {
     expect(calls).toContain(`addRole ${NEW} ${ROLE.ujiko}`);
     expect(calls).toContain(`removeRole ${NEW} ${ROLE.sanpaisha}`);
     expect(await decideOmairi(ctx, shinshoku, NEW, 'remove')).toBe('not_found');
+  });
+
+  it('二重に押しても、退出の DM・キックは 1 回だけ', async () => {
+    await approved();
+    calls = [];
+    const rs = await Promise.all([decideOmairi(ctx, shinshoku, NEW, 'remove'), decideOmairi(ctx, shinshoku, NEW, 'remove')]);
+    expect(rs.sort()).toEqual(['not_found', 'ok']);
+    expect(calls.filter((c) => c.startsWith('kick'))).toHaveLength(1);
+    expect(calls.filter((c) => c.startsWith('dm'))).toHaveLength(1);
   });
 
   it('退出させる', async () => {

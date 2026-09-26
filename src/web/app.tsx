@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
+import { bodyLimit } from 'hono/body-limit';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
@@ -19,6 +20,9 @@ import type { DiscordActions } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
 import { createSession, deleteSession, findSession, markChecked, randomToken, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
+
+/** ロールの確かめ直しに失敗しても使い続けてよい時間 */
+const RECHECK_GRACE_MS = 30 * 60_000;
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
 import { ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
@@ -110,6 +114,18 @@ export function createWebApp(deps: WebDeps) {
     }),
   );
 
+  // 送れる大きさの上限（掲示の本文でも十分な 256KB）
+  app.use(bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) }));
+
+  // 管理画面の中身（相談・メモなど）をブラウザや共用 PC に残さない。htmx の部分表示と全体表示を取り違えないように
+  app.use(async (c, next) => {
+    await next();
+    if (!c.req.path.startsWith('/static/') && c.req.path !== '/healthz') {
+      c.header('Cache-Control', 'no-store');
+      c.header('Vary', 'HX-Request');
+    }
+  });
+
   app.onError((err, c) => {
     logger.error({ err, path: c.req.path }, 'web error');
     return c.text('エラーが発生しました。時間をおいてもう一度お試しください。', 500);
@@ -117,7 +133,8 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/healthz', (c) => c.text('ok'));
   app.get('/static/:file', (c) => {
-    const f = STATIC[c.req.param('file')];
+    const name = c.req.param('file');
+    const f = Object.hasOwn(STATIC, name) ? STATIC[name] : undefined;
     if (!f) return c.notFound();
     return c.body(f.body, 200, { 'content-type': f.type, 'cache-control': 'public, max-age=3600' });
   });
@@ -151,7 +168,8 @@ export function createWebApp(deps: WebDeps) {
 
     const level = roles ? adminLevelOf(cfg, roles) : undefined;
     if (!level) {
-      await audit(db, { actorId: user.id, action: 'auth.denied', via: 'web' });
+      const [last] = await listAudit(db, { actorId: user.id, action: 'auth.denied', limit: 1 });
+      if (!last || now().getTime() - last.at.getTime() > 3_600_000) await audit(db, { actorId: user.id, action: 'auth.denied', via: 'web' });
       return c.redirect('/login?e=forbidden');
     }
     const token = await createSession(db, user, level, now());
@@ -175,12 +193,20 @@ export function createWebApp(deps: WebDeps) {
 
     // 一定時間ごとに、今も神職・宮司のロールを持っているか Discord に確かめる
     if (now().getTime() - session.checkedAt.getTime() > RECHECK_MS) {
-      let roles: string[] | null;
+      let roles: string[] | null | undefined;
       try {
         roles = await api.memberRoles(cfg.guildId, session.userId);
       } catch (err) {
         logger.warn({ err }, 'role recheck failed');
-        return c.text('Discord に接続できませんでした。時間をおいてもう一度お試しください。', 503);
+        // Discord が混んでいる（429 など）とき: 少し前に確かめていれば、そのまま使える
+        if (now().getTime() - session.checkedAt.getTime() > RECHECK_GRACE_MS) {
+          return c.text('Discord に接続できませんでした。時間をおいてもう一度お試しください。', 503);
+        }
+        roles = undefined;
+      }
+      if (roles === undefined) {
+        c.set('session', session);
+        return next();
       }
       const level = roles ? adminLevelOf(cfg, roles) : undefined;
       if (!level) {
@@ -212,11 +238,10 @@ export function createWebApp(deps: WebDeps) {
   };
 
   app.use('/', requireAdmin);
-  app.use('/members', requireAdmin);
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
-  for (const p of ['/applications', '/applications/*', '/omairi', '/omairi/*', '/soudan', '/soudan/*', '/settings', '/settings/*', '/notices', '/notices/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -261,7 +286,7 @@ export function createWebApp(deps: WebDeps) {
     };
     const t = now();
     const result = await listMembers(db, query, t);
-    if (c.req.header('hx-request')) return c.html(<MemberResults cfg={cfg} query={query} result={result} now={t} />);
+    if (c.req.header('hx-request') && !c.req.header('hx-history-restore-request')) return c.html(<MemberResults cfg={cfg} query={query} result={result} now={t} />);
     return c.html(<MembersPage session={c.get('session')} cfg={cfg} query={query} result={result} now={t} />);
   });
 
@@ -306,10 +331,10 @@ export function createWebApp(deps: WebDeps) {
         audits={audits}
         names={names}
         now={now()}
-        flash={flash && FLASH[flash] ? flash : undefined}
+        flash={flash && Object.hasOwn(FLASH, flash) ? flash : undefined}
         moderation={
           <>
-          {flash && ADMISSION_FLASH[flash] && !FLASH[flash] && <p class={`flash ${ADMISSION_FLASH[flash]!.kind}`}>{ADMISSION_FLASH[flash]!.text}</p>}
+          {flash && Object.hasOwn(ADMISSION_FLASH, flash) && !Object.hasOwn(FLASH, flash) && <p class={`flash ${ADMISSION_FLASH[flash]!.kind}`}>{ADMISSION_FLASH[flash]!.text}</p>}
           <MemberAdmissionSection
             session={session}
             cfg={cfg}
@@ -434,6 +459,7 @@ export function createWebApp(deps: WebDeps) {
     const r = await unbanMember(mod(), actorOf(c.get('session')), id, keep, note);
     if (r.status === 'forbidden') return back(c, id, 'unban_forbidden');
     if (r.status === 'failed') return back(c, id, 'unban_failed');
+    if (r.status === 'not_banned') return back(c, id, 'unban_not_banned');
     return back(c, id, r.alreadyUnbanned ? 'unbanned_already' : 'unbanned');
   });
 
@@ -703,7 +729,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/notices/*', async (c, next) => (gujiOnly(c) ? next() : c.text('宮司のみできる操作です。', 403)));
 
   app.get('/notices', async (c) => {
-    const channels = await loadChannels(true);
+    const channels = await loadChannels();
     const byId = new Map(channels.map((ch) => [ch.id, ch]));
     const groups: NoticeGroup[] = [];
     for (const n of await listNotices(db)) {

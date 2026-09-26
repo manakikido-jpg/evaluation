@@ -69,21 +69,24 @@ export async function voiceTick(
 
     const amount = Math.min(economy.voicePer10Min, economy.voiceDailyCap - row.vcCoins);
     if (amount <= 0) continue;
-    // 上限の判定と加算を同時に行う（二重に渡さない）
-    const updated = await db
-      .update(activityDaily)
-      .set({ vcCoins: sql`${activityDaily.vcCoins} + ${amount}` })
-      .where(
-        and(
-          eq(activityDaily.memberId, memberId),
-          eq(activityDaily.date, date),
-          sql`${activityDaily.vcCoins} + ${amount} <= ${economy.voiceDailyCap}`,
-        ),
-      )
-      .returning({ vcCoins: activityDaily.vcCoins });
-    if (!updated.length) continue;
-    await addCoins(db, memberId, amount, 'voice', { date, minutes: row.vcMinutes });
-    awarded.push({ memberId, amount });
+    // 上限の判定と加算を同時に行う（二重に渡さない）。今日の枠と花びらは一緒に記録する
+    const paid = await db.transaction(async (tx) => {
+      const updated = await tx
+        .update(activityDaily)
+        .set({ vcCoins: sql`${activityDaily.vcCoins} + ${amount}` })
+        .where(
+          and(
+            eq(activityDaily.memberId, memberId),
+            eq(activityDaily.date, date),
+            sql`${activityDaily.vcCoins} + ${amount} <= ${economy.voiceDailyCap}`,
+          ),
+        )
+        .returning({ vcCoins: activityDaily.vcCoins });
+      if (!updated.length) return false;
+      await addCoins(tx, memberId, amount, 'voice', { date, minutes: row.vcMinutes });
+      return true;
+    });
+    if (paid) awarded.push({ memberId, amount });
   }
   return awarded;
 }

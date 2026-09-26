@@ -106,8 +106,11 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
   let dmSent: boolean;
   if (kind === 'join') {
     if (approve) {
-      const age = app.answers.age === 'adult' || app.answers.age === 'minor' ? app.answers.age : 'unknown';
-      await setAgeGroup(ctx.db, app.memberId, age);
+      const answered = app.answers.age === 'adult' || app.answers.age === 'minor' ? app.answers.age : 'unknown';
+      // 前に 13〜17 と記録された人（宮司が変えた場合も）は、入り直して「18 歳以上」と申告しても変えない
+      const prev = (await getMember(ctx.db, app.memberId))?.ageGroup;
+      const age = prev === 'minor' && answered !== 'minor' ? 'minor' : answered === 'unknown' && prev ? prev : answered;
+      await setAgeGroup(ctx.db, app.memberId, age as 'minor' | 'adult' | 'unknown');
       const first = autoRanks(ctx.cfg.ranks)[0];
       if (first) await safely('add first rank', () => ctx.discord.addRole(g, app.memberId, first.roleId, '入鯖申請を承認'));
       // BAN を解除して入り直した人などで厄が残っていれば、👹厄年 を付け直す
@@ -162,6 +165,7 @@ export async function changeAgeGroup(ctx: ModCtx, actor: Actor, memberId: string
   if (actor.level !== 'guji') return 'forbidden';
   const m = await getMember(ctx.db, memberId);
   if (!m) return 'not_found';
+  if (await checkTarget(ctx, actor, memberId)) return 'forbidden';
   await setAgeGroup(ctx.db, memberId, age);
   const role = ctx.cfg.roles.yoimairi;
   if (age !== 'adult' && role && m.roleIds.includes(role)) {
@@ -253,14 +257,15 @@ export async function decideOmairi(
   if (action === 'extend') {
     await extendOmairi(ctx.db, memberId, ctx.cfg.omairi.extendDays || 7, now, actor.id);
   } else if (action === 'promote') {
+    // 先に「判定済み」にできた 1 回だけが動く（二重に押しても昇格・記録は 1 回）
+    if (!(await setOmairiStatus(ctx.db, memberId, 'promoted', actor.id))) return 'not_found';
     const [first, second] = autoRanks(ctx.cfg.ranks);
     if (second) await safely('add second rank', () => ctx.discord.addRole(g, memberId, second.roleId, 'お参り期間の判定で昇格'));
     if (first) await safely('remove first rank', () => ctx.discord.removeRole(g, memberId, first.roleId, 'お参り期間の判定で昇格'));
-    await setOmairiStatus(ctx.db, memberId, 'promoted', actor.id);
   } else {
+    if (!(await setOmairiStatus(ctx.db, memberId, 'removed', actor.id))) return 'not_found';
     await ctx.discord.sendDm(memberId, [SIGN, 'お参り期間が終わりました。申し訳ありませんが、今回は退出とさせていただきます。'].join('\n'));
     await safely('kick after omairi', () => ctx.discord.kick(g, memberId, 'お参り期間の判定'));
-    await setOmairiStatus(ctx.db, memberId, 'removed', actor.id);
   }
   await audit(ctx.db, { actorId: actor.id, targetId: memberId, action: `omairi.${action}`, via: actor.via });
   return 'ok';
@@ -287,7 +292,8 @@ export async function revealSoudanSender(ctx: ModCtx, actor: Actor, soudanId: nu
   if (actor.level !== 'guji') return 'forbidden';
   const sender = await senderOf(ctx.db, soudanId);
   if (!sender) return 'not_found';
-  await audit(ctx.db, { actorId: actor.id, targetId: sender, action: 'soudan.reveal', detail: { soudanId, reason }, via: actor.via });
+  // 相談した人は記録の「相手」に残さない（記録は神職も見られるので、匿名が守れなくなる）
+  await audit(ctx.db, { actorId: actor.id, targetId: null, action: 'soudan.reveal', detail: { soudanId, reason }, via: actor.via });
   return sender;
 }
 

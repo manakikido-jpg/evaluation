@@ -53,13 +53,18 @@ async function main(): Promise<void> {
       logger.error({ guildId: fileCfg.guildId }, 'BOT がこのサーバーに参加していません');
       return;
     }
-    await guild.commands.set(commandDefinitions(cfg()));
-    logger.info({ guild: guild.name }, 'commands registered');
+    // どれかが失敗しても（Discord が混んでいるなど）、止まらずに続ける
+    await guild.commands
+      .set(commandDefinitions(cfg()))
+      .then(() => logger.info({ guild: guild.name }, 'commands registered'))
+      .catch((err) => logger.error({ err }, 'command registration failed'));
     // 管理画面用に全員を同期（BOT が止まっていた間の参加・退出も反映）
-    const all = await guild.members.fetch();
-    await app.syncAll(all.values()).catch((err) => logger.error({ err }, 'member sync failed'));
+    await guild.members
+      .fetch()
+      .then((all) => app.syncAll(all.values()))
+      .catch((err) => logger.error({ err }, 'member sync failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
-    await tempVoice.attach(guild);
+    await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     // 募集ボタン: なければ置く
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
@@ -126,6 +131,9 @@ async function main(): Promise<void> {
 
   await client.login(env.DISCORD_TOKEN);
 }
+
+// 取りこぼした失敗で BOT ごと止まらないように（記録だけ残す）
+process.on('unhandledRejection', (err) => logger.error({ err }, 'unhandled rejection'));
 
 main().catch((err) => {
   // よくある設定ミスは、直し方を日本語で出す

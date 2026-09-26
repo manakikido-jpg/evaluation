@@ -485,6 +485,10 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(gpage).toContain('相談した人を確認');
     const revealed = await (await post(`/soudan/${id}/reveal`, g, { _csrf: await csrfOf(g), reason: '身の危険' })).text();
     expect(revealed).toContain(`/members/${USER}`);
+    // 確認したことは記録に残るが、相談した人（相手）は記録に残さない（神職も記録を見られるため）
+    const [row] = await listAudit(db, { action: 'soudan.reveal' });
+    expect(row?.targetId).toBeNull();
+    expect(await (await get('/audit', s)).text()).not.toContain('さくら');
   });
 
   it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {
@@ -614,5 +618,47 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const res = await post('/settings', g, form);
     expect(res.headers.get('location')).toBe('/settings?msg=saved_notices');
     expect(actions.at(-1)).toMatch(/^edit m\d+ 免罪符は 800 枚$/);
+  });
+});
+
+describe('管理画面の守り', () => {
+  it('ログイン後のページはブラウザに残さない（Cache-Control: no-store）', async () => {
+    const s = await login(STAFF);
+    const res = await get('/members', s);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('vary')).toContain('HX-Request');
+    expect((await app.request('/static/style.css')).headers.get('cache-control')).toContain('max-age');
+  });
+
+  it('おかしな名前（__proto__ など）でエラーにならない', async () => {
+    expect((await app.request('/static/__proto__')).status).toBe(404);
+    expect((await app.request('/static/constructor')).status).toBe(404);
+    expect((await app.request('/login?e=constructor')).status).toBe(200);
+  });
+
+  it('入れない人が何度ログインしても、記録は 1 時間に 1 回だけ', async () => {
+    for (let i = 0; i < 3; i++) {
+      loginAs = USER;
+      const start = await app.request('/auth/discord');
+      const state = cookiesFrom(start).shamusho_state!;
+      await app.request(`/auth/callback?code=good&state=${state}`, { headers: { cookie: `shamusho_state=${state}` } });
+    }
+    expect(await listAudit(db, { action: 'auth.denied' })).toHaveLength(1);
+  });
+
+  it('Discord が混んでいてロールを確かめ直せなくても、30 分以内に確かめていれば使える', async () => {
+    const s = await login(STAFF);
+    const memberRoles = fakeApi.memberRoles;
+    fakeApi.memberRoles = async () => {
+      throw new Error('guild member lookup failed: 429');
+    };
+    try {
+      clock = new Date(clock.getTime() + 10 * 60_000);
+      expect((await get('/', s)).status).toBe(200);
+      clock = new Date(clock.getTime() + 60 * 60_000);
+      expect((await get('/', s)).status).toBe(503);
+    } finally {
+      fakeApi.memberRoles = memberRoles;
+    }
   });
 });

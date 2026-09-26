@@ -159,3 +159,18 @@ describe('番付', () => {
     expect(f.log).toEqual([]);
   });
 });
+
+describe('番付: BOT が長く止まっていたとき', () => {
+  it('確定にするのは前に貼った月（7 月に貼って 9 月に起動 → 7 月の分を確定）', async () => {
+    const f = fakeDiscord();
+    const ctx = { db, cfg, discord: f.discord };
+    await stamp('A', 'B', 3, '2026-07-10T00:00:00Z');
+    await updateBanzuke(ctx, new Date('2026-07-20T00:00:00Z'));
+    await stamp('A', 'C', 2, '2026-08-10T00:00:00Z');
+    await updateBanzuke(ctx, new Date('2026-09-02T00:00:00Z'));
+    expect(f.title('m1')).toBe('📜 番付 ― 2026年7月（確定）');
+    expect(f.text('m1')).toContain('べに\\* … ご縁 3');
+    expect(f.text('m1')).not.toContain('ちはや');
+    expect(f.title('m2')).toBe('📜 番付 ― 2026年9月');
+  });
+});

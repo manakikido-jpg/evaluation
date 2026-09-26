@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 新しいコードが GitHub に届いていたら、自動で update.sh を実行する。
 # cron で 5 分おきに動かす（docs/deploy-vps.md「8. 更新」）。新しいコードがなければ何もしない。
+# 更新に失敗したコードは、何度も試さない（ログに 1 回だけ残す。新しいコードが届いたらまた試す）
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -19,8 +20,18 @@ if [ "$now" = "$next" ]; then
   say "すでに最新です（${now:0:7}）"
   exit 0
 fi
+failed_file=.git/auto-update-failed
+if [ "$(cat "$failed_file" 2>/dev/null)" = "$next" ]; then
+  say "このコード（${next:0:7}）は前に更新に失敗したので、試しません。手で ./scripts/update.sh を実行すると、もう一度試せます"
+  exit 0
+fi
 
 echo "=== $(date '+%F %T') 更新: ${now:0:7} → ${next:0:7}"
-# 作り直しに失敗したときは、今動いているものがそのまま残る（docker compose は作り終えてから入れ替える）
-./scripts/update.sh
-echo "=== $(date '+%F %T') 完了"
+if ./scripts/update.sh; then
+  rm -f "$failed_file"
+  echo "=== $(date '+%F %T') 完了"
+else
+  echo "$next" > "$failed_file"
+  echo "=== $(date '+%F %T') ❌ 失敗（${next:0:7}）。次に新しいコードが届くまで、自動では試しません"
+  exit 1
+fi

@@ -4,3 +4,6 @@ dist
 .env
 docs
 test
+backups
+config
+scripts

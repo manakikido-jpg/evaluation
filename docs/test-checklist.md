@@ -32,9 +32,9 @@
    ```
 4. セットアップを実行（テストは `--minimal` で最小構成）
    ```bash
-   docker compose run --rm setup --guild （サーバー ID） --minimal
+   docker compose run --rm --build setup --guild （サーバー ID） --minimal
    ```
-   - ロール 8 個・チャンネルを作り、見える範囲も設定し、`config/guild.json` に ID を書き込む
+   - ロール 12 個・チャンネルを作り、見える範囲も設定し、`config/guild.json` に ID を書き込む
    - `#社務所` に入鯖申請・宵参り申請のボタンも置く
    - 何度実行しても安全（あるものは作らない）。先に `--dry-run` を付けると、何を作るかだけ確認できる
 5. 自分（本垢）に「⛩ 宮司」ロールを付ける。サブ垢には何も付けない

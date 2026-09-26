@@ -20,6 +20,7 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   unbanned_already: { text: 'Discord ではすでに解除されていたので、厄の整理だけしました。', kind: 'ok' },
   unban_failed: { text: 'BAN を解除できませんでした。BOT の「メンバーを BAN」権限を確認してください。', kind: 'warn' },
   unban_forbidden: { text: 'BAN の解除は宮司のみできます。', kind: 'warn' },
+  unban_not_banned: { text: 'この方は BAN されていません。', kind: 'warn' },
   memo: { text: 'メモを残しました。', kind: 'ok' },
   denied_self: { text: '自分自身には操作できません。', kind: 'warn' },
   denied_protected: { text: 'この方には操作できません（神職は神職・宮司に、宮司は宮司に操作できません）。', kind: 'warn' },
@@ -28,7 +29,7 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
 };
 
 export function Flash(props: { code?: string }) {
-  const f = props.code ? FLASH[props.code] : undefined;
+  const f = props.code && Object.hasOwn(FLASH, props.code) ? FLASH[props.code] : undefined;
   return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
 }
 

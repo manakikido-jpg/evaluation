@@ -31,7 +31,7 @@ const LOGIN_ERRORS: Record<string, string> = {
 };
 
 export function LoginPage(props: { error?: string }) {
-  const msg = props.error ? LOGIN_ERRORS[props.error] : undefined;
+  const msg = props.error && Object.hasOwn(LOGIN_ERRORS, props.error) ? LOGIN_ERRORS[props.error] : undefined;
   return (
     <Layout title="ログイン">
       <section class="login">

@@ -63,8 +63,12 @@ export class RecruitApp {
       if (interaction.isModalSubmit() && interaction.customId === 'recruit:submit') return await this.submit(interaction);
     } catch (err) {
       logger.error({ err }, 'recruit failed');
-      const msg = { content: '募集できませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL };
-      if (interaction.isRepliable()) await (interaction.replied || interaction.deferred ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => undefined);
+      const content = '募集できませんでした。時間をおいてもう一度お試しください。';
+      if (interaction.isRepliable()) {
+        await (interaction.deferred ? interaction.editReply({ content }) : interaction.replied ? interaction.followUp({ content, ...EPHEMERAL }) : interaction.reply({ content, ...EPHEMERAL })).catch(
+          () => undefined,
+        );
+      }
     }
   }
 
@@ -100,7 +104,8 @@ export class RecruitApp {
     if (d.status !== 'ok') return this.deny(i, d);
     const channel = i.channel;
     if (!channel?.isSendable()) return void (await i.reply({ content: DENIED.unknown, ...EPHEMERAL }));
-    this.cooldown.mark(i.user.id, Date.now());
+    // 投稿が混んで 3 秒を超えても失敗にならないよう、先に受け付ける
+    await i.deferReply(EPHEMERAL);
     await channel.send(
       recruitCard({
         guildId: i.guildId,
@@ -111,7 +116,9 @@ export class RecruitApp {
         voiceChannelId: i.member.voice.channelId,
       }),
     );
-    await i.reply({ content: `募集しました。${d.panel.label}のお守りを持っている人に通知が届きます。`, ...EPHEMERAL });
+    // 投稿できてから「続けて募集できない」時間を数え始める
+    this.cooldown.mark(i.user.id, Date.now());
+    await i.editReply({ content: `募集しました。${d.panel.label}のお守りを持っている人に通知が届きます。` });
     clearTimeout(this.timers.get(channel.id));
     await this.restick(channel.id);
   }
@@ -128,24 +135,28 @@ export class RecruitApp {
     const panel = this.cfg().recruit.panels.find((p) => p.channelId === channelId);
     const channel = this.guild?.channels.cache.get(channelId);
     if (!panel || !channel?.isTextBased() || !channel.isSendable()) return;
-    const state = await this.loadState();
-    const old = state[channelId];
+    const old = await this.loadPanelId(channelId);
     if (old && channel.lastMessageId === old) return;
     if (old) await channel.messages.delete(old).catch(() => undefined);
     const sent = await channel.send(recruitPanelMessage(panel));
-    state[channelId] = sent.id;
-    await this.saveState(state);
+    await this.savePanelId(channelId, sent.id);
   }
 
-  private async loadState(): Promise<Record<string, string>> {
-    const [row] = await this.db.select().from(settings).where(eq(settings.key, STATE_KEY));
-    return { ...((row?.value as Record<string, string> | undefined) ?? {}) };
+  /** チャンネルごとに別の行に覚える（同時に置き直しても、ほかのチャンネルの記録を上書きしない） */
+  private async loadPanelId(channelId: string): Promise<string | undefined> {
+    const [row] = await this.db.select().from(settings).where(eq(settings.key, `${STATE_KEY}:${channelId}`));
+    if (row) return (row.value as { messageId?: string }).messageId;
+    // 前の版は全チャンネルを 1 行にまとめていた
+    const [legacy] = await this.db.select().from(settings).where(eq(settings.key, STATE_KEY));
+    return (legacy?.value as Record<string, string> | undefined)?.[channelId];
   }
 
-  private async saveState(value: Record<string, string>): Promise<void> {
+  private async savePanelId(channelId: string, messageId: string): Promise<void> {
+    const key = `${STATE_KEY}:${channelId}`;
+    const value = { messageId };
     await this.db
       .insert(settings)
-      .values({ key: STATE_KEY, value, updatedBy: 'system' })
+      .values({ key, value, updatedBy: 'system' })
       .onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: 'system', updatedAt: new Date() } });
   }
 }

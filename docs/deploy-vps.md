@@ -44,9 +44,11 @@ chown -R shamusho:shamusho /home/shamusho/.ssh
 ### 2-2. 安全のための設定
 ```bash
 # パスワードでの SSH ログインを禁止（鍵だけにする）
-sudo sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
-sudo systemctl restart ssh
+# ⚠️ 先に「鍵で入れること」を確かめてから（入れなくなると、VPS 会社のコンソールからしか直せない）
+# Ubuntu 24.04 は sshd_config.d/ の設定が優先されるので、そこに書く（sshd_config を書き換えても効かないことがある）
+printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin no\n' | sudo tee /etc/ssh/sshd_config.d/00-hardening.conf
+sudo sshd -t && sudo systemctl restart ssh
+sudo sshd -T | grep -Ei 'passwordauthentication|permitrootlogin'   # どちらも no になっていれば OK
 
 # ファイアウォール: SSH・HTTP・HTTPS だけ開ける
 sudo ufw allow OpenSSH
@@ -117,9 +119,9 @@ SHAMUSHO_DOMAIN=shamusho.（あなたのドメイン）
 3. 実行:
 ```bash
 docker compose run --rm --build setup --guild （サーバー ID） --dry-run   # 何を作るか確認だけ
-docker compose run --rm setup --guild （サーバー ID）                     # 本当に作る（テスト用は --minimal を付ける）
+docker compose run --rm --build setup --guild （サーバー ID）             # 本当に作る（テスト用は --minimal を付ける）
 ```
-- ロール 8 個・カテゴリ 7 個・チャンネル約 45 個を作り、見える範囲も設定する
+- ロール 12 個（役職・厄年・宵参り・お守り）・カテゴリ 7 個・チャンネル 31 個を作り、見える範囲も設定する
 - `config/guild.json` に ID を書き込み、`#社務所` に申請ボタンを置く
 - 何度実行しても安全（同じ名前のものは作らない）。足りないものだけ作る
 - **`--tidy`** を付けると片付けもする（先に `--tidy --dry-run` で何を消すか確認できる）
@@ -162,6 +164,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build d
 ssh -N -o ServerAliveInterval=60 -L 3000:127.0.0.1:3000 shamusho@（IP）   # 行頭が PS C:\…> の画面で実行
 ```
 → パソコンのブラウザで http://localhost:3000。Developer Portal の Redirects に `http://localhost:3000/auth/callback` も追加しておく。
+> この形で動かしている間は、`.env` に `COMPOSE_FILE=docker-compose.yml:docker-compose.local.yml` を書いておく（自動更新で作り直しても、トンネル用の設定が外れないように）。ドメインで動かすようになったら、この行を消す。
 
 ---
 
@@ -198,7 +201,8 @@ crontab -e
 */5 * * * * /home/shamusho/evaluation/scripts/auto-update.sh >> /home/shamusho/auto-update.log 2>&1
 ```
 - 更新したかどうかは `tail ~/auto-update.log` で見られる
-- 作り直しに失敗したときは、今動いているものがそのまま残る（ログにエラーが出る）
+- 新しいコードで BOT・管理画面が起動できなかったら、**前のコードに自動で戻す**。そのコードは何度も試さず、次の新しいコードが届くまで待つ（ログに ❌ が 1 回だけ出る）
+- VPS で書き換えたファイルが新しいコードでも変わっているときは、取り込まずに止める（バックアップも取らない）
 - 止めたいときは `crontab -e` でこの行の先頭に `#` を付ける
 
 ---

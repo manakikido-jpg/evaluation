@@ -14,6 +14,17 @@ async function lockMember(tx: Db, memberId: string): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'yaku:' + memberId}))`);
 }
 
+/**
+ * この人への操作全体（厄を数える → 付ける → BAN → 記録）を 1 つずつにする。
+ * 二重送信でも、2 回目は 1 回目の BAN の記録まで終わってから動く。
+ */
+export async function withMemberLock<T>(db: Db, memberId: string, fn: (tx: Db) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await lockMember(tx, memberId);
+    return fn(tx);
+  });
+}
+
 const activeWhere = (memberId: string) =>
   and(eq(yaku.memberId, memberId), eq(yaku.kind, 'normal'), isNull(yaku.clearedAt));
 
@@ -30,12 +41,29 @@ export async function yakuHistory(db: Db, memberId: string): Promise<Yaku[]> {
   return db.select().from(yaku).where(eq(yaku.memberId, memberId)).orderBy(desc(yaku.createdAt), desc(yaku.id));
 }
 
-/** 厄を 1 つ付ける。返り値の active が 2 以上なら BAN にする */
-export async function recordYaku(db: Db, input: { memberId: string; reason: string; issuedBy: string }): Promise<{ id: number; active: number }> {
+export type RecordYakuResult =
+  | { status: 'recorded'; id: number; active: number }
+  /** すでに厄が 1 つあり、確認（BAN してよいか）がまだ */
+  | { status: 'needs_confirm'; active: number }
+  /** すでに厄が 2 つ以上ある（二重送信などで、もう BAN 済み） */
+  | { status: 'already_banned'; active: number };
+
+/**
+ * 厄を 1 つ付ける。返り値の active が 2 以上なら BAN にする。
+ * 数えるのと付けるのを同じロックの中で行うので、二重送信でも確認なしに BAN にならない。
+ */
+export async function recordYaku(
+  db: Db,
+  input: { memberId: string; reason: string; issuedBy: string },
+  opts: { confirmBan?: boolean } = {},
+): Promise<RecordYakuResult> {
   return db.transaction(async (tx) => {
     await lockMember(tx, input.memberId);
+    const before = await countActive(tx, input.memberId);
+    if (before >= 2) return { status: 'already_banned', active: before };
+    if (before >= 1 && !opts.confirmBan) return { status: 'needs_confirm', active: before };
     const [row] = await tx.insert(yaku).values({ ...input, kind: 'normal' }).returning({ id: yaku.id });
-    return { id: row!.id, active: await countActive(tx, input.memberId) };
+    return { status: 'recorded', id: row!.id, active: await countActive(tx, input.memberId) };
   });
 }
 

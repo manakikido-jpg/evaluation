@@ -31,7 +31,8 @@ export class OmamoriApp {
       await this.toggle(interaction);
     } catch (err) {
       logger.error({ err }, 'omamori failed');
-      await interaction.reply({ content: 'お守りを授けられませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL }).catch(() => undefined);
+      const msg = 'お守りを授けられませんでした。時間をおいてもう一度お試しください。';
+      await (interaction.deferred ? interaction.editReply({ content: msg }) : interaction.reply({ content: msg, ...EPHEMERAL })).catch(() => undefined);
     }
   }
 
@@ -43,12 +44,15 @@ export class OmamoriApp {
         return void (await i.reply({ content: 'このお守りは今は授けていません。', ...EPHEMERAL }));
       case 'adult_only':
         return void (await i.reply({ content: 'このお守りは、宵参り（18 歳以上）の方だけが授かれます。', ...EPHEMERAL }));
+      // ロールの付け外しが混んで 3 秒を超えても失敗にならないよう、先に受け付ける
       case 'added':
+        await i.deferReply(EPHEMERAL);
         await i.member.roles.add(roleId, 'お守りを授かった');
-        return void (await i.reply({ content: `${r.label}を授かりました。この募集の通知が届きます（もう一度押すと返せます）。`, ...EPHEMERAL }));
+        return void (await i.editReply({ content: `${r.label}を授かりました。この募集の通知が届きます（もう一度押すと返せます）。` }));
       case 'removed':
+        await i.deferReply(EPHEMERAL);
         await i.member.roles.remove(roleId, 'お守りを返した');
-        return void (await i.reply({ content: `${r.label}を返しました。`, ...EPHEMERAL }));
+        return void (await i.editReply({ content: `${r.label}を返しました。` }));
     }
   }
 }

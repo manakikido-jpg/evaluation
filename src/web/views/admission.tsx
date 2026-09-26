@@ -35,7 +35,7 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
 };
 
 function Flash(props: { code?: string }) {
-  const f = props.code ? ADMISSION_FLASH[props.code] : undefined;
+  const f = props.code && Object.hasOwn(ADMISSION_FLASH, props.code) ? ADMISSION_FLASH[props.code] : undefined;
   return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
 }
 

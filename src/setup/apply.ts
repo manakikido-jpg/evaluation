@@ -68,7 +68,15 @@ export type SetupResult = {
 /** Discord はテキストチャンネル名を小文字・空白→ハイフンにするので、比べるときはそろえる */
 const norm = (name: string, kind: 'text' | 'voice' | 'category') => (kind === 'text' ? name.toLowerCase().replace(/\s+/g, '-') : name);
 
-export async function applyLayout(api: SetupApi, guildId: string, layout: Layout, opts: { postPanels?: boolean; dryRun?: boolean } = {}): Promise<SetupResult> {
+/** 前に作ったロール・チャンネルの ID（config/guild.json）。名前が変えられていても、同じものを使い続ける */
+export type KnownIds = { roles?: Partial<Record<RoleKey, string>>; channels?: Partial<Record<NonNullable<ChannelSpec['configKey']>, string>> };
+
+export async function applyLayout(
+  api: SetupApi,
+  guildId: string,
+  layout: Layout,
+  opts: { postPanels?: boolean; dryRun?: boolean; known?: KnownIds } = {},
+): Promise<SetupResult> {
   const me = await api.me();
   const guild = await api.guild(guildId);
   let roles = await api.roles(guildId);
@@ -106,7 +114,9 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
 
   // ── ロール（上から順に作る。新しいロールはいちばん下にできるので、この順で作ると並びが正しくなる） ──
   for (const spec of layout.roles) {
-    const found = roles.find((r) => r.name === spec.name && !r.managed);
+    // 前に作ったロール（ID で探す）→ なければ同じ名前のロール
+    const knownId = opts.known?.roles?.[spec.key];
+    const found = roles.find((r) => r.id === knownId && !r.managed) ?? roles.find((r) => r.name === spec.name && !r.managed);
     if (found) {
       result.roleIds[spec.key] = found.id;
       result.reused.roles++;
@@ -186,7 +196,11 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
 
     for (const ch of cat.channels) {
       const type = TYPE[ch.kind];
-      let found = channels.find((c) => c.type === type && c.parent_id === parent!.id && c.name === norm(ch.name, ch.kind));
+      // 設定に ID があるチャンネル（#慶事 など）は ID で探す → なければ同じカテゴリの同じ名前
+      const knownId = ch.configKey ? opts.known?.channels?.[ch.configKey] : undefined;
+      let found =
+        channels.find((c) => c.id === knownId && c.type === type) ??
+        channels.find((c) => c.type === type && c.parent_id === parent!.id && c.name === norm(ch.name, ch.kind));
       let isNew = false;
       if (found) {
         result.reused.channels++;
@@ -300,7 +314,9 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
     }
   }
   if (communityMoved) {
-    for (const c of channels.filter((c) => c.type === TYPE.text && COMMUNITY_CHANNELS.includes(c.name))) remove.set(c.id, c);
+    // コミュニティ設定で使われていた #rules・#moderator-only だけ（同じ名前の、自分で作ったチャンネルは消さない）
+    const wasCommunity = new Set([guild.rules_channel_id, guild.public_updates_channel_id, guild.safety_alerts_channel_id].filter(Boolean));
+    for (const c of channels.filter((c) => c.type === TYPE.text && COMMUNITY_CHANNELS.includes(c.name) && wasCommunity.has(c.id))) remove.set(c.id, c);
   }
   // Discord が最初から作るもの（中が空になるカテゴリも）
   for (const cat of channels.filter((c) => isCategory(c) && DEFAULT_CATEGORIES.includes(c.name.toLowerCase()))) {

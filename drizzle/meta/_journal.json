@@ -57,6 +57,13 @@
       "when": 1790424505510,
       "tag": "0007_omikuji",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790431077491,
+      "tag": "0008_soudan_reveal_anonymous",
+      "breakpoints": true
     }
   ]
 }

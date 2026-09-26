@@ -50,9 +50,12 @@ export function createDiscordActions(botToken: string): DiscordActions {
         ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
       });
       // 続けて投稿すると（掲示をまとめて反映するときなど）「少し待って」と言われるので、言われた秒数だけ待つ
-      if (res.status !== 429 || attempt >= 5) break;
+      if (res.status !== 429 || attempt >= 3) break;
       const j = (await res.json().catch(() => ({}))) as { retry_after?: number };
-      await new Promise((r) => setTimeout(r, Math.min(Math.ceil((j.retry_after ?? 1) * 1000) + 100, 30_000)));
+      const wait = Math.ceil((j.retry_after ?? 1) * 1000) + 100;
+      // 長く待つように言われたら、待たずに失敗にする（管理画面が何分も固まらないように）
+      if (wait > 10_000) break;
+      await new Promise((r) => setTimeout(r, wait));
     }
     if (!res.ok) throw new DiscordHttpError(`${method} ${path} failed: ${res.status} ${await res.text().catch(() => '')}`, res.status);
     return res.status === 204 ? undefined : res.json();

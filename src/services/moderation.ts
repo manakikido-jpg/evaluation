@@ -5,7 +5,7 @@ import { DiscordHttpError, type DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { walletOf } from './economy.js';
-import { getMember } from './members.js';
+import { eventsOf, getMember } from './members.js';
 import {
   activeYakuCount,
   addMemo,
@@ -14,6 +14,7 @@ import {
   clearYakuForUnban,
   recordInstantBan,
   recordYaku,
+  withMemberLock,
   type MenzaifuResult,
 } from './yaku.js';
 
@@ -78,7 +79,7 @@ export type GiveYakuResult =
   | { status: 'denied'; reason: Denied }
   | { status: 'needs_confirm'; active: number }
   | { status: 'warned'; dmSent: boolean; roleOk: boolean }
-  | { status: 'banned'; dmSent: boolean; banOk: boolean };
+  | { status: 'banned'; dmSent: boolean; banOk: boolean; /** 二重送信で、もう BAN 済みだった */ duplicate?: boolean };
 
 /**
  * 厄を付ける。すでに 1 つある人に付けると BAN になるので、confirmBan が必要。
@@ -92,10 +93,22 @@ export async function giveYaku(
 ): Promise<GiveYakuResult> {
   const denied = await checkTarget(ctx, actor, targetId);
   if (denied) return { status: 'denied', reason: denied };
-  const before = await activeYakuCount(ctx.db, targetId);
-  if (before >= 1 && !confirmBan) return { status: 'needs_confirm', active: before };
+  return withMemberLock(ctx.db, targetId, (tx) => giveYakuLocked({ ...ctx, db: tx }, actor, targetId, reason, confirmBan));
+}
 
-  const { id, active } = await recordYaku(ctx.db, { memberId: targetId, reason, issuedBy: actor.id });
+async function giveYakuLocked(ctx: ModCtx, actor: Actor, targetId: string, reason: string, confirmBan: boolean): Promise<GiveYakuResult> {
+  const rec = await recordYaku(ctx.db, { memberId: targetId, reason, issuedBy: actor.id }, { confirmBan });
+  if (rec.status === 'needs_confirm') return { status: 'needs_confirm', active: rec.active };
+  if (rec.status === 'already_banned') {
+    // 二重送信で、もう BAN 済み
+    if (isBannedByEvents(await eventsOf(ctx.db, targetId))) return { status: 'banned', dmSent: false, banOk: true, duplicate: true };
+    // 厄は 2 つあるのに、前回 Discord での BAN に失敗していた: BAN だけやり直す
+    const banOk = await safely('ban', () => ctx.discord.ban(ctx.cfg.guildId, targetId, `厄 2 つ目: ${reason}`));
+    await audit(ctx.db, { actorId: actor.id, targetId, action: 'member.ban', detail: { rule: 'yaku2', reason, ok: banOk, retry: true }, via: actor.via });
+    if (banOk) await ctx.db.insert(memberEvents).values({ memberId: targetId, kind: 'ban', detail: { rule: 'yaku2', reason } });
+    return { status: 'banned', dmSent: false, banOk };
+  }
+  const { id, active } = rec;
   const g = ctx.cfg.guildId;
 
   if (active >= 2) {
@@ -104,7 +117,7 @@ export async function giveYaku(
     const banOk = await safely('ban', () => ctx.discord.ban(g, targetId, `厄 2 つ目: ${reason}`));
     await audit(ctx.db, { actorId: actor.id, targetId, action: 'yaku.add', detail: { reason, yakuId: id, active }, via: actor.via });
     await audit(ctx.db, { actorId: actor.id, targetId, action: 'member.ban', detail: { rule: 'yaku2', reason, ok: banOk }, via: actor.via });
-    await ctx.db.insert(memberEvents).values({ memberId: targetId, kind: 'ban', detail: { rule: 'yaku2', reason } });
+    if (banOk) await ctx.db.insert(memberEvents).values({ memberId: targetId, kind: 'ban', detail: { rule: 'yaku2', reason } });
     return { status: 'banned', dmSent, banOk };
   }
 
@@ -121,12 +134,18 @@ export type InstantBanResult = { status: 'denied'; reason: Denied } | { status: 
 export async function instantBan(ctx: ModCtx, actor: Actor, targetId: string, reason: string, note: string): Promise<InstantBanResult> {
   const denied = await checkTarget(ctx, actor, targetId);
   if (denied) return { status: 'denied', reason: denied };
+  return withMemberLock(ctx.db, targetId, (tx) => instantBanLocked({ ...ctx, db: tx }, actor, targetId, reason, note));
+}
+
+async function instantBanLocked(ctx: ModCtx, actor: Actor, targetId: string, reason: string, note: string): Promise<InstantBanResult> {
+  // 二重送信: もう BAN 済みなら何もしない
+  if (isBannedByEvents(await eventsOf(ctx.db, targetId))) return { status: 'banned', dmSent: false, banOk: true };
   const full = note ? `${reason}（${note}）` : reason;
   const id = await recordInstantBan(ctx.db, { memberId: targetId, reason: full, issuedBy: actor.id });
   const dmSent = await ctx.discord.sendDm(targetId, dm.bannedInstantly(reason));
   const banOk = await safely('ban', () => ctx.discord.ban(ctx.cfg.guildId, targetId, `一発 BAN: ${full}`));
   await audit(ctx.db, { actorId: actor.id, targetId, action: 'member.ban', detail: { rule: 'instant', reason, note, yakuId: id, ok: banOk }, via: actor.via });
-  await ctx.db.insert(memberEvents).values({ memberId: targetId, kind: 'ban', detail: { rule: 'instant', reason } });
+  if (banOk) await ctx.db.insert(memberEvents).values({ memberId: targetId, kind: 'ban', detail: { rule: 'instant', reason } });
   return { status: 'banned', dmSent, banOk };
 }
 
@@ -173,7 +192,11 @@ export async function kickMember(ctx: ModCtx, actor: Actor, targetId: string, re
   return { status: 'kicked', dmSent, kickOk };
 }
 
-export type UnbanResult = { status: 'forbidden' } | { status: 'failed' } | { status: 'unbanned'; alreadyUnbanned: boolean; cleared: number; remaining: number };
+export type UnbanResult =
+  | { status: 'forbidden' }
+  | { status: 'not_banned' }
+  | { status: 'failed' }
+  | { status: 'unbanned'; alreadyUnbanned: boolean; cleared: number; remaining: number };
 
 /**
  * BAN を解除する（宮司のみ）。厄は keep 個（0 = 全部祓う、1 = 厄年からやり直し）だけ残す。
@@ -181,6 +204,8 @@ export type UnbanResult = { status: 'forbidden' } | { status: 'failed' } | { sta
  */
 export async function unbanMember(ctx: ModCtx, actor: Actor, memberId: string, keep: 0 | 1, note: string): Promise<UnbanResult> {
   if (actor.level !== 'guji') return { status: 'forbidden' };
+  // BAN されていない人の厄を、解除のついでに消してしまわないように
+  if (!isBannedByEvents(await eventsOf(ctx.db, memberId))) return { status: 'not_banned' };
   let alreadyUnbanned = false;
   try {
     await ctx.discord.unban(ctx.cfg.guildId, memberId, note ? `BAN 解除: ${note}` : 'BAN 解除');

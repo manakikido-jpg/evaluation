@@ -41,20 +41,23 @@ export async function giveFlow(
   if (!giverRank) return { kind: 'denied', reason: 'giver_no_rank' };
   if (!highestRank(cfg.ranks, receiver.roleIds)) return { kind: 'denied', reason: 'receiver_no_rank' };
 
-  const res = await giveShuin(db, {
-    giverId: giver.id,
-    receiverId: receiver.id,
-    weight: giverRank.weight,
-    giverRank: giverRank.key,
+  // 朱印と通貨を一緒に記録する（途中で失敗したら、どちらも残さない）
+  const res = await db.transaction(async (tx) => {
+    const r = await giveShuin(tx, {
+      giverId: giver.id,
+      receiverId: receiver.id,
+      weight: giverRank.weight,
+      giverRank: giverRank.key,
+    });
+    // 通貨は同じ相手とは最初の 1 回だけ（取り消して押し直しても増えない）
+    if (r.status === 'given' && !r.restamped) {
+      const detail = { giverId: giver.id, receiverId: receiver.id };
+      if (cfg.economy.shuinGive > 0) await addCoins(tx, giver.id, cfg.economy.shuinGive, 'shuin_give', detail);
+      if (cfg.economy.shuinReceive > 0) await addCoins(tx, receiver.id, cfg.economy.shuinReceive, 'shuin_receive', detail);
+    }
+    return r;
   });
   if (res.status === 'already') return { kind: 'already', weight: res.weight, goen: res.goen };
-
-  // 通貨は同じ相手とは最初の 1 回だけ（取り消して押し直しても増えない）
-  if (!res.restamped) {
-    const detail = { giverId: giver.id, receiverId: receiver.id };
-    if (cfg.economy.shuinGive > 0) await addCoins(db, giver.id, cfg.economy.shuinGive, 'shuin_give', detail);
-    if (cfg.economy.shuinReceive > 0) await addCoins(db, receiver.id, cfg.economy.shuinReceive, 'shuin_receive', detail);
-  }
 
   const promotion = decidePromotion(cfg.ranks, receiver.roleIds, res.goen);
   return {

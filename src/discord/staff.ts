@@ -126,6 +126,8 @@ export class StaffApp {
         const r = await giveYaku(this.ctx, actor, target.id, reason, false);
         if (r.status === 'needs_confirm') {
           const nonce = randomBytes(9).toString('base64url');
+          // 押されずに期限切れになった確認は消しておく（ずっと覚えないように）
+          for (const [k, v] of this.pending) if (v.expires < Date.now()) this.pending.delete(k);
           this.pending.set(nonce, { actorId: actor.id, targetId: target.id, reason, expires: Date.now() + 5 * 60_000 });
           const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
             new ButtonBuilder().setCustomId(`yaku:confirm:${nonce}`).setLabel('BAN する（厄 2 つ目）').setStyle(ButtonStyle.Danger),
@@ -192,7 +194,7 @@ export class StaffApp {
     this.pending.delete(nonce);
     await i.deferUpdate();
     const r = await giveYaku(this.ctx, actor, p.targetId, p.reason, true);
-    if (r.status === 'banned') await this.log(`⛔ 厄 2 つ目で BAN ${mention(p.targetId)}（${p.reason}）by ${mention(actor.id)}`);
+    if (r.status === 'banned' && !r.duplicate) await this.log(`⛔ 厄 2 つ目で BAN ${mention(p.targetId)}（${p.reason}）by ${mention(actor.id)}`);
     await i.editReply({ content: this.yakuResultText(p.targetId, r), components: [], allowedMentions: NO_MENTIONS });
   }
 

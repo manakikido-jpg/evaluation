@@ -88,11 +88,39 @@ describe('厄', () => {
     expect((await listAudit(db, { action: 'member.ban' }))[0]?.detail).toMatchObject({ rule: 'yaku2' });
   });
 
-  it('2 人の神職が同時に 1 つ目を付けても、ルールどおり 2 つ目で BAN になる', async () => {
+  it('2 人の神職が同時に 1 つ目を付けても、確認なしに BAN にはならない（片方は確認待ち）', async () => {
     const actor2: Actor = { id: STAFF2, level: 'shinshoku', via: 'discord' };
     const results = await Promise.all([giveYaku(ctx, shinshoku, U, 'A', false), giveYaku(ctx, actor2, U, 'B', false)]);
     const statuses = results.map((r) => r.status).sort();
-    expect(statuses).toEqual(['banned', 'warned']);
+    expect(statuses).toEqual(['needs_confirm', 'warned']);
+    expect(await activeYakuCount(db, U)).toBe(1);
+    expect(kinds()).not.toContain('ban');
+  });
+
+  it('BAN の確認を二重に押しても、BAN・DM・記録は 1 回だけ', async () => {
+    await giveYaku(ctx, shinshoku, U, 'A', false);
+    calls = [];
+    const rs = await Promise.all([giveYaku(ctx, shinshoku, U, 'B', true), giveYaku(ctx, shinshoku, U, 'B', true)]);
+    expect(rs.map((r) => r.status)).toEqual(['banned', 'banned']);
+    expect(kinds().filter((k) => k === 'ban')).toHaveLength(1);
+    expect(kinds().filter((k) => k === 'dm')).toHaveLength(1);
+    expect(await activeYakuCount(db, U)).toBe(2);
+  });
+
+  it('Discord での BAN に失敗したら、BAN の記録は残さない。もう一度付けると BAN だけやり直す', async () => {
+    await giveYaku(ctx, shinshoku, U, 'A', false);
+    const ban = ctx.discord.ban;
+    ctx.discord.ban = async () => {
+      throw new Error('Missing Permissions');
+    };
+    expect(await giveYaku(ctx, shinshoku, U, 'B', true)).toMatchObject({ status: 'banned', banOk: false });
+    expect(isBannedByEvents(await eventsOf(db, U))).toBe(false);
+    ctx.discord.ban = ban;
+    calls = [];
+    expect(await giveYaku(ctx, shinshoku, U, 'B', true)).toMatchObject({ status: 'banned', banOk: true });
+    expect(kinds()).toEqual(['ban']);
+    expect(await activeYakuCount(db, U)).toBe(2);
+    expect(isBannedByEvents(await eventsOf(db, U))).toBe(true);
   });
 
   it('DM が届かなくても処理は進む', async () => {
@@ -208,6 +236,12 @@ describe('BAN の解除（宮司のみ）', () => {
     expect(isBannedByEvents(await eventsOf(db, U))).toBe(true);
     calls = [];
   }
+
+  it('BAN されていない人には使えない（厄を消してしまわない）', async () => {
+    await giveYaku(ctx, shinshoku, U, '誹謗中傷', false);
+    expect(await unbanMember(ctx, guji, U, 0, 'x')).toEqual({ status: 'not_banned' });
+    expect(await activeYakuCount(db, U)).toBe(1);
+  });
 
   it('神職は解除できない', async () => {
     await banWithTwoYaku();

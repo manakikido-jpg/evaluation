@@ -33,6 +33,13 @@ export function jstMonth(now: Date, offset = 0): JstMonth {
   return { key, label: `${s.getUTCFullYear()}年${s.getUTCMonth() + 1}月`, start, end };
 }
 
+/** 2026-09 のような key からその月 */
+export function jstMonthFromKey(key: string): JstMonth {
+  const [y, m] = key.split('-').map(Number) as [number, number];
+  // その月の 15 日（日本時間）を基準にすれば、確実にその月になる
+  return jstMonth(new Date(Date.UTC(y, m - 1, 15)));
+}
+
 /** 在籍中の人（退出した人・BOT は載せない） */
 const present = (col: typeof shuin.receiverId | typeof shuin.giverId) => [eq(members.id, col), isNull(members.leftAt), eq(members.isBot, false)];
 
@@ -137,7 +144,8 @@ export async function updateBanzuke(ctx: { db: Db; cfg: GuildConfig; discord: Di
 
   // 月が変わった: 先月の番付を「確定」にして残し、今月の分は新しく貼る
   if (state && state.month !== month.key) {
-    const prev = jstMonth(now, -1);
+    // BOT が長く止まっていても、確定にするのは前に貼った月
+    const prev = jstMonthFromKey(state.month);
     try {
       await ctx.discord.editMessage(channelId, state.messageId, renderBanzuke(await banzukeData(ctx.db, prev), { final: true }));
     } catch (err) {

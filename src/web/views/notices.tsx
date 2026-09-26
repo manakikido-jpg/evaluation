@@ -30,7 +30,7 @@ function Csrf(props: { session: AdminSession }) {
 }
 
 function Flash(props: { code?: string }) {
-  const f = props.code ? NOTICE_FLASH[props.code] : undefined;
+  const f = props.code && Object.hasOwn(NOTICE_FLASH, props.code) ? NOTICE_FLASH[props.code] : undefined;
   return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
 }
 

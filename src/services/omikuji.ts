@@ -61,15 +61,19 @@ export async function drawOmikuji(db: Db, economy: EconomyConfig, memberId: stri
   const fortune = drawFortune(rand);
   const amount = omikujiReward(economy, fortune);
   // (member_id, date) が主キーなので、同じ日に 2 回目は入らない（連打しても 1 回だけ）
-  const inserted = await db.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount }).onConflictDoNothing().returning();
-  if (!inserted.length) {
+  // 引いた記録と花びらを一緒に（途中で失敗したら、その日はまた引ける）
+  const balance = await db.transaction(async (tx) => {
+    const inserted = await tx.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount }).onConflictDoNothing().returning();
+    if (!inserted.length) return undefined;
+    return amount > 0 ? addCoins(tx, memberId, amount, 'omikuji', { date, fortune: fortune.key }) : (await walletOf(tx, memberId)).balance;
+  });
+  if (balance === undefined) {
     const [row] = await db
       .select()
       .from(omikuji)
       .where(and(eq(omikuji.memberId, memberId), eq(omikuji.date, date)));
     return { status: 'already', fortune: FORTUNES.find((f) => f.key === row?.fortune) ?? fortune };
   }
-  const balance = amount > 0 ? await addCoins(db, memberId, amount, 'omikuji', { date, fortune: fortune.key }) : (await walletOf(db, memberId)).balance;
   const sayings = SAYINGS.map((s) => ({ label: s.label, text: s.list[Math.floor(rand() * s.list.length)]! }));
   return { status: 'drawn', fortune, amount, balance, sayings };
 }

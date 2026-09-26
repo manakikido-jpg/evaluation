@@ -384,3 +384,28 @@ describe('募集ボタン', () => {
     expect(cfg.recruit.cooldownMinutes).toBe(10);
   });
 });
+
+describe('名前を変えたあとでセットアップし直しても', () => {
+  it('設定ファイルの ID で探すので、ロールやチャンネルを作り直さない', async () => {
+    const d = fakeDiscord();
+    const r1 = await applyLayout(d.api, GUILD, FULL);
+    d.roles.find((x) => x.name === '🔰 参拝者')!.name = '🔰 はじめまして';
+    find(d, '慶事', 0).name = 'おめでとう';
+    const r2 = await applyLayout(d.api, GUILD, FULL, {
+      known: { roles: { sanpaisha: r1.roleIds.sanpaisha }, channels: { keiji: r1.channelIds.keiji } },
+    });
+    expect(r2.created.roles).toEqual([]);
+    expect(r2.roleIds.sanpaisha).toBe(r1.roleIds.sanpaisha);
+    expect(r2.channelIds.keiji).toBe(r1.channelIds.keiji);
+    expect(r2.created.channels).toEqual([]);
+  });
+
+  it('片付けで、コミュニティ設定に使われていない #rules（自分で作ったもの）は消さない', async () => {
+    const d = fakeDiscord({ community: true });
+    d.seed('テキストチャンネル', 4);
+    const mine = d.seed('rules', 0, 'テキストチャンネル');
+    await applyLayout(d.api, GUILD, FULL);
+    await tidyGuild(d.api, GUILD, FULL);
+    expect(d.channels.some((c) => c.id === mine.id)).toBe(true);
+  });
+});

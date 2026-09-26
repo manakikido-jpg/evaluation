@@ -277,12 +277,18 @@ export class ShuinApp {
     const reason = `ご縁 ${goen} で ${promotion.to.name} に昇格`;
     try {
       await member.roles.add(promotion.to.roleId, reason);
-      if (promotion.removeRoleIds.length) await member.roles.remove(promotion.removeRoleIds, reason);
     } catch (err) {
       // BOT のロールが役職ロールより下にある、権限がない など
       logger.error({ err, userId: member.id, to: promotion.to.key }, 'promotion role update failed');
       await this.log(`⚠️ ${member} さまの昇格（${promotion.to.name}）でロールを変更できませんでした。BOT のロールの位置と権限を確認してください。`);
       return;
+    }
+    // 新しい役職は付いた。古い役職を外せなくても、昇格の発表と記録はする（あとから手で外せばよい）
+    if (promotion.removeRoleIds.length) {
+      await member.roles.remove(promotion.removeRoleIds, reason).catch(async (err) => {
+        logger.warn({ err, userId: member.id }, 'old rank role removal failed');
+        await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
+      });
     }
     await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen), [member.id]);
     await this.log(promotionLog(member.id, promotion, goen));
