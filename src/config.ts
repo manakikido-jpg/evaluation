@@ -45,7 +45,7 @@ export const economySchema = z.object({
   joinBonus: z.number().int().min(0).default(3000),
   /** おみくじ（1 日 1 回のログボ）の基本の量。吉でこの量、大吉は 3 倍、凶は半分（0 なら花びらなし） */
   omikujiBase: z.number().int().min(0).default(10),
-  /** ブースト（奉納）のお礼: 奉納してくれたときと、続けてくれている間 30 日ごとに贈る量（0 で贈らない） */
+  /** ブースト（奉納）のお礼: ブースト 1 回ごとと、続けてくれている間 30 日ごと（1 人 1 回分）に贈る量（0 で贈らない） */
   boostThanks: z.number().int().min(0).default(1500),
   /** 奉納している人の授与品の割引（%。免罪符・贈り物はのぞく。0 で割引なし） */
   boostDiscountPercent: z.number().int().min(0).max(90).default(20),

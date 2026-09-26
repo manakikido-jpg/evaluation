@@ -11,7 +11,7 @@ import { OmamoriApp } from './discord/omamori.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
-import { boostTick } from './services/boost.js';
+import { BoostApp } from './discord/boost.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -46,6 +46,7 @@ async function main(): Promise<void> {
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
+  const boost = new BoostApp(db, cfg, actions);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -70,6 +71,8 @@ async function main(): Promise<void> {
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
+    // ブースト: 止まっていた間の「ブーストしました」を拾う
+    await boost.attach(guild).catch((err) => logger.warn({ err }, 'boost attach failed'));
     // 募集ボタン: なければ置く
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
@@ -87,7 +90,7 @@ async function main(): Promise<void> {
       // 期限が来た授与品（色守り・絵馬のピン留め）を外す
       void shop.expire().catch((err) => logger.warn({ err }, 'shop expire failed'));
       // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
-      void boostTick({ db, cfg: cfg(), discord: actions });
+      void boost.tick();
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
@@ -98,7 +101,7 @@ async function main(): Promise<void> {
     void (async () => {
       await app.onMemberUpdate(m);
       // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
-      if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boostTick({ db, cfg: cfg(), discord: actions }, new Date(), m.id);
+      if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);
     })();
   });
   client.on(Events.VoiceStateUpdate, (before, after) => {
@@ -120,6 +123,7 @@ async function main(): Promise<void> {
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);
     recruit.onMessage(m);
+    void boost.onMessage(m);
   });
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 

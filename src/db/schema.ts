@@ -410,3 +410,14 @@ export const boostThanks = pgTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.since] })],
 );
+
+/** ブーストのお知らせ（Discord のシステムメッセージ）ごとのお礼。同じメッセージで 2 回贈らないための記録 */
+export const boostMessages = pgTable('boost_messages', {
+  messageId: text('message_id').primaryKey(),
+  memberId: text('member_id').notNull(),
+  /** 何回分のブーストか */
+  count: integer('count').notNull(),
+  /** 贈った花びら */
+  granted: integer('granted').notNull(),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+});

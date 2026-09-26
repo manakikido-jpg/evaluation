@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-boost-per-boost',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord'],
+    title: 'ブーストのお礼を 1 回ごとに',
+    items: ['ブースト 1 回ごとに花びら 1500 枚（2 回なら 3000 枚）。#慶事 のお知らせと DM も 1 回ごと', '授与品の割引は、何回ブーストしても 2 割引のまま'],
+  },
+  {
     id: '2026-09-26-changelog',
     date: '2026-09-26',
     kind: 'new',

@@ -65,7 +65,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '朱印を頂くと', value: String(e.shuinReceive), note: '朱印を頂くともらえる量' },
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
     { name: 'おみくじの花びら', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
-    { name: '奉納のお礼', value: String(e.boostThanks), note: 'ブーストしてくれた人に贈る量（30 日ごと）' },
+    { name: '奉納のお礼', value: String(e.boostThanks), note: 'ブースト 1 回ごとに贈る量' },
     { name: '奉納割引', value: String(e.boostDiscountPercent), note: 'ブーストしている人の授与品の割引（%）' },
     { name: 'お参り期間', value: String(cfg.omairi.days), note: '日数' },
     { name: 'お参り延長', value: String(cfg.omairi.extendDays), note: '自動で延ばす日数' },
