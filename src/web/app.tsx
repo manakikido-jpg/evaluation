@@ -23,6 +23,10 @@ import { createSession, deleteSession, findSession, markChecked, randomToken, RE
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
 const RECHECK_GRACE_MS = 30 * 60_000;
 import { StatsPage } from './views/stats.js';
+import { RecentUpdates, UpdatesPage } from './views/updates.js';
+import type { SessionView } from './views/layout.js';
+import { unseenChanges } from '../changelog.js';
+import { markChangesSeen, seenChangeId } from '../services/updates.js';
 import { isTrendRange, memberTrend } from '../services/stats.js';
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
@@ -82,7 +86,7 @@ export type WebDeps = {
   now?: () => Date;
 };
 
-type Env = { Variables: { session: AdminSession } };
+type Env = { Variables: { session: SessionView } };
 
 const SESSION_COOKIE = 'shamusho_session';
 const STATE_COOKIE = 'shamusho_state';
@@ -212,7 +216,7 @@ export function createWebApp(deps: WebDeps) {
         roles = undefined;
       }
       if (roles === undefined) {
-        c.set('session', session);
+        c.set('session', await withUpdates(session));
         return next();
       }
       const level = roles ? adminLevelOf(cfg, roles) : undefined;
@@ -225,9 +229,12 @@ export function createWebApp(deps: WebDeps) {
       await markChecked(db, session.id, level, now());
       session.level = level;
     }
-    c.set('session', session);
+    c.set('session', await withUpdates(session));
     await next();
   };
+
+  /** メニューの「更新履歴」に、まだ読んでいない更新の数を出す */
+  const withUpdates = async (s: AdminSession): Promise<SessionView> => ({ ...s, updatesUnseen: unseenChanges(await seenChangeId(db, s.userId)).length });
 
   const requireCsrf: MiddlewareHandler<Env> = async (c, next) => {
     if (c.req.method !== 'POST') return next();
@@ -249,6 +256,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
   app.use('/stats', requireAdmin);
+  app.use('/updates', requireAdmin);
   for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
@@ -375,6 +383,16 @@ export function createWebApp(deps: WebDeps) {
         }
       />,
     );
+  });
+
+  // ───────── 更新履歴 ─────────
+
+  app.get('/updates', async (c) => {
+    const s = c.get('session');
+    const unseenIds = new Set(unseenChanges(await seenChangeId(db, s.userId)).map((e) => e.id));
+    await markChangesSeen(db, s.userId);
+    // このページを開いたら読んだことにする（メニューの印も消す）
+    return c.html(<UpdatesPage session={{ ...s, updatesUnseen: 0 }} unseenIds={unseenIds} />);
   });
 
   // ───────── 推移（グラフ） ─────────

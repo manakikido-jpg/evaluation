@@ -903,3 +903,21 @@ describe('CSS・JS の読み込み', () => {
     expect((await app.request('/static/style.css?v=0000000000')).headers.get('cache-control')).toBe('public, max-age=300');
   });
 });
+
+describe('更新履歴（管理画面）', () => {
+  it('まだ読んでいない数がメニューに出て、開くと消える。ホームにも最近の更新', async () => {
+    const { CHANGELOG } = await import('../src/changelog.js');
+    const s = await login(STAFF);
+    const home = await (await get('/', s)).text();
+    expect(home).toContain(`新しい更新 ${CHANGELOG.length} 件`);
+    expect(home).toContain('最近の更新');
+    expect(home).toContain(CHANGELOG[0]!.title);
+    const page = await (await get('/updates', s)).text();
+    expect(page).toContain(CHANGELOG.at(-1)!.title);
+    expect(page).toContain('NEW');
+    expect(page).not.toContain('新しい更新 ');
+    const again = await (await get('/', s)).text();
+    expect(again).not.toContain('新しい更新 ');
+    expect(await (await get('/updates', s)).text()).not.toContain('>NEW<');
+  });
+});

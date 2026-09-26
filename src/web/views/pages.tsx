@@ -4,6 +4,8 @@ import type { AdminSession, AuditLog, Member, MemberEvent } from '../../db/schem
 import type { GoshuinchoData } from '../../services/shuin.js';
 import type { TrendBucket } from '../../services/stats.js';
 import { LineChart } from './charts.js';
+import { RecentUpdates } from './updates.js';
+import type { SessionView } from './layout.js';
 import type { MemberListQuery, MemberRow } from '../../services/members.js';
 import {
   ACTION_LABEL,
@@ -53,7 +55,7 @@ export function LoginPage(props: { error?: string }) {
 // ───────── ホーム ─────────
 
 export function HomePage(props: {
-  session: AdminSession;
+  session: SessionView;
   stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
   todo: { applications: number; omairi: number; soudan: number };
   recent: AuditLog[];
@@ -112,6 +114,8 @@ export function HomePage(props: {
           </li>
         </ul>
       </section>
+
+      <RecentUpdates unseen={props.session.updatesUnseen ?? 0} />
 
       <section class="card">
         <h2>最近の操作</h2>

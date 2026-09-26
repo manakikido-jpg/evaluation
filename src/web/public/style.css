@@ -258,3 +258,16 @@ details summary { cursor: pointer; margin: 12px 0 6px; color: var(--muted); }
 .legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .legend .swatch.s1 { background: var(--series-1); }
 .legend .swatch.s2 { background: var(--series-2); }
+
+/* ───────── 更新履歴 ───────── */
+.top nav a .badge { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--shu); color: #fff; font-size: .75rem; line-height: 18px; text-align: center; }
+.tag.new { background: var(--shu); color: #fff; }
+ul.updates { list-style: none; padding: 0; margin: 0; }
+ul.updates > li.update { padding: 10px 0; border-top: 1px solid var(--line); }
+ul.updates > li.update:first-child { border-top: 0; padding-top: 0; }
+.update-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.update-head .tag { margin-left: 0; }
+li.update ul { margin: 6px 0 0; padding-left: 1.3em; }
+ul.recent-updates { list-style: none; padding: 0; margin: 0; }
+ul.recent-updates li { padding: 4px 0; }
+ul.recent-updates .tag { margin-left: 0; }

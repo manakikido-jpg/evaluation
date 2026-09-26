@@ -3,9 +3,12 @@ import type { AdminSession } from '../../db/schema.js';
 import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
 
-type Nav = 'home' | 'stats' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
+type Nav = 'home' | 'stats' | 'updates' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
 
-export function Layout(props: { title: string; session?: AdminSession; nav?: Nav; children: Child }) {
+/** 画面に出すログイン中の人（updatesUnseen: まだ読んでいない更新の数） */
+export type SessionView = AdminSession & { updatesUnseen?: number };
+
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; children: Child }) {
   const { session, nav } = props;
   return (
     <html lang="ja">
@@ -67,6 +70,14 @@ export function Layout(props: { title: string; session?: AdminSession; nav?: Nav
                   設定
                 </a>
               )}
+              <a href="/updates" class={nav === 'updates' ? 'on' : ''}>
+                更新履歴
+                {(session.updatesUnseen ?? 0) > 0 && (
+                  <span class="badge" aria-label={`新しい更新 ${session.updatesUnseen} 件`}>
+                    {session.updatesUnseen}
+                  </span>
+                )}
+              </a>
             </nav>
             <div class="me">
               {session.avatarUrl && <img src={session.avatarUrl} alt="" width="28" height="28" />}
