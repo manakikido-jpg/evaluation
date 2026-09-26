@@ -12,6 +12,7 @@ import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
 import { BoostApp } from './discord/boost.js';
+import { StickyApp } from './discord/sticky.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -47,6 +48,7 @@ async function main(): Promise<void> {
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
   const boost = new BoostApp(db, cfg, actions);
+  const sticky = new StickyApp(db, cfg, actions);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -124,6 +126,7 @@ async function main(): Promise<void> {
     void app.onMessage(m);
     recruit.onMessage(m);
     void boost.onMessage(m);
+    void sticky.onMessage(m);
   });
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 

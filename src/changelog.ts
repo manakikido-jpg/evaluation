@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-sticky',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '#絵馬 のひな形をいつもいちばん下に',
+    items: [
+      '#絵馬 の自己紹介のひな形が、いつもチャンネルのいちばん下に出るように（誰かが書き込むと、1 分落ち着いてから BOT が下に出し直す）',
+      '掲示に「⬇ いちばん下に表示し続ける」を足した（ほかのチャンネルでも使える）',
+    ],
+  },
+  {
     id: '2026-09-26-channel-rename',
     date: '2026-09-26',
     kind: 'new',

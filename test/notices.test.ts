@@ -11,7 +11,9 @@ import {
   publishNotice,
   renderNotice,
   repostChannel,
+  restickNotice,
   seedChannelGuides,
+  stickyNotices,
   seedDefaultNotices,
   syncPostedNotices,
   updateNotice,
@@ -268,9 +270,11 @@ describe('チャンネルの案内とピン留め', () => {
     const list = await listNotices(db);
     expect(r.created).toBe(list.length);
     expect(list.find((n) => n.channelId === idOf('しきたり'))).toMatchObject({ title: 'チャンネル案内', pinned: false });
-    for (const name of ['絵馬', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処']) {
-      expect(list.find((n) => n.channelId === idOf(name)), name).toMatchObject({ title: '使い方', pinned: true });
+    for (const name of ['境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処']) {
+      expect(list.find((n) => n.channelId === idOf(name)), name).toMatchObject({ title: '使い方', pinned: true, sticky: false });
     }
+    // #絵馬 はひな形がいつも見えるよう、いちばん下に表示し続ける
+    expect(list.find((n) => n.channelId === idOf('絵馬'))).toMatchObject({ title: '使い方', pinned: false, sticky: true });
     for (const n of list) {
       const out = renderNotice(n.body, cfg, FULL);
       expect(out.unknown, n.title).toEqual([]);
@@ -347,5 +351,47 @@ describe('チャンネルの案内とピン留め', () => {
     const pinned = (await getNotice(db, a.id))!;
     expect(d.log.filter((l) => l.startsWith('pin'))).toEqual([`pin ${CH.ema} m1`, `pin ${CH.ema} ${pinned.messageId}`]);
     expect(pinned.postedPinned).toBe(true);
+  });
+});
+
+describe('いちばん下に表示し続ける', () => {
+  it('ピン留めはしない。置き直すと新しいメッセージを出して前のを消し、「投稿済み」のまま', async () => {
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: '使い方', body: 'ひな形', pinned: true, sticky: true, by: GUJI });
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('posted');
+    expect(d.log).toEqual([`send ${CH.ema} m1`]);
+    expect((await stickyNotices(db, CH.ema)).map((x) => x.id)).toEqual([n.id]);
+    expect(await restickNotice(ctx, n.id)).toBe(true);
+    expect(d.log.slice(1)).toEqual([`send ${CH.ema} m2`, 'delete m1']);
+    const after = (await getNotice(db, n.id))!;
+    expect(after.messageId).toBe('m2');
+    expect(noticeStatus(after, 'ひな形')).toBe('posted');
+    expect(d.inChannel(CH.ema).map((m) => m.content)).toEqual(['ひな形']);
+  });
+
+  it('BOT: いちばん下なら何もしない。下でなければ置き直す', async () => {
+    const { StickyApp } = await import('../src/discord/sticky.js');
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: '使い方', body: 'ひな形', sticky: true, by: GUJI });
+    await publishNotice(ctx, n.id, GUJI);
+    const app = new StickyApp(db, () => cfg, d.discord);
+    await app.restick(CH.ema, () => 'm1');
+    expect(d.log).toEqual([`send ${CH.ema} m1`]);
+    await app.restick(CH.ema, () => 'someone-else');
+    expect(d.log).toEqual([`send ${CH.ema} m1`, `send ${CH.ema} m2`, 'delete m1']);
+  });
+
+  it('標準の #絵馬 の案内が前の形（ピン留め）なら、押し直すと「いちばん下に表示し続ける」になる', async () => {
+    const { DEFAULT_GUIDES } = await import('../src/services/noticeDefaults.js');
+    const NAMES = ['絵馬'];
+    const channels: GuildChannel[] = NAMES.map((name, i) => ({ id: `93000000000000${1000 + i}`, name, type: 0, parent_id: null, position: i }));
+    const d = fakeDiscord(channels);
+    const body = DEFAULT_GUIDES.find((t) => t.channelName === '絵馬')!.body;
+    const old = await createNotice(db, { channelId: channels[0]!.id, title: '使い方', body, pinned: true, by: GUJI });
+    const r = await seedChannelGuides({ db, cfg, discord: d.discord }, GUJI);
+    expect(r.updated).toBe(1);
+    expect(await getNotice(db, old.id)).toMatchObject({ sticky: true, pinned: false });
   });
 });

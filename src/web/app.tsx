@@ -911,7 +911,7 @@ export function createWebApp(deps: WebDeps) {
     const channels = await loadChannels();
     if (!title || !text || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
     const style = isNoticeStyle(body.style) ? body.style : 'embed';
-    const n = await createNotice(db, { channelId, title, body: text, style, pinned: body.pinned === 'yes', by: c.get('session').userId });
+    const n = await createNotice(db, { channelId, title, body: text, style, pinned: body.pinned === 'yes', sticky: body.sticky === 'yes', by: c.get('session').userId });
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
   });
@@ -936,6 +936,7 @@ export function createWebApp(deps: WebDeps) {
       body: text,
       style: isNoticeStyle(body.style) ? body.style : undefined,
       pinned: body.pinned === 'yes',
+      sticky: body.sticky === 'yes',
       by: c.get('session').userId,
     });
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));

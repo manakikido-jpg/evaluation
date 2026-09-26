@@ -309,6 +309,8 @@ export const notices = pgTable(
     pinned: boolean('pinned').notNull().default(false),
     /** Discord でピン留めできているか */
     postedPinned: boolean('posted_pinned').notNull().default(false),
+    /** いちばん下に表示し続ける（誰かが書き込むと、落ち着いてから下へ置き直す。#絵馬 のひな形など） */
+    sticky: boolean('sticky').notNull().default(false),
     updatedBy: text('updated_by').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

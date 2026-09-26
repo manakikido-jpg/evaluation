@@ -107,7 +107,7 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
                   <strong>{r.notice.title}</strong>
                   <span class={`status ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
                   <small>{r.notice.style === 'text' ? '普通のメッセージ' : 'カード'}</small>
-                  {r.notice.pinned && <small>📌 ピン留め</small>}
+                  {r.notice.sticky ? <small>⬇ いちばん下に表示し続ける</small> : r.notice.pinned && <small>📌 ピン留め</small>}
                   <small class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
                     {r.length} / {maxLengthOf(r.notice.style)} 文字
                   </small>
@@ -220,6 +220,10 @@ export function NoticeEditPage(props: {
           <label class="field check">
             <input type="checkbox" name="pinned" value="yes" checked={notice?.pinned ?? false} />
             <span>📌 ピン留めする（チャンネルの使い方など、話が流れても読めるように）</span>
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="sticky" value="yes" checked={notice?.sticky ?? false} />
+            <span>⬇ いちばん下に表示し続ける（誰かが書き込むと、1 分落ち着いてから BOT が下に出し直す。#絵馬 のひな形など。こちらを選ぶとピン留めはしません）</span>
           </label>
           <label class="field">
             <span>本文（Discord の書き方: # 見出し、**太字**、- 箇条書き、-# 小さい文字）</span>

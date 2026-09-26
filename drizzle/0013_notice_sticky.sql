@@ -1,0 +1,1 @@
+ALTER TABLE "notices" ADD COLUMN "sticky" boolean DEFAULT false NOT NULL;

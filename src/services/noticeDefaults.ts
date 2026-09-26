@@ -3,7 +3,7 @@
  * {…} は投稿するときに今の設定で置き換わる（使える名前は notices.ts の noticeVariables）。
  * {#しきたり} のように # を付けると、そのチャンネルへのリンクになる。
  */
-export type NoticeTemplate = { channelName: string; title: string; body: string; pinned?: boolean };
+export type NoticeTemplate = { channelName: string; title: string; body: string; pinned?: boolean; sticky?: boolean };
 
 export const DEFAULT_NOTICES: NoticeTemplate[] = [
   {
@@ -151,7 +151,8 @@ export const DEFAULT_NOTICES: NoticeTemplate[] = [
  * チャンネルの使い方（管理画面の「チャンネルの案内を入れる」で入る）。
  * 各チャンネルの案内はピン留めするので、話が流れても 📌 から読める。
  */
-const guide = (channelName: string, body: string): NoticeTemplate => ({ channelName, title: '使い方', body, pinned: true });
+const guide = (channelName: string, body: string, opts: { sticky?: boolean } = {}): NoticeTemplate =>
+  opts.sticky ? { channelName, title: '使い方', body, sticky: true } : { channelName, title: '使い方', body, pinned: true };
 
 export const DEFAULT_GUIDES: NoticeTemplate[] = [
   {
@@ -208,6 +209,8 @@ export const DEFAULT_GUIDES: NoticeTemplate[] = [
 -# 書きたくない項目は空けたままで大丈夫です（年齢は「10代」「20代前半」などでも）
 -# 招待者は、誘ってくれた人の名前（いなければ空けたまま）
 -# 書き直したいときは、自分の投稿を編集してください ／ おしゃべりは {#境内} で`,
+    // ひな形がいつも見えるよう、いちばん下に表示し続ける
+    { sticky: true },
   ),
   guide(
     '境内',

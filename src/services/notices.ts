@@ -1,4 +1,4 @@
-import { asc, eq, max } from 'drizzle-orm';
+import { and, asc, eq, max } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { notices, type Notice } from '../db/schema.js';
@@ -153,7 +153,7 @@ export async function getNotice(db: Db, id: number): Promise<Notice | undefined>
 
 export async function createNotice(
   db: Db,
-  input: { channelId: string; title: string; body: string; style?: NoticeStyle; pinned?: boolean; by: string },
+  input: { channelId: string; title: string; body: string; style?: NoticeStyle; pinned?: boolean; sticky?: boolean; by: string },
 ): Promise<Notice> {
   const [last] = await db
     .select({ p: max(notices.position) })
@@ -168,6 +168,7 @@ export async function createNotice(
       body: input.body,
       style: input.style ?? 'embed',
       pinned: input.pinned ?? false,
+      sticky: input.sticky ?? false,
       updatedBy: input.by,
     })
     .returning();
@@ -178,7 +179,7 @@ export async function createNotice(
 export async function updateNotice(
   db: Db,
   id: number,
-  input: { title: string; body: string; style?: NoticeStyle; pinned?: boolean; by: string },
+  input: { title: string; body: string; style?: NoticeStyle; pinned?: boolean; sticky?: boolean; by: string },
 ): Promise<void> {
   await db
     .update(notices)
@@ -187,6 +188,7 @@ export async function updateNotice(
       body: input.body,
       ...(input.style ? { style: input.style } : {}),
       ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
+      ...(input.sticky !== undefined ? { sticky: input.sticky } : {}),
       updatedBy: input.by,
       updatedAt: new Date(),
     })
@@ -251,10 +253,36 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
   }
   // 新しく投稿したメッセージは、まだピン留めされていない
   const wasPinned = result === 'edited' ? n.postedPinned : false;
-  const postedPinned = await applyPin(ctx.discord, n.channelId, messageId!, n.pinned, wasPinned);
+  const postedPinned = await applyPin(ctx.discord, n.channelId, messageId!, wantPinned(n), wasPinned);
   await ctx.db.update(notices).set({ messageId, postedText: text, postedStyle: n.style, postedPinned }).where(eq(notices.id, id));
   await audit(ctx.db, { actorId: by, action: 'notice.publish', detail: { id, title: n.title, result }, via: by === 'system' ? 'system' : 'web' });
-  return postedPinned === n.pinned ? result : 'pin_failed';
+  return postedPinned === wantPinned(n) ? result : 'pin_failed';
+}
+
+/** いちばん下に置き直すものは、ピン留めしない（置き直すたびにピン留めのお知らせが出てしまうため） */
+const wantPinned = (n: Notice) => n.pinned && !n.sticky;
+
+/** いちばん下に表示し続ける掲示（チャンネルごと） */
+export async function stickyNotices(db: Db, channelId?: string): Promise<Notice[]> {
+  const rows = await db
+    .select()
+    .from(notices)
+    .where(channelId ? and(eq(notices.sticky, true), eq(notices.channelId, channelId)) : eq(notices.sticky, true))
+    .orderBy(asc(notices.position), asc(notices.id));
+  return rows.filter((n) => n.messageId);
+}
+
+/**
+ * 投稿済みの「いちばん下に表示し続ける」掲示を、消して下に出し直す（BOT が、書き込みが落ち着いたあとに呼ぶ）。
+ * 本文は投稿済みのもの（未反映の変更は入れない）。
+ */
+export async function restickNotice(ctx: NoticeCtx, id: number): Promise<boolean> {
+  const n = await getNotice(ctx.db, id);
+  if (!n?.sticky || !n.messageId || n.postedText === null) return false;
+  const { id: messageId } = await ctx.discord.sendMessage(n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText));
+  await ctx.db.update(notices).set({ messageId, postedPinned: false }).where(eq(notices.id, id));
+  await deleteMessageQuietly(ctx.discord, n.channelId, n.messageId);
+  return true;
 }
 
 /** ピン留めを合わせる。できなければ（権限がないなど）今の状態のまま返す */
@@ -300,8 +328,8 @@ export async function repostChannel(ctx: NoticeCtx, channelId: string, by: strin
   const pinFailed: string[] = [];
   for (const { n, text } of rendered) {
     const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text));
-    const postedPinned = await applyPin(ctx.discord, channelId, id, n.pinned, false);
-    if (postedPinned !== n.pinned) pinFailed.push(n.title);
+    const postedPinned = await applyPin(ctx.discord, channelId, id, wantPinned(n), false);
+    if (postedPinned !== wantPinned(n)) pinFailed.push(n.title);
     await ctx.db.update(notices).set({ messageId: id, postedText: text, postedStyle: n.style, postedPinned }).where(eq(notices.id, n.id));
   }
   await audit(ctx.db, { actorId: by, action: 'notice.repost', detail: { channelId, count: rendered.length }, via: 'web' });
@@ -341,7 +369,7 @@ export type NoticeStatus = 'draft' | 'posted' | 'changed';
 
 export function noticeStatus(n: Notice, renderedText: string): NoticeStatus {
   if (!n.messageId) return 'draft';
-  return n.postedText === renderedText && n.postedStyle === n.style && n.postedPinned === n.pinned ? 'posted' : 'changed';
+  return n.postedText === renderedText && n.postedStyle === n.style && n.postedPinned === wantPinned(n) ? 'posted' : 'changed';
 }
 
 /** 標準の文面を入れる。チャンネルは名前で探す。すでに掲示があるチャンネルには入れない */
@@ -364,8 +392,11 @@ export async function seedChannelGuides(ctx: NoticeCtx, by: string): Promise<{ c
   for (const t of DEFAULT_GUIDES) {
     const ch = findChannel(channels, t.channelName);
     const n = ch && have.get(`${ch.id}\n${t.title}`);
-    if (n && n.body !== t.body && (PREVIOUS_GUIDE_BODIES[`${t.channelName}\n${t.title}`] ?? []).includes(n.body)) {
-      await updateNotice(ctx.db, n.id, { title: n.title, body: t.body, by });
+    if (!n) continue;
+    const untouched = n.body === t.body || (PREVIOUS_GUIDE_BODIES[`${t.channelName}\n${t.title}`] ?? []).includes(n.body);
+    // 標準の文面のまま: 新しい文面・見せ方（いちばん下に表示し続ける など）にそろえる
+    if (untouched && (n.body !== t.body || n.sticky !== Boolean(t.sticky) || n.pinned !== Boolean(t.pinned))) {
+      await updateNotice(ctx.db, n.id, { title: n.title, body: t.body, pinned: Boolean(t.pinned), sticky: Boolean(t.sticky), by });
       updated++;
     }
   }
@@ -389,7 +420,7 @@ async function seedTemplates(
       continue;
     }
     if (!wanted(ch, t)) continue;
-    await createNotice(ctx.db, { channelId: ch.id, title: t.title, body: t.body, pinned: t.pinned, by });
+    await createNotice(ctx.db, { channelId: ch.id, title: t.title, body: t.body, pinned: t.pinned, sticky: t.sticky, by });
     created++;
   }
   return { created, missing: [...missing] };
