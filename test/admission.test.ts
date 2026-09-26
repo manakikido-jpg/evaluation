@@ -52,6 +52,9 @@ beforeEach(async () => {
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
+    editChannel: async () => undefined,
+    setChannelOverwrite: async () => undefined,
+    pinMessage: async () => undefined,
   };
   ctx = { db, cfg, discord };
   await recordJoin(db, snap(STAFF, [ROLE.shinshoku]));

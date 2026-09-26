@@ -15,6 +15,13 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   deleted: { text: '削除しました（Discord のメッセージも消しました）。', kind: 'ok' },
   seeded: { text: '標準の文面を入れました。内容を確認して「すべて反映」を押すと Discord に投稿されます。', kind: 'ok' },
   seed_missing: { text: '#鳥居・#しきたり が見つからなかったため、見つかったチャンネルの分だけ入れました。', kind: 'warn' },
+  guides_seeded: { text: 'チャンネルの使い方の案内を入れました。内容を確認して「すべて反映」を押すと、各チャンネルに投稿してピン留めします。', kind: 'ok' },
+  guides_none: { text: '入れる案内はありませんでした（もう入っています）。', kind: 'ok' },
+  guides_missing: { text: '見つからないチャンネルがあったので、見つかったチャンネルの分だけ入れました。', kind: 'warn' },
+  pin_failed: {
+    text: '投稿はできましたが、ピン留めできませんでした。BOT のロールに「メッセージの管理」（または「メッセージをピン留め」）権限を付けてから、もう一度「反映」を押してください。',
+    kind: 'warn',
+  },
   invalid: { text: '入力が足りません（タイトル・本文・チャンネル）。', kind: 'warn' },
   discord_error: { text: 'Discord への投稿に失敗しました。BOT がそのチャンネルに書き込めるか確認してください。', kind: 'warn' },
 };
@@ -62,6 +69,19 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
         )}
       </div>
 
+      <details class="card">
+        <summary>チャンネルの使い方の案内を入れる</summary>
+        <p class="note">
+          #絵馬・#手水舎・#縁日・#宿帳・#おみくじ などに「使い方」のカードを入れて、ピン留めします（話が流れても 📌 から読めます）。#しきたり には全チャンネルの一覧「チャンネル案内」を入れます。入れたあと、ここで文面を直してから反映できます。もう入っているものは入れません。
+        </p>
+        <form method="post" action="/notices/seed-guides">
+          <Csrf session={session} />
+          <button type="submit" class="ok">
+            チャンネルの案内を入れる
+          </button>
+        </form>
+      </details>
+
       {props.groups.length === 0 && (
         <section class="card">
           <p>まだ掲示がありません。#鳥居（ようこそ）と #しきたり（ルール・朱印の仕組み・花びら・用語集）の標準の文面を入れられます。</p>
@@ -84,6 +104,7 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
                   <strong>{r.notice.title}</strong>
                   <span class={`status ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
                   <small>{r.notice.style === 'text' ? '普通のメッセージ' : 'カード'}</small>
+                  {r.notice.pinned && <small>📌 ピン留め</small>}
                   <small class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
                     {r.length} / {maxLengthOf(r.notice.style)} 文字
                   </small>
@@ -192,6 +213,10 @@ export function NoticeEditPage(props: {
                 </option>
               ))}
             </select>
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="pinned" value="yes" checked={notice?.pinned ?? false} />
+            <span>📌 ピン留めする（チャンネルの使い方など、話が流れても読めるように）</span>
           </label>
           <label class="field">
             <span>本文（Discord の書き方: # 見出し、**太字**、- 箇条書き、-# 小さい文字）</span>

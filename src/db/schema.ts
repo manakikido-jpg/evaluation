@@ -303,6 +303,10 @@ export const notices = pgTable(
     postedText: text('posted_text'),
     /** 最後に投稿・書き換えしたときの見せ方 */
     postedStyle: text('posted_style'),
+    /** ピン留めする（チャンネルの使い方の案内など。話が流れても上のピンから読める） */
+    pinned: boolean('pinned').notNull().default(false),
+    /** Discord でピン留めできているか */
+    postedPinned: boolean('posted_pinned').notNull().default(false),
     updatedBy: text('updated_by').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

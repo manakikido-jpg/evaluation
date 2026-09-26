@@ -45,6 +45,7 @@ import {
   publishNotice,
   renderNotice,
   repostChannel,
+  seedChannelGuides,
   seedDefaultNotices,
   syncPostedNotices,
   updateNotice,
@@ -52,6 +53,8 @@ import {
 } from '../services/notices.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
+import { ChannelsPage } from './views/channels.js';
+import { listTextChannels, modeOf as channelModeOf, planMode as planChannelMode } from '../services/channels.js';
 import {
   createItem as createShopItem,
   deleteItem as deleteShopItem,
@@ -250,7 +253,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -804,10 +807,17 @@ export function createWebApp(deps: WebDeps) {
     });
   });
 
+  app.post('/notices/seed-guides', async (c) => {
+    return tryDiscord(c, '/notices', async () => {
+      const r = await seedChannelGuides(noticeCtx(), c.get('session').userId);
+      return r.missing.length ? 'guides_missing' : r.created ? 'guides_seeded' : 'guides_none';
+    });
+  });
+
   app.post('/notices/publish-all', async (c) => {
     return tryDiscord(c, '/notices', async () => {
       const r = await publishAll(noticeCtx(), c.get('session').userId);
-      return r.tooLong.length ? 'too_long' : 'published_all';
+      return r.tooLong.length ? 'too_long' : r.pinFailed.length ? 'pin_failed' : 'published_all';
     });
   });
 
@@ -819,7 +829,7 @@ export function createWebApp(deps: WebDeps) {
     const channels = await loadChannels();
     if (!title || !text || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
     const style = isNoticeStyle(body.style) ? body.style : 'embed';
-    const n = await createNotice(db, { channelId, title, body: text, style, by: c.get('session').userId });
+    const n = await createNotice(db, { channelId, title, body: text, style, pinned: body.pinned === 'yes', by: c.get('session').userId });
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
   });
@@ -839,7 +849,13 @@ export function createWebApp(deps: WebDeps) {
     const title = field(body, 'title', 60);
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
     if (!title || !text) return editPage(c, n, text || n.body, 'invalid');
-    await updateNotice(db, n.id, { title, body: text, style: isNoticeStyle(body.style) ? body.style : undefined, by: c.get('session').userId });
+    await updateNotice(db, n.id, {
+      title,
+      body: text,
+      style: isNoticeStyle(body.style) ? body.style : undefined,
+      pinned: body.pinned === 'yes',
+      by: c.get('session').userId,
+    });
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
   });
@@ -880,8 +896,45 @@ export function createWebApp(deps: WebDeps) {
     if (body.confirm !== 'yes' || !/^\d{17,20}$/.test(channelId)) return c.redirect('/notices');
     return tryDiscord(c, '/notices', async () => {
       const r = await repostChannel(noticeCtx(), channelId, c.get('session').userId);
-      return r.tooLong.length ? 'too_long' : 'reposted_channel';
+      return r.tooLong.length ? 'too_long' : r.pinFailed.length ? 'pin_failed' : 'reposted_channel';
     });
+  });
+
+  // ───────── チャンネル（宮司のみ）: 説明と「書き込める／読むだけ」 ─────────
+
+  app.use('/channels/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+
+  app.get('/channels', async (c) => {
+    const channels = await loadChannels(true);
+    const groups = listTextChannels(channels).map((g) => ({ category: g.category, items: g.items.map((ch) => ({ channel: ch, mode: channelModeOf(ch, cfg) })) }));
+    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} />);
+  });
+
+  app.post('/channels/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
+    const body = await c.req.parseBody();
+    const topic = typeof body.topic === 'string' ? body.topic.replace(/\r\n/g, '\n').trim() : undefined;
+    const mode = body.mode === 'readonly' || body.mode === 'writable' ? body.mode : undefined;
+    if (topic === undefined || topic.length > 1024 || !mode) return c.redirect('/channels?msg=invalid');
+    const channel = (await loadChannels(true)).find((ch) => ch.id === id && (ch.type === 0 || ch.type === 5));
+    if (!channel) return c.redirect('/channels');
+    const changes: string[] = [];
+    try {
+      if ((channel.topic ?? '') !== topic) {
+        await deps.discord.editChannel(id, { topic });
+        changes.push('topic');
+      }
+      const plan = planChannelMode(channel, cfg, mode);
+      for (const o of plan) await deps.discord.setChannelOverwrite(id, o, mode === 'readonly' ? '読むだけにした（管理画面）' : '書き込めるようにした（管理画面）');
+      if (plan.length) changes.push('mode');
+    } catch (err) {
+      logger.warn({ err }, 'channel update failed');
+      return c.redirect('/channels?msg=failed');
+    }
+    if (!changes.length) return c.redirect('/channels?msg=unchanged');
+    await audit(db, { actorId: c.get('session').userId, action: 'channel.update', detail: { channelId: id, name: channel.name, topic: changes.includes('topic') ? topic : undefined, mode: changes.includes('mode') ? mode : undefined }, via: 'web' });
+    return c.redirect('/channels?msg=saved');
   });
 
   // ───────── ショップ（宮司のみ） ─────────

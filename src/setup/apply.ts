@@ -1,5 +1,6 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
 import { FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { coreName } from '../lib/names.js';
 
 export type ApiGuild = {
   id: string;
@@ -71,11 +72,7 @@ export type SetupResult = {
 /** Discord はテキストチャンネル名を小文字・空白→ハイフンにするので、比べるときはそろえる */
 const norm = (name: string, kind: 'text' | 'voice' | 'category') => (kind === 'text' ? name.toLowerCase().replace(/\s+/g, '-') : name);
 
-/**
- * 飾り（絵文字・記号・区切り線・空白）を除いた名前。
- * 「------📜 掲示 📜------」「📜｜授与所」のように見た目を変えても、同じチャンネルだと分かるように。
- */
-export const coreName = (name: string) => name.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+export { coreName };
 
 /** 同じ名前（または飾りを除いて同じ名前）のものが複数あれば、いちばん古いもの（前からあるほう） */
 const oldest = <T extends { id: string }>(list: T[]): T | undefined => [...list].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1))[0];

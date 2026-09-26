@@ -35,10 +35,13 @@ const fakeActions: DiscordActions = {
   deleteMessage: async (_c, m) => void actions.push(`delete ${m}`),
   guildChannels: async () => [
     { id: '910000000000000001', name: '⛩ 鳥居', type: 4, parent_id: null, position: 0 },
-    { id: '910000000000000002', name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0 },
+    { id: '910000000000000002', name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0, topic: 'ようこそ', permission_overwrites: [] },
     { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
   ],
   guildRoles: async () => [],
+  editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic}`),
+  setChannelOverwrite: async (c, o) => void actions.push(`overwrite ${c} ${o.id} allow=${o.allow} deny=${o.deny}`),
+  pinMessage: async (c, m, pin) => void actions.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`),
 };
 
 const fakeApi: DiscordApi = {
@@ -732,5 +735,61 @@ describe('ショップ（管理画面）', () => {
     const hana = (await listItems(db)).find((i) => i.kind === 'hanafubuki')!;
     await form(g, `/shop/items/${hana.id}/delete`, { confirm: 'yes' });
     expect((await listItems(db)).some((i) => i.id === hana.id)).toBe(true);
+  });
+});
+
+describe('チャンネル（管理画面）', () => {
+  const TORII = '910000000000000002';
+  const form = async (session: string, path: string, data: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
+    });
+  };
+
+  it('宮司だけが開ける', async () => {
+    const s = await login(STAFF);
+    expect((await get('/channels', s)).status).toBe(403);
+    expect((await form(s, `/channels/${TORII}`, { topic: 'x', mode: 'readonly' })).status).toBe(403);
+    expect(actions.filter((a) => a.startsWith('editChannel') || a.startsWith('overwrite'))).toEqual([]);
+    const g = await login(GUJI);
+    const page = await (await get('/channels', g)).text();
+    expect(page).toContain('#鳥居');
+    expect(page).toContain('ようこそ');
+  });
+
+  it('説明を変えて、読むだけにできる', async () => {
+    const g = await login(GUJI);
+    const r = await form(g, `/channels/${TORII}`, { topic: '最初に読んでね', mode: 'readonly' });
+    expect(r.headers.get('location')).toBe('/channels?msg=saved');
+    expect(actions).toContain(`editChannel ${TORII} 最初に読んでね`);
+    // みんな（@everyone）の書き込みを止める。リアクションは止めない
+    const ow = actions.find((a) => a.startsWith(`overwrite ${TORII} ${cfg.guildId}`))!;
+    const deny = BigInt(/deny=(\d+)/.exec(ow)![1]!);
+    expect(deny & (1n << 11n)).not.toBe(0n);
+    expect(deny & (1n << 6n)).toBe(0n);
+    expect((await listAudit(db, { action: 'channel.update' })).length).toBe(1);
+  });
+
+  it('何も変わらなければ Discord に送らない。おかしな入力は受けない', async () => {
+    const g = await login(GUJI);
+    expect((await form(g, `/channels/${TORII}`, { topic: 'ようこそ', mode: 'writable' })).headers.get('location')).toBe('/channels?msg=unchanged');
+    expect((await form(g, `/channels/${TORII}`, { topic: 'x'.repeat(1025), mode: 'writable' })).headers.get('location')).toBe('/channels?msg=invalid');
+    expect((await form(g, `/channels/${TORII}`, { topic: 'x', mode: 'nope' })).headers.get('location')).toBe('/channels?msg=invalid');
+    expect(actions.filter((a) => a.startsWith('editChannel') || a.startsWith('overwrite'))).toEqual([]);
+  });
+
+  it('掲示: チャンネルの案内を入れる・ピン留めを選べる', async () => {
+    const g = await login(GUJI);
+    expect((await form(g, '/notices/seed-guides', {})).headers.get('location')).toBe('/notices?msg=guides_missing');
+    expect((await listNotices(db)).map((n) => n.title)).toEqual(['チャンネル案内']);
+    const r = await form(g, '/notices', { channelId: TORII, title: '使い方', body: 'ここは入口', pinned: 'yes', then: 'publish' });
+    expect(r.headers.get('location')).toBe('/notices?msg=posted');
+    expect(actions.some((a) => a.startsWith(`pin ${TORII}`))).toBe(true);
+    const n = (await listNotices(db)).find((x) => x.title === '使い方')!;
+    await form(g, `/notices/${n.id}`, { title: '使い方', body: 'ここは入口', then: 'publish' });
+    expect(actions.some((a) => a.startsWith(`unpin ${TORII}`))).toBe(true);
   });
 });

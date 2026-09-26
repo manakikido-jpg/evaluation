@@ -33,6 +33,9 @@ beforeEach(async () => {
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
+    editChannel: async () => undefined,
+    setChannelOverwrite: async () => undefined,
+    pinMessage: async () => undefined,
   };
   staff = new StaffApp({ channels: { fetch: async () => null } } as never, db, cfg, discord, 'https://shamusho.example.com');
   for (const [id, roles] of [

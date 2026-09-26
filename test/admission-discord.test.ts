@@ -38,6 +38,9 @@ beforeEach(async () => {
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
+    editChannel: async () => undefined,
+    setChannelOverwrite: async () => undefined,
+    pinMessage: async () => undefined,
   };
   let n = 0;
   const client = {

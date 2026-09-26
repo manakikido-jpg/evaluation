@@ -16,8 +16,14 @@ export interface DiscordActions {
   /** チャンネルにメッセージを投稿する（掲示など）。メンションで通知は飛ばさない */
   sendMessage(channelId: string, body: MessageBody): Promise<{ id: string }>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
+  /** ピン留めする（pin = false で外す）。「ピン留めしました」のお知らせは消す */
+  pinMessage(channelId: string, messageId: string, pin: boolean): Promise<void>;
   /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
   guildChannels(guildId: string): Promise<GuildChannel[]>;
+  /** チャンネルの説明（トピック）を変える */
+  editChannel(channelId: string, body: { topic?: string }): Promise<void>;
+  /** チャンネルの権限の上書きを 1 つ書き換える（書き込める・読むだけの切り替え） */
+  setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
   /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
   guildRoles(guildId: string): Promise<GuildRole[]>;
 }
@@ -26,7 +32,18 @@ export type GuildRole = { id: string; name: string; position: number; managed: b
 
 export type MessageBody = { content?: string; embeds?: { title?: string; description?: string; color?: number }[]; components?: unknown[] };
 
-export type GuildChannel = { id: string; name: string; type: number; parent_id: string | null; position: number };
+export type GuildChannel = {
+  id: string;
+  name: string;
+  type: number;
+  parent_id: string | null;
+  position: number;
+  topic?: string | null;
+  permission_overwrites?: ChannelOverwrite[];
+};
+
+/** type: 0 = ロール、1 = メンバー。allow・deny は権限のビット（10 進の文字列） */
+export type ChannelOverwrite = { id: string; type: 0 | 1; allow: string; deny: string };
 
 /** Discord が失敗を返したとき（status で「メッセージが消されていた（404）」などを見分ける） */
 export class DiscordHttpError extends Error {
@@ -85,7 +102,22 @@ export function createDiscordActions(botToken: string): DiscordActions {
     sendMessage: async (c, body) =>
       (await call('POST', `/channels/${c}/messages`, { body: { ...body, allowed_mentions: { parse: [] } } })) as { id: string },
     deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
+    async pinMessage(c, m, pin) {
+      await call(pin ? 'PUT' : 'DELETE', `/channels/${c}/messages/pins/${m}`, { reason: pin ? '掲示のピン留め' : '掲示のピン留めを外した' });
+      if (!pin) return;
+      // Discord が出す「○○がメッセージをピン留めしました」は、チャンネルが散らからないよう消す（できなくても構わない）
+      try {
+        const recent = (await call('GET', `/channels/${c}/messages?limit=10`)) as { id: string; type: number; message_reference?: { message_id?: string } }[];
+        const notice = recent.find((x) => x.type === 6 && x.message_reference?.message_id === m);
+        if (notice) await call('DELETE', `/channels/${c}/messages/${notice.id}`);
+      } catch {
+        // そのまま
+      }
+    },
     guildChannels: async (g) => (await call('GET', `/guilds/${g}/channels`)) as GuildChannel[],
     guildRoles: async (g) => (await call('GET', `/guilds/${g}/roles`)) as GuildRole[],
+    editChannel: async (c, body) => void (await call('PATCH', `/channels/${c}`, { body })),
+    setChannelOverwrite: async (c, o, reason) =>
+      void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { reason, body: { type: o.type, allow: o.allow, deny: o.deny } })),
   };
 }

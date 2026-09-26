@@ -11,6 +11,7 @@ import {
   publishNotice,
   renderNotice,
   repostChannel,
+  seedChannelGuides,
   seedDefaultNotices,
   syncPostedNotices,
   updateNotice,
@@ -69,6 +70,13 @@ function fakeDiscord(channels = CHANNELS) {
     },
     guildChannels: async () => channels,
     guildRoles: async () => [],
+    editChannel: async () => undefined,
+    setChannelOverwrite: async () => undefined,
+    pinMessage: async (c, m, pin) => {
+      if (pinFails) throw new DiscordHttpError('Missing Permissions', 403);
+      if (!messages.has(m)) throw new DiscordHttpError('Unknown Message', 404);
+      log.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`);
+    },
   };
   /** チャンネルのメッセージを投稿順に */
   const inChannel = (c: string) => [...messages.entries()].filter(([, v]) => v.channelId === c).map(([id, v]) => ({ id, ...v }));
@@ -76,10 +84,13 @@ function fakeDiscord(channels = CHANNELS) {
 }
 
 const GUJI = '700000000000000002';
+/** ピン留めの権限がないとき */
+let pinFails = false;
 let db: Db;
 let close: () => Promise<void>;
 
 beforeEach(async () => {
+  pinFails = false;
   ({ db, close } = await makeDb());
 });
 afterEach(async () => {
@@ -200,7 +211,7 @@ describe('掲示', () => {
     await createNotice(db, { channelId: CH.shikitari, title: 'B', body: 'B', by: GUJI });
     await publishNotice(ctx, a.id, GUJI);
     d.log.length = 0;
-    expect(await publishAll(ctx, GUJI)).toEqual({ done: 1, tooLong: [] });
+    expect(await publishAll(ctx, GUJI)).toEqual({ done: 1, tooLong: [], pinFailed: [] });
     expect(d.log).toEqual([`send ${CH.shikitari} m2`]);
   });
 
@@ -213,7 +224,7 @@ describe('掲示', () => {
     await moveNotice(db, b.id, 'up');
     expect((await listNotices(db)).map((n) => n.title)).toEqual(['B', 'A']);
 
-    expect(await repostChannel(ctx, CH.shikitari, GUJI)).toEqual({ done: 2, tooLong: [] });
+    expect(await repostChannel(ctx, CH.shikitari, GUJI)).toEqual({ done: 2, tooLong: [], pinFailed: [] });
     expect(d.inChannel(CH.shikitari).map((m) => m.content)).toEqual(['B', 'A']);
     expect((await getNotice(db, a.id))?.messageId).toBe('m4');
   });
@@ -234,5 +245,93 @@ describe('掲示', () => {
     expect(d.messages.get((await getNotice(db, editing.id))!.messageId!)?.content).toBe('300 枚');
     expect(d.log).toEqual([`edit ${(await getNotice(db, price.id))!.messageId}`]);
     expect((await getNotice(db, plain.id))?.postedText).toBe('こんにちは');
+  });
+});
+
+describe('チャンネルの案内とピン留め', () => {
+  /** 見た目を変えた名前（「🪧｜絵馬」など）でも見つかる */
+  const NAMES = ['しきたり', '御触書', '授与所', '絵馬', '慶事', '番付', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処'];
+  const FULL: GuildChannel[] = NAMES.map((name, i) => ({ id: `92000000000000${String(1000 + i)}`, name: `🌸｜${name}`, type: 0, parent_id: null, position: i }));
+  const idOf = (name: string) => FULL.find((c) => c.name.endsWith(name))!.id;
+
+  it('飾りを付けた名前でも {#チャンネル名} がリンクになる', () => {
+    expect(renderNotice('{#絵馬}', cfg, FULL).text).toBe(`<#${idOf('絵馬')}>`);
+    // 飾りを除くと何も残らない名前は探さない
+    expect(renderNotice('{#🌸}', cfg, FULL).unknown).toEqual(['#🌸']);
+  });
+
+  it('案内を入れると、各チャンネルにピン留めの「使い方」と、#しきたり に「チャンネル案内」が入る。2 回目は増えない', async () => {
+    const d = fakeDiscord(FULL);
+    const ctx = { db, cfg, discord: d.discord };
+    const r = await seedChannelGuides(ctx, GUJI);
+    expect(r.missing).toEqual([]);
+    const list = await listNotices(db);
+    expect(r.created).toBe(list.length);
+    expect(list.find((n) => n.channelId === idOf('しきたり'))).toMatchObject({ title: 'チャンネル案内', pinned: false });
+    for (const name of ['絵馬', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処']) {
+      expect(list.find((n) => n.channelId === idOf(name)), name).toMatchObject({ title: '使い方', pinned: true });
+    }
+    for (const n of list) {
+      const out = renderNotice(n.body, cfg, FULL);
+      expect(out.unknown, n.title).toEqual([]);
+      expect(out.text.length, n.title).toBeLessThanOrEqual(2000);
+    }
+    expect(await seedChannelGuides(ctx, GUJI)).toEqual({ created: 0, missing: [] });
+  });
+
+  it('標準の文面が入っていても、案内は入る（#しきたり の最後に足される）', async () => {
+    const d = fakeDiscord(FULL);
+    const ctx = { db, cfg, discord: d.discord };
+    await seedDefaultNotices(ctx, GUJI);
+    await seedChannelGuides(ctx, GUJI);
+    const shikitari = (await listNotices(db)).filter((n) => n.channelId === idOf('しきたり')).map((n) => n.title);
+    expect(shikitari.at(-1)).toBe('チャンネル案内');
+    expect(shikitari.length).toBe(6);
+  });
+
+  it('ピン留めの掲示は、投稿するとピン留めされる。ピン留めだけ変えたら本文は書き換えない', async () => {
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: '使い方', body: '自己紹介をどうぞ', pinned: true, by: GUJI });
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('posted');
+    expect(d.log).toEqual([`send ${CH.ema} m1`, `pin ${CH.ema} m1`]);
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('unchanged');
+
+    await updateNotice(db, n.id, { title: '使い方', body: '自己紹介をどうぞ', pinned: false, by: GUJI });
+    const saved = (await getNotice(db, n.id))!;
+    expect(noticeStatus(saved, '自己紹介をどうぞ')).toBe('changed');
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('edited');
+    expect(d.log.slice(2)).toEqual([`unpin ${CH.ema} m1`]);
+  });
+
+  it('ピン留めできなくても投稿はして知らせる。あとで権限を付けて反映すればピン留めされる', async () => {
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: '使い方', body: '自己紹介をどうぞ', pinned: true, by: GUJI });
+    pinFails = true;
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('pin_failed');
+    expect(d.inChannel(CH.ema).length).toBe(1);
+    expect(noticeStatus((await getNotice(db, n.id))!, '自己紹介をどうぞ')).toBe('changed');
+    expect((await publishAll(ctx, GUJI)).pinFailed).toEqual(['使い方']);
+
+    pinFails = false;
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('edited');
+    expect(d.log).toContain(`pin ${CH.ema} m1`);
+    expect(d.inChannel(CH.ema).length).toBe(1);
+    expect(noticeStatus((await getNotice(db, n.id))!, '自己紹介をどうぞ')).toBe('posted');
+  });
+
+  it('投稿し直すと、新しいメッセージをピン留めし直す', async () => {
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const a = await createNotice(db, { channelId: CH.ema, title: '使い方', body: 'A', pinned: true, by: GUJI });
+    await createNotice(db, { channelId: CH.ema, title: 'ふつう', body: 'B', by: GUJI });
+    await publishAll(ctx, GUJI);
+    await moveNotice(db, a.id, 'down');
+    const r = await repostChannel(ctx, CH.ema, GUJI);
+    expect(r.pinFailed).toEqual([]);
+    const pinned = (await getNotice(db, a.id))!;
+    expect(d.log.filter((l) => l.startsWith('pin'))).toEqual([`pin ${CH.ema} m1`, `pin ${CH.ema} ${pinned.messageId}`]);
+    expect(pinned.postedPinned).toBe(true);
   });
 });

@@ -71,6 +71,13 @@
       "when": 1790437063256,
       "tag": "0009_shop",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790440137843,
+      "tag": "0010_notice_pinned",
+      "breakpoints": true
     }
   ]
 }
