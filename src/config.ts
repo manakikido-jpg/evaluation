@@ -125,6 +125,29 @@ export const guildConfigSchema = z
     economy: economySchema.default(economySchema.parse({})),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),
+    /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
+    recruit: z
+      .object({
+        /** 同じ人が続けて募集できるまでの分 */
+        cooldownMinutes: z.number().int().min(0).default(10),
+        panels: z
+          .array(
+            z.object({
+              channelId: snowflake,
+              /** 何の募集か（例: 寝落ち） */
+              label: z.string().min(1).max(40),
+              emoji: z.string().max(10).default(''),
+              /** 知らせるお守りのロール */
+              roleId: snowflake.optional(),
+              /** 通話にいないときに案内する「➕ ○○をひらく」 */
+              hubId: snowflake.optional(),
+              /** 宵参りの人だけ募集できる */
+              adultOnly: z.boolean().default(false),
+            }),
+          )
+          .default([]),
+      })
+      .default({ cooldownMinutes: 10, panels: [] }),
     /** 自分の通話部屋: ここに入ると、その人の通話が同じカテゴリにでき、全員抜けると消える */
     tempVoice: z
       .object({

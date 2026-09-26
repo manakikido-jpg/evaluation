@@ -369,3 +369,18 @@ describe('お守り', () => {
     expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(cfg.roles.omamori.map((o) => `omamori:${o.roleId}`));
   });
 });
+
+describe('募集ボタン', () => {
+  it('#宿帳・#縁日・#手水舎・#御神酒処 に、お守りと同じカテゴリの ➕ を結びつけて設定に書く', async () => {
+    const d = fakeDiscord();
+    const r = await applyLayout(d.api, GUILD, FULL);
+    const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
+    const role = (name: string) => d.roles.find((x) => x.name === name)!.id;
+    const byLabel = Object.fromEntries(cfg.recruit.panels.map((p) => [p.label, p]));
+    expect(Object.keys(byLabel).sort()).toEqual(['ゲーム', '宵宮', '寝落ち', '雑談'].sort());
+    expect(byLabel['寝落ち']).toMatchObject({ channelId: find(d, '宿帳', 0).id, roleId: role('🌙 寝落ちのお守り'), hubId: find(d, '➕ 宿坊をひらく', 2).id });
+    expect(byLabel['雑談']).toMatchObject({ channelId: find(d, '手水舎', 0).id, hubId: find(d, '➕ 縁側をひらく', 2).id });
+    expect(byLabel['宵宮']).toMatchObject({ channelId: find(d, '御神酒処', 0).id, adultOnly: true, hubId: find(d, '➕ 宵宮の部屋をひらく', 2).id });
+    expect(cfg.recruit.cooldownMinutes).toBe(10);
+  });
+});

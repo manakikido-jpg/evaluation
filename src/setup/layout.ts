@@ -40,6 +40,8 @@ export type ChannelSpec = {
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
   hub?: string;
+  /** 「募集する」ボタンを置く（どのお守りの人に知らせるか） */
+  recruit?: RoleKey;
 };
 
 export type CategorySpec = { name: string; visibility: Visibility; channels: ChannelSpec[] };
@@ -124,7 +126,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '境内', kind: 'text', topic: '雑談' },
-        { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）' },
+        { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: 'omamori_zatsudan' },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
         { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（花びらがもらえます）' },
         { name: '拝殿', kind: 'voice' },
@@ -136,7 +138,7 @@ export const FULL: Layout = {
       name: '🎮 縁日',
       visibility: 'member',
       channels: [
-        { name: '縁日', kind: 'text', topic: 'ゲームの募集' },
+        { name: '縁日', kind: 'text', topic: 'ゲームの募集', recruit: 'omamori_game' },
         { name: '屋台', kind: 'text', topic: 'ゲームの話題' },
         { name: '➕ 屋台をひらく', kind: 'voice', hub: '🎮 {name}の屋台' },
         { name: '神楽殿', kind: 'voice' },
@@ -146,7 +148,7 @@ export const FULL: Layout = {
       name: '🌙 宿坊',
       visibility: 'member',
       channels: [
-        { name: '宿帳', kind: 'text', topic: '寝落ち通話の募集・おやすみの挨拶' },
+        { name: '宿帳', kind: 'text', topic: '寝落ち通話の募集・おやすみの挨拶', recruit: 'omamori_neochi' },
         { name: '➕ 宿坊をひらく', kind: 'voice', hub: '🌙 {name}の宿坊' },
       ],
     },
@@ -155,7 +157,7 @@ export const FULL: Layout = {
       visibility: 'adult',
       channels: [
         { name: '宵宮', kind: 'text', topic: '18 歳以上の雑談' },
-        { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集' },
+        { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集', recruit: 'omamori_yoimiya' },
         { name: '宵宮', kind: 'voice' },
         { name: '➕ 宵宮の部屋をひらく', kind: 'voice', hub: '🍶 {name}の部屋' },
       ],
