@@ -1,5 +1,6 @@
 import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
+import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
 
 type Nav = 'home' | 'stats' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
@@ -14,8 +15,8 @@ export function Layout(props: { title: string; session?: AdminSession; nav?: Nav
         <meta name="robots" content="noindex, nofollow" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false}' />
         <title>{`${props.title} | 社務所 Web`}</title>
-        <link rel="stylesheet" href="/static/style.css" />
-        <script src="/static/htmx.min.js" defer></script>
+        <link rel="stylesheet" href={assetUrl('style.css')} />
+        <script src={assetUrl('htmx.min.js')} defer></script>
       </head>
       <body>
         {session && (

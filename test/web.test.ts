@@ -884,3 +884,18 @@ describe('推移（管理画面）', () => {
     expect(home).toContain('<svg');
   });
 });
+
+describe('CSS・JS の読み込み', () => {
+  it('URL に中身の印が付き、更新すると別の URL になる（古い CSS を使い続けない）', async () => {
+    const page = await (await app.request('/login')).text();
+    const href = /href="(\/static\/style\.css\?v=[0-9a-f]{10})"/.exec(page)?.[1];
+    expect(href).toBeDefined();
+    const res = await app.request(href!);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('immutable');
+    expect(await res.text()).toContain('--series-1');
+    // 印なし・古い印は長く覚えさせない
+    expect((await app.request('/static/style.css')).headers.get('cache-control')).toBe('public, max-age=300');
+    expect((await app.request('/static/style.css?v=0000000000')).headers.get('cache-control')).toBe('public, max-age=300');
+  });
+});

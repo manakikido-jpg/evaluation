@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { STATIC } from './assets.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
@@ -89,15 +87,7 @@ type Env = { Variables: { session: AdminSession } };
 const SESSION_COOKIE = 'shamusho_session';
 const STATE_COOKIE = 'shamusho_state';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const readText = (p: string) => readFileSync(p, 'utf8');
-const STATIC: Record<string, { body: string; type: string }> = {
-  'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
-  'htmx.min.js': {
-    body: readText(path.join(here, '../../node_modules/htmx.org/dist/htmx.min.js')),
-    type: 'text/javascript; charset=utf-8',
-  },
-};
+
 
 export function createWebApp(deps: WebDeps) {
   const { db, api } = deps;
@@ -151,7 +141,9 @@ export function createWebApp(deps: WebDeps) {
     const name = c.req.param('file');
     const f = Object.hasOwn(STATIC, name) ? STATIC[name] : undefined;
     if (!f) return c.notFound();
-    return c.body(f.body, 200, { 'content-type': f.type, 'cache-control': 'public, max-age=3600' });
+    // 印（?v=）が今の中身と同じなら長く覚えてよい。印なし・古い印は短く
+    const cache = c.req.query('v') === f.version ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
+    return c.body(f.body, 200, { 'content-type': f.type, 'cache-control': cache });
   });
 
   // ───────── ログイン ─────────

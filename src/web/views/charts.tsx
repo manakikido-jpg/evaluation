@@ -14,6 +14,9 @@ const PH = H - M.top - M.bottom;
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
+/** CSS が読めなかったとき（古い CSS が残っているときなど）の色。ふだんは style.css の色が上書きする */
+const C = { s1: '#c8102e', s2: '#2a78d6', grid: '#eadfe1', muted: '#7a6d71' };
+
 /** 0 から max までのきりのよい目盛り */
 export function niceTicks(max: number): number[] {
   if (max <= 0) return [0, 1];
@@ -36,7 +39,7 @@ function XLabels(props: { points: ChartPoint[]; x: (i: number) => number }) {
     <g class="xlabels">
       {props.points.map((p, i) =>
         (n - 1 - i) % every === 0 ? (
-          <text x={props.x(i)} y={H - 8} text-anchor="middle">
+          <text x={props.x(i)} y={H - 8} text-anchor="middle" fill={C.muted} font-size="12">
             {p.label}
           </text>
         ) : null,
@@ -72,22 +75,22 @@ export function LineChart(props: { points: ChartPoint[]; values: number[]; unit:
       <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${props.label}。最新 ${fmt(last)}${props.unit}`}>
         {ticks.map((t) => (
           <g>
-            <line class="grid" x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} />
-            <text class="ytick" x={M.left - 8} y={y(t) + 4} text-anchor="end">
+            <line class="grid" x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} stroke={C.grid} />
+            <text class="ytick" x={M.left - 8} y={y(t) + 4} text-anchor="end" fill={C.muted} font-size="12">
               {fmt(t)}
             </text>
           </g>
         ))}
-        <path class="area s1" d={area} />
-        <path class="line s1" d={line} />
-        <circle class="dot s1" cx={x(n - 1)} cy={y(last)} r={4} />
-        <text class="endlabel" x={x(n - 1) + 10} y={y(last) + 4}>
+        <path class="area s1" d={area} fill={C.s1} fill-opacity="0.1" />
+        <path class="line s1" d={line} fill="none" stroke={C.s1} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        <circle class="dot s1" cx={x(n - 1)} cy={y(last)} r={4} fill={C.s1} />
+        <text class="endlabel" x={x(n - 1) + 10} y={y(last) + 4} fill={C.muted} font-size="12">
           {fmt(last)}
           {props.unit}
         </text>
         <XLabels points={points} x={x} />
         {points.map((p, i) => (
-          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH}>
+          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
             <title>{`${p.title}: ${fmt(values[i]!)}${props.unit}`}</title>
           </rect>
         ))}
@@ -142,17 +145,17 @@ export function ColumnChart(props: {
       <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={props.label}>
         {ticks.map((t) => (
           <g>
-            <line class={t === 0 ? 'base' : 'grid'} x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} />
-            <text class="ytick" x={M.left - 8} y={y(t) + 4} text-anchor="end">
+            <line class={t === 0 ? 'base' : 'grid'} x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? C.muted : C.grid} />
+            <text class="ytick" x={M.left - 8} y={y(t) + 4} text-anchor="end" fill={C.muted} font-size="12">
               {t > 0 && down ? `+${f(t)}` : t < 0 ? `−${f(-t)}` : f(t)}
             </text>
           </g>
         ))}
-        {up.values.map((v, i) => (v > 0 ? <path class="bar s1" d={barPath(x(i) - w / 2, w, y(0), y(v))} /> : null))}
-        {down?.values.map((v, i) => (v > 0 ? <path class="bar s2" d={barPath(x(i) - w / 2, w, y(0), y(-v))} /> : null))}
+        {up.values.map((v, i) => (v > 0 ? <path class="bar s1" d={barPath(x(i) - w / 2, w, y(0), y(v))} fill={C.s1} /> : null))}
+        {down?.values.map((v, i) => (v > 0 ? <path class="bar s2" d={barPath(x(i) - w / 2, w, y(0), y(-v))} fill={C.s2} /> : null))}
         <XLabels points={points} x={x} />
         {points.map((p, i) => (
-          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH}>
+          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
             <title>{`${p.title}: ${up.name} ${f(up.values[i]!)}${props.unit}${down ? ` ／ ${down.name} ${f(down.values[i]!)}${props.unit}` : ''}`}</title>
           </rect>
         ))}
