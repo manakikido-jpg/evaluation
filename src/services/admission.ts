@@ -16,6 +16,7 @@ import {
 import { audit } from './audit.js';
 import { getMember } from './members.js';
 import { activeYakuCount } from './yaku.js';
+import { grantJoinBonus } from './economy.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { DISCORD_AGE_NOTE } from '../discord/panels.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
@@ -119,6 +120,9 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
         await safely('add yakudoshi', () => ctx.discord.addRole(g, app.memberId, yakudoshi, '厄が残っている'));
       }
       await startOmairi(ctx.db, app.memberId, ctx.cfg.omairi.days, now);
+      // 初期配布（1 人 1 回。入り直した人にはもう配らない）
+      const e = ctx.cfg.economy;
+      const bonus = await grantJoinBonus(ctx.db, app.memberId, e.joinBonus);
       dmSent = await ctx.discord.sendDm(
         app.memberId,
         [
@@ -126,6 +130,7 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
           `ようこそ、咲楽ノ宮へお参りくださいました。`,
           `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
           '相手の名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」でできます。',
+          ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
         ].join('\n'),
       );
     } else {

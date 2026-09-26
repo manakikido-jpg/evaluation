@@ -514,6 +514,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       shuinGive: '3',
       shuinReceive: '5',
       omikujiBase: '10',
+      joinBonus: '3000',
       omairiDays: '14',
       omairiExtendDays: '7',
       autoApproveAccountDays: '0',
@@ -606,6 +607,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       shuinGive: '3',
       shuinReceive: '5',
       omikujiBase: '10',
+      joinBonus: '3000',
       omairiDays: '14',
       omairiExtendDays: '7',
       autoApproveAccountDays: '0',
@@ -660,5 +662,27 @@ describe('管理画面の守り', () => {
     } finally {
       fakeApi.memberRoles = memberRoles;
     }
+  });
+});
+
+describe('初期配布（管理画面）', () => {
+  it('今いる人に配るのは宮司だけ。確認なしでは配らない', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    const s = await login(STAFF);
+    const csrf = async (session: string) => /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    const post = async (session: string, form: Record<string, string>) =>
+      app.request('/settings/join-bonus-all', {
+        method: 'POST',
+        headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ _csrf: await csrf(session), ...form }).toString(),
+      });
+    expect((await post(s, { confirm: 'yes' })).status).toBe(403);
+    const g = await login(GUJI);
+    expect((await post(g, {})).headers.get('location')).toBe('/settings');
+    expect((await walletOf(db, USER)).balance).toBe(0);
+    expect((await post(g, { confirm: 'yes' })).headers.get('location')).toBe('/settings?msg=bonus_given');
+    expect((await walletOf(db, USER)).balance).toBe(cfg.economy.joinBonus);
+    await post(g, { confirm: 'yes' });
+    expect((await walletOf(db, USER)).balance).toBe(cfg.economy.joinBonus);
   });
 });

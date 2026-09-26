@@ -37,6 +37,8 @@ export const economySchema = z.object({
   menzaifuPrice: z.number().int().positive().default(300),
   /** 免罪符を買える回数（1 人あたり、ずっと） */
   menzaifuMaxUses: z.number().int().min(0).default(1),
+  /** 初期配布: 入鯖が承認されたときに 1 回だけ配る量（入り直しても 2 回目はない。0 で配らない） */
+  joinBonus: z.number().int().min(0).default(3000),
   /** おみくじ（1 日 1 回のログボ）の基本の量。吉でこの量、大吉は 3 倍、凶は半分（0 なら花びらなし） */
   omikujiBase: z.number().int().min(0).default(10),
 });

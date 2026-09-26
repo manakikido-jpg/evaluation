@@ -38,6 +38,7 @@ const COIN_REASON: Record<string, string> = {
   shuin_give: '朱印を押した',
   shuin_receive: '朱印を頂いた',
   omikuji: 'おみくじ',
+  join_bonus: '初期配布',
   shuin_revoke: '朱印の取り消し',
   menzaifu: '免罪符',
   adjust: '調整',

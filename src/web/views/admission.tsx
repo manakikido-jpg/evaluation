@@ -26,6 +26,7 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   replied_nodm: { text: '返信を記録しましたが、DM が届きませんでした（DM を受け取らない設定の可能性）。', kind: 'warn' },
   soudan_done: { text: '完了にしました。', kind: 'ok' },
   saved: { text: '設定を保存しました。BOT には 1 分以内に反映されます。', kind: 'ok' },
+  bonus_given: { text: 'まだもらっていない人に初期配布を配りました。', kind: 'ok' },
   saved_notices: { text: '設定を保存しました。BOT には 1 分以内に反映されます。投稿済みの掲示の数字も書き換えました。', kind: 'ok' },
   settings_invalid: { text: '設定を保存できませんでした。値を確認してください（昇格ラインは役職ごとに違う値にする必要があります）。', kind: 'warn' },
   age_changed: { text: '年齢区分を変更しました。', kind: 'ok' },
@@ -463,6 +464,7 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             <Num name="voiceDailyCap" label="通話でもらえる 1 日の上限" value={e.voiceDailyCap} file={f.voiceDailyCap} />
             <Num name="shuinGive" label="朱印を押すともらえる量" value={e.shuinGive} file={f.shuinGive} />
             <Num name="shuinReceive" label="朱印を頂くともらえる量" value={e.shuinReceive} file={f.shuinReceive} />
+            <Num name="joinBonus" label="初期配布（入鯖が承認されたときに 1 回だけ。0 で配らない）" value={e.joinBonus} file={f.joinBonus} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
           </div>
         </section>
@@ -533,6 +535,20 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             保存する
           </button>
         </p>
+      </form>
+      <form method="post" action="/settings/join-bonus-all" class="card">
+        <Csrf session={props.session} />
+        <h2>{e.currencyEmoji} 今いる人に初期配布を配る</h2>
+        <p class="note">
+          役職のある今いる人のうち、まだ初期配布をもらっていない人に {e.joinBonus} 枚ずつ配ります。もらい済みの人には配らないので、何度押しても 2 回目はありません。
+        </p>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>配る</span>
+        </label>
+        <button type="submit" class="ok">
+          配る
+        </button>
       </form>
       <form method="post" action="/settings/reset">
         <Csrf session={props.session} />

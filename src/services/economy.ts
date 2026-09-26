@@ -1,13 +1,13 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { coinTx, wallets } from '../db/schema.js';
+import { coinTx, members, wallets } from '../db/schema.js';
 
 /**
  * 鯖内通貨（花びら）。
  * 残高（wallets）と入出金の記録（coin_tx）は必ず同じトランザクションで変える。
  */
 
-export type CoinReason = 'voice' | 'shuin_give' | 'shuin_receive' | 'shuin_revoke' | 'menzaifu' | 'omikuji' | 'adjust';
+export type CoinReason = 'voice' | 'shuin_give' | 'shuin_receive' | 'shuin_revoke' | 'menzaifu' | 'omikuji' | 'join_bonus' | 'adjust';
 
 /** 増やす（amount > 0） */
 export async function addCoins(
@@ -101,4 +101,32 @@ export async function walletOf(db: Db, memberId: string): Promise<{ balance: num
 
 export async function recentCoinTx(db: Db, memberId: string, limit = 20) {
   return db.select().from(coinTx).where(eq(coinTx.memberId, memberId)).orderBy(desc(coinTx.at), desc(coinTx.id)).limit(limit);
+}
+
+/**
+ * 初期配布: まだもらっていない人にだけ配る（1 人 1 回。入り直しても、管理画面から何度押しても 2 回目はない）。
+ * 配った量を返す（もらい済み・量が 0 なら 0）
+ */
+export async function grantJoinBonus(db: Db, memberId: string, amount: number): Promise<number> {
+  if (amount <= 0) return 0;
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'join_bonus:' + memberId}))`);
+    const [already] = await tx
+      .select({ id: coinTx.id })
+      .from(coinTx)
+      .where(and(eq(coinTx.memberId, memberId), eq(coinTx.reason, 'join_bonus')))
+      .limit(1);
+    if (already) return 0;
+    await addCoins(tx, memberId, amount, 'join_bonus');
+    return amount;
+  });
+}
+
+/** 今いる人（役職ロールを持つ・BOT でない・退出していない）のうち、まだもらっていない人に配る */
+export async function grantJoinBonusToAll(db: Db, amount: number, rankRoleIds: readonly string[]): Promise<{ granted: number; total: number }> {
+  const rows = await db.select({ id: members.id, roleIds: members.roleIds }).from(members).where(and(isNull(members.leftAt), eq(members.isBot, false)));
+  const targets = rows.filter((m) => m.roleIds.some((r) => rankRoleIds.includes(r)));
+  let granted = 0;
+  for (const m of targets) if ((await grantJoinBonus(db, m.id, amount)) > 0) granted++;
+  return { granted, total: targets.length };
 }

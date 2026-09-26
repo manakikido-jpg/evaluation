@@ -13,7 +13,7 @@ import { audit, listAudit } from '../services/audit.js';
 import { eventsOf, getMember, homeStats, listMembers, namesOf, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { recentActivity } from '../services/activity.js';
-import { recentCoinTx, walletOf } from '../services/economy.js';
+import { grantJoinBonusToAll, recentCoinTx, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -661,6 +661,7 @@ export function createWebApp(deps: WebDeps) {
         shuinGive: num('shuinGive'),
         shuinReceive: num('shuinReceive'),
         omikujiBase: num('omikujiBase'),
+        joinBonus: num('joinBonus'),
       },
       ranks: Object.fromEntries(
         cfg.ranks.map((r) => [r.key, { weight: num(`rank.${r.key}.weight`), ...(r.auto ? { requiredGoen: num(`rank.${r.key}.requiredGoen`) } : {}) }]),
@@ -688,6 +689,15 @@ export function createWebApp(deps: WebDeps) {
       via: 'web',
     });
     return c.redirect(noticesUpdated > 0 ? '/settings?msg=saved_notices' : '/settings?msg=saved');
+  });
+
+  app.post('/settings/join-bonus-all', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/settings');
+    const r = await grantJoinBonusToAll(db, cfg.economy.joinBonus, cfg.ranks.map((x) => x.roleId));
+    await audit(db, { actorId: c.get('session').userId, action: 'economy.join_bonus_all', detail: { amount: cfg.economy.joinBonus, ...r }, via: 'web' });
+    return c.redirect('/settings?msg=bonus_given');
   });
 
   app.post('/settings/reset', async (c) => {

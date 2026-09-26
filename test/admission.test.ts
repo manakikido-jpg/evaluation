@@ -294,6 +294,21 @@ describe('宵参りを外すと、宵宮のお守りも外れる', () => {
   });
 });
 
+describe('初期配布', () => {
+  it('入鯖を承認すると 1 回だけ配り、DM で知らせる。入り直しても 2 回目はない', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    const join = async () => {
+      const r = (await submitJoin(ctx, { id: NEW, roleIds: [], accountCreatedAt: recentAccount }, answers, now)) as { id: number };
+      await decide(ctx, shinshoku, r.id, true, '', now);
+    };
+    await join();
+    expect((await walletOf(db, NEW)).balance).toBe(3000);
+    expect(calls.find((c) => c.startsWith(`dm ${NEW}`))).toBeDefined();
+    await join();
+    expect((await walletOf(db, NEW)).balance).toBe(3000);
+  });
+});
+
 describe('BAN を解除して入り直した人', () => {
   it('厄が残っていれば、入鯖を承認したときに 👹厄年 を付け直す', async () => {
     const { recordYaku } = await import('../src/services/yaku.js');

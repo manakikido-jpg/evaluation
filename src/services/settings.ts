@@ -20,6 +20,7 @@ export const overridesSchema = z.object({
       menzaifuPrice: z.number().int().positive().max(1_000_000),
       menzaifuMaxUses: z.number().int().min(0).max(100),
       omikujiBase: z.number().int().min(0).max(10000),
+      joinBonus: z.number().int().min(0).max(1_000_000),
     })
     .partial()
     .default({}),

@@ -104,3 +104,33 @@ describe('通話', () => {
     expect((await recentActivity(db, B))[0]?.messageCount).toBe(1);
   });
 });
+
+describe('初期配布', () => {
+  it('1 人 1 回だけ。何度呼んでも 2 回目はない', async () => {
+    const { grantJoinBonus, walletOf } = await import('../src/services/economy.js');
+    const results = await Promise.all([grantJoinBonus(db, 'A', 3000), grantJoinBonus(db, 'A', 3000)]);
+    expect(results.sort()).toEqual([0, 3000]);
+    expect((await walletOf(db, 'A')).balance).toBe(3000);
+    expect(await grantJoinBonus(db, 'B', 0)).toBe(0);
+  });
+
+  it('今いる人にまとめて配る: 役職がある在籍中の人だけ。もらい済みの人は飛ばす', async () => {
+    const { grantJoinBonus, grantJoinBonusToAll, walletOf } = await import('../src/services/economy.js');
+    const { recordJoin, recordLeave } = await import('../src/services/members.js');
+    const join = (id: string, roleIds: string[], isBot = false) =>
+      recordJoin(db, { id, username: id, displayName: id, avatarUrl: null, roleIds, isBot, joinedAt: null });
+    await join('M1', [ROLE.sanpaisha]);
+    await join('M2', [ROLE.ujiko]);
+    await join('NOROLE', []);
+    await join('BOT', [ROLE.sanpaisha], true);
+    await join('LEFT', [ROLE.sanpaisha]);
+    await recordLeave(db, 'LEFT');
+    await grantJoinBonus(db, 'M2', 3000);
+    const ranks = cfg.ranks.map((r) => r.roleId);
+    expect(await grantJoinBonusToAll(db, 3000, ranks)).toEqual({ granted: 1, total: 2 });
+    expect((await walletOf(db, 'M1')).balance).toBe(3000);
+    expect((await walletOf(db, 'M2')).balance).toBe(3000);
+    expect((await walletOf(db, 'NOROLE')).balance).toBe(0);
+    expect(await grantJoinBonusToAll(db, 3000, ranks)).toEqual({ granted: 0, total: 2 });
+  });
+});
