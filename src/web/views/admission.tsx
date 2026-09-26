@@ -477,7 +477,7 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
         <section class="card">
           <h2>🚪 通話部屋の値段（宿坊・宵宮）</h2>
           <p class="note">
-            「➕ 宿坊をひらく」「➕ 宵宮の部屋をひらく」でできた部屋は、作った人が部屋のチャットの「⚙ 部屋の設定」から種類・人数・招待を選べます。値段は{e.currencyName}の枚数（0 で無料）。宿坊はひらくたびに 1 回（種類を変えたら差額）、宵宮は 1 時間ごと（払えなくなると、招待限定などは公開に戻り、公開も払えなければ 5 分後に閉じる）。
+            「➕ 宿坊をひらく」「➕ 宵宮の部屋をひらく」でできた部屋は、作った人が部屋のチャットの「⚙ 部屋の設定」から種類・人数・招待を選べます。値段は{e.currencyName}の枚数（0 で無料）。宿坊は作った人がひらくたびに 1 回（種類を変えたら差額）。宵宮は入っている人それぞれが 1 時間ごと（入ったときに最初の 1 時間。足りなければ入れず、途中で払えなくなると 5 分後に通話から抜ける）。
           </p>
           <table class="compact rooms">
             <thead>
@@ -493,7 +493,7 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               {(
                 [
                   ['once', '🌙 宿坊（ひらくたびに 1 回）'],
-                  ['hourly', '🍶 宵宮（1 時間ごと）'],
+                  ['hourly', '🍶 宵宮（1 人 1 時間ごと）'],
                 ] as const
               ).map(([plan, label]) => (
                 <tr>

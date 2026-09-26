@@ -4,7 +4,7 @@ import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
 import { roomPanel } from '../src/discord/rooms.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { addInvites, changeRoomKind, hourlyRooms, planOf, roomOf, roomOverwrites, startRoom, type Overwrite } from '../src/services/rooms.js';
+import { addInvites, changeRoomKind, hourlyPerPerson, payEntry, planOf, roomOf, roomOverwrites, startRoom, type Overwrite } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -118,28 +118,56 @@ describe('支払い', () => {
     expect(await startRoom(db, cfg, ROOM, T0)).toEqual({ status: 'insufficient', price: 50 });
   });
 
-  it('宵宮: 1 時間ごと。払えなければ公開に戻し、公開も払えなければ注意して 5 分後に閉じる', async () => {
-    await addCoins(db, OWNER, 500, 'adjust');
+  it('宵宮: 入った人それぞれが最初の 1 時間を払う。払ってある間は出入りしても払わない。足りなければ入れない', async () => {
+    await addCoins(db, OWNER, 150, 'adjust');
+    await addCoins(db, FRIEND, 50, 'adjust');
     await open(YOIMIYA);
-    await startRoom(db, cfg, ROOM, T0); // 100
-    await changeRoomKind(db, cfg, ROOM, 'invite'); // 差額 100
-    expect(await hourlyRooms(db, cfg, min(59))).toEqual([]);
-    expect(await hourlyRooms(db, cfg, min(60))).toEqual([{ action: 'paid', channelId: ROOM, charged: 200 }]);
-    expect((await walletOf(db, OWNER)).balance).toBe(100);
-    // 次の 1 時間: 招待限定（200）は払えないので、公開（100）に戻す
-    expect(await hourlyRooms(db, cfg, min(120))).toEqual([{ action: 'downgraded', channelId: ROOM, charged: 100, from: 'invite' }]);
-    expect((await roomOf(db, ROOM))?.kind).toBe('public');
-    // その次: 公開も払えない
-    expect(await hourlyRooms(db, cfg, min(180))).toEqual([{ action: 'warned', channelId: ROOM }]);
-    expect(await hourlyRooms(db, cfg, min(183))).toEqual([]);
-    expect(await hourlyRooms(db, cfg, min(185))).toEqual([{ action: 'close', channelId: ROOM }]);
+    // ひらいたときには払わない（入ったときに払う）
+    expect(await startRoom(db, cfg, ROOM, T0)).toEqual({ status: 'ok', charged: 0 });
+    expect(await payEntry(db, cfg, ROOM, OWNER, T0)).toEqual({ status: 'ok', charged: 100 });
+    expect(await payEntry(db, cfg, ROOM, OWNER, min(30))).toEqual({ status: 'already', charged: 0 });
+    expect(await payEntry(db, cfg, ROOM, FRIEND, min(5))).toEqual({ status: 'insufficient', price: 100 });
+    expect((await walletOf(db, OWNER)).balance).toBe(50);
+    // 宿坊（1 回払い）の部屋では、入った人は払わない
+    expect(await payEntry(db, cfg, '961000000000000999', FRIEND, T0)).toEqual({ status: 'free', charged: 0 });
   });
 
-  it('無料（0 枚）なら払わずに続く', async () => {
+  it('宵宮: 1 時間ごとに、今いる人それぞれが払う。払えない人は注意して 5 分後に抜けてもらう', async () => {
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await addCoins(db, FRIEND, 100, 'adjust');
+    await open(YOIMIYA);
+    await payEntry(db, cfg, ROOM, OWNER, T0);
+    await payEntry(db, cfg, ROOM, FRIEND, T0);
+    const present = [{ channelId: ROOM, memberIds: [OWNER, FRIEND] }];
+    expect(await hourlyPerPerson(db, cfg, present, min(59))).toEqual([]);
+    expect(await hourlyPerPerson(db, cfg, present, min(60))).toEqual([
+      { action: 'paid', channelId: ROOM, memberId: OWNER, charged: 100 },
+      { action: 'warned', channelId: ROOM, memberId: FRIEND, price: 100 },
+    ]);
+    expect(await hourlyPerPerson(db, cfg, present, min(62))).toEqual([]);
+    expect(await hourlyPerPerson(db, cfg, present, min(65))).toEqual([{ action: 'kick', channelId: ROOM, memberId: FRIEND }]);
+    // 花びらが入れば、また払える
+    await addCoins(db, FRIEND, 100, 'adjust');
+    expect(await hourlyPerPerson(db, cfg, present, min(66))).toEqual([{ action: 'paid', channelId: ROOM, memberId: FRIEND, charged: 100 }]);
+    expect((await walletOf(db, OWNER)).balance).toBe(800);
+  });
+
+  it('宵宮: 招待限定などにすると、次の 1 時間からはその値段。作った人は今の 1 時間の差額', async () => {
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await addCoins(db, FRIEND, 1000, 'adjust');
+    await open(YOIMIYA);
+    await payEntry(db, cfg, ROOM, OWNER, T0);
+    await payEntry(db, cfg, ROOM, FRIEND, T0);
+    expect(await changeRoomKind(db, cfg, ROOM, 'secret')).toEqual({ status: 'ok', charged: 200 });
+    const actions = await hourlyPerPerson(db, cfg, [{ channelId: ROOM, memberIds: [OWNER, FRIEND] }], min(60));
+    expect(actions.map((a) => (a.action === 'paid' ? a.charged : a.action))).toEqual([300, 300]);
+  });
+
+  it('無料（0 枚）なら払わない', async () => {
     const free = applyOverrides(cfg, overridesSchema.parse({ rooms: { hourly: { public: 0, invite: 0, secret: 0, twoshot: 0 } } }));
     await open(YOIMIYA);
-    expect(await startRoom(db, free, ROOM, T0)).toEqual({ status: 'ok', charged: 0 });
-    expect(await hourlyRooms(db, free, min(60))).toEqual([{ action: 'paid', channelId: ROOM, charged: 0 }]);
+    expect(await payEntry(db, free, ROOM, OWNER, T0)).toEqual({ status: 'free', charged: 0 });
+    expect(await hourlyPerPerson(db, free, [{ channelId: ROOM, memberIds: [OWNER] }], min(60))).toEqual([]);
   });
 
   it('招待した人を覚える（重ならない）', async () => {

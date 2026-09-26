@@ -126,6 +126,8 @@ async function main(): Promise<void> {
     void tempVoice.onVoiceStateUpdate(before, after);
     // 通話のチャットに「この通話の人に朱印を押す」
     voicePanel.onVoiceStateUpdate(before, after);
+    // 宵宮の部屋: 入った人がそれぞれ払う
+    void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
     void app.onInteraction(i);

@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-yoimiya-everyone-pays',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '宵宮の部屋は、入っている人それぞれが払う',
+    items: ['宵宮の部屋は、入った人それぞれが 1 時間ごとに花びらを払う（入ったときに最初の 1 時間。足りなければ入れない。途中で払えなくなると 5 分後に通話から抜ける）', '宿坊の部屋は今までどおり、作った人がひらくたびに 1 回'],
+  },
+  {
     id: '2026-09-26-room-kinds',
     date: '2026-09-26',
     kind: 'new',

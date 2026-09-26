@@ -5,6 +5,7 @@ import {
   MessageFlags,
   type Guild,
   type Interaction,
+  type VoiceState,
   type StringSelectMenuInteraction,
   type UserSelectMenuInteraction,
   type VoiceChannel,
@@ -15,7 +16,9 @@ import { logger } from '../lib/logger.js';
 import {
   addInvites,
   changeRoomKind,
-  hourlyRooms,
+  hourlyPerPerson,
+  listRooms,
+  payEntry,
   isRoomKind,
   planOf,
   priceLabel,
@@ -35,7 +38,10 @@ const LIMITS = [2, 3, 4, 5, 6, 8, 10, 15, 20, 0];
 /** 部屋のチャットに出す「部屋の設定」（作った人だけ使える） */
 export function roomPanel(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId' | 'kind'>, userLimit: number) {
   const plan = planOf(cfg, row.hubId);
-  const how = plan === 'hourly' ? '1 時間ごとに払います（払えなくなると、招待限定などは公開に戻り、公開も払えなければ 5 分後に閉じます）' : 'ひらくたびに 1 回。種類を変えたら差額だけ払います';
+  const how =
+    plan === 'hourly'
+      ? '入っている人それぞれが 1 時間ごとに払います（入ったときに最初の 1 時間。払えなくなると、5 分後に通話から抜けます）'
+      : '作った人が、ひらくたびに 1 回。種類を変えたら差額だけ払います';
   const k = ROOM_KINDS[row.kind];
   const lines = [
     `<@${row.ownerId}> さんの部屋です。下のメニューは作った人だけ使えます。`,
@@ -182,21 +188,38 @@ export class RoomApp {
     await ch.send({ content: `${ids.map((id) => `<@${id}>`).join(' ')} さん、<@${row.ownerId}> さんから <#${ch.id}> への招待です。`, allowedMentions: { users: ids } });
   }
 
-  /** 1 分ごと: 1 時間ごとの部屋の支払い */
+  /** 1 時間ごとの部屋（宵宮）に入ったとき: その人の最初の 1 時間を払う。足りなければ通話から抜けてもらう */
+  async onVoiceStateUpdate(before: VoiceState, after: VoiceState): Promise<void> {
+    const member = after.member;
+    if (!after.channelId || after.channelId === before.channelId || !member || member.user.bot) return;
+    if (after.guild.id !== this.cfg().guildId) return;
+    try {
+      const r = await payEntry(this.db, this.cfg(), after.channelId, member.id);
+      if (r.status !== 'insufficient') return;
+      await member.voice.disconnect('花びらが足りない（宵宮の部屋）').catch(() => undefined);
+      await this.voice(after.channelId)
+        ?.send({ content: `<@${member.id}> さん、花びらが足りないため入れませんでした（1 時間 ${r.price} 枚）。`, allowedMentions: { users: [member.id] } })
+        .catch(() => undefined);
+    } catch (err) {
+      logger.warn({ err }, 'room entry payment failed');
+    }
+  }
+
+  /** 1 分ごと: 1 時間ごとの部屋（宵宮）に今いる人それぞれの支払い */
   async tick(): Promise<void> {
     const cfg = this.cfg();
-    for (const a of await hourlyRooms(this.db, cfg)) {
+    const present = (await listRooms(this.db)).flatMap((r) => {
+      const ch = this.voice(r.channelId);
+      return ch ? [{ channelId: r.channelId, memberIds: [...ch.members.values()].filter((m) => !m.user.bot).map((m) => m.id) }] : [];
+    });
+    for (const a of await hourlyPerPerson(this.db, cfg, present)) {
       const ch = this.voice(a.channelId);
-      const row = await roomOf(this.db, a.channelId);
       try {
-        if (a.action === 'downgraded' && ch && row) {
-          await this.apply(ch, { ...row, kind: a.from }, 'public');
-          await ch.send({ content: `<@${row.ownerId}> さん、花びらが足りないため、部屋を公開に戻しました。`, allowedMentions: { users: [row.ownerId] } });
-          await ch.send(roomPanel(cfg, { ...row, kind: 'public' }, ch.userLimit));
-        } else if (a.action === 'warned' && ch && row) {
-          await ch.send({ content: `<@${row.ownerId}> さん、花びらが足りません。5 分以内に払えないと、この部屋は閉じます。`, allowedMentions: { users: [row.ownerId] } });
-        } else if (a.action === 'close') {
-          await this.close(a.channelId);
+        if (a.action === 'warned') {
+          await ch?.send({ content: `<@${a.memberId}> さん、次の 1 時間の花びら（${a.price} 枚）が足りません。5 分以内に払えないと、通話から抜けます。`, allowedMentions: { users: [a.memberId] } });
+        } else if (a.action === 'kick') {
+          await ch?.members.get(a.memberId)?.voice.disconnect('花びらが足りない（宵宮の部屋）');
+          await ch?.send({ content: `<@${a.memberId}> さんは、花びらが足りないため通話から抜けました。`, allowedMentions: { parse: [] } });
         }
       } catch (err) {
         logger.warn({ err, channelId: a.channelId }, 'room hourly action failed');

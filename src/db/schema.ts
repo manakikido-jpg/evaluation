@@ -433,3 +433,16 @@ export const boostMessages = pgTable('boost_messages', {
   granted: integer('granted').notNull(),
   at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** 1 時間ごとの部屋（宵宮）: 入っている人それぞれが、どこまで払ってあるか */
+export const roomPayers = pgTable(
+  'room_payers',
+  {
+    channelId: text('channel_id').notNull(),
+    memberId: text('member_id').notNull(),
+    paidUntil: timestamp('paid_until', { withTimezone: true }).notNull(),
+    /** 払えなくなった時刻（5 分たったら通話から抜ける） */
+    unpaidSince: timestamp('unpaid_since', { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.channelId, t.memberId] })],
+);
