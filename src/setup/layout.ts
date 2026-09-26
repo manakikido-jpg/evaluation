@@ -194,7 +194,6 @@ export const FULL: Layout = {
       channels: [
         { name: '宵宮', kind: 'text', topic: '18 歳以上の雑談' },
         { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集', recruit: 'omamori_yoimiya' },
-        { name: '宵宮', kind: 'voice' },
         { name: '➕ 宵宮の部屋をひらく', kind: 'voice', hub: '🍶 {name}の部屋' },
       ],
     },
@@ -255,5 +254,6 @@ export const RETIRED: { category: string; name: string; kind: 'text' | 'voice' }
     kind: 'voice' as const,
   })),
   ...['宿坊 一の間', '宿坊 二の間', '宿坊 三の間', '宿坊 四の間', '宿坊 五の間'].map((name) => ({ category: '🌙 宿坊', name, kind: 'voice' as const })),
-  ...['御神酒処', '宵宮の宿坊 一', '宵宮の宿坊 二'].map((name) => ({ category: '🔞 宵宮', name, kind: 'voice' as const })),
+  // 宵宮の固定の通話は、部屋を作る形だけにした（2026-09）
+  ...['宵宮', '御神酒処', '宵宮の宿坊 一', '宵宮の宿坊 二'].map((name) => ({ category: '🔞 宵宮', name, kind: 'voice' as const })),
 ];
