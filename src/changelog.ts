@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-roles-page',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: 'ロールのページ',
+    items: [
+      '「ロール」ページ（宮司のみ）: Discord のロールの一覧・このサーバーでの役目・持っている人数・気をつける権限（管理者・BAN など）',
+      'ロールを開くと、権限の確認と変更（Discord の日本語の名前で）、名前・色・一覧で分けて表示・@ で呼べる、持っている人の一覧',
+      '「管理者」を付けるときは確認が要る。BOT のロールより上・BOT などのロールは変えられない（🔒）',
+    ],
+  },
+  {
     id: '2026-09-26-board-boost-count',
     date: '2026-09-26',
     kind: 'improve',

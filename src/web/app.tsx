@@ -9,7 +9,7 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
-import { eventsOf, getMember, homeStats, listMembers, namesOf, shuinHistory, type MemberListQuery } from '../services/members.js';
+import { eventsOf, getMember, homeStats, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
@@ -59,6 +59,8 @@ import {
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
+import { RolePage, RolesPage } from './views/roles.js';
+import { ADMINISTRATOR, botTopPosition, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import { cleanChannelName, isText, listTextChannels, modeOf as channelModeOf, planMode as planChannelMode } from '../services/channels.js';
 import {
   createItem as createShopItem,
@@ -68,7 +70,7 @@ import {
   recentPurchases,
   updateItem as updateShopItem,
 } from '../services/shop.js';
-import type { GuildChannel } from '../lib/discordRest.js';
+import type { GuildChannel, GuildRole, RolePatch } from '../lib/discordRest.js';
 
 export type WebDeps = {
   db: Db;
@@ -83,6 +85,8 @@ export type WebDeps = {
   discord: DiscordActions;
   /** 例: https://shamusho.example.com（末尾の / なし） */
   baseUrl: string;
+  /** BOT のユーザー ID（＝ DISCORD_CLIENT_ID）。ロールのページで、BOT が変えられないロールを見分ける */
+  botId?: string;
   now?: () => Date;
 };
 
@@ -257,7 +261,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/yaku', requireAdmin);
   app.use('/stats', requireAdmin);
   app.use('/updates', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*']) {
+  app.use('/roles', requireAdmin);
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -1083,6 +1088,99 @@ export function createWebApp(deps: WebDeps) {
       via: 'web',
     });
     return c.redirect('/channels?msg=saved');
+  });
+
+  // ───────── ロール（宮司のみ）: 一覧・権限の確認と変更・持っている人 ─────────
+
+  app.use('/roles', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+  app.use('/roles/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+
+  const loadRoles = async (): Promise<GuildRole[] | undefined> => {
+    try {
+      return (await deps.discord.guildRoles(cfg.guildId)).sort((a, b) => b.position - a.position);
+    } catch (err) {
+      logger.warn({ err }, 'could not load guild roles');
+      return undefined;
+    }
+  };
+  /** BOT からは変えられない（BOT のロール以上・自動のロール） */
+  const roleLocked = (role: GuildRole, all: GuildRole[]) => role.managed || (role.id !== cfg.guildId && role.position >= botTopPosition(all, deps.botId));
+
+  app.get('/roles', async (c) => {
+    const roles = await loadRoles();
+    const { counts, total } = await roleMemberCounts(db);
+    const rows = (roles ?? []).map((role) => ({
+      role,
+      kind: roleKind(cfg, role),
+      members: role.id === cfg.guildId ? total : (counts.get(role.id) ?? 0),
+      locked: roleLocked(role, roles ?? []),
+    }));
+    return c.html(<RolesPage session={c.get('session')} rows={rows} flash={c.req.query('msg')} loadFailed={!roles} />);
+  });
+
+  app.get('/roles/:id', async (c) => {
+    const roles = await loadRoles();
+    const role = roles?.find((r) => r.id === c.req.param('id'));
+    if (!roles || !role) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    const isEveryone = role.id === cfg.guildId;
+    return c.html(
+      <RolePage
+        session={c.get('session')}
+        role={role}
+        kind={roleKind(cfg, role)}
+        locked={roleLocked(role, roles)}
+        isEveryone={isEveryone}
+        members={isEveryone ? [] : await membersWithRole(db, role.id)}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.post('/roles/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/roles');
+    const back = (msg: string) => c.redirect(`/roles/${id}?msg=${msg}`);
+    const roles = await loadRoles();
+    const role = roles?.find((r) => r.id === id);
+    if (!roles || !role) return c.redirect('/roles');
+    if (roleLocked(role, roles)) return back('locked');
+    const body = await c.req.parseBody({ all: true });
+    const one = (k: string) => (Array.isArray(body[k]) ? body[k][0] : body[k]);
+    const permsRaw = body.perm === undefined ? [] : Array.isArray(body.perm) ? body.perm : [body.perm];
+    const selected = permsRaw.map((v) => Number(v)).filter((n) => Number.isInteger(n));
+    const before = permsOf(role);
+    const after = mergePermissions(before, selected);
+    // 管理者を新しく付けるときは確認
+    if ((after & ADMINISTRATOR) !== 0n && (before & ADMINISTRATOR) === 0n && one('confirmAdmin') !== 'yes') return back('need_confirm');
+    const patch: RolePatch = {};
+    if (after !== before) patch.permissions = after.toString();
+    if (id !== cfg.guildId) {
+      const name = typeof one('name') === 'string' ? (one('name') as string).trim() : '';
+      const colorRaw = typeof one('color') === 'string' ? (one('color') as string) : '';
+      if (!name || name.length > 100 || (one('noColor') !== 'yes' && !/^#[0-9a-f]{6}$/i.test(colorRaw))) return back('invalid');
+      const color = one('noColor') === 'yes' ? 0 : parseInt(colorRaw.slice(1), 16);
+      if (name !== role.name) patch.name = name;
+      if (color !== role.color) patch.color = color;
+      const hoist = one('hoist') === 'yes';
+      const mentionable = one('mentionable') === 'yes';
+      if (hoist !== Boolean(role.hoist)) patch.hoist = hoist;
+      if (mentionable !== Boolean(role.mentionable)) patch.mentionable = mentionable;
+    }
+    if (!Object.keys(patch).length) return back('unchanged');
+    try {
+      await deps.discord.editRole(cfg.guildId, id, patch, '管理画面（ロール）');
+    } catch (err) {
+      logger.warn({ err }, 'role update failed');
+      return back('failed');
+    }
+    const diff = permDiff(before, after);
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'role.update',
+      detail: { roleId: id, name: role.name, ...(patch.name ? { newName: patch.name } : {}), ...(diff.added.length ? { added: diff.added } : {}), ...(diff.removed.length ? { removed: diff.removed } : {}) },
+      via: 'web',
+    });
+    return back('saved');
   });
 
   // ───────── ショップ（宮司のみ） ─────────

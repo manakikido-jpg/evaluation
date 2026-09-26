@@ -275,3 +275,9 @@ form.rename { margin: 0 0 12px; flex-wrap: wrap; }
 form.rename input[type="text"] { flex: 1; min-width: 160px; }
 .voice-list { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .voice-list form.rename { margin-bottom: 8px; }
+
+/* ───────── ロール ───────── */
+.swatch-dot { vertical-align: middle; flex: none; }
+fieldset.perms { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 12px; }
+fieldset.perms legend { font-weight: bold; padding: 0 4px; }
+ul.role-members { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }

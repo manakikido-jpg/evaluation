@@ -26,9 +26,27 @@ export interface DiscordActions {
   setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
   /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
   guildRoles(guildId: string): Promise<GuildRole[]>;
+  /** ロールの名前・色・権限などを変える */
+  editRole(guildId: string, roleId: string, body: RolePatch, reason: string): Promise<void>;
 }
 
-export type GuildRole = { id: string; name: string; position: number; managed: boolean; color: number };
+export type GuildRole = {
+  id: string;
+  name: string;
+  position: number;
+  managed: boolean;
+  color: number;
+  /** 権限のビット（10 進の文字列） */
+  permissions?: string;
+  /** メンバー一覧で分けて表示する */
+  hoist?: boolean;
+  /** 誰でも @ で呼べる */
+  mentionable?: boolean;
+  /** BOT のロールなら bot_id が入る */
+  tags?: { bot_id?: string };
+};
+
+export type RolePatch = { name?: string; color?: number; hoist?: boolean; mentionable?: boolean; permissions?: string };
 
 export type MessageBody = { content?: string; embeds?: { title?: string; description?: string; color?: number }[]; components?: unknown[] };
 
@@ -118,6 +136,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
     },
     guildChannels: async (g) => (await call('GET', `/guilds/${g}/channels`)) as GuildChannel[],
     guildRoles: async (g) => (await call('GET', `/guilds/${g}/roles`)) as GuildRole[],
+    editRole: async (g, r, body, reason) => void (await call('PATCH', `/guilds/${g}/roles/${r}`, { reason, body })),
     editChannel: async (c, body) => void (await call('PATCH', `/channels/${c}`, { body })),
     setChannelOverwrite: async (c, o, reason) =>
       void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { reason, body: { type: o.type, allow: o.allow, deny: o.deny } })),

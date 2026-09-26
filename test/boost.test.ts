@@ -44,6 +44,7 @@ const discord: DiscordActions = {
   pinMessage: async () => undefined,
   guildChannels: async () => [],
   guildRoles: async () => [],
+  editRole: async () => undefined,
   editChannel: async () => undefined,
   setChannelOverwrite: async () => undefined,
 };

@@ -23,6 +23,8 @@ let app: ReturnType<typeof createWebApp>;
 /** 偽の Discord で「誰としてログインするか」 */
 let loginAs: string;
 let actions: string[];
+/** 偽の Discord のロール一覧 */
+let roleList: import('../src/lib/discordRest.js').GuildRole[] = [];
 const fakeActions: DiscordActions = {
   addRole: async (_g, u, r) => void actions.push(`addRole ${u} ${r}`),
   removeRole: async (_g, u, r) => void actions.push(`removeRole ${u} ${r}`),
@@ -38,7 +40,8 @@ const fakeActions: DiscordActions = {
     { id: '910000000000000002', name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0, topic: 'ようこそ', permission_overwrites: [] },
     { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
   ],
-  guildRoles: async () => [],
+  guildRoles: async () => roleList,
+  editRole: async (_g, r, b) => void actions.push(`editRole ${r} ${JSON.stringify(b)}`),
   editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}${b.nsfw !== undefined ? ` nsfw=${b.nsfw}` : ''}`),
   setChannelOverwrite: async (c, o) => void actions.push(`overwrite ${c} ${o.id} allow=${o.allow} deny=${o.deny}`),
   pinMessage: async (c, m, pin) => void actions.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`),
@@ -963,5 +966,66 @@ describe('更新履歴（管理画面）', () => {
     const again = await (await get('/', s)).text();
     expect(again).not.toContain('新しい更新 ');
     expect(await (await get('/updates', s)).text()).not.toContain('>NEW<');
+  });
+});
+
+describe('ロール（管理画面）', () => {
+  const form = async (session: string, path: string, data: [string, string][]) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    const body = new URLSearchParams([['_csrf', csrf], ...data]);
+    return app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+  };
+  const BOTROLE = '980000000000000001';
+  const TOP = '980000000000000002';
+  beforeEach(() => {
+    roleList = [
+      { id: TOP, name: '上のロール', position: 20, managed: false, color: 0, permissions: '0' },
+      { id: BOTROLE, name: 'BOT', position: 15, managed: true, color: 0, permissions: '8', tags: { bot_id: 'bot' } },
+      { id: ROLE.sanpaisha, name: '🔰 参拝者', position: 2, managed: false, color: 0xb0b0b0, permissions: String((1n << 11n) | (1n << 2n)), hoist: true },
+      { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: String(1n << 10n) },
+    ];
+  });
+  afterEach(() => {
+    roleList = [];
+  });
+
+  it('宮司だけが見られる。人数・役目・気をつける権限・持っている人が出る', async () => {
+    const s = await login(STAFF);
+    expect((await get('/roles', s)).status).toBe(403);
+    const g = await login(GUJI);
+    const page = await (await get('/roles', g)).text();
+    expect(page).toContain('🔰 参拝者');
+    expect(page).toContain('役職（自動で昇格）');
+    expect(page).toContain('メンバーを BAN');
+    expect(page).toMatch(/上のロール 🔒/);
+    const detail = await (await get(`/roles/${ROLE.sanpaisha}`, g)).text();
+    expect(detail).toContain('さくら');
+    expect(detail).toMatch(/name="perm" value="11" checked/);
+  });
+
+  it('権限・名前・色を変えられる。管理者を付けるときは確認が要る。BOT より上は変えられない', async () => {
+    const g = await login(GUJI);
+    const r = await form(g, `/roles/${ROLE.sanpaisha}`, [
+      ['name', '🔰 参拝者'],
+      ['color', '#ff0000'],
+      ['hoist', 'yes'],
+      ['perm', '11'],
+      ['perm', '20'],
+    ]);
+    expect(r.headers.get('location')).toBe(`/roles/${ROLE.sanpaisha}?msg=saved`);
+    expect(actions.at(-1)).toBe(`editRole ${ROLE.sanpaisha} ${JSON.stringify({ permissions: String((1n << 11n) | (1n << 20n)), color: 0xff0000 })}`);
+    const log = (await listAudit(db, { action: 'role.update' }))[0]!;
+    expect(log.detail).toMatchObject({ added: ['接続'], removed: ['メンバーを BAN'] });
+
+    const admin = await form(g, `/roles/${ROLE.sanpaisha}`, [['name', 'x'], ['noColor', 'yes'], ['perm', '3']]);
+    expect(admin.headers.get('location')).toBe(`/roles/${ROLE.sanpaisha}?msg=need_confirm`);
+    expect((await form(g, `/roles/${TOP}`, [['name', 'x'], ['noColor', 'yes']])).headers.get('location')).toBe(`/roles/${TOP}?msg=locked`);
+    expect((await form(g, `/roles/${BOTROLE}`, [['name', 'x'], ['noColor', 'yes']])).headers.get('location')).toBe(`/roles/${BOTROLE}?msg=locked`);
+  });
+
+  it('みんな（@everyone）は権限だけ', async () => {
+    const g = await login(GUJI);
+    await form(g, `/roles/${cfg.guildId}`, [['perm', '10'], ['perm', '6']]);
+    expect(actions.at(-1)).toBe(`editRole ${cfg.guildId} ${JSON.stringify({ permissions: String((1n << 10n) | (1n << 6n)) })}`);
   });
 });

@@ -61,6 +61,7 @@ function fakeDiscord(channels = [{ id: BANZUKE, name: '番付', type: 0, parent_
     deleteMessage: async () => undefined,
     guildChannels: async () => channels,
     guildRoles: async () => [],
+    editRole: async () => undefined,
     editChannel: async () => undefined,
     setChannelOverwrite: async () => undefined,
     pinMessage: async () => undefined,

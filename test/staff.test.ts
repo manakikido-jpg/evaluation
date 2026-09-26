@@ -33,6 +33,7 @@ beforeEach(async () => {
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
+    editRole: async () => undefined,
     editChannel: async () => undefined,
     setChannelOverwrite: async () => undefined,
     pinMessage: async () => undefined,

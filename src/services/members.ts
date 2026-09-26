@@ -221,3 +221,21 @@ export async function homeStats(db: Db, since: Date) {
     shuin: shuinToday?.n ?? 0,
   };
 }
+
+/** 今いる人（BOT を除く）のロールごとの人数と、全員の人数 */
+export async function roleMemberCounts(db: Db): Promise<{ counts: Map<string, number>; total: number }> {
+  const rows = await db.select({ roleIds: members.roleIds }).from(members).where(and(isNull(members.leftAt), eq(members.isBot, false)));
+  const counts = new Map<string, number>();
+  for (const r of rows) for (const id of r.roleIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return { counts, total: rows.length };
+}
+
+/** そのロールを持っている、今いる人（名前順・最大 limit 人） */
+export async function membersWithRole(db: Db, roleId: string, limit = 300): Promise<Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[]> {
+  return db
+    .select({ id: members.id, displayName: members.displayName, username: members.username, avatarUrl: members.avatarUrl })
+    .from(members)
+    .where(and(isNull(members.leftAt), eq(members.isBot, false), sql`${roleId} = any(${members.roleIds})`))
+    .orderBy(asc(members.displayName))
+    .limit(limit);
+}

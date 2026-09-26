@@ -29,6 +29,7 @@ async function main(): Promise<void> {
     }),
     discord: createDiscordActions(env.DISCORD_TOKEN),
     baseUrl: env.WEB_BASE_URL,
+    botId: env.DISCORD_CLIENT_ID,
   });
 
   const server = serve({ fetch: app.fetch, port: env.WEB_PORT }, (info) =>
