@@ -295,10 +295,14 @@ export const notices = pgTable(
     /** 管理画面で見分けるための名前（Discord には出ない） */
     title: text('title').notNull(),
     body: text('body').notNull(),
+    /** 見せ方: embed = カード（1 つずつ区切られて見やすい）、text = 普通のメッセージ */
+    style: text('style').$type<'embed' | 'text'>().notNull().default('embed'),
     /** 投稿済みならそのメッセージ ID */
     messageId: text('message_id'),
     /** 最後に投稿・書き換えしたときの本文（差し込み後）。今の本文と違えば「未反映」 */
     postedText: text('posted_text'),
+    /** 最後に投稿・書き換えしたときの見せ方 */
+    postedStyle: text('posted_style'),
     updatedBy: text('updated_by').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

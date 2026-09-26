@@ -10,13 +10,15 @@ export interface DiscordActions {
   ban(guildId: string, userId: string, reason: string): Promise<void>;
   kick(guildId: string, userId: string, reason: string): Promise<void>;
   /** 投稿済みのメッセージを書き換える（申請カードを「承認済み」にするなど） */
-  editMessage(channelId: string, messageId: string, body: { content?: string; components?: unknown[] }): Promise<void>;
+  editMessage(channelId: string, messageId: string, body: MessageBody): Promise<void>;
   /** チャンネルにメッセージを投稿する（掲示など）。メンションで通知は飛ばさない */
-  sendMessage(channelId: string, body: { content: string }): Promise<{ id: string }>;
+  sendMessage(channelId: string, body: MessageBody): Promise<{ id: string }>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
   /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
   guildChannels(guildId: string): Promise<GuildChannel[]>;
 }
+
+export type MessageBody = { content?: string; embeds?: { description?: string; color?: number }[]; components?: unknown[] };
 
 export type GuildChannel = { id: string; name: string; type: number; parent_id: string | null; position: number };
 

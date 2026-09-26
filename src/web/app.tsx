@@ -35,6 +35,7 @@ import {
   moveNotice,
   noticeStatus,
   noticeVariables,
+  isNoticeStyle,
   postableChannels,
   publishAll,
   publishNotice,
@@ -727,9 +728,10 @@ export function createWebApp(deps: WebDeps) {
   app.post('/notices/preview', async (c) => {
     const body = await c.req.parseBody();
     const text = typeof body.body === 'string' ? body.body : '';
+    const style = isNoticeStyle(body.style) ? body.style : 'embed';
     const channels = await loadChannels();
     const preview = renderNotice(text, cfg, channels, { forPreview: true });
-    return c.html(<NoticePreview preview={preview.text} length={renderNotice(text, cfg, channels).text.length} unknown={preview.unknown} />);
+    return c.html(<NoticePreview preview={preview.text} length={renderNotice(text, cfg, channels).text.length} unknown={preview.unknown} style={style} />);
   });
 
   app.post('/notices/seed', async (c) => {
@@ -753,7 +755,8 @@ export function createWebApp(deps: WebDeps) {
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
     const channels = await loadChannels();
     if (!title || !text || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
-    const n = await createNotice(db, { channelId, title, body: text, by: c.get('session').userId });
+    const style = isNoticeStyle(body.style) ? body.style : 'embed';
+    const n = await createNotice(db, { channelId, title, body: text, style, by: c.get('session').userId });
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
   });
@@ -773,7 +776,7 @@ export function createWebApp(deps: WebDeps) {
     const title = field(body, 'title', 60);
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
     if (!title || !text) return editPage(c, n, text || n.body, 'invalid');
-    await updateNotice(db, n.id, { title, body: text, by: c.get('session').userId });
+    await updateNotice(db, n.id, { title, body: text, style: isNoticeStyle(body.style) ? body.style : undefined, by: c.get('session').userId });
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
   });

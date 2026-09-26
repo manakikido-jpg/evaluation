@@ -29,8 +29,8 @@ const fakeActions: DiscordActions = {
   sendDm: async (u) => (actions.push(`dm ${u}`), true),
   ban: async (_g, u) => void actions.push(`ban ${u}`),
   kick: async (_g, u) => void actions.push(`kick ${u}`),
-  editMessage: async (_c, m, b) => void actions.push(`edit ${m} ${b.content}`),
-  sendMessage: async (c, b) => (actions.push(`send ${c} ${b.content}`), { id: `m${actions.length}` }),
+  editMessage: async (_c, m, b) => void actions.push(`edit ${m} ${b.content || b.embeds?.[0]?.description}`),
+  sendMessage: async (c, b) => (actions.push(`send ${c} ${b.content || b.embeds?.[0]?.description}`), { id: `m${actions.length}` }),
   deleteMessage: async (_c, m) => void actions.push(`delete ${m}`),
   guildChannels: async () => [
     { id: '910000000000000001', name: '⛩ 鳥居', type: 4, parent_id: null, position: 0 },

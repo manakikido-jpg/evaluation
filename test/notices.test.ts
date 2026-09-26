@@ -52,12 +52,12 @@ function fakeDiscord(channels = CHANNELS) {
     kick: async () => undefined,
     editMessage: async (c, m, b) => {
       if (!messages.has(m)) throw new DiscordHttpError('Unknown Message', 404);
-      messages.set(m, { channelId: c, content: b.content ?? '' });
+      messages.set(m, { channelId: c, content: b.content || b.embeds?.[0]?.description || '' });
       log.push(`edit ${m}`);
     },
     sendMessage: async (c, b) => {
       const id = `m${++seq}`;
-      messages.set(id, { channelId: c, content: b.content });
+      messages.set(id, { channelId: c, content: b.content || b.embeds?.[0]?.description || '' });
       log.push(`send ${c} ${id}`);
       return { id };
     },
@@ -159,11 +159,35 @@ describe('掲示', () => {
     expect((await getNotice(db, n.id))?.messageId).toBe('m2');
   });
 
-  it('2000 文字を超えるものは投稿しない', async () => {
+  it('上限を超えるものは投稿しない（カードは 4096 文字・普通のメッセージは 2000 文字）', async () => {
     const d = fakeDiscord();
-    const n = await createNotice(db, { channelId: CH.torii, title: '長い', body: 'あ'.repeat(2001), by: GUJI });
-    expect(await publishNotice({ db, cfg, discord: d.discord }, n.id, GUJI)).toBe('too_long');
+    const ctx = { db, cfg, discord: d.discord };
+    const card = await createNotice(db, { channelId: CH.torii, title: 'カード', body: 'あ'.repeat(4097), by: GUJI });
+    expect(await publishNotice(ctx, card.id, GUJI)).toBe('too_long');
+    const text = await createNotice(db, { channelId: CH.torii, title: '普通', body: 'あ'.repeat(2001), style: 'text', by: GUJI });
+    expect(await publishNotice(ctx, text.id, GUJI)).toBe('too_long');
     expect(d.log).toEqual([]);
+    const ok = await createNotice(db, { channelId: CH.torii, title: 'カード', body: 'あ'.repeat(3000), by: GUJI });
+    expect(await publishNotice(ctx, ok.id, GUJI)).toBe('posted');
+  });
+
+  it('カードで投稿し、普通のメッセージに切り替えると同じメッセージを書き換える', async () => {
+    const bodies: unknown[] = [];
+    const d = fakeDiscord();
+    const send = d.discord.sendMessage;
+    const edit = d.discord.editMessage;
+    d.discord.sendMessage = async (c, b) => (bodies.push(b), send(c, b));
+    d.discord.editMessage = async (c, m, b) => (bodies.push(b), edit(c, m, b));
+    const ctx = { db, cfg, discord: d.discord };
+    const n = await createNotice(db, { channelId: CH.torii, title: 'ようこそ', body: 'ようこそ', by: GUJI });
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('posted');
+    expect(bodies[0]).toEqual({ content: '', embeds: [{ description: 'ようこそ', color: 0xd7003a }] });
+
+    await updateNotice(db, n.id, { title: 'ようこそ', body: 'ようこそ', style: 'text', by: GUJI });
+    expect(noticeStatus((await getNotice(db, n.id))!, 'ようこそ')).toBe('changed');
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('edited');
+    expect(bodies[1]).toEqual({ content: 'ようこそ', embeds: [] });
+    expect(d.log).toEqual([`send ${CH.torii} m1`, 'edit m1']);
   });
 
   it('すべて反映: 未投稿と変更ありだけを反映する', async () => {

@@ -2,7 +2,7 @@ import { asc, eq, max } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { notices, type Notice } from '../db/schema.js';
-import { DiscordHttpError, type DiscordActions, type GuildChannel } from '../lib/discordRest.js';
+import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { DEFAULT_NOTICES } from './noticeDefaults.js';
@@ -15,8 +15,26 @@ import { DEFAULT_NOTICES } from './noticeDefaults.js';
 
 export type NoticeCtx = { db: Db; cfg: GuildConfig; discord: DiscordActions };
 
-/** Discord の 1 メッセージの上限 */
-export const MAX_NOTICE_LENGTH = 2000;
+export type NoticeStyle = 'embed' | 'text';
+
+/** 見せ方ごとの名前と文字数の上限（Discord の決まり: 普通のメッセージ 2000・カードの本文 4096） */
+export const NOTICE_STYLES: Record<NoticeStyle, { label: string; max: number }> = {
+  embed: { label: 'カード（1 つずつ区切られて見やすい）', max: 4096 },
+  text: { label: '普通のメッセージ', max: 2000 },
+};
+
+export const maxLengthOf = (style: string) => NOTICE_STYLES[style === 'text' ? 'text' : 'embed'].max;
+export const isNoticeStyle = (v: unknown): v is NoticeStyle => v === 'embed' || v === 'text';
+
+/** カードの左の線の色（朱色） */
+const SHU = 0xd7003a;
+
+function messageBody(style: string, text: string): MessageBody {
+  // 見せ方を切り替えたときに前の形が残らないよう、使わないほうは空にする
+  return style === 'text' ? { content: text, embeds: [] } : { content: '', embeds: [{ description: text, color: SHU }] };
+}
+
+const tooLong = (style: string, text: string) => !text.trim() || text.length > maxLengthOf(style);
 
 /** チャンネルとして選べる種類（テキスト・お知らせ） */
 const POSTABLE = new Set([0, 5]);
@@ -121,21 +139,34 @@ export async function getNotice(db: Db, id: number): Promise<Notice | undefined>
   return row;
 }
 
-export async function createNotice(db: Db, input: { channelId: string; title: string; body: string; by: string }): Promise<Notice> {
+export async function createNotice(
+  db: Db,
+  input: { channelId: string; title: string; body: string; style?: NoticeStyle; by: string },
+): Promise<Notice> {
   const [last] = await db
     .select({ p: max(notices.position) })
     .from(notices)
     .where(eq(notices.channelId, input.channelId));
   const [row] = await db
     .insert(notices)
-    .values({ channelId: input.channelId, position: (last?.p ?? -1) + 1, title: input.title, body: input.body, updatedBy: input.by })
+    .values({
+      channelId: input.channelId,
+      position: (last?.p ?? -1) + 1,
+      title: input.title,
+      body: input.body,
+      style: input.style ?? 'embed',
+      updatedBy: input.by,
+    })
     .returning();
   await audit(db, { actorId: input.by, action: 'notice.create', detail: { id: row!.id, title: input.title }, via: 'web' });
   return row!;
 }
 
-export async function updateNotice(db: Db, id: number, input: { title: string; body: string; by: string }): Promise<void> {
-  await db.update(notices).set({ title: input.title, body: input.body, updatedBy: input.by, updatedAt: new Date() }).where(eq(notices.id, id));
+export async function updateNotice(db: Db, id: number, input: { title: string; body: string; style?: NoticeStyle; by: string }): Promise<void> {
+  await db
+    .update(notices)
+    .set({ title: input.title, body: input.body, ...(input.style ? { style: input.style } : {}), updatedBy: input.by, updatedAt: new Date() })
+    .where(eq(notices.id, id));
   await audit(db, { actorId: input.by, action: 'notice.update', detail: { id, title: input.title }, via: 'web' });
 }
 
@@ -171,25 +202,26 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
   const n = await getNotice(ctx.db, id);
   if (!n) throw new Error(`notice ${id} not found`);
   const { text } = renderNotice(n.body, ctx.cfg, await guildChannelsCached(ctx.discord, ctx.cfg.guildId));
-  if (!text.trim() || text.length > MAX_NOTICE_LENGTH) return 'too_long';
-  if (n.messageId && n.postedText === text) return 'unchanged';
+  if (tooLong(n.style, text)) return 'too_long';
+  if (noticeStatus(n, text) === 'posted') return 'unchanged';
+  const body = messageBody(n.style, text);
 
   let result: PublishResult;
   let messageId = n.messageId;
   if (messageId) {
     try {
-      await ctx.discord.editMessage(n.channelId, messageId, { content: text });
+      await ctx.discord.editMessage(n.channelId, messageId, body);
       result = 'edited';
     } catch (err) {
       if (!(err instanceof DiscordHttpError && err.status === 404)) throw err;
-      messageId = (await ctx.discord.sendMessage(n.channelId, { content: text })).id;
+      messageId = (await ctx.discord.sendMessage(n.channelId, body)).id;
       result = 'reposted';
     }
   } else {
-    messageId = (await ctx.discord.sendMessage(n.channelId, { content: text })).id;
+    messageId = (await ctx.discord.sendMessage(n.channelId, body)).id;
     result = 'posted';
   }
-  await ctx.db.update(notices).set({ messageId, postedText: text }).where(eq(notices.id, id));
+  await ctx.db.update(notices).set({ messageId, postedText: text, postedStyle: n.style }).where(eq(notices.id, id));
   await audit(ctx.db, { actorId: by, action: 'notice.publish', detail: { id, title: n.title, result }, via: by === 'system' ? 'system' : 'web' });
   return result;
 }
@@ -213,16 +245,16 @@ export async function repostChannel(ctx: NoticeCtx, channelId: string, by: strin
   const list = await ctx.db.select().from(notices).where(eq(notices.channelId, channelId)).orderBy(asc(notices.position), asc(notices.id));
   const channels = await guildChannelsCached(ctx.discord, ctx.cfg.guildId, true);
   const rendered = list.map((n) => ({ n, text: renderNotice(n.body, ctx.cfg, channels).text }));
-  const tooLong = rendered.filter((r) => !r.text.trim() || r.text.length > MAX_NOTICE_LENGTH).map((r) => r.n.title);
-  if (tooLong.length) return { done: 0, tooLong };
+  const over = rendered.filter((r) => tooLong(r.n.style, r.text)).map((r) => r.n.title);
+  if (over.length) return { done: 0, tooLong: over };
 
   for (const { n } of rendered) {
     if (n.messageId) await deleteMessageQuietly(ctx.discord, channelId, n.messageId);
-    await ctx.db.update(notices).set({ messageId: null, postedText: null }).where(eq(notices.id, n.id));
+    await ctx.db.update(notices).set({ messageId: null, postedText: null, postedStyle: null }).where(eq(notices.id, n.id));
   }
   for (const { n, text } of rendered) {
-    const { id } = await ctx.discord.sendMessage(channelId, { content: text });
-    await ctx.db.update(notices).set({ messageId: id, postedText: text }).where(eq(notices.id, n.id));
+    const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text));
+    await ctx.db.update(notices).set({ messageId: id, postedText: text, postedStyle: n.style }).where(eq(notices.id, n.id));
   }
   await audit(ctx.db, { actorId: by, action: 'notice.repost', detail: { channelId, count: rendered.length }, via: 'web' });
   return { done: rendered.length, tooLong: [] };
@@ -244,9 +276,9 @@ export async function syncPostedNotices(ctx: NoticeCtx, before: GuildConfig): Pr
   for (const n of await listNotices(ctx.db)) {
     if (!n.messageId) continue;
     // 設定を変える前の値で差し込んだものが、投稿済みの本文と同じもの（＝本文は反映済み）だけ
-    if (renderNotice(n.body, before, channels).text !== n.postedText) continue;
+    if (noticeStatus(n, renderNotice(n.body, before, channels).text) !== 'posted') continue;
     const text = renderNotice(n.body, ctx.cfg, channels).text;
-    if (text === n.postedText || text.length > MAX_NOTICE_LENGTH) continue;
+    if (text === n.postedText || tooLong(n.style, text)) continue;
     try {
       await publishNotice(ctx, n.id, 'system');
       changed++;
@@ -261,7 +293,7 @@ export type NoticeStatus = 'draft' | 'posted' | 'changed';
 
 export function noticeStatus(n: Notice, renderedText: string): NoticeStatus {
   if (!n.messageId) return 'draft';
-  return n.postedText === renderedText ? 'posted' : 'changed';
+  return n.postedText === renderedText && n.postedStyle === n.style ? 'posted' : 'changed';
 }
 
 /** 標準の文面を入れる。チャンネルは名前で探す。すでに掲示があるチャンネルには入れない */

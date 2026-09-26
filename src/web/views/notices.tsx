@@ -1,5 +1,5 @@
 import type { AdminSession, Notice } from '../../db/schema.js';
-import { MAX_NOTICE_LENGTH, type NoticeStatus, type NoticeVariable } from '../../services/notices.js';
+import { maxLengthOf, NOTICE_STYLES, type NoticeStatus, type NoticeStyle, type NoticeVariable } from '../../services/notices.js';
 import { fmtAgo } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -9,7 +9,7 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   edited: { text: 'Discord のメッセージを書き換えました。', kind: 'ok' },
   reposted: { text: 'Discord のメッセージが消されていたので、新しく投稿しました（いちばん下に出ます。並びを直すには「投稿し直す」）。', kind: 'warn' },
   unchanged: { text: 'Discord の内容と同じなので、何もしていません。', kind: 'ok' },
-  too_long: { text: `本文が空か、${MAX_NOTICE_LENGTH} 文字を超えています。分けてください。`, kind: 'warn' },
+  too_long: { text: '本文が空か、文字数の上限（カード 4096・普通のメッセージ 2000）を超えています。分けてください。', kind: 'warn' },
   published_all: { text: '未反映の掲示をすべて反映しました。', kind: 'ok' },
   reposted_channel: { text: 'チャンネルの掲示を順番どおりに投稿し直しました。', kind: 'ok' },
   deleted: { text: '削除しました（Discord のメッセージも消しました）。', kind: 'ok' },
@@ -45,7 +45,7 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
       <h1>掲示（BOT が投稿する文面）</h1>
       <Flash code={props.flash} />
       <p class="note">
-        #鳥居・#しきたり などに BOT が投稿するメッセージです。ここで直して「反映」を押すと、Discord のメッセージが書き換わります。本文の{' '}
+        #鳥居・#しきたり などに BOT が投稿するメッセージです。「カード」にすると 1 つずつ枠で区切られて読みやすくなります。ここで直して「反映」を押すと、Discord のメッセージが書き換わります。本文の{' '}
         <code>{'{免罪符の値段}'}</code> などは今の設定の値に、<code>{'{#しきたり}'}</code> はチャンネルへのリンクに置き換わります。設定を変えると、投稿済みの掲示の数字も自動で書き換わります。
       </p>
       <div class="inline-actions">
@@ -83,13 +83,14 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
                 <div class="notice-head">
                   <strong>{r.notice.title}</strong>
                   <span class={`status ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
-                  <small class={r.length > MAX_NOTICE_LENGTH ? 'over' : ''}>
-                    {r.length} / {MAX_NOTICE_LENGTH} 文字
+                  <small>{r.notice.style === 'text' ? '普通のメッセージ' : 'カード'}</small>
+                  <small class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
+                    {r.length} / {maxLengthOf(r.notice.style)} 文字
                   </small>
                   <small>更新 {fmtAgo(r.notice.updatedAt, props.now)}</small>
                 </div>
                 {r.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {r.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-                <pre class="notice-preview">{r.preview}</pre>
+                <pre class={`notice-preview${r.notice.style === 'text' ? '' : ' embed'}`}>{r.preview}</pre>
                 <div class="inline-actions">
                   <a class="button-link" href={`/notices/${r.notice.id}`}>
                     編集
@@ -177,6 +178,22 @@ export function NoticeEditPage(props: {
             <input type="text" name="title" value={notice?.title ?? ''} maxlength={60} required />
           </label>
           <label class="field">
+            <span>見せ方</span>
+            <select
+              name="style"
+              hx-post="/notices/preview"
+              hx-trigger="change"
+              hx-target="#notice-preview"
+              hx-include="#notice-form"
+            >
+              {(Object.keys(NOTICE_STYLES) as NoticeStyle[]).map((k) => (
+                <option value={k} selected={(notice?.style ?? 'embed') === k}>
+                  {NOTICE_STYLES[k].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label class="field">
             <span>本文（Discord の書き方: # 見出し、**太字**、- 箇条書き、-# 小さい文字）</span>
             <textarea
               name="body"
@@ -203,7 +220,7 @@ export function NoticeEditPage(props: {
           <section class="card">
             <h2>プレビュー</h2>
             <div id="notice-preview">
-              <NoticePreview preview={props.preview} length={props.length} unknown={props.unknown} />
+              <NoticePreview preview={props.preview} length={props.length} unknown={props.unknown} style={notice?.style ?? 'embed'} />
             </div>
           </section>
           <section class="card">
@@ -231,14 +248,15 @@ export function NoticeEditPage(props: {
   );
 }
 
-export function NoticePreview(props: { preview: string; length: number; unknown: string[] }) {
+export function NoticePreview(props: { preview: string; length: number; unknown: string[]; style: string }) {
+  const max = maxLengthOf(props.style);
   return (
     <>
-      <p class={props.length > MAX_NOTICE_LENGTH ? 'flash warn' : 'note'}>
-        {props.length} / {MAX_NOTICE_LENGTH} 文字{props.length > MAX_NOTICE_LENGTH ? '（多すぎます。2 つに分けてください）' : ''}
+      <p class={props.length > max ? 'flash warn' : 'note'}>
+        {props.length} / {max} 文字{props.length > max ? '（多すぎます。2 つに分けてください）' : ''}
       </p>
       {props.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {props.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-      <pre class="notice-preview">{props.preview}</pre>
+      <pre class={`notice-preview${props.style === 'text' ? '' : ' embed'}`}>{props.preview}</pre>
     </>
   );
 }

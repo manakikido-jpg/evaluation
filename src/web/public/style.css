@@ -208,6 +208,7 @@ ol.notices > li:first-child { border-top: none; padding-top: 0; }
 .status.st-draft { background: var(--gray); color: var(--muted); }
 .status.st-posted { background: #e7f5ea; color: #1f5f2e; }
 .status.st-changed { background: var(--sakura-2); color: var(--shu-dark); }
+pre.notice-preview.embed { border-left: 4px solid #d7003a; }
 pre.notice-preview { white-space: pre-wrap; word-break: break-word; font: inherit; font-size: .9rem; background: var(--gray); padding: 10px 12px; border-radius: 8px; max-height: 320px; overflow: auto; margin: 8px 0; }
 .notice-edit { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .notice-edit pre.notice-preview { max-height: 560px; }
