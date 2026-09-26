@@ -32,8 +32,15 @@ export async function getItem(db: Db, id: number): Promise<ShopItem | undefined>
   return row;
 }
 
-/** 表示する値段（免罪符は設定の値段） */
-export const priceOf = (item: ShopItem, economy: EconomyConfig) => (item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price);
+/** 奉納（ブースト）割引が効く品物（免罪符・贈り物はのぞく） */
+export const discountable = (item: ShopItem) => item.kind !== 'menzaifu' && item.kind !== 'gift';
+
+/** 払う値段（免罪符は設定の値段。奉納している人は割引。1 枚未満は切り上げ） */
+export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
+  const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
+  if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return base;
+  return Math.ceil((base * (100 - economy.boostDiscountPercent)) / 100);
+};
 
 export type ItemPatch = Partial<Pick<ShopItem, 'name' | 'emoji' | 'description' | 'price' | 'durationDays' | 'enabled' | 'position' | 'roleId' | 'roleGroup'>>;
 
@@ -93,7 +100,7 @@ export type BuyResult =
  * ロール（色守り・称号）を買う。期限つきのものを同じものでもう一度買うと、期限が延びる。
  * 同じ組（色）の別のものを持っていたら、その記録を終わりにして、外すロールを返す。
  */
-export async function buyRole(db: Db, item: ShopItem, memberId: string, now = new Date()): Promise<BuyResult> {
+export async function buyRole(db: Db, item: ShopItem, memberId: string, now = new Date(), price = item.price): Promise<BuyResult> {
   if (!item.enabled || item.kind !== 'role' || !item.roleId) return { status: 'disabled' };
   return db.transaction(async (tx) => {
     await lock(tx, memberId);
@@ -103,8 +110,8 @@ export async function buyRole(db: Db, item: ShopItem, memberId: string, now = ne
       .where(and(eq(shopPurchases.memberId, memberId), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt)));
     const same = active.find((p) => p.roleId === item.roleId);
     if (same && !item.durationDays) return { status: 'owned' };
-    if (item.price > 0 && !(await spendWithin(tx, memberId, item.price, 'shop', { itemId: item.id, name: item.name }))) {
-      return { status: 'insufficient', price: item.price, balance: (await walletOf(tx, memberId)).balance };
+    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name }))) {
+      return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
     // 同じものの延長: 今の期限（切れていれば今）から足す
     const base = same?.expiresAt && same.expiresAt > now ? same.expiresAt : now;
@@ -117,7 +124,7 @@ export async function buyRole(db: Db, item: ShopItem, memberId: string, now = ne
     for (const p of replaced) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, p.id));
     const [purchase] = await tx
       .insert(shopPurchases)
-      .values({ memberId, itemId: item.id, kind: 'role', price: item.price, roleId: item.roleId, expiresAt })
+      .values({ memberId, itemId: item.id, kind: 'role', price, roleId: item.roleId, expiresAt })
       .returning();
     return { status: 'ok', purchase: purchase!, balance: (await walletOf(tx, memberId)).balance, removeRoleIds: replaced.map((p) => p.roleId!) };
   });
@@ -130,17 +137,18 @@ export async function buySimple(
   memberId: string,
   extra: { targetId?: string; channelId?: string; messageId?: string } = {},
   now = new Date(),
+  price = item.price,
 ): Promise<BuyResult> {
   if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra'].includes(item.kind)) return { status: 'disabled' };
   return db.transaction(async (tx) => {
     await lock(tx, memberId);
-    if (item.price > 0 && !(await spendWithin(tx, memberId, item.price, 'shop', { itemId: item.id, name: item.name, ...extra }))) {
-      return { status: 'insufficient', price: item.price, balance: (await walletOf(tx, memberId)).balance };
+    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name, ...extra }))) {
+      return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
     const expiresAt = item.durationDays ? new Date(now.getTime() + item.durationDays * DAY) : null;
     const [purchase] = await tx
       .insert(shopPurchases)
-      .values({ memberId, itemId: item.id, kind: item.kind, price: item.price, expiresAt, ...extra })
+      .values({ memberId, itemId: item.id, kind: item.kind, price, expiresAt, ...extra })
       .returning();
     return { status: 'ok', purchase: purchase!, balance: (await walletOf(tx, memberId)).balance, removeRoleIds: [] };
   });

@@ -52,6 +52,7 @@ const COIN_REASON: Record<string, string> = {
   shop_refund: 'ショップの払い戻し',
   gift_send: '贈り物を贈った',
   gift_receive: '贈り物をもらった',
+  boost: '奉納（ブースト）のお礼',
   admin_grant: '運営から',
   admin_take: '運営が減らした',
   shuin_revoke: '朱印の取り消し',

@@ -11,6 +11,8 @@ export type MemberSnapshot = {
   roleIds: string[];
   isBot: boolean;
   joinedAt: Date | null;
+  /** サーバーブースト（奉納）を始めた日時。undefined なら変えない */
+  boostingSince?: Date | null;
 };
 
 /** 参加（初参加なら join、戻ってきたなら rejoin を記録） */
@@ -42,6 +44,7 @@ export async function upsertMember(db: Db, m: MemberSnapshot, extra: { leftAt?: 
     roleIds: m.roleIds,
     isBot: m.isBot,
     joinedAt: m.joinedAt,
+    ...(m.boostingSince !== undefined ? { boostingSince: m.boostingSince } : {}),
     updatedAt: sql`now()`,
     ...extra,
   };

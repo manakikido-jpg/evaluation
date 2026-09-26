@@ -45,6 +45,8 @@ export const members = pgTable(
     joinedAt: timestamp('joined_at', { withTimezone: true }),
     /** 退出した日時（在籍中は null） */
     leftAt: timestamp('left_at', { withTimezone: true }),
+    /** サーバーブースト（奉納）を始めた日時（していなければ null） */
+    boostingSince: timestamp('boosting_since', { withTimezone: true }),
     /** 年齢区分: minor（13〜17）/ adult（18 以上）/ unknown。生年月日は持たない */
     ageGroup: text('age_group').notNull().default('unknown'),
     /** 最後に発言した・通話に入った日時 */
@@ -391,3 +393,20 @@ export const shopPurchases = pgTable(
 );
 
 export type ShopPurchase = typeof shopPurchases.$inferSelect;
+
+/**
+ * ブースト（奉納）のお礼。奉納 1 回（Discord の「ブーストを始めた日時」）ごとに 1 行。
+ * お知らせは 1 回だけ。花びらは同じ人に 30 日に 1 回まで（やめてすぐ始め直しても増えない）。
+ */
+export const boostThanks = pgTable(
+  'boost_thanks',
+  {
+    memberId: text('member_id').notNull(),
+    /** Discord の premium_since */
+    since: timestamp('since', { withTimezone: true }).notNull(),
+    announcedAt: timestamp('announced_at', { withTimezone: true }).notNull().defaultNow(),
+    /** この奉納で最後に花びらを贈った日時 */
+    lastRewardAt: timestamp('last_reward_at', { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.since] })],
+);

@@ -1,6 +1,6 @@
 import type { EconomyConfig } from '../config.js';
 import type { ShopItem } from '../db/schema.js';
-import { priceOf } from '../services/shop.js';
+import { discountable, priceOf } from '../services/shop.js';
 
 /** ショップの見た目（Discord API の形のまま。テストしやすいように discord.js に依らない） */
 
@@ -8,19 +8,24 @@ const SHU = 0xd7003a;
 const coin = (e: EconomyConfig) => `${e.currencyEmoji}${e.currencyName}`;
 const label = (i: ShopItem) => `${i.emoji ? `${i.emoji} ` : ''}${i.name}`;
 
-export function priceText(item: ShopItem, e: EconomyConfig): string {
+/** 奉納割引が効いているか */
+const discounted = (item: ShopItem, e: EconomyConfig, booster: boolean) => booster && discountable(item) && e.boostDiscountPercent > 0;
+
+export function priceText(item: ShopItem, e: EconomyConfig, booster = false): string {
   if (item.kind === 'gift') return '好きな量';
-  return `${priceOf(item, e).toLocaleString('ja-JP')} 枚`;
+  const now = `${priceOf(item, e, booster).toLocaleString('ja-JP')} 枚`;
+  return discounted(item, e, booster) ? `${now}（${priceOf(item, e).toLocaleString('ja-JP')} 枚から奉納割引）` : now;
 }
 
 /** 一覧（本人にだけ） */
-export function shopList(items: ShopItem[], e: EconomyConfig, balance: number) {
-  const lines = items.map((i) => `${label(i)} … **${priceText(i, e)}**${i.description ? `\n-# ${i.description}` : ''}`);
+export function shopList(items: ShopItem[], e: EconomyConfig, balance: number, booster = false) {
+  const lines = items.map((i) => `${label(i)} … **${priceText(i, e, booster)}**${i.description ? `\n-# ${i.description}` : ''}`);
+  const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（免罪符・贈り物をのぞく）`, ''] : [];
   return {
     embeds: [
       {
         title: '🛍 授与品',
-        description: [`いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`, '', ...(lines.length ? lines : ['いまは授与品がありません。'])].join('\n'),
+        description: [...thanks, `いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`, '', ...(lines.length ? lines : ['いまは授与品がありません。'])].join('\n'),
         color: SHU,
       },
     ],
@@ -36,7 +41,7 @@ export function shopList(items: ShopItem[], e: EconomyConfig, balance: number) {
                 options: items.slice(0, 25).map((i) => ({
                   label: i.name.slice(0, 100),
                   value: String(i.id),
-                  description: `${priceText(i, e)}${i.description ? `・${i.description}` : ''}`.slice(0, 100),
+                  description: `${priceText(i, e, booster)}${i.description ? `・${i.description}` : ''}`.slice(0, 100),
                   ...(i.emoji ? { emoji: { name: i.emoji } } : {}),
                 })),
               },
@@ -48,12 +53,12 @@ export function shopList(items: ShopItem[], e: EconomyConfig, balance: number) {
 }
 
 /** 選んだ品物の確認（買う・やめる） */
-export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, note?: string) {
-  const price = priceOf(item, e);
+export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, note?: string, booster = false) {
+  const price = priceOf(item, e, booster);
   const lines = [
     item.description,
     item.durationDays ? `期間: ${item.durationDays} 日` : item.kind === 'role' ? '期間: ずっと' : '',
-    `値段: **${price.toLocaleString('ja-JP')} 枚**（いま ${balance.toLocaleString('ja-JP')} 枚）`,
+    `値段: **${priceText(item, e, booster)}**（いま ${balance.toLocaleString('ja-JP')} 枚）`,
     note ?? '',
   ].filter(Boolean);
   return {
@@ -71,8 +76,8 @@ export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, n
 }
 
 /** 花吹雪・贈り物: 相手を選ぶ */
-export function shopPickTarget(item: ShopItem, e: EconomyConfig, balance: number) {
-  const what = item.kind === 'gift' ? `${coin(e)}を贈る相手` : '花吹雪を贈る相手';
+export function shopPickTarget(item: ShopItem, e: EconomyConfig, balance: number, booster = false) {
+  const what = item.kind === 'gift' ? `${coin(e)}を贈る相手` : `花吹雪（${priceText(item, e, booster)}）を贈る相手`;
   return {
     embeds: [{ title: label(item), description: [item.description, `いま ${balance.toLocaleString('ja-JP')} 枚`, '', `${what}を選んでください。`].join('\n'), color: SHU }],
     components: [

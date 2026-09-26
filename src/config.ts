@@ -45,9 +45,23 @@ export const economySchema = z.object({
   joinBonus: z.number().int().min(0).default(3000),
   /** おみくじ（1 日 1 回のログボ）の基本の量。吉でこの量、大吉は 3 倍、凶は半分（0 なら花びらなし） */
   omikujiBase: z.number().int().min(0).default(10),
+  /** ブースト（奉納）のお礼: 奉納してくれたときと、続けてくれている間 30 日ごとに贈る量（0 で贈らない） */
+  boostThanks: z.number().int().min(0).default(1500),
+  /** 奉納している人の授与品の割引（%。免罪符・贈り物はのぞく。0 で割引なし） */
+  boostDiscountPercent: z.number().int().min(0).max(90).default(20),
 });
 
 export type EconomyConfig = z.infer<typeof economySchema>;
+
+export const DEFAULT_BOOST_ANNOUNCE = '🏮 **{名前}** さんが、咲楽ノ宮に奉納（サーバーブースト）してくださいました。\nありがとうございます！';
+export const DEFAULT_BOOST_DM = '🏮 咲楽ノ宮に奉納（サーバーブースト）してくださり、ありがとうございます。';
+
+export const boostSchema = z.object({
+  /** #慶事 に出すお知らせ */
+  announceText: z.string().min(1).max(1000).default(DEFAULT_BOOST_ANNOUNCE),
+  /** 本人への DM の最初の文（お礼の花びら・割引の案内は BOT が下に足す） */
+  dmText: z.string().min(1).max(1000).default(DEFAULT_BOOST_DM),
+});
 
 export const applicationsSchema = z.object({
   /**
@@ -133,6 +147,8 @@ export const guildConfigSchema = z
     economy: economySchema.default(economySchema.parse({})),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),
+    /** ブースト（奉納）のお礼の文面。{名前} は奉納した人（メンションになるが通知は飛ばない） */
+    boost: boostSchema.default(boostSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({

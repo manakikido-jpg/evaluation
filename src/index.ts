@@ -11,6 +11,7 @@ import { OmamoriApp } from './discord/omamori.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
+import { boostTick } from './services/boost.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -85,13 +86,21 @@ async function main(): Promise<void> {
       banzuke();
       // 期限が来た授与品（色守り・絵馬のピン留め）を外す
       void shop.expire().catch((err) => logger.warn({ err }, 'shop expire failed'));
+      // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
+      void boostTick({ db, cfg: cfg(), discord: actions });
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
   });
   client.on(Events.GuildMemberAdd, (m) => void app.onMemberAdd(m));
   client.on(Events.GuildMemberRemove, (m) => void app.onMemberRemove(m.guild.id, m.id));
-  client.on(Events.GuildMemberUpdate, (_old, m) => void app.onMemberUpdate(m));
+  client.on(Events.GuildMemberUpdate, (old, m) => {
+    void (async () => {
+      await app.onMemberUpdate(m);
+      // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
+      if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boostTick({ db, cfg: cfg(), discord: actions }, new Date(), m.id);
+    })();
+  });
   client.on(Events.VoiceStateUpdate, (before, after) => {
     // 通話に入った・移動したとき
     if (after.channelId && after.channelId !== before.channelId && after.member) {

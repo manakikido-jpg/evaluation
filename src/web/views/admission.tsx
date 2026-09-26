@@ -475,6 +475,28 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </div>
         </section>
         <section class="card">
+          <h2>🏮 ブースト（奉納）のお礼</h2>
+          <p class="note">
+            サーバーブーストしてくれた人に、#慶事 でお知らせ・本人に DM・{e.currencyName}を贈ります。続けてくれている間は 30 日ごとにまた贈ります（同じ人には 30 日に 1 回まで）。#番付 に今奉納してくれている人の「奉納板」も出します。
+          </p>
+          <div class="fields">
+            <Num name="boostThanks" label={`お礼の${e.currencyName}（0 で贈らない）`} value={e.boostThanks} file={f.boostThanks} />
+            <Num name="boostDiscountPercent" label="授与品の割引 %（免罪符・贈り物はのぞく。0 で割引なし。90 まで）" value={e.boostDiscountPercent} file={f.boostDiscountPercent} />
+          </div>
+          <label class="field">
+            <span>#慶事 に出すお知らせ（{'{名前}'} が奉納した人になります。通知は飛びません）</span>
+            <textarea name="boostAnnounce" rows={3} maxlength={1000} required>
+              {cfg.boost.announceText}
+            </textarea>
+          </label>
+          <label class="field">
+            <span>本人への DM の最初の文（お礼の{e.currencyName}・割引の案内は BOT が下に足します）</span>
+            <textarea name="boostDm" rows={3} maxlength={1000} required>
+              {cfg.boost.dmText}
+            </textarea>
+          </label>
+        </section>
+        <section class="card">
           <h2>役職（朱印の格・昇格ライン）</h2>
           <table class="compact">
             <thead>

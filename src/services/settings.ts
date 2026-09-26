@@ -24,6 +24,8 @@ export const overridesSchema = z.object({
       giftMin: z.number().int().positive().max(1_000_000),
       giftMax: z.number().int().positive().max(1_000_000),
       giftDailyLimit: z.number().int().min(0).max(10_000_000),
+      boostThanks: z.number().int().min(0).max(1_000_000),
+      boostDiscountPercent: z.number().int().min(0).max(90),
     })
     .partial()
     .default({}),
@@ -35,6 +37,7 @@ export const overridesSchema = z.object({
     )
     .default({}),
   omairi: z.object({ days: z.number().int().positive().max(365), extendDays: z.number().int().min(0).max(365) }).partial().default({}),
+  boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
 });
 
@@ -48,6 +51,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     ...base,
     economy: { ...base.economy, ...o.economy },
     omairi: { ...base.omairi, ...o.omairi },
+    boost: { ...base.boost, ...o.boost },
     applications: { ...base.applications, ...o.applications },
     ranks: base.ranks.map((r) => {
       const x = o.ranks[r.key] ?? {};

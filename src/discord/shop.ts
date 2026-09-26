@@ -19,7 +19,10 @@ import { logger } from '../lib/logger.js';
 import { walletOf } from '../services/economy.js';
 import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
-import { buyRole, buySimple, duePurchases, endPurchase, getItem, giveGift, listItems, refund, seedDefaultItems, type BuyResult } from '../services/shop.js';
+import { buyRole, buySimple, duePurchases, endPurchase, getItem, giveGift, listItems, priceOf, refund, seedDefaultItems, type BuyResult } from '../services/shop.js';
+
+/** サーバーブースト（奉納）している人 */
+const isBooster = (i: { member: { premiumSince: Date | null } }) => i.member.premiumSince !== null;
 import { omikujiEmbed } from './omikuji.js';
 import { hanafubukiMessage, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
 
@@ -71,13 +74,18 @@ export class ShopApp {
     }
   }
 
+  /** 払う値段（奉納している人は割引） */
+  private price(i: Buyable, item: ShopItem): number {
+    return priceOf(item, this.cfg().economy, isBooster(i));
+  }
+
   private async balance(userId: string): Promise<number> {
     return (await walletOf(this.db, userId)).balance;
   }
 
   private async open(i: ButtonInteraction<'cached'>): Promise<void> {
     const items = await listItems(this.db, { enabledOnly: true });
-    await i.reply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id)), ...EPHEMERAL });
+    await i.reply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id), isBooster(i)), ...EPHEMERAL });
   }
 
   private async pick(i: StringSelectMenuInteraction<'cached'>): Promise<void> {
@@ -85,11 +93,11 @@ export class ShopApp {
     if (!item?.enabled) return void (await i.update(done('この授与品は、今は受けられません。')));
     const balance = await this.balance(i.user.id);
     const e = this.cfg().economy;
-    if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance)));
+    if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     let note: string | undefined;
     if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていたら、その色は外れます。同じ色なら期間が延びます';
     if (item.kind === 'ema_pin') note = '-# #絵馬 に書いた、いちばん新しい自分のメッセージをピン留めします';
-    await i.update(shopConfirm(item, e, balance, note));
+    await i.update(shopConfirm(item, e, balance, note, isBooster(i)));
   }
 
   private async buy(i: ButtonInteraction<'cached'>, itemId: number): Promise<void> {
@@ -169,7 +177,7 @@ export class ShopApp {
   }
 
   private async role(i: Buyable, item: ShopItem): Promise<string> {
-    const r = await buyRole(this.db, item, i.user.id);
+    const r = await buyRole(this.db, item, i.user.id, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
       await i.member.roles.add(item.roleId!, `授与品: ${item.name}`);
@@ -188,7 +196,7 @@ export class ShopApp {
     const today = await omikujiToday(this.db, i.user.id, new Date());
     if (!today.drawn) return '先に今日のおみくじを引いてください（花びらは減っていません）。';
     if (today.extraUsed) return '今日の「もう 1 回」は使いました。また明日どうぞ。';
-    const r = await buySimple(this.db, item, i.user.id);
+    const r = await buySimple(this.db, item, i.user.id, {}, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     const d = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { extra: true });
     if (d.status !== 'drawn') {
@@ -212,7 +220,7 @@ export class ShopApp {
     const mine = recent.filter((m) => m.author.id === i.user.id).first();
     if (!mine) return `先に <#${channel.id}> に自己紹介を書いてください（花びらは減っていません）。`;
     if (mine.pinned) return 'もうピン留めされています（花びらは減っていません）。';
-    const r = await buySimple(this.db, item, i.user.id, { channelId: channel.id, messageId: mine.id });
+    const r = await buySimple(this.db, item, i.user.id, { channelId: channel.id, messageId: mine.id }, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
       await mine.pin(`授与品: ${item.name}`);
@@ -229,7 +237,7 @@ export class ShopApp {
     const home = cfg.channels.keidai ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === '境内')?.id;
     const channel = home ? i.guild.channels.cache.get(home) : undefined;
     if (!channel?.isSendable()) return '#境内 が見つかりません。神職に知らせてください。';
-    const r = await buySimple(this.db, item, i.user.id, { targetId });
+    const r = await buySimple(this.db, item, i.user.id, { targetId }, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
       await channel.send(hanafubukiMessage(i.user.id, targetId, message));

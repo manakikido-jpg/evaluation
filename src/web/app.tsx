@@ -698,6 +698,8 @@ export function createWebApp(deps: WebDeps) {
     return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} coinsNonce={randomUUID()} />);
   });
 
+  const longText = (v: unknown) => (typeof v === 'string' && v.trim() ? v.replace(/\r\n/g, '\n').trim().slice(0, 1000) : undefined);
+
   app.post('/settings', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody();
@@ -717,6 +719,13 @@ export function createWebApp(deps: WebDeps) {
         giftMin: num('giftMin'),
         giftMax: num('giftMax'),
         giftDailyLimit: num('giftDailyLimit'),
+        boostThanks: num('boostThanks'),
+        boostDiscountPercent: num('boostDiscountPercent'),
+      },
+      boost: {
+        // 空なら標準の文面に戻す
+        announceText: longText(body.boostAnnounce),
+        dmText: longText(body.boostDm),
       },
       ranks: Object.fromEntries(
         cfg.ranks.map((r) => [r.key, { weight: num(`rank.${r.key}.weight`), ...(r.auto ? { requiredGoen: num(`rank.${r.key}.requiredGoen`) } : {}) }]),

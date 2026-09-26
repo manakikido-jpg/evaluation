@@ -19,6 +19,7 @@ export type CoinReason =
   | 'shop_refund'
   | 'gift_send'
   | 'gift_receive'
+  | 'boost'
   | 'admin_grant'
   | 'admin_take'
   | 'adjust';

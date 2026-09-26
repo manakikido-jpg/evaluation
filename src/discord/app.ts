@@ -53,6 +53,7 @@ export function toSnapshot(m: GuildMember): MemberSnapshot {
     roleIds: [...m.roles.cache.keys()].filter((id) => id !== m.guild.id),
     isBot: m.user.bot,
     joinedAt: m.joinedAt,
+    boostingSince: m.premiumSince,
   };
 }
 
