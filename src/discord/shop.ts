@@ -10,8 +10,9 @@ import {
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
   type UserSelectMenuInteraction,
+  type Message,
 } from 'discord.js';
-import type { GuildConfig } from '../config.js';
+import { emaChannelIds, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { ShopItem } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -96,7 +97,7 @@ export class ShopApp {
     if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     let note: string | undefined;
     if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていたら、その色は外れます。同じ色なら期間が延びます';
-    if (item.kind === 'ema_pin') note = '-# #絵馬 に書いた、いちばん新しい自分のメッセージをピン留めします';
+    if (item.kind === 'ema_pin') note = '-# 自己紹介のチャンネル（#絵馬-男性・#絵馬-女性 など）に書いた、いちばん新しい自分のメッセージをピン留めします';
     await i.update(shopConfirm(item, e, balance, note, isBooster(i)));
   }
 
@@ -213,14 +214,19 @@ export class ShopApp {
   }
 
   private async emaPin(i: Buyable, item: ShopItem): Promise<string> {
-    const emaId = this.cfg().channels.ema;
-    const channel = emaId ? i.guild.channels.cache.get(emaId) : undefined;
-    if (!channel?.isTextBased()) return '#絵馬 が見つかりません。神職に知らせてください。';
-    const recent = await channel.messages.fetch({ limit: 100 });
-    const mine = recent.filter((m) => m.author.id === i.user.id).first();
-    if (!mine) return `先に <#${channel.id}> に自己紹介を書いてください（花びらは減っていません）。`;
+    // 自己紹介のチャンネル（絵馬-男性・絵馬-女性・運営紹介）のうち、いちばん新しい自分の投稿
+    const channels = emaChannelIds(this.cfg()).map((id) => i.guild.channels.cache.get(id));
+    const channel = channels.find((c) => c?.isTextBased());
+    if (!channel?.isTextBased()) return '自己紹介のチャンネルが見つかりません。神職に知らせてください。';
+    let mine: Message | undefined;
+    for (const c of channels) {
+      if (!c?.isTextBased()) continue;
+      const found = (await c.messages.fetch({ limit: 100 })).filter((m) => m.author.id === i.user.id).first();
+      if (found && (!mine || found.createdTimestamp > mine.createdTimestamp)) mine = found;
+    }
+    if (!mine) return `先に <#${channel.id}> などの自己紹介のチャンネルに書いてください（花びらは減っていません）。`;
     if (mine.pinned) return 'もうピン留めされています（花びらは減っていません）。';
-    const r = await buySimple(this.db, item, i.user.id, { channelId: channel.id, messageId: mine.id }, new Date(), this.price(i, item));
+    const r = await buySimple(this.db, item, i.user.id, { channelId: mine.channelId, messageId: mine.id }, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
       await mine.pin(`授与品: ${item.name}`);

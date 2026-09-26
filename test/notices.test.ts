@@ -36,7 +36,8 @@ const CHANNELS: GuildChannel[] = [
   { id: CH.torii, name: '鳥居', type: 0, parent_id: CH.cat, position: 0 },
   { id: CH.shikitari, name: 'しきたり', type: 0, parent_id: CH.cat, position: 1 },
   { id: CH.shamusho, name: '社務所', type: 0, parent_id: CH.cat, position: 2 },
-  { id: CH.ema, name: '絵馬', type: 0, parent_id: null, position: 3 },
+  { id: CH.ema, name: '絵馬-男性', type: 0, parent_id: null, position: 3 },
+  { id: '910000000000000010', name: '絵馬-女性', type: 0, parent_id: null, position: 8 },
   { id: CH.keiji, name: '慶事', type: 0, parent_id: null, position: 4 },
   { id: CH.yoimiyaVoice, name: '宵宮', type: 2, parent_id: null, position: 5 },
   { id: CH.yoimiya, name: '宵宮', type: 0, parent_id: null, position: 6 },
@@ -252,12 +253,12 @@ describe('掲示', () => {
 
 describe('チャンネルの案内とピン留め', () => {
   /** 見た目を変えた名前（「🪧｜絵馬」など）でも見つかる */
-  const NAMES = ['しきたり', '御触書', '授与所', '絵馬', '慶事', '番付', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処'];
+  const NAMES = ['しきたり', '御触書', '授与所', '絵馬-男性', '絵馬-女性', '運営紹介', 'アイコン紹介', '慶事', '番付', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処'];
   const FULL: GuildChannel[] = NAMES.map((name, i) => ({ id: `92000000000000${String(1000 + i)}`, name: `🌸｜${name}`, type: 0, parent_id: null, position: i }));
   const idOf = (name: string) => FULL.find((c) => c.name.endsWith(name))!.id;
 
   it('飾りを付けた名前でも {#チャンネル名} がリンクになる', () => {
-    expect(renderNotice('{#絵馬}', cfg, FULL).text).toBe(`<#${idOf('絵馬')}>`);
+    expect(renderNotice('{#絵馬-男性}', cfg, FULL).text).toBe(`<#${idOf('絵馬-男性')}>`);
     // 飾りを除くと何も残らない名前は探さない
     expect(renderNotice('{#🌸}', cfg, FULL).unknown).toEqual(['#🌸']);
   });
@@ -273,8 +274,11 @@ describe('チャンネルの案内とピン留め', () => {
     for (const name of ['境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処']) {
       expect(list.find((n) => n.channelId === idOf(name)), name).toMatchObject({ title: '使い方', pinned: true, sticky: false });
     }
-    // #絵馬 はひな形がいつも見えるよう、いちばん下に表示し続ける
-    expect(list.find((n) => n.channelId === idOf('絵馬'))).toMatchObject({ title: '使い方', pinned: false, sticky: true });
+    // 自己紹介はひな形がいつも見えるよう、いちばん下に表示し続ける
+    for (const name of ['絵馬-男性', '絵馬-女性']) {
+      expect(list.find((n) => n.channelId === idOf(name)), name).toMatchObject({ title: '使い方', pinned: false, sticky: true });
+    }
+    expect(list.find((n) => n.channelId === idOf('アイコン紹介'))).toMatchObject({ title: '使い方', pinned: true });
     for (const n of list) {
       const out = renderNotice(n.body, cfg, FULL);
       expect(out.unknown, n.title).toEqual([]);
@@ -287,12 +291,12 @@ describe('チャンネルの案内とピン留め', () => {
     const { PREVIOUS_GUIDE_BODIES, DEFAULT_GUIDES } = await import('../src/services/noticeDefaults.js');
     const d = fakeDiscord(FULL);
     const ctx = { db, cfg, discord: d.discord };
-    const old = PREVIOUS_GUIDE_BODIES['絵馬\n使い方']![0]!;
-    const ema = await createNotice(db, { channelId: idOf('絵馬'), title: '使い方', body: old, pinned: true, by: GUJI });
+    const old = PREVIOUS_GUIDE_BODIES['絵馬-男性\n使い方']![0]!;
+    const ema = await createNotice(db, { channelId: idOf('絵馬-男性'), title: '使い方', body: old, pinned: true, by: GUJI });
     const edited = await createNotice(db, { channelId: idOf('境内'), title: '使い方', body: '手で書いた', pinned: true, by: GUJI });
     const r = await seedChannelGuides(ctx, GUJI);
     expect(r.updated).toBe(1);
-    expect((await getNotice(db, ema.id))!.body).toBe(DEFAULT_GUIDES.find((t) => t.channelName === '絵馬')!.body);
+    expect((await getNotice(db, ema.id))!.body).toBe(DEFAULT_GUIDES.find((t) => t.channelName === '絵馬-男性')!.body);
     expect((await getNotice(db, ema.id))!.body).toContain('【招待者】');
     expect((await getNotice(db, edited.id))!.body).toBe('手で書いた');
   });
@@ -385,13 +389,28 @@ describe('いちばん下に表示し続ける', () => {
 
   it('標準の #絵馬 の案内が前の形（ピン留め）なら、押し直すと「いちばん下に表示し続ける」になる', async () => {
     const { DEFAULT_GUIDES } = await import('../src/services/noticeDefaults.js');
-    const NAMES = ['絵馬'];
+    const NAMES = ['🪧｜絵馬-男性'];
     const channels: GuildChannel[] = NAMES.map((name, i) => ({ id: `93000000000000${1000 + i}`, name, type: 0, parent_id: null, position: i }));
     const d = fakeDiscord(channels);
-    const body = DEFAULT_GUIDES.find((t) => t.channelName === '絵馬')!.body;
+    const { PREVIOUS_GUIDE_BODIES } = await import('../src/services/noticeDefaults.js');
+    const body = PREVIOUS_GUIDE_BODIES['絵馬-男性\n使い方']![1]!;
+    expect(DEFAULT_GUIDES.some((t) => t.channelName === '絵馬-男性')).toBe(true);
     const old = await createNotice(db, { channelId: channels[0]!.id, title: '使い方', body, pinned: true, by: GUJI });
     const r = await seedChannelGuides({ db, cfg, discord: d.discord }, GUJI);
     expect(r.updated).toBe(1);
     expect(await getNotice(db, old.id)).toMatchObject({ sticky: true, pinned: false });
+  });
+
+  it('#絵馬 を 絵馬殿 に移したあと: 手を加えていない #鳥居 の「ようこそ」なども新しいリンクの文面になる', async () => {
+    const { PREVIOUS_GUIDE_BODIES } = await import('../src/services/noticeDefaults.js');
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const welcome = await createNotice(db, { channelId: CH.torii, title: 'ようこそ', body: PREVIOUS_GUIDE_BODIES['鳥居\nようこそ']![0]!, by: GUJI });
+    const edited = await createNotice(db, { channelId: CH.shikitari, title: '用語集', body: '自分で書いた', by: GUJI });
+    await seedChannelGuides(ctx, GUJI);
+    const after = (await getNotice(db, welcome.id))!;
+    expect(after.body).toContain('{#絵馬-男性}');
+    expect(renderNotice(after.body, cfg, CHANNELS).unknown).toEqual([]);
+    expect((await getNotice(db, edited.id))!.body).toBe('自分で書いた');
   });
 });

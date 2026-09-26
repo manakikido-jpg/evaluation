@@ -36,6 +36,8 @@ export interface SetupApi {
   /** 最近のメッセージ（重複の片付けで、人の書き込みがないか確かめる） */
   recentMessages(channelId: string): Promise<{ author: { id: string; bot?: boolean } }[]>;
   reorderRoles(guildId: string, body: { id: string; position: number }[]): Promise<void>;
+  /** チャンネルの名前を変える（前の版の名前から、今の名前へ） */
+  renameChannel(channelId: string, name: string): Promise<void>;
 }
 
 export type ApiRole = { id: string; name: string; position: number; permissions: string; managed: boolean };
@@ -62,6 +64,8 @@ export type SetupResult = {
   created: { roles: string[]; channels: string[] };
   reused: { roles: number; channels: number };
   panelsPosted: string[];
+  /** 前の版の場所・名前から移したもの */
+  moved: string[];
   warnings: string[];
   /** 自分の通話部屋の入口（config の tempVoice.hubs に書く） */
   hubs: { channelId: string; name: string }[];
@@ -85,6 +89,22 @@ export function findCategory(channels: ApiChannel[], name: string): ApiChannel |
 
 export function findChild(channels: ApiChannel[], parentId: string, spec: { name: string; kind: 'text' | 'voice' }): ApiChannel | undefined {
   return oldest(channels.filter((c) => c.type === TYPE[spec.kind] && c.parent_id === parentId && sameName(c.name, spec.name, spec.kind)));
+}
+
+/** 前の版の名前のチャンネル（どのカテゴリにあっても。いちばん古いもの） */
+function findFormer(channels: ApiChannel[], spec: ChannelSpec): ApiChannel | undefined {
+  if (!spec.formerly?.length) return undefined;
+  return oldest(channels.filter((c) => c.type === TYPE[spec.kind] && spec.formerly!.some((f) => sameName(c.name, f, spec.kind))));
+}
+
+/**
+ * 前の版の名前なら、今の名前にしたもの（飾りは残す: 「🪧｜絵馬」→「🪧｜絵馬-男性」）。変えなくてよければ undefined
+ */
+export function renamedFrom(current: string, spec: ChannelSpec): string | undefined {
+  const former = spec.formerly?.find((f) => sameName(current, f, spec.kind));
+  if (!former || sameName(current, spec.name, spec.kind)) return undefined;
+  const i = current.indexOf(former);
+  return i >= 0 ? current.slice(0, i) + spec.name + current.slice(i + former.length) : spec.name;
 }
 
 /** 前に作ったロール・チャンネルの ID（config/guild.json）。名前が変えられていても、同じものを使い続ける */
@@ -126,6 +146,7 @@ export async function applyLayout(
     created: { roles: [], channels: [] },
     reused: { roles: 0, channels: 0 },
     panelsPosted: [],
+    moved: [],
     warnings: hubWarning ? [hubWarning] : [],
     hubs: [],
     recruit: [],
@@ -218,10 +239,24 @@ export async function applyLayout(
       // 設定に ID があるチャンネル（#慶事 など）は ID で探す → なければ同じカテゴリの同じ名前
       const knownId = ch.configKey ? opts.known?.channels?.[ch.configKey] : undefined;
       let found =
-        channels.find((c) => c.id === knownId && c.type === type) ?? findChild(channels, parent.id, ch);
+        channels.find((c) => c.id === knownId && c.type === type) ?? findChild(channels, parent.id, ch) ?? findFormer(channels, ch);
       let isNew = false;
       if (found) {
         result.reused.channels++;
+        // 前の版の場所・名前にあるもの（#絵馬 など）: 書き込みはそのままで、このカテゴリへ移して名前を変える
+        // 前の版の名前のままのときだけ（移したあとに、自分で別の場所へ動かしたものは動かさない）
+        const newName = renamedFrom(found.name, ch);
+        if (newName && found.parent_id !== parent.id && !String(parent.id).startsWith('dry:')) {
+          if (!opts.dryRun) await api.reorderChannels(guildId, [{ id: found.id, position: 999, parent_id: parent.id, lock_permissions: false }]);
+          result.moved.push(`#${found.name} → ${cat.name}`);
+          found = { ...found, parent_id: parent.id };
+        }
+        if (newName) {
+          if (!opts.dryRun) await api.renameChannel(found.id, newName);
+          result.moved.push(`名前: #${found.name} → #${newName}`);
+          found = { ...found, name: newName };
+        }
+        channels = channels.map((c) => (c.id === found!.id ? found! : c));
       } else if (opts.dryRun) {
         found = { id: `dry:${ch.name}`, name: ch.name, type, parent_id: parent.id };
         isNew = true;
@@ -288,6 +323,15 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   const catOf = (c: ApiChannel) => channels.find((p) => p.id === c.parent_id);
   const label = (c: ApiChannel) => `${catOf(c) ? `${catOf(c)!.name} / ` : ''}${c.name}`;
   const specsIn = (l: Layout, catName: string) => l.categories.find((c) => c.name === catName)?.channels ?? [];
+  const me = await api.me();
+  /** 人（BOT 以外）の書き込みがなければ true。確かめられなければ false（消さない） */
+  const noPeople = async (c: ApiChannel) => {
+    try {
+      return (await api.recentMessages(c.id)).every((m) => m.author.id === me.id || m.author.bot);
+    } catch {
+      return false;
+    }
+  };
   const findIn = (catName: string, s: ChannelSpec) => {
     const cat = findCategory(channels, catName);
     return cat && findChild(channels, cat.id, s);
@@ -326,7 +370,8 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
       for (const s of cat.channels) {
         if (specsIn(FULL, cat.name).some((f) => f.name === s.name && f.kind === s.kind)) continue;
         const c = findIn(cat.name, s);
-        if (c) remove.set(c.id, c);
+        // 人の書き込みがあるもの（#絵馬 の自己紹介など）は消さない
+        if (c && (c.type !== TYPE.text || (await noPeople(c)))) remove.set(c.id, c);
       }
     }
   }

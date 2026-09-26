@@ -71,6 +71,9 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
       // 本物と同じく、動かしたロールの位置に合わせて、ほかのロールの位置も詰め直す
       for (const o of body) roles.find((r) => r.id === o.id)!.position = o.position;
     },
+    renameChannel: async (id, name) => {
+      channels.find((x) => x.id === id)!.name = name;
+    },
     reorderChannels: async (_g, body) => {
       for (const o of body) {
         const c = channels.find((x) => x.id === o.id)!;
@@ -234,17 +237,17 @@ describe('片付け（--tidy）', () => {
     return d.channels.filter((c) => c.parent_id === cat.id).sort((a, b) => a.position! - b.position!).map((c) => c.name);
   };
 
-  it('最小構成のあとで全部の構成にすると、境内に残った 絵馬・慶事・通話テスト を消す（設定の ID は新しいほう）', async () => {
+  it('最小構成のあとで全部の構成にすると、境内に残った 慶事・通話テスト を消し、#絵馬 は 絵馬殿 に移す（設定の ID は新しいほう）', async () => {
     const d = fakeDiscord();
-    await applyLayout(d.api, GUILD, MINIMAL);
+    const minimal = await applyLayout(d.api, GUILD, MINIMAL);
     const r = await applyLayout(d.api, GUILD, FULL);
     const done = await tidyGuild(d.api, GUILD, FULL);
-    expect(done).toContain('削除: 🌳 境内 / 絵馬');
     expect(done).toContain('削除: 🌳 境内 / 慶事');
     expect(done).toContain('削除: 🌳 境内 / 通話テスト');
     expect(names(d, '🌳 境内')).not.toContain('絵馬');
     expect(names(d, '🌳 境内')).toContain('境内');
-    expect(names(d, '📜 掲示')).toContain('絵馬');
+    expect(names(d, '🪧 絵馬殿')).toEqual(['絵馬-男性', '絵馬-女性', '運営紹介', 'アイコン紹介']);
+    expect(r.channelIds.ema).toBe(minimal.channelIds.ema);
     expect(d.channels.some((c) => c.id === r.channelIds.ema)).toBe(true);
     expect(d.channels.some((c) => c.id === r.channelIds.keiji)).toBe(true);
   });
@@ -321,7 +324,7 @@ describe('片付け（--tidy）', () => {
     await applyLayout(d.api, GUILD, FULL);
     const snapshot = JSON.stringify(d.channels);
     const done = await tidyGuild(d.api, GUILD, FULL, { dryRun: true });
-    expect(done).toContain('削除: 🌳 境内 / 絵馬');
+    expect(done).toContain('削除: 🌳 境内 / 慶事');
     expect(JSON.stringify(d.channels)).toBe(snapshot);
   });
 });
@@ -454,6 +457,54 @@ describe('ショップのロール', () => {
   });
 });
 
+describe('メンバー紹介（🪧 絵馬殿）', () => {
+  it('前の版の #絵馬（📜 掲示）は、書き込みはそのままで 絵馬殿 に移して名前を「絵馬-男性」にする（飾りは残す）。2 回目は何もしない', async () => {
+    const d = fakeDiscord();
+    d.seed('📜 掲示', 4);
+    const old = d.seed('🪧｜絵馬', 0, '📜 掲示');
+    d.posts.set(old.id, ['someone']);
+    const r = await applyLayout(d.api, GUILD, FULL);
+    const moved = d.channels.find((c) => c.id === old.id)!;
+    expect(moved.name).toBe('🪧｜絵馬-男性');
+    expect(moved.parent_id).toBe(find(d, '🪧 絵馬殿', 4).id);
+    expect(r.channelIds.ema).toBe(old.id);
+    expect(r.moved).toEqual(['#🪧｜絵馬 → 🪧 絵馬殿', '名前: #🪧｜絵馬 → #🪧｜絵馬-男性']);
+    expect(d.channels.filter((c) => c.name.includes('絵馬-男性'))).toHaveLength(1);
+    expect(r.channelIds.emaFemale).toBeDefined();
+    expect(r.channelIds.staffIntro).toBeDefined();
+    // 運営紹介は、一般の人は書けない
+    const staffIntro = d.channels.find((c) => c.id === r.channelIds.staffIntro)!;
+    expect(has(ow(staffIntro, GUILD)?.deny, P.SendMessages)).toBe(true);
+
+    const again = await applyLayout(d.api, GUILD, FULL, { known: { channels: { ...r.channelIds } } });
+    expect(again.moved).toEqual([]);
+    expect(again.created.channels).toEqual([]);
+  });
+
+  it('移したあとに自分で別のカテゴリへ動かしても、戻さない', async () => {
+    const d = fakeDiscord();
+    const r = await applyLayout(d.api, GUILD, FULL);
+    const ema = d.channels.find((c) => c.id === r.channelIds.ema)!;
+    ema.parent_id = find(d, '🌳 境内', 4).id;
+    const again = await applyLayout(d.api, GUILD, FULL, { known: { channels: { ...r.channelIds } } });
+    expect(again.moved).toEqual([]);
+    expect(d.channels.find((c) => c.id === r.channelIds.ema)!.parent_id).toBe(find(d, '🌳 境内', 4).id);
+  });
+
+  it('片付けで、人の書き込みがあるチャンネルは消さない', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, MINIMAL);
+    const test = find(d, '通話テスト', 2);
+    const keiji = d.channels.find((c) => c.name === '慶事' && c.parent_id === find(d, '🌳 境内', 4).id)!;
+    d.posts.set(keiji.id, ['someone']);
+    await applyLayout(d.api, GUILD, FULL);
+    const done = await tidyGuild(d.api, GUILD, FULL);
+    expect(done).not.toContain('削除: 🌳 境内 / 慶事');
+    expect(done).toContain('削除: 🌳 境内 / 通話テスト');
+    expect(d.channels.some((c) => c.id === test.id)).toBe(false);
+  });
+});
+
 describe('見た目を変えた名前（「------📜 掲示 📜------」「📜｜授与所」など）', () => {
   it('飾りを除いた名前で同じものだと分かる', () => {
     expect(coreName('------📜 掲示 📜------')).toBe(coreName('📜 掲示'));
@@ -488,7 +539,7 @@ describe('見た目を変えた名前（「------📜 掲示 📜------」「�
     const dupCat = d.seed('📜 掲示', 4);
     const dupJuyo = d.seed('授与所', 0, '📜 掲示');
     d.posts.set(dupJuyo.id, [BOT]); // BOT がボタンを置いただけ
-    const dupEma = d.seed('絵馬', 0, '📜 掲示');
+    const dupEma = d.seed('番付', 0, '📜 掲示');
     d.posts.set(dupEma.id, ['800000000000000001']); // 人が書き込んだ
     const onlyInDup = d.seed('🍵 さくらの縁側', 2, '📜 掲示'); // 重複のカテゴリにしかない
     // 同じカテゴリの中の重複も
@@ -497,7 +548,7 @@ describe('見た目を変えた名前（「------📜 掲示 📜------」「�
     const done = await dedupeGuild(d.api, GUILD, FULL);
     expect(done).toContain('重複を削除: 📜 掲示 / 授与所');
     expect(done).toContain('重複を削除: ⛩ 鳥居 / しきたり');
-    expect(done.some((x) => x.startsWith('⚠️ 消さなかった（人の書き込みあり）: 📜 掲示 / 絵馬'))).toBe(true);
+    expect(done.some((x) => x.startsWith('⚠️ 消さなかった（人の書き込みあり）: 📜 掲示 / 番付'))).toBe(true);
     expect(done).toContain('移動: 📜 掲示 / 🍵 さくらの縁側 → ------📜 掲示 📜------');
     const ids = new Set(d.channels.map((c) => c.id));
     expect(ids.has(dupJuyo.id)).toBe(false);

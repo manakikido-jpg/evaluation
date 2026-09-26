@@ -389,14 +389,20 @@ export async function seedChannelGuides(ctx: NoticeCtx, by: string): Promise<{ c
   // 前の版の標準の文面のまま（手を加えていない）なら、新しい標準の文面にする（反映は「すべて反映」で）
   let updated = 0;
   const channels = await guildChannelsCached(ctx.discord, ctx.cfg.guildId, true);
-  for (const t of DEFAULT_GUIDES) {
+  // #鳥居・#しきたり の標準の文面も（文面だけ）、チャンネルの案内は見せ方（ピン留め・いちばん下）も
+  for (const [t, isGuide] of [...DEFAULT_NOTICES.map((t) => [t, false] as const), ...DEFAULT_GUIDES.map((t) => [t, true] as const)]) {
     const ch = findChannel(channels, t.channelName);
     const n = ch && have.get(`${ch.id}\n${t.title}`);
     if (!n) continue;
     const untouched = n.body === t.body || (PREVIOUS_GUIDE_BODIES[`${t.channelName}\n${t.title}`] ?? []).includes(n.body);
-    // 標準の文面のまま: 新しい文面・見せ方（いちばん下に表示し続ける など）にそろえる
-    if (untouched && (n.body !== t.body || n.sticky !== Boolean(t.sticky) || n.pinned !== Boolean(t.pinned))) {
-      await updateNotice(ctx.db, n.id, { title: n.title, body: t.body, pinned: Boolean(t.pinned), sticky: Boolean(t.sticky), by });
+    const flagsDiffer = isGuide && (n.sticky !== Boolean(t.sticky) || n.pinned !== Boolean(t.pinned));
+    if (untouched && (n.body !== t.body || flagsDiffer)) {
+      await updateNotice(ctx.db, n.id, {
+        title: n.title,
+        body: t.body,
+        ...(isGuide ? { pinned: Boolean(t.pinned), sticky: Boolean(t.sticky) } : {}),
+        by,
+      });
       updated++;
     }
   }

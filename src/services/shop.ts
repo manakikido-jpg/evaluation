@@ -80,7 +80,7 @@ export async function seedDefaultItems(
   const singles: Omit<typeof shopItems.$inferInsert, 'id' | 'updatedAt' | 'position'>[] = [
     { kind: 'hanafubuki', name: '花吹雪', emoji: '🌸', description: '選んだ人へ、#境内 にお祝いのメッセージを出す', price: 300 },
     { kind: 'gift', name: '贈り物', emoji: '🎁', description: '花びらをほかの人に贈る（手数料なし）', price: 0 },
-    { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '#絵馬 の自分の自己紹介を 7 日間ピン留め', price: 800, durationDays: 7 },
+    { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '自分の自己紹介（#絵馬-男性・#絵馬-女性）を 7 日間ピン留め', price: 800, durationDays: 7 },
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
     { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
   ];

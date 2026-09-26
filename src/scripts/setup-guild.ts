@@ -53,6 +53,7 @@ function createSetupApi(token: string): SetupApi {
     reorderChannels: async (g, body) => void (await call('PATCH', `/guilds/${g}/channels`, body)),
     reorderRoles: async (g, body) => void (await call('PATCH', `/guilds/${g}/roles`, body)),
     recentMessages: (c) => call('GET', `/channels/${c}/messages?limit=50`),
+    renameChannel: async (c, name) => void (await call('PATCH', `/channels/${c}`, { name })),
   };
 }
 
@@ -118,6 +119,7 @@ async function main(): Promise<void> {
   for (const n of r.created.roles) console.log(`  + ${n}`);
   console.log(`チャンネル: 作成 ${r.created.channels.length} ・ 既存を使用 ${r.reused.channels}`);
   for (const n of r.created.channels) console.log(`  + ${n}`);
+  for (const m of r.moved) console.log(`移動: ${m}`);
   for (const p of r.panelsPosted) console.log(`申請ボタンを置きました: ${p}`);
   for (const w of r.warnings) console.log(`\n⚠️  ${w}`);
 

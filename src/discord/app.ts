@@ -10,7 +10,7 @@ import {
   type Message,
   type UserContextMenuCommandInteraction,
 } from 'discord.js';
-import type { GuildConfig } from '../config.js';
+import { emaChannelIds, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { decidePromotion, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
@@ -171,8 +171,7 @@ export class ShuinApp {
     if (message.guildId === this.cfg.guildId && !message.author.bot) {
       this.messageCounts.set(message.author.id, (this.messageCounts.get(message.author.id) ?? 0) + 1);
     }
-    const ema = this.cfg.channels.ema;
-    if (!ema || message.channelId !== ema || message.author.bot || !message.inGuild()) return;
+    if (!emaChannelIds(this.cfg).includes(message.channelId) || message.author.bot || !message.inGuild()) return;
     // 返信や固定メッセージなどは除き、自己紹介の投稿にだけ付ける
     if (message.type !== MessageType.Default) return;
     await message

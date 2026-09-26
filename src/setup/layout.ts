@@ -43,7 +43,12 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
+  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
+  /**
+   * 前の版での名前（別のカテゴリにあってもよい）。見つかったら、作らずにこのカテゴリへ移して名前を変える
+   * （書き込みはそのまま。「🪧｜絵馬」のような飾りは残す）
+   */
+  formerly?: string[];
   /** 入鯖申請・宵参り申請・お守りのボタンを置く */
   panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop')[];
   /** サーバーの AFK チャンネルにする */
@@ -152,9 +157,19 @@ export const FULL: Layout = {
       channels: [
         { name: '御触書', kind: 'text', readOnly: true, topic: 'お知らせ' },
         { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）と授与品（ショップ）', panels: ['omamori', 'shop'] },
-        { name: '絵馬', kind: 'text', configKey: 'ema', topic: '自己紹介（書くと御朱印帳ボタンが付きます）' },
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji', topic: '昇格・称号の発表' },
         { name: '番付', kind: 'text', readOnly: true, configKey: 'banzuke', topic: 'ご縁のランキング（BOT が 10 分ごとに更新）' },
+      ],
+    },
+    {
+      // メンバー紹介（2026-09 に #絵馬 を 📜 掲示 から移して、男性・女性に分けた）
+      name: '🪧 絵馬殿',
+      visibility: 'member',
+      channels: [
+        { name: '絵馬-男性', kind: 'text', configKey: 'ema', formerly: ['絵馬'], topic: '男性の自己紹介（書くと御朱印帳ボタンが付きます）' },
+        { name: '絵馬-女性', kind: 'text', configKey: 'emaFemale', topic: '女性の自己紹介（書くと御朱印帳ボタンが付きます）' },
+        { name: '運営紹介', kind: 'text', readOnly: true, configKey: 'staffIntro', topic: '宮司・神職の紹介' },
+        { name: 'アイコン紹介', kind: 'text', topic: '自分のアイコン・イラストの紹介' },
       ],
     },
     {

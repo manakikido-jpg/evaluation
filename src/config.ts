@@ -105,8 +105,12 @@ export const guildConfigSchema = z
       keiji: snowflake,
       /** #記録: BOT のログ（任意） */
       log: snowflake.optional(),
-      /** #絵馬: 自己紹介に御朱印帳ボタンを付ける（任意） */
+      /** #絵馬（男性）: 自己紹介に御朱印帳ボタンを付ける（任意） */
       ema: snowflake.optional(),
+      /** #絵馬（女性）: 同じく御朱印帳ボタンを付ける（任意） */
+      emaFemale: snowflake.optional(),
+      /** #運営紹介: 宮司・神職の紹介。同じく御朱印帳ボタンを付ける（任意） */
+      staffIntro: snowflake.optional(),
       /** #申請受付: 入鯖・宵参り申請のカードが届く（運営のみ） */
       applications: snowflake.optional(),
       /** #お参り判定: お参り期間が終わっても氏子に届かなかった人の通知（運営のみ） */
@@ -283,4 +287,9 @@ export function parseGuildConfig(json: unknown): GuildConfig {
 
 export function loadGuildConfig(file: string): GuildConfig {
   return parseGuildConfig(JSON.parse(readFileSync(file, 'utf8')));
+}
+
+/** 自己紹介のチャンネル（#絵馬-男性・#絵馬-女性・#運営紹介）。書くと御朱印帳ボタンが付く */
+export function emaChannelIds(cfg: GuildConfig): string[] {
+  return [cfg.channels.ema, cfg.channels.emaFemale, cfg.channels.staffIntro].filter((id): id is string => Boolean(id));
 }
