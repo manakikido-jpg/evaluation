@@ -16,6 +16,7 @@ import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
 import { RoomApp } from './discord/rooms.js';
+import { MarketApp } from './discord/market.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
   const shop = new ShopApp(db, cfg, actions);
   const boost = new BoostApp(db, cfg, actions);
   const sticky = new StickyApp(db, cfg, actions);
+  const market = new MarketApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -79,6 +81,7 @@ async function main(): Promise<void> {
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     rooms.attach(guild);
+    market.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // ブースト: 止まっていた間の「ブーストしました」を拾う
@@ -105,6 +108,8 @@ async function main(): Promise<void> {
       void shop.expire().catch((err) => logger.warn({ err }, 'shop expire failed'));
       // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
       void boost.tick();
+      // 市場: 期限が来た取引を売った人に渡す
+      void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
@@ -138,6 +143,7 @@ async function main(): Promise<void> {
     void recruit.onInteraction(i);
     void shop.onInteraction(i);
     void rooms.onInteraction(i);
+    void market.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);

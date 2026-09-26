@@ -88,6 +88,14 @@ export const roomsSchema = z.object({
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
+/** 市場（花びらだけ。本物のお金は扱わない） */
+export const marketSchema = z.object({
+  /** サーバーの手数料（%）。売った人には値段からこれを引いた分を渡す */
+  feePercent: z.number().int().min(0).max(50).default(10),
+  /** 買った人が「受け取った」も「問題あり」も押さなければ、この日数で売った人に渡す */
+  autoReleaseDays: z.number().int().min(1).max(60).default(7),
+});
+
 export const DEFAULT_BOOST_ANNOUNCE = '🏮 **{名前}** さんが、咲楽ノ宮に奉納（サーバーブースト）してくださいました。\nありがとうございます！';
 export const DEFAULT_BOOST_DM = '🏮 咲楽ノ宮に奉納（サーバーブースト）してくださり、ありがとうございます。';
 
@@ -146,6 +154,8 @@ export const guildConfigSchema = z
       emaFemale: snowflake.optional(),
       /** #運営紹介: 宮司・神職の紹介（任意） */
       staffIntro: snowflake.optional(),
+      /** #市場: 開業権利を持つ人の出品（任意） */
+      market: snowflake.optional(),
       /** #申請受付: 入鯖・宵参り申請のカードが届く（運営のみ） */
       applications: snowflake.optional(),
       /** #お参り判定: お参り期間が終わっても氏子に届かなかった人の通知（運営のみ） */
@@ -170,6 +180,8 @@ export const guildConfigSchema = z
         female: snowflake.optional(),
         /** 📝 絵馬待ち: 承認されて、まだ自己紹介を書いていない人。書くと 🔰参拝者 になる（任意。なければ承認ですぐ参拝者） */
         emaPending: snowflake.optional(),
+        /** 🏪 開業: 市場に出品できる（授与品「開業権利」で受ける）（任意） */
+        merchant: snowflake.optional(),
         /** お守り: 募集の通知を受け取りたい人が #授与所 のボタンで付け外しするロール */
         omamori: z
           .array(
@@ -195,6 +207,7 @@ export const guildConfigSchema = z
     boost: boostSchema.default(boostSchema.parse({})),
     coreTime: coreTimeSchema.default(coreTimeSchema.parse({})),
     rooms: roomsSchema.default(roomsSchema.parse({})),
+    market: marketSchema.default(marketSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({
@@ -223,6 +236,8 @@ export const guildConfigSchema = z
       .object({
         colors: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default(''), boosterOnly: z.boolean().optional() })).default([]),
         titles: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default(''), boosterOnly: z.boolean().optional() })).default([]),
+        /** 開業権利（市場に出品できるロール）。セットアップが書く */
+        license: z.object({ roleId: snowflake }).optional(),
       })
       .default({ colors: [], titles: [] }),
     /** 自分の通話部屋: ここに入ると、その人の通話が同じカテゴリにでき、全員抜けると消える */

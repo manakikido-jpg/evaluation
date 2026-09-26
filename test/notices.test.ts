@@ -254,7 +254,7 @@ describe('掲示', () => {
 
 describe('チャンネルの案内とピン留め', () => {
   /** 見た目を変えた名前（「🪧｜絵馬」など）でも見つかる */
-  const NAMES = ['しきたり', '御触書', '授与所', '絵馬-男性', '絵馬-女性', '運営紹介', 'アイコン紹介', '慶事', '番付', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処'];
+  const NAMES = ['しきたり', '御触書', '授与所', '絵馬-男性', '絵馬-女性', '運営紹介', 'アイコン紹介', '慶事', '番付', '境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処', '市場'];
   const FULL: GuildChannel[] = NAMES.map((name, i) => ({ id: `92000000000000${String(1000 + i)}`, name: `🌸｜${name}`, type: 0, parent_id: null, position: i }));
   const idOf = (name: string) => FULL.find((c) => c.name.endsWith(name))!.id;
 
@@ -272,7 +272,7 @@ describe('チャンネルの案内とピン留め', () => {
     const list = await listNotices(db);
     expect(r.created).toBe(list.length);
     expect(list.find((n) => n.channelId === idOf('しきたり'))).toMatchObject({ title: 'チャンネル案内', pinned: false });
-    for (const name of ['境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処']) {
+    for (const name of ['境内', '手水舎', '写真館', 'おみくじ', '縁日', '屋台', '宿帳', '宵宮', '御神酒処', '市場']) {
       expect(list.find((n) => n.channelId === idOf(name)), name).toMatchObject({ title: '使い方', pinned: true, sticky: false });
     }
     // 自己紹介はひな形がいつも見えるよう、いちばん下に表示し続ける

@@ -120,6 +120,13 @@
       "when": 1790457961027,
       "tag": "0016_booster_only",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790460023294,
+      "tag": "0017_market",
+      "breakpoints": true
     }
   ]
 }

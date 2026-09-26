@@ -528,6 +528,8 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       boostDiscountPercent: '20',
       coreTimePercent: '150',
       roomBoosterDiscount: '100',
+      marketFee: '10',
+      marketAutoRelease: '7',
       ...Object.fromEntries(['once', 'hourly'].flatMap((p) => ['public', 'invite', 'secret', 'twoshot'].map((k) => [`room.${p}.${k}`, '0']))),
       'ct.5.start': '21:00',
       'ct.5.end': '23:00',
@@ -632,6 +634,8 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       boostDiscountPercent: '20',
       coreTimePercent: '150',
       roomBoosterDiscount: '100',
+      marketFee: '10',
+      marketAutoRelease: '7',
       ...Object.fromEntries(['once', 'hourly'].flatMap((p) => ['public', 'invite', 'secret', 'twoshot'].map((k) => [`room.${p}.${k}`, '0']))),
       'ct.5.start': '21:00',
       'ct.5.end': '23:00',
@@ -823,6 +827,54 @@ describe('ショップ（管理画面）', () => {
     const hana = (await listItems(db)).find((i) => i.kind === 'hanafubuki')!;
     await form(g, `/shop/items/${hana.id}/delete`, { confirm: 'yes' });
     expect((await listItems(db)).some((i) => i.id === hana.id)).toBe(true);
+  });
+});
+
+describe('市場（管理画面）', () => {
+  const SELLER = '700000000000000009';
+  const form = async (session: string, path: string, data: Record<string, string> = {}) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
+    });
+  };
+  const setup = async () => {
+    const { createListing, buyListing, setListingMessage } = await import('../src/services/market.js');
+    const mcfg = { ...cfg, roles: { ...cfg.roles, merchant: '100000000000000077' } };
+    const r = await createListing(db, mcfg, { id: SELLER, roleIds: ['100000000000000077'] }, { category: 'illust', title: 'アイコン', description: '', price: 1000 });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await setListingMessage(db, r.listing.id, '920000000000000001', '920000000000000002');
+    await addCoins(db, USER, 1000, 'adjust');
+    const b = await buyListing(db, mcfg, r.listing.id, USER);
+    if (b.status !== 'ok') throw new Error(b.status);
+    return { listing: r.listing, order: b.order };
+  };
+
+  it('運営が返金すると買った人に戻り、2 回目は何もしない', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    const { order } = await setup();
+    expect((await get('/market', await login(USER))).status).not.toBe(200);
+    const s = await login(STAFF);
+    expect(await (await get('/market', s)).text()).toContain('アイコン');
+    expect((await form(s, `/market/orders/${order.id}/refund`)).headers.get('location')).toBe('/market?msg=refunded');
+    expect((await walletOf(db, USER)).balance).toBe(1000);
+    expect(actions).toContain(`dm ${USER}`);
+    expect((await form(s, `/market/orders/${order.id}/release`)).headers.get('location')).toBe('/market?msg=done_already');
+    expect((await walletOf(db, SELLER)).balance).toBe(0);
+    expect((await listAudit(db, { action: 'market.refund' })).length).toBe(1);
+  });
+
+  it('運営が完了にすると手数料を引いて売った人へ。出品の取り下げはカードも直す', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    const { listing, order } = await setup();
+    const s = await login(STAFF);
+    expect((await form(s, `/market/orders/${order.id}/release`)).headers.get('location')).toBe('/market?msg=released');
+    expect((await walletOf(db, SELLER)).balance).toBe(900);
+    expect((await form(s, `/market/listings/${listing.id}/remove`)).headers.get('location')).toBe('/market?msg=removed');
+    expect(actions.some((a) => a.startsWith('edit 920000000000000002'))).toBe(true);
+    expect((await form(s, `/market/listings/${listing.id}/remove`)).headers.get('location')).toBe('/market?msg=done_already');
   });
 });
 

@@ -93,6 +93,36 @@ export function findChild(channels: ApiChannel[], parentId: string, spec: { name
   return oldest(channels.filter((c) => c.type === TYPE[spec.kind] && c.parent_id === parentId && sameName(c.name, spec.name, spec.kind)));
 }
 
+/**
+ * 作ったもの（item）を、同じ場所（parentId の中・カテゴリなら一番上の並び）で after のすぐ後ろに置く。
+ * ほかのものの並びは変えない。after がなければ先頭に。並べ替えた後のチャンネル一覧を返す。
+ */
+async function placeAfter(
+  api: SetupApi,
+  guildId: string,
+  channels: ApiChannel[],
+  item: ApiChannel,
+  after: string | undefined,
+  parentId: string | null,
+  opts: { move?: boolean } = {},
+): Promise<ApiChannel[]> {
+  const isCat = item.type === TYPE.category;
+  const same = channels
+    .filter((c) => c.id !== item.id && (isCat ? c.type === TYPE.category : c.parent_id === parentId && c.type !== TYPE.category))
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+  const i = after ? same.findIndex((c) => c.id === after) : -1;
+  const order = [...same.slice(0, i + 1), item, ...same.slice(i + 1)];
+  const body: { id: string; position: number; parent_id?: string; lock_permissions?: boolean }[] = order
+    .map((c, k) => ({ id: c.id, position: k }))
+    .filter((o) => (opts.move && o.id === item.id) || channels.find((c) => c.id === o.id)?.position !== o.position)
+    // 別のカテゴリから移すときは、行き先も一緒に（権限はそのまま）
+    .map((o) => (opts.move && o.id === item.id && parentId ? { ...o, parent_id: parentId, lock_permissions: false } : o));
+  if (!body.length) return channels;
+  await api.reorderChannels(guildId, body);
+  const pos = new Map(body.map((o) => [o.id, o.position]));
+  return channels.map((c) => (pos.has(c.id) ? { ...c, position: pos.get(c.id)! } : c));
+}
+
 /** 前の版の名前のチャンネル（どのカテゴリにあっても。いちばん古いもの） */
 function findFormer(channels: ApiChannel[], spec: ChannelSpec): ApiChannel | undefined {
   if (!spec.formerly?.length) return undefined;
@@ -203,10 +233,13 @@ export async function applyLayout(
   const staffRoles = [ids.shinshoku, ids.guji];
   const alsoIds = (ch: ChannelSpec) => (ch.alsoRoles ?? []).map((k) => ids[k]).filter((x): x is string => Boolean(x));
   const VIEW = P.ViewChannel | P.ReadMessageHistory;
-  const WRITE = P.SendMessages | P.AddReactions | P.CreatePublicThreads | P.SendMessagesInThreads;
+  const WRITE_ALL = P.SendMessages | P.AddReactions | P.CreatePublicThreads | P.SendMessagesInThreads;
+  const WRITE = WRITE_ALL;
   const BOT = P.ViewChannel | P.SendMessages | EmbedLinks | P.ReadMessageHistory | P.Connect;
 
-  const overwrites = (visibility: Visibility, readOnly: boolean, also: string[] = []): Overwrite[] => {
+  const overwrites = (visibility: Visibility, readOnly: boolean, also: string[] = [], threadsOk = false): Overwrite[] => {
+    // 読むだけでも、スレッドの中では書けるようにする（#市場 の取引のスレッド）
+    const WRITE = threadsOk ? WRITE_ALL & ~P.SendMessagesInThreads : WRITE_ALL;
     const ow = (id: string, type: 0 | 1, allow: bigint, deny: bigint): Overwrite => ({ id, type, allow: allow.toString(), deny: deny.toString() });
     const list: Overwrite[] = [];
     const seeRoles = visibility === 'member' ? memberRoles : visibility === 'staff' ? staffRoles : visibility === 'adult' ? [ids.yoimairi, ...staffRoles] : [];
@@ -225,6 +258,7 @@ export async function applyLayout(
   // 募集ボタンのチャンネルと、同じカテゴリの「➕ ○○をひらく」（通話にいない人への案内）
   const hubOfCategory = new Map<string, string>();
   const recruitIn: { channelId: string; omamori: RoleKey; parentId: string }[] = [];
+  let prevCategoryId: string | undefined;
   for (const cat of layout.categories) {
     let parent = findCategory(channels, cat.name);
     if (parent) {
@@ -236,7 +270,11 @@ export async function applyLayout(
       parent = await api.createChannel(guildId, { name: cat.name, type: TYPE.category, permission_overwrites: overwrites(cat.visibility, false) });
       result.created.channels.push(cat.name);
       channels = [...channels, parent];
+      // 今の並びはそのままに、配置で 1 つ前のカテゴリのすぐ後ろへ
+      channels = await placeAfter(api, guildId, channels, parent, prevCategoryId, null);
     }
+    prevCategoryId = parent.id;
+    let prevChildId: string | undefined;
 
     for (const ch of cat.channels) {
       const type = TYPE[ch.kind];
@@ -251,9 +289,12 @@ export async function applyLayout(
         // 前の版の名前のままのときだけ（移したあとに、自分で別の場所へ動かしたものは動かさない）
         const newName = renamedFrom(found.name, ch);
         if (newName && found.parent_id !== parent.id && !String(parent.id).startsWith('dry:')) {
-          if (!opts.dryRun) await api.reorderChannels(guildId, [{ id: found.id, position: 999, parent_id: parent.id, lock_permissions: false }]);
           result.moved.push(`#${found.name} → ${cat.name}`);
           found = { ...found, parent_id: parent.id };
+          channels = channels.map((c) => (c.id === found!.id ? found! : c));
+          // 移して、移した先でも配置で 1 つ前のチャンネルのすぐ後ろへ
+          if (!opts.dryRun) channels = await placeAfter(api, guildId, channels, found, prevChildId, parent.id, { move: true });
+          found = channels.find((c) => c.id === found!.id) ?? found;
         }
         if (newName) {
           if (!opts.dryRun) await api.renameChannel(found.id, newName);
@@ -271,12 +312,15 @@ export async function applyLayout(
           type,
           parent_id: parent.id,
           ...(ch.topic && ch.kind === 'text' ? { topic: ch.topic } : {}),
-          permission_overwrites: overwrites(cat.visibility, Boolean(ch.readOnly), alsoIds(ch)),
+          permission_overwrites: overwrites(cat.visibility, Boolean(ch.readOnly), alsoIds(ch), Boolean(ch.threadsOk)),
         });
         isNew = true;
         channels = [...channels, found];
         result.created.channels.push(`${cat.name} / ${ch.name}`);
+        // 今の並びはそのままに、配置で 1 つ前のチャンネルのすぐ後ろへ（前がなければ同じカテゴリの先頭へ）
+        channels = await placeAfter(api, guildId, channels, found, prevChildId, parent.id);
       }
+      if (found.parent_id === parent.id) prevChildId = found.id;
       // 前からあるチャンネルにも、あとから足した「見る・書く」を付ける（#絵馬-男性 の 絵馬待ち など）
       if (!isNew && !opts.dryRun && !found.id.startsWith('dry:')) {
         for (const roleId of alsoIds(ch)) {
@@ -328,7 +372,7 @@ const COMMUNITY_CHANNELS = ['rules', 'moderator-only'];
  * - カテゴリとチャンネルを配置どおりに並べる
  * 配置にあるチャンネルと、上の名前のもの以外は消さない。
  */
-export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, opts: { dryRun?: boolean } = {}): Promise<string[]> {
+export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, opts: { dryRun?: boolean; reorder?: boolean } = {}): Promise<string[]> {
   const done: string[] = [];
   const guild = await api.guild(guildId);
   let channels = await api.channels(guildId);
@@ -440,7 +484,9 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
     }
   }
 
-  // ── 並べ替え: 配置のカテゴリを上から順に、配置にないものはそのあと ──
+  // ── 並べ替え（--reorder のときだけ）: 配置のカテゴリを上から順に、配置にないものはそのあと ──
+  // ふだんは今の並び（自分で並べ替えたもの）をそのままにする。新しく作ったものは、作ったときに前のもののすぐ後ろに置いている
+  if (!opts.reorder) return done;
   const byPos = (a: ApiChannel, b: ApiChannel) => (a.position ?? 0) - (b.position ?? 0);
   const order: { id: string; position: number }[] = [];
   const layoutCats = layout.categories.map((cat) => findCategory(channels, cat.name)).filter((c): c is ApiChannel => Boolean(c));
@@ -462,7 +508,7 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
-const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品', gender: '性別' };
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品', gender: '性別', market: '市場' };
 
 /** 作った（見つけた）お守りロール → config の roles.omamori */
 export function omamoriConfig(roleIds: Partial<Record<RoleKey, string>>) {
@@ -577,6 +623,7 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
       male: r.roleIds.male,
       female: r.roleIds.female,
       emaPending: r.roleIds.ema_pending,
+      merchant: r.roleIds.merchant,
       omamori: omamoriConfig(r.roleIds),
     },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
@@ -589,6 +636,7 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
       titles: SHOP_TITLES()
         .filter((t) => r.roleIds[t.key])
         .map((t) => ({ roleId: r.roleIds[t.key], name: t.label, emoji: t.emoji, ...(t.boosterOnly ? { boosterOnly: true } : {}) })),
+      ...(r.roleIds.merchant ? { license: { roleId: r.roleIds.merchant } } : {}),
     },
   };
 }

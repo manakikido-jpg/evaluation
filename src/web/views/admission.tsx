@@ -522,6 +522,22 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </div>
         </section>
         <section class="card">
+          <h2>🏪 市場</h2>
+          <p class="note">
+            開業権利（🏪 開業ロール）を持つ人が #市場 に出品できます。{e.currencyName}だけで、本物のお金は扱いません。買った人の{e.currencyName}は預かっておき、「受け取った」か期限で売った人に渡します（手数料を引いて）。手数料の分は誰にも渡りません。開業権利の値段は「授与所」で変えられます。
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>手数料 %（0〜50）</span>
+              <input type="number" name="marketFee" value={String(cfg.market.feePercent)} min={0} max={50} required />
+            </label>
+            <label class="field">
+              <span>自動で売った人に渡すまでの日数（1〜60）</span>
+              <input type="number" name="marketAutoRelease" value={String(cfg.market.autoReleaseDays)} min={1} max={60} required />
+            </label>
+          </div>
+        </section>
+        <section class="card">
           <h2>🏮 コアタイム</h2>
           <p class="note">
             みんなが集まる時間（日本時間）。この間の通話は{e.currencyName}が増えます（増えた分は 1 日の上限に数えません。端数は四捨五入）。#境内 に、前日と始まる少し前に予告を出します。曜日ごとに 1 つ。空けた曜日はコアタイムなし。終わりを 00:00 にすると 24 時まで。

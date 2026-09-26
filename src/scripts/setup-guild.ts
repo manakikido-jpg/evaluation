@@ -1,11 +1,13 @@
 /**
  * ロールとチャンネルを自動で作り、config/guild.json を書く。
  *
- *   npm run setup-guild -- --guild <サーバー ID> [--minimal] [--dry-run] [--post-panels] [--tidy]
+ *   npm run setup-guild -- --guild <サーバー ID> [--minimal] [--dry-run] [--post-panels] [--tidy] [--reorder]
  *   （Docker: docker compose run --rm setup --guild <サーバー ID>）
  *
  * --tidy: 使わなくなったチャンネル（最小構成の残り・Discord が最初から作る「一般」・#rules など）を消し、
- *         コミュニティ設定を付け替えて、配置どおりに並べる
+ *         コミュニティ設定を付け替える。今の並び（自分で並べ替えたもの）はそのまま
+ * --reorder: カテゴリ・チャンネルを配置どおりの順に並べ直す（--tidy と一緒に）
+ * 新しく作るチャンネルは、配置で 1 つ前のチャンネルのすぐ後ろに置く（ほかの並びは変えない）
  *
  * 何度実行しても安全（同じ名前のロール・チャンネルがあれば作らずに使う）。
  */
@@ -77,6 +79,7 @@ function knownIdsFrom(path: string, guildId: string): KnownIds | undefined {
         male: c.roles.male,
         female: c.roles.female,
         ema_pending: c.roles.emaPending,
+        merchant: c.roles.merchant,
       },
       channels: { ...c.channels },
     };
@@ -103,6 +106,7 @@ async function main(): Promise<void> {
   const layout = flag('minimal') ? MINIMAL : FULL;
   const dryRun = flag('dry-run');
   const tidy = flag('tidy');
+  const reorder = flag('reorder');
   const api = createSetupApi(token);
 
   console.log(`⛩ セットアップを始めます（${flag('minimal') ? 'テスト用の最小構成' : '全部の構成'}${dryRun ? '・確認だけ' : ''}）`);
@@ -133,7 +137,7 @@ async function main(): Promise<void> {
   };
 
   if (dryRun) {
-    if (tidy) printTidy(await tidyGuild(api, guildId, layout, { dryRun: true }));
+    if (tidy) printTidy(await tidyGuild(api, guildId, layout, { dryRun: true, reorder }));
     console.log('\n（確認だけなので、何も作ったり消したりしていません。--dry-run を外すと実行します）');
     return;
   }
@@ -143,7 +147,7 @@ async function main(): Promise<void> {
   parseGuildConfig(merged); // おかしな設定なら書き込まない
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + '\n');
   console.log(`\n✅ ${configPath} に ID を書き込みました。`);
-  if (tidy) printTidy(await tidyGuild(api, guildId, layout));
+  if (tidy) printTidy(await tidyGuild(api, guildId, layout, { reorder }));
   console.log('\n次にすること:');
   let n = 1;
   if (r.warnings.some((w) => w.includes('より上に'))) console.log(`  ${n++}. サーバー設定 → ロール で、BOT のロールをいちばん上にドラッグして保存（上の ⚠️ のとおり）`);

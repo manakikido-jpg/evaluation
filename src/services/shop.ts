@@ -64,6 +64,7 @@ export async function seedDefaultItems(
   roles: {
     colors: { roleId: string; name: string; emoji: string; boosterOnly?: boolean }[];
     titles: { roleId: string; name: string; emoji: string; boosterOnly?: boolean }[];
+    license?: { roleId: string };
   },
 ): Promise<number> {
   const existing = await listItems(db);
@@ -89,6 +90,10 @@ export async function seedDefaultItems(
       continue;
     }
     await add({ kind: 'role', name: `称号「${t.name}」`, emoji: t.emoji, description: 'プロフィールに称号のロールが付く（ずっと）', price: 2000, roleId: t.roleId, roleGroup: 'title', durationDays: null });
+  }
+  // 開業権利: #市場 に出品できる（ずっと）
+  if (roles.license && !existing.some((i) => i.roleId === roles.license!.roleId)) {
+    await add({ kind: 'role', name: '開業権利', emoji: '🏪', description: '#市場 に出品できるようになる（ずっと）', price: 3000, roleId: roles.license.roleId, roleGroup: null, durationDays: null });
   }
   const singles: Omit<typeof shopItems.$inferInsert, 'id' | 'updatedAt' | 'position'>[] = [
     { kind: 'hanafubuki', name: '花吹雪', emoji: '🌸', description: '選んだ人へ、#境内 にお祝いのメッセージを出す', price: 300 },

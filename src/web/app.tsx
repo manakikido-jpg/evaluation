@@ -60,6 +60,9 @@ import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type Noti
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
 import { RolePage, RolesPage } from './views/roles.js';
+import { MarketPage } from './views/market.js';
+import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
+import { listingCard } from '../discord/market.js';
 import { ADMINISTRATOR, botTopPosition, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import { cleanChannelName, isText, listTextChannels, modeOf as channelModeOf, planMode as planChannelMode } from '../services/channels.js';
 import {
@@ -262,7 +265,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/stats', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*']) {
+  app.use('/market', requireAdmin);
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -754,6 +758,7 @@ export function createWebApp(deps: WebDeps) {
         ),
         boosterDiscountPercent: num('roomBoosterDiscount'),
       },
+      market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
       coreTime: {
         slots: [0, 1, 2, 3, 4, 5, 6].flatMap((day) => {
           const start = field(body, `ct.${day}.start`, 5);
@@ -1183,6 +1188,39 @@ export function createWebApp(deps: WebDeps) {
       via: 'web',
     });
     return back('saved');
+  });
+
+  // ───────── 市場（神職・宮司）: 問題ありの取引・出品の取り下げ ─────────
+
+  app.get('/market', async (c) => {
+    const [orders, listings] = await Promise.all([recentOrders(db), recentListings(db)]);
+    const names = await namesOf(db, [...orders.flatMap((o) => [o.buyerId, o.sellerId]), ...listings.map((l) => l.sellerId)]);
+    return c.html(<MarketPage session={c.get('session')} orders={orders} listings={listings} names={names} feePercent={cfg.market.feePercent} flash={c.req.query('msg')} />);
+  });
+
+  app.post('/market/orders/:id/:action', async (c) => {
+    const id = Number(c.req.param('id'));
+    const action = c.req.param('action');
+    if (!Number.isSafeInteger(id) || (action !== 'refund' && action !== 'release')) return c.redirect('/market');
+    const by = c.get('session').userId;
+    const o = action === 'refund' ? await refundOrder(db, id, by) : await releaseOrder(db, id, by);
+    if (!o) return c.redirect('/market?msg=done_already');
+    await audit(db, { actorId: by, targetId: action === 'refund' ? o.buyerId : o.sellerId, action: `market.${action}`, detail: { orderId: id, price: o.price }, via: 'web' });
+    const e = cfg.economy;
+    await deps.discord.sendDm(o.buyerId, action === 'refund' ? `🏪 取引 #${id} は運営の判断で返金しました（${e.currencyEmoji} ${o.price} 枚）。` : `🏪 取引 #${id} は運営の判断で完了にしました。`);
+    await deps.discord.sendDm(o.sellerId, action === 'refund' ? `🏪 取引 #${id} は運営の判断で、買った方に返金しました。` : `🏪 取引 #${id} は運営の判断で完了にしました（${e.currencyEmoji} ${o.price - o.fee} 枚をお渡ししました）。`);
+    return c.redirect(`/market?msg=${action === 'refund' ? 'refunded' : 'released'}`);
+  });
+
+  app.post('/market/listings/:id/remove', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/market');
+    const l = await closeListing(db, id, 'staff');
+    if (!l) return c.redirect('/market?msg=done_already');
+    // Discord のカードも「受付終了」に
+    if (l.channelId && l.messageId) await deps.discord.editMessage(l.channelId, l.messageId, listingCard(l, cfg) as never).catch(() => undefined);
+    await audit(db, { actorId: c.get('session').userId, targetId: l.sellerId, action: 'market.close', detail: { listingId: id, by: 'removed' }, via: 'web' });
+    return c.redirect('/market?msg=removed');
   });
 
   // ───────── ショップ（宮司のみ） ─────────

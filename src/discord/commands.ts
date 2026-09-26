@@ -109,6 +109,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
         s.setName('shop').setNameLocalizations({ ja: '授与品' }).setDescription('Shop').setDescriptionLocalizations({ ja: '授与品（ショップ）のボタン（#授与所 用）' }),
       )
       .addSubcommand((s) =>
+        s.setName('market').setNameLocalizations({ ja: '市場' }).setDescription('Market').setDescriptionLocalizations({ ja: '市場の「出品する」ボタン（#市場 用）' }),
+      )
+      .addSubcommand((s) =>
         s.setName('gender').setNameLocalizations({ ja: '性別' }).setDescription('Gender').setDescriptionLocalizations({ ja: '性別を選ぶボタン（前からいる方向け。#授与所 など）' }),
       )
       .toJSON(),

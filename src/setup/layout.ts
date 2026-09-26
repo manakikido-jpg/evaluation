@@ -28,6 +28,7 @@ export type RoleKey =
   | 'title_utaite'
   | 'color_kin'
   | 'title_hounou'
+  | 'merchant'
   | 'male'
   | 'female'
   | 'ema_pending';
@@ -48,14 +49,16 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
+  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'market' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
+  /** 読むだけでも、スレッドの中では書ける（#市場 の取引のスレッド） */
+  threadsOk?: boolean;
   /**
    * 前の版での名前（別のカテゴリにあってもよい）。見つかったら、作らずにこのカテゴリへ移して名前を変える
    * （書き込みはそのまま。「🪧｜絵馬」のような飾りは残す）
    */
   formerly?: string[];
   /** 入鯖申請・宵参り申請・お守りのボタンを置く */
-  panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop')[];
+  panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop' | 'market')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
@@ -111,6 +114,8 @@ export const ROLES: RoleSpec[] = [
   { key: 'sanpaisha', name: '🔰 参拝者', color: 0xb0b0b0, hoist: true, permissions: 0n },
   // 入鯖申請が承認されて、まだ自己紹介を書いていない人（#絵馬-男性・#絵馬-女性 だけ見える）
   { key: 'ema_pending', name: '📝 絵馬待ち', color: 0, hoist: false, permissions: 0n },
+  // 開業権利（授与品）: #市場 に出品できる。色なし
+  { key: 'merchant', name: '🏪 開業', color: 0, hoist: false, permissions: 0n },
   // 性別（入鯖申請で選ぶ）。色なし
   { key: 'male', name: '♂ 男性', color: 0, hoist: false, permissions: 0n },
   { key: 'female', name: '♀ 女性', color: 0, hoist: false, permissions: 0n },
@@ -198,6 +203,15 @@ export const FULL: Layout = {
         { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: 'omamori_zatsudan' },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
         { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（花びらがもらえます）' },
+        {
+          name: '市場',
+          kind: 'text',
+          readOnly: true,
+          threadsOk: true,
+          configKey: 'market',
+          panels: ['market'],
+          topic: 'イラスト・歌・作ったもの・通話などを花びらで売り買い（出品は開業権利がある方）',
+        },
         { name: '拝殿', kind: 'voice' },
         { name: '➕ 縁側をひらく', kind: 'voice', hub: '🍵 {name}の縁側' },
         { name: '奥の院', kind: 'voice', afk: true },

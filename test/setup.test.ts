@@ -166,7 +166,7 @@ describe('セットアップ', () => {
   it('社務所に申請ボタンを置く（2 回目は置かない）', async () => {
     const d = fakeDiscord();
     const r1 = await applyLayout(d.api, GUILD, FULL);
-    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）', '#授与所（授与品）']);
+    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）', '#授与所（授与品）', '#市場（市場）']);
     expect(d.messages.filter((m) => m.channelId === find(d, '社務所', 0).id)).toHaveLength(2);
     expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(2);
     expect(JSON.stringify(d.messages[0]!.body)).toContain('apply:start');
@@ -175,7 +175,7 @@ describe('セットアップ', () => {
     const r2 = await applyLayout(d.api, GUILD, FULL);
     expect(r2.panelsPosted).toEqual([]);
     const r3 = await applyLayout(d.api, GUILD, FULL, { postPanels: true });
-    expect(r3.panelsPosted).toHaveLength(4);
+    expect(r3.panelsPosted).toHaveLength(5);
   });
 
   it('何度実行しても同じものは作らない', async () => {
@@ -258,18 +258,39 @@ describe('片付け（--tidy）', () => {
     expect(d.channels.some((c) => c.id === r.channelIds.keiji)).toBe(true);
   });
 
-  it('カテゴリとチャンネルを配置どおりに並べる', async () => {
+  it('あとから作るカテゴリ・チャンネルは、配置で 1 つ前のもののすぐ後ろにできる', async () => {
     const d = fakeDiscord();
     await applyLayout(d.api, GUILD, MINIMAL);
     await applyLayout(d.api, GUILD, FULL);
-    // 最小構成のカテゴリが先にあるので、掲示・縁日・宿坊は下にできている
     const cats = () => d.channels.filter((c) => c.type === 4).sort((a, b) => a.position! - b.position!).map((c) => c.name);
-    expect(cats().indexOf('📜 掲示')).toBeGreaterThan(cats().indexOf('🔒 社務所裏'));
-    await tidyGuild(d.api, GUILD, FULL);
     expect(cats()).toEqual(FULL.categories.map((c) => c.name));
     expect(names(d, '🔒 社務所裏').slice(0, 5)).toEqual(['寄合', '申請受付', 'お参り判定', '相談窓口', '記録']);
-    // 2 回目はすることがない
-    expect(await tidyGuild(d.api, GUILD, FULL)).toEqual([]);
+  });
+
+  it('自分で並べ替えた順は、片付けでもそのまま（--reorder のときだけ配置どおりに並べ直す）', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, FULL);
+    const cats = () => d.channels.filter((c) => c.type === 4).sort((a, b) => a.position! - b.position!).map((c) => c.name);
+    // 宮司が、縁日をいちばん上に、#境内 の中の順も変えた
+    find(d, '🎮 縁日', 4).position = -1;
+    const keidai = find(d, '🌳 境内', 4);
+    const texts = d.channels.filter((c) => c.parent_id === keidai.id).sort((a, b) => a.position! - b.position!);
+    texts.reverse().forEach((c, i) => (c.position = i));
+    const before = { cats: cats(), keidai: names(d, '🌳 境内') };
+    await applyLayout(d.api, GUILD, FULL);
+    await tidyGuild(d.api, GUILD, FULL);
+    expect(cats()).toEqual(before.cats);
+    expect(names(d, '🌳 境内')).toEqual(before.keidai);
+    // 新しく足したチャンネルは、前のもののすぐ後ろ（ほかの並びはそのまま）
+    const omikuji = find(d, 'おみくじ', 0);
+    d.channels.splice(d.channels.findIndex((c) => c.name === '市場'), 1);
+    await applyLayout(d.api, GUILD, FULL);
+    const after = names(d, '🌳 境内');
+    expect(after[after.indexOf(omikuji.name) + 1]).toBe('市場');
+    expect(after.filter((n) => n !== '市場')).toEqual(before.keidai.filter((n) => n !== '市場'));
+    // --reorder なら配置どおり
+    await tidyGuild(d.api, GUILD, FULL, { reorder: true });
+    expect(cats()).toEqual(FULL.categories.map((c) => c.name));
   });
 
   it('Discord が最初から作る「一般」は消す。自分で作ったチャンネルとそのカテゴリは残す', async () => {

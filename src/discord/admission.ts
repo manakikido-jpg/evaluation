@@ -179,7 +179,7 @@ export class AdmissionApp {
     if (kind === 'omamori' && !this.cfg.roles.omamori.length) {
       return void (await i.reply({ content: 'お守りのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
-    await channel.send(panelMessage(kind === 'apply' || kind === 'omamori' || kind === 'shop' || kind === 'gender' ? kind : 'yoimairi', { omamori: this.cfg.roles.omamori }));
+    await channel.send(panelMessage(kind === 'apply' || kind === 'omamori' || kind === 'shop' || kind === 'gender' || kind === 'market' ? kind : 'yoimairi', { omamori: this.cfg.roles.omamori }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 

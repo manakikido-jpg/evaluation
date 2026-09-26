@@ -448,3 +448,50 @@ export const roomPayers = pgTable(
   },
   (t) => [primaryKey({ columns: [t.channelId, t.memberId] })],
 );
+
+/** 市場: 開業権利を持つ人の出品（イラスト・歌・作成物・通話など）。花びらだけで売り買いする */
+export const marketListings = pgTable(
+  'market_listings',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    sellerId: text('seller_id').notNull(),
+    /** illust / voice / craft / call / other */
+    category: text('category').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    price: integer('price').notNull(),
+    /** open 受付中 / closed 売った人が終了 / removed 運営が取り下げ */
+    status: text('status').$type<'open' | 'closed' | 'removed'>().notNull().default('open'),
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('market_listings_seller_idx').on(t.sellerId), check('market_listings_price', sql`${t.price} > 0`)],
+);
+export type MarketListing = typeof marketListings.$inferSelect;
+
+/** 市場の取引。買った人の花びらは預かっておき、「受け取った」（または期限）で売った人に渡す */
+export const marketOrders = pgTable(
+  'market_orders',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    listingId: bigint('listing_id', { mode: 'number' }).notNull(),
+    buyerId: text('buyer_id').notNull(),
+    sellerId: text('seller_id').notNull(),
+    price: integer('price').notNull(),
+    /** サーバーの手数料（売った人に渡すのは price - fee） */
+    fee: integer('fee').notNull(),
+    /** paid 預かり中 / completed 渡した / disputed 問題あり（運営が判断） / refunded 買った人に戻した */
+    status: text('status').$type<'paid' | 'completed' | 'disputed' | 'refunded'>().notNull().default('paid'),
+    /** やり取りのスレッド */
+    threadId: text('thread_id'),
+    /** この時刻までに「受け取った」「問題あり」がなければ、売った人に渡す */
+    autoReleaseAt: timestamp('auto_release_at', { withTimezone: true }).notNull(),
+    decidedBy: text('decided_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (t) => [index('market_orders_status_idx').on(t.status, t.autoReleaseAt)],
+);
+export type MarketOrder = typeof marketOrders.$inferSelect;

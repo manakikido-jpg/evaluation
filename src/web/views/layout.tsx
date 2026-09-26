@@ -3,7 +3,7 @@ import type { AdminSession } from '../../db/schema.js';
 import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
 
-type Nav = 'home' | 'stats' | 'updates' | 'roles' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
+type Nav = 'home' | 'stats' | 'updates' | 'roles' | 'market' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
 
 /** 画面に出すログイン中の人（updatesUnseen: まだ読んでいない更新の数） */
 export type SessionView = AdminSession & { updatesUnseen?: number };
@@ -49,6 +49,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
               </a>
               <a href="/audit" class={nav === 'audit' ? 'on' : ''}>
                 記録
+              </a>
+              <a href="/market" class={nav === 'market' ? 'on' : ''}>
+                市場
               </a>
               {session.level === 'guji' && (
                 <a href="/notices" class={nav === 'notices' ? 'on' : ''}>

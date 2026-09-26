@@ -7,7 +7,7 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
@@ -20,6 +20,26 @@ export type OmamoriPanelItem = { roleId: string; label: string; emoji: string; d
 export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[] } = {}): PanelMessage {
   if (kind === 'omamori') return omamoriPanel(opts.omamori ?? []);
   if (kind === 'shop') return shopPanel();
+  if (kind === 'market') {
+    return {
+      embeds: [
+        {
+          title: '🏪 市場',
+          description: [
+            '開業権利を持つ方が、イラスト・歌・作ったもの・通話（雑談・寝落ち）などを花びらで売っています。出品のカードの「買う」から買えます。',
+            '',
+            '・花びらは社務所が預かり、「受け取った」を押すと売った人に渡します（押さなくても期限が来たら渡します）',
+            '・困ったときは、取引のスレッドの「問題あり」で運営が確認します',
+            '・通話は 18 歳以上どうしだけ。性的なもの・本物のお金のやり取りは禁止です',
+            '',
+            '-# 出品するには #授与所 の「開業権利」を受けてから、下のボタンを押してください',
+          ].join('\n'),
+          color: SHU,
+        },
+      ],
+      components: [{ type: 1, components: [{ type: 2, style: 1, label: '出品する', custom_id: 'market:new', emoji: { name: '🏪' } }] }],
+    };
+  }
   if (kind === 'gender') {
     return {
       embeds: [

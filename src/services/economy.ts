@@ -21,6 +21,9 @@ export type CoinReason =
   | 'gift_receive'
   | 'boost'
   | 'room'
+  | 'market_buy'
+  | 'market_sell'
+  | 'market_refund'
   | 'admin_grant'
   | 'admin_take'
   | 'adjust';

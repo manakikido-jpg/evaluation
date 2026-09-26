@@ -79,6 +79,12 @@ export const ACTION_LABEL: Record<string, string> = {
   'coins.grant_all': '今いる人みんなに送った',
   'shop.update': 'ショップの品物を変更',
   'channel.update': 'チャンネルの説明・書き込みを変更',
+  'market.buy': '市場で購入',
+  'market.release': '市場の取引を完了',
+  'market.refund': '市場の取引を返金',
+  'market.dispute': '市場の取引に問題あり',
+  'market.close': '市場の出品を終了',
+  'role.update': 'ロールを変更',
   'shop.create': 'ショップの品物を追加',
   'shop.delete': 'ショップの品物を削除',
 };
