@@ -13,6 +13,7 @@ import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
 import { BoostApp } from './discord/boost.js';
 import { StickyApp } from './discord/sticky.js';
+import { VoicePanelApp } from './discord/voicePanel.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
   const shop = new ShopApp(db, cfg, actions);
   const boost = new BoostApp(db, cfg, actions);
   const sticky = new StickyApp(db, cfg, actions);
+  const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -112,6 +114,8 @@ async function main(): Promise<void> {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
     }
     void tempVoice.onVoiceStateUpdate(before, after);
+    // 通話のチャットに「この通話の人に朱印を押す」
+    voicePanel.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
     void app.onInteraction(i);

@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-vc-panel',
+    date: '2026-09-26',
+    kind: 'new',
+    where: ['Discord'],
+    title: '通話から朱印を押せるように',
+    items: [
+      '通話に入ると、その通話のチャットのいちばん下に「🌸 この通話の人に朱印を押す」が出る（前のものは消すので、たまらない）',
+      '押すと、今一緒に通話している人がボタンで並ぶ（自分にだけ見える）。押せばその人に朱印。押した人は ✅',
+    ],
+  },
+  {
     id: '2026-09-26-ema-no-button',
     date: '2026-09-26',
     kind: 'improve',

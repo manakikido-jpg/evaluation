@@ -19,7 +19,7 @@ import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/a
 import { walletOf } from '../services/economy.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
-import { giversOf, goenOf, goshuinchoOf, receivedCountOf } from '../services/shuin.js';
+import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
 import { COMMAND, parseShuinId } from './ids.js';
 import {
   giveLog,
@@ -30,6 +30,7 @@ import {
   promotionLog,
   revokeLog,
   revokeReply,
+  vcList,
   type Reply,
 } from './views.js';
 
@@ -150,6 +151,8 @@ export class ShuinApp {
             return await this.card(interaction, parsed.userId, false);
           case 'list':
             return await this.list(interaction, parsed.userId);
+          case 'vc':
+            return await this.vcList(interaction, parsed.userId);
         }
       }
     } catch (err) {
@@ -212,6 +215,18 @@ export class ShuinApp {
     if (result.status === 'revoked') {
       await this.log(revokeLog(interaction.user.id, receiverId, result.weight, result.goen));
     }
+  }
+
+  /** 通話のチャットのボタン: 今同じ通話にいる人を並べる（自分が入っている通話。いなければボタンの通話） */
+  private async vcList(interaction: ButtonInteraction<'cached'>, channelId: string): Promise<void> {
+    const channel = interaction.member.voice.channel ?? interaction.guild.channels.cache.get(channelId);
+    const others = channel?.isVoiceBased() ? [...channel.members.values()].filter((m) => !m.user.bot && m.id !== interaction.user.id) : [];
+    const stamped = await stampedBy(this.db, interaction.user.id, others.map((m) => m.id));
+    const people = others
+      .map((m) => ({ id: m.id, name: m.displayName, stamped: stamped.has(m.id) }))
+      // まだ押していない人を先に
+      .sort((a, b) => Number(a.stamped) - Number(b.stamped));
+    await interaction.reply({ ...vcList(people, others.length), flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS });
   }
 
   private async card(interaction: Repliable, ownerId: string, isPublic: boolean): Promise<void> {

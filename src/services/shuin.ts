@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNotNull, isNull, sql, sum } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { shuin } from '../db/schema.js';
 
@@ -129,4 +129,14 @@ export async function giversOf(db: Db, userId: string, limit = 100): Promise<{ g
     .where(and(eq(shuin.receiverId, userId), isNull(shuin.revokedAt)))
     .orderBy(desc(shuin.createdAt))
     .limit(limit);
+}
+
+/** その人が今朱印を押している相手（取り消したものは除く）のうち、ids にいる人 */
+export async function stampedBy(db: Db, giverId: string, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ id: shuin.receiverId })
+    .from(shuin)
+    .where(and(eq(shuin.giverId, giverId), inArray(shuin.receiverId, ids), isNull(shuin.revokedAt)));
+  return new Set(rows.map((r) => r.id));
 }
