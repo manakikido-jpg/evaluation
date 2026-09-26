@@ -153,7 +153,7 @@ BOT は先に動かせる。管理画面は SSH のトンネルで自分のパ�
 # VPS 上（.env の WEB_BASE_URL は http://localhost:3000 にしておく）
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build db bot web
 # 自分のパソコンで（開いたままにする）
-ssh -L 3000:localhost:3000 shamusho@（IP）
+ssh -N -o ServerAliveInterval=60 -L 3000:127.0.0.1:3000 shamusho@（IP）   # 行頭が PS C:\…> の画面で実行
 ```
 → パソコンのブラウザで http://localhost:3000。Developer Portal の Redirects に `http://localhost:3000/auth/callback` も追加しておく。
 

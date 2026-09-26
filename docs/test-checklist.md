@@ -108,6 +108,7 @@ docker compose logs -f bot     # 「commands registered」「members synced」�
 | セットアップで「permission denied」（書き込めない） | VPS で `sudo chown -R 1000:1000 config` してから、もう一度実行 |
 | 神職用コマンドが見えない | 🎐神職 ロールに「メンバーをタイムアウト」権限があるか |
 | DM が届かない | サの「サーバーにいるメンバーからの DM を許可」が ON か |
+| 管理画面が「このサイトにアクセスできません」 | トンネル（`ssh -N -o ServerAliveInterval=60 -L 3000:127.0.0.1:3000 shamusho@（IP）`）を**自分のパソコン**（行頭が `PS C:\…>`）で開いたままにしているか。VPS の中（行頭が `shamusho@vm-…$`）で実行すると `Address already in use` になる。パソコンがスリープすると切れるので、つなぎ直す |
 | 管理画面にログインできない | Developer Portal の Redirects に `http://localhost:3000/auth/callback` があるか。`.env` の Client Secret |
 | 起動しない | `docker compose logs bot` / `docker compose logs web` の最後の行（設定ファイルの書き間違いは、どこが違うかが出る） |
 
