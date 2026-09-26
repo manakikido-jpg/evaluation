@@ -37,6 +37,10 @@ export const economySchema = z.object({
   menzaifuPrice: z.number().int().positive().default(300),
   /** 免罪符を買える回数（1 人あたり、ずっと） */
   menzaifuMaxUses: z.number().int().min(0).default(1),
+  /** 贈り物（ショップ）: 1 回に贈れる量と、1 人が 1 日に贈れる合計 */
+  giftMin: z.number().int().positive().default(10),
+  giftMax: z.number().int().positive().default(1000),
+  giftDailyLimit: z.number().int().min(0).default(1000),
   /** 初期配布: 入鯖が承認されたときに 1 回だけ配る量（入り直しても 2 回目はない。0 で配らない） */
   joinBonus: z.number().int().min(0).default(3000),
   /** おみくじ（1 日 1 回のログボ）の基本の量。吉でこの量、大吉は 3 倍、凶は半分（0 なら花びらなし） */
@@ -99,6 +103,8 @@ export const guildConfigSchema = z
       banzuke: snowflake.optional(),
       /** #おみくじ: /おみくじ を引く場所（省略時は「おみくじ」という名前のチャンネル） */
       omikuji: snowflake.optional(),
+      /** #境内: 花吹雪（ショップ）を出す場所（省略時は「境内」という名前のチャンネル） */
+      keidai: snowflake.optional(),
     }),
     roles: z
       .object({
@@ -150,6 +156,13 @@ export const guildConfigSchema = z
           .default([]),
       })
       .default({ cooldownMinutes: 10, panels: [] }),
+    /** ショップ: セットアップが作った色守り・称号のロール（BOT が起動時に品物として並べる） */
+    shop: z
+      .object({
+        colors: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default('') })).default([]),
+        titles: z.array(z.object({ roleId: snowflake, name: z.string(), emoji: z.string().default('') })).default([]),
+      })
+      .default({ colors: [], titles: [] }),
     /** 自分の通話部屋: ここに入ると、その人の通話が同じカテゴリにでき、全員抜けると消える */
     tempVoice: z
       .object({

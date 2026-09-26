@@ -8,11 +8,11 @@ const SHU = 0xd7003a;
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 export const DISCORD_AGE_NOTE = '宵宮を見るには、Discord の年齢確認が必要な場合があります（ユーザー設定から。多くの方は自動で済んでいます）。';
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
-  components: { type: 1; components: { type: 2; style: 1 | 2; label: string; custom_id: string; emoji?: { name: string } }[] }[];
+  components: { type: 1; components: { type: 2; style: 1 | 2 | 3; label: string; custom_id: string; emoji?: { name: string } }[] }[];
 };
 
 /** お守り 1 つ分（config の roles.omamori と同じ形） */
@@ -20,6 +20,7 @@ export type OmamoriPanelItem = { roleId: string; label: string; emoji: string; d
 
 export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[] } = {}): PanelMessage {
   if (kind === 'omamori') return omamoriPanel(opts.omamori ?? []);
+  if (kind === 'shop') return shopPanel();
   if (kind === 'apply') {
     return {
       embeds: [
@@ -84,5 +85,19 @@ function omamoriPanel(items: OmamoriPanelItem[]): PanelMessage {
       },
     ],
     components: rows,
+  };
+}
+
+/** #授与所 のショップのボタン */
+function shopPanel(): PanelMessage {
+  return {
+    embeds: [
+      {
+        title: '🛍 授与所 ― 授与品',
+        description: '花びらで授与品（色守り・称号・花吹雪・贈り物 など）を受けられます。下のボタンから一覧を開いてください（自分にだけ表示されます）。',
+        color: SHU,
+      },
+    ],
+    components: [{ type: 1, components: [{ type: 2, style: 1, label: '授与品を見る', custom_id: 'shop:open', emoji: { name: '🛍' } }] }],
   };
 }

@@ -74,6 +74,9 @@ export const ACTION_LABEL: Record<string, string> = {
   'settings.reset': '設定をファイルの値に戻した',
   'member.unban': 'BAN 解除',
   'economy.join_bonus_all': '今いる人に初期配布',
+  'shop.update': 'ショップの品物を変更',
+  'shop.create': 'ショップの品物を追加',
+  'shop.delete': 'ショップの品物を削除',
 };
 
 export function memberRankLabel(cfg: GuildConfig, roleIds: readonly string[]): string {

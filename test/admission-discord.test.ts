@@ -37,6 +37,7 @@ beforeEach(async () => {
     sendMessage: async () => ({ id: '0' }),
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
+    guildRoles: async () => [],
   };
   let n = 0;
   const client = {

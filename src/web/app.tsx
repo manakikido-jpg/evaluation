@@ -51,6 +51,15 @@ import {
   type NoticeCtx,
 } from '../services/notices.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
+import { ShopPage } from './views/shop.js';
+import {
+  createItem as createShopItem,
+  deleteItem as deleteShopItem,
+  getItem as getShopItem,
+  listItems as listShopItems,
+  recentPurchases,
+  updateItem as updateShopItem,
+} from '../services/shop.js';
 import type { GuildChannel } from '../lib/discordRest.js';
 
 export type WebDeps = {
@@ -241,7 +250,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -662,6 +671,9 @@ export function createWebApp(deps: WebDeps) {
         shuinReceive: num('shuinReceive'),
         omikujiBase: num('omikujiBase'),
         joinBonus: num('joinBonus'),
+        giftMin: num('giftMin'),
+        giftMax: num('giftMax'),
+        giftDailyLimit: num('giftDailyLimit'),
       },
       ranks: Object.fromEntries(
         cfg.ranks.map((r) => [r.key, { weight: num(`rank.${r.key}.weight`), ...(r.auto ? { requiredGoen: num(`rank.${r.key}.requiredGoen`) } : {}) }]),
@@ -870,6 +882,95 @@ export function createWebApp(deps: WebDeps) {
       const r = await repostChannel(noticeCtx(), channelId, c.get('session').userId);
       return r.tooLong.length ? 'too_long' : 'reposted_channel';
     });
+  });
+
+  // ───────── ショップ（宮司のみ） ─────────
+
+  app.use('/shop/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+
+  const shopRoles = async () => {
+    try {
+      return await deps.discord.guildRoles(cfg.guildId);
+    } catch (err) {
+      logger.warn({ err }, 'could not load guild roles');
+      return [];
+    }
+  };
+  /** 品物のフォーム（空の日数は「ずっと」） */
+  const shopFields = (body: Record<string, unknown>) => {
+    const n = (k: string) => (typeof body[k] === 'string' && body[k] !== '' ? Number(body[k]) : undefined);
+    const days = n('durationDays');
+    return {
+      name: field(body, 'name', 60),
+      emoji: field(body, 'emoji', 10),
+      description: field(body, 'description', 100),
+      price: n('price'),
+      durationDays: days === undefined ? null : days,
+      position: n('position'),
+    };
+  };
+  const validInt = (v: number | null | undefined, min: number) => v === undefined || v === null || (Number.isInteger(v) && v >= min && v <= 10_000_000);
+
+  app.get('/shop', async (c) => {
+    const [items, roles, purchases] = await Promise.all([listShopItems(db), shopRoles(), recentPurchases(db, 50)]);
+    const names = await namesOf(db, purchases.flatMap((p) => [p.memberId, p.targetId ?? '']).filter(Boolean));
+    return c.html(<ShopPage session={c.get('session')} items={items} roles={roles} purchases={purchases} names={names} economy={cfg.economy} flash={c.req.query('msg')} />);
+  });
+
+  app.post('/shop/items/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const item = Number.isSafeInteger(id) ? await getShopItem(db, id) : undefined;
+    if (!item) return c.redirect('/shop');
+    const body = await c.req.parseBody();
+    const f = shopFields(body);
+    if (!f.name || !validInt(f.price, 0) || !validInt(f.durationDays, 1) || !validInt(f.position, -1000)) return c.redirect('/shop?msg=invalid');
+    await updateShopItem(db, id, {
+      name: f.name,
+      emoji: f.emoji,
+      description: f.description,
+      enabled: body.enabled === 'yes',
+      ...(f.price !== undefined && item.kind !== 'menzaifu' && item.kind !== 'gift' ? { price: f.price } : {}),
+      ...(item.kind === 'role' || item.kind === 'ema_pin' ? { durationDays: item.kind === 'ema_pin' ? (f.durationDays ?? 7) : f.durationDays } : {}),
+      ...(f.position !== undefined ? { position: f.position } : {}),
+    });
+    await audit(db, { actorId: c.get('session').userId, action: 'shop.update', detail: { id, name: f.name, price: f.price, enabled: body.enabled === 'yes' }, via: 'web' });
+    return c.redirect('/shop?msg=saved');
+  });
+
+  app.post('/shop/items', async (c) => {
+    const body = await c.req.parseBody();
+    const f = shopFields(body);
+    const roleId = typeof body.roleId === 'string' ? body.roleId : '';
+    const group = body.roleGroup === 'color' || body.roleGroup === 'title' ? body.roleGroup : null;
+    if (!f.name || !/^\d{17,20}$/.test(roleId) || f.price === undefined || !validInt(f.price, 0) || !validInt(f.durationDays, 1)) return c.redirect('/shop?msg=invalid');
+    const roles = await shopRoles();
+    if (!roles.some((r) => r.id === roleId && !r.managed)) return c.redirect('/shop?msg=invalid');
+    if ((await listShopItems(db)).some((i) => i.roleId === roleId)) return c.redirect('/shop?msg=role_taken');
+    const items = await listShopItems(db);
+    const item = await createShopItem(db, {
+      kind: 'role',
+      name: f.name,
+      emoji: f.emoji,
+      description: f.description,
+      price: f.price,
+      roleId,
+      roleGroup: group,
+      durationDays: f.durationDays,
+      position: items.reduce((n, i) => Math.max(n, i.position), 0) + 1,
+    });
+    await audit(db, { actorId: c.get('session').userId, action: 'shop.create', detail: { id: item.id, name: f.name, roleId, price: f.price }, via: 'web' });
+    return c.redirect('/shop?msg=created');
+  });
+
+  app.post('/shop/items/:id/delete', async (c) => {
+    const id = Number(c.req.param('id'));
+    const body = await c.req.parseBody();
+    const item = Number.isSafeInteger(id) ? await getShopItem(db, id) : undefined;
+    // 決まった動きの品物（花吹雪など）は消さずに「販売しない」にする
+    if (!item || item.kind !== 'role' || body.confirm !== 'yes') return c.redirect('/shop');
+    await deleteShopItem(db, id);
+    await audit(db, { actorId: c.get('session').userId, action: 'shop.delete', detail: { id, name: item.name }, via: 'web' });
+    return c.redirect('/shop?msg=deleted');
   });
 
   app.get('/audit', async (c) => {

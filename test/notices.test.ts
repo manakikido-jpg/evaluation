@@ -68,6 +68,7 @@ function fakeDiscord(channels = CHANNELS) {
       log.push(`delete ${m}`);
     },
     guildChannels: async () => channels,
+    guildRoles: async () => [],
   };
   /** チャンネルのメッセージを投稿順に */
   const inChannel = (c: string) => [...messages.entries()].filter(([, v]) => v.channelId === c).map(([id, v]) => ({ id, ...v }));

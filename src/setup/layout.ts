@@ -15,7 +15,17 @@ export type RoleKey =
   | 'omamori_neochi'
   | 'omamori_game'
   | 'omamori_zatsudan'
-  | 'omamori_yoimiya';
+  | 'omamori_yoimiya'
+  | 'color_sakura'
+  | 'color_fuji'
+  | 'color_wakakusa'
+  | 'color_yamabuki'
+  | 'color_sora'
+  | 'color_beni'
+  | 'title_shugo'
+  | 'title_yofukashi'
+  | 'title_shobushi'
+  | 'title_utaite';
 
 export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint; /** 誰でも @ で呼べる（お守り） */ mentionable?: boolean };
 
@@ -33,9 +43,9 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji';
+  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
   /** 入鯖申請・宵参り申請・お守りのボタンを置く */
-  panels?: ('apply' | 'yoimairi' | 'omamori')[];
+  panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
@@ -78,6 +88,8 @@ export const ROLES: RoleSpec[] = [
   { key: 'guji', name: '⛩ 宮司', color: 0xc8102e, hoist: true, permissions: STAFF_PERMS | P.ManageChannels | P.ManageRoles | P.ManageGuild },
   { key: 'shinshoku', name: '🎐 神職', color: 0xe0607e, hoist: true, permissions: STAFF_PERMS },
   { key: 'yakudoshi', name: '👹 厄年', color: 0x5b0e14, hoist: false, permissions: 0n },
+  // 色守り（ショップ）: 役職の色より上に置くので、買った色で名前が表示される
+  ...SHOP_COLORS().map((c) => ({ key: c.key, name: c.name, color: c.color, hoist: false, permissions: 0n })),
   { key: 'yoimairi', name: '🔞 宵参り', color: 0x6a5acd, hoist: false, permissions: 0n },
   { key: 'sodai', name: '🏮 総代', color: 0xd4a017, hoist: true, permissions: 0n },
   { key: 'sewayaku', name: '🎋 世話役', color: 0x3cb371, hoist: true, permissions: 0n },
@@ -85,7 +97,31 @@ export const ROLES: RoleSpec[] = [
   { key: 'sanpaisha', name: '🔰 参拝者', color: 0xb0b0b0, hoist: true, permissions: 0n },
   // お守り（募集の通知を受け取るロール）。色なし・一覧で分けない。誰でも @ で呼べる
   ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: true })),
+  // 称号（ショップ）。色なし
+  ...SHOP_TITLES().map((t) => ({ key: t.key, name: t.name, color: 0, hoist: false, permissions: 0n })),
 ];
+
+/** 色守り（ショップで買う名前の色） */
+export function SHOP_COLORS(): { key: RoleKey; name: string; label: string; emoji: string; color: number }[] {
+  return [
+    { key: 'color_sakura', name: '🎨 桜色', label: '桜', emoji: '🌸', color: 0xf4a7b9 },
+    { key: 'color_fuji', name: '🎨 藤色', label: '藤', emoji: '💜', color: 0xa99ad6 },
+    { key: 'color_wakakusa', name: '🎨 若草色', label: '若草', emoji: '🌱', color: 0xa8d44a },
+    { key: 'color_yamabuki', name: '🎨 山吹色', label: '山吹', emoji: '🌼', color: 0xf8b500 },
+    { key: 'color_sora', name: '🎨 空色', label: '空', emoji: '🩵', color: 0x7cc7e8 },
+    { key: 'color_beni', name: '🎨 紅色', label: '紅', emoji: '❤️', color: 0xd7003a },
+  ];
+}
+
+/** 称号（ショップで買うロール） */
+export function SHOP_TITLES(): { key: RoleKey; name: string; label: string; emoji: string }[] {
+  return [
+    { key: 'title_shugo', name: '🍶 酒豪', label: '酒豪', emoji: '🍶' },
+    { key: 'title_yofukashi', name: '🌙 夜更かし', label: '夜更かし', emoji: '🌙' },
+    { key: 'title_shobushi', name: '🎮 勝負師', label: '勝負師', emoji: '🎮' },
+    { key: 'title_utaite', name: '🎤 歌い手', label: '歌い手', emoji: '🎤' },
+  ];
+}
 
 /** お守り（#授与所 のボタンで付け外しする、募集の通知用ロール） */
 export function OMAMORI_SPECS(): { key: RoleKey; name: string; label: string; emoji: string; description: string; adultOnly: boolean }[] {
@@ -115,7 +151,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '御触書', kind: 'text', readOnly: true, topic: 'お知らせ' },
-        { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）を受け取る', panels: ['omamori'] },
+        { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）と授与品（ショップ）', panels: ['omamori', 'shop'] },
         { name: '絵馬', kind: 'text', configKey: 'ema', topic: '自己紹介（書くと御朱印帳ボタンが付きます）' },
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji', topic: '昇格・称号の発表' },
         { name: '番付', kind: 'text', readOnly: true, configKey: 'banzuke', topic: 'ご縁のランキング（BOT が 10 分ごとに更新）' },
@@ -125,7 +161,7 @@ export const FULL: Layout = {
       name: '🌳 境内',
       visibility: 'member',
       channels: [
-        { name: '境内', kind: 'text', topic: '雑談' },
+        { name: '境内', kind: 'text', topic: '雑談', configKey: 'keidai' },
         { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: 'omamori_zatsudan' },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
         { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（花びらがもらえます）' },

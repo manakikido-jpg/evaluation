@@ -333,3 +333,57 @@ export const omikuji = pgTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.date] })],
 );
+
+/**
+ * ショップ（授与品）の品物。管理画面（宮司）で名前・値段・説明・販売のオン／オフを変えられる。
+ * kind: role = ロールを付ける（色守り・称号）、ほかは決まった動き
+ */
+export const shopItems = pgTable(
+  'shop_items',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu'>().notNull(),
+    name: text('name').notNull(),
+    emoji: text('emoji').notNull().default(''),
+    description: text('description').notNull().default(''),
+    /** 値段（免罪符は設定の値段を使うので 0） */
+    price: integer('price').notNull().default(0),
+    /** kind = role のとき付けるロール */
+    roleId: text('role_id'),
+    /** 同じ組のロールは 1 つだけ（色守りを買い替えると前の色は外れる）。例: color / title */
+    roleGroup: text('role_group'),
+    /** 何日で外れるか（なし = ずっと） */
+    durationDays: integer('duration_days'),
+    enabled: boolean('enabled').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('shop_items_price', sql`${t.price} >= 0`)],
+);
+
+export type ShopItem = typeof shopItems.$inferSelect;
+
+/** 買った記録（期限のあるもの＝色守り・絵馬のピン留めは、期限が来たら BOT が外す） */
+export const shopPurchases = pgTable(
+  'shop_purchases',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    itemId: bigint('item_id', { mode: 'number' }).notNull(),
+    kind: text('kind').notNull(),
+    price: integer('price').notNull(),
+    roleId: text('role_id'),
+    /** 花吹雪・贈り物の相手 */
+    targetId: text('target_id'),
+    /** 絵馬のピン留め: チャンネルとメッセージ */
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    /** 期限切れで外した・買い替えた・払い戻した日時 */
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('shop_purchases_member_idx').on(t.memberId, t.createdAt), index('shop_purchases_expires_idx').on(t.expiresAt)],
+);
+
+export type ShopPurchase = typeof shopPurchases.$inferSelect;

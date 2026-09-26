@@ -18,7 +18,11 @@ export interface DiscordActions {
   deleteMessage(channelId: string, messageId: string): Promise<void>;
   /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
   guildChannels(guildId: string): Promise<GuildChannel[]>;
+  /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
+  guildRoles(guildId: string): Promise<GuildRole[]>;
 }
+
+export type GuildRole = { id: string; name: string; position: number; managed: boolean; color: number };
 
 export type MessageBody = { content?: string; embeds?: { title?: string; description?: string; color?: number }[]; components?: unknown[] };
 
@@ -82,5 +86,6 @@ export function createDiscordActions(botToken: string): DiscordActions {
       (await call('POST', `/channels/${c}/messages`, { body: { ...body, allowed_mentions: { parse: [] } } })) as { id: string },
     deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
     guildChannels: async (g) => (await call('GET', `/guilds/${g}/channels`)) as GuildChannel[],
+    guildRoles: async (g) => (await call('GET', `/guilds/${g}/roles`)) as GuildRole[],
   };
 }

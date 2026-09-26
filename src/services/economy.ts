@@ -7,7 +7,19 @@ import { coinTx, members, wallets } from '../db/schema.js';
  * 残高（wallets）と入出金の記録（coin_tx）は必ず同じトランザクションで変える。
  */
 
-export type CoinReason = 'voice' | 'shuin_give' | 'shuin_receive' | 'shuin_revoke' | 'menzaifu' | 'omikuji' | 'join_bonus' | 'adjust';
+export type CoinReason =
+  | 'voice'
+  | 'shuin_give'
+  | 'shuin_receive'
+  | 'shuin_revoke'
+  | 'menzaifu'
+  | 'omikuji'
+  | 'join_bonus'
+  | 'shop'
+  | 'shop_refund'
+  | 'gift_send'
+  | 'gift_receive'
+  | 'adjust';
 
 /** 増やす（amount > 0） */
 export async function addCoins(

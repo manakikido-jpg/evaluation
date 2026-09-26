@@ -220,3 +220,11 @@ code { background: var(--gray); padding: 1px 5px; border-radius: 4px; font-size:
 @media (prefers-color-scheme: dark) {
   .status.st-posted { background: #1f3a26; color: #bfe6c8; }
 }
+
+/* ショップ */
+.shop-items { display: grid; gap: 12px; }
+.shop-item { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.shop-item.off { opacity: .6; }
+.shop-item-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.shop-item input, .shop-item select { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+details summary { cursor: pointer; margin: 12px 0 6px; color: var(--muted); }

@@ -464,6 +464,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             <Num name="voiceDailyCap" label="通話でもらえる 1 日の上限" value={e.voiceDailyCap} file={f.voiceDailyCap} />
             <Num name="shuinGive" label="朱印を押すともらえる量" value={e.shuinGive} file={f.shuinGive} />
             <Num name="shuinReceive" label="朱印を頂くともらえる量" value={e.shuinReceive} file={f.shuinReceive} />
+            <Num name="giftMin" label="贈り物: 1 回に贈れる最小" value={e.giftMin} file={f.giftMin} min={1} />
+            <Num name="giftMax" label="贈り物: 1 回に贈れる最大" value={e.giftMax} file={f.giftMax} min={1} />
+            <Num name="giftDailyLimit" label="贈り物: 1 人が 1 日に贈れる合計" value={e.giftDailyLimit} file={f.giftDailyLimit} />
             <Num name="joinBonus" label="初期配布（入鯖が承認されたときに 1 回だけ。0 で配らない）" value={e.joinBonus} file={f.joinBonus} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
           </div>

@@ -64,6 +64,13 @@
       "when": 1790431077491,
       "tag": "0008_soudan_reveal_anonymous",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790437063256,
+      "tag": "0009_shop",
+      "breakpoints": true
     }
   ]
 }

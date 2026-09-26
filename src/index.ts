@@ -9,6 +9,7 @@ import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OmamoriApp } from './discord/omamori.js';
 import { RecruitApp } from './discord/recruit.js';
+import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
   const omikuji = new OmikujiApp(db, cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
+  const shop = new ShopApp(db, cfg, actions);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -65,6 +67,8 @@ async function main(): Promise<void> {
       .catch((err) => logger.error({ err }, 'member sync failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
+    // ショップ: 最初の品物を並べる
+    await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // 募集ボタン: なければ置く
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
@@ -79,6 +83,8 @@ async function main(): Promise<void> {
     const every10 = () => {
       omairi();
       banzuke();
+      // 期限が来た授与品（色守り・絵馬のピン留め）を外す
+      void shop.expire().catch((err) => logger.warn({ err }, 'shop expire failed'));
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
@@ -100,6 +106,7 @@ async function main(): Promise<void> {
     void omikuji.onInteraction(i);
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);
+    void shop.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);

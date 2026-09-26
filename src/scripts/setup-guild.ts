@@ -51,6 +51,7 @@ function createSetupApi(token: string): SetupApi {
     sendMessage: async (c, body) => void (await call('POST', `/channels/${c}/messages`, body)),
     deleteChannel: async (c) => void (await call('DELETE', `/channels/${c}`)),
     reorderChannels: async (g, body) => void (await call('PATCH', `/guilds/${g}/channels`, body)),
+    reorderRoles: async (g, body) => void (await call('PATCH', `/guilds/${g}/roles`, body)),
   };
 }
 

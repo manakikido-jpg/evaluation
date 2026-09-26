@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig } from '../src/config.js';
 import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type ApiChannel, type ApiGuild, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
-import { FULL, MINIMAL, P, RETIRED, ROLES } from '../src/setup/layout.js';
+import { FULL, MINIMAL, P, RETIRED, ROLES, SHOP_COLORS } from '../src/setup/layout.js';
 import example from '../config/guild.example.json' with { type: 'json' };
 
 const GUILD = '960000000000000000';
@@ -60,6 +60,10 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
       const i = channels.findIndex((c) => c.id === id);
       if (i < 0) throw new Error('Unknown Channel');
       channels.splice(i, 1);
+    },
+    reorderRoles: async (_g, body) => {
+      // 本物と同じく、動かしたロールの位置に合わせて、ほかのロールの位置も詰め直す
+      for (const o of body) roles.find((r) => r.id === o.id)!.position = o.position;
     },
     reorderChannels: async (_g, body) => {
       for (const o of body) channels.find((c) => c.id === o.id)!.position = o.position;
@@ -143,16 +147,16 @@ describe('セットアップ', () => {
   it('社務所に申請ボタンを置く（2 回目は置かない）', async () => {
     const d = fakeDiscord();
     const r1 = await applyLayout(d.api, GUILD, FULL);
-    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）']);
+    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）', '#授与所（授与品）']);
     expect(d.messages.filter((m) => m.channelId === find(d, '社務所', 0).id)).toHaveLength(2);
-    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(1);
+    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(2);
     expect(JSON.stringify(d.messages[0]!.body)).toContain('apply:start');
     expect(JSON.stringify(d.messages[1]!.body)).toContain('yoimairi:start');
 
     const r2 = await applyLayout(d.api, GUILD, FULL);
     expect(r2.panelsPosted).toEqual([]);
     const r3 = await applyLayout(d.api, GUILD, FULL, { postPanels: true });
-    expect(r3.panelsPosted).toHaveLength(3);
+    expect(r3.panelsPosted).toHaveLength(4);
   });
 
   it('何度実行しても同じものは作らない', async () => {
@@ -407,5 +411,35 @@ describe('名前を変えたあとでセットアップし直しても', () => {
     await applyLayout(d.api, GUILD, FULL);
     await tidyGuild(d.api, GUILD, FULL);
     expect(d.channels.some((c) => c.id === mine.id)).toBe(true);
+  });
+});
+
+describe('ショップのロール', () => {
+  it('色守り 6・称号 4 を作り、設定ファイルの shop に書く', async () => {
+    const d = fakeDiscord();
+    const r = await applyLayout(d.api, GUILD, FULL);
+    const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
+    expect(cfg.shop.colors.map((c) => c.name)).toEqual(['桜', '藤', '若草', '山吹', '空', '紅']);
+    expect(cfg.shop.titles.map((c) => c.name)).toEqual(['酒豪', '夜更かし', '勝負師', '歌い手']);
+    expect(cfg.channels.keidai).toBe(find(d, '境内', 0).id);
+  });
+
+  it('あとから足した色守りは一番下にできるので、片付けで役職・宵参りより上に動かす', async () => {
+    const d = fakeDiscord();
+    d.roles.find((x) => x.id === BOT_ROLE)!.position = 99;
+    // 前の版で作ったサーバー（色守りなし）
+    await applyLayout(d.api, GUILD, { ...FULL, roles: ROLES.filter((x) => !x.key.startsWith('color_')) });
+    await applyLayout(d.api, GUILD, FULL);
+    const pos = (name: string) => d.roles.find((x) => x.name === name)!.position;
+    expect(pos('🎨 桜色')).toBeLessThan(pos('🔰 参拝者'));
+    const done = await tidyGuild(d.api, GUILD, FULL);
+    expect(done).toContain('並べ替え: 色守りのロールを、役職と宵参りより上に');
+    for (const c of SHOP_COLORS()) {
+      expect(pos(c.name), c.name).toBeGreaterThan(pos('🔞 宵参り'));
+      expect(pos(c.name), c.name).toBeGreaterThan(pos('🏮 総代'));
+      expect(pos(c.name), c.name).toBeLessThan(pos('👹 厄年'));
+    }
+    // 2 回目はすることがない
+    expect(await tidyGuild(d.api, GUILD, FULL)).not.toContain('並べ替え: 色守りのロールを、役職と宵参りより上に');
   });
 });

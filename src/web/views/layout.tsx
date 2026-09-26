@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
 import { LEVEL_LABEL } from '../format.js';
 
-type Nav = 'home' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'settings';
+type Nav = 'home' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'shop' | 'settings';
 
 export function Layout(props: { title: string; session?: AdminSession; nav?: Nav; children: Child }) {
   const { session, nav } = props;
@@ -46,6 +46,11 @@ export function Layout(props: { title: string; session?: AdminSession; nav?: Nav
               {session.level === 'guji' && (
                 <a href="/notices" class={nav === 'notices' ? 'on' : ''}>
                   掲示
+                </a>
+              )}
+              {session.level === 'guji' && (
+                <a href="/shop" class={nav === 'shop' ? 'on' : ''}>
+                  ショップ
                 </a>
               )}
               {session.level === 'guji' && (

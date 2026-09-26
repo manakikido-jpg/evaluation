@@ -1,5 +1,5 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
-import { FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
 
 export type ApiGuild = {
   id: string;
@@ -32,6 +32,7 @@ export interface SetupApi {
   sendMessage(channelId: string, body: unknown): Promise<void>;
   deleteChannel(channelId: string): Promise<void>;
   reorderChannels(guildId: string, body: { id: string; position: number }[]): Promise<void>;
+  reorderRoles(guildId: string, body: { id: string; position: number }[]): Promise<void>;
 }
 
 export type ApiRole = { id: string; name: string; position: number; permissions: string; managed: boolean };
@@ -142,7 +143,7 @@ export async function applyLayout(
   if (!opts.dryRun) {
     roles = await api.roles(guildId);
     const myTop = Math.max(...roles.filter((r) => member.roles.includes(r.id)).map((r) => r.position), 0);
-    const managedByBot: RoleKey[] = ['yakudoshi', 'yoimairi', 'sodai', 'sewayaku', 'ujiko', 'sanpaisha', ...OMAMORI_SPECS().map((o) => o.key)];
+    const managedByBot: RoleKey[] = ['yakudoshi', 'yoimairi', 'sodai', 'sewayaku', 'ujiko', 'sanpaisha', ...OMAMORI_SPECS().map((o) => o.key), ...SHOP_COLORS().map((c) => c.key), ...SHOP_TITLES().map((t) => t.key)];
     const above = managedByBot
       .map((k) => roles.find((r) => r.id === result.roleIds[k]))
       .filter((r): r is ApiRole => Boolean(r && r.position >= myTop))
@@ -342,6 +343,29 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   }
   channels = channels.filter((c) => !remove.has(c.id));
 
+  // ── 色守り（ショップ）のロールを、役職・宵参りより上へ（上にないと、買った色が名前に出ない） ──
+  {
+    const me = await api.me();
+    const mine = (await api.member(guildId, me.id)).roles;
+    const roles = await api.roles(guildId);
+    const myTop = Math.max(0, ...roles.filter((r) => mine.includes(r.id)).map((r) => r.position));
+    const below = roles.filter((r) => r.id !== guildId && r.position < myTop).sort((a, b) => b.position - a.position || a.id.localeCompare(b.id));
+    const colorNames = new Set(SHOP_COLORS().map((c) => c.name));
+    const colors = below.filter((r) => colorNames.has(r.name) && !r.managed);
+    const colored = ['🔞 宵参り', ...ROLES.filter((x) => ['sodai', 'sewayaku', 'ujiko', 'sanpaisha'].includes(x.key)).map((x) => x.name)];
+    const anchor = below.find((r) => colored.includes(r.name) && !r.managed);
+    if (colors.length && anchor && colors.some((c) => c.position <= anchor.position)) {
+      const rest = below.filter((r) => !colors.includes(r));
+      const i = rest.indexOf(anchor);
+      const order = [...rest.slice(0, i), ...colors, ...rest.slice(i)];
+      const body = order.map((r, k) => ({ id: r.id, position: myTop - 1 - k })).filter((o) => roles.find((r) => r.id === o.id)!.position !== o.position);
+      if (body.length) {
+        if (!opts.dryRun) await api.reorderRoles(guildId, body);
+        done.push('並べ替え: 色守りのロールを、役職と宵参りより上に');
+      }
+    }
+  }
+
   // ── 並べ替え: 配置のカテゴリを上から順に、配置にないものはそのあと ──
   const byPos = (a: ApiChannel, b: ApiChannel) => (a.position ?? 0) - (b.position ?? 0);
   const order: { id: string; position: number }[] = [];
@@ -364,7 +388,7 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
-const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り' };
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品' };
 
 /** 作った（見つけた）お守りロール → config の roles.omamori */
 export function omamoriConfig(roleIds: Partial<Record<RoleKey, string>>) {
@@ -393,5 +417,9 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
     tempVoice: { ...(base.tempVoice as object), hubs: r.hubs },
     recruit: { ...(base.recruit as object), panels: recruitConfig(r) },
+    shop: {
+      colors: SHOP_COLORS().filter((c) => r.roleIds[c.key]).map((c) => ({ roleId: r.roleIds[c.key], name: c.label, emoji: c.emoji })),
+      titles: SHOP_TITLES().filter((t) => r.roleIds[t.key]).map((t) => ({ roleId: r.roleIds[t.key], name: t.label, emoji: t.emoji })),
+    },
   };
 }

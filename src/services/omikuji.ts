@@ -56,8 +56,25 @@ export type OmikujiResult =
   | { status: 'drawn'; fortune: Fortune; amount: number; balance: number; sayings: { label: string; text: string }[] }
   | { status: 'already'; fortune: Fortune };
 
-export async function drawOmikuji(db: Db, economy: EconomyConfig, memberId: string, now: Date, rand: Rand = Math.random): Promise<OmikujiResult> {
+/** ショップの「もう 1 回」は、その日の 2 回目として別の日付の印で記録する（1 日 1 回まで） */
+const extraKey = (date: string) => `${date}#2`;
+
+/** 今日のおみくじ: 引いたか・もう 1 回を使ったか */
+export async function omikujiToday(db: Db, memberId: string, now: Date): Promise<{ drawn: boolean; extraUsed: boolean }> {
   const date = jstDate(now);
+  const rows = await db.select({ date: omikuji.date }).from(omikuji).where(eq(omikuji.memberId, memberId));
+  return { drawn: rows.some((r) => r.date === date), extraUsed: rows.some((r) => r.date === extraKey(date)) };
+}
+
+export async function drawOmikuji(
+  db: Db,
+  economy: EconomyConfig,
+  memberId: string,
+  now: Date,
+  rand: Rand = Math.random,
+  opts: { extra?: boolean } = {},
+): Promise<OmikujiResult> {
+  const date = opts.extra ? extraKey(jstDate(now)) : jstDate(now);
   const fortune = drawFortune(rand);
   const amount = omikujiReward(economy, fortune);
   // (member_id, date) が主キーなので、同じ日に 2 回目は入らない（連打しても 1 回だけ）

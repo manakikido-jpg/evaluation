@@ -60,6 +60,7 @@ function fakeDiscord(channels = [{ id: BANZUKE, name: '番付', type: 0, parent_
     },
     deleteMessage: async () => undefined,
     guildChannels: async () => channels,
+    guildRoles: async () => [],
   };
   const text = (id: string) => messages.get(id)?.embeds?.[0]?.description ?? '';
   const title = (id: string) => messages.get(id)?.embeds?.[0]?.title ?? '';

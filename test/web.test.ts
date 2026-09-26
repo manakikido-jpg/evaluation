@@ -38,6 +38,7 @@ const fakeActions: DiscordActions = {
     { id: '910000000000000002', name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0 },
     { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
   ],
+  guildRoles: async () => [],
 };
 
 const fakeApi: DiscordApi = {
@@ -515,6 +516,9 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       shuinReceive: '5',
       omikujiBase: '10',
       joinBonus: '3000',
+      giftMin: '10',
+      giftMax: '1000',
+      giftDailyLimit: '1000',
       omairiDays: '14',
       omairiExtendDays: '7',
       autoApproveAccountDays: '0',
@@ -608,6 +612,9 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       shuinReceive: '5',
       omikujiBase: '10',
       joinBonus: '3000',
+      giftMin: '10',
+      giftMax: '1000',
+      giftDailyLimit: '1000',
       omairiDays: '14',
       omairiExtendDays: '7',
       autoApproveAccountDays: '0',
@@ -684,5 +691,46 @@ describe('初期配布（管理画面）', () => {
     expect((await walletOf(db, USER)).balance).toBe(cfg.economy.joinBonus);
     await post(g, { confirm: 'yes' });
     expect((await walletOf(db, USER)).balance).toBe(cfg.economy.joinBonus);
+  });
+});
+
+describe('ショップ（管理画面）', () => {
+  const form = async (session: string, path: string, data: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
+    });
+  };
+
+  it('宮司だけが開けて、品物の値段・販売のオン／オフを変えられる', async () => {
+    const { seedDefaultItems, listItems } = await import('../src/services/shop.js');
+    await seedDefaultItems(db, { colors: [{ roleId: '960000000000000001', name: '桜', emoji: '🌸' }], titles: [] });
+    const s = await login(STAFF);
+    expect((await get('/shop', s)).status).toBe(403);
+    const [sakura] = await listItems(db);
+    expect((await form(s, `/shop/items/${sakura!.id}`, { name: 'x', price: '1' })).status).toBe(403);
+
+    const g = await login(GUJI);
+    const page = await (await get('/shop', g)).text();
+    expect(page).toContain('色守り（桜）');
+    expect(page).toContain('花吹雪');
+    const r = await form(g, `/shop/items/${sakura!.id}`, { name: '色守り（桜）', emoji: '🌸', description: 'きれい', price: '1200', durationDays: '14', position: '1' });
+    expect(r.headers.get('location')).toBe('/shop?msg=saved');
+    const after = (await listItems(db)).find((i) => i.id === sakura!.id)!;
+    expect(after).toMatchObject({ price: 1200, durationDays: 14, enabled: false, description: 'きれい' });
+    expect((await form(g, `/shop/items/${sakura!.id}`, { name: '', price: '1' })).headers.get('location')).toBe('/shop?msg=invalid');
+    expect((await form(g, `/shop/items/${sakura!.id}`, { name: 'a', price: '-5' })).headers.get('location')).toBe('/shop?msg=invalid');
+    expect((await listAudit(db, { action: 'shop.update' })).length).toBe(1);
+  });
+
+  it('決まった動きの品物（花吹雪など）は消せない', async () => {
+    const { seedDefaultItems, listItems } = await import('../src/services/shop.js');
+    await seedDefaultItems(db, { colors: [], titles: [] });
+    const g = await login(GUJI);
+    const hana = (await listItems(db)).find((i) => i.kind === 'hanafubuki')!;
+    await form(g, `/shop/items/${hana.id}/delete`, { confirm: 'yes' });
+    expect((await listItems(db)).some((i) => i.id === hana.id)).toBe(true);
   });
 });

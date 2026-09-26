@@ -105,6 +105,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addSubcommand((s) =>
         s.setName('omamori').setNameLocalizations({ ja: 'お守り' }).setDescription('Notification roles').setDescriptionLocalizations({ ja: 'お守り（募集の通知）のボタン（#授与所 用）' }),
       )
+      .addSubcommand((s) =>
+        s.setName('shop').setNameLocalizations({ ja: '授与品' }).setDescription('Shop').setDescriptionLocalizations({ ja: '授与品（ショップ）のボタン（#授与所 用）' }),
+      )
       .toJSON(),
     new SlashCommandBuilder()
       .setName('yaku')

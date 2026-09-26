@@ -46,6 +46,7 @@ beforeEach(async () => {
     sendMessage: async () => ({ id: '0' }),
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
+    guildRoles: async () => [],
   };
   ctx = { db, cfg, discord };
   const join = (id: string, roleIds: string[]) =>
