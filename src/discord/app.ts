@@ -1,6 +1,5 @@
 import {
   MessageFlags,
-  MessageType,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
@@ -10,7 +9,7 @@ import {
   type Message,
   type UserContextMenuCommandInteraction,
 } from 'discord.js';
-import { emaChannelIds, type GuildConfig } from '../config.js';
+import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { decidePromotion, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
@@ -23,7 +22,6 @@ import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembe
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf } from '../services/shuin.js';
 import { COMMAND, parseShuinId } from './ids.js';
 import {
-  emaReply,
   giveLog,
   giveReply,
   giversReply,
@@ -171,12 +169,7 @@ export class ShuinApp {
     if (message.guildId === this.cfg.guildId && !message.author.bot) {
       this.messageCounts.set(message.author.id, (this.messageCounts.get(message.author.id) ?? 0) + 1);
     }
-    if (!emaChannelIds(this.cfg).includes(message.channelId) || message.author.bot || !message.inGuild()) return;
-    // 返信や固定メッセージなどは除き、自己紹介の投稿にだけ付ける
-    if (message.type !== MessageType.Default) return;
-    await message
-      .reply({ ...emaReply(message.author.id), allowedMentions: { ...NO_MENTIONS, repliedUser: false } })
-      .catch((err) => logger.warn({ err }, 'ema reply failed'));
+    // 自己紹介（#絵馬-男性 など）には何も付けない（ひな形がいちばん下に出るだけ。2026-09 に御朱印帳ボタンをやめた）
   }
 
   private async fetchMember(interaction: Repliable, userId: string): Promise<GuildMember | undefined> {

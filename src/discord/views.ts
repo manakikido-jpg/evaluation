@@ -139,14 +139,6 @@ export function promotionAnnouncement(userId: string, promotion: Promotion, goen
   return `🌸 ${mention(userId)} さまのご縁が花ひらき、**${rankLabel(promotion.to)}** になられました。（ご縁 ${goen}）`;
 }
 
-/** #絵馬 の自己紹介に付けるボタン */
-export function emaReply(authorId: string): Reply {
-  return {
-    content: `📕 ${mention(authorId)} さまの御朱印帳`,
-    components: [row(cardButton(authorId), giveButton(authorId))],
-  };
-}
-
 /** #記録 用のログ */
 export function giveLog(giverId: string, giverRank: Rank, receiverId: string, weight: number, goen: number): string {
   return `🌸 朱印 ${mention(giverId)}（${giverRank.name}・格 ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}`;

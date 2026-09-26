@@ -245,21 +245,10 @@ describe('#絵馬', () => {
     };
   }
 
-  it('自己紹介の投稿に御朱印帳ボタンを付ける（通知は飛ばさない）', async () => {
-    const { m, reply } = msg(cfg.channels.ema ?? '900000000000000003');
-    const withEma = new ShuinApp({} as never, db, { ...cfg, channels: { ...cfg.channels, ema: '900000000000000003' } });
-    await withEma.onMessage(m as never);
-    expect(reply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: `📕 <@${R}> さまの御朱印帳`,
-        allowedMentions: { parse: [], repliedUser: false },
-      }),
-    );
-  });
-
-  it('ほかのチャンネル・BOT・返信には付けない', async () => {
+  it('自己紹介（#絵馬-男性 など）にも、ほかのチャンネル・BOT・返信にも何も付けない', async () => {
     const withEma = new ShuinApp({} as never, db, { ...cfg, channels: { ...cfg.channels, ema: '900000000000000003' } });
     for (const { m, reply } of [
+      msg('900000000000000003'),
       msg('900000000000000004'),
       msg('900000000000000003', true),
       msg('900000000000000003', false, MessageType.Reply),

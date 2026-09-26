@@ -166,8 +166,8 @@ export const FULL: Layout = {
       name: '🪧 絵馬殿',
       visibility: 'member',
       channels: [
-        { name: '絵馬-男性', kind: 'text', configKey: 'ema', formerly: ['絵馬'], topic: '男性の自己紹介（書くと御朱印帳ボタンが付きます）' },
-        { name: '絵馬-女性', kind: 'text', configKey: 'emaFemale', topic: '女性の自己紹介（書くと御朱印帳ボタンが付きます）' },
+        { name: '絵馬-男性', kind: 'text', configKey: 'ema', formerly: ['絵馬'], topic: '男性の自己紹介（いちばん下のひな形をコピーして書いてください）' },
+        { name: '絵馬-女性', kind: 'text', configKey: 'emaFemale', topic: '女性の自己紹介（いちばん下のひな形をコピーして書いてください）' },
         { name: '運営紹介', kind: 'text', readOnly: true, configKey: 'staffIntro', topic: '宮司・神職の紹介' },
         { name: 'アイコン紹介', kind: 'text', topic: '自分のアイコン・イラストの紹介' },
       ],

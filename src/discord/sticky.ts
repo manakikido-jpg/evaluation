@@ -5,14 +5,14 @@ import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { restickNotice, stickyNotices } from '../services/notices.js';
 
-/** 書き込みが続いている間は置き直さず、落ち着いてから下へ */
-const RESTICK_AFTER_MS = 60_000;
+/** 書き込みがあってから下へ置き直すまで（続けて書き込まれている間は待つ。短いほど早く下に出る） */
+const RESTICK_AFTER_MS = 3_000;
 /** どのチャンネルに「いちばん下に表示し続ける」掲示があるか、読み直す間隔 */
 const REFRESH_MS = 60_000;
 
 /**
  * 「いちばん下に表示し続ける」掲示（#絵馬 のひな形など）。
- * 誰かが書き込んだら、1 分落ち着いてから、掲示を消して下に出し直す。
+ * 誰かが書き込んだら、3 秒ほど落ち着いてから、掲示を消して下に出し直す。
  */
 export class StickyApp {
   private channels = new Set<string>();
