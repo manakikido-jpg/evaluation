@@ -1,5 +1,11 @@
 # VPS で動かす手順
 
+> **VPS に入る（毎回これから）**
+> 1. パソコンで PowerShell を開く（スタートメニューで「PowerShell」と検索）。行頭は `PS C:\Users\…>`（＝パソコン）
+> 2. `ssh shamusho@（VPS の IP）` → パスワードを入れる（文字は表示されない）
+> 3. 行頭が `shamusho@vm-…:~$` になれば VPS の中。`cd ~/evaluation` してから `docker compose …` などを実行する
+> 4. 終わったら `exit` でパソコンに戻る
+
 BOT・管理画面・データベースを 1 台の VPS で動かす。所要時間は 1〜2 時間。
 テストが終わるまでは **テスト用の Discord サーバー** で動かし、本番の咲楽ノ宮は後で作る（[test-checklist.md](test-checklist.md)）。
 
