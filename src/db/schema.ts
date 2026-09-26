@@ -318,3 +318,18 @@ export const tempVoice = pgTable('temp_voice', {
   hubId: text('hub_id').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */
+export const omikuji = pgTable(
+  'omikuji',
+  {
+    memberId: text('member_id').notNull(),
+    /** 日本時間の日付（YYYY-MM-DD） */
+    date: text('date').notNull(),
+    fortune: text('fortune').notNull(),
+    /** もらった花びら */
+    amount: integer('amount').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.date] })],
+);

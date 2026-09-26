@@ -21,7 +21,7 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke';
+  configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji';
   /** 入鯖申請・宵参り申請のボタンを置く */
   panels?: ('apply' | 'yoimairi')[];
   /** サーバーの AFK チャンネルにする */
@@ -101,7 +101,7 @@ export const FULL: Layout = {
         { name: '境内', kind: 'text', topic: '雑談' },
         { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）' },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
-        { name: 'おみくじ', kind: 'text', topic: 'BOT のコマンド用' },
+        { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（花びらがもらえます）' },
         { name: '拝殿', kind: 'voice' },
         { name: '➕ 縁側をひらく', kind: 'voice', hub: '🍵 {name}の縁側' },
         { name: '奥の院', kind: 'voice', afk: true },

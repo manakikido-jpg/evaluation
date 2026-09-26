@@ -620,6 +620,7 @@ export function createWebApp(deps: WebDeps) {
         voiceDailyCap: num('voiceDailyCap'),
         shuinGive: num('shuinGive'),
         shuinReceive: num('shuinReceive'),
+        omikujiBase: num('omikujiBase'),
       },
       ranks: Object.fromEntries(
         cfg.ranks.map((r) => [r.key, { weight: num(`rank.${r.key}.weight`), ...(r.auto ? { requiredGoen: num(`rank.${r.key}.requiredGoen`) } : {}) }]),

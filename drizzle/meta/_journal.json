@@ -50,6 +50,13 @@
       "when": 1790421546548,
       "tag": "0006_temp_voice",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790424505510,
+      "tag": "0007_omikuji",
+      "breakpoints": true
     }
   ]
 }

@@ -37,6 +37,7 @@ const CHANNELS: GuildChannel[] = [
   { id: CH.keiji, name: '慶事', type: 0, parent_id: null, position: 4 },
   { id: CH.yoimiyaVoice, name: '宵宮', type: 2, parent_id: null, position: 5 },
   { id: CH.yoimiya, name: '宵宮', type: 0, parent_id: null, position: 6 },
+  { id: '910000000000000009', name: 'おみくじ', type: 0, parent_id: null, position: 7 },
 ];
 
 /** 偽の Discord: チャンネルごとのメッセージを持つ */

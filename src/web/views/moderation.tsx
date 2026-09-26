@@ -32,6 +32,7 @@ const COIN_REASON: Record<string, string> = {
   voice: '通話',
   shuin_give: '朱印を押した',
   shuin_receive: '朱印を頂いた',
+  omikuji: 'おみくじ',
   shuin_revoke: '朱印の取り消し',
   menzaifu: '免罪符',
   adjust: '調整',

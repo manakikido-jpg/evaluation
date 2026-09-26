@@ -61,6 +61,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('omikuji')
+      .setNameLocalizations({ ja: 'おみくじ' })
+      .setDescription('Draw an omikuji (once a day, with a small reward)')
+      .setDescriptionLocalizations({ ja: 'おみくじを引く（1 日 1 回。花びらがもらえる）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('soudan')
       .setNameLocalizations({ ja: '相談' })
       .setDescription('Anonymous consultation with staff')
