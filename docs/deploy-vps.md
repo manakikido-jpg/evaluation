@@ -188,6 +188,19 @@ cd ~/evaluation
 ```
 データベースの形が変わる更新も、起動時に自動で反映される。
 
+### 自動で更新する（おすすめ）
+GitHub に新しいコードが届いたら、**5 分以内に自動で** `update.sh` を実行する。新しいコードがないときは何もしない。
+```bash
+crontab -e
+```
+いちばん下に追加:
+```
+*/5 * * * * /home/shamusho/evaluation/scripts/auto-update.sh >> /home/shamusho/auto-update.log 2>&1
+```
+- 更新したかどうかは `tail ~/auto-update.log` で見られる
+- 作り直しに失敗したときは、今動いているものがそのまま残る（ログにエラーが出る）
+- 止めたいときは `crontab -e` でこの行の先頭に `#` を付ける
+
 ---
 
 ## 9. 困ったとき
