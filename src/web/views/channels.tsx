@@ -62,13 +62,43 @@ export function ChannelsPage(props: {
       <p class="note">
         名前を変えても BOT は同じチャンネルとして扱います（ID で覚えているため）。テキストチャンネルの名前は、Discord が英字を小文字に、空白を「-」に変えます。掲示の <code>{'{#絵馬}'}</code> のようなリンクは、飾り（絵文字・記号）を除いて同じ名前なら見つかります。まったく別の名前にしたときは、掲示の <code>{'{#…}'}</code> も新しい名前に直してください。
       </p>
+      <nav class="card toc" id="toc" aria-label="チャンネル一覧">
+        <h2>一覧（押すとそこへ移動）</h2>
+        {props.groups.map((g) => (
+          <div class="toc-group">
+            <a class="toc-cat" href={`#cat-${g.category?.id ?? 'none'}`}>
+              {g.category ? g.category.name : 'カテゴリなし'}
+            </a>
+            <ul>
+              {g.items.map(({ channel, mode }) => (
+                <li>
+                  <a href={`#ch-${channel.id}`}>
+                    #{channel.name}
+                    {mode === 'readonly' && <small> 読むだけ</small>}
+                  </a>
+                </li>
+              ))}
+              {g.voice.map((v) => (
+                <li>
+                  <a href={`#ch-${v.id}`}>🔊 {v.name}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
       {props.groups.map((g) => (
-        <section class="card">
-          <h2>{g.category ? g.category.name : 'カテゴリなし'}</h2>
+        <section class="card anchor" id={`cat-${g.category?.id ?? 'none'}`}>
+          <h2 class="with-top">
+            <span>{g.category ? g.category.name : 'カテゴリなし'}</span>
+            <a href="#toc" class="to-top">
+              ▲ 一覧へ
+            </a>
+          </h2>
           {g.category && <RenameForm session={session} channel={g.category} label="カテゴリ" />}
           <div class="shop-items">
             {g.items.map(({ channel, mode }) => (
-              <form method="post" action={`/channels/${channel.id}`} class="shop-item">
+              <form method="post" action={`/channels/${channel.id}`} class="shop-item anchor" id={`ch-${channel.id}`}>
                 <input type="hidden" name="_csrf" value={session.csrfToken} />
                 <div class="shop-item-head">
                   <strong>#{channel.name}</strong>
@@ -105,7 +135,9 @@ export function ChannelsPage(props: {
           {g.voice.length > 0 && (
             <div class="voice-list">
               {g.voice.map((v) => (
-                <RenameForm session={session} channel={v} label="🔊 通話" ageGate />
+                <div class="anchor" id={`ch-${v.id}`}>
+                  <RenameForm session={session} channel={v} label="🔊 通話" ageGate />
+                </div>
               ))}
             </div>
           )}

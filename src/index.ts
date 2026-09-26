@@ -78,6 +78,8 @@ async function main(): Promise<void> {
       .fetch()
       .then((all) => app.syncAll(all.values()))
       .catch((err) => logger.error({ err }, 'member sync failed'));
+    // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
+    await admission.catchUpIntros(guild).catch((err) => logger.warn({ err }, 'intro catch-up failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     rooms.attach(guild);

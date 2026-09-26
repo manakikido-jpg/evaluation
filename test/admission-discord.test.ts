@@ -255,6 +255,41 @@ describe('自己紹介を書くまでは 絵馬待ち', () => {
     expect(calls.length).toBe(n);
   });
 
+  it('本文が読めない（Message Content がオフ・空）ときも、自分の絵馬に書けば 参拝者 に', async () => {
+    const app2 = new AdmissionApp(client as never, db, () => cfg2, discord);
+    const post = msg(EMA_F, '', [PENDING, FEMALE]);
+    await app2.onMessage(post.m as never);
+    expect(post.flashes).toEqual([]);
+    expect(post.reacted).toEqual(['🌸']);
+    expect(calls).toContain(`removeRole ${USER} ${PENDING}`);
+    expect(calls).toContain(`addRole ${USER} ${ROLE.sanpaisha}`);
+  });
+
+  it('起動したとき、止まっていた間に書かれた自己紹介を拾う（ちがうチャンネルのものは消さない）', async () => {
+    const app2 = new AdmissionApp(client as never, db, () => cfg2, discord);
+    const OTHER = '850000000000000003';
+    const reacted: string[] = [];
+    const deleted: string[] = [];
+    const m = (id: string, author: string, bot = false) => ({ id, content: '', author: { id: author, bot }, react: async () => void reacted.push(id), delete: async () => void deleted.push(id) });
+    const byChannel: Record<string, ReturnType<typeof m>[]> = {
+      [EMA_M]: [m('a', USER), m('b', 'bot', true)],
+      [EMA_F]: [m('c', USER), m('d', OTHER)],
+    };
+    const members = new Map([
+      [USER, { id: USER, roles: { cache: new Map([[PENDING, {}], [FEMALE, {}]]) } }],
+      [OTHER, { id: OTHER, roles: { cache: new Map([[ROLE.ujiko, {}]]) } }],
+    ]);
+    const guild = {
+      channels: { fetch: async (id: string) => ({ isTextBased: () => true, messages: { fetch: async () => new Map((byChannel[id] ?? []).map((x) => [x.id, x])) } }) },
+      members: { cache: members, fetch: async () => undefined },
+    };
+    expect(await app2.catchUpIntros(guild as never)).toEqual([USER]);
+    expect(reacted).toEqual(['c']);
+    expect(deleted).toEqual([]);
+    expect(calls).toContain(`removeRole ${USER} ${PENDING}`);
+    expect(calls.filter((c) => c === `addRole ${USER} ${ROLE.sanpaisha}`)).toHaveLength(1);
+  });
+
   it('前からいる人は、パネルで性別を選べる（1 回だけ）', async () => {
     const app2 = new AdmissionApp(client as never, db, () => cfg2, discord);
     const added: string[] = [];

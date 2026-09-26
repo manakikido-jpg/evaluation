@@ -20,6 +20,25 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-channels-toc',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: 'チャンネルのページに一覧',
+    items: ['いちばん上にカテゴリ・チャンネル・通話の一覧。押すとそこへ移動し、各カテゴリの「▲ 一覧へ」で戻れる'],
+  },
+  {
+    id: '2026-09-26-intro-fix',
+    date: '2026-09-26',
+    kind: 'fix',
+    where: ['Discord'],
+    title: '自己紹介を書いても 絵馬待ち が外れなかったのを直した',
+    items: [
+      'BOT が本文を読めない設定（Message Content がオフ）だと「短すぎ」と判断していた。本文が読めないときは、自分の絵馬に書けば 参拝者 にする',
+      '起動したとき、絵馬のチャンネルの最近の書き込みから、絵馬待ちの人の自己紹介を拾って仕上げる（書いたのに外れていなかった人もこれで外れる）',
+    ],
+  },
+  {
     id: '2026-09-26-roles-mentionable',
     date: '2026-09-26',
     kind: 'new',

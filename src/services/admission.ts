@@ -101,19 +101,20 @@ export const INTRO_MIN_CHARS = 10;
 
 /**
  * #絵馬-男性・#絵馬-女性 に書き込まれたとき。絵馬待ちの人なら、自分の性別のチャンネルかを確かめて、入鯖を仕上げる。
+ * content が undefined（BOT が本文を読めない。Discord の「Message Content」がオフ）のときは、長さは確かめない。
  */
 export async function onIntroPosted(
   ctx: ModCtx,
   author: { id: string; roleIds: readonly string[] },
   channelId: string,
-  content: string,
+  content: string | undefined,
   now = new Date(),
 ): Promise<IntroResult> {
   const pending = ctx.cfg.roles.emaPending;
   if (!pending || !author.roleIds.includes(pending)) return { status: 'not_pending' };
   const expected = introChannelOf(ctx.cfg, genderOfRoles(ctx.cfg, author.roleIds));
   if (expected && channelId !== expected) return { status: 'wrong_channel', expected };
-  if (content.replace(/\s/g, '').length < INTRO_MIN_CHARS) return { status: 'too_short' };
+  if (content !== undefined && content.replace(/\s/g, '').length < INTRO_MIN_CHARS) return { status: 'too_short' };
   await safely('remove ema pending', () => ctx.discord.removeRole(ctx.cfg.guildId, author.id, pending, '自己紹介を書いた'));
   await completeJoin(ctx, author.id, now);
   await audit(ctx.db, { actorId: author.id, targetId: author.id, action: 'join.intro', detail: { channelId }, via: 'discord' });

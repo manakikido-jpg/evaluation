@@ -889,6 +889,16 @@ describe('チャンネル（管理画面）', () => {
     });
   };
 
+  it('上に一覧があり、押すとそのチャンネルへ移動できる', async () => {
+    const g = await login(GUJI);
+    const page = await (await get('/channels', g)).text();
+    expect(page).toContain('id="toc"');
+    expect(page).toContain('href="#ch-910000000000000002"');
+    expect(page).toContain('id="ch-910000000000000002"');
+    expect(page).toContain('href="#cat-910000000000000001"');
+    expect(page).toContain('id="cat-910000000000000001"');
+  });
+
   it('宮司だけが開ける', async () => {
     const s = await login(STAFF);
     expect((await get('/channels', s)).status).toBe(403);

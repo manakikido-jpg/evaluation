@@ -281,3 +281,16 @@ form.rename input[type="text"] { flex: 1; min-width: 160px; }
 fieldset.perms { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 12px; }
 fieldset.perms legend { font-weight: bold; padding: 0 4px; }
 ul.role-members { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+
+/* ───────── チャンネル: 一覧（押すとそこへ移動） ───────── */
+html { scroll-behavior: smooth; }
+.anchor { scroll-margin-top: 12px; }
+.anchor:target { outline: 2px solid var(--shu); outline-offset: 2px; }
+nav.toc { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 16px; }
+nav.toc h2 { grid-column: 1 / -1; margin: 0; }
+nav.toc .toc-cat { font-weight: bold; }
+nav.toc ul { list-style: none; margin: 4px 0 0; padding: 0 0 0 8px; }
+nav.toc li { margin: 2px 0; }
+h2.with-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+h2.with-top .to-top { font-size: 0.8rem; font-weight: normal; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

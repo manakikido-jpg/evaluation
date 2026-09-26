@@ -14,6 +14,7 @@ import {
   type Message,
   type MessageActionRowComponentBuilder,
   type ModalSubmitInteraction,
+  type Guild,
 } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -162,20 +163,51 @@ export class AdmissionApp {
     this.introBusy.add(msg.author.id);
     let r: Awaited<ReturnType<typeof onIntroPosted>>;
     try {
-      r = await onIntroPosted(this.ctx, { id: msg.author.id, roleIds: [...msg.member.roles.cache.keys()] }, msg.channelId, msg.content);
+      // 本文が空 = BOT が本文を読めない（Message Content がオフ）か、画像だけ。長さは確かめない
+      r = await onIntroPosted(this.ctx, { id: msg.author.id, roleIds: [...msg.member.roles.cache.keys()] }, msg.channelId, msg.content || undefined);
       if (r.status === 'completed') this.introDone.add(msg.author.id);
     } finally {
       this.introBusy.delete(msg.author.id);
     }
     if (r.status === 'wrong_channel') {
       await msg.delete().catch(() => undefined);
-      const sent = await this.discord.sendDm(msg.author.id, `⛩ 自己紹介は <#${r.expected}> に書いてください（書いたものは消しました。コピーしてあれば貼り直せます）。\n> ${msg.content.slice(0, 1500)}`);
+      const quote = msg.content ? `\n> ${msg.content.slice(0, 1500).replace(/\n/g, '\n> ')}` : '';
+      const sent = await this.discord.sendDm(msg.author.id, `⛩ 自己紹介は <#${r.expected}> に書いてください（書いたものは消しました。コピーしてあれば貼り直せます）。${quote}`);
       if (!sent) await this.flash(msg, `<@${msg.author.id}> さん、自己紹介は <#${r.expected}> に書いてください。`);
     } else if (r.status === 'too_short') {
       await this.flash(msg, `<@${msg.author.id}> さん、自己紹介はもう少し詳しく書いてください（${INTRO_MIN_CHARS} 文字以上。いちばん下のひな形をどうぞ）。`);
     } else if (r.status === 'completed') {
       await msg.react('🌸').catch(() => undefined);
     }
+  }
+
+  /**
+   * 起動したとき: BOT が止まっていた間（や、本文を読めずに仕上げられなかった間）に書かれた自己紹介を拾う。
+   * 絵馬のチャンネルの最近 100 件から、絵馬待ちの人が自分のチャンネルに書いたものを探す（ちがうチャンネルのものは消さない）。
+   */
+  async catchUpIntros(guild: Guild): Promise<string[]> {
+    const pending = this.cfg.roles.emaPending;
+    if (!pending) return [];
+    const done: string[] = [];
+    for (const channelId of [this.cfg.channels.ema, this.cfg.channels.emaFemale]) {
+      if (!channelId) continue;
+      const channel = await guild.channels.fetch(channelId).catch(() => null);
+      if (!channel?.isTextBased()) continue;
+      const messages = await channel.messages.fetch({ limit: 100 }).catch(() => undefined);
+      if (!messages) continue;
+      for (const msg of messages.values()) {
+        if (msg.author.bot || done.includes(msg.author.id) || this.introDone.has(msg.author.id)) continue;
+        const member = guild.members.cache.get(msg.author.id) ?? (await guild.members.fetch(msg.author.id).catch(() => undefined));
+        if (!member?.roles.cache.has(pending)) continue;
+        const r = await onIntroPosted(this.ctx, { id: member.id, roleIds: [...member.roles.cache.keys()] }, channelId, msg.content || undefined);
+        if (r.status !== 'completed') continue;
+        this.introDone.add(member.id);
+        done.push(member.id);
+        await msg.react('🌸').catch(() => undefined);
+      }
+    }
+    if (done.length) logger.info({ count: done.length }, 'intro catch-up');
+    return done;
   }
 
   /** そのチャンネルに少しだけ出して消す（DM が届かない人向け） */
