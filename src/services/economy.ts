@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { coinTx, members, wallets } from '../db/schema.js';
 
@@ -19,6 +19,8 @@ export type CoinReason =
   | 'shop_refund'
   | 'gift_send'
   | 'gift_receive'
+  | 'admin_grant'
+  | 'admin_take'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -134,11 +136,68 @@ export async function grantJoinBonus(db: Db, memberId: string, amount: number): 
   });
 }
 
-/** 今いる人（役職ロールを持つ・BOT でない・退出していない）のうち、まだもらっていない人に配る */
-export async function grantJoinBonusToAll(db: Db, amount: number, rankRoleIds: readonly string[]): Promise<{ granted: number; total: number }> {
+/** 今いる人（役職ロールを持つ・BOT でない・退出していない） */
+export async function currentMemberIds(db: Db, rankRoleIds: readonly string[]): Promise<string[]> {
   const rows = await db.select({ id: members.id, roleIds: members.roleIds }).from(members).where(and(isNull(members.leftAt), eq(members.isBot, false)));
-  const targets = rows.filter((m) => m.roleIds.some((r) => rankRoleIds.includes(r)));
+  return rows.filter((m) => m.roleIds.some((r) => rankRoleIds.includes(r))).map((m) => m.id);
+}
+
+/** 今いる人のうち、まだもらっていない人に配る */
+export async function grantJoinBonusToAll(db: Db, amount: number, rankRoleIds: readonly string[]): Promise<{ granted: number; total: number }> {
+  const targets = await currentMemberIds(db, rankRoleIds);
   let granted = 0;
-  for (const m of targets) if ((await grantJoinBonus(db, m.id, amount)) > 0) granted++;
+  for (const id of targets) if ((await grantJoinBonus(db, id, amount)) > 0) granted++;
   return { granted, total: targets.length };
+}
+
+// ───────── 運営から送る・減らす（管理画面・宮司） ─────────
+
+/** 1 回に送れる上限（打ち間違いで桁が増えないように） */
+export const ADMIN_COINS_MAX = 100_000;
+
+export type AdminCoinsInput = {
+  memberIds: string[];
+  amount: number;
+  /** 理由（記録に残る） */
+  note: string;
+  by: string;
+  /** 画面を開いたときに作る番号。同じ番号は 1 回だけ（ボタンの二度押し・再送信で 2 回送らない） */
+  nonce: string;
+};
+
+export const validAdminAmount = (n: number) => Number.isInteger(n) && n >= 1 && n <= ADMIN_COINS_MAX;
+
+/** 同じ番号でもう送っていたら true（トランザクションの中で、番号ごとの鍵を取ってから呼ぶ） */
+async function nonceUsed(tx: Db, nonce: string): Promise<boolean> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'admin_coins:' + nonce}))`);
+  const [row] = await tx
+    .select({ id: coinTx.id })
+    .from(coinTx)
+    .where(and(inArray(coinTx.reason, ['admin_grant', 'admin_take']), sql`${coinTx.detail}->>'nonce' = ${nonce}`))
+    .limit(1);
+  return Boolean(row);
+}
+
+/** 運営から送る。全員分を 1 つのトランザクションで（途中で失敗したら誰にも送らない） */
+export async function adminGrant(db: Db, input: AdminCoinsInput): Promise<{ status: 'ok'; count: number } | { status: 'duplicate' }> {
+  if (!validAdminAmount(input.amount)) throw new Error('invalid amount');
+  return db.transaction(async (tx) => {
+    if (await nonceUsed(tx, input.nonce)) return { status: 'duplicate' as const };
+    const ids = [...new Set(input.memberIds)];
+    for (const id of ids) await addCoins(tx, id, input.amount, 'admin_grant', { note: input.note, by: input.by, nonce: input.nonce });
+    return { status: 'ok' as const, count: ids.length };
+  });
+}
+
+/** 運営が減らす（送りすぎたときなど）。残高より多くは減らさない。減らした量を返す */
+export async function adminTake(
+  db: Db,
+  input: Omit<AdminCoinsInput, 'memberIds'> & { memberId: string },
+): Promise<{ status: 'ok'; taken: number } | { status: 'duplicate' }> {
+  if (!validAdminAmount(input.amount)) throw new Error('invalid amount');
+  return db.transaction(async (tx) => {
+    if (await nonceUsed(tx, input.nonce)) return { status: 'duplicate' as const };
+    const taken = await deductUpTo(tx, input.memberId, input.amount, 'admin_take', { note: input.note, by: input.by, nonce: input.nonce });
+    return { status: 'ok' as const, taken };
+  });
 }

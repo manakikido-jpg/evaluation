@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +14,7 @@ import { audit, listAudit } from '../services/audit.js';
 import { eventsOf, getMember, homeStats, listMembers, namesOf, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { recentActivity } from '../services/activity.js';
-import { grantJoinBonusToAll, recentCoinTx, walletOf } from '../services/economy.js';
+import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -23,6 +24,8 @@ import { createSession, deleteSession, findSession, markChecked, randomToken, RE
 
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
 const RECHECK_GRACE_MS = 30 * 60_000;
+import { StatsPage } from './views/stats.js';
+import { isTrendRange, memberTrend } from '../services/stats.js';
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
 import { ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
@@ -253,6 +256,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
+  app.use('/stats', requireAdmin);
   for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
@@ -372,11 +376,21 @@ export function createWebApp(deps: WebDeps) {
             memos={memoRows}
             names={names}
             showUnban={session.level === 'guji' && isBannedByEvents(events)}
+            coinsNonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
           />
           </>
         }
       />,
     );
+  });
+
+  // ───────── 推移（グラフ） ─────────
+
+  app.get('/stats', async (c) => {
+    const q = c.req.query('range');
+    const range = isTrendRange(q) ? q : '30d';
+    const buckets = await memberTrend(db, range, now());
+    return c.html(<StatsPage session={c.get('session')} range={range} buckets={buckets} />);
   });
 
   // ───────── 厄・BAN・キック・メモ ─────────
@@ -502,6 +516,39 @@ export function createWebApp(deps: WebDeps) {
     const r = await kickMember(mod(), actorOf(session), id, reason);
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
     return back(c, id, r.kickOk ? 'kicked' : 'kick_failed');
+  });
+
+  const NONCE = /^[0-9a-f-]{36}$/;
+
+  app.post('/members/:id/coins', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    if (!gujiOnly(c)) return back(c, id, 'coins_forbidden');
+    const body = await c.req.parseBody();
+    const amount = Number(body.amount);
+    const note = field(body, 'note', 200);
+    const nonce = typeof body.nonce === 'string' ? body.nonce : '';
+    const mode = body.mode === 'take' ? 'take' : 'grant';
+    if (!validAdminAmount(amount) || !note || !NONCE.test(nonce)) return back(c, id, 'coins_invalid');
+    const m = await getMember(db, id);
+    if (!m || m.isBot) return back(c, id, 'denied_not_found');
+    const by = c.get('session').userId;
+    if (mode === 'take') {
+      const r = await adminTake(db, { memberId: id, amount, note, by, nonce });
+      if (r.status === 'duplicate') return back(c, id, 'coins_dup');
+      await audit(db, { actorId: by, targetId: id, action: 'coins.take', detail: { amount, taken: r.taken, note }, via: 'web' });
+      return back(c, id, r.taken < amount ? 'coins_taken_short' : 'coins_taken');
+    }
+    const r = await adminGrant(db, { memberIds: [id], amount, note, by, nonce });
+    if (r.status === 'duplicate') return back(c, id, 'coins_dup');
+    await audit(db, { actorId: by, targetId: id, action: 'coins.grant', detail: { amount, note }, via: 'web' });
+    if (body.dm !== 'yes') return back(c, id, 'coins_given_quiet');
+    const e = cfg.economy;
+    const sent = await deps.discord.sendDm(
+      id,
+      `${e.currencyEmoji} 咲楽ノ宮の社務所から、${e.currencyName}が **${amount.toLocaleString('ja-JP')} 枚** 届きました。\n> ${note}\n残高は \`/御朱印帳\` で見られます。`,
+    );
+    return back(c, id, sent ? 'coins_given' : 'coins_given_nodm');
   });
 
   app.post('/members/:id/memo', async (c) => {
@@ -655,7 +702,7 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/settings', (c) => {
     if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
-    return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} />);
+    return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} coinsNonce={randomUUID()} />);
   });
 
   app.post('/settings', async (c) => {
@@ -713,6 +760,21 @@ export function createWebApp(deps: WebDeps) {
     const r = await grantJoinBonusToAll(db, cfg.economy.joinBonus, cfg.ranks.map((x) => x.roleId));
     await audit(db, { actorId: c.get('session').userId, action: 'economy.join_bonus_all', detail: { amount: cfg.economy.joinBonus, ...r }, via: 'web' });
     return c.redirect('/settings?msg=bonus_given');
+  });
+
+  app.post('/settings/coins-all', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const amount = Number(body.amount);
+    const note = field(body, 'note', 200);
+    const nonce = typeof body.nonce === 'string' ? body.nonce : '';
+    if (body.confirm !== 'yes' || !validAdminAmount(amount) || !note || !/^[0-9a-f-]{36}$/.test(nonce)) return c.redirect('/settings?msg=coins_invalid');
+    const by = c.get('session').userId;
+    const targets = await currentMemberIds(db, cfg.ranks.map((x) => x.roleId));
+    const r = await adminGrant(db, { memberIds: targets, amount, note, by, nonce });
+    if (r.status === 'duplicate') return c.redirect('/settings?msg=coins_dup');
+    await audit(db, { actorId: by, action: 'coins.grant_all', detail: { amount, note, count: r.count }, via: 'web' });
+    return c.redirect('/settings?msg=coins_all_given');
   });
 
   app.post('/settings/reset', async (c) => {

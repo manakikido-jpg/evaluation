@@ -27,6 +27,9 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   soudan_done: { text: '完了にしました。', kind: 'ok' },
   saved: { text: '設定を保存しました。BOT には 1 分以内に反映されます。', kind: 'ok' },
   bonus_given: { text: 'まだもらっていない人に初期配布を配りました。', kind: 'ok' },
+  coins_all_given: { text: '今いる人みんなに送りました。', kind: 'ok' },
+  coins_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回送られないようにしています）。', kind: 'warn' },
+  coins_invalid: { text: '枚数（1〜100,000）と理由を入れて、「送る」にチェックしてください。', kind: 'warn' },
   saved_notices: { text: '設定を保存しました。BOT には 1 分以内に反映されます。投稿済みの掲示の数字も書き換えました。', kind: 'ok' },
   settings_invalid: { text: '設定を保存できませんでした。値を確認してください（昇格ラインは役職ごとに違う値にする必要があります）。', kind: 'warn' },
   age_changed: { text: '年齢区分を変更しました。', kind: 'ok' },
@@ -426,7 +429,7 @@ export function MemberAdmissionSection(props: {
 
 // ───────── 設定（宮司） ─────────
 
-export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; fileCfg: GuildConfig; flash?: string; error?: string }) {
+export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; fileCfg: GuildConfig; flash?: string; error?: string; coinsNonce?: string }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
   // いちばん下の自動役職（参拝者）は入鯖時に付くので、昇格ラインは 0 で固定
@@ -553,6 +556,33 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           配る
         </button>
       </form>
+      {props.coinsNonce && (
+        <form method="post" action="/settings/coins-all" class="card">
+          <Csrf session={props.session} />
+          <input type="hidden" name="nonce" value={props.coinsNonce} />
+          <h2>{e.currencyEmoji} 今いる人みんなに{e.currencyName}を送る</h2>
+          <p class="note">
+            イベントのお礼・お詫びなどに。役職のある今いる人（BOT・退出した人を除く）全員に同じ枚数を送ります。DM は送らないので、{'#御触書'} などで知らせてください。1 人ずつ送るときは、メンバーのページから送れます。
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>1 人あたりの枚数</span>
+              <input type="number" name="amount" min={1} max={100000} required />
+            </label>
+            <label class="field">
+              <span>理由（記録に残る）</span>
+              <input type="text" name="note" maxlength={200} required />
+            </label>
+          </div>
+          <label class="field check">
+            <input type="checkbox" name="confirm" value="yes" required />
+            <span>全員に送る</span>
+          </label>
+          <button type="submit" class="ok">
+            送る
+          </button>
+        </form>
+      )}
       <form method="post" action="/settings/reset">
         <Csrf session={props.session} />
         <button type="submit" class="link">

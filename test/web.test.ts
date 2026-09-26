@@ -697,6 +697,75 @@ describe('初期配布（管理画面）', () => {
   });
 });
 
+describe('運営から花びらを送る（管理画面）', () => {
+  const post = async (session: string, path: string, form: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...form }).toString(),
+    });
+  };
+  const nonceOn = async (session: string, path: string) => /name="nonce" value="([^"]+)"/.exec(await (await get(path, session)).text())?.[1];
+
+  it('宮司だけが送れる。DM で知らせ、二度押ししても 1 回だけ', async () => {
+    const { walletOf, recentCoinTx } = await import('../src/services/economy.js');
+    const s = await login(STAFF);
+    expect(await nonceOn(s, `/members/${USER}`)).toBeUndefined();
+    const fake = '11111111-2222-3333-4444-555555555555';
+    expect((await post(s, `/members/${USER}/coins`, { mode: 'grant', amount: '500', note: 'お礼', nonce: fake })).headers.get('location')).toBe(
+      `/members/${USER}?msg=coins_forbidden`,
+    );
+    expect((await walletOf(db, USER)).balance).toBe(0);
+
+    const g = await login(GUJI);
+    const nonce = (await nonceOn(g, `/members/${USER}`))!;
+    const form = { mode: 'grant', amount: '500', note: 'イベントのお礼', dm: 'yes', nonce };
+    expect((await post(g, `/members/${USER}/coins`, form)).headers.get('location')).toBe(`/members/${USER}?msg=coins_given`);
+    expect((await walletOf(db, USER)).balance).toBe(500);
+    expect(actions).toContain(`dm ${USER}`);
+    expect((await post(g, `/members/${USER}/coins`, form)).headers.get('location')).toBe(`/members/${USER}?msg=coins_dup`);
+    expect((await walletOf(db, USER)).balance).toBe(500);
+    expect((await recentCoinTx(db, USER))[0]).toMatchObject({ reason: 'admin_grant', amount: 500, detail: { note: 'イベントのお礼', by: GUJI } });
+    expect((await listAudit(db, { action: 'coins.grant' })).length).toBe(1);
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain('イベントのお礼');
+  });
+
+  it('減らすときは残高までしか減らさない。枚数・理由がおかしければ何もしない', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    await addCoins(db, USER, 300, 'voice');
+    const g = await login(GUJI);
+    const bad = async (form: Record<string, string>) =>
+      (await post(g, `/members/${USER}/coins`, { mode: 'grant', nonce: (await nonceOn(g, `/members/${USER}`))!, ...form })).headers.get('location');
+    expect(await bad({ amount: '0', note: 'x' })).toBe(`/members/${USER}?msg=coins_invalid`);
+    expect(await bad({ amount: '100001', note: 'x' })).toBe(`/members/${USER}?msg=coins_invalid`);
+    expect(await bad({ amount: '1.5', note: 'x' })).toBe(`/members/${USER}?msg=coins_invalid`);
+    expect(await bad({ amount: '10', note: '' })).toBe(`/members/${USER}?msg=coins_invalid`);
+    expect(await bad({ amount: '10', note: 'x', nonce: 'nope' })).toBe(`/members/${USER}?msg=coins_invalid`);
+    expect((await walletOf(db, USER)).balance).toBe(300);
+
+    const r = await post(g, `/members/${USER}/coins`, { mode: 'take', amount: '1000', note: '送りすぎ', nonce: (await nonceOn(g, `/members/${USER}`))! });
+    expect(r.headers.get('location')).toBe(`/members/${USER}?msg=coins_taken_short`);
+    expect((await walletOf(db, USER)).balance).toBe(0);
+    expect(actions.filter((a) => a.startsWith('dm'))).toEqual([]);
+  });
+
+  it('今いる人みんなに送る（宮司のみ・確認が要る・二度押しで 2 回送らない）', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    const s = await login(STAFF);
+    expect((await post(s, '/settings/coins-all', { amount: '100', note: 'お詫び', confirm: 'yes', nonce: '11111111-2222-3333-4444-555555555555' })).status).toBe(403);
+    const g = await login(GUJI);
+    const nonce = (await nonceOn(g, '/settings'))!;
+    expect((await post(g, '/settings/coins-all', { amount: '100', note: 'お詫び', nonce })).headers.get('location')).toBe('/settings?msg=coins_invalid');
+    const form = { amount: '100', note: 'お詫び', confirm: 'yes', nonce };
+    expect((await post(g, '/settings/coins-all', form)).headers.get('location')).toBe('/settings?msg=coins_all_given');
+    expect((await walletOf(db, USER)).balance).toBe(100);
+    expect((await post(g, '/settings/coins-all', form)).headers.get('location')).toBe('/settings?msg=coins_dup');
+    expect((await walletOf(db, USER)).balance).toBe(100);
+    expect((await listAudit(db, { action: 'coins.grant_all' }))[0]?.detail).toMatchObject({ amount: 100, count: 1 });
+  });
+});
+
 describe('ショップ（管理画面）', () => {
   const form = async (session: string, path: string, data: Record<string, string>) => {
     const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
@@ -791,5 +860,19 @@ describe('チャンネル（管理画面）', () => {
     const n = (await listNotices(db)).find((x) => x.title === '使い方')!;
     await form(g, `/notices/${n.id}`, { title: '使い方', body: 'ここは入口', then: 'publish' });
     expect(actions.some((a) => a.startsWith(`unpin ${TORII}`))).toBe(true);
+  });
+});
+
+describe('推移（管理画面）', () => {
+  it('神職も見られる。グラフと表が出て、知らない期間は 30 日になる', async () => {
+    const s = await login(STAFF);
+    const page = await (await get('/stats?range=1y', s)).text();
+    expect(page).toContain('<svg');
+    expect(page).toContain('サーバーにいる人数');
+    expect(page).toContain('表で見る');
+    const fallback = await (await get('/stats?range=zzz', s)).text();
+    expect(fallback).toContain('aria-current="page"');
+    expect(fallback).toMatch(/aria-current="page"[^>]*>30 日/);
+    expect((await app.request('/stats')).status).toBe(302);
   });
 });

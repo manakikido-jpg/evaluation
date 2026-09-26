@@ -9,6 +9,9 @@
   --bg: #fbf8f8;
   --card: #fff;
   --gray: #eceaea;
+  /* グラフの色（ライト・ダークとも色覚の多様性を確かめ済み。ダークは下で上書き） */
+  --series-1: #c8102e;
+  --series-2: #2a78d6;
   font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "IPAPGothic", system-ui, sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -16,6 +19,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --series-1: #e0475f;
+    --series-2: #3987e5;
     --ink: #f1e9eb;
     --muted: #b3a5a9;
     --line: #3b3034;
@@ -167,7 +172,7 @@ strong.big { font-size: 1.6rem; color: var(--shu); }
 button.ok { background: #2f7d45; color: #fff; border-color: #2f7d45; }
 button.ok:hover { background: #256437; }
 td.wrap { white-space: normal; }
-.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
 .tabs a { padding: 6px 12px; border-radius: 6px; color: var(--ink); border: 1px solid var(--line); }
 .tabs a.on { background: var(--sakura); border-color: var(--sakura-2); }
 .chat { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
@@ -231,3 +236,25 @@ details summary { cursor: pointer; margin: 12px 0 6px; color: var(--muted); }
 
 .tag.green { background: #e7f5ea; color: #1f5f2e; }
 @media (prefers-color-scheme: dark) { .tag.green { background: #1f3a26; color: #bfe6c8; } }
+
+/* ───────── グラフ（推移） ───────── */
+/* スマホでは横にスクロール。最新（右端）が最初に見えるよう、右から並べる */
+.chart-wrap { overflow-x: auto; direction: rtl; }
+.chart-wrap > * { direction: ltr; }
+.chart { display: block; width: 100%; min-width: 520px; height: auto; }
+.chart text { font-size: 12px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.chart .endlabel { fill: var(--ink); font-weight: bold; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .base { stroke: var(--muted); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: var(--series-1); opacity: .1; }
+.chart .dot { fill: var(--series-1); stroke: var(--card); stroke-width: 2; }
+.chart .bar.s1 { fill: var(--series-1); }
+.chart .bar.s2 { fill: var(--series-2); }
+.chart .hit { fill: transparent; }
+.chart .hit:hover { fill: var(--ink); fill-opacity: .06; }
+.legend { display: flex; gap: 16px; margin: 0 0 4px; font-size: .85rem; color: var(--muted); }
+.legend .key { display: inline-flex; align-items: center; gap: 6px; }
+.legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.legend .swatch.s1 { background: var(--series-1); }
+.legend .swatch.s2 { background: var(--series-2); }

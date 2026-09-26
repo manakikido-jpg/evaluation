@@ -70,6 +70,9 @@ export function HomePage(props: {
         <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
         <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href="/yaku" />
       </div>
+      <p class="more">
+        <a href="/stats">人数・朱印・通話の推移をグラフで見る →</a>
+      </p>
 
       <section class="card">
         <h2>対応待ち</h2>

@@ -1,5 +1,6 @@
 import type { GuildConfig } from '../../config.js';
 import type { ActivityDaily, AdminSession, CoinTx, Memo, Yaku } from '../../db/schema.js';
+import { ADMIN_COINS_MAX } from '../../services/economy.js';
 import { fmtAgo, fmtDate, fmtDateTime } from '../format.js';
 import { Avatar, Layout } from './layout.js';
 
@@ -26,6 +27,14 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   denied_protected: { text: 'この方には操作できません（神職は神職・宮司に、宮司は宮司に操作できません）。', kind: 'warn' },
   denied_not_found: { text: 'その方の記録が見つかりません。', kind: 'warn' },
   invalid: { text: '入力が足りません（「その他」を選んだときは補足を書いてください）。', kind: 'warn' },
+  coins_given: { text: '送りました。本人に DM で知らせました。', kind: 'ok' },
+  coins_given_quiet: { text: '送りました（DM は送っていません）。', kind: 'ok' },
+  coins_given_nodm: { text: '送りました。DM は届きませんでした（DM を受け取らない設定の可能性）。', kind: 'warn' },
+  coins_taken: { text: '減らしました。', kind: 'ok' },
+  coins_taken_short: { text: '残高が足りなかったので、残っていた分だけ減らしました。', kind: 'warn' },
+  coins_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回送られないようにしています）。', kind: 'warn' },
+  coins_invalid: { text: `枚数（1〜${ADMIN_COINS_MAX.toLocaleString('ja-JP')}）と理由を入れてください。`, kind: 'warn' },
+  coins_forbidden: { text: '送る・減らすのは宮司のみできます。', kind: 'warn' },
 };
 
 export function Flash(props: { code?: string }) {
@@ -43,6 +52,8 @@ const COIN_REASON: Record<string, string> = {
   shop_refund: 'ショップの払い戻し',
   gift_send: '贈り物を贈った',
   gift_receive: '贈り物をもらった',
+  admin_grant: '運営から',
+  admin_take: '運営が減らした',
   shuin_revoke: '朱印の取り消し',
   menzaifu: '免罪符',
   adjust: '調整',
@@ -65,6 +76,8 @@ export function ModerationSection(props: {
   names: Names;
   /** BAN 中で、見ているのが宮司なら「BAN を解除する」を出す */
   showUnban?: boolean;
+  /** 宮司なら「送る・減らす」を出す（二度押し対策の番号つき） */
+  coinsNonce?: string;
 }) {
   const { cfg, memberId, csrf } = props;
   const e = cfg.economy;
@@ -234,6 +247,34 @@ export function ModerationSection(props: {
               </tbody>
             </table>
           )}
+          {props.coinsNonce && (
+            <form method="post" action={`${base}/coins`} class="actions coins">
+              <input type="hidden" name="_csrf" value={csrf} />
+              <input type="hidden" name="nonce" value={props.coinsNonce} />
+              <h3>
+                {e.currencyEmoji} {e.currencyName}を送る・減らす
+              </h3>
+              <div class="inline-actions">
+                <label class="field check">
+                  <input type="radio" name="mode" value="grant" checked />
+                  <span>送る</span>
+                </label>
+                <label class="field check">
+                  <input type="radio" name="mode" value="take" />
+                  <span>減らす（送りすぎたときなど）</span>
+                </label>
+              </div>
+              <input type="number" name="amount" min={1} max={ADMIN_COINS_MAX} placeholder="枚数" required />
+              <input type="text" name="note" maxlength={200} placeholder="理由（必須・記録に残る。DM にも載る）" required />
+              <label class="field check">
+                <input type="checkbox" name="dm" value="yes" checked />
+                <span>送ったことを本人に DM で知らせる</span>
+              </label>
+              <button type="submit" class="ok">
+                実行する
+              </button>
+            </form>
+          )}
           <h3>{e.currencyName}の出入り</h3>
           {props.coinTx.length === 0 ? (
             <p class="empty">記録はありません。</p>
@@ -243,7 +284,10 @@ export function ModerationSection(props: {
                 {props.coinTx.map((t) => (
                   <tr>
                     <td>{fmtDateTime(t.at)}</td>
-                    <td>{COIN_REASON[t.reason] ?? t.reason}</td>
+                    <td>
+                      {COIN_REASON[t.reason] ?? t.reason}
+                      {(t.reason === 'admin_grant' || t.reason === 'admin_take') && typeof t.detail.note === 'string' && <small class="reason">{t.detail.note}</small>}
+                    </td>
                     <td class="num">{t.amount > 0 ? `+${t.amount}` : t.amount}</td>
                   </tr>
                 ))}
