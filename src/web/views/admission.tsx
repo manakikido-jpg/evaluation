@@ -443,7 +443,7 @@ export function MemberAdmissionSection(props: {
 
 // ───────── 設定（宮司） ─────────
 
-export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; fileCfg: GuildConfig; flash?: string; error?: string; coinsNonce?: string }) {
+export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; fileCfg: GuildConfig; flash?: string; error?: string; coinsNonce?: string; at?: string }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
   // いちばん下の自動役職（参拝者）は入鯖時に付くので、昇格ラインは 0 で固定
@@ -456,6 +456,15 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
       {p.value !== p.file && <small>ファイルの値: {p.file}</small>}
     </label>
   );
+  /** 各項目の下の「保存する」（全部の項目をまとめて保存し、この項目に戻ってくる） */
+  const Save = (p: { at: string }) => (
+    <div class="inline-actions section-save">
+      {props.at === p.at && props.flash && <Flash code={props.flash} />}
+      <button type="submit" name="at" value={p.at} class="ok">
+        保存する
+      </button>
+    </div>
+  );
   return (
     <Layout title="設定" session={props.session} nav="settings">
       <h1>設定（宮司のみ）</h1>
@@ -464,7 +473,7 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
       <p class="note">ここで変えた値は config/guild.json の値より優先されます。BOT には 1 分以内に反映されます。チャンネル・ロールの ID はファイルで設定してください。</p>
       <form method="post" action="/settings" class="settings">
         <Csrf session={props.session} />
-        <section class="card">
+        <section class="card anchor" id="sec-coins">
           <h2>{e.currencyEmoji} 通貨と免罪符</h2>
           <div class="fields">
             <label class="field">
@@ -487,8 +496,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             <Num name="joinBonus" label="初期配布（入鯖が承認されたときに 1 回だけ。0 で配らない）" value={e.joinBonus} file={f.joinBonus} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
           </div>
+          <Save at="coins" />
         </section>
-        <section class="card">
+        <section class="card anchor" id="sec-rooms">
           <h2>🚪 通話部屋の値段（宿坊・宵宮）</h2>
           <p class="note">
             「➕ 宿坊をひらく」「➕ 宵宮の部屋をひらく」でできた部屋は、作った人が部屋のチャットの「⚙ 部屋の設定」から種類・人数・招待を選べます。値段は{e.currencyName}の枚数（0 で無料）。宿坊は作った人がひらくたびに 1 回（種類を変えたら差額）。宵宮は入っている人それぞれが 1 時間ごと（入ったときに最初の 1 時間。足りなければ入れず、途中で払えなくなると 5 分後に通話から抜ける）。
@@ -527,8 +537,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
             </label>
           </div>
+          <Save at="rooms" />
         </section>
-        <section class="card">
+        <section class="card anchor" id="sec-market">
           <h2>🏪 市場</h2>
           <p class="note">
             開業権利（🏪 開業ロール）を持つ人が #市場 に出品できます。{e.currencyName}だけで、本物のお金は扱いません。買った人の{e.currencyName}は預かっておき、「受け取った」か期限で売った人に渡します（手数料を引いて）。手数料の分は誰にも渡りません。開業権利の値段は「授与所」で変えられます。
@@ -543,8 +554,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               <input type="number" name="marketAutoRelease" value={String(cfg.market.autoReleaseDays)} min={1} max={60} required />
             </label>
           </div>
+          <Save at="market" />
         </section>
-        <section class="card">
+        <section class="card anchor" id="sec-coretime">
           <h2>🏮 コアタイム</h2>
           <p class="note">
             みんなが集まる時間（日本時間）。この間の通話は{e.currencyName}が増えます（増えた分は 1 日の上限に数えません。端数は四捨五入）。#境内 に、前日と始まる少し前に予告を出します。曜日ごとに 1 つ。空けた曜日はコアタイムなし。終わりを 00:00 にすると 24 時まで。
@@ -585,8 +597,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               <input type="number" name="ctNoticeMinutesBefore" value={String(cfg.coreTime.noticeMinutesBefore)} min={0} max={720} required />
             </label>
           </div>
+          <Save at="coretime" />
         </section>
-        <section class="card">
+        <section class="card anchor" id="sec-boost">
           <h2>🏮 ブースト（奉納）のお礼と特典</h2>
           <p class="note">
             ブースト 1 回ごとに、#慶事 でお知らせ・本人に DM を送ります（お金・{e.currencyName}は渡しません）。#番付 に今奉納してくれている人の「奉納板」を出します。奉納している間は授与品が割引になります（何回ブーストしても同じ）。
@@ -608,8 +621,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               {cfg.boost.dmText}
             </textarea>
           </label>
+          <Save at="boost" />
         </section>
-        <section class="card">
+        <section class="card anchor" id="sec-ranks">
           <h2>役職（朱印の格・昇格ライン）</h2>
           <table class="compact">
             <thead>
@@ -653,8 +667,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
                 })}
             </tbody>
           </table>
+          <Save at="ranks" />
         </section>
-        <section class="card">
+        <section class="card anchor" id="sec-join">
           <h2>入鯖申請・お参り期間</h2>
           <div class="fields">
             <Num name="omairiDays" label="お参り期間（日）" value={cfg.omairi.days} file={fileCfg.omairi.days} min={1} />
@@ -670,12 +685,8 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
               <span>入鯖申請を却下した人をキックする</span>
             </label>
           </div>
+          <Save at="join" />
         </section>
-        <p>
-          <button type="submit" class="ok">
-            保存する
-          </button>
-        </p>
       </form>
       <form method="post" action="/settings/join-bonus-all" class="card">
         <Csrf session={props.session} />

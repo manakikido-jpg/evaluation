@@ -722,7 +722,7 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/settings', (c) => {
     if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
-    return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} coinsNonce={randomUUID()} />);
+    return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} at={c.req.query('at')} coinsNonce={randomUUID()} />);
   });
 
   const longText = (v: unknown) => (typeof v === 'string' && v.trim() ? v.replace(/\r\n/g, '\n').trim().slice(0, 1000) : undefined);
@@ -730,6 +730,9 @@ export function createWebApp(deps: WebDeps) {
   app.post('/settings', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody();
+    // 項目の下の「保存する」で押したときは、その項目に戻る
+    const at = typeof body.at === 'string' && /^[a-z]{1,20}$/.test(body.at) ? body.at : '';
+    const backTo = (msg: string) => (at ? `/settings?msg=${msg}&at=${at}#sec-${at}` : `/settings?msg=${msg}`);
     const num = (k: string) => Number(typeof body[k] === 'string' ? body[k] : NaN);
     const raw = {
       economy: {
@@ -785,7 +788,7 @@ export function createWebApp(deps: WebDeps) {
       overrides = overridesSchema.parse(raw);
       applyOverrides(fileCfg(), overrides);
     } catch {
-      return c.redirect('/settings?msg=settings_invalid');
+      return c.redirect(backTo('settings_invalid'));
     }
     const before = cfg;
     await saveOverrides(db, overrides, c.get('session').userId);
@@ -799,7 +802,7 @@ export function createWebApp(deps: WebDeps) {
       detail: { economy: diff(before.economy, after.economy), omairi: diff(before.omairi, after.omairi), applications: diff(before.applications, after.applications), ranks: rankDiff(before, after) },
       via: 'web',
     });
-    return c.redirect(noticesUpdated > 0 ? '/settings?msg=saved_notices' : '/settings?msg=saved');
+    return c.redirect(backTo(noticesUpdated > 0 ? 'saved_notices' : 'saved'));
   });
 
   app.post('/settings/join-bonus-all', async (c) => {

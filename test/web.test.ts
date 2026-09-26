@@ -549,6 +549,14 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.economy.menzaifuPrice).toBe(800);
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
 
+    // 項目の下の「保存する」（通話部屋の値段など）は、その項目に戻って「保存しました」を出す
+    const rooms = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'room.hourly.public': '50', at: 'rooms' });
+    expect(rooms.headers.get('location')).toBe('/settings?msg=saved&at=rooms#sec-rooms');
+    expect(store.current.rooms.hourly.public).toBe(50);
+    const back = await (await get('/settings?msg=saved&at=rooms', g)).text();
+    expect(back).toContain('id="sec-rooms"');
+    expect(back.match(/設定を保存しました/g)?.length).toBe(2);
+
     // おかしな値（昇格ラインが重複）は保存しない
     const bad = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'rank.ujiko.requiredGoen': '100' });
     expect(bad.headers.get('location')).toBe('/settings?msg=settings_invalid');

@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-26-settings-section-save',
+    date: '2026-09-26',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '設定の項目ごとに「保存する」',
+    items: ['通話部屋の値段・市場・コアタイムなど、各項目のいちばん下に「保存する」。押すとその項目に戻って「保存しました」が出る'],
+  },
+  {
     id: '2026-09-26-channels-toc',
     date: '2026-09-26',
     kind: 'improve',
