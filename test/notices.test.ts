@@ -50,6 +50,7 @@ function fakeDiscord(channels = CHANNELS) {
     removeRole: async () => undefined,
     sendDm: async () => true,
     ban: async () => undefined,
+    unban: async () => undefined,
     kick: async () => undefined,
     editMessage: async (c, m, b) => {
       if (!messages.has(m)) throw new DiscordHttpError('Unknown Message', 404);

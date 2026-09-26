@@ -16,6 +16,10 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   no_yaku: { text: '取り消す厄がありません。', kind: 'warn' },
   kicked: { text: 'キックしました。', kind: 'ok' },
   kick_failed: { text: 'キックに失敗しました。BOT の権限を確認してください。', kind: 'warn' },
+  unbanned: { text: 'BAN を解除しました。本人に招待リンクを送ると、入鯖申請からやり直せます（DM は BOT から送れません）。', kind: 'ok' },
+  unbanned_already: { text: 'Discord ではすでに解除されていたので、厄の整理だけしました。', kind: 'ok' },
+  unban_failed: { text: 'BAN を解除できませんでした。BOT の「メンバーを BAN」権限を確認してください。', kind: 'warn' },
+  unban_forbidden: { text: 'BAN の解除は宮司のみできます。', kind: 'warn' },
   memo: { text: 'メモを残しました。', kind: 'ok' },
   denied_self: { text: '自分自身には操作できません。', kind: 'warn' },
   denied_protected: { text: 'この方には操作できません（神職は神職・宮司に、宮司は宮司に操作できません）。', kind: 'warn' },
@@ -53,6 +57,8 @@ export function ModerationSection(props: {
   activity: ActivityDaily[];
   memos: Memo[];
   names: Names;
+  /** BAN 中で、見ているのが宮司なら「BAN を解除する」を出す */
+  showUnban?: boolean;
 }) {
   const { cfg, memberId, csrf } = props;
   const e = cfg.economy;
@@ -82,7 +88,7 @@ export function ModerationSection(props: {
                       <small class="reason">
                         付けた人: {who(props.names, y.issuedBy)}
                         {y.clearedAt &&
-                          ` ／ ${y.clearedReason === 'menzaifu' ? '免罪符で祓った' : `取り消し（${who(props.names, y.clearedBy)}${y.clearedNote ? `: ${y.clearedNote}` : ''}）`} ${fmtDate(y.clearedAt)}`}
+                          ` ／ ${y.clearedReason === 'menzaifu' ? '免罪符で祓った' : y.clearedReason === 'unban' ? 'BAN 解除で祓った' : `取り消し（${who(props.names, y.clearedBy)}${y.clearedNote ? `: ${y.clearedNote}` : ''}）`} ${fmtDate(y.clearedAt)}`}
                       </small>
                     </td>
                   </tr>
@@ -94,6 +100,27 @@ export function ModerationSection(props: {
 
         <section class="card">
           <h2>操作</h2>
+          {props.showUnban && (
+            <form method="post" action={`${base}/unban`} class="actions unban">
+              <input type="hidden" name="_csrf" value={csrf} />
+              <h3>
+                BAN を解除する <span class="tag red">BAN 中</span>
+              </h3>
+              <p class="note">解除すると、招待リンクからまた入れます（入鯖申請からやり直し）。残っている厄をどうするか選んでください。</p>
+              <label class="field check">
+                <input type="radio" name="keep" value="0" required />
+                <span>厄を全部祓う（まっさらからやり直し）</span>
+              </label>
+              <label class="field check">
+                <input type="radio" name="keep" value="1" />
+                <span>厄を 1 つ残す（👹厄年からやり直し。次に厄が付くとまた BAN）</span>
+              </label>
+              <input type="text" name="note" maxlength={300} placeholder="解除する理由（必須・記録に残ります）" required />
+              <button type="submit" class="ok">
+                BAN を解除する
+              </button>
+            </form>
+          )}
           {!props.canModerate ? (
             <p class="empty">{props.deniedText}</p>
           ) : (

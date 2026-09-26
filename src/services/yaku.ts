@@ -57,7 +57,7 @@ export async function clearYakuByStaff(
   });
 }
 
-async function clearLatest(tx: Db, memberId: string, by: string, reason: 'staff' | 'menzaifu', note: string | null): Promise<boolean> {
+async function clearLatest(tx: Db, memberId: string, by: string, reason: 'staff' | 'menzaifu' | 'unban', note: string | null): Promise<boolean> {
   const [latest] = await tx.select({ id: yaku.id }).from(yaku).where(activeWhere(memberId)).orderBy(desc(yaku.createdAt), desc(yaku.id)).limit(1);
   if (!latest) return false;
   await tx
@@ -65,6 +65,22 @@ async function clearLatest(tx: Db, memberId: string, by: string, reason: 'staff'
     .set({ clearedAt: sql`now()`, clearedBy: by, clearedReason: reason, clearedNote: note })
     .where(eq(yaku.id, latest.id));
   return true;
+}
+
+/** BAN を解除するとき: 厄を keep 個だけ残して祓う（新しいものから祓う） */
+export async function clearYakuForUnban(
+  db: Db,
+  input: { memberId: string; by: string; keep: 0 | 1; note: string },
+): Promise<{ cleared: number; remaining: number }> {
+  return db.transaction(async (tx) => {
+    await lockMember(tx, input.memberId);
+    let cleared = 0;
+    while ((await countActive(tx, input.memberId)) > input.keep) {
+      if (!(await clearLatest(tx, input.memberId, input.by, 'unban', input.note || null))) break;
+      cleared++;
+    }
+    return { cleared, remaining: await countActive(tx, input.memberId) };
+  });
 }
 
 export async function menzaifuUsed(db: Db, memberId: string): Promise<number> {

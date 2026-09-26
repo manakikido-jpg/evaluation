@@ -45,6 +45,7 @@ beforeEach(async () => {
     removeRole: async (_g, u, r) => void calls.push(`removeRole ${u} ${r}`),
     sendDm: async (u, c) => (calls.push(`dm ${u} ${c.split('\n')[1] ?? ''}`), true),
     ban: async (_g, u) => void calls.push(`ban ${u}`),
+    unban: async () => undefined,
     kick: async (_g, u) => void calls.push(`kick ${u}`),
     editMessage: async () => undefined,
     sendMessage: async () => ({ id: '0' }),
@@ -266,5 +267,16 @@ describe('宵参りを外すと、宵宮のお守りも外れる', () => {
     calls = [];
     expect(await changeAgeGroup(ctx, guji, NEW, 'minor')).toBe('ok');
     expect(calls).toEqual([`removeRole ${NEW} ${YOI}`, `removeRole ${NEW} ${OMA}`]);
+  });
+});
+
+describe('BAN を解除して入り直した人', () => {
+  it('厄が残っていれば、入鯖を承認したときに 👹厄年 を付け直す', async () => {
+    const { recordYaku } = await import('../src/services/yaku.js');
+    await recordYaku(db, { memberId: NEW, reason: '誹謗中傷', issuedBy: STAFF });
+    const r = await submitJoin(ctx, { id: NEW, roleIds: [], accountCreatedAt: recentAccount }, answers, now);
+    await decide(ctx, shinshoku, (r as { id: number }).id, true, '', now);
+    expect(calls).toContain(`addRole ${NEW} ${ROLE.sanpaisha}`);
+    expect(calls).toContain(`addRole ${NEW} ${ROLE.yakudoshi}`);
   });
 });

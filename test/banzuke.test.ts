@@ -45,6 +45,7 @@ function fakeDiscord(channels = [{ id: BANZUKE, name: '番付', type: 0, parent_
     removeRole: async () => undefined,
     sendDm: async () => true,
     ban: async () => undefined,
+    unban: async () => undefined,
     kick: async () => undefined,
     editMessage: async (_c, m, b) => {
       if (!messages.has(m)) throw new DiscordHttpError('Unknown Message', 404);

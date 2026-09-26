@@ -26,6 +26,7 @@ beforeEach(async () => {
     removeRole: async (_g, u, r) => void calls.push(`removeRole ${u} ${r}`),
     sendDm: async (u) => (calls.push(`dm ${u}`), true),
     ban: async (_g, u) => void calls.push(`ban ${u}`),
+    unban: async () => undefined,
     kick: async (_g, u) => void calls.push(`kick ${u}`),
     editMessage: async () => undefined,
     sendMessage: async () => ({ id: '0' }),

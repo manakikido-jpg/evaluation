@@ -28,6 +28,7 @@ const fakeActions: DiscordActions = {
   removeRole: async (_g, u, r) => void actions.push(`removeRole ${u} ${r}`),
   sendDm: async (u) => (actions.push(`dm ${u}`), true),
   ban: async (_g, u) => void actions.push(`ban ${u}`),
+  unban: async () => undefined,
   kick: async (_g, u) => void actions.push(`kick ${u}`),
   editMessage: async (_c, m, b) => void actions.push(`edit ${m} ${b.content || b.embeds?.[0]?.description}`),
   sendMessage: async (c, b) => (actions.push(`send ${c} ${b.content || b.embeds?.[0]?.description}`), { id: `m${actions.length}` }),
@@ -320,6 +321,29 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     const confirmed = await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: 'スパム・宣伝', note: '', confirm: 'yes' });
     expect(confirmed.headers.get('location')).toBe(`/members/${USER}?msg=banned`);
     expect(actions).toContain(`ban ${USER}`);
+  });
+
+  it('BAN の解除は宮司だけ。厄を全部祓うか 1 つ残すかを選ぶ', async () => {
+    const s = await login(STAFF);
+    let csrf = await csrfOf(s);
+    await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: '誹謗中傷', note: '' });
+    await post(`/members/${USER}/yaku`, s, { _csrf: csrf, reason: '誹謗中傷', note: '', confirm: 'yes' });
+    // 神職には解除の欄が出ない。送っても解除できない
+    expect(await (await get(`/members/${USER}`, s)).text()).not.toContain('BAN を解除する');
+    expect((await post(`/members/${USER}/unban`, s, { _csrf: csrf, keep: '0', note: 'x' })).headers.get('location')).toBe(`/members/${USER}?msg=unban_forbidden`);
+
+    const g = await login(GUJI);
+    const page = await (await get(`/members/${USER}`, g)).text();
+    expect(page).toContain('BAN を解除する');
+    csrf = await csrfOf(g);
+    // 選ばない・理由なしは受け付けない
+    expect((await post(`/members/${USER}/unban`, g, { _csrf: csrf, note: '反省' })).headers.get('location')).toBe(`/members/${USER}?msg=invalid`);
+    const r = await post(`/members/${USER}/unban`, g, { _csrf: csrf, keep: '1', note: '反省している' });
+    expect(r.headers.get('location')).toBe(`/members/${USER}?msg=unbanned`);
+    expect(await activeYakuCount(db, USER)).toBe(1);
+    const after = await (await get(`/members/${USER}?msg=unbanned`, g)).text();
+    expect(after).toContain('BAN を解除しました');
+    expect(after).not.toContain('>BAN を解除する');
   });
 
   it('「その他」は補足が必須・一覧にない理由は拒否', async () => {

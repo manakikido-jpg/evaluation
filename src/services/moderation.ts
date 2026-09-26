@@ -1,7 +1,7 @@
 import { adminLevelOf, type AdminLevel, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { memberEvents } from '../db/schema.js';
-import type { DiscordActions } from '../lib/discordRest.js';
+import { DiscordHttpError, type DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { walletOf } from './economy.js';
@@ -11,6 +11,7 @@ import {
   addMemo,
   buyMenzaifu,
   clearYakuByStaff,
+  clearYakuForUnban,
   recordInstantBan,
   recordYaku,
   type MenzaifuResult,
@@ -170,6 +171,37 @@ export async function kickMember(ctx: ModCtx, actor: Actor, targetId: string, re
   const kickOk = await safely('kick', () => ctx.discord.kick(ctx.cfg.guildId, targetId, reason));
   await audit(ctx.db, { actorId: actor.id, targetId, action: 'member.kick', detail: { reason, ok: kickOk }, via: actor.via });
   return { status: 'kicked', dmSent, kickOk };
+}
+
+export type UnbanResult = { status: 'forbidden' } | { status: 'failed' } | { status: 'unbanned'; alreadyUnbanned: boolean; cleared: number; remaining: number };
+
+/**
+ * BAN を解除する（宮司のみ）。厄は keep 個（0 = 全部祓う、1 = 厄年からやり直し）だけ残す。
+ * Discord 側ですでに解除されていても、厄の整理はする。入り直したら、入鯖申請からやり直し。
+ */
+export async function unbanMember(ctx: ModCtx, actor: Actor, memberId: string, keep: 0 | 1, note: string): Promise<UnbanResult> {
+  if (actor.level !== 'guji') return { status: 'forbidden' };
+  let alreadyUnbanned = false;
+  try {
+    await ctx.discord.unban(ctx.cfg.guildId, memberId, note ? `BAN 解除: ${note}` : 'BAN 解除');
+  } catch (err) {
+    // Unknown Ban（すでに解除されている）
+    if (err instanceof DiscordHttpError && err.status === 404) alreadyUnbanned = true;
+    else {
+      logger.warn({ err }, 'unban failed');
+      return { status: 'failed' };
+    }
+  }
+  const { cleared, remaining } = await clearYakuForUnban(ctx.db, { memberId, by: actor.id, keep, note });
+  await ctx.db.insert(memberEvents).values({ memberId, kind: 'unban', detail: { keep, remaining } });
+  await audit(ctx.db, { actorId: actor.id, targetId: memberId, action: 'member.unban', detail: { keep, cleared, remaining, note, alreadyUnbanned }, via: actor.via });
+  return { status: 'unbanned', alreadyUnbanned, cleared, remaining };
+}
+
+/** いま BAN されているか（記録の上で。最後の BAN のあとに解除がなければ BAN 中） */
+export function isBannedByEvents(events: { kind: string; at: Date }[]): boolean {
+  const last = [...events].filter((e) => e.kind === 'ban' || e.kind === 'unban').sort((a, b) => b.at.getTime() - a.at.getTime())[0];
+  return last?.kind === 'ban';
 }
 
 /** 申し送りメモ */

@@ -13,7 +13,7 @@ import { eventsOf, getMember, homeStats, listMembers, namesOf, shuinHistory, typ
 import { goshuinchoOf } from '../services/shuin.js';
 import { recentActivity } from '../services/activity.js';
 import { recentCoinTx, walletOf } from '../services/economy.js';
-import { checkTarget, clearYaku, giveYaku, instantBan, kickMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
+import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
@@ -334,6 +334,7 @@ export function createWebApp(deps: WebDeps) {
             activity={activity}
             memos={memoRows}
             names={names}
+            showUnban={session.level === 'guji' && isBannedByEvents(events)}
           />
           </>
         }
@@ -421,6 +422,19 @@ export function createWebApp(deps: WebDeps) {
     const r = await instantBan(mod(), actorOf(session), id, reason, note);
     if (r.status === 'denied') return back(c, id, deniedCode(r.reason));
     return back(c, id, r.banOk ? 'banned' : 'ban_failed');
+  });
+
+  app.post('/members/:id/unban', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const body = await c.req.parseBody();
+    const note = field(body, 'note');
+    const keep = body.keep === '0' ? 0 : body.keep === '1' ? 1 : undefined;
+    if (keep === undefined || !note) return back(c, id, 'invalid');
+    const r = await unbanMember(mod(), actorOf(c.get('session')), id, keep, note);
+    if (r.status === 'forbidden') return back(c, id, 'unban_forbidden');
+    if (r.status === 'failed') return back(c, id, 'unban_failed');
+    return back(c, id, r.alreadyUnbanned ? 'unbanned_already' : 'unbanned');
   });
 
   app.post('/members/:id/kick', async (c) => {

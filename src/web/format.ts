@@ -46,6 +46,7 @@ export const EVENT_LABEL: Record<string, string> = {
   leave: '退出',
   promote: '昇格',
   ban: 'BAN',
+  unban: 'BAN 解除',
 };
 
 export const ACTION_LABEL: Record<string, string> = {
@@ -71,6 +72,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'soudan.reveal': '相談した人を確認',
   'settings.update': '設定を変更',
   'settings.reset': '設定をファイルの値に戻した',
+  'member.unban': 'BAN 解除',
 };
 
 export function memberRankLabel(cfg: GuildConfig, roleIds: readonly string[]): string {

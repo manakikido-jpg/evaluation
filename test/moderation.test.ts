@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import type { DiscordActions } from '../src/lib/discordRest.js';
+import { DiscordHttpError, type DiscordActions } from '../src/lib/discordRest.js';
 import { listAudit } from '../src/services/audit.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { recordJoin } from '../src/services/members.js';
-import { clearYaku, giveYaku, instantBan, kickMember, purchaseMenzaifu, writeMemo, type Actor, type ModCtx } from '../src/services/moderation.js';
+import { eventsOf, recordJoin } from '../src/services/members.js';
+import { clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, purchaseMenzaifu, unbanMember, writeMemo, type Actor, type ModCtx } from '../src/services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, yakuHistory } from '../src/services/yaku.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -19,6 +19,7 @@ let close: () => Promise<void>;
 let calls: Call[];
 let dmOk: boolean;
 let ctx: ModCtx;
+let unbanNotFound = false;
 
 const shinshoku: Actor = { id: STAFF, level: 'shinshoku', via: 'web' };
 const guji: Actor = { id: GUJI, level: 'guji', via: 'discord' };
@@ -27,6 +28,7 @@ beforeEach(async () => {
   ({ db, close } = await makeDb());
   calls = [];
   dmOk = true;
+  unbanNotFound = false;
   const discord: DiscordActions = {
     addRole: async (_g, u, r) => void calls.push(['addRole', u, r]),
     removeRole: async (_g, u, r) => void calls.push(['removeRole', u, r]),
@@ -35,6 +37,10 @@ beforeEach(async () => {
       return dmOk;
     },
     ban: async (_g, u, reason) => void calls.push(['ban', u, reason]),
+    unban: async (_g, u) => {
+      calls.push(['unban', u, '']);
+      if (unbanNotFound) throw new DiscordHttpError('Unknown Ban', 404);
+    },
     kick: async (_g, u, reason) => void calls.push(['kick', u, reason]),
     editMessage: async () => undefined,
     sendMessage: async () => ({ id: '0' }),
@@ -192,5 +198,44 @@ describe('キック・メモ', () => {
     expect(await writeMemo(ctx, shinshoku, U, '通話で少し強い言い方が気になった')).toBe('ok');
     expect((await memosOf(db, U))[0]).toMatchObject({ body: '通話で少し強い言い方が気になった', authorId: STAFF });
     expect(await writeMemo(ctx, shinshoku, '820000000000000099', 'x')).toBe('not_found');
+  });
+});
+
+describe('BAN の解除（宮司のみ）', () => {
+  async function banWithTwoYaku() {
+    await giveYaku(ctx, shinshoku, U, '誹謗中傷', false);
+    await giveYaku(ctx, shinshoku, U, '誹謗中傷', true);
+    expect(isBannedByEvents(await eventsOf(db, U))).toBe(true);
+    calls = [];
+  }
+
+  it('神職は解除できない', async () => {
+    await banWithTwoYaku();
+    expect(await unbanMember(ctx, shinshoku, U, 0, '反省している')).toEqual({ status: 'forbidden' });
+    expect(calls).toEqual([]);
+  });
+
+  it('A: 厄を全部祓って解除', async () => {
+    await banWithTwoYaku();
+    expect(await unbanMember(ctx, guji, U, 0, '反省している')).toEqual({ status: 'unbanned', alreadyUnbanned: false, cleared: 2, remaining: 0 });
+    expect(kinds()).toEqual(['unban']);
+    expect(await activeYakuCount(db, U)).toBe(0);
+    expect(isBannedByEvents(await eventsOf(db, U))).toBe(false);
+    expect((await yakuHistory(db, U)).every((y) => y.clearedReason === 'unban')).toBe(true);
+    expect((await listAudit(db, { action: 'member.unban' }))[0]?.detail).toMatchObject({ keep: 0, cleared: 2, remaining: 0 });
+  });
+
+  it('B: 厄を 1 つ残して解除（次に厄が付くとまた BAN の確認になる）', async () => {
+    await banWithTwoYaku();
+    const r = await unbanMember(ctx, guji, U, 1, '一度だけ');
+    expect(r).toMatchObject({ status: 'unbanned', cleared: 1, remaining: 1 });
+    expect(await activeYakuCount(db, U)).toBe(1);
+    expect((await giveYaku(ctx, shinshoku, U, '誹謗中傷', false)).status).toBe('needs_confirm');
+  });
+
+  it('Discord ですでに解除されていても、厄の整理はする', async () => {
+    await banWithTwoYaku();
+    unbanNotFound = true;
+    expect(await unbanMember(ctx, guji, U, 0, '手で解除済み')).toMatchObject({ status: 'unbanned', alreadyUnbanned: true, remaining: 0 });
   });
 });

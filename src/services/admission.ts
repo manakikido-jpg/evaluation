@@ -15,6 +15,7 @@ import {
 } from './applications.js';
 import { audit } from './audit.js';
 import { getMember } from './members.js';
+import { activeYakuCount } from './yaku.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
 
@@ -108,6 +109,11 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
       await setAgeGroup(ctx.db, app.memberId, age);
       const first = autoRanks(ctx.cfg.ranks)[0];
       if (first) await safely('add first rank', () => ctx.discord.addRole(g, app.memberId, first.roleId, '入鯖申請を承認'));
+      // BAN を解除して入り直した人などで厄が残っていれば、👹厄年 を付け直す
+      const yakudoshi = ctx.cfg.roles.yakudoshi;
+      if (yakudoshi && (await activeYakuCount(ctx.db, app.memberId)) > 0) {
+        await safely('add yakudoshi', () => ctx.discord.addRole(g, app.memberId, yakudoshi, '厄が残っている'));
+      }
       await startOmairi(ctx.db, app.memberId, ctx.cfg.omairi.days, now);
       dmSent = await ctx.discord.sendDm(
         app.memberId,
