@@ -54,6 +54,7 @@ function createSetupApi(token: string): SetupApi {
     reorderRoles: async (g, body) => void (await call('PATCH', `/guilds/${g}/roles`, body)),
     recentMessages: (c) => call('GET', `/channels/${c}/messages?limit=50`),
     renameChannel: async (c, name) => void (await call('PATCH', `/channels/${c}`, { name })),
+    setPermission: async (c, o) => void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { type: o.type, allow: o.allow, deny: o.deny })),
   };
 }
 
@@ -73,6 +74,9 @@ function knownIdsFrom(path: string, guildId: string): KnownIds | undefined {
         sanpaisha: rank('sanpaisha'),
         yakudoshi: c.roles.yakudoshi,
         yoimairi: c.roles.yoimairi,
+        male: c.roles.male,
+        female: c.roles.female,
+        ema_pending: c.roles.emaPending,
       },
       channels: { ...c.channels },
     };

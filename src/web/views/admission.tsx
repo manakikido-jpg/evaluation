@@ -1,6 +1,7 @@
 import type { GuildConfig } from '../../config.js';
 import type { AdminSession, Application, Omairi, Soudan, SoudanMessage } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
+import { GENDER_LABEL, isGender } from '../../services/admission.js';
 import { Avatar, Layout } from './layout.js';
 
 type Names = Map<string, string>;
@@ -88,6 +89,12 @@ export function ApplicationsPage(props: {
                   <dt>年齢区分</dt>
                   <dd>{AGE_LABEL[app.answers.age ?? 'unknown']}</dd>
                 </div>
+                {isGender(app.answers.gender) && (
+                  <div>
+                    <dt>性別</dt>
+                    <dd>{GENDER_LABEL[app.answers.gender]}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>やりたいこと</dt>
                   <dd>{app.answers.purpose}</dd>

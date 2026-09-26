@@ -40,7 +40,84 @@ async function safely(what: string, fn: () => Promise<unknown>): Promise<boolean
 
 export type AgeGroup = 'minor' | 'adult';
 
-export type JoinAnswers = { name: string; age: AgeGroup; purpose: string; message: string };
+export type Gender = 'male' | 'female';
+export const GENDER_LABEL: Record<Gender, string> = { male: '男性', female: '女性' };
+export const isGender = (v: unknown): v is Gender => v === 'male' || v === 'female';
+
+export type JoinAnswers = { name: string; age: AgeGroup; gender?: Gender; purpose: string; message: string };
+
+/** 自己紹介を書くチャンネル（女性は #絵馬-女性、ほかは #絵馬-男性） */
+export function introChannelOf(cfg: ModCtx['cfg'], gender: Gender | undefined): string | undefined {
+  return gender === 'female' ? (cfg.channels.emaFemale ?? cfg.channels.ema) : cfg.channels.ema;
+}
+
+/** 性別のロール */
+export function genderRoleOf(cfg: ModCtx['cfg'], gender: Gender | undefined): string | undefined {
+  return gender === 'female' ? cfg.roles.female : gender === 'male' ? cfg.roles.male : undefined;
+}
+
+/** ロールから性別 */
+export function genderOfRoles(cfg: ModCtx['cfg'], roleIds: readonly string[]): Gender | undefined {
+  if (cfg.roles.female && roleIds.includes(cfg.roles.female)) return 'female';
+  if (cfg.roles.male && roleIds.includes(cfg.roles.male)) return 'male';
+  return undefined;
+}
+
+/**
+ * 入鯖を仕上げる: 🔰参拝者 にして、お参り期間を始め、初期配布を渡し、ようこその DM を送る。
+ * 自己紹介を書いたとき（絵馬待ちがあるとき）か、承認したとき（絵馬待ちがないとき）に呼ぶ。
+ */
+export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date(), opts: { introChannelId?: string } = {}): Promise<boolean> {
+  const g = ctx.cfg.guildId;
+  const first = autoRanks(ctx.cfg.ranks)[0];
+  if (first) await safely('add first rank', () => ctx.discord.addRole(g, memberId, first.roleId, '入鯖（自己紹介を書いた・承認）'));
+  // BAN を解除して入り直した人などで厄が残っていれば、👹厄年 を付け直す
+  const yakudoshi = ctx.cfg.roles.yakudoshi;
+  if (yakudoshi && (await activeYakuCount(ctx.db, memberId)) > 0) {
+    await safely('add yakudoshi', () => ctx.discord.addRole(g, memberId, yakudoshi, '厄が残っている'));
+  }
+  await startOmairi(ctx.db, memberId, ctx.cfg.omairi.days, now);
+  // 初期配布（1 人 1 回。入り直した人にはもう配らない）
+  const e = ctx.cfg.economy;
+  const bonus = await grantJoinBonus(ctx.db, memberId, e.joinBonus);
+  return ctx.discord.sendDm(
+    memberId,
+    [
+      SIGN,
+      `ようこそ、咲楽ノ宮へお参りくださいました。`,
+      ...(opts.introChannelId ? [`まだの方は、<#${opts.introChannelId}> に自己紹介を書いてください（いちばん下のひな形をコピーして使えます）。`] : []),
+      `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
+      '相手の名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」でできます。',
+      ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
+    ].join('\n'),
+  );
+}
+
+export type IntroResult = { status: 'not_pending' } | { status: 'wrong_channel'; expected: string } | { status: 'too_short' } | { status: 'completed' };
+
+/** 自己紹介を書かないと入れない、の最低の文字数（空白を除く） */
+export const INTRO_MIN_CHARS = 10;
+
+/**
+ * #絵馬-男性・#絵馬-女性 に書き込まれたとき。絵馬待ちの人なら、自分の性別のチャンネルかを確かめて、入鯖を仕上げる。
+ */
+export async function onIntroPosted(
+  ctx: ModCtx,
+  author: { id: string; roleIds: readonly string[] },
+  channelId: string,
+  content: string,
+  now = new Date(),
+): Promise<IntroResult> {
+  const pending = ctx.cfg.roles.emaPending;
+  if (!pending || !author.roleIds.includes(pending)) return { status: 'not_pending' };
+  const expected = introChannelOf(ctx.cfg, genderOfRoles(ctx.cfg, author.roleIds));
+  if (expected && channelId !== expected) return { status: 'wrong_channel', expected };
+  if (content.replace(/\s/g, '').length < INTRO_MIN_CHARS) return { status: 'too_short' };
+  await safely('remove ema pending', () => ctx.discord.removeRole(ctx.cfg.guildId, author.id, pending, '自己紹介を書いた'));
+  await completeJoin(ctx, author.id, now);
+  await audit(ctx.db, { actorId: author.id, targetId: author.id, action: 'join.intro', detail: { channelId }, via: 'discord' });
+  return { status: 'completed' };
+}
 
 // ───────── 入鯖申請 ─────────
 
@@ -48,7 +125,8 @@ export type SubmitJoinResult =
   | { status: 'pending'; id: number }
   | { status: 'auto_approved'; id: number }
   | { status: 'duplicate' }
-  | { status: 'already_member' };
+  | { status: 'already_member' }
+  | { status: 'pending_intro'; channelId?: string };
 
 /** 入鯖申請を出す。アカウントが十分古ければ自動で承認（半自動モード） */
 export async function submitJoin(
@@ -58,6 +136,10 @@ export async function submitJoin(
   now = new Date(),
 ): Promise<SubmitJoinResult> {
   if (ctx.cfg.ranks.some((r) => applicant.roleIds.includes(r.roleId))) return { status: 'already_member' };
+  // 承認済みで、自己紹介がまだの人
+  if (ctx.cfg.roles.emaPending && applicant.roleIds.includes(ctx.cfg.roles.emaPending)) {
+    return { status: 'pending_intro', channelId: introChannelOf(ctx.cfg, genderOfRoles(ctx.cfg, applicant.roleIds)) };
+  }
   const r = await submitApplication(ctx.db, { memberId: applicant.id, kind: 'join', answers });
   if (r.status === 'duplicate') return r;
 
@@ -111,27 +193,26 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
       const prev = (await getMember(ctx.db, app.memberId))?.ageGroup;
       const age = prev === 'minor' && answered !== 'minor' ? 'minor' : answered === 'unknown' && prev ? prev : answered;
       await setAgeGroup(ctx.db, app.memberId, age as 'minor' | 'adult' | 'unknown');
-      const first = autoRanks(ctx.cfg.ranks)[0];
-      if (first) await safely('add first rank', () => ctx.discord.addRole(g, app.memberId, first.roleId, '入鯖申請を承認'));
-      // BAN を解除して入り直した人などで厄が残っていれば、👹厄年 を付け直す
-      const yakudoshi = ctx.cfg.roles.yakudoshi;
-      if (yakudoshi && (await activeYakuCount(ctx.db, app.memberId)) > 0) {
-        await safely('add yakudoshi', () => ctx.discord.addRole(g, app.memberId, yakudoshi, '厄が残っている'));
+      const gender = isGender(app.answers.gender) ? app.answers.gender : undefined;
+      const genderRole = genderRoleOf(ctx.cfg, gender);
+      if (genderRole) await safely('add gender', () => ctx.discord.addRole(g, app.memberId, genderRole, '入鯖申請（性別）'));
+      const intro = introChannelOf(ctx.cfg, gender);
+      const pending = ctx.cfg.roles.emaPending;
+      if (pending && intro) {
+        // 自己紹介を書くまでは 📝絵馬待ち（自己紹介のチャンネルだけ見える）。書くと 🔰参拝者 になる
+        await safely('add ema pending', () => ctx.discord.addRole(g, app.memberId, pending, '入鯖申請を承認（自己紹介待ち）'));
+        dmSent = await ctx.discord.sendDm(
+          app.memberId,
+          [
+            SIGN,
+            '入鯖申請を承認しました。',
+            `最後に、<#${intro}> に自己紹介を書いてください。書くと、咲楽ノ宮の全部のチャンネルが見えるようになります。`,
+            `-# チャンネルのいちばん下のひな形をコピーして使えます（${INTRO_MIN_CHARS} 文字以上）`,
+          ].join('\n'),
+        );
+      } else {
+        dmSent = await completeJoin(ctx, app.memberId, now, { introChannelId: intro });
       }
-      await startOmairi(ctx.db, app.memberId, ctx.cfg.omairi.days, now);
-      // 初期配布（1 人 1 回。入り直した人にはもう配らない）
-      const e = ctx.cfg.economy;
-      const bonus = await grantJoinBonus(ctx.db, app.memberId, e.joinBonus);
-      dmSent = await ctx.discord.sendDm(
-        app.memberId,
-        [
-          SIGN,
-          `ようこそ、咲楽ノ宮へお参りくださいました。`,
-          `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
-          '相手の名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」でできます。',
-          ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
-        ].join('\n'),
-      );
     } else {
       dmSent = await ctx.discord.sendDm(app.memberId, [SIGN, '申し訳ありませんが、今回は入鯖をお見送りとさせていただきました。'].join('\n'));
       if (ctx.cfg.applications.kickOnReject) await safely('kick rejected', () => ctx.discord.kick(g, app.memberId, '入鯖申請を却下'));

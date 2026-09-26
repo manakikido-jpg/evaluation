@@ -165,6 +165,11 @@ export const guildConfigSchema = z
         yakudoshi: snowflake.optional(),
         /** 🔞 宵参り: 成人エリアに入れる（任意） */
         yoimairi: snowflake.optional(),
+        /** ♂ 男性・♀ 女性: 入鯖申請で選ぶ（任意） */
+        male: snowflake.optional(),
+        female: snowflake.optional(),
+        /** 📝 絵馬待ち: 承認されて、まだ自己紹介を書いていない人。書くと 🔰参拝者 になる（任意。なければ承認ですぐ参拝者） */
+        emaPending: snowflake.optional(),
         /** お守り: 募集の通知を受け取りたい人が #授与所 のボタンで付け外しするロール */
         omamori: z
           .array(

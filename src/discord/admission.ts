@@ -11,6 +11,7 @@ import {
   type ChatInputCommandInteraction,
   type Client,
   type Interaction,
+  type Message,
   type MessageActionRowComponentBuilder,
   type ModalSubmitInteraction,
 } from 'discord.js';
@@ -25,9 +26,17 @@ import {
   decide,
   decideOmairi,
   replySoudan,
+  genderOfRoles,
+  genderRoleOf,
+  GENDER_LABEL,
+  introChannelOf,
+  isGender,
+  INTRO_MIN_CHARS,
+  onIntroPosted,
   submitJoin,
   submitYoimairi,
   type AgeGroup,
+  type Gender,
   type OmairiAction,
 } from '../services/admission.js';
 import { getMember } from '../services/members.js';
@@ -63,6 +72,10 @@ function textInput(id: string, label: string, style: TextInputStyle, opts: { req
  * 判定の中身は services/admission.ts（管理画面と共通）。
  */
 export class AdmissionApp {
+  /** 自己紹介を仕上げている人・仕上げた人（Discord のロールが届くまでの間、二重に仕上げない） */
+  private readonly introBusy = new Set<string>();
+  private readonly introDone = new Set<string>();
+
   constructor(
     private readonly client: Client,
     private readonly db: Db,
@@ -87,7 +100,12 @@ export class AdmissionApp {
       } else if (interaction.isButton()) {
         const [ns, action, arg] = interaction.customId.split(':');
         if (ns === 'apply' && action === 'start') return await this.applyStart(interaction);
-        if (ns === 'apply' && action === 'age' && (arg === 'minor' || arg === 'adult')) return await this.applyModal(interaction, arg);
+        if (ns === 'apply' && action === 'age' && (arg === 'minor' || arg === 'adult')) return await this.applyGender(interaction, arg);
+        if (ns === 'apply' && action === 'gender') {
+          const [age, gender] = (arg ?? '').split('.');
+          if ((age === 'minor' || age === 'adult') && isGender(gender)) return await this.applyModal(interaction, age, gender);
+        }
+        if (ns === 'gender' && isGender(action)) return await this.chooseGender(interaction, action);
         if (ns === 'yoimairi' && action === 'start') return await this.yoimairiStart(interaction);
         if (ns === 'app' && (action === 'approve' || action === 'reject') && arg) return await this.decideApp(interaction, Number(arg), action === 'approve');
         if (ns === 'soudan' && action === 'reply' && arg) return await this.soudanReplyModal(interaction, Number(arg));
@@ -97,7 +115,10 @@ export class AdmissionApp {
         if (ns === 'omairi' && action === 'removeok' && arg) return await this.omairiDecide(interaction, arg, 'remove');
       } else if (interaction.isModalSubmit()) {
         const [ns, action, arg] = interaction.customId.split(':');
-        if (ns === 'apply' && action === 'modal' && (arg === 'minor' || arg === 'adult')) return await this.applySubmit(interaction, arg);
+        if (ns === 'apply' && action === 'modal') {
+          const [age, gender] = (arg ?? '').split('.');
+          if ((age === 'minor' || age === 'adult') && (gender === undefined || isGender(gender))) return await this.applySubmit(interaction, age, gender);
+        }
         if (ns === 'soudan' && action === 'modal') return await this.soudanSubmit(interaction, arg === 'new' ? undefined : Number(arg));
         if (ns === 'soudan' && action === 'replymodal' && arg) return await this.soudanReply(interaction, Number(arg));
       }
@@ -108,6 +129,39 @@ export class AdmissionApp {
         await (interaction.deferred || interaction.replied ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => undefined);
       }
     }
+  }
+
+  /** #絵馬-男性・#絵馬-女性 への書き込み: 絵馬待ちの人なら、入鯖を仕上げる */
+  async onMessage(msg: Message): Promise<void> {
+    if (!msg.inGuild() || msg.guildId !== this.cfg.guildId || msg.author.bot || !msg.member) return;
+    const pending = this.cfg.roles.emaPending;
+    if (!pending || !msg.member.roles.cache.has(pending) || this.introDone.has(msg.author.id)) return;
+    if (![this.cfg.channels.ema, this.cfg.channels.emaFemale].includes(msg.channelId)) return;
+    // 続けて書き込んでも 1 回だけ仕上げる
+    if (this.introBusy.has(msg.author.id)) return;
+    this.introBusy.add(msg.author.id);
+    let r: Awaited<ReturnType<typeof onIntroPosted>>;
+    try {
+      r = await onIntroPosted(this.ctx, { id: msg.author.id, roleIds: [...msg.member.roles.cache.keys()] }, msg.channelId, msg.content);
+      if (r.status === 'completed') this.introDone.add(msg.author.id);
+    } finally {
+      this.introBusy.delete(msg.author.id);
+    }
+    if (r.status === 'wrong_channel') {
+      await msg.delete().catch(() => undefined);
+      const sent = await this.discord.sendDm(msg.author.id, `⛩ 自己紹介は <#${r.expected}> に書いてください（書いたものは消しました。コピーしてあれば貼り直せます）。\n> ${msg.content.slice(0, 1500)}`);
+      if (!sent) await this.flash(msg, `<@${msg.author.id}> さん、自己紹介は <#${r.expected}> に書いてください。`);
+    } else if (r.status === 'too_short') {
+      await this.flash(msg, `<@${msg.author.id}> さん、自己紹介はもう少し詳しく書いてください（${INTRO_MIN_CHARS} 文字以上。いちばん下のひな形をどうぞ）。`);
+    } else if (r.status === 'completed') {
+      await msg.react('🌸').catch(() => undefined);
+    }
+  }
+
+  /** そのチャンネルに少しだけ出して消す（DM が届かない人向け） */
+  private async flash(msg: Message<true>, content: string): Promise<void> {
+    const m = await msg.channel.send({ content, allowedMentions: { users: [msg.author.id] } }).catch(() => undefined);
+    if (m) setTimeout(() => void m.delete().catch(() => undefined), 20_000);
   }
 
   private staffOf(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>): Actor | undefined {
@@ -125,7 +179,7 @@ export class AdmissionApp {
     if (kind === 'omamori' && !this.cfg.roles.omamori.length) {
       return void (await i.reply({ content: 'お守りのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
-    await channel.send(panelMessage(kind === 'apply' || kind === 'omamori' || kind === 'shop' ? kind : 'yoimairi', { omamori: this.cfg.roles.omamori }));
+    await channel.send(panelMessage(kind === 'apply' || kind === 'omamori' || kind === 'shop' || kind === 'gender' ? kind : 'yoimairi', { omamori: this.cfg.roles.omamori }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 
@@ -139,10 +193,29 @@ export class AdmissionApp {
     });
   }
 
-  private async applyModal(i: ButtonInteraction<'cached'>, age: AgeGroup): Promise<void> {
+  /** 年齢のあとに性別（自己紹介を書くチャンネル・ロールが決まる） */
+  private async applyGender(i: ButtonInteraction<'cached'>, age: AgeGroup): Promise<void> {
+    await i.update({
+      content: '性別を選んでください（自己紹介を書くチャンネルと、ロールが決まります）。',
+      components: [row(btn(`apply:gender:${age}.male`, '♂ 男性'), btn(`apply:gender:${age}.female`, '♀ 女性'))],
+    });
+  }
+
+  /** パネルの「性別を選ぶ」（前からいる人向け。選んだあとは神職が変える） */
+  private async chooseGender(i: ButtonInteraction<'cached'>, gender: Gender): Promise<void> {
+    const role = genderRoleOf(this.cfg, gender);
+    if (!role) return void (await i.reply({ content: '性別のロールがまだありません。神職に知らせてください。', ...EPHEMERAL }));
+    const now = genderOfRoles(this.cfg, [...i.member.roles.cache.keys()]);
+    if (now) return void (await i.reply({ content: `もう「${GENDER_LABEL[now]}」になっています。変えたいときは神職に知らせてください。`, ...EPHEMERAL }));
+    await i.member.roles.add(role, '性別を選んだ');
+    const intro = introChannelOf(this.cfg, gender);
+    await i.reply({ content: `「${GENDER_LABEL[gender]}」にしました。${intro ? `自己紹介は <#${intro}> へどうぞ。` : ''}`, ...EPHEMERAL });
+  }
+
+  private async applyModal(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender): Promise<void> {
     const modal = new ModalBuilder()
-      .setCustomId(`apply:modal:${age}`)
-      .setTitle(`入鯖申請（${AGE_LABEL[age]}）`)
+      .setCustomId(`apply:modal:${age}.${gender}`)
+      .setTitle(`入鯖申請（${AGE_LABEL[age]}・${GENDER_LABEL[gender]}）`)
       .addComponents(
         textInput('name', '呼び名', TextInputStyle.Short, { max: 32 }),
         textInput('purpose', '主にやりたいこと', TextInputStyle.Short, { max: 100, placeholder: 'ゲーム・雑談・寝落ち など' }),
@@ -151,23 +224,35 @@ export class AdmissionApp {
     await i.showModal(modal);
   }
 
-  private async applySubmit(i: ModalSubmitInteraction<'cached'>, age: AgeGroup): Promise<void> {
+  private async applySubmit(i: ModalSubmitInteraction<'cached'>, age: AgeGroup, gender?: Gender): Promise<void> {
     await i.deferReply(EPHEMERAL);
     const answers = {
       name: i.fields.getTextInputValue('name').trim(),
       age,
+      ...(gender ? { gender } : {}),
       purpose: i.fields.getTextInputValue('purpose').trim(),
       message: i.fields.getTextInputValue('message').trim(),
     };
     const r = await submitJoin(this.ctx, { id: i.user.id, roleIds: [...i.member.roles.cache.keys()], accountCreatedAt: i.user.createdAt }, answers);
     if (r.status === 'already_member') return void (await i.editReply('すでに参拝者以上になっています。申請は不要です。'));
     if (r.status === 'duplicate') return void (await i.editReply('申請はすでに受け付けています。神職の確認をお待ちください。'));
-    if (r.status === 'auto_approved') return void (await i.editReply('⛩ 申請を承認しました。ようこそ、咲楽ノ宮へ！'));
+    if (r.status === 'pending_intro') {
+      return void (await i.editReply(`申請はもう承認されています。${r.channelId ? `<#${r.channelId}> に自己紹介を書くと、全部のチャンネルが見えるようになります。` : ''}`));
+    }
+    if (r.status === 'auto_approved') {
+      const intro = introChannelOf(this.cfg, gender);
+      return void (await i.editReply(
+        this.cfg.roles.emaPending && intro
+          ? `⛩ 申請を承認しました。最後に <#${intro}> に自己紹介を書いてください。書くと、全部のチャンネルが見えるようになります。`
+          : '⛩ 申請を承認しました。ようこそ、咲楽ノ宮へ！',
+      ));
+    }
 
     await this.postApplicationCard(r.id, i.user.id, [
       `**入鯖申請 #${r.id}** ${mention(i.user.id)}`,
       `呼び名: ${answers.name}`,
       `年齢区分: ${AGE_LABEL[age]}`,
+      gender ? `性別: ${GENDER_LABEL[gender]}` : '',
       `やりたいこと: ${answers.purpose}`,
       answers.message ? `ひとこと: ${answers.message}` : '',
       `Discord アカウント作成: ${ts(i.user.createdAt)} ・ 参加: ${i.member.joinedAt ? ts(i.member.joinedAt) : '—'}`,

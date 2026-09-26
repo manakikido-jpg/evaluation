@@ -21,12 +21,14 @@ let close: () => Promise<void>;
 let calls: string[];
 let sent: { channelId: string; payload: { embeds?: { title?: string; description?: string }[]; components?: { components: { data: { custom_id?: string } }[] }[] } }[];
 let app: AdmissionApp;
+let discord: DiscordActions;
+let client: unknown;
 
 beforeEach(async () => {
   ({ db, close } = await makeDb());
   calls = [];
   sent = [];
-  const discord: DiscordActions = {
+  discord = {
     addRole: async (_g, u, r) => void calls.push(`addRole ${u} ${r}`),
     removeRole: async (_g, u, r) => void calls.push(`removeRole ${u} ${r}`),
     sendDm: async (u, c) => (calls.push(`dm ${u} ${c}`), true),
@@ -43,7 +45,7 @@ beforeEach(async () => {
     pinMessage: async () => undefined,
   };
   let n = 0;
-  const client = {
+  client = {
     channels: {
       fetch: async (channelId: string) => ({
         id: channelId,
@@ -95,6 +97,9 @@ function base(userId: string, roleIds: string[]) {
     async followUp(p: Reply) {
       replies.push(p);
     },
+    async update(p: Reply) {
+      replies.push(p);
+    },
     async showModal(m: { toJSON: () => { custom_id: string } }) {
       modals.push({ data: m.toJSON() });
     },
@@ -140,14 +145,19 @@ describe('入鯖申請（Discord）', () => {
 
     const age = button(USER, [], 'apply:age:adult');
     await app.onInteraction(age.i as never);
-    expect(age.modals[0]?.data.custom_id).toBe('apply:modal:adult');
+    expect(age.replies[0]?.components?.[0]?.components.map((c) => c.data.custom_id)).toEqual(['apply:gender:adult.male', 'apply:gender:adult.female']);
 
-    const submit = modal(USER, [], 'apply:modal:adult', { name: 'さくら', purpose: 'ゲーム', message: 'よろしく' });
+    const gender = button(USER, [], 'apply:gender:adult.female');
+    await app.onInteraction(gender.i as never);
+    expect(gender.modals[0]?.data.custom_id).toBe('apply:modal:adult.female');
+
+    const submit = modal(USER, [], 'apply:modal:adult.female', { name: 'さくら', purpose: 'ゲーム', message: 'よろしく' });
     await app.onInteraction(submit.i as never);
     expect(submit.replies.at(-1)?.content).toContain('申請を受け付けました');
     const card = sent.find((s) => s.channelId === APPS)!;
     expect(card.payload.embeds?.[0]?.description).toContain('呼び名: さくら');
     expect(card.payload.embeds?.[0]?.description).toContain('年齢区分: 18 歳以上');
+    expect(card.payload.embeds?.[0]?.description).toContain('性別: 女性');
     const approveId = card.payload.components?.[0]?.components[0]?.data.custom_id!;
     expect(approveId).toMatch(/^app:approve:\d+$/);
     const appId = Number(approveId.split(':')[2]);
@@ -164,6 +174,97 @@ describe('入鯖申請（Discord）', () => {
     expect(calls).toContain(`addRole ${USER} ${ROLE.sanpaisha}`);
     expect(calls.some((c) => c.startsWith(`edit ${APPS} msg1 ✅ 承認しました（<@${STAFF}>）`))).toBe(true);
     expect((await getOmairi(db, USER))?.status).toBe('ongoing');
+  });
+});
+
+describe('自己紹介を書くまでは 絵馬待ち', () => {
+  const MALE = '100000000000000071';
+  const FEMALE = '100000000000000072';
+  const PENDING = '100000000000000073';
+  const EMA_M = '900000000000000031';
+  const EMA_F = '900000000000000032';
+  const cfg2: GuildConfig = {
+    ...cfg,
+    roles: { ...cfg.roles, male: MALE, female: FEMALE, emaPending: PENDING },
+    channels: { ...cfg.channels, ema: EMA_M, emaFemale: EMA_F },
+  };
+  const msg = (channelId: string, content: string, roleIds: string[]) => {
+    const deleted: boolean[] = [];
+    const reacted: string[] = [];
+    const flashes: string[] = [];
+    return {
+      deleted,
+      reacted,
+      flashes,
+      m: {
+        guildId: cfg.guildId,
+        channelId,
+        content,
+        inGuild: () => true,
+        author: { id: USER, bot: false },
+        member: { roles: { cache: new Map(roleIds.map((r) => [r, {}])) } },
+        delete: async () => void deleted.push(true),
+        react: async (e: string) => void reacted.push(e),
+        channel: { send: async (p: { content: string }) => (flashes.push(p.content), { delete: async () => undefined }) },
+      },
+    };
+  };
+
+  it('承認すると 性別のロールと 絵馬待ち（参拝者はまだ）。DM で自分の絵馬のリンク', async () => {
+    const app2 = new AdmissionApp(client as never, db, () => cfg2, discord);
+    const submit = modal(USER, [], 'apply:modal:adult.female', { name: 'さくら', purpose: 'ゲーム' });
+    await app2.onInteraction(submit.i as never);
+    const card = sent.find((s) => s.channelId === APPS)!;
+    const ok = button(STAFF, [ROLE.shinshoku], card.payload.components?.[0]?.components[0]?.data.custom_id!);
+    await app2.onInteraction(ok.i as never);
+    expect(calls).toContain(`addRole ${USER} ${FEMALE}`);
+    expect(calls).toContain(`addRole ${USER} ${PENDING}`);
+    expect(calls).not.toContain(`addRole ${USER} ${ROLE.sanpaisha}`);
+    expect(calls.find((c) => c.startsWith(`dm ${USER}`))).toContain(`<#${EMA_F}>`);
+    expect(await getOmairi(db, USER)).toBeUndefined();
+
+    // もう一度申請しようとしても「自己紹介を書いて」
+    const again = modal(USER, [PENDING, FEMALE], 'apply:modal:adult.female', { name: 'さくら', purpose: 'ゲーム' });
+    await app2.onInteraction(again.i as never);
+    expect(again.replies.at(-1)?.content).toContain(`<#${EMA_F}>`);
+  });
+
+  it('ちがうチャンネルに書いたら消して案内。短すぎたら案内。自分のチャンネルに書いたら 参拝者 に', async () => {
+    const app2 = new AdmissionApp(client as never, db, () => cfg2, discord);
+    const roles = [PENDING, FEMALE];
+    const wrong = msg(EMA_M, '【名前】さくら【一言】よろしくお願いします', roles);
+    await app2.onMessage(wrong.m as never);
+    expect(wrong.deleted).toEqual([true]);
+    expect(calls.find((c) => c.startsWith(`dm ${USER}`))).toContain(`<#${EMA_F}>`);
+
+    const short = msg(EMA_F, 'よろしく', roles);
+    await app2.onMessage(short.m as never);
+    expect(short.flashes[0]).toContain('もう少し詳しく');
+    expect(calls).not.toContain(`removeRole ${USER} ${PENDING}`);
+
+    const good = msg(EMA_F, '【名前】さくら【一言】よろしくお願いします', roles);
+    await app2.onMessage(good.m as never);
+    expect(good.reacted).toEqual(['🌸']);
+    expect(calls).toContain(`removeRole ${USER} ${PENDING}`);
+    expect(calls).toContain(`addRole ${USER} ${ROLE.sanpaisha}`);
+    expect((await getOmairi(db, USER))?.status).toBe('ongoing');
+    // 続けて書いても、もう一度は仕上げない
+    const n = calls.length;
+    await app2.onMessage(msg(EMA_F, '追記です、よろしくお願いします！', roles).m as never);
+    expect(calls.length).toBe(n);
+  });
+
+  it('前からいる人は、パネルで性別を選べる（1 回だけ）', async () => {
+    const app2 = new AdmissionApp(client as never, db, () => cfg2, discord);
+    const added: string[] = [];
+    const pick = button(USER, [ROLE.ujiko], 'gender:male');
+    Object.assign(pick.i.member.roles, { add: async (r: string) => void added.push(r) });
+    await app2.onInteraction(pick.i as never);
+    expect(added).toEqual([MALE]);
+    expect(pick.replies[0]?.content).toContain(`<#${EMA_M}>`);
+    const again = button(USER, [ROLE.ujiko, MALE], 'gender:female');
+    await app2.onInteraction(again.i as never);
+    expect(again.replies[0]?.content).toContain('もう「男性」');
   });
 });
 

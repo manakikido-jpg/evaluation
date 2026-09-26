@@ -7,7 +7,7 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
@@ -20,6 +20,30 @@ export type OmamoriPanelItem = { roleId: string; label: string; emoji: string; d
 export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[] } = {}): PanelMessage {
   if (kind === 'omamori') return omamoriPanel(opts.omamori ?? []);
   if (kind === 'shop') return shopPanel();
+  if (kind === 'gender') {
+    return {
+      embeds: [
+        {
+          title: '🪧 性別を選ぶ',
+          description: [
+            '自己紹介を書くチャンネル（#絵馬-男性・#絵馬-女性）と、プロフィールのロールが決まります。',
+            '',
+            '-# 前からいる方向けです（これから入る方は、入鯖申請で選びます）。一度選んだら、変えたいときは神職に知らせてください',
+          ].join('\n'),
+          color: SHU,
+        },
+      ],
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 2, label: '男性', custom_id: 'gender:male', emoji: { name: '♂️' } },
+            { type: 2, style: 2, label: '女性', custom_id: 'gender:female', emoji: { name: '♀️' } },
+          ],
+        },
+      ],
+    };
+  }
   if (kind === 'apply') {
     return {
       embeds: [

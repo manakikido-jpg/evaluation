@@ -25,7 +25,10 @@ export type RoleKey =
   | 'title_shugo'
   | 'title_yofukashi'
   | 'title_shobushi'
-  | 'title_utaite';
+  | 'title_utaite'
+  | 'male'
+  | 'female'
+  | 'ema_pending';
 
 export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint; /** 誰でも @ で呼べる（お守り） */ mentionable?: boolean };
 
@@ -55,6 +58,8 @@ export type ChannelSpec = {
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
   hub?: string;
+  /** カテゴリの見える範囲に加えて、見る・書くことを許すロール（絵馬待ちの人が自己紹介を書けるように） */
+  alsoRoles?: RoleKey[];
   /** 自分の通話部屋の種類と値段（once: ひらくたびに 1 回 / hourly: 1 時間ごと） */
   plan?: 'once' | 'hourly';
   /** 「募集する」ボタンを置く（どのお守りの人に知らせるか） */
@@ -102,6 +107,11 @@ export const ROLES: RoleSpec[] = [
   { key: 'sewayaku', name: '🎋 世話役', color: 0x3cb371, hoist: true, permissions: 0n },
   { key: 'ujiko', name: '🍃 氏子', color: 0x8fbc8f, hoist: true, permissions: 0n },
   { key: 'sanpaisha', name: '🔰 参拝者', color: 0xb0b0b0, hoist: true, permissions: 0n },
+  // 入鯖申請が承認されて、まだ自己紹介を書いていない人（#絵馬-男性・#絵馬-女性 だけ見える）
+  { key: 'ema_pending', name: '📝 絵馬待ち', color: 0, hoist: false, permissions: 0n },
+  // 性別（入鯖申請で選ぶ）。色なし
+  { key: 'male', name: '♂ 男性', color: 0, hoist: false, permissions: 0n },
+  { key: 'female', name: '♀ 女性', color: 0, hoist: false, permissions: 0n },
   // お守り（募集の通知を受け取るロール）。色なし・一覧で分けない。誰でも @ で呼べる
   ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: true })),
   // 称号（ショップ）。色なし
@@ -168,8 +178,8 @@ export const FULL: Layout = {
       name: '🪧 絵馬殿',
       visibility: 'member',
       channels: [
-        { name: '絵馬-男性', kind: 'text', configKey: 'ema', formerly: ['絵馬'], topic: '男性の自己紹介（いちばん下のひな形をコピーして書いてください）' },
-        { name: '絵馬-女性', kind: 'text', configKey: 'emaFemale', topic: '女性の自己紹介（いちばん下のひな形をコピーして書いてください）' },
+        { name: '絵馬-男性', kind: 'text', configKey: 'ema', formerly: ['絵馬'], alsoRoles: ['ema_pending'], topic: '男性の自己紹介（いちばん下のひな形をコピーして書いてください）' },
+        { name: '絵馬-女性', kind: 'text', configKey: 'emaFemale', alsoRoles: ['ema_pending'], topic: '女性の自己紹介（いちばん下のひな形をコピーして書いてください）' },
         { name: '運営紹介', kind: 'text', readOnly: true, configKey: 'staffIntro', topic: '宮司・神職の紹介' },
         { name: 'アイコン紹介', kind: 'text', topic: '自分のアイコン・イラストの紹介' },
       ],

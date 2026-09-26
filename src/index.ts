@@ -144,6 +144,8 @@ async function main(): Promise<void> {
     recruit.onMessage(m);
     void boost.onMessage(m);
     void sticky.onMessage(m);
+    // 絵馬待ちの人が自己紹介を書いたら、🔰参拝者 に
+    void admission.onMessage(m).catch((err) => logger.warn({ err }, 'intro check failed'));
   });
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 

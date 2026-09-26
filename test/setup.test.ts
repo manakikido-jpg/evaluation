@@ -43,7 +43,7 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
       roles.push(role);
       return role;
     },
-    channels: async () => channels.map(({ body: _b, ...c }) => c),
+    channels: async () => channels.map(({ body, ...c }) => ({ ...c, permission_overwrites: c.permission_overwrites ?? body?.permission_overwrites })),
     createChannel: async (_g, body) => {
       const name = body.type === 0 ? body.name.toLowerCase().replace(/\s+/g, '-') : body.name;
       // 本物と同じく、新しいチャンネルは同じ場所のいちばん下にできる
@@ -70,6 +70,11 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
     reorderRoles: async (_g, body) => {
       // 本物と同じく、動かしたロールの位置に合わせて、ほかのロールの位置も詰め直す
       for (const o of body) roles.find((r) => r.id === o.id)!.position = o.position;
+    },
+    setPermission: async (id, o) => {
+      const c = channels.find((x) => x.id === id)!;
+      const list = (c.permission_overwrites ??= c.body?.permission_overwrites ?? []).filter((x) => x.id !== o.id);
+      c.permission_overwrites = [...list, o];
     },
     renameChannel: async (id, name) => {
       channels.find((x) => x.id === id)!.name = name;
@@ -469,7 +474,14 @@ describe('メンバー紹介（🪧 絵馬殿）', () => {
     expect(moved.name).toBe('🪧｜絵馬-男性');
     expect(moved.parent_id).toBe(find(d, '🪧 絵馬殿', 4).id);
     expect(r.channelIds.ema).toBe(old.id);
-    expect(r.moved).toEqual(['#🪧｜絵馬 → 🪧 絵馬殿', '名前: #🪧｜絵馬 → #🪧｜絵馬-男性']);
+    expect(r.moved).toEqual(['#🪧｜絵馬 → 🪧 絵馬殿', '名前: #🪧｜絵馬 → #🪧｜絵馬-男性', '権限: #🪧｜絵馬-男性 に 見る・書く（📝 絵馬待ち）']);
+    // 絵馬待ちの人（承認されて自己紹介がまだの人）も、見て書ける
+    const pending = moved.permission_overwrites!.find((o) => o.id === r.roleIds.ema_pending)!;
+    expect(has(pending.allow, P.ViewChannel | P.SendMessages)).toBe(true);
+    const female = d.channels.find((c) => c.id === r.channelIds.emaFemale)!;
+    expect(has(ow(female, r.roleIds.ema_pending)?.allow, P.ViewChannel | P.SendMessages)).toBe(true);
+    // ほかのチャンネルは見えない
+    expect(ow(find(d, '境内', 0), r.roleIds.ema_pending)).toBeUndefined();
     expect(d.channels.filter((c) => c.name.includes('絵馬-男性'))).toHaveLength(1);
     expect(r.channelIds.emaFemale).toBeDefined();
     expect(r.channelIds.staffIntro).toBeDefined();

@@ -36,13 +36,15 @@ export interface SetupApi {
   /** 最近のメッセージ（重複の片付けで、人の書き込みがないか確かめる） */
   recentMessages(channelId: string): Promise<{ author: { id: string; bot?: boolean } }[]>;
   reorderRoles(guildId: string, body: { id: string; position: number }[]): Promise<void>;
+  /** チャンネルの権限の上書きを 1 つ足す・書き換える */
+  setPermission(channelId: string, overwrite: Overwrite): Promise<void>;
   /** チャンネルの名前を変える（前の版の名前から、今の名前へ） */
   renameChannel(channelId: string, name: string): Promise<void>;
 }
 
 export type ApiRole = { id: string; name: string; position: number; permissions: string; managed: boolean };
-export type ApiChannel = { id: string; name: string; type: number; parent_id: string | null; position?: number };
 export type Overwrite = { id: string; type: 0 | 1; allow: string; deny: string };
+export type ApiChannel = { id: string; name: string; type: number; parent_id: string | null; position?: number; permission_overwrites?: Overwrite[] };
 export type CreateChannelBody = {
   name: string;
   type: number;
@@ -199,17 +201,19 @@ export async function applyLayout(
   const ids = result.roleIds;
   const memberRoles = [ids.sanpaisha, ids.ujiko, ids.sewayaku, ids.sodai, ids.shinshoku, ids.guji];
   const staffRoles = [ids.shinshoku, ids.guji];
+  const alsoIds = (ch: ChannelSpec) => (ch.alsoRoles ?? []).map((k) => ids[k]).filter((x): x is string => Boolean(x));
   const VIEW = P.ViewChannel | P.ReadMessageHistory;
   const WRITE = P.SendMessages | P.AddReactions | P.CreatePublicThreads | P.SendMessagesInThreads;
   const BOT = P.ViewChannel | P.SendMessages | EmbedLinks | P.ReadMessageHistory | P.Connect;
 
-  const overwrites = (visibility: Visibility, readOnly: boolean): Overwrite[] => {
+  const overwrites = (visibility: Visibility, readOnly: boolean, also: string[] = []): Overwrite[] => {
     const ow = (id: string, type: 0 | 1, allow: bigint, deny: bigint): Overwrite => ({ id, type, allow: allow.toString(), deny: deny.toString() });
     const list: Overwrite[] = [];
     const seeRoles = visibility === 'member' ? memberRoles : visibility === 'staff' ? staffRoles : visibility === 'adult' ? [ids.yoimairi, ...staffRoles] : [];
     if (visibility === 'public') list.push(ow(guildId, 0, VIEW, readOnly ? WRITE : 0n));
     else list.push(ow(guildId, 0, 0n, P.ViewChannel | (readOnly ? WRITE : 0n)));
     for (const r of seeRoles) if (!staffRoles.includes(r)) list.push(ow(r, 0, VIEW, 0n));
+    for (const r of also) list.push(ow(r, 0, VIEW | WRITE, 0n));
     // 神職・宮司はどこでも見られて、読み取り専用のチャンネルにも書ける
     for (const r of staffRoles) list.push(ow(r, 0, VIEW | (readOnly ? WRITE : 0n), 0n));
     // BOT 自身（管理者権限を外したあとも、見る・書く・通話の人数を数えることができるように）
@@ -267,11 +271,21 @@ export async function applyLayout(
           type,
           parent_id: parent.id,
           ...(ch.topic && ch.kind === 'text' ? { topic: ch.topic } : {}),
-          permission_overwrites: overwrites(cat.visibility, Boolean(ch.readOnly)),
+          permission_overwrites: overwrites(cat.visibility, Boolean(ch.readOnly), alsoIds(ch)),
         });
         isNew = true;
         channels = [...channels, found];
         result.created.channels.push(`${cat.name} / ${ch.name}`);
+      }
+      // 前からあるチャンネルにも、あとから足した「見る・書く」を付ける（#絵馬-男性 の 絵馬待ち など）
+      if (!isNew && !opts.dryRun && !found.id.startsWith('dry:')) {
+        for (const roleId of alsoIds(ch)) {
+          const cur = found.permission_overwrites?.find((o) => o.id === roleId);
+          if (!cur || (BigInt(cur.allow) & (VIEW | WRITE)) !== (VIEW | WRITE)) {
+            await api.setPermission(found.id, { id: roleId, type: 0, allow: (VIEW | WRITE).toString(), deny: '0' });
+            result.moved.push(`権限: #${found.name} に 見る・書く（${ROLES.find((x) => ids[x.key] === roleId)?.name ?? roleId}）`);
+          }
+        }
       }
       if (ch.configKey) result.channelIds[ch.configKey] = found.id;
       if (ch.afk) afkChannelId = found.id;
@@ -448,7 +462,7 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
-const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品' };
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品', gender: '性別' };
 
 /** 作った（見つけた）お守りロール → config の roles.omamori */
 export function omamoriConfig(roleIds: Partial<Record<RoleKey, string>>) {
@@ -556,7 +570,15 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
     ...base,
     guildId,
     channels: { ...(base.channels as object), ...r.channelIds },
-    roles: { ...(base.roles as object), yakudoshi: r.roleIds.yakudoshi, yoimairi: r.roleIds.yoimairi, omamori: omamoriConfig(r.roleIds) },
+    roles: {
+      ...(base.roles as object),
+      yakudoshi: r.roleIds.yakudoshi,
+      yoimairi: r.roleIds.yoimairi,
+      male: r.roleIds.male,
+      female: r.roleIds.female,
+      emaPending: r.roleIds.ema_pending,
+      omamori: omamoriConfig(r.roleIds),
+    },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
     tempVoice: { ...(base.tempVoice as object), hubs: r.hubs },
     recruit: { ...(base.recruit as object), panels: recruitConfig(r) },
