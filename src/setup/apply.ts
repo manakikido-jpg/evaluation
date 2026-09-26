@@ -1,5 +1,5 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
-import { FULL, MINIMAL, P, RETIRED, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
 
 export type ApiGuild = {
   id: string;
@@ -114,7 +114,13 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
       result.created.roles.push(spec.name);
       continue;
     }
-    const r = await api.createRole(guildId, { name: spec.name, color: spec.color, hoist: spec.hoist, permissions: spec.permissions.toString(), mentionable: false });
+    const r = await api.createRole(guildId, {
+      name: spec.name,
+      color: spec.color,
+      hoist: spec.hoist,
+      permissions: spec.permissions.toString(),
+      mentionable: Boolean(spec.mentionable),
+    });
     result.roleIds[spec.key] = r.id;
     result.created.roles.push(spec.name);
   }
@@ -123,7 +129,7 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
   if (!opts.dryRun) {
     roles = await api.roles(guildId);
     const myTop = Math.max(...roles.filter((r) => member.roles.includes(r.id)).map((r) => r.position), 0);
-    const managedByBot: RoleKey[] = ['yakudoshi', 'yoimairi', 'sodai', 'sewayaku', 'ujiko', 'sanpaisha'];
+    const managedByBot: RoleKey[] = ['yakudoshi', 'yoimairi', 'sodai', 'sewayaku', 'ujiko', 'sanpaisha', ...OMAMORI_SPECS().map((o) => o.key)];
     const above = managedByBot
       .map((k) => roles.find((r) => r.id === result.roleIds[k]))
       .filter((r): r is ApiRole => Boolean(r && r.position >= myTop))
@@ -200,8 +206,8 @@ export async function applyLayout(api: SetupApi, guildId: string, layout: Layout
       if (ch.hub) result.hubs.push({ channelId: found.id, name: ch.hub });
       if (ch.panels && (isNew || opts.postPanels) && !opts.dryRun) {
         for (const kind of ch.panels as PanelKind[]) {
-          await api.sendMessage(found.id, panelMessage(kind));
-          result.panelsPosted.push(`#${ch.name}（${kind === 'apply' ? '入鯖申請' : '宵参り申請'}）`);
+          await api.sendMessage(found.id, panelMessage(kind, { omamori: omamoriConfig(result.roleIds) }));
+          result.panelsPosted.push(`#${ch.name}（${PANEL_LABEL[kind]}）`);
         }
       }
     }
@@ -327,6 +333,15 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り' };
+
+/** 作った（見つけた）お守りロール → config の roles.omamori */
+export function omamoriConfig(roleIds: Partial<Record<RoleKey, string>>) {
+  return OMAMORI_SPECS()
+    .filter((o) => roleIds[o.key])
+    .map((o) => ({ roleId: roleIds[o.key]!, label: o.label, emoji: o.emoji, description: o.description, adultOnly: o.adultOnly }));
+}
+
 /** 既存の設定（なければ見本）に、作ったロール・チャンネルの ID を書き込む */
 export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, r: SetupResult): Record<string, unknown> {
   const ranks = Array.isArray(base.ranks) ? (base.ranks as { key: string; roleId: string }[]) : [];
@@ -334,7 +349,7 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
     ...base,
     guildId,
     channels: { ...(base.channels as object), ...r.channelIds },
-    roles: { ...(base.roles as object), yakudoshi: r.roleIds.yakudoshi, yoimairi: r.roleIds.yoimairi },
+    roles: { ...(base.roles as object), yakudoshi: r.roleIds.yakudoshi, yoimairi: r.roleIds.yoimairi, omamori: omamoriConfig(r.roleIds) },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
     tempVoice: { ...(base.tempVoice as object), hubs: r.hubs },
   };

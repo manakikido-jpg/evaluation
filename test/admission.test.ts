@@ -9,6 +9,7 @@ import {
   checkOmairi,
   decide,
   decideOmairi,
+  removeYoimairi,
   replySoudan,
   revealSoudanSender,
   submitJoin,
@@ -238,5 +239,32 @@ describe('設定', () => {
   it('DB の値が壊れていても、ファイルの設定で動く', async () => {
     await saveOverrides(db, { economy: { menzaifuPrice: -1 } } as never, GUJI);
     expect(await loadOverrides(db)).toEqual(overridesSchema.parse({}));
+  });
+});
+
+describe('宵参りを外すと、宵宮のお守りも外れる', () => {
+  const OMA = '100000000000000021';
+  const NEOCHI = '100000000000000022';
+  it('宵参りを外す・年齢区分を変える', async () => {
+    ctx = {
+      ...ctx,
+      cfg: {
+        ...cfg,
+        roles: {
+          ...cfg.roles,
+          omamori: [
+            { roleId: NEOCHI, label: '寝落ち', emoji: '🌙', description: '', adultOnly: false },
+            { roleId: OMA, label: '宵宮', emoji: '🔞', description: '', adultOnly: true },
+          ],
+        },
+      },
+    };
+    await recordJoin(db, snap(NEW, [ROLE.sanpaisha, YOI, OMA, NEOCHI]));
+    expect(await removeYoimairi(ctx, shinshoku, NEW, '年齢の確認')).toBe('ok');
+    expect(calls).toEqual([`removeRole ${NEW} ${YOI}`, `removeRole ${NEW} ${OMA}`]);
+
+    calls = [];
+    expect(await changeAgeGroup(ctx, guji, NEW, 'minor')).toBe('ok');
+    expect(calls).toEqual([`removeRole ${NEW} ${YOI}`, `removeRole ${NEW} ${OMA}`]);
   });
 });

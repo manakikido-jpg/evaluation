@@ -102,6 +102,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
           .setDescription('Adult area application')
           .setDescriptionLocalizations({ ja: '宵参り（18 歳以上のエリア）申請のボタン' }),
       )
+      .addSubcommand((s) =>
+        s.setName('omamori').setNameLocalizations({ ja: 'お守り' }).setDescription('Notification roles').setDescriptionLocalizations({ ja: 'お守り（募集の通知）のボタン（#授与所 用）' }),
+      )
       .toJSON(),
     new SlashCommandBuilder()
       .setName('yaku')

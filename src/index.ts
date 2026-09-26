@@ -7,6 +7,7 @@ import { StaffApp } from './discord/staff.js';
 import { AdmissionApp } from './discord/admission.js';
 import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
+import { OmamoriApp } from './discord/omamori.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
 import { ConfigStore } from './services/settings.js';
 import { createDiscordActions } from './lib/discordRest.js';
@@ -39,6 +40,7 @@ async function main(): Promise<void> {
   const admission = new AdmissionApp(client, db, cfg, actions);
   const tempVoice = new TempVoiceApp(db, cfg);
   const omikuji = new OmikujiApp(db, cfg);
+  const omamori = new OmamoriApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -87,6 +89,7 @@ async function main(): Promise<void> {
     void staff.onInteraction(i);
     void admission.onInteraction(i);
     void omikuji.onInteraction(i);
+    void omamori.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => void app.onMessage(m));
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));

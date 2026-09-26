@@ -104,8 +104,23 @@ export const guildConfigSchema = z
         yakudoshi: snowflake.optional(),
         /** 🔞 宵参り: 成人エリアに入れる（任意） */
         yoimairi: snowflake.optional(),
+        /** お守り: 募集の通知を受け取りたい人が #授与所 のボタンで付け外しするロール */
+        omamori: z
+          .array(
+            z.object({
+              roleId: snowflake,
+              /** ボタンの文字（例: 寝落ち） */
+              label: z.string().min(1).max(40),
+              emoji: z.string().max(10).default(''),
+              /** 何の募集が届くか（パネルに書く） */
+              description: z.string().max(100).default(''),
+              /** 宵参りの人だけ付けられる */
+              adultOnly: z.boolean().default(false),
+            }),
+          )
+          .default([]),
       })
-      .default({}),
+      .default({ omamori: [] }),
     ranks: z.array(rankSchema).min(1),
     economy: economySchema.default(economySchema.parse({})),
     applications: applicationsSchema.default(applicationsSchema.parse({})),

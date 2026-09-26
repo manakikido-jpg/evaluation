@@ -3,9 +3,21 @@
  * setup-guild スクリプトはこの配置どおりに作る。
  */
 
-export type RoleKey = 'guji' | 'shinshoku' | 'yakudoshi' | 'yoimairi' | 'sodai' | 'sewayaku' | 'ujiko' | 'sanpaisha';
+export type RoleKey =
+  | 'guji'
+  | 'shinshoku'
+  | 'yakudoshi'
+  | 'yoimairi'
+  | 'sodai'
+  | 'sewayaku'
+  | 'ujiko'
+  | 'sanpaisha'
+  | 'omamori_neochi'
+  | 'omamori_game'
+  | 'omamori_zatsudan'
+  | 'omamori_yoimiya';
 
-export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint };
+export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint; /** 誰でも @ で呼べる（お守り） */ mentionable?: boolean };
 
 /** 誰が見られるか */
 export type Visibility =
@@ -22,8 +34,8 @@ export type ChannelSpec = {
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
   configKey?: 'keiji' | 'log' | 'ema' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji';
-  /** 入鯖申請・宵参り申請のボタンを置く */
-  panels?: ('apply' | 'yoimairi')[];
+  /** 入鯖申請・宵参り申請・お守りのボタンを置く */
+  panels?: ('apply' | 'yoimairi' | 'omamori')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
@@ -69,7 +81,19 @@ export const ROLES: RoleSpec[] = [
   { key: 'sewayaku', name: '🎋 世話役', color: 0x3cb371, hoist: true, permissions: 0n },
   { key: 'ujiko', name: '🍃 氏子', color: 0x8fbc8f, hoist: true, permissions: 0n },
   { key: 'sanpaisha', name: '🔰 参拝者', color: 0xb0b0b0, hoist: true, permissions: 0n },
+  // お守り（募集の通知を受け取るロール）。色なし・一覧で分けない。誰でも @ で呼べる
+  ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: true })),
 ];
+
+/** お守り（#授与所 のボタンで付け外しする、募集の通知用ロール） */
+export function OMAMORI_SPECS(): { key: RoleKey; name: string; label: string; emoji: string; description: string; adultOnly: boolean }[] {
+  return [
+    { key: 'omamori_neochi', name: '🌙 寝落ちのお守り', label: '寝落ち', emoji: '🌙', description: '寝落ち通話の募集', adultOnly: false },
+    { key: 'omamori_game', name: '🎮 ゲームのお守り', label: 'ゲーム', emoji: '🎮', description: 'ゲームの募集', adultOnly: false },
+    { key: 'omamori_zatsudan', name: '🍵 雑談のお守り', label: '雑談', emoji: '🍵', description: '雑談通話の募集', adultOnly: false },
+    { key: 'omamori_yoimiya', name: '🔞 宵宮のお守り', label: '宵宮', emoji: '🔞', description: '宵宮の募集（宵参りの方だけ）', adultOnly: true },
+  ];
+}
 
 /** 設計書どおりの全部の構成 */
 export const FULL: Layout = {
@@ -89,6 +113,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '御触書', kind: 'text', readOnly: true, topic: 'お知らせ' },
+        { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）を受け取る', panels: ['omamori'] },
         { name: '絵馬', kind: 'text', configKey: 'ema', topic: '自己紹介（書くと御朱印帳ボタンが付きます）' },
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji', topic: '昇格・称号の発表' },
         { name: '番付', kind: 'text', readOnly: true, configKey: 'banzuke', topic: 'ご縁のランキング（BOT が 10 分ごとに更新）' },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig } from '../src/config.js';
 import { applyLayout, mergeIntoConfig, SetupError, tidyGuild, type ApiChannel, type ApiGuild, type ApiRole, type CreateChannelBody, type SetupApi } from '../src/setup/apply.js';
-import { FULL, MINIMAL, P, RETIRED } from '../src/setup/layout.js';
+import { FULL, MINIMAL, P, RETIRED, ROLES } from '../src/setup/layout.js';
 import example from '../config/guild.example.json' with { type: 'json' };
 
 const GUILD = '960000000000000000';
@@ -24,6 +24,7 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
   ];
   const channels: (ApiChannel & { body?: CreateChannelBody })[] = [];
   const messages: { channelId: string; body: unknown }[] = [];
+  const created: Parameters<SetupApi['createRole']>[1][] = [];
   let afk: string | null = null;
   const guild: ApiGuild = { id: GUILD, name: 'テスト鯖', afk_channel_id: null, features: opts.community ? ['COMMUNITY'] : [] };
   const api: SetupApi = {
@@ -32,6 +33,7 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
     roles: async () => roles.map((r) => ({ ...r })),
     member: async () => ({ roles: [BOT_ROLE] }),
     createRole: async (_g, body) => {
+      created.push(body);
       // 本物の Discord と同じく、新しいロールは BOT のロールより下にはならない
       // （2026-09 の本番テストで確認。BOT のロールを先に上へ動かしておく必要がある）
       for (const r of roles) if (r.position >= 1 && !r.managed) r.position++;
@@ -70,7 +72,7 @@ function fakeDiscord(opts: { admin?: boolean; community?: boolean; hubPerms?: bo
     channels.push(ch);
     return ch;
   };
-  return { api, roles, channels, messages, guild, seed, getAfk: () => afk };
+  return { api, roles, channels, messages, guild, seed, created, getAfk: () => afk };
 }
 
 const find = (d: ReturnType<typeof fakeDiscord>, name: string, type?: number) => d.channels.find((c) => c.name === name && (type === undefined || c.type === type))!;
@@ -87,7 +89,7 @@ describe('セットアップ', () => {
   it('全部の構成: ロール 8・カテゴリ 7 と、チャンネルを作る', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL);
-    expect(r.created.roles).toHaveLength(8);
+    expect(r.created.roles).toHaveLength(ROLES.length);
     const total = FULL.categories.reduce((n, c) => n + 1 + c.channels.length, 0);
     expect(r.created.channels).toHaveLength(total);
     // ロールの並び: 宮司がいちばん上、参拝者がいちばん下
@@ -141,15 +143,16 @@ describe('セットアップ', () => {
   it('社務所に申請ボタンを置く（2 回目は置かない）', async () => {
     const d = fakeDiscord();
     const r1 = await applyLayout(d.api, GUILD, FULL);
-    expect(r1.panelsPosted).toHaveLength(2);
-    expect(d.messages.every((m) => m.channelId === find(d, '社務所', 0).id)).toBe(true);
+    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）']);
+    expect(d.messages.filter((m) => m.channelId === find(d, '社務所', 0).id)).toHaveLength(2);
+    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(1);
     expect(JSON.stringify(d.messages[0]!.body)).toContain('apply:start');
     expect(JSON.stringify(d.messages[1]!.body)).toContain('yoimairi:start');
 
     const r2 = await applyLayout(d.api, GUILD, FULL);
     expect(r2.panelsPosted).toEqual([]);
     const r3 = await applyLayout(d.api, GUILD, FULL, { postPanels: true });
-    expect(r3.panelsPosted).toHaveLength(2);
+    expect(r3.panelsPosted).toHaveLength(3);
   });
 
   it('何度実行しても同じものは作らない', async () => {
@@ -175,7 +178,7 @@ describe('セットアップ', () => {
   it('確認だけ（--dry-run）は何も作らない', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL, { dryRun: true });
-    expect(r.created.roles).toHaveLength(8);
+    expect(r.created.roles).toHaveLength(ROLES.length);
     expect(d.roles).toHaveLength(2);
     expect(d.channels).toHaveLength(0);
     expect(d.messages).toHaveLength(0);
@@ -341,5 +344,28 @@ describe('自分の通話部屋（➕ ○○をひらく）', () => {
     expect(d.channels.some((c) => c.name === '御神酒処' && c.type === 0)).toBe(true);
     expect(d.channels.some((c) => c.name === 'みんなの部屋')).toBe(true);
     expect(d.channels.some((c) => c.name === '➕ 縁側をひらく')).toBe(true);
+  });
+});
+
+describe('お守り', () => {
+  it('お守りのロールは誰でも @ で呼べる（ほかの役職は呼べない）。設定ファイルに書き、#授与所 にボタンを置く', async () => {
+    const d = fakeDiscord();
+    const r = await applyLayout(d.api, GUILD, FULL);
+    const role = (name: string) => d.roles.find((x) => x.name === name)!;
+    const created = d.created;
+    expect(created.find((c) => c.name === '🌙 寝落ちのお守り')?.mentionable).toBe(true);
+    expect(created.find((c) => c.name === '🔰 参拝者')?.mentionable).toBe(false);
+
+    const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
+    expect(cfg.roles.omamori.map((o) => [o.label, o.adultOnly])).toEqual([
+      ['寝落ち', false],
+      ['ゲーム', false],
+      ['雑談', false],
+      ['宵宮', true],
+    ]);
+    expect(cfg.roles.omamori[0]!.roleId).toBe(role('🌙 寝落ちのお守り').id);
+
+    const panel = d.messages.find((m) => m.channelId === find(d, '授与所', 0).id)!.body as { components: { components: { custom_id: string }[] }[] };
+    expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(cfg.roles.omamori.map((o) => `omamori:${o.roleId}`));
   });
 });

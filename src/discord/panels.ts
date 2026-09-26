@@ -1,18 +1,22 @@
 /**
- * 入鯖申請・宵参り申請のパネル（Discord API の形のまま）。
+ * 入鯖申請・宵参り申請・お守りのパネル（Discord API の形のまま）。
  * BOT の /panel とセットアップスクリプトの両方で使う。
  */
 
 const SHU = 0xd7003a;
 
-export type PanelKind = 'apply' | 'yoimairi';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
-  components: { type: 1; components: { type: 2; style: 1; label: string; custom_id: string }[] }[];
+  components: { type: 1; components: { type: 2; style: 1 | 2; label: string; custom_id: string; emoji?: { name: string } }[] }[];
 };
 
-export function panelMessage(kind: PanelKind): PanelMessage {
+/** お守り 1 つ分（config の roles.omamori と同じ形） */
+export type OmamoriPanelItem = { roleId: string; label: string; emoji: string; description: string; adultOnly: boolean };
+
+export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[] } = {}): PanelMessage {
+  if (kind === 'omamori') return omamoriPanel(opts.omamori ?? []);
   if (kind === 'apply') {
     return {
       embeds: [
@@ -40,5 +44,38 @@ export function panelMessage(kind: PanelKind): PanelMessage {
       },
     ],
     components: [{ type: 1, components: [{ type: 2, style: 1, label: '宵参りを申請する', custom_id: 'yoimairi:start' }] }],
+  };
+}
+
+function omamoriPanel(items: OmamoriPanelItem[]): PanelMessage {
+  const rows: PanelMessage['components'] = [];
+  for (let i = 0; i < items.length; i += 5) {
+    rows.push({
+      type: 1,
+      components: items.slice(i, i + 5).map((o) => ({
+        type: 2,
+        style: 2,
+        label: `${o.label}のお守り`,
+        custom_id: `omamori:${o.roleId}`,
+        ...(o.emoji ? { emoji: { name: o.emoji } } : {}),
+      })),
+    });
+  }
+  return {
+    embeds: [
+      {
+        title: '🧧 授与所 ― お守り',
+        description: [
+          'お守りを持っていると、その募集の通知が届きます。ボタンを押すと授かり、もう一度押すと返せます。',
+          '',
+          ...items.map((o) => `${o.emoji} **${o.label}のお守り** … ${o.description}`),
+          '',
+          '**募集するとき**は、メッセージにお守りを付けて送ってください（例: `@寝落ちのお守り 23 時から寝落ちしませんか`）。',
+          '-# 通知が多いと感じたら、いつでも返せます',
+        ].join('\n'),
+        color: SHU,
+      },
+    ],
+    components: rows,
   };
 }
