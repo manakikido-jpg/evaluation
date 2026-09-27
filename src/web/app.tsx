@@ -614,6 +614,25 @@ export function createWebApp(deps: WebDeps) {
     return back(c, id, r === 'ok' ? 'age_changed' : r === 'forbidden' ? 'forbidden' : 'denied_not_found');
   });
 
+  /** ニックネームを変える（空で元の名前に戻す）。自分より上の運営・BOT などは変えない */
+  app.post('/members/:id/nickname', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const nick = field(await c.req.parseBody(), 'nickname', 32);
+    const actor = actorOf(c.get('session'));
+    if (id !== actor.id && (await checkTarget(mod(), actor, id))) return back(c, id, 'denied_protected');
+    const member = await getMember(db, id);
+    if (!member) return back(c, id, 'denied_not_found');
+    try {
+      await deps.discord.setNickname(cfg.guildId, id, nick, '管理画面（ニックネーム）');
+    } catch (err) {
+      logger.warn({ err }, 'nickname change failed');
+      return back(c, id, 'nickname_failed');
+    }
+    await audit(db, { actorId: actor.id, targetId: id, action: 'member.nickname', detail: { from: member.displayName, to: nick || '（元の名前）' }, via: 'web' });
+    return back(c, id, 'nickname_changed');
+  });
+
   app.post('/members/:id/yoimairi/remove', async (c) => {
     const id = c.req.param('id');
     if (!validId(id)) return c.notFound();
@@ -1260,6 +1279,8 @@ export function createWebApp(deps: WebDeps) {
   /** BOT からは変えられない（BOT のロール以上・自動のロール） */
   /** 招待を作成 */
   const CREATE_INVITE = 1n;
+  /** ニックネームの変更（自分の） */
+  const CHANGE_NICKNAME = 1n << 26n;
   const roleLocked = (role: GuildRole, all: GuildRole[]) => role.managed || (role.id !== cfg.guildId && role.position >= botTopPosition(all, deps.botId));
 
   app.get('/roles', async (c) => {
@@ -1362,6 +1383,28 @@ export function createWebApp(deps: WebDeps) {
     }
     if (done.length) await audit(db, { actorId: c.get('session').userId, action: 'role.invites_bot_only', detail: { count: done.length, roles: done }, via: 'web' });
     return c.redirect(`/roles?msg=${failed ? 'failed_some' : done.length ? 'invites_bot_only' : 'unchanged'}`);
+  });
+
+  /** ニックネームを自分で変えられないようにする: @everyone と（🔒 以外の）ロールから「ニックネームの変更」を外す */
+  app.post('/roles/nickname-lock', async (c) => {
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/roles?msg=need_confirm_all');
+    const roles = await loadRoles();
+    if (!roles) return c.redirect('/roles?msg=failed');
+    const targets = roles.filter((r) => !roleLocked(r, roles) && (BigInt(r.permissions ?? '0') & CHANGE_NICKNAME) !== 0n);
+    const done: string[] = [];
+    let failed = 0;
+    for (const r of targets) {
+      try {
+        await deps.discord.editRole(cfg.guildId, r.id, { permissions: (BigInt(r.permissions ?? '0') & ~CHANGE_NICKNAME).toString() }, '管理画面（ニックネームは自分で変えられない）');
+        done.push(r.name);
+      } catch (err) {
+        logger.warn({ err, roleId: r.id }, 'role nickname permission update failed');
+        failed++;
+      }
+    }
+    if (done.length) await audit(db, { actorId: c.get('session').userId, action: 'role.nickname_lock', detail: { count: done.length, roles: done }, via: 'web' });
+    return c.redirect(`/roles?msg=${failed ? 'failed_some' : done.length ? 'nickname_locked' : 'unchanged'}`);
   });
 
   /** すべてのロールの「誰でも @ で呼べる」をまとめて ON / OFF（@everyone・🔒 のロールはのぞく） */

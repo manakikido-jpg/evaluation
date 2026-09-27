@@ -56,6 +56,7 @@ const fakeActions: DiscordActions = {
   reorderChannels: async (_g, list) => void actions.push(`reorder ${JSON.stringify(list)}`),
   createRole: async (_g, b) => (actions.push(`createRole ${JSON.stringify(b)}`), { id: '980000000000000099', name: b.name ?? '', position: 1, managed: false, color: b.color ?? 0 }),
   deleteRole: async (_g, r) => void actions.push(`deleteRole ${r}`),
+  setNickname: async (_g, u, nick) => void actions.push(`nick ${u} ${nick}`),
 };
 
 const fakeApi: DiscordApi = {
@@ -824,6 +825,20 @@ describe('運営から花びらを送る（管理画面）', () => {
   });
 });
 
+describe('ニックネーム（管理画面）', () => {
+  it('運営がメンバーのニックネームを変えられる（上の運営は変えられない）', async () => {
+    const s = await login(STAFF);
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get(`/members/${USER}`, s)).text())![1]!;
+    const post = (path: string, data: Record<string, string>) =>
+      app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
+    expect((await post(`/members/${USER}/nickname`, { nickname: 'さくら' })).headers.get('location')).toBe(`/members/${USER}?msg=nickname_changed`);
+    expect(actions).toContain(`nick ${USER} さくら`);
+    expect((await listAudit(db, { action: 'member.nickname' }))[0]?.detail).toMatchObject({ to: 'さくら' });
+    await recordJoin(db, { id: GUJI, username: 'g', displayName: '宮司', avatarUrl: null, roleIds: [ROLE.guji], isBot: false, joinedAt: null });
+    expect((await post(`/members/${GUJI}/nickname`, { nickname: 'x' })).headers.get('location')).toBe(`/members/${GUJI}?msg=denied_protected`);
+  });
+});
+
 describe('ショップ（管理画面）', () => {
   const form = async (session: string, path: string, data: Record<string, string>) => {
     const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
@@ -1189,6 +1204,18 @@ describe('ロール（管理画面）', () => {
     const detail = await (await get(`/roles/${ROLE.sanpaisha}`, g)).text();
     expect(detail).toContain('さくら');
     expect(detail).toMatch(/name="perm" value="11" checked/);
+  });
+
+  it('ニックネームを自分で変えられないように: @everyone とロールから「ニックネームの変更」を外す', async () => {
+    const NICK = 1n << 26n;
+    roleList = roleList.map((r) => (r.id === cfg.guildId || r.id === ROLE.sanpaisha ? { ...r, permissions: String(BigInt(r.permissions ?? '0') | NICK) } : r));
+    const g = await login(GUJI);
+    expect(await (await get('/roles', g)).text()).toContain('今「ニックネームの変更」を持っているロール: 🔰 参拝者・@everyone');
+    const r = await form(g, '/roles/nickname-lock', [['confirm', 'yes']]);
+    expect(r.headers.get('location')).toBe('/roles?msg=nickname_locked');
+    const edits = actions.filter((a) => a.startsWith('editRole'));
+    expect(edits).toHaveLength(2);
+    for (const e of edits) expect(BigInt(JSON.parse(e.slice(e.indexOf('{'))).permissions) & NICK).toBe(0n);
   });
 
   it('ロールを作れる（権限なし）。消すときは名前を入力。BOT が使っているロールは消せない', async () => {

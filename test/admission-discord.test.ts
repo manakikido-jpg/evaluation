@@ -47,6 +47,7 @@ beforeEach(async () => {
     reorderChannels: async () => undefined,
     createRole: async (_g, b) => ({ id: '0', name: b.name ?? '', position: 1, managed: false, color: 0 }),
     deleteRole: async () => undefined,
+    setNickname: async () => undefined,
     setChannelOverwrite: async () => undefined,
     pinMessage: async () => undefined,
   };

@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-nickname-lock',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: 'ニックネームを自分で変えられないように',
+    items: [
+      '「ロール」ページで、みんなとロールから「ニックネームの変更」をまとめて外せる（メンバーは自分でニックネームを変えられなくなる）',
+      'メンバーのページの「ニックネームを変える」で、運営が変えられる（空で元の名前に戻す）',
+    ],
+  },
+  {
     id: '2026-09-27-my-omamori',
     date: '2026-09-27',
     kind: 'improve',

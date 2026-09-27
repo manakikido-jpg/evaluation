@@ -32,6 +32,8 @@ export interface DiscordActions {
   deleteChannel(channelId: string, reason: string): Promise<void>;
   /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
   guildRoles(guildId: string): Promise<GuildRole[]>;
+  /** メンバーのニックネームを変える（空で元の名前に戻す） */
+  setNickname(guildId: string, userId: string, nick: string, reason: string): Promise<void>;
   /** ロールを作る（いちばん下、@everyone のすぐ上にできる） */
   createRole(guildId: string, body: RolePatch, reason: string): Promise<GuildRole>;
   /** ロールを消す（持っている人からも外れる） */
@@ -154,6 +156,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
     guildChannels: async (g) => (await call('GET', `/guilds/${g}/channels`)) as GuildChannel[],
     guildRoles: async (g) => (await call('GET', `/guilds/${g}/roles`)) as GuildRole[],
     editRole: async (g, r, body, reason) => void (await call('PATCH', `/guilds/${g}/roles/${r}`, { reason, body })),
+    setNickname: async (g, u, nick, reason) => void (await call('PATCH', `/guilds/${g}/members/${u}`, { reason, body: { nick: nick || null } })),
     createRole: async (g, body, reason) => (await call('POST', `/guilds/${g}/roles`, { reason, body })) as GuildRole,
     deleteRole: async (g, r, reason) => void (await call('DELETE', `/guilds/${g}/roles/${r}`, { reason })),
     editChannel: async (c, body) => void (await call('PATCH', `/channels/${c}`, { body })),

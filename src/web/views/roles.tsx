@@ -18,6 +18,7 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   deleted: { text: 'ロールを消しました。', kind: 'ok' },
   in_use: { text: 'このロールは BOT が使っているので消せません（役職・お守り・色守り・授与所の品物など）。', kind: 'warn' },
   confirm_name: { text: '消すときは、確認のためロールの名前をそのまま入力してください。', kind: 'warn' },
+  nickname_locked: { text: '「ニックネームの変更」を外しました。これからは、メンバーは自分でニックネームを変えられません（運営がメンバーのページから変えられます）。', kind: 'ok' },
   invites_bot_only: { text: '「招待を作成」を外しました。これからは BOT の /招待リンク だけで招待できます。', kind: 'ok' },
 };
 
@@ -45,6 +46,8 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
   const offCount = editable.filter((r) => !r.role.mentionable).length;
   // 「招待を作成」を持っているロール（@everyone を含む）
   const inviters = props.rows.filter((r) => !r.locked && (BigInt(r.role.permissions ?? '0') & 1n) !== 0n);
+  // 「ニックネームの変更」を持っているロール
+  const nicknamers = props.rows.filter((r) => !r.locked && (BigInt(r.role.permissions ?? '0') & (1n << 26n)) !== 0n);
   return (
     <Layout title="ロール" session={props.session} nav="roles">
       <h1>ロール</h1>
@@ -90,6 +93,21 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
         </label>
         <button type="submit" class="ok">
           招待リンクを BOT だけにする
+        </button>
+      </form>
+      <form method="post" action="/roles/nickname-lock" class="card">
+        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+        <h2>🏷 ニックネームは自分で変えられないように</h2>
+        <p class="note">
+          みんな（@everyone）とロールから「ニックネームの変更」を外すと、メンバーは自分のサーバーでの名前（ニックネーム）を変えられなくなります。変えたいときは、運営がメンバーのページの「ニックネーム」から変えます。今「ニックネームの変更」を持っているロール:{' '}
+          {nicknamers.length ? nicknamers.map((r) => r.role.name).join('・') : 'なし'}。🔒 のロールと、サーバーの持ち主・「管理者」「ニックネームの管理」を持つ人は変わりません。
+        </p>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>「ニックネームの変更」を外す</span>
+        </label>
+        <button type="submit" class="ok">
+          ニックネームを自分で変えられないようにする
         </button>
       </form>
       <div class="table-wrap">

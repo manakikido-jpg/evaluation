@@ -35,6 +35,8 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   saved_notices: { text: '設定を保存しました。BOT には 1 分以内に反映されます。投稿済みの掲示の数字も書き換えました。', kind: 'ok' },
   settings_invalid: { text: '設定を保存できませんでした。値を確認してください（昇格ラインは役職ごとに違う値にする必要があります）。', kind: 'warn' },
   age_changed: { text: '年齢区分を変更しました。', kind: 'ok' },
+  nickname_changed: { text: 'ニックネームを変えました（Discord に反映しました）。', kind: 'ok' },
+  nickname_failed: { text: 'ニックネームを変えられませんでした。BOT に「ニックネームの管理」の権限があるか、相手のロールが BOT のロールより下か確かめてください（サーバーの持ち主は変えられません）。', kind: 'warn' },
   yoimairi_removed: { text: '宵参りを外しました。', kind: 'ok' },
   forbidden: { text: '宮司のみできる操作です。', kind: 'warn' },
   invalid: { text: '入力が足りません。', kind: 'warn' },
@@ -414,6 +416,11 @@ export function MemberAdmissionSection(props: {
             </dd>
           </div>
         </dl>
+        <form method="post" action={`/members/${props.memberId}/nickname`} class="inline-actions">
+          <Csrf session={props.session} />
+          <input type="text" name="nickname" maxlength={32} placeholder="ニックネーム（空で元の名前）" aria-label="ニックネーム" />
+          <button type="submit">ニックネームを変える</button>
+        </form>
         {isGuji && (
           <form method="post" action={`/members/${props.memberId}/age`} class="inline-actions">
             <Csrf session={props.session} />
