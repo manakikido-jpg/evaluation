@@ -63,6 +63,7 @@ import { appendFromSender, createSoudan, setSoudanCard } from '../services/souda
 import { goshuinchoOf } from '../services/shuin.js';
 import { coreName } from '../lib/names.js';
 import { inviteOf } from '../services/invites.js';
+import { recordIntro } from '../services/intros.js';
 import { panelMessage } from './panels.js';
 import { SHU } from './views.js';
 
@@ -177,6 +178,12 @@ export class AdmissionApp {
   /** #絵馬-男性・#絵馬-女性 への書き込み: 絵馬待ちの人なら、入鯖を仕上げる */
   async onMessage(msg: Message): Promise<void> {
     if (!msg.inGuild() || msg.guildId !== this.cfg.guildId || msg.author.bot || !msg.member) return;
+    // 自己紹介はプロフィールに出すので覚えておく（だれでも）
+    if ([this.cfg.channels.ema, this.cfg.channels.emaFemale].includes(msg.channelId)) {
+      await recordIntro(this.db, { memberId: msg.author.id, channelId: msg.channelId, messageId: msg.id, content: msg.content, postedAt: msg.createdAt }).catch(
+        (err: unknown) => logger.warn({ err }, 'record intro failed'),
+      );
+    }
     const pending = this.cfg.roles.emaPending;
     if (!pending || !msg.member.roles.cache.has(pending) || this.introDone.has(msg.author.id)) return;
     if (![this.cfg.channels.ema, this.cfg.channels.emaFemale].includes(msg.channelId)) return;
@@ -208,8 +215,7 @@ export class AdmissionApp {
    * 絵馬のチャンネルの最近 100 件から、絵馬待ちの人が自分のチャンネルに書いたものを探す（ちがうチャンネルのものは消さない）。
    */
   async catchUpIntros(guild: Guild): Promise<string[]> {
-    const pending = this.cfg.roles.emaPending;
-    if (!pending) return [];
+    const pending = this.cfg.roles.emaPending ?? '';
     const done: string[] = [];
     for (const channelId of [this.cfg.channels.ema, this.cfg.channels.emaFemale]) {
       if (!channelId) continue;
@@ -218,7 +224,10 @@ export class AdmissionApp {
       const messages = await channel.messages.fetch({ limit: 100 }).catch(() => undefined);
       if (!messages) continue;
       for (const msg of messages.values()) {
-        if (msg.author.bot || done.includes(msg.author.id) || this.introDone.has(msg.author.id)) continue;
+        if (msg.author.bot) continue;
+        // プロフィール用に、前からいる人の自己紹介も覚える（新しいものが残る）
+        await recordIntro(this.db, { memberId: msg.author.id, channelId, messageId: msg.id, content: msg.content, postedAt: msg.createdAt }).catch(() => undefined);
+        if (!pending || done.includes(msg.author.id) || this.introDone.has(msg.author.id)) continue;
         const member = guild.members.cache.get(msg.author.id) ?? (await guild.members.fetch(msg.author.id).catch(() => undefined));
         if (!member?.roles.cache.has(pending)) continue;
         const r = await onIntroPosted(this.ctx, { id: member.id, roleIds: [...member.roles.cache.keys()] }, channelId, msg.content || undefined, new Date(), msg.id);

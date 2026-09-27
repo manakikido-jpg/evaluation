@@ -169,6 +169,13 @@
       "when": 1790472179161,
       "tag": "0023_invite_links",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790475328375,
+      "tag": "0024_intros",
+      "breakpoints": true
     }
   ]
 }

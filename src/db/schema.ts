@@ -555,3 +555,15 @@ export const inviteLinks = pgTable(
 );
 
 export type InviteLink = typeof inviteLinks.$inferSelect;
+
+/** 自己紹介（#絵馬-男性・#絵馬-女性 に書いた、いちばん新しいもの）。プロフィールに出す */
+export const intros = pgTable('intros', {
+  memberId: text('member_id').primaryKey(),
+  channelId: text('channel_id').notNull(),
+  messageId: text('message_id').notNull(),
+  /** 本文のはじめ（BOT が本文を読めないときは空） */
+  excerpt: text('excerpt').notNull().default(''),
+  postedAt: timestamp('posted_at', { withTimezone: true }).notNull(),
+});
+
+export type Intro = typeof intros.$inferSelect;

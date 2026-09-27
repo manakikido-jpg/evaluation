@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-profile',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: 'プロフィールから朱印を押す',
+    items: [
+      '右クリック（スマホは長押し）→「アプリ」→「プロフィール」1 つにまとめた（「朱印を押す」「御朱印帳を見る」はなくした）',
+      'プロフィール: アイコン・バナー、役職・ご縁、性別・DM・フレンド、称号・参拝した日、自己紹介（はじめの部分とリンク）、朱印。「🌸 朱印を押す」ボタンから押せる',
+    ],
+  },
+  {
     id: '2026-09-27-goshuincho-balance',
     date: '2026-09-27',
     kind: 'improve',

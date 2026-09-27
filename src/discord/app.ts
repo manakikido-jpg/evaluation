@@ -9,6 +9,9 @@ import {
   type Message,
   type UserContextMenuCommandInteraction,
 } from 'discord.js';
+import { genderOfRoles } from '../services/admission.js';
+import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../services/contact.js';
+import { introOf, introUrl } from '../services/intros.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { decidePromotion, type Promotion } from '../domain/ranks.js';
@@ -27,6 +30,7 @@ import {
   giveReply,
   giversReply,
   goshuinchoReply,
+  type ProfileExtra,
   promotionAnnouncement,
   promotionLog,
   revokeLog,
@@ -136,8 +140,8 @@ export class ShuinApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg.guildId) return;
     try {
       if (interaction.isUserContextMenuCommand()) {
+        if (interaction.commandName === COMMAND.profileMenu || interaction.commandName === COMMAND.cardMenu) return await this.card(interaction, interaction.targetId, false);
         if (interaction.commandName === COMMAND.giveMenu) return await this.give(interaction, interaction.targetId);
-        if (interaction.commandName === COMMAND.cardMenu) return await this.card(interaction, interaction.targetId, false);
       } else if (interaction.isChatInputCommand() && interaction.commandName === COMMAND.goshuin) {
         const target = interaction.options.getUser('user') ?? interaction.user;
         const isPublic = interaction.options.getBoolean('public') ?? false;
@@ -253,13 +257,43 @@ export class ShuinApp {
         {
           id: owner.id,
           displayName: owner.displayName,
-          avatarUrl: owner.displayAvatarURL({ size: 128 }),
+          avatarUrl: owner.displayAvatarURL({ size: 256 }),
           roleIds: [...owner.roles.cache.keys()],
         },
         data,
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
+        await this.profileOf(owner, interaction.user.id === ownerId),
       ),
     );
+  }
+
+  /** プロフィールに出すこと（性別・DM・フレンド・称号・入った日・自己紹介） */
+  private async profileOf(owner: GuildMember, self: boolean): Promise<ProfileExtra> {
+    const roleIds = [...owner.roles.cache.keys()];
+    const gender = genderOfRoles(this.cfg, roleIds);
+    const level = (kind: 'dm' | 'friend') => {
+      const l = contactOfRoles(this.cfg, kind, roleIds);
+      return l ? `${CONTACT_LEVEL_EMOJI[l]} ${CONTACT_LEVEL_LABEL[l]}` : undefined;
+    };
+    const intro = await introOf(this.db, owner.id).catch(() => undefined);
+    // バナーは、ユーザーを取り直さないと分からない（なければ出さない）
+    let bannerUrl: string | undefined;
+    try {
+      const user = await owner.user.fetch(true);
+      bannerUrl = owner.displayBannerURL?.({ size: 1024 }) ?? user.bannerURL({ size: 1024 }) ?? undefined;
+    } catch {
+      // 取れなければバナーなし
+    }
+    return {
+      ...(bannerUrl ? { bannerUrl } : {}),
+      self,
+      ...(gender ? { gender: gender === 'female' ? '♀ 女性' : '♂ 男性' } : {}),
+      ...(level('dm') ? { dm: level('dm') } : {}),
+      ...(level('friend') ? { friend: level('friend') } : {}),
+      titles: this.cfg.shop.titles.filter((t) => roleIds.includes(t.roleId)).map((t) => `${t.emoji}${t.name}`),
+      joinedAt: owner.joinedAt,
+      ...(intro ? { intro: { url: introUrl(this.cfg.guildId, intro), excerpt: intro.excerpt } } : {}),
+    };
   }
 
   private async list(interaction: Repliable, ownerId: string): Promise<void> {

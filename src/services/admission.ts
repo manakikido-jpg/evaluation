@@ -106,7 +106,7 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
       `ようこそ、咲楽ノ宮へお参りくださいました。`,
       ...(opts.introChannelId ? [`まだの方は、<#${opts.introChannelId}> に自己紹介を書いてください（いちばん下のひな形をコピーして使えます）。`] : []),
       `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
-      '相手の名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」でできます。',
+      '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」でできます。',
       ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
       '',
       `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・朱印・通話・お守り）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,

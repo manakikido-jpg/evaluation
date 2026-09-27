@@ -30,7 +30,7 @@ const giveButton = (userId: string, label = '朱印を押す') =>
 const revokeButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('revoke', userId)).setLabel('取り消す').setStyle(ButtonStyle.Secondary);
 const cardButton = (userId: string) =>
-  new ButtonBuilder().setCustomId(shuinId('card', userId)).setLabel('御朱印帳を見る').setEmoji('📕').setStyle(ButtonStyle.Secondary);
+  new ButtonBuilder().setCustomId(shuinId('card', userId)).setLabel('プロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Secondary);
 const listButton = (userId: string) =>
   new ButtonBuilder().setCustomId(shuinId('list', userId)).setLabel('朱印をくれた人').setStyle(ButtonStyle.Secondary);
 
@@ -90,12 +90,29 @@ export function breakdownLine(ranks: readonly Rank[], byRank: Record<string, num
   return parts.join(' ・ ');
 }
 
-/** 御朱印帳 */
+/** プロフィールに出すこと（性別・DM・フレンド・称号・入った日・自己紹介） */
+export type ProfileExtra = {
+  /** 見ているのが本人（自分には朱印を押せないので、ボタンを出さない） */
+  self?: boolean;
+  gender?: string;
+  dm?: string;
+  friend?: string;
+  titles?: string[];
+  joinedAt?: Date | null;
+  intro?: { url: string; excerpt: string };
+  /** Discord のプロフィールのバナー（あれば大きく出す） */
+  bannerUrl?: string;
+};
+
+const jstDay = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+
+/** プロフィール（御朱印帳）。ここから朱印を押せる */
 export function goshuinchoReply(
   ranks: readonly Rank[],
   owner: { id: string; displayName: string; avatarUrl?: string; roleIds: string[] },
   data: GoshuinchoData,
   coins?: { emoji: string; name: string; balance: number },
+  profile: ProfileExtra = {},
 ): Reply {
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
@@ -109,17 +126,32 @@ export function goshuinchoReply(
 
   const embed = new EmbedBuilder()
     .setColor(SHU)
-    .setTitle(`📕 ${owner.displayName} さまの御朱印帳`)
-    .setDescription(`${rankLabel(rank)} ・ ご縁 **${data.goen}**${nextText}`)
-    .addFields(
-      { name: '頂いた朱印', value: received },
-      { name: '最近の朱印', value: recent },
-      { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
-    );
+    .setTitle(`📕 ${owner.displayName} さまのプロフィール`)
+    .setDescription(`${rankLabel(rank)} ・ ご縁 **${data.goen}**${nextText}`);
+  // 性別・DM・フレンド（あるものだけ）
+  const about = [
+    ...(profile.gender ? [{ name: '性別', value: profile.gender, inline: true }] : []),
+    ...(profile.dm ? [{ name: 'DM', value: profile.dm, inline: true }] : []),
+    ...(profile.friend ? [{ name: 'フレンド追加', value: profile.friend, inline: true }] : []),
+    ...(profile.titles?.length ? [{ name: '称号', value: profile.titles.join('・'), inline: true }] : []),
+    ...(profile.joinedAt ? [{ name: '参拝した日', value: jstDay(profile.joinedAt), inline: true }] : []),
+  ];
+  if (about.length) embed.addFields(about);
+  embed.addFields({
+    name: '自己紹介',
+    value: profile.intro ? `${profile.intro.excerpt ? `${profile.intro.excerpt}\n` : ''}[📝 自己紹介を見る](${profile.intro.url})` : 'まだありません',
+  });
+  embed.addFields(
+    { name: '頂いた朱印', value: received },
+    { name: '最近の朱印', value: recent },
+    { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
+  );
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
+  if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
 
-  return { embeds: [embed.toJSON()], components: [row(giveButton(owner.id), listButton(owner.id))] };
+  const buttons = [...(profile.self ? [] : [giveButton(owner.id)]), listButton(owner.id)];
+  return { embeds: [embed.toJSON()], components: [row(...buttons)] };
 }
 
 /** 朱印をくれた人の一覧 */
@@ -176,6 +208,6 @@ export function vcList(people: { id: string; name: string; stamped: boolean }[],
   });
   const rows: Row[] = [];
   for (let i = 0; i < buttons.length; i += 5) rows.push(row(...buttons.slice(i, i + 5)));
-  const more = total > VC_LIST_MAX ? `\n-# ほかの方は、名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」` : '';
+  const more = total > VC_LIST_MAX ? `\n-# ほかの方は、名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」` : '';
   return { content: `🌸 朱印を押す相手を選んでください（押した人は ✅。押すとその人の御朱印帳が見られます）${more}`, components: rows };
 }

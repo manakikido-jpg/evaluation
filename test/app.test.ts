@@ -203,7 +203,7 @@ describe('ShuinApp', () => {
     });
     await app.onInteraction(i as never);
 
-    expect(replies[0]?.embeds?.[0]?.title).toBe(`📕 user09 さまの御朱印帳`);
+    expect(replies[0]?.embeds?.[0]?.title).toBe(`📕 user09 さまのプロフィール`);
     // ほかの人の残高は出さない
     expect(JSON.stringify(replies[0]?.embeds)).not.toContain(cfg.economy.currencyName);
     expect(owner.roles.cache.has(ROLE.ujiko)).toBe(true);

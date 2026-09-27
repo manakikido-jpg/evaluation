@@ -36,7 +36,7 @@ export async function onboardingOf(db: Db, cfg: GuildConfig, memberId: string, r
   const coin = cfg.economy.currencyName;
   const steps: OnboardingStep[] = [
     { key: 'omikuji', label: 'おみくじを引く', hint: `${link(cfg.channels.omikuji, 'おみくじ')} で \`/おみくじ\`（毎日${coin}がもらえます）`, done: Boolean(drew) },
-    { key: 'shuin', label: 'だれかに朱印を押す', hint: '相手の名前を右クリック（スマホは長押し）→「アプリ」→「朱印を押す」', done: Boolean(gave) },
+    { key: 'shuin', label: 'だれかに朱印を押す', hint: '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」', done: Boolean(gave) },
     {
       key: 'voice',
       label: `通話に ${ONBOARDING_VOICE_MINUTES} 分いる`,

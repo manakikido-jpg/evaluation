@@ -20,12 +20,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   return [
     // 右クリック（スマホは長押し）→ アプリ
     new ContextMenuCommandBuilder()
-      .setName(COMMAND.giveMenu)
-      .setType(ApplicationCommandType.User)
-      .setContexts(InteractionContextType.Guild)
-      .toJSON(),
-    new ContextMenuCommandBuilder()
-      .setName(COMMAND.cardMenu)
+      .setName(COMMAND.profileMenu)
       .setType(ApplicationCommandType.User)
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
@@ -33,14 +28,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName(COMMAND.goshuin)
       .setNameLocalizations({ ja: '御朱印帳' })
       .setDescription('Show a goshuincho (shuin, goen and rank)')
-      .setDescriptionLocalizations({ ja: '御朱印帳（ご縁・役職・頂いた朱印）を見る' })
+      .setDescriptionLocalizations({ ja: 'プロフィール（御朱印帳・自己紹介・ご縁）を見る。ここから朱印を押せる' })
       .setContexts(InteractionContextType.Guild)
       .addUserOption((o) =>
         o
           .setName('user')
           .setNameLocalizations({ ja: '相手' })
           .setDescription('Whose goshuincho (default: yourself)')
-          .setDescriptionLocalizations({ ja: '誰の御朱印帳を見るか（省略すると自分）' }),
+          .setDescriptionLocalizations({ ja: '誰のプロフィールを見るか（省略すると自分）' }),
       )
       .addBooleanOption((o) =>
         o

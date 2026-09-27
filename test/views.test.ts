@@ -24,7 +24,7 @@ describe('customId', () => {
 describe('コマンド定義', () => {
   it('右クリックメニュー・全員用・神職用', () => {
     const defs = commandDefinitions(cfg);
-    expect(defs.map((d) => d.name)).toEqual(['朱印を押す', '御朱印帳を見る', 'goshuin', 'menzaifu', 'omikuji', 'invite', 'hajimete', 'soudan', 'panel', 'yaku', 'ban', 'kick', 'memo', 'member']);
+    expect(defs.map((d) => d.name)).toEqual(['プロフィール', 'goshuin', 'menzaifu', 'omikuji', 'invite', 'hajimete', 'soudan', 'panel', 'yaku', 'ban', 'kick', 'memo', 'member']);
     // 神職用は「メンバーをタイムアウト」権限がある人にだけ表示
     const staff = defs.filter((d) => ['panel', 'yaku', 'ban', 'kick', 'memo', 'member'].includes(d.name));
     expect(staff.every((d) => d.default_member_permissions === '1099511627776')).toBe(true);
@@ -67,10 +67,32 @@ describe('表示', () => {
       { goen: 142, receivedCount: 51, byRank: { sodai: 8, sewayaku: 17 }, recentGiverIds: ['1', '2'], givenCount: 63 },
     );
     const embed = r.embeds![0]!;
-    expect(embed.title).toBe('📕 さくら さまの御朱印帳');
+    expect(embed.title).toBe('📕 さくら さまのプロフィール');
     expect(embed.description).toBe('🎋 世話役 ・ ご縁 **142**（総代まで あと 158）');
-    expect(embed.fields?.[0]?.value).toContain('51 人');
-    expect(embed.fields?.[2]?.value).toBe('63 人');
+    const field = (name: string) => embed.fields?.find((f) => f.name === name)?.value;
+    expect(field('頂いた朱印')).toContain('51 人');
+    expect(field('押した朱印')).toBe('63 人');
+  });
+
+  it('プロフィール: 性別・DM・フレンド・称号・参拝した日・自己紹介。ここから朱印を押せる（自分には出さない）', () => {
+    const data = { goen: 10, receivedCount: 1, byRank: {}, recentGiverIds: [], givenCount: 0 };
+    const owner = { id: B, displayName: 'さくら', roleIds: [ROLE.sanpaisha] };
+    const r = goshuinchoReply(cfg.ranks, owner, data, undefined, {
+      gender: '♀ 女性',
+      dm: '⭕ OK',
+      friend: '💬 要相談',
+      titles: ['🌙夜更かし'],
+      joinedAt: new Date('2026-09-20T03:00:00Z'),
+      intro: { url: 'https://discord.com/channels/1/2/3', excerpt: '【名前】さくら' },
+      bannerUrl: 'https://cdn.discordapp.com/banners/1/b.png?size=1024',
+    });
+    expect(r.embeds![0]!.image?.url).toBe('https://cdn.discordapp.com/banners/1/b.png?size=1024');
+    const json = JSON.stringify(r);
+    for (const t of ['♀ 女性', '⭕ OK', '💬 要相談', '🌙夜更かし', '2026年9月20日', '【名前】さくら', 'https://discord.com/channels/1/2/3']) expect(json).toContain(t);
+    expect(json).toContain(`shuin:give:${B}`);
+    const mine = JSON.stringify(goshuinchoReply(cfg.ranks, owner, data, undefined, { self: true }));
+    expect(mine).not.toContain(`shuin:give:${B}`);
+    expect(mine).toContain('まだありません');
   });
 
   it('いちばん上の役職なら「あと○○」は出ない', () => {
@@ -80,7 +102,7 @@ describe('表示', () => {
       { goen: 500, receivedCount: 0, byRank: {}, recentGiverIds: [], givenCount: 0 },
     );
     expect(r.embeds![0]!.description).toBe('🏮 総代 ・ ご縁 **500**');
-    expect(r.embeds![0]!.fields?.[0]?.value).toBe('まだありません');
+    expect(r.embeds![0]!.fields?.find((f) => f.name === '頂いた朱印')?.value).toBe('まだありません');
   });
 
   it('朱印をくれた人の一覧（100 人を超えたら「ほか」）', () => {

@@ -18,6 +18,9 @@ export function parseShuinId(customId: string): { action: ShuinAction; userId: s
 
 /** コマンド名 */
 export const COMMAND = {
+  /** 右クリック → アプリ → プロフィール（ここから朱印を押す） */
+  profileMenu: 'プロフィール',
+  /** 前の版の右クリックメニュー（もう登録しない。残っていても動くように） */
   giveMenu: '朱印を押す',
   cardMenu: '御朱印帳を見る',
   goshuin: 'goshuin',
