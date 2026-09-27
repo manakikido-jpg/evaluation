@@ -296,3 +296,7 @@ h2.with-top .to-top { font-size: 0.8rem; font-weight: normal; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 .section-save { justify-content: flex-end; margin-top: 12px; }
 .section-save .flash { margin: 0; flex: 1; }
+.shop-item > form { display: grid; gap: 8px; }
+details.delete-channel { margin-top: 4px; }
+details.delete-channel summary { cursor: pointer; color: var(--shu); font-size: 0.85rem; }
+details.delete-channel form { margin-top: 6px; }

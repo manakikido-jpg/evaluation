@@ -45,6 +45,10 @@ const fakeActions: DiscordActions = {
   editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}${b.nsfw !== undefined ? ` nsfw=${b.nsfw}` : ''}`),
   setChannelOverwrite: async (c, o) => void actions.push(`overwrite ${c} ${o.id} allow=${o.allow} deny=${o.deny}`),
   pinMessage: async (c, m, pin) => void actions.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`),
+  createChannel: async (_g, b) => (
+    actions.push(`createChannel ${JSON.stringify(b)}`), { id: '910000000000000099', name: b.name, type: b.type, parent_id: b.parent_id ?? null, position: 9 }
+  ),
+  deleteChannel: async (c) => void actions.push(`deleteChannel ${c}`),
 };
 
 const fakeApi: DiscordApi = {
@@ -904,6 +908,66 @@ describe('チャンネル（管理画面）', () => {
       body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
     });
   };
+
+  const formMulti = async (session: string, path: string, data: [string, string][]) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams([['_csrf', csrf], ...data]).toString(),
+    });
+  };
+
+  it('チャンネルを作れる（プライベートは選んだロールと運営・BOT だけ見られる）。おかしな入力は作らない', async () => {
+    roleList = [{ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0' }];
+    const g = await login(GUJI);
+    const page = await (await get('/channels', g)).text();
+    expect(page).toContain('チャンネルを作る');
+    expect(page).toContain('🍃 氏子');
+    const bad = await formMulti(g, '/channels/new', [['kind', 'text'], ['name', '秘密'], ['visibility', 'private']]);
+    expect(bad.headers.get('location')).toBe('/channels?msg=create_invalid#new-channel');
+    const noParent = await formMulti(g, '/channels/new', [['kind', 'text'], ['name', '秘密'], ['visibility', 'category']]);
+    expect(noParent.headers.get('location')).toBe('/channels?msg=create_invalid#new-channel');
+    expect(actions.filter((a) => a.startsWith('createChannel'))).toEqual([]);
+
+    const ok = await formMulti(g, '/channels/new', [
+      ['kind', 'text'],
+      ['name', '氏子の間'],
+      ['parent', '910000000000000001'],
+      ['visibility', 'private'],
+      ['roles', ROLE.ujiko],
+      ['topic', '氏子だけ'],
+    ]);
+    expect(ok.headers.get('location')).toBe('/channels?msg=created#ch-910000000000000099');
+    const body = JSON.parse(actions.find((a) => a.startsWith('createChannel'))!.slice('createChannel '.length)) as {
+      name: string;
+      parent_id: string;
+      topic: string;
+      permission_overwrites: { id: string; allow: string; deny: string }[];
+    };
+    expect(body).toMatchObject({ name: '氏子の間', parent_id: '910000000000000001', topic: '氏子だけ' });
+    const view = 1n << 10n;
+    const ow = (id: string) => body.permission_overwrites.find((o) => o.id === id);
+    expect(BigInt(ow(cfg.guildId)!.deny) & view).toBe(view);
+    expect(BigInt(ow(ROLE.ujiko)!.allow) & view).toBe(view);
+    expect(BigInt(ow(ROLE.guji)!.allow) & view).toBe(view);
+    expect(ow(ROLE.sanpaisha)).toBeUndefined();
+    expect((await listAudit(db, { action: 'channel.create' }))[0]?.detail).toMatchObject({ name: '氏子の間', visibility: 'private' });
+  });
+
+  it('消すときは名前を入力。BOT が使っているもの・中身のあるカテゴリは消せない', async () => {
+    const g = await login(GUJI);
+    expect((await form(g, `/channels/${TORII}/delete`, { confirmName: 'ちがう' })).headers.get('location')).toBe(`/channels?msg=confirm_name#ch-${TORII}`);
+    expect((await form(g, '/channels/910000000000000001/delete', { confirmName: '⛩ 鳥居' })).headers.get('location')).toBe('/channels?msg=has_children#cat-910000000000000001');
+    expect(actions.filter((a) => a.startsWith('deleteChannel'))).toEqual([]);
+    const r = await form(g, `/channels/${TORII}/delete`, { confirmName: '鳥居' });
+    expect(r.headers.get('location')).toBe('/channels?msg=deleted');
+    expect(actions).toContain(`deleteChannel ${TORII}`);
+    expect((await listAudit(db, { action: 'channel.delete' }))[0]?.detail).toMatchObject({ name: '鳥居' });
+    // 宮司でなければできない
+    const s = await login(STAFF);
+    expect((await form(s, `/channels/${TORII}/delete`, { confirmName: '鳥居' })).status).toBe(403);
+  });
 
   it('上に一覧があり、押すとそのチャンネルへ移動できる', async () => {
     const g = await login(GUJI);

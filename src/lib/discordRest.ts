@@ -24,6 +24,10 @@ export interface DiscordActions {
   editChannel(channelId: string, body: { topic?: string; name?: string; nsfw?: boolean }): Promise<void>;
   /** チャンネルの権限の上書きを 1 つ書き換える（書き込める・読むだけの切り替え） */
   setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
+  /** チャンネル・カテゴリを作る（管理画面のチャンネル） */
+  createChannel(guildId: string, body: CreateChannelInput, reason: string): Promise<GuildChannel>;
+  /** チャンネル・カテゴリを消す（中の書き込みも消える） */
+  deleteChannel(channelId: string, reason: string): Promise<void>;
   /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
   guildRoles(guildId: string): Promise<GuildRole[]>;
   /** ロールの名前・色・権限などを変える */
@@ -64,6 +68,9 @@ export type GuildChannel = {
 
 /** type: 0 = ロール、1 = メンバー。allow・deny は権限のビット（10 進の文字列） */
 export type ChannelOverwrite = { id: string; type: 0 | 1; allow: string; deny: string };
+
+/** 0: テキスト / 2: 通話 / 4: カテゴリ */
+export type CreateChannelInput = { name: string; type: 0 | 2 | 4; parent_id?: string; topic?: string; permission_overwrites: ChannelOverwrite[] };
 
 /** Discord が失敗を返したとき（status で「メッセージが消されていた（404）」などを見分ける） */
 export class DiscordHttpError extends Error {
@@ -138,6 +145,8 @@ export function createDiscordActions(botToken: string): DiscordActions {
     guildRoles: async (g) => (await call('GET', `/guilds/${g}/roles`)) as GuildRole[],
     editRole: async (g, r, body, reason) => void (await call('PATCH', `/guilds/${g}/roles/${r}`, { reason, body })),
     editChannel: async (c, body) => void (await call('PATCH', `/channels/${c}`, { body })),
+    createChannel: async (g, body, reason) => (await call('POST', `/guilds/${g}/channels`, { reason, body })) as GuildChannel,
+    deleteChannel: async (c, reason) => void (await call('DELETE', `/channels/${c}`, { reason })),
     setChannelOverwrite: async (c, o, reason) =>
       void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { reason, body: { type: o.type, allow: o.allow, deny: o.deny } })),
   };

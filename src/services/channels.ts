@@ -84,3 +84,72 @@ export function cleanChannelName(v: unknown): string | undefined {
   const name = v.replace(/[\r\n]+/g, ' ').trim();
   return name.length >= 1 && name.length <= 100 ? name : undefined;
 }
+
+// ───────── 作る・消す ─────────
+
+/**
+ * 新しいチャンネルの見える範囲。
+ * category: 入れるカテゴリと同じ ／ public: 申請前の人も ／ members: 参拝者以上 ／ private: 選んだロールだけ ／ staff: 神職・宮司だけ ／ adult: 宵参りの人だけ
+ * どれでも（public・category 以外）神職・宮司と BOT は見られる。
+ */
+export type ChannelVisibility = 'category' | 'public' | 'members' | 'private' | 'staff' | 'adult';
+export const CHANNEL_VISIBILITY: Record<ChannelVisibility, string> = {
+  category: 'カテゴリと同じ',
+  public: 'みんな（申請前の人も）',
+  members: '参拝者以上',
+  private: 'プライベート（選んだロールだけ）',
+  staff: '運営だけ（神職・宮司）',
+  adult: '🔞 宵参りの人だけ',
+};
+export const isChannelVisibility = (v: unknown): v is ChannelVisibility => typeof v === 'string' && Object.hasOwn(CHANNEL_VISIBILITY, v);
+
+const VIEW = bit(10) | bit(16) | bit(20); // 見る・履歴・通話に入る
+const BOT_ALLOW = VIEW | bit(11) | bit(14) | bit(13); // 見る・送る・埋め込み・メッセージの管理
+
+export function overwritesFor(
+  cfg: GuildConfig,
+  opts: { visibility: ChannelVisibility; roleIds?: readonly string[]; readOnly?: boolean; botId?: string; parent?: GuildChannel },
+): ChannelOverwrite[] {
+  const ow = (id: string, type: 0 | 1, allow: bigint, deny: bigint): ChannelOverwrite => ({ id, type, allow: allow.toString(), deny: deny.toString() });
+  const staff = [...staffRoleIds(cfg)];
+  let list: ChannelOverwrite[];
+  if (opts.visibility === 'category') {
+    list = (opts.parent?.permission_overwrites ?? []).map((o) => ({ ...o }));
+  } else if (opts.visibility === 'public') {
+    list = [ow(cfg.guildId, 0, VIEW, 0n)];
+  } else {
+    const see =
+      opts.visibility === 'members'
+        ? cfg.ranks.filter((r) => r.auto).map((r) => r.roleId)
+        : opts.visibility === 'private'
+          ? [...(opts.roleIds ?? [])]
+          : opts.visibility === 'adult'
+            ? [cfg.roles.yoimairi ?? '']
+            : [];
+    list = [ow(cfg.guildId, 0, 0n, bit(10)), ...[...new Set(see)].filter((id) => id && id !== cfg.guildId && !staff.includes(id)).map((id) => ow(id, 0, VIEW, 0n))];
+    for (const id of staff) list.push(ow(id, 0, VIEW, 0n));
+  }
+  if (opts.botId && !list.some((o) => o.id === opts.botId)) list.push(ow(opts.botId, 1, BOT_ALLOW, 0n));
+  if (opts.readOnly) {
+    // 読むだけ: いつもの切り替えと同じ書き換えを重ねる
+    const changes = planMode({ id: 'new', name: '', type: 0, parent_id: null, position: 0, permission_overwrites: list }, cfg, 'readonly');
+    list = list.map((o) => changes.find((c) => c.id === o.id) ?? o);
+    for (const c of changes) if (!list.some((o) => o.id === c.id)) list.push(c);
+  }
+  return list;
+}
+
+/** BOT が使っているチャンネル（設定ファイルの ID・部屋の入口・募集ボタン）。消させない */
+export function channelsInUse(cfg: GuildConfig): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [key, id] of Object.entries(cfg.channels)) if (typeof id === 'string') out.set(id, `設定の channels.${key}`);
+  for (const h of cfg.tempVoice.hubs) out.set(h.channelId, '通話部屋の入口');
+  for (const p of cfg.recruit.panels) out.set(p.channelId, '募集ボタン');
+  return out;
+}
+
+/** Discord のチャンネル名にできるか（1〜100 文字） */
+export const cleanNewChannelName = (v: unknown): string | undefined => {
+  const s = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
+  return s && s.length <= 100 ? s : undefined;
+};

@@ -65,7 +65,17 @@ import { MarketPage } from './views/market.js';
 import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
 import { listingCard } from '../discord/market.js';
 import { ADMINISTRATOR, botTopPosition, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
-import { cleanChannelName, isText, listTextChannels, modeOf as channelModeOf, planMode as planChannelMode } from '../services/channels.js';
+import {
+  channelsInUse,
+  cleanChannelName,
+  cleanNewChannelName,
+  isChannelVisibility,
+  isText,
+  listTextChannels,
+  modeOf as channelModeOf,
+  overwritesFor,
+  planMode as planChannelMode,
+} from '../services/channels.js';
 import {
   createItem as createShopItem,
   deleteItem as deleteShopItem,
@@ -1029,9 +1039,72 @@ export function createWebApp(deps: WebDeps) {
   app.use('/channels/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
 
   app.get('/channels', async (c) => {
-    const channels = await loadChannels(true);
+    const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
     const groups = listTextChannels(channels).map((g) => ({ ...g, items: g.items.map((ch) => ({ channel: ch, mode: channelModeOf(ch, cfg) })) }));
-    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} />);
+    // プライベートで選べるロール（@everyone・BOT などの自動のロールはのぞく）
+    const pickable = (roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
+    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} roles={pickable} inUse={channelsInUse(cfg)} />);
+  });
+
+  /** 新しいチャンネル・カテゴリを作る */
+  app.post('/channels/new', async (c) => {
+    const body = await c.req.parseBody({ all: true });
+    const one = (k: string) => (Array.isArray(body[k]) ? body[k][0] : body[k]);
+    const kind = one('kind');
+    const type = kind === 'text' ? 0 : kind === 'voice' ? 2 : kind === 'category' ? 4 : undefined;
+    const name = cleanNewChannelName(one('name'));
+    const visibility = one('visibility');
+    const roleIds = (body.roles === undefined ? [] : Array.isArray(body.roles) ? body.roles : [body.roles]).filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v));
+    const topicRaw = one('topic');
+    const topic = typeof topicRaw === 'string' ? topicRaw.trim().slice(0, 1024) : '';
+    if (type === undefined || !name || !isChannelVisibility(visibility)) return c.redirect('/channels?msg=create_invalid#new-channel');
+    const channels = await loadChannels(true);
+    const parentId = type === 4 ? '' : String(one('parent') ?? '');
+    const parent = parentId ? channels.find((ch) => ch.id === parentId && ch.type === 4) : undefined;
+    if ((parentId && !parent) || (visibility === 'category' && !parent) || (visibility === 'private' && !roleIds.length)) {
+      return c.redirect('/channels?msg=create_invalid#new-channel');
+    }
+    const permission_overwrites = overwritesFor(cfg, { visibility, roleIds, readOnly: type === 0 && one('readOnly') === 'yes', botId: deps.botId, parent });
+    let created: GuildChannel;
+    try {
+      created = await deps.discord.createChannel(
+        cfg.guildId,
+        { name, type, ...(parent ? { parent_id: parent.id } : {}), ...(type === 0 && topic ? { topic } : {}), permission_overwrites },
+        '管理画面（チャンネルを作る）',
+      );
+    } catch (err) {
+      logger.warn({ err }, 'channel create failed');
+      return c.redirect('/channels?msg=failed#new-channel');
+    }
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'channel.create',
+      detail: { channelId: created.id, name, kind, visibility, ...(visibility === 'private' ? { roleIds } : {}), ...(parent ? { parent: parent.name } : {}) },
+      via: 'web',
+    });
+    return c.redirect(`/channels?msg=created#${type === 4 ? 'cat' : 'ch'}-${created.id}`);
+  });
+
+  /** チャンネル・カテゴリを消す（名前を入力して確認。BOT が使っているもの・中身のあるカテゴリは消さない） */
+  app.post('/channels/:id/delete', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
+    const body = await c.req.parseBody();
+    const channels = await loadChannels(true);
+    const channel = channels.find((ch) => ch.id === id);
+    if (!channel) return c.redirect('/channels');
+    const back = (msg: string) => c.redirect(`/channels?msg=${msg}#${channel.type === 4 ? 'cat' : 'ch'}-${id}`);
+    if (channelsInUse(cfg).has(id)) return back('in_use');
+    if (channel.type === 4 && channels.some((ch) => ch.parent_id === id)) return back('has_children');
+    if (typeof body.confirmName !== 'string' || body.confirmName.trim() !== channel.name) return back('confirm_name');
+    try {
+      await deps.discord.deleteChannel(id, '管理画面（チャンネルを消す）');
+    } catch (err) {
+      logger.warn({ err }, 'channel delete failed');
+      return back('failed');
+    }
+    await audit(db, { actorId: c.get('session').userId, action: 'channel.delete', detail: { channelId: id, name: channel.name, type: channel.type }, via: 'web' });
+    return c.redirect('/channels?msg=deleted');
   });
 
   app.post('/channels/:id', async (c) => {

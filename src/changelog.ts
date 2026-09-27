@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-channel-create-delete',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: 'チャンネルを作る・消す',
+    items: [
+      '「チャンネル」ページでテキスト・通話・カテゴリを作れる。見える範囲は カテゴリと同じ・みんな・参拝者以上・プライベート（選んだロールだけ）・運営だけ・宵参りだけ から選ぶ',
+      '各チャンネルの「🗑 消す」で消せる（名前を入力して確認）。BOT が使っているチャンネルと、中身のあるカテゴリは消せない',
+    ],
+  },
+  {
     id: '2026-09-27-invite-bonus',
     date: '2026-09-27',
     kind: 'new',

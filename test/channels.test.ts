@@ -83,3 +83,32 @@ describe('書き込める／読むだけ', () => {
     expect(cleanChannelName(undefined)).toBeUndefined();
   });
 });
+
+describe('新しいチャンネルの見える範囲', () => {
+  const VIEW = 1n << 10n;
+  const SEND = 1n << 11n;
+  const BOT_ID = '800000000000000099';
+  const find = (list: { id: string; allow: string; deny: string }[], id: string) => list.find((o) => o.id === id);
+
+  it('参拝者以上: みんなは見えず、自動の役職は見える。BOT も見て書ける', async () => {
+    const { overwritesFor } = await import('../src/services/channels.js');
+    const list = overwritesFor(cfg, { visibility: 'members', botId: BOT_ID });
+    expect(BigInt(find(list, cfg.guildId)!.deny) & VIEW).toBe(VIEW);
+    expect(BigInt(find(list, ROLE.sanpaisha)!.allow) & VIEW).toBe(VIEW);
+    expect(BigInt(find(list, ROLE.guji)!.allow) & VIEW).toBe(VIEW);
+    expect(BigInt(find(list, BOT_ID)!.allow) & (VIEW | SEND)).toBe(VIEW | SEND);
+  });
+
+  it('運営だけ・読むだけ・カテゴリと同じ', async () => {
+    const { overwritesFor, modeOf } = await import('../src/services/channels.js');
+    const staff = overwritesFor(cfg, { visibility: 'staff' });
+    expect(find(staff, ROLE.sanpaisha)).toBeUndefined();
+    expect(BigInt(find(staff, ROLE.shinshoku)!.allow) & VIEW).toBe(VIEW);
+
+    const ro = overwritesFor(cfg, { visibility: 'public', readOnly: true });
+    expect(modeOf({ id: 'x', name: 'x', type: 0, parent_id: null, position: 0, permission_overwrites: ro }, cfg)).toBe('readonly');
+
+    const parent = { id: 'p', name: 'cat', type: 4, parent_id: null, position: 0, permission_overwrites: [{ id: ROLE.ujiko, type: 0 as const, allow: String(VIEW), deny: '0' }] };
+    expect(overwritesFor(cfg, { visibility: 'category', parent })).toEqual(parent.permission_overwrites);
+  });
+});
