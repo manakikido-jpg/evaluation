@@ -1,3 +1,4 @@
+import { COIN_REASON_LABEL } from '../../services/economy.js';
 import type { GuildConfig } from '../../config.js';
 import type { ActivityDaily, AdminSession, CoinTx, Memo, Yaku } from '../../db/schema.js';
 import { ADMIN_COINS_MAX } from '../../services/economy.js';
@@ -42,35 +43,7 @@ export function Flash(props: { code?: string }) {
   return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
 }
 
-const COIN_REASON: Record<string, string> = {
-  voice: '通話',
-  shuin_give: '朱印を押した',
-  shuin_receive: '朱印を頂いた',
-  omikuji: 'おみくじ',
-  join_bonus: '初期配布',
-  shop: 'ショップ',
-  shop_refund: 'ショップの払い戻し',
-  gift_send: '贈り物を贈った',
-  gift_receive: '贈り物をもらった',
-  boost: '奉納（ブースト）のお礼',
-  room: '通話部屋',
-  gacha: '物御籤',
-  gacha_prize: '物御籤の当たり',
-  gacha_refund: '物御籤の払い戻し',
-  gacha_reset: '物御籤のリセット（当たりの銭を戻してもらった）',
-  gacha_share: '物御籤のおすそ分け',
-  onboarding: 'はじめての参拝のお祝い',
-  invite: '招待のお礼',
-  invite_active: '招待した人の浮上ボーナス',
-  market_buy: '市場で買った',
-  market_sell: '市場で売れた',
-  market_refund: '市場の返金',
-  admin_grant: '運営から',
-  admin_take: '運営が減らした',
-  shuin_revoke: '朱印の取り消し',
-  menzaifu: '免罪符',
-  adjust: '調整',
-};
+const COIN_REASON = COIN_REASON_LABEL;
 
 /** メンバー詳細に足す「厄・操作・花びら・活動・メモ」 */
 export function ModerationSection(props: {

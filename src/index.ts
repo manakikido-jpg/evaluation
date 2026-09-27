@@ -14,6 +14,7 @@ import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
 import { GuidePendingApp } from './discord/guidePending.js';
+import { WalletApp } from './discord/wallet.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const gacha = new GachaApp(db, cfg);
+  const wallet = new WalletApp(db, cfg);
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
@@ -196,6 +198,7 @@ async function main(): Promise<void> {
     void admission.onInteraction(i);
     void omikuji.onInteraction(i);
     void gacha.onInteraction(i);
+    void wallet.onInteraction(i);
     void onboarding.onInteraction(i);
     void inviteLinks.onInteraction(i);
     void bell.onInteraction(i);

@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-zandaka',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord'],
+    title: '💰 /残高 で自分の銭を確認',
+    items: ['自分の銭・今日の通話でもらった銭・効いている札・持っている券・最近の出入りを、自分にだけ出す'],
+  },
+  {
     id: '2026-09-27-gacha-part3',
     date: '2026-09-27',
     kind: 'new',

@@ -48,6 +48,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
 
     // ───── 全員用 ─────
     new SlashCommandBuilder()
+      .setName('zandaka')
+      .setNameLocalizations({ ja: '残高' })
+      .setDescription('Check your coins, tickets and recent history')
+      .setDescriptionLocalizations({ ja: '自分の銭・券・最近の出入りを見る（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('menzaifu')
       .setNameLocalizations({ ja: '免罪符' })
       .setDescription('Buy a menzaifu to clear a yaku')
