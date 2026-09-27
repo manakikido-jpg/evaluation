@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-glossary',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '📖 用語集（/用語・#用語集・社務所Web で編集）',
+    items: [
+      '`/用語 天井` のように、サーバーの言葉の意味を調べられる（候補も出る・自分にだけ表示）',
+      '社務所Web の「用語集」で言葉を足す・直す・並べ替え。物御籤・券・札・案内待ちなど新しい言葉も入った',
+      '「掲示に反映」で #しきたり の用語集と #用語集 のカテゴリごとのカードを作り直す',
+    ],
+  },
+  {
     id: '2026-09-27-economy-page',
     date: '2026-09-27',
     kind: 'new',

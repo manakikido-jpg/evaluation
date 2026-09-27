@@ -899,3 +899,26 @@ export const economyAlerts = pgTable(
 );
 
 export type EconomyAlert = typeof economyAlerts.$inferSelect;
+
+/** 用語集（社務所Web で編集。#しきたり・#用語集 の掲示と /用語 に出す） */
+export const glossaryTerms = pgTable(
+  'glossary_terms',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** roles / system / economy / gacha / places / voice */
+    category: text('category').notNull(),
+    term: text('term').notNull(),
+    /** 読みがな（/用語 で探せる） */
+    reading: text('reading').notNull().default(''),
+    emoji: text('emoji').notNull().default(''),
+    description: text('description').notNull(),
+    /** 別の呼び名（カンマ区切り。/用語 で探せる） */
+    aliases: text('aliases').notNull().default(''),
+    position: integer('position').notNull().default(0),
+    enabled: boolean('enabled').notNull().default(true),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('glossary_terms_category_idx').on(t.category, t.position)],
+);
+
+export type GlossaryTerm = typeof glossaryTerms.$inferSelect;

@@ -78,6 +78,7 @@ import {
   createNotice,
   deleteNotice,
   getNotice,
+  findChannel,
   guildChannelsCached,
   listNotices,
   moveNotice,
@@ -107,6 +108,9 @@ import {
 import { giftAnnouncement, giftItemLabel, giftTargets, giftToAll, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
 import { EconomyPage } from './views/economy.js';
+import { createTerm, deleteTerm, getTerm, GLOSSARY_CHANNEL, listTerms, moveTerm, seedDefaultTerms, setTermEnabled, syncGlossaryNotices, updateTerm, type TermInput } from '../services/glossary.js';
+import { isGlossaryCategory } from '../services/glossaryDefaults.js';
+import { GlossaryPage } from './views/glossary.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
@@ -332,6 +336,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/yaku', requireAdmin);
   app.use('/stats', requireAdmin);
   app.use('/economy', requireAdmin);
+  app.use('/glossary', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -1360,6 +1365,120 @@ export function createWebApp(deps: WebDeps) {
       const r = await repostChannel(noticeCtx(), channelId, c.get('session').userId);
       return r.tooLong.length ? 'too_long' : r.pinFailed.length ? 'pin_failed' : 'reposted_channel';
     });
+  });
+
+  // ───────── 用語集（見るのは神職も・直すのは宮司） ─────────
+
+  app.use('/glossary/*', requireAdmin, requireCsrf);
+  // 見るのは神職も（'/glossary/*' は '/glossary' にも当たるので、変える操作だけ宮司に）
+  app.use('/glossary/*', async (c, next) => (c.req.method !== 'POST' || gujiOnly(c) ? next() : c.text('宮司のみできる操作です。', 403)));
+
+  app.get('/glossary', async (c) => {
+    const [terms, channels] = await Promise.all([listTerms(db), loadChannels().catch(() => [] as GuildChannel[])]);
+    const edit = Number(c.req.query('edit'));
+    return c.html(
+      <GlossaryPage
+        session={c.get('session')}
+        terms={terms}
+        coin={cfg.economy.currencyName}
+        flash={c.req.query('msg')}
+        render={(s) => renderNotice(s, cfg, channels, { forPreview: true }).text}
+        hasChannel={Boolean(findChannel(channels, GLOSSARY_CHANNEL))}
+        editId={Number.isInteger(edit) && edit > 0 ? edit : undefined}
+      />,
+    );
+  });
+
+  const termInput = (body: Record<string, unknown>): TermInput | undefined => {
+    const category = body.category;
+    const term = field(body, 'term', 40);
+    const description = field(body, 'description', 300);
+    if (!isGlossaryCategory(category) || !term || !description) return undefined;
+    return { category, term, description, reading: field(body, 'reading', 40), emoji: field(body, 'emoji', 16), aliases: field(body, 'aliases', 100) };
+  };
+  const termId = (c: Context<Env>) => {
+    const id = Number(c.req.param('id'));
+    return Number.isInteger(id) && id > 0 ? id : undefined;
+  };
+
+  app.post('/glossary', async (c) => {
+    const input = termInput(await c.req.parseBody());
+    if (!input) return c.redirect('/glossary?msg=invalid#glossary-add');
+    const t = await createTerm(db, input, c.get('session').userId);
+    return c.redirect(`/glossary?msg=added#term-${t.id}`);
+  });
+
+  app.post('/glossary/seed', async (c) => {
+    const n = await seedDefaultTerms(db, c.get('session').userId);
+    return c.redirect(`/glossary?msg=${n ? 'seeded' : 'seeded_none'}`);
+  });
+
+  app.post('/glossary/sync', async (c) => {
+    try {
+      const r = await syncGlossaryNotices(noticeCtx(), c.get('session').userId);
+      return c.redirect(`/glossary?msg=${r.noShikitari && r.noChannel ? 'synced_none' : r.noChannel ? 'synced_nochannel' : 'synced'}`);
+    } catch (err) {
+      logger.warn({ err }, 'glossary sync failed');
+      return c.redirect('/glossary?msg=discord_error');
+    }
+  });
+
+  /** #用語集 を作る（#しきたり と同じカテゴリ・同じ見える範囲で、読むだけ） */
+  app.post('/glossary/channel', async (c) => {
+    const channels = await loadChannels(true).catch(() => undefined);
+    if (!channels) return c.redirect('/glossary?msg=discord_error');
+    if (findChannel(channels, GLOSSARY_CHANNEL)) return c.redirect('/glossary?msg=channel_exists');
+    const shikitari = findChannel(channels, 'しきたり');
+    const parent = shikitari?.parent_id ? channels.find((ch) => ch.id === shikitari.parent_id && ch.type === 4) : undefined;
+    if (!shikitari || !parent) return c.redirect('/glossary?msg=channel_failed');
+    try {
+      const created = await deps.discord.createChannel(
+        cfg.guildId,
+        {
+          name: GLOSSARY_CHANNEL,
+          type: 0,
+          parent_id: parent.id,
+          topic: '言葉の意味（/用語 でも調べられます）',
+          permission_overwrites: overwritesFor(cfg, { visibility: 'category', roleIds: [], readOnly: true, botId: deps.botId, parent }),
+        },
+        '管理画面（用語集）',
+      );
+      await audit(db, { actorId: c.get('session').userId, action: 'channel.create', detail: { channelId: created.id, name: GLOSSARY_CHANNEL }, via: 'web' });
+      await guildChannelsCached(deps.discord, cfg.guildId, true).catch(() => undefined);
+      return c.redirect('/glossary?msg=channel_created');
+    } catch (err) {
+      logger.warn({ err }, 'glossary channel create failed');
+      return c.redirect('/glossary?msg=channel_failed');
+    }
+  });
+
+  app.post('/glossary/:id', async (c) => {
+    const id = termId(c);
+    const input = termInput(await c.req.parseBody());
+    if (!id || !(await getTerm(db, id))) return c.redirect('/glossary');
+    if (!input) return c.redirect(`/glossary?msg=invalid&edit=${id}#term-${id}`);
+    await updateTerm(db, id, input, c.get('session').userId);
+    return c.redirect(`/glossary?msg=saved#term-${id}`);
+  });
+
+  app.post('/glossary/:id/move', async (c) => {
+    const id = termId(c);
+    const body = await c.req.parseBody();
+    if (id && (body.dir === 'up' || body.dir === 'down')) await moveTerm(db, id, body.dir);
+    return c.redirect(`/glossary#term-${id ?? ''}`);
+  });
+
+  app.post('/glossary/:id/toggle', async (c) => {
+    const id = termId(c);
+    const t = id ? await getTerm(db, id) : undefined;
+    if (t) await setTermEnabled(db, t.id, !t.enabled);
+    return c.redirect(`/glossary?msg=toggled#term-${id ?? ''}`);
+  });
+
+  app.post('/glossary/:id/delete', async (c) => {
+    const id = termId(c);
+    if (id) await deleteTerm(db, id, c.get('session').userId);
+    return c.redirect('/glossary?msg=deleted');
   });
 
   // ───────── チャンネル（宮司のみ）: 名前・説明と「書き込める／読むだけ」 ─────────

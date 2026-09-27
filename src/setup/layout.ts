@@ -194,6 +194,7 @@ export const FULL: Layout = {
       channels: [
         { name: '鳥居', kind: 'text', readOnly: true, configKey: 'entrance', topic: 'ようこそ、咲楽ノ宮へ' },
         { name: 'しきたり', kind: 'text', readOnly: true, topic: 'ルール・用語集・朱印の仕組み' },
+        { name: '用語集', kind: 'text', readOnly: true, topic: '言葉の意味（/用語 でも調べられます）' },
         { name: '社務所', kind: 'text', readOnly: true, topic: '入鯖申請・宵参り申請はこちらのボタンから', panels: ['apply', 'yoimairi'] },
       ],
     },

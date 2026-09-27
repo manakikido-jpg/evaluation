@@ -281,6 +281,13 @@
       "when": 1790510158653,
       "tag": "0039_economy_ops",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790512087200,
+      "tag": "0040_glossary",
+      "breakpoints": true
     }
   ]
 }

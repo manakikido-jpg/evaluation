@@ -1196,6 +1196,39 @@ describe('物御籤（管理画面）', () => {
     expect((await listAudit(db, { action: 'gacha.claim_done' })).length).toBe(1);
   });
 
+  it('用語集: 神職は見るだけ。宮司は言葉を入れる・直す・掲示に反映・#用語集 を作る', async () => {
+    const { listTerms } = await import('../src/services/glossary.js');
+    const s = await login(STAFF);
+    const view = await (await get('/glossary', s)).text();
+    expect(view).toContain('📖 用語集');
+    expect(view).not.toContain('action="/glossary/seed"');
+    expect((await post(s, '/glossary/seed', {})).status).toBe(403);
+    const g = await login(GUJI);
+    expect((await post(g, '/glossary/seed', {})).headers.get('location')).toBe('/glossary?msg=seeded');
+    const page = await (await get('/glossary', g)).text();
+    expect(page).toContain('金の10連券');
+    expect(page).toContain('サーバーの中だけのお金');
+    // {#しきたり} などはプレビューでは #名前
+    expect(page).toContain('#しきたり');
+    expect((await post(g, '/glossary', { category: 'gacha', term: '', description: 'x' })).headers.get('location')).toContain('msg=invalid');
+    const added = await post(g, '/glossary', { category: 'gacha', term: '推し券', description: '推しに会える券', aliases: 'おし' });
+    expect(added.headers.get('location')).toMatch(/msg=added#term-\d+/);
+    const t = (await listTerms(db)).find((x) => x.term === '推し券')!;
+    expect(await (await get(`/glossary?edit=${t.id}`, g)).text()).toContain(`action="/glossary/${t.id}"`);
+    await post(g, `/glossary/${t.id}`, { category: 'gacha', term: '推し券', description: '推しと話せる券' });
+    expect((await listTerms(db)).find((x) => x.id === t.id)?.description).toBe('推しと話せる券');
+    await post(g, `/glossary/${t.id}/toggle`, {});
+    expect((await listTerms(db)).find((x) => x.id === t.id)?.enabled).toBe(false);
+    // #用語集 を作る → 掲示に反映
+    actions = [];
+    expect((await post(g, '/glossary/channel', {})).headers.get('location')).toBe('/glossary?msg=channel_created');
+    expect(actions.find((a) => a.startsWith('createChannel'))).toContain('"name":"用語集"');
+    expect((await post(g, '/glossary/sync', {})).headers.get('location')).toContain('/glossary?msg=synced');
+    expect((await listNotices(db)).some((n) => n.title === '用語集')).toBe(true);
+    await post(g, `/glossary/${t.id}/delete`, {});
+    expect((await listTerms(db)).some((x) => x.id === t.id)).toBe(false);
+  });
+
   it('経済のページ: 神職も見られる。期間を切り替えられる', async () => {
     await addCoins(db, USER, 3000, 'join_bonus');
     const s = await login(STAFF);

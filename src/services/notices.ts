@@ -232,7 +232,7 @@ export function renderNotice(body: string, cfg: GuildConfig, channels: GuildChan
   return { text, unknown: [...unknown] };
 }
 
-function findChannel(channels: GuildChannel[], name: string): GuildChannel | undefined {
+export function findChannel(channels: GuildChannel[], name: string): GuildChannel | undefined {
   const n = name.toLowerCase();
   const pick = (same: GuildChannel[]) => same.find((c) => POSTABLE.has(c.type)) ?? same[0];
   // 宵宮のように同じ名前のテキストと通話があるときは、テキストを選ぶ

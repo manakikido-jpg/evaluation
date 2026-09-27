@@ -56,6 +56,23 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('yougo')
+      .setNameLocalizations({ ja: '用語' })
+      .setDescription('Look up a word used in this server')
+      .setDescriptionLocalizations({ ja: '用語集で言葉の意味を調べる（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .addStringOption((o) =>
+        o
+          .setName('word')
+          .setNameLocalizations({ ja: '言葉' })
+          .setDescription('word')
+          .setDescriptionLocalizations({ ja: '調べたい言葉（なければ一覧）' })
+          .setMaxLength(40)
+          .setAutocomplete(true),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('menzaifu')
       .setNameLocalizations({ ja: '免罪符' })
       .setDescription('Buy a menzaifu to clear a yaku')
