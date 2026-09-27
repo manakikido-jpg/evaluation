@@ -221,6 +221,8 @@ export type GachaPull = {
   removeRoleIds?: string[];
   /** 運気アップの札が効いた回 */
   lucky?: boolean;
+  /** 金の10連券の「大吉以上確定」で出た */
+  guaranteed?: boolean;
   /** 運営が渡す特別な賞品（当たりの記録） */
   special?: { label: string; claimId: number };
   /** 自由な券 */
@@ -249,10 +251,11 @@ export async function drawGacha(
   heldRoleIds: readonly string[],
   rand: Rand = Math.random,
   now = new Date(),
-  /** free: 物御籤の無料券で 1 回（銭は払わない） */
-  opts: { free?: boolean } = {},
+  /** free: 物御籤の無料券で 1 回。gold: 金の10連券で 10 連（1 回は大吉以上が確定）。どちらも銭は払わない */
+  opts: { free?: boolean; gold?: boolean } = {},
 ): Promise<GachaResult> {
-  if (!g.enabled || !Number.isInteger(times) || times < 1 || times > 10 || (opts.free && times !== 1)) return { status: 'disabled' };
+  if (!g.enabled || !Number.isInteger(times) || times < 1 || times > 10 || (opts.free && times !== 1) || (opts.gold && (times !== 10 || opts.free)))
+    return { status: 'disabled' };
   await ensureGachaPrizes(db, g);
   const prizes = await listPrizes(db);
   const shop = new Map((await db.select().from(shopItems)).map((i) => [i.id, i]));
@@ -269,12 +272,12 @@ export async function drawGacha(
     return GACHA_TIERS.some((t) => rates[t] > 0) ? rates : undefined;
   };
   if (!available()) return { status: 'empty' };
-  const unit = opts.free ? 0 : g.price;
+  const unit = opts.free || opts.gold ? 0 : g.price;
   const price = unit * times;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'gacha:' + memberId}))`);
-    if (opts.free) {
-      if (!(await useTicket(tx, memberId, 'gacha_free'))) return { status: 'no_ticket' as const };
+    if (opts.free || opts.gold) {
+      if (!(await useTicket(tx, memberId, opts.gold ? 'gacha_gold10' : 'gacha_free'))) return { status: 'no_ticket' as const };
     } else if (!(await spendWithin(tx, memberId, price, 'gacha', { times }))) return { status: 'insufficient' as const, price, balance: (await walletOf(tx, memberId)).balance };
     const [state] = await tx.select().from(gachaState).where(eq(gachaState.memberId, memberId));
     let sinceTop = state?.sinceTop ?? 0;
@@ -283,12 +286,15 @@ export async function drawGacha(
       const rates = available();
       if (!rates) break;
       const pity = g.pity > 0 && sinceTop + 1 >= g.pity && rates.daikichi > 0;
+      // 🌟 金の10連券: 最後の 1 回まで大吉以上が出ていなければ、大吉か超大当たり（今の出やすさの比で）
+      const top = { ...Object.fromEntries(GACHA_TIERS.map((t) => [t, 0])), super: rates.super, daikichi: rates.daikichi } as Record<GachaTier, number>;
+      const guaranteed = !pity && opts.gold && n === times - 1 && !pulls.some((x) => x.tier === 'super' || x.tier === 'daikichi') && top.super + top.daikichi > 0;
       // 🍀 運気アップの札: 残っていれば、この 1 回は大吉が 2 倍出やすい
-      const lucky = !pity && rates.daikichi > 0 && (await takeLuck(tx, memberId));
-      const tier = pity ? 'daikichi' : pickTier({ rates: lucky ? { ...rates, daikichi: rates.daikichi * 2 } : rates }, rand);
+      const lucky = !pity && !guaranteed && rates.daikichi > 0 && (await takeLuck(tx, memberId));
+      const tier = pity ? 'daikichi' : guaranteed ? pickTier({ rates: top }, rand) : pickTier({ rates: lucky ? { ...rates, daikichi: rates.daikichi * 2 } : rates }, rand);
       sinceTop = tier === 'daikichi' ? 0 : sinceTop + 1;
       const p = pickWeighted(choicesOf(prizes, tier, ctx), rand);
-      const pull: GachaPull = { tier, pity, prizeId: p.id, kind: p.kind, count: 0, coins: 0, ...(lucky ? { lucky: true } : {}) };
+      const pull: GachaPull = { tier, pity, prizeId: p.id, kind: p.kind, count: 0, coins: 0, ...(lucky ? { lucky: true } : {}), ...(guaranteed ? { guaranteed: true } : {}) };
       if (p.kind === 'role') {
         pull.roleId = p.roleId!;
         owned.add(p.roleId!);
@@ -350,6 +356,8 @@ export async function drawGacha(
     const refunded = times - pulls.length;
     if (refunded > 0 && unit > 0) await addCoins(tx, memberId, refunded * unit, 'gacha_refund', { times: refunded });
     if (refunded > 0 && opts.free) await addTickets(tx, memberId, 'gacha_free', 1);
+    // 金の10連券: 1 回も引けなければ券を戻す。途中までなら、足りない回数分の無料券
+    if (refunded > 0 && opts.gold) await addTickets(tx, memberId, pulls.length === 0 ? 'gacha_gold10' : 'gacha_free', pulls.length === 0 ? 1 : refunded);
     const total = (state?.total ?? 0) + pulls.length;
     await tx
       .insert(gachaState)

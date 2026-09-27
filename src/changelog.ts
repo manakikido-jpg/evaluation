@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-gacha-gold10',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🌟 金の10連券',
+    items: [
+      '物御籤を 10 連タダで引ける券。10 回のうち 1 回は大吉以上が確定',
+      '運営がメンバーのページから渡すか、「🎁 全員にプレゼント」で配る',
+    ],
+  },
+  {
     id: '2026-09-27-gift-all',
     date: '2026-09-27',
     kind: 'new',

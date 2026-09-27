@@ -160,6 +160,7 @@ export const TICKET_KINDS = [
   'luck',
   'omikuji_extra',
   'gacha_free',
+  'gacha_gold10',
   'gacha_gift',
   'name_deco',
 ] as const;

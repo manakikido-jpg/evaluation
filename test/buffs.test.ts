@@ -176,3 +176,38 @@ describe('🎟 自由な券', () => {
     expect(menu).toContain('運営と通話券（1 枚）');
   });
 });
+
+describe('🌟 金の10連券', () => {
+  it('10 連をタダで。最後まで大吉以上が出なければ最後の 1 回は大吉以上。なければ引けない', async () => {
+    await ensureGachaPrizes(db, g);
+    expect(await drawGacha(db, g, U, 10, [], () => 0.99, T0, { gold: true })).toEqual({ status: 'no_ticket' });
+    expect(await drawGacha(db, g, U, 1, [], () => 0.99, T0, { gold: true })).toEqual({ status: 'disabled' });
+    await addTickets(db, U, 'gacha_gold10', 1);
+    // 0.99 はふつうなら吉ばかり
+    const r = await drawGacha(db, g, U, 10, [], () => 0.99, T0, { gold: true });
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.pulls).toHaveLength(10);
+    expect(r.pulls.slice(0, 9).every((p) => p.tier === 'kichi')).toBe(true);
+    expect(r.pulls[9]).toMatchObject({ guaranteed: true });
+    expect(['daikichi', 'super']).toContain(r.pulls[9]!.tier);
+    expect(r.balance).toBe(0);
+    expect(r.tickets.gacha_gold10).toBe(0);
+    // 途中で大吉が出ていれば、確定は使わない
+    await addTickets(db, U, 'gacha_gold10', 1);
+    let n = 0;
+    const r2 = await drawGacha(db, g, U, 10, [], () => (n++ === 0 ? 0 : 0.99), T0, { gold: true });
+    if (r2.status !== 'ok') throw new Error(r2.status);
+    expect(r2.pulls.some((p) => p.guaranteed)).toBe(false);
+  });
+
+  it('持っていれば /物御籤 に「金の10連券で引く」（2 行目）。券を使うメニューにも出る', async () => {
+    await ensureGachaPrizes(db, g);
+    const prizes = await listPrizes(db);
+    const names = { role: () => undefined, shop: () => undefined };
+    const m = gachaMenu(g, prizes, names, { balance: 0, sinceTop: 0, tickets: { ...emptyTickets(), gacha_gold10: 2 } }, '🪙銭');
+    expect(m.components).toHaveLength(2);
+    expect(JSON.stringify(m.components[1]!.toJSON())).toContain('"custom_id":"gacha:draw:gold"');
+    expect(JSON.stringify(m.components[1]!.toJSON())).toContain('金の10連券で引く（2 枚）');
+    expect(JSON.stringify(useTicketMenu({ ...emptyTickets(), gacha_gold10: 1 }).components)).toContain('"value":"gacha_gold10"');
+  });
+});
