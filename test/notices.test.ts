@@ -417,6 +417,22 @@ describe('いちばん下に表示し続ける', () => {
     expect(d.log).toEqual([`send ${CH.ema} m1`, `send ${CH.ema} m2`, 'delete m1']);
   });
 
+  it('書き込みがなくても、下にない掲示は見回りで下に出し直す（管理画面で書き換えたあとなど）', async () => {
+    const { StickyApp } = await import('../src/discord/sticky.js');
+    const d = fakeDiscord();
+    const ctx = { db, cfg, discord: d.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: 'テンプレート', body: 'ひな形', sticky: true, by: GUJI });
+    await publishNotice(ctx, n.id, GUJI);
+    const app = new StickyApp(db, () => cfg, d.discord);
+    let last = 'm1';
+    const guild = { id: cfg.guildId, channels: { cache: new Map([[CH.ema, { isTextBased: () => true, get lastMessageId() { return last; } }]]) } };
+    await app.checkAll(guild as never);
+    expect(d.log).toEqual([`send ${CH.ema} m1`]);
+    last = 'someone-else';
+    await app.checkAll(guild as never);
+    expect(d.log).toEqual([`send ${CH.ema} m1`, `send ${CH.ema} m2`, 'delete m1']);
+  });
+
   it('標準の #絵馬 の案内が前の形（ピン留め）なら、押し直すと「いちばん下に表示し続ける」になる', async () => {
     const { DEFAULT_GUIDES } = await import('../src/services/noticeDefaults.js');
     const NAMES = ['🪧｜絵馬-男性'];

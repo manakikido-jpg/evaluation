@@ -160,6 +160,8 @@ async function main(): Promise<void> {
       void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));
       // 呼び鈴のボタン（設定で足したチャンネルにも）
       bellSticky.checkAll();
+      // いちばん下に表示し続ける掲示（#絵馬 のひな形・朱印ボタン）が下にないときは出し直す
+      void sticky.checkAll(guild).catch((err) => logger.warn({ err }, 'sticky check failed'));
       // 経済の見守り: 動きが多い人の警告、週ごとのお知らせとお賽銭
       void (async () => {
         const ctx = { db, cfg: cfg(), discord: actions };

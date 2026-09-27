@@ -1,4 +1,4 @@
-import type { Message } from 'discord.js';
+import type { Guild, Message } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -49,6 +49,20 @@ export class StickyApp {
       msg.channelId,
       setTimeout(() => void this.restick(msg.channelId, () => channel.lastMessageId), RESTICK_AFTER_MS),
     );
+  }
+
+  /**
+   * 全部の「いちばん下に表示し続ける」掲示が、いちばん下にあるか確かめて、なければ出し直す。
+   * 書き込みがなくても下にない（管理画面で書き換えた・BOT が止まっていた間に書き込まれた）ときのため、起動したときと 10 分ごとに呼ぶ
+   */
+  async checkAll(guild: Guild): Promise<void> {
+    if (guild.id !== this.cfg().guildId) return;
+    const list = await stickyNotices(this.db).catch((err: unknown) => (logger.warn({ err }, 'sticky list failed'), []));
+    for (const channelId of new Set(list.map((n) => n.channelId))) {
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel?.isTextBased()) continue;
+      await this.restick(channelId, () => channel.lastMessageId);
+    }
   }
 
   /** 掲示がすでにいちばん下なら何もしない */
