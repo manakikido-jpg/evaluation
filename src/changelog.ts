@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-economy-page',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '📊 経済のページ',
+    items: [
+      '出回っている銭・配った量・鯖の収入（授与品・物御籤・通話部屋・免罪符・市場の手数料）と、その推移のグラフ',
+      '持っている量のかたより（平均・中央値・上位 10%・ジニ係数）・多く持っている人',
+      'よく受けられた授与品・大きな出入り・いまの値段と配る量',
+    ],
+  },
+  {
     id: '2026-09-27-gacha-gold10',
     date: '2026-09-27',
     kind: 'new',

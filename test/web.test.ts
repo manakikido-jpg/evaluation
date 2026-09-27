@@ -1196,6 +1196,17 @@ describe('物御籤（管理画面）', () => {
     expect((await listAudit(db, { action: 'gacha.claim_done' })).length).toBe(1);
   });
 
+  it('経済のページ: 神職も見られる。期間を切り替えられる', async () => {
+    await addCoins(db, USER, 3000, 'join_bonus');
+    const s = await login(STAFF);
+    const html = await (await get('/economy', s)).text();
+    for (const t of ['経済（🪙銭の流れ）', 'いま出回っている銭', '鯖の収入の内訳', '配った内訳', '持っている量のかたより', 'ジニ係数', '初期配布', 'href="/economy"'])
+      expect(html).toContain(t);
+    expect(html).toContain('3,000');
+    expect((await get('/economy?range=1y', s)).status).toBe(200);
+    expect((await app.request('/economy')).status).toBe(302);
+  });
+
   it('🎁 全員にプレゼント（宮司だけ・二度押しでも 1 回・お知らせ）', async () => {
     const { ticketsOf } = await import('../src/services/tickets.js');
     const { recentGifts } = await import('../src/services/gifts.js');

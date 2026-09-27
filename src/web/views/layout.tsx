@@ -3,7 +3,7 @@ import type { AdminSession } from '../../db/schema.js';
 import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
 
-type Nav = 'home' | 'stats' | 'voice' | 'updates' | 'roles' | 'market' | 'gacha' | 'interview' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
+type Nav = 'home' | 'stats' | 'economy' | 'voice' | 'updates' | 'roles' | 'market' | 'gacha' | 'interview' | 'members' | 'applications' | 'yaku' | 'soudan' | 'audit' | 'notices' | 'channels' | 'shop' | 'settings';
 
 /** 画面に出すログイン中の人（updatesUnseen: まだ読んでいない更新の数） */
 export type SessionView = AdminSession & { updatesUnseen?: number };
@@ -37,6 +37,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
               </a>
               <a href="/stats" class={nav === 'stats' ? 'on' : ''}>
                 推移
+              </a>
+              <a href="/economy" class={nav === 'economy' ? 'on' : ''}>
+                経済
               </a>
               <a href="/voice" class={nav === 'voice' ? 'on' : ''}>
                 通話の記録

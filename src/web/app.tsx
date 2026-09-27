@@ -105,6 +105,8 @@ import {
   type NoticeCtx,
 } from '../services/notices.js';
 import { giftAnnouncement, giftItemLabel, giftTargets, giftToAll, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
+import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
+import { EconomyPage } from './views/economy.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
@@ -329,6 +331,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
   app.use('/stats', requireAdmin);
+  app.use('/economy', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -556,6 +559,17 @@ export function createWebApp(deps: WebDeps) {
     const range = isTrendRange(q) ? q : '30d';
     const buckets = await memberTrend(db, range, now());
     return c.html(<StatsPage session={c.get('session')} range={range} buckets={buckets} />);
+  });
+
+  /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */
+  app.get('/economy', async (c) => {
+    const q = c.req.query('range');
+    const range = isTrendRange(q) ? q : '30d';
+    const t = now();
+    const since = rangeStart(range, t);
+    const [overview, dist, big, sales] = await Promise.all([economyOverview(db, range, t), balanceDistribution(db), bigTransactions(db, since), shopSales(db, since)]);
+    const names = await namesOf(db, [...dist.top.map((x) => x.memberId), ...big.map((x) => x.memberId)]);
+    return c.html(<EconomyPage session={c.get('session')} cfg={cfg} range={range} overview={overview} dist={dist} big={big} sales={sales} names={names} />);
   });
 
   // ───────── 厄・BAN・キック・メモ ─────────
