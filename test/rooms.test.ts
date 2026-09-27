@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
-import { roomPanel } from '../src/discord/rooms.js';
+import { roomNotice, roomPanel } from '../src/discord/rooms.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { addInvites, changeRoomKind, hourlyPerPerson, payEntry, planOf, roomOf, roomOverwrites, startRoom, type Overwrite } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
@@ -89,24 +89,48 @@ describe('部屋の種類と見える範囲', () => {
     expect(find(o, FRIEND).allow & VIEW).toBe(VIEW);
   });
 
-  it('部屋の設定のカード: 値段が並ぶ', () => {
-    const json = JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public' }, 0));
+  it('部屋の案内: 値段が並び、「⚙ 部屋の設定」ボタンだけ（だれでも見える）', () => {
+    const json = JSON.stringify(roomNotice(cfg, { ownerId: OWNER, hubId: YOIMIYA }));
     expect(json).toContain('1 時間 200 枚');
-    expect(json).toContain('room:kind');
-    expect(json).toContain('room:invite');
+    expect(json).toContain('room:open');
+    expect(json).not.toContain('room:kind');
+    // 値段のない部屋（縁側など）は値段を出さない
+    expect(JSON.stringify(roomNotice(cfg, { ownerId: OWNER, hubId: ENGAWA }))).not.toContain('枚');
+  });
+
+  it('部屋の設定（本人だけに見える）: チャンネル名・ステータス・人数制限・入室許可者・閉じる。種類は 1 回だけ', () => {
+    const open = JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public', kindLocked: false, invited: [] }, { name: '🍶 りくの部屋', userLimit: 0 }));
+    for (const id of ['room:name', 'room:status', 'room:limit', 'room:invite', 'room:kind', 'room:close']) expect(open).toContain(id);
+    expect(open).toContain('まだ 1 回選べます');
+    const locked = JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'invite', kindLocked: true, invited: [FRIEND] }, { name: 'x', userLimit: 4 }, '人数制限を 4 人にしました'));
+    expect(locked).not.toContain('room:kind');
+    expect(locked).toContain('決定済み');
+    expect(locked).toContain(`<@${FRIEND}>`);
+    expect(locked).toContain('✅ 人数制限を 4 人にしました');
+    // 縁側などは種類を出さない
+    expect(JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: ENGAWA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }))).not.toContain('room:kind');
   });
 });
 
 describe('支払い', () => {
-  it('宿坊: ひらくときに公開の分、種類を変えたら差額だけ', async () => {
+  it('宿坊: ひらくときに公開の分、種類を選んだら差額だけ。種類は 1 回だけ（あとから切り替えられない）', async () => {
     await addCoins(db, OWNER, 1000, 'adjust');
     await open(NEOCHI);
     expect(await startRoom(db, cfg, ROOM, T0)).toEqual({ status: 'ok', charged: 50 });
+    expect((await roomOf(db, ROOM))?.kindLocked).toBe(false);
     expect(await changeRoomKind(db, cfg, ROOM, 'secret')).toEqual({ status: 'ok', charged: 250 });
-    expect(await changeRoomKind(db, cfg, ROOM, 'invite')).toEqual({ status: 'ok', charged: 0 });
-    expect(await changeRoomKind(db, cfg, ROOM, 'twoshot')).toEqual({ status: 'ok', charged: 100 });
-    expect((await walletOf(db, OWNER)).balance).toBe(600);
-    expect((await roomOf(db, ROOM))?.kind).toBe('twoshot');
+    expect(await changeRoomKind(db, cfg, ROOM, 'public')).toEqual({ status: 'locked' });
+    expect(await changeRoomKind(db, cfg, ROOM, 'twoshot')).toEqual({ status: 'locked' });
+    expect((await walletOf(db, OWNER)).balance).toBe(700);
+    expect(await roomOf(db, ROOM)).toMatchObject({ kind: 'secret', kindLocked: true });
+  });
+
+  it('公開のまま「公開」を選んでも決定になる（あとから非公開にできない）', async () => {
+    await addCoins(db, OWNER, 100, 'adjust');
+    await open(NEOCHI);
+    await startRoom(db, cfg, ROOM, T0);
+    expect(await changeRoomKind(db, cfg, ROOM, 'public')).toEqual({ status: 'ok', charged: 0 });
+    expect(await changeRoomKind(db, cfg, ROOM, 'invite')).toEqual({ status: 'locked' });
   });
 
   it('足りなければひらけない・変えられない', async () => {

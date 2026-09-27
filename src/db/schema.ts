@@ -335,6 +335,8 @@ export const tempVoice = pgTable('temp_voice', {
   unpaidSince: timestamp('unpaid_since', { withTimezone: true }),
   /** 招待した人 */
   invited: text('invited').array().notNull().default(sql`'{}'::text[]`),
+  /** 種類を選んだ（1 回だけ選べる。選んだあとは変えられない） */
+  kindLocked: boolean('kind_locked').notNull().default(false),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */

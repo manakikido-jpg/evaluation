@@ -124,11 +124,13 @@ export async function startRoom(db: Db, cfg: GuildConfig, channelId: string, now
  * 種類を変える。1 回払い: 作った人が、これまでに払った分との差額。
  * 1 時間ごと: 作った人が今の 1 時間の差額（ほかの人は次の 1 時間から新しい値段。安くしても戻さない）。
  */
-export async function changeRoomKind(db: Db, cfg: GuildConfig, channelId: string, kind: RoomKind): Promise<PayResult | { status: 'not_found' }> {
+/** 部屋の種類を選ぶ（1 回だけ。選んだあとは公開・非公開を切り替えられない） */
+export async function changeRoomKind(db: Db, cfg: GuildConfig, channelId: string, kind: RoomKind): Promise<PayResult | { status: 'not_found' } | { status: 'locked' }> {
   return db.transaction(async (tx) => {
     await lockRoom(tx, channelId);
     const [row] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
     if (!row) return { status: 'not_found' as const };
+    if (row.kindLocked) return { status: 'locked' as const };
     const plan = planOf(cfg, row.hubId);
     const price = await priceFor(tx, cfg, plan, kind, row.ownerId);
     const charge = plan === 'once' ? Math.max(0, price - row.paid) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, row.ownerId)));
@@ -137,7 +139,7 @@ export async function changeRoomKind(db: Db, cfg: GuildConfig, channelId: string
     }
     await tx
       .update(tempVoice)
-      .set({ kind, paid: plan === 'once' ? row.paid + charge : row.paid })
+      .set({ kind, kindLocked: true, paid: plan === 'once' ? row.paid + charge : row.paid })
       .where(eq(tempVoice.channelId, channelId));
     return { status: 'ok' as const, charged: charge };
   });

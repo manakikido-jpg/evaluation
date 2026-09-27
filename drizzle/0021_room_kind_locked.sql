@@ -1,0 +1,1 @@
+ALTER TABLE "temp_voice" ADD COLUMN "kind_locked" boolean DEFAULT false NOT NULL;
