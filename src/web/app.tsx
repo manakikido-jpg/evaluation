@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { channelsOf, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
+import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { inviteCountOf, inviterOf } from '../services/invites.js';
 import { STATIC } from './assets.js';
@@ -14,7 +14,7 @@ import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
 import { eventsOf, getMember, homeStats, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
-import { recentActivity } from '../services/activity.js';
+import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
@@ -348,6 +348,7 @@ export function createWebApp(deps: WebDeps) {
       channelsOf(db, id, since30),
       partnersOf(db, id, since30),
     ]);
+    const vcDaily = await dailyUsage(db, since30, jstDate(now()), { memberId: id });
     const vcByCategory = (await usageByMember(db, since30)).find((m) => m.memberId === id);
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
@@ -390,6 +391,7 @@ export function createWebApp(deps: WebDeps) {
           <>
           {flash && Object.hasOwn(ADMISSION_FLASH, flash) && !Object.hasOwn(FLASH, flash) && <p class={`flash ${ADMISSION_FLASH[flash]!.kind}`}>{ADMISSION_FLASH[flash]!.text}</p>}
           <MemberVoiceSection
+            daily={vcDaily}
             total={vcByCategory?.total ?? 0}
             byCategory={vcByCategory?.byCategory ?? []}
             channels={vcChannels}
@@ -450,12 +452,14 @@ export function createWebApp(deps: WebDeps) {
     const cat = c.req.query('cat');
     const t = now();
     const since = sinceDate(t, days);
-    const [categories, members, pairs, rooms, channels] = await Promise.all([
+    const catId = cat && /^(\d{17,20}|none)$/.test(cat) ? cat : undefined;
+    const [categories, members, pairs, rooms, channels, daily] = await Promise.all([
       usageByCategory(db, since),
       usageByMember(db, since),
       topPairs(db, since),
       roomHistory(db, new Date(t.getTime() - days * 86_400_000)),
       loadChannels(),
+      dailyUsage(db, since, jstDate(t), catId ? { categoryId: catId } : {}),
     ]);
     const names = await namesOf(db, [...members.map((m) => m.memberId), ...pairs.flatMap((p) => [p.memberA, p.memberB]), ...rooms.map((r) => r.ownerId ?? '')]);
     const hubNames = new Map(cfg.tempVoice.hubs.map((h) => [h.channelId, channels.find((ch) => ch.id === h.channelId)?.name ?? h.name]));
@@ -463,7 +467,8 @@ export function createWebApp(deps: WebDeps) {
       <VoicePage
         session={c.get('session')}
         days={days}
-        category={cat && /^(\d{17,20}|none)$/.test(cat) ? cat : undefined}
+        category={catId}
+        daily={daily}
         categories={categories}
         members={members}
         pairs={pairs}

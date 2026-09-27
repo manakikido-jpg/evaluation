@@ -1,10 +1,16 @@
 import type { AdminSession, VoiceChannelRow } from '../../db/schema.js';
 import { fmtMinutes, type CategoryMinutes, type MemberUsage } from '../../services/voiceUsage.js';
+import { BarList, ColumnChart } from './charts.js';
 import { Layout } from './layout.js';
 
 type Names = Map<string, string>;
 export const VOICE_RANGES = { 7: '7 日', 30: '30 日', 90: '90 日' } as const;
 export type VoiceRange = keyof typeof VOICE_RANGES;
+
+const hoursText = (v: number) => v.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+/** 「9/27」 */
+const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+const points = (daily: { date: string }[]) => daily.map((d) => ({ label: md(d.date), title: `${Number(d.date.slice(5, 7))}月${Number(d.date.slice(8, 10))}日` }));
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '—');
 const who = (names: Names, id: string) => <a href={`/members/${id}`}>{names.get(id) ?? id}</a>;
@@ -22,6 +28,8 @@ export function VoicePage(props: {
   rooms: (VoiceChannelRow & { personMinutes: number; people: number; paid: number })[];
   hubNames: Map<string, string>;
   names: Names;
+  /** 日ごとの分（カテゴリを選んでいればそのカテゴリだけ） */
+  daily: { date: string; minutes: number }[];
 }) {
   const { names } = props;
   const all = props.categories.reduce((n, c) => n + c.minutes, 0);
@@ -44,7 +52,22 @@ export function VoicePage(props: {
       </nav>
 
       <section class="card">
+        <h2>{cat ? `${cat.categoryName} の通話時間（日ごと）` : 'みんなの通話時間（日ごと）'}</h2>
+        <ColumnChart
+          points={points(props.daily)}
+          up={{ name: '通話', values: props.daily.map((d) => d.minutes / 60) }}
+          unit="時間"
+          label={cat ? `${cat.categoryName} の日ごとの通話時間` : '日ごとの通話時間の合計'}
+          format={hoursText}
+        />
+        <p class="note">のべ時間です（2 人が 1 時間いたら 2 時間）。棒にマウスを乗せると、その日の時間が出ます。</p>
+      </section>
+
+      <section class="card">
         <h2>カテゴリ（エリア）ごと</h2>
+        {props.categories.length > 0 && (
+          <BarList rows={props.categories.map((c) => ({ name: c.categoryName, value: c.minutes / 60 }))} unit="時間" label="カテゴリごとの通話時間" format={hoursText} />
+        )}
         {props.categories.length === 0 ? (
           <p class="empty">まだ記録がありません。</p>
         ) : (
@@ -182,6 +205,7 @@ export function VoicePage(props: {
 
 /** メンバーのページ: 通話の記録（30 日） */
 export function MemberVoiceSection(props: {
+  daily?: { date: string; minutes: number }[];
   total: number;
   byCategory: CategoryMinutes[];
   channels: { channelId: string; name: string; hubId: string | null; kind: string | null; minutes: number }[];
@@ -199,6 +223,15 @@ export function MemberVoiceSection(props: {
             <p>
               合計 <strong>{fmtMinutes(props.total)}</strong>
             </p>
+            {props.daily && (
+              <ColumnChart
+                points={points(props.daily)}
+                up={{ name: '通話', values: props.daily.map((d) => d.minutes / 60) }}
+                unit="時間"
+                label="この人の日ごとの通話時間"
+                format={hoursText}
+              />
+            )}
             <h3>場所ごと</h3>
             <ul>
               {props.byCategory.map((c) => (

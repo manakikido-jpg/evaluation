@@ -302,3 +302,4 @@ details.delete-channel summary { cursor: pointer; color: var(--shu); font-size: 
 details.delete-channel form { margin-top: 6px; }
 .move-channel { gap: 6px; }
 .move-channel form { gap: 6px; }
+.chart .barvalue { fill: var(--ink); }

@@ -163,3 +163,48 @@ export function ColumnChart(props: {
     </div>
   );
 }
+
+/**
+ * 横棒（1 系列）。カテゴリごとの時間など、名前が長いものの比べっこに。
+ * 名前は左、値は棒の先に（文字の色で）。
+ */
+export function BarList(props: { rows: { name: string; value: number }[]; unit: string; label: string; format?: (v: number) => string }) {
+  const f = props.format ?? fmt;
+  const rows = props.rows;
+  const ROW = 28;
+  const L = 170;
+  const R = 110;
+  const top = Math.max(...rows.map((r) => r.value), 0) || 1;
+  const h = ROW * rows.length + 8;
+  const bw = W - L - R;
+  const bar = 14;
+  return (
+    <div class="chart-wrap">
+      <svg class="chart" viewBox={`0 0 ${W} ${h}`} role="img" aria-label={props.label}>
+        {rows.map((r, i) => {
+          const y = 4 + i * ROW + (ROW - bar) / 2;
+          const len = Math.max(r.value > 0 ? 2 : 0, (r.value / top) * bw);
+          const rr = Math.min(4, bar / 2, len);
+          const d = len
+            ? `M${L},${y}H${L + len - rr}Q${L + len},${y} ${L + len},${y + rr}V${y + bar - rr}Q${L + len},${y + bar} ${L + len - rr},${y + bar}H${L}Z`
+            : '';
+          return (
+            <g>
+              <text x={L - 8} y={y + bar - 3} text-anchor="end" fill={C.muted} font-size="12">
+                {r.name.length > 14 ? `${r.name.slice(0, 13)}…` : r.name}
+              </text>
+              {d && <path class="bar s1" d={d} fill={C.s1} />}
+              <text class="barvalue" x={L + len + 6} y={y + bar - 3} fill={C.muted} font-size="12">
+                {f(r.value)}
+                {props.unit}
+              </text>
+              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent">
+                <title>{`${r.name}: ${f(r.value)}${props.unit}`}</title>
+              </rect>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}

@@ -833,10 +833,14 @@ describe('通話の記録（管理画面）', () => {
     const page = await (await get('/voice', s)).text();
     expect(page).toContain('🔞 宵宮');
     expect(page).toContain('よくいっしょにいる 2 人');
+    // グラフ（日ごと・カテゴリごと）
+    expect(page).toContain('日ごとの通話時間の合計');
+    expect(page).toContain('カテゴリごとの通話時間');
     const filtered = await (await get('/voice?days=7&cat=990000000000000010', s)).text();
     expect(filtered).toContain('🔞 宵宮 が多い順');
     const member = await (await get(`/members/${USER}`, s)).text();
     expect(member).toContain('通話の記録（30 日）');
+    expect(member).toContain('この人の日ごとの通話時間');
     expect(member).toContain('1分');
   });
 });

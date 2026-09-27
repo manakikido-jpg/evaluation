@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { coinTx, tempVoice } from '../src/db/schema.js';
-import { channelsOf, fmtMinutes, partnersOf, recordPresence, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../src/services/voiceUsage.js';
+import { channelsOf, dailyUsage, fmtMinutes, partnersOf, recordPresence, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../src/services/voiceUsage.js';
 import { makeDb } from './helpers.js';
 
 const A = '890000000000000001';
@@ -76,6 +76,20 @@ describe('通話の記録', () => {
     const [r] = await roomHistory(db, T0);
     expect(r).toMatchObject({ name: '🌙 Aの宿坊', ownerId: A, hubId: 'hub-neo', kind: 'invite', people: 2, personMinutes: 3, paid: 200 });
     expect(r!.lastSeen.getTime() - r!.firstSeen.getTime()).toBe(30 * 60_000);
+  });
+
+  it('日ごとの分（なかった日は 0）。カテゴリ・人で絞れる', async () => {
+    await tick(min(0), { yoi: [A, B], haiden: [C] });
+    await tick(new Date(T0.getTime() + 86_400_000), { haiden: [A] });
+    const since = '2026-09-26';
+    const until = '2026-09-28';
+    expect(await dailyUsage(db, since, until)).toEqual([
+      { date: '2026-09-26', minutes: 0 },
+      { date: '2026-09-27', minutes: 3 },
+      { date: '2026-09-28', minutes: 1 },
+    ]);
+    expect((await dailyUsage(db, since, until, { categoryId: 'c-yoi' })).map((d) => d.minutes)).toEqual([0, 2, 0]);
+    expect((await dailyUsage(db, since, until, { memberId: A })).map((d) => d.minutes)).toEqual([0, 1, 1]);
   });
 
   it('時間の書き方', () => {

@@ -182,3 +182,23 @@ export function fmtMinutes(m: number): string {
   const min = m % 60;
   return h ? `${h}時間${min ? `${min}分` : ''}` : `${min}分`;
 }
+
+/** 日ごとの分（期間のすべての日。なかった日は 0）。カテゴリ・人で絞れる（カテゴリなしは 'none'） */
+export async function dailyUsage(db: Db, since: string, until: string, opts: { categoryId?: string; memberId?: string } = {}): Promise<{ date: string; minutes: number }[]> {
+  const conds = [gte(voiceUsage.date, since), sql`${voiceUsage.date} <= ${until}`];
+  if (opts.memberId) conds.push(eq(voiceUsage.memberId, opts.memberId));
+  if (opts.categoryId) conds.push(opts.categoryId === 'none' ? sql`${voiceChannels.categoryId} is null` : eq(voiceChannels.categoryId, opts.categoryId));
+  const rows = await db
+    .select({ date: voiceUsage.date, minutes: sql<number>`sum(${voiceUsage.minutes})::int` })
+    .from(voiceUsage)
+    .leftJoin(voiceChannels, eq(voiceChannels.channelId, voiceUsage.channelId))
+    .where(and(...conds))
+    .groupBy(voiceUsage.date);
+  const by = new Map(rows.map((r) => [r.date, r.minutes]));
+  const out: { date: string; minutes: number }[] = [];
+  for (let t = Date.parse(`${since}T00:00:00Z`); t <= Date.parse(`${until}T00:00:00Z`); t += DAY) {
+    const date = new Date(t).toISOString().slice(0, 10);
+    out.push({ date, minutes: by.get(date) ?? 0 });
+  }
+  return out;
+}

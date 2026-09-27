@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-voice-charts',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '通話の記録をグラフで',
+    items: [
+      '「通話の記録」に日ごとの通話時間（カテゴリを選ぶとその場所だけ）と、カテゴリごとの横棒グラフ',
+      'メンバーのページに、その人の日ごとの通話時間（30 日）',
+    ],
+  },
+  {
     id: '2026-09-27-voice-usage',
     date: '2026-09-27',
     kind: 'new',
