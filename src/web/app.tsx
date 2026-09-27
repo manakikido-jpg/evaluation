@@ -12,12 +12,14 @@ import {
   createPrize,
   deletePrize,
   ensureGachaPrizes,
+  gachaResetPreview,
   gachaStateOf,
   gachaStats,
   giftableShopItem,
   listPrizes,
   PRIZE_KINDS,
   recentDraws,
+  resetGacha,
   topPlayers,
   updatePrize,
   type PrizeInput,
@@ -1648,6 +1650,7 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const names = await namesOf(db, [...draws.map((d) => d.memberId), ...tops.map((d) => d.memberId), ...players.map((p) => p.memberId), ...holders.map((h) => h.memberId)]);
     const roles = (guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
+    const reset = gujiOnly(c) ? await gachaResetPreview(db) : undefined;
     return c.html(
       <GachaPage
         session={c.get('session')}
@@ -1664,6 +1667,18 @@ export function createWebApp(deps: WebDeps) {
         names={names}
         roleNames={new Map((guildRoles ?? []).map((r) => [r.id, r.name]))}
         flash={c.req.query('msg')}
+        {...(reset
+          ? {
+              reset: {
+                members: reset.length,
+                draws: reset.reduce((n, m) => n + m.draws, 0),
+                refund: reset.reduce((n, m) => n + m.refund, 0),
+                coins: reset.reduce((n, m) => n + m.coins, 0),
+                tickets: reset.reduce((n, m) => n + Object.values(m.tickets).reduce((a, b) => a + (b ?? 0), 0), 0),
+                roles: reset.reduce((n, m) => n + m.roleIds.length, 0),
+              },
+            }
+          : {})}
       />,
     );
   });
@@ -1684,6 +1699,40 @@ export function createWebApp(deps: WebDeps) {
     return true;
   };
   const gachaBack = (c: Context<Env>, msg: string, at = 'gacha-basic') => c.redirect(`/gacha?msg=${msg}#${at}`);
+
+  // 物御籤をリセット: 引いた分の銭を返し、出たものを取り上げる（宮司のみ・「リセット」と入れる）
+  app.post('/gacha/reset', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    if (typeof body.confirm !== 'string' || body.confirm.trim() !== 'リセット') return gachaBack(c, 'gacha_reset_confirm', 'gacha-reset');
+    const r = await resetGacha(db, now());
+    let rolesRemoved = 0;
+    for (const x of r.removeRoles) {
+      const ok = await deps.discord
+        .removeRole(cfg.guildId, x.memberId, x.roleId, '物御籤のリセット')
+        .then(() => true)
+        .catch((err: unknown) => (logger.warn({ err, ...x }, 'gacha reset role remove failed'), false));
+      if (ok) rolesRemoved++;
+    }
+    if (body.dm === 'yes') {
+      const e = cfg.economy;
+      for (const m of r.perMember) {
+        const parts = [
+          `🎁 咲楽ノ宮の物御籤をリセットしました。`,
+          `引いた分の ${e.currencyEmoji}${e.currencyName} ${m.refund.toLocaleString('ja-JP')} 枚をお返ししました。`,
+          m.coinsTaken || m.ticketsTaken || m.roles ? `物御籤で出たもの（${[m.coinsTaken ? `${e.currencyName} ${m.coinsTaken} 枚` : '', m.ticketsTaken ? `券 ${m.ticketsTaken} 枚` : '', m.roles ? `ロール ${m.roles} 個` : ''].filter(Boolean).join('・')}）は、返していただきました。` : '',
+        ];
+        await deps.discord.sendDm(m.memberId, parts.filter(Boolean).join('\n')).catch(() => false);
+      }
+    }
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'gacha.reset',
+      detail: { members: r.members, draws: r.draws, refunded: r.refunded, coinsTaken: r.coinsTaken, ticketsTaken: r.ticketsTaken, roles: r.removeRoles.length, rolesRemoved },
+      via: 'web',
+    });
+    return gachaBack(c, 'gacha_reset', 'gacha-basic');
+  });
 
   app.post('/gacha/toggle', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);

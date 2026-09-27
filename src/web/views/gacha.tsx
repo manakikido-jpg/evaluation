@@ -27,6 +27,8 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   prize_deleted: { text: '中身を削除しました。', kind: 'ok' },
   prize_invalid: { text: '中身の入力を確かめてください（限定ロール・ショップの品は選んでください。枚数・重みは 1 以上）。', kind: 'warn' },
   prize_not_found: { text: 'その中身はもうありません。', kind: 'warn' },
+  gacha_reset: { text: '物御籤をリセットしました（銭を返し、出たものを取り上げました）。くわしくは「記録」に残っています。', kind: 'ok' },
+  gacha_reset_confirm: { text: 'リセットするときは「リセット」と入れてください。', kind: 'warn' },
 };
 
 export function GachaFlash(props: { code?: string }) {
@@ -96,6 +98,8 @@ export function GachaPage(props: {
   names: Names;
   roleNames: Map<string, string>;
   flash?: string;
+  /** リセットしたら返す・取り上げる量（宮司だけ） */
+  reset?: { members: number; draws: number; refund: number; coins: number; tickets: number; roles: number };
 }) {
   const { session, gacha: g, stats } = props;
   const guji = session.level === 'guji';
@@ -366,6 +370,46 @@ export function GachaPage(props: {
               足す
             </button>
           </form>
+        </section>
+      )}
+
+      {guji && props.reset && (
+        <section class="card anchor danger-zone" id="gacha-reset">
+          <h2>🗑 物御籤をリセット</h2>
+          {props.reset.draws === 0 ? (
+            <p class="empty">引かれた記録がないので、リセットするものはありません。</p>
+          ) : (
+            <>
+              <p>
+                これまでに引かれた <strong>{fmt(props.reset.draws)} 回</strong>（{props.reset.members} 人）を取り消します。
+              </p>
+              <ul>
+                <li>
+                  払った{props.coinName} <strong>{fmt(props.reset.refund)} 枚</strong> を、それぞれに返します
+                </li>
+                <li>
+                  出たものを取り上げます: {props.coinName} {fmt(props.reset.coins)} 枚・券 {fmt(props.reset.tickets)} 枚・ロール {fmt(props.reset.roles)} 個（{props.coinName}と券は、残っている分まで）
+                </li>
+                <li>引いた記録と、天井までの回数も消します（中身と設定はそのまま）</li>
+              </ul>
+              <form method="post" action="/gacha/reset">
+                {csrf}
+                <label class="field">
+                  <span>
+                    元に戻せません。よければ <strong>リセット</strong> と入れてください
+                  </span>
+                  <input type="text" name="confirm" required autocomplete="off" />
+                </label>
+                <label class="field check">
+                  <input type="checkbox" name="dm" value="yes" checked />
+                  <span>引いた人に DM で知らせる</span>
+                </label>
+                <button type="submit" class="danger">
+                  リセットする
+                </button>
+              </form>
+            </>
+          )}
         </section>
       )}
 

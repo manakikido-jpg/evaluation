@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-gacha-reset',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '物御籤をリセット（返金・取り上げ）',
+    items: [
+      '「🎁 物御籤」ページのいちばん下から、これまでに引かれた分を取り消せる（宮司のみ・「リセット」と入れる）',
+      '払った銭を返し、出た銭・券（残っている分まで）・ロールを取り上げる。引いた記録と天井の回数も消す。中身と設定はそのまま',
+    ],
+  },
+  {
     id: '2026-09-27-room-shop-tickets',
     date: '2026-09-27',
     kind: 'new',

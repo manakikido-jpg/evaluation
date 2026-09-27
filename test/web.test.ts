@@ -1063,6 +1063,32 @@ describe('物御籤（管理画面）', () => {
     expect((await listAudit(db, { action: 'gacha.prize_add' })).length).toBe(4);
   });
 
+  it('リセット（宮司のみ・「リセット」と入れる）: 返金・取り上げ・ロールを外す・DM・記録', async () => {
+    const { drawGacha, createPrize, ensureGachaPrizes, listPrizes, deletePrize } = await import('../src/services/gacha.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    await ensureGachaPrizes(db, cfg.gacha);
+    for (const p of await listPrizes(db)) await deletePrize(db, p.id);
+    await createPrize(db, { tier: 'kichi', kind: 'role', roleId: '100000000000000091', amount: 1, weight: 1, fallback: false });
+    await addCoins(db, USER, 500, 'adjust');
+    await drawGacha(db, cfg.gacha, USER, 1, [], () => 0.5);
+    expect((await walletOf(db, USER)).balance).toBe(0);
+    const s = await login(STAFF);
+    expect(await (await get('/gacha', s)).text()).not.toContain('action="/gacha/reset"');
+    expect((await post(s, '/gacha/reset', { confirm: 'リセット' })).status).toBe(403);
+    const g = await login(GUJI);
+    const page = await (await get('/gacha', g)).text();
+    expect(page).toContain('action="/gacha/reset"');
+    expect(page).toContain('1 回</strong>（1 人）');
+    expect((await post(g, '/gacha/reset', { confirm: 'りせっと' })).headers.get('location')).toContain('gacha_reset_confirm');
+    expect((await walletOf(db, USER)).balance).toBe(0);
+    actions.length = 0;
+    expect((await post(g, '/gacha/reset', { confirm: 'リセット', dm: 'yes' })).headers.get('location')).toBe('/gacha?msg=gacha_reset#gacha-basic');
+    expect((await walletOf(db, USER)).balance).toBe(500);
+    expect(actions).toContain(`removeRole ${USER} 100000000000000091`);
+    expect(actions).toContain(`dm ${USER}`);
+    expect((await listAudit(db, { action: 'gacha.reset' }))[0]?.detail).toMatchObject({ draws: 1, refunded: 500, roles: 1 });
+  });
+
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {
     const { ticketsOf } = await import('../src/services/tickets.js');
     const s = await login(STAFF);

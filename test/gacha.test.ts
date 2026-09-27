@@ -269,6 +269,35 @@ describe('中身（社務所Web で変える）', () => {
   });
 });
 
+describe('リセット', () => {
+  it('引いた分の銭を返し、出た券・銭・ロールを取り上げる（残っている分まで）。記録と天井は消える', async () => {
+    const { gachaResetPreview, resetGacha } = await import('../src/services/gacha.js');
+    const { useTicket } = await import('../src/services/tickets.js');
+    await ensureGachaPrizes(db, g);
+    await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 100, weight: 1, fallback: false });
+    await addCoins(db, U, 2000, 'adjust');
+    // 大吉（ロール R1）・吉（絵馬券 か 100 銭）を 3 回
+    await drawGacha(db, g, U, 1, [], () => 0);
+    await drawGacha(db, g, U, 1, [R1], () => 0.99);
+    await drawGacha(db, g, U, 1, [R1], seq(0.99, 0));
+    const before = await gachaResetPreview(db);
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({ memberId: U, draws: 3, refund: 1500, roleIds: [R1] });
+    const t = await ticketsOf(db, U);
+    // 券を 1 枚使ってしまっていたら、残っている分だけ取り上げる
+    if (t.ema_pin > 0) await useTicket(db, U, 'ema_pin');
+    const balanceBefore = (await walletOf(db, U)).balance;
+    const r = await resetGacha(db, T0);
+    expect(r).toMatchObject({ members: 1, draws: 3, refunded: 1500, removeRoles: [{ memberId: U, roleId: R1 }] });
+    expect((await walletOf(db, U)).balance).toBe(balanceBefore + 1500 - r.coinsTaken);
+    expect(await ticketsOf(db, U)).toMatchObject({ ema_pin: 0, room_free: 0 });
+    expect(await gachaStateOf(db, U)).toEqual({ sinceTop: 0, total: 0 });
+    expect(await gachaResetPreview(db)).toEqual([]);
+    // 中身はそのまま
+    expect((await listPrizes(db)).length).toBeGreaterThan(0);
+  });
+});
+
 describe('券を使う', () => {
   it('宿坊: 部屋代無料券でひらく → 種類を変えても払わない', async () => {
     await addTickets(db, U, 'room_free', 1);

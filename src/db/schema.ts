@@ -675,7 +675,7 @@ export const gachaDraws = pgTable(
     /** 1 回分の値段 */
     price: integer('price').notNull(),
     roleId: text('role_id'),
-    ticket: text('ticket'),
+    ticket: text('ticket').$type<TicketKind>(),
     ticketCount: integer('ticket_count').notNull().default(0),
     coins: integer('coins').notNull().default(0),
     /** 出た中身（gacha_prizes） */

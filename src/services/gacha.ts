@@ -1,10 +1,10 @@
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { gachaDraws, gachaPrizes, gachaState, settings, shopItems, type GachaDraw, type GachaPrizeRow, type ShopItem } from '../db/schema.js';
-import { addCoins, spendWithin, walletOf } from './economy.js';
+import { gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaDraw, type GachaPrizeRow, type ShopItem } from '../db/schema.js';
+import { addCoins, deductUpTo, spendWithin, walletOf } from './economy.js';
 import { grantRoleItem } from './shop.js';
-import { addTickets, TICKET_LABEL, ticketsOf } from './tickets.js';
+import { addTickets, takeTickets, TICKET_LABEL, ticketsOf } from './tickets.js';
 
 /**
  * 物御籤（もつみくじ）: 花びらで引くくじ。本物のお金は扱わない。
@@ -329,4 +329,77 @@ export async function topPlayers(db: Db, limit = 30): Promise<{ memberId: string
     )
     .groupBy(gachaDraws.memberId);
   return rows.map((r) => ({ memberId: r.memberId, total: r.total, sinceTop: r.sinceTop, tops: tops.find((t) => t.memberId === r.memberId)?.n ?? 0 }));
+}
+
+// ───────── リセット ─────────
+
+export type GachaResetMember = { memberId: string; draws: number; refund: number; coins: number; tickets: Partial<Record<TicketKind, number>>; roleIds: string[] };
+
+/** リセットしたら何が起きるか（引いた人ごと: 返す銭・取り上げる銭・券・ロール） */
+export async function gachaResetPreview(db: Db): Promise<GachaResetMember[]> {
+  const draws = await db.select().from(gachaDraws);
+  const by = new Map<string, GachaResetMember>();
+  for (const d of draws) {
+    const m = by.get(d.memberId) ?? { memberId: d.memberId, draws: 0, refund: 0, coins: 0, tickets: {}, roleIds: [] };
+    m.draws++;
+    m.refund += d.price;
+    m.coins += d.coins;
+    if (d.ticket && d.ticketCount > 0) m.tickets[d.ticket] = (m.tickets[d.ticket] ?? 0) + d.ticketCount;
+    if (d.roleId && !m.roleIds.includes(d.roleId)) m.roleIds.push(d.roleId);
+    by.set(d.memberId, m);
+  }
+  return [...by.values()].sort((a, b) => b.draws - a.draws);
+}
+
+export type GachaResetResult = {
+  members: number;
+  draws: number;
+  refunded: number;
+  coinsTaken: number;
+  ticketsTaken: number;
+  /** Discord で外すロール（呼び出し側で外す） */
+  removeRoles: { memberId: string; roleId: string }[];
+  perMember: { memberId: string; refund: number; coinsTaken: number; ticketsTaken: number; roles: number }[];
+};
+
+/**
+ * 物御籤をリセットする: これまでに引いた分の銭を返し、出たものを取り上げる（当たりの銭・券は残っている分まで。
+ * 物御籤で出たショップの品は記録を終わりにする）。引いた記録と天井の回数は消す。中身と設定はそのまま。
+ */
+export async function resetGacha(db: Db, now = new Date()): Promise<GachaResetResult> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'gacha:reset'}))`);
+    const plan = await gachaResetPreview(tx);
+    const out: GachaResetResult = { members: plan.length, draws: 0, refunded: 0, coinsTaken: 0, ticketsTaken: 0, removeRoles: [], perMember: [] };
+    const shopDraws = await tx.select({ memberId: gachaDraws.memberId, roleId: gachaDraws.roleId, shopItemId: gachaDraws.shopItemId }).from(gachaDraws);
+    for (const m of plan) {
+      if (m.refund > 0) await addCoins(tx, m.memberId, m.refund, 'gacha_refund', { reset: true, draws: m.draws });
+      const coinsTaken = m.coins > 0 ? await deductUpTo(tx, m.memberId, m.coins, 'gacha_reset', { reset: true }) : 0;
+      let ticketsTaken = 0;
+      for (const [kind, n] of Object.entries(m.tickets) as [TicketKind, number][]) ticketsTaken += await takeTickets(tx, m.memberId, kind, n);
+      // ショップの品: 物御籤で渡した記録（0 枚・券なし）を終わりにする。銭で買った同じ品が残っていればロールは外さない
+      const shopRoles = new Set(shopDraws.filter((d) => d.memberId === m.memberId && d.shopItemId && d.roleId).map((d) => d.roleId!));
+      for (const roleId of shopRoles) {
+        await tx
+          .update(shopPurchases)
+          .set({ endedAt: now })
+          .where(and(eq(shopPurchases.memberId, m.memberId), eq(shopPurchases.roleId, roleId), eq(shopPurchases.price, 0), isNull(shopPurchases.ticket), isNull(shopPurchases.endedAt)));
+      }
+      const paid = await tx
+        .select({ roleId: shopPurchases.roleId })
+        .from(shopPurchases)
+        .where(and(eq(shopPurchases.memberId, m.memberId), isNull(shopPurchases.endedAt), gt(shopPurchases.price, 0)));
+      const keep = new Set(paid.map((p) => p.roleId));
+      const roles = m.roleIds.filter((r) => !keep.has(r));
+      out.removeRoles.push(...roles.map((roleId) => ({ memberId: m.memberId, roleId })));
+      out.draws += m.draws;
+      out.refunded += m.refund;
+      out.coinsTaken += coinsTaken;
+      out.ticketsTaken += ticketsTaken;
+      out.perMember.push({ memberId: m.memberId, refund: m.refund, coinsTaken, ticketsTaken, roles: roles.length });
+    }
+    await tx.delete(gachaDraws);
+    await tx.delete(gachaState);
+    return out;
+  });
 }
