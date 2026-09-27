@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { GachaTier, TicketKind } from '../config.js';
-import { bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, check, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /**
  * 朱印（評価スタンプ）。
@@ -312,6 +312,16 @@ export const notices = pgTable(
     postedPinned: boolean('posted_pinned').notNull().default(false),
     /** いちばん下に表示し続ける（誰かが書き込むと、落ち着いてから下へ置き直す。#絵馬 のひな形など） */
     sticky: boolean('sticky').notNull().default(false),
+    /** メンション: '' = なし、'here'、'everyone'、または ロール ID をカンマ区切り。通知が届くのは最初に投稿したときだけ */
+    mention: text('mention').notNull().default(''),
+    /** 最後に投稿・書き換えしたときのメンション */
+    postedMention: text('posted_mention'),
+    /** 写真（中身は notice_images）の印。写真がなければ null */
+    imageHash: text('image_hash'),
+    /** 写真を本文の上に出すか下に出すか */
+    imagePosition: text('image_position').$type<'top' | 'bottom'>().notNull().default('bottom'),
+    /** 最後に投稿・書き換えしたときの写真（印:上下）。なければ null */
+    postedImage: text('posted_image'),
     updatedBy: text('updated_by').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -319,6 +329,23 @@ export const notices = pgTable(
 );
 
 export type Notice = typeof notices.$inferSelect;
+
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => 'bytea',
+  toDriver: (v) => Buffer.from(v.buffer, v.byteOffset, v.byteLength),
+  fromDriver: (v) => new Uint8Array(v),
+});
+
+/** 掲示の写真（投稿するたびに Discord に添付して送る） */
+export const noticeImages = pgTable('notice_images', {
+  noticeId: bigint('notice_id', { mode: 'number' })
+    .primaryKey()
+    .references(() => notices.id, { onDelete: 'cascade' }),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  hash: text('hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** 自分の通話部屋（➕ の通話に入るとできる。全員抜けたら消して、行も消す） */
 export const tempVoice = pgTable('temp_voice', {

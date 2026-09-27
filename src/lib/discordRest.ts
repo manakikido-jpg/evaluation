@@ -62,11 +62,18 @@ export type RolePatch = { name?: string; color?: number; hoist?: boolean; mentio
 
 export type MessageBody = {
   content?: string;
-  embeds?: { title?: string; description?: string; color?: number }[];
+  /** image.url に attachment://ファイル名 と書くと、いっしょに送った写真をカードの中に出す */
+  embeds?: { title?: string; description?: string; color?: number; image?: { url: string } }[];
   components?: unknown[];
   /** 通知を飛ばす相手（なければだれにも飛ばさない） */
   allowed_mentions?: { parse?: ('everyone' | 'roles' | 'users')[]; roles?: string[] };
+  /** 書き換えのとき: 残す添付（[] で全部外す。書かなければそのまま） */
+  attachments?: { id: string | number; filename?: string }[];
+  /** いっしょに送るファイル（写真など） */
+  files?: MessageFile[];
 };
+
+export type MessageFile = { name: string; contentType: string; data: Uint8Array };
 
 export type GuildChannel = {
   id: string;
@@ -103,17 +110,27 @@ export class DiscordHttpError extends Error {
 const API = 'https://discord.com/api/v10';
 
 export function createDiscordActions(botToken: string): DiscordActions {
-  const call = async (method: string, path: string, opts: { reason?: string; body?: unknown } = {}) => {
+  const call = async (method: string, path: string, opts: { reason?: string; body?: unknown; files?: MessageFile[] } = {}) => {
     const headers: Record<string, string> = { authorization: `Bot ${botToken}` };
     // Discord の監査ログに残る理由（日本語はエンコードが必要）
     if (opts.reason) headers['x-audit-log-reason'] = encodeURIComponent(opts.reason.slice(0, 400));
-    if (opts.body !== undefined) headers['content-type'] = 'application/json';
+    const multipart = Boolean(opts.files?.length);
+    if (opts.body !== undefined && !multipart) headers['content-type'] = 'application/json';
+    /** ファイルを送るときは multipart（本文は payload_json に）。待ってからもう一度送れるよう、毎回作る */
+    const payload = () => {
+      if (!multipart) return opts.body !== undefined ? JSON.stringify(opts.body) : undefined;
+      const form = new FormData();
+      form.append('payload_json', JSON.stringify(opts.body ?? {}));
+      opts.files!.forEach((f, i) => form.append(`files[${i}]`, new Blob([f.data], { type: f.contentType }), f.name));
+      return form;
+    };
     let res: Response;
     for (let attempt = 0; ; attempt++) {
+      const body = payload();
       res = await fetch(`${API}${path}`, {
         method,
         headers,
-        ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+        ...(body !== undefined ? { body } : {}),
       });
       // 続けて投稿すると（掲示をまとめて反映するときなど）「少し待って」と言われるので、言われた秒数だけ待つ
       if (res.status !== 429 || attempt >= 3) break;
@@ -142,10 +159,13 @@ export function createDiscordActions(botToken: string): DiscordActions {
     ban: async (g, u, reason) => void (await call('PUT', `/guilds/${g}/bans/${u}`, { reason, body: { delete_message_seconds: 0 } })),
     unban: async (g, u, reason) => void (await call('DELETE', `/guilds/${g}/bans/${u}`, { reason })),
     kick: async (g, u, reason) => void (await call('DELETE', `/guilds/${g}/members/${u}`, { reason })),
-    editMessage: async (c, m, body) =>
-      void (await call('PATCH', `/channels/${c}/messages/${m}`, { body: { ...body, allowed_mentions: { parse: [] } } })),
-    sendMessage: async (c, body) =>
-      (await call('POST', `/channels/${c}/messages`, { body: { ...body, allowed_mentions: body.allowed_mentions ?? { parse: [] } } })) as { id: string },
+    editMessage: async (c, m, { files, ...body }) =>
+      void (await call('PATCH', `/channels/${c}/messages/${m}`, { body: { ...withAttachments(body, files), allowed_mentions: { parse: [] } }, files })),
+    sendMessage: async (c, { files, ...body }) =>
+      (await call('POST', `/channels/${c}/messages`, {
+        body: { ...withAttachments(body, files), allowed_mentions: body.allowed_mentions ?? { parse: [] } },
+        files,
+      })) as { id: string },
     deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
     async pinMessage(c, m, pin) {
       await call(pin ? 'PUT' : 'DELETE', `/channels/${c}/messages/pins/${m}`, { reason: pin ? '掲示のピン留め' : '掲示のピン留めを外した' });
@@ -172,4 +192,10 @@ export function createDiscordActions(botToken: string): DiscordActions {
     setChannelOverwrite: async (c, o, reason) =>
       void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { reason, body: { type: o.type, allow: o.allow, deny: o.deny } })),
   };
+}
+
+/** 送るファイルを attachments に並べる（書き換えのとき、前の添付と入れ替わる） */
+function withAttachments(body: Omit<MessageBody, 'files'>, files: MessageFile[] | undefined): Omit<MessageBody, 'files'> {
+  if (!files?.length) return body;
+  return { ...body, attachments: files.map((f, i) => ({ id: i, filename: f.name })) };
 }

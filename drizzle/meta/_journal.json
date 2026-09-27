@@ -253,6 +253,20 @@
       "when": 1790497348010,
       "tag": "0035_gacha_zodiac",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790501696792,
+      "tag": "0036_notice_mention",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790502210072,
+      "tag": "0037_notice_images",
+      "breakpoints": true
     }
   ]
 }

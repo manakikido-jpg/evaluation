@@ -83,8 +83,17 @@ import {
   moveNotice,
   noticeStatus,
   noticeVariables,
+  detectImage,
+  isImagePosition,
   isNoticeStyle,
+  NOTICE_IMAGE_MAX,
+  getNoticeImage,
+  mentionLabel,
+  mentionValue,
+  parseMention,
   postableChannels,
+  removeNoticeImage,
+  setNoticeImage,
   publishAll,
   publishNotice,
   renderNotice,
@@ -172,7 +181,8 @@ export function createWebApp(deps: WebDeps) {
     secureHeaders({
       contentSecurityPolicy: {
         defaultSrc: ["'self'"],
-        imgSrc: ["'self'", 'https://cdn.discordapp.com'],
+        // blob: 掲示の写真を選んだとき、送る前にプレビューに出す
+        imgSrc: ["'self'", 'blob:', 'https://cdn.discordapp.com'],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
         formAction: ["'self'", 'https://discord.com'],
@@ -183,7 +193,10 @@ export function createWebApp(deps: WebDeps) {
   );
 
   // 送れる大きさの上限（掲示の本文でも十分な 256KB）
-  app.use(bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) }));
+  const smallBody = bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) });
+  // 掲示の写真だけは大きめに（写真の上限 8MB ＋ 本文）
+  const noticeBody = bodyLimit({ maxSize: 9 * 1024 * 1024, onError: (c) => c.text('写真が大きすぎます（8MB まで）。', 413) });
+  app.use((c, next) => (c.req.method === 'POST' && /^\/notices(?:\/\d+)?$/.test(c.req.path) ? noticeBody(c, next) : smallBody(c, next)));
 
   // 管理画面の中身（相談・メモなど）をブラウザや共用 PC に残さない。htmx の部分表示と全体表示を取り違えないように
   app.use(async (c, next) => {
@@ -1111,8 +1124,31 @@ export function createWebApp(deps: WebDeps) {
   app.use('/notices', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
   app.use('/notices/*', async (c, next) => (gujiOnly(c) ? next() : c.text('宮司のみできる操作です。', 403)));
 
+  /** メンションに選べるロール（@everyone と BOT などの自動のロールはのぞく） */
+  const mentionableRoles = async () => ((await loadRoles()) ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }));
+  /** 画面で選んだメンション。ロールを読めなかったときは、前に選んでいたロールだけ残す */
+  const mentionFrom = async (body: Record<string, unknown>, before?: string) => {
+    const picked = (body.mentionRoles === undefined ? [] : Array.isArray(body.mentionRoles) ? body.mentionRoles : [body.mentionRoles]).filter(
+      (v): v is string => typeof v === 'string' && validId(v),
+    );
+    const roles = await loadRoles();
+    const prev = parseMention(before);
+    const valid = roles ? new Set(roles.filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => r.id)) : new Set(prev.kind === 'roles' ? prev.roleIds : []);
+    return { value: mentionValue(body.mentionKind, picked, valid), roles };
+  };
+
+  /** 選んだ写真（なければ undefined）。大きすぎ・写真でないものは知らせる */
+  const imageUpload = async (body: Record<string, unknown>): Promise<Uint8Array | 'too_big' | 'bad_type' | undefined> => {
+    const f = Array.isArray(body.image) ? body.image[0] : body.image;
+    if (!(f instanceof File) || f.size === 0) return undefined;
+    if (f.size > NOTICE_IMAGE_MAX) return 'too_big';
+    const data = new Uint8Array(await f.arrayBuffer());
+    return detectImage(data) ? data : 'bad_type';
+  };
+
   app.get('/notices', async (c) => {
-    const channels = await loadChannels();
+    const [channels, roles] = await Promise.all([loadChannels(), loadRoles()]);
+    const roleName = (id: string) => roles?.find((r) => r.id === id)?.name;
     const byId = new Map(channels.map((ch) => [ch.id, ch]));
     const groups: NoticeGroup[] = [];
     for (const n of await listNotices(db)) {
@@ -1120,7 +1156,14 @@ export function createWebApp(deps: WebDeps) {
       if (!g) groups.push((g = { channelId: n.channelId, channelName: byId.get(n.channelId)?.name ?? null, rows: [] }));
       const text = renderNotice(n.body, cfg, channels).text;
       const preview = renderNotice(n.body, cfg, channels, { forPreview: true });
-      g.rows.push({ notice: n, preview: preview.text, length: text.length, status: noticeStatus(n, text), unknown: preview.unknown });
+      g.rows.push({
+        notice: n,
+        preview: preview.text,
+        length: text.length,
+        status: noticeStatus(n, text),
+        unknown: preview.unknown,
+        mention: mentionLabel(n.mention, roleName),
+      });
     }
     // Discord のチャンネルの並び順に合わせる
     const order = new Map(postableChannels(channels).map((ch, i) => [ch.id, i]));
@@ -1129,7 +1172,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   const editPage = async (c: Context<Env>, notice: Awaited<ReturnType<typeof getNotice>>, body: string, error?: string) => {
-    const channels = await loadChannels();
+    const [channels, roles] = await Promise.all([loadChannels(), mentionableRoles()]);
     const preview = renderNotice(body, cfg, channels, { forPreview: true });
     const length = renderNotice(body, cfg, channels).text.length;
     return c.html(
@@ -1138,6 +1181,7 @@ export function createWebApp(deps: WebDeps) {
         notice={notice}
         channels={postableChannels(channels)}
         channelName={notice ? (channels.find((ch) => ch.id === notice.channelId)?.name ?? null) : null}
+        roles={roles}
         vars={noticeVariables(cfg)}
         preview={preview.text}
         length={length}
@@ -1150,12 +1194,27 @@ export function createWebApp(deps: WebDeps) {
   app.get('/notices/new', (c) => editPage(c, undefined, ''));
 
   app.post('/notices/preview', async (c) => {
-    const body = await c.req.parseBody();
+    const body = await c.req.parseBody({ all: true });
     const text = typeof body.body === 'string' ? body.body : '';
     const style = isNoticeStyle(body.style) ? body.style : 'embed';
-    const channels = await loadChannels();
+    const [channels, mention] = await Promise.all([loadChannels(), mentionFrom(body)]);
     const preview = renderNotice(text, cfg, channels, { forPreview: true });
-    return c.html(<NoticePreview preview={preview.text} length={renderNotice(text, cfg, channels).text.length} unknown={preview.unknown} style={style} />);
+    const label = mentionLabel(mention.value, (id) => mention.roles?.find((r) => r.id === id)?.name);
+    // 保存済みの写真（外すにチェックがなければ）。新しく選んだ写真は画面の JS が出す
+    const id = typeof body.noticeId === 'string' ? Number(body.noticeId) : 0;
+    const saved = id > 0 && body.removeImage !== 'yes' ? await getNotice(db, id) : undefined;
+    const image = { url: saved?.imageHash ? `/notices/${saved.id}/image?v=${saved.imageHash}` : undefined, position: isImagePosition(body.imagePosition) ? body.imagePosition : 'bottom' };
+    return c.html(
+      <NoticePreview
+        preview={preview.text}
+        length={renderNotice(text, cfg, channels).text.length}
+        unknown={preview.unknown}
+        style={style}
+        mention={label}
+        image={image}
+        slot
+      />,
+    );
   });
 
   app.post('/notices/seed', async (c) => {
@@ -1180,14 +1239,28 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.post('/notices', async (c) => {
-    const body = await c.req.parseBody();
+    const body = await c.req.parseBody({ all: true });
     const channelId = typeof body.channelId === 'string' ? body.channelId : '';
     const title = field(body, 'title', 60);
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
     const channels = await loadChannels();
     if (!title || !text || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
     const style = isNoticeStyle(body.style) ? body.style : 'embed';
-    const n = await createNotice(db, { channelId, title, body: text, style, pinned: body.pinned === 'yes', sticky: body.sticky === 'yes', by: c.get('session').userId });
+    const { value: mention } = await mentionFrom(body);
+    const upload = await imageUpload(body);
+    if (upload === 'too_big' || upload === 'bad_type') return editPage(c, undefined, text, `image_${upload}`);
+    const n = await createNotice(db, {
+      channelId,
+      title,
+      body: text,
+      style,
+      pinned: body.pinned === 'yes',
+      sticky: body.sticky === 'yes',
+      mention,
+      imagePosition: isImagePosition(body.imagePosition) ? body.imagePosition : undefined,
+      by: c.get('session').userId,
+    });
+    if (upload) await setNoticeImage(db, n.id, upload, c.get('session').userId);
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
   });
@@ -1203,20 +1276,35 @@ export function createWebApp(deps: WebDeps) {
     const id = noticeId(c);
     const n = id ? await getNotice(db, id) : undefined;
     if (!n) return c.redirect('/notices');
-    const body = await c.req.parseBody();
+    const body = await c.req.parseBody({ all: true });
     const title = field(body, 'title', 60);
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
     if (!title || !text) return editPage(c, n, text || n.body, 'invalid');
+    const upload = await imageUpload(body);
+    if (upload === 'too_big' || upload === 'bad_type') return editPage(c, n, text, `image_${upload}`);
     await updateNotice(db, n.id, {
       title,
       body: text,
       style: isNoticeStyle(body.style) ? body.style : undefined,
       pinned: body.pinned === 'yes',
       sticky: body.sticky === 'yes',
+      // 古い画面（メンションの欄がない）から送られたときは変えない
+      mention: body.mentionKind === undefined ? undefined : (await mentionFrom(body, n.mention)).value,
+      imagePosition: isImagePosition(body.imagePosition) ? body.imagePosition : undefined,
       by: c.get('session').userId,
     });
+    if (upload) await setNoticeImage(db, n.id, upload, c.get('session').userId);
+    else if (body.removeImage === 'yes' && n.imageHash) await removeNoticeImage(db, n.id, c.get('session').userId);
     if (body.then === 'publish') return tryDiscord(c, '/notices', () => publishNotice(noticeCtx(), n.id, c.get('session').userId));
     return c.redirect('/notices?msg=saved');
+  });
+
+  /** 掲示の写真（管理画面のプレビュー用。宮司だけ） */
+  app.get('/notices/:id/image', async (c) => {
+    const id = noticeId(c);
+    const img = id ? await getNoticeImage(db, id) : undefined;
+    if (!img) return c.notFound();
+    return c.body(Buffer.from(img.data), 200, { 'content-type': img.contentType, 'x-content-type-options': 'nosniff' });
   });
 
   app.post('/notices/:id/publish', async (c) => {

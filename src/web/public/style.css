@@ -213,10 +213,48 @@ ol.notices > li:first-child { border-top: none; padding-top: 0; }
 .status.st-draft { background: var(--gray); color: var(--muted); }
 .status.st-posted { background: #e7f5ea; color: #1f5f2e; }
 .status.st-changed { background: var(--sakura-2); color: var(--shu-dark); }
-pre.notice-preview.embed { border-left: 4px solid #d7003a; }
-pre.notice-preview { white-space: pre-wrap; word-break: break-word; font: inherit; font-size: .9rem; background: var(--gray); padding: 10px 12px; border-radius: 8px; max-height: 320px; overflow: auto; margin: 8px 0; }
+.notice-preview.embed { border-left: 4px solid #d7003a; }
+.notice-preview { word-break: break-word; font-size: .9rem; line-height: 1.5; background: var(--gray); padding: 10px 12px; border-radius: 8px; max-height: 320px; overflow: auto; margin: 8px 0; }
 .notice-edit { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-.notice-edit pre.notice-preview { max-height: 560px; }
+.notice-edit .notice-preview { max-height: 560px; }
+.notice-rendered .notice-preview + .notice-preview { margin-top: 4px; }
+.notice-rendered .notice-img-card { padding: 8px; }
+.notice-img { display: block; max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; }
+.notice-img-card .notice-img { margin-top: 0; }
+.notice-img[hidden], .notice-img-card[hidden] { display: none; }
+.md-mentionline { font-size: .9rem; margin: 8px 0 -4px; }
+.md-mentionline, .md .md-mention { color: #4752c4; background: rgba(88, 101, 242, .15); border-radius: 4px; padding: 0 3px; display: inline-block; }
+.md .md-h1 { font-size: 1.35rem; font-weight: bold; margin: 6px 0 2px; }
+.md .md-h2 { font-size: 1.15rem; font-weight: bold; margin: 6px 0 2px; }
+.md .md-h3 { font-size: 1rem; font-weight: bold; margin: 4px 0 2px; }
+.md .md-sub { font-size: .78rem; color: var(--muted); }
+.md .md-li, .md .md-ol { padding-left: 1.2em; }
+.md .md-li::before { content: '•'; display: inline-block; width: 1.1em; margin-left: -1.1em; }
+.md .md-in { padding-left: 2.4em; }
+.md .md-li.md-in::before { content: '◦'; }
+.md .md-quote { border-left: 4px solid var(--muted); padding-left: 10px; }
+.md .md-gap { height: .8em; }
+.md .md-spoiler { background: var(--ink); color: var(--ink); border-radius: 3px; padding: 0 2px; }
+.md .md-spoiler:hover { color: var(--card); }
+.md .md-link { color: #0068e0; }
+.md .md-code { white-space: pre-wrap; background: var(--card); border: 1px solid var(--line); padding: 8px; border-radius: 6px; margin: 4px 0; font-size: .85rem; }
+.md-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: -6px; }
+.md-toolbar .md-group { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.md-toolbar button { font: inherit; font-size: .85rem; padding: 4px 9px; border: none; border-right: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+.md-toolbar button:last-child { border-right: none; }
+.md-toolbar button:hover { background: var(--gray); }
+.md-toolbar button[data-before="**"] { font-weight: bold; }
+.md-toolbar button[data-before="*"] { font-style: italic; }
+.md-toolbar button[data-before="__"] { text-decoration: underline; }
+.md-toolbar button[data-before="~~"] { text-decoration: line-through; }
+button.md-insert { font-family: ui-monospace, monospace; font-size: .8rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--gray); color: var(--ink); cursor: pointer; }
+button.md-insert:hover { border-color: var(--shu); }
+.notice-form fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; display: grid; gap: 8px; }
+.notice-form fieldset legend { padding: 0 4px; }
+.role-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; max-height: 150px; overflow: auto; }
+.image-current { display: flex; gap: 12px; align-items: center; }
+.image-current img { max-width: 160px; max-height: 100px; border-radius: 6px; border: 1px solid var(--line); }
+.md-help table { margin-top: 6px; }
 .notice-form { display: grid; gap: 12px; }
 .notice-form input, .notice-form select, .notice-form textarea { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
 .notice-form textarea { resize: vertical; min-height: 320px; font-size: .9rem; line-height: 1.5; }

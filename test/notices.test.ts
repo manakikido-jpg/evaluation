@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { DiscordHttpError, type DiscordActions, type GuildChannel } from '../src/lib/discordRest.js';
+import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody } from '../src/lib/discordRest.js';
 import {
   createNotice,
   getNotice,
@@ -442,5 +442,171 @@ describe('いちばん下に表示し続ける', () => {
     expect(after.body).toContain('{#絵馬-男性}');
     expect(renderNotice(after.body, cfg, CHANNELS).unknown).toEqual([]);
     expect((await getNotice(db, edited.id))!.body).toBe('自分で書いた');
+  });
+});
+
+describe('メンション', () => {
+  const ROLE_A = '920000000000000001';
+  const ROLE_B = '920000000000000002';
+
+  it('保存する形と、上に付ける文字・通知を届ける相手', async () => {
+    const { mentionValue, mentionHead, mentionAllowed, mentionLabel, parseMention } = await import('../src/services/notices.js');
+    const valid = new Set([ROLE_A, ROLE_B]);
+    expect(mentionValue('none', [ROLE_A], valid)).toBe('');
+    expect(mentionValue('here', [], valid)).toBe('here');
+    expect(mentionValue('everyone', [], valid)).toBe('everyone');
+    expect(mentionValue('roles', [ROLE_A, ROLE_A, '920000000000000009', ROLE_B], valid)).toBe(`${ROLE_A},${ROLE_B}`);
+    expect(mentionValue('roles', [], valid)).toBe('');
+    expect(mentionValue('@everyone', [], valid)).toBe('');
+    expect(parseMention('abc,1')).toEqual({ kind: 'none' });
+    expect(mentionHead(`${ROLE_A},${ROLE_B}`)).toBe(`<@&${ROLE_A}> <@&${ROLE_B}>`);
+    expect(mentionHead('everyone')).toBe('@everyone');
+    expect(mentionAllowed('here')).toEqual({ parse: ['everyone'] });
+    expect(mentionAllowed(ROLE_A)).toEqual({ parse: [], roles: [ROLE_A] });
+    expect(mentionAllowed('')).toEqual({ parse: [] });
+    expect(mentionLabel(`${ROLE_A},${ROLE_B}`, (id) => (id === ROLE_A ? '新人' : undefined))).toBe(`@新人 @${ROLE_B}`);
+  });
+
+  it('はじめての投稿だけ通知を鳴らす。カードはメンションをカードの上に、普通のメッセージは 1 行目に', async () => {
+    const f = fakeDiscord();
+    const sent: MessageBody[] = [];
+    const edited: MessageBody[] = [];
+    const send = f.discord.sendMessage;
+    const edit = f.discord.editMessage;
+    f.discord.sendMessage = async (c, b) => (sent.push(b), send(c, b));
+    f.discord.editMessage = async (c, m, b) => (edited.push(b), edit(c, m, b));
+    const ctx = { db, cfg, discord: f.discord };
+    const card = await createNotice(db, { channelId: CH.torii, title: 'お知らせ', body: '**祭り**です', mention: 'everyone', by: GUJI });
+    expect(await publishNotice(ctx, card.id, GUJI)).toBe('posted');
+    expect(sent.at(-1)).toMatchObject({ content: '@everyone', embeds: [{ description: '**祭り**です' }], allowed_mentions: { parse: ['everyone'] } });
+    expect(noticeStatus((await getNotice(db, card.id))!, '**祭り**です')).toBe('posted');
+
+    // メンションを変えると「未反映」→ 書き換え（通知は鳴らさない）
+    await updateNotice(db, card.id, { title: 'お知らせ', body: '**祭り**です', mention: ROLE_A, by: GUJI });
+    expect(noticeStatus((await getNotice(db, card.id))!, '**祭り**です')).toBe('changed');
+    expect(await publishNotice(ctx, card.id, GUJI)).toBe('edited');
+    expect(edited.at(-1)).toMatchObject({ content: `<@&${ROLE_A}>` });
+    expect(edited.at(-1)!.allowed_mentions).toBeUndefined();
+
+    const text = await createNotice(db, { channelId: CH.torii, title: '新人へ', body: 'ようこそ', style: 'text', mention: ROLE_A, by: GUJI });
+    await publishNotice(ctx, text.id, GUJI);
+    expect(sent.at(-1)).toMatchObject({ content: `<@&${ROLE_A}>\nようこそ`, allowed_mentions: { parse: [], roles: [ROLE_A] } });
+
+    // 並べ直し（投稿し直す）では鳴らさない
+    sent.length = 0;
+    await repostChannel(ctx, CH.torii, GUJI);
+    expect(sent.map((b) => b.content)).toEqual(['<@&920000000000000001>', `<@&${ROLE_A}>\nようこそ`]);
+    expect(sent.every((b) => b.allowed_mentions === undefined)).toBe(true);
+  });
+
+  it('普通のメッセージはメンションの分も文字数に数える', async () => {
+    const f = fakeDiscord();
+    const n = await createNotice(db, { channelId: CH.torii, title: '長い', body: 'あ'.repeat(1995), style: 'text', mention: 'everyone', by: GUJI });
+    expect(await publishNotice({ db, cfg, discord: f.discord }, n.id, GUJI)).toBe('too_long');
+  });
+});
+
+describe('プレビューの飾り', () => {
+  it('Discord の書き方を HTML にする（HTML はそのまま文字で出す）', async () => {
+    const { discordMarkdownToHtml: md } = await import('../src/web/markdown.js');
+    expect(md('**太字** *斜体* __下線__ ~~消し~~ ||秘密||')).toBe(
+      '<div><strong>太字</strong> <em>斜体</em> <u>下線</u> <s>消し</s> <span class="md-spoiler">秘密</span></div>',
+    );
+    expect(md('# 大\n## 中\n-# 小さい\n- 箇条\n  - 下げる\n1. 一\n> 引用')).toBe(
+      '<div class="md-h1">大</div><div class="md-h2">中</div><div class="md-sub">小さい</div><div class="md-li">箇条</div><div class="md-li md-in">下げる</div><div class="md-ol">1. 一</div><div class="md-quote"><div>引用</div></div>',
+    );
+    expect(md('<script>alert(1)</script> `**そのまま**`')).toBe('<div>&lt;script&gt;alert(1)&lt;/script&gt; <code>**そのまま**</code></div>');
+    expect(md('```\n<b>コード</b>\n```')).toBe('<div><pre class="md-code">&lt;b&gt;コード&lt;/b&gt;</pre></div>');
+    expect(md('[公式](https://example.com) @everyone')).toBe('<div><span class="md-link">公式</span> <span class="md-mention">@everyone</span></div>');
+    expect(md('snake_case_name')).toBe('<div>snake_case_name</div>');
+    expect(md('a\n\nb')).toBe('<div>a</div><div class="md-gap"></div><div>b</div>');
+  });
+});
+
+describe('写真', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1]);
+
+  it('写真の種類は中身で見分ける。大きすぎるもの・写真でないものは入れない', async () => {
+    const { detectImage, setNoticeImage, NOTICE_IMAGE_MAX } = await import('../src/services/notices.js');
+    expect(detectImage(PNG)).toEqual({ type: 'image/png', ext: 'png' });
+    expect(detectImage(JPG)).toEqual({ type: 'image/jpeg', ext: 'jpg' });
+    expect(detectImage(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBeUndefined();
+    const n = await createNotice(db, { channelId: CH.torii, title: '写真', body: 'x', by: GUJI });
+    expect(await setNoticeImage(db, n.id, new TextEncoder().encode('こんにちは、写真ではありません'), GUJI)).toBe('bad_type');
+    expect(await setNoticeImage(db, n.id, new Uint8Array(NOTICE_IMAGE_MAX + 1), GUJI)).toBe('too_big');
+    expect((await getNotice(db, n.id))!.imageHash).toBeNull();
+  });
+
+  it('カード: 下なら本文のカードの中、上なら写真のカードを上に。替える・外すと「未反映」→ 書き換え', async () => {
+    const { setNoticeImage, removeNoticeImage } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const sent: MessageBody[] = [];
+    const edited: MessageBody[] = [];
+    const send = f.discord.sendMessage;
+    const edit = f.discord.editMessage;
+    f.discord.sendMessage = async (c, b) => (sent.push(b), send(c, b));
+    f.discord.editMessage = async (c, m, b) => (edited.push(b), edit(c, m, b));
+    const ctx = { db, cfg, discord: f.discord };
+    const n = await createNotice(db, { channelId: CH.torii, title: '祭り', body: '夏祭り', by: GUJI });
+    expect(await setNoticeImage(db, n.id, PNG, GUJI)).toBe('ok');
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('posted');
+    const name = `notice-${n.id}.png`;
+    expect(sent[0]).toMatchObject({ embeds: [{ description: '夏祭り', image: { url: `attachment://${name}` } }] });
+    expect(sent[0]!.files).toEqual([{ name, contentType: 'image/png', data: PNG }]);
+    expect(noticeStatus((await getNotice(db, n.id))!, '夏祭り')).toBe('posted');
+
+    // 上にする
+    await updateNotice(db, n.id, { title: '祭り', body: '夏祭り', imagePosition: 'top', by: GUJI });
+    expect(noticeStatus((await getNotice(db, n.id))!, '夏祭り')).toBe('changed');
+    expect(await publishNotice(ctx, n.id, GUJI)).toBe('edited');
+    expect(edited.at(-1)!.embeds).toEqual([
+      { color: 0xd7003a, image: { url: `attachment://${name}` } },
+      { description: '夏祭り', color: 0xd7003a },
+    ]);
+    expect(edited.at(-1)!.files).toHaveLength(1);
+
+    // 写真を替える
+    await setNoticeImage(db, n.id, JPG, GUJI);
+    expect(noticeStatus((await getNotice(db, n.id))!, '夏祭り')).toBe('changed');
+    await publishNotice(ctx, n.id, GUJI);
+    expect(edited.at(-1)!.files![0]).toMatchObject({ name: `notice-${n.id}.jpg`, contentType: 'image/jpeg' });
+
+    // 外す → 添付も外す
+    await removeNoticeImage(db, n.id, GUJI);
+    expect(noticeStatus((await getNotice(db, n.id))!, '夏祭り')).toBe('changed');
+    await publishNotice(ctx, n.id, GUJI);
+    expect(edited.at(-1)).toMatchObject({ embeds: [{ description: '夏祭り' }], attachments: [] });
+    expect(edited.at(-1)!.files).toBeUndefined();
+    expect(noticeStatus((await getNotice(db, n.id))!, '夏祭り')).toBe('posted');
+  });
+
+  it('普通のメッセージは写真を添付（本文の下）。いちばん下に出し直すときも写真ごと', async () => {
+    const { setNoticeImage } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const sent: MessageBody[] = [];
+    const send = f.discord.sendMessage;
+    f.discord.sendMessage = async (c, b) => (sent.push(b), send(c, b));
+    const ctx = { db, cfg, discord: f.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: 'ひな形', body: '名前:', style: 'text', sticky: true, imagePosition: 'top', by: GUJI });
+    await setNoticeImage(db, n.id, PNG, GUJI);
+    await publishNotice(ctx, n.id, GUJI);
+    expect(sent[0]).toMatchObject({ content: '名前:', embeds: [], files: [{ name: `notice-${n.id}.png` }] });
+    expect(await restickNotice(ctx, n.id)).toBe(true);
+    expect(sent[1]).toMatchObject({ content: '名前:', files: [{ name: `notice-${n.id}.png` }] });
+    // 投稿したあとに写真を替えたら、出し直しは写真なし（未反映の写真は出さない）
+    await setNoticeImage(db, n.id, JPG, GUJI);
+    await restickNotice(ctx, n.id);
+    expect(sent[2]!.files).toBeUndefined();
+  });
+
+  it('消すと写真も消える', async () => {
+    const { setNoticeImage, getNoticeImage, deleteNotice } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const n = await createNotice(db, { channelId: CH.torii, title: '写真', body: 'x', by: GUJI });
+    await setNoticeImage(db, n.id, PNG, GUJI);
+    expect((await getNoticeImage(db, n.id))?.data).toEqual(PNG);
+    await deleteNotice({ db, cfg, discord: f.discord }, n.id, GUJI);
+    expect(await getNoticeImage(db, n.id)).toBeUndefined();
   });
 });

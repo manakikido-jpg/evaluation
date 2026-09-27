@@ -13,6 +13,7 @@ const readText = (p: string) => readFileSync(p, 'utf8');
 export const STATIC: Record<string, { body: string; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
+    'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'htmx.min.js': { body: readText(path.join(here, '../../node_modules/htmx.org/dist/htmx.min.js')), type: 'text/javascript; charset=utf-8' },
   }).map(([name, f]) => [name, { ...f, version: createHash('sha256').update(f.body).digest('hex').slice(0, 10) }]),
 );

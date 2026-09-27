@@ -1,8 +1,9 @@
 import { and, asc, eq, max } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { notices, settings, type Notice } from '../db/schema.js';
-import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody } from '../lib/discordRest.js';
+import { createHash } from 'node:crypto';
+import { noticeImages, notices, settings, type Notice } from '../db/schema.js';
+import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody, type MessageFile } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { coreName } from '../lib/names.js';
@@ -32,12 +33,134 @@ export const isNoticeStyle = (v: unknown): v is NoticeStyle => v === 'embed' || 
 /** カードの左の線の色（朱色） */
 const SHU = 0xd7003a;
 
-function messageBody(style: string, text: string): MessageBody {
-  // 見せ方を切り替えたときに前の形が残らないよう、使わないほうは空にする
-  return style === 'text' ? { content: text, embeds: [] } : { content: '', embeds: [{ description: text, color: SHU }] };
+type NoticeImage = { file: MessageFile; position: ImagePosition };
+
+function messageBody(style: string, text: string, mention = '', image?: NoticeImage): MessageBody {
+  const head = mentionHead(mention);
+  const files = image ? { files: [image.file] } : {};
+  // 見せ方を切り替えたときに前の形が残らないよう、使わないほうは空にする。カードのメンションはカードの上（本文の外）に出す
+  // 普通のメッセージの写真は、Discord の決まりで本文の下に出る
+  if (style === 'text') return { content: head ? `${head}\n${text}` : text, embeds: [], ...files };
+  if (!image) return { content: head, embeds: [{ description: text, color: SHU }] };
+  const picture = { url: `attachment://${image.file.name}` };
+  // 上: 写真だけのカードを本文のカードの上に。下: 本文のカードの中、いちばん下に
+  const embeds =
+    image.position === 'top' ? [{ color: SHU, image: picture }, { description: text, color: SHU }] : [{ description: text, color: SHU, image: picture }];
+  return { content: head, embeds, ...files };
 }
 
-const tooLong = (style: string, text: string) => !text.trim() || text.length > maxLengthOf(style);
+const tooLong = (style: string, text: string, mention = '') =>
+  !text.trim() || text.length + (style === 'text' && mention ? mentionHead(mention).length + 1 : 0) > maxLengthOf(style);
+
+// ───────── 写真 ─────────
+
+export type ImagePosition = 'top' | 'bottom';
+export const isImagePosition = (v: unknown): v is ImagePosition => v === 'top' || v === 'bottom';
+
+/** 写真の大きさの上限（Discord の BOT が送れるのは 10MB まで） */
+export const NOTICE_IMAGE_MAX = 8 * 1024 * 1024;
+
+const IMAGE_TYPES: { type: string; ext: string; test: (d: Uint8Array) => boolean }[] = [
+  { type: 'image/png', ext: 'png', test: (d) => d[0] === 0x89 && d[1] === 0x50 && d[2] === 0x4e && d[3] === 0x47 },
+  { type: 'image/jpeg', ext: 'jpg', test: (d) => d[0] === 0xff && d[1] === 0xd8 && d[2] === 0xff },
+  { type: 'image/gif', ext: 'gif', test: (d) => d[0] === 0x47 && d[1] === 0x49 && d[2] === 0x46 && d[3] === 0x38 },
+  {
+    type: 'image/webp',
+    ext: 'webp',
+    test: (d) => d[0] === 0x52 && d[1] === 0x49 && d[2] === 0x46 && d[3] === 0x46 && d[8] === 0x57 && d[9] === 0x45 && d[10] === 0x42 && d[11] === 0x50,
+  },
+];
+
+/** 中身から写真の種類を見分ける（PNG・JPEG・GIF・WebP。ファイル名や申告された種類は信じない） */
+export function detectImage(data: Uint8Array): { type: string; ext: string } | undefined {
+  const t = IMAGE_TYPES.find((x) => data.length > 12 && x.test(data));
+  return t && { type: t.type, ext: t.ext };
+}
+
+/** 今の写真と上下（投稿済みのものと比べて「未反映」を見分ける） */
+const imageKey = (n: Pick<Notice, 'imageHash' | 'imagePosition'>) => (n.imageHash ? `${n.imageHash}:${n.imagePosition}` : '');
+
+export async function setNoticeImage(db: Db, id: number, data: Uint8Array, by: string): Promise<'ok' | 'bad_type' | 'too_big'> {
+  if (data.length > NOTICE_IMAGE_MAX) return 'too_big';
+  const kind = detectImage(data);
+  if (!kind) return 'bad_type';
+  const hash = createHash('sha256').update(data).digest('hex').slice(0, 16);
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(noticeImages)
+      .values({ noticeId: id, contentType: kind.type, data, hash })
+      .onConflictDoUpdate({ target: noticeImages.noticeId, set: { contentType: kind.type, data, hash, createdAt: new Date() } });
+    await tx.update(notices).set({ imageHash: hash, updatedBy: by, updatedAt: new Date() }).where(eq(notices.id, id));
+  });
+  await audit(db, { actorId: by, action: 'notice.image', detail: { id, bytes: data.length }, via: 'web' });
+  return 'ok';
+}
+
+export async function removeNoticeImage(db: Db, id: number, by: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.delete(noticeImages).where(eq(noticeImages.noticeId, id));
+    await tx.update(notices).set({ imageHash: null, updatedBy: by, updatedAt: new Date() }).where(eq(notices.id, id));
+  });
+}
+
+export async function getNoticeImage(db: Db, id: number): Promise<{ contentType: string; data: Uint8Array; hash: string } | undefined> {
+  const [row] = await db.select().from(noticeImages).where(eq(noticeImages.noticeId, id));
+  return row;
+}
+
+/** Discord に添付する写真（hash を渡すと、その写真のときだけ） */
+async function imageFor(db: Db, n: Notice, position: ImagePosition, hash?: string | null): Promise<NoticeImage | undefined> {
+  if (!n.imageHash) return undefined;
+  const img = await getNoticeImage(db, n.id);
+  if (!img || (hash !== undefined && img.hash !== hash)) return undefined;
+  const ext = detectImage(img.data)?.ext ?? 'png';
+  return { file: { name: `notice-${n.id}.${ext}`, contentType: img.contentType, data: img.data }, position };
+}
+
+// ───────── メンション ─────────
+
+export type NoticeMention = { kind: 'none' } | { kind: 'here' } | { kind: 'everyone' } | { kind: 'roles'; roleIds: string[] };
+
+/** 保存している形（'' / 'here' / 'everyone' / ロール ID のカンマ区切り）を読む */
+export function parseMention(raw: string | null | undefined): NoticeMention {
+  const v = (raw ?? '').trim();
+  if (v === 'here' || v === 'everyone') return { kind: v };
+  const roleIds = [...new Set(v.split(',').filter((x) => /^\d{17,20}$/.test(x)))];
+  return roleIds.length ? { kind: 'roles', roleIds } : { kind: 'none' };
+}
+
+/** 画面で選んだもの（なし・@here・@everyone・ロール）から保存する形を作る。ロールは選べるものだけ・最大 5 つ */
+export function mentionValue(kind: unknown, roleIds: string[], validRoleIds: Set<string>): string {
+  if (kind === 'here' || kind === 'everyone') return kind;
+  if (kind !== 'roles') return '';
+  return [...new Set(roleIds.filter((id) => validRoleIds.has(id)))].slice(0, 5).join(',');
+}
+
+/** メッセージのいちばん上に付けるメンション */
+export function mentionHead(raw: string | null | undefined): string {
+  const m = parseMention(raw);
+  if (m.kind === 'here') return '@here';
+  if (m.kind === 'everyone') return '@everyone';
+  if (m.kind === 'roles') return m.roleIds.map((id) => `<@&${id}>`).join(' ');
+  return '';
+}
+
+/** 通知を届ける相手（選んだものだけ。本文に書いた @everyone などでは鳴らさない） */
+export function mentionAllowed(raw: string | null | undefined): NonNullable<MessageBody['allowed_mentions']> {
+  const m = parseMention(raw);
+  if (m.kind === 'here' || m.kind === 'everyone') return { parse: ['everyone'] };
+  if (m.kind === 'roles') return { parse: [], roles: m.roleIds };
+  return { parse: [] };
+}
+
+/** 管理画面で見せる名前（@ロール名） */
+export function mentionLabel(raw: string | null | undefined, roleName: (id: string) => string | undefined): string {
+  const m = parseMention(raw);
+  if (m.kind === 'here') return '@here';
+  if (m.kind === 'everyone') return '@everyone';
+  if (m.kind === 'roles') return m.roleIds.map((id) => `@${roleName(id) ?? id}`).join(' ');
+  return '';
+}
 
 /** チャンネルとして選べる種類（テキスト・お知らせ） */
 const POSTABLE = new Set([0, 5]);
@@ -158,7 +281,17 @@ export async function getNotice(db: Db, id: number): Promise<Notice | undefined>
 
 export async function createNotice(
   db: Db,
-  input: { channelId: string; title: string; body: string; style?: NoticeStyle; pinned?: boolean; sticky?: boolean; by: string },
+  input: {
+    channelId: string;
+    title: string;
+    body: string;
+    style?: NoticeStyle;
+    pinned?: boolean;
+    sticky?: boolean;
+    mention?: string;
+    imagePosition?: ImagePosition;
+    by: string;
+  },
 ): Promise<Notice> {
   const [last] = await db
     .select({ p: max(notices.position) })
@@ -174,6 +307,8 @@ export async function createNotice(
       style: input.style ?? 'embed',
       pinned: input.pinned ?? false,
       sticky: input.sticky ?? false,
+      mention: input.mention ?? '',
+      imagePosition: input.imagePosition ?? 'bottom',
       updatedBy: input.by,
     })
     .returning();
@@ -184,7 +319,16 @@ export async function createNotice(
 export async function updateNotice(
   db: Db,
   id: number,
-  input: { title: string; body: string; style?: NoticeStyle; pinned?: boolean; sticky?: boolean; by: string },
+  input: {
+    title: string;
+    body: string;
+    style?: NoticeStyle;
+    pinned?: boolean;
+    sticky?: boolean;
+    mention?: string;
+    imagePosition?: ImagePosition;
+    by: string;
+  },
 ): Promise<void> {
   await db
     .update(notices)
@@ -194,6 +338,8 @@ export async function updateNotice(
       ...(input.style ? { style: input.style } : {}),
       ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
       ...(input.sticky !== undefined ? { sticky: input.sticky } : {}),
+      ...(input.mention !== undefined ? { mention: input.mention } : {}),
+      ...(input.imagePosition ? { imagePosition: input.imagePosition } : {}),
       updatedBy: input.by,
       updatedAt: new Date(),
     })
@@ -228,19 +374,26 @@ export async function deleteNotice(ctx: NoticeCtx, id: number, by: string): Prom
 
 export type PublishResult = 'posted' | 'edited' | 'reposted' | 'unchanged' | 'too_long' | 'pin_failed';
 
-/** 未投稿なら投稿、投稿済みなら書き換える。Discord 側で消されていたら投稿し直す */
+/**
+ * 未投稿なら投稿、投稿済みなら書き換える。Discord 側で消されていたら投稿し直す。
+ * メンションの通知が届くのは、はじめて投稿したときだけ（書き換え・出し直しでは鳴らさない）
+ */
 export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Promise<PublishResult> {
   const n = await getNotice(ctx.db, id);
   if (!n) throw new Error(`notice ${id} not found`);
   const { text } = renderNotice(n.body, ctx.cfg, await guildChannelsCached(ctx.discord, ctx.cfg.guildId));
-  if (tooLong(n.style, text)) return 'too_long';
+  if (tooLong(n.style, text, n.mention)) return 'too_long';
   if (noticeStatus(n, text) === 'posted') return 'unchanged';
-  const body = messageBody(n.style, text);
+  const image = await imageFor(ctx.db, n, n.imagePosition);
+  const body = messageBody(n.style, text, n.mention, image);
+  // 写真を外したときは、前の添付も外す
+  if (!image && n.postedImage) body.attachments = [];
 
   let result: PublishResult;
   let messageId = n.messageId;
   // 本文はそのままで、ピン留めだけ変えたとき
-  const sameContent = Boolean(messageId) && n.postedText === text && n.postedStyle === n.style;
+  const sameContent =
+    Boolean(messageId) && n.postedText === text && n.postedStyle === n.style && (n.postedMention ?? '') === n.mention && (n.postedImage ?? '') === imageKey(n);
   if (sameContent) {
     result = 'edited';
   } else if (messageId) {
@@ -253,13 +406,16 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
       result = 'reposted';
     }
   } else {
-    messageId = (await ctx.discord.sendMessage(n.channelId, body)).id;
+    messageId = (await ctx.discord.sendMessage(n.channelId, n.mention ? { ...body, allowed_mentions: mentionAllowed(n.mention) } : body)).id;
     result = 'posted';
   }
   // 新しく投稿したメッセージは、まだピン留めされていない
   const wasPinned = result === 'edited' ? n.postedPinned : false;
   const postedPinned = await applyPin(ctx.discord, n.channelId, messageId!, wantPinned(n), wasPinned);
-  await ctx.db.update(notices).set({ messageId, postedText: text, postedStyle: n.style, postedPinned }).where(eq(notices.id, id));
+  await ctx.db
+    .update(notices)
+    .set({ messageId, postedText: text, postedStyle: n.style, postedPinned, postedMention: n.mention, postedImage: image ? imageKey(n) : null })
+    .where(eq(notices.id, id));
   await audit(ctx.db, { actorId: by, action: 'notice.publish', detail: { id, title: n.title, result }, via: by === 'system' ? 'system' : 'web' });
   return postedPinned === wantPinned(n) ? result : 'pin_failed';
 }
@@ -284,8 +440,14 @@ export async function stickyNotices(db: Db, channelId?: string): Promise<Notice[
 export async function restickNotice(ctx: NoticeCtx, id: number): Promise<boolean> {
   const n = await getNotice(ctx.db, id);
   if (!n?.sticky || !n.messageId || n.postedText === null) return false;
-  const { id: messageId } = await ctx.discord.sendMessage(n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText));
-  await ctx.db.update(notices).set({ messageId, postedPinned: false }).where(eq(notices.id, id));
+  // 投稿済みの写真（そのあと差し替えていれば、写真なしで出し直す）
+  const [hash, pos] = (n.postedImage ?? '').split(':');
+  const image = hash ? await imageFor(ctx.db, n, isImagePosition(pos) ? pos : 'bottom', hash) : undefined;
+  const { id: messageId } = await ctx.discord.sendMessage(n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText, n.postedMention ?? '', image));
+  await ctx.db
+    .update(notices)
+    .set({ messageId, postedPinned: false, ...(hash && !image ? { postedImage: null } : {}) })
+    .where(eq(notices.id, id));
   await deleteMessageQuietly(ctx.discord, n.channelId, n.messageId);
   return true;
 }
@@ -323,19 +485,27 @@ export async function repostChannel(ctx: NoticeCtx, channelId: string, by: strin
   const list = await ctx.db.select().from(notices).where(eq(notices.channelId, channelId)).orderBy(asc(notices.position), asc(notices.id));
   const channels = await guildChannelsCached(ctx.discord, ctx.cfg.guildId, true);
   const rendered = list.map((n) => ({ n, text: renderNotice(n.body, ctx.cfg, channels).text }));
-  const over = rendered.filter((r) => tooLong(r.n.style, r.text)).map((r) => r.n.title);
+  const over = rendered.filter((r) => tooLong(r.n.style, r.text, r.n.mention)).map((r) => r.n.title);
   if (over.length) return { done: 0, tooLong: over, pinFailed: [] };
 
   for (const { n } of rendered) {
     if (n.messageId) await deleteMessageQuietly(ctx.discord, channelId, n.messageId);
-    await ctx.db.update(notices).set({ messageId: null, postedText: null, postedStyle: null, postedPinned: false }).where(eq(notices.id, n.id));
+    await ctx.db
+      .update(notices)
+      .set({ messageId: null, postedText: null, postedStyle: null, postedPinned: false, postedMention: null, postedImage: null })
+      .where(eq(notices.id, n.id));
   }
   const pinFailed: string[] = [];
+  // 並べ直しなので、メンションの通知は鳴らさない
   for (const { n, text } of rendered) {
-    const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text));
+    const image = await imageFor(ctx.db, n, n.imagePosition);
+    const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text, n.mention, image));
     const postedPinned = await applyPin(ctx.discord, channelId, id, wantPinned(n), false);
     if (postedPinned !== wantPinned(n)) pinFailed.push(n.title);
-    await ctx.db.update(notices).set({ messageId: id, postedText: text, postedStyle: n.style, postedPinned }).where(eq(notices.id, n.id));
+    await ctx.db
+      .update(notices)
+      .set({ messageId: id, postedText: text, postedStyle: n.style, postedPinned, postedMention: n.mention, postedImage: image ? imageKey(n) : null })
+      .where(eq(notices.id, n.id));
   }
   await audit(ctx.db, { actorId: by, action: 'notice.repost', detail: { channelId, count: rendered.length }, via: 'web' });
   return { done: rendered.length, tooLong: [], pinFailed };
@@ -359,7 +529,7 @@ export async function syncPostedNotices(ctx: NoticeCtx, before: GuildConfig): Pr
     // 設定を変える前の値で差し込んだものが、投稿済みの本文と同じもの（＝本文は反映済み）だけ
     if (noticeStatus(n, renderNotice(n.body, before, channels).text) !== 'posted') continue;
     const text = renderNotice(n.body, ctx.cfg, channels).text;
-    if (text === n.postedText || tooLong(n.style, text)) continue;
+    if (text === n.postedText || tooLong(n.style, text, n.mention)) continue;
     try {
       await publishNotice(ctx, n.id, 'system');
       changed++;
@@ -395,7 +565,13 @@ export type NoticeStatus = 'draft' | 'posted' | 'changed';
 
 export function noticeStatus(n: Notice, renderedText: string): NoticeStatus {
   if (!n.messageId) return 'draft';
-  return n.postedText === renderedText && n.postedStyle === n.style && n.postedPinned === wantPinned(n) ? 'posted' : 'changed';
+  const same =
+    n.postedText === renderedText &&
+    n.postedStyle === n.style &&
+    n.postedPinned === wantPinned(n) &&
+    (n.postedMention ?? '') === n.mention &&
+    (n.postedImage ?? '') === imageKey(n);
+  return same ? 'posted' : 'changed';
 }
 
 /** 標準の文面を入れる。チャンネルは名前で探す。すでに掲示があるチャンネルには入れない */

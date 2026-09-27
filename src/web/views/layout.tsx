@@ -8,7 +8,7 @@ type Nav = 'home' | 'stats' | 'voice' | 'updates' | 'roles' | 'market' | 'gacha'
 /** 画面に出すログイン中の人（updatesUnseen: まだ読んでいない更新の数） */
 export type SessionView = AdminSession & { updatesUnseen?: number };
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: 'editor.js'[]; children: Child }) {
   const { session, nav } = props;
   return (
     <html lang="ja">
@@ -20,6 +20,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         <title>{`${props.title} | 社務所 Web`}</title>
         <link rel="stylesheet" href={assetUrl('style.css')} />
         <script src={assetUrl('htmx.min.js')} defer></script>
+        {(props.scripts ?? []).map((s) => (
+          <script src={assetUrl(s)} defer></script>
+        ))}
       </head>
       <body>
         {session && (

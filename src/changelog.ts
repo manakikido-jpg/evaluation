@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-notice-mention-deco-image',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '📋 掲示: メンション・文字の飾り・写真',
+    items: [
+      '🔔 掲示にメンション（@here・@everyone・ロール）を付けられる。通知が鳴るのは、はじめて投稿したときだけ',
+      '✍ 本文の飾りボタン（太字・斜体・下線・取り消し線・伏せ字・見出し・小さい文字・箇条書き・引用・コード・リンク）と Ctrl+B / I / U',
+      '👀 プレビューが Discord に近い見た目に（太字や見出しがそのまま見える）',
+      '🖼 写真を 1 枚付けられる。本文の上か下かを選べる（普通のメッセージは下だけ）',
+    ],
+  },
+  {
     id: '2026-09-27-zandaka',
     date: '2026-09-27',
     kind: 'new',

@@ -1,6 +1,16 @@
+import { raw } from 'hono/html';
 import type { AdminSession, Notice } from '../../db/schema.js';
-import { maxLengthOf, NOTICE_STYLES, type NoticeStatus, type NoticeStyle, type NoticeVariable } from '../../services/notices.js';
+import {
+  maxLengthOf,
+  NOTICE_STYLES,
+  parseMention,
+  type ImagePosition,
+  type NoticeStatus,
+  type NoticeStyle,
+  type NoticeVariable,
+} from '../../services/notices.js';
 import { fmtAgo } from '../format.js';
+import { discordMarkdownToHtml } from '../markdown.js';
 import { Layout } from './layout.js';
 
 export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
@@ -26,6 +36,8 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
     kind: 'warn',
   },
   invalid: { text: '入力が足りません（タイトル・本文・チャンネル）。', kind: 'warn' },
+  image_too_big: { text: '写真が大きすぎます（8MB まで）。小さくしてから選び直してください。', kind: 'warn' },
+  image_bad_type: { text: '写真は PNG・JPEG・GIF・WebP のどれかにしてください。', kind: 'warn' },
   discord_error: { text: 'Discord への投稿に失敗しました。BOT がそのチャンネルに書き込めるか確認してください。', kind: 'warn' },
 };
 
@@ -44,7 +56,7 @@ function Flash(props: { code?: string }) {
   return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
 }
 
-export type NoticeRow = { notice: Notice; preview: string; length: number; status: NoticeStatus; unknown: string[] };
+export type NoticeRow = { notice: Notice; preview: string; length: number; status: NoticeStatus; unknown: string[]; mention: string };
 export type NoticeGroup = { channelId: string; channelName: string | null; rows: NoticeRow[] };
 
 export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[]; flash?: string; now: Date }) {
@@ -108,13 +120,15 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
                   <span class={`status ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
                   <small>{r.notice.style === 'text' ? '普通のメッセージ' : 'カード'}</small>
                   {r.notice.sticky ? <small>⬇ いちばん下に表示し続ける</small> : r.notice.pinned && <small>📌 ピン留め</small>}
+                  {r.mention && <small>🔔 {r.mention}</small>}
+                  {r.notice.imageHash && <small>🖼 写真（{r.notice.imagePosition === 'top' ? '上' : '下'}）</small>}
                   <small class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
                     {r.length} / {maxLengthOf(r.notice.style)} 文字
                   </small>
                   <small>更新 {fmtAgo(r.notice.updatedAt, props.now)}</small>
                 </div>
                 {r.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {r.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-                <pre class={`notice-preview${r.notice.style === 'text' ? '' : ' embed'}`}>{r.preview}</pre>
+                <Rendered text={r.preview} style={r.notice.style} mention={r.mention} image={imageOf(r.notice)} />
                 <div class="inline-actions">
                   <a class="button-link" href={`/notices/${r.notice.id}`}>
                     編集
@@ -164,6 +178,7 @@ export function NoticeEditPage(props: {
   notice?: Notice;
   channels: { id: string; name: string; category: string | null }[];
   channelName?: string | null;
+  roles: { id: string; name: string }[];
   vars: NoticeVariable[];
   preview: string;
   length: number;
@@ -172,16 +187,22 @@ export function NoticeEditPage(props: {
 }) {
   const { session, notice } = props;
   const action = notice ? `/notices/${notice.id}` : '/notices';
+  const mention = parseMention(notice?.mention);
+  const picked = new Set(mention.kind === 'roles' ? mention.roleIds : []);
+  const preview = { 'hx-post': '/notices/preview', 'hx-trigger': 'change', 'hx-target': '#notice-preview', 'hx-include': '#notice-form' };
+  const mentionLabel = mention.kind === 'here' ? '@here' : mention.kind === 'everyone' ? '@everyone' : props.roles.filter((r) => picked.has(r.id)).map((r) => `@${r.name}`).join(' ');
   return (
-    <Layout title={notice ? `掲示の編集: ${notice.title}` : '掲示の追加'} session={session} nav="notices">
+    <Layout title={notice ? `掲示の編集: ${notice.title}` : '掲示の追加'} session={session} nav="notices" scripts={['editor.js']}>
       <p>
         <a href="/notices">← 掲示の一覧</a>
       </p>
       <h1>{notice ? `掲示の編集: ${notice.title}` : '掲示の追加'}</h1>
       <Flash code={props.error} />
       <div class="notice-edit">
-        <form method="post" action={action} class="card notice-form" id="notice-form">
+        {/* プレビューのたびに写真を送らないよう、htmx には写真を入れない */}
+        <form method="post" action={action} class="card notice-form" id="notice-form" enctype="multipart/form-data" hx-params="not image">
           <Csrf session={session} />
+          {notice && <input type="hidden" name="noticeId" value={String(notice.id)} />}
           <label class="field">
             <span>投稿先のチャンネル</span>
             {notice ? (
@@ -225,20 +246,104 @@ export function NoticeEditPage(props: {
             <input type="checkbox" name="sticky" value="yes" checked={notice?.sticky ?? false} />
             <span>⬇ いちばん下に表示し続ける（誰かが書き込むと、3 秒ほどで BOT が下に出し直す。#絵馬-男性 のひな形など。こちらを選ぶとピン留めはしません）</span>
           </label>
-          <label class="field">
-            <span>本文（Discord の書き方: # 見出し、**太字**、- 箇条書き、-# 小さい文字）</span>
-            <textarea
-              name="body"
-              rows={24}
-              required
-              hx-post="/notices/preview"
-              hx-trigger="input changed delay:500ms"
-              hx-target="#notice-preview"
-              hx-include="#notice-form"
-            >
-              {notice?.body ?? ''}
-            </textarea>
+          <fieldset class="field mention-pick" {...preview}>
+            <legend>🔔 メンション（投稿したときに通知を届ける相手）</legend>
+            <div class="inline-actions">
+              {(
+                [
+                  ['none', 'なし'],
+                  ['here', '@here（いまオンラインの人）'],
+                  ['everyone', '@everyone（全員）'],
+                  ['roles', 'ロール（下で選ぶ）'],
+                ] as const
+              ).map(([v, label]) => (
+                <label class="check">
+                  <input type="radio" name="mentionKind" value={v} checked={mention.kind === v} />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            {props.roles.length > 0 ? (
+              <div class="role-checks">
+                {props.roles.map((r) => (
+                  <label class="check">
+                    <input type="checkbox" name="mentionRoles" value={r.id} checked={picked.has(r.id)} />
+                    <span>@{r.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p class="note">ロールを読み込めませんでした（BOT が動いていれば、少しあとに開き直すと出ます）。</p>
+            )}
+            <p class="note">
+              通知が届くのは<strong>はじめて投稿したときだけ</strong>です（あとから書き換えても、もう一度は鳴りません）。ロールは 5 つまで。@everyone・@here や「メンションを許可」していないロールを鳴らすには、BOT
+              のロールに「@everyone、@here、全てのロールにメンション」の権限が要ります。
+            </p>
+          </fieldset>
+          <label class="field" for="notice-body">
+            <span>本文（Discord の書き方で飾れます。下のボタンか、Ctrl+B 太字・Ctrl+I 斜体・Ctrl+U 下線）</span>
           </label>
+          <MarkdownToolbar target="notice-body" />
+          <textarea
+            id="notice-body"
+            name="body"
+            rows={24}
+            required
+            data-md-editor
+            hx-post="/notices/preview"
+            hx-trigger="input changed delay:500ms"
+            hx-target="#notice-preview"
+            hx-include="#notice-form"
+          >
+            {notice?.body ?? ''}
+          </textarea>
+          <fieldset class="field image-pick" {...preview}>
+            <legend>🖼 写真</legend>
+            {notice?.imageHash && (
+              <div class="image-current">
+                <img src={`/notices/${notice.id}/image?v=${notice.imageHash}`} alt="今の写真" />
+                <label class="check">
+                  <input type="checkbox" name="removeImage" value="yes" />
+                  <span>写真を外す</span>
+                </label>
+              </div>
+            )}
+            <label class="field">
+              <span>{notice?.imageHash ? '別の写真に替える' : '写真を選ぶ'}（PNG・JPEG・GIF・WebP、8MB まで）</span>
+              <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" data-image-input />
+            </label>
+            <div class="inline-actions">
+              {(
+                [
+                  ['top', '⬆ 本文の上'],
+                  ['bottom', '⬇ 本文の下'],
+                ] as const
+              ).map(([v, label]) => (
+                <label class="check">
+                  <input type="radio" name="imagePosition" value={v} checked={(notice?.imagePosition ?? 'bottom') === v} />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            <p class="note">
+              カードは、上なら写真のカードを本文のカードの上に、下なら本文のカードの中のいちばん下に出します。普通のメッセージは Discord の決まりで、写真はいつも本文の下になります。
+            </p>
+          </fieldset>
+          <details class="md-help">
+            <summary>書き方の一覧</summary>
+            <table class="compact">
+              <tbody>
+                {MD_HELP.map(([src, note]) => (
+                  <tr>
+                    <td>
+                      <code>{src}</code>
+                    </td>
+                    <td class="wrap note">{note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
           <div class="inline-actions">
             <button type="submit" name="then" value="save">
               保存
@@ -252,20 +357,30 @@ export function NoticeEditPage(props: {
           <section class="card">
             <h2>プレビュー</h2>
             <div id="notice-preview">
-              <NoticePreview preview={props.preview} length={props.length} unknown={props.unknown} style={notice?.style ?? 'embed'} />
+              <NoticePreview
+                preview={props.preview}
+                length={props.length}
+                unknown={props.unknown}
+                style={notice?.style ?? 'embed'}
+                mention={mentionLabel}
+                image={imageOf(notice)}
+                slot
+              />
             </div>
           </section>
           <section class="card">
             <h2>差し込める値</h2>
             <p class="note">
-              本文に書くと、今の設定の値に置き換わります。<code>{'{#チャンネル名}'}</code> でチャンネルへのリンクになります。
+              本文に書くと、今の設定の値に置き換わります。<code>{'{#チャンネル名}'}</code> でチャンネルへのリンクになります。名前を押すと、本文のカーソルの所に入ります。
             </p>
             <table class="compact">
               <tbody>
                 {props.vars.map((v) => (
                   <tr>
                     <td>
-                      <code>{`{${v.name}}`}</code>
+                      <button type="button" class="md-insert" data-md="insert" data-target="notice-body" data-text={`{${v.name}}`}>
+                        {`{${v.name}}`}
+                      </button>
                     </td>
                     <td class="wrap">{v.name === '役職一覧' ? '（役職の箇条書き）' : v.value}</td>
                     <td class="wrap note">{v.note}</td>
@@ -280,7 +395,24 @@ export function NoticeEditPage(props: {
   );
 }
 
-export function NoticePreview(props: { preview: string; length: number; unknown: string[]; style: string }) {
+type PreviewImage = { url?: string; position: ImagePosition };
+
+/** 保存済みの写真（プレビュー用の URL） */
+const imageOf = (n?: Notice): PreviewImage => ({
+  url: n?.imageHash ? `/notices/${n.id}/image?v=${n.imageHash}` : undefined,
+  position: n?.imagePosition ?? 'bottom',
+});
+
+export function NoticePreview(props: {
+  preview: string;
+  length: number;
+  unknown: string[];
+  style: string;
+  mention?: string;
+  image?: PreviewImage;
+  /** 編集画面: 新しく選んだ写真を JS が入れる場所を用意する */
+  slot?: boolean;
+}) {
   const max = maxLengthOf(props.style);
   return (
     <>
@@ -288,10 +420,97 @@ export function NoticePreview(props: { preview: string; length: number; unknown:
         {props.length} / {max} 文字{props.length > max ? '（多すぎます。2 つに分けてください）' : ''}
       </p>
       {props.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {props.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-      <pre class={`notice-preview${props.style === 'text' ? '' : ' embed'}`}>{props.preview}</pre>
+      <Rendered text={props.preview} style={props.style} mention={props.mention} image={props.image} slot={props.slot} />
     </>
   );
 }
+
+/** Discord での見た目（メンションはカードの上・普通のメッセージなら 1 行目。写真は上か下） */
+function Rendered(props: { text: string; style: string; mention?: string; image?: PreviewImage; slot?: boolean }) {
+  const card = props.style !== 'text';
+  // 普通のメッセージの写真は、いつも本文の下
+  const top = card && props.image?.position === 'top';
+  const img = (props.image?.url || props.slot) && (
+    <img class="notice-img" src={props.image?.url} alt="写真" hidden={!props.image?.url} {...(props.slot ? { 'data-image-slot': '' } : {})} />
+  );
+  const body = raw(discordMarkdownToHtml(props.text));
+  return (
+    <div class="notice-rendered">
+      {props.mention && <div class="md-mentionline">{props.mention}</div>}
+      {top && img && (
+        <div class="notice-preview embed notice-img-card" hidden={!props.image?.url}>
+          {img}
+        </div>
+      )}
+      <div class={`notice-preview md${card ? ' embed' : ''}`}>
+        {body}
+        {card && !top && img}
+      </div>
+      {!card && img}
+    </div>
+  );
+}
+
+/** 飾りのボタン（押すと選んだ文字を囲む・行の頭に付ける。JS がなければ何もしないので、手で書く） */
+const TOOLBAR: { label: string; title: string; attrs: Record<string, string> }[][] = [
+  [
+    { label: 'B', title: '太字 **文字**', attrs: { 'data-md': 'wrap', 'data-before': '**' } },
+    { label: 'I', title: '斜体 *文字*', attrs: { 'data-md': 'wrap', 'data-before': '*' } },
+    { label: 'U', title: '下線 __文字__', attrs: { 'data-md': 'wrap', 'data-before': '__' } },
+    { label: 'S', title: '取り消し線 ~~文字~~', attrs: { 'data-md': 'wrap', 'data-before': '~~' } },
+    { label: '伏せ字', title: 'ネタバレ（押すと見える） ||文字||', attrs: { 'data-md': 'wrap', 'data-before': '||' } },
+  ],
+  [
+    { label: '見出し大', title: '# 見出し', attrs: { 'data-md': 'line', 'data-prefix': '# ' } },
+    { label: '中', title: '## 見出し', attrs: { 'data-md': 'line', 'data-prefix': '## ' } },
+    { label: '小', title: '### 見出し', attrs: { 'data-md': 'line', 'data-prefix': '### ' } },
+    { label: '小さい文字', title: '-# 小さい文字', attrs: { 'data-md': 'line', 'data-prefix': '-# ' } },
+  ],
+  [
+    { label: '• 箇条書き', title: '- 箇条書き', attrs: { 'data-md': 'line', 'data-prefix': '- ' } },
+    { label: '1. 番号', title: '1. 番号付き', attrs: { 'data-md': 'line', 'data-prefix': '1. ', 'data-numbered': 'yes' } },
+    { label: '❝ 引用', title: '> 引用', attrs: { 'data-md': 'line', 'data-prefix': '> ' } },
+  ],
+  [
+    { label: '`コード`', title: '`コード`', attrs: { 'data-md': 'wrap', 'data-before': '`' } },
+    { label: 'コード枠', title: '```コードブロック```', attrs: { 'data-md': 'code' } },
+    { label: '🔗 リンク', title: '[文字](https://…)', attrs: { 'data-md': 'link' } },
+  ],
+];
+
+function MarkdownToolbar(props: { target: string }) {
+  return (
+    <div class="md-toolbar" role="toolbar" aria-label="本文の飾り">
+      {TOOLBAR.map((group) => (
+        <span class="md-group">
+          {group.map((b) => (
+            <button type="button" title={b.title} data-target={props.target} {...b.attrs}>
+              {b.label}
+            </button>
+          ))}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const MD_HELP: [string, string][] = [
+  ['**太字**', '太字'],
+  ['*斜体*', '斜め（_斜体_ でも）'],
+  ['__下線__', '下線'],
+  ['~~取り消し~~', '取り消し線'],
+  ['||ネタバレ||', '押すまで隠れる'],
+  ['***太字の斜体***', '組み合わせもできます（__**下線の太字**__ など）'],
+  ['# 見出し', '大きな見出し（## 中・### 小）。行の頭に書く'],
+  ['-# 小さい文字', '小さく薄い文字。注意書きに'],
+  ['- 箇条書き', '行の頭に。先頭に空白 2 つで 1 段下げる'],
+  ['1. 番号付き', '番号の箇条書き'],
+  ['> 引用', 'その行を引用の枠に（>>> ならそこから最後まで）'],
+  ['`コード`', '等幅の文字'],
+  ['```\n複数行\n```', 'コードの枠'],
+  ['[文字](https://…)', '文字にリンクを付ける'],
+  ['{#チャンネル名}', 'チャンネルへのリンク'],
+];
 
 export function NoticeDeletePage(props: { session: AdminSession; notice: Notice; channelName: string | null }) {
   const { session, notice } = props;

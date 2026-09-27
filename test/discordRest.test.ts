@@ -21,4 +21,37 @@ describe('Discord REST', () => {
     expect(err).toBeInstanceOf(DiscordHttpError);
     expect((err as DiscordHttpError).status).toBe(404);
   });
+
+  it('写真を送るときは multipart（本文は payload_json、ファイルは files[0]）。待ってやり直すときも送り直す', async () => {
+    const replies = [
+      new Response(JSON.stringify({ retry_after: 0.01 }), { status: 429 }),
+      new Response(JSON.stringify({ id: '9' }), { status: 200 }),
+    ];
+    const calls: RequestInit[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => (calls.push(init), replies.shift()!)),
+    );
+    const data = new Uint8Array([1, 2, 3]);
+    const r = await createDiscordActions('t').sendMessage('1', {
+      content: '',
+      embeds: [{ description: 'x', image: { url: 'attachment://a.png' } }],
+      files: [{ name: 'a.png', contentType: 'image/png', data }],
+    });
+    expect(r).toEqual({ id: '9' });
+    expect(calls).toHaveLength(2);
+    const form = calls[1]!.body as FormData;
+    expect(form).toBeInstanceOf(FormData);
+    expect((calls[1]!.headers as Record<string, string>)['content-type']).toBeUndefined();
+    const payload = JSON.parse(form.get('payload_json') as string);
+    expect(payload).toEqual({
+      content: '',
+      embeds: [{ description: 'x', image: { url: 'attachment://a.png' } }],
+      attachments: [{ id: 0, filename: 'a.png' }],
+      allowed_mentions: { parse: [] },
+    });
+    const file = form.get('files[0]') as File;
+    expect(file.name).toBe('a.png');
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(data);
+  });
 });

@@ -3,7 +3,7 @@ import type { Db } from '../src/db/client.js';
 import { listAudit } from '../src/services/audit.js';
 import { recordJoin } from '../src/services/members.js';
 import type { DiscordApi } from '../src/web/discordApi.js';
-import type { DiscordActions } from '../src/lib/discordRest.js';
+import type { DiscordActions, MessageBody } from '../src/lib/discordRest.js';
 import { addCoins } from '../src/services/economy.js';
 import { activeYakuCount, memosOf } from '../src/services/yaku.js';
 import { createWebApp } from '../src/web/app.js';
@@ -662,6 +662,65 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(del.headers.get('location')).toBe('/notices?msg=deleted');
     expect(actions).toContain(`delete ${first!.messageId}`);
     expect((await listAudit(db)).map((a) => a.action)).toEqual(expect.arrayContaining(['notice.create', 'notice.publish', 'notice.update', 'notice.delete']));
+  });
+
+  it('掲示: メンションを選び、写真を付けて投稿できる。飾りのボタンとプレビュー', async () => {
+    roleList = [
+      { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0 },
+      { id: '980000000000000001', name: '新人', position: 2, managed: false, color: 0 },
+      { id: '980000000000000002', name: 'BOT', position: 3, managed: true, color: 0 },
+    ];
+    const bodies: MessageBody[] = [];
+    const send = fakeActions.sendMessage;
+    fakeActions.sendMessage = async (c, b) => (bodies.push(b), send(c, b));
+    try {
+      const g = await login(GUJI);
+      const page = await (await get('/notices/new', g)).text();
+      expect(page).toContain('/static/editor.js?v=');
+      expect(page).toContain('data-md="wrap"');
+      expect(page).toContain('name="mentionRoles" value="980000000000000001"');
+      expect(page).not.toContain('value="980000000000000002"');
+      expect(page).toContain('enctype="multipart/form-data"');
+      expect((await get('/static/editor.js', g)).status).toBe(200);
+
+      // プレビュー: 飾りを HTML で、メンションは上に
+      const pv = await (
+        await post('/notices/preview', g, { _csrf: await csrfOf(g), body: '**太字** <b>', mentionKind: 'roles', mentionRoles: '980000000000000001' })
+      ).text();
+      expect(pv).toContain('<strong>太字</strong> &lt;b&gt;');
+      expect(pv).toContain('@新人');
+
+      const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+      const fd = new FormData();
+      for (const [k, v] of Object.entries({ _csrf: await csrfOf(g), channelId: '910000000000000003', title: '祭り', body: '夏祭り', mentionKind: 'everyone', imagePosition: 'top', then: 'publish' }))
+        fd.append(k, v);
+      fd.append('image', new File([png], 'photo.png', { type: 'image/png' }));
+      const r = await app.request('/notices', { method: 'POST', headers: { cookie: `shamusho_session=${g}` }, body: fd });
+      expect(r.headers.get('location')).toBe('/notices?msg=posted');
+      expect(bodies.at(-1)).toMatchObject({ content: '@everyone', allowed_mentions: { parse: ['everyone'] }, embeds: [{ image: {} }, { description: '夏祭り' }] });
+      const n = (await listNotices(db)).at(-1)!;
+      expect(bodies.at(-1)!.files![0]).toMatchObject({ name: `notice-${n.id}.png`, contentType: 'image/png' });
+      expect((await get(`/notices/${n.id}/image`, g)).headers.get('content-type')).toBe('image/png');
+      const list = await (await get('/notices', g)).text();
+      expect(list).toContain('🔔 @everyone');
+      expect(list).toContain('🖼 写真（上）');
+
+      // 写真でないものは入れない
+      const bad = new FormData();
+      for (const [k, v] of Object.entries({ _csrf: await csrfOf(g), title: '祭り', body: '夏祭り' })) bad.append(k, v);
+      bad.append('image', new File(['<svg/>'], 'x.png', { type: 'image/png' }));
+      const br = await app.request(`/notices/${n.id}`, { method: 'POST', headers: { cookie: `shamusho_session=${g}` }, body: bad });
+      expect(await br.text()).toContain('PNG・JPEG・GIF・WebP');
+
+      // 写真を外す（メンションの欄がない古い画面から送られても、メンションは変えない）
+      await post(`/notices/${n.id}`, g, { _csrf: await csrfOf(g), title: '祭り', body: '夏祭り', removeImage: 'yes' });
+      const after = (await listNotices(db)).at(-1)!;
+      expect(after.imageHash).toBeNull();
+      expect(after.mention).toBe('everyone');
+    } finally {
+      fakeActions.sendMessage = send;
+      roleList = [];
+    }
   });
 
   it('設定で免罪符の値段を変えると、投稿済みの掲示も書き換わる', async () => {
