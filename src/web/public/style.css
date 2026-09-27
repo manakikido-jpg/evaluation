@@ -317,3 +317,4 @@ td.prize-name { min-width: 180px; max-width: 340px; }
 .bulk-bar .sep { margin-left: 8px; }
 .pct { display: inline-flex; align-items: center; gap: 2px; }
 .pct input { width: 6.5em; }
+pre.preview { white-space: pre-wrap; background: var(--bg-soft, rgba(0,0,0,.04)); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: .9rem; }

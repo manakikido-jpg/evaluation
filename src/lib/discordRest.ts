@@ -60,7 +60,13 @@ export type GuildRole = {
 
 export type RolePatch = { name?: string; color?: number; hoist?: boolean; mentionable?: boolean; permissions?: string };
 
-export type MessageBody = { content?: string; embeds?: { title?: string; description?: string; color?: number }[]; components?: unknown[] };
+export type MessageBody = {
+  content?: string;
+  embeds?: { title?: string; description?: string; color?: number }[];
+  components?: unknown[];
+  /** 通知を飛ばす相手（なければだれにも飛ばさない） */
+  allowed_mentions?: { parse?: ('everyone' | 'roles' | 'users')[]; roles?: string[] };
+};
 
 export type GuildChannel = {
   id: string;
@@ -139,7 +145,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
     editMessage: async (c, m, body) =>
       void (await call('PATCH', `/channels/${c}/messages/${m}`, { body: { ...body, allowed_mentions: { parse: [] } } })),
     sendMessage: async (c, body) =>
-      (await call('POST', `/channels/${c}/messages`, { body: { ...body, allowed_mentions: { parse: [] } } })) as { id: string },
+      (await call('POST', `/channels/${c}/messages`, { body: { ...body, allowed_mentions: body.allowed_mentions ?? { parse: [] } } })) as { id: string },
     deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
     async pinMessage(c, m, pin) {
       await call(pin ? 'PUT' : 'DELETE', `/channels/${c}/messages/pins/${m}`, { reason: pin ? '掲示のピン留め' : '掲示のピン留めを外した' });

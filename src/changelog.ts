@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-interview',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '🍵 面談告知: 日時を決めるだけで定型文を流せる',
+    items: [
+      '社務所Web の「面談告知」で日時（場所・一言も）を決めて「流す」と、面談告知のチャンネルに定型文を流す',
+      '定型文・流し先・通知（なし・@here・@everyone・ロール）を保存できる。差し込みは {日時} {あと} {場所} {一言} など',
+    ],
+  },
+  {
     id: '2026-09-27-gacha-percent',
     date: '2026-09-27',
     kind: 'improve',

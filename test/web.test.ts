@@ -126,7 +126,7 @@ const get = (path: string, session: string, headers: Record<string, string> = {}
 
 describe('ログイン', () => {
   it('ログインしていなければログイン画面へ', async () => {
-    for (const p of ['/', '/members', `/members/${USER}`, '/audit', '/gacha']) {
+    for (const p of ['/', '/members', `/members/${USER}`, '/audit', '/gacha', '/interview']) {
       const res = await app.request(p);
       expect(res.status).toBe(302);
       expect(res.headers.get('location')).toBe('/login');
@@ -1212,6 +1212,40 @@ describe('物御籤（管理画面）', () => {
     expect((await ticketsOf(db, USER)).room_free).toBe(0);
     expect((await listAudit(db, { action: 'tickets.grant' })).length).toBe(1);
     expect((await listAudit(db, { action: 'tickets.take' })).length).toBe(2);
+  });
+});
+
+describe('面談告知（管理画面）', () => {
+  const post = async (session: string, path: string, form: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...form }).toString(),
+    });
+  };
+
+  it('日時を決めて流す（流し先・通知・定型文は保存できる）。神職も使える', async () => {
+    const s = await login(STAFF);
+    const page = await (await get('/interview', s)).text();
+    expect(page).toContain('🍵 面談告知');
+    expect(page).toContain('面談のお知らせ');
+    // 面談のチャンネルがなければ流せない
+    expect((await post(s, '/interview/post', { at: '2026-09-28T21:00' })).headers.get('location')).toBe('/interview?msg=no_channel');
+    expect((await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'role', template: 'x' })).headers.get('location')).toBe(
+      '/interview?msg=settings_invalid',
+    );
+    expect((await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'here', template: '面談: {日時}\n{一言}' })).headers.get('location')).toBe(
+      '/interview?msg=saved',
+    );
+    expect((await post(s, '/interview/post', { at: 'だめ' })).headers.get('location')).toBe('/interview?msg=invalid');
+    actions.length = 0;
+    expect((await post(s, '/interview/post', { at: '2026-09-28T21:00', note: '' })).headers.get('location')).toBe('/interview?msg=posted');
+    expect(actions).toEqual(['send 910000000000000003 @here\n面談: 9月28日（月） 21:00']);
+    expect(await (await get('/interview', s)).text()).toContain('9月28日（月） 21:00');
+    // 標準に戻す
+    await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'none', template: 'x', reset: 'yes' });
+    expect(await (await get('/interview', s)).text()).toContain('運営との面談をおこないます');
   });
 });
 

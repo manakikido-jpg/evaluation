@@ -31,6 +31,18 @@ import {
 import { addTickets, emptyTickets, ticketHolders, ticketsOf, takeTickets, TICKET_LABEL } from '../services/tickets.js';
 import { addCustom, createCustomTicket, customHolders, customHoldingsOf, customName, listCustomTickets, setCustomTicketEnabled, takeCustom } from '../services/customTickets.js';
 import { GachaPage, GACHA_FLASH, MemberGachaSection } from './views/gacha.js';
+import { InterviewPage } from './views/interview.js';
+import {
+  DEFAULT_INTERVIEW_TEMPLATE,
+  interviewChannelOf,
+  interviewMessage,
+  interviewSchema,
+  jstParts,
+  loadInterview,
+  parseJstLocal,
+  renderInterview,
+  saveInterview,
+} from '../services/interview.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -307,7 +319,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/roles', requireAdmin);
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*', '/gacha/*']) {
+  app.use('/interview', requireAdmin);
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -1663,6 +1676,67 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // ───────── 市場（神職・宮司）: 問題ありの取引・出品の取り下げ ─────────
+
+  // ───────── 面談告知 ─────────
+
+  /** 次のちょうどの時刻（日本時間の 2026-09-28T21:00） */
+  const nextHourJst = () => {
+    const j = new Date(Math.ceil((now().getTime() + 9 * 3_600_000) / 3_600_000) * 3_600_000);
+    return j.toISOString().slice(0, 16);
+  };
+
+  app.get('/interview', async (c) => {
+    const [st, channels, guildRoles, history] = await Promise.all([loadInterview(db), loadChannels(), loadRoles(), listAudit(db, { action: 'interview.post', limit: 20 })]);
+    const catName = (id: string | null) => channels.find((ch) => ch.id === id)?.name;
+    const textChannels = listTextChannels(channels).flatMap((g) => g.items);
+    const names = await namesOf(db, history.map((h) => h.actorId));
+    const at = parseJstLocal(nextHourJst())!;
+    return c.html(
+      <InterviewPage
+        session={c.get('session')}
+        settings={st}
+        channelName={interviewChannelOf(st, channels)?.name}
+        textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
+        roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
+        defaultAt={nextHourJst()}
+        preview={interviewMessage(st, renderInterview(st.template, { at, place: '🔊 拝殿', note: '（ここに一言）' })).content ?? ''}
+        history={history}
+        names={names}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.post('/interview/post', async (c) => {
+    const body = await c.req.parseBody();
+    const at = typeof body.at === 'string' ? parseJstLocal(body.at) : undefined;
+    if (!at) return c.redirect('/interview?msg=invalid');
+    const st = await loadInterview(db);
+    const channel = interviewChannelOf(st, await loadChannels(true));
+    if (!channel) return c.redirect('/interview?msg=no_channel');
+    const text = renderInterview(st.template, { at, place: field(body, 'place', 100), note: typeof body.note === 'string' ? body.note.slice(0, 500) : '' });
+    try {
+      await deps.discord.sendMessage(channel.id, interviewMessage(st, text));
+    } catch (err) {
+      logger.warn({ err }, 'interview post failed');
+      return c.redirect('/interview?msg=failed');
+    }
+    const p = jstParts(at);
+    await audit(db, { actorId: c.get('session').userId, action: 'interview.post', detail: { channelId: channel.id, at: at.toISOString(), label: `${p.date} ${p.time}` }, via: 'web' });
+    return c.redirect('/interview?msg=posted');
+  });
+
+  app.post('/interview/settings', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : undefined;
+    const roleId = typeof body.roleId === 'string' && validId(body.roleId) ? body.roleId : undefined;
+    const template = body.reset === 'yes' ? DEFAULT_INTERVIEW_TEMPLATE : typeof body.template === 'string' ? body.template.replace(/\r\n/g, '\n').trim() : '';
+    const parsed = interviewSchema.safeParse({ ...(channelId ? { channelId } : {}), ...(roleId ? { roleId } : {}), template, mention: body.mention });
+    if (!parsed.success || (parsed.data.mention === 'role' && !parsed.data.roleId)) return c.redirect('/interview?msg=settings_invalid');
+    await saveInterview(db, parsed.data, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'interview.settings', detail: { channelId, mention: parsed.data.mention }, via: 'web' });
+    return c.redirect('/interview?msg=saved');
+  });
 
   // ───────── 物御籤 ─────────
 
