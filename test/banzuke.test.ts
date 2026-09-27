@@ -65,6 +65,7 @@ function fakeDiscord(channels = [{ id: BANZUKE, name: '番付', type: 0, parent_
     editChannel: async () => undefined,
     createChannel: async (_g, b) => ({ id: '0', name: b.name, type: b.type, parent_id: b.parent_id ?? null, position: 0 }),
     deleteChannel: async () => undefined,
+    reorderChannels: async () => undefined,
     setChannelOverwrite: async () => undefined,
     pinMessage: async () => undefined,
   };

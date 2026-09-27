@@ -112,3 +112,45 @@ describe('新しいチャンネルの見える範囲', () => {
     expect(overwritesFor(cfg, { visibility: 'category', parent })).toEqual(parent.permission_overwrites);
   });
 });
+
+describe('並べ替え・カテゴリを移す', () => {
+  const ch = (id: string, type: number, parent: string | null, position: number): GuildChannel => ({ id, name: id, type, parent_id: parent, position });
+  const CAT_A = '100';
+  const CAT_B = '200';
+  const list = [
+    ch(CAT_A, 4, null, 0),
+    ch(CAT_B, 4, null, 1),
+    ch('101', 0, CAT_A, 0),
+    ch('102', 0, CAT_A, 1),
+    ch('103', 0, CAT_A, 1), // 位置が重なっていても大丈夫
+    ch('104', 2, CAT_A, 0),
+    ch('201', 0, CAT_B, 0),
+  ];
+
+  it('同じカテゴリのテキストの中で入れ替える（通話は別）。端なら何もしない', async () => {
+    const { planMove } = await import('../src/services/channels.js');
+    expect(planMove(list, '102', 'up')).toEqual([
+      { id: '102', position: 0 },
+      { id: '101', position: 1 },
+      { id: '103', position: 2 },
+    ]);
+    expect(planMove(list, '101', 'up')).toEqual([]);
+    expect(planMove(list, '104', 'down')).toEqual([]);
+    expect(planMove(list, CAT_A, 'down')).toEqual([
+      { id: CAT_B, position: 0 },
+      { id: CAT_A, position: 1 },
+    ]);
+  });
+
+  it('ほかのカテゴリのいちばん下へ移す（権限を合わせるかも選べる）。同じカテゴリ・カテゴリ自身は何もしない', async () => {
+    const { planParent } = await import('../src/services/channels.js');
+    expect(planParent(list, '101', CAT_B, true)).toEqual([
+      { id: '201', position: 0 },
+      { id: '101', position: 1, parent_id: CAT_B, lock_permissions: true },
+    ]);
+    expect(planParent(list, '101', null, false).at(-1)).toEqual({ id: '101', position: 0, parent_id: null, lock_permissions: false });
+    expect(planParent(list, '101', CAT_A, false)).toEqual([]);
+    expect(planParent(list, CAT_A, CAT_B, false)).toEqual([]);
+    expect(planParent(list, '101', '999', false)).toEqual([]);
+  });
+});

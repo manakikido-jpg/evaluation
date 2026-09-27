@@ -48,6 +48,7 @@ const discord: DiscordActions = {
   editChannel: async () => undefined,
   createChannel: async (_g, b) => ({ id: '0', name: b.name, type: b.type, parent_id: b.parent_id ?? null, position: 0 }),
   deleteChannel: async () => undefined,
+  reorderChannels: async () => undefined,
   setChannelOverwrite: async () => undefined,
 };
 

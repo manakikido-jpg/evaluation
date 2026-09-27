@@ -75,6 +75,9 @@ import {
   modeOf as channelModeOf,
   overwritesFor,
   planMode as planChannelMode,
+  planMove as planMoveChannel,
+  planParent as planParentChannel,
+  type ChannelPositionPlan,
 } from '../services/channels.js';
 import {
   createItem as createShopItem,
@@ -1092,6 +1095,40 @@ export function createWebApp(deps: WebDeps) {
       via: 'web',
     });
     return c.redirect(`/channels?msg=created#${type === 4 ? 'cat' : 'ch'}-${created.id}`);
+  });
+
+  /** 並べ替え（▲▼）・ほかのカテゴリへ移す */
+  app.post('/channels/:id/move', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
+    const body = await c.req.parseBody();
+    const channels = await loadChannels(true);
+    const channel = channels.find((ch) => ch.id === id);
+    if (!channel) return c.redirect('/channels');
+    const anchor = `#${channel.type === 4 ? 'cat' : 'ch'}-${id}`;
+    let plan: ChannelPositionPlan = [];
+    let to: string | undefined;
+    if (body.dir === 'up' || body.dir === 'down') {
+      plan = planMoveChannel(channels, id, body.dir);
+    } else if (typeof body.parent === 'string') {
+      const parentId = body.parent === 'none' ? null : body.parent;
+      plan = planParentChannel(channels, id, parentId, body.sync === 'yes');
+      to = parentId ? (channels.find((ch) => ch.id === parentId)?.name ?? parentId) : 'カテゴリなし';
+    }
+    if (!plan.length) return c.redirect(`/channels?msg=unchanged${anchor}`);
+    try {
+      await deps.discord.reorderChannels(cfg.guildId, plan, '管理画面（チャンネルの並び）');
+    } catch (err) {
+      logger.warn({ err }, 'channel reorder failed');
+      return c.redirect(`/channels?msg=failed${anchor}`);
+    }
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'channel.move',
+      detail: { channelId: id, name: channel.name, ...(to ? { to, sync: body.sync === 'yes' } : { dir: body.dir }) },
+      via: 'web',
+    });
+    return c.redirect(`/channels?msg=moved${anchor}`);
   });
 
   /** チャンネル・カテゴリを消す（名前を入力して確認。BOT が使っているもの・中身のあるカテゴリは消さない） */

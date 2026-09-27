@@ -77,6 +77,7 @@ function fakeDiscord(channels = CHANNELS) {
     editChannel: async () => undefined,
     createChannel: async (_g, b) => ({ id: '0', name: b.name, type: b.type, parent_id: b.parent_id ?? null, position: 0 }),
     deleteChannel: async () => undefined,
+    reorderChannels: async () => undefined,
     setChannelOverwrite: async () => undefined,
     pinMessage: async (c, m, pin) => {
       if (pinFails) throw new DiscordHttpError('Missing Permissions', 403);

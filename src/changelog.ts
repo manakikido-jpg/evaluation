@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-channel-reorder',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: 'チャンネルの並べ替え・カテゴリの移動',
+    items: [
+      '「チャンネル」ページの ▲▼ で、チャンネル・通話・カテゴリを 1 つずつ入れ替えられる',
+      'チャンネル・通話は、ほかのカテゴリ（またはカテゴリなし）へ移せる。移した先の権限に合わせるかも選べる',
+    ],
+  },
+  {
     id: '2026-09-27-voice-user-limit',
     date: '2026-09-27',
     kind: 'improve',

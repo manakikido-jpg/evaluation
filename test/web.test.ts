@@ -53,6 +53,7 @@ const fakeActions: DiscordActions = {
     actions.push(`createChannel ${JSON.stringify(b)}`), { id: '910000000000000099', name: b.name, type: b.type, parent_id: b.parent_id ?? null, position: 9 }
   ),
   deleteChannel: async (c) => void actions.push(`deleteChannel ${c}`),
+  reorderChannels: async (_g, list) => void actions.push(`reorder ${JSON.stringify(list)}`),
 };
 
 const fakeApi: DiscordApi = {
@@ -969,6 +970,25 @@ describe('チャンネル（管理画面）', () => {
     const created = await formMulti(g, '/channels/new', [['kind', 'voice'], ['name', '二人部屋'], ['visibility', 'members'], ['userLimit', '2']]);
     expect(created.headers.get('location')).toBe('/channels?msg=created#ch-910000000000000099');
     expect(actions.find((a) => a.startsWith('createChannel'))).toContain('"user_limit":2');
+  });
+
+  it('▲▼ で入れ替え、ほかのカテゴリへ移せる', async () => {
+    const g = await login(GUJI);
+    const page = await (await get('/channels', g)).text();
+    expect(page).toContain(`action="/channels/${TORII}/move"`);
+    const up = await form(g, '/channels/910000000000000003/move', { dir: 'up' });
+    expect(up.headers.get('location')).toBe('/channels?msg=moved#ch-910000000000000003');
+    expect(actions.find((a) => a.startsWith('reorder'))).toBe(
+      `reorder ${JSON.stringify([
+        { id: '910000000000000003', position: 0 },
+        { id: TORII, position: 1 },
+      ])}`,
+    );
+    expect((await form(g, `/channels/${TORII}/move`, { dir: 'up' })).headers.get('location')).toBe(`/channels?msg=unchanged#ch-${TORII}`);
+    const out = await form(g, `/channels/${TORII}/move`, { parent: 'none' });
+    expect(out.headers.get('location')).toBe(`/channels?msg=moved#ch-${TORII}`);
+    expect(actions.at(-1)).toContain(`"id":"${TORII}","position":0,"parent_id":null,"lock_permissions":false`);
+    expect((await listAudit(db, { action: 'channel.move' })).length).toBe(2);
   });
 
   it('消すときは名前を入力。BOT が使っているもの・中身のあるカテゴリは消せない', async () => {

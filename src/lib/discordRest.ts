@@ -26,6 +26,8 @@ export interface DiscordActions {
   setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
   /** チャンネル・カテゴリを作る（管理画面のチャンネル） */
   createChannel(guildId: string, body: CreateChannelInput, reason: string): Promise<GuildChannel>;
+  /** 並び順・カテゴリを変える（lock_permissions: 移した先のカテゴリの権限に合わせる） */
+  reorderChannels(guildId: string, list: ChannelPosition[], reason: string): Promise<void>;
   /** チャンネル・カテゴリを消す（中の書き込みも消える） */
   deleteChannel(channelId: string, reason: string): Promise<void>;
   /** サーバーのロール一覧（ショップのロールの品物を選ぶ用） */
@@ -70,6 +72,8 @@ export type GuildChannel = {
 
 /** type: 0 = ロール、1 = メンバー。allow・deny は権限のビット（10 進の文字列） */
 export type ChannelOverwrite = { id: string; type: 0 | 1; allow: string; deny: string };
+
+export type ChannelPosition = { id: string; position: number; parent_id?: string | null; lock_permissions?: boolean };
 
 /** 0: テキスト / 2: 通話 / 4: カテゴリ */
 export type CreateChannelInput = { name: string; type: 0 | 2 | 4; parent_id?: string; topic?: string; user_limit?: number; permission_overwrites: ChannelOverwrite[] };
@@ -149,6 +153,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
     editChannel: async (c, body) => void (await call('PATCH', `/channels/${c}`, { body })),
     createChannel: async (g, body, reason) => (await call('POST', `/guilds/${g}/channels`, { reason, body })) as GuildChannel,
     deleteChannel: async (c, reason) => void (await call('DELETE', `/channels/${c}`, { reason })),
+    reorderChannels: async (g, list, reason) => void (await call('PATCH', `/guilds/${g}/channels`, { reason, body: list })),
     setChannelOverwrite: async (c, o, reason) =>
       void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { reason, body: { type: o.type, allow: o.allow, deny: o.deny } })),
   };

@@ -81,6 +81,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'channel.update': 'チャンネルの説明・書き込みを変更',
   'channel.create': 'チャンネルを作成',
   'channel.delete': 'チャンネルを削除',
+  'channel.move': 'チャンネルの並び・カテゴリを変更',
   'market.buy': '市場で購入',
   'market.release': '市場の取引を完了',
   'market.refund': '市場の取引を返金',

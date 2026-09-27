@@ -300,3 +300,5 @@ h2.with-top .to-top { font-size: 0.8rem; font-weight: normal; }
 details.delete-channel { margin-top: 4px; }
 details.delete-channel summary { cursor: pointer; color: var(--shu); font-size: 0.85rem; }
 details.delete-channel form { margin-top: 6px; }
+.move-channel { gap: 6px; }
+.move-channel form { gap: 6px; }

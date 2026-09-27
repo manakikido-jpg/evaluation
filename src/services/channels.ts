@@ -153,3 +153,39 @@ export const cleanNewChannelName = (v: unknown): string | undefined => {
   const s = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
   return s && s.length <= 100 ? s : undefined;
 };
+
+// ───────── 並べ替え・カテゴリを移す ─────────
+
+/** 並び順で同じ仲間（カテゴリどうし・同じカテゴリのテキスト・同じカテゴリの通話） */
+function siblingsOf(channels: GuildChannel[], ch: GuildChannel, parentId: string | null): GuildChannel[] {
+  const group = (c: GuildChannel) => (c.type === 4 ? 'cat' : isVoice(c) ? 'voice' : 'text');
+  return channels
+    .filter((c) => c.id !== ch.id && group(c) === group(ch) && (ch.type === 4 || (c.parent_id ?? null) === parentId))
+    .sort((a, b) => a.position - b.position || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+}
+
+/**
+ * 1 つ上・下へ（同じ仲間の中で入れ替える）。動かなければ空。
+ * 仲間の並びを 0, 1, 2… に振り直して送る（Discord の位置は重なっていることがあるため）。
+ */
+export function planMove(channels: GuildChannel[], id: string, dir: 'up' | 'down'): ChannelPositionPlan {
+  const ch = channels.find((c) => c.id === id);
+  if (!ch) return [];
+  const list = [...siblingsOf(channels, ch, ch.parent_id ?? null), ch].sort((a, b) => a.position - b.position || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+  const i = list.findIndex((c) => c.id === id);
+  const j = dir === 'up' ? i - 1 : i + 1;
+  if (j < 0 || j >= list.length) return [];
+  [list[i], list[j]] = [list[j]!, list[i]!];
+  return list.map((c, position) => ({ id: c.id, position }));
+}
+
+export type ChannelPositionPlan = { id: string; position: number; parent_id?: string | null; lock_permissions?: boolean }[];
+
+/** ほかのカテゴリへ移す（いちばん下へ）。sync: 移した先の権限に合わせる */
+export function planParent(channels: GuildChannel[], id: string, parentId: string | null, sync: boolean): ChannelPositionPlan {
+  const ch = channels.find((c) => c.id === id);
+  if (!ch || ch.type === 4 || (ch.parent_id ?? null) === parentId) return [];
+  if (parentId && !channels.some((c) => c.id === parentId && c.type === 4)) return [];
+  const list = siblingsOf(channels, ch, parentId);
+  return [...list.map((c, position) => ({ id: c.id, position })), { id: ch.id, position: list.length, parent_id: parentId, lock_permissions: sync }];
+}
