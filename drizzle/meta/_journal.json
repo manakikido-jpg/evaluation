@@ -295,6 +295,13 @@
       "when": 1790546562463,
       "tag": "0041_recruit_posts",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790547981664,
+      "tag": "0042_notice_shuin_button",
+      "breakpoints": true
     }
   ]
 }

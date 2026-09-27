@@ -3,7 +3,7 @@
  * {…} は投稿するときに今の設定で置き換わる（使える名前は notices.ts の noticeVariables）。
  * {#しきたり} のように # を付けると、そのチャンネルへのリンクになる。
  */
-export type NoticeTemplate = { channelName: string; title: string; body: string; pinned?: boolean; sticky?: boolean };
+export type NoticeTemplate = { channelName: string; title: string; body: string; pinned?: boolean; sticky?: boolean; /** 「🌸 朱印を押す」ボタンを付ける */ shuinButton?: boolean };
 
 export const DEFAULT_NOTICES: NoticeTemplate[] = [
   {
@@ -162,8 +162,10 @@ export const DEFAULT_NOTICES: NoticeTemplate[] = [
  * チャンネルの使い方（管理画面の「チャンネルの案内を入れる」で入る）。
  * 各チャンネルの案内はピン留めするので、話が流れても 📌 から読める。
  */
-const guide = (channelName: string, body: string, opts: { sticky?: boolean } = {}): NoticeTemplate =>
-  opts.sticky ? { channelName, title: '使い方', body, sticky: true } : { channelName, title: '使い方', body, pinned: true };
+const guide = (channelName: string, body: string, opts: { sticky?: boolean; shuinButton?: boolean } = {}): NoticeTemplate => ({
+  ...(opts.sticky ? { channelName, title: '使い方', body, sticky: true } : { channelName, title: '使い方', body, pinned: true }),
+  ...(opts.shuinButton ? { shuinButton: true } : {}),
+});
 
 /** #絵馬-男性・#絵馬-女性 の使い方（ひな形。いちばん下に表示し続ける） */
 const EMA_GUIDE = `# 🪧 自己紹介の書き方
@@ -181,7 +183,9 @@ const EMA_GUIDE = `# 🪧 自己紹介の書き方
 \`\`\`
 -# 書きたくない項目は空けたままで大丈夫です（年齢は「10代」「20代前半」などでも）
 -# 招待者は、誘ってくれた人の名前（いなければ空けたまま）
--# 書き直したいときは、自分の投稿を編集してください ／ アイコンの紹介は {#アイコン紹介}、おしゃべりは {#境内} で`;
+-# 書き直したいときは、自分の投稿を編集してください ／ アイコンの紹介は {#アイコン紹介}、おしゃべりは {#境内} で
+
+🌸 自己紹介を読んで気になった人がいたら、下の **「朱印を押す」** ボタンから朱印を押せます`;
 
 export const DEFAULT_GUIDES: NoticeTemplate[] = [
   {
@@ -227,8 +231,9 @@ export const DEFAULT_GUIDES: NoticeTemplate[] = [
 
 -# 開けないチャンネルは、入鯖が承認されると見えるようになります（宵宮は宵参り申請の承認後）`,
   },
-  guide('絵馬-男性', EMA_GUIDE, { sticky: true }),
-  guide('絵馬-女性', EMA_GUIDE, { sticky: true }),
+  // いちばん下のひな形に「🌸 朱印を押す」ボタン（自己紹介を読んで、そのまま朱印を押せる）
+  guide('絵馬-男性', EMA_GUIDE, { sticky: true, shuinButton: true }),
+  guide('絵馬-女性', EMA_GUIDE, { sticky: true, shuinButton: true }),
   guide(
     'アイコン紹介',
     `# 🎨 #アイコン紹介 の使い方
@@ -827,6 +832,24 @@ const GLOSSARY_V4 = `# 📖 用語集
 - **宵宮**（よいみや）… 18 歳以上エリア ／ **御神酒処**（おみきどころ）… お酒の話
 - **奥の院** … 放置（AFK）`;
 
+/** 朱印を押すボタンを付ける前 */
+const EMA_V4 = `# 🪧 自己紹介の書き方
+男性は {#絵馬-男性}、女性は {#絵馬-女性} に書いてください。
+
+**下のひな形をコピーして書いてください**（スマホは長押しでコピー）
+\`\`\`
+【名前】
+【年齢】
+【声質】
+【好きなタイプ】
+【一言】
+
+【招待者】
+\`\`\`
+-# 書きたくない項目は空けたままで大丈夫です（年齢は「10代」「20代前半」などでも）
+-# 招待者は、誘ってくれた人の名前（いなければ空けたまま）
+-# 書き直したいときは、自分の投稿を編集してください ／ アイコンの紹介は {#アイコン紹介}、おしゃべりは {#境内} で`;
+
 const OVERVIEW_V5 = `# 🗺 チャンネル案内
 どこで何をするところか、の一覧です。各チャンネルの 📌（ピン留め）にも使い方があります。
 
@@ -1086,8 +1109,8 @@ const SHUIN_V1 = `# 🌸 朱印とご縁
  * key: チャンネル名 + タイトル
  */
 export const PREVIOUS_GUIDE_BODIES: Record<string, string[]> = {
-  '絵馬-男性\n使い方': [EMA_V1, EMA_V2, EMA_V3],
-  '絵馬-女性\n使い方': [EMA_V1, EMA_V2, EMA_V3],
+  '絵馬-男性\n使い方': [EMA_V1, EMA_V2, EMA_V3, EMA_V4],
+  '絵馬-女性\n使い方': [EMA_V1, EMA_V2, EMA_V3, EMA_V4],
   'しきたり\nチャンネル案内': [OVERVIEW_V1, OVERVIEW_V2, OVERVIEW_V3, OVERVIEW_V4, OVERVIEW_V5],
   '鳥居\nようこそ': [WELCOME_V1, WELCOME_V2, WELCOME_V3, WELCOME_V4],
   'しきたり\n用語集': [GLOSSARY_V1, GLOSSARY_V2, GLOSSARY_V3, GLOSSARY_V4],

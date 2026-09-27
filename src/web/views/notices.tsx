@@ -122,13 +122,14 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
                   {r.notice.sticky ? <small>⬇ いちばん下に表示し続ける</small> : r.notice.pinned && <small>📌 ピン留め</small>}
                   {r.mention && <small>🔔 {r.mention}</small>}
                   {r.notice.imageHash && <small>🖼 写真（{r.notice.imagePosition === 'top' ? '上' : '下'}）</small>}
+                  {r.notice.shuinButton && <small>🌸 朱印ボタン</small>}
                   <small class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
                     {r.length} / {maxLengthOf(r.notice.style)} 文字
                   </small>
                   <small>更新 {fmtAgo(r.notice.updatedAt, props.now)}</small>
                 </div>
                 {r.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {r.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-                <Rendered text={r.preview} style={r.notice.style} mention={r.mention} image={imageOf(r.notice)} />
+                <Rendered text={r.preview} style={r.notice.style} mention={r.mention} image={imageOf(r.notice)} button={r.notice.shuinButton} />
                 <div class="inline-actions">
                   <a class="button-link" href={`/notices/${r.notice.id}`}>
                     編集
@@ -245,6 +246,10 @@ export function NoticeEditPage(props: {
           <label class="field check">
             <input type="checkbox" name="sticky" value="yes" checked={notice?.sticky ?? false} />
             <span>⬇ いちばん下に表示し続ける（誰かが書き込むと、3 秒ほどで BOT が下に出し直す。#絵馬-男性 のひな形など。こちらを選ぶとピン留めはしません）</span>
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="shuinButton" value="yes" checked={notice?.shuinButton ?? false} {...preview} />
+            <span>🌸「朱印を押す」ボタンを付ける（押すと相手を選んで朱印を押せる。#絵馬 のひな形など、いちばん下に表示し続けるものに付けるのがおすすめ）</span>
           </label>
           <fieldset class="field mention-pick" {...preview}>
             <legend>🔔 メンション（投稿したときに通知を届ける相手）</legend>
@@ -365,6 +370,7 @@ export function NoticeEditPage(props: {
                 mention={mentionLabel}
                 image={imageOf(notice)}
                 slot
+                button={notice?.shuinButton ?? false}
               />
             </div>
           </section>
@@ -412,6 +418,7 @@ export function NoticePreview(props: {
   image?: PreviewImage;
   /** 編集画面: 新しく選んだ写真を JS が入れる場所を用意する */
   slot?: boolean;
+  button?: boolean;
 }) {
   const max = maxLengthOf(props.style);
   return (
@@ -420,13 +427,13 @@ export function NoticePreview(props: {
         {props.length} / {max} 文字{props.length > max ? '（多すぎます。2 つに分けてください）' : ''}
       </p>
       {props.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {props.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-      <Rendered text={props.preview} style={props.style} mention={props.mention} image={props.image} slot={props.slot} />
+      <Rendered text={props.preview} style={props.style} mention={props.mention} image={props.image} slot={props.slot} button={props.button} />
     </>
   );
 }
 
 /** Discord での見た目（メンションはカードの上・普通のメッセージなら 1 行目。写真は上か下） */
-function Rendered(props: { text: string; style: string; mention?: string; image?: PreviewImage; slot?: boolean }) {
+function Rendered(props: { text: string; style: string; mention?: string; image?: PreviewImage; slot?: boolean; button?: boolean }) {
   const card = props.style !== 'text';
   // 普通のメッセージの写真は、いつも本文の下
   const top = card && props.image?.position === 'top';
@@ -447,6 +454,7 @@ function Rendered(props: { text: string; style: string; mention?: string; image?
         {card && !top && img}
       </div>
       {!card && img}
+      {props.button && <div class="md-button">🌸 朱印を押す</div>}
     </div>
   );
 }

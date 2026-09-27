@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-ema-shuin-button',
+    date: '2026-09-28',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🌸 絵馬殿のいちばん下に「朱印を押す」ボタン',
+    items: [
+      '#絵馬-男性・#絵馬-女性 のひな形に「朱印を押す」ボタン。押して相手を選ぶと、そのまま朱印を押せる',
+      '掲示の編集画面で、ほかの掲示にもボタンを付けられる',
+    ],
+  },
+  {
     id: '2026-09-27-recruit-antispam',
     date: '2026-09-27',
     kind: 'improve',

@@ -362,3 +362,4 @@ td.level-cheap { color: var(--muted); }
 td.level-high { color: #b26b00; }
 td.level-very_high { color: var(--shu); font-weight: bold; }
 @media (prefers-color-scheme: dark) { td.level-high { color: #f0b04a; } }
+.md-button { display: inline-block; margin: 4px 0 8px; padding: 5px 14px; border-radius: 6px; background: #5865f2; color: #fff; font-size: .85rem; }

@@ -71,7 +71,7 @@ function add(id: string, ...roleIds: string[]) {
   return m;
 }
 
-type Kind = 'button' | 'userMenu' | 'slash';
+type Kind = 'button' | 'userMenu' | 'slash' | 'select';
 
 function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown>) {
   const replies: { content?: string; embeds?: { title?: string; description?: string }[]; flags?: unknown }[] = [];
@@ -88,6 +88,7 @@ function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown
     isUserContextMenuCommand: () => kind === 'userMenu',
     isChatInputCommand: () => kind === 'slash',
     isButton: () => kind === 'button',
+    isUserSelectMenu: () => kind === 'select',
     isRepliable: () => true,
     async deferReply(opts: unknown) {
       i.deferred = true;
@@ -113,6 +114,17 @@ const G2 = '400000000000000002';
 const R = '400000000000000009';
 
 describe('ShuinApp', () => {
+  it('#絵馬 のひな形の「🌸 朱印を押す」: 相手を選ぶ欄を出し、選ぶと朱印を押す', async () => {
+    const giver = add(G, ROLE.sewayaku);
+    add(R, ROLE.sanpaisha);
+    const b = interaction('button', giver, { customId: 'shuin:pick' });
+    await app.onInteraction(b.i as never);
+    expect(b.replies[0]!.content).toContain('朱印を押す相手を選んでください');
+    const sel = interaction('select', giver, { customId: 'shuin:pickuser', values: [R] });
+    await app.onInteraction(sel.i as never);
+    expect(sel.replies.at(-1)!.content).toBe(`🌸 <@${R}> さまに朱印を押しました（格 3・ご縁 +3）`);
+  });
+
   it('ボタンで朱印を押すと、本人に結果を返して #記録 にログを残す', async () => {
     const giver = add(G, ROLE.sewayaku);
     add(R, ROLE.sanpaisha);

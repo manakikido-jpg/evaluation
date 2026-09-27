@@ -610,3 +610,38 @@ describe('写真', () => {
     expect(await getNoticeImage(db, n.id)).toBeUndefined();
   });
 });
+
+describe('🌸 朱印を押すボタン', () => {
+  it('付けるとボタンを付けて投稿。外すと「未反映」→ 書き換えでボタンも外す。出し直しでもボタンごと', async () => {
+    const { SHUIN_PICK_ID } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const sent: MessageBody[] = [];
+    const edited: MessageBody[] = [];
+    const send = f.discord.sendMessage;
+    const edit = f.discord.editMessage;
+    f.discord.sendMessage = async (c, b) => (sent.push(b), send(c, b));
+    f.discord.editMessage = async (c, m, b) => (edited.push(b), edit(c, m, b));
+    const ctx = { db, cfg, discord: f.discord };
+    const n = await createNotice(db, { channelId: CH.ema, title: '使い方', body: 'ひな形', sticky: true, shuinButton: true, by: GUJI });
+    await publishNotice(ctx, n.id, GUJI);
+    expect(JSON.stringify(sent[0]!.components)).toContain(`"custom_id":"${SHUIN_PICK_ID}"`);
+    expect(noticeStatus((await getNotice(db, n.id))!, 'ひな形')).toBe('posted');
+    await restickNotice(ctx, n.id);
+    expect(JSON.stringify(sent[1]!.components)).toContain(SHUIN_PICK_ID);
+
+    await updateNotice(db, n.id, { title: '使い方', body: 'ひな形', shuinButton: false, by: GUJI });
+    expect(noticeStatus((await getNotice(db, n.id))!, 'ひな形')).toBe('changed');
+    await publishNotice(ctx, n.id, GUJI);
+    expect(edited.at(-1)!.components).toEqual([]);
+    expect(noticeStatus((await getNotice(db, n.id))!, 'ひな形')).toBe('posted');
+  });
+
+  it('標準の #絵馬 のひな形にはボタンが付く（チャンネルの案内を入れる）', async () => {
+    const f = fakeDiscord();
+    await seedChannelGuides({ db, cfg, discord: f.discord }, GUJI);
+    const ema = (await listNotices(db)).filter((x) => x.sticky);
+    expect(ema.length).toBeGreaterThan(0);
+    expect(ema.every((x) => x.shuinButton)).toBe(true);
+    expect((await listNotices(db)).filter((x) => !x.sticky).every((x) => !x.shuinButton)).toBe(true);
+  });
+});

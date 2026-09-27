@@ -322,6 +322,10 @@ export const notices = pgTable(
     imagePosition: text('image_position').$type<'top' | 'bottom'>().notNull().default('bottom'),
     /** 最後に投稿・書き換えしたときの写真（印:上下）。なければ null */
     postedImage: text('posted_image'),
+    /** 「🌸 朱印を押す」ボタンを付ける（#絵馬 のひな形など。押すと相手を選んで朱印を押せる） */
+    shuinButton: boolean('shuin_button').notNull().default(false),
+    /** 最後に投稿・書き換えしたときにボタンを付けていたか */
+    postedShuinButton: boolean('posted_shuin_button').notNull().default(false),
     updatedBy: text('updated_by').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

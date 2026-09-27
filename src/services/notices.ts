@@ -35,13 +35,17 @@ const SHU = 0xd7003a;
 
 type NoticeImage = { file: MessageFile; position: ImagePosition };
 
-function messageBody(style: string, text: string, mention = '', image?: NoticeImage): MessageBody {
+/** 「🌸 朱印を押す」ボタン（押すと相手を選んで朱印を押せる） */
+export const SHUIN_PICK_ID = 'shuin:pick';
+const SHUIN_BUTTON_ROW = { type: 1, components: [{ type: 2, style: 1, label: '朱印を押す', emoji: { name: '🌸' }, custom_id: SHUIN_PICK_ID }] };
+
+function messageBody(style: string, text: string, mention = '', image?: NoticeImage, shuinButton = false): MessageBody {
   const head = mentionHead(mention);
-  const files = image ? { files: [image.file] } : {};
+  const files = { ...(image ? { files: [image.file] } : {}), ...(shuinButton ? { components: [SHUIN_BUTTON_ROW] } : {}) };
   // 見せ方を切り替えたときに前の形が残らないよう、使わないほうは空にする。カードのメンションはカードの上（本文の外）に出す
   // 普通のメッセージの写真は、Discord の決まりで本文の下に出る
   if (style === 'text') return { content: head ? `${head}\n${text}` : text, embeds: [], ...files };
-  if (!image) return { content: head, embeds: [{ description: text, color: SHU }] };
+  if (!image) return { content: head, embeds: [{ description: text, color: SHU }], ...files };
   const picture = { url: `attachment://${image.file.name}` };
   // 上: 写真だけのカードを本文のカードの上に。下: 本文のカードの中、いちばん下に
   const embeds =
@@ -290,6 +294,7 @@ export async function createNotice(
     sticky?: boolean;
     mention?: string;
     imagePosition?: ImagePosition;
+    shuinButton?: boolean;
     by: string;
   },
 ): Promise<Notice> {
@@ -309,6 +314,7 @@ export async function createNotice(
       sticky: input.sticky ?? false,
       mention: input.mention ?? '',
       imagePosition: input.imagePosition ?? 'bottom',
+      shuinButton: input.shuinButton ?? false,
       updatedBy: input.by,
     })
     .returning();
@@ -327,6 +333,7 @@ export async function updateNotice(
     sticky?: boolean;
     mention?: string;
     imagePosition?: ImagePosition;
+    shuinButton?: boolean;
     by: string;
   },
 ): Promise<void> {
@@ -340,6 +347,7 @@ export async function updateNotice(
       ...(input.sticky !== undefined ? { sticky: input.sticky } : {}),
       ...(input.mention !== undefined ? { mention: input.mention } : {}),
       ...(input.imagePosition ? { imagePosition: input.imagePosition } : {}),
+      ...(input.shuinButton !== undefined ? { shuinButton: input.shuinButton } : {}),
       updatedBy: input.by,
       updatedAt: new Date(),
     })
@@ -385,15 +393,21 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
   if (tooLong(n.style, text, n.mention)) return 'too_long';
   if (noticeStatus(n, text) === 'posted') return 'unchanged';
   const image = await imageFor(ctx.db, n, n.imagePosition);
-  const body = messageBody(n.style, text, n.mention, image);
-  // 写真を外したときは、前の添付も外す
+  const body = messageBody(n.style, text, n.mention, image, n.shuinButton);
+  // 写真を外したときは、前の添付も外す。ボタンを外したときも
   if (!image && n.postedImage) body.attachments = [];
+  if (!n.shuinButton && n.postedShuinButton) body.components = [];
 
   let result: PublishResult;
   let messageId = n.messageId;
   // 本文はそのままで、ピン留めだけ変えたとき
   const sameContent =
-    Boolean(messageId) && n.postedText === text && n.postedStyle === n.style && (n.postedMention ?? '') === n.mention && (n.postedImage ?? '') === imageKey(n);
+    Boolean(messageId) &&
+    n.postedText === text &&
+    n.postedStyle === n.style &&
+    (n.postedMention ?? '') === n.mention &&
+    (n.postedImage ?? '') === imageKey(n) &&
+    n.postedShuinButton === n.shuinButton;
   if (sameContent) {
     result = 'edited';
   } else if (messageId) {
@@ -414,7 +428,7 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
   const postedPinned = await applyPin(ctx.discord, n.channelId, messageId!, wantPinned(n), wasPinned);
   await ctx.db
     .update(notices)
-    .set({ messageId, postedText: text, postedStyle: n.style, postedPinned, postedMention: n.mention, postedImage: image ? imageKey(n) : null })
+    .set({ messageId, postedText: text, postedStyle: n.style, postedPinned, postedMention: n.mention, postedImage: image ? imageKey(n) : null, postedShuinButton: n.shuinButton })
     .where(eq(notices.id, id));
   await audit(ctx.db, { actorId: by, action: 'notice.publish', detail: { id, title: n.title, result }, via: by === 'system' ? 'system' : 'web' });
   return postedPinned === wantPinned(n) ? result : 'pin_failed';
@@ -443,7 +457,7 @@ export async function restickNotice(ctx: NoticeCtx, id: number): Promise<boolean
   // 投稿済みの写真（そのあと差し替えていれば、写真なしで出し直す）
   const [hash, pos] = (n.postedImage ?? '').split(':');
   const image = hash ? await imageFor(ctx.db, n, isImagePosition(pos) ? pos : 'bottom', hash) : undefined;
-  const { id: messageId } = await ctx.discord.sendMessage(n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText, n.postedMention ?? '', image));
+  const { id: messageId } = await ctx.discord.sendMessage(n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText, n.postedMention ?? '', image, n.postedShuinButton));
   await ctx.db
     .update(notices)
     .set({ messageId, postedPinned: false, ...(hash && !image ? { postedImage: null } : {}) })
@@ -492,19 +506,27 @@ export async function repostChannel(ctx: NoticeCtx, channelId: string, by: strin
     if (n.messageId) await deleteMessageQuietly(ctx.discord, channelId, n.messageId);
     await ctx.db
       .update(notices)
-      .set({ messageId: null, postedText: null, postedStyle: null, postedPinned: false, postedMention: null, postedImage: null })
+      .set({ messageId: null, postedText: null, postedStyle: null, postedPinned: false, postedMention: null, postedImage: null, postedShuinButton: false })
       .where(eq(notices.id, n.id));
   }
   const pinFailed: string[] = [];
   // 並べ直しなので、メンションの通知は鳴らさない
   for (const { n, text } of rendered) {
     const image = await imageFor(ctx.db, n, n.imagePosition);
-    const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text, n.mention, image));
+    const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text, n.mention, image, n.shuinButton));
     const postedPinned = await applyPin(ctx.discord, channelId, id, wantPinned(n), false);
     if (postedPinned !== wantPinned(n)) pinFailed.push(n.title);
     await ctx.db
       .update(notices)
-      .set({ messageId: id, postedText: text, postedStyle: n.style, postedPinned, postedMention: n.mention, postedImage: image ? imageKey(n) : null })
+      .set({
+        messageId: id,
+        postedText: text,
+        postedStyle: n.style,
+        postedPinned,
+        postedMention: n.mention,
+        postedImage: image ? imageKey(n) : null,
+        postedShuinButton: n.shuinButton,
+      })
       .where(eq(notices.id, n.id));
   }
   await audit(ctx.db, { actorId: by, action: 'notice.repost', detail: { channelId, count: rendered.length }, via: 'web' });
@@ -570,7 +592,8 @@ export function noticeStatus(n: Notice, renderedText: string): NoticeStatus {
     n.postedStyle === n.style &&
     n.postedPinned === wantPinned(n) &&
     (n.postedMention ?? '') === n.mention &&
-    (n.postedImage ?? '') === imageKey(n);
+    (n.postedImage ?? '') === imageKey(n) &&
+    n.postedShuinButton === n.shuinButton;
   return same ? 'posted' : 'changed';
 }
 
@@ -597,12 +620,12 @@ export async function seedChannelGuides(ctx: NoticeCtx, by: string): Promise<{ c
     const n = ch && have.get(`${ch.id}\n${t.title}`);
     if (!n) continue;
     const untouched = n.body === t.body || (PREVIOUS_GUIDE_BODIES[`${t.channelName}\n${t.title}`] ?? []).includes(n.body);
-    const flagsDiffer = isGuide && (n.sticky !== Boolean(t.sticky) || n.pinned !== Boolean(t.pinned));
+    const flagsDiffer = isGuide && (n.sticky !== Boolean(t.sticky) || n.pinned !== Boolean(t.pinned) || n.shuinButton !== Boolean(t.shuinButton));
     if (untouched && (n.body !== t.body || flagsDiffer)) {
       await updateNotice(ctx.db, n.id, {
         title: n.title,
         body: t.body,
-        ...(isGuide ? { pinned: Boolean(t.pinned), sticky: Boolean(t.sticky) } : {}),
+        ...(isGuide ? { pinned: Boolean(t.pinned), sticky: Boolean(t.sticky), shuinButton: Boolean(t.shuinButton) } : {}),
         by,
       });
       updated++;
@@ -628,7 +651,7 @@ async function seedTemplates(
       continue;
     }
     if (!wanted(ch, t)) continue;
-    await createNotice(ctx.db, { channelId: ch.id, title: t.title, body: t.body, pinned: t.pinned, sticky: t.sticky, by });
+    await createNotice(ctx.db, { channelId: ch.id, title: t.title, body: t.body, pinned: t.pinned, sticky: t.sticky, shuinButton: t.shuinButton, by });
     created++;
   }
   return { created, missing: [...missing] };

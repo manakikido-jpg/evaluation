@@ -1,5 +1,7 @@
 import {
+  ActionRowBuilder,
   MessageFlags,
+  UserSelectMenuBuilder,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
@@ -8,7 +10,9 @@ import {
   type Interaction,
   type Message,
   type UserContextMenuCommandInteraction,
+  type UserSelectMenuInteraction,
 } from 'discord.js';
+import { SHUIN_PICK_ID } from '../services/notices.js';
 import { recordPresence } from '../services/voiceUsage.js';
 import { genderOfRoles } from '../services/admission.js';
 import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../services/contact.js';
@@ -46,7 +50,10 @@ import {
 
 const NO_MENTIONS = { parse: [] as const };
 
-type Repliable = ChatInputCommandInteraction<'cached'> | UserContextMenuCommandInteraction<'cached'> | ButtonInteraction<'cached'>;
+type Repliable = ChatInputCommandInteraction<'cached'> | UserContextMenuCommandInteraction<'cached'> | ButtonInteraction<'cached'> | UserSelectMenuInteraction<'cached'>;
+
+/** 「🌸 朱印を押す」ボタン（#絵馬 のひな形など）で相手を選ぶ欄 */
+const SHUIN_PICK_USER_ID = 'shuin:pickuser';
 
 function toInfo(m: GuildMember): MemberInfo {
   return { id: m.id, isBot: m.user.bot, roleIds: [...m.roles.cache.keys()] };
@@ -163,6 +170,19 @@ export class ShuinApp {
         const target = interaction.options.getUser('user') ?? interaction.user;
         const isPublic = interaction.options.getBoolean('public') ?? false;
         return await this.card(interaction, target.id, isPublic);
+      } else if (interaction.isButton() && interaction.customId === SHUIN_PICK_ID) {
+        return void (await interaction.reply({
+          content: '🌸 朱印を押す相手を選んでください（名前を入れると探せます）。',
+          components: [
+            new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+              new UserSelectMenuBuilder().setCustomId(SHUIN_PICK_USER_ID).setPlaceholder('朱印を押す相手').setMinValues(1).setMaxValues(1),
+            ),
+          ],
+          flags: MessageFlags.Ephemeral,
+        }));
+      } else if (interaction.isUserSelectMenu() && interaction.customId === SHUIN_PICK_USER_ID) {
+        const target = interaction.values[0];
+        if (target) return await this.give(interaction, target);
       } else if (interaction.isButton()) {
         const parsed = parseShuinId(interaction.customId);
         if (!parsed) return;

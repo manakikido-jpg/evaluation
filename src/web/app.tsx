@@ -1369,6 +1369,7 @@ export function createWebApp(deps: WebDeps) {
         mention={label}
         image={image}
         slot
+        button={body.shuinButton === 'yes'}
       />,
     );
   });
@@ -1414,6 +1415,7 @@ export function createWebApp(deps: WebDeps) {
       sticky: body.sticky === 'yes',
       mention,
       imagePosition: isImagePosition(body.imagePosition) ? body.imagePosition : undefined,
+      shuinButton: body.shuinButton === 'yes',
       by: c.get('session').userId,
     });
     if (upload) await setNoticeImage(db, n.id, upload, c.get('session').userId);
@@ -1447,6 +1449,7 @@ export function createWebApp(deps: WebDeps) {
       // 古い画面（メンションの欄がない）から送られたときは変えない
       mention: body.mentionKind === undefined ? undefined : (await mentionFrom(body, n.mention)).value,
       imagePosition: isImagePosition(body.imagePosition) ? body.imagePosition : undefined,
+      shuinButton: body.shuinButton === 'yes',
       by: c.get('session').userId,
     });
     if (upload) await setNoticeImage(db, n.id, upload, c.get('session').userId);
