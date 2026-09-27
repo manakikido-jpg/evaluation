@@ -179,6 +179,8 @@ async function main(): Promise<void> {
     recruit.onMessage(m);
     void boost.onMessage(m);
     void sticky.onMessage(m);
+    // 通話のチャット: 「この通話の人のプロフィールを見る」をいちばん下へ（15 秒に 1 回まで）
+    voicePanel.onMessage(m);
     // 絵馬待ちの人が自己紹介を書いたら、🔰参拝者 に
     void admission.onMessage(m).catch((err) => logger.warn({ err }, 'intro check failed'));
   });

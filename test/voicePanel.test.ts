@@ -92,8 +92,8 @@ describe('通話に入ったとき', () => {
         messages.push(m);
       },
     };
-    const say = (author: string) =>
-      messages.push({ id: `u${++seq}`, author: { id: author }, components: [], delete: async () => undefined });
+    const say = (author: string, bot = false) =>
+      messages.push({ id: `u${++seq}`, author: { id: author, bot } as { id: string }, components: [], delete: async () => undefined });
     return { channel, messages, say };
   }
   const state = (channel: unknown, channelId: string | null, bot = false) =>
@@ -113,6 +113,44 @@ describe('通話に入ったとき', () => {
     app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
     await settle();
     expect(v.messages.map((m) => m.id)).toEqual(['u2', 'm3']);
+  });
+
+  const message = (channel: unknown, author = A, bot = false) =>
+    ({ inGuild: () => true, guildId: cfg.guildId, guild: { id: cfg.guildId, afkChannelId: null }, author: { id: author, bot }, channel }) as never;
+  const voiceCh = (v: ReturnType<typeof fakeVoice>) => Object.assign(v.channel, { isVoiceBased: () => true });
+
+  it('チャットに人が書いたら、決まった間隔（15 秒）に 1 回だけいちばん下へ出し直す', async () => {
+    const app = new VoicePanelApp(() => cfg, 30);
+    const v = fakeVoice();
+    const ch = voiceCh(v);
+    app.onVoiceStateUpdate(state(null, null), state(ch, VC));
+    await settle();
+    v.say(A);
+    app.onMessage(message(ch));
+    v.say(B);
+    app.onMessage(message(ch, B));
+    await settle();
+    // まだ出し直さない（間隔を待つ）
+    expect(v.messages.at(-1)?.id).toBe('u3');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(v.messages.map((m) => m.id)).toEqual(['u2', 'u3', 'm4']);
+  });
+
+  it('BOT の書き込みは数えない（出し直さない・カードのあとに BOT だけならいちばん下とみなす）', async () => {
+    const app = new VoicePanelApp(() => cfg, 10);
+    const v = fakeVoice();
+    const ch = voiceCh(v);
+    app.onVoiceStateUpdate(state(null, null), state(ch, VC));
+    await settle();
+    v.say('999000000000000777', true);
+    app.onMessage(message(ch, '999000000000000777', true));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(v.messages.map((m) => m.id)).toEqual(['m1', 'u2']);
+    // 人が書いて間隔がたてば出し直す
+    v.say(A);
+    app.onMessage(message(ch));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(v.messages.at(-1)?.id).toBe('m4');
   });
 
   it('BOT・同じ通話の中での変化（ミュートなど）・「➕ ○○をひらく」では出さない', async () => {

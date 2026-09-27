@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-vc-panel-sticky',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '通話のチャットのカードをいつもいちばん下に',
+    items: ['通話のチャットに人が書いたら、「この通話の人のプロフィールを見る」を 15 秒に 1 回までいちばん下へ出し直す。BOT の書き込みは数えない'],
+  },
+  {
     id: '2026-09-27-vc-profile',
     date: '2026-09-27',
     kind: 'improve',
