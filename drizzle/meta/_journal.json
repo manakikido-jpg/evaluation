@@ -232,6 +232,13 @@
       "when": 1790494136272,
       "tag": "0032_buffs",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790494694302,
+      "tag": "0033_gacha_special",
+      "breakpoints": true
     }
   ]
 }

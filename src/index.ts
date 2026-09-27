@@ -160,6 +160,8 @@ async function main(): Promise<void> {
     void app.onMemberAdd(m);
     // だれの招待リンクで入ったか
     void inviteLinks.onMemberAdd(m);
+    // 入った瞬間に 🧭案内待ち
+    void guidePending.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide pending add failed'));
     // 入った人に、はじめの流れを DM で案内
     void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
   });
@@ -167,7 +169,7 @@ async function main(): Promise<void> {
   client.on(Events.GuildMemberUpdate, (old, m) => {
     void (async () => {
       await app.onMemberUpdate(m);
-      // 参加時の質問を終えたら 🧭案内待ち、承認されたら外す
+      // 承認されて絵馬待ち・役職になったら 🧭案内待ちを外す
       await guidePending.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'guide pending update failed'));
       // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
       if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);

@@ -130,7 +130,8 @@ export const bellSchema = z.object({
 });
 
 /** 物御籤の運勢（出やすさの順ではなく、良い順） */
-export const GACHA_TIERS = ['daikichi', 'chukichi', 'shokichi', 'kichi'] as const;
+/** super: 超大当たり（大吉より上。0.01% など、ごくまれ） */
+export const GACHA_TIERS = ['super', 'daikichi', 'chukichi', 'shokichi', 'kichi'] as const;
 export type GachaTier = (typeof GACHA_TIERS)[number];
 /** 物御籤で出る券 */
 export const TICKET_KINDS = [
@@ -182,16 +183,17 @@ export const gachaSchema = z.object({
   price: z.number().int().min(1).max(1_000_000).default(500),
   /** 大吉が出ないまま、この回数目は必ず大吉（0 で天井なし） */
   pity: z.number().int().min(0).max(1000).default(30),
-  /** 出やすさ（合計が 100 でなくてもよい。割合で出す） */
+  /** 出やすさ（合計が 100 でなくてもよい。割合で出す。小数も使える: 超大当たり 0.01 など） */
   rates: z
     .object({
-      daikichi: z.number().int().min(0).max(1000),
-      chukichi: z.number().int().min(0).max(1000),
-      shokichi: z.number().int().min(0).max(1000),
-      kichi: z.number().int().min(0).max(1000),
+      super: z.number().min(0).max(1000).default(0.01),
+      daikichi: z.number().min(0).max(1000),
+      chukichi: z.number().min(0).max(1000),
+      shokichi: z.number().min(0).max(1000),
+      kichi: z.number().min(0).max(1000),
     })
-    .default({ daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 })
-    .refine((r) => r.daikichi + r.chukichi + r.shokichi + r.kichi > 0, '出やすさの合計が 0 です'),
+    .default({ super: 0.01, daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 })
+    .refine((r) => r.super + r.daikichi + r.chukichi + r.shokichi + r.kichi > 0, '出やすさの合計が 0 です'),
   /** 物御籤限定のロール（色守り・称号） */
   roleIds: z.array(snowflake).max(25).default([]),
   prizes: z.object({ daikichi: gachaPrizeSchema, chukichi: gachaPrizeSchema, shokichi: gachaPrizeSchema, kichi: gachaPrizeSchema }).default({

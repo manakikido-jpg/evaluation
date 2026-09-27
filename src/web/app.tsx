@@ -11,11 +11,13 @@ import { adminLevelOf, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConf
 import {
   createPrize,
   deletePrize,
+  deliverClaim,
   ensureGachaPrizes,
   gachaResetPreview,
   gachaStateOf,
   gachaStats,
   giftableShopItem,
+  listClaims,
   listPrizes,
   PRIZE_KINDS,
   recentDraws,
@@ -1638,7 +1640,7 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/gacha', async (c) => {
     await ensureGachaPrizes(db, cfg.gacha);
-    const [stats, draws, tops, players, holders, prizes, items, guildRoles] = await Promise.all([
+    const [stats, draws, tops, players, holders, prizes, items, guildRoles, claims] = await Promise.all([
       gachaStats(db),
       recentDraws(db, { limit: 100 }),
       recentDraws(db, { limit: 20, topOnly: true }),
@@ -1647,8 +1649,15 @@ export function createWebApp(deps: WebDeps) {
       listPrizes(db),
       listShopItems(db),
       loadRoles(),
+      listClaims(db),
     ]);
-    const names = await namesOf(db, [...draws.map((d) => d.memberId), ...tops.map((d) => d.memberId), ...players.map((p) => p.memberId), ...holders.map((h) => h.memberId)]);
+    const names = await namesOf(db, [
+      ...draws.map((d) => d.memberId),
+      ...tops.map((d) => d.memberId),
+      ...players.map((p) => p.memberId),
+      ...holders.map((h) => h.memberId),
+      ...claims.flatMap((cl) => [cl.memberId, cl.deliveredBy ?? '']),
+    ]);
     const roles = (guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
     const reset = gujiOnly(c) ? await gachaResetPreview(db) : undefined;
     return c.html(
@@ -1659,6 +1668,7 @@ export function createWebApp(deps: WebDeps) {
         coinEmoji={cfg.economy.currencyEmoji}
         stats={stats}
         prizes={prizes}
+        claims={claims}
         shopItems={items.filter(giftableShopItem)}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         draws={draws}
@@ -1735,6 +1745,17 @@ export function createWebApp(deps: WebDeps) {
     return gachaBack(c, 'gacha_reset', 'gacha-basic');
   });
 
+  // 運営が渡す賞品を渡した
+  app.post('/gacha/claims/:id/done', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return gachaBack(c, 'claim_done_already', 'gacha-claims');
+    const row = await deliverClaim(db, id, c.get('session').userId, now());
+    if (!row) return gachaBack(c, 'claim_done_already', 'gacha-claims');
+    await audit(db, { actorId: c.get('session').userId, targetId: row.memberId, action: 'gacha.claim_done', detail: { id, label: row.label }, via: 'web' });
+    return gachaBack(c, 'claim_done', 'gacha-claims');
+  });
+
   app.post('/gacha/toggle', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const enabled = (await c.req.parseBody()).enabled === 'yes';
@@ -1748,7 +1769,8 @@ export function createWebApp(deps: WebDeps) {
     const patch = {
       price: num('price'),
       pity: num('pity'),
-      rates: Object.fromEntries(GACHA_TIERS.map((t) => [t, num(`rate.${t}`)])) as GuildConfig['gacha']['rates'],
+      // 送られなかった運勢は、いまの値のまま
+      rates: Object.fromEntries(GACHA_TIERS.map((t) => [t, body[`rate.${t}`] === undefined ? cfg.gacha.rates[t] : num(`rate.${t}`)])) as GuildConfig['gacha']['rates'],
     };
     return gachaBack(c, (await saveGacha(c, patch)) ? 'gacha_saved' : 'gacha_invalid');
   });
@@ -1760,7 +1782,11 @@ export function createWebApp(deps: WebDeps) {
     const amount = kind === 'ticket' || kind === 'coins' ? n('amount') : 1;
     const maxAmount = kind === 'coins' ? 1_000_000 : 100;
     if (!Number.isInteger(weight) || weight < 1 || weight > 10_000 || !Number.isInteger(amount) || amount < 1 || amount > maxAmount) return undefined;
-    return { weight, amount, fallback: body.fallback === 'yes' };
+    // 特別な賞品の残り（空はいくらでも）
+    const stockRaw = typeof body.stock === 'string' ? body.stock.trim() : '';
+    const stock = stockRaw === '' ? null : Number(stockRaw);
+    if (kind === 'special' && stock !== null && (!Number.isInteger(stock) || stock < 0 || stock > 1000)) return undefined;
+    return { weight, amount, fallback: body.fallback === 'yes', ...(kind === 'special' ? { stock } : {}) };
   };
 
   app.post('/gacha/prizes', async (c) => {
@@ -1783,6 +1809,10 @@ export function createWebApp(deps: WebDeps) {
       const item = await getShopItem(db, Number(body.shopItemId));
       if (!item || !giftableShopItem(item)) return gachaBack(c, 'prize_invalid', 'gacha-add');
       input.shopItemId = item.id;
+    } else if (kind === 'special') {
+      const label = field(body, 'label', 100);
+      if (!label) return gachaBack(c, 'prize_invalid', 'gacha-add');
+      input.label = label;
     }
     const row = await createPrize(db, input);
     await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_add', detail: { ...input, id: row.id }, via: 'web' });

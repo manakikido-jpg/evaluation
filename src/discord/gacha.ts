@@ -151,7 +151,8 @@ export function useTicketMenu(tickets: Record<TicketKind, number>) {
 export function pullLine(p: GachaPull, roleName: (id: string) => string, coinName = '銭'): string {
   const t = TIER_LABEL[p.tier];
   let got: string;
-  if (p.shopItemId) got = `${p.shopName ?? 'ショップの品'}${p.expiresAt ? `（${p.expiresAt.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })} まで）` : ''}`;
+  if (p.special) got = `🎊 ${p.special.label}（運営からお渡しします）`;
+  else if (p.shopItemId) got = `${p.shopName ?? 'ショップの品'}${p.expiresAt ? `（${p.expiresAt.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })} まで）` : ''}`;
   else if (p.roleId) got = `「${roleName(p.roleId)}」`;
   else if (p.ticket) got = `${TICKET_LABEL[p.ticket].emoji}${TICKET_LABEL[p.ticket].name} ×${p.count}`;
   else if (p.coins > 0) got = `${coinName} ${fmt(p.coins)} 枚`;
@@ -262,24 +263,56 @@ export class GachaApp {
       components: gachaMenu(g, p.prizes, p.names, { balance: r.balance, sinceTop: r.sinceTop, tickets: r.tickets, buffs }, this.coin()).components,
     });
 
-    // 大吉は #おみくじ でお祝い
-    const tops = r.pulls.filter((x) => x.tier === 'daikichi');
-    if (!tops.length) return;
+    // 運営が渡す特別な賞品: 運営に知らせて、当たった人に DM
+    for (const x of r.pulls) if (x.special) await this.notifySpecial(i, x.special);
+
+    // 超大当たり・大吉は #おみくじ でお祝い
     const channel = this.omikujiChannel(i.guild);
-    if (!channel) return;
-    const got = tops.map((x) => pullLine(x, roleName, cfg.economy.currencyName).replace(/^.*? … /, '')).join('、');
-    await channel
-      .send({
-        embeds: [
-          {
-            title: '🌸 物御籤で大吉！',
-            description: `**${i.member.displayName}** さんが物御籤で **大吉** を引きました！\n授かったもの: ${got}`,
-            color: TIER_LABEL.daikichi.color,
-          },
-        ],
-        allowedMentions: { parse: [] },
-      })
-      .catch((err: unknown) => logger.warn({ err }, 'gacha announce failed'));
+    for (const tier of ['super', 'daikichi'] as const) {
+      const tops = r.pulls.filter((x) => x.tier === tier);
+      if (!tops.length || !channel) continue;
+      const got = tops.map((x) => pullLine(x, roleName, cfg.economy.currencyName).replace(/^.*? … /, '')).join('、');
+      const t = TIER_LABEL[tier];
+      await channel
+        .send({
+          embeds: [
+            {
+              title: tier === 'super' ? '🎊🎊 物御籤で超大当たり！！ 🎊🎊' : '🌸 物御籤で大吉！',
+              description: `**${i.member.displayName}** さんが物御籤で **${t.name}** を引きました！\n授かったもの: ${got}`,
+              color: t.color,
+            },
+          ],
+          allowedMentions: { parse: [] },
+        })
+        .catch((err: unknown) => logger.warn({ err }, 'gacha announce failed'));
+    }
+  }
+
+  /** 運営が渡す特別な賞品が当たったとき: 運営のチャンネル（呼び鈴の知らせ先か #記録）と、当たった人に DM */
+  private async notifySpecial(i: ButtonInteraction<'cached'>, special: { label: string; claimId: number }): Promise<void> {
+    const cfg = this.cfg();
+    const target = cfg.bell.channelId ?? cfg.channels.log;
+    const ch = target ? i.guild.channels.cache.get(target) : undefined;
+    if (ch?.isSendable()) {
+      await ch
+        .send({
+          embeds: [
+            {
+              title: '🎊 物御籤の超大当たり（運営から渡す賞品）',
+              description: [
+                `<@${i.user.id}> さんが **${special.label}** を当てました（当たり #${special.claimId}）。`,
+                '渡したら、社務所Web の「🎁 物御籤」→「🎊 運営が渡す賞品」で「渡した」を押してください。',
+              ].join('\n'),
+              color: TIER_LABEL.super.color,
+            },
+          ],
+          allowedMentions: { parse: [] },
+        })
+        .catch((err: unknown) => logger.warn({ err }, 'gacha special notify failed'));
+    }
+    await i.user
+      .send(`🎊 物御籤の超大当たり、おめでとうございます！（咲楽ノ宮）\n**${special.label}** は、運営からお渡しします。連絡をお待ちください。`)
+      .catch(() => undefined);
   }
 
   /** #おみくじ（設定になければ「おみくじ」という名前のチャンネル） */

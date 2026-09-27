@@ -70,14 +70,17 @@ afterEach(async () => {
 describe('物御籤の設定', () => {
   it('標準: 500 枚・天井 30・大吉 3 / 中吉 12 / 小吉 25 / 吉 60', () => {
     const d = gachaSchema.parse({});
-    expect(d).toMatchObject({ enabled: true, price: 500, pity: 30, rates: { daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 } });
-    expect(gachaRates(d)).toEqual({ daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 });
+    expect(d).toMatchObject({ enabled: true, price: 500, pity: 30, rates: { super: 0.01, daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 } });
+    expect(gachaRates(d)).toEqual({ super: 0.01, daikichi: 3, chukichi: 12, shokichi: 25, kichi: 59.99 });
+    // 前に保存した設定（超大当たりがない）も読める
+    expect(gachaSchema.parse({ rates: { daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 } }).rates.super).toBe(0.01);
     expect(d.prizes.daikichi).toMatchObject({ role: true, ticket: 'room_free', count: 3 });
-    expect(gachaSchema.safeParse({ rates: { daikichi: 0, chukichi: 0, shokichi: 0, kichi: 0 } }).success).toBe(false);
+    expect(gachaSchema.safeParse({ rates: { super: 0, daikichi: 0, chukichi: 0, shokichi: 0, kichi: 0 } }).success).toBe(false);
   });
 
   it('運勢は出やすさの順に決まる', () => {
-    expect(pickTier(g, () => 0)).toBe('daikichi');
+    expect(pickTier(g, () => 0)).toBe('super');
+    expect(pickTier(g, () => 0.0002)).toBe('daikichi');
     expect(pickTier(g, () => 0.029)).toBe('daikichi');
     expect(pickTier(g, () => 0.031)).toBe('chukichi');
     expect(pickTier(g, () => 0.2)).toBe('shokichi');
@@ -198,7 +201,7 @@ describe('中身（社務所Web で変える）', () => {
     const kichi = list.find((p) => p.tier === 'kichi')!;
     await updatePrize(db, kichi.id, { enabled: false });
     const off = await listPrizes(db);
-    expect(effectiveRates(g, off)).toEqual({ daikichi: 7.5, chukichi: 30, shokichi: 62.5, kichi: 0 });
+    expect(effectiveRates(g, off)).toEqual({ super: 0, daikichi: 7.5, chukichi: 30, shokichi: 62.5, kichi: 0 });
     await addCoins(db, U, 500, 'adjust');
     const r = await drawGacha(db, g, U, 1, [], () => 0.99);
     expect(r).toMatchObject({ status: 'ok', pulls: [{ tier: 'shokichi' }] });
@@ -266,6 +269,35 @@ describe('中身（社務所Web で変える）', () => {
     for (const p of await listPrizes(db)) await deletePrize(db, p.id);
     await createPrize(db, { tier: 'kichi', kind: 'shop', shopItemId: title.id, amount: 1, weight: 1, fallback: false });
     expect(await drawGacha(db, g, U, 1, [TITLE])).toEqual({ status: 'empty' });
+  });
+});
+
+describe('🎊 超大当たり・運営が渡す賞品', () => {
+  it('超大当たりに運営が渡す賞品を入れると 0.01% で出る。残りが 0 になったら出ない。当たりは記録して「渡した」にできる', async () => {
+    const { listClaims, deliverClaim } = await import('../src/services/gacha.js');
+    await ensureGachaPrizes(db, g);
+    const nitro = await createPrize(db, { tier: 'super', kind: 'special', label: 'Discord Nitro 1 か月分', stock: 1, amount: 1, weight: 1, fallback: false });
+    const list = await listPrizes(db);
+    expect(prizeChances(g, list).get(nitro.id)).toBe(0.01);
+    expect(effectiveRates(g, list).super).toBe(0.01);
+    await addCoins(db, U, 1000, 'adjust');
+    const r = await drawGacha(db, g, U, 1, [], () => 0);
+    expect(r).toMatchObject({ status: 'ok', pulls: [{ tier: 'super', kind: 'special', special: { label: 'Discord Nitro 1 か月分' } }] });
+    // 大吉ではないので天井は数え続ける
+    expect(await gachaStateOf(db, U)).toMatchObject({ sinceTop: 1 });
+    expect((await listPrizes(db)).find((p) => p.id === nitro.id)?.stock).toBe(0);
+    expect(effectiveRates(g, await listPrizes(db)).super).toBe(0);
+    // 残りがないので、次は超大当たりにならない
+    const r2 = await drawGacha(db, g, U, 1, [], () => 0);
+    expect(r2.status === 'ok' && r2.pulls[0]?.tier).toBe('daikichi');
+    const claims = await listClaims(db);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]).toMatchObject({ memberId: U, label: 'Discord Nitro 1 か月分', deliveredAt: null });
+    expect(await deliverClaim(db, claims[0]!.id, 'staff', T0)).toMatchObject({ deliveredBy: 'staff' });
+    expect(await deliverClaim(db, claims[0]!.id, 'staff', T0)).toBeUndefined();
+    expect(pullLine({ tier: 'super', pity: false, prizeId: 1, kind: 'special', special: { label: 'Nitro', claimId: 1 }, count: 0, coins: 0 }, () => 'x')).toBe(
+      '🎊 **超大当たり** … 🎊 Nitro（運営からお渡しします）',
+    );
   });
 });
 

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { TicketKind } from '../config.js';
+import type { GachaTier, TicketKind } from '../config.js';
 import { bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /**
@@ -669,7 +669,7 @@ export const gachaDraws = pgTable(
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     memberId: text('member_id').notNull(),
-    tier: text('tier').$type<'daikichi' | 'chukichi' | 'shokichi' | 'kichi'>().notNull(),
+    tier: text('tier').$type<GachaTier>().notNull(),
     /** 天井で出た */
     pity: boolean('pity').notNull().default(false),
     /** 1 回分の値段 */
@@ -697,8 +697,12 @@ export const gachaPrizes = pgTable(
   'gacha_prizes',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    tier: text('tier').$type<'daikichi' | 'chukichi' | 'shokichi' | 'kichi'>().notNull(),
-    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop'>().notNull(),
+    tier: text('tier').$type<GachaTier>().notNull(),
+    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop' | 'special'>().notNull(),
+    /** 運営が渡す特別な賞品の名前（例: Discord Nitro 1 か月分） */
+    label: text('label'),
+    /** 残りの数（null はいくらでも。0 になったら出ない） */
+    stock: integer('stock'),
     roleId: text('role_id'),
     ticket: text('ticket').$type<TicketKind>(),
     shopItemId: integer('shop_item_id'),
@@ -750,3 +754,20 @@ export const nameDecos = pgTable('name_decos', {
 });
 
 export type NameDeco = typeof nameDecos.$inferSelect;
+
+/** 運営が渡す特別な賞品の当たり（渡したら deliveredAt） */
+export const gachaClaims = pgTable(
+  'gacha_claims',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    prizeId: bigint('prize_id', { mode: 'number' }),
+    label: text('label').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    deliveredBy: text('delivered_by'),
+  },
+  (t) => [index('gacha_claims_created_idx').on(t.createdAt)],
+);
+
+export type GachaClaim = typeof gachaClaims.$inferSelect;

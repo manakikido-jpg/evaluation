@@ -50,21 +50,17 @@ describe('🧭 案内待ち', () => {
     return { m, log, roleIds };
   };
 
-  it('メンバーが変わったとき: 質問を終えたら付け、承認されたら外す（ルールの同意だけでも付ける）', async () => {
+  it('入った瞬間に付ける。承認されたら外す', async () => {
     const app = new GuidePendingApp(() => cfg);
-    const before = fakeMember('1', {});
-    const done = fakeMember('1', { flags: GuildMemberFlags.CompletedOnboarding });
-    await app.onMemberUpdate(before.m as never, done.m as never);
-    expect(done.log).toEqual([`add ${GUIDE}`]);
-
-    const approved = fakeMember('1', { flags: GuildMemberFlags.CompletedOnboarding, roleIds: [GUIDE, EMA] });
-    await app.onMemberUpdate(done.m as never, approved.m as never);
+    const joined = fakeMember('1', {});
+    await app.onMemberAdd(joined.m as never);
+    expect(joined.log).toEqual([`add ${GUIDE}`]);
+    const approved = fakeMember('1', { roleIds: [GUIDE, EMA] });
+    await app.onMemberUpdate(joined.m as never, approved.m as never);
     expect(approved.log).toEqual([`remove ${GUIDE}`]);
-
-    const screening = fakeMember('2', { pending: true });
-    const agreed = fakeMember('2', { pending: false });
-    await app.onMemberUpdate(screening.m as never, agreed.m as never);
-    expect(agreed.log).toEqual([`add ${GUIDE}`]);
+    const bot = fakeMember('2', { bot: true });
+    await app.onMemberAdd(bot.m as never);
+    expect(bot.log).toEqual([]);
   });
 
   it('起動したとき: 全員を合わせる', async () => {
@@ -72,8 +68,10 @@ describe('🧭 案内待ち', () => {
     const a = fakeMember('1', { flags: GuildMemberFlags.CompletedOnboarding });
     const b = fakeMember('2', { flags: GuildMemberFlags.CompletedOnboarding, roleIds: [GUIDE, ROLE.sanpaisha] });
     const c = fakeMember('3', {});
-    const guild = { roles: { cache: new Map() }, members: { cache: new Map([a, b, c].map((x) => [x.m.id, x.m])) } };
+    const d = fakeMember('4', { roleIds: [ROLE.ujiko] });
+    const guild = { roles: { cache: new Map() }, members: { cache: new Map([a, b, c, d].map((x) => [x.m.id, x.m])) } };
     await app.attach(guild as never);
-    expect([a.log, b.log, c.log]).toEqual([[`add ${GUIDE}`], [`remove ${GUIDE}`], []]);
+    // 質問を終えたかは問わない。もう役職がある人には付けない
+    expect([a.log, b.log, c.log, d.log]).toEqual([[`add ${GUIDE}`], [`remove ${GUIDE}`], [`add ${GUIDE}`], []]);
   });
 });

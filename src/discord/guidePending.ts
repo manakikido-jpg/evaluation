@@ -1,9 +1,9 @@
-import { GuildMemberFlags, type Guild, type GuildMember, type PartialGuildMember } from 'discord.js';
+import type { Guild, GuildMember, PartialGuildMember } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import { logger } from '../lib/logger.js';
 
 /**
- * 🧭 案内待ち: Discord の参加時の質問（サーバーのオンボーディング）を終えた人に付ける目印のロール。
+ * 🧭 案内待ち: サーバーに入った瞬間に付ける目印のロール（まだ承認されていない人）。
  * 入鯖申請が承認されて次の段階（📝絵馬待ち・役職）に進んだら外す。
  * ロールは設定（roles.guidePending）か、名前に「案内待ち」を含むロール。どちらもなければ何もしない。
  */
@@ -28,34 +28,36 @@ export function guideRoleOf(cfg: GuildConfig, roles: Iterable<{ id: string; name
 export class GuidePendingApp {
   constructor(private readonly cfg: () => GuildConfig) {}
 
-  /** 起動したとき: 止まっていた間に質問を終えた人・承認された人も合わせる */
+  /** 入った瞬間に付ける */
+  async onMemberAdd(m: GuildMember): Promise<void> {
+    if (m.guild.id !== this.cfg().guildId) return;
+    const roleId = guideRoleOf(this.cfg(), m.guild.roles.cache.values());
+    if (roleId) await this.reconcile(m, roleId);
+  }
+
+  /** 起動したとき: 止まっていた間に入った人・承認された人も合わせる */
   async attach(guild: Guild): Promise<void> {
     const roleId = guideRoleOf(this.cfg(), guild.roles.cache.values());
     if (!roleId) return;
     let changed = 0;
-    for (const m of guild.members.cache.values()) if (await this.reconcile(m, roleId, false)) changed++;
+    for (const m of guild.members.cache.values()) if (await this.reconcile(m, roleId)) changed++;
     if (changed) logger.info({ changed }, 'guide pending synced');
   }
 
-  async onMemberUpdate(old: GuildMember | PartialGuildMember, m: GuildMember): Promise<void> {
+  /** 承認されて絵馬待ち・役職になったら外す（付け忘れていたら付ける） */
+  async onMemberUpdate(_old: GuildMember | PartialGuildMember, m: GuildMember): Promise<void> {
     if (m.guild.id !== this.cfg().guildId) return;
     const roleId = guideRoleOf(this.cfg(), m.guild.roles.cache.values());
-    if (!roleId) return;
-    // ルールの同意（メンバー審査）だけのサーバーでも、同意したら「終えた」とみなす
-    const screened = old.pending === true && !m.pending;
-    await this.reconcile(m, roleId, screened);
+    if (roleId) await this.reconcile(m, roleId);
   }
 
   /** 付けた・外したら true */
-  private async reconcile(m: GuildMember, roleId: string, screened: boolean): Promise<boolean> {
-    const action = guideAction(this.cfg(), roleId, {
-      isBot: m.user.bot,
-      completed: screened || m.flags.has(GuildMemberFlags.CompletedOnboarding),
-      roleIds: [...m.roles.cache.keys()],
-    });
+  private async reconcile(m: GuildMember, roleId: string): Promise<boolean> {
+    // 入った時点で付ける（参加時の質問を終えたかは問わない）
+    const action = guideAction(this.cfg(), roleId, { isBot: m.user.bot, completed: true, roleIds: [...m.roles.cache.keys()] });
     if (!action) return false;
     try {
-      if (action === 'add') await m.roles.add(roleId, '参加時の質問を終えた（案内待ち）');
+      if (action === 'add') await m.roles.add(roleId, 'サーバーに入った（案内待ち）');
       else await m.roles.remove(roleId, '次の段階に進んだ（案内待ちを外す）');
       return true;
     } catch (err) {

@@ -1,5 +1,5 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
-import type { AdminSession, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
+import type { AdminSession, GachaClaim, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
 import { effectiveRates, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, TIER_LABEL, untilPity } from '../../services/gacha.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
@@ -29,6 +29,8 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   prize_not_found: { text: 'その中身はもうありません。', kind: 'warn' },
   prize_bulk: { text: 'まとめて変えました。', kind: 'ok' },
   prize_bulk_none: { text: '変える中身を選んでください（左のチェック）。', kind: 'warn' },
+  claim_done: { text: '「渡した」にしました。', kind: 'ok' },
+  claim_done_already: { text: 'もう「渡した」になっています。', kind: 'warn' },
   gacha_reset: { text: '物御籤をリセットしました（銭を返し、出たものを取り上げました）。くわしくは「記録」に残っています。', kind: 'ok' },
   gacha_reset_confirm: { text: 'リセットするときは「リセット」と入れてください。', kind: 'warn' },
 };
@@ -100,13 +102,13 @@ export function TicketSelect(props: { name: string; selected?: string }) {
 }
 
 /** 運勢を選ぶ（いまの割合つき） */
-function TierPick(props: { rates: Record<GachaTier, number> }) {
+function TierPick(props: { rates: Record<GachaTier, number>; checked?: GachaTier }) {
   return (
     <fieldset class="tier-pick">
       <legend>運勢</legend>
       {GACHA_TIERS.map((t, i) => (
         <label>
-          <input type="radio" name="tier" value={t} checked={i === GACHA_TIERS.length - 1} required />
+          <input type="radio" name="tier" value={t} checked={props.checked ? props.checked === t : i === GACHA_TIERS.length - 1} required />
           <span>
             {TIER_LABEL[t].emoji} {TIER_LABEL[t].name}
             <small> {props.rates[t] > 0 ? `${props.rates[t]}%` : 'まだ出ない'}</small>
@@ -152,6 +154,8 @@ export function GachaPage(props: {
   names: Names;
   roleNames: Map<string, string>;
   flash?: string;
+  /** 運営が渡す賞品の当たり */
+  claims: GachaClaim[];
   /** リセットしたら返す・取り上げる量（宮司だけ） */
   reset?: { members: number; draws: number; refund: number; coins: number; tickets: number; roles: number };
 }) {
@@ -205,7 +209,7 @@ export function GachaPage(props: {
                   <span>
                     {TIER_LABEL[t].emoji} {TIER_LABEL[t].name}の出やすさ（いま {rates[t]}%）
                   </span>
-                  <input type="number" name={`rate.${t}`} value={String(g.rates[t])} min={0} max={1000} required />
+                  <input type="number" name={`rate.${t}`} value={String(g.rates[t])} min={0} max={1000} step="0.01" required />
                 </label>
               ))}
             </div>
@@ -286,7 +290,7 @@ export function GachaPage(props: {
                       <tr>
                         {guji && <th></th>}
                         <th>中身</th>
-                        <th class="num">枚数</th>
+                        <th class="num">枚数・残り</th>
                         <th class="num">重み</th>
                         <th>ほかが出せないときだけ</th>
                         <th class="num">出る確率</th>
@@ -327,6 +331,23 @@ export function GachaPage(props: {
                                 />
                               ) : p.kind === 'ticket' || p.kind === 'coins' ? (
                                 fmt(p.amount)
+                              ) : p.kind === 'special' ? (
+                                guji ? (
+                                  <input
+                                    type="number"
+                                    name="stock"
+                                    form={f}
+                                    value={p.stock === null ? '' : String(p.stock)}
+                                    min={0}
+                                    max={1000}
+                                    placeholder="いくらでも"
+                                    aria-label="残り"
+                                  />
+                                ) : p.stock === null ? (
+                                  'いくらでも'
+                                ) : (
+                                  `残り ${p.stock}`
+                                )
                               ) : (
                                 '—'
                               )}
@@ -471,6 +492,28 @@ export function GachaPage(props: {
                 足す
               </button>
             </form>
+
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="special" />
+              <h3>🎊 運営が渡す賞品</h3>
+              <p class="note">
+                Discord Nitro など、運営が手で渡すもの。当たると運営のチャンネル（呼び鈴の知らせ先か #記録）に知らせ、当たった人に DM します。渡したら下の「🎊 運営が渡す賞品」で「渡した」を押してください。ふつうは🎊超大当たりに入れます。
+              </p>
+              <TierPick rates={rates} checked="super" />
+              <label class="field">
+                <span>賞品の名前</span>
+                <input type="text" name="label" maxlength={100} placeholder="例: Discord Nitro 1 か月分" required />
+              </label>
+              <label class="field">
+                <span>残りの数（空にするといくらでも。0 になったら出ない）</span>
+                <input type="number" name="stock" value="1" min={0} max={1000} />
+              </label>
+              <WeightFields />
+              <button type="submit" class="ok">
+                足す
+              </button>
+            </form>
           </div>
         </section>
       )}
@@ -514,6 +557,50 @@ export function GachaPage(props: {
           )}
         </section>
       )}
+
+      <section class="card anchor" id="gacha-claims">
+        <h2>🎊 運営が渡す賞品</h2>
+        {props.claims.length === 0 ? (
+          <p class="empty">まだ当たりはありません。</p>
+        ) : (
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>当たった日時</th>
+                <th>メンバー</th>
+                <th>賞品</th>
+                <th>渡した</th>
+              </tr>
+            </thead>
+            <tbody>
+              {props.claims.map((cl) => (
+                <tr>
+                  <td>{fmtDateTime(cl.createdAt)}</td>
+                  <td>{who(cl.memberId)}</td>
+                  <td class="wrap">🎊 {cl.label}</td>
+                  <td>
+                    {cl.deliveredAt ? (
+                      <span>
+                        ✅ {fmtDateTime(cl.deliveredAt)}
+                        {cl.deliveredBy && <small> {props.names.get(cl.deliveredBy) ?? cl.deliveredBy}</small>}
+                      </span>
+                    ) : guji ? (
+                      <form method="post" action={`/gacha/claims/${cl.id}/done`}>
+                        {csrf}
+                        <button type="submit" class="ok">
+                          渡した
+                        </button>
+                      </form>
+                    ) : (
+                      <span class="tag red">まだ</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <section class="card">
         <h2>最近の大吉</h2>

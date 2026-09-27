@@ -1018,7 +1018,7 @@ describe('物御籤（管理画面）', () => {
     expect((await post(g, '/gacha/settings', { price: '300', pity: '0', ...rates })).headers.get('location')).toBe('/gacha?msg=gacha_saved#gacha-basic');
     expect(store.current.gacha).toMatchObject({ enabled: false, price: 300, pity: 0, rates: { daikichi: 10, kichi: 40 } });
     expect((await post(g, '/gacha/settings', { price: '0', pity: '0', ...rates })).headers.get('location')).toContain('gacha_invalid');
-    expect((await post(g, '/gacha/settings', { price: '300', pity: '0', 'rate.daikichi': '0', 'rate.chukichi': '0', 'rate.shokichi': '0', 'rate.kichi': '0' })).headers.get('location')).toContain(
+    expect((await post(g, '/gacha/settings', { price: '300', pity: '0', 'rate.super': '0', 'rate.daikichi': '0', 'rate.chukichi': '0', 'rate.shokichi': '0', 'rate.kichi': '0' })).headers.get('location')).toContain(
       'gacha_invalid',
     );
     expect((await post(g, '/gacha/toggle', { enabled: 'yes' })).headers.get('location')).toContain('gacha_on');
@@ -1112,6 +1112,29 @@ describe('物御籤（管理画面）', () => {
     const s = await login(STAFF);
     const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
     expect((await app.request('/gacha/prizes/bulk', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: `_csrf=${csrf}&action=all_on` })).status).toBe(403);
+  });
+
+  it('運営が渡す賞品（超大当たり）: 足す・当たりの一覧・「渡した」', async () => {
+    const { drawGacha, listPrizes, listClaims } = await import('../src/services/gacha.js');
+    const g = await login(GUJI);
+    await get('/gacha', g);
+    expect(await (await post(g, '/gacha/prizes', { tier: 'super', kind: 'special', label: '', stock: '1', weight: '1' })).headers.get('location')).toContain('prize_invalid');
+    expect((await post(g, '/gacha/prizes', { tier: 'super', kind: 'special', label: 'Discord Nitro 1 か月分', stock: '1', weight: '1' })).headers.get('location')).toContain('prize_added');
+    const nitro = (await listPrizes(db)).find((p) => p.kind === 'special')!;
+    expect(nitro).toMatchObject({ tier: 'super', label: 'Discord Nitro 1 か月分', stock: 1 });
+    // 残りを変える（空でいくらでも）
+    expect((await post(g, `/gacha/prizes/${nitro.id}`, { weight: '1', stock: '' })).headers.get('location')).toContain('prize_saved');
+    expect((await listPrizes(db)).find((p) => p.id === nitro.id)?.stock).toBeNull();
+    await addCoins(db, USER, 500, 'adjust');
+    await drawGacha(db, cfg.gacha, USER, 1, [], () => 0);
+    const page = await (await get('/gacha', g)).text();
+    expect(page).toContain('🎊 運営が渡す賞品');
+    expect(page).toContain('🎊 Discord Nitro 1 か月分');
+    const claim = (await listClaims(db))[0]!;
+    expect(page).toContain(`/gacha/claims/${claim.id}/done`);
+    expect((await post(g, `/gacha/claims/${claim.id}/done`, {})).headers.get('location')).toBe('/gacha?msg=claim_done#gacha-claims');
+    expect((await post(g, `/gacha/claims/${claim.id}/done`, {})).headers.get('location')).toContain('claim_done_already');
+    expect((await listAudit(db, { action: 'gacha.claim_done' })).length).toBe(1);
   });
 
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {

@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-gacha-super',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '物御籤: 🎊超大当たり（運営が渡す賞品）・案内待ちは入った瞬間に',
+    items: [
+      '大吉より上の 🎊超大当たり（標準 0.01%）。中身に「運営が渡す賞品」（Discord Nitro など。名前と残りの数）を入れられる',
+      '当たったら #おみくじ でお祝い・運営のチャンネルに知らせ・当たった人に DM。社務所Web で「渡した」を押して記録',
+      '出やすさを小数で決められるように（0.01 など）',
+      '🧭 案内待ち は、サーバーに入った瞬間に付けるように（承認で外すのは今までどおり）',
+    ],
+  },
+  {
     id: '2026-09-27-gacha-charms',
     date: '2026-09-27',
     kind: 'new',
