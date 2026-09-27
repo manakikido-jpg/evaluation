@@ -9,6 +9,7 @@ import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { onboardingTick } from './services/onboarding.js';
+import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
@@ -117,6 +118,8 @@ async function main(): Promise<void> {
       void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
       // はじめての参拝: 全部できた人にお祝い
       void onboardingTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'onboarding tick failed'));
+      // 招待: 招待された人が浮上した日ごとに、招待した人へボーナス
+      void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);

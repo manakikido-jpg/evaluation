@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { inviteCountOf, inviterOf } from '../services/invites.js';
 import { STATIC } from './assets.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -322,7 +323,7 @@ export function createWebApp(deps: WebDeps) {
     const member = await getMember(db, id);
     if (!member) return c.html(<NotFoundPage session={c.get('session')} />, 404);
     const session = c.get('session');
-    const [apps, omairiRow] = await Promise.all([applicationsOf(db, id), getOmairi(db, id)]);
+    const [apps, omairiRow, invitedBy, inviteCount] = await Promise.all([applicationsOf(db, id), getOmairi(db, id), inviterOf(db, id), inviteCountOf(db, id)]);
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
       shuinHistory(db, id),
@@ -344,6 +345,7 @@ export function createWebApp(deps: WebDeps) {
       ...yakuRows.flatMap((y) => [y.issuedBy, y.clearedBy ?? '']),
       ...memoRows.map((m) => m.authorId),
       ...apps.map((a) => a.reviewedBy ?? ''),
+      invitedBy ?? '',
     ]);
     const flash = c.req.query('msg');
     return c.html(
@@ -370,6 +372,8 @@ export function createWebApp(deps: WebDeps) {
             omairi={omairiRow}
             applications={apps}
             names={names}
+            invitedBy={invitedBy}
+            inviteCount={inviteCount}
           />
           <ModerationSection
             cfg={cfg}
@@ -610,7 +614,8 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/applications', async (c) => {
     const [pending, decided] = await Promise.all([pendingApplications(db), recentDecidedApplications(db)]);
-    const names = await namesOf(db, decided.map((d) => d.app.reviewedBy ?? ''));
+    const inviters = pending.map((p) => p.app.answers.inviter);
+    const names = await namesOf(db, [...decided.map((d) => d.app.reviewedBy ?? ''), ...inviters.filter((x): x is string => typeof x === 'string')]);
     const flash = c.req.query('msg');
     return c.html(
       <ApplicationsPage session={c.get('session')} pending={pending} decided={decided} names={names} now={now()} flash={flash} />,
@@ -752,6 +757,9 @@ export function createWebApp(deps: WebDeps) {
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
         onboardingReward: num('onboardingReward'),
+        inviteReward: num('inviteReward'),
+        inviteActiveReward: num('inviteActiveReward'),
+        inviteActiveDays: num('inviteActiveDays'),
       },
       rooms: {
         ...Object.fromEntries(

@@ -96,6 +96,14 @@ export function ApplicationsPage(props: {
                     <dd>{GENDER_LABEL[app.answers.gender]}</dd>
                   </div>
                 )}
+                {typeof app.answers.inviter === 'string' && (
+                  <div>
+                    <dt>招待してくれた人</dt>
+                    <dd>
+                      <a href={`/members/${app.answers.inviter}`}>{props.names.get(app.answers.inviter) ?? app.answers.inviter}</a>
+                    </dd>
+                  </div>
+                )}
                 {contactSummary(app.answers) && (
                   <div>
                     <dt>DM・フレンド</dt>
@@ -372,6 +380,8 @@ export function MemberAdmissionSection(props: {
   omairi?: Omairi;
   applications: Application[];
   names: Names;
+  invitedBy?: string;
+  inviteCount?: { joined: number; pending: number };
 }) {
   const isGuji = props.session.level === 'guji';
   const yoi = props.cfg.roles.yoimairi;
@@ -392,6 +402,16 @@ export function MemberAdmissionSection(props: {
           <div>
             <dt>お参り期間</dt>
             <dd>{props.omairi ? `${OMAIRI_STATUS[props.omairi.status]}（${fmtDate(props.omairi.endsAt)} まで）` : '—'}</dd>
+          </div>
+          <div>
+            <dt>招待してくれた人</dt>
+            <dd>{props.invitedBy ? <a href={`/members/${props.invitedBy}`}>{props.names.get(props.invitedBy) ?? props.invitedBy}</a> : '—'}</dd>
+          </div>
+          <div>
+            <dt>招待した人</dt>
+            <dd>
+              {props.inviteCount ? `参拝者になった ${props.inviteCount.joined} 人${props.inviteCount.pending ? `・まだ ${props.inviteCount.pending} 人` : ''}` : '—'}
+            </dd>
           </div>
         </dl>
         {isGuji && (
@@ -494,6 +514,9 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             <Num name="giftMax" label="贈り物: 1 回に贈れる最大" value={e.giftMax} file={f.giftMax} min={1} />
             <Num name="giftDailyLimit" label="贈り物: 1 人が 1 日に贈れる合計" value={e.giftDailyLimit} file={f.giftDailyLimit} />
             <Num name="joinBonus" label="初期配布（入鯖が承認されたときに 1 回だけ。0 で配らない）" value={e.joinBonus} file={f.joinBonus} />
+            <Num name="inviteReward" label="招待のお礼（招待した人に、招待された人が参拝者になったとき 1 回。0 でなし）" value={e.inviteReward} file={f.inviteReward} />
+            <Num name="inviteActiveReward" label="招待した人の浮上ボーナス（招待された人が発言・通話 10 分した日ごと。0 でなし）" value={e.inviteActiveReward} file={f.inviteActiveReward} />
+            <Num name="inviteActiveDays" label="浮上ボーナスを続ける日数（参拝者になってから）" value={e.inviteActiveDays} file={f.inviteActiveDays} min={1} />
             <Num name="onboardingReward" label="「はじめての参拝」を全部できたときのお祝い（1 人 1 回。0 でなし）" value={e.onboardingReward} file={f.onboardingReward} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
           </div>

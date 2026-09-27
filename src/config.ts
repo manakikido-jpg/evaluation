@@ -51,6 +51,12 @@ export const economySchema = z.object({
   coreTimePercent: z.number().int().min(100).max(500).default(150),
   /** 「はじめての参拝」（おみくじ・朱印・通話・お守り）を全部できたときのお祝い（1 人 1 回。0 でなし） */
   onboardingReward: z.number().int().min(0).default(300),
+  /** 招待のお礼: 入鯖申請で「招待してくれた人」に選ばれた人に、招待された人が 🔰参拝者 になったとき（1 人につき 1 回。0 でなし） */
+  inviteReward: z.number().int().min(0).default(500),
+  /** 招待した人が浮上した日（発言した・通話に 10 分いた）ごとに、招待した人へ（1 日 1 回。0 でなし） */
+  inviteActiveReward: z.number().int().min(0).default(20),
+  /** ↑を続ける日数（招待された人が参拝者になってから） */
+  inviteActiveDays: z.number().int().min(1).max(365).default(30),
 });
 
 export type EconomyConfig = z.infer<typeof economySchema>;

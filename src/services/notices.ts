@@ -65,6 +65,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '朱印を押すと', value: String(e.shuinGive), note: '朱印を押すともらえる量' },
     { name: '朱印を頂くと', value: String(e.shuinReceive), note: '朱印を頂くともらえる量' },
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
+    { name: '招待のお礼', value: String(e.inviteReward), note: '招待した人が参拝者になったときにもらえる量' },
     { name: 'おみくじの花びら', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
     { name: 'コアタイム', value: describeCoreTime(cfg.coreTime), note: 'コアタイムの曜日と時間' },
     { name: 'コアタイム倍率', value: coreTimeRate(e), note: 'コアタイムの通話の花びらの倍率' },

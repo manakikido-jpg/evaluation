@@ -55,6 +55,8 @@ const COIN_REASON: Record<string, string> = {
   boost: '奉納（ブースト）のお礼',
   room: '通話部屋',
   onboarding: 'はじめての参拝のお祝い',
+  invite: '招待のお礼',
+  invite_active: '招待した人の浮上ボーナス',
   market_buy: '市場で買った',
   market_sell: '市場で売れた',
   market_refund: '市場の返金',

@@ -502,3 +502,32 @@ export const onboardingDone = pgTable('onboarding_done', {
   reward: integer('reward').notNull().default(0),
   doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** 招待（入鯖申請で「招待してくれた人」に選ばれた人）。お礼は招待された人 1 人につき 1 回 */
+export const invites = pgTable(
+  'invites',
+  {
+    memberId: text('member_id').primaryKey(),
+    inviterId: text('inviter_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    rewardedAt: timestamp('rewarded_at', { withTimezone: true }),
+    reward: integer('reward').notNull().default(0),
+  },
+  (t) => [index('invites_inviter_idx').on(t.inviterId)],
+);
+
+export type Invite = typeof invites.$inferSelect;
+
+/** 招待された人が浮上した日ごとの、招待した人へのボーナス（1 人 1 日 1 回） */
+export const inviteActive = pgTable(
+  'invite_active',
+  {
+    memberId: text('member_id').notNull(),
+    /** 日本時間の日付（YYYY-MM-DD） */
+    date: text('date').notNull(),
+    inviterId: text('inviter_id').notNull(),
+    amount: integer('amount').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.date] })],
+);

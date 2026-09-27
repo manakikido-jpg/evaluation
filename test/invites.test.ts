@@ -1,0 +1,89 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import type { GuildConfig } from '../src/config.js';
+import type { Db } from '../src/db/client.js';
+import { activityDaily, invites, members } from '../src/db/schema.js';
+import { walletOf } from '../src/services/economy.js';
+import { inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { recordJoin } from '../src/services/members.js';
+import { cfg as baseCfg, makeDb } from './helpers.js';
+
+const INVITER = '870000000000000001';
+const NEW = '870000000000000002';
+const NEW2 = '870000000000000003';
+const T0 = new Date('2026-09-27T03:00:00Z'); // 日本時間 12:00
+const DAY = 86_400_000;
+const cfg: GuildConfig = { ...baseCfg, economy: { ...baseCfg.economy, inviteReward: 500, inviteActiveReward: 20, inviteActiveDays: 30 } };
+
+let db: Db;
+let close: () => Promise<void>;
+let dms: string[];
+const ctx = (c = cfg) => ({ db, cfg: c, discord: { sendDm: async (u: string, t: string) => (dms.push(`${u} ${t}`), true) } });
+beforeEach(async () => {
+  ({ db, close } = await makeDb());
+  dms = [];
+  for (const id of [INVITER, NEW, NEW2]) await recordJoin(db, { id, username: id, displayName: id, avatarUrl: null, roleIds: [], isBot: false, joinedAt: T0 });
+});
+afterEach(async () => {
+  await close();
+});
+
+describe('招待のお礼', () => {
+  it('自分は記録しない。前の記録は変えない', async () => {
+    expect(await recordInvite(db, NEW, NEW)).toBe(false);
+    expect(await recordInvite(db, NEW, 'abc')).toBe(false);
+    expect(await recordInvite(db, NEW, INVITER)).toBe(true);
+    expect(await recordInvite(db, NEW, NEW2)).toBe(false);
+    expect(await inviterOf(db, NEW)).toBe(INVITER);
+  });
+
+  it('参拝者になったら 1 回だけお礼と DM。抜けて入り直しても 2 回目はない', async () => {
+    await recordInvite(db, NEW, INVITER);
+    expect(await inviteCountOf(db, INVITER)).toEqual({ joined: 0, pending: 1 });
+    expect(await rewardInviter(ctx(), NEW, T0)).toEqual({ status: 'rewarded', inviterId: INVITER, amount: 500 });
+    expect(await rewardInviter(ctx(), NEW, T0)).toEqual({ status: 'already' });
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    expect(dms[0]).toContain(`<@${NEW}> さんが、咲楽ノ宮に参拝しました`);
+    expect(await inviteCountOf(db, INVITER)).toEqual({ joined: 1, pending: 0 });
+    expect(await rewardInviter(ctx(), NEW2, T0)).toEqual({ status: 'none' });
+  });
+
+  it('招待した人が抜けていたら渡さない。お礼 0 でも参拝者になった日は記録する', async () => {
+    await recordInvite(db, NEW, INVITER);
+    await db.update(members).set({ leftAt: T0 }).where(eq(members.id, INVITER));
+    expect((await rewardInviter(ctx(), NEW, T0)).status).toBe('inviter_gone');
+    await db.update(members).set({ leftAt: null }).where(eq(members.id, INVITER));
+    const off = { ...cfg, economy: { ...cfg.economy, inviteReward: 0 } };
+    expect((await rewardInviter(ctx(off), NEW, T0)).status).toBe('disabled');
+    const [row] = await db.select().from(invites).where(eq(invites.memberId, NEW));
+    expect(row?.rewardedAt).toEqual(T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+  });
+});
+
+describe('招待した人の浮上ボーナス', () => {
+  beforeEach(async () => {
+    await recordInvite(db, NEW, INVITER);
+    await rewardInviter(ctx(), NEW, T0);
+  });
+  const active = (id: string, date: string, v: { messageCount?: number; vcMinutes?: number }) => db.insert(activityDaily).values({ memberId: id, date, ...v });
+
+  it('発言した日・通話 10 分の日に 1 日 1 回。通話 9 分はまだ', async () => {
+    await active(NEW, '2026-09-27', { vcMinutes: 9 });
+    expect(await inviteActiveTick(db, cfg, T0)).toEqual([]);
+    await db.update(activityDaily).set({ messageCount: 1 }).where(eq(activityDaily.memberId, NEW));
+    expect(await inviteActiveTick(db, cfg, T0)).toEqual([{ memberId: NEW, inviterId: INVITER }]);
+    expect(await inviteActiveTick(db, cfg, T0)).toEqual([]);
+    await active(NEW, '2026-09-28', { vcMinutes: 10 });
+    expect(await inviteActiveTick(db, cfg, new Date(T0.getTime() + DAY))).toHaveLength(1);
+    expect((await walletOf(db, INVITER)).balance).toBe(540);
+  });
+
+  it('参拝者になってから決めた日数を過ぎたら、もう渡さない。招待された人が抜けていても渡さない', async () => {
+    await active(NEW, '2026-10-28', { messageCount: 3 });
+    expect(await inviteActiveTick(db, cfg, new Date(T0.getTime() + 31 * DAY))).toEqual([]);
+    await active(NEW, '2026-10-01', { messageCount: 3 });
+    await db.update(members).set({ leftAt: T0 }).where(eq(members.id, NEW));
+    expect(await inviteActiveTick(db, cfg, new Date(T0.getTime() + 4 * DAY))).toEqual([]);
+  });
+});

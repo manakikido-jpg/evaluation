@@ -16,6 +16,8 @@ export type CoinReason =
   | 'omikuji'
   | 'join_bonus'
   | 'onboarding'
+  | 'invite'
+  | 'invite_active'
   | 'shop'
   | 'shop_refund'
   | 'gift_send'

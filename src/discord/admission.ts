@@ -14,6 +14,8 @@ import {
   type Message,
   type MessageActionRowComponentBuilder,
   type ModalSubmitInteraction,
+  type UserSelectMenuInteraction,
+  UserSelectMenuBuilder,
   type Guild,
   type GuildMember,
 } from 'discord.js';
@@ -84,6 +86,9 @@ function textInput(id: string, label: string, style: TextInputStyle, opts: { req
   return new ActionRowBuilder<TextInputBuilder>().addComponents(t);
 }
 
+/** 申請の状態の「招待」: - まだ ／ 0 いない ／ ID */
+const invOf = (v: string | undefined): string | undefined => (v === '0' || (v && /^\d{17,20}$/.test(v)) ? v : undefined);
+
 /**
  * 入鯖申請・宵参り申請・匿名相談・お参り期間の判定（Discord 側）。
  * 判定の中身は services/admission.ts（管理画面と共通）。
@@ -119,10 +124,10 @@ export class AdmissionApp {
         if (ns === 'apply' && action === 'start') return await this.applyStart(interaction);
         if (ns === 'apply' && action === 'age' && (arg === 'minor' || arg === 'adult')) return await this.applyGender(interaction, arg);
         if (ns === 'apply' && (action === 'gender' || action === 'c')) {
-          // apply:gender:<年齢>.<性別> → apply:c:<年齢>.<性別>.<DM>.<フレンド>（まだなら -）
-          const [age, gender, dm, fr] = (arg ?? '').split('.');
+          // apply:gender:<年齢>.<性別> → apply:c:<年齢>.<性別>.<DM>.<フレンド>.<招待>（まだなら -。招待なしは 0）
+          const [age, gender, dm, fr, inv] = (arg ?? '').split('.');
           if ((age === 'minor' || age === 'adult') && isGender(gender)) {
-            return await this.applyNext(interaction, age, gender, isContactLevel(dm) ? dm : undefined, isContactLevel(fr) ? fr : undefined);
+            return await this.applyNext(interaction, age, gender, isContactLevel(dm) ? dm : undefined, isContactLevel(fr) ? fr : undefined, invOf(inv));
           }
         }
         if (ns === 'gender' && isGender(action)) return await this.chooseGender(interaction, action);
@@ -134,12 +139,26 @@ export class AdmissionApp {
         if (ns === 'omairi' && action === 'remove' && arg) return await this.omairiConfirmRemove(interaction, arg);
         if (ns === 'omairi' && (action === 'extend' || action === 'promote') && arg) return await this.omairiDecide(interaction, arg, action);
         if (ns === 'omairi' && action === 'removeok' && arg) return await this.omairiDecide(interaction, arg, 'remove');
+      } else if (interaction.isUserSelectMenu()) {
+        // 招待してくれた人を選んだ
+        const [ns, action, arg] = interaction.customId.split(':');
+        if (ns === 'apply' && action === 'inv') {
+          const [age, gender, dm, fr] = (arg ?? '').split('.');
+          if ((age === 'minor' || age === 'adult') && isGender(gender)) {
+            return await this.applyInviter(interaction, age, gender, isContactLevel(dm) ? dm : undefined, isContactLevel(fr) ? fr : undefined);
+          }
+        }
       } else if (interaction.isModalSubmit()) {
         const [ns, action, arg] = interaction.customId.split(':');
         if (ns === 'apply' && action === 'modal') {
-          const [age, gender, dm, fr] = (arg ?? '').split('.');
+          const [age, gender, dm, fr, inv] = (arg ?? '').split('.');
           if ((age === 'minor' || age === 'adult') && (gender === undefined || isGender(gender))) {
-            return await this.applySubmit(interaction, age, gender, { dm: isContactLevel(dm) ? dm : undefined, friend: isContactLevel(fr) ? fr : undefined });
+            const inviter = invOf(inv);
+            return await this.applySubmit(interaction, age, gender, {
+              dm: isContactLevel(dm) ? dm : undefined,
+              friend: isContactLevel(fr) ? fr : undefined,
+              inviter: inviter && inviter !== '0' ? inviter : undefined,
+            });
           }
         }
         if (ns === 'soudan' && action === 'modal') return await this.soudanSubmit(interaction, arg === 'new' ? undefined : Number(arg));
@@ -269,9 +288,9 @@ export class AdmissionApp {
 
   // ───────── 入鯖申請 ─────────
 
-  /** 申請のステップの数（年齢・性別・DM・フレンド・フォーム。ロールがなければ DM・フレンドは聞かない） */
+  /** 申請のステップの数（年齢・性別・DM・フレンド・招待・フォーム。ロールがなければ DM・フレンドは聞かない） */
   private get applySteps(): number {
-    return 3 + CONTACT_KINDS.filter((k) => contactEnabled(this.cfg, k)).length;
+    return 4 + CONTACT_KINDS.filter((k) => contactEnabled(this.cfg, k)).length;
   }
 
   private step(n: number, label: string): string {
@@ -312,9 +331,9 @@ export class AdmissionApp {
     await i.editReply(r === 'ok' ? `${CONTACT_KIND_LABEL[kind]}を「${CONTACT_LEVEL_EMOJI[level]} ${CONTACT_LEVEL_LABEL[level]}」にしました。` : 'このロールはまだありません。神職に知らせてください。');
   }
 
-  /** 性別のあと: DM → フレンド追加（ロールがあれば）→ フォーム */
-  private async applyNext(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender, dm?: ContactLevel, fr?: ContactLevel): Promise<void> {
-    const state = (d?: ContactLevel, f?: ContactLevel) => `${age}.${gender}.${d ?? '-'}.${f ?? '-'}`;
+  /** 性別のあと: DM → フレンド追加（ロールがあれば）→ 招待してくれた人 → フォーム */
+  private async applyNext(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender, dm?: ContactLevel, fr?: ContactLevel, inv?: string): Promise<void> {
+    const state = (d?: ContactLevel, f?: ContactLevel, v?: string) => `${age}.${gender}.${d ?? '-'}.${f ?? '-'}.${v ?? '-'}`;
     const ask = (kind: ContactKind, to: (l: ContactLevel) => string) =>
       i.update({
         content: [
@@ -327,10 +346,40 @@ export class AdmissionApp {
       });
     if (!dm && contactEnabled(this.cfg, 'dm')) return void (await ask('dm', (l) => state(l, fr)));
     if (!fr && contactEnabled(this.cfg, 'friend')) return void (await ask('friend', (l) => state(dm, l)));
-    await this.applyModal(i, age, gender, state(dm, fr));
+    if (!inv) return void (await i.update(this.inviterStep(age, gender, dm, fr)));
+    await this.applyModal(i, age, gender, state(dm, fr, inv));
   }
 
-  private async applyModal(i: ButtonInteraction<'cached'>, age: AgeGroup, gender: Gender, state: string): Promise<void> {
+  /** 招待してくれた人を選ぶ（メンバーから 1 人。いなければボタン） */
+  private inviterStep(age: AgeGroup, gender: Gender, dm?: ContactLevel, fr?: ContactLevel, warning?: string) {
+    const base = `${age}.${gender}.${dm ?? '-'}.${fr ?? '-'}`;
+    const e = this.cfg.economy;
+    return {
+      content: [
+        this.step(this.applySteps - 1, '招待してくれた人'),
+        ...(warning ? [`⚠️ ${warning}`] : []),
+        'だれかに招待されて来ましたか？ 招待してくれた人を下から選んでください（名前で検索できます）。',
+        e.inviteReward > 0 ? `-# 選ばれた人には、あなたが参拝者になったときに招待のお礼（${e.currencyEmoji}${e.inviteReward} 枚）が届きます` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      components: [
+        new ActionRowBuilder<UserSelectMenuBuilder>()
+          .addComponents(new UserSelectMenuBuilder().setCustomId(`apply:inv:${base}`).setPlaceholder('招待してくれた人を選ぶ').setMinValues(1).setMaxValues(1))
+          .toJSON(),
+        row(btn(`apply:c:${base}.0`, '招待してくれた人はいない')),
+      ],
+    };
+  }
+
+  private async applyInviter(i: UserSelectMenuInteraction<'cached'>, age: AgeGroup, gender: Gender, dm?: ContactLevel, fr?: ContactLevel): Promise<void> {
+    const user = i.users.first();
+    const warning = !user ? '選べませんでした。もう一度選んでください。' : user.id === i.user.id ? '自分は選べません。' : user.bot ? 'BOT は選べません。' : undefined;
+    if (warning || !user) return void (await i.update(this.inviterStep(age, gender, dm, fr, warning)));
+    await this.applyModal(i, age, gender, `${age}.${gender}.${dm ?? '-'}.${fr ?? '-'}.${user.id}`);
+  }
+
+  private async applyModal(i: ButtonInteraction<'cached'> | UserSelectMenuInteraction<'cached'>, age: AgeGroup, gender: Gender, state: string): Promise<void> {
     const modal = new ModalBuilder()
       .setCustomId(`apply:modal:${state}`)
       .setTitle(`入鯖申請 ${this.applySteps}/${this.applySteps}（${AGE_LABEL[age]}・${GENDER_LABEL[gender]}）`)
@@ -342,7 +391,12 @@ export class AdmissionApp {
     await i.showModal(modal);
   }
 
-  private async applySubmit(i: ModalSubmitInteraction<'cached'>, age: AgeGroup, gender: Gender | undefined, contact: { dm?: ContactLevel; friend?: ContactLevel }): Promise<void> {
+  private async applySubmit(
+    i: ModalSubmitInteraction<'cached'>,
+    age: AgeGroup,
+    gender: Gender | undefined,
+    contact: { dm?: ContactLevel; friend?: ContactLevel; inviter?: string },
+  ): Promise<void> {
     await i.deferReply(EPHEMERAL);
     const answers = {
       name: i.fields.getTextInputValue('name').trim(),
@@ -350,6 +404,7 @@ export class AdmissionApp {
       ...(gender ? { gender } : {}),
       ...(contact.dm ? { dm: contact.dm } : {}),
       ...(contact.friend ? { friend: contact.friend } : {}),
+      ...(contact.inviter ? { inviter: contact.inviter } : {}),
       purpose: i.fields.getTextInputValue('purpose').trim(),
       message: i.fields.getTextInputValue('message').trim(),
     };
@@ -374,6 +429,7 @@ export class AdmissionApp {
       `年齢区分: ${AGE_LABEL[age]}`,
       gender ? `性別: ${GENDER_LABEL[gender]}` : '',
       contactSummary(answers),
+      answers.inviter ? `招待してくれた人: <@${answers.inviter}>` : '招待してくれた人: いない',
       `やりたいこと: ${answers.purpose}`,
       answers.message ? `ひとこと: ${answers.message}` : '',
       `Discord アカウント作成: ${ts(i.user.createdAt)} ・ 参加: ${i.member.joinedAt ? ts(i.member.joinedAt) : '—'}`,

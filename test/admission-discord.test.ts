@@ -81,6 +81,7 @@ function base(userId: string, roleIds: string[]) {
     isChatInputCommand: () => false,
     isButton: () => false,
     isModalSubmit: () => false,
+    isUserSelectMenu: () => false,
     isRepliable: () => true,
     async reply(p: Reply) {
       i.replied = true;
@@ -113,6 +114,11 @@ const button = (userId: string, roleIds: string[], customId: string) => {
   Object.assign(b.i, { isButton: () => true, customId });
   return b;
 };
+const userSelect = (userId: string, roleIds: string[], customId: string, picked: { id: string; bot?: boolean }) => {
+  const b = base(userId, roleIds);
+  Object.assign(b.i, { isUserSelectMenu: () => true, customId, users: { first: () => ({ id: picked.id, bot: Boolean(picked.bot) }) } });
+  return b;
+};
 const modal = (userId: string, roleIds: string[], customId: string, fields: Record<string, string>) => {
   const b = base(userId, roleIds);
   Object.assign(b.i, { isModalSubmit: () => true, customId, fields: { getTextInputValue: (k: string) => fields[k] ?? '' } });
@@ -143,24 +149,37 @@ describe('入鯖申請（Discord）', () => {
     const start = button(USER, [], 'apply:start');
     await app.onInteraction(start.i as never);
     expect(start.replies[0]?.components?.[0]?.components.map((c) => c.data.custom_id)).toEqual(['apply:age:minor', 'apply:age:adult']);
-    expect(start.replies[0]?.content).toContain('ステップ 1/3：年齢');
+    expect(start.replies[0]?.content).toContain('ステップ 1/4：年齢');
 
     const age = button(USER, [], 'apply:age:adult');
     await app.onInteraction(age.i as never);
     expect(age.replies[0]?.components?.[0]?.components.map((c) => c.data.custom_id)).toEqual(['apply:gender:adult.male', 'apply:gender:adult.female']);
-    expect(age.replies[0]?.content).toContain('ステップ 2/3：性別');
+    expect(age.replies[0]?.content).toContain('ステップ 2/4：性別');
 
     const gender = button(USER, [], 'apply:gender:adult.female');
     await app.onInteraction(gender.i as never);
-    expect(gender.modals[0]?.data.custom_id).toBe('apply:modal:adult.female.-.-');
+    expect(gender.replies[0]?.content).toContain('ステップ 3/4：招待してくれた人');
+    expect(JSON.stringify(gender.replies[0]?.components)).toContain('apply:inv:adult.female.-.-');
+    expect(JSON.stringify(gender.replies[0]?.components)).toContain('apply:c:adult.female.-.-.0');
 
-    const submit = modal(USER, [], 'apply:modal:adult.female', { name: 'さくら', purpose: 'ゲーム', message: 'よろしく' });
+    // 自分は選べない → 選び直し
+    const self = userSelect(USER, [], 'apply:inv:adult.female.-.-', { id: USER });
+    await app.onInteraction(self.i as never);
+    expect(self.replies[0]?.content).toContain('自分は選べません');
+    expect(self.modals).toEqual([]);
+
+    const none = button(USER, [], 'apply:c:adult.female.-.-.0');
+    await app.onInteraction(none.i as never);
+    expect(none.modals[0]?.data.custom_id).toBe('apply:modal:adult.female.-.-.0');
+
+    const submit = modal(USER, [], 'apply:modal:adult.female.-.-.0', { name: 'さくら', purpose: 'ゲーム', message: 'よろしく' });
     await app.onInteraction(submit.i as never);
     expect(submit.replies.at(-1)?.content).toContain('申請を受け付けました');
     const card = sent.find((s) => s.channelId === APPS)!;
     expect(card.payload.embeds?.[0]?.description).toContain('呼び名: さくら');
     expect(card.payload.embeds?.[0]?.description).toContain('年齢区分: 18 歳以上');
     expect(card.payload.embeds?.[0]?.description).toContain('性別: 女性');
+    expect(card.payload.embeds?.[0]?.description).toContain('招待してくれた人: いない');
     const approveId = card.payload.components?.[0]?.components[0]?.data.custom_id!;
     expect(approveId).toMatch(/^app:approve:\d+$/);
     const appId = Number(approveId.split(':')[2]);
@@ -324,34 +343,42 @@ describe('DM・フレンド追加', () => {
     const gender = button(USER, [], 'apply:gender:adult.female');
     await app3.onInteraction(gender.i as never);
     expect(gender.replies[0]?.content).toContain('DM');
-    expect(ids(gender)).toEqual(['apply:c:adult.female.ok.-', 'apply:c:adult.female.ask.-', 'apply:c:adult.female.ng.-']);
+    expect(ids(gender)).toEqual(['apply:c:adult.female.ok.-.-', 'apply:c:adult.female.ask.-.-', 'apply:c:adult.female.ng.-.-']);
 
-    const dm = button(USER, [], 'apply:c:adult.female.ok.-');
+    const dm = button(USER, [], 'apply:c:adult.female.ok.-.-');
     await app3.onInteraction(dm.i as never);
     expect(dm.replies[0]?.content).toContain('フレンド追加');
-    expect(gender.replies[0]?.content).toContain('ステップ 3/5：DM');
-    expect(dm.replies[0]?.content).toContain('ステップ 4/5：フレンド追加');
-    expect(ids(dm)).toEqual(['apply:c:adult.female.ok.ok', 'apply:c:adult.female.ok.ask', 'apply:c:adult.female.ok.ng']);
+    expect(gender.replies[0]?.content).toContain('ステップ 3/6：DM');
+    expect(dm.replies[0]?.content).toContain('ステップ 4/6：フレンド追加');
+    expect(ids(dm)).toEqual(['apply:c:adult.female.ok.ok.-', 'apply:c:adult.female.ok.ask.-', 'apply:c:adult.female.ok.ng.-']);
 
-    const fr = button(USER, [], 'apply:c:adult.female.ok.ng');
+    const fr = button(USER, [], 'apply:c:adult.female.ok.ng.-');
     await app3.onInteraction(fr.i as never);
-    expect(fr.modals[0]?.data.custom_id).toBe('apply:modal:adult.female.ok.ng');
+    expect(fr.replies[0]?.content).toContain('ステップ 5/6：招待してくれた人');
 
-    const submit = modal(USER, [], 'apply:modal:adult.female.ok.ng', { name: 'さくら', purpose: 'ゲーム' });
+    const inv = userSelect(USER, [], 'apply:inv:adult.female.ok.ng', { id: STAFF });
+    await app3.onInteraction(inv.i as never);
+    expect(inv.modals[0]?.data.custom_id).toBe(`apply:modal:adult.female.ok.ng.${STAFF}`);
+
+    const submit = modal(USER, [], `apply:modal:adult.female.ok.ng.${STAFF}`, { name: 'さくら', purpose: 'ゲーム' });
     await app3.onInteraction(submit.i as never);
     const card = sent.find((s) => s.channelId === APPS)!;
     expect(card.payload.embeds?.[0]?.description).toContain('DM: OK ・ フレンド追加: NG');
+    expect(card.payload.embeds?.[0]?.description).toContain(`招待してくれた人: <@${STAFF}>`);
     const ok = button(STAFF, [ROLE.shinshoku], card.payload.components?.[0]?.components[0]?.data.custom_id!);
     await app3.onInteraction(ok.i as never);
     expect(calls).toContain(`addRole ${USER} ${C.dmOk}`);
     expect(calls).toContain(`addRole ${USER} ${C.frNg}`);
     expect(calls).not.toContain(`addRole ${USER} ${C.dmNg}`);
+    // 承認ですぐ参拝者（絵馬待ちなし）→ 招待してくれた人にお礼
+    expect(calls.find((c) => c.startsWith(`dm ${STAFF}`))).toContain('招待のお礼に 🌸花びら を 500 枚');
   });
 
-  it('ロールがなければ、性別のあとすぐフォーム', async () => {
+  it('ロールがなければ、性別のあとすぐ招待してくれた人', async () => {
     const gender = button(USER, [], 'apply:gender:adult.male');
     await app.onInteraction(gender.i as never);
-    expect(gender.modals[0]?.data.custom_id).toBe('apply:modal:adult.male.-.-');
+    expect(gender.replies[0]?.content).toContain('ステップ 3/4：招待してくれた人');
+    expect(gender.modals).toEqual([]);
   });
 
   it('パネルで押し直すと、同じ種類のほかのロールを外して付け替える', async () => {

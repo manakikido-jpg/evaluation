@@ -17,6 +17,7 @@ import { audit } from './audit.js';
 import { getMember } from './members.js';
 import { activeYakuCount } from './yaku.js';
 import { grantJoinBonus } from './economy.js';
+import { recordInvite, rewardInviter } from './invites.js';
 import { CONTACT_KINDS, isContactLevel, setContact, type ContactLevel } from './contact.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
@@ -45,7 +46,7 @@ export type Gender = 'male' | 'female';
 export const GENDER_LABEL: Record<Gender, string> = { male: '男性', female: '女性' };
 export const isGender = (v: unknown): v is Gender => v === 'male' || v === 'female';
 
-export type JoinAnswers = { name: string; age: AgeGroup; gender?: Gender; dm?: ContactLevel; friend?: ContactLevel; purpose: string; message: string };
+export type JoinAnswers = { name: string; age: AgeGroup; gender?: Gender; dm?: ContactLevel; friend?: ContactLevel; inviter?: string; purpose: string; message: string };
 
 /** 自己紹介を書くチャンネル（女性は #絵馬-女性、ほかは #絵馬-男性） */
 export function introChannelOf(cfg: ModCtx['cfg'], gender: Gender | undefined): string | undefined {
@@ -81,6 +82,8 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
   // 初期配布（1 人 1 回。入り直した人にはもう配らない）
   const e = ctx.cfg.economy;
   const bonus = await grantJoinBonus(ctx.db, memberId, e.joinBonus);
+  // 招待してくれた人にお礼（1 回だけ）
+  await rewardInviter(ctx, memberId, now).catch((err: unknown) => logger.warn({ err }, 'invite reward failed'));
   // #お出迎え に「参拝しました」（通知は飛ばさない）
   const welcome = ctx.cfg.channels.welcome;
   if (welcome) {
@@ -210,6 +213,8 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
       const gender = isGender(app.answers.gender) ? app.answers.gender : undefined;
       const genderRole = genderRoleOf(ctx.cfg, gender);
       if (genderRole) await safely('add gender', () => ctx.discord.addRole(g, app.memberId, genderRole, '入鯖申請（性別）'));
+      // 招待してくれた人（申請で選んだ人）。お礼は 🔰参拝者 になったときに
+      await recordInvite(ctx.db, app.memberId, app.answers.inviter).catch((err: unknown) => logger.warn({ err }, 'record invite failed'));
       // DM・フレンド追加（申請で選んだもの）
       for (const kind of CONTACT_KINDS) {
         const level = app.answers[kind];
