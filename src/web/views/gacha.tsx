@@ -1,5 +1,5 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
-import type { AdminSession, CustomTicket, GachaClaim, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
+import type { AdminSession, CustomTicket, GachaClaim, GachaDraw, GachaPrizeRow, GiftBatch, ShopItem } from '../../db/schema.js';
 import { effectiveRates, inPeriod, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, roundRate, TIER_LABEL, untilPity } from '../../services/gacha.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
@@ -9,6 +9,12 @@ type Names = Map<string, string>;
 
 export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   tickets_given: { text: '券を渡しました。本人に DM で知らせました。', kind: 'ok' },
+  gift_given: { text: '🎁 全員にプレゼントしました。', kind: 'ok' },
+  gift_announced: { text: '🎁 全員にプレゼントして、チャンネルでお知らせしました。', kind: 'ok' },
+  gift_announce_failed: { text: '🎁 全員にプレゼントしました。ただ、チャンネルへのお知らせは送れませんでした（BOT がそのチャンネルに書き込めるか確かめてください）。', kind: 'warn' },
+  gift_dup: { text: 'このプレゼントはもう贈っています（同じ画面から 2 回送られたので、2 回目は贈っていません）。', kind: 'warn' },
+  gift_none: { text: '贈る相手がいませんでした（ロールで絞ったときは、そのロールを持っている人がいるか確かめてください）。', kind: 'warn' },
+  gift_invalid: { text: '贈るもの・数（銭は 1〜100,000、券は 1〜100）・理由を入れて、「全員に贈る」にチェックしてください。', kind: 'warn' },
   tickets_given_quiet: { text: '券を渡しました（DM は送っていません）。', kind: 'ok' },
   tickets_given_nodm: { text: '券を渡しました。DM は届きませんでした（DM を受け取らない設定の可能性）。', kind: 'warn' },
   tickets_taken: { text: '券を減らしました。', kind: 'ok' },
@@ -216,6 +222,8 @@ export function GachaPage(props: {
   customHolders?: { memberId: string; ticket: CustomTicket; count: number }[];
   /** リセットしたら返す・取り上げる量（宮司だけ） */
   reset?: { members: number; draws: number; refund: number; coins: number; tickets: number; roles: number };
+  /** 全員へのプレゼント（宮司だけ） */
+  gift?: { nonce: string; targets: number; channels: { id: string; name: string; category: string | null }[]; recent: GiftBatch[] };
 }) {
   const { session, gacha: g, stats } = props;
   const guji = session.level === 'guji';
@@ -747,6 +755,107 @@ export function GachaPage(props: {
           </form>
         )}
       </section>
+
+      {guji && props.gift && (
+        <section class="card anchor" id="gacha-gift">
+          <h2>🎁 全員にプレゼント</h2>
+          <p class="note">
+            イベントのお礼・お詫び・記念日などに。役職のある今いる人（BOT・退出した人を除く、いま <strong>{fmt(props.gift.targets)} 人</strong>
+            ）全員に、同じものを同じ数だけ贈ります。ロールで絞ることもできます。1 人ずつ渡すときは、メンバーのページから。
+          </p>
+          <form method="post" action="/gacha/gift" class="fields">
+            {csrf}
+            <input type="hidden" name="nonce" value={props.gift.nonce} />
+            <label class="field">
+              <span>贈るもの</span>
+              <select name="item" required>
+                <option value="coins">
+                  {props.coinEmoji ?? ''}
+                  {props.coinName}
+                </option>
+                {TICKET_GROUPS.map((grp) => (
+                  <optgroup label={grp.label}>
+                    {grp.kinds.map((k) => (
+                      <option value={k}>
+                        {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                {(props.customTickets ?? []).length > 0 && (
+                  <optgroup label="🎟 自由な券">
+                    {(props.customTickets ?? []).map((t) => (
+                      <option value={`custom:${t.id}`}>
+                        {t.emoji} {t.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+            <label class="field">
+              <span>1 人あたりの数（{props.coinName}は 100,000 まで・券は 100 枚まで）</span>
+              <input type="number" name="count" min={1} max={100000} value="1" required />
+            </label>
+            <label class="field">
+              <span>贈る相手</span>
+              <select name="roleId">
+                <option value="">全員</option>
+                {props.roles.map((r) => (
+                  <option value={r.id}>@{r.name} を持っている人だけ</option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>理由（記録に残る・お知らせにも載る）</span>
+              <input type="text" name="note" maxlength={200} placeholder="例: 1 周年のお祝い" required />
+            </label>
+            <label class="field">
+              <span>チャンネルでお知らせ（任意）</span>
+              <select name="announce">
+                <option value="">知らせない</option>
+                {props.gift.channels.map((ch) => (
+                  <option value={ch.id}>
+                    {ch.category ? `${ch.category} / ` : ''}#{ch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="everyone" value="yes" />
+              <span>お知らせで @everyone に通知する（ロールで絞ったときは、そのロールに通知）</span>
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="confirm" value="yes" required />
+              <span>全員に贈る（取り消しはメンバーごとに「減らす」で）</span>
+            </label>
+            <button type="submit" class="ok">
+              🎁 贈る
+            </button>
+          </form>
+          {props.gift.recent.length > 0 && (
+            <>
+              <h3>これまでのプレゼント</h3>
+              <table class="compact">
+                <tbody>
+                  {props.gift.recent.map((b) => (
+                    <tr>
+                      <td>{fmtDateTime(b.createdAt)}</td>
+                      <td>
+                        {b.label} × {fmt(b.count)}
+                      </td>
+                      <td>
+                        {fmt(b.recipients)} 人{b.roleId ? `（@${roleName(b.roleId)}）` : ''}
+                      </td>
+                      <td class="wrap note">{b.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </section>
+      )}
 
       {guji && props.reset && (
         <section class="card anchor danger-zone" id="gacha-reset">

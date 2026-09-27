@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-gift-all',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '🎁 全員にプレゼント',
+    items: [
+      '物御籤のページから、銭・券・自由な券を全員に同じ数だけ贈れる（ロールで絞ることもできる）',
+      'チャンネルでお知らせ（@everyone で通知も選べる）。二度押ししても 1 回だけ',
+    ],
+  },
+  {
     id: '2026-09-27-yoimairi-age-roles',
     date: '2026-09-27',
     kind: 'improve',

@@ -841,3 +841,22 @@ export const gachaCollection = pgTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.item] })],
 );
+
+/** 全員へのプレゼント（社務所Web から。同じ送信を 2 回受けないよう nonce を覚える） */
+export const giftBatches = pgTable('gift_batches', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  nonce: text('nonce').notNull().unique(),
+  /** coins / 券の種類 / custom:<id> */
+  item: text('item').notNull(),
+  /** 贈ったときの名前（あとで券の名前が変わっても分かるように） */
+  label: text('label').notNull(),
+  count: integer('count').notNull(),
+  note: text('note').notNull(),
+  /** このロールを持っている人だけに贈ったとき */
+  roleId: text('role_id'),
+  recipients: integer('recipients').notNull(),
+  by: text('by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type GiftBatch = typeof giftBatches.$inferSelect;

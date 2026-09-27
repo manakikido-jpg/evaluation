@@ -267,6 +267,13 @@
       "when": 1790502210072,
       "tag": "0037_notice_images",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790504225068,
+      "tag": "0038_gift_batches",
+      "breakpoints": true
     }
   ]
 }

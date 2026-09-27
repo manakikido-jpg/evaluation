@@ -104,6 +104,7 @@ import {
   updateNotice,
   type NoticeCtx,
 } from '../services/notices.js';
+import { giftAnnouncement, giftItemLabel, giftTargets, giftToAll, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
@@ -1854,6 +1855,14 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const roles = (guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
     const reset = gujiOnly(c) ? await gachaResetPreview(db) : undefined;
+    const gift = gujiOnly(c)
+      ? {
+          nonce: randomUUID(),
+          targets: (await giftTargets(db, cfg.ranks.map((x) => x.roleId))).length,
+          channels: postableChannels(await loadChannels().catch(() => [])),
+          recent: await recentGifts(db),
+        }
+      : undefined;
     return c.html(
       <GachaPage
         session={c.get('session')}
@@ -1877,6 +1886,7 @@ export function createWebApp(deps: WebDeps) {
         names={names}
         roleNames={new Map((guildRoles ?? []).map((r) => [r.id, r.name]))}
         flash={c.req.query('msg')}
+        gift={gift}
         {...(reset
           ? {
               reset: {
@@ -1972,6 +1982,44 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 自由な券を作る・ON/OFF
+  /** 🎁 全員にプレゼント（宮司だけ） */
+  app.post('/gacha/gift', async (c) => {
+    const to = (msg: string) => c.redirect(`/gacha?msg=${msg}#gacha-gift`);
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const item = await parseGiftItem(db, body.item);
+    const count = Number(body.count);
+    const note = field(body, 'note', 200);
+    const nonce = typeof body.nonce === 'string' ? body.nonce : '';
+    const roleId = typeof body.roleId === 'string' && validId(body.roleId) ? body.roleId : undefined;
+    if (body.confirm !== 'yes' || !item || !validGiftCount(item, count) || !note || !/^[0-9a-f-]{36}$/.test(nonce)) return to('gift_invalid');
+    const targets = await giftTargets(db, cfg.ranks.map((x) => x.roleId), roleId);
+    if (targets.length === 0) return to('gift_none');
+    const by = c.get('session').userId;
+    const label = giftItemLabel(item, { name: cfg.economy.currencyName, emoji: cfg.economy.currencyEmoji });
+    const r = await giftToAll(db, { item, label, count, note, memberIds: targets, roleId, by, nonce });
+    if (r.status === 'duplicate') return to('gift_dup');
+    if (r.status !== 'ok') return to('gift_invalid');
+    await audit(db, { actorId: by, action: 'gift.all', detail: { gift: r.batch.id, item: r.batch.item, label, count, note, roleId, recipients: targets.length }, via: 'web' });
+    // チャンネルでお知らせ（任意）
+    const announce = typeof body.announce === 'string' && validId(body.announce) ? body.announce : undefined;
+    if (!announce) return to('gift_given');
+    const roleName = roleId ? (await loadRoles())?.find((x) => x.id === roleId)?.name : undefined;
+    const ping = body.everyone === 'yes';
+    const head = ping ? (roleId ? `<@&${roleId}>\n` : '@everyone\n') : '';
+    const howToUse = item.kind === 'coins' ? '' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';
+    try {
+      await deps.discord.sendMessage(announce, {
+        content: `${head}${giftAnnouncement(label, count, note, '枚', roleName)}${howToUse}`,
+        allowed_mentions: ping ? (roleId ? { parse: [], roles: [roleId] } : { parse: ['everyone'] }) : { parse: [] },
+      });
+      return to('gift_announced');
+    } catch (err) {
+      logger.warn({ err }, 'gift announce failed');
+      return to('gift_announce_failed');
+    }
+  });
+
   app.post('/gacha/custom', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody();

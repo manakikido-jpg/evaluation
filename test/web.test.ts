@@ -1196,6 +1196,34 @@ describe('物御籤（管理画面）', () => {
     expect((await listAudit(db, { action: 'gacha.claim_done' })).length).toBe(1);
   });
 
+  it('🎁 全員にプレゼント（宮司だけ・二度押しでも 1 回・お知らせ）', async () => {
+    const { ticketsOf } = await import('../src/services/tickets.js');
+    const { recentGifts } = await import('../src/services/gifts.js');
+    const s = await login(STAFF);
+    expect(await (await get('/gacha', s)).text()).not.toContain('action="/gacha/gift"');
+    expect((await post(s, '/gacha/gift', { item: 'fuku', count: '1', note: 'x', confirm: 'yes', nonce: randomUUIDLike(1) })).status).toBe(403);
+    const g = await login(GUJI);
+    const page = await (await get('/gacha', g)).text();
+    expect(page).toContain('🎁 全員にプレゼント');
+    const nonce = /name="nonce" value="([0-9a-f-]{36})"/.exec(page)![1]!;
+    expect((await post(g, '/gacha/gift', { item: 'fuku', count: '0', note: '1 周年', confirm: 'yes', nonce })).headers.get('location')).toContain('gift_invalid');
+    expect((await post(g, '/gacha/gift', { item: 'fuku', count: '1', note: '1 周年', nonce })).headers.get('location')).toContain('gift_invalid');
+    actions = [];
+    const ok = await post(g, '/gacha/gift', { item: 'fuku', count: '2', note: '1 周年', confirm: 'yes', nonce, announce: '910000000000000002', everyone: 'yes' });
+    expect(ok.headers.get('location')).toBe('/gacha?msg=gift_announced#gacha-gift');
+    expect((await ticketsOf(db, USER)).fuku).toBe(2);
+    expect(actions.find((a) => a.startsWith('send 910000000000000002'))).toContain('@everyone\n🎁 **運営からみなさんへプレゼント！**');
+    // 同じ画面から 2 回目
+    expect((await post(g, '/gacha/gift', { item: 'fuku', count: '2', note: '1 周年', confirm: 'yes', nonce })).headers.get('location')).toContain('gift_dup');
+    expect((await ticketsOf(db, USER)).fuku).toBe(2);
+    const [batch] = await recentGifts(db);
+    expect(batch).toMatchObject({ label: '🧧福の札', count: 2, note: '1 周年' });
+    expect(batch!.recipients).toBeGreaterThanOrEqual(1);
+    expect(await (await get('/gacha', g)).text()).toContain('これまでのプレゼント');
+    // 持っている人がいないロールで絞る
+    expect((await post(g, '/gacha/gift', { item: 'coins', count: '100', note: 'x', confirm: 'yes', nonce: randomUUIDLike(2), roleId: '990000000000000077' })).headers.get('location')).toContain('gift_none');
+  });
+
   it('自由な券: 作る・ON/OFF・物御籤の中身に足す・メンバーに渡す', async () => {
     const { listCustomTickets, customHoldingsOf } = await import('../src/services/customTickets.js');
     const { listPrizes } = await import('../src/services/gacha.js');
@@ -1703,3 +1731,8 @@ describe('ロール（管理画面）', () => {
     expect(actions.at(-1)).toBe(`editRole ${cfg.guildId} ${JSON.stringify({ permissions: String((1n << 10n) | (1n << 6n)) })}`);
   });
 });
+
+/** テスト用の nonce（UUID の形） */
+function randomUUIDLike(n: number): string {
+  return `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+}
