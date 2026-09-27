@@ -784,6 +784,7 @@ export function createWebApp(deps: WebDeps) {
         boosterDiscountPercent: num('roomBoosterDiscount'),
       },
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
+      ...(typeof body.vcClearDelay === 'string' ? { voiceChat: { clearWhenEmpty: body.vcClear === 'yes', delayMinutes: num('vcClearDelay') } } : {}),
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'
         ? {

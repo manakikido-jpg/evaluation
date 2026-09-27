@@ -595,6 +595,21 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </table>
           <Save at="voicegroups" />
         </section>
+        <section class="card anchor" id="sec-voicechat">
+          <h2>💬 通話のチャット</h2>
+          <p class="note">通話チャンネルの中のチャットです。人がいなくなって決めた分だけたっても、まだだれもいなければ、チャットを消します（ピン留めは残します）。BOT に「メッセージの管理」と「メッセージ履歴を読む」の権限が要ります。</p>
+          <div class="fields">
+            <label class="field check">
+              <input type="checkbox" name="vcClear" value="yes" checked={cfg.voiceChat.clearWhenEmpty} />
+              <span>人がいなくなった通話のチャットを消す</span>
+            </label>
+            <label class="field">
+              <span>いなくなってから消すまで（分。0〜60）</span>
+              <input type="number" name="vcClearDelay" value={String(cfg.voiceChat.delayMinutes)} min={0} max={60} required />
+            </label>
+          </div>
+          <Save at="voicechat" />
+        </section>
         <section class="card anchor" id="sec-market">
           <h2>🏪 市場</h2>
           <p class="note">

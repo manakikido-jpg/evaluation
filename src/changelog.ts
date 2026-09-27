@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-voice-chat-clear',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '人がいなくなった通話のチャットを消す',
+    items: [
+      '通話からみんな抜けて 1 分たったら、その通話のチャットを消す（その間にだれか入れば消さない。ピン留めは残す）',
+      '「設定 → 💬 通話のチャット」で、オン・オフと待つ分を変えられる',
+    ],
+  },
+  {
     id: '2026-09-27-vc-panel-sticky',
     date: '2026-09-27',
     kind: 'improve',

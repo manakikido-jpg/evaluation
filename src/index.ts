@@ -10,6 +10,7 @@ import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
+import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -59,6 +60,7 @@ async function main(): Promise<void> {
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
   const voiceGroups = new VoiceGroupApp(cfg);
+  const voiceChatClear = new VoiceChatClearApp(cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
@@ -95,6 +97,8 @@ async function main(): Promise<void> {
     rooms.attach(guild);
     // 自動で増える通話（大きな縁側 1〜3 など）
     await voiceGroups.attach(guild).catch((err) => logger.warn({ err }, 'voice groups attach failed'));
+    // 人がいなくなった通話のチャットを消す（止まっていた間に空になったものも）
+    voiceChatClear.attach(guild);
     market.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
@@ -156,6 +160,8 @@ async function main(): Promise<void> {
     void tempVoice.onVoiceStateUpdate(before, after);
     // 自動で増える通話: 全部埋まったら増やし、空きが増えたら減らす
     voiceGroups.onVoiceStateUpdate(before, after);
+    // 人がいなくなった通話のチャットを消す
+    voiceChatClear.onVoiceStateUpdate(before, after);
     // 通話のチャットに「この通話の人に朱印を押す」
     voicePanel.onVoiceStateUpdate(before, after);
     // 宵宮の部屋: 入った人がそれぞれ払う

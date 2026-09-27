@@ -107,6 +107,14 @@ export const voiceGroupSchema = z.object({
 });
 export type VoiceGroup = z.infer<typeof voiceGroupSchema>;
 
+/** 通話のチャット（通話チャンネルの中のテキスト） */
+export const voiceChatSchema = z.object({
+  /** 人がいなくなった通話のチャットを消す（ピン留めは残す） */
+  clearWhenEmpty: z.boolean().default(true),
+  /** いなくなってから消すまでの分（その間にだれか入れば消さない） */
+  delayMinutes: z.number().int().min(0).max(60).default(1),
+});
+
 /** 市場（花びらだけ。本物のお金は扱わない） */
 export const marketSchema = z.object({
   /** サーバーの手数料（%）。売った人には値段からこれを引いた分を渡す */
@@ -239,6 +247,7 @@ export const guildConfigSchema = z
     rooms: roomsSchema.default(roomsSchema.parse({})),
     market: marketSchema.default(marketSchema.parse({})),
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
+    voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({

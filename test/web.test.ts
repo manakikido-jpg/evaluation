@@ -568,6 +568,10 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const rooms = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'room.hourly.public': '50', at: 'rooms' });
     expect(rooms.headers.get('location')).toBe('/settings?msg=saved&at=rooms#sec-rooms');
     expect(store.current.rooms.hourly.public).toBe(50);
+    // 通話のチャット（チェックを外すと消さない）
+    const vcc = await post('/settings', g, { ...form, _csrf: await csrfOf(g), vcClearDelay: '5' });
+    expect(vcc.headers.get('location')).toBe('/settings?msg=saved');
+    expect(store.current.voiceChat).toEqual({ clearWhenEmpty: false, delayMinutes: 5 });
     // 自動で増える通話（名前が空の行は使わない）
     const vg = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'vg.0.name': '大きな縁側', 'vg.0.min': '3', 'vg.0.max': '10', 'vg.1.name': '', 'vg.1.min': '3', 'vg.1.max': '20', at: 'voicegroups' });
     expect(vg.headers.get('location')).toBe('/settings?msg=saved&at=voicegroups#sec-voicegroups');
