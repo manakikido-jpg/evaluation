@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-my-omamori',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '授与所のお守りで、授かっているものが分かるように',
+    items: [
+      'お守りのボタンを押すと「🧧 あなたのお守り」が出る（本人にだけ）。授かっているものは ✅ と緑のボタン。そこで押すと、その場で授かる・返すが切り替わる',
+      'パネルに「🧧 自分のお守りを見る」ボタン（/パネル お守り で置き直すと出る）',
+    ],
+  },
+  {
     id: '2026-09-27-voice-chat-clear',
     date: '2026-09-27',
     kind: 'new',

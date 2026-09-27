@@ -141,12 +141,14 @@ function omamoriPanel(items: OmamoriPanelItem[]): PanelMessage {
       })),
     });
   }
+  // 自分がどれを授かっているか見るボタン（本人にだけ見える）
+  rows.push({ type: 1, components: [{ type: 2, style: 1, label: '自分のお守りを見る', custom_id: 'omamori:mine', emoji: { name: '🧧' } }] });
   return {
     embeds: [
       {
         title: '🧧 授与所 ― お守り',
         description: [
-          'お守りを持っていると、その募集の通知が届きます。ボタンを押すと授かり、もう一度押すと返せます。',
+          'お守りを持っていると、その募集の通知が届きます。ボタンを押すと授かり、もう一度押すと返せます。押すと、あなたが授かっているお守りが ✅ で出ます（「自分のお守りを見る」でも見られます）。',
           '',
           ...items.map((o) => `${o.emoji} **${o.label}のお守り** … ${o.description}`),
           '',
