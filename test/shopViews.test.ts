@@ -32,6 +32,16 @@ describe('ショップの見た目', () => {
   it('確認: 足りなければ「受ける」を押せない', () => {
     expect(shopConfirm(base, cfg.economy, 3000).components[0]!.components[0]).toMatchObject({ custom_id: 'shop:buy:1', disabled: false });
     expect(shopConfirm(base, cfg.economy, 100).components[0]!.components[0]!.disabled).toBe(true);
+    // 割引券を持っていれば、使うボタン（持っていない券は出さない）
+    const withTickets = shopConfirm(base, cfg.economy, 1000, undefined, false, [
+      { ticket: 'shop_10', count: 0 },
+      { ticket: 'shop_50', count: 2 },
+    ]).components[0]!.components;
+    expect(withTickets.map((c) => c.custom_id)).toEqual(['shop:buy:1', 'shop:buy:1:shop_50', 'shop:cancel']);
+    expect(withTickets[1]).toMatchObject({ label: '🏷 50%引きで 750 枚（券 2 枚）', disabled: false });
+    // 免罪符には使えない
+    const menzaifu = shopConfirm({ ...base, kind: 'menzaifu' }, cfg.economy, 1000, undefined, false, [{ ticket: 'shop_50', count: 2 }]).components[0]!.components;
+    expect(menzaifu.map((c) => c.custom_id)).toEqual(['shop:buy:1', 'shop:cancel']);
     expect(priceText(base, cfg.economy)).toBe('1,500 枚');
   });
 

@@ -1,6 +1,6 @@
 import type { EconomyConfig } from '../config.js';
 import type { ShopItem } from '../db/schema.js';
-import { discountable, priceOf } from '../services/shop.js';
+import { discountable, discountedPrice, DISCOUNT_PERCENT, priceOf, type DiscountTicket } from '../services/shop.js';
 
 /** ショップの見た目（Discord API の形のまま。テストしやすいように discord.js に依らない） */
 
@@ -55,7 +55,18 @@ export function shopList(items: ShopItem[], e: EconomyConfig, balance: number, b
 }
 
 /** 選んだ品物の確認（買う・やめる） */
-export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, note?: string, booster = false) {
+/** 割引券が使える品（ロール・おみくじもう 1 回・絵馬の奉納。免罪符・贈り物・花吹雪はのぞく） */
+export const discountableKinds = ['role', 'omikuji_extra', 'ema_pin'];
+
+export function shopConfirm(
+  item: ShopItem,
+  e: EconomyConfig,
+  balance: number,
+  note?: string,
+  booster = false,
+  /** 持っている割引券（使える品のときだけボタンを出す） */
+  discounts: { ticket: DiscountTicket; count: number }[] = [],
+) {
   const price = priceOf(item, e, booster);
   const lines = [
     item.description,
@@ -71,6 +82,20 @@ export function shopConfirm(item: ShopItem, e: EconomyConfig, balance: number, n
         type: 1,
         components: [
           { type: 2, style: 3, label: `${price.toLocaleString('ja-JP')} 枚で受ける`, custom_id: `shop:buy:${item.id}`, disabled: balance < price || (item.boosterOnly && !booster) },
+          ...(price > 0 && discountable(item) && discountableKinds.includes(item.kind)
+            ? discounts
+                .filter((d) => d.count > 0)
+                .map((d) => {
+                  const p = discountedPrice(price, d.ticket);
+                  return {
+                    type: 2 as const,
+                    style: 1 as const,
+                    label: `🏷 ${DISCOUNT_PERCENT[d.ticket]}%引きで ${p.toLocaleString('ja-JP')} 枚（券 ${d.count} 枚）`.slice(0, 80),
+                    custom_id: `shop:buy:${item.id}:${d.ticket}`,
+                    disabled: balance < p || (item.boosterOnly && !booster),
+                  };
+                })
+            : []),
           { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
         ],
       },

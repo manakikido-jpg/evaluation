@@ -20,8 +20,22 @@ import { logger } from '../lib/logger.js';
 import { walletOf } from '../services/economy.js';
 import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
-import { addTickets, ticketsOf } from '../services/tickets.js';
-import { buyRole, buySimple, duePurchases, endPurchase, getItem, giveGift, listItems, priceOf, refund, seedDefaultItems, type BuyResult } from '../services/shop.js';
+import { ticketsOf } from '../services/tickets.js';
+import {
+  buyRole,
+  buySimple,
+  DISCOUNT_TICKETS,
+  duePurchases,
+  endPurchase,
+  getItem,
+  giveGift,
+  listItems,
+  priceOf,
+  refund,
+  seedDefaultItems,
+  type BuyResult,
+  type DiscountTicket,
+} from '../services/shop.js';
 
 /** サーバーブースト（奉納）している人 */
 const isBooster = (i: { member: { premiumSince: Date | null } }) => i.member.premiumSince !== null;
@@ -59,7 +73,11 @@ export class ShopApp {
       if (interaction.isButton()) {
         if (id === 'shop:open') return await this.open(interaction);
         if (id === 'shop:cancel') return void (await interaction.update(done('やめました。')));
-        if (id.startsWith('shop:buy:')) return await this.buy(interaction, Number(id.split(':')[2]));
+        if (id.startsWith('shop:buy:')) {
+          const [, , itemId, ticket] = id.split(':');
+          const discount = DISCOUNT_TICKETS.find((t) => t === ticket);
+          return await this.buy(interaction, Number(itemId), discount);
+        }
       }
       if (interaction.isStringSelectMenu() && id === 'shop:pick') return await this.pick(interaction);
       if (interaction.isUserSelectMenu() && id.startsWith('shop:target:')) return await this.target(interaction, Number(id.split(':')[2]));
@@ -108,14 +126,15 @@ export class ShopApp {
       const t = (await ticketsOf(this.db, i.user.id)).ema_pin;
       if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、${this.coinName}は減りません**（いま ${t} 枚）\n${note}`;
     }
-    await i.update(shopConfirm(item, e, balance, note, isBooster(i)));
+    const t = await ticketsOf(this.db, i.user.id);
+    await i.update(shopConfirm(item, e, balance, note, isBooster(i), DISCOUNT_TICKETS.map((d) => ({ ticket: d, count: t[d] }))));
   }
 
-  private async buy(i: ButtonInteraction<'cached'>, itemId: number): Promise<void> {
+  private async buy(i: ButtonInteraction<'cached'>, itemId: number, discount?: DiscountTicket): Promise<void> {
     await i.deferUpdate();
     const item = await getItem(this.db, itemId);
     if (!item?.enabled) return void (await i.editReply(done('この授与品は、今は受けられません。')));
-    const text = await this.execute(i, item);
+    const text = await this.execute(i, item, {}, discount);
     await i.editReply(done(text));
   }
 
@@ -156,13 +175,13 @@ export class ShopApp {
 
   // ───────── それぞれの授与品 ─────────
 
-  private async execute(i: Buyable, item: ShopItem, extra: { targetId?: string; message?: string } = {}): Promise<string> {
+  private async execute(i: Buyable, item: ShopItem, extra: { targetId?: string; message?: string } = {}, discount?: DiscountTicket): Promise<string> {
     const cfg = this.cfg();
     const userId = i.user.id;
     if (item.boosterOnly && !isBooster(i)) return '🏮 この授与品は、奉納（サーバーブースト）している方だけが受けられます。';
     switch (item.kind) {
       case 'role':
-        return this.role(i, item);
+        return this.role(i, item, discount);
       case 'menzaifu': {
         const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId);
         if (r.status === 'ok') return `🧾 厄を 1 つ祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`;
@@ -171,9 +190,9 @@ export class ShopApp {
         return `${this.coinName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
       }
       case 'omikuji_extra':
-        return this.omikujiExtra(i, item);
+        return this.omikujiExtra(i, item, discount);
       case 'ema_pin':
-        return this.emaPin(i, item);
+        return this.emaPin(i, item, discount);
       case 'hanafubuki':
         return this.hanafubuki(i, item, extra.targetId ?? '', extra.message ?? '');
       default:
@@ -185,11 +204,17 @@ export class ShopApp {
     if (r.status === 'insufficient') return `${this.coinName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
     if (r.status === 'disabled') return 'この授与品は、今は受けられません。';
     if (r.status === 'owned') return `もう持っています（${this.coinName}は減っていません）。`;
+    if (r.status === 'no_ticket') return `割引券がありません（${this.coinName}は減っていません）。`;
     return undefined;
   }
 
-  private async role(i: Buyable, item: ShopItem): Promise<string> {
-    const r = await buyRole(this.db, item, i.user.id, new Date(), this.price(i, item));
+  /** 割引券を使ったときの一言 */
+  private discountNote(r: BuyResult): string {
+    return r.status === 'ok' && r.discount ? `（🏷 ${r.discount}% 割引券を使いました）` : '';
+  }
+
+  private async role(i: Buyable, item: ShopItem, discount?: DiscountTicket): Promise<string> {
+    const r = await buyRole(this.db, item, i.user.id, new Date(), this.price(i, item), discount);
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
       await i.member.roles.add(item.roleId!, `授与品: ${item.name}`);
@@ -200,15 +225,15 @@ export class ShopApp {
     }
     for (const old of r.removeRoleIds) await i.member.roles.remove(old, '色守りの買い替え').catch(() => undefined);
     const until = r.purchase.expiresAt ? `${fmtDate(r.purchase.expiresAt)} まで` : 'ずっと';
-    return `${item.emoji} ${item.name}を授かりました（${until}）。残り ${r.balance} 枚。`;
+    return `${item.emoji} ${item.name}を授かりました（${until}）${this.discountNote(r)}。残り ${r.balance} 枚。`;
   }
 
-  private async omikujiExtra(i: Buyable, item: ShopItem): Promise<string> {
+  private async omikujiExtra(i: Buyable, item: ShopItem, discount?: DiscountTicket): Promise<string> {
     const cfg = this.cfg();
     const today = await omikujiToday(this.db, i.user.id, new Date());
     if (!today.drawn) return `先に今日のおみくじを引いてください（${this.coinName}は減っていません）。`;
     if (today.extraUsed) return '今日の「もう 1 回」は使いました。また明日どうぞ。';
-    const r = await buySimple(this.db, item, i.user.id, {}, new Date(), this.price(i, item));
+    const r = await buySimple(this.db, item, i.user.id, {}, new Date(), this.price(i, item), discount);
     if (r.status !== 'ok') return this.insufficientText(r)!;
     const d = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { extra: true });
     if (d.status !== 'drawn') {
@@ -221,10 +246,10 @@ export class ShopApp {
     if (channel?.isSendable()) {
       await channel.send({ embeds: [{ ...embed, title: `${embed.title}（もう 1 回）` }], allowedMentions: { parse: [] } }).catch(() => undefined);
     }
-    return `🎟 もう 1 回引きました: **${d.fortune.name}**${home ? `（<#${home}> に出しました）` : ''}`;
+    return `🎟 もう 1 回引きました: **${d.fortune.name}**${home ? `（<#${home}> に出しました）` : ''}${this.discountNote(r)}`;
   }
 
-  private async emaPin(i: Buyable, item: ShopItem): Promise<string> {
+  private async emaPin(i: Buyable, item: ShopItem, discount?: DiscountTicket): Promise<string> {
     // 自己紹介のチャンネル（絵馬-男性・絵馬-女性・運営紹介）のうち、いちばん新しい自分の投稿
     const channels = emaChannelIds(this.cfg()).map((id) => i.guild.channels.cache.get(id));
     const channel = channels.find((c) => c?.isTextBased());
@@ -237,18 +262,18 @@ export class ShopApp {
     }
     if (!mine) return `先に <#${channel.id}> などの自己紹介のチャンネルに書いてください（${this.coinName}は減っていません）。`;
     if (mine.pinned) return `もうピン留めされています（${this.coinName}は減っていません）。`;
-    const r = await buySimple(this.db, item, i.user.id, { channelId: mine.channelId, messageId: mine.id }, new Date(), this.price(i, item));
+    const r = await buySimple(this.db, item, i.user.id, { channelId: mine.channelId, messageId: mine.id }, new Date(), this.price(i, item), discount);
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
       await mine.pin(`授与品: ${item.name}`);
     } catch (err) {
       logger.warn({ err }, 'ema pin failed');
+      // 払った銭も、使った券も戻る
       await refund(this.db, r.purchase);
-      if (r.ticket) await addTickets(this.db, i.user.id, 'ema_pin', 1);
       return `ピン留めできなかったので、${r.ticket ? '券' : this.coinName}を戻しました。神職に知らせてください（BOT の「メッセージの管理」権限）。`;
     }
     if (r.ticket) return `📌 絵馬のピン留め券を 1 枚使って、自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました（${this.coinName}は減っていません）。`;
-    return `📌 自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました。残り ${r.balance} 枚。`;
+    return `📌 自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました${this.discountNote(r)}。残り ${r.balance} 枚。`;
   }
 
   private async hanafubuki(i: Buyable, item: ShopItem, targetId: string, message: string): Promise<string> {

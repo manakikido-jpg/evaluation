@@ -133,7 +133,35 @@ export const bellSchema = z.object({
 export const GACHA_TIERS = ['daikichi', 'chukichi', 'shokichi', 'kichi'] as const;
 export type GachaTier = (typeof GACHA_TIERS)[number];
 /** 物御籤で出る券 */
-export const TICKET_KINDS = ['room_free', 'ema_pin', 'market_nofee'] as const;
+export const TICKET_KINDS = [
+  // 部屋代（種類を問わない無料券・種類ごとの無料券・半額券・一日券）
+  'room_free',
+  'room_free_public',
+  'room_free_invite',
+  'room_free_secret',
+  'room_free_twoshot',
+  'room_half_public',
+  'room_half_invite',
+  'room_half_secret',
+  'room_half_twoshot',
+  'room_day_public',
+  'room_day_invite',
+  'room_day_secret',
+  'room_day_twoshot',
+  // ショップの割引
+  'shop_10',
+  'shop_30',
+  'shop_50',
+  'ema_pin',
+  'market_nofee',
+  // 使うと効くもの
+  'fuku',
+  'luck',
+  'omikuji_extra',
+  'gacha_free',
+  'gacha_gift',
+  'name_deco',
+] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
 
 const gachaPrizeSchema = z.object({

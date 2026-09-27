@@ -15,7 +15,8 @@ import {
   type UserSelectMenuInteraction,
   type VoiceChannel,
 } from 'discord.js';
-import type { GuildConfig } from '../config.js';
+import type { GuildConfig, TicketKind } from '../config.js';
+import { ticketName } from '../services/tickets.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import {
@@ -55,6 +56,13 @@ const button = (custom_id: string, label: string, emoji: string, style: Btn['sty
 const buttons = (...list: Btn[]) => ({ type: 1 as const, components: list });
 
 /** 部屋のチャットに出す案内（だれでも見える）。設定は「⚙ 部屋の設定」を押した作った人にだけ出る */
+/** 使った券の説明（一日券で無料・無料券を使った・半額券を使った） */
+export function ticketUsedText(r: { ticketKind?: TicketKind; pass?: boolean; charged: number; ticket?: boolean }): string {
+  if (!r.ticketKind) return '';
+  if (r.pass) return `${ticketName(r.ticketKind)}を使っているので無料です`;
+  return r.ticket ? `${ticketName(r.ticketKind)}を 1 枚使いました（部屋代は無料です）` : `${ticketName(r.ticketKind)}を 1 枚使いました（${r.charged} 枚を払いました）`;
+}
+
 export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'>) {
   const plan = planOf(cfg, row.hubId);
   const lines = [`<@${row.ownerId}> さんの部屋です。設定は、部屋を作った人だけが「⚙ 部屋の設定」から変えられます。`];
@@ -159,10 +167,7 @@ export class RoomApp {
       return;
     }
     await ch?.send(roomNotice(cfg, row));
-    if (r.ticket)
-      await ch
-        ?.send({ content: `🎫 <@${ownerId}> さんの部屋代無料券を 1 枚使いました（この部屋の部屋代は無料です）。`, allowedMentions: { parse: [] } })
-        .catch(() => undefined);
+    if (r.ticketKind) await ch?.send({ content: `<@${ownerId}> さん: ${ticketUsedText(r)}。`, allowedMentions: { parse: [] } }).catch(() => undefined);
   }
 
   /** 種類に合わせて、見える・入れる範囲を付け直す */
@@ -321,7 +326,7 @@ export class RoomApp {
     if (r.status === 'insufficient') return void (await i.reply({ content: `${this.cfg().economy.currencyName}が足りません（${r.price} 枚必要）。`, ...EPHEMERAL }));
     if (kind !== row.kind) await this.apply(ch, row, kind);
     const k = ROOM_KINDS[kind];
-    const paid = r.ticket ? '（🎫 部屋代無料券を 1 枚使いました）' : r.charged ? `（${this.cfg().economy.currencyName} ${r.charged} 枚を払いました）` : '';
+    const paid = r.ticketKind ? `（${ticketUsedText(r)}）` : r.charged ? `（${this.cfg().economy.currencyName} ${r.charged} 枚を払いました）` : '';
     const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
     await this.done(i, { ...row, kind, kindLocked: true }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`);
   }

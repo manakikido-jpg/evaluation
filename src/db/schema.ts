@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { TicketKind } from '../config.js';
 import { bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 /**
@@ -404,6 +405,8 @@ export const shopPurchases = pgTable(
     /** 絵馬のピン留め: チャンネルとメッセージ */
     channelId: text('channel_id'),
     messageId: text('message_id'),
+    /** 使った券（割引券・絵馬のピン留め券。払い戻すときに券も戻す） */
+    ticket: text('ticket').$type<TicketKind>(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     /** 期限切れで外した・買い替えた・払い戻した日時 */
     endedAt: timestamp('ended_at', { withTimezone: true }),
@@ -653,7 +656,7 @@ export const tickets = pgTable(
   'tickets',
   {
     memberId: text('member_id').notNull(),
-    kind: text('kind').$type<'room_free' | 'ema_pin' | 'market_nofee'>().notNull(),
+    kind: text('kind').$type<TicketKind>().notNull(),
     count: integer('count').notNull().default(0),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -697,7 +700,7 @@ export const gachaPrizes = pgTable(
     tier: text('tier').$type<'daikichi' | 'chukichi' | 'shokichi' | 'kichi'>().notNull(),
     kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop'>().notNull(),
     roleId: text('role_id'),
-    ticket: text('ticket').$type<'room_free' | 'ema_pin' | 'market_nofee'>(),
+    ticket: text('ticket').$type<TicketKind>(),
     shopItemId: integer('shop_item_id'),
     /** 券の枚数・花びらの枚数 */
     amount: integer('amount').notNull().default(1),
@@ -713,3 +716,14 @@ export const gachaPrizes = pgTable(
 );
 
 export type GachaPrizeRow = typeof gachaPrizes.$inferSelect;
+
+/** 部屋の一日券（使い始めてから 24 時間、その種類の部屋代が無料） */
+export const roomPasses = pgTable(
+  'room_passes',
+  {
+    memberId: text('member_id').notNull(),
+    kind: text('kind').$type<'public' | 'invite' | 'secret' | 'twoshot'>().notNull(),
+    until: timestamp('until', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.kind] })],
+);

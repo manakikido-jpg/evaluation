@@ -1,11 +1,11 @@
 import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
-import type { EconomyConfig, GuildConfig } from '../config.js';
+import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coinTx, shopItems, shopPurchases, type ShopItem, type ShopPurchase } from '../db/schema.js';
 import { autoRanks, currentAutoRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
-import { useTicket } from './tickets.js';
+import { addTickets, useTicket } from './tickets.js';
 
 /**
  * ショップ（授与品）。花びらで品物を買う。
@@ -115,19 +115,46 @@ export type BuyResult =
       purchase: ShopPurchase;
       balance: number;
       /** 買い替えで外すロール */ removeRoleIds: string[];
-      /** 券を使った（花びらは払っていない） */ ticket?: boolean;
+      /** 券を使った（銭は払っていない） */ ticket?: boolean;
+      /** 割引券を使った（%） */ discount?: number;
     }
   | { status: 'insufficient'; price: number; balance: number }
   | { status: 'owned' }
-  | { status: 'disabled' };
+  | { status: 'disabled' }
+  | { status: 'no_ticket' };
+
+// ───────── 割引券 ─────────
+
+export type DiscountTicket = 'shop_10' | 'shop_30' | 'shop_50';
+export const DISCOUNT_TICKETS: DiscountTicket[] = ['shop_10', 'shop_30', 'shop_50'];
+export const DISCOUNT_PERCENT: Record<DiscountTicket, number> = { shop_10: 10, shop_30: 30, shop_50: 50 };
+/** 割引した値段（1 枚未満は切り上げ） */
+export const discountedPrice = (price: number, t: DiscountTicket) => Math.ceil((price * (100 - DISCOUNT_PERCENT[t])) / 100);
+
+class NoTicket extends Error {}
+
+/** 割引券を 1 枚使う（なければ取り消し。払った分も戻る） */
+async function takeDiscount(tx: Db, memberId: string, t: DiscountTicket | undefined): Promise<void> {
+  if (t && !(await useTicket(tx, memberId, t))) throw new NoTicket();
+}
+
+async function withDiscount(discount: DiscountTicket | undefined, run: () => Promise<BuyResult>): Promise<BuyResult> {
+  try {
+    return await run();
+  } catch (err) {
+    if (discount && err instanceof NoTicket) return { status: 'no_ticket' };
+    throw err;
+  }
+}
 
 /**
  * ロール（色守り・称号）を買う。期限つきのものを同じものでもう一度買うと、期限が延びる。
  * 同じ組（色）の別のものを持っていたら、その記録を終わりにして、外すロールを返す。
  */
-export async function buyRole(db: Db, item: ShopItem, memberId: string, now = new Date(), price = item.price): Promise<BuyResult> {
+export async function buyRole(db: Db, item: ShopItem, memberId: string, now = new Date(), price = item.price, discount?: DiscountTicket): Promise<BuyResult> {
   if (!item.enabled || item.kind !== 'role' || !item.roleId) return { status: 'disabled' };
-  return db.transaction(async (tx) => {
+  if (discount) price = discountedPrice(price, discount);
+  return withDiscount(discount, () => db.transaction(async (tx) => {
     await lock(tx, memberId);
     const active = await tx
       .select()
@@ -135,12 +162,13 @@ export async function buyRole(db: Db, item: ShopItem, memberId: string, now = ne
       .where(and(eq(shopPurchases.memberId, memberId), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt)));
     const same = active.find((p) => p.roleId === item.roleId);
     if (same && !item.durationDays) return { status: 'owned' };
-    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name }))) {
+    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name, ...(discount ? { ticket: discount } : {}) }))) {
       return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
-    const { purchase, removeRoleIds } = await recordRoleItem(tx, item, memberId, now, price, active, same);
-    return { status: 'ok', purchase, balance: (await walletOf(tx, memberId)).balance, removeRoleIds };
-  });
+    await takeDiscount(tx, memberId, discount);
+    const { purchase, removeRoleIds } = await recordRoleItem(tx, item, memberId, now, price, active, same, discount);
+    return { status: 'ok', purchase, balance: (await walletOf(tx, memberId)).balance, removeRoleIds, ...(discount ? { discount: DISCOUNT_PERCENT[discount] } : {}) };
+  }));
 }
 
 type ActivePurchase = typeof shopPurchases.$inferSelect;
@@ -154,6 +182,7 @@ async function recordRoleItem(
   price: number,
   active: ActivePurchase[],
   same: ActivePurchase | undefined,
+  ticket?: TicketKind,
 ): Promise<{ purchase: ShopPurchase; removeRoleIds: string[] }> {
   // 同じものの延長: 今の期限（切れていれば今）から足す
   const base = same?.expiresAt && same.expiresAt > now ? same.expiresAt : now;
@@ -166,7 +195,7 @@ async function recordRoleItem(
   for (const p of replaced) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, p.id));
   const [purchase] = await tx
     .insert(shopPurchases)
-    .values({ memberId, itemId: item.id, kind: 'role', price, roleId: item.roleId, expiresAt })
+    .values({ memberId, itemId: item.id, kind: 'role', price, roleId: item.roleId, expiresAt, ticket: ticket ?? null })
     .returning();
   return { purchase: purchase!, removeRoleIds: replaced.map((p) => p.roleId!) };
 }
@@ -200,23 +229,34 @@ export async function buySimple(
   extra: { targetId?: string; channelId?: string; messageId?: string } = {},
   now = new Date(),
   price = item.price,
+  discount?: DiscountTicket,
 ): Promise<BuyResult> {
   if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra'].includes(item.kind)) return { status: 'disabled' };
-  return db.transaction(async (tx) => {
+  return withDiscount(discount, () => db.transaction(async (tx) => {
     await lock(tx, memberId);
-    // 絵馬の奉納: 絵馬のピン留め券を持っていれば、それを使って無料
+    // 絵馬の奉納: 絵馬のピン留め券を持っていれば、それを使って無料（割引券は使わない）
     const ticket = item.kind === 'ema_pin' && price > 0 && (await useTicket(tx, memberId, 'ema_pin'));
     if (ticket) price = 0;
-    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name, ...extra }))) {
+    const used = ticket ? undefined : discount;
+    if (used) price = discountedPrice(price, used);
+    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name, ...extra, ...(used ? { ticket: used } : {}) }))) {
       return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
+    await takeDiscount(tx, memberId, used);
     const expiresAt = item.durationDays ? new Date(now.getTime() + item.durationDays * DAY) : null;
     const [purchase] = await tx
       .insert(shopPurchases)
-      .values({ memberId, itemId: item.id, kind: item.kind, price, expiresAt, ...extra })
+      .values({ memberId, itemId: item.id, kind: item.kind, price, expiresAt, ...extra, ticket: ticket ? 'ema_pin' : (used ?? null) })
       .returning();
-    return { status: 'ok', purchase: purchase!, balance: (await walletOf(tx, memberId)).balance, removeRoleIds: [], ...(ticket ? { ticket: true } : {}) };
-  });
+    return {
+      status: 'ok',
+      purchase: purchase!,
+      balance: (await walletOf(tx, memberId)).balance,
+      removeRoleIds: [],
+      ...(ticket ? { ticket: true } : {}),
+      ...(used ? { discount: DISCOUNT_PERCENT[used] } : {}),
+    };
+  }));
 }
 
 /** Discord の操作に失敗したとき: 払った花びらを戻し、記録を終わりにする */
@@ -228,6 +268,8 @@ export async function refund(db: Db, purchase: ShopPurchase, now = new Date()): 
       .where(and(eq(shopPurchases.id, purchase.id), isNull(shopPurchases.endedAt)))
       .returning({ id: shopPurchases.id });
     if (ended.length && purchase.price > 0) await addCoins(tx, purchase.memberId, purchase.price, 'shop_refund', { purchaseId: purchase.id });
+    // 使った券（割引券・絵馬のピン留め券）も戻す
+    if (ended.length && purchase.ticket) await addTickets(tx, purchase.memberId, purchase.ticket, 1);
   });
 }
 

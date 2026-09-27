@@ -24,7 +24,7 @@ import { buyListing, createListing, releaseOrder } from '../src/services/market.
 import { changeRoomKind, payEntry, roomOf, startRoom } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
 import { buySimple, listItems, refund, seedDefaultItems } from '../src/services/shop.js';
-import { addTickets, ticketLine, ticketsOf } from '../src/services/tickets.js';
+import { addTickets, emptyTickets, ticketLine, ticketsOf } from '../src/services/tickets.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
 const U = '830000000000000001';
@@ -110,7 +110,7 @@ describe('引く', () => {
     expect(r1.pulls[0]).toMatchObject({ tier: 'kichi', pity: false, kind: 'ticket', ticket: 'ema_pin', count: 1, coins: 0 });
     expect(r2.pulls[0]).toMatchObject({ tier: 'shokichi', ticket: 'market_nofee' });
     expect(r3.pulls[0]).toMatchObject({ tier: 'chukichi', ticket: 'room_free' });
-    expect(r3.tickets).toEqual({ room_free: 1, ema_pin: 1, market_nofee: 1 });
+    expect(r3.tickets).toMatchObject({ room_free: 1, ema_pin: 1, market_nofee: 1 });
     expect(r3.balance).toBe(0);
     expect(await gachaStateOf(db, U)).toEqual({ sinceTop: 3, total: 3 });
   });
@@ -273,7 +273,7 @@ describe('券を使う', () => {
   it('宿坊: 部屋代無料券でひらく → 種類を変えても払わない', async () => {
     await addTickets(db, U, 'room_free', 1);
     await db.insert(tempVoice).values({ channelId: ROOM, ownerId: U, hubId: NEOCHI, createdAt: T0 });
-    expect(await startRoom(db, cfg, ROOM, T0)).toEqual({ status: 'ok', charged: 0, ticket: true });
+    expect(await startRoom(db, cfg, ROOM, T0)).toEqual({ status: 'ok', charged: 0, ticket: true, ticketKind: 'room_free' });
     expect(await changeRoomKind(db, cfg, ROOM, 'secret')).toEqual({ status: 'ok', charged: 0 });
     expect((await roomOf(db, ROOM))?.freeTicket).toBe(true);
     expect((await ticketsOf(db, U)).room_free).toBe(0);
@@ -284,16 +284,82 @@ describe('券を使う', () => {
     await db.insert(tempVoice).values({ channelId: ROOM, ownerId: U, hubId: NEOCHI, createdAt: T0 });
     const free = { ...cfg, rooms: { ...cfg.rooms, once: { ...cfg.rooms.once, public: 0 } } };
     expect(await startRoom(db, free, ROOM, T0)).toEqual({ status: 'ok', charged: 0 });
-    expect(await changeRoomKind(db, free, ROOM, 'invite')).toEqual({ status: 'ok', charged: 0, ticket: true });
+    expect(await changeRoomKind(db, free, ROOM, 'invite')).toEqual({ status: 'ok', charged: 0, ticket: true, ticketKind: 'room_free' });
     expect((await ticketsOf(db, U)).room_free).toBe(1);
   });
 
   it('宵宮: 1 時間分を券で', async () => {
     await addTickets(db, B, 'room_free', 1);
     await db.insert(tempVoice).values({ channelId: ROOM, ownerId: U, hubId: YOIMIYA, createdAt: T0 });
-    expect(await payEntry(db, cfg, ROOM, B, T0)).toEqual({ status: 'ok', charged: 0, ticket: true });
+    expect(await payEntry(db, cfg, ROOM, B, T0)).toEqual({ status: 'ok', charged: 0, ticket: true, ticketKind: 'room_free' });
     expect(await payEntry(db, cfg, ROOM, B, T0)).toEqual({ status: 'already', charged: 0 });
     expect((await ticketsOf(db, B)).room_free).toBe(0);
+  });
+
+  it('種類ごとの券: その種類の無料券を先に使い、ほかの種類の券は使わない', async () => {
+    await addTickets(db, U, 'room_free_secret', 1);
+    await addTickets(db, U, 'room_free_invite', 1);
+    await addCoins(db, U, 1000, 'adjust');
+    await db.insert(tempVoice).values({ channelId: ROOM, ownerId: U, hubId: NEOCHI, createdAt: T0 });
+    // 公開の分は、公開の券がないので払う
+    expect(await startRoom(db, cfg, ROOM, T0)).toEqual({ status: 'ok', charged: 50 });
+    expect(await changeRoomKind(db, cfg, ROOM, 'secret', T0)).toEqual({ status: 'ok', charged: 0, ticket: true, ticketKind: 'room_free_secret' });
+    expect(await ticketsOf(db, U)).toMatchObject({ room_free_secret: 0, room_free_invite: 1 });
+  });
+
+  it('半額券: 半分だけ払う（足りなければ券は使わない）', async () => {
+    await addTickets(db, B, 'room_half_public', 1);
+    await db.insert(tempVoice).values({ channelId: ROOM, ownerId: U, hubId: YOIMIYA, createdAt: T0 });
+    expect(await payEntry(db, cfg, ROOM, B, T0)).toEqual({ status: 'insufficient', price: 100 });
+    expect((await ticketsOf(db, B)).room_half_public).toBe(1);
+    await addCoins(db, B, 50, 'adjust');
+    expect(await payEntry(db, cfg, ROOM, B, T0)).toEqual({ status: 'ok', charged: 50, ticketKind: 'room_half_public' });
+    expect((await walletOf(db, B)).balance).toBe(0);
+  });
+
+  it('一日券: 使い始めてから 24 時間はその種類の部屋代が無料（券は 1 枚だけ）', async () => {
+    const { hourlyPerPerson } = await import('../src/services/rooms.js');
+    await addTickets(db, B, 'room_day_public', 1);
+    await db.insert(tempVoice).values({ channelId: ROOM, ownerId: U, hubId: YOIMIYA, createdAt: T0 });
+    expect(await payEntry(db, cfg, ROOM, B, T0)).toEqual({ status: 'ok', charged: 0, ticket: true, ticketKind: 'room_day_public' });
+    expect((await ticketsOf(db, B)).room_day_public).toBe(0);
+    const h = (n: number) => new Date(T0.getTime() + n * 3_600_000);
+    expect(await hourlyPerPerson(db, cfg, [{ channelId: ROOM, memberIds: [B] }], h(1))).toEqual([{ action: 'paid', channelId: ROOM, memberId: B, charged: 0 }]);
+    expect(await hourlyPerPerson(db, cfg, [{ channelId: ROOM, memberIds: [B] }], h(23))).toEqual([{ action: 'paid', channelId: ROOM, memberId: B, charged: 0 }]);
+    // 24 時間たったら払う（足りないので注意）
+    expect((await hourlyPerPerson(db, cfg, [{ channelId: ROOM, memberIds: [B] }], h(25)))[0]).toMatchObject({ action: 'warned' });
+  });
+
+  it('ショップの割引券: 割り引いて払い、券を 1 枚使う。払い戻すと券も戻る。券がなければ買えない', async () => {
+    const { buyRole, DISCOUNT_TICKETS } = await import('../src/services/shop.js');
+    expect(DISCOUNT_TICKETS).toEqual(['shop_10', 'shop_30', 'shop_50']);
+    const SAKURA = '100000000000000081';
+    await seedDefaultItems(db, { colors: [{ roleId: SAKURA, name: '桜', emoji: '🌸' }], titles: [] });
+    const color = (await listItems(db)).find((i) => i.roleId === SAKURA)!;
+    await addCoins(db, U, 1500, 'adjust');
+    expect(await buyRole(db, color, U, T0, 1500, 'shop_30')).toEqual({ status: 'no_ticket' });
+    expect((await walletOf(db, U)).balance).toBe(1500);
+    await addTickets(db, U, 'shop_30', 1);
+    const r = await buyRole(db, color, U, T0, 1500, 'shop_30');
+    expect(r).toMatchObject({ status: 'ok', balance: 450, discount: 30 });
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.purchase).toMatchObject({ price: 1050, ticket: 'shop_30' });
+    expect((await ticketsOf(db, U)).shop_30).toBe(0);
+    await refund(db, r.purchase);
+    expect((await walletOf(db, U)).balance).toBe(1500);
+    expect((await ticketsOf(db, U)).shop_30).toBe(1);
+    // 足りなければ券は減らない
+    await addTickets(db, B, 'shop_10', 1);
+    expect(await buyRole(db, color, B, T0, 1500, 'shop_10')).toMatchObject({ status: 'insufficient', price: 1350 });
+    expect((await ticketsOf(db, B)).shop_10).toBe(1);
+  });
+
+  it('券の名前と説明は全部そろっている', async () => {
+    const { TICKET_KINDS } = await import('../src/config.js');
+    const { TICKET_LABEL, MANUAL_TICKETS } = await import('../src/services/tickets.js');
+    for (const k of TICKET_KINDS) expect(TICKET_LABEL[k]?.name).toBeTruthy();
+    expect(TICKET_LABEL.room_half_twoshot.name).toBe('💞ツーショットの部屋代半額券');
+    expect(MANUAL_TICKETS).toEqual(['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gift', 'name_deco']);
   });
 
   it('市場: 手数料なし券があれば、売れたとき全部受け取る', async () => {
@@ -313,7 +379,7 @@ describe('券を使う', () => {
     expect((await ticketsOf(db, U)).market_nofee).toBe(0);
   });
 
-  it('絵馬の奉納: 絵馬のピン留め券で無料。失敗して戻すときは花びらは戻さない', async () => {
+  it('絵馬の奉納: 絵馬のピン留め券で無料。失敗して戻すときは券を戻す（銭は戻さない）', async () => {
     await seedDefaultItems(db, { colors: [], titles: [] });
     const ema = (await listItems(db)).find((i) => i.kind === 'ema_pin')!;
     await addTickets(db, U, 'ema_pin', 1);
@@ -321,9 +387,12 @@ describe('券を使う', () => {
     expect(r).toMatchObject({ status: 'ok', ticket: true, balance: 0 });
     if (r.status !== 'ok') throw new Error(r.status);
     expect(r.purchase.price).toBe(0);
+    expect(r.purchase.ticket).toBe('ema_pin');
     await refund(db, r.purchase);
     expect((await walletOf(db, U)).balance).toBe(0);
-    // 券がなければ花びら
+    expect((await ticketsOf(db, U)).ema_pin).toBe(1);
+    // 券がなければ銭
+    await buySimple(db, ema, U, {}, T0, 800);
     expect(await buySimple(db, ema, U, {}, T0, 800)).toMatchObject({ status: 'insufficient', price: 800 });
   });
 });
@@ -334,7 +403,7 @@ describe('物御籤の画面', () => {
   it('値段・割合・中身と確率・天井・持っている券と、1 回 / 10 連のボタン', async () => {
     await ensureGachaPrizes(db, g);
     const prizes = await listPrizes(db);
-    const m = JSON.stringify(gachaMenu(g, prizes, names, { balance: 600, sinceTop: 25, tickets: { room_free: 2, ema_pin: 0, market_nofee: 0 } }, '🌸花びら'));
+    const m = JSON.stringify(gachaMenu(g, prizes, names, { balance: 600, sinceTop: 25, tickets: { ...emptyTickets(), room_free: 2, ema_pin: 0, market_nofee: 0 } }, '🌸花びら'));
     for (const t of [
       '500',
       '5,000',
@@ -351,7 +420,7 @@ describe('物御籤の画面', () => {
     ])
       expect(m).toContain(t);
     // 10 連の分は足りないので押せない
-    const menu = gachaMenu(g, prizes, names, { balance: 600, sinceTop: 0, tickets: { room_free: 0, ema_pin: 0, market_nofee: 0 } }, '🌸花びら');
+    const menu = gachaMenu(g, prizes, names, { balance: 600, sinceTop: 0, tickets: { ...emptyTickets(), room_free: 0, ema_pin: 0, market_nofee: 0 } }, '🌸花びら');
     const buttons = menu.components[0]!.toJSON().components as { disabled?: boolean }[];
     expect(buttons.map((b) => Boolean(b.disabled))).toEqual([false, true]);
     expect(tierPrizeText(g, prizes, 'kichi', names)).toBe('📌絵馬のピン留め券 ×1 60%');
@@ -365,8 +434,8 @@ describe('物御籤の画面', () => {
         () => 'x',
       ),
     ).toBe('🍡 **吉** … 🌸色守り（桜）');
-    expect(ticketLine({ room_free: 0, ema_pin: 1, market_nofee: 0 })).toBe('📌絵馬のピン留め券 ×1');
-    expect(ticketLine({ room_free: 0, ema_pin: 0, market_nofee: 0 })).toBeUndefined();
+    expect(ticketLine({ ...emptyTickets(), room_free: 0, ema_pin: 1, market_nofee: 0 })).toBe('📌絵馬のピン留め券 ×1');
+    expect(ticketLine({ ...emptyTickets(), room_free: 0, ema_pin: 0, market_nofee: 0 })).toBeUndefined();
     expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:open');
   });
 });

@@ -61,13 +61,20 @@ function TierCell(props: { draw: GachaDraw }) {
   );
 }
 
-function TicketCells(props: { tickets: Record<TicketKind, number> }) {
+/** 持っている券の一覧（持っていない券は出さない） */
+function TicketList(props: { tickets: Record<TicketKind, number> }) {
+  const owned = TICKET_KINDS.filter((k) => props.tickets[k] > 0);
+  if (!owned.length) return <span class="empty">なし</span>;
   return (
-    <>
-      {TICKET_KINDS.map((k) => (
-        <td class="num">{props.tickets[k] || '—'}</td>
+    <span>
+      {owned.map((k, i) => (
+        <>
+          {i > 0 && '・'}
+          {TICKET_LABEL[k].emoji}
+          {TICKET_LABEL[k].name} ×{props.tickets[k]}
+        </>
       ))}
-    </>
+    </span>
   );
 }
 
@@ -421,18 +428,16 @@ export function GachaPage(props: {
             <thead>
               <tr>
                 <th>メンバー</th>
-                {TICKET_KINDS.map((k) => (
-                  <th class="num">
-                    {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
-                  </th>
-                ))}
+                <th>持っている券</th>
               </tr>
             </thead>
             <tbody>
               {props.holders.map((h) => (
                 <tr>
                   <td>{who(h.memberId)}</td>
-                  <TicketCells tickets={h.tickets} />
+                  <td class="wrap">
+                    <TicketList tickets={h.tickets} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -498,22 +503,9 @@ export function MemberGachaSection(props: {
         引いた回数 <strong>{fmt(props.state.total)}</strong>
         {props.state.total > 0 && left !== undefined && ` ／ 天井まであと ${left} 回`}
       </p>
-      <table class="compact">
-        <thead>
-          <tr>
-            {TICKET_KINDS.map((k) => (
-              <th class="num">
-                {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <TicketCells tickets={props.tickets} />
-          </tr>
-        </tbody>
-      </table>
+      <p>
+        🎟 持っている券: <TicketList tickets={props.tickets} />
+      </p>
       {session.level === 'guji' && (
         <form method="post" action={`/members/${props.memberId}/tickets`} class="actions coins">
           <input type="hidden" name="_csrf" value={session.csrfToken} />

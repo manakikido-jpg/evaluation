@@ -1,23 +1,54 @@
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
-import type { TicketKind } from '../config.js';
+import { TICKET_KINDS, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { tickets } from '../db/schema.js';
 
 /**
- * 券（物御籤で出る）。持っていれば自動で使う。
- * 部屋代無料: 宿坊はその部屋の部屋代・宵宮は 1 時間分 / 絵馬のピン留め: 「絵馬の奉納」が無料 / 市場の手数料なし: 売れたとき手数料を引かない
+ * 券（物御籤で出る・運営が渡す）。
+ * auto: 使う場面で自動で使う（部屋代・ショップの割引は選んで使う）/ manual: /物御籤 の「🎟 券を使う」から使う
  */
 
-export const TICKET_LABEL: Record<TicketKind, { emoji: string; name: string; note: string }> = {
-  room_free: { emoji: '🎫', name: '部屋代無料券', note: '宿坊はその部屋の部屋代、宵宮は 1 時間分が無料（部屋代を払うときに自動で使う）' },
-  ema_pin: { emoji: '📌', name: '絵馬のピン留め券', note: '授与所の「絵馬の奉納」が無料（受けるときに自動で使う）' },
-  market_nofee: { emoji: '🏪', name: '市場の手数料なし券', note: '市場で売れたとき、手数料を引かずに受け取れる（自動で使う）' },
-};
+type TicketDef = { emoji: string; name: string; note: string; use: 'auto' | 'manual' };
+
+const ROOM_KIND_LABEL = { public: '🔓公開', invite: '🔒招待限定', secret: '🤫シークレット', twoshot: '💞ツーショット' } as const;
+export type RoomKindKey = keyof typeof ROOM_KIND_LABEL;
+const room = (k: RoomKindKey): Record<string, TicketDef> => ({
+  [`room_free_${k}`]: { emoji: '🎫', name: `${ROOM_KIND_LABEL[k]}の部屋代無料券`, note: `${ROOM_KIND_LABEL[k]}の部屋の部屋代が 1 回無料（宿坊はその部屋ぜんぶ・宵宮は 1 時間分。払うときに自動で使う）`, use: 'auto' },
+  [`room_half_${k}`]: { emoji: '🎟', name: `${ROOM_KIND_LABEL[k]}の部屋代半額券`, note: `${ROOM_KIND_LABEL[k]}の部屋の部屋代が 1 回半額（払うときに自動で使う）`, use: 'auto' },
+  [`room_day_${k}`]: { emoji: '📅', name: `${ROOM_KIND_LABEL[k]}の一日券`, note: `${ROOM_KIND_LABEL[k]}の部屋の部屋代が 24 時間無料（最初に払うときに自動で使い始める）`, use: 'auto' },
+});
+
+/** 券の名前と説明（全部の券。テストで数を確かめる） */
+export const TICKET_LABEL = {
+  room_free: { emoji: '🎫', name: '部屋代無料券', note: 'どの種類の部屋でも、部屋代が 1 回無料（宿坊はその部屋ぜんぶ・宵宮は 1 時間分。払うときに自動で使う）', use: 'auto' },
+  ...room('public'),
+  ...room('invite'),
+  ...room('secret'),
+  ...room('twoshot'),
+  shop_10: { emoji: '🏷', name: 'ショップ 10% 割引券', note: '授与所の品が 1 回 10% 引き（受けるときに選んで使う）', use: 'auto' },
+  shop_30: { emoji: '🏷', name: 'ショップ 30% 割引券', note: '授与所の品が 1 回 30% 引き（受けるときに選んで使う）', use: 'auto' },
+  shop_50: { emoji: '🏷', name: 'ショップ 50% 割引券', note: '授与所の品が 1 回半額（受けるときに選んで使う）', use: 'auto' },
+  ema_pin: { emoji: '📌', name: '絵馬のピン留め券', note: '授与所の「絵馬の奉納」が無料（受けるときに自動で使う）', use: 'auto' },
+  market_nofee: { emoji: '🏪', name: '市場の手数料なし券', note: '市場で売れたとき、手数料を引かずに受け取れる（自動で使う）', use: 'auto' },
+  fuku: { emoji: '🧧', name: '福の札', note: '使うと 24 時間、通話でもらえる銭が 2 倍', use: 'manual' },
+  luck: { emoji: '🍀', name: '運気アップの札', note: '使うと、次の 10 回は物御籤の大吉が出やすくなる（2 倍）', use: 'manual' },
+  omikuji_extra: { emoji: '🎴', name: 'おみくじもう 1 回券', note: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', use: 'manual' },
+  gacha_free: { emoji: '🎁', name: '物御籤の無料券', note: '物御籤を 1 回タダで引ける', use: 'manual' },
+  gacha_gift: { emoji: '💝', name: '物御籤の贈り券', note: 'ほかの人に「物御籤の無料券」を贈れる', use: 'manual' },
+  name_deco: { emoji: '🏷', name: '名前の飾り札', note: '使うと 7 日間、名前の前に好きな絵文字を 1 つ付けられる', use: 'manual' },
+} as Record<TicketKind, TicketDef>;
+
+/** /物御籤 の「券を使う」から使う券 */
+export const MANUAL_TICKETS = TICKET_KINDS.filter((k) => TICKET_LABEL[k].use === 'manual');
+
+export const ticketName = (k: TicketKind) => `${TICKET_LABEL[k].emoji}${TICKET_LABEL[k].name}`;
+
+export const emptyTickets = (): Record<TicketKind, number> => Object.fromEntries(TICKET_KINDS.map((k) => [k, 0])) as Record<TicketKind, number>;
 
 export async function ticketsOf(db: Db, memberId: string): Promise<Record<TicketKind, number>> {
   const rows = await db.select().from(tickets).where(eq(tickets.memberId, memberId));
-  const out: Record<TicketKind, number> = { room_free: 0, ema_pin: 0, market_nofee: 0 };
-  for (const r of rows) out[r.kind] = r.count;
+  const out = emptyTickets();
+  for (const r of rows) if (r.kind in out) out[r.kind as TicketKind] = r.count;
   return out;
 }
 
@@ -41,7 +72,7 @@ export async function useTicket(tx: Db, memberId: string, kind: TicketKind): Pro
 
 /** 持っている券の一行（なければ undefined） */
 export function ticketLine(t: Record<TicketKind, number>): string | undefined {
-  const parts = (Object.keys(TICKET_LABEL) as TicketKind[]).filter((k) => t[k] > 0).map((k) => `${TICKET_LABEL[k].emoji}${TICKET_LABEL[k].name} ×${t[k]}`);
+  const parts = TICKET_KINDS.filter((k) => t[k] > 0).map((k) => `${ticketName(k)} ×${t[k]}`);
   return parts.length ? parts.join('　') : undefined;
 }
 
@@ -69,10 +100,11 @@ export async function ticketHolders(db: Db): Promise<{ memberId: string; tickets
   const rows = await db.select().from(tickets).where(gt(tickets.count, 0)).orderBy(desc(tickets.count));
   const by = new Map<string, Record<TicketKind, number>>();
   for (const r of rows) {
-    const t = by.get(r.memberId) ?? { room_free: 0, ema_pin: 0, market_nofee: 0 };
-    t[r.kind] = r.count;
+    if (!(r.kind in TICKET_LABEL)) continue;
+    const t = by.get(r.memberId) ?? emptyTickets();
+    t[r.kind as TicketKind] = r.count;
     by.set(r.memberId, t);
   }
-  const sum = (t: Record<TicketKind, number>) => t.room_free + t.ema_pin + t.market_nofee;
+  const sum = (t: Record<TicketKind, number>) => TICKET_KINDS.reduce((n, k) => n + t[k], 0);
   return [...by.entries()].map(([memberId, t]) => ({ memberId, tickets: t })).sort((a, b) => sum(b.tickets) - sum(a.tickets));
 }
