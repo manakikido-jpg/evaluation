@@ -5,6 +5,7 @@ import { coinTx, shopItems, shopPurchases, type ShopItem, type ShopPurchase } fr
 import { autoRanks, currentAutoRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
+import { useTicket } from './tickets.js';
 
 /**
  * ショップ（授与品）。花びらで品物を買う。
@@ -109,7 +110,13 @@ export async function seedDefaultItems(
 // ───────── 買う ─────────
 
 export type BuyResult =
-  | { status: 'ok'; purchase: ShopPurchase; balance: number; /** 買い替えで外すロール */ removeRoleIds: string[] }
+  | {
+      status: 'ok';
+      purchase: ShopPurchase;
+      balance: number;
+      /** 買い替えで外すロール */ removeRoleIds: string[];
+      /** 券を使った（花びらは払っていない） */ ticket?: boolean;
+    }
   | { status: 'insufficient'; price: number; balance: number }
   | { status: 'owned' }
   | { status: 'disabled' };
@@ -160,6 +167,9 @@ export async function buySimple(
   if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra'].includes(item.kind)) return { status: 'disabled' };
   return db.transaction(async (tx) => {
     await lock(tx, memberId);
+    // 絵馬の奉納: 絵馬のピン留め券を持っていれば、それを使って無料
+    const ticket = item.kind === 'ema_pin' && price > 0 && (await useTicket(tx, memberId, 'ema_pin'));
+    if (ticket) price = 0;
     if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name, ...extra }))) {
       return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
@@ -168,7 +178,7 @@ export async function buySimple(
       .insert(shopPurchases)
       .values({ memberId, itemId: item.id, kind: item.kind, price, expiresAt, ...extra })
       .returning();
-    return { status: 'ok', purchase: purchase!, balance: (await walletOf(tx, memberId)).balance, removeRoleIds: [] };
+    return { status: 'ok', purchase: purchase!, balance: (await walletOf(tx, memberId)).balance, removeRoleIds: [], ...(ticket ? { ticket: true } : {}) };
   });
 }
 

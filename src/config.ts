@@ -129,6 +129,52 @@ export const bellSchema = z.object({
   channelIds: z.array(snowflake).max(25).default([]),
 });
 
+/** 物御籤の運勢（出やすさの順ではなく、良い順） */
+export const GACHA_TIERS = ['daikichi', 'chukichi', 'shokichi', 'kichi'] as const;
+export type GachaTier = (typeof GACHA_TIERS)[number];
+/** 物御籤で出る券 */
+export const TICKET_KINDS = ['room_free', 'ema_pin', 'market_nofee'] as const;
+export type TicketKind = (typeof TICKET_KINDS)[number];
+
+const gachaPrizeSchema = z.object({
+  /** 物御籤限定のロール（色守り・称号）を 1 つ（まだ持っていないもの）。全部持っていたら・なければ券 */
+  role: z.boolean().default(false),
+  /** 券の種類（none: 券なし） */
+  ticket: z.enum([...TICKET_KINDS, 'none']).default('none'),
+  count: z.number().int().min(0).max(10).default(1),
+  /** 花びら（おまけ。0 でなし） */
+  coins: z.number().int().min(0).max(1_000_000).default(0),
+});
+export type GachaPrize = z.infer<typeof gachaPrizeSchema>;
+
+/** 物御籤（花びらで引くくじ。本物のお金は扱わない） */
+export const gachaSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** 1 回の値段（花びら）。10 連は 10 倍 */
+  price: z.number().int().min(1).max(1_000_000).default(500),
+  /** 大吉が出ないまま、この回数目は必ず大吉（0 で天井なし） */
+  pity: z.number().int().min(0).max(1000).default(30),
+  /** 出やすさ（合計が 100 でなくてもよい。割合で出す） */
+  rates: z
+    .object({
+      daikichi: z.number().int().min(0).max(1000),
+      chukichi: z.number().int().min(0).max(1000),
+      shokichi: z.number().int().min(0).max(1000),
+      kichi: z.number().int().min(0).max(1000),
+    })
+    .default({ daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 })
+    .refine((r) => r.daikichi + r.chukichi + r.shokichi + r.kichi > 0, '出やすさの合計が 0 です'),
+  /** 物御籤限定のロール（色守り・称号） */
+  roleIds: z.array(snowflake).max(25).default([]),
+  prizes: z.object({ daikichi: gachaPrizeSchema, chukichi: gachaPrizeSchema, shokichi: gachaPrizeSchema, kichi: gachaPrizeSchema }).default({
+    daikichi: { role: true, ticket: 'room_free', count: 3, coins: 0 },
+    chukichi: { role: false, ticket: 'room_free', count: 1, coins: 0 },
+    shokichi: { role: false, ticket: 'market_nofee', count: 1, coins: 0 },
+    kichi: { role: false, ticket: 'ema_pin', count: 1, coins: 0 },
+  }),
+});
+export type GachaConfig = z.infer<typeof gachaSchema>;
+
 /** 市場（花びらだけ。本物のお金は扱わない） */
 export const marketSchema = z.object({
   /** サーバーの手数料（%）。売った人には値段からこれを引いた分を渡す */
@@ -263,6 +309,7 @@ export const guildConfigSchema = z
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     bell: bellSchema.default(bellSchema.parse({})),
+    gacha: gachaSchema.default(gachaSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({

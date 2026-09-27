@@ -7,7 +7,8 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
-import { adminLevelOf, type GuildConfig } from '../config.js';
+import { adminLevelOf, GACHA_TIERS, type GuildConfig } from '../config.js';
+import { gachaStats } from '../services/gacha.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -829,6 +830,7 @@ export function createWebApp(deps: WebDeps) {
         coinsNonce={randomUUID()}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
+        gachaStats={await gachaStats(db)}
       />,
     );
   });
@@ -885,6 +887,29 @@ export function createWebApp(deps: WebDeps) {
               mentionStaff: body.bellMention === 'yes',
               roleIds: ids('bellRoles'),
               channelIds: ids('bellChannels'),
+            },
+          }
+        : {}),
+      // 物御籤（フォームにあるときだけ）
+      ...(typeof body.gachaPrice === 'string'
+        ? {
+            gacha: {
+              enabled: body.gachaEnabled === 'yes',
+              price: num('gachaPrice'),
+              pity: num('gachaPity'),
+              rates: Object.fromEntries(GACHA_TIERS.map((t) => [t, num(`gacha.${t}.rate`)])),
+              roleIds: ids('gachaRoles'),
+              prizes: Object.fromEntries(
+                GACHA_TIERS.map((t) => [
+                  t,
+                  {
+                    role: body[`gacha.${t}.role`] === 'yes',
+                    ticket: field(body, `gacha.${t}.ticket`, 20),
+                    count: num(`gacha.${t}.count`),
+                    coins: num(`gacha.${t}.coins`),
+                  },
+                ]),
+              ),
             },
           }
         : {}),

@@ -24,6 +24,8 @@ export type CoinReason =
   | 'gift_receive'
   | 'boost'
   | 'room'
+  | 'gacha'
+  | 'gacha_prize'
   | 'market_buy'
   | 'market_sell'
   | 'market_refund'

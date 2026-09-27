@@ -64,6 +64,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('gacha')
+      .setNameLocalizations({ ja: '物御籤' })
+      .setDescription('Draw the prize lottery with petals')
+      .setDescriptionLocalizations({ ja: '物御籤を引く（花びらで引くくじ。限定の色守り・称号や券が出る）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('bell')
       .setNameLocalizations({ ja: '呼び鈴' })
       .setDescription('Call the staff')
@@ -132,6 +140,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       )
       .addSubcommand((s) =>
         s.setName('gender').setNameLocalizations({ ja: '性別' }).setDescription('Gender').setDescriptionLocalizations({ ja: '性別を選ぶボタン（前からいる方向け。#授与所 など）' }),
+      )
+      .addSubcommand((s) =>
+        s.setName('gacha').setNameLocalizations({ ja: '物御籤' }).setDescription('Prize lottery').setDescriptionLocalizations({ ja: '物御籤を引くボタン（#おみくじ・#授与所 用）' }),
       )
       .addSubcommand((s) =>
         s.setName('bell').setNameLocalizations({ ja: '呼び鈴' }).setDescription('Call staff button').setDescriptionLocalizations({ ja: '運営を呼ぶ「🔔 呼び鈴」のボタン' }),

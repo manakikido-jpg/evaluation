@@ -7,7 +7,7 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market' | 'contact' | 'bell';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
@@ -56,6 +56,26 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
         },
       ],
       components: [{ type: 1, components: [{ type: 2, style: 1, label: '運営を呼ぶ', custom_id: 'bell:ring', emoji: { name: '🔔' } }] }],
+    };
+  }
+  if (kind === 'gacha') {
+    return {
+      embeds: [
+        {
+          title: '🎁 物御籤（もつみくじ）',
+          description: [
+            '花びらで引くくじです。運勢に応じて、物御籤でしか受けられない色守り・称号や、いろいろな券が出ます。',
+            '',
+            '・下のボタンを押すと、値段・出る割合・中身・天井までの回数が（自分にだけ）出ます。そこから 1 回か 10 連で引けます',
+            '・大吉が出たら #おみくじ でお祝いします',
+            '・花びらだけで引けます（本物のお金は使いません）',
+            '',
+            '-# `/物御籤` でも引けます',
+          ].join('\n'),
+          color: SHU,
+        },
+      ],
+      components: [{ type: 1, components: [{ type: 2, style: 1, label: '物御籤を引く', custom_id: 'gacha:open', emoji: { name: '🎁' } }] }],
     };
   }
   if (kind === 'contact') {

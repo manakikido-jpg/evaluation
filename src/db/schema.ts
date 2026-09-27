@@ -339,6 +339,8 @@ export const tempVoice = pgTable('temp_voice', {
   kindLocked: boolean('kind_locked').notNull().default(false),
   /** 部屋主の分の部屋代を払う人（権限を譲渡して「部屋代は自分が持つ」を選んだ前の部屋主）。なければ部屋主 */
   payerId: text('payer_id'),
+  /** 部屋代無料券を使った（1 回払いの部屋: この部屋では種類を変えても払わない） */
+  freeTicket: boolean('free_ticket').notNull().default(false),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */
@@ -636,3 +638,46 @@ export const bells = pgTable(
 );
 
 export type Bell = typeof bells.$inferSelect;
+
+/** 物御籤: 1 人ごとの回数（大吉が出てからの回数で天井を数える） */
+export const gachaState = pgTable('gacha_state', {
+  memberId: text('member_id').primaryKey(),
+  /** 大吉が出てから引いた回数 */
+  sinceTop: integer('since_top').notNull().default(0),
+  total: integer('total').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 持っている券（部屋代無料・絵馬のピン留め・市場の手数料なし） */
+export const tickets = pgTable(
+  'tickets',
+  {
+    memberId: text('member_id').notNull(),
+    kind: text('kind').$type<'room_free' | 'ema_pin' | 'market_nofee'>().notNull(),
+    count: integer('count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.kind] })],
+);
+
+/** 物御籤を引いた記録 */
+export const gachaDraws = pgTable(
+  'gacha_draws',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    tier: text('tier').$type<'daikichi' | 'chukichi' | 'shokichi' | 'kichi'>().notNull(),
+    /** 天井で出た */
+    pity: boolean('pity').notNull().default(false),
+    /** 1 回分の値段 */
+    price: integer('price').notNull(),
+    roleId: text('role_id'),
+    ticket: text('ticket'),
+    ticketCount: integer('ticket_count').notNull().default(0),
+    coins: integer('coins').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('gacha_draws_member_idx').on(t.memberId, t.createdAt)],
+);
+
+export type GachaDraw = typeof gachaDraws.$inferSelect;

@@ -3,6 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { marketListings, marketOrders, type MarketListing, type MarketOrder } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
+import { useTicket } from './tickets.js';
 import { getMember } from './members.js';
 
 /**
@@ -129,6 +130,12 @@ export async function releaseOrder(db: Db, id: number, by: string, now = new Dat
       .where(and(eq(marketOrders.id, id), inArray(marketOrders.status, ['paid', 'disputed'])))
       .returning();
     if (!order) return undefined;
+    // 市場の手数料なし券を持っていれば、手数料を引かない
+    if (order.fee > 0 && (await useTicket(tx, order.sellerId, 'market_nofee'))) {
+      const [noFee] = await tx.update(marketOrders).set({ fee: 0 }).where(eq(marketOrders.id, id)).returning();
+      await addCoins(tx, order.sellerId, order.price, 'market_sell', { orderId: id, fee: 0, ticket: 'market_nofee' });
+      return noFee ?? order;
+    }
     const pay = order.price - order.fee;
     if (pay > 0) await addCoins(tx, order.sellerId, pay, 'market_sell', { orderId: id, fee: order.fee });
     return order;

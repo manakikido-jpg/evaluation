@@ -102,6 +102,8 @@ export type ProfileExtra = {
   intro?: { url: string; excerpt: string };
   /** Discord のプロフィールのバナー（あれば大きく出す） */
   bannerUrl?: string;
+  /** 持っている券（本人が自分だけに見えるように開いたときだけ） */
+  tickets?: string;
 };
 
 const jstDay = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' }).format(d);
@@ -147,6 +149,7 @@ export function goshuinchoReply(
     { name: '押した朱印', value: `${data.givenCount} 人`, inline: true },
   );
   if (coins) embed.addFields({ name: coins.name, value: `${coins.emoji} ${coins.balance}`, inline: true });
+  if (profile.tickets) embed.addFields({ name: '🎟 券', value: profile.tickets });
   if (owner.avatarUrl) embed.setThumbnail(owner.avatarUrl);
   if (profile.bannerUrl) embed.setImage(profile.bannerUrl);
 

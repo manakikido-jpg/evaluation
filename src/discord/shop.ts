@@ -20,6 +20,7 @@ import { logger } from '../lib/logger.js';
 import { walletOf } from '../services/economy.js';
 import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
+import { addTickets, ticketsOf } from '../services/tickets.js';
 import { buyRole, buySimple, duePurchases, endPurchase, getItem, giveGift, listItems, priceOf, refund, seedDefaultItems, type BuyResult } from '../services/shop.js';
 
 /** サーバーブースト（奉納）している人 */
@@ -97,7 +98,11 @@ export class ShopApp {
     if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     let note: string | undefined;
     if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていたら、その色は外れます。同じ色なら期間が延びます';
-    if (item.kind === 'ema_pin') note = '-# 自己紹介のチャンネル（#絵馬-男性・#絵馬-女性 など）に書いた、いちばん新しい自分のメッセージをピン留めします';
+    if (item.kind === 'ema_pin') {
+      note = '-# 自己紹介のチャンネル（#絵馬-男性・#絵馬-女性 など）に書いた、いちばん新しい自分のメッセージをピン留めします';
+      const t = (await ticketsOf(this.db, i.user.id)).ema_pin;
+      if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、花びらは減りません**（いま ${t} 枚）\n${note}`;
+    }
     await i.update(shopConfirm(item, e, balance, note, isBooster(i)));
   }
 
@@ -234,8 +239,10 @@ export class ShopApp {
     } catch (err) {
       logger.warn({ err }, 'ema pin failed');
       await refund(this.db, r.purchase);
-      return 'ピン留めできなかったので、花びらを戻しました。神職に知らせてください（BOT の「メッセージの管理」権限）。';
+      if (r.ticket) await addTickets(this.db, i.user.id, 'ema_pin', 1);
+      return `ピン留めできなかったので、${r.ticket ? '券' : '花びら'}を戻しました。神職に知らせてください（BOT の「メッセージの管理」権限）。`;
     }
+    if (r.ticket) return `📌 絵馬のピン留め券を 1 枚使って、自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました（花びらは減っていません）。`;
     return `📌 自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました。残り ${r.balance} 枚。`;
   }
 

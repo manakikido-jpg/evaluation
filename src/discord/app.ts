@@ -21,6 +21,7 @@ import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
 import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
+import { ticketLine, ticketsOf } from '../services/tickets.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
@@ -261,7 +262,12 @@ export class ShuinApp {
 
     // 残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ（ほかの人の残高は見せない）
     const showCoins = interaction.user.id === ownerId && !isPublic;
-    const [data, wallet] = await Promise.all([goshuinchoOf(this.db, ownerId), showCoins ? walletOf(this.db, ownerId) : undefined]);
+    const [data, wallet, tickets] = await Promise.all([
+      goshuinchoOf(this.db, ownerId),
+      showCoins ? walletOf(this.db, ownerId) : undefined,
+      showCoins ? ticketsOf(this.db, ownerId) : undefined,
+    ]);
+    const ticketText = tickets ? ticketLine(tickets) : undefined;
     const e = this.cfg.economy;
     await this.reply(
       interaction,
@@ -275,7 +281,7 @@ export class ShuinApp {
         },
         data,
         wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
-        await this.profileOf(owner, interaction.user.id === ownerId),
+        { ...(await this.profileOf(owner, interaction.user.id === ownerId)), ...(ticketText ? { tickets: ticketText } : {}) },
       ),
     );
   }
@@ -303,7 +309,14 @@ export class ShuinApp {
       ...(gender ? { gender: gender === 'female' ? '♀ 女性' : '♂ 男性' } : {}),
       ...(level('dm') ? { dm: level('dm') } : {}),
       ...(level('friend') ? { friend: level('friend') } : {}),
-      titles: this.cfg.shop.titles.filter((t) => roleIds.includes(t.roleId)).map((t) => `${t.emoji}${t.name}`),
+      titles: [
+        ...this.cfg.shop.titles.filter((t) => roleIds.includes(t.roleId)).map((t) => `${t.emoji}${t.name}`),
+        // 物御籤限定のロール
+        ...this.cfg.gacha.roleIds
+          .filter((id) => roleIds.includes(id))
+          .map((id) => owner.guild.roles.cache.get(id)?.name ?? '')
+          .filter(Boolean),
+      ],
       joinedAt: owner.joinedAt,
       ...(intro ? { intro: { url: introUrl(this.cfg.guildId, intro), excerpt: intro.excerpt } } : {}),
     };

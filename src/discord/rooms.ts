@@ -159,6 +159,10 @@ export class RoomApp {
       return;
     }
     await ch?.send(roomNotice(cfg, row));
+    if (r.ticket)
+      await ch
+        ?.send({ content: `🎫 <@${ownerId}> さんの部屋代無料券を 1 枚使いました（この部屋の部屋代は無料です）。`, allowedMentions: { parse: [] } })
+        .catch(() => undefined);
   }
 
   /** 種類に合わせて、見える・入れる範囲を付け直す */
@@ -317,7 +321,7 @@ export class RoomApp {
     if (r.status === 'insufficient') return void (await i.reply({ content: `花びらが足りません（${r.price} 枚必要）。`, ...EPHEMERAL }));
     if (kind !== row.kind) await this.apply(ch, row, kind);
     const k = ROOM_KINDS[kind];
-    const paid = r.charged ? `（花びら ${r.charged} 枚を払いました）` : '';
+    const paid = r.ticket ? '（🎫 部屋代無料券を 1 枚使いました）' : r.charged ? `（花びら ${r.charged} 枚を払いました）` : '';
     const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
     await this.done(i, { ...row, kind, kindLocked: true }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`);
   }

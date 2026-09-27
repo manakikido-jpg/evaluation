@@ -54,6 +54,8 @@ const COIN_REASON: Record<string, string> = {
   gift_receive: '贈り物をもらった',
   boost: '奉納（ブースト）のお礼',
   room: '通話部屋',
+  gacha: '物御籤',
+  gacha_prize: '物御籤の当たり',
   onboarding: 'はじめての参拝のお祝い',
   invite: '招待のお礼',
   invite_active: '招待した人の浮上ボーナス',

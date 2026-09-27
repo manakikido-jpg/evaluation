@@ -3,6 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { members, roomPayers, tempVoice } from '../db/schema.js';
 import { spendWithin } from './economy.js';
+import { useTicket } from './tickets.js';
 
 /**
  * 宿坊・宵宮の自分の通話部屋: 種類（公開・招待限定・シークレット・ツーショット）・人数・招待と、花びらの支払い。
@@ -98,11 +99,17 @@ async function priceFor(db: Db, cfg: GuildConfig, plan: RoomPlan, kind: RoomKind
   return Math.ceil((price * (100 - off)) / 100);
 }
 
-export type PayResult = { status: 'ok'; charged: number } | { status: 'insufficient'; price: number };
+export type PayResult = { status: 'ok'; charged: number; /** 部屋代無料券を使った */ ticket?: boolean } | { status: 'insufficient'; price: number };
 
 /** その人の分を払う人（部屋主の分は、譲渡のときに「自分が持つ」を選んだ前の部屋主が払う） */
 export const payerOf = (row: Pick<RoomRow, 'ownerId' | 'payerId'>, memberId: string): string =>
   memberId === row.ownerId && row.payerId ? row.payerId : memberId;
+
+/** 部屋代を払う。部屋代無料券を持っていれば、先にそれを使う（'ticket'）。足りなければ false */
+async function payRoom(tx: Db, payerId: string, price: number, detail: Record<string, unknown>): Promise<'ticket' | 'paid' | false> {
+  if (await useTicket(tx, payerId, 'room_free')) return 'ticket';
+  return (await spendWithin(tx, payerId, price, 'room', detail)) ? 'paid' : false;
+}
 
 const lockRoom = (tx: Db, channelId: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'room:' + channelId}))`);
 
@@ -116,8 +123,11 @@ export async function startRoom(db: Db, cfg: GuildConfig, channelId: string, now
     // 1 時間ごとの部屋は、入った人それぞれが払う（payEntry）
     if (plan !== 'once') return { status: 'ok' as const, charged: 0 };
     const price = await priceFor(tx, cfg, plan, 'public', row.ownerId);
-    if (price > 0 && !(await spendWithin(tx, row.ownerId, price, 'room', { channelId, kind: 'public', plan }))) {
-      return { status: 'insufficient' as const, price };
+    const paid = price > 0 ? await payRoom(tx, row.ownerId, price, { channelId, kind: 'public', plan }) : 'paid';
+    if (!paid) return { status: 'insufficient' as const, price };
+    if (paid === 'ticket') {
+      await tx.update(tempVoice).set({ freeTicket: true }).where(eq(tempVoice.channelId, channelId));
+      return { status: 'ok' as const, charged: 0, ticket: true };
     }
     await tx.update(tempVoice).set({ paid: price }).where(eq(tempVoice.channelId, channelId));
     return { status: 'ok' as const, charged: price };
@@ -138,15 +148,16 @@ export async function changeRoomKind(db: Db, cfg: GuildConfig, channelId: string
     const plan = planOf(cfg, row.hubId);
     const payer = payerOf(row, row.ownerId);
     const price = await priceFor(tx, cfg, plan, kind, payer);
-    const charge = plan === 'once' ? Math.max(0, price - row.paid) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, payer)));
-    if (charge > 0 && !(await spendWithin(tx, payer, charge, 'room', { channelId, kind, plan }))) {
-      return { status: 'insufficient' as const, price: charge };
-    }
+    // 部屋代無料券を使った部屋（1 回払い）は、種類を変えても払わない
+    const charge = plan === 'once' ? (row.freeTicket ? 0 : Math.max(0, price - row.paid)) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, payer)));
+    const paid = charge > 0 ? await payRoom(tx, payer, charge, { channelId, kind, plan }) : 'paid';
+    if (!paid) return { status: 'insufficient' as const, price: charge };
+    const ticket = paid === 'ticket';
     await tx
       .update(tempVoice)
-      .set({ kind, kindLocked: true, paid: plan === 'once' ? row.paid + charge : row.paid })
+      .set({ kind, kindLocked: true, paid: plan === 'once' && !ticket ? row.paid + charge : row.paid, ...(ticket && plan === 'once' ? { freeTicket: true } : {}) })
       .where(eq(tempVoice.channelId, channelId));
-    return { status: 'ok' as const, charged: charge };
+    return ticket ? { status: 'ok' as const, charged: 0, ticket: true } : { status: 'ok' as const, charged: charge };
   });
 }
 
@@ -176,7 +187,7 @@ export async function payEntry(
   channelId: string,
   memberId: string,
   now = new Date(),
-): Promise<{ status: 'ok' | 'free' | 'already'; charged: number } | { status: 'insufficient'; price: number }> {
+): Promise<{ status: 'ok' | 'free' | 'already'; charged: number; ticket?: boolean } | { status: 'insufficient'; price: number }> {
   const row = await roomOf(db, channelId);
   if (!row || planOf(cfg, row.hubId) !== 'hourly') return { status: 'free', charged: 0 };
   const payerId = payerOf(row, memberId);
@@ -186,15 +197,14 @@ export async function payEntry(
     await lockPayer(tx, channelId, memberId);
     const [payer] = await tx.select().from(roomPayers).where(and(eq(roomPayers.channelId, channelId), eq(roomPayers.memberId, memberId)));
     if (payer && payer.paidUntil > now) return { status: 'already' as const, charged: 0 };
-    if (!(await spendWithin(tx, payerId, price, 'room', { channelId, kind: row.kind, plan: 'hourly', ...(payerId !== memberId ? { for: memberId } : {}) }))) {
-      return { status: 'insufficient' as const, price };
-    }
+    const paid = await payRoom(tx, payerId, price, { channelId, kind: row.kind, plan: 'hourly', ...(payerId !== memberId ? { for: memberId } : {}) });
+    if (!paid) return { status: 'insufficient' as const, price };
     const paidUntil = new Date(now.getTime() + HOUR_MS);
     await tx
       .insert(roomPayers)
       .values({ channelId, memberId, paidUntil })
       .onConflictDoUpdate({ target: [roomPayers.channelId, roomPayers.memberId], set: { paidUntil, unpaidSince: null } });
-    return { status: 'ok' as const, charged: price };
+    return paid === 'ticket' ? { status: 'ok' as const, charged: 0, ticket: true } : { status: 'ok' as const, charged: price };
   });
 }
 
@@ -227,14 +237,15 @@ export async function hourlyPerPerson(
         await lockPayer(tx, room.channelId, memberId);
         const [payer] = await tx.select().from(roomPayers).where(and(eq(roomPayers.channelId, room.channelId), eq(roomPayers.memberId, memberId)));
         if (payer && payer.paidUntil > now) return undefined;
-        if (await spendWithin(tx, payerId, price, 'room', { channelId: room.channelId, kind: row.kind, plan: 'hourly', ...(payerId !== memberId ? { for: memberId } : {}) })) {
+        const paid = await payRoom(tx, payerId, price, { channelId: room.channelId, kind: row.kind, plan: 'hourly', ...(payerId !== memberId ? { for: memberId } : {}) });
+        if (paid) {
           // BOT が止まっていた間の分はさかのぼらない（今から 1 時間）
           const paidUntil = new Date(Math.max(payer?.paidUntil.getTime() ?? 0, now.getTime() - HOUR_MS) + HOUR_MS);
           await tx
             .insert(roomPayers)
             .values({ channelId: room.channelId, memberId, paidUntil })
             .onConflictDoUpdate({ target: [roomPayers.channelId, roomPayers.memberId], set: { paidUntil, unpaidSince: null } });
-          return { action: 'paid', channelId: room.channelId, memberId, charged: price };
+          return { action: 'paid', channelId: room.channelId, memberId, charged: paid === 'ticket' ? 0 : price };
         }
         if (!payer?.unpaidSince) {
           await tx
