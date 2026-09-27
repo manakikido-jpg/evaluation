@@ -21,7 +21,9 @@ import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
 import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
-import { ticketLine, ticketsOf } from '../services/tickets.js';
+import { ticketsOf } from '../services/tickets.js';
+import { customHoldingsOf } from '../services/customTickets.js';
+import { allTicketsLine } from './gacha.js';
 import { listPrizes } from '../services/gacha.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
@@ -268,7 +270,7 @@ export class ShuinApp {
       showCoins ? walletOf(this.db, ownerId) : undefined,
       showCoins ? ticketsOf(this.db, ownerId) : undefined,
     ]);
-    const ticketText = tickets ? ticketLine(tickets) : undefined;
+    const ticketText = tickets ? allTicketsLine(tickets, await customHoldingsOf(this.db, ownerId)) : undefined;
     const e = this.cfg.economy;
     await this.reply(
       interaction,

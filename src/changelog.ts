@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-custom-tickets',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '物御籤: 🎟 自由な券（名前を自由に決めた券）',
+    items: [
+      '「🎁 物御籤」ページで、絵文字・名前・説明を決めて券を作れる（例: リクエスト曲券・運営と通話券）',
+      '物御籤の中身にしたり、メンバーのページから渡したりできる。持っている人は /物御籤 の「🎟 券を使う」から使う',
+      '使われたら運営のチャンネルに知らせ、「🎊 運営が対応するもの」に出る（対応したら「渡した」）',
+    ],
+  },
+  {
     id: '2026-09-27-gacha-super',
     date: '2026-09-27',
     kind: 'new',

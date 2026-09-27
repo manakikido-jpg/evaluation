@@ -1,10 +1,11 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { gachaClaims, gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem } from '../db/schema.js';
+import { gachaClaims, gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem, type CustomTicket } from '../db/schema.js';
 import { addCoins, deductUpTo, spendWithin, walletOf } from './economy.js';
 import { grantRoleItem } from './shop.js';
 import { takeLuck } from './buffs.js';
+import { addCustom, customName, listCustomTickets, takeCustom } from './customTickets.js';
 import { addTickets, takeTickets, TICKET_LABEL, ticketsOf, useTicket } from './tickets.js';
 
 /**
@@ -44,18 +45,27 @@ export function pickTier(g: Pick<GachaConfig, 'rates'>, rand: Rand = Math.random
 // ───────── 中身 ─────────
 
 export type PrizeKind = GachaPrizeRow['kind'];
-export const PRIZE_KINDS: PrizeKind[] = ['role', 'ticket', 'coins', 'shop', 'special'];
-export const PRIZE_KIND_LABEL: Record<PrizeKind, string> = { role: '限定ロール', ticket: '券', coins: '銭', shop: 'ショップの品', special: '運営が渡す賞品' };
+export const PRIZE_KINDS: PrizeKind[] = ['role', 'ticket', 'coins', 'shop', 'special', 'custom'];
+export const PRIZE_KIND_LABEL: Record<PrizeKind, string> = { role: '限定ロール', ticket: '券', coins: '銭', shop: 'ショップの品', special: '運営が渡す賞品', custom: '自由な券' };
 
 /** 中身の名前（role: ロールの名前・shop: ショップの品。分からなければ「消えた〜」） */
 export function prizeLabel(
-  p: Pick<GachaPrizeRow, 'kind' | 'roleId' | 'ticket' | 'shopItemId' | 'amount' | 'label'>,
-  names: { role: (id: string) => string | undefined; shop: (id: number) => ShopItem | undefined; /** 通貨（絵文字つき。なければ 🪙銭） */ coin?: string },
+  p: Pick<GachaPrizeRow, 'kind' | 'roleId' | 'ticket' | 'shopItemId' | 'amount' | 'label' | 'customTicketId'>,
+  names: {
+    role: (id: string) => string | undefined;
+    shop: (id: number) => ShopItem | undefined;
+    /** 通貨（絵文字つき。なければ 🪙銭） */ coin?: string;
+    custom?: (id: number) => CustomTicket | undefined;
+  },
 ): string {
   if (p.kind === 'role') return `🎀「${(p.roleId && names.role(p.roleId)) ?? '消えたロール'}」`;
   if (p.kind === 'ticket') return p.ticket ? `${TICKET_LABEL[p.ticket].emoji}${TICKET_LABEL[p.ticket].name} ×${p.amount}` : '券';
   if (p.kind === 'coins') return `${names.coin ?? '🪙銭'} ${p.amount.toLocaleString('ja-JP')} 枚`;
   if (p.kind === 'special') return `🎊 ${p.label ?? '特別な賞品'}`;
+  if (p.kind === 'custom') {
+    const t = p.customTicketId ? names.custom?.(p.customTicketId) : undefined;
+    return t ? `${customName(t)} ×${p.amount}` : '（消えた自由な券）';
+  }
   const item = p.shopItemId ? names.shop(p.shopItemId) : undefined;
   return item ? `${item.emoji}${item.name}${item.durationDays ? `（${item.durationDays} 日）` : ''}` : '（消えたショップの品）';
 }
@@ -69,7 +79,7 @@ export async function listPrizes(db: Db): Promise<GachaPrizeRow[]> {
 }
 
 export type PrizeInput = Pick<GachaPrizeRow, 'tier' | 'kind' | 'amount' | 'weight' | 'fallback'> &
-  Partial<Pick<GachaPrizeRow, 'roleId' | 'ticket' | 'shopItemId' | 'enabled' | 'label' | 'stock'>>;
+  Partial<Pick<GachaPrizeRow, 'roleId' | 'ticket' | 'shopItemId' | 'enabled' | 'label' | 'stock' | 'customTicketId'>>;
 
 export async function createPrize(db: Db, p: PrizeInput): Promise<GachaPrizeRow> {
   const [row] = await db.insert(gachaPrizes).values(p).returning();
@@ -115,9 +125,10 @@ export async function ensureGachaPrizes(db: Db, g: GachaConfig): Promise<void> {
 }
 
 /** その人に出せる中身か（持っているロールは出さない。期限つきのショップの品は延長になるので出す） */
-function eligible(p: GachaPrizeRow, owned: ReadonlySet<string>, shop: ReadonlyMap<number, ShopItem>): boolean {
+function eligible(p: GachaPrizeRow, owned: ReadonlySet<string>, shop: ReadonlyMap<number, ShopItem>, custom?: ReadonlyMap<number, CustomTicket>): boolean {
   if (!p.enabled || p.weight <= 0) return false;
   if (p.kind === 'special') return Boolean(p.label) && (p.stock === null || p.stock > 0);
+  if (p.kind === 'custom') return Boolean(p.customTicketId && custom?.get(p.customTicketId)?.enabled) && p.amount > 0;
   if (p.kind === 'role') return Boolean(p.roleId) && !owned.has(p.roleId!);
   if (p.kind === 'shop') {
     const item = p.shopItemId ? shop.get(p.shopItemId) : undefined;
@@ -128,8 +139,14 @@ function eligible(p: GachaPrizeRow, owned: ReadonlySet<string>, shop: ReadonlyMa
 }
 
 /** 運勢ごとの、今出せる中身（ふつうの中身が 1 つもなければ「ほかが出せないときだけ」の中身） */
-function choicesOf(prizes: GachaPrizeRow[], tier: GachaTier, owned: ReadonlySet<string>, shop: ReadonlyMap<number, ShopItem>): GachaPrizeRow[] {
-  const ok = prizes.filter((p) => p.tier === tier && eligible(p, owned, shop));
+function choicesOf(
+  prizes: GachaPrizeRow[],
+  tier: GachaTier,
+  owned: ReadonlySet<string>,
+  shop: ReadonlyMap<number, ShopItem>,
+  custom?: ReadonlyMap<number, CustomTicket>,
+): GachaPrizeRow[] {
+  const ok = prizes.filter((p) => p.tier === tier && eligible(p, owned, shop, custom));
   const normal = ok.filter((p) => !p.fallback);
   return normal.length ? normal : ok;
 }
@@ -194,6 +211,8 @@ export type GachaPull = {
   lucky?: boolean;
   /** 運営が渡す特別な賞品（当たりの記録） */
   special?: { label: string; claimId: number };
+  /** 自由な券 */
+  custom?: { id: number; name: string; count: number };
 };
 
 export type GachaResult =
@@ -223,10 +242,11 @@ export async function drawGacha(
   await ensureGachaPrizes(db, g);
   const prizes = await listPrizes(db);
   const shop = new Map((await db.select().from(shopItems)).map((i) => [i.id, i]));
+  const custom = new Map((await listCustomTickets(db)).map((t) => [t.id, t]));
   const owned = new Set(heldRoleIds);
   /** 今出せる運勢（出やすさ 0 と、出せる中身がない運勢はのぞく） */
   const available = () => {
-    const rates = Object.fromEntries(GACHA_TIERS.map((t) => [t, g.rates[t] > 0 && choicesOf(prizes, t, owned, shop).length ? g.rates[t] : 0])) as Record<
+    const rates = Object.fromEntries(GACHA_TIERS.map((t) => [t, g.rates[t] > 0 && choicesOf(prizes, t, owned, shop, custom).length ? g.rates[t] : 0])) as Record<
       GachaTier,
       number
     >;
@@ -251,7 +271,7 @@ export async function drawGacha(
       const lucky = !pity && rates.daikichi > 0 && (await takeLuck(tx, memberId));
       const tier = pity ? 'daikichi' : pickTier({ rates: lucky ? { ...rates, daikichi: rates.daikichi * 2 } : rates }, rand);
       sinceTop = tier === 'daikichi' ? 0 : sinceTop + 1;
-      const p = pickWeighted(choicesOf(prizes, tier, owned, shop), rand);
+      const p = pickWeighted(choicesOf(prizes, tier, owned, shop, custom), rand);
       const pull: GachaPull = { tier, pity, prizeId: p.id, kind: p.kind, count: 0, coins: 0, ...(lucky ? { lucky: true } : {}) };
       if (p.kind === 'role') {
         pull.roleId = p.roleId!;
@@ -277,6 +297,10 @@ export async function drawGacha(
         }
         const [claim] = await tx.insert(gachaClaims).values({ memberId, prizeId: p.id, label: p.label ?? '特別な賞品' }).returning();
         pull.special = { label: claim!.label, claimId: claim!.id };
+      } else if (p.kind === 'custom') {
+        const t = custom.get(p.customTicketId!)!;
+        await addCustom(tx, memberId, t.id, p.amount);
+        pull.custom = { id: t.id, name: customName(t), count: p.amount };
       } else if (p.kind === 'coins') {
         pull.coins = p.amount;
         await addCoins(tx, memberId, p.amount, 'gacha_prize', { tier, prizeId: p.id });
@@ -315,6 +339,8 @@ export async function drawGacha(
         coins: p.coins,
         prizeId: p.prizeId,
         shopItemId: p.shopItemId ?? null,
+        customTicketId: p.custom?.id ?? null,
+        ...(p.custom ? { ticketCount: p.custom.count } : {}),
       })),
     );
     return { status: 'ok' as const, pulls, balance: (await walletOf(tx, memberId)).balance, sinceTop, total, tickets: await ticketsOf(tx, memberId), refunded };
@@ -374,18 +400,28 @@ export async function topPlayers(db: Db, limit = 30): Promise<{ memberId: string
 
 // ───────── リセット ─────────
 
-export type GachaResetMember = { memberId: string; draws: number; refund: number; coins: number; tickets: Partial<Record<TicketKind, number>>; roleIds: string[] };
+export type GachaResetMember = {
+  memberId: string;
+  draws: number;
+  refund: number;
+  coins: number;
+  tickets: Partial<Record<TicketKind, number>>;
+  /** 自由な券（id → 枚数） */
+  custom: Record<number, number>;
+  roleIds: string[];
+};
 
 /** リセットしたら何が起きるか（引いた人ごと: 返す銭・取り上げる銭・券・ロール） */
 export async function gachaResetPreview(db: Db): Promise<GachaResetMember[]> {
   const draws = await db.select().from(gachaDraws);
   const by = new Map<string, GachaResetMember>();
   for (const d of draws) {
-    const m = by.get(d.memberId) ?? { memberId: d.memberId, draws: 0, refund: 0, coins: 0, tickets: {}, roleIds: [] };
+    const m = by.get(d.memberId) ?? { memberId: d.memberId, draws: 0, refund: 0, coins: 0, tickets: {}, custom: {}, roleIds: [] };
     m.draws++;
     m.refund += d.price;
     m.coins += d.coins;
     if (d.ticket && d.ticketCount > 0) m.tickets[d.ticket] = (m.tickets[d.ticket] ?? 0) + d.ticketCount;
+    if (d.customTicketId && d.ticketCount > 0) m.custom[d.customTicketId] = (m.custom[d.customTicketId] ?? 0) + d.ticketCount;
     if (d.roleId && !m.roleIds.includes(d.roleId)) m.roleIds.push(d.roleId);
     by.set(d.memberId, m);
   }
@@ -418,6 +454,7 @@ export async function resetGacha(db: Db, now = new Date()): Promise<GachaResetRe
       const coinsTaken = m.coins > 0 ? await deductUpTo(tx, m.memberId, m.coins, 'gacha_reset', { reset: true }) : 0;
       let ticketsTaken = 0;
       for (const [kind, n] of Object.entries(m.tickets) as [TicketKind, number][]) ticketsTaken += await takeTickets(tx, m.memberId, kind, n);
+      for (const [id, n] of Object.entries(m.custom)) ticketsTaken += await takeCustom(tx, m.memberId, Number(id), n);
       // ショップの品: 物御籤で渡した記録（0 枚・券なし）を終わりにする。銭で買った同じ品が残っていればロールは外さない
       const shopRoles = new Set(shopDraws.filter((d) => d.memberId === m.memberId && d.shopItemId && d.roleId).map((d) => d.roleId!));
       for (const roleId of shopRoles) {

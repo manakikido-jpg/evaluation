@@ -27,7 +27,8 @@ import {
   type PrizeInput,
   type PrizeKind,
 } from '../services/gacha.js';
-import { addTickets, ticketHolders, ticketsOf, takeTickets, TICKET_LABEL } from '../services/tickets.js';
+import { addTickets, emptyTickets, ticketHolders, ticketsOf, takeTickets, TICKET_LABEL } from '../services/tickets.js';
+import { addCustom, createCustomTicket, customHolders, customHoldingsOf, customName, listCustomTickets, setCustomTicketEnabled, takeCustom } from '../services/customTickets.js';
 import { GachaPage, GACHA_FLASH, MemberGachaSection } from './views/gacha.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
@@ -371,7 +372,13 @@ export function createWebApp(deps: WebDeps) {
       partnersOf(db, id, since30),
     ]);
     const vcDaily = await dailyUsage(db, since30, jstDate(now()), { memberId: id });
-    const [gState, gTickets, gDraws] = await Promise.all([gachaStateOf(db, id), ticketsOf(db, id), recentDraws(db, { memberId: id, limit: 15 })]);
+    const [gState, gTickets, gDraws, gCustom, gCustomTickets] = await Promise.all([
+      gachaStateOf(db, id),
+      ticketsOf(db, id),
+      recentDraws(db, { memberId: id, limit: 15 }),
+      customHoldingsOf(db, id),
+      listCustomTickets(db),
+    ]);
     const gRoleNames = gDraws.some((d) => d.roleId) ? await roleNameMap() : new Map<string, string>();
     const vcByCategory = (await usageByMember(db, since30)).find((m) => m.memberId === id);
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
@@ -440,6 +447,8 @@ export function createWebApp(deps: WebDeps) {
             gacha={cfg.gacha}
             state={gState}
             tickets={gTickets}
+            custom={gCustom}
+            customTickets={gCustomTickets}
             draws={gDraws}
             roleNames={gRoleNames}
             flash={flash && Object.hasOwn(GACHA_FLASH, flash) ? flash : undefined}
@@ -685,13 +694,31 @@ export function createWebApp(deps: WebDeps) {
     const to = (msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-gacha`);
     if (!gujiOnly(c)) return to('tickets_forbidden');
     const body = await c.req.parseBody();
-    const kind = body.kind as TicketKind;
+    const kindRaw = typeof body.kind === 'string' ? body.kind : '';
     const count = Number(body.count);
     const note = field(body, 'note', 200);
-    if (!TICKET_KINDS.includes(kind) || !Number.isInteger(count) || count < 1 || count > 100 || !note) return to('tickets_invalid');
+    // 自由な券（custom:<id>）
+    const customTicket = kindRaw.startsWith('custom:') ? (await listCustomTickets(db)).find((x) => `custom:${x.id}` === kindRaw) : undefined;
+    const kind = kindRaw as TicketKind;
+    if ((!customTicket && !TICKET_KINDS.includes(kind)) || !Number.isInteger(count) || count < 1 || count > 100 || !note) return to('tickets_invalid');
     const m = await getMember(db, id);
     if (!m || m.isBot) return back(c, id, 'denied_not_found');
     const by = c.get('session').userId;
+    if (customTicket) {
+      if (body.mode === 'take') {
+        const taken = await takeCustom(db, id, customTicket.id, count);
+        await audit(db, { actorId: by, targetId: id, action: 'tickets.take', detail: { custom: customTicket.id, name: customTicket.name, count, taken, note }, via: 'web' });
+        return to(taken === 0 ? 'tickets_none' : taken < count ? 'tickets_taken_short' : 'tickets_taken');
+      }
+      await addCustom(db, id, customTicket.id, count);
+      await audit(db, { actorId: by, targetId: id, action: 'tickets.grant', detail: { custom: customTicket.id, name: customTicket.name, count, note }, via: 'web' });
+      if (body.dm !== 'yes') return to('tickets_given_quiet');
+      const sent = await deps.discord.sendDm(
+        id,
+        `🎟 咲楽ノ宮の社務所から、${customName(customTicket)} が **${count} 枚** 届きました。\n> ${note}\n${customTicket.note ? `${customTicket.note}\n` : ''}\`/物御籤\` の「🎟 券を使う」から使えます。`,
+      );
+      return to(sent ? 'tickets_given' : 'tickets_given_nodm');
+    }
     const t = TICKET_LABEL[kind];
     if (body.mode === 'take') {
       const taken = await takeTickets(db, id, kind, count);
@@ -1640,7 +1667,7 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/gacha', async (c) => {
     await ensureGachaPrizes(db, cfg.gacha);
-    const [stats, draws, tops, players, holders, prizes, items, guildRoles, claims] = await Promise.all([
+    const [stats, draws, tops, players, holders, prizes, items, guildRoles, claims, customs, cHolders] = await Promise.all([
       gachaStats(db),
       recentDraws(db, { limit: 100 }),
       recentDraws(db, { limit: 20, topOnly: true }),
@@ -1650,6 +1677,8 @@ export function createWebApp(deps: WebDeps) {
       listShopItems(db),
       loadRoles(),
       listClaims(db),
+      listCustomTickets(db),
+      customHolders(db),
     ]);
     const names = await namesOf(db, [
       ...draws.map((d) => d.memberId),
@@ -1657,6 +1686,7 @@ export function createWebApp(deps: WebDeps) {
       ...players.map((p) => p.memberId),
       ...holders.map((h) => h.memberId),
       ...claims.flatMap((cl) => [cl.memberId, cl.deliveredBy ?? '']),
+      ...cHolders.map((h) => h.memberId),
     ]);
     const roles = (guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
     const reset = gujiOnly(c) ? await gachaResetPreview(db) : undefined;
@@ -1669,12 +1699,17 @@ export function createWebApp(deps: WebDeps) {
         stats={stats}
         prizes={prizes}
         claims={claims}
+        customTickets={customs}
+        customHolders={cHolders}
         shopItems={items.filter(giftableShopItem)}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         draws={draws}
         tops={tops}
         players={players}
-        holders={holders}
+        holders={[
+          ...holders,
+          ...[...new Set(cHolders.map((h) => h.memberId))].filter((id) => !holders.some((h) => h.memberId === id)).map((memberId) => ({ memberId, tickets: emptyTickets() })),
+        ]}
         names={names}
         roleNames={new Map((guildRoles ?? []).map((r) => [r.id, r.name]))}
         flash={c.req.query('msg')}
@@ -1685,7 +1720,7 @@ export function createWebApp(deps: WebDeps) {
                 draws: reset.reduce((n, m) => n + m.draws, 0),
                 refund: reset.reduce((n, m) => n + m.refund, 0),
                 coins: reset.reduce((n, m) => n + m.coins, 0),
-                tickets: reset.reduce((n, m) => n + Object.values(m.tickets).reduce((a, b) => a + (b ?? 0), 0), 0),
+                tickets: reset.reduce((n, m) => n + [...Object.values(m.tickets), ...Object.values(m.custom)].reduce((a, b) => a + (b ?? 0), 0), 0),
                 roles: reset.reduce((n, m) => n + m.roleIds.length, 0),
               },
             }
@@ -1745,6 +1780,26 @@ export function createWebApp(deps: WebDeps) {
     return gachaBack(c, 'gacha_reset', 'gacha-basic');
   });
 
+  // 自由な券を作る・ON/OFF
+  app.post('/gacha/custom', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const name = field(body, 'name', 40);
+    if (!name) return gachaBack(c, 'custom_invalid', 'gacha-custom');
+    const t = await createCustomTicket(db, { emoji: field(body, 'emoji', 16) || '🎟', name, note: field(body, 'note', 200) });
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.custom_create', detail: { id: t.id, name }, via: 'web' });
+    return gachaBack(c, 'custom_created', 'gacha-custom');
+  });
+
+  app.post('/gacha/custom/:id/toggle', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const t = (await listCustomTickets(db)).find((x) => x.id === Number(c.req.param('id')));
+    if (!t) return gachaBack(c, 'prize_not_found', 'gacha-custom');
+    await setCustomTicketEnabled(db, t.id, !t.enabled);
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.custom_toggle', detail: { id: t.id, enabled: !t.enabled }, via: 'web' });
+    return gachaBack(c, 'custom_toggled', 'gacha-custom');
+  });
+
   // 運営が渡す賞品を渡した
   app.post('/gacha/claims/:id/done', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
@@ -1779,7 +1834,7 @@ export function createWebApp(deps: WebDeps) {
   const prizeNumbers = (body: Record<string, unknown>, kind: PrizeKind) => {
     const n = (k: string) => (typeof body[k] === 'string' && body[k] !== '' ? Number(body[k]) : NaN);
     const weight = n('weight');
-    const amount = kind === 'ticket' || kind === 'coins' ? n('amount') : 1;
+    const amount = kind === 'ticket' || kind === 'coins' || kind === 'custom' ? n('amount') : 1;
     const maxAmount = kind === 'coins' ? 1_000_000 : 100;
     if (!Number.isInteger(weight) || weight < 1 || weight > 10_000 || !Number.isInteger(amount) || amount < 1 || amount > maxAmount) return undefined;
     // 特別な賞品の残り（空はいくらでも）
@@ -1813,6 +1868,10 @@ export function createWebApp(deps: WebDeps) {
       const label = field(body, 'label', 100);
       if (!label) return gachaBack(c, 'prize_invalid', 'gacha-add');
       input.label = label;
+    } else if (kind === 'custom') {
+      const t = (await listCustomTickets(db)).find((x) => x.id === Number(body.customTicketId));
+      if (!t) return gachaBack(c, 'prize_invalid', 'gacha-add');
+      input.customTicketId = t.id;
     }
     const row = await createPrize(db, input);
     await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_add', detail: { ...input, id: row.id }, via: 'web' });

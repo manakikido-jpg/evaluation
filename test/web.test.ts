@@ -1137,6 +1137,33 @@ describe('物御籤（管理画面）', () => {
     expect((await listAudit(db, { action: 'gacha.claim_done' })).length).toBe(1);
   });
 
+  it('自由な券: 作る・ON/OFF・物御籤の中身に足す・メンバーに渡す', async () => {
+    const { listCustomTickets, customHoldingsOf } = await import('../src/services/customTickets.js');
+    const { listPrizes } = await import('../src/services/gacha.js');
+    const s = await login(STAFF);
+    expect((await post(s, '/gacha/custom', { emoji: '🎤', name: 'リクエスト曲券' })).status).toBe(403);
+    const g = await login(GUJI);
+    expect((await post(g, '/gacha/custom', { emoji: '🎤', name: '' })).headers.get('location')).toContain('custom_invalid');
+    expect((await post(g, '/gacha/custom', { emoji: '🎤', name: 'リクエスト曲券', note: '1 曲歌います' })).headers.get('location')).toBe('/gacha?msg=custom_created#gacha-custom');
+    const t = (await listCustomTickets(db))[0]!;
+    expect(t).toMatchObject({ emoji: '🎤', name: 'リクエスト曲券', note: '1 曲歌います', enabled: true });
+    const page = await (await get('/gacha', g)).text();
+    expect(page).toContain('🎤 リクエスト曲券');
+    expect(page).toContain('name="customTicketId"');
+    expect((await post(g, '/gacha/prizes', { tier: 'kichi', kind: 'custom', customTicketId: String(t.id), amount: '2', weight: '1' })).headers.get('location')).toContain('prize_added');
+    expect((await listPrizes(db)).find((p) => p.kind === 'custom')).toMatchObject({ customTicketId: t.id, amount: 2 });
+    // メンバーに渡す（DM）
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain(`value="custom:${t.id}"`);
+    const to = (form: Record<string, string>) => post(g, `/members/${USER}/tickets`, form).then((r) => r.headers.get('location'));
+    expect(await to({ mode: 'grant', kind: `custom:${t.id}`, count: '3', note: 'お礼', dm: 'yes' })).toContain('tickets_given');
+    expect(await customHoldingsOf(db, USER)).toMatchObject([{ count: 3 }]);
+    expect(await to({ mode: 'take', kind: `custom:${t.id}`, count: '1', note: '多すぎ' })).toContain('tickets_taken');
+    expect(await customHoldingsOf(db, USER)).toMatchObject([{ count: 2 }]);
+    expect(await to({ mode: 'grant', kind: 'custom:999', count: '1', note: 'x' })).toContain('tickets_invalid');
+    expect((await post(g, `/gacha/custom/${t.id}/toggle`, {})).headers.get('location')).toContain('custom_toggled');
+    expect((await listCustomTickets(db))[0]?.enabled).toBe(false);
+  });
+
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {
     const { ticketsOf } = await import('../src/services/tickets.js');
     const s = await login(STAFF);

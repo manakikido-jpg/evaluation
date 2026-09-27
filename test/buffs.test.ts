@@ -141,3 +141,38 @@ describe('物御籤の画面（札）', () => {
     expect(await walletOf(db, U)).toMatchObject({ balance: 0 });
   });
 });
+
+describe('🎟 自由な券', () => {
+  it('作って物御籤の中身にする → 当たる → 使うと運営が対応するものに出る。リセットで取り上げ', async () => {
+    const { createCustomTicket, customHoldingsOf, useCustom, setCustomTicketEnabled } = await import('../src/services/customTickets.js');
+    const { listClaims, resetGacha, prizeLabel } = await import('../src/services/gacha.js');
+    const t = await createCustomTicket(db, { emoji: '🎤', name: 'リクエスト曲券', note: '運営が 1 曲歌います' });
+    await ensureGachaPrizes(db, g);
+    for (const p of await listPrizes(db)) await deletePrize(db, p.id);
+    const prize = await createPrize(db, { tier: 'kichi', kind: 'custom', customTicketId: t.id, amount: 2, weight: 1, fallback: false });
+    expect(prizeLabel(prize, { role: () => undefined, shop: () => undefined, custom: () => t })).toBe('🎤リクエスト曲券 ×2');
+    await addCoins(db, U, 500, 'adjust');
+    const r = await drawGacha(db, g, U, 1, [], () => 0.5);
+    expect(r).toMatchObject({ status: 'ok', pulls: [{ kind: 'custom', custom: { id: t.id, name: '🎤リクエスト曲券', count: 2 } }] });
+    expect(await customHoldingsOf(db, U)).toMatchObject([{ ticket: { id: t.id }, count: 2 }]);
+    const used = await useCustom(db, U, t.id);
+    expect(used).toMatchObject({ status: 'ok', claim: { memberId: U, label: '🎤リクエスト曲券（使った）' } });
+    expect((await listClaims(db)).length).toBe(1);
+    expect(await useCustom(db, B, t.id)).toEqual({ status: 'no_ticket' });
+    // 止めると物御籤には出ない（持っている人は使える）
+    await setCustomTicketEnabled(db, t.id, false);
+    expect(await drawGacha(db, g, U, 1, [])).toEqual({ status: 'empty' });
+    // リセット: 残っている 1 枚を取り上げる
+    const reset = await resetGacha(db, T0);
+    expect(reset.ticketsTaken).toBe(1);
+    expect(await customHoldingsOf(db, U)).toEqual([]);
+  });
+
+  it('券を使うメニューに自由な券も出る', async () => {
+    const { createCustomTicket } = await import('../src/services/customTickets.js');
+    const t = await createCustomTicket(db, { emoji: '📞', name: '運営と通話券', note: '' });
+    const menu = JSON.stringify(useTicketMenu(emptyTickets(), [{ ticket: t, count: 1 }]).components);
+    expect(menu).toContain(`"value":"custom:${t.id}"`);
+    expect(menu).toContain('運営と通話券（1 枚）');
+  });
+});

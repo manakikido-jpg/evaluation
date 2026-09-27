@@ -1,5 +1,5 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
-import type { AdminSession, GachaClaim, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
+import type { AdminSession, CustomTicket, GachaClaim, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
 import { effectiveRates, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, TIER_LABEL, untilPity } from '../../services/gacha.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
@@ -29,6 +29,9 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   prize_not_found: { text: 'その中身はもうありません。', kind: 'warn' },
   prize_bulk: { text: 'まとめて変えました。', kind: 'ok' },
   prize_bulk_none: { text: '変える中身を選んでください（左のチェック）。', kind: 'warn' },
+  custom_created: { text: '自由な券を作りました。物御籤の中身やメンバーのページで使えます。', kind: 'ok' },
+  custom_invalid: { text: '自由な券の名前を入れてください（40 文字まで）。', kind: 'warn' },
+  custom_toggled: { text: '自由な券の ON/OFF を変えました。', kind: 'ok' },
   claim_done: { text: '「渡した」にしました。', kind: 'ok' },
   claim_done_already: { text: 'もう「渡した」になっています。', kind: 'warn' },
   gacha_reset: { text: '物御籤をリセットしました（銭を返し、出たものを取り上げました）。くわしくは「記録」に残っています。', kind: 'ok' },
@@ -85,7 +88,7 @@ function TicketList(props: { tickets: Record<TicketKind, number> }) {
 }
 
 /** 券を選ぶ（まとまりごと） */
-export function TicketSelect(props: { name: string; selected?: string }) {
+export function TicketSelect(props: { name: string; selected?: string; custom?: CustomTicket[] }) {
   return (
     <select name={props.name} required>
       {TICKET_GROUPS.map((grp) => (
@@ -97,7 +100,33 @@ export function TicketSelect(props: { name: string; selected?: string }) {
           ))}
         </optgroup>
       ))}
+      {props.custom && props.custom.length > 0 && (
+        <optgroup label="🎟 自由な券">
+          {props.custom.map((t) => (
+            <option value={`custom:${t.id}`} selected={props.selected === `custom:${t.id}`}>
+              {t.emoji} {t.name}
+              {t.enabled ? '' : '（止めている）'}
+            </option>
+          ))}
+        </optgroup>
+      )}
     </select>
+  );
+}
+
+type CustomHolding = { ticket: CustomTicket; count: number };
+
+/** 持っている自由な券 */
+function CustomList(props: { items: CustomHolding[] }) {
+  return (
+    <>
+      {props.items.map((c) => (
+        <>
+          ・{c.ticket.emoji}
+          {c.ticket.name} ×{c.count}
+        </>
+      ))}
+    </>
   );
 }
 
@@ -154,8 +183,12 @@ export function GachaPage(props: {
   names: Names;
   roleNames: Map<string, string>;
   flash?: string;
-  /** 運営が渡す賞品の当たり */
+  /** 運営が渡す賞品の当たり・使われた自由な券 */
   claims: GachaClaim[];
+  /** 自由な券（全部） */
+  customTickets?: CustomTicket[];
+  /** 自由な券を持っている人 */
+  customHolders?: { memberId: string; ticket: CustomTicket; count: number }[];
   /** リセットしたら返す・取り上げる量（宮司だけ） */
   reset?: { members: number; draws: number; refund: number; coins: number; tickets: number; roles: number };
 }) {
@@ -164,7 +197,8 @@ export function GachaPage(props: {
   const who = (id: string) => <a href={`/members/${id}`}>{props.names.get(id) ?? id}</a>;
   const roleName = (id: string) => props.roleNames.get(id) ?? '（消えたロール）';
   const shopById = new Map(props.shopItems.map((i) => [i.id, i]));
-  const labelNames = { role: (id: string) => props.roleNames.get(id), shop: (id: number) => shopById.get(id), coin: props.coinName };
+  const customById = new Map((props.customTickets ?? []).map((t) => [t.id, t]));
+  const labelNames = { role: (id: string) => props.roleNames.get(id), shop: (id: number) => shopById.get(id), coin: props.coinName, custom: (id: number) => customById.get(id) };
   const rates = effectiveRates(g, props.prizes);
   const chances = prizeChances(g, props.prizes);
   const csrf = <input type="hidden" name="_csrf" value={session.csrfToken} />;
@@ -318,7 +352,7 @@ export function GachaPage(props: {
                               )}
                             </td>
                             <td class="num">
-                              {guji && (p.kind === 'ticket' || p.kind === 'coins') ? (
+                              {guji && (p.kind === 'ticket' || p.kind === 'coins' || p.kind === 'custom') ? (
                                 <input
                                   type="number"
                                   name="amount"
@@ -329,7 +363,7 @@ export function GachaPage(props: {
                                   required
                                   aria-label="枚数"
                                 />
-                              ) : p.kind === 'ticket' || p.kind === 'coins' ? (
+                              ) : p.kind === 'ticket' || p.kind === 'coins' || p.kind === 'custom' ? (
                                 fmt(p.amount)
                               ) : p.kind === 'special' ? (
                                 guji ? (
@@ -514,9 +548,101 @@ export function GachaPage(props: {
                 足す
               </button>
             </form>
+
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="custom" />
+              <h3>🎟 自由な券</h3>
+              <p class="note">下の「🎟 自由な券」で作った券（通話デート券・リクエスト曲券など、なんでも）。持っている人が使うと、運営に知らせます。</p>
+              {(props.customTickets ?? []).filter((t) => t.enabled).length === 0 ? (
+                <p class="empty">まだ自由な券がありません。下の「🎟 自由な券」で作ってください。</p>
+              ) : (
+                <>
+                  <TierPick rates={rates} />
+                  <label class="field">
+                    <span>券</span>
+                    <select name="customTicketId" required>
+                      {(props.customTickets ?? [])
+                        .filter((t) => t.enabled)
+                        .map((t) => (
+                          <option value={String(t.id)}>
+                            {t.emoji} {t.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>枚数（1〜100）</span>
+                    <input type="number" name="amount" value="1" min={1} max={100} required />
+                  </label>
+                  <WeightFields />
+                  <button type="submit" class="ok">
+                    足す
+                  </button>
+                </>
+              )}
+            </form>
           </div>
         </section>
       )}
+
+      <section class="card anchor" id="gacha-custom">
+        <h2>🎟 自由な券</h2>
+        <p class="note">
+          名前を自由に決めた券です（例: 🎤 リクエスト曲券・📞 運営と通話券）。物御籤の中身にしたり、メンバーのページから渡したりできます。持っている人が /物御籤 の「🎟 券を使う」から使うと、運営のチャンネル（呼び鈴の知らせ先か #記録）に知らせ、上の「🎊 運営が対応するもの」に出ます。
+        </p>
+        {(props.customTickets ?? []).length > 0 && (
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>券</th>
+                <th>説明</th>
+                <th>状態</th>
+                {guji && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {(props.customTickets ?? []).map((t) => (
+                <tr class={t.enabled ? '' : 'muted'}>
+                  <td>
+                    {t.emoji} {t.name}
+                  </td>
+                  <td class="wrap">{t.note}</td>
+                  <td>{t.enabled ? '🟢 ON' : '⏸ OFF（物御籤に出ない・持っている人は使える）'}</td>
+                  {guji && (
+                    <td>
+                      <form method="post" action={`/gacha/custom/${t.id}/toggle`}>
+                        {csrf}
+                        <button type="submit">{t.enabled ? 'OFF にする' : 'ON にする'}</button>
+                      </form>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {guji && (
+          <form method="post" action="/gacha/custom" class="fields">
+            {csrf}
+            <label class="field">
+              <span>絵文字</span>
+              <input type="text" name="emoji" value="🎟" maxlength={16} />
+            </label>
+            <label class="field">
+              <span>名前</span>
+              <input type="text" name="name" maxlength={40} placeholder="例: リクエスト曲券" required />
+            </label>
+            <label class="field">
+              <span>説明（使ったらどうなるか）</span>
+              <input type="text" name="note" maxlength={200} placeholder="例: 運営が歌ってほしい曲を 1 曲歌います" />
+            </label>
+            <button type="submit" class="ok">
+              作る
+            </button>
+          </form>
+        )}
+      </section>
 
       {guji && props.reset && (
         <section class="card anchor danger-zone" id="gacha-reset">
@@ -559,14 +685,15 @@ export function GachaPage(props: {
       )}
 
       <section class="card anchor" id="gacha-claims">
-        <h2>🎊 運営が渡す賞品</h2>
+        <h2>🎊 運営が対応するもの</h2>
+        <p class="note">超大当たりの「運営が渡す賞品」と、使われた「自由な券」です。対応したら「渡した」を押してください。</p>
         {props.claims.length === 0 ? (
-          <p class="empty">まだ当たりはありません。</p>
+          <p class="empty">まだありません。</p>
         ) : (
           <table class="compact">
             <thead>
               <tr>
-                <th>当たった日時</th>
+                <th>日時</th>
                 <th>メンバー</th>
                 <th>賞品</th>
                 <th>渡した</th>
@@ -670,6 +797,7 @@ export function GachaPage(props: {
                   <td>{who(h.memberId)}</td>
                   <td class="wrap">
                     <TicketList tickets={h.tickets} />
+                    <CustomList items={(props.customHolders ?? []).filter((c) => c.memberId === h.memberId)} />
                   </td>
                 </tr>
               ))}
@@ -721,6 +849,10 @@ export function MemberGachaSection(props: {
   gacha: GachaConfig;
   state: { sinceTop: number; total: number };
   tickets: Record<TicketKind, number>;
+  /** 持っている自由な券 */
+  custom?: CustomHolding[];
+  /** 渡せる自由な券 */
+  customTickets?: CustomTicket[];
   draws: GachaDraw[];
   roleNames: Map<string, string>;
   flash?: string;
@@ -738,6 +870,7 @@ export function MemberGachaSection(props: {
       </p>
       <p>
         🎟 持っている券: <TicketList tickets={props.tickets} />
+        <CustomList items={props.custom ?? []} />
       </p>
       {session.level === 'guji' && (
         <form method="post" action={`/members/${props.memberId}/tickets`} class="actions coins">
@@ -753,7 +886,7 @@ export function MemberGachaSection(props: {
               <span>減らす</span>
             </label>
           </div>
-          <TicketSelect name="kind" />
+          <TicketSelect name="kind" custom={props.customTickets} />
           <input type="number" name="count" min={1} max={100} placeholder="枚数" required />
           <input type="text" name="note" maxlength={200} placeholder="理由（必須・記録に残る。DM にも載る）" required />
           <label class="field check">

@@ -682,6 +682,8 @@ export const gachaDraws = pgTable(
     prizeId: bigint('prize_id', { mode: 'number' }),
     /** ショップの品が出たとき */
     shopItemId: integer('shop_item_id'),
+    /** 自由な券が出たとき（枚数は ticket_count） */
+    customTicketId: bigint('custom_ticket_id', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('gacha_draws_member_idx').on(t.memberId, t.createdAt)],
@@ -698,11 +700,13 @@ export const gachaPrizes = pgTable(
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     tier: text('tier').$type<GachaTier>().notNull(),
-    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop' | 'special'>().notNull(),
+    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop' | 'special' | 'custom'>().notNull(),
     /** 運営が渡す特別な賞品の名前（例: Discord Nitro 1 か月分） */
     label: text('label'),
     /** 残りの数（null はいくらでも。0 になったら出ない） */
     stock: integer('stock'),
+    /** 自由な券（custom_tickets） */
+    customTicketId: bigint('custom_ticket_id', { mode: 'number' }),
     roleId: text('role_id'),
     ticket: text('ticket').$type<TicketKind>(),
     shopItemId: integer('shop_item_id'),
@@ -771,3 +775,26 @@ export const gachaClaims = pgTable(
 );
 
 export type GachaClaim = typeof gachaClaims.$inferSelect;
+
+/** 自由な券（運営が名前を決める券。使うと運営に知らせて、運営が対応する） */
+export const customTickets = pgTable('custom_tickets', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  emoji: text('emoji').notNull().default('🎟'),
+  name: text('name').notNull(),
+  note: text('note').notNull().default(''),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type CustomTicket = typeof customTickets.$inferSelect;
+
+/** 自由な券を持っている枚数 */
+export const customTicketHoldings = pgTable(
+  'custom_ticket_holdings',
+  {
+    memberId: text('member_id').notNull(),
+    ticketId: bigint('ticket_id', { mode: 'number' }).notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.ticketId] })],
+);

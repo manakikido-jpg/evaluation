@@ -239,6 +239,13 @@
       "when": 1790494694302,
       "tag": "0033_gacha_special",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790495645546,
+      "tag": "0034_custom_tickets",
+      "breakpoints": true
     }
   ]
 }
