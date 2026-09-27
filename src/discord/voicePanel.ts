@@ -10,7 +10,7 @@ export const VC_PANEL_RESTICK_MS = 15_000;
 /**
  * 通話のチャットのいちばん下に、いつも「この通話の人のプロフィールを見る」を出す。
  * - 通話に入った人がいたら、すぐ（いちばん下になければ）
- * - だれかがチャットに書いたら、15 秒に 1 回まで出し直す（BOT の書き込みは数えない）
+ * - チャットに書き込みがあったら（BOT の書き込みも）、15 秒に 1 回まで出し直す（このカード自身はのぞく）
  * 前に出したものは消すので、チャットに何枚もたまらない。
  */
 export class VoicePanelApp {
@@ -41,9 +41,11 @@ export class VoicePanelApp {
     this.enqueue(channel);
   }
 
-  /** 通話のチャットに人が書いたら、15 秒後に 1 回だけ、いちばん下へ出し直す（BOT の書き込みは数えない） */
+  /** 通話のチャットに書き込みがあったら（BOT の書き込みも）、15 秒後に 1 回だけ、いちばん下へ出し直す */
   onMessage(msg: Message): void {
-    if (!msg.inGuild() || msg.guildId !== this.cfg().guildId || msg.author.bot) return;
+    if (!msg.inGuild() || msg.guildId !== this.cfg().guildId) return;
+    // このカード自身の書き込みでは出し直さない（くり返しにならないように）
+    if (msg.author.id === msg.client.user?.id && msg.components.some((r) => 'components' in r && r.components.some((c) => 'customId' in c && c.customId === shuinId('vc', msg.channelId)))) return;
     const channel = msg.channel;
     if (!channel.isVoiceBased() || this.skip(channel, msg.guild) || this.timers.has(channel.id)) return;
     this.timers.set(
@@ -65,11 +67,11 @@ export class VoicePanelApp {
     if (!channel.isTextBased() || !channel.isSendable()) return;
     const me = channel.client.user.id;
     const panelId = shuinId('vc', channel.id);
-    type Msg = { author: { id: string; bot?: boolean }; components: { components: { customId?: string | null }[] }[] };
+    type Msg = { author: { id: string }; components: { components: { customId?: string | null }[] }[] };
     const isPanel = (m: Msg) => m.author.id === me && m.components.some((r) => r.components.some((c) => 'customId' in c && c.customId === panelId));
-    // すでにいちばん下にあれば何もしない（あとに BOT の書き込みしかなければ、いちばん下とみなす）
+    // すでにいちばん下にあれば何もしない（BOT の書き込みも数える）
     const recent = await channel.messages.fetch({ limit: 20 }).catch(() => undefined);
-    const last = [...(recent?.values() ?? [])].find((m) => isPanel(m as never) || !(m as Msg).author.bot);
+    const last = recent?.first();
     if (last && isPanel(last as never)) return;
     await channel.send({ ...vcPanel(channel.id), allowedMentions: { parse: [] } });
     // 前に出したものは消す

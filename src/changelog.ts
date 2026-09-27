@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-vc-panel-bots',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '通話のチャットのカード: BOT の書き込みのあとも出し直す',
+    items: ['「この通話の人のプロフィールを見る」は、BOT の書き込みのあとにも（15 秒に 1 回まで）いちばん下へ出し直すように'],
+  },
+  {
     id: '2026-09-27-bell',
     date: '2026-09-27',
     kind: 'new',

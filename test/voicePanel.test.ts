@@ -115,8 +115,17 @@ describe('通話に入ったとき', () => {
     expect(v.messages.map((m) => m.id)).toEqual(['u2', 'm3']);
   });
 
-  const message = (channel: unknown, author = A, bot = false) =>
-    ({ inGuild: () => true, guildId: cfg.guildId, guild: { id: cfg.guildId, afkChannelId: null }, author: { id: author, bot }, channel }) as never;
+  const message = (channel: unknown, author = A, bot = false, components: unknown[] = []) =>
+    ({
+      inGuild: () => true,
+      guildId: cfg.guildId,
+      channelId: VC,
+      guild: { id: cfg.guildId, afkChannelId: null },
+      client: { user: { id: '999000000000000001' } },
+      author: { id: author, bot },
+      components,
+      channel,
+    }) as never;
   const voiceCh = (v: ReturnType<typeof fakeVoice>) => Object.assign(v.channel, { isVoiceBased: () => true });
 
   it('チャットに人が書いたら、決まった間隔（15 秒）に 1 回だけいちばん下へ出し直す', async () => {
@@ -136,7 +145,7 @@ describe('通話に入ったとき', () => {
     expect(v.messages.map((m) => m.id)).toEqual(['u2', 'u3', 'm4']);
   });
 
-  it('BOT の書き込みは数えない（出し直さない・カードのあとに BOT だけならいちばん下とみなす）', async () => {
+  it('BOT の書き込みも数えて出し直す。このカード自身では出し直さない', async () => {
     const app = new VoicePanelApp(() => cfg, 10);
     const v = fakeVoice();
     const ch = voiceCh(v);
@@ -145,12 +154,11 @@ describe('通話に入ったとき', () => {
     v.say('999000000000000777', true);
     app.onMessage(message(ch, '999000000000000777', true));
     await new Promise((r) => setTimeout(r, 30));
-    expect(v.messages.map((m) => m.id)).toEqual(['m1', 'u2']);
-    // 人が書いて間隔がたてば出し直す
-    v.say(A);
-    app.onMessage(message(ch));
+    expect(v.messages.map((m) => m.id)).toEqual(['u2', 'm3']);
+    // カード自身（BOT の書き込み）では出し直さない
+    app.onMessage(message(ch, '999000000000000001', true, [{ components: [{ customId: `shuin:vc:${VC}` }] }]));
     await new Promise((r) => setTimeout(r, 30));
-    expect(v.messages.at(-1)?.id).toBe('m4');
+    expect(v.messages.map((m) => m.id)).toEqual(['u2', 'm3']);
   });
 
   it('BOT・同じ通話の中での変化（ミュートなど）・「➕ ○○をひらく」では出さない', async () => {
