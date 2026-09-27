@@ -184,7 +184,7 @@ export function promotionLog(userId: string, promotion: Promotion, goen: number)
   return `⬆️ 昇格 ${mention(userId)} ${promotion.from.name} → ${promotion.to.name}（ご縁 ${goen}）`;
 }
 
-// ───────── 通話のチャット（「この通話の人に朱印を押す」） ─────────
+// ───────── 通話のチャット（「この通話の人のプロフィールを見る」） ─────────
 
 /** 1 回に並べる人数（ボタン 5 × 4 行） */
 export const VC_LIST_MAX = 20;
@@ -192,22 +192,29 @@ export const VC_LIST_MAX = 20;
 /** 通話に入った人がいたら、その通話のチャットのいちばん下に出すカード */
 export function vcPanel(channelId: string): Reply {
   return {
-    embeds: [new EmbedBuilder().setColor(SAKURA).setDescription('🌸 **この通話の人に朱印を押す**\n-# 下のボタンを押すと、今この通話にいる人が出ます（あなたにだけ見えます）').toJSON()],
-    components: [row(new ButtonBuilder().setCustomId(shuinId('vc', channelId)).setLabel('この通話の人に朱印を押す').setEmoji('🌸').setStyle(ButtonStyle.Primary))],
+    embeds: [
+      new EmbedBuilder()
+        .setColor(SAKURA)
+        .setDescription('📕 **この通話の人のプロフィールを見る**\n-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから朱印も押せます（あなたにだけ見えます）')
+        .toJSON(),
+    ],
+    components: [row(new ButtonBuilder().setCustomId(shuinId('vc', channelId)).setLabel('この通話の人のプロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Primary))],
   };
 }
 
-/** 通話にいる人のボタン（押し済みの人は押せない） */
+/** 通話にいる人のボタン。押すとその人のプロフィール（そこから朱印を押せる）。朱印を押した人は ✅ */
 export function vcList(people: { id: string; name: string; stamped: boolean }[], total: number): Reply {
   if (!people.length) return { content: '今この通話には、ほかの方がいません。' };
   const buttons = people.slice(0, VC_LIST_MAX).map((p) => {
     const label = p.name.slice(0, 30) || '（名前なし）';
-    return p.stamped
-      ? new ButtonBuilder().setCustomId(shuinId('card', p.id)).setLabel(`${label}（押した）`).setEmoji('✅').setStyle(ButtonStyle.Secondary)
-      : giveButton(p.id, label);
+    return new ButtonBuilder()
+      .setCustomId(shuinId('card', p.id))
+      .setLabel(label)
+      .setEmoji(p.stamped ? '✅' : '📕')
+      .setStyle(p.stamped ? ButtonStyle.Secondary : ButtonStyle.Primary);
   });
   const rows: Row[] = [];
   for (let i = 0; i < buttons.length; i += 5) rows.push(row(...buttons.slice(i, i + 5)));
-  const more = total > VC_LIST_MAX ? `\n-# ほかの方は、名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」` : '';
-  return { content: `🌸 朱印を押す相手を選んでください（押した人は ✅。押すとその人の御朱印帳が見られます）${more}`, components: rows };
+  const more = total > VC_LIST_MAX ? `\n-# ほかの方は、名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」` : '';
+  return { content: `📕 プロフィールを見る人を選んでください（プロフィールの「🌸 朱印を押す」で朱印を押せます。押した人は ✅）${more}`, components: rows };
 }

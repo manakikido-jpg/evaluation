@@ -18,7 +18,7 @@ describe('通話のチャットのカード', () => {
     expect(parseShuinId(shuinId('vc', VC))).toEqual({ action: 'vc', userId: VC });
   });
 
-  it('通話にいる人をボタンで並べる。押した人は ✅（押せない代わりに御朱印帳）', () => {
+  it('通話にいる人をボタンで並べる。押すとプロフィール。朱印を押した人は ✅', () => {
     const r = vcList(
       [
         { id: A, name: 'さくら', stamped: false },
@@ -28,9 +28,11 @@ describe('通話のチャットのカード', () => {
     );
     const buttons = r.components!.flatMap((row) => row.toJSON().components) as { custom_id: string; label: string }[];
     expect(buttons.map((b) => [b.custom_id, b.label])).toEqual([
-      [shuinId('give', A), 'さくら'],
-      [shuinId('card', B), 'もみじ（押した）'],
+      [shuinId('card', A), 'さくら'],
+      [shuinId('card', B), 'もみじ'],
     ]);
+    expect(JSON.stringify(buttons[1])).toContain('✅');
+    expect(JSON.stringify(vcPanel(VC))).toContain('この通話の人のプロフィールを見る');
   });
 
   it('たくさんいるときは 20 人まで（5 人ずつ 4 行）。ほかの人への押し方を書く。誰もいなければそう言う', () => {

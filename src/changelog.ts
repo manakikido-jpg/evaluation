@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-vc-profile',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '通話のチャットは「この通話の人のプロフィールを見る」',
+    items: ['通話のチャットのボタンを「この通話の人のプロフィールを見る」に。人を選ぶとプロフィールが出て、そこから朱印を押せる（押した人は ✅）'],
+  },
+  {
     id: '2026-09-27-profile',
     date: '2026-09-27',
     kind: 'improve',
