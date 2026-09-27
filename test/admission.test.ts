@@ -133,6 +133,39 @@ describe('宵参り', () => {
     expect(await submitYoimairi(ctx, NEW, [ROLE.sanpaisha, YOI])).toEqual({ status: 'already' });
   });
 
+  it('年齢のロール: 17 歳以下なら自動で却下、18 歳以上なら自動で承認（申告がなくても）', async () => {
+    const { ageFromRoles } = await import('../src/services/admission.js');
+    expect(ageFromRoles(cfg, [{ id: '1', name: '🔞 18歳以上' }])).toBe('adult');
+    expect(ageFromRoles(cfg, [{ id: '1', name: '１８才以上' }])).toBe('adult');
+    expect(ageFromRoles(cfg, [{ id: '1', name: '17 歳以下' }])).toBe('minor');
+    expect(ageFromRoles(cfg, [{ id: '1', name: '18歳以上' }, { id: '2', name: '17歳以下' }])).toBe('minor');
+    expect(ageFromRoles(cfg, [{ id: '1', name: '参拝者' }])).toBeUndefined();
+    const set = { ...cfg, roles: { ...cfg.roles, ageAdult: '990000000000000001' } };
+    expect(ageFromRoles(set, [{ id: '1', name: '18歳以上' }])).toBeUndefined();
+    expect(ageFromRoles(set, [{ id: '990000000000000001', name: 'おとな' }])).toBe('adult');
+
+    // 18 歳以上のロール: 入鯖の申告がなくても（unknown）承認して、年齢区分も 18 歳以上に
+    await approveJoin('adult');
+    const { setAgeGroup } = await import('../src/services/applications.js');
+    await setAgeGroup(db, NEW, 'unknown');
+    expect(await submitYoimairi(ctx, NEW, [ROLE.sanpaisha])).toEqual({ status: 'not_adult' });
+    calls.length = 0;
+    const ok = await submitYoimairi(ctx, NEW, [ROLE.sanpaisha], 'adult');
+    expect(ok).toMatchObject({ status: 'auto_approved' });
+    expect(calls).toContain(`addRole ${NEW} ${YOI}`);
+    expect((await getMember(db, NEW))?.ageGroup).toBe('adult');
+  });
+
+  it('年齢のロール: 17 歳以下は自動で却下。13〜17 歳と記録された人は 18 歳以上のロールでも却下', async () => {
+    await approveJoin('adult');
+    calls.length = 0;
+    expect(await submitYoimairi(ctx, NEW, [ROLE.sanpaisha], 'minor')).toMatchObject({ status: 'auto_rejected' });
+    expect(calls).not.toContain(`addRole ${NEW} ${YOI}`);
+    await changeAgeGroup(ctx, guji, NEW, 'minor');
+    expect(await submitYoimairi(ctx, NEW, [ROLE.sanpaisha], 'adult')).toMatchObject({ status: 'auto_rejected' });
+    expect((await getMember(db, NEW))?.ageGroup).toBe('minor');
+  });
+
   it('13〜17 歳と申告した人は申請できない', async () => {
     await approveJoin('minor');
     expect(await submitYoimairi(ctx, NEW, [ROLE.sanpaisha])).toEqual({ status: 'not_adult' });

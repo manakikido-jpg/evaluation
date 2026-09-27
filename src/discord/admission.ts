@@ -39,6 +39,7 @@ import {
   onIntroPosted,
   submitJoin,
   submitYoimairi,
+  ageFromRoles,
   type AgeGroup,
   type Gender,
   type OmairiAction,
@@ -481,13 +482,17 @@ export class AdmissionApp {
 
   private async yoimairiStart(i: ButtonInteraction<'cached'>): Promise<void> {
     await i.deferReply(EPHEMERAL);
-    const r = await submitYoimairi(this.ctx, i.user.id, [...i.member.roles.cache.keys()]);
+    // 参加時の質問で付いた年齢のロールで、自動で承認・却下する
+    const ageRole = ageFromRoles(this.cfg, i.member.roles.cache.values());
+    const r = await submitYoimairi(this.ctx, i.user.id, [...i.member.roles.cache.keys()], ageRole);
     const text = {
       disabled: '宵参りの申請は受け付けていません。',
       already: 'すでに宵参りになっています。',
       not_adult: '入鯖のときに「18 歳以上」と申告した方だけ申請できます。',
       duplicate: '申請はすでに受け付けています。',
       pending: '宵参りの申請を受け付けました。結果は BOT から DM でお知らせします。',
+      auto_approved: '🔞 宵参りになりました。宵宮（18 歳以上のエリア）に入れます。',
+      auto_rejected: '宵参り（宵宮）は 18 歳以上の方だけが入れます。申し訳ありませんが、申請はお受けできません。',
     }[r.status];
     if (r.status === 'pending') await this.postApplicationCard(r.id, i.user.id, [`**🔞 宵参り申請 #${r.id}** ${mention(i.user.id)}`, '年齢区分: 18 歳以上（入鯖時の申告）']);
     await i.editReply(text);

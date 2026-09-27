@@ -305,6 +305,9 @@ export const guildConfigSchema = z
         emaPending: snowflake.optional(),
         /** 🧭 案内待ち: Discord の参加時の質問（オンボーディング）を終えて、まだ承認されていない人。承認（絵馬待ち・役職）で外す（任意。なければ名前に「案内待ち」を含むロール） */
         guidePending: snowflake.optional(),
+        /** 年齢のロール（Discord の参加時の質問で付く）。宵参りの申請を、17 歳以下なら自動で却下・18 歳以上なら自動で承認（任意。なければ名前に「17歳以下」「18歳以上」を含むロール） */
+        ageMinor: snowflake.optional(),
+        ageAdult: snowflake.optional(),
         /** 🏪 開業: 市場に出品できる（授与品「開業権利」で受ける）（任意） */
         merchant: snowflake.optional(),
         /** DM・フレンド追加の OK / 要相談 / NG（入鯖申請と #授与所 のボタンで選ぶ。プロフィールに出る）（任意） */

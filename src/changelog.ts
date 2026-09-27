@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-yoimairi-age-roles',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🔞 宵参りの申請を年齢のロールで自動判定',
+    items: [
+      '17 歳以下のロールがある人は自動で却下',
+      '18 歳以上のロールがある人は自動で承認（宵参りのロールが付く）',
+      'ロールは名前に「17歳以下」「18歳以上」を含むもの（どちらもなければ今までどおり神職が判定）',
+    ],
+  },
+  {
     id: '2026-09-27-notice-mention-deco-image',
     date: '2026-09-27',
     kind: 'new',

@@ -1,5 +1,6 @@
 import type { GuildConfig } from '../config.js';
 import type { GuildRole } from '../lib/discordRest.js';
+import { ageFromRoles } from './admission.js';
 
 /**
  * ロールの一覧・権限（管理画面の「ロール」ページ）。
@@ -121,6 +122,8 @@ export function roleKind(cfg: GuildConfig, role: GuildRole): string | undefined 
   if (role.id === r.male || role.id === r.female) return '性別';
   if (role.id === r.emaPending) return '絵馬待ち';
   if (role.id === r.guidePending) return '案内待ち';
+  const age = ageFromRoles(cfg, [role]);
+  if (age) return age === 'minor' ? '年齢（17 歳以下・宵参りは自動で却下）' : '年齢（18 歳以上・宵参りは自動で承認）';
   if (role.id === r.merchant) return '開業（市場）';
   if (r.contact && [...Object.values(r.contact.dm), ...Object.values(r.contact.friend)].includes(role.id)) return 'DM・フレンド';
   if ([...(cfg.admin?.shinshokuRoleIds ?? []), ...(cfg.admin?.gujiRoleIds ?? [])].includes(role.id)) return '運営（管理画面に入れる）';

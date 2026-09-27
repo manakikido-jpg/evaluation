@@ -1,4 +1,4 @@
-import { adminLevelOf } from '../config.js';
+import { adminLevelOf, type GuildConfig } from '../config.js';
 import { autoRanks, currentAutoRank } from '../domain/ranks.js';
 import { logger } from '../lib/logger.js';
 import {
@@ -174,14 +174,57 @@ export async function submitJoin(
   return { status: 'pending', id: r.id };
 }
 
-export type SubmitYoimairiResult = { status: 'pending'; id: number } | { status: 'duplicate' } | { status: 'not_adult' } | { status: 'already' } | { status: 'disabled' };
+export type SubmitYoimairiResult =
+  | { status: 'pending'; id: number }
+  | { status: 'auto_approved'; id: number; dmSent: boolean }
+  | { status: 'auto_rejected'; id: number }
+  | { status: 'duplicate' }
+  | { status: 'not_adult' }
+  | { status: 'already' }
+  | { status: 'disabled' };
 
-/** 宵参り（成人エリア）の申請。18 歳以上と申告した人だけ */
-export async function submitYoimairi(ctx: ModCtx, memberId: string, roleIds: readonly string[]): Promise<SubmitYoimairiResult> {
+const normRoleName = (name: string) => name.normalize('NFKC').replace(/\s/g, '');
+const MINOR_NAME = /1[0-7][歳才]以下|18[歳才]未満|未成年/;
+const ADULT_NAME = /(1[89]|[2-9]\d)[歳才]以上|成人/;
+
+/**
+ * 持っている年齢のロール（Discord の参加時の質問で付く）。両方あれば 17 歳以下を優先。
+ * ロールは設定（roles.ageMinor / ageAdult）か、名前に「17歳以下」「18歳以上」などを含むロール
+ */
+export function ageFromRoles(cfg: GuildConfig, held: Iterable<{ id: string; name: string }>): AgeGroup | undefined {
+  let adult = false;
+  for (const r of held) {
+    const name = normRoleName(r.name);
+    if (r.id === cfg.roles.ageMinor || (!cfg.roles.ageMinor && MINOR_NAME.test(name))) return 'minor';
+    if (r.id === cfg.roles.ageAdult || (!cfg.roles.ageAdult && ADULT_NAME.test(name))) adult = true;
+  }
+  return adult ? 'adult' : undefined;
+}
+
+/**
+ * 宵参り（成人エリア）の申請。
+ * - 17 歳以下のロールがある（か、13〜17 歳と記録されている）人は自動で却下
+ * - 18 歳以上のロールがある人は自動で承認（年齢区分も 18 歳以上にする）
+ * - どちらのロールもなければ、入鯖のときに 18 歳以上と申告した人だけ受け付けて、神職が判定する
+ */
+export async function submitYoimairi(ctx: ModCtx, memberId: string, roleIds: readonly string[], ageRole?: AgeGroup): Promise<SubmitYoimairiResult> {
   const role = ctx.cfg.roles.yoimairi;
   if (!role) return { status: 'disabled' };
   if (roleIds.includes(role)) return { status: 'already' };
   const m = await getMember(ctx.db, memberId);
+  if (ageRole === 'minor' || (ageRole === 'adult' && m?.ageGroup === 'minor')) {
+    const r = await submitApplication(ctx.db, { memberId, kind: 'yoimairi', answers: { ageRole } });
+    if (r.status !== 'created') return r;
+    await decide(ctx, SYSTEM, r.id, false, ageRole === 'minor' ? '自動却下（17 歳以下のロール）' : '自動却下（13〜17 歳と記録されている）');
+    return { status: 'auto_rejected', id: r.id };
+  }
+  if (ageRole === 'adult' && m) {
+    if (m.ageGroup !== 'adult') await setAgeGroup(ctx.db, memberId, 'adult');
+    const r = await submitApplication(ctx.db, { memberId, kind: 'yoimairi', answers: { ageRole } });
+    if (r.status !== 'created') return r;
+    const d = await decide(ctx, SYSTEM, r.id, true, '自動承認（18 歳以上のロール）');
+    return d.status === 'approved' ? { status: 'auto_approved', id: r.id, dmSent: d.dmSent } : { status: 'pending', id: r.id };
+  }
   if (m?.ageGroup !== 'adult') return { status: 'not_adult' };
   const r = await submitApplication(ctx.db, { memberId, kind: 'yoimairi', answers: {} });
   return r.status === 'created' ? { status: 'pending', id: r.id } : r;
