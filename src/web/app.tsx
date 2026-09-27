@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { channelsOf, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
+import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { inviteCountOf, inviterOf } from '../services/invites.js';
 import { STATIC } from './assets.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
@@ -277,6 +279,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
   app.use('/stats', requireAdmin);
+  app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
   app.use('/market', requireAdmin);
@@ -336,7 +339,16 @@ export function createWebApp(deps: WebDeps) {
     const member = await getMember(db, id);
     if (!member) return c.html(<NotFoundPage session={c.get('session')} />, 404);
     const session = c.get('session');
-    const [apps, omairiRow, invitedBy, inviteCount] = await Promise.all([applicationsOf(db, id), getOmairi(db, id), inviterOf(db, id), inviteCountOf(db, id)]);
+    const since30 = sinceDate(now(), 30);
+    const [apps, omairiRow, invitedBy, inviteCount, vcChannels, vcPartners] = await Promise.all([
+      applicationsOf(db, id),
+      getOmairi(db, id),
+      inviterOf(db, id),
+      inviteCountOf(db, id),
+      channelsOf(db, id, since30),
+      partnersOf(db, id, since30),
+    ]);
+    const vcByCategory = (await usageByMember(db, since30)).find((m) => m.memberId === id);
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
       shuinHistory(db, id),
@@ -359,6 +371,7 @@ export function createWebApp(deps: WebDeps) {
       ...memoRows.map((m) => m.authorId),
       ...apps.map((a) => a.reviewedBy ?? ''),
       invitedBy ?? '',
+      ...vcPartners.map((p) => p.memberId),
     ]);
     const flash = c.req.query('msg');
     return c.html(
@@ -376,6 +389,13 @@ export function createWebApp(deps: WebDeps) {
         moderation={
           <>
           {flash && Object.hasOwn(ADMISSION_FLASH, flash) && !Object.hasOwn(FLASH, flash) && <p class={`flash ${ADMISSION_FLASH[flash]!.kind}`}>{ADMISSION_FLASH[flash]!.text}</p>}
+          <MemberVoiceSection
+            total={vcByCategory?.total ?? 0}
+            byCategory={vcByCategory?.byCategory ?? []}
+            channels={vcChannels}
+            partners={vcPartners}
+            names={names}
+          />
           <MemberAdmissionSection
             session={session}
             cfg={cfg}
@@ -422,6 +442,37 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // ───────── 推移（グラフ） ─────────
+
+  // 通話の記録（浮上時間）: 人ごと・カテゴリごと・よくいっしょにいる 2 人・自分の通話部屋
+  app.get('/voice', async (c) => {
+    const d = Number(c.req.query('days'));
+    const days: VoiceRange = d === 7 || d === 90 ? d : 30;
+    const cat = c.req.query('cat');
+    const t = now();
+    const since = sinceDate(t, days);
+    const [categories, members, pairs, rooms, channels] = await Promise.all([
+      usageByCategory(db, since),
+      usageByMember(db, since),
+      topPairs(db, since),
+      roomHistory(db, new Date(t.getTime() - days * 86_400_000)),
+      loadChannels(),
+    ]);
+    const names = await namesOf(db, [...members.map((m) => m.memberId), ...pairs.flatMap((p) => [p.memberA, p.memberB]), ...rooms.map((r) => r.ownerId ?? '')]);
+    const hubNames = new Map(cfg.tempVoice.hubs.map((h) => [h.channelId, channels.find((ch) => ch.id === h.channelId)?.name ?? h.name]));
+    return c.html(
+      <VoicePage
+        session={c.get('session')}
+        days={days}
+        category={cat && /^(\d{17,20}|none)$/.test(cat) ? cat : undefined}
+        categories={categories}
+        members={members}
+        pairs={pairs}
+        rooms={rooms}
+        hubNames={hubNames}
+        names={names}
+      />,
+    );
+  });
 
   app.get('/stats', async (c) => {
     const q = c.req.query('range');

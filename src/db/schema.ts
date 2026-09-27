@@ -567,3 +567,44 @@ export const intros = pgTable('intros', {
 });
 
 export type Intro = typeof intros.$inferSelect;
+
+/** 通話にいた時間（人 × 日 × 通話チャンネル。1 分ごとに足す。AFK はのぞく） */
+export const voiceUsage = pgTable(
+  'voice_usage',
+  {
+    memberId: text('member_id').notNull(),
+    /** 日本時間の日付（YYYY-MM-DD） */
+    date: text('date').notNull(),
+    channelId: text('channel_id').notNull(),
+    minutes: integer('minutes').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date)],
+);
+
+/** 同じ通話にいた時間（2 人 × 日。member_a < member_b） */
+export const voicePairs = pgTable(
+  'voice_pairs',
+  {
+    memberA: text('member_a').notNull(),
+    memberB: text('member_b').notNull(),
+    date: text('date').notNull(),
+    minutes: integer('minutes').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberA, t.memberB, t.date] }), index('voice_pairs_b_idx').on(t.memberB), index('voice_pairs_date_idx').on(t.date)],
+);
+
+/** 通話チャンネルの記録（名前・カテゴリ。自分の通話部屋は、消えたあとも作った人・種類が分かるように） */
+export const voiceChannels = pgTable('voice_channels', {
+  channelId: text('channel_id').primaryKey(),
+  name: text('name').notNull(),
+  categoryId: text('category_id'),
+  categoryName: text('category_name'),
+  /** 自分の通話部屋のとき: 入口・作った人・種類 */
+  hubId: text('hub_id'),
+  ownerId: text('owner_id'),
+  kind: text('kind'),
+  firstSeen: timestamp('first_seen', { withTimezone: true }).notNull().defaultNow(),
+  lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type VoiceChannelRow = typeof voiceChannels.$inferSelect;

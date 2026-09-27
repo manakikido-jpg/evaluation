@@ -825,6 +825,22 @@ describe('運営から花びらを送る（管理画面）', () => {
   });
 });
 
+describe('通話の記録（管理画面）', () => {
+  it('運営が見られる。カテゴリで絞ると、その場所が多い順。メンバーのページにも出る', async () => {
+    const { recordPresence } = await import('../src/services/voiceUsage.js');
+    await recordPresence(db, [{ id: '990000000000000001', name: '宵宮', categoryId: '990000000000000010', categoryName: '🔞 宵宮', memberIds: [USER, STAFF] }], clock);
+    const s = await login(STAFF);
+    const page = await (await get('/voice', s)).text();
+    expect(page).toContain('🔞 宵宮');
+    expect(page).toContain('よくいっしょにいる 2 人');
+    const filtered = await (await get('/voice?days=7&cat=990000000000000010', s)).text();
+    expect(filtered).toContain('🔞 宵宮 が多い順');
+    const member = await (await get(`/members/${USER}`, s)).text();
+    expect(member).toContain('通話の記録（30 日）');
+    expect(member).toContain('1分');
+  });
+});
+
 describe('ニックネーム（管理画面）', () => {
   it('運営がメンバーのニックネームを変えられる（上の運営は変えられない）', async () => {
     const s = await login(STAFF);

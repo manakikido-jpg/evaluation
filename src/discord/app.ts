@@ -9,6 +9,7 @@ import {
   type Message,
   type UserContextMenuCommandInteraction,
 } from 'discord.js';
+import { recordPresence } from '../services/voiceUsage.js';
 import { genderOfRoles } from '../services/admission.js';
 import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../services/contact.js';
 import { introOf, introUrl } from '../services/intros.js';
@@ -119,6 +120,18 @@ export class ShuinApp {
         id: c.id,
         members: [...c.members.values()].map((m) => ({ id: m.id, bot: m.user.bot, deaf: Boolean(m.voice.deaf) })),
       }));
+    // 通話の記録（浮上時間）: AFK 以外の通話にいる人（BOT をのぞく）。1 人でも記録する
+    const presence = [...guild.channels.cache.values()]
+      .filter((c) => c.isVoiceBased() && c.id !== guild.afkChannelId)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        categoryId: c.parentId ?? null,
+        categoryName: c.parent?.name ?? null,
+        memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [],
+      }));
+    await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
+
     const ids = eligibleVoiceMembers(channels, excluded);
     if (!ids.length) return;
     // コアタイム中は、10 分ごとの花びらが増える

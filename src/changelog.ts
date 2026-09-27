@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-voice-usage',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '通話の記録（浮上時間）',
+    items: [
+      '1 分ごとに、だれがどの通話に何分いたか・だれといっしょだったかを記録（AFK はのぞく）',
+      '社務所Web の「通話の記録」: カテゴリごとの時間、その場所が多い人（例: 宵宮に長くいる人）、人ごとの浮上時間、よくいっしょにいる 2 人、宿坊・宵宮などの部屋ごとの使われ方と部屋代',
+      'メンバーのページに「通話の記録（30 日）」',
+    ],
+  },
+  {
     id: '2026-09-27-nickname-lock',
     date: '2026-09-27',
     kind: 'new',

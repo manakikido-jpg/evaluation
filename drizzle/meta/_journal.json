@@ -176,6 +176,13 @@
       "when": 1790475328375,
       "tag": "0024_intros",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790479237906,
+      "tag": "0025_voice_usage",
+      "breakpoints": true
     }
   ]
 }
