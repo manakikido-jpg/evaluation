@@ -560,9 +560,13 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       form[`rank.${r.key}.weight`] = String(r.weight);
       if (r.auto) form[`rank.${r.key}.requiredGoen`] = String(r.requiredGoen);
     }
+    // 物御籤の値（物御籤のページで変える）は、設定を保存しても残る
+    const { saveOverrides, overridesSchema: os } = await import('../src/services/settings.js');
+    await saveOverrides(db, os.parse({ gacha: { price: 777, enabled: false } }), GUJI);
     const res = await post('/settings', g, form);
     expect(res.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.economy.menzaifuPrice).toBe(800);
+    expect(store.current.gacha).toMatchObject({ price: 777, enabled: false });
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
 
     // 項目の下の「保存する」（通話部屋の値段など）は、その項目に戻って「保存しました」を出す
@@ -987,15 +991,76 @@ describe('物御籤（管理画面）', () => {
     const res = await get('/gacha', s);
     expect(res.status).toBe(200);
     const html = await res.text();
-    for (const t of ['🎁 物御籤', '引かれた回数', '最近の大吉', 'よく引いている人', '券を持っている人', '部屋代無料券', '絵馬のピン留め券', '50%', `/members/${USER}`]) expect(html).toContain(t);
-    // 設定へのリンクは宮司だけ
-    expect(html).not.toContain('/settings#sec-gacha');
-    expect(await (await get('/gacha', await login(GUJI))).text()).toContain('/settings#sec-gacha');
+    for (const t of ['🎁 物御籤', '引かれた回数', '最近の大吉', 'よく引いている人', '券を持っている人', '部屋代無料券', '絵馬のピン留め券', '50%', `/members/${USER}`, '🟢 いま引けます'])
+      expect(html).toContain(t);
+    // 変えるフォームは宮司だけ
+    expect(html).not.toContain('action="/gacha/');
+    const guji = await (await get('/gacha', await login(GUJI))).text();
+    for (const t of ['action="/gacha/toggle"', 'action="/gacha/settings"', 'action="/gacha/prizes"', '物御籤を止める']) expect(guji).toContain(t);
     // メンバーのページにも（券を渡すフォームは宮司だけ）
     const member = await (await get(`/members/${USER}`, s)).text();
     expect(member).toContain('🎁 物御籤');
     expect(member).toContain('引いた回数 <strong>2</strong>');
     expect(member).not.toContain('/tickets"');
+  });
+
+  it('ON/OFF・値段・天井・出やすさを変える（宮司のみ）', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const s = await login(STAFF);
+    expect((await post(s, '/gacha/toggle', { enabled: 'no' })).status).toBe(403);
+    const g = await login(GUJI);
+    expect((await post(g, '/gacha/toggle', { enabled: 'no' })).headers.get('location')).toBe('/gacha?msg=gacha_off#gacha-basic');
+    expect(store.current.gacha.enabled).toBe(false);
+    expect(await (await get('/gacha', g)).text()).toContain('物御籤を始める');
+    const rates = { 'rate.daikichi': '10', 'rate.chukichi': '20', 'rate.shokichi': '30', 'rate.kichi': '40' };
+    expect((await post(g, '/gacha/settings', { price: '300', pity: '0', ...rates })).headers.get('location')).toBe('/gacha?msg=gacha_saved#gacha-basic');
+    expect(store.current.gacha).toMatchObject({ enabled: false, price: 300, pity: 0, rates: { daikichi: 10, kichi: 40 } });
+    expect((await post(g, '/gacha/settings', { price: '0', pity: '0', ...rates })).headers.get('location')).toContain('gacha_invalid');
+    expect((await post(g, '/gacha/settings', { price: '300', pity: '0', 'rate.daikichi': '0', 'rate.chukichi': '0', 'rate.shokichi': '0', 'rate.kichi': '0' })).headers.get('location')).toContain(
+      'gacha_invalid',
+    );
+    expect((await post(g, '/gacha/toggle', { enabled: 'yes' })).headers.get('location')).toContain('gacha_on');
+    expect(store.current.gacha).toMatchObject({ enabled: true, price: 300 });
+    expect((await listAudit(db, { action: 'gacha.settings' })).length).toBe(3);
+  });
+
+  it('中身を足す・変える・ON/OFF・削除する（宮司のみ。ショップのロールの品も出せる）', async () => {
+    const { listPrizes } = await import('../src/services/gacha.js');
+    const { createItem } = await import('../src/services/shop.js');
+    const item = await createItem(db, { kind: 'role', name: '色守り（桜）', emoji: '🌸', description: '', price: 1500, roleId: '100000000000000081', roleGroup: 'color', durationDays: 30, enabled: false });
+    const hana = await createItem(db, { kind: 'hanafubuki', name: '花吹雪', emoji: '🌸', description: '', price: 300 });
+    const s = await login(STAFF);
+    expect((await post(s, '/gacha/prizes', { tier: 'kichi', kind: 'coins', amount: '100', weight: '1' })).status).toBe(403);
+    const g = await login(GUJI);
+    await get('/gacha', g);
+    const before = (await listPrizes(db)).length;
+    const add = async (form: Record<string, string>) => (await post(g, '/gacha/prizes', form)).headers.get('location');
+    expect(await add({ tier: 'kichi', kind: 'coins', amount: '100', weight: '2' })).toBe('/gacha?msg=prize_added#gacha-prizes');
+    expect(await add({ tier: 'daikichi', kind: 'shop', shopItemId: String(item.id), weight: '1', fallback: 'yes' })).toContain('prize_added');
+    expect(await add({ tier: 'daikichi', kind: 'role', roleId: '100000000000000091', weight: '1' })).toContain('prize_added');
+    expect(await add({ tier: 'chukichi', kind: 'ticket', ticket: 'ema_pin', amount: '2', weight: '1' })).toContain('prize_added');
+    // おかしな入力は足さない（花吹雪はロールの品ではない・ロールなし・重み 0）
+    expect(await add({ tier: 'kichi', kind: 'shop', shopItemId: String(hana.id), weight: '1' })).toContain('prize_invalid');
+    expect(await add({ tier: 'kichi', kind: 'role', roleId: '', weight: '1' })).toContain('prize_invalid');
+    expect(await add({ tier: 'kichi', kind: 'coins', amount: '10', weight: '0' })).toContain('prize_invalid');
+    expect(await add({ tier: 'nope', kind: 'coins', amount: '10', weight: '1' })).toContain('prize_invalid');
+    const list = await listPrizes(db);
+    expect(list.length).toBe(before + 4);
+    const coins = list.find((p) => p.kind === 'coins')!;
+    expect(coins).toMatchObject({ tier: 'kichi', amount: 100, weight: 2, fallback: false, enabled: true });
+    expect(list.find((p) => p.kind === 'shop')).toMatchObject({ shopItemId: item.id, fallback: true });
+    expect(await (await get('/gacha', g)).text()).toContain('色守り（桜）');
+
+    expect((await post(g, `/gacha/prizes/${coins.id}`, { amount: '250', weight: '5', fallback: 'yes' })).headers.get('location')).toContain('prize_saved');
+    expect((await post(g, `/gacha/prizes/${coins.id}/toggle`, {})).headers.get('location')).toContain('prize_off');
+    expect((await listPrizes(db)).find((p) => p.id === coins.id)).toMatchObject({ amount: 250, weight: 5, fallback: true, enabled: false });
+    expect((await post(g, `/gacha/prizes/${coins.id}/toggle`, {})).headers.get('location')).toContain('prize_on');
+    expect((await post(g, `/gacha/prizes/${coins.id}/delete`, {})).headers.get('location')).toContain('prize_deleted');
+    expect((await post(g, `/gacha/prizes/${coins.id}/delete`, {})).headers.get('location')).toContain('prize_not_found');
+    expect((await listPrizes(db)).some((p) => p.id === coins.id)).toBe(false);
+    expect((await listAudit(db, { action: 'gacha.prize_add' })).length).toBe(4);
   });
 
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {

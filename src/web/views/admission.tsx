@@ -1,6 +1,4 @@
-import { GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig } from '../../config.js';
-import { gachaRates, TIER_LABEL } from '../../services/gacha.js';
-import { TICKET_LABEL } from '../../services/tickets.js';
+import type { GachaTier, GuildConfig } from '../../config.js';
 import { contactSummary } from '../../services/contact.js';
 import type { AdminSession, Application, Omairi, Soudan, SoudanMessage } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
@@ -704,104 +702,10 @@ export function SettingsPage(props: {
         <section class="card anchor" id="sec-gacha">
           <h2>🎁 物御籤</h2>
           <p class="note">
-            {e.currencyName}で引くくじです（本物のお金は扱いません）。<code>/物御籤</code> か、<code>/パネル 物御籤</code> で置いたボタンから引けます。大吉は #おみくじ
-            でお祝いします。券は使う場面で自動で使われます（部屋代無料券: 宿坊はその部屋の部屋代・宵宮は 1 時間分 ／ 絵馬のピン留め券: 授与所の「絵馬の奉納」 ／
-            市場の手数料なし券: 市場で売れたとき）。
+            物御籤の ON/OFF・値段・天井・出やすさ・中身（限定ロール・券・{e.currencyName}・ショップの品）は、<a href="/gacha">🎁 物御籤</a> のページで変えられます。
+            {cfg.gacha.enabled ? ` いまは 1 回 ${cfg.gacha.price.toLocaleString('ja-JP')} 枚で引けます。` : ' いまはお休み中です。'}
+            {props.gachaStats && ` これまで ${props.gachaStats.total.toLocaleString('ja-JP')} 回引かれました。`}
           </p>
-          <div class="fields">
-            <label class="field check">
-              <input type="checkbox" name="gachaEnabled" value="yes" checked={cfg.gacha.enabled} />
-              <span>物御籤を引けるようにする</span>
-            </label>
-            <label class="field">
-              <span>1 回の値段（{e.currencyName}。10 連は 10 倍）</span>
-              <input type="number" name="gachaPrice" value={String(cfg.gacha.price)} min={1} max={1000000} required />
-            </label>
-            <label class="field">
-              <span>天井（大吉が出ないまま、この回数目は必ず大吉。0 でなし）</span>
-              <input type="number" name="gachaPity" value={String(cfg.gacha.pity)} min={0} max={1000} required />
-            </label>
-          </div>
-          <table class="compact">
-            <thead>
-              <tr>
-                <th>運勢</th>
-                <th>出やすさ（いまの割合）</th>
-                <th>限定ロール</th>
-                <th>券</th>
-                <th>枚数</th>
-                <th>{e.currencyName}（おまけ）</th>
-              </tr>
-            </thead>
-            <tbody>
-              {GACHA_TIERS.map((t) => {
-                const p = cfg.gacha.prizes[t];
-                return (
-                  <tr>
-                    <td>
-                      {TIER_LABEL[t].emoji} {TIER_LABEL[t].name}
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        name={`gacha.${t}.rate`}
-                        value={String(cfg.gacha.rates[t])}
-                        min={0}
-                        max={1000}
-                        required
-                        aria-label={`${TIER_LABEL[t].name} 出やすさ`}
-                      />{' '}
-                      <small>{gachaRates(cfg.gacha)[t]}%</small>
-                    </td>
-                    <td>
-                      <label class="field check">
-                        <input type="checkbox" name={`gacha.${t}.role`} value="yes" checked={p.role} />
-                        <span>出す</span>
-                      </label>
-                    </td>
-                    <td>
-                      <select name={`gacha.${t}.ticket`} aria-label={`${TIER_LABEL[t].name} 券`}>
-                        <option value="none" selected={p.ticket === 'none'}>
-                          なし
-                        </option>
-                        {TICKET_KINDS.map((k) => (
-                          <option value={k} selected={p.ticket === k}>
-                            {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input type="number" name={`gacha.${t}.count`} value={String(p.count)} min={0} max={10} required aria-label={`${TIER_LABEL[t].name} 枚数`} />
-                    </td>
-                    <td>
-                      <input type="number" name={`gacha.${t}.coins`} value={String(p.coins)} min={0} max={1000000} required aria-label={`${TIER_LABEL[t].name} おまけ`} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p class="note">
-            「限定ロール」に印を付けた運勢は、下で選んだロールのうち、まだ持っていないものを 1
-            つ出します（そのときは券は出ません）。全部持っているとき・ロールを選んでいないときは、券を出します。
-          </p>
-          <fieldset class="perms">
-            <legend>物御籤限定のロール（色守り・称号。BOT のロールより下に置いてください）</legend>
-            {(props.roles ?? []).map((r) => (
-              <label class="field check">
-                <input type="checkbox" name="gachaRoles" value={r.id} checked={cfg.gacha.roleIds.includes(r.id)} />
-                <span>{r.name}</span>
-              </label>
-            ))}
-          </fieldset>
-          {props.gachaStats && (
-            <p class="note">
-              これまで: {props.gachaStats.total.toLocaleString('ja-JP')} 回（{props.gachaStats.players} 人・{props.gachaStats.spent.toLocaleString('ja-JP')} 枚）
-              {GACHA_TIERS.map((t) => ` ／ ${TIER_LABEL[t].name} ${props.gachaStats!.byTier[t]}`).join('')}
-            </p>
-          )}
-          <Save at="gacha" />
         </section>
         <section class="card anchor" id="sec-coretime">
           <h2>🏮 コアタイム</h2>

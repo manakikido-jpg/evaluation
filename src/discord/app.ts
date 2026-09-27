@@ -22,6 +22,7 @@ import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
 import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
 import { ticketLine, ticketsOf } from '../services/tickets.js';
+import { listPrizes } from '../services/gacha.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
@@ -295,6 +296,9 @@ export class ShuinApp {
       return l ? `${CONTACT_LEVEL_EMOJI[l]} ${CONTACT_LEVEL_LABEL[l]}` : undefined;
     };
     const intro = await introOf(this.db, owner.id).catch(() => undefined);
+    // 物御籤の中身の限定ロール（まだ中身を作っていなければ設定の roleIds）
+    const prizeRoles = (await listPrizes(this.db).catch(() => [])).flatMap((p) => (p.kind === 'role' && p.roleId ? [p.roleId] : []));
+    const gachaRoles = [...new Set([...prizeRoles, ...this.cfg.gacha.roleIds])];
     // バナーは、ユーザーを取り直さないと分からない（なければ出さない）
     let bannerUrl: string | undefined;
     try {
@@ -312,7 +316,7 @@ export class ShuinApp {
       titles: [
         ...this.cfg.shop.titles.filter((t) => roleIds.includes(t.roleId)).map((t) => `${t.emoji}${t.name}`),
         // 物御籤限定のロール
-        ...this.cfg.gacha.roleIds
+        ...gachaRoles
           .filter((id) => roleIds.includes(id))
           .map((id) => owner.guild.roles.cache.get(id)?.name ?? '')
           .filter(Boolean),

@@ -26,6 +26,7 @@ export type CoinReason =
   | 'room'
   | 'gacha'
   | 'gacha_prize'
+  | 'gacha_refund'
   | 'market_buy'
   | 'market_sell'
   | 'market_refund'

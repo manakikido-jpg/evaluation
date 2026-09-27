@@ -7,8 +7,22 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
-import { adminLevelOf, GACHA_TIERS, TICKET_KINDS, type GuildConfig, type TicketKind } from '../config.js';
-import { gachaStateOf, gachaStats, recentDraws, topPlayers } from '../services/gacha.js';
+import { adminLevelOf, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
+import {
+  createPrize,
+  deletePrize,
+  ensureGachaPrizes,
+  gachaStateOf,
+  gachaStats,
+  giftableShopItem,
+  listPrizes,
+  PRIZE_KINDS,
+  recentDraws,
+  topPlayers,
+  updatePrize,
+  type PrizeInput,
+  type PrizeKind,
+} from '../services/gacha.js';
 import { addTickets, ticketHolders, ticketsOf, takeTickets, TICKET_LABEL } from '../services/tickets.js';
 import { GachaPage, GACHA_FLASH, MemberGachaSection } from './views/gacha.js';
 import type { Db } from '../db/client.js';
@@ -40,7 +54,7 @@ import { ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, 
 import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecidedApplications } from '../services/applications.js';
 import { changeAgeGroup, closeSoudan, decide, decideOmairi, removeYoimairi, replySoudan, revealSoudanSender, type OmairiAction } from '../services/admission.js';
 import { getSoudan, listSoudan, soudanMessagesOf } from '../services/soudan.js';
-import { applyOverrides, overridesSchema, saveOverrides, type Overrides } from '../services/settings.js';
+import { applyOverrides, loadOverrides, overridesSchema, saveOverrides, type Overrides } from '../services/settings.js';
 import {
   createNotice,
   deleteNotice,
@@ -287,7 +301,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/roles', requireAdmin);
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*', '/gacha/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -935,29 +949,8 @@ export function createWebApp(deps: WebDeps) {
             },
           }
         : {}),
-      // 物御籤（フォームにあるときだけ）
-      ...(typeof body.gachaPrice === 'string'
-        ? {
-            gacha: {
-              enabled: body.gachaEnabled === 'yes',
-              price: num('gachaPrice'),
-              pity: num('gachaPity'),
-              rates: Object.fromEntries(GACHA_TIERS.map((t) => [t, num(`gacha.${t}.rate`)])),
-              roleIds: ids('gachaRoles'),
-              prizes: Object.fromEntries(
-                GACHA_TIERS.map((t) => [
-                  t,
-                  {
-                    role: body[`gacha.${t}.role`] === 'yes',
-                    ticket: field(body, `gacha.${t}.ticket`, 20),
-                    count: num(`gacha.${t}.count`),
-                    coins: num(`gacha.${t}.coins`),
-                  },
-                ]),
-              ),
-            },
-          }
-        : {}),
+      // 物御籤は「物御籤」のページで変える（ここでは今の値を残す）
+      gacha: (await loadOverrides(db)).gacha,
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'
         ? {
@@ -1642,29 +1635,144 @@ export function createWebApp(deps: WebDeps) {
   // ───────── 物御籤 ─────────
 
   app.get('/gacha', async (c) => {
-    const [stats, draws, tops, players, holders, roleNames] = await Promise.all([
+    await ensureGachaPrizes(db, cfg.gacha);
+    const [stats, draws, tops, players, holders, prizes, items, guildRoles] = await Promise.all([
       gachaStats(db),
       recentDraws(db, { limit: 100 }),
       recentDraws(db, { limit: 20, topOnly: true }),
       topPlayers(db),
       ticketHolders(db),
-      roleNameMap(),
+      listPrizes(db),
+      listShopItems(db),
+      loadRoles(),
     ]);
     const names = await namesOf(db, [...draws.map((d) => d.memberId), ...tops.map((d) => d.memberId), ...players.map((p) => p.memberId), ...holders.map((h) => h.memberId)]);
+    const roles = (guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
     return c.html(
       <GachaPage
         session={c.get('session')}
         gacha={cfg.gacha}
         coinName={cfg.economy.currencyName}
         stats={stats}
+        prizes={prizes}
+        shopItems={items.filter(giftableShopItem)}
+        roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         draws={draws}
         tops={tops}
         players={players}
         holders={holders}
         names={names}
-        roleNames={roleNames}
+        roleNames={new Map((guildRoles ?? []).map((r) => [r.id, r.name]))}
+        flash={c.req.query('msg')}
       />,
     );
+  });
+
+  /** 物御籤の設定（値段・天井・出やすさ・ON/OFF）を保存する。おかしければ false */
+  const saveGacha = async (c: Context<Env>, patch: Partial<GuildConfig['gacha']>): Promise<boolean> => {
+    const current = await loadOverrides(db);
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, gacha: { ...cfg.gacha, ...patch } });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return false;
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.settings', detail: patch, via: 'web' });
+    return true;
+  };
+  const gachaBack = (c: Context<Env>, msg: string, at = 'gacha-basic') => c.redirect(`/gacha?msg=${msg}#${at}`);
+
+  app.post('/gacha/toggle', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const enabled = (await c.req.parseBody()).enabled === 'yes';
+    return gachaBack(c, (await saveGacha(c, { enabled })) ? (enabled ? 'gacha_on' : 'gacha_off') : 'gacha_invalid');
+  });
+
+  app.post('/gacha/settings', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const num = (k: string) => Number(typeof body[k] === 'string' && body[k] !== '' ? body[k] : NaN);
+    const patch = {
+      price: num('price'),
+      pity: num('pity'),
+      rates: Object.fromEntries(GACHA_TIERS.map((t) => [t, num(`rate.${t}`)])) as GuildConfig['gacha']['rates'],
+    };
+    return gachaBack(c, (await saveGacha(c, patch)) ? 'gacha_saved' : 'gacha_invalid');
+  });
+
+  /** 中身の枚数・重み（おかしければ undefined） */
+  const prizeNumbers = (body: Record<string, unknown>, kind: PrizeKind) => {
+    const n = (k: string) => (typeof body[k] === 'string' && body[k] !== '' ? Number(body[k]) : NaN);
+    const weight = n('weight');
+    const amount = kind === 'ticket' || kind === 'coins' ? n('amount') : 1;
+    const maxAmount = kind === 'coins' ? 1_000_000 : 100;
+    if (!Number.isInteger(weight) || weight < 1 || weight > 10_000 || !Number.isInteger(amount) || amount < 1 || amount > maxAmount) return undefined;
+    return { weight, amount, fallback: body.fallback === 'yes' };
+  };
+
+  app.post('/gacha/prizes', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const tier = body.tier as GachaTier;
+    const kind = body.kind as PrizeKind;
+    if (!GACHA_TIERS.includes(tier) || !PRIZE_KINDS.includes(kind)) return gachaBack(c, 'prize_invalid', 'gacha-add');
+    const nums = prizeNumbers(body, kind);
+    if (!nums) return gachaBack(c, 'prize_invalid', 'gacha-add');
+    const input: PrizeInput = { tier, kind, ...nums };
+    if (kind === 'role') {
+      const roleId = typeof body.roleId === 'string' ? body.roleId : '';
+      if (!validId(roleId) || roleId === cfg.guildId) return gachaBack(c, 'prize_invalid', 'gacha-add');
+      input.roleId = roleId;
+    } else if (kind === 'ticket') {
+      if (!TICKET_KINDS.includes(body.ticket as TicketKind)) return gachaBack(c, 'prize_invalid', 'gacha-add');
+      input.ticket = body.ticket as TicketKind;
+    } else if (kind === 'shop') {
+      const item = await getShopItem(db, Number(body.shopItemId));
+      if (!item || !giftableShopItem(item)) return gachaBack(c, 'prize_invalid', 'gacha-add');
+      input.shopItemId = item.id;
+    }
+    const row = await createPrize(db, input);
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_add', detail: { ...input, id: row.id }, via: 'web' });
+    return gachaBack(c, 'prize_added', 'gacha-prizes');
+  });
+
+  const prizeId = (c: Context<Env>) => {
+    const id = Number(c.req.param('id'));
+    return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+  };
+
+  app.post('/gacha/prizes/:id', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = prizeId(c);
+    const row = id ? (await listPrizes(db)).find((p) => p.id === id) : undefined;
+    if (!row) return gachaBack(c, 'prize_not_found', 'gacha-prizes');
+    const nums = prizeNumbers(await c.req.parseBody(), row.kind);
+    if (!nums) return gachaBack(c, 'prize_invalid', 'gacha-prizes');
+    await updatePrize(db, row.id, nums);
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_update', detail: { id: row.id, ...nums }, via: 'web' });
+    return gachaBack(c, 'prize_saved', 'gacha-prizes');
+  });
+
+  app.post('/gacha/prizes/:id/toggle', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = prizeId(c);
+    const row = id ? (await listPrizes(db)).find((p) => p.id === id) : undefined;
+    if (!row) return gachaBack(c, 'prize_not_found', 'gacha-prizes');
+    await updatePrize(db, row.id, { enabled: !row.enabled });
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_toggle', detail: { id: row.id, enabled: !row.enabled }, via: 'web' });
+    return gachaBack(c, row.enabled ? 'prize_off' : 'prize_on', 'gacha-prizes');
+  });
+
+  app.post('/gacha/prizes/:id/delete', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = prizeId(c);
+    const row = id ? await deletePrize(db, id) : undefined;
+    if (!row) return gachaBack(c, 'prize_not_found', 'gacha-prizes');
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_delete', detail: { ...row }, via: 'web' });
+    return gachaBack(c, 'prize_deleted', 'gacha-prizes');
   });
 
   app.get('/market', async (c) => {

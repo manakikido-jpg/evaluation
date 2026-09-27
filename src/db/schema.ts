@@ -675,9 +675,41 @@ export const gachaDraws = pgTable(
     ticket: text('ticket'),
     ticketCount: integer('ticket_count').notNull().default(0),
     coins: integer('coins').notNull().default(0),
+    /** 出た中身（gacha_prizes） */
+    prizeId: bigint('prize_id', { mode: 'number' }),
+    /** ショップの品が出たとき */
+    shopItemId: integer('shop_item_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('gacha_draws_member_idx').on(t.memberId, t.createdAt)],
 );
 
 export type GachaDraw = typeof gachaDraws.$inferSelect;
+
+/**
+ * 物御籤の中身（運勢ごとにいくつでも）。運勢が決まったら、その運勢の中から重みで 1 つ選ぶ。
+ * kind: role 限定ロール / ticket 券 / coins 花びら / shop ショップのロールの品（色守り・称号など）
+ */
+export const gachaPrizes = pgTable(
+  'gacha_prizes',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    tier: text('tier').$type<'daikichi' | 'chukichi' | 'shokichi' | 'kichi'>().notNull(),
+    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop'>().notNull(),
+    roleId: text('role_id'),
+    ticket: text('ticket').$type<'room_free' | 'ema_pin' | 'market_nofee'>(),
+    shopItemId: integer('shop_item_id'),
+    /** 券の枚数・花びらの枚数 */
+    amount: integer('amount').notNull().default(1),
+    /** 同じ運勢の中での出やすさ */
+    weight: integer('weight').notNull().default(1),
+    /** ほかの中身が出せないとき（ロールを全部持っているなど）だけ出す */
+    fallback: boolean('fallback').notNull().default(false),
+    enabled: boolean('enabled').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('gacha_prizes_tier_idx').on(t.tier, t.position)],
+);
+
+export type GachaPrizeRow = typeof gachaPrizes.$inferSelect;

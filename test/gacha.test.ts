@@ -1,11 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { gachaSchema, type GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
-import { gachaDraws, members, tempVoice } from '../src/db/schema.js';
-import { gachaMenu, prizeText, pullLine } from '../src/discord/gacha.js';
+import { gachaDraws, members, shopPurchases, tempVoice } from '../src/db/schema.js';
+import { gachaMenu, pullLine, tierPrizeText } from '../src/discord/gacha.js';
 import { panelMessage } from '../src/discord/panels.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { drawGacha, gachaRates, gachaStateOf, gachaStats, pickTier, untilPity } from '../src/services/gacha.js';
+import {
+  createPrize,
+  deletePrize,
+  drawGacha,
+  effectiveRates,
+  ensureGachaPrizes,
+  gachaRates,
+  gachaStateOf,
+  gachaStats,
+  listPrizes,
+  pickTier,
+  prizeChances,
+  untilPity,
+  updatePrize,
+} from '../src/services/gacha.js';
 import { buyListing, createListing, releaseOrder } from '../src/services/market.js';
 import { changeRoomKind, payEntry, roomOf, startRoom } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
@@ -93,7 +107,7 @@ describe('引く', () => {
     const r2 = await drawGacha(db, g, U, 1, [], () => 0.2);
     const r3 = await drawGacha(db, g, U, 1, [], () => 0.1);
     if (r1.status !== 'ok' || r2.status !== 'ok' || r3.status !== 'ok') throw new Error('draw');
-    expect(r1.pulls[0]).toEqual({ tier: 'kichi', pity: false, ticket: 'ema_pin', count: 1, coins: 0 });
+    expect(r1.pulls[0]).toMatchObject({ tier: 'kichi', pity: false, kind: 'ticket', ticket: 'ema_pin', count: 1, coins: 0 });
     expect(r2.pulls[0]).toMatchObject({ tier: 'shokichi', ticket: 'market_nofee' });
     expect(r3.pulls[0]).toMatchObject({ tier: 'chukichi', ticket: 'room_free' });
     expect(r3.tickets).toEqual({ room_free: 1, ema_pin: 1, market_nofee: 1 });
@@ -111,8 +125,9 @@ describe('引く', () => {
     if (b.status !== 'ok') throw new Error(b.status);
     expect(b.pulls[0]).toMatchObject({ tier: 'daikichi', ticket: 'room_free', count: 3 });
     expect(b.pulls[0]?.roleId).toBeUndefined();
-    // ロールを選んでいなければ券
-    const c = await drawGacha(db, { ...g, roleIds: [] }, U, 1, [], () => 0);
+    // ロールの中身を消せば券
+    for (const p of (await listPrizes(db)).filter((x) => x.kind === 'role')) await deletePrize(db, p.id);
+    const c = await drawGacha(db, g, U, 1, [], () => 0);
     if (c.status !== 'ok') throw new Error(c.status);
     expect(c.pulls[0]).toMatchObject({ ticket: 'room_free', count: 3 });
     expect((await ticketsOf(db, U)).room_free).toBe(6);
@@ -154,6 +169,103 @@ describe('引く', () => {
     const gg = { ...g, prizes: { ...g.prizes, kichi: { role: false, ticket: 'none' as const, count: 0, coins: 100 } } };
     const r = await drawGacha(db, gg, U, 1, [], () => 0.99);
     expect(r).toMatchObject({ status: 'ok', balance: 100, pulls: [{ tier: 'kichi', coins: 100, count: 0 }] });
+  });
+});
+
+describe('中身（社務所Web で変える）', () => {
+  it('最初の中身は設定から 1 回だけ作る（全部消しても作り直さない）', async () => {
+    await ensureGachaPrizes(db, g);
+    const list = await listPrizes(db);
+    expect(list.map((p) => [p.tier, p.kind, p.roleId ?? p.ticket, p.amount, p.fallback])).toEqual([
+      ['daikichi', 'role', R1, 1, false],
+      ['daikichi', 'role', R2, 1, false],
+      ['daikichi', 'ticket', 'room_free', 3, true],
+      ['chukichi', 'ticket', 'room_free', 1, false],
+      ['shokichi', 'ticket', 'market_nofee', 1, false],
+      ['kichi', 'ticket', 'ema_pin', 1, false],
+    ]);
+    for (const p of list) await deletePrize(db, p.id);
+    await ensureGachaPrizes(db, g);
+    expect(await listPrizes(db)).toEqual([]);
+  });
+
+  it('確率: 運勢の割合 × 重み。OFF の中身は出ない。中身のない運勢は出ない', async () => {
+    await ensureGachaPrizes(db, g);
+    const list = await listPrizes(db);
+    const c = prizeChances(g, list);
+    expect(list.map((p) => c.get(p.id))).toEqual([1.5, 1.5, 0, 12, 25, 60]);
+    // 吉の中身を OFF → 吉は出ない（ほかの運勢で割り直す）
+    const kichi = list.find((p) => p.tier === 'kichi')!;
+    await updatePrize(db, kichi.id, { enabled: false });
+    const off = await listPrizes(db);
+    expect(effectiveRates(g, off)).toEqual({ daikichi: 7.5, chukichi: 30, shokichi: 62.5, kichi: 0 });
+    await addCoins(db, U, 500, 'adjust');
+    const r = await drawGacha(db, g, U, 1, [], () => 0.99);
+    expect(r).toMatchObject({ status: 'ok', pulls: [{ tier: 'shokichi' }] });
+    // 重みで出やすさを変える
+    const coins = await createPrize(db, { tier: 'chukichi', kind: 'coins', amount: 300, weight: 3, fallback: false });
+    expect(prizeChances(g, await listPrizes(db)).get(coins.id)).toBe(22.5);
+  });
+
+  it('中身が全部 OFF なら引けない（花びらは減らない）', async () => {
+    await ensureGachaPrizes(db, g);
+    for (const p of await listPrizes(db)) await updatePrize(db, p.id, { enabled: false });
+    await addCoins(db, U, 500, 'adjust');
+    expect(await drawGacha(db, g, U, 1, [])).toEqual({ status: 'empty' });
+    expect((await walletOf(db, U)).balance).toBe(500);
+  });
+
+  it('ロールだけの中身: 全部持ったら、残りの回数分は払い戻す', async () => {
+    await ensureGachaPrizes(db, g);
+    for (const p of await listPrizes(db)) await deletePrize(db, p.id);
+    await createPrize(db, { tier: 'kichi', kind: 'role', roleId: R1, amount: 1, weight: 1, fallback: false });
+    await createPrize(db, { tier: 'kichi', kind: 'role', roleId: R2, amount: 1, weight: 1, fallback: false });
+    await addCoins(db, U, 5000, 'adjust');
+    const r = await drawGacha(db, g, U, 10, [], () => 0.5);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.pulls.map((p) => p.roleId).sort()).toEqual([R1, R2]);
+    expect(r.refunded).toBe(8);
+    expect(r.balance).toBe(4000);
+    expect(await gachaStateOf(db, U)).toMatchObject({ total: 2 });
+    expect(await drawGacha(db, g, U, 1, [R1, R2])).toEqual({ status: 'empty' });
+  });
+
+  it('ショップの品: 色守りは期限つきで記録し、前の色を外す。ずっと持つ称号は、持っていれば出ない', async () => {
+    const SAKURA = '100000000000000081';
+    const FUJI = '100000000000000082';
+    const TITLE = '100000000000000083';
+    await seedDefaultItems(db, {
+      colors: [
+        { roleId: SAKURA, name: '桜', emoji: '🌸' },
+        { roleId: FUJI, name: '藤', emoji: '💜' },
+      ],
+      titles: [{ roleId: TITLE, name: '酒豪', emoji: '🍶' }],
+    });
+    const items = await listItems(db);
+    const sakura = items.find((i) => i.roleId === SAKURA)!;
+    const fuji = items.find((i) => i.roleId === FUJI)!;
+    const title = items.find((i) => i.roleId === TITLE)!;
+    await ensureGachaPrizes(db, g);
+    for (const p of await listPrizes(db)) await deletePrize(db, p.id);
+    const ps = await createPrize(db, { tier: 'kichi', kind: 'shop', shopItemId: sakura.id, amount: 1, weight: 1, fallback: false });
+    await addCoins(db, U, 2000, 'adjust');
+    const a = await drawGacha(db, g, U, 1, [], () => 0.5, T0);
+    if (a.status !== 'ok') throw new Error(a.status);
+    expect(a.pulls[0]).toMatchObject({ kind: 'shop', roleId: SAKURA, shopItemId: sakura.id, removeRoleIds: [] });
+    expect(a.pulls[0]?.expiresAt?.getTime()).toBe(T0.getTime() + 30 * 86_400_000);
+    // 藤に替えると、桜の記録は終わって外す
+    await updatePrize(db, ps.id, { enabled: false });
+    await createPrize(db, { tier: 'kichi', kind: 'shop', shopItemId: fuji.id, amount: 1, weight: 1, fallback: false });
+    const b = await drawGacha(db, g, U, 1, [SAKURA], () => 0.5, T0);
+    expect(b).toMatchObject({ status: 'ok', pulls: [{ roleId: FUJI, removeRoleIds: [SAKURA] }] });
+    expect((await db.select().from(shopPurchases)).map((p) => [p.roleId, p.price, Boolean(p.endedAt)])).toEqual([
+      [SAKURA, 0, true],
+      [FUJI, 0, false],
+    ]);
+    // 称号（ずっと）を持っていれば出ない
+    for (const p of await listPrizes(db)) await deletePrize(db, p.id);
+    await createPrize(db, { tier: 'kichi', kind: 'shop', shopItemId: title.id, amount: 1, weight: 1, fallback: false });
+    expect(await drawGacha(db, g, U, 1, [TITLE])).toEqual({ status: 'empty' });
   });
 });
 
@@ -217,15 +329,20 @@ describe('券を使う', () => {
 });
 
 describe('物御籤の画面', () => {
-  it('値段・割合・中身・天井・持っている券と、1 回 / 10 連のボタン', () => {
-    const m = JSON.stringify(gachaMenu(g, { balance: 600, sinceTop: 25, tickets: { room_free: 2, ema_pin: 0, market_nofee: 0 } }, '🌸花びら'));
+  const names = { role: (id: string) => (id === R1 ? '金の桜' : id === R2 ? '銀の月' : undefined), shop: () => undefined };
+
+  it('値段・割合・中身と確率・天井・持っている券と、1 回 / 10 連のボタン', async () => {
+    await ensureGachaPrizes(db, g);
+    const prizes = await listPrizes(db);
+    const m = JSON.stringify(gachaMenu(g, prizes, names, { balance: 600, sinceTop: 25, tickets: { room_free: 2, ema_pin: 0, market_nofee: 0 } }, '🌸花びら'));
     for (const t of [
       '500',
       '5,000',
       '大吉',
       '3%',
       '60%',
-      '限定の色守り・称号',
+      '「金の桜」 1.5%',
+      '出せないときは 🎫部屋代無料券 ×3',
       'あと **5** 回',
       '部屋代無料券 ×2',
       'gacha:draw:1',
@@ -234,15 +351,20 @@ describe('物御籤の画面', () => {
     ])
       expect(m).toContain(t);
     // 10 連の分は足りないので押せない
-    const menu = gachaMenu(g, { balance: 600, sinceTop: 0, tickets: { room_free: 0, ema_pin: 0, market_nofee: 0 } }, '🌸花びら');
+    const menu = gachaMenu(g, prizes, names, { balance: 600, sinceTop: 0, tickets: { room_free: 0, ema_pin: 0, market_nofee: 0 } }, '🌸花びら');
     const buttons = menu.components[0]!.toJSON().components as { disabled?: boolean }[];
     expect(buttons.map((b) => Boolean(b.disabled))).toEqual([false, true]);
+    expect(tierPrizeText(g, prizes, 'kichi', names)).toBe('📌絵馬のピン留め券 ×1 60%');
   });
 
-  it('中身の説明・結果の一行・券の一行・パネル', () => {
-    expect(prizeText(g.prizes.daikichi, 2)).toContain('全部持っていたら 🎫部屋代無料券 ×3');
-    expect(prizeText(g.prizes.daikichi, 0)).toBe('🎫部屋代無料券 ×3');
-    expect(pullLine({ tier: 'daikichi', pity: true, roleId: R1, count: 0, coins: 0 }, () => '金の桜')).toBe('🌸 **大吉**（天井） … 「金の桜」');
+  it('結果の一行・券の一行・パネル', () => {
+    expect(pullLine({ tier: 'daikichi', pity: true, prizeId: 1, kind: 'role', roleId: R1, count: 0, coins: 0 }, () => '金の桜')).toBe('🌸 **大吉**（天井） … 「金の桜」');
+    expect(
+      pullLine(
+        { tier: 'kichi', pity: false, prizeId: 2, kind: 'shop', roleId: R1, shopItemId: 3, shopName: '🌸色守り（桜）', expiresAt: null, count: 0, coins: 0 },
+        () => 'x',
+      ),
+    ).toBe('🍡 **吉** … 🌸色守り（桜）');
     expect(ticketLine({ room_free: 0, ema_pin: 1, market_nofee: 0 })).toBe('📌絵馬のピン留め券 ×1');
     expect(ticketLine({ room_free: 0, ema_pin: 0, market_nofee: 0 })).toBeUndefined();
     expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:open');

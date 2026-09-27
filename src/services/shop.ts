@@ -138,21 +138,58 @@ export async function buyRole(db: Db, item: ShopItem, memberId: string, now = ne
     if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name }))) {
       return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
-    // 同じものの延長: 今の期限（切れていれば今）から足す
-    const base = same?.expiresAt && same.expiresAt > now ? same.expiresAt : now;
-    const expiresAt = item.durationDays ? new Date(base.getTime() + item.durationDays * DAY) : null;
-    if (same) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, same.id));
-    // 同じ組の別のロール（色の買い替え）は外す
-    const groupItems = item.roleGroup ? await tx.select().from(shopItems).where(eq(shopItems.roleGroup, item.roleGroup)) : [];
-    const groupRoles = new Set(groupItems.map((i) => i.roleId).filter((r): r is string => Boolean(r) && r !== item.roleId));
-    const replaced = active.filter((p) => p.roleId && groupRoles.has(p.roleId));
-    for (const p of replaced) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, p.id));
-    const [purchase] = await tx
-      .insert(shopPurchases)
-      .values({ memberId, itemId: item.id, kind: 'role', price, roleId: item.roleId, expiresAt })
-      .returning();
-    return { status: 'ok', purchase: purchase!, balance: (await walletOf(tx, memberId)).balance, removeRoleIds: replaced.map((p) => p.roleId!) };
+    const { purchase, removeRoleIds } = await recordRoleItem(tx, item, memberId, now, price, active, same);
+    return { status: 'ok', purchase, balance: (await walletOf(tx, memberId)).balance, removeRoleIds };
   });
+}
+
+type ActivePurchase = typeof shopPurchases.$inferSelect;
+
+/** ロールの品を記録する（期限を足す・同じ組の別のロールを終わりにする）。払うのは呼び出し側 */
+async function recordRoleItem(
+  tx: Db,
+  item: ShopItem,
+  memberId: string,
+  now: Date,
+  price: number,
+  active: ActivePurchase[],
+  same: ActivePurchase | undefined,
+): Promise<{ purchase: ShopPurchase; removeRoleIds: string[] }> {
+  // 同じものの延長: 今の期限（切れていれば今）から足す
+  const base = same?.expiresAt && same.expiresAt > now ? same.expiresAt : now;
+  const expiresAt = item.durationDays ? new Date(base.getTime() + item.durationDays * DAY) : null;
+  if (same) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, same.id));
+  // 同じ組の別のロール（色の買い替え）は外す
+  const groupItems = item.roleGroup ? await tx.select().from(shopItems).where(eq(shopItems.roleGroup, item.roleGroup)) : [];
+  const groupRoles = new Set(groupItems.map((i) => i.roleId).filter((r): r is string => Boolean(r) && r !== item.roleId));
+  const replaced = active.filter((p) => p.roleId && groupRoles.has(p.roleId));
+  for (const p of replaced) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, p.id));
+  const [purchase] = await tx
+    .insert(shopPurchases)
+    .values({ memberId, itemId: item.id, kind: 'role', price, roleId: item.roleId, expiresAt })
+    .returning();
+  return { purchase: purchase!, removeRoleIds: replaced.map((p) => p.roleId!) };
+}
+
+/**
+ * ロールの品を無料で渡す（物御籤）。ショップで止めている品でも渡せる。
+ * ずっと持てる品をもう持っていれば 'owned'。期限つきなら期限を延ばす。
+ */
+export async function grantRoleItem(
+  tx: Db,
+  item: ShopItem,
+  memberId: string,
+  now = new Date(),
+): Promise<{ status: 'ok'; purchase: ShopPurchase; removeRoleIds: string[] } | { status: 'owned' | 'disabled' }> {
+  if (item.kind !== 'role' || !item.roleId) return { status: 'disabled' };
+  await lock(tx, memberId);
+  const active = await tx
+    .select()
+    .from(shopPurchases)
+    .where(and(eq(shopPurchases.memberId, memberId), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt)));
+  const same = active.find((p) => p.roleId === item.roleId);
+  if (same && !item.durationDays) return { status: 'owned' };
+  return { status: 'ok', ...(await recordRoleItem(tx, item, memberId, now, 0, active, same)) };
 }
 
 /** 花吹雪・絵馬の奉納・おみくじもう 1 回: 払って記録する（中身は呼び出し側） */

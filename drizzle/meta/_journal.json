@@ -204,6 +204,13 @@
       "when": 1790486265626,
       "tag": "0028_gacha",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790488503083,
+      "tag": "0029_gacha_prizes",
+      "breakpoints": true
     }
   ]
 }
