@@ -54,6 +54,8 @@ const fakeActions: DiscordActions = {
   ),
   deleteChannel: async (c) => void actions.push(`deleteChannel ${c}`),
   reorderChannels: async (_g, list) => void actions.push(`reorder ${JSON.stringify(list)}`),
+  createRole: async (_g, b) => (actions.push(`createRole ${JSON.stringify(b)}`), { id: '980000000000000099', name: b.name ?? '', position: 1, managed: false, color: b.color ?? 0 }),
+  deleteRole: async (_g, r) => void actions.push(`deleteRole ${r}`),
 };
 
 const fakeApi: DiscordApi = {
@@ -1183,6 +1185,28 @@ describe('ロール（管理画面）', () => {
     const detail = await (await get(`/roles/${ROLE.sanpaisha}`, g)).text();
     expect(detail).toContain('さくら');
     expect(detail).toMatch(/name="perm" value="11" checked/);
+  });
+
+  it('ロールを作れる（権限なし）。消すときは名前を入力。BOT が使っているロールは消せない', async () => {
+    roleList.push({ id: '980000000000000050', name: 'イベント係', position: 3, managed: false, color: 0, permissions: '0' });
+    const g = await login(GUJI);
+    expect(await (await get('/roles', g)).text()).toContain('ロールを作る');
+    expect((await form(g, '/roles/new', [['name', ''], ['color', '#ff0000']])).headers.get('location')).toBe('/roles?msg=invalid#new-role');
+    const created = await form(g, '/roles/new', [['name', '🎉 イベント係'], ['color', '#ff0000'], ['mentionable', 'yes']]);
+    expect(created.headers.get('location')).toBe('/roles/980000000000000099?msg=created');
+    expect(actions).toContain(`createRole ${JSON.stringify({ name: '🎉 イベント係', color: 0xff0000, hoist: false, mentionable: true, permissions: '0' })}`);
+
+    // 役職（BOT が使っている）は消せない
+    expect(await (await get(`/roles/${ROLE.sanpaisha}`, g)).text()).toContain('BOT が使っているので消せません');
+    expect((await form(g, `/roles/${ROLE.sanpaisha}/delete`, [['confirmName', '🔰 参拝者']])).headers.get('location')).toBe(`/roles/${ROLE.sanpaisha}?msg=in_use`);
+    // BOT より上も消せない
+    expect((await form(g, `/roles/${TOP}/delete`, [['confirmName', '上のロール']])).headers.get('location')).toBe(`/roles/${TOP}?msg=locked`);
+    expect((await form(g, '/roles/980000000000000050/delete', [['confirmName', 'ちがう']])).headers.get('location')).toBe('/roles/980000000000000050?msg=confirm_name');
+    expect(actions.filter((a) => a.startsWith('deleteRole'))).toEqual([]);
+    const del = await form(g, '/roles/980000000000000050/delete', [['confirmName', 'イベント係']]);
+    expect(del.headers.get('location')).toBe('/roles?msg=deleted');
+    expect(actions).toContain('deleteRole 980000000000000050');
+    expect((await listAudit(db, { action: 'role.delete' }))[0]?.detail).toMatchObject({ name: 'イベント係' });
   });
 
   it('招待リンクを BOT だけに: @everyone とロールから「招待を作成」を外す（🔒 はのぞく）', async () => {

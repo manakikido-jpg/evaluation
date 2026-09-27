@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-role-create-delete',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: 'ロールを作る・消す',
+    items: [
+      '「ロール」ページの下で、名前・色・分けて表示・@ で呼べる を決めてロールを作れる（権限はなしで作り、開いたページで付ける）',
+      'ロールのページの「🗑 ロールを消す」で消せる（名前を入力して確認）。役職・お守り・色守り・授与所の品物など BOT が使っているロールは消せない',
+    ],
+  },
+  {
     id: '2026-09-27-voice-groups',
     date: '2026-09-27',
     kind: 'new',

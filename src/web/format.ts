@@ -90,6 +90,8 @@ export const ACTION_LABEL: Record<string, string> = {
   'role.update': 'ロールを変更',
   'role.mentionable_all': 'ロールの @ をまとめて変更',
   'role.invites_bot_only': '招待リンクを BOT だけに',
+  'role.create': 'ロールを作成',
+  'role.delete': 'ロールを削除',
   'shop.create': 'ショップの品物を追加',
   'shop.delete': 'ショップの品物を削除',
 };

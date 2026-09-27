@@ -14,6 +14,10 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   need_confirm_all: { text: 'まとめて変えるときは、確認のチェックを入れてください。', kind: 'warn' },
   mentionable_on: { text: 'すべてのロールを、誰でも @ で呼べるようにしました（🔒 のロールはのぞく）。', kind: 'ok' },
   mentionable_off: { text: 'すべてのロールを、@ で呼べないようにしました（🔒 のロールはのぞく）。', kind: 'ok' },
+  created: { text: 'ロールを作りました（いちばん下にできます。権限はここで付けてください）。', kind: 'ok' },
+  deleted: { text: 'ロールを消しました。', kind: 'ok' },
+  in_use: { text: 'このロールは BOT が使っているので消せません（役職・お守り・色守り・授与所の品物など）。', kind: 'warn' },
+  confirm_name: { text: '消すときは、確認のためロールの名前をそのまま入力してください。', kind: 'warn' },
   invites_bot_only: { text: '「招待を作成」を外しました。これからは BOT の /招待リンク だけで招待できます。', kind: 'ok' },
 };
 
@@ -69,6 +73,9 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
           </button>
         </div>
       </form>
+      <p>
+        <a href="#new-role">➕ ロールを作る</a>
+      </p>
       <form method="post" action="/roles/invites-bot-only" class="card">
         <input type="hidden" name="_csrf" value={props.session.csrfToken} />
         <h2>🔗 招待リンクは BOT だけ</h2>
@@ -124,6 +131,36 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
           </tbody>
         </table>
       </div>
+      <form method="post" action="/roles/new" class="card anchor" id="new-role">
+        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+        <h2>➕ ロールを作る</h2>
+        <p class="note">いちばん下（@everyone のすぐ上）にできます。権限はなしで作るので、作ったあとに開くページで付けてください。並び順は Discord のサーバー設定 → ロールで変えられます。</p>
+        <div class="fields">
+          <label class="field">
+            <span>名前</span>
+            <input type="text" name="name" maxlength={100} required />
+          </label>
+          <label class="field">
+            <span>色（名前の色）</span>
+            <input type="color" name="color" value="#99aab5" />
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="noColor" value="yes" />
+            <span>色なし</span>
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="hoist" value="yes" />
+            <span>メンバー一覧で分けて表示</span>
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="mentionable" value="yes" checked />
+            <span>誰でも @ で呼べる</span>
+          </label>
+        </div>
+        <button type="submit" class="ok">
+          作る
+        </button>
+      </form>
     </Layout>
   );
 }
@@ -133,6 +170,8 @@ export function RolePage(props: {
   role: GuildRole;
   kind?: string;
   locked: boolean;
+  /** BOT が使っているロール（消せない） */
+  inUse?: boolean;
   isEveryone: boolean;
   members: Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[];
   flash?: string;
@@ -205,6 +244,23 @@ export function RolePage(props: {
           </>
         )}
       </form>
+      {!props.isEveryone && !props.locked && (
+        <section class="card">
+          <h2>🗑 ロールを消す</h2>
+          {props.inUse ? (
+            <p class="note">🔒 BOT が使っているので消せません（{props.kind ?? '授与所の品物'}）。</p>
+          ) : (
+            <form method="post" action={`/roles/${role.id}/delete`} class="inline-actions">
+              <input type="hidden" name="_csrf" value={session.csrfToken} />
+              <span class="note">持っている人からも外れて、元に戻せません。消すなら名前「{role.name}」を入力:</span>
+              <input type="text" name="confirmName" maxlength={100} required aria-label="確認のための名前" />
+              <button type="submit" class="danger">
+                消す
+              </button>
+            </form>
+          )}
+        </section>
+      )}
       <section class="card">
         <h2>このロールを持っている人（{props.members.length} 人）</h2>
         {props.members.length === 0 ? (

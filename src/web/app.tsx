@@ -1284,12 +1284,62 @@ export function createWebApp(deps: WebDeps) {
         role={role}
         kind={roleKind(cfg, role)}
         locked={roleLocked(role, roles)}
+        inUse={Boolean(roleKind(cfg, role)) || (await roleUsedByShop(role.id))}
         isEveryone={isEveryone}
         members={isEveryone ? [] : await membersWithRole(db, role.id)}
         flash={c.req.query('msg')}
       />,
     );
   });
+
+  /** ロールを作る（いちばん下にできる。権限はなしで作って、あとからロールのページで付ける） */
+  app.post('/roles/new', async (c) => {
+    const body = await c.req.parseBody();
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const colorRaw = typeof body.color === 'string' ? body.color : '';
+    if (!name || name.length > 100 || (body.noColor !== 'yes' && !/^#[0-9a-f]{6}$/i.test(colorRaw))) return c.redirect('/roles?msg=invalid#new-role');
+    const patch: RolePatch = {
+      name,
+      color: body.noColor === 'yes' ? 0 : parseInt(colorRaw.slice(1), 16),
+      hoist: body.hoist === 'yes',
+      mentionable: body.mentionable === 'yes',
+      permissions: '0',
+    };
+    let role: GuildRole;
+    try {
+      role = await deps.discord.createRole(cfg.guildId, patch, '管理画面（ロールを作る）');
+    } catch (err) {
+      logger.warn({ err }, 'role create failed');
+      return c.redirect('/roles?msg=failed#new-role');
+    }
+    await audit(db, { actorId: c.get('session').userId, action: 'role.create', detail: { roleId: role.id, name }, via: 'web' });
+    return c.redirect(`/roles/${role.id}?msg=created`);
+  });
+
+  /** ロールを消す（名前を入力して確認。BOT が使っているロール・🔒 のロールは消さない） */
+  app.post('/roles/:id/delete', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/roles');
+    const back = (msg: string) => c.redirect(`/roles/${id}?msg=${msg}`);
+    const body = await c.req.parseBody();
+    const roles = await loadRoles();
+    const role = roles?.find((r) => r.id === id);
+    if (!roles || !role || id === cfg.guildId) return c.redirect('/roles');
+    if (roleLocked(role, roles)) return back('locked');
+    if (roleKind(cfg, role) || (await roleUsedByShop(id))) return back('in_use');
+    if (typeof body.confirmName !== 'string' || body.confirmName.trim() !== role.name) return back('confirm_name');
+    try {
+      await deps.discord.deleteRole(cfg.guildId, id, '管理画面（ロールを消す）');
+    } catch (err) {
+      logger.warn({ err }, 'role delete failed');
+      return back('failed');
+    }
+    await audit(db, { actorId: c.get('session').userId, action: 'role.delete', detail: { roleId: id, name: role.name }, via: 'web' });
+    return c.redirect('/roles?msg=deleted');
+  });
+
+  /** 授与所の品物で使っているロールか */
+  const roleUsedByShop = async (roleId: string) => (await listShopItems(db)).some((i) => i.roleId === roleId);
 
   /** 招待リンクを作れるのを BOT だけにする: @everyone と（🔒 以外の）ロールから「招待を作成」を外す */
   app.post('/roles/invites-bot-only', async (c) => {
