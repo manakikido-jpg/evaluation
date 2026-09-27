@@ -784,6 +784,15 @@ export function createWebApp(deps: WebDeps) {
         boosterDiscountPercent: num('roomBoosterDiscount'),
       },
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
+      // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
+      ...(typeof body['vg.0.name'] === 'string'
+        ? {
+            voiceGroups: [...Array(10).keys()].flatMap((i) => {
+              const name = field(body, `vg.${i}.name`, 50);
+              return name ? [{ name, min: num(`vg.${i}.min`), max: num(`vg.${i}.max`) }] : [];
+            }),
+          }
+        : {}),
       coreTime: {
         slots: [0, 1, 2, 3, 4, 5, 6].flatMap((day) => {
           const start = field(body, `ct.${day}.start`, 5);

@@ -563,6 +563,38 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
           </div>
           <Save at="rooms" />
         </section>
+        <section class="card anchor" id="sec-voicegroups">
+          <h2>🔊 自動で増える通話</h2>
+          <p class="note">
+            「大きな縁側 1」「大きな縁側 2」「大きな縁側 3」のように、名前の後ろに番号を付けた通話をまとめて見ます。全部に人がいたら、いちばん大きい番号のすぐ下に次の番号（4）を作ります。空きが
+            2 つ以上になったら、最低の数より大きい番号の空いている通話を消して、いつも空きが 1 つある状態にします。作る通話は、いちばん大きい番号の通話と同じ設定（人数・見える範囲）です。名前を空にすると止めます。
+          </p>
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>名前（番号の前）</th>
+                <th>最低の数</th>
+                <th>最大の数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...cfg.voiceGroups, { name: '', min: 3, max: 20 }, { name: '', min: 3, max: 20 }].slice(0, 10).map((g, i) => (
+                <tr>
+                  <td>
+                    <input type="text" name={`vg.${i}.name`} value={g.name} maxlength={50} placeholder="例: 大きな縁側" aria-label="名前" />
+                  </td>
+                  <td>
+                    <input type="number" name={`vg.${i}.min`} value={String(g.min)} min={1} max={20} aria-label="最低の数" />
+                  </td>
+                  <td>
+                    <input type="number" name={`vg.${i}.max`} value={String(g.max)} min={1} max={50} aria-label="最大の数" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Save at="voicegroups" />
+        </section>
         <section class="card anchor" id="sec-market">
           <h2>🏪 市場</h2>
           <p class="note">

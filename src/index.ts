@@ -9,6 +9,7 @@ import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
+import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
   const omikuji = new OmikujiApp(db, cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
+  const voiceGroups = new VoiceGroupApp(cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
@@ -91,6 +93,8 @@ async function main(): Promise<void> {
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     rooms.attach(guild);
+    // 自動で増える通話（大きな縁側 1〜3 など）
+    await voiceGroups.attach(guild).catch((err) => logger.warn({ err }, 'voice groups attach failed'));
     market.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
@@ -102,6 +106,7 @@ async function main(): Promise<void> {
     ticker = setInterval(() => {
       void app.everyMinute(guild);
       void tempVoice.cleanup();
+      void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
       // 1 時間ごとの部屋（宵宮）の支払い
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
@@ -149,6 +154,8 @@ async function main(): Promise<void> {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
     }
     void tempVoice.onVoiceStateUpdate(before, after);
+    // 自動で増える通話: 全部埋まったら増やし、空きが増えたら減らす
+    voiceGroups.onVoiceStateUpdate(before, after);
     // 通話のチャットに「この通話の人に朱印を押す」
     voicePanel.onVoiceStateUpdate(before, after);
     // 宵宮の部屋: 入った人がそれぞれ払う

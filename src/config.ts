@@ -96,6 +96,17 @@ export const roomsSchema = z.object({
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
+/** 自動で増える通話（例: 大きな縁側 1〜3。全部埋まったら 4 を作り、空きが 2 つ以上になったら減らす） */
+export const voiceGroupSchema = z.object({
+  /** 番号の前の名前（例: 大きな縁側）。飾り・空白は無視して比べる */
+  name: z.string().min(1).max(50),
+  /** いつもある数（これより減らさない） */
+  min: z.number().int().min(1).max(20).default(3),
+  /** 増やす上限 */
+  max: z.number().int().min(1).max(50).default(20),
+});
+export type VoiceGroup = z.infer<typeof voiceGroupSchema>;
+
 /** 市場（花びらだけ。本物のお金は扱わない） */
 export const marketSchema = z.object({
   /** サーバーの手数料（%）。売った人には値段からこれを引いた分を渡す */
@@ -227,6 +238,7 @@ export const guildConfigSchema = z
     coreTime: coreTimeSchema.default(coreTimeSchema.parse({})),
     rooms: roomsSchema.default(roomsSchema.parse({})),
     market: marketSchema.default(marketSchema.parse({})),
+    voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({

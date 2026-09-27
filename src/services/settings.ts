@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, guildConfigSchema, marketSchema, roomsSchema, type GuildConfig } from '../config.js';
+import { coreTimeSchema, guildConfigSchema, marketSchema, roomsSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -44,6 +44,8 @@ export const overridesSchema = z.object({
   coreTime: coreTimeSchema.partial().default({}),
   rooms: roomsSchema.partial().default({}),
   market: marketSchema.partial().default({}),
+  /** 自動で増える通話（送られたときは全部置きかえる） */
+  voiceGroups: z.array(voiceGroupSchema).max(10).optional(),
   boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
 });
@@ -62,6 +64,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     coreTime: { ...base.coreTime, ...o.coreTime },
     rooms: { ...base.rooms, ...o.rooms },
     market: { ...base.market, ...o.market },
+    voiceGroups: o.voiceGroups ?? base.voiceGroups,
     applications: { ...base.applications, ...o.applications },
     ranks: base.ranks.map((r) => {
       const x = o.ranks[r.key] ?? {};

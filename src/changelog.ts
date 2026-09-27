@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-voice-groups',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '自動で増える通話',
+    items: [
+      '「大きな縁側 1〜3」のような番号付きの通話が全部埋まったら、3 の下に 4 を作る。空きが 2 つ以上になったら減らす（最低 3 つ・いつも空きが 1 つ）',
+      '「設定 → 🔊 自動で増える通話」で、名前・最低の数・最大の数を決められる',
+    ],
+  },
+  {
     id: '2026-09-27-room-panel-paid-only',
     date: '2026-09-27',
     kind: 'improve',

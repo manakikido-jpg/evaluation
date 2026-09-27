@@ -566,6 +566,10 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const rooms = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'room.hourly.public': '50', at: 'rooms' });
     expect(rooms.headers.get('location')).toBe('/settings?msg=saved&at=rooms#sec-rooms');
     expect(store.current.rooms.hourly.public).toBe(50);
+    // 自動で増える通話（名前が空の行は使わない）
+    const vg = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'vg.0.name': '大きな縁側', 'vg.0.min': '3', 'vg.0.max': '10', 'vg.1.name': '', 'vg.1.min': '3', 'vg.1.max': '20', at: 'voicegroups' });
+    expect(vg.headers.get('location')).toBe('/settings?msg=saved&at=voicegroups#sec-voicegroups');
+    expect(store.current.voiceGroups).toEqual([{ name: '大きな縁側', min: 3, max: 10 }]);
     const back = await (await get('/settings?msg=saved&at=rooms', g)).text();
     expect(back).toContain('id="sec-rooms"');
     expect(back.match(/設定を保存しました/g)?.length).toBe(2);
