@@ -738,7 +738,7 @@ export function SettingsPage(props: {
             </tbody>
           </table>
           <div class="fields">
-            <Num name="coreTimePercent" label="通話の花びら（%。150 で 1.5 倍）" value={e.coreTimePercent} file={f.coreTimePercent} min={100} />
+            <Num name="coreTimePercent" label={`コアタイムの通話でもらえる${e.currencyName}（%。150 で 1.5 倍）`} value={e.coreTimePercent} file={f.coreTimePercent} min={100} />
             <label class="field">
               <span>前日の予告の時刻（空で出さない）</span>
               <input type="time" name="ctNoticeDayBefore" value={cfg.coreTime.noticeDayBefore} />

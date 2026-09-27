@@ -17,18 +17,19 @@ export type PanelMessage = {
 /** お守り 1 つ分（config の roles.omamori と同じ形） */
 export type OmamoriPanelItem = { roleId: string; label: string; emoji: string; description: string; adultOnly: boolean };
 
-export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[] } = {}): PanelMessage {
+export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[]; /** 通貨の名前（なければ銭） */ coinName?: string } = {}): PanelMessage {
+  const coin = opts.coinName ?? '銭';
   if (kind === 'omamori') return omamoriPanel(opts.omamori ?? []);
-  if (kind === 'shop') return shopPanel();
+  if (kind === 'shop') return shopPanel(coin);
   if (kind === 'market') {
     return {
       embeds: [
         {
           title: '🏪 市場',
           description: [
-            '開業権利を持つ方が、イラスト・歌・作ったもの・通話（雑談・寝落ち）などを花びらで売っています。出品のカードの「買う」から買えます。',
+            `開業権利を持つ方が、イラスト・歌・作ったもの・通話（雑談・寝落ち）などを${coin}で売っています。出品のカードの「買う」から買えます。`,
             '',
-            '・花びらは社務所が預かり、「受け取った」を押すと売った人に渡します（押さなくても期限が来たら渡します）',
+            `・${coin}は社務所が預かり、「受け取った」を押すと売った人に渡します（押さなくても期限が来たら渡します）`,
             '・困ったときは、取引のスレッドの「問題あり」で運営が確認します',
             '・通話は 18 歳以上どうしだけ。性的なもの・本物のお金のやり取りは禁止です',
             '',
@@ -64,11 +65,11 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
         {
           title: '🎁 物御籤（もつみくじ）',
           description: [
-            '花びらで引くくじです。運勢に応じて、物御籤でしか受けられない色守り・称号や、いろいろな券が出ます。',
+            `${coin}で引くくじです。運勢に応じて、物御籤でしか受けられない色守り・称号や、いろいろな券が出ます。`,
             '',
             '・下のボタンを押すと、値段・出る割合・中身・天井までの回数が（自分にだけ）出ます。そこから 1 回か 10 連で引けます',
             '・大吉が出たら #おみくじ でお祝いします',
-            '・花びらだけで引けます（本物のお金は使いません）',
+            `・${coin}だけで引けます（本物のお金は使いません）`,
             '',
             '-# `/物御籤` でも引けます',
           ].join('\n'),
@@ -201,12 +202,12 @@ function omamoriPanel(items: OmamoriPanelItem[]): PanelMessage {
 }
 
 /** #授与所 のショップのボタン */
-function shopPanel(): PanelMessage {
+function shopPanel(coin: string): PanelMessage {
   return {
     embeds: [
       {
         title: '🛍 授与所 ― 授与品',
-        description: '花びらで授与品（色守り・称号・花吹雪・贈り物 など）を受けられます。下のボタンから一覧を開いてください（自分にだけ表示されます）。',
+        description: `${coin}で授与品（色守り・称号・花吹雪・贈り物 など）を受けられます。下のボタンから一覧を開いてください（自分にだけ表示されます）。`,
         color: SHU,
       },
     ],

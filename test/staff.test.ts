@@ -172,7 +172,7 @@ describe('神職用コマンド', () => {
     const { i, replies } = command(STAFF, [ROLE.shinshoku], 'member', { user: USER });
     await staff.onInteraction(i as never);
     const embed = replies.at(-1)?.embeds?.[0] as { description: string; url: string };
-    expect(embed.description).toContain('🌸花びら 42');
+    expect(embed.description).toContain('🪙銭 42');
     expect(embed.url).toBe(`https://shamusho.example.com/members/${USER}`);
   });
 

@@ -81,7 +81,7 @@ describe('はじめての参拝', () => {
     const dms: string[] = [];
     const done = await onboardingTick({ db, cfg, discord: { sendDm: async (u, c) => (dms.push(`${u} ${c}`), true) } }, NOW);
     expect(done).toEqual([NEW]);
-    expect(dms[0]).toContain('お祝いに 🌸花びら を 300 枚');
+    expect(dms[0]).toContain('お祝いに 🪙銭 を 300 枚');
     expect(await onboardingTick({ db, cfg, discord: { sendDm: async () => true } }, NOW)).toEqual([]);
   });
 });

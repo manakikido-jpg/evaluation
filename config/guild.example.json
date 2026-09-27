@@ -63,8 +63,8 @@
     }
   ],
   "economy": {
-    "currencyName": "花びら",
-    "currencyEmoji": "🌸",
+    "currencyName": "銭",
+    "currencyEmoji": "🪙",
     "voicePer10Min": 5,
     "voiceDailyCap": 150,
     "excludedVoiceChannelIds": [],

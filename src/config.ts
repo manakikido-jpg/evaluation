@@ -22,8 +22,8 @@ export type Rank = z.infer<typeof rankSchema>;
 
 export const economySchema = z.object({
   /** 通貨の名前と絵文字 */
-  currencyName: z.string().default('花びら'),
-  currencyEmoji: z.string().default('🌸'),
+  currencyName: z.string().default('銭'),
+  currencyEmoji: z.string().default('🪙'),
   /** 通話 10 分ごとにもらえる量（2 人以上いる通話のみ） */
   voicePer10Min: z.number().int().min(0).default(5),
   /** 通話でもらえる 1 日の上限 */

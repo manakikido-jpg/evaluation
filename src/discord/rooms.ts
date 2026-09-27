@@ -66,7 +66,7 @@ export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hub
     lines.push(
       '',
       ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label} … ${priceLabel(cfg, plan, key)}（${ROOM_KINDS[key].description}）`),
-      `-# 🌸 花びら: ${how}`,
+      `-# ${cfg.economy.currencyEmoji} ${cfg.economy.currencyName}: ${how}`,
       ...(cfg.rooms.boosterDiscountPercent > 0
         ? [`-# 🏮 奉納（ブースト）している人は、部屋代が${cfg.rooms.boosterDiscountPercent >= 100 ? '無料' : ` ${cfg.rooms.boosterDiscountPercent}% 引き`}`]
         : []),
@@ -154,7 +154,7 @@ export class RoomApp {
     const ch = this.voice(channelId);
     const r = await startRoom(this.db, cfg, channelId);
     if (r.status === 'insufficient') {
-      await ch?.send({ content: `<@${ownerId}> さん、花びらが足りないため部屋をひらけませんでした（${r.price} 枚必要）。`, allowedMentions: { users: [ownerId] } }).catch(() => undefined);
+      await ch?.send({ content: `<@${ownerId}> さん、${this.cfg().economy.currencyName}が足りないため部屋をひらけませんでした（${r.price} 枚必要）。`, allowedMentions: { users: [ownerId] } }).catch(() => undefined);
       await this.close(channelId);
       return;
     }
@@ -318,10 +318,10 @@ export class RoomApp {
     const r = await changeRoomKind(this.db, this.cfg(), ch.id, kind);
     if (r.status === 'not_found') return void (await i.reply({ content: 'この部屋はもうありません。', ...EPHEMERAL }));
     if (r.status === 'locked') return void (await i.reply({ content: '部屋の種類はもう決まっています（1 回だけ選べます）。', ...EPHEMERAL }));
-    if (r.status === 'insufficient') return void (await i.reply({ content: `花びらが足りません（${r.price} 枚必要）。`, ...EPHEMERAL }));
+    if (r.status === 'insufficient') return void (await i.reply({ content: `${this.cfg().economy.currencyName}が足りません（${r.price} 枚必要）。`, ...EPHEMERAL }));
     if (kind !== row.kind) await this.apply(ch, row, kind);
     const k = ROOM_KINDS[kind];
-    const paid = r.ticket ? '（🎫 部屋代無料券を 1 枚使いました）' : r.charged ? `（花びら ${r.charged} 枚を払いました）` : '';
+    const paid = r.ticket ? '（🎫 部屋代無料券を 1 枚使いました）' : r.charged ? `（${this.cfg().economy.currencyName} ${r.charged} 枚を払いました）` : '';
     const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
     await this.done(i, { ...row, kind, kindLocked: true }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`);
   }
@@ -407,9 +407,9 @@ export class RoomApp {
     try {
       const r = await payEntry(this.db, this.cfg(), after.channelId, member.id);
       if (r.status !== 'insufficient') return;
-      await member.voice.disconnect('花びらが足りない（宵宮の部屋）').catch(() => undefined);
+      await member.voice.disconnect(`${this.cfg().economy.currencyName}が足りない（宵宮の部屋）`).catch(() => undefined);
       await this.voice(after.channelId)
-        ?.send({ content: `<@${member.id}> さん、花びらが足りないため入れませんでした（1 時間 ${r.price} 枚）。`, allowedMentions: { users: [member.id] } })
+        ?.send({ content: `<@${member.id}> さん、${this.cfg().economy.currencyName}が足りないため入れませんでした（1 時間 ${r.price} 枚）。`, allowedMentions: { users: [member.id] } })
         .catch(() => undefined);
     } catch (err) {
       logger.warn({ err }, 'room entry payment failed');
@@ -427,10 +427,10 @@ export class RoomApp {
       const ch = this.voice(a.channelId);
       try {
         if (a.action === 'warned') {
-          await ch?.send({ content: `<@${a.memberId}> さん、次の 1 時間の花びら（${a.price} 枚）が足りません。5 分以内に払えないと、通話から抜けます。`, allowedMentions: { users: [a.memberId] } });
+          await ch?.send({ content: `<@${a.memberId}> さん、次の 1 時間の${this.cfg().economy.currencyName}（${a.price} 枚）が足りません。5 分以内に払えないと、通話から抜けます。`, allowedMentions: { users: [a.memberId] } });
         } else if (a.action === 'kick') {
-          await ch?.members.get(a.memberId)?.voice.disconnect('花びらが足りない（宵宮の部屋）');
-          await ch?.send({ content: `<@${a.memberId}> さんは、花びらが足りないため通話から抜けました。`, allowedMentions: { parse: [] } });
+          await ch?.members.get(a.memberId)?.voice.disconnect(`${this.cfg().economy.currencyName}が足りない（宵宮の部屋）`);
+          await ch?.send({ content: `<@${a.memberId}> さんは、${this.cfg().economy.currencyName}が足りないため通話から抜けました。`, allowedMentions: { parse: [] } });
         }
       } catch (err) {
         logger.warn({ err, channelId: a.channelId }, 'room hourly action failed');

@@ -26,6 +26,7 @@ import { VoicePanelApp } from './discord/voicePanel.js';
 import { RoomApp } from './discord/rooms.js';
 import { MarketApp } from './discord/market.js';
 import { ConfigStore } from './services/settings.js';
+import { syncCurrencyRename } from './services/notices.js';
 import { createDiscordActions } from './lib/discordRest.js';
 import { commandDefinitions } from './discord/commands.js';
 import { logger } from './lib/logger.js';
@@ -88,6 +89,8 @@ async function main(): Promise<void> {
       .set(commandDefinitions(cfg()))
       .then(() => logger.info({ guild: guild.name }, 'commands registered'))
       .catch((err) => logger.error({ err }, 'command registration failed'));
+    // 通貨の名前を変えたあと（花びら → 銭）: 投稿済みの掲示を出し直す（1 回だけ）
+    await syncCurrencyRename({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'currency rename sync failed'));
     // 管理画面用に全員を同期（BOT が止まっていた間の参加・退出も反映）
     await guild.members
       .fetch()

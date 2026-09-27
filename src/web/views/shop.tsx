@@ -74,7 +74,7 @@ export function ShopPage(props: {
                   <input type="text" name="name" value={i.name} maxlength={60} required />
                 </label>
                 <label class="field">
-                  <span>値段（花びら）</span>
+                  <span>値段（銭）</span>
                   {i.kind === 'menzaifu' ? (
                     <input type="text" value={`${e.menzaifuPrice}（設定で変える）`} disabled />
                   ) : i.kind === 'gift' ? (
@@ -172,7 +172,7 @@ export function ShopPage(props: {
               <input type="text" name="name" maxlength={60} required />
             </label>
             <label class="field">
-              <span>値段（花びら）</span>
+              <span>値段（銭）</span>
               <input type="number" name="price" min={0} value="1500" required />
             </label>
             <label class="field">

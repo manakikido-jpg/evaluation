@@ -211,6 +211,13 @@
       "when": 1790488503083,
       "tag": "0029_gacha_prizes",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790489700968,
+      "tag": "0030_currency_zeni",
+      "breakpoints": true
     }
   ]
 }

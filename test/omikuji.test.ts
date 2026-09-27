@@ -70,6 +70,6 @@ describe('おみくじ', () => {
     expect(e.title).toBe('⛩ おみくじ ― 大吉');
     expect(e.description).toContain('**さくら** さんの運勢');
     expect(e.description).toContain('📞 待ち人 … 通話で来る');
-    expect(e.description).toContain('🌸花びら **+30**（いま 30 枚）');
+    expect(e.description).toContain('🪙銭 **+30**（いま 30 枚）');
   });
 });

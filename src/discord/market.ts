@@ -80,7 +80,7 @@ function orderMessage(o: MarketOrder, l: MarketListing | undefined, cfg: GuildCo
           `状態: **${status}**`,
           '',
           o.status === 'paid'
-            ? `花びらは社務所が預かっています。受け取ったら「受け取った」を押してください。<t:${Math.floor(o.autoReleaseAt.getTime() / 1000)}:R> までに押されなければ、売った人に渡します。困ったときは「問題あり」を。`
+            ? `${e.currencyName}は社務所が預かっています。受け取ったら「受け取った」を押してください。<t:${Math.floor(o.autoReleaseAt.getTime() / 1000)}:R> までに押されなければ、売った人に渡します。困ったときは「問題あり」を。`
             : '',
           '-# 本物のお金のやり取り・性的なものの売り買いは禁止です（しきたり）',
         ]
@@ -214,7 +214,7 @@ export class MarketApp {
     await i.reply({
       content: [
         `「${l.title}」を ${e.currencyEmoji} **${fmt(l.price)} 枚** で買いますか？`,
-        `-# 花びらは社務所が預かり、「受け取った」を押すか ${this.cfg().market.autoReleaseDays} 日たつと売った人に渡します。困ったときは「問題あり」で運営が確認します。`,
+        `-# ${this.cfg().economy.currencyName}は社務所が預かり、「受け取った」を押すか ${this.cfg().market.autoReleaseDays} 日たつと売った人に渡します。困ったときは「問題あり」で運営が確認します。`,
       ].join('\n'),
       components: [row(btn(`market:buyok:${id}`, `${fmt(l.price)} 枚で買う`, ButtonStyle.Success))],
       ...EPHEMERAL,
@@ -230,7 +230,7 @@ export class MarketApp {
         not_open: 'この出品は受付を終えています。',
         self: '自分の出品は買えません。',
         adult_only: '通話の売り買いは、18 歳以上どうしだけです。',
-        insufficient: r.status === 'insufficient' ? `花びらが足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。` : '',
+        insufficient: r.status === 'insufficient' ? `${this.cfg().economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。` : '',
       }[r.status];
       return void (await i.editReply({ content: text, components: [] }));
     }

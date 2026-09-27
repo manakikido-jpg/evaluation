@@ -1,7 +1,7 @@
 import { and, asc, eq, max } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { notices, type Notice } from '../db/schema.js';
+import { notices, settings, type Notice } from '../db/schema.js';
 import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
@@ -66,9 +66,9 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '朱印を頂くと', value: String(e.shuinReceive), note: '朱印を頂くともらえる量' },
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
     { name: '招待のお礼', value: String(e.inviteReward), note: '招待した人が参拝者になったときにもらえる量' },
-    { name: 'おみくじの花びら', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
+    { name: 'おみくじの銭', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
     { name: 'コアタイム', value: describeCoreTime(cfg.coreTime), note: 'コアタイムの曜日と時間' },
-    { name: 'コアタイム倍率', value: coreTimeRate(e), note: 'コアタイムの通話の花びらの倍率' },
+    { name: 'コアタイム倍率', value: coreTimeRate(e), note: 'コアタイムの通話でもらえる量の倍率' },
     { name: '奉納割引', value: String(e.boostDiscountPercent), note: 'ブーストしている人の授与品の割引（%）' },
     { name: 'お参り期間', value: String(cfg.omairi.days), note: '日数' },
     { name: 'お参り延長', value: String(cfg.omairi.extendDays), note: '自動で延ばす日数' },
@@ -86,6 +86,8 @@ export type Rendered = { text: string; unknown: string[] };
  */
 export function renderNotice(body: string, cfg: GuildConfig, channels: GuildChannel[], opts: { forPreview?: boolean } = {}): Rendered {
   const vars = new Map(noticeVariables(cfg).map((v) => [v.name, v.value]));
+  // 前の名前（通貨が花びらだったころの掲示・標準の文面）
+  vars.set('おみくじの花びら', vars.get('おみくじの銭')!);
   const unknown = new Set<string>();
   const text = body.replace(/\{(#?)([^{}\n]{1,40})\}/g, (whole, hash: string, rawName: string) => {
     const name = rawName.trim();
@@ -365,6 +367,27 @@ export async function syncPostedNotices(ctx: NoticeCtx, before: GuildConfig): Pr
       logger.warn({ err, id: n.id }, 'notice sync failed');
     }
   }
+  return changed;
+}
+
+const RENAME_KEY = 'currency_rename_sync';
+
+/**
+ * 通貨の名前を変えたあと（移行で花びら → 銭）: 投稿済みの掲示を、新しい名前で出し直す（BOT の起動時に 1 回だけ）。
+ * 前の名前で差し込んだものが投稿済みの本文と同じ掲示だけ。出し直した数を返す
+ */
+export async function syncCurrencyRename(ctx: NoticeCtx): Promise<number> {
+  const [row] = await ctx.db.select().from(settings).where(eq(settings.key, RENAME_KEY));
+  if (!row) return 0;
+  const v = (row.value ?? {}) as { name?: unknown; emoji?: unknown };
+  const e = ctx.cfg.economy;
+  const before: GuildConfig = {
+    ...ctx.cfg,
+    economy: { ...e, currencyName: typeof v.name === 'string' ? v.name : '花びら', currencyEmoji: typeof v.emoji === 'string' ? v.emoji : '🌸' },
+  };
+  const changed = await syncPostedNotices(ctx, before);
+  await ctx.db.delete(settings).where(eq(settings.key, RENAME_KEY));
+  logger.info({ changed, to: e.currencyName }, 'currency rename: notices synced');
   return changed;
 }
 

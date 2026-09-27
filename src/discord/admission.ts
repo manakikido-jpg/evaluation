@@ -292,7 +292,7 @@ export class AdmissionApp {
       return void (await i.reply({ content: 'DM・フレンドのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
     const kinds = ['apply', 'omamori', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha'] as const;
-    await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { omamori: this.cfg.roles.omamori }));
+    await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { omamori: this.cfg.roles.omamori, coinName: this.cfg.economy.currencyName }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 

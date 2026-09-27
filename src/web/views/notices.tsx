@@ -87,7 +87,7 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
 
       {props.groups.length === 0 && (
         <section class="card">
-          <p>まだ掲示がありません。#鳥居（ようこそ）と #しきたり（ルール・朱印の仕組み・花びら・用語集）の標準の文面を入れられます。</p>
+          <p>まだ掲示がありません。#鳥居（ようこそ）と #しきたり（ルール・朱印の仕組み・銭・用語集）の標準の文面を入れられます。</p>
           <form method="post" action="/notices/seed">
             <Csrf session={session} />
             <button type="submit" class="ok">

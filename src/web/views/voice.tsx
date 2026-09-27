@@ -161,7 +161,7 @@ export function VoicePage(props: {
 
       <section class="card">
         <h2>自分の通話部屋（宿坊・宵宮・縁側など）</h2>
-        <p class="note">ひらいた部屋ごとに、作った人・種類・ひらいていた時間・入った人数・のべ時間・払われた花びら（部屋代）です。</p>
+        <p class="note">ひらいた部屋ごとに、作った人・種類・ひらいていた時間・入った人数・のべ時間・払われた銭（部屋代）です。</p>
         {props.rooms.length === 0 ? (
           <p class="empty">この期間の部屋はありません。</p>
         ) : (

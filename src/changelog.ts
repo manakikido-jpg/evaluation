@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-currency-zeni',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '通貨を「銭」（🪙）に統一',
+    items: [
+      '通貨の名前を花びら（🌸）から銭（🪙）に。設定の通貨の名前が花びらのままなら、更新のときに自動で銭にする',
+      'BOT・社務所Web・コマンドの説明・パネル・ショップの品の説明など、「花びら」と書いていたところを全部、設定の通貨の名前で出すように',
+      '投稿済みの掲示は、更新後の最初の BOT の起動で 1 回だけ、銭で出し直す。掲示の差し込みは {おみくじの銭}（前の {おみくじの花びら} も使える）',
+    ],
+  },
+  {
     id: '2026-09-27-gacha-prizes',
     date: '2026-09-27',
     kind: 'improve',

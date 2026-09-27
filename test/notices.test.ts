@@ -110,7 +110,7 @@ afterEach(async () => {
 describe('差し込み', () => {
   it('{名前} を今の設定の値に、{#チャンネル名} をリンクに置き換える', () => {
     const r = renderNotice('免罪符は {免罪符の値段} {通貨}。{#しきたり} を読む。氏子は {氏子のご縁}', cfg, CHANNELS);
-    expect(r.text).toBe(`免罪符は 300 花びら。<#${CH.shikitari}> を読む。氏子は 20`);
+    expect(r.text).toBe(`免罪符は 300 銭。<#${CH.shikitari}> を読む。氏子は 20`);
     expect(r.unknown).toEqual([]);
   });
 
@@ -255,6 +255,29 @@ describe('掲示', () => {
     expect(d.messages.get((await getNotice(db, editing.id))!.messageId!)?.content).toBe('300 枚');
     expect(d.log).toEqual([`edit ${(await getNotice(db, price.id))!.messageId}`]);
     expect((await getNotice(db, plain.id))?.postedText).toBe('こんにちは');
+  });
+});
+
+describe('通貨を銭に', () => {
+  it('移行で設定が銭になり、BOT の起動時に 1 回だけ、花びらで出した掲示を銭で出し直す', async () => {
+    const { loadOverrides } = await import('../src/services/settings.js');
+    const { syncCurrencyRename } = await import('../src/services/notices.js');
+    expect((await loadOverrides(db)).economy).toMatchObject({ currencyName: '銭', currencyEmoji: '🪙' });
+    const d = fakeDiscord();
+    const hana = { ...cfg, economy: { ...cfg.economy, currencyName: '花びら', currencyEmoji: '🌸' } };
+    const zeni = { ...cfg, economy: { ...cfg.economy, currencyName: '銭', currencyEmoji: '🪙' } };
+    const n = await createNotice(db, { channelId: CH.shikitari, title: '通貨', body: '{通貨絵文字}{通貨}を集めよう', by: GUJI });
+    await publishAll({ db, cfg: hana, discord: d.discord }, GUJI);
+    expect(d.messages.get((await getNotice(db, n.id))!.messageId!)?.content).toBe('🌸花びらを集めよう');
+    expect(await syncCurrencyRename({ db, cfg: zeni, discord: d.discord })).toBe(1);
+    expect(d.messages.get((await getNotice(db, n.id))!.messageId!)?.content).toBe('🪙銭を集めよう');
+    // 2 回目はしない
+    expect(await syncCurrencyRename({ db, cfg: zeni, discord: d.discord })).toBe(0);
+  });
+
+  it('{おみくじの花びら}（前の名前）も {おみくじの銭} と同じに差し込む', () => {
+    expect(renderNotice('{おみくじの花びら}', cfg, CHANNELS).text).toBe(renderNotice('{おみくじの銭}', cfg, CHANNELS).text);
+    expect(renderNotice('{おみくじの花びら}', cfg, CHANNELS).unknown).toEqual([]);
   });
 });
 

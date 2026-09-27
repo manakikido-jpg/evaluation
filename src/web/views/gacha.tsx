@@ -47,7 +47,7 @@ function prizeCell(d: GachaDraw, roleName: (id: string) => string, shop?: Map<nu
     const t = TICKET_LABEL[d.ticket as TicketKind];
     got.push(`${t.emoji}${t.name} ×${d.ticketCount}`);
   }
-  if (d.coins > 0) got.push(`花びら ${fmt(d.coins)}`);
+  if (d.coins > 0) got.push(`銭 ${fmt(d.coins)}`);
   return got.join(' ＋ ') || 'なし';
 }
 
@@ -95,7 +95,7 @@ export function GachaPage(props: {
   const who = (id: string) => <a href={`/members/${id}`}>{props.names.get(id) ?? id}</a>;
   const roleName = (id: string) => props.roleNames.get(id) ?? '（消えたロール）';
   const shopById = new Map(props.shopItems.map((i) => [i.id, i]));
-  const labelNames = { role: (id: string) => props.roleNames.get(id), shop: (id: number) => shopById.get(id) };
+  const labelNames = { role: (id: string) => props.roleNames.get(id), shop: (id: number) => shopById.get(id), coin: props.coinName };
   const rates = effectiveRates(g, props.prizes);
   const chances = prizeChances(g, props.prizes);
   const csrf = <input type="hidden" name="_csrf" value={session.csrfToken} />;

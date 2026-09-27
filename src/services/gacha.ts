@@ -43,16 +43,16 @@ export function pickTier(g: Pick<GachaConfig, 'rates'>, rand: Rand = Math.random
 
 export type PrizeKind = GachaPrizeRow['kind'];
 export const PRIZE_KINDS: PrizeKind[] = ['role', 'ticket', 'coins', 'shop'];
-export const PRIZE_KIND_LABEL: Record<PrizeKind, string> = { role: '限定ロール', ticket: '券', coins: '花びら', shop: 'ショップの品' };
+export const PRIZE_KIND_LABEL: Record<PrizeKind, string> = { role: '限定ロール', ticket: '券', coins: '銭', shop: 'ショップの品' };
 
 /** 中身の名前（role: ロールの名前・shop: ショップの品。分からなければ「消えた〜」） */
 export function prizeLabel(
   p: Pick<GachaPrizeRow, 'kind' | 'roleId' | 'ticket' | 'shopItemId' | 'amount'>,
-  names: { role: (id: string) => string | undefined; shop: (id: number) => ShopItem | undefined },
+  names: { role: (id: string) => string | undefined; shop: (id: number) => ShopItem | undefined; /** 通貨（絵文字つき。なければ 🪙銭） */ coin?: string },
 ): string {
   if (p.kind === 'role') return `🎀「${(p.roleId && names.role(p.roleId)) ?? '消えたロール'}」`;
   if (p.kind === 'ticket') return p.ticket ? `${TICKET_LABEL[p.ticket].emoji}${TICKET_LABEL[p.ticket].name} ×${p.amount}` : '券';
-  if (p.kind === 'coins') return `🌸花びら ${p.amount.toLocaleString('ja-JP')} 枚`;
+  if (p.kind === 'coins') return `${names.coin ?? '🪙銭'} ${p.amount.toLocaleString('ja-JP')} 枚`;
   const item = p.shopItemId ? names.shop(p.shopItemId) : undefined;
   return item ? `${item.emoji}${item.name}${item.durationDays ? `（${item.durationDays} 日）` : ''}` : '（消えたショップの品）';
 }

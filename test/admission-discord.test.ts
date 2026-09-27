@@ -377,7 +377,7 @@ describe('DM・フレンド追加', () => {
     expect(calls).toContain(`addRole ${USER} ${C.frNg}`);
     expect(calls).not.toContain(`addRole ${USER} ${C.dmNg}`);
     // 承認ですぐ参拝者（絵馬待ちなし）→ 招待してくれた人にお礼
-    expect(calls.find((c) => c.startsWith(`dm ${STAFF}`))).toContain('招待のお礼に 🌸花びら を 500 枚');
+    expect(calls.find((c) => c.startsWith(`dm ${STAFF}`))).toContain('招待のお礼に 🪙銭 を 500 枚');
   });
 
   it('招待リンクで入った人には「招待してくれた人」を聞かない。カードに（招待リンク）', async () => {

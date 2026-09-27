@@ -25,7 +25,7 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 /** 1 つの運勢に並べる中身の数（多いときは「ほか N 種」） */
 const MAX_LIST = 8;
 
-type Names = { role: (id: string) => string | undefined; shop: (id: number) => ShopItem | undefined };
+type Names = { role: (id: string) => string | undefined; shop: (id: number) => ShopItem | undefined; coin?: string };
 
 /** 運勢ごとの中身の説明（出る中身と確率。止めている中身は出さない） */
 export function tierPrizeText(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeRow[], tier: GachaPrizeRow['tier'], names: Names): string {
@@ -82,13 +82,13 @@ export function gachaMenu(
 }
 
 /** 1 回分の結果の一行 */
-export function pullLine(p: GachaPull, roleName: (id: string) => string): string {
+export function pullLine(p: GachaPull, roleName: (id: string) => string, coinName = '銭'): string {
   const t = TIER_LABEL[p.tier];
   let got: string;
   if (p.shopItemId) got = `${p.shopName ?? 'ショップの品'}${p.expiresAt ? `（${p.expiresAt.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })} まで）` : ''}`;
   else if (p.roleId) got = `「${roleName(p.roleId)}」`;
   else if (p.ticket) got = `${TICKET_LABEL[p.ticket].emoji}${TICKET_LABEL[p.ticket].name} ×${p.count}`;
-  else if (p.coins > 0) got = `花びら ${fmt(p.coins)} 枚`;
+  else if (p.coins > 0) got = `${coinName} ${fmt(p.coins)} 枚`;
   else got = 'なし';
   return `${t.emoji} **${t.name}**${p.pity ? '（天井）' : ''} … ${got}`;
 }
@@ -123,7 +123,7 @@ export class GachaApp {
     await ensureGachaPrizes(this.db, this.cfg().gacha);
     const [prizes, items] = await Promise.all([listPrizes(this.db), this.db.select().from(shopItems)]);
     const shop = new Map(items.map((x) => [x.id, x]));
-    return { prizes, names: { role: (id) => i.guild.roles.cache.get(id)?.name, shop: (id) => shop.get(id) } };
+    return { prizes, names: { role: (id) => i.guild.roles.cache.get(id)?.name, shop: (id) => shop.get(id), coin: this.coin() } };
   }
 
   private async menu(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<void> {
@@ -141,8 +141,8 @@ export class GachaApp {
     await i.deferReply(EPHEMERAL);
     const r = await drawGacha(this.db, g, i.user.id, times, [...i.member.roles.cache.keys()]);
     if (r.status === 'disabled') return void (await i.editReply('物御籤は今お休みしています。'));
-    if (r.status === 'empty') return void (await i.editReply('いま出せる中身がありません（持っていないものが残っていません）。花びらは減っていません。'));
-    if (r.status === 'insufficient') return void (await i.editReply(`花びらが足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。`));
+    if (r.status === 'empty') return void (await i.editReply(`いま出せる中身がありません（持っていないものが残っていません）。${cfg.economy.currencyName}は減っていません。`));
+    if (r.status === 'insufficient') return void (await i.editReply(`${cfg.economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。`));
 
     // 当たったロールを付ける（ショップの色の買い替えなら前の色を外す）。付けられなければ、神職に知らせてもらう
     const failed: string[] = [];
@@ -159,7 +159,7 @@ export class GachaApp {
     const best = GACHA_TIERS.find((t) => r.pulls.some((p) => p.tier === t)) ?? 'kichi';
     const left = untilPity(g, r.sinceTop);
     const lines = [
-      ...r.pulls.map((p) => pullLine(p, roleName)),
+      ...r.pulls.map((p) => pullLine(p, roleName, cfg.economy.currencyName)),
       '',
       ...(r.refunded > 0 ? [`↩️ 出せる中身がなくなったので、${r.refunded} 回分（${fmt(r.refunded * g.price)} 枚）を払い戻しました。`, ''] : []),
       ...(failed.length
@@ -180,7 +180,7 @@ export class GachaApp {
     const home = cfg.channels.omikuji ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
     const channel = home ? i.guild.channels.cache.get(home) : undefined;
     if (!channel?.isSendable()) return;
-    const got = tops.map((x) => pullLine(x, roleName).replace(/^.*? … /, '')).join('、');
+    const got = tops.map((x) => pullLine(x, roleName, cfg.economy.currencyName).replace(/^.*? … /, '')).join('、');
     await channel
       .send({
         embeds: [

@@ -424,12 +424,12 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(home).toMatch(/厄が付いている方<\/div><div class="value">1/);
   });
 
-  it('花びらが表示される', async () => {
+  it('銭が表示される', async () => {
     await addCoins(db, USER, 77, 'adjust');
     const s = await login(STAFF);
     const html = await (await get(`/members/${USER}`, s)).text();
     expect(html).toContain('77');
-    expect(html).toContain('花びらの出入り');
+    expect(html).toContain('銭の出入り');
   });
 });
 

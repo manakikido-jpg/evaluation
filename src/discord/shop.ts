@@ -76,6 +76,11 @@ export class ShopApp {
     }
   }
 
+  /** 通貨の名前（銭） */
+  private get coinName(): string {
+    return this.cfg().economy.currencyName;
+  }
+
   /** 払う値段（奉納している人は割引） */
   private price(i: Buyable, item: ShopItem): number {
     return priceOf(item, this.cfg().economy, isBooster(i));
@@ -101,7 +106,7 @@ export class ShopApp {
     if (item.kind === 'ema_pin') {
       note = '-# 自己紹介のチャンネル（#絵馬-男性・#絵馬-女性 など）に書いた、いちばん新しい自分のメッセージをピン留めします';
       const t = (await ticketsOf(this.db, i.user.id)).ema_pin;
-      if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、花びらは減りません**（いま ${t} 枚）\n${note}`;
+      if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、${this.coinName}は減りません**（いま ${t} 枚）\n${note}`;
     }
     await i.update(shopConfirm(item, e, balance, note, isBooster(i)));
   }
@@ -161,9 +166,9 @@ export class ShopApp {
       case 'menzaifu': {
         const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId);
         if (r.status === 'ok') return `🧾 厄を 1 つ祓いました。${r.remaining ? `残りの厄: ${r.remaining}` : '厄年は外れました。'}`;
-        if (r.status === 'no_yaku') return '祓う厄がありません（花びらは減っていません）。';
+        if (r.status === 'no_yaku') return `祓う厄がありません（${this.coinName}は減っていません）。`;
         if (r.status === 'used_up') return `免罪符は 1 人 ${r.max} 回までです。`;
-        return `花びらが足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
+        return `${this.coinName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
       }
       case 'omikuji_extra':
         return this.omikujiExtra(i, item);
@@ -177,9 +182,9 @@ export class ShopApp {
   }
 
   private insufficientText(r: BuyResult): string | undefined {
-    if (r.status === 'insufficient') return `花びらが足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
+    if (r.status === 'insufficient') return `${this.coinName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`;
     if (r.status === 'disabled') return 'この授与品は、今は受けられません。';
-    if (r.status === 'owned') return 'もう持っています（花びらは減っていません）。';
+    if (r.status === 'owned') return `もう持っています（${this.coinName}は減っていません）。`;
     return undefined;
   }
 
@@ -191,7 +196,7 @@ export class ShopApp {
     } catch (err) {
       logger.warn({ err, roleId: item.roleId }, 'shop role add failed');
       await refund(this.db, r.purchase);
-      return 'ロールを付けられなかったので、花びらを戻しました。神職に知らせてください（BOT のロールの位置か権限）。';
+      return `ロールを付けられなかったので、${this.coinName}を戻しました。神職に知らせてください（BOT のロールの位置か権限）。`;
     }
     for (const old of r.removeRoleIds) await i.member.roles.remove(old, '色守りの買い替え').catch(() => undefined);
     const until = r.purchase.expiresAt ? `${fmtDate(r.purchase.expiresAt)} まで` : 'ずっと';
@@ -201,14 +206,14 @@ export class ShopApp {
   private async omikujiExtra(i: Buyable, item: ShopItem): Promise<string> {
     const cfg = this.cfg();
     const today = await omikujiToday(this.db, i.user.id, new Date());
-    if (!today.drawn) return '先に今日のおみくじを引いてください（花びらは減っていません）。';
+    if (!today.drawn) return `先に今日のおみくじを引いてください（${this.coinName}は減っていません）。`;
     if (today.extraUsed) return '今日の「もう 1 回」は使いました。また明日どうぞ。';
     const r = await buySimple(this.db, item, i.user.id, {}, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     const d = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { extra: true });
     if (d.status !== 'drawn') {
       await refund(this.db, r.purchase);
-      return '今日の「もう 1 回」は使いました（花びらは戻しました）。';
+      return `今日の「もう 1 回」は使いました（${this.coinName}は戻しました）。`;
     }
     const embed = omikujiEmbed(d, i.member.displayName, cfg.economy);
     const home = cfg.channels.omikuji ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
@@ -230,8 +235,8 @@ export class ShopApp {
       const found = (await c.messages.fetch({ limit: 100 })).filter((m) => m.author.id === i.user.id).first();
       if (found && (!mine || found.createdTimestamp > mine.createdTimestamp)) mine = found;
     }
-    if (!mine) return `先に <#${channel.id}> などの自己紹介のチャンネルに書いてください（花びらは減っていません）。`;
-    if (mine.pinned) return 'もうピン留めされています（花びらは減っていません）。';
+    if (!mine) return `先に <#${channel.id}> などの自己紹介のチャンネルに書いてください（${this.coinName}は減っていません）。`;
+    if (mine.pinned) return `もうピン留めされています（${this.coinName}は減っていません）。`;
     const r = await buySimple(this.db, item, i.user.id, { channelId: mine.channelId, messageId: mine.id }, new Date(), this.price(i, item));
     if (r.status !== 'ok') return this.insufficientText(r)!;
     try {
@@ -240,9 +245,9 @@ export class ShopApp {
       logger.warn({ err }, 'ema pin failed');
       await refund(this.db, r.purchase);
       if (r.ticket) await addTickets(this.db, i.user.id, 'ema_pin', 1);
-      return `ピン留めできなかったので、${r.ticket ? '券' : '花びら'}を戻しました。神職に知らせてください（BOT の「メッセージの管理」権限）。`;
+      return `ピン留めできなかったので、${r.ticket ? '券' : this.coinName}を戻しました。神職に知らせてください（BOT の「メッセージの管理」権限）。`;
     }
-    if (r.ticket) return `📌 絵馬のピン留め券を 1 枚使って、自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました（花びらは減っていません）。`;
+    if (r.ticket) return `📌 絵馬のピン留め券を 1 枚使って、自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました（${this.coinName}は減っていません）。`;
     return `📌 自己紹介を ${fmtDate(r.purchase.expiresAt!)} までピン留めしました。残り ${r.balance} 枚。`;
   }
 
@@ -258,7 +263,7 @@ export class ShopApp {
     } catch (err) {
       logger.warn({ err }, 'hanafubuki post failed');
       await refund(this.db, r.purchase);
-      return '花吹雪を出せなかったので、花びらを戻しました。';
+      return `花吹雪を出せなかったので、${this.coinName}を戻しました。`;
     }
     return `🌸 <#${channel.id}> に花吹雪を出しました。残り ${r.balance} 枚。`;
   }
@@ -281,7 +286,7 @@ export class ShopApp {
       case 'daily_limit':
         return `今日贈れるのは、あと ${r.left} 枚までです（日本時間の 0 時に戻ります）。`;
       case 'insufficient':
-        return `花びらが足りません（いま ${r.balance} 枚）。`;
+        return `${this.coinName}が足りません（いま ${r.balance} 枚）。`;
     }
   }
 

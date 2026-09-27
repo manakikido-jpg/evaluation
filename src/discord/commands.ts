@@ -51,7 +51,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('menzaifu')
       .setNameLocalizations({ ja: '免罪符' })
       .setDescription('Buy a menzaifu to clear a yaku')
-      .setDescriptionLocalizations({ ja: '免罪符を購入して厄を祓う（厄と花びらの確認もできる）' })
+      .setDescriptionLocalizations({ ja: '免罪符を購入して厄を祓う（厄と銭の確認もできる）' })
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
@@ -59,7 +59,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('omikuji')
       .setNameLocalizations({ ja: 'おみくじ' })
       .setDescription('Draw an omikuji (once a day, with a small reward)')
-      .setDescriptionLocalizations({ ja: 'おみくじを引く（1 日 1 回。花びらがもらえる）' })
+      .setDescriptionLocalizations({ ja: 'おみくじを引く（1 日 1 回。銭がもらえる）' })
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
@@ -67,7 +67,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('gacha')
       .setNameLocalizations({ ja: '物御籤' })
       .setDescription('Draw the prize lottery with petals')
-      .setDescriptionLocalizations({ ja: '物御籤を引く（花びらで引くくじ。限定の色守り・称号や券が出る）' })
+      .setDescriptionLocalizations({ ja: '物御籤を引く（銭で引くくじ。限定の色守り・称号や券が出る）' })
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 

@@ -22,7 +22,7 @@ const base: ShopItem = {
 describe('ショップの見た目', () => {
   it('一覧: 残高と値段。選ぶメニュー', () => {
     const m = shopList([base, { ...base, id: 2, kind: 'gift', name: '贈り物', emoji: '🎁', price: 0 }, { ...base, id: 3, kind: 'menzaifu', name: '免罪符', emoji: '🧾', price: 0 }], cfg.economy, 3000);
-    expect(m.embeds[0]!.description).toContain('いまの🌸花びら: **3,000 枚**');
+    expect(m.embeds[0]!.description).toContain('いまの🪙銭: **3,000 枚**');
     expect(m.embeds[0]!.description).toContain('🌸 色守り（桜） … **1,500 枚**');
     expect(m.embeds[0]!.description).toContain('🎁 贈り物 … **好きな量**');
     expect(m.embeds[0]!.description).toContain(`🧾 免罪符 … **${cfg.economy.menzaifuPrice} 枚**`);

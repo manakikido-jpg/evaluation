@@ -223,7 +223,7 @@ export const FULL: Layout = {
         { name: 'お出迎え', kind: 'text', configKey: 'welcome', topic: '新しく参拝した方のお知らせ。ひと声かけてあげてください 🌸' },
         { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: 'omamori_zatsudan' },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
-        { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（花びらがもらえます）' },
+        { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（銭がもらえます）' },
         {
           name: '市場',
           kind: 'text',
@@ -231,7 +231,7 @@ export const FULL: Layout = {
           threadsOk: true,
           configKey: 'market',
           panels: ['market'],
-          topic: 'イラスト・歌・作ったもの・通話などを花びらで売り買い（出品は開業権利がある方）',
+          topic: 'イラスト・歌・作ったもの・通話などを銭で売り買い（出品は開業権利がある方）',
         },
         { name: '拝殿', kind: 'voice' },
         { name: '➕ 縁側をひらく', kind: 'voice', hub: '🍵 {name}の縁側' },

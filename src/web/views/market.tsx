@@ -4,8 +4,8 @@ import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
 export const MARKET_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
-  refunded: { text: '買った人に花びらを戻しました。', kind: 'ok' },
-  released: { text: '売った人に花びらを渡しました（手数料を引いて）。', kind: 'ok' },
+  refunded: { text: '買った人に銭を戻しました。', kind: 'ok' },
+  released: { text: '売った人に銭を渡しました（手数料を引いて）。', kind: 'ok' },
   removed: { text: '出品を取り下げました。', kind: 'ok' },
   done_already: { text: 'この取引・出品はもう終わっています。', kind: 'warn' },
 };
@@ -34,7 +34,7 @@ export function MarketPage(props: {
       <h1>🏪 市場</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
-        開業権利を持つ人の出品と、取引です（花びらだけ。手数料 {props.feePercent}%）。買った人が「問題あり」を押した取引は、ここで「返金」か「売った人に渡す」を選んでください。性的なもの・本物のお金のやり取りの出品は取り下げてください。
+        開業権利を持つ人の出品と、取引です（銭だけ。手数料 {props.feePercent}%）。買った人が「問題あり」を押した取引は、ここで「返金」か「売った人に渡す」を選んでください。性的なもの・本物のお金のやり取りの出品は取り下げてください。
       </p>
       <section class="card">
         <h2>取引</h2>
