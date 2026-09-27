@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, guildConfigSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
+import { coreTimeSchema, economyOpsSchema, guildConfigSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -53,6 +53,8 @@ export const overridesSchema = z.object({
   gacha: gachaSchema.optional(),
   boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
+  /** 経済の見守り（channelId を空にすると #記録 へ） */
+  economyOps: economyOpsSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
 });
 
 export type Overrides = z.infer<typeof overridesSchema>;
@@ -80,6 +82,13 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       return merged;
     })(),
     gacha: o.gacha ?? base.gacha,
+    economyOps: (() => {
+      const { channelId, ...rest } = o.economyOps;
+      const merged = { ...base.economyOps, ...rest };
+      if (channelId === null) delete (merged as { channelId?: string }).channelId;
+      else if (channelId) merged.channelId = channelId;
+      return merged;
+    })(),
     applications: { ...base.applications, ...o.applications },
     ranks: base.ranks.map((r) => {
       const x = o.ranks[r.key] ?? {};

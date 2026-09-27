@@ -860,3 +860,42 @@ export const giftBatches = pgTable('gift_batches', {
 });
 
 export type GiftBatch = typeof giftBatches.$inferSelect;
+
+/** 期間限定イベント（通話ボーナス・授与品セール・物御籤セール）。始まり・終わりは BOT が自動で知らせる */
+export const economyEvents = pgTable('economy_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** voice = 通話でもらえる銭が value% に / shop = 授与品が value% 引き / gacha = 物御籤が value% 引き */
+  kind: text('kind').$type<'voice' | 'shop' | 'gacha'>().notNull(),
+  value: integer('value').notNull(),
+  title: text('title').notNull(),
+  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+  endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+  /** 始まり・終わりを知らせるチャンネル（なければ知らせない） */
+  announceChannelId: text('announce_channel_id'),
+  startNotified: boolean('start_notified').notNull().default(false),
+  endNotified: boolean('end_notified').notNull().default(false),
+  /** 途中でやめた */
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type EconomyEvent = typeof economyEvents.$inferSelect;
+
+/** 経済の警告（同じものを 2 回知らせないよう key を覚える） */
+export const economyAlerts = pgTable(
+  'economy_alerts',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    key: text('key').notNull().unique(),
+    /** earn = 稼ぎすぎ / spend = 使いすぎ / saisen = お賽銭 / report = 週ごとのお知らせ */
+    kind: text('kind').notNull(),
+    memberId: text('member_id'),
+    amount: integer('amount').notNull().default(0),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('economy_alerts_created_idx').on(t.createdAt)],
+);
+
+export type EconomyAlert = typeof economyAlerts.$inferSelect;

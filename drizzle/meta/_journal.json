@@ -274,6 +274,13 @@
       "when": 1790504225068,
       "tag": "0038_gift_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790510158653,
+      "tag": "0039_economy_ops",
+      "breakpoints": true
     }
   ]
 }

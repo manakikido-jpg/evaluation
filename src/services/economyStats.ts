@@ -36,6 +36,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   gacha: 'income',
   gacha_refund: 'income',
   menzaifu: 'income',
+  saisen: 'income',
   market_buy: 'income',
   market_sell: 'income',
   market_refund: 'income',
@@ -56,6 +57,7 @@ const INCOME_GROUP: Record<string, string> = {
   gacha_refund: 'gacha',
   room: 'room',
   menzaifu: 'menzaifu',
+  saisen: 'saisen',
   market_buy: 'market',
   market_sell: 'market',
   market_refund: 'market',
@@ -66,6 +68,7 @@ export const INCOME_LABEL: Record<string, string> = {
   room: '通話部屋',
   menzaifu: '免罪符',
   market: '市場の手数料',
+  saisen: 'お賽銭（持ちすぎた分）',
 };
 
 export type FlowLine = { key: string; label: string; amount: number; count: number; members: number };
@@ -94,15 +97,19 @@ const jstDay = sql<string>`to_char(${coinTx.at} at time zone 'Asia/Tokyo', 'YYYY
 const startOfJstDate = (date: string) => new Date(`${date}T00:00:00+09:00`);
 const nextDay = (date: string) => new Date(startOfJstDate(date).getTime() + 86_400_000);
 
-export async function economyOverview(db: Db, range: TrendRange, now: Date): Promise<EconomyOverview> {
-  const frame = trendBuckets(range, now);
-  const from = startOfJstDate(frame[0]!.from);
-  const to = nextDay(frame.at(-1)!.to);
-  const inRange = and(gte(coinTx.at, from), lt(coinTx.at, to));
+export type FlowSummary = {
+  issued: number;
+  income: number;
+  admin: number;
+  giftVolume: number;
+  marketVolume: number;
+  issueLines: FlowLine[];
+  incomeLines: FlowLine[];
+  adminLines: FlowLine[];
+};
 
-  const [supplyRow] = await db.select({ n: sql<number>`coalesce(sum(${wallets.balance}), 0)::bigint` }).from(wallets);
-  const supply = Number(supplyRow?.n ?? 0);
-
+/** from〜to（to は含まない）の銭の流れ */
+export async function flowSummary(db: Db, from: Date, to: Date): Promise<FlowSummary> {
   const byReason = await db
     .select({
       reason: coinTx.reason,
@@ -111,7 +118,7 @@ export async function economyOverview(db: Db, range: TrendRange, now: Date): Pro
       who: sql<number>`count(distinct ${coinTx.memberId})::int`,
     })
     .from(coinTx)
-    .where(inRange)
+    .where(and(gte(coinTx.at, from), lt(coinTx.at, to)))
     .groupBy(coinTx.reason);
 
   const lines = (flow: Flow, sign: 1 | -1, group: (r: string) => string, label: (k: string) => string): FlowLine[] => {
@@ -134,10 +141,42 @@ export async function economyOverview(db: Db, range: TrendRange, now: Date): Pro
   const incomeLines = lines('income', -1, (r) => INCOME_GROUP[r] ?? r, (k) => INCOME_LABEL[k] ?? reasonLabel(k));
   const adminLines = lines('admin', 1, (r) => r, reasonLabel);
   const sum = (ls: FlowLine[]) => ls.reduce((n, l) => n + l.amount, 0);
-  const issued = sum(issueLines);
-  const income = sum(incomeLines);
-  const admin = sum(adminLines);
   const amountOf = (reason: string) => Number(byReason.find((r) => r.reason === reason)?.amount ?? 0);
+  return {
+    issued: sum(issueLines),
+    income: sum(incomeLines),
+    admin: sum(adminLines),
+    giftVolume: -amountOf('gift_send'),
+    marketVolume: amountOf('market_sell'),
+    issueLines,
+    incomeLines,
+    adminLines,
+  };
+}
+
+/** いまメンバーが持っている銭の合計 */
+export async function currentSupply(db: Db): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`coalesce(sum(${wallets.balance}), 0)::bigint` }).from(wallets);
+  return Number(row?.n ?? 0);
+}
+
+/** from 以降の増減の合計（今の量から引くと、from の時点の量） */
+export async function changeSince(db: Db, from: Date): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`coalesce(sum(${coinTx.amount}), 0)::bigint` })
+    .from(coinTx)
+    .where(gte(coinTx.at, from));
+  return Number(row?.n ?? 0);
+}
+
+export async function economyOverview(db: Db, range: TrendRange, now: Date): Promise<EconomyOverview> {
+  const frame = trendBuckets(range, now);
+  const from = startOfJstDate(frame[0]!.from);
+  const to = nextDay(frame.at(-1)!.to);
+  const inRange = and(gte(coinTx.at, from), lt(coinTx.at, to));
+  const supply = await currentSupply(db);
+  const f = await flowSummary(db, from, to);
+  const { issued, income, admin } = f;
 
   // 日ごと → 区切りごと
   const daily = await db
@@ -151,18 +190,14 @@ export async function economyOverview(db: Db, range: TrendRange, now: Date): Pro
     const i = buckets.findIndex((b) => b.from <= d.day && d.day <= b.to);
     if (i < 0) continue;
     const a = Number(d.amount);
-    const f = flowOf(d.reason);
-    if (f === 'issue') buckets[i]!.issued += a;
-    else if (f === 'income') buckets[i]!.income -= a;
-    else if (f === 'admin') buckets[i]!.admin += a;
+    const kind = flowOf(d.reason);
+    if (kind === 'issue') buckets[i]!.issued += a;
+    else if (kind === 'income') buckets[i]!.income -= a;
+    else if (kind === 'admin') buckets[i]!.admin += a;
     totals[i]! += a;
   }
   // 今の量から、あとの区切りの増減を引いていく（各区切りの終わりの量）
-  const after = await db
-    .select({ n: sql<number>`coalesce(sum(${coinTx.amount}), 0)::bigint` })
-    .from(coinTx)
-    .where(gte(coinTx.at, to));
-  let level = supply - Number(after[0]?.n ?? 0);
+  let level = supply - (await changeSince(db, to));
   for (let i = buckets.length - 1; i >= 0; i--) {
     buckets[i]!.supply = Math.max(0, level);
     level -= totals[i]!;
@@ -174,11 +209,11 @@ export async function economyOverview(db: Db, range: TrendRange, now: Date): Pro
     income,
     admin,
     net: issued - income + admin,
-    giftVolume: -amountOf('gift_send'),
-    marketVolume: amountOf('market_sell'),
-    issueLines,
-    incomeLines,
-    adminLines,
+    giftVolume: f.giftVolume,
+    marketVolume: f.marketVolume,
+    issueLines: f.issueLines,
+    incomeLines: f.incomeLines,
+    adminLines: f.adminLines,
     buckets,
   };
 }

@@ -10,7 +10,7 @@ import { tickets } from '../db/schema.js';
 
 type TicketDef = { emoji: string; name: string; note: string; use: 'auto' | 'manual' };
 
-const ROOM_KIND_LABEL = { public: '🔓公開', invite: '🔒招待限定', secret: '🤫シークレット', twoshot: '💞ツーショット' } as const;
+export const ROOM_KIND_LABEL = { public: '🔓公開', invite: '🔒招待限定', secret: '🤫シークレット', twoshot: '💞ツーショット' } as const;
 export type RoomKindKey = keyof typeof ROOM_KIND_LABEL;
 const room = (k: RoomKindKey): Record<string, TicketDef> => ({
   [`room_free_${k}`]: { emoji: '🎫', name: `${ROOM_KIND_LABEL[k]}の部屋代無料券`, note: `${ROOM_KIND_LABEL[k]}の部屋の部屋代が 1 回無料（宿坊はその部屋ぜんぶ・宵宮は 1 時間分。払うときに自動で使う）`, use: 'auto' },

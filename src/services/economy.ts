@@ -34,6 +34,7 @@ export type CoinReason =
   | 'market_refund'
   | 'admin_grant'
   | 'admin_take'
+  | 'saisen'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -241,6 +242,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   market_refund: '市場の返金',
   admin_grant: '運営から',
   admin_take: '運営が減らした',
+  saisen: 'お賽銭（持ちすぎた分）',
   shuin_revoke: '朱印の取り消し',
   menzaifu: '免罪符',
   adjust: '調整',

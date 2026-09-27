@@ -21,6 +21,8 @@ export const rankSchema = z.object({
 export type Rank = z.infer<typeof rankSchema>;
 
 export const economySchema = z.object({
+  /** 期間限定の授与品セール（%引き）。設定ではなく、経済のページの「期間限定イベント」が BOT の設定に入れる */
+  shopSalePercent: z.number().int().min(0).max(90).default(0),
   /** 通貨の名前と絵文字 */
   currencyName: z.string().default('銭'),
   currencyEmoji: z.string().default('🪙'),
@@ -260,6 +262,26 @@ export const DEFAULT_YAKU_REASONS = [
   'スパム・宣伝',
 ];
 
+/** 経済の見守り（週ごとのお知らせ・警告・お賽銭） */
+export const economyOpsSchema = z.object({
+  /** 週ごとのお知らせ */
+  reportEnabled: z.boolean().default(true),
+  /** お知らせ・警告を出すチャンネル（なければ #記録） */
+  channelId: snowflake.optional(),
+  /** お知らせの曜日（0 = 日曜 … 6 = 土曜）と時（日本時間） */
+  reportWeekday: z.number().int().min(0).max(6).default(1),
+  reportHour: z.number().int().min(0).max(23).default(9),
+  /** 警告: 24 時間で稼いだ・使った量がこれ以上なら知らせる（0 で知らせない） */
+  alertsEnabled: z.boolean().default(true),
+  alertEarn24h: z.number().int().min(0).max(100_000_000).default(5000),
+  alertSpend24h: z.number().int().min(0).max(100_000_000).default(20000),
+  /** お賽銭（持ちすぎた分）: 週に 1 回、この量を超えた分の % を納めてもらう（はじめは止めている） */
+  saisenEnabled: z.boolean().default(false),
+  saisenThreshold: z.number().int().min(0).max(100_000_000).default(50000),
+  saisenPercent: z.number().int().min(1).max(20).default(1),
+});
+export type EconomyOpsConfig = z.infer<typeof economyOpsSchema>;
+
 export const guildConfigSchema = z
   .object({
     guildId: snowflake,
@@ -348,6 +370,7 @@ export const guildConfigSchema = z
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     bell: bellSchema.default(bellSchema.parse({})),
     gacha: gachaSchema.default(gachaSchema.parse({})),
+    economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({
