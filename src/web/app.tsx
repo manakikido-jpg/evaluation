@@ -1656,6 +1656,7 @@ export function createWebApp(deps: WebDeps) {
         session={c.get('session')}
         gacha={cfg.gacha}
         coinName={cfg.economy.currencyName}
+        coinEmoji={cfg.economy.currencyEmoji}
         stats={stats}
         prizes={prizes}
         shopItems={items.filter(giftableShopItem)}
@@ -1792,6 +1793,24 @@ export function createWebApp(deps: WebDeps) {
     const id = Number(c.req.param('id'));
     return Number.isSafeInteger(id) && id > 0 ? id : undefined;
   };
+
+  // まとめて: 選んだ中身を ON・OFF・削除 / 全部を ON・OFF（/gacha/prizes/:id より先に）
+  app.post('/gacha/prizes/bulk', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody({ all: true });
+    const action = typeof body.action === 'string' ? body.action : '';
+    const all = await listPrizes(db);
+    const picked = (body.ids === undefined ? [] : Array.isArray(body.ids) ? body.ids : [body.ids]).map((v) => Number(v));
+    const targets = action === 'all_on' || action === 'all_off' ? all : all.filter((p) => picked.includes(p.id));
+    if (!['on', 'off', 'delete', 'all_on', 'all_off'].includes(action)) return gachaBack(c, 'prize_invalid', 'gacha-prizes');
+    if (!targets.length) return gachaBack(c, 'prize_bulk_none', 'gacha-prizes');
+    for (const p of targets) {
+      if (action === 'delete') await deletePrize(db, p.id);
+      else await updatePrize(db, p.id, { enabled: action === 'on' || action === 'all_on' });
+    }
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_bulk', detail: { action, ids: targets.map((p) => p.id) }, via: 'web' });
+    return gachaBack(c, 'prize_bulk', 'gacha-prizes');
+  });
 
   app.post('/gacha/prizes/:id', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);

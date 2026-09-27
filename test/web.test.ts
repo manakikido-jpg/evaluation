@@ -1089,6 +1089,31 @@ describe('物御籤（管理画面）', () => {
     expect((await listAudit(db, { action: 'gacha.reset' }))[0]?.detail).toMatchObject({ draws: 1, refunded: 500, roles: 1 });
   });
 
+  it('中身をまとめて ON・OFF・削除（選んだもの・全部）', async () => {
+    const { listPrizes, createPrize } = await import('../src/services/gacha.js');
+    const g = await login(GUJI);
+    await get('/gacha', g);
+    const a = await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 10, weight: 1, fallback: false });
+    const b = await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 20, weight: 1, fallback: false });
+    const bulk = async (form: [string, string][]) => {
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', g)).text())![1]!;
+      const body = new URLSearchParams([['_csrf', csrf], ...form]);
+      return (await app.request('/gacha/prizes/bulk', { method: 'POST', headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() })).headers.get('location');
+    };
+    expect(await bulk([['action', 'off']])).toContain('prize_bulk_none');
+    expect(await bulk([['action', 'off'], ['ids', String(a.id)], ['ids', String(b.id)]])).toBe('/gacha?msg=prize_bulk#gacha-prizes');
+    expect((await listPrizes(db)).filter((p) => [a.id, b.id].includes(p.id)).map((p) => p.enabled)).toEqual([false, false]);
+    expect(await bulk([['action', 'all_on']])).toContain('prize_bulk');
+    expect((await listPrizes(db)).every((p) => p.enabled)).toBe(true);
+    expect(await bulk([['action', 'all_off']])).toContain('prize_bulk');
+    expect((await listPrizes(db)).some((p) => p.enabled)).toBe(false);
+    expect(await bulk([['action', 'delete'], ['ids', String(a.id)]])).toContain('prize_bulk');
+    expect((await listPrizes(db)).some((p) => p.id === a.id)).toBe(false);
+    const s = await login(STAFF);
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
+    expect((await app.request('/gacha/prizes/bulk', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: `_csrf=${csrf}&action=all_on` })).status).toBe(403);
+  });
+
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {
     const { ticketsOf } = await import('../src/services/tickets.js');
     const s = await login(STAFF);

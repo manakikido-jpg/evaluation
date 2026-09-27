@@ -83,6 +83,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'gacha.prize_update': '物御籤の中身を変更',
   'gacha.prize_toggle': '物御籤の中身の ON/OFF',
   'gacha.prize_delete': '物御籤の中身を削除',
+  'gacha.prize_bulk': '物御籤の中身をまとめて変更',
   'coins.take': '運営が減らした',
   'coins.grant_all': '今いる人みんなに送った',
   'shop.update': 'ショップの品物を変更',

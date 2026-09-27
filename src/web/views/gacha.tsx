@@ -1,7 +1,7 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
 import type { AdminSession, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
 import { effectiveRates, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, TIER_LABEL, untilPity } from '../../services/gacha.js';
-import { TICKET_LABEL } from '../../services/tickets.js';
+import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -27,6 +27,8 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   prize_deleted: { text: '中身を削除しました。', kind: 'ok' },
   prize_invalid: { text: '中身の入力を確かめてください（限定ロール・ショップの品は選んでください。枚数・重みは 1 以上）。', kind: 'warn' },
   prize_not_found: { text: 'その中身はもうありません。', kind: 'warn' },
+  prize_bulk: { text: 'まとめて変えました。', kind: 'ok' },
+  prize_bulk_none: { text: '変える中身を選んでください（左のチェック）。', kind: 'warn' },
   gacha_reset: { text: '物御籤をリセットしました（銭を返し、出たものを取り上げました）。くわしくは「記録」に残っています。', kind: 'ok' },
   gacha_reset_confirm: { text: 'リセットするときは「リセット」と入れてください。', kind: 'warn' },
 };
@@ -80,11 +82,63 @@ function TicketList(props: { tickets: Record<TicketKind, number> }) {
   );
 }
 
+/** 券を選ぶ（まとまりごと） */
+export function TicketSelect(props: { name: string; selected?: string }) {
+  return (
+    <select name={props.name} required>
+      {TICKET_GROUPS.map((grp) => (
+        <optgroup label={grp.label}>
+          {grp.kinds.map((k) => (
+            <option value={k} selected={props.selected === k}>
+              {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
+/** 運勢を選ぶ（いまの割合つき） */
+function TierPick(props: { rates: Record<GachaTier, number> }) {
+  return (
+    <fieldset class="tier-pick">
+      <legend>運勢</legend>
+      {GACHA_TIERS.map((t, i) => (
+        <label>
+          <input type="radio" name="tier" value={t} checked={i === GACHA_TIERS.length - 1} required />
+          <span>
+            {TIER_LABEL[t].emoji} {TIER_LABEL[t].name}
+            <small> {props.rates[t] > 0 ? `${props.rates[t]}%` : 'まだ出ない'}</small>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** 重み・ほかが出せないときだけ */
+function WeightFields() {
+  return (
+    <>
+      <label class="field">
+        <span>重み（1〜10000）</span>
+        <input type="number" name="weight" value="1" min={1} max={10000} required />
+      </label>
+      <label class="field check">
+        <input type="checkbox" name="fallback" value="yes" />
+        <span>ほかが出せないときだけ出す（ロールを全部持っている人への代わり）</span>
+      </label>
+    </>
+  );
+}
+
 /** 物御籤のページ（運営みんなが見られる。変えられるのは宮司） */
 export function GachaPage(props: {
   session: AdminSession;
   gacha: GachaConfig;
   coinName: string;
+  coinEmoji?: string;
   stats: { total: number; spent: number; byTier: Record<GachaTier, number>; players: number };
   prizes: GachaPrizeRow[];
   /** 物御籤で出せるショップの品（ロールの品） */
@@ -194,6 +248,28 @@ export function GachaPage(props: {
         <p class="note">
           「出る確率」は、全体の中でその中身が出る確率です（何も持っていない人のとき）。「ほかが出せないときだけ」にした中身は、同じ運勢のほかの中身（ロールなど）を全部持っている人にだけ出ます。止めた中身は出ません。
         </p>
+        {guji && props.prizes.length > 0 && (
+          <form method="post" action="/gacha/prizes/bulk" id="gp-bulk" class="inline-actions bulk-bar">
+            {csrf}
+            <span>☑ 選んだものを</span>
+            <button type="submit" name="action" value="on" class="ok">
+              ON にする
+            </button>
+            <button type="submit" name="action" value="off">
+              OFF にする
+            </button>
+            <button type="submit" name="action" value="delete" class="danger">
+              削除
+            </button>
+            <span class="sep">／ 全部を</span>
+            <button type="submit" name="action" value="all_on" class="ok">
+              全部 ON
+            </button>
+            <button type="submit" name="action" value="all_off">
+              全部 OFF
+            </button>
+          </form>
+        )}
         {GACHA_TIERS.map((t) => {
           const list = props.prizes.filter((p) => p.tier === t);
           return (
@@ -208,6 +284,7 @@ export function GachaPage(props: {
                   <table class="compact">
                     <thead>
                       <tr>
+                        {guji && <th></th>}
                         <th>中身</th>
                         <th class="num">枚数</th>
                         <th class="num">重み</th>
@@ -222,8 +299,19 @@ export function GachaPage(props: {
                         const f = `gp-${p.id}`;
                         return (
                           <tr class={p.enabled ? '' : 'muted'}>
-                            <td>
+                            {guji && (
+                              <td>
+                                <input type="checkbox" name="ids" value={String(p.id)} form="gp-bulk" aria-label="選ぶ" />
+                              </td>
+                            )}
+                            <td class="wrap prize-name">
                               <small>{PRIZE_KIND_LABEL[p.kind]}</small> {prizeLabel(p, labelNames)}
+                              {p.kind === 'ticket' && p.ticket && TICKET_LABEL[p.ticket] && (
+                                <>
+                                  <br />
+                                  <small>{TICKET_LABEL[p.ticket].note}</small>
+                                </>
+                              )}
                             </td>
                             <td class="num">
                               {guji && (p.kind === 'ticket' || p.kind === 'coins') ? (
@@ -258,7 +346,7 @@ export function GachaPage(props: {
                                 ''
                               )}
                             </td>
-                            <td class="num">{p.enabled ? `${chances.get(p.id) ?? 0}%` : '—'}</td>
+                            <td class="num">{!p.enabled ? '—' : (chances.get(p.id) ?? 0) > 0 ? `${chances.get(p.id)}%` : p.fallback ? '代わり' : '0%'}</td>
                             <td>{p.enabled ? '🟢 ON' : '⏸ OFF'}</td>
                             {guji && (
                               <td class="inline-actions">
@@ -295,50 +383,79 @@ export function GachaPage(props: {
       {guji && (
         <section class="card anchor" id="gacha-add">
           <h2>中身を足す</h2>
-          <form method="post" action="/gacha/prizes">
-            {csrf}
-            <div class="fields">
+          <p class="note">足したい種類のところで、運勢と中身を選んで「足す」を押してください。重みは同じ運勢の中での出やすさです（ほかの中身が 1 なら、2 で 2 倍出やすい）。</p>
+          <div class="prize-add">
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="role" />
+              <h3>🎀 限定ロール</h3>
+              <p class="note">物御籤でしか手に入らない色守り・称号など。持っている人には出ません。ロールは「ロール」ページで先に作ってください（BOT のロールより下に）。</p>
+              <TierPick rates={rates} />
               <label class="field">
-                <span>運勢</span>
-                <select name="tier" required>
-                  {GACHA_TIERS.map((t) => (
-                    <option value={t}>
-                      {TIER_LABEL[t].emoji} {TIER_LABEL[t].name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label class="field">
-                <span>種類</span>
-                <select name="kind" required>
-                  {PRIZE_KINDS.map((k) => (
-                    <option value={k}>{PRIZE_KIND_LABEL[k]}</option>
-                  ))}
-                </select>
-              </label>
-              <label class="field">
-                <span>限定ロール（種類が「限定ロール」のとき）</span>
-                <select name="roleId">
-                  <option value="">―</option>
+                <span>ロール</span>
+                <select name="roleId" required>
+                  <option value="">選んでください</option>
                   {props.roles.map((r) => (
                     <option value={r.id}>{r.name}</option>
                   ))}
                 </select>
               </label>
+              <WeightFields />
+              <button type="submit" class="ok">
+                足す
+              </button>
+            </form>
+
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="ticket" />
+              <h3>🎟 券</h3>
+              <p class="note">部屋代・授与所の割引・使うと効く札など。</p>
+              <TierPick rates={rates} />
               <label class="field">
-                <span>券（種類が「券」のとき）</span>
-                <select name="ticket">
-                  {TICKET_KINDS.map((k) => (
-                    <option value={k}>
-                      {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
-                    </option>
-                  ))}
-                </select>
+                <span>券</span>
+                <TicketSelect name="ticket" />
               </label>
               <label class="field">
-                <span>ショップの品（種類が「ショップの品」のとき）</span>
-                <select name="shopItemId">
-                  <option value="">―</option>
+                <span>枚数（1〜100）</span>
+                <input type="number" name="amount" value="1" min={1} max={100} required />
+              </label>
+              <WeightFields />
+              <button type="submit" class="ok">
+                足す
+              </button>
+            </form>
+
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="coins" />
+              <h3>
+                {props.coinEmoji} {props.coinName}
+              </h3>
+              <p class="note">
+                お賽銭返し。はずれの代わりに少し、大吉に大きく、など（1 回の値段は {fmt(g.price)} 枚）。
+              </p>
+              <TierPick rates={rates} />
+              <label class="field">
+                <span>枚数</span>
+                <input type="number" name="amount" value="100" min={1} max={1000000} required />
+              </label>
+              <WeightFields />
+              <button type="submit" class="ok">
+                足す
+              </button>
+            </form>
+
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="shop" />
+              <h3>🛍 ショップの品</h3>
+              <p class="note">授与所のロールの品（色守り・称号・開業権利など）。ショップで止めている品も出せます。期限つきは持っていれば延長、同じ組の色は入れ替え。</p>
+              <TierPick rates={rates} />
+              <label class="field">
+                <span>品</span>
+                <select name="shopItemId" required>
+                  <option value="">選んでください</option>
                   {props.shopItems.map((i) => (
                     <option value={String(i.id)}>
                       {i.emoji}
@@ -349,27 +466,12 @@ export function GachaPage(props: {
                   ))}
                 </select>
               </label>
-              <label class="field">
-                <span>枚数（券・{props.coinName}のとき）</span>
-                <input type="number" name="amount" value="1" min={1} max={1000000} />
-              </label>
-              <label class="field">
-                <span>重み（同じ運勢の中での出やすさ）</span>
-                <input type="number" name="weight" value="1" min={1} max={10000} required />
-              </label>
-              <label class="field check">
-                <input type="checkbox" name="fallback" value="yes" />
-                <span>ほかが出せないときだけ出す</span>
-              </label>
-            </div>
-            <p class="note">
-              ショップの品は、ロールの品（色守り・称号・開業権利など）が出せます。ショップで止めている品も出せます（物御籤だけの品にできます）。期限つきの品は、持っていれば期限が延びます。限定ロールは
-              BOT のロールより下に置いてください。
-            </p>
-            <button type="submit" class="ok">
-              足す
-            </button>
-          </form>
+              <WeightFields />
+              <button type="submit" class="ok">
+                足す
+              </button>
+            </form>
+          </div>
         </section>
       )}
 
@@ -564,13 +666,7 @@ export function MemberGachaSection(props: {
               <span>減らす</span>
             </label>
           </div>
-          <select name="kind" aria-label="券の種類" required>
-            {TICKET_KINDS.map((k) => (
-              <option value={k}>
-                {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
-              </option>
-            ))}
-          </select>
+          <TicketSelect name="kind" />
           <input type="number" name="count" min={1} max={100} placeholder="枚数" required />
           <input type="text" name="note" maxlength={200} placeholder="理由（必須・記録に残る。DM にも載る）" required />
           <label class="field check">

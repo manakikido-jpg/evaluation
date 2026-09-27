@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-gacha-ui',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '物御籤の中身を選びやすく・まとめて ON/OFF',
+    items: [
+      '「中身を足す」を種類ごとのカード（限定ロール・券・銭・ショップの品）に分け、運勢はいまの割合つきのボタンで選ぶ',
+      '券はまとまりごと（部屋の種類ごと・授与所・市場・使う札）に並べ、一覧には券の説明も出す',
+      '中身をチェックで選んで、まとめて ON・OFF・削除。全部 ON・全部 OFF もできる',
+    ],
+  },
+  {
     id: '2026-09-27-gacha-reset',
     date: '2026-09-27',
     kind: 'new',

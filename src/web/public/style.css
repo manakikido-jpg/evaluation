@@ -304,3 +304,14 @@ details.delete-channel form { margin-top: 6px; }
 .move-channel { gap: 6px; }
 .move-channel form { gap: 6px; }
 .chart .barvalue { fill: var(--ink); }
+
+/* 物御籤: 中身を足す（種類ごとのカード）と運勢の選択 */
+.prize-add { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.prize-add .prize-kind { margin: 0; display: grid; gap: 8px; align-content: start; }
+.prize-add h3 { margin: 0; }
+fieldset.tier-pick { border: 1px solid var(--line); border-radius: 8px; margin: 0; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+fieldset.tier-pick legend { font-weight: bold; padding: 0 4px; }
+fieldset.tier-pick label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+td.prize-name { min-width: 180px; max-width: 340px; }
+.bulk-bar { flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.bulk-bar .sep { margin-left: 8px; }
