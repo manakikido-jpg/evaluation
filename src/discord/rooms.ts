@@ -146,19 +146,17 @@ export class RoomApp {
     return ch?.isVoiceBased() && ch.isTextBased() && 'userLimit' in ch ? (ch as VoiceChannel) : undefined;
   }
 
-  /** 部屋ができたとき: （値段のある部屋は）公開の値段を払い、部屋の案内を出す */
+  /** 部屋ができたとき（宿坊・宵宮だけ。縁側・屋台などには出さない）: 公開の値段を払い、部屋の案内を出す */
   async onCreated(channelId: string, ownerId: string): Promise<void> {
     const cfg = this.cfg();
     const row = await roomOf(this.db, channelId);
-    if (!row) return;
+    if (!row || planOf(cfg, row.hubId) === 'none') return;
     const ch = this.voice(channelId);
-    if (planOf(cfg, row.hubId) !== 'none') {
-      const r = await startRoom(this.db, cfg, channelId);
-      if (r.status === 'insufficient') {
-        await ch?.send({ content: `<@${ownerId}> さん、花びらが足りないため部屋をひらけませんでした（${r.price} 枚必要）。`, allowedMentions: { users: [ownerId] } }).catch(() => undefined);
-        await this.close(channelId);
-        return;
-      }
+    const r = await startRoom(this.db, cfg, channelId);
+    if (r.status === 'insufficient') {
+      await ch?.send({ content: `<@${ownerId}> さん、花びらが足りないため部屋をひらけませんでした（${r.price} 枚必要）。`, allowedMentions: { users: [ownerId] } }).catch(() => undefined);
+      await this.close(channelId);
+      return;
     }
     await ch?.send(roomNotice(cfg, row));
   }
@@ -186,7 +184,7 @@ export class RoomApp {
     try {
       const row = await roomOf(this.db, i.channelId ?? '');
       const ch = this.voice(i.channelId ?? '');
-      if (!row || !ch) return void (await i.reply({ content: 'この部屋はもうありません。', ...EPHEMERAL }));
+      if (!row || !ch || planOf(this.cfg(), row.hubId) === 'none') return void (await i.reply({ content: 'この部屋はもうありません。', ...EPHEMERAL }));
       // 操作は部屋を作った本人だけ
       if (i.user.id !== row.ownerId) return void (await i.reply({ content: '部屋の設定は、部屋を作った人だけが使えます。', ...EPHEMERAL }));
       const id = i.customId;

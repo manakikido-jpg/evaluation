@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-room-panel-paid-only',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '部屋の設定パネルは宿坊・宵宮だけ',
+    items: ['縁側・屋台などの通話部屋には、部屋の設定パネルを出さないように（前のとおり）'],
+  },
+  {
     id: '2026-09-27-invite-links',
     date: '2026-09-27',
     kind: 'new',
@@ -52,7 +60,6 @@ export const CHANGELOG: ChangelogEntry[] = [
       '部屋のチャットには「⚙ 部屋の設定」ボタンだけ。押すと作った本人にだけパネルが出る（ほかの人は使えない）',
       'パネル: チャンネル名・ステータス・人数制限・入室許可者を追加・閉じる',
       '部屋の種類（公開・招待限定・シークレット・ツーショット）は 1 回だけ選べる。あとから公開・非公開は切り替えられない',
-      '縁側・屋台などの部屋にもパネル',
     ],
   },
   {
