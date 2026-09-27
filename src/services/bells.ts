@@ -8,12 +8,17 @@ import { bells, type Bell } from '../db/schema.js';
  * 同じ人は cooldownMinutes の間、続けて鳴らせない（待っている呼び鈴があるときも鳴らせない）。
  */
 
+/** 呼べるロール（設定になければ、運営の役職: 神職・宮司など） */
+export function bellRoles(cfg: GuildConfig): string[] {
+  return cfg.bell.roleIds.length ? cfg.bell.roleIds : cfg.ranks.filter((r) => !r.auto).map((r) => r.roleId);
+}
+
 export type RingResult = { status: 'ok'; bell: Bell } | { status: 'cooldown'; minutes: number } | { status: 'waiting'; bell: Bell };
 
 export async function ringBell(
   db: Db,
   cfg: GuildConfig,
-  input: { memberId: string; channelId?: string | null; voiceChannelId?: string | null; reason?: string },
+  input: { memberId: string; channelId?: string | null; voiceChannelId?: string | null; reason?: string; roleId?: string | null },
   now = new Date(),
 ): Promise<RingResult> {
   const [waiting] = await db
@@ -40,6 +45,7 @@ export async function ringBell(
       channelId: input.channelId ?? null,
       voiceChannelId: input.voiceChannelId ?? null,
       reason: (input.reason ?? '').trim().slice(0, 500),
+      roleId: input.roleId ?? null,
       createdAt: now,
     })
     .returning();
@@ -76,7 +82,7 @@ export async function doneBell(db: Db, id: number, staffId: string, now = new Da
 export function bellCardText(b: Bell): string {
   const status = b.status === 'open' ? '🔔 **待っています**' : b.status === 'taken' ? `🏃 <@${b.takenBy}> さんが対応中` : `✅ 対応済み（<@${b.takenBy}> さん）`;
   return [
-    `**🔔 呼び鈴 #${b.id}** <@${b.memberId}> さんが運営を呼んでいます`,
+    `**🔔 呼び鈴 #${b.id}** <@${b.memberId}> さんが${b.roleId ? ` <@&${b.roleId}> を` : '運営を'}呼んでいます`,
     ...(b.channelId ? [`場所: <#${b.channelId}>`] : []),
     ...(b.voiceChannelId ? [`通話: <#${b.voiceChannelId}>`] : []),
     ...(b.reason ? [`> ${b.reason.replace(/\n+/g, ' ')}`] : []),

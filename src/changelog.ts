@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-bell-roles',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '呼び鈴: ボタンをチャンネルのいちばん下に・呼ぶロールを選べる',
+    items: [
+      '「設定 → 🔔 呼び鈴」で選んだチャンネル（境内など）のいちばん下に「🔔 呼び鈴」ボタンを置く',
+      '押すと呼ぶロール（設定で選んだもの。例: 神職・宮司・世話役）を選んでから内容を書く。そのロールに通知し、そのロールの人も対応できる',
+    ],
+  },
+  {
     id: '2026-09-27-invite-link-copy',
     date: '2026-09-27',
     kind: 'improve',

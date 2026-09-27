@@ -67,16 +67,8 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('bell')
       .setNameLocalizations({ ja: '呼び鈴' })
       .setDescription('Call the staff')
-      .setDescriptionLocalizations({ ja: '運営（神職）を呼ぶ' })
+      .setDescriptionLocalizations({ ja: '運営などを呼ぶ（呼ぶロールを選んで、内容を書く）' })
       .setContexts(InteractionContextType.Guild)
-      .addStringOption((o) =>
-        o
-          .setName('reason')
-          .setNameLocalizations({ ja: '内容' })
-          .setDescription('What happened (optional)')
-          .setDescriptionLocalizations({ ja: 'どうしましたか（なくても大丈夫）' })
-          .setMaxLength(500),
-      )
       .toJSON(),
 
     new SlashCommandBuilder()

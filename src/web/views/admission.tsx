@@ -478,8 +478,10 @@ export function SettingsPage(props: {
   error?: string;
   coinsNonce?: string;
   at?: string;
-  /** テキストチャンネル（呼び鈴の知らせ先を選ぶ） */
-  textChannels?: { id: string; name: string }[];
+  /** テキストチャンネル（呼び鈴の知らせ先を選ぶ。category はカテゴリ名） */
+  textChannels?: { id: string; name: string; category?: string }[];
+  /** ロール（呼び鈴で呼べるロールを選ぶ） */
+  roles?: { id: string; name: string }[];
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -637,9 +639,30 @@ export function SettingsPage(props: {
             </label>
             <label class="field check">
               <input type="checkbox" name="bellMention" value="yes" checked={cfg.bell.mentionStaff} />
-              <span>神職・宮司に通知を飛ばす（@ロール）</span>
+              <span>呼んだロールに通知を飛ばす（@ロール）</span>
             </label>
           </div>
+          <fieldset class="perms">
+            <legend>呼べるロール（押した人が選ぶ。1 つだけならすぐ呼ぶ。なにも選ばなければ運営の役職）</legend>
+            {(props.roles ?? []).map((r) => (
+              <label class="field check">
+                <input type="checkbox" name="bellRoles" value={r.id} checked={cfg.bell.roleIds.includes(r.id)} />
+                <span>{r.name}</span>
+              </label>
+            ))}
+          </fieldset>
+          <fieldset class="perms">
+            <legend>「🔔 呼び鈴」のボタンを、いつもいちばん下に置くチャンネル</legend>
+            {(props.textChannels ?? []).map((c) => (
+              <label class="field check">
+                <input type="checkbox" name="bellChannels" value={c.id} checked={cfg.bell.channelIds.includes(c.id)} />
+                <span>
+                  #{c.name}
+                  {c.category && <small> {c.category}</small>}
+                </span>
+              </label>
+            ))}
+          </fieldset>
           <Save at="bell" />
         </section>
         <section class="card anchor" id="sec-voicechat">

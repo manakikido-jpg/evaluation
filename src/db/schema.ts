@@ -620,6 +620,8 @@ export const bells = pgTable(
     /** そのとき入っていた通話 */
     voiceChannelId: text('voice_channel_id'),
     reason: text('reason').notNull().default(''),
+    /** 呼んだロール */
+    roleId: text('role_id'),
     /** open: 待っている / taken: 対応中 / done: 対応済み */
     status: text('status').notNull().default('open'),
     takenBy: text('taken_by'),

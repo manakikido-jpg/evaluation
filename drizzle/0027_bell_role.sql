@@ -1,0 +1,1 @@
+ALTER TABLE "bells" ADD COLUMN "role_id" text;

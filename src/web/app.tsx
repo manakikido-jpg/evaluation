@@ -815,7 +815,10 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/settings', async (c) => {
     if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
-    const textChannels = (await loadChannels()).filter(isText).sort((a, b) => a.position - b.position);
+    const channels = await loadChannels();
+    const catName = (id: string | null) => channels.find((c) => c.id === id)?.name;
+    const textChannels = listTextChannels(channels).flatMap((g) => g.items);
+    const roles = ((await loadRoles()) ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
     return c.html(
       <SettingsPage
         session={c.get('session')}
@@ -824,7 +827,8 @@ export function createWebApp(deps: WebDeps) {
         flash={c.req.query('msg')}
         at={c.req.query('at')}
         coinsNonce={randomUUID()}
-        textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name }))}
+        textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
+        roles={roles.map((r) => ({ id: r.id, name: r.name }))}
       />,
     );
   });
@@ -833,11 +837,13 @@ export function createWebApp(deps: WebDeps) {
 
   app.post('/settings', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
-    const body = await c.req.parseBody();
+    const body = await c.req.parseBody({ all: true });
     // 項目の下の「保存する」で押したときは、その項目に戻る
     const at = typeof body.at === 'string' && /^[a-z]{1,20}$/.test(body.at) ? body.at : '';
     const backTo = (msg: string) => (at ? `/settings?msg=${msg}&at=${at}#sec-${at}` : `/settings?msg=${msg}`);
     const num = (k: string) => Number(typeof body[k] === 'string' ? body[k] : NaN);
+    // チェックボックスの ID（いくつでも）
+    const ids = (k: string) => (body[k] === undefined ? [] : Array.isArray(body[k]) ? body[k] : [body[k]]).filter((v): v is string => typeof v === 'string' && validId(v));
     const raw = {
       economy: {
         currencyName: field(body, 'currencyName', 20),
@@ -872,7 +878,15 @@ export function createWebApp(deps: WebDeps) {
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
       ...(typeof body.vcClearDelay === 'string' ? { voiceChat: { clearWhenEmpty: body.vcClear === 'yes', delayMinutes: num('vcClearDelay') } } : {}),
       ...(typeof body.bellCooldown === 'string'
-        ? { bell: { channelId: field(body, 'bellChannel', 20) || null, cooldownMinutes: num('bellCooldown'), mentionStaff: body.bellMention === 'yes' } }
+        ? {
+            bell: {
+              channelId: field(body, 'bellChannel', 20) || null,
+              cooldownMinutes: num('bellCooldown'),
+              mentionStaff: body.bellMention === 'yes',
+              roleIds: ids('bellRoles'),
+              channelIds: ids('bellChannels'),
+            },
+          }
         : {}),
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'

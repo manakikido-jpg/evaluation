@@ -11,7 +11,7 @@ import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
-import { BellApp } from './discord/bell.js';
+import { BellApp, BellStickyApp } from './discord/bell.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -63,6 +63,7 @@ async function main(): Promise<void> {
   const voiceGroups = new VoiceGroupApp(cfg);
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
+  const bellSticky = new BellStickyApp(cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
@@ -101,6 +102,8 @@ async function main(): Promise<void> {
     await voiceGroups.attach(guild).catch((err) => logger.warn({ err }, 'voice groups attach failed'));
     // 人がいなくなった通話のチャットを消す（止まっていた間に空になったものも）
     voiceChatClear.attach(guild);
+    // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
+    bellSticky.attach(guild);
     market.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
@@ -135,6 +138,8 @@ async function main(): Promise<void> {
       void onboardingTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'onboarding tick failed'));
       // 招待: 招待された人が浮上した日ごとに、招待した人へボーナス
       void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));
+      // 呼び鈴のボタン（設定で足したチャンネルにも）
+      bellSticky.checkAll();
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
@@ -190,6 +195,8 @@ async function main(): Promise<void> {
     void sticky.onMessage(m);
     // 通話のチャット: 「この通話の人のプロフィールを見る」をいちばん下へ（15 秒に 1 回まで）
     voicePanel.onMessage(m);
+    // 呼び鈴のボタン: 話が落ち着いたらいちばん下へ
+    bellSticky.onMessage(m);
     // 絵馬待ちの人が自己紹介を書いたら、🔰参拝者 に
     void admission.onMessage(m).catch((err) => logger.warn({ err }, 'intro check failed'));
   });

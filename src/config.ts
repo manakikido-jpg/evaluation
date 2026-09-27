@@ -121,8 +121,12 @@ export const bellSchema = z.object({
   channelId: snowflake.optional(),
   /** 同じ人が続けて鳴らせない分 */
   cooldownMinutes: z.number().int().min(0).max(120).default(5),
-  /** 神職・宮司のロールに通知を飛ばす */
+  /** 呼んだロールに通知を飛ばす */
   mentionStaff: z.boolean().default(true),
+  /** 呼べるロール（なければ神職・宮司などの運営の役職） */
+  roleIds: z.array(snowflake).max(10).default([]),
+  /** 「🔔 呼び鈴」のボタンを、いつもいちばん下に置くチャンネル */
+  channelIds: z.array(snowflake).max(25).default([]),
 });
 
 /** 市場（花びらだけ。本物のお金は扱わない） */

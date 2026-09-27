@@ -570,11 +570,25 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(rooms.headers.get('location')).toBe('/settings?msg=saved&at=rooms#sec-rooms');
     expect(store.current.rooms.hourly.public).toBe(50);
     // 呼び鈴（知らせ先を空にすると #記録）
-    const bell = await post('/settings', g, { ...form, _csrf: await csrfOf(g), bellChannel: '910000000000000003', bellCooldown: '3', bellMention: 'yes' });
+    const bellBody = new URLSearchParams({ ...form, _csrf: await csrfOf(g), bellChannel: '910000000000000003', bellCooldown: '3', bellMention: 'yes' });
+    bellBody.append('bellRoles', ROLE.shinshoku);
+    bellBody.append('bellRoles', ROLE.sewayaku);
+    bellBody.append('bellChannels', '910000000000000002');
+    const bell = await app.request('/settings', {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: bellBody.toString(),
+    });
     expect(bell.headers.get('location')).toBe('/settings?msg=saved');
-    expect(store.current.bell).toEqual({ channelId: '910000000000000003', cooldownMinutes: 3, mentionStaff: true });
+    expect(store.current.bell).toEqual({
+      channelId: '910000000000000003',
+      cooldownMinutes: 3,
+      mentionStaff: true,
+      roleIds: [ROLE.shinshoku, ROLE.sewayaku],
+      channelIds: ['910000000000000002'],
+    });
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), bellChannel: '', bellCooldown: '3' });
-    expect(store.current.bell).toEqual({ cooldownMinutes: 3, mentionStaff: false });
+    expect(store.current.bell).toEqual({ cooldownMinutes: 3, mentionStaff: false, roleIds: [], channelIds: [] });
     // 通話のチャット（チェックを外すと消さない）
     const vcc = await post('/settings', g, { ...form, _csrf: await csrfOf(g), vcClearDelay: '5' });
     expect(vcc.headers.get('location')).toBe('/settings?msg=saved');
