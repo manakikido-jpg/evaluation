@@ -1,7 +1,7 @@
-import { and, count, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { activityDaily, inviteActive, invites, members } from '../db/schema.js';
+import { activityDaily, inviteActive, inviteLinks, invites, members, type InviteLink } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { jstDate } from './activity.js';
@@ -15,10 +15,13 @@ import { addCoins } from './economy.js';
 
 const isSnowflake = (v: unknown): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v);
 
-/** 申請を承認したとき: 招待した人を記録する（前に記録があれば変えない） */
-export async function recordInvite(db: Db, memberId: string, inviterId: unknown): Promise<boolean> {
+/**
+ * 招待した人を記録する（前に記録があれば変えない）。
+ * link: その人の招待リンクで入った（入ったとき）／ answer: 申請で選んだ（承認したとき）
+ */
+export async function recordInvite(db: Db, memberId: string, inviterId: unknown, source: 'answer' | 'link' = 'answer'): Promise<boolean> {
   if (!isSnowflake(inviterId) || inviterId === memberId) return false;
-  const rows = await db.insert(invites).values({ memberId, inviterId }).onConflictDoNothing().returning();
+  const rows = await db.insert(invites).values({ memberId, inviterId, source }).onConflictDoNothing().returning();
   return rows.length > 0;
 }
 
@@ -65,8 +68,50 @@ export async function inviteCountOf(db: Db, inviterId: string): Promise<{ joined
 
 /** 招待した人（招待された人から） */
 export async function inviterOf(db: Db, memberId: string): Promise<string | undefined> {
-  const [row] = await db.select({ inviterId: invites.inviterId }).from(invites).where(eq(invites.memberId, memberId));
-  return row?.inviterId;
+  return (await inviteOf(db, memberId))?.inviterId;
+}
+
+/** 招待の記録（だれが・リンクか申請か） */
+export async function inviteOf(db: Db, memberId: string): Promise<{ inviterId: string; source: string } | undefined> {
+  const [row] = await db.select({ inviterId: invites.inviterId, source: invites.source }).from(invites).where(eq(invites.memberId, memberId));
+  return row;
+}
+
+// ───────── BOT が作る招待リンク ─────────
+
+/** その人の今の招待リンク */
+export async function activeLinkOf(db: Db, inviterId: string): Promise<InviteLink | undefined> {
+  const [row] = await db
+    .select()
+    .from(inviteLinks)
+    .where(and(eq(inviteLinks.inviterId, inviterId), isNull(inviteLinks.revokedAt)))
+    .orderBy(desc(inviteLinks.createdAt))
+    .limit(1);
+  return row;
+}
+
+export async function saveLink(db: Db, link: { code: string; inviterId: string; channelId: string; uses: number }): Promise<void> {
+  await db.insert(inviteLinks).values(link).onConflictDoUpdate({ target: inviteLinks.code, set: { uses: link.uses, revokedAt: null } });
+}
+
+/**
+ * だれかが入ったとき: 今の招待リンクの使われた回数と、覚えている回数を比べて、増えたリンクの持ち主を返す。
+ * 増えたリンクが 1 つだけのときだけ（同時に入ったなど、分からなければ undefined）。回数は覚え直し、Discord にないリンクは無効にする。
+ */
+export async function matchJoin(db: Db, current: { code: string; uses: number }[], now = new Date()): Promise<string | undefined> {
+  const stored = await db.select().from(inviteLinks).where(isNull(inviteLinks.revokedAt));
+  const byCode = new Map(current.map((c) => [c.code, c.uses]));
+  const grew: InviteLink[] = [];
+  for (const s of stored) {
+    const uses = byCode.get(s.code);
+    if (uses === undefined) {
+      await db.update(inviteLinks).set({ revokedAt: now }).where(eq(inviteLinks.code, s.code));
+      continue;
+    }
+    if (uses > s.uses) grew.push(s);
+    if (uses !== s.uses) await db.update(inviteLinks).set({ uses }).where(eq(inviteLinks.code, s.code));
+  }
+  return grew.length === 1 ? grew[0]!.inviterId : undefined;
 }
 
 /** 浮上したとみなす通話の分数（発言は 1 回でよい） */

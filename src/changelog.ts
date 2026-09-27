@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-invite-links',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '招待リンクは BOT だけ・だれの招待か分かる',
+    items: [
+      '/招待リンク で自分専用の招待リンクをもらえる。そのリンクで入った人は、自動でその人の招待になる（申請で聞かない。カードに「招待リンク」）',
+      '#お出迎え に「🤝 招待: ○○ さん」',
+      '社務所Web の「ロール」で、みんなとロールから「招待を作成」を外せる（招待リンクは BOT だけに）',
+    ],
+  },
+  {
     id: '2026-09-27-room-transfer',
     date: '2026-09-27',
     kind: 'new',

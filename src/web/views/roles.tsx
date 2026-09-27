@@ -14,6 +14,7 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   need_confirm_all: { text: 'まとめて変えるときは、確認のチェックを入れてください。', kind: 'warn' },
   mentionable_on: { text: 'すべてのロールを、誰でも @ で呼べるようにしました（🔒 のロールはのぞく）。', kind: 'ok' },
   mentionable_off: { text: 'すべてのロールを、@ で呼べないようにしました（🔒 のロールはのぞく）。', kind: 'ok' },
+  invites_bot_only: { text: '「招待を作成」を外しました。これからは BOT の /招待リンク だけで招待できます。', kind: 'ok' },
 };
 
 function Flash(props: { code?: string }) {
@@ -38,6 +39,8 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
   // @everyone は位置 0
   const editable = props.rows.filter((r) => !r.locked && r.role.position !== 0);
   const offCount = editable.filter((r) => !r.role.mentionable).length;
+  // 「招待を作成」を持っているロール（@everyone を含む）
+  const inviters = props.rows.filter((r) => !r.locked && (BigInt(r.role.permissions ?? '0') & 1n) !== 0n);
   return (
     <Layout title="ロール" session={props.session} nav="roles">
       <h1>ロール</h1>
@@ -65,6 +68,22 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
             すべて @ で呼べないようにする
           </button>
         </div>
+      </form>
+      <form method="post" action="/roles/invites-bot-only" class="card">
+        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+        <h2>🔗 招待リンクは BOT だけ</h2>
+        <p class="note">
+          みんな（@everyone）とロールから「招待を作成」を外すと、メンバーは自分で招待リンクを作れなくなり、BOT の <code>/招待リンク</code>{' '}
+          で自分専用のリンクをもらう形になります（だれの招待で入ったか分かります）。今「招待を作成」を持っているロール:{' '}
+          {inviters.length ? inviters.map((r) => r.role.name).join('・') : 'なし'}。🔒 のロールと、サーバーの持ち主・「管理者」を持つロールは変わりません。前に人が作った招待リンクは、サーバー設定 →「招待」から消してください。
+        </p>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>「招待を作成」を外す</span>
+        </label>
+        <button type="submit" class="ok">
+          招待リンクを BOT だけにする
+        </button>
       </form>
       <div class="table-wrap">
         <table class="members roles">

@@ -162,6 +162,8 @@ export const guildConfigSchema = z
       emaFemale: snowflake.optional(),
       /** #運営紹介: 宮司・神職の紹介（任意） */
       staffIntro: snowflake.optional(),
+      /** #鳥居: 入口。BOT が作る招待リンクはここに入る（任意。なければ名前で探す） */
+      entrance: snowflake.optional(),
       /** #お出迎え: 新しく参拝した人のお知らせ（任意） */
       welcome: snowflake.optional(),
       /** #市場: 開業権利を持つ人の出品（任意） */

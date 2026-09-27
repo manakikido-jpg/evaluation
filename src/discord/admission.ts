@@ -62,6 +62,7 @@ import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { coreName } from '../lib/names.js';
+import { inviteOf } from '../services/invites.js';
 import { panelMessage } from './panels.js';
 import { SHU } from './views.js';
 
@@ -346,6 +347,11 @@ export class AdmissionApp {
       });
     if (!dm && contactEnabled(this.cfg, 'dm')) return void (await ask('dm', (l) => state(l, fr)));
     if (!fr && contactEnabled(this.cfg, 'friend')) return void (await ask('friend', (l) => state(dm, l)));
+    if (!inv) {
+      // 招待リンクで入った人は、だれの招待か分かっているので聞かない
+      const linked = await inviteOf(this.db, i.user.id);
+      if (linked?.source === 'link') inv = linked.inviterId;
+    }
     if (!inv) return void (await i.update(this.inviterStep(age, gender, dm, fr)));
     await this.applyModal(i, age, gender, state(dm, fr, inv));
   }
@@ -409,6 +415,7 @@ export class AdmissionApp {
       message: i.fields.getTextInputValue('message').trim(),
     };
     const r = await submitJoin(this.ctx, { id: i.user.id, roleIds: [...i.member.roles.cache.keys()], accountCreatedAt: i.user.createdAt }, answers);
+    const linked = await inviteOf(this.db, i.user.id);
     if (r.status === 'already_member') return void (await i.editReply('すでに参拝者以上になっています。申請は不要です。'));
     if (r.status === 'duplicate') return void (await i.editReply('申請はすでに受け付けています。神職の確認をお待ちください。'));
     if (r.status === 'pending_intro') {
@@ -429,7 +436,7 @@ export class AdmissionApp {
       `年齢区分: ${AGE_LABEL[age]}`,
       gender ? `性別: ${GENDER_LABEL[gender]}` : '',
       contactSummary(answers),
-      answers.inviter ? `招待してくれた人: <@${answers.inviter}>` : '招待してくれた人: いない',
+      answers.inviter ? `招待してくれた人: <@${answers.inviter}>${linked?.source === 'link' && linked.inviterId === answers.inviter ? '（招待リンク）' : ''}` : '招待してくれた人: いない',
       `やりたいこと: ${answers.purpose}`,
       answers.message ? `ひとこと: ${answers.message}` : '',
       `Discord アカウント作成: ${ts(i.user.createdAt)} ・ 参加: ${i.member.joinedAt ? ts(i.member.joinedAt) : '—'}`,

@@ -55,7 +55,7 @@ export type ChannelSpec = {
   /** 一般の人は書き込めない（BOT と神職だけ書き込む） */
   readOnly?: boolean;
   /** config/guild.json のどこに ID を書くか */
-  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'welcome' | 'market' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
+  configKey?: 'keiji' | 'log' | 'ema' | 'emaFemale' | 'staffIntro' | 'welcome' | 'entrance' | 'market' | 'applications' | 'omairi' | 'soudan' | 'banzuke' | 'omikuji' | 'keidai';
   /** 読むだけでも、スレッドの中では書ける（#市場 の取引のスレッド） */
   threadsOk?: boolean;
   /**
@@ -189,7 +189,7 @@ export const FULL: Layout = {
       name: '⛩ 鳥居',
       visibility: 'public',
       channels: [
-        { name: '鳥居', kind: 'text', readOnly: true, topic: 'ようこそ、咲楽ノ宮へ' },
+        { name: '鳥居', kind: 'text', readOnly: true, configKey: 'entrance', topic: 'ようこそ、咲楽ノ宮へ' },
         { name: 'しきたり', kind: 'text', readOnly: true, topic: 'ルール・用語集・朱印の仕組み' },
         { name: '社務所', kind: 'text', readOnly: true, topic: '入鯖申請・宵参り申請はこちらのボタンから', panels: ['apply', 'yoimairi'] },
       ],

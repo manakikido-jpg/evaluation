@@ -1181,6 +1181,16 @@ describe('ロール（管理画面）', () => {
     expect(detail).toMatch(/name="perm" value="11" checked/);
   });
 
+  it('招待リンクを BOT だけに: @everyone とロールから「招待を作成」を外す（🔒 はのぞく）', async () => {
+    roleList = roleList.map((r) => (r.id === cfg.guildId ? { ...r, permissions: String((1n << 10n) | 1n) } : r));
+    const g = await login(GUJI);
+    expect(await (await get('/roles', g)).text()).toContain('今「招待を作成」を持っているロール: @everyone');
+    expect((await form(g, '/roles/invites-bot-only', [])).headers.get('location')).toBe('/roles?msg=need_confirm_all');
+    const r = await form(g, '/roles/invites-bot-only', [['confirm', 'yes']]);
+    expect(r.headers.get('location')).toBe('/roles?msg=invites_bot_only');
+    expect(actions.filter((a) => a.startsWith('editRole'))).toEqual([`editRole ${cfg.guildId} {"permissions":"${String(1n << 10n)}"}`]);
+  });
+
   it('すべてのロールをまとめて @ で呼べるように（🔒・@everyone はのぞく。確認が要る）', async () => {
     roleList.push({ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0', mentionable: true });
     const s = await login(STAFF);

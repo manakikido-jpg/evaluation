@@ -69,6 +69,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('invite')
+      .setNameLocalizations({ ja: '招待リンク' })
+      .setDescription('Get your personal invite link')
+      .setDescriptionLocalizations({ ja: '自分専用の招待リンクをもらう（このリンクで入った人は、あなたの招待になる）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('hajimete')
       .setNameLocalizations({ ja: 'はじめて' })
       .setDescription('Getting started checklist')

@@ -89,6 +89,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'market.close': '市場の出品を終了',
   'role.update': 'ロールを変更',
   'role.mentionable_all': 'ロールの @ をまとめて変更',
+  'role.invites_bot_only': '招待リンクを BOT だけに',
   'shop.create': 'ショップの品物を追加',
   'shop.delete': 'ショップの品物を削除',
 };

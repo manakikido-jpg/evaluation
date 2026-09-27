@@ -516,6 +516,8 @@ export const invites = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     rewardedAt: timestamp('rewarded_at', { withTimezone: true }),
     reward: integer('reward').notNull().default(0),
+    /** answer: 申請で選んだ / link: その人の招待リンクで入った */
+    source: text('source').notNull().default('answer'),
   },
   (t) => [index('invites_inviter_idx').on(t.inviterId)],
 );
@@ -535,3 +537,21 @@ export const inviteActive = pgTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.date] })],
 );
+
+/** BOT が作った、メンバーごとの招待リンク（だれのリンクで入ったか分かるように） */
+export const inviteLinks = pgTable(
+  'invite_links',
+  {
+    code: text('code').primaryKey(),
+    inviterId: text('inviter_id').notNull(),
+    channelId: text('channel_id').notNull(),
+    /** 最後に確かめたときの使われた回数 */
+    uses: integer('uses').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Discord で消されていた・作り直した */
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [index('invite_links_inviter_idx').on(t.inviterId)],
+);
+
+export type InviteLink = typeof inviteLinks.$inferSelect;

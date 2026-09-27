@@ -1248,6 +1248,8 @@ export function createWebApp(deps: WebDeps) {
     }
   };
   /** BOT からは変えられない（BOT のロール以上・自動のロール） */
+  /** 招待を作成 */
+  const CREATE_INVITE = 1n;
   const roleLocked = (role: GuildRole, all: GuildRole[]) => role.managed || (role.id !== cfg.guildId && role.position >= botTopPosition(all, deps.botId));
 
   app.get('/roles', async (c) => {
@@ -1278,6 +1280,28 @@ export function createWebApp(deps: WebDeps) {
         flash={c.req.query('msg')}
       />,
     );
+  });
+
+  /** 招待リンクを作れるのを BOT だけにする: @everyone と（🔒 以外の）ロールから「招待を作成」を外す */
+  app.post('/roles/invites-bot-only', async (c) => {
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/roles?msg=need_confirm_all');
+    const roles = await loadRoles();
+    if (!roles) return c.redirect('/roles?msg=failed');
+    const targets = roles.filter((r) => !roleLocked(r, roles) && (BigInt(r.permissions ?? '0') & CREATE_INVITE) !== 0n);
+    const done: string[] = [];
+    let failed = 0;
+    for (const r of targets) {
+      try {
+        await deps.discord.editRole(cfg.guildId, r.id, { permissions: (BigInt(r.permissions ?? '0') & ~CREATE_INVITE).toString() }, '管理画面（招待リンクは BOT だけ）');
+        done.push(r.name);
+      } catch (err) {
+        logger.warn({ err, roleId: r.id }, 'role invite permission update failed');
+        failed++;
+      }
+    }
+    if (done.length) await audit(db, { actorId: c.get('session').userId, action: 'role.invites_bot_only', detail: { count: done.length, roles: done }, via: 'web' });
+    return c.redirect(`/roles?msg=${failed ? 'failed_some' : done.length ? 'invites_bot_only' : 'unchanged'}`);
   });
 
   /** すべてのロールの「誰でも @ で呼べる」をまとめて ON / OFF（@everyone・🔒 のロールはのぞく） */

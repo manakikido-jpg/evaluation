@@ -377,6 +377,18 @@ describe('DM・フレンド追加', () => {
     expect(calls.find((c) => c.startsWith(`dm ${STAFF}`))).toContain('招待のお礼に 🌸花びら を 500 枚');
   });
 
+  it('招待リンクで入った人には「招待してくれた人」を聞かない。カードに（招待リンク）', async () => {
+    const { recordInvite } = await import('../src/services/invites.js');
+    await recordInvite(db, USER, STAFF, 'link');
+    const gender = button(USER, [], 'apply:gender:adult.male');
+    await app.onInteraction(gender.i as never);
+    expect(gender.modals[0]?.data.custom_id).toBe(`apply:modal:adult.male.-.-.${STAFF}`);
+    const submit = modal(USER, [], `apply:modal:adult.male.-.-.${STAFF}`, { name: 'りく', purpose: '雑談' });
+    await app.onInteraction(submit.i as never);
+    const card = sent.find((x) => x.channelId === APPS)!;
+    expect(card.payload.embeds?.[0]?.description).toContain(`招待してくれた人: <@${STAFF}>（招待リンク）`);
+  });
+
   it('ロールがなければ、性別のあとすぐ招待してくれた人', async () => {
     const gender = button(USER, [], 'apply:gender:adult.male');
     await app.onInteraction(gender.i as never);

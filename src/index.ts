@@ -8,6 +8,7 @@ import { AdmissionApp } from './discord/admission.js';
 import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
+import { InviteLinkApp } from './discord/inviteLinks.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const onboarding = new OnboardingApp(db, cfg);
+  const inviteLinks = new InviteLinkApp(db, cfg);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
@@ -82,6 +84,8 @@ async function main(): Promise<void> {
       .fetch()
       .then((all) => app.syncAll(all.values()))
       .catch((err) => logger.error({ err }, 'member sync failed'));
+    // 招待リンク: 使われた回数を覚え直す
+    await inviteLinks.attach(guild).catch((err) => logger.warn({ err }, 'invite links attach failed'));
     // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
     await admission.catchUpIntros(guild).catch((err) => logger.warn({ err }, 'intro catch-up failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
@@ -126,6 +130,8 @@ async function main(): Promise<void> {
   });
   client.on(Events.GuildMemberAdd, (m) => {
     void app.onMemberAdd(m);
+    // だれの招待リンクで入ったか
+    void inviteLinks.onMemberAdd(m);
     // 入った人に、はじめの流れを DM で案内
     void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
   });
@@ -154,6 +160,7 @@ async function main(): Promise<void> {
     void admission.onInteraction(i);
     void omikuji.onInteraction(i);
     void onboarding.onInteraction(i);
+    void inviteLinks.onInteraction(i);
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);
     void shop.onInteraction(i);

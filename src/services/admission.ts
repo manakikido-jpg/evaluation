@@ -17,7 +17,7 @@ import { audit } from './audit.js';
 import { getMember } from './members.js';
 import { activeYakuCount } from './yaku.js';
 import { grantJoinBonus } from './economy.js';
-import { recordInvite, rewardInviter } from './invites.js';
+import { inviterOf, recordInvite, rewardInviter } from './invites.js';
 import { CONTACT_KINDS, isContactLevel, setContact, type ContactLevel } from './contact.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
@@ -86,10 +86,16 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
   await rewardInviter(ctx, memberId, now).catch((err: unknown) => logger.warn({ err }, 'invite reward failed'));
   // #お出迎え に「参拝しました」（通知は飛ばさない）
   const welcome = ctx.cfg.channels.welcome;
+  const invitedBy = welcome ? await inviterOf(ctx.db, memberId).catch(() => undefined) : undefined;
   if (welcome) {
     await safely('welcome post', () =>
       ctx.discord.sendMessage(welcome, {
-        content: [`🌸 <@${memberId}> さんが参拝しました！`, 'みなさん、ひと声かけてあげてください。', ...(opts.introUrl ? [`📝 自己紹介: ${opts.introUrl}`] : [])].join('\n'),
+        content: [
+          `🌸 <@${memberId}> さんが参拝しました！`,
+          'みなさん、ひと声かけてあげてください。',
+          ...(opts.introUrl ? [`📝 自己紹介: ${opts.introUrl}`] : []),
+          ...(invitedBy ? [`🤝 招待: <@${invitedBy}> さん`] : []),
+        ].join('\n'),
       }),
     );
   }

@@ -87,3 +87,26 @@ describe('招待した人の浮上ボーナス', () => {
     expect(await inviteActiveTick(db, cfg, new Date(T0.getTime() + 4 * DAY))).toEqual([]);
   });
 });
+
+describe('BOT が作る招待リンク', () => {
+  it('使われた回数が増えたリンクが 1 つだけなら、その持ち主。2 つ増えたら分からない。Discord にないリンクは無効に', async () => {
+    const { saveLink, matchJoin, activeLinkOf } = await import('../src/services/invites.js');
+    await saveLink(db, { code: 'aaa', inviterId: INVITER, channelId: '1', uses: 3 });
+    await saveLink(db, { code: 'bbb', inviterId: NEW2, channelId: '1', uses: 0 });
+    expect((await activeLinkOf(db, INVITER))?.code).toBe('aaa');
+    expect(await matchJoin(db, [{ code: 'aaa', uses: 4 }, { code: 'bbb', uses: 0 }, { code: 'human', uses: 9 }])).toBe(INVITER);
+    // 覚え直したので、同じ回数ならだれでもない
+    expect(await matchJoin(db, [{ code: 'aaa', uses: 4 }, { code: 'bbb', uses: 0 }])).toBeUndefined();
+    expect(await matchJoin(db, [{ code: 'aaa', uses: 5 }, { code: 'bbb', uses: 1 }])).toBeUndefined();
+    // bbb が消された
+    expect(await matchJoin(db, [{ code: 'aaa', uses: 6 }])).toBe(INVITER);
+    expect(await activeLinkOf(db, NEW2)).toBeUndefined();
+  });
+
+  it('リンクで入った記録は、あとで申請で選んだ人より優先（上書きしない）', async () => {
+    const { inviteOf } = await import('../src/services/invites.js');
+    expect(await recordInvite(db, NEW, INVITER, 'link')).toBe(true);
+    expect(await recordInvite(db, NEW, NEW2, 'answer')).toBe(false);
+    expect(await inviteOf(db, NEW)).toEqual({ inviterId: INVITER, source: 'link' });
+  });
+});
