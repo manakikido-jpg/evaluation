@@ -271,6 +271,8 @@ export const guildConfigSchema = z
         female: snowflake.optional(),
         /** 📝 絵馬待ち: 承認されて、まだ自己紹介を書いていない人。書くと 🔰参拝者 になる（任意。なければ承認ですぐ参拝者） */
         emaPending: snowflake.optional(),
+        /** 🧭 案内待ち: Discord の参加時の質問（オンボーディング）を終えて、まだ承認されていない人。承認（絵馬待ち・役職）で外す（任意。なければ名前に「案内待ち」を含むロール） */
+        guidePending: snowflake.optional(),
         /** 🏪 開業: 市場に出品できる（授与品「開業権利」で受ける）（任意） */
         merchant: snowflake.optional(),
         /** DM・フレンド追加の OK / 要相談 / NG（入鯖申請と #授与所 のボタンで選ぶ。プロフィールに出る）（任意） */

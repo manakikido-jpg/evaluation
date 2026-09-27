@@ -32,6 +32,7 @@ export type RoleKey =
   | 'male'
   | 'female'
   | 'ema_pending'
+  | 'guide_pending'
   | 'dm_ok'
   | 'dm_ask'
   | 'dm_ng'
@@ -120,6 +121,8 @@ export const ROLES: RoleSpec[] = [
   { key: 'sanpaisha', name: '🔰 参拝者', color: 0xb0b0b0, hoist: true, permissions: 0n },
   // 入鯖申請が承認されて、まだ自己紹介を書いていない人（#絵馬-男性・#絵馬-女性 だけ見える）
   { key: 'ema_pending', name: '📝 絵馬待ち', color: 0, hoist: false, permissions: 0n },
+  // Discord の参加時の質問（オンボーディング）を終えて、まだ承認されていない人（目印だけ。見える範囲は変えない）
+  { key: 'guide_pending', name: '🧭 案内待ち', color: 0, hoist: false, permissions: 0n },
   // 開業権利（授与品）: #市場 に出品できる。色なし
   { key: 'merchant', name: '🏪 開業', color: 0, hoist: false, permissions: 0n },
   // 性別（入鯖申請で選ぶ）。色なし

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-guide-pending',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord'],
+    title: '🧭 案内待ち のロール',
+    items: [
+      'Discord の参加時の質問（オンボーディング）を終えた人に、BOT が 🧭 案内待ち を付ける',
+      '入鯖申請が承認されて 📝絵馬待ち・役職 になったら、自動で外す（BOT が止まっていた間の分も、起動したときに合わせる）',
+      'ロールはセットアップで作るか、社務所Web の「ロール」で名前に「案内待ち」を含むロールを作る',
+    ],
+  },
+  {
     id: '2026-09-27-currency-zeni',
     date: '2026-09-27',
     kind: 'improve',

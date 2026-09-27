@@ -83,6 +83,7 @@ function knownIdsFrom(path: string, guildId: string): KnownIds | undefined {
         male: c.roles.male,
         female: c.roles.female,
         ema_pending: c.roles.emaPending,
+        guide_pending: c.roles.guidePending,
         merchant: c.roles.merchant,
         dm_ok: c.roles.contact?.dm.ok,
         dm_ask: c.roles.contact?.dm.ask,

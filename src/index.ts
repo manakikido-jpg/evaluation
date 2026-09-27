@@ -13,6 +13,7 @@ import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
+import { GuidePendingApp } from './discord/guidePending.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const gacha = new GachaApp(db, cfg);
+  const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
   const voiceGroups = new VoiceGroupApp(cfg);
@@ -96,6 +98,8 @@ async function main(): Promise<void> {
       .fetch()
       .then((all) => app.syncAll(all.values()))
       .catch((err) => logger.error({ err }, 'member sync failed'));
+    // 🧭 案内待ち: 止まっていた間に参加時の質問を終えた人・承認された人も合わせる
+    await guidePending.attach(guild).catch((err) => logger.warn({ err }, 'guide pending attach failed'));
     // 招待リンク: 使われた回数を覚え直す
     await inviteLinks.attach(guild).catch((err) => logger.warn({ err }, 'invite links attach failed'));
     // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
@@ -160,6 +164,8 @@ async function main(): Promise<void> {
   client.on(Events.GuildMemberUpdate, (old, m) => {
     void (async () => {
       await app.onMemberUpdate(m);
+      // 参加時の質問を終えたら 🧭案内待ち、承認されたら外す
+      await guidePending.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'guide pending update failed'));
       // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
       if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);
     })();

@@ -120,6 +120,7 @@ export function roleKind(cfg: GuildConfig, role: GuildRole): string | undefined 
   if (role.id === r.yoimairi) return '宵参り';
   if (role.id === r.male || role.id === r.female) return '性別';
   if (role.id === r.emaPending) return '絵馬待ち';
+  if (role.id === r.guidePending) return '案内待ち';
   if (role.id === r.merchant) return '開業（市場）';
   if (r.contact && [...Object.values(r.contact.dm), ...Object.values(r.contact.friend)].includes(role.id)) return 'DM・フレンド';
   if ([...(cfg.admin?.shinshokuRoleIds ?? []), ...(cfg.admin?.gujiRoleIds ?? [])].includes(role.id)) return '運営（管理画面に入れる）';
