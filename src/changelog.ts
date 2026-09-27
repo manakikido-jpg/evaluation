@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-invite-link-copy',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '招待リンクをコピーしやすく',
+    items: ['/招待リンク で、リンクだけのメッセージも出すように（長押し →「テキストをコピー」でリンクだけコピーできる）。説明の中のリンクも枠で囲んだ'],
+  },
+  {
     id: '2026-09-27-vc-panel-bots',
     date: '2026-09-27',
     kind: 'improve',

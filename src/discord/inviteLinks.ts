@@ -90,9 +90,14 @@ export class InviteLinkApp {
     }
     const n = await inviteCountOf(this.db, i.user.id);
     const e = cfg.economy;
+    const url = `https://discord.gg/${code}`;
     await i.editReply({
       content: [
-        `🔗 **あなた専用の招待リンク**: https://discord.gg/${code}`,
+        '🔗 **あなた専用の招待リンク**',
+        '```',
+        url,
+        '```',
+        '-# すぐ下に、リンクだけのメッセージも出します。長押し（右クリック）→「テキストをコピー」でそのままコピーできます',
         'このリンクで入った人は、あなたの招待として記録されます（申請で選ばなくても分かります）。',
         e.inviteReward > 0 ? `招待した人が 🔰参拝者 になると ${e.currencyEmoji}${e.inviteReward} 枚のお礼${e.inviteActiveReward > 0 ? `、その人が浮上した日ごとに ${e.inviteActiveReward} 枚` : ''}が届きます。` : '',
         `-# これまでに招待した人: 参拝者になった ${n.joined} 人${n.pending ? `・まだ ${n.pending} 人` : ''}`,
@@ -101,5 +106,7 @@ export class InviteLinkApp {
         .filter(Boolean)
         .join('\n'),
     });
+    // コピーしやすいように、リンクだけのメッセージ（本人にだけ見える）
+    await i.followUp({ content: url, ...EPHEMERAL });
   }
 }
