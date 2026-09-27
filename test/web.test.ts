@@ -1164,6 +1164,33 @@ describe('物御籤（管理画面）', () => {
     expect((await listCustomTickets(db))[0]?.enabled).toBe(false);
   });
 
+  it('出る確率（%）を直接決める: 運勢の出やすさと重みを合わせる。0% は OFF', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const { listPrizes, deletePrize, createPrize, prizeChances, ensureGachaPrizes } = await import('../src/services/gacha.js');
+    await ensureGachaPrizes(db, cfg.gacha);
+    for (const p of await listPrizes(db)) await deletePrize(db, p.id);
+    const a = await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 10, weight: 1, fallback: false });
+    const b = await createPrize(db, { tier: 'chukichi', kind: 'coins', amount: 50, weight: 1, fallback: false });
+    const c2 = await createPrize(db, { tier: 'chukichi', kind: 'coins', amount: 80, weight: 1, fallback: false });
+    const g = await login(GUJI);
+    const page = await (await get('/gacha', g)).text();
+    expect(page).toContain(`name="pct.${a.id}"`);
+    expect(page).toContain('action="/gacha/prizes/rates"');
+    expect((await post(g, '/gacha/prizes/rates', { [`pct.${a.id}`]: '150' })).headers.get('location')).toContain('prize_rates_invalid');
+    expect((await post(g, '/gacha/prizes/rates', { [`pct.${a.id}`]: '70', [`pct.${b.id}`]: '20', [`pct.${c2.id}`]: '10' })).headers.get('location')).toBe(
+      '/gacha?msg=prize_rates#gacha-prizes',
+    );
+    expect(store.current.gacha.rates).toMatchObject({ kichi: 70, chukichi: 30 });
+    const chances = prizeChances(store.current.gacha, await listPrizes(db));
+    expect([chances.get(a.id), chances.get(b.id), chances.get(c2.id)]).toEqual([70, 20, 10]);
+    // 0% にすると OFF
+    await post(g, '/gacha/prizes/rates', { [`pct.${a.id}`]: '70', [`pct.${b.id}`]: '30', [`pct.${c2.id}`]: '0' });
+    expect((await listPrizes(db)).find((p) => p.id === c2.id)?.enabled).toBe(false);
+    expect(prizeChances(store.current.gacha, await listPrizes(db)).get(b.id)).toBe(30);
+  });
+
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {
     const { ticketsOf } = await import('../src/services/tickets.js');
     const s = await login(STAFF);

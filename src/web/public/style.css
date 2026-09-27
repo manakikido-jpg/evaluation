@@ -315,3 +315,5 @@ fieldset.tier-pick label { display: inline-flex; align-items: center; gap: 4px; 
 td.prize-name { min-width: 180px; max-width: 340px; }
 .bulk-bar { flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .bulk-bar .sep { margin-left: 8px; }
+.pct { display: inline-flex; align-items: center; gap: 2px; }
+.pct input { width: 6.5em; }

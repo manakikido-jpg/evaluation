@@ -20,6 +20,7 @@ import {
   listClaims,
   listPrizes,
   PRIZE_KINDS,
+  prizeChances,
   recentDraws,
   resetGacha,
   topPlayers,
@@ -1836,7 +1837,7 @@ export function createWebApp(deps: WebDeps) {
     const weight = n('weight');
     const amount = kind === 'ticket' || kind === 'coins' || kind === 'custom' ? n('amount') : 1;
     const maxAmount = kind === 'coins' ? 1_000_000 : 100;
-    if (!Number.isInteger(weight) || weight < 1 || weight > 10_000 || !Number.isInteger(amount) || amount < 1 || amount > maxAmount) return undefined;
+    if (!Number.isInteger(weight) || weight < 1 || weight > 1_000_000 || !Number.isInteger(amount) || amount < 1 || amount > maxAmount) return undefined;
     // 特別な賞品の残り（空はいくらでも）
     const stockRaw = typeof body.stock === 'string' ? body.stock.trim() : '';
     const stock = stockRaw === '' ? null : Number(stockRaw);
@@ -1882,6 +1883,34 @@ export function createWebApp(deps: WebDeps) {
     const id = Number(c.req.param('id'));
     return Number.isSafeInteger(id) && id > 0 ? id : undefined;
   };
+
+  // 出る確率（%）で決める: 運勢の出やすさ = その運勢の中身の % の合計、重み = % に比例（0% は OFF）
+  app.post('/gacha/prizes/rates', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const prizes = await listPrizes(db);
+    const chances = prizeChances(cfg.gacha, prizes);
+    const edits: { prize: (typeof prizes)[number]; pct: number }[] = [];
+    for (const p of prizes) {
+      const v = body[`pct.${p.id}`];
+      if ((chances.get(p.id) ?? 0) <= 0 || typeof v !== 'string' || v.trim() === '') continue;
+      const pct = Number(v);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) return gachaBack(c, 'prize_rates_invalid', 'gacha-prizes');
+      edits.push({ prize: p, pct });
+    }
+    if (!edits.length || edits.every((e) => e.pct === 0)) return gachaBack(c, 'prize_rates_invalid', 'gacha-prizes');
+    const rates = { ...cfg.gacha.rates };
+    for (const t of GACHA_TIERS) {
+      const inTier = edits.filter((e) => e.prize.tier === t);
+      if (inTier.length) rates[t] = Math.round(inTier.reduce((n, e) => n + e.pct, 0) * 10000) / 10000;
+    }
+    if (!(await saveGacha(c, { rates }))) return gachaBack(c, 'prize_rates_invalid', 'gacha-prizes');
+    for (const e of edits) {
+      await updatePrize(db, e.prize.id, e.pct > 0 ? { weight: Math.max(1, Math.round(e.pct * 10000)) } : { enabled: false });
+    }
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.prize_rates', detail: { rates, prizes: edits.map((e) => ({ id: e.prize.id, pct: e.pct })) }, via: 'web' });
+    return gachaBack(c, 'prize_rates', 'gacha-prizes');
+  });
 
   // まとめて: 選んだ中身を ON・OFF・削除 / 全部を ON・OFF（/gacha/prizes/:id より先に）
   app.post('/gacha/prizes/bulk', async (c) => {

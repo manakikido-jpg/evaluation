@@ -1,6 +1,6 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
 import type { AdminSession, CustomTicket, GachaClaim, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
-import { effectiveRates, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, TIER_LABEL, untilPity } from '../../services/gacha.js';
+import { effectiveRates, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, roundRate, TIER_LABEL, untilPity } from '../../services/gacha.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
@@ -27,6 +27,8 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   prize_deleted: { text: '中身を削除しました。', kind: 'ok' },
   prize_invalid: { text: '中身の入力を確かめてください（限定ロール・ショップの品は選んでください。枚数・重みは 1 以上）。', kind: 'warn' },
   prize_not_found: { text: 'その中身はもうありません。', kind: 'warn' },
+  prize_rates: { text: '出る確率を保存しました。BOT には 1 分以内に反映されます。', kind: 'ok' },
+  prize_rates_invalid: { text: '出る確率は 0〜100 の数で入れてください（合計が 0 にはできません）。', kind: 'warn' },
   prize_bulk: { text: 'まとめて変えました。', kind: 'ok' },
   prize_bulk_none: { text: '変える中身を選んでください（左のチェック）。', kind: 'warn' },
   custom_created: { text: '自由な券を作りました。物御籤の中身やメンバーのページで使えます。', kind: 'ok' },
@@ -153,8 +155,8 @@ function WeightFields() {
   return (
     <>
       <label class="field">
-        <span>重み（1〜10000）</span>
-        <input type="number" name="weight" value="1" min={1} max={10000} required />
+        <span>重み（1 以上）</span>
+        <input type="number" name="weight" value="1" min={1} max={1000000} required />
       </label>
       <label class="field check">
         <input type="checkbox" name="fallback" value="yes" />
@@ -287,6 +289,18 @@ export function GachaPage(props: {
           「出る確率」は、全体の中でその中身が出る確率です（何も持っていない人のとき）。「ほかが出せないときだけ」にした中身は、同じ運勢のほかの中身（ロールなど）を全部持っている人にだけ出ます。止めた中身は出ません。
         </p>
         {guji && props.prizes.length > 0 && (
+          <form method="post" action="/gacha/prizes/rates" id="gp-rates" class="inline-actions bulk-bar">
+            {csrf}
+            <span>
+              ％ いまの合計 <strong>{roundRate([...chances.values()].reduce((n, v) => n + v, 0))}%</strong>
+            </span>
+            <button type="submit" class="ok">
+              「出る確率」を保存する
+            </button>
+            <small>表の「出る確率」を書き換えて押すと、運勢の出やすさと重みをそれに合わせます（合計は 100% に。100 でなければ割合で出します。0% にした中身は OFF）。</small>
+          </form>
+        )}
+        {guji && props.prizes.length > 0 && (
           <form method="post" action="/gacha/prizes/bulk" id="gp-bulk" class="inline-actions bulk-bar">
             {csrf}
             <span>☑ 選んだものを</span>
@@ -387,7 +401,7 @@ export function GachaPage(props: {
                               )}
                             </td>
                             <td class="num">
-                              {guji ? <input type="number" name="weight" form={f} value={String(p.weight)} min={1} max={10000} required aria-label="重み" /> : p.weight}
+                              {guji ? <input type="number" name="weight" form={f} value={String(p.weight)} min={1} max={1000000} required aria-label="重み" /> : p.weight}
                             </td>
                             <td>
                               {guji ? (
@@ -401,7 +415,33 @@ export function GachaPage(props: {
                                 ''
                               )}
                             </td>
-                            <td class="num">{!p.enabled ? '—' : (chances.get(p.id) ?? 0) > 0 ? `${chances.get(p.id)}%` : p.fallback ? '代わり' : '0%'}</td>
+                            <td class="num">
+                              {!p.enabled ? (
+                                '—'
+                              ) : (chances.get(p.id) ?? 0) > 0 ? (
+                                guji ? (
+                                  <span class="pct">
+                                    <input
+                                      type="number"
+                                      name={`pct.${p.id}`}
+                                      form="gp-rates"
+                                      value={String(chances.get(p.id))}
+                                      min={0}
+                                      max={100}
+                                      step="any"
+                                      aria-label="出る確率（%）"
+                                    />
+                                    %
+                                  </span>
+                                ) : (
+                                  `${chances.get(p.id)}%`
+                                )
+                              ) : p.fallback ? (
+                                '代わり'
+                              ) : (
+                                '0%'
+                              )}
+                            </td>
                             <td>{p.enabled ? '🟢 ON' : '⏸ OFF'}</td>
                             {guji && (
                               <td class="inline-actions">

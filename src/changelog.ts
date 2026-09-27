@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-gacha-percent',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '物御籤: 中身ごとの出る確率（%）を直接決められる',
+    items: ['一覧の「出る確率」を書き換えて保存すると、運勢の出やすさと重みをそれに合わせる（0% は OFF）。いまの合計も出る'],
+  },
+  {
     id: '2026-09-27-custom-tickets',
     date: '2026-09-27',
     kind: 'new',
