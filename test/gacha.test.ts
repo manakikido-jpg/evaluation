@@ -483,7 +483,7 @@ describe('物御籤の画面', () => {
     // 10 連の分は足りないので押せない
     const menu = gachaMenu(g, prizes, names, { balance: 600, sinceTop: 0, tickets: { ...emptyTickets(), room_free: 0, ema_pin: 0, market_nofee: 0 } }, '🌸花びら');
     const buttons = menu.components[0]!.toJSON().components as { disabled?: boolean }[];
-    expect(buttons.map((b) => Boolean(b.disabled))).toEqual([false, true]);
+    expect(buttons.map((b) => Boolean(b.disabled))).toEqual([false, true, false]);
     expect(tierPrizeText(g, prizes, 'kichi', names)).toBe('📌絵馬のピン留め券 ×1 60%');
   });
 

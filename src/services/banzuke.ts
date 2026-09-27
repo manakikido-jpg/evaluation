@@ -1,7 +1,7 @@
-import { and, asc, count, desc, eq, gte, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { members, settings, shuin } from '../db/schema.js';
+import { gachaDraws, members, settings, shuin } from '../db/schema.js';
 import { DiscordHttpError, type DiscordActions, type MessageBody } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { guildChannelsCached } from './notices.js';
@@ -12,7 +12,15 @@ import { guildChannelsCached } from './notices.js';
  */
 
 export type BanzukeEntry = { memberId: string; name: string; value: number };
-export type BanzukeData = { month: JstMonth; monthly: BanzukeEntry[]; total: BanzukeEntry[]; givers: BanzukeEntry[] };
+export type BanzukeData = {
+  month: JstMonth;
+  monthly: BanzukeEntry[];
+  total: BanzukeEntry[];
+  givers: BanzukeEntry[];
+  /** 🎐 今月の物御籤: よく引いた人・大吉（超大当たりもふくむ）を多く引いた人 */
+  gachaDraws?: BanzukeEntry[];
+  gachaTops?: BanzukeEntry[];
+};
 export type JstMonth = { key: string; label: string; start: Date; end: Date };
 
 const TOP = 10;
@@ -72,7 +80,23 @@ export async function banzukeData(db: Db, month: JstMonth): Promise<BanzukeData>
     monthly: await goenRanking(db, inMonth),
     total: await goenRanking(db, []),
     givers: givers.map((r) => ({ ...r, value: Number(r.value) })),
+    gachaDraws: await gachaRanking(db, month, false),
+    gachaTops: await gachaRanking(db, month, true),
   };
+}
+
+/** 今月の物御籤（tops: 大吉・超大当たりだけ数える） */
+async function gachaRanking(db: Db, month: JstMonth, tops: boolean): Promise<BanzukeEntry[]> {
+  const n = count();
+  const rows = await db
+    .select({ memberId: gachaDraws.memberId, name: members.displayName, value: n })
+    .from(gachaDraws)
+    .innerJoin(members, and(eq(members.id, gachaDraws.memberId), isNull(members.leftAt), eq(members.isBot, false)))
+    .where(and(gte(gachaDraws.createdAt, month.start), lt(gachaDraws.createdAt, month.end), ...(tops ? [inArray(gachaDraws.tier, ['super', 'daikichi'])] : [])))
+    .groupBy(gachaDraws.memberId, members.displayName)
+    .orderBy(desc(n), asc(gachaDraws.memberId))
+    .limit(TOP_GIVERS);
+  return rows.map((r) => ({ ...r, value: Number(r.value) }));
 }
 
 /** 名前に * や _ があっても太字などにならないように */
@@ -98,6 +122,9 @@ export function renderBanzuke(d: BanzukeData, opts: { final?: boolean } = {}): M
     ...(opts.final ? [] : ['### 🏆 累計のご縁', lines(d.total, (v) => `ご縁 ${v}`)]),
     `### 🚶 ${opts.final ? '' : '今月'}たくさん朱印を押した人`,
     lines(d.givers, (v) => `${v} 人`),
+    ...(d.gachaDraws?.length
+      ? [`### 🎐 ${opts.final ? '' : '今月'}物御籤をよく引いた人`, lines(d.gachaDraws, (v) => `${v} 回`), `### 🌸 ${opts.final ? '' : '今月'}大吉を多く引いた人`, lines(d.gachaTops ?? [], (v) => `${v} 回`)]
+      : []),
     '',
     opts.final ? `-# ${d.month.label}の番付はこれで確定です` : '-# 10 分ごとに更新します。朱印を押す・もらうと載ります',
   ];

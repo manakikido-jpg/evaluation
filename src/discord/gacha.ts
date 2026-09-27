@@ -25,11 +25,16 @@ import {
   drawGacha,
   effectiveRates,
   ensureGachaPrizes,
+  inPeriod,
   gachaStateOf,
   listPrizes,
   prizeChances,
   prizeLabel,
+  collectionOf,
+  shareFortune,
   TIER_LABEL,
+  ZODIAC,
+  zodiacLine,
   untilPity,
   type GachaPull,
 } from '../services/gacha.js';
@@ -61,6 +66,46 @@ const MAX_LIST = 8;
 
 type Names = { role: (id: string) => string | undefined; shop: (id: number) => ShopItem | undefined; coin?: string; custom?: (id: number) => CustomTicket | undefined };
 
+/**
+ * 「📜 中身と排出率」: 運勢ごとに、出る中身を全部と、それぞれの出る確率（本人にだけ）。
+ * 長いときは運勢ごとに分けて、いくつかのカードにする。
+ */
+export function gachaRatesView(g: GachaConfig, prizes: GachaPrizeRow[], names: Names, coin: string, now = new Date()) {
+  const rates = effectiveRates(g, prizes, now);
+  const chances = prizeChances(g, prizes, now);
+  const md = (d: Date) => {
+    const j = new Date(d.getTime() + 9 * 3_600_000);
+    return `${j.getUTCMonth() + 1}/${j.getUTCDate()}`;
+  };
+  const embeds = GACHA_TIERS.filter((t) => rates[t] > 0).map((t) => {
+    const on = prizes.filter((p) => p.tier === t && p.enabled && p.weight > 0 && inPeriod(p, now) && (p.kind !== 'special' || p.stock === null || p.stock > 0));
+    const lines = on.map((p) => {
+      const c = chances.get(p.id) ?? 0;
+      const notes = [
+        p.endsAt ? `🎍 ${md(new Date(p.endsAt.getTime() - 1))} まで` : '',
+        p.kind === 'special' && p.stock !== null ? `残り ${p.stock}` : '',
+        p.kind === 'role' || (p.kind === 'shop' && !names.shop(p.shopItemId ?? 0)?.durationDays) ? '持っていたら出ない' : '',
+      ].filter(Boolean);
+      return `${c > 0 ? `**${c}%**` : '代わり'} … ${prizeLabel(p, names)}${notes.length ? `（${notes.join('・')}）` : ''}`;
+    });
+    const backup = on.some((p) => (chances.get(p.id) ?? 0) === 0);
+    return {
+      title: `${TIER_LABEL[t].emoji} ${TIER_LABEL[t].name}　${rates[t]}%`,
+      description: [...lines, ...(backup ? ['-# 「代わり」は、ほかの中身を全部持っている人にだけ出ます'] : [])].join('\n').slice(0, 4000),
+      color: TIER_LABEL[t].color,
+    };
+  });
+  const left = g.pity > 0 && rates.daikichi > 0 ? `🎯 天井: 大吉が出ないまま ${g.pity} 回目は必ず大吉` : '🎯 天井はありません';
+  return {
+    content: [
+      `📜 **物御籤の中身と排出率**（1 回 ${fmt(g.price)} 枚・10 連 ${fmt(g.price * 10)} 枚。${coin}だけで引けます）`,
+      left,
+      '-# % は、1 回引いたときにその中身が出る確率です（何も持っていない人のとき）。持っているロールは出ないので、そのぶんほかの中身が出ます',
+    ].join('\n'),
+    embeds: embeds.slice(0, 10),
+  };
+}
+
 /** 運勢ごとの中身の説明（出る中身と確率。止めている中身は出さない） */
 export function tierPrizeText(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeRow[], tier: GachaPrizeRow['tier'], names: Names): string {
   const chances = prizeChances(g, prizes);
@@ -78,7 +123,7 @@ export function gachaMenu(
   g: GachaConfig,
   prizes: GachaPrizeRow[],
   names: Names,
-  s: { balance: number; sinceTop: number; tickets: Record<TicketKind, number>; buffs?: Buffs; custom?: CustomHolding[] },
+  s: { balance: number; sinceTop: number; tickets: Record<TicketKind, number>; buffs?: Buffs; custom?: CustomHolding[]; zodiac?: string[] },
   coin: string,
 ) {
   const rates = effectiveRates(g, prizes);
@@ -95,6 +140,7 @@ export function gachaMenu(
     `🎟 持っている券: ${allTicketsLine(s.tickets, s.custom) ?? 'なし'}`,
     ...(buffs?.fukuUntil ? [`🧧 福の札: <t:${Math.floor(buffs.fukuUntil.getTime() / 1000)}:f> まで、通話の${coin}が 2 倍`] : []),
     ...(buffs && buffs.luck > 0 ? [`🍀 運気アップ: あと **${buffs.luck}** 回、大吉が出やすい`] : []),
+    ...(s.zodiac?.length ? [`🐉 十二支: ${zodiacLine(s.zodiac)}（${s.zodiac.length}/12）`] : []),
     ...(buffs?.deco ? [`🏷 名前の飾り ${buffs.deco.emoji}: <t:${Math.floor(buffs.deco.until.getTime() / 1000)}:d> まで`] : []),
     '-# 部屋代・授与所の券は使う場面で。札は「🎟 券を使う」から',
   ];
@@ -116,6 +162,7 @@ export function gachaMenu(
       ? [new ButtonBuilder().setCustomId('gacha:draw:free').setLabel(`無料券で引く（${s.tickets.gacha_free} 枚）`).setEmoji('🎫').setStyle(ButtonStyle.Success)]
       : []),
     ...(usable ? [new ButtonBuilder().setCustomId('gacha:use').setLabel('券を使う').setEmoji('🎟').setStyle(ButtonStyle.Secondary)] : []),
+    new ButtonBuilder().setCustomId('gacha:rates').setLabel('中身と排出率').setEmoji('📜').setStyle(ButtonStyle.Secondary),
   );
   return {
     embeds: [{ title: '🎁 物御籤', description: lines.join('\n').slice(0, 4000), color: 0xd7003a }],
@@ -170,6 +217,7 @@ export function pullLine(p: GachaPull, roleName: (id: string) => string, coinNam
   let got: string;
   if (p.special) got = `🎊 ${p.special.label}（運営からお渡しします）`;
   else if (p.custom) got = `${p.custom.name} ×${p.custom.count}`;
+  else if (p.zodiac) got = `${p.zodiac.emoji}${p.zodiac.name}のお守り（${p.zodiac.count}/12）${p.zodiac.complete ? ' 🎉 十二支がそろいました！' : ''}`;
   else if (p.shopItemId) got = `${p.shopName ?? 'ショップの品'}${p.expiresAt ? `（${p.expiresAt.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })} まで）` : ''}`;
   else if (p.roleId) got = `「${roleName(p.roleId)}」`;
   else if (p.ticket) got = `${TICKET_LABEL[p.ticket].emoji}${TICKET_LABEL[p.ticket].name} ×${p.count}`;
@@ -200,6 +248,7 @@ export class GachaApp {
       if (interaction.isButton() && id === 'gacha:draw:free') return await this.draw(interaction, 1, true);
       if (interaction.isButton() && id.startsWith('gacha:draw:')) return await this.draw(interaction, Number(id.split(':')[2]));
       if (interaction.isButton() && id === 'gacha:use') return await this.useMenu(interaction);
+      if (interaction.isButton() && id === 'gacha:rates') return await this.ratesView(interaction);
       if (interaction.isStringSelectMenu() && id === 'gacha:usepick') {
         const v = interaction.values[0] ?? '';
         if (v.startsWith('custom:')) return await this.useCustomTicket(interaction, Number(v.slice(7)));
@@ -239,7 +288,8 @@ export class GachaApp {
       this.prizes(i),
       customHoldingsOf(this.db, i.user.id),
     ]);
-    await i.reply({ ...gachaMenu(g, p.prizes, p.names, { balance: w.balance, sinceTop: st.sinceTop, tickets, buffs, custom }, this.coin()), ...EPHEMERAL });
+    const zodiac = await collectionOf(this.db, i.user.id);
+    await i.reply({ ...gachaMenu(g, p.prizes, p.names, { balance: w.balance, sinceTop: st.sinceTop, tickets, buffs, custom, zodiac }, this.coin()), ...EPHEMERAL });
   }
 
   private async draw(i: ButtonInteraction<'cached'>, times: number, free = false): Promise<void> {
@@ -280,12 +330,45 @@ export class GachaApp {
         : []),
       `${this.coin()} 残り **${fmt(r.balance)}** 枚${left !== undefined ? ` ／ 天井まであと ${left} 回` : ''}`,
     ];
-    const [p, buffs, custom] = await Promise.all([this.prizes(i), buffsOf(this.db, i.user.id), customHoldingsOf(this.db, i.user.id)]);
+    const [p, buffs, custom, zodiac] = await Promise.all([
+      this.prizes(i),
+      buffsOf(this.db, i.user.id),
+      customHoldingsOf(this.db, i.user.id),
+      collectionOf(this.db, i.user.id),
+    ]);
+    // 🍶 おすそ分け: 大吉・超大当たりの数だけ、同じ通話にいる人に
+    const bigWins = r.pulls.filter((x) => x.tier === 'super' || x.tier === 'daikichi').length;
+    const vc = i.member.voice.channel;
+    if (bigWins && g.share > 0 && vc) {
+      const shared = await shareFortune(this.db, i.user.id, [...vc.members.values()].filter((m) => !m.user.bot).map((m) => m.id), g.share * bigWins);
+      if (shared.length) {
+        lines.push(`🍶 同じ通話の ${shared.length} 人に、${cfg.economy.currencyName} ${fmt(g.share * bigWins)} 枚ずつおすそ分けしました`);
+        if (vc.isSendable())
+          await vc
+            .send({
+              content: `🍶 **${i.member.displayName}** さんの物御籤の${r.pulls.some((x) => x.tier === 'super') ? '超大当たり' : '大吉'}のおすそ分け！ この通話のみなさんに ${cfg.economy.currencyEmoji}${cfg.economy.currencyName} ${fmt(g.share * bigWins)} 枚ずつ`,
+              allowedMentions: { parse: [] },
+            })
+            .catch(() => undefined);
+      }
+    }
     lines.push(`🎟 ${allTicketsLine(r.tickets, custom) ?? '券はありません'}`);
     await i.editReply({
       embeds: [{ title: `🎁 物御籤${times > 1 ? ` ${times} 連` : ''} ― ${TIER_LABEL[best].name}`, description: lines.join('\n'), color: TIER_LABEL[best].color }],
-      components: gachaMenu(g, p.prizes, p.names, { balance: r.balance, sinceTop: r.sinceTop, tickets: r.tickets, buffs, custom }, this.coin()).components,
+      components: gachaMenu(g, p.prizes, p.names, { balance: r.balance, sinceTop: r.sinceTop, tickets: r.tickets, buffs, custom, zodiac }, this.coin()).components,
     });
+
+    // 🐉 十二支がそろったら #慶事 でお祝い
+    if (r.pulls.some((x) => x.zodiac?.complete)) {
+      const keiji = cfg.channels.keiji ? i.guild.channels.cache.get(cfg.channels.keiji) : undefined;
+      if (keiji?.isSendable())
+        await keiji
+          .send({
+            embeds: [{ title: '🐉 十二支がそろいました！', description: `**${i.member.displayName}** さんが、物御籤で十二支のお守りを全部集めました。\n${zodiacLine(ZODIAC.map((z) => z.key))}`, color: 0xd4a017 }],
+            allowedMentions: { parse: [] },
+          })
+          .catch(() => undefined);
+    }
 
     // 運営が渡す特別な賞品: 運営に知らせて、当たった人に DM
     for (const x of r.pulls) if (x.special) await this.notifySpecial(i, x.special);
@@ -344,6 +427,14 @@ export class GachaApp {
     const home = this.cfg().channels.omikuji ?? guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
     const channel = home ? guild.channels.cache.get(home) : undefined;
     return channel?.isSendable() ? channel : undefined;
+  }
+
+  /** 📜 中身と排出率（本人にだけ） */
+  private async ratesView(i: ButtonInteraction<'cached'>): Promise<void> {
+    const g = this.cfg().gacha;
+    if (!g.enabled) return void (await i.reply({ content: '物御籤は今お休みしています。', ...EPHEMERAL }));
+    const p = await this.prizes(i);
+    await i.reply({ ...gachaRatesView(g, p.prizes, p.names, this.coin()), ...EPHEMERAL });
   }
 
   // ───────── 券を使う ─────────

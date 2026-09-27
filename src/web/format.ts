@@ -78,6 +78,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'tickets.grant': '運営から券を渡した',
   'tickets.take': '運営が券を減らした',
   'gacha.settings': '物御籤の設定を変更',
+  'gacha.presets': '物御籤におすすめの中身を足した',
   'interview.post': '面談の告知を流した',
   'interview.settings': '面談告知の定型文を変更',
   'gacha.reset': '物御籤をリセット（返金・取り上げ）',

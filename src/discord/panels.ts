@@ -67,7 +67,8 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
           description: [
             `${coin}で引くくじです。運勢に応じて、物御籤でしか受けられない色守り・称号や、いろいろな券が出ます。`,
             '',
-            '・下のボタンを押すと、値段・出る割合・中身・天井までの回数が（自分にだけ）出ます。そこから 1 回か 10 連で引けます',
+            '・「物御籤を引く」を押すと、値段・出る割合・天井までの回数が（自分にだけ）出ます。そこから 1 回か 10 連で引けます',
+            '・「📜 中身と排出率」で、出る中身と、それぞれの出る確率を見られます',
             '・大吉が出たら #おみくじ でお祝いします',
             `・${coin}だけで引けます（本物のお金は使いません）`,
             '',
@@ -76,7 +77,15 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
           color: SHU,
         },
       ],
-      components: [{ type: 1, components: [{ type: 2, style: 1, label: '物御籤を引く', custom_id: 'gacha:open', emoji: { name: '🎁' } }] }],
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 1, label: '物御籤を引く', custom_id: 'gacha:open', emoji: { name: '🎁' } },
+            { type: 2, style: 2, label: '中身と排出率', custom_id: 'gacha:rates', emoji: { name: '📜' } },
+          ],
+        },
+      ],
     };
   }
   if (kind === 'contact') {

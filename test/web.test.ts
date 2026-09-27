@@ -1191,6 +1191,39 @@ describe('物御籤（管理画面）', () => {
     expect(prizeChances(store.current.gacha, await listPrizes(db)).get(b.id)).toBe(30);
   });
 
+  it('おすすめの中身（ロールを作ってまとめて足す）・おすそ分けの設定・期間限定の中身', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const { listPrizes } = await import('../src/services/gacha.js');
+    const g = await login(GUJI);
+    await get('/gacha', g);
+    const before = (await listPrizes(db)).length;
+    actions.length = 0;
+    const loc = (await post(g, '/gacha/presets', {})).headers.get('location')!;
+    expect(loc).toMatch(/^\/gacha\?msg=presets&added=\d+&roles=7#gacha-prizes$/);
+    expect(actions.filter((a) => a.startsWith('createRole')).length).toBe(7);
+    const after = await listPrizes(db);
+    expect(after.length).toBeGreaterThan(before);
+    expect(after.some((p) => p.kind === 'special' && p.label === 'Discord Nitro 1 か月分')).toBe(true);
+    expect(after.some((p) => p.kind === 'zodiac')).toBe(true);
+    // おすそ分け
+    const rates = { 'rate.daikichi': '3', 'rate.chukichi': '12', 'rate.shokichi': '25', 'rate.kichi': '60' };
+    expect((await post(g, '/gacha/settings', { price: '500', pity: '30', share: '120', ...rates })).headers.get('location')).toContain('gacha_saved');
+    expect(store.current.gacha.share).toBe(120);
+    // 期間限定（最後の日はその日の終わりまで）
+    expect((await post(g, '/gacha/prizes', { tier: 'kichi', kind: 'coins', amount: '5', weight: '1', startsOn: '2026-10-01', endsOn: '2026-10-31' })).headers.get('location')).toContain(
+      'prize_added',
+    );
+    const seasonal = (await listPrizes(db)).find((p) => p.kind === 'coins' && p.amount === 5)!;
+    expect(seasonal.startsAt?.toISOString()).toBe('2026-09-30T15:00:00.000Z');
+    expect(seasonal.endsAt?.toISOString()).toBe('2026-10-31T15:00:00.000Z');
+    expect(await (await get('/gacha', g)).text()).toContain('🎍 10/1〜10/31');
+    expect((await post(g, '/gacha/prizes', { tier: 'kichi', kind: 'coins', amount: '5', weight: '1', startsOn: '2026-10-31', endsOn: '2026-10-01' })).headers.get('location')).toContain(
+      'prize_invalid',
+    );
+  });
+
   it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {
     const { ticketsOf } = await import('../src/services/tickets.js');
     const s = await login(STAFF);

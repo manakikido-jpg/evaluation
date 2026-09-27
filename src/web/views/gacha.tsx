@@ -1,6 +1,6 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
 import type { AdminSession, CustomTicket, GachaClaim, GachaDraw, GachaPrizeRow, ShopItem } from '../../db/schema.js';
-import { effectiveRates, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, roundRate, TIER_LABEL, untilPity } from '../../services/gacha.js';
+import { effectiveRates, inPeriod, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, roundRate, TIER_LABEL, untilPity } from '../../services/gacha.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
@@ -29,6 +29,7 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   prize_not_found: { text: 'その中身はもうありません。', kind: 'warn' },
   prize_rates: { text: '出る確率を保存しました。BOT には 1 分以内に反映されます。', kind: 'ok' },
   prize_rates_invalid: { text: '出る確率は 0〜100 の数で入れてください（合計が 0 にはできません）。', kind: 'warn' },
+  presets: { text: 'おすすめの中身を足しました（同じ中身がもうあるものは足していません）。作ったロールは、Discord でランク（役職）のロールより上に動かすと、名前の色が出ます。', kind: 'ok' },
   prize_bulk: { text: 'まとめて変えました。', kind: 'ok' },
   prize_bulk_none: { text: '変える中身を選んでください（左のチェック）。', kind: 'warn' },
   custom_created: { text: '自由な券を作りました。物御籤の中身やメンバーのページで使えます。', kind: 'ok' },
@@ -162,8 +163,30 @@ function WeightFields() {
         <input type="checkbox" name="fallback" value="yes" />
         <span>ほかが出せないときだけ出す（ロールを全部持っている人への代わり）</span>
       </label>
+      <details>
+        <summary>🎍 期間限定にする（なくても大丈夫）</summary>
+        <label class="field">
+          <span>出はじめる日（日本時間の 0 時から）</span>
+          <input type="date" name="startsOn" />
+        </label>
+        <label class="field">
+          <span>最後の日（その日の終わりまで）</span>
+          <input type="date" name="endsOn" />
+        </label>
+      </details>
     </>
   );
+}
+
+/** 期間限定の表示（10/1〜10/31） */
+function periodText(p: Pick<GachaPrizeRow, 'startsAt' | 'endsAt'>): string | undefined {
+  if (!p.startsAt && !p.endsAt) return undefined;
+  const md = (d: Date) => {
+    const j = new Date(d.getTime() + 9 * 3_600_000);
+    return `${j.getUTCMonth() + 1}/${j.getUTCDate()}`;
+  };
+  // 終わりは次の日の 0 時なので、1 日戻して見せる
+  return `🎍 ${p.startsAt ? md(p.startsAt) : ''}〜${p.endsAt ? md(new Date(p.endsAt.getTime() - 1)) : ''}`;
 }
 
 /** 物御籤のページ（運営みんなが見られる。変えられるのは宮司） */
@@ -239,6 +262,10 @@ export function GachaPage(props: {
               <label class="field">
                 <span>天井（大吉が出ないまま、この回数目は必ず大吉。0 でなし）</span>
                 <input type="number" name="pity" value={String(g.pity)} min={0} max={1000} required />
+              </label>
+              <label class="field">
+                <span>🍶 おすそ分け（大吉・超大当たりが出たとき、同じ通話にいる人それぞれに配る{props.coinName}。0 でなし）</span>
+                <input type="number" name="share" value={String(g.share)} min={0} max={100000} required />
               </label>
               {GACHA_TIERS.map((t) => (
                 <label class="field">
@@ -358,6 +385,13 @@ export function GachaPage(props: {
                             )}
                             <td class="wrap prize-name">
                               <small>{PRIZE_KIND_LABEL[p.kind]}</small> {prizeLabel(p, labelNames)}
+                              {periodText(p) && (
+                                <small class="tag gray">
+                                  {' '}
+                                  {periodText(p)}
+                                  {inPeriod(p, new Date()) ? '' : '（期間外）'}
+                                </small>
+                              )}
                               {p.kind === 'ticket' && p.ticket && TICKET_LABEL[p.ticket] && (
                                 <>
                                   <br />
@@ -478,6 +512,15 @@ export function GachaPage(props: {
       {guji && (
         <section class="card anchor" id="gacha-add">
           <h2>中身を足す</h2>
+          <form method="post" action="/gacha/presets" class="inline-actions bulk-bar">
+            {csrf}
+            <button type="submit" class="ok">
+              ✨ おすすめの中身をまとめて足す
+            </button>
+            <small>
+              限定の色守り 4 色・称号（大吉の申し子・物御籤の主・十二支守）のロールを作り、超大当たり（Discord Nitro 1 か月分・残り 1）・大吉（限定ロール）・中吉（福の札・運気アップ・無料券・ショップの色守り）・小吉（十二支・名前の飾り・贈り券・30% 割引）・吉（おみくじもう 1 回・10% 割引・100 銭）を足します。同じ中身がもうあれば足しません。あとから重み・%・ON/OFF で調整してください。
+            </small>
+          </form>
           <p class="note">足したい種類のところで、運勢と中身を選んで「足す」を押してください。重みは同じ運勢の中での出やすさです（ほかの中身が 1 なら、2 で 2 倍出やすい）。</p>
           <div class="prize-add">
             <form method="post" action="/gacha/prizes" class="card prize-kind">
@@ -582,6 +625,27 @@ export function GachaPage(props: {
               <label class="field">
                 <span>残りの数（空にするといくらでも。0 になったら出ない）</span>
                 <input type="number" name="stock" value="1" min={0} max={1000} />
+              </label>
+              <WeightFields />
+              <button type="submit" class="ok">
+                足す
+              </button>
+            </form>
+
+            <form method="post" action="/gacha/prizes" class="card prize-kind">
+              {csrf}
+              <input type="hidden" name="kind" value="zodiac" />
+              <h3>🐉 十二支のお守り</h3>
+              <p class="note">出るたびに、まだ持っていない十二支のお守りが 1 つ。12 そろうと、決めたロール（称号「十二支守」など）を付けて #慶事 でお祝いします。そろった人には出ません。</p>
+              <TierPick rates={rates} />
+              <label class="field">
+                <span>そろったときのロール（なくても大丈夫）</span>
+                <select name="roleId">
+                  <option value="">なし</option>
+                  {props.roles.map((r) => (
+                    <option value={r.id}>{r.name}</option>
+                  ))}
+                </select>
               </label>
               <WeightFields />
               <button type="submit" class="ok">

@@ -121,7 +121,7 @@ describe('物御籤の画面（札）', () => {
     const tickets = { ...emptyTickets(), gacha_free: 2, fuku: 1, room_free: 3 };
     const m = gachaMenu(g, prizes, names, { balance: 0, sinceTop: 0, tickets, buffs: { fukuUntil: new Date(T0.getTime() + H), luck: 4 } }, '🪙銭');
     const ids = (m.components[0]!.toJSON().components as { custom_id: string }[]).map((c) => c.custom_id);
-    expect(ids).toEqual(['gacha:draw:1', 'gacha:draw:10', 'gacha:draw:free', 'gacha:use']);
+    expect(ids).toEqual(['gacha:draw:1', 'gacha:draw:10', 'gacha:draw:free', 'gacha:use', 'gacha:rates']);
     const text = JSON.stringify(m.embeds);
     expect(text).toContain('🧧 福の札');
     expect(text).toContain('あと **4** 回');
@@ -134,7 +134,7 @@ describe('物御籤の画面（札）', () => {
     expect(useTicketMenu(emptyTickets()).components).toEqual([]);
     // 何も持っていなければ、引くボタンだけ
     const none = gachaMenu(g, prizes, names, { balance: 0, sinceTop: 0, tickets: emptyTickets() }, '🪙銭');
-    expect((none.components[0]!.toJSON().components as unknown[]).length).toBe(2);
+    expect((none.components[0]!.toJSON().components as unknown[]).length).toBe(3);
     // 使わない: 中身をすべて消しても落ちない
     for (const p of prizes) await deletePrize(db, p.id);
     await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 10, weight: 1, fallback: false });

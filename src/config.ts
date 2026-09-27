@@ -194,6 +194,8 @@ export const gachaSchema = z.object({
     })
     .default({ super: 0.01, daikichi: 3, chukichi: 12, shokichi: 25, kichi: 60 })
     .refine((r) => r.super + r.daikichi + r.chukichi + r.shokichi + r.kichi > 0, '出やすさの合計が 0 です'),
+  /** 🍶 おすそ分け: 大吉・超大当たりが出たとき、同じ通話にいる人それぞれに配る銭（0 でなし） */
+  share: z.number().int().min(0).max(100_000).default(50),
   /** 物御籤限定のロール（色守り・称号） */
   roleIds: z.array(snowflake).max(25).default([]),
   prizes: z.object({ daikichi: gachaPrizeSchema, chukichi: gachaPrizeSchema, shokichi: gachaPrizeSchema, kichi: gachaPrizeSchema }).default({

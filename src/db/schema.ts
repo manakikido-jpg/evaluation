@@ -684,6 +684,8 @@ export const gachaDraws = pgTable(
     shopItemId: integer('shop_item_id'),
     /** 自由な券が出たとき（枚数は ticket_count） */
     customTicketId: bigint('custom_ticket_id', { mode: 'number' }),
+    /** 十二支のお守りが出たとき（子・丑…） */
+    zodiac: text('zodiac'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('gacha_draws_member_idx').on(t.memberId, t.createdAt)],
@@ -700,13 +702,16 @@ export const gachaPrizes = pgTable(
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     tier: text('tier').$type<GachaTier>().notNull(),
-    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop' | 'special' | 'custom'>().notNull(),
+    kind: text('kind').$type<'role' | 'ticket' | 'coins' | 'shop' | 'special' | 'custom' | 'zodiac'>().notNull(),
     /** 運営が渡す特別な賞品の名前（例: Discord Nitro 1 か月分） */
     label: text('label'),
     /** 残りの数（null はいくらでも。0 になったら出ない） */
     stock: integer('stock'),
     /** 自由な券（custom_tickets） */
     customTicketId: bigint('custom_ticket_id', { mode: 'number' }),
+    /** 期間限定（この間だけ出る。なければいつでも） */
+    startsAt: timestamp('starts_at', { withTimezone: true }),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
     roleId: text('role_id'),
     ticket: text('ticket').$type<TicketKind>(),
     shopItemId: integer('shop_item_id'),
@@ -797,4 +802,15 @@ export const customTicketHoldings = pgTable(
     count: integer('count').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.ticketId] })],
+);
+
+/** 十二支のお守りコレクション（物御籤で 1 つずつ集める） */
+export const gachaCollection = pgTable(
+  'gacha_collection',
+  {
+    memberId: text('member_id').notNull(),
+    item: text('item').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.item] })],
 );

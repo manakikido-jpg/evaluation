@@ -58,6 +58,7 @@ const COIN_REASON: Record<string, string> = {
   gacha_prize: '物御籤の当たり',
   gacha_refund: '物御籤の払い戻し',
   gacha_reset: '物御籤のリセット（当たりの銭を戻してもらった）',
+  gacha_share: '物御籤のおすそ分け',
   onboarding: 'はじめての参拝のお祝い',
   invite: '招待のお礼',
   invite_active: '招待した人の浮上ボーナス',

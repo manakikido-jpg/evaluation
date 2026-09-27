@@ -31,6 +31,7 @@ import {
 import { addTickets, emptyTickets, ticketHolders, ticketsOf, takeTickets, TICKET_LABEL } from '../services/tickets.js';
 import { addCustom, createCustomTicket, customHolders, customHoldingsOf, customName, listCustomTickets, setCustomTicketEnabled, takeCustom } from '../services/customTickets.js';
 import { GachaPage, GACHA_FLASH, MemberGachaSection } from './views/gacha.js';
+import { addPresetPrizes, PRESET_ROLES, presetPrizes, type PresetRoleKey } from '../services/gachaPresets.js';
 import { InterviewPage } from './views/interview.js';
 import {
   DEFAULT_INTERVIEW_TEMPLATE,
@@ -1855,6 +1856,33 @@ export function createWebApp(deps: WebDeps) {
     return gachaBack(c, 'gacha_reset', 'gacha-basic');
   });
 
+  // おすすめの中身をまとめて足す（限定ロールがなければ作る）
+  app.post('/gacha/presets', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const existing = (await loadRoles()) ?? [];
+    const roles: Partial<Record<PresetRoleKey, string>> = {};
+    let rolesCreated = 0;
+    for (const r of PRESET_ROLES) {
+      const found = existing.find((x) => x.name === r.name);
+      if (found) {
+        roles[r.key] = found.id;
+        continue;
+      }
+      try {
+        const made = await deps.discord.createRole(cfg.guildId, { name: r.name, color: r.color, hoist: false, mentionable: false, permissions: '0' }, '物御籤のおすすめの中身');
+        roles[r.key] = made.id;
+        rolesCreated++;
+      } catch (err) {
+        logger.warn({ err, name: r.name }, 'preset role create failed');
+      }
+    }
+    const shopColors = (await listShopItems(db)).filter((i) => giftableShopItem(i) && i.roleGroup === 'color' && i.durationDays && !i.boosterOnly);
+    await ensureGachaPrizes(db, cfg.gacha);
+    const added = await addPresetPrizes(db, presetPrizes(roles, shopColors));
+    await audit(db, { actorId: c.get('session').userId, action: 'gacha.presets', detail: { added, rolesCreated }, via: 'web' });
+    return c.redirect(`/gacha?msg=presets&added=${added}&roles=${rolesCreated}#gacha-prizes`);
+  });
+
   // 自由な券を作る・ON/OFF
   app.post('/gacha/custom', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
@@ -1899,6 +1927,7 @@ export function createWebApp(deps: WebDeps) {
     const patch = {
       price: num('price'),
       pity: num('pity'),
+      ...(typeof body.share === 'string' ? { share: num('share') } : {}),
       // 送られなかった運勢は、いまの値のまま
       rates: Object.fromEntries(GACHA_TIERS.map((t) => [t, body[`rate.${t}`] === undefined ? cfg.gacha.rates[t] : num(`rate.${t}`)])) as GuildConfig['gacha']['rates'],
     };
@@ -1928,7 +1957,21 @@ export function createWebApp(deps: WebDeps) {
     const nums = prizeNumbers(body, kind);
     if (!nums) return gachaBack(c, 'prize_invalid', 'gacha-add');
     const input: PrizeInput = { tier, kind, ...nums };
-    if (kind === 'role') {
+    // 🎍 期間限定（日本時間の日付。最後の日は、その日の終わりまで）
+    const day = (k: string, add = 0) => {
+      const v = typeof body[k] === 'string' ? (body[k] as string) : '';
+      const d = /^\d{4}-\d{2}-\d{2}$/.test(v) ? parseJstLocal(`${v}T00:00`) : undefined;
+      return d ? new Date(d.getTime() + add * 86_400_000) : undefined;
+    };
+    const startsAt = day('startsOn');
+    const endsAt = day('endsOn', 1);
+    if (startsAt && endsAt && endsAt <= startsAt) return gachaBack(c, 'prize_invalid', 'gacha-add');
+    if (startsAt) input.startsAt = startsAt;
+    if (endsAt) input.endsAt = endsAt;
+    if (kind === 'zodiac') {
+      const roleId = typeof body.roleId === 'string' ? body.roleId : '';
+      if (roleId && validId(roleId) && roleId !== cfg.guildId) input.roleId = roleId;
+    } else if (kind === 'role') {
       const roleId = typeof body.roleId === 'string' ? body.roleId : '';
       if (!validId(roleId) || roleId === cfg.guildId) return gachaBack(c, 'prize_invalid', 'gacha-add');
       input.roleId = roleId;

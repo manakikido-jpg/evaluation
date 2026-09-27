@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { gachaClaims, gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem, type CustomTicket } from '../db/schema.js';
+import { gachaClaims, gachaCollection, gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem, type CustomTicket } from '../db/schema.js';
 import { addCoins, deductUpTo, spendWithin, walletOf } from './economy.js';
 import { grantRoleItem } from './shop.js';
 import { takeLuck } from './buffs.js';
@@ -45,8 +45,8 @@ export function pickTier(g: Pick<GachaConfig, 'rates'>, rand: Rand = Math.random
 // ───────── 中身 ─────────
 
 export type PrizeKind = GachaPrizeRow['kind'];
-export const PRIZE_KINDS: PrizeKind[] = ['role', 'ticket', 'coins', 'shop', 'special', 'custom'];
-export const PRIZE_KIND_LABEL: Record<PrizeKind, string> = { role: '限定ロール', ticket: '券', coins: '銭', shop: 'ショップの品', special: '運営が渡す賞品', custom: '自由な券' };
+export const PRIZE_KINDS: PrizeKind[] = ['role', 'ticket', 'coins', 'shop', 'special', 'custom', 'zodiac'];
+export const PRIZE_KIND_LABEL: Record<PrizeKind, string> = { role: '限定ロール', ticket: '券', coins: '銭', shop: 'ショップの品', special: '運営が渡す賞品', custom: '自由な券', zodiac: '十二支のお守り' };
 
 /** 中身の名前（role: ロールの名前・shop: ショップの品。分からなければ「消えた〜」） */
 export function prizeLabel(
@@ -62,6 +62,10 @@ export function prizeLabel(
   if (p.kind === 'ticket') return p.ticket ? `${TICKET_LABEL[p.ticket].emoji}${TICKET_LABEL[p.ticket].name} ×${p.amount}` : '券';
   if (p.kind === 'coins') return `${names.coin ?? '🪙銭'} ${p.amount.toLocaleString('ja-JP')} 枚`;
   if (p.kind === 'special') return `🎊 ${p.label ?? '特別な賞品'}`;
+  if (p.kind === 'zodiac') {
+    const reward = p.roleId ? names.role(p.roleId) : undefined;
+    return `🐉 十二支のお守り（12 種${reward ? `・そろうと「${reward}」` : ''}）`;
+  }
   if (p.kind === 'custom') {
     const t = p.customTicketId ? names.custom?.(p.customTicketId) : undefined;
     return t ? `${customName(t)} ×${p.amount}` : '（消えた自由な券）';
@@ -79,7 +83,7 @@ export async function listPrizes(db: Db): Promise<GachaPrizeRow[]> {
 }
 
 export type PrizeInput = Pick<GachaPrizeRow, 'tier' | 'kind' | 'amount' | 'weight' | 'fallback'> &
-  Partial<Pick<GachaPrizeRow, 'roleId' | 'ticket' | 'shopItemId' | 'enabled' | 'label' | 'stock' | 'customTicketId'>>;
+  Partial<Pick<GachaPrizeRow, 'roleId' | 'ticket' | 'shopItemId' | 'enabled' | 'label' | 'stock' | 'customTicketId' | 'startsAt' | 'endsAt'>>;
 
 export async function createPrize(db: Db, p: PrizeInput): Promise<GachaPrizeRow> {
   const [row] = await db.insert(gachaPrizes).values(p).returning();
@@ -124,9 +128,23 @@ export async function ensureGachaPrizes(db: Db, g: GachaConfig): Promise<void> {
   if (rows.length) await db.insert(gachaPrizes).values(rows.map((r, i) => ({ ...r, position: i })));
 }
 
+/** 引く人ごとの事情（持っているロール・ショップの品・自由な券・集めた十二支・いま） */
+type DrawCtx = {
+  owned: ReadonlySet<string>;
+  shop: ReadonlyMap<number, ShopItem>;
+  custom?: ReadonlyMap<number, CustomTicket>;
+  zodiac?: ReadonlySet<string>;
+  now: Date;
+};
+
+/** 期間限定の中身が、いま出る期間か */
+export const inPeriod = (p: Pick<GachaPrizeRow, 'startsAt' | 'endsAt'>, now: Date) => (!p.startsAt || p.startsAt <= now) && (!p.endsAt || now < p.endsAt);
+
 /** その人に出せる中身か（持っているロールは出さない。期限つきのショップの品は延長になるので出す） */
-function eligible(p: GachaPrizeRow, owned: ReadonlySet<string>, shop: ReadonlyMap<number, ShopItem>, custom?: ReadonlyMap<number, CustomTicket>): boolean {
-  if (!p.enabled || p.weight <= 0) return false;
+function eligible(p: GachaPrizeRow, ctx: DrawCtx): boolean {
+  const { owned, shop, custom } = ctx;
+  if (!p.enabled || p.weight <= 0 || !inPeriod(p, ctx.now)) return false;
+  if (p.kind === 'zodiac') return (ctx.zodiac?.size ?? 0) < ZODIAC.length;
   if (p.kind === 'special') return Boolean(p.label) && (p.stock === null || p.stock > 0);
   if (p.kind === 'custom') return Boolean(p.customTicketId && custom?.get(p.customTicketId)?.enabled) && p.amount > 0;
   if (p.kind === 'role') return Boolean(p.roleId) && !owned.has(p.roleId!);
@@ -139,14 +157,8 @@ function eligible(p: GachaPrizeRow, owned: ReadonlySet<string>, shop: ReadonlyMa
 }
 
 /** 運勢ごとの、今出せる中身（ふつうの中身が 1 つもなければ「ほかが出せないときだけ」の中身） */
-function choicesOf(
-  prizes: GachaPrizeRow[],
-  tier: GachaTier,
-  owned: ReadonlySet<string>,
-  shop: ReadonlyMap<number, ShopItem>,
-  custom?: ReadonlyMap<number, CustomTicket>,
-): GachaPrizeRow[] {
-  const ok = prizes.filter((p) => p.tier === tier && eligible(p, owned, shop, custom));
+function choicesOf(prizes: GachaPrizeRow[], tier: GachaTier, ctx: DrawCtx): GachaPrizeRow[] {
+  const ok = prizes.filter((p) => p.tier === tier && eligible(p, ctx));
   const normal = ok.filter((p) => !p.fallback);
   return normal.length ? normal : ok;
 }
@@ -161,14 +173,14 @@ function pickWeighted<T extends { weight: number }>(list: T[], rand: Rand): T {
 }
 
 /** 出せる中身か（止めていない・重みがある・特別な賞品は残りがある） */
-const live = (p: GachaPrizeRow) => p.enabled && p.weight > 0 && (p.kind !== 'special' || p.stock === null || p.stock > 0);
+const live = (p: GachaPrizeRow, now: Date) => p.enabled && p.weight > 0 && inPeriod(p, now) && (p.kind !== 'special' || p.stock === null || p.stock > 0);
 
 /** 割合の丸め（0.01% のような小さい値も 0 にしない） */
 export const roundRate = (v: number) => (v === 0 ? 0 : v >= 1 ? Math.round(v * 100) / 100 : Number(v.toPrecision(2)));
 
 /** 中身のある運勢だけで数えた、出る割合（%） */
-export function effectiveRates(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeRow[]): Record<GachaTier, number> {
-  const rates = Object.fromEntries(GACHA_TIERS.map((t) => [t, prizes.some((p) => p.tier === t && live(p)) ? g.rates[t] : 0])) as Record<
+export function effectiveRates(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeRow[], now = new Date()): Record<GachaTier, number> {
+  const rates = Object.fromEntries(GACHA_TIERS.map((t) => [t, prizes.some((p) => p.tier === t && live(p, now)) ? g.rates[t] : 0])) as Record<
     GachaTier,
     number
   >;
@@ -179,11 +191,11 @@ export function effectiveRates(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrize
  * 中身ごとの出る確率（%。だれも何も持っていないとき）。止めている中身は 0。
  * 「ほかが出せないときだけ」の中身は、同じ運勢にふつうの中身があれば 0（fallback: true で返す）
  */
-export function prizeChances(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeRow[]): Map<number, number> {
-  const rates = effectiveRates(g, prizes);
+export function prizeChances(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeRow[], now = new Date()): Map<number, number> {
+  const rates = effectiveRates(g, prizes, now);
   const out = new Map<number, number>();
   for (const t of GACHA_TIERS) {
-    const on = prizes.filter((p) => p.tier === t && live(p));
+    const on = prizes.filter((p) => p.tier === t && live(p, now));
     const normal = on.filter((p) => !p.fallback);
     const pool = normal.length ? normal : on;
     const sum = pool.reduce((n, p) => n + p.weight, 0);
@@ -213,6 +225,8 @@ export type GachaPull = {
   special?: { label: string; claimId: number };
   /** 自由な券 */
   custom?: { id: number; name: string; count: number };
+  /** 十二支のお守り（count: 集めた数。complete: 12 そろった） */
+  zodiac?: { key: string; name: string; emoji: string; count: number; complete: boolean };
 };
 
 export type GachaResult =
@@ -244,9 +258,11 @@ export async function drawGacha(
   const shop = new Map((await db.select().from(shopItems)).map((i) => [i.id, i]));
   const custom = new Map((await listCustomTickets(db)).map((t) => [t.id, t]));
   const owned = new Set(heldRoleIds);
+  const zodiac = new Set(await collectionOf(db, memberId));
+  const ctx: DrawCtx = { owned, shop, custom, zodiac, now };
   /** 今出せる運勢（出やすさ 0 と、出せる中身がない運勢はのぞく） */
   const available = () => {
-    const rates = Object.fromEntries(GACHA_TIERS.map((t) => [t, g.rates[t] > 0 && choicesOf(prizes, t, owned, shop, custom).length ? g.rates[t] : 0])) as Record<
+    const rates = Object.fromEntries(GACHA_TIERS.map((t) => [t, g.rates[t] > 0 && choicesOf(prizes, t, ctx).length ? g.rates[t] : 0])) as Record<
       GachaTier,
       number
     >;
@@ -271,7 +287,7 @@ export async function drawGacha(
       const lucky = !pity && rates.daikichi > 0 && (await takeLuck(tx, memberId));
       const tier = pity ? 'daikichi' : pickTier({ rates: lucky ? { ...rates, daikichi: rates.daikichi * 2 } : rates }, rand);
       sinceTop = tier === 'daikichi' ? 0 : sinceTop + 1;
-      const p = pickWeighted(choicesOf(prizes, tier, owned, shop, custom), rand);
+      const p = pickWeighted(choicesOf(prizes, tier, ctx), rand);
       const pull: GachaPull = { tier, pity, prizeId: p.id, kind: p.kind, count: 0, coins: 0, ...(lucky ? { lucky: true } : {}) };
       if (p.kind === 'role') {
         pull.roleId = p.roleId!;
@@ -297,6 +313,18 @@ export async function drawGacha(
         }
         const [claim] = await tx.insert(gachaClaims).values({ memberId, prizeId: p.id, label: p.label ?? '特別な賞品' }).returning();
         pull.special = { label: claim!.label, claimId: claim!.id };
+      } else if (p.kind === 'zodiac') {
+        // 🐉 十二支のお守り: まだ持っていないものから 1 つ。12 そろったら、決めたロール（称号）
+        const missing = ZODIAC.filter((z) => !zodiac.has(z.key));
+        const z = missing[Math.floor(rand() * missing.length)]!;
+        await tx.insert(gachaCollection).values({ memberId, item: z.key, createdAt: now }).onConflictDoNothing();
+        zodiac.add(z.key);
+        const complete = zodiac.size >= ZODIAC.length;
+        pull.zodiac = { key: z.key, name: z.name, emoji: z.emoji, count: zodiac.size, complete };
+        if (complete && p.roleId && !owned.has(p.roleId)) {
+          pull.roleId = p.roleId;
+          owned.add(p.roleId);
+        }
       } else if (p.kind === 'custom') {
         const t = custom.get(p.customTicketId!)!;
         await addCustom(tx, memberId, t.id, p.amount);
@@ -340,6 +368,8 @@ export async function drawGacha(
         prizeId: p.prizeId,
         shopItemId: p.shopItemId ?? null,
         customTicketId: p.custom?.id ?? null,
+        zodiac: p.zodiac?.key ?? null,
+        createdAt: now,
         ...(p.custom ? { ticketCount: p.custom.count } : {}),
       })),
     );
@@ -478,6 +508,7 @@ export async function resetGacha(db: Db, now = new Date()): Promise<GachaResetRe
     }
     await tx.delete(gachaDraws);
     await tx.delete(gachaState);
+    await tx.delete(gachaCollection);
     return out;
   });
 }
@@ -501,4 +532,40 @@ export async function deliverClaim(db: Db, id: number, by: string, now = new Dat
     .where(and(eq(gachaClaims.id, id), isNull(gachaClaims.deliveredAt)))
     .returning();
   return row;
+}
+
+// ───────── 十二支のお守り ─────────
+
+export const ZODIAC = [
+  { key: 'ne', name: '子', emoji: '🐭' },
+  { key: 'ushi', name: '丑', emoji: '🐮' },
+  { key: 'tora', name: '寅', emoji: '🐯' },
+  { key: 'u', name: '卯', emoji: '🐰' },
+  { key: 'tatsu', name: '辰', emoji: '🐲' },
+  { key: 'mi', name: '巳', emoji: '🐍' },
+  { key: 'uma', name: '午', emoji: '🐴' },
+  { key: 'hitsuji', name: '未', emoji: '🐑' },
+  { key: 'saru', name: '申', emoji: '🐵' },
+  { key: 'tori', name: '酉', emoji: '🐔' },
+  { key: 'inu', name: '戌', emoji: '🐶' },
+  { key: 'i', name: '亥', emoji: '🐗' },
+] as const;
+
+/** 集めた十二支（key） */
+export async function collectionOf(db: Db, memberId: string): Promise<string[]> {
+  const rows = await db.select({ item: gachaCollection.item }).from(gachaCollection).where(eq(gachaCollection.memberId, memberId));
+  return rows.map((r) => r.item);
+}
+
+/** 十二支の並び（持っているものは絵文字、まだのものは ・） */
+export const zodiacLine = (have: readonly string[]) => ZODIAC.map((z) => (have.includes(z.key) ? z.emoji : '・')).join('');
+
+/** 🍶 おすそ分け: 大吉・超大当たりを引いた人と同じ通話にいる人それぞれに銭（引いた人はのぞく） */
+export async function shareFortune(db: Db, fromId: string, memberIds: readonly string[], amount: number): Promise<string[]> {
+  const to = [...new Set(memberIds)].filter((id) => id !== fromId);
+  if (amount <= 0 || !to.length) return [];
+  await db.transaction(async (tx) => {
+    for (const id of to) await addCoins(tx, id, amount, 'gacha_share', { from: fromId });
+  });
+  return to;
 }
