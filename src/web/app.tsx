@@ -7,8 +7,10 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
-import { adminLevelOf, GACHA_TIERS, type GuildConfig } from '../config.js';
-import { gachaStats } from '../services/gacha.js';
+import { adminLevelOf, GACHA_TIERS, TICKET_KINDS, type GuildConfig, type TicketKind } from '../config.js';
+import { gachaStateOf, gachaStats, recentDraws, topPlayers } from '../services/gacha.js';
+import { addTickets, ticketHolders, ticketsOf, takeTickets, TICKET_LABEL } from '../services/tickets.js';
+import { GachaPage, GACHA_FLASH, MemberGachaSection } from './views/gacha.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -284,6 +286,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
   app.use('/market', requireAdmin);
+  app.use('/gacha', requireAdmin);
   for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
@@ -350,6 +353,8 @@ export function createWebApp(deps: WebDeps) {
       partnersOf(db, id, since30),
     ]);
     const vcDaily = await dailyUsage(db, since30, jstDate(now()), { memberId: id });
+    const [gState, gTickets, gDraws] = await Promise.all([gachaStateOf(db, id), ticketsOf(db, id), recentDraws(db, { memberId: id, limit: 15 })]);
+    const gRoleNames = gDraws.some((d) => d.roleId) ? await roleNameMap() : new Map<string, string>();
     const vcByCategory = (await usageByMember(db, since30)).find((m) => m.memberId === id);
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
@@ -410,6 +415,16 @@ export function createWebApp(deps: WebDeps) {
             names={names}
             invitedBy={invitedBy}
             inviteCount={inviteCount}
+          />
+          <MemberGachaSection
+            session={session}
+            memberId={id}
+            gacha={cfg.gacha}
+            state={gState}
+            tickets={gTickets}
+            draws={gDraws}
+            roleNames={gRoleNames}
+            flash={flash && Object.hasOwn(GACHA_FLASH, flash) ? flash : undefined}
           />
           <ModerationSection
             cfg={cfg}
@@ -643,6 +658,36 @@ export function createWebApp(deps: WebDeps) {
       `${e.currencyEmoji} 咲楽ノ宮の社務所から、${e.currencyName}が **${amount.toLocaleString('ja-JP')} 枚** 届きました。\n> ${note}\n残高は \`/御朱印帳\` で見られます。`,
     );
     return back(c, id, sent ? 'coins_given' : 'coins_given_nodm');
+  });
+
+  // 券を渡す・減らす（宮司のみ）
+  app.post('/members/:id/tickets', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const to = (msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-gacha`);
+    if (!gujiOnly(c)) return to('tickets_forbidden');
+    const body = await c.req.parseBody();
+    const kind = body.kind as TicketKind;
+    const count = Number(body.count);
+    const note = field(body, 'note', 200);
+    if (!TICKET_KINDS.includes(kind) || !Number.isInteger(count) || count < 1 || count > 100 || !note) return to('tickets_invalid');
+    const m = await getMember(db, id);
+    if (!m || m.isBot) return back(c, id, 'denied_not_found');
+    const by = c.get('session').userId;
+    const t = TICKET_LABEL[kind];
+    if (body.mode === 'take') {
+      const taken = await takeTickets(db, id, kind, count);
+      await audit(db, { actorId: by, targetId: id, action: 'tickets.take', detail: { kind, count, taken, note }, via: 'web' });
+      return to(taken === 0 ? 'tickets_none' : taken < count ? 'tickets_taken_short' : 'tickets_taken');
+    }
+    await addTickets(db, id, kind, count);
+    await audit(db, { actorId: by, targetId: id, action: 'tickets.grant', detail: { kind, count, note }, via: 'web' });
+    if (body.dm !== 'yes') return to('tickets_given_quiet');
+    const sent = await deps.discord.sendDm(
+      id,
+      `🎟 咲楽ノ宮の社務所から、${t.emoji}${t.name} が **${count} 枚** 届きました。\n> ${note}\n${t.note}。持っている券は、自分のプロフィールで見られます。`,
+    );
+    return to(sent ? 'tickets_given' : 'tickets_given_nodm');
   });
 
   app.post('/members/:id/memo', async (c) => {
@@ -1377,6 +1422,9 @@ export function createWebApp(deps: WebDeps) {
   app.use('/roles', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
   app.use('/roles/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
 
+  /** ロールの名前（Discord から読めなければ空） */
+  const roleNameMap = async () => new Map(((await loadRoles()) ?? []).map((r) => [r.id, r.name]));
+
   const loadRoles = async (): Promise<GuildRole[] | undefined> => {
     try {
       return (await deps.discord.guildRoles(cfg.guildId)).sort((a, b) => b.position - a.position);
@@ -1590,6 +1638,34 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // ───────── 市場（神職・宮司）: 問題ありの取引・出品の取り下げ ─────────
+
+  // ───────── 物御籤 ─────────
+
+  app.get('/gacha', async (c) => {
+    const [stats, draws, tops, players, holders, roleNames] = await Promise.all([
+      gachaStats(db),
+      recentDraws(db, { limit: 100 }),
+      recentDraws(db, { limit: 20, topOnly: true }),
+      topPlayers(db),
+      ticketHolders(db),
+      roleNameMap(),
+    ]);
+    const names = await namesOf(db, [...draws.map((d) => d.memberId), ...tops.map((d) => d.memberId), ...players.map((p) => p.memberId), ...holders.map((h) => h.memberId)]);
+    return c.html(
+      <GachaPage
+        session={c.get('session')}
+        gacha={cfg.gacha}
+        coinName={cfg.economy.currencyName}
+        stats={stats}
+        draws={draws}
+        tops={tops}
+        players={players}
+        holders={holders}
+        names={names}
+        roleNames={roleNames}
+      />,
+    );
+  });
 
   app.get('/market', async (c) => {
     const [orders, listings] = await Promise.all([recentOrders(db), recentListings(db)]);

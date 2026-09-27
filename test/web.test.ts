@@ -126,7 +126,7 @@ const get = (path: string, session: string, headers: Record<string, string> = {}
 
 describe('ログイン', () => {
   it('ログインしていなければログイン画面へ', async () => {
-    for (const p of ['/', '/members', `/members/${USER}`, '/audit']) {
+    for (const p of ['/', '/members', `/members/${USER}`, '/audit', '/gacha']) {
       const res = await app.request(p);
       expect(res.status).toBe(302);
       expect(res.headers.get('location')).toBe('/login');
@@ -965,6 +965,60 @@ describe('市場（管理画面）', () => {
     expect((await form(s, `/market/listings/${listing.id}/remove`)).headers.get('location')).toBe('/market?msg=removed');
     expect(actions.some((a) => a.startsWith('edit 920000000000000002'))).toBe(true);
     expect((await form(s, `/market/listings/${listing.id}/remove`)).headers.get('location')).toBe('/market?msg=done_already');
+  });
+});
+
+describe('物御籤（管理画面）', () => {
+  const post = async (session: string, path: string, form: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...form }).toString(),
+    });
+  };
+
+  it('神職も見られる: 回数・運勢ごとの割合・最近の結果・券を持っている人・よく引いている人', async () => {
+    const { drawGacha } = await import('../src/services/gacha.js');
+    await addCoins(db, USER, 1000, 'adjust');
+    await drawGacha(db, cfg.gacha, USER, 1, [], () => 0);
+    await drawGacha(db, cfg.gacha, USER, 1, [], () => 0.99);
+    const s = await login(STAFF);
+    const res = await get('/gacha', s);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    for (const t of ['🎁 物御籤', '引かれた回数', '最近の大吉', 'よく引いている人', '券を持っている人', '部屋代無料券', '絵馬のピン留め券', '50%', `/members/${USER}`]) expect(html).toContain(t);
+    // 設定へのリンクは宮司だけ
+    expect(html).not.toContain('/settings#sec-gacha');
+    expect(await (await get('/gacha', await login(GUJI))).text()).toContain('/settings#sec-gacha');
+    // メンバーのページにも（券を渡すフォームは宮司だけ）
+    const member = await (await get(`/members/${USER}`, s)).text();
+    expect(member).toContain('🎁 物御籤');
+    expect(member).toContain('引いた回数 <strong>2</strong>');
+    expect(member).not.toContain('/tickets"');
+  });
+
+  it('券を渡す・減らす（宮司のみ・理由が要る・持っている分まで減らす）', async () => {
+    const { ticketsOf } = await import('../src/services/tickets.js');
+    const s = await login(STAFF);
+    expect((await post(s, `/members/${USER}/tickets`, { mode: 'grant', kind: 'room_free', count: '2', note: 'お礼' })).headers.get('location')).toBe(
+      `/members/${USER}?msg=tickets_forbidden#sec-gacha`,
+    );
+    const g = await login(GUJI);
+    expect(await (await get(`/members/${USER}`, g)).text()).toContain(`/members/${USER}/tickets`);
+    const loc = async (form: Record<string, string>) => (await post(g, `/members/${USER}/tickets`, form)).headers.get('location');
+    expect(await loc({ mode: 'grant', kind: 'nope', count: '1', note: 'x' })).toContain('tickets_invalid');
+    expect(await loc({ mode: 'grant', kind: 'room_free', count: '0', note: 'x' })).toContain('tickets_invalid');
+    expect(await loc({ mode: 'grant', kind: 'room_free', count: '101', note: 'x' })).toContain('tickets_invalid');
+    expect(await loc({ mode: 'grant', kind: 'room_free', count: '1', note: '' })).toContain('tickets_invalid');
+    expect(await loc({ mode: 'grant', kind: 'room_free', count: '2', note: 'イベントのお礼', dm: 'yes' })).toBe(`/members/${USER}?msg=tickets_given#sec-gacha`);
+    expect(actions).toContain(`dm ${USER}`);
+    expect((await ticketsOf(db, USER)).room_free).toBe(2);
+    expect(await loc({ mode: 'take', kind: 'room_free', count: '5', note: '渡しすぎ' })).toBe(`/members/${USER}?msg=tickets_taken_short#sec-gacha`);
+    expect(await loc({ mode: 'take', kind: 'room_free', count: '1', note: '渡しすぎ' })).toBe(`/members/${USER}?msg=tickets_none#sec-gacha`);
+    expect((await ticketsOf(db, USER)).room_free).toBe(0);
+    expect((await listAudit(db, { action: 'tickets.grant' })).length).toBe(1);
+    expect((await listAudit(db, { action: 'tickets.take' })).length).toBe(2);
   });
 });
 

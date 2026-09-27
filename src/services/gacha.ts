@@ -1,7 +1,7 @@
-import { count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { gachaDraws, gachaState } from '../db/schema.js';
+import { gachaDraws, gachaState, type GachaDraw } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { addTickets, ticketsOf } from './tickets.js';
 
@@ -119,7 +119,25 @@ export async function gachaStats(db: Db): Promise<{ total: number; spent: number
   return { total: rows.reduce((n, r) => n + r.n, 0), spent: rows.reduce((n, r) => n + r.spent, 0), byTier, players: players?.n ?? 0 };
 }
 
-/** 最近の大吉（管理画面） */
-export async function recentTopDraws(db: Db, limit = 20) {
-  return db.select().from(gachaDraws).where(eq(gachaDraws.tier, 'daikichi')).orderBy(desc(gachaDraws.createdAt)).limit(limit);
+/** 最近引かれた物御籤（管理画面。memberId でその人だけ・topOnly で大吉だけ） */
+export async function recentDraws(db: Db, opts: { limit?: number; memberId?: string; topOnly?: boolean } = {}): Promise<GachaDraw[]> {
+  const where = and(opts.memberId ? eq(gachaDraws.memberId, opts.memberId) : undefined, opts.topOnly ? eq(gachaDraws.tier, 'daikichi') : undefined);
+  return db
+    .select()
+    .from(gachaDraws)
+    .where(where)
+    .orderBy(desc(gachaDraws.createdAt), desc(gachaDraws.id))
+    .limit(opts.limit ?? 100);
+}
+
+/** よく引いている人（管理画面）: 回数・天井までの回数・大吉の回数 */
+export async function topPlayers(db: Db, limit = 30): Promise<{ memberId: string; total: number; sinceTop: number; tops: number }[]> {
+  const rows = await db.select().from(gachaState).orderBy(desc(gachaState.total)).limit(limit);
+  if (!rows.length) return [];
+  const tops = await db
+    .select({ memberId: gachaDraws.memberId, n: count() })
+    .from(gachaDraws)
+    .where(and(eq(gachaDraws.tier, 'daikichi'), inArray(gachaDraws.memberId, rows.map((r) => r.memberId))))
+    .groupBy(gachaDraws.memberId);
+  return rows.map((r) => ({ memberId: r.memberId, total: r.total, sinceTop: r.sinceTop, tops: tops.find((t) => t.memberId === r.memberId)?.n ?? 0 }));
 }

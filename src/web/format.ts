@@ -75,6 +75,8 @@ export const ACTION_LABEL: Record<string, string> = {
   'member.unban': 'BAN 解除',
   'economy.join_bonus_all': '今いる人に初期配布',
   'coins.grant': '運営から送った',
+  'tickets.grant': '運営から券を渡した',
+  'tickets.take': '運営が券を減らした',
   'coins.take': '運営が減らした',
   'coins.grant_all': '今いる人みんなに送った',
   'shop.update': 'ショップの品物を変更',
