@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-goshuincho-balance',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '御朱印帳にほかの人の残高を出さない',
+    items: ['花びらの残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ出る（ほかの人の御朱印帳・みんなに見せる御朱印帳には出ない）'],
+  },
+  {
     id: '2026-09-27-role-create-delete',
     date: '2026-09-27',
     kind: 'new',

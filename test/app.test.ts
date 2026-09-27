@@ -204,18 +204,31 @@ describe('ShuinApp', () => {
     await app.onInteraction(i as never);
 
     expect(replies[0]?.embeds?.[0]?.title).toBe(`📕 user09 さまの御朱印帳`);
+    // ほかの人の残高は出さない
+    expect(JSON.stringify(replies[0]?.embeds)).not.toContain(cfg.economy.currencyName);
     expect(owner.roles.cache.has(ROLE.ujiko)).toBe(true);
     expect(sent.some((s) => s.channelId === cfg.channels.keiji)).toBe(true);
   });
 
-  it('/goshuin 公開:true なら全員に見える形で返す', async () => {
+  it('/goshuin 公開:true なら全員に見える形で返す（残高は出さない）', async () => {
     const viewer = add(G, ROLE.ujiko);
-    const { i } = interaction('slash', viewer, {
+    const { i, replies } = interaction('slash', viewer, {
       commandName: 'goshuin',
       options: { getUser: () => null, getBoolean: () => true },
     });
     await app.onInteraction(i as never);
     expect(i.deferOptions).toEqual({});
+    expect(JSON.stringify(replies[0]?.embeds)).not.toContain(cfg.economy.currencyName);
+  });
+
+  it('自分の御朱印帳を自分だけに見えるように開いたときは、残高が出る', async () => {
+    const viewer = add(G, ROLE.ujiko);
+    const { i, replies } = interaction('slash', viewer, {
+      commandName: 'goshuin',
+      options: { getUser: () => null, getBoolean: () => null },
+    });
+    await app.onInteraction(i as never);
+    expect(JSON.stringify(replies[0]?.embeds)).toContain(cfg.economy.currencyName);
   });
 
   it('ほかのサーバーからの操作は無視する', async () => {

@@ -242,7 +242,9 @@ export class ShuinApp {
     // 表示のついでに昇格漏れ（BOT 停止中・ロール付与の失敗など）を直す
     await this.lock.run(ownerId, () => this.ensurePromotion(owner));
 
-    const [data, wallet] = await Promise.all([goshuinchoOf(this.db, ownerId), walletOf(this.db, ownerId)]);
+    // 残高は、自分の御朱印帳を自分だけに見えるように開いたときだけ（ほかの人の残高は見せない）
+    const showCoins = interaction.user.id === ownerId && !isPublic;
+    const [data, wallet] = await Promise.all([goshuinchoOf(this.db, ownerId), showCoins ? walletOf(this.db, ownerId) : undefined]);
     const e = this.cfg.economy;
     await this.reply(
       interaction,
@@ -255,7 +257,7 @@ export class ShuinApp {
           roleIds: [...owner.roles.cache.keys()],
         },
         data,
-        { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance },
+        wallet ? { emoji: e.currencyEmoji, name: e.currencyName, balance: wallet.balance } : undefined,
       ),
     );
   }
