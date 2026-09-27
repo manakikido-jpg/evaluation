@@ -381,6 +381,18 @@ export const guildConfigSchema = z
       .object({
         /** 同じ人が続けて募集できるまでの分 */
         cooldownMinutes: z.number().int().min(0).default(10),
+        /** 同じチャンネル（同じお守り）に続けて通知を飛ばせるまでの分（だれが押しても） */
+        channelCooldownMinutes: z.number().int().min(0).max(120).default(5),
+        /** 役職（🔰参拝者 以上）のある人だけ募集できる */
+        requireRank: z.boolean().default(true),
+        /** 👹厄年の人は募集できない */
+        blockYakudoshi: z.boolean().default(true),
+        /** 入ってからこの日数がたつまで募集できない（0 でなし） */
+        newMemberDays: z.number().int().min(0).max(90).default(0),
+        /** お守りのロールを、メッセージで直接 @ して呼べるようにする（止めると、通知は募集ボタンからだけ） */
+        allowDirectMention: z.boolean().default(false),
+        /** 待ち時間中にこの回数押した人を運営に知らせる（0 で知らせない） */
+        spamAlertCount: z.number().int().min(0).max(50).default(3),
         panels: z
           .array(
             z.object({
@@ -398,7 +410,16 @@ export const guildConfigSchema = z
           )
           .default([]),
       })
-      .default({ cooldownMinutes: 10, panels: [] }),
+      .default({
+        cooldownMinutes: 10,
+        channelCooldownMinutes: 5,
+        requireRank: true,
+        blockYakudoshi: true,
+        newMemberDays: 0,
+        allowDirectMention: false,
+        spamAlertCount: 3,
+        panels: [],
+      }),
     /** ショップ: セットアップが作った色守り・称号のロール（BOT が起動時に品物として並べる） */
     shop: z
       .object({

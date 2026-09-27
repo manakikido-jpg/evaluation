@@ -394,14 +394,14 @@ describe('自分の通話部屋（➕ ○○をひらく）', () => {
 });
 
 describe('お守り', () => {
-  it('作るロールは誰でも @ で呼べる（お守りも役職も）。設定ファイルに書き、#授与所 にボタンを置く', async () => {
+  it('役職は誰でも @ で呼べる。お守りは直接 @ できない（通知は募集ボタンから）。設定ファイルに書き、#授与所 にボタンを置く', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL);
     const role = (name: string) => d.roles.find((x) => x.name === name)!;
     const created = d.created;
-    expect(created.find((c) => c.name === '🌙 寝落ちのお守り')?.mentionable).toBe(true);
+    expect(created.find((c) => c.name === '🌙 寝落ちのお守り')?.mentionable).toBe(false);
     expect(created.find((c) => c.name === '🔰 参拝者')?.mentionable).toBe(true);
-    expect(created.every((c) => c.mentionable)).toBe(true);
+    expect(created.every((c) => c.mentionable === !c.name.includes('のお守り'))).toBe(true);
 
     const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
     expect(cfg.roles.omamori.map((o) => [o.label, o.adultOnly])).toEqual([

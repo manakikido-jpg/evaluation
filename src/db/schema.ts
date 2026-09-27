@@ -922,3 +922,15 @@ export const glossaryTerms = pgTable(
 );
 
 export type GlossaryTerm = typeof glossaryTerms.$inferSelect;
+
+/** 募集の記録（続けて募集できない時間を、BOT を起動し直しても覚えておく） */
+export const recruitPosts = pgTable(
+  'recruit_posts',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    channelId: text('channel_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('recruit_posts_member_idx').on(t.memberId, t.createdAt), index('recruit_posts_channel_idx').on(t.channelId, t.createdAt)],
+);

@@ -484,6 +484,8 @@ export function SettingsPage(props: {
   roles?: { id: string; name: string }[];
   /** 物御籤の回数 */
   gachaStats?: { total: number; spent: number; byTier: Record<GachaTier, number>; players: number };
+  /** BOT が「メンション不可」のロールも鳴らせるか（分からなければ undefined） */
+  botCanMentionAll?: boolean;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -666,6 +668,50 @@ export function SettingsPage(props: {
             ))}
           </fieldset>
           <Save at="bell" />
+        </section>
+        <section class="card anchor" id="sec-recruit">
+          <h2>📣 募集（荒らし対策）</h2>
+          <p class="note">
+            #宿帳・#縁日・#手水舎・#御神酒処 のいちばん下の「○○を募集する」ボタンの決まりです。募集するとお守りの人に通知が届くので、続けて鳴らないようにします。待ち時間は BOT
+            を起動し直しても忘れません。
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>同じ人が続けて募集できない分（0〜120）</span>
+              <input type="number" name="recruitCooldown" value={String(cfg.recruit.cooldownMinutes)} min={0} max={120} required />
+            </label>
+            <label class="field">
+              <span>同じチャンネルで、だれが押しても続けて募集できない分（0〜120）</span>
+              <input type="number" name="recruitChannelCooldown" value={String(cfg.recruit.channelCooldownMinutes)} min={0} max={120} required />
+            </label>
+            <label class="field">
+              <span>入ってからこの日数は募集できない（0 でなし。運営はいつでも）</span>
+              <input type="number" name="recruitNewDays" value={String(cfg.recruit.newMemberDays)} min={0} max={90} required />
+            </label>
+            <label class="field">
+              <span>待ち時間中にこの回数押した人を #記録 に知らせる（0 で知らせない）</span>
+              <input type="number" name="recruitSpamAlert" value={String(cfg.recruit.spamAlertCount)} min={0} max={50} required />
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="recruitRequireRank" value="yes" checked={cfg.recruit.requireRank} />
+              <span>入鯖が承認された人（🔰参拝者 以上）だけ募集できる</span>
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="recruitBlockYaku" value="yes" checked={cfg.recruit.blockYakudoshi} />
+              <span>👹 厄年の人は募集できない</span>
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="recruitDirect" value="yes" checked={cfg.recruit.allowDirectMention} />
+              <span>お守りのロールを、メッセージで直接 @ して呼べるようにする（止めておくと、通知は募集ボタンからだけ。直接の @ には待ち時間が効かないので、止めておくのがおすすめ）</span>
+            </label>
+          </div>
+          {!cfg.recruit.allowDirectMention && props.botCanMentionAll === false && (
+            <p class="flash warn">
+              BOT のロールに「@everyone、@here、全てのロールにメンション」の権限がないため、お守りを @ できないようにすると、募集ボタンからの通知も届きません。Discord
+              のサーバー設定 → ロール → BOT のロールで、この権限を付けてください。
+            </p>
+          )}
+          <Save at="recruit" />
         </section>
         <section class="card anchor" id="sec-voicechat">
           <h2>💬 通話のチャット</h2>

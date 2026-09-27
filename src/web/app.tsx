@@ -113,6 +113,7 @@ import { gachaLedger, memberLedger, priceGuide, recentAlerts, suspectPairs } fro
 import { createTerm, deleteTerm, getTerm, GLOSSARY_CHANNEL, listTerms, moveTerm, seedDefaultTerms, setTermEnabled, syncGlossaryNotices, updateTerm, type TermInput } from '../services/glossary.js';
 import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
+import { syncOmamoriMentionable } from '../services/recruit.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelsPage } from './views/channels.js';
@@ -1063,7 +1064,12 @@ export function createWebApp(deps: WebDeps) {
     const channels = await loadChannels();
     const catName = (id: string | null) => channels.find((c) => c.id === id)?.name;
     const textChannels = listTextChannels(channels).flatMap((g) => g.items);
-    const roles = ((await loadRoles()) ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
+    const allRoles = (await loadRoles()) ?? [];
+    const roles = allRoles.filter((r) => r.id !== cfg.guildId && !r.managed);
+    // BOT が「メンション不可」のロールも鳴らせるか（@everyone、@here、全てのロールにメンション・管理者）
+    const botRoles = allRoles.filter((r) => r.id === cfg.guildId || (r.tags?.bot_id && (!deps.botId || r.tags.bot_id === deps.botId)));
+    const botPerms = botRoles.reduce((n, r) => n | BigInt(r.permissions ?? '0'), 0n);
+    const botCanMentionAll = allRoles.length ? (botPerms & ((1n << 17n) | (1n << 3n))) !== 0n : undefined;
     return c.html(
       <SettingsPage
         session={c.get('session')}
@@ -1075,6 +1081,7 @@ export function createWebApp(deps: WebDeps) {
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         gachaStats={await gachaStats(db)}
+        botCanMentionAll={botCanMentionAll}
       />,
     );
   });
@@ -1134,6 +1141,19 @@ export function createWebApp(deps: WebDeps) {
             },
           }
         : {}),
+      ...(typeof body.recruitCooldown === 'string'
+        ? {
+            recruit: {
+              cooldownMinutes: num('recruitCooldown'),
+              channelCooldownMinutes: num('recruitChannelCooldown'),
+              requireRank: body.recruitRequireRank === 'yes',
+              blockYakudoshi: body.recruitBlockYaku === 'yes',
+              newMemberDays: num('recruitNewDays'),
+              allowDirectMention: body.recruitDirect === 'yes',
+              spamAlertCount: num('recruitSpamAlert'),
+            },
+          }
+        : {}),
       // 物御籤は「物御籤」のページで変える（ここでは今の値を残す）
       gacha: (await loadOverrides(db)).gacha,
       // 経済の見守りの設定は経済のページで変える（ここでは残す）
@@ -1181,10 +1201,18 @@ export function createWebApp(deps: WebDeps) {
     const after = applyOverrides(fileCfg(), overrides);
     // 投稿済みの掲示の数字（免罪符の値段など）も新しい値に書き換える
     const noticesUpdated = await syncPostedNotices({ db, cfg: after, discord: deps.discord }, before);
+    // お守りを @ で呼べるかを変えたら、Discord のロールも合わせる
+    if (before.recruit.allowDirectMention !== after.recruit.allowDirectMention) await syncOmamoriMentionable(deps.discord, after);
     await audit(db, {
       actorId: c.get('session').userId,
       action: 'settings.update',
-      detail: { economy: diff(before.economy, after.economy), omairi: diff(before.omairi, after.omairi), applications: diff(before.applications, after.applications), ranks: rankDiff(before, after) },
+      detail: {
+        economy: diff(before.economy, after.economy),
+        omairi: diff(before.omairi, after.omairi),
+        applications: diff(before.applications, after.applications),
+        recruit: diff(before.recruit, after.recruit),
+        ranks: rankDiff(before, after),
+      },
       via: 'web',
     });
     return c.redirect(backTo(noticesUpdated > 0 ? 'saved_notices' : 'saved'));

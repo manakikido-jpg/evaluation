@@ -288,6 +288,13 @@
       "when": 1790512087200,
       "tag": "0040_glossary",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790546562463,
+      "tag": "0041_recruit_posts",
+      "breakpoints": true
     }
   ]
 }

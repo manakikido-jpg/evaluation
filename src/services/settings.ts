@@ -54,6 +54,19 @@ export const overridesSchema = z.object({
   gacha: gachaSchema.optional(),
   boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
+  /** 募集の荒らし対策（募集ボタンの置き場所はファイルで決める） */
+  recruit: z
+    .object({
+      cooldownMinutes: z.number().int().min(0).max(120),
+      channelCooldownMinutes: z.number().int().min(0).max(120),
+      requireRank: z.boolean(),
+      blockYakudoshi: z.boolean(),
+      newMemberDays: z.number().int().min(0).max(90),
+      allowDirectMention: z.boolean(),
+      spamAlertCount: z.number().int().min(0).max(50),
+    })
+    .partial()
+    .default({}),
   /** 経済の見守り（channelId を空にすると #記録 へ） */
   economyOps: economyOpsSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
 });
@@ -83,6 +96,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       return merged;
     })(),
     gacha: o.gacha ?? base.gacha,
+    recruit: { ...base.recruit, ...o.recruit },
     economyOps: (() => {
       const { channelId, ...rest } = o.economyOps;
       const merged = { ...base.economyOps, ...rest };

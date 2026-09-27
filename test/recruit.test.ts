@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig, type GuildConfig } from '../src/config.js';
-import { decideRecruit, RecruitCooldown, recruitCard, recruitPanelMessage } from '../src/services/recruit.js';
-import { cfg as base } from './helpers.js';
+import type { DiscordActions } from '../src/lib/discordRest.js';
+import {
+  decideRecruit,
+  lastRecruits,
+  omamoriRoleIds,
+  recordRecruit,
+  recruitCard,
+  recruitPanelMessage,
+  RecruitSpamCounter,
+  syncOmamoriMentionable,
+} from '../src/services/recruit.js';
+import { applyOverrides, overridesSchema } from '../src/services/settings.js';
+import { cfg as base, makeDb, ROLE } from './helpers.js';
 
 const NEOCHI_CH = '950000000000000001';
 const YOI_CH = '950000000000000002';
@@ -9,11 +20,14 @@ const NEOCHI_ROLE = '950000000000000011';
 const YOI_ROLE = '950000000000000012';
 const HUB = '950000000000000021';
 const YOIMAIRI = '950000000000000031';
+const YAKU = '950000000000000032';
 const GUILD = base.guildId;
+/** 参拝者（役職あり） */
+const M = (...extra: string[]) => ({ roleIds: [ROLE.sanpaisha, ...extra] });
 
 const cfg: GuildConfig = parseGuildConfig({
   ...base,
-  roles: { ...base.roles, yoimairi: YOIMAIRI },
+  roles: { ...base.roles, yoimairi: YOIMAIRI, yakudoshi: YAKU },
   recruit: {
     panels: [
       { channelId: NEOCHI_CH, label: '寝落ち', emoji: '🌙', roleId: NEOCHI_ROLE, hubId: HUB },
@@ -25,18 +39,65 @@ const now = Date.parse('2026-09-27T12:00:00Z');
 
 describe('募集', () => {
   it('ボタンのあるチャンネルでだけ募集できる。宵宮は宵参りの人だけ', () => {
-    expect(decideRecruit(cfg, NEOCHI_CH, [], undefined, now).status).toBe('ok');
-    expect(decideRecruit(cfg, '950000000000000099', [], undefined, now)).toEqual({ status: 'unknown' });
-    expect(decideRecruit(cfg, YOI_CH, [], undefined, now)).toEqual({ status: 'adult_only' });
-    expect(decideRecruit(cfg, YOI_CH, [YOIMAIRI], undefined, now).status).toBe('ok');
+    expect(decideRecruit(cfg, NEOCHI_CH, M(), now).status).toBe('ok');
+    expect(decideRecruit(cfg, '950000000000000099', M(), now)).toEqual({ status: 'unknown' });
+    expect(decideRecruit(cfg, YOI_CH, M(), now)).toEqual({ status: 'adult_only' });
+    expect(decideRecruit(cfg, YOI_CH, M(YOIMAIRI), now).status).toBe('ok');
   });
 
-  it('同じ人は 10 分に 1 回', () => {
-    const cd = new RecruitCooldown();
-    cd.mark('A', now);
-    expect(decideRecruit(cfg, NEOCHI_CH, [], cd.lastAt('A'), now + 60_000)).toEqual({ status: 'cooldown', minutes: 9 });
-    expect(decideRecruit(cfg, NEOCHI_CH, [], cd.lastAt('A'), now + 10 * 60_000).status).toBe('ok');
-    expect(decideRecruit(cfg, NEOCHI_CH, [], cd.lastAt('B'), now).status).toBe('ok');
+  it('同じ人は 10 分に 1 回・同じチャンネルはだれが押しても 5 分に 1 回', () => {
+    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), lastAt: now }, now + 60_000)).toEqual({ status: 'cooldown', minutes: 9 });
+    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), lastAt: now }, now + 10 * 60_000).status).toBe('ok');
+    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), channelLastAt: now }, now + 60_000)).toEqual({ status: 'channel_cooldown', minutes: 4 });
+    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), channelLastAt: now }, now + 5 * 60_000).status).toBe('ok');
+  });
+
+  it('役職のない人（承認前）・厄年の人・入ってすぐの人は募集できない（運営はいつでも）', () => {
+    expect(decideRecruit(cfg, NEOCHI_CH, { roleIds: [] }, now)).toEqual({ status: 'not_member' });
+    expect(decideRecruit(cfg, NEOCHI_CH, M(YAKU), now)).toEqual({ status: 'yakudoshi' });
+    const strict = { ...cfg, recruit: { ...cfg.recruit, newMemberDays: 3 } };
+    expect(decideRecruit(strict, NEOCHI_CH, { ...M(), joinedAt: now - 86_400_000 }, now)).toEqual({ status: 'too_new', days: 2 });
+    expect(decideRecruit(strict, NEOCHI_CH, { ...M(), joinedAt: now - 4 * 86_400_000 }, now).status).toBe('ok');
+    expect(decideRecruit(strict, NEOCHI_CH, { roleIds: [ROLE.shinshoku], joinedAt: now }, now).status).toBe('ok');
+    const loose = { ...cfg, recruit: { ...cfg.recruit, requireRank: false, blockYakudoshi: false } };
+    expect(decideRecruit(loose, NEOCHI_CH, { roleIds: [YAKU] }, now).status).toBe('ok');
+  });
+
+  it('募集の記録は DB に残る（BOT を起動し直しても待ち時間を忘れない）', async () => {
+    const { db, close } = await makeDb();
+    try {
+      await recordRecruit(db, 'A', NEOCHI_CH, new Date(now));
+      expect(await lastRecruits(db, 'A', NEOCHI_CH, now + 60_000)).toEqual({ lastAt: now, channelLastAt: now });
+      expect(await lastRecruits(db, 'B', NEOCHI_CH, now + 60_000)).toEqual({ channelLastAt: now });
+      expect(await lastRecruits(db, 'A', YOI_CH, now + 60_000)).toEqual({ lastAt: now });
+      // 2 時間より前は見ない
+      expect(await lastRecruits(db, 'A', NEOCHI_CH, now + 3 * 3_600_000)).toEqual({});
+    } finally {
+      await close();
+    }
+  });
+
+  it('待ち時間中に決めた回数押したら 1 回だけ知らせる', () => {
+    const c = new RecruitSpamCounter();
+    expect([1, 2, 3, 4].map((k) => c.hit('A', now + k * 1000, 5, 3))).toEqual([false, false, true, false]);
+    // 待ち時間が終われば数え直す
+    expect(c.hit('A', now + 10 * 60_000, 5, 3)).toBe(false);
+    expect(new RecruitSpamCounter().hit('A', now, 5, 0)).toBe(false);
+  });
+
+  it('お守りのロールを @ で呼べるかを設定に合わせる（同じなら変えない）', async () => {
+    const edits: string[] = [];
+    const discord = { editRole: async (_g: string, id: string, b: { mentionable?: boolean }) => void edits.push(`${id} ${b.mentionable}`) } as unknown as DiscordActions;
+    expect(omamoriRoleIds(cfg)).toEqual([NEOCHI_ROLE, YOI_ROLE, ...cfg.roles.omamori.map((o) => o.roleId)].filter((v, i, a) => a.indexOf(v) === i));
+    expect(await syncOmamoriMentionable(discord, cfg, new Map([[YOI_ROLE, false]]))).toMatchObject({ changed: omamoriRoleIds(cfg).length - 1 });
+    expect(edits).toContain(`${NEOCHI_ROLE} false`);
+    expect(edits).not.toContain(`${YOI_ROLE} false`);
+  });
+
+  it('管理画面の設定で変えられる（募集ボタンの置き場所はファイルのまま）', () => {
+    const c = applyOverrides(cfg, overridesSchema.parse({ recruit: { cooldownMinutes: 30, allowDirectMention: true } }));
+    expect(c.recruit).toMatchObject({ cooldownMinutes: 30, allowDirectMention: true, channelCooldownMinutes: 5 });
+    expect(c.recruit.panels).toHaveLength(2);
   });
 
   it('カード: お守りのロールにだけ通知。通話にいれば「通話に入る」ボタン', () => {

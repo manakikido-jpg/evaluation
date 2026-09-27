@@ -136,6 +136,8 @@ describe('贈り物', () => {
   });
 
   it('1 日に贈れる合計は 1000 まで（日本時間の 0 時に戻る）', async () => {
+    // 贈った記録は DB の今の時刻で残るので、決まった日付ではなく今の時刻で確かめる
+    const now = new Date();
     await addCoins(db, 'A', 5000, 'adjust');
     expect((await giveGift(db, cfg, ujiko, 'B', 700, now)).status).toBe('ok');
     expect(await giveGift(db, cfg, ujiko, 'C', 400, now)).toEqual({ status: 'daily_limit', left: 300 });

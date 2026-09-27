@@ -131,7 +131,8 @@ export const ROLES: RoleSpec[] = [
   // DM・フレンド追加（入鯖申請と #授与所 のボタンで選ぶ）。色なし
   ...CONTACT_SPECS().map((c) => ({ key: c.key, name: c.name, color: 0, hoist: false, permissions: 0n })),
   // お守り（募集の通知を受け取るロール）。色なし・一覧で分けない。誰でも @ で呼べる
-  ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: true })),
+  // お守りは直接 @ できない（通知は募集ボタンからだけ。設定の「お守りを直接 @ して呼べる」で変えられる）
+  ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: false })),
   // 称号（ショップ）。色なし
   ...SHOP_TITLES().map((t) => ({ key: t.key, name: t.name, color: 0, hoist: false, permissions: 0n })),
 ];

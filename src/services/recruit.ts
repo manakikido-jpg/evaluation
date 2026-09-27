@@ -1,4 +1,9 @@
+import { and, desc, eq, gte } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
+import type { Db } from '../db/client.js';
+import { recruitPosts } from '../db/schema.js';
+import type { DiscordActions } from '../lib/discordRest.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * 募集: チャンネルのいちばん下に「募集する」ボタンを置く。
@@ -31,16 +36,95 @@ export type RecruitDecision =
   | { status: 'ok'; panel: RecruitPanel }
   | { status: 'unknown' }
   | { status: 'adult_only' }
-  | { status: 'cooldown'; minutes: number };
+  | { status: 'not_member' }
+  | { status: 'yakudoshi' }
+  | { status: 'too_new'; days: number }
+  | { status: 'cooldown'; minutes: number }
+  | { status: 'channel_cooldown'; minutes: number };
 
-/** 募集できるか（宵宮は宵参りの人だけ。同じ人は cooldownMinutes に 1 回） */
-export function decideRecruit(cfg: GuildConfig, channelId: string, memberRoleIds: readonly string[], lastAt: number | undefined, now: number): RecruitDecision {
-  const panel = cfg.recruit.panels.find((p) => p.channelId === channelId);
+export type RecruitMember = {
+  roleIds: readonly string[];
+  /** サーバーに入った日時（分からなければ undefined） */
+  joinedAt?: number;
+  /** その人がこの前募集した日時・このチャンネルでこの前だれかが募集した日時 */
+  lastAt?: number;
+  channelLastAt?: number;
+};
+
+/**
+ * 募集できるか。
+ * 宵宮は宵参りの人だけ／役職（参拝者以上）のある人だけ／厄年の人はだめ／入ってすぐはだめ（決めた日数）／
+ * 同じ人は cooldownMinutes に 1 回／同じチャンネルはだれが押しても channelCooldownMinutes に 1 回
+ */
+export function decideRecruit(cfg: GuildConfig, channelId: string, m: RecruitMember, now: number): RecruitDecision {
+  const r = cfg.recruit;
+  const panel = r.panels.find((p) => p.channelId === channelId);
   if (!panel) return { status: 'unknown' };
-  if (panel.adultOnly && !(cfg.roles.yoimairi && memberRoleIds.includes(cfg.roles.yoimairi))) return { status: 'adult_only' };
-  const wait = lastAt === undefined ? 0 : lastAt + cfg.recruit.cooldownMinutes * 60_000 - now;
-  if (wait > 0) return { status: 'cooldown', minutes: Math.ceil(wait / 60_000) };
+  const has = (id: string | undefined) => Boolean(id && m.roleIds.includes(id));
+  const staff = cfg.ranks.some((x) => !x.auto && has(x.roleId));
+  if (panel.adultOnly && !has(cfg.roles.yoimairi)) return { status: 'adult_only' };
+  if (r.requireRank && !cfg.ranks.some((x) => has(x.roleId))) return { status: 'not_member' };
+  if (r.blockYakudoshi && has(cfg.roles.yakudoshi)) return { status: 'yakudoshi' };
+  if (!staff && r.newMemberDays > 0 && m.joinedAt !== undefined) {
+    const left = m.joinedAt + r.newMemberDays * 86_400_000 - now;
+    if (left > 0) return { status: 'too_new', days: Math.ceil(left / 86_400_000) };
+  }
+  const wait = (last: number | undefined, minutes: number) => (last === undefined ? 0 : last + minutes * 60_000 - now);
+  const mine = wait(m.lastAt, r.cooldownMinutes);
+  if (mine > 0) return { status: 'cooldown', minutes: Math.ceil(mine / 60_000) };
+  const ch = wait(m.channelLastAt, r.channelCooldownMinutes);
+  if (ch > 0) return { status: 'channel_cooldown', minutes: Math.ceil(ch / 60_000) };
   return { status: 'ok', panel };
+}
+
+/** この前の募集（その人・そのチャンネル）。2 時間より前は見ない */
+export async function lastRecruits(db: Db, memberId: string, channelId: string, now: number): Promise<{ lastAt?: number; channelLastAt?: number }> {
+  const since = new Date(now - 2 * 3_600_000);
+  const last = async (where: ReturnType<typeof eq>) => {
+    const [row] = await db
+      .select({ at: recruitPosts.createdAt })
+      .from(recruitPosts)
+      .where(and(where, gte(recruitPosts.createdAt, since)))
+      .orderBy(desc(recruitPosts.createdAt))
+      .limit(1);
+    return row?.at.getTime();
+  };
+  const [lastAt, channelLastAt] = await Promise.all([last(eq(recruitPosts.memberId, memberId)), last(eq(recruitPosts.channelId, channelId))]);
+  return { ...(lastAt !== undefined ? { lastAt } : {}), ...(channelLastAt !== undefined ? { channelLastAt } : {}) };
+}
+
+export async function recordRecruit(db: Db, memberId: string, channelId: string, at = new Date()): Promise<void> {
+  await db.insert(recruitPosts).values({ memberId, channelId, createdAt: at });
+}
+
+/** 募集の通知先のお守りのロール（パネル・授与所のお守り） */
+export function omamoriRoleIds(cfg: GuildConfig): string[] {
+  return [...new Set([...cfg.recruit.panels.map((p) => p.roleId), ...cfg.roles.omamori.map((o) => o.roleId)].filter((x): x is string => Boolean(x)))];
+}
+
+/**
+ * お守りのロールを「だれでも @ で呼べる」にするか合わせる（設定の allowDirectMention）。
+ * current: 今の状態が分かるロール（分かるものは同じなら変えない）。変えた数・失敗した数を返す
+ */
+export async function syncOmamoriMentionable(
+  discord: DiscordActions,
+  cfg: GuildConfig,
+  current: Map<string, boolean> = new Map(),
+): Promise<{ changed: number; failed: number }> {
+  const want = cfg.recruit.allowDirectMention;
+  let changed = 0;
+  let failed = 0;
+  for (const id of omamoriRoleIds(cfg)) {
+    if (current.get(id) === want) continue;
+    try {
+      await discord.editRole(cfg.guildId, id, { mentionable: want }, want ? 'お守りを @ で呼べるようにする' : '募集の荒らし対策（お守りは募集ボタンからだけ通知）');
+      changed++;
+    } catch (err) {
+      failed++;
+      logger.warn({ err, roleId: id }, 'omamori mentionable sync failed');
+    }
+  }
+  return { changed, failed };
 }
 
 /** 募集カード（お守りのロールに通知。通話にいれば、その通話へのボタンを付ける） */
@@ -78,13 +162,22 @@ export function recruitCard(input: { guildId: string; panel: RecruitPanel; userI
   };
 }
 
-/** 同じ人の連続した募集を止める（BOT を起動し直すと忘れる） */
-export class RecruitCooldown {
-  private last = new Map<string, number>();
-  lastAt(userId: string): number | undefined {
-    return this.last.get(userId);
-  }
-  mark(userId: string, at: number): void {
-    this.last.set(userId, at);
+/**
+ * 待ち時間中に何度も押す人を数える（決めた回数で 1 回だけ知らせる）。
+ * 知らせたら true。待ち時間が終わったら数え直す
+ */
+export class RecruitSpamCounter {
+  private counts = new Map<string, { count: number; until: number; alerted: boolean }>();
+  hit(userId: string, now: number, waitMinutes: number, threshold: number): boolean {
+    if (threshold <= 0) return false;
+    const cur = this.counts.get(userId);
+    const c = cur && cur.until > now ? cur : { count: 0, until: now + waitMinutes * 60_000, alerted: false };
+    c.count++;
+    this.counts.set(userId, c);
+    if (c.count >= threshold && !c.alerted) {
+      c.alerted = true;
+      return true;
+    }
+    return false;
   }
 }

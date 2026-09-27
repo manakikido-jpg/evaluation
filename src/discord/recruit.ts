@@ -15,22 +15,42 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
-import { decideRecruit, RecruitCooldown, recruitCard, recruitPanelMessage, type RecruitDecision } from '../services/recruit.js';
+import {
+  decideRecruit,
+  lastRecruits,
+  recordRecruit,
+  recruitCard,
+  recruitPanelMessage,
+  RecruitSpamCounter,
+  syncOmamoriMentionable,
+  type RecruitDecision,
+} from '../services/recruit.js';
+import type { DiscordActions } from '../lib/discordRest.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const STATE_KEY = 'recruit_panels';
 /** 会話が続いている間は置き直さず、落ち着いてから一番下へ */
 const RESTICK_AFTER_MS = 60_000;
 
-const DENIED: Record<Exclude<RecruitDecision['status'], 'ok' | 'cooldown'>, string> = {
+const DENIED: Record<Exclude<RecruitDecision['status'], 'ok' | 'cooldown' | 'channel_cooldown' | 'too_new'>, string> = {
   unknown: 'このチャンネルでは募集できません。',
   adult_only: 'この募集は、宵参り（18 歳以上）の方だけができます。',
+  not_member: '募集は、入鯖が承認された方（🔰参拝者 以上）だけができます。',
+  yakudoshi: '👹 厄年の間は募集できません。',
 };
+
+/** 断るときの文 */
+export function deniedText(d: Exclude<RecruitDecision, { status: 'ok' }>): string {
+  if (d.status === 'cooldown') return `続けて募集できません。あと ${d.minutes} 分ほど待ってください。`;
+  if (d.status === 'channel_cooldown') return `このチャンネルでは少し前に募集がありました。通知が続かないよう、あと ${d.minutes} 分ほど待ってください（上の募集に参加するのもおすすめです）。`;
+  if (d.status === 'too_new') return `入ったばかりの方は、あと ${d.days} 日ほどで募集できるようになります。`;
+  return DENIED[d.status];
+}
 
 /** 「募集する」ボタン（#宿帳・#縁日・#手水舎・#御神酒処 のいちばん下） */
 export class RecruitApp {
   private guild?: Guild;
-  private readonly cooldown = new RecruitCooldown();
+  private readonly spam = new RecruitSpamCounter();
   private readonly timers = new Map<string, NodeJS.Timeout>();
   /** チャンネルごとに置き直しを 1 つずつ行う */
   private readonly queue = new Map<string, Promise<void>>();
@@ -38,12 +58,18 @@ export class RecruitApp {
   constructor(
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
+    private readonly discord?: DiscordActions,
   ) {}
 
-  /** 起動したとき: ボタンがなければ置く（あれば一番下か確かめる） */
+  /** 起動したとき: ボタンがなければ置く（あれば一番下か確かめる）。お守りを @ で呼べるかを設定に合わせる */
   async attach(guild: Guild): Promise<void> {
     this.guild = guild;
     for (const p of this.cfg().recruit.panels) await this.restick(p.channelId);
+    if (this.discord) {
+      const current = new Map([...guild.roles.cache.values()].map((r) => [r.id, r.mentionable]));
+      const r = await syncOmamoriMentionable(this.discord, this.cfg(), current);
+      if (r.changed || r.failed) logger.info(r, 'omamori mentionable synced');
+    }
   }
 
   onMessage(msg: Message): void {
@@ -72,17 +98,34 @@ export class RecruitApp {
     }
   }
 
-  private decide(i: ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>): RecruitDecision {
-    return decideRecruit(this.cfg(), i.channelId ?? '', [...i.member.roles.cache.keys()], this.cooldown.lastAt(i.user.id), Date.now());
+  private async decide(i: ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>): Promise<RecruitDecision> {
+    const now = Date.now();
+    const channelId = i.channelId ?? '';
+    const last = await lastRecruits(this.db, i.user.id, channelId, now);
+    return decideRecruit(this.cfg(), channelId, { roleIds: [...i.member.roles.cache.keys()], joinedAt: i.member.joinedTimestamp ?? undefined, ...last }, now);
   }
 
   private async deny(i: ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>, d: Exclude<RecruitDecision, { status: 'ok' }>): Promise<void> {
-    const content = d.status === 'cooldown' ? `続けて募集できません。あと ${d.minutes} 分ほど待ってください。` : DENIED[d.status];
-    await i.reply({ content, ...EPHEMERAL });
+    await i.reply({ content: deniedText(d), ...EPHEMERAL });
+    // 待ち時間中に何度も押す人は、運営に知らせる（1 回だけ）
+    if (d.status === 'cooldown' || d.status === 'channel_cooldown') {
+      const cfg = this.cfg();
+      if (this.spam.hit(i.user.id, Date.now(), d.minutes, cfg.recruit.spamAlertCount) && cfg.channels.log) {
+        const ch = await i.client.channels.fetch(cfg.channels.log).catch(() => null);
+        if (ch?.isSendable()) {
+          await ch
+            .send({
+              content: `⚠ <@${i.user.id}> さんが、待ち時間中に募集ボタンを ${cfg.recruit.spamAlertCount} 回以上押しています（<#${i.channelId}>）。連投・荒らしでないか確かめてください。`,
+              allowedMentions: { parse: [] },
+            })
+            .catch(() => undefined);
+        }
+      }
+    }
   }
 
   private async open(i: ButtonInteraction<'cached'>): Promise<void> {
-    const d = this.decide(i);
+    const d = await this.decide(i);
     if (d.status !== 'ok') return this.deny(i, d);
     const input = new TextInputBuilder()
       .setCustomId('message')
@@ -100,7 +143,7 @@ export class RecruitApp {
   }
 
   private async submit(i: ModalSubmitInteraction<'cached'>): Promise<void> {
-    const d = this.decide(i);
+    const d = await this.decide(i);
     if (d.status !== 'ok') return this.deny(i, d);
     const channel = i.channel;
     if (!channel?.isSendable()) return void (await i.reply({ content: DENIED.unknown, ...EPHEMERAL }));
@@ -117,8 +160,8 @@ export class RecruitApp {
         avatarUrl: i.member.displayAvatarURL({ size: 256 }),
       }),
     );
-    // 投稿できてから「続けて募集できない」時間を数え始める
-    this.cooldown.mark(i.user.id, Date.now());
+    // 投稿できてから「続けて募集できない」時間を数え始める（DB に残すので、BOT を起動し直しても忘れない）
+    await recordRecruit(this.db, i.user.id, channel.id);
     await i.editReply({ content: `募集しました。${d.panel.label}のお守りを持っている人に通知が届きます。` });
     clearTimeout(this.timers.get(channel.id));
     await this.restick(channel.id);

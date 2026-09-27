@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-recruit-antispam',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '📣 募集の荒らし対策',
+    items: [
+      'お守りのロールは直接 @ できないように（通知は「○○を募集する」ボタンからだけ）',
+      '同じ人は 10 分・同じチャンネルは 5 分に 1 回。BOT を起動し直しても待ち時間を忘れない',
+      '承認前の人・厄年の人は募集できない。入ってすぐの人を止める日数も決められる',
+      '待ち時間中に何度も押す人を #記録 に知らせる。設定 → 📣 募集 で変えられる',
+    ],
+  },
+  {
     id: '2026-09-27-economy-watch',
     date: '2026-09-27',
     kind: 'new',

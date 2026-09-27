@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
   const omamori = new OmamoriApp(cfg);
-  const recruit = new RecruitApp(db, cfg);
+  const recruit = new RecruitApp(db, cfg, actions);
   const shop = new ShopApp(db, cfg, actions);
   const boost = new BoostApp(db, cfg, actions);
   const sticky = new StickyApp(db, cfg, actions);
