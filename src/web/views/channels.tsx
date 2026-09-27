@@ -142,6 +142,10 @@ function CreateForm(props: {
           <span>説明（テキストのとき・任意）</span>
           <input type="text" name="topic" maxlength={1024} />
         </label>
+        <label class="field">
+          <span>人数の上限（通話のとき。0 でなし・99 まで）</span>
+          <input type="number" name="userLimit" value="0" min={0} max={99} />
+        </label>
       </div>
       <fieldset class="perms">
         <legend>見える範囲</legend>
@@ -211,6 +215,12 @@ function RenameForm(props: {
           <AgeGate channel={props.channel} />
         </>
       )}
+      {props.channel.type === 2 && (
+        <label class="field inline">
+          <span>人数の上限（0 でなし）</span>
+          <input type="number" name="userLimit" value={String(props.channel.user_limit ?? 0)} min={0} max={99} aria-label="人数の上限" />
+        </label>
+      )}
       <button type="submit">保存</button>
     </form>
   );
@@ -266,7 +276,10 @@ export function ChannelsPage(props: {
               ))}
               {g.voice.map((v) => (
                 <li>
-                  <a href={`#ch-${v.id}`}>🔊 {v.name}</a>
+                  <a href={`#ch-${v.id}`}>
+                    🔊 {v.name}
+                    {v.user_limit ? <small> {v.user_limit} 人まで</small> : null}
+                  </a>
                 </li>
               ))}
             </ul>

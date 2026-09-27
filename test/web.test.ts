@@ -39,10 +39,14 @@ const fakeActions: DiscordActions = {
     { id: '910000000000000001', name: '⛩ 鳥居', type: 4, parent_id: null, position: 0 },
     { id: '910000000000000002', name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0, topic: 'ようこそ', permission_overwrites: [] },
     { id: '910000000000000003', name: 'しきたり', type: 0, parent_id: '910000000000000001', position: 1 },
+    { id: '910000000000000004', name: '拝殿', type: 2, parent_id: '910000000000000001', position: 2, user_limit: 0 },
   ],
   guildRoles: async () => roleList,
   editRole: async (_g, r, b) => void actions.push(`editRole ${r} ${JSON.stringify(b)}`),
-  editChannel: async (c, b) => void actions.push(`editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}${b.nsfw !== undefined ? ` nsfw=${b.nsfw}` : ''}`),
+  editChannel: async (c, b) =>
+    void actions.push(
+      `editChannel ${c} ${b.topic ?? ''}${b.name ? ` name=${b.name}` : ''}${b.nsfw !== undefined ? ` nsfw=${b.nsfw}` : ''}${b.user_limit !== undefined ? ` limit=${b.user_limit}` : ''}`,
+    ),
   setChannelOverwrite: async (c, o) => void actions.push(`overwrite ${c} ${o.id} allow=${o.allow} deny=${o.deny}`),
   pinMessage: async (c, m, pin) => void actions.push(`${pin ? 'pin' : 'unpin'} ${c} ${m}`),
   createChannel: async (_g, b) => (
@@ -953,6 +957,18 @@ describe('チャンネル（管理画面）', () => {
     expect(BigInt(ow(ROLE.guji)!.allow) & view).toBe(view);
     expect(ow(ROLE.sanpaisha)).toBeUndefined();
     expect((await listAudit(db, { action: 'channel.create' }))[0]?.detail).toMatchObject({ name: '氏子の間', visibility: 'private' });
+  });
+
+  it('通話の人数の上限を変えられる（0〜99）。作るときにも決められる', async () => {
+    const g = await login(GUJI);
+    expect(await (await get('/channels', g)).text()).toContain('name="userLimit"');
+    const r = await form(g, '/channels/910000000000000004/name', { name: '拝殿', userLimit: '5' });
+    expect(r.headers.get('location')).toBe('/channels?msg=saved');
+    expect(actions).toContain('editChannel 910000000000000004  limit=5');
+    expect((await form(g, '/channels/910000000000000004/name', { name: '拝殿', userLimit: '100' })).headers.get('location')).toBe('/channels?msg=invalid#ch-910000000000000004');
+    const created = await formMulti(g, '/channels/new', [['kind', 'voice'], ['name', '二人部屋'], ['visibility', 'members'], ['userLimit', '2']]);
+    expect(created.headers.get('location')).toBe('/channels?msg=created#ch-910000000000000099');
+    expect(actions.find((a) => a.startsWith('createChannel'))).toContain('"user_limit":2');
   });
 
   it('消すときは名前を入力。BOT が使っているもの・中身のあるカテゴリは消せない', async () => {

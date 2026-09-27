@@ -1046,6 +1046,12 @@ export function createWebApp(deps: WebDeps) {
     return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} roles={pickable} inUse={channelsInUse(cfg)} />);
   });
 
+  /** 通話の人数の上限（0〜99。0 = なし）。おかしければ undefined */
+  const userLimitOf = (v: string): number | undefined => {
+    const n = Number(v.trim() || '0');
+    return Number.isInteger(n) && n >= 0 && n <= 99 ? n : undefined;
+  };
+
   /** 新しいチャンネル・カテゴリを作る */
   app.post('/channels/new', async (c) => {
     const body = await c.req.parseBody({ all: true });
@@ -1065,11 +1071,14 @@ export function createWebApp(deps: WebDeps) {
       return c.redirect('/channels?msg=create_invalid#new-channel');
     }
     const permission_overwrites = overwritesFor(cfg, { visibility, roleIds, readOnly: type === 0 && one('readOnly') === 'yes', botId: deps.botId, parent });
+    const limitRaw = one('userLimit');
+    const user_limit = type === 2 && typeof limitRaw === 'string' && limitRaw !== '' ? userLimitOf(limitRaw) : 0;
+    if (user_limit === undefined) return c.redirect('/channels?msg=create_invalid#new-channel');
     let created: GuildChannel;
     try {
       created = await deps.discord.createChannel(
         cfg.guildId,
-        { name, type, ...(parent ? { parent_id: parent.id } : {}), ...(type === 0 && topic ? { topic } : {}), permission_overwrites },
+        { name, type, ...(parent ? { parent_id: parent.id } : {}), ...(type === 0 && topic ? { topic } : {}), ...(user_limit ? { user_limit } : {}), permission_overwrites },
         '管理画面（チャンネルを作る）',
       );
     } catch (err) {
@@ -1162,10 +1171,16 @@ export function createWebApp(deps: WebDeps) {
     if (!name) return c.redirect('/channels?msg=invalid');
     const channel = (await loadChannels(true)).find((ch) => ch.id === id);
     if (!channel) return c.redirect('/channels');
-    const patch: { name?: string; nsfw?: boolean } = {};
+    const patch: { name?: string; nsfw?: boolean; user_limit?: number } = {};
     if (channel.name !== name) patch.name = name;
     // 通話の年齢制限（カテゴリには付けられない）
     if (body.ageGateField === '1' && channel.type !== 4 && (body.nsfw === 'yes') !== Boolean(channel.nsfw)) patch.nsfw = body.nsfw === 'yes';
+    // 通話の人数の上限（0 = なし。Discord は 99 まで）
+    if (typeof body.userLimit === 'string' && channel.type === 2) {
+      const limit = userLimitOf(body.userLimit);
+      if (limit === undefined) return c.redirect(`/channels?msg=invalid#ch-${id}`);
+      if (limit !== (channel.user_limit ?? 0)) patch.user_limit = limit;
+    }
     if (!Object.keys(patch).length) return c.redirect('/channels?msg=unchanged');
     try {
       await deps.discord.editChannel(id, patch);
@@ -1176,7 +1191,7 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, {
       actorId: c.get('session').userId,
       action: 'channel.update',
-      detail: { channelId: id, name: channel.name, newName: patch.name, nsfw: patch.nsfw },
+      detail: { channelId: id, name: channel.name, newName: patch.name, nsfw: patch.nsfw, userLimit: patch.user_limit },
       via: 'web',
     });
     return c.redirect('/channels?msg=saved');

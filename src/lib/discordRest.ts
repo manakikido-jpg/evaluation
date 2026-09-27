@@ -21,7 +21,7 @@ export interface DiscordActions {
   /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
   guildChannels(guildId: string): Promise<GuildChannel[]>;
   /** チャンネルの名前・説明（トピック）を変える */
-  editChannel(channelId: string, body: { topic?: string; name?: string; nsfw?: boolean }): Promise<void>;
+  editChannel(channelId: string, body: { topic?: string; name?: string; nsfw?: boolean; user_limit?: number }): Promise<void>;
   /** チャンネルの権限の上書きを 1 つ書き換える（書き込める・読むだけの切り替え） */
   setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
   /** チャンネル・カテゴリを作る（管理画面のチャンネル） */
@@ -63,6 +63,8 @@ export type GuildChannel = {
   topic?: string | null;
   /** Discord の年齢制限チャンネル */
   nsfw?: boolean;
+  /** 通話の人数の上限（0 = なし） */
+  user_limit?: number;
   permission_overwrites?: ChannelOverwrite[];
 };
 
@@ -70,7 +72,7 @@ export type GuildChannel = {
 export type ChannelOverwrite = { id: string; type: 0 | 1; allow: string; deny: string };
 
 /** 0: テキスト / 2: 通話 / 4: カテゴリ */
-export type CreateChannelInput = { name: string; type: 0 | 2 | 4; parent_id?: string; topic?: string; permission_overwrites: ChannelOverwrite[] };
+export type CreateChannelInput = { name: string; type: 0 | 2 | 4; parent_id?: string; topic?: string; user_limit?: number; permission_overwrites: ChannelOverwrite[] };
 
 /** Discord が失敗を返したとき（status で「メッセージが消されていた（404）」などを見分ける） */
 export class DiscordHttpError extends Error {

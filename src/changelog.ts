@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-voice-user-limit',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '通話の人数の上限',
+    items: ['「チャンネル」ページで、通話の人数の上限（0 でなし・99 まで）を変えられる。通話を作るときにも決められる。一覧に「○人まで」'],
+  },
+  {
     id: '2026-09-27-channel-create-delete',
     date: '2026-09-27',
     kind: 'new',
