@@ -114,6 +114,7 @@ async function main(): Promise<void> {
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
     bellSticky.attach(guild);
     market.attach(guild);
+    gacha.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // ブースト: 止まっていた間の「ブーストしました」を拾う
@@ -139,6 +140,8 @@ async function main(): Promise<void> {
       banzuke();
       // 期限が来た授与品（色守り・絵馬のピン留め）を外す
       void shop.expire().catch((err) => logger.warn({ err }, 'shop expire failed'));
+      // 期限が来た名前の飾りを外す
+      void gacha.tick().catch((err) => logger.warn({ err }, 'gacha tick failed'));
       // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
       void boost.tick();
       // 市場: 期限が来た取引を売った人に渡す

@@ -225,6 +225,13 @@
       "when": 1790492315404,
       "tag": "0031_room_passes",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790494136272,
+      "tag": "0032_buffs",
+      "breakpoints": true
     }
   ]
 }

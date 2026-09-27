@@ -727,3 +727,26 @@ export const roomPasses = pgTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.kind] })],
 );
+
+/** 使っている札（fuku: 福の札・until まで通話の銭 2 倍 / luck: 運気アップの札・あと remaining 回、物御籤の大吉 2 倍） */
+export const memberBuffs = pgTable(
+  'member_buffs',
+  {
+    memberId: text('member_id').notNull(),
+    kind: text('kind').$type<'fuku' | 'luck'>().notNull(),
+    until: timestamp('until', { withTimezone: true }),
+    remaining: integer('remaining').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.kind] })],
+);
+
+/** 名前の飾り（until まで、名前の前に絵文字。終わったら base の名前に戻す） */
+export const nameDecos = pgTable('name_decos', {
+  memberId: text('member_id').primaryKey(),
+  emoji: text('emoji').notNull(),
+  /** 飾る前のニックネーム（なければ null = サーバーのニックネームなし） */
+  baseNick: text('base_nick'),
+  until: timestamp('until', { withTimezone: true }).notNull(),
+});
+
+export type NameDeco = typeof nameDecos.$inferSelect;

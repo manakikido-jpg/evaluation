@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import type { EconomyConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily } from '../db/schema.js';
+import { fukuActive } from './buffs.js';
 import { addCoins } from './economy.js';
 
 /** 日本時間の日付（YYYY-MM-DD） */
@@ -89,10 +90,12 @@ export async function voiceTick(
           .returning({ vcCoins: activityDaily.vcCoins });
         if (updated.length) base = amount;
       }
+      // 🧧 福の札が効いていれば、ふつうにもらえる分をもう 1 回（上限に数えない）
+      const fuku = base > 0 && (await fukuActive(tx, memberId, now)) ? base : 0;
       // コアタイムで増えた分は、上限に届いていてももらえる
-      const total = base + bonus;
+      const total = base + bonus + fuku;
       if (total <= 0) return 0;
-      await addCoins(tx, memberId, total, 'voice', { date, minutes: row.vcMinutes, ...(bonus ? { coreTime: bonus } : {}) });
+      await addCoins(tx, memberId, total, 'voice', { date, minutes: row.vcMinutes, ...(bonus ? { coreTime: bonus } : {}), ...(fuku ? { fuku } : {}) });
       return total;
     });
     if (paid) awarded.push({ memberId, amount: paid });
