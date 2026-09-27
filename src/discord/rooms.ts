@@ -31,6 +31,7 @@ import {
   roomOverwrites,
   ROOM_KINDS,
   startRoom,
+  transferRoom,
   type Overwrite,
   type RoomKind,
   type RoomRow,
@@ -41,7 +42,7 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 名前の変更は Discord が 10 分に 2 回までにしているので、待ちすぎないように */
 const EDIT_TIMEOUT_MS = 5000;
 
-type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'>;
+type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'> & { payerId?: string | null };
 type Btn = { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; emoji?: { name: string }; disabled?: boolean };
 const button = (custom_id: string, label: string, emoji: string, style: Btn['style'] = 2, disabled = false): Btn => ({
   type: 2,
@@ -90,6 +91,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
     ...(plan !== 'none' ? [`・部屋の種類: ${k.emoji} ${k.label}${row.kindLocked ? '（決定済み）' : '（まだ 1 回選べます）'}`] : []),
     `・人数制限: ${ch.userLimit ? `${ch.userLimit} 人まで` : 'なし'}`,
     `・入室許可者: ${row.invited.length ? row.invited.map((id) => `<@${id}>`).join(' ') : 'なし'}`,
+    ...(plan !== 'none' && row.payerId && row.payerId !== row.ownerId ? [`・部屋主の分の部屋代: <@${row.payerId}> さんが持っています`] : []),
     '',
     '変更したい項目のボタンを押してください：',
   ];
@@ -100,6 +102,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
       buttons(
         button('room:invite', '入室許可者を追加', '➕', 1),
         ...(canChoose ? [button('room:kind', '部屋の種類を選ぶ（1 回だけ）', '🔒', 2)] : []),
+        button('room:xfer', '権限を譲渡', '👑'),
         button('room:close', '閉じる', '✖️'),
       ),
     ],
@@ -196,6 +199,11 @@ export class RoomApp {
         if (id === 'room:limit') return await this.textModal(i, 'room:limitmodal', '人数制限（0 でなし・99 まで）', String(ch.userLimit), 2);
         if (id === 'room:invite') return void (await i.update(this.invitePicker(row)));
         if (id === 'room:kind') return void (await i.update(this.kindPicker(row)));
+        if (id === 'room:xfer') return await this.transferPicker(i, row, ch);
+        if (id.startsWith('room:xferok:')) {
+          const [, , to, pay] = id.split(':');
+          if (to && (pay === 'new' || pay === 'keep')) return await this.transfer(i, row, ch, to, pay === 'keep');
+        }
       }
       if (i.isModalSubmit()) {
         const v = i.fields.getTextInputValue('value').trim();
@@ -205,6 +213,7 @@ export class RoomApp {
       }
       if (i.isStringSelectMenu() && id === 'room:kindpick') return await this.kind(i, row, ch);
       if (i.isUserSelectMenu() && id === 'room:invitepick') return await this.invite(i, row, ch);
+      if (i.isStringSelectMenu() && id === 'room:xferpick') return await this.transferConfirm(i, row, ch);
     } catch (err) {
       logger.warn({ err }, 'room settings failed');
       const content = 'うまくいきませんでした。BOT に「チャンネルの管理」「ロールの管理」の権限があるか、神職に確かめてもらってください。';
@@ -313,6 +322,65 @@ export class RoomApp {
     const paid = r.charged ? `（花びら ${r.charged} 枚を払いました）` : '';
     const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
     await this.done(i, { ...row, kind, kindLocked: true }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`);
+  }
+
+  /** 譲渡できる人（今この部屋にいる人。BOT と自分はのぞく） */
+  private transferable(row: RoomRow, ch: VoiceChannel) {
+    return [...ch.members.values()].filter((m) => !m.user.bot && m.id !== row.ownerId).slice(0, 25);
+  }
+
+  private async transferPicker(i: ButtonInteraction<'cached'>, row: RoomRow, ch: VoiceChannel): Promise<void> {
+    const people = this.transferable(row, ch);
+    if (!people.length) return void (await i.reply({ content: '譲渡できる人がいません（今この部屋にいる人から選べます）。', ...EPHEMERAL }));
+    await i.update({
+      embeds: [{ title: '👑 権限を譲渡', description: '部屋の設定を使える人（部屋主）を、今この部屋にいる人から選んでください。', color: 0x6b5b95 }],
+      components: [
+        new ActionRowBuilder<StringSelectMenuBuilder>()
+          .addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('room:xferpick')
+              .setPlaceholder('譲渡する人を選ぶ')
+              .addOptions(people.map((m) => ({ label: m.displayName.slice(0, 100), value: m.id }))),
+          )
+          .toJSON(),
+        buttons(button('room:back', '設定一覧に戻る', '↩️')),
+      ],
+    });
+  }
+
+  /** 選んだあと: 部屋代をどうするか（値段のない部屋は確認だけ） */
+  private async transferConfirm(i: StringSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel): Promise<void> {
+    const to = i.values[0];
+    if (!to || !this.transferable(row, ch).some((m) => m.id === to)) return void (await i.reply({ content: 'その人は今この部屋にいません。', ...EPHEMERAL }));
+    const paid = planOf(this.cfg(), row.hubId) !== 'none';
+    await i.update({
+      embeds: [
+        {
+          title: '👑 権限を譲渡',
+          description: paid
+            ? `<@${to}> さんに部屋主の権限を譲渡します。\nこれからの部屋主の分の部屋代はどうしますか？`
+            : `<@${to}> さんに部屋主の権限を譲渡します。よろしいですか？`,
+          color: 0x6b5b95,
+        },
+      ],
+      components: [
+        paid
+          ? buttons(button(`room:xferok:${to}:new`, 'これからは相手が払う', '🤝', 1), button(`room:xferok:${to}:keep`, '部屋代は自分が持つ', '💰', 3), button('room:back', 'やめる', '↩️'))
+          : buttons(button(`room:xferok:${to}:new`, '譲渡する', '👑', 1), button('room:back', 'やめる', '↩️')),
+      ],
+      allowedMentions: { parse: [] },
+    });
+  }
+
+  private async transfer(i: ButtonInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, to: string, keepPaying: boolean): Promise<void> {
+    if (!this.transferable(row, ch).some((m) => m.id === to)) return void (await i.reply({ content: 'その人は今この部屋にいません。', ...EPHEMERAL }));
+    const r = await transferRoom(this.db, ch.id, row.ownerId, to, keepPaying);
+    if (r.status !== 'ok') return void (await i.reply({ content: '譲渡できませんでした（もう部屋主ではないかもしれません）。', ...EPHEMERAL }));
+    await this.apply(ch, r.row, r.row.kind);
+    const paid = planOf(this.cfg(), row.hubId) !== 'none';
+    const money = !paid ? '' : keepPaying ? `（部屋主の分の部屋代は <@${r.row.payerId ?? row.ownerId}> さんが持ちます）` : `（これからの部屋主の分の部屋代は <@${to}> さんが払います）`;
+    await i.update({ content: `👑 <@${to}> さんに権限を譲渡しました。${money}`, embeds: [], components: [], allowedMentions: { parse: [] } });
+    await ch.send({ content: `👑 <@${row.ownerId}> さんから <@${to}> さんに、部屋主の権限を譲渡しました。${money}\n-# 部屋の設定は「⚙ 部屋の設定」から <@${to}> さんが使えます`, allowedMentions: { users: [to] } });
   }
 
   private async invite(i: UserSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel): Promise<void> {

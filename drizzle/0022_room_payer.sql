@@ -1,0 +1,1 @@
+ALTER TABLE "temp_voice" ADD COLUMN "payer_id" text;

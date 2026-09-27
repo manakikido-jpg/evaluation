@@ -337,6 +337,8 @@ export const tempVoice = pgTable('temp_voice', {
   invited: text('invited').array().notNull().default(sql`'{}'::text[]`),
   /** 種類を選んだ（1 回だけ選べる。選んだあとは変えられない） */
   kindLocked: boolean('kind_locked').notNull().default(false),
+  /** 部屋主の分の部屋代を払う人（権限を譲渡して「部屋代は自分が持つ」を選んだ前の部屋主）。なければ部屋主 */
+  payerId: text('payer_id'),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */

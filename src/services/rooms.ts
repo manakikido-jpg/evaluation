@@ -100,6 +100,10 @@ async function priceFor(db: Db, cfg: GuildConfig, plan: RoomPlan, kind: RoomKind
 
 export type PayResult = { status: 'ok'; charged: number } | { status: 'insufficient'; price: number };
 
+/** その人の分を払う人（部屋主の分は、譲渡のときに「自分が持つ」を選んだ前の部屋主が払う） */
+export const payerOf = (row: Pick<RoomRow, 'ownerId' | 'payerId'>, memberId: string): string =>
+  memberId === row.ownerId && row.payerId ? row.payerId : memberId;
+
 const lockRoom = (tx: Db, channelId: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'room:' + channelId}))`);
 
 /** 部屋ができたとき（ひらくたびに 1 回の部屋）: 作った人が公開の値段を払う */
@@ -132,9 +136,10 @@ export async function changeRoomKind(db: Db, cfg: GuildConfig, channelId: string
     if (!row) return { status: 'not_found' as const };
     if (row.kindLocked) return { status: 'locked' as const };
     const plan = planOf(cfg, row.hubId);
-    const price = await priceFor(tx, cfg, plan, kind, row.ownerId);
-    const charge = plan === 'once' ? Math.max(0, price - row.paid) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, row.ownerId)));
-    if (charge > 0 && !(await spendWithin(tx, row.ownerId, charge, 'room', { channelId, kind, plan }))) {
+    const payer = payerOf(row, row.ownerId);
+    const price = await priceFor(tx, cfg, plan, kind, payer);
+    const charge = plan === 'once' ? Math.max(0, price - row.paid) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, payer)));
+    if (charge > 0 && !(await spendWithin(tx, payer, charge, 'room', { channelId, kind, plan }))) {
       return { status: 'insufficient' as const, price: charge };
     }
     await tx
@@ -174,13 +179,16 @@ export async function payEntry(
 ): Promise<{ status: 'ok' | 'free' | 'already'; charged: number } | { status: 'insufficient'; price: number }> {
   const row = await roomOf(db, channelId);
   if (!row || planOf(cfg, row.hubId) !== 'hourly') return { status: 'free', charged: 0 };
-  const price = await priceFor(db, cfg, 'hourly', row.kind, memberId);
+  const payerId = payerOf(row, memberId);
+  const price = await priceFor(db, cfg, 'hourly', row.kind, payerId);
   if (price <= 0) return { status: 'free', charged: 0 };
   return db.transaction(async (tx) => {
     await lockPayer(tx, channelId, memberId);
     const [payer] = await tx.select().from(roomPayers).where(and(eq(roomPayers.channelId, channelId), eq(roomPayers.memberId, memberId)));
     if (payer && payer.paidUntil > now) return { status: 'already' as const, charged: 0 };
-    if (!(await spendWithin(tx, memberId, price, 'room', { channelId, kind: row.kind, plan: 'hourly' }))) return { status: 'insufficient' as const, price };
+    if (!(await spendWithin(tx, payerId, price, 'room', { channelId, kind: row.kind, plan: 'hourly', ...(payerId !== memberId ? { for: memberId } : {}) }))) {
+      return { status: 'insufficient' as const, price };
+    }
     const paidUntil = new Date(now.getTime() + HOUR_MS);
     await tx
       .insert(roomPayers)
@@ -212,13 +220,14 @@ export async function hourlyPerPerson(
     if (!row || planOf(cfg, row.hubId) !== 'hourly') continue;
     if (roomPrice(cfg, 'hourly', row.kind) <= 0) continue;
     for (const memberId of new Set(room.memberIds)) {
-      const price = await priceFor(db, cfg, 'hourly', row.kind, memberId);
+      const payerId = payerOf(row, memberId);
+      const price = await priceFor(db, cfg, 'hourly', row.kind, payerId);
       if (price <= 0) continue;
       const a = await db.transaction(async (tx): Promise<PersonAction | undefined> => {
         await lockPayer(tx, room.channelId, memberId);
         const [payer] = await tx.select().from(roomPayers).where(and(eq(roomPayers.channelId, room.channelId), eq(roomPayers.memberId, memberId)));
         if (payer && payer.paidUntil > now) return undefined;
-        if (await spendWithin(tx, memberId, price, 'room', { channelId: room.channelId, kind: row.kind, plan: 'hourly' })) {
+        if (await spendWithin(tx, payerId, price, 'room', { channelId: room.channelId, kind: row.kind, plan: 'hourly', ...(payerId !== memberId ? { for: memberId } : {}) })) {
           // BOT が止まっていた間の分はさかのぼらない（今から 1 時間）
           const paidUntil = new Date(Math.max(payer?.paidUntil.getTime() ?? 0, now.getTime() - HOUR_MS) + HOUR_MS);
           await tx
@@ -250,4 +259,30 @@ export async function roomOf(db: Db, channelId: string): Promise<RoomRow | undef
 
 export async function listRooms(db: Db): Promise<RoomRow[]> {
   return db.select().from(tempVoice);
+}
+
+// ───────── 部屋主の権限を譲渡する ─────────
+
+export type TransferResult = { status: 'ok'; row: RoomRow } | { status: 'not_found' | 'not_owner' | 'invalid' };
+
+/**
+ * 部屋主の権限を譲渡する。keepPaying: 部屋主の分の部屋代を、これからも今払っている人が持つ
+ * （しなければ、これからは新しい部屋主が払う）。前の部屋主は入室許可者に入れて、鍵付きの部屋にも入れるようにする。
+ */
+export async function transferRoom(db: Db, channelId: string, fromId: string, toId: string, keepPaying: boolean): Promise<TransferResult> {
+  if (fromId === toId) return { status: 'invalid' };
+  return db.transaction(async (tx) => {
+    await lockRoom(tx, channelId);
+    const [row] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
+    if (!row) return { status: 'not_found' as const };
+    if (row.ownerId !== fromId) return { status: 'not_owner' as const };
+    const payerId = keepPaying ? payerOf(row, fromId) : null;
+    const invited = [...new Set([...row.invited.filter((id) => id !== toId), fromId])].slice(-50);
+    const [updated] = await tx
+      .update(tempVoice)
+      .set({ ownerId: toId, payerId: payerId === toId ? null : payerId, invited })
+      .where(eq(tempVoice.channelId, channelId))
+      .returning();
+    return { status: 'ok' as const, row: updated! };
+  });
 }

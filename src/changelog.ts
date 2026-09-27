@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-room-transfer',
+    date: '2026-09-27',
+    kind: 'new',
+    where: ['Discord'],
+    title: '通話部屋の権限の譲渡',
+    items: [
+      '部屋の設定の「👑 権限を譲渡」で、今部屋にいる人から選んで部屋主を譲れる。前の部屋主は入室許可者に入る',
+      '部屋代: 「これからは相手が払う」なら、その時間以降の部屋主の分は新しい部屋主が払う。「部屋代は自分が持つ」なら前の部屋主が払い続ける（抜けたあとも）',
+    ],
+  },
+  {
     id: '2026-09-27-room-panel',
     date: '2026-09-27',
     kind: 'improve',

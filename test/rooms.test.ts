@@ -4,7 +4,7 @@ import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
 import { roomNotice, roomPanel } from '../src/discord/rooms.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { addInvites, changeRoomKind, hourlyPerPerson, payEntry, planOf, roomOf, roomOverwrites, startRoom, type Overwrite } from '../src/services/rooms.js';
+import { addInvites, changeRoomKind, hourlyPerPerson, payEntry, planOf, roomOf, roomOverwrites, startRoom, transferRoom, type Overwrite } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
 import { members } from '../src/db/schema.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
@@ -211,5 +211,57 @@ describe('支払い', () => {
     await open(NEOCHI);
     await addInvites(db, ROOM, [FRIEND]);
     expect((await addInvites(db, ROOM, [FRIEND]))?.invited).toEqual([FRIEND]);
+  });
+});
+
+describe('部屋主の権限を譲渡', () => {
+  it('部屋主だけが譲渡できる。前の部屋主は入室許可者に入る', async () => {
+    await open(YOIMIYA);
+    expect(await transferRoom(db, ROOM, FRIEND, OWNER, false)).toEqual({ status: 'not_owner' });
+    expect(await transferRoom(db, ROOM, OWNER, OWNER, false)).toEqual({ status: 'invalid' });
+    const r = await transferRoom(db, ROOM, OWNER, FRIEND, false);
+    expect(r.status).toBe('ok');
+    expect(await roomOf(db, ROOM)).toMatchObject({ ownerId: FRIEND, payerId: null, invited: [OWNER] });
+    expect(await transferRoom(db, ROOM, OWNER, FRIEND, false)).toEqual({ status: 'not_owner' });
+  });
+
+  it('宵宮: 譲渡したら、その時間以降の部屋主の分は新しい部屋主が払う', async () => {
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await addCoins(db, FRIEND, 1000, 'adjust');
+    await open(YOIMIYA);
+    await payEntry(db, cfg, ROOM, OWNER, T0);
+    await payEntry(db, cfg, ROOM, FRIEND, T0);
+    await transferRoom(db, ROOM, OWNER, FRIEND, false);
+    await hourlyPerPerson(db, cfg, [{ channelId: ROOM, memberIds: [OWNER, FRIEND] }], min(60));
+    expect((await walletOf(db, OWNER)).balance).toBe(800);
+    expect((await walletOf(db, FRIEND)).balance).toBe(800);
+  });
+
+  it('宵宮:「部屋代は自分が持つ」なら、前の部屋主が新しい部屋主の分も払う（抜けたあとも）', async () => {
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await addCoins(db, FRIEND, 1000, 'adjust');
+    await open(YOIMIYA);
+    await payEntry(db, cfg, ROOM, OWNER, T0);
+    await payEntry(db, cfg, ROOM, FRIEND, T0);
+    await transferRoom(db, ROOM, OWNER, FRIEND, true);
+    expect(await roomOf(db, ROOM)).toMatchObject({ ownerId: FRIEND, payerId: OWNER });
+    // 前の部屋主は抜けた。新しい部屋主の 1 時間分は前の部屋主から
+    await hourlyPerPerson(db, cfg, [{ channelId: ROOM, memberIds: [FRIEND] }], min(60));
+    expect((await walletOf(db, OWNER)).balance).toBe(800);
+    expect((await walletOf(db, FRIEND)).balance).toBe(900);
+    // もう一度譲渡して戻しても、持つ人を引きつぐ
+    await transferRoom(db, ROOM, FRIEND, OWNER, true);
+    expect(await roomOf(db, ROOM)).toMatchObject({ ownerId: OWNER, payerId: null });
+  });
+
+  it('宿坊: 譲渡したあとに種類を選ぶと、新しい部屋主が払う（自分が持つなら前の部屋主）', async () => {
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await addCoins(db, FRIEND, 1000, 'adjust');
+    await open(NEOCHI);
+    await startRoom(db, cfg, ROOM, T0);
+    await transferRoom(db, ROOM, OWNER, FRIEND, true);
+    expect(await changeRoomKind(db, cfg, ROOM, 'invite')).toEqual({ status: 'ok', charged: 150 });
+    expect((await walletOf(db, OWNER)).balance).toBe(800);
+    expect((await walletOf(db, FRIEND)).balance).toBe(1000);
   });
 });
