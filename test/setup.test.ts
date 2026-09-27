@@ -616,3 +616,52 @@ describe('見た目を変えた名前（「------📜 掲示 📜------」「�
     expect(d.channels.some((c) => c.id === dup.id)).toBe(false);
   });
 });
+
+describe('チャンネルの形を固定（標準）', () => {
+  it('足りないチャンネル・カテゴリは作らずに知らせる。あるものは ID を書く。ロールは作る', async () => {
+    const d = fakeDiscord();
+    await applyLayout(d.api, GUILD, FULL);
+    // お出迎え を消して、🎮 縁日 カテゴリの中身を別のカテゴリへ動かしておく
+    d.channels.splice(d.channels.indexOf(find(d, 'お出迎え', 0)), 1);
+    const game = find(d, '縁日', 0);
+    const keidaiCat = find(d, '🌳 境内', 4);
+    game.parent_id = keidaiCat.id;
+    const before = d.channels.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id, position: c.position }));
+    const roleCount = d.roles.length;
+    d.roles.splice(d.roles.findIndex((r) => r.name === '📩 DM OK'), 1);
+
+    const r = await applyLayout(d.api, GUILD, FULL, { fixed: true });
+    expect(r.created.channels).toEqual([]);
+    expect(r.skipped).toEqual(['🌳 境内 / お出迎え']);
+    expect(r.moved).toEqual([]);
+    expect(d.channels.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id, position: c.position }))).toEqual(before);
+    // 動かしてあっても、同じ名前なら使う
+    expect(r.recruit.some((p) => p.channelId === game.id)).toBe(true);
+    expect(r.channelIds.welcome).toBeUndefined();
+    expect(r.channelIds.keidai).toBe(find(d, '境内', 0).id);
+    // ロールは足りなければ作る
+    expect(r.created.roles).toEqual(['📩 DM OK']);
+    expect(d.roles.length).toBe(roleCount);
+  });
+
+  it('前の版の #絵馬 も、固定なら移さない・名前を変えない', async () => {
+    const d = fakeDiscord();
+    d.seed('📜 掲示', 4);
+    const old = d.seed('🪧｜絵馬', 0, '📜 掲示');
+    const r = await applyLayout(d.api, GUILD, FULL, { fixed: true });
+    expect(d.channels).toHaveLength(2);
+    expect(d.channels.find((c) => c.id === old.id)).toMatchObject({ name: '🪧｜絵馬', parent_id: find(d, '📜 掲示', 4).id });
+    expect(r.channelIds.ema).toBe(old.id);
+    expect(r.skipped).toContain('🪧 絵馬殿');
+  });
+
+  it('見つからなかった通話部屋の入口・募集ボタンも、前の設定から消さない', () => {
+    const r = { roleIds: {}, channelIds: {}, hubs: [{ channelId: '1', name: 'a' }], recruit: [] } as unknown as Parameters<typeof mergeIntoConfig>[2];
+    const merged = mergeIntoConfig({ tempVoice: { hubs: [{ channelId: '1', name: 'old' }, { channelId: '2', name: 'renamed' }] }, recruit: { panels: [{ channelId: '3' }] } }, GUILD, r) as {
+      tempVoice: { hubs: { channelId: string; name: string }[] };
+      recruit: { panels: { channelId: string }[] };
+    };
+    expect(merged.tempVoice.hubs).toEqual([{ channelId: '1', name: 'a' }, { channelId: '2', name: 'renamed' }]);
+    expect(merged.recruit.panels.map((p) => p.channelId)).toEqual(['3']);
+  });
+});

@@ -1,7 +1,11 @@
 /**
  * ロールとチャンネルを自動で作り、config/guild.json を書く。
  *
- *   npm run setup-guild -- --guild <サーバー ID> [--minimal] [--dry-run] [--post-panels] [--tidy] [--reorder]
+ *   npm run setup-guild -- --guild <サーバー ID> [--minimal] [--dry-run] [--post-panels] [--change-channels [--tidy] [--reorder]]
+ *
+ * 標準: チャンネルの形は固定（2026-09〜）。今あるカテゴリ・チャンネルを探して ID を書くだけで、
+ *       作らない・移さない・名前を変えない・消さない。ロールは足りなければ作る。
+ * --change-channels: 配置どおりに、足りないチャンネルを作り、前の版の場所・名前のものを移す（--tidy・--reorder もこれと一緒のときだけ）
  *   （Docker: docker compose run --rm setup --guild <サーバー ID>）
  *
  * --tidy: 使わなくなったチャンネル（最小構成の残り・Discord が最初から作る「一般」・#rules など）を消し、
@@ -111,11 +115,16 @@ async function main(): Promise<void> {
   }
   const layout = flag('minimal') ? MINIMAL : FULL;
   const dryRun = flag('dry-run');
-  const tidy = flag('tidy');
-  const reorder = flag('reorder');
+  // チャンネルの形を変えてよいか（標準は固定）
+  const change = flag('change-channels');
+  const tidy = change && flag('tidy');
+  const reorder = change && flag('reorder');
   const api = createSetupApi(token);
 
-  console.log(`⛩ セットアップを始めます（${flag('minimal') ? 'テスト用の最小構成' : '全部の構成'}${dryRun ? '・確認だけ' : ''}）`);
+  console.log(`⛩ セットアップを始めます（${flag('minimal') ? 'テスト用の最小構成' : '全部の構成'}${dryRun ? '・確認だけ' : ''}${change ? '' : '・チャンネルの形は固定'}）`);
+  if (!change && (flag('tidy') || flag('reorder'))) {
+    console.log('（チャンネルの形を固定しているので、--tidy・--reorder は使いません。変えるときは --change-channels を付けてください）');
+  }
   // 片付け: 前の版が作ってしまった重複を、セットアップより先に消す（人の書き込みがあるものは消さない）
   if (tidy) {
     const dups = await dedupeGuild(api, guildId, layout, { dryRun });
@@ -126,7 +135,7 @@ async function main(): Promise<void> {
   }
   // 同じサーバーの設定ファイルがあれば、前に作ったロール・チャンネルを ID で探す（名前を変えていても作り直さない）
   const known = knownIdsFrom(configPath, guildId);
-  const r = await applyLayout(api, guildId, layout, { postPanels: flag('post-panels'), dryRun, known });
+  const r = await applyLayout(api, guildId, layout, { postPanels: flag('post-panels'), dryRun, known, fixed: !change });
 
   console.log(`\nサーバー: ${r.guildName}`);
   console.log(`ロール: 作成 ${r.created.roles.length} ・ 既存を使用 ${r.reused.roles}`);
@@ -134,6 +143,10 @@ async function main(): Promise<void> {
   console.log(`チャンネル: 作成 ${r.created.channels.length} ・ 既存を使用 ${r.reused.channels}`);
   for (const n of r.created.channels) console.log(`  + ${n}`);
   for (const m of r.moved) console.log(`移動: ${m}`);
+  if (r.skipped.length) {
+    console.log(`\nチャンネルの形を固定しているので、作らなかったもの（${r.skipped.length} 件。使うなら Discord で同じ名前で作ってから、もう一度セットアップ）:`);
+    for (const s of r.skipped) console.log(`  - ${s}`);
+  }
   for (const p of r.panelsPosted) console.log(`申請ボタンを置きました: ${p}`);
   for (const w of r.warnings) console.log(`\n⚠️  ${w}`);
 

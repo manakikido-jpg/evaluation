@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-27-fixed-channels',
+    date: '2026-09-27',
+    kind: 'improve',
+    where: ['運用'],
+    title: 'セットアップでチャンネルの形を固定',
+    items: [
+      'セットアップは今あるチャンネルを探して ID を書くだけに。作らない・移さない・名前を変えない・消さない（ロールは足りなければ作る）',
+      '配置にあってサーバーにないものは「作らなかったもの」として表示。使うなら Discord で同じ名前で作ってから、もう一度セットアップ',
+      '配置どおりに作る・片付けるときだけ --change-channels（--tidy・--reorder もそのときだけ）',
+    ],
+  },
+  {
     id: '2026-09-26-onboarding',
     date: '2026-09-26',
     kind: 'new',

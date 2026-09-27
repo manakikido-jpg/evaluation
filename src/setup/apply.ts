@@ -73,6 +73,8 @@ export type SetupResult = {
   hubs: { channelId: string; name: string; plan?: 'once' | 'hourly' }[];
   /** 「募集する」ボタンを置くチャンネル（config の recruit.panels に書く） */
   recruit: { channelId: string; omamori: RoleKey; hubId?: string }[];
+  /** 形を固定しているので作らなかったもの（配置にあって、サーバーにないもの） */
+  skipped: string[];
 };
 
 /** Discord はテキストチャンネル名を小文字・空白→ハイフンにするので、比べるときはそろえる */
@@ -124,6 +126,12 @@ async function placeAfter(
 }
 
 /** 前の版の名前のチャンネル（どのカテゴリにあっても。いちばん古いもの） */
+/** どのカテゴリにあっても、同じ名前・同じ種類のものが 1 つだけならそれ */
+function findAnywhere(channels: ApiChannel[], spec: ChannelSpec): ApiChannel | undefined {
+  const hits = channels.filter((c) => c.type === TYPE[spec.kind] && sameName(c.name, spec.name, spec.kind));
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
 function findFormer(channels: ApiChannel[], spec: ChannelSpec): ApiChannel | undefined {
   if (!spec.formerly?.length) return undefined;
   return oldest(channels.filter((c) => c.type === TYPE[spec.kind] && spec.formerly!.some((f) => sameName(c.name, f, spec.kind))));
@@ -146,7 +154,8 @@ export async function applyLayout(
   api: SetupApi,
   guildId: string,
   layout: Layout,
-  opts: { postPanels?: boolean; dryRun?: boolean; known?: KnownIds } = {},
+  /** fixed: 今のチャンネルの形を変えない（作らない・移さない・名前を変えない。あるものを探して ID を書くだけ） */
+  opts: { postPanels?: boolean; dryRun?: boolean; known?: KnownIds; fixed?: boolean } = {},
 ): Promise<SetupResult> {
   const me = await api.me();
   const guild = await api.guild(guildId);
@@ -182,6 +191,7 @@ export async function applyLayout(
     warnings: hubWarning ? [hubWarning] : [],
     hubs: [],
     recruit: [],
+    skipped: [],
   };
 
   // ── ロール（上から順に作る。新しいロールはいちばん下にできるので、この順で作ると並びが正しくなる） ──
@@ -264,6 +274,8 @@ export async function applyLayout(
     let parent = findCategory(channels, cat.name);
     if (parent) {
       result.reused.channels++;
+    } else if (opts.fixed) {
+      result.skipped.push(cat.name);
     } else if (opts.dryRun) {
       parent = { id: `dry:${cat.name}`, name: cat.name, type: TYPE.category, parent_id: null };
       result.created.channels.push(cat.name);
@@ -274,7 +286,7 @@ export async function applyLayout(
       // 今の並びはそのままに、配置で 1 つ前のカテゴリのすぐ後ろへ
       channels = await placeAfter(api, guildId, channels, parent, prevCategoryId, null);
     }
-    prevCategoryId = parent.id;
+    if (parent) prevCategoryId = parent.id;
     let prevChildId: string | undefined;
 
     for (const ch of cat.channels) {
@@ -282,9 +294,15 @@ export async function applyLayout(
       // 設定に ID があるチャンネル（#慶事 など）は ID で探す → なければ同じカテゴリの同じ名前
       const knownId = ch.configKey ? opts.known?.channels?.[ch.configKey] : undefined;
       let found =
-        channels.find((c) => c.id === knownId && c.type === type) ?? findChild(channels, parent.id, ch) ?? findFormer(channels, ch);
+        channels.find((c) => c.id === knownId && c.type === type) ??
+        (parent ? findChild(channels, parent.id, ch) : undefined) ??
+        findFormer(channels, ch) ??
+        // 形を固定しているときは、ほかのカテゴリに動かしてあっても同じ名前なら使う（1 つだけのとき）
+        (opts.fixed ? findAnywhere(channels, ch) : undefined);
       let isNew = false;
-      if (found) {
+      if (found && (opts.fixed || !parent)) {
+        result.reused.channels++;
+      } else if (found && parent) {
         result.reused.channels++;
         // 前の版の場所・名前にあるもの（#絵馬 など）: 書き込みはそのままで、このカテゴリへ移して名前を変える
         // 前の版の名前のままのときだけ（移したあとに、自分で別の場所へ動かしたものは動かさない）
@@ -303,6 +321,9 @@ export async function applyLayout(
           found = { ...found, name: newName };
         }
         channels = channels.map((c) => (c.id === found!.id ? found! : c));
+      } else if (opts.fixed || !parent) {
+        result.skipped.push(`${cat.name} / ${ch.name}`);
+        continue;
       } else if (opts.dryRun) {
         found = { id: `dry:${ch.name}`, name: ch.name, type, parent_id: parent.id };
         isNew = true;
@@ -321,7 +342,7 @@ export async function applyLayout(
         // 今の並びはそのままに、配置で 1 つ前のチャンネルのすぐ後ろへ（前がなければ同じカテゴリの先頭へ）
         channels = await placeAfter(api, guildId, channels, found, prevChildId, parent.id);
       }
-      if (found.parent_id === parent.id) prevChildId = found.id;
+      if (parent && found.parent_id === parent.id) prevChildId = found.id;
       // 前からあるチャンネルにも、あとから足した「見る・書く」を付ける（#絵馬-男性 の 絵馬待ち など）
       if (!isNew && !opts.dryRun && !found.id.startsWith('dry:')) {
         for (const roleId of alsoIds(ch)) {
@@ -334,11 +355,12 @@ export async function applyLayout(
       }
       if (ch.configKey) result.channelIds[ch.configKey] = found.id;
       if (ch.afk) afkChannelId = found.id;
+      const catId = found.parent_id ?? parent?.id ?? '';
       if (ch.hub) {
         result.hubs.push({ channelId: found.id, name: ch.hub, ...(ch.plan ? { plan: ch.plan } : {}) });
-        hubOfCategory.set(parent.id, found.id);
+        hubOfCategory.set(catId, found.id);
       }
-      if (ch.recruit) recruitIn.push({ channelId: found.id, omamori: ch.recruit, parentId: parent.id });
+      if (ch.recruit) recruitIn.push({ channelId: found.id, omamori: ch.recruit, parentId: catId });
       if (ch.panels && (isNew || opts.postPanels) && !opts.dryRun) {
         for (const kind of ch.panels as PanelKind[]) {
           await api.sendMessage(found.id, panelMessage(kind, { omamori: omamoriConfig(result.roleIds) }));
@@ -617,6 +639,11 @@ export async function dedupeGuild(api: SetupApi, guildId: string, layout: Layout
   return done;
 }
 
+/** 新しく見つけたものに、前の設定にしかないもの（同じチャンネルでないもの）を足す */
+function keepOld<T extends { channelId: string }>(found: T[], old: { channelId: string }[] | undefined): T[] {
+  return [...found, ...((old ?? []) as T[]).filter((o) => !found.some((f) => f.channelId === o.channelId))];
+}
+
 /** 既存の設定（なければ見本）に、作ったロール・チャンネルの ID を書き込む */
 export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, r: SetupResult): Record<string, unknown> {
   const ranks = Array.isArray(base.ranks) ? (base.ranks as { key: string; roleId: string }[]) : [];
@@ -636,8 +663,9 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
       omamori: omamoriConfig(r.roleIds),
     },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
-    tempVoice: { ...(base.tempVoice as object), hubs: r.hubs },
-    recruit: { ...(base.recruit as object), panels: recruitConfig(r) },
+    // 見つからなかったもの（名前を変えたチャンネルなど）も、前の設定から消さない
+    tempVoice: { ...(base.tempVoice as object), hubs: keepOld(r.hubs, (base.tempVoice as { hubs?: { channelId: string }[] } | undefined)?.hubs) },
+    recruit: { ...(base.recruit as object), panels: keepOld(recruitConfig(r), (base.recruit as { panels?: { channelId: string }[] } | undefined)?.panels) },
     shop: {
       colors: SHOP_COLORS()
         .filter((c) => r.roleIds[c.key])
