@@ -470,7 +470,17 @@ export function MemberAdmissionSection(props: {
 
 // ───────── 設定（宮司） ─────────
 
-export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; fileCfg: GuildConfig; flash?: string; error?: string; coinsNonce?: string; at?: string }) {
+export function SettingsPage(props: {
+  session: AdminSession;
+  cfg: GuildConfig;
+  fileCfg: GuildConfig;
+  flash?: string;
+  error?: string;
+  coinsNonce?: string;
+  at?: string;
+  /** テキストチャンネル（呼び鈴の知らせ先を選ぶ） */
+  textChannels?: { id: string; name: string }[];
+}) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
   // いちばん下の自動役職（参拝者）は入鯖時に付くので、昇格ラインは 0 で固定
@@ -601,6 +611,36 @@ export function SettingsPage(props: { session: AdminSession; cfg: GuildConfig; f
             </tbody>
           </table>
           <Save at="voicegroups" />
+        </section>
+        <section class="card anchor" id="sec-bell">
+          <h2>🔔 呼び鈴</h2>
+          <p class="note">
+            メンバーが <code>/呼び鈴</code> やパネルのボタン（<code>/パネル 呼び鈴</code>）で運営を呼ぶと、ここで選んだチャンネルにカードが出ます。神職が「対応する」を押すと、呼んだ人に DM が届きます。
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>知らせ先のチャンネル（運営だけが見られるところ）</span>
+              <select name="bellChannel">
+                <option value="" selected={!cfg.bell.channelId}>
+                  #記録（設定ファイルの log）
+                </option>
+                {(props.textChannels ?? []).map((c) => (
+                  <option value={c.id} selected={c.id === cfg.bell.channelId}>
+                    #{c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>同じ人が続けて鳴らせない分（0〜120）</span>
+              <input type="number" name="bellCooldown" value={String(cfg.bell.cooldownMinutes)} min={0} max={120} required />
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="bellMention" value="yes" checked={cfg.bell.mentionStaff} />
+              <span>神職・宮司に通知を飛ばす（@ロール）</span>
+            </label>
+          </div>
+          <Save at="bell" />
         </section>
         <section class="card anchor" id="sec-voicechat">
           <h2>💬 通話のチャット</h2>

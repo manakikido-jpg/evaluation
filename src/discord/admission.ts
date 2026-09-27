@@ -291,7 +291,7 @@ export class AdmissionApp {
     if (kind === 'contact' && !CONTACT_KINDS.some((k) => contactEnabled(this.cfg, k))) {
       return void (await i.reply({ content: 'DM・フレンドのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
-    const kinds = ['apply', 'omamori', 'shop', 'gender', 'market', 'contact'] as const;
+    const kinds = ['apply', 'omamori', 'shop', 'gender', 'market', 'contact', 'bell'] as const;
     await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { omamori: this.cfg.roles.omamori }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }

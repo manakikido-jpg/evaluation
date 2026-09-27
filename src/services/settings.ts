@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, guildConfigSchema, marketSchema, roomsSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
+import { coreTimeSchema, guildConfigSchema, marketSchema, roomsSchema, bellSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -47,6 +47,8 @@ export const overridesSchema = z.object({
   /** 自動で増える通話（送られたときは全部置きかえる） */
   voiceGroups: z.array(voiceGroupSchema).max(10).optional(),
   voiceChat: voiceChatSchema.partial().default({}),
+  /** 呼び鈴（channelId を空にすると #記録 へ） */
+  bell: bellSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
 });
@@ -67,6 +69,14 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     market: { ...base.market, ...o.market },
     voiceGroups: o.voiceGroups ?? base.voiceGroups,
     voiceChat: { ...base.voiceChat, ...o.voiceChat },
+    bell: (() => {
+      const { channelId, ...rest } = o.bell;
+      const merged = { ...base.bell, ...rest };
+      // null は「決めない（#記録 へ）」
+      if (channelId === null) delete (merged as { channelId?: string }).channelId;
+      else if (channelId) merged.channelId = channelId;
+      return merged;
+    })(),
     applications: { ...base.applications, ...o.applications },
     ranks: base.ranks.map((r) => {
       const x = o.ranks[r.key] ?? {};

@@ -813,9 +813,20 @@ export function createWebApp(deps: WebDeps) {
   const fileCfg = () => deps.fileCfg ?? cfg;
   const gujiOnly = (c: Context<Env>) => c.get('session').level === 'guji';
 
-  app.get('/settings', (c) => {
+  app.get('/settings', async (c) => {
     if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
-    return c.html(<SettingsPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} flash={c.req.query('msg')} at={c.req.query('at')} coinsNonce={randomUUID()} />);
+    const textChannels = (await loadChannels()).filter(isText).sort((a, b) => a.position - b.position);
+    return c.html(
+      <SettingsPage
+        session={c.get('session')}
+        cfg={cfg}
+        fileCfg={fileCfg()}
+        flash={c.req.query('msg')}
+        at={c.req.query('at')}
+        coinsNonce={randomUUID()}
+        textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name }))}
+      />,
+    );
   });
 
   const longText = (v: unknown) => (typeof v === 'string' && v.trim() ? v.replace(/\r\n/g, '\n').trim().slice(0, 1000) : undefined);
@@ -860,6 +871,9 @@ export function createWebApp(deps: WebDeps) {
       },
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
       ...(typeof body.vcClearDelay === 'string' ? { voiceChat: { clearWhenEmpty: body.vcClear === 'yes', delayMinutes: num('vcClearDelay') } } : {}),
+      ...(typeof body.bellCooldown === 'string'
+        ? { bell: { channelId: field(body, 'bellChannel', 20) || null, cooldownMinutes: num('bellCooldown'), mentionStaff: body.bellMention === 'yes' } }
+        : {}),
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'
         ? {

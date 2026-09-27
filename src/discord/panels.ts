@@ -7,7 +7,7 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market' | 'contact';
+export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market' | 'contact' | 'bell';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
@@ -38,6 +38,24 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
         },
       ],
       components: [{ type: 1, components: [{ type: 2, style: 1, label: '出品する', custom_id: 'market:new', emoji: { name: '🏪' } }] }],
+    };
+  }
+  if (kind === 'bell') {
+    return {
+      embeds: [
+        {
+          title: '🔔 呼び鈴',
+          description: [
+            '困ったことがあったら、下のボタンで運営（神職）を呼べます。',
+            '・通話で困っている人がいる、荒らしがいる、使い方が分からない など',
+            '・呼んだことは神職にだけ伝わります。神職が気づいたら、BOT から DM でお知らせします',
+            '',
+            '-# `/呼び鈴` でも呼べます。人に知られたくない相談は `/相談`（匿名）へ',
+          ].join('\n'),
+          color: SHU,
+        },
+      ],
+      components: [{ type: 1, components: [{ type: 2, style: 1, label: '運営を呼ぶ', custom_id: 'bell:ring', emoji: { name: '🔔' } }] }],
     };
   }
   if (kind === 'contact') {

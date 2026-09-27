@@ -93,6 +93,8 @@ export const ACTION_LABEL: Record<string, string> = {
   'role.nickname_lock': 'ニックネームを自分で変えられないように',
   'member.nickname': 'ニックネームを変更',
   'role.create': 'ロールを作成',
+  'bell.take': '呼び鈴に対応',
+  'bell.done': '呼び鈴を対応済みに',
   'role.delete': 'ロールを削除',
   'shop.create': 'ショップの品物を追加',
   'shop.delete': 'ショップの品物を削除',

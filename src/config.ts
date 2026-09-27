@@ -115,6 +115,16 @@ export const voiceChatSchema = z.object({
   delayMinutes: z.number().int().min(0).max(60).default(1),
 });
 
+/** 呼び鈴（運営を呼ぶ） */
+export const bellSchema = z.object({
+  /** 呼び鈴のカードを出すチャンネル（なければ #記録（log）） */
+  channelId: snowflake.optional(),
+  /** 同じ人が続けて鳴らせない分 */
+  cooldownMinutes: z.number().int().min(0).max(120).default(5),
+  /** 神職・宮司のロールに通知を飛ばす */
+  mentionStaff: z.boolean().default(true),
+});
+
 /** 市場（花びらだけ。本物のお金は扱わない） */
 export const marketSchema = z.object({
   /** サーバーの手数料（%）。売った人には値段からこれを引いた分を渡す */
@@ -248,6 +258,7 @@ export const guildConfigSchema = z
     market: marketSchema.default(marketSchema.parse({})),
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
+    bell: bellSchema.default(bellSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
     recruit: z
       .object({

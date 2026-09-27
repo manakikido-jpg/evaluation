@@ -608,3 +608,29 @@ export const voiceChannels = pgTable('voice_channels', {
 });
 
 export type VoiceChannelRow = typeof voiceChannels.$inferSelect;
+
+/** 呼び鈴（運営を呼んだ記録） */
+export const bells = pgTable(
+  'bells',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    /** 鳴らしたチャンネル */
+    channelId: text('channel_id'),
+    /** そのとき入っていた通話 */
+    voiceChannelId: text('voice_channel_id'),
+    reason: text('reason').notNull().default(''),
+    /** open: 待っている / taken: 対応中 / done: 対応済み */
+    status: text('status').notNull().default('open'),
+    takenBy: text('taken_by'),
+    /** 運営に出したカード */
+    cardChannelId: text('card_channel_id'),
+    cardMessageId: text('card_message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    takenAt: timestamp('taken_at', { withTimezone: true }),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+  },
+  (t) => [index('bells_member_idx').on(t.memberId, t.createdAt)],
+);
+
+export type Bell = typeof bells.$inferSelect;

@@ -64,6 +64,22 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('bell')
+      .setNameLocalizations({ ja: '呼び鈴' })
+      .setDescription('Call the staff')
+      .setDescriptionLocalizations({ ja: '運営（神職）を呼ぶ' })
+      .setContexts(InteractionContextType.Guild)
+      .addStringOption((o) =>
+        o
+          .setName('reason')
+          .setNameLocalizations({ ja: '内容' })
+          .setDescription('What happened (optional)')
+          .setDescriptionLocalizations({ ja: 'どうしましたか（なくても大丈夫）' })
+          .setMaxLength(500),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('invite')
       .setNameLocalizations({ ja: '招待リンク' })
       .setDescription('Get your personal invite link')
@@ -124,6 +140,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       )
       .addSubcommand((s) =>
         s.setName('gender').setNameLocalizations({ ja: '性別' }).setDescription('Gender').setDescriptionLocalizations({ ja: '性別を選ぶボタン（前からいる方向け。#授与所 など）' }),
+      )
+      .addSubcommand((s) =>
+        s.setName('bell').setNameLocalizations({ ja: '呼び鈴' }).setDescription('Call staff button').setDescriptionLocalizations({ ja: '運営を呼ぶ「🔔 呼び鈴」のボタン' }),
       )
       .addSubcommand((s) =>
         s.setName('contact').setNameLocalizations({ ja: 'dmとフレンド' }).setDescription('DM / friend requests').setDescriptionLocalizations({ ja: 'DM・フレンド追加の OK／要相談／NG を選ぶボタン（#授与所 用）' }),

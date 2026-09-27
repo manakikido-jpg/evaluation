@@ -11,6 +11,7 @@ import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
+import { BellApp } from './discord/bell.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   const inviteLinks = new InviteLinkApp(db, cfg);
   const voiceGroups = new VoiceGroupApp(cfg);
   const voiceChatClear = new VoiceChatClearApp(cfg);
+  const bell = new BellApp(client, db, cfg, actions);
   const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg);
   const shop = new ShopApp(db, cfg, actions);
@@ -174,6 +176,7 @@ async function main(): Promise<void> {
     void omikuji.onInteraction(i);
     void onboarding.onInteraction(i);
     void inviteLinks.onInteraction(i);
+    void bell.onInteraction(i);
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);
     void shop.onInteraction(i);
