@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { salePrice } from './economyEvents.js';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { gachaClaims, gachaCollection, gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem, type CustomTicket } from '../db/schema.js';
@@ -231,6 +232,9 @@ export type GachaPull = {
   zodiac?: { key: string; name: string; emoji: string; count: number; complete: boolean };
 };
 
+/** 1 回の値段（期間限定の物御籤セールで % 引き。切り上げ） */
+export const gachaUnitPrice = (g: Pick<GachaConfig, 'price'>, salePercent = 0) => salePrice(g.price, salePercent);
+
 export type GachaResult =
   | { status: 'ok'; pulls: GachaPull[]; balance: number; sinceTop: number; total: number; tickets: Record<TicketKind, number>; refunded: number }
   | { status: 'insufficient'; price: number; balance: number }
@@ -252,7 +256,7 @@ export async function drawGacha(
   rand: Rand = Math.random,
   now = new Date(),
   /** free: 物御籤の無料券で 1 回。gold: 金の10連券で 10 連（1 回は大吉以上が確定）。どちらも銭は払わない */
-  opts: { free?: boolean; gold?: boolean } = {},
+  opts: { free?: boolean; gold?: boolean; salePercent?: number } = {},
 ): Promise<GachaResult> {
   if (!g.enabled || !Number.isInteger(times) || times < 1 || times > 10 || (opts.free && times !== 1) || (opts.gold && (times !== 10 || opts.free)))
     return { status: 'disabled' };
@@ -272,7 +276,7 @@ export async function drawGacha(
     return GACHA_TIERS.some((t) => rates[t] > 0) ? rates : undefined;
   };
   if (!available()) return { status: 'empty' };
-  const unit = opts.free || opts.gold ? 0 : g.price;
+  const unit = opts.free || opts.gold ? 0 : gachaUnitPrice(g, opts.salePercent ?? 0);
   const price = unit * times;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'gacha:' + memberId}))`);

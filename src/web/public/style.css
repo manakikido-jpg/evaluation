@@ -356,3 +356,9 @@ td.prize-name { min-width: 180px; max-width: 340px; }
 .pct { display: inline-flex; align-items: center; gap: 2px; }
 .pct input { width: 6.5em; }
 pre.preview { white-space: pre-wrap; background: var(--bg-soft, rgba(0,0,0,.04)); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: .9rem; }
+
+/* 経済: 値段の目安 */
+td.level-cheap { color: var(--muted); }
+td.level-high { color: #b26b00; }
+td.level-very_high { color: var(--shu); font-weight: bold; }
+@media (prefers-color-scheme: dark) { td.level-high { color: #f0b04a; } }

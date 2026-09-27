@@ -1229,6 +1229,47 @@ describe('物御籤（管理画面）', () => {
     expect((await listTerms(db)).some((x) => x.id === t.id)).toBe(false);
   });
 
+  it('経済の見守り: イベントを作る・やめる、見守りの設定、1 人ずつの収支（変えるのは宮司だけ）', async () => {
+    const { listEvents } = await import('../src/services/economyEvents.js');
+    const { loadOverrides } = await import('../src/services/settings.js');
+    await addCoins(db, USER, 3000, 'join_bonus');
+    const s = await login(STAFF);
+    const view = await (await get('/economy', s)).text();
+    for (const t of ['期間限定イベント', '物御籤の収支', '値段の目安', 'サブアカウントの疑い', '最近の警告', '見守りの設定']) expect(view).toContain(t);
+    expect(view).not.toContain('action="/economy/events"');
+    expect((await post(s, '/economy/events', { kind: 'voice', value: '200', title: 'x', startsAt: '2026-10-01T00:00', endsAt: '2026-10-08T00:00' })).status).toBe(403);
+    const ledger = await (await get(`/economy/members/${USER}`, s)).text();
+    expect(ledger).toContain('の収支');
+    expect(ledger).toContain('初期配布');
+
+    const g = await login(GUJI);
+    expect(await (await get('/economy', g)).text()).toContain('action="/economy/events"');
+    const bad = await post(g, '/economy/events', { kind: 'shop', value: '95', title: 'セール', startsAt: '2026-10-01T00:00', endsAt: '2026-10-08T00:00' });
+    expect(bad.headers.get('location')).toContain('event_invalid');
+    const ok = await post(g, '/economy/events', { kind: 'shop', value: '30', title: '秋のセール', startsAt: '2026-10-01T00:00', endsAt: '2026-10-08T00:00' });
+    expect(ok.headers.get('location')).toBe('/economy?msg=event_created#economy-events');
+    const [ev] = await listEvents(db);
+    expect(ev).toMatchObject({ kind: 'shop', value: 30, title: '秋のセール', startsAt: new Date('2026-09-30T15:00:00Z') });
+    expect(await (await get('/economy', g)).text()).toContain('秋のセール');
+    await post(g, `/economy/events/${ev!.id}/cancel`, {});
+    expect((await listEvents(db))[0]!.cancelledAt).not.toBeNull();
+
+    const saved = await post(g, '/economy/settings', {
+      reportEnabled: 'yes',
+      reportWeekday: '5',
+      reportHour: '21',
+      channelId: '',
+      alertsEnabled: 'yes',
+      alertEarn24h: '8000',
+      alertSpend24h: '30000',
+      saisenThreshold: '100000',
+      saisenPercent: '2',
+    });
+    expect(saved.headers.get('location')).toBe('/economy?msg=watch_saved#economy-watch');
+    expect((await loadOverrides(db)).economyOps).toMatchObject({ reportWeekday: 5, reportHour: 21, alertEarn24h: 8000, saisenEnabled: false, saisenPercent: 2, channelId: null });
+    expect((await post(g, '/economy/settings', { reportWeekday: '9', reportHour: '1', alertEarn24h: '1', alertSpend24h: '1', saisenThreshold: '1', saisenPercent: '50' })).headers.get('location')).toContain('watch_invalid');
+  });
+
   it('経済のページ: 神職も見られる。期間を切り替えられる', async () => {
     await addCoins(db, USER, 3000, 'join_bonus');
     const s = await login(STAFF);

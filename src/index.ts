@@ -16,6 +16,8 @@ import { GachaApp } from './discord/gacha.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { GlossaryApp } from './discord/glossary.js';
+import { announceEvents } from './services/economyEvents.js';
+import { checkAlerts, weeklyTick } from './services/economyWatch.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { OmamoriApp } from './discord/omamori.js';
@@ -134,6 +136,8 @@ async function main(): Promise<void> {
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
+      // 期間限定イベント（ボーナス週間・セール）の始まり・終わりを知らせる
+      void announceEvents({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'economy event announce failed'));
     }, 60_000);
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));
@@ -156,6 +160,12 @@ async function main(): Promise<void> {
       void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));
       // 呼び鈴のボタン（設定で足したチャンネルにも）
       bellSticky.checkAll();
+      // 経済の見守り: 動きが多い人の警告、週ごとのお知らせとお賽銭
+      void (async () => {
+        const ctx = { db, cfg: cfg(), discord: actions };
+        await checkAlerts(ctx);
+        await weeklyTick(ctx);
+      })().catch((err) => logger.warn({ err }, 'economy watch failed'));
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);

@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
+import { salePrice } from './economyEvents.js';
 import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coinTx, shopItems, shopPurchases, type ShopItem, type ShopPurchase } from '../db/schema.js';
@@ -40,8 +41,10 @@ export const discountable = (item: ShopItem) => item.kind !== 'menzaifu' && item
 export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
   const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
   if (booster && item.kind === 'ema_pin') return 0;
-  if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return base;
-  return Math.ceil((base * (100 - economy.boostDiscountPercent)) / 100);
+  // 期間限定の授与品セール（免罪符・贈り物はのぞく）
+  const onSale = item.kind === 'menzaifu' || item.kind === 'gift' ? base : salePrice(base, economy.shopSalePercent);
+  if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return onSale;
+  return Math.ceil((onSale * (100 - economy.boostDiscountPercent)) / 100);
 };
 
 export type ItemPatch = Partial<Pick<ShopItem, 'name' | 'emoji' | 'description' | 'price' | 'durationDays' | 'enabled' | 'position' | 'roleId' | 'roleGroup' | 'boosterOnly'>>;

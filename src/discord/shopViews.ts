@@ -16,18 +16,22 @@ export function priceText(item: ShopItem, e: EconomyConfig, booster = false): st
   if (item.kind === 'gift') return '好きな量';
   if (booster && item.kind === 'ema_pin' && item.price > 0) return `0 枚（奉納の特典で無料）`;
   const now = `${priceOf(item, e, booster).toLocaleString('ja-JP')} 枚`;
-  return discounted(item, e, booster) ? `${now}（${priceOf(item, e).toLocaleString('ja-JP')} 枚から奉納割引）` : now;
+  const base = item.kind === 'menzaifu' ? e.menzaifuPrice : item.price;
+  const sale = item.kind !== 'menzaifu' && e.shopSalePercent > 0;
+  const why = [sale ? `セール ${e.shopSalePercent}% 引き` : '', discounted(item, e, booster) ? '奉納割引' : ''].filter(Boolean).join('・');
+  return why && priceOf(item, e, booster) < base ? `${now}（${base.toLocaleString('ja-JP')} 枚から${why}）` : now;
 }
 
 /** 一覧（本人にだけ） */
 export function shopList(items: ShopItem[], e: EconomyConfig, balance: number, booster = false) {
   const lines = items.map((i) => `${label(i)} … **${priceText(i, e, booster)}**${i.description ? `\n-# ${i.description}` : ''}`);
   const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（免罪符・贈り物をのぞく）`, ''] : [];
+  const sale = e.shopSalePercent > 0 ? [`🎉 **期間限定セール中！** 授与品が **${e.shopSalePercent}% 引き** です（免罪符・贈り物をのぞく）`, ''] : [];
   return {
     embeds: [
       {
         title: '🛍 授与品',
-        description: [...thanks, `いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`, '', ...(lines.length ? lines : ['いまは授与品がありません。'])].join('\n'),
+        description: [...sale, ...thanks, `いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`, '', ...(lines.length ? lines : ['いまは授与品がありません。'])].join('\n'),
         color: SHU,
       },
     ],

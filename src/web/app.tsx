@@ -107,7 +107,9 @@ import {
 } from '../services/notices.js';
 import { giftAnnouncement, giftItemLabel, giftTargets, giftToAll, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
-import { EconomyPage } from './views/economy.js';
+import { EconomyPage, MemberLedgerPage } from './views/economy.js';
+import { cancelEvent, createEvent, isEventKind, listEvents, validEventValue } from '../services/economyEvents.js';
+import { gachaLedger, memberLedger, priceGuide, recentAlerts, suspectPairs } from '../services/economyWatch.js';
 import { createTerm, deleteTerm, getTerm, GLOSSARY_CHANNEL, listTerms, moveTerm, seedDefaultTerms, setTermEnabled, syncGlossaryNotices, updateTerm, type TermInput } from '../services/glossary.js';
 import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
@@ -336,6 +338,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/yaku', requireAdmin);
   app.use('/stats', requireAdmin);
   app.use('/economy', requireAdmin);
+  app.use('/economy/*', requireAdmin);
   app.use('/glossary', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
@@ -572,9 +575,112 @@ export function createWebApp(deps: WebDeps) {
     const range = isTrendRange(q) ? q : '30d';
     const t = now();
     const since = rangeStart(range, t);
-    const [overview, dist, big, sales] = await Promise.all([economyOverview(db, range, t), balanceDistribution(db), bigTransactions(db, since), shopSales(db, since)]);
-    const names = await namesOf(db, [...dist.top.map((x) => x.memberId), ...big.map((x) => x.memberId)]);
-    return c.html(<EconomyPage session={c.get('session')} cfg={cfg} range={range} overview={overview} dist={dist} big={big} sales={sales} names={names} />);
+    const [overview, dist, big, sales, suspects, guide, gacha, alerts, events, channels] = await Promise.all([
+      economyOverview(db, range, t),
+      balanceDistribution(db),
+      bigTransactions(db, since),
+      shopSales(db, since),
+      suspectPairs(db, cfg, since),
+      priceGuide(db, cfg, t),
+      gachaLedger(db, since, t),
+      recentAlerts(db, 20),
+      listEvents(db),
+      loadChannels().catch(() => [] as GuildChannel[]),
+    ]);
+    const names = await namesOf(db, [
+      ...dist.top.map((x) => x.memberId),
+      ...big.map((x) => x.memberId),
+      ...suspects.flatMap((x) => [x.fromId, x.toId]),
+      ...alerts.map((x) => x.memberId ?? ''),
+    ]);
+    return c.html(
+      <EconomyPage
+        session={c.get('session')}
+        cfg={cfg}
+        range={range}
+        overview={overview}
+        dist={dist}
+        big={big}
+        sales={sales}
+        names={names}
+        watch={{ suspects, guide, gacha, alerts, events, channels: postableChannels(channels), now: t }}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  /** 1 人ずつの収支 */
+  app.get('/economy/members/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.notFound();
+    const q = c.req.query('range');
+    const range = isTrendRange(q) && q !== '1y' ? q : '30d';
+    const t = now();
+    const ledger = await memberLedger(db, id, rangeStart(range, t), t);
+    const names = await namesOf(db, [id, ...ledger.partners.map((p) => p.memberId)]);
+    return c.html(<MemberLedgerPage session={c.get('session')} cfg={cfg} memberId={id} range={range} ledger={ledger} names={names} />);
+  });
+
+  // 変える操作（イベント・見守りの設定）は宮司だけ
+  app.use('/economy/*', requireCsrf);
+  app.use('/economy/*', async (c, next) => (c.req.method !== 'POST' || gujiOnly(c) ? next() : c.text('宮司のみできる操作です。', 403)));
+
+  /** 🎉 期間限定イベントを作る（始まり・終わりは日本時間の datetime-local） */
+  app.post('/economy/events', async (c) => {
+    const body = await c.req.parseBody();
+    const kind = body.kind;
+    const value = Number(body.value);
+    const title = field(body, 'title', 60);
+    const jst = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? new Date(`${v}:00+09:00`) : undefined);
+    const startsAt = jst(body.startsAt);
+    const endsAt = jst(body.endsAt);
+    const announce = typeof body.announce === 'string' && /^\d{17,20}$/.test(body.announce) ? body.announce : undefined;
+    if (!isEventKind(kind) || !validEventValue(kind, value) || !title || !startsAt || !endsAt || endsAt <= startsAt || endsAt <= now()) {
+      return c.redirect('/economy?msg=event_invalid#economy-events');
+    }
+    await createEvent(db, { kind, value, title, startsAt, endsAt, announceChannelId: announce }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    return c.redirect('/economy?msg=event_created#economy-events');
+  });
+
+  app.post('/economy/events/:id/cancel', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (Number.isInteger(id) && id > 0) await cancelEvent(db, id, c.get('session').userId, now());
+    await deps.onSettingsSaved?.();
+    return c.redirect('/economy?msg=event_cancelled#economy-events');
+  });
+
+  /** ⚙ 見守りの設定 */
+  app.post('/economy/settings', async (c) => {
+    const body = await c.req.parseBody();
+    const int = (k: string) => (typeof body[k] === 'string' && /^\d+$/.test(body[k] as string) ? Number(body[k]) : NaN);
+    const channel = typeof body.channelId === 'string' && /^\d{17,20}$/.test(body.channelId) ? body.channelId : null;
+    const current = await loadOverrides(db);
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse({
+        ...current,
+        economyOps: {
+          reportEnabled: body.reportEnabled === 'yes',
+          channelId: channel,
+          reportWeekday: int('reportWeekday'),
+          reportHour: int('reportHour'),
+          alertsEnabled: body.alertsEnabled === 'yes',
+          alertEarn24h: int('alertEarn24h'),
+          alertSpend24h: int('alertSpend24h'),
+          saisenEnabled: body.saisenEnabled === 'yes',
+          saisenThreshold: int('saisenThreshold'),
+          saisenPercent: int('saisenPercent'),
+        },
+      });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/economy?msg=watch_invalid#economy-watch');
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'economy.watch.settings', detail: overrides.economyOps, via: 'web' });
+    return c.redirect('/economy?msg=watch_saved#economy-watch');
   });
 
   // ───────── 厄・BAN・キック・メモ ─────────
@@ -1030,6 +1136,8 @@ export function createWebApp(deps: WebDeps) {
         : {}),
       // 物御籤は「物御籤」のページで変える（ここでは今の値を残す）
       gacha: (await loadOverrides(db)).gacha,
+      // 経済の見守りの設定は経済のページで変える（ここでは残す）
+      economyOps: (await loadOverrides(db)).economyOps,
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'
         ? {

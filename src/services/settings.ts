@@ -3,6 +3,7 @@ import { coreTimeSchema, economyOpsSchema, guildConfigSchema, marketSchema, room
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
+import { activeEvents, applyEvents } from './economyEvents.js';
 
 /**
  * 管理画面（宮司）から変えられる設定。config/guild.json の値を上書きする。
@@ -140,7 +141,8 @@ export class ConfigStore {
 
   async refresh(): Promise<void> {
     try {
-      this.cfg = applyOverrides(this.base, await loadOverrides(this.db));
+      // 期間限定イベント（ボーナス週間・セール）は、その間だけ設定に入れる
+      this.cfg = applyEvents(applyOverrides(this.base, await loadOverrides(this.db)), await activeEvents(this.db).catch(() => []));
     } catch (err) {
       logger.warn({ err }, 'failed to apply settings, keeping previous');
     }

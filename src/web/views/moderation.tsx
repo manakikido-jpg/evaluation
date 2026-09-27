@@ -261,7 +261,9 @@ export function ModerationSection(props: {
               </button>
             </form>
           )}
-          <h3>{e.currencyName}の出入り</h3>
+          <h3>
+            {e.currencyName}の出入り <small><a href={`/economy/members/${props.memberId}`}>📒 収支のグラフ →</a></small>
+          </h3>
           {props.coinTx.length === 0 ? (
             <p class="empty">記録はありません。</p>
           ) : (

@@ -21,8 +21,13 @@ export const rankSchema = z.object({
 export type Rank = z.infer<typeof rankSchema>;
 
 export const economySchema = z.object({
-  /** 期間限定の授与品セール（%引き）。設定ではなく、経済のページの「期間限定イベント」が BOT の設定に入れる */
+  /**
+   * 期間限定イベントで変わる値（設定では変えない。経済のページの「期間限定イベント」が、その間だけ入れる）
+   * shopSalePercent: 授与品の %引き ／ gachaSalePercent: 物御籤の %引き ／ voiceEventPercent: 通話でもらえる量（100 = ふつう）
+   */
   shopSalePercent: z.number().int().min(0).max(90).default(0),
+  gachaSalePercent: z.number().int().min(0).max(90).default(0),
+  voiceEventPercent: z.number().int().min(100).max(1000).default(100),
   /** 通貨の名前と絵文字 */
   currencyName: z.string().default('銭'),
   currencyEmoji: z.string().default('🪙'),

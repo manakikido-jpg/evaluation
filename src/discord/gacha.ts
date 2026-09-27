@@ -23,6 +23,7 @@ import { logger } from '../lib/logger.js';
 import { walletOf } from '../services/economy.js';
 import {
   drawGacha,
+  gachaUnitPrice,
   effectiveRates,
   ensureGachaPrizes,
   inPeriod,
@@ -123,13 +124,23 @@ export function gachaMenu(
   g: GachaConfig,
   prizes: GachaPrizeRow[],
   names: Names,
-  s: { balance: number; sinceTop: number; tickets: Record<TicketKind, number>; buffs?: Buffs; custom?: CustomHolding[]; zodiac?: string[] },
+  s: {
+    balance: number;
+    sinceTop: number;
+    tickets: Record<TicketKind, number>;
+    buffs?: Buffs;
+    custom?: CustomHolding[];
+    zodiac?: string[];
+    /** 期間限定の物御籤セール（g.price はもう引いた値段） */
+    sale?: { percent: number; original: number };
+  },
   coin: string,
 ) {
   const rates = effectiveRates(g, prizes);
   const left = untilPity(g, s.sinceTop);
   const buffs = s.buffs;
   const lines = [
+    ...(s.sale ? [`🎉 **期間限定セール中！** ${s.sale.percent}% 引き（ふだんは 1 回 ${fmt(s.sale.original)} 枚）`] : []),
     `1 回 **${fmt(g.price)}** 枚 ／ 10 連 **${fmt(g.price * 10)}** 枚（${coin}。本物のお金は使いません）`,
     '',
     ...GACHA_TIERS.filter((t) => rates[t] > 0).map((t) => `${TIER_LABEL[t].emoji} **${TIER_LABEL[t].name}** ${rates[t]}%\n-# ${tierPrizeText(g, prizes, t, names)}`),
@@ -291,8 +302,19 @@ export class GachaApp {
     return { prizes, names: { role: (id) => i.guild.roles.cache.get(id)?.name, shop: (id) => shop.get(id), coin: this.coin(), custom: (id) => custom.get(id) } };
   }
 
+  /** 見せる値段（物御籤セール中は % 引きの値段） */
+  private shown(): GachaConfig {
+    const cfg = this.cfg();
+    return { ...cfg.gacha, price: gachaUnitPrice(cfg.gacha, cfg.economy.gachaSalePercent) };
+  }
+
+  private sale(): { percent: number; original: number } | undefined {
+    const cfg = this.cfg();
+    return cfg.economy.gachaSalePercent > 0 ? { percent: cfg.economy.gachaSalePercent, original: cfg.gacha.price } : undefined;
+  }
+
   private async menu(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<void> {
-    const g = this.cfg().gacha;
+    const g = this.shown();
     if (!g.enabled) return void (await i.reply({ content: '物御籤は今お休みしています。', ...EPHEMERAL }));
     const [w, st, tickets, buffs, p, custom] = await Promise.all([
       walletOf(this.db, i.user.id),
@@ -303,7 +325,7 @@ export class GachaApp {
       customHoldingsOf(this.db, i.user.id),
     ]);
     const zodiac = await collectionOf(this.db, i.user.id);
-    await i.reply({ ...gachaMenu(g, p.prizes, p.names, { balance: w.balance, sinceTop: st.sinceTop, tickets, buffs, custom, zodiac }, this.coin()), ...EPHEMERAL });
+    await i.reply({ ...gachaMenu(g, p.prizes, p.names, { balance: w.balance, sinceTop: st.sinceTop, tickets, buffs, custom, zodiac, sale: this.sale() }, this.coin()), ...EPHEMERAL });
   }
 
   private async draw(i: ButtonInteraction<'cached'>, times: number, ticket?: 'free' | 'gold'): Promise<void> {
@@ -314,7 +336,7 @@ export class GachaApp {
     const g = cfg.gacha;
     if (!g.enabled) return void (await i.reply({ content: '物御籤は今お休みしています。', ...EPHEMERAL }));
     await i.deferReply(EPHEMERAL);
-    const r = await drawGacha(this.db, g, i.user.id, times, [...i.member.roles.cache.keys()], Math.random, new Date(), { free, gold });
+    const r = await drawGacha(this.db, g, i.user.id, times, [...i.member.roles.cache.keys()], Math.random, new Date(), { free, gold, salePercent: cfg.economy.gachaSalePercent });
     if (r.status === 'disabled') return void (await i.editReply('物御籤は今お休みしています。'));
     if (r.status === 'no_ticket') return void (await i.editReply(gold ? '🌟 金の10連券がありません。' : '🎫 物御籤の無料券がありません。'));
     if (r.status === 'empty') return void (await i.editReply(`いま出せる中身がありません（持っていないものが残っていません）。${cfg.economy.currencyName}は減っていません。`));
@@ -372,7 +394,7 @@ export class GachaApp {
     lines.push(`🎟 ${allTicketsLine(r.tickets, custom) ?? '券はありません'}`);
     await i.editReply({
       embeds: [{ title: `🎁 物御籤${times > 1 ? ` ${times} 連` : ''} ― ${TIER_LABEL[best].name}`, description: lines.join('\n'), color: TIER_LABEL[best].color }],
-      components: gachaMenu(g, p.prizes, p.names, { balance: r.balance, sinceTop: r.sinceTop, tickets: r.tickets, buffs, custom, zodiac }, this.coin()).components,
+      components: gachaMenu(this.shown(), p.prizes, p.names, { balance: r.balance, sinceTop: r.sinceTop, tickets: r.tickets, buffs, custom, zodiac }, this.coin()).components,
     });
 
     // 🐉 十二支がそろったら #慶事 でお祝い
@@ -448,7 +470,7 @@ export class GachaApp {
 
   /** 📜 中身と排出率（本人にだけ） */
   private async ratesView(i: ButtonInteraction<'cached'>): Promise<void> {
-    const g = this.cfg().gacha;
+    const g = this.shown();
     if (!g.enabled) return void (await i.reply({ content: '物御籤は今お休みしています。', ...EPHEMERAL }));
     const p = await this.prizes(i);
     await i.reply({ ...gachaRatesView(g, p.prizes, p.names, this.coin()), ...EPHEMERAL });

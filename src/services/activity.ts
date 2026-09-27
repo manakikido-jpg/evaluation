@@ -92,10 +92,18 @@ export async function voiceTick(
       }
       // 🧧 福の札が効いていれば、ふつうにもらえる分をもう 1 回（上限に数えない）
       const fuku = base > 0 && (await fukuActive(tx, memberId, now)) ? base : 0;
+      // 🎙 期間限定の通話ボーナス（ふつうにもらえる分の決めた %。上限に数えない）
+      const event = base > 0 && economy.voiceEventPercent > 100 ? Math.floor((base * (economy.voiceEventPercent - 100)) / 100) : 0;
       // コアタイムで増えた分は、上限に届いていてももらえる
-      const total = base + bonus + fuku;
+      const total = base + bonus + fuku + event;
       if (total <= 0) return 0;
-      await addCoins(tx, memberId, total, 'voice', { date, minutes: row.vcMinutes, ...(bonus ? { coreTime: bonus } : {}), ...(fuku ? { fuku } : {}) });
+      await addCoins(tx, memberId, total, 'voice', {
+        date,
+        minutes: row.vcMinutes,
+        ...(bonus ? { coreTime: bonus } : {}),
+        ...(fuku ? { fuku } : {}),
+        ...(event ? { event } : {}),
+      });
       return total;
     });
     if (paid) awarded.push({ memberId, amount: paid });
