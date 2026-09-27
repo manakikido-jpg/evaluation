@@ -85,6 +85,7 @@ import {
   noticeStatus,
   noticeVariables,
   detectImage,
+  addShuinButtonsToCategory,
   isImagePosition,
   isNoticeStyle,
   NOTICE_IMAGE_MAX,
@@ -1324,7 +1325,11 @@ export function createWebApp(deps: WebDeps) {
     // Discord のチャンネルの並び順に合わせる
     const order = new Map(postableChannels(channels).map((ch, i) => [ch.id, i]));
     groups.sort((a, b) => (order.get(a.channelId) ?? 999) - (order.get(b.channelId) ?? 999));
-    return c.html(<NoticesPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} now={now()} />);
+    const categories = channels
+      .filter((ch) => ch.type === 4)
+      .sort((a, b) => a.position - b.position)
+      .map((ch) => ({ id: ch.id, name: ch.name }));
+    return c.html(<NoticesPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} now={now()} categories={categories} />);
   });
 
   const editPage = async (c: Context<Env>, notice: Awaited<ReturnType<typeof getNotice>>, body: string, error?: string) => {
@@ -1381,6 +1386,16 @@ export function createWebApp(deps: WebDeps) {
     });
   });
 
+  app.post('/notices/shuin-category', async (c) => {
+    const body = await c.req.parseBody();
+    const categoryId = typeof body.categoryId === 'string' && /^\d{17,20}$/.test(body.categoryId) ? body.categoryId : '';
+    if (!categoryId) return c.redirect('/notices');
+    return tryDiscord(c, '/notices', async () => {
+      const r = await addShuinButtonsToCategory(noticeCtx(), categoryId, c.get('session').userId);
+      return r.updated + r.created > 0 ? 'shuin_buttons' : 'shuin_buttons_none';
+    });
+  });
+
   app.post('/notices/seed-guides', async (c) => {
     return tryDiscord(c, '/notices', async () => {
       const r = await seedChannelGuides(noticeCtx(), c.get('session').userId);
@@ -1401,7 +1416,8 @@ export function createWebApp(deps: WebDeps) {
     const title = field(body, 'title', 60);
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
     const channels = await loadChannels();
-    if (!title || !text || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
+    // ボタンだけの掲示（🌸 朱印を押す）は本文なしでよい
+    if (!title || (!text && body.shuinButton !== 'yes') || !postableChannels(channels).some((ch) => ch.id === channelId)) return editPage(c, undefined, text, 'invalid');
     const style = isNoticeStyle(body.style) ? body.style : 'embed';
     const { value: mention } = await mentionFrom(body);
     const upload = await imageUpload(body);
@@ -1437,7 +1453,7 @@ export function createWebApp(deps: WebDeps) {
     const body = await c.req.parseBody({ all: true });
     const title = field(body, 'title', 60);
     const text = typeof body.body === 'string' ? body.body.replace(/\r\n/g, '\n').trimEnd() : '';
-    if (!title || !text) return editPage(c, n, text || n.body, 'invalid');
+    if (!title || (!text && body.shuinButton !== 'yes')) return editPage(c, n, text || n.body, 'invalid');
     const upload = await imageUpload(body);
     if (upload === 'too_big' || upload === 'bad_type') return editPage(c, n, text, `image_${upload}`);
     await updateNotice(db, n.id, {

@@ -1,7 +1,9 @@
 import {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   MessageFlags,
-  UserSelectMenuBuilder,
+  StringSelectMenuBuilder,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
@@ -10,8 +12,9 @@ import {
   type Interaction,
   type Message,
   type UserContextMenuCommandInteraction,
-  type UserSelectMenuInteraction,
+  type StringSelectMenuInteraction,
 } from 'discord.js';
+import { channelPosters, posterPage, type Poster } from '../services/posters.js';
 import { SHUIN_PICK_ID } from '../services/notices.js';
 import { recordPresence } from '../services/voiceUsage.js';
 import { genderOfRoles } from '../services/admission.js';
@@ -50,10 +53,44 @@ import {
 
 const NO_MENTIONS = { parse: [] as const };
 
-type Repliable = ChatInputCommandInteraction<'cached'> | UserContextMenuCommandInteraction<'cached'> | ButtonInteraction<'cached'> | UserSelectMenuInteraction<'cached'>;
+type Repliable = ChatInputCommandInteraction<'cached'> | UserContextMenuCommandInteraction<'cached'> | ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>;
 
-/** 「🌸 朱印を押す」ボタン（#絵馬 のひな形など）で相手を選ぶ欄 */
-const SHUIN_PICK_USER_ID = 'shuin:pickuser';
+/** 「🌸 朱印を押す」ボタン（#絵馬 のひな形など）: そのチャンネルに投稿している人から選ぶ欄・ページ送り */
+const SHUIN_PICK_ONE_ID = 'shuin:pickone';
+const SHUIN_PICK_PAGE_PREFIX = 'shuin:pickpage:';
+/** 投稿した人を探すときに読む最近のメッセージ（100 件 × この回数） */
+const POSTER_PAGES = 5;
+
+/** 選ぶ欄とページ送り（本人にだけ） */
+export function posterPicker(list: Poster[], page: number) {
+  if (!list.length) return { content: '🌸 このチャンネルには、まだ朱印を押せる人の投稿がありません。', components: [] };
+  const p = posterPage(list, page);
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(SHUIN_PICK_ONE_ID)
+    .setPlaceholder('朱印を押す相手')
+    .addOptions(p.items.map((x) => ({ label: x.name.slice(0, 100) || x.id, value: x.id })));
+  const nav =
+    p.pages > 1
+      ? [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`${SHUIN_PICK_PAGE_PREFIX}${p.page - 1}`)
+              .setLabel('◀ 前')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(p.page === 0),
+            new ButtonBuilder()
+              .setCustomId(`${SHUIN_PICK_PAGE_PREFIX}${p.page + 1}`)
+              .setLabel('次 ▶')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(p.page >= p.pages - 1),
+          ),
+        ]
+      : [];
+  return {
+    content: `🌸 朱印を押す相手を選んでください（このチャンネルに投稿している ${list.length} 人・新しく投稿した順${p.pages > 1 ? `・${p.page + 1}/${p.pages} ページ` : ''}）。`,
+    components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu), ...nav],
+  };
+}
 
 function toInfo(m: GuildMember): MemberInfo {
   return { id: m.id, isBot: m.user.bot, roleIds: [...m.roles.cache.keys()] };
@@ -171,16 +208,13 @@ export class ShuinApp {
         const isPublic = interaction.options.getBoolean('public') ?? false;
         return await this.card(interaction, target.id, isPublic);
       } else if (interaction.isButton() && interaction.customId === SHUIN_PICK_ID) {
-        return void (await interaction.reply({
-          content: '🌸 朱印を押す相手を選んでください（名前を入れると探せます）。',
-          components: [
-            new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
-              new UserSelectMenuBuilder().setCustomId(SHUIN_PICK_USER_ID).setPlaceholder('朱印を押す相手').setMinValues(1).setMaxValues(1),
-            ),
-          ],
-          flags: MessageFlags.Ephemeral,
-        }));
-      } else if (interaction.isUserSelectMenu() && interaction.customId === SHUIN_PICK_USER_ID) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        return void (await interaction.editReply(posterPicker(await this.posters(interaction), 0)));
+      } else if (interaction.isButton() && interaction.customId.startsWith(SHUIN_PICK_PAGE_PREFIX)) {
+        const page = Number(interaction.customId.slice(SHUIN_PICK_PAGE_PREFIX.length));
+        await interaction.deferUpdate();
+        return void (await interaction.editReply(posterPicker(await this.posters(interaction), Number.isInteger(page) ? page : 0)));
+      } else if (interaction.isStringSelectMenu() && interaction.customId === SHUIN_PICK_ONE_ID) {
         const target = interaction.values[0];
         if (target) return await this.give(interaction, target);
       } else if (interaction.isButton()) {
@@ -217,6 +251,28 @@ export class ShuinApp {
       this.messageCounts.set(message.author.id, (this.messageCounts.get(message.author.id) ?? 0) + 1);
     }
     // 自己紹介（#絵馬-男性 など）には何も付けない（ひな形がいちばん下に出るだけ。2026-09 に御朱印帳ボタンをやめた）
+  }
+
+  /** このチャンネルに投稿している人（最近のメッセージ・自己紹介の記録。1 分だけ覚える） */
+  private readonly posterCache = new Map<string, { at: number; recent: { authorId: string; at: number }[] }>();
+  private async posters(interaction: ButtonInteraction<'cached'>): Promise<Poster[]> {
+    const channel = interaction.channel;
+    const hit = this.posterCache.get(interaction.channelId);
+    let recent = hit && Date.now() - hit.at < 60_000 ? hit.recent : undefined;
+    if (!recent) {
+      recent = [];
+      if (channel && 'messages' in channel) {
+        let before: string | undefined;
+        for (let n = 0; n < POSTER_PAGES; n++) {
+          const batch = [...(await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => new Map())).values()] as Message[];
+          for (const m of batch) if (!m.author.bot) recent.push({ authorId: m.author.id, at: m.createdTimestamp });
+          if (batch.length < 100) break;
+          before = batch.at(-1)!.id;
+        }
+      }
+      this.posterCache.set(interaction.channelId, { at: Date.now(), recent });
+    }
+    return channelPosters(this.db, interaction.channelId, recent, interaction.user.id);
   }
 
   private async fetchMember(interaction: Repliable, userId: string): Promise<GuildMember | undefined> {

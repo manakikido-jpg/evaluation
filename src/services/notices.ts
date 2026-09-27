@@ -42,6 +42,8 @@ const SHUIN_BUTTON_ROW = { type: 1, components: [{ type: 2, style: 1, label: '�
 function messageBody(style: string, text: string, mention = '', image?: NoticeImage, shuinButton = false): MessageBody {
   const head = mentionHead(mention);
   const files = { ...(image ? { files: [image.file] } : {}), ...(shuinButton ? { components: [SHUIN_BUTTON_ROW] } : {}) };
+  // 本文のないボタンだけの掲示（写真もなければ、ボタンだけのメッセージ）
+  if (!text.trim() && shuinButton && !image) return { content: head, embeds: [], ...files };
   // 見せ方を切り替えたときに前の形が残らないよう、使わないほうは空にする。カードのメンションはカードの上（本文の外）に出す
   // 普通のメッセージの写真は、Discord の決まりで本文の下に出る
   if (style === 'text') return { content: head ? `${head}\n${text}` : text, embeds: [], ...files };
@@ -53,8 +55,9 @@ function messageBody(style: string, text: string, mention = '', image?: NoticeIm
   return { content: head, embeds, ...files };
 }
 
-const tooLong = (style: string, text: string, mention = '') =>
-  !text.trim() || text.length + (style === 'text' && mention ? mentionHead(mention).length + 1 : 0) > maxLengthOf(style);
+/** 本文が空（ボタンだけの掲示はよい）か、文字数の上限を超えている */
+const tooLong = (style: string, text: string, mention = '', shuinButton = false) =>
+  (!text.trim() && !shuinButton) || text.length + (style === 'text' && mention ? mentionHead(mention).length + 1 : 0) > maxLengthOf(style);
 
 // ───────── 写真 ─────────
 
@@ -390,7 +393,7 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
   const n = await getNotice(ctx.db, id);
   if (!n) throw new Error(`notice ${id} not found`);
   const { text } = renderNotice(n.body, ctx.cfg, await guildChannelsCached(ctx.discord, ctx.cfg.guildId));
-  if (tooLong(n.style, text, n.mention)) return 'too_long';
+  if (tooLong(n.style, text, n.mention, n.shuinButton)) return 'too_long';
   if (noticeStatus(n, text) === 'posted') return 'unchanged';
   const image = await imageFor(ctx.db, n, n.imagePosition);
   const body = messageBody(n.style, text, n.mention, image, n.shuinButton);
@@ -499,7 +502,7 @@ export async function repostChannel(ctx: NoticeCtx, channelId: string, by: strin
   const list = await ctx.db.select().from(notices).where(eq(notices.channelId, channelId)).orderBy(asc(notices.position), asc(notices.id));
   const channels = await guildChannelsCached(ctx.discord, ctx.cfg.guildId, true);
   const rendered = list.map((n) => ({ n, text: renderNotice(n.body, ctx.cfg, channels).text }));
-  const over = rendered.filter((r) => tooLong(r.n.style, r.text, r.n.mention)).map((r) => r.n.title);
+  const over = rendered.filter((r) => tooLong(r.n.style, r.text, r.n.mention, r.n.shuinButton)).map((r) => r.n.title);
   if (over.length) return { done: 0, tooLong: over, pinFailed: [] };
 
   for (const { n } of rendered) {
@@ -551,7 +554,7 @@ export async function syncPostedNotices(ctx: NoticeCtx, before: GuildConfig): Pr
     // 設定を変える前の値で差し込んだものが、投稿済みの本文と同じもの（＝本文は反映済み）だけ
     if (noticeStatus(n, renderNotice(n.body, before, channels).text) !== 'posted') continue;
     const text = renderNotice(n.body, ctx.cfg, channels).text;
-    if (text === n.postedText || tooLong(n.style, text, n.mention)) continue;
+    if (text === n.postedText || tooLong(n.style, text, n.mention, n.shuinButton)) continue;
     try {
       await publishNotice(ctx, n.id, 'system');
       changed++;
@@ -595,6 +598,53 @@ export function noticeStatus(n: Notice, renderedText: string): NoticeStatus {
     (n.postedImage ?? '') === imageKey(n) &&
     n.postedShuinButton === n.shuinButton;
   return same ? 'posted' : 'changed';
+}
+
+/**
+ * チャンネルのいちばん下に「🌸 朱印を押す」ボタンを置く（掲示を作る・付けるだけ）。
+ * いちばん下に表示し続ける掲示があれば、それに付ける。なければボタンだけ（本文なし）の掲示を作る
+ */
+async function ensureShuinButton(db: Db, channelId: string, by: string, all?: Notice[]): Promise<{ updated: number; created?: Notice; ids: number[] }> {
+  const sticky = (all ?? (await listNotices(db))).filter((n) => n.channelId === channelId && n.sticky);
+  if (!sticky.length) {
+    const created = await createNotice(db, { channelId, title: '朱印を押す', body: '', style: 'text', sticky: true, shuinButton: true, by });
+    return { updated: 0, created, ids: [created.id] };
+  }
+  let updated = 0;
+  for (const n of sticky.filter((x) => !x.shuinButton)) {
+    await db.update(notices).set({ shuinButton: true, updatedBy: by, updatedAt: new Date() }).where(eq(notices.id, n.id));
+    updated++;
+  }
+  return { updated, ids: sticky.map((n) => n.id) };
+}
+
+/** /パネル 朱印: このチャンネルのいちばん下にボタンを置いて、すぐ Discord に出す */
+export async function placeShuinButton(ctx: NoticeCtx, channelId: string, by: string): Promise<PublishResult[]> {
+  const r = await ensureShuinButton(ctx.db, channelId, by);
+  const results: PublishResult[] = [];
+  for (const id of r.ids) results.push(await publishNotice(ctx, id, by));
+  await audit(ctx.db, { actorId: by, action: 'notice.shuin_button', detail: { channelId, created: Boolean(r.created), updated: r.updated }, via: 'discord' });
+  return results;
+}
+
+/**
+ * カテゴリの中のテキストチャンネル全部の、いちばん下に「🌸 朱印を押す」ボタンを置く。
+ * いちばん下に表示し続ける掲示（#絵馬 のひな形など）があれば、それにボタンを付ける。なければボタンだけ（本文なし）の掲示を作る。
+ * 作る・付けるだけ（Discord への反映は「すべて反映」で）
+ */
+export async function addShuinButtonsToCategory(ctx: NoticeCtx, categoryId: string, by: string): Promise<{ channels: number; updated: number; created: number }> {
+  const channels = await guildChannelsCached(ctx.discord, ctx.cfg.guildId, true);
+  const targets = channels.filter((c) => c.type === 0 && c.parent_id === categoryId);
+  const all = await listNotices(ctx.db);
+  let updated = 0;
+  let created = 0;
+  for (const ch of targets) {
+    const r = await ensureShuinButton(ctx.db, ch.id, by, all);
+    updated += r.updated;
+    created += r.created ? 1 : 0;
+  }
+  await audit(ctx.db, { actorId: by, action: 'notice.shuin_buttons', detail: { categoryId, channels: targets.length, updated, created }, via: 'web' });
+  return { channels: targets.length, updated, created };
 }
 
 /** 標準の文面を入れる。チャンネルは名前で探す。すでに掲示があるチャンネルには入れない */

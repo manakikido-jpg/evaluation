@@ -35,7 +35,9 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
     text: '投稿はできましたが、ピン留めできませんでした。BOT のロールに「メッセージの管理」（または「メッセージをピン留め」）権限を付けてから、もう一度「反映」を押してください。',
     kind: 'warn',
   },
-  invalid: { text: '入力が足りません（タイトル・本文・チャンネル）。', kind: 'warn' },
+  invalid: { text: '入力が足りません（タイトル・本文・チャンネル。本文なしにできるのは「朱印を押す」ボタンを付けたときだけ）。', kind: 'warn' },
+  shuin_buttons: { text: '🌸 カテゴリの全部のチャンネルに「朱印を押す」ボタンを置きました（ひな形があるチャンネルはひな形に、ないチャンネルはボタンだけ）。内容を見て「すべて反映」を押すと Discord に出ます。', kind: 'ok' },
+  shuin_buttons_none: { text: 'そのカテゴリには、ボタンを置くテキストチャンネルがありませんでした（もう全部に付いているかもしれません）。', kind: 'warn' },
   image_too_big: { text: '写真が大きすぎます（8MB まで）。小さくしてから選び直してください。', kind: 'warn' },
   image_bad_type: { text: '写真は PNG・JPEG・GIF・WebP のどれかにしてください。', kind: 'warn' },
   discord_error: { text: 'Discord への投稿に失敗しました。BOT がそのチャンネルに書き込めるか確認してください。', kind: 'warn' },
@@ -59,7 +61,14 @@ function Flash(props: { code?: string }) {
 export type NoticeRow = { notice: Notice; preview: string; length: number; status: NoticeStatus; unknown: string[]; mention: string };
 export type NoticeGroup = { channelId: string; channelName: string | null; rows: NoticeRow[] };
 
-export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[]; flash?: string; now: Date }) {
+export function NoticesPage(props: {
+  session: AdminSession;
+  groups: NoticeGroup[];
+  flash?: string;
+  now: Date;
+  /** カテゴリ（「朱印を押す」ボタンをまとめて置く先を選ぶ） */
+  categories?: { id: string; name: string }[];
+}) {
   const { session } = props;
   const pending = props.groups.flatMap((g) => g.rows).filter((r) => r.status !== 'posted').length;
   return (
@@ -83,6 +92,29 @@ export function NoticesPage(props: { session: AdminSession; groups: NoticeGroup[
           </form>
         )}
       </div>
+
+      {(props.categories ?? []).length > 0 && (
+        <details class="card">
+          <summary>🌸 カテゴリの全部のチャンネルに「朱印を押す」ボタンを置く</summary>
+          <p class="note">
+            選んだカテゴリ（絵馬殿など）のテキストチャンネル全部の、いちばん下に「🌸 朱印を押す」ボタンを置きます。いちばん下に表示し続ける掲示（#絵馬
+            のひな形など）があればそれにボタンを付け、なければボタンだけ（文章なし）の掲示を作ります。押したあと「すべて反映」を押すと Discord に出ます。
+          </p>
+          <form method="post" action="/notices/shuin-category" class="inline-actions">
+            <Csrf session={session} />
+            <select name="categoryId" required>
+              {(props.categories ?? []).map((c) => (
+                <option value={c.id} selected={c.name.includes('絵馬')}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" class="ok">
+              ボタンを置く
+            </button>
+          </form>
+        </details>
+      )}
 
       <details class="card">
         <summary>チャンネルの使い方の案内を入れる</summary>
@@ -293,7 +325,6 @@ export function NoticeEditPage(props: {
             id="notice-body"
             name="body"
             rows={24}
-            required
             data-md-editor
             hx-post="/notices/preview"
             hx-trigger="input changed delay:500ms"

@@ -173,6 +173,13 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
         s.setName('bell').setNameLocalizations({ ja: '呼び鈴' }).setDescription('Call staff button').setDescriptionLocalizations({ ja: '運営を呼ぶ「🔔 呼び鈴」のボタン' }),
       )
       .addSubcommand((s) =>
+        s
+          .setName('shuin')
+          .setNameLocalizations({ ja: '朱印' })
+          .setDescription('Give-shuin button')
+          .setDescriptionLocalizations({ ja: '「🌸 朱印を押す」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）' }),
+      )
+      .addSubcommand((s) =>
         s.setName('contact').setNameLocalizations({ ja: 'dmとフレンド' }).setDescription('DM / friend requests').setDescriptionLocalizations({ ja: 'DM・フレンド追加の OK／要相談／NG を選ぶボタン（#授与所 用）' }),
       )
       .toJSON(),

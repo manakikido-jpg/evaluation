@@ -1,3 +1,4 @@
+import { placeShuinButton } from '../services/notices.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -291,6 +292,15 @@ export class AdmissionApp {
     }
     if (kind === 'contact' && !CONTACT_KINDS.some((k) => contactEnabled(this.cfg, k))) {
       return void (await i.reply({ content: 'DM・フレンドのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
+    }
+    if (kind === 'shuin') {
+      // いちばん下に出し続ける（掲示として覚えるので、社務所Web の「掲示」から外したり直したりもできる）
+      await i.deferReply(EPHEMERAL);
+      const r = await placeShuinButton(this.ctx, channel.id, i.user.id);
+      const failed = r.some((x) => x === 'too_long');
+      return void (await i.editReply(
+        failed ? '置けませんでした（このチャンネルの掲示の文字数が多すぎます）。' : '🌸 このチャンネルのいちばん下に「朱印を押す」ボタンを置きました（書き込みがあると、下に出し直します）。',
+      ));
     }
     const kinds = ['apply', 'omamori', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha'] as const;
     await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { omamori: this.cfg.roles.omamori, coinName: this.cfg.economy.currencyName }));

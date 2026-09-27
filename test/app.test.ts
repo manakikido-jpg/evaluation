@@ -71,7 +71,7 @@ function add(id: string, ...roleIds: string[]) {
   return m;
 }
 
-type Kind = 'button' | 'userMenu' | 'slash' | 'select';
+type Kind = 'button' | 'userMenu' | 'slash' | 'stringSelect';
 
 function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown>) {
   const replies: { content?: string; embeds?: { title?: string; description?: string }[]; flags?: unknown }[] = [];
@@ -88,7 +88,7 @@ function interaction(kind: Kind, user: FakeMember, extra: Record<string, unknown
     isUserContextMenuCommand: () => kind === 'userMenu',
     isChatInputCommand: () => kind === 'slash',
     isButton: () => kind === 'button',
-    isUserSelectMenu: () => kind === 'select',
+    isStringSelectMenu: () => kind === 'stringSelect',
     isRepliable: () => true,
     async deferReply(opts: unknown) {
       i.deferred = true;
@@ -114,13 +114,24 @@ const G2 = '400000000000000002';
 const R = '400000000000000009';
 
 describe('ShuinApp', () => {
-  it('#絵馬 のひな形の「🌸 朱印を押す」: 相手を選ぶ欄を出し、選ぶと朱印を押す', async () => {
+  it('#絵馬 のひな形の「🌸 朱印を押す」: そのチャンネルに投稿している人から選び、選ぶと朱印を押す', async () => {
+    const { recordJoin } = await import('../src/services/members.js');
     const giver = add(G, ROLE.sewayaku);
     add(R, ROLE.sanpaisha);
-    const b = interaction('button', giver, { customId: 'shuin:pick' });
+    await recordJoin(db, { id: R, username: 'r', displayName: 'あいて', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: null });
+    const messages = new Map([
+      ['m2', { id: 'm2', author: { id: R, bot: false }, createdTimestamp: 2000 }],
+      ['m1', { id: 'm1', author: { id: 'BOT', bot: true }, createdTimestamp: 1000 }],
+    ]);
+    const channel = { messages: { fetch: async () => messages } };
+    const b = interaction('button', giver, { customId: 'shuin:pick', channelId: 'C1', channel, editReply: undefined });
+    const shown: unknown[] = [];
+    (b.i as Record<string, unknown>).editReply = async (p: unknown) => void shown.push(p);
     await app.onInteraction(b.i as never);
-    expect(b.replies[0]!.content).toContain('朱印を押す相手を選んでください');
-    const sel = interaction('select', giver, { customId: 'shuin:pickuser', values: [R] });
+    const view = shown[0] as { content: string; components: { toJSON(): unknown }[] };
+    expect(view.content).toContain('このチャンネルに投稿している 1 人');
+    expect(JSON.stringify(view.components.map((c) => c.toJSON()))).toContain(`"value":"${R}"`);
+    const sel = interaction('stringSelect', giver, { customId: 'shuin:pickone', values: [R] });
     await app.onInteraction(sel.i as never);
     expect(sel.replies.at(-1)!.content).toBe(`🌸 <@${R}> さまに朱印を押しました（格 3・ご縁 +3）`);
   });

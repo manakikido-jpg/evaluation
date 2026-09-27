@@ -645,3 +645,58 @@ describe('🌸 朱印を押すボタン', () => {
     expect((await listNotices(db)).filter((x) => !x.sticky).every((x) => !x.shuinButton)).toBe(true);
   });
 });
+
+describe('🌸 カテゴリの全部に朱印ボタン', () => {
+  it('ひな形があるチャンネルはひな形に付け、ないチャンネルはボタンだけ（文章なし）の掲示を作る', async () => {
+    const { addShuinButtonsToCategory } = await import('../src/services/notices.js');
+    const EMADEN = '910000000000000050';
+    const channels: GuildChannel[] = [
+      ...CHANNELS,
+      { id: EMADEN, name: '🪧 絵馬殿', type: 4, parent_id: null, position: 9 },
+      { id: '910000000000000051', name: '参拝者－🚹', type: 0, parent_id: EMADEN, position: 0 },
+      { id: '910000000000000052', name: '参拝者－🚺', type: 0, parent_id: EMADEN, position: 1 },
+      { id: '910000000000000053', name: 'アイコン紹介', type: 0, parent_id: EMADEN, position: 2 },
+      { id: '910000000000000054', name: '絵馬の通話', type: 2, parent_id: EMADEN, position: 3 },
+    ];
+    const f = fakeDiscord(channels);
+    const sent: MessageBody[] = [];
+    const send = f.discord.sendMessage;
+    f.discord.sendMessage = async (c, b) => (sent.push(b), send(c, b));
+    const ctx = { db, cfg, discord: f.discord };
+    await createNotice(db, { channelId: '910000000000000051', title: 'テンプレート', body: 'ひな形', sticky: true, by: GUJI });
+    await createNotice(db, { channelId: '910000000000000052', title: 'テンプレート', body: 'ひな形', sticky: true, shuinButton: true, by: GUJI });
+    expect(await addShuinButtonsToCategory(ctx, EMADEN, GUJI)).toEqual({ channels: 3, updated: 1, created: 1 });
+    const list = await listNotices(db);
+    expect(list.filter((n) => n.shuinButton).map((n) => n.channelId).sort()).toEqual(['910000000000000051', '910000000000000052', '910000000000000053']);
+    const only = list.find((n) => n.channelId === '910000000000000053')!;
+    expect(only).toMatchObject({ title: '朱印を押す', body: '', sticky: true, style: 'text' });
+    // ボタンだけのメッセージ
+    expect(await publishNotice(ctx, only.id, GUJI)).toBe('posted');
+    expect(sent.at(-1)).toMatchObject({ content: '', embeds: [] });
+    expect(JSON.stringify(sent.at(-1)!.components)).toContain('shuin:pick');
+    expect(noticeStatus((await getNotice(db, only.id))!, '')).toBe('posted');
+    // 2 回目は何もしない
+    expect(await addShuinButtonsToCategory(ctx, EMADEN, GUJI)).toEqual({ channels: 3, updated: 0, created: 0 });
+    // ボタンのない空の掲示は投稿しない
+    const empty = await createNotice(db, { channelId: '910000000000000053', title: '空', body: '', by: GUJI });
+    expect(await publishNotice(ctx, empty.id, GUJI)).toBe('too_long');
+  });
+});
+
+describe('/パネル 朱印', () => {
+  it('ひな形のないチャンネルはボタンだけの掲示を作ってすぐ出す。ひな形があればそれに付けて書き換える', async () => {
+    const { placeShuinButton } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const ctx = { db, cfg, discord: f.discord };
+    expect(await placeShuinButton(ctx, CH.keiji, GUJI)).toEqual(['posted']);
+    expect((await listNotices(db)).find((n) => n.channelId === CH.keiji)).toMatchObject({ sticky: true, shuinButton: true, body: '' });
+    // もう一度: 同じ掲示のまま（増えない）
+    expect(await placeShuinButton(ctx, CH.keiji, GUJI)).toEqual(['unchanged']);
+    expect((await listNotices(db)).filter((n) => n.channelId === CH.keiji)).toHaveLength(1);
+
+    const tpl = await createNotice(db, { channelId: CH.ema, title: 'テンプレート', body: 'ひな形', sticky: true, by: GUJI });
+    await publishNotice(ctx, tpl.id, GUJI);
+    expect(await placeShuinButton(ctx, CH.ema, GUJI)).toEqual(['edited']);
+    expect((await getNotice(db, tpl.id))!.postedShuinButton).toBe(true);
+  });
+});
