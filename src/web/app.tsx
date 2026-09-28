@@ -171,6 +171,9 @@ import { RolePage, RolesPage } from './views/roles.js';
 import { MarketPage } from './views/market.js';
 import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
 import { listingCard } from '../discord/market.js';
+import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
+import { BoardPage } from './views/board.js';
+import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
   channelsInUse,
@@ -397,6 +400,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/minutes', requireAdmin);
   app.use('/temp', requireAdmin);
   app.use('/invites', requireAdmin);
+  app.use('/board', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -404,7 +408,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -3323,6 +3327,93 @@ export function createWebApp(deps: WebDeps) {
     await deps.discord.sendDm(o.buyerId, action === 'refund' ? `🏪 取引 #${id} は運営の判断で返金しました（${e.currencyEmoji} ${o.price} 枚）。` : `🏪 取引 #${id} は運営の判断で完了にしました。`);
     await deps.discord.sendDm(o.sellerId, action === 'refund' ? `🏪 取引 #${id} は運営の判断で、買った方に返金しました。` : `🏪 取引 #${id} は運営の判断で完了にしました（${e.currencyEmoji} ${o.price - o.fee} 枚をお渡ししました）。`);
     return c.redirect(`/market?msg=${action === 'refund' ? 'refunded' : 'released'}`);
+  });
+
+  // ───────── 📌 掲示板 ─────────
+
+  app.get('/board', async (c) => {
+    const [place, posts, channels] = await Promise.all([loadBoardPlace(db), recentPosts(db, 100), loadChannels().catch(() => [] as GuildChannel[])]);
+    const entries = await entriesFor(db, posts.map((p) => p.id));
+    const names = await namesOf(db, [...posts.map((p) => p.authorId), ...entries.map((e) => e.memberId)]);
+    const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch.name]));
+    return c.html(
+      <BoardPage
+        session={c.get('session')}
+        channelId={place.channelId}
+        channels={textChannelsOf(channels).map((ch) => ({ id: ch.id, name: ch.name, category: ch.parent_id ? (cats.get(ch.parent_id) ?? null) : null }))}
+        posts={posts}
+        entries={entries}
+        name={(id) => names.get(id) ?? id}
+        coin={`${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`}
+        feePercent={cfg.market.feePercent}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.post('/board/place', async (c) => {
+    const body = await c.req.parseBody();
+    const channels = await loadChannels(true).catch(() => [] as GuildChannel[]);
+    const ch = textChannelsOf(channels).find((x) => x.id === body.channelId);
+    if (!ch) return c.redirect('/board?msg=no_place');
+    const by = c.get('session').userId;
+    const prev = await loadBoardPlace(db);
+    // 前のチャンネルの「募集を書く」は消す
+    if (prev.panelMessageId && prev.channelId && prev.channelId !== ch.id) await deps.discord.deleteMessage(prev.channelId, prev.panelMessageId).catch(() => undefined);
+    await saveBoardPlace(db, { channelId: ch.id, ...(prev.channelId === ch.id && prev.panelMessageId ? { panelMessageId: prev.panelMessageId } : {}) }, by);
+    await audit(db, { actorId: by, action: 'board.place', detail: { channelId: ch.id }, via: 'web' });
+    const ok = await postBoardPanel(db, cfg, deps.discord, by).catch(() => false);
+    return c.redirect(`/board?msg=${ok ? 'place_saved' : 'panel_failed'}`);
+  });
+
+  app.post('/board/panel', async (c) => {
+    const ok = await postBoardPanel(db, cfg, deps.discord, c.get('session').userId).catch(() => false);
+    return c.redirect(`/board?msg=${ok ? 'panel' : (await loadBoardPlace(db)).channelId ? 'panel_failed' : 'no_place'}`);
+  });
+
+  /** Discord のカードとスレッドを今の状態に */
+  const boardRefresh = async (postId: number, entryId?: number) => {
+    const p = await getPost(db, postId);
+    if (!p) return;
+    if (p.channelId && p.messageId) await deps.discord.editMessage(p.channelId, p.messageId, postCard(p, await entriesOf(db, p.id), cfg) as never).catch(() => undefined);
+    const e = entryId ? await getEntry(db, entryId) : undefined;
+    if (e && p.threadId) await deps.discord.sendMessage(p.threadId, entryMessage(e, p, cfg) as never).catch(() => undefined);
+  };
+
+  app.post('/board/posts/:id/remove', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/board');
+    const by = c.get('session').userId;
+    const r = await closePost(db, id, by, { staff: true }, now());
+    if (!r) return c.redirect('/board?msg=done_already');
+    await audit(db, { actorId: by, targetId: r.post.authorId, action: 'board.remove', detail: { postId: id, refunded: r.refunded }, via: 'web' });
+    await boardRefresh(id);
+    if (r.post.threadId) await deps.discord.sendMessage(r.post.threadId, { content: `🛡 運営が募集を取り下げました${r.refunded ? `（採用しなかった分の ${r.refunded} 枚は募集した人に戻しました）` : ''}。` }).catch(() => undefined);
+    return c.redirect('/board?msg=removed');
+  });
+
+  app.post('/board/entries/:id/:action', async (c) => {
+    const id = Number(c.req.param('id'));
+    const action = c.req.param('action');
+    if (!Number.isSafeInteger(id) || (action !== 'pay' && action !== 'refund')) return c.redirect('/board');
+    const by = c.get('session').userId;
+    const e = cfg.economy;
+    if (action === 'pay') {
+      const r = await completeEntry(db, cfg, id, by, { staff: true }, now());
+      if (r.status !== 'ok') return c.redirect('/board?msg=done_already');
+      await audit(db, { actorId: by, targetId: r.entry.memberId, action: 'board.pay', detail: { postId: r.post.id, entryId: id, paid: r.paid }, via: 'web' });
+      await boardRefresh(r.post.id, id);
+      await deps.discord.sendDm(r.entry.memberId, `📌 募集「${r.post.title}」は運営の判断で完了にしました（${e.currencyEmoji} ${r.paid} 枚をお渡ししました）。`).catch(() => false);
+      await deps.discord.sendDm(r.post.authorId, `📌 募集「${r.post.title}」は運営の判断で、報酬を採用した方に渡しました。`).catch(() => false);
+      return c.redirect('/board?msg=paid');
+    }
+    const r = await refundEntry(db, id, by, now());
+    if (!r) return c.redirect('/board?msg=done_already');
+    await audit(db, { actorId: by, targetId: r.post.authorId, action: 'board.refund', detail: { postId: r.post.id, entryId: id }, via: 'web' });
+    await boardRefresh(r.post.id, id);
+    await deps.discord.sendDm(r.post.authorId, `📌 募集「${r.post.title}」は運営の判断で、報酬（${e.currencyEmoji} ${r.post.reward} 枚）をお返ししました。`).catch(() => false);
+    await deps.discord.sendDm(r.entry.memberId, `📌 募集「${r.post.title}」は運営の判断で、報酬を募集した方に戻しました。`).catch(() => false);
+    return c.redirect('/board?msg=refunded');
   });
 
   app.post('/market/listings/:id/remove', async (c) => {

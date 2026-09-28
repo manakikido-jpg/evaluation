@@ -1097,3 +1097,55 @@ export const otoshidamaClaims = pgTable(
 );
 
 export type OtoshidamaClaim = typeof otoshidamaClaims.$inferSelect;
+
+/** 📌 掲示板の募集（仕事・手伝い・仲間など）。報酬（銭）を付けたら、人数分を宮が預かる */
+export const boardPosts = pgTable(
+  'board_posts',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    authorId: text('author_id').notNull(),
+    /** work 仕事・依頼 / help 手伝い / team 仲間 / event イベント / other その他 */
+    category: text('category').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    /** 募集する人数 */
+    slots: integer('slots').notNull().default(1),
+    /** 1 人あたりの報酬（0 = なし） */
+    reward: integer('reward').notNull().default(0),
+    /** 今預かっている銭（採用した人に渡す・締め切りで余りを戻すと減る） */
+    escrow: integer('escrow').notNull().default(0),
+    /** open 募集中 / closed 締め切り（本人・期限・満員） / removed 運営が取り下げ */
+    status: text('status').$type<'open' | 'closed' | 'removed'>().notNull().default('open'),
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    threadId: text('thread_id'),
+    deadlineAt: timestamp('deadline_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+  },
+  (t) => [index('board_posts_status_idx').on(t.status, t.deadlineAt), check('board_posts_reward', sql`${t.reward} >= 0 and ${t.escrow} >= 0`)],
+);
+export type BoardPost = typeof boardPosts.$inferSelect;
+
+/** 応募・採用。報酬つきなら、採用した人に「完了」（または期限）で渡す */
+export const boardEntries = pgTable(
+  'board_entries',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    postId: bigint('post_id', { mode: 'number' }).notNull(),
+    memberId: text('member_id').notNull(),
+    /** applied 応募 / hired 採用（仕事中） / done 完了（報酬を渡した） / disputed 問題あり / refunded 募集した人に戻した */
+    status: text('status').$type<'applied' | 'hired' | 'done' | 'disputed' | 'refunded'>().notNull().default('applied'),
+    /** 渡した報酬（手数料を引いたあと） */
+    paid: integer('paid').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    hiredAt: timestamp('hired_at', { withTimezone: true }),
+    /** この時刻までに「完了」「問題あり」がなければ、報酬を渡す */
+    releaseAt: timestamp('release_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    decidedBy: text('decided_by'),
+  },
+  (t) => [uniqueIndex('board_entries_post_member_idx').on(t.postId, t.memberId), index('board_entries_status_idx').on(t.status, t.releaseAt)],
+);
+export type BoardEntry = typeof boardEntries.$inferSelect;
+

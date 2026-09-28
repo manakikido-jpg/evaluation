@@ -25,6 +25,9 @@ export type CoinReason =
   | 'otoshidama_put'
   | 'otoshidama_get'
   | 'otoshidama_refund'
+  | 'board_hold'
+  | 'board_reward'
+  | 'board_refund'
   | 'boost'
   | 'room'
   | 'gacha'
@@ -233,6 +236,9 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   otoshidama_put: 'お年玉袋を置いた',
   otoshidama_get: 'お年玉袋から受け取った',
   otoshidama_refund: 'お年玉袋の残りが戻った',
+  board_hold: '掲示板の報酬を預けた',
+  board_reward: '掲示板の報酬をもらった',
+  board_refund: '掲示板の報酬が戻った',
   boost: '奉納（ブースト）のお礼',
   room: '通話部屋',
   gacha: '物御籤',

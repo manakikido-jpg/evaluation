@@ -2238,3 +2238,46 @@ describe('ロール（管理画面）', () => {
 function randomUUIDLike(n: number): string {
   return `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 }
+
+describe('掲示板（管理画面）', () => {
+  const form = async (session: string, path: string, data: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
+    });
+  };
+
+  it('置き場所を決めると「募集を書く」を出す。問題ありは渡す・戻すを決められる。取り下げで余りを戻す', async () => {
+    const { createPost, applyPost, hire, disputeEntry, getPost } = await import('../src/services/board.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    const s = await login(STAFF);
+    expect(await (await get('/board', s)).text()).toContain('まだ決まっていません');
+    actions = [];
+    expect((await form(s, '/board/place', { channelId: '910000000000000003' })).headers.get('location')).toBe('/board?msg=place_saved');
+    expect(actions.some((a) => a.startsWith('send 910000000000000003') && a.includes('仕事・依頼'))).toBe(true);
+    expect((await form(s, '/board/place', { channelId: '999' })).headers.get('location')).toBe('/board?msg=no_place');
+    // 報酬つきの募集と、問題あり
+    const AUTHOR = '870000000000000011';
+    const WORKER = '870000000000000012';
+    await addCoins(db, AUTHOR, 3000, 'adjust');
+    const r = await createPost(db, cfg, { id: AUTHOR, roleIds: [ROLE.ujiko] }, { category: 'work', title: 'ロゴ作り', body: '', slots: 2, reward: 1000, days: 7 });
+    if (r.status !== 'ok') throw new Error(r.status);
+    const a = await applyPost(db, cfg, r.post.id, { id: WORKER, roleIds: [ROLE.sanpaisha] });
+    if (a.status !== 'ok') throw new Error(a.status);
+    await hire(db, cfg, a.entry.id, AUTHOR);
+    await disputeEntry(db, a.entry.id, WORKER);
+    const page = await (await get('/board', s)).text();
+    expect(page).toContain('問題あり（運営が決める）');
+    expect(page).toContain('ロゴ作り');
+    expect((await form(s, `/board/entries/${a.entry.id}/pay`, {})).headers.get('location')).toBe('/board?msg=paid');
+    expect((await walletOf(db, WORKER)).balance).toBe(900);
+    expect((await form(s, `/board/entries/${a.entry.id}/refund`, {})).headers.get('location')).toBe('/board?msg=done_already');
+    // 取り下げ: 採用しなかった 1 人分を戻す
+    expect((await form(s, `/board/posts/${r.post.id}/remove`, {})).headers.get('location')).toBe('/board?msg=removed');
+    expect((await getPost(db, r.post.id))!.status).toBe('removed');
+    expect((await walletOf(db, AUTHOR)).balance).toBe(2000);
+    expect((await listAudit(db, { action: 'board.pay' })).length).toBe(1);
+  });
+});

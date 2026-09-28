@@ -40,6 +40,9 @@ export const REASON_FLOW: Record<string, Flow> = {
   market_buy: 'income',
   market_sell: 'income',
   market_refund: 'income',
+  board_hold: 'income',
+  board_reward: 'income',
+  board_refund: 'income',
   gift_send: 'transfer',
   gift_receive: 'transfer',
   otoshidama_put: 'transfer',
@@ -64,6 +67,9 @@ const INCOME_GROUP: Record<string, string> = {
   market_buy: 'market',
   market_sell: 'market',
   market_refund: 'market',
+  board_hold: 'board',
+  board_reward: 'board',
+  board_refund: 'board',
 };
 export const INCOME_LABEL: Record<string, string> = {
   shop: '授与品（ショップ）',
@@ -71,6 +77,7 @@ export const INCOME_LABEL: Record<string, string> = {
   room: '通話部屋',
   menzaifu: '免罪符',
   market: '市場の手数料',
+  board: '掲示板の手数料',
   saisen: 'お賽銭（持ちすぎた分）',
 };
 

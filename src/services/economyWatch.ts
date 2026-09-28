@@ -61,11 +61,11 @@ export async function suspectPairs(db: Db, cfg: GuildConfig, since: Date, limit 
     const to = typeof g.detail.to === 'string' ? g.detail.to : undefined;
     if (to) add('gift', g.memberId, to, -g.amount, g.at);
   }
-  // お年玉袋: 置いた人 → 受け取った人（贈り物と同じに数える）
+  // お年玉袋・掲示板の報酬: 置いた人・募集した人 → 受け取った人（贈り物と同じに数える）
   const bags = await db
     .select({ memberId: coinTx.memberId, amount: coinTx.amount, detail: coinTx.detail, at: coinTx.at })
     .from(coinTx)
-    .where(and(eq(coinTx.reason, 'otoshidama_get'), gte(coinTx.at, since)));
+    .where(and(inArray(coinTx.reason, ['otoshidama_get', 'board_reward']), gte(coinTx.at, since)));
   for (const g of bags) {
     const from = typeof g.detail.from === 'string' ? g.detail.from : undefined;
     if (from) add('gift', from, g.memberId, g.amount, g.at);

@@ -11,6 +11,7 @@ import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
 import { GiftApp } from './discord/gifts.js';
 import { OtoshidamaApp } from './discord/otoshidama.js';
+import { BoardApp } from './discord/board.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
@@ -94,6 +95,7 @@ async function main(): Promise<void> {
   const boost = new BoostApp(db, cfg, actions);
   const sticky = new StickyApp(db, cfg, actions);
   const market = new MarketApp(db, cfg, actions);
+  const board = new BoardApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -137,6 +139,7 @@ async function main(): Promise<void> {
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
     bellSticky.attach(guild);
     market.attach(guild);
+    board.attach(guild);
     gacha.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
@@ -177,6 +180,8 @@ async function main(): Promise<void> {
       void gacha.tick().catch((err) => logger.warn({ err }, 'gacha tick failed'));
       // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
       void boost.tick();
+      // 📌 掲示板: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す
+      void board.tick().catch((err) => logger.warn({ err }, 'board tick failed'));
       // 市場: 期限が来た取引を売った人に渡す
       void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
       // はじめての参拝: 全部できた人にお祝い
@@ -252,6 +257,7 @@ async function main(): Promise<void> {
     void shop.onInteraction(i);
     void rooms.onInteraction(i);
     void market.onInteraction(i);
+    void board.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);

@@ -337,6 +337,13 @@
       "when": 1790626810930,
       "tag": "0047_otoshidama",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790632013247,
+      "tag": "0048_board",
+      "breakpoints": true
     }
   ]
 }
