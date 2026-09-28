@@ -179,15 +179,15 @@ export function gachaMenu(
   const left = untilPity(g, s.sinceTop);
   const buffs = s.buffs;
   const featured = gachaFeatured(g, prizes, names);
-  // 超大当たりは上の「今の目玉」に大きく出すので、ここでは短く
-  const superShown = featured?.description.includes('超大当たり');
+  // 運勢ごとの中身は長くなるので出さない（割合だけ 1 行。中身は「📜 中身と排出率」、目玉は上のカード）
   const lines = [
     ...(s.sale ? [`🎉 **期間限定セール中！** ${s.sale.percent}% 引き（ふだんは 1 回 ${fmt(s.sale.original)} 枚）`] : []),
     `1 回 **${fmt(g.price)}** 枚 ／ 10 連 **${fmt(g.price * 10)}** 枚（${coin}。本物のお金は使いません）`,
     '',
-    ...GACHA_TIERS.filter((t) => rates[t] > 0).map(
-      (t) => `${TIER_LABEL[t].emoji} **${TIER_LABEL[t].name}** ${rates[t]}%\n-# ${t === 'super' && superShown ? '↑ 上の「✨ 今の目玉」' : tierPrizeText(g, prizes, t, names)}`,
-    ),
+    GACHA_TIERS.filter((t) => rates[t] > 0)
+      .map((t) => `${TIER_LABEL[t].emoji} ${TIER_LABEL[t].name} ${rates[t]}%`)
+      .join('・'),
+    '-# 出る中身は「📜 中身と排出率」で見られます',
     '',
     left !== undefined && rates.daikichi > 0 ? `🎯 天井: 大吉が出ないまま ${g.pity} 回目は必ず大吉（あと **${left}** 回）` : '🎯 天井はありません',
     '-# 持っているロールは出ません（出せる中身がなくなったら、その分は払い戻します）',

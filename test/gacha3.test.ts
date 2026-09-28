@@ -149,9 +149,10 @@ describe('✨ 今の目玉', () => {
     for (const t of ['超大当たり', '### 🌟 🎊 Discord Nitro 1 か月分', '🔥 残り 2', '🎍 **期間限定**', '10/31 まで']) expect(f.description).toContain(t);
     expect(f.description).not.toContain('売り切れ');
     expect(f.description).not.toContain('×50');
-    // 画面: 目玉がいちばん上。下の一覧の超大当たりは短く
+    // 画面: 目玉がいちばん上。下は割合だけ（中身は並べない）
     const menu = gachaMenu(g, await listPrizes(db), names, { balance: 0, sinceTop: 0, tickets: emptyTickets() }, '🪙銭');
     expect(menu.embeds.map((e) => e.title)).toEqual(['✨ 今の目玉', '🎁 物御籤']);
-    expect(menu.embeds[1]!.description).toContain('↑ 上の「✨ 今の目玉」');
+    expect(menu.embeds[1]!.description).toContain('中身と排出率');
+    expect(menu.embeds[1]!.description).not.toContain('金色');
   });
 });

@@ -468,11 +468,7 @@ describe('物御籤の画面', () => {
     for (const t of [
       '500',
       '5,000',
-      '大吉',
-      '3%',
-      '60%',
-      '「金の桜」 1.5%',
-      '出せないときは 🎫部屋代無料券 ×3',
+      '大吉 3%',
       'あと **5** 回',
       '部屋代無料券 ×2',
       'gacha:draw:1',
@@ -485,6 +481,10 @@ describe('物御籤の画面', () => {
     const buttons = menu.components[0]!.toJSON().components as { disabled?: boolean }[];
     expect(buttons.map((b) => Boolean(b.disabled))).toEqual([false, true, false]);
     expect(tierPrizeText(g, prizes, 'kichi', names)).toBe('📌絵馬のピン留め券 ×1 60%');
+    expect(tierPrizeText(g, prizes, 'daikichi', names)).toContain('「金の桜」 1.5%');
+    expect(tierPrizeText(g, prizes, 'daikichi', names)).toContain('出せないときは 🎫部屋代無料券 ×3');
+    // 画面には運勢ごとの中身は並べない（「中身と排出率」で見る）
+    expect(JSON.stringify(menu.embeds)).not.toContain('金の桜');
   });
 
   it('結果の一行・券の一行・パネル', () => {
