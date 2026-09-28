@@ -40,6 +40,7 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   shuin_buttons_none: { text: 'そのカテゴリには、ボタンを置くテキストチャンネルがありませんでした（もう全部に付いているかもしれません）。', kind: 'warn' },
   image_too_big: { text: '写真が大きすぎます（8MB まで）。小さくしてから選び直してください。', kind: 'warn' },
   image_bad_type: { text: '写真は PNG・JPEG・GIF・WebP のどれかにしてください。', kind: 'warn' },
+  commands_notice: { text: 'コマンドのまとめの掲示を作りました。文面を見て「保存して Discord に反映」を押すと出ます（{コマンド一覧} は、コマンドが増えると自動で新しくなります）。', kind: 'ok' },
   discord_error: { text: 'Discord への投稿に失敗しました。BOT がそのチャンネルに書き込めるか確認してください。', kind: 'warn' },
 };
 

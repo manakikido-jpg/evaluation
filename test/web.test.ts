@@ -656,6 +656,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       { id: '980000000000000010', name: '新しい氏子', position: 20, managed: false, color: 0 },
       { id: '980000000000000011', name: '巫女', position: 21, managed: false, color: 0 },
       { id: '980000000000000012', name: 'BOT', position: 22, managed: true, color: 0 },
+      { id: '980000000000000013', name: '巫女頭', position: 23, managed: false, color: 0 },
     ];
     try {
       const g = await login(GUJI);
@@ -703,6 +704,24 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       expect((await post('/ranks', g, await form({ [`rank.${miko.key}.kind`]: 'appointed' }))).headers.get('location')).toBe('/ranks?msg=saved');
       expect(store.current.ranks.find((r) => r.key === miko.key)?.auto).toBe(false);
 
+      // ファイルの役職も、ご縁で自動 ⇔ 任命制 を変えられる（任命制ならご縁は要らない）
+      const toAppointed = await post('/ranks', g, await form({ 'rank.sodai.kind': 'appointed', 'rank.sodai.requiredGoen': '' }));
+      expect(toAppointed.headers.get('location')).toBe('/ranks?msg=saved');
+      expect(store.current.ranks.find((r) => r.key === 'sodai')?.auto).toBe(false);
+      // 自動に戻すときはご縁が要る
+      expect((await post('/ranks', g, await form({ 'rank.sodai.kind': 'auto', 'rank.sodai.requiredGoen': '' }))).headers.get('location')).toBe('/ranks?msg=invalid');
+      expect((await post('/ranks', g, await form({ 'rank.sodai.kind': 'auto', 'rank.sodai.requiredGoen': '400' }))).headers.get('location')).toBe('/ranks?msg=saved');
+      expect(store.current.ranks.find((r) => r.key === 'sodai')).toMatchObject({ auto: true, requiredGoen: 400 });
+      // 宮司・参拝者のなり方は変えない
+      await post('/ranks', g, await form({ 'rank.guji.kind': 'auto', 'rank.sanpaisha.kind': 'appointed' }));
+      expect(store.current.ranks.find((r) => r.key === 'guji')?.auto).toBe(false);
+      expect(store.current.ranks.find((r) => r.key === 'sanpaisha')?.auto).toBe(true);
+      // 任命制で足すときはご縁なしでよい
+      expect((await add({ name: '巫女頭', roleId: '980000000000000013', kind: 'appointed', weight: '6' })).headers.get('location')).toBe('/ranks?msg=added');
+      const head = store.current.ranks.find((r) => r.name === '巫女頭')!;
+      expect(head).toMatchObject({ auto: false, requiredGoen: 0 });
+      await post(`/ranks/${head.key}/delete`, g, { _csrf: await csrfOf(g) });
+
       // 消せるのは足した役職だけ
       expect((await post('/ranks/ujiko/delete', g, { _csrf: await csrfOf(g) })).headers.get('location')).toBe('/ranks?msg=locked');
       expect((await post(`/ranks/${miko.key}/delete`, g, { _csrf: await csrfOf(g) })).headers.get('location')).toBe('/ranks?msg=deleted');
@@ -736,6 +755,23 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await post('/updates/news/post', g, { _csrf: await csrfOf(g), date: CHANGELOG[0]!.date });
     expect(actions.length).toBeGreaterThan(0);
     expect((await post('/updates/news/post', g, { _csrf: await csrfOf(g), id: 'nothing' })).headers.get('location')).toBe('/updates?msg=news_none#update-news');
+  });
+
+  it('⌨ コマンドのまとめ: だれでも見られる。宮司はメンバー向けのまとめを掲示にできる', async () => {
+    const s = await login(STAFF);
+    const page = await (await get('/commands', s)).text();
+    expect(page).toContain('/残高');
+    expect(page).toContain('/厄');
+    expect(page).not.toContain('action="/commands/notice"');
+    expect((await post('/commands/notice', s, { _csrf: await csrfOf(s), channelId: '910000000000000003' })).status).toBe(403);
+    const g = await login(GUJI);
+    expect(await (await get('/commands', g)).text()).toContain('action="/commands/notice"');
+    expect((await post('/commands/notice', g, { _csrf: await csrfOf(g), channelId: '' })).headers.get('location')).toBe('/commands?msg=notice_invalid');
+    const r = await post('/commands/notice', g, { _csrf: await csrfOf(g), channelId: '910000000000000003' });
+    expect(r.headers.get('location')).toMatch(/^\/notices\/\d+\?msg=commands_notice$/);
+    const n = (await listNotices(db)).find((x) => x.title === 'コマンドのまとめ')!;
+    expect(n.body).toContain('{コマンド一覧}');
+    expect(await (await get(r.headers.get('location')!, g)).text()).toContain('コマンドのまとめの掲示を作りました');
   });
 
   it('年齢区分の変更は宮司だけ', async () => {

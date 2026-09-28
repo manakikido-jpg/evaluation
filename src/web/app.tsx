@@ -137,7 +137,10 @@ import {
 } from '../services/glossary.js';
 import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
-import { ADMIN_RANK_KEYS, RanksPage } from './views/ranks.js';
+import { CommandsPage } from './views/commands.js';
+import { commandList } from '../services/commandList.js';
+import { commandDefinitions } from '../discord/commands.js';
+import { ADMIN_RANK_KEYS, firstAutoKeyOf, RanksPage } from './views/ranks.js';
 import { syncOmamoriMentionable } from '../services/recruit.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
@@ -368,6 +371,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/economy', requireAdmin);
   app.use('/economy/*', requireAdmin);
   app.use('/glossary', requireAdmin);
+  app.use('/commands', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -375,7 +379,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -544,6 +548,30 @@ export function createWebApp(deps: WebDeps) {
         }
       />,
     );
+  });
+
+  // ───────── ⌨ コマンドのまとめ（見るのはだれでも・掲示を作るのは宮司） ─────────
+
+  app.get('/commands', async (c) => {
+    const s = c.get('session');
+    const channels = s.level === 'guji' ? postableChannels(await loadChannels().catch(() => [] as GuildChannel[])).filter((ch) => ch.type === 0 || ch.type === 5) : undefined;
+    return c.html(<CommandsPage session={s} list={commandList(commandDefinitions(cfg))} channels={channels} flash={c.req.query('msg')} />);
+  });
+
+  /** メンバー向けのコマンドのまとめを掲示にする */
+  app.post('/commands/notice', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const channels = await loadChannels(true).catch(() => [] as GuildChannel[]);
+    const ch = channels.find((x) => x.id === body.channelId && (x.type === 0 || x.type === 5));
+    if (!ch) return c.redirect('/commands?msg=notice_invalid');
+    const n = await createNotice(db, {
+      channelId: ch.id,
+      title: 'コマンドのまとめ',
+      body: '# ⌨ コマンドのまとめ\n`/` を打つと BOT のコマンドが出てきます。\n\n{コマンド一覧}\n\n-# 名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」でも御朱印帳が見られます',
+      by: c.get('session').userId,
+    });
+    return c.redirect(`/notices/${n.id}?msg=commands_notice`);
   });
 
   // ───────── 更新履歴 ─────────
@@ -1519,7 +1547,7 @@ export function createWebApp(deps: WebDeps) {
     const id = noticeId(c);
     const n = id ? await getNotice(db, id) : undefined;
     if (!n) return c.html(<NotFoundPage session={c.get('session')} />, 404);
-    return editPage(c, n, n.body);
+    return editPage(c, n, n.body, c.req.query('msg'));
   });
 
   app.post('/notices/:id', async (c) => {
@@ -2245,6 +2273,7 @@ export function createWebApp(deps: WebDeps) {
       return roles.some((r) => r.id === v) ? v : 'invalid';
     };
     const file = fileCfg();
+    const fileFirstAuto = firstAutoKeyOf(file.ranks);
     const ranks: Overrides['ranks'] = {};
     const extraRanks: Overrides['extraRanks'] = [];
     for (const r of cfg.ranks) {
@@ -2254,9 +2283,13 @@ export function createWebApp(deps: WebDeps) {
       const fr = file.ranks.find((x) => x.key === r.key);
       if (fr) {
         const roleId = ADMIN_RANK_KEYS.includes(r.key) ? fr.roleId : roleOf(`${k}.roleId`, r.roleId);
+        // なり方（宮司・神職と、入鯖時に付く役職は変えない）
+        const fixed = ADMIN_RANK_KEYS.includes(r.key) || r.key === fileFirstAuto;
+        const auto = fixed || body[`${k}.kind`] === undefined ? r.auto : body[`${k}.kind`] !== 'appointed';
         ranks[r.key] = {
           weight: num(`${k}.weight`),
-          ...(r.auto ? { requiredGoen: num(`${k}.requiredGoen`) } : {}),
+          ...(auto ? { requiredGoen: num(`${k}.requiredGoen`) } : {}),
+          ...(auto !== fr.auto ? { auto } : {}),
           // ファイルと同じなら持たない（ファイルを直したときにそちらが効くように）
           ...(name !== fr.name ? { name, formerNames: [...new Set([...(prev.ranks[r.key]?.formerNames ?? []), ...(name !== r.name ? [r.name] : [])])].slice(-20) } : {}),
           ...(emoji !== fr.emoji ? { emoji } : {}),

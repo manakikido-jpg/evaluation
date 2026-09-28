@@ -47,6 +47,8 @@ export const overridesSchema = z.object({
           roleId: z.string().regex(/^\d{17,20}$/),
           /** 前の名前（掲示の {前の名前のご縁} なども使えるように） */
           formerNames: z.array(z.string()).max(20),
+          /** true = ご縁で自動 / false = 任命制（ファイルと変えたときだけ） */
+          auto: z.boolean(),
         })
         .partial(),
     )
@@ -121,14 +123,16 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       ...base.ranks.map((r) => {
         const x = o.ranks[r.key] ?? {};
         const name = x.name ?? r.name;
+        const auto = x.auto ?? r.auto;
         return {
           ...r,
           name,
+          auto,
           ...(name !== r.name ? { formerNames: [...new Set([...(r.formerNames ?? []), ...(x.formerNames ?? []), r.name])].filter((n) => n !== name) } : {}),
           ...(x.emoji !== undefined ? { emoji: x.emoji } : {}),
           ...(x.roleId !== undefined ? { roleId: x.roleId } : {}),
           ...(x.weight !== undefined ? { weight: x.weight } : {}),
-          ...(r.auto && x.requiredGoen !== undefined ? { requiredGoen: x.requiredGoen } : {}),
+          ...(auto && x.requiredGoen !== undefined ? { requiredGoen: x.requiredGoen } : {}),
         };
       }),
       // ファイルの役職と同じキーのものは使わない

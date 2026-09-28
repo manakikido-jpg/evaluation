@@ -20,6 +20,7 @@ type Nav =
   | 'yaku'
   | 'soudan'
   | 'audit'
+  | 'commands'
   | 'notices'
   | 'channels'
   | 'shop'
@@ -39,6 +40,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'stats', href: '/stats', icon: '📈', label: '推移' },
       { key: 'voice', href: '/voice', icon: '🎙', label: '通話の記録' },
       { key: 'audit', href: '/audit', icon: '📜', label: '記録' },
+      { key: 'commands', href: '/commands', icon: '⌨', label: 'コマンド' },
     ],
   },
   {

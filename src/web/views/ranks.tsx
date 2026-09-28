@@ -20,6 +20,9 @@ function Csrf(props: { session: AdminSession }) {
 /** 管理画面に入れるかをロールで決めている役職（ロールを変えると入れなくなるので、ファイルで決める） */
 export const ADMIN_RANK_KEYS = ['guji', 'shinshoku'];
 
+/** 入鯖時に付くいちばん下の自動の役職（参拝者） */
+export const firstAutoKeyOf = (ranks: readonly Rank[]) => [...ranks].filter((x) => x.auto).sort((a, b) => a.requiredGoen - b.requiredGoen)[0]?.key;
+
 function RoleSelect(props: { name: string; roles: GuildRole[]; selected?: string; used: Map<string, string>; self?: string; required?: boolean }) {
   return (
     <select name={props.name} required={props.required}>
@@ -49,9 +52,11 @@ export function RanksPage(props: {
 }) {
   const { session, cfg, fileCfg } = props;
   const f = props.flash && Object.hasOwn(RANKS_FLASH, props.flash) ? RANKS_FLASH[props.flash] : undefined;
-  const firstAutoKey = [...cfg.ranks].filter((x) => x.auto).sort((a, b) => a.requiredGoen - b.requiredGoen)[0]?.key;
   const ranks = [...cfg.ranks].sort((a, b) => b.weight - a.weight);
   const fromFile = (r: Rank) => fileCfg.ranks.find((x) => x.key === r.key);
+  // 宮司・神職（管理画面に入れる人）と、入鯖時に付くいちばん下の役職は、なり方を変えない
+  const fileFirstAuto = firstAutoKeyOf(fileCfg.ranks);
+  const fixedKind = (r: Rank) => (Boolean(fromFile(r)) && ADMIN_RANK_KEYS.includes(r.key)) || r.key === fileFirstAuto;
   const used = new Map(cfg.ranks.map((r) => [r.roleId, r.name]));
   const roleName = (id: string) => props.roles?.find((r) => r.id === id)?.name;
   return (
@@ -98,32 +103,35 @@ export function RanksPage(props: {
                       {adminRole || !props.roles ? (
                         <>
                           {roleName(r.roleId) ?? r.roleId}
-                          {adminRole && <small class="note"> （管理画面に入れる人を決めるロールなので、ファイルで変えます）</small>}
+                          {adminRole && (
+                            <small class="note" title="管理画面に入れる人を決めるロールなので、config/guild.json で変えます">
+                              {' '}
+                              🔒 ファイルで設定
+                            </small>
+                          )}
                         </>
                       ) : (
                         <RoleSelect name={`${k}.roleId`} roles={props.roles} selected={r.roleId} used={used} self={r.name} required />
                       )}
                     </td>
                     <td class="num">{props.counts.get(r.roleId) ?? 0}</td>
-                    <td class="nowrap">
-                      {fr ? (
+                    <td class="nowrap kind-cell">
+                      {fixedKind(r) ? (
                         !r.auto ? (
-                          '任命制'
-                        ) : r.key === firstAutoKey ? (
+                          <>
+                            任命制
+                            <small class="note"> （固定）</small>
+                          </>
+                        ) : (
                           <>
                             入鯖時
                             <input type="hidden" name={`${k}.requiredGoen`} value="0" />
                           </>
-                        ) : (
-                          <>
-                            ご縁 <input type="number" name={`${k}.requiredGoen`} value={String(r.requiredGoen)} min={0} required size={5} />
-                            {fr.requiredGoen !== r.requiredGoen && <small> ファイル: {fr.requiredGoen}</small>}
-                          </>
                         )
                       ) : (
-                        // 社務所Web で足した役職は、なり方も変えられる
+                        // ご縁で自動 ⇔ 任命制 を変えられる（任命制ならご縁の欄は隠れる）
                         <>
-                          <select name={`${k}.kind`}>
+                          <select name={`${k}.kind`} aria-label="なり方">
                             <option value="auto" selected={r.auto}>
                               ご縁で自動
                             </option>
@@ -131,7 +139,10 @@ export function RanksPage(props: {
                               任命制
                             </option>
                           </select>{' '}
-                          ご縁 <input type="number" name={`${k}.requiredGoen`} value={String(r.requiredGoen)} min={1} size={5} />
+                          <span class="goen">
+                            ご縁 <input type="number" name={`${k}.requiredGoen`} value={String(r.auto ? r.requiredGoen : '')} min={1} size={5} aria-label="昇格に必要なご縁" />
+                            {fr && fr.auto && fr.requiredGoen !== r.requiredGoen && <small> ファイル: {fr.requiredGoen}</small>}
+                          </span>
                         </>
                       )}
                     </td>
@@ -154,6 +165,8 @@ export function RanksPage(props: {
         </div>
         <p class="note">
           朱印の格 = 朱印 1 回で渡すご縁。「ご縁で自動」の役職は、ご縁がたまると自動で上がります（下がることはありません）。昇格に必要なご縁は役職ごとに別の数にしてください。
+          「任命制」の役職は、運営が Discord でロールを付けた人がなります（ご縁では上がりません）。任命制の役職は運営として扱うので、「読むだけ」のチャンネルにも書けます。
+          宮司・神職と、入鯖時に付く役職のなり方は変えられません。
         </p>
         <button type="submit" class="ok">
           保存
@@ -164,7 +177,7 @@ export function RanksPage(props: {
         <section class="card anchor" id="rank-add">
           <h2>＋ 役職を足す</h2>
           <p class="note">先に「ロール」のページで Discord のロールを作っておき、ここで選びます。</p>
-          <form method="post" action="/ranks/new">
+          <form method="post" action="/ranks/new" class="rank-add">
             <Csrf session={session} />
             <div class="fields">
               <label class="field">
@@ -186,8 +199,8 @@ export function RanksPage(props: {
                   <option value="appointed">任命制（運営が付ける）</option>
                 </select>
               </label>
-              <label class="field">
-                <span>昇格に必要なご縁（ご縁で自動のとき）</span>
+              <label class="field goen-field">
+                <span>昇格に必要なご縁</span>
                 <input type="number" name="requiredGoen" min={1} value="500" />
               </label>
               <label class="field">

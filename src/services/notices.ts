@@ -6,6 +6,7 @@ import { noticeImages, notices, settings, type Notice } from '../db/schema.js';
 import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody, type MessageFile } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
+import { memberCommandsText } from './commandList.js';
 import { coreName } from '../lib/names.js';
 import { DEFAULT_GUIDES, DEFAULT_NOTICES, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
 import { omikujiRange } from './omikuji.js';
@@ -177,6 +178,10 @@ const POSTABLE = new Set([0, 5]);
 export type NoticeVariable = { name: string; value: string; note: string };
 
 /** 本文で使える {名前} と、いまの値 */
+/** {コマンド一覧}（コマンドは起動中に変わらないので 1 回だけ作る） */
+let commandsCache: string | undefined;
+const commandsText = () => (commandsCache ??= memberCommandsText());
+
 export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
   const e = cfg.economy;
   const ranks = [...cfg.ranks].sort((a, b) => a.weight - b.weight);
@@ -205,6 +210,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     ...ranks.filter((r) => r.auto).map((r) => ({ name: `${r.name}のご縁`, value: String(r.requiredGoen), note: '昇格に必要なご縁' })),
     ...ranks.map((r) => ({ name: `${r.name}の格`, value: String(r.weight), note: '朱印 1 回のご縁' })),
     { name: '役職一覧', value: [...ranks].map(rankLine).join('\n'), note: '役職・昇格ライン・格の箇条書き' },
+    { name: 'コマンド一覧', value: commandsText(), note: 'メンバーが使えるコマンドの箇条書き（コマンドを足すと自動で増える）' },
   ];
 }
 

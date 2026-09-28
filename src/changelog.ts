@@ -20,6 +20,28 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-ranks-kind',
+    date: '2026-09-28',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '⛩ 役職を「ご縁で自動」と「任命制」で切り替えられるように',
+    items: [
+      '役職のページで、今の役職のなり方を ご縁で自動 ⇔ 任命制 に変えられる（宮司・神職・参拝者はそのまま）',
+      '任命制を選ぶと、昇格に必要なご縁の欄は出ない（足すときも）',
+    ],
+  },
+  {
+    id: '2026-09-28-commands',
+    date: '2026-09-28',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '⌨ コマンドのまとめ',
+    items: [
+      '社務所Web に「コマンド」のページ。BOT のコマンドを、だれでも使えるもの・運営だけのものに分けて、入れる項目まで一覧にした（コマンドが増えると自動で増える）',
+      '掲示で {コマンド一覧} が使える。「メンバー向けのまとめを Discord に出す」でまとめの掲示をすぐ作れる',
+    ],
+  },
+  {
     id: '2026-09-28-ui-refresh',
     date: '2026-09-28',
     kind: 'improve',

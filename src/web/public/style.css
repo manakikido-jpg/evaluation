@@ -633,3 +633,16 @@ main table input[type=number] { width: 6.5em; }
 nav.jump { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
 nav.jump a { padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font-size: .88rem; }
 nav.jump a:hover { border-color: var(--shu); text-decoration: none; }
+
+/* ⌨ コマンドのまとめ */
+.cmd-row { align-items: flex-start; }
+code.cmd-name { flex: none; min-width: 9em; font-weight: 600; background: var(--sakura); color: var(--shu-dark); padding: 2px 8px; border-radius: 6px; }
+@media (prefers-color-scheme: dark) { code.cmd-name { color: var(--ink); } }
+.cmd-opts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cmd-opts .tag { margin-left: 0; font-size: .75rem; }
+ul.cmd-subs { margin: 6px 0 0; padding-left: 1.1em; font-size: .9rem; }
+ul.cmd-subs li { margin: 2px 0; }
+@media (max-width: 640px) { .cmd-row { flex-direction: column; gap: 4px; } }
+/* 役職: 任命制ならご縁の欄を隠す */
+.kind-cell:has(option[value=appointed]:checked) .goen { display: none; }
+.rank-add:has(select[name=kind] option[value=appointed]:checked) .goen-field { display: none; }
