@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-hamburger',
+    date: '2026-09-28',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '☰ メニューを開け閉めできるように',
+    items: [
+      '上のバーの ☰ で左のメニューを開け閉めできる。パソコンで閉じるとページが広くなり、次のページでも閉じたまま',
+      'スマホは ☰ でメニューが左から出る。外を押すと閉じる',
+    ],
+  },
+  {
     id: '2026-09-28-ranks-kind',
     date: '2026-09-28',
     kind: 'improve',

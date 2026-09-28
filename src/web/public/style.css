@@ -320,7 +320,7 @@ ul.role-members { list-style: none; padding: 0; margin: 0; display: grid; grid-t
 
 /* ───────── チャンネル: 一覧（押すとそこへ移動） ───────── */
 html { scroll-behavior: smooth; }
-.anchor { scroll-margin-top: 12px; }
+.anchor { scroll-margin-top: 67px; }
 .anchor:target { outline: 2px solid var(--shu); outline-offset: 2px; }
 nav.toc { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 16px; }
 nav.toc h2 { grid-column: 1 / -1; margin: 0; }
@@ -367,7 +367,7 @@ th.sortable.on a { color: var(--shu); }
 
 /* 面談告知 */
 .iv-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-.iv-preview { position: sticky; top: 12px; }
+.iv-preview { position: sticky; top: 67px; }
 .iv-form { display: grid; gap: 18px; }
 .iv-form h2 { margin-bottom: 0; }
 .iv-step { display: grid; gap: 8px; }
@@ -489,18 +489,31 @@ label.choice small { color: var(--muted); font-size: .8rem; }
 .ch-create .role-pick { display: none; }
 .ch-create:has(input[name=visibility][value=private]:checked) .role-pick { display: block; }
 
-/* ───────── 左のメニュー ───────── */
-body.with-side { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100vh; }
-body.with-side > main { width: 100%; }
-.side { background: var(--card); border-right: 1px solid var(--line); border-top: 3px solid var(--shu); position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.side-head { display: flex; flex-direction: column; gap: 10px; padding: 14px 12px 16px; }
-.brand { font-weight: bold; color: var(--ink); font-size: 1.1rem; }
+/* ───────── 上のバー（☰）と左のメニュー ───────── */
+body.with-side {
+  display: grid; min-height: 100vh;
+  grid-template-columns: 224px minmax(0, 1fr); grid-template-rows: auto 1fr;
+  grid-template-areas: "top top" "side main";
+}
+body.with-side > main { grid-area: main; width: 100%; }
+.nav-toggle { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.topbar {
+  grid-area: top; position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px;
+  height: 52px; padding: 0 14px; background: var(--card); border-bottom: 1px solid var(--line); border-top: 3px solid var(--shu);
+}
+.brand { font-weight: bold; color: var(--ink); font-size: 1.1rem; white-space: nowrap; }
 .brand small { margin-left: 6px; font-weight: normal; }
 .brand:hover { text-decoration: none; }
 .torii { color: var(--shu); }
-.side .brand { padding: 0 8px; }
-.nav-toggle, .nav-button { display: none; }
-.side-nav { display: flex; flex-direction: column; gap: 10px; }
+.hamburger { display: inline-flex; flex-direction: column; justify-content: center; gap: 4px; width: 38px; height: 38px; padding: 0 9px; border-radius: 8px; cursor: pointer; flex: none; }
+.hamburger:hover { background: var(--bg); }
+.hamburger span { display: block; height: 2px; border-radius: 2px; background: var(--ink); transition: transform .2s, opacity .2s; }
+.nav-toggle:focus-visible ~ .topbar .hamburger { outline: 2px solid var(--shu); outline-offset: 1px; }
+.topbar-updates { margin-left: auto; color: var(--ink); font-size: .9rem; }
+.topbar-updates:hover { text-decoration: none; }
+.topbar-updates .badge, .side-nav .badge { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--shu); color: #fff; font-size: .75rem; line-height: 18px; text-align: center; }
+.side { grid-area: side; background: var(--card); border-right: 1px solid var(--line); position: sticky; top: 55px; height: calc(100vh - 55px); overflow-y: auto; }
+.side-nav { display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 16px; }
 .nav-group { display: flex; flex-direction: column; gap: 1px; }
 .nav-title { font-size: .72rem; font-weight: 600; color: var(--muted); padding: 0 10px 2px; letter-spacing: .04em; }
 .side-nav a { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 8px; color: var(--ink); font-size: .92rem; }
@@ -508,19 +521,27 @@ body.with-side > main { width: 100%; }
 .side-nav a.on { background: var(--sakura); color: var(--shu-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--shu); }
 @media (prefers-color-scheme: dark) { .side-nav a.on { color: var(--ink); } }
 .nav-icon { width: 1.4em; text-align: center; flex: none; }
-.side-nav .badge { margin-left: auto; display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--shu); color: #fff; font-size: .75rem; line-height: 18px; text-align: center; }
+.side-nav .badge { margin-left: auto; }
 .side .me { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 12px 10px 0; border-top: 1px solid var(--line); font-size: .85rem; }
 .side .me small { display: block; color: var(--muted); }
-@media (max-width: 900px) {
-  body.with-side { display: block; }
-  .side { position: sticky; top: 0; z-index: 20; height: auto; max-height: 100vh; border-right: 0; border-bottom: 1px solid var(--line); }
-  .side-head { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
-  .nav-button { display: inline-block; padding: 5px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: .9rem; user-select: none; }
-  .nav-toggle:checked + .nav-button { background: var(--sakura); border-color: var(--shu); }
-  .side-nav { display: none; flex-basis: 100%; max-height: calc(100vh - 70px); overflow-y: auto; padding: 4px 0 8px; }
-  .nav-toggle:checked ~ .side-nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-  .side .me { grid-column: 1 / -1; }
+.backdrop { display: none; }
+/* パソコン: ☰ でメニューを閉じて、ページを広く */
+@media (min-width: 901px) {
+  body.with-side:has(.nav-toggle:checked) { grid-template-columns: 0 minmax(0, 1fr); }
+  body.with-side:has(.nav-toggle:checked) .side { display: none; }
 }
+/* スマホ: メニューは左から出る。外を押すと閉じる */
+@media (max-width: 900px) {
+  body.with-side { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "main"; }
+  .topbar .brand small { display: none; }
+  .side { position: fixed; top: 55px; left: 0; bottom: 0; z-index: 40; width: min(280px, 85vw); height: auto; transform: translateX(-105%); transition: transform .2s ease; box-shadow: 4px 0 16px rgba(0, 0, 0, .15); }
+  .nav-toggle:checked ~ .side { transform: translateX(0); }
+  .nav-toggle:checked ~ .backdrop { display: block; position: fixed; inset: 55px 0 0 0; z-index: 35; background: rgba(0, 0, 0, .35); }
+  .nav-toggle:checked ~ .topbar .hamburger span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .nav-toggle:checked ~ .topbar .hamburger span:nth-child(2) { opacity: 0; }
+  .nav-toggle:checked ~ .topbar .hamburger span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+}
+@media (prefers-reduced-motion: reduce) { .side, .hamburger span { transition: none; } }
 
 /* ───────── 掲示の一覧 ───────── */
 button.small { padding: 3px 10px; font-size: .85rem; }
@@ -550,7 +571,7 @@ form.tool .note { margin: 2px 0 0; }
 .notice-form section.card h2 { margin: 0; }
 .notice-form fieldset.mention-pick, .notice-form fieldset.image-pick { border: 0; padding: 0; }
 .option-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
-.notice-side { display: grid; gap: 16px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.notice-side { display: grid; gap: 16px; position: sticky; top: 67px; max-height: calc(100vh - 79px); overflow-y: auto; }
 .notice-side .preview-card .notice-preview { max-height: none; }
 details.vars summary { cursor: pointer; }
 details.vars[open] summary { margin-bottom: 8px; }
@@ -559,7 +580,7 @@ details.vars[open] summary { margin-bottom: 8px; }
 
 /* ───────── 設定: 左の目次で項目を選ぶ（選んだ項目だけ出す。選ばなければ全部） ───────── */
 .settings-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 16px; align-items: start; }
-.settings-index { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 1px; padding: 10px 8px; margin: 0; }
+.settings-index { position: sticky; top: 67px; display: flex; flex-direction: column; gap: 1px; padding: 10px 8px; margin: 0; }
 .settings-index a { padding: 5px 10px; border-radius: 8px; color: var(--ink); font-size: .9rem; }
 .settings-index a:hover { background: var(--bg); text-decoration: none; }
 .settings-index a.all { color: var(--muted); font-size: .85rem; }

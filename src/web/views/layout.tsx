@@ -94,17 +94,27 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
       </head>
       <body class={session ? 'with-side' : ''}>
         {session && (
-          <aside class="side">
-            <div class="side-head">
+          <>
+            {/* ☰ で開け閉め（パソコン: チェックで閉じる／スマホ: チェックで開く）。JS がなくても動き、JS はパソコンで閉じたかを覚えるだけ */}
+            <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="メニューを開け閉めする" />
+            <script src={assetUrl('menu.js')}></script>
+            <header class="topbar">
+              <label for="nav-toggle" class="hamburger" title="メニュー">
+                <span></span>
+                <span></span>
+                <span></span>
+              </label>
               <a class="brand" href="/">
                 <span class="torii">⛩</span> 社務所 Web
                 <small>咲楽ノ宮</small>
               </a>
-              {/* スマホ: ☰ で開け閉め（JavaScript なし） */}
-              <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="メニューを開く" />
-              <label for="nav-toggle" class="nav-button" aria-hidden="true">
-                ☰ メニュー
-              </label>
+              {unseen > 0 && (
+                <a class="topbar-updates" href="/updates" title="新しい更新">
+                  📰 <span class="badge">{unseen}</span>
+                </a>
+              )}
+            </header>
+            <aside class="side">
               <nav class="side-nav" aria-label="メニュー">
                 {NAV_GROUPS.map((g) => {
                   const items = g.items.filter((i) => !i.gujiOnly || session.level === 'guji');
@@ -150,8 +160,10 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                   </form>
                 </div>
               </nav>
-            </div>
-          </aside>
+            </aside>
+            {/* スマホ: メニューの外を押すと閉じる */}
+            <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
+          </>
         )}
         <main>{props.children}</main>
       </body>
