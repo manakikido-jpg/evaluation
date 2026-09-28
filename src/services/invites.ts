@@ -90,8 +90,42 @@ export async function activeLinkOf(db: Db, inviterId: string): Promise<InviteLin
   return row;
 }
 
-export async function saveLink(db: Db, link: { code: string; inviterId: string; channelId: string; uses: number }): Promise<void> {
+export async function saveLink(db: Db, link: { code: string; inviterId: string; channelId: string; uses: number; label?: string | null; createdBy?: string | null }): Promise<void> {
   await db.insert(inviteLinks).values(link).onConflictDoUpdate({ target: inviteLinks.code, set: { uses: link.uses, revokedAt: null } });
+}
+
+/** 運営が作る共通の招待リンク（SNS・ポスター用など）の持ち主。だれの招待にもならない */
+export const SHARED_INVITER = 'shared';
+
+/** 共通の招待リンク（使えるもの）。新しい順 */
+export async function sharedLinks(db: Db): Promise<InviteLink[]> {
+  return db
+    .select()
+    .from(inviteLinks)
+    .where(and(eq(inviteLinks.inviterId, SHARED_INVITER), isNull(inviteLinks.revokedAt)))
+    .orderBy(desc(inviteLinks.createdAt));
+}
+
+/** 名前が同じ共通リンク（名前なしどうしも同じとみなす） */
+export async function sharedLinkNamed(db: Db, label: string | null): Promise<InviteLink | undefined> {
+  return (await sharedLinks(db)).find((l) => (l.label ?? '') === (label ?? ''));
+}
+
+/** 共通リンクを使えなくしたと記録する */
+export async function revokeSharedLink(db: Db, code: string, now = new Date()): Promise<boolean> {
+  const rows = await db
+    .update(inviteLinks)
+    .set({ revokedAt: now })
+    .where(and(eq(inviteLinks.code, code), eq(inviteLinks.inviterId, SHARED_INVITER), isNull(inviteLinks.revokedAt)))
+    .returning();
+  return rows.length > 0;
+}
+
+/** https://discord.gg/abc・discord.com/invite/abc・abc のどれでもコードにする */
+export function inviteCodeOf(text: string): string {
+  const t = text.trim();
+  const m = t.match(/(?:discord\.gg|discord(?:app)?\.com\/invite)\/([\w-]+)/i);
+  return m ? m[1]! : t.replace(/^\/+|\/+$/g, '');
 }
 
 /**

@@ -574,7 +574,7 @@ export const inviteActive = pgTable(
   (t) => [primaryKey({ columns: [t.memberId, t.date] })],
 );
 
-/** BOT が作った、メンバーごとの招待リンク（だれのリンクで入ったか分かるように） */
+/** BOT が作った、メンバーごとの招待リンク（だれのリンクで入ったか分かるように）。inviterId = 'shared' は運営が作る共通のリンク */
 export const inviteLinks = pgTable(
   'invite_links',
   {
@@ -586,6 +586,10 @@ export const inviteLinks = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** Discord で消されていた・作り直した */
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    /** 共通の招待リンク（inviterId = 'shared'）の名前（X 用・ポスター用 など） */
+    label: text('label'),
+    /** 共通の招待リンクを作った人 */
+    createdBy: text('created_by'),
   },
   (t) => [index('invite_links_inviter_idx').on(t.inviterId)],
 );

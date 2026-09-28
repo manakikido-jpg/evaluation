@@ -116,6 +116,34 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('sharedinvite')
+      .setNameLocalizations({ ja: '共通招待リンク' })
+      .setDescription('Shared invite links for SNS etc.')
+      .setDescriptionLocalizations({ ja: '期限なし・回数なしの共通の招待リンク（SNS・宣伝用。だれの招待にもならない）【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addSubcommand((s) =>
+        s
+          .setName('make')
+          .setNameLocalizations({ ja: '作る' })
+          .setDescription('Make')
+          .setDescriptionLocalizations({ ja: '共通の招待リンクをもらう（同じ名前なら同じリンク）' })
+          .addStringOption((o) =>
+            o.setName('label').setNameLocalizations({ ja: '名前' }).setDescription('label').setDescriptionLocalizations({ ja: 'X 用・ポスター用 など（分けると、どこから何人来たか分かる）' }).setMaxLength(40),
+          ),
+      )
+      .addSubcommand((s) => s.setName('list').setNameLocalizations({ ja: '一覧' }).setDescription('List').setDescriptionLocalizations({ ja: '共通の招待リンクと、使われた回数を見る' }))
+      .addSubcommand((s) =>
+        s
+          .setName('delete')
+          .setNameLocalizations({ ja: '消す' })
+          .setDescription('Delete')
+          .setDescriptionLocalizations({ ja: '共通の招待リンクを使えなくする' })
+          .addStringOption((o) => o.setName('link').setNameLocalizations({ ja: 'リンク' }).setDescription('link').setDescriptionLocalizations({ ja: 'リンクか名前' }).setRequired(true).setMaxLength(200)),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('hajimete')
       .setNameLocalizations({ ja: 'はじめて' })
       .setDescription('Getting started checklist')

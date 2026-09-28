@@ -323,6 +323,13 @@
       "when": 1790614521463,
       "tag": "0045_temp_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790620806990,
+      "tag": "0046_invite_label",
+      "breakpoints": true
     }
   ]
 }

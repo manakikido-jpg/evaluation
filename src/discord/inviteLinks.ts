@@ -3,7 +3,7 @@ import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coreName } from '../lib/names.js';
 import { logger } from '../lib/logger.js';
-import { activeLinkOf, inviteCountOf, matchJoin, recordInvite, saveLink } from '../services/invites.js';
+import { activeLinkOf, inviteCodeOf, inviteCountOf, matchJoin, recordInvite, revokeSharedLink, saveLink, SHARED_INVITER, sharedLinkNamed, sharedLinks } from '../services/invites.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -50,6 +50,8 @@ export class InviteLinkApp {
       const current = await this.current();
       if (!current) return;
       const inviterId = await matchJoin(this.db, current);
+      // 共通の招待リンク（SNS・宣伝用）で入った人は、だれの招待にもしない
+      if (inviterId === SHARED_INVITER) return void logger.info({ memberId: member.id }, 'joined by shared invite link');
       if (inviterId && inviterId !== member.id && (await recordInvite(this.db, member.id, inviterId, 'link'))) {
         logger.info({ memberId: member.id, inviterId }, 'joined by invite link');
       }
@@ -59,9 +61,10 @@ export class InviteLinkApp {
   }
 
   async onInteraction(interaction: Interaction): Promise<void> {
-    if (!interaction.isChatInputCommand() || interaction.commandName !== 'invite') return;
+    if (!interaction.isChatInputCommand() || (interaction.commandName !== 'invite' && interaction.commandName !== 'sharedinvite')) return;
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     try {
+      if (interaction.commandName === 'sharedinvite') return void (await this.shared(interaction));
       await this.link(interaction);
     } catch (err) {
       logger.warn({ err }, 'invite link failed');
@@ -107,6 +110,72 @@ export class InviteLinkApp {
         .join('\n'),
     });
     // コピーしやすいように、リンクだけのメッセージ（本人にだけ見える）
+    await i.followUp({ content: url, ...EPHEMERAL });
+  }
+
+  /** 🔗 /共通招待リンク: 運営が作る、期限なし・回数なしの共通リンク（SNS・ポスター用。だれの招待にもならない） */
+  private async shared(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
+    if (!adminLevelOf(this.cfg(), [...i.member.roles.cache.keys()])) {
+      return void (await i.reply({ content: '神職・宮司だけが使えます。', ...EPHEMERAL }));
+    }
+    this.guild ??= i.guild;
+    const sub = i.options.getSubcommand();
+    await i.deferReply(EPHEMERAL);
+    // 回数の覚え直し（matchJoin）は、入った人を調べる順番（queue）に任せる。ここでは今の回数を見るだけ
+    const current = await this.current();
+    const uses = new Map((current ?? []).map((c) => [c.code, c.uses]));
+    const alive = (code: string) => !current || uses.has(code);
+    const nameOf = (label: string | null) => (label ? `「${label}」` : '（名前なし）');
+
+    if (sub === 'list') {
+      const links = (await sharedLinks(this.db)).filter((l) => alive(l.code));
+      if (!links.length) return void (await i.editReply('共通の招待リンクはまだありません。`/共通招待リンク 作る` で作れます。'));
+      const lines = links.map((l) => `- ${nameOf(l.label)} https://discord.gg/${l.code} … 👥 ${uses.get(l.code) ?? l.uses} 回${l.createdBy ? `・作った人 <@${l.createdBy}>` : ''}`);
+      return void (await i.editReply({
+        content: ['🔗 **共通の招待リンク**（期限なし・回数なし）', ...lines, '-# 回数は、そのリンクから入った人の数です（抜けた人も数えます）'].join('\n').slice(0, 2000),
+        allowedMentions: { parse: [] },
+      }));
+    }
+
+    if (sub === 'delete') {
+      const raw = i.options.getString('link', true).trim();
+      const links = await sharedLinks(this.db);
+      const code = inviteCodeOf(raw);
+      const target = links.find((l) => l.code === code) ?? links.find((l) => (l.label ?? '') === raw.replace(/^「|」$/g, ''));
+      if (!target) return void (await i.editReply(`「${raw}」という共通の招待リンクは見つかりませんでした。\`/共通招待リンク 一覧\` で確かめてください。`));
+      await i.guild.invites.delete(target.code, `共通招待リンクを消す（${i.member.displayName}）`).catch((err: unknown) => {
+        // もう Discord にないなら、記録だけ直せばよい
+        if ((err as { code?: number }).code !== 10006) throw err;
+      });
+      await revokeSharedLink(this.db, target.code);
+      return void (await i.editReply(`🗑 ${nameOf(target.label)} の招待リンク（https://discord.gg/${target.code}）を使えなくしました。`));
+    }
+
+    // make
+    const label = i.options.getString('label')?.trim().slice(0, 40) || null;
+    const ch = this.entrance();
+    if (!ch) return void (await i.editReply('入口のチャンネル（#鳥居）が見つかりません。設定で入口のチャンネルを確かめてください。'));
+    const existing = await sharedLinkNamed(this.db, label);
+    let code = existing && current && uses.has(existing.code) ? existing.code : undefined;
+    const made = !code;
+    if (!code) {
+      const inv = await ch.createInvite({ maxAge: 0, maxUses: 0, unique: true, reason: `共通招待リンク${label ? `「${label}」` : ''}（${i.member.displayName}）` });
+      await saveLink(this.db, { code: inv.code, inviterId: SHARED_INVITER, channelId: ch.id, uses: inv.uses ?? 0, label, createdBy: i.user.id });
+      code = inv.code;
+    }
+    const url = `https://discord.gg/${code}`;
+    await i.editReply({
+      content: [
+        `🔗 **共通の招待リンク** ${nameOf(label)}${made ? '' : '（前に作ったもの）'}`,
+        '```',
+        url,
+        '```',
+        '期限なし・回数なしです。SNS やポスターにそのまま使えます。入った人は #鳥居 に着きます。',
+        '-# このリンクで入った人は、だれの招待にもなりません（招待のお礼は出ません）',
+        `-# 使われた回数: ${uses.get(code) ?? 0} 回・\`/共通招待リンク 一覧\` で全部見る・\`/共通招待リンク 消す\` で使えなくする`,
+        '-# 名前を変えて作ると別のリンクになるので、どこから来た人が多いか分けて数えられます',
+      ].join('\n'),
+    });
     await i.followUp({ content: url, ...EPHEMERAL });
   }
 }

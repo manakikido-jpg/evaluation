@@ -103,6 +103,22 @@ describe('BOT が作る招待リンク', () => {
     expect(await activeLinkOf(db, NEW2)).toBeUndefined();
   });
 
+  it('共通の招待リンク: 名前ごとに 1 つ、消すと一覧から消える、入った人は shared（だれの招待でもない）', async () => {
+    const { saveLink, matchJoin, sharedLinks, sharedLinkNamed, revokeSharedLink, inviteCodeOf, SHARED_INVITER } = await import('../src/services/invites.js');
+    await saveLink(db, { code: 'sns', inviterId: SHARED_INVITER, channelId: '1', uses: 0, label: 'X 用', createdBy: INVITER });
+    await saveLink(db, { code: 'plain', inviterId: SHARED_INVITER, channelId: '1', uses: 0, label: null, createdBy: INVITER });
+    expect((await sharedLinkNamed(db, 'X 用'))?.code).toBe('sns');
+    expect((await sharedLinkNamed(db, null))?.code).toBe('plain');
+    expect(await sharedLinkNamed(db, 'ポスター')).toBeUndefined();
+    expect(await matchJoin(db, [{ code: 'sns', uses: 1 }, { code: 'plain', uses: 0 }])).toBe(SHARED_INVITER);
+    expect(await revokeSharedLink(db, 'sns')).toBe(true);
+    expect(await revokeSharedLink(db, 'sns')).toBe(false);
+    expect((await sharedLinks(db)).map((l) => l.code)).toEqual(['plain']);
+    expect(inviteCodeOf('https://discord.gg/abcDEF')).toBe('abcDEF');
+    expect(inviteCodeOf('discord.com/invite/xyz-1')).toBe('xyz-1');
+    expect(inviteCodeOf(' abc ')).toBe('abc');
+  });
+
   it('リンクで入った記録は、あとで申請で選んだ人より優先（上書きしない）', async () => {
     const { inviteOf } = await import('../src/services/invites.js');
     expect(await recordInvite(db, NEW, INVITER, 'link')).toBe(true);

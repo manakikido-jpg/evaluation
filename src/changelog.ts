@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-shared-invite',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord'],
+    title: '🔗 /共通招待リンク（SNS・宣伝用の、期限なしのリンク）',
+    items: [
+      '運営が `/共通招待リンク 作る` で、期限なし・回数なしの招待リンクをもらえる（入った人は #鳥居 に着く）',
+      '名前（X 用・ポスター用 など）を付けると別のリンクになり、`/共通招待リンク 一覧` でどこから何人来たか分かる',
+      '`/共通招待リンク 消す` で使えなくできる。このリンクで入った人は、だれの招待にもならない（招待のお礼は出ない）',
+    ],
+  },
+  {
     id: '2026-09-29-shop-look',
     date: '2026-09-29',
     kind: 'improve',
