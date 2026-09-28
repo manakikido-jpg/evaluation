@@ -98,6 +98,76 @@ export async function grantRole(
   return { status: 'granted', grant: g! };
 }
 
+// ───────── ふつうのロール（期限なし）: /ロール ─────────
+
+export type RoleChangeResult =
+  | { status: 'given' | 'removed'; madePermanent?: boolean }
+  | { status: 'self' | 'guji_only' | 'locked' | 'already' | 'not_has' | 'rank' | 'not_found' | 'failed' };
+
+export const ROLE_CHANGE_MESSAGES: Record<Exclude<RoleChangeResult['status'], 'given' | 'removed'>, string> = {
+  self: '自分のロールは変えられません。',
+  guji_only: GRANT_MESSAGES.guji_only,
+  locked: GRANT_MESSAGES.locked,
+  already: 'その方はもうこのロールを持っています。',
+  not_has: 'その方はこのロールを持っていません。',
+  rank: 'ご縁で上がる役職のロールは BOT が付け外しするので、ここでは変えられません（任命制の役職なら宮司が付けられます）。',
+  not_found: 'ロールが見つかりませんでした。',
+  failed: 'Discord に反映できませんでした。BOT の「ロールの管理」の権限と、ロールの順番（BOT のロールより下か）を確かめてください。',
+};
+
+/**
+ * ロールをふつうに（期限なしで）付ける・外す。一時ロールと同じ決まり（BOT より上・危ないロール・運営のロールは宮司だけ）。
+ * 一時的に付いていたロールを「付ける」と、期限なしに変える（外さずに、一時の記録だけ終える）。
+ * 一時的に付いていたロールを「外す」と、一時の記録も終える。
+ */
+export async function changeRole(
+  ctx: GrantCtx,
+  opts: { action: 'give' | 'remove'; memberId: string; roleId: string; reason: string; by: string; byLevel: AdminLevel; roles: GuildRole[]; memberRoleIds: readonly string[]; botId?: string; now?: Date; via?: 'web' | 'discord' },
+): Promise<RoleChangeResult> {
+  const now = opts.now ?? new Date();
+  if (opts.memberId === opts.by) return { status: 'self' };
+  const role = opts.roles.find((r) => r.id === opts.roleId);
+  if (!role) return { status: 'not_found' };
+  if (role.id === ctx.cfg.guildId || role.managed || role.position >= botTopPosition(opts.roles, opts.botId)) return { status: 'locked' };
+  if (ctx.cfg.ranks.some((r) => r.auto && r.roleId === role.id)) return { status: 'rank' };
+  const risky = dangerLabels(permsOf(role)).length > 0 || staffRoleIds(ctx.cfg).has(role.id);
+  if (risky && opts.byLevel !== 'guji') return { status: 'guji_only' };
+  const temp = await active(ctx.db, and(eq(tempGrants.kind, 'role'), eq(tempGrants.memberId, opts.memberId), eq(tempGrants.roleId, opts.roleId)));
+  const has = opts.memberRoleIds.includes(opts.roleId);
+  const via = opts.via ?? 'discord';
+  const why = opts.reason ? `（${opts.reason}）` : '';
+  if (opts.action === 'give') {
+    if (has && !temp) return { status: 'already' };
+    if (!has) {
+      try {
+        await ctx.discord.addRole(ctx.cfg.guildId, opts.memberId, opts.roleId, `ロールを付ける: ${opts.reason}`.slice(0, 400));
+      } catch (err) {
+        logger.warn({ err }, 'role add failed');
+        return { status: 'failed' };
+      }
+    }
+    if (temp) await ctx.db.update(tempGrants).set({ endedAt: now, endedBy: opts.by, endReason: 'permanent' }).where(eq(tempGrants.id, temp.id));
+    await audit(ctx.db, { actorId: opts.by, action: 'role.give', targetId: opts.memberId, detail: { roleId: opts.roleId, reason: opts.reason, fromTemp: temp?.id }, via });
+    await log(ctx, `🏷 <@${opts.by}> が <@${opts.memberId}> に <@&${opts.roleId}> を付けました${temp ? '（一時的 → 期限なし）' : ''}${why}`);
+    return { status: 'given', madePermanent: Boolean(temp) };
+  }
+  if (!has) {
+    // Discord ではもう外れているのに、一時の記録だけ残っていたら終える
+    if (temp) await ctx.db.update(tempGrants).set({ endedAt: now, endedBy: opts.by, endReason: 'revoked' }).where(eq(tempGrants.id, temp.id));
+    return { status: 'not_has' };
+  }
+  try {
+    await ctx.discord.removeRole(ctx.cfg.guildId, opts.memberId, opts.roleId, `ロールを外す: ${opts.reason}`.slice(0, 400));
+  } catch (err) {
+    logger.warn({ err }, 'role remove failed');
+    return { status: 'failed' };
+  }
+  if (temp) await ctx.db.update(tempGrants).set({ endedAt: now, endedBy: opts.by, endReason: 'revoked' }).where(eq(tempGrants.id, temp.id));
+  await audit(ctx.db, { actorId: opts.by, action: 'role.remove', targetId: opts.memberId, detail: { roleId: opts.roleId, reason: opts.reason }, via });
+  await log(ctx, `🏷 <@${opts.by}> が <@${opts.memberId}> の <@&${opts.roleId}> を外しました${why}`);
+  return { status: 'removed' };
+}
+
 /** チャンネルの権限を一時的に付ける（その人だけの上書き。同じチャンネルにもう付いていれば、外してから付け直す） */
 export async function grantPerm(
   ctx: GrantCtx,

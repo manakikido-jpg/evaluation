@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-role-command',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord'],
+    title: '🏷 /ロール（期限なしでロールを付ける・外す）',
+    items: [
+      '運営が `/ロール 付ける 相手 ロール` ・ `/ロール 外す 相手 ロール` で、ロールをふつうに付け外しできる（理由も書ける。#記録 に出る）',
+      '決まりは /一時ロール と同じ（BOT より上・危ないロール・運営のロールは宮司だけ）。ご縁で上がる役職のロールは BOT に任せる',
+      '一時的に付いていたロールを /ロール 付ける にすると、外さずに期限なしに変わる',
+    ],
+  },
+  {
     id: '2026-09-29-shared-invite',
     date: '2026-09-29',
     kind: 'new',

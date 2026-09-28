@@ -5,6 +5,7 @@ import type { DiscordActions, GuildChannel, GuildRole } from '../lib/discordRest
 import { logger } from '../lib/logger.js';
 import {
   activeGrants,
+  changeRole,
   durationMinutes,
   endGrant,
   GRANT_MESSAGES,
@@ -14,6 +15,7 @@ import {
   isPermPreset,
   jstShort,
   remaining,
+  ROLE_CHANGE_MESSAGES,
   type GrantResult,
 } from '../services/tempGrants.js';
 
@@ -43,7 +45,7 @@ const channelsOf = (g: Guild): GuildChannel[] =>
         : [],
   }));
 
-/** ⏳ /一時ロール・/一時権限（神職・宮司） */
+/** ⏳ /一時ロール・/一時権限、🏷 /ロール（期限なし）（神職・宮司） */
 export class TempGrantApp {
   constructor(
     private readonly db: Db,
@@ -53,7 +55,7 @@ export class TempGrantApp {
 
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
-    if (!interaction.isChatInputCommand() || (interaction.commandName !== 'temprole' && interaction.commandName !== 'tempperm')) return;
+    if (!interaction.isChatInputCommand() || !['temprole', 'tempperm', 'role'].includes(interaction.commandName)) return;
     try {
       await this.handle(interaction);
     } catch (err) {
@@ -72,6 +74,25 @@ export class TempGrantApp {
     const ctx = { db: this.db, cfg, discord: this.discord };
     const target = i.options.getMember('user') as GuildMember | null;
     const user = i.options.getUser('user', true);
+    if (i.commandName === 'role') {
+      const role = i.options.getRole('role', true);
+      if (!target) return void (await i.editReply(`${user} はこのサーバーにいません。`));
+      const r = await changeRole(ctx, {
+        action: sub === 'remove' ? 'remove' : 'give',
+        memberId: user.id,
+        roleId: role.id,
+        reason: i.options.getString('reason') ?? '',
+        by: i.user.id,
+        byLevel: level,
+        roles: rolesOf(i.guild),
+        memberRoleIds: [...target.roles.cache.keys()],
+        botId: i.client.user.id,
+        via: 'discord',
+      });
+      if (r.status === 'given') return void (await i.editReply(`🏷 ${user} に ${role} を付けました${r.madePermanent ? '（一時的だったのを、期限なしにしました）' : ''}。`));
+      if (r.status === 'removed') return void (await i.editReply(`🏷 ${user} の ${role} を外しました。`));
+      return void (await i.editReply(ROLE_CHANGE_MESSAGES[r.status]));
+    }
     if (i.commandName === 'temprole') {
       const role = i.options.getRole('role', true);
       if (sub === 'remove') {

@@ -281,6 +281,34 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setRequired(true).setMaxLength(300))
       .toJSON(),
     new SlashCommandBuilder()
+      .setName('role')
+      .setNameLocalizations({ ja: 'ロール' })
+      .setDescription('Give or remove a role')
+      .setDescriptionLocalizations({ ja: 'ロールを期限なしで付ける・外す【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addSubcommand((s) =>
+        s
+          .setName('give')
+          .setNameLocalizations({ ja: '付ける' })
+          .setDescription('Give')
+          .setDescriptionLocalizations({ ja: 'ロールを付ける（一時的に付いていたら、期限なしに変える）' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
+          .addRoleOption((o) => o.setName('role').setNameLocalizations({ ja: 'ロール' }).setDescription('role').setRequired(true))
+          .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setMaxLength(200)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('remove')
+          .setNameLocalizations({ ja: '外す' })
+          .setDescription('Remove')
+          .setDescriptionLocalizations({ ja: 'ロールを外す' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
+          .addRoleOption((o) => o.setName('role').setNameLocalizations({ ja: 'ロール' }).setDescription('role').setRequired(true))
+          .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setMaxLength(200)),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
       .setName('temprole')
       .setNameLocalizations({ ja: '一時ロール' })
       .setDescription('Give a role for a limited time')

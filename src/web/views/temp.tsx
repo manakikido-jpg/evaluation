@@ -24,7 +24,7 @@ function Csrf(props: { session: AdminSession }) {
 type Lookup = { member: (id: string) => string; role: (id: string) => string; channel: (id: string) => string };
 
 const what = (g: TempGrant, l: Lookup) => (g.kind === 'role' ? `🎭 ${l.role(g.roleId ?? '')}` : `#${l.channel(g.channelId ?? '')} の ${isPermPreset(g.preset) ? PERM_PRESETS[g.preset].label : g.preset}`);
-const END_LABEL: Record<string, string> = { expired: '⌛ 期限', revoked: '⏹ 手で外した' };
+const END_LABEL: Record<string, string> = { expired: '⌛ 期限', revoked: '⏹ 手で外した', permanent: '♾ 期限なしにした' };
 
 export function TempPage(props: {
   session: AdminSession;

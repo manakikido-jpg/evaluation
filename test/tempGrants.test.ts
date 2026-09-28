@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import type { ChannelOverwrite, DiscordActions, GuildChannel, GuildRole } from '../src/lib/discordRest.js';
-import { activeGrants, endGrant, endedGrants, expireTick, extendGrant, grantPerm, grantRole, remaining } from '../src/services/tempGrants.js';
+import { activeGrants, changeRole, endGrant, endedGrants, expireTick, extendGrant, grantPerm, grantRole, remaining } from '../src/services/tempGrants.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const STAFF = '800000000000000001';
@@ -92,6 +92,38 @@ describe('⏳ 一時的なロール', () => {
     const g = (await activeGrants(db))[0]!;
     const gone = { ...discord, removeRole: async () => Promise.reject(new Error('Discord API 404: Unknown Role')) } as DiscordActions;
     expect(await endGrant({ db, cfg, discord: gone }, g, STAFF, 'revoked', T0)).toBe('ended');
+  });
+});
+
+describe('🏷 /ロール（期限なし）', () => {
+  const base = { memberId: USER, reason: 'お手伝い', by: STAFF, byLevel: 'shinshoku' as const, roles: ROLES, botId: BOT, now: T0 };
+  it('付ける・外す。#記録 に残る。持っている・持っていないは何もしない', async () => {
+    expect((await changeRole(ctx(), { ...base, action: 'give', roleId: '980000000000000001', memberRoleIds: [] })).status).toBe('given');
+    expect(log).toContain(`addRole ${USER} 980000000000000001`);
+    expect(log.some((l) => l.startsWith('send 900000000000000002 🏷') && l.includes('付けました（お手伝い）'))).toBe(true);
+    expect((await changeRole(ctx(), { ...base, action: 'give', roleId: '980000000000000001', memberRoleIds: ['980000000000000001'] })).status).toBe('already');
+    log = [];
+    expect((await changeRole(ctx(), { ...base, action: 'remove', roleId: '980000000000000001', memberRoleIds: ['980000000000000001'] })).status).toBe('removed');
+    expect(log[0]).toBe(`removeRole ${USER} 980000000000000001`);
+    expect((await changeRole(ctx(), { ...base, action: 'remove', roleId: '980000000000000001', memberRoleIds: [] })).status).toBe('not_has');
+    // 一時ロールと同じ決まり・ご縁で上がる役職は BOT に任せる
+    expect((await changeRole(ctx(), { ...base, action: 'give', memberId: STAFF, roleId: '980000000000000001', memberRoleIds: [] })).status).toBe('self');
+    expect((await changeRole(ctx(), { ...base, action: 'give', roleId: '980000000000000010', memberRoleIds: [] })).status).toBe('locked');
+    expect((await changeRole(ctx(), { ...base, action: 'give', roleId: '980000000000000002', memberRoleIds: [] })).status).toBe('guji_only');
+    const auto = cfg.ranks.find((r) => r.auto)!;
+    expect((await changeRole(ctx(), { ...base, action: 'give', byLevel: 'guji', roleId: auto.roleId, roles: [...ROLES, { id: auto.roleId, name: auto.name, position: 1, managed: false, color: 0, permissions: '0' }], memberRoleIds: [] })).status).toBe('rank');
+  });
+
+  it('一時的に付いていたロールを付けると、外さずに期限なしに変わる（期限が来ても外れない）', async () => {
+    await grantRole(ctx(), { ...base, roleId: '980000000000000001', minutes: 60 });
+    log = [];
+    const r = await changeRole(ctx(), { ...base, action: 'give', roleId: '980000000000000001', memberRoleIds: ['980000000000000001'] });
+    expect(r).toEqual({ status: 'given', madePermanent: true });
+    expect(log.filter((l) => l.startsWith('addRole') || l.startsWith('removeRole'))).toEqual([]);
+    expect(await activeGrants(db)).toEqual([]);
+    expect((await endedGrants(db))[0]).toMatchObject({ endReason: 'permanent', endedBy: STAFF });
+    expect(await expireTick(ctx(), new Date(T0.getTime() + 120 * 60_000))).toBe(0);
+    expect(log.filter((l) => l.startsWith('removeRole'))).toEqual([]);
   });
 });
 
