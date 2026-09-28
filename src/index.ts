@@ -17,6 +17,8 @@ import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { GlossaryApp } from './discord/glossary.js';
 import { TempGrantApp } from './discord/tempGrants.js';
+import { MeetingApp } from './discord/meetings.js';
+import { HelpApp } from './discord/help.js';
 import { expireTick } from './services/tempGrants.js';
 import { announceEvents } from './services/economyEvents.js';
 import { interviewTick, loadInterview } from './services/interview.js';
@@ -73,6 +75,8 @@ async function main(): Promise<void> {
   const wallet = new WalletApp(db, cfg);
   const glossary = new GlossaryApp(db, cfg);
   const tempGrants = new TempGrantApp(db, cfg, actions);
+  const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
+  const help = new HelpApp(cfg);
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
@@ -230,6 +234,8 @@ async function main(): Promise<void> {
     void wallet.onInteraction(i);
     void glossary.onInteraction(i);
     void tempGrants.onInteraction(i);
+    void meetingApp.onInteraction(i);
+    void help.onInteraction(i);
     void onboarding.onInteraction(i);
     void inviteLinks.onInteraction(i);
     void bell.onInteraction(i);

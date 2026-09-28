@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-help-minutes-commands',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord'],
+    title: '⌨ /コマンド で使えるコマンドの一覧',
+    items: [
+      '/コマンド で、使えるコマンドの一覧が見られる（「公開」でチャンネルのみんなに見せる）',
+      '運営は /議事録 で、会議の最中に Discord から議事録を書ける（始める・決定・やること・メモ・終わる）',
+    ],
+  },
+  {
     id: '2026-09-29-temp-grants',
     date: '2026-09-29',
     kind: 'new',

@@ -139,6 +139,17 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       )
       .toJSON(),
 
+    new SlashCommandBuilder()
+      .setName('help')
+      .setNameLocalizations({ ja: 'コマンド' })
+      .setDescription('List the commands you can use')
+      .setDescriptionLocalizations({ ja: '使えるコマンドの一覧を見る（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .addBooleanOption((o) =>
+        o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post it so everyone can see').setDescriptionLocalizations({ ja: 'チャンネルのみんなに見せる（だれでも使えるコマンドだけ出す）' }),
+      )
+      .toJSON(),
+
     // ───── 神職用 ─────
     new SlashCommandBuilder()
       .setName('panel')
@@ -313,6 +324,62 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
           .setDescriptionLocalizations({ ja: '一時的に付いているロール・権限の一覧' })
           .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user')),
       )
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('minutes')
+      .setNameLocalizations({ ja: '議事録' })
+      .setDescription('Take meeting minutes')
+      .setDescriptionLocalizations({ ja: '会議の議事録を書く（社務所Web の議事録に入る）【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addSubcommand((s) =>
+        s
+          .setName('start')
+          .setNameLocalizations({ ja: '始める' })
+          .setDescription('Start')
+          .setDescriptionLocalizations({ ja: '議事録を始める（いる通話を場所に、通話の人を参加した人に）' })
+          .addStringOption((o) => o.setName('title').setNameLocalizations({ ja: '題' }).setDescription('title').setRequired(true).setMaxLength(100))
+          .addChannelOption((o) => o.setName('voice').setNameLocalizations({ ja: '通話' }).setDescription('voice').setDescriptionLocalizations({ ja: '省略すると、いま入っている通話' })),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('note')
+          .setNameLocalizations({ ja: 'メモ' })
+          .setDescription('Note')
+          .setDescriptionLocalizations({ ja: '「話したこと」に 1 行足す' })
+          .addStringOption((o) => o.setName('text').setNameLocalizations({ ja: '内容' }).setDescription('text').setRequired(true).setMaxLength(1000)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('decide')
+          .setNameLocalizations({ ja: '決定' })
+          .setDescription('Decision')
+          .setDescriptionLocalizations({ ja: '「決まったこと」に 1 つ足す' })
+          .addStringOption((o) => o.setName('text').setNameLocalizations({ ja: '内容' }).setDescription('text').setRequired(true).setMaxLength(300)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('todo')
+          .setNameLocalizations({ ja: 'やること' })
+          .setDescription('To-do')
+          .setDescriptionLocalizations({ ja: 'やることを 1 つ足す（担当・期限つき）' })
+          .addStringOption((o) => o.setName('text').setNameLocalizations({ ja: '内容' }).setDescription('text').setRequired(true).setMaxLength(200))
+          .addUserOption((o) => o.setName('who').setNameLocalizations({ ja: '担当' }).setDescription('who'))
+          .addStringOption((o) =>
+            o.setName('due').setNameLocalizations({ ja: '期限' }).setDescription('due').setDescriptionLocalizations({ ja: '10/5・明日・3日後 など' }).setMaxLength(20),
+          ),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('end')
+          .setNameLocalizations({ ja: '終わる' })
+          .setDescription('End')
+          .setDescriptionLocalizations({ ja: '議事録を閉じて、まとめをこのチャンネルに出す' })
+          .addBooleanOption((o) =>
+            o.setName('post').setNameLocalizations({ ja: 'まとめを出す' }).setDescription('post summary').setDescriptionLocalizations({ ja: '省略すると出す。出さないときは「いいえ」' }),
+          ),
+      )
+      .addSubcommand((s) => s.setName('now').setNameLocalizations({ ja: '今の' }).setDescription('Show').setDescriptionLocalizations({ ja: 'いま開いている議事録を見る' }))
       .toJSON(),
     new SlashCommandBuilder()
       .setName('memo')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commandList, memberCommandsText } from '../src/services/commandList.js';
+import { commandList, helpEmbeds, memberCommandsText } from '../src/services/commandList.js';
 import { renderNotice } from '../src/services/notices.js';
 import { cfg } from './helpers.js';
 
@@ -26,5 +26,19 @@ describe('⌨ コマンドのまとめ', () => {
     expect(text).not.toContain('`/厄`');
     expect(text).not.toContain('`/パネル`');
     expect(renderNotice('{コマンド一覧}', cfg, []).text).toBe(text);
+  });
+
+  it('/コマンド: メンバーにはだれでも使えるものだけ、運営には運営のものも', () => {
+    const list = commandList();
+    const member = helpEmbeds(list, { staff: false });
+    expect(member.length).toBe(1);
+    expect(member[0]!.description).toContain('`/残高`');
+    expect(member[0]!.description).toContain('`/コマンド`');
+    expect(member[0]!.description).not.toContain('`/議事録`');
+    const staff = helpEmbeds(list, { staff: true });
+    expect(staff.length).toBe(2);
+    expect(staff[1]!.description).toContain('`/議事録`');
+    expect(staff[1]!.description).toContain('始める・メモ・決定・やること・終わる・今の');
+    expect(staff[1]!.description.length).toBeLessThanOrEqual(4000);
   });
 });

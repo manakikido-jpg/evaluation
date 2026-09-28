@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import type { DiscordActions, MessageBody } from '../src/lib/discordRest.js';
 import {
+  addTodo,
+  appendToMeeting,
+  currentMeetingId,
+  parseDue,
+  setCurrentMeeting,
   countOpenTodos,
   createMeeting,
   getMeeting,
@@ -140,5 +145,37 @@ describe('📓 議事録', () => {
     expect((await pickablePeople(db, cfg)).map((p) => p.name)).toEqual(['あおい', 'いろは']);
     // 通話にいた一般の人も選べる（あとに並ぶ）
     expect((await pickablePeople(db, cfg, [C])).map((p) => `${p.name}:${p.staff}`)).toEqual(['あおい:true', 'いろは:true', 'うみ:false']);
+  });
+
+  it('/議事録 から書く: 開いている議事録・メモ・決定・やること（書いた人は参加した人に）', async () => {
+    const m = await createMeeting(db, { ...input(), notes: '', decisions: '', attendees: [A] }, [], A, T0);
+    expect(await currentMeetingId(db)).toBeUndefined();
+    await setCurrentMeeting(db, m.id, A);
+    expect(await currentMeetingId(db)).toBe(m.id);
+    await appendToMeeting(db, m.id, 'notes', 'ハロウィンの話', B);
+    await appendToMeeting(db, m.id, 'notes', '景品の話', A);
+    await appendToMeeting(db, m.id, 'decisions', '10/31 に決定', B);
+    await addTodo(db, m.id, { body: '告知', assigneeId: C, due: '2026-10-05' }, B);
+    const got = (await getMeeting(db, m.id))!;
+    expect(got.meeting.notes).toBe('- ハロウィンの話\n- 景品の話');
+    expect(got.meeting.decisions).toBe('10/31 に決定');
+    expect(got.meeting.attendees).toEqual([A, B]);
+    expect(got.todos.map((t) => [t.body, t.assigneeId, t.due])).toEqual([['告知', C, '2026-10-05']]);
+    await setCurrentMeeting(db, null, A);
+    expect(await currentMeetingId(db)).toBeUndefined();
+  });
+
+  it('期限の書き方', () => {
+    const now = new Date('2026-09-28T12:00:00Z'); // 日本時間 9/28 21:00
+    expect(parseDue('10/5', now)).toBe('2026-10-05');
+    expect(parseDue('１０／５', now)).toBe('2026-10-05');
+    expect(parseDue('10月5日', now)).toBe('2026-10-05');
+    expect(parseDue('2027-01-02', now)).toBe('2027-01-02');
+    expect(parseDue('1/10', now)).toBe('2027-01-10');
+    expect(parseDue('今日', now)).toBe('2026-09-28');
+    expect(parseDue('明日', now)).toBe('2026-09-29');
+    expect(parseDue('3日後', now)).toBe('2026-10-01');
+    expect(parseDue('2/30', now)).toBeUndefined();
+    expect(parseDue('そのうち', now)).toBeUndefined();
   });
 });

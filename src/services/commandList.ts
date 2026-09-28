@@ -64,3 +64,24 @@ export function memberCommandsText(list: CommandInfo[] = commandList()): string 
     .map((c) => (c.kind === 'menu' ? `- **${c.name}** … ${c.description}` : `- \`/${c.name}\` … ${c.description}`))
     .join('\n');
 }
+
+/** Discord の /コマンド: カードで出す（運営には運営のコマンドも） */
+export function helpEmbeds(list: CommandInfo[], opts: { staff: boolean }): { title: string; description: string; color: number }[] {
+  const line = (c: CommandInfo) => {
+    if (c.kind === 'menu') return `- **🖱 ${c.name}** … ${c.description}`;
+    const subs = c.subcommands.length ? `\n  -# ${c.subcommands.map((s) => s.name).join('・')}` : '';
+    return `- \`/${c.name}\` … ${c.description}${subs}`;
+  };
+  const members = list.filter((c) => !c.staff);
+  const out = [
+    {
+      title: '⌨ だれでも使えるコマンド',
+      description: [...members.map(line), '', '-# `/` を打つと出てきます。名前を右クリック（スマホは長押し）→「アプリ」からも使えます'].join('\n').slice(0, 4000),
+      color: 0xd7003a,
+    },
+  ];
+  if (opts.staff) {
+    out.push({ title: '🛡 運営のコマンド（神職・宮司）', description: list.filter((c) => c.staff).map(line).join('\n').slice(0, 4000), color: 0x8a6d3b });
+  }
+  return out;
+}

@@ -241,3 +241,73 @@ export async function postSummary(ctx: { db: Db; discord: DiscordActions }, id: 
   await audit(ctx.db, { actorId: by, action: 'meeting.post', detail: { id, channelId, result }, via: 'web' });
   return result;
 }
+
+// ───────── Discord の /議事録 から書く（いま開いている会議は 1 つ） ─────────
+
+const CURRENT_KEY = 'meeting_current';
+
+export async function currentMeetingId(db: Db): Promise<number | undefined> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, CURRENT_KEY));
+  const id = (row?.value as { id?: unknown } | undefined)?.id;
+  return typeof id === 'number' ? id : undefined;
+}
+
+export async function setCurrentMeeting(db: Db, id: number | null, by: string): Promise<void> {
+  const value = { id };
+  await db
+    .insert(settings)
+    .values({ key: CURRENT_KEY, value, updatedBy: by })
+    .onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+}
+
+/** 話したこと・決まったことに 1 行足す（書いた人は参加した人に入れる） */
+export async function appendToMeeting(db: Db, id: number, field: 'notes' | 'decisions', line: string, by: string, now = new Date()): Promise<boolean> {
+  const found = await getMeeting(db, id);
+  if (!found) return false;
+  const m = found.meeting;
+  const text = field === 'notes' ? `- ${line}` : line;
+  const next = m[field].trim() ? `${m[field].replace(/\s+$/, '')}\n${text}` : text;
+  await db
+    .update(meetings)
+    .set({ [field]: next.slice(0, field === 'notes' ? 20000 : 4000), attendees: m.attendees.includes(by) ? m.attendees : [...m.attendees, by], updatedBy: by, updatedAt: now })
+    .where(eq(meetings.id, id));
+  return true;
+}
+
+/** やることを 1 つ足す */
+export async function addTodo(db: Db, id: number, todo: { body: string; assigneeId: string | null; due: string | null }, by: string, now = new Date()): Promise<MeetingTodo | undefined> {
+  const found = await getMeeting(db, id);
+  if (!found) return undefined;
+  const [t] = await db
+    .insert(meetingTodos)
+    .values({ meetingId: id, body: todo.body.slice(0, 200), assigneeId: todo.assigneeId, due: todo.due, position: found.todos.length })
+    .returning();
+  await db.update(meetings).set({ updatedBy: by, updatedAt: now }).where(eq(meetings.id, id));
+  return t;
+}
+
+/** 期限の書き方: 10/5・2026-10-05・2026/10/5・今日・明日・あさって・3日後。読めなければ undefined */
+export function parseDue(v: string, now = new Date()): string | undefined {
+  const s = v.normalize('NFKC').trim();
+  const today = new Date(now.getTime() + 9 * 3_600_000);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const plus = (days: number) => iso(new Date(today.getTime() + days * 86_400_000));
+  if (s === '今日') return plus(0);
+  if (s === '明日') return plus(1);
+  if (s === 'あさって' || s === '明後日') return plus(2);
+  const after = /^(\d{1,3})日後$/.exec(s);
+  if (after) return plus(Number(after[1]));
+  const full = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(s);
+  const short = /^(\d{1,2})[/月](\d{1,2})日?$/.exec(s);
+  let y: number, mo: number, d: number;
+  if (full) [y, mo, d] = [Number(full[1]), Number(full[2]), Number(full[3])];
+  else if (short) {
+    [mo, d] = [Number(short[1]), Number(short[2])];
+    y = today.getUTCFullYear();
+    // 2 か月より前の日付なら来年のこと
+    if (Date.UTC(y, mo - 1, d) < today.getTime() - 60 * 86_400_000) y++;
+  } else return undefined;
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return undefined;
+  return iso(date);
+}
