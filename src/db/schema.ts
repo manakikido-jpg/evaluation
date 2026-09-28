@@ -1025,3 +1025,32 @@ export const meetingTodos = pgTable(
 );
 
 export type MeetingTodo = typeof meetingTodos.$inferSelect;
+
+/** ⏳ 一時的なロール・チャンネルの権限（期限が来たら BOT が外す） */
+export const tempGrants = pgTable(
+  'temp_grants',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** role = ロールを付ける / perm = チャンネルの権限（その人だけの上書き） */
+    kind: text('kind').$type<'role' | 'perm'>().notNull(),
+    memberId: text('member_id').notNull(),
+    roleId: text('role_id'),
+    channelId: text('channel_id'),
+    /** perm のとき: 何の権限か（write・view・speak・manage・mute） */
+    preset: text('preset'),
+    /** perm のとき: 付ける前のその人だけの上書き（なければ null。外すときに戻す） */
+    prevAllow: text('prev_allow'),
+    prevDeny: text('prev_deny'),
+    reason: text('reason').notNull().default(''),
+    grantedBy: text('granted_by').notNull(),
+    grantedAt: timestamp('granted_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** 終わった日時と、だれが・なぜ（expired 期限 / revoked 手で外した / failed 外せなかった） */
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    endedBy: text('ended_by'),
+    endReason: text('end_reason'),
+  },
+  (t) => [index('temp_grants_active_idx').on(t.endedAt, t.expiresAt), index('temp_grants_member_idx').on(t.memberId)],
+);
+
+export type TempGrant = typeof tempGrants.$inferSelect;

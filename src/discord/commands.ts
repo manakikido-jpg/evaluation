@@ -8,7 +8,10 @@ import {
 } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import { COMMAND } from './ids.js';
+import { DURATIONS, PERM_PRESETS } from '../services/tempGrantPresets.js';
 
+const durationChoices = DURATIONS.map(([value, name]) => ({ name, value }));
+const presetChoices = Object.entries(PERM_PRESETS).map(([value, p]) => ({ name: p.label, value }));
 const choices = (list: string[]) => list.slice(0, 25).map((r) => ({ name: r.slice(0, 100), value: r.slice(0, 100) }));
 
 /** サーバーに登録するコマンド一覧 */
@@ -237,6 +240,79 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setDefaultMemberPermissions(staff)
       .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
       .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setRequired(true).setMaxLength(300))
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('temprole')
+      .setNameLocalizations({ ja: '一時ロール' })
+      .setDescription('Give a role for a limited time')
+      .setDescriptionLocalizations({ ja: 'ロールを期限つきで付ける（期限が来たら BOT が外す）【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addSubcommand((s) =>
+        s
+          .setName('give')
+          .setNameLocalizations({ ja: '付ける' })
+          .setDescription('Give')
+          .setDescriptionLocalizations({ ja: 'ロールを期限つきで付ける（もう付いていれば期限を付け直す）' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
+          .addRoleOption((o) => o.setName('role').setNameLocalizations({ ja: 'ロール' }).setDescription('role').setRequired(true))
+          .addStringOption((o) => o.setName('for').setNameLocalizations({ ja: '期間' }).setDescription('how long').setRequired(true).addChoices(...durationChoices))
+          .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setMaxLength(200)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('remove')
+          .setNameLocalizations({ ja: '外す' })
+          .setDescription('Remove now')
+          .setDescriptionLocalizations({ ja: '一時的に付けたロールを今すぐ外す' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
+          .addRoleOption((o) => o.setName('role').setNameLocalizations({ ja: 'ロール' }).setDescription('role').setRequired(true)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('list')
+          .setNameLocalizations({ ja: '一覧' })
+          .setDescription('List')
+          .setDescriptionLocalizations({ ja: '一時的に付いているロール・権限の一覧' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user')),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('tempperm')
+      .setNameLocalizations({ ja: '一時権限' })
+      .setDescription('Give channel permission for a limited time')
+      .setDescriptionLocalizations({ ja: 'チャンネルの権限を期限つきで付ける・止める（期限が来たら元に戻す）【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addSubcommand((s) =>
+        s
+          .setName('give')
+          .setNameLocalizations({ ja: '付ける' })
+          .setDescription('Give')
+          .setDescriptionLocalizations({ ja: 'このチャンネル（か選んだチャンネル）の権限を期限つきで付ける・止める' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
+          .addStringOption((o) => o.setName('perm').setNameLocalizations({ ja: '権限' }).setDescription('what').setRequired(true).addChoices(...presetChoices))
+          .addStringOption((o) => o.setName('for').setNameLocalizations({ ja: '期間' }).setDescription('how long').setRequired(true).addChoices(...durationChoices))
+          .addChannelOption((o) => o.setName('channel').setNameLocalizations({ ja: 'チャンネル' }).setDescription('channel (default: here)').setDescriptionLocalizations({ ja: '省略するとこのチャンネル' }))
+          .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setMaxLength(200)),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('remove')
+          .setNameLocalizations({ ja: '外す' })
+          .setDescription('Remove now')
+          .setDescriptionLocalizations({ ja: '一時的な権限を今すぐ元に戻す' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setRequired(true))
+          .addChannelOption((o) => o.setName('channel').setNameLocalizations({ ja: 'チャンネル' }).setDescription('channel (default: here)').setDescriptionLocalizations({ ja: '省略するとこのチャンネル' })),
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('list')
+          .setNameLocalizations({ ja: '一覧' })
+          .setDescription('List')
+          .setDescriptionLocalizations({ ja: '一時的に付いているロール・権限の一覧' })
+          .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user')),
+      )
       .toJSON(),
     new SlashCommandBuilder()
       .setName('memo')

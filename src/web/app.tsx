@@ -138,6 +138,9 @@ import {
 import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
 import { MeetingEditPage, MeetingViewPage, MinutesPage } from './views/minutes.js';
+import { TempPage } from './views/temp.js';
+import { activeGrants, activeMemberNames, durationMinutes, endGrant, endedGrants, extendGrant, findActiveMember, getGrant, grantPerm, grantRole, isPermPreset, memberRoleIdsOf } from '../services/tempGrants.js';
+import { staffRoleIds } from '../services/meetings.js';
 import {
   countOpenTodos,
   createMeeting,
@@ -165,7 +168,7 @@ import { RolePage, RolesPage } from './views/roles.js';
 import { MarketPage } from './views/market.js';
 import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
 import { listingCard } from '../discord/market.js';
-import { ADMINISTRATOR, botTopPosition, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
+import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
   channelsInUse,
   cleanChannelName,
@@ -389,6 +392,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/glossary', requireAdmin);
   app.use('/commands', requireAdmin);
   app.use('/minutes', requireAdmin);
+  app.use('/temp', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -396,7 +400,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -740,6 +744,88 @@ export function createWebApp(deps: WebDeps) {
     if (id) await toggleTodo(db, id, c.get('session').userId, now());
     const back = typeof body.back === 'string' ? /^meeting:(\d+)$/.exec(body.back) : null;
     return c.redirect(back ? `/minutes/${back[1]}?msg=toggled` : '/minutes?msg=toggled');
+  });
+
+  // ───────── ⏳ 一時的なロール・権限（神職・宮司。危ないロールは宮司だけ） ─────────
+
+  const tempCtx = () => ({ db, cfg, discord: deps.discord });
+
+  app.get('/temp', async (c) => {
+    const [active, ended, channels, roles] = await Promise.all([activeGrants(db), endedGrants(db, 50), loadChannels().catch(() => [] as GuildChannel[]), loadRoles()]);
+    const all = [...active, ...ended];
+    const names = await namesOf(db, [...all.map((g) => g.memberId), ...all.map((g) => g.grantedBy)]);
+    const roleName = new Map((roles ?? []).map((r) => [r.id, r.name]));
+    const chName = new Map(channels.map((ch) => [ch.id, ch.name]));
+    const top = botTopPosition(roles ?? [], deps.botId);
+    const staff = staffRoleIds(cfg);
+    const pickRoles = (roles ?? [])
+      .filter((r) => r.id !== cfg.guildId && !r.managed && r.position < top)
+      .map((r) => ({ id: r.id, name: r.name, guji: dangerLabels(permsOf(r)).length > 0 || staff.has(r.id) }));
+    const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch]));
+    const catPos = (ch: GuildChannel) => (ch.parent_id ? (cats.get(ch.parent_id)?.position ?? 0) + 1 : 0);
+    const pickChannels = channels
+      .filter((ch) => ch.type !== 4)
+      .sort((a, b) => catPos(a) - catPos(b) || Number(a.type === 2 || a.type === 13) - Number(b.type === 2 || b.type === 13) || a.position - b.position)
+      .map((ch) => ({ id: ch.id, name: ch.name, category: ch.parent_id ? (cats.get(ch.parent_id)?.name ?? null) : null, voice: ch.type === 2 || ch.type === 13 }));
+    const members = await activeMemberNames(db);
+    const prefill = c.req.query('member');
+    return c.html(
+      <TempPage
+        session={c.get('session')}
+        active={active}
+        ended={ended}
+        lookup={{ member: (id) => names.get(id) ?? id, role: (id) => roleName.get(id) ?? '（消えたロール）', channel: (id) => chName.get(id) ?? '（消えたチャンネル）' }}
+        roles={pickRoles}
+        channels={pickChannels}
+        members={members}
+        prefillMember={prefill ? (members.find((m) => m.id === prefill)?.name ?? prefill) : undefined}
+        flash={c.req.query('msg')}
+        now={now()}
+      />,
+    );
+  });
+
+  app.post('/temp', async (c) => {
+    const body = await c.req.parseBody();
+    const s = c.get('session');
+    const minutes = durationMinutes(body.for);
+    if (!minutes || typeof body.member !== 'string') return c.redirect('/temp?msg=invalid#temp-give');
+    const memberId = await findActiveMember(db, body.member);
+    if (!memberId) return c.redirect('/temp?msg=no_member#temp-give');
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 200) : '';
+    let status: string;
+    if (body.kind === 'perm') {
+      if (typeof body.channelId !== 'string' || !isPermPreset(body.preset)) return c.redirect('/temp?msg=invalid#temp-give');
+      const channels = await loadChannels(true).catch(() => [] as GuildChannel[]);
+      status = (await grantPerm(tempCtx(), { memberId, channelId: body.channelId, preset: body.preset, minutes, reason, by: s.userId, byLevel: s.level === 'guji' ? 'guji' : 'shinshoku', channels, now: now() })).status;
+    } else {
+      if (typeof body.roleId !== 'string' || !body.roleId) return c.redirect('/temp?msg=invalid#temp-give');
+      const roles = (await loadRoles()) ?? [];
+      status = (await grantRole(tempCtx(), { memberId, roleId: body.roleId, minutes, reason, by: s.userId, byLevel: s.level === 'guji' ? 'guji' : 'shinshoku', roles, memberRoleIds: await memberRoleIdsOf(db, memberId), botId: deps.botId, now: now() })).status;
+    }
+    return c.redirect(`/temp?msg=${status}${status === 'granted' || status === 'extended' ? '' : '#temp-give'}`);
+  });
+
+  const grantId = (c: Context<Env>) => {
+    const id = Number(c.req.param('id'));
+    return Number.isInteger(id) && id > 0 ? id : undefined;
+  };
+
+  app.post('/temp/:id/extend', async (c) => {
+    const id = grantId(c);
+    const body = await c.req.parseBody();
+    const minutes = durationMinutes(body.for);
+    if (!id || !minutes) return c.redirect('/temp');
+    const ok = await extendGrant(tempCtx(), id, minutes, c.get('session').userId);
+    return c.redirect(`/temp?msg=${ok ? 'extended' : 'ended_already'}`);
+  });
+
+  app.post('/temp/:id/revoke', async (c) => {
+    const id = grantId(c);
+    const g = id ? await getGrant(db, id) : undefined;
+    if (!g || g.endedAt) return c.redirect('/temp?msg=ended_already');
+    const r = await endGrant(tempCtx(), g, c.get('session').userId, 'revoked', now());
+    return c.redirect(`/temp?msg=${r === 'ended' ? 'revoked' : 'failed'}`);
   });
 
   // ───────── ⌨ コマンドのまとめ（見るのはだれでも・掲示を作るのは宮司） ─────────

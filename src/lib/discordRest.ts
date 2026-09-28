@@ -24,6 +24,8 @@ export interface DiscordActions {
   editChannel(channelId: string, body: { topic?: string; name?: string; nsfw?: boolean; user_limit?: number }): Promise<void>;
   /** チャンネルの権限の上書きを 1 つ書き換える（書き込める・読むだけの切り替え） */
   setChannelOverwrite(channelId: string, overwrite: ChannelOverwrite, reason: string): Promise<void>;
+  /** その人・ロールだけの上書きを消す（なければ、許可も禁止もない上書きにする） */
+  deleteChannelOverwrite?(channelId: string, targetId: string, reason: string): Promise<void>;
   /** チャンネル・カテゴリを作る（管理画面のチャンネル） */
   createChannel(guildId: string, body: CreateChannelInput, reason: string): Promise<GuildChannel>;
   /** 並び順・カテゴリを変える（lock_permissions: 移した先のカテゴリの権限に合わせる） */
@@ -198,6 +200,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
     createChannel: async (g, body, reason) => (await call('POST', `/guilds/${g}/channels`, { reason, body })) as GuildChannel,
     deleteChannel: async (c, reason) => void (await call('DELETE', `/channels/${c}`, { reason })),
     reorderChannels: async (g, list, reason) => void (await call('PATCH', `/guilds/${g}/channels`, { reason, body: list })),
+    deleteChannelOverwrite: async (c, target, reason) => void (await call('DELETE', `/channels/${c}/permissions/${target}`, { reason })),
     setChannelOverwrite: async (c, o, reason) =>
       void (await call('PUT', `/channels/${c}/permissions/${o.id}`, { reason, body: { type: o.type, allow: o.allow, deny: o.deny } })),
   };

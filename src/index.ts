@@ -16,6 +16,8 @@ import { GachaApp } from './discord/gacha.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { GlossaryApp } from './discord/glossary.js';
+import { TempGrantApp } from './discord/tempGrants.js';
+import { expireTick } from './services/tempGrants.js';
 import { announceEvents } from './services/economyEvents.js';
 import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
@@ -70,6 +72,7 @@ async function main(): Promise<void> {
   const gacha = new GachaApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
   const glossary = new GlossaryApp(db, cfg);
+  const tempGrants = new TempGrantApp(db, cfg, actions);
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
@@ -142,6 +145,8 @@ async function main(): Promise<void> {
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
+      // ⏳ 一時的なロール・権限: 期限が来たものを外す
+      void expireTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'temp grant expire failed'));
       // 面談告知: 予約した告知と、1 時間前・10 分前のリマインドを流す
       void loadInterview(db)
         .then((st) => interviewTick({ db, discord: actions }, st))
@@ -224,6 +229,7 @@ async function main(): Promise<void> {
     void gacha.onInteraction(i);
     void wallet.onInteraction(i);
     void glossary.onInteraction(i);
+    void tempGrants.onInteraction(i);
     void onboarding.onInteraction(i);
     void inviteLinks.onInteraction(i);
     void bell.onInteraction(i);

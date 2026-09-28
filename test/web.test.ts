@@ -833,6 +833,40 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect((await get('/minutes/99999', g)).status).toBe(404);
   });
 
+  it('⏳ 一時的な権限: 社務所Web から付ける・のばす・外す。危ないロールは宮司だけ', async () => {
+    const { activeGrants } = await import('../src/services/tempGrants.js');
+    roleList = [
+      { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: '0' },
+      { id: '980000000000000001', name: 'イベント係', position: 2, managed: false, color: 0, permissions: '0' },
+      { id: '980000000000000002', name: 'BAN できる', position: 3, managed: false, color: 0, permissions: String(1n << 2n) },
+      { id: '980000000000000009', name: 'BOT', position: 10, managed: true, color: 0, permissions: '8', tags: { bot_id: '990000000000000001' } },
+    ];
+    try {
+      const s = await login(STAFF);
+      const page = await (await get('/temp', s)).text();
+      expect(page).toContain('いま一時的に付いているものはありません');
+      expect(page).toContain('<option value="980000000000000002" disabled="">BAN できる（宮司だけ）</option>');
+      const csrf = await csrfOf(s);
+      expect((await post('/temp', s, { _csrf: csrf, member: 'だれでもない', kind: 'role', roleId: '980000000000000001', for: '1h' })).headers.get('location')).toBe('/temp?msg=no_member#temp-give');
+      expect((await post('/temp', s, { _csrf: csrf, member: USER, kind: 'role', roleId: '980000000000000002', for: '1h' })).headers.get('location')).toBe('/temp?msg=guji_only#temp-give');
+      expect((await post('/temp', s, { _csrf: csrf, member: USER, kind: 'role', roleId: '980000000000000001', for: '1h', reason: '手伝い' })).headers.get('location')).toBe('/temp?msg=granted');
+      expect(actions).toContain(`addRole ${USER} 980000000000000001`);
+      expect((await post('/temp', s, { _csrf: csrf, member: USER, kind: 'perm', channelId: '910000000000000003', preset: 'mute', for: '10m' })).headers.get('location')).toBe('/temp?msg=granted');
+      expect(actions.some((a) => a.startsWith(`overwrite 910000000000000003 ${USER}`))).toBe(true);
+      const list = await (await get('/temp', s)).text();
+      expect(list).toContain('イベント係');
+      expect(list).toContain('#しきたり の 🔇 書き込み禁止');
+      const [first] = await activeGrants(db);
+      expect((await post(`/temp/${first!.id}/extend`, s, { _csrf: csrf, for: '1d' })).headers.get('location')).toBe('/temp?msg=extended');
+      expect((await post(`/temp/${first!.id}/revoke`, s, { _csrf: csrf })).headers.get('location')).toBe('/temp?msg=revoked');
+      expect((await post(`/temp/${first!.id}/revoke`, s, { _csrf: csrf })).headers.get('location')).toBe('/temp?msg=ended_already');
+      expect((await activeGrants(db)).length).toBe(1);
+      expect(await (await get('/temp', s)).text()).toContain('⏹ 手で外した');
+    } finally {
+      roleList = [];
+    }
+  });
+
   it('年齢区分の変更は宮司だけ', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/age`, s, { _csrf: await csrfOf(s), age: 'adult' });

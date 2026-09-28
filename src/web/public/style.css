@@ -688,3 +688,12 @@ table.todo-edit input[type=text] { width: 100%; min-width: 220px; }
 ul.decisions { margin: 0; padding-left: 1.2em; }
 ul.decisions li { margin: 4px 0; }
 @media (max-width: 900px) { .meeting-view { grid-template-columns: 1fr; } }
+
+/* ───────── ⏳ 一時的な権限 ───────── */
+.temp-row .ch-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.temp-give { display: grid; gap: 14px; }
+.temp-give h2 { margin: 0; }
+.temp-give:has(input[name=kind][value=role]:checked) .only-perm,
+.temp-give:has(input[name=kind][value=perm]:checked) .only-role { display: none; }
+.only-perm { display: grid; gap: 12px; }
+@media (max-width: 700px) { .temp-row { flex-wrap: wrap; } .temp-row .ch-actions { width: 100%; justify-content: flex-start; } }

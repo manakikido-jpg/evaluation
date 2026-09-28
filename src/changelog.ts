@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-temp-grants',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '⏳ 一時的なロール・権限',
+    items: [
+      '/一時ロール でロールを期限つきで付けられる。期限が来たら BOT が外す',
+      '/一時権限 で、チャンネルごとに「書き込める・見られる・話せる・メッセージの管理・書き込み禁止」を期限つきで付けられる。外すときは元に戻す',
+      '社務所Web の「一時的な権限」で、いま付いているものを見て、のばす・今すぐ外す・付けるができる',
+    ],
+  },
+  {
     id: '2026-09-29-minutes',
     date: '2026-09-29',
     kind: 'new',
