@@ -302,6 +302,17 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       )
       .toJSON(),
     new SlashCommandBuilder()
+      .setName('roomadmin')
+      .setNameLocalizations({ ja: '部屋の設定' })
+      .setDescription('Open any room settings (staff)')
+      .setDescriptionLocalizations({ ja: 'だれの部屋でも設定を開く（シークレット・ツーショットなど見えない部屋も）【神職】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addStringOption((o) =>
+        o.setName('room').setNameLocalizations({ ja: '部屋' }).setDescription('room').setDescriptionLocalizations({ ja: '部屋の名前か、部屋主の名前で探す' }).setRequired(true).setAutocomplete(true),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
       .setName('role')
       .setNameLocalizations({ ja: 'ロール' })
       .setDescription('Give or remove a role')

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-room-staff',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🛡 運営がだれの部屋でも設定を変えられるように',
+    items: [
+      '神職・宮司も「⚙ 部屋の設定」を使える（名前・人数・入室許可・譲渡・種類）',
+      '運営は、部屋の種類が決まったあとでも公開・招待限定・シークレット・ツーショットに変えられる（差額は取らない）',
+      '見えない部屋（シークレットなど）は `/部屋の設定` で部屋を探して、どこからでも開ける',
+    ],
+  },
+  {
     id: '2026-09-29-otoshidama-mycolor',
     date: '2026-09-29',
     kind: 'new',

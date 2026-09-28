@@ -195,6 +195,15 @@ export async function changeRoomKind(
   });
 }
 
+/** 運営（神職・宮司）が種類を変える: 決まっていても変えられ、部屋代の差額は取らない */
+export async function staffSetRoomKind(db: Db, channelId: string, kind: RoomKind): Promise<RoomRow | undefined> {
+  return db.transaction(async (tx) => {
+    await lockRoom(tx, channelId);
+    const [row] = await tx.update(tempVoice).set({ kind, kindLocked: true }).where(eq(tempVoice.channelId, channelId)).returning();
+    return row;
+  });
+}
+
 export async function addInvites(db: Db, channelId: string, ids: string[]): Promise<RoomRow | undefined> {
   const [row] = await db.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
   if (!row) return undefined;

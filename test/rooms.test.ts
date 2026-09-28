@@ -110,6 +110,17 @@ describe('部屋の種類と見える範囲', () => {
     // 縁側などは種類を出さない
     expect(JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: ENGAWA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }))).not.toContain('room:kind');
   });
+
+  it('運営として開く: 決まっていても種類を変えられる。/部屋の設定 から開くと、ボタンに部屋の ID が付く', () => {
+    const ROOM = '930000000000000077';
+    const staff = JSON.stringify(
+      roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'secret', kindLocked: true, invited: [] }, { name: 'x', userLimit: 0 }, undefined, { staff: true, at: ROOM }),
+    );
+    expect(staff).toContain('運営として開いています');
+    expect(staff).toContain(`room:kind|${ROOM}`);
+    expect(staff).toContain(`room:name|${ROOM}`);
+    expect(staff).toContain('部屋の種類を変える（運営）');
+  });
 });
 
 describe('支払い', () => {
@@ -123,6 +134,19 @@ describe('支払い', () => {
     expect(await changeRoomKind(db, cfg, ROOM, 'twoshot')).toEqual({ status: 'locked' });
     expect((await walletOf(db, OWNER)).balance).toBe(700);
     expect(await roomOf(db, ROOM)).toMatchObject({ kind: 'secret', kindLocked: true });
+  });
+
+  it('運営は決まったあとでも種類を変えられる（差額は取らない）', async () => {
+    const { staffSetRoomKind } = await import('../src/services/rooms.js');
+    await addCoins(db, OWNER, 1000, 'adjust');
+    await open(NEOCHI);
+    await startRoom(db, cfg, ROOM, T0);
+    await changeRoomKind(db, cfg, ROOM, 'public');
+    const before = (await walletOf(db, OWNER)).balance;
+    expect(await staffSetRoomKind(db, ROOM, 'twoshot')).toMatchObject({ kind: 'twoshot', kindLocked: true });
+    expect(await staffSetRoomKind(db, ROOM, 'secret')).toMatchObject({ kind: 'secret' });
+    expect((await walletOf(db, OWNER)).balance).toBe(before);
+    expect(await staffSetRoomKind(db, '930000000000009999', 'secret')).toBeUndefined();
   });
 
   it('公開のまま「公開」を選んでも決定になる（あとから非公開にできない）', async () => {
