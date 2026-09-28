@@ -516,6 +516,13 @@ body.with-side > main { grid-area: main; width: 100%; }
 .side-nav { display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 16px; }
 .nav-group { display: flex; flex-direction: column; gap: 1px; }
 .nav-title { font-size: .72rem; font-weight: 600; color: var(--muted); padding: 0 10px 2px; letter-spacing: .04em; }
+/* 折りたためる見出し（押すと開け閉め） */
+details.nav-group > summary.nav-title { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; border-radius: 6px; padding: 3px 10px; user-select: none; }
+details.nav-group > summary.nav-title::-webkit-details-marker { display: none; }
+details.nav-group > summary.nav-title::after { content: '▾'; font-size: .8rem; }
+details.nav-group:not([open]) > summary.nav-title::after { content: '▸'; }
+details.nav-group > summary.nav-title:hover { background: var(--bg); color: var(--ink); }
+.nav-items { display: flex; flex-direction: column; gap: 1px; }
 .side-nav a { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 8px; color: var(--ink); font-size: .92rem; }
 .side-nav a:hover { background: var(--bg); text-decoration: none; }
 .side-nav a.on { background: var(--sakura); color: var(--shu-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--shu); }

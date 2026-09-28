@@ -25,3 +25,32 @@
     if (!wide()) toggle.checked = false;
   });
 })();
+
+// 左のメニューの仲間（見る・メンバー対応 など）は見出しで折りたためる。閉じた仲間を覚える（今いるページの仲間は開く）
+document.addEventListener('DOMContentLoaded', () => {
+  const KEY = 'nav-closed';
+  let closed = [];
+  try {
+    closed = JSON.parse(localStorage.getItem(KEY) || '[]');
+    if (!Array.isArray(closed)) closed = [];
+  } catch {
+    closed = [];
+  }
+  const groups = document.querySelectorAll('details.nav-group[data-group]');
+  groups.forEach((d) => {
+    if (!(d instanceof HTMLDetailsElement)) return;
+    const name = d.dataset.group || '';
+    if (closed.includes(name) && !d.querySelector('a.on')) d.open = false;
+    d.addEventListener('toggle', () => {
+      const set = new Set(closed);
+      if (d.open) set.delete(name);
+      else set.add(name);
+      closed = [...set];
+      try {
+        localStorage.setItem(KEY, JSON.stringify(closed));
+      } catch {
+        // 覚えられなくても動く
+      }
+    });
+  });
+});

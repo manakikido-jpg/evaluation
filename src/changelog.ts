@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-nav-fold',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '📂 左のメニューを折りたためるように',
+    items: ['見出し（見る・メンバー対応・お金と品物・Discord の設定）を押すと、その仲間を折りたためる。閉じたかは覚えておき、今いるページの仲間は開いて出る'],
+  },
+  {
     id: '2026-09-29-mention-ranks',
     date: '2026-09-29',
     kind: 'improve',

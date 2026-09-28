@@ -127,18 +127,21 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                 {NAV_GROUPS.map((g) => {
                   const items = g.items.filter((i) => !i.gujiOnly || session.level === 'guji');
                   if (!items.length) return null;
+                  // 見出しを押すと折りたためる（閉じたかは menu.js が覚える。今いるページの仲間は開いておく）
                   return (
-                    <div class="nav-group">
-                      <div class="nav-title">{g.title}</div>
-                      {items.map((i) => (
-                        <a href={i.href} class={nav === i.key ? 'on' : ''} aria-current={nav === i.key ? 'page' : undefined}>
-                          <span class="nav-icon" aria-hidden="true">
-                            {i.icon}
-                          </span>
-                          {i.label}
-                        </a>
-                      ))}
-                    </div>
+                    <details class="nav-group" open data-group={g.title}>
+                      <summary class="nav-title">{g.title}</summary>
+                      <div class="nav-items">
+                        {items.map((i) => (
+                          <a href={i.href} class={nav === i.key ? 'on' : ''} aria-current={nav === i.key ? 'page' : undefined}>
+                            <span class="nav-icon" aria-hidden="true">
+                              {i.icon}
+                            </span>
+                            {i.label}
+                          </a>
+                        ))}
+                      </div>
+                    </details>
                   );
                 })}
                 <div class="nav-group">
