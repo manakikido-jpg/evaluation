@@ -218,6 +218,13 @@ export function renderNotice(body: string, cfg: GuildConfig, channels: GuildChan
   const vars = new Map(noticeVariables(cfg).map((v) => [v.name, v.value]));
   // 前の名前（通貨が花びらだったころの掲示・標準の文面）
   vars.set('おみくじの花びら', vars.get('おみくじの銭')!);
+  // 役職の前の名前（社務所Web で名前を変えた役職）
+  for (const r of cfg.ranks) {
+    for (const old of r.formerNames ?? []) {
+      if (r.auto && !vars.has(`${old}のご縁`)) vars.set(`${old}のご縁`, String(r.requiredGoen));
+      if (!vars.has(`${old}の格`)) vars.set(`${old}の格`, String(r.weight));
+    }
+  }
   const unknown = new Set<string>();
   const text = body.replace(/\{(#?)([^{}\n]{1,40})\}/g, (whole, hash: string, rawName: string) => {
     const name = rawName.trim();

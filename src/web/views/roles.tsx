@@ -77,7 +77,7 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
         </div>
       </form>
       <p>
-        <a href="#new-role">➕ ロールを作る</a>
+        <a href="#new-role">➕ ロールを作る</a> ・ <a href="/ranks">⛩ 役職（参拝者〜宮司）の名前・ロール・格を変える →</a>
       </p>
       <form method="post" action="/roles/invites-bot-only" class="card">
         <input type="hidden" name="_csrf" value={props.session.csrfToken} />

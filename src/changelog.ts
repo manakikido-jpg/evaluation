@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-ranks-page',
+    date: '2026-09-28',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '⛩ 役職を社務所Web で変えられるように',
+    items: [
+      '役職（参拝者〜宮司）の名前・絵文字・Discord のロール・朱印の格・昇格に必要なご縁を「役職」のページで変えられる（設定・ロールのページから開く）',
+      '役職を足す・消す（足したものだけ）。先に Discord のロールを作って選ぶ',
+      '名前を変えても、掲示の {前の名前のご縁} などはそのまま使える',
+    ],
+  },
+  {
     id: '2026-09-28-glossary-places',
     date: '2026-09-28',
     kind: 'fix',

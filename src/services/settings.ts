@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, economyOpsSchema, guildConfigSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
+import { coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -34,13 +34,25 @@ export const overridesSchema = z.object({
     })
     .partial()
     .default({}),
-  /** 役職キーごとの格・昇格ライン */
+  /** 役職キーごとの格・昇格ライン・名前・絵文字・ロール（役職のページで変える） */
   ranks: z
     .record(
       z.string(),
-      z.object({ weight: z.number().int().positive().max(100), requiredGoen: z.number().int().min(0).max(1_000_000) }).partial(),
+      z
+        .object({
+          weight: z.number().int().positive().max(100),
+          requiredGoen: z.number().int().min(0).max(1_000_000),
+          name: z.string().trim().min(1).max(20),
+          emoji: z.string().max(16),
+          roleId: z.string().regex(/^\d{17,20}$/),
+          /** 前の名前（掲示の {前の名前のご縁} なども使えるように） */
+          formerNames: z.array(z.string()).max(20),
+        })
+        .partial(),
     )
     .default({}),
+  /** 社務所Web で足した役職 */
+  extraRanks: z.array(rankSchema.extend({ weight: z.number().int().positive().max(100), name: z.string().trim().min(1).max(20) })).max(20).default([]),
   omairi: z.object({ days: z.number().int().positive().max(365), extendDays: z.number().int().min(0).max(365) }).partial().default({}),
   coreTime: coreTimeSchema.partial().default({}),
   rooms: roomsSchema.partial().default({}),
@@ -105,10 +117,23 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       return merged;
     })(),
     applications: { ...base.applications, ...o.applications },
-    ranks: base.ranks.map((r) => {
-      const x = o.ranks[r.key] ?? {};
-      return { ...r, ...(x.weight !== undefined ? { weight: x.weight } : {}), ...(r.auto && x.requiredGoen !== undefined ? { requiredGoen: x.requiredGoen } : {}) };
-    }),
+    ranks: [
+      ...base.ranks.map((r) => {
+        const x = o.ranks[r.key] ?? {};
+        const name = x.name ?? r.name;
+        return {
+          ...r,
+          name,
+          ...(name !== r.name ? { formerNames: [...new Set([...(r.formerNames ?? []), ...(x.formerNames ?? []), r.name])].filter((n) => n !== name) } : {}),
+          ...(x.emoji !== undefined ? { emoji: x.emoji } : {}),
+          ...(x.roleId !== undefined ? { roleId: x.roleId } : {}),
+          ...(x.weight !== undefined ? { weight: x.weight } : {}),
+          ...(r.auto && x.requiredGoen !== undefined ? { requiredGoen: x.requiredGoen } : {}),
+        };
+      }),
+      // ファイルの役職と同じキーのものは使わない
+      ...o.extraRanks.filter((e) => !base.ranks.some((b) => b.key === e.key)),
+    ],
   });
 }
 

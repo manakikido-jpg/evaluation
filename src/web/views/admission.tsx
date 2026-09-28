@@ -822,49 +822,20 @@ export function SettingsPage(props: {
         </section>
         <section class="card anchor" id="sec-ranks">
           <h2>役職（朱印の格・昇格ライン）</h2>
-          <table class="compact">
-            <thead>
-              <tr>
-                <th>役職</th>
-                <th>朱印の格</th>
-                <th>昇格に必要なご縁</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...cfg.ranks]
-                .sort((a, b) => b.weight - a.weight)
-                .map((r) => {
-                  const fr = fileCfg.ranks.find((x) => x.key === r.key);
-                  return (
-                    <tr>
-                      <td>
-                        {r.emoji} {r.name}
-                      </td>
-                      <td>
-                        <input type="number" name={`rank.${r.key}.weight`} value={String(r.weight)} min={1} required />
-                        {fr && fr.weight !== r.weight && <small> ファイル: {fr.weight}</small>}
-                      </td>
-                      <td>
-                        {r.key === firstAutoKey ? (
-                          <>
-                            入鯖時
-                            <input type="hidden" name={`rank.${r.key}.requiredGoen`} value="0" />
-                          </>
-                        ) : r.auto ? (
-                          <>
-                            <input type="number" name={`rank.${r.key}.requiredGoen`} value={String(r.requiredGoen)} min={0} required />
-                            {fr && fr.requiredGoen !== r.requiredGoen && <small> ファイル: {fr.requiredGoen}</small>}
-                          </>
-                        ) : (
-                          '任命制'
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-          <Save at="ranks" />
+          <ul>
+            {[...cfg.ranks]
+              .sort((x, y) => y.weight - x.weight)
+              .map((r) => (
+                <li>
+                  {r.emoji} {r.name} … {!r.auto ? '任命制' : r.key === firstAutoKey ? '入鯖時' : `ご縁 ${r.requiredGoen}`} ・ 格 {r.weight}
+                </li>
+              ))}
+          </ul>
+          <p>
+            <a class="button-link" href="/ranks">
+              役職のページで変える（名前・絵文字・ロール・格・昇格ライン・役職を足す）→
+            </a>
+          </p>
         </section>
         <section class="card anchor" id="sec-join">
           <h2>入鯖申請・お参り期間</h2>
@@ -929,7 +900,7 @@ export function SettingsPage(props: {
       <form method="post" action="/settings/reset">
         <Csrf session={props.session} />
         <button type="submit" class="link">
-          すべてファイルの値に戻す
+          すべてファイルの値に戻す（役職のページで変えたものは残ります）
         </button>
       </form>
     </Layout>

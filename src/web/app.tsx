@@ -136,6 +136,7 @@ import {
 } from '../services/glossary.js';
 import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
+import { ADMIN_RANK_KEYS, RanksPage } from './views/ranks.js';
 import { syncOmamoriMentionable } from '../services/recruit.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
@@ -367,10 +368,11 @@ export function createWebApp(deps: WebDeps) {
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
+  app.use('/ranks', requireAdmin);
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -1121,6 +1123,7 @@ export function createWebApp(deps: WebDeps) {
     const num = (k: string) => Number(typeof body[k] === 'string' ? body[k] : NaN);
     // チェックボックスの ID（いくつでも）
     const ids = (k: string) => (body[k] === undefined ? [] : Array.isArray(body[k]) ? body[k] : [body[k]]).filter((v): v is string => typeof v === 'string' && validId(v));
+    const prev = await loadOverrides(db);
     const raw = {
       economy: {
         currencyName: field(body, 'currencyName', 20),
@@ -1179,9 +1182,12 @@ export function createWebApp(deps: WebDeps) {
           }
         : {}),
       // 物御籤は「物御籤」のページで変える（ここでは今の値を残す）
-      gacha: (await loadOverrides(db)).gacha,
+      gacha: prev.gacha,
       // 経済の見守りの設定は経済のページで変える（ここでは残す）
-      economyOps: (await loadOverrides(db)).economyOps,
+      economyOps: prev.economyOps,
+      // 役職は役職のページで変える（ここでは残す）
+      ranks: prev.ranks,
+      extraRanks: prev.extraRanks,
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'
         ? {
@@ -1206,9 +1212,6 @@ export function createWebApp(deps: WebDeps) {
         announceText: longText(body.boostAnnounce),
         dmText: longText(body.boostDm),
       },
-      ranks: Object.fromEntries(
-        cfg.ranks.map((r) => [r.key, { weight: num(`rank.${r.key}.weight`), ...(r.auto ? { requiredGoen: num(`rank.${r.key}.requiredGoen`) } : {}) }]),
-      ),
       omairi: { days: num('omairiDays'), extendDays: num('omairiExtendDays') },
       applications: { autoApproveAccountDays: num('autoApproveAccountDays'), kickOnReject: body.kickOnReject === 'yes' },
     };
@@ -1269,9 +1272,12 @@ export function createWebApp(deps: WebDeps) {
   app.post('/settings/reset', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const before = cfg;
-    await saveOverrides(db, overridesSchema.parse({}), c.get('session').userId);
+    // 役職は役職のページで変えるので残す
+    const { ranks, extraRanks } = await loadOverrides(db);
+    const reset = overridesSchema.parse({ ranks, extraRanks });
+    await saveOverrides(db, reset, c.get('session').userId);
     await deps.onSettingsSaved?.();
-    await syncPostedNotices({ db, cfg: applyOverrides(fileCfg(), overridesSchema.parse({})), discord: deps.discord }, before);
+    await syncPostedNotices({ db, cfg: applyOverrides(fileCfg(), reset), discord: deps.discord }, before);
     await audit(db, { actorId: c.get('session').userId, action: 'settings.reset', via: 'web' });
     return c.redirect('/settings?msg=saved');
   });
@@ -2105,6 +2111,113 @@ export function createWebApp(deps: WebDeps) {
     return back('saved');
   });
 
+  // ───────── 役職（宮司のみ）: 名前・絵文字・ロール・格・昇格ライン・足す・消す ─────────
+
+  app.use('/ranks', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+  app.use('/ranks/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
+
+  /** 役職に選べるロール（@everyone・BOT などの自動のロールは除く） */
+  const rankRoles = async () => (await loadRoles())?.filter((r) => r.id !== cfg.guildId && !r.managed);
+
+  app.get('/ranks', async (c) => {
+    const [roles, { counts }] = await Promise.all([rankRoles(), roleMemberCounts(db)]);
+    return c.html(<RanksPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} roles={roles} counts={counts} flash={c.req.query('msg')} />);
+  });
+
+  /** 役職の上書きを保存して、BOT・掲示に反映する */
+  const saveRanks = async (c: Context<Env>, next: Overrides, action: string): Promise<string | undefined> => {
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse(next);
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return undefined;
+    }
+    const before = cfg;
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    const after = applyOverrides(fileCfg(), overrides);
+    const noticesUpdated = await syncPostedNotices({ db, cfg: after, discord: deps.discord }, before);
+    await audit(db, { actorId: c.get('session').userId, action, detail: { ranks: rankDiff(before, after) }, via: 'web' });
+    return noticesUpdated > 0 ? 'saved_notices' : 'saved';
+  };
+
+  app.post('/ranks', async (c) => {
+    const body = await c.req.parseBody();
+    const prev = await loadOverrides(db);
+    const roles = await rankRoles();
+    const num = (k: string) => Number(typeof body[k] === 'string' ? body[k] : NaN);
+    const roleOf = (k: string, current: string) => {
+      const v = body[k];
+      if (typeof v !== 'string' || !v) return current;
+      // 読めないときは変えない。選べないロールは NaN 扱い（保存しない）
+      if (!roles) return current;
+      return roles.some((r) => r.id === v) ? v : 'invalid';
+    };
+    const file = fileCfg();
+    const ranks: Overrides['ranks'] = {};
+    const extraRanks: Overrides['extraRanks'] = [];
+    for (const r of cfg.ranks) {
+      const k = `rank.${r.key}`;
+      const name = field(body, `${k}.name`, 20);
+      const emoji = typeof body[`${k}.emoji`] === 'string' ? (body[`${k}.emoji`] as string).trim().slice(0, 16) : r.emoji;
+      const fr = file.ranks.find((x) => x.key === r.key);
+      if (fr) {
+        const roleId = ADMIN_RANK_KEYS.includes(r.key) ? fr.roleId : roleOf(`${k}.roleId`, r.roleId);
+        ranks[r.key] = {
+          weight: num(`${k}.weight`),
+          ...(r.auto ? { requiredGoen: num(`${k}.requiredGoen`) } : {}),
+          // ファイルと同じなら持たない（ファイルを直したときにそちらが効くように）
+          ...(name !== fr.name ? { name, formerNames: [...new Set([...(prev.ranks[r.key]?.formerNames ?? []), ...(name !== r.name ? [r.name] : [])])].slice(-20) } : {}),
+          ...(emoji !== fr.emoji ? { emoji } : {}),
+          ...(roleId !== fr.roleId ? { roleId } : {}),
+        };
+      } else {
+        const auto = body[`${k}.kind`] !== 'appointed';
+        extraRanks.push({
+          key: r.key,
+          name,
+          emoji,
+          roleId: roleOf(`${k}.roleId`, r.roleId),
+          weight: num(`${k}.weight`),
+          auto,
+          requiredGoen: auto ? num(`${k}.requiredGoen`) : 0,
+          formerNames: name && name !== r.name ? [...new Set([...(r.formerNames ?? []), r.name])].slice(-20) : r.formerNames,
+        });
+      }
+    }
+    const msg = await saveRanks(c, { ...prev, ranks, extraRanks }, 'ranks.update');
+    return c.redirect(`/ranks?msg=${msg ?? 'invalid'}`);
+  });
+
+  app.post('/ranks/new', async (c) => {
+    const body = await c.req.parseBody();
+    const roles = await rankRoles();
+    if (!roles) return c.redirect('/ranks?msg=no_roles');
+    const roleId = typeof body.roleId === 'string' && roles.some((r) => r.id === body.roleId) ? body.roleId : '';
+    const auto = body.kind !== 'appointed';
+    const prev = await loadOverrides(db);
+    const rank = {
+      key: `r${Date.now().toString(36)}`,
+      name: field(body, 'name', 20),
+      emoji: typeof body.emoji === 'string' ? body.emoji.trim().slice(0, 16) : '',
+      roleId,
+      weight: Number(body.weight),
+      auto,
+      requiredGoen: auto ? Number(body.requiredGoen) : 0,
+    };
+    const msg = await saveRanks(c, { ...prev, extraRanks: [...prev.extraRanks, rank] }, 'ranks.create');
+    return c.redirect(msg ? '/ranks?msg=added' : '/ranks?msg=invalid#rank-add');
+  });
+
+  app.post('/ranks/:key/delete', async (c) => {
+    const key = c.req.param('key');
+    const prev = await loadOverrides(db);
+    if (!prev.extraRanks.some((r) => r.key === key)) return c.redirect('/ranks?msg=locked');
+    const msg = await saveRanks(c, { ...prev, extraRanks: prev.extraRanks.filter((r) => r.key !== key) }, 'ranks.delete');
+    return c.redirect(`/ranks?msg=${msg ? 'deleted' : 'invalid'}`);
+  });
+
   // ───────── 市場（神職・宮司）: 問題ありの取引・出品の取り下げ ─────────
 
   // ───────── 面談告知 ─────────
@@ -2876,11 +2989,16 @@ function diff<T extends Record<string, unknown>>(a: T, b: T): Record<string, [un
 
 function rankDiff(a: GuildConfig, b: GuildConfig): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  const keys = ['name', 'emoji', 'roleId', 'weight', 'requiredGoen', 'auto'] as const;
   for (const r of b.ranks) {
     const old = a.ranks.find((x) => x.key === r.key);
-    if (old && (old.weight !== r.weight || old.requiredGoen !== r.requiredGoen)) {
-      out[r.key] = { weight: [old.weight, r.weight], requiredGoen: [old.requiredGoen, r.requiredGoen] };
+    if (!old) {
+      out[r.key] = { added: { name: r.name, roleId: r.roleId, weight: r.weight, auto: r.auto, requiredGoen: r.requiredGoen } };
+      continue;
     }
+    const changed = Object.fromEntries(keys.filter((k) => old[k] !== r[k]).map((k) => [k, [old[k], r[k]]]));
+    if (Object.keys(changed).length) out[r.key] = changed;
   }
+  for (const r of a.ranks) if (!b.ranks.some((x) => x.key === r.key)) out[r.key] = { removed: r.name };
   return out;
 }

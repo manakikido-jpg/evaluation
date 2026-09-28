@@ -16,6 +16,8 @@ export const rankSchema = z.object({
   auto: z.boolean(),
   /** 自動昇格に必要なご縁（auto の役職のみ） */
   requiredGoen: z.number().int().min(0).default(0),
+  /** 前の名前（社務所Web で名前を変えたとき。掲示の {前の名前のご縁} なども使えるように） */
+  formerNames: z.array(z.string()).optional(),
 });
 
 export type Rank = z.infer<typeof rankSchema>;

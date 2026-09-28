@@ -631,14 +631,86 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(back).toContain('id="sec-rooms"');
     expect(back.match(/設定を保存しました/g)?.length).toBe(2);
 
-    // おかしな値（昇格ラインが重複）は保存しない
-    const bad = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'rank.ujiko.requiredGoen': '100' });
-    expect(bad.headers.get('location')).toBe('/settings?msg=settings_invalid');
+    // 役職は役職のページで変える（設定の保存では変わらない）
+    const ignored = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'rank.ujiko.requiredGoen': '100' });
+    expect(ignored.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.ranks.find((r) => r.key === 'ujiko')?.requiredGoen).toBe(20);
+    expect(await (await get('/settings', g)).text()).toContain('href="/ranks"');
 
     const reset = await post('/settings/reset', g, { _csrf: await csrfOf(g) });
     expect(reset.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.economy.menzaifuPrice).toBe(300);
+  });
+
+  it('役職: 宮司だけ。名前・絵文字・ロール・格・昇格ラインを変える・足す・消す', async () => {
+    const { ROLE } = await import('./helpers.js');
+    const { renderNotice } = await import('../src/services/notices.js');
+    const s = await login(STAFF);
+    expect((await get('/ranks', s)).status).toBe(403);
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    roleList = [
+      { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0 },
+      ...Object.entries(ROLE).map(([k, id], i) => ({ id, name: k, position: i + 1, managed: false, color: 0 })),
+      { id: '980000000000000010', name: '新しい氏子', position: 20, managed: false, color: 0 },
+      { id: '980000000000000011', name: '巫女', position: 21, managed: false, color: 0 },
+      { id: '980000000000000012', name: 'BOT', position: 22, managed: true, color: 0 },
+    ];
+    try {
+      const g = await login(GUJI);
+      const page = await (await get('/ranks', g)).text();
+      expect(page).toContain('action="/ranks/new"');
+      expect(page).toContain('name="rank.ujiko.roleId"');
+      // 管理画面に入れるかを決める役職のロールは、ここでは変えない
+      expect(page).not.toContain('name="rank.guji.roleId"');
+      expect(page).not.toContain('>BOT<');
+      const form = async (patch: Record<string, string> = {}) => {
+        const f: Record<string, string> = { _csrf: await csrfOf(g) };
+        for (const r of store.current.ranks) {
+          f[`rank.${r.key}.name`] = r.name;
+          f[`rank.${r.key}.emoji`] = r.emoji;
+          f[`rank.${r.key}.weight`] = String(r.weight);
+          f[`rank.${r.key}.roleId`] = r.roleId;
+          if (r.auto) f[`rank.${r.key}.requiredGoen`] = String(r.requiredGoen);
+          if (!cfg.ranks.some((x) => x.key === r.key)) f[`rank.${r.key}.kind`] = r.auto ? 'auto' : 'appointed';
+        }
+        return { ...f, ...patch };
+      };
+      const saved = await post('/ranks', g, await form({ 'rank.ujiko.name': '氏子さん', 'rank.ujiko.emoji': '🌿', 'rank.ujiko.roleId': '980000000000000010', 'rank.ujiko.weight': '3', 'rank.guji.roleId': '980000000000000011' }));
+      expect(saved.headers.get('location')).toBe('/ranks?msg=saved');
+      const ujiko = store.current.ranks.find((r) => r.key === 'ujiko')!;
+      expect(ujiko).toMatchObject({ name: '氏子さん', emoji: '🌿', roleId: '980000000000000010', weight: 3, formerNames: ['氏子'] });
+      expect(store.current.ranks.find((r) => r.key === 'guji')?.roleId).toBe(ROLE.guji);
+      // 掲示の {氏子のご縁} は前の名前でも使える
+      expect(renderNotice('{氏子のご縁} {氏子さんのご縁}', store.current, []).text).toBe('20 20');
+      expect((await listAudit(db, { action: 'ranks.update' }))[0]?.detail).toMatchObject({ ranks: { ujiko: { name: ['氏子', '氏子さん'] } } });
+
+      // 昇格ラインが重なる・選べないロール・名前が空は保存しない
+      const bads: Record<string, string>[] = [{ 'rank.ujiko.requiredGoen': '100' }, { 'rank.ujiko.roleId': '980000000000000012' }, { 'rank.sodai.name': '' }];
+      for (const bad of bads) {
+        expect((await post('/ranks', g, await form(bad))).headers.get('location')).toBe('/ranks?msg=invalid');
+      }
+      expect(store.current.ranks.find((r) => r.key === 'ujiko')?.requiredGoen).toBe(20);
+
+      // 足す（ご縁が同じ役職があると足せない）
+      const add = async (b: Record<string, string>) => post('/ranks/new', g, { _csrf: await csrfOf(g), ...b });
+      expect((await add({ name: '巫女', roleId: '980000000000000011', kind: 'auto', requiredGoen: '20', weight: '5' })).headers.get('location')).toContain('msg=invalid');
+      expect((await add({ name: '巫女', emoji: '🎀', roleId: '980000000000000011', kind: 'auto', requiredGoen: '500', weight: '5' })).headers.get('location')).toBe('/ranks?msg=added');
+      const miko = store.current.ranks.find((r) => r.name === '巫女')!;
+      expect(miko).toMatchObject({ emoji: '🎀', roleId: '980000000000000011', auto: true, requiredGoen: 500, weight: 5 });
+      // 足した役職は、なり方も変えられる
+      expect((await post('/ranks', g, await form({ [`rank.${miko.key}.kind`]: 'appointed' }))).headers.get('location')).toBe('/ranks?msg=saved');
+      expect(store.current.ranks.find((r) => r.key === miko.key)?.auto).toBe(false);
+
+      // 消せるのは足した役職だけ
+      expect((await post('/ranks/ujiko/delete', g, { _csrf: await csrfOf(g) })).headers.get('location')).toBe('/ranks?msg=locked');
+      expect((await post(`/ranks/${miko.key}/delete`, g, { _csrf: await csrfOf(g) })).headers.get('location')).toBe('/ranks?msg=deleted');
+      expect(store.current.ranks.some((r) => r.key === miko.key)).toBe(false);
+      expect(store.current.ranks.length).toBe(cfg.ranks.length);
+    } finally {
+      roleList = [];
+    }
   });
 
   it('年齢区分の変更は宮司だけ', async () => {
