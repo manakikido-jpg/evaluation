@@ -8,6 +8,8 @@ import { commandDefinitions } from '../discord/commands.js';
 
 export type CommandOptionInfo = { name: string; description: string; required: boolean };
 export type CommandInfo = {
+  /** 登録している名前（英語。どのコマンドかの目印） */
+  key: string;
   /** 日本語の名前（/ は付けない） */
   name: string;
   description: string;
@@ -47,6 +49,7 @@ export function commandList(defs: RESTPostAPIApplicationCommandsJSONBody[] = com
     const menu = raw.type === 2 || raw.type === 3;
     const subs = (raw.options ?? []).filter((o) => o.type === 1);
     return {
+      key: raw.name,
       name: ja(raw.name, raw.name_localizations),
       description: menu ? '名前を右クリック（スマホは長押し）→「アプリ」から使う' : cleanDesc(jaDesc(raw.description_localizations) || raw.description || ''),
       staff: raw.default_member_permissions !== undefined && raw.default_member_permissions !== null,
@@ -65,23 +68,50 @@ export function memberCommandsText(list: CommandInfo[] = commandList()): string 
     .join('\n');
 }
 
-/** Discord の /コマンド: カードで出す（運営には運営のコマンドも） */
-export function helpEmbeds(list: CommandInfo[], opts: { staff: boolean }): { title: string; description: string; color: number }[] {
+/** だれに出すか: all = 入ったばかりの人にも / member = 入鯖が承認された人（役職あり） / yakudoshi = 厄が付いている人 / staff = 神職・宮司 */
+export type Audience = 'all' | 'member' | 'yakudoshi' | 'staff';
+
+/** コマンドの名前（英語）→ だれに出すか。書いていないものは member */
+const AUDIENCE: Record<string, Audience> = {
+  help: 'all',
+  goshuin: 'all',
+  yougo: 'all',
+  hajimete: 'all',
+  soudan: 'all',
+  bell: 'all',
+  menzaifu: 'yakudoshi',
+};
+
+export function audienceOf(c: Pick<CommandInfo, 'staff' | 'kind'> & { key: string }): Audience {
+  if (c.staff) return 'staff';
+  if (c.kind === 'menu') return 'all';
+  return AUDIENCE[c.key] ?? 'member';
+}
+
+/** 見る人のようす（ロールから） */
+export type Viewer = { member: boolean; yakudoshi: boolean; staff: boolean; rankLabel?: string };
+
+export const canSee = (a: Audience, v: Viewer) => a === 'all' || (a === 'member' && (v.member || v.staff)) || (a === 'yakudoshi' && v.yakudoshi) || (a === 'staff' && v.staff);
+
+/** Discord の /コマンド: その人のロールに合うものだけ、カードで出す */
+export function helpEmbeds(list: CommandInfo[], viewer: Viewer): { title: string; description: string; color: number }[] {
   const line = (c: CommandInfo) => {
     if (c.kind === 'menu') return `- **🖱 ${c.name}** … ${c.description}`;
     const subs = c.subcommands.length ? `\n  -# ${c.subcommands.map((s) => s.name).join('・')}` : '';
     return `- \`/${c.name}\` … ${c.description}${subs}`;
   };
-  const members = list.filter((c) => !c.staff);
+  const seen = list.filter((c) => canSee(audienceOf(c), viewer));
+  const everyone = seen.filter((c) => audienceOf(c) !== 'staff');
+  const head = viewer.rankLabel ? `-# あなた: ${viewer.rankLabel}${viewer.yakudoshi ? '・👹 厄年' : ''}` : '';
+  const foot = viewer.member || viewer.staff ? '-# `/` を打つと出てきます。名前を右クリック（スマホは長押し）→「アプリ」からも使えます' : '-# 入鯖が承認されると、使えるコマンドが増えます';
   const out = [
     {
-      title: '⌨ だれでも使えるコマンド',
-      description: [...members.map(line), '', '-# `/` を打つと出てきます。名前を右クリック（スマホは長押し）→「アプリ」からも使えます'].join('\n').slice(0, 4000),
+      title: '⌨ あなたが使えるコマンド',
+      description: [head, ...everyone.map(line), '', foot].filter((l, i) => l || i > 0).join('\n').slice(0, 4000),
       color: 0xd7003a,
     },
   ];
-  if (opts.staff) {
-    out.push({ title: '🛡 運営のコマンド（神職・宮司）', description: list.filter((c) => c.staff).map(line).join('\n').slice(0, 4000), color: 0x8a6d3b });
-  }
+  const staff = seen.filter((c) => audienceOf(c) === 'staff');
+  if (staff.length) out.push({ title: '🛡 運営のコマンド（神職・宮司）', description: staff.map(line).join('\n').slice(0, 4000), color: 0x8a6d3b });
   return out;
 }

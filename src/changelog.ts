@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-help-by-role',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '⌨ /コマンド は自分のロールに合うものだけ',
+    items: [
+      '入鯖が承認される前は、はじめに使うものだけ。承認されたら残高・物御籤なども出る',
+      '/免罪符 は厄年のときだけ、運営のコマンドは神職・宮司だけに出る。いちばん上に今の役職が出る',
+    ],
+  },
+  {
     id: '2026-09-29-help-minutes-commands',
     date: '2026-09-29',
     kind: 'new',

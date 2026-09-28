@@ -1,5 +1,7 @@
 import type { AdminSession } from '../../db/schema.js';
-import type { CommandInfo, CommandOptionInfo } from '../../services/commandList.js';
+import { audienceOf, type Audience, type CommandInfo, type CommandOptionInfo } from '../../services/commandList.js';
+
+const AUDIENCE_TAG: Record<Audience, string> = { all: '入ったばかりの人にも', member: '承認された人', yakudoshi: '👹 厄年の人だけ', staff: '運営' };
 import { Layout } from './layout.js';
 
 export const COMMANDS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
@@ -29,7 +31,9 @@ function CommandRows(props: { list: CommandInfo[] }) {
         <li class="ch-row cmd-row">
           <code class="cmd-name">{c.kind === 'menu' ? `🖱 ${c.name}` : `/${c.name}`}</code>
           <div class="ch-main">
-            <div>{c.description}</div>
+            <div>
+              {c.description} <span class={`tag ${audienceOf(c) === 'all' ? 'green' : 'gray'}`}>{AUDIENCE_TAG[audienceOf(c)]}</span>
+            </div>
             <Options options={c.options} />
             {c.subcommands.length > 0 && (
               <ul class="cmd-subs">
@@ -63,7 +67,7 @@ export function CommandsPage(props: { session: AdminSession; list: CommandInfo[]
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
         Discord で BOT に使えるコマンドの一覧です（BOT に登録しているものをそのまま出しているので、コマンドが増えるとここにも増えます）。Discord で <code>/</code> を打つと出てきます。
-        赤い印は、入れないと使えない項目です。
+        赤い印は、入れないと使えない項目です。Discord の <code>/コマンド</code> では、その人のロールに合うもの（右の印）だけが出ます。
       </p>
 
       <section class="card ch-group">
