@@ -9,12 +9,13 @@ export const OWNER_ALLOW = PermissionFlagsBits.ViewChannel | PermissionFlagsBits
 
 export function discordVoiceOps(guild: Guild): VoiceOps {
   return {
-    async create({ hubId, name, ownerId }) {
+    async create({ hubId, name, ownerId, fromHub }) {
       const hub = guild.channels.cache.get(hubId);
       const parent = hub && 'parent' in hub ? hub.parent : null;
-      // カテゴリと同じ見える範囲（宵宮なら宵参りの人だけ）にして、作った人の権限を足す
-      const overwrites = parent
-        ? parent.permissionOverwrites.cache.map((o) => ({ id: o.id, type: o.type, allow: o.allow.bitfield, deny: o.deny.bitfield }))
+      // カテゴリと同じ見える範囲（宵宮なら宵参りの人だけ）にして、作った人の権限を足す。💎 極は入口と同じ（VIP だけ）
+      const source = fromHub && hub && 'permissionOverwrites' in hub ? hub : parent;
+      const overwrites = source
+        ? source.permissionOverwrites.cache.map((o) => ({ id: o.id, type: o.type, allow: o.allow.bitfield, deny: o.deny.bitfield }))
         : [];
       const mine = overwrites.find((o) => o.id === ownerId);
       if (mine) mine.allow |= OWNER_ALLOW;

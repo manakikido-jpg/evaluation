@@ -29,20 +29,21 @@ export function priceText(item: ShopItem, e: EconomyConfig, booster = false): st
 /** カード（Discord の embed の形） */
 export type ShopEmbed = { title: string; description?: string; color: number; fields?: { name: string; value: string; inline?: boolean }[] };
 
-export type ShopCategory = 'color' | 'title' | 'gift' | 'fun' | 'menzaifu' | 'other';
+export type ShopCategory = 'color' | 'title' | 'vip' | 'gift' | 'fun' | 'menzaifu' | 'other';
 
 export const SHOP_CATEGORIES: Record<ShopCategory, { title: string; note: string; color: number; pick: string }> = {
   color: { title: '🎨 色守り', note: '名前の色が変わります（1 人 1 色。買い替えると前の色は外れます）', color: 0xe86a92, pick: '🎨 色守りを選ぶ' },
   title: { title: '🏷 称号', note: 'プロフィール（御朱印帳）に称号が付きます', color: 0xd4a017, pick: '🏷 称号を選ぶ' },
+  vip: { title: '💎 極（遊郭の VIP）', note: '宵参りの方だけ。遊郭の「💎 極の部屋」をひらける・入れる', color: 0xe6b422, pick: '💎 極の VIP を選ぶ' },
   gift: { title: '🎁 贈る', note: 'ほかの人に贈ります', color: 0xf4a7b9, pick: '🎁 贈るものを選ぶ' },
   fun: { title: '🎐 おみくじ・絵馬', note: 'おみくじをもう 1 回・自己紹介のピン留め', color: 0x5b8def, pick: '🎐 おみくじ・絵馬を選ぶ' },
   menzaifu: { title: '🧾 厄払い', note: '厄を 1 つ祓います', color: 0x7a6d71, pick: '🧾 免罪符を選ぶ' },
   other: { title: '✨ そのほか', note: '', color: SHU, pick: '✨ そのほかを選ぶ' },
 };
-const ORDER: ShopCategory[] = ['color', 'title', 'gift', 'fun', 'menzaifu', 'other'];
+const ORDER: ShopCategory[] = ['color', 'title', 'vip', 'gift', 'fun', 'menzaifu', 'other'];
 
 export function categoryOf(i: Pick<ShopItem, 'kind' | 'roleGroup'>): ShopCategory {
-  if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : 'other';
+  if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : i.roleGroup === 'vip' ? 'vip' : 'other';
   if (i.kind === 'mycolor') return 'color';
   if (i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
   if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin') return 'fun';

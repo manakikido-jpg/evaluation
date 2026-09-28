@@ -1265,6 +1265,44 @@ describe('ショップ（管理画面）', () => {
     expect((await listAudit(db, { action: 'shop.update' })).length).toBe(1);
   });
 
+  it('💎 極の VIP を作る: ロール・VIP だけが見える入口・授与品。設定に入り、極の入口が通話部屋の入口になる。やめられる', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const { listItems } = await import('../src/services/shop.js');
+    const store = new ConfigStore(db, cfg);
+    await store.refresh();
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const g = await login(GUJI);
+    // 宵宮（遊郭）のカテゴリがないと作れない
+    expect(await (await get('/shop', g)).text()).toContain('入口を置くカテゴリが見つかりません');
+    expect((await form(g, '/shop/vip', { price: '8000', durationDays: '30' })).headers.get('location')).toBe('/shop?msg=vip_nocategory#shop-vip');
+    const original = fakeActions.guildChannels;
+    fakeActions.guildChannels = async () => [
+      ...(await original(cfg.guildId)),
+      { id: '910000000000000020', name: '🏮 遊郭', type: 4, parent_id: null, position: 5, permission_overwrites: [{ id: cfg.guildId, type: 0, allow: '0', deny: String(1n << 10n) }] },
+    ];
+    try {
+      actions = [];
+      expect((await form(g, '/shop/vip', { price: '8000', durationDays: '30' })).headers.get('location')).toBe('/shop?msg=vip_created#shop-vip');
+      expect(actions.some((a) => a.startsWith('createRole') && a.includes('極 VIP'))).toBe(true);
+      const made = actions.find((a) => a.startsWith('createChannel'))!;
+      expect(made).toContain('極の部屋をひらく');
+      expect(made).toContain('"parent_id":"910000000000000020"');
+      expect(store.current.rooms.vip).toEqual({ roleId: '980000000000000099', hubId: '910000000000000099' });
+      expect(store.current.tempVoice.hubs.some((h) => h.channelId === '910000000000000099' && h.plan === 'free')).toBe(true);
+      const vipItem = (await listItems(db)).find((i) => i.roleGroup === 'vip')!;
+      expect(vipItem).toMatchObject({ kind: 'role', price: 8000, durationDays: 30, roleId: '980000000000000099' });
+      expect(await (await get('/shop', g)).text()).toContain('VIP だけの部屋');
+      expect((await form(g, '/shop/vip', {})).headers.get('location')).toBe('/shop?msg=vip_exists#shop-vip');
+      // 設定を保存しても消えない
+      expect((await listAudit(db, { action: 'rooms.vip_create' })).length).toBe(1);
+      expect((await form(g, '/shop/vip/off', { confirm: 'yes' })).headers.get('location')).toBe('/shop?msg=vip_off#shop-vip');
+      expect(store.current.rooms.vip).toBeUndefined();
+      expect((await listItems(db)).find((i) => i.id === vipItem.id)!.enabled).toBe(false);
+    } finally {
+      fakeActions.guildChannels = original;
+    }
+  });
+
   it('決まった動きの品物（花吹雪など）は消せない', async () => {
     const { seedDefaultItems, listItems } = await import('../src/services/shop.js');
     await seedDefaultItems(db, { colors: [], titles: [] });

@@ -76,7 +76,8 @@ export function prizeLabel(
 }
 
 /** 物御籤で出せるショップの品（ロールの品: 色守り・称号・開業権利など） */
-export const giftableShopItem = (i: ShopItem) => i.kind === 'role' && Boolean(i.roleId);
+/** 物御籤・全員へのプレゼントで渡せる授与品（ロールの品物。💎 極の VIP は宵参りの人だけなので渡さない） */
+export const giftableShopItem = (i: ShopItem) => i.kind === 'role' && Boolean(i.roleId) && i.roleGroup !== 'vip';
 
 export async function listPrizes(db: Db): Promise<GachaPrizeRow[]> {
   const rows = await db.select().from(gachaPrizes).orderBy(asc(gachaPrizes.position), asc(gachaPrizes.id));

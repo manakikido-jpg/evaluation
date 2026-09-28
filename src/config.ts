@@ -102,6 +102,11 @@ export const roomsSchema = z.object({
   hourly: roomPrices.default(roomPrices.parse({})),
   /** 奉納（ブースト）している人の部屋代の割引（%。100 で無料） */
   boosterDiscountPercent: z.number().int().min(0).max(100).default(100),
+  /**
+   * 💎 極（遊郭の VIP）: roleId の人だけが見える入口（hubId）から、VIP だけの部屋をひらける。部屋代はなし。
+   * 社務所Web の「ショップ」の「💎 極の VIP を作る」で作る
+   */
+  vip: z.object({ roleId: snowflake, hubId: snowflake }).optional(),
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
@@ -442,10 +447,10 @@ export const guildConfigSchema = z
               name: z.string().min(1).max(90),
               /**
                * 部屋の種類（公開・招待限定・シークレット・ツーショット）を選べて、花びらを払う入口。
-               * once: ひらくたびに 1 回（宿坊） / hourly: 1 時間ごと（宵宮） / none: 選べない・無料。
+               * once: ひらくたびに 1 回（宿坊） / hourly: 1 時間ごと（宵宮） / free: 種類は選べて部屋代なし（💎 極） / none: 選べない・無料。
                * 省略時は名前から決める（宿坊 → once、🍶・宵宮 → hourly）
                */
-              plan: z.enum(['none', 'once', 'hourly']).optional(),
+              plan: z.enum(['none', 'once', 'hourly', 'free']).optional(),
             }),
           )
           .default([]),

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-kiwami-vip',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '💎 極（遊郭の VIP）',
+    items: [
+      '授与所で「💎 極の VIP」を受けると（宵参りの方だけ・期間つき）、遊郭の「➕ 💎 極の部屋をひらく」が見えるようになる',
+      '極の入口からひらいた部屋は VIP だけが見える・入れる（部屋代なし。種類も選べる）',
+      '社務所Web の「ショップ」の「💎 極の VIP を作る」で、ロール・入口・授与品をまとめて作れる',
+    ],
+  },
+  {
     id: '2026-09-29-room-staff',
     date: '2026-09-29',
     kind: 'improve',

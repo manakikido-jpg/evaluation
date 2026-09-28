@@ -10,6 +10,11 @@ export const SHOP_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   deleted: { text: '授与品を消しました（買った人のロールはそのまま、期限が来たら外れます）。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（名前は必須、値段・日数は 0 以上の数）。', kind: 'warn' },
   role_taken: { text: 'そのロールは、もうほかの授与品に使われています。', kind: 'warn' },
+  vip_created: { text: '💎 極の VIP を作りました（ロール・入口の通話・授与品）。授与所の「授与品を見る」に並びます。', kind: 'ok' },
+  vip_exists: { text: '💎 極はもう作ってあります。', kind: 'warn' },
+  vip_nocategory: { text: '極の入口を置くカテゴリ（宵宮の部屋の入口があるカテゴリか、名前に「遊郭」「宵宮」が入ったカテゴリ）が見つかりませんでした。', kind: 'warn' },
+  vip_failed: { text: '作れませんでした。BOT に「ロールの管理」「チャンネルの管理」の権限があるか確かめてください。', kind: 'warn' },
+  vip_off: { text: '💎 極をやめました（授与品は販売しないにしました。ロールと入口の通話は Discord に残っているので、いらなければ消してください）。', kind: 'ok' },
 };
 
 const KIND_LABEL: Record<ShopItem['kind'], string> = {
@@ -40,6 +45,12 @@ export function ShopPage(props: {
   names: Map<string, string>;
   economy: EconomyConfig;
   flash?: string;
+  /** 💎 極（作ってあれば） */
+  vip?: { roleName: string; hubName: string; item?: ShopItem };
+  /** 極の入口を置くカテゴリの名前（まだ作っていないとき） */
+  vipCategory?: string;
+  /** 宵参りのロールが決まっているか（VIP を買えるのを宵参りの人だけにする） */
+  adultRoleSet?: boolean;
 }) {
   const { session, economy: e } = props;
   const roleName = (id: string | null) => (id ? (props.roles.find((r) => r.id === id)?.name ?? `（見つからないロール ${id}）`) : '');
@@ -187,6 +198,50 @@ export function ShopPage(props: {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section class="card anchor" id="shop-vip">
+        <h2>💎 極（遊郭の VIP）</h2>
+        {props.vip ? (
+          <>
+            <p class="note">
+              「{props.vip.roleName}」のロールを持っている人だけに「{props.vip.hubName}」が見え、そこから VIP だけの部屋（部屋代なし・種類は選べる）をひらけます。VIP は授与所の「💎 極の VIP」で買えます（宵参りの方だけ・物御籤や全員へのプレゼントでは渡しません）。
+              {props.vip.item ? ` いま ${props.vip.item.price.toLocaleString('ja-JP')} 銭・${props.vip.item.durationDays ? `${props.vip.item.durationDays} 日` : 'ずっと'}${props.vip.item.enabled ? '' : '（お休み中）'}。値段と日数は上の品物の一覧から変えられます。` : ''}
+            </p>
+            <form method="post" action="/shop/vip/off" class="inline-actions">
+              <Csrf session={session} />
+              <label class="field check">
+                <input type="checkbox" name="confirm" value="yes" required />
+                <span>極をやめる（授与品は販売しないにする。ロールと入口は Discord に残る）</span>
+              </label>
+              <button type="submit" class="danger">
+                やめる
+              </button>
+            </form>
+          </>
+        ) : (
+          <form method="post" action="/shop/vip" class="shop-item">
+            <Csrf session={session} />
+            <p class="note">
+              押すと、Discord に「💎 極 VIP」のロールと、{props.vipCategory ? `「${props.vipCategory}」` : '宵宮（遊郭）のカテゴリ'}に VIP だけが見える入口「➕ 💎 極の部屋をひらく」を作り、授与所に「💎 極の VIP」を並べます。VIP の人はその入口から、VIP だけの部屋（部屋代なし）をひらけます。招待した人は VIP でなくても入れます。
+            </p>
+            {!props.adultRoleSet && <p class="flash warn">宵参りのロールが設定にないので、だれでも VIP を買えてしまいます。設定ファイルの roles.yoimairi を確かめてください。</p>}
+            {!props.vipCategory && <p class="flash warn">入口を置くカテゴリが見つかりません（宵宮の部屋の入口があるカテゴリか、名前に「遊郭」「宵宮」が入ったカテゴリ）。</p>}
+            <div class="fields">
+              <label class="field">
+                <span>値段（銭）</span>
+                <input type="number" name="price" min={0} value="10000" required />
+              </label>
+              <label class="field">
+                <span>日数（空でずっと）</span>
+                <input type="number" name="durationDays" min={1} value="30" />
+              </label>
+            </div>
+            <button type="submit" class="ok" disabled={!props.vipCategory}>
+              💎 極の VIP を作る
+            </button>
+          </form>
+        )}
       </section>
 
       <section class="card anchor" id="shop-add">

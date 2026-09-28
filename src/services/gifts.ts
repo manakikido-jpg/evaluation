@@ -35,7 +35,7 @@ export async function parseGiftItem(db: Db, raw: unknown): Promise<GiftItem | un
   const shop = /^shop:(\d+)$/.exec(raw);
   if (shop) {
     const item = await getItem(db, Number(shop[1]));
-    return item && item.kind === 'role' && item.roleId ? { kind: 'shop', id: item.id, label: `${item.emoji}${item.name}` } : undefined;
+    return item && item.kind === 'role' && item.roleId && item.roleGroup !== 'vip' ? { kind: 'shop', id: item.id, label: `${item.emoji}${item.name}` } : undefined;
   }
   const m = /^custom:(\d+)$/.exec(raw);
   if (!m) return undefined;

@@ -91,8 +91,17 @@ const KEY = 'overrides';
 
 /** ファイルの設定に上書きを重ねる。おかしな組み合わせ（昇格ラインの重複など）はエラー */
 export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
+  const vip = o.rooms.vip ?? base.rooms.vip;
   return guildConfigSchema.parse({
     ...base,
+    // 💎 極の入口（社務所Web で作ったもの）を、通話部屋の入口に足す
+    tempVoice: {
+      ...base.tempVoice,
+      hubs: [
+        ...base.tempVoice.hubs.filter((h) => h.channelId !== vip?.hubId),
+        ...(vip ? [{ channelId: vip.hubId, name: '💎 {name}の極の部屋', plan: 'free' as const }] : []),
+      ],
+    },
     economy: { ...base.economy, ...o.economy },
     omairi: { ...base.omairi, ...o.omairi },
     boost: { ...base.boost, ...o.boost },

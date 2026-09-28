@@ -141,6 +141,7 @@ import { GlossaryPage } from './views/glossary.js';
 import { MeetingEditPage, MeetingViewPage, MinutesPage } from './views/minutes.js';
 import { TempPage } from './views/temp.js';
 import { InvitesPage } from './views/invites.js';
+import { hourlyHubOf, vipCategoryOf, vipHubOverwrites, VIP_COLOR, VIP_HUB_NAME, VIP_ROLE_NAME } from '../services/vip.js';
 import { activeGrants, activeMemberNames, durationMinutes, endGrant, endedGrants, extendGrant, findActiveMember, getGrant, grantPerm, grantRole, isPermPreset, memberRoleIdsOf } from '../services/tempGrants.js';
 import { staffRoleIds } from '../services/meetings.js';
 import {
@@ -1547,6 +1548,8 @@ export function createWebApp(deps: WebDeps) {
           ]),
         ),
         boosterDiscountPercent: num('roomBoosterDiscount'),
+        // 💎 極（VIP）はショップのページで作る（ここでは残す）
+        ...(prev.rooms.vip ? { vip: prev.rooms.vip } : {}),
       },
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
       ...(typeof body.vcClearDelay === 'string' ? { voiceChat: { clearWhenEmpty: body.vcClear === 'yes', delayMinutes: num('vcClearDelay') } } : {}),
@@ -1666,8 +1669,8 @@ export function createWebApp(deps: WebDeps) {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const before = cfg;
     // 役職は役職のページで変えるので残す
-    const { ranks, extraRanks } = await loadOverrides(db);
-    const reset = overridesSchema.parse({ ranks, extraRanks });
+    const { ranks, extraRanks, rooms } = await loadOverrides(db);
+    const reset = overridesSchema.parse({ ranks, extraRanks, ...(rooms.vip ? { rooms: { vip: rooms.vip } } : {}) });
     await saveOverrides(db, reset, c.get('session').userId);
     await deps.onSettingsSaved?.();
     await syncPostedNotices({ db, cfg: applyOverrides(fileCfg(), reset), discord: deps.discord }, before);
@@ -3361,9 +3364,91 @@ export function createWebApp(deps: WebDeps) {
   const validInt = (v: number | null | undefined, min: number) => v === undefined || v === null || (Number.isInteger(v) && v >= min && v <= 10_000_000);
 
   app.get('/shop', async (c) => {
-    const [items, roles, purchases] = await Promise.all([listShopItems(db), shopRoles(), recentPurchases(db, 50)]);
+    const [items, roles, purchases, channels] = await Promise.all([listShopItems(db), shopRoles(), recentPurchases(db, 50), loadChannels().catch(() => [] as GuildChannel[])]);
     const names = await namesOf(db, purchases.flatMap((p) => [p.memberId, p.targetId ?? '']).filter(Boolean));
-    return c.html(<ShopPage session={c.get('session')} items={items} roles={roles} purchases={purchases} names={names} economy={cfg.economy} flash={c.req.query('msg')} />);
+    const v = cfg.rooms.vip;
+    const vip = v
+      ? {
+          roleName: roles.find((r) => r.id === v.roleId)?.name ?? '（見つからないロール）',
+          hubName: channels.find((ch) => ch.id === v.hubId)?.name ?? '（見つからないチャンネル）',
+          item: items.find((i) => i.roleId === v.roleId),
+        }
+      : undefined;
+    const category = vipCategoryOf(cfg, channels);
+    return c.html(
+      <ShopPage
+        session={c.get('session')}
+        items={items}
+        roles={roles}
+        purchases={purchases}
+        names={names}
+        economy={cfg.economy}
+        flash={c.req.query('msg')}
+        vip={vip}
+        vipCategory={category?.name}
+        adultRoleSet={Boolean(cfg.roles.yoimairi)}
+      />,
+    );
+  });
+
+  // 💎 極（遊郭の VIP）: ロール・入口の通話・授与品をまとめて作る
+  app.post('/shop/vip', async (c) => {
+    const to = (msg: string) => c.redirect(`/shop?msg=${msg}#shop-vip`);
+    if (cfg.rooms.vip) return to('vip_exists');
+    const body = await c.req.parseBody();
+    const price = Number(body.price ?? 10000);
+    const days = body.durationDays === '' ? null : Number(body.durationDays ?? 30);
+    if (!validInt(price, 0) || (days !== null && !validInt(days, 1))) return to('invalid');
+    const channels = await loadChannels(true).catch(() => undefined);
+    if (!channels) return to('vip_failed');
+    const category = vipCategoryOf(cfg, channels);
+    if (!category) return to('vip_nocategory');
+    const by = c.get('session').userId;
+    try {
+      const role = await deps.discord.createRole(cfg.guildId, { name: VIP_ROLE_NAME, color: VIP_COLOR, permissions: '0', hoist: false, mentionable: false }, '管理画面（💎 極の VIP）');
+      const hub = await deps.discord.createChannel(
+        cfg.guildId,
+        { name: VIP_HUB_NAME, type: 2, parent_id: category.id, permission_overwrites: vipHubOverwrites(category.permission_overwrites ?? [], cfg, role.id, deps.botId) },
+        '管理画面（💎 極の部屋の入口）',
+      );
+      // 宵宮の入口が年齢制限なら、極の入口もそろえる
+      if (hourlyHubOf(cfg, channels)?.nsfw) await deps.discord.editChannel(hub.id, { nsfw: true }).catch(() => undefined);
+      const items = await listShopItems(db);
+      await createShopItem(db, {
+        kind: 'role',
+        name: '極の VIP',
+        emoji: '💎',
+        description: '遊郭の「💎 極の部屋」をひらける・入れる（宵参りの方だけ。部屋代なし）',
+        price,
+        roleId: role.id,
+        roleGroup: 'vip',
+        durationDays: days,
+        position: items.reduce((n, i) => Math.max(n, i.position), 0) + 1,
+      });
+      const prev = await loadOverrides(db);
+      await saveOverrides(db, { ...prev, rooms: { ...prev.rooms, vip: { roleId: role.id, hubId: hub.id } } }, by);
+      await deps.onSettingsSaved?.();
+      await guildChannelsCached(deps.discord, cfg.guildId, true).catch(() => undefined);
+      await audit(db, { actorId: by, action: 'rooms.vip_create', detail: { roleId: role.id, hubId: hub.id, price, days }, via: 'web' });
+      return to('vip_created');
+    } catch (err) {
+      logger.warn({ err }, 'vip setup failed');
+      return to('vip_failed');
+    }
+  });
+
+  // 💎 極をやめる（ロール・入口の通話は消さない。授与品は販売しないにする）
+  app.post('/shop/vip/off', async (c) => {
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes' || !cfg.rooms.vip) return c.redirect('/shop#shop-vip');
+    const v = cfg.rooms.vip;
+    const prev = await loadOverrides(db);
+    const { vip: _drop, ...rooms } = prev.rooms;
+    await saveOverrides(db, { ...prev, rooms }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    for (const i of (await listShopItems(db)).filter((x) => x.roleId === v.roleId)) await updateShopItem(db, i.id, { enabled: false });
+    await audit(db, { actorId: c.get('session').userId, action: 'rooms.vip_off', detail: v, via: 'web' });
+    return c.redirect('/shop?msg=vip_off#shop-vip');
   });
 
   app.post('/shop/items/:id', async (c) => {

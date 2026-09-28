@@ -22,6 +22,7 @@ import { walletOf } from '../services/economy.js';
 import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { ticketsOf } from '../services/tickets.js';
+import { canBuyVip } from '../services/vip.js';
 import { bagMessage, OTOSHIDAMA, parseCount, putBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import {
   activeMyColor,
@@ -159,6 +160,11 @@ export class ShopApp {
     }
     let note: string | undefined;
     if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていたら、その色は外れます。同じ色なら期間が延びます';
+    if (item.kind === 'role' && item.roleGroup === 'vip') {
+      note = canBuyVip(this.cfg(), [...i.member.roles.cache.keys()])
+        ? '-# 遊郭の「➕ 💎 極の部屋をひらく」が見えるようになり、VIP だけの部屋をひらける・入れる（部屋代なし）。もう一度受けると期間が延びます'
+        : '-# 💎 極の VIP は、宵参り（18 歳以上）の方だけが受けられます';
+    }
     if (item.kind === 'ema_pin') {
       note = '-# 自己紹介のチャンネル（#絵馬-男性・#絵馬-女性 など）に書いた、いちばん新しい自分のメッセージをピン留めします';
       const t = (await ticketsOf(this.db, i.user.id)).ema_pin;
@@ -219,6 +225,8 @@ export class ShopApp {
     if (item.boosterOnly && !isBooster(i)) return '🏮 この授与品は、奉納（サーバーブースト）している方だけが受けられます。';
     switch (item.kind) {
       case 'role':
+        // 💎 極の VIP: 宵参り（18 歳以上）の方だけ
+        if (item.roleGroup === 'vip' && !canBuyVip(cfg, [...i.member.roles.cache.keys()])) return '💎 極の VIP は、宵参り（18 歳以上）の方だけが受けられます。';
         return this.role(i, item, discount);
       case 'menzaifu': {
         const r = await purchaseMenzaifu({ db: this.db, cfg, discord: this.discord }, userId);

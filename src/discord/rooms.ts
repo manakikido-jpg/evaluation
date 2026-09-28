@@ -69,7 +69,14 @@ export function ticketUsedText(r: { ticketKind?: TicketKind; pass?: boolean; cha
 export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'>) {
   const plan = planOf(cfg, row.hubId);
   const lines = [`<@${row.ownerId}> さんの部屋です。設定は、部屋を作った人（と運営）が「⚙ 部屋の設定」から変えられます。`];
-  if (plan !== 'none') {
+  if (plan === 'free') {
+    lines.push(
+      '',
+      '💎 **極の部屋**です（極の VIP の人だけが見える・入れる）。部屋代はかかりません。',
+      ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label}（${ROOM_KINDS[key].description}）`),
+      '-# 部屋の種類は 1 回だけ選べます。招待した人は VIP でなくても入れます',
+    );
+  } else if (plan !== 'none') {
     const how =
       plan === 'hourly'
         ? '入っている人それぞれが 1 時間ごとに払います（入ったときに最初の 1 時間。払えなくなると、5 分後に通話から抜けます）'
@@ -187,9 +194,11 @@ export class RoomApp {
 
   /** 種類に合わせて、見える・入れる範囲を付け直す */
   private async apply(ch: VoiceChannel, row: RoomRow, kind: RoomKind): Promise<void> {
-    const parent = ch.parent;
-    const base: Overwrite[] = parent
-      ? parent.permissionOverwrites.cache.map((o) => ({ id: o.id, type: o.type as 0 | 1, allow: o.allow.bitfield, deny: o.deny.bitfield }))
+    // もとにする見える範囲: カテゴリ（宵宮なら宵参りの人だけ）。💎 極の部屋は入口と同じ（VIP だけ）
+    const hub = this.cfg().rooms.vip?.hubId === row.hubId ? this.guild?.channels.cache.get(row.hubId) : undefined;
+    const source = hub && 'permissionOverwrites' in hub ? hub : ch.parent;
+    const base: Overwrite[] = source
+      ? source.permissionOverwrites.cache.map((o) => ({ id: o.id, type: o.type as 0 | 1, allow: o.allow.bitfield, deny: o.deny.bitfield }))
       : [];
     const list = roomOverwrites(base, kind, { ownerId: row.ownerId, botId: ch.client.user.id, invited: row.invited, ownerAllow: OWNER_ALLOW });
     await ch.permissionOverwrites.set(
@@ -424,7 +433,8 @@ export class RoomApp {
     const to = i.values[0];
     if (!to || !this.transferable(row, ch).some((m) => m.id === to)) return void (await i.reply({ content: 'その人は今この部屋にいません。', ...EPHEMERAL }));
     // 運営が譲渡するときは、これからの部屋代は新しい部屋主が払う（前の部屋主に持たせない）
-    const paid = planOf(this.cfg(), row.hubId) !== 'none' && !v.staff;
+    const plan = planOf(this.cfg(), row.hubId);
+    const paid = plan !== 'none' && plan !== 'free' && !v.staff;
     await i.update({
       embeds: [
         {
@@ -453,7 +463,8 @@ export class RoomApp {
     const r = await transferRoom(this.db, ch.id, row.ownerId, to, keepPaying);
     if (r.status !== 'ok') return void (await i.reply({ content: '譲渡できませんでした（もう部屋主ではないかもしれません）。', ...EPHEMERAL }));
     await this.apply(ch, r.row, r.row.kind);
-    const paid = planOf(this.cfg(), row.hubId) !== 'none';
+    const plan = planOf(this.cfg(), row.hubId);
+    const paid = plan !== 'none' && plan !== 'free';
     const money = !paid ? '' : keepPaying ? `（部屋主の分の部屋代は <@${r.row.payerId ?? row.ownerId}> さんが持ちます）` : `（これからの部屋主の分の部屋代は <@${to}> さんが払います）`;
     await i.update({ content: `👑 <@${to}> さんに権限を譲渡しました。${money}`, embeds: [], components: [], allowedMentions: { parse: [] } });
     await ch.send({

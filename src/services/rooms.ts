@@ -13,7 +13,8 @@ import { addTickets, useTicket } from './tickets.js';
  */
 
 export type RoomKind = 'public' | 'invite' | 'secret' | 'twoshot';
-export type RoomPlan = 'none' | 'once' | 'hourly';
+/** free: 種類は選べて部屋代なし（💎 極の部屋） */
+export type RoomPlan = 'none' | 'once' | 'hourly' | 'free';
 export type RoomRow = typeof tempVoice.$inferSelect;
 
 export const ROOM_KINDS: Record<RoomKind, { label: string; emoji: string; description: string }> = {
@@ -39,7 +40,7 @@ export function planOf(cfg: GuildConfig, hubId: string): RoomPlan {
 }
 
 export function roomPrice(cfg: GuildConfig, plan: RoomPlan, kind: RoomKind): number {
-  return plan === 'none' ? 0 : cfg.rooms[plan][kind];
+  return plan === 'none' || plan === 'free' ? 0 : cfg.rooms[plan][kind];
 }
 
 export function priceLabel(cfg: GuildConfig, plan: RoomPlan, kind: RoomKind): string {
