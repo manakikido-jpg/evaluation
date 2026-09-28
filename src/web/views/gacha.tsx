@@ -818,10 +818,20 @@ export function GachaPage(props: {
                     ))}
                   </optgroup>
                 )}
+                {props.shopItems.length > 0 && (
+                  <optgroup label="🛍 授与品（ロール）">
+                    {props.shopItems.map((i) => (
+                      <option value={`shop:${i.id}`}>
+                        {i.emoji} {i.name}
+                        {i.durationDays ? `（${i.durationDays} 日）` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </label>
             <label class="field">
-              <span>1 人あたりの数（{props.coinName}は 100,000 まで・券は 100 枚まで）</span>
+              <span>1 人あたりの数（{props.coinName}は 100,000 まで・券は 100 枚まで・授与品は 1 つ。もう持っている品は、期間のあるものはのばし、ないものは贈らない）</span>
               <input type="number" name="count" min={1} max={100000} value="1" required />
             </label>
             <label class="field">

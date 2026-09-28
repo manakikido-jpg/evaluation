@@ -9,6 +9,7 @@ import { TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
+import { GiftApp } from './discord/gifts.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
+  const gifts = new GiftApp(db, cfg, actions);
   const voiceGroups = new VoiceGroupApp(cfg);
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
@@ -238,6 +240,7 @@ async function main(): Promise<void> {
     void help.onInteraction(i);
     void onboarding.onInteraction(i);
     void inviteLinks.onInteraction(i);
+    void gifts.onInteraction(i);
     void bell.onInteraction(i);
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);

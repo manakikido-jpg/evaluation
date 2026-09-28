@@ -115,7 +115,7 @@ import {
   updateNotice,
   type NoticeCtx,
 } from '../services/notices.js';
-import { giftAnnouncement, giftItemLabel, giftTargets, giftToAll, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
+import { applyGiftRoles, giftAnnouncement, giftItemLabel, giftTargets, giftToAll, giftUnit, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
 import { EconomyPage, MemberLedgerPage } from './views/economy.js';
 import { cancelEvent, createEvent, isEventKind, listEvents, validEventValue } from '../services/economyEvents.js';
@@ -3072,9 +3072,11 @@ export function createWebApp(deps: WebDeps) {
     if (targets.length === 0) return to('gift_none');
     const by = c.get('session').userId;
     const label = giftItemLabel(item, { name: cfg.economy.currencyName, emoji: cfg.economy.currencyEmoji });
-    const r = await giftToAll(db, { item, label, count, note, memberIds: targets, roleId, by, nonce });
+    const r = await giftToAll(db, { item, label, count, note, memberIds: targets, roleId, by, nonce }, now());
     if (r.status === 'duplicate') return to('gift_dup');
     if (r.status !== 'ok') return to('gift_invalid');
+    // 授与品: Discord でロールを付ける（人数が多いと時間がかかるので、待たずに進める）
+    if (r.roles.length) void applyGiftRoles(deps.discord, cfg.guildId, r.roles);
     await audit(db, { actorId: by, action: 'gift.all', detail: { gift: r.batch.id, item: r.batch.item, label, count, note, roleId, recipients: targets.length }, via: 'web' });
     // チャンネルでお知らせ（任意）
     const announce = typeof body.announce === 'string' && validId(body.announce) ? body.announce : undefined;
@@ -3082,10 +3084,10 @@ export function createWebApp(deps: WebDeps) {
     const roleName = roleId ? (await loadRoles())?.find((x) => x.id === roleId)?.name : undefined;
     const ping = body.everyone === 'yes';
     const head = ping ? (roleId ? `<@&${roleId}>\n` : '@everyone\n') : '';
-    const howToUse = item.kind === 'coins' ? '' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';
+    const howToUse = item.kind === 'coins' ? '' : item.kind === 'shop' ? '\n-# ロールは少しずつ付きます（もう持っている人には、期間のある品はその分のばします）' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';
     try {
       await deps.discord.sendMessage(announce, {
-        content: `${head}${giftAnnouncement(label, count, note, '枚', roleName)}${howToUse}`,
+        content: `${head}${giftAnnouncement(label, count, note, giftUnit(item), roleName)}${howToUse}`,
         allowed_mentions: ping ? (roleId ? { parse: [], roles: [roleId] } : { parse: ['everyone'] }) : { parse: [] },
       });
       return to('gift_announced');

@@ -24,6 +24,7 @@ type Nav =
   | 'minutes'
   | 'temp'
   | 'invites'
+  | 'gift'
   | 'notices'
   | 'channels'
   | 'shop'
@@ -63,6 +64,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'お金と品物',
     items: [
       { key: 'economy', href: '/economy', icon: '🪙', label: '経済' },
+      { key: 'gift', href: '/gacha#gacha-gift', icon: '🎁', label: 'みんなに配る', gujiOnly: true },
       { key: 'gacha', href: '/gacha', icon: '🎲', label: '物御籤' },
       { key: 'market', href: '/market', icon: '🏮', label: '市場' },
       { key: 'shop', href: '/shop', icon: '🛍', label: 'ショップ', gujiOnly: true },

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-gift-command',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🎁 みんなに配る（/配る・授与品も）',
+    items: [
+      '宮司が Discord の `/配る` で、みんなに銭・券・自由な券・授与品を配れる（ロールで絞れる。押す前に「○人に贈ります」と確かめる）',
+      '社務所Web の「🎁 全員にプレゼント」で授与品（色守り・称号などのロール）も贈れるように。左のメニューの「🎁 みんなに配る」からすぐ開ける',
+      '授与品は 1 人 1 つ。期間のある品は持っている人にはその分のばし、期間のない品は持っている人には贈らない',
+    ],
+  },
+  {
     id: '2026-09-29-invites-page',
     date: '2026-09-29',
     kind: 'new',

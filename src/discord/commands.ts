@@ -281,6 +281,27 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addStringOption((o) => o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setRequired(true).setMaxLength(300))
       .toJSON(),
     new SlashCommandBuilder()
+      .setName('gift')
+      .setNameLocalizations({ ja: '配る' })
+      .setDescription('Give something to everyone')
+      .setDescriptionLocalizations({ ja: 'みんなに銭・券・授与品を配る（押す前に確かめる）【宮司】' })
+      .setContexts(InteractionContextType.Guild)
+      .setDefaultMemberPermissions(staff)
+      .addStringOption((o) =>
+        o.setName('item').setNameLocalizations({ ja: 'もの' }).setDescription('item').setDescriptionLocalizations({ ja: '配るもの（候補から選ぶ）' }).setRequired(true).setAutocomplete(true),
+      )
+      .addStringOption((o) =>
+        o.setName('reason').setNameLocalizations({ ja: '理由' }).setDescription('reason').setDescriptionLocalizations({ ja: '記録とお知らせに載る（例: 1 周年のお祝い）' }).setRequired(true).setMaxLength(200),
+      )
+      .addIntegerOption((o) =>
+        o.setName('count').setNameLocalizations({ ja: '数' }).setDescription('count').setDescriptionLocalizations({ ja: '1 人あたりの数（省略すると 1）' }).setMinValue(1).setMaxValue(100000),
+      )
+      .addRoleOption((o) => o.setName('role').setNameLocalizations({ ja: 'ロール' }).setDescription('role').setDescriptionLocalizations({ ja: 'このロールを持っている人だけに配る' }))
+      .addBooleanOption((o) =>
+        o.setName('announce').setNameLocalizations({ ja: 'お知らせ' }).setDescription('announce').setDescriptionLocalizations({ ja: 'このチャンネルでお知らせする（省略すると する）' }),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
       .setName('role')
       .setNameLocalizations({ ja: 'ロール' })
       .setDescription('Give or remove a role')
