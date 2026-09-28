@@ -1608,6 +1608,11 @@ describe('物御籤（管理画面）', () => {
     expect(batch).toMatchObject({ label: '🧧福の札', count: 2, note: '1 周年' });
     expect(batch!.recipients).toBeGreaterThanOrEqual(1);
     expect(await (await get('/gacha', g)).text()).toContain('これまでのプレゼント');
+    // すべての役職に通知
+    actions = [];
+    await post(g, '/gacha/gift', { item: 'fuku', count: '1', note: '秋祭り', confirm: 'yes', nonce: randomUUIDLike(9), announce: '910000000000000002', ping: 'ranks' });
+    const rankHead = [...new Set(cfg.ranks.map((x) => x.roleId))].map((id) => `<@&${id}>`).join(' ');
+    expect(actions.find((a) => a.startsWith('send 910000000000000002'))).toContain(`${rankHead}\n🎁`);
     // 持っている人がいないロールで絞る
     expect((await post(g, '/gacha/gift', { item: 'coins', count: '100', note: 'x', confirm: 'yes', nonce: randomUUIDLike(2), roleId: '990000000000000077' })).headers.get('location')).toContain('gift_none');
   });

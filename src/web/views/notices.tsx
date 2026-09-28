@@ -261,7 +261,14 @@ export function NoticeEditPage(props: {
   const mention = parseMention(notice?.mention);
   const picked = new Set(mention.kind === 'roles' ? mention.roleIds : []);
   const preview = { 'hx-post': '/notices/preview', 'hx-trigger': 'change', 'hx-target': '#notice-preview', 'hx-include': '#notice-form' };
-  const mentionLabel = mention.kind === 'here' ? '@here' : mention.kind === 'everyone' ? '@everyone' : props.roles.filter((r) => picked.has(r.id)).map((r) => `@${r.name}`).join(' ');
+  const mentionLabel =
+    mention.kind === 'here'
+      ? '@here'
+      : mention.kind === 'everyone'
+        ? '@everyone'
+        : mention.kind === 'ranks'
+          ? '@すべての役職'
+          : props.roles.filter((r) => picked.has(r.id)).map((r) => `@${r.name}`).join(' ');
   return (
     <Layout title={notice ? `掲示の編集: ${notice.title}` : '掲示の追加'} session={session} nav="notices" scripts={['editor.js']}>
       <p class="crumbs">
@@ -384,6 +391,7 @@ export function NoticeEditPage(props: {
                     ['none', 'なし'],
                     ['here', '@here（いまオンラインの人）'],
                     ['everyone', '@everyone（全員）'],
+                    ['ranks', '⛩ すべての役職（役職のロールを全部）'],
                     ['roles', 'ロール（下で選ぶ）'],
                   ] as const
                 ).map(([v, label]) => (
@@ -406,7 +414,7 @@ export function NoticeEditPage(props: {
                 <p class="note">ロールを読み込めませんでした（BOT が動いていれば、少しあとに開き直すと出ます）。</p>
               )}
               <p class="note">
-                通知が届くのは<strong>はじめて投稿したときだけ</strong>です（あとから書き換えても、もう一度は鳴りません）。ロールは 5 つまで。@everyone・@here や「メンションを許可」していないロールを鳴らすには、BOT
+                通知が届くのは<strong>はじめて投稿したときだけ</strong>です（あとから書き換えても、もう一度は鳴りません）。「すべての役職」は、出すときの役職のロール全部（入鯖が承認された人みんな）に届きます。ロールは 5 つまで。@everyone・@here や「メンションを許可」していないロールを鳴らすには、BOT
                 のロールに「@everyone、@here、全てのロールにメンション」の権限が要ります。
               </p>
             </fieldset>

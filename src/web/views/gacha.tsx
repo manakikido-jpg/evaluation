@@ -858,9 +858,13 @@ export function GachaPage(props: {
                 ))}
               </select>
             </label>
-            <label class="field check">
-              <input type="checkbox" name="everyone" value="yes" />
-              <span>お知らせで @everyone に通知する（ロールで絞ったときは、そのロールに通知）</span>
+            <label class="field">
+              <span>お知らせの通知</span>
+              <select name="ping">
+                <option value="">通知しない</option>
+                <option value="everyone">@everyone（ロールで絞ったときは、そのロール）</option>
+                <option value="ranks">⛩ すべての役職（ロールで絞ったときは、そのロール）</option>
+              </select>
             </label>
             <label class="field check">
               <input type="checkbox" name="confirm" value="yes" required />

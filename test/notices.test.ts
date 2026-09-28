@@ -481,6 +481,24 @@ describe('メンション', () => {
     expect(mentionAllowed(ROLE_A)).toEqual({ parse: [], roles: [ROLE_A] });
     expect(mentionAllowed('')).toEqual({ parse: [] });
     expect(mentionLabel(`${ROLE_A},${ROLE_B}`, (id) => (id === ROLE_A ? '新人' : undefined))).toBe(`@新人 @${ROLE_B}`);
+    // すべての役職: 保存は 'ranks'、出すときに役職のロールにする
+    const { resolveMention } = await import('../src/services/notices.js');
+    expect(mentionValue('ranks', [], valid)).toBe('ranks');
+    expect(parseMention('ranks')).toEqual({ kind: 'ranks' });
+    expect(mentionLabel('ranks', () => undefined)).toBe('@すべての役職');
+    expect(resolveMention('ranks', [ROLE_A, ROLE_B, ROLE_A])).toBe(`${ROLE_A},${ROLE_B}`);
+    expect(resolveMention('everyone', [ROLE_A])).toBe('everyone');
+  });
+
+  it('すべての役職: 出すときの役職のロール全部に通知（5 つより多くても）', async () => {
+    const f = fakeDiscord();
+    const sent: MessageBody[] = [];
+    const send = f.discord.sendMessage;
+    f.discord.sendMessage = async (c, b) => (sent.push(b), send(c, b));
+    const n = await createNotice(db, { channelId: CH.torii, title: '全体', body: 'お祭り', style: 'text', mention: 'ranks', by: GUJI });
+    expect(await publishNotice({ db, cfg, discord: f.discord }, n.id, GUJI)).toBe('posted');
+    const ids = [...new Set(cfg.ranks.map((r) => r.roleId))];
+    expect(sent.at(-1)).toMatchObject({ content: `${ids.map((id) => `<@&${id}>`).join(' ')}\nお祭り`, allowed_mentions: { parse: [], roles: ids } });
   });
 
   it('はじめての投稿だけ通知を鳴らす。カードはメンションをカードの上に、普通のメッセージは 1 行目に', async () => {

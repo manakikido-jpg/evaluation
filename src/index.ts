@@ -155,7 +155,7 @@ async function main(): Promise<void> {
       void expireTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'temp grant expire failed'));
       // 面談告知: 予約した告知と、1 時間前・10 分前のリマインドを流す
       void loadInterview(db)
-        .then((st) => interviewTick({ db, discord: actions }, st))
+        .then((st) => interviewTick({ db, discord: actions, rankRoleIds: cfg().ranks.map((r) => r.roleId) }, st))
         .catch((err) => logger.warn({ err }, 'interview tick failed'));
       // 期間限定イベント（ボーナス週間・セール）の始まり・終わりを知らせる
       void announceEvents({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'economy event announce failed'));

@@ -46,8 +46,8 @@ const rawSchema = z.object({
     .string()
     .regex(/^\d{17,20}$/)
     .optional(),
-  /** 通知: none なし / here @here / everyone @everyone / role 決めたロール */
-  mention: z.enum(['none', 'here', 'everyone', 'role']).default('none'),
+  /** 通知: none なし / here @here / everyone @everyone / ranks すべての役職 / role 決めたロール */
+  mention: z.enum(['none', 'here', 'everyone', 'ranks', 'role']).default('none'),
   roleId: z
     .string()
     .regex(/^\d{17,20}$/)
@@ -131,7 +131,11 @@ export function renderInterview(template: string, v: { at: Date; place?: string;
 }
 
 /** 流すメッセージ（通知つき） */
-export function interviewMessage(s: InterviewSettings, text: string): MessageBody {
+export function interviewMessage(s: InterviewSettings, text: string, rankRoleIds: readonly string[] = []): MessageBody {
+  if (s.mention === 'ranks' && rankRoleIds.length) {
+    const ids = [...new Set(rankRoleIds)];
+    return { content: `${ids.map((id) => `<@&${id}>`).join(' ')}\n${text}`.slice(0, 2000), allowed_mentions: { parse: [], roles: ids } };
+  }
   const head = s.mention === 'here' ? '@here\n' : s.mention === 'everyone' ? '@everyone\n' : s.mention === 'role' && s.roleId ? `<@&${s.roleId}>\n` : '';
   const allowed: MessageBody['allowed_mentions'] =
     s.mention === 'here' || s.mention === 'everyone' ? { parse: ['everyone'] } : s.mention === 'role' && s.roleId ? { roles: [s.roleId] } : { parse: [] };
@@ -141,7 +145,8 @@ export function interviewMessage(s: InterviewSettings, text: string): MessageBod
 
 // ───────── 面談（予約・リマインド・変更・中止） ─────────
 
-export type InterviewCtx = { db: Db; discord: DiscordActions };
+/** rankRoleIds: 「すべての役職」に通知するときの役職のロール */
+export type InterviewCtx = { db: Db; discord: DiscordActions; rankRoleIds?: readonly string[] };
 
 /** {場所} に入れる文字（通話チャンネルならリンク） */
 export const placeOf = (i: Pick<Interview, 'placeChannelId' | 'placeText'>, forPreview?: (id: string) => string | undefined) =>
@@ -197,7 +202,7 @@ export async function listInterviews(db: Db, limit = 30): Promise<Interview[]> {
 export async function postInterview(ctx: InterviewCtx, id: number, st: InterviewSettings, now = new Date()): Promise<Interview | undefined> {
   const i = await getInterview(ctx.db, id);
   if (!i || i.status !== 'scheduled') return i;
-  const { id: messageId } = await ctx.discord.sendMessage(i.channelId, interviewMessage(st, interviewText(i)));
+  const { id: messageId } = await ctx.discord.sendMessage(i.channelId, interviewMessage(st, interviewText(i), ctx.rankRoleIds));
   const [row] = await ctx.db
     .update(interviews)
     .set({ status: 'posted', messageId, postedAt: now, updatedAt: now })
@@ -260,9 +265,9 @@ export async function cancelInterview(ctx: InterviewCtx, id: number, reason: str
 }
 
 /** リマインドの文 */
-export function reminderMessage(st: InterviewSettings, i: Interview): MessageBody {
+export function reminderMessage(st: InterviewSettings, i: Interview, rankRoleIds: readonly string[] = []): MessageBody {
   const text = renderInterview(st.reminderTemplate, { at: i.at, place: placeOf(i), note: i.note });
-  return st.remindMention ? interviewMessage(st, text) : { content: text, allowed_mentions: { parse: [] } };
+  return st.remindMention ? interviewMessage(st, text, rankRoleIds) : { content: text, allowed_mentions: { parse: [] } };
 }
 
 /**
@@ -294,7 +299,7 @@ export async function interviewTick(ctx: InterviewCtx, st: InterviewSettings, no
     const left = (i.at.getTime() - now.getTime()) / 60_000;
     const send = async (col: 'remind60At' | 'remind10At') => {
       await ctx.db.update(interviews).set({ [col]: now }).where(eq(interviews.id, i.id));
-      await ctx.discord.sendMessage(i.channelId, reminderMessage(st, i)).catch((err: unknown) => logger.warn({ err, id: i.id }, 'interview reminder failed'));
+      await ctx.discord.sendMessage(i.channelId, reminderMessage(st, i, ctx.rankRoleIds)).catch((err: unknown) => logger.warn({ err, id: i.id }, 'interview reminder failed'));
       reminded++;
     };
     // 1 時間前（10 分前を過ぎていたら、1 時間前は出さない）

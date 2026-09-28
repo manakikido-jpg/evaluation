@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-mention-ranks',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🔔 メンションに「すべての役職」',
+    items: [
+      '掲示・面談告知・🎁 全員にプレゼントのお知らせで、通知先に「⛩ すべての役職」を選べる（役職のロール全部に届く）',
+      '出すときの役職で決まるので、役職を足したらそれにも届く（ロール 5 つまでの決まりもなし）',
+    ],
+  },
+  {
     id: '2026-09-29-gacha-featured',
     date: '2026-09-29',
     kind: 'improve',

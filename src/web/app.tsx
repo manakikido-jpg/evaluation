@@ -2728,7 +2728,15 @@ export function createWebApp(deps: WebDeps) {
   };
 
   const mentionLabelOf = (st: InterviewSettings, roleName: (id: string) => string | undefined) =>
-    st.mention === 'here' ? '@here' : st.mention === 'everyone' ? '@everyone' : st.mention === 'role' && st.roleId ? `@${roleName(st.roleId) ?? 'ロール'}` : '';
+    st.mention === 'here'
+      ? '@here'
+      : st.mention === 'everyone'
+        ? '@everyone'
+        : st.mention === 'ranks'
+          ? '@すべての役職'
+          : st.mention === 'role' && st.roleId
+            ? `@${roleName(st.roleId) ?? 'ロール'}`
+            : '';
 
   const interviewPreview = (st: InterviewSettings, form: InterviewForm, channels: GuildChannel[], roleName: (id: string) => string | undefined, t: Date) => {
     if (form.error) return { text: '', mention: '', postLabel: '', reminders: [], error: INTERVIEW_ERRORS[form.error] };
@@ -2812,7 +2820,7 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, action: 'interview.create', detail: { id: i.id, at: form.at!.toISOString(), label: `${p.date} ${p.time}`, postAt: form.postAt!.toISOString() }, via: 'web' });
     if (form.postAt!.getTime() > t.getTime()) return c.redirect('/interview?msg=scheduled#iv-upcoming');
     try {
-      await postInterview({ db, discord: deps.discord }, i.id, st, t);
+      await postInterview({ db, discord: deps.discord, rankRoleIds: cfg.ranks.map((r) => r.roleId) }, i.id, st, t);
     } catch (err) {
       logger.warn({ err }, 'interview post failed');
       return c.redirect('/interview?msg=failed#iv-upcoming');
@@ -2829,7 +2837,7 @@ export function createWebApp(deps: WebDeps) {
     const i = await getInterview(db, interviewId(c));
     if (!i || i.status !== 'scheduled') return c.redirect('/interview?msg=not_found#iv-upcoming');
     try {
-      await postInterview({ db, discord: deps.discord }, i.id, await loadInterview(db), now());
+      await postInterview({ db, discord: deps.discord, rankRoleIds: cfg.ranks.map((r) => r.roleId) }, i.id, await loadInterview(db), now());
     } catch (err) {
       logger.warn({ err }, 'interview post failed');
       return c.redirect('/interview?msg=failed#iv-upcoming');
@@ -3082,13 +3090,16 @@ export function createWebApp(deps: WebDeps) {
     const announce = typeof body.announce === 'string' && validId(body.announce) ? body.announce : undefined;
     if (!announce) return to('gift_given');
     const roleName = roleId ? (await loadRoles())?.find((x) => x.id === roleId)?.name : undefined;
-    const ping = body.everyone === 'yes';
-    const head = ping ? (roleId ? `<@&${roleId}>\n` : '@everyone\n') : '';
+    const pingKind = body.ping === 'everyone' || body.everyone === 'yes' ? 'everyone' : body.ping === 'ranks' ? 'ranks' : '';
+    const ping = pingKind !== '';
+    const rankIds = [...new Set(cfg.ranks.map((x) => x.roleId))];
+    const pingRoles = roleId ? [roleId] : pingKind === 'ranks' ? rankIds : [];
+    const head = !ping ? '' : pingRoles.length ? `${pingRoles.map((id) => `<@&${id}>`).join(' ')}\n` : '@everyone\n';
     const howToUse = item.kind === 'coins' ? '' : item.kind === 'shop' ? '\n-# ロールは少しずつ付きます（もう持っている人には、期間のある品はその分のばします）' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';
     try {
       await deps.discord.sendMessage(announce, {
         content: `${head}${giftAnnouncement(label, count, note, giftUnit(item), roleName)}${howToUse}`,
-        allowed_mentions: ping ? (roleId ? { parse: [], roles: [roleId] } : { parse: ['everyone'] }) : { parse: [] },
+        allowed_mentions: ping ? (pingRoles.length ? { parse: [], roles: pingRoles } : { parse: ['everyone'] }) : { parse: [] },
       });
       return to('gift_announced');
     } catch (err) {
