@@ -193,14 +193,16 @@ cd ~/evaluation
 データベースの形が変わる更新も、起動時に自動で反映される。
 
 ### 自動で更新する（おすすめ）
-GitHub に新しいコードが届いたら、**5 分以内に自動で** `update.sh` を実行する。新しいコードがないときは何もしない。
+GitHub に新しいコードが届いたら、**1 分以内に自動で** `update.sh` を実行する。新しいコードがないときは何もしない（GitHub に確かめるだけなので、1 分ごとでも VPS の負担はほとんどない。前の更新がまだ動いていれば、その回は何もしない）。
 ```bash
 crontab -e
 ```
 いちばん下に追加:
 ```
-*/5 * * * * /home/shamusho/evaluation/scripts/auto-update.sh >> /home/shamusho/auto-update.log 2>&1
+* * * * * /home/shamusho/evaluation/scripts/auto-update.sh >> /home/shamusho/auto-update.log 2>&1
 ```
+- 前に 5 分ごと（`*/5 * * * *`）で入れていたら、次の 1 行で 1 分ごとに変えられる（`crontab -l` で確かめる）:
+  `crontab -l | sed 's#^\*/5 \(\* \* \* \* /home/shamusho/evaluation/scripts/auto-update.sh\)#* \1#' | crontab -`
 - 更新したかどうかは `tail ~/auto-update.log` で見られる
 - 新しいコードで BOT・管理画面が起動できなかったら、**前のコードに自動で戻す**。そのコードは何度も試さず、次の新しいコードが届くまで待つ（ログに ❌ が 1 回だけ出る）
 - VPS で書き換えたファイルが新しいコードでも変わっているときは、取り込まずに止める（バックアップも取らない）

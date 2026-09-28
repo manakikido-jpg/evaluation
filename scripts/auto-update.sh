@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 新しいコードが GitHub に届いていたら、自動で update.sh を実行する。
-# cron で 5 分おきに動かす（docs/deploy-vps.md「8. 更新」）。新しいコードがなければ何もしない。
+# cron で 1 分おきに動かす（docs/deploy-vps.md「8. 更新」）。新しいコードがなければ何もしない。
 # 更新に失敗したコードは、何度も試さない（ログに 1 回だけ残す。新しいコードが届いたらまた試す）
 set -euo pipefail
 cd "$(dirname "$0")/.."
