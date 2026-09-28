@@ -1456,26 +1456,80 @@ describe('面談告知（管理画面）', () => {
     });
   };
 
-  it('日時を決めて流す（流し先・通知・定型文は保存できる）。神職も使える', async () => {
+  it('日にち・時刻をボタンで選んで流す（流し先・通知・定型文は保存できる）。神職も使える', async () => {
     const s = await login(STAFF);
     const page = await (await get('/interview', s)).text();
     expect(page).toContain('🍵 面談告知');
     expect(page).toContain('面談のお知らせ');
+    // 今日（9/25）の 21:00 は過ぎているので、明日が選ばれている
+    expect(page).toContain('value="2026-09-26" checked');
+    expect(page).toContain('name="time" value="21:00" checked');
+    expect(page).toContain('value="910000000000000004"'); // 通話（拝殿）を場所に選べる
     // 面談のチャンネルがなければ流せない
-    expect((await post(s, '/interview/post', { at: '2026-09-28T21:00' })).headers.get('location')).toBe('/interview?msg=no_channel');
-    expect((await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'role', template: 'x' })).headers.get('location')).toBe(
+    expect((await post(s, '/interview/post', { day: '2026-09-28', time: '21:00', when: 'now' })).headers.get('location')).toBe('/interview?msg=no_channel');
+    expect((await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'role', 'tplName.0': 'a', 'tplBody.0': 'x' })).headers.get('location')).toBe(
       '/interview?msg=settings_invalid',
     );
-    expect((await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'here', template: '面談: {日時}\n{一言}' })).headers.get('location')).toBe(
-      '/interview?msg=saved',
-    );
-    expect((await post(s, '/interview/post', { at: 'だめ' })).headers.get('location')).toBe('/interview?msg=invalid');
+    const saved = await post(s, '/interview/settings', {
+      channelId: '910000000000000003',
+      mention: 'here',
+      'tplName.0': 'いつもの',
+      'tplBody.0': '面談: {日時}\n場所: {場所}\n{一言}',
+      'tplName.1': '新人面談',
+      'tplBody.1': '新人さん向け: {日時}',
+      reminderTemplate: 'まもなく {時刻}',
+    });
+    expect(saved.headers.get('location')).toBe('/interview?msg=saved');
+    expect((await post(s, '/interview/post', { day: 'だめ', time: '21:00' })).headers.get('location')).toBe('/interview?msg=invalid');
+    expect((await post(s, '/interview/post', { day: '2026-09-25', time: '20:00' })).headers.get('location')).toBe('/interview?msg=past');
+
+    // プレビュー
+    const pv = await (await post(s, '/interview/preview', { day: '2026-09-28', time: '21:00', placeChannelId: '910000000000000004', when: 'now', remind10: 'yes' })).text();
+    expect(pv).toContain('すぐに流します');
+    expect(pv).toContain('面談: 9月28日（月） 21:00');
+    expect(pv).toContain('場所: 🔊 拝殿');
+    expect(pv).toContain('@here');
+    expect(pv).toContain('10 分前');
+
+    // 今すぐ流す（ほかの時刻・定型文を選ぶ）
     actions.length = 0;
-    expect((await post(s, '/interview/post', { at: '2026-09-28T21:00', note: '' })).headers.get('location')).toBe('/interview?msg=posted');
-    expect(actions).toEqual(['send 910000000000000003 @here\n面談: 9月28日（月） 21:00']);
-    expect(await (await get('/interview', s)).text()).toContain('9月28日（月） 21:00');
+    const now = await post(s, '/interview/post', { day: '2026-09-28', timeOther: '21:15', template: '1', when: 'now', placeChannelId: '910000000000000004' });
+    expect(now.headers.get('location')).toBe('/interview?msg=posted#iv-upcoming');
+    expect(actions).toEqual(['send 910000000000000003 @here\n新人さん向け: 9月28日（月） 21:15']);
+    // 予約（当日の朝 10:00）
+    actions.length = 0;
+    const later = await post(s, '/interview/post', { day: '2026-09-29', time: '22:00', when: 'morning', note: 'よろしく', remind60: 'yes' });
+    expect(later.headers.get('location')).toBe('/interview?msg=scheduled#iv-upcoming');
+    expect(actions).toEqual([]);
+    const { listInterviews } = await import('../src/services/interview.js');
+    const [sched, posted] = await listInterviews(db);
+    expect(sched).toMatchObject({ status: 'scheduled', postAt: new Date('2026-09-29T01:00:00Z'), remind60: true, remind10: false, note: 'よろしく' });
+    expect(posted).toMatchObject({ status: 'posted', templateName: '新人面談', placeChannelId: '910000000000000004' });
+    // 前日 21:00 は面談より前でないとだめ
+    expect((await post(s, '/interview/post', { day: '2026-09-29', time: '20:00', when: 'custom', postAtOther: '2026-09-29T20:30' })).headers.get('location')).toBe(
+      '/interview?msg=post_after',
+    );
+    const list = await (await get('/interview', s)).text();
+    expect(list).toContain('⏳ 予約中');
+    expect(list).toContain('📣 流した');
+    expect(list).toContain('value="22:00" checked'); // 前の時刻を覚える
+
+    // 変更（流したあとは Discord も書き換え）・中止
+    actions.length = 0;
+    const up = await post(s, `/interview/${posted!.id}/update`, { at: '2026-09-28T22:00', placeText: '拝殿', note: '' });
+    expect(up.headers.get('location')).toBe('/interview?msg=updated#iv-upcoming');
+    expect(actions[0]).toContain('edit ');
+    expect(actions[0]).toContain('日時が変わりました');
+    const cancel = await post(s, `/interview/${posted!.id}/cancel`, { reason: '都合により' });
+    expect(cancel.headers.get('location')).toBe('/interview?msg=cancelled#iv-upcoming');
+    expect(actions[1]).toContain('中止になりました');
+    // 予約を今すぐ流す
+    actions.length = 0;
+    expect((await post(s, `/interview/${sched!.id}/post-now`, {})).headers.get('location')).toBe('/interview?msg=posted#iv-upcoming');
+    expect(actions[0]).toContain('面談: 9月29日（火） 22:00');
+    expect(actions[0]).toContain('よろしく');
     // 標準に戻す
-    await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'none', template: 'x', reset: 'yes' });
+    await post(s, '/interview/settings', { channelId: '910000000000000003', mention: 'none', reset: 'yes' });
     expect(await (await get('/interview', s)).text()).toContain('運営との面談をおこないます');
   });
 });

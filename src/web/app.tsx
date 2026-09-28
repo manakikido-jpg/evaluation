@@ -32,17 +32,25 @@ import { addTickets, emptyTickets, ticketHolders, ticketsOf, takeTickets, TICKET
 import { addCustom, createCustomTicket, customHolders, customHoldingsOf, customName, listCustomTickets, setCustomTicketEnabled, takeCustom } from '../services/customTickets.js';
 import { GachaPage, GACHA_FLASH, MemberGachaSection } from './views/gacha.js';
 import { addPresetPrizes, PRESET_ROLES, presetPrizes, type PresetRoleKey } from '../services/gachaPresets.js';
-import { InterviewPage } from './views/interview.js';
+import { InterviewPage, InterviewPreview, type DayChip } from './views/interview.js';
 import {
-  DEFAULT_INTERVIEW_TEMPLATE,
+  cancelInterview,
+  createInterview,
+  DEFAULT_REMINDER_TEMPLATE,
+  DEFAULT_TEMPLATES,
+  getInterview,
   interviewChannelOf,
-  interviewMessage,
   interviewSchema,
   jstParts,
+  listInterviews,
   loadInterview,
   parseJstLocal,
+  placeOf,
+  postInterview,
   renderInterview,
   saveInterview,
+  updateInterview,
+  type InterviewSettings,
 } from '../services/interview.js';
 import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
@@ -2058,62 +2066,242 @@ export function createWebApp(deps: WebDeps) {
 
   // ───────── 面談告知 ─────────
 
-  /** 次のちょうどの時刻（日本時間の 2026-09-28T21:00） */
-  const nextHourJst = () => {
-    const j = new Date(Math.ceil((now().getTime() + 9 * 3_600_000) / 3_600_000) * 3_600_000);
-    return j.toISOString().slice(0, 16);
+  // ───────── 面談告知 ─────────
+
+  const WEEKDAY = ['日', '月', '火', '水', '木', '金', '土'];
+  /** 日本時間の YYYY-MM-DD */
+  const jstDay = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
+  /** 今日から 7 日分の日にちのボタン */
+  const dayChips = (t: Date): DayChip[] =>
+    Array.from({ length: 7 }, (_, n) => {
+      const d = new Date(t.getTime() + n * 86_400_000);
+      const day = jstDay(d);
+      const j = new Date(`${day}T00:00:00Z`);
+      const md = `${j.getUTCMonth() + 1}/${j.getUTCDate()}（${WEEKDAY[j.getUTCDay()]}）`;
+      return { value: day, label: ['今日', '明日', '明後日'][n] ?? md, sub: n < 3 ? md : '' };
+    });
+  const voiceOptions = (channels: GuildChannel[]) => {
+    const cat = (id: string | null) => channels.find((ch) => ch.id === id)?.name;
+    return channels
+      .filter((ch) => ch.type === 2 || ch.type === 13)
+      .sort((a, b) => a.position - b.position)
+      .map((ch) => ({ id: ch.id, name: ch.name, ...(cat(ch.parent_id) ? { category: cat(ch.parent_id)! } : {}) }));
   };
 
+  type InterviewForm = {
+    at?: Date;
+    postAt?: Date;
+    placeChannelId?: string;
+    placeText: string;
+    note: string;
+    templateIndex: number;
+    remind60: boolean;
+    remind10: boolean;
+    error?: 'invalid' | 'past' | 'post_after';
+  };
+  /** 告知のフォームを読む（日にち・時刻のボタン、ほかの日・時刻、流すタイミング） */
+  const readInterviewForm = (body: Record<string, unknown>, st: InterviewSettings, t: Date): InterviewForm => {
+    const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string).trim() : '');
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(str('dayOther')) ? str('dayOther') : str('day');
+    const time = /^\d{2}:\d{2}$/.test(str('timeOther')) ? str('timeOther') : str('time');
+    const at = /^\d{4}-\d{2}-\d{2}$/.test(day) && /^\d{2}:\d{2}$/.test(time) ? parseJstLocal(`${day}T${time}`) : undefined;
+    const placeChannelId = validId(str('placeChannelId')) ? str('placeChannelId') : undefined;
+    const idx = Number(str('template') || '0');
+    const base: InterviewForm = {
+      placeChannelId,
+      placeText: placeChannelId ? '' : str('placeText').slice(0, 100),
+      note: str('note').slice(0, 500),
+      templateIndex: Number.isInteger(idx) && idx >= 0 && idx < st.templates.length ? idx : 0,
+      remind60: body.remind60 === 'yes',
+      remind10: body.remind10 === 'yes',
+    };
+    if (!at) return { ...base, error: 'invalid' };
+    if (at.getTime() <= t.getTime()) return { ...base, at, error: 'past' };
+    const w = str('when');
+    let postAt = t;
+    if (w === 'morning') postAt = parseJstLocal(`${day}T10:00`)!;
+    else if (w === 'eve') postAt = new Date(parseJstLocal(`${day}T21:00`)!.getTime() - 86_400_000);
+    else if (w === 'before2h') postAt = new Date(at.getTime() - 2 * 3_600_000);
+    else if (w === 'custom') postAt = parseJstLocal(str('postAtOther')) ?? t;
+    // もう過ぎた時刻なら、すぐ流す
+    if (postAt.getTime() < t.getTime()) postAt = t;
+    if (postAt.getTime() >= at.getTime()) return { ...base, at, error: 'post_after' };
+    return { ...base, at, postAt };
+  };
+
+  const mentionLabelOf = (st: InterviewSettings, roleName: (id: string) => string | undefined) =>
+    st.mention === 'here' ? '@here' : st.mention === 'everyone' ? '@everyone' : st.mention === 'role' && st.roleId ? `@${roleName(st.roleId) ?? 'ロール'}` : '';
+
+  const interviewPreview = (st: InterviewSettings, form: InterviewForm, channels: GuildChannel[], roleName: (id: string) => string | undefined, t: Date) => {
+    if (form.error) return { text: '', mention: '', postLabel: '', reminders: [], error: INTERVIEW_ERRORS[form.error] };
+    const tpl = st.templates[form.templateIndex] ?? st.templates[0]!;
+    const place = placeOf({ placeChannelId: form.placeChannelId ?? null, placeText: form.placeText }, (id) => channels.find((ch) => ch.id === id)?.name);
+    const text = renderInterview(tpl.body, { at: form.at!, place, note: form.note });
+    const p = jstParts(form.postAt!);
+    const postLabel = form.postAt!.getTime() <= t.getTime() + 60_000 ? 'すぐに流します' : `${p.date} ${p.time} に流します（予約）`;
+    return { text, mention: mentionLabelOf(st, roleName), postLabel, reminders: [...(form.remind60 ? ['1 時間前'] : []), ...(form.remind10 ? ['10 分前'] : [])] };
+  };
+  const INTERVIEW_ERRORS = { invalid: '日にちと時刻を選んでください。', past: 'その日時はもう過ぎています。', post_after: '告知を流す日時は、面談より前にしてください。' } as const;
+
   app.get('/interview', async (c) => {
-    const [st, channels, guildRoles, history] = await Promise.all([loadInterview(db), loadChannels(), loadRoles(), listAudit(db, { action: 'interview.post', limit: 20 })]);
+    const t = now();
+    const [st, channels, guildRoles, list] = await Promise.all([loadInterview(db), loadChannels(), loadRoles(), listInterviews(db, 60)]);
     const catName = (id: string | null) => channels.find((ch) => ch.id === id)?.name;
     const textChannels = listTextChannels(channels).flatMap((g) => g.items);
-    const names = await namesOf(db, history.map((h) => h.actorId));
-    const at = parseJstLocal(nextHourJst())!;
+    const roles = (guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
+    const days = dayChips(t);
+    const defaultTime = st.lastTime ?? '21:00';
+    // 今日のその時刻が過ぎていたら、明日を選んでおく
+    const defaultDay = parseJstLocal(`${days[0]!.value}T${defaultTime}`)!.getTime() > t.getTime() ? days[0]!.value : days[1]!.value;
+    const form = readInterviewForm({ day: defaultDay, time: defaultTime, remind60: 'yes', remind10: 'yes', placeChannelId: st.lastPlaceChannelId ?? '' }, st, t);
+    const upcoming = list.filter((i) => i.at.getTime() > t.getTime() - 3_600_000).reverse();
+    const past = list.filter((i) => i.at.getTime() <= t.getTime() - 3_600_000);
     return c.html(
       <InterviewPage
         session={c.get('session')}
         settings={st}
         channelName={interviewChannelOf(st, channels)?.name}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
-        roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
-        defaultAt={nextHourJst()}
-        preview={interviewMessage(st, renderInterview(st.template, { at, place: '🔊 拝殿', note: '（ここに一言）' })).content ?? ''}
-        history={history}
-        names={names}
+        voiceChannels={voiceOptions(channels)}
+        roles={roles.map((r) => ({ id: r.id, name: r.name }))}
+        days={days}
+        defaultDay={defaultDay}
+        defaultTime={defaultTime}
+        preview={interviewPreview(st, form, channels, (id) => roles.find((r) => r.id === id)?.name, t)}
+        upcoming={upcoming}
+        past={past}
+        channelNameOf={(id) => channels.find((ch) => ch.id === id)?.name}
+        now={t}
         flash={c.req.query('msg')}
       />,
     );
   });
 
+  app.post('/interview/preview', async (c) => {
+    const t = now();
+    const [body, st, channels, guildRoles] = await Promise.all([c.req.parseBody(), loadInterview(db), loadChannels(), loadRoles()]);
+    const form = readInterviewForm(body, st, t);
+    return c.html(<InterviewPreview {...interviewPreview(st, form, channels, (id) => guildRoles?.find((r) => r.id === id)?.name, t)} />);
+  });
+
   app.post('/interview/post', async (c) => {
+    const t = now();
     const body = await c.req.parseBody();
-    const at = typeof body.at === 'string' ? parseJstLocal(body.at) : undefined;
-    if (!at) return c.redirect('/interview?msg=invalid');
     const st = await loadInterview(db);
+    const form = readInterviewForm(body, st, t);
+    if (form.error) return c.redirect(`/interview?msg=${form.error}`);
     const channel = interviewChannelOf(st, await loadChannels(true));
     if (!channel) return c.redirect('/interview?msg=no_channel');
-    const text = renderInterview(st.template, { at, place: field(body, 'place', 100), note: typeof body.note === 'string' ? body.note.slice(0, 500) : '' });
+    const by = c.get('session').userId;
+    const i = await createInterview(
+      db,
+      {
+        at: form.at!,
+        ...(form.placeChannelId ? { placeChannelId: form.placeChannelId } : {}),
+        placeText: form.placeText,
+        note: form.note,
+        template: st.templates[form.templateIndex]!,
+        channelId: channel.id,
+        postAt: form.postAt!,
+        remind60: form.remind60,
+        remind10: form.remind10,
+      },
+      by,
+    );
+    // 次に開いたときのために、時刻と場所を覚える
+    const p = jstParts(form.at!);
+    await saveInterview(db, { ...st, lastTime: p.time, ...(form.placeChannelId ? { lastPlaceChannelId: form.placeChannelId } : {}) }, by);
+    await audit(db, { actorId: by, action: 'interview.create', detail: { id: i.id, at: form.at!.toISOString(), label: `${p.date} ${p.time}`, postAt: form.postAt!.toISOString() }, via: 'web' });
+    if (form.postAt!.getTime() > t.getTime()) return c.redirect('/interview?msg=scheduled#iv-upcoming');
     try {
-      await deps.discord.sendMessage(channel.id, interviewMessage(st, text));
+      await postInterview({ db, discord: deps.discord }, i.id, st, t);
     } catch (err) {
       logger.warn({ err }, 'interview post failed');
-      return c.redirect('/interview?msg=failed');
+      return c.redirect('/interview?msg=failed#iv-upcoming');
     }
-    const p = jstParts(at);
-    await audit(db, { actorId: c.get('session').userId, action: 'interview.post', detail: { channelId: channel.id, at: at.toISOString(), label: `${p.date} ${p.time}` }, via: 'web' });
-    return c.redirect('/interview?msg=posted');
+    return c.redirect('/interview?msg=posted#iv-upcoming');
+  });
+
+  const interviewId = (c: Context<Env>) => {
+    const id = Number(c.req.param('id'));
+    return Number.isInteger(id) && id > 0 ? id : 0;
+  };
+
+  app.post('/interview/:id/post-now', async (c) => {
+    const i = await getInterview(db, interviewId(c));
+    if (!i || i.status !== 'scheduled') return c.redirect('/interview?msg=not_found#iv-upcoming');
+    try {
+      await postInterview({ db, discord: deps.discord }, i.id, await loadInterview(db), now());
+    } catch (err) {
+      logger.warn({ err }, 'interview post failed');
+      return c.redirect('/interview?msg=failed#iv-upcoming');
+    }
+    return c.redirect('/interview?msg=posted#iv-upcoming');
+  });
+
+  app.post('/interview/:id/update', async (c) => {
+    const t = now();
+    const body = await c.req.parseBody();
+    const at = typeof body.at === 'string' ? parseJstLocal(body.at) : undefined;
+    const postAt = typeof body.postAt === 'string' ? parseJstLocal(body.postAt) : undefined;
+    if (!at) return c.redirect('/interview?msg=invalid#iv-upcoming');
+    if (at.getTime() <= t.getTime()) return c.redirect('/interview?msg=past#iv-upcoming');
+    if (postAt && postAt.getTime() >= at.getTime()) return c.redirect('/interview?msg=post_after#iv-upcoming');
+    const placeChannelId = typeof body.placeChannelId === 'string' && validId(body.placeChannelId) ? body.placeChannelId : undefined;
+    try {
+      const r = await updateInterview(
+        { db, discord: deps.discord },
+        interviewId(c),
+        {
+          at,
+          ...(placeChannelId ? { placeChannelId } : {}),
+          placeText: placeChannelId ? '' : field(body, 'placeText', 100),
+          note: typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '',
+          ...(postAt ? { postAt: postAt.getTime() < t.getTime() ? t : postAt } : {}),
+          remind60: body.remind60 === 'yes',
+          remind10: body.remind10 === 'yes',
+        },
+        c.get('session').userId,
+        t,
+      );
+      return c.redirect(`/interview?msg=${r === 'ok' ? 'updated' : 'not_found'}#iv-upcoming`);
+    } catch (err) {
+      logger.warn({ err }, 'interview update failed');
+      return c.redirect('/interview?msg=failed#iv-upcoming');
+    }
+  });
+
+  app.post('/interview/:id/cancel', async (c) => {
+    const body = await c.req.parseBody();
+    const r = await cancelInterview({ db, discord: deps.discord }, interviewId(c), field(body, 'reason', 200), c.get('session').userId, now());
+    return c.redirect(`/interview?msg=${r === 'ok' ? 'cancelled' : 'not_found'}#iv-upcoming`);
   });
 
   app.post('/interview/settings', async (c) => {
     const body = await c.req.parseBody();
+    const current = await loadInterview(db);
     const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : undefined;
     const roleId = typeof body.roleId === 'string' && validId(body.roleId) ? body.roleId : undefined;
-    const template = body.reset === 'yes' ? DEFAULT_INTERVIEW_TEMPLATE : typeof body.template === 'string' ? body.template.replace(/\r\n/g, '\n').trim() : '';
-    const parsed = interviewSchema.safeParse({ ...(channelId ? { channelId } : {}), ...(roleId ? { roleId } : {}), template, mention: body.mention });
-    if (!parsed.success || (parsed.data.mention === 'role' && !parsed.data.roleId)) return c.redirect('/interview?msg=settings_invalid');
+    const templates =
+      body.reset === 'yes'
+        ? DEFAULT_TEMPLATES
+        : Array.from({ length: 11 }, (_, i) => ({ name: field(body, `tplName.${i}`, 30), body: typeof body[`tplBody.${i}`] === 'string' ? (body[`tplBody.${i}`] as string).replace(/\r\n/g, '\n').trim() : '' }))
+            .filter((t) => t.name || t.body)
+            .map((t, i) => ({ name: t.name || `定型文 ${i + 1}`, body: t.body }));
+    const reminderTemplate = body.reset === 'yes' ? DEFAULT_REMINDER_TEMPLATE : typeof body.reminderTemplate === 'string' ? body.reminderTemplate.replace(/\r\n/g, '\n').trim() : '';
+    const parsed = interviewSchema.safeParse({
+      ...(current.lastTime ? { lastTime: current.lastTime } : {}),
+      ...(current.lastPlaceChannelId ? { lastPlaceChannelId: current.lastPlaceChannelId } : {}),
+      ...(channelId ? { channelId } : {}),
+      ...(roleId ? { roleId } : {}),
+      templates,
+      reminderTemplate,
+      remindMention: body.remindMention === 'yes',
+      mention: body.mention,
+    });
+    if (!parsed.success || (parsed.data.mention === 'role' && !parsed.data.roleId) || templates.some((t) => !t.body)) return c.redirect('/interview?msg=settings_invalid');
     await saveInterview(db, parsed.data, c.get('session').userId);
-    await audit(db, { actorId: c.get('session').userId, action: 'interview.settings', detail: { channelId, mention: parsed.data.mention }, via: 'web' });
+    await audit(db, { actorId: c.get('session').userId, action: 'interview.settings', detail: { channelId, mention: parsed.data.mention, templates: templates.length }, via: 'web' });
     return c.redirect('/interview?msg=saved');
   });
 

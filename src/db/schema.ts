@@ -938,3 +938,39 @@ export const recruitPosts = pgTable(
   },
   (t) => [index('recruit_posts_member_idx').on(t.memberId, t.createdAt), index('recruit_posts_channel_idx').on(t.channelId, t.createdAt)],
 );
+
+/** 面談（面談告知のページで作る。予約して流す・リマインド・時間の変更・中止） */
+export const interviews = pgTable(
+  'interviews',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** 面談の日時 */
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    /** 場所: 通話チャンネル（リンクにする）か、手で書いた場所 */
+    placeChannelId: text('place_channel_id'),
+    placeText: text('place_text').notNull().default(''),
+    note: text('note').notNull().default(''),
+    /** 使った定型文（あとで定型文を直しても、この面談の文面は変わらない） */
+    templateName: text('template_name').notNull(),
+    template: text('template').notNull(),
+    /** 流すチャンネルと、流す日時（予約。今すぐなら作った日時） */
+    channelId: text('channel_id').notNull(),
+    postAt: timestamp('post_at', { withTimezone: true }).notNull(),
+    /** scheduled 予約中 / posted 流した / cancelled 中止 */
+    status: text('status').$type<'scheduled' | 'posted' | 'cancelled'>().notNull().default('scheduled'),
+    messageId: text('message_id'),
+    postedAt: timestamp('posted_at', { withTimezone: true }),
+    /** リマインド（1 時間前・10 分前）と、流したか */
+    remind60: boolean('remind_60').notNull().default(true),
+    remind10: boolean('remind_10').notNull().default(true),
+    remind60At: timestamp('remind_60_at', { withTimezone: true }),
+    remind10At: timestamp('remind_10_at', { withTimezone: true }),
+    cancelReason: text('cancel_reason'),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('interviews_at_idx').on(t.at), index('interviews_status_idx').on(t.status, t.postAt)],
+);
+
+export type Interview = typeof interviews.$inferSelect;

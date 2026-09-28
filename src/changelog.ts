@@ -20,6 +20,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-interview-v2',
+    date: '2026-09-28',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🍵 面談告知を使いやすく',
+    items: [
+      '日にち・時刻をボタンで選べる（前の時刻・場所を覚える）。場所は通話チャンネルを選ぶとリンクになる',
+      'Discord での見た目をその場でプレビュー。定型文をいくつも持てる',
+      '予約して流せる（当日の朝・前日の夜・2 時間前・日時を決めて）。1 時間前・10 分前にリマインド',
+      '流したあとに時間を変える・中止にできる（Discord のメッセージも書き換える）',
+      '入力欄を大きくして、左に入力・右にプレビューの並びにした',
+    ],
+  },
+  {
     id: '2026-09-28-members-sort',
     date: '2026-09-28',
     kind: 'improve',

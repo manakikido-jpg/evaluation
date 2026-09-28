@@ -367,3 +367,55 @@ td.level-very_high { color: var(--shu); font-weight: bold; }
 th.sortable a { color: inherit; text-decoration: none; white-space: nowrap; }
 th.sortable a:hover { color: var(--shu); }
 th.sortable.on a { color: var(--shu); }
+
+/* 面談告知 */
+.iv-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.iv-preview { position: sticky; top: 12px; }
+.iv-form { display: grid; gap: 18px; }
+.iv-form h2 { margin-bottom: 0; }
+.iv-step { display: grid; gap: 8px; }
+.iv-step h3 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+.iv-step h3 b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--shu); color: #fff; font-size: .8rem; }
+.iv-form select, .iv-form input[type="text"], .iv-form textarea, .iv-form input[type="date"], .iv-form input[type="time"], .iv-form input[type="datetime-local"],
+.iv-settings select, .iv-settings input[type="text"], .iv-settings textarea, .iv-edit input, .iv-edit select, .iv-edit textarea {
+  font: inherit; font-size: 1rem; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); width: 100%; box-sizing: border-box;
+}
+.iv-form textarea, .iv-settings textarea { resize: vertical; line-height: 1.5; }
+.iv-other { display: flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted); }
+.iv-other span { white-space: nowrap; }
+.iv-other input { max-width: 240px; }
+.iv-submit { font-size: 1.1rem !important; padding: 12px 18px !important; border-radius: 12px !important; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; cursor: pointer; }
+.chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.chip span { display: inline-flex; flex-direction: column; align-items: center; min-width: 64px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); font-size: .95rem; line-height: 1.2; }
+.chip span small { font-size: .72rem; color: var(--muted); }
+.chip:hover span { border-color: var(--shu); }
+.chip input:checked + span { background: var(--shu); border-color: var(--shu); color: #fff; }
+.chip input:checked + span small { color: #fff; opacity: .85; }
+.chip input:focus-visible + span { outline: 2px solid var(--shu); outline-offset: 2px; }
+.iv-when { font-weight: bold; margin: 0 0 6px; }
+.iv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.iv-item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.iv-item.st-cancelled { opacity: .6; }
+.iv-item-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.iv-at { font-size: 1.1rem; }
+.status.iv-scheduled { background: #fff4d6; color: #7a5600; }
+.status.iv-posted { background: #e7f5ea; color: #1f5f2e; }
+.status.iv-cancelled { background: var(--gray); color: var(--muted); }
+.iv-item .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.iv-item .inline-actions form { margin: 0; }
+.iv-edit { width: auto; }
+.iv-edit[open] { flex-basis: 100%; }
+.iv-edit summary { cursor: pointer; display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.iv-edit[open] summary { margin-bottom: 10px; }
+.iv-edit .fields { margin-top: 4px; }
+.danger-text { color: var(--shu); }
+.iv-settings { display: grid; gap: 12px; margin-top: 12px; }
+.iv-settings h3 { margin: 8px 0 0; font-size: 1rem; }
+.iv-template { display: grid; gap: 6px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; }
+@media (max-width: 860px) { .iv-grid { grid-template-columns: 1fr; } .iv-preview { position: static; } }
+@media (prefers-color-scheme: dark) {
+  .status.iv-scheduled { background: #3a2f10; color: #f3d27a; }
+  .status.iv-posted { background: #1f3a26; color: #bfe6c8; }
+}

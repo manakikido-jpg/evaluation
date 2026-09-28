@@ -17,6 +17,7 @@ import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { GlossaryApp } from './discord/glossary.js';
 import { announceEvents } from './services/economyEvents.js';
+import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
@@ -136,6 +137,10 @@ async function main(): Promise<void> {
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
+      // 面談告知: 予約した告知と、1 時間前・10 分前のリマインドを流す
+      void loadInterview(db)
+        .then((st) => interviewTick({ db, discord: actions }, st))
+        .catch((err) => logger.warn({ err }, 'interview tick failed'));
       // 期間限定イベント（ボーナス週間・セール）の始まり・終わりを知らせる
       void announceEvents({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'economy event announce failed'));
     }, 60_000);

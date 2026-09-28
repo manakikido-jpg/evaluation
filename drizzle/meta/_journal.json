@@ -302,6 +302,13 @@
       "when": 1790547981664,
       "tag": "0042_notice_shuin_button",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790555458996,
+      "tag": "0043_interviews",
+      "breakpoints": true
     }
   ]
 }
