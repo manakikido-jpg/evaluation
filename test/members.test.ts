@@ -137,6 +137,35 @@ describe('メンバー一覧の検索', () => {
     expect((await listMembers(db, { perPage: 2, page: 99 })).page).toBe(2);
   });
 
+  it('並べ方を増やした: 役職・銭・朱印を押した人数・通話と発言（30 日）・向き（↑↓）', async () => {
+    const { addCoins } = await import('../src/services/economy.js');
+    const { activityDaily } = await import('../src/db/schema.js');
+    const { cfg } = await import('./helpers.js');
+    const now = new Date('2026-09-25T12:00:00+09:00');
+    await addCoins(db, B, 500, 'adjust');
+    await addCoins(db, C, 100, 'adjust');
+    await db.insert(activityDaily).values([
+      { memberId: C, date: '2026-09-20', vcMinutes: 120, messageCount: 3 },
+      { memberId: B, date: '2026-09-24', vcMinutes: 30, messageCount: 50 },
+      // 30 日より前は数えない
+      { memberId: A, date: '2026-08-01', vcMinutes: 999, messageCount: 999 },
+    ]);
+    const ids = async (sort: Parameters<typeof listMembers>[1]['sort'], dir?: 'asc' | 'desc') =>
+      (await listMembers(db, { sort, ...(dir ? { dir } : {}) }, now, cfg.ranks)).rows.map((m) => m.displayName);
+    // 役職: 世話役 > 氏子 > 参拝者
+    expect(await ids('rank')).toEqual(['Sakura', 'Kaede_100%', 'Momiji']);
+    expect(await ids('rank', 'asc')).toEqual(['Momiji', 'Kaede_100%', 'Sakura']);
+    expect(await ids('coins')).toEqual(['Momiji', 'Kaede_100%', 'Sakura']);
+    // 朱印を押した人数: B 1・C 1・A 1 → 同じなら名前順
+    expect(await ids('given')).toEqual(['Kaede_100%', 'Momiji', 'Sakura']);
+    expect(await ids('vc30')).toEqual(['Kaede_100%', 'Momiji', 'Sakura']);
+    expect(await ids('msg30')).toEqual(['Momiji', 'Kaede_100%', 'Sakura']);
+    expect(await ids('name', 'desc')).toEqual(['Sakura', 'Momiji', 'Kaede_100%']);
+    expect(await ids('goen', 'asc')).toEqual(['Momiji', 'Kaede_100%', 'Sakura']);
+    const r = (await listMembers(db, { sort: 'vc30' }, now, cfg.ranks)).rows.find((m) => m.id === C)!;
+    expect(r).toMatchObject({ coins: 100, given: 1, vc30: 120, msg30: 3 });
+  });
+
   it('参加の新しい順', async () => {
     const r = await listMembers(db, { sort: 'joined' });
     expect(r.rows[0]?.id).toBe(B);

@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { memberEvents, members, shuin, type Member } from '../db/schema.js';
+import { activityDaily, memberEvents, members, shuin, wallets, type Member } from '../db/schema.js';
 
 /** Discord から取ったメンバー情報（BOT が渡す） */
 export type MemberSnapshot = {
@@ -115,16 +115,43 @@ export type MemberListQuery = {
   status?: 'active' | 'left' | 'all';
   /** N 日以上活動していない人 */
   inactiveDays?: number;
-  sort?: 'goen' | 'joined' | 'active' | 'name';
+  sort?: MemberSort;
+  /** 並べる向き（なければ並べ方ごとの向き） */
+  dir?: 'asc' | 'desc';
   page?: number;
   perPage?: number;
 };
 
-export type MemberRow = Member & { goen: number };
+/** 並べ方と、はじめの向き（数が多い順・新しい順・名前は あ→ん） */
+export const MEMBER_SORTS = {
+  goen: { label: 'ご縁', dir: 'desc' },
+  rank: { label: '役職', dir: 'desc' },
+  joined: { label: '参加日', dir: 'desc' },
+  active: { label: '最後の活動', dir: 'desc' },
+  coins: { label: '銭', dir: 'desc' },
+  given: { label: '朱印を押した人数', dir: 'desc' },
+  vc30: { label: '通話（30 日）', dir: 'desc' },
+  msg30: { label: '発言（30 日）', dir: 'desc' },
+  name: { label: '名前', dir: 'asc' },
+} as const satisfies Record<string, { label: string; dir: 'asc' | 'desc' }>;
+export type MemberSort = keyof typeof MEMBER_SORTS;
+export const isMemberSort = (v: unknown): v is MemberSort => typeof v === 'string' && Object.hasOwn(MEMBER_SORTS, v);
+
+export type MemberRow = Member & { goen: number; coins: number; given: number; vc30: number; msg30: number };
 
 const goenExpr = sql<number>`coalesce((select sum(${shuin.weight}) from ${shuin} where ${shuin.receiverId} = ${members.id} and ${shuin.revokedAt} is null), 0)::int`;
+const coinsExpr = sql<number>`coalesce((select ${wallets.balance} from ${wallets} where ${wallets.memberId} = ${members.id}), 0)::int`;
+const givenExpr = sql<number>`(select count(*) from ${shuin} where ${shuin.giverId} = ${members.id} and ${shuin.revokedAt} is null)::int`;
+const activity30 = (col: typeof activityDaily.vcMinutes | typeof activityDaily.messageCount, since: string) =>
+  sql<number>`coalesce((select sum(${col}) from ${activityDaily} where ${activityDaily.memberId} = ${members.id} and ${activityDaily.date} >= ${since}), 0)::int`;
 
-export async function listMembers(db: Db, query: MemberListQuery, now = new Date()): Promise<{ rows: MemberRow[]; total: number; page: number; pages: number }> {
+export async function listMembers(
+  db: Db,
+  query: MemberListQuery,
+  now = new Date(),
+  /** 役職の並べ替え用（役職のロールと格） */
+  ranks: { roleId: string; weight: number }[] = [],
+): Promise<{ rows: MemberRow[]; total: number; page: number; pages: number }> {
   const conds: SQL[] = [eq(members.isBot, false)];
   const status = query.status ?? 'active';
   if (status === 'active') conds.push(isNull(members.leftAt));
@@ -142,12 +169,32 @@ export async function listMembers(db: Db, query: MemberListQuery, now = new Date
   }
   const where = and(...conds);
 
-  const order = {
-    goen: [desc(goenExpr), asc(members.displayName)],
-    joined: [desc(members.joinedAt)],
-    active: [sql`${members.lastActiveAt} desc nulls last`],
-    name: [asc(members.displayName)],
-  }[query.sort ?? 'goen'];
+  const since = new Date(now.getTime() + 9 * 3_600_000 - 29 * 86_400_000).toISOString().slice(0, 10);
+  const vc30 = activity30(activityDaily.vcMinutes, since);
+  const msg30 = activity30(activityDaily.messageCount, since);
+  // 役職: 持っている役職のうち、いちばん格の高いもの（役職がなければ 0）
+  const rankExpr = ranks.length
+    ? sql`greatest(0, ${sql.join(
+        ranks.map((r) => sql`case when ${r.roleId} = any(${members.roleIds}) then ${r.weight} else 0 end`),
+        sql`, `,
+      )})`
+    : sql`0`;
+  const sort = query.sort ?? 'goen';
+  const dir = query.dir ?? MEMBER_SORTS[sort].dir;
+  const by = (e: SQL | typeof members.displayName) => (dir === 'asc' ? sql`${e} asc nulls last` : sql`${e} desc nulls last`);
+  const key: Record<MemberSort, SQL | typeof members.displayName> = {
+    goen: goenExpr,
+    rank: rankExpr,
+    joined: sql`${members.joinedAt}`,
+    active: sql`${members.lastActiveAt}`,
+    coins: coinsExpr,
+    given: givenExpr,
+    vc30,
+    msg30,
+    name: members.displayName,
+  };
+  // 同じなら名前順
+  const order = [by(key[sort]), asc(members.displayName)];
 
   const perPage = Math.min(Math.max(query.perPage ?? 50, 1), 200);
   const [totalRow] = await db.select({ n: count() }).from(members).where(where);
@@ -156,14 +203,19 @@ export async function listMembers(db: Db, query: MemberListQuery, now = new Date
   const page = Math.min(Math.max(query.page ?? 1, 1), pages);
 
   const rows = await db
-    .select({ member: members, goen: goenExpr })
+    .select({ member: members, goen: goenExpr, coins: coinsExpr, given: givenExpr, vc30, msg30 })
     .from(members)
     .where(where)
     .orderBy(...order)
     .limit(perPage)
     .offset((page - 1) * perPage);
 
-  return { rows: rows.map((r) => ({ ...r.member, goen: Number(r.goen) })), total, page, pages };
+  return {
+    rows: rows.map((r) => ({ ...r.member, goen: Number(r.goen), coins: Number(r.coins), given: Number(r.given), vc30: Number(r.vc30), msg30: Number(r.msg30) })),
+    total,
+    page,
+    pages,
+  };
 }
 
 export async function getMember(db: Db, id: string): Promise<Member | undefined> {

@@ -48,7 +48,7 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
-import { eventsOf, getMember, homeStats, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
+import { eventsOf, getMember, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
@@ -389,11 +389,12 @@ export function createWebApp(deps: WebDeps) {
       ageGroup: q.age === 'minor' || q.age === 'adult' || q.age === 'unknown' ? q.age : undefined,
       status: q.status === 'left' || q.status === 'all' ? q.status : 'active',
       inactiveDays: Number(q.inactive) > 0 ? Math.min(Number(q.inactive), 3650) : undefined,
-      sort: q.sort === 'joined' || q.sort === 'active' || q.sort === 'name' ? q.sort : 'goen',
+      sort: isMemberSort(q.sort) ? q.sort : 'goen',
+      dir: q.dir === 'asc' || q.dir === 'desc' ? q.dir : undefined,
       page: Number(q.page) > 0 ? Math.floor(Number(q.page)) : 1,
     };
     const t = now();
-    const result = await listMembers(db, query, t);
+    const result = await listMembers(db, query, t, cfg.ranks);
     if (c.req.header('hx-request') && !c.req.header('hx-history-restore-request')) return c.html(<MemberResults cfg={cfg} query={query} result={result} now={t} />);
     return c.html(<MembersPage session={c.get('session')} cfg={cfg} query={query} result={result} now={t} />);
   });

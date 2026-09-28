@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-members-sort',
+    date: '2026-09-28',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '👥 メンバー一覧の並べ替えを増やした',
+    items: [
+      '役職・銭・朱印を押した人数・通話時間（30 日）・発言数（30 日）でも並べられる（ご縁・参加日・最後の活動・名前も）',
+      '多い順・少ない順を選べる。見出しを押してもその列で並び、もう一度押すと逆になる',
+      '一覧に 銭・押した朱印・通話・発言 の列を足した',
+    ],
+  },
+  {
     id: '2026-09-28-ema-shuin-button',
     date: '2026-09-28',
     kind: 'new',

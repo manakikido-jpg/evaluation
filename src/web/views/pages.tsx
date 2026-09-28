@@ -6,7 +6,7 @@ import type { TrendBucket } from '../../services/stats.js';
 import { LineChart } from './charts.js';
 import { RecentUpdates } from './updates.js';
 import type { SessionView } from './layout.js';
-import type { MemberListQuery, MemberRow } from '../../services/members.js';
+import { MEMBER_SORTS, type MemberListQuery, type MemberRow, type MemberSort } from '../../services/members.js';
 import {
   ACTION_LABEL,
   AGE_LABEL,
@@ -210,17 +210,21 @@ export function MembersPage(props: {
           </option>
         </select>
         <select name="sort" aria-label="並べ替え">
-          <option value="goen" {...sel(query.sort, 'goen')}>
-            ご縁の多い順
+          {(Object.keys(MEMBER_SORTS) as MemberSort[]).map((k) => (
+            <option value={k} {...sel(query.sort ?? 'goen', k)}>
+              {MEMBER_SORTS[k].label}で並べる
+            </option>
+          ))}
+        </select>
+        <select name="dir" aria-label="向き">
+          <option value="" {...sel(query.dir, undefined)}>
+            おすすめの向き
           </option>
-          <option value="joined" {...sel(query.sort, 'joined')}>
-            参加の新しい順
+          <option value="desc" {...sel(query.dir, 'desc')}>
+            多い順・新しい順（↓）
           </option>
-          <option value="active" {...sel(query.sort, 'active')}>
-            最近の活動順
-          </option>
-          <option value="name" {...sel(query.sort, 'name')}>
-            名前順
+          <option value="asc" {...sel(query.dir, 'asc')}>
+            少ない順・古い順（↑）
           </option>
         </select>
         <noscript>
@@ -239,17 +243,34 @@ export function MemberResults(props: {
   now: Date;
 }) {
   const { result } = props;
-  const pageLink = (p: number) => {
+  const { query } = props;
+  const link = (p: number, sort: MemberSort = query.sort ?? 'goen', dir: MemberListQuery['dir'] = query.dir) => {
     const q = new URLSearchParams();
-    const { query } = props;
     if (query.q) q.set('q', query.q);
     if (query.rank) q.set('rank', query.rank);
     if (query.ageGroup) q.set('age', query.ageGroup);
     if (query.inactiveDays) q.set('inactive', String(query.inactiveDays));
     if (query.status && query.status !== 'active') q.set('status', query.status);
-    if (query.sort && query.sort !== 'goen') q.set('sort', query.sort);
-    q.set('page', String(p));
+    if (sort !== 'goen') q.set('sort', sort);
+    if (dir) q.set('dir', dir);
+    if (p > 1) q.set('page', String(p));
     return `/members?${q}`;
+  };
+  const pageLink = (p: number) => link(p);
+  const current = query.sort ?? 'goen';
+  const currentDir = query.dir ?? MEMBER_SORTS[current].dir;
+  /** 見出しを押すとその列で並べる（もう一度押すと向きが変わる） */
+  const Th = (p: { sort: MemberSort; label: string; num?: boolean }) => {
+    const on = current === p.sort;
+    const nextDir = on ? (currentDir === 'desc' ? 'asc' : 'desc') : undefined;
+    return (
+      <th class={`${p.num ? 'num ' : ''}sortable${on ? ' on' : ''}`} aria-sort={on ? (currentDir === 'asc' ? 'ascending' : 'descending') : undefined}>
+        <a href={link(1, p.sort, nextDir)} title={`${MEMBER_SORTS[p.sort].label}で並べる`}>
+          {p.label}
+          {on ? (currentDir === 'asc' ? ' ↑' : ' ↓') : ''}
+        </a>
+      </th>
+    );
   };
   return (
     <section id="results">
@@ -261,11 +282,15 @@ export function MemberResults(props: {
           <table class="members">
             <thead>
               <tr>
-                <th>名前</th>
-                <th>役職</th>
-                <th class="num">ご縁</th>
-                <th>参加日</th>
-                <th>最後の活動</th>
+                <Th sort="name" label="名前" />
+                <Th sort="rank" label="役職" />
+                <Th sort="goen" label="ご縁" num />
+                <Th sort="coins" label="銭" num />
+                <Th sort="given" label="押した朱印" num />
+                <Th sort="vc30" label="通話 30 日" num />
+                <Th sort="msg30" label="発言 30 日" num />
+                <Th sort="joined" label="参加日" />
+                <Th sort="active" label="最後の活動" />
                 <th>年齢区分</th>
               </tr>
             </thead>
@@ -283,6 +308,10 @@ export function MemberResults(props: {
                   </td>
                   <td>{m.leftAt ? <span class="tag gray">退出 {fmtDate(m.leftAt)}</span> : memberRankLabel(props.cfg, m.roleIds)}</td>
                   <td class="num">{m.goen}</td>
+                  <td class="num">{m.coins.toLocaleString('ja-JP')}</td>
+                  <td class="num">{m.given}</td>
+                  <td class="num">{m.vc30 >= 60 ? `${Math.floor(m.vc30 / 60)} 時間` : `${m.vc30} 分`}</td>
+                  <td class="num">{m.msg30.toLocaleString('ja-JP')}</td>
                   <td>{fmtDate(m.joinedAt)}</td>
                   <td>{fmtAgo(m.lastActiveAt, props.now)}</td>
                   <td>{AGE_LABEL[m.ageGroup] ?? m.ageGroup}</td>
