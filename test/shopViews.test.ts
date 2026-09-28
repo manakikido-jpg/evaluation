@@ -20,13 +20,36 @@ const base: ShopItem = {
 };
 
 describe('ショップの見た目', () => {
-  it('一覧: 残高と値段。選ぶメニュー', () => {
-    const m = shopList([base, { ...base, id: 2, kind: 'gift', name: '贈り物', emoji: '🎁', price: 0 }, { ...base, id: 3, kind: 'menzaifu', name: '免罪符', emoji: '🧾', price: 0 }], cfg.economy, 3000);
-    expect(m.embeds[0]!.description).toContain('いまの🪙銭: **3,000 枚**');
-    expect(m.embeds[0]!.description).toContain('🌸 色守り（桜） … **1,500 枚**');
-    expect(m.embeds[0]!.description).toContain('🎁 贈り物 … **好きな量**');
-    expect(m.embeds[0]!.description).toContain(`🧾 免罪符 … **${cfg.economy.menzaifuPrice} 枚**`);
-    expect(m.components[0]!.components[0]!.options.map((o) => o.value)).toEqual(['1', '2', '3']);
+  it('一覧: 残高・受けているもの・種類ごとのカードと選ぶメニュー。足りない分も出す', () => {
+    const title = { ...base, id: 4, name: '称号「常連」', emoji: '🎋', roleGroup: 'title', price: 5000, durationDays: null };
+    const m = shopList(
+      [base, title, { ...base, id: 2, kind: 'gift', name: '贈り物', emoji: '🎁', price: 0, roleGroup: null }, { ...base, id: 3, kind: 'menzaifu', name: '免罪符', emoji: '🧾', price: 0, roleGroup: null }],
+      cfg.economy,
+      3000,
+      false,
+      new Map([[1, new Date('2026-10-05T03:00:00Z')]]),
+    );
+    expect(m.embeds[0]!.description).toContain('👛 いまの🪙銭: **3,000 枚**');
+    expect(m.embeds[0]!.description).toContain('🌸 色守り（桜） … 10/5 まで');
+    expect(m.embeds.map((e) => e.title)).toEqual(['🛍 授与所', '🎨 色守り', '🏷 称号', '🎁 贈る', '🧾 厄払い']);
+    const color = m.embeds[1]!.fields![0]!;
+    expect(color).toMatchObject({ name: '🌸 色守り（桜）', inline: true });
+    expect(color.value).toContain('**1,500 枚**・30 日');
+    expect(color.value).toContain('✅ 受けている（10/5 まで）');
+    expect(m.embeds[2]!.fields![0]!.value).toContain('あと 2,000 枚');
+    expect(m.embeds[3]!.fields![0]!.value).toContain('**好きな量**');
+    expect(m.embeds[4]!.fields![0]!.value).toContain(`**${cfg.economy.menzaifuPrice} 枚**`);
+    // 種類ごとの選ぶメニュー
+    expect(m.components.map((r) => r.components[0]!.custom_id)).toEqual(['shop:pick:color', 'shop:pick:title', 'shop:pick:gift', 'shop:pick:menzaifu']);
+    expect(m.components[0]!.components[0]!.options[0]!.description).toContain('✅ 受けている');
+  });
+
+  it('一覧: 品物が多くても、カードは合わせて 6000 文字まで', () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({ ...base, id: i + 1, name: `色守り（色 ${i}）`, description: '30 日間、名前がこの色になる。とても長い説明がここに入ります。'.repeat(2) }));
+    const m = shopList(many, cfg.economy, 3000);
+    const total = m.embeds.reduce((n, e) => n + e.title.length + (e.description?.length ?? 0) + (e.fields ?? []).reduce((k, f) => k + f.name.length + f.value.length, 0), 0);
+    expect(total).toBeLessThanOrEqual(6000);
+    expect(m.embeds[1]!.fields!.length).toBeGreaterThan(0);
   });
 
   it('確認: 足りなければ「受ける」を押せない', () => {
@@ -43,6 +66,10 @@ describe('ショップの見た目', () => {
     const menzaifu = shopConfirm({ ...base, kind: 'menzaifu' }, cfg.economy, 1000, undefined, false, [{ ticket: 'shop_50', count: 2 }]).components[0]!.components;
     expect(menzaifu.map((c) => c.custom_id)).toEqual(['shop:buy:1', 'shop:cancel']);
     expect(priceText(base, cfg.economy)).toBe('1,500 枚');
+    // 値段・期間・いま・受けたあと
+    const fields = shopConfirm(base, cfg.economy, 3000).embeds[0]!.fields.map((f) => `${f.name}=${f.value}`);
+    expect(fields).toEqual(['値段=**1,500 枚**', '期間=30 日', 'いまの銭=3,000 枚', '受けたあと=1,500 枚']);
+    expect(shopConfirm(base, cfg.economy, 1000).embeds[0]!.fields.at(-1)!.value).toBe('⚠ あと 500 枚 足りません');
   });
 
   it('相手を選ぶ（ユーザーのメニュー）', () => {
@@ -64,7 +91,7 @@ describe('奉納（ブースト）の特典', () => {
     expect(json(false)).toContain('"disabled":true');
     expect(json(false)).toContain('奉納（サーバーブースト）している方だけ');
     expect(json(true)).toContain('"disabled":false');
-    expect(json(true)).toContain('期間: 奉納している間');
+    expect(json(true)).toContain('"name":"期間","value":"奉納している間"');
   });
 
   it('絵馬の奉納（自己紹介のピン留め）は、奉納している人は無料', () => {

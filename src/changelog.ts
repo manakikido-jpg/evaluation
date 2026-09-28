@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-shop-look',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🛍 授与所を見やすく',
+    items: [
+      '授与品を種類ごと（色守り・称号・贈る・おみくじと絵馬・厄払い）のカードに分けて、値段・期間を小さな枠で並べた',
+      '受けているものは ✅ と期限、銭が足りないものは「あと ○ 枚」が出る',
+      '選ぶメニューも種類ごとに。選ぶと、値段・期間・いまの銭・受けたあとの銭が並ぶ',
+    ],
+  },
+  {
     id: '2026-09-29-help-by-role',
     date: '2026-09-29',
     kind: 'improve',

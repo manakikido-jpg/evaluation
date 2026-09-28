@@ -22,6 +22,7 @@ import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { ticketsOf } from '../services/tickets.js';
 import {
+  activeRolePurchases,
   buyRole,
   buySimple,
   DISCOUNT_TICKETS,
@@ -79,7 +80,7 @@ export class ShopApp {
           return await this.buy(interaction, Number(itemId), discount);
         }
       }
-      if (interaction.isStringSelectMenu() && id === 'shop:pick') return await this.pick(interaction);
+      if (interaction.isStringSelectMenu() && (id === 'shop:pick' || id.startsWith('shop:pick:'))) return await this.pick(interaction);
       if (interaction.isUserSelectMenu() && id.startsWith('shop:target:')) return await this.target(interaction, Number(id.split(':')[2]));
       if (interaction.isModalSubmit()) {
         const [, kind, itemId, targetId] = id.split(':');
@@ -109,8 +110,14 @@ export class ShopApp {
   }
 
   private async open(i: ButtonInteraction<'cached'>): Promise<void> {
-    const items = await listItems(this.db, { enabledOnly: true });
-    await i.reply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id), isBooster(i)), ...EPHEMERAL });
+    const [items, purchases] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id)]);
+    // 受けている授与品（ロールをまだ持っているものだけ）
+    const owned = new Map<number, Date | null>();
+    for (const p of purchases) {
+      const item = items.find((x) => x.id === p.itemId);
+      if (item?.roleId && i.member.roles.cache.has(item.roleId)) owned.set(p.itemId, p.expiresAt ?? null);
+    }
+    await i.reply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id), isBooster(i), owned), ...EPHEMERAL });
   }
 
   private async pick(i: StringSelectMenuInteraction<'cached'>): Promise<void> {
