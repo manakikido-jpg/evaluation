@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-otoshidama-mycolor',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🧧 お年玉袋・🎨 自分だけの色（授与品）',
+    items: [
+      '🧧 お年玉袋: 銭を入れた袋をチャンネルに置くと、先着の人が「もらう」で受け取れる（量は運しだい。1 人 1 回・24 時間で残りは戻る）',
+      '🎨 自分だけの色: 和の色の見本か色コードで、自分専用の色ロールを BOT が作る（期間つき。もう一度で色を変えて延長）',
+      '社務所Web の「ショップ」で値段・日数・手数料を変えられる',
+    ],
+  },
+  {
     id: '2026-09-29-nav-fold',
     date: '2026-09-29',
     kind: 'improve',

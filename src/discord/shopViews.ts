@@ -1,6 +1,7 @@
 import type { EconomyConfig } from '../config.js';
 import type { ShopItem } from '../db/schema.js';
-import { discountable, discountedPrice, DISCOUNT_PERCENT, priceOf, type DiscountTicket } from '../services/shop.js';
+import { OTOSHIDAMA } from '../services/otoshidama.js';
+import { discountable, discountedPrice, DISCOUNT_PERCENT, hexOf, MY_COLORS, priceOf, type DiscountTicket } from '../services/shop.js';
 
 /** ショップの見た目（Discord API の形のまま。テストしやすいように discord.js に依らない） */
 
@@ -14,6 +15,7 @@ const discounted = (item: ShopItem, e: EconomyConfig, booster: boolean) => boost
 export function priceText(item: ShopItem, e: EconomyConfig, booster = false): string {
   if (item.boosterOnly && !booster) return '🏮 奉納している方だけ';
   if (item.kind === 'gift') return '好きな量';
+  if (item.kind === 'otoshidama') return item.price > 0 ? `好きな量（手数料 ${item.price.toLocaleString('ja-JP')} 枚）` : '好きな量';
   if (booster && item.kind === 'ema_pin' && item.price > 0) return `0 枚（奉納の特典で無料）`;
   const now = `${priceOf(item, e, booster).toLocaleString('ja-JP')} 枚`;
   const base = item.kind === 'menzaifu' ? e.menzaifuPrice : item.price;
@@ -41,14 +43,16 @@ const ORDER: ShopCategory[] = ['color', 'title', 'gift', 'fun', 'menzaifu', 'oth
 
 export function categoryOf(i: Pick<ShopItem, 'kind' | 'roleGroup'>): ShopCategory {
   if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : 'other';
-  if (i.kind === 'gift' || i.kind === 'hanafubuki') return 'gift';
+  if (i.kind === 'mycolor') return 'color';
+  if (i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
   if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin') return 'fun';
   if (i.kind === 'menzaifu') return 'menzaifu';
   return 'other';
 }
 
 const fmtDay = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).format(d);
-const durationText = (i: ShopItem) => (i.durationDays ? `${i.durationDays} 日` : i.kind === 'role' ? (i.boosterOnly ? '奉納している間' : 'ずっと') : '');
+const durationText = (i: ShopItem) =>
+  i.durationDays ? `${i.durationDays} 日` : i.kind === 'role' || i.kind === 'mycolor' ? (i.boosterOnly ? '奉納している間' : 'ずっと') : '';
 
 /** 一覧（本人にだけ）。種類ごとのカードと、種類ごとの選ぶメニュー */
 export function shopList(
@@ -70,7 +74,7 @@ export function shopList(
   const groups = ORDER.map((c) => ({ c, items: items.filter((i) => categoryOf(i) === c) })).filter((g) => g.items.length);
   const tile = (i: ShopItem, withNote = true) => {
     const price = priceOf(i, e, booster);
-    const lack = i.kind !== 'gift' && !(i.boosterOnly && !booster) && price > balance ? price - balance : 0;
+    const lack = i.kind !== 'gift' && i.kind !== 'otoshidama' && !(i.boosterOnly && !booster) && price > balance ? price - balance : 0;
     const until = owned.get(i.id);
     return {
       name: label(i).slice(0, 256),
@@ -213,5 +217,128 @@ export function hanafubukiMessage(fromId: string, toId: string, message: string)
     ],
     // 通知は贈られた人にだけ
     allowedMentions: { users: [toId], roles: [] as string[] },
+  };
+}
+
+// ───────── 🎨 自分だけの色 ─────────
+
+/** 色を選ぶ（見本から・色コードで）。持っていれば今の色と期限も出す */
+export function myColorPicker(item: ShopItem, e: EconomyConfig, balance: number, booster = false, current?: { color: number; expiresAt: Date | null }) {
+  const price = priceOf(item, e, booster);
+  return {
+    embeds: [
+      {
+        title: label(item),
+        description: [
+          item.description,
+          `値段 **${priceText(item, e, booster)}**${durationText(item) ? `・${durationText(item)}` : ''}　いま ${balance.toLocaleString('ja-JP')} 枚`,
+          ...(current
+            ? [`🎨 いまの色: **${hexOf(current.color)}**${current.expiresAt ? `（${fmtDay(current.expiresAt)} まで）` : ''}`, '-# もう一度受けると、色を変えて期間が延びます']
+            : ['-# BOT があなた専用の色ロールを作って付けます。色守りより上に出るので、名前がこの色になります']),
+          '',
+          '下の見本から選ぶか、「色コードで決める」を押してください（例: #ff88aa）。',
+        ].join('\n'),
+        color: current?.color ?? SHU,
+      },
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 3,
+            custom_id: `shop:mycolor:pick:${item.id}`,
+            placeholder: '🎨 色の見本から選ぶ',
+            options: MY_COLORS.map((c) => ({ label: `${c.name}（${hexOf(c.color)}）`, value: String(c.color), emoji: { name: c.emoji } })),
+          },
+        ],
+      },
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 1, label: '色コードで決める', emoji: { name: '🖌' }, custom_id: `shop:mycolor:hex:${item.id}`, disabled: balance < price },
+          { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
+        ],
+      },
+    ],
+  };
+}
+
+/** 選んだ色の確認（カードの左の線がその色になる） */
+export function myColorConfirm(item: ShopItem, e: EconomyConfig, balance: number, color: number, booster = false, extend = false) {
+  const price = priceOf(item, e, booster);
+  const after = balance - price;
+  const name = MY_COLORS.find((c) => c.color === color)?.name;
+  return {
+    embeds: [
+      {
+        title: `${label(item)}: ${name ? `${name}（${hexOf(color)}）` : hexOf(color)}`,
+        description: [
+          '← このカードの左の線が、名前の色の見本です（画面の明るさで少し違って見えます）',
+          extend ? '-# 今の色をこの色に変えて、期間を延ばします' : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        fields: [
+          { name: '値段', value: `**${priceText(item, e, booster)}**`, inline: true },
+          ...(durationText(item) ? [{ name: '期間', value: durationText(item), inline: true }] : []),
+          { name: '受けたあと', value: after >= 0 ? `${after.toLocaleString('ja-JP')} 枚` : `⚠ あと ${(-after).toLocaleString('ja-JP')} 枚 足りません`, inline: true },
+        ],
+        color,
+      },
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 3, label: `${price.toLocaleString('ja-JP')} 枚で受ける`, custom_id: `shop:mycolor:buy:${item.id}:${color}`, disabled: balance < price || (item.boosterOnly && !booster) },
+          { type: 2, style: 2, label: '色を選び直す', custom_id: `shop:mycolor:again:${item.id}` },
+          { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
+        ],
+      },
+    ],
+  };
+}
+
+// ───────── 🧧 お年玉袋 ─────────
+
+/** 置くチャンネルを選ぶ */
+export function otoshidamaPickChannel(item: ShopItem, e: EconomyConfig, balance: number, defaultChannelId?: string, defaultName?: string) {
+  const o = OTOSHIDAMA;
+  return {
+    embeds: [
+      {
+        title: label(item),
+        description: [
+          item.description,
+          `入れられるのは ${coin(e)} ${o.minTotal.toLocaleString('ja-JP')}〜${o.maxTotal.toLocaleString('ja-JP')} 枚、${o.minCount}〜${o.maxCount} 人分${item.price > 0 ? `（ほかに手数料 ${item.price.toLocaleString('ja-JP')} 枚）` : ''}`,
+          `いま ${balance.toLocaleString('ja-JP')} 枚`,
+          `-# 受け取れるのは 1 人 1 回・入鯖が承認された人だけ。${o.hours} 時間で締め切り、残りはあなたに戻ります`,
+          '',
+          '袋を置くチャンネルを選んでください。',
+        ].join('\n'),
+        color: 0xd7003a,
+      },
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 8,
+            custom_id: `shop:otoshi:ch:${item.id}`,
+            placeholder: '袋を置くチャンネル',
+            channel_types: [0],
+          },
+        ],
+      },
+      {
+        type: 1,
+        components: [
+          ...(defaultChannelId ? [{ type: 2, style: 1, label: `${defaultName ? `#${defaultName}` : 'いつもの場所'} に置く`.slice(0, 80), emoji: { name: '📍' }, custom_id: `shop:otoshi:here:${item.id}:${defaultChannelId}` }] : []),
+          { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
+        ],
+      },
+    ],
   };
 }

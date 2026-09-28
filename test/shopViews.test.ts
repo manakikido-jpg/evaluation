@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ShopItem } from '../src/db/schema.js';
-import { hanafubukiMessage, priceText, shopConfirm, shopList, shopPickTarget } from '../src/discord/shopViews.js';
+import { categoryOf, hanafubukiMessage, myColorConfirm, myColorPicker, otoshidamaPickChannel, priceText, shopConfirm, shopList, shopPickTarget } from '../src/discord/shopViews.js';
 import { cfg } from './helpers.js';
 
 const base: ShopItem = {
@@ -101,3 +101,33 @@ describe('奉納（ブースト）の特典', () => {
   });
 });
 
+describe('新しい授与品の見た目', () => {
+  const mycolor: ShopItem = { ...base, id: 20, kind: 'mycolor', name: '自分だけの色', emoji: '🎨', price: 5000, roleId: null, roleGroup: null };
+  const bag: ShopItem = { ...base, id: 21, kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', price: 50, roleId: null, roleGroup: null, durationDays: null };
+
+  it('種類と値段: 自分だけの色は色守りの仲間・お年玉袋は贈るの仲間（手数料つき）', () => {
+    expect(categoryOf(mycolor)).toBe('color');
+    expect(categoryOf(bag)).toBe('gift');
+    expect(priceText(bag, cfg.economy)).toBe('好きな量（手数料 50 枚）');
+    expect(priceText({ ...bag, price: 0 }, cfg.economy)).toBe('好きな量');
+    // お年玉袋は足りない分を出さない（量はあとで決める）
+    expect(JSON.stringify(shopList([bag], cfg.economy, 0).embeds)).not.toContain('あと');
+  });
+
+  it('色を選ぶ: 見本のメニューと色コードのボタン。確認はカードの線がその色で、買うボタンに色が入る', () => {
+    const pick = JSON.stringify(myColorPicker(mycolor, cfg.economy, 6000, false, { color: 0x00ff00, expiresAt: new Date('2026-10-30T00:00:00Z') }));
+    for (const t of ['shop:mycolor:pick:20', 'shop:mycolor:hex:20', '#00ff00', '色を変えて期間が延びます']) expect(pick).toContain(t);
+    const c = myColorConfirm(mycolor, cfg.economy, 6000, 0xf4a7b9, false, true);
+    expect(c.embeds[0]!.color).toBe(0xf4a7b9);
+    expect(c.embeds[0]!.title).toContain('桜色（#f4a7b9）');
+    expect(JSON.stringify(c.components)).toContain(`shop:mycolor:buy:20:${0xf4a7b9}`);
+    expect((c.components[0]!.components[0] as { disabled: boolean }).disabled).toBe(false);
+    expect((myColorConfirm(mycolor, cfg.economy, 100, 0xf4a7b9).components[0]!.components[0] as { disabled: boolean }).disabled).toBe(true);
+  });
+
+  it('お年玉袋: 置くチャンネルを選ぶ（いつもの場所のボタンも）', () => {
+    const v = JSON.stringify(otoshidamaPickChannel(bag, cfg.economy, 1000, '910000000000000001', '境内'));
+    for (const t of ['shop:otoshi:ch:21', '"type":8', 'shop:otoshi:here:21:910000000000000001', '#境内 に置く', '手数料 50 枚']) expect(v).toContain(t);
+    expect(JSON.stringify(otoshidamaPickChannel(bag, cfg.economy, 1000))).not.toContain('shop:otoshi:here');
+  });
+});

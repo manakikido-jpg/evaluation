@@ -10,6 +10,7 @@ import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
 import { GiftApp } from './discord/gifts.js';
+import { OtoshidamaApp } from './discord/otoshidama.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
   const gifts = new GiftApp(db, cfg, actions);
+  const otoshidama = new OtoshidamaApp(db, cfg, actions);
   const voiceGroups = new VoiceGroupApp(cfg);
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
@@ -151,6 +153,8 @@ async function main(): Promise<void> {
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
+      // 🧧 お年玉袋: 締め切りが来た袋の残りを置いた人に戻す
+      void otoshidama.tick().catch((err) => logger.warn({ err }, 'otoshidama tick failed'));
       // ⏳ 一時的なロール・権限: 期限が来たものを外す
       void expireTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'temp grant expire failed'));
       // 面談告知: 予約した告知と、1 時間前・10 分前のリマインドを流す
@@ -241,6 +245,7 @@ async function main(): Promise<void> {
     void onboarding.onInteraction(i);
     void inviteLinks.onInteraction(i);
     void gifts.onInteraction(i);
+    void otoshidama.onInteraction(i);
     void bell.onInteraction(i);
     void omamori.onInteraction(i);
     void recruit.onInteraction(i);

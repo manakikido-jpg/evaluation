@@ -330,6 +330,13 @@
       "when": 1790620806990,
       "tag": "0046_invite_label",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790626810930,
+      "tag": "0047_otoshidama",
+      "breakpoints": true
     }
   ]
 }

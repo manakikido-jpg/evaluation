@@ -61,6 +61,15 @@ export async function suspectPairs(db: Db, cfg: GuildConfig, since: Date, limit 
     const to = typeof g.detail.to === 'string' ? g.detail.to : undefined;
     if (to) add('gift', g.memberId, to, -g.amount, g.at);
   }
+  // お年玉袋: 置いた人 → 受け取った人（贈り物と同じに数える）
+  const bags = await db
+    .select({ memberId: coinTx.memberId, amount: coinTx.amount, detail: coinTx.detail, at: coinTx.at })
+    .from(coinTx)
+    .where(and(eq(coinTx.reason, 'otoshidama_get'), gte(coinTx.at, since)));
+  for (const g of bags) {
+    const from = typeof g.detail.from === 'string' ? g.detail.from : undefined;
+    if (from) add('gift', from, g.memberId, g.amount, g.at);
+  }
   // 市場は、買った人 → 売った人（{通貨}が動く向き）
   for (const o of orders.filter((x) => x.status !== 'refunded')) add('market', o.buyerId, o.sellerId, o.price, o.at);
 
@@ -140,7 +149,7 @@ export async function memberLedger(db: Db, memberId: string, since: Date, now: D
     if (r.reason === 'gift_send') {
       const p = partner(r.detail.to);
       if (p) p.sent -= r.amount;
-    } else if (r.reason === 'gift_receive') {
+    } else if (r.reason === 'gift_receive' || r.reason === 'otoshidama_get') {
       const p = partner(r.detail.from);
       if (p) p.received += r.amount;
     }

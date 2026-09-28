@@ -3378,9 +3378,9 @@ export function createWebApp(deps: WebDeps) {
       emoji: f.emoji,
       description: f.description,
       enabled: body.enabled === 'yes',
-      ...(item.kind !== 'menzaifu' && item.kind !== 'gift' ? { boosterOnly: body.boosterOnly === 'yes' } : {}),
+      ...(item.kind !== 'menzaifu' && item.kind !== 'gift' && item.kind !== 'otoshidama' ? { boosterOnly: body.boosterOnly === 'yes' } : {}),
       ...(f.price !== undefined && item.kind !== 'menzaifu' && item.kind !== 'gift' ? { price: f.price } : {}),
-      ...(item.kind === 'role' || item.kind === 'ema_pin' ? { durationDays: item.kind === 'ema_pin' ? (f.durationDays ?? 7) : f.durationDays } : {}),
+      ...(item.kind === 'role' || item.kind === 'ema_pin' || item.kind === 'mycolor' ? { durationDays: item.kind === 'ema_pin' ? (f.durationDays ?? 7) : f.durationDays } : {}),
       ...(f.position !== undefined ? { position: f.position } : {}),
     });
     await audit(db, { actorId: c.get('session').userId, action: 'shop.update', detail: { id, name: f.name, price: f.price, enabled: body.enabled === 'yes' }, via: 'web' });

@@ -19,6 +19,8 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   ema_pin: '絵馬の奉納',
   omikuji_extra: 'おみくじもう 1 回',
   menzaifu: '免罪符',
+  otoshidama: 'お年玉袋',
+  mycolor: '自分だけの色',
 };
 
 function Csrf(props: { session: AdminSession }) {
@@ -79,7 +81,7 @@ export function ShopPage(props: {
                         <span class="tag gray">{KIND_LABEL[i.kind]}</span>
                         {!i.enabled && <span class="tag gray">お休み</span>}
                         {i.boosterOnly && <span class="tag red">🏮 奉納限定</span>}
-                        {i.durationDays !== null && (i.kind === 'role' || i.kind === 'ema_pin') && <span class="tag gray">{i.durationDays} 日</span>}
+                        {i.durationDays !== null && (i.kind === 'role' || i.kind === 'ema_pin' || i.kind === 'mycolor') && <span class="tag gray">{i.durationDays} 日</span>}
                       </span>
                     </div>
                     <div class="ch-topic">
@@ -89,7 +91,14 @@ export function ShopPage(props: {
                   </div>
                   <span class="ch-actions">
                     <span class="price">
-                      {i.kind === 'menzaifu' ? e.menzaifuPrice : i.kind === 'gift' ? `${e.giftMin}〜${e.giftMax}` : i.price.toLocaleString('ja-JP')} 銭
+                      {i.kind === 'menzaifu'
+                        ? e.menzaifuPrice
+                        : i.kind === 'gift'
+                          ? `${e.giftMin}〜${e.giftMax}`
+                          : i.kind === 'otoshidama'
+                            ? `好きな量＋手数料 ${i.price.toLocaleString('ja-JP')}`
+                            : i.price.toLocaleString('ja-JP')}{' '}
+                      銭
                     </span>
                     <span class="button-link small">編集</span>
                   </span>
@@ -106,7 +115,7 @@ export function ShopPage(props: {
                       <input type="text" name="name" value={i.name} maxlength={60} required />
                     </label>
                     <label class="field">
-                      <span>値段（銭）</span>
+                      <span>{i.kind === 'otoshidama' ? '手数料（銭。袋に入れる量とは別に払う）' : '値段（銭）'}</span>
                       {i.kind === 'menzaifu' ? (
                         <input type="text" value={`${e.menzaifuPrice}（設定で変える）`} disabled />
                       ) : i.kind === 'gift' ? (
@@ -115,7 +124,7 @@ export function ShopPage(props: {
                         <input type="number" name="price" value={String(i.price)} min={0} required />
                       )}
                     </label>
-                    {(i.kind === 'role' || i.kind === 'ema_pin') && (
+                    {(i.kind === 'role' || i.kind === 'ema_pin' || i.kind === 'mycolor') && (
                       <label class="field">
                         <span>日数（空でずっと）</span>
                         <input type="number" name="durationDays" value={i.durationDays === null ? '' : String(i.durationDays)} min={1} />
@@ -130,6 +139,16 @@ export function ShopPage(props: {
                     <span>説明</span>
                     <input type="text" name="description" value={i.description} maxlength={100} />
                   </label>
+                  {i.kind === 'mycolor' && (
+                    <p class="note">
+                      買った人ごとに、BOT が「🎨 名前」の色ロールを作って付けます（その人の色つきのロールより上に置くので、名前がその色になる）。期限が来たらロールごと消します。もう一度買うと色を変えて期間が延びます。
+                    </p>
+                  )}
+                  {i.kind === 'otoshidama' && (
+                    <p class="note">
+                      買った人が 100〜10,000 枚・2〜20 人分の袋をチャンネルに置き、先着の人が「もらう」で受け取ります（1 人ずつの量は運しだい。1 人 1 回・入鯖が承認された人だけ）。24 時間で締め切り、残りは置いた人に戻ります。置けるのは贈り物と同じく 2 段目の役職以上。
+                    </p>
+                  )}
                   {i.kind === 'role' && (
                     <p class="note">
                       ロール: {roleName(i.roleId)}
@@ -141,7 +160,7 @@ export function ShopPage(props: {
                       <input type="checkbox" name="enabled" value="yes" checked={i.enabled} />
                       <span>販売する</span>
                     </label>
-                    {i.kind !== 'menzaifu' && i.kind !== 'gift' && (
+                    {i.kind !== 'menzaifu' && i.kind !== 'gift' && i.kind !== 'otoshidama' && (
                       <label class="field check">
                         <input type="checkbox" name="boosterOnly" value="yes" checked={i.boosterOnly} />
                         <span>🏮 奉納限定（ブーストしている人だけ。ロールは奉納をやめると外れる）</span>

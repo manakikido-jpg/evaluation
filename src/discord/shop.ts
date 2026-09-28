@@ -5,6 +5,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   type ButtonInteraction,
+  type ChannelSelectMenuInteraction,
   type Guild,
   type Interaction,
   type ModalSubmitInteraction,
@@ -21,8 +22,14 @@ import { walletOf } from '../services/economy.js';
 import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { ticketsOf } from '../services/tickets.js';
+import { bagMessage, OTOSHIDAMA, parseCount, putBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import {
+  activeMyColor,
   activeRolePurchases,
+  buyMyColor,
+  parseHexColor,
+  setPurchaseRole,
+  undoMyColor,
   buyRole,
   buySimple,
   DISCOUNT_TICKETS,
@@ -41,7 +48,7 @@ import {
 /** サーバーブースト（奉納）している人 */
 const isBooster = (i: { member: { premiumSince: Date | null } }) => i.member.premiumSince !== null;
 import { omikujiEmbed } from './omikuji.js';
-import { hanafubukiMessage, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
+import { hanafubukiMessage, myColorConfirm, myColorPicker, otoshidamaPickChannel, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const done = (content: string) => ({ content, embeds: [], components: [] });
@@ -79,12 +86,28 @@ export class ShopApp {
           const discount = DISCOUNT_TICKETS.find((t) => t === ticket);
           return await this.buy(interaction, Number(itemId), discount);
         }
+        // 🎨 自分だけの色: 色コードの入力欄・選び直す・買う
+        if (id.startsWith('shop:mycolor:')) {
+          const [, , step, itemId, color] = id.split(':');
+          if (step === 'hex') return await this.myColorHexModal(interaction, Number(itemId));
+          if (step === 'again') return await this.myColorPick(interaction, Number(itemId));
+          if (step === 'buy') return await this.myColorBuy(interaction, Number(itemId), Number(color));
+        }
+        // 🧧 お年玉袋: いつもの場所に置く
+        if (id.startsWith('shop:otoshi:here:')) {
+          const [, , , itemId, channelId] = id.split(':');
+          return await this.otoshidamaModal(interaction, Number(itemId), channelId ?? '');
+        }
       }
       if (interaction.isStringSelectMenu() && (id === 'shop:pick' || id.startsWith('shop:pick:'))) return await this.pick(interaction);
+      if (interaction.isStringSelectMenu() && id.startsWith('shop:mycolor:pick:')) return await this.myColorChosen(interaction, Number(id.split(':')[3]), Number(interaction.values[0]));
+      if (interaction.isChannelSelectMenu() && id.startsWith('shop:otoshi:ch:')) return await this.otoshidamaModal(interaction, Number(id.split(':')[3]), interaction.values[0] ?? '');
       if (interaction.isUserSelectMenu() && id.startsWith('shop:target:')) return await this.target(interaction, Number(id.split(':')[2]));
       if (interaction.isModalSubmit()) {
         const [, kind, itemId, targetId] = id.split(':');
         if (kind === 'hana' || kind === 'gift') return await this.submitWithTarget(interaction, kind, Number(itemId), targetId ?? '');
+        if (kind === 'mycolorhex') return await this.myColorHexSubmit(interaction, Number(itemId));
+        if (kind === 'otoshi') return await this.otoshidamaSubmit(interaction, Number(itemId), targetId ?? '');
       }
     } catch (err) {
       logger.error({ err, id }, 'shop failed');
@@ -110,13 +133,14 @@ export class ShopApp {
   }
 
   private async open(i: ButtonInteraction<'cached'>): Promise<void> {
-    const [items, purchases] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id)]);
+    const [items, purchases, mine] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id), activeMyColor(this.db, i.user.id)]);
     // 受けている授与品（ロールをまだ持っているものだけ）
     const owned = new Map<number, Date | null>();
     for (const p of purchases) {
       const item = items.find((x) => x.id === p.itemId);
       if (item?.roleId && i.member.roles.cache.has(item.roleId)) owned.set(p.itemId, p.expiresAt ?? null);
     }
+    if (mine?.roleId && i.member.roles.cache.has(mine.roleId)) owned.set(mine.itemId, mine.expiresAt ?? null);
     await i.reply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id), isBooster(i), owned), ...EPHEMERAL });
   }
 
@@ -126,6 +150,13 @@ export class ShopApp {
     const balance = await this.balance(i.user.id);
     const e = this.cfg().economy;
     if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
+    if (item.kind === 'mycolor') return this.myColorPick(i, item.id);
+    if (item.kind === 'otoshidama') {
+      const cfg = this.cfg();
+      const home = cfg.channels.keidai ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === '境内')?.id;
+      const homeName = home ? i.guild.channels.cache.get(home)?.name : undefined;
+      return void (await i.update(otoshidamaPickChannel(item, e, balance, home, homeName)));
+    }
     let note: string | undefined;
     if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていたら、その色は外れます。同じ色なら期間が延びます';
     if (item.kind === 'ema_pin') {
@@ -322,6 +353,152 @@ export class ShopApp {
     }
   }
 
+  // ───────── 🎨 自分だけの色 ─────────
+
+  /** 色を選ぶ画面（持っていれば今の色も） */
+  private async myColorPick(i: StringSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>, itemId: number): Promise<void> {
+    const item = await getItem(this.db, itemId);
+    if (!item?.enabled || item.kind !== 'mycolor') return void (await i.update(done('この授与品は、今は受けられません。')));
+    const mine = await activeMyColor(this.db, i.user.id);
+    const role = mine?.roleId ? i.guild.roles.cache.get(mine.roleId) : undefined;
+    const current = role ? { color: role.colors.primaryColor || role.color, expiresAt: mine!.expiresAt } : undefined;
+    await i.update(myColorPicker(item, this.cfg().economy, await this.balance(i.user.id), isBooster(i), current));
+  }
+
+  private async myColorChosen(i: StringSelectMenuInteraction<'cached'> | ModalSubmitInteraction<'cached'>, itemId: number, color: number): Promise<void> {
+    const item = await getItem(this.db, itemId);
+    if (!item?.enabled || item.kind !== 'mycolor' || !Number.isInteger(color) || color < 1 || color > 0xffffff) return void (await i.editReply(done('この授与品は、今は受けられません。')).catch(() => undefined));
+    const view = myColorConfirm(item, this.cfg().economy, await this.balance(i.user.id), color, isBooster(i), Boolean(await activeMyColor(this.db, i.user.id)));
+    if (i.isStringSelectMenu()) await i.update(view);
+    else await i.editReply(view);
+  }
+
+  private async myColorHexModal(i: ButtonInteraction<'cached'>, itemId: number): Promise<void> {
+    await i.showModal(
+      new ModalBuilder()
+        .setCustomId(`shop:mycolorhex:${itemId}`)
+        .setTitle('🎨 色コードで決める')
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder().setCustomId('hex').setLabel('色コード（例: #ff88aa）').setPlaceholder('#ff88aa').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(3).setMaxLength(7),
+          ),
+        ),
+    );
+  }
+
+  private async myColorHexSubmit(i: ModalSubmitInteraction<'cached'>, itemId: number): Promise<void> {
+    if (i.isFromMessage()) await i.deferUpdate();
+    else await i.deferReply(EPHEMERAL);
+    const color = parseHexColor(i.fields.getTextInputValue('hex'));
+    if (color === undefined) {
+      await i.followUp({ content: '色コードが読めませんでした。#ff88aa のように、# と 6 けたの 0〜9・a〜f で入れてください。', ...EPHEMERAL });
+      return;
+    }
+    await this.myColorChosen(i, itemId, color);
+  }
+
+  private async myColorBuy(i: ButtonInteraction<'cached'>, itemId: number, color: number): Promise<void> {
+    await i.deferUpdate();
+    const item = await getItem(this.db, itemId);
+    if (!item?.enabled || item.kind !== 'mycolor' || !Number.isInteger(color) || color < 1 || color > 0xffffff) return void (await i.editReply(done('この授与品は、今は受けられません。')));
+    if (item.boosterOnly && !isBooster(i)) return void (await i.editReply(done('🏮 この授与品は、奉納（サーバーブースト）している方だけが受けられます。')));
+    const price = this.price(i, item);
+    const r = await buyMyColor(this.db, item, i.user.id, color, new Date(), price);
+    if (r.status === 'insufficient') return void (await i.editReply(done(`${this.coinName}が足りません（${r.price} 枚必要・いま ${r.balance} 枚）。`)));
+    if (r.status !== 'ok') return void (await i.editReply(done('この授与品は、今は受けられません。')));
+    const name = `🎨 ${i.member.displayName}`.slice(0, 100);
+    try {
+      const existing = r.purchase.roleId ? (i.guild.roles.cache.get(r.purchase.roleId) ?? (await i.guild.roles.fetch(r.purchase.roleId).catch(() => null))) : null;
+      if (existing) {
+        await existing.edit({ colors: { primaryColor: color }, name, reason: `授与品: ${item.name}（色を変えた）` });
+        if (!i.member.roles.cache.has(existing.id)) await i.member.roles.add(existing, `授与品: ${item.name}`);
+      } else {
+        const role = await i.guild.roles.create({ name, colors: { primaryColor: color }, permissions: [], hoist: false, mentionable: false, reason: `授与品: ${item.name}` });
+        await setPurchaseRole(this.db, r.purchase.id, role.id);
+        // 名前がこの色になるよう、その人の色つきのロールより上に（BOT のロールより下）
+        const top = i.guild.members.me?.roles.highest.position ?? 0;
+        const colored = [...i.member.roles.cache.values()].filter((x) => (x.colors.primaryColor || x.color) !== 0 && x.id !== role.id);
+        const want = Math.min(top - 1, Math.max(0, ...colored.map((x) => x.position)) + 1);
+        if (want > role.position) await role.setPosition(want).catch((err: unknown) => logger.warn({ err }, 'mycolor position failed'));
+        await i.member.roles.add(role, `授与品: ${item.name}`);
+      }
+    } catch (err) {
+      logger.warn({ err }, 'mycolor role failed');
+      await undoMyColor(this.db, r, price);
+      return void (await i.editReply(done(`色のロールを作れなかったので、${this.coinName}を戻しました。神職に知らせてください（BOT の「ロールの管理」の権限）。`)));
+    }
+    const until = r.purchase.expiresAt ? `${fmtDate(r.purchase.expiresAt)} まで` : 'ずっと';
+    await i.editReply({
+      content: '',
+      embeds: [{ title: `🎨 ${r.extended ? '色を変えました' : '自分だけの色を授かりました'}`, description: `${until}。残り ${r.balance} 枚。\n-# 名前の色が変わらないときは、Discord を開き直してください`, color }],
+      components: [],
+    });
+  }
+
+  // ───────── 🧧 お年玉袋 ─────────
+
+  /** 置くチャンネルを選んだら、量・人数・一言の入力欄 */
+  private async otoshidamaModal(i: ChannelSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>, itemId: number, channelId: string): Promise<void> {
+    const item = await getItem(this.db, itemId);
+    if (!item?.enabled || item.kind !== 'otoshidama') return void (await i.update(done('この授与品は、今は受けられません。')));
+    const ch = i.guild.channels.cache.get(channelId);
+    const me = i.guild.members.me;
+    if (!ch?.isTextBased() || !ch.permissionsFor(i.member).has(['ViewChannel', 'SendMessages']) || !me || !ch.permissionsFor(me).has(['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
+      return void (await i.update(done('そのチャンネルには置けません（あなたか BOT が書き込めないチャンネル）。もう一度「授与品を見る」から選んでください。')));
+    }
+    const o = OTOSHIDAMA;
+    const row = (input: TextInputBuilder) => new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+    await i.showModal(
+      new ModalBuilder()
+        .setCustomId(`shop:otoshi:${item.id}:${ch.id}`)
+        .setTitle(`🧧 お年玉袋（#${ch.name}）`.slice(0, 45))
+        .addComponents(
+          row(new TextInputBuilder().setCustomId('total').setLabel(`入れる${this.coinName}（${o.minTotal}〜${o.maxTotal.toLocaleString('ja-JP')} 枚）`).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(7).setPlaceholder('1000')),
+          row(new TextInputBuilder().setCustomId('count').setLabel(`何人で分ける？（${o.minCount}〜${o.maxCount} 人）`).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3).setPlaceholder('5')),
+          row(new TextInputBuilder().setCustomId('note').setLabel('一言（なくても大丈夫）').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(60)),
+        ),
+    );
+  }
+
+  private async otoshidamaSubmit(i: ModalSubmitInteraction<'cached'>, itemId: number, channelId: string): Promise<void> {
+    if (i.isFromMessage()) await i.deferUpdate();
+    else await i.deferReply(EPHEMERAL);
+    const cfg = this.cfg();
+    const e = cfg.economy;
+    const item = await getItem(this.db, itemId);
+    const ch = i.guild.channels.cache.get(channelId);
+    if (!item?.enabled || item.kind !== 'otoshidama' || !ch?.isSendable() || !ch.permissionsFor(i.member)?.has(['ViewChannel', 'SendMessages'])) {
+      return void (await i.editReply(done('この授与品は、今は受けられません。')));
+    }
+    const total = parseCount(i.fields.getTextInputValue('total'));
+    const count = parseCount(i.fields.getTextInputValue('count'));
+    const o = OTOSHIDAMA;
+    const r = await putBag(this.db, cfg, {
+      ownerId: i.user.id,
+      roleIds: [...i.member.roles.cache.keys()],
+      channelId: ch.id,
+      total,
+      count,
+      note: i.fields.getTextInputValue('note') ?? '',
+      fee: this.price(i, item),
+      itemId: item.id,
+      itemName: item.name,
+    });
+    if (r.status === 'rank_too_low') return void (await i.editReply(done(`お年玉袋は ${r.rankName} 以上になると置けます。`)));
+    if (r.status === 'bad_amount')
+      return void (await i.editReply(done(`入れる量は ${o.minTotal}〜${o.maxTotal.toLocaleString('ja-JP')} 枚、人数は ${o.minCount}〜${o.maxCount} 人にしてください（量は人数以上）。`)));
+    if (r.status === 'insufficient') return void (await i.editReply(done(`${this.coinName}が足りません（${r.need.toLocaleString('ja-JP')} 枚必要・いま ${r.balance.toLocaleString('ja-JP')} 枚）。`)));
+    try {
+      const msg = await ch.send({ ...bagMessage(r.bag, [], { name: e.currencyName, emoji: e.currencyEmoji }), allowedMentions: { parse: [] } } as Parameters<typeof ch.send>[0]);
+      await setBagMessage(this.db, r.bag.id, msg.id);
+    } catch (err) {
+      logger.warn({ err }, 'otoshidama post failed');
+      await undoBag(this.db, r.bag, this.price(i, item));
+      return void (await i.editReply(done(`袋を置けなかったので、${this.coinName}を戻しました。`)));
+    }
+    await i.editReply(done(`🧧 <#${ch.id}> にお年玉袋を置きました（${r.bag.total.toLocaleString('ja-JP')} 枚・${r.bag.count} 人分）。残り ${r.balance.toLocaleString('ja-JP')} 枚。`));
+  }
+
   // ───────── 期限 ─────────
 
   /** 10 分ごと: 期限が来た色守りのロールを外し、絵馬のピン留めを外す */
@@ -330,7 +507,10 @@ export class ShopApp {
     if (!guild) return;
     for (const p of await duePurchases(this.db, now)) {
       try {
-        if (p.kind === 'role' && p.roleId) {
+        if (p.kind === 'mycolor' && p.roleId) {
+          // 自分だけの色: ロールごと消す
+          await guild.roles.delete(p.roleId, '授与品の期限（自分だけの色）').catch((err) => logger.warn({ err }, 'mycolor expire failed'));
+        } else if (p.kind === 'role' && p.roleId) {
           const m = await guild.members.fetch(p.memberId).catch(() => undefined);
           if (m) await m.roles.remove(p.roleId, '授与品の期限').catch((err) => logger.warn({ err }, 'shop role expire failed'));
         } else if (p.kind === 'ema_pin' && p.channelId && p.messageId) {

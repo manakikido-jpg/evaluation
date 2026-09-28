@@ -34,15 +34,15 @@ export async function getItem(db: Db, id: number): Promise<ShopItem | undefined>
   return row;
 }
 
-/** 奉納（ブースト）割引が効く品物（免罪符・贈り物はのぞく） */
-export const discountable = (item: ShopItem) => item.kind !== 'menzaifu' && item.kind !== 'gift';
+/** 奉納（ブースト）割引が効く品物（免罪符・贈り物・お年玉袋の手数料はのぞく） */
+export const discountable = (item: ShopItem) => item.kind !== 'menzaifu' && item.kind !== 'gift' && item.kind !== 'otoshidama';
 
 /** 払う値段（免罪符は設定の値段。奉納している人は割引、絵馬の奉納は無料。1 枚未満は切り上げ） */
 export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
   const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
   if (booster && item.kind === 'ema_pin') return 0;
   // 期間限定の授与品セール（免罪符・贈り物はのぞく）
-  const onSale = item.kind === 'menzaifu' || item.kind === 'gift' ? base : salePrice(base, economy.shopSalePercent);
+  const onSale = item.kind === 'menzaifu' || item.kind === 'gift' || item.kind === 'otoshidama' ? base : salePrice(base, economy.shopSalePercent);
   if (!booster || !discountable(item) || economy.boostDiscountPercent <= 0) return onSale;
   return Math.ceil((onSale * (100 - economy.boostDiscountPercent)) / 100);
 };
@@ -106,6 +106,10 @@ export async function seedDefaultItems(
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
     { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
   ];
+  singles.push(
+    { kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', description: '銭を入れた袋をチャンネルに置くと、先着の人がボタンで受け取れる（量は運しだい）', price: 0 },
+    { kind: 'mycolor', name: '自分だけの色', emoji: '🎨', description: '好きな色の、自分専用の色ロールを BOT が作る（色守りより上に出る）', price: 5000, durationDays: 30 },
+  );
   for (const s of singles) if (!existing.some((i) => i.kind === s.kind)) await add(s);
   return created;
 }
@@ -260,6 +264,92 @@ export async function buySimple(
       ...(used ? { discount: DISCOUNT_PERCENT[used] } : {}),
     };
   }));
+}
+
+// ───────── 🎨 自分だけの色 ─────────
+
+/** 選べる色の見本（和の色）。色コードで好きな色にもできる */
+export const MY_COLORS: { key: string; name: string; emoji: string; color: number }[] = [
+  { key: 'sakura', name: '桜色', emoji: '🌸', color: 0xf4a7b9 },
+  { key: 'momo', name: '桃色', emoji: '🍑', color: 0xf09199 },
+  { key: 'botan', name: '牡丹色', emoji: '🌺', color: 0xe7609e },
+  { key: 'kurenai', name: '紅', emoji: '🔴', color: 0xd7003a },
+  { key: 'shu', name: '朱色', emoji: '🟠', color: 0xeb6101 },
+  { key: 'yamabuki', name: '山吹色', emoji: '🟡', color: 0xf8b500 },
+  { key: 'nanohana', name: '菜の花色', emoji: '🌼', color: 0xffec47 },
+  { key: 'kin', name: '金色', emoji: '✨', color: 0xe6b422 },
+  { key: 'wakakusa', name: '若草色', emoji: '🌱', color: 0xc3d825 },
+  { key: 'matcha', name: '抹茶色', emoji: '🍵', color: 0xc5c56a },
+  { key: 'hisui', name: '翡翠色', emoji: '💚', color: 0x38b48b },
+  { key: 'mizu', name: '水色', emoji: '💧', color: 0xbce2e8 },
+  { key: 'sora', name: '空色', emoji: '☁️', color: 0xa0d8ef },
+  { key: 'ruri', name: '瑠璃色', emoji: '🔵', color: 0x1e50a2 },
+  { key: 'fuji', name: '藤色', emoji: '💜', color: 0xbbbcde },
+  { key: 'sumire', name: '菫色', emoji: '🟣', color: 0x7058a3 },
+  { key: 'kohaku', name: '琥珀色', emoji: '🟤', color: 0xbf783a },
+  { key: 'gin', name: '白銀', emoji: '🤍', color: 0xe5e4e6 },
+];
+
+/** 「#ff88aa」「ff88aa」「#f8a」を色の数に。黒（0）は Discord では「色なし」なので、ほぼ黒にする */
+export function parseHexColor(raw: string): number | undefined {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(raw.trim().replace(/^＃/, '#'));
+  if (!m) return undefined;
+  const hex = m[1]!.length === 3 ? [...m[1]!].map((c) => c + c).join('') : m[1]!;
+  return Number.parseInt(hex, 16) || 0x010101;
+}
+
+export const hexOf = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
+
+/** その人の今の「自分だけの色」 */
+export async function activeMyColor(db: Db, memberId: string): Promise<ShopPurchase | undefined> {
+  const [row] = await db
+    .select()
+    .from(shopPurchases)
+    .where(and(eq(shopPurchases.memberId, memberId), eq(shopPurchases.kind, 'mycolor'), isNull(shopPurchases.endedAt)));
+  return row;
+}
+
+export type MyColorResult =
+  | { status: 'ok'; purchase: ShopPurchase; balance: number; /** 前から持っていて、色を変えて期間を延ばした */ extended: boolean; previousExpiresAt: Date | null }
+  | { status: 'insufficient'; price: number; balance: number }
+  | { status: 'disabled' };
+
+/** 払って記録する（ロールを作る・色を変えるのは呼び出し側）。持っていれば期間を延ばす */
+export async function buyMyColor(db: Db, item: ShopItem, memberId: string, color: number, now = new Date(), price = item.price): Promise<MyColorResult> {
+  if (!item.enabled || item.kind !== 'mycolor') return { status: 'disabled' };
+  return db.transaction(async (tx) => {
+    await lock(tx, memberId);
+    if (price > 0 && !(await spendWithin(tx, memberId, price, 'shop', { itemId: item.id, name: item.name, color: hexOf(color) }))) {
+      return { status: 'insufficient' as const, price, balance: (await walletOf(tx, memberId)).balance };
+    }
+    const [active] = await tx
+      .select()
+      .from(shopPurchases)
+      .where(and(eq(shopPurchases.memberId, memberId), eq(shopPurchases.kind, 'mycolor'), isNull(shopPurchases.endedAt)));
+    const balance = async () => (await walletOf(tx, memberId)).balance;
+    if (active) {
+      const base = active.expiresAt && active.expiresAt > now ? active.expiresAt : now;
+      const expiresAt = item.durationDays && active.expiresAt ? new Date(base.getTime() + item.durationDays * DAY) : null;
+      const [purchase] = await tx.update(shopPurchases).set({ expiresAt }).where(eq(shopPurchases.id, active.id)).returning();
+      return { status: 'ok' as const, purchase: purchase!, balance: await balance(), extended: true, previousExpiresAt: active.expiresAt };
+    }
+    const expiresAt = item.durationDays ? new Date(now.getTime() + item.durationDays * DAY) : null;
+    const [purchase] = await tx.insert(shopPurchases).values({ memberId, itemId: item.id, kind: 'mycolor', price, expiresAt }).returning();
+    return { status: 'ok' as const, purchase: purchase!, balance: await balance(), extended: false, previousExpiresAt: null };
+  });
+}
+
+export async function setPurchaseRole(db: Db, purchaseId: number, roleId: string): Promise<void> {
+  await db.update(shopPurchases).set({ roleId }).where(eq(shopPurchases.id, purchaseId));
+}
+
+/** ロールを作れなかった・色を変えられなかったとき: 払った分を戻す（延ばしたときは期間も元に戻す） */
+export async function undoMyColor(db: Db, r: Extract<MyColorResult, { status: 'ok' }>, price: number): Promise<void> {
+  if (!r.extended) return refund(db, { ...r.purchase, price });
+  await db.transaction(async (tx) => {
+    await tx.update(shopPurchases).set({ expiresAt: r.previousExpiresAt }).where(eq(shopPurchases.id, r.purchase.id));
+    if (price > 0) await addCoins(tx, r.purchase.memberId, price, 'shop_refund', { purchaseId: r.purchase.id });
+  });
 }
 
 /** Discord の操作に失敗したとき: 払った花びらを戻し、記録を終わりにする */

@@ -30,9 +30,9 @@ afterEach(async () => {
 const item = async (pred: (i: Awaited<ReturnType<typeof listItems>>[number]) => boolean) => (await listItems(db)).find(pred)!;
 
 describe('品物', () => {
-  it('最初の品物: 色守り 2・称号 1・花吹雪・贈り物・絵馬の奉納・おみくじもう 1 回・免罪符。2 回目は作らない', async () => {
+  it('最初の品物: 色守り 2・称号 1・花吹雪・贈り物・絵馬の奉納・おみくじもう 1 回・免罪符・お年玉袋・自分だけの色。2 回目は作らない', async () => {
     const items = await listItems(db);
-    expect(items.map((i) => i.kind)).toEqual(['role', 'role', 'role', 'hanafubuki', 'gift', 'ema_pin', 'omikuji_extra', 'menzaifu']);
+    expect(items.map((i) => i.kind)).toEqual(['role', 'role', 'role', 'hanafubuki', 'gift', 'ema_pin', 'omikuji_extra', 'menzaifu', 'otoshidama', 'mycolor']);
     expect(await seedDefaultItems(db, { colors: [{ roleId: SAKURA, name: '桜', emoji: '🌸' }], titles: [] })).toBe(0);
     const menzaifu = items.find((i) => i.kind === 'menzaifu')!;
     expect(priceOf(menzaifu, cfg.economy)).toBe(cfg.economy.menzaifuPrice);

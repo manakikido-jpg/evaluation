@@ -398,7 +398,8 @@ export const shopItems = pgTable(
   'shop_items',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu'>().notNull(),
+    /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -1058,3 +1059,41 @@ export const tempGrants = pgTable(
 );
 
 export type TempGrant = typeof tempGrants.$inferSelect;
+
+/** 🧧 お年玉袋: 買った人がチャンネルに置き、先着の人がボタンで銭を受け取る（中身の量は運しだい） */
+export const otoshidamaBags = pgTable(
+  'otoshidama_bags',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    channelId: text('channel_id').notNull(),
+    messageId: text('message_id'),
+    total: integer('total').notNull(),
+    count: integer('count').notNull(),
+    /** 1 人ずつの量（受け取った順に前から使う） */
+    shares: integer('shares').array().notNull(),
+    note: text('note').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** 全部受け取られた・期限で残りを戻した */
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    /** 期限で持ち主に戻した量 */
+    refunded: integer('refunded').notNull().default(0),
+  },
+  (t) => [index('otoshidama_bags_open_idx').on(t.endedAt, t.expiresAt)],
+);
+
+export type OtoshidamaBag = typeof otoshidamaBags.$inferSelect;
+
+export const otoshidamaClaims = pgTable(
+  'otoshidama_claims',
+  {
+    bagId: bigint('bag_id', { mode: 'number' }).notNull(),
+    memberId: text('member_id').notNull(),
+    amount: integer('amount').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.bagId, t.memberId] })],
+);
+
+export type OtoshidamaClaim = typeof otoshidamaClaims.$inferSelect;
