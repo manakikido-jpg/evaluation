@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-minutes',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '📓 議事録',
+    items: [
+      '運営の会議を記録できる（日時・場所・参加した人・議題・話したこと・決まったこと・やること）',
+      '「いま通話にいる人を入れる」で、場所と参加した人をまとめて入れられる',
+      'やることは担当・期限つき。まだのものは一覧とホームの「対応待ち」に出る',
+      '会議のあとに、決まったこととやることのまとめを Discord に出せる',
+    ],
+  },
+  {
     id: '2026-09-28-hamburger',
     date: '2026-09-28',
     kind: 'improve',

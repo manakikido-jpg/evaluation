@@ -1,3 +1,4 @@
+import { saveVoiceNow } from '../services/meetings.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -179,6 +180,8 @@ export class ShuinApp {
         memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [],
       }));
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
+    // 議事録の「参加した人」を、いま通話にいる人から入れられるように
+    await saveVoiceNow(this.db, presence.map((c) => ({ id: c.id, name: c.name, memberIds: c.memberIds })), now).catch((err) => logger.warn({ err }, 'voice now save failed'));
 
     const ids = eligibleVoiceMembers(channels, excluded);
     if (!ids.length) return;

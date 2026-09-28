@@ -57,7 +57,7 @@ export function LoginPage(props: { error?: string }) {
 export function HomePage(props: {
   session: SessionView;
   stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
-  todo: { applications: number; omairi: number; soudan: number };
+  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number };
   recent: AuditLog[];
   names: Names;
   now: Date;
@@ -110,6 +110,12 @@ export function HomePage(props: {
             <a href="/soudan" class={props.todo.soudan ? '' : 'zero'}>
               <span>未対応の相談</span>
               <strong>{props.todo.soudan} 件</strong>
+            </a>
+          </li>
+          <li>
+            <a href="/minutes" class={props.todo.meetingTodos ? '' : 'zero'}>
+              <span>議事録のやること（まだ）</span>
+              <strong>{props.todo.meetingTodos ?? 0} 件</strong>
             </a>
           </li>
         </ul>

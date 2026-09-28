@@ -137,6 +137,22 @@ import {
 } from '../services/glossary.js';
 import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
+import { MeetingEditPage, MeetingViewPage, MinutesPage } from './views/minutes.js';
+import {
+  countOpenTodos,
+  createMeeting,
+  deleteMeeting,
+  getMeeting,
+  listMeetings,
+  loadVoiceNow,
+  openTodos,
+  pickablePeople,
+  postSummary,
+  toggleTodo,
+  updateMeeting,
+  type MeetingInput,
+  type TodoInput,
+} from '../services/meetings.js';
 import { CommandsPage } from './views/commands.js';
 import { commandList } from '../services/commandList.js';
 import { commandDefinitions } from '../discord/commands.js';
@@ -372,6 +388,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/economy/*', requireAdmin);
   app.use('/glossary', requireAdmin);
   app.use('/commands', requireAdmin);
+  app.use('/minutes', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -379,7 +396,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -405,7 +422,7 @@ export function createWebApp(deps: WebDeps) {
       memberTrend(db, '30d', t),
     ]);
     const stats = { ...base, yaku: yakuRows.length };
-    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length };
+    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db) };
     const names = await namesOf(db, recent.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
     return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} />);
   });
@@ -548,6 +565,181 @@ export function createWebApp(deps: WebDeps) {
         }
       />,
     );
+  });
+
+  // ───────── 📓 議事録（神職・宮司。消すのは宮司だけ） ─────────
+
+  const nameFn = async (ids: string[]) => {
+    const names = await namesOf(db, ids);
+    return (id: string) => names.get(id) ?? id;
+  };
+  /** 通話チャンネル（カテゴリの順・カテゴリ名つき） */
+  const voiceChannelsOf = (channels: GuildChannel[]) => {
+    const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch]));
+    const catPos = (ch: GuildChannel) => (ch.parent_id ? (cats.get(ch.parent_id)?.position ?? 0) + 1 : 0);
+    return channels
+      .filter((ch) => ch.type === 2 || ch.type === 13)
+      .sort((a, b) => catPos(a) - catPos(b) || a.position - b.position)
+      .map((ch) => ({ id: ch.id, name: ch.name, category: ch.parent_id ? (cats.get(ch.parent_id)?.name ?? null) : null }));
+  };
+  const textChannelsOf = (channels: GuildChannel[]) => postableChannels(channels).filter((ch) => ch.type === 0 || ch.type === 5);
+
+  app.get('/minutes', async (c) => {
+    const q = c.req.query('q');
+    const [list, open] = await Promise.all([listMeetings(db, { q }), openTodos(db)]);
+    const name = await nameFn(open.map((t) => t.assigneeId ?? ''));
+    return c.html(<MinutesPage session={c.get('session')} meetings={list} open={open} name={name} q={q} flash={c.req.query('msg')} now={now()} />);
+  });
+
+  const minutesEdit = async (c: Context<Env>, found?: Awaited<ReturnType<typeof getMeeting>>) => {
+    const [channels, voiceNow] = await Promise.all([loadChannels().catch(() => [] as GuildChannel[]), loadVoiceNow(db, now())]);
+    const picked = voiceNow.find((v) => v.id === c.req.query('voice'));
+    const prefill = picked ? { placeChannelId: picked.id, attendees: picked.memberIds } : undefined;
+    const extra = [...(found?.meeting.attendees ?? []), ...(found?.todos.map((t) => t.assigneeId ?? '') ?? []), ...(picked?.memberIds ?? [])].filter(Boolean);
+    return c.html(
+      <MeetingEditPage
+        session={c.get('session')}
+        meeting={found?.meeting}
+        todos={found?.todos ?? []}
+        people={await pickablePeople(db, cfg, extra)}
+        voiceChannels={voiceChannelsOf(channels)}
+        voiceNow={voiceNow}
+        prefill={prefill}
+        flash={c.req.query('msg')}
+        now={now()}
+      />,
+    );
+  };
+
+  app.get('/minutes/new', (c) => minutesEdit(c));
+
+  /** フォームから会議とやることを読む（おかしければ undefined） */
+  const meetingFrom = async (c: Context<Env>): Promise<{ input: MeetingInput; todos: TodoInput[] } | undefined> => {
+    const body = await c.req.parseBody({ all: true });
+    const one = (k: string) => (Array.isArray(body[k]) ? body[k][0] : body[k]);
+    const text = (k: string, max: number) => {
+      const v = one(k);
+      return typeof v === 'string' ? v.replace(/\r\n/g, '\n').slice(0, max) : '';
+    };
+    const title = text('title', 100).trim();
+    const at = one('heldAt');
+    const heldAt = typeof at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at) ? new Date(`${at}:00+09:00`) : undefined;
+    if (!title || !heldAt || Number.isNaN(heldAt.getTime())) return undefined;
+    const ids = (v: unknown) => (v === undefined ? [] : Array.isArray(v) ? v : [v]).filter((x): x is string => typeof x === 'string' && validId(x));
+    const place = one('placeChannelId');
+    const rows = Math.min(Number(one('todoRows')) || 0, 100);
+    const todos: TodoInput[] = [];
+    for (let i = 0; i < rows; i++) {
+      const id = Number(one(`todo.${i}.id`));
+      const assignee = one(`todo.${i}.assignee`);
+      const due = one(`todo.${i}.due`);
+      todos.push({
+        id: Number.isInteger(id) && id > 0 ? id : undefined,
+        body: text(`todo.${i}.body`, 200),
+        assigneeId: typeof assignee === 'string' && validId(assignee) ? assignee : null,
+        due: typeof due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : null,
+        done: one(`todo.${i}.done`) === 'yes',
+      });
+    }
+    return {
+      input: {
+        title,
+        heldAt,
+        placeChannelId: typeof place === 'string' && validId(place) ? place : null,
+        attendees: [...new Set(ids(body.attendees))].slice(0, 100),
+        agenda: text('agenda', 4000),
+        notes: text('notes', 20000),
+        decisions: text('decisions', 4000),
+      },
+      todos,
+    };
+  };
+
+  app.post('/minutes', async (c) => {
+    const got = await meetingFrom(c);
+    if (!got) return c.redirect('/minutes/new?msg=invalid');
+    const m = await createMeeting(db, got.input, got.todos, c.get('session').userId, now());
+    return c.redirect(`/minutes/${m.id}?msg=created`);
+  });
+
+  const meetingId = (c: Context<Env>) => {
+    const id = Number(c.req.param('id'));
+    return Number.isInteger(id) && id > 0 ? id : undefined;
+  };
+
+  app.get('/minutes/:id', async (c) => {
+    const id = meetingId(c);
+    const found = id ? await getMeeting(db, id) : undefined;
+    if (!found) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    const { meeting: m, todos } = found;
+    const channels = await loadChannels().catch(() => [] as GuildChannel[]);
+    const texts = textChannelsOf(channels);
+    // 前に出したチャンネル、なければ名前に「議事録」「会議」「運営」を含むチャンネル
+    const guess = m.postedChannelId ?? (texts.find((ch) => /議事録|会議/.test(ch.name)) ?? texts.find((ch) => ch.name.includes('運営')))?.id;
+    const name = await nameFn([...m.attendees, ...todos.map((t) => t.assigneeId ?? ''), m.updatedBy]);
+    return c.html(
+      <MeetingViewPage
+        session={c.get('session')}
+        meeting={m}
+        todos={todos}
+        name={name}
+        placeName={m.placeChannelId ? (channels.find((ch) => ch.id === m.placeChannelId)?.name ?? '（見つからない通話）') : undefined}
+        channels={texts}
+        defaultChannelId={guess}
+        flash={c.req.query('msg')}
+        now={now()}
+      />,
+    );
+  });
+
+  app.get('/minutes/:id/edit', async (c) => {
+    const id = meetingId(c);
+    const found = id ? await getMeeting(db, id) : undefined;
+    if (!found) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    return minutesEdit(c, found);
+  });
+
+  app.post('/minutes/:id', async (c) => {
+    const id = meetingId(c);
+    if (!id || !(await getMeeting(db, id))) return c.redirect('/minutes');
+    const got = await meetingFrom(c);
+    if (!got) return c.redirect(`/minutes/${id}/edit?msg=invalid`);
+    await updateMeeting(db, id, got.input, got.todos, c.get('session').userId, now());
+    return c.redirect(`/minutes/${id}?msg=saved`);
+  });
+
+  app.post('/minutes/:id/delete', async (c) => {
+    const id = meetingId(c);
+    if (!id) return c.redirect('/minutes');
+    if (!gujiOnly(c)) return c.redirect(`/minutes/${id}?msg=forbidden`);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect(`/minutes/${id}`);
+    await deleteMeeting(db, id, c.get('session').userId);
+    return c.redirect('/minutes?msg=deleted');
+  });
+
+  app.post('/minutes/:id/post', async (c) => {
+    const id = meetingId(c);
+    if (!id) return c.redirect('/minutes');
+    const body = await c.req.parseBody();
+    const channels = await loadChannels(true).catch(() => [] as GuildChannel[]);
+    const ch = textChannelsOf(channels).find((x) => x.id === body.channelId);
+    if (!ch) return c.redirect(`/minutes/${id}?msg=post_invalid`);
+    try {
+      const r = await postSummary({ db, discord: deps.discord }, id, ch.id, c.get('session').userId, { url: `${deps.baseUrl}/minutes/${id}`, now: now() });
+      return c.redirect(`/minutes/${id}?msg=${r ?? 'post_failed'}`);
+    } catch (err) {
+      logger.warn({ err }, 'meeting summary post failed');
+      return c.redirect(`/minutes/${id}?msg=post_failed`);
+    }
+  });
+
+  app.post('/minutes/todos/:id/toggle', async (c) => {
+    const id = meetingId(c);
+    const body = await c.req.parseBody();
+    if (id) await toggleTodo(db, id, c.get('session').userId, now());
+    const back = typeof body.back === 'string' ? /^meeting:(\d+)$/.exec(body.back) : null;
+    return c.redirect(back ? `/minutes/${back[1]}?msg=toggled` : '/minutes?msg=toggled');
   });
 
   // ───────── ⌨ コマンドのまとめ（見るのはだれでも・掲示を作るのは宮司） ─────────

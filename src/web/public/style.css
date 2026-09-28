@@ -667,3 +667,24 @@ ul.cmd-subs li { margin: 2px 0; }
 /* 役職: 任命制ならご縁の欄を隠す */
 .kind-cell:has(option[value=appointed]:checked) .goen { display: none; }
 .rank-add:has(select[name=kind] option[value=appointed]:checked) .goen-field { display: none; }
+
+/* ───────── 📓 議事録 ───────── */
+.minutes-form { display: grid; gap: 16px; }
+.minutes-form .card { margin-bottom: 0; display: grid; gap: 10px; }
+.minutes-form .card h2 { margin: 0; }
+.minutes-form textarea { width: 100%; resize: vertical; line-height: 1.5; }
+.minutes-form fieldset { border: 0; padding: 0; margin: 0; }
+.people-checks { max-height: 220px; }
+table.todo-edit input[type=text] { width: 100%; min-width: 220px; }
+.voice-now { display: grid; gap: 6px; }
+.todo-list .todo-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--line); }
+.todo-list .todo-item:first-child { border-top: 0; }
+.todo-item form.todo-toggle { margin: 0; flex: none; }
+.todo-item.done .todo-body { text-decoration: line-through; color: var(--muted); }
+.meeting-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); margin: -4px 0 12px; }
+.meeting-view { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+.meeting-view .card { margin-bottom: 16px; }
+.meeting-view .md { line-height: 1.7; }
+ul.decisions { margin: 0; padding-left: 1.2em; }
+ul.decisions li { margin: 4px 0; }
+@media (max-width: 900px) { .meeting-view { grid-template-columns: 1fr; } }

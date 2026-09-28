@@ -974,3 +974,54 @@ export const interviews = pgTable(
 );
 
 export type Interview = typeof interviews.$inferSelect;
+
+/** 📓 議事録（運営の会議。社務所Web で書く） */
+export const meetings = pgTable(
+  'meetings',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    title: text('title').notNull(),
+    /** 会議の日時 */
+    heldAt: timestamp('held_at', { withTimezone: true }).notNull(),
+    /** 場所: 通話チャンネル（なくてもよい） */
+    placeChannelId: text('place_channel_id'),
+    /** 参加した人（メンバーの ID） */
+    attendees: text('attendees').array().notNull().default(sql`'{}'::text[]`),
+    /** 議題・話したこと・決まったこと（決まったことは 1 行に 1 つ） */
+    agenda: text('agenda').notNull().default(''),
+    notes: text('notes').notNull().default(''),
+    decisions: text('decisions').notNull().default(''),
+    /** Discord に出したまとめ（チャンネル・メッセージ） */
+    postedChannelId: text('posted_channel_id'),
+    postedMessageId: text('posted_message_id'),
+    postedAt: timestamp('posted_at', { withTimezone: true }),
+    createdBy: text('created_by').notNull(),
+    updatedBy: text('updated_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('meetings_held_at_idx').on(t.heldAt)],
+);
+
+export type Meeting = typeof meetings.$inferSelect;
+
+/** 議事録の「やること」（担当・期限・済んだか） */
+export const meetingTodos = pgTable(
+  'meeting_todos',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    meetingId: bigint('meeting_id', { mode: 'number' })
+      .notNull()
+      .references(() => meetings.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    assigneeId: text('assignee_id'),
+    /** 期限（日本時間の日付 YYYY-MM-DD） */
+    due: text('due'),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    doneBy: text('done_by'),
+    position: integer('position').notNull().default(0),
+  },
+  (t) => [index('meeting_todos_meeting_idx').on(t.meetingId), index('meeting_todos_open_idx').on(t.doneAt)],
+);
+
+export type MeetingTodo = typeof meetingTodos.$inferSelect;

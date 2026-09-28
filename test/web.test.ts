@@ -774,6 +774,65 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(await (await get(r.headers.get('location')!, g)).text()).toContain('コマンドのまとめの掲示を作りました');
   });
 
+  it('📓 議事録: 神職も書ける・直せる・やることを済にできる・まとめを Discord に出せる。消すのは宮司だけ', async () => {
+    const { listAudit: audits } = await import('../src/services/audit.js');
+    const s = await login(STAFF);
+    expect(await (await get('/minutes', s)).text()).toContain('まだ議事録がありません');
+    expect(await (await get('/minutes/new', s)).text()).toContain('name="todo.0.body"');
+    expect((await post('/minutes', s, { _csrf: await csrfOf(s), title: '', heldAt: '2026-09-28T21:00', todoRows: '0' })).headers.get('location')).toBe('/minutes/new?msg=invalid');
+    const created = await post('/minutes', s, {
+      _csrf: await csrfOf(s),
+      title: '9 月の運営会議',
+      heldAt: '2026-09-28T21:00',
+      placeChannelId: '910000000000000004',
+      attendees: STAFF,
+      agenda: '- イベント',
+      notes: '**ハロウィン**',
+      decisions: '10/31 21 時から',
+      todoRows: '3',
+      'todo.0.body': '告知文を書く',
+      'todo.0.assignee': STAFF,
+      'todo.0.due': '2026-10-05',
+      'todo.1.body': '',
+      'todo.2.body': '部屋を作る',
+      'todo.2.done': 'yes',
+    });
+    const loc = created.headers.get('location')!;
+    expect(loc).toMatch(/^\/minutes\/\d+\?msg=created$/);
+    const id = Number(/\/minutes\/(\d+)/.exec(loc)![1]);
+    const view = await (await get(`/minutes/${id}`, s)).text();
+    for (const t of ['9 月の運営会議', '10/31 21 時から', '告知文を書く', '<strong>ハロウィン</strong>', '🔊 拝殿', '1 / 2']) expect(view).toContain(t);
+    expect(view).not.toContain('この議事録を消す');
+    // ホームの対応待ち・一覧のまだのやること
+    expect(await (await get('/', s)).text()).toContain('議事録のやること（まだ）');
+    const list = await (await get('/minutes', s)).text();
+    expect(list).toContain('やること まだ 1 / 2');
+    // 済にする
+    const { getMeeting } = await import('../src/services/meetings.js');
+    const todo = (await getMeeting(db, id))!.todos[0]!;
+    expect((await post(`/minutes/todos/${todo.id}/toggle`, s, { _csrf: await csrfOf(s), back: `meeting:${id}` })).headers.get('location')).toBe(`/minutes/${id}?msg=toggled`);
+    expect((await getMeeting(db, id))!.todos[0]!.doneAt).not.toBeNull();
+    // 直す（題を変え、やることを 1 つ足す）
+    const edit = await (await get(`/minutes/${id}/edit`, s)).text();
+    expect(edit).toContain(`name="todo.0.id" value="${todo.id}"`);
+    await post(`/minutes/${id}`, s, { _csrf: await csrfOf(s), title: '9 月の運営会議（直した）', heldAt: '2026-09-28T21:00', todoRows: '2', 'todo.0.id': String(todo.id), 'todo.0.body': '告知文を書く', 'todo.0.done': 'yes', 'todo.1.body': 'BOT の告知' });
+    expect((await getMeeting(db, id))!.todos.map((t) => t.body)).toEqual(['告知文を書く', 'BOT の告知']);
+    // Discord に出す
+    actions = [];
+    expect((await post(`/minutes/${id}/post`, s, { _csrf: await csrfOf(s), channelId: '' })).headers.get('location')).toBe(`/minutes/${id}?msg=post_invalid`);
+    expect((await post(`/minutes/${id}/post`, s, { _csrf: await csrfOf(s), channelId: '910000000000000003' })).headers.get('location')).toBe(`/minutes/${id}?msg=posted`);
+    expect(actions[0]).toMatch(/^send 910000000000000003 /);
+    expect((await post(`/minutes/${id}/post`, s, { _csrf: await csrfOf(s), channelId: '910000000000000003' })).headers.get('location')).toBe(`/minutes/${id}?msg=edited`);
+    // 消すのは宮司だけ
+    expect((await post(`/minutes/${id}/delete`, s, { _csrf: await csrfOf(s), confirm: 'yes' })).headers.get('location')).toBe(`/minutes/${id}?msg=forbidden`);
+    const g = await login(GUJI);
+    expect(await (await get(`/minutes/${id}`, g)).text()).toContain('この議事録を消す');
+    expect((await post(`/minutes/${id}/delete`, g, { _csrf: await csrfOf(g), confirm: 'yes' })).headers.get('location')).toBe('/minutes?msg=deleted');
+    expect(await getMeeting(db, id)).toBeUndefined();
+    expect((await audits(db, { action: 'meeting.delete' })).length).toBe(1);
+    expect((await get('/minutes/99999', g)).status).toBe(404);
+  });
+
   it('年齢区分の変更は宮司だけ', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/age`, s, { _csrf: await csrfOf(s), age: 'adult' });
