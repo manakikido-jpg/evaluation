@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-glossary-places',
+    date: '2026-09-28',
+    kind: 'fix',
+    where: ['社務所Web', 'Discord'],
+    title: '📖 用語集を出すチャンネルを選べるように',
+    items: [
+      'ルールのチャンネルの名前が「しきたり」でなくても、用語集のページの「出すチャンネル」で選べば「掲示に反映」できる',
+      '選ばないときは「しきたり」「ルール」「用語集」などの名前で探す',
+      '#用語集 を作るときは置くカテゴリを選べる。作ったチャンネルはそのまま出す先になる（/用語 の案内もそこを指す）',
+    ],
+  },
+  {
     id: '2026-09-28-interview-v2',
     date: '2026-09-28',
     kind: 'improve',

@@ -7,9 +7,12 @@ import {
   createTerm,
   deleteTerm,
   glossaryAll,
+  glossaryChannelsOf,
   listTerms,
+  loadGlossaryPlaces,
   moveTerm,
   normalizeWord,
+  saveGlossaryPlaces,
   searchTerms,
   seedDefaultTerms,
   setTermEnabled,
@@ -112,7 +115,7 @@ describe('用語集', () => {
     await seedDefaultTerms(db, GUJI);
     const terms = await listTerms(db, { enabledOnly: true });
     const render = (s: string) => renderNotice(s, cfg, CHANNELS).text;
-    const index = JSON.stringify(glossaryIndexView(terms, render, false));
+    const index = JSON.stringify(glossaryIndexView(terms, render));
     expect(index).toContain('⛩ 役職・ロール');
     expect(index).toContain('🪙 銭と授与品');
     const ans = glossaryAnswerView('市場', searchTerms(terms, '市場', '銭'), render);
@@ -149,6 +152,36 @@ describe('用語集', () => {
     // 通話の言葉を全部出さないと、そのカードは消える
     for (const t of (await listTerms(db)).filter((x) => x.category === 'voice')) await setTermEnabled(db, t.id, false);
     expect(await syncGlossaryNotices(ctx2, GUJI)).toMatchObject({ removed: 1 });
+  });
+
+  it('出すチャンネルを選べる: 名前が違っても、選んだチャンネルに出す。選ばなければ「ルール」なども名前で探す', async () => {
+    await seedDefaultTerms(db, GUJI);
+    const rules = '910000000000000040';
+    const words = '910000000000000041';
+    const channels: GuildChannel[] = [
+      { id: CH.cat, name: '⛩ 鳥居', type: 4, parent_id: null, position: 0 },
+      { id: rules, name: '📜｜サーバーの決まり', type: 0, parent_id: CH.cat, position: 1 },
+      { id: words, name: '📖｜ことば', type: 0, parent_id: CH.cat, position: 2 },
+    ];
+    const ctx = { db, cfg, discord: fakeDiscord(channels) };
+    expect(await syncGlossaryNotices(ctx, GUJI)).toMatchObject({ noShikitari: true, noChannel: true, created: 0 });
+
+    await saveGlossaryPlaces(db, { rulesChannelId: rules, glossaryChannelId: words }, GUJI);
+    expect(await loadGlossaryPlaces(db)).toEqual({ rulesChannelId: rules, glossaryChannelId: words });
+    expect(await syncGlossaryNotices(ctx, GUJI)).toMatchObject({ noShikitari: false, noChannel: false, created: 7 });
+    const notices = await listNotices(db);
+    const main = notices.find((n) => n.channelId === rules && n.title === '用語集')!;
+    // #用語集 へのリンクは今の名前で差し込まれる
+    expect(renderNotice(main.body, cfg, channels).text).toContain(`<#${words}>`);
+    expect(notices.filter((n) => n.channelId === words).length).toBe(6);
+
+    // 選んだチャンネルが消えたら名前で探す（「ルール」も当たる）
+    const renamed: GuildChannel[] = [{ id: '910000000000000050', name: '📜ルール', type: 0, parent_id: null, position: 0 }];
+    expect(glossaryChannelsOf({ rulesChannelId: rules }, renamed).rules?.id).toBe('910000000000000050');
+    expect(glossaryChannelsOf({}, CHANNELS)).toMatchObject({ rules: { id: CH.shikitari }, glossary: undefined });
+    // おかしな ID は保存しない
+    await saveGlossaryPlaces(db, { rulesChannelId: 'abc' }, GUJI);
+    expect(await loadGlossaryPlaces(db)).toEqual({ rulesChannelId: undefined, glossaryChannelId: undefined });
   });
 
   it('#しきたり に入りきらないときは、役職・仕組みだけと /用語 への案内', () => {

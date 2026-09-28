@@ -4,8 +4,8 @@ import type { Db } from '../db/client.js';
 import type { GlossaryTerm } from '../db/schema.js';
 import type { GuildChannel } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
-import { byCategory, categoryHeading, GLOSSARY_CHANNEL, listTerms, searchTerms, termLine } from '../services/glossary.js';
-import { findChannel, renderNotice } from '../services/notices.js';
+import { byCategory, categoryHeading, glossaryChannelsOf, listTerms, loadGlossaryPlaces, searchTerms, termLine, type GlossaryPlaces } from '../services/glossary.js';
+import { renderNotice } from '../services/notices.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const COLOR = 0xd7003a;
@@ -15,12 +15,12 @@ const channelsOf = (g: Guild): GuildChannel[] =>
   [...g.channels.cache.values()].map((c) => ({ id: c.id, name: c.name, type: c.type, parent_id: c.parentId, position: 'position' in c ? c.position : 0 }));
 
 /** /用語（言葉なし）: カテゴリごとの言葉の一覧 */
-export function glossaryIndexView(terms: GlossaryTerm[], render: (s: string) => string, hasChannel: boolean) {
+export function glossaryIndexView(terms: GlossaryTerm[], render: (s: string) => string, glossaryChannelId?: string) {
   const groups = byCategory(terms);
   if (!groups.length) return { content: 'まだ用語集がありません。', embeds: [] };
   const lines = [
     ...groups.flatMap((g) => [`**${render(categoryHeading(g.category))}**`, g.terms.map((t) => render(t.term)).join(' ・ '), '']),
-    `-# \`/用語 天井\` のように言葉を入れると、意味が出ます${hasChannel ? `（くわしい一覧は ${render(`{#${GLOSSARY_CHANNEL}}`)}）` : ''}`,
+    `-# \`/用語 天井\` のように言葉を入れると、意味が出ます${glossaryChannelId ? `（くわしい一覧は <#${glossaryChannelId}>）` : ''}`,
   ];
   return { embeds: [{ title: '📖 用語集', description: lines.join('\n').slice(0, 4000), color: COLOR }] };
 }
@@ -37,7 +37,7 @@ export function glossaryAnswerView(query: string, found: GlossaryTerm[], render:
 
 /** /用語: 言葉の意味を自分にだけ出す（入れながら候補も出る） */
 export class GlossaryApp {
-  private cache?: { at: number; terms: GlossaryTerm[] };
+  private cache?: { at: number; terms: GlossaryTerm[]; places: GlossaryPlaces };
 
   constructor(
     private readonly db: Db,
@@ -45,11 +45,15 @@ export class GlossaryApp {
   ) {}
 
   /** 入力のたびに DB を読まないよう 1 分だけ覚える */
+  private async load(): Promise<{ terms: GlossaryTerm[]; places: GlossaryPlaces }> {
+    if (this.cache && Date.now() - this.cache.at < 60_000) return this.cache;
+    const [terms, places] = await Promise.all([listTerms(this.db, { enabledOnly: true }), loadGlossaryPlaces(this.db)]);
+    this.cache = { at: Date.now(), terms, places };
+    return this.cache;
+  }
+
   private async terms(): Promise<GlossaryTerm[]> {
-    if (this.cache && Date.now() - this.cache.at < 60_000) return this.cache.terms;
-    const terms = await listTerms(this.db, { enabledOnly: true });
-    this.cache = { at: Date.now(), terms };
-    return terms;
+    return (await this.load()).terms;
   }
 
   async onInteraction(interaction: Interaction): Promise<void> {
@@ -76,11 +80,11 @@ export class GlossaryApp {
 
   private async answer(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     const cfg = this.cfg();
-    const terms = await this.terms();
+    const { terms, places } = await this.load();
     const channels = channelsOf(i.guild);
     const render = (s: string) => renderNotice(s, cfg, channels).text;
     const word = (i.options.getString('word') ?? '').trim();
-    if (!word) return void (await i.reply({ ...glossaryIndexView(terms, render, Boolean(findChannel(channels, GLOSSARY_CHANNEL))), ...EPHEMERAL }));
+    if (!word) return void (await i.reply({ ...glossaryIndexView(terms, render, glossaryChannelsOf(places, channels).glossary?.id), ...EPHEMERAL }));
     // 候補から選んだとき（#番号）
     const picked = /^#(\d+)$/.exec(word);
     const byId = picked ? terms.find((t) => t.id === Number(picked[1])) : undefined;

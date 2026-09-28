@@ -1,12 +1,13 @@
 import { asc, eq, max } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { glossaryTerms, type GlossaryTerm } from '../db/schema.js';
+import { glossaryTerms, settings, type GlossaryTerm } from '../db/schema.js';
+import type { GuildChannel } from '../lib/discordRest.js';
 import { audit } from './audit.js';
 import { DEFAULT_TERMS, GLOSSARY_CATEGORIES, GLOSSARY_CATEGORY_KEYS, type GlossaryCategory } from './glossaryDefaults.js';
 import { createNotice, deleteNotice, findChannel, guildChannelsCached, listNotices, renderNotice, updateNotice, type NoticeCtx } from './notices.js';
 
 /**
- * 用語集: 言葉は社務所Web で編集し、#しきたり の「用語集」・#用語集 のカテゴリごとの掲示・/用語 に出す。
+ * 用語集: 言葉は社務所Web で編集し、#しきたり（ルールのチャンネル。社務所Web で選べる）の「用語集」・#用語集 のカテゴリごとの掲示・/用語 に出す。
  * 説明には掲示と同じ差し込み（{通貨} {#チャンネル} など）が使える。
  */
 
@@ -130,9 +131,9 @@ export function categoryCard(category: GlossaryCategory, terms: GlossaryTerm[]):
 }
 
 /** #しきたり の「用語集」（全部。長すぎるときは short で、役職・仕組みだけと #用語集 への案内） */
-export function glossaryAll(terms: GlossaryTerm[], opts: { short?: boolean; channelLink?: boolean } = {}): string {
+export function glossaryAll(terms: GlossaryTerm[], opts: { short?: boolean; channelLink?: string | boolean } = {}): string {
   const groups = byCategory(terms).filter((g) => !opts.short || g.category === 'roles' || g.category === 'system');
-  const more = opts.channelLink ? '{#用語集}' : '';
+  const more = typeof opts.channelLink === 'string' ? opts.channelLink : opts.channelLink ? `{#${GLOSSARY_CHANNEL}}` : '';
   return [
     '# 📖 用語集',
     DISCLAIMER,
@@ -179,9 +180,46 @@ export function searchTerms(terms: GlossaryTerm[], query: string, currencyName: 
 // ───────── 掲示に反映 ─────────
 
 export const GLOSSARY_CHANNEL = '用語集';
-const SHIKITARI = 'しきたり';
+/** 決めていないときに名前で探す #しきたり（ルールのチャンネル）の候補 */
+const RULES_NAMES = ['しきたり', 'ルール', 'rules', '規約', '利用規約', '規則'];
 const TITLE = '用語集';
 const cardTitle = (c: GlossaryCategory) => `用語集: ${GLOSSARY_CATEGORIES[c].label}`;
+
+/** 用語集を出すチャンネル（社務所Web で選ぶ。決めていなければ名前で探す） */
+export type GlossaryPlaces = { rulesChannelId?: string; glossaryChannelId?: string };
+const PLACES_KEY = 'glossary';
+const isText = (c: GuildChannel) => c.type === 0 || c.type === 5;
+const snowflake = (v: unknown) => (typeof v === 'string' && /^\d{17,20}$/.test(v) ? v : undefined);
+
+export async function loadGlossaryPlaces(db: Db): Promise<GlossaryPlaces> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, PLACES_KEY));
+  const v = (row?.value ?? {}) as Record<string, unknown>;
+  return { rulesChannelId: snowflake(v.rulesChannelId), glossaryChannelId: snowflake(v.glossaryChannelId) };
+}
+
+export async function saveGlossaryPlaces(db: Db, places: GlossaryPlaces, by: string): Promise<void> {
+  const value = { rulesChannelId: snowflake(places.rulesChannelId) ?? null, glossaryChannelId: snowflake(places.glossaryChannelId) ?? null };
+  await db
+    .insert(settings)
+    .values({ key: PLACES_KEY, value, updatedBy: by })
+    .onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+  await audit(db, { actorId: by, action: 'glossary.places', detail: value, via: 'web' });
+}
+
+/** 今の #しきたり（ルール）と #用語集。選んだチャンネルが消えていたら名前で探す */
+export function glossaryChannelsOf(places: GlossaryPlaces, channels: GuildChannel[]): { rules?: GuildChannel; glossary?: GuildChannel } {
+  const byId = (id?: string) => (id ? channels.find((c) => c.id === id && isText(c)) : undefined);
+  const byName = (names: string[]) => {
+    for (const n of names) {
+      const c = findChannel(channels, n);
+      if (c && isText(c)) return c;
+    }
+    return undefined;
+  };
+  const glossary = byId(places.glossaryChannelId) ?? byName([GLOSSARY_CHANNEL]);
+  const rules = byId(places.rulesChannelId) ?? byName(RULES_NAMES);
+  return { rules: rules && rules.id !== glossary?.id ? rules : undefined, glossary };
+}
 
 export type SyncResult = { created: number; updated: number; removed: number; noShikitari: boolean; noChannel: boolean };
 
@@ -194,7 +232,9 @@ export async function syncGlossaryNotices(ctx: NoticeCtx, by: string): Promise<S
   const terms = await listTerms(ctx.db, { enabledOnly: true });
   const all = await listNotices(ctx.db);
   const r: SyncResult = { created: 0, updated: 0, removed: 0, noShikitari: false, noChannel: false };
-  const glossaryChannel = findChannel(channels, GLOSSARY_CHANNEL);
+  const { rules: shikitari, glossary: glossaryChannel } = glossaryChannelsOf(await loadGlossaryPlaces(ctx.db), channels);
+  // #用語集 へのリンク（名前を変えていても当たるよう、今の名前で差し込む）
+  const link = !glossaryChannel ? undefined : glossaryChannel.name.length <= 40 && !/[{}\n]/.test(glossaryChannel.name) ? `{#${glossaryChannel.name}}` : `<#${glossaryChannel.id}>`;
 
   const upsert = async (channelId: string, title: string, body: string) => {
     const n = all.find((x) => x.channelId === channelId && x.title === title);
@@ -207,13 +247,12 @@ export async function syncGlossaryNotices(ctx: NoticeCtx, by: string): Promise<S
     }
   };
 
-  const shikitari = findChannel(channels, SHIKITARI);
   if (!shikitari) r.noShikitari = true;
   else {
-    const full = glossaryAll(terms, { channelLink: Boolean(glossaryChannel) });
+    const full = glossaryAll(terms, { channelLink: link });
     // カードは 4096 文字まで（差し込んだあとで数える）
     const fits = renderNotice(full, ctx.cfg, channels).text.length <= 4000;
-    await upsert(shikitari.id, TITLE, fits ? full : glossaryAll(terms, { short: true, channelLink: Boolean(glossaryChannel) }));
+    await upsert(shikitari.id, TITLE, fits ? full : glossaryAll(terms, { short: true, channelLink: link }));
   }
 
   if (!glossaryChannel) r.noChannel = true;

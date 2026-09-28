@@ -1247,8 +1247,19 @@ describe('物御籤（管理画面）', () => {
     expect((await listTerms(db)).find((x) => x.id === t.id)?.enabled).toBe(false);
     // #用語集 を作る → 掲示に反映
     actions = [];
-    expect((await post(g, '/glossary/channel', {})).headers.get('location')).toBe('/glossary?msg=channel_created');
+    const places = await (await get('/glossary', g)).text();
+    expect(places).toContain('action="/glossary/places"');
+    expect(places).toContain('<option value="910000000000000001" selected="">⛩ 鳥居</option>');
+    expect((await post(g, '/glossary/channel', {})).headers.get('location')).toBe('/glossary?msg=channel_nocategory#glossary-places');
+    expect((await post(g, '/glossary/channel', { categoryId: '910000000000000001' })).headers.get('location')).toBe('/glossary?msg=channel_created#glossary-places');
     expect(actions.find((a) => a.startsWith('createChannel'))).toContain('"name":"用語集"');
+    const { loadGlossaryPlaces } = await import('../src/services/glossary.js');
+    expect((await loadGlossaryPlaces(db)).glossaryChannelId).toBe('910000000000000099');
+    // 出すチャンネルを選ぶ（通話やカテゴリは選べない）
+    expect((await post(g, '/glossary/places', { rulesChannelId: '910000000000000004' })).headers.get('location')).toContain('msg=places_invalid');
+    expect((await post(g, '/glossary/places', { rulesChannelId: '910000000000000002' })).headers.get('location')).toContain('msg=places_saved');
+    expect((await loadGlossaryPlaces(db)).rulesChannelId).toBe('910000000000000002');
+    await post(g, '/glossary/places', { rulesChannelId: '910000000000000003' });
     expect((await post(g, '/glossary/sync', {})).headers.get('location')).toContain('/glossary?msg=synced');
     expect((await listNotices(db)).some((n) => n.title === '用語集')).toBe(true);
     await post(g, `/glossary/${t.id}/delete`, {});
