@@ -173,6 +173,9 @@ import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder }
 import { listingCard } from '../discord/market.js';
 import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
+import { CastPage } from './views/cast.js';
+import { refreshCastPanel } from '../discord/cast.js';
+import { castStats, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -401,6 +404,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/temp', requireAdmin);
   app.use('/invites', requireAdmin);
   app.use('/board', requireAdmin);
+  app.use('/cast', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -408,7 +412,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -3414,6 +3418,135 @@ export function createWebApp(deps: WebDeps) {
     await deps.discord.sendDm(r.post.authorId, `📌 募集「${r.post.title}」は運営の判断で、報酬（${e.currencyEmoji} ${r.post.reward} 枚）をお返ししました。`).catch(() => false);
     await deps.discord.sendDm(r.entry.memberId, `📌 募集「${r.post.title}」は運営の判断で、報酬を募集した方に戻しました。`).catch(() => false);
     return c.redirect('/board?msg=refunded');
+  });
+
+  // ───────── 🎀 キャスト ─────────
+
+  app.get('/cast', async (c) => {
+    const [conf, channels, roles, list, stats, sessions, image] = await Promise.all([
+      loadCastConfig(db),
+      loadChannels().catch(() => [] as GuildChannel[]),
+      loadRoles(),
+      listCasts(db, ['pending', 'active', 'paused']),
+      castStats(db, monthStart(now())),
+      recentSessions(db, 100),
+      loadMenuImage(db),
+    ]);
+    const names = await namesOf(db, [...list.map((x) => x.memberId), ...sessions.flatMap((x) => [x.castId, x.customerId])]);
+    const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch.name]));
+    return c.html(
+      <CastPage
+        session={c.get('session')}
+        config={conf}
+        channels={textChannelsOf(channels).map((ch) => ({ id: ch.id, name: `#${ch.name}`, category: ch.parent_id ? (cats.get(ch.parent_id) ?? null) : null }))}
+        categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
+        roles={(roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
+        hasImage={Boolean(image)}
+        casts={list}
+        stats={stats}
+        sessions={sessions}
+        name={(id) => names.get(id) ?? id}
+        coin={`${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.get('/cast/image', async (c) => {
+    const img = await loadMenuImage(db);
+    if (!img) return c.notFound();
+    return c.body(Buffer.from(img.data), 200, { 'content-type': img.contentType, 'x-content-type-options': 'nosniff' });
+  });
+
+  const castPanelNow = () => refreshCastPanel(db, deps.discord).catch((err: unknown) => (logger.warn({ err }, 'cast panel failed'), false));
+
+  app.post('/cast/settings', async (c) => {
+    const body = await c.req.parseBody();
+    const prev = await loadCastConfig(db);
+    const id = (k: string) => (typeof body[k] === 'string' && validId(body[k] as string) ? (body[k] as string) : undefined);
+    const n = (k: string) => Number(body[k]);
+    const next = {
+      ...prev,
+      channelId: id('channelId'),
+      privateCategoryId: id('privateCategoryId'),
+      publicCategoryId: id('publicCategoryId'),
+      roleId: id('roleId'),
+      priceMin: n('priceMin'),
+      priceMax: n('priceMax'),
+      feePercent: n('feePercent'),
+      acceptMinutes: n('acceptMinutes'),
+    };
+    const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.priceMax, next.priceMin, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
+    // チャンネルを変えたら、前のメニューはそのままにして、新しいチャンネルに出し直す
+    if (next.channelId !== prev.channelId) delete next.panelMessageId;
+    await saveCastConfig(db, next, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'cast.settings', detail: { ...next }, via: 'web' });
+    return c.redirect('/cast?msg=saved');
+  });
+
+  app.post('/cast/image', async (c) => {
+    const upload = await imageUpload(await c.req.parseBody());
+    if (!(upload instanceof Uint8Array)) return c.redirect('/cast?msg=image_bad');
+    if (!(await saveMenuImage(db, upload))) return c.redirect('/cast?msg=image_bad');
+    await audit(db, { actorId: c.get('session').userId, action: 'cast.image', via: 'web' });
+    await castPanelNow();
+    return c.redirect('/cast?msg=image_saved');
+  });
+
+  app.post('/cast/image/delete', async (c) => {
+    await deleteMenuImage(db);
+    await castPanelNow();
+    return c.redirect('/cast?msg=image_removed');
+  });
+
+  app.post('/cast/post', async (c) => {
+    const ok = await refreshCastPanel(db, deps.discord, { repost: true, by: c.get('session').userId }).catch(() => false);
+    return c.redirect(`/cast?msg=${ok ? 'posted' : 'post_failed'}`);
+  });
+
+  app.post('/cast/role', async (c) => {
+    try {
+      const role = await deps.discord.createRole(cfg.guildId, { name: '🎀 キャスト', color: 0xe86a92, permissions: '0', hoist: false, mentionable: false }, '管理画面（キャスト）');
+      const prev = await loadCastConfig(db);
+      await saveCastConfig(db, { ...prev, roleId: role.id }, c.get('session').userId);
+      return c.redirect('/cast?msg=role_made');
+    } catch (err) {
+      logger.warn({ err }, 'cast role create failed');
+      return c.redirect('/cast?msg=role_failed');
+    }
+  });
+
+  app.post('/cast/casts/:id/:status', async (c) => {
+    const id = c.req.param('id');
+    const status = c.req.param('status');
+    if (!validId(id) || (status !== 'active' && status !== 'paused' && status !== 'removed')) return c.redirect('/cast');
+    const by = c.get('session').userId;
+    const row = await setCastStatus(db, id, status, by, now());
+    if (!row) return c.redirect('/cast');
+    const conf = await loadCastConfig(db);
+    if (conf.roleId) {
+      if (status === 'active') await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの承認').catch((err: unknown) => logger.warn({ err }, 'cast role add failed'));
+      if (status === 'removed') await deps.discord.removeRole(cfg.guildId, id, conf.roleId, 'キャストを外した').catch(() => undefined);
+    }
+    await audit(db, { actorId: by, targetId: id, action: `cast.${status}`, via: 'web' });
+    if (status === 'active') await deps.discord.sendDm(id, '🎀 キャストに承認されました。#キャスト一覧 の「⚙ キャストの方」から待機できます。').catch(() => false);
+    await castPanelNow();
+    return c.redirect(`/cast?msg=${status === 'active' && row.approvedBy === by ? 'approved' : 'status'}`);
+  });
+
+  app.post('/cast/sessions/:id/:action', async (c) => {
+    const id = Number(c.req.param('id'));
+    const action = c.req.param('action');
+    if (!Number.isSafeInteger(id) || (action !== 'pay' && action !== 'refund')) return c.redirect('/cast');
+    const by = c.get('session').userId;
+    const s = await resolveSession(db, await loadCastConfig(db), id, action, by, now());
+    if (!s) return c.redirect('/cast?msg=done_already');
+    await audit(db, { actorId: by, targetId: action === 'pay' ? s.castId : s.customerId, action: `cast.${action}`, detail: { sessionId: id, price: s.price, paid: s.paid }, via: 'web' });
+    const e = cfg.economy;
+    await deps.discord.sendDm(s.castId, action === 'pay' ? `🎀 指名 #${id} は運営の判断で、${e.currencyEmoji} ${s.paid} 枚をお渡ししました。` : `🎀 指名 #${id} は運営の判断で、お客に戻しました。`).catch(() => false);
+    await deps.discord.sendDm(s.customerId, action === 'pay' ? `🎀 指名 #${id} は運営の判断で、キャストに渡しました。` : `🎀 指名 #${id} は運営の判断で、${e.currencyEmoji} ${s.price} 枚をお戻ししました。`).catch(() => false);
+    return c.redirect(`/cast?msg=${action === 'pay' ? 'paid' : 'refunded'}`);
   });
 
   app.post('/market/listings/:id/remove', async (c) => {

@@ -43,6 +43,9 @@ export const REASON_FLOW: Record<string, Flow> = {
   board_hold: 'income',
   board_reward: 'income',
   board_refund: 'income',
+  cast_pay: 'income',
+  cast_reward: 'income',
+  cast_refund: 'income',
   gift_send: 'transfer',
   gift_receive: 'transfer',
   otoshidama_put: 'transfer',
@@ -70,6 +73,9 @@ const INCOME_GROUP: Record<string, string> = {
   board_hold: 'board',
   board_reward: 'board',
   board_refund: 'board',
+  cast_pay: 'cast',
+  cast_reward: 'cast',
+  cast_refund: 'cast',
 };
 export const INCOME_LABEL: Record<string, string> = {
   shop: '授与品（ショップ）',
@@ -78,6 +84,7 @@ export const INCOME_LABEL: Record<string, string> = {
   menzaifu: '免罪符',
   market: '市場の手数料',
   board: '掲示板の手数料',
+  cast: 'キャストの手数料',
   saisen: 'お賽銭（持ちすぎた分）',
 };
 

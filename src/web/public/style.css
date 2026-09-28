@@ -704,3 +704,4 @@ ul.decisions li { margin: 4px 0; }
 .temp-give:has(input[name=kind][value=perm]:checked) .only-role { display: none; }
 .only-perm { display: grid; gap: 12px; }
 @media (max-width: 700px) { .temp-row { flex-wrap: wrap; } .temp-row .ch-actions { width: 100%; justify-content: flex-start; } }
+.cast-menu-preview { display: block; max-width: min(100%, 420px); height: auto; border-radius: 10px; border: 1px solid var(--line); margin: 8px 0; }

@@ -28,6 +28,9 @@ export type CoinReason =
   | 'board_hold'
   | 'board_reward'
   | 'board_refund'
+  | 'cast_pay'
+  | 'cast_reward'
+  | 'cast_refund'
   | 'boost'
   | 'room'
   | 'gacha'
@@ -239,6 +242,9 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   board_hold: '掲示板の報酬を預けた',
   board_reward: '掲示板の報酬をもらった',
   board_refund: '掲示板の報酬が戻った',
+  cast_pay: 'キャストを指名した',
+  cast_reward: 'キャストの売り上げ',
+  cast_refund: 'キャストの指名の払い戻し',
   boost: '奉納（ブースト）のお礼',
   room: '通話部屋',
   gacha: '物御籤',

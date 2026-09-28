@@ -65,7 +65,7 @@ export async function suspectPairs(db: Db, cfg: GuildConfig, since: Date, limit 
   const bags = await db
     .select({ memberId: coinTx.memberId, amount: coinTx.amount, detail: coinTx.detail, at: coinTx.at })
     .from(coinTx)
-    .where(and(inArray(coinTx.reason, ['otoshidama_get', 'board_reward']), gte(coinTx.at, since)));
+    .where(and(inArray(coinTx.reason, ['otoshidama_get', 'board_reward', 'cast_reward']), gte(coinTx.at, since)));
   for (const g of bags) {
     const from = typeof g.detail.from === 'string' ? g.detail.from : undefined;
     if (from) add('gift', from, g.memberId, g.amount, g.at);

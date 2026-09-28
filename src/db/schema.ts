@@ -1149,3 +1149,83 @@ export const boardEntries = pgTable(
 );
 export type BoardEntry = typeof boardEntries.$inferSelect;
 
+/** 🎀 キャスト（寝落ち・雑談などの通話を銭で受ける人）。18 歳以上の人だけが申し込め、運営が承認する */
+export const casts = pgTable('casts', {
+  memberId: text('member_id').primaryKey(),
+  /** pending 申し込み / active キャスト / paused 運営がお休みにした / removed 外した・断った */
+  status: text('status').$type<'pending' | 'active' | 'paused' | 'removed'>().notNull().default('pending'),
+  bio: text('bio').notNull().default(''),
+  /** 得意なこと（寝落ち・雑談・ゲーム・相談 など） */
+  tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+  price30: integer('price_30').notNull().default(0),
+  price60: integer('price_60').notNull().default(0),
+  /** 寝落ち（朝 7 時まで）。0 = 受けない */
+  priceNight: integer('price_night').notNull().default(0),
+  /** 未成年の人の公開の雑談を受ける */
+  minorOk: boolean('minor_ok').notNull().default(true),
+  /** off お休み / waiting 待機中（waitingUntil まで） */
+  available: text('available').$type<'off' | 'waiting'>().notNull().default('off'),
+  waitingUntil: timestamp('waiting_until', { withTimezone: true }),
+  /** 指名できない人（キャストがブロックした） */
+  blocked: text('blocked').array().notNull().default(sql`'{}'::text[]`),
+  appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  approvedBy: text('approved_by'),
+});
+export type Cast = typeof casts.$inferSelect;
+
+/** 🎀 指名。銭は先に預かり、終わってからキャストに渡す（手数料を引く） */
+export const castSessions = pgTable(
+  'cast_sessions',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    castId: text('cast_id').notNull(),
+    customerId: text('customer_id').notNull(),
+    /** 30 / 60 / night */
+    plan: text('plan').$type<'30' | '60' | 'night'>().notNull(),
+    minutes: integer('minutes').notNull(),
+    /** 預かっている銭（延長で増える） */
+    price: integer('price').notNull(),
+    /**
+     * reserved 予約（キャストの返事待ち）/ accepted 予約を受けた（始まる時刻待ち）/ requested 今すぐ（返事待ち）/ active 通話中 /
+     * done 終わった（渡した）/ declined 断られた・返事がなかった / canceled 取り消し / disputed 通報（運営が決める）/ refunded 運営が戻した
+     */
+    status: text('status')
+      .$type<'reserved' | 'accepted' | 'requested' | 'active' | 'done' | 'declined' | 'canceled' | 'disputed' | 'refunded'>()
+      .notNull(),
+    /** 公開の部屋（未成年の人の雑談）。2 人だけの部屋は 18 歳以上どうしだけ */
+    isPublic: boolean('is_public').notNull().default(false),
+    channelId: text('channel_id'),
+    /** 予約のやり取りのスレッド */
+    threadId: text('thread_id'),
+    /** 予約の始まる時刻 */
+    startAt: timestamp('start_at', { withTimezone: true }),
+    /** この時刻までに返事がなければ断ったことにする */
+    acceptBy: timestamp('accept_by', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    /** 部屋を消す時刻（終わってから少し残して評価してもらう） */
+    deleteAt: timestamp('delete_at', { withTimezone: true }),
+    /** 終わりの 5 分前の知らせを出した */
+    warned: boolean('warned').notNull().default(false),
+    extensions: integer('extensions').notNull().default(0),
+    /** キャストに渡した銭（手数料を引いたあと） */
+    paid: integer('paid').notNull().default(0),
+    rating: integer('rating'),
+    decidedBy: text('decided_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('cast_sessions_status_idx').on(t.status), index('cast_sessions_cast_idx').on(t.castId, t.createdAt), check('cast_sessions_price', sql`${t.price} >= 0`)],
+);
+export type CastSession = typeof castSessions.$inferSelect;
+
+/** 🎀 キャストのメニューの画像（社務所Web で上げる） */
+export const castImages = pgTable('cast_images', {
+  key: text('key').primaryKey(),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  hash: text('hash').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+

@@ -2281,3 +2281,53 @@ describe('掲示板（管理画面）', () => {
     expect((await listAudit(db, { action: 'board.pay' })).length).toBe(1);
   });
 });
+
+describe('キャスト（管理画面）', () => {
+  const form = async (session: string, path: string, data: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
+    });
+  };
+
+  it('設定・画像・承認・メニューを出す・通報を決める', async () => {
+    const { applyCast, requestSession, acceptSession, disputeSession, getCast, CAST_DEFAULTS } = await import('../src/services/cast.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    const s = await login(STAFF);
+    expect(await (await get('/cast', s)).text()).toContain('申し込みはありません');
+    expect((await form(s, '/cast/settings', { channelId: '910000000000000003', priceMin: '100', priceMax: '50', feePercent: '10', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=invalid');
+    expect((await form(s, '/cast/settings', { channelId: '910000000000000003', roleId: '980000000000000001', priceMin: '100', priceMax: '30000', feePercent: '10', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=saved');
+    // 画像
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    const fd = new FormData();
+    fd.append('_csrf', /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!);
+    fd.append('image', new File([png], 'menu.png', { type: 'image/png' }));
+    actions = [];
+    const up = await app.request('/cast/image', { method: 'POST', headers: { cookie: `shamusho_session=${s}` }, body: fd });
+    expect(up.headers.get('location')).toBe('/cast?msg=image_saved');
+    expect(actions.some((a) => a.startsWith('send 910000000000000003') && a.includes('指名できます'))).toBe(true);
+    expect((await get('/cast/image', s)).headers.get('content-type')).toBe('image/png');
+    // 申し込み → 承認（ロールを付ける）
+    const CAST = '880000000000000011';
+    const GUEST = '880000000000000012';
+    await applyCast(db, CAST_DEFAULTS, { id: CAST, adult: true }, { bio: 'よろしく', tags: ['寝落ち'], price30: 300, price60: 500, priceNight: 0, minorOk: true });
+    expect(await (await get('/cast', s)).text()).toContain('よろしく');
+    actions = [];
+    expect((await form(s, `/cast/casts/${CAST}/active`, {})).headers.get('location')).toBe('/cast?msg=approved');
+    expect(actions).toContain(`addRole ${CAST} 980000000000000001`);
+    expect((await getCast(db, CAST))?.status).toBe('active');
+    // 通報 → お客に戻す
+    await addCoins(db, GUEST, 1000, 'adjust');
+    const r = await requestSession(db, CAST_DEFAULTS, { castId: CAST, customerId: GUEST, customerAdult: true, plan: '60' });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST);
+    await disputeSession(db, r.session.id, GUEST);
+    expect(await (await get('/cast', s)).text()).toContain('通報（運営が決める）');
+    expect((await form(s, `/cast/sessions/${r.session.id}/refund`, {})).headers.get('location')).toBe('/cast?msg=refunded');
+    expect((await walletOf(db, GUEST)).balance).toBe(1000);
+    expect((await form(s, `/cast/sessions/${r.session.id}/pay`, {})).headers.get('location')).toBe('/cast?msg=done_already');
+    expect((await listAudit(db, { action: 'cast.refund' })).length).toBe(1);
+  });
+});

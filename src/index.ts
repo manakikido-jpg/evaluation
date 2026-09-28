@@ -12,6 +12,7 @@ import { InviteLinkApp } from './discord/inviteLinks.js';
 import { GiftApp } from './discord/gifts.js';
 import { OtoshidamaApp } from './discord/otoshidama.js';
 import { BoardApp } from './discord/board.js';
+import { CastApp } from './discord/cast.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
@@ -96,6 +97,7 @@ async function main(): Promise<void> {
   const sticky = new StickyApp(db, cfg, actions);
   const market = new MarketApp(db, cfg, actions);
   const board = new BoardApp(db, cfg, actions);
+  const cast = new CastApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -140,6 +142,7 @@ async function main(): Promise<void> {
     bellSticky.attach(guild);
     market.attach(guild);
     board.attach(guild);
+    cast.attach(guild);
     gacha.attach(guild);
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
@@ -156,6 +159,8 @@ async function main(): Promise<void> {
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
+      // 🎀 キャスト: 返事待ちの期限・予約の始まり・通話の終わり・部屋の片付け
+      void cast.tick().catch((err) => logger.warn({ err }, 'cast tick failed'));
       // 🧧 お年玉袋: 締め切りが来た袋の残りを置いた人に戻す
       void otoshidama.tick().catch((err) => logger.warn({ err }, 'otoshidama tick failed'));
       // ⏳ 一時的なロール・権限: 期限が来たものを外す
@@ -258,6 +263,7 @@ async function main(): Promise<void> {
     void rooms.onInteraction(i);
     void market.onInteraction(i);
     void board.onInteraction(i);
+    void cast.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);
