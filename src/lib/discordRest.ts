@@ -63,7 +63,16 @@ export type RolePatch = { name?: string; color?: number; hoist?: boolean; mentio
 export type MessageBody = {
   content?: string;
   /** image.url に attachment://ファイル名 と書くと、いっしょに送った写真をカードの中に出す */
-  embeds?: { title?: string; description?: string; color?: number; image?: { url: string } }[];
+  embeds?: {
+    title?: string;
+    description?: string;
+    color?: number;
+    image?: { url: string };
+    /** カードのいちばん上の小さい文字 */
+    author?: { name: string };
+    /** カードのいちばん下の小さい文字 */
+    footer?: { text: string };
+  }[];
   components?: unknown[];
   /** 通知を飛ばす相手（なければだれにも飛ばさない） */
   allowed_mentions?: { parse?: ('everyone' | 'roles' | 'users')[]; roles?: string[] };

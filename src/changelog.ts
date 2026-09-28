@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-update-news',
+    date: '2026-09-28',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '📰 #更新速報 にアップデートのお知らせ',
+    items: [
+      'アップデートの内容が #更新速報 にカードで届くようになりました',
+      'カードは種類ごとに色分け（✨ 新しい機能・🔧 使いやすくなりました・🩹 直しました）',
+    ],
+  },
+  {
     id: '2026-09-28-ranks-page',
     date: '2026-09-28',
     kind: 'new',

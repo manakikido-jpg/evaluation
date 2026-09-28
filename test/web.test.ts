@@ -713,6 +713,31 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     }
   });
 
+  it('📰 更新速報: 宮司が設定して、1 つ・1 日分を #更新速報 に出す', async () => {
+    const { CHANGELOG, LATEST_CHANGE_ID } = await import('../src/changelog.js');
+    const { loadUpdateNews } = await import('../src/services/updateNews.js');
+    const s = await login(STAFF);
+    const staffPage = await (await get('/updates', s)).text();
+    expect(staffPage).not.toContain('action="/updates/news"');
+    expect((await post('/updates/news', s, { _csrf: await csrfOf(s), enabled: 'yes' })).status).toBe(403);
+    const g = await login(GUJI);
+    const page = await (await get('/updates', g)).text();
+    expect(page).toContain('action="/updates/news"');
+    expect(page).toContain('news-card');
+    // 名前で探す（テストの偽の Discord には「更新速報」がないので #しきたり を選ぶ）
+    expect((await post('/updates/news/post', g, { _csrf: await csrfOf(g), id: CHANGELOG[0]!.id })).headers.get('location')).toBe('/updates?msg=news_nochannel#update-news');
+    const saved = await post('/updates/news', g, { _csrf: await csrfOf(g), enabled: 'yes', channelId: '910000000000000003', scope: 'all' });
+    expect(saved.headers.get('location')).toBe('/updates?msg=news_saved#update-news');
+    expect(await loadUpdateNews(db)).toEqual({ enabled: true, channelId: '910000000000000003', scope: 'all', lastId: LATEST_CHANGE_ID });
+    actions = [];
+    expect((await post('/updates/news/post', g, { _csrf: await csrfOf(g), id: CHANGELOG[0]!.id })).headers.get('location')).toBe('/updates?msg=news_posted#update-news');
+    expect(actions).toEqual([expect.stringMatching(/^send 910000000000000003 /)]);
+    actions = [];
+    await post('/updates/news/post', g, { _csrf: await csrfOf(g), date: CHANGELOG[0]!.date });
+    expect(actions.length).toBeGreaterThan(0);
+    expect((await post('/updates/news/post', g, { _csrf: await csrfOf(g), id: 'nothing' })).headers.get('location')).toBe('/updates?msg=news_none#update-news');
+  });
+
   it('年齢区分の変更は宮司だけ', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/age`, s, { _csrf: await csrfOf(s), age: 'adult' });

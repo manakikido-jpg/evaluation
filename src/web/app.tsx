@@ -72,8 +72,9 @@ const RECHECK_GRACE_MS = 30 * 60_000;
 import { StatsPage } from './views/stats.js';
 import { RecentUpdates, UpdatesPage } from './views/updates.js';
 import type { SessionView } from './views/layout.js';
-import { unseenChanges } from '../changelog.js';
+import { CHANGELOG, LATEST_CHANGE_ID, unseenChanges } from '../changelog.js';
 import { markChangesSeen, seenChangeId } from '../services/updates.js';
+import { inScope, loadUpdateNews, newsChannelOf, postNews, saveUpdateNews } from '../services/updateNews.js';
 import { isTrendRange, memberTrend } from '../services/stats.js';
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
@@ -372,7 +373,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -549,8 +550,51 @@ export function createWebApp(deps: WebDeps) {
     const s = c.get('session');
     const unseenIds = new Set(unseenChanges(await seenChangeId(db, s.userId)).map((e) => e.id));
     await markChangesSeen(db, s.userId);
+    let news: Parameters<typeof UpdatesPage>[0]['news'];
+    if (s.level === 'guji') {
+      const [settings, channels] = await Promise.all([loadUpdateNews(db), loadChannels().catch(() => [] as GuildChannel[])]);
+      news = { settings, channels: postableChannels(channels).filter((ch) => ch.type === 0 || ch.type === 5), currentChannel: newsChannelOf(settings, channels)?.name };
+    }
     // このページを開いたら読んだことにする（メニューの印も消す）
-    return c.html(<UpdatesPage session={{ ...s, updatesUnseen: 0 }} unseenIds={unseenIds} />);
+    return c.html(<UpdatesPage session={{ ...s, updatesUnseen: 0 }} unseenIds={unseenIds} flash={c.req.query('msg')} news={news} />);
+  });
+
+  /** 📰 更新速報の設定（宮司） */
+  app.post('/updates/news', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const prev = await loadUpdateNews(db);
+    const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : undefined;
+    const enabled = body.enabled === 'yes';
+    await saveUpdateNews(
+      db,
+      // 自動にしたときは今の最新から（前の更新を全部出さない）
+      { enabled, channelId, scope: body.scope === 'all' ? 'all' : 'discord', lastId: prev.lastId ?? (enabled ? LATEST_CHANGE_ID : undefined) },
+      c.get('session').userId,
+    );
+    await audit(db, { actorId: c.get('session').userId, action: 'updates.news_settings', detail: { enabled, channelId: channelId ?? null, scope: body.scope }, via: 'web' });
+    return c.redirect('/updates?msg=news_saved#update-news');
+  });
+
+  /** 📰 更新速報に今出す（1 つ、または 1 日分） */
+  app.post('/updates/news/post', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const s = await loadUpdateNews(db);
+    const entries =
+      typeof body.id === 'string'
+        ? CHANGELOG.filter((e) => e.id === body.id)
+        : typeof body.date === 'string'
+          ? CHANGELOG.filter((e) => e.date === body.date && inScope(e, s.scope))
+          : [];
+    if (!entries.length) return c.redirect('/updates?msg=news_none#update-news');
+    try {
+      const n = await postNews({ db, discord: deps.discord, channels: await loadChannels(true) }, entries, c.get('session').userId);
+      return c.redirect(`/updates?msg=${n === undefined ? 'news_nochannel' : 'news_posted'}#update-news`);
+    } catch (err) {
+      logger.warn({ err }, 'update news post failed');
+      return c.redirect('/updates?msg=news_failed#update-news');
+    }
   });
 
   // ───────── 推移（グラフ） ─────────

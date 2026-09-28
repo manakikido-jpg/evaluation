@@ -307,6 +307,17 @@ ul.updates > li.update:first-child { border-top: 0; padding-top: 0; }
 .update-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .update-head .tag { margin-left: 0; }
 li.update ul { margin: 6px 0 0; padding-left: 1.3em; }
+/* 📰 更新速報の見た目（Discord のカードに似せる） */
+.news-preview { margin-top: 8px; padding: 12px 14px; border-radius: 8px; background: #313338; color: #dbdee1; max-width: 560px; }
+.news-preview .news-head { font-size: 1.15rem; font-weight: 700; color: #f2f3f5; }
+.news-preview > .note { color: #949ba4; font-size: .8rem; margin: 2px 0 8px; }
+.news-card { margin-top: 8px; padding: 8px 12px 10px; border-left: 4px solid #d7003a; border-radius: 4px; background: #2b2d31; }
+.news-card.kind-improve { border-left-color: #3cb371; }
+.news-card.kind-fix { border-left-color: #e0a030; }
+.news-card .news-author { font-size: .8rem; font-weight: 600; color: #f2f3f5; }
+.news-card .news-title { margin-top: 4px; font-weight: 700; color: #f2f3f5; }
+.news-card ul { margin: 6px 0 0; padding-left: 1.2em; font-size: .9rem; }
+.news-card .news-footer { margin-top: 8px; font-size: .75rem; color: #949ba4; }
 ul.recent-updates { list-style: none; padding: 0; margin: 0; }
 ul.recent-updates li { padding: 4px 0; }
 ul.recent-updates .tag { margin-left: 0; }
