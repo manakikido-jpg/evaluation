@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-gacha-featured',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '✨ 物御籤に「今の目玉」',
+    items: [
+      '「物御籤を引く」・/物御籤 の画面のいちばん上に、超大当たりの中身を大きく（確率・残り・期間つき）',
+      '期間限定の中身も「いつまで」と並べる。今出せるものだけ出す',
+    ],
+  },
+  {
     id: '2026-09-29-gift-command',
     date: '2026-09-29',
     kind: 'new',

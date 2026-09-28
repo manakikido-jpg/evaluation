@@ -119,6 +119,45 @@ export function tierPrizeText(g: Pick<GachaConfig, 'rates'>, prizes: GachaPrizeR
   return (shown || 'なし') + fb;
 }
 
+/** 目玉に並べる数 */
+const MAX_FEATURED = 5;
+
+/**
+ * ✨ 今の目玉: 超大当たりの中身と、期間限定の中身を、物御籤の画面のいちばん上に大きく出す。
+ * どちらもなければ出さない（今出せるものだけ。残りのない賞品・期間の外のものは出さない）。
+ */
+export function gachaFeatured(g: GachaConfig, prizes: GachaPrizeRow[], names: Names, now = new Date()): { title: string; description: string; color: number } | undefined {
+  const rates = effectiveRates(g, prizes, now);
+  const chances = prizeChances(g, prizes, now);
+  const live = (p: GachaPrizeRow) =>
+    p.enabled && p.weight > 0 && inPeriod(p, now) && (p.kind !== 'special' || p.stock === null || p.stock > 0) && (chances.get(p.id) ?? 0) > 0 && rates[p.tier] > 0;
+  const md = (d: Date) => {
+    const j = new Date(d.getTime() - 1 + 9 * 3_600_000);
+    return `${j.getUTCMonth() + 1}/${j.getUTCDate()}`;
+  };
+  const supers = prizes.filter((p) => p.tier === 'super' && live(p));
+  const limited = prizes.filter((p) => p.tier !== 'super' && p.endsAt && live(p));
+  if (!supers.length && !limited.length) return undefined;
+  const lines: string[] = [];
+  if (supers.length) {
+    lines.push(`🎊 **超大当たり**（どれかが出る確率 ${rates.super}%）`);
+    for (const p of supers.slice(0, MAX_FEATURED)) {
+      const notes = [`${chances.get(p.id)}%`, p.kind === 'special' && p.stock !== null ? `🔥 残り ${p.stock}` : '', p.endsAt ? `🎍 ${md(p.endsAt)} まで` : ''].filter(Boolean);
+      lines.push(`### 🌟 ${prizeLabel(p, names)}`, `-# ${notes.join('・')}`);
+    }
+    if (supers.length > MAX_FEATURED) lines.push(`-# ほか ${supers.length - MAX_FEATURED} 種`);
+  }
+  if (limited.length) {
+    if (lines.length) lines.push('');
+    lines.push('🎍 **期間限定**');
+    for (const p of limited.slice(0, MAX_FEATURED)) {
+      lines.push(`- ${TIER_LABEL[p.tier].emoji} ${prizeLabel(p, names)} … **${md(p.endsAt!)} まで**（${TIER_LABEL[p.tier].name}の ${chances.get(p.id)}%）`);
+    }
+    if (limited.length > MAX_FEATURED) lines.push(`-# ほか ${limited.length - MAX_FEATURED} 種`);
+  }
+  return { title: '✨ 今の目玉', description: lines.join('\n').slice(0, 4000), color: supers.length ? TIER_LABEL.super.color : TIER_LABEL.daikichi.color };
+}
+
 /** /物御籤 と「物御籤を引く」: 値段・割合・中身・天井と、引くボタン（本人にだけ） */
 export function gachaMenu(
   g: GachaConfig,
@@ -139,11 +178,16 @@ export function gachaMenu(
   const rates = effectiveRates(g, prizes);
   const left = untilPity(g, s.sinceTop);
   const buffs = s.buffs;
+  const featured = gachaFeatured(g, prizes, names);
+  // 超大当たりは上の「今の目玉」に大きく出すので、ここでは短く
+  const superShown = featured?.description.includes('超大当たり');
   const lines = [
     ...(s.sale ? [`🎉 **期間限定セール中！** ${s.sale.percent}% 引き（ふだんは 1 回 ${fmt(s.sale.original)} 枚）`] : []),
     `1 回 **${fmt(g.price)}** 枚 ／ 10 連 **${fmt(g.price * 10)}** 枚（${coin}。本物のお金は使いません）`,
     '',
-    ...GACHA_TIERS.filter((t) => rates[t] > 0).map((t) => `${TIER_LABEL[t].emoji} **${TIER_LABEL[t].name}** ${rates[t]}%\n-# ${tierPrizeText(g, prizes, t, names)}`),
+    ...GACHA_TIERS.filter((t) => rates[t] > 0).map(
+      (t) => `${TIER_LABEL[t].emoji} **${TIER_LABEL[t].name}** ${rates[t]}%\n-# ${t === 'super' && superShown ? '↑ 上の「✨ 今の目玉」' : tierPrizeText(g, prizes, t, names)}`,
+    ),
     '',
     left !== undefined && rates.daikichi > 0 ? `🎯 天井: 大吉が出ないまま ${g.pity} 回目は必ず大吉（あと **${left}** 回）` : '🎯 天井はありません',
     '-# 持っているロールは出ません（出せる中身がなくなったら、その分は払い戻します）',
@@ -189,7 +233,7 @@ export function gachaMenu(
         ]
       : [];
   return {
-    embeds: [{ title: '🎁 物御籤', description: lines.join('\n').slice(0, 4000), color: 0xd7003a }],
+    embeds: [...(featured ? [featured] : []), { title: '🎁 物御籤', description: lines.join('\n').slice(0, 4000), color: 0xd7003a }],
     components: [row, ...gold],
   };
 }

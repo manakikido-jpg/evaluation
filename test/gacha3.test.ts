@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { gachaSchema } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { members } from '../src/db/schema.js';
-import { gachaMenu, gachaRatesView, pullLine } from '../src/discord/gacha.js';
+import { gachaFeatured, gachaMenu, gachaRatesView, pullLine } from '../src/discord/gacha.js';
 import { panelMessage } from '../src/discord/panels.js';
 import { banzukeData, jstMonth, renderBanzuke } from '../src/services/banzuke.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -131,5 +131,27 @@ describe('📜 中身と排出率', () => {
     expect(view.embeds.map((e) => e.title)).toEqual(['🎊 超大当たり　0.016%', '🌸 大吉　4.76%', '🍡 吉　95.22%']);
     for (const t of ['**0.016%** … 🎊 Discord Nitro 1 か月分（残り 1）', '「金色」（持っていたら出ない）', '代わり … 🎫部屋代無料券 ×3', '🎍 10/31 まで', '天井', '1 回 500 枚']) expect(text).toContain(t);
     expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:rates');
+  });
+});
+
+describe('✨ 今の目玉', () => {
+  const names = { role: () => '金色', shop: () => undefined, coin: '🪙銭' };
+  it('超大当たりの中身（残り）と期間限定の中身を、物御籤の画面のいちばん上に。なければ出さない', async () => {
+    await createPrize(db, { tier: 'daikichi', kind: 'role', roleId: '100000000000000081', amount: 1, weight: 1, fallback: false });
+    expect(gachaFeatured(g, await listPrizes(db), names, T0)).toBeUndefined();
+    await createPrize(db, { tier: 'super', kind: 'special', label: 'Discord Nitro 1 か月分', stock: 2, amount: 1, weight: 1, fallback: false });
+    await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 100, weight: 1, fallback: false, endsAt: new Date('2026-11-01T00:00:00+09:00') });
+    // 期間が終わったもの・残りのないものは出さない
+    await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 50, weight: 1, fallback: false, endsAt: new Date('2026-10-01T00:00:00+09:00') });
+    await createPrize(db, { tier: 'super', kind: 'special', label: '売り切れ', stock: 0, amount: 1, weight: 1, fallback: false });
+    const f = gachaFeatured(g, await listPrizes(db), names, T0)!;
+    expect(f.title).toBe('✨ 今の目玉');
+    for (const t of ['超大当たり', '### 🌟 🎊 Discord Nitro 1 か月分', '🔥 残り 2', '🎍 **期間限定**', '10/31 まで']) expect(f.description).toContain(t);
+    expect(f.description).not.toContain('売り切れ');
+    expect(f.description).not.toContain('×50');
+    // 画面: 目玉がいちばん上。下の一覧の超大当たりは短く
+    const menu = gachaMenu(g, await listPrizes(db), names, { balance: 0, sinceTop: 0, tickets: emptyTickets() }, '🪙銭');
+    expect(menu.embeds.map((e) => e.title)).toEqual(['✨ 今の目玉', '🎁 物御籤']);
+    expect(menu.embeds[1]!.description).toContain('↑ 上の「✨ 今の目玉」');
   });
 });
