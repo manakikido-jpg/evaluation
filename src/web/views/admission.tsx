@@ -61,7 +61,7 @@ export function ApplicationsPage(props: {
 }) {
   return (
     <Layout title="申請" session={props.session} nav="applications">
-      <h1>申請</h1>
+      <h1>📝 申請</h1>
       <Flash code={props.flash} />
       <p class="note">
         Discord の #申請受付 のボタンと同じ処理です。どちらで判定しても、もう片方に反映されます。 <a href="/omairi">お参り期間の一覧 →</a>
@@ -225,7 +225,7 @@ export function OmairiPage(props: { session: AdminSession; cfg: GuildConfig; rev
     );
   return (
     <Layout title="お参り期間" session={props.session} nav="applications">
-      <h1>お参り期間</h1>
+      <h1>🗓 お参り期間</h1>
       <Flash code={props.flash} />
       <p class="note">
         期間は {props.cfg.omairi.days} 日。届かなければ 1 回だけ自動で {props.cfg.omairi.extendDays} 日延長し、それでも届かなければここに「判定待ち」として出ます。
@@ -257,7 +257,7 @@ export function SoudanListPage(props: {
   ];
   return (
     <Layout title="相談" session={props.session} nav="soudan">
-      <h1>📮 相談</h1>
+      <h1>💌 相談</h1>
       <p class="note">相談した人の名前は表示されません。返信は BOT から本人へ DM で届きます（神職の名前は出ません）。</p>
       <nav class="tabs">
         {tabs.map(([k, v]) => (
@@ -470,6 +470,21 @@ export function MemberAdmissionSection(props: {
 
 // ───────── 設定（宮司） ─────────
 
+/** 設定の項目（左の目次。id は section の sec-○○） */
+const SETTINGS_SECTIONS: [string, string][] = [
+  ['coins', '🪙 {通貨}と免罪符'],
+  ['rooms', '🚪 通話部屋の値段'],
+  ['voicegroups', '🔊 自動で増える通話'],
+  ['voicechat', '💬 通話のチャット'],
+  ['bell', '🔔 呼び鈴'],
+  ['recruit', '📣 募集（荒らし対策）'],
+  ['market', '🏮 市場'],
+  ['coretime', '🕘 コアタイム'],
+  ['boost', '💝 ブースト（奉納）'],
+  ['join', '📝 入鯖申請・お参り'],
+  ['give', '🎁 今いる人に配る'],
+];
+
 export function SettingsPage(props: {
   session: AdminSession;
   cfg: GuildConfig;
@@ -503,17 +518,34 @@ export function SettingsPage(props: {
   const Save = (p: { at: string }) => (
     <div class="inline-actions section-save">
       {props.at === p.at && props.flash && <Flash code={props.flash} />}
-      <button type="submit" name="at" value={p.at} class="ok">
+      {/* 見えていない項目の入力で止まらないよう、確かめはサーバーで */}
+      <button type="submit" name="at" value={p.at} class="ok" formnovalidate>
         保存する
       </button>
     </div>
   );
   return (
     <Layout title="設定" session={props.session} nav="settings">
-      <h1>設定（宮司のみ）</h1>
+      <div class="page-head">
+        <h1>⚙ 設定</h1>
+      </div>
       <Flash code={props.flash} />
       {props.error && <p class="flash warn">{props.error}</p>}
       <p class="note">ここで変えた値は config/guild.json の値より優先されます。BOT には 1 分以内に反映されます。チャンネル・ロールの ID はファイルで設定してください。</p>
+      <div class="settings-layout">
+        <nav class="settings-index card" aria-label="設定の項目">
+          <a href="/settings" class="all">すべて表示</a>
+          {SETTINGS_SECTIONS.map(([id, label]) => (
+            <a href={`#sec-${id}`} class={`to-${id}`}>
+              {label.replaceAll('{通貨}', e.currencyName)}
+            </a>
+          ))}
+          <span class="index-sep">ほかのページ</span>
+          <a href="/gacha">🎲 物御籤 →</a>
+          <a href="/ranks">⛩ 役職 →</a>
+          <a href="/economy">🪙 経済の見守り →</a>
+        </nav>
+        <div class="settings-body">
       <form method="post" action="/settings" class="settings">
         <Csrf session={props.session} />
         <section class="card anchor" id="sec-coins">
@@ -856,9 +888,11 @@ export function SettingsPage(props: {
           <Save at="join" />
         </section>
       </form>
-      <form method="post" action="/settings/join-bonus-all" class="card">
+      <section class="card anchor give" id="sec-give">
+      <h2>🎁 今いる人に配る</h2>
+      <form method="post" action="/settings/join-bonus-all" class="give-form">
         <Csrf session={props.session} />
-        <h2>{e.currencyEmoji} 今いる人に初期配布を配る</h2>
+        <h3>{e.currencyEmoji} 初期配布を配る</h3>
         <p class="note">
           役職のある今いる人のうち、まだ初期配布をもらっていない人に {e.joinBonus} 枚ずつ配ります。もらい済みの人には配らないので、何度押しても 2 回目はありません。
         </p>
@@ -871,10 +905,10 @@ export function SettingsPage(props: {
         </button>
       </form>
       {props.coinsNonce && (
-        <form method="post" action="/settings/coins-all" class="card">
+        <form method="post" action="/settings/coins-all" class="give-form">
           <Csrf session={props.session} />
           <input type="hidden" name="nonce" value={props.coinsNonce} />
-          <h2>{e.currencyEmoji} 今いる人みんなに{e.currencyName}を送る</h2>
+          <h3>{e.currencyEmoji} みんなに{e.currencyName}を送る</h3>
           <p class="note">
             イベントのお礼・お詫びなどに。役職のある今いる人（BOT・退出した人を除く）全員に同じ枚数を送ります。DM は送らないので、{'#御触書'} などで知らせてください。1 人ずつ送るときは、メンバーのページから送れます。
           </p>
@@ -897,6 +931,9 @@ export function SettingsPage(props: {
           </button>
         </form>
       )}
+      </section>
+        </div>
+      </div>
       <form method="post" action="/settings/reset">
         <Csrf session={props.session} />
         <button type="submit" class="link">

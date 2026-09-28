@@ -16,7 +16,7 @@ export function StatsPage(props: { session: AdminSession; range: TrendRange; buc
   const per = TREND_RANGES[props.range].unit === 'day' ? '1 日ごと' : TREND_RANGES[props.range].unit === 'week' ? '1 週ごと' : '1 か月ごと';
   return (
     <Layout title="推移" session={props.session} nav="stats">
-      <h1>推移</h1>
+      <h1>📈 推移</h1>
       <nav class="tabs" aria-label="期間">
         {(Object.keys(TREND_RANGES) as TrendRange[]).map((r) => (
           <a href={`/stats?range=${r}`} class={r === props.range ? 'on' : ''} aria-current={r === props.range ? 'page' : undefined}>

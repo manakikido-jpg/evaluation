@@ -67,7 +67,7 @@ export function HomePage(props: {
   const { stats, trend } = props;
   return (
     <Layout title="ホーム" session={props.session} nav="home">
-      <h1>今日の社務所</h1>
+      <h1>🏠 今日の社務所</h1>
       {trend && trend.length > 0 && (
         <section class="card">
           <h2>メンバーの推移（30 日）</h2>
@@ -160,7 +160,7 @@ export function MembersPage(props: {
   const sel = (a: unknown, b: unknown) => (a === b ? { selected: true } : {});
   return (
     <Layout title="メンバー" session={props.session} nav="members">
-      <h1>メンバー</h1>
+      <h1>👥 メンバー</h1>
       <form
         class="filters"
         method="get"
@@ -479,7 +479,7 @@ function ShuinTable(props: { rows: ShuinRow[]; cfg: GuildConfig; names: Names })
 export function AuditPage(props: { session: AdminSession; rows: AuditLog[]; names: Names; now: Date }) {
   return (
     <Layout title="操作の記録" session={props.session} nav="audit">
-      <h1>操作の記録</h1>
+      <h1>📜 操作の記録</h1>
       <p class="note">神職・宮司の操作はすべてここに残り、消すことはできません。</p>
       <section class="card">
         <AuditTable rows={props.rows} names={props.names} now={props.now} />

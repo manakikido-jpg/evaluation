@@ -196,6 +196,18 @@ function periodText(p: Pick<GachaPrizeRow, 'startsAt' | 'endsAt'>): string | und
 }
 
 /** 物御籤のページ（運営みんなが見られる。変えられるのは宮司） */
+/** 左の目次（id は gacha-○○・宮司だけのもの） */
+const GACHA_SECTIONS: [string, string, boolean][] = [
+  ['basic', '⚙ 基本', false],
+  ['prizes', '🎁 中身', false],
+  ['add', '＋ 中身を足す', true],
+  ['custom', '🎟 自由な券', false],
+  ['claims', '🎊 運営が対応するもの', false],
+  ['gift', '🎁 全員にプレゼント', true],
+  ['log', '📜 引かれた記録', false],
+  ['reset', '🗑 リセット', true],
+];
+
 export function GachaPage(props: {
   session: AdminSession;
   gacha: GachaConfig;
@@ -237,14 +249,27 @@ export function GachaPage(props: {
   const csrf = <input type="hidden" name="_csrf" value={session.csrfToken} />;
   return (
     <Layout title="物御籤" session={session} nav="gacha">
-      <h1>🎁 物御籤</h1>
+      <div class="page-head">
+        <h1>🎲 物御籤</h1>
+      </div>
       <GachaFlash code={props.flash} />
       <p class="note">
         {props.coinName}で引くくじです（本物のお金は扱いません）。運勢（大吉・中吉・小吉・吉）を出やすさで決めて、その運勢の中身から重みで 1
         つ出します。持っているロールは出ません。
         {guji ? '' : ' 変えられるのは宮司です。'}
       </p>
-
+      <div class="settings-layout tabs-top">
+        <nav class="settings-index card" aria-label="物御籤の項目">
+          <a href="/gacha" class="all">
+            すべて表示
+          </a>
+          {GACHA_SECTIONS.filter(([, , gujiOnly]) => guji || !gujiOnly).map(([id, label]) => (
+            <a href={`#gacha-${id}`} class={`to-gacha-${id}`}>
+              {label}
+            </a>
+          ))}
+        </nav>
+        <div class="settings-body">
       <section class="card anchor" id="gacha-basic">
         <h2>基本</h2>
         <div class="inline-actions">
@@ -486,7 +511,8 @@ export function GachaPage(props: {
                             </td>
                             <td>{p.enabled ? '🟢 ON' : '⏸ OFF'}</td>
                             {guji && (
-                              <td class="inline-actions">
+                              <td>
+                                <div class="row-actions">
                                 <form method="post" action={`/gacha/prizes/${p.id}`} id={f}>
                                   {csrf}
                                   <button type="submit" class="ok">
@@ -503,6 +529,7 @@ export function GachaPage(props: {
                                     削除
                                   </button>
                                 </form>
+                                </div>
                               </td>
                             )}
                           </tr>
@@ -942,6 +969,7 @@ export function GachaPage(props: {
         )}
       </section>
 
+      <div class="anchor log-group" id="gacha-log">
       <section class="card">
         <h2>最近の大吉</h2>
         {props.tops.length === 0 ? (
@@ -1051,6 +1079,9 @@ export function GachaPage(props: {
           </div>
         )}
       </section>
+      </div>
+        </div>
+      </div>
     </Layout>
   );
 }

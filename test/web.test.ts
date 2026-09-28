@@ -1173,7 +1173,7 @@ describe('物御籤（管理画面）', () => {
     const res = await get('/gacha', s);
     expect(res.status).toBe(200);
     const html = await res.text();
-    for (const t of ['🎁 物御籤', '引かれた回数', '最近の大吉', 'よく引いている人', '券を持っている人', '部屋代無料券', '絵馬のピン留め券', '50%', `/members/${USER}`, '🟢 いま引けます'])
+    for (const t of ['🎲 物御籤', '引かれた回数', '最近の大吉', 'よく引いている人', '券を持っている人', '部屋代無料券', '絵馬のピン留め券', '50%', `/members/${USER}`, '🟢 いま引けます'])
       expect(html).toContain(t);
     // 変えるフォームは宮司だけ
     expect(html).not.toContain('action="/gacha/');

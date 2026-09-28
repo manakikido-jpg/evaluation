@@ -31,7 +31,7 @@ export function MarketPage(props: {
   const f = props.flash && Object.hasOwn(MARKET_FLASH, props.flash) ? MARKET_FLASH[props.flash] : undefined;
   return (
     <Layout title="市場" session={session} nav="market">
-      <h1>🏪 市場</h1>
+      <h1>🏮 市場</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
         開業権利を持つ人の出品と、取引です（銭だけ。手数料 {props.feePercent}%）。買った人が「問題あり」を押した取引は、ここで「返金」か「売った人に渡す」を選んでください。性的なもの・本物のお金のやり取りの出品は取り下げてください。

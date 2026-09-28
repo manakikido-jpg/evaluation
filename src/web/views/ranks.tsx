@@ -55,7 +55,7 @@ export function RanksPage(props: {
   const used = new Map(cfg.ranks.map((r) => [r.roleId, r.name]));
   const roleName = (id: string) => props.roles?.find((r) => r.id === id)?.name;
   return (
-    <Layout title="役職" session={session} nav="settings">
+    <Layout title="役職" session={session} nav="ranks">
       <h1>⛩ 役職</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       {!props.roles && <p class="flash warn">Discord からロールを読めませんでした。ロールの付け替えと役職を足すことはできません（名前・格・昇格ラインは変えられます）。</p>}

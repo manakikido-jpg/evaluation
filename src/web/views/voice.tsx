@@ -39,7 +39,7 @@ export function VoicePage(props: {
   const q = (days: number, category?: string) => `/voice?days=${days}${category ? `&cat=${category}` : ''}`;
   return (
     <Layout title="通話の記録" session={props.session} nav="voice">
-      <h1>通話の記録（浮上時間）</h1>
+      <h1>🎙 通話の記録（浮上時間）</h1>
       <p class="note">
         BOT が 1 分ごとに、だれがどの通話に何分いたか・だれといっしょだったかを記録しています（AFK はのぞく。1 人でいた時間も入ります）。運営を任せる人・イベントを計画してもらう人を選ぶときや、部屋の使われ方を見るときに使ってください。
       </p>

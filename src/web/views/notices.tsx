@@ -70,19 +70,12 @@ export function NoticesPage(props: {
   categories?: { id: string; name: string }[];
 }) {
   const { session } = props;
-  const pending = props.groups.flatMap((g) => g.rows).filter((r) => r.status !== 'posted').length;
+  const rows = props.groups.flatMap((g) => g.rows);
+  const pending = rows.filter((r) => r.status !== 'posted').length;
   return (
     <Layout title="掲示" session={session} nav="notices">
-      <h1>掲示（BOT が投稿する文面）</h1>
-      <Flash code={props.flash} />
-      <p class="note">
-        #鳥居・#しきたり などに BOT が投稿するメッセージです。「カード」にすると 1 つずつ枠で区切られて読みやすくなります。ここで直して「反映」を押すと、Discord のメッセージが書き換わります。本文の{' '}
-        <code>{'{免罪符の値段}'}</code> などは今の設定の値に、<code>{'{#しきたり}'}</code> はチャンネルへのリンクに置き換わります。設定を変えると、投稿済みの掲示の数字も自動で書き換わります。
-      </p>
-      <div class="inline-actions">
-        <a class="button-link" href="/notices/new">
-          ＋ 掲示を追加
-        </a>
+      <div class="page-head">
+        <h1>🪧 掲示</h1>
         {pending > 0 && (
           <form method="post" action="/notices/publish-all">
             <Csrf session={session} />
@@ -91,42 +84,58 @@ export function NoticesPage(props: {
             </button>
           </form>
         )}
+        <a class="button-link primary" href="/notices/new">
+          ＋ 掲示を追加
+        </a>
       </div>
+      <Flash code={props.flash} />
+      <p class="note">
+        BOT が Discord に投稿するメッセージです（{rows.length} 件・未反映 {pending} 件）。ここで直して「反映」を押すと Discord のメッセージが書き換わります。本文の{' '}
+        <code>{'{免罪符の値段}'}</code> などは今の設定の値に、<code>{'{#しきたり}'}</code> はチャンネルへのリンクになります。設定を変えると、投稿済みの掲示の数字も自動で書き換わります。
+      </p>
 
-      {(props.categories ?? []).length > 0 && (
-        <details class="card">
-          <summary>🌸 カテゴリの全部のチャンネルに「朱印を押す」ボタンを置く</summary>
-          <p class="note">
-            選んだカテゴリ（絵馬殿など）のテキストチャンネル全部の、いちばん下に「🌸 朱印を押す」ボタンを置きます。いちばん下に表示し続ける掲示（#絵馬
-            のひな形など）があればそれにボタンを付け、なければボタンだけ（文章なし）の掲示を作ります。押したあと「すべて反映」を押すと Discord に出ます。
-          </p>
-          <form method="post" action="/notices/shuin-category" class="inline-actions">
+      <details class="card tools">
+        <summary>🧰 まとめて入れる（標準の文面・チャンネルの案内・朱印ボタン）</summary>
+        <div class="tool-list">
+          <form method="post" action="/notices/seed" class="tool">
             <Csrf session={session} />
-            <select name="categoryId" required>
-              {(props.categories ?? []).map((c) => (
-                <option value={c.id} selected={c.name.includes('絵馬')}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit" class="ok">
-              ボタンを置く
-            </button>
+            <div>
+              <strong>標準の文面</strong>
+              <p class="note">#鳥居（ようこそ）と #しきたり（ルール・朱印の仕組み・銭・用語集）。もう入っているものは入れません。</p>
+            </div>
+            <button type="submit">標準の文面を入れる</button>
           </form>
-        </details>
-      )}
-
-      <details class="card">
-        <summary>チャンネルの使い方の案内を入れる</summary>
-        <p class="note">
-          #絵馬-男性・#絵馬-女性（ひな形をいちばん下に）・#手水舎・#縁日・#宿帳・#おみくじ などに「使い方」のカードを入れて、ピン留めします（話が流れても 📌 から読めます）。#しきたり には全チャンネルの一覧「チャンネル案内」を入れます。入れたあと、ここで文面を直してから反映できます。もう入っているものは入れません（標準の文面のまま手を加えていないものは、新しい標準の文面にします）。
-        </p>
-        <form method="post" action="/notices/seed-guides">
-          <Csrf session={session} />
-          <button type="submit" class="ok">
-            チャンネルの案内を入れる
-          </button>
-        </form>
+          <form method="post" action="/notices/seed-guides" class="tool">
+            <Csrf session={session} />
+            <div>
+              <strong>チャンネルの使い方の案内</strong>
+              <p class="note">
+                #絵馬（ひな形をいちばん下に）・#手水舎・#縁日・#宿帳・#おみくじ などに「使い方」のカードを入れてピン留め。#しきたり には全チャンネルの一覧。標準の文面のままのものは新しい文面にします。
+              </p>
+            </div>
+            <button type="submit">チャンネルの案内を入れる</button>
+          </form>
+          {(props.categories ?? []).length > 0 && (
+            <form method="post" action="/notices/shuin-category" class="tool">
+              <Csrf session={session} />
+              <div>
+                <strong>🌸「朱印を押す」ボタン</strong>
+                <p class="note">選んだカテゴリ（絵馬殿など）のテキストチャンネル全部の、いちばん下に置きます（ひな形があればそれに付け、なければボタンだけの掲示を作る）。</p>
+              </div>
+              <span class="inline-actions">
+                <select name="categoryId" required aria-label="カテゴリ">
+                  {(props.categories ?? []).map((c) => (
+                    <option value={c.id} selected={c.name.includes('絵馬')}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit">ボタンを置く</button>
+              </span>
+            </form>
+          )}
+          <p class="note">入れたあとは、内容を見て「すべて反映」を押すと Discord に出ます。</p>
+        </div>
       </details>
 
       {props.groups.length === 0 && (
@@ -142,63 +151,89 @@ export function NoticesPage(props: {
       )}
 
       {props.groups.map((g) => (
-        <section class="card">
-          <h2>#{g.channelName ?? `（見つからないチャンネル ${g.channelId}）`}</h2>
-          <ol class="notices">
+        <section class="card ch-group">
+          <div class="ch-cat">
+            <span class="ch-cat-name"># {g.channelName ?? `（見つからないチャンネル ${g.channelId}）`}</span>
+            <span class="ch-count">{g.rows.length}</span>
+            <span class="ch-actions">
+              <a class="small-link" href={`/notices/new?channel=${g.channelId}`}>
+                ＋ 追加
+              </a>
+            </span>
+          </div>
+          <ol class="ch-list notice-list">
             {g.rows.map((r, i) => (
-              <li>
-                <div class="notice-head">
-                  <strong>{r.notice.title}</strong>
+              <li class="notice-row">
+                <div class="ch-row">
                   <span class={`status ${STATUS[r.status].cls}`}>{STATUS[r.status].label}</span>
-                  <small>{r.notice.style === 'text' ? '普通のメッセージ' : 'カード'}</small>
-                  {r.notice.sticky ? <small>⬇ いちばん下に表示し続ける</small> : r.notice.pinned && <small>📌 ピン留め</small>}
-                  {r.mention && <small>🔔 {r.mention}</small>}
-                  {r.notice.imageHash && <small>🖼 写真（{r.notice.imagePosition === 'top' ? '上' : '下'}）</small>}
-                  {r.notice.shuinButton && <small>🌸 朱印ボタン</small>}
-                  <small class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
-                    {r.length} / {maxLengthOf(r.notice.style)} 文字
-                  </small>
-                  <small>更新 {fmtAgo(r.notice.updatedAt, props.now)}</small>
-                </div>
-                {r.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {r.unknown.map((u) => `{${u}}`).join(' ')}</p>}
-                <Rendered text={r.preview} style={r.notice.style} mention={r.mention} image={imageOf(r.notice)} button={r.notice.shuinButton} />
-                <div class="inline-actions">
-                  <a class="button-link" href={`/notices/${r.notice.id}`}>
-                    編集
-                  </a>
-                  {r.status !== 'posted' && (
-                    <form method="post" action={`/notices/${r.notice.id}/publish`}>
+                  <div class="ch-main">
+                    <div class="ch-line">
+                      <a class="ch-name" href={`/notices/${r.notice.id}`}>
+                        {r.notice.title}
+                      </a>
+                      <span class="ch-tags">
+                        <span class="tag gray">{r.notice.style === 'text' ? '普通のメッセージ' : 'カード'}</span>
+                        {r.notice.sticky ? <span class="tag gray">⬇ いちばん下</span> : r.notice.pinned && <span class="tag gray">📌 ピン留め</span>}
+                        {r.mention && <span class="tag gray">🔔 {r.mention}</span>}
+                        {r.notice.imageHash && <span class="tag gray">🖼 写真（{r.notice.imagePosition === 'top' ? '上' : '下'}）</span>}
+                        {r.notice.shuinButton && <span class="tag gray">🌸 朱印ボタン</span>}
+                      </span>
+                    </div>
+                    <div class="ch-topic">
+                      <span class={r.length > maxLengthOf(r.notice.style) ? 'over' : ''}>
+                        {r.length} / {maxLengthOf(r.notice.style)} 文字
+                      </span>{' '}
+                      ・ 更新 {fmtAgo(r.notice.updatedAt, props.now)}
+                    </div>
+                  </div>
+                  <span class="ch-actions">
+                    {r.status !== 'posted' && (
+                      <form method="post" action={`/notices/${r.notice.id}/publish`}>
+                        <Csrf session={session} />
+                        <button type="submit" class="ok small">
+                          {r.status === 'draft' ? '投稿する' : '反映する'}
+                        </button>
+                      </form>
+                    )}
+                    <form method="post" action={`/notices/${r.notice.id}/move`} class="updown">
                       <Csrf session={session} />
-                      <button type="submit" class="ok">
-                        {r.status === 'draft' ? '投稿する' : '反映する'}
+                      <button type="submit" name="dir" value="up" disabled={i === 0} title="上へ" aria-label="上へ">
+                        ▲
+                      </button>
+                      <button type="submit" name="dir" value="down" disabled={i === g.rows.length - 1} title="下へ" aria-label="下へ">
+                        ▼
                       </button>
                     </form>
-                  )}
-                  <form method="post" action={`/notices/${r.notice.id}/move`}>
-                    <Csrf session={session} />
-                    <button type="submit" name="dir" value="up" disabled={i === 0} title="上へ">
-                      ↑
-                    </button>
-                    <button type="submit" name="dir" value="down" disabled={i === g.rows.length - 1} title="下へ">
-                      ↓
-                    </button>
-                  </form>
-                  <a class="danger-link" href={`/notices/${r.notice.id}/delete`}>
-                    削除
-                  </a>
+                    <a class="button-link small" href={`/notices/${r.notice.id}`}>
+                      編集
+                    </a>
+                  </span>
                 </div>
+                {r.unknown.length > 0 && <p class="flash warn">置き換えられない名前: {r.unknown.map((u) => `{${u}}`).join(' ')}</p>}
+                <details class="notice-peek">
+                  <summary>見本を見る</summary>
+                  <Rendered text={r.preview} style={r.notice.style} mention={r.mention} image={imageOf(r.notice)} button={r.notice.shuinButton} />
+                  <p class="note">
+                    <a class="danger-link small" href={`/notices/${r.notice.id}/delete`}>
+                      この掲示を削除
+                    </a>
+                  </p>
+                </details>
               </li>
             ))}
           </ol>
           {g.rows.some((r) => r.notice.messageId) && (
-            <form method="post" action={`/notices/channel/${g.channelId}/repost`} class="inline-actions">
-              <Csrf session={session} />
-              <label class="field check">
-                <input type="checkbox" name="confirm" value="yes" required />
-                <span>このチャンネルの掲示を全部消して、上の順番で投稿し直す（並べ替えたとき・途中に追加したとき）</span>
-              </label>
-              <button type="submit">投稿し直す</button>
-            </form>
+            <details class="repost">
+              <summary>並びを Discord に合わせる（投稿し直す）</summary>
+              <form method="post" action={`/notices/channel/${g.channelId}/repost`} class="inline-actions">
+                <Csrf session={session} />
+                <label class="field check">
+                  <input type="checkbox" name="confirm" value="yes" required />
+                  <span>このチャンネルの掲示を全部消して、上の順番で投稿し直す（並べ替えたとき・途中に追加したとき）</span>
+                </label>
+                <button type="submit">投稿し直す</button>
+              </form>
+            </details>
           )}
         </section>
       ))}
@@ -217,6 +252,8 @@ export function NoticeEditPage(props: {
   length: number;
   unknown: string[];
   error?: string;
+  /** 新しく作るとき: 最初から選んでおくチャンネル */
+  channelId?: string;
 }) {
   const { session, notice } = props;
   const action = notice ? `/notices/${notice.id}` : '/notices';
@@ -226,171 +263,201 @@ export function NoticeEditPage(props: {
   const mentionLabel = mention.kind === 'here' ? '@here' : mention.kind === 'everyone' ? '@everyone' : props.roles.filter((r) => picked.has(r.id)).map((r) => `@${r.name}`).join(' ');
   return (
     <Layout title={notice ? `掲示の編集: ${notice.title}` : '掲示の追加'} session={session} nav="notices" scripts={['editor.js']}>
-      <p>
+      <p class="crumbs">
         <a href="/notices">← 掲示の一覧</a>
       </p>
-      <h1>{notice ? `掲示の編集: ${notice.title}` : '掲示の追加'}</h1>
+      <div class="page-head">
+        <h1>{notice ? `掲示の編集: ${notice.title}` : '掲示の追加'}</h1>
+        {notice && (
+          <a class="danger-link" href={`/notices/${notice.id}/delete`}>
+            削除
+          </a>
+        )}
+      </div>
       <Flash code={props.error} />
       <div class="notice-edit">
         {/* プレビューのたびに写真を送らないよう、htmx には写真を入れない */}
-        <form method="post" action={action} class="card notice-form" id="notice-form" enctype="multipart/form-data" hx-params="not image">
+        <form method="post" action={action} class="notice-form" id="notice-form" enctype="multipart/form-data" hx-params="not image">
           <Csrf session={session} />
           {notice && <input type="hidden" name="noticeId" value={String(notice.id)} />}
-          <label class="field">
-            <span>投稿先のチャンネル</span>
-            {notice ? (
-              <input type="text" value={`#${props.channelName ?? notice.channelId}`} disabled />
-            ) : (
-              <select name="channelId" required>
-                <option value="">選んでください</option>
-                {props.channels.map((c) => (
-                  <option value={c.id}>
-                    {c.category ? `${c.category} / ` : ''}#{c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </label>
-          <label class="field">
-            <span>タイトル（管理画面での見分け用。Discord には出ません）</span>
-            <input type="text" name="title" value={notice?.title ?? ''} maxlength={60} required />
-          </label>
-          <label class="field">
-            <span>見せ方</span>
-            <select
-              name="style"
+          <section class="card">
+            <h2>どこに・どう出す</h2>
+            <div class="fields">
+              <label class="field">
+                <span>投稿先のチャンネル</span>
+                {notice ? (
+                  <input type="text" value={`#${props.channelName ?? notice.channelId}`} disabled />
+                ) : (
+                  <select name="channelId" required>
+                    <option value="">選んでください</option>
+                    {props.channels.map((c) => (
+                      <option value={c.id} selected={props.channelId === c.id}>
+                        {c.category ? `${c.category} / ` : ''}#{c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+              <label class="field">
+                <span>タイトル（管理画面での見分け用。Discord には出ません）</span>
+                <input type="text" name="title" value={notice?.title ?? ''} maxlength={60} required />
+              </label>
+              <label class="field">
+                <span>見せ方</span>
+                <select name="style" hx-post="/notices/preview" hx-trigger="change" hx-target="#notice-preview" hx-include="#notice-form">
+                  {(Object.keys(NOTICE_STYLES) as NoticeStyle[]).map((k) => (
+                    <option value={k} selected={(notice?.style ?? 'embed') === k}>
+                      {NOTICE_STYLES[k].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div class="option-cards">
+              <label class="choice">
+                <input type="checkbox" name="pinned" value="yes" checked={notice?.pinned ?? false} />
+                <span>
+                  <strong>📌 ピン留めする</strong>
+                  <small>チャンネルの使い方など、話が流れても読めるように</small>
+                </span>
+              </label>
+              <label class="choice">
+                <input type="checkbox" name="sticky" value="yes" checked={notice?.sticky ?? false} />
+                <span>
+                  <strong>⬇ いちばん下に表示し続ける</strong>
+                  <small>書き込みがあると 3 秒ほどで BOT が下に出し直す（#絵馬 のひな形など）。ピン留めはしない</small>
+                </span>
+              </label>
+              <label class="choice">
+                <input type="checkbox" name="shuinButton" value="yes" checked={notice?.shuinButton ?? false} {...preview} />
+                <span>
+                  <strong>🌸「朱印を押す」ボタン</strong>
+                  <small>押すと相手を選んで朱印を押せる。いちばん下に表示し続けるものに付けるのがおすすめ</small>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2>本文</h2>
+            <label class="field" for="notice-body">
+              <span class="note">Discord の書き方で飾れます。下のボタンか、Ctrl+B 太字・Ctrl+I 斜体・Ctrl+U 下線</span>
+            </label>
+            <MarkdownToolbar target="notice-body" />
+            <textarea
+              id="notice-body"
+              name="body"
+              rows={24}
+              data-md-editor
               hx-post="/notices/preview"
-              hx-trigger="change"
+              hx-trigger="input changed delay:500ms"
               hx-target="#notice-preview"
               hx-include="#notice-form"
             >
-              {(Object.keys(NOTICE_STYLES) as NoticeStyle[]).map((k) => (
-                <option value={k} selected={(notice?.style ?? 'embed') === k}>
-                  {NOTICE_STYLES[k].label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label class="field check">
-            <input type="checkbox" name="pinned" value="yes" checked={notice?.pinned ?? false} />
-            <span>📌 ピン留めする（チャンネルの使い方など、話が流れても読めるように）</span>
-          </label>
-          <label class="field check">
-            <input type="checkbox" name="sticky" value="yes" checked={notice?.sticky ?? false} />
-            <span>⬇ いちばん下に表示し続ける（誰かが書き込むと、3 秒ほどで BOT が下に出し直す。#絵馬-男性 のひな形など。こちらを選ぶとピン留めはしません）</span>
-          </label>
-          <label class="field check">
-            <input type="checkbox" name="shuinButton" value="yes" checked={notice?.shuinButton ?? false} {...preview} />
-            <span>🌸「朱印を押す」ボタンを付ける（押すと相手を選んで朱印を押せる。#絵馬 のひな形など、いちばん下に表示し続けるものに付けるのがおすすめ）</span>
-          </label>
-          <fieldset class="field mention-pick" {...preview}>
-            <legend>🔔 メンション（投稿したときに通知を届ける相手）</legend>
-            <div class="inline-actions">
-              {(
-                [
-                  ['none', 'なし'],
-                  ['here', '@here（いまオンラインの人）'],
-                  ['everyone', '@everyone（全員）'],
-                  ['roles', 'ロール（下で選ぶ）'],
-                ] as const
-              ).map(([v, label]) => (
-                <label class="check">
-                  <input type="radio" name="mentionKind" value={v} checked={mention.kind === v} />
-                  <span>{label}</span>
-                </label>
-              ))}
-            </div>
-            {props.roles.length > 0 ? (
-              <div class="role-checks">
-                {props.roles.map((r) => (
+              {notice?.body ?? ''}
+            </textarea>
+            <details class="md-help">
+              <summary>書き方の一覧</summary>
+              <table class="compact">
+                <tbody>
+                  {MD_HELP.map(([src, note]) => (
+                    <tr>
+                      <td>
+                        <code>{src}</code>
+                      </td>
+                      <td class="wrap note">{note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </section>
+
+          <section class="card">
+            <h2>🔔 メンション</h2>
+            <fieldset class="field mention-pick" {...preview}>
+              <legend class="note">投稿したときに通知を届ける相手</legend>
+              <div class="inline-actions">
+                {(
+                  [
+                    ['none', 'なし'],
+                    ['here', '@here（いまオンラインの人）'],
+                    ['everyone', '@everyone（全員）'],
+                    ['roles', 'ロール（下で選ぶ）'],
+                  ] as const
+                ).map(([v, label]) => (
                   <label class="check">
-                    <input type="checkbox" name="mentionRoles" value={r.id} checked={picked.has(r.id)} />
-                    <span>@{r.name}</span>
+                    <input type="radio" name="mentionKind" value={v} checked={mention.kind === v} />
+                    <span>{label}</span>
                   </label>
                 ))}
               </div>
-            ) : (
-              <p class="note">ロールを読み込めませんでした（BOT が動いていれば、少しあとに開き直すと出ます）。</p>
-            )}
-            <p class="note">
-              通知が届くのは<strong>はじめて投稿したときだけ</strong>です（あとから書き換えても、もう一度は鳴りません）。ロールは 5 つまで。@everyone・@here や「メンションを許可」していないロールを鳴らすには、BOT
-              のロールに「@everyone、@here、全てのロールにメンション」の権限が要ります。
-            </p>
-          </fieldset>
-          <label class="field" for="notice-body">
-            <span>本文（Discord の書き方で飾れます。下のボタンか、Ctrl+B 太字・Ctrl+I 斜体・Ctrl+U 下線）</span>
-          </label>
-          <MarkdownToolbar target="notice-body" />
-          <textarea
-            id="notice-body"
-            name="body"
-            rows={24}
-            data-md-editor
-            hx-post="/notices/preview"
-            hx-trigger="input changed delay:500ms"
-            hx-target="#notice-preview"
-            hx-include="#notice-form"
-          >
-            {notice?.body ?? ''}
-          </textarea>
-          <fieldset class="field image-pick" {...preview}>
-            <legend>🖼 写真</legend>
-            {notice?.imageHash && (
-              <div class="image-current">
-                <img src={`/notices/${notice.id}/image?v=${notice.imageHash}`} alt="今の写真" />
-                <label class="check">
-                  <input type="checkbox" name="removeImage" value="yes" />
-                  <span>写真を外す</span>
-                </label>
-              </div>
-            )}
-            <label class="field">
-              <span>{notice?.imageHash ? '別の写真に替える' : '写真を選ぶ'}（PNG・JPEG・GIF・WebP、8MB まで）</span>
-              <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" data-image-input />
-            </label>
-            <div class="inline-actions">
-              {(
-                [
-                  ['top', '⬆ 本文の上'],
-                  ['bottom', '⬇ 本文の下'],
-                ] as const
-              ).map(([v, label]) => (
-                <label class="check">
-                  <input type="radio" name="imagePosition" value={v} checked={(notice?.imagePosition ?? 'bottom') === v} />
-                  <span>{label}</span>
-                </label>
-              ))}
-            </div>
-            <p class="note">
-              カードは、上なら写真のカードを本文のカードの上に、下なら本文のカードの中のいちばん下に出します。普通のメッセージは Discord の決まりで、写真はいつも本文の下になります。
-            </p>
-          </fieldset>
-          <details class="md-help">
-            <summary>書き方の一覧</summary>
-            <table class="compact">
-              <tbody>
-                {MD_HELP.map(([src, note]) => (
-                  <tr>
-                    <td>
-                      <code>{src}</code>
-                    </td>
-                    <td class="wrap note">{note}</td>
-                  </tr>
+              {props.roles.length > 0 ? (
+                <div class="role-checks">
+                  {props.roles.map((r) => (
+                    <label class="check">
+                      <input type="checkbox" name="mentionRoles" value={r.id} checked={picked.has(r.id)} />
+                      <span>@{r.name}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p class="note">ロールを読み込めませんでした（BOT が動いていれば、少しあとに開き直すと出ます）。</p>
+              )}
+              <p class="note">
+                通知が届くのは<strong>はじめて投稿したときだけ</strong>です（あとから書き換えても、もう一度は鳴りません）。ロールは 5 つまで。@everyone・@here や「メンションを許可」していないロールを鳴らすには、BOT
+                のロールに「@everyone、@here、全てのロールにメンション」の権限が要ります。
+              </p>
+            </fieldset>
+          </section>
+
+          <section class="card">
+            <h2>🖼 写真</h2>
+            <fieldset class="field image-pick" {...preview}>
+              {notice?.imageHash && (
+                <div class="image-current">
+                  <img src={`/notices/${notice.id}/image?v=${notice.imageHash}`} alt="今の写真" />
+                  <label class="check">
+                    <input type="checkbox" name="removeImage" value="yes" />
+                    <span>写真を外す</span>
+                  </label>
+                </div>
+              )}
+              <label class="field">
+                <span>{notice?.imageHash ? '別の写真に替える' : '写真を選ぶ'}（PNG・JPEG・GIF・WebP、8MB まで）</span>
+                <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" data-image-input />
+              </label>
+              <div class="inline-actions">
+                {(
+                  [
+                    ['top', '⬆ 本文の上'],
+                    ['bottom', '⬇ 本文の下'],
+                  ] as const
+                ).map(([v, label]) => (
+                  <label class="check">
+                    <input type="radio" name="imagePosition" value={v} checked={(notice?.imagePosition ?? 'bottom') === v} />
+                    <span>{label}</span>
+                  </label>
                 ))}
-              </tbody>
-            </table>
-          </details>
-          <div class="inline-actions">
+              </div>
+              <p class="note">
+                カードは、上なら写真のカードを本文のカードの上に、下なら本文のカードの中のいちばん下に出します。普通のメッセージは Discord の決まりで、写真はいつも本文の下になります。
+              </p>
+            </fieldset>
+          </section>
+
+          <div class="save-bar">
             <button type="submit" name="then" value="save">
               保存
             </button>
             <button type="submit" name="then" value="publish" class="ok">
               保存して Discord に反映
             </button>
+            <a href="/notices">やめる</a>
           </div>
         </form>
-        <div>
-          <section class="card">
+        <div class="notice-side">
+          <section class="card preview-card">
             <h2>プレビュー</h2>
             <div id="notice-preview">
               <NoticePreview
@@ -405,8 +472,10 @@ export function NoticeEditPage(props: {
               />
             </div>
           </section>
-          <section class="card">
-            <h2>差し込める値</h2>
+          <details class="card vars">
+            <summary>
+              <strong>差し込める値</strong> <span class="note">（押すと本文に入る）</span>
+            </summary>
             <p class="note">
               本文に書くと、今の設定の値に置き換わります。<code>{'{#チャンネル名}'}</code> でチャンネルへのリンクになります。名前を押すと、本文のカーソルの所に入ります。
             </p>
@@ -425,7 +494,7 @@ export function NoticeEditPage(props: {
                 ))}
               </tbody>
             </table>
-          </section>
+          </details>
         </div>
       </div>
     </Layout>

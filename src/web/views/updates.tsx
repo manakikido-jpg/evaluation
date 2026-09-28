@@ -160,7 +160,7 @@ export function UpdatesPage(props: {
   }
   return (
     <Layout title="更新履歴" session={props.session} nav="updates">
-      <h1>更新履歴</h1>
+      <h1>📰 更新履歴</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
         アップデートで変わったことです（新しい順）。「Discord」はメンバーにも見える変更、「社務所Web」は運営だけ、「運用」は VPS・セットアップの変更です。

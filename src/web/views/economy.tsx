@@ -38,7 +38,7 @@ export function EconomyPage(props: {
   const guji = props.session.level === 'guji';
   return (
     <Layout title="経済" session={props.session} nav="economy">
-      <h1>経済（{coin}の流れ）</h1>
+      <h1>🪙 経済（{coin}の流れ）</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
         鯖の中の{e.currencyName}が、どこから出て（配った）、どこに使われて戻ったか（鯖の収入）をまとめています。{e.currencyName}は鯖の中だけのもので、本物のお金では買えません。日付は日本時間です。
@@ -66,13 +66,26 @@ export function EconomyPage(props: {
           : ''}
       </p>
 
-      <section class="card">
+      <nav class="jump card" aria-label="このページの項目">
+        <a href="#economy-supply">📊 出回っている量</a>
+        <a href="#economy-flow">🔁 配った・収入</a>
+        <a href="#economy-spread">👛 かたより</a>
+        <a href="#economy-big">💥 大きな出入り</a>
+        <a href="#economy-events">🎉 イベント</a>
+        <a href="#economy-gacha">🎲 物御籤の収支</a>
+        <a href="#economy-guide">🎯 値段の目安</a>
+        <a href="#economy-suspects">🕵 サブ垢の疑い</a>
+        <a href="#economy-alerts">⚠ 警告</a>
+        <a href="#economy-watch">⚙ 見守りの設定</a>
+      </nav>
+
+      <section class="card anchor" id="economy-supply">
         <h2>出回っている{e.currencyName}の量</h2>
         <p class="note">各区切りの終わりに、メンバーが持っていた{e.currencyName}の合計です。</p>
         <LineChart points={points} values={o.buckets.map((b) => b.supply)} unit="枚" label={`出回っている${e.currencyName}の量の推移`} />
       </section>
 
-      <section class="card">
+      <section class="card anchor" id="economy-flow">
         <h2>配った（上）と鯖の収入（下）</h2>
         <ColumnChart
           points={points}
@@ -121,7 +134,7 @@ export function EconomyPage(props: {
         </section>
       </div>
 
-      <section class="card">
+      <section class="card anchor" id="economy-spread">
         <h2>👛 持っている量のかたより</h2>
         <div class="stats">
           <Stat label="持っている人" value={fmt(d.holders)} unit="人" />
@@ -222,7 +235,7 @@ export function EconomyPage(props: {
         </section>
       </div>
 
-      <section class="card">
+      <section class="card anchor" id="economy-big">
         <h2>大きな出入り（この期間）</h2>
         {props.big.length === 0 ? (
           <p class="empty">この期間の出入りはありません。</p>

@@ -1423,6 +1423,7 @@ export function createWebApp(deps: WebDeps) {
         length={length}
         unknown={preview.unknown}
         error={error}
+        channelId={notice ? undefined : c.req.query('channel')}
       />,
     );
   };

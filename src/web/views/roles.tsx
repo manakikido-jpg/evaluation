@@ -50,105 +50,122 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
   const nicknamers = props.rows.filter((r) => !r.locked && (BigInt(r.role.permissions ?? '0') & (1n << 26n)) !== 0n);
   return (
     <Layout title="ロール" session={props.session} nav="roles">
-      <h1>ロール</h1>
+      <div class="page-head">
+        <h1>🎭 ロール</h1>
+        <a class="button-link" href="/ranks">
+          ⛩ 役職の設定 →
+        </a>
+        <a class="button-link primary" href="#new-role">
+          ➕ ロールを作る
+        </a>
+      </div>
       <Flash code={props.flash} />
       {props.loadFailed && <p class="flash warn">Discord からロールを読めませんでした。時間をおいてもう一度開いてください。</p>}
       <p class="note">
-        Discord のロールと、持っている人数（今いる人・BOT を除く）、気をつける権限です。名前を押すと、権限の確認・変更と、持っている人の一覧が見られます。🔒 は BOT
+        Discord のロール（上から順）と、持っている人数（今いる人・BOT を除く）、気をつける権限です。名前を押すと、権限の確認・変更と、持っている人の一覧が見られます。🔒 は BOT
         からは変えられないロールです（BOT のロールより上・BOT などの自動のロール）。
       </p>
-      <form method="post" action="/roles/mentionable-all" class="card">
-        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
-        <h2>@ で呼べるようにする</h2>
-        <p class="note">
-          ロールを「誰でも @ で呼べる」にすると、メンバーが @ロール名 でそのロールの人全員に通知できます（今 @ で呼べないロール: {offCount} 個）。🔒 のロールと「みんな（@everyone）」は変えません。1 つずつ変えるときは、ロールの名前を押してください。
-        </p>
-        <label class="field check">
-          <input type="checkbox" name="confirm" value="yes" required />
-          <span>すべてのロールをまとめて変える</span>
-        </label>
-        <div class="actions">
-          <button type="submit" name="mentionable" value="on" class="ok">
-            すべて @ で呼べるようにする
-          </button>
-          <button type="submit" name="mentionable" value="off">
-            すべて @ で呼べないようにする
-          </button>
+      <details class="card tools">
+        <summary>🧰 まとめて変える（@ で呼べる・招待リンク・ニックネーム）</summary>
+        <div class="tool-list">
+          <form method="post" action="/roles/mentionable-all" class="tool">
+            <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+            <div>
+              <strong>@ で呼べるようにする</strong>
+              <p class="note">
+                「誰でも @ で呼べる」にすると、メンバーが @ロール名 でそのロールの人全員に通知できます（今 @ で呼べないロール: {offCount} 個）。🔒 のロールと「みんな（@everyone）」は変えません。
+              </p>
+              <label class="field check">
+                <input type="checkbox" name="confirm" value="yes" required />
+                <span>すべてのロールをまとめて変える</span>
+              </label>
+            </div>
+            <span class="inline-actions">
+              <button type="submit" name="mentionable" value="on" class="ok">
+                すべて @ で呼べるようにする
+              </button>
+              <button type="submit" name="mentionable" value="off">
+                すべて @ で呼べないようにする
+              </button>
+            </span>
+          </form>
+          <form method="post" action="/roles/invites-bot-only" class="tool">
+            <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+            <div>
+              <strong>🔗 招待リンクは BOT だけ</strong>
+              <p class="note">
+                みんなとロールから「招待を作成」を外すと、メンバーは BOT の <code>/招待リンク</code> で自分専用のリンクをもらう形になります（だれの招待で入ったか分かります）。今「招待を作成」を持っているロール:{' '}
+                {inviters.length ? inviters.map((r) => r.role.name).join('・') : 'なし'}。前に作られた招待リンクは、サーバー設定 →「招待」から消してください。
+              </p>
+              <label class="field check">
+                <input type="checkbox" name="confirm" value="yes" required />
+                <span>「招待を作成」を外す</span>
+              </label>
+            </div>
+            <button type="submit" class="ok">
+              招待リンクを BOT だけにする
+            </button>
+          </form>
+          <form method="post" action="/roles/nickname-lock" class="tool">
+            <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+            <div>
+              <strong>🏷 ニックネームは自分で変えられないように</strong>
+              <p class="note">
+                みんなとロールから「ニックネームの変更」を外します。変えたいときは、運営がメンバーのページの「ニックネーム」から変えます。今「ニックネームの変更」を持っているロール:{' '}
+                {nicknamers.length ? nicknamers.map((r) => r.role.name).join('・') : 'なし'}。
+              </p>
+              <label class="field check">
+                <input type="checkbox" name="confirm" value="yes" required />
+                <span>「ニックネームの変更」を外す</span>
+              </label>
+            </div>
+            <button type="submit" class="ok">
+              ニックネームを自分で変えられないようにする
+            </button>
+          </form>
         </div>
-      </form>
-      <p>
-        <a href="#new-role">➕ ロールを作る</a> ・ <a href="/ranks">⛩ 役職（参拝者〜宮司）の名前・ロール・格を変える →</a>
-      </p>
-      <form method="post" action="/roles/invites-bot-only" class="card">
-        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
-        <h2>🔗 招待リンクは BOT だけ</h2>
-        <p class="note">
-          みんな（@everyone）とロールから「招待を作成」を外すと、メンバーは自分で招待リンクを作れなくなり、BOT の <code>/招待リンク</code>{' '}
-          で自分専用のリンクをもらう形になります（だれの招待で入ったか分かります）。今「招待を作成」を持っているロール:{' '}
-          {inviters.length ? inviters.map((r) => r.role.name).join('・') : 'なし'}。🔒 のロールと、サーバーの持ち主・「管理者」を持つロールは変わりません。前に人が作った招待リンクは、サーバー設定 →「招待」から消してください。
-        </p>
-        <label class="field check">
-          <input type="checkbox" name="confirm" value="yes" required />
-          <span>「招待を作成」を外す</span>
-        </label>
-        <button type="submit" class="ok">
-          招待リンクを BOT だけにする
-        </button>
-      </form>
-      <form method="post" action="/roles/nickname-lock" class="card">
-        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
-        <h2>🏷 ニックネームは自分で変えられないように</h2>
-        <p class="note">
-          みんな（@everyone）とロールから「ニックネームの変更」を外すと、メンバーは自分のサーバーでの名前（ニックネーム）を変えられなくなります。変えたいときは、運営がメンバーのページの「ニックネーム」から変えます。今「ニックネームの変更」を持っているロール:{' '}
-          {nicknamers.length ? nicknamers.map((r) => r.role.name).join('・') : 'なし'}。🔒 のロールと、サーバーの持ち主・「管理者」「ニックネームの管理」を持つ人は変わりません。
-        </p>
-        <label class="field check">
-          <input type="checkbox" name="confirm" value="yes" required />
-          <span>「ニックネームの変更」を外す</span>
-        </label>
-        <button type="submit" class="ok">
-          ニックネームを自分で変えられないようにする
-        </button>
-      </form>
-      <div class="table-wrap">
-        <table class="members roles">
-          <thead>
-            <tr>
-              <th>ロール</th>
-              <th>このサーバーでの役目</th>
-              <th>@</th>
-              <th class="num">人数</th>
-              <th>気をつける権限</th>
-            </tr>
-          </thead>
-          <tbody>
-            {props.rows.map(({ role, kind, members, locked }) => {
-              const danger = dangerLabels(permsOf(role));
-              return (
-                <tr>
-                  <td>
-                    <a href={`/roles/${role.id}`} class="who">
-                      <Swatch color={role.color} />
-                      <span>
-                        {role.name}
-                        {locked && ' 🔒'}
-                      </span>
+      </details>
+      <section class="card ch-group">
+        <div class="ch-cat">
+          <span class="ch-cat-name">ロール</span>
+          <span class="ch-count">{props.rows.length}</span>
+        </div>
+        <ul class="ch-list">
+          {props.rows.map(({ role, kind, members, locked }) => {
+            const danger = dangerLabels(permsOf(role));
+            return (
+              <li class="ch-row">
+                <span class="ch-icon">
+                  <Swatch color={role.color} />
+                </span>
+                <div class="ch-main">
+                  <div class="ch-line">
+                    <a class="ch-name" href={`/roles/${role.id}`} title={locked ? 'BOT からは変えられない' : undefined}>
+                      {role.name}
+                      {locked && ' 🔒'}
                     </a>
-                  </td>
-                  <td>{kind ?? <small>—</small>}</td>
-                  <td>{role.mentionable ? '✅' : <small>—</small>}</td>
-                  <td class="num">{members}</td>
-                  <td class="wrap">
-                    {danger.map((d) => (
-                      <span class="tag red">{d}</span>
-                    ))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    <span class="ch-tags">
+                      {kind && <span class="tag bot">{kind}</span>}
+                      {role.mentionable && <span class="tag green">@ で呼べる</span>}
+                      {danger.map((d) => (
+                        <span class="tag red">{d}</span>
+                      ))}
+                    </span>
+                  </div>
+                </div>
+                <span class="ch-actions">
+                  <span class="ch-count" title="持っている人">
+                    👤 {members}
+                  </span>
+                  <a class="button-link small" href={`/roles/${role.id}`}>
+                    開く
+                  </a>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
       <form method="post" action="/roles/new" class="card anchor" id="new-role">
         <input type="hidden" name="_csrf" value={props.session.csrfToken} />
         <h2>➕ ロールを作る</h2>
@@ -199,13 +216,15 @@ export function RolePage(props: {
   const disabled = props.locked;
   return (
     <Layout title={`ロール: ${role.name}`} session={session} nav="roles">
-      <p>
+      <p class="crumbs">
         <a href="/roles">← ロールの一覧</a>
       </p>
-      <h1>
-        <Swatch color={role.color} /> {role.name}
-        {props.kind && <small> {props.kind}</small>}
-      </h1>
+      <div class="page-head">
+        <h1>
+          <Swatch color={role.color} /> {role.name}
+          {props.kind && <small> {props.kind}</small>}
+        </h1>
+      </div>
       <Flash code={props.flash} />
       {props.locked && <p class="flash warn">{ROLE_FLASH.locked!.text}</p>}
       <form method="post" action={`/roles/${role.id}`} class="card">
