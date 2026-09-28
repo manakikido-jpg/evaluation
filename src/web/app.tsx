@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
-import { inviteCountOf, inviterOf } from '../services/invites.js';
+import { inviteCountOf, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { STATIC } from './assets.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -63,6 +63,7 @@ import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoi
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
 import type { DiscordActions } from '../lib/discordRest.js';
+import { DiscordHttpError } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
 import { createSession, deleteSession, findSession, markChecked, randomToken, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
@@ -139,6 +140,7 @@ import { isGlossaryCategory } from '../services/glossaryDefaults.js';
 import { GlossaryPage } from './views/glossary.js';
 import { MeetingEditPage, MeetingViewPage, MinutesPage } from './views/minutes.js';
 import { TempPage } from './views/temp.js';
+import { InvitesPage } from './views/invites.js';
 import { activeGrants, activeMemberNames, durationMinutes, endGrant, endedGrants, extendGrant, findActiveMember, getGrant, grantPerm, grantRole, isPermPreset, memberRoleIdsOf } from '../services/tempGrants.js';
 import { staffRoleIds } from '../services/meetings.js';
 import {
@@ -393,6 +395,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/commands', requireAdmin);
   app.use('/minutes', requireAdmin);
   app.use('/temp', requireAdmin);
+  app.use('/invites', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -400,7 +403,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -818,6 +821,44 @@ export function createWebApp(deps: WebDeps) {
     if (!id || !minutes) return c.redirect('/temp');
     const ok = await extendGrant(tempCtx(), id, minutes, c.get('session').userId);
     return c.redirect(`/temp?msg=${ok ? 'extended' : 'ended_already'}`);
+  });
+
+  // 🔗 招待: だれのリンクか・だれがだれを招待したか（Discord の設定では BOT のリンクは全部「BOT」と出るので）
+  app.get('/invites', async (c) => {
+    const [joins, links, known] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db)]);
+    const discordInvites = deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => null) : null;
+    const others = discordInvites ? discordInvites.filter((i) => !known.has(i.code) && !i.inviter?.bot && (!deps.botId || i.inviter?.id !== deps.botId)) : null;
+    const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
+    // Discord で消されていた BOT のリンクは出さない（読めたときだけ）
+    const alive = discordInvites ? links.filter((l) => uses.has(l.code)) : links;
+    const names = await namesOf(db, [...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
+    return c.html(
+      <InvitesPage
+        session={c.get('session')}
+        joins={joins}
+        links={alive}
+        others={others}
+        uses={uses}
+        name={(id) => names.get(id) ?? id}
+        flash={c.req.query('msg')}
+        now={now()}
+      />,
+    );
+  });
+
+  app.post('/invites/:code/delete', async (c) => {
+    const code = c.req.param('code');
+    if (!/^[\w-]{2,40}$/.test(code) || !deps.discord.deleteInvite) return c.redirect('/invites?msg=invalid');
+    const s = c.get('session');
+    try {
+      await deps.discord.deleteInvite(code, `社務所Web で招待リンクを消す（${s.userId}）`);
+    } catch (err) {
+      // もう Discord になければ、記録だけ直す
+      if (!(err instanceof DiscordHttpError && err.status === 404)) return c.redirect('/invites?msg=failed');
+    }
+    await revokeLink(db, code, now());
+    await audit(db, { actorId: s.userId, action: 'invite.delete', detail: { code }, via: 'web' });
+    return c.redirect('/invites?msg=deleted');
   });
 
   app.post('/temp/:id/revoke', async (c) => {

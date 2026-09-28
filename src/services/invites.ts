@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { activityDaily, inviteActive, inviteLinks, invites, members, type InviteLink } from '../db/schema.js';
+import { activityDaily, inviteActive, inviteLinks, invites, members, type Invite, type InviteLink } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { jstDate } from './activity.js';
@@ -92,6 +92,29 @@ export async function activeLinkOf(db: Db, inviterId: string): Promise<InviteLin
 
 export async function saveLink(db: Db, link: { code: string; inviterId: string; channelId: string; uses: number; label?: string | null; createdBy?: string | null }): Promise<void> {
   await db.insert(inviteLinks).values(link).onConflictDoUpdate({ target: inviteLinks.code, set: { uses: link.uses, revokedAt: null } });
+}
+
+// ───────── 社務所Web の「招待」 ─────────
+
+/** BOT が作った、今使える招待リンク（メンバーのものと共通のもの）。新しい順 */
+export async function liveLinks(db: Db): Promise<InviteLink[]> {
+  return db.select().from(inviteLinks).where(isNull(inviteLinks.revokedAt)).orderBy(desc(inviteLinks.createdAt));
+}
+
+/** BOT が作ったことのあるリンクのコード（消したものも） */
+export async function knownLinkCodes(db: Db): Promise<Set<string>> {
+  return new Set((await db.select({ code: inviteLinks.code }).from(inviteLinks)).map((r) => r.code));
+}
+
+/** だれがだれを招待したか（新しい順） */
+export async function recentInviteJoins(db: Db, limit = 200): Promise<Invite[]> {
+  return db.select().from(invites).orderBy(desc(invites.createdAt)).limit(limit);
+}
+
+/** リンクを使えなくしたと記録する（メンバーのものも共通のものも） */
+export async function revokeLink(db: Db, code: string, now = new Date()): Promise<boolean> {
+  const rows = await db.update(inviteLinks).set({ revokedAt: now }).where(and(eq(inviteLinks.code, code), isNull(inviteLinks.revokedAt))).returning();
+  return rows.length > 0;
 }
 
 /** 運営が作る共通の招待リンク（SNS・ポスター用など）の持ち主。だれの招待にもならない */

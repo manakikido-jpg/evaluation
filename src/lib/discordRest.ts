@@ -42,7 +42,22 @@ export interface DiscordActions {
   deleteRole(guildId: string, roleId: string, reason: string): Promise<void>;
   /** ロールの名前・色・権限などを変える */
   editRole(guildId: string, roleId: string, body: RolePatch, reason: string): Promise<void>;
+  /** サーバーの招待リンク全部（BOT に「サーバーの管理」が要る） */
+  guildInvites?(guildId: string): Promise<GuildInvite[]>;
+  /** 招待リンクを消す */
+  deleteInvite?(code: string, reason: string): Promise<void>;
 }
+
+/** max_age: 秒（0 = 期限なし）・max_uses: 0 = 回数なし */
+export type GuildInvite = {
+  code: string;
+  uses?: number;
+  max_age?: number;
+  max_uses?: number;
+  created_at?: string;
+  inviter?: { id: string; username: string; global_name?: string | null; bot?: boolean };
+  channel?: { id: string; name: string } | null;
+};
 
 export type GuildRole = {
   id: string;
@@ -192,6 +207,8 @@ export function createDiscordActions(botToken: string): DiscordActions {
     },
     guildChannels: async (g) => (await call('GET', `/guilds/${g}/channels`)) as GuildChannel[],
     guildRoles: async (g) => (await call('GET', `/guilds/${g}/roles`)) as GuildRole[],
+    guildInvites: async (g) => (await call('GET', `/guilds/${g}/invites`)) as GuildInvite[],
+    deleteInvite: async (code, reason) => void (await call('DELETE', `/invites/${encodeURIComponent(code)}`, { reason })),
     editRole: async (g, r, body, reason) => void (await call('PATCH', `/guilds/${g}/roles/${r}`, { reason, body })),
     setNickname: async (g, u, nick, reason) => void (await call('PATCH', `/guilds/${g}/members/${u}`, { reason, body: { nick: nick || null } })),
     createRole: async (g, body, reason) => (await call('POST', `/guilds/${g}/roles`, { reason, body })) as GuildRole,

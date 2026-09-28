@@ -867,6 +867,46 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     }
   });
 
+  it('🔗 招待: だれのリンクか・だれがだれを招待したか・人が作った期限つきのリンクを消せる', async () => {
+    const { saveLink, recordInvite, SHARED_INVITER } = await import('../src/services/invites.js');
+    await recordJoin(db, { id: GUJI, username: 'g', displayName: 'ぐうじ', avatarUrl: null, roleIds: [ROLE.guji], isBot: false, joinedAt: null });
+    await saveLink(db, { code: 'sakuraLink', inviterId: USER, channelId: '910000000000000002', uses: 1 });
+    await saveLink(db, { code: 'snsLink', inviterId: SHARED_INVITER, channelId: '910000000000000002', uses: 0, label: 'X 用', createdBy: GUJI });
+    await recordInvite(db, '800000000000000077', USER, 'link');
+    const created = new Date(clock.getTime() - 86_400_000).toISOString();
+    fakeActions.guildInvites = async () => [
+      { code: 'sakuraLink', uses: 2, max_age: 0, inviter: { id: '990000000000000001', username: 'bot', bot: true } },
+      { code: 'snsLink', uses: 5, max_age: 0, inviter: { id: '990000000000000001', username: 'bot', bot: true } },
+      { code: 'handMade', uses: 3, max_age: 604800, created_at: created, inviter: { id: USER, username: 'u', global_name: 'さくら' }, channel: { id: '910000000000000003', name: 'しきたり' } },
+    ];
+    const deleted: string[] = [];
+    fakeActions.deleteInvite = async (code) => void deleted.push(code);
+    try {
+      const s = await login(STAFF);
+      const page = await (await get('/invites', s)).text();
+      expect(page).toContain('discord.gg/sakuraLink');
+      expect(page).toContain('使われた 2 回');
+      expect(page).toContain('「X 用」');
+      expect(page).toContain('使われた 5 回');
+      expect(page).toContain('discord.gg/handMade');
+      expect(page).toContain('期限が付いているリンクが 1 個あります');
+      expect(page).toContain('招待リンクで入った');
+      expect((await post('/invites/handMade/delete', s, { _csrf: await csrfOf(s) })).headers.get('location')).toBe('/invites?msg=deleted');
+      expect(deleted).toEqual(['handMade']);
+      expect((await post('/invites/sakuraLink/delete', s, { _csrf: await csrfOf(s) })).headers.get('location')).toBe('/invites?msg=deleted');
+      fakeActions.guildInvites = async () => [];
+      const after = await (await get('/invites', s)).text();
+      expect(after).not.toContain('discord.gg/sakuraLink');
+      expect((await listAudit(db, { action: 'invite.delete' })).length).toBe(2);
+      // 読めないとき
+      fakeActions.guildInvites = async () => Promise.reject(new Error('403'));
+      expect(await (await get('/invites', s)).text()).toContain('Discord から読めませんでした');
+    } finally {
+      delete fakeActions.guildInvites;
+      delete fakeActions.deleteInvite;
+    }
+  });
+
   it('年齢区分の変更は宮司だけ', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/age`, s, { _csrf: await csrfOf(s), age: 'adult' });

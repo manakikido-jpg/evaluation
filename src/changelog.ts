@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-invites-page',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🔗 招待のページ（だれのリンクか・だれがだれを招待したか）',
+    items: [
+      'Discord のサーバー設定の「招待」では BOT が作ったリンクは全部「BOT」と出るので、だれのリンクか・何回使われたかを社務所Web で見られるように',
+      'だれがだれを招待したか（招待リンクで入った／申請で選んだ・お礼済みか）の一覧',
+      'Discord の「招待」ボタンで人が作ったリンク（期限つき・だれの招待か記録されない）を見つけて、その場で消せる',
+    ],
+  },
+  {
     id: '2026-09-29-role-command',
     date: '2026-09-29',
     kind: 'new',

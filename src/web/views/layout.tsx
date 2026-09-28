@@ -23,6 +23,7 @@ type Nav =
   | 'commands'
   | 'minutes'
   | 'temp'
+  | 'invites'
   | 'notices'
   | 'channels'
   | 'shop'
@@ -53,6 +54,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'yaku', href: '/yaku', icon: '👹', label: '厄' },
       { key: 'soudan', href: '/soudan', icon: '💌', label: '相談' },
       { key: 'temp', href: '/temp', icon: '⏳', label: '一時的な権限' },
+      { key: 'invites', href: '/invites', icon: '🔗', label: '招待' },
       { key: 'interview', href: '/interview', icon: '🍵', label: '面談告知' },
       { key: 'minutes', href: '/minutes', icon: '📓', label: '議事録' },
     ],
