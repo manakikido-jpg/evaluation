@@ -51,7 +51,7 @@ small { color: var(--muted); }
 .brand { font-weight: bold; color: var(--ink); font-size: 1.1rem; }
 .brand small { margin-left: 6px; font-weight: normal; }
 .torii { color: var(--shu); }
-.top nav { display: flex; gap: 4px; flex: 1; }
+.top nav { display: flex; flex-wrap: wrap; gap: 2px 4px; flex: 1; min-width: 0; }
 .top nav a { padding: 6px 12px; border-radius: 6px; color: var(--ink); white-space: nowrap; }
 .top nav a.on, .top nav a:hover { background: var(--sakura); text-decoration: none; }
 .me { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
@@ -131,7 +131,7 @@ table.compact td, table.compact th { padding: 6px 8px; font-size: .9rem; }
 
 @media (max-width: 640px) {
   .top { gap: 8px; padding: 10px 12px; }
-  .top nav { order: 3; flex-basis: 100%; overflow-x: auto; }
+  .top nav { order: 3; flex-basis: 100%; flex-wrap: nowrap; overflow-x: auto; }
   .profile { flex-direction: column; }
 }
 
@@ -430,3 +430,75 @@ th.sortable.on a { color: var(--shu); }
   .status.iv-scheduled { background: #3a2f10; color: #f3d27a; }
   .status.iv-posted { background: #1f3a26; color: #bfe6c8; }
 }
+
+/* ───────── チャンネル（一覧・編集・作る） ───────── */
+.page-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.page-head h1 { margin-right: auto; display: flex; align-items: center; gap: 8px; }
+a.button-link.primary { background: var(--shu); border-color: var(--shu); color: #fff; }
+a.button-link.primary:hover { background: var(--shu-dark); }
+a.button-link.small { padding: 3px 10px; font-size: .85rem; }
+.crumbs { margin: 0 0 4px; font-size: .9rem; }
+.ch-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.ch-search input[type=search] { flex: 1 1 240px; font: inherit; padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
+.ch-search .note { margin-left: auto; }
+details.ch-help { padding: 10px 16px; }
+details.ch-help summary { cursor: pointer; color: var(--muted); }
+details.ch-help ul { margin: 8px 0 0; padding-left: 1.2em; font-size: .9rem; }
+.ch-group { padding: 0; overflow: hidden; }
+.ch-cat { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 14px; background: var(--sakura); border-bottom: 1px solid var(--line); }
+.ch-cat-name { font-weight: 700; color: var(--ink); }
+.ch-count { font-size: .8rem; color: var(--muted); background: var(--card); border-radius: 999px; padding: 0 8px; }
+.ch-cat .ch-actions { margin-left: auto; }
+.ch-list { list-style: none; margin: 0; padding: 0; }
+.ch-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--line); }
+.ch-list > .ch-row:first-child { border-top: 0; }
+.ch-row:hover { background: var(--bg); }
+.ch-icon { width: 1.6em; text-align: center; color: var(--muted); font-weight: 700; flex: none; }
+.ch-icon.big { font-size: 1.3rem; }
+.ch-main { flex: 1; min-width: 0; }
+.ch-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ch-name { font-weight: 600; color: var(--ink); }
+.ch-topic { font-size: .82rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.ch-tags .tag { margin-left: 0; font-size: .72rem; }
+.tag.bot { background: #e6eefb; color: #1f4a8a; }
+@media (prefers-color-scheme: dark) { .tag.bot { background: #22324a; color: #bcd3f5; } }
+.ch-actions { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.ch-empty { margin: 0; padding: 10px 14px; }
+a.small-link { font-size: .85rem; }
+form.updown { display: inline-flex; gap: 2px; margin: 0; }
+form.updown button { padding: 2px 8px; font-size: .75rem; line-height: 1.4; }
+.ch-edit form.updown button { padding: 4px 12px; font-size: .85rem; }
+.ch-edit { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+@media (max-width: 800px) { .ch-edit { grid-template-columns: 1fr; } }
+.ch-edit .card { display: grid; gap: 12px; }
+.ch-edit .card h2 { margin: 0; }
+.ch-edit textarea, .ch-edit input[type=text], .ch-edit input[type=number], .ch-edit select, .ch-create input[type=text], .ch-create input[type=number], .ch-create select {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); width: 100%;
+}
+.ch-edit button[type=submit].ok, .ch-create button.ok { justify-self: start; }
+form.move-to { display: grid; gap: 8px; }
+form.move-to button { justify-self: start; }
+.danger-zone { border-color: var(--sakura-2); }
+.danger-zone h2 { color: var(--shu); }
+/* 大きめの選択肢（ラジオをカードに） */
+fieldset.mode-pick, fieldset.kind-pick, fieldset.vis-pick, fieldset.role-pick { border: 0; padding: 0; margin: 0; }
+fieldset.mode-pick legend, fieldset.kind-pick legend, fieldset.vis-pick legend, fieldset.role-pick legend { font-size: .9rem; margin-bottom: 6px; padding: 0; }
+fieldset.mode-pick, fieldset.kind-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+fieldset.vis-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+label.choice { position: relative; display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--card); }
+label.choice:hover { border-color: var(--shu); }
+label.choice:has(input:checked) { border-color: var(--shu); background: var(--sakura); box-shadow: 0 0 0 1px var(--shu) inset; }
+label.choice input { margin-top: 4px; accent-color: var(--shu); }
+label.choice span { display: grid; }
+label.choice small { color: var(--muted); font-size: .8rem; }
+.ch-create { display: grid; gap: 16px; }
+/* 種類・見える範囲に合わせて、使わない欄を隠す */
+.ch-create:has(input[name=kind][value=text]:checked) .only-voice,
+.ch-create:has(input[name=kind][value=voice]:checked) .only-text,
+.ch-create:has(input[name=kind][value=category]:checked) .only-text,
+.ch-create:has(input[name=kind][value=category]:checked) .only-voice,
+.ch-create:has(input[name=kind][value=category]:checked) .only-in-category { display: none; }
+.ch-create:has(input[name=kind][value=category]:checked) .vis-category { display: none; }
+.ch-create .role-pick { display: none; }
+.ch-create:has(input[name=visibility][value=private]:checked) .role-pick { display: block; }

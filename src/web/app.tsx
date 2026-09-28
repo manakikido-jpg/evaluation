@@ -141,7 +141,7 @@ import { ADMIN_RANK_KEYS, RanksPage } from './views/ranks.js';
 import { syncOmamoriMentionable } from '../services/recruit.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
-import { ChannelsPage } from './views/channels.js';
+import { ChannelEditPage, ChannelNewPage, ChannelsPage, type ChannelInfo } from './views/channels.js';
 import { RolePage, RolesPage } from './views/roles.js';
 import { MarketPage } from './views/market.js';
 import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
@@ -152,7 +152,9 @@ import {
   cleanChannelName,
   cleanNewChannelName,
   isChannelVisibility,
+  isRestricted,
   isText,
+  isVoice as isVoiceChannel,
   listTextChannels,
   modeOf as channelModeOf,
   overwritesFor,
@@ -1742,12 +1744,52 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/channels/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
 
+  /** 一覧・編集ページに出す、チャンネルのようす */
+  const channelInfo = (ch: GuildChannel, all: GuildChannel[]): ChannelInfo => {
+    const parent = ch.parent_id ? (all.find((x) => x.id === ch.parent_id) ?? null) : null;
+    return { channel: ch, mode: isText(ch) ? channelModeOf(ch, cfg) : undefined, restricted: isRestricted(ch, cfg, parent), inUse: channelsInUse(cfg).get(ch.id) };
+  };
+
   app.get('/channels', async (c) => {
+    const channels = await loadChannels(true);
+    const groups = listTextChannels(channels).map((g) => ({
+      category: g.category ? channelInfo(g.category, channels) : null,
+      // テキストのあとに通話（Discord と同じ並び）
+      items: [...g.items, ...g.voice].map((ch) => channelInfo(ch, channels)),
+    }));
+    const total = groups.reduce((n, g) => n + g.items.length, 0);
+    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} q={c.req.query('q')} total={total} />);
+  });
+
+  app.get('/channels/new', async (c) => {
     const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
-    const groups = listTextChannels(channels).map((g) => ({ ...g, items: g.items.map((ch) => ({ channel: ch, mode: channelModeOf(ch, cfg) })) }));
+    const categories = channels.filter((ch) => ch.type === 4).sort((a, b) => a.position - b.position);
     // プライベートで選べるロール（@everyone・BOT などの自動のロールはのぞく）
     const pickable = (roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed);
-    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} roles={pickable} inUse={channelsInUse(cfg)} />);
+    return c.html(<ChannelNewPage session={c.get('session')} categories={categories} roles={pickable} parentId={c.req.query('parent')} flash={c.req.query('msg')} />);
+  });
+
+  app.get('/channels/:id', async (c) => {
+    const id = c.req.param('id');
+    const channels = /^\d{17,20}$/.test(id) ? await loadChannels(true) : [];
+    const ch = channels.find((x) => x.id === id);
+    if (!ch) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    const parent = ch.parent_id ? (channels.find((x) => x.id === ch.parent_id) ?? null) : null;
+    const group = (x: GuildChannel) => (x.type === 4 ? 'cat' : isVoiceChannel(x) ? 'voice' : 'text');
+    const siblings = channels.filter((x) => group(x) === group(ch) && (ch.type === 4 || (x.parent_id ?? null) === (ch.parent_id ?? null))).sort((a, b) => a.position - b.position);
+    const children = ch.type === 4 ? listTextChannels(channels).find((g) => g.category?.id === ch.id) : undefined;
+    return c.html(
+      <ChannelEditPage
+        session={c.get('session')}
+        guildId={cfg.guildId}
+        info={channelInfo(ch, channels)}
+        parent={parent}
+        categories={channels.filter((x) => x.type === 4).sort((a, b) => a.position - b.position)}
+        children={children ? [...children.items, ...children.voice].map((x) => channelInfo(x, channels)) : []}
+        place={{ index: siblings.findIndex((x) => x.id === ch.id) + 1, count: siblings.length }}
+        flash={c.req.query('msg')}
+      />,
+    );
   });
 
   /** 通話の人数の上限（0〜99。0 = なし）。おかしければ undefined */
@@ -1763,21 +1805,22 @@ export function createWebApp(deps: WebDeps) {
     const kind = one('kind');
     const type = kind === 'text' ? 0 : kind === 'voice' ? 2 : kind === 'category' ? 4 : undefined;
     const name = cleanNewChannelName(one('name'));
-    const visibility = one('visibility');
+    // カテゴリには「カテゴリと同じ」がないので、参拝者以上にする
+    const visibility = type === 4 && one('visibility') === 'category' ? 'members' : one('visibility');
     const roleIds = (body.roles === undefined ? [] : Array.isArray(body.roles) ? body.roles : [body.roles]).filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v));
     const topicRaw = one('topic');
     const topic = typeof topicRaw === 'string' ? topicRaw.trim().slice(0, 1024) : '';
-    if (type === undefined || !name || !isChannelVisibility(visibility)) return c.redirect('/channels?msg=create_invalid#new-channel');
+    if (type === undefined || !name || !isChannelVisibility(visibility)) return c.redirect('/channels/new?msg=create_invalid');
     const channels = await loadChannels(true);
     const parentId = type === 4 ? '' : String(one('parent') ?? '');
     const parent = parentId ? channels.find((ch) => ch.id === parentId && ch.type === 4) : undefined;
     if ((parentId && !parent) || (visibility === 'category' && !parent) || (visibility === 'private' && !roleIds.length)) {
-      return c.redirect('/channels?msg=create_invalid#new-channel');
+      return c.redirect('/channels/new?msg=create_invalid');
     }
     const permission_overwrites = overwritesFor(cfg, { visibility, roleIds, readOnly: type === 0 && one('readOnly') === 'yes', botId: deps.botId, parent });
     const limitRaw = one('userLimit');
     const user_limit = type === 2 && typeof limitRaw === 'string' && limitRaw !== '' ? userLimitOf(limitRaw) : 0;
-    if (user_limit === undefined) return c.redirect('/channels?msg=create_invalid#new-channel');
+    if (user_limit === undefined) return c.redirect('/channels/new?msg=create_invalid');
     let created: GuildChannel;
     try {
       created = await deps.discord.createChannel(
@@ -1787,7 +1830,7 @@ export function createWebApp(deps: WebDeps) {
       );
     } catch (err) {
       logger.warn({ err }, 'channel create failed');
-      return c.redirect('/channels?msg=failed#new-channel');
+      return c.redirect('/channels/new?msg=failed');
     }
     await audit(db, {
       actorId: c.get('session').userId,
@@ -1795,7 +1838,7 @@ export function createWebApp(deps: WebDeps) {
       detail: { channelId: created.id, name, kind, visibility, ...(visibility === 'private' ? { roleIds } : {}), ...(parent ? { parent: parent.name } : {}) },
       via: 'web',
     });
-    return c.redirect(`/channels?msg=created#${type === 4 ? 'cat' : 'ch'}-${created.id}`);
+    return c.redirect(`/channels/${created.id}?msg=created`);
   });
 
   /** 並べ替え（▲▼）・ほかのカテゴリへ移す */
@@ -1806,7 +1849,9 @@ export function createWebApp(deps: WebDeps) {
     const channels = await loadChannels(true);
     const channel = channels.find((ch) => ch.id === id);
     if (!channel) return c.redirect('/channels');
-    const anchor = `#${channel.type === 4 ? 'cat' : 'ch'}-${id}`;
+    // 一覧の ▲▼ からなら一覧へ、編集ページからなら編集ページへ戻る
+    const fromList = body.from === 'list';
+    const backTo = (msg: string) => c.redirect(fromList ? `/channels?msg=${msg}#${channel.type === 4 ? 'cat' : 'ch'}-${id}` : `/channels/${id}?msg=${msg}`);
     let plan: ChannelPositionPlan = [];
     let to: string | undefined;
     if (body.dir === 'up' || body.dir === 'down') {
@@ -1816,12 +1861,12 @@ export function createWebApp(deps: WebDeps) {
       plan = planParentChannel(channels, id, parentId, body.sync === 'yes');
       to = parentId ? (channels.find((ch) => ch.id === parentId)?.name ?? parentId) : 'カテゴリなし';
     }
-    if (!plan.length) return c.redirect(`/channels?msg=unchanged${anchor}`);
+    if (!plan.length) return backTo('unchanged');
     try {
       await deps.discord.reorderChannels(cfg.guildId, plan, '管理画面（チャンネルの並び）');
     } catch (err) {
       logger.warn({ err }, 'channel reorder failed');
-      return c.redirect(`/channels?msg=failed${anchor}`);
+      return backTo('failed');
     }
     await audit(db, {
       actorId: c.get('session').userId,
@@ -1829,7 +1874,7 @@ export function createWebApp(deps: WebDeps) {
       detail: { channelId: id, name: channel.name, ...(to ? { to, sync: body.sync === 'yes' } : { dir: body.dir }) },
       via: 'web',
     });
-    return c.redirect(`/channels?msg=moved${anchor}`);
+    return backTo('moved');
   });
 
   /** チャンネル・カテゴリを消す（名前を入力して確認。BOT が使っているもの・中身のあるカテゴリは消さない） */
@@ -1840,7 +1885,7 @@ export function createWebApp(deps: WebDeps) {
     const channels = await loadChannels(true);
     const channel = channels.find((ch) => ch.id === id);
     if (!channel) return c.redirect('/channels');
-    const back = (msg: string) => c.redirect(`/channels?msg=${msg}#${channel.type === 4 ? 'cat' : 'ch'}-${id}`);
+    const back = (msg: string) => c.redirect(`/channels/${id}?msg=${msg}`);
     if (channelsInUse(cfg).has(id)) return back('in_use');
     if (channel.type === 4 && channels.some((ch) => ch.parent_id === id)) return back('has_children');
     if (typeof body.confirmName !== 'string' || body.confirmName.trim() !== channel.name) return back('confirm_name');
@@ -1862,7 +1907,7 @@ export function createWebApp(deps: WebDeps) {
     const mode = body.mode === 'readonly' || body.mode === 'writable' ? body.mode : undefined;
     // 名前は、送られてきたときだけ変える
     const name = body.name === undefined ? undefined : cleanChannelName(body.name);
-    if (topic === undefined || topic.length > 1024 || !mode || (body.name !== undefined && !name)) return c.redirect('/channels?msg=invalid');
+    if (topic === undefined || topic.length > 1024 || !mode || (body.name !== undefined && !name)) return c.redirect(`/channels/${id}?msg=invalid`);
     const channel = (await loadChannels(true)).find((ch) => ch.id === id && isText(ch));
     if (!channel) return c.redirect('/channels');
     const changes: string[] = [];
@@ -1881,9 +1926,9 @@ export function createWebApp(deps: WebDeps) {
       if (plan.length) changes.push('mode');
     } catch (err) {
       logger.warn({ err }, 'channel update failed');
-      return c.redirect('/channels?msg=failed');
+      return c.redirect(`/channels/${id}?msg=failed`);
     }
-    if (!changes.length) return c.redirect('/channels?msg=unchanged');
+    if (!changes.length) return c.redirect(`/channels/${id}?msg=unchanged`);
     await audit(db, {
       actorId: c.get('session').userId,
       action: 'channel.update',
@@ -1897,7 +1942,7 @@ export function createWebApp(deps: WebDeps) {
       },
       via: 'web',
     });
-    return c.redirect('/channels?msg=saved');
+    return c.redirect(`/channels/${id}?msg=saved`);
   });
 
   /** カテゴリ・通話の名前だけ変える */
@@ -1906,7 +1951,7 @@ export function createWebApp(deps: WebDeps) {
     if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
     const body = await c.req.parseBody();
     const name = cleanChannelName(body.name);
-    if (!name) return c.redirect('/channels?msg=invalid');
+    if (!name) return c.redirect(`/channels/${id}?msg=invalid`);
     const channel = (await loadChannels(true)).find((ch) => ch.id === id);
     if (!channel) return c.redirect('/channels');
     const patch: { name?: string; nsfw?: boolean; user_limit?: number } = {};
@@ -1916,15 +1961,15 @@ export function createWebApp(deps: WebDeps) {
     // 通話の人数の上限（0 = なし。Discord は 99 まで）
     if (typeof body.userLimit === 'string' && channel.type === 2) {
       const limit = userLimitOf(body.userLimit);
-      if (limit === undefined) return c.redirect(`/channels?msg=invalid#ch-${id}`);
+      if (limit === undefined) return c.redirect(`/channels/${id}?msg=invalid`);
       if (limit !== (channel.user_limit ?? 0)) patch.user_limit = limit;
     }
-    if (!Object.keys(patch).length) return c.redirect('/channels?msg=unchanged');
+    if (!Object.keys(patch).length) return c.redirect(`/channels/${id}?msg=unchanged`);
     try {
       await deps.discord.editChannel(id, patch);
     } catch (err) {
       logger.warn({ err }, 'channel rename failed');
-      return c.redirect('/channels?msg=failed');
+      return c.redirect(`/channels/${id}?msg=failed`);
     }
     await audit(db, {
       actorId: c.get('session').userId,
@@ -1932,7 +1977,7 @@ export function createWebApp(deps: WebDeps) {
       detail: { channelId: id, name: channel.name, newName: patch.name, nsfw: patch.nsfw, userLimit: patch.user_limit },
       via: 'web',
     });
-    return c.redirect('/channels?msg=saved');
+    return c.redirect(`/channels/${id}?msg=saved`);
   });
 
   // ───────── ロール（宮司のみ）: 一覧・権限の確認と変更・持っている人 ─────────

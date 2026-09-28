@@ -1665,13 +1665,16 @@ describe('チャンネル（管理画面）', () => {
   it('チャンネルを作れる（プライベートは選んだロールと運営・BOT だけ見られる）。おかしな入力は作らない', async () => {
     roleList = [{ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0' }];
     const g = await login(GUJI);
-    const page = await (await get('/channels', g)).text();
+    expect(await (await get('/channels', g)).text()).toContain('href="/channels/new"');
+    const page = await (await get('/channels/new?parent=910000000000000001', g)).text();
     expect(page).toContain('チャンネルを作る');
     expect(page).toContain('🍃 氏子');
+    // カテゴリから開いたら、そのカテゴリが選ばれている
+    expect(page).toContain('<option value="910000000000000001" selected="">');
     const bad = await formMulti(g, '/channels/new', [['kind', 'text'], ['name', '秘密'], ['visibility', 'private']]);
-    expect(bad.headers.get('location')).toBe('/channels?msg=create_invalid#new-channel');
+    expect(bad.headers.get('location')).toBe('/channels/new?msg=create_invalid');
     const noParent = await formMulti(g, '/channels/new', [['kind', 'text'], ['name', '秘密'], ['visibility', 'category']]);
-    expect(noParent.headers.get('location')).toBe('/channels?msg=create_invalid#new-channel');
+    expect(noParent.headers.get('location')).toBe('/channels/new?msg=create_invalid');
     expect(actions.filter((a) => a.startsWith('createChannel'))).toEqual([]);
 
     const ok = await formMulti(g, '/channels/new', [
@@ -1682,7 +1685,7 @@ describe('チャンネル（管理画面）', () => {
       ['roles', ROLE.ujiko],
       ['topic', '氏子だけ'],
     ]);
-    expect(ok.headers.get('location')).toBe('/channels?msg=created#ch-910000000000000099');
+    expect(ok.headers.get('location')).toBe('/channels/910000000000000099?msg=created');
     const body = JSON.parse(actions.find((a) => a.startsWith('createChannel'))!.slice('createChannel '.length)) as {
       name: string;
       parent_id: string;
@@ -1701,13 +1704,13 @@ describe('チャンネル（管理画面）', () => {
 
   it('通話の人数の上限を変えられる（0〜99）。作るときにも決められる', async () => {
     const g = await login(GUJI);
-    expect(await (await get('/channels', g)).text()).toContain('name="userLimit"');
+    expect(await (await get('/channels/910000000000000004', g)).text()).toContain('name="userLimit"');
     const r = await form(g, '/channels/910000000000000004/name', { name: '拝殿', userLimit: '5' });
-    expect(r.headers.get('location')).toBe('/channels?msg=saved');
+    expect(r.headers.get('location')).toBe('/channels/910000000000000004?msg=saved');
     expect(actions).toContain('editChannel 910000000000000004  limit=5');
-    expect((await form(g, '/channels/910000000000000004/name', { name: '拝殿', userLimit: '100' })).headers.get('location')).toBe('/channels?msg=invalid#ch-910000000000000004');
+    expect((await form(g, '/channels/910000000000000004/name', { name: '拝殿', userLimit: '100' })).headers.get('location')).toBe('/channels/910000000000000004?msg=invalid');
     const created = await formMulti(g, '/channels/new', [['kind', 'voice'], ['name', '二人部屋'], ['visibility', 'members'], ['userLimit', '2']]);
-    expect(created.headers.get('location')).toBe('/channels?msg=created#ch-910000000000000099');
+    expect(created.headers.get('location')).toBe('/channels/910000000000000099?msg=created');
     expect(actions.find((a) => a.startsWith('createChannel'))).toContain('"user_limit":2');
   });
 
@@ -1715,7 +1718,8 @@ describe('チャンネル（管理画面）', () => {
     const g = await login(GUJI);
     const page = await (await get('/channels', g)).text();
     expect(page).toContain(`action="/channels/${TORII}/move"`);
-    const up = await form(g, '/channels/910000000000000003/move', { dir: 'up' });
+    // 一覧の ▲▼ は一覧へ、編集ページからは編集ページへ戻る
+    const up = await form(g, '/channels/910000000000000003/move', { dir: 'up', from: 'list' });
     expect(up.headers.get('location')).toBe('/channels?msg=moved#ch-910000000000000003');
     expect(actions.find((a) => a.startsWith('reorder'))).toBe(
       `reorder ${JSON.stringify([
@@ -1723,17 +1727,17 @@ describe('チャンネル（管理画面）', () => {
         { id: TORII, position: 1 },
       ])}`,
     );
-    expect((await form(g, `/channels/${TORII}/move`, { dir: 'up' })).headers.get('location')).toBe(`/channels?msg=unchanged#ch-${TORII}`);
+    expect((await form(g, `/channels/${TORII}/move`, { dir: 'up' })).headers.get('location')).toBe(`/channels/${TORII}?msg=unchanged`);
     const out = await form(g, `/channels/${TORII}/move`, { parent: 'none' });
-    expect(out.headers.get('location')).toBe(`/channels?msg=moved#ch-${TORII}`);
+    expect(out.headers.get('location')).toBe(`/channels/${TORII}?msg=moved`);
     expect(actions.at(-1)).toContain(`"id":"${TORII}","position":0,"parent_id":null,"lock_permissions":false`);
     expect((await listAudit(db, { action: 'channel.move' })).length).toBe(2);
   });
 
   it('消すときは名前を入力。BOT が使っているもの・中身のあるカテゴリは消せない', async () => {
     const g = await login(GUJI);
-    expect((await form(g, `/channels/${TORII}/delete`, { confirmName: 'ちがう' })).headers.get('location')).toBe(`/channels?msg=confirm_name#ch-${TORII}`);
-    expect((await form(g, '/channels/910000000000000001/delete', { confirmName: '⛩ 鳥居' })).headers.get('location')).toBe('/channels?msg=has_children#cat-910000000000000001');
+    expect((await form(g, `/channels/${TORII}/delete`, { confirmName: 'ちがう' })).headers.get('location')).toBe(`/channels/${TORII}?msg=confirm_name`);
+    expect((await form(g, '/channels/910000000000000001/delete', { confirmName: '⛩ 鳥居' })).headers.get('location')).toBe('/channels/910000000000000001?msg=has_children');
     expect(actions.filter((a) => a.startsWith('deleteChannel'))).toEqual([]);
     const r = await form(g, `/channels/${TORII}/delete`, { confirmName: '鳥居' });
     expect(r.headers.get('location')).toBe('/channels?msg=deleted');
@@ -1744,14 +1748,27 @@ describe('チャンネル（管理画面）', () => {
     expect((await form(s, `/channels/${TORII}/delete`, { confirmName: '鳥居' })).status).toBe(403);
   });
 
-  it('上に一覧があり、押すとそのチャンネルへ移動できる', async () => {
+  it('一覧はカテゴリごと。名前を押すとそのチャンネルの編集ページ。名前で探せる', async () => {
     const g = await login(GUJI);
     const page = await (await get('/channels', g)).text();
-    expect(page).toContain('id="toc"');
-    expect(page).toContain('href="#ch-910000000000000002"');
+    expect(page).toContain('href="/channels/910000000000000002"');
     expect(page).toContain('id="ch-910000000000000002"');
-    expect(page).toContain('href="#cat-910000000000000001"');
     expect(page).toContain('id="cat-910000000000000001"');
+    // 通話も同じカテゴリに並ぶ
+    expect(page).toContain('href="/channels/910000000000000004"');
+    const found = await (await get(`/channels?q=${encodeURIComponent('しきたり')}`, g)).text();
+    expect(found).toContain('href="/channels/910000000000000003"');
+    expect(found).not.toContain('href="/channels/910000000000000002"');
+    // 編集ページ: 基本・場所と並び・消す、Discord で開く
+    const edit = await (await get('/channels/910000000000000002', g)).text();
+    expect(edit).toContain('action="/channels/910000000000000002"');
+    expect(edit).toContain('action="/channels/910000000000000002/move"');
+    expect(edit).toContain('action="/channels/910000000000000002/delete"');
+    expect(edit).toContain(`https://discord.com/channels/${cfg.guildId}/910000000000000002`);
+    // カテゴリの編集ページには中のチャンネル
+    const cat = await (await get('/channels/910000000000000001', g)).text();
+    expect(cat).toContain('中のチャンネル（3）');
+    expect((await get('/channels/123', g)).status).toBe(404);
   });
 
   it('宮司だけが開ける', async () => {
@@ -1761,14 +1778,14 @@ describe('チャンネル（管理画面）', () => {
     expect(actions.filter((a) => a.startsWith('editChannel') || a.startsWith('overwrite'))).toEqual([]);
     const g = await login(GUJI);
     const page = await (await get('/channels', g)).text();
-    expect(page).toContain('#鳥居');
+    expect(page).toContain('>鳥居</a>');
     expect(page).toContain('ようこそ');
   });
 
   it('説明を変えて、読むだけにできる', async () => {
     const g = await login(GUJI);
     const r = await form(g, `/channels/${TORII}`, { topic: '最初に読んでね', mode: 'readonly' });
-    expect(r.headers.get('location')).toBe('/channels?msg=saved');
+    expect(r.headers.get('location')).toBe(`/channels/${TORII}?msg=saved`);
     expect(actions).toContain(`editChannel ${TORII} 最初に読んでね`);
     // みんな（@everyone）の書き込みを止める。リアクションは止めない
     const ow = actions.find((a) => a.startsWith(`overwrite ${TORII} ${cfg.guildId}`))!;
@@ -1780,23 +1797,23 @@ describe('チャンネル（管理画面）', () => {
 
   it('何も変わらなければ Discord に送らない。おかしな入力は受けない', async () => {
     const g = await login(GUJI);
-    expect((await form(g, `/channels/${TORII}`, { topic: 'ようこそ', mode: 'writable' })).headers.get('location')).toBe('/channels?msg=unchanged');
-    expect((await form(g, `/channels/${TORII}`, { topic: 'x'.repeat(1025), mode: 'writable' })).headers.get('location')).toBe('/channels?msg=invalid');
-    expect((await form(g, `/channels/${TORII}`, { topic: 'x', mode: 'nope' })).headers.get('location')).toBe('/channels?msg=invalid');
+    expect((await form(g, `/channels/${TORII}`, { topic: 'ようこそ', mode: 'writable' })).headers.get('location')).toBe(`/channels/${TORII}?msg=unchanged`);
+    expect((await form(g, `/channels/${TORII}`, { topic: 'x'.repeat(1025), mode: 'writable' })).headers.get('location')).toBe(`/channels/${TORII}?msg=invalid`);
+    expect((await form(g, `/channels/${TORII}`, { topic: 'x', mode: 'nope' })).headers.get('location')).toBe(`/channels/${TORII}?msg=invalid`);
     expect(actions.filter((a) => a.startsWith('editChannel') || a.startsWith('overwrite'))).toEqual([]);
   });
 
   it('名前を変えられる（チャンネル・カテゴリ）。空の名前は受けない', async () => {
     const g = await login(GUJI);
     const r = await form(g, `/channels/${TORII}`, { name: '⛩｜鳥居', topic: 'ようこそ', mode: 'writable' });
-    expect(r.headers.get('location')).toBe('/channels?msg=saved');
+    expect(r.headers.get('location')).toBe(`/channels/${TORII}?msg=saved`);
     expect(actions).toContain(`editChannel ${TORII}  name=⛩｜鳥居`);
-    expect((await form(g, `/channels/${TORII}`, { name: '  ', topic: 'ようこそ', mode: 'writable' })).headers.get('location')).toBe('/channels?msg=invalid');
+    expect((await form(g, `/channels/${TORII}`, { name: '  ', topic: 'ようこそ', mode: 'writable' })).headers.get('location')).toBe(`/channels/${TORII}?msg=invalid`);
     const CAT = '910000000000000001';
-    expect((await form(g, `/channels/${CAT}/name`, { name: '⛩ 鳥居 ⛩' })).headers.get('location')).toBe('/channels?msg=saved');
+    expect((await form(g, `/channels/${CAT}/name`, { name: '⛩ 鳥居 ⛩' })).headers.get('location')).toBe(`/channels/${CAT}?msg=saved`);
     expect(actions).toContain(`editChannel ${CAT}  name=⛩ 鳥居 ⛩`);
-    expect((await form(g, `/channels/${CAT}/name`, { name: '⛩ 鳥居' })).headers.get('location')).toBe('/channels?msg=unchanged');
-    expect((await form(g, `/channels/${CAT}/name`, { name: '' })).headers.get('location')).toBe('/channels?msg=invalid');
+    expect((await form(g, `/channels/${CAT}/name`, { name: '⛩ 鳥居' })).headers.get('location')).toBe(`/channels/${CAT}?msg=unchanged`);
+    expect((await form(g, `/channels/${CAT}/name`, { name: '' })).headers.get('location')).toBe(`/channels/${CAT}?msg=invalid`);
     const s2 = await login(STAFF);
     expect((await form(s2, `/channels/${CAT}/name`, { name: 'x' })).status).toBe(403);
     expect((await listAudit(db, { action: 'channel.update' })).length).toBe(2);

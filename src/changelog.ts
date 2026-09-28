@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-28-channels-ui',
+    date: '2026-09-28',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '📁 チャンネルのページを見やすく',
+    items: [
+      '一覧を Discord のように、カテゴリごとにアイコン・名前・説明・印（読むだけ・限定公開・年齢制限・BOT が使用）で並べた。▲▼ はその場で、名前・説明で探せる',
+      'チャンネルごとの編集ページ（基本・場所と並び・消す、Discord で開く）',
+      '作るページは大きな選択肢で。種類に合わない欄は隠れる',
+      '上のメニューが画面からはみ出さないよう、折り返すようにした',
+    ],
+  },
+  {
     id: '2026-09-28-update-news',
     date: '2026-09-28',
     kind: 'new',

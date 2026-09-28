@@ -63,6 +63,14 @@ export const isText = (c: GuildChannel) => c.type === 0 || c.type === 5;
 /** 通話・ステージ */
 export const isVoice = (c: GuildChannel) => c.type === 2 || c.type === 13;
 
+/** みんな（@everyone）から見えないチャンネル（チャンネルに上書きがなければカテゴリで見る） */
+export function isRestricted(channel: GuildChannel, cfg: GuildConfig, parent?: GuildChannel | null): boolean {
+  const own = (channel.permission_overwrites ?? []).find((o) => o.id === cfg.guildId);
+  if (own) return has(own.deny, bit(10));
+  const cat = (parent?.permission_overwrites ?? []).find((o) => o.id === cfg.guildId);
+  return has(cat?.deny, bit(10));
+}
+
 /** 管理画面に並べるチャンネル（カテゴリの順。テキストと通話を分けて） */
 export function listTextChannels(
   channels: GuildChannel[],
