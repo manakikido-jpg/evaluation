@@ -17,6 +17,7 @@ import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
+import { PresentApp } from './discord/presents.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { GlossaryApp } from './discord/glossary.js';
@@ -76,6 +77,7 @@ async function main(): Promise<void> {
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const gacha = new GachaApp(db, cfg);
+  const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
   const glossary = new GlossaryApp(db, cfg);
   const tempGrants = new TempGrantApp(db, cfg, actions);
@@ -249,6 +251,7 @@ async function main(): Promise<void> {
     void admission.onInteraction(i);
     void omikuji.onInteraction(i);
     void gacha.onInteraction(i);
+    void presents.onInteraction(i);
     void wallet.onInteraction(i);
     void glossary.onInteraction(i);
     void tempGrants.onInteraction(i);

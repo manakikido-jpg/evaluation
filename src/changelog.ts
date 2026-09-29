@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-present',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord'],
+    title: '💝 /贈る: 持っている券を、ほかの人に贈れるように',
+    items: [
+      '`/贈る` で相手と「もの」（自分が持っている券・自由な券）と数を選ぶと、確かめてから贈れる。相手には DM で届く（ひとことも添えられる）',
+      '贈れるのは氏子以上の人（作ったばかりのアカウントから集められないように）',
+    ],
+  },
+  {
     id: '2026-09-29-gacha-first-free',
     date: '2026-09-29',
     kind: 'improve',

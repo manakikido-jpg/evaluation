@@ -59,6 +59,22 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('present')
+      .setNameLocalizations({ ja: '贈る' })
+      .setDescription('Give your tickets to someone')
+      .setDescriptionLocalizations({ ja: '持っている券を、ほかの人に贈る（押す前に確かめる）' })
+      .setContexts(InteractionContextType.Guild)
+      .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setDescriptionLocalizations({ ja: '贈る相手' }).setRequired(true))
+      .addStringOption((o) =>
+        o.setName('item').setNameLocalizations({ ja: 'もの' }).setDescription('item').setDescriptionLocalizations({ ja: '贈るもの（自分が持っている券から選ぶ）' }).setRequired(true).setAutocomplete(true),
+      )
+      .addIntegerOption((o) => o.setName('count').setNameLocalizations({ ja: '数' }).setDescription('count').setDescriptionLocalizations({ ja: '何枚贈るか（省略すると 1）' }).setMinValue(1).setMaxValue(100))
+      .addStringOption((o) =>
+        o.setName('message').setNameLocalizations({ ja: 'ひとこと' }).setDescription('message').setDescriptionLocalizations({ ja: '相手への DM に添える（例: いつもありがとう）' }).setMaxLength(200),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('yougo')
       .setNameLocalizations({ ja: '用語' })
       .setDescription('Look up a word used in this server')
