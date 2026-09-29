@@ -1118,7 +1118,10 @@ export const boardPosts = pgTable(
     status: text('status').$type<'open' | 'closed' | 'removed'>().notNull().default('open'),
     channelId: text('channel_id'),
     messageId: text('message_id'),
+    /** みんなの質問のスレッド */
     threadId: text('thread_id'),
+    /** 応募が届く、募集した人（と運営）だけのスレッド */
+    applyThreadId: text('apply_thread_id'),
     deadlineAt: timestamp('deadline_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
@@ -1136,6 +1139,8 @@ export const boardEntries = pgTable(
     memberId: text('member_id').notNull(),
     /** applied 応募 / hired 採用（仕事中） / done 完了（報酬を渡した） / disputed 問題あり / refunded 募集した人に戻した */
     status: text('status').$type<'applied' | 'hired' | 'done' | 'disputed' | 'refunded'>().notNull().default('applied'),
+    /** 採用したあとの、募集した人と採用された人（と運営）だけのスレッド */
+    threadId: text('thread_id'),
     /** 渡した報酬（手数料を引いたあと） */
     paid: integer('paid').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

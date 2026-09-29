@@ -126,3 +126,23 @@ describe('📌 掲示板', () => {
     expect(JSON.stringify(postCard(removed!.post, [], cfg))).toContain('取り下げ');
   });
 });
+
+describe('📌 掲示板の見せ方', () => {
+  it('応募の受付では、採用したらやり取りのスレッドへの案内だけ（ボタンは出さない）', async () => {
+    await addCoins(db, AUTHOR, 2000, 'adjust');
+    const r = await createPost(db, cfg, author, base, T0);
+    if (r.status !== 'ok') throw new Error(r.status);
+    const a = await applyPost(db, cfg, r.post.id, member(A), T0);
+    if (a.status !== 'ok') throw new Error(a.status);
+    expect(JSON.stringify(entryMessage(a.entry, r.post, cfg))).toContain(`board:hire:${a.entry.id}`);
+    const h = await hire(db, cfg, a.entry.id, AUTHOR, T0);
+    if (h.status !== 'ok') throw new Error(h.status);
+    const summary = entryMessage(h.entry, h.post, cfg, { workThreadId: '930000000000000001' });
+    expect(summary.components).toEqual([]);
+    expect(JSON.stringify(summary)).toContain('<#930000000000000001>');
+    // やり取りのスレッドでは、完了・問題ありのボタン
+    expect(JSON.stringify(entryMessage(h.entry, h.post, cfg))).toContain(`board:done:${a.entry.id}`);
+    expect(JSON.stringify(boardPanel(cfg))).toContain('募集した人にだけ見えます');
+  });
+});
+

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-board-private',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '📌 掲示板の応募・採用を、募集した人にだけ見えるように',
+    items: [
+      '応募は、募集した人（と運営）だけに見える「📋 応募」のスレッドに届き、そこで採用する',
+      '採用したら、募集した人と採用された人だけのスレッドでやり取り（完了・問題ありもそこで）',
+      'みんなのスレッドは質問だけ。カードには人数だけが出る',
+    ],
+  },
+  {
     id: '2026-09-29-web-access',
     date: '2026-09-29',
     kind: 'new',

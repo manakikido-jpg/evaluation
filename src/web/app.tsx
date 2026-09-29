@@ -3397,7 +3397,9 @@ export function createWebApp(deps: WebDeps) {
     if (!p) return;
     if (p.channelId && p.messageId) await deps.discord.editMessage(p.channelId, p.messageId, postCard(p, await entriesOf(db, p.id), cfg) as never).catch(() => undefined);
     const e = entryId ? await getEntry(db, entryId) : undefined;
-    if (e && p.threadId) await deps.discord.sendMessage(p.threadId, entryMessage(e, p, cfg) as never).catch(() => undefined);
+    // 採用のやり取りのスレッド（募集した人と採用された人だけ）。なければ応募の受付
+    const where = e ? (e.threadId ?? p.applyThreadId ?? p.threadId) : undefined;
+    if (e && where) await deps.discord.sendMessage(where, entryMessage(e, p, cfg) as never).catch(() => undefined);
   };
 
   app.post('/board/posts/:id/remove', async (c) => {

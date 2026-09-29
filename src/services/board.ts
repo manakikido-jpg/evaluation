@@ -86,8 +86,13 @@ export async function createPost(db: Db, cfg: GuildConfig, author: { id: string;
   });
 }
 
-export async function setPostMessage(db: Db, id: number, v: { channelId: string; messageId: string; threadId?: string }): Promise<void> {
+export async function setPostMessage(db: Db, id: number, v: { channelId: string; messageId: string; threadId?: string; applyThreadId?: string }): Promise<void> {
   await db.update(boardPosts).set(v).where(eq(boardPosts.id, id));
+}
+
+/** 採用したあとのやり取りのスレッド（募集した人と採用された人だけ） */
+export async function setEntryThread(db: Db, id: number, threadId: string): Promise<void> {
+  await db.update(boardEntries).set({ threadId }).where(eq(boardEntries.id, id));
 }
 
 export async function getPost(db: Db, id: number): Promise<BoardPost | undefined> {

@@ -23,6 +23,7 @@ import {
   isBoardCategory,
   loadBoardPlace,
   saveBoardPlace,
+  setEntryThread,
   setPostMessage,
   type BoardCategory,
 } from '../services/board.js';
@@ -46,7 +47,8 @@ export function boardPanel(cfg: GuildConfig) {
         description: [
           '仕事・依頼・手伝い・仲間・イベントなどの募集を書けます（入鯖が承認された方ならだれでも）。',
           `報酬（${e.currencyEmoji}${e.currencyName}）を付けると、人数分を社務所が預かり、採用した人に「完了」で渡します（手数料 ${cfg.market.feePercent}%）。`,
-          '-# 気になる募集には「🙋 応募する」。やり取りは募集のスレッドで。本物のお金のやり取り・性的なもの・個人情報の募集は禁止です（しきたり）',
+          '-# 気になる募集には「🙋 応募する」。応募した人と採用は、募集した人にだけ見えます（採用されたら 2 人だけのスレッドでやり取り）。質問は募集のスレッドへ',
+          '-# 本物のお金のやり取り・性的なもの・個人情報の募集は禁止です（しきたり）',
         ].join('\n'),
         color: COLOR,
       },
@@ -89,7 +91,11 @@ export function postCard(post: BoardPost, entries: BoardEntry[], cfg: GuildConfi
 }
 
 /** スレッドに出す、1 人の応募（採用・完了・問題あり） */
-export function entryMessage(entry: BoardEntry, post: BoardPost, cfg: GuildConfig) {
+/**
+ * 応募・採用のメッセージ。応募の受付（募集した人だけのスレッド）では、採用したあとは
+ * やり取りのスレッドへの案内だけにする（完了・問題ありのボタンは、やり取りのスレッドに出す）
+ */
+export function entryMessage(entry: BoardEntry, post: BoardPost, cfg: GuildConfig, opts: { workThreadId?: string } = {}) {
   const e = cfg.economy;
   const status = {
     applied: '🙋 応募',
@@ -100,10 +106,13 @@ export function entryMessage(entry: BoardEntry, post: BoardPost, cfg: GuildConfi
   }[entry.status];
   const lines = [`<@${entry.memberId}> さん … **${status}**`];
   if (entry.status === 'applied') lines.push(`-# <@${post.authorId}> さん: お願いするなら「採用する」を押してください`);
-  if (entry.status === 'hired' && post.reward > 0 && entry.releaseAt)
+  const summary = Boolean(opts.workThreadId) && entry.status !== 'applied';
+  if (summary) lines.push(`-# やり取りは <#${opts.workThreadId}> で`);
+  if (!summary && entry.status === 'hired' && post.reward > 0 && entry.releaseAt)
     lines.push(`-# 終わったら <@${post.authorId}> さんが「完了（報酬を渡す）」を。<t:${unix(entry.releaseAt)}:R> までに押されなければ報酬を渡します。困ったら「問題あり」`);
-  const buttons: Btn[] =
-    entry.status === 'applied'
+  const buttons: Btn[] = summary
+    ? []
+    : entry.status === 'applied'
       ? post.status === 'removed'
         ? []
         : [button(`board:hire:${entry.id}`, '採用する', 3, '✅')]
@@ -227,9 +236,20 @@ export class BoardApp {
     }
     try {
       const msg = await channel.send({ ...postCard(r.post, [], cfg), allowedMentions: { parse: [] } } as Parameters<typeof channel.send>[0]);
+      // みんなの質問のスレッド（公開）と、応募が届く募集した人だけのスレッド（非公開。運営は見られる）
       const thread = await msg.startThread({ name: `📌 ${r.post.title}`.slice(0, 90), autoArchiveDuration: 10080, reason: '掲示板の募集' }).catch(() => undefined);
-      await setPostMessage(this.db, r.post.id, { channelId: channel.id, messageId: msg.id, ...(thread ? { threadId: thread.id } : {}) });
       await thread?.members.add(i.user.id).catch(() => undefined);
+      await thread?.send({ content: '-# 質問はここへどうぞ。応募は募集のカードの「🙋 応募する」から（応募した人・採用は、募集した人にだけ見えます）', allowedMentions: { parse: [] } }).catch(() => undefined);
+      const applyThread = await channel.threads
+        .create({ name: `📋 応募 #${r.post.id} ${r.post.title}`.slice(0, 90), type: ChannelType.PrivateThread, invitable: false, autoArchiveDuration: 10080, reason: '掲示板の応募の受付' })
+        .catch((err: unknown) => (logger.warn({ err }, 'board apply thread failed'), undefined));
+      if (applyThread) {
+        await applyThread.members.add(i.user.id).catch(() => undefined);
+        await applyThread
+          .send({ content: `<@${i.user.id}> さん、ここは あなた（と運営）だけに見える応募の受付です。応募が届いたら、ここで「採用する」を押してください。`, allowedMentions: { users: [i.user.id] } })
+          .catch(() => undefined);
+      }
+      await setPostMessage(this.db, r.post.id, { channelId: channel.id, messageId: msg.id, ...(thread ? { threadId: thread.id } : {}), ...(applyThread ? { applyThreadId: applyThread.id } : {}) });
       await this.panelToBottom();
       await audit(this.db, { actorId: i.user.id, action: 'board.post', detail: { postId: r.post.id, title: r.post.title, reward: r.post.reward, slots: r.post.slots }, via: 'discord' });
       await i.editReply(
@@ -253,9 +273,19 @@ export class BoardApp {
     await this.discord.editMessage(post.channelId, post.messageId, postCard(post, await entriesOf(this.db, post.id), this.cfg())).catch((err: unknown) => logger.warn({ err }, 'board card edit failed'));
   }
 
-  private async thread(post: BoardPost) {
-    const ch = post.threadId ? (this.guild?.channels.cache.get(post.threadId) ?? (await this.guild?.channels.fetch(post.threadId).catch(() => null))) : undefined;
+  private async threadById(id: string | null | undefined) {
+    const ch = id ? (this.guild?.channels.cache.get(id) ?? (await this.guild?.channels.fetch(id).catch(() => null))) : undefined;
     return ch?.isThread() ? ch : undefined;
+  }
+
+  /** みんなの質問のスレッド */
+  private thread(post: BoardPost) {
+    return this.threadById(post.threadId);
+  }
+
+  /** 応募の受付（募集した人だけ）。前に作った募集で無ければ、質問のスレッド */
+  private async applyThread(post: BoardPost) {
+    return (await this.threadById(post.applyThreadId)) ?? (post.applyThreadId ? undefined : await this.thread(post));
   }
 
   // ───────── 応募・締め切る ─────────
@@ -263,17 +293,17 @@ export class BoardApp {
   private async apply(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
     const r = await applyPost(this.db, this.cfg(), id, { id: i.user.id, roleIds: [...i.member.roles.cache.keys()] });
     if (r.status !== 'ok') {
-      const text = { closed: 'この募集は締め切りました。', self: '自分の募集には応募できません。', already: 'もう応募しています。やり取りは募集のスレッドで。', no_rank: '応募できるのは、入鯖が承認された方だけです。', gone: 'この募集は見つかりませんでした。' }[r.status];
+      const text = { closed: 'この募集は締め切りました。', self: '自分の募集には応募できません。', already: 'もう応募しています。採用されると知らせが届きます。', no_rank: '応募できるのは、入鯖が承認された方だけです。', gone: 'この募集は見つかりませんでした。' }[r.status];
       return void (await i.reply({ content: text, ...EPHEMERAL }));
     }
     await i.update({ ...postCard(r.post, await entriesOf(this.db, id), this.cfg()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
-    const thread = await this.thread(r.post);
-    if (thread) {
-      await thread.members.add(i.user.id).catch(() => undefined);
-      await thread.send({ content: `<@${r.post.authorId}>`, ...entryMessage(r.entry, r.post, this.cfg()), allowedMentions: { users: [r.post.authorId] } } as Parameters<typeof thread.send>[0]).catch(() => undefined);
-    }
-    await this.discord.sendDm(r.post.authorId, `📌 募集「${r.post.title}」に ${i.member.displayName} さんが応募しました。${thread ? `<#${thread.id}> で採用できます。` : ''}`).catch(() => false);
-    await i.followUp({ content: `🙋 応募しました。${thread ? `やり取りは <#${thread.id}> で。` : ''}採用されると知らせが届きます。`, ...EPHEMERAL });
+    // 応募は、募集した人（と運営）だけに見えるスレッドに届ける
+    const inbox = await this.applyThread(r.post);
+    await inbox
+      ?.send({ content: `<@${r.post.authorId}>`, ...entryMessage(r.entry, r.post, this.cfg()), allowedMentions: { users: [r.post.authorId] } } as Parameters<typeof inbox.send>[0])
+      .catch(() => undefined);
+    await this.discord.sendDm(r.post.authorId, `📌 募集「${r.post.title}」に ${i.member.displayName} さんが応募しました。${inbox ? `<#${inbox.id}> で採用できます（あなたにだけ見えます）。` : ''}`).catch(() => false);
+    await i.followUp({ content: `🙋 応募しました。採用されると知らせが届きます。${r.post.threadId ? `質問は <#${r.post.threadId}> で。` : ''}`, ...EPHEMERAL });
   }
 
   private async close(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
@@ -298,11 +328,31 @@ export class BoardApp {
       const text = { not_author: '採用できるのは、募集した人だけです。', full: 'もう人数がいっぱいです。', not_applied: 'もう採用しています。', gone: 'この募集は見つかりませんでした。' }[r.status];
       return void (await i.reply({ content: text, ...EPHEMERAL }));
     }
-    await i.update(entryMessage(r.entry, r.post, this.cfg()));
+    // やり取りの場所: 募集した人と採用された人（と運営）だけのスレッド
+    const work = await this.openWorkThread(r.post, r.entry);
+    await i.update(entryMessage(r.entry, r.post, this.cfg(), work ? { workThreadId: work } : {}));
     await this.refreshCard(r.post);
     await audit(this.db, { actorId: i.user.id, targetId: r.entry.memberId, action: 'board.hire', detail: { postId: r.post.id, entryId }, via: 'discord' });
-    await this.discord.sendDm(r.entry.memberId, `✅ 募集「${r.post.title}」で採用されました。${r.post.threadId ? `<#${r.post.threadId}> でやり取りしてください。` : ''}`).catch(() => false);
+    await this.discord.sendDm(r.entry.memberId, `✅ 募集「${r.post.title}」で採用されました。${work ? `<#${work}> でやり取りしてください。` : ''}`).catch(() => false);
     if (r.full) await i.followUp({ content: '人数がいっぱいになったので、募集を締め切りました。', ...EPHEMERAL });
+  }
+
+  /** 採用したら、2 人（と運営）だけのスレッドを作って、完了・問題ありのボタンを出す */
+  private async openWorkThread(post: BoardPost, entry: BoardEntry): Promise<string | undefined> {
+    const channel = post.channelId ? this.guild?.channels.cache.get(post.channelId) : undefined;
+    if (channel?.type !== ChannelType.GuildText) return undefined;
+    try {
+      const name = this.guild?.members.cache.get(entry.memberId)?.displayName ?? '採用';
+      const t = await channel.threads.create({ name: `🤝 ${post.title}（${name}）`.slice(0, 90), type: ChannelType.PrivateThread, invitable: false, autoArchiveDuration: 10080, reason: '掲示板の採用' });
+      await t.members.add(post.authorId).catch(() => undefined);
+      await t.members.add(entry.memberId).catch(() => undefined);
+      await t.send({ content: `<@${post.authorId}> <@${entry.memberId}>`, ...entryMessage(entry, post, this.cfg()), allowedMentions: { users: [post.authorId, entry.memberId] } } as Parameters<typeof t.send>[0]);
+      await setEntryThread(this.db, entry.id, t.id);
+      return t.id;
+    } catch (err) {
+      logger.warn({ err }, 'board work thread failed');
+      return undefined;
+    }
   }
 
   private async done(i: ButtonInteraction<'cached'>, entryId: number): Promise<void> {
@@ -339,7 +389,7 @@ export class BoardApp {
     const e = await getEntry(this.db, entryId);
     const post = e ? await getPost(this.db, e.postId) : undefined;
     if (!e || !post) return;
-    const thread = await this.thread(post);
+    const thread = (await this.threadById(e.threadId)) ?? (await this.applyThread(post));
     await thread?.send({ ...entryMessage(e, post, this.cfg()), allowedMentions: { parse: [] } } as Parameters<typeof thread.send>[0]).catch(() => undefined);
   }
 }
