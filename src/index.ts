@@ -129,6 +129,8 @@ async function main(): Promise<void> {
       .catch((err) => logger.error({ err }, 'member sync failed'));
     // 🧭 案内待ち: 止まっていた間に参加時の質問を終えた人・承認された人も合わせる
     await guidePending.attach(guild).catch((err) => logger.warn({ err }, 'guide pending attach failed'));
+    // #面談日程: 止まっていた間に案内待ちが外れた人・抜けた人の書き込みを消す
+    void guidePending.sweepSchedule(guild);
     // 招待リンク: 使われた回数を覚え直す
     await inviteLinks.attach(guild).catch((err) => logger.warn({ err }, 'invite links attach failed'));
     // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
@@ -193,6 +195,8 @@ async function main(): Promise<void> {
       void boost.tick();
       // 📌 掲示板: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す（消されたカードも出し直す）
       void board.tick().catch((err) => logger.warn({ err }, 'board tick failed'));
+      // #面談日程: 案内待ちが外れた人・抜けた人の書き込みの取りこぼしを消す
+      void guidePending.sweepSchedule(guild);
       // 市場: 期限が来た取引を売った人に渡す
       void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
       // はじめての参拝: 全部できた人にお祝い
@@ -222,7 +226,11 @@ async function main(): Promise<void> {
     // 入った人に、はじめの流れを DM で案内
     void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
   });
-  client.on(Events.GuildMemberRemove, (m) => void app.onMemberRemove(m.guild.id, m.id));
+  client.on(Events.GuildMemberRemove, (m) => {
+    void app.onMemberRemove(m.guild.id, m.id);
+    // 抜けた人の #面談日程 の書き込みを消す
+    void guidePending.onMemberRemove(m.guild, m.id).catch((err) => logger.warn({ err }, 'interview schedule clear failed'));
+  });
   client.on(Events.GuildMemberUpdate, (old, m) => {
     void (async () => {
       await app.onMemberUpdate(m);

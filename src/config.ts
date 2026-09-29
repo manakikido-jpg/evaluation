@@ -361,6 +361,8 @@ export const guildConfigSchema = z
       omikuji: snowflake.optional(),
       /** #境内: 花吹雪（ショップ）を出す場所（省略時は「境内」という名前のチャンネル） */
       keidai: snowflake.optional(),
+      /** #面談日程: 案内待ちの人が面談の日程を書く場所。案内待ちが外れたら、その人の書き込みを消す（省略時は名前に「面談日程」を含むチャンネル） */
+      interviewSchedule: snowflake.optional(),
     }),
     roles: z
       .object({

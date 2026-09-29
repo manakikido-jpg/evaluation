@@ -40,9 +40,9 @@ describe('🧭 案内待ち', () => {
       pending: o.pending ?? false,
       flags,
       user: { bot: o.bot ?? false },
-      guild: { id: cfg.guildId, roles: { cache: new Map() } },
+      guild: { id: cfg.guildId, roles: { cache: new Map() }, channels: { cache: new Map() } },
       roles: {
-        cache: { keys: () => roleIds.values() },
+        cache: { keys: () => roleIds.values(), has: (r: string) => roleIds.has(r) },
         add: async (r: string) => (roleIds.add(r), log.push(`add ${r}`)),
         remove: async (r: string) => (roleIds.delete(r), log.push(`remove ${r}`)),
       },
@@ -73,5 +73,38 @@ describe('🧭 案内待ち', () => {
     await app.attach(guild as never);
     // 質問を終えたかは問わない。もう役職がある人には付けない
     expect([a.log, b.log, c.log, d.log]).toEqual([[`add ${GUIDE}`], [`remove ${GUIDE}`], [`add ${GUIDE}`], []]);
+  });
+});
+
+describe('#面談日程 の片付け', () => {
+  it('チャンネル: 設定があればそれ、なければ名前に「面談日程」を含むテキストチャンネル', async () => {
+    const { scheduleChannelOf } = await import('../src/discord/guidePending.js');
+    const list = [
+      { id: '1', name: '面談-告知', type: 0 },
+      { id: '2', name: '面談日程 追加はこちら', type: 2 },
+      { id: '3', name: '📅面談日程追加はこちら', type: 0 },
+    ];
+    expect(scheduleChannelOf(cfg, list)).toBe('3');
+    expect(scheduleChannelOf({ ...cfg, channels: { ...cfg.channels, interviewSchedule: '900000000000000009' } }, list)).toBe('900000000000000009');
+    expect(scheduleChannelOf(cfg, [])).toBeUndefined();
+  });
+
+  it('消すのは案内待ちでなくなった人・抜けた人の書き込み。ピン留め・BOT・運営・まだ案内待ちの人は残す', async () => {
+    const { leftoverIds } = await import('../src/discord/guidePending.js');
+    const who: Record<string, { left: boolean; pending: boolean; staff: boolean }> = {
+      waiting: { left: false, pending: true, staff: false },
+      approved: { left: false, pending: false, staff: false },
+      gone: { left: true, pending: false, staff: false },
+      staff: { left: false, pending: false, staff: true },
+    };
+    const msgs = [
+      { id: 'a', authorId: 'waiting', bot: false, pinned: false },
+      { id: 'b', authorId: 'approved', bot: false, pinned: false },
+      { id: 'c', authorId: 'approved', bot: false, pinned: true },
+      { id: 'd', authorId: 'gone', bot: false, pinned: false },
+      { id: 'e', authorId: 'staff', bot: false, pinned: false },
+      { id: 'f', authorId: 'bot', bot: true, pinned: false },
+    ];
+    expect(leftoverIds(msgs, (id) => who[id]!)).toEqual(['b', 'd']);
   });
 });

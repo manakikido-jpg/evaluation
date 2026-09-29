@@ -49,7 +49,8 @@ function fakeVoice() {
 }
 
 /** できてから 30 秒以上たったころ */
-const later = new Date(Date.now() + 60_000);
+/** 今から 1 分後（使うときに決める。読み込んだときに決めると、遅いときに 30 秒以内になる） */
+const later = () => new Date(Date.now() + 60_000);
 
 let db: Db;
 let close: () => Promise<void>;
@@ -77,10 +78,10 @@ describe('自分の通話部屋', () => {
 
     // 友だちが入ってきて、作った人が先に抜けても残る
     v.join('B', 'room1');
-    expect(await onVoiceLeave(ctx, v.leave('A'), later)).toBe(false);
+    expect(await onVoiceLeave(ctx, v.leave('A'), later())).toBe(false);
     expect(v.rooms.has('room1')).toBe(true);
     // 最後の人が抜けたら消える
-    expect(await onVoiceLeave(ctx, v.leave('B'), later)).toBe(true);
+    expect(await onVoiceLeave(ctx, v.leave('B'), later())).toBe(true);
     expect(v.rooms.has('room1')).toBe(false);
     expect(await db.select().from(tempVoice)).toEqual([]);
   });
@@ -126,7 +127,7 @@ describe('自分の通話部屋', () => {
     // BOT が止まっている間に: A は抜けた、B の部屋は手で消された、C はまだいる
     v.leave('A');
     v.rooms.delete('room2');
-    expect(await cleanupRooms(ctx, later)).toBe(1);
+    expect(await cleanupRooms(ctx, later())).toBe(1);
     expect((await db.select().from(tempVoice)).map((r) => r.ownerId)).toEqual(['C']);
     expect(v.rooms.has('room3')).toBe(true);
   });
@@ -141,8 +142,7 @@ describe('自分の通話部屋: 取りこぼし', () => {
     v.leave('A');
     expect(await cleanupRooms(ctx, new Date())).toBe(0);
     expect(v.rooms.has('room1')).toBe(true);
-    // 部屋ができてから 1 分後（読み込んだときの時刻からだと、遅いときに 30 秒以内になる）
-    expect(await cleanupRooms(ctx, new Date(Date.now() + 60_000))).toBe(1);
+    expect(await cleanupRooms(ctx, later())).toBe(1);
   });
 
   it('ほかの入口では、その入口の部屋を新しく作る', async () => {

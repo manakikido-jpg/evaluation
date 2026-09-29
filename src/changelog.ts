@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-schedule-clear',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['Discord'],
+    title: '🧭 案内待ちが外れたら、#面談日程 の書き込みを消すように',
+    items: [
+      '承認されて（か運営が外して）🧭案内待ちが外れた人と、サーバーを抜けた人の #面談日程 の書き込みを BOT が消す',
+      'BOT が起きたときと 10 分ごとにも取りこぼしを片付ける。ピン留め・運営・BOT の書き込みは残す',
+    ],
+  },
+  {
     id: '2026-09-29-board-card-restore',
     date: '2026-09-29',
     kind: 'fix',
