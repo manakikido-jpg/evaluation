@@ -345,8 +345,10 @@ export class GachaApp {
       if (interaction.isButton() && id.startsWith('gacha:draw:')) return await this.draw(interaction, Number(id.split(':')[2]));
       if (interaction.isButton() && id === 'gacha:use') return await this.useMenu(interaction);
       if (interaction.isButton() && id === 'gacha:rates') return await this.ratesView(interaction);
-      if (interaction.isStringSelectMenu() && id === 'gacha:usepick') {
-        const v = interaction.values[0] ?? '';
+      // 🎒 /持ち物 の「使う」ボタン（中身は「券を使う」と同じ）
+      if ((interaction.isStringSelectMenu() && id === 'gacha:usepick') || (interaction.isButton() && id.startsWith('gacha:use1:'))) {
+        const v = interaction.isButton() ? id.slice('gacha:use1:'.length) : (interaction.values[0] ?? '');
+        if (!v.startsWith('custom:') && !(MANUAL_TICKETS as readonly string[]).includes(v)) return void (await interaction.reply({ content: 'その券は、使う場面で自動で使われます。', ...EPHEMERAL }));
         if (v.startsWith('custom:')) return await this.useCustomTicket(interaction, Number(v.slice(7)));
         return await this.use(interaction, v as TicketKind);
       }
@@ -561,7 +563,7 @@ export class GachaApp {
     await i.reply({ ...useTicketMenu(tickets, custom), ...EPHEMERAL });
   }
 
-  private async use(i: StringSelectMenuInteraction<'cached'>, kind: TicketKind): Promise<void> {
+  private async use(i: StringSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>, kind: TicketKind): Promise<void> {
     const cfg = this.cfg();
     const coin = cfg.economy.currencyName;
     switch (kind) {
@@ -608,7 +610,7 @@ export class GachaApp {
   }
 
   /** 自由な券を使う: 運営に知らせて、運営が対応する */
-  private async useCustomTicket(i: StringSelectMenuInteraction<'cached'>, ticketId: number): Promise<void> {
+  private async useCustomTicket(i: StringSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>, ticketId: number): Promise<void> {
     const r = await useCustom(this.db, i.user.id, ticketId);
     if (r.status === 'no_ticket') return void (await i.update({ content: 'その券を持っていません。', components: [] }));
     const cfg = this.cfg();
@@ -638,7 +640,7 @@ export class GachaApp {
   }
 
   /** 🎴 おみくじもう 1 回券（その日のおみくじをもう 1 回。結果は #おみくじ に） */
-  private async omikujiExtra(i: StringSelectMenuInteraction<'cached'>): Promise<string> {
+  private async omikujiExtra(i: StringSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<string> {
     const cfg = this.cfg();
     const now = new Date();
     const today = await omikujiToday(this.db, i.user.id, now);

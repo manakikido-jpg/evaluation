@@ -1,7 +1,7 @@
 import type { EconomyConfig } from '../config.js';
 import type { ShopItem } from '../db/schema.js';
 import { OTOSHIDAMA } from '../services/otoshidama.js';
-import { discountable, discountedPrice, DISCOUNT_PERCENT, hexOf, MY_COLORS, priceOf, type DiscountTicket } from '../services/shop.js';
+import { discountable, discountedPrice, DISCOUNT_PERCENT, hexOf, MY_COLORS, presentable, priceOf, type DiscountTicket } from '../services/shop.js';
 
 /** ショップの見た目（Discord API の形のまま。テストしやすいように discord.js に依らない） */
 
@@ -185,6 +185,58 @@ export function shopConfirm(
                   };
                 })
             : []),
+          { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
+        ],
+      },
+      // 🎁 ほかの人へのプレゼントとして買う（色守り・称号など）
+      ...(presentable(item)
+        ? [{ type: 1, components: [{ type: 2, style: 1, label: `🎁 プレゼントにする（${price.toLocaleString('ja-JP')} 枚）`, custom_id: `shop:present:${item.id}`, disabled: balance < price }] }]
+        : []),
+    ],
+  };
+}
+
+/** 🎁 プレゼント: 贈る相手を選ぶ */
+export function presentPickTarget(item: ShopItem, e: EconomyConfig, balance: number, booster = false) {
+  return {
+    embeds: [
+      {
+        title: `🎁 ${label(item)}をプレゼント`,
+        description: [
+          `${priceText(item, e, booster)}をあなたが払い、相手が受けます（${durationText(item) || 'ずっと'}）。いま ${balance.toLocaleString('ja-JP')} 枚`,
+          '',
+          '贈る相手を選んでください。',
+        ].join('\n'),
+        color: SHU,
+      },
+    ],
+    components: [
+      { type: 1, components: [{ type: 5, custom_id: `shop:presentto:${item.id}`, placeholder: '贈る相手を選ぶ' }] },
+      { type: 1, components: [{ type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' }] },
+    ],
+  };
+}
+
+/** 🎁 プレゼント: 相手と値段を確かめる */
+export function presentConfirm(item: ShopItem, e: EconomyConfig, balance: number, target: { id: string; name: string }, booster = false, note?: string) {
+  const price = priceOf(item, e, booster);
+  return {
+    embeds: [
+      {
+        title: `🎁 ${target.name} さんに ${label(item)}`,
+        description: [
+          `**${price.toLocaleString('ja-JP')} 枚**で、<@${target.id}> さんへのプレゼントにします（${durationText(item) || 'ずっと'}）。相手には DM で知らせます。`,
+          ...(note ? [note] : []),
+          `-# いま ${balance.toLocaleString('ja-JP')} 枚 → 贈ったあと ${(balance - price).toLocaleString('ja-JP')} 枚`,
+        ].join('\n'),
+        color: SHU,
+      },
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 3, label: `🎁 ${price.toLocaleString('ja-JP')} 枚で贈る`, custom_id: `shop:presentok:${item.id}:${target.id}`, disabled: balance < price },
           { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
         ],
       },

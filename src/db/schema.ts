@@ -441,6 +441,8 @@ export const shopPurchases = pgTable(
     messageId: text('message_id'),
     /** 使った券（割引券・絵馬のピン留め券。払い戻すときに券も戻す） */
     ticket: text('ticket').$type<TicketKind>(),
+    /** 🎁 プレゼントで買った人（memberId は受け取った人。払い戻しはこの人へ） */
+    giftFrom: text('gift_from'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     /** 期限切れで外した・買い替えた・払い戻した日時 */
     endedAt: timestamp('ended_at', { withTimezone: true }),

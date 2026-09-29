@@ -61,10 +61,25 @@ export class RecruitApp {
     private readonly discord?: DiscordActions,
   ) {}
 
-  /** 起動したとき: ボタンがなければ置く（あれば一番下か確かめる） */
+  /** 起動したとき: ボタンがなければ置く（あれば一番下か確かめる）。置いてあるボタンの文も今の文にする */
   async attach(guild: Guild): Promise<void> {
     this.guild = guild;
-    for (const p of this.cfg().recruit.panels) await this.restick(p.channelId);
+    for (const p of this.cfg().recruit.panels) {
+      await this.restick(p.channelId);
+      await this.refreshText(p.channelId);
+    }
+  }
+
+  /** 置いてあるボタンの文が前の版（お守りの人に通知、など）なら書き換える */
+  private async refreshText(channelId: string): Promise<void> {
+    const panel = this.cfg().recruit.panels.find((p) => p.channelId === channelId);
+    const channel = this.guild?.channels.cache.get(channelId);
+    const id = await this.loadPanelId(channelId);
+    if (!panel || !id || !channel?.isTextBased()) return;
+    const next = recruitPanelMessage(panel);
+    const msg = await channel.messages.fetch(id).catch(() => undefined);
+    if (!msg || msg.embeds[0]?.description === next.embeds[0]!.description) return;
+    await msg.edit(next).catch((err: unknown) => logger.warn({ err, channelId }, 'recruit panel text refresh failed'));
   }
 
   onMessage(msg: Message): void {

@@ -23,7 +23,7 @@ describe('💝 /贈る', () => {
     await addTickets(db, A, 'fuku', 3);
     expect(parsePresentItem('fuku')).toEqual({ kind: 'ticket', ticket: 'fuku' });
     expect(parsePresentItem('coins')).toBeUndefined();
-    expect(await presentChoices(db, A)).toEqual([{ value: 'fuku', label: '🧧福の札', count: 3 }]);
+    expect(await presentChoices(db, A)).toEqual([{ value: 'fuku', label: '🧧福の札', count: 3, note: expect.stringContaining('2 倍'), manual: true }]);
     const fuku = { kind: 'ticket', ticket: 'fuku' } as const;
     expect((await sendPresent(db, cfg, ujiko(A), ujiko(A), fuku, 1)).status).toBe('self');
     expect((await sendPresent(db, cfg, ujiko(A), { id: B, roleIds: [] }, fuku, 1)).status).toBe('not_member');
@@ -48,5 +48,27 @@ describe('💝 /贈る', () => {
     expect(await sendPresent(db, cfg, ujiko(A), ujiko(B), item, 2)).toEqual({ status: 'ok', label: '🎤リクエスト曲券', count: 2, left: 0 });
     expect((await customHoldingsOf(db, B)).map((c) => c.count)).toEqual([2]);
     expect(await presentChoices(db, A)).toEqual([]);
+  });
+});
+
+describe('🎒 /持ち物 の見た目', () => {
+  it('一覧から選ぶ。使えるものは「使う」、自動のものは「贈る」だけ。枚数は選ぶだけ', async () => {
+    const { itemsView, itemDetail, itemGiveCount, itemGiveConfirm, itemGiveTarget } = await import('../src/discord/presents.js');
+    expect(JSON.stringify(itemsView([]))).toContain('持っている券はありません');
+    const fuku = { value: 'fuku', label: '🧧福の札', count: 3, note: '2 倍', manual: true };
+    const room = { value: 'room_free', label: '🎫部屋代無料券', count: 1, note: '自動', manual: false };
+    const custom = { value: 'custom:7', label: '🎤リクエスト曲券', count: 12, note: '1 曲', manual: true };
+    const list = JSON.stringify(itemsView([fuku, room]));
+    expect(list).toContain('items:pick');
+    expect(list).toContain('（使う場面で自動）');
+    expect(JSON.stringify(itemDetail(fuku))).toContain('gacha:use1:fuku');
+    expect(JSON.stringify(itemDetail(room))).not.toContain('gacha:use1');
+    expect(JSON.stringify(itemDetail(room))).toContain('items:give:room_free');
+    expect(JSON.stringify(itemGiveTarget(custom))).toContain('items:to:custom:7');
+    const to = { id: '870000000000000102', name: 'さくら' };
+    const counts = (itemGiveCount(custom, to).components[0]!.components[0] as { options: { value: string; label: string }[] }).options;
+    expect(counts.map((o) => o.value)).toEqual(['1', '2', '3', '5', '10', '12']);
+    expect(counts.at(-1)!.label).toBe('全部（12 枚）');
+    expect(JSON.stringify(itemGiveConfirm(custom, to, 5))).toContain(`items:ok:custom:7:${to.id}:5`);
   });
 });

@@ -32,6 +32,7 @@ import {
   setPurchaseRole,
   undoMyColor,
   buyRole,
+  buyPresent,
   buySimple,
   DISCOUNT_TICKETS,
   duePurchases,
@@ -39,6 +40,7 @@ import {
   getItem,
   giveGift,
   listItems,
+  presentable,
   priceOf,
   refund,
   seedDefaultItems,
@@ -49,7 +51,7 @@ import {
 /** サーバーブースト（奉納）している人 */
 const isBooster = (i: { member: { premiumSince: Date | null } }) => i.member.premiumSince !== null;
 import { omikujiEmbed } from './omikuji.js';
-import { hanafubukiMessage, myColorConfirm, myColorPicker, otoshidamaPickChannel, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
+import { hanafubukiMessage, myColorConfirm, myColorPicker, otoshidamaPickChannel, presentConfirm, presentPickTarget, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const done = (content: string) => ({ content, embeds: [], components: [] });
@@ -94,6 +96,12 @@ export class ShopApp {
           if (step === 'again') return await this.myColorPick(interaction, Number(itemId));
           if (step === 'buy') return await this.myColorBuy(interaction, Number(itemId), Number(color));
         }
+        // 🎁 プレゼント: 相手を選ぶ・贈る
+        if (id.startsWith('shop:present:')) return await this.presentPick(interaction, Number(id.split(':')[2]));
+        if (id.startsWith('shop:presentok:')) {
+          const [, , itemId, targetId] = id.split(':');
+          return await this.presentBuy(interaction, Number(itemId), targetId ?? '');
+        }
         // 🧧 お年玉袋: いつもの場所に置く
         if (id.startsWith('shop:otoshi:here:')) {
           const [, , , itemId, channelId] = id.split(':');
@@ -103,6 +111,7 @@ export class ShopApp {
       if (interaction.isStringSelectMenu() && (id === 'shop:pick' || id.startsWith('shop:pick:'))) return await this.pick(interaction);
       if (interaction.isStringSelectMenu() && id.startsWith('shop:mycolor:pick:')) return await this.myColorChosen(interaction, Number(id.split(':')[3]), Number(interaction.values[0]));
       if (interaction.isChannelSelectMenu() && id.startsWith('shop:otoshi:ch:')) return await this.otoshidamaModal(interaction, Number(id.split(':')[3]), interaction.values[0] ?? '');
+      if (interaction.isUserSelectMenu() && id.startsWith('shop:presentto:')) return await this.presentTarget(interaction, Number(id.split(':')[2]));
       if (interaction.isUserSelectMenu() && id.startsWith('shop:target:')) return await this.target(interaction, Number(id.split(':')[2]));
       if (interaction.isModalSubmit()) {
         const [, kind, itemId, targetId] = id.split(':');
@@ -215,6 +224,68 @@ export class ShopApp {
     if (!item?.enabled || !/^\d{17,20}$/.test(targetId)) return void (await i.editReply(done('この授与品は、今は受けられません。')));
     const text = kind === 'gift' ? await this.gift(i, targetId) : await this.execute(i, item, { targetId, message: i.fields.getTextInputValue('message') });
     await i.editReply(done(text));
+  }
+
+  // ───────── 🎁 プレゼント ─────────
+
+  private async presentPick(i: ButtonInteraction<'cached'>, itemId: number): Promise<void> {
+    const item = await getItem(this.db, itemId);
+    if (!item?.enabled || !presentable(item)) return void (await i.update(done('この授与品は、プレゼントにできません。')));
+    await i.update(presentPickTarget(item, this.cfg().economy, await this.balance(i.user.id), isBooster(i)));
+  }
+
+  private async presentTarget(i: UserSelectMenuInteraction<'cached'>, itemId: number): Promise<void> {
+    const item = await getItem(this.db, itemId);
+    const targetId = i.values[0];
+    if (!item?.enabled || !presentable(item) || !targetId) return void (await i.update(done('この授与品は、プレゼントにできません。')));
+    const target = i.members.get(targetId);
+    if (targetId === i.user.id) return void (await i.update(done('自分には贈れません（自分のぶんは「受ける」から）。')));
+    if (!target || i.users.get(targetId)?.bot) return void (await i.update(done('その方には贈れません（BOT や、サーバーにいない方）。')));
+    const note =
+      item.roleId && target.roles.cache.has(item.roleId)
+        ? item.durationDays
+          ? `-# ${target.displayName} さんはもう持っているので、期間が ${item.durationDays} 日延びます`
+          : undefined
+        : item.roleGroup === 'color'
+          ? '-# 相手がほかの色守りを持っていたら、その色は外れます'
+          : undefined;
+    await i.update(presentConfirm(item, this.cfg().economy, await this.balance(i.user.id), { id: targetId, name: target.displayName }, isBooster(i), note));
+  }
+
+  private async presentBuy(i: ButtonInteraction<'cached'>, itemId: number, targetId: string): Promise<void> {
+    await i.deferUpdate();
+    const item = await getItem(this.db, itemId);
+    if (!item?.enabled || !/^\d{17,20}$/.test(targetId)) return void (await i.editReply(done('この授与品は、今は受けられません。')));
+    const target = await i.guild.members.fetch(targetId).catch(() => undefined);
+    if (!target) return void (await i.editReply(done('その方は、サーバーにいません。')));
+    const r = await buyPresent(
+      this.db,
+      this.cfg(),
+      item,
+      { id: i.user.id, roleIds: [...i.member.roles.cache.keys()] },
+      { id: target.id, roleIds: [...target.roles.cache.keys()], bot: target.user.bot },
+      this.price(i, item),
+    );
+    if (r.status === 'self' || r.status === 'not_member') return void (await i.editReply(done(r.status === 'self' ? '自分には贈れません。' : 'その方には贈れません（BOT や、まだ役職のない方）。')));
+    if (r.status === 'rank_too_low') return void (await i.editReply(done(`プレゼントを贈れるのは「${r.rankName}」になってからです（作ったばかりのアカウントから贈れないようにしています）。`)));
+    if (r.status === 'owned') return void (await i.editReply(done(`${target.displayName} さんはもう持っています（${this.coinName}は減っていません）。`)));
+    if (r.status !== 'ok') return void (await i.editReply(done(this.insufficientText(r) ?? 'この授与品は、今は受けられません。')));
+    try {
+      await target.roles.add(item.roleId!, `授与品のプレゼント: ${item.name}（${i.member.displayName} さんから）`);
+    } catch (err) {
+      logger.warn({ err, roleId: item.roleId }, 'shop present role add failed');
+      await refund(this.db, r.purchase);
+      return void (await i.editReply(done(`ロールを付けられなかったので、${this.coinName}を戻しました。神職に知らせてください（BOT のロールの位置か権限）。`)));
+    }
+    for (const old of r.removeRoleIds) await target.roles.remove(old, '色守りの買い替え（プレゼント）').catch(() => undefined);
+    const until = r.purchase.expiresAt ? `${fmtDate(r.purchase.expiresAt)} まで` : 'ずっと';
+    const dm = await this.discord
+      .sendDm(target.id, `🎁 **${i.member.displayName}** さんから、授与品「${item.emoji} ${item.name}」のプレゼントが届きました（${until}・咲楽ノ宮）。`)
+      .then((ok) => ok !== false)
+      .catch(() => false);
+    await i.editReply(
+      done(`🎁 ${target.displayName} さんに ${item.emoji} ${item.name}を贈りました（${until}）。残り ${r.balance} 枚。${dm ? '' : '\n-# 相手が DM を受け取らない設定のため、知らせは届いていません'}`),
+    );
   }
 
   // ───────── それぞれの授与品 ─────────

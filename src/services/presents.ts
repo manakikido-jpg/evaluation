@@ -4,7 +4,7 @@ import type { Db } from '../db/client.js';
 import { customTicketHoldings, customTickets, tickets } from '../db/schema.js';
 import { autoRanks, currentAutoRank } from '../domain/ranks.js';
 import { customHoldingsOf, customName } from './customTickets.js';
-import { ticketName, ticketsOf } from './tickets.js';
+import { TICKET_LABEL, ticketName, ticketsOf } from './tickets.js';
 
 /**
  * 💝 /贈る: 持っている券・自由な券を、サーバーのほかの人に贈る（個人から個人へ）。
@@ -21,12 +21,17 @@ export function parsePresentItem(raw: string): PresentItem | undefined {
   return m ? { kind: 'custom', id: Number(m[1]) } : undefined;
 }
 
-/** 自分が持っていて贈れるもの（/贈る の候補） */
-export async function presentChoices(db: Db, memberId: string): Promise<{ value: string; label: string; count: number }[]> {
+/** 持ち物 1 つ（value: 券の種類か custom:ID / manual: 「使う」で使える。ほかは使う場面で自動で使う） */
+export type Holding = { value: string; label: string; count: number; note: string; manual: boolean };
+
+/** 自分が持っていて贈れるもの（/持ち物・/贈る の候補） */
+export async function presentChoices(db: Db, memberId: string): Promise<Holding[]> {
   const [t, customs] = await Promise.all([ticketsOf(db, memberId), customHoldingsOf(db, memberId)]);
   return [
-    ...TICKET_KINDS.filter((k) => t[k] > 0).map((k) => ({ value: k, label: ticketName(k), count: t[k] })),
-    ...customs.filter((c) => c.count > 0).map((c) => ({ value: `custom:${c.ticket.id}`, label: customName(c.ticket), count: c.count })),
+    ...TICKET_KINDS.filter((k) => t[k] > 0).map((k) => ({ value: k, label: ticketName(k), count: t[k], note: TICKET_LABEL[k].note, manual: TICKET_LABEL[k].use === 'manual' })),
+    ...customs
+      .filter((c) => c.count > 0)
+      .map((c) => ({ value: `custom:${c.ticket.id}`, label: customName(c.ticket), count: c.count, note: c.ticket.note || '運営に知らせて、対応してもらう券', manual: true })),
   ];
 }
 

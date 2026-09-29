@@ -59,6 +59,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('items')
+      .setNameLocalizations({ ja: '持ち物' })
+      .setDescription('Your tickets: use or give')
+      .setDescriptionLocalizations({ ja: '持っている券を見て、選んで使う・贈る（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('present')
       .setNameLocalizations({ ja: '贈る' })
       .setDescription('Give your tickets to someone')

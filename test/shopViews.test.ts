@@ -54,6 +54,8 @@ describe('ショップの見た目', () => {
 
   it('確認: 足りなければ「受ける」を押せない', () => {
     expect(shopConfirm(base, cfg.economy, 3000).components[0]!.components[0]).toMatchObject({ custom_id: 'shop:buy:1', disabled: false });
+    // ロールの品は「🎁 プレゼントにする」も出る
+    expect(JSON.stringify(shopConfirm(base, cfg.economy, 3000).components)).toContain(base.kind === 'role' ? 'shop:present:1' : 'shop:buy:1');
     expect(shopConfirm(base, cfg.economy, 100).components[0]!.components[0]!.disabled).toBe(true);
     // 割引券を持っていれば、使うボタン（持っていない券は出さない）
     const withTickets = shopConfirm(base, cfg.economy, 1000, undefined, false, [

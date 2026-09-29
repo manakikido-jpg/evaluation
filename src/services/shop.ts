@@ -228,6 +228,56 @@ export async function grantRoleItem(
   return { status: 'ok', ...(await recordRoleItem(tx, item, memberId, now, 0, active, same)) };
 }
 
+// ───────── 🎁 プレゼント ─────────
+
+/** プレゼントにできる品（色守り・称号など、ロールの品。VIP・奉納している人だけの品はのぞく） */
+export const presentable = (item: ShopItem) => item.kind === 'role' && Boolean(item.roleId) && item.roleGroup !== 'vip' && !item.boosterOnly;
+
+export type PresentBuyResult =
+  | BuyResult
+  | { status: 'self' }
+  | { status: 'not_member' }
+  | { status: 'rank_too_low'; rankName: string };
+
+/**
+ * 授与品をプレゼントとして買う: 買う人が払い、相手が受ける（ロールを付けるのは呼び出し側）。
+ * 贈れるのは 2 段目の役職（氏子）以上か運営（サブアカウントの初期配布で買って集められないように）。相手は役職のある人。
+ * ずっと持てる品を相手がもう持っていれば 'owned'、期限つきなら相手の期限が延びる
+ */
+export async function buyPresent(
+  db: Db,
+  cfg: GuildConfig,
+  item: ShopItem,
+  from: { id: string; roleIds: readonly string[] },
+  to: { id: string; roleIds: readonly string[]; bot?: boolean },
+  price = item.price,
+  now = new Date(),
+): Promise<PresentBuyResult> {
+  if (!item.enabled || !presentable(item)) return { status: 'disabled' };
+  if (from.id === to.id) return { status: 'self' };
+  if (to.bot || !cfg.ranks.some((r) => to.roleIds.includes(r.roleId))) return { status: 'not_member' };
+  const [first, second] = autoRanks(cfg.ranks);
+  const current = currentAutoRank(cfg.ranks, from.roleIds);
+  const isStaff = cfg.ranks.some((r) => !r.auto && from.roleIds.includes(r.roleId));
+  if (second && !isStaff && (!current || current.key === first?.key)) return { status: 'rank_too_low', rankName: second.name };
+  return db.transaction(async (tx) => {
+    // 2 人とも順番に（いつも同じ順で取って、待ち合わせにならないように）
+    for (const id of [from.id, to.id].sort()) await lock(tx, id);
+    const active = await tx
+      .select()
+      .from(shopPurchases)
+      .where(and(eq(shopPurchases.memberId, to.id), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt)));
+    const same = active.find((p) => p.roleId === item.roleId);
+    if (same && !item.durationDays) return { status: 'owned' as const };
+    if (price > 0 && !(await spendWithin(tx, from.id, price, 'shop', { itemId: item.id, name: item.name, presentTo: to.id }))) {
+      return { status: 'insufficient' as const, price, balance: (await walletOf(tx, from.id)).balance };
+    }
+    const r = await recordRoleItem(tx, item, to.id, now, price, active, same);
+    const [purchase] = await tx.update(shopPurchases).set({ giftFrom: from.id }).where(eq(shopPurchases.id, r.purchase.id)).returning();
+    return { status: 'ok' as const, purchase: purchase!, balance: (await walletOf(tx, from.id)).balance, removeRoleIds: r.removeRoleIds };
+  });
+}
+
 /** 花吹雪・絵馬の奉納・おみくじもう 1 回: 払って記録する（中身は呼び出し側） */
 export async function buySimple(
   db: Db,
@@ -360,7 +410,8 @@ export async function refund(db: Db, purchase: ShopPurchase, now = new Date()): 
       .set({ endedAt: now })
       .where(and(eq(shopPurchases.id, purchase.id), isNull(shopPurchases.endedAt)))
       .returning({ id: shopPurchases.id });
-    if (ended.length && purchase.price > 0) await addCoins(tx, purchase.memberId, purchase.price, 'shop_refund', { purchaseId: purchase.id });
+    // プレゼントは買った人に戻す
+    if (ended.length && purchase.price > 0) await addCoins(tx, purchase.giftFrom ?? purchase.memberId, purchase.price, 'shop_refund', { purchaseId: purchase.id });
     // 使った券（割引券・絵馬のピン留め券）も戻す
     if (ended.length && purchase.ticket) await addTickets(tx, purchase.memberId, purchase.ticket, 1);
   });
