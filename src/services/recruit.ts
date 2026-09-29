@@ -2,12 +2,10 @@ import { and, desc, eq, gte } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { recruitPosts } from '../db/schema.js';
-import type { DiscordActions } from '../lib/discordRest.js';
-import { logger } from '../lib/logger.js';
 
 /**
  * 募集: チャンネルのいちばん下に「募集する」ボタンを置く。
- * 押した人が一言を書くと、BOT が募集カードを出して、そのお守りを持っている人に知らせる。
+ * 押した人が一言を書くと、BOT が募集カードを出して、役職のある人みんなに知らせる（そのチャンネルを見られる人だけに届く）。
  */
 
 export type RecruitPanel = GuildConfig['recruit']['panels'][number];
@@ -19,7 +17,7 @@ export function recruitPanelMessage(p: RecruitPanel) {
   return {
     embeds: [
       {
-        description: `${p.emoji} **${p.label}の募集**は下のボタンから。一言を書くと、${p.label}のお守りを持っている人に通知が届きます。`,
+        description: `${p.emoji} **${p.label}の募集**は下のボタンから。一言を書くと、役職のある人みんなに通知が届きます。`,
         color: SHU,
       },
     ],
@@ -97,40 +95,15 @@ export async function recordRecruit(db: Db, memberId: string, channelId: string,
   await db.insert(recruitPosts).values({ memberId, channelId, createdAt: at });
 }
 
-/** 募集の通知先のお守りのロール（パネル・授与所のお守り） */
-export function omamoriRoleIds(cfg: GuildConfig): string[] {
-  return [...new Set([...cfg.recruit.panels.map((p) => p.roleId), ...cfg.roles.omamori.map((o) => o.roleId)].filter((x): x is string => Boolean(x)))];
+/** 募集の通知先: 役職のロール全部（Discord は、そのチャンネルを見られる人にだけ知らせる） */
+export function recruitMentionRoleIds(cfg: GuildConfig): string[] {
+  return [...new Set(cfg.ranks.map((r) => r.roleId))];
 }
 
-/**
- * お守りのロールを「だれでも @ で呼べる」にするか合わせる（設定の allowDirectMention）。
- * current: 今の状態が分かるロール（分かるものは同じなら変えない）。変えた数・失敗した数を返す
- */
-export async function syncOmamoriMentionable(
-  discord: DiscordActions,
-  cfg: GuildConfig,
-  current: Map<string, boolean> = new Map(),
-): Promise<{ changed: number; failed: number }> {
-  const want = cfg.recruit.allowDirectMention;
-  let changed = 0;
-  let failed = 0;
-  for (const id of omamoriRoleIds(cfg)) {
-    if (current.get(id) === want) continue;
-    try {
-      await discord.editRole(cfg.guildId, id, { mentionable: want }, want ? 'お守りを @ で呼べるようにする' : '募集の荒らし対策（お守りは募集ボタンからだけ通知）');
-      changed++;
-    } catch (err) {
-      failed++;
-      logger.warn({ err, roleId: id }, 'omamori mentionable sync failed');
-    }
-  }
-  return { changed, failed };
-}
-
-/** 募集カード（お守りのロールに通知。通話にいれば、その通話へのボタンを付ける） */
+/** 募集カード（mention: 知らせるロール。通話にいれば、その通話へのボタンを付ける） */
 /** avatarUrl: 募集した人のアイコン（サーバーのアイコンがあればそれ）。カードの右上と名前の横に出す */
-export function recruitCard(input: { guildId: string; panel: RecruitPanel; userId: string; name: string; message: string; voiceChannelId?: string | null; avatarUrl?: string }) {
-  const { panel } = input;
+export function recruitCard(input: { guildId: string; panel: RecruitPanel; mention: string[]; userId: string; name: string; message: string; voiceChannelId?: string | null; avatarUrl?: string }) {
+  const { panel, mention } = input;
   const where = input.voiceChannelId
     ? `📞 <#${input.voiceChannelId}> にいます。下のボタンから入れます`
     : panel.hubId
@@ -138,7 +111,7 @@ export function recruitCard(input: { guildId: string; panel: RecruitPanel; userI
       : '📞 まだ通話にいません';
   const message = input.message.trim();
   return {
-    content: panel.roleId ? `<@&${panel.roleId}>` : '',
+    content: mention.map((id) => `<@&${id}>`).join(' '),
     embeds: [
       {
         ...(input.avatarUrl ? { author: { name: `${input.name} さん`, icon_url: input.avatarUrl }, thumbnail: { url: input.avatarUrl } } : {}),
@@ -157,8 +130,8 @@ export function recruitCard(input: { guildId: string; panel: RecruitPanel; userI
           },
         ]
       : [],
-    // お守りの人にだけ通知（募集した人の @ や @everyone は鳴らさない）
-    allowedMentions: { roles: panel.roleId ? [panel.roleId] : [], users: [] as string[] },
+    // 役職のロールにだけ通知（募集した人の @ や @everyone は鳴らさない）
+    allowedMentions: { roles: mention, users: [] as string[] },
   };
 }
 

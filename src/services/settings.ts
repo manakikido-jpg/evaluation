@@ -78,7 +78,6 @@ export const overridesSchema = z.object({
       requireRank: z.boolean(),
       blockYakudoshi: z.boolean(),
       newMemberDays: z.number().int().min(0).max(90),
-      allowDirectMention: z.boolean(),
       spamAlertCount: z.number().int().min(0).max(50),
     })
     .partial()

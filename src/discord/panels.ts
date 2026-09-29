@@ -1,5 +1,5 @@
 /**
- * 入鯖申請・宵参り申請・お守りのパネル（Discord API の形のまま）。
+ * 入鯖申請・宵参り申請などのパネル（Discord API の形のまま）。
  * BOT の /panel とセットアップスクリプトの両方で使う。
  */
 
@@ -7,19 +7,15 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'omamori' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha';
+export type PanelKind = 'apply' | 'yoimairi' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
   components: { type: 1; components: { type: 2; style: 1 | 2 | 3; label: string; custom_id: string; emoji?: { name: string } }[] }[];
 };
 
-/** お守り 1 つ分（config の roles.omamori と同じ形） */
-export type OmamoriPanelItem = { roleId: string; label: string; emoji: string; description: string; adultOnly: boolean };
-
-export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem[]; /** 通貨の名前（なければ銭） */ coinName?: string } = {}): PanelMessage {
+export function panelMessage(kind: PanelKind, opts: { /** 通貨の名前（なければ銭） */ coinName?: string } = {}): PanelMessage {
   const coin = opts.coinName ?? '銭';
-  if (kind === 'omamori') return omamoriPanel(opts.omamori ?? []);
   if (kind === 'shop') return shopPanel(coin);
   if (kind === 'market') {
     return {
@@ -173,41 +169,6 @@ export function panelMessage(kind: PanelKind, opts: { omamori?: OmamoriPanelItem
       },
     ],
     components: [{ type: 1, components: [{ type: 2, style: 1, label: '宵参りを申請する', custom_id: 'yoimairi:start' }] }],
-  };
-}
-
-function omamoriPanel(items: OmamoriPanelItem[]): PanelMessage {
-  const rows: PanelMessage['components'] = [];
-  for (let i = 0; i < items.length; i += 5) {
-    rows.push({
-      type: 1,
-      components: items.slice(i, i + 5).map((o) => ({
-        type: 2,
-        style: 2,
-        label: `${o.label}のお守り`,
-        custom_id: `omamori:${o.roleId}`,
-        ...(o.emoji ? { emoji: { name: o.emoji } } : {}),
-      })),
-    });
-  }
-  // 自分がどれを授かっているか見るボタン（本人にだけ見える）
-  rows.push({ type: 1, components: [{ type: 2, style: 1, label: '自分のお守りを見る', custom_id: 'omamori:mine', emoji: { name: '🧧' } }] });
-  return {
-    embeds: [
-      {
-        title: '🧧 授与所 ― お守り',
-        description: [
-          'お守りを持っていると、その募集の通知が届きます。ボタンを押すと授かり、もう一度押すと返せます。押すと、あなたが授かっているお守りが ✅ で出ます（「自分のお守りを見る」でも見られます）。',
-          '',
-          ...items.map((o) => `${o.emoji} **${o.label}のお守り** … ${o.description}`),
-          '',
-          '**募集するとき**は、#宿帳・#縁日・#手水舎・#御神酒処 のいちばん下の「○○を募集する」ボタンから（一言を書くと、お守りの人に通知が届きます）。',
-          '-# 通知が多いと感じたら、いつでも返せます',
-        ].join('\n'),
-        color: SHU,
-      },
-    ],
-    components: rows,
   };
 }
 

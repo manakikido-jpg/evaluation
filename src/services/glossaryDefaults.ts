@@ -34,7 +34,6 @@ export const DEFAULT_TERMS: GlossaryDefault[] = [
   { category: 'roles', emoji: '🏪', term: '開業', reading: 'かいぎょう', description: '市場に出品できる人（授与所の「開業権利」で受ける）', aliases: '開業権利' },
   { category: 'roles', emoji: '🎨', term: '色守り', reading: 'いろまもり', description: '名前の色が変わるロール（授与所・物御籤で受ける）' },
   { category: 'roles', emoji: '🏷', term: '称号', reading: 'しょうごう', description: 'プロフィールに付く肩書きのロール（授与所・物御籤で受ける）' },
-  { category: 'roles', emoji: '🌙', term: 'お守り', reading: 'おまもり', description: '募集の通知を受け取るロール。{#授与所} で受け取る。募集は各チャンネルのいちばん下の「○○を募集する」ボタンから' },
 
   // 仕組み
   { category: 'system', emoji: '📖', term: '御朱印帳', reading: 'ごしゅいんちょう', description: '自分の評価カード（`/御朱印帳`）' },

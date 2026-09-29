@@ -12,10 +12,6 @@ export type RoleKey =
   | 'sewayaku'
   | 'ujiko'
   | 'sanpaisha'
-  | 'omamori_neochi'
-  | 'omamori_game'
-  | 'omamori_zatsudan'
-  | 'omamori_yoimiya'
   | 'color_sakura'
   | 'color_fuji'
   | 'color_wakakusa'
@@ -40,7 +36,7 @@ export type RoleKey =
   | 'friend_ask'
   | 'friend_ng';
 
-export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint; /** 誰でも @ で呼べる（お守り） */ mentionable?: boolean };
+export type RoleSpec = { key: RoleKey; name: string; color: number; hoist: boolean; permissions: bigint; /** 誰でも @ で呼べる（false で呼べない） */ mentionable?: boolean };
 
 /** 誰が見られるか */
 export type Visibility =
@@ -64,8 +60,8 @@ export type ChannelSpec = {
    * （書き込みはそのまま。「🪧｜絵馬」のような飾りは残す）
    */
   formerly?: string[];
-  /** 入鯖申請・宵参り申請・お守りのボタンを置く */
-  panels?: ('apply' | 'yoimairi' | 'omamori' | 'shop' | 'market' | 'contact')[];
+  /** 入鯖申請・宵参り申請などのボタンを置く */
+  panels?: ('apply' | 'yoimairi' | 'shop' | 'market' | 'contact')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */
@@ -74,8 +70,8 @@ export type ChannelSpec = {
   alsoRoles?: RoleKey[];
   /** 自分の通話部屋の種類と値段（once: ひらくたびに 1 回 / hourly: 1 時間ごと） */
   plan?: 'once' | 'hourly';
-  /** 「募集する」ボタンを置く（どのお守りの人に知らせるか） */
-  recruit?: RoleKey;
+  /** 「募集する」ボタンを置く（何の募集か。通知は役職のある人みんなへ） */
+  recruit?: RecruitSpec;
 };
 
 export type CategorySpec = { name: string; visibility: Visibility; channels: ChannelSpec[] };
@@ -130,9 +126,6 @@ export const ROLES: RoleSpec[] = [
   { key: 'female', name: '♀ 女性', color: 0, hoist: false, permissions: 0n },
   // DM・フレンド追加（入鯖申請と #授与所 のボタンで選ぶ）。色なし
   ...CONTACT_SPECS().map((c) => ({ key: c.key, name: c.name, color: 0, hoist: false, permissions: 0n })),
-  // お守り（募集の通知を受け取るロール）。色なし・一覧で分けない。誰でも @ で呼べる
-  // お守りは直接 @ できない（通知は募集ボタンからだけ。設定の「お守りを直接 @ して呼べる」で変えられる）
-  ...OMAMORI_SPECS().map((o) => ({ key: o.key, name: o.name, color: 0, hoist: false, permissions: 0n, mentionable: false })),
   // 称号（ショップ）。色なし
   ...SHOP_TITLES().map((t) => ({ key: t.key, name: t.name, color: 0, hoist: false, permissions: 0n })),
 ];
@@ -175,15 +168,11 @@ export function CONTACT_SPECS(): { key: RoleKey; kind: 'dm' | 'friend'; level: '
   ];
 }
 
-/** お守り（#授与所 のボタンで付け外しする、募集の通知用ロール） */
-export function OMAMORI_SPECS(): { key: RoleKey; name: string; label: string; emoji: string; description: string; adultOnly: boolean }[] {
-  return [
-    { key: 'omamori_neochi', name: '🌙 寝落ちのお守り', label: '寝落ち', emoji: '🌙', description: '寝落ち通話の募集', adultOnly: false },
-    { key: 'omamori_game', name: '🎮 ゲームのお守り', label: 'ゲーム', emoji: '🎮', description: 'ゲームの募集', adultOnly: false },
-    { key: 'omamori_zatsudan', name: '🍵 雑談のお守り', label: '雑談', emoji: '🍵', description: '雑談通話の募集', adultOnly: false },
-    { key: 'omamori_yoimiya', name: '🔞 宵宮のお守り', label: '宵宮', emoji: '🔞', description: '宵宮の募集（宵参りの方だけ）', adultOnly: true },
-  ];
-}
+/** 「募集する」ボタンの中身（何の募集か） */
+export type RecruitSpec = { label: string; emoji: string; adultOnly?: boolean };
+
+/** 前の版で作ったお守り（募集の通知のロール）の名前（BOT が 1 回だけ消す） */
+export const RETIRED_OMAMORI_NAMES = ['🌙 寝落ちのお守り', '🎮 ゲームのお守り', '🍵 雑談のお守り', '🔞 宵宮のお守り'];
 
 /** 設計書どおりの全部の構成 */
 export const FULL: Layout = {
@@ -204,7 +193,7 @@ export const FULL: Layout = {
       visibility: 'member',
       channels: [
         { name: '御触書', kind: 'text', readOnly: true, topic: 'お知らせ' },
-        { name: '授与所', kind: 'text', readOnly: true, topic: 'お守り（募集の通知）と授与品（ショップ）・DM とフレンド追加', panels: ['omamori', 'shop', 'contact'] },
+        { name: '授与所', kind: 'text', readOnly: true, topic: '授与品（ショップ）・DM とフレンド追加', panels: ['shop', 'contact'] },
         { name: '慶事', kind: 'text', readOnly: true, configKey: 'keiji', topic: '昇格・称号の発表' },
         { name: '番付', kind: 'text', readOnly: true, configKey: 'banzuke', topic: 'ご縁のランキング（BOT が 10 分ごとに更新）' },
       ],
@@ -226,7 +215,7 @@ export const FULL: Layout = {
       channels: [
         { name: '境内', kind: 'text', topic: '雑談', configKey: 'keidai' },
         { name: 'お出迎え', kind: 'text', configKey: 'welcome', topic: '新しく参拝した方のお知らせ。ひと声かけてあげてください 🌸' },
-        { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: 'omamori_zatsudan' },
+        { name: '手水舎', kind: 'text', topic: '浮上（来たら一言）・雑談の募集', recruit: { label: '雑談', emoji: '🍵' } },
         { name: '写真館', kind: 'text', topic: '画像・スクショ' },
         { name: 'おみくじ', kind: 'text', configKey: 'omikuji', topic: '/おみくじ を 1 日 1 回（銭がもらえます）' },
         {
@@ -247,7 +236,7 @@ export const FULL: Layout = {
       name: '🎮 縁日',
       visibility: 'member',
       channels: [
-        { name: '縁日', kind: 'text', topic: 'ゲームの募集', recruit: 'omamori_game' },
+        { name: '縁日', kind: 'text', topic: 'ゲームの募集', recruit: { label: 'ゲーム', emoji: '🎮' } },
         { name: '屋台', kind: 'text', topic: 'ゲームの話題' },
         { name: '➕ 屋台をひらく', kind: 'voice', hub: '🎮 {name}の屋台' },
         { name: '神楽殿', kind: 'voice' },
@@ -257,7 +246,7 @@ export const FULL: Layout = {
       name: '🌙 宿坊',
       visibility: 'member',
       channels: [
-        { name: '宿帳', kind: 'text', topic: '寝落ち通話の募集・おやすみの挨拶', recruit: 'omamori_neochi' },
+        { name: '宿帳', kind: 'text', topic: '寝落ち通話の募集・おやすみの挨拶', recruit: { label: '寝落ち', emoji: '🌙' } },
         { name: '➕ 宿坊をひらく', kind: 'voice', hub: '🌙 {name}の宿坊', plan: 'once' },
       ],
     },
@@ -266,7 +255,7 @@ export const FULL: Layout = {
       visibility: 'adult',
       channels: [
         { name: '宵宮', kind: 'text', topic: '18 歳以上の雑談' },
-        { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集', recruit: 'omamori_yoimiya' },
+        { name: '御神酒処', kind: 'text', topic: 'お酒の話・飲み通話の募集', recruit: { label: '宵宮', emoji: '🔞', adultOnly: true } },
         { name: '➕ 宵宮の部屋をひらく', kind: 'voice', hub: '🍶 {name}の部屋', plan: 'hourly' },
       ],
     },

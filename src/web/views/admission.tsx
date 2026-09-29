@@ -763,7 +763,7 @@ export function SettingsPage(props: {
         <section class="card anchor" id="sec-recruit">
           <h2>📣 募集（荒らし対策）</h2>
           <p class="note">
-            #宿帳・#縁日・#手水舎・#御神酒処 のいちばん下の「○○を募集する」ボタンの決まりです。募集するとお守りの人に通知が届くので、続けて鳴らないようにします。待ち時間は BOT
+            #宿帳・#縁日・#手水舎・#御神酒処 のいちばん下の「○○を募集する」ボタンの決まりです。募集すると役職のある人みんな（そのチャンネルを見られる人）に通知が届くので、続けて鳴らないようにします。待ち時間は BOT
             を起動し直しても忘れません。
           </p>
           <div class="fields">
@@ -791,14 +791,10 @@ export function SettingsPage(props: {
               <input type="checkbox" name="recruitBlockYaku" value="yes" checked={cfg.recruit.blockYakudoshi} />
               <span>👹 厄年の人は募集できない</span>
             </label>
-            <label class="field check">
-              <input type="checkbox" name="recruitDirect" value="yes" checked={cfg.recruit.allowDirectMention} />
-              <span>お守りのロールを、メッセージで直接 @ して呼べるようにする（止めておくと、通知は募集ボタンからだけ。直接の @ には待ち時間が効かないので、止めておくのがおすすめ）</span>
-            </label>
           </div>
-          {!cfg.recruit.allowDirectMention && props.botCanMentionAll === false && (
+          {props.botCanMentionAll === false && (
             <p class="flash warn">
-              BOT のロールに「@everyone、@here、全てのロールにメンション」の権限がないため、お守りを @ できないようにすると、募集ボタンからの通知も届きません。Discord
+              BOT のロールに「@everyone、@here、全てのロールにメンション」の権限がないため、「@ で呼べる」にしていない役職のロールには、募集ボタンからの通知が届きません。Discord
               のサーバー設定 → ロール → BOT のロールで、この権限を付けてください。
             </p>
           )}

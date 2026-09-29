@@ -18,6 +18,7 @@ import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
 import { PresentApp } from './discord/presents.js';
+import { retireOmamori } from './discord/retireOmamori.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { GlossaryApp } from './discord/glossary.js';
@@ -30,7 +31,6 @@ import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
 import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
-import { OmamoriApp } from './discord/omamori.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
 import { updateBanzukeQuietly } from './services/banzuke.js';
@@ -92,7 +92,6 @@ async function main(): Promise<void> {
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
-  const omamori = new OmamoriApp(cfg);
   const recruit = new RecruitApp(db, cfg, actions);
   const shop = new ShopApp(db, cfg, actions);
   const boost = new BoostApp(db, cfg, actions);
@@ -156,6 +155,8 @@ async function main(): Promise<void> {
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // ブースト: 止まっていた間の「ブーストしました」を拾う
     await boost.attach(guild).catch((err) => logger.warn({ err }, 'boost attach failed'));
+    // 🧧 なくしたお守り（募集の通知のロール）と #授与所 のボタンを 1 回だけ消す
+    await retireOmamori(db, cfg(), guild, actions).catch((err) => logger.warn({ err }, 'omamori retire failed'));
     // 募集ボタン: なければ置く
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
@@ -272,7 +273,6 @@ async function main(): Promise<void> {
     void gifts.onInteraction(i);
     void otoshidama.onInteraction(i);
     void bell.onInteraction(i);
-    void omamori.onInteraction(i);
     void recruit.onInteraction(i);
     void shop.onInteraction(i);
     void rooms.onInteraction(i);

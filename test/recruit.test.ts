@@ -1,23 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { parseGuildConfig, type GuildConfig } from '../src/config.js';
-import type { DiscordActions } from '../src/lib/discordRest.js';
 import {
   decideRecruit,
   lastRecruits,
-  omamoriRoleIds,
   recordRecruit,
   recruitCard,
+  recruitMentionRoleIds,
   recruitPanelMessage,
   RecruitSpamCounter,
-  syncOmamoriMentionable,
 } from '../src/services/recruit.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
 import { cfg as base, makeDb, ROLE } from './helpers.js';
 
 const NEOCHI_CH = '950000000000000001';
 const YOI_CH = '950000000000000002';
-const NEOCHI_ROLE = '950000000000000011';
-const YOI_ROLE = '950000000000000012';
 const HUB = '950000000000000021';
 const YOIMAIRI = '950000000000000031';
 const YAKU = '950000000000000032';
@@ -30,8 +26,8 @@ const cfg: GuildConfig = parseGuildConfig({
   roles: { ...base.roles, yoimairi: YOIMAIRI, yakudoshi: YAKU },
   recruit: {
     panels: [
-      { channelId: NEOCHI_CH, label: '寝落ち', emoji: '🌙', roleId: NEOCHI_ROLE, hubId: HUB },
-      { channelId: YOI_CH, label: '宵宮', emoji: '🔞', roleId: YOI_ROLE, adultOnly: true },
+      { channelId: NEOCHI_CH, label: '寝落ち', emoji: '🌙', hubId: HUB },
+      { channelId: YOI_CH, label: '宵宮', emoji: '🔞', adultOnly: true },
     ],
   },
 });
@@ -85,32 +81,28 @@ describe('募集', () => {
     expect(new RecruitSpamCounter().hit('A', now, 5, 0)).toBe(false);
   });
 
-  it('お守りのロールを @ で呼べるかを設定に合わせる（同じなら変えない）', async () => {
-    const edits: string[] = [];
-    const discord = { editRole: async (_g: string, id: string, b: { mentionable?: boolean }) => void edits.push(`${id} ${b.mentionable}`) } as unknown as DiscordActions;
-    expect(omamoriRoleIds(cfg)).toEqual([NEOCHI_ROLE, YOI_ROLE, ...cfg.roles.omamori.map((o) => o.roleId)].filter((v, i, a) => a.indexOf(v) === i));
-    expect(await syncOmamoriMentionable(discord, cfg, new Map([[YOI_ROLE, false]]))).toMatchObject({ changed: omamoriRoleIds(cfg).length - 1 });
-    expect(edits).toContain(`${NEOCHI_ROLE} false`);
-    expect(edits).not.toContain(`${YOI_ROLE} false`);
+  it('通知先は役職のロール全部', () => {
+    expect(recruitMentionRoleIds(cfg)).toEqual(cfg.ranks.map((r) => r.roleId));
   });
 
   it('管理画面の設定で変えられる（募集ボタンの置き場所はファイルのまま）', () => {
-    const c = applyOverrides(cfg, overridesSchema.parse({ recruit: { cooldownMinutes: 30, allowDirectMention: true } }));
-    expect(c.recruit).toMatchObject({ cooldownMinutes: 30, allowDirectMention: true, channelCooldownMinutes: 5 });
+    const c = applyOverrides(cfg, overridesSchema.parse({ recruit: { cooldownMinutes: 30 } }));
+    expect(c.recruit).toMatchObject({ cooldownMinutes: 30, channelCooldownMinutes: 5 });
     expect(c.recruit.panels).toHaveLength(2);
   });
 
-  it('カード: お守りのロールにだけ通知。通話にいれば「通話に入る」ボタン', () => {
+  it('カード: 役職のロールにだけ通知。通話にいれば「通話に入る」ボタン', () => {
     const panel = cfg.recruit.panels[0]!;
-    const inVoice = recruitCard({ guildId: GUILD, panel, userId: 'U1', name: 'さくら', message: '23 時から\n寝落ちしよ', voiceChannelId: '950000000000000041' });
-    expect(inVoice.content).toBe(`<@&${NEOCHI_ROLE}>`);
-    expect(inVoice.allowedMentions).toEqual({ roles: [NEOCHI_ROLE], users: [] });
+    const mention = recruitMentionRoleIds(cfg);
+    const inVoice = recruitCard({ guildId: GUILD, panel, mention, userId: 'U1', name: 'さくら', message: '23 時から\n寝落ちしよ', voiceChannelId: '950000000000000041' });
+    expect(inVoice.content).toBe(mention.map((id) => `<@&${id}>`).join(' '));
+    expect(inVoice.allowedMentions).toEqual({ roles: mention, users: [] });
     expect(inVoice.embeds[0]!.title).toBe('🌙 寝落ちの募集');
     expect(inVoice.embeds[0]!.description).toContain('> 23 時から 寝落ちしよ');
     expect(inVoice.embeds[0]!.description).toContain('<#950000000000000041> にいます');
     expect(inVoice.components[0]!.components[0]!.url).toBe(`https://discord.com/channels/${GUILD}/950000000000000041`);
 
-    const noVoice = recruitCard({ guildId: GUILD, panel, userId: 'U1', name: 'さくら', message: '', voiceChannelId: null });
+    const noVoice = recruitCard({ guildId: GUILD, panel, mention, userId: 'U1', name: 'さくら', message: '', voiceChannelId: null });
     expect(noVoice.embeds[0]!.description).toContain(`<#${HUB}> に入ると部屋ができます`);
     expect(noVoice.embeds[0]!.description).not.toContain('>  ');
     expect(noVoice.components).toEqual([]);
@@ -119,7 +111,7 @@ describe('募集', () => {
 
   it('カード: 募集した人のアイコンを右上と名前の横に出す', () => {
     const icon = 'https://cdn.discordapp.com/avatars/U1/abc.png?size=256';
-    const card = recruitCard({ guildId: GUILD, panel: cfg.recruit.panels[0]!, userId: 'U1', name: 'さくら', message: '', avatarUrl: icon });
+    const card = recruitCard({ guildId: GUILD, panel: cfg.recruit.panels[0]!, mention: [], userId: 'U1', name: 'さくら', message: '', avatarUrl: icon });
     expect(card.embeds[0]).toMatchObject({ author: { name: 'さくら さん', icon_url: icon }, thumbnail: { url: icon } });
   });
 

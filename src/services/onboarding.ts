@@ -8,11 +8,11 @@ import { addCoins } from './economy.js';
 
 /**
  * 「はじめての参拝」: 入ったばかりの人が、サーバーの遊び方をひと通り試せるようにするチェックリスト。
- * おみくじ・朱印・通話・お守り を全部できたら、お祝いの花びら（1 人 1 回）。
+ * おみくじ・朱印・通話 を全部できたら、お祝いの花びら（1 人 1 回）。
  * /はじめて で進み具合を見られる。BOT も 10 分ごとに確かめて、できた人にはお祝いを送る。
  */
 
-export type OnboardingKey = 'omikuji' | 'shuin' | 'voice' | 'omamori';
+export type OnboardingKey = 'omikuji' | 'shuin' | 'voice';
 export type OnboardingStep = { key: OnboardingKey; label: string; hint: string; done: boolean };
 export type OnboardingProgress = { steps: OnboardingStep[]; allDone: boolean; rewarded: boolean };
 
@@ -44,15 +44,6 @@ export async function onboardingOf(db: Db, cfg: GuildConfig, memberId: string, r
       done: (vc?.minutes ?? 0) >= ONBOARDING_VOICE_MINUTES,
     },
   ];
-  // お守りのロールがあるときだけ
-  if (cfg.roles.omamori.length) {
-    steps.push({
-      key: 'omamori',
-      label: 'お守りを受ける',
-      hint: '#授与所 で、通知を受け取りたい募集（寝落ち・ゲーム・雑談など）のお守りを押す',
-      done: cfg.roles.omamori.some((o) => roles.includes(o.roleId)),
-    });
-  }
   return { steps, allDone: steps.every((s) => s.done), rewarded: Boolean(done) };
 }
 

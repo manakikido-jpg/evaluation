@@ -109,7 +109,7 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
       '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」でできます。',
       ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
       '',
-      `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・朱印・通話・お守り）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,
+      `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・朱印・通話）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,
     ].join('\n'),
   );
 }
@@ -329,17 +329,8 @@ export async function changeAgeGroup(ctx: ModCtx, actor: Actor, memberId: string
   if (age !== 'adult' && role && m.roleIds.includes(role)) {
     await safely('remove yoimairi', () => ctx.discord.removeRole(ctx.cfg.guildId, memberId, role, '年齢区分の変更'));
   }
-  if (age !== 'adult') await removeAdultOmamori(ctx, memberId, m.roleIds, '年齢区分の変更');
   await audit(ctx.db, { actorId: actor.id, targetId: memberId, action: 'member.age', detail: { from: m.ageGroup, to: age }, via: actor.via });
   return 'ok';
-}
-
-/** 宵宮のお守り（宵参りの人だけのもの）を外す。持っているか分からないときは全部外してみる */
-async function removeAdultOmamori(ctx: ModCtx, memberId: string, roleIds: readonly string[] | undefined, reason: string): Promise<void> {
-  for (const o of ctx.cfg.roles.omamori.filter((x) => x.adultOnly)) {
-    if (roleIds && !roleIds.includes(o.roleId)) continue;
-    await safely('remove adult omamori', () => ctx.discord.removeRole(ctx.cfg.guildId, memberId, o.roleId, reason));
-  }
 }
 
 /** 宵参りを外す（神職・宮司） */
@@ -348,7 +339,6 @@ export async function removeYoimairi(ctx: ModCtx, actor: Actor, memberId: string
   if (!role) return 'disabled';
   if (await checkTarget(ctx, actor, memberId)) return 'denied';
   await safely('remove yoimairi', () => ctx.discord.removeRole(ctx.cfg.guildId, memberId, role, reason));
-  await removeAdultOmamori(ctx, memberId, (await getMember(ctx.db, memberId))?.roleIds, reason);
   await audit(ctx.db, { actorId: actor.id, targetId: memberId, action: 'member.yoimairi.remove', detail: { reason }, via: actor.via });
   return 'ok';
 }

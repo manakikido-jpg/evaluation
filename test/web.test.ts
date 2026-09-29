@@ -593,7 +593,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     });
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), bellChannel: '', bellCooldown: '3' });
     expect(store.current.bell).toEqual({ cooldownMinutes: 3, mentionStaff: false, roleIds: [], channelIds: [] });
-    // 募集の荒らし対策（お守りを @ で呼べるかを変えたら、ロールも合わせる）
+    // 募集の荒らし対策
     expect(await (await get('/settings', g)).text()).toContain('📣 募集（荒らし対策）');
     actions = [];
     const rec = await post('/settings', g, {
@@ -604,7 +604,6 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       recruitNewDays: '2',
       recruitSpamAlert: '4',
       recruitRequireRank: 'yes',
-      recruitDirect: 'yes',
     });
     expect(rec.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.recruit).toMatchObject({
@@ -614,11 +613,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       spamAlertCount: 4,
       requireRank: true,
       blockYakudoshi: false,
-      allowDirectMention: true,
     });
-    expect(actions.filter((x) => x.startsWith('editRole') && x.includes('"mentionable":true')).length).toBe(
-      new Set([...store.current.recruit.panels.map((p) => p.roleId), ...store.current.roles.omamori.map((o) => o.roleId)].filter(Boolean)).size,
-    );
     // 通話のチャット（チェックを外すと消さない）
     const vcc = await post('/settings', g, { ...form, _csrf: await csrfOf(g), vcClearDelay: '5' });
     expect(vcc.headers.get('location')).toBe('/settings?msg=saved');

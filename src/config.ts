@@ -93,7 +93,7 @@ export const economySchema = z.object({
   boostDiscountPercent: z.number().int().min(0).max(90).default(20),
   /** コアタイム中の通話の花びら（%。150 で 1.5 倍。増えた分は 1 日の上限に数えない） */
   coreTimePercent: z.number().int().min(100).max(500).default(150),
-  /** 「はじめての参拝」（おみくじ・朱印・通話・お守り）を全部できたときのお祝い（1 人 1 回。0 でなし） */
+  /** 「はじめての参拝」（おみくじ・朱印・通話）を全部できたときのお祝い（1 人 1 回。0 でなし） */
   onboardingReward: z.number().int().min(0).default(300),
   /** 招待のお礼: 入鯖申請で「招待してくれた人」に選ばれた人に、招待された人が 🔰参拝者 になったとき（1 人につき 1 回。0 でなし） */
   inviteReward: z.number().int().min(0).default(500),
@@ -389,7 +389,7 @@ export const guildConfigSchema = z
             friend: z.object({ ok: snowflake.optional(), ask: snowflake.optional(), ng: snowflake.optional() }).default({}),
           })
           .optional(),
-        /** お守り: 募集の通知を受け取りたい人が #授与所 のボタンで付け外しするロール */
+        /** 前の版のお守り（募集の通知のロール）。今は使わない。BOT が起きたときに 1 回だけ、このロールを消す */
         omamori: z
           .array(
             z.object({
@@ -420,12 +420,12 @@ export const guildConfigSchema = z
     bell: bellSchema.default(bellSchema.parse({})),
     gacha: gachaSchema.default(gachaSchema.parse({})),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
-    /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集をお守りの人に知らせる */
+    /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集を役職のある人みんなに知らせる */
     recruit: z
       .object({
         /** 同じ人が続けて募集できるまでの分 */
         cooldownMinutes: z.number().int().min(0).default(10),
-        /** 同じチャンネル（同じお守り）に続けて通知を飛ばせるまでの分（だれが押しても） */
+        /** 同じチャンネルに続けて通知を飛ばせるまでの分（だれが押しても） */
         channelCooldownMinutes: z.number().int().min(0).max(120).default(5),
         /** 役職（🔰参拝者 以上）のある人だけ募集できる */
         requireRank: z.boolean().default(true),
@@ -433,8 +433,6 @@ export const guildConfigSchema = z
         blockYakudoshi: z.boolean().default(true),
         /** 入ってからこの日数がたつまで募集できない（0 でなし） */
         newMemberDays: z.number().int().min(0).max(90).default(0),
-        /** お守りのロールを、メッセージで直接 @ して呼べるようにする（止めると、通知は募集ボタンからだけ） */
-        allowDirectMention: z.boolean().default(false),
         /** 待ち時間中にこの回数押した人を運営に知らせる（0 で知らせない） */
         spamAlertCount: z.number().int().min(0).max(50).default(3),
         panels: z
@@ -444,8 +442,6 @@ export const guildConfigSchema = z
               /** 何の募集か（例: 寝落ち） */
               label: z.string().min(1).max(40),
               emoji: z.string().max(10).default(''),
-              /** 知らせるお守りのロール */
-              roleId: snowflake.optional(),
               /** 通話にいないときに案内する「➕ ○○をひらく」 */
               hubId: snowflake.optional(),
               /** 宵参りの人だけ募集できる */
@@ -460,7 +456,6 @@ export const guildConfigSchema = z
         requireRank: true,
         blockYakudoshi: true,
         newMemberDays: 0,
-        allowDirectMention: false,
         spamAlertCount: 3,
         panels: [],
       }),

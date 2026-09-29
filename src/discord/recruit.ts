@@ -20,9 +20,9 @@ import {
   lastRecruits,
   recordRecruit,
   recruitCard,
+  recruitMentionRoleIds,
   recruitPanelMessage,
   RecruitSpamCounter,
-  syncOmamoriMentionable,
   type RecruitDecision,
 } from '../services/recruit.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -61,15 +61,10 @@ export class RecruitApp {
     private readonly discord?: DiscordActions,
   ) {}
 
-  /** 起動したとき: ボタンがなければ置く（あれば一番下か確かめる）。お守りを @ で呼べるかを設定に合わせる */
+  /** 起動したとき: ボタンがなければ置く（あれば一番下か確かめる） */
   async attach(guild: Guild): Promise<void> {
     this.guild = guild;
     for (const p of this.cfg().recruit.panels) await this.restick(p.channelId);
-    if (this.discord) {
-      const current = new Map([...guild.roles.cache.values()].map((r) => [r.id, r.mentionable]));
-      const r = await syncOmamoriMentionable(this.discord, this.cfg(), current);
-      if (r.changed || r.failed) logger.info(r, 'omamori mentionable synced');
-    }
   }
 
   onMessage(msg: Message): void {
@@ -153,6 +148,7 @@ export class RecruitApp {
       recruitCard({
         guildId: i.guildId,
         panel: d.panel,
+        mention: recruitMentionRoleIds(this.cfg()),
         userId: i.user.id,
         name: i.member.displayName,
         message: i.fields.getTextInputValue('message'),
@@ -162,7 +158,7 @@ export class RecruitApp {
     );
     // 投稿できてから「続けて募集できない」時間を数え始める（DB に残すので、BOT を起動し直しても忘れない）
     await recordRecruit(this.db, i.user.id, channel.id);
-    await i.editReply({ content: `募集しました。${d.panel.label}のお守りを持っている人に通知が届きます。` });
+    await i.editReply({ content: `募集しました。役職のある人みんなに通知が届きます。` });
     clearTimeout(this.timers.get(channel.id));
     await this.restick(channel.id);
   }

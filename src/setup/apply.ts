@@ -1,5 +1,5 @@
 import { panelMessage, type PanelKind } from '../discord/panels.js';
-import { CONTACT_SPECS, FULL, MINIMAL, OMAMORI_SPECS, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RoleKey, type Visibility } from './layout.js';
+import { CONTACT_SPECS, FULL, MINIMAL, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RecruitSpec, type RoleKey, type Visibility } from './layout.js';
 import { coreName } from '../lib/names.js';
 
 export type ApiGuild = {
@@ -72,7 +72,7 @@ export type SetupResult = {
   /** 自分の通話部屋の入口（config の tempVoice.hubs に書く） */
   hubs: { channelId: string; name: string; plan?: 'once' | 'hourly' }[];
   /** 「募集する」ボタンを置くチャンネル（config の recruit.panels に書く） */
-  recruit: { channelId: string; omamori: RoleKey; hubId?: string }[];
+  recruit: { channelId: string; spec: RecruitSpec; hubId?: string }[];
   /** 形を固定しているので作らなかったもの（配置にあって、サーバーにないもの） */
   skipped: string[];
 };
@@ -225,7 +225,7 @@ export async function applyLayout(
   if (!opts.dryRun) {
     roles = await api.roles(guildId);
     const myTop = Math.max(...roles.filter((r) => member.roles.includes(r.id)).map((r) => r.position), 0);
-    const managedByBot: RoleKey[] = ['yakudoshi', 'yoimairi', 'sodai', 'sewayaku', 'ujiko', 'sanpaisha', ...OMAMORI_SPECS().map((o) => o.key), ...SHOP_COLORS().map((c) => c.key), ...SHOP_TITLES().map((t) => t.key)];
+    const managedByBot: RoleKey[] = ['yakudoshi', 'yoimairi', 'sodai', 'sewayaku', 'ujiko', 'sanpaisha', ...SHOP_COLORS().map((c) => c.key), ...SHOP_TITLES().map((t) => t.key)];
     const above = managedByBot
       .map((k) => roles.find((r) => r.id === result.roleIds[k]))
       .filter((r): r is ApiRole => Boolean(r && r.position >= myTop))
@@ -268,7 +268,7 @@ export async function applyLayout(
   let afkChannelId: string | undefined;
   // 募集ボタンのチャンネルと、同じカテゴリの「➕ ○○をひらく」（通話にいない人への案内）
   const hubOfCategory = new Map<string, string>();
-  const recruitIn: { channelId: string; omamori: RoleKey; parentId: string }[] = [];
+  const recruitIn: { channelId: string; spec: RecruitSpec; parentId: string }[] = [];
   let prevCategoryId: string | undefined;
   for (const cat of layout.categories) {
     let parent = findCategory(channels, cat.name);
@@ -360,10 +360,10 @@ export async function applyLayout(
         result.hubs.push({ channelId: found.id, name: ch.hub, ...(ch.plan ? { plan: ch.plan } : {}) });
         hubOfCategory.set(catId, found.id);
       }
-      if (ch.recruit) recruitIn.push({ channelId: found.id, omamori: ch.recruit, parentId: catId });
+      if (ch.recruit) recruitIn.push({ channelId: found.id, spec: ch.recruit, parentId: catId });
       if (ch.panels && (isNew || opts.postPanels) && !opts.dryRun) {
         for (const kind of ch.panels as PanelKind[]) {
-          await api.sendMessage(found.id, panelMessage(kind, { omamori: omamoriConfig(result.roleIds) }));
+          await api.sendMessage(found.id, panelMessage(kind));
           result.panelsPosted.push(`#${ch.name}（${PANEL_LABEL[kind]}）`);
         }
       }
@@ -372,7 +372,7 @@ export async function applyLayout(
 
   for (const r of recruitIn) {
     const hubId = hubOfCategory.get(r.parentId);
-    result.recruit.push({ channelId: r.channelId, omamori: r.omamori, ...(hubId ? { hubId } : {}) });
+    result.recruit.push({ channelId: r.channelId, spec: r.spec, ...(hubId ? { hubId } : {}) });
   }
 
   if (afkChannelId && !guild.afk_channel_id && !opts.dryRun) {
@@ -531,7 +531,7 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
-const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', omamori: 'お守り', shop: '授与品', gender: '性別', market: '市場', contact: 'DM・フレンド', bell: '呼び鈴', gacha: '物御籤' };
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', shop: '授与品', gender: '性別', market: '市場', contact: 'DM・フレンド', bell: '呼び鈴', gacha: '物御籤' };
 
 /** 作った（見つけた）DM・フレンドのロール → config の roles.contact */
 export function contactConfig(roleIds: Partial<Record<RoleKey, string>>) {
@@ -540,20 +540,9 @@ export function contactConfig(roleIds: Partial<Record<RoleKey, string>>) {
   return out;
 }
 
-/** 作った（見つけた）お守りロール → config の roles.omamori */
-export function omamoriConfig(roleIds: Partial<Record<RoleKey, string>>) {
-  return OMAMORI_SPECS()
-    .filter((o) => roleIds[o.key])
-    .map((o) => ({ roleId: roleIds[o.key]!, label: o.label, emoji: o.emoji, description: o.description, adultOnly: o.adultOnly }));
-}
-
-/** 募集ボタンの設定（お守りのロールと、同じカテゴリの ➕ を結びつける） */
-export function recruitConfig(r: Pick<SetupResult, 'recruit' | 'roleIds'>) {
-  return r.recruit.map((p) => {
-    const o = OMAMORI_SPECS().find((x) => x.key === p.omamori)!;
-    const roleId = r.roleIds[p.omamori];
-    return { channelId: p.channelId, label: o.label, emoji: o.emoji, adultOnly: o.adultOnly, ...(roleId ? { roleId } : {}), ...(p.hubId ? { hubId: p.hubId } : {}) };
-  });
+/** 募集ボタンの設定（同じカテゴリの ➕ を結びつける） */
+export function recruitConfig(r: Pick<SetupResult, 'recruit'>) {
+  return r.recruit.map((p) => ({ channelId: p.channelId, label: p.spec.label, emoji: p.spec.emoji, adultOnly: Boolean(p.spec.adultOnly), ...(p.hubId ? { hubId: p.hubId } : {}) }));
 }
 
 /**
@@ -661,7 +650,6 @@ export function mergeIntoConfig(base: Record<string, unknown>, guildId: string, 
       guidePending: r.roleIds.guide_pending,
       merchant: r.roleIds.merchant,
       contact: contactConfig(r.roleIds),
-      omamori: omamoriConfig(r.roleIds),
     },
     ranks: ranks.map((rank) => (rank.key in r.roleIds ? { ...rank, roleId: r.roleIds[rank.key as RoleKey] } : rank)),
     // 見つからなかったもの（名前を変えたチャンネルなど）も、前の設定から消さない

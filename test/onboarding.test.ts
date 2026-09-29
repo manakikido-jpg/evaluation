@@ -7,14 +7,12 @@ import { recordJoin } from '../src/services/members.js';
 import { claimOnboarding, onboardingOf, onboardingText, onboardingTick } from '../src/services/onboarding.js';
 import { cfg as baseCfg, makeDb, ROLE } from './helpers.js';
 
-const OMAMORI = '100000000000000091';
 const NEW = '860000000000000001';
 const OLD = '860000000000000002';
 const OTHER = '860000000000000003';
 const NOW = new Date('2026-09-26T12:00:00Z');
 const cfg: GuildConfig = {
   ...baseCfg,
-  roles: { ...baseCfg.roles, omamori: [{ roleId: OMAMORI, label: '寝落ち', emoji: '🌙', description: '', adultOnly: false }] },
   economy: { ...baseCfg.economy, onboardingReward: 300 },
 };
 
@@ -39,9 +37,6 @@ const doAll = async (id: string) => {
     { memberId: id, date: '2026-09-21', vcMinutes: 6 },
     { memberId: id, date: '2026-09-22', vcMinutes: 4 },
   ]);
-  const { eq } = await import('drizzle-orm');
-  const [m] = await db.select().from(members).where(eq(members.id, id));
-  await db.update(members).set({ roleIds: [...m!.roleIds, OMAMORI] }).where(eq(members.id, id));
 };
 
 describe('はじめての参拝', () => {
@@ -51,19 +46,13 @@ describe('はじめての参拝', () => {
       ['omikuji', false],
       ['shuin', false],
       ['voice', false],
-      ['omamori', false],
     ]);
-    expect(onboardingText(cfg, p0)).toContain('（0/4）');
+    expect(onboardingText(cfg, p0)).toContain('（0/3）');
     await db.insert(activityDaily).values({ memberId: NEW, date: '2026-09-20', vcMinutes: 9 });
     expect((await onboardingOf(db, cfg, NEW)).steps.find((s) => s.key === 'voice')).toMatchObject({ done: false, hint: expect.stringContaining('9/10') });
     await doAll(NEW);
     const p = await onboardingOf(db, cfg, NEW);
     expect(p.allDone).toBe(true);
-  });
-
-  it('お守りのロールがなければ、お守りは聞かない', async () => {
-    const p = await onboardingOf(db, { ...cfg, roles: { ...cfg.roles, omamori: [] } }, NEW);
-    expect(p.steps.map((s) => s.key)).toEqual(['omikuji', 'shuin', 'voice']);
   });
 
   it('全部できたらお祝い（1 回だけ）。まだなら渡さない', async () => {

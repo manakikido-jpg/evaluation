@@ -163,7 +163,6 @@ import { CommandsPage } from './views/commands.js';
 import { commandList } from '../services/commandList.js';
 import { commandDefinitions } from '../discord/commands.js';
 import { ADMIN_RANK_KEYS, firstAutoKeyOf, RanksPage } from './views/ranks.js';
-import { syncOmamoriMentionable } from '../services/recruit.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
 import { ChannelEditPage, ChannelNewPage, ChannelsPage, type ChannelInfo } from './views/channels.js';
@@ -1590,7 +1589,6 @@ export function createWebApp(deps: WebDeps) {
               requireRank: body.recruitRequireRank === 'yes',
               blockYakudoshi: body.recruitBlockYaku === 'yes',
               newMemberDays: num('recruitNewDays'),
-              allowDirectMention: body.recruitDirect === 'yes',
               spamAlertCount: num('recruitSpamAlert'),
             },
           }
@@ -1644,8 +1642,6 @@ export function createWebApp(deps: WebDeps) {
     const after = applyOverrides(fileCfg(), overrides);
     // 投稿済みの掲示の数字（免罪符の値段など）も新しい値に書き換える
     const noticesUpdated = await syncPostedNotices({ db, cfg: after, discord: deps.discord }, before);
-    // お守りを @ で呼べるかを変えたら、Discord のロールも合わせる
-    if (before.recruit.allowDirectMention !== after.recruit.allowDirectMention) await syncOmamoriMentionable(deps.discord, after);
     await audit(db, {
       actorId: c.get('session').userId,
       action: 'settings.update',

@@ -287,9 +287,6 @@ export class AdmissionApp {
     const kind = i.options.getSubcommand();
     const channel = i.channel;
     if (!channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', ...EPHEMERAL }));
-    if (kind === 'omamori' && !this.cfg.roles.omamori.length) {
-      return void (await i.reply({ content: 'お守りのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
-    }
     if (kind === 'contact' && !CONTACT_KINDS.some((k) => contactEnabled(this.cfg, k))) {
       return void (await i.reply({ content: 'DM・フレンドのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
@@ -302,8 +299,8 @@ export class AdmissionApp {
         failed ? '置けませんでした（このチャンネルの掲示の文字数が多すぎます）。' : '🌸 このチャンネルのいちばん下に「朱印を押す」ボタンを置きました（書き込みがあると、下に出し直します）。',
       ));
     }
-    const kinds = ['apply', 'omamori', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha'] as const;
-    await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { omamori: this.cfg.roles.omamori, coinName: this.cfg.economy.currencyName }));
+    const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha'] as const;
+    await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { coinName: this.cfg.economy.currencyName }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 

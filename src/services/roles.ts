@@ -127,7 +127,6 @@ export function roleKind(cfg: GuildConfig, role: GuildRole): string | undefined 
   if (role.id === r.merchant) return '開業（市場）';
   if (r.contact && [...Object.values(r.contact.dm), ...Object.values(r.contact.friend)].includes(role.id)) return 'DM・フレンド';
   if ([...(cfg.admin?.shinshokuRoleIds ?? []), ...(cfg.admin?.gujiRoleIds ?? [])].includes(role.id)) return '運営（管理画面に入れる）';
-  if (r.omamori.some((o) => o.roleId === role.id)) return 'お守り（募集の通知）';
   if (cfg.shop.colors.some((c) => c.roleId === role.id)) return '色守り（ショップ）';
   if (cfg.shop.titles.some((t) => t.roleId === role.id)) return '称号（ショップ）';
   return undefined;

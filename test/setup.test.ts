@@ -166,16 +166,16 @@ describe('セットアップ', () => {
   it('社務所に申請ボタンを置く（2 回目は置かない）', async () => {
     const d = fakeDiscord();
     const r1 = await applyLayout(d.api, GUILD, FULL);
-    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（お守り）', '#授与所（授与品）', '#授与所（DM・フレンド）', '#市場（市場）']);
+    expect(r1.panelsPosted).toEqual(['#社務所（入鯖申請）', '#社務所（宵参り申請）', '#授与所（授与品）', '#授与所（DM・フレンド）', '#市場（市場）']);
     expect(d.messages.filter((m) => m.channelId === find(d, '社務所', 0).id)).toHaveLength(2);
-    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(3);
+    expect(d.messages.filter((m) => m.channelId === find(d, '授与所', 0).id)).toHaveLength(2);
     expect(JSON.stringify(d.messages[0]!.body)).toContain('apply:start');
     expect(JSON.stringify(d.messages[1]!.body)).toContain('yoimairi:start');
 
     const r2 = await applyLayout(d.api, GUILD, FULL);
     expect(r2.panelsPosted).toEqual([]);
     const r3 = await applyLayout(d.api, GUILD, FULL, { postPanels: true });
-    expect(r3.panelsPosted).toHaveLength(6);
+    expect(r3.panelsPosted).toHaveLength(5);
   });
 
   it('何度実行しても同じものは作らない', async () => {
@@ -393,39 +393,26 @@ describe('自分の通話部屋（➕ ○○をひらく）', () => {
   });
 });
 
-describe('お守り', () => {
-  it('役職は誰でも @ で呼べる。お守りは直接 @ できない（通知は募集ボタンから）。設定ファイルに書き、#授与所 にボタンを置く', async () => {
+describe('お守り（なくした）', () => {
+  it('役職は誰でも @ で呼べる。お守りのロール・#授与所 のお守りのボタンは作らない', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL);
-    const role = (name: string) => d.roles.find((x) => x.name === name)!;
-    const created = d.created;
-    expect(created.find((c) => c.name === '🌙 寝落ちのお守り')?.mentionable).toBe(false);
-    expect(created.find((c) => c.name === '🔰 参拝者')?.mentionable).toBe(true);
-    expect(created.every((c) => c.mentionable === !c.name.includes('のお守り'))).toBe(true);
-
+    expect(d.created.find((c) => c.name === '🔰 参拝者')?.mentionable).toBe(true);
+    expect(d.created.some((c) => c.name.includes('のお守り'))).toBe(false);
+    expect(JSON.stringify(d.messages)).not.toContain('omamori:');
     const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
-    expect(cfg.roles.omamori.map((o) => [o.label, o.adultOnly])).toEqual([
-      ['寝落ち', false],
-      ['ゲーム', false],
-      ['雑談', false],
-      ['宵宮', true],
-    ]);
-    expect(cfg.roles.omamori[0]!.roleId).toBe(role('🌙 寝落ちのお守り').id);
-
-    const panel = d.messages.find((m) => m.channelId === find(d, '授与所', 0).id)!.body as { components: { components: { custom_id: string }[] }[] };
-    expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(cfg.roles.omamori.map((o) => `omamori:${o.roleId}`));
+    expect(cfg.roles.omamori).toEqual([]);
   });
 });
 
 describe('募集ボタン', () => {
-  it('#宿帳・#縁日・#手水舎・#御神酒処 に、お守りと同じカテゴリの ➕ を結びつけて設定に書く', async () => {
+  it('#宿帳・#縁日・#手水舎・#御神酒処 に、同じカテゴリの ➕ を結びつけて設定に書く', async () => {
     const d = fakeDiscord();
     const r = await applyLayout(d.api, GUILD, FULL);
     const cfg = parseGuildConfig(mergeIntoConfig(example as Record<string, unknown>, GUILD, r));
-    const role = (name: string) => d.roles.find((x) => x.name === name)!.id;
     const byLabel = Object.fromEntries(cfg.recruit.panels.map((p) => [p.label, p]));
     expect(Object.keys(byLabel).sort()).toEqual(['ゲーム', '宵宮', '寝落ち', '雑談'].sort());
-    expect(byLabel['寝落ち']).toMatchObject({ channelId: find(d, '宿帳', 0).id, roleId: role('🌙 寝落ちのお守り'), hubId: find(d, '➕ 宿坊をひらく', 2).id });
+    expect(byLabel['寝落ち']).toMatchObject({ channelId: find(d, '宿帳', 0).id, hubId: find(d, '➕ 宿坊をひらく', 2).id });
     expect(byLabel['雑談']).toMatchObject({ channelId: find(d, '手水舎', 0).id, hubId: find(d, '➕ 縁側をひらく', 2).id });
     expect(byLabel['宵宮']).toMatchObject({ channelId: find(d, '御神酒処', 0).id, adultOnly: true, hubId: find(d, '➕ 宵宮の部屋をひらく', 2).id });
     expect(cfg.recruit.cooldownMinutes).toBe(10);
