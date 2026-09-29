@@ -223,6 +223,19 @@ export async function getMember(db: Db, id: string): Promise<Member | undefined>
   return m;
 }
 
+/** ID・ユーザー名・表示名（先頭の @ は無視）から、今いる人を 1 人に決める（2 人以上当たれば ambiguous） */
+export async function findMemberByNameOrId(db: Db, raw: string): Promise<Member | 'ambiguous' | undefined> {
+  const q = raw.trim().replace(/^@/, '');
+  if (!q) return undefined;
+  if (/^\d{17,20}$/.test(q)) return getMember(db, q);
+  const rows = await db
+    .select()
+    .from(members)
+    .where(and(isNull(members.leftAt), or(eq(members.username, q), eq(members.displayName, q))))
+    .limit(2);
+  return rows.length > 1 ? 'ambiguous' : rows[0];
+}
+
 export async function eventsOf(db: Db, id: string, limit = 50) {
   return db.select().from(memberEvents).where(eq(memberEvents.memberId, id)).orderBy(desc(memberEvents.at)).limit(limit);
 }

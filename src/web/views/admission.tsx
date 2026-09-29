@@ -1,4 +1,4 @@
-import type { GachaTier, GuildConfig } from '../../config.js';
+import { WEB_PAGES, webAccessEntries, type GachaTier, type GuildConfig, type WebAccessEntry } from '../../config.js';
 import { contactSummary } from '../../services/contact.js';
 import type { AdminSession, Application, Omairi, Soudan, SoudanMessage } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
@@ -40,6 +40,10 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   yoimairi_removed: { text: '宵参りを外しました。', kind: 'ok' },
   forbidden: { text: '宮司のみできる操作です。', kind: 'warn' },
   invalid: { text: '入力が足りません。', kind: 'warn' },
+  webaccess_not_found: { text: 'ロール・人が見つかりませんでした（人は ID・ユーザー名・表示名で入れてください）。', kind: 'warn' },
+  webaccess_ambiguous: { text: '同じ名前の人が 2 人以上います。ID で入れてください。', kind: 'warn' },
+  webaccess_no_pages: { text: 'ロールは、見られるページを 1 つ以上選んでください（外すときは「外す」）。', kind: 'warn' },
+  webaccess_removed: { text: '外しました。次に開いたときから入れなくなります。', kind: 'ok' },
 };
 
 function Flash(props: { code?: string }) {
@@ -483,8 +487,60 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['boost', '💝 ブースト（奉納）'],
   ['join', '📝 入鯖申請・お参り'],
   ['give', '🎁 今いる人に配る'],
-  ['webaccess', '🔑 社務所Web に入れるロール'],
+  ['webaccess', '🔑 社務所Web に入れる人'],
 ];
+
+/** 見られるページのチェック（「全部」は、これから増えるページも） */
+function PageChecks(props: { pages: WebAccessEntry['pages'] }) {
+  const all = props.pages.includes('*');
+  return (
+    <div class="role-checks page-checks">
+      <label class="check">
+        <input type="checkbox" name="pages" value="*" checked={all} />
+        <span>
+          <b>全部</b>（これから増えるページも）
+        </span>
+      </label>
+      {WEB_PAGES.map((p) => (
+        <label class="check">
+          <input type="checkbox" name="pages" value={p.key} checked={!all && (props.pages as string[]).includes(p.key)} />
+          <span>{p.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function WebAccessRow(props: { session: AdminSession; entry: WebAccessEntry; name: string }) {
+  const { entry } = props;
+  return (
+    <div class="webaccess-row">
+      <form method="post" action="/settings/web-access">
+        <Csrf session={props.session} />
+        <input type="hidden" name="kind" value={entry.kind} />
+        <input type="hidden" name={entry.kind === 'role' ? 'roleId' : 'member'} value={entry.id} />
+        <h3>
+          {props.name}
+          {!entry.pages.length && <small class="webaccess-off">（入れない）</small>}
+        </h3>
+        <PageChecks pages={entry.pages} />
+        <div class="inline-actions">
+          <button type="submit" class="ok">
+            保存する
+          </button>
+        </div>
+      </form>
+      <form method="post" action="/settings/web-access/remove" class="inline-actions">
+        <Csrf session={props.session} />
+        <input type="hidden" name="kind" value={entry.kind} />
+        <input type="hidden" name="id" value={entry.id} />
+        <button type="submit" class="danger">
+          外す
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export function SettingsPage(props: {
   session: AdminSession;
@@ -502,6 +558,8 @@ export function SettingsPage(props: {
   gachaStats?: { total: number; spent: number; byTier: Record<GachaTier, number>; players: number };
   /** BOT が「メンション不可」のロールも鳴らせるか（分からなければ undefined） */
   botCanMentionAll?: boolean;
+  /** 社務所Web に入れる人（人の行）の名前 */
+  webAccessNames?: Names;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -890,28 +948,53 @@ export function SettingsPage(props: {
         </section>
       </form>
       <section class="card anchor" id="sec-webaccess">
-        <h2>🔑 社務所Web に入れるロール</h2>
+        <h2>🔑 社務所Web に入れる人</h2>
         <p class="note">
-          神職・宮司のほかに、社務所Web に入れるロール（例: 神代）を選びます。選んだロールの人は、社務所Web でだけ神職と同じことができます（宮司だけのページ・Discord の運営コマンドは今のまま）。外すと、次に開いたときに入れなくなります。
+          神職・宮司のほかに社務所Web に入れる人を、ロール（例: 神代）か人で選び、見られるページを決めます。入れた人は、見られるページでは神職と同じことができます（宮司だけのページ・Discord の運営コマンドは今のまま）。
+          神職は全部のページを見られます。人で選ぶと、神職でもそのページだけになります（ページを 1 つも選ばないと、その人は入れません）。宮司はいつも全部です。変えると、次に開いたときから反映されます。
         </p>
-        <form method="post" action="/settings/web-access">
+        {webAccessEntries(cfg).length ? (
+          <div class="webaccess-list">
+            {webAccessEntries(cfg).map((entry) => (
+              <WebAccessRow session={props.session} entry={entry} name={entry.kind === 'role' ? `@${props.roles?.find((r) => r.id === entry.id)?.name ?? `ID ${entry.id}`}` : `👤 ${props.webAccessNames?.get(entry.id) ?? `ID ${entry.id}`}`} />
+            ))}
+          </div>
+        ) : (
+          <p class="note">まだだれも足していません（神職・宮司だけが入れます）。</p>
+        )}
+        <form method="post" action="/settings/web-access" class="webaccess-add">
           <Csrf session={props.session} />
-          {props.roles?.length ? (
-            <div class="role-checks">
-              {props.roles.map((r) => (
-                <label class="check">
-                  <input type="checkbox" name="roleIds" value={r.id} checked={cfg.webAccess.shinshokuRoleIds.includes(r.id)} />
-                  <span>@{r.name}</span>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <p class="note">ロールを読み込めませんでした（BOT が動いていれば、少しあとに開き直すと出ます）。</p>
-          )}
+          <h3>＋ 足す</h3>
+          <div class="chips">
+            <label class="chip">
+              <input type="radio" name="kind" value="role" checked />
+              <span>ロールで</span>
+            </label>
+            <label class="chip">
+              <input type="radio" name="kind" value="member" />
+              <span>人で</span>
+            </label>
+          </div>
+          <div class="grid2">
+            <label class="field">
+              <span>ロール（「ロールで」のとき）</span>
+              <select name="roleId">
+                <option value="">— 選ぶ —</option>
+                {(props.roles ?? []).map((r) => (
+                  <option value={r.id}>@{r.name}</option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>人（「人で」のとき。ID・ユーザー名・表示名）</span>
+              <input type="text" name="member" maxlength={100} placeholder="例: 123456789012345678" />
+            </label>
+          </div>
+          <PageChecks pages={['*']} />
           <div class="inline-actions section-save">
             {props.at === 'webaccess' && props.flash && <Flash code={props.flash} />}
             <button type="submit" class="ok">
-              保存する
+              足す
             </button>
           </div>
         </form>

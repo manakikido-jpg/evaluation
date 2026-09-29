@@ -209,7 +209,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
         s.setName('gender').setNameLocalizations({ ja: '性別' }).setDescription('Gender').setDescriptionLocalizations({ ja: '性別を選ぶボタン（前からいる方向け。#授与所 など）' }),
       )
       .addSubcommand((s) =>
-        s.setName('gacha').setNameLocalizations({ ja: '物御籤' }).setDescription('Prize lottery').setDescriptionLocalizations({ ja: '物御籤を引くボタン（#おみくじ・#授与所 用）' }),
+        s.setName('gacha').setNameLocalizations({ ja: '物御籤' }).setDescription('Prize lottery').setDescriptionLocalizations({ ja: '物御籤売り場へ入るボタン（#おみくじ・#授与所 用）' }),
       )
       .addSubcommand((s) =>
         s.setName('bell').setNameLocalizations({ ja: '呼び鈴' }).setDescription('Call staff button').setDescriptionLocalizations({ ja: '運営を呼ぶ「🔔 呼び鈴」のボタン' }),

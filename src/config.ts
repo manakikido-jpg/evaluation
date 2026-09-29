@@ -3,6 +3,41 @@ import { z } from 'zod';
 
 const snowflake = z.string().regex(/^\d{17,20}$/, 'Discord の ID（17〜20 桁の数字）を入れてください');
 
+/**
+ * 社務所Web の、人ごとに見せるかを選べるページ（宮司だけのページ・更新履歴は入れない）。
+ * prefixes: そのページの URL の 1 段目
+ */
+export const WEB_PAGES = [
+  { key: 'home', label: 'ホーム', href: '/', prefixes: [''] },
+  { key: 'stats', label: '推移', href: '/stats', prefixes: ['stats'] },
+  { key: 'voice', label: '通話の記録', href: '/voice', prefixes: ['voice'] },
+  { key: 'audit', label: '記録', href: '/audit', prefixes: ['audit'] },
+  { key: 'commands', label: 'コマンド', href: '/commands', prefixes: ['commands'] },
+  { key: 'members', label: 'メンバー', href: '/members', prefixes: ['members'] },
+  { key: 'applications', label: '申請・お参り期間', href: '/applications', prefixes: ['applications', 'omairi'] },
+  { key: 'yaku', label: '厄', href: '/yaku', prefixes: ['yaku'] },
+  { key: 'soudan', label: '相談', href: '/soudan', prefixes: ['soudan'] },
+  { key: 'temp', label: '一時的な権限', href: '/temp', prefixes: ['temp'] },
+  { key: 'invites', label: '招待', href: '/invites', prefixes: ['invites'] },
+  { key: 'interview', label: '面談告知', href: '/interview', prefixes: ['interview'] },
+  { key: 'minutes', label: '議事録', href: '/minutes', prefixes: ['minutes'] },
+  { key: 'economy', label: '経済', href: '/economy', prefixes: ['economy'] },
+  { key: 'gacha', label: '物御籤', href: '/gacha', prefixes: ['gacha'] },
+  { key: 'market', label: '市場', href: '/market', prefixes: ['market'] },
+  { key: 'board', label: '掲示板', href: '/board', prefixes: ['board'] },
+  { key: 'cast', label: 'キャスト', href: '/cast', prefixes: ['cast'] },
+  { key: 'glossary', label: '用語集', href: '/glossary', prefixes: ['glossary'] },
+] as const;
+
+export type WebPage = (typeof WEB_PAGES)[number]['key'];
+export const WEB_PAGE_KEYS = WEB_PAGES.map((p) => p.key) as [WebPage, ...WebPage[]];
+
+export const webAccessEntrySchema = z.object({
+  kind: z.enum(['role', 'member']),
+  id: snowflake,
+  pages: z.array(z.enum(['*', ...WEB_PAGE_KEYS])).max(WEB_PAGE_KEYS.length + 1),
+});
+
 export const rankSchema = z.object({
   /** プログラム内で使う名前（英小文字） */
   key: z.string().regex(/^[a-z][a-z0-9_]*$/),
@@ -462,8 +497,13 @@ export const guildConfigSchema = z
         instantBanReasons: z.array(z.string().min(1)).default(DEFAULT_INSTANT_BAN_REASONS),
       })
       .default({ yakuReasons: DEFAULT_YAKU_REASONS, instantBanReasons: DEFAULT_INSTANT_BAN_REASONS }),
-    /** 社務所Web にだけ神職と同じで入れるロール（例: 神代）。社務所Web の「設定」で選ぶ */
-    webAccess: z.object({ shinshokuRoleIds: z.array(snowflake).max(20).default([]) }).default({ shinshokuRoleIds: [] }),
+    /**
+     * 社務所Web に入れる人（社務所Web の「設定」で選ぶ）。
+     * shinshokuRoleIds: 前の形（全部のページ）。entries: ロール・人ごとに見られるページ
+     */
+    webAccess: z
+      .object({ shinshokuRoleIds: z.array(snowflake).max(20).default([]), entries: z.array(webAccessEntrySchema).max(50).default([]) })
+      .default({ shinshokuRoleIds: [], entries: [] }),
     /** 管理画面に入れるロール（省略時は役職キー shinshoku / guji のロール） */
     admin: z
       .object({
@@ -532,15 +572,48 @@ export function loadWebEnv(env: NodeJS.ProcessEnv = process.env): WebEnv {
 
 export type AdminLevel = 'shinshoku' | 'guji';
 
-/** ロールから管理画面の権限を決める（宮司が上） */
-/**
- * 社務所Web に入れるか（Discord の運営コマンドは adminLevelOf のまま）。
- * webAccess.shinshokuRoleIds のロール（例: 神代）は、社務所Web でだけ神職と同じにする
- */
-export function webLevelOf(cfg: GuildConfig, roleIds: readonly string[]): AdminLevel | undefined {
-  return adminLevelOf(cfg, roleIds) ?? (roleIds.some((id) => cfg.webAccess.shinshokuRoleIds.includes(id)) ? 'shinshoku' : undefined);
+/** URL のパスが、選べるページのどれか（選べないページ・ログインなどは undefined = だれでも通す） */
+export function webPageOf(path: string): WebPage | undefined {
+  const first = path.split('/')[1] ?? '';
+  return WEB_PAGES.find((p) => (p.prefixes as readonly string[]).includes(first))?.key;
 }
 
+/** 社務所Web に入れる人（role: そのロールの人 / member: その人だけ）。pages の '*' は「全部（これから増えるページも）」 */
+export type WebAccessEntry = { kind: 'role' | 'member'; id: string; pages: (WebPage | '*')[] };
+
+/** 前の「ロールを選ぶだけ」の分も、全部のページの行として並べる */
+export function webAccessEntries(cfg: GuildConfig): WebAccessEntry[] {
+  const legacy = cfg.webAccess.shinshokuRoleIds
+    .filter((id) => !cfg.webAccess.entries.some((e) => e.kind === 'role' && e.id === id))
+    .map((id) => ({ kind: 'role' as const, id, pages: ['*' as const] }));
+  return [...legacy, ...cfg.webAccess.entries];
+}
+
+/** pages: 見られるページ（null は全部） */
+export type WebAccess = { level: AdminLevel; pages: WebPage[] | null };
+
+/**
+ * 社務所Web に入れるか・どのページを見られるか（Discord の運営コマンドは adminLevelOf のまま）。
+ * 宮司: 全部。人を指定した行があれば、神職でもその行のページだけ（1 つもなければ入れない）。
+ * 神職: 全部。そのほか、ロールの行に当たる人は神職と同じで、当たった行のページを合わせたもの
+ */
+export function webAccessOf(cfg: GuildConfig, userId: string, roleIds: readonly string[]): WebAccess | undefined {
+  const admin = adminLevelOf(cfg, roleIds);
+  if (admin === 'guji') return { level: 'guji', pages: null };
+  const entries = webAccessEntries(cfg);
+  const pagesOf = (list: WebAccessEntry[]): WebPage[] | null =>
+    list.some((e) => e.pages.includes('*')) ? null : WEB_PAGE_KEYS.filter((k) => list.some((e) => e.pages.includes(k)));
+  const mine = entries.find((e) => e.kind === 'member' && e.id === userId);
+  if (mine) {
+    const pages = pagesOf([mine]);
+    return pages?.length === 0 ? undefined : { level: 'shinshoku', pages };
+  }
+  if (admin) return { level: admin, pages: null };
+  const hits = entries.filter((e) => e.kind === 'role' && roleIds.includes(e.id) && e.pages.length);
+  return hits.length ? { level: 'shinshoku', pages: pagesOf(hits) } : undefined;
+}
+
+/** ロールから管理画面の権限を決める（宮司が上） */
 export function adminLevelOf(cfg: GuildConfig, roleIds: readonly string[]): AdminLevel | undefined {
   const byKey = (key: string) => cfg.ranks.filter((r) => r.key === key).map((r) => r.roleId);
   const guji = cfg.admin?.gujiRoleIds.length ? cfg.admin.gujiRoleIds : byKey('guji');

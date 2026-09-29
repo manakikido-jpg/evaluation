@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, type GuildConfig } from '../config.js';
+import { coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -61,8 +61,8 @@ export const overridesSchema = z.object({
   market: marketSchema.partial().default({}),
   /** 自動で増える通話（送られたときは全部置きかえる） */
   voiceGroups: z.array(voiceGroupSchema).max(10).optional(),
-  /** 社務所Web にだけ神職と同じで入れるロール（例: 神代） */
-  webAccess: z.object({ shinshokuRoleIds: z.array(z.string().regex(/^\d{17,20}$/)).max(20) }).partial().default({}),
+  /** 社務所Web に入れる人（shinshokuRoleIds: 前の形・全部のページ / entries: ロール・人ごとに見られるページ） */
+  webAccess: z.object({ shinshokuRoleIds: z.array(z.string().regex(/^\d{17,20}$/)).max(20), entries: z.array(webAccessEntrySchema).max(50) }).partial().default({}),
   voiceChat: voiceChatSchema.partial().default({}),
   /** 呼び鈴（channelId を空にすると #記録 へ） */
   bell: bellSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),

@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelType,
   MessageFlags,
   ModalBuilder,
   StringSelectMenuBuilder,
@@ -27,6 +28,7 @@ import {
   effectiveRates,
   ensureGachaPrizes,
   inPeriod,
+  firstFreeLeft,
   gachaStateOf,
   listPrizes,
   prizeChances,
@@ -57,6 +59,7 @@ import { customHoldingsOf, customName, listCustomTickets, useCustom } from '../s
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket } from '../services/tickets.js';
 import { omikujiEmbed } from './omikuji.js';
+import { panelMessage } from './panels.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -158,7 +161,7 @@ export function gachaFeatured(g: GachaConfig, prizes: GachaPrizeRow[], names: Na
   return { title: '✨ 今の目玉', description: lines.join('\n').slice(0, 4000), color: supers.length ? TIER_LABEL.super.color : TIER_LABEL.daikichi.color };
 }
 
-/** /物御籤 と「物御籤を引く」: 値段・割合・中身・天井と、引くボタン（本人にだけ） */
+/** /物御籤 と「物御籤売り場へ入る」: 値段・割合・中身・天井と、引くボタン（本人にだけ） */
 export function gachaMenu(
   g: GachaConfig,
   prizes: GachaPrizeRow[],
@@ -172,6 +175,8 @@ export function gachaMenu(
     zodiac?: string[];
     /** 期間限定の物御籤セール（g.price はもう引いた値段） */
     sale?: { percent: number; original: number };
+    /** はじめての 1 回（無料）がまだ使える */
+    firstFree?: boolean;
   },
   coin: string,
 ) {
@@ -181,6 +186,7 @@ export function gachaMenu(
   const featured = gachaFeatured(g, prizes, names);
   // 運勢ごとの中身は長くなるので出さない（割合だけ 1 行。中身は「📜 中身と排出率」、目玉は上のカード）
   const lines = [
+    ...(s.firstFree ? ['🎉 **はじめての 1 回は無料！** 「はじめての 1 回（無料）」で引けます', ''] : []),
     ...(s.sale ? [`🎉 **期間限定セール中！** ${s.sale.percent}% 引き（ふだんは 1 回 ${fmt(s.sale.original)} 枚）`] : []),
     `1 回 **${fmt(g.price)}** 枚 ／ 10 連 **${fmt(g.price * 10)}** 枚（${coin}。本物のお金は使いません）`,
     '',
@@ -219,19 +225,14 @@ export function gachaMenu(
     ...(usable ? [new ButtonBuilder().setCustomId('gacha:use').setLabel('券を使う').setEmoji('🎟').setStyle(ButtonStyle.Secondary)] : []),
     new ButtonBuilder().setCustomId('gacha:rates').setLabel('中身と排出率').setEmoji('📜').setStyle(ButtonStyle.Secondary),
   );
-  // 🌟 金の10連券（1 行目はボタンがいっぱいなので 2 行目に）
-  const gold =
-    s.tickets.gacha_gold10 > 0
-      ? [
-          new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder()
-              .setCustomId('gacha:draw:gold')
-              .setLabel(`金の10連券で引く（${s.tickets.gacha_gold10} 枚）`)
-              .setEmoji('🌟')
-              .setStyle(ButtonStyle.Success),
-          ),
-        ]
-      : [];
+  // 🎉 はじめての 1 回・🌟 金の10連券（1 行目はボタンがいっぱいなので 2 行目に）
+  const extra = [
+    ...(s.firstFree ? [new ButtonBuilder().setCustomId('gacha:draw:first').setLabel('はじめての 1 回（無料）').setEmoji('🎉').setStyle(ButtonStyle.Success)] : []),
+    ...(s.tickets.gacha_gold10 > 0
+      ? [new ButtonBuilder().setCustomId('gacha:draw:gold').setLabel(`金の10連券で引く（${s.tickets.gacha_gold10} 枚）`).setEmoji('🌟').setStyle(ButtonStyle.Success)]
+      : []),
+  ];
+  const gold = extra.length ? [new ActionRowBuilder<ButtonBuilder>().addComponents(...extra)] : [];
   return {
     embeds: [...(featured ? [featured] : []), { title: '🎁 物御籤', description: lines.join('\n').slice(0, 4000), color: 0xd7003a }],
     components: [row, ...gold],
@@ -307,6 +308,31 @@ export class GachaApp {
     this.guild = guild;
   }
 
+  /**
+   * 置いてある「物御籤」のボタンの案内を、今の文に書き換える（ボタンの名前を変えたとき用。同じなら何もしない）。
+   * 見るのは #おみくじ・#授与所 の最近の BOT の書き込みだけ
+   */
+  async refreshPanels(guild: Guild): Promise<number> {
+    const cfg = this.cfg();
+    const next = panelMessage('gacha', { coinName: cfg.economy.currencyName });
+    const label = next.components[0]?.components.find((b) => b.custom_id === 'gacha:open')?.label;
+    let edited = 0;
+    const places = guild.channels.cache.filter((c) => c.type === ChannelType.GuildText && (c.id === cfg.channels.omikuji || c.name.includes('おみくじ') || c.name.includes('授与所')));
+    for (const ch of places.values()) {
+      if (ch.type !== ChannelType.GuildText) continue;
+      const msgs = await ch.messages.fetch({ limit: 50 }).catch(() => undefined);
+      for (const m of msgs?.values() ?? []) {
+        if (m.author.id !== guild.client.user.id) continue;
+        const rows = m.components.map((row) => row.toJSON()) as { components?: { custom_id?: string; label?: string }[] }[];
+        const open = rows.flatMap((row) => row.components ?? []).find((b) => b.custom_id === 'gacha:open');
+        if (!open) continue;
+        if (open.label === label && m.embeds[0]?.title === next.embeds[0]?.title) continue;
+        await m.edit(next).then(() => edited++).catch((err: unknown) => logger.warn({ err, channelId: ch.id }, 'gacha panel refresh failed'));
+      }
+    }
+    return edited;
+  }
+
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     const id = 'customId' in interaction ? interaction.customId : '';
@@ -315,6 +341,7 @@ export class GachaApp {
       if (interaction.isButton() && id === 'gacha:open') return await this.menu(interaction);
       if (interaction.isButton() && id === 'gacha:draw:free') return await this.draw(interaction, 1, 'free');
       if (interaction.isButton() && id === 'gacha:draw:gold') return await this.draw(interaction, 10, 'gold');
+      if (interaction.isButton() && id === 'gacha:draw:first') return await this.draw(interaction, 1, 'first');
       if (interaction.isButton() && id.startsWith('gacha:draw:')) return await this.draw(interaction, Number(id.split(':')[2]));
       if (interaction.isButton() && id === 'gacha:use') return await this.useMenu(interaction);
       if (interaction.isButton() && id === 'gacha:rates') return await this.ratesView(interaction);
@@ -360,29 +387,35 @@ export class GachaApp {
   private async menu(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<void> {
     const g = this.shown();
     if (!g.enabled) return void (await i.reply({ content: '物御籤は今お休みしています。', ...EPHEMERAL }));
-    const [w, st, tickets, buffs, p, custom] = await Promise.all([
+    const [w, st, tickets, buffs, p, custom, firstFree] = await Promise.all([
       walletOf(this.db, i.user.id),
       gachaStateOf(this.db, i.user.id),
       ticketsOf(this.db, i.user.id),
       buffsOf(this.db, i.user.id),
       this.prizes(i),
       customHoldingsOf(this.db, i.user.id),
+      firstFreeLeft(this.db, i.user.id),
     ]);
     const zodiac = await collectionOf(this.db, i.user.id);
-    await i.reply({ ...gachaMenu(g, p.prizes, p.names, { balance: w.balance, sinceTop: st.sinceTop, tickets, buffs, custom, zodiac, sale: this.sale() }, this.coin()), ...EPHEMERAL });
+    await i.reply({
+      ...gachaMenu(g, p.prizes, p.names, { balance: w.balance, sinceTop: st.sinceTop, tickets, buffs, custom, zodiac, sale: this.sale(), firstFree }, this.coin()),
+      ...EPHEMERAL,
+    });
   }
 
-  private async draw(i: ButtonInteraction<'cached'>, times: number, ticket?: 'free' | 'gold'): Promise<void> {
+  private async draw(i: ButtonInteraction<'cached'>, times: number, ticket?: 'free' | 'gold' | 'first'): Promise<void> {
     const free = ticket === 'free';
     const gold = ticket === 'gold';
+    const first = ticket === 'first';
     if (times !== 1 && times !== 10) return;
     const cfg = this.cfg();
     const g = cfg.gacha;
     if (!g.enabled) return void (await i.reply({ content: '物御籤は今お休みしています。', ...EPHEMERAL }));
     await i.deferReply(EPHEMERAL);
-    const r = await drawGacha(this.db, g, i.user.id, times, [...i.member.roles.cache.keys()], Math.random, new Date(), { free, gold, salePercent: cfg.economy.gachaSalePercent });
+    const r = await drawGacha(this.db, g, i.user.id, times, [...i.member.roles.cache.keys()], Math.random, new Date(), { free, gold, first, salePercent: cfg.economy.gachaSalePercent });
     if (r.status === 'disabled') return void (await i.editReply('物御籤は今お休みしています。'));
-    if (r.status === 'no_ticket') return void (await i.editReply(gold ? '🌟 金の10連券がありません。' : '🎫 物御籤の無料券がありません。'));
+    if (r.status === 'no_ticket')
+      return void (await i.editReply(first ? '🎉 はじめての 1 回は、もう使っています。' : gold ? '🌟 金の10連券がありません。' : '🎫 物御籤の無料券がありません。'));
     if (r.status === 'empty') return void (await i.editReply(`いま出せる中身がありません（持っていないものが残っていません）。${cfg.economy.currencyName}は減っていません。`));
     if (r.status === 'insufficient') return void (await i.editReply(`${cfg.economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。`));
 
@@ -405,6 +438,7 @@ export class GachaApp {
       ...r.pulls.map((p) => pullLine(p, roleName, cfg.economy.currencyName)),
       '',
       ...(free ? ['-# 🎫 物御籤の無料券を 1 枚使いました'] : []),
+      ...(first ? ['-# 🎉 はじめての 1 回（無料）で引きました'] : []),
       ...(gold ? [`-# 🌟 金の10連券を 1 枚使いました${r.pulls.some((x) => x.guaranteed) ? '（最後の 1 回は大吉以上が確定）' : ''}`] : []),
       ...(lucky ? [`-# 🍀 運気アップの札が ${lucky} 回効きました`] : []),
       ...(r.refunded > 0 ? [`↩️ 出せる中身がなくなったので、${r.refunded} 回分を払い戻しました。`, ''] : []),

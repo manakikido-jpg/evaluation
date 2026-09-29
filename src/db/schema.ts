@@ -100,6 +100,8 @@ export const adminSessions = pgTable('admin_sessions', {
   avatarUrl: text('avatar_url'),
   /** shinshoku / guji */
   level: text('level').notNull(),
+  /** 見られるページ（null は全部。社務所Web の「設定」で人・ロールごとに選ぶ） */
+  pages: text('pages').array(),
   csrfToken: text('csrf_token').notNull(),
   /** 最後に Discord のロールを確認した日時 */
   checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
@@ -685,6 +687,12 @@ export const gachaState = pgTable('gacha_state', {
   sinceTop: integer('since_top').notNull().default(0),
   total: integer('total').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 物御籤の「はじめての 1 回は無料」を使った人（物御籤のリセットでも消さない。出直しても 1 回だけ） */
+export const gachaFirstFree = pgTable('gacha_first_free', {
+  memberId: text('member_id').primaryKey(),
+  usedAt: timestamp('used_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /** 持っている券（部屋代無料・絵馬のピン留め・市場の手数料なし） */

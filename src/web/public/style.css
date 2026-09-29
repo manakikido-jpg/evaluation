@@ -706,3 +706,11 @@ ul.decisions li { margin: 4px 0; }
 .only-perm { display: grid; gap: 12px; }
 @media (max-width: 700px) { .temp-row { flex-wrap: wrap; } .temp-row .ch-actions { width: 100%; justify-content: flex-start; } }
 .cast-menu-preview { display: block; max-width: min(100%, 420px); height: auto; border-radius: 10px; border: 1px solid var(--line); margin: 8px 0; }
+/* 社務所Web に入れる人 */
+.webaccess-list { display: grid; gap: 10px; margin-bottom: 14px; }
+.webaccess-row { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+.webaccess-row h3 { margin: 0 0 6px; font-size: 1rem; }
+.webaccess-off { color: var(--shu-dark); font-weight: 600; }
+.page-checks { max-height: none; margin: 8px 0; }
+.webaccess-add { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 8px; }
+@media (max-width: 700px) { .webaccess-add .grid2 { grid-template-columns: 1fr; } }

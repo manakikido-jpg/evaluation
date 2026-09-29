@@ -7,7 +7,7 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
-import { adminLevelOf, webLevelOf, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
+import { adminLevelOf, webAccessOf, webAccessEntries, webPageOf, WEB_PAGES, WEB_PAGE_KEYS, type WebAccessEntry, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
 import {
   createPrize,
   deletePrize,
@@ -56,7 +56,7 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
-import { eventsOf, getMember, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
+import { eventsOf, findMemberByNameOrId, getMember, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
@@ -66,7 +66,7 @@ import type { DiscordActions } from '../lib/discordRest.js';
 import { DiscordHttpError } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
-import { createSession, deleteSession, findSession, markChecked, randomToken, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
+import { createSession, deleteSession, findSession, markChecked, randomToken, recheckAllSessions, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
 
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
 const RECHECK_GRACE_MS = 30 * 60_000;
@@ -317,13 +317,13 @@ export function createWebApp(deps: WebDeps) {
       return c.redirect('/login?e=failed');
     }
 
-    const level = roles ? webLevelOf(cfg, roles) : undefined;
-    if (!level) {
+    const access = roles ? webAccessOf(cfg, user.id, roles) : undefined;
+    if (!access) {
       const [last] = await listAudit(db, { actorId: user.id, action: 'auth.denied', limit: 1 });
       if (!last || now().getTime() - last.at.getTime() > 3_600_000) await audit(db, { actorId: user.id, action: 'auth.denied', via: 'web' });
       return c.redirect('/login?e=forbidden');
     }
-    const token = await createSession(db, user, level, now());
+    const token = await createSession(db, user, access, now());
     setCookie(c, SESSION_COOKIE, token, {
       httpOnly: true,
       secure,
@@ -331,7 +331,7 @@ export function createWebApp(deps: WebDeps) {
       path: '/',
       maxAge: SESSION_HOURS * 3600,
     });
-    await audit(db, { actorId: user.id, action: 'auth.login', detail: { level }, via: 'web' });
+    await audit(db, { actorId: user.id, action: 'auth.login', detail: { level: access.level, ...(access.pages ? { pages: access.pages } : {}) }, via: 'web' });
     return c.redirect('/');
   });
 
@@ -359,17 +359,26 @@ export function createWebApp(deps: WebDeps) {
         c.set('session', await withUpdates(session));
         return next();
       }
-      const level = roles ? webLevelOf(cfg, roles) : undefined;
-      if (!level) {
+      const access = roles ? webAccessOf(cfg, session.userId, roles) : undefined;
+      if (!access) {
         await deleteSession(db, session.id);
         await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
         deleteCookie(c, SESSION_COOKIE, { path: '/' });
         return toLogin(c, 'forbidden');
       }
-      await markChecked(db, session.id, level, now());
-      session.level = level;
+      await markChecked(db, session.id, access, now());
+      session.level = access.level;
+      session.pages = access.pages;
     }
     c.set('session', await withUpdates(session));
+    // 見られるページを選ばれている人は、ほかのページに入れない（ホームがなければ最初のページへ）
+    const page = webPageOf(c.req.path);
+    if (page && session.pages && !session.pages.includes(page)) {
+      const first = WEB_PAGES.find((p) => session.pages!.includes(p.key));
+      if (page === 'home' && c.req.method === 'GET') return c.redirect(first?.href ?? '/updates');
+      if (c.req.method !== 'GET') return c.text('このページは開けません。', 403);
+      return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    }
     await next();
   };
 
@@ -1510,6 +1519,7 @@ export function createWebApp(deps: WebDeps) {
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         gachaStats={await gachaStats(db)}
         botCanMentionAll={botCanMentionAll}
+        webAccessNames={await namesOf(db, webAccessEntries(cfg).filter((e) => e.kind === 'member').map((e) => e.id))}
       />,
     );
   });
@@ -1675,18 +1685,52 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect('/settings?msg=coins_all_given');
   });
 
-  // 社務所Web に入れるロール（例: 神代。社務所Web でだけ神職と同じ）
+  // 社務所Web に入れる人（ロール・人ごとに、見られるページを選ぶ）
+  const saveWebAccess = async (c: Context<Env>, entries: WebAccessEntry[], detail: Record<string, unknown>) => {
+    const prev = await loadOverrides(db);
+    await saveOverrides(db, { ...prev, webAccess: { shinshokuRoleIds: [], entries } }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    // 次に開いたときに、全員の入れる・見られるページを確かめ直す
+    await recheckAllSessions(db);
+    await audit(db, { actorId: c.get('session').userId, action: 'settings.web_access', detail, via: 'web' });
+  };
+  const webAccessBack = (msg: string) => `/settings?msg=${msg}&at=webaccess#sec-webaccess`;
+
   app.post('/settings/web-access', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody({ all: true });
-    const raw = body.roleIds === undefined ? [] : Array.isArray(body.roleIds) ? body.roleIds : [body.roleIds];
-    const roles = (await loadRoles()) ?? [];
-    const ids = [...new Set(raw.filter((v): v is string => typeof v === 'string' && roles.some((r) => r.id === v && r.id !== cfg.guildId && !r.managed)))].slice(0, 20);
-    const prev = await loadOverrides(db);
-    await saveOverrides(db, { ...prev, webAccess: { shinshokuRoleIds: ids } }, c.get('session').userId);
-    await deps.onSettingsSaved?.();
-    await audit(db, { actorId: c.get('session').userId, action: 'settings.web_access', detail: { roleIds: ids }, via: 'web' });
-    return c.redirect('/settings?msg=saved&at=webaccess#sec-webaccess');
+    const kind = body.kind === 'member' ? 'member' : 'role';
+    let id: string | undefined;
+    if (kind === 'role') {
+      const roles = (await loadRoles()) ?? [];
+      const v = field(body, 'roleId');
+      id = roles.some((r) => r.id === v && r.id !== cfg.guildId && !r.managed) ? v : undefined;
+    } else {
+      const found = await findMemberByNameOrId(db, field(body, 'member', 100) ?? '');
+      if (found === 'ambiguous') return c.redirect(webAccessBack('webaccess_ambiguous'));
+      id = found?.id;
+    }
+    if (!id) return c.redirect(webAccessBack('webaccess_not_found'));
+    const raw = body.pages === undefined ? [] : Array.isArray(body.pages) ? body.pages : [body.pages];
+    const picked = raw.filter((v): v is string => typeof v === 'string');
+    const pages: WebAccessEntry['pages'] = picked.includes('*') ? ['*'] : WEB_PAGE_KEYS.filter((k) => picked.includes(k));
+    // ロールでページなしは意味がない（人は「神職でも入れない」にできる）
+    if (kind === 'role' && !pages.length) return c.redirect(webAccessBack('webaccess_no_pages'));
+    const rest = webAccessEntries(cfg).filter((e) => !(e.kind === kind && e.id === id));
+    if (rest.length >= 50) return c.redirect(webAccessBack('invalid'));
+    await saveWebAccess(c, [...rest, { kind, id, pages }], { kind, id, pages });
+    return c.redirect(webAccessBack('saved'));
+  });
+
+  app.post('/settings/web-access/remove', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const kind = body.kind === 'member' ? 'member' : 'role';
+    const id = field(body, 'id');
+    const entries = webAccessEntries(cfg);
+    if (!id || !entries.some((e) => e.kind === kind && e.id === id)) return c.redirect(webAccessBack('invalid'));
+    await saveWebAccess(c, entries.filter((e) => !(e.kind === kind && e.id === id)), { kind, id, removed: true });
+    return c.redirect(webAccessBack('webaccess_removed'));
   });
 
   app.post('/settings/reset', async (c) => {

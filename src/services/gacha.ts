@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm
 import { salePrice } from './economyEvents.js';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { gachaClaims, gachaCollection, gachaDraws, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem, type CustomTicket } from '../db/schema.js';
+import { gachaClaims, gachaCollection, gachaDraws, gachaFirstFree, gachaPrizes, gachaState, settings, shopItems, shopPurchases, type GachaClaim, type GachaDraw, type GachaPrizeRow, type ShopItem, type CustomTicket } from '../db/schema.js';
 import { addCoins, deductUpTo, spendWithin, walletOf } from './economy.js';
 import { grantRoleItem } from './shop.js';
 import { takeLuck } from './buffs.js';
@@ -10,7 +10,7 @@ import { addCustom, customName, listCustomTickets, takeCustom } from './customTi
 import { addTickets, takeTickets, TICKET_LABEL, ticketsOf, useTicket } from './tickets.js';
 
 /**
- * 物御籤（もつみくじ）: 花びらで引くくじ。本物のお金は扱わない。
+ * 物御籤（ものみくじ）: 花びらで引くくじ。本物のお金は扱わない。
  * 運勢（大吉・中吉・小吉・吉）を出やすさで決め、その運勢の中身（限定ロール・券・花びら・ショップの品）から重みで 1 つ出す。
  * 中身は社務所Web の「物御籤」で足す・変える・止める（gacha_prizes）。
  * 大吉が出ないまま決めた回数目（天井）は必ず大吉。
@@ -256,10 +256,14 @@ export async function drawGacha(
   heldRoleIds: readonly string[],
   rand: Rand = Math.random,
   now = new Date(),
-  /** free: 物御籤の無料券で 1 回。gold: 金の10連券で 10 連（1 回は大吉以上が確定）。どちらも銭は払わない */
-  opts: { free?: boolean; gold?: boolean; salePercent?: number } = {},
+  /**
+   * free: 物御籤の無料券で 1 回。gold: 金の10連券で 10 連（1 回は大吉以上が確定）。
+   * first: はじめての 1 回（無料。1 人 1 回だけ）。どれも銭は払わない
+   */
+  opts: { free?: boolean; gold?: boolean; first?: boolean; salePercent?: number } = {},
 ): Promise<GachaResult> {
-  if (!g.enabled || !Number.isInteger(times) || times < 1 || times > 10 || (opts.free && times !== 1) || (opts.gold && (times !== 10 || opts.free)))
+  const kinds = [opts.free, opts.gold, opts.first].filter(Boolean).length;
+  if (!g.enabled || !Number.isInteger(times) || times < 1 || times > 10 || kinds > 1 || ((opts.free || opts.first) && times !== 1) || (opts.gold && times !== 10))
     return { status: 'disabled' };
   await ensureGachaPrizes(db, g);
   const prizes = await listPrizes(db);
@@ -277,11 +281,14 @@ export async function drawGacha(
     return GACHA_TIERS.some((t) => rates[t] > 0) ? rates : undefined;
   };
   if (!available()) return { status: 'empty' };
-  const unit = opts.free || opts.gold ? 0 : gachaUnitPrice(g, opts.salePercent ?? 0);
+  const unit = opts.free || opts.gold || opts.first ? 0 : gachaUnitPrice(g, opts.salePercent ?? 0);
   const price = unit * times;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'gacha:' + memberId}))`);
-    if (opts.free || opts.gold) {
+    if (opts.first) {
+      const [used] = await tx.insert(gachaFirstFree).values({ memberId, usedAt: now }).onConflictDoNothing().returning();
+      if (!used) return { status: 'no_ticket' as const };
+    } else if (opts.free || opts.gold) {
       if (!(await useTicket(tx, memberId, opts.gold ? 'gacha_gold10' : 'gacha_free'))) return { status: 'no_ticket' as const };
     } else if (!(await spendWithin(tx, memberId, price, 'gacha', { times }))) return { status: 'insufficient' as const, price, balance: (await walletOf(tx, memberId)).balance };
     const [state] = await tx.select().from(gachaState).where(eq(gachaState.memberId, memberId));
@@ -361,6 +368,7 @@ export async function drawGacha(
     const refunded = times - pulls.length;
     if (refunded > 0 && unit > 0) await addCoins(tx, memberId, refunded * unit, 'gacha_refund', { times: refunded });
     if (refunded > 0 && opts.free) await addTickets(tx, memberId, 'gacha_free', 1);
+    if (refunded > 0 && opts.first) await tx.delete(gachaFirstFree).where(eq(gachaFirstFree.memberId, memberId));
     // 金の10連券: 1 回も引けなければ券を戻す。途中までなら、足りない回数分の無料券
     if (refunded > 0 && opts.gold) await addTickets(tx, memberId, pulls.length === 0 ? 'gacha_gold10' : 'gacha_free', pulls.length === 0 ? 1 : refunded);
     const total = (state?.total ?? 0) + pulls.length;
@@ -388,6 +396,12 @@ export async function drawGacha(
     );
     return { status: 'ok' as const, pulls, balance: (await walletOf(tx, memberId)).balance, sinceTop, total, tickets: await ticketsOf(tx, memberId), refunded };
   });
+}
+
+/** はじめての 1 回（無料）がまだ使えるか */
+export async function firstFreeLeft(db: Db, memberId: string): Promise<boolean> {
+  const [row] = await db.select({ id: gachaFirstFree.memberId }).from(gachaFirstFree).where(eq(gachaFirstFree.memberId, memberId));
+  return !row;
 }
 
 /** 自分の回数（天井まであと何回） */

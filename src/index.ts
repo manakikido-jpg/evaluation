@@ -144,6 +144,8 @@ async function main(): Promise<void> {
     board.attach(guild);
     cast.attach(guild);
     gacha.attach(guild);
+    // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
+    await gacha.refreshPanels(guild).catch((err) => logger.warn({ err }, 'gacha panels refresh failed'));
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // ブースト: 止まっていた間の「ブーストしました」を拾う

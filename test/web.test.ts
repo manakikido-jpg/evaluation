@@ -2339,9 +2339,9 @@ describe('キャスト（管理画面）', () => {
   });
 });
 
-describe('社務所Web に入れるロール（神代など）', () => {
-  it('宮司が選んだロールの人は、社務所Web でだけ神職と同じに入れる。外すと入れない', async () => {
-    const { ConfigStore } = await import('../src/services/settings.js');
+describe('社務所Web に入れる人（ロール・人ごとに見られるページ）', () => {
+  it('ロールで足した人は、選んだページだけ。人で選ぶと神職でも絞れる。ページなしは入れない', async () => {
+    const { ConfigStore, loadOverrides } = await import('../src/services/settings.js');
     const store = new ConfigStore(db, cfg);
     await store.refresh();
     app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
@@ -2352,26 +2352,71 @@ describe('社務所Web に入れるロール（神代など）', () => {
       { id: KAMISHIRO_ROLE, name: '神代', position: 3, managed: false, color: 0, permissions: '0' },
     ];
     roles.set(KAMISHIRO, [KAMISHIRO_ROLE]);
+    await recordJoin(db, { id: STAFF, username: 'staff', displayName: '神職さん', avatarUrl: null, roleIds: [ROLE.shinshoku], isBot: false, joinedAt: null });
     try {
       expect(await login(KAMISHIRO)).toBe('');
       const g = await login(GUJI);
-      expect(await (await get('/settings', g)).text()).toContain('社務所Web に入れるロール');
+      expect(await (await get('/settings', g)).text()).toContain('社務所Web に入れる人');
       const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', g)).text())![1]!;
-      const r = await app.request('/settings/web-access', {
-        method: 'POST',
-        headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ _csrf: csrf, roleIds: KAMISHIRO_ROLE }).toString(),
-      });
-      expect(r.headers.get('location')).toBe('/settings?msg=saved&at=webaccess#sec-webaccess');
-      expect(store.current.webAccess.shinshokuRoleIds).toEqual([KAMISHIRO_ROLE]);
+      const post = async (path: string, data: [string, string][]) =>
+        (
+          await app.request(path, {
+            method: 'POST',
+            headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams([['_csrf', csrf], ...data]).toString(),
+          })
+        ).headers.get('location');
+      const back = (msg: string) => `/settings?msg=${msg}&at=webaccess#sec-webaccess`;
+      // ロール: ページなしは足せない
+      expect(await post('/settings/web-access', [['kind', 'role'], ['roleId', KAMISHIRO_ROLE]])).toBe(back('webaccess_no_pages'));
+      expect(await post('/settings/web-access', [['kind', 'role'], ['roleId', KAMISHIRO_ROLE], ['pages', 'members'], ['pages', 'board'], ['pages', 'nope']])).toBe(back('saved'));
+      expect(store.current.webAccess.entries).toEqual([{ kind: 'role', id: KAMISHIRO_ROLE, pages: ['members', 'board'] }]);
       const k = await login(KAMISHIRO);
       expect(k).not.toBe('');
+      // ホームは選んでいないので、最初のページへ
+      const home = await get('/', k);
+      expect(home.status).toBe(302);
+      expect(home.headers.get('location')).toBe('/members');
       expect((await get('/members', k)).status).toBe(200);
+      expect((await get(`/members/${USER}`, k)).status).toBe(200);
+      expect((await get('/board', k)).status).toBe(200);
+      expect((await get('/economy', k)).status).toBe(403);
+      expect((await get('/omairi', k)).status).toBe(403);
+      expect((await get('/updates', k)).status).toBe(200);
       // 宮司だけのページは入れない
       expect((await get('/shop', k)).status).toBe(403);
+      // メニューにも選んだページだけ
+      const menu = await (await get('/members', k)).text();
+      expect(menu).toContain('href="/board"');
+      expect(menu).not.toContain('href="/economy"');
+      expect(menu).not.toContain('href="/audit"');
+
+      // 人で: 名前でも選べる。神職でも、選んだページだけになる（ログイン中の人も次に開いたときから）
+      const s = await login(STAFF);
+      expect((await get('/audit', s)).status).toBe(200);
+      expect(await post('/settings/web-access', [['kind', 'member'], ['member', 'だれでもない']])).toBe(back('webaccess_not_found'));
+      expect(await post('/settings/web-access', [['kind', 'member'], ['member', '@神職さん'], ['pages', 'economy']])).toBe(back('saved'));
+      expect((await get('/audit', s)).status).toBe(403);
+      expect((await get('/economy', s)).status).toBe(200);
+      // 役職のない人も、人で足せば入れる
+      expect(await login(USER)).toBe('');
+      expect(await post('/settings/web-access', [['kind', 'member'], ['member', 'sakura'], ['pages', '*'], ['pages', 'board']])).toBe(back('saved'));
+      const u = await login(USER);
+      expect(u).not.toBe('');
+      expect((await get('/', u)).status).toBe(200);
+      // ページなしの人は、神職でも入れない
+      expect(await post('/settings/web-access', [['kind', 'member'], ['member', STAFF]])).toBe(back('saved'));
+      expect((await get('/economy', s)).status).toBe(302);
+      expect(await login(STAFF)).toBe('');
+      // 外すと神職は元どおり
+      expect(await post('/settings/web-access/remove', [['kind', 'member'], ['id', STAFF]])).toBe(back('webaccess_removed'));
+      expect((await get('/audit', await login(STAFF))).status).toBe(200);
       // ほかの設定を保存しても消えない
-      const { loadOverrides } = await import('../src/services/settings.js');
-      expect((await loadOverrides(db)).webAccess.shinshokuRoleIds).toEqual([KAMISHIRO_ROLE]);
+      expect((await loadOverrides(db)).webAccess.entries).toEqual([
+        { kind: 'role', id: KAMISHIRO_ROLE, pages: ['members', 'board'] },
+        { kind: 'member', id: USER, pages: ['*'] },
+      ]);
+      expect(await (await get('/settings', g)).text()).toContain('@神代');
     } finally {
       roleList = [];
       roles.delete(KAMISHIRO);

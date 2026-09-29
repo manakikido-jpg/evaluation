@@ -500,3 +500,32 @@ describe('物御籤の画面', () => {
     expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:open');
   });
 });
+
+describe('物御籤のはじめての 1 回', () => {
+  it('1 人 1 回だけ無料。銭は減らず、記録は 0 枚。リセットしても戻らない。メニューとボタン', async () => {
+    const { firstFreeLeft, resetGacha } = await import('../src/services/gacha.js');
+    expect(await firstFreeLeft(db, U)).toBe(true);
+    expect(await drawGacha(db, g, U, 10, [], () => 0.99, T0, { first: true })).toEqual({ status: 'disabled' });
+    expect(await drawGacha(db, g, U, 1, [], () => 0.99, T0, { first: true, free: true })).toEqual({ status: 'disabled' });
+    const r = await drawGacha(db, g, U, 1, [], () => 0.99, T0, { first: true });
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.pulls).toHaveLength(1);
+    expect(r.balance).toBe(0);
+    expect((await db.select().from(gachaDraws))[0]?.price).toBe(0);
+    expect(await firstFreeLeft(db, U)).toBe(false);
+    expect(await drawGacha(db, g, U, 1, [], () => 0.99, T0, { first: true })).toEqual({ status: 'no_ticket' });
+    await resetGacha(db, T0);
+    expect(await firstFreeLeft(db, U)).toBe(false);
+    // メニュー: まだの人にだけボタン
+    const prizes = await listPrizes(db);
+    const names = { role: () => 'ロール', shop: () => undefined, coin: '銭', custom: () => undefined };
+    const menu = (firstFree: boolean) => JSON.stringify(gachaMenu(g, prizes, names, { balance: 0, sinceTop: 0, tickets: emptyTickets(), firstFree }, '銭'));
+    expect(menu(true)).toContain('gacha:draw:first');
+    expect(menu(true)).toContain('はじめての 1 回は無料');
+    expect(menu(false)).not.toContain('gacha:draw:first');
+    // 置くボタンは「物御籤売り場へ入る」・読みは「ものみくじ」
+    const panel = JSON.stringify(panelMessage('gacha'));
+    expect(panel).toContain('物御籤売り場へ入る');
+    expect(panel).toContain('ものみくじ');
+  });
+});
