@@ -144,6 +144,8 @@ async function main(): Promise<void> {
     bellSticky.attach(guild);
     market.attach(guild);
     board.attach(guild);
+    // 止まっていた間に消された募集のカードを出し直す
+    void board.checkCards().catch((err) => logger.warn({ err }, 'board card check failed'));
     cast.attach(guild);
     gacha.attach(guild);
     // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
@@ -189,7 +191,7 @@ async function main(): Promise<void> {
       void gacha.tick().catch((err) => logger.warn({ err }, 'gacha tick failed'));
       // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
       void boost.tick();
-      // 📌 掲示板: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す
+      // 📌 掲示板: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す（消されたカードも出し直す）
       void board.tick().catch((err) => logger.warn({ err }, 'board tick failed'));
       // 市場: 期限が来た取引を売った人に渡す
       void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
@@ -282,6 +284,8 @@ async function main(): Promise<void> {
     // 絵馬待ちの人が自己紹介を書いたら、🔰参拝者 に
     void admission.onMessage(m).catch((err) => logger.warn({ err }, 'intro check failed'));
   });
+  // 📌 掲示板: 募集のカードが消されたら出し直す
+  client.on(Events.MessageDelete, (m) => void board.onMessageDelete(m).catch((err) => logger.warn({ err }, 'board message delete failed')));
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 
   const health =

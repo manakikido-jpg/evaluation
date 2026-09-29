@@ -141,7 +141,8 @@ describe('自分の通話部屋: 取りこぼし', () => {
     v.leave('A');
     expect(await cleanupRooms(ctx, new Date())).toBe(0);
     expect(v.rooms.has('room1')).toBe(true);
-    expect(await cleanupRooms(ctx, later)).toBe(1);
+    // 部屋ができてから 1 分後（読み込んだときの時刻からだと、遅いときに 30 秒以内になる）
+    expect(await cleanupRooms(ctx, new Date(Date.now() + 60_000))).toBe(1);
   });
 
   it('ほかの入口では、その入口の部屋を新しく作る', async () => {

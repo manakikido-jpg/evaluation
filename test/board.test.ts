@@ -11,7 +11,10 @@ import {
   entriesOf,
   getPost,
   hire,
+  livePosts,
+  postByMessage,
   refundEntry,
+  setPostMessage,
 } from '../src/services/board.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
@@ -146,3 +149,25 @@ describe('📌 掲示板の見せ方', () => {
   });
 });
 
+
+describe('📌 消されたカードの見守り', () => {
+  it('見守るのは募集中か、まだ銭を預かっている募集。書き込みの ID から引ける', async () => {
+    await addCoins(db, AUTHOR, 1000, 'adjust');
+    const a = await createPost(db, cfg, author, { ...base, slots: 1 }, T0);
+    const b = await createPost(db, cfg, member(A), { ...base, reward: 0, slots: 1 }, T0);
+    if (a.status !== 'ok' || b.status !== 'ok') throw new Error('post');
+    // まだカードを出していないものは見ない
+    expect(await livePosts(db)).toEqual([]);
+    await setPostMessage(db, a.post.id, { channelId: '930000000000000010', messageId: '930000000000000011' });
+    await setPostMessage(db, b.post.id, { channelId: '930000000000000010', messageId: '930000000000000012' });
+    expect((await livePosts(db)).map((p) => p.id).sort()).toEqual([a.post.id, b.post.id].sort());
+    expect((await postByMessage(db, '930000000000000012'))?.id).toBe(b.post.id);
+    // 報酬なしで締め切ったものは見ない。報酬ありで採用中（預かりあり）は見る
+    await closePost(db, b.post.id, A);
+    const x = await applyPost(db, cfg, a.post.id, member(B), T0);
+    if (x.status !== 'ok') throw new Error(x.status);
+    await hire(db, cfg, x.entry.id, AUTHOR, T0);
+    expect((await getPost(db, a.post.id))!.status).toBe('closed');
+    expect((await livePosts(db)).map((p) => p.id)).toEqual([a.post.id]);
+  });
+});

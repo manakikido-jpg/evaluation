@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-board-card-restore',
+    date: '2026-09-29',
+    kind: 'fix',
+    where: ['Discord'],
+    title: '📌 掲示板の募集のカードが消されたら、出し直すように',
+    items: [
+      '募集中（か報酬を預かっている）募集のカードが消されたら、BOT が同じチャンネルに出し直す（質問のスレッドへのリンクつき）。10 分ごとと BOT が起きたときにも確かめる',
+      '#記録 に「出し直した」と、分かれば消した人を知らせる。募集をやめさせたいときは、カードを消さずに社務所Web の「取り下げ」を使う',
+    ],
+  },
+  {
     id: '2026-09-29-present',
     date: '2026-09-29',
     kind: 'new',

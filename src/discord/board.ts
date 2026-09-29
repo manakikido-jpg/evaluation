@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ChannelType, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction, type Guild, type Interaction, type ModalSubmitInteraction } from 'discord.js';
+import { ActionRowBuilder, AuditLogEvent, ChannelType, DiscordAPIError, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction, type Guild, type Interaction, type ModalSubmitInteraction } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { BoardEntry, BoardPost } from '../db/schema.js';
@@ -21,6 +21,8 @@ import {
   hire,
   hiredCount,
   isBoardCategory,
+  livePosts,
+  postByMessage,
   loadBoardPlace,
   saveBoardPlace,
   setEntryThread,
@@ -396,8 +398,69 @@ export class BoardApp {
     if (log) await this.discord.sendMessage(log, { content: `⚠️ 掲示板の募集 #${d.post.id}「${d.post.title}」に「問題あり」が出ました。社務所Web の「掲示板」で確かめてください。` }).catch(() => undefined);
   }
 
-  /** 10 分ごと: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す */
+  // ───────── カードが消されたとき ─────────
+
+  /** 募集のカードが消されたら（BOT が覚えている書き込みのとき）、出し直す */
+  async onMessageDelete(msg: { id: string; channelId: string; guildId: string | null }): Promise<void> {
+    if (msg.guildId !== this.cfg().guildId) return;
+    const post = await postByMessage(this.db, msg.id);
+    if (!post || !(post.status === 'open' || post.escrow > 0)) return;
+    await this.restoreCard(post, await this.deletedBy(msg.channelId));
+  }
+
+  /** 募集中（か銭を預かっている）募集のカードが、まだチャンネルにあるか確かめる。なければ出し直す */
+  async checkCards(): Promise<number> {
+    let restored = 0;
+    for (const post of await livePosts(this.db)) {
+      const channel = post.channelId ? this.guild?.channels.cache.get(post.channelId) : undefined;
+      if (channel?.type !== ChannelType.GuildText || !post.messageId) continue;
+      const gone = await channel.messages.fetch(post.messageId).then(
+        () => false,
+        (err: unknown) => err instanceof DiscordAPIError && err.code === 10008,
+      );
+      if (gone && (await this.restoreCard(post))) restored++;
+    }
+    return restored;
+  }
+
+  /** だれが消したか（Discord の監査ログ。本人以外が消したときだけ残る。見られなければ undefined） */
+  private async deletedBy(channelId: string): Promise<string | undefined> {
+    const guild = this.guild;
+    if (!guild) return undefined;
+    const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.MessageDelete, limit: 5 }).catch(() => undefined);
+    const hit = logs?.entries.find((e) => e.targetId === guild.client.user.id && e.extra?.channel.id === channelId && Date.now() - e.createdTimestamp < 60_000);
+    return hit?.executorId ?? undefined;
+  }
+
+  /** カードを出し直す（質問のスレッドはそのまま残るので、リンクを付ける）。#記録 に知らせる */
+  private async restoreCard(post: BoardPost, by?: string): Promise<boolean> {
+    const channel = post.channelId ? this.guild?.channels.cache.get(post.channelId) : undefined;
+    if (channel?.type !== ChannelType.GuildText) return false;
+    try {
+      const msg = await channel.send({
+        ...(post.threadId ? { content: `-# 質問は <#${post.threadId}> へ` } : {}),
+        ...postCard(post, await entriesOf(this.db, post.id), this.cfg()),
+        allowedMentions: { parse: [] },
+      } as Parameters<typeof channel.send>[0]);
+      await setPostMessage(this.db, post.id, { channelId: channel.id, messageId: msg.id });
+      await this.panelToBottom();
+      await audit(this.db, { actorId: by ?? 'system', targetId: post.authorId, action: 'board.card_restored', detail: { postId: post.id, oldMessageId: post.messageId, deletedBy: by }, via: 'system' });
+      const log = this.cfg().channels.log;
+      if (log) {
+        await this.discord
+          .sendMessage(log, { content: `🛡 掲示板の募集 #${post.id}「${post.title}」のカードが消されていたので、出し直しました（消した人: ${by ? `<@${by}>` : '分かりません（BOT・本人以外の記録なし）'}）。` })
+          .catch(() => undefined);
+      }
+      return true;
+    } catch (err) {
+      logger.warn({ err, postId: post.id }, 'board card restore failed');
+      return false;
+    }
+  }
+
+  /** 10 分ごと: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す。消されたカードを出し直す */
   async tick(): Promise<void> {
+    await this.checkCards().catch((err: unknown) => logger.warn({ err }, 'board card check failed'));
     const r = await boardTick(this.db, this.cfg());
     for (const p of r.closed) {
       await this.refreshCard(p);

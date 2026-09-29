@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { boardEntries, boardPosts, settings, type BoardEntry, type BoardPost } from '../db/schema.js';
@@ -88,6 +88,19 @@ export async function createPost(db: Db, cfg: GuildConfig, author: { id: string;
 
 export async function setPostMessage(db: Db, id: number, v: { channelId: string; messageId: string; threadId?: string; applyThreadId?: string }): Promise<void> {
   await db.update(boardPosts).set(v).where(eq(boardPosts.id, id));
+}
+
+/** Discord のカードを見守る募集（募集中か、まだ銭を預かっている） */
+export async function livePosts(db: Db): Promise<BoardPost[]> {
+  return db
+    .select()
+    .from(boardPosts)
+    .where(and(isNotNull(boardPosts.messageId), or(eq(boardPosts.status, 'open'), gt(boardPosts.escrow, 0))));
+}
+
+export async function postByMessage(db: Db, messageId: string): Promise<BoardPost | undefined> {
+  const [row] = await db.select().from(boardPosts).where(eq(boardPosts.messageId, messageId));
+  return row;
 }
 
 /** 採用したあとのやり取りのスレッド（募集した人と採用された人だけ） */
