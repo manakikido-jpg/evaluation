@@ -107,6 +107,7 @@ export const ACTION_LABEL: Record<string, string> = {
   'role.mentionable_all': 'ロールの @ をまとめて変更',
   'role.invites_bot_only': '招待リンクを BOT だけに',
   'invite.delete': '招待リンクを消す',
+  'settings.web_access': '社務所Web に入れるロールを変えた',
   'board.post': '掲示板に募集を書いた',
   'board.hire': '掲示板で採用した',
   'board.complete': '掲示板の募集を完了にした',

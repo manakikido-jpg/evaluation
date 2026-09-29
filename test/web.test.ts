@@ -2331,3 +2331,43 @@ describe('キャスト（管理画面）', () => {
     expect((await listAudit(db, { action: 'cast.refund' })).length).toBe(1);
   });
 });
+
+describe('社務所Web に入れるロール（神代など）', () => {
+  it('宮司が選んだロールの人は、社務所Web でだけ神職と同じに入れる。外すと入れない', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    await store.refresh();
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const KAMISHIRO_ROLE = '980000000000000055';
+    const KAMISHIRO = '800000000000000055';
+    roleList = [
+      { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: '0' },
+      { id: KAMISHIRO_ROLE, name: '神代', position: 3, managed: false, color: 0, permissions: '0' },
+    ];
+    roles.set(KAMISHIRO, [KAMISHIRO_ROLE]);
+    try {
+      expect(await login(KAMISHIRO)).toBe('');
+      const g = await login(GUJI);
+      expect(await (await get('/settings', g)).text()).toContain('社務所Web に入れるロール');
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', g)).text())![1]!;
+      const r = await app.request('/settings/web-access', {
+        method: 'POST',
+        headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ _csrf: csrf, roleIds: KAMISHIRO_ROLE }).toString(),
+      });
+      expect(r.headers.get('location')).toBe('/settings?msg=saved&at=webaccess#sec-webaccess');
+      expect(store.current.webAccess.shinshokuRoleIds).toEqual([KAMISHIRO_ROLE]);
+      const k = await login(KAMISHIRO);
+      expect(k).not.toBe('');
+      expect((await get('/members', k)).status).toBe(200);
+      // 宮司だけのページは入れない
+      expect((await get('/shop', k)).status).toBe(403);
+      // ほかの設定を保存しても消えない
+      const { loadOverrides } = await import('../src/services/settings.js');
+      expect((await loadOverrides(db)).webAccess.shinshokuRoleIds).toEqual([KAMISHIRO_ROLE]);
+    } finally {
+      roleList = [];
+      roles.delete(KAMISHIRO);
+    }
+  });
+});

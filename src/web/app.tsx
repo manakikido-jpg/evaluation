@@ -7,7 +7,7 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
-import { adminLevelOf, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
+import { adminLevelOf, webLevelOf, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
 import {
   createPrize,
   deletePrize,
@@ -317,7 +317,7 @@ export function createWebApp(deps: WebDeps) {
       return c.redirect('/login?e=failed');
     }
 
-    const level = roles ? adminLevelOf(cfg, roles) : undefined;
+    const level = roles ? webLevelOf(cfg, roles) : undefined;
     if (!level) {
       const [last] = await listAudit(db, { actorId: user.id, action: 'auth.denied', limit: 1 });
       if (!last || now().getTime() - last.at.getTime() > 3_600_000) await audit(db, { actorId: user.id, action: 'auth.denied', via: 'web' });
@@ -359,7 +359,7 @@ export function createWebApp(deps: WebDeps) {
         c.set('session', await withUpdates(session));
         return next();
       }
-      const level = roles ? adminLevelOf(cfg, roles) : undefined;
+      const level = roles ? webLevelOf(cfg, roles) : undefined;
       if (!level) {
         await deleteSession(db, session.id);
         await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
@@ -1592,6 +1592,8 @@ export function createWebApp(deps: WebDeps) {
       // 役職は役職のページで変える（ここでは残す）
       ranks: prev.ranks,
       extraRanks: prev.extraRanks,
+      // 社務所Web に入れるロールは「社務所Web に入れるロール」の項目で変える（ここでは残す）
+      webAccess: prev.webAccess,
       // 自動で増える通話（フォームにあるときだけ。名前が空の行は使わない）
       ...(typeof body['vg.0.name'] === 'string'
         ? {
@@ -1673,12 +1675,26 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect('/settings?msg=coins_all_given');
   });
 
+  // 社務所Web に入れるロール（例: 神代。社務所Web でだけ神職と同じ）
+  app.post('/settings/web-access', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody({ all: true });
+    const raw = body.roleIds === undefined ? [] : Array.isArray(body.roleIds) ? body.roleIds : [body.roleIds];
+    const roles = (await loadRoles()) ?? [];
+    const ids = [...new Set(raw.filter((v): v is string => typeof v === 'string' && roles.some((r) => r.id === v && r.id !== cfg.guildId && !r.managed)))].slice(0, 20);
+    const prev = await loadOverrides(db);
+    await saveOverrides(db, { ...prev, webAccess: { shinshokuRoleIds: ids } }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'settings.web_access', detail: { roleIds: ids }, via: 'web' });
+    return c.redirect('/settings?msg=saved&at=webaccess#sec-webaccess');
+  });
+
   app.post('/settings/reset', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const before = cfg;
     // 役職は役職のページで変えるので残す
-    const { ranks, extraRanks, rooms } = await loadOverrides(db);
-    const reset = overridesSchema.parse({ ranks, extraRanks, ...(rooms.vip ? { rooms: { vip: rooms.vip } } : {}) });
+    const { ranks, extraRanks, rooms, webAccess } = await loadOverrides(db);
+    const reset = overridesSchema.parse({ ranks, extraRanks, webAccess, ...(rooms.vip ? { rooms: { vip: rooms.vip } } : {}) });
     await saveOverrides(db, reset, c.get('session').userId);
     await deps.onSettingsSaved?.();
     await syncPostedNotices({ db, cfg: applyOverrides(fileCfg(), reset), discord: deps.discord }, before);

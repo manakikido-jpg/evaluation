@@ -462,6 +462,8 @@ export const guildConfigSchema = z
         instantBanReasons: z.array(z.string().min(1)).default(DEFAULT_INSTANT_BAN_REASONS),
       })
       .default({ yakuReasons: DEFAULT_YAKU_REASONS, instantBanReasons: DEFAULT_INSTANT_BAN_REASONS }),
+    /** 社務所Web にだけ神職と同じで入れるロール（例: 神代）。社務所Web の「設定」で選ぶ */
+    webAccess: z.object({ shinshokuRoleIds: z.array(snowflake).max(20).default([]) }).default({ shinshokuRoleIds: [] }),
     /** 管理画面に入れるロール（省略時は役職キー shinshoku / guji のロール） */
     admin: z
       .object({
@@ -531,6 +533,14 @@ export function loadWebEnv(env: NodeJS.ProcessEnv = process.env): WebEnv {
 export type AdminLevel = 'shinshoku' | 'guji';
 
 /** ロールから管理画面の権限を決める（宮司が上） */
+/**
+ * 社務所Web に入れるか（Discord の運営コマンドは adminLevelOf のまま）。
+ * webAccess.shinshokuRoleIds のロール（例: 神代）は、社務所Web でだけ神職と同じにする
+ */
+export function webLevelOf(cfg: GuildConfig, roleIds: readonly string[]): AdminLevel | undefined {
+  return adminLevelOf(cfg, roleIds) ?? (roleIds.some((id) => cfg.webAccess.shinshokuRoleIds.includes(id)) ? 'shinshoku' : undefined);
+}
+
 export function adminLevelOf(cfg: GuildConfig, roleIds: readonly string[]): AdminLevel | undefined {
   const byKey = (key: string) => cfg.ranks.filter((r) => r.key === key).map((r) => r.roleId);
   const guji = cfg.admin?.gujiRoleIds.length ? cfg.admin.gujiRoleIds : byKey('guji');

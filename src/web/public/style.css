@@ -614,6 +614,7 @@ form.give-form button { justify-self: start; }
 .settings-layout:has(#sec-boost:target) .settings-index a.to-boost { background: var(--sakura); color: var(--shu-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--shu); }
 .settings-layout:has(#sec-join:target) .settings-index a.to-join { background: var(--sakura); color: var(--shu-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--shu); }
 .settings-layout:has(#sec-give:target) .settings-index a.to-give { background: var(--sakura); color: var(--shu-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--shu); }
+.settings-layout:has(#sec-webaccess:target) .settings-index a.to-webaccess { background: var(--sakura); color: var(--shu-dark); font-weight: 600; box-shadow: inset 3px 0 0 var(--shu); }
 
 /* ───────── 入力欄の見た目をどのページでもそろえる ───────── */
 main :where(input:not([type=checkbox], [type=radio], [type=file], [type=hidden], [type=color]), select, textarea) {

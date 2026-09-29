@@ -483,6 +483,7 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['boost', '💝 ブースト（奉納）'],
   ['join', '📝 入鯖申請・お参り'],
   ['give', '🎁 今いる人に配る'],
+  ['webaccess', '🔑 社務所Web に入れるロール'],
 ];
 
 export function SettingsPage(props: {
@@ -888,6 +889,33 @@ export function SettingsPage(props: {
           <Save at="join" />
         </section>
       </form>
+      <section class="card anchor" id="sec-webaccess">
+        <h2>🔑 社務所Web に入れるロール</h2>
+        <p class="note">
+          神職・宮司のほかに、社務所Web に入れるロール（例: 神代）を選びます。選んだロールの人は、社務所Web でだけ神職と同じことができます（宮司だけのページ・Discord の運営コマンドは今のまま）。外すと、次に開いたときに入れなくなります。
+        </p>
+        <form method="post" action="/settings/web-access">
+          <Csrf session={props.session} />
+          {props.roles?.length ? (
+            <div class="role-checks">
+              {props.roles.map((r) => (
+                <label class="check">
+                  <input type="checkbox" name="roleIds" value={r.id} checked={cfg.webAccess.shinshokuRoleIds.includes(r.id)} />
+                  <span>@{r.name}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p class="note">ロールを読み込めませんでした（BOT が動いていれば、少しあとに開き直すと出ます）。</p>
+          )}
+          <div class="inline-actions section-save">
+            {props.at === 'webaccess' && props.flash && <Flash code={props.flash} />}
+            <button type="submit" class="ok">
+              保存する
+            </button>
+          </div>
+        </form>
+      </section>
       <section class="card anchor give" id="sec-give">
       <h2>🎁 今いる人に配る</h2>
       <form method="post" action="/settings/join-bonus-all" class="give-form">

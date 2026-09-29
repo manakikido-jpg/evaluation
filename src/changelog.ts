@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-web-access',
+    date: '2026-09-29',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🔑 神代なども社務所Web に入れるように',
+    items: [
+      '「設定」の「🔑 社務所Web に入れるロール」で選んだロール（例: 神代）の人は、社務所Web でだけ神職と同じことができる',
+      '宮司だけのページと、Discord の運営コマンドは今のまま',
+    ],
+  },
+  {
     id: '2026-09-29-cast',
     date: '2026-09-29',
     kind: 'new',

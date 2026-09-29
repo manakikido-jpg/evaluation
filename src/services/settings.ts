@@ -61,6 +61,8 @@ export const overridesSchema = z.object({
   market: marketSchema.partial().default({}),
   /** 自動で増える通話（送られたときは全部置きかえる） */
   voiceGroups: z.array(voiceGroupSchema).max(10).optional(),
+  /** 社務所Web にだけ神職と同じで入れるロール（例: 神代） */
+  webAccess: z.object({ shinshokuRoleIds: z.array(z.string().regex(/^\d{17,20}$/)).max(20) }).partial().default({}),
   voiceChat: voiceChatSchema.partial().default({}),
   /** 呼び鈴（channelId を空にすると #記録 へ） */
   bell: bellSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
@@ -109,6 +111,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     rooms: { ...base.rooms, ...o.rooms },
     market: { ...base.market, ...o.market },
     voiceGroups: o.voiceGroups ?? base.voiceGroups,
+    webAccess: { ...base.webAccess, ...o.webAccess },
     voiceChat: { ...base.voiceChat, ...o.voiceChat },
     bell: (() => {
       const { channelId, ...rest } = o.bell;
