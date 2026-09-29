@@ -23,6 +23,7 @@ import {
   recruitMentionRoleIds,
   recruitPanelMessage,
   RecruitSpamCounter,
+  waitText,
   type RecruitDecision,
 } from '../services/recruit.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -41,8 +42,8 @@ const DENIED: Record<Exclude<RecruitDecision['status'], 'ok' | 'cooldown' | 'cha
 
 /** 断るときの文 */
 export function deniedText(d: Exclude<RecruitDecision, { status: 'ok' }>): string {
-  if (d.status === 'cooldown') return `続けて募集できません。あと ${d.minutes} 分ほど待ってください。`;
-  if (d.status === 'channel_cooldown') return `このチャンネルでは少し前に募集がありました。通知が続かないよう、あと ${d.minutes} 分ほど待ってください（上の募集に参加するのもおすすめです）。`;
+  if (d.status === 'cooldown') return `続けて募集できません。あと ${waitText(d.seconds)}ほど待ってください。`;
+  if (d.status === 'channel_cooldown') return `このチャンネルでは少し前に募集がありました。通知が続かないよう、あと ${waitText(d.seconds)}ほど待ってください（上の募集に参加するのもおすすめです）。`;
   if (d.status === 'too_new') return `入ったばかりの方は、あと ${d.days} 日ほどで募集できるようになります。`;
   return DENIED[d.status];
 }
@@ -120,7 +121,7 @@ export class RecruitApp {
     // 待ち時間中に何度も押す人は、運営に知らせる（1 回だけ）
     if (d.status === 'cooldown' || d.status === 'channel_cooldown') {
       const cfg = this.cfg();
-      if (this.spam.hit(i.user.id, Date.now(), d.minutes, cfg.recruit.spamAlertCount) && cfg.channels.log) {
+      if (this.spam.hit(i.user.id, Date.now(), d.seconds / 60, cfg.recruit.spamAlertCount) && cfg.channels.log) {
         const ch = await i.client.channels.fetch(cfg.channels.log).catch(() => null);
         if (ch?.isSendable()) {
           await ch

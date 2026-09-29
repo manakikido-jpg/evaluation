@@ -427,6 +427,9 @@ export const guildConfigSchema = z
         cooldownMinutes: z.number().int().min(0).default(10),
         /** 同じチャンネルに続けて通知を飛ばせるまでの分（だれが押しても） */
         channelCooldownMinutes: z.number().int().min(0).max(120).default(5),
+        /** 秒で決めたとき（社務所Web の設定。あれば分より優先） */
+        cooldownSeconds: z.number().int().min(0).max(7200).optional(),
+        channelCooldownSeconds: z.number().int().min(0).max(7200).optional(),
         /** 役職（🔰参拝者 以上）のある人だけ募集できる */
         requireRank: z.boolean().default(true),
         /** 👹厄年の人は募集できない */

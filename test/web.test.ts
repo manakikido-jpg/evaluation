@@ -599,16 +599,16 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const rec = await post('/settings', g, {
       ...form,
       _csrf: await csrfOf(g),
-      recruitCooldown: '15',
-      recruitChannelCooldown: '3',
+      recruitCooldownSec: '15',
+      recruitChannelCooldownSec: '15',
       recruitNewDays: '2',
       recruitSpamAlert: '4',
       recruitRequireRank: 'yes',
     });
     expect(rec.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.recruit).toMatchObject({
-      cooldownMinutes: 15,
-      channelCooldownMinutes: 3,
+      cooldownSeconds: 15,
+      channelCooldownSeconds: 15,
       newMemberDays: 2,
       spamAlertCount: 4,
       requireRank: true,

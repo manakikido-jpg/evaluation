@@ -3,6 +3,7 @@ import { contactSummary } from '../../services/contact.js';
 import type { AdminSession, Application, Omairi, Soudan, SoudanMessage } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
 import { GENDER_LABEL, isGender } from '../../services/admission.js';
+import { recruitWaits } from '../../services/recruit.js';
 import { Avatar, Layout } from './layout.js';
 
 type Names = Map<string, string>;
@@ -768,12 +769,12 @@ export function SettingsPage(props: {
           </p>
           <div class="fields">
             <label class="field">
-              <span>同じ人が続けて募集できない分（0〜120）</span>
-              <input type="number" name="recruitCooldown" value={String(cfg.recruit.cooldownMinutes)} min={0} max={120} required />
+              <span>同じ人が続けて募集できない秒（0〜7200。例: 15 秒・600 = 10 分）</span>
+              <input type="number" name="recruitCooldownSec" value={String(recruitWaits(cfg.recruit).mine)} min={0} max={7200} required />
             </label>
             <label class="field">
-              <span>同じチャンネルで、だれが押しても続けて募集できない分（0〜120）</span>
-              <input type="number" name="recruitChannelCooldown" value={String(cfg.recruit.channelCooldownMinutes)} min={0} max={120} required />
+              <span>同じチャンネルで、だれが押しても続けて募集できない秒（0〜7200。例: 15 秒・300 = 5 分）</span>
+              <input type="number" name="recruitChannelCooldownSec" value={String(recruitWaits(cfg.recruit).channel)} min={0} max={7200} required />
             </label>
             <label class="field">
               <span>入ってからこの日数は募集できない（0 でなし。運営はいつでも）</span>

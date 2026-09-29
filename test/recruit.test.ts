@@ -42,10 +42,19 @@ describe('募集', () => {
   });
 
   it('同じ人は 10 分に 1 回・同じチャンネルはだれが押しても 5 分に 1 回', () => {
-    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), lastAt: now }, now + 60_000)).toEqual({ status: 'cooldown', minutes: 9 });
+    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), lastAt: now }, now + 60_000)).toEqual({ status: 'cooldown', seconds: 540 });
     expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), lastAt: now }, now + 10 * 60_000).status).toBe('ok');
-    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), channelLastAt: now }, now + 60_000)).toEqual({ status: 'channel_cooldown', minutes: 4 });
+    expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), channelLastAt: now }, now + 60_000)).toEqual({ status: 'channel_cooldown', seconds: 240 });
     expect(decideRecruit(cfg, NEOCHI_CH, { ...M(), channelLastAt: now }, now + 5 * 60_000).status).toBe('ok');
+  });
+
+  it('秒で決めたら秒（15 秒など）。分より優先', async () => {
+    const { waitText } = await import('../src/services/recruit.js');
+    const c = { ...cfg, recruit: { ...cfg.recruit, cooldownSeconds: 15, channelCooldownSeconds: 15 } };
+    expect(decideRecruit(c, NEOCHI_CH, { ...M(), lastAt: now }, now + 5_000)).toEqual({ status: 'cooldown', seconds: 10 });
+    expect(decideRecruit(c, NEOCHI_CH, { ...M(), lastAt: now, channelLastAt: now }, now + 15_000).status).toBe('ok');
+    expect(waitText(10)).toBe('10 秒');
+    expect(waitText(61)).toBe('2 分');
   });
 
   it('役職のない人（承認前）・厄年の人・入ってすぐの人は募集できない（運営はいつでも）', () => {

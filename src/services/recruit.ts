@@ -37,8 +37,18 @@ export type RecruitDecision =
   | { status: 'not_member' }
   | { status: 'yakudoshi' }
   | { status: 'too_new'; days: number }
-  | { status: 'cooldown'; minutes: number }
-  | { status: 'channel_cooldown'; minutes: number };
+  | { status: 'cooldown'; seconds: number }
+  | { status: 'channel_cooldown'; seconds: number };
+
+/** 待ち時間（秒）。秒で決めていればそれ、なければ分から */
+export function recruitWaits(r: GuildConfig['recruit']): { mine: number; channel: number } {
+  return { mine: r.cooldownSeconds ?? r.cooldownMinutes * 60, channel: r.channelCooldownSeconds ?? r.channelCooldownMinutes * 60 };
+}
+
+/** 「あと 15 秒」「あと 3 分」 */
+export function waitText(seconds: number): string {
+  return seconds < 60 ? `${seconds} 秒` : `${Math.ceil(seconds / 60)} 分`;
+}
 
 export type RecruitMember = {
   roleIds: readonly string[];
@@ -52,7 +62,7 @@ export type RecruitMember = {
 /**
  * 募集できるか。
  * 宵宮は宵参りの人だけ／役職（参拝者以上）のある人だけ／厄年の人はだめ／入ってすぐはだめ（決めた日数）／
- * 同じ人は cooldownMinutes に 1 回／同じチャンネルはだれが押しても channelCooldownMinutes に 1 回
+ * 同じ人は決めた秒数に 1 回／同じチャンネルはだれが押しても決めた秒数に 1 回（recruitWaits）
  */
 export function decideRecruit(cfg: GuildConfig, channelId: string, m: RecruitMember, now: number): RecruitDecision {
   const r = cfg.recruit;
@@ -67,11 +77,12 @@ export function decideRecruit(cfg: GuildConfig, channelId: string, m: RecruitMem
     const left = m.joinedAt + r.newMemberDays * 86_400_000 - now;
     if (left > 0) return { status: 'too_new', days: Math.ceil(left / 86_400_000) };
   }
-  const wait = (last: number | undefined, minutes: number) => (last === undefined ? 0 : last + minutes * 60_000 - now);
-  const mine = wait(m.lastAt, r.cooldownMinutes);
-  if (mine > 0) return { status: 'cooldown', minutes: Math.ceil(mine / 60_000) };
-  const ch = wait(m.channelLastAt, r.channelCooldownMinutes);
-  if (ch > 0) return { status: 'channel_cooldown', minutes: Math.ceil(ch / 60_000) };
+  const waits = recruitWaits(r);
+  const wait = (last: number | undefined, seconds: number) => (last === undefined ? 0 : last + seconds * 1000 - now);
+  const mine = wait(m.lastAt, waits.mine);
+  if (mine > 0) return { status: 'cooldown', seconds: Math.ceil(mine / 1000) };
+  const ch = wait(m.channelLastAt, waits.channel);
+  if (ch > 0) return { status: 'channel_cooldown', seconds: Math.ceil(ch / 1000) };
   return { status: 'ok', panel };
 }
 

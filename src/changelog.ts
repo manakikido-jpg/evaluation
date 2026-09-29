@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-29-recruit-seconds',
+    date: '2026-09-29',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '📣 募集の待ち時間を秒で決められるように',
+    items: [
+      '「設定」の「📣 募集（荒らし対策）」で、同じ人・同じチャンネルの待ち時間を秒で入れられる（例: 15 秒）',
+      '待っている人への案内も「あと 10 秒ほど」のように秒で出る（1 分以上は分）',
+    ],
+  },
+  {
     id: '2026-09-29-items-present',
     date: '2026-09-29',
     kind: 'new',

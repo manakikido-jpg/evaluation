@@ -1581,11 +1581,11 @@ export function createWebApp(deps: WebDeps) {
             },
           }
         : {}),
-      ...(typeof body.recruitCooldown === 'string'
+      ...(typeof body.recruitCooldownSec === 'string'
         ? {
             recruit: {
-              cooldownMinutes: num('recruitCooldown'),
-              channelCooldownMinutes: num('recruitChannelCooldown'),
+              cooldownSeconds: num('recruitCooldownSec'),
+              channelCooldownSeconds: num('recruitChannelCooldownSec'),
               requireRank: body.recruitRequireRank === 'yes',
               blockYakudoshi: body.recruitBlockYaku === 'yes',
               newMemberDays: num('recruitNewDays'),
