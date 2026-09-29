@@ -315,8 +315,7 @@ export class BoardApp {
     if (!r) return void (await i.reply({ content: 'もう締め切っています。', ...EPHEMERAL }));
     await i.update({ ...postCard(r.post, await entriesOf(this.db, id), this.cfg()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
     await audit(this.db, { actorId: i.user.id, targetId: post.authorId, action: staff ? 'board.remove' : 'board.close', detail: { postId: id, refunded: r.refunded }, via: 'discord' });
-    const thread = await this.thread(r.post);
-    await thread?.send({ content: `${staff ? '🛡 運営が募集を取り下げました' : '📌 募集を締め切りました'}${r.refunded ? `（採用しなかった分の ${fmt(r.refunded)} 枚を <@${post.authorId}> さんに戻しました）` : ''}。`, allowedMentions: { parse: [] } }).catch(() => undefined);
+    await this.wrapUp(r.post, staff ? 'removed' : 'closed');
     if (r.refunded) await i.followUp({ content: `締め切りました。採用しなかった分の ${fmt(r.refunded)} 枚を戻しました。`, ...EPHEMERAL });
   }
 
@@ -334,7 +333,29 @@ export class BoardApp {
     await this.refreshCard(r.post);
     await audit(this.db, { actorId: i.user.id, targetId: r.entry.memberId, action: 'board.hire', detail: { postId: r.post.id, entryId }, via: 'discord' });
     await this.discord.sendDm(r.entry.memberId, `✅ 募集「${r.post.title}」で採用されました。${work ? `<#${work}> でやり取りしてください。` : ''}`).catch(() => false);
-    if (r.full) await i.followUp({ content: '人数がいっぱいになったので、募集を締め切りました。', ...EPHEMERAL });
+    if (r.full) {
+      await i.followUp({ content: `人数がいっぱいになったので、募集を締め切りました。${work ? `<#${work}> でやり取りしてください（応募の受付のスレッドは消します）。` : ''}`, ...EPHEMERAL });
+      await this.wrapUp(r.post, 'full');
+    }
+  }
+
+  /**
+   * 募集が終わったとき（満員・締め切り・取り下げ）: 応募の受付のスレッドを消し、採用しなかった人に知らせ、
+   * みんなの質問のスレッドは閉じる（採用した人とのスレッドはそのまま）
+   */
+  private async wrapUp(post: BoardPost, why: 'full' | 'closed' | 'removed'): Promise<void> {
+    const entries = await entriesOf(this.db, post.id);
+    const inbox = post.applyThreadId ? await this.threadById(post.applyThreadId) : undefined;
+    await inbox?.delete('掲示板の募集が終わった').catch((err: unknown) => logger.warn({ err }, 'board apply thread delete failed'));
+    const text = why === 'removed' ? 'は運営が取り下げました' : why === 'full' ? 'は人数がいっぱいになりました' : 'は締め切りました';
+    for (const e of entries.filter((x) => x.status === 'applied')) {
+      await this.discord.sendDm(e.memberId, `📌 募集「${post.title}」${text}。今回は見送りとなりました。応募ありがとうございました。`).catch(() => false);
+    }
+    const pub = await this.thread(post);
+    if (pub && !pub.archived) {
+      await pub.send({ content: `📌 この募集${text}。`, allowedMentions: { parse: [] } }).catch(() => undefined);
+      await pub.edit({ archived: true, locked: true, reason: '掲示板の募集が終わった' }).catch(() => undefined);
+    }
   }
 
   /** 採用したら、2 人（と運営）だけのスレッドを作って、完了・問題ありのボタンを出す */
@@ -378,7 +399,10 @@ export class BoardApp {
   /** 10 分ごと: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す */
   async tick(): Promise<void> {
     const r = await boardTick(this.db, this.cfg());
-    for (const p of r.closed) await this.refreshCard(p);
+    for (const p of r.closed) {
+      await this.refreshCard(p);
+      await this.wrapUp(p, 'closed');
+    }
     for (const x of r.paid) {
       if (x.paid > 0) await this.discord.sendDm(x.entry.memberId, `🎉 募集「${x.post.title}」は期限が来たので完了にしました。${this.cfg().economy.currencyEmoji} ${fmt(x.paid)} 枚の報酬をお渡ししました。`).catch(() => false);
     }

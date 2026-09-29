@@ -3411,6 +3411,11 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, targetId: r.post.authorId, action: 'board.remove', detail: { postId: id, refunded: r.refunded }, via: 'web' });
     await boardRefresh(id);
     if (r.post.threadId) await deps.discord.sendMessage(r.post.threadId, { content: `🛡 運営が募集を取り下げました${r.refunded ? `（採用しなかった分の ${r.refunded} 枚は募集した人に戻しました）` : ''}。` }).catch(() => undefined);
+    // 応募の受付のスレッドを消し、採用しなかった人に知らせる
+    if (r.post.applyThreadId) await deps.discord.deleteChannel(r.post.applyThreadId, '掲示板の募集を取り下げた').catch(() => undefined);
+    for (const e of (await entriesOf(db, id)).filter((x) => x.status === 'applied')) {
+      await deps.discord.sendDm(e.memberId, `📌 募集「${r.post.title}」は運営が取り下げました。応募ありがとうございました。`).catch(() => false);
+    }
     return c.redirect('/board?msg=removed');
   });
 

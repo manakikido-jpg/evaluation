@@ -2274,8 +2274,15 @@ describe('掲示板（管理画面）', () => {
     expect((await form(s, `/board/entries/${a.entry.id}/pay`, {})).headers.get('location')).toBe('/board?msg=paid');
     expect((await walletOf(db, WORKER)).balance).toBe(900);
     expect((await form(s, `/board/entries/${a.entry.id}/refund`, {})).headers.get('location')).toBe('/board?msg=done_already');
-    // 取り下げ: 採用しなかった 1 人分を戻す
+    // 取り下げ: 採用しなかった 1 人分を戻す。応募の受付のスレッドを消し、採用しなかった人に知らせる
+    const { setPostMessage } = await import('../src/services/board.js');
+    await setPostMessage(db, r.post.id, { channelId: '910000000000000003', messageId: '910000000000000070', applyThreadId: '910000000000000071' });
+    const other = await applyPost(db, cfg, r.post.id, { id: '870000000000000013', roleIds: [ROLE.sanpaisha] });
+    if (other.status !== 'ok') throw new Error(other.status);
+    actions = [];
     expect((await form(s, `/board/posts/${r.post.id}/remove`, {})).headers.get('location')).toBe('/board?msg=removed');
+    expect(actions).toContain('deleteChannel 910000000000000071');
+    expect(actions).toContain('dm 870000000000000013');
     expect((await getPost(db, r.post.id))!.status).toBe('removed');
     expect((await walletOf(db, AUTHOR)).balance).toBe(2000);
     expect((await listAudit(db, { action: 'board.pay' })).length).toBe(1);
