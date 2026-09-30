@@ -1,6 +1,9 @@
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import type { CasinoGame, GuildConfig } from '../config.js';
+import { TABLE_KINDS, type CasinoGame, type GuildConfig, type TableKind } from '../config.js';
+import { actTable, createTable, joinTable, leaveTable, myTable, openTables, pollTable, sweepTables, tableById, tableCounts, type TableResult } from '../services/casino/tables/service.js';
+import type { Form } from '../services/casino/tables/types.js';
+import { TableFrag, TablePage, TablesLobby } from './views/casinoTables.js';
 import type { Db } from '../db/client.js';
 import type { CasinoGameRow, MemberSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -130,6 +133,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const cfg = d.cfg();
     if (!cfg.casino.enabled) return c.html(<CasinoClosed me={me} />);
     await sweepMatches(db, d.now());
+    await sweepTables(db, cfg, d.now());
     const wins = await bigWins(db, new Date(d.now().getTime() - 7 * 86_400_000));
     const names = await namesOf(db, wins.map((w) => w.memberId));
     const open = (await openMatches(db)).filter((m) => m.status === 'open').length;
@@ -141,6 +145,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         recent={await recentGames(db, me.session.userId, 10)}
         bigWins={wins.map((w) => ({ ...w, name: names.get(w.memberId) ?? 'だれか' }))}
         openMatches={open}
+        tables={await tableCounts(db)}
+        mine={await myTable(db, me.session.userId)}
         msg={casinoMsg(c.req.query('e'))}
       />,
     );
@@ -415,6 +421,107 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const id = idOf(c);
       if (!id) return c.redirect('/casino/versus?e=not_found');
       return toRoom(c, await resignMatch(db, id, me.session.userId, d.now()), id);
+    }, { post: true }),
+  );
+
+  // ───────── 👥 みんなで座る卓 ─────────
+
+  const isKind = (k: string): k is TableKind => (TABLE_KINDS as readonly string[]).includes(k);
+  const kindOn = (k: TableKind) => d.cfg().casino.games.includes(k);
+  const who = (me: Me) => ({ id: me.session.userId, name: me.session.displayName.slice(0, 32) });
+  /** フォームの値（チップの「好きな量」は bet に入れ直す） */
+  const formOf = async (c: Context): Promise<Form> => {
+    const body = (await c.req.parseBody({ all: true })) as Record<string, string | string[] | File>;
+    const f: Form = {};
+    for (const [k, v] of Object.entries(body)) {
+      if (typeof v === 'string') f[k] = v;
+      else if (Array.isArray(v)) f[k] = v.filter((x): x is string => typeof x === 'string');
+    }
+    if (f.bet === 'custom') f.bet = f.betCustom;
+    return f;
+  };
+  const back = (c: Context, id: number, r: TableResult) => c.redirect(r.status === 'ok' ? `/casino/t/${id}` : `/casino/t/${id}?e=${r.status}`);
+
+  app.get(
+    '/casino/tables/:kind',
+    page(async (c, me) => {
+      const kind = c.req.param('kind') ?? '';
+      if (!isKind(kind) || !kindOn(kind)) return c.redirect('/casino?e=game_off');
+      await sweepTables(db, d.cfg(), d.now());
+      return c.html(
+        <TablesLobby me={me} kind={kind} casino={d.cfg().casino} tables={await openTables(db, kind)} mine={await myTable(db, me.session.userId)} msg={casinoMsg(c.req.query('e'))} />,
+      );
+    }),
+  );
+
+  app.post(
+    '/casino/tables/:kind',
+    page(async (c, me) => {
+      const kind = c.req.param('kind') ?? '';
+      if (!isKind(kind) || !kindOn(kind)) return c.redirect('/casino?e=game_off');
+      const r = await createTable(db, d.cfg(), kind, who(me), await formOf(c), d.now());
+      return r.status === 'ok' && 'table' in r ? c.redirect(`/casino/t/${r.table.id}`) : c.redirect(`/casino/tables/${kind}?e=${r.status}`);
+    }, { post: true }),
+  );
+
+  app.get(
+    '/casino/t/:id',
+    page(async (c, me) => {
+      const id = idOf(c);
+      const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
+      if (!t) return c.redirect('/casino?e=not_found');
+      return c.html(<TablePage me={me} table={t} casino={d.cfg().casino} msg={casinoMsg(c.req.query('e'))} now={d.now().getTime()} />);
+    }),
+  );
+
+  /** 2 秒ごと: 時間が来ていれば進めて、今の番号を返す（変わっていたら中身を読み直す） */
+  app.get(
+    '/casino/t/:id/poll',
+    page(async (c) => {
+      const id = idOf(c);
+      const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
+      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime() });
+    }),
+  );
+
+  app.get(
+    '/casino/t/:id/frag',
+    page(async (c, me) => {
+      const id = idOf(c);
+      const t = id ? await tableById(db, id) : undefined;
+      if (!t) return c.body(null, 204);
+      return c.html(<TableFrag table={t} me={me} casino={d.cfg().casino} now={d.now().getTime()} />);
+    }),
+  );
+
+  app.post(
+    '/casino/t/:id/join',
+    page(async (c, me) => {
+      const id = idOf(c);
+      if (!id) return c.redirect('/casino?e=not_found');
+      const t = await tableById(db, id);
+      if (!t || !isKind(t.kind) || !kindOn(t.kind)) return c.redirect('/casino?e=game_off');
+      return back(c, id, await joinTable(db, d.cfg(), id, who(me), await formOf(c), d.now()));
+    }, { post: true }),
+  );
+
+  app.post(
+    '/casino/t/:id/leave',
+    page(async (c, me) => {
+      const id = idOf(c);
+      if (!id) return c.redirect('/casino?e=not_found');
+      const t = await tableById(db, id);
+      const r = await leaveTable(db, d.cfg(), id, me.session.userId, d.now());
+      return r.status === 'ok' || r.status === 'not_found' ? c.redirect(`/casino/tables/${t?.kind ?? ''}`) : back(c, id, r);
+    }, { post: true }),
+  );
+
+  app.post(
+    '/casino/t/:id/act',
+    page(async (c, me) => {
+      const id = idOf(c);
+      if (!id) return c.redirect('/casino?e=not_found');
+      return back(c, id, await actTable(db, d.cfg(), id, me.session.userId, await formOf(c), d.now()));
     }, { post: true }),
   );
 }

@@ -176,6 +176,32 @@ export const casinoMatches = pgTable(
 
 export type CasinoMatch = typeof casinoMatches.$inferSelect;
 
+/**
+ * みんなで座る卓（ブラックジャック・バカラ・ルーレットの卓、ポーカー、大富豪、ババ抜き）。
+ * state に座っている人・山札・手札など全部を入れ、画面には見せてよい分だけ出す。動かすときは行をロックする
+ */
+export const casinoTables = pgTable(
+  'casino_tables',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    kind: text('kind').notNull(),
+    hostId: text('host_id').notNull(),
+    /** open / closed */
+    status: text('status').notNull().default('open'),
+    state: jsonb('state').notNull(),
+    /** 座っている人（1 人 1 卓まで・自分の卓を探す） */
+    seatIds: text('seat_ids').array().notNull().default(sql`'{}'::text[]`),
+    version: integer('version').notNull().default(0),
+    /** 次に時間で動く日時（持ち時間・次の回）。なければ null */
+    dueAt: timestamp('due_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('casino_tables_status_idx').on(t.status, t.kind)],
+);
+
+export type CasinoTable = typeof casinoTables.$inferSelect;
+
 /** 社務所Web の ID とパスワード（宮司が発行する。パスワードは scrypt のハッシュだけ保存） */
 export const webAccounts = pgTable('web_accounts', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),

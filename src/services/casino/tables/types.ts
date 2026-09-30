@@ -1,0 +1,65 @@
+import type { CasinoGame, GuildConfig, TableKind } from '../../../config.js';
+import type { Rng } from '../cards.js';
+
+/**
+ * みんなで座る卓の決まりごと。ゲームごとに「状態 → 次の状態」を返す関数だけを書き、
+ * 銭の出し入れ（fx）は卓のサービスが同じトランザクションでまとめて行う。
+ */
+
+export type Who = { id: string; name: string };
+
+/** 引く銭（足りなければ動かさない）。limited: 1 日の上限に数える */
+export type Debit = { memberId: string; amount: number; reason: 'casino_bet' | 'casino_buyin'; limited: boolean };
+export type Credit = { memberId: string; amount: number; reason: 'casino_win' | 'casino_refund' | 'casino_cashout' };
+/** カジノの収支（運営の画面）に入れる 1 回分 */
+export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };
+export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[] };
+
+export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
+export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });
+export const fail = <S = never>(error: string): Step<S> => ({ ok: false, error });
+
+/** フォームから来た値 */
+export type Form = Record<string, string | string[] | undefined>;
+export const str = (f: Form, k: string) => {
+  const v = f[k];
+  return typeof v === 'string' ? v : Array.isArray(v) ? v[0] : undefined;
+};
+export const list = (f: Form, k: string) => {
+  const v = f[k];
+  return Array.isArray(v) ? v : typeof v === 'string' ? [v] : [];
+};
+export const intOf = (f: Form, k: string) => {
+  const v = str(f, k);
+  return v && /^\d{1,9}$/.test(v) ? Number(v) : NaN;
+};
+
+export type Ctx = { now: number; rng: Rng; cfg: GuildConfig };
+
+export interface TableEngine<S> {
+  kind: TableKind;
+  maxSeats: number;
+  /** 卓を作る（作った人も座る） */
+  create(host: Who, form: Form, ctx: Ctx): Step<S>;
+  join(s: S, who: Who, form: Form, ctx: Ctx): Step<S>;
+  leave(s: S, memberId: string, ctx: Ctx): Step<S>;
+  act(s: S, memberId: string, form: Form, ctx: Ctx): Step<S>;
+  /** 時間で進める（持ち時間切れ・次の回）。何もなければ null */
+  tick(s: S, ctx: Ctx): Step<S> | null;
+  /** 次に時間で動く時刻（ms） */
+  due(s: S): number | null;
+  /** 座っている人 */
+  seats(s: S): string[];
+  /** 閉じてよいか（だれもいない・終わった） */
+  closed(s: S, now: number): boolean;
+}
+
+/** 卓の説明（ロビー） */
+export const TABLE_LABEL: Record<TableKind, { emoji: string; name: string; note: string; players: string }> = {
+  bj_table: { emoji: '🃏', name: 'ブラックジャック卓', note: 'みんなで同じディーラーと勝負', players: '1〜5 人' },
+  baccarat_table: { emoji: '🎴', name: 'バカラ卓', note: 'みんなで同じ勝負に賭ける', players: '1〜8 人' },
+  roulette_table: { emoji: '🎡', name: 'ルーレット卓', note: 'みんなで同じ回転に賭ける', players: '1〜8 人' },
+  poker: { emoji: '♠', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う', players: '2〜6 人' },
+  daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金', players: '3〜5 人' },
+  babanuki: { emoji: '🃟', name: 'ババ抜き', note: '最後にババを持っていた人の負け', players: '2〜5 人' },
+};

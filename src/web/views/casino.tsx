@@ -16,6 +16,9 @@ export type Coin = { name: string; emoji: string };
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 
+/** みんなで遊ぶもの（ロビーで分けて出す） */
+const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'daifugo', 'babanuki', 'versus'];
+
 export type CasinoMe = { session: MemberSession; balance: number; coin: Coin };
 
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean }) {
@@ -118,6 +121,9 @@ export type LobbyProps = {
   recent: CasinoGameRow[];
   bigWins: (CasinoGameRow & { name: string })[];
   openMatches: number;
+  /** 種類ごとの開いている卓の数 */
+  tables: Map<string, number>;
+  mine?: { id: number; kind: string };
   msg?: string;
 };
 
@@ -137,15 +143,34 @@ export function CasinoLobby(p: LobbyProps) {
         </p>
         {p.msg && <Msg msg={p.msg} />}
       </section>
+      {p.mine && (
+        <p class="c-alert c-mine">
+          卓 #{p.mine.id}（{CASINO_LABEL[p.mine.kind as CasinoGame]?.name}）に座っています。<a href={`/casino/t/${p.mine.id}`}>卓へ戻る</a>
+        </p>
+      )}
+      <h2 class="c-section">👥 みんなで遊ぶ</h2>
       <section class="c-games">
-        {games.map((g) => (
-          <a href={`/casino/${g}`} class={`c-game c-game-${g}`}>
-            <span class="c-game-emoji">{CASINO_LABEL[g].emoji}</span>
-            <span class="c-game-name">{CASINO_LABEL[g].name}</span>
-            <span class="c-game-note">{CASINO_LABEL[g].note}</span>
-            {g === 'versus' && p.openMatches > 0 && <span class="c-badge">{p.openMatches} 部屋</span>}
-          </a>
-        ))}
+        {TABLE_GAMES.filter((g) => games.includes(g)).map((g) => (
+            <a href={g === 'versus' ? '/casino/versus' : `/casino/tables/${g}`} class={`c-game c-game-${g} c-game-multi`}>
+              <span class="c-game-emoji">{CASINO_LABEL[g].emoji}</span>
+              <span class="c-game-name">{CASINO_LABEL[g].name}</span>
+              <span class="c-game-note">{CASINO_LABEL[g].note}</span>
+              {g === 'versus' && p.openMatches > 0 && <span class="c-badge">{p.openMatches} 部屋</span>}
+              {(p.tables.get(g) ?? 0) > 0 && <span class="c-badge">{p.tables.get(g)} 卓</span>}
+            </a>
+          ))}
+      </section>
+      <h2 class="c-section">🙋 1 人で遊ぶ</h2>
+      <section class="c-games">
+        {games
+          .filter((g) => !TABLE_GAMES.includes(g))
+          .map((g) => (
+            <a href={`/casino/${g}`} class={`c-game c-game-${g}`}>
+              <span class="c-game-emoji">{CASINO_LABEL[g].emoji}</span>
+              <span class="c-game-name">{CASINO_LABEL[g].name}</span>
+              <span class="c-game-note">{CASINO_LABEL[g].note}</span>
+            </a>
+          ))}
       </section>
       <div class="c-two">
         <section class="c-panel">
@@ -203,9 +228,20 @@ const MSG: Record<string, string> = {
   not_found: '見つかりませんでした（終わったかもしれません）。',
   not_yours: 'あなたの番・部屋ではありません。',
   done: 'このゲームはもう終わっています。',
+  seated: 'ほかの卓に座っています。先にそちらを立ってください。',
+  full: '満席です。',
+  started: 'もう始まっています。',
+  not_seated: '座っていません。',
+  not_your_turn: 'あなたの番ではありません（時間が過ぎたかもしれません）。',
+  min_raise: 'レイズが小さすぎます。',
+  bad_set: '同じ数字のカード（1〜4 枚）を選んでください。',
+  weak: '場のカードより強くないと出せません（枚数も同じに）。',
+  must_play: '場が空のときはパスできません。',
+  need_players: '人数が足りません。',
+  too_many: '1 回に賭けられる数を超えました。',
 };
 export const casinoMsg = (k: string | undefined) => (k && MSG[k] ? k : undefined);
-const Msg = (p: { msg: string }) => <p class="c-alert">{MSG[p.msg] ?? p.msg}</p>;
+export const Msg = (p: { msg: string }) => <p class="c-alert">{MSG[p.msg] ?? p.msg}</p>;
 
 /** 賭ける量を選ぶ（チップを押すとそのまま始まる。好きな量も入れられる） */
 export function BetForm(p: { action: string; csrf: string; casino: CasinoConfig; coin: Coin; label: string; extra?: Child; last?: number }) {

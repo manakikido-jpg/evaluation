@@ -28,6 +28,8 @@ import { MeetingApp } from './discord/meetings.js';
 import { HelpApp } from './discord/help.js';
 import { expireTick } from './services/tempGrants.js';
 import { announceEvents, voiceTicketDm, voiceTicketTick } from './services/economyEvents.js';
+import { sweepTables } from './services/casino/tables/service.js';
+import { sweepMatches } from './services/casino/versus.js';
 import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
 import { onboardingTick } from './services/onboarding.js';
@@ -182,6 +184,10 @@ async function main(): Promise<void> {
         .catch((err) => logger.warn({ err }, 'interview tick failed'));
       // 期間限定イベント（ボーナス週間・セール）の始まり・終わりを知らせる
       void announceEvents({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'economy event announce failed'));
+      // 🎰 カジノ: だれも見ていない卓・対戦も、時間が来たら進める（持ち時間切れ・返金）
+      void sweepTables(db, cfg())
+        .then(() => sweepMatches(db))
+        .catch((err) => logger.warn({ err }, 'casino sweep failed'));
       // 🎫 通話で券: 決めた日に、通話が決めた分数になった人へ券を配って DM で知らせる
       void voiceTicketTick(db, cfg())
         .then(async (granted) => {

@@ -278,3 +278,71 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect(bad.headers.get('location')).toBe('/economy/casino?msg=invalid');
   });
 });
+
+describe('👥 みんなで座る卓（画面）', () => {
+  it('ロビーに「みんなで遊ぶ」が出る。ポーカー卓を立てて、2 人目が座り、配られる', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const b = (await casinoLogin(B)).cookie!;
+    const lobby = await (await get('/casino', a)).text();
+    expect(lobby).toContain('みんなで遊ぶ');
+    expect(lobby).toContain('/casino/tables/poker');
+    expect(lobby).toContain('/casino/tables/daifugo');
+    const list = await (await get('/casino/tables/poker', a)).text();
+    expect(list).toContain('卓を立てて座る');
+    const made = await post('/casino/tables/poker', a, { bb: '20', buyin: '1000' });
+    const loc = made.headers.get('location')!;
+    expect(loc).toMatch(/^\/casino\/t\/\d+$/);
+    const id = loc.split('/').pop()!;
+    expect(await balance(A)).toBe(4000);
+    expect((await post(`/casino/t/${id}/join`, b, { buyin: '600' })).headers.get('location')).toBe(loc);
+    const page = await (await get(loc, a)).text();
+    expect(page).toContain('id="c-live"');
+    expect(page).toContain('あや&lt;b&gt;');
+    clock = new Date(clock.getTime() + 6000);
+    const poll = (await (await get(`/casino/t/${id}/poll`, a)).json()) as { open: boolean };
+    expect(poll.open).toBe(true);
+    const frag = await (await get(`/casino/t/${id}/frag`, b)).text();
+    expect(frag).toContain('プリフロップ');
+    // 相手の手札は伏せたまま
+    expect((frag.match(/class="pc back small"/g) ?? []).length).toBe(2);
+    // 自分の番の人だけに操作が出る
+    const fa = await (await get(`/casino/t/${id}/frag`, a)).text();
+    const actor = fa.includes('value="fold"') ? a : b;
+    const r = await post(`/casino/t/${id}/act`, actor, { action: 'fold' });
+    expect(r.headers.get('location')).toBe(loc);
+    // ほかの卓は立てられない
+    expect((await post('/casino/tables/bj_table', a, {})).headers.get('location')).toBe('/casino/tables/bj_table?e=seated');
+  });
+
+  it('ブラックジャック卓: 賭けて、2 人そろうと配る。ババ抜きは作った人が始める', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const b = (await casinoLogin(B)).cookie!;
+    const loc = (await post('/casino/tables/bj_table', a, {})).headers.get('location')!;
+    const id = loc.split('/').pop()!;
+    await post(`/casino/t/${id}/join`, b, {});
+    expect((await post(`/casino/t/${id}/act`, a, { action: 'bet', bet: 'custom', betCustom: '150' })).headers.get('location')).toBe(loc);
+    expect(await balance(A)).toBe(4850);
+    await post(`/casino/t/${id}/act`, b, { action: 'bet', bet: '100' });
+    const frag = await (await get(`/casino/t/${id}/frag`, a)).text();
+    expect(frag).toMatch(/さんの番|結果/);
+    // 立って、ババ抜きへ
+    for (const c of [a, b]) {
+      for (let k = 0; k < 5; k++) {
+        const f = await (await get(`/casino/t/${id}/frag`, c)).text();
+        if (!f.includes('value="stand"')) break;
+        await post(`/casino/t/${id}/act`, c, { action: 'stand' });
+      }
+    }
+    clock = new Date(clock.getTime() + 10_000);
+    await get(`/casino/t/${id}/poll`, a);
+    await post(`/casino/t/${id}/leave`, a, {});
+    await post(`/casino/t/${id}/leave`, b, {});
+    const bl = (await post('/casino/tables/babanuki', a, { entry: '50' })).headers.get('location')!;
+    const bid = bl.split('/').pop()!;
+    await post(`/casino/t/${bid}/join`, b, {});
+    expect((await post(`/casino/t/${bid}/act`, b, { action: 'start' })).headers.get('location')).toBe(`${bl}?e=invalid`);
+    await post(`/casino/t/${bid}/act`, a, { action: 'start' });
+    const bf = await (await get(`/casino/t/${bid}/frag`, a)).text();
+    expect(bf).toContain('あなたの手札');
+  });
+});

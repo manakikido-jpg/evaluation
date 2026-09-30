@@ -400,6 +400,13 @@
       "when": 1790787144569,
       "tag": "0056_casino",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1790790153666,
+      "tag": "0057_casino_tables",
+      "breakpoints": true
     }
   ]
 }

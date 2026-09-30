@@ -1,0 +1,13 @@
+import { baccaratTable, bjTable, rouletteTable } from './dealer.js';
+import { babanuki, daifugo } from './party.js';
+import { poker } from './poker.js';
+
+/** 卓の種類ごとのゲーム */
+export const ENGINES = {
+  bj_table: bjTable,
+  baccarat_table: baccaratTable,
+  roulette_table: rouletteTable,
+  poker,
+  daifugo,
+  babanuki,
+} as const;

@@ -25,6 +25,12 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   roulette: { emoji: '🎡', name: 'ルーレット', note: '赤黒は 2 倍・数字 1 つは 36 倍' },
   othello: { emoji: '⚫', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.2〜2.2 倍' },
   versus: { emoji: '⚔', name: 'メンバー対戦（オセロ）', note: 'メンバー同士で賭けて対戦。勝った人が総取り' },
+  bj_table: { emoji: '🃏', name: 'ブラックジャック卓', note: 'みんなで同じディーラーと勝負' },
+  baccarat_table: { emoji: '🎴', name: 'バカラ卓', note: 'みんなで同じ勝負に賭ける' },
+  roulette_table: { emoji: '🎡', name: 'ルーレット卓', note: 'みんなで同じ回転に賭ける' },
+  poker: { emoji: '♠', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う' },
+  daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金' },
+  babanuki: { emoji: '🃟', name: 'ババ抜き', note: '最後にババを持っていた人の負け' },
 };
 
 export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor';
