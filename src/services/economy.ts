@@ -44,6 +44,9 @@ export type CoinReason =
   | 'admin_grant'
   | 'admin_take'
   | 'saisen'
+  | 'casino_bet'
+  | 'casino_win'
+  | 'casino_refund'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -263,5 +266,8 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   saisen: 'お賽銭（持ちすぎた分）',
   shuin_revoke: '朱印の取り消し',
   menzaifu: '免罪符',
+  casino_bet: 'カジノで賭けた',
+  casino_win: 'カジノの払い戻し（勝ち）',
+  casino_refund: 'カジノの返金',
   adjust: '調整',
 };

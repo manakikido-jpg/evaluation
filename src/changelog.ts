@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-casino',
+    date: '2026-09-30',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🎰 社務所Web にカジノができました',
+    items: [
+      'メンバーは社務所Web の /casino から Discord でログインして、サーバーの銭で遊べる（Discord の /カジノ でリンクが出る）',
+      'ブラックジャック・ハイ＆ロー・バカラ・スロット・ルーレット・オセロ（CPU）と、メンバー同士で賭けて打つオセロ対戦',
+      '運営は「🎰 カジノ」で、ゲームごとの収支を見て、賭けの最低・最高・1 日の上限・遊べるゲーム・お休みを決められる',
+    ],
+  },
+  {
     id: '2026-09-30-voice-ticket-event',
     date: '2026-09-30',
     kind: 'new',

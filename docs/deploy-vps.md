@@ -143,7 +143,7 @@ docker compose run --rm --build setup --guild （サーバー ID）             
 反映まで数分〜1 時間。`ping shamusho.（ドメイン）` で VPS の IP が出れば OK。
 > Cloudflare を使う場合、最初は「プロキシ（オレンジの雲）」を**オフ**にしておく（証明書の取得がうまくいかないことがあるため）。
 
-Discord Developer Portal → OAuth2 → **Redirects** に `https://shamusho.（ドメイン）/auth/callback` を追加。
+Discord Developer Portal → OAuth2 → **Redirects** に `https://shamusho.（ドメイン）/auth/callback` と `https://shamusho.（ドメイン）/casino/auth/callback`（カジノのログイン）を追加。
 
 ---
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { casinoSchema, coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -86,6 +86,8 @@ export const overridesSchema = z.object({
     .default({}),
   /** 経済の見守り（channelId を空にすると #記録 へ） */
   economyOps: economyOpsSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
+  /** カジノ */
+  casino: casinoSchema.partial().default({}),
 });
 
 export type Overrides = z.infer<typeof overridesSchema>;
@@ -132,6 +134,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       return merged;
     })(),
     applications: { ...base.applications, ...o.applications },
+    casino: { ...base.casino, ...o.casino },
     ranks: [
       ...base.ranks.map((r) => {
         const x = o.ranks[r.key] ?? {};

@@ -59,6 +59,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('casino')
+      .setNameLocalizations({ ja: 'カジノ' })
+      .setDescription('Open the casino on the web')
+      .setDescriptionLocalizations({ ja: '社務所Web のカジノを開くリンク（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('items')
       .setNameLocalizations({ ja: '持ち物' })
       .setDescription('Your tickets: use or give')

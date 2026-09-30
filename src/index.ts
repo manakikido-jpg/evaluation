@@ -21,6 +21,7 @@ import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
+import { CasinoApp } from './discord/casino.js';
 import { GlossaryApp } from './discord/glossary.js';
 import { TempGrantApp } from './discord/tempGrants.js';
 import { MeetingApp } from './discord/meetings.js';
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
   const gacha = new GachaApp(db, cfg);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
+  const casino = new CasinoApp(cfg, env.WEB_BASE_URL);
   const glossary = new GlossaryApp(db, cfg);
   const tempGrants = new TempGrantApp(db, cfg, actions);
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
@@ -270,6 +272,7 @@ async function main(): Promise<void> {
     void gacha.onInteraction(i);
     void presents.onInteraction(i);
     void wallet.onInteraction(i);
+    void casino.onInteraction(i);
     void glossary.onInteraction(i);
     void tempGrants.onInteraction(i);
     void meetingApp.onInteraction(i);

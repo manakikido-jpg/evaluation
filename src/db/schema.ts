@@ -111,6 +111,71 @@ export const adminSessions = pgTable('admin_sessions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** カジノのログイン（メンバーが Discord でログイン。運営の画面には入れない） */
+export const memberSessions = pgTable('member_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  displayName: text('display_name').notNull(),
+  avatarUrl: text('avatar_url'),
+  csrfToken: text('csrf_token').notNull(),
+  /** 最後に Discord のロールを確認した日時 */
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type MemberSession = typeof memberSessions.$inferSelect;
+
+/** カジノの 1 回のゲーム（1 人で遊ぶもの）。state は BOT 側だけが持つ（山札など、見せない分も入る） */
+export const casinoGames = pgTable(
+  'casino_games',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    game: text('game').notNull(),
+    /** 賭けた銭（ダブルダウンなどで増えた分も入れる） */
+    bet: integer('bet').notNull(),
+    state: jsonb('state').notNull(),
+    /** playing / done */
+    status: text('status').notNull().default('playing'),
+    /** 戻った銭（負けは 0・引き分けは賭けた分） */
+    payout: integer('payout').notNull().default(0),
+    /** 同時に 2 回動かさないための番号 */
+    version: integer('version').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => [index('casino_games_member_idx').on(t.memberId, t.status), index('casino_games_created_idx').on(t.createdAt)],
+);
+
+export type CasinoGameRow = typeof casinoGames.$inferSelect;
+
+/** メンバー同士の対戦（オセロ）。賭けた銭は両方から預かり、勝った人がまとめてもらう */
+export const casinoMatches = pgTable(
+  'casino_matches',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    game: text('game').notNull().default('othello'),
+    hostId: text('host_id').notNull(),
+    guestId: text('guest_id'),
+    bet: integer('bet').notNull(),
+    state: jsonb('state').notNull(),
+    /** open（相手待ち）/ playing / done / cancelled */
+    status: text('status').notNull().default('open'),
+    winnerId: text('winner_id'),
+    /** どう終わったか（end / resign / timeout / cancel / expired） */
+    endReason: text('end_reason'),
+    version: integer('version').notNull().default(0),
+    /** 最後に動いた日時（持ち時間の判定） */
+    turnAt: timestamp('turn_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => [index('casino_matches_status_idx').on(t.status)],
+);
+
+export type CasinoMatch = typeof casinoMatches.$inferSelect;
+
 /** 社務所Web の ID とパスワード（宮司が発行する。パスワードは scrypt のハッシュだけ保存） */
 export const webAccounts = pgTable('web_accounts', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),

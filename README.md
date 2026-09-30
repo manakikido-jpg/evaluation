@@ -126,7 +126,7 @@ npm start
 1. **ドメインを用意**し、DNS に A レコードを追加して、管理画面用のサブドメイン（例: `shamusho.example.com`）をサーバーの IP に向ける
 2. Discord Developer Portal → **OAuth2**
    - 「Client Secret」を発行してメモ
-   - **Redirects** に `https://shamusho.example.com/auth/callback` を追加
+   - **Redirects** に `https://shamusho.example.com/auth/callback` と `https://shamusho.example.com/casino/auth/callback`（カジノ）を追加
 3. `.env` に追記
    ```
    DISCORD_CLIENT_ID=（Client ID）

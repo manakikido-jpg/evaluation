@@ -7,6 +7,7 @@ type Nav =
   | 'home'
   | 'stats'
   | 'economy'
+  | 'casino'
   | 'glossary'
   | 'voice'
   | 'updates'
@@ -35,7 +36,8 @@ type Nav =
 /** 画面に出すログイン中の人（updatesUnseen: まだ読んでいない更新の数） */
 export type SessionView = AdminSession & { updatesUnseen?: number };
 
-type NavItem = { key: Nav; href: string; icon: string; label: string; gujiOnly?: boolean };
+/** page: 見られるページを選ばれている人に出すかを決めるページ（なければ key） */
+type NavItem = { key: Nav; href: string; icon: string; label: string; gujiOnly?: boolean; page?: string };
 
 /** 左のメニュー（仲間ごと） */
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
@@ -66,6 +68,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'お金と品物',
     items: [
       { key: 'economy', href: '/economy', icon: '🪙', label: '経済' },
+      { key: 'casino', href: '/economy/casino', icon: '🎰', label: 'カジノ', page: 'economy' },
       { key: 'gift', href: '/gacha#gacha-gift', icon: '🎁', label: 'みんなに配る', gujiOnly: true },
       { key: 'gacha', href: '/gacha', icon: '🎲', label: '物御籤' },
       { key: 'market', href: '/market', icon: '🏮', label: '市場' },
@@ -130,7 +133,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
               <nav class="side-nav" aria-label="メニュー">
                 {NAV_GROUPS.map((g) => {
                   // 宮司だけのページ・見られるページを選ばれている人の、ほかのページは出さない
-                  const items = g.items.filter((i) => (!i.gujiOnly || session.level === 'guji') && (!session.pages || session.pages.includes(i.key)));
+                  const items = g.items.filter((i) => (!i.gujiOnly || session.level === 'guji') && (!session.pages || session.pages.includes((i.page ?? i.key) as never)));
                   if (!items.length) return null;
                   // 見出しを押すと折りたためる（閉じたかは menu.js が覚える。今いるページの仲間は開いておく）
                   return (

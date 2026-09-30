@@ -329,6 +329,23 @@ export const economyOpsSchema = z.object({
 });
 export type EconomyOpsConfig = z.infer<typeof economyOpsSchema>;
 
+/** カジノ（社務所Web の /casino。メンバーが Discord でログインして銭で遊ぶ） */
+export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'othello', 'versus'] as const;
+export type CasinoGame = (typeof CASINO_GAMES)[number];
+export const casinoSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** 1 回に賭けられる銭 */
+  minBet: z.number().int().min(1).max(1_000_000).default(10),
+  maxBet: z.number().int().min(1).max(1_000_000).default(1000),
+  /** 1 日（日本時間）に賭けられる合計（0 で上限なし） */
+  dailyBetLimit: z.number().int().min(0).max(100_000_000).default(20000),
+  /** 遊べるゲーム */
+  games: z.array(z.enum(CASINO_GAMES)).default([...CASINO_GAMES]),
+  /** 位のロールがある人だけ入れる */
+  requireRank: z.boolean().default(true),
+});
+export type CasinoConfig = z.infer<typeof casinoSchema>;
+
 export const guildConfigSchema = z
   .object({
     guildId: snowflake,
@@ -420,6 +437,7 @@ export const guildConfigSchema = z
     bell: bellSchema.default(bellSchema.parse({})),
     gacha: gachaSchema.default(gachaSchema.parse({})),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
+    casino: casinoSchema.default(casinoSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集を役職のある人みんなに知らせる */
     recruit: z
       .object({

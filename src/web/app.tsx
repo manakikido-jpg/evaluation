@@ -3,6 +3,11 @@ import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, u
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { inviteCountOf, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { STATIC } from './assets.js';
+import { mountCasino } from './casino.js';
+import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
+import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
+import { matchStats, recentMatches } from '../services/casino/versus.js';
+import { CASINO_GAMES, type CasinoGame } from '../config.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
@@ -398,6 +403,9 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: user.id, action: 'auth.login', detail: { level: access.level, ...(access.pages ? { pages: access.pages } : {}) }, via: 'web' });
     return c.redirect('/');
   });
+
+  // ───────── 🎰 カジノ（メンバーが Discord でログイン。秘密の入口は要らない） ─────────
+  mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ここから先はログイン必須 ─────────
 
@@ -1205,6 +1213,56 @@ export function createWebApp(deps: WebDeps) {
     if (Number.isInteger(id) && id > 0) await cancelEvent(db, id, c.get('session').userId, now());
     await deps.onSettingsSaved?.();
     return c.redirect('/economy?msg=event_cancelled#economy-events');
+  });
+
+  /** 🎰 カジノ（収支と設定） */
+  app.get('/economy/casino', async (c) => {
+    const q = c.req.query('range');
+    const range: CasinoRange = q && Object.hasOwn(CASINO_RANGES, q) ? (q as CasinoRange) : '7d';
+    const since = new Date(now().getTime() - CASINO_RANGES[range].days * 86_400_000);
+    const [stats, matches, recent, players7d] = await Promise.all([
+      casinoStats(db, since),
+      matchStats(db, since),
+      recentMatches(db, 10),
+      casinoPlayers(db, new Date(now().getTime() - 7 * 86_400_000)),
+    ]);
+    return c.html(
+      <CasinoAdminPage
+        session={c.get('session')}
+        casino={cfg.casino}
+        coinName={cfg.economy.currencyName}
+        url={`${deps.baseUrl}/casino`}
+        range={range}
+        stats={stats}
+        matches={matches}
+        recentMatches={recent}
+        names={await namesOf(db, recent.flatMap((m) => [m.hostId, m.guestId ?? '', m.winnerId ?? '']))}
+        players7d={players7d}
+        flash={c.req.query('msg')}
+        guji={c.get('session').level === 'guji'}
+      />,
+    );
+  });
+
+  app.post('/economy/casino', async (c) => {
+    const body = await c.req.parseBody({ all: true });
+    const int = (k: string) => (typeof body[k] === 'string' && /^\d{1,9}$/.test(body[k] as string) ? Number(body[k]) : NaN);
+    const raw = body.games;
+    const list = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((g): g is CasinoGame => typeof g === 'string' && (CASINO_GAMES as readonly string[]).includes(g));
+    const casino = { enabled: body.enabled === 'yes', requireRank: body.requireRank === 'yes', minBet: int('minBet'), maxBet: int('maxBet'), dailyBetLimit: int('dailyBetLimit'), games: CASINO_GAMES.filter((g) => list.includes(g)) };
+    if (!(casino.minBet <= casino.maxBet)) return c.redirect('/economy/casino?msg=invalid');
+    const current = await loadOverrides(db);
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, casino });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/economy/casino?msg=invalid');
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'casino.settings', detail: casino, via: 'web' });
+    return c.redirect('/economy/casino?msg=saved');
   });
 
   /** ⚙ 見守りの設定 */
