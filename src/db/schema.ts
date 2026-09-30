@@ -102,12 +102,39 @@ export const adminSessions = pgTable('admin_sessions', {
   level: text('level').notNull(),
   /** 見られるページ（null は全部。社務所Web の「設定」で人・ロールごとに選ぶ） */
   pages: text('pages').array(),
+  /** ID とパスワードでログインしたとき、そのアカウント（Discord でログインしたときは null） */
+  accountId: bigint('account_id', { mode: 'number' }),
   csrfToken: text('csrf_token').notNull(),
   /** 最後に Discord のロールを確認した日時 */
   checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** 社務所Web の ID とパスワード（宮司が発行する。パスワードは scrypt のハッシュだけ保存） */
+export const webAccounts = pgTable('web_accounts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** ログイン ID（小文字で保存） */
+  loginId: text('login_id').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  /** 画面に出す名前 */
+  name: text('name').notNull(),
+  /** guji / shinshoku */
+  level: text('level').$type<'guji' | 'shinshoku'>().notNull(),
+  /** 見られるページ（null は全部。神職のとき） */
+  pages: text('pages').array(),
+  /** 結びつけた Discord の人（記録に名前を出す。なくてもよい） */
+  memberId: text('member_id'),
+  disabled: boolean('disabled').notNull().default(false),
+  /** 続けて間違えた回数と、ログインできない期限 */
+  failedCount: integer('failed_count').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type WebAccount = typeof webAccounts.$inferSelect;
 
 export type Member = typeof members.$inferSelect;
 export type MemberEvent = typeof memberEvents.$inferSelect;

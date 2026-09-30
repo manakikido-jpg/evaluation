@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { inviteCountOf, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
@@ -66,6 +66,7 @@ import type { DiscordActions } from '../lib/discordRest.js';
 import { DiscordHttpError } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
+import { accountAccess, accountUserId, checkLogin, createAccount, deleteAccount, getAccount, listAccounts, normalizeLoginId, resetPassword, setDisabled, updateAccount } from '../services/webAccounts.js';
 import { createSession, deleteSession, findSession, markChecked, randomToken, recheckAllSessions, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
 
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
@@ -79,7 +80,7 @@ import { inScope, loadUpdateNews, newsChannelOf, postNews, saveUpdateNews } from
 import { isTrendRange, memberTrend } from '../services/stats.js';
 import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
-import { ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
+import { AccountIssuedPage, ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
 import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecidedApplications } from '../services/applications.js';
 import { changeAgeGroup, closeSoudan, decide, decideOmairi, removeYoimairi, replySoudan, revealSoudanSender, type OmairiAction } from '../services/admission.js';
 import { getSoudan, listSoudan, soudanMessagesOf } from '../services/soudan.js';
@@ -218,6 +219,10 @@ export type WebDeps = {
   baseUrl: string;
   /** BOT のユーザー ID（＝ DISCORD_CLIENT_ID）。ロールのページで、BOT が変えられないロールを見分ける */
   botId?: string;
+  /** Discord でログインできるか（止めると ID とパスワードだけ。省略時はできる） */
+  discordLogin?: boolean;
+  /** 秘密の入口（/enter/この文字）。決めると、ここを通った人にだけログイン画面を出す（ほかは「見つかりません」） */
+  entryKey?: string;
   now?: () => Date;
 };
 
@@ -225,6 +230,12 @@ type Env = { Variables: { session: SessionView } };
 
 const SESSION_COOKIE = 'shamusho_session';
 const STATE_COOKIE = 'shamusho_state';
+/** 秘密の入口を通った印 */
+const ENTRY_COOKIE = 'shamusho_entry';
+/** ログインの画面の CSRF */
+const LOGIN_COOKIE = 'shamusho_login';
+/** 同じところから続けて間違えたら、しばらく止める（アカウントごとのロックとは別に） */
+const IP_LOCK = { tries: 20, minutes: 15 } as const;
 
 
 
@@ -291,7 +302,60 @@ export function createWebApp(deps: WebDeps) {
 
   // ───────── ログイン ─────────
 
-  app.get('/login', (c) => c.html(<LoginPage error={c.req.query('e')} />));
+  const discordLogin = deps.discordLogin ?? true;
+  const entryMark = deps.entryKey ? createHash('sha256').update(`entry:${deps.entryKey}`).digest('hex') : undefined;
+  /** 秘密の入口を通ったか（入口を決めていなければ、いつでも通す） */
+  const hasEntry = (c: Context) => !entryMark || safeEqual(getCookie(c, ENTRY_COOKIE) ?? '', entryMark);
+  const hidden = (c: Context) => c.text('Not Found', 404);
+
+  app.get('/enter/:key', (c) => {
+    if (!deps.entryKey || !entryMark || !safeEqual(c.req.param('key'), deps.entryKey)) return hidden(c);
+    setCookie(c, ENTRY_COOKIE, entryMark, { httpOnly: true, secure, sameSite: 'Lax', path: '/', maxAge: 30 * 86_400 });
+    return c.redirect('/login');
+  });
+
+  app.get('/login', (c) => {
+    if (!hasEntry(c)) return hidden(c);
+    const csrf = randomToken();
+    setCookie(c, LOGIN_COOKIE, csrf, { httpOnly: true, secure, sameSite: 'Strict', path: '/login', maxAge: 1800 });
+    return c.html(<LoginPage error={c.req.query('e')} discord={discordLogin} csrf={csrf} />);
+  });
+
+  // 同じところ（IP）からの失敗を数える
+  const ipFails = new Map<string, { count: number; until: number }>();
+  const ipOf = (c: Context) => (c.req.header('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'local';
+
+  app.post('/login', async (c) => {
+    if (!hasEntry(c)) return hidden(c);
+    const body = await c.req.parseBody();
+    const sent = typeof body._csrf === 'string' ? body._csrf : '';
+    if (!safeEqual(sent, getCookie(c, LOGIN_COOKIE) ?? '')) return c.redirect('/login?e=state');
+    const ip = ipOf(c);
+    const t = now().getTime();
+    const f = ipFails.get(ip);
+    if (f && f.until > t && f.count >= IP_LOCK.tries) return c.redirect('/login?e=locked');
+    const loginId = typeof body.loginId === 'string' ? body.loginId.slice(0, 64) : '';
+    const password = typeof body.password === 'string' ? body.password.slice(0, 200) : '';
+    const r = await checkLogin(db, loginId, password, now());
+    if (r.status !== 'ok') {
+      const cur = f && f.until > t ? f : { count: 0, until: t + IP_LOCK.minutes * 60_000 };
+      cur.count++;
+      ipFails.set(ip, cur);
+      if (ipFails.size > 5000) for (const [k, v] of ipFails) if (v.until <= t) ipFails.delete(k);
+      await audit(db, { actorId: `login:${normalizeLoginId(loginId).slice(0, 32) || '?'}`, action: 'auth.denied', detail: { reason: r.status, ip }, via: 'web' });
+      return c.redirect(`/login?e=${r.status === 'locked' ? 'locked' : r.status === 'disabled' ? 'disabled' : 'wrong'}`);
+    }
+    ipFails.delete(ip);
+    const access = accountAccess(r.account)!;
+    const token = await createSession(db, { id: accountUserId(r.account), username: r.account.loginId, displayName: r.account.name, avatarUrl: null }, access, now(), r.account.id);
+    deleteCookie(c, LOGIN_COOKIE, { path: '/login' });
+    setCookie(c, SESSION_COOKIE, token, { httpOnly: true, secure, sameSite: 'Lax', path: '/', maxAge: SESSION_HOURS * 3600 });
+    await audit(db, { actorId: accountUserId(r.account), action: 'auth.login', detail: { account: r.account.loginId, level: access.level, ...(access.pages ? { pages: access.pages } : {}) }, via: 'web' });
+    return c.redirect('/');
+  });
+
+  // Discord でのログイン（止めているときは「見つかりません」）
+  app.use('/auth/*', async (c, next) => (discordLogin && hasEntry(c) ? next() : hidden(c)));
 
   app.get('/auth/discord', (c) => {
     const state = randomToken();
@@ -341,8 +405,23 @@ export function createWebApp(deps: WebDeps) {
     const session = token ? await findSession(db, token, now()) : undefined;
     if (!session) return toLogin(c, token ? 'expired' : undefined);
 
+    // ID とパスワードのアカウント: 止めた・消した・ページを変えたら、次に開いたときから
+    if (session.accountId !== null && now().getTime() - session.checkedAt.getTime() > RECHECK_MS) {
+      const account = await getAccount(db, session.accountId);
+      const access = account ? accountAccess(account) : undefined;
+      if (!account || !access) {
+        await deleteSession(db, session.id);
+        await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
+        deleteCookie(c, SESSION_COOKIE, { path: '/' });
+        return toLogin(c, 'forbidden');
+      }
+      await markChecked(db, session.id, access, now());
+      session.level = access.level;
+      session.pages = access.pages;
+      session.username = account.name;
+    }
     // 一定時間ごとに、今も神職・宮司のロールを持っているか Discord に確かめる
-    if (now().getTime() - session.checkedAt.getTime() > RECHECK_MS) {
+    if (session.accountId === null && now().getTime() - session.checkedAt.getTime() > RECHECK_MS) {
       let roles: string[] | null | undefined;
       try {
         roles = await api.memberRoles(cfg.guildId, session.userId);
@@ -393,6 +472,8 @@ export function createWebApp(deps: WebDeps) {
   };
 
   const toLogin = (c: Context<Env>, error?: string) => {
+    // 秘密の入口を通っていない人には、ここがあることも見せない
+    if (!hasEntry(c)) return hidden(c);
     const url = error ? `/login?e=${error}` : '/login';
     // htmx からのリクエストはページごと移動させる
     if (c.req.header('hx-request')) return c.body(null, 401, { 'hx-redirect': url });
@@ -1506,6 +1587,7 @@ export function createWebApp(deps: WebDeps) {
     const botRoles = allRoles.filter((r) => r.id === cfg.guildId || (r.tags?.bot_id && (!deps.botId || r.tags.bot_id === deps.botId)));
     const botPerms = botRoles.reduce((n, r) => n | BigInt(r.permissions ?? '0'), 0n);
     const botCanMentionAll = allRoles.length ? (botPerms & ((1n << 17n) | (1n << 3n))) !== 0n : undefined;
+    const accounts = await listAccounts(db);
     return c.html(
       <SettingsPage
         session={c.get('session')}
@@ -1519,6 +1601,9 @@ export function createWebApp(deps: WebDeps) {
         gachaStats={await gachaStats(db)}
         botCanMentionAll={botCanMentionAll}
         webAccessNames={await namesOf(db, webAccessEntries(cfg).filter((e) => e.kind === 'member').map((e) => e.id))}
+        accounts={accounts}
+        accountNames={await namesOf(db, accounts.map((a) => a.memberId).filter((x): x is string => Boolean(x)))}
+        discordLogin={discordLogin}
       />,
     );
   });
@@ -1716,6 +1801,75 @@ export function createWebApp(deps: WebDeps) {
     if (rest.length >= 50) return c.redirect(webAccessBack('invalid'));
     await saveWebAccess(c, [...rest, { kind, id, pages }], { kind, id, pages });
     return c.redirect(webAccessBack('saved'));
+  });
+
+  // ───────── 🪪 社務所Web のアカウント（ID とパスワード） ─────────
+
+  const accountsBack = (msg: string) => `/settings?msg=${msg}&at=accounts#sec-accounts`;
+  /** フォームの値（権限・ページ・Discord の人）。人が見つからなければ undefined */
+  const accountForm = async (body: Record<string, unknown>, current?: string | null) => {
+    const level = body.level === 'guji' ? ('guji' as const) : ('shinshoku' as const);
+    const raw = body.pages === undefined ? [] : Array.isArray(body.pages) ? body.pages : [body.pages];
+    const picked = raw.filter((v): v is string => typeof v === 'string');
+    const pages = picked.includes('*') ? null : WEB_PAGE_KEYS.filter((k) => picked.includes(k));
+    const memberRaw = field(body, 'member', 100);
+    let memberId: string | null = null;
+    if (memberRaw && memberRaw !== current) {
+      const found = await findMemberByNameOrId(db, memberRaw);
+      if (!found || found === 'ambiguous') return undefined;
+      memberId = found.id;
+    } else if (memberRaw) memberId = current ?? null;
+    return { name: field(body, 'name', 40), level, pages, memberId };
+  };
+
+  app.post('/settings/accounts', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody({ all: true });
+    const f = await accountForm(body);
+    if (!f) return c.redirect(accountsBack('account_member_not_found'));
+    const r = await createAccount(db, { loginId: field(body, 'loginId', 64), ...f }, c.get('session').userId, now());
+    if (r.status !== 'ok') return c.redirect(accountsBack(`account_${r.status}`));
+    await audit(db, { actorId: c.get('session').userId, action: 'account.create', detail: { account: r.account.loginId, level: r.account.level, pages: r.account.pages }, via: 'web' });
+    return c.html(<AccountIssuedPage session={c.get('session')} loginId={r.account.loginId} name={r.account.name} password={r.password} entryHint={Boolean(deps.entryKey)} />);
+  });
+
+  app.post('/settings/accounts/:id/:action?', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = Number(c.req.param('id'));
+    const action = c.req.param('action') ?? 'save';
+    const a = Number.isSafeInteger(id) ? await getAccount(db, id) : undefined;
+    if (!a) return c.redirect(accountsBack('invalid'));
+    const by = c.get('session').userId;
+    const log = (what: string, detail: Record<string, unknown> = {}) => audit(db, { actorId: by, action: `account.${what}`, detail: { account: a.loginId, ...detail }, via: 'web' });
+    if (action === 'reset') {
+      const r = await resetPassword(db, id);
+      if (r.status !== 'ok') return c.redirect(accountsBack('invalid'));
+      await log('reset');
+      return c.html(<AccountIssuedPage session={c.get('session')} loginId={a.loginId} name={a.name} password={r.password} reset entryHint={Boolean(deps.entryKey)} />);
+    }
+    const body = await c.req.parseBody({ all: true });
+    if (action === 'toggle') {
+      const r = await setDisabled(db, id, !a.disabled);
+      if (r !== 'ok') return c.redirect(accountsBack(r === 'last_guji' ? 'account_last_guji' : 'invalid'));
+      await log(a.disabled ? 'enable' : 'disable');
+      return c.redirect(accountsBack(a.disabled ? 'account_enabled' : 'account_disabled'));
+    }
+    if (action === 'delete') {
+      if (body.confirm !== 'yes') return c.redirect(accountsBack('invalid'));
+      const r = await deleteAccount(db, id);
+      if (r !== 'ok') return c.redirect(accountsBack(r === 'last_guji' ? 'account_last_guji' : 'invalid'));
+      await log('delete');
+      return c.redirect(accountsBack('account_deleted'));
+    }
+    if (action !== 'save') return c.redirect(accountsBack('invalid'));
+    const f = await accountForm(body, a.memberId);
+    if (!f) return c.redirect(accountsBack('account_member_not_found'));
+    const r = await updateAccount(db, id, f);
+    if (r !== 'ok') return c.redirect(accountsBack(r === 'last_guji' ? 'account_last_guji' : r === 'bad_name' ? 'account_bad_name' : 'invalid'));
+    // ログイン中の人にも、次に開いたときから効かせる
+    await recheckAllSessions(db);
+    await log('update', { level: f.level, pages: f.level === 'guji' ? null : f.pages });
+    return c.redirect(accountsBack('account_saved'));
   });
 
   app.post('/settings/web-access/remove', async (c) => {

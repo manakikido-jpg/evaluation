@@ -2418,3 +2418,67 @@ describe('社務所Web に入れる人（ロール・人ごとに見られるペ
     }
   });
 });
+
+describe('🪪 ID とパスワード・秘密の入口', () => {
+  it('入口を通らないと何も見えない。ID とパスワードで入り、宮司が発行したアカウントはページを絞れて、止めるとすぐ入れない', async () => {
+    const { createAccount } = await import('../src/services/webAccounts.js');
+    const KEY = 'test-entry-key-0123456789';
+    app = createWebApp({ db, cfg, api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock, discordLogin: false, entryKey: KEY });
+    const g = await createAccount(db, { loginId: 'miyaji', name: '宮司さん', level: 'guji', pages: null }, 'cli');
+    if (g.status !== 'ok') throw new Error(g.status);
+    // 入口を通っていなければ、どこも「見つかりません」
+    for (const p of ['/', '/login', '/members', '/auth/discord']) expect((await app.request(p)).status).toBe(404);
+    expect((await app.request('/enter/wrong-key-0123456789')).status).toBe(404);
+    const enter = await app.request(`/enter/${KEY}`);
+    expect(enter.headers.get('location')).toBe('/login');
+    const entry = `shamusho_entry=${cookiesFrom(enter).shamusho_entry}`;
+    // Discord のログインは止めている
+    expect((await app.request('/auth/discord', { headers: { cookie: entry } })).status).toBe(404);
+    const loginAs = async (loginId: string, password: string) => {
+      const page = await app.request('/login', { headers: { cookie: entry } });
+      const html = await page.text();
+      expect(html).toContain('name="loginId"');
+      expect(html).not.toContain('Discord でログイン');
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+      const lc = cookiesFrom(page).shamusho_login!;
+      const res = await app.request('/login', {
+        method: 'POST',
+        headers: { cookie: `${entry}; shamusho_login=${lc}`, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ _csrf: csrf, loginId, password }).toString(),
+      });
+      return { location: res.headers.get('location'), session: cookiesFrom(res).shamusho_session };
+    };
+    expect((await loginAs('miyaji', 'wrong')).location).toBe('/login?e=wrong');
+    const me = await loginAs('Miyaji', g.password);
+    expect(me.location).toBe('/');
+    const s = me.session!;
+    expect((await get('/', s)).status).toBe(200);
+    expect(await (await get('/settings', s)).text()).toContain('社務所Web のアカウント');
+    // 神職のアカウントを発行（掲示板だけ）→ パスワードはこの画面だけ
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
+    const issued = await app.request('/settings/accounts', {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams([['_csrf', csrf], ['loginId', 'shin'], ['name', '神職さん'], ['level', 'shinshoku'], ['pages', 'board']]).toString(),
+    });
+    const issuedHtml = await issued.text();
+    expect(issuedHtml).toContain('アカウントを発行しました');
+    const pw = /<code class="secret">([^<]+)<\/code>/.exec(issuedHtml)![1]!;
+    const shin = await loginAs('shin', pw);
+    expect(shin.location).toBe('/');
+    const home = await get('/', shin.session!);
+    expect(home.headers.get('location')).toBe('/board');
+    expect((await get('/economy', shin.session!)).status).toBe(403);
+    // 止めると、ログイン中でもすぐ入れない
+    const { listAccounts } = await import('../src/services/webAccounts.js');
+    const id = (await listAccounts(db)).find((a) => a.loginId === 'shin')!.id;
+    const stop = await app.request(`/settings/accounts/${id}/toggle`, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf }).toString(),
+    });
+    expect(stop.headers.get('location')).toBe('/settings?msg=account_disabled&at=accounts#sec-accounts');
+    expect((await get('/board', shin.session!)).status).toBe(404);
+    expect((await app.request('/board', { headers: { cookie: `${entry}; shamusho_session=${shin.session}` } })).headers.get('location')).toBe('/login?e=expired');
+  });
+});

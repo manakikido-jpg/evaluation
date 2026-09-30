@@ -19,7 +19,8 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 /** ログイン状態を作る。返すトークンは Cookie に入れ、DB にはハッシュだけ保存する */
-export async function createSession(db: Db, user: DiscordUser, access: WebAccess, now = new Date()): Promise<string> {
+/** accountId: ID とパスワードでログインしたとき、そのアカウント */
+export async function createSession(db: Db, user: DiscordUser, access: WebAccess, now = new Date(), accountId?: number): Promise<string> {
   const token = randomToken();
   await db.insert(adminSessions).values({
     id: hash(token),
@@ -28,6 +29,7 @@ export async function createSession(db: Db, user: DiscordUser, access: WebAccess
     avatarUrl: user.avatarUrl,
     level: access.level,
     pages: access.pages,
+    accountId: accountId ?? null,
     csrfToken: randomToken(),
     checkedAt: now,
     expiresAt: new Date(now.getTime() + SESSION_HOURS * 3_600_000),

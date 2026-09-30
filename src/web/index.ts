@@ -30,10 +30,12 @@ async function main(): Promise<void> {
     discord: createDiscordActions(env.DISCORD_TOKEN),
     baseUrl: env.WEB_BASE_URL,
     botId: env.DISCORD_CLIENT_ID,
+    discordLogin: env.WEB_DISCORD_LOGIN === 'on',
+    ...(env.WEB_ENTRY_KEY ? { entryKey: env.WEB_ENTRY_KEY } : {}),
   });
 
   const server = serve({ fetch: app.fetch, port: env.WEB_PORT }, (info) =>
-    logger.info({ port: info.port, url: env.WEB_BASE_URL }, 'shamusho web started'),
+    logger.info({ port: info.port, url: env.WEB_BASE_URL, entry: Boolean(env.WEB_ENTRY_KEY), discordLogin: env.WEB_DISCORD_LOGIN }, 'shamusho web started'),
   );
 
   const shutdown = async (signal: string) => {

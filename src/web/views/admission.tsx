@@ -1,6 +1,6 @@
 import { WEB_PAGES, webAccessEntries, type GachaTier, type GuildConfig, type WebAccessEntry } from '../../config.js';
 import { contactSummary } from '../../services/contact.js';
-import type { AdminSession, Application, Omairi, Soudan, SoudanMessage } from '../../db/schema.js';
+import type { AdminSession, Application, Omairi, Soudan, SoudanMessage, WebAccount } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
 import { GENDER_LABEL, isGender } from '../../services/admission.js';
 import { recruitWaits } from '../../services/recruit.js';
@@ -45,6 +45,15 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   webaccess_ambiguous: { text: '同じ名前の人が 2 人以上います。ID で入れてください。', kind: 'warn' },
   webaccess_no_pages: { text: 'ロールは、見られるページを 1 つ以上選んでください（外すときは「外す」）。', kind: 'warn' },
   webaccess_removed: { text: '外しました。次に開いたときから入れなくなります。', kind: 'ok' },
+  account_bad_id: { text: 'ID は英小文字・数字・「_ . -」で 3〜32 文字にしてください。', kind: 'warn' },
+  account_taken: { text: 'その ID はもう使われています。', kind: 'warn' },
+  account_bad_name: { text: '名前を入れてください。', kind: 'warn' },
+  account_saved: { text: 'アカウントを保存しました（ログイン中の人にも、次に開いたときから効きます）。', kind: 'ok' },
+  account_disabled: { text: '止めました。ログイン中だった人も入れなくなりました。', kind: 'ok' },
+  account_enabled: { text: '使えるようにしました。', kind: 'ok' },
+  account_deleted: { text: '消しました。', kind: 'ok' },
+  account_last_guji: { text: '使える宮司が 1 人もいなくなるので、できません（先にほかの宮司を発行してください）。', kind: 'warn' },
+  account_member_not_found: { text: 'Discord の人が見つかりませんでした（ID で入れてみてください）。', kind: 'warn' },
 };
 
 function Flash(props: { code?: string }) {
@@ -488,7 +497,8 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['boost', '💝 ブースト（奉納）'],
   ['join', '📝 入鯖申請・お参り'],
   ['give', '🎁 今いる人に配る'],
-  ['webaccess', '🔑 社務所Web に入れる人'],
+  ['accounts', '🪪 社務所Web のアカウント'],
+  ['webaccess', '🔑 Discord ログインで入れる人'],
 ];
 
 /** 見られるページのチェック（「全部」は、これから増えるページも） */
@@ -509,6 +519,125 @@ function PageChecks(props: { pages: WebAccessEntry['pages'] }) {
         </label>
       ))}
     </div>
+  );
+}
+
+const LEVEL_NAME = { guji: '⛩ 宮司', shinshoku: '🎐 神職' } as const;
+
+/** アカウントの入力欄（発行・直す）。a があれば今の値 */
+function AccountFields(props: { account?: WebAccount; memberName?: string }) {
+  const a = props.account;
+  return (
+    <>
+      <div class="grid2">
+        {!a && (
+          <label class="field">
+            <span>ID（英小文字・数字・「_ . -」で 3〜32 文字）</span>
+            <input type="text" name="loginId" required minlength={3} maxlength={32} pattern="[a-zA-Z0-9_.\-]{3,32}" autocomplete="off" />
+          </label>
+        )}
+        <label class="field">
+          <span>名前（画面・記録に出る）</span>
+          <input type="text" name="name" required maxlength={40} value={a?.name ?? ''} />
+        </label>
+        <label class="field">
+          <span>権限</span>
+          <select name="level">
+            <option value="shinshoku" selected={a?.level !== 'guji'}>
+              🎐 神職（見られるページを選べる）
+            </option>
+            <option value="guji" selected={a?.level === 'guji'}>
+              ⛩ 宮司（全部）
+            </option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Discord の人（ID・ユーザー名・表示名。なくてもよい。記録に名前が出る）</span>
+          <input type="text" name="member" maxlength={100} value={a?.memberId ?? ''} placeholder={props.memberName ? `今: ${props.memberName}` : '例: 123456789012345678'} />
+        </label>
+      </div>
+      <p class="note">神職のとき見られるページ:</p>
+      <PageChecks pages={a?.pages ? (a.pages as WebAccessEntry['pages']) : ['*']} />
+    </>
+  );
+}
+
+function AccountRow(props: { session: AdminSession; account: WebAccount; memberName?: string }) {
+  const a = props.account;
+  const Hidden = () => (
+    <>
+      <Csrf session={props.session} />
+    </>
+  );
+  return (
+    <div class="webaccess-row">
+      <form method="post" action={`/settings/accounts/${a.id}`}>
+        <Hidden />
+        <h3>
+          🪪 {a.name} <small>（ID: {a.loginId}・{LEVEL_NAME[a.level]}）</small>
+          {a.disabled && <small class="webaccess-off">（止めている）</small>}
+        </h3>
+        <p class="note">
+          {a.lastLoginAt ? `最後のログイン: ${fmtDateTime(a.lastLoginAt)}` : 'まだログインしていません'}
+          {a.memberId ? `・Discord: ${props.memberName ?? a.memberId}` : ''}
+        </p>
+        <AccountFields account={a} memberName={props.memberName} />
+        <div class="inline-actions">
+          <button type="submit" class="ok">
+            保存する
+          </button>
+        </div>
+      </form>
+      <div class="inline-actions">
+        <form method="post" action={`/settings/accounts/${a.id}/reset`}>
+          <Hidden />
+          <button type="submit">🔁 パスワードを作り直す</button>
+        </form>
+        <form method="post" action={`/settings/accounts/${a.id}/toggle`}>
+          <Hidden />
+          <button type="submit">{a.disabled ? '▶ 使えるようにする' : '⏸ 止める'}</button>
+        </form>
+        <form method="post" action={`/settings/accounts/${a.id}/delete`} class="inline-actions">
+          <Hidden />
+          <label class="check">
+            <input type="checkbox" name="confirm" value="yes" required />
+            <span>消す</span>
+          </label>
+          <button type="submit" class="danger">
+            消す
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** 発行・作り直したパスワード（この画面だけで見せる） */
+export function AccountIssuedPage(props: { session: AdminSession; loginId: string; name: string; password: string; reset?: boolean; entryHint?: boolean }) {
+  return (
+    <Layout title="アカウント" session={props.session} nav="settings">
+      <h1>🪪 {props.reset ? 'パスワードを作り直しました' : 'アカウントを発行しました'}</h1>
+      <section class="card">
+        <p>
+          <b>{props.name}</b> さんに、次の ID とパスワードを伝えてください（DM など、ほかの人に見られないところで）。
+        </p>
+        <dl class="kv">
+          <dt>ID</dt>
+          <dd>
+            <code>{props.loginId}</code>
+          </dd>
+          <dt>パスワード</dt>
+          <dd>
+            <code class="secret">{props.password}</code>
+          </dd>
+        </dl>
+        <p class="flash warn">パスワードはこの画面だけで見られます。閉じたり戻ったりすると、もう出ません（わからなくなったら作り直してください）。</p>
+        {props.entryHint && <p class="note">ログインの画面は、秘密の入口の URL から開きます（入口の URL も一緒に伝えてください）。</p>}
+        <a class="button" href="/settings?at=accounts#sec-accounts">
+          設定に戻る
+        </a>
+      </section>
+    </Layout>
   );
 }
 
@@ -561,6 +690,12 @@ export function SettingsPage(props: {
   botCanMentionAll?: boolean;
   /** 社務所Web に入れる人（人の行）の名前 */
   webAccessNames?: Names;
+  /** ID とパスワードのアカウント */
+  accounts?: WebAccount[];
+  /** アカウントに結びつけた Discord の人の名前 */
+  accountNames?: Names;
+  /** Discord でログインできるか（止めていれば「Discord ログインで入れる人」は出さない） */
+  discordLogin?: boolean;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -595,7 +730,7 @@ export function SettingsPage(props: {
       <div class="settings-layout">
         <nav class="settings-index card" aria-label="設定の項目">
           <a href="/settings" class="all">すべて表示</a>
-          {SETTINGS_SECTIONS.map(([id, label]) => (
+          {SETTINGS_SECTIONS.filter(([id]) => id !== 'webaccess' || props.discordLogin !== false).map(([id, label]) => (
             <a href={`#sec-${id}`} class={`to-${id}`}>
               {label.replaceAll('{通貨}', e.currencyName)}
             </a>
@@ -944,6 +1079,33 @@ export function SettingsPage(props: {
           <Save at="join" />
         </section>
       </form>
+      <section class="card anchor" id="sec-accounts">
+        <h2>🪪 社務所Web のアカウント（ID とパスワード）</h2>
+        <p class="note">
+          社務所Web に入れる人の ID とパスワードを発行します。パスワードは発行・作り直したときに 1 回だけ出ます（DB には暗号にした形だけ）。宮司はいつも全部、神職は見られるページを選べます。止める・消すと、ログイン中の人もすぐ入れなくなります。5 回続けて間違えると 15 分ログインできません。
+        </p>
+        {props.at === 'accounts' && props.flash && <Flash code={props.flash} />}
+        {(props.accounts ?? []).length ? (
+          <div class="webaccess-list">
+            {(props.accounts ?? []).map((a) => (
+              <AccountRow session={props.session} account={a} memberName={a.memberId ? props.accountNames?.get(a.memberId) : undefined} />
+            ))}
+          </div>
+        ) : (
+          <p class="note">まだアカウントがありません。</p>
+        )}
+        <form method="post" action="/settings/accounts" class="webaccess-add">
+          <Csrf session={props.session} />
+          <h3>＋ 発行する</h3>
+          <AccountFields />
+          <div class="inline-actions section-save">
+            <button type="submit" class="ok">
+              発行する（パスワードが出ます）
+            </button>
+          </div>
+        </form>
+      </section>
+      {props.discordLogin !== false && (
       <section class="card anchor" id="sec-webaccess">
         <h2>🔑 社務所Web に入れる人</h2>
         <p class="note">
@@ -996,6 +1158,7 @@ export function SettingsPage(props: {
           </div>
         </form>
       </section>
+      )}
       <section class="card anchor give" id="sec-give">
       <h2>🎁 今いる人に配る</h2>
       <form method="post" action="/settings/join-bonus-all" class="give-form">

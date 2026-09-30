@@ -28,13 +28,16 @@ const who = (names: Names, id: string | null) => (id ? names.get(id) ?? `ID ${id
 // ───────── ログイン ─────────
 
 const LOGIN_ERRORS: Record<string, string> = {
-  forbidden: '神職・宮司のロールを持っている方だけが入れます。',
+  forbidden: '入れません（アカウントが止められたか、神職・宮司のロールがありません）。',
   state: 'ログインの確認に失敗しました。もう一度お試しください。',
   failed: 'Discord とのやり取りに失敗しました。時間をおいてもう一度お試しください。',
   expired: 'ログインの期限が切れました。もう一度ログインしてください。',
+  wrong: 'ID かパスワードが違います。',
+  locked: '続けて間違えたので、しばらく（15 分ほど）ログインできません。',
+  disabled: 'このアカウントは止められています。宮司に聞いてください。',
 };
 
-export function LoginPage(props: { error?: string }) {
+export function LoginPage(props: { error?: string; /** Discord でログインできる */ discord?: boolean; csrf?: string }) {
   const msg = props.error && Object.hasOwn(LOGIN_ERRORS, props.error) ? LOGIN_ERRORS[props.error] : undefined;
   return (
     <Layout title="ログイン">
@@ -43,10 +46,26 @@ export function LoginPage(props: { error?: string }) {
         <h1>社務所 Web</h1>
         <p class="sub">咲楽ノ宮 管理画面（神職・宮司専用）</p>
         {msg && <p class="error">{msg}</p>}
-        <a class="button primary" href="/auth/discord">
-          Discord でログイン
-        </a>
-        <p class="note">Discord のユーザー名とアイコンだけを使います。</p>
+        <form method="post" action="/login" class="login-form">
+          <input type="hidden" name="_csrf" value={props.csrf ?? ''} />
+          <label class="field">
+            <span>ID</span>
+            <input type="text" name="loginId" autocomplete="username" required maxlength={32} autofocus />
+          </label>
+          <label class="field">
+            <span>パスワード</span>
+            <input type="password" name="password" autocomplete="current-password" required maxlength={200} />
+          </label>
+          <button type="submit" class="button primary">
+            ログイン
+          </button>
+        </form>
+        <p class="note">ID とパスワードは宮司が発行します。</p>
+        {props.discord !== false && (
+          <a class="button" href="/auth/discord">
+            Discord でログイン
+          </a>
+        )}
       </section>
     </Layout>
   );

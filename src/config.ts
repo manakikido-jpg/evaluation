@@ -561,6 +561,14 @@ const webEnvSchema = z.object({
   /** 管理画面の URL（例: https://shamusho.example.com）。末尾の / なし */
   WEB_BASE_URL: z.url().transform((u) => u.replace(/\/+$/, '')),
   WEB_PORT: z.coerce.number().int().positive().default(3000),
+  /** 秘密の入口（https://…/enter/この文字 からだけログイン画面を出す）。16 文字以上の英数字。なければ入口なし */
+  WEB_ENTRY_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{16,128}$/, 'WEB_ENTRY_KEY は 16 文字以上の英数字にしてください')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  /** Discord でのログイン（on にすると使える。標準は止めて、ID とパスワードだけ） */
+  WEB_DISCORD_LOGIN: z.enum(['on', 'off']).default('off'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

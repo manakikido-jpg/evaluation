@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-web-accounts',
+    date: '2026-09-30',
+    kind: 'new',
+    where: ['社務所Web', '運用'],
+    title: '🪪 社務所Web を ID とパスワードに・秘密の入口',
+    items: [
+      '宮司が「設定」→「🪪 社務所Web のアカウント」で ID とパスワードを発行する（権限・見られるページ・止める・作り直す）',
+      '秘密の入口（/enter/…）を通った人にだけログイン画面を出す。ほかは「見つかりません」',
+      '切り替えたときに、ログイン中の人は全員ログアウト。Discord でのログインは止めた',
+      '5 回続けて間違えると 15 分ログインできない',
+    ],
+  },
+  {
     id: '2026-09-29-recruit-seconds',
     date: '2026-09-29',
     kind: 'improve',

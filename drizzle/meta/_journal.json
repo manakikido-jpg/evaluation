@@ -379,6 +379,13 @@
       "when": 1790703412489,
       "tag": "0053_shop_present",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790749605899,
+      "tag": "0054_web_accounts",
+      "breakpoints": true
     }
   ]
 }
