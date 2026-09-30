@@ -26,7 +26,7 @@ import { TempGrantApp } from './discord/tempGrants.js';
 import { MeetingApp } from './discord/meetings.js';
 import { HelpApp } from './discord/help.js';
 import { expireTick } from './services/tempGrants.js';
-import { announceEvents } from './services/economyEvents.js';
+import { announceEvents, voiceTicketDm, voiceTicketTick } from './services/economyEvents.js';
 import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
 import { onboardingTick } from './services/onboarding.js';
@@ -180,6 +180,12 @@ async function main(): Promise<void> {
         .catch((err) => logger.warn({ err }, 'interview tick failed'));
       // 期間限定イベント（ボーナス週間・セール）の始まり・終わりを知らせる
       void announceEvents({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'economy event announce failed'));
+      // 🎫 通話で券: 決めた日に、通話が決めた分数になった人へ券を配って DM で知らせる
+      void voiceTicketTick(db, cfg())
+        .then(async (granted) => {
+          for (const g of granted) await actions.sendDm(g.memberId, voiceTicketDm(g)).catch(() => false);
+        })
+        .catch((err) => logger.warn({ err }, 'voice ticket tick failed'));
     }, 60_000);
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));

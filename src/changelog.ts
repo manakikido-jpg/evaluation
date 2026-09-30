@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-voice-ticket-event',
+    date: '2026-09-30',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🎫 決めた日に、通話した人へ券を配れるように',
+    items: [
+      '「経済」→「期間限定イベント」に種類「🎫 通話で券」を追加。分数・配る券・枚数・日時を決めておく',
+      '期間中、その日の通話が決めた分数（例: 10 分）になった人に、BOT が自動で券を配って DM で知らせる（1 人 1 日 1 回・位のロールがある人だけ）',
+    ],
+  },
+  {
     id: '2026-09-30-channel-perms',
     date: '2026-09-30',
     kind: 'new',

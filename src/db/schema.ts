@@ -910,9 +910,15 @@ export type GiftBatch = typeof giftBatches.$inferSelect;
 /** 期間限定イベント（通話ボーナス・授与品セール・物御籤セール）。始まり・終わりは BOT が自動で知らせる */
 export const economyEvents = pgTable('economy_events', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
-  /** voice = 通話でもらえる銭が value% に / shop = 授与品が value% 引き / gacha = 物御籤が value% 引き */
-  kind: text('kind').$type<'voice' | 'shop' | 'gacha'>().notNull(),
+  /**
+   * voice = 通話でもらえる銭が value% に / shop = 授与品が value% 引き / gacha = 物御籤が value% 引き
+   * voice_ticket = その日の通話が value 分になった人に券（ticket を ticket_count 枚。1 日 1 回）
+   */
+  kind: text('kind').$type<'voice' | 'shop' | 'gacha' | 'voice_ticket'>().notNull(),
   value: integer('value').notNull(),
+  /** voice_ticket で配る券と枚数 */
+  ticket: text('ticket').notNull().default('gacha_free'),
+  ticketCount: integer('ticket_count').notNull().default(1),
   title: text('title').notNull(),
   startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
   endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
@@ -927,6 +933,19 @@ export const economyEvents = pgTable('economy_events', {
 });
 
 export type EconomyEvent = typeof economyEvents.$inferSelect;
+
+/** voice_ticket のイベントで券を配った人（イベント × 人 × 日本時間の日付で 1 回） */
+export const eventTicketGrants = pgTable(
+  'event_ticket_grants',
+  {
+    eventId: bigint('event_id', { mode: 'number' }).notNull(),
+    memberId: text('member_id').notNull(),
+    date: text('date').notNull(),
+    minutes: integer('minutes').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.eventId, t.memberId, t.date] })],
+);
 
 /** 経済の警告（同じものを 2 回知らせないよう key を覚える） */
 export const economyAlerts = pgTable(

@@ -1589,6 +1589,13 @@ describe('物御籤（管理画面）', () => {
     expect(await (await get('/economy', g)).text()).toContain('秋のセール');
     await post(g, `/economy/events/${ev!.id}/cancel`, {});
     expect((await listEvents(db))[0]!.cancelledAt).not.toBeNull();
+    // 🎫 通話で券（その日の通話が 10 分で 物御籤の無料券 ×2）
+    const vt = await post(g, '/economy/events', { kind: 'voice_ticket', value: '10', ticket: 'gacha_free', ticketCount: '2', title: '通話で券の日', startsAt: '2026-10-03T00:00', endsAt: '2026-10-03T23:59' });
+    expect(vt.headers.get('location')).toBe('/economy?msg=event_created#economy-events');
+    expect((await listEvents(db)).find((e) => e.kind === 'voice_ticket')).toMatchObject({ value: 10, ticket: 'gacha_free', ticketCount: 2 });
+    const tooMany = await post(g, '/economy/events', { kind: 'voice_ticket', value: '10', ticket: 'gacha_free', ticketCount: '50', title: 'x', startsAt: '2026-10-03T00:00', endsAt: '2026-10-03T23:59' });
+    expect(tooMany.headers.get('location')).toContain('event_invalid');
+    expect(await (await get('/economy', g)).text()).toContain('その日の通話が 10 分になると 🎁物御籤の無料券 ×2');
 
     const saved = await post(g, '/economy/settings', {
       reportEnabled: 'yes',

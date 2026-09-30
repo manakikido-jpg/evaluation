@@ -6,7 +6,8 @@ import { flowOf, type Distribution, type EconomyOverview, type FlowLine } from '
 import { TREND_RANGES, type TrendRange } from '../../services/stats.js';
 import { fmtDateTime } from '../format.js';
 import type { EconomyAlert, EconomyEvent } from '../../db/schema.js';
-import { EVENT_KINDS, eventEffect, eventState } from '../../services/economyEvents.js';
+import { EVENT_KINDS, EVENT_TICKET_MAX, eventEffect, eventState } from '../../services/economyEvents.js';
+import { TicketSelect } from './gacha.js';
 import { PRICE_LEVEL, type GachaLedger, type MemberLedger, type PriceGuide, type SuspectPair } from '../../services/economyWatch.js';
 import { ColumnChart, LineChart } from './charts.js';
 import { Layout } from './layout.js';
@@ -369,6 +370,9 @@ function WatchSections(props: { watch: Watch; cfg: GuildConfig; guji: boolean; w
         <p class="note">
           決めた期間だけ、通話でもらえる{e.currencyName}を増やしたり、授与品・物御籤を安くしたりします。始まり・終わりは BOT が自動で効かせます（1 分以内）。同じ種類が重なったら大きいほうが効きます。
         </p>
+        <p class="note">
+          🎫 <strong>通話で券</strong>: 期間中、その日（日本時間）の通話の合計が「値」の分数になった人に、選んだ券を配って DM で知らせます（1 人 1 日 1 回・位のロールを持っている人だけ）。配る日の 0:00〜23:59 にすると、その日だけになります。数えるのは「通話の記録」の時間（AFK・除外した通話はのぞく）で、始まる前のその日の分も入ります。
+        </p>
         {w.events.length === 0 ? (
           <p class="empty">まだイベントはありません。</p>
         ) : (
@@ -414,8 +418,16 @@ function WatchSections(props: { watch: Watch; cfg: GuildConfig; guji: boolean; w
               </select>
             </label>
             <label class="field">
-              <span>値（通話ボーナスは 200 で 2 倍・セールは 30 で 30% 引き）</span>
+              <span>値（通話ボーナスは 200 で 2 倍・セールは 30 で 30% 引き・通話で券は 10 で 10 分）</span>
               <input type="number" name="value" min={1} max={1000} value="200" required />
+            </label>
+            <label class="field">
+              <span>通話で券: 配る券</span>
+              <TicketSelect name="ticket" selected="gacha_free" />
+            </label>
+            <label class="field">
+              <span>通話で券: 枚数</span>
+              <input type="number" name="ticketCount" min={1} max={EVENT_TICKET_MAX} value="1" required />
             </label>
             <label class="field">
               <span>名前（お知らせに出る）</span>

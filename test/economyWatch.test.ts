@@ -1,11 +1,13 @@
 import { desc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { coinTx, marketOrders, shopItems } from '../src/db/schema.js';
+import { coinTx, marketOrders, members, shopItems } from '../src/db/schema.js';
 import type { DiscordActions, MessageBody } from '../src/lib/discordRest.js';
 import { voiceTick } from '../src/services/activity.js';
 import { addCoins, spendWithin, walletOf } from '../src/services/economy.js';
-import { activeEvents, announceEvents, applyEvents, cancelEvent, createEvent, eventEffect, eventState, salePrice } from '../src/services/economyEvents.js';
+import { activeEvents, announceEvents, applyEvents, cancelEvent, createEvent, eventEffect, eventState, salePrice, voiceTicketDm, voiceTicketTick } from '../src/services/economyEvents.js';
+import { ticketsOf } from '../src/services/tickets.js';
+import { recordPresence } from '../src/services/voiceUsage.js';
 import { checkAlerts, collectSaisen, gachaLedger, memberLedger, priceGuide, suspectPairs, weeklyReport, weeklyTick } from '../src/services/economyWatch.js';
 import { gachaUnitPrice } from '../src/services/gacha.js';
 import { recordJoin } from '../src/services/members.js';
@@ -69,6 +71,59 @@ describe('🎉 期間限定イベント', () => {
     expect(await activeEvents(db, t(15))).toHaveLength(3);
     expect(eventEffect({ kind: 'voice', value: 150 }, '銭')).toBe('通話でもらえる銭が 150%');
     expect(eventEffect({ kind: 'shop', value: 30 }, '銭')).toBe('授与品が 30% 引き');
+  });
+
+  it('🎫 通話で券: その日の通話が決めた分数になった人に 1 日 1 回、券を配る（位のない人・抜けた人・除外した通話はのぞく）', async () => {
+    const RANK = cfg.ranks[0]!.roleId;
+    const C = '880000000000000004';
+    await recordJoin(db, snap(C, new Date(NOW.getTime() - 100 * DAY)));
+    await db.update(members).set({ roleIds: [RANK] });
+    await db.update(members).set({ roleIds: [] }).where(eq(members.id, NEW));
+    await db.update(members).set({ leftAt: NOW }).where(eq(members.id, C));
+    const AFK = '770000000000000009';
+    const ch = (id: string, ids: string[]) => ({ id, name: id, categoryId: null, categoryName: null, memberIds: ids });
+    const minute = (i: number) => new Date(NOW.getTime() - (20 - i) * 60_000);
+    // まず全員 10 分（NEW は位なし・C は抜けた）。そのあと A は除外した通話に 5 分（数えない）、A・B が 1 分
+    for (let i = 0; i < 10; i++) await recordPresence(db, [ch('770000000000000001', [A, B, NEW, C])], minute(i));
+    const tcfg = { ...cfg, economy: { ...cfg.economy, excludedVoiceChannelIds: [AFK] } };
+    const ev = await createEvent(db, { kind: 'voice_ticket', value: 11, title: '通話で券の日', startsAt: new Date(NOW.getTime() - 3_600_000), endsAt: new Date(NOW.getTime() + 3_600_000), ticket: 'gacha_free', ticketCount: 2 }, GUJI);
+    expect(ev).toMatchObject({ ticket: 'gacha_free', ticketCount: 2 });
+    expect(await voiceTicketTick(db, tcfg, NOW)).toEqual([]);
+    for (let i = 10; i < 15; i++) await recordPresence(db, [ch(AFK, [A])], minute(i));
+    expect(await voiceTicketTick(db, tcfg, NOW)).toEqual([]);
+    await recordPresence(db, [ch('770000000000000001', [A, B])], minute(16));
+    const got = await voiceTicketTick(db, tcfg, NOW);
+    expect(got.map((g) => [g.memberId, g.minutes]).sort()).toEqual([
+      [A, 11],
+      [B, 11],
+    ]);
+    expect((await ticketsOf(db, A)).gacha_free).toBe(2);
+    expect((await ticketsOf(db, NEW)).gacha_free).toBe(0);
+    expect((await ticketsOf(db, C)).gacha_free).toBe(0);
+    expect(voiceTicketDm(got[0]!)).toContain('🎁物御籤の無料券 ×2');
+    // 同じ日は 2 回目なし。次の日はまた配る
+    await recordPresence(db, [ch('770000000000000001', [A])], minute(17));
+    expect(await voiceTicketTick(db, tcfg, NOW)).toEqual([]);
+    const tomorrow = new Date(NOW.getTime() + 20 * 60_000 + DAY);
+    // 終わったイベントでは配らない
+    for (let i = 0; i < 12; i++) await recordPresence(db, [ch('770000000000000001', [A])], new Date(tomorrow.getTime() + i * 60_000));
+    expect(await voiceTicketTick(db, tcfg, tomorrow)).toEqual([]);
+    expect(eventEffect(ev, '銭')).toBe('その日の通話が 11 分になると 🎁物御籤の無料券 ×2（1 日 1 回）');
+    // ほかの設定には入らない
+    expect(applyEvents(cfg, [ev]).economy).toMatchObject({ voiceEventPercent: cfg.economy.voiceEventPercent, shopSalePercent: 0, gachaSalePercent: 0 });
+  });
+
+  it('🎫 通話で券: 何日も続くイベントは、日ごとに配る', async () => {
+    await db.update(members).set({ roleIds: [cfg.ranks[0]!.roleId] });
+    const ch = (ids: string[]) => [{ id: '770000000000000001', name: 'v', categoryId: null, categoryName: null, memberIds: ids }];
+    await createEvent(db, { kind: 'voice_ticket', value: 1, title: '週間', startsAt: new Date(NOW.getTime() - DAY), endsAt: new Date(NOW.getTime() + 7 * DAY) }, GUJI);
+    await recordPresence(db, ch([A]), NOW);
+    expect((await voiceTicketTick(db, cfg, NOW)).map((g) => g.memberId)).toEqual([A]);
+    const next = new Date(NOW.getTime() + DAY);
+    expect(await voiceTicketTick(db, cfg, next)).toEqual([]);
+    await recordPresence(db, ch([A]), next);
+    expect((await voiceTicketTick(db, cfg, next)).map((g) => g.memberId)).toEqual([A]);
+    expect((await ticketsOf(db, A)).gacha_free).toBe(2);
   });
 
   it('設定の読み直しで入る（BOT・管理画面とも）', async () => {

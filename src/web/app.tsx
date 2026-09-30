@@ -119,7 +119,7 @@ import {
 import { applyGiftRoles, giftAnnouncement, giftItemLabel, giftTargets, giftToAll, giftUnit, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
 import { EconomyPage, MemberLedgerPage } from './views/economy.js';
-import { cancelEvent, createEvent, isEventKind, listEvents, validEventValue } from '../services/economyEvents.js';
+import { cancelEvent, createEvent, EVENT_TICKET_MAX, isEventKind, isTicketKind, listEvents, validEventValue } from '../services/economyEvents.js';
 import { gachaLedger, memberLedger, priceGuide, recentAlerts, suspectPairs } from '../services/economyWatch.js';
 import {
   createTerm,
@@ -1187,10 +1187,15 @@ export function createWebApp(deps: WebDeps) {
     const startsAt = jst(body.startsAt);
     const endsAt = jst(body.endsAt);
     const announce = typeof body.announce === 'string' && /^\d{17,20}$/.test(body.announce) ? body.announce : undefined;
+    const ticket = isTicketKind(body.ticket) ? body.ticket : 'gacha_free';
+    const ticketCount = body.ticketCount === undefined ? 1 : Number(body.ticketCount);
     if (!isEventKind(kind) || !validEventValue(kind, value) || !title || !startsAt || !endsAt || endsAt <= startsAt || endsAt <= now()) {
       return c.redirect('/economy?msg=event_invalid#economy-events');
     }
-    await createEvent(db, { kind, value, title, startsAt, endsAt, announceChannelId: announce }, c.get('session').userId);
+    if (kind === 'voice_ticket' && !(Number.isInteger(ticketCount) && ticketCount >= 1 && ticketCount <= EVENT_TICKET_MAX)) {
+      return c.redirect('/economy?msg=event_invalid#economy-events');
+    }
+    await createEvent(db, { kind, value, title, startsAt, endsAt, announceChannelId: announce, ticket, ticketCount }, c.get('session').userId);
     await deps.onSettingsSaved?.();
     return c.redirect('/economy?msg=event_created#economy-events');
   });
