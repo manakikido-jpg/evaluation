@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-member-diff',
+    date: '2026-09-30',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '👥 人数の差（前の人数と今の人数・入った人・抜けた人）',
+    items: [
+      'ホームの「今日の参加」「今日の退出」を押すと、今日の 0 時と今の人数の差・入った人・抜けた人がポップアップで出る',
+      '「人数の差」のページで、今日・24 時間・7 日・30 日・好きな日時とくらべられる（入ってすぐ抜けた人も別に出る）',
+    ],
+  },
+  {
     id: '2026-09-30-left-feed',
     date: '2026-09-30',
     kind: 'new',

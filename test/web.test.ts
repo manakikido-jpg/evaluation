@@ -2495,3 +2495,21 @@ describe('🚪 最近抜けた人（ホーム）', () => {
     expect(html).toContain(`/members/${USER}`);
   });
 });
+
+describe('👥 人数の差（ホームのポップアップ）', () => {
+  it('ホームの参加・退出を押すとポップアップ。ページでは日時を選んでくらべられる', async () => {
+    const { recordLeave } = await import('../src/services/members.js');
+    const s = await login(STAFF);
+    const home = await (await get('/', s)).text();
+    expect(home).toContain('data-popup="/members/diff?since=today&amp;popup=1"');
+    expect(home).toContain('id="popup"');
+    await recordLeave(db, USER);
+    const pop = await (await get('/members/diff?since=today&popup=1', s)).text();
+    expect(pop).toContain('今日の 0 時から今までの人数');
+    expect(pop).toContain('@sakura');
+    expect(pop).not.toContain('<html');
+    const page = await (await get('/members/diff?at=2026-09-20T10:00', s)).text();
+    expect(page).toContain('2026-09-20 10:00の人数');
+    expect(page).toContain('name="at"');
+  });
+});

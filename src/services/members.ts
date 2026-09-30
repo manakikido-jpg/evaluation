@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, ilike, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { activityDaily, memberEvents, members, shuin, wallets, type Member } from '../db/schema.js';
 
@@ -52,6 +52,56 @@ export function leaveNotice(m: Pick<Member, 'id' | 'displayName' | 'username' | 
     content: `🚪 **${m.displayName}**（@${m.username}・<@${m.id}>）さんが抜けました${stay}${rank ? `・${rank}` : ''}（<t:${Math.floor(now.getTime() / 1000)}:t>）`,
     allowedMentions: { parse: [] as never[] },
   };
+}
+
+export type DiffRow = { member: Member; at: Date };
+export type MemberDiff = {
+  since: Date;
+  /** since のときの人数・今の人数（BOT はのぞく） */
+  before: number;
+  now: number;
+  /** since のときにいて、今いない人（抜けた時刻） */
+  left: DiffRow[];
+  /** since のときにいなくて、今いる人（入った時刻） */
+  joined: DiffRow[];
+  /** そのあいだに入って、もう抜けた人 */
+  bounced: DiffRow[];
+};
+
+/**
+ * ある時点（since）と今のメンバーの差（参加・退出の記録から）。
+ * since より後に記録がない人は、変わっていないとみなす
+ */
+export async function memberDiff(db: Db, since: Date): Promise<MemberDiff> {
+  const [active] = await db.select({ n: count() }).from(members).where(and(isNull(members.leftAt), eq(members.isBot, false)));
+  const rows = await db
+    .select({ event: memberEvents, member: members })
+    .from(memberEvents)
+    .innerJoin(members, eq(members.id, memberEvents.memberId))
+    .where(and(gt(memberEvents.at, since), inArray(memberEvents.kind, ['join', 'rejoin', 'leave']), eq(members.isBot, false)))
+    .orderBy(asc(memberEvents.at), asc(memberEvents.id));
+  const byMember = new Map<string, { member: Member; events: { kind: string; at: Date }[] }>();
+  for (const r of rows) {
+    const cur = byMember.get(r.member.id) ?? { member: r.member, events: [] };
+    cur.events.push({ kind: r.event.kind, at: r.event.at });
+    byMember.set(r.member.id, cur);
+  }
+  const left: DiffRow[] = [];
+  const joined: DiffRow[] = [];
+  const bounced: DiffRow[] = [];
+  for (const { member, events } of byMember.values()) {
+    // いちばん初めの記録が「退出」なら、since のときはいた
+    const wasHere = events[0]!.kind === 'leave';
+    const isHere = member.leftAt === null;
+    const lastLeave = [...events].reverse().find((e) => e.kind === 'leave')?.at;
+    const firstJoin = events.find((e) => e.kind !== 'leave')?.at;
+    if (wasHere && !isHere) left.push({ member, at: lastLeave ?? events.at(-1)!.at });
+    else if (!wasHere && isHere) joined.push({ member, at: firstJoin ?? events[0]!.at });
+    else if (!wasHere && !isHere) bounced.push({ member, at: firstJoin ?? events[0]!.at });
+  }
+  const newest = (a: DiffRow, b: DiffRow) => b.at.getTime() - a.at.getTime();
+  const now = active?.n ?? 0;
+  return { since, before: now - joined.length + left.length, now, left: left.sort(newest), joined: joined.sort(newest), bounced: bounced.sort(newest) };
 }
 
 /** 名前・アイコン・ロールの更新 */

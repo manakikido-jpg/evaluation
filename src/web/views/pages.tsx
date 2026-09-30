@@ -6,7 +6,7 @@ import type { TrendBucket } from '../../services/stats.js';
 import { LineChart } from './charts.js';
 import { RecentUpdates } from './updates.js';
 import type { SessionView } from './layout.js';
-import { MEMBER_SORTS, type MemberListQuery, type MemberRow, type MemberSort } from '../../services/members.js';
+import { MEMBER_SORTS, type DiffRow, type MemberDiff, type MemberListQuery, type MemberRow, type MemberSort } from '../../services/members.js';
 import {
   ACTION_LABEL,
   AGE_LABEL,
@@ -103,8 +103,8 @@ export function HomePage(props: {
       )}
       <div class="stats">
         <Stat label="メンバー" value={stats.members.toLocaleString('ja-JP')} unit="人" />
-        <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" />
-        <Stat label="今日の退出" value={`-${stats.left}`} unit="人" />
+        <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" href="/members/diff?since=today" popup="/members/diff?since=today&popup=1" />
+        <Stat label="今日の退出" value={`-${stats.left}`} unit="人" href="/members/diff?since=today" popup="/members/diff?since=today&popup=1" />
         <Stat label="今日の朱印" value={String(stats.shuin)} unit="件" />
         <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
         <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href="/yaku" />
@@ -167,6 +167,108 @@ export function HomePage(props: {
   );
 }
 
+// ───────── 👥 人数の差（ある時点と今） ─────────
+
+export const DIFF_PRESETS = [
+  ['today', '今日'],
+  ['24h', '24 時間'],
+  ['7d', '7 日'],
+  ['30d', '30 日'],
+] as const;
+
+function DiffList(props: { title: string; rows: DiffRow[]; cfg: GuildConfig; now: Date; empty: string; what: string }) {
+  return (
+    <section class="diff-list">
+      <h3>
+        {props.title} <small>{props.rows.length} 人</small>
+      </h3>
+      {props.rows.length ? (
+        <ul class="left-feed">
+          {props.rows.slice(0, 200).map((r) => (
+            <li>
+              <a href={`/members/${r.member.id}`}>
+                <b>{r.member.displayName}</b> <small>@{r.member.username}</small>
+              </a>
+              <span class="muted">
+                {props.what} {fmtAgo(r.at, props.now)}・{memberRankLabel(props.cfg, r.member.roleIds)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="note">{props.empty}</p>
+      )}
+    </section>
+  );
+}
+
+/** 差の中身（ページとポップアップの両方で使う） */
+export function MemberDiffBody(props: { diff: MemberDiff; cfg: GuildConfig; now: Date; label: string }) {
+  const d = props.diff;
+  const delta = d.now - d.before;
+  return (
+    <div class="member-diff">
+      <div class="stats">
+        <div class="stat">
+          <div class="label">{props.label}の人数</div>
+          <div class="value">
+            {d.before.toLocaleString('ja-JP')}
+            <small>人</small>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="label">今の人数</div>
+          <div class="value">
+            {d.now.toLocaleString('ja-JP')}
+            <small>人</small>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="label">差</div>
+          <div class={`value ${delta < 0 ? 'down' : delta > 0 ? 'up' : ''}`}>
+            {delta > 0 ? `+${delta}` : String(delta)}
+            <small>人</small>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        {fmtDateTime(d.since)} から今まで: 入った人 {d.joined.length}・抜けた人 {d.left.length}
+        {d.bounced.length ? `・入ってすぐ抜けた人 ${d.bounced.length}` : ''}（BOT はのぞく）
+      </p>
+      <DiffList title="🚪 抜けた人" rows={d.left} cfg={props.cfg} now={props.now} empty="抜けた人はいません。" what="抜けた" />
+      <DiffList title="🌸 入った人" rows={d.joined} cfg={props.cfg} now={props.now} empty="入った人はいません。" what="入った" />
+      {d.bounced.length > 0 && <DiffList title="💨 入ってすぐ抜けた人" rows={d.bounced} cfg={props.cfg} now={props.now} empty="" what="入った" />}
+    </div>
+  );
+}
+
+export function MemberDiffPage(props: { session: SessionView; diff: MemberDiff; cfg: GuildConfig; now: Date; since: string; at?: string; label: string }) {
+  return (
+    <Layout title="人数の差" session={props.session} nav="members">
+      <h1>👥 人数の差</h1>
+      <section class="card">
+        <form method="get" action="/members/diff" class="inline-actions">
+          <div class="chips">
+            {DIFF_PRESETS.map(([key, label]) => (
+              <a class={`chip-link ${props.since === key ? 'on' : ''}`} href={`/members/diff?since=${key}`}>
+                {label}
+              </a>
+            ))}
+          </div>
+          <label class="field">
+            <span>この日時から</span>
+            <input type="datetime-local" name="at" value={props.at ?? ''} />
+          </label>
+          <button type="submit">くらべる</button>
+        </form>
+      </section>
+      <section class="card">
+        <MemberDiffBody diff={props.diff} cfg={props.cfg} now={props.now} label={props.label} />
+      </section>
+    </Layout>
+  );
+}
+
 /** 🚪 最近抜けた人（ホームのカードの中身。htmx で 30 秒ごとに読み直す） */
 export function LeftFeed(props: { cfg: GuildConfig; rows: Member[]; now: Date }) {
   if (!props.rows.length) return <p class="note">まだ抜けた人はいません。</p>;
@@ -191,7 +293,7 @@ export function LeftFeed(props: { cfg: GuildConfig; rows: Member[]; now: Date })
   );
 }
 
-function Stat(props: { label: string; value: string; unit: string; href?: string }) {
+function Stat(props: { label: string; value: string; unit: string; href?: string; /** 押すと、この URL の中身をポップアップで出す */ popup?: string }) {
   const body = (
     <>
       <div class="label">{props.label}</div>
@@ -202,7 +304,7 @@ function Stat(props: { label: string; value: string; unit: string; href?: string
     </>
   );
   return props.href ? (
-    <a class="stat" href={props.href}>
+    <a class="stat" href={props.href} data-popup={props.popup}>
       {body}
     </a>
   ) : (

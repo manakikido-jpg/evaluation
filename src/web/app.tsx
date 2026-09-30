@@ -56,7 +56,7 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
-import { eventsOf, findMemberByNameOrId, getMember, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
+import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
@@ -78,7 +78,7 @@ import { CHANGELOG, LATEST_CHANGE_ID, unseenChanges } from '../changelog.js';
 import { markChangesSeen, seenChangeId } from '../services/updates.js';
 import { inScope, loadUpdateNews, newsChannelOf, postNews, saveUpdateNews } from '../services/updateNews.js';
 import { isTrendRange, memberTrend } from '../services/stats.js';
-import { AuditPage, HomePage, LeftFeed, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
+import { AuditPage, HomePage, LeftFeed, LoginPage, MemberDiffBody, MemberDiffPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
 import { AccountIssuedPage, ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
 import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecidedApplications } from '../services/applications.js';
@@ -550,6 +550,36 @@ export function createWebApp(deps: WebDeps) {
     const result = await listMembers(db, query, t, cfg.ranks);
     if (c.req.header('hx-request') && !c.req.header('hx-history-restore-request')) return c.html(<MemberResults cfg={cfg} query={query} result={result} now={t} />);
     return c.html(<MembersPage session={c.get('session')} cfg={cfg} query={query} result={result} now={t} />);
+  });
+
+  // 👥 人数の差（ある時点と今）。popup=1 ならポップアップの中身だけ
+  app.get('/members/diff', async (c) => {
+    const t = now();
+    const since = c.req.query('since') ?? '';
+    const at = c.req.query('at') ?? '';
+    const presets: Record<string, [Date, string]> = {
+      today: [startOfTodayJst(t), '今日の 0 時'],
+      '24h': [new Date(t.getTime() - 86_400_000), '24 時間前'],
+      '7d': [new Date(t.getTime() - 7 * 86_400_000), '7 日前'],
+      '30d': [new Date(t.getTime() - 30 * 86_400_000), '30 日前'],
+    };
+    const custom = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at) ? new Date(`${at}:00+09:00`) : undefined;
+    const useCustom = custom && !Number.isNaN(custom.getTime()) && custom < t && custom.getTime() > t.getTime() - 400 * 86_400_000;
+    const key = useCustom ? 'custom' : Object.hasOwn(presets, since) ? since : 'today';
+    const [from, label] = useCustom ? [custom!, `${at.replace('T', ' ')}`] : presets[key]!;
+    const diff = await memberDiff(db, from);
+    if (c.req.query('popup') === '1') {
+      return c.html(
+        <div>
+          <h2>👥 {label}から今までの人数</h2>
+          <MemberDiffBody diff={diff} cfg={cfg} now={t} label={label} />
+          <p class="more">
+            <a href={`/members/diff?since=${key === 'custom' ? 'today' : key}`}>ほかの日時とくらべる →</a>
+          </p>
+        </div>,
+      );
+    }
+    return c.html(<MemberDiffPage session={c.get('session')} diff={diff} cfg={cfg} now={t} since={key} at={useCustom ? at : undefined} label={label} />);
   });
 
   // 🚪 最近抜けた人（ホームのカード。30 秒ごとに読み直す）

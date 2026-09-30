@@ -196,3 +196,34 @@ describe('🚪 抜けた人', () => {
     expect(n.allowedMentions).toEqual({ parse: [] });
   });
 });
+
+describe('👥 人数の差', () => {
+  it('ある時点にいて今いない人・いなくて今いる人・そのあいだに入って抜けた人。BOT はのぞく', async () => {
+    const { memberDiff } = await import('../src/services/members.js');
+    const { memberEvents } = await import('../src/db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const snap = (id: string, isBot = false): MemberSnapshot => ({ id, username: `u${id.slice(-1)}`, displayName: `n${id.slice(-1)}`, avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot, joinedAt: null });
+    const since = new Date(Date.now() - 3_600_000);
+    const old = new Date(Date.now() - 86_400_000);
+    const A = '890000000000000001';
+    const B = '890000000000000002';
+    const C = '890000000000000003';
+    const D = '890000000000000004';
+    const BOT = '890000000000000005';
+    // A・D は前からいた（入った記録を昔にする）
+    for (const id of [A, D]) {
+      await recordJoin(db, snap(id));
+      await db.update(memberEvents).set({ at: old }).where(eq(memberEvents.memberId, id));
+    }
+    await recordLeave(db, A);
+    await recordJoin(db, snap(B));
+    await recordJoin(db, snap(C));
+    await recordLeave(db, C);
+    await recordJoin(db, snap(BOT, true));
+    const d = await memberDiff(db, since);
+    expect(d.left.map((r) => r.member.id)).toEqual([A]);
+    expect(d.joined.map((r) => r.member.id)).toEqual([B]);
+    expect(d.bounced.map((r) => r.member.id)).toEqual([C]);
+    expect({ before: d.before, now: d.now }).toEqual({ before: 2, now: 2 });
+  });
+});

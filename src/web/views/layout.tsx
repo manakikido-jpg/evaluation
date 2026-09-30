@@ -182,6 +182,20 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
           </>
         )}
         <main>{props.children}</main>
+        {session && (
+          <>
+            {/* ポップアップ（data-popup の付いたものを押すと、ここに中身を出す） */}
+            <dialog id="popup" class="popup">
+              <div class="popup-head">
+                <button type="button" class="link" data-popup-close>
+                  ✕ 閉じる
+                </button>
+              </div>
+              <div id="popup-body"></div>
+            </dialog>
+            <script src={assetUrl('popup.js')} defer></script>
+          </>
+        )}
       </body>
     </html>
   );

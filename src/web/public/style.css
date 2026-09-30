@@ -726,3 +726,16 @@ code.secret { font-size: 1.2rem; letter-spacing: .05em; padding: 2px 8px; user-s
 .left-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .left-feed li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .muted { color: var(--muted); }
+/* ポップアップ */
+dialog.popup { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); border: 1px solid var(--line); border-radius: 12px; padding: 12px 18px 18px; background: var(--card); color: inherit; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
+dialog.popup::backdrop { background: rgba(0, 0, 0, .45); }
+.popup-head { display: flex; justify-content: flex-end; position: sticky; top: 0; }
+a.stat[data-popup] { cursor: pointer; }
+/* 👥 人数の差 */
+.member-diff .stats { margin-bottom: 8px; }
+.member-diff .value.down { color: var(--shu); }
+.member-diff .value.up { color: #2e8b57; }
+.diff-list { margin-top: 14px; }
+.diff-list h3 { margin: 0 0 6px; font-size: 1rem; }
+a.chip-link { display: inline-block; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: inherit; }
+a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; }
