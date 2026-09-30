@@ -56,7 +56,7 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
-import { eventsOf, findMemberByNameOrId, getMember, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
+import { eventsOf, findMemberByNameOrId, getMember, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
@@ -78,7 +78,7 @@ import { CHANGELOG, LATEST_CHANGE_ID, unseenChanges } from '../changelog.js';
 import { markChangesSeen, seenChangeId } from '../services/updates.js';
 import { inScope, loadUpdateNews, newsChannelOf, postNews, saveUpdateNews } from '../services/updateNews.js';
 import { isTrendRange, memberTrend } from '../services/stats.js';
-import { AuditPage, HomePage, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
+import { AuditPage, HomePage, LeftFeed, LoginPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
 import { AccountIssuedPage, ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
 import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecidedApplications } from '../services/applications.js';
@@ -551,6 +551,9 @@ export function createWebApp(deps: WebDeps) {
     if (c.req.header('hx-request') && !c.req.header('hx-history-restore-request')) return c.html(<MemberResults cfg={cfg} query={query} result={result} now={t} />);
     return c.html(<MembersPage session={c.get('session')} cfg={cfg} query={query} result={result} now={t} />);
   });
+
+  // 🚪 最近抜けた人（ホームのカード。30 秒ごとに読み直す）
+  app.get('/members/left', async (c) => c.html(<LeftFeed cfg={cfg} rows={await recentLeaves(db, 15)} now={now()} />));
 
   app.get('/members/:id', async (c) => {
     const id = c.req.param('id');

@@ -34,6 +34,26 @@ export async function recordLeave(db: Db, id: string): Promise<void> {
   if (updated.length) await db.insert(memberEvents).values({ memberId: id, kind: 'leave' });
 }
 
+/** 最近抜けた人（新しい順。BOT はのぞく） */
+export async function recentLeaves(db: Db, limit = 20): Promise<Member[]> {
+  return db
+    .select()
+    .from(members)
+    .where(and(isNotNull(members.leftAt), eq(members.isBot, false)))
+    .orderBy(desc(members.leftAt))
+    .limit(limit);
+}
+
+/** #記録 に出す「抜けました」（在籍日数・役職つき。通知は飛ばさない） */
+export function leaveNotice(m: Pick<Member, 'id' | 'displayName' | 'username' | 'joinedAt'>, rank: string | undefined, now = new Date()) {
+  const days = m.joinedAt ? Math.max(0, Math.floor((now.getTime() - m.joinedAt.getTime()) / 86_400_000)) : undefined;
+  const stay = days === undefined ? '' : days === 0 ? '・入って 1 日たたずに' : `・在籍 ${days} 日`;
+  return {
+    content: `🚪 **${m.displayName}**（@${m.username}・<@${m.id}>）さんが抜けました${stay}${rank ? `・${rank}` : ''}（<t:${Math.floor(now.getTime() / 1000)}:t>）`,
+    allowedMentions: { parse: [] as never[] },
+  };
+}
+
 /** 名前・アイコン・ロールの更新 */
 export async function upsertMember(db: Db, m: MemberSnapshot, extra: { leftAt?: null } = {}): Promise<void> {
   const values = {

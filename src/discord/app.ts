@@ -23,7 +23,7 @@ import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../ser
 import { introOf, introUrl } from '../services/intros.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { decidePromotion, type Promotion } from '../domain/ranks.js';
+import { decidePromotion, highestRank, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
@@ -35,7 +35,7 @@ import { allTicketsLine } from './gacha.js';
 import { listPrizes } from '../services/gacha.js';
 import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
-import { ActivityTracker, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
+import { ActivityTracker, getMember, leaveNotice, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
 import { COMMAND, parseShuinId } from './ids.js';
 import {
@@ -147,7 +147,18 @@ export class ShuinApp {
 
   async onMemberRemove(guildId: string, userId: string): Promise<void> {
     if (guildId !== this.cfg.guildId) return;
+    const before = await getMember(this.db, userId).catch(() => undefined);
     await recordLeave(this.db, userId).catch((err) => logger.error({ err }, 'recordLeave failed'));
+    // 🚪 抜けた人を #記録 にすぐ出す（BOT はのぞく）
+    const log = this.cfg.channels.log;
+    if (!log || !before || before.isBot) return;
+    const rank = highestRank(this.cfg.ranks, before.roleIds);
+    try {
+      const ch = await this.client.channels.fetch(log);
+      if (ch?.isSendable()) await ch.send(leaveNotice(before, rank ? `${rank.emoji}${rank.name}` : undefined));
+    } catch (err) {
+      logger.warn({ err }, 'leave notice failed');
+    }
   }
 
   async onMemberUpdate(m: GuildMember): Promise<void> {

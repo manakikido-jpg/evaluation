@@ -140,6 +140,20 @@ export function HomePage(props: {
         </ul>
       </section>
 
+      {(!props.session.pages || props.session.pages.includes('members')) && (
+        <section class="card">
+          <h2>
+            🚪 最近抜けた人 <small class="muted">30 秒ごとに更新</small>
+          </h2>
+          <div hx-get="/members/left" hx-trigger="load, every 30s" hx-swap="innerHTML">
+            <p class="note">読み込み中…</p>
+          </div>
+          <p class="more">
+            <a href="/members?status=left">退出した人をすべて見る →</a>
+          </p>
+        </section>
+      )}
+
       <RecentUpdates unseen={props.session.updatesUnseen ?? 0} />
 
       <section class="card">
@@ -150,6 +164,30 @@ export function HomePage(props: {
         </p>
       </section>
     </Layout>
+  );
+}
+
+/** 🚪 最近抜けた人（ホームのカードの中身。htmx で 30 秒ごとに読み直す） */
+export function LeftFeed(props: { cfg: GuildConfig; rows: Member[]; now: Date }) {
+  if (!props.rows.length) return <p class="note">まだ抜けた人はいません。</p>;
+  return (
+    <ul class="left-feed">
+      {props.rows.map((m) => {
+        const days = m.joinedAt && m.leftAt ? Math.floor((m.leftAt.getTime() - m.joinedAt.getTime()) / 86_400_000) : undefined;
+        return (
+          <li>
+            <a href={`/members/${m.id}`}>
+              <b>{m.displayName}</b> <small>@{m.username}</small>
+            </a>
+            <span class="muted">
+              {m.leftAt ? fmtAgo(m.leftAt, props.now) : ''}
+              {days !== undefined ? `・在籍 ${days} 日` : ''}
+              {`・${memberRankLabel(props.cfg, m.roleIds)}`}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

@@ -2482,3 +2482,16 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
     expect((await app.request('/board', { headers: { cookie: `${entry}; shamusho_session=${shin.session}` } })).headers.get('location')).toBe('/login?e=expired');
   });
 });
+
+describe('🚪 最近抜けた人（ホーム）', () => {
+  it('ホームに 30 秒ごとに読み直すカード。抜けた人が並ぶ', async () => {
+    const { recordLeave } = await import('../src/services/members.js');
+    const s = await login(STAFF);
+    expect(await (await get('/', s)).text()).toContain('hx-get="/members/left"');
+    expect(await (await get('/members/left', s)).text()).toContain('まだ抜けた人はいません');
+    await recordLeave(db, USER);
+    const html = await (await get('/members/left', s)).text();
+    expect(html).toContain('@sakura');
+    expect(html).toContain(`/members/${USER}`);
+  });
+});

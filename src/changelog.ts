@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-left-feed',
+    date: '2026-09-30',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '🚪 抜けた人をすぐ見られるように',
+    items: [
+      'だれかが抜けると、BOT が #記録 にすぐ知らせる（名前・在籍日数・役職。通知は飛ばさない）',
+      '社務所Web のホームに「🚪 最近抜けた人」。30 秒ごとに自動で読み直す',
+    ],
+  },
+  {
     id: '2026-09-30-web-accounts',
     date: '2026-09-30',
     kind: 'new',

@@ -176,3 +176,23 @@ describe('メンバー一覧の検索', () => {
     expect(s).toMatchObject({ members: 3, joined: 4, left: 0, shuin: 3 });
   });
 });
+
+describe('🚪 抜けた人', () => {
+  it('新しい順に並び、#記録 に出す文には在籍日数と役職が入る（通知は飛ばさない）', async () => {
+    const { recentLeaves, leaveNotice } = await import('../src/services/members.js');
+    const snap = (id: string): MemberSnapshot => ({ id, username: `u${id.slice(-1)}`, displayName: `名前${id.slice(-1)}`, avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date('2026-09-01T00:00:00Z') });
+    await recordJoin(db, snap('880000000000000001'));
+    await recordJoin(db, snap('880000000000000002'));
+    await recordJoin(db, { ...snap('880000000000000003'), isBot: true });
+    expect(await recentLeaves(db)).toEqual([]);
+    await recordLeave(db, '880000000000000001');
+    await recordLeave(db, '880000000000000003');
+    expect((await recentLeaves(db)).map((m) => m.id)).toEqual(['880000000000000001']);
+    const m = (await getMember(db, '880000000000000002'))!;
+    const n = leaveNotice(m, '🔰参拝者', new Date('2026-09-30T12:00:00Z'));
+    expect(n.content).toContain('名前2');
+    expect(n.content).toContain('在籍 29 日');
+    expect(n.content).toContain('🔰参拝者');
+    expect(n.allowedMentions).toEqual({ parse: [] });
+  });
+});
