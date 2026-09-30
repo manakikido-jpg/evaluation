@@ -198,6 +198,18 @@ describe('⚔ メンバー対戦', () => {
     expect(await bal(A)).toBe(5000);
   });
 
+  it('1 手の持ち時間を長くできる（10 分なら 2 分では負けにならない）', async () => {
+    expect((await createMatch(db, ccfg(), A, 0, NOW, 45)).status).toBe('invalid');
+    const c = await createMatch(db, ccfg(), A, 0, NOW, 600);
+    const id = c.status === 'ok' ? c.match.id : 0;
+    await joinMatch(db, ccfg(), id, B, NOW);
+    await moveMatch(db, id, A, 19, NOW);
+    expect((await readMatch(db, id, new Date(NOW.getTime() + 300_000)))?.status).toBe('playing');
+    await sweepMatches(db, new Date(NOW.getTime() + 300_000));
+    expect((await readMatch(db, id, new Date(NOW.getTime() + 300_000)))?.status).toBe('playing');
+    expect(await readMatch(db, id, new Date(NOW.getTime() + 601_000))).toMatchObject({ status: 'done', winnerId: A, endReason: 'timeout' });
+  });
+
   it('持ち時間を過ぎたら、置く番の人の負け。0 銭の対戦もできる', async () => {
     const c = await createMatch(db, ccfg(), A, 0, NOW);
     const id = c.status === 'ok' ? c.match.id : 0;

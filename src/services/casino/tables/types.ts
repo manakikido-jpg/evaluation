@@ -36,6 +36,16 @@ export const intOf = (f: Form, k: string) => {
 
 export type Ctx = { now: number; rng: Rng; cfg: GuildConfig };
 
+/** 持ち時間の長さ（卓を立てる人が選ぶ）。ふつうの何倍か */
+export const PACES = { normal: { label: 'ふつう', mult: 1 }, slow: { label: 'ゆっくり', mult: 2 }, relaxed: { label: 'のんびり', mult: 4 } } as const;
+export type Pace = keyof typeof PACES;
+export const paceOf = (f: Form): Pace => {
+  const v = str(f, 'pace');
+  return v && Object.hasOwn(PACES, v) ? (v as Pace) : 'normal';
+};
+/** 状態に入っている持ち時間の倍率（前に作った卓は「ふつう」） */
+export const paceMult = (s: { pace?: Pace }) => PACES[s.pace ?? 'normal']?.mult ?? 1;
+
 export interface TableEngine<S> {
   kind: TableKind;
   maxSeats: number;

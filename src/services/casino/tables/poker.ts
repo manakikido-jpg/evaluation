@@ -1,12 +1,12 @@
 import { shuffledShoe } from '../cards.js';
 import { bestHand, handName } from './pokerHands.js';
-import { fail, intOf, ok, str, type Credit, type Ctx, type Form, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * ポーカー（テキサスホールデム・ノーリミット）。2〜6 人。
  * 座るときに銭を持ち込み（チップ）、立つときにチップを銭に戻す。胴元の取り分はない（メンバー同士のやりとり）。
  * - 2 人以上そろうと START_SECONDS 秒で配る。ボタンは毎回ひとつ進む（2 人のときはボタンがスモールブラインド）
- * - 持ち時間 ACT_SECONDS 秒。過ぎたらチェック（できなければフォールド）。2 回続けて過ぎたら「休み」にする
+ * - 持ち時間 ACT_SECONDS 秒（卓を立てる人が「ゆっくり 2 倍」「のんびり 4 倍」を選べる）。過ぎたらチェック（できなければフォールド）。2 回続けて過ぎたら「休み」にする
  * - サイドポットあり。同じ強さなら分ける（端数はボタンの次の人から）
  */
 
@@ -61,6 +61,7 @@ export type PokerState = {
   hand: number;
   result: PokerResult | null;
   log: string[];
+  pace?: Pace;
 };
 
 /** ビッグブラインドの選び方（最低の賭けから） */
@@ -134,7 +135,7 @@ function proceed(s: PokerState, ctx: Ctx, from: number | null): Step<PokerState>
   const next = from === null ? null : nextSeat(s, from, need);
   if (next !== null) {
     s.turn = next;
-    s.deadline = ctx.now + ACT_SECONDS * 1000;
+    s.deadline = ctx.now + ACT_SECONDS * 1000 * paceMult(s);
     return ok(s);
   }
   return nextStreet(s, ctx);
@@ -303,6 +304,7 @@ export const poker: TableEngine<PokerState> = {
       hand: 0,
       result: null,
       log: [],
+      pace: paceOf(f),
     };
     return this.join(s, host, f, ctx);
   },

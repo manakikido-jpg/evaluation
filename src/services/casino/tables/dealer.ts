@@ -3,12 +3,13 @@ import { bacDeal, bacPayout, BAC_BETS, type BacBet, type BacResult } from '../ba
 import { bjPayout, handValue, isBlackjack, type BjResult } from '../blackjack.js';
 import { shuffledShoe, type Rng } from '../cards.js';
 import { isRouletteBet, rouletteMultiplier, rouletteSpin, type RouletteBet } from '../roulette.js';
-import { fail, intOf, ok, str, type Ctx, type Credit, type Form, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, ok, paceMult, paceOf, str, type Ctx, type Credit, type Form, type Pace, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * ディーラーのいる卓（ブラックジャック・バカラ・ルーレット）。座った人みんなが同じ回で、ディーラー（胴元）と勝負する。
  * - 賭けの時間: だれかが賭けてから BET_SECONDS 秒（みんなが賭けたらすぐ始まる）
  * - ブラックジャックは 1 人ずつ順番に。持ち時間 TURN_SECONDS 秒を過ぎたらスタンド
+ * - 秒数は「ふつう」のとき。卓を立てる人が「ゆっくり（2 倍）」「のんびり（4 倍）」を選べる
  * - 結果を見せてから、次の回へ
  * - 賭けずに IDLE_MINUTES 分いた人は席を立たせる
  */
@@ -42,6 +43,7 @@ export type BjTableState = {
   dealer: number[];
   turn: string | null;
   round: number;
+  pace?: Pace;
 };
 
 const bjSeat = (w: Who, now: number): BjSeat => ({ ...w, lastActive: now, bet: 0, hand: [], doubled: false, done: false });
@@ -69,7 +71,7 @@ function bjNextTurn(s: BjTableState, ctx: Ctx): Step<BjTableState> {
   const next = s.seats.find((x) => x.bet > 0 && !x.done);
   if (!next) return bjFinish(s, ctx);
   s.turn = next.id;
-  s.deadline = ctx.now + TURN_SECONDS * 1000;
+  s.deadline = ctx.now + TURN_SECONDS * 1000 * paceMult(s);
   return ok(s);
 }
 
@@ -107,7 +109,7 @@ function bjAfterResult(state: BjTableState, now: number): BjTableState {
 export const bjTable: TableEngine<BjTableState> = {
   kind: 'bj_table',
   maxSeats: 5,
-  create: (host, _f, ctx) => ok({ kind: 'bj_table', seats: [bjSeat(host, ctx.now)], phase: 'betting', deadline: null, shoe: shuffledShoe(6, ctx.rng), dealer: [], turn: null, round: 0 }),
+  create: (host, f, ctx) => ok({ kind: 'bj_table', seats: [bjSeat(host, ctx.now)], phase: 'betting', deadline: null, shoe: shuffledShoe(6, ctx.rng), dealer: [], turn: null, round: 0, pace: paceOf(f) }),
   join(s, who, _f, ctx) {
     if (s.seats.some((x) => x.id === who.id)) return ok(s);
     if (s.seats.length >= this.maxSeats) return fail('full');
@@ -142,7 +144,7 @@ export const bjTable: TableEngine<BjTableState> = {
       const bet = intOf(f, 'bet');
       if (!validBet(ctx.cfg, bet)) return fail('bad_bet');
       seat.bet = bet;
-      if (s.deadline === null) s.deadline = ctx.now + BET_SECONDS * 1000;
+      if (s.deadline === null) s.deadline = ctx.now + BET_SECONDS * 1000 * paceMult(s);
       const debit = { debits: [{ memberId: id, amount: bet, reason: 'casino_bet' as const, limited: true }] };
       if (s.seats.every((x) => x.bet > 0)) {
         const r = bjStartRound(s, ctx);
@@ -155,7 +157,7 @@ export const bjTable: TableEngine<BjTableState> = {
       seat.hand.push(bjDraw(s, ctx.rng));
       const t = handValue(seat.hand).total;
       if (t >= 21) seat.done = true;
-      return seat.done ? bjNextTurn(s, ctx) : ok({ ...s, deadline: ctx.now + TURN_SECONDS * 1000 });
+      return seat.done ? bjNextTurn(s, ctx) : ok({ ...s, deadline: ctx.now + TURN_SECONDS * 1000 * paceMult(s) });
     }
     if (a === 'stand') {
       seat.done = true;
@@ -205,6 +207,7 @@ export type BacTableState = {
   last: BacResult | null;
   /** これまでの勝ち（新しいものが後ろ） */
   history: BacBet[];
+  pace?: Pace;
 };
 
 const bacSeat = (w: Who, now: number): BacSeat => ({ ...w, lastActive: now, bet: 0, on: null });
@@ -229,7 +232,7 @@ function bacRound(state: BacTableState, ctx: Ctx): Step<BacTableState> {
 export const baccaratTable: TableEngine<BacTableState> = {
   kind: 'baccarat_table',
   maxSeats: 8,
-  create: (host, _f, ctx) => ok({ kind: 'baccarat_table', seats: [bacSeat(host, ctx.now)], phase: 'betting', deadline: null, last: null, history: [] }),
+  create: (host, f, ctx) => ok({ kind: 'baccarat_table', seats: [bacSeat(host, ctx.now)], phase: 'betting', deadline: null, last: null, history: [], pace: paceOf(f) }),
   join(s, who, _f, ctx) {
     if (s.seats.some((x) => x.id === who.id)) return ok(s);
     if (s.seats.length >= this.maxSeats) return fail('full');
@@ -254,7 +257,7 @@ export const baccaratTable: TableEngine<BacTableState> = {
     if (!validBet(ctx.cfg, bet)) return fail('bad_bet');
     seat.bet = bet;
     seat.on = on;
-    if (s.deadline === null) s.deadline = ctx.now + BET_SECONDS * 1000;
+    if (s.deadline === null) s.deadline = ctx.now + BET_SECONDS * 1000 * paceMult(s);
     const debit = { debits: [{ memberId: id, amount: bet, reason: 'casino_bet' as const, limited: true }] };
     if (s.seats.every((x) => x.bet > 0)) {
       const r = bacRound(s, ctx);
@@ -293,6 +296,7 @@ export type RlTableState = {
   deadline: number | null;
   number: number | null;
   history: number[];
+  pace?: Pace;
 };
 
 const rlSeat = (w: Who, now: number): RlSeat => ({ ...w, lastActive: now, bets: [], ready: false });
@@ -318,7 +322,7 @@ function rlRound(state: RlTableState, ctx: Ctx): Step<RlTableState> {
 export const rouletteTable: TableEngine<RlTableState> = {
   kind: 'roulette_table',
   maxSeats: 8,
-  create: (host, _f, ctx) => ok({ kind: 'roulette_table', seats: [rlSeat(host, ctx.now)], phase: 'betting', deadline: null, number: null, history: [] }),
+  create: (host, f, ctx) => ok({ kind: 'roulette_table', seats: [rlSeat(host, ctx.now)], phase: 'betting', deadline: null, number: null, history: [], pace: paceOf(f) }),
   join(s, who, _f, ctx) {
     if (s.seats.some((x) => x.id === who.id)) return ok(s);
     if (s.seats.length >= this.maxSeats) return fail('full');
@@ -347,7 +351,7 @@ export const rouletteTable: TableEngine<RlTableState> = {
       if (rlTotal(seat) + amount > ctx.cfg.casino.maxBet * ROULETTE_MAX_BETS) return fail('bad_bet');
       seat.bets.push({ on, amount });
       seat.ready = false;
-      if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000;
+      if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);
       return ok(s, { debits: [{ memberId: id, amount, reason: 'casino_bet', limited: true }] });
     }
     if (a === 'clear') {

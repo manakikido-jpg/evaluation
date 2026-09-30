@@ -8,7 +8,7 @@ import type { BacTableState, BjTableState, RlTableState } from '../../services/c
 import { cardLabel, JOKER, type BabaState, type DaifugoState } from '../../services/casino/tables/party.js';
 import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
 import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
-import { TABLE_LABEL } from '../../services/casino/tables/types.js';
+import { PACES, paceMult, TABLE_LABEL, type Pace } from '../../services/casino/tables/types.js';
 import { BetForm, CasinoLayout, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
@@ -95,6 +95,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
           <form method="post" action={`/casino/tables/${p.kind}`} class="c-bet-custom">
             <input type="hidden" name="_csrf" value={csrf} />
             <CreateFields kind={p.kind} casino={p.casino} coin={coin} />
+            <PaceSelect kind={p.kind} />
             <button type="submit" class="c-btn c-btn-gold">
               卓を立てて座る
             </button>
@@ -106,13 +107,40 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
 }
 
 const RULES: Record<TableKind, string> = {
-  bj_table: 'みんなで同じディーラーと勝負します。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。順番に 20 秒ずつ。配当は 1 人のときと同じです。',
+  bj_table: 'みんなで同じディーラーと勝負します。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。順番に 20 秒ずつ（卓を立てる人が「ゆっくり」「のんびり」にすると 2 倍・4 倍）。配当は 1 人のときと同じです。',
   baccarat_table: 'みんなで同じ勝負に賭けます。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。',
   roulette_table: 'みんなで同じ回転に賭けます。いくつでも賭けられて（10 か所まで）、賭けた人がみんな「回す」を押すか、25 秒たつと回ります。',
-  poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間は 30 秒。胴元の取り分はありません。`,
+  poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。8 切り・4 枚で革命あり。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
 };
+
+/** ふつうのときの持ち時間（秒）。ディーラー卓は賭ける時間 */
+const BASE_SECONDS: Record<TableKind, { sec: number; what: string }> = {
+  poker: { sec: 30, what: '1 回の持ち時間' },
+  bj_table: { sec: 20, what: '1 人の持ち時間' },
+  baccarat_table: { sec: 15, what: '賭ける時間' },
+  roulette_table: { sec: 25, what: '賭ける時間' },
+  daifugo: { sec: 40, what: '1 回の持ち時間' },
+  babanuki: { sec: 25, what: '1 回の持ち時間' },
+};
+const secText = (n: number) => (n >= 60 && n % 60 === 0 ? `${n / 60} 分` : n > 60 ? `${Math.floor(n / 60)} 分 ${n % 60} 秒` : `${n} 秒`);
+
+function PaceSelect(p: { kind: TableKind }) {
+  const b = BASE_SECONDS[p.kind];
+  return (
+    <label>
+      ⏱ {b.what}
+      <select name="pace">
+        {(Object.keys(PACES) as Pace[]).map((k) => (
+          <option value={k}>
+            {PACES[k].label}（{secText(b.sec * PACES[k].mult)}）
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) {
   if (p.kind === 'poker') {
@@ -150,6 +178,12 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
 }
 
 function tableSummary(t: CasinoTable, coin: Coin): string {
+  const pace = (t.state as { pace?: Pace }).pace;
+  const base = BASE_SECONDS[t.kind as TableKind];
+  return `${summaryBody(t, coin)}・⏱ ${base ? secText(base.sec * paceMult({ pace })) : ''}`;
+}
+
+function summaryBody(t: CasinoTable, coin: Coin): string {
   const s = t.state as { seats: unknown[] } & Record<string, unknown>;
   const seats = (s.seats ?? []).filter(Boolean) as { name: string }[];
   const who = seats.map((x) => x.name).join('・') || 'だれもいない';
@@ -584,7 +618,7 @@ function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
                   <div class="c-pseat-state">
                     {x.folded ? 'フォールド' : x.allIn ? 'オールイン' : x.sittingOut ? '休み' : x.leaving ? '立ちます' : shown.get(x.id)?.hand ?? ''}
                   </div>
-                  {s.turn === i && <TimerBar at={s.deadline} total={ACT_SECONDS * 1000} />}
+                  {s.turn === i && <TimerBar at={s.deadline} total={ACT_SECONDS * 1000 * paceMult(s)} />}
                 </div>
                 <div class="c-pseat-cards">
                   {x.inHand && !x.folded

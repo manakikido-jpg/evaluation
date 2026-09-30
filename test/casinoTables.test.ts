@@ -359,3 +359,30 @@ describe('♠ ポーカー: 放っておかれた卓', () => {
     expect(t.bank.get(P(1).id)).toBe(0);
   });
 });
+
+describe('⏱ 持ち時間を長くする', () => {
+  it('卓を立てる人が選んだ倍率で、持ち時間が長くなる（前の卓はふつう）', () => {
+    const t = sim(poker, 41);
+    let s = t.run(poker.create(P(1), { bb: '20', buyin: '800', pace: 'relaxed' }, t.ctx()));
+    s = t.run(poker.join(s, P(2), { buyin: '800' }, t.ctx()));
+    s = t.advance(s, 6000);
+    expect(s.phase).toBe('preflop');
+    expect(s.deadline).toBe(t.now + 120_000);
+    s = t.advance(s, 60_000);
+    expect(s.log.some((l) => l.includes('時間切れ'))).toBe(false);
+
+    const b = sim(bjTable, 42);
+    let bs = b.run(bjTable.create(P(1), { pace: 'slow' }, b.ctx()));
+    bs = b.run(bjTable.join(bs, P(2), {}, b.ctx()));
+    bs = b.run(bjTable.act(bs, P(1).id, { action: 'bet', bet: '100' }, b.ctx()));
+    expect(bs.deadline).toBe(b.now + BET_SECONDS * 2000);
+    // 選ばなかった・おかしな値は「ふつう」
+    expect(b.run(bjTable.create(P(3), { pace: 'forever' }, b.ctx())).pace).toBe('normal');
+
+    const d = sim(daifugo, 43);
+    let ds = d.run(daifugo.create(P(1), { entry: '0', pace: 'relaxed' }, d.ctx()));
+    for (const n of [2, 3]) ds = d.run(daifugo.join(ds, P(n), {}, d.ctx()));
+    ds = d.run(daifugo.act(ds, P(1).id, { action: 'start' }, d.ctx()));
+    expect(ds.deadline).toBe(d.now + 160_000);
+  });
+});

@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-casino-pace',
+    date: '2026-09-30',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '⏱ カジノの卓の持ち時間を長くできるように',
+    items: [
+      '卓を立てるときに「ふつう」「ゆっくり（2 倍）」「のんびり（4 倍）」を選べる（ポーカーなら 30 秒・1 分・2 分）',
+      'オセロ対戦は 1 手 2 分・5 分・10 分から選べる',
+    ],
+  },
+  {
     id: '2026-09-30-poker-ux',
     date: '2026-09-30',
     kind: 'improve',

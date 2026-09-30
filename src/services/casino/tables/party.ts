@@ -1,6 +1,6 @@
 import type { TableKind } from '../../../config.js';
 import { rankOf, shuffledShoe, type Rng } from '../cards.js';
-import { fail, intOf, list, ok, str, type Credit, type Ctx, type Form, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, list, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * みんなで遊ぶトランプ（大富豪・ババ抜き）。部屋を作った人が参加費を決め、そろったら作った人が始める。
@@ -25,6 +25,7 @@ type PartyBase = {
   order: string[];
   payouts: { id: string; name: string; amount: number }[];
   log: string[];
+  pace?: Pace;
 };
 
 const addLog = (s: PartyBase, line: string) => {
@@ -72,7 +73,7 @@ function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<S> {
     create(host, f, ctx) {
       const entry = intOf(f, 'entry');
       if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > ctx.cfg.casino.maxBet))) return fail('bad_bet');
-      const s = { ...r.init(), seats: [seat(host)], entry, phase: 'lobby', deadline: ctx.now + LOBBY_MINUTES * 60_000, createdAt: ctx.now, turn: null, order: [], payouts: [], log: [] } as unknown as S;
+      const s = { ...r.init(), seats: [seat(host)], entry, phase: 'lobby', deadline: ctx.now + LOBBY_MINUTES * 60_000, createdAt: ctx.now, turn: null, order: [], payouts: [], log: [], pace: paceOf(f) } as unknown as S;
       return ok(s, entry > 0 ? { debits: [{ memberId: host.id, amount: entry, reason: 'casino_bet', limited: true }] } : undefined);
     },
     join(s, who, _f) {
@@ -107,7 +108,7 @@ function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<S> {
         if (state.seats.length < r.min) return fail('need_players');
         const s = r.deal(structuredClone(state), ctx.rng, ctx.now);
         s.phase = 'playing';
-        s.deadline = ctx.now + r.turnSeconds * 1000;
+        s.deadline = ctx.now + r.turnSeconds * 1000 * paceMult(s);
         return ok(s);
       }
       if (state.phase !== 'playing' || state.turn !== i) return fail('not_your_turn');
@@ -152,7 +153,7 @@ function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<S> {
       return ok(s, { debits: step.fx?.debits, credits: [...(step.fx?.credits ?? []), ...credits] });
     }
     const t = s.turn;
-    s.deadline = t !== null && s.seats[t]!.gone ? ctx.now + 800 : ctx.now + r.turnSeconds * 1000;
+    s.deadline = t !== null && s.seats[t]!.gone ? ctx.now + 800 : ctx.now + r.turnSeconds * 1000 * paceMult(s);
     return ok(s, step.fx);
   }
 }

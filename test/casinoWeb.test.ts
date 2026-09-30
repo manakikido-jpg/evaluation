@@ -289,7 +289,8 @@ describe('👥 みんなで座る卓（画面）', () => {
     expect(lobby).toContain('/casino/tables/daifugo');
     const list = await (await get('/casino/tables/poker', a)).text();
     expect(list).toContain('卓を立てて座る');
-    const made = await post('/casino/tables/poker', a, { bb: '20', buyin: '1000' });
+    expect(list).toContain('のんびり（2 分）');
+    const made = await post('/casino/tables/poker', a, { bb: '20', buyin: '1000', pace: 'slow' });
     const loc = made.headers.get('location')!;
     expect(loc).toMatch(/^\/casino\/t\/\d+$/);
     const id = loc.split('/').pop()!;

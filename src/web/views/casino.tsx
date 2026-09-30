@@ -9,7 +9,7 @@ import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/c
 import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteBetLabel, rouletteColor, ROULETTE_BETS } from '../../services/casino/roulette.js';
 import { SLOT_SYMBOLS, slotEmoji } from '../../services/casino/slots.js';
-import { MOVE_SECONDS, type VersusState } from '../../services/casino/versus.js';
+import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
 import { assetUrl } from '../assets.js';
 
 export type Coin = { name: string; emoji: string };
@@ -733,13 +733,21 @@ export function VersusLobby(p: { me: CasinoMe; casino: CasinoConfig; matches: Ca
       ) : (
         <section class="c-panel">
           <h2>🆕 部屋を作る</h2>
-          <p class="c-muted">相手も同じだけ賭けて、勝った人が 2 人分をもらいます。0 にすると賭けない対戦です。1 手 {MOVE_SECONDS / 60} 分以内に置かないと負けになります。</p>
+          <p class="c-muted">相手も同じだけ賭けて、勝った人が 2 人分をもらいます。0 にすると賭けない対戦です。1 手の持ち時間を過ぎると、置く番の人の負けになります。</p>
           <form method="post" action="/casino/versus" class="c-bet-custom">
             <input type="hidden" name="_csrf" value={csrf} />
             <label>
               賭け
               <input type="number" name="bet" min={0} max={p.casino.maxBet} value="100" inputmode="numeric" />
               {p.me.coin.name}
+            </label>
+            <label>
+              1 手の持ち時間
+              <select name="moveSeconds">
+                {MOVE_CHOICES.map((sec) => (
+                  <option value={String(sec)}>{sec / 60} 分</option>
+                ))}
+              </select>
             </label>
             <button type="submit" class="c-btn c-btn-gold">
               部屋を作る
@@ -819,7 +827,7 @@ export function VersusBoard(p: { match: CasinoMatch; names: Names; me: string; c
   const mine: Stone | undefined = m.hostId === p.me ? 'B' : m.guestId === p.me ? 'W' : undefined;
   const live = m.status === 'playing' || m.status === 'open';
   const myTurn = m.status === 'playing' && s.turn === mine;
-  const left = Math.max(0, MOVE_SECONDS - Math.floor((p.now.getTime() - m.turnAt.getTime()) / 1000));
+  const left = Math.max(0, moveSecondsOf(m) - Math.floor((p.now.getTime() - m.turnAt.getTime()) / 1000));
   return (
     <div id="vs-board" class="c-vs" {...(live ? { 'hx-get': `/casino/versus/${m.id}/board?v=${m.version}`, 'hx-trigger': 'every 2s', 'hx-swap': 'outerHTML' } : {})}>
       <StoneCount board={s.board} b={nameOf(p.names, m.hostId)} w={nameOf(p.names, m.guestId)} turn={m.status === 'playing' ? s.turn : null} />

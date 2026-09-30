@@ -9,14 +9,19 @@ import { initialBoard, othelloPlay, winnerOf, type OthelloState, type Stone } fr
 /**
  * メンバー同士の対戦（オセロ）。部屋を作った人が黒（先手）、入った人が白。
  * 賭けは両方から預かり、勝った人が 2 人分をもらう（引き分けは返す）。0 銭（賭けない）でもできる。
- * - 持ち時間: 1 手 MOVE_SECONDS 秒。過ぎたら置く番の人の負け
+ * - 持ち時間: 1 手 MOVE_SECONDS 秒（部屋を作る人が MOVE_CHOICES から選ぶ）。過ぎたら置く番の人の負け
  * - 相手待ちのまま OPEN_MINUTES 分たったら、部屋を閉じて返す
  */
 
 export const MOVE_SECONDS = 120;
+/** 1 手の持ち時間の選び方（秒） */
+export const MOVE_CHOICES = [120, 300, 600] as const;
 export const OPEN_MINUTES = 30;
 
-export type VersusState = OthelloState;
+export type VersusState = OthelloState & { moveSeconds?: number };
+
+/** その対戦の 1 手の持ち時間（前に作った部屋は 2 分） */
+export const moveSecondsOf = (m: Pick<CasinoMatch, 'state'>) => (m.state as VersusState).moveSeconds ?? MOVE_SECONDS;
 
 export const colorOf = (m: Pick<CasinoMatch, 'hostId' | 'guestId'>, memberId: string): Stone | undefined =>
   m.hostId === memberId ? 'B' : m.guestId === memberId ? 'W' : undefined;
@@ -55,13 +60,14 @@ async function checkVersusBet(db: Db, cfg: GuildConfig, memberId: string, bet: n
 
 export type MatchResult = { status: 'ok'; match: CasinoMatch } | { status: Exclude<BetCheck, 'ok'> | 'busy' | 'not_found' | 'self' | 'taken' | 'not_yours' | 'invalid' };
 
-export async function createMatch(db: Db, cfg: GuildConfig, hostId: string, bet: number, now = new Date()): Promise<MatchResult> {
+export async function createMatch(db: Db, cfg: GuildConfig, hostId: string, bet: number, now = new Date(), moveSeconds: number = MOVE_SECONDS): Promise<MatchResult> {
+  if (!(MOVE_CHOICES as readonly number[]).includes(moveSeconds)) return { status: 'invalid' };
   if (await myMatch(db, hostId)) return { status: 'busy' };
   const check = await checkVersusBet(db, cfg, hostId, bet, now);
   if (check !== 'ok') return { status: check };
   const match = await db.transaction(async (tx) => {
     if (bet > 0 && !(await spendWithin(tx, hostId, bet, 'casino_bet', { game: 'versus' }))) return undefined;
-    const state: VersusState = { board: initialBoard(), turn: 'B' };
+    const state: VersusState = { board: initialBoard(), turn: 'B', moveSeconds };
     const [m] = await tx.insert(casinoMatches).values({ hostId, bet, state, createdAt: now, turnAt: now }).returning();
     return m;
   });
@@ -162,7 +168,7 @@ async function sweepOne(db: Db, m: CasinoMatch | undefined, now: Date): Promise<
     return (await closeMatch(db, m, { status: 'cancelled', endReason: 'expired' }, now)) ?? (await matchById(db, m.id));
   }
   const turn = (m.state as VersusState).turn;
-  if (m.status === 'playing' && turn && now.getTime() - m.turnAt.getTime() > MOVE_SECONDS * 1000) {
+  if (m.status === 'playing' && turn && now.getTime() - m.turnAt.getTime() > moveSecondsOf(m) * 1000) {
     return (await closeMatch(db, m, { status: 'done', endReason: 'timeout', winner: turn === 'B' ? 'W' : 'B' }, now)) ?? (await matchById(db, m.id));
   }
   return m;
@@ -179,7 +185,8 @@ export async function sweepMatches(db: Db, now = new Date()): Promise<void> {
     .where(
       or(
         and(eq(casinoMatches.status, 'open'), lt(casinoMatches.createdAt, new Date(now.getTime() - OPEN_MINUTES * 60_000))),
-        and(eq(casinoMatches.status, 'playing'), lt(casinoMatches.turnAt, new Date(now.getTime() - MOVE_SECONDS * 1000))),
+        // 一番短い持ち時間を過ぎたものを拾い、部屋ごとの持ち時間で確かめる
+        and(eq(casinoMatches.status, 'playing'), lt(casinoMatches.turnAt, new Date(now.getTime() - MOVE_CHOICES[0] * 1000))),
       ),
     );
   for (const m of stale) await sweepOne(db, m, now);

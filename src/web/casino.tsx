@@ -30,7 +30,7 @@ import {
 } from '../services/casino/casino.js';
 import { isOthelloLevel } from '../services/casino/othello.js';
 import { isRouletteBet } from '../services/casino/roulette.js';
-import { cancelMatch, createMatch, joinMatch, moveMatch, myMatch, openMatches, readMatch, recentMatches, resignMatch, sweepMatches, type MatchResult } from '../services/casino/versus.js';
+import { cancelMatch, createMatch, MOVE_SECONDS, joinMatch, moveMatch, myMatch, openMatches, readMatch, recentMatches, resignMatch, sweepMatches, type MatchResult } from '../services/casino/versus.js';
 import { walletOf } from '../services/economy.js';
 import { namesOf } from '../services/members.js';
 import type { DiscordApi } from './discordApi.js';
@@ -355,7 +355,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const body = await c.req.parseBody();
       const bet = typeof body.bet === 'string' && /^\d{1,9}$/.test(body.bet) ? Number(body.bet) : NaN;
       if (!Number.isInteger(bet)) return c.redirect('/casino/versus?e=bad_bet');
-      return toRoom(c, await createMatch(db, d.cfg(), me.session.userId, bet, d.now()));
+      const move = typeof body.moveSeconds === 'string' && /^\d{1,4}$/.test(body.moveSeconds) ? Number(body.moveSeconds) : MOVE_SECONDS;
+      return toRoom(c, await createMatch(db, d.cfg(), me.session.userId, bet, d.now(), move));
     }, { post: true }),
   );
 
