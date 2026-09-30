@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-channel-perms',
+    date: '2026-09-30',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🔐 チャンネル・カテゴリの見られるロール・人を見て変えられるように',
+    items: [
+      '「チャンネル」で各チャンネル・カテゴリを開くと、今見られるロールと、ロール・人ごとの設定（見る・書く・入る・話す）が出る',
+      '✅ 許可・⛔ 拒否・／ 決めない を選んで保存すると Discord に反映。ロール・人（ID・名前）を足す・外すこともできる',
+      'カテゴリを変えるときは、同期している中のチャンネルにも同じ変更を入れられる',
+    ],
+  },
+  {
     id: '2026-09-30-member-diff',
     date: '2026-09-30',
     kind: 'new',

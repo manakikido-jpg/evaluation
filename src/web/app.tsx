@@ -166,7 +166,8 @@ import { commandDefinitions } from '../discord/commands.js';
 import { ADMIN_RANK_KEYS, firstAutoKeyOf, RanksPage } from './views/ranks.js';
 import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type NoticeGroup } from './views/notices.js';
 import { ShopPage } from './views/shop.js';
-import { ChannelEditPage, ChannelNewPage, ChannelsPage, type ChannelInfo } from './views/channels.js';
+import { isTri, overwriteRows, permKeysFor, planOverwrites, sameOverwrites, whoCanView, type WantedOverwrite } from '../services/channelPerms.js';
+import { ChannelEditPage, type ChannelPermView, ChannelNewPage, ChannelsPage, type ChannelInfo } from './views/channels.js';
 import { RolePage, RolesPage } from './views/roles.js';
 import { MarketPage } from './views/market.js';
 import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
@@ -2380,9 +2381,23 @@ export function createWebApp(deps: WebDeps) {
     const group = (x: GuildChannel) => (x.type === 4 ? 'cat' : isVoiceChannel(x) ? 'voice' : 'text');
     const siblings = channels.filter((x) => group(x) === group(ch) && (ch.type === 4 || (x.parent_id ?? null) === (ch.parent_id ?? null))).sort((a, b) => a.position - b.position);
     const children = ch.type === 4 ? listTextChannels(channels).find((g) => g.category?.id === ch.id) : undefined;
+    const roles = (await loadRoles()) ?? [];
+    const memberIds = (ch.permission_overwrites ?? []).filter((o) => o.type === 1).map((o) => o.id);
+    const perm: ChannelPermView = {
+      keys: permKeysFor(ch),
+      rows: overwriteRows(ch, roles, await namesOf(db, memberIds), cfg.guildId, deps.botId),
+      viewers: whoCanView(ch, roles, cfg.guildId),
+      synced: parent ? sameOverwrites(ch.permission_overwrites, parent.permission_overwrites) : null,
+      syncedChildren: ch.type === 4 ? channels.filter((x) => x.parent_id === ch.id && sameOverwrites(x.permission_overwrites, ch.permission_overwrites)).length : 0,
+      roles: roles
+        .filter((r) => r.id !== cfg.guildId && !r.managed && !(ch.permission_overwrites ?? []).some((o) => o.id === r.id))
+        .sort((a, b) => b.position - a.position)
+        .map((r) => ({ id: r.id, name: r.name })),
+    };
     return c.html(
       <ChannelEditPage
         session={c.get('session')}
+        perm={perm}
         guildId={cfg.guildId}
         info={channelInfo(ch, channels)}
         parent={parent}
@@ -2477,6 +2492,64 @@ export function createWebApp(deps: WebDeps) {
       via: 'web',
     });
     return backTo('moved');
+  });
+
+  /** 🔐 見られる人・ロール（ロール・人ごとの上書き）を変える。カテゴリなら、同期している中のチャンネルにも */
+  app.post('/channels/:id/perms', async (c) => {
+    const id = c.req.param('id');
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/channels');
+    const body = await c.req.parseBody();
+    const channels = await loadChannels(true);
+    const channel = channels.find((ch) => ch.id === id);
+    if (!channel) return c.redirect('/channels');
+    const back = (msg: string) => c.redirect(`/channels/${id}?msg=${msg}`);
+    const keys = permKeysFor(channel);
+    const roles = (await loadRoles()) ?? [];
+    const locked = (oid: string, type: 0 | 1) => (type === 1 && oid === deps.botId) || roles.some((r) => r.id === oid && r.managed);
+    const trisFrom = (prefix: string) => Object.fromEntries(keys.map((k) => [k, body[`${prefix}.${k}`]]).filter(([, v]) => isTri(v))) as WantedOverwrite['tris'];
+    const wanted: WantedOverwrite[] = [];
+    const n = Math.min(Number(body.rows) || 0, 200);
+    for (let i = 0; i < n; i++) {
+      const oid = typeof body[`ow.${i}.id`] === 'string' ? (body[`ow.${i}.id`] as string) : '';
+      const type = body[`ow.${i}.type`] === '1' ? 1 : 0;
+      if (!/^\d{17,20}$/.test(oid) || locked(oid, type) || !(channel.permission_overwrites ?? []).some((o) => o.id === oid)) continue;
+      wanted.push({ id: oid, type, tris: trisFrom(`ow.${i}`), remove: body[`ow.${i}.remove`] === 'yes' });
+    }
+    // 足す: ロールか人
+    const newRole = typeof body['new.role'] === 'string' ? body['new.role'] : '';
+    if (newRole && roles.some((r) => r.id === newRole && !r.managed)) wanted.push({ id: newRole, type: 0, tris: trisFrom('new') });
+    const newMember = field(body, 'new.member', 100);
+    if (newMember) {
+      const found = await findMemberByNameOrId(db, newMember);
+      if (!found || found === 'ambiguous') return back('perms_member_not_found');
+      if (found.id !== deps.botId) wanted.push({ id: found.id, type: 1, tris: trisFrom('new') });
+    }
+    const before = channel.permission_overwrites ?? [];
+    const plan = planOverwrites(before, wanted, keys);
+    if (!plan.set.length && !plan.del.length) return back('unchanged');
+    // カテゴリ: 同期している中のチャンネルにも同じ変更（Discord は API で変えたカテゴリを中へ広げないため）
+    const targets = [channel, ...(channel.type === 4 && body.children === 'yes' ? channels.filter((x) => x.parent_id === id && sameOverwrites(x.permission_overwrites, before)) : [])];
+    const reason = '見られる人・ロールを変えた（管理画面）';
+    try {
+      for (const t of targets) {
+        const p = t.id === id ? plan : planOverwrites(t.permission_overwrites ?? [], wanted, permKeysFor(t).filter((k) => keys.includes(k)));
+        for (const o of p.set) await deps.discord.setChannelOverwrite(t.id, o, reason);
+        for (const oid of p.del) {
+          if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(t.id, oid, reason);
+          else await deps.discord.setChannelOverwrite(t.id, { id: oid, type: (t.permission_overwrites ?? []).find((o) => o.id === oid)?.type ?? 0, allow: '0', deny: '0' }, reason);
+        }
+      }
+    } catch (err) {
+      logger.warn({ err }, 'channel perms update failed');
+      return back('failed');
+    }
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'channel.perms',
+      detail: { channelId: id, name: channel.name, set: plan.set, removed: plan.del, children: targets.length - 1 },
+      via: 'web',
+    });
+    return back('perms_saved');
   });
 
   /** チャンネル・カテゴリを消す（名前を入力して確認。BOT が使っているもの・中身のあるカテゴリは消さない） */

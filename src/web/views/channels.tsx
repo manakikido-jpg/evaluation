@@ -1,6 +1,7 @@
 import type { AdminSession } from '../../db/schema.js';
 import type { GuildChannel, GuildRole } from '../../lib/discordRest.js';
 import { CHANNEL_VISIBILITY, type ChannelMode } from '../../services/channels.js';
+import { PERM_LABEL, type OverwriteRow, type PermKey, type Tri } from '../../services/channelPerms.js';
 import { Layout } from './layout.js';
 
 export const CHANNEL_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
@@ -21,6 +22,8 @@ export const CHANNEL_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }
     kind: 'warn',
   },
   deleted: { text: 'チャンネルを消しました。', kind: 'ok' },
+  perms_saved: { text: '見られる人・ロールを変えました。Discord に反映しました。', kind: 'ok' },
+  perms_member_not_found: { text: '人が見つかりませんでした（ID・ユーザー名・表示名で入れてください）。', kind: 'warn' },
   confirm_name: {
     text: '消すときは、確認のためチャンネルの名前をそのまま入力してください。',
     kind: 'warn',
@@ -190,8 +193,129 @@ export function ChannelsPage(props: {
 
 // ───────── 1 つのチャンネル ─────────
 
+/** 見られる人・ロールの欄に出すもの */
+export type ChannelPermView = {
+  keys: PermKey[];
+  rows: OverwriteRow[];
+  /** 今見られる（@everyone とそのロールだけを持っている人が） */
+  viewers: { everyone: boolean; roles: string[] };
+  /** カテゴリと同期しているか（カテゴリの中でなければ null） */
+  synced: boolean | null;
+  /** カテゴリのとき: 同期している中のチャンネルの数 */
+  syncedChildren: number;
+  /** 足せるロール */
+  roles: { id: string; name: string }[];
+};
+
+const TRI_LABEL: Record<Tri, string> = { allow: '✅ 許可', deny: '⛔ 拒否', inherit: '／ 決めない' };
+
+function TriSelect(props: { name: string; value: Tri; disabled?: boolean }) {
+  return (
+    <select name={props.name} disabled={props.disabled} class={`tri tri-${props.value}`}>
+      {(Object.keys(TRI_LABEL) as Tri[]).map((t) => (
+        <option value={t} selected={t === props.value}>
+          {TRI_LABEL[t]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** 🔐 見られる人・ロール */
+function PermsSection(props: { session: AdminSession; channel: GuildChannel; perm: ChannelPermView }) {
+  const { perm, channel: c } = props;
+  const isCat = c.type === 4;
+  return (
+    <section class="card perms">
+      <h2>🔐 見られる人・ロール</h2>
+      <p>
+        <b>今見られる:</b>{' '}
+        {perm.viewers.everyone ? (
+          <span class="tag">みんな（@everyone）</span>
+        ) : perm.viewers.roles.length ? (
+          perm.viewers.roles.map((n) => <span class="tag gray">@{n}</span>)
+        ) : (
+          <span class="note">（ロールでは見られない。下の人だけ・管理者だけ）</span>
+        )}
+      </p>
+      {perm.synced === true && <p class="note">📁 カテゴリと同期しています。ここで変えると、このチャンネルだけの設定になります（同期が外れます）。</p>}
+      {perm.synced === false && <p class="note">📁 カテゴリとは別の設定です。</p>}
+      <form method="post" action={`/channels/${c.id}/perms`}>
+        <Csrf session={props.session} />
+        <div class="table-wrap">
+          <table class="perm-table">
+            <thead>
+              <tr>
+                <th>ロール・人</th>
+                {perm.keys.map((k) => (
+                  <th>{PERM_LABEL[k]}</th>
+                ))}
+                <th>外す</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perm.rows.map((r, i) => (
+                <tr>
+                  <td>
+                    {r.name}
+                    {r.locked && <small class="muted">（BOT・連携のロールはここでは変えない）</small>}
+                    {!r.locked && (
+                      <>
+                        <input type="hidden" name={`ow.${i}.id`} value={r.id} />
+                        <input type="hidden" name={`ow.${i}.type`} value={String(r.type)} />
+                      </>
+                    )}
+                  </td>
+                  {perm.keys.map((k) => (
+                    <td>
+                      <TriSelect name={`ow.${i}.${k}`} value={r.tris[k]} disabled={r.locked} />
+                    </td>
+                  ))}
+                  <td>{!r.locked && <input type="checkbox" name={`ow.${i}.remove`} value="yes" aria-label="外す" />}</td>
+                </tr>
+              ))}
+              <tr class="perm-new">
+                <td>
+                  <select name="new.role" aria-label="足すロール">
+                    <option value="">＋ ロールを足す</option>
+                    {perm.roles.map((r) => (
+                      <option value={r.id}>@{r.name}</option>
+                    ))}
+                  </select>
+                  <input type="text" name="new.member" maxlength={100} placeholder="＋ 人を足す（ID・名前）" aria-label="足す人" />
+                </td>
+                {perm.keys.map((k) => (
+                  <td>
+                    <TriSelect name={`new.${k}`} value={k === 'view' ? 'allow' : 'inherit'} />
+                  </td>
+                ))}
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <input type="hidden" name="rows" value={String(perm.rows.length)} />
+        {isCat && perm.syncedChildren > 0 && (
+          <label class="field check">
+            <input type="checkbox" name="children" value="yes" checked />
+            <span>同期している中のチャンネル（{perm.syncedChildren} 個）にも同じ変更をする</span>
+          </label>
+        )}
+        <p class="note">
+          ✅ 許可・⛔ 拒否・／ 決めない（{isCat ? 'ロールの権限' : 'カテゴリ・ロールの権限'}に従う）。人の設定はロールより強く、⛔ はほかのロールの ✅ より弱いことに気をつけてください（Discord の決まり）。「外す」にチェックすると、その行の設定を消します。
+        </p>
+        <button type="submit" class="ok">
+          保存して Discord に反映
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export function ChannelEditPage(props: {
   session: AdminSession;
+  /** 見られる人・ロール */
+  perm?: ChannelPermView;
   guildId: string;
   info: ChannelInfo;
   parent: GuildChannel | null;
@@ -371,6 +495,8 @@ export function ChannelEditPage(props: {
               </form>
             )}
           </section>
+
+          {props.perm && <PermsSection session={session} channel={c} perm={props.perm} />}
 
           <section class="card danger-zone">
             <h2>消す</h2>

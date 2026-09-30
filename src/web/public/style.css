@@ -739,3 +739,12 @@ a.stat[data-popup] { cursor: pointer; }
 .diff-list h3 { margin: 0 0 6px; font-size: 1rem; }
 a.chip-link { display: inline-block; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: inherit; }
 a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; }
+/* 🔐 見られる人・ロール */
+.perm-table { width: 100%; border-collapse: collapse; }
+.perm-table th, .perm-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.perm-table select.tri { min-width: 7.5em; }
+.perm-table select.tri-allow { border-color: #2e8b57; }
+.perm-table select.tri-deny { border-color: var(--shu); }
+.perm-table .perm-new td { background: var(--sakura, transparent); }
+.perm-table .perm-new input[type=text] { margin-top: 4px; width: 100%; }
+.perms .tag { margin-right: 4px; }

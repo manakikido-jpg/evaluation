@@ -2513,3 +2513,35 @@ describe('👥 人数の差（ホームのポップアップ）', () => {
     expect(page).toContain('name="at"');
   });
 });
+
+
+describe('🔐 チャンネルの見られる人・ロール', () => {
+  it('編集ページで今見られるロールを見て、ロールを足して許可・拒否を決められる', async () => {
+    const R = '980000000000000071';
+    roleList = [
+      { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: String(1 << 10) },
+      { id: R, name: '参拝者', position: 2, managed: false, color: 0, permissions: '0' },
+    ];
+    try {
+      const g = await login(GUJI);
+      const page = await (await get('/channels/910000000000000002', g)).text();
+      expect(page).toContain('見られる人・ロール');
+      expect(page).toContain('みんな（@everyone）');
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+      const post = (data: Record<string, string>) =>
+        app.request('/channels/910000000000000002/perms', {
+          method: 'POST',
+          headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ _csrf: csrf, rows: '0', ...data }).toString(),
+        });
+      actions = [];
+      const r = await post({ 'new.role': R, 'new.view': 'allow', 'new.send': 'deny' });
+      expect(r.headers.get('location')).toBe('/channels/910000000000000002?msg=perms_saved');
+      expect(actions).toEqual([`overwrite 910000000000000002 ${R} allow=${1 << 10} deny=${1 << 11}`]);
+      expect((await post({ 'new.member': 'だれでもない' })).headers.get('location')).toBe('/channels/910000000000000002?msg=perms_member_not_found');
+      expect((await post({})).headers.get('location')).toBe('/channels/910000000000000002?msg=unchanged');
+    } finally {
+      roleList = [];
+    }
+  });
+});
