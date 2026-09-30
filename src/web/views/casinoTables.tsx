@@ -6,7 +6,8 @@ import { handValue } from '../../services/casino/blackjack.js';
 import { rouletteBetLabel, rouletteColor, ROULETTE_BETS } from '../../services/casino/roulette.js';
 import type { BacTableState, BjTableState, RlTableState } from '../../services/casino/tables/dealer.js';
 import { cardLabel, JOKER, type BabaState, type DaifugoState } from '../../services/casino/tables/party.js';
-import { blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
+import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
+import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
 import { TABLE_LABEL } from '../../services/casino/tables/types.js';
 import { BetForm, CasinoLayout, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
 
@@ -176,6 +177,12 @@ export function TablePage(p: { me: CasinoMe; table: CasinoTable; casino: CasinoC
         {L.emoji} {L.name} #{p.table.id}
       </h1>
       {p.msg && <Msg msg={p.msg} />}
+      {p.table.kind === 'poker' && (
+        <div class="c-tools">
+          <HintToggle />
+          <PokerGuide />
+        </div>
+      )}
       <TableFrag table={p.table} me={p.me} casino={p.casino} now={p.now} />
       <details class="c-rules">
         <summary>遊び方</summary>
@@ -500,111 +507,199 @@ function RlView({ t, s, me, casino, now }: ViewProps<RlTableState>) {
 }
 
 // ♠ ポーカー
-const PHASE_LABEL: Record<PokerState['phase'], string> = { waiting: '次の手を待っています', preflop: 'プリフロップ', flop: 'フロップ', turn: 'ターン', river: 'リバー', showdown: '結果' };
+const PHASE_LABEL: Record<PokerState['phase'], string> = { waiting: '次の手を待っています', preflop: 'プリフロップ（手札 2 枚）', flop: 'フロップ（場に 3 枚）', turn: 'ターン（4 枚目）', river: 'リバー（5 枚目）', showdown: '結果' };
+const TONE_ICON: Record<Tone, string> = { go: '🔥', ok: '👍', care: '🤔', fold: '✋' };
+
+/** 持ち時間のバー（casino.js が縮める） */
+const TimerBar = (p: { at: number | null; total: number }) =>
+  p.at === null ? null : (
+    <span class="c-timer" data-deadline={String(p.at)} data-total={String(p.total)}>
+      <i></i>
+    </span>
+  );
+
 function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
-  const v = pokerView(s, me.session.userId);
+  const uid = me.session.userId;
+  const v = pokerView(s, uid);
   const csrf = me.session.csrfToken;
   const shown = new Map((s.result?.shown ?? []).map((x) => [x.id, x]));
+  const winners = new Map((s.result?.winners ?? []).map((w) => [w.id, w]));
+  const base = v.me >= 0 ? v.me : 0;
+  const mine = v.seat && v.seat.inHand && !v.seat.folded && v.seat.hole.length === 2 ? v.seat : undefined;
+  const adv = mine ? pokerAdvice(mine.hole, s.board, { toCall: v.toCall, pot: v.pot, bb: s.bb }) : null;
+  const betting = ['preflop', 'flop', 'turn', 'river'].includes(s.phase);
+  const inHandNow = Boolean(v.seat?.inHand && s.phase !== 'waiting' && s.phase !== 'showdown');
   return (
     <>
-      <section class="c-table c-poker">
-        <div class="c-phase">
-          {PHASE_LABEL[s.phase]}
-          {s.phase === 'waiting' && s.seats.filter(Boolean).length < 2 && '（2 人そろうと始まります）'}
-          {s.turn !== null && ` ・ ${s.seats[s.turn]?.name} さんの番`}
+      <section class="c-poker2" data-hand-cat={adv?.category ?? ''}>
+        <div class="c-ptop">
+          <span class="c-pphase">{PHASE_LABEL[s.phase]}</span>
+          {s.phase === 'waiting' && s.seats.filter(Boolean).length < 2 && <span class="c-muted">2 人そろうと始まります</span>}
+          {s.turn !== null && <span class="c-pturn">{s.turn === v.me ? '🫵 あなたの番です' : `${s.seats[s.turn]?.name} さんの番`}</span>}
           <Countdown at={s.deadline} now={now} />
+          <span class="c-muted c-pblinds">
+            ブラインド {fmt(s.sb)}/{fmt(s.bb)}
+          </span>
         </div>
-        <div class="c-board">
-          <div class="c-cards c-cards-center">
-            {s.board.map((c, i) => (
-              <Card c={c} delay={i} />
-            ))}
-            {Array.from({ length: Math.max(0, 5 - s.board.length) }, () => (
-              <span class="pc slot"></span>
-            ))}
+        <div class="c-oval">
+          <div class="c-oval-rail"></div>
+          <div class="c-oval-center">
+            <div class="c-cards c-cards-center c-boardcards">
+              {s.board.map((c, i) => (
+                <span class={adv?.cards.includes(c) ? 'c-hl-card' : ''}>
+                  <Card c={c} delay={i} />
+                </span>
+              ))}
+              {Array.from({ length: Math.max(0, 5 - s.board.length) }, () => (
+                <span class="pc slot"></span>
+              ))}
+            </div>
+            <div class={`c-pot${v.pot > 0 ? ' has' : ''}`}>
+              <span class="c-potchips" aria-hidden="true"></span>
+              ポット <b>{fmt(v.pot)}</b>
+            </div>
+            {s.result && (
+              <div class="c-pwin">
+                {s.result.winners.map((w) => (
+                  <div>
+                    🏆 <b>{w.name}</b> +{fmt(w.amount)}
+                    {w.hand ? ` ・${w.hand}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div class="c-pot">
-            ポット <b>{fmt(v.pot)}</b>
-            <span class="c-muted">
-              {' '}
-              ・ブラインド {fmt(s.sb)}/{fmt(s.bb)}
-            </span>
-          </div>
-        </div>
-        <div class="c-seats c-seats-poker">
-          {s.seats.map((x, i) =>
-            x ? (
-              <div class={`c-seat${x.id === me.session.userId ? ' me' : ''}${s.turn === i ? ' turn' : ''}${x.folded ? ' folded' : ''}`}>
-                <div class="c-seat-name">
-                  {s.button === i && <span class="c-dealer-btn">D</span>}
-                  {x.name}
+          {s.seats.map((x, i) => {
+            const pos = (i - base + POKER_SEATS) % POKER_SEATS;
+            if (!x) return <div class={`c-pseat pos${pos} empty`}>空き</div>;
+            const cls = `c-pseat pos${pos}${x.id === uid ? ' me' : ''}${s.turn === i ? ' turn' : ''}${x.folded ? ' folded' : ''}${winners.has(x.id) ? ' winner' : ''}`;
+            return (
+              <div class={cls}>
+                <div class="c-pseat-box">
+                  <div class="c-pseat-name">
+                    {s.button === i && <span class="c-dealer-btn" title="ディーラーボタン">D</span>}
+                    {x.name}
+                  </div>
+                  <div class="c-pseat-chips">{fmt(x.chips)}</div>
+                  <div class="c-pseat-state">
+                    {x.folded ? 'フォールド' : x.allIn ? 'オールイン' : x.sittingOut ? '休み' : x.leaving ? '立ちます' : shown.get(x.id)?.hand ?? ''}
+                  </div>
+                  {s.turn === i && <TimerBar at={s.deadline} total={ACT_SECONDS * 1000} />}
                 </div>
-                <div class="c-muted">
-                  チップ <b class="c-gold">{fmt(x.chips)}</b>
-                  {x.sittingOut && '（休み）'}
-                  {x.leaving && '（立ちます）'}
-                </div>
-                <div class="c-cards">
+                <div class="c-pseat-cards">
                   {x.inHand && !x.folded
-                    ? x.id === me.session.userId || shown.has(x.id)
+                    ? x.id === uid || shown.has(x.id)
                       ? x.hole.map((c) => <Card c={c} small />)
                       : [<Back small />, <Back small />]
                     : null}
                 </div>
-                {shown.get(x.id) && <div class="c-tag">{shown.get(x.id)!.hand}</div>}
-                {x.bet > 0 && <div class="c-chipmini">{fmt(x.bet)}</div>}
-                {x.folded && <div class="c-muted">フォールド</div>}
-                {x.allIn && <div class="c-tag">オールイン</div>}
+                {x.bet > 0 && (
+                  <div class="c-pbet">
+                    <span class="c-chipicon" aria-hidden="true"></span>
+                    {fmt(x.bet)}
+                  </div>
+                )}
+                {winners.has(x.id) && <div class="c-winbadge">WIN</div>}
               </div>
-            ) : (
-              <div class="c-seat empty">空き</div>
-            ),
-          )}
+            );
+          })}
         </div>
-        {s.result && (
-          <div class="c-result win">
-            <div class="c-result-text">
-              {s.result.winners.map((w) => (
-                <div>
-                  🏆 {w.name} +{fmt(w.amount)}
-                  {w.hand ? `（${w.hand}）` : ''}
+      </section>
+      <div class={`c-dock${v.myTurn ? ' myturn' : ''}`}>
+        {v.seat && (
+          <div class={`c-hero${v.myTurn ? ' myturn' : ''}`}>
+            <div class="c-hero-cards">
+              {mine ? (
+                mine.hole.map((c) => (
+                  <span class={adv?.cards.includes(c) ? 'c-hl-card' : ''}>
+                    <Card c={c} />
+                  </span>
+                ))
+              ) : (
+                <span class="c-muted">{v.seat.folded ? 'この手は降りました' : '次の手を待っています'}</span>
+              )}
+            </div>
+            <div class="c-hero-info">
+              <div class="c-hero-chips">
+                チップ <b>{fmt(v.seat.chips)}</b>
+                {v.seat.bet > 0 && <span class="c-muted">（この回に {fmt(v.seat.bet)}）</span>}
+              </div>
+              {adv && (
+                <div class="c-nowhand">
+                  <span class="c-nowhand-label">{adv.category === null ? '手札' : '今の役'}</span>
+                  <b>{adv.detail}</b>
                 </div>
-              ))}
+              )}
+              {adv && (
+                <div class={`c-hints tone-${adv.tone}`}>
+                  <div class="c-hint-main">
+                    {TONE_ICON[adv.tone]} {adv.advice}
+                  </div>
+                  {adv.draws.map((d) => (
+                    <div class="c-hint-sub draw">🎯 {d}</div>
+                  ))}
+                  {(adv.equity !== null || adv.potOdds !== null) && (
+                    <div class="c-hint-sub">
+                      {adv.equity !== null && `次で当たる確率 約 ${adv.equity}%`}
+                      {adv.equity !== null && adv.potOdds !== null && ' ・ '}
+                      {adv.potOdds !== null && `コールに必要な確率 ${adv.potOdds}%（${fmt(Math.min(v.toCall, v.seat.chips))} を出して ${fmt(v.pot + v.toCall)} を取りに行く）`}
+                    </div>
+                  )}
+                  {v.myTurn && <div class="c-hint-sub">{v.toCall === 0 ? '💡 だれも賭けていないので、チェック（賭けずに次へ）ができます' : `💡 続けるには ${fmt(Math.min(v.toCall, v.seat.chips))} のコールが必要です`}</div>}
+                </div>
+              )}
             </div>
           </div>
         )}
-      </section>
       {v.myTurn && v.seat && (
-        <ActForm id={t.id} csrf={csrf} class="c-actions c-poker-actions">
-          <button type="submit" name="action" value="fold" class="c-btn c-btn-ghost">
-            フォールド
-          </button>
-          {v.toCall === 0 ? (
-            <button type="submit" name="action" value="check" class="c-btn">
-              チェック
+        <div class="c-pbar">
+          <ActForm id={t.id} csrf={csrf} class="c-pbar-main">
+            <button type="submit" name="action" value="fold" class="c-pbtn fold">
+              フォールド<small>降りる</small>
             </button>
-          ) : (
-            <button type="submit" name="action" value="call" class="c-btn">
-              コール {fmt(Math.min(v.toCall, v.seat.chips))}
-            </button>
-          )}
-          {v.maxTo > s.currentBet && (
-            <>
-              <label class="c-raise">
-                {s.currentBet === 0 ? 'ベット' : 'レイズ'}（合計）
-                <input type="number" name="amount" min={v.minTo} max={v.maxTo} value={String(v.minTo)} inputmode="numeric" />
-              </label>
-              <button type="submit" name="action" value="raise" class="c-btn c-btn-gold">
-                {s.currentBet === 0 ? 'ベット' : 'レイズ'}
+            {v.toCall === 0 ? (
+              <button type="submit" name="action" value="check" class="c-pbtn check">
+                チェック<small>賭けずに次へ</small>
               </button>
-            </>
+            ) : (
+              <button type="submit" name="action" value="call" class="c-pbtn call">
+                コール {fmt(Math.min(v.toCall, v.seat.chips))}
+                <small>同じだけ出す</small>
+              </button>
+            )}
+            <button type="submit" name="action" value="allin" class="c-pbtn allin c-confirm" data-confirm={`オールイン（${fmt(v.seat.bet + v.seat.chips)} まで）しますか？`}>
+              オールイン<small>{fmt(v.seat.chips)} 全部</small>
+            </button>
+          </ActForm>
+          {v.maxTo > s.currentBet && (
+            <div class="c-pbar-raise">
+              <span class="c-pbar-label">{s.currentBet === 0 ? '💰 ベット' : '⬆ レイズ'}</span>
+              {quickRaises(s, v).map((q) => (
+                <ActForm id={t.id} csrf={csrf} action="raise" class="c-inline">
+                  <button type="submit" name="amount" value={String(q.to)} class="c-qbtn">
+                    {q.label}
+                    <small>{fmt(q.to)}</small>
+                  </button>
+                </ActForm>
+              ))}
+              <details class="c-rcustom">
+                <summary class="c-qbtn c-qbtn-ghost">
+                  ✏<small>金額</small>
+                </summary>
+                <ActForm id={t.id} csrf={csrf} action="raise" class="c-raise">
+                  <input type="number" name="amount" min={v.minTo} max={v.maxTo} value={String(v.minTo)} inputmode="numeric" aria-label="合計でいくらにするか" />
+                  <button type="submit" class="c-btn c-btn-gold">
+                    {s.currentBet === 0 ? 'ベット' : 'レイズ'}
+                  </button>
+                  <span class="c-muted">{fmt(v.minTo)}〜{fmt(v.maxTo)}（合計）</span>
+                </ActForm>
+              </details>
+            </div>
           )}
-          <button type="submit" name="action" value="allin" class="c-btn c-btn-ghost c-confirm" data-confirm={`オールイン（${fmt(v.seat.chips)}）しますか？`}>
-            オールイン
-          </button>
-        </ActForm>
+        </div>
       )}
-      {v.seat && !(v.seat.inHand && s.phase !== 'waiting' && s.phase !== 'showdown') && (
+      </div>
+      {v.seat && !inHandNow && (
         <div class="c-actions">
           {v.seat.chips < v.buy.max && (
             <ActForm id={t.id} csrf={csrf} action="rebuy" class="c-bet-custom">
@@ -624,24 +719,110 @@ function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
           </ActForm>
         </div>
       )}
-      <SeatControls
-        t={t}
-        me={me}
-        seated={Boolean(v.seat) && !v.seat?.leaving}
-        full={s.seats.every(Boolean)}
-        leaveNote="席を立ちますか？（手の途中ならフォールドして、終わったらチップが銭に戻ります）"
-        join={
-          <label>
-            持ち込む
-            <input type="number" name="buyin" min={v.buy.min} max={v.buy.max} value={String(Math.min(v.buy.max, s.bb * 50))} inputmode="numeric" />
-            {me.coin.name}（{fmt(v.buy.min)}〜{fmt(v.buy.max)}）
-          </label>
-        }
-      />
+      {!betting || !v.myTurn ? (
+        <SeatControls
+          t={t}
+          me={me}
+          seated={Boolean(v.seat) && !v.seat?.leaving}
+          full={s.seats.every(Boolean)}
+          leaveNote="席を立ちますか？（手の途中ならフォールドして、終わったらチップが銭に戻ります）"
+          join={
+            <label>
+              持ち込む
+              <input type="number" name="buyin" min={v.buy.min} max={v.buy.max} value={String(Math.min(v.buy.max, s.bb * 50))} inputmode="numeric" />
+              {me.coin.name}（{fmt(v.buy.min)}〜{fmt(v.buy.max)}）
+            </label>
+          }
+        />
+      ) : null}
       <Log lines={s.log} />
     </>
   );
 }
+
+/** すぐ押せるレイズの量（最小・ポットの半分・ポットぶん）。合計でいくらにするか */
+function quickRaises(s: PokerState, v: ReturnType<typeof pokerView>): { label: string; to: number }[] {
+  const toCall = v.toCall;
+  const potAfterCall = v.pot + toCall;
+  const list = [
+    { label: '最小', to: v.minTo },
+    { label: '½ ポット', to: s.currentBet + Math.floor(potAfterCall / 2) },
+    { label: 'ポット', to: s.currentBet + potAfterCall },
+  ];
+  const seen = new Set<number>();
+  return list
+    .map((q) => ({ ...q, to: Math.min(v.maxTo, Math.max(v.minTo, q.to)) }))
+    .filter((q) => q.to < v.maxTo && !seen.has(q.to) && (seen.add(q.to), true));
+}
+
+/** ポーカーの役の一覧（タブで開く。卓の外に置くので、読み直しても閉じない） */
+export function PokerGuide() {
+  const ex: { cat: number; name: string; cards: number[]; note: string }[] = [
+    { cat: 8, name: 'ストレートフラッシュ', cards: [9, 10, 11, 12, 13].map((r) => 13 + r - 1), note: '同じマークで 5 つ続き。A から始まる一番上はロイヤルストレートフラッシュ' },
+    { cat: 7, name: 'フォーカード', cards: [8, 21, 34, 47, 1], note: '同じ数字が 4 枚' },
+    { cat: 6, name: 'フルハウス', cards: [11, 24, 37, 4, 17], note: '同じ数字 3 枚 ＋ 同じ数字 2 枚' },
+    { cat: 5, name: 'フラッシュ', cards: [26 + 1, 26 + 5, 26 + 8, 26 + 10, 26 + 12], note: '同じマークが 5 枚（数字はばらばらでよい）' },
+    { cat: 4, name: 'ストレート', cards: [4, 18, 32, 46, 8], note: '数字が 5 つ続く（マークはばらばらでよい）。A-2-3-4-5 もOK' },
+    { cat: 3, name: 'スリーカード', cards: [6, 19, 32, 1, 12], note: '同じ数字が 3 枚' },
+    { cat: 2, name: 'ツーペア', cards: [9, 22, 3, 16, 11], note: '同じ数字 2 枚が 2 組' },
+    { cat: 1, name: 'ワンペア', cards: [0, 13, 7, 22, 36], note: '同じ数字が 2 枚' },
+    { cat: 0, name: 'ハイカード（役なし）', cards: [12, 22, 33, 43, 2], note: '役がないときは、一番大きい数字でくらべる' },
+  ];
+  return (
+    <details class="c-guide">
+      <summary class="c-guide-tab">📖 役の一覧</summary>
+      <div class="c-guide-body">
+        <h2>♠ ポーカーの役（上ほど強い）</h2>
+        <p class="c-muted">自分の手札 2 枚と、場の 5 枚を合わせた 7 枚から、一番強い 5 枚で勝負します。同じ役なら、数字の大きいほうが勝ち。</p>
+        <ol class="c-guide-list">
+          {ex.map((e) => (
+            <li data-cat={String(e.cat)}>
+              <div class="c-guide-name">
+                <b>{e.name}</b>
+                <span class="c-guide-now">← 今のあなた</span>
+              </div>
+              <div class="c-cards">
+                {e.cards.map((c) => (
+                  <PlayingCard c={c} small />
+                ))}
+              </div>
+              <div class="c-muted">{e.note}</div>
+            </li>
+          ))}
+        </ol>
+        <h2>流れ</h2>
+        <ol class="c-guide-flow">
+          <li>手札が 2 枚配られる（プリフロップ）→ 賭ける</li>
+          <li>場に 3 枚（フロップ）→ 賭ける</li>
+          <li>4 枚目（ターン）→ 賭ける</li>
+          <li>5 枚目（リバー）→ 賭けて、残った人で見せ合う</li>
+        </ol>
+        <h2>ことば</h2>
+        <dl class="c-guide-words">
+          <dt>チェック</dt>
+          <dd>だれも賭けていないとき、賭けずに次へ</dd>
+          <dt>コール</dt>
+          <dd>前の人と同じだけ出して続ける</dd>
+          <dt>ベット・レイズ</dt>
+          <dd>最初に賭ける・上乗せする（合計の額を入れる）</dd>
+          <dt>フォールド</dt>
+          <dd>降りる（それまで出した分は戻らない）</dd>
+          <dt>オールイン</dt>
+          <dd>持っているチップを全部出す</dd>
+          <dt>ブラインド</dt>
+          <dd>毎回、ボタン（D）の次の 2 人が先に出す決まった額</dd>
+        </dl>
+      </div>
+    </details>
+  );
+}
+
+/** ヒントを出す・隠す（casino.js が覚えておく） */
+export const HintToggle = () => (
+  <button type="button" class="c-hint-toggle" data-hint-toggle aria-pressed="true">
+    💡 ヒント
+  </button>
+);
 
 const Log = (p: { lines: string[] }) =>
   p.lines.length ? (

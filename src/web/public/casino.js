@@ -30,6 +30,10 @@ window.addEventListener('pageshow', () => {
   let version = el.dataset.v;
   // サーバーとの時計のずれ
   let skew = Number(el.dataset.now || Date.now()) - Date.now();
+  const share = () => {
+    document.documentElement.dataset.skew = String(skew);
+  };
+  share();
   // 選んでいる途中（カードを選んだ・数を入れている）は差し替えを少し待つ
   let dirtyAt = 0;
   document.addEventListener('input', (e) => {
@@ -57,6 +61,7 @@ window.addEventListener('pageshow', () => {
     cur.replaceWith(next);
     version = next.getAttribute('data-v');
     skew = Number(next.getAttribute('data-now') || Date.now()) - Date.now();
+    share();
     dirtyAt = 0;
     tickCountdowns();
   };
@@ -71,6 +76,7 @@ window.addEventListener('pageshow', () => {
       }
       const j = await res.json();
       skew = j.now - Date.now();
+      share();
       const changed = String(j.v) !== String(version);
       // 選んでいる途中なら 15 秒まで待つ（そのあいだに時間切れになれば、そのまま差し替え）
       if (changed && (Date.now() - dirtyAt > 15000 || !dirtyAt)) await refresh();
@@ -81,4 +87,46 @@ window.addEventListener('pageshow', () => {
     }
   };
   setInterval(poll, 1500);
+})();
+
+// ───── 💡 ヒントの表示・📖 役の一覧の「今のあなた」・持ち時間のバー ─────
+(() => {
+  const KEY = 'casino-hints';
+  const get = () => {
+    try {
+      return localStorage.getItem(KEY) !== 'off';
+    } catch {
+      return true;
+    }
+  };
+  const apply = (on) => {
+    document.body.classList.toggle('c-hints-off', !on);
+    document.querySelectorAll('[data-hint-toggle]').forEach((b) => b.setAttribute('aria-pressed', on ? 'true' : 'false'));
+  };
+  apply(get());
+  document.addEventListener('click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('[data-hint-toggle]') : null;
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    try {
+      localStorage.setItem(KEY, on ? 'on' : 'off');
+    } catch {
+      // 覚えられなくても、この画面では切り替える
+    }
+    apply(on);
+  });
+  const mark = () => {
+    const cat = document.querySelector('[data-hand-cat]')?.getAttribute('data-hand-cat') ?? '';
+    document.querySelectorAll('.c-guide-list li').forEach((li) => li.classList.toggle('now', cat !== '' && li.getAttribute('data-cat') === cat));
+    const now = Date.now() + Number(document.documentElement.dataset.skew || 0);
+    document.querySelectorAll('.c-timer').forEach((t) => {
+      const left = Number(t.getAttribute('data-deadline')) - now;
+      const total = Number(t.getAttribute('data-total')) || 1;
+      const i = t.querySelector('i');
+      if (i) i.style.width = `${Math.max(0, Math.min(100, (left / total) * 100))}%`;
+      t.classList.toggle('soon', left < 8000);
+    });
+  };
+  mark();
+  setInterval(mark, 250);
 })();
