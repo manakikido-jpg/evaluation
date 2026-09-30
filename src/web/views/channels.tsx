@@ -496,8 +496,6 @@ export function ChannelEditPage(props: {
             )}
           </section>
 
-          {props.perm && <PermsSection session={session} channel={c} perm={props.perm} />}
-
           <section class="card danger-zone">
             <h2>消す</h2>
             {info.inUse ? (
@@ -521,6 +519,8 @@ export function ChannelEditPage(props: {
           </section>
         </div>
       </div>
+      {/* 表が横に広いので、2 列の下に横いっぱいで出す */}
+      {props.perm && <PermsSection session={session} channel={c} perm={props.perm} />}
     </Layout>
   );
 }

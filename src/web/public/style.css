@@ -748,3 +748,18 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .perm-table .perm-new td { background: var(--sakura, transparent); }
 .perm-table .perm-new input[type=text] { margin-top: 4px; width: 100%; }
 .perms .tag { margin-right: 4px; }
+/* 🔐 見られる人・ロール: 横いっぱい・はみ出さない */
+.ch-edit > div { min-width: 0; }
+.card.perms { margin-top: 16px; }
+.perm-table { table-layout: fixed; }
+.perm-table th:first-child, .perm-table td:first-child { width: 38%; }
+.perm-table th:last-child, .perm-table td:last-child { width: 4.5em; text-align: center; }
+.perm-table select.tri { min-width: 0; width: 100%; }
+.perm-table .perm-new select, .perm-table .perm-new input[type=text] { display: block; width: 100%; box-sizing: border-box; }
+.perm-table .perm-new td { vertical-align: top; }
+.perm-table td small.muted { display: block; }
+@media (max-width: 700px) {
+  .perm-table { table-layout: auto; min-width: 480px; }
+}
+.card.perms { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; }
+.card.perms h2 { margin: 0; }
