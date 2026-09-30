@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-09-30-casino-look',
+    date: '2026-09-30',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🌸 カジノの見た目を新しく',
+    items: [
+      '背景を夜の境内に（七宝の模様・金と桜の灯り・舞う花びら）',
+      'ロビーのゲームは、ゲームごとの色と金のメダルに。残高を大きく表示',
+      '座っている卓のお知らせを、見やすい金のお知らせに',
+    ],
+  },
+  {
     id: '2026-09-30-casino-pace',
     date: '2026-09-30',
     kind: 'improve',

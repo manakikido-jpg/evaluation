@@ -518,3 +518,97 @@ body.c-hints-off .c-hints { display: none; }
 .c-game:hover .c-game-emoji { transform: scale(1.15) rotate(-6deg); }
 .c-section { display: flex; align-items: center; gap: 10px; }
 .c-section::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--c-line), transparent); }
+
+/* ───── 背景: 夜の境内（七宝の模様・金と桜の灯り・舞う花びら） ───── */
+body.casino { background: #070d0b; }
+.c-sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(1100px 620px at 12% -8%, rgba(226, 179, 64, 0.2), transparent 62%), radial-gradient(900px 560px at 92% 0%, rgba(244, 167, 192, 0.16), transparent 60%), radial-gradient(1000px 700px at 50% 110%, rgba(90, 40, 140, 0.22), transparent 65%), linear-gradient(180deg, #0c1a15 0%, #08120f 45%, #070b12 100%); }
+.c-sky::before { content: ''; position: absolute; inset: -56px; background: url('/static/casino-bg.svg') repeat; opacity: 0.06; mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 80%); -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 80%); animation: drift 90s linear infinite; }
+.c-sky::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 30%, rgba(226, 179, 64, 0.08) 0 2px, transparent 3px), radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.07) 0 1.5px, transparent 2.5px), radial-gradient(circle at 85% 60%, rgba(244, 167, 192, 0.08) 0 2px, transparent 3px), radial-gradient(circle at 35% 75%, rgba(255, 255, 255, 0.06) 0 1.5px, transparent 2.5px); background-size: 420px 420px, 360px 360px, 480px 480px, 300px 300px; animation: twinkle 6s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translate(56px, 56px); } }
+@keyframes twinkle { from { opacity: 0.5; } to { opacity: 1; } }
+.c-petal { position: absolute; top: -40px; width: 12px; height: 10px; border-radius: 150% 0 150% 0; background: linear-gradient(135deg, #ffd6e4, #f4a7c0 60%, #e07a9c); opacity: 0.55; animation: fall 18s linear infinite; }
+.c-petal:nth-child(1) { left: 4%; animation-duration: 19s; animation-delay: -2s; }
+.c-petal:nth-child(2) { left: 12%; animation-duration: 23s; animation-delay: -11s; transform: scale(0.7); }
+.c-petal:nth-child(3) { left: 21%; animation-duration: 17s; animation-delay: -6s; }
+.c-petal:nth-child(4) { left: 29%; animation-duration: 25s; animation-delay: -15s; }
+.c-petal:nth-child(5) { left: 37%; animation-duration: 20s; animation-delay: -1s; }
+.c-petal:nth-child(6) { left: 46%; animation-duration: 27s; animation-delay: -19s; }
+.c-petal:nth-child(7) { left: 54%; animation-duration: 18s; animation-delay: -8s; }
+.c-petal:nth-child(8) { left: 62%; animation-duration: 22s; animation-delay: -13s; }
+.c-petal:nth-child(9) { left: 70%; animation-duration: 26s; animation-delay: -4s; }
+.c-petal:nth-child(10) { left: 78%; animation-duration: 19s; animation-delay: -17s; }
+.c-petal:nth-child(11) { left: 85%; animation-duration: 24s; animation-delay: -9s; }
+.c-petal:nth-child(12) { left: 91%; animation-duration: 21s; animation-delay: -14s; }
+.c-petal:nth-child(13) { left: 96%; animation-duration: 28s; animation-delay: -5s; }
+.c-petal:nth-child(14) { left: 50%; animation-duration: 30s; animation-delay: -22s; }
+@keyframes fall {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(40px, 27vh) rotate(90deg); }
+  50% { transform: translate(-20px, 55vh) rotate(200deg); }
+  75% { transform: translate(50px, 82vh) rotate(290deg); }
+  100% { transform: translate(10px, 112vh) rotate(380deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .c-petal { display: none; }
+  .c-sky::before, .c-sky::after { animation: none; }
+}
+.c-top { background: linear-gradient(180deg, rgba(5, 10, 8, 0.85), rgba(5, 10, 8, 0.6)); border-bottom: 0; box-shadow: 0 1px 0 rgba(226, 179, 64, 0.35), 0 10px 30px rgba(0, 0, 0, 0.35); }
+.c-foot { background: rgba(0, 0, 0, 0.35); }
+
+/* ようこそ（金の額縁・残高を大きく） */
+.c-welcome { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 20px 24px; border-radius: 20px; background: linear-gradient(120deg, rgba(40, 28, 8, 0.85), rgba(16, 26, 22, 0.85) 55%, rgba(38, 14, 26, 0.85)); border: 1px solid transparent; background-clip: padding-box; box-shadow: 0 0 0 1px rgba(226, 179, 64, 0.55), 0 0 0 5px rgba(0, 0, 0, 0.35), 0 0 0 6px rgba(226, 179, 64, 0.25), 0 18px 40px rgba(0, 0, 0, 0.45); margin-bottom: 16px; }
+.c-welcome::before { right: auto; left: 55%; opacity: 0.07; font-size: 3.4rem; }
+.c-welcome-kicker { margin: 0; font-size: 0.7rem; letter-spacing: 0.35em; color: var(--c-gold); opacity: 0.85; }
+.c-welcome h1 { margin: 2px 0 4px; font-size: 1.5rem; }
+.c-welcome .c-muted { margin: 0; }
+.c-welcome-bal { display: flex; flex-direction: column; align-items: flex-end; }
+.c-welcome-bal b { font-size: 2rem; font-weight: 900; font-variant-numeric: tabular-nums; background: linear-gradient(180deg, #fff3c9, var(--c-gold) 55%, var(--c-gold2)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 10px rgba(226, 179, 64, 0.35)); }
+
+/* 座っている卓（エラーではなく金のお知らせ） */
+.c-mine { display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 14px; border-radius: 14px; text-decoration: none; color: var(--c-text); background: linear-gradient(90deg, rgba(226, 179, 64, 0.16), rgba(226, 179, 64, 0.04)); border: 1px solid rgba(226, 179, 64, 0.5); transition: background 0.2s; }
+.c-mine:hover { background: linear-gradient(90deg, rgba(226, 179, 64, 0.26), rgba(226, 179, 64, 0.08)); }
+.c-mine b { margin-left: auto; color: var(--c-gold); white-space: nowrap; }
+.c-mine-dot { width: 10px; height: 10px; border-radius: 50%; background: #6fe39a; box-shadow: 0 0 0 0 rgba(111, 227, 154, 0.7); animation: ping 1.6s ease-out infinite; flex: none; }
+@keyframes ping { to { box-shadow: 0 0 0 10px rgba(111, 227, 154, 0); } }
+
+/* ゲームのカード（ゲームごとの色・金のメダル） */
+.c-section { font-size: 1.1rem; letter-spacing: 0.04em; margin-top: 22px; }
+.c-game { --g1: #164a38; --g2: #0a2a20; --ga: #6fe39a; background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--ga) 22%, transparent), transparent 55%), linear-gradient(160deg, var(--g1), var(--g2)); border: 1px solid color-mix(in srgb, var(--ga) 35%, transparent); padding: 18px 16px 16px; min-height: 172px; }
+.c-game::before { content: ''; position: absolute; inset: 0; background: url('/static/casino-bg.svg'); opacity: 0.05; pointer-events: none; }
+.c-game:hover { transform: translateY(-4px); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--ga), 0 0 28px color-mix(in srgb, var(--ga) 35%, transparent); }
+.c-game .c-game-emoji { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.9rem; background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.25), rgba(0, 0, 0, 0.35) 70%); box-shadow: 0 0 0 2px rgba(226, 179, 64, 0.8), 0 0 0 5px rgba(0, 0, 0, 0.35), 0 0 0 6px rgba(226, 179, 64, 0.35), 0 6px 16px rgba(0, 0, 0, 0.5); margin-bottom: 6px; }
+.c-game:hover .c-game-emoji { transform: scale(1.08) rotate(-6deg); box-shadow: 0 0 0 2px var(--c-gold), 0 0 0 5px rgba(0, 0, 0, 0.35), 0 0 0 6px var(--c-gold), 0 0 22px color-mix(in srgb, var(--ga) 60%, transparent); }
+.c-game-name { font-size: 1.12rem; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+.c-game-note { color: rgba(243, 239, 228, 0.72); }
+.c-badge { background: var(--ga); color: #0b1512; box-shadow: 0 0 12px color-mix(in srgb, var(--ga) 60%, transparent); }
+.c-game-poker { --g1: #5c1024; --g2: #22040c; --ga: #ff5a7a; }
+.c-game-bj_table, .c-game-blackjack { --g1: #0f4a3a; --g2: #062219; --ga: #4ee0a0; }
+.c-game-baccarat_table, .c-game-baccarat { --g1: #3a1a66; --g2: #140828; --ga: #b48cff; }
+.c-game-roulette_table, .c-game-roulette { --g1: #5a1414; --g2: #1a0606; --ga: #ff8a4a; }
+.c-game-daifugo { --g1: #5a4210; --g2: #221704; --ga: #ffd45a; }
+.c-game-babanuki { --g1: #4a1846; --g2: #1a0618; --ga: #ff8ad8; }
+.c-game-versus, .c-game-othello { --g1: #0e4450; --g2: #041a20; --ga: #5ad8ff; }
+.c-game-highlow { --g1: #173a6a; --g2: #081a34; --ga: #6aa8ff; }
+.c-game-slots { --g1: #5a3a08; --g2: #221402; --ga: #ffb347; }
+/* 1 人で遊ぶほうは少し落ち着いた色に */
+.c-game:not(.c-game-multi) { filter: saturate(0.85); }
+.c-game:not(.c-game-multi):hover { filter: none; }
+@media (max-width: 520px) {
+  .c-welcome { padding: 14px 16px; }
+  .c-welcome h1 { font-size: 1.15rem; }
+  .c-welcome-bal { align-items: flex-start; }
+  .c-welcome-bal b { font-size: 1.5rem; }
+  .c-game { min-height: 0; padding: 12px 10px; }
+  .c-game .c-game-emoji { width: 44px; height: 44px; font-size: 1.4rem; }
+  .c-mine { flex-wrap: wrap; }
+}
+.c-game-poker .c-game-emoji { background: radial-gradient(circle at 35% 30%, #fffdf5, #e9dfc6 70%); color: #111; }
+.c-mine-short { display: none; }
+@media (max-width: 520px) {
+  .c-welcome::before { display: none; }
+  .c-welcome { gap: 8px; }
+  .c-mine { flex-wrap: nowrap; font-size: 0.85rem; padding: 10px 12px; gap: 8px; }
+  .c-mine > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .c-mine-long { display: none; }
+  .c-mine-short { display: inline; }
+}

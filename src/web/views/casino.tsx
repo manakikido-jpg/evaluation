@@ -35,6 +35,11 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         <script src={assetUrl('casino.js')} defer></script>
       </head>
       <body class="casino">
+        <div class="c-sky" aria-hidden="true">
+          {Array.from({ length: 14 }, () => (
+            <span class="c-petal"></span>
+          ))}
+        </div>
         <header class="c-top">
           <a href="/casino" class="c-logo">
             <span class="c-logo-mark">🌸</span>
@@ -132,7 +137,9 @@ export function CasinoLobby(p: LobbyProps) {
   return (
     <CasinoLayout title="ロビー" me={p.me}>
       <section class="c-welcome">
-        <h1>ようこそ、{p.me.session.displayName} さん</h1>
+        <div class="c-welcome-text">
+          <p class="c-welcome-kicker">SAKURANOMIYA CASINO</p>
+          <h1>ようこそ、{p.me.session.displayName} さん</h1>
         <p class="c-muted">
           1 回 {money(p.me.coin, p.casino.minBet)}〜{money(p.me.coin, p.casino.maxBet)}
           {p.casino.dailyBetLimit > 0 && (
@@ -141,18 +148,35 @@ export function CasinoLobby(p: LobbyProps) {
             </>
           )}
         </p>
-        {p.msg && <Msg msg={p.msg} />}
+        </div>
+        <div class="c-welcome-bal">
+          <span class="c-muted">持っている{p.me.coin.name}</span>
+          <b>
+            {p.me.coin.emoji}
+            {fmt(p.me.balance)}
+          </b>
+        </div>
       </section>
+      {p.msg && <Msg msg={p.msg} />}
       {p.mine && (
-        <p class="c-alert c-mine">
-          卓 #{p.mine.id}（{CASINO_LABEL[p.mine.kind as CasinoGame]?.name}）に座っています。<a href={`/casino/t/${p.mine.id}`}>卓へ戻る</a>
-        </p>
+        <a class="c-mine" href={`/casino/t/${p.mine.id}`}>
+          <span class="c-mine-dot" aria-hidden="true"></span>
+          <span>
+            {CASINO_LABEL[p.mine.kind as CasinoGame]?.emoji} 卓 #{p.mine.id}（{CASINO_LABEL[p.mine.kind as CasinoGame]?.name}）に座っています
+          </span>
+          <b>
+            <span class="c-mine-long">卓へ戻る </span>
+            <span class="c-mine-short">戻る </span>→
+          </b>
+        </a>
       )}
       <h2 class="c-section">👥 みんなで遊ぶ</h2>
       <section class="c-games">
         {TABLE_GAMES.filter((g) => games.includes(g)).map((g) => (
             <a href={g === 'versus' ? '/casino/versus' : `/casino/tables/${g}`} class={`c-game c-game-${g} c-game-multi`}>
-              <span class="c-game-emoji">{CASINO_LABEL[g].emoji}</span>
+              <span class="c-game-emoji">
+                <span>{CASINO_LABEL[g].emoji}</span>
+              </span>
               <span class="c-game-name">{CASINO_LABEL[g].name}</span>
               <span class="c-game-note">{CASINO_LABEL[g].note}</span>
               {g === 'versus' && p.openMatches > 0 && <span class="c-badge">{p.openMatches} 部屋</span>}
@@ -166,7 +190,9 @@ export function CasinoLobby(p: LobbyProps) {
           .filter((g) => !TABLE_GAMES.includes(g))
           .map((g) => (
             <a href={`/casino/${g}`} class={`c-game c-game-${g}`}>
-              <span class="c-game-emoji">{CASINO_LABEL[g].emoji}</span>
+              <span class="c-game-emoji">
+                <span>{CASINO_LABEL[g].emoji}</span>
+              </span>
               <span class="c-game-name">{CASINO_LABEL[g].name}</span>
               <span class="c-game-note">{CASINO_LABEL[g].note}</span>
             </a>
