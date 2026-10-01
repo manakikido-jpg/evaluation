@@ -15,6 +15,12 @@ export function voicePercentOf(ranks: readonly Rank[], roleIds: Iterable<string>
   return highestRank(ranks, roleIds)?.voicePercent ?? 100;
 }
 
+/** 通話でもらえる 1 日の上限の倍率（%）: いちばん格の高い役職の上限の倍率（決めていなければ「通話の銭」と同じ・役職がなければ 100） */
+export function voiceCapPercentOf(ranks: readonly Rank[], roleIds: Iterable<string>): number {
+  const r = highestRank(ranks, roleIds);
+  return r?.voiceCapPercent ?? r?.voicePercent ?? 100;
+}
+
 /** 自動昇格の役職を、必要なご縁の少ない順に */
 export function autoRanks(ranks: readonly Rank[]): Rank[] {
   return ranks.filter((r) => r.auto).sort((a, b) => a.requiredGoen - b.requiredGoen);

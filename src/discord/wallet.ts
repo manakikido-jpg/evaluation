@@ -4,6 +4,7 @@ import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily, type CoinTx } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
+import { voiceCapPercentOf, voicePercentOf } from '../domain/ranks.js';
 import { jstDate } from '../services/activity.js';
 import { buffsOf, type Buffs } from '../services/buffs.js';
 import { customHoldingsOf } from '../services/customTickets.js';
@@ -27,6 +28,9 @@ export function walletView(
     tickets: Record<TicketKind, number>;
     custom: { ticket: CustomTicket; count: number }[];
     buffs: Buffs;
+    /** 役職の倍率（%）。10 分ごとの量と 1 日の上限 */
+    voicePercent?: number;
+    voiceCapPercent?: number;
   },
 ) {
   const coin = `${e.currencyEmoji}${e.currencyName}`;
@@ -34,7 +38,10 @@ export function walletView(
     `# ${coin} **${fmt(d.balance)}** 枚`,
     `-# これまでにもらった合計 ${fmt(d.lifetimeEarned)} 枚`,
     '',
-    `📞 今日の通話で ${fmt(d.today.vcCoins)} / ${fmt(e.voiceDailyCap)} 枚（${fmt(d.today.vcMinutes)} 分）`,
+    `📞 今日の通話で ${fmt(d.today.vcCoins)} / ${fmt(Math.round((e.voiceDailyCap * (d.voiceCapPercent ?? 100)) / 100))} 枚（${fmt(d.today.vcMinutes)} 分）`,
+    ...((d.voicePercent ?? 100) !== 100 || (d.voiceCapPercent ?? 100) !== 100
+      ? [`-# 役職の倍率: 10 分ごと ${fmt(Math.round((e.voicePer10Min * (d.voicePercent ?? 100)) / 100))} 枚（${d.voicePercent ?? 100}%）・1 日の上限 ${d.voiceCapPercent ?? 100}%`]
+      : []),
     ...(d.buffs.fukuUntil ? [`🧧 福の札: <t:${unix(d.buffs.fukuUntil)}:f> まで、通話の${e.currencyName}が 2 倍`] : []),
     ...(d.buffs.luck > 0 ? [`🍀 運気アップ: 物御籤あと ${d.buffs.luck} 回`] : []),
     `🎟 券: ${allTicketsLine(d.tickets, d.custom) ?? 'なし'}`,
@@ -83,7 +90,16 @@ export class WalletApp {
         .where(and(eq(activityDaily.memberId, id), eq(activityDaily.date, jstDate(now)))),
     ]);
     await i.reply({
-      ...walletView(this.cfg().economy, { ...w, today: today ?? { vcCoins: 0, vcMinutes: 0 }, recent, tickets, custom, buffs }),
+      ...walletView(this.cfg().economy, {
+        ...w,
+        today: today ?? { vcCoins: 0, vcMinutes: 0 },
+        recent,
+        tickets,
+        custom,
+        buffs,
+        voicePercent: voicePercentOf(this.cfg().ranks, i.member.roles.cache.keys()),
+        voiceCapPercent: voiceCapPercentOf(this.cfg().ranks, i.member.roles.cache.keys()),
+      }),
       ...EPHEMERAL,
     });
   }

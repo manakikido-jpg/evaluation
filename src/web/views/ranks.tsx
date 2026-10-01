@@ -91,6 +91,7 @@ export function RanksPage(props: {
                 <th>なり方</th>
                 <th>朱印の格</th>
                 <th>通話の銭</th>
+                <th>1 日の上限</th>
                 <th></th>
               </tr>
             </thead>
@@ -162,6 +163,23 @@ export function RanksPage(props: {
                     <td class="nowrap">
                       <input type="number" name={`${k}.voicePercent`} value={String(r.voicePercent)} min={0} max={1000} required size={4} aria-label="通話でもらえる銭の倍率（%）" /> %
                       {fr && fr.voicePercent !== r.voicePercent && <small> ファイル: {fr.voicePercent}</small>}
+                      <br />
+                      <small class="note">10 分 {Math.round((cfg.economy.voicePer10Min * r.voicePercent) / 100).toLocaleString('ja-JP')} 枚</small>
+                    </td>
+                    <td class="nowrap">
+                      <input
+                        type="number"
+                        name={`${k}.voiceCapPercent`}
+                        value={r.voiceCapPercent === undefined ? '' : String(r.voiceCapPercent)}
+                        min={0}
+                        max={1000}
+                        size={4}
+                        placeholder={String(r.voicePercent)}
+                        aria-label="通話でもらえる 1 日の上限の倍率（%。空なら通話の銭と同じ）"
+                      />{' '}
+                      %
+                      <br />
+                      <small class="note">1 日 {Math.round((cfg.economy.voiceDailyCap * (r.voiceCapPercent ?? r.voicePercent)) / 100).toLocaleString('ja-JP')} 枚まで</small>
                     </td>
                     <td>
                       {!fr && (
@@ -180,7 +198,7 @@ export function RanksPage(props: {
           朱印の格 = 朱印 1 回で渡すご縁。「ご縁で自動」の役職は、ご縁がたまると自動で上がります（下がることはありません）。昇格に必要なご縁は役職ごとに別の数にしてください。
           「任命制」の役職は、運営が Discord でロールを付けた人がなります（ご縁では上がりません）。任命制の役職は運営として扱うので、「読むだけ」のチャンネルにも書けます。
           宮司・神職と、入鯖時に付く役職のなり方は変えられません。
-          通話の銭 = 通話でもらえる銭の倍率（100% でふつう・150% で 1.5 倍・0% でもらえない）。10 分ごとの量・1 日の上限・コアタイムで増える分にかかります。いくつか役職を持っている人は、朱印の格がいちばん高い役職の倍率です。
+          通話の銭 = 通話でもらえる銭の倍率（100% でふつう・150% で 1.5 倍・0% でもらえない）。10 分ごとの量・コアタイムで増える分にかかります。1 日の上限 = その役職の 1 日にもらえる上限の倍率（空なら通話の銭と同じ %。例: 通話の銭 100%・1 日の上限 200% なら、10 分ごとはふつうのまま、長くいると 2 倍までもらえる）。いくつか役職を持っている人は、朱印の格がいちばん高い役職の倍率です。
         </p>
         <button type="submit" class="ok">
           保存

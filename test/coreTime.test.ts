@@ -93,6 +93,14 @@ describe('予告と花びら', () => {
     const D = '820000000000000014';
     for (let i = 0; i < 10; i++) await voiceTick(db, e, [D], jst('2026-09-25T21:00:00'), { coreBonus: 3, percentOf: () => 150 });
     expect((await walletOf(db, D)).balance).toBe(15 + 5);
+    // 上限だけ別に決める: 10 分ごとはふつう（10）・上限 200%（40）
+    const E = '820000000000000015';
+    for (let i = 0; i < 60; i++) await voiceTick(db, e, [E], t, { percentOf: () => 100, capPercentOf: () => 200 });
+    expect((await walletOf(db, E)).balance).toBe(40);
+    const { voiceCapPercentOf } = await import('../src/domain/ranks.js');
+    expect(voiceCapPercentOf([{ ...cfg.ranks[0]!, voicePercent: 150 }], [cfg.ranks[0]!.roleId])).toBe(150);
+    expect(voiceCapPercentOf([{ ...cfg.ranks[0]!, voicePercent: 150, voiceCapPercent: 300 }], [cfg.ranks[0]!.roleId])).toBe(300);
+    expect(voiceCapPercentOf(cfg.ranks, [])).toBe(100);
     const { voicePercentOf } = await import('../src/domain/ranks.js');
     expect(voicePercentOf([{ ...cfg.ranks[0]!, voicePercent: 120 }], [cfg.ranks[0]!.roleId])).toBe(120);
     expect(voicePercentOf(cfg.ranks, [])).toBe(100);

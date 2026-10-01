@@ -44,6 +44,8 @@ export const overridesSchema = z.object({
           weight: z.number().int().positive().max(100),
           requiredGoen: z.number().int().min(0).max(1_000_000),
           voicePercent: z.number().int().min(0).max(1000),
+          /** null: 「通話の銭」と同じに戻す */
+          voiceCapPercent: z.number().int().min(0).max(1000).nullable(),
           name: z.string().trim().min(1).max(20),
           emoji: z.string().max(16),
           roleId: z.string().regex(/^\d{17,20}$/),
@@ -166,6 +168,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
           ...(x.weight !== undefined ? { weight: x.weight } : {}),
           ...(auto && x.requiredGoen !== undefined ? { requiredGoen: x.requiredGoen } : {}),
           ...(x.voicePercent !== undefined ? { voicePercent: x.voicePercent } : {}),
+          ...(x.voiceCapPercent === null ? { voiceCapPercent: undefined } : x.voiceCapPercent !== undefined ? { voiceCapPercent: x.voiceCapPercent } : {}),
         };
       }),
       // ファイルの役職と同じキーのものは使わない

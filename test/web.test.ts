@@ -710,6 +710,12 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       expect((await post('/ranks', g, await form({ 'rank.ujiko.voicePercent': '150' }))).headers.get('location')).toBe('/ranks?msg=saved');
       expect(store.current.ranks.find((r) => r.key === 'ujiko')?.voicePercent).toBe(150);
       expect(store.current.ranks.find((r) => r.key === 'sodai')?.voicePercent).toBe(100);
+      // 1 日の上限の倍率は別に決められる（空なら通話の銭と同じに戻る）
+      expect((await post('/ranks', g, await form({ 'rank.ujiko.voicePercent': '150', 'rank.ujiko.voiceCapPercent': '300' }))).headers.get('location')).toBe('/ranks?msg=saved');
+      expect(store.current.ranks.find((r) => r.key === 'ujiko')?.voiceCapPercent).toBe(300);
+      expect(await (await get('/ranks', g)).text()).toContain('1 日 450 枚まで');
+      expect((await post('/ranks', g, await form({ 'rank.ujiko.voicePercent': '150', 'rank.ujiko.voiceCapPercent': '' }))).headers.get('location')).toBe('/ranks?msg=saved');
+      expect(store.current.ranks.find((r) => r.key === 'ujiko')?.voiceCapPercent).toBeUndefined();
       expect((await post('/ranks', g, await form({ 'rank.ujiko.voicePercent': '2000' }))).headers.get('location')).toBe('/ranks?msg=invalid');
       expect(store.current.ranks.find((r) => r.key === 'ujiko')?.voicePercent).toBe(150);
 

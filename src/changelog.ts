@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-02-rank-voice-cap',
+    date: '2026-10-02',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🎙 役職ごとの通話の 1 日の上限',
+    items: [
+      '役職のページに「1 日の上限（%）」。通話の銭とは別に、1 日にもらえる上限の倍率を決められる（空なら通話の銭と同じ）',
+      '役職のページに、その役職の「10 分 ○ 枚」「1 日 ○ 枚まで」を出す',
+      '/残高 の「今日の通話で ○ / ○ 枚」を、役職の倍率をかけた上限で出すように',
+    ],
+  },
+  {
     id: '2026-10-02-rank-voice-percent',
     date: '2026-10-02',
     kind: 'new',

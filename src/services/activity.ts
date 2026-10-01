@@ -55,7 +55,7 @@ export async function voiceTick(
   memberIds: string[],
   now: Date,
   /** コアタイム中なら、10 分ごとに増える分（1 日の上限に数えない）。percentOf: 役職ごとの倍率（%。10 分ごとの量・上限・コアタイムの分にかかる） */
-  opts: { coreBonus?: number; percentOf?: (memberId: string) => number } = {},
+  opts: { coreBonus?: number; percentOf?: (memberId: string) => number; capPercentOf?: (memberId: string) => number } = {},
 ): Promise<{ memberId: string; amount: number }[]> {
   const date = jstDate(now);
   const awarded: { memberId: string; amount: number }[] = [];
@@ -73,7 +73,8 @@ export async function voiceTick(
     const pct = Math.max(0, opts.percentOf?.(memberId) ?? 100);
     const scale = (n: number) => Math.round((n * pct) / 100);
     const per10 = scale(economy.voicePer10Min);
-    const cap = scale(economy.voiceDailyCap);
+    const capPct = Math.max(0, opts.capPercentOf?.(memberId) ?? pct);
+    const cap = Math.round((economy.voiceDailyCap * capPct) / 100);
     const bonus = scale(Math.max(0, opts.coreBonus ?? 0));
     const amount = Math.max(0, Math.min(per10, cap - row.vcCoins));
     if (amount + bonus <= 0) continue;

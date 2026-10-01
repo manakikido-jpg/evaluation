@@ -55,6 +55,8 @@ export const rankSchema = z.object({
   formerNames: z.array(z.string()).optional(),
   /** 通話でもらえる銭の倍率（%。100 = ふつう・150 で 1.5 倍・0 でなし）。10 分ごとの量と 1 日の上限の両方にかかる */
   voicePercent: z.number().int().min(0).max(1000).default(100),
+  /** 通話でもらえる 1 日の上限の倍率（%）。なければ voicePercent と同じ */
+  voiceCapPercent: z.number().int().min(0).max(1000).optional(),
 });
 
 export type Rank = z.infer<typeof rankSchema>;
