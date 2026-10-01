@@ -9,7 +9,7 @@ import { cardLabel, JOKER, type BabaState, type DaifugoState } from '../../servi
 import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
 import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
 import { PACES, paceMult, TABLE_LABEL, type Pace } from '../../services/casino/tables/types.js';
-import { BetForm, CasinoLayout, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
+import { BetForm, CasinoLayout, FlipCard, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
@@ -45,6 +45,8 @@ const Joker = () => (
   </span>
 );
 const Card = (p: { c: number; small?: boolean; delay?: number }) => (p.c === JOKER ? <Joker /> : <PlayingCard c={p.c} small={p.small} delay={p.delay} />);
+/** 卓のカード（前からあるものは動かさない。ck で見分ける） */
+const TCard = (p: { c: number; ck: string; small?: boolean; slow?: boolean }) => (p.c === JOKER ? <FlipCard ck={p.ck} small={p.small} face={<Joker />} /> : <FlipCard c={p.c} ck={p.ck} small={p.small} slow={p.slow} />);
 const Back = (p: { small?: boolean }) => <span class={`pc back${p.small ? ' small' : ''}`} aria-label="伏せたカード"></span>;
 
 // ───────── ロビー ─────────
@@ -307,9 +309,9 @@ function BjView({ t, s, me, casino, now }: ViewProps<BjTableState>) {
             </div>
             <div class="c-cards c-cards-center">
               {dealer.map((c, i) => (
-                <Card c={c} delay={i} />
+                <TCard c={c} ck={`d:${s.round}:${i}:${c}`} />
               ))}
-              {hide && <Back />}
+              {hide && <FlipCard down ck={`d:${s.round}:hole`} />}
             </div>
           </div>
         )}
@@ -322,11 +324,15 @@ function BjView({ t, s, me, casino, now }: ViewProps<BjTableState>) {
               </div>
               <div class="c-cards">
                 {x.hand.map((c, i) => (
-                  <Card c={c} small delay={i} />
+                  <TCard c={c} small ck={`${x.id}:${s.round}:${i}:${c}`} />
                 ))}
               </div>
               {x.hand.length > 0 && <div class="c-muted">合計 {handValue(x.hand).total}</div>}
-              {x.result && <SeatResult bet={x.bet} payout={x.payout ?? 0} />}
+              {x.result && (
+                <div class="c-later">
+                  <SeatResult bet={x.bet} payout={x.payout ?? 0} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -385,7 +391,7 @@ function BacView({ t, s, me, casino, now }: ViewProps<BacTableState>) {
                 </div>
                 <div class="c-cards">
                   {(side === 'player' ? s.last!.player : s.last!.banker).map((c, i) => (
-                    <Card c={c} delay={i * 2 + (side === 'banker' ? 1 : 0)} />
+                    <TCard c={c} slow={i === 2} ck={`${side}:${s.history.length}:${i}:${c}`} />
                   ))}
                 </div>
               </div>
@@ -403,7 +409,11 @@ function BacView({ t, s, me, casino, now }: ViewProps<BacTableState>) {
               ) : (
                 <div class="c-muted">{s.phase === 'betting' ? '考え中…' : '見ている'}</div>
               )}
-              {x.payout !== undefined && <SeatResult bet={x.bet} payout={x.payout} />}
+              {x.payout !== undefined && (
+                <div class="c-later">
+                  <SeatResult bet={x.bet} payout={x.payout} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -571,7 +581,7 @@ function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
             <div class="c-cards c-cards-center c-boardcards">
               {s.board.map((c, i) => (
                 <span class={adv?.cards.includes(c) ? 'c-hl-card' : ''}>
-                  <Card c={c} delay={i} />
+                  <TCard c={c} ck={`b:${s.hand}:${i}:${c}`} />
                 </span>
               ))}
               {Array.from({ length: Math.max(0, 5 - s.board.length) }, () => (
@@ -613,7 +623,7 @@ function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
                 <div class="c-pseat-cards">
                   {x.inHand && !x.folded
                     ? x.id === uid || shown.has(x.id)
-                      ? x.hole.map((c) => <Card c={c} small />)
+                      ? x.hole.map((c) => <TCard c={c} small ck={`s:${s.hand}:${x.id}:${c}`} />)
                       : [<Back small />, <Back small />]
                     : null}
                 </div>
@@ -636,7 +646,7 @@ function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
               {mine ? (
                 mine.hole.map((c) => (
                   <span class={adv?.cards.includes(c) ? 'c-hl-card' : ''}>
-                    <Card c={c} />
+                    <TCard c={c} ck={`h:${s.hand}:${c}`} />
                   </span>
                 ))
               ) : (
@@ -946,7 +956,7 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
           {s.field ? (
             <div class="c-cards c-cards-center">
               {s.field.cards.map((c) => (
-                <Card c={c} />
+                <TCard c={c} ck={`f:${s.played}:${c}`} />
               ))}
             </div>
           ) : (

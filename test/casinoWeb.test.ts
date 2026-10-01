@@ -144,14 +144,15 @@ describe('🎰 カジノ: 遊ぶ', () => {
     const loc = res.headers.get('location')!;
     expect(loc).toMatch(/^\/casino\/slots\?g=\d+$/);
     const html = await (await get(loc, cookie!)).text();
-    expect(html).toContain('c-slot spun');
+    expect(html).toContain('c-jug');
+    expect(html).toContain('data-final=');
     expect(html).toMatch(/賭け 100 → 戻り \d/);
     // 残高は「5000 − 賭け + 戻り」（×1 で戻りが 100 のときもある）
     const back = Number(/戻り ([\d,]+)/.exec(html)![1]!.replace(/,/g, ''));
     expect(await balance(A)).toBe(5000 - 100 + back);
     // ほかの人の結果は見えない
     const other = await casinoLogin(B);
-    expect(await (await get(loc, other.cookie!)).text()).not.toContain('c-slot spun');
+    expect(await (await get(loc, other.cookie!)).text()).not.toContain('c-result');
   });
 
   it('好きな量・上限・足りない', async () => {
@@ -311,7 +312,8 @@ describe('👥 みんなで座る卓（画面）', () => {
     const frag = await (await get(`/casino/t/${id}/frag`, b)).text();
     expect(frag).toContain('プリフロップ');
     // 相手の手札は伏せたまま
-    expect((frag.match(/class="pc back small"/g) ?? []).length).toBe(2);
+    // 相手の 2 枚（自分のカードは、めくれるカードの裏面を持っている分を引く）
+    expect((frag.match(/class="pc back small"/g) ?? []).length - (frag.match(/class="fc small/g) ?? []).length).toBe(2);
     // 自分の番の人だけに操作が出る
     const fa = await (await get(`/casino/t/${id}/frag`, a)).text();
     const actor = fa.includes('value="fold"') ? a : b;

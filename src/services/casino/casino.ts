@@ -10,7 +10,7 @@ import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_MAX_SPOTS, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
-import { slotSpin, type SlotKey } from './slots.js';
+import { slotGrid, slotLamp, slotSpin, type SlotKey } from './slots.js';
 
 /**
  * カジノ（1 人で遊ぶゲーム）。賭けた銭は始めたときに引き、終わったときに 1 回だけ戻す（負けは 0）。
@@ -190,11 +190,13 @@ export function playBaccarat(db: Db, cfg: GuildConfig, memberId: string, bet: nu
   }, now);
 }
 
-export type SlotsState = { reels: SlotKey[]; multiplier: number };
+/** grid: リールごとの上・中・下（中段が reels）。lamp: GOGO ランプ */
+export type SlotsState = { reels: SlotKey[]; multiplier: number; grid?: SlotKey[][]; lamp?: 'pre' | 'post' | null };
 export function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet: number, rng: Rng = cryptoRng, now = new Date()) {
   return start(db, cfg, memberId, 'slots', bet, () => {
     const r = slotSpin(rng);
-    return { state: r satisfies SlotsState, done: true, payout: bet * r.multiplier };
+    const state: SlotsState = { ...r, grid: slotGrid(r.reels, rng), lamp: slotLamp(r.multiplier, rng) };
+    return { state, done: true, payout: bet * r.multiplier };
   }, now);
 }
 

@@ -9,7 +9,7 @@ import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/c
 import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteColor, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
-import { SLOT_SYMBOLS, slotEmoji } from '../../services/casino/slots.js';
+import { LAMP_MIN, SLOT_SYMBOLS, slotEmoji, type SlotKey } from '../../services/casino/slots.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
 import { assetUrl } from '../assets.js';
 
@@ -21,7 +21,7 @@ const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'daifugo', 'babanuki', 'versus'];
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
-export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number };
+export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean };
 
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean }) {
   const me = props.me;
@@ -49,9 +49,12 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
               咲楽ノ宮<b>カジノ</b>
             </span>
           </a>
+          <button type="button" class="c-sound" data-sound-toggle aria-pressed="true" title="音を消す">
+            🔊
+          </button>
           {me && (
             <div class="c-me">
-              <span class="c-balance" title="持っている銭">
+              <span class={`c-balance ${dly(me.revealAt ?? 26)}${me.revealWait ? ' wait' : ''}`} title="持っている銭">
                 {me.revealFrom !== undefined && me.revealFrom !== me.balance ? (
                   <>
                     <span class="bal-old">{money(me.coin, me.revealFrom)}</span>
@@ -323,6 +326,36 @@ export function PlayingCard(p: { c: number; small?: boolean; delay?: number }) {
 
 const CardBack = (p: { delay?: number }) => <span class={`pc back d${p.delay ?? 0}`} aria-label="伏せたカード"></span>;
 
+/** 遅れのクラス（0.2 秒きざみ。dly-5 = 1 秒） */
+export const dly = (n: number) => `dly-${Math.max(0, Math.min(60, Math.round(n)))}`;
+
+/**
+ * 山から飛んできて、裏から表にめくれるカード。d: 遅れ（0.2 秒きざみ）/ still: 動かさない / down: 裏のまま /
+ * slow: ゆっくりめくる（バカラの 3 枚目）/ ck: 卓の画面で「前からあるカード」を見分ける印（casino.js）
+ */
+export function FlipCard(p: { c?: number; d?: number; small?: boolean; still?: boolean; down?: boolean; slow?: boolean; ck?: string; face?: Child }) {
+  const cls = `fc${p.small ? ' small' : ''}${p.still ? ' still' : ''}${p.down ? ' down' : ''}${p.slow ? ' slow' : ''} ${dly(p.d ?? 0)}`;
+  return (
+    <span class={cls} data-ck={p.ck}>
+      <span class="fc-in">
+        <span class={`pc back${p.small ? ' small' : ''}`} aria-label="伏せたカード"></span>
+        {!p.down && (p.face ?? (p.c !== undefined ? <PlayingCard c={p.c} small={p.small} /> : null))}
+      </span>
+    </span>
+  );
+}
+
+/** 遅れて出す（カードが配り終わってから結果を出す） */
+export const Later = (p: { d: number; children: Child; class?: string }) => <div class={`c-later ${dly(p.d)}${p.class ? ` ${p.class}` : ''}`}>{p.children}</div>;
+
+/** 結果を見せる前の残高（止まる・配り終わるまで、こちらを出しておく） */
+export const revealMe = (me: CasinoMe, row: CasinoGameRow | undefined, at: number): CasinoMe => {
+  if (!row || row.status !== 'done' || !row.finishedAt || Date.now() - row.finishedAt.getTime() > 60_000) return me;
+  return { ...me, revealFrom: me.balance - row.payout, revealAt: at };
+};
+/** 終わったばかり（演出する）か */
+const freshDone = (row: CasinoGameRow | undefined) => Boolean(row && row.status === 'done' && row.finishedAt && Date.now() - row.finishedAt.getTime() < 60_000);
+
 /** 結果（勝ち・負け・引き分け） */
 function Result(p: { bet: number; payout: number; coin: Coin; text: string }) {
   const net = p.payout - p.bet;
@@ -350,27 +383,64 @@ const BJ_TEXT: Record<BjResult, string> = {
   dealer_blackjack: '😢 ディーラーのブラックジャック',
 };
 
+/**
+ * 配る順番と遅れ（0.2 秒きざみ）。
+ * - 配ったばかり: あなた → ディーラー → あなた → ディーラー（伏せ）
+ * - ヒットのあと: 新しい 1 枚だけ
+ * - 終わったとき: ディーラーの伏せカードをめくり、引いたカードを 1 枚ずつ。そのあと結果
+ */
+function bjPlan(v: ReturnType<typeof bjView>, fresh: boolean) {
+  const still = (n: number) => Array<number | null>(n).fill(null);
+  if (!fresh && v.phase === 'done') return { player: still(v.player.length), dealer: still(v.dealer.length), result: 0 };
+  const deal = v.player.length === 2 && v.dealer.length <= 2 && !v.doubled;
+  if (deal) {
+    const dealer = v.dealer.map((_, i) => (i === 0 ? 2 : 6));
+    return { player: [0, 4], dealer, result: v.phase === 'done' ? 10 : 0 };
+  }
+  const player = v.player.map((_, i) => (i === v.player.length - 1 ? 0 : null));
+  if (v.phase === 'player') return { player, dealer: still(v.dealer.length), result: 0 };
+  const dealer = v.dealer.map((_, i) => (i === 0 ? null : 3 + (i - 1) * 4));
+  return { player, dealer, result: (dealer[dealer.length - 1] ?? 0) + 4 };
+}
+
 export function BlackjackPage(p: GamePage) {
   const csrf = p.me.session.csrfToken;
   const s = p.row?.state as BjState | undefined;
   const v = s ? bjView(s) : undefined;
+  const fresh = p.row?.status === 'playing' || freshDone(p.row);
+  const plan = v ? bjPlan(v, fresh) : undefined;
+  const me = v?.phase === 'done' ? revealMe(p.me, p.row, plan!.result) : p.me;
+  const Hand = (q: { cards: number[]; delays: (number | null)[]; hidden?: boolean; hiddenAt?: number }) => (
+    <div class="c-cards">
+      {q.cards.map((c, i) => (
+        <FlipCard c={c} d={q.delays[i] ?? 0} still={q.delays[i] === null} slow={false} />
+      ))}
+      {q.hidden && <FlipCard down d={q.hiddenAt ?? 0} still={q.hiddenAt === undefined} />}
+    </div>
+  );
+  const effect = v?.result === 'blackjack' ? ' c-fx-burst' : v?.result === 'bust' ? ' c-fx-shake' : '';
   return (
-    <CasinoLayout title="ブラックジャック" me={p.me} back>
+    <CasinoLayout title="ブラックジャック" me={me} back>
       <h1 class="c-h1">🃏 ブラックジャック</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-table">
-        {v ? (
+      <section class="c-table c-felt">
+        <div class="c-shoe" aria-hidden="true"></div>
+        {v && plan ? (
           <>
             <div class="c-hand">
               <div class="c-hand-label">
-                ディーラー <b>{v.dealerHidden ? `${v.dealerTotal.total} + ?` : v.dealerTotal.total}</b>
+                ディーラー{' '}
+                {v.dealerHidden ? (
+                  <b>{`${v.dealerTotal.total} + ?`}</b>
+                ) : plan.result > 0 ? (
+                  <Later d={plan.result - 1} class="c-inline-later">
+                    <b>{v.dealerTotal.total}</b>
+                  </Later>
+                ) : (
+                  <b>{v.dealerTotal.total}</b>
+                )}
               </div>
-              <div class="c-cards">
-                {v.dealer.map((c, i) => (
-                  <PlayingCard c={c} delay={i} />
-                ))}
-                {v.dealerHidden && <CardBack delay={1} />}
-              </div>
+              <Hand cards={v.dealer} delays={plan.dealer} hidden={v.dealerHidden} hiddenAt={v.player.length === 2 && !v.doubled && fresh ? 6 : undefined} />
             </div>
             <div class="c-hand">
               <div class="c-hand-label">
@@ -378,37 +448,41 @@ export function BlackjackPage(p: GamePage) {
                 {v.playerTotal.soft && v.playerTotal.total < 21 && <span class="c-muted">（A を 11 で）</span>}
                 {v.doubled && <span class="c-tag">ダブル</span>}
               </div>
-              <div class="c-cards">
-                {v.player.map((c, i) => (
-                  <PlayingCard c={c} delay={i} />
-                ))}
-              </div>
+              <Hand cards={v.player} delays={plan.player} />
             </div>
             {v.phase === 'player' ? (
-              <form method="post" action={`/casino/blackjack/${p.row!.id}`} class="c-actions">
-                <input type="hidden" name="_csrf" value={csrf} />
-                <input type="hidden" name="v" value={String(p.row!.version)} />
-                <button type="submit" name="action" value="hit" class="c-btn">
-                  もう 1 枚（ヒット）
-                </button>
-                <button type="submit" name="action" value="stand" class="c-btn c-btn-gold">
-                  これで勝負（スタンド）
-                </button>
-                {v.canDouble && (
-                  <button type="submit" name="action" value="double" class="c-btn c-btn-ghost">
-                    倍にして 1 枚（ダブル +{fmt(p.row!.bet)}）
+              <Later d={v.player.length === 2 && !v.doubled ? 8 : 2}>
+                <form method="post" action={`/casino/blackjack/${p.row!.id}`} class="c-actions">
+                  <input type="hidden" name="_csrf" value={csrf} />
+                  <input type="hidden" name="v" value={String(p.row!.version)} />
+                  <button type="submit" name="action" value="hit" class="c-btn">
+                    もう 1 枚（ヒット）
                   </button>
-                )}
-              </form>
+                  <button type="submit" name="action" value="stand" class="c-btn c-btn-gold">
+                    これで勝負（スタンド）
+                  </button>
+                  {v.canDouble && (
+                    <button type="submit" name="action" value="double" class="c-btn c-btn-ghost">
+                      倍にして 1 枚（ダブル +{fmt(p.row!.bet)}）
+                    </button>
+                  )}
+                </form>
+              </Later>
             ) : (
-              <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={BJ_TEXT[v.result!]} />
+              <Later d={plan.result} class={effect}>
+                <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={BJ_TEXT[v.result!]} />
+              </Later>
             )}
           </>
         ) : (
           <p class="c-muted c-center">21 に近いほうが勝ち。絵札は 10、A は 1 か 11。ディーラーは 17 以上で止まります。</p>
         )}
       </section>
-      {(!v || v.phase === 'done') && <BetForm action="/casino/blackjack" csrf={csrf} casino={p.casino} coin={p.me.coin} label="配る" last={p.row?.bet} />}
+      {(!v || v.phase === 'done') && (
+        <Later d={plan?.result ?? 0}>
+          <BetForm action="/casino/blackjack" csrf={csrf} casino={p.casino} coin={p.me.coin} label="配る" last={p.row?.bet} />
+        </Later>
+      )}
       <Rules>ブラックジャック（最初の 2 枚で 21）は賭けの 2.5 倍、勝ちは 2 倍、引き分けは戻ります。最初の 2 枚のときは「ダブル」（賭けを倍にして 1 枚だけ引く）もできます。</Rules>
     </CasinoLayout>
   );
@@ -427,11 +501,16 @@ export function HighLowPage(p: GamePage) {
   const csrf = p.me.session.csrfToken;
   const s = p.row?.state as HlState | undefined;
   const mult = (m: number) => `×${(m / 1000).toFixed(2)}`;
+  const fresh = p.row?.status === 'playing' || freshDone(p.row);
+  // 降りたときは、新しいカードはめくらない
+  const flipped = fresh && s?.result !== 'cashout';
+  const at = flipped ? 4 : 0;
+  const me = s?.phase === 'done' ? revealMe(p.me, p.row, at) : p.me;
   return (
-    <CasinoLayout title="ハイ＆ロー" me={p.me} back>
+    <CasinoLayout title="ハイ＆ロー" me={me} back>
       <h1 class="c-h1">🔼 ハイ＆ロー</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-table">
+      <section class="c-table c-felt">
         {s ? (
           <>
             <div class="c-hl">
@@ -440,40 +519,52 @@ export function HighLowPage(p: GamePage) {
                   <PlayingCard c={c} small />
                 ))}
               </div>
-              <PlayingCard c={s.current} delay={1} />
-              <div class="c-hl-mult">
-                いまの倍率 <b>{mult(s.mult)}</b>
-                <span class="c-muted">
-                  （{s.steps} / {HL_MAX_STEPS} 回）
-                </span>
-              </div>
+              <span class={s.result === 'lose' && fresh ? 'c-fx-shake-later' : ''}>
+                <FlipCard c={s.current} d={0} still={!flipped} />
+              </span>
+              <Later d={at}>
+                <div class="c-hl-mult">
+                  いまの倍率 <b>{mult(s.mult)}</b>
+                  <span class="c-muted">
+                    （{s.steps} / {HL_MAX_STEPS} 回）
+                  </span>
+                </div>
+              </Later>
             </div>
             {s.phase === 'playing' ? (
-              <form method="post" action={`/casino/highlow/${p.row!.id}`} class="c-actions">
-                <input type="hidden" name="_csrf" value={csrf} />
-                <input type="hidden" name="v" value={String(p.row!.version)} />
-                {(['high', 'low'] as const).map((g) =>
-                  hlWays(s.current, g) > 0 ? (
-                    <button type="submit" name="action" value={g} class="c-btn">
-                      {g === 'high' ? '▲ 上' : '▼ 下'}（{mult(hlNextMult(s.mult, s.current, g))}・{Math.round((hlWays(s.current, g) / 13) * 100)}%）
+              <Later d={at}>
+                <form method="post" action={`/casino/highlow/${p.row!.id}`} class="c-actions">
+                  <input type="hidden" name="_csrf" value={csrf} />
+                  <input type="hidden" name="v" value={String(p.row!.version)} />
+                  {(['high', 'low'] as const).map((g) =>
+                    hlWays(s.current, g) > 0 ? (
+                      <button type="submit" name="action" value={g} class="c-btn">
+                        {g === 'high' ? '▲ 上' : '▼ 下'}（{mult(hlNextMult(s.mult, s.current, g))}・{Math.round((hlWays(s.current, g) / 13) * 100)}%）
+                      </button>
+                    ) : null,
+                  )}
+                  {s.steps > 0 && (
+                    <button type="submit" name="action" value="cashout" class="c-btn c-btn-gold">
+                      💰 降りて受け取る（{fmt(Math.floor((p.row!.bet * s.mult) / 1000))}）
                     </button>
-                  ) : null,
-                )}
-                {s.steps > 0 && (
-                  <button type="submit" name="action" value="cashout" class="c-btn c-btn-gold">
-                    💰 降りて受け取る（{fmt(Math.floor((p.row!.bet * s.mult) / 1000))}）
-                  </button>
-                )}
-              </form>
+                  )}
+                </form>
+              </Later>
             ) : (
-              <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={s.result === 'cashout' ? '💰 受け取りました！' : '😢 はずれ…'} />
+              <Later d={at} class={s.result === 'cashout' ? ' c-fx-burst' : ''}>
+                <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={s.result === 'cashout' ? '💰 受け取りました！' : '😢 はずれ…'} />
+              </Later>
             )}
           </>
         ) : (
           <p class="c-muted c-center">次のカードが「上」か「下」かを当てます。同じ数字ははずれ。当てるほど倍率が上がり、好きなときに降りられます。</p>
         )}
       </section>
-      {(!s || s.phase === 'done') && <BetForm action="/casino/highlow" csrf={csrf} casino={p.casino} coin={p.me.coin} label="始める" last={p.row?.bet} />}
+      {(!s || s.phase === 'done') && (
+        <Later d={at}>
+          <BetForm action="/casino/highlow" csrf={csrf} casino={p.casino} coin={p.me.coin} label="始める" last={p.row?.bet} />
+        </Later>
+      )}
       <Rules>当たるたびに倍率が「0.95 ÷ 当たる確率」倍になります（A から上なら小さく、K から上は選べません）。{HL_MAX_STEPS} 回当てるか ×100 に届いたら自動で受け取ります。</Rules>
     </CasinoLayout>
   );
@@ -484,87 +575,167 @@ export function HighLowPage(p: GamePage) {
 const BAC_LABEL: Record<BacBet, string> = { player: '🔵 プレイヤー（2 倍）', banker: '🔴 バンカー（1.95 倍）', tie: '🟢 タイ（9 倍）' };
 const BAC_WIN: Record<BacBet, string> = { player: 'プレイヤーの勝ち', banker: 'バンカーの勝ち', tie: 'タイ（引き分け）' };
 
+/** バカラの配る順（P1 → B1 → P2 → B2、3 枚目はためてゆっくり）。遅れと、結果を出す時刻 */
+export function bacPlan(player: number[], banker: number[]) {
+  const p = [0, 4];
+  const b = [2, 6];
+  let t = 8;
+  if (player.length > 2) {
+    p.push(t + 2);
+    t += 7;
+  }
+  if (banker.length > 2) {
+    b.push(t + 2);
+    t += 7;
+  }
+  return { player: p, banker: b, result: t + 2 };
+}
+
 export function BaccaratPage(p: GamePage) {
   const csrf = p.me.session.csrfToken;
   const s = p.row?.state as BaccaratState | undefined;
+  const fresh = freshDone(p.row);
+  const plan = s ? bacPlan(s.result.player, s.result.banker) : undefined;
+  const at = fresh && plan ? plan.result : 0;
+  const me = s ? revealMe(p.me, p.row, at) : p.me;
   return (
-    <CasinoLayout title="バカラ" me={p.me} back>
+    <CasinoLayout title="バカラ" me={me} back>
       <h1 class="c-h1">🎴 バカラ</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-table">
-        {s ? (
+      <section class="c-table c-felt">
+        <div class="c-shoe" aria-hidden="true"></div>
+        {s && plan ? (
           <>
             <div class="c-bac">
               {(['player', 'banker'] as const).map((side) => (
-                <div class={`c-hand c-bac-${side}${s.result.winner === side ? ' won' : ''}`}>
+                <div class={`c-hand c-bac-${side}${s.result.winner === side ? ' won' : ''} ${dly(at)}`}>
                   <div class="c-hand-label">
-                    {side === 'player' ? '🔵 プレイヤー' : '🔴 バンカー'} <b>{side === 'player' ? s.result.playerTotal : s.result.bankerTotal}</b>
+                    {side === 'player' ? '🔵 プレイヤー' : '🔴 バンカー'}{' '}
+                    <Later d={at} class="c-inline-later">
+                      <b>{side === 'player' ? s.result.playerTotal : s.result.bankerTotal}</b>
+                    </Later>
                   </div>
                   <div class="c-cards">
                     {(side === 'player' ? s.result.player : s.result.banker).map((c, i) => (
-                      <PlayingCard c={c} delay={i * 2 + (side === 'banker' ? 1 : 0)} />
+                      <FlipCard c={c} d={(side === 'player' ? plan.player : plan.banker)[i]} still={!fresh} slow={i === 2} />
                     ))}
                   </div>
                 </div>
               ))}
             </div>
-            <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={`${BAC_WIN[s.result.winner]}（あなたは ${BAC_LABEL[s.bet].split('（')[0]}）`} />
+            <Later d={at} class={s.result.winner === s.bet ? ' c-fx-burst' : ''}>
+              <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={`${BAC_WIN[s.result.winner]}（あなたは ${BAC_LABEL[s.bet].split('（')[0]}）`} />
+            </Later>
           </>
         ) : (
           <p class="c-muted c-center">プレイヤーとバンカー、合計の 1 の位が 9 に近いほうが勝ち。どちらが勝つか（またはタイか）に賭けます。</p>
         )}
       </section>
-      <BetForm
-        action="/casino/baccarat"
-        csrf={csrf}
-        casino={p.casino}
-        coin={p.me.coin}
-        label="賭ける"
-        last={p.row?.bet}
-        extra={
-          <div class="c-choice">
-            {BAC_BETS.map((b, i) => (
-              <label class={`c-pick c-pick-${b}`}>
-                <input type="radio" name="on" value={b} checked={s ? s.bet === b : i === 0} />
-                <span>{BAC_LABEL[b]}</span>
-              </label>
-            ))}
-          </div>
-        }
-      />
+      <Later d={at}>
+        <BetForm
+          action="/casino/baccarat"
+          csrf={csrf}
+          casino={p.casino}
+          coin={p.me.coin}
+          label="賭ける"
+          last={p.row?.bet}
+          extra={
+            <div class="c-choice">
+              {BAC_BETS.map((b, i) => (
+                <label class={`c-pick c-pick-${b}`}>
+                  <input type="radio" name="on" value={b} checked={s ? s.bet === b : i === 0} />
+                  <span>{BAC_LABEL[b]}</span>
+                </label>
+              ))}
+            </div>
+          }
+        />
+      </Later>
       <Rules>10・絵札は 0。合計が 8・9 なら引かず、それ以外は決まりどおり 3 枚目を引きます。タイのとき、プレイヤー・バンカーに賭けた分は戻ります。</Rules>
     </CasinoLayout>
   );
 }
 
-// ───────── 🎰 スロット ─────────
+// ───────── 🎰 スロット（3 × 3。回り続けて、STOP で 1 本ずつ止める） ─────────
+
+/** 回っている帯の飾り（同じ並びを 2 回つなげて、切れ目なく回す） */
+const SPIN_STRIP: SlotKey[] = ['dango', 'sakura', 'chime', 'fox', 'lantern', 'torii', 'dango', 'chime', 'lantern', 'fox'];
 
 export function SlotsPage(p: GamePage) {
   const csrf = p.me.session.csrfToken;
   const s = p.row?.state as SlotsState | undefined;
-  const reels = s?.reels ?? (['sakura', 'sakura', 'sakura'] as const);
+  const fresh = freshDone(p.row);
+  const grid: SlotKey[][] = s?.grid ?? (s ? s.reels.map((r) => [r, r, r]) : [['dango', 'sakura', 'chime'], ['fox', 'sakura', 'torii'], ['lantern', 'sakura', 'dango']]);
+  const spinning = Boolean(s && fresh);
+  const me = s && fresh ? { ...p.me, revealFrom: p.me.balance - p.row!.payout, revealAt: 0, revealWait: true } : p.me;
+  const big = s && s.multiplier >= 100 ? 'JACKPOT!!' : s && s.multiplier >= 10 ? 'BIG WIN!' : '';
   return (
-    <CasinoLayout title="スロット" me={p.me} back>
+    <CasinoLayout title="スロット" me={me} back>
       <h1 class="c-h1">🎰 スロット</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-table">
-        <div class={`c-slot${s ? ' spun' : ''}${s && s.multiplier >= 50 ? ' jackpot' : ''}`}>
-          {reels.map((r, i) => (
-            <div class={`c-reel r${i}`}>
-              <div class="c-reel-strip" aria-hidden="true">
-                {SLOT_SYMBOLS.map((x) => (
-                  <span>{x.emoji}</span>
-                ))}
+      <section class="c-slot-stage">
+        <div
+          class={`c-jug${spinning ? ' spinning' : ''}${s?.lamp === 'pre' && spinning ? ' lamp-pre' : ''}${s?.lamp && !spinning ? ' lamp-on' : ''}`}
+          data-lamp={s?.lamp ?? ''}
+          data-win={s ? String(s.multiplier) : ''}
+        >
+          <div class="c-jug-top">
+            <span class="c-jug-title">🌸 SAKURA 777 🌸</span>
+            <span class="c-bulbs" aria-hidden="true"></span>
+          </div>
+          <div class="c-jug-window">
+            {grid.map((col, i) => (
+              <div class={`c-jreel r${i}`} data-reel={String(i)} data-final={col.map(slotEmoji).join(',')}>
+                <div class="c-jstrip" aria-hidden="true">
+                  {spinning
+                    ? [...SPIN_STRIP, ...SPIN_STRIP].map((k) => <span>{slotEmoji(k)}</span>)
+                    : col.map((k) => <span>{slotEmoji(k)}</span>)}
+                </div>
               </div>
-              <span class="c-reel-face">{slotEmoji(r)}</span>
+            ))}
+            <div class="c-payline" aria-hidden="true">
+              <span>中段</span>
             </div>
-          ))}
+          </div>
+          <div class="c-jug-bottom">
+            <span class="c-gogo" aria-label="大当たりのランプ">
+              <b>GOGO!</b>
+            </span>
+            {spinning ? (
+              <span class="c-stops">
+                {[0, 1, 2].map((i) => (
+                  <button type="button" class="c-stop" data-stop={String(i)} aria-label={`${i + 1} 本目を止める`}>
+                    STOP
+                  </button>
+                ))}
+              </span>
+            ) : (
+              <span class="c-muted c-jug-note">{s ? '↓ もう一度回す' : '↓ 賭ける量を選ぶと回ります'}</span>
+            )}
+          </div>
+          {big && spinning && (
+            <div class="c-later wait c-bigwin" data-after-stop>
+              <b>{big}</b>
+              <span class="c-coins" aria-hidden="true">
+                {Array.from({ length: 16 }, () => (
+                  <i>🪙</i>
+                ))}
+              </span>
+            </div>
+          )}
         </div>
-        {s && <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={s.multiplier > 0 ? `🎉 ${s.multiplier} 倍！` : 'はずれ…'} />}
+        {s && (
+          <div class={`c-later${spinning ? ' wait' : ''}`} data-after-stop>
+            <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={s.multiplier > 0 ? `🎉 ${s.multiplier} 倍！` : 'はずれ…'} />
+          </div>
+        )}
+        {spinning && <p class="c-muted c-center c-jug-help">STOP を押す（キーボードならスペース）と、1 本ずつ止まります。押さなくても少したつと止まります。</p>}
       </section>
-      <BetForm action="/casino/slots" csrf={csrf} casino={p.casino} coin={p.me.coin} label="回す" last={p.row?.bet} />
+      <div class={spinning ? 'c-later wait' : ''} data-after-stop>
+        <BetForm action="/casino/slots" csrf={csrf} casino={p.casino} coin={p.me.coin} label="回す" last={p.row?.bet} />
+      </div>
       <Rules>
-        {SLOT_SYMBOLS.map((x) => `${x.emoji}${x.emoji}${x.emoji} ×${x.three}`).join('・')}。🌸 が 2 つで ×15、1 つで ×1（賭けた分が戻る）。左の 2 つがそろうと 🏮×1・🦊×2・⛩×3。
+        払うのは真ん中の段（中段）だけです。{SLOT_SYMBOLS.map((x) => `${x.emoji}${x.emoji}${x.emoji} ×${x.three}`).join('・')}。🌸 が 2 つで ×15、1 つで ×1（賭けた分が戻る）。左の 2 つがそろうと 🏮×1・🦊×2・⛩×3。止まる絵柄は回したときに決まっていて、STOP は止める合図です（押す早さで当たりは変わりません）。×{LAMP_MIN} 以上の当たりのときは「GOGO!」ランプが光ります（回したときに光ることも、止めたあとに光ることも）。
       </Rules>
     </CasinoLayout>
   );
@@ -577,9 +748,8 @@ export function RoulettePage(p: GamePage) {
   const s = p.row?.state as RouletteState | undefined;
   // 前の形（1 か所だけ）の結果も出せるように
   const stakes = s?.stakes ?? (s?.bet ? [{ on: s.bet, amount: p.row!.bet, payout: p.row!.payout }] : []);
-  // 回したばかり（1 分以内）なら、止まるまで残高は戻りを足す前を出す
-  const fresh = p.row?.finishedAt && Date.now() - p.row.finishedAt.getTime() < 60_000;
-  const me = s && fresh ? { ...p.me, revealFrom: p.me.balance - p.row!.payout } : p.me;
+  // 回したばかりなら、玉が止まるまで（約 5.2 秒）残高は戻りを足す前を出す
+  const me = s ? revealMe(p.me, p.row, 26) : p.me;
   return (
     <CasinoLayout title="ルーレット" me={me} back>
       <h1 class="c-h1">🎡 ルーレット</h1>

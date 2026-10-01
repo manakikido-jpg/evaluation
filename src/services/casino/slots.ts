@@ -52,3 +52,24 @@ export function slotRtp(): number {
   for (const a of SLOT_SYMBOLS) for (const b of SLOT_SYMBOLS) for (const c of SLOT_SYMBOLS) ev += ((a.weight * b.weight * c.weight) / TOTAL ** 3) * slotMultiplier([a.key, b.key, c.key]);
   return ev;
 }
+
+/**
+ * 3 × 3 の見た目（リールごとに上・中・下）。払うのは中段だけ（中段 = reels）。
+ * 上段・下段は飾り（3 つそろって見えないようにする）
+ */
+export function slotGrid(reels: SlotKey[], rng: Rng): SlotKey[][] {
+  for (let tries = 0; tries < 20; tries++) {
+    const top = reels.map(() => spinReel(rng));
+    const bottom = reels.map(() => spinReel(rng));
+    const line3 = (row: SlotKey[]) => row[0] === row[1] && row[1] === row[2];
+    if (!line3(top) && !line3(bottom)) return reels.map((mid, i) => [top[i]!, mid, bottom[i]!]);
+  }
+  return reels.map((mid) => [mid, mid, mid]);
+}
+
+/** GOGO ランプ（大きい当たりのとき光る。pre: レバーで先に光る / post: 3 本止めたら光る） */
+export const LAMP_MIN = 20;
+export function slotLamp(multiplier: number, rng: Rng): 'pre' | 'post' | null {
+  if (multiplier < LAMP_MIN) return null;
+  return rng(3) === 0 ? 'pre' : 'post';
+}
