@@ -10,7 +10,7 @@ import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_MAX_SPOTS, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
-import { aimStops, bonusStops, drawRole, isBonus, lineOf, REEL_LEN, roleMult, roleOfLine, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
+import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
 
 /**
  * カジノ（1 人で遊ぶゲーム）。賭けた銭は始めたときに引き、終わったときに 1 回だけ戻す（負けは 0）。
@@ -219,7 +219,7 @@ export function aimSlots(db: Db, id: number, memberId: string, pressed: number[]
     if (pressed !== 'assist' && (pressed.length !== 3 || pressed.some((x) => !Number.isInteger(x) || x < 0 || x >= REEL_LEN))) return undefined;
     const stops = pressed === 'assist' ? bonusStops(s.role) : aimStops(s.role, pressed);
     const tries = (s.tries ?? 0) + 1;
-    if (roleOfLine(lineOf(stops)) !== s.role) return { state: { ...s, stops, tries, aimed: true } satisfies SlotsSpin, done: false, payout: 0 };
+    if (judge(stops).role !== s.role) return { state: { ...s, stops, tries, aimed: true } satisfies SlotsSpin, done: false, payout: 0 };
     const state: SlotsSpin = { ...s, stops, tries, aimed: true, phase: 'done', mult: roleMult(s.role), assist: pressed === 'assist' };
     return { state, done: true, payout: slotPayout(row.bet, s.role) };
   }, now);

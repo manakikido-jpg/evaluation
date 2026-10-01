@@ -547,10 +547,12 @@ document.addEventListener('c-live-updated', () => document.querySelectorAll('for
 
 // ───── 🎰 スロット（ジャグラー風）: リールを回し、STOP で左から 1 本ずつ止める ─────
 // - spin: 止まる目はもう決まっている（data-stops）。遠ければ、ぼやけている間にずらしてから最大 4 コマすべらせる
-// - aim: ボーナスを持っている。押した所から最大 4 コマ以内に 7（狙う絵柄）があればそこで止まる。
-//   止め終わったら押した所を送り、サーバーが同じ計算で確かめる（services/casino/slots.ts と同じ決まり）
+// - aim: ボーナスを持っている。押した所から最大 4 コマ以内で、どれかのライン（5 本）に 7 がつながる所で止まる。
+//   止め終わったら押した所を送り、サーバーが同じ計算で確かめる（services/casino/slots.ts の judge・aimStops と同じ決まり）
+// - still: 止まったまま。レバー（スペース）で同じ量を賭けて回す
 const REEL_SPEED = 15; // コマ / 秒
 let slotCtl = null;
+let leverAt = 0;
 const initSlots = (root) => {
   if (slotCtl) slotCtl.stop();
   slotCtl = null;
@@ -567,15 +569,27 @@ const initSlots = (root) => {
     const [k, l] = x.split(':');
     return [k, l.split('.')];
   });
+  const paylines = (jug.dataset.paylines || '1,1,1').split('|').map((x) => x.split(',').map(Number));
   const roleOf = (line) => (lines.find(([, w]) => w.every((x, i) => x === '*' || x === line[i])) || ['none'])[0];
-  const reels = [...jug.querySelectorAll('.c-jreel')].map((el, i) => ({ el, strip: el.querySelector('.c-jstrip'), keys: (el.dataset.strip || '').split(','), pos: N + (stops[i] || 0), state: 'still', anim: null, at: stops[i] || 0 }));
+  const reels = [...jug.querySelectorAll('.c-jreel')].map((el, i) => {
+    const at = Number(el.dataset.at ?? stops[i]) || 0;
+    return { el, strip: el.querySelector('.c-jstrip'), keys: (el.dataset.strip || '').split(','), pos: N + at, state: 'still', anim: null, at };
+  });
   const keyAt = (r, i) => reels[r].keys[((i % N) + N) % N];
-  const cherryShown = (i) => [i - 1, i, i + 1].some((j) => keyAt(0, j) === 'cherry');
+  /** どこかのラインにそろった役（slots.ts の judge と同じ） */
+  const judge = (st) => {
+    const found = paylines.map((rows) => roleOf(rows.map((row, i) => keyAt(i, st[i] - 1 + row))));
+    const line = found.findIndex((r) => r !== 'none');
+    return { role: line < 0 ? 'none' : found[line], line, roles: [...new Set(found.filter((r) => r !== 'none'))] };
+  };
+  const rowsOf = (reel, st, k) => [0, 1, 2].filter((row) => keyAt(reel, st - 1 + row) === k);
   const paint = (r) => r.strip.style.setProperty('--at', r.pos.toFixed(3));
   const stopBtns = [...jug.querySelectorAll('[data-stop]')];
   const lever = jug.querySelector('[data-lever]');
+  const spinLever = jug.querySelector('[data-lever-spin]');
   const lamp = jug.querySelector('.c-gogo');
   const form = document.querySelector('form[data-aim]');
+  const winEl = jug.querySelector('.c-winline');
   let alive = true;
   let raf = 0;
   let last = 0;
@@ -585,7 +599,7 @@ const initSlots = (root) => {
   const later = (fn, ms) => timers.push(setTimeout(() => alive && fn(), ms));
   const nextIdx = () => reels.findIndex((r) => r.state === 'spin');
   const mark = () => {
-    const n = nextIdx();
+    const n = mode === 'still' ? -1 : nextIdx();
     stopBtns.forEach((b, i) => b.classList.toggle('next', i === n));
   };
   const frame = (t) => {
@@ -614,33 +628,70 @@ const initSlots = (root) => {
   reels.forEach(paint);
   raf = requestAnimationFrame(frame);
 
-  /** 目押しのすべり（slots.ts の slipStop・aimStops と同じ） */
-  const slipStop = (reel, p) => {
-    const cand = Array.from({ length: SLIP + 1 }, (_, k) => (((p - k) % N) + N) % N);
-    const avoid = (i) => {
-      if (reel === 0) return cherryShown(i);
-      if (reel < 2) return false;
-      const r = roleOf([keyAt(0, reels[0].at), keyAt(1, reels[1].at), keyAt(2, i)]);
-      return r !== 'none' && r !== bonus;
+  /** 当たったラインを光らせる */
+  const showLine = (l) => {
+    if (l < 0 || !paylines[l]) return;
+    reels.forEach((r, i) => r.el.classList.add(`hit-${paylines[l][i]}`));
+    jug.querySelectorAll(`.ln[data-line="${l}"]`).forEach((e) => e.classList.add('on'));
+    const win = jug.querySelector('.c-jug-window');
+    if (!winEl || !win) return;
+    const box = win.getBoundingClientRect();
+    const pt = (i) => {
+      const rb = reels[i].el.getBoundingClientRect();
+      return [rb.left + rb.width / 2 - box.left, rb.top + (rb.height / 3) * (paylines[l][i] + 0.5) - box.top];
     };
-    return cand.find((i) => keyAt(reel, i) === want[reel]) ?? cand.find((i) => !avoid(i)) ?? cand[0];
+    const [x0, y0] = pt(0);
+    const [x2, y2] = pt(2);
+    const pad = reels[0].el.getBoundingClientRect().width / 2;
+    const len = Math.hypot(x2 - x0, y2 - y0) + pad * 2;
+    const ang = Math.atan2(y2 - y0, x2 - x0);
+    winEl.style.setProperty('left', `${(x0 + x2) / 2 - len / 2}px`);
+    winEl.style.setProperty('top', `${(y0 + y2) / 2}px`);
+    winEl.style.setProperty('width', `${len}px`);
+    winEl.style.setProperty('transform', `rotate(${ang}rad)`);
+    winEl.classList.add('show');
+  };
+  const clearLine = () => {
+    reels.forEach((r) => r.el.classList.remove('hit-0', 'hit-1', 'hit-2'));
+    jug.querySelectorAll('.ln.on').forEach((e) => e.classList.remove('on'));
+    winEl?.classList.remove('show');
   };
 
-  const startSpin = () => {
-    pressed = [];
+  /** 目押しのすべり（slots.ts の aimStops と同じ） */
+  const aimStop = (reel, p) => {
+    const cands = Array.from({ length: SLIP + 1 }, (_, k) => (((p - k) % N) + N) % N);
+    const prev = reels.slice(0, reel).map((r) => r.at);
+    const alive2 = paylines.map((_, l) => l).filter((l) => prev.every((st, r) => rowsOf(r, st, want[r]).includes(paylines[l][r])));
+    const hits = (c) => alive2.some((l) => rowsOf(reel, c, want[reel]).includes(paylines[l][reel]));
+    const clean = (c) => {
+      if (reel === 0) return rowsOf(0, c, 'cherry').length === 0;
+      if (reel < 2) return true;
+      return judge([...prev, c]).roles.every((r) => r === bonus);
+    };
+    return cands.find((c) => hits(c) && clean(c)) ?? cands.find(clean) ?? cands[0];
+  };
+
+  const spinAll = () => {
+    clearLine();
     reels.forEach((r) => {
       r.state = 'spin';
       r.el.classList.add('spin');
-      r.el.classList.remove('hit');
     });
+    jug.classList.add('running');
+    loop?.stop();
+    loop = Sound.reelLoop();
+  };
+  const startSpin = () => {
+    pressed = [];
+    spinAll();
     stopBtns.forEach((b) => {
       b.disabled = false;
       b.classList.remove('pressed');
     });
-    if (lever) lever.disabled = true;
-    jug.classList.add('running');
-    loop?.stop();
-    loop = Sound.reelLoop();
+    if (lever) {
+      lever.disabled = true;
+      lever.classList.add('pulled');
+    }
     mark();
   };
 
@@ -648,22 +699,22 @@ const initSlots = (root) => {
     loop?.stop();
     loop = null;
     jug.classList.remove('running');
-    const line = reels.map((r, i) => keyAt(i, r.at));
-    const role = roleOf(line);
+    lever?.classList.remove('pulled');
+    const j = judge(reels.map((r) => r.at));
     if (mode === 'aim') {
-      const hit = role === bonus;
-      if (hit) reels.forEach((r) => r.el.classList.add('hit'));
+      const hit = j.role === bonus;
+      if (hit) showLine(j.line);
       else Sound.miss(0.1);
       later(() => {
         const input = form?.querySelector('[data-aim-p]');
         if (!input) return;
         input.value = pressed.join(',');
         form.requestSubmit();
-      }, hit ? 250 : 650);
+      }, hit ? 300 : 650);
       return;
     }
     const win = Number(jug.dataset.win || 0);
-    if (win > 0) reels.forEach((r) => r.el.classList.add('hit'));
+    if (win > 0) showLine(Number(jug.dataset.winline ?? j.line));
     let wait = 450;
     const held = !jug.dataset.win && (bonus === 'big' || bonus === 'reg');
     if (held) {
@@ -677,7 +728,19 @@ const initSlots = (root) => {
         mode = 'aim';
         jug.dataset.mode = 'aim';
         if (lever) lever.disabled = false;
-        document.querySelector('.c-jug-help')?.remove();
+        const note = jug.querySelector('.c-deck-note');
+        if (note) note.textContent = 'レバーで回して 7 を狙う';
+      }, wait);
+    }
+    // 止め終わったら、レバーでまた回せる
+    if (!held && spinLever) {
+      later(() => {
+        mode = 'still';
+        jug.dataset.mode = 'still';
+        spinLever.disabled = false;
+        spinLever.classList.remove('pulled');
+        const note = jug.querySelector('.c-deck-note');
+        if (note) note.textContent = note.dataset.still || note.textContent;
       }, wait);
     }
     later(() => {
@@ -693,14 +756,14 @@ const initSlots = (root) => {
 
   const stopReel = (i) => {
     const r = reels[i];
-    if (!r || r.state !== 'spin' || i !== nextIdx()) return;
+    if (mode === 'still' || !r || r.state !== 'spin' || i !== nextIdx()) return;
     const pf = Math.floor(r.pos);
     const p = pf % N;
     let target;
     let from = r.pos;
     if (mode === 'aim') {
       pressed.push(p);
-      target = slipStop(i, p);
+      target = aimStop(i, p);
     } else {
       target = stops[i];
     }
@@ -742,12 +805,23 @@ const initSlots = (root) => {
     Sound.lever();
     startSpin();
   });
+  // 止まっているときのレバー: 送るのと同時に回し始める（次の画面が来たら、決まった目で止められる）
+  spinLever?.addEventListener('click', () => {
+    leverAt = Date.now();
+    spinLever.classList.add('pulled');
+    Sound.lever();
+    spinAll();
+  });
   const onKey = (e) => {
     if (!alive) return;
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.repeat) return;
     const n = ['1', '2', '3'].indexOf(e.key);
     if (e.code !== 'Space' && e.key !== ' ' && n < 0) return;
     e.preventDefault();
+    if (mode === 'still') {
+      if (n < 0 && spinLever && !spinLever.disabled && !jug.classList.contains('running')) spinLever.click();
+      return;
+    }
     if (lever && !lever.disabled && reels.every((r) => r.state === 'still')) {
       lever.click();
       return;
@@ -757,19 +831,18 @@ const initSlots = (root) => {
   document.addEventListener('keydown', onKey);
 
   if (mode === 'spin') {
-    Sound.lever();
+    if (Date.now() - leverAt > 3000) Sound.lever();
     startSpin();
     // 押さなくても、少したつと左から止まる
     later(() => reels.forEach((_, i) => later(() => stopReel(i), i * 700)), 9000);
   } else if (mode === 'aim' && jug.dataset.auto === '1') {
     // 先ペカ: レバーでランプが光って、そのまま狙える
     lamp?.classList.add('peka');
-    Sound.lever();
+    if (Date.now() - leverAt > 3000) Sound.lever();
     Sound.peka(0.15);
     startSpin();
   } else if (mode === 'still') {
-    const win = Number(jug.dataset.win || 0);
-    if (win > 0) reels.forEach((r) => r.el.classList.add('hit'));
+    if (jug.dataset.winline) showLine(Number(jug.dataset.winline));
     // そろえたばかりのボーナス: ファンファーレと、戻りを数え上げる
     const count = jug.querySelector('[data-count]');
     if (count) {

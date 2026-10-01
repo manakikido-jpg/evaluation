@@ -5,7 +5,7 @@ import { cardText, cryptoRng, rankOf, shuffledShoe, type Rng } from '../src/serv
 import { HL_MAX_STEPS, hlCashout, hlGuess, hlNextMult, hlPayout, hlStart, hlWays } from '../src/services/casino/highlow.js';
 import { applyMove, countStones, cpuMove, flipsFor, initialBoard, legalMoves, nextTurn, othelloPlay, winnerOf } from '../src/services/casino/othello.js';
 import { isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
-import { aimStops, bonusStops, drawRole, gridOf, lineOf, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
+import { aimStops, bonusStops, drawRole, gridOf, judge, lineOf, PAYLINES, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
 
 /** 決めた数を順に返す乱数 */
 const seq = (xs: number[]): Rng => {
@@ -194,36 +194,52 @@ describe('🎰 スロット（ジャグラー風）', () => {
     expect(n.grape! / 40000).toBeLessThan(0.165);
   });
 
-  it('決まった役どおりに止まる（はずれ・小役のとき、左にチェリーは見えない）', () => {
+  it('5 本のライン（上・中・下・斜め 2 本）のどれかにそろえば当たり', () => {
+    expect(PAYLINES).toHaveLength(5);
+    const at7 = REELS.map((r) => r.indexOf('seven'));
+    // 中段
+    expect(judge(at7)).toMatchObject({ role: 'big', line: 1 });
+    // 上段（7 が上に見える = 中段は 7 の 1 つ下）
+    expect(judge(at7.map((x) => x + 1))).toMatchObject({ role: 'big', line: 0 });
+    // 右下がり: 左は上・中は中・右は下
+    expect(judge([at7[0]! + 1, at7[1]!, at7[2]! - 1])).toMatchObject({ role: 'big', line: 3 });
+    // 右上がり
+    expect(judge([at7[0]! - 1, at7[1]!, at7[2]! + 1])).toMatchObject({ role: 'big', line: 4 });
+    expect(lineOf([at7[0]! - 1, at7[1]!, at7[2]! + 1], 4)).toEqual(['seven', 'seven', 'seven']);
+  });
+
+  it('決まった役どおりに止まる（ほかの役はどのラインにも見せない・はずれは左にチェリーが見えない）', () => {
     const rng = seeded(3);
     for (const role of ['none', 'grape', 'replay', 'cherry', 'bell', 'clown', 'big', 'reg'] as SlotRole[]) {
       for (let i = 0; i < 30; i++) {
         const stops = stopsFor(role, rng);
-        expect(roleOfLine(lineOf(stops))).toBe(role);
+        const j = judge(stops);
+        expect(j.role).toBe(role);
+        expect(j.roles.length).toBe(role === 'none' ? 0 : 1);
         if (role !== 'cherry') expect(gridOf(stops)[0]).not.toContain('cherry');
       }
     }
   });
 
-  it('目押し: 7 の 4 コマ手前までに押せばすべってそろう。遠ければそろわず、ほかの役にも見えない', () => {
+  it('目押し: 7 が窓に届く所で押せば、すべってどこかのラインにそろう。遠ければそろわず、ほかの役にも見えない', () => {
     const at7 = REELS.map((r) => r.indexOf('seven'));
-    // ちょうど 7 で押す・4 コマ手前（上の絵柄が下りてくるので、番号が大きい側）で押す
-    expect(roleOfLine(lineOf(aimStops('big', at7)))).toBe('big');
-    expect(roleOfLine(lineOf(aimStops('big', at7.map((x) => (x + SLIP) % REEL_LEN))))).toBe('big');
-    // 5 コマ手前では届かない
-    const far = aimStops('big', at7.map((x) => (x + SLIP + 1) % REEL_LEN));
-    expect(roleOfLine(lineOf(far))).toBe('none');
+    expect(judge(aimStops('big', at7)).role).toBe('big');
+    // 4 コマすべって上段に 7 が来る所（7 の 5 コマ手前）でもそろう
+    expect(judge(aimStops('big', at7.map((x) => (x + SLIP + 1) % REEL_LEN))).role).toBe('big');
+    // もっと遠いと届かない
+    const far = aimStops('big', at7.map((x) => (x + SLIP + 4) % REEL_LEN));
+    expect(judge(far).roles).toEqual([]);
     expect(gridOf(far)[0]).not.toContain('cherry');
-    // REG: 右は BAR に向かってすべる。7・7・7 には見せない
+    // REG: 右は BAR。7・7・7 には見せない
     const reg = aimStops('reg', [at7[0]!, at7[1]!, REELS[2]!.indexOf('bar')]);
-    expect(roleOfLine(lineOf(reg))).toBe('reg');
+    expect(judge(reg).role).toBe('reg');
     for (let p = 0; p < REEL_LEN; p++) {
       const s = aimStops('reg', [at7[0]!, at7[1]!, p]);
-      expect(['reg', 'none']).toContain(roleOfLine(lineOf(s)));
-      expect(Math.abs((((p - s[2]!) % REEL_LEN) + REEL_LEN) % REEL_LEN)).toBeLessThanOrEqual(SLIP);
+      expect(judge(s).roles.every((r) => r === 'reg')).toBe(true);
+      expect((((p - s[2]!) % REEL_LEN) + REEL_LEN) % REEL_LEN).toBeLessThanOrEqual(SLIP);
     }
-    expect(roleOfLine(lineOf(bonusStops('big')))).toBe('big');
-    expect(roleOfLine(lineOf(bonusStops('reg')))).toBe('reg');
+    for (const b of ['big', 'reg'] as const) expect(judge(bonusStops(b))).toMatchObject({ role: b, roles: [b] });
+    expect(roleOfLine(['seven', 'seven', 'bar'])).toBe('reg');
   });
 });
 

@@ -91,7 +91,7 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     expect((await playSlots(db, ccfg(), A, 100, seq([1000]), NOW)).status).toBe('busy');
     const at7 = REELS.map((x) => x.indexOf('seven'));
     // 遠い所で押すと、はずれて持ち越し
-    const miss = await aimSlots(db, row.id, A, at7.map((x) => (x + SLIP + 3) % 21), NOW);
+    const miss = await aimSlots(db, row.id, A, at7.map((x) => (x + SLIP + 5) % 21), NOW);
     expect(miss.status === 'ok' && miss.row.status).toBe('playing');
     expect(await bal(A)).toBe(4900);
     expect((await aimSlots(db, row.id, A, [1, 2], NOW)).status).toBe('invalid');

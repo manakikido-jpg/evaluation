@@ -183,7 +183,9 @@ describe('🎰 カジノ: 遊ぶ', () => {
     expect(await balance(A)).toBe(5000 + 8000);
     const html = await (await get(res.headers.get('location')!, cookie!)).text();
     expect(html).toContain('BIG BONUS');
-    expect(html).toContain('data-stops="0,0,0"');
+    // 7 が上段に来る所が先に届くので、上段にそろう
+    expect(html).toContain('data-stops="1,1,1"');
+    expect(html).toContain('data-winline="0"');
   });
 
   it('好きな量・上限・足りない', async () => {

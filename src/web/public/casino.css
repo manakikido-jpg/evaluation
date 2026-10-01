@@ -966,9 +966,9 @@ body.casino { background: #070d0b; }
 .c-jug.holding, .c-jug:has(.c-gogo.lit) { animation: jugglow 1.1s ease-in-out infinite alternate; }
 @keyframes jugglow { to { box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.6), inset 0 0 0 5px rgba(255, 120, 190, 0.5), inset 0 0 70px rgba(255, 70, 150, 0.35), 0 0 0 1px #2a1606, 0 26px 60px rgba(0, 0, 0, 0.7), 0 0 60px rgba(255, 70, 150, 0.55); } }
 /* 両脇の流れる LED（回っているときは速く・ボーナスは虹色） */
-.c-jug-side { position: absolute; z-index: 1; top: 18%; bottom: 22%; width: 5px; border-radius: 3px; background: repeating-linear-gradient(180deg, #ff5aa0 0 6px, rgba(255, 90, 160, 0.12) 6px 14px); background-size: 100% 28px; box-shadow: 0 0 8px rgba(255, 90, 160, 0.6); animation: ledrun 1.4s linear infinite; }
-.c-jug-side.l { left: 6px; }
-.c-jug-side.r { right: 6px; animation-direction: reverse; }
+.c-jug-side { position: absolute; z-index: 1; top: 18%; bottom: 22%; width: 4px; border-radius: 3px; background: repeating-linear-gradient(180deg, #ff5aa0 0 6px, rgba(255, 90, 160, 0.12) 6px 14px); background-size: 100% 28px; box-shadow: 0 0 8px rgba(255, 90, 160, 0.6); animation: ledrun 1.4s linear infinite; }
+.c-jug-side.l { left: 3px; }
+.c-jug-side.r { right: 3px; animation-direction: reverse; }
 .c-jug.running .c-jug-side { animation-duration: 0.45s; }
 .c-jug.holding .c-jug-side, .c-jug:has(.c-gogo.lit) .c-jug-side, .c-jug[class*='bonus-'] .c-jug-side { animation: ledrun 0.35s linear infinite, rainbow 1.2s linear infinite; }
 @keyframes ledrun { to { background-position: 0 28px; } }
@@ -988,9 +988,11 @@ body.casino { background: #070d0b; }
 .c-jstrip { --at: 21; display: flex; flex-direction: column; align-items: center; transform: translateY(calc((1 - var(--at)) * var(--h))); will-change: transform; }
 .c-jstrip .sy { flex: none; display: block; width: calc(var(--h) - 8px); height: var(--h); padding: 4px 0; box-sizing: border-box; object-fit: contain; text-align: center; line-height: calc(var(--h) - 8px); font-size: calc(var(--h) * 0.62); user-select: none; -webkit-user-drag: none; }
 .c-jreel.spin .c-jstrip { filter: blur(1.6px) saturate(1.2); }
+.c-jreel.hit-0::after { top: 0; }
+.c-jreel.hit-2::after { top: calc(var(--h) * 2); }
 .c-jstrip.bump { animation: jbump 0.26s cubic-bezier(0.3, 1.8, 0.5, 1); }
 @keyframes jbump { from { translate: 0 calc(var(--h) * 0.18); } to { translate: 0 0; } }
-.c-jreel.hit::after { content: ''; position: absolute; z-index: 3; left: 0; right: 0; top: var(--h); height: var(--h); box-shadow: inset 0 0 0 3px var(--c-gold), inset 0 0 24px rgba(226, 179, 64, 0.7); border-radius: 6px; animation: gogo 0.5s ease-in-out infinite alternate; pointer-events: none; }
+.c-jreel:is(.hit-0, .hit-1, .hit-2)::after { content: ''; position: absolute; z-index: 3; left: 0; right: 0; top: var(--h); height: var(--h); box-shadow: inset 0 0 0 3px var(--c-gold), inset 0 0 24px rgba(226, 179, 64, 0.7); border-radius: 6px; animation: gogo 0.5s ease-in-out infinite alternate; pointer-events: none; }
 .c-jstrip.at-0 { --at: 21; }
 .c-jstrip.at-1 { --at: 22; }
 .c-jstrip.at-2 { --at: 23; }
@@ -1015,7 +1017,7 @@ body.casino { background: #070d0b; }
 .c-payline { position: absolute; z-index: 3; left: 4px; right: 4px; top: 50%; height: 0; border-top: 2px dashed rgba(255, 90, 120, 0.75); pointer-events: none; }
 .c-payline span { position: absolute; left: -2px; top: -10px; font-size: 0.6rem; background: #ff5a7a; color: #fff; padding: 0 4px; border-radius: 4px; }
 .c-payline::after { content: ''; position: absolute; right: -4px; top: -6px; border: 6px solid transparent; border-right-color: #ff5a7a; }
-.c-jug-bottom { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 10px 12px; border-radius: 16px; background: linear-gradient(180deg, #3a1020, #1a060e 60%, #12040a); border: 1px solid #6a3048; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -4px 10px rgba(0, 0, 0, 0.6), 0 4px 0 #0a0205, 0 8px 16px rgba(0, 0, 0, 0.5); }
+.c-jug-deck { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 12px 12px 14px; border-radius: 16px; background: linear-gradient(180deg, #3a1020, #1a060e 60%, #12040a); border: 1px solid #6a3048; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -4px 10px rgba(0, 0, 0, 0.6), 0 4px 0 #0a0205, 0 8px 16px rgba(0, 0, 0, 0.5); }
 /* BET・状態・WIN の電光表示 */
 .c-jug-led { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 6px; margin-top: 10px; padding: 6px 8px; border-radius: 10px; background: linear-gradient(180deg, #070103, #0e0306); box-shadow: inset 0 0 0 2px #3a2412, inset 0 4px 10px #000, 0 0 0 1px #c8961e55; }
 .c-seg { display: flex; flex-direction: column; align-items: center; min-width: 0; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; line-height: 1.15; }
@@ -1042,10 +1044,63 @@ body.casino { background: #070d0b; }
 .c-stop:disabled { filter: grayscale(1) brightness(0.6); cursor: default; }
 .c-stop.next { animation: nextstop 0.8s ease-in-out infinite; }
 @keyframes nextstop { 50% { box-shadow: 0 6px 0 #6a0614, 0 0 0 5px rgba(255, 234, 150, 0.6), 0 10px 18px rgba(0, 0, 0, 0.5); } }
-.c-lever { appearance: none; flex: none; width: 64px; height: 64px; border-radius: 50%; border: 3px solid #fff3c9; background: radial-gradient(circle at 35% 30%, #fff 0 8%, #ffd34a 30%, #c08a10 75%); color: #4a2a00; font: inherit; font-weight: 900; font-size: 0.85rem; white-space: nowrap; padding: 0; cursor: pointer; box-shadow: 0 5px 0 #6a4a00, 0 8px 16px rgba(0, 0, 0, 0.5); touch-action: manipulation; }
-.c-lever:not(:disabled) { animation: nextstop 0.9s ease-in-out infinite; }
-.c-lever:disabled { filter: grayscale(1) brightness(0.55); cursor: default; animation: none; }
-.c-lever:active { transform: translateY(4px); box-shadow: 0 1px 0 #6a4a00; }
+.c-lever-form { display: contents; }
+.c-lever { appearance: none; position: relative; flex: none; width: 54px; height: 74px; padding: 0; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
+/* 台座と棒 */
+.c-lever::before { content: ''; position: absolute; left: 50%; bottom: 0; width: 40px; height: 16px; transform: translateX(-50%); border-radius: 50% 50% 8px 8px; background: radial-gradient(ellipse at 50% 30%, #6a6a6a, #1a1a1a 70%); box-shadow: 0 3px 0 #000, inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+.c-lever::after { content: ''; position: absolute; left: 50%; bottom: 8px; width: 8px; height: 50px; margin-left: -4px; border-radius: 4px; background: linear-gradient(90deg, #8a8a8a, #f4f4f4 45%, #9a9a9a); transform-origin: 50% 100%; transform: rotate(-14deg); transition: transform 0.12s ease-in; }
+.c-lever-knob { position: absolute; z-index: 1; left: 50%; bottom: 50px; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0 10%, #ff6a8a 30%, #c8103a 70%, #6a0014); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px #ffd0dc55; transform-origin: 50% 340%; transform: rotate(-14deg) translateX(-4px); transition: transform 0.12s ease-in; }
+.c-lever:not(:disabled):hover .c-lever-knob { filter: brightness(1.15); }
+.c-lever:not(:disabled) .c-lever-knob { animation: knob 1.1s ease-in-out infinite; }
+@keyframes knob { 50% { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 0 0 5px rgba(255, 140, 170, 0.45), 0 0 16px rgba(255, 90, 130, 0.7); } }
+.c-lever:active::after, .c-lever.pulled::after { transform: rotate(-14deg) scaleY(0.55); }
+.c-lever:active .c-lever-knob, .c-lever.pulled .c-lever-knob { transform: rotate(-14deg) translate(-4px, 24px); }
+.c-lever:disabled { cursor: default; }
+.c-lever:disabled:not(.pulled) .c-lever-knob { filter: grayscale(0.8) brightness(0.6); }
+/* メダルの投入口 */
+.c-medal-slot { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.c-medal-slot i { display: block; width: 26px; height: 34px; border-radius: 6px; background: linear-gradient(180deg, #d9a62a, #7a5210); box-shadow: inset 0 0 0 2px #fff0b866, 0 2px 0 #000; position: relative; }
+.c-medal-slot i::after { content: ''; position: absolute; left: 50%; top: 6px; bottom: 6px; width: 4px; margin-left: -2px; border-radius: 2px; background: #0a0306; box-shadow: inset 0 0 3px #000; }
+.c-medal-slot small { font-size: 0.5rem; letter-spacing: 0.1em; color: #d9a62a; }
+.c-deck-note { position: relative; z-index: 2; margin: 6px 0 0; text-align: center; font-size: 0.72rem; color: #e8c3d2; opacity: 0.85; }
+/* 上の屋根（電球が流れる） */
+.c-cab { position: relative; max-width: 480px; margin: 0 auto 18px; padding: 0 0 18px; filter: drop-shadow(0 30px 30px rgba(0, 0, 0, 0.55)); }
+.c-cab .c-jug { margin-bottom: 0; }
+.c-cab-crown { position: relative; height: 34px; margin: 0 34px -6px; border-radius: 120px 120px 0 0 / 34px 34px 0 0; background: linear-gradient(180deg, #ffefb0, #c8961e 40%, #7a5210); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 -2px 18px rgba(255, 150, 200, 0.35); display: flex; align-items: flex-start; justify-content: center; overflow: hidden; }
+.c-cab-crown b { position: relative; z-index: 1; margin-top: 3px; font-size: 1.2rem; filter: drop-shadow(0 0 6px #ff7ab8); }
+.c-cab-bulbs { position: absolute; left: 10px; right: 10px; top: 14px; height: 10px; background: radial-gradient(circle, #fff 0 2px, #ffd34a 3px, transparent 4.5px) 0 50% / 16px 10px repeat-x; animation: bulbrun 0.6s steps(2) infinite; }
+@keyframes bulbrun { 50% { background-position: 8px 50%; filter: hue-rotate(-40deg) brightness(1.3); } }
+.c-cab:has(.running) .c-cab-bulbs { animation-duration: 0.2s; }
+.c-cab:has(.holding, .c-gogo.lit, [class*='bonus-']) .c-cab-bulbs { animation: bulbrun 0.2s steps(2) infinite, rainbow 1s linear infinite; }
+/* 足元の台座 */
+.c-cab-base { height: 18px; margin: -2px 18px 0; border-radius: 0 0 14px 14px; background: linear-gradient(180deg, #2a1606, #0e0602); box-shadow: inset 0 2px 0 #c8961e88; }
+/* 中段の左右: ランプと電光表示 */
+.c-jug-mid { position: relative; z-index: 2; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; margin-top: 10px; }
+.c-jug-mid .c-jug-led { margin-top: 0; }
+/* 配当表（下のパネルの画像がないとき） */
+.c-jug-belly { position: relative; z-index: 2; margin-top: 12px; padding: 10px 12px 12px; border-radius: 14px; background: radial-gradient(ellipse at 50% 0, rgba(255, 120, 180, 0.25), transparent 70%), linear-gradient(180deg, #2a0816, #12040a); border: 2px solid #c8961e; box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.5), inset 0 0 24px rgba(255, 90, 150, 0.2); }
+.c-belly-title { display: block; text-align: center; font-size: 0.78rem; letter-spacing: 0.4em; color: #f7d77a; margin-bottom: 6px; }
+.c-jug-belly ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.c-jug-belly li { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.35); }
+.c-jug-belly li.c-pay-big, .c-jug-belly li.c-pay-reg { grid-column: span 1; background: linear-gradient(90deg, rgba(255, 80, 140, 0.25), rgba(0, 0, 0, 0.35)); }
+.c-pay-syms { display: flex; align-items: center; gap: 1px; }
+.c-pay-sy { width: 22px; height: 22px; object-fit: contain; font-size: 0.9rem; line-height: 22px; text-align: center; }
+.c-pay-any { width: 22px; font-size: 0.5rem; color: #b08a9a; text-align: center; }
+.c-pay-mult { font-size: 0.78rem; font-weight: 800; color: #ffd34a; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 受け皿のメダル（当たったとき） */
+.c-tray-coins { position: absolute; left: 50%; bottom: 14px; width: 150px; height: 18px; margin-left: -75px; display: none; }
+.c-jug-tray.paid .c-tray-coins { display: block; }
+.c-tray-coins i { position: absolute; bottom: 0; width: 18px; height: 10px; border-radius: 50%; background: radial-gradient(ellipse at 40% 35%, #fff6c0, #e2b340 55%, #8a5e12); box-shadow: 0 1px 0 #5a3a08; }
+.c-tray-coins i:nth-child(1) { left: 10px; } .c-tray-coins i:nth-child(2) { left: 26px; bottom: 3px; } .c-tray-coins i:nth-child(3) { left: 42px; } .c-tray-coins i:nth-child(4) { left: 58px; bottom: 5px; } .c-tray-coins i:nth-child(5) { left: 66px; }
+.c-tray-coins i:nth-child(6) { left: 80px; bottom: 2px; } .c-tray-coins i:nth-child(7) { left: 96px; } .c-tray-coins i:nth-child(8) { left: 112px; bottom: 4px; } .c-tray-coins i:nth-child(9) { left: 124px; }
+/* ラインのランプ（窓の左右）と、当たったライン */
+.c-linelamps { position: absolute; z-index: 5; top: 9px; bottom: 9px; width: 12px; display: grid; grid-template-rows: 0.35fr 1fr 1fr 1fr 0.35fr; align-items: center; justify-items: center; pointer-events: none; }
+.c-linelamps.l { left: -11px; } .c-linelamps.r { right: -11px; }
+.c-linelamps .ln { width: 9px; height: 9px; border-radius: 50%; background: #3a1020; box-shadow: inset 0 0 0 1px #6a3048; }
+.c-linelamps .ln.on { background: #ff5aa0; box-shadow: 0 0 6px #ff5aa0, 0 0 14px #ff3a8a; animation: gogo 0.4s ease-in-out infinite alternate; }
+.c-winline { position: absolute; z-index: 4; height: 6px; margin-top: -3px; border-radius: 3px; pointer-events: none; opacity: 0; transform-origin: 50% 50%; background: linear-gradient(90deg, transparent, #ffe08a 12%, #fff 50%, #ffe08a 88%, transparent); box-shadow: 0 0 10px #ffd34a, 0 0 22px rgba(255, 160, 60, 0.8); }
+.c-winline.show { opacity: 0.9; animation: winline 0.5s ease-in-out infinite alternate; }
+@keyframes winline { to { opacity: 0.45; } }
 .c-jug-note { flex: 1; text-align: right; }
 .c-jug-help { font-size: 0.85rem; }
 .c-aim { max-width: 460px; margin: 0 auto 14px; padding: 14px 16px; border-radius: 14px; background: linear-gradient(180deg, rgba(255, 58, 138, 0.18), rgba(0, 0, 0, 0.35)); border: 1px solid rgba(255, 140, 190, 0.5); text-align: center; }
@@ -1071,19 +1126,27 @@ body.casino { background: #070d0b; }
 @keyframes coinfall { from { transform: translateY(0) rotate(0); } to { transform: translateY(460px) rotate(540deg); } }
 @media (max-width: 520px) {
   .c-jug { --h: 62px; padding: 12px 14px 10px; border-radius: 22px 22px 16px 16px; }
-  .c-jug-side.l { left: 3px; } .c-jug-side.r { right: 3px; }
-  .c-jug-side { width: 4px; }
+  .c-jug-side.l { left: 1px; } .c-jug-side.r { right: 1px; }
+  .c-jug-side { width: 3px; }
   .c-seg b { font-size: 0.95rem; letter-spacing: 0.06em; }
-  .c-jug-bottom { padding: 8px; }
+  .c-jug-deck { padding: 10px 8px 12px; gap: 6px; }
   .c-gogo { width: 58px; height: 58px; font-size: 0.85rem; }
   .c-stop { width: 60px; height: 60px; font-size: 0.8rem; }
-  .c-lever { width: 52px; height: 52px; font-size: 0.62rem; letter-spacing: -0.02em; }
+  .c-lever { width: 44px; height: 66px; }
+  .c-lever-knob { width: 26px; height: 26px; margin-left: -13px; bottom: 44px; }
+  .c-lever::after { height: 44px; }
+  .c-medal-slot { display: none; }
+  .c-cab-crown { margin: 0 24px -6px; }
+  .c-jug-belly ul { gap: 3px 6px; }
+  .c-pay-sy { width: 18px; height: 18px; }
+  .c-linelamps.l { left: -9px; } .c-linelamps.r { right: -9px; }
+  .c-linelamps { width: 9px; }
+  .c-linelamps .ln { width: 7px; height: 7px; }
   .c-stops { gap: 6px; }
-  .c-jug-bottom { gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .c-jreel.spin .c-jstrip { filter: none; }
-  .c-bulbs, .c-coins i, .c-jug-side, .c-seg-blink, .c-jug.holding { animation: none; }
+  .c-bulbs, .c-coins i, .c-jug-side, .c-seg-blink, .c-jug.holding, .c-cab-bulbs, .c-winline.show, .c-lever-knob { animation: none !important; }
 }
 .c-sound { appearance: none; border: 1px solid var(--c-line); background: rgba(0, 0, 0, 0.35); color: var(--c-text); width: 36px; height: 36px; border-radius: 50%; font-size: 1.05rem; cursor: pointer; margin-left: auto; flex: none; }
 .c-sound[aria-pressed='false'] { opacity: 0.6; }

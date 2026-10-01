@@ -1,11 +1,11 @@
 import type { Rng } from './cards.js';
 
 /**
- * スロット（ジャグラー風・3 リール × 21 コマ）。払うのは中段の 1 列だけ。
+ * スロット（ジャグラー風・3 リール × 21 コマ）。ラインは 5 本（上段・中段・下段・右下がり・右上がり）。
  * - レバーを叩いたときに「役」を引く（小役・ボーナス・はずれ）。払い戻し率はおよそ 95%（テストで確かめる）
  * - 小役（ぶどう・チェリー・リプレイ・ベル・ピエロ）は、その回にそろって払う
  * - ボーナス（BIG・REG）を引くと GOGO ランプが光る（レバーで光る「先ペカ」か、3 本止めたら光る「後ペカ」）。
- *   そのあとは自分で 7 を狙って止める（目押し）。STOP を押した所から最大 4 コマすべって止まる。
+ *   そのあとは自分で 7 を狙って止める（目押し）。STOP を押した所から最大 4 コマすべって止まり、どのラインでも 7 がそろえばよい。
  *   はずしても当たりは持ち越し、狙う回は賭けない（損はしない）。うまく押せなければ「おまかせ」でそろう
  * リールの並び・すべり方は casino.js でも同じに計算する（画面の data-* で渡す）
  */
@@ -73,12 +73,21 @@ export function slotRtp(): number {
 }
 
 const at = (reel: number, i: number) => REELS[reel]![((i % REEL_LEN) + REEL_LEN) % REEL_LEN]!;
-/** 中段に止まっている絵柄 */
-export const lineOf = (stops: number[]) => stops.map((s, i) => at(i, s));
 /** 3 × 3 の見た目（リールごとに上・中・下） */
 export const gridOf = (stops: number[]) => stops.map((s, i) => [at(i, s - 1), at(i, s), at(i, s + 1)]);
 
-/** 中段の並びが何の役か */
+/** ライン（リールごとの段: 0 上・1 中・2 下） */
+export const PAYLINES = [
+  { key: 'top', name: '上段', rows: [0, 0, 0] },
+  { key: 'mid', name: '中段', rows: [1, 1, 1] },
+  { key: 'bottom', name: '下段', rows: [2, 2, 2] },
+  { key: 'down', name: '右下がり', rows: [0, 1, 2] },
+  { key: 'up', name: '右上がり', rows: [2, 1, 0] },
+] as const;
+/** ライン上に並んだ絵柄 */
+export const lineOf = (stops: number[], line = 1) => stops.map((s, i) => at(i, s - 1 + PAYLINES[line]!.rows[i]!));
+
+/** 1 本のラインの並びが何の役か */
 export function roleOfLine(line: SlotKey[]): SlotRole {
   for (const k of ROLE_KEYS) {
     const want = SLOT_ROLES[k].line;
@@ -87,52 +96,65 @@ export function roleOfLine(line: SlotKey[]): SlotRole {
   return 'none';
 }
 
-/** 左リールの上・中・下のどこかにチェリーが見えるか（チェリーでないのに見えると紛らわしい） */
-const cherryShown = (s: number) => [s - 1, s, s + 1].some((i) => at(0, i) === 'cherry');
+/** 止まった目の役（どこかのラインにそろった役。line: そのラインの番号・なければ -1） */
+export function judge(stops: number[]): { role: SlotRole; line: number; roles: SlotRole[] } {
+  const found = PAYLINES.map((_, l) => roleOfLine(lineOf(stops, l)));
+  const roles = [...new Set(found.filter((r) => r !== 'none'))];
+  const line = found.findIndex((r) => r !== 'none');
+  return { role: line < 0 ? 'none' : found[line]!, line, roles };
+}
 
-/** その役を見せる止まり方（決まった役のときに使う） */
+/** その役だけを見せる止まり方（決まった役のときに使う。ほかの役はどのラインにも見せない） */
 export function stopsFor(role: SlotRole, rng: Rng): number[] {
-  const ok = (stops: number[]) => roleOfLine(lineOf(stops)) === role && (role === 'cherry' || !cherryShown(stops[0]!));
-  const want = role === 'none' ? [null, null, null] : SLOT_ROLES[role].line;
-  const pick = (reel: number, w: SlotKey | null) => {
-    const idx = REELS[reel]!.flatMap((k, i) => (w === null || k === w ? [i] : []));
-    return idx[rng(idx.length)]!;
+  const ok = (stops: number[]) => {
+    const j = judge(stops);
+    return role === 'none' ? j.roles.length === 0 : j.roles.length === 1 && j.roles[0] === role;
   };
-  for (let tries = 0; tries < 200; tries++) {
-    const stops = want.map((w, i) => pick(i, w));
+  for (let tries = 0; tries < 400; tries++) {
+    const stops = [rng(REEL_LEN), rng(REEL_LEN), rng(REEL_LEN)];
     if (ok(stops)) return stops;
   }
-  // 乱数がかたよっても必ず見つける
-  for (let a = 0; a < REEL_LEN; a++) for (let b = 0; b < REEL_LEN; b++) for (let c = 0; c < REEL_LEN; c++) if (ok([a, b, c])) return [a, b, c];
+  // 乱数がかたよっても必ず見つける（ずらしながら全部ためす）
+  const o = [rng(REEL_LEN), rng(REEL_LEN), rng(REEL_LEN)];
+  for (let a = 0; a < REEL_LEN; a++)
+    for (let b = 0; b < REEL_LEN; b++)
+      for (let c = 0; c < REEL_LEN; c++) {
+        const stops = [(a + o[0]!) % REEL_LEN, (b + o[1]!) % REEL_LEN, (c + o[2]!) % REEL_LEN];
+        if (ok(stops)) return stops;
+      }
   throw new Error(`no stops for ${role}`);
 }
 
-/**
- * 1 本止める（目押しのとき）。pressed: STOP を押したとき中段にあったコマ。
- * 狙う絵柄（want）が SLIP コマ以内にあればそこで止め、なければ紛らわしい止まり方（avoid）をよける
- */
-export function slipStop(reel: number, pressed: number, want: SlotKey, avoid: (idx: number) => boolean): number {
-  const cand = Array.from({ length: SLIP + 1 }, (_, k) => (((pressed - k) % REEL_LEN) + REEL_LEN) % REEL_LEN);
-  return cand.find((i) => at(reel, i) === want) ?? cand.find((i) => !avoid(i)) ?? cand[0]!;
-}
+/** STOP を押した所から止まれる所（すべる順） */
+const slipCands = (pressed: number) => Array.from({ length: SLIP + 1 }, (_, k) => (((pressed - k) % REEL_LEN) + REEL_LEN) % REEL_LEN);
+/** その止まり方で、絵柄 k が見えている段 */
+const rowsOf = (reel: number, stop: number, k: SlotKey) => [0, 1, 2].filter((r) => at(reel, stop - 1 + r) === k);
 
-/** 目押しの止まり方（左から順に止める）。ボーナスがそろうか、ほかの役に見えない所で止まる */
+/**
+ * 目押しの止まり方（左から順に止める。ボーナスを持っているとき）。
+ * 押した所から SLIP コマ以内で、それまでのリールとどれかのラインでつながる所に 7（右は REG なら BAR）が来れば止める。
+ * そろわなければ、ほかの役に見えない所で止める
+ */
 export function aimStops(bonus: SlotBonus, pressed: number[]): number[] {
   const want = SLOT_ROLES[bonus].line as SlotKey[];
   const stops: number[] = [];
   for (let reel = 0; reel < 3; reel++) {
-    const avoid = (i: number) => {
-      if (reel === 0) return cherryShown(i);
-      if (reel < 2) return false;
-      const r = roleOfLine(lineOf([...stops, i]));
-      return r !== 'none' && r !== bonus;
+    const cands = slipCands(pressed[reel]!);
+    // まだつながっているライン
+    const alive = PAYLINES.map((l, i) => i).filter((l) => stops.every((st, r) => rowsOf(r, st, want[r]!).includes(PAYLINES[l]!.rows[r]!)));
+    const hits = (c: number) => alive.some((l) => rowsOf(reel, c, want[reel]!).includes(PAYLINES[l]!.rows[reel]!));
+    // ほかの役に見えない（左はチェリーを見せない・右はボーナス以外の役をそろえない）
+    const clean = (c: number) => {
+      if (reel === 0) return rowsOf(0, c, 'cherry').length === 0;
+      if (reel < 2) return true;
+      return judge([...stops, c]).roles.every((r) => r === bonus);
     };
-    stops.push(slipStop(reel, pressed[reel]!, want[reel]!, avoid));
+    stops.push(cands.find((c) => hits(c) && clean(c)) ?? cands.find(clean) ?? cands[0]!);
   }
   return stops;
 }
 
-/** ボーナスがそろう止まり方（おまかせ） */
+/** ボーナスがそろう止まり方（おまかせ。中段にそろえる） */
 export const bonusStops = (bonus: SlotBonus) => (SLOT_ROLES[bonus].line as SlotKey[]).map((k, reel) => REELS[reel]!.indexOf(k));
 
 /** GOGO ランプ（pre: レバーで光る / post: 3 本止めたら光る） */
