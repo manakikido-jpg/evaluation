@@ -90,7 +90,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js')[]; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
   return (
@@ -184,7 +184,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
           </>
         )}
-        <main>{props.children}</main>
+        <main class={props.wide ? 'wide' : undefined}>{props.children}</main>
         {session && (
           <>
             {/* ポップアップ（data-popup の付いたものを押すと、ここに中身を出す） */}

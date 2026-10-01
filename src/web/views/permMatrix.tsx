@@ -163,7 +163,7 @@ export function PermMatrixPage(props: {
     );
   };
   return (
-    <Layout title="チャンネル権限" session={session} nav="channels" scripts={['perms.js']}>
+    <Layout title="チャンネル権限" session={session} nav="channels" scripts={['perms.js']} wide>
       <div class="page-head">
         <h1>🧮 チャンネル権限 &amp; テンプレート適用</h1>
         <a href="/channels">← チャンネル</a>
@@ -263,7 +263,7 @@ export function PermTemplatesPage(props: {
   const t = props.edit;
   const applying = props.templates.find((x) => x.id === props.applyId) ?? props.templates[0];
   return (
-    <Layout title="チャンネル権限" session={session} nav="channels" scripts={['perms.js']}>
+    <Layout title="チャンネル権限" session={session} nav="channels" scripts={['perms.js']} wide>
       <div class="page-head">
         <h1>🧮 チャンネル権限 &amp; テンプレート適用</h1>
         <a href="/channels">← チャンネル</a>

@@ -37,6 +37,7 @@ body { margin: 0; line-height: 1.6; background: var(--bg); }
 a { color: var(--shu); text-decoration: none; }
 a:hover { text-decoration: underline; }
 main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 48px; }
+main.wide { max-width: none; }
 h1 { font-size: 1.5rem; margin: 8px 0 16px; }
 h1 small { font-size: .9rem; color: var(--muted); font-weight: normal; }
 h2 { font-size: 1.05rem; margin: 0 0 12px; border-left: 4px solid var(--shu); padding-left: 8px; }
@@ -801,7 +802,7 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .pm-pick small { color: var(--muted); font-family: ui-monospace, monospace; font-size: .72rem; }
 .pm-pick select { margin-left: auto; }
 .pm-no { display: inline-grid; place-items: center; min-width: 1.9em; height: 1.9em; border-radius: 999px; border: 1px solid var(--line); font-size: .78rem; font-weight: 700; background: var(--card); }
-.pm-scroll { max-height: 72vh; overflow: auto; }
+.pm-scroll { max-height: calc(100vh - 220px); min-height: 360px; overflow: auto; }
 .pm-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
 .pm-table th, .pm-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; }
 .pm-table thead th { position: sticky; top: 0; background: var(--card); z-index: 2; }
