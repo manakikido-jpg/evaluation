@@ -26,6 +26,8 @@ import {
 import type { BjState } from '../src/services/casino/blackjack.js';
 import { legalMoves } from '../src/services/casino/othello.js';
 import { REELS, SLIP } from '../src/services/casino/slots.js';
+import { dayPicks, machineSetting, slotFloorData } from '../src/services/casino/slotFloor.js';
+import { casinoDaily, slotSettingStats } from '../src/services/casino/report.js';
 import { cancelMatch, createMatch, joinMatch, MOVE_SECONDS, moveMatch, myMatch, OPEN_MINUTES, readMatch, resignMatch, sweepMatches } from '../src/services/casino/versus.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -38,7 +40,8 @@ const seq = (xs: number[]): Rng => {
   return (n) => xs[i++ % xs.length]! % n;
 };
 const card = (r: number, s = 0) => s * 13 + r - 1;
-const ccfg = (patch: Partial<GuildConfig['casino']> = {}): GuildConfig => ({ ...cfg, casino: { ...cfg.casino, ...patch } });
+// スロットは設定 1 の台 1 つ（おまかせだと、設定を引くのに乱数を使う）
+const ccfg = (patch: Partial<GuildConfig['casino']> = {}): GuildConfig => ({ ...cfg, casino: { ...cfg.casino, slotMachines: [1], ...patch } });
 
 let db: Db;
 let close: () => Promise<void>;
@@ -120,6 +123,48 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     expect(await bal(A)).toBe(4900 + 8000);
     expect((await aimSlots(db, row.id, A, at7, NOW)).status).toBe('done');
     expect((await bigWins(db, new Date(NOW.getTime() - 3_600_000))).map((g) => g.payout)).toEqual([8000]);
+  });
+
+  it('スロットの台: 決めた設定はそのまま、おまかせはその日 1 回だけ引いて覚える。回すと台と設定が残る', async () => {
+    const c = ccfg({ slotMachines: [3, 'random', 'random'] });
+    expect(await machineSetting(db, c, 1, NOW, seq([0]))).toBe(3);
+    const a = await machineSetting(db, c, 2, NOW, seq([99]));
+    expect(a).toBe(6);
+    // 同じ日はもう引かない（別の乱数でも同じ）
+    expect(await machineSetting(db, c, 2, NOW, seq([0]))).toBe(6);
+    expect(await machineSetting(db, c, 3, NOW, seq([0]))).toBe(1);
+    expect(await dayPicks(db, NOW)).toEqual({ '2': 6, '3': 1 });
+    // 次の日は引き直す
+    const tomorrow = new Date(NOW.getTime() + 86_400_000);
+    expect(await machineSetting(db, c, 2, tomorrow, seq([0]))).toBe(1);
+    expect((await playSlots(db, c, A, 10, seq([1000]), NOW, 4)).status).toBe('bad_bet');
+    const r = await playSlots(db, c, A, 10, seq([1000, 3, 5, 7]), NOW, 1);
+    expect(r.status === 'ok' && r.row.state).toMatchObject({ machine: 1, setting: 3 });
+  });
+
+  it('スロットのデータ: 台ごとの回転数・BIG・REG・いまの回転数・差枚（止める前の回は当たりに入れない）', async () => {
+    const c = ccfg({ slotMachines: [1, 1] });
+    // 2 番台: はずれ 2 回 → BIG（そろえる）→ はずれ 1 回
+    await playSlots(db, c, A, 10, seq([65000, 1, 2, 3]), NOW, 2);
+    await playSlots(db, c, A, 10, seq([65000, 4, 5, 6]), NOW, 2);
+    const big = await playSlots(db, c, A, 10, seq([0, 1, 2, 3, 4]), NOW, 2);
+    await aimSlots(db, big.status === 'ok' ? big.row.id : 0, A, 'assist', NOW);
+    const last = await playSlots(db, c, A, 10, seq([65000, 7, 8, 9]), NOW, 2);
+    const d = await slotFloorData(db, c, NOW);
+    expect(d.today[0]).toMatchObject({ games: 0, big: 0 });
+    expect(d.today[1]).toMatchObject({ games: 4, big: 1, reg: 0, since: 1, net: -40 + 800 });
+    expect(d.today[1]!.history).toEqual([{ game: 3, kind: 'big', gap: 3 }]);
+    expect(d.today[1]!.slump).toEqual([-10, -20, 770, 760]);
+    // 回したばかり（まだ止めていない）の回は、回転数だけ数える
+    const hidden = await slotFloorData(db, c, NOW, last.status === 'ok' ? last.row.id : 0);
+    expect(hidden.today[1]).toMatchObject({ games: 4, since: 1, net: 770 });
+    expect(hidden.today[1]!.slump).toHaveLength(3);
+    // 運営の画面: 日ごとと、設定ごと
+    const days = await casinoDaily(db, 3, NOW);
+    expect(days).toHaveLength(3);
+    expect(days[2]).toMatchObject({ plays: 4, wagered: 40, paid: 800, players: 1 });
+    expect(days[0]).toMatchObject({ plays: 0 });
+    expect(await slotSettingStats(db, new Date(NOW.getTime() - 86_400_000))).toEqual([{ setting: 1, plays: 4, wagered: 40, paid: 800, big: 1, reg: 0 }]);
   });
 
   it('スロット: REG はおまかせでもそろう', async () => {

@@ -11,6 +11,7 @@ import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } fro
 import { CHIN_MAX_LOSS, chinMoney, chinSettle, parentDecides, rollTurn, turnHand, type ChinRoll } from './chinchiro.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_MAX_SPOTS, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
+import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
 
 /**
@@ -199,18 +200,24 @@ export function playBaccarat(db: Db, cfg: GuildConfig, memberId: string, bet: nu
  * phase aim: ボーナスを引いて、7 を狙っている途中（tries: 狙った回数・aimed: 最後が目押しだった）
  * 前の形（reels・multiplier）も残っている
  */
-export type SlotsSpin = { v: 2; role: SlotRole; stops: number[]; lamp: 'pre' | 'post' | null; phase: 'aim' | 'done'; mult: number; tries?: number; aimed?: boolean; assist?: boolean };
+/** machine: 何番台か・setting: そのときの設定（前の回にはない） */
+export type SlotsSpin = { v: 2; role: SlotRole; stops: number[]; lamp: 'pre' | 'post' | null; phase: 'aim' | 'done'; mult: number; tries?: number; aimed?: boolean; assist?: boolean; machine?: number; setting?: number };
 export type SlotsState = SlotsSpin | { v?: undefined; reels: SlotKey[] | string[]; multiplier: number };
 
-export function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet: number, rng: Rng = cryptoRng, now = new Date()) {
+export async function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet: number, rng: Rng = cryptoRng, now = new Date(), machine = 1): Promise<Played> {
+  if (!validMachine(cfg, machine)) return { status: 'bad_bet' };
+  // 持ち越しのボーナスがあれば、その台に戻る（新しく引かない）
+  const busy = await activeGame(db, memberId, 'slots');
+  if (busy) return { status: 'busy', row: busy };
+  const setting = await machineSetting(db, cfg, machine, now, rng);
   return start(db, cfg, memberId, 'slots', bet, () => {
-    const role = drawRole(rng);
+    const role = drawRole(rng, setting);
     // ボーナス: はずれの目で止めて、ランプを光らせる（払うのは 7 がそろってから）
     if (isBonus(role)) {
-      const state: SlotsSpin = { v: 2, role, stops: stopsFor('none', rng), lamp: slotLamp(rng), phase: 'aim', mult: 0, tries: 0 };
+      const state: SlotsSpin = { v: 2, role, stops: stopsFor('none', rng), lamp: slotLamp(rng), phase: 'aim', mult: 0, tries: 0, machine, setting };
       return { state, done: false, payout: 0 };
     }
-    const state: SlotsSpin = { v: 2, role, stops: stopsFor(role, rng), lamp: null, phase: 'done', mult: roleMult(role) };
+    const state: SlotsSpin = { v: 2, role, stops: stopsFor(role, rng), lamp: null, phase: 'done', mult: roleMult(role), machine, setting };
     return { state, done: true, payout: slotPayout(bet, role) };
   }, now);
 }

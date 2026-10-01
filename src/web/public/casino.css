@@ -1217,3 +1217,50 @@ body.casino { background: #070d0b; }
 @media (prefers-reduced-motion: reduce) {
   .c-roll .c-die, .c-bowl-idle .c-die { animation: none !important; }
 }
+
+/* ───── 🎰 データカウンター（台の上）・台を選ぶ島 ───── */
+.c-counter { max-width: 480px; margin: 0 auto 10px; padding: 10px 12px 8px; border-radius: 14px; background: linear-gradient(180deg, #14161c, #07080b); border: 2px solid #3a3f4a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.5); color: #e8ecf4; }
+.c-counter-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.c-counter-no { font-size: 1.5rem; font-weight: 900; color: #ffd34a; text-shadow: 0 0 8px rgba(255, 180, 40, 0.6); font-variant-numeric: tabular-nums; }
+.c-counter-no small { font-size: 0.7rem; margin-left: 2px; color: #c8a040; }
+.c-counter-title { font-size: 0.65rem; letter-spacing: 0.35em; color: #8a93a6; }
+.c-counter-head .c-btn { margin-left: auto; }
+.c-counter-cells { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.cc { display: flex; flex-direction: column; align-items: center; padding: 4px 2px; border-radius: 8px; background: #000; box-shadow: inset 0 0 0 1px #262a33; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+.cc i { font-style: normal; font-size: 0.6rem; color: #8a93a6; letter-spacing: 0.05em; white-space: nowrap; }
+.cc b { font-size: 1.2rem; font-weight: 800; color: #ff6b3d; text-shadow: 0 0 6px rgba(255, 107, 61, 0.6); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cc-big b, .hk-big { color: #ff4f6a !important; text-shadow: 0 0 6px rgba(255, 79, 106, 0.6); }
+.cc-reg b, .hk-reg { color: #4fa8ff !important; text-shadow: 0 0 6px rgba(79, 168, 255, 0.6); }
+.c-counter-more { margin-top: 8px; font-size: 0.85rem; }
+.c-counter-more summary { cursor: pointer; color: #c3cad8; }
+.c-counter-cap { margin: 8px 0 2px; font-size: 0.75rem; color: #8a93a6; }
+.c-counter-hist { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.c-counter-hist th, .c-counter-hist td { padding: 3px 6px; border-bottom: 1px solid #262a33; text-align: center; }
+.c-counter-hist th { color: #8a93a6; font-weight: 600; }
+.c-counter-prev { margin: 8px 0 2px; color: #a8b0c0; font-size: 0.8rem; }
+.c-slump { display: block; width: 100%; height: auto; }
+.c-slump-zero { stroke: #3a3f4a; stroke-width: 1; }
+.c-slump-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.c-slump-line.up, .c-slump-dot.up { stroke: #4fd88a; fill: none; }
+.c-slump-line.down, .c-slump-dot.down { stroke: #ff6b7a; }
+.c-slump-dot { stroke: #07080b !important; stroke-width: 2; }
+.c-slump-dot.up { fill: #4fd88a; }
+.c-slump-dot.down { fill: #ff6b7a; }
+.c-slump-tick { fill: #8a93a6; font-size: 11px; font-variant-numeric: tabular-nums; }
+.c-slump.mini .c-slump-line { stroke-width: 1.5; }
+.c-floor { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 12px 0 20px; }
+.c-floor-m { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; text-decoration: none; color: #e8ecf4; background: linear-gradient(180deg, #43122a, #1c0611 60%, #12040a); border: 2px solid #c8961e; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5); transition: transform 0.12s, box-shadow 0.12s; }
+.c-floor-m:hover, .c-floor-m:focus-visible { transform: translateY(-2px); box-shadow: 0 12px 22px rgba(0, 0, 0, 0.6), 0 0 0 2px #ffd34a; }
+.c-floor-top { display: flex; align-items: baseline; gap: 8px; }
+.c-floor-no { font-size: 1.6rem; font-weight: 900; color: #ffd34a; font-variant-numeric: tabular-nums; }
+.c-floor-name { font-size: 0.7rem; letter-spacing: 0.15em; color: #f7d77a; }
+.c-floor-cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px; border-radius: 8px; background: #000; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+.c-floor-cells span { display: flex; flex-direction: column; align-items: center; }
+.c-floor-cells i { font-style: normal; font-size: 0.55rem; color: #8a93a6; }
+.c-floor-cells b { font-size: 1rem; color: #ff6b3d; font-variant-numeric: tabular-nums; }
+.c-floor-odds { font-size: 0.72rem; color: #c3cad8; }
+.c-floor-m .c-slump { background: #07080b; border-radius: 6px; }
+@media (max-width: 520px) {
+  .cc b { font-size: 1rem; }
+  .c-floor { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}

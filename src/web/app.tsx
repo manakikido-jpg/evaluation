@@ -6,6 +6,8 @@ import { STATIC } from './assets.js';
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
+import { casinoDaily, slotSettingStats } from '../services/casino/report.js';
+import { dayPicks, slotFloorData } from '../services/casino/slotFloor.js';
 import { matchStats, recentMatches } from '../services/casino/versus.js';
 import { CASINO_GAMES, type CasinoGame } from '../config.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
@@ -1220,11 +1222,15 @@ export function createWebApp(deps: WebDeps) {
     const q = c.req.query('range');
     const range: CasinoRange = q && Object.hasOwn(CASINO_RANGES, q) ? (q as CasinoRange) : '7d';
     const since = new Date(now().getTime() - CASINO_RANGES[range].days * 86_400_000);
-    const [stats, matches, recent, players7d] = await Promise.all([
+    const [stats, matches, recent, players7d, daily, floor, picks, settingStats] = await Promise.all([
       casinoStats(db, since),
       matchStats(db, since),
       recentMatches(db, 10),
       casinoPlayers(db, new Date(now().getTime() - 7 * 86_400_000)),
+      casinoDaily(db, 30, now()),
+      slotFloorData(db, cfg, now()),
+      dayPicks(db, now()),
+      slotSettingStats(db, new Date(now().getTime() - 30 * 86_400_000)),
     ]);
     return c.html(
       <CasinoAdminPage
@@ -1238,18 +1244,31 @@ export function createWebApp(deps: WebDeps) {
         recentMatches={recent}
         names={await namesOf(db, recent.flatMap((m) => [m.hostId, m.guestId ?? '', m.winnerId ?? '']))}
         players7d={players7d}
+        daily={daily}
+        floor={floor.today}
+        picks={picks}
+        settingStats={settingStats}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
       />,
     );
   });
 
+  /** スロットの台の数と、台ごとの設定（random か 1〜6） */
+  const slotMachinesOf = (body: Record<string, unknown>) => {
+    const n = typeof body.slotCount === 'string' && /^\d{1,2}$/.test(body.slotCount) ? Math.min(20, Math.max(1, Number(body.slotCount))) : cfg.casino.slotMachines.length;
+    return Array.from({ length: n }, (_, i) => {
+      const v = body[`slot_${i + 1}`];
+      return typeof v === 'string' && /^[1-6]$/.test(v) ? Number(v) : 'random';
+    }) as (number | 'random')[];
+  };
+
   app.post('/economy/casino', async (c) => {
     const body = await c.req.parseBody({ all: true });
     const int = (k: string) => (typeof body[k] === 'string' && /^\d{1,9}$/.test(body[k] as string) ? Number(body[k]) : NaN);
     const raw = body.games;
     const list = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((g): g is CasinoGame => typeof g === 'string' && (CASINO_GAMES as readonly string[]).includes(g));
-    const casino = { enabled: body.enabled === 'yes', requireRank: body.requireRank === 'yes', minBet: int('minBet'), maxBet: int('maxBet'), dailyBetLimit: int('dailyBetLimit'), games: CASINO_GAMES.filter((g) => list.includes(g)), knownGames: [...CASINO_GAMES] };
+    const casino = { enabled: body.enabled === 'yes', requireRank: body.requireRank === 'yes', minBet: int('minBet'), maxBet: int('maxBet'), dailyBetLimit: int('dailyBetLimit'), games: CASINO_GAMES.filter((g) => list.includes(g)), knownGames: [...CASINO_GAMES], slotMachines: slotMachinesOf(body) };
     if (!(casino.minBet <= casino.maxBet)) return c.redirect('/economy/casino?msg=invalid');
     const current = await loadOverrides(db);
     let overrides: Overrides;

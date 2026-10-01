@@ -6,7 +6,7 @@ import { HL_MAX_STEPS, hlCashout, hlGuess, hlNextMult, hlPayout, hlStart, hlWays
 import { applyMove, countStones, cpuMove, flipsFor, initialBoard, legalMoves, nextTurn, othelloPlay, winnerOf } from '../src/services/casino/othello.js';
 import { chinEdge, chinMoney, chinSettle, handOf, rollTurn, turnHand } from '../src/services/casino/chinchiro.js';
 import { isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
-import { aimStops, bonusStops, drawRole, gridOf, judge, lineOf, PAYLINES, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
+import { randomSetting, RANDOM_SETTING_ODDS, SETTING_KEYS, aimStops, bonusStops, drawRole, gridOf, judge, lineOf, PAYLINES, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
 
 /** 決めた数を順に返す乱数 */
 const seq = (xs: number[]): Rng => {
@@ -160,6 +160,20 @@ describe('🎰 スロット（ジャグラー風）', () => {
   it('払い戻し率はおよそ 95%', () => {
     expect(slotRtp()).toBeGreaterThan(0.94);
     expect(slotRtp()).toBeLessThan(0.96);
+  });
+
+  it('設定 1〜6: 高いほど払い戻し率が上がる（1 は約 95%・6 は約 107%）', () => {
+    const r = SETTING_KEYS.map((k) => slotRtp(k));
+    expect(r.every((v, i) => i === 0 || v > r[i - 1]!)).toBe(true);
+    expect(r[0]!).toBeGreaterThan(0.94);
+    expect(r[0]!).toBeLessThan(0.96);
+    expect(r[5]!).toBeGreaterThan(1.05);
+    expect(r[5]!).toBeLessThan(1.08);
+    expect(drawRole(seq([300]), 1)).toBe('reg');
+    expect(drawRole(seq([300]), 6)).toBe('big');
+    expect(Object.values(RANDOM_SETTING_ODDS).reduce((a, b) => a + b, 0)).toBe(100);
+    expect(randomSetting(seq([0]))).toBe(1);
+    expect(randomSetting(seq([99]))).toBe(6);
   });
 
   it('リールは 21 コマで、どのリールにも 7・BAR がある', () => {

@@ -763,3 +763,9 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 }
 .card.perms { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; }
 .card.perms h2 { margin: 0; }
+
+/* カジノ: スロットの台ごとの設定（フォームの横いっぱい） */
+.fields .slot-fieldset { grid-column: 1 / -1; display: block; }
+.slot-settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 12px; margin: 8px 0; }
+.slot-more summary { cursor: pointer; margin: 6px 0; }
+.fields > button.ok { justify-self: start; align-self: end; }

@@ -350,6 +350,12 @@ export const casinoSchema = z.object({
   knownGames: z.array(z.string()).optional(),
   /** 位のロールがある人だけ入れる */
   requireRank: z.boolean().default(true),
+  /** スロットの台（並び順に 1 番台・2 番台…）。それぞれの設定 1〜6、random はおまかせ（日替わり） */
+  slotMachines: z
+    .array(z.union([z.literal('random'), z.number().int().min(1).max(6)]))
+    .min(1)
+    .max(20)
+    .default(['random', 'random', 'random', 'random', 'random', 'random', 'random', 'random']),
 });
 export type CasinoConfig = z.infer<typeof casinoSchema>;
 

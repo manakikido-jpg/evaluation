@@ -164,6 +164,22 @@ describe('🎰 カジノ: 遊ぶ', () => {
     expect(seen).not.toContain('data-aim');
   });
 
+  it('スロット: 台を選ぶ島 → その台の画面（データカウンター）。台の番号を送って回す', async () => {
+    const { cookie } = await casinoLogin(A);
+    const floor = await (await get('/casino/slots', cookie!)).text();
+    expect(floor).toContain('台を選ぶ');
+    expect(floor).toContain('href="/casino/slots?m=8"');
+    const m3 = await (await get('/casino/slots?m=3', cookie!)).text();
+    expect(m3).toContain('3 番台');
+    expect(m3).toContain('回転数');
+    expect(m3).toContain('name="m" value="3"');
+    const res = await post('/casino/slots', cookie!, { bet: '100', m: '3' });
+    const loc = res.headers.get('location')!;
+    expect(loc).toMatch(/\?g=\d+/);
+    expect(await (await get(loc, cookie!)).text()).toContain('3 番台');
+    expect((await post('/casino/slots', cookie!, { bet: '100', m: '99' })).headers.get('location')).toBe('/casino/slots?m=99&e=bad_bet');
+  });
+
   it('スロット: ボーナスを持っていたら狙う画面。押した所を送ると、すべりを計算してそろえる', async () => {
     const { cookie } = await casinoLogin(A);
     const [row] = await db
@@ -190,8 +206,8 @@ describe('🎰 カジノ: 遊ぶ', () => {
 
   it('好きな量・上限・足りない', async () => {
     const { cookie } = await casinoLogin(A);
-    expect((await post('/casino/slots', cookie!, { bet: 'custom', betCustom: '5' })).headers.get('location')).toBe('/casino/slots?e=bad_bet');
-    expect((await post('/casino/slots', cookie!, { bet: 'custom', betCustom: '1001' })).headers.get('location')).toBe('/casino/slots?e=bad_bet');
+    expect((await post('/casino/slots', cookie!, { bet: 'custom', betCustom: '5' })).headers.get('location')).toBe('/casino/slots?m=1&e=bad_bet');
+    expect((await post('/casino/slots', cookie!, { bet: 'custom', betCustom: '1001' })).headers.get('location')).toBe('/casino/slots?m=1&e=bad_bet');
     expect((await post('/casino/roulette', cookie!, { bet: '100', on: 'purple' })).headers.get('location')).toBe('/casino/roulette?e=invalid');
     const r = await post('/casino/roulette', cookie!, { bet: 'custom', betCustom: '50', on: 'n7' });
     expect(r.headers.get('location')).toMatch(/\?g=\d+/);
@@ -293,6 +309,9 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect(html).toContain(`${BASE}/casino`);
     expect(html).toContain('ルーレット');
     expect(html).toContain('action="/economy/casino"');
+    expect(html).toContain('日ごとの胴元の収支');
+    expect(html).toContain('設定ごとの結果');
+    expect(html).toContain('name="slot_8"');
     const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
     const save = await app.request('/economy/casino', {
       method: 'POST',
@@ -306,10 +325,15 @@ describe('🎰 カジノ（運営の画面）', () => {
         ['dailyBetLimit', '0'],
         ['games', 'slots'],
         ['games', 'versus'],
+        ['slotCount', '3'],
+        ['slot_1', '6'],
+        ['slot_2', 'random'],
+        ['slot_3', '2'],
+        ['slot_4', '5'],
       ]),
     });
     expect(save.headers.get('location')).toBe('/economy/casino?msg=saved');
-    expect((await loadOverrides(db)).casino).toMatchObject({ minBet: 20, maxBet: 3000, dailyBetLimit: 0, games: ['slots', 'versus'] });
+    expect((await loadOverrides(db)).casino).toMatchObject({ minBet: 20, maxBet: 3000, dailyBetLimit: 0, games: ['slots', 'versus'], slotMachines: [6, 'random', 2] });
     const bad = await app.request('/economy/casino', {
       method: 'POST',
       headers: { cookie: g, 'content-type': 'application/x-www-form-urlencoded' },

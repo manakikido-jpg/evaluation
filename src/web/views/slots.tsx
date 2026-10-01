@@ -1,6 +1,7 @@
 import type { SlotsSpin, SlotsState } from '../../services/casino/casino.js';
 import { gridOf, isBonus, judge, PAYLINES, REEL_LEN, REELS, SLIP, SLOT_ROLES, SLOT_SYMBOLS, type SlotKey, type SlotRole } from '../../services/casino/slots.js';
 import { slotArt } from '../assets.js';
+import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
 import { BetForm, CasinoLayout, freshDone, Msg, Result, revealMe, Rules, type GamePage } from './casino.js';
 
 /**
@@ -49,7 +50,167 @@ function Art(p: { name: string; class: string; fallback?: unknown }) {
   return src ? <img class={p.class} src={src} alt="" draggable="false" /> : <>{p.fallback}</>;
 }
 
-export function SlotsPage(p: GamePage) {
+type FloorData = { today: MachineDay[]; yesterday: MachineDay[] };
+
+/** 差枚のグラフ（その台のその日。0 の線が真ん中の目安） */
+function Slump(p: { values: number[]; mini?: boolean; label: string }) {
+  const W = p.mini ? 160 : 600;
+  const H = p.mini ? 44 : 150;
+  const pad = p.mini ? { l: 2, r: 2, t: 4, b: 4 } : { l: 52, r: 12, t: 10, b: 20 };
+  const vals = p.values.length > 200 ? Array.from({ length: 200 }, (_, i) => p.values[Math.floor((i * p.values.length) / 200)]!).concat(p.values.at(-1)!) : p.values;
+  const lo = Math.min(0, ...vals);
+  const hi = Math.max(0, ...vals);
+  const span = hi - lo || 1;
+  const x = (i: number) => pad.l + (vals.length <= 1 ? 0 : (i * (W - pad.l - pad.r)) / (vals.length - 1));
+  const y = (v: number) => pad.t + ((hi - v) * (H - pad.t - pad.b)) / span;
+  const last = vals.at(-1) ?? 0;
+  const sign = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
+  return (
+    <svg class={`c-slump${p.mini ? ' mini' : ''}`} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${p.label}（いま ${sign(last)}・最高 ${sign(hi)}・最低 ${sign(lo)}）`}>
+      <line class="c-slump-zero" x1={pad.l} x2={W - pad.r} y1={y(0)} y2={y(0)} />
+      {!p.mini && (
+        <>
+          <text class="c-slump-tick" x={pad.l - 6} y={y(hi) + 4} text-anchor="end">
+            {sign(hi)}
+          </text>
+          <text class="c-slump-tick" x={pad.l - 6} y={y(0) + 4} text-anchor="end">
+            0
+          </text>
+          {lo < 0 && (
+            <text class="c-slump-tick" x={pad.l - 6} y={y(lo) + 4} text-anchor="end">
+              {sign(lo)}
+            </text>
+          )}
+          <text class="c-slump-tick" x={W - pad.r} y={H - 4} text-anchor="end">
+            {fmt(p.values.length)} G
+          </text>
+        </>
+      )}
+      {vals.length > 1 && <polyline class={`c-slump-line${last >= 0 ? ' up' : ' down'}`} points={vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')} />}
+      {vals.length > 0 && <circle class={`c-slump-dot${last >= 0 ? ' up' : ' down'}`} cx={x(vals.length - 1)} cy={y(last)} r={p.mini ? 2.5 : 4} />}
+      <title>{`${p.label}: いま ${sign(last)}`}</title>
+    </svg>
+  );
+}
+
+const oddsText = (d: MachineDay) => {
+  const o = combinedOdds(d);
+  return o === null ? '—' : `1/${o.toFixed(1)}`;
+};
+
+/** データカウンター（台の上の表示）。今日の BIG・REG・いまの回転数・総回転・合成。開くとグラフ・当たり履歴・前日 */
+function SlotCounter(p: { machine: number; today: MachineDay; yesterday: MachineDay }) {
+  const d = p.today;
+  return (
+    <section class="c-counter" aria-label={`${p.machine} 番台のデータ`}>
+      <div class="c-counter-head">
+        <b class="c-counter-no">
+          {p.machine}
+          <small>番台</small>
+        </b>
+        <span class="c-counter-title">DATA</span>
+        <a class="c-btn c-btn-small c-btn-ghost" href="/casino/slots">
+          台を移る
+        </a>
+      </div>
+      <div class="c-counter-cells">
+        <span class="cc cc-big">
+          <i>BIG</i>
+          <b>{d.big}</b>
+        </span>
+        <span class="cc cc-reg">
+          <i>REG</i>
+          <b>{d.reg}</b>
+        </span>
+        <span class="cc">
+          <i>回転数</i>
+          <b>{d.since}</b>
+        </span>
+        <span class="cc">
+          <i>総回転</i>
+          <b>{fmt(d.games)}</b>
+        </span>
+        <span class="cc">
+          <i>合成</i>
+          <b>{oddsText(d)}</b>
+        </span>
+      </div>
+      <details class="c-counter-more">
+        <summary>📈 グラフ・当たり履歴・前日</summary>
+        <p class="c-counter-cap">今日の差枚（この台でみんなが出した・のまれた銭の合計）</p>
+        {d.slump.length ? <Slump values={d.slump} label={`${p.machine} 番台の今日の差枚`} /> : <p class="c-muted">今日はまだ回されていません。</p>}
+        {d.history.length > 0 && (
+          <table class="c-counter-hist">
+            <thead>
+              <tr>
+                <th>回</th>
+                <th>当たり</th>
+                <th>何 G 目</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...d.history].reverse().slice(0, 10).map((h, k) => (
+                <tr>
+                  <td>{d.history.length - k}</td>
+                  <td class={`hk-${h.kind}`}>{h.kind === 'big' ? 'BIG' : 'REG'}</td>
+                  <td>{h.gap} G</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p class="c-counter-prev">
+          前日: BIG {p.yesterday.big}・REG {p.yesterday.reg}・総回転 {fmt(p.yesterday.games)}・合成 {oddsText(p.yesterday)}
+        </p>
+      </details>
+    </section>
+  );
+}
+
+/** 台を選ぶ（島）。台ごとの今日のデータとグラフ */
+export function SlotFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; msg?: string }) {
+  return (
+    <CasinoLayout title="スロット" me={p.me} back>
+      <h1 class="c-h1">🎰 スロット（台を選ぶ）</h1>
+      {p.msg && <Msg msg={p.msg} />}
+      <p class="c-muted">台ごとに設定（1〜6）があり、BIG・REG の出やすさが違います。データ（今日の当たり回数・回転数・差枚のグラフ）を見て、好きな台を選んでください。データはみんなで同じです。</p>
+      <section class="c-floor">
+        {p.data.today.map((d, i) => (
+          <a class="c-floor-m" href={`/casino/slots?m=${i + 1}`}>
+            <span class="c-floor-top">
+              <b class="c-floor-no">{i + 1}</b>
+              <span class="c-floor-name">SAKURA 777</span>
+            </span>
+            <span class="c-floor-cells">
+              <span>
+                <i>BIG</i>
+                <b class="hk-big">{d.big}</b>
+              </span>
+              <span>
+                <i>REG</i>
+                <b class="hk-reg">{d.reg}</b>
+              </span>
+              <span>
+                <i>回転数</i>
+                <b>{d.since}</b>
+              </span>
+              <span>
+                <i>総回転</i>
+                <b>{fmt(d.games)}</b>
+              </span>
+            </span>
+            <Slump values={d.slump} mini label={`${i + 1} 番台の今日の差枚`} />
+            <span class="c-floor-odds">
+              合成 {oddsText(d)}・前日 BIG {p.data.yesterday[i]?.big ?? 0}／REG {p.data.yesterday[i]?.reg ?? 0}
+            </span>
+          </a>
+        ))}
+      </section>
+    </CasinoLayout>
+  );
+}
+
+export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
   const csrf = p.me.session.csrfToken;
   const row = p.row;
   const raw = row?.state as SlotsState | undefined;
@@ -71,9 +232,10 @@ export function SlotsPage(p: GamePage) {
   const leverBet = Math.min(p.casino.maxBet, Math.max(p.casino.minBet, row?.bet ?? 100));
   return (
     <CasinoLayout title="スロット" me={me} back>
-      <h1 class="c-h1">🎰 スロット</h1>
+      <h1 class="c-h1">🎰 スロット・{p.machine} 番台</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-slot-stage">
+        <SlotCounter machine={p.machine} today={p.data.today[p.machine - 1] ?? { games: 0, big: 0, reg: 0, since: 0, net: 0, history: [], slump: [] }} yesterday={p.data.yesterday[p.machine - 1] ?? { games: 0, big: 0, reg: 0, since: 0, net: 0, history: [], slump: [] }} />
         <div class="c-cab">
           <div class="c-cab-crown" aria-hidden="true">
             <span class="c-cab-bulbs"></span>
@@ -173,6 +335,7 @@ export function SlotsPage(p: GamePage) {
                 <form method="post" action="/casino/slots" class="c-lever-form">
                   <input type="hidden" name="_csrf" value={csrf} />
                   <input type="hidden" name="bet" value={String(leverBet)} />
+                  <input type="hidden" name="m" value={String(p.machine)} />
                   <button type="submit" class={`c-lever${mode === 'spin' ? ' pulled' : ''}`} data-lever-spin disabled={mode === 'spin'} aria-label={`レバー（${fmt(leverBet)} ${p.me.coin.name}で回す）`}>
                     <span class="c-lever-knob"></span>
                   </button>
@@ -275,7 +438,7 @@ export function SlotsPage(p: GamePage) {
       </section>
       {!holding && (
         <div class={wait.trim() ? 'c-later wait' : ''} data-after-stop>
-          <BetForm action="/casino/slots" csrf={csrf} casino={p.casino} coin={p.me.coin} label="回す" last={row?.bet} />
+          <BetForm action="/casino/slots" csrf={csrf} casino={p.casino} coin={p.me.coin} label="回す" last={row?.bet} extra={<input type="hidden" name="m" value={String(p.machine)} />} />
         </div>
       )}
       <Rules>
@@ -283,7 +446,7 @@ export function SlotsPage(p: GamePage) {
         {(Object.keys(SLOT_ROLES) as (keyof typeof SLOT_ROLES)[])
           .map((k) => `${SLOT_ROLES[k].name}（${SLOT_ROLES[k].line.map((x) => (x ? SLOT_SYMBOLS[x].name : 'なんでも')).join('・')}）${odds(SLOT_ROLES[k].weight)}・×${SLOT_ROLES[k].mult}`)
           .join(' / ')}
-        。チェリーは左リールのどの段でも当たり。リプレイは賭けた分が戻ります。BIG・REG を引くと GOGO ランプが光り（レバーで光る先ペカ・止めたあとの後ペカ）、自分で 7 を狙ってそろえると払われます（どのラインでもよい）。はずしても当たりは持ち越し、狙う回は賭けません。払い戻し率は約 95% です。
+        。チェリーは左リールのどの段でも当たり。リプレイは賭けた分が戻ります。BIG・REG を引くと GOGO ランプが光り（レバーで光る先ペカ・止めたあとの後ペカ）、自分で 7 を狙ってそろえると払われます（どのラインでもよい）。はずしても当たりは持ち越し、狙う回は賭けません。台ごとに設定（1〜6）があり、設定が高いほど BIG・REG・ぶどうが出やすくなります（払い戻し率は設定 1 で約 95%）。
       </Rules>
     </CasinoLayout>
   );

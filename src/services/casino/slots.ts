@@ -38,7 +38,7 @@ export type SlotBonus = 'big' | 'reg';
 
 /**
  * 役（weight / 65536 の確率で引く）。mult: 賭けの何倍が戻るか。line: 中段にそろう絵柄（null はなんでも）
- * チェリーは左リールの中段に止まれば、ほかはなんでも
+ * チェリーは左リールのどの段に止まっても当たり。weight は設定 1 のとき（BIG・REG・ぶどうは設定で変わる）
  */
 export const SLOT_ROLES: Record<Exclude<SlotRole, 'none'>, { weight: number; mult: number; name: string; line: (SlotKey | null)[] }> = {
   big: { weight: 273, mult: 80, name: 'BIG BONUS', line: ['seven', 'seven', 'seven'] },
@@ -52,24 +52,54 @@ export const SLOT_ROLES: Record<Exclude<SlotRole, 'none'>, { weight: number; mul
 const ROLE_KEYS = Object.keys(SLOT_ROLES) as Exclude<SlotRole, 'none'>[];
 const WEIGHT_TOTAL = 65536;
 
+/** 設定（1〜6）。BIG・REG・ぶどうの重み（/ 65536）。高いほど当たりやすい */
+export type SlotSetting = 1 | 2 | 3 | 4 | 5 | 6;
+export const SLOT_SETTINGS: Record<SlotSetting, { big: number; reg: number; grape: number }> = {
+  1: { big: 273, reg: 164, grape: 9362 },
+  2: { big: 278, reg: 180, grape: 9380 },
+  3: { big: 285, reg: 200, grape: 9420 },
+  4: { big: 293, reg: 224, grape: 9470 },
+  5: { big: 303, reg: 250, grape: 9520 },
+  6: { big: 318, reg: 280, grape: 9600 },
+};
+export const SETTING_KEYS = [1, 2, 3, 4, 5, 6] as const;
+export const isSetting = (v: unknown): v is SlotSetting => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 6;
+/** 「おまかせ」のとき、その日の設定の出やすさ（%） */
+export const RANDOM_SETTING_ODDS: Record<SlotSetting, number> = { 1: 35, 2: 25, 3: 18, 4: 12, 5: 6, 6: 4 };
+
+const weightOf = (k: Exclude<SlotRole, 'none'>, setting: SlotSetting) => (k === 'big' || k === 'reg' || k === 'grape' ? SLOT_SETTINGS[setting][k] : SLOT_ROLES[k].weight);
+/** その設定での役の確率（1/x の x） */
+export const roleOdds = (k: Exclude<SlotRole, 'none'>, setting: SlotSetting = 1) => WEIGHT_TOTAL / weightOf(k, setting);
+
 export const isBonus = (r: SlotRole): r is SlotBonus => r === 'big' || r === 'reg';
 export const roleMult = (r: SlotRole) => (r === 'none' ? 0 : SLOT_ROLES[r].mult);
 /** 戻る銭（1 銭未満は切り捨て） */
 export const slotPayout = (bet: number, r: SlotRole) => Math.floor(bet * roleMult(r));
 
 /** レバーを叩いたときに引く役 */
-export function drawRole(rng: Rng): SlotRole {
+export function drawRole(rng: Rng, setting: SlotSetting = 1): SlotRole {
   let x = rng(WEIGHT_TOTAL);
   for (const k of ROLE_KEYS) {
-    if (x < SLOT_ROLES[k].weight) return k;
-    x -= SLOT_ROLES[k].weight;
+    const w = weightOf(k, setting);
+    if (x < w) return k;
+    x -= w;
   }
   return 'none';
 }
 
 /** 払い戻し率（役の確率 × 倍率） */
-export function slotRtp(): number {
-  return ROLE_KEYS.reduce((n, k) => n + (SLOT_ROLES[k].weight / WEIGHT_TOTAL) * SLOT_ROLES[k].mult, 0);
+export function slotRtp(setting: SlotSetting = 1): number {
+  return ROLE_KEYS.reduce((n, k) => n + (weightOf(k, setting) / WEIGHT_TOTAL) * SLOT_ROLES[k].mult, 0);
+}
+
+/** 「おまかせ」の設定を引く */
+export function randomSetting(rng: Rng): SlotSetting {
+  let x = rng(100);
+  for (const k of SETTING_KEYS) {
+    if (x < RANDOM_SETTING_ODDS[k]) return k;
+    x -= RANDOM_SETTING_ODDS[k];
+  }
+  return 1;
 }
 
 const at = (reel: number, i: number) => REELS[reel]![((i % REEL_LEN) + REEL_LEN) % REEL_LEN]!;

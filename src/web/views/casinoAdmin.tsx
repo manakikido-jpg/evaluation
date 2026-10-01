@@ -3,6 +3,10 @@ import { CASINO_GAMES } from '../../config.js';
 import type { CasinoMatch } from '../../db/schema.js';
 import { CASINO_LABEL, type CasinoStat } from '../../services/casino/casino.js';
 import { Layout, type SessionView } from './layout.js';
+import { BarList, ColumnChart, LineChart, type ChartPoint } from './charts.js';
+import type { CasinoDay, SettingStat } from '../../services/casino/report.js';
+import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
+import { RANDOM_SETTING_ODDS, roleOdds, SETTING_KEYS, slotRtp, type SlotSetting } from '../../services/casino/slots.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -27,6 +31,11 @@ export function CasinoAdminPage(p: {
   players7d: number;
   flash?: string;
   guji: boolean;
+  daily: CasinoDay[];
+  floor: MachineDay[];
+  /** 今日のおまかせの設定（台の番号 → 設定） */
+  picks: Record<string, number>;
+  settingStats: SettingStat[];
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -119,6 +128,9 @@ export function CasinoAdminPage(p: {
         )}
       </section>
 
+      <CasinoCharts daily={p.daily} stats={p.stats} coinName={p.coinName} range={CASINO_RANGES[p.range].label} />
+      <SlotMachines casino={c} floor={p.floor} picks={p.picks} settingStats={p.settingStats} coinName={p.coinName} />
+
       {p.guji && (
         <section class="card">
           <h2>⚙ 設定（宮司）</h2>
@@ -152,6 +164,34 @@ export function CasinoAdminPage(p: {
                 </label>
               ))}
             </fieldset>
+            <fieldset class="perms slot-fieldset">
+              <legend>🎰 スロットの台と設定</legend>
+              <label class="field">
+                <span>台の数（1〜20）</span>
+                <input type="number" name="slotCount" min={1} max={20} value={String(c.slotMachines.length)} required />
+              </label>
+              <div class="slot-settings">
+                {Array.from({ length: c.slotMachines.length }, (_, i) => (
+                  <SlotSelect i={i} value={c.slotMachines[i]} />
+                ))}
+              </div>
+              {c.slotMachines.length < 20 && (
+                <details class="slot-more">
+                  <summary>
+                    {c.slotMachines.length + 1} 番台〜20 番台（台の数を増やしたときの設定）
+                  </summary>
+                  <div class="slot-settings">
+                    {Array.from({ length: 20 - c.slotMachines.length }, (_, k) => (
+                      <SlotSelect i={c.slotMachines.length + k} value={undefined} />
+                    ))}
+                  </div>
+                </details>
+              )}
+              <p class="note">
+                おまかせは毎日（日本時間）、その日に最初に回されたときに設定を引きます（設定 1: {RANDOM_SETTING_ODDS[1]}%・2: {RANDOM_SETTING_ODDS[2]}%・3: {RANDOM_SETTING_ODDS[3]}%・4: {RANDOM_SETTING_ODDS[4]}%・5:{' '}
+                {RANDOM_SETTING_ODDS[5]}%・6: {RANDOM_SETTING_ODDS[6]}%）。かっこの中は戻り率。設定 4 以上は 100% を超えるので、メンバーが平均で増やせます。
+              </p>
+            </fieldset>
             <button type="submit" class="ok">
               保存
             </button>
@@ -159,5 +199,184 @@ export function CasinoAdminPage(p: {
         </section>
       )}
     </Layout>
+  );
+}
+
+const pct = (x: number) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
+const sign = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
+const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+
+/** 日ごとのグラフ（30 日）と、ゲームごとの賭けた額。表でも見られる */
+function CasinoCharts(p: { daily: CasinoDay[]; stats: CasinoStat[]; coinName: string; range: string }) {
+  const points: ChartPoint[] = p.daily.map((d) => ({ label: md(d.date), title: d.date }));
+  const house = p.daily.map((d) => d.wagered - d.paid);
+  const total = house.reduce((a, b) => a + b, 0);
+  const wagered = p.daily.reduce((a, d) => a + d.wagered, 0);
+  const paid = p.daily.reduce((a, d) => a + d.paid, 0);
+  return (
+    <section class="card">
+      <h2>📈 グラフ（30 日）</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">胴元の収支（30 日）</div>
+          <div class="value">
+            {sign(total)}
+            <small>{p.coinName}</small>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="label">賭けた合計（30 日）</div>
+          <div class="value">
+            {fmt(wagered)}
+            <small>{p.coinName}</small>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="label">戻り率（30 日）</div>
+          <div class="value">{wagered ? pct(paid / wagered) : '—'}</div>
+        </div>
+      </div>
+      <h3>日ごとの胴元の収支</h3>
+      <p class="note">上はメンバーから入った（胴元のもうけ）、下はメンバーに出た（胴元の持ち出し）。</p>
+      <ColumnChart
+        points={points}
+        up={{ name: '胴元のもうけ', values: house.map((v) => Math.max(0, v)) }}
+        down={{ name: '胴元の持ち出し', values: house.map((v) => Math.max(0, -v)) }}
+        unit={` ${p.coinName}`}
+        label="日ごとの胴元の収支（30 日）"
+      />
+      <h3>日ごとの賭けた合計</h3>
+      <LineChart points={points} values={p.daily.map((d) => d.wagered)} unit={` ${p.coinName}`} label="日ごとの賭けた合計（30 日）" />
+      <h3>日ごとの遊んだ人</h3>
+      <LineChart points={points} values={p.daily.map((d) => d.players)} unit=" 人" label="日ごとの遊んだ人（30 日）" />
+      <h3>ゲームごとの賭けた額（{p.range}）</h3>
+      {p.stats.length ? (
+        <BarList rows={[...p.stats].sort((a, b) => b.wagered - a.wagered).map((s) => ({ name: `${CASINO_LABEL[s.game as CasinoGame]?.emoji ?? ''} ${CASINO_LABEL[s.game as CasinoGame]?.name ?? s.game}`, value: s.wagered }))} unit={` ${p.coinName}`} label="ゲームごとの賭けた額" />
+      ) : (
+        <p class="note">まだ遊ばれていません。</p>
+      )}
+      <details>
+        <summary>表で見る（日ごと）</summary>
+        <table class="compact">
+          <thead>
+            <tr>
+              <th>日</th>
+              <th class="num">回数</th>
+              <th class="num">遊んだ人</th>
+              <th class="num">賭けた</th>
+              <th class="num">戻した</th>
+              <th class="num">胴元の収支</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...p.daily].reverse().map((d) => (
+              <tr>
+                <td>{d.date}</td>
+                <td class="num">{fmt(d.plays)}</td>
+                <td class="num">{fmt(d.players)}</td>
+                <td class="num">{fmt(d.wagered)}</td>
+                <td class="num">{fmt(d.paid)}</td>
+                <td class="num">{sign(d.wagered - d.paid)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </section>
+  );
+}
+
+/** スロットの台（今日の設定とデータ）と、設定ごとの結果（30 日） */
+function SlotMachines(p: { casino: CasinoConfig; floor: MachineDay[]; picks: Record<string, number>; settingStats: SettingStat[]; coinName: string }) {
+  const settingOf = (i: number) => {
+    const conf = p.casino.slotMachines[i];
+    if (conf !== 'random' && conf !== undefined) return `設定 ${conf}`;
+    const got = p.picks[String(i + 1)];
+    return got ? `おまかせ → 今日は 設定 ${got}` : 'おまかせ（今日はまだ決まっていない）';
+  };
+  return (
+    <section class="card">
+      <h2>🎰 スロットの台（今日）</h2>
+      <p class="note">設定はメンバーには見えません（データから推理して台を選びます）。差枚はその台でメンバーが増やした（＋）・減らした（−）銭の合計。</p>
+      <table class="compact">
+        <thead>
+          <tr>
+            <th>台</th>
+            <th>設定</th>
+            <th class="num">総回転</th>
+            <th class="num">BIG</th>
+            <th class="num">REG</th>
+            <th class="num">合成</th>
+            <th class="num">差枚</th>
+          </tr>
+        </thead>
+        <tbody>
+          {p.floor.map((d, i) => (
+            <tr>
+              <td>{i + 1} 番台</td>
+              <td>{settingOf(i)}</td>
+              <td class="num">{fmt(d.games)}</td>
+              <td class="num">{d.big}</td>
+              <td class="num">{d.reg}</td>
+              <td class="num">{combinedOdds(d) ? `1/${combinedOdds(d)!.toFixed(1)}` : '—'}</td>
+              <td class="num">{sign(d.net)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h3>設定ごとの結果（30 日）と理論値</h3>
+      <table class="compact">
+        <thead>
+          <tr>
+            <th>設定</th>
+            <th class="num">回転</th>
+            <th class="num">BIG（実際／理論）</th>
+            <th class="num">REG（実際／理論）</th>
+            <th class="num">戻り率（実際／理論）</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SETTING_KEYS.map((k) => {
+            const r = p.settingStats.find((x) => x.setting === k);
+            const odds = (n: number | undefined) => (r && n ? `1/${(r.plays / n).toFixed(0)}` : '—');
+            return (
+              <tr>
+                <td>設定 {k}</td>
+                <td class="num">{fmt(r?.plays ?? 0)}</td>
+                <td class="num">
+                  {odds(r?.big)}／1/{roleOdds('big', k as SlotSetting).toFixed(0)}
+                </td>
+                <td class="num">
+                  {odds(r?.reg)}／1/{roleOdds('reg', k as SlotSetting).toFixed(0)}
+                </td>
+                <td class="num">
+                  {r?.wagered ? pct(r.paid / r.wagered) : '—'}／{pct(slotRtp(k as SlotSetting))}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p class="note">回転が少ないうちは、実際の数字は理論値から大きくずれます（数千回転でだいたい近づきます）。</p>
+    </section>
+  );
+}
+
+/** 1 台の設定の選び方 */
+function SlotSelect(p: { i: number; value: number | 'random' | undefined }) {
+  return (
+    <label class="field">
+      <span>{p.i + 1} 番台</span>
+      <select name={`slot_${p.i + 1}`}>
+        <option value="random" selected={(p.value ?? 'random') === 'random'}>
+          おまかせ（日替わり）
+        </option>
+        {SETTING_KEYS.map((k) => (
+          <option value={String(k)} selected={p.value === k}>
+            設定 {k}（{pct(slotRtp(k))}）
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

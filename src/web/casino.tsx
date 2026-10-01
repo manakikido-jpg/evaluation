@@ -29,6 +29,7 @@ import {
   type Acted,
   type BjAction,
   type Played,
+  type SlotsSpin,
 } from '../services/casino/casino.js';
 import { isOthelloLevel } from '../services/casino/othello.js';
 import { isRouletteBet, parseStakes } from '../services/casino/roulette.js';
@@ -53,7 +54,8 @@ import {
   VersusRoom,
   type CasinoMe,
 } from './views/casino.js';
-import { SlotsPage } from './views/slots.js';
+import { SlotFloor, SlotsPage } from './views/slots.js';
+import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 
 /**
@@ -221,16 +223,34 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     return row && row.memberId === me.session.userId && row.game === game ? row : undefined;
   }
 
-  const VIEWS = { blackjack: BlackjackPage, highlow: HighLowPage, baccarat: BaccaratPage, slots: SlotsPage, roulette: RoulettePage, chinchiro: ChinchiroPage, othello: OthelloPage } as const;
+  const VIEWS = { blackjack: BlackjackPage, highlow: HighLowPage, baccarat: BaccaratPage, roulette: RoulettePage, chinchiro: ChinchiroPage, othello: OthelloPage } as const;
   for (const game of SOLO) {
     const View = VIEWS[game as keyof typeof VIEWS];
     app.get(
       `/casino/${game}`,
       page(async (c, me) => {
         if (!d.cfg().casino.games.includes(game)) return c.redirect('/casino?e=game_off');
+        if (game === 'slots') return slotsPage(c, me);
         return c.html(<View me={me} casino={d.cfg().casino} row={await shown(c, me, game)} msg={casinoMsg(c.req.query('e'))} />);
       }),
     );
+  }
+
+  /**
+   * 🎰 スロット: 台を選ぶ島（?m がなく、持ち越しも結果もないとき）か、その台の画面。
+   * 回したばかりでまだ止めていない回は、データの当たり・差枚に入れない（止める前に結果が分からないように）
+   */
+  async function slotsPage(c: Context, me: Me) {
+    const cfg = d.cfg();
+    const row = await shown(c, me, 'slots');
+    const st = row?.state as SlotsSpin | undefined;
+    const q = Number(c.req.query('m'));
+    const machine = st?.machine ?? (row ? 1 : validMachine(cfg, q) ? q : undefined);
+    const hide = row && st && !st.aimed && (row.status === 'playing' || (row.finishedAt && d.now().getTime() - row.finishedAt.getTime() < 60_000)) ? row.id : undefined;
+    const data = await slotFloorData(db, cfg, d.now(), hide);
+    const msg = casinoMsg(c.req.query('e'));
+    if (!machine) return c.html(<SlotFloor me={me} casino={cfg.casino} data={data} msg={msg} />);
+    return c.html(<SlotsPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} data={data} />);
   }
 
   /** 途中のゲームを進める前に: 画面が古い（2 回押した）なら断る */
@@ -289,7 +309,12 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   app.post(
     '/casino/slots',
-    page(async (c, me) => after(c, 'slots', await playSlots(db, d.cfg(), me.session.userId, betOf(await c.req.parseBody()), undefined, d.now())), { post: true }),
+    page(async (c, me) => {
+      const body = await c.req.parseBody();
+      const m = typeof body.m === 'string' && /^\d{1,2}$/.test(body.m) ? Number(body.m) : 1;
+      const r = await playSlots(db, d.cfg(), me.session.userId, betOf(body), undefined, d.now(), m);
+      return r.status === 'ok' || r.status === 'busy' ? after(c, 'slots', r) : c.redirect(`/casino/slots?m=${m}&e=${r.status}`);
+    }, { post: true }),
   );
 
   app.post(
