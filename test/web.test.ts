@@ -2046,6 +2046,51 @@ describe('チャンネル（管理画面）', () => {
     });
   };
 
+  it('🧮 権限マトリクス: マスを押すと上書きが変わる（ほかのビットはそのまま）・テンプレートを作って一括で当てる', async () => {
+    roleList = [
+      { id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0' },
+      { id: '980000000000000088', name: 'BOT 連携', position: 4, managed: true, color: 0, permissions: '0' },
+    ];
+    const s = await login(STAFF);
+    expect((await get('/channels/perms', s)).status).toBe(403);
+    const g = await login(GUJI);
+    expect(await (await get('/channels', g)).text()).toContain('href="/channels/perms"');
+    const page = await (await get(`/channels/perms?role=${ROLE.ujiko}`, g)).text();
+    expect(page).toContain('権限マトリクス一覧');
+    expect(page).toContain(`data-role="${ROLE.ujiko}"`);
+    expect(page).toContain(`data-ch="${TORII}" data-bit="11"`);
+    expect(page).not.toContain('BOT 連携');
+    expect(page).toContain('/static/perms.js');
+    // ボイスの権限は、テキストのチャンネルにはない
+    expect((await form(g, '/channels/perms/cell', { channel: TORII, role: ROLE.ujiko, bit: '20', cell: 'allow' })).status).toBe(400);
+    actions = [];
+    const r = await form(g, '/channels/perms/cell', { channel: TORII, role: ROLE.ujiko, bit: '11', cell: 'deny' });
+    expect(await r.json()).toEqual({ ok: true, cell: 'deny' });
+    expect(actions).toContain(`overwrite ${TORII} ${ROLE.ujiko} allow=0 deny=2048`);
+    // 連携のロールは変えない
+    expect((await form(g, '/channels/perms/cell', { channel: TORII, role: '980000000000000088', bit: '11', cell: 'deny' })).status).toBe(400);
+    // テンプレート
+    const tpl = await (await get('/channels/perms?tab=templates', g)).text();
+    expect(tpl).toContain('新規 権限テンプレートの作成');
+    expect((await form(g, '/channels/perms/templates', { name: '', target: 'text' })).headers.get('location')).toContain('tpl_invalid');
+    expect((await form(g, '/channels/perms/templates', { name: '📢 告知（発言禁止）', target: 'text', note: '見るだけ', 'p.1': 'allow', 'p.6': 'deny', 'p.22': 'deny' })).headers.get('location')).toContain('tpl_saved');
+    const { listTemplates } = await import('../src/services/permMatrix.js');
+    const [t] = await listTemplates(db);
+    expect(t).toMatchObject({ name: '📢 告知（発言禁止）', target: 'text', perms: { '1': 'allow', '6': 'deny', '22': 'deny' } });
+    actions = [];
+    // テキスト用なので、ボイスのチャンネルは飛ばす。確認がないと当てない
+    expect((await formMulti(g, '/channels/perms/apply', [['template', t!.id], ['role', ROLE.ujiko], ['channels', TORII], ['channels', '910000000000000004']])).headers.get('location')).toContain('msg=invalid');
+    const applied = await formMulti(g, '/channels/perms/apply', [['template', t!.id], ['role', ROLE.ujiko], ['channels', TORII], ['channels', '910000000000000004'], ['confirm', 'yes']]);
+    expect(applied.headers.get('location')).toContain('msg=applied');
+    expect(actions).toEqual([`overwrite ${TORII} ${ROLE.ujiko} allow=1024 deny=2048`]);
+    // 直す・消す
+    expect((await form(g, '/channels/perms/templates', { id: t!.id, name: '告知', target: 'all', 'p.6': 'deny' })).headers.get('location')).toContain('tpl_saved');
+    expect((await listTemplates(db))[0]).toMatchObject({ id: t!.id, name: '告知', target: 'all', perms: { '6': 'deny' } });
+    expect((await form(g, `/channels/perms/templates/${t!.id}/delete`, {})).headers.get('location')).toContain('tpl_deleted');
+    expect(await listTemplates(db)).toEqual([]);
+    roleList = [];
+  });
+
   it('チャンネルを作れる（プライベートは選んだロールと運営・BOT だけ見られる）。おかしな入力は作らない', async () => {
     roleList = [{ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0' }];
     const g = await login(GUJI);

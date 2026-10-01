@@ -113,9 +113,14 @@ export function ChannelsPage(props: {
     <Layout title="チャンネル" session={session} nav="channels">
       <div class="page-head">
         <h1>チャンネル</h1>
-        <a class="button-link primary" href="/channels/new">
-          ➕ チャンネルを作る
-        </a>
+        <span class="inline-actions">
+          <a class="button-link" href="/channels/perms">
+            🧮 権限マトリクス・テンプレート
+          </a>
+          <a class="button-link primary" href="/channels/new">
+            ➕ チャンネルを作る
+          </a>
+        </span>
       </div>
       <Flash code={props.flash} />
       <form method="get" action="/channels" class="ch-search">

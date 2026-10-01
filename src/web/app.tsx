@@ -7,6 +7,8 @@ import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
 import { casinoDaily, slotSettingStats } from '../services/casino/report.js';
+import { applies, isCell, listTemplates, MATRIX_PERMS, planCells, saveTemplates, templateChanges, templateFits, templateSchema } from '../services/permMatrix.js';
+import { PermMatrixPage, PermTemplatesPage } from './views/permMatrix.js';
 import { resetState, runDemotions, startEvaluationReset, undoShuinReset } from '../services/evalReset.js';
 import { panelMessage } from '../discord/panels.js';
 import { NOTIFY_LABEL, notifyCounts, notifyReady, notifySetupState, pingRoleIds, runNotifySetup, startNotifySetup } from '../services/notify.js';
@@ -2605,6 +2607,129 @@ export function createWebApp(deps: WebDeps) {
     }));
     const total = groups.reduce((n, g) => n + g.items.length, 0);
     return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} q={c.req.query('q')} total={total} />);
+  });
+
+  // ───────── 🧮 チャンネル権限（マトリクス・テンプレート） ─────────
+
+  /** マトリクスで選べるロール（@everyone を先に、上のロールから。BOT・連携のロールは除く） */
+  const matrixRoles = async () => {
+    const [roles, { counts }] = await Promise.all([loadRoles(), roleMemberCounts(db)]);
+    const list = (roles ?? []).filter((r) => !r.managed);
+    return [
+      { id: cfg.guildId, name: '@everyone（みんな）', members: undefined as number | undefined },
+      ...list.filter((r) => r.id !== cfg.guildId).map((r) => ({ id: r.id, name: r.name, members: counts.get(r.id) ?? 0 })),
+    ];
+  };
+  const matrixGroups = (channels: GuildChannel[]) => listTextChannels(channels).map((g) => ({ category: g.category, items: [...g.items, ...g.voice] }));
+
+  app.get('/channels/perms', async (c) => {
+    const [channels, roles, templates] = await Promise.all([loadChannels(true), matrixRoles(), listTemplates(db)]);
+    const want = c.req.query('role');
+    const roleId = roles.some((r) => r.id === want) ? want! : (roles[1]?.id ?? cfg.guildId);
+    const groups = matrixGroups(channels);
+    if (c.req.query('tab') === 'templates') {
+      const edit = templates.find((t) => t.id === c.req.query('edit'));
+      return c.html(<PermTemplatesPage session={c.get('session')} roles={roles} roleId={roleId} templates={templates} edit={edit} groups={groups} flash={c.req.query('msg')} applyId={c.req.query('t')} />);
+    }
+    const k = c.req.query('kind');
+    const kind = k === 'text' || k === 'voice' ? k : 'all';
+    return c.html(<PermMatrixPage session={c.get('session')} roles={roles} roleId={roleId} kind={kind} groups={groups} flash={c.req.query('msg')} />);
+  });
+
+  /** マスを 1 つ変える（perms.js から。答えは JSON） */
+  app.post('/channels/perms/cell', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = typeof body.channel === 'string' && validId(body.channel) ? body.channel : '';
+    const roleId = typeof body.role === 'string' && validId(body.role) ? body.role : '';
+    const bit = Number(body.bit);
+    const cell = body.cell;
+    const p = MATRIX_PERMS.find((m) => m.bit === bit);
+    if (!channelId || !roleId || !p || !isCell(cell)) return c.json({ ok: false, error: 'invalid' }, 400);
+    const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
+    const ch = channels.find((x) => x.id === channelId);
+    const role = (roles ?? []).find((r) => r.id === roleId);
+    if (!ch || !role || role.managed || !applies(p, ch)) return c.json({ ok: false, error: 'invalid' }, 400);
+    const plan = planCells(ch, roleId, [{ bit, cell }]);
+    const reason = 'チャンネル権限のマトリクス（管理画面）';
+    try {
+      if (plan && 'set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
+      if (plan && 'del' in plan) {
+        if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
+        else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
+      }
+    } catch (err) {
+      logger.warn({ err }, 'perm matrix cell failed');
+      return c.json({ ok: false, error: 'failed' }, 502);
+    }
+    // 次に開いたときに新しい上書きが出るように
+    await loadChannels(true);
+    if (plan) await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_cell', detail: { channelId, name: ch.name, roleId, role: role.name, perm: p.key, cell }, via: 'web' });
+    return c.json({ ok: true, cell });
+  });
+
+  /** テンプレートを作る・直す */
+  app.post('/channels/perms/templates', async (c) => {
+    const body = await c.req.parseBody();
+    const list = await listTemplates(db);
+    const id = typeof body.id === 'string' && list.some((t) => t.id === body.id) ? body.id : `t${Date.now().toString(36)}`;
+    const perms: Record<string, 'allow' | 'deny' | 'neutral'> = {};
+    for (const m of MATRIX_PERMS) {
+      const v = body[`p.${m.no}`];
+      if (v === 'allow' || v === 'deny' || v === 'neutral') perms[String(m.no)] = v;
+    }
+    const parsed = templateSchema.safeParse({ id, name: field(body, 'name', 40), target: body.target, note: field(body, 'note', 200), perms });
+    if (!parsed.success || !Object.keys(perms).length) return c.redirect('/channels/perms?tab=templates&msg=tpl_invalid#pm-edit');
+    const next = list.some((t) => t.id === id) ? list.map((t) => (t.id === id ? parsed.data : t)) : [...list, parsed.data];
+    await saveTemplates(db, next, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_template', detail: { id, name: parsed.data.name, perms }, via: 'web' });
+    return c.redirect('/channels/perms?tab=templates&msg=tpl_saved');
+  });
+
+  app.post('/channels/perms/templates/:id/delete', async (c) => {
+    const list = await listTemplates(db);
+    const id = c.req.param('id');
+    if (!list.some((t) => t.id === id)) return c.redirect('/channels/perms?tab=templates&msg=invalid');
+    await saveTemplates(db, list.filter((t) => t.id !== id), c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_template_delete', detail: { id }, via: 'web' });
+    return c.redirect('/channels/perms?tab=templates&msg=tpl_deleted');
+  });
+
+  /** テンプレートを、選んだチャンネルのロールの上書きに当てる */
+  app.post('/channels/perms/apply', async (c) => {
+    const body = await c.req.parseBody({ all: true });
+    const one = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+    const back = (msg: string, role?: string) => c.redirect(`/channels/perms?tab=templates&msg=${msg}${role ? `&role=${role}` : ''}`);
+    const t = (await listTemplates(db)).find((x) => x.id === one('template'));
+    const roleId = validId(one('role')) ? one('role') : '';
+    const roles = (await loadRoles()) ?? [];
+    const role = roles.find((r) => r.id === roleId);
+    if (!t || !role || role.managed || one('confirm') !== 'yes') return back('invalid');
+    const raw = body.channels;
+    const ids = new Set((Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((v): v is string => typeof v === 'string' && validId(v)));
+    const channels = await loadChannels(true);
+    const targets = channels.filter((ch) => ids.has(ch.id) && templateFits(t, ch));
+    if (!targets.length) return back('apply_none', roleId);
+    const changes = templateChanges(t);
+    const reason = `権限テンプレート「${t.name}」（管理画面）`;
+    let changed = 0;
+    try {
+      for (const ch of targets) {
+        const plan = planCells(ch, roleId, changes);
+        if (!plan) continue;
+        if ('set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
+        else if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
+        else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
+        changed++;
+      }
+    } catch (err) {
+      logger.warn({ err }, 'perm template apply failed');
+      await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_apply', detail: { template: t.name, roleId, role: role.name, changed, failed: true }, via: 'web' });
+      await loadChannels(true);
+      return back('apply_failed', roleId);
+    }
+    await loadChannels(true);
+    await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_apply', detail: { template: t.name, roleId, role: role.name, channels: targets.map((x) => x.name), changed }, via: 'web' });
+    return back(changed ? 'applied' : 'apply_unchanged', roleId);
   });
 
   app.get('/channels/new', async (c) => {

@@ -90,7 +90,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: 'editor.js'[]; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js')[]; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
   return (
