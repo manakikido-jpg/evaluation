@@ -124,7 +124,20 @@ import {
   updateNotice,
   type NoticeCtx,
 } from '../services/notices.js';
-import { applyGiftRoles, giftAnnouncement, giftItemLabel, giftTargets, giftToAll, giftUnit, parseGiftItem, recentGifts, validGiftCount } from '../services/gifts.js';
+import {
+  applyGiftRoles,
+  endOfJstDay,
+  giftableRole,
+  giftAnnouncement,
+  giftItemLabel,
+  giftTargets,
+  giftToAll,
+  giftUnit,
+  parseGiftItem,
+  parseGiftRole,
+  recentGifts,
+  validGiftCount,
+} from '../services/gifts.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
 import { EconomyPage, MemberLedgerPage } from './views/economy.js';
 import { cancelEvent, createEvent, EVENT_TICKET_MAX, isEventKind, isTicketKind, listEvents, validEventValue } from '../services/economyEvents.js';
@@ -3422,6 +3435,7 @@ export function createWebApp(deps: WebDeps) {
       ? {
           nonce: randomUUID(),
           targets: (await giftTargets(db, cfg.ranks.map((x) => x.roleId))).length,
+          roles: (guildRoles ?? []).filter((r) => giftableRole(cfg, r, guildRoles ?? [], deps.botId)).map((r) => ({ id: r.id, name: r.name })),
           channels: postableChannels(await loadChannels().catch(() => [])),
           recent: await recentGifts(db),
         }
@@ -3550,22 +3564,26 @@ export function createWebApp(deps: WebDeps) {
     const to = (msg: string) => c.redirect(`/gacha?msg=${msg}#gacha-gift`);
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody();
-    const item = await parseGiftItem(db, body.item);
+    const item = typeof body.item === 'string' && body.item.startsWith('role:') ? parseGiftRole(cfg, body.item, (await loadRoles()) ?? [], deps.botId) : await parseGiftItem(db, body.item);
     const count = Number(body.count);
     const note = field(body, 'note', 200);
     const nonce = typeof body.nonce === 'string' ? body.nonce : '';
     const roleId = typeof body.roleId === 'string' && validId(body.roleId) ? body.roleId : undefined;
+    // この日までに入った人だけ（任意）
+    const joinedBy = endOfJstDay(body.joinedBy);
+    if (typeof body.joinedBy === 'string' && body.joinedBy !== '' && !joinedBy) return to('gift_invalid');
     if (body.confirm !== 'yes' || !item || !validGiftCount(item, count) || !note || !/^[0-9a-f-]{36}$/.test(nonce)) return to('gift_invalid');
-    const targets = await giftTargets(db, cfg.ranks.map((x) => x.roleId), roleId);
+    const targets = await giftTargets(db, cfg.ranks.map((x) => x.roleId), roleId, joinedBy);
     if (targets.length === 0) return to('gift_none');
     const by = c.get('session').userId;
     const label = giftItemLabel(item, { name: cfg.economy.currencyName, emoji: cfg.economy.currencyEmoji });
     const r = await giftToAll(db, { item, label, count, note, memberIds: targets, roleId, by, nonce }, now());
     if (r.status === 'duplicate') return to('gift_dup');
     if (r.status !== 'ok') return to('gift_invalid');
-    // 授与品: Discord でロールを付ける（人数が多いと時間がかかるので、待たずに進める）
+    // 授与品・ロール: Discord でロールを付ける（人数が多いと時間がかかるので、待たずに進める）
     if (r.roles.length) void applyGiftRoles(deps.discord, cfg.guildId, r.roles);
-    await audit(db, { actorId: by, action: 'gift.all', detail: { gift: r.batch.id, item: r.batch.item, label, count, note, roleId, recipients: targets.length }, via: 'web' });
+    const joinedByDate = joinedBy ? (body.joinedBy as string) : undefined;
+    await audit(db, { actorId: by, action: 'gift.all', detail: { gift: r.batch.id, item: r.batch.item, label, count, note, roleId, joinedBy: joinedByDate, recipients: targets.length }, via: 'web' });
     // チャンネルでお知らせ（任意）
     const announce = typeof body.announce === 'string' && validId(body.announce) ? body.announce : undefined;
     if (!announce) return to('gift_given');
@@ -3575,10 +3593,10 @@ export function createWebApp(deps: WebDeps) {
     const rankIds = [...new Set(cfg.ranks.map((x) => x.roleId))];
     const pingRoles = roleId ? [roleId] : pingKind === 'ranks' ? rankIds : [];
     const head = !ping ? '' : pingRoles.length ? `${pingRoles.map((id) => `<@&${id}>`).join(' ')}\n` : '@everyone\n';
-    const howToUse = item.kind === 'coins' ? '' : item.kind === 'shop' ? '\n-# ロールは少しずつ付きます（もう持っている人には、期間のある品はその分のばします）' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';
+    const howToUse = item.kind === 'coins' ? '' : item.kind === 'role' ? '\n-# ロールは少しずつ付きます' : item.kind === 'shop' ? '\n-# ロールは少しずつ付きます（もう持っている人には、期間のある品はその分のばします）' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';
     try {
       await deps.discord.sendMessage(announce, {
-        content: `${head}${giftAnnouncement(label, count, note, giftUnit(item), roleName)}${howToUse}`,
+        content: `${head}${giftAnnouncement(label, count, note, giftUnit(item), roleName, { role: item.kind === 'role', joinedBy: joinedByDate })}${howToUse}`,
         allowed_mentions: ping ? (pingRoles.length ? { parse: [], roles: pingRoles } : { parse: ['everyone'] }) : { parse: [] },
       });
       return to('gift_announced');

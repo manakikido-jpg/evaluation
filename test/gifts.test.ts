@@ -79,6 +79,38 @@ describe('🎁 全員にプレゼント', () => {
     });
   });
 
+  it('入った日で絞る（入った日がわからない人は入れる）・ふつうのロールを配る（持っている人には付けない）', async () => {
+    const { endOfJstDay, giftableRole, parseGiftRole } = await import('../src/services/gifts.js');
+    const OLD = '850000000000000011';
+    const LATE = '850000000000000012';
+    await recordJoin(db, { ...snap(OLD, [ROLE.sanpaisha]), joinedAt: new Date('2026-09-29T23:00:00+09:00') });
+    await recordJoin(db, { ...snap(LATE, [ROLE.sanpaisha]), joinedAt: new Date('2026-09-30T00:00:00+09:00') });
+    const by = endOfJstDay('2026-09-29')!;
+    expect(by.toISOString()).toBe('2026-09-29T14:59:59.999Z');
+    expect(endOfJstDay('2026/09/29')).toBeUndefined();
+    expect((await giftTargets(db, ranks, undefined, by)).sort()).toEqual([A, B, OLD].sort());
+    const all = [
+      { id: EVENT_ROLE, name: '記念', position: 2, managed: false, color: 0, permissions: '0' },
+      { id: '850000000000000098', name: '管理', position: 2, managed: false, color: 0, permissions: '8' },
+      { id: '850000000000000097', name: 'ブースト', position: 2, managed: true, color: 0 },
+      { id: '850000000000000096', name: '上', position: 9, managed: false, color: 0, permissions: '0' },
+      { id: ROLE.sanpaisha, name: '参拝者', position: 1, managed: false, color: 0 },
+      { id: '850000000000000095', name: 'BOT', position: 5, managed: true, color: 0, tags: { bot_id: '1' } },
+    ];
+    expect(all.filter((r) => giftableRole(cfg, r, all)).map((r) => r.name)).toEqual(['記念']);
+    expect(parseGiftRole(cfg, `role:${EVENT_ROLE}`, all)).toEqual({ kind: 'role', id: EVENT_ROLE, label: '@記念' });
+    expect(parseGiftRole(cfg, 'role:850000000000000098', all)).toBeUndefined();
+    const item = parseGiftRole(cfg, `role:${EVENT_ROLE}`, all)!;
+    expect(validGiftCount(item, 2)).toBe(false);
+    const r = await giftToAll(db, { item, label: '@記念', count: 1, note: 'お詫び', memberIds: await giftTargets(db, ranks, undefined, by), by: GUJI, nonce: '00000000-0000-0000-0000-00000000bb01' });
+    // A はもう持っている
+    expect(r.status === 'ok' && r.roles.map((x) => x.memberId).sort()).toEqual([B, OLD].sort());
+    expect(r.status === 'ok' && r.batch.item).toBe(`role:${EVENT_ROLE}`);
+    expect(giftAnnouncement('@記念', 1, 'お詫び', 'つ', undefined, { role: true, joinedBy: '2026-09-29' })).toBe(
+      '🎁 **運営から9月29日までに入ったみなさんへプレゼント！**\nロール **@記念** をお付けしました。\n> お詫び',
+    );
+  });
+
   it('お知らせの文面', () => {
     expect(giftAnnouncement('🧧福の札', 1, '1 周年', '枚')).toBe('🎁 **運営からみなさんへプレゼント！**\n🧧福の札 を **1 枚** ずつお渡ししました。\n> 1 周年');
     expect(giftAnnouncement('🪙銭', 3000, '', '枚', 'イベント参加者')).toContain('運営から@イベント参加者 のみなさんへ');

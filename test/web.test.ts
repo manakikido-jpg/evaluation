@@ -1670,6 +1670,48 @@ describe('物御籤（管理画面）', () => {
     expect((await post(g, '/gacha/gift', { item: 'coins', count: '100', note: 'x', confirm: 'yes', nonce: randomUUIDLike(2), roleId: '990000000000000077' })).headers.get('location')).toContain('gift_none');
   });
 
+  it('🎁 全員にプレゼント: 入った日で絞る・ふつうのロールを配る（お詫びなど）', async () => {
+    const { ticketsOf } = await import('../src/services/tickets.js');
+    const LATE = '850000000000000777';
+    await recordJoin(db, { id: LATE, username: 'late', displayName: 'late', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date('2026-09-30T00:30:00+09:00') });
+    const SORRY = '980000000000000050';
+    const ADMINISH = '980000000000000051';
+    const saved = roleList;
+    roleList = [
+      { id: SORRY, name: 'お詫びの印', position: 1, managed: false, color: 0, permissions: '0' },
+      { id: ADMINISH, name: '危ない', position: 1, managed: false, color: 0, permissions: '8' },
+      { id: ROLE.sanpaisha, name: '参拝者', position: 1, managed: false, color: 0, permissions: '0' },
+    ];
+    try {
+      const g = await login(GUJI);
+      const page = await (await get('/gacha', g)).text();
+      expect(page).toContain(`value="role:${SORRY}"`);
+      expect(page).not.toContain(`value="role:${ADMINISH}"`);
+      expect(page).not.toContain(`value="role:${ROLE.sanpaisha}"`);
+      expect(page).toContain('name="joinedBy"');
+      // 危ない権限・役職のロールは配れない
+      for (const id of [ADMINISH, ROLE.sanpaisha])
+        expect((await post(g, '/gacha/gift', { item: `role:${id}`, count: '1', note: 'x', confirm: 'yes', nonce: randomUUIDLike(31) })).headers.get('location')).toContain('gift_invalid');
+      expect((await post(g, '/gacha/gift', { item: 'gacha_free', count: '2', note: 'x', confirm: 'yes', nonce: randomUUIDLike(32), joinedBy: '9/29' })).headers.get('location')).toContain('gift_invalid');
+      actions = [];
+      const r = await post(g, '/gacha/gift', { item: `role:${SORRY}`, count: '1', note: 'リセットのお詫び', confirm: 'yes', nonce: randomUUIDLike(33), joinedBy: '2026-09-29', announce: '910000000000000002' });
+      expect(r.headers.get('location')).toContain('gift_announced');
+      await new Promise((res) => setTimeout(res, 10));
+      expect(actions).toContain(`addRole ${USER} ${SORRY}`);
+      expect(actions).not.toContain(`addRole ${LATE} ${SORRY}`);
+      expect(actions.find((a) => a.startsWith('send 910000000000000002'))).toContain('9月29日までに入ったみなさんへプレゼント');
+      expect(actions.find((a) => a.startsWith('send 910000000000000002'))).toContain('ロール **@お詫びの印** をお付けしました');
+      // 券 2 枚ずつ（同じ日で絞る）
+      expect((await post(g, '/gacha/gift', { item: 'gacha_free', count: '2', note: 'リセットのお詫び', confirm: 'yes', nonce: randomUUIDLike(34), joinedBy: '2026-09-29' })).headers.get('location')).toContain(
+        'gift_given',
+      );
+      expect((await ticketsOf(db, USER)).gacha_free).toBe(2);
+      expect((await ticketsOf(db, LATE)).gacha_free).toBe(0);
+    } finally {
+      roleList = saved;
+    }
+  });
+
   it('自由な券: 作る・ON/OFF・物御籤の中身に足す・メンバーに渡す', async () => {
     const { listCustomTickets, customHoldingsOf } = await import('../src/services/customTickets.js');
     const { listPrizes } = await import('../src/services/gacha.js');

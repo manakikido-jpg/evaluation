@@ -235,7 +235,7 @@ export function GachaPage(props: {
   /** リセットしたら返す・取り上げる量（宮司だけ） */
   reset?: { members: number; draws: number; refund: number; coins: number; tickets: number; roles: number };
   /** 全員へのプレゼント（宮司だけ） */
-  gift?: { nonce: string; targets: number; channels: { id: string; name: string; category: string | null }[]; recent: GiftBatch[] };
+  gift?: { nonce: string; targets: number; roles: { id: string; name: string }[]; channels: { id: string; name: string; category: string | null }[]; recent: GiftBatch[] };
 }) {
   const { session, gacha: g, stats } = props;
   const guji = session.level === 'guji';
@@ -828,10 +828,17 @@ export function GachaPage(props: {
                     ))}
                   </optgroup>
                 )}
+                {props.gift.roles.length > 0 && (
+                  <optgroup label="🎀 ロール（記念・お詫びなど）">
+                    {props.gift.roles.map((r) => (
+                      <option value={`role:${r.id}`}>@{r.name}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </label>
             <label class="field">
-              <span>1 人あたりの数（{props.coinName}は 100,000 まで・券は 100 枚まで・授与品は 1 つ。もう持っている品は、期間のあるものはのばし、ないものは贈らない）</span>
+              <span>1 人あたりの数（{props.coinName}は 100,000 まで・券は 100 枚まで・授与品・ロールは 1 つ。もう持っている品は、期間のあるものはのばし、ないものは贈らない。ロールは持っていない人にだけ付ける）</span>
               <input type="number" name="count" min={1} max={100000} value="1" required />
             </label>
             <label class="field">
@@ -842,6 +849,10 @@ export function GachaPage(props: {
                   <option value={r.id}>@{r.name} を持っている人だけ</option>
                 ))}
               </select>
+            </label>
+            <label class="field">
+              <span>入った日で絞る（任意。この日の終わりまでに入った人だけ。入った日がわからない人は前からいる人として入れる）</span>
+              <input type="date" name="joinedBy" />
             </label>
             <label class="field">
               <span>理由（記録に残る・お知らせにも載る）</span>
@@ -868,7 +879,7 @@ export function GachaPage(props: {
             </label>
             <label class="field check">
               <input type="checkbox" name="confirm" value="yes" required />
-              <span>全員に贈る（取り消しはメンバーごとに「減らす」で）</span>
+              <span>全員に贈る（取り消しはメンバーごとに「減らす」で。ロールは「ロール」のページから外せます）</span>
             </label>
             <button type="submit" class="ok">
               🎁 贈る
