@@ -1,9 +1,10 @@
-import { and, eq } from 'drizzle-orm';
-import type { EconomyConfig } from '../config.js';
+import { and, desc, eq, notLike } from 'drizzle-orm';
+import type { EconomyConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { omikuji } from '../db/schema.js';
 import { jstDate } from './activity.js';
 import { addCoins, walletOf } from './economy.js';
+import { addTickets, TICKET_LABEL } from './tickets.js';
 
 /**
  * おみくじ（1 日 1 回のログボ）。運勢に応じて花びらがもらえる。ご縁には影響しない。
@@ -52,9 +53,77 @@ export function omikujiRange(economy: Pick<EconomyConfig, 'omikujiBase'>): strin
   return `${Math.min(...amounts)}〜${Math.max(...amounts)}`;
 }
 
+/** 連続日数: 今日（または昨日）から、1 日も空けずに引いた日数。今日まだ引いていなければ昨日までの分 */
+export function streakOf(dates: readonly string[], today: string): number {
+  const set = new Set(dates);
+  const prev = (d: string) => jstDate(new Date(new Date(`${d}T12:00:00+09:00`).getTime() - 86_400_000));
+  let d = set.has(today) ? today : prev(today);
+  let n = 0;
+  while (set.has(d)) {
+    n++;
+    d = prev(d);
+  }
+  return n;
+}
+
+/** その日数でもらえるおまけ */
+export const streakHits = (cfg: OmikujiStreakConfig, streak: number): StreakReward[] =>
+  cfg.rewards.filter((r) => (r.repeat ? streak > 0 && streak % r.days === 0 : streak === r.days));
+
+/** 次のおまけ（いちばん近いもの）。何日後か */
+export function nextStreakReward(cfg: OmikujiStreakConfig, streak: number): { reward: StreakReward; left: number } | undefined {
+  let best: { reward: StreakReward; left: number } | undefined;
+  for (const r of cfg.rewards) {
+    const at = r.repeat ? (Math.floor(streak / r.days) + 1) * r.days : r.days;
+    if (at <= streak) continue;
+    if (!best || at - streak < best.left) best = { reward: r, left: at - streak };
+  }
+  return best;
+}
+
+/** おまけの中身（「🪙銭 50・🎁物御籤の無料券 ×1・<@&ロール>」） */
+export function streakRewardText(r: StreakReward, economy: Pick<EconomyConfig, 'currencyEmoji' | 'currencyName'>): string {
+  return [
+    ...(r.coins > 0 ? [`${economy.currencyEmoji}${economy.currencyName} ${r.coins.toLocaleString('ja-JP')}`] : []),
+    ...(r.ticket !== 'none' && r.tickets > 0 ? [`${TICKET_LABEL[r.ticket].emoji}${TICKET_LABEL[r.ticket].name} ×${r.tickets}`] : []),
+    ...(r.roleId ? [`<@&${r.roleId}>`] : []),
+  ].join('・');
+}
+
+/** 掲示に書く、おまけの一覧（「7 日ごとに …／30 日目に …」。なければ「なし」） */
+export function describeStreakRewards(cfg: OmikujiStreakConfig, economy: Pick<EconomyConfig, 'currencyEmoji' | 'currencyName'>): string {
+  const list = [...cfg.rewards].sort((a, b) => a.days - b.days).filter((r) => streakRewardText(r, economy));
+  return list.length ? list.map((r) => `${r.days} 日${r.repeat ? 'ごとに' : '目に'} ${streakRewardText(r, economy)}`).join('／') : 'なし';
+}
+
+/** おみくじを引いた日（もう 1 回の分は除く） */
+async function drawnDates(db: Db, memberId: string): Promise<string[]> {
+  const rows = await db
+    .select({ date: omikuji.date })
+    .from(omikuji)
+    .where(and(eq(omikuji.memberId, memberId), notLike(omikuji.date, '%#%')))
+    .orderBy(desc(omikuji.date))
+    .limit(800);
+  return rows.map((r) => r.date);
+}
+
+export async function omikujiStreak(db: Db, memberId: string, now: Date): Promise<number> {
+  return streakOf(await drawnDates(db, memberId), jstDate(now));
+}
+
 export type OmikujiResult =
-  | { status: 'drawn'; fortune: Fortune; amount: number; balance: number; sayings: { label: string; text: string }[] }
-  | { status: 'already'; fortune: Fortune };
+  | {
+      status: 'drawn';
+      fortune: Fortune;
+      amount: number;
+      balance: number;
+      sayings: { label: string; text: string }[];
+      /** 連続日数（もう 1 回のときは 0） */
+      streak: number;
+      /** 今日もらえたおまけ（ロールは呼び出し側が付ける） */
+      bonus: StreakReward[];
+    }
+  | { status: 'already'; fortune: Fortune; streak: number };
 
 /** ショップの「もう 1 回」は、その日の 2 回目として別の日付の印で記録する（1 日 1 回まで） */
 const extraKey = (date: string) => `${date}#2`;
@@ -72,25 +141,33 @@ export async function drawOmikuji(
   memberId: string,
   now: Date,
   rand: Rand = Math.random,
-  opts: { extra?: boolean } = {},
+  opts: { extra?: boolean; streak?: OmikujiStreakConfig } = {},
 ): Promise<OmikujiResult> {
   const date = opts.extra ? extraKey(jstDate(now)) : jstDate(now);
   const fortune = drawFortune(rand);
   const amount = omikujiReward(economy, fortune);
   // (member_id, date) が主キーなので、同じ日に 2 回目は入らない（連打しても 1 回だけ）
   // 引いた記録と花びらを一緒に（途中で失敗したら、その日はまた引ける）
-  const balance = await db.transaction(async (tx) => {
+  // 連続日数のおまけも同じ記録と一緒に（その日の記録は 1 つだけなので、おまけも 1 回だけ）
+  const done = await db.transaction(async (tx) => {
     const inserted = await tx.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount }).onConflictDoNothing().returning();
     if (!inserted.length) return undefined;
-    return amount > 0 ? addCoins(tx, memberId, amount, 'omikuji', { date, fortune: fortune.key }) : (await walletOf(tx, memberId)).balance;
+    let balance = amount > 0 ? await addCoins(tx, memberId, amount, 'omikuji', { date, fortune: fortune.key }) : (await walletOf(tx, memberId)).balance;
+    const streak = opts.extra ? 0 : streakOf(await drawnDates(tx, memberId), date);
+    const bonus = opts.streak && streak ? streakHits(opts.streak, streak) : [];
+    for (const b of bonus) {
+      if (b.coins > 0) balance = await addCoins(tx, memberId, b.coins, 'omikuji_streak', { date, streak, days: b.days });
+      if (b.ticket !== 'none' && b.tickets > 0) await addTickets(tx, memberId, b.ticket, b.tickets);
+    }
+    return { balance, streak, bonus };
   });
-  if (balance === undefined) {
+  if (done === undefined) {
     const [row] = await db
       .select()
       .from(omikuji)
       .where(and(eq(omikuji.memberId, memberId), eq(omikuji.date, date)));
-    return { status: 'already', fortune: FORTUNES.find((f) => f.key === row?.fortune) ?? fortune };
+    return { status: 'already', fortune: FORTUNES.find((f) => f.key === row?.fortune) ?? fortune, streak: await omikujiStreak(db, memberId, now) };
   }
   const sayings = SAYINGS.map((s) => ({ label: s.label, text: s.list[Math.floor(rand() * s.list.length)]! }));
-  return { status: 'drawn', fortune, amount, balance, sayings };
+  return { status: 'drawn', fortune, amount, balance: done.balance, sayings, streak: done.streak, bonus: done.bonus };
 }

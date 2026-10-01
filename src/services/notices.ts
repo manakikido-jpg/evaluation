@@ -9,7 +9,7 @@ import { audit } from './audit.js';
 import { memberCommandsText } from './commandList.js';
 import { coreName } from '../lib/names.js';
 import { DEFAULT_GUIDES, DEFAULT_NOTICES, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
-import { omikujiRange } from './omikuji.js';
+import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
 
 /**
@@ -214,6 +214,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
     { name: '招待のお礼', value: String(e.inviteReward), note: '招待した人が参拝者になったときにもらえる量' },
     { name: 'おみくじの銭', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
+    { name: 'おみくじのおまけ', value: describeStreakRewards(cfg.omikujiStreak, e), note: 'おみくじを毎日続けたおまけ（設定の「おみくじを続けたおまけ」）' },
     { name: 'コアタイム', value: describeCoreTime(cfg.coreTime), note: 'コアタイムの曜日と時間' },
     { name: 'コアタイム倍率', value: coreTimeRate(e), note: 'コアタイムの通話でもらえる量の倍率' },
     { name: '奉納割引', value: String(e.boostDiscountPercent), note: 'ブーストしている人の授与品の割引（%）' },

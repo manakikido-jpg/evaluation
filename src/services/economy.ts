@@ -14,6 +14,7 @@ export type CoinReason =
   | 'shuin_revoke'
   | 'menzaifu'
   | 'omikuji'
+  | 'omikuji_streak'
   | 'join_bonus'
   | 'onboarding'
   | 'invite'
@@ -259,6 +260,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   gacha_reset: '物御籤のリセット（当たりの銭を戻してもらった）',
   gacha_share: '物御籤のおすそ分け',
   onboarding: 'はじめての参拝のお祝い',
+  omikuji_streak: 'おみくじの連続日数のおまけ',
   invite: '招待のお礼',
   invite_active: '招待した人の浮上ボーナス',
   market_buy: '市場で買った',

@@ -22,6 +22,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   shuin_receive: 'issue',
   shuin_revoke: 'issue',
   omikuji: 'issue',
+  omikuji_streak: 'issue',
   join_bonus: 'issue',
   onboarding: 'issue',
   invite: 'issue',

@@ -4,6 +4,7 @@ import type { AdminSession, Application, Omairi, Soudan, SoudanMessage, WebAccou
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
 import { GENDER_LABEL, isGender } from '../../services/admission.js';
 import { recruitWaits } from '../../services/recruit.js';
+import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { Avatar, Layout } from './layout.js';
 
 type Names = Map<string, string>;
@@ -672,6 +673,87 @@ function WebAccessRow(props: { session: AdminSession; entry: WebAccessEntry; nam
   );
 }
 
+/** おみくじの連続日数のおまけ（5 行まで。日数を空にした行は使わない） */
+function StreakRewards(props: { cfg: GuildConfig; roles: { id: string; name: string }[] }) {
+  const rows = props.cfg.omikujiStreak.rewards;
+  const e = props.cfg.economy;
+  const known = (id?: string) => props.roles.some((r) => r.id === id);
+  return (
+    <div class="streak-rewards">
+      <h3>🔥 おみくじを続けたおまけ</h3>
+      <p class="note">
+        /おみくじ を毎日続けると、決めた日数の日におまけを渡します（1 日空けると 1 日目から）。「くり返す」にすると、その日数ごと（7 日なら 7・14・21 日目…）に毎回。称号ロールは一度付いたら、続かなくなってもそのまま。ロールは「ロール」のページで先に作ってください（役目のない・危ない権限のないロールだけ選べます）。日数を空にした行は使いません。
+      </p>
+      <div class="table-wrap">
+        <table class="compact streak-table">
+          <thead>
+            <tr>
+              <th>日数</th>
+              <th>くり返す</th>
+              <th>{e.currencyName}</th>
+              <th>券</th>
+              <th>枚数</th>
+              <th>称号ロール</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[0, 1, 2, 3, 4].map((i) => {
+              const r = rows[i];
+              return (
+                <tr>
+                  <td>
+                    <input type="number" name={`streak.${i}.days`} min={2} max={365} value={r ? String(r.days) : ''} aria-label={`${i + 1} 行目の日数`} />
+                  </td>
+                  <td>
+                    <input type="checkbox" name={`streak.${i}.repeat`} value="yes" checked={r ? r.repeat : true} aria-label={`${i + 1} 行目をくり返す`} />
+                  </td>
+                  <td>
+                    <input type="number" name={`streak.${i}.coins`} min={0} max={1000000} value={String(r?.coins ?? 0)} aria-label={`${i + 1} 行目の${e.currencyName}`} />
+                  </td>
+                  <td>
+                    <select name={`streak.${i}.ticket`} aria-label={`${i + 1} 行目の券`}>
+                      <option value="none" selected={!r || r.ticket === 'none'}>
+                        なし
+                      </option>
+                      {TICKET_GROUPS.map((g) => (
+                        <optgroup label={g.label}>
+                          {g.kinds.map((k) => (
+                            <option value={k} selected={r?.ticket === k}>
+                              {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input type="number" name={`streak.${i}.tickets`} min={0} max={100} value={String(r?.tickets ?? 0)} aria-label={`${i + 1} 行目の券の枚数`} />
+                  </td>
+                  <td>
+                    <select name={`streak.${i}.roleId`} aria-label={`${i + 1} 行目の称号ロール`}>
+                      <option value="">なし</option>
+                      {r?.roleId && !known(r.roleId) && (
+                        <option value={r.roleId} selected>
+                          （いまのロール）
+                        </option>
+                      )}
+                      {props.roles.map((x) => (
+                        <option value={x.id} selected={r?.roleId === x.id}>
+                          @{x.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage(props: {
   session: AdminSession;
   cfg: GuildConfig;
@@ -684,6 +766,8 @@ export function SettingsPage(props: {
   textChannels?: { id: string; name: string; category?: string }[];
   /** ロール（呼び鈴で呼べるロールを選ぶ） */
   roles?: { id: string; name: string }[];
+  /** おみくじのおまけで付けられるロール（役目のない・危ない権限のないもの） */
+  streakRoles?: { id: string; name: string }[];
   /** 物御籤の回数 */
   gachaStats?: { total: number; spent: number; byTier: Record<GachaTier, number>; players: number };
   /** BOT が「メンション不可」のロールも鳴らせるか（分からなければ undefined） */
@@ -770,6 +854,7 @@ export function SettingsPage(props: {
             <Num name="onboardingReward" label="「はじめての参拝」を全部できたときのお祝い（1 人 1 回。0 でなし）" value={e.onboardingReward} file={f.onboardingReward} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
           </div>
+          <StreakRewards cfg={cfg} roles={props.streakRoles ?? []} />
           <Save at="coins" />
         </section>
         <section class="card anchor" id="sec-rooms">

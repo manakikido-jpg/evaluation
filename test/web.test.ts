@@ -562,11 +562,18 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     }
     // 物御籤の値（物御籤のページで変える）は、設定を保存しても残る
     const { saveOverrides, overridesSchema: os } = await import('../src/services/settings.js');
-    await saveOverrides(db, os.parse({ gacha: { price: 777, enabled: false } }), GUJI);
+    // カジノ（カジノのページで変える）・おみくじのおまけ（フォームにないとき）も残る
+    await saveOverrides(
+      db,
+      os.parse({ gacha: { price: 777, enabled: false }, casino: { slotMachines: [3, 'random'] }, omikujiStreak: { rewards: [{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }] } }),
+      GUJI,
+    );
     const res = await post('/settings', g, form);
     expect(res.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.economy.menzaifuPrice).toBe(800);
     expect(store.current.gacha).toMatchObject({ price: 777, enabled: false });
+    expect(store.current.casino.slotMachines).toEqual([3, 'random']);
+    expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
 
     // 項目の下の「保存する」（通話部屋の値段など）は、その項目に戻って「保存しました」を出す
@@ -1635,6 +1642,59 @@ describe('物御籤（管理画面）', () => {
     expect(html).toContain('3,000');
     expect((await get('/economy?range=1y', s)).status).toBe(200);
     expect((await app.request('/economy')).status).toBe(302);
+  });
+
+  it('おみくじを続けたおまけ: 設定で決める（日数が空の行は使わない・危ないロールは選べない）', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const TITLE = '980000000000000060';
+    const saved = roleList;
+    roleList = [
+      { id: TITLE, name: '皆勤', position: 1, managed: false, color: 0, permissions: '0' },
+      { id: '980000000000000061', name: '危ない', position: 1, managed: false, color: 0, permissions: '8' },
+    ];
+    try {
+      const g = await login(GUJI);
+      const page = await (await get('/settings', g)).text();
+      expect(page).toContain('🔥 おみくじを続けたおまけ');
+      expect(page).toContain('name="streak.0.days" min="2" max="365" value="7"');
+      const roleSelect = page.slice(page.indexOf('name="streak.0.roleId"'), page.indexOf('</select>', page.indexOf('name="streak.0.roleId"')));
+      expect(roleSelect).toContain(`value="${TITLE}">@皆勤`);
+      expect(roleSelect).not.toContain('@危ない');
+      const form = Object.fromEntries(
+        [...page.matchAll(/name="([^"]+)"[^>]*?value="([^"]*)"/g)].map((m) => [m[1]!, m[2]!]));
+      delete form._csrf;
+      const base: Record<string, string> = {
+        ...form,
+        at: 'coins',
+        'streak.0.days': '3',
+        'streak.0.repeat': 'yes',
+        'streak.0.coins': '20',
+        'streak.0.ticket': 'none',
+        'streak.0.tickets': '0',
+        'streak.0.roleId': '',
+        'streak.1.days': '30',
+        'streak.1.coins': '0',
+        'streak.1.ticket': 'gacha_free',
+        'streak.1.tickets': '2',
+        'streak.1.roleId': TITLE,
+        'streak.2.days': '',
+      };
+      for (const k of Object.keys(base)) if (/^streak\.[2-4]\./.test(k) && k.endsWith('.days')) base[k] = '';
+      delete (base as Record<string, string>)['streak.1.repeat'];
+      const res = await post(g, '/settings', base);
+      expect(res.headers.get('location')).toBe('/settings?msg=saved&at=coins#sec-coins');
+      expect(store.current.omikujiStreak.rewards).toEqual([
+        { days: 3, repeat: true, coins: 20, ticket: 'none', tickets: 0 },
+        { days: 30, repeat: false, coins: 0, ticket: 'gacha_free', tickets: 2, roleId: TITLE },
+      ]);
+      expect((await post(g, '/settings', { ...base, 'streak.1.roleId': '980000000000000061' })).headers.get('location')).toContain('settings_invalid');
+      expect((await post(g, '/settings', { ...base, 'streak.0.days': '1' })).headers.get('location')).toContain('settings_invalid');
+      expect(store.current.omikujiStreak.rewards).toHaveLength(2);
+    } finally {
+      roleList = saved;
+    }
   });
 
   it('🎁 全員にプレゼント（宮司だけ・二度押しでも 1 回・お知らせ）', async () => {

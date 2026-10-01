@@ -62,14 +62,16 @@ describe('🎰 カジノ: 賭けの決まり', () => {
     expect(await checkBet(db, ccfg(), A, 'slots', 5, NOW)).toBe('bad_bet');
     expect(await checkBet(db, ccfg(), A, 'slots', 1001, NOW)).toBe('bad_bet');
     expect(await checkBet(db, ccfg(), C, 'slots', 100, NOW)).toBe('poor');
+    // 銭の記録の時刻は本当の今なので、上限は本当の今で確かめる
+    const now = new Date();
     const lim = ccfg({ dailyBetLimit: 250 });
-    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), NOW);
-    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), NOW);
-    expect(await todayBets(db, A, NOW)).toBe(200);
-    expect(await checkBet(db, lim, A, 'slots', 100, NOW)).toBe('limit');
-    expect(await checkBet(db, lim, A, 'slots', 50, NOW)).toBe('ok');
+    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), now);
+    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), now);
+    expect(await todayBets(db, A, now)).toBe(200);
+    expect(await checkBet(db, lim, A, 'slots', 100, now)).toBe('limit');
+    expect(await checkBet(db, lim, A, 'slots', 50, now)).toBe('ok');
     // 次の日はまた賭けられる
-    expect(await checkBet(db, lim, A, 'slots', 100, new Date(NOW.getTime() + 86_400_000))).toBe('ok');
+    expect(await checkBet(db, lim, A, 'slots', 100, new Date(now.getTime() + 86_400_000))).toBe('ok');
   });
 });
 

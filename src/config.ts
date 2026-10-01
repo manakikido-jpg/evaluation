@@ -215,6 +215,27 @@ export const TICKET_KINDS = [
 ] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
 
+/** おみくじの連続日数のおまけ（days 日続けた日に。repeat: days 日ごとに毎回。ロールは一度付いたらそのまま） */
+export const streakRewardSchema = z.object({
+  days: z.number().int().min(2).max(365),
+  repeat: z.boolean().default(true),
+  coins: z.number().int().min(0).max(1_000_000).default(0),
+  ticket: z.enum([...TICKET_KINDS, 'none']).default('none'),
+  tickets: z.number().int().min(0).max(100).default(0),
+  roleId: snowflake.optional(),
+});
+export type StreakReward = z.infer<typeof streakRewardSchema>;
+export const omikujiStreakSchema = z.object({
+  rewards: z
+    .array(streakRewardSchema)
+    .max(5)
+    .default([
+      { days: 7, repeat: true, coins: 50, ticket: 'gacha_free', tickets: 1 },
+      { days: 30, repeat: true, coins: 300, ticket: 'gacha_free', tickets: 3 },
+    ]),
+});
+export type OmikujiStreakConfig = z.infer<typeof omikujiStreakSchema>;
+
 const gachaPrizeSchema = z.object({
   /** 物御籤限定のロール（色守り・称号）を 1 つ（まだ持っていないもの）。全部持っていたら・なければ券 */
   role: z.boolean().default(false),
@@ -442,6 +463,7 @@ export const guildConfigSchema = z
       .default({ omamori: [] }),
     ranks: z.array(rankSchema).min(1),
     economy: economySchema.default(economySchema.parse({})),
+    omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),
     /** ブースト（奉納）のお礼の文面。{名前} は奉納した人（メンションになるが通知は飛ばない） */

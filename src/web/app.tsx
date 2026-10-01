@@ -1763,6 +1763,7 @@ export function createWebApp(deps: WebDeps) {
         coinsNonce={randomUUID()}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
+        streakRoles={allRoles.filter((r) => giftableRole(cfg, r, allRoles, deps.botId)).map((r) => ({ id: r.id, name: r.name }))}
         gachaStats={await gachaStats(db)}
         botCanMentionAll={botCanMentionAll}
         webAccessNames={await namesOf(db, webAccessEntries(cfg).filter((e) => e.kind === 'member').map((e) => e.id))}
@@ -1847,6 +1848,28 @@ export function createWebApp(deps: WebDeps) {
       gacha: prev.gacha,
       // 経済の見守りの設定は経済のページで変える（ここでは残す）
       economyOps: prev.economyOps,
+      // カジノはカジノのページで変える（ここでは残す）
+      casino: prev.casino,
+      // おみくじの連続日数のおまけ（フォームにあるときだけ。日数が空の行は使わない）
+      omikujiStreak:
+        typeof body['streak.0.days'] === 'string'
+          ? {
+              rewards: [...Array(5).keys()].flatMap((i) => {
+                if (!field(body, `streak.${i}.days`, 4)) return [];
+                const roleId = field(body, `streak.${i}.roleId`, 20);
+                return [
+                  {
+                    days: num(`streak.${i}.days`),
+                    repeat: body[`streak.${i}.repeat`] === 'yes',
+                    coins: num(`streak.${i}.coins`) || 0,
+                    ticket: field(body, `streak.${i}.ticket`, 30) || 'none',
+                    tickets: num(`streak.${i}.tickets`) || 0,
+                    ...(roleId ? { roleId } : {}),
+                  },
+                ];
+              }),
+            }
+          : prev.omikujiStreak,
       // 役職は役職のページで変える（ここでは残す）
       ranks: prev.ranks,
       extraRanks: prev.extraRanks,
@@ -1885,6 +1908,13 @@ export function createWebApp(deps: WebDeps) {
       applyOverrides(fileCfg(), overrides);
     } catch {
       return c.redirect(backTo('settings_invalid'));
+    }
+    // 新しく選んだおまけのロールは、役目のない・危ない権限のないロールだけ
+    const prevStreakRoles = new Set((prev.omikujiStreak.rewards ?? []).map((r) => r.roleId));
+    const streakRoles = (overrides.omikujiStreak.rewards ?? []).flatMap((r) => (r.roleId && !prevStreakRoles.has(r.roleId) ? [r.roleId] : []));
+    if (streakRoles.length) {
+      const all = (await loadRoles()) ?? [];
+      if (streakRoles.some((id) => !all.some((r) => r.id === id && giftableRole(cfg, r, all, deps.botId)))) return c.redirect(backTo('settings_invalid'));
     }
     const before = cfg;
     await saveOverrides(db, overrides, c.get('session').userId);

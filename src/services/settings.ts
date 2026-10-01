@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -55,6 +55,8 @@ export const overridesSchema = z.object({
     .default({}),
   /** 社務所Web で足した役職 */
   extraRanks: z.array(rankSchema.extend({ weight: z.number().int().positive().max(100), name: z.string().trim().min(1).max(20) })).max(20).default([]),
+  /** おみくじの連続日数のおまけ（送られたときは全部置きかえる） */
+  omikujiStreak: z.object({ rewards: z.array(streakRewardSchema).max(5) }).partial().default({}),
   omairi: z.object({ days: z.number().int().positive().max(365), extendDays: z.number().int().min(0).max(365) }).partial().default({}),
   coreTime: coreTimeSchema.partial().default({}),
   rooms: roomsSchema.partial().default({}),
@@ -108,6 +110,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       ],
     },
     economy: { ...base.economy, ...o.economy },
+    omikujiStreak: { ...base.omikujiStreak, ...o.omikujiStreak },
     omairi: { ...base.omairi, ...o.omairi },
     boost: { ...base.boost, ...o.boost },
     coreTime: { ...base.coreTime, ...o.coreTime },

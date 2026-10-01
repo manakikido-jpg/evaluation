@@ -1,13 +1,23 @@
 import { MessageFlags, type ChatInputCommandInteraction, type Interaction } from 'discord.js';
-import type { EconomyConfig, GuildConfig } from '../config.js';
+import type { EconomyConfig, GuildConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { drawOmikuji, type OmikujiResult } from '../services/omikuji.js';
+import { drawOmikuji, nextStreakReward, streakRewardText, type OmikujiResult } from '../services/omikuji.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
+/** 連続日数の行（「🔥 連続 6 日目 ・ あと 1 日で 7 日のおまけ」） */
+export function streakLines(streak: number, bonus: readonly StreakReward[], cfg: OmikujiStreakConfig | undefined, economy: EconomyConfig): string[] {
+  if (!streak) return [];
+  const next = cfg ? nextStreakReward(cfg, streak) : undefined;
+  return [
+    `🔥 連続 **${streak}** 日目${next ? ` ・ あと ${next.left} 日で ${next.reward.days} 日のおまけ` : ''}`,
+    ...bonus.map((b) => `🎁 **${b.days} 日続いたおまけ**: ${streakRewardText(b, economy)}`),
+  ];
+}
+
 /** 引いた結果のカード（みんなに見える） */
-export function omikujiEmbed(r: Extract<OmikujiResult, { status: 'drawn' }>, name: string, economy: EconomyConfig) {
+export function omikujiEmbed(r: Extract<OmikujiResult, { status: 'drawn' }>, name: string, economy: EconomyConfig, streak?: OmikujiStreakConfig) {
   const coin = `${economy.currencyEmoji}${economy.currencyName}`;
   const lines = [
     `**${name}** さんの運勢`,
@@ -16,7 +26,8 @@ export function omikujiEmbed(r: Extract<OmikujiResult, { status: 'drawn' }>, nam
     ...r.sayings.map((s) => `${s.label} … ${s.text}`),
     '',
     ...(r.amount > 0 ? [`${coin} **+${r.amount}**（いま ${r.balance} 枚）`] : []),
-    '-# おみくじは 1 日 1 回。日本時間の 0 時にまた引けます',
+    ...streakLines(r.streak, r.bonus, streak, economy),
+    `-# おみくじは 1 日 1 回。日本時間の 0 時にまた引けます${streak?.rewards.length ? '（毎日続けるとおまけがあります。1 日空けると 1 日目から）' : ''}`,
   ];
   return { title: `⛩ おみくじ ― ${r.fortune.name}`, description: lines.join('\n'), color: r.fortune.color };
 }
@@ -48,11 +59,17 @@ export class OmikujiApp {
       await i.reply({ content: `おみくじは <#${home}> で引けます。`, ...EPHEMERAL });
       return;
     }
-    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date());
+    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak });
     if (r.status === 'already') {
-      await i.reply({ content: `今日はもう引きました（${r.fortune.name}）。日本時間の 0 時にまた引けます。`, ...EPHEMERAL });
+      const streak = r.streak ? `（🔥 連続 ${r.streak} 日目）` : '';
+      await i.reply({ content: `今日はもう引きました（${r.fortune.name}）${streak}。日本時間の 0 時にまた引けます。`, ...EPHEMERAL });
       return;
     }
-    await i.reply({ embeds: [omikujiEmbed(r, i.member.displayName, cfg.economy)], allowedMentions: { parse: [] } });
+    await i.reply({ embeds: [omikujiEmbed(r, i.member.displayName, cfg.economy, cfg.omikujiStreak)], allowedMentions: { parse: [] } });
+    // おまけの称号ロール（もう持っていれば何もしない）
+    for (const b of r.bonus) {
+      if (!b.roleId || i.member.roles.cache.has(b.roleId)) continue;
+      await i.member.roles.add(b.roleId, `おみくじ ${b.days} 日続いたおまけ`).catch((err) => logger.warn({ err, roleId: b.roleId }, 'omikuji streak role failed'));
+    }
   }
 }

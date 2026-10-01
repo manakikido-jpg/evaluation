@@ -772,3 +772,7 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .fields .access-fieldset { grid-column: 1 / -1; display: block; }
 .access-fieldset label.check { display: block; margin: 4px 0; }
 .access-fieldset select { margin-left: 6px; }
+/* おみくじを続けたおまけ（設定） */
+.streak-rewards { margin-top: 16px; }
+.streak-table input[type="number"] { width: 6.5em; }
+.streak-table select { max-width: 14em; }
