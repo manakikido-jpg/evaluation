@@ -1,4 +1,4 @@
-import { MessageFlags, type ChatInputCommandInteraction, type Interaction } from 'discord.js';
+import { MessageFlags, type ChatInputCommandInteraction, type GuildMember, type Interaction } from 'discord.js';
 import type { EconomyConfig, GuildConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
@@ -14,6 +14,14 @@ export function streakLines(streak: number, bonus: readonly StreakReward[], cfg:
     `🔥 連続 **${streak}** 日目${next ? ` ・ あと ${next.left} 日で ${next.reward.days} 日のおまけ` : ''}`,
     ...bonus.map((b) => `🎁 **${b.days} 日続いたおまけ**: ${streakRewardText(b, economy)}`),
   ];
+}
+
+/** 通話に入っていないと引けないとき、その案内（引けるなら undefined）。AFK・数えない通話は入っていないのと同じ */
+export function omikujiVoiceBlock(economy: Pick<EconomyConfig, 'omikujiVoiceOnly' | 'excludedVoiceChannelIds'>, member: Pick<GuildMember, 'voice' | 'guild'>): string | undefined {
+  if (!economy.omikujiVoiceOnly) return undefined;
+  const ch = member.voice.channelId;
+  if (ch && ch !== member.guild.afkChannelId && !economy.excludedVoiceChannelIds.includes(ch)) return undefined;
+  return '🔊 おみくじは **通話に入っているときだけ** 引けます。どこかの通話に入ってから、もう一度どうぞ（AFK の通話はのぞく）。';
 }
 
 /** 引いた結果のカード（みんなに見える） */
@@ -57,6 +65,11 @@ export class OmikujiApp {
     const home = cfg.channels.omikuji ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
     if (home && i.channelId !== home) {
       await i.reply({ content: `おみくじは <#${home}> で引けます。`, ...EPHEMERAL });
+      return;
+    }
+    const blocked = omikujiVoiceBlock(cfg.economy, i.member);
+    if (blocked) {
+      await i.reply({ content: blocked, ...EPHEMERAL });
       return;
     }
     const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak });

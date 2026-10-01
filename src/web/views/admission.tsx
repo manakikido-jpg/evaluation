@@ -946,6 +946,10 @@ export function SettingsPage(props: {
             <Num name="inviteActiveDays" label="浮上ボーナスを続ける日数（参拝者になってから）" value={e.inviteActiveDays} file={f.inviteActiveDays} min={1} />
             <Num name="onboardingReward" label="「はじめての参拝」を全部できたときのお祝い（1 人 1 回。0 でなし）" value={e.onboardingReward} file={f.onboardingReward} />
             <Num name="omikujiBase" label="おみくじの基本の量（吉でこの量・大吉は 3 倍・凶は半分。0 でなし）" value={e.omikujiBase} file={f.omikujiBase} />
+            <label class="field check">
+              <input type="checkbox" name="omikujiVoiceOnly" value="yes" {...(e.omikujiVoiceOnly ? { checked: true } : {})} />
+              <span>おみくじは通話に入っているときだけ引ける（AFK・数えない通話はのぞく。「もう 1 回」も同じ）</span>
+            </label>
           </div>
           <StreakRewards cfg={cfg} roles={props.streakRoles ?? []} />
           <Save at="coins" />

@@ -575,6 +575,10 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.casino.slotMachines).toEqual([3, 'random']);
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
+    // おみくじの「通話中だけ」はチェックを外すと OFF
+    expect(store.current.economy.omikujiVoiceOnly).toBe(false);
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g), omikujiVoiceOnly: 'yes' });
+    expect(store.current.economy.omikujiVoiceOnly).toBe(true);
 
     // 項目の下の「保存する」（通話部屋の値段など）は、その項目に戻って「保存しました」を出す
     const rooms = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'room.hourly.public': '50', at: 'rooms' });

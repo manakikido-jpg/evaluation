@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { omikujiEmbed } from '../src/discord/omikuji.js';
+import { omikujiEmbed, omikujiVoiceBlock } from '../src/discord/omikuji.js';
 import { walletOf } from '../src/services/economy.js';
 import { describeStreakRewards, drawFortune, drawOmikuji, FORTUNES, nextStreakReward, omikujiRange, omikujiReward, streakOf } from '../src/services/omikuji.js';
 import { ticketsOf } from '../src/services/tickets.js';
@@ -115,6 +115,17 @@ describe('おみくじ', () => {
     const e = omikujiEmbed({ ...r, streak: 7, bonus: sc.rewards }, 'さくら', economy, sc);
     expect(e.description).toContain('🔥 連続 **7** 日目 ・ あと 7 日で 7 日のおまけ');
     expect(e.description).toContain('🎁 **7 日続いたおまけ**: 🪙銭 50・🎁物御籤の無料券 ×1・<@&980000000000000060>');
+  });
+
+  it('通話に入っているときだけ引ける（AFK・数えない通話は入っていないのと同じ。設定で切れる）', () => {
+    const economy = { ...cfg.economy, omikujiVoiceOnly: true, excludedVoiceChannelIds: ['900000000000000003'] };
+    const m = (channelId: string | null) => ({ voice: { channelId }, guild: { afkChannelId: '900000000000000002' } }) as never;
+    expect(cfg.economy.omikujiVoiceOnly).toBe(true);
+    expect(omikujiVoiceBlock(economy, m('900000000000000001'))).toBeUndefined();
+    expect(omikujiVoiceBlock(economy, m(null))).toContain('通話に入っているときだけ');
+    expect(omikujiVoiceBlock(economy, m('900000000000000002'))).toBeDefined();
+    expect(omikujiVoiceBlock(economy, m('900000000000000003'))).toBeDefined();
+    expect(omikujiVoiceBlock({ ...economy, omikujiVoiceOnly: false }, m(null))).toBeUndefined();
   });
 
   it('カード: 運勢・一言・もらった花びら', async () => {

@@ -58,7 +58,7 @@ import {
 import { customHoldingsOf, customName, listCustomTickets, useCustom } from '../services/customTickets.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket } from '../services/tickets.js';
-import { omikujiEmbed } from './omikuji.js';
+import { omikujiEmbed, omikujiVoiceBlock } from './omikuji.js';
 import { panelMessage } from './panels.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -646,6 +646,8 @@ export class GachaApp {
     const today = await omikujiToday(this.db, i.user.id, now);
     if (!today.drawn) return '先に今日のおみくじを引いてください（券は使っていません）。';
     if (today.extraUsed) return '今日の「もう 1 回」はもう使いました（券は使っていません）。また明日どうぞ。';
+    const blocked = omikujiVoiceBlock(cfg.economy, i.member);
+    if (blocked) return `${blocked}（券は使っていません）`;
     if (!(await useTicket(this.db, i.user.id, 'omikuji_extra'))) return '🎴 おみくじもう 1 回券がありません。';
     const d = await drawOmikuji(this.db, cfg.economy, i.user.id, now, Math.random, { extra: true });
     if (d.status !== 'drawn') {

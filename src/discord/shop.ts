@@ -50,7 +50,7 @@ import {
 
 /** サーバーブースト（奉納）している人 */
 const isBooster = (i: { member: { premiumSince: Date | null } }) => i.member.premiumSince !== null;
-import { omikujiEmbed } from './omikuji.js';
+import { omikujiEmbed, omikujiVoiceBlock } from './omikuji.js';
 import { hanafubukiMessage, myColorConfirm, myColorPicker, otoshidamaPickChannel, presentConfirm, presentPickTarget, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -350,6 +350,8 @@ export class ShopApp {
     const today = await omikujiToday(this.db, i.user.id, new Date());
     if (!today.drawn) return `先に今日のおみくじを引いてください（${this.coinName}は減っていません）。`;
     if (today.extraUsed) return '今日の「もう 1 回」は使いました。また明日どうぞ。';
+    const blocked = omikujiVoiceBlock(cfg.economy, i.member);
+    if (blocked) return `${blocked}（${this.coinName}は減っていません）`;
     const r = await buySimple(this.db, item, i.user.id, {}, new Date(), this.price(i, item), discount);
     if (r.status !== 'ok') return this.insufficientText(r)!;
     const d = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { extra: true });

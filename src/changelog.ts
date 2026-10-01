@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-02-omikuji-voice-only',
+    date: '2026-10-02',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '🔊 おみくじは通話に入っているときだけ',
+    items: [
+      '/おみくじ は、どこかの通話に入っているときだけ引ける（AFK の通話はのぞく。「もう 1 回」も同じ）',
+      '設定 → 銭と免罪符 の「おみくじは通話に入っているときだけ引ける」で切り替えられる（はじめは ON）',
+    ],
+  },
+  {
     id: '2026-10-02-notify-ok-ng',
     date: '2026-10-02',
     kind: 'new',

@@ -216,6 +216,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
     { name: '招待のお礼', value: String(e.inviteReward), note: '招待した人が参拝者になったときにもらえる量' },
     { name: 'おみくじの銭', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
+    { name: 'おみくじを引けるとき', value: e.omikujiVoiceOnly ? '通話に入っているとき' : 'いつでも', note: 'おみくじを引ける条件（設定の「通話に入っているときだけ」）' },
     { name: '募集の通知先', value: notifyReady(cfg) ? '🔔通知OK の人' : '役職のある人みんな', note: '募集・「すべての役職」で鳴る人（通知 OK／NG を用意すると「🔔通知OK の人」）' },
     { name: 'おみくじのおまけ', value: describeStreakRewards(cfg.omikujiStreak, e), note: 'おみくじを毎日続けたおまけ（設定の「おみくじを続けたおまけ」）' },
     { name: 'コアタイム', value: describeCoreTime(cfg.coreTime), note: 'コアタイムの曜日と時間' },

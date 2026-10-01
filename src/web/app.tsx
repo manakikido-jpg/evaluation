@@ -1875,6 +1875,7 @@ export function createWebApp(deps: WebDeps) {
         shuinGive: num('shuinGive'),
         shuinReceive: num('shuinReceive'),
         omikujiBase: num('omikujiBase'),
+        omikujiVoiceOnly: body.omikujiVoiceOnly === 'yes',
         joinBonus: num('joinBonus'),
         giftMin: num('giftMin'),
         giftMax: num('giftMax'),
