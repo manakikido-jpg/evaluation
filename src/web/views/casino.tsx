@@ -7,7 +7,7 @@ import { cardText, isRed, rankText, SUITS, suitOf } from '../../services/casino/
 import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState } from '../../services/casino/casino.js';
 import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
 import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
-import { rouletteColor, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
+import { rouletteColor, rouletteMaxOf, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
 import { assetUrl } from '../assets.js';
@@ -710,7 +710,7 @@ export function RoulettePage(p: GamePage) {
       </section>
       <RouletteBoard action="/casino/roulette" csrf={csrf} casino={p.casino} coin={p.me.coin} number={s?.number} submitLabel="🎡 回す" memoryKey="solo" />
       <Rules>
-        0〜36 の 37 マス（ヨーロピアン）。チップを選んでマスを押すと置けます（何か所でも・{ROULETTE_MAX_SPOTS} か所まで）。数字 1 つは 36 倍、赤・黒・奇数・偶数・1〜18・19〜36 は 2 倍、1st 12 などのまとまりと「2:1」（その列）は 3 倍。0 は数字にしか入りません。
+        0〜36 の 37 マス（ヨーロピアン）。チップを選んでマスを押すと置けます（何か所でも・{ROULETTE_MAX_SPOTS} か所まで。1 か所 {rouletteMaxOf(p.casino).toLocaleString('ja-JP')} 枚まで）。数字 1 つは 36 倍、赤・黒・奇数・偶数・1〜18・19〜36 は 2 倍、1st 12 などのまとまりと「2:1」（その列）は 3 倍。0 は数字にしか入りません。
       </Rules>
     </CasinoLayout>
   );

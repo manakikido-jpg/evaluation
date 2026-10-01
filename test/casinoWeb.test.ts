@@ -379,6 +379,9 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect((await pick([['access', 'role']])).headers.get('location')).toBe('/economy/casino?msg=no_role_picked');
     expect((await pick([['access', 'role'], ['accessRoleId', '760000000000000555']])).headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino).toMatchObject({ requireRank: false, accessRoleId: '760000000000000555' });
+    // ルーレットの 1 か所の最高
+    expect((await pick([['access', 'all'], ['rouletteMaxBet', '20000']])).headers.get('location')).toBe('/economy/casino?msg=saved');
+    expect((await loadOverrides(db)).casino.rouletteMaxBet).toBe(20000);
     await pick([['access', 'all']]);
     const all = (await loadOverrides(db)).casino;
     expect(all.requireRank).toBe(false);

@@ -185,6 +185,15 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 5 }], seq([7]), NOW)).status).toBe('bad_bet');
     // 1 か所は最高まで、合計は最高 × 10 まで
     expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 1000 }, { on: 'black', amount: 1000 }], seq([0]), NOW)).status).toBe('ok');
+    // ルーレットだけ 1 か所の最高を別に決められる（ふつうの最高 1000 のまま 5000 まで）
+    await addCoins(db, B, 50_000, 'admin_grant');
+    const big = ccfg({ rouletteMaxBet: 5000, dailyBetLimit: 0 });
+    expect((await playRoulette(db, ccfg(), B, [{ on: 'red', amount: 5000 }], seq([0]), NOW)).status).toBe('bad_bet');
+    expect((await playRoulette(db, big, B, [{ on: 'red', amount: 5000 }, { on: 'black', amount: 5000 }], seq([0]), NOW)).status).toBe('ok');
+    expect((await playRoulette(db, big, B, [{ on: 'red', amount: 5001 }], seq([0]), NOW)).status).toBe('bad_bet');
+    const { rouletteMaxOf } = await import('../src/services/casino/roulette.js');
+    expect(rouletteMaxOf({ minBet: 10, maxBet: 1000, rouletteMaxBet: 0 })).toBe(1000);
+    expect(rouletteMaxOf({ minBet: 10, maxBet: 1000, rouletteMaxBet: 20000 })).toBe(20000);
   });
 
   it('ルーレット・バカラ', async () => {

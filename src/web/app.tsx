@@ -1297,6 +1297,7 @@ export function createWebApp(deps: WebDeps) {
       ...(access === 'role' ? { accessRoleId: roleId, ...(roleName ? { accessRoleName: roleName } : {}) } : {}),
       minBet: int('minBet'),
       maxBet: int('maxBet'),
+      rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
       games: CASINO_GAMES.filter((g) => list.includes(g)),
       knownGames: [...CASINO_GAMES],

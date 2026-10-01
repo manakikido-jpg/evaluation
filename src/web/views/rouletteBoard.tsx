@@ -1,5 +1,5 @@
 import type { CasinoConfig } from '../../config.js';
-import { rouletteBetLabel, rouletteColor, rouletteMultiplier, ROULETTE_BETS, ROULETTE_MAX_SPOTS, ROULETTE_ORDER, type RouletteBet } from '../../services/casino/roulette.js';
+import { rouletteBetLabel, rouletteColor, rouletteMaxOf, rouletteMultiplier, ROULETTE_BETS, ROULETTE_MAX_SPOTS, ROULETTE_ORDER, type RouletteBet } from '../../services/casino/roulette.js';
 import type { Coin } from './casino.js';
 
 /**
@@ -29,7 +29,9 @@ export function RouletteBoard(p: {
   memoryKey: string;
   disabled?: boolean;
 }) {
-  const chips = [...new Set([p.casino.minBet, 50, 100, 500, 1000, 5000])].filter((n) => n >= p.casino.minBet && n <= p.casino.maxBet).sort((a, b) => a - b);
+  // 1 か所の最高（ルーレットだけ別に決められる）。大きい賭けのチップも出す
+  const max = rouletteMaxOf(p.casino);
+  const chips = [...new Set([p.casino.minBet, 50, 100, 500, 1000, 5000, 10000, 50000, 100000])].filter((n) => n >= p.casino.minBet && n <= max).sort((a, b) => a - b);
   const hit = (bet: RouletteBet) => (p.number !== undefined && p.number !== null && rouletteMultiplier(bet, p.number) > 0 ? ' hit' : '');
   const Cell = (q: { bet: RouletteBet; cls: string; label: string; title: string }) => (
     <button type="button" class={`c-rb-cell ${q.cls}${hit(q.bet)}`} data-bet={q.bet} title={q.title} disabled={p.disabled}>
@@ -37,7 +39,7 @@ export function RouletteBoard(p: {
     </button>
   );
   return (
-    <form method="post" action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(p.casino.maxBet)} data-spots={String(ROULETTE_MAX_SPOTS)}>
+    <form method="post" action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(max)} data-spots={String(ROULETTE_MAX_SPOTS)}>
       <input type="hidden" name="_csrf" value={p.csrf} />
       {Object.entries(p.hidden ?? {}).map(([k, v]) => (
         <input type="hidden" name={k} value={v} />

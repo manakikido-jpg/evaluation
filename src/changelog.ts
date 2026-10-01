@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-02-roulette-max',
+    date: '2026-10-02',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🎡 ルーレットにもっと賭けられるように',
+    items: [
+      '社務所の「🎰 カジノ」に「ルーレットの 1 か所に賭けられる最高」（0 でふつうの最高と同じ）。1 人のルーレットとルーレット卓の両方',
+      '盤のチップに 10,000・50,000・100,000 を足した（1 か所の最高まで出る）',
+    ],
+  },
+  {
     id: '2026-10-02-rank-voice-cap',
     date: '2026-10-02',
     kind: 'improve',

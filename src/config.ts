@@ -376,6 +376,8 @@ export const casinoSchema = z.object({
   /** 1 回に賭けられる銭 */
   minBet: z.number().int().min(1).max(1_000_000).default(10),
   maxBet: z.number().int().min(1).max(1_000_000).default(1000),
+  /** ルーレットの 1 か所に賭けられる最高（0 で maxBet と同じ）。合計はこの 10 か所分まで */
+  rouletteMaxBet: z.number().int().min(0).max(10_000_000).default(0),
   /** 1 日（日本時間）に賭けられる合計（0 で上限なし） */
   dailyBetLimit: z.number().int().min(0).max(100_000_000).default(20000),
   /** 遊べるゲーム */

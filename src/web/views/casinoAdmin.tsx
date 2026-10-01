@@ -174,7 +174,11 @@ export function CasinoAdminPage(p: {
               <input type="number" name="maxBet" min={1} max={1000000} value={String(c.maxBet)} required />
             </label>
             <label class="field">
-              <span>1 日（日本時間）に賭けられる合計（0 で上限なし）</span>
+              <span>🎡 ルーレットの 1 か所に賭けられる最高（0 で上の最高と同じ。10 か所まで置けるので、合計はこの 10 倍まで）</span>
+              <input type="number" name="rouletteMaxBet" min={0} max={10000000} value={String(c.rouletteMaxBet)} required />
+            </label>
+            <label class="field">
+              <span>1 日（日本時間）に賭けられる合計（0 で上限なし。大きく賭けられるようにしたら、こちらも上げてください）</span>
               <input type="number" name="dailyBetLimit" min={0} max={100000000} value={String(c.dailyBetLimit)} required />
             </label>
             <fieldset class="perms">

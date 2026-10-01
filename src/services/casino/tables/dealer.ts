@@ -2,7 +2,7 @@ import type { GuildConfig } from '../../../config.js';
 import { bacDeal, bacPayout, BAC_BETS, type BacBet, type BacResult } from '../baccarat.js';
 import { bjPayout, handValue, isBlackjack, type BjResult } from '../blackjack.js';
 import { shuffledShoe, type Rng } from '../cards.js';
-import { isRouletteBet, parseStakes, rouletteMultiplier, rouletteSpin, stakesTotal, type RouletteBet } from '../roulette.js';
+import { isRouletteBet, parseStakes, rouletteMaxOf, rouletteMultiplier, rouletteSpin, stakesTotal, type RouletteBet } from '../roulette.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type Ctx, type Credit, type Form, type Pace, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
@@ -22,6 +22,8 @@ export const IDLE_MINUTES = 10;
 type Base = Who & { lastActive: number };
 
 const validBet = (cfg: GuildConfig, n: number) => Number.isInteger(n) && n >= cfg.casino.minBet && n <= cfg.casino.maxBet;
+/** ルーレットの 1 か所（ルーレットだけ別に最高を決められる） */
+const rlBet = (cfg: GuildConfig, n: number) => Number.isInteger(n) && n >= cfg.casino.minBet && n <= rouletteMaxOf(cfg.casino);
 const idleDue = (seats: Base[], busy: (s: Base) => boolean) => {
   const t = seats.filter((s) => !busy(s)).map((s) => s.lastActive + IDLE_MINUTES * 60_000);
   return t.length ? Math.min(...t) : null;
@@ -349,9 +351,9 @@ export const rouletteTable: TableEngine<RlTableState> = {
       const on = str(f, 'on');
       const amount = intOf(f, 'bet');
       if (!isRouletteBet(on)) return fail('invalid');
-      if (!validBet(ctx.cfg, amount)) return fail('bad_bet');
+      if (!rlBet(ctx.cfg, amount)) return fail('bad_bet');
       if (seat.bets.length >= ROULETTE_MAX_BETS) return fail('too_many');
-      if (rlTotal(seat) + amount > ctx.cfg.casino.maxBet * ROULETTE_MAX_BETS) return fail('bad_bet');
+      if (rlTotal(seat) + amount > rouletteMaxOf(ctx.cfg.casino) * ROULETTE_MAX_BETS) return fail('bad_bet');
       seat.bets.push({ on, amount });
       seat.ready = false;
       if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);
@@ -361,12 +363,12 @@ export const rouletteTable: TableEngine<RlTableState> = {
       // 盤でまとめて置いた分（bets=red:100,n7:50）。置いたら「回す」も押したことにする
       const stakes = parseStakes(str(f, 'bets'));
       if (!stakes) return fail('invalid');
-      if (stakes.some((x) => !validBet(ctx.cfg, x.amount))) return fail('bad_bet');
+      if (stakes.some((x) => !rlBet(ctx.cfg, x.amount))) return fail('bad_bet');
       const merged = new Map(seat.bets.map((b) => [b.on as string, b.amount]));
       for (const x of stakes) merged.set(x.on, (merged.get(x.on) ?? 0) + x.amount);
       if (merged.size > ROULETTE_MAX_BETS) return fail('too_many');
       const add = stakesTotal(stakes);
-      if (rlTotal(seat) + add > ctx.cfg.casino.maxBet * ROULETTE_MAX_BETS) return fail('bad_bet');
+      if (rlTotal(seat) + add > rouletteMaxOf(ctx.cfg.casino) * ROULETTE_MAX_BETS) return fail('bad_bet');
       seat.bets = [...merged].map(([on, amount]) => ({ on: on as RouletteBet, amount }));
       seat.ready = true;
       if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);

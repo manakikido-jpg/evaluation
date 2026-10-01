@@ -64,6 +64,9 @@ export const rouletteSpin = (rng: Rng) => rng(37);
 
 // ───────── いくつもの所に賭ける ─────────
 
+/** ルーレットの 1 か所に賭けられる最高（決めていなければ、ふつうの最高） */
+export const rouletteMaxOf = (c: { minBet: number; maxBet: number; rouletteMaxBet: number }) => (c.rouletteMaxBet > 0 ? Math.max(c.rouletteMaxBet, c.minBet) : c.maxBet);
+
 /** 1 回に賭けられる所の数 */
 export const ROULETTE_MAX_SPOTS = 10;
 export type RouletteStake = { on: RouletteBet; amount: number };
