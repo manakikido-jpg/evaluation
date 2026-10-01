@@ -3,7 +3,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import type { Rng } from '../src/services/casino/cards.js';
 import { baccaratTable, bjTable, BET_SECONDS, rouletteTable, type BjTableState } from '../src/services/casino/tables/dealer.js';
-import { babanuki, daifugo, dBeats, dropPairs, dSet, JOKER, type BabaState, type DaifugoState } from '../src/services/casino/tables/party.js';
+import { babanuki, daifugo, daifugoRulesOf, dBeats, dropPairs, dSet, JOKER, reversed, type BabaState, type DaifugoRule, type DaifugoState } from '../src/services/casino/tables/party.js';
 import { poker, settlePots, type PokerState, type PSeat } from '../src/services/casino/tables/poker.js';
 import { bestHand, handName, score5 } from '../src/services/casino/tables/pokerHands.js';
 import { actTable, createTable, joinTable, leaveTable, myTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
@@ -281,6 +281,117 @@ describe('👑 大富豪', () => {
       s = t.advance(s, 100_000);
       expect(daifugo.closed(s, t.now)).toBe(true);
     }
+  });
+
+  it('ルールの選び方（選ばなければはじめのルール）', () => {
+    expect(daifugoRulesOf({})).toEqual(['revolution', 'eight', 'joker']);
+    expect(daifugoRulesOf({ rules_set: '1', rules: ['stairs', 'jback', 'nope'] })).toEqual(['jback', 'stairs']);
+    expect(daifugoRulesOf({ rules_set: '1' })).toEqual([]);
+    // ジョーカーなしなら 52 枚
+    const t = sim(daifugo, 21);
+    let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '0', rules_set: '1', rules: ['eight'] }, t.ctx()));
+    for (const n of [2, 3]) s = t.run(daifugo.join(s, P(n), {}, t.ctx()));
+    s = t.run(daifugo.act(s, P(1).id, { action: 'start' }, t.ctx()));
+    expect(s.seats.reduce((n, x) => n + x.hand.length, 0)).toBe(52);
+    expect(s.rules).toEqual(['eight']);
+  });
+
+  it('階段（同じマークの連番・ジョーカーで埋められる）と、♠3 返し・しばり', () => {
+    expect(dSet([C(3), C(4), C(5)])).toBeUndefined();
+    expect(dSet([C(3), C(4), C(5)], { stairs: true })).toMatchObject({ type: 'seq', n: 3, strength: 0 });
+    expect(dSet([C(3), JOKER, C(5)], { stairs: true })).toMatchObject({ type: 'seq', n: 3 });
+    expect(dSet([C(3), C(4, 1), C(5)], { stairs: true })).toBeUndefined();
+    expect(dSet([C(13), C(1), JOKER], { stairs: true })).toMatchObject({ type: 'seq', strength: 10 });
+    const seq = dSet([C(3), C(4), C(5)], { stairs: true })!;
+    const field = { cards: [C(3), C(4), C(5)], n: 3, strength: seq.strength, joker: false, by: 0, type: 'seq' as const, suits: seq.suits };
+    expect(dBeats(field, dSet([C(6, 1), C(7, 1), C(8, 1)], { stairs: true })!, false)).toBe(true);
+    expect(dBeats(field, dSet([C(9), C(9, 1), C(9, 2)])!, false)).toBe(false);
+    const joker = { cards: [JOKER], n: 1, strength: 13, joker: true, by: 0 };
+    expect(dBeats(joker, dSet([C(3)])!, false, { spade3: true, cards: [C(3)] })).toBe(true);
+    expect(dBeats(joker, dSet([C(3, 1)])!, false, { spade3: true, cards: [C(3, 1)] })).toBe(false);
+    expect(dBeats(joker, dSet([C(3)])!, false, { cards: [C(3)] })).toBe(false);
+    const four = { cards: [C(4)], n: 1, strength: dSet([C(4)])!.strength, joker: false, by: 0 };
+    expect(dBeats(four, dSet([C(9, 1)])!, false, { lock: [0] })).toBe(false);
+    expect(dBeats(four, dSet([C(9)])!, false, { lock: [0] })).toBe(true);
+  });
+
+  /** ルールを決めて、手札を配り直した卓（p1 から） */
+  function ruled(rules: DaifugoRule[], hands: number[][]) {
+    const t = sim(daifugo, 31);
+    let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '100', rules_set: '1', rules }, t.ctx()));
+    for (const n of [2, 3]) s = t.run(daifugo.join(s, P(n), {}, t.ctx()));
+    s = t.run(daifugo.act(s, P(1).id, { action: 'start' }, t.ctx()));
+    s = { ...s, turn: 0, seats: s.seats.map((x, i) => ({ ...x, hand: hands[i]! })) };
+    const play = (n: number, cards: number[]) => {
+      const r = daifugo.act(s, P(n).id, { action: 'play', cards: cards.map(String) }, t.ctx());
+      if (r.ok) s = t.run(r);
+      return r;
+    };
+    const pass = (n: number) => (s = t.run(daifugo.act(s, P(n).id, { action: 'pass' }, t.ctx())));
+    return { t, get s() { return s; }, play, pass };
+  }
+
+  it('8 切りなし・革命なしなら、ふつうのカードと同じ', () => {
+    const g = ruled([], [[C(8), C(9, 0), C(9, 1), C(9, 2), C(9, 3)], [C(10), C(12)], [C(11), C(13)]]);
+    g.play(1, [C(8)]);
+    expect(g.s.field?.cards).toEqual([C(8)]);
+    expect(g.s.turn).toBe(1);
+    g.play(2, [C(10)]);
+    g.pass(3);
+    g.pass(1);
+    expect(g.s.field).toBeNull();
+    expect(g.s.turn).toBe(1);
+    g.play(2, [C(12)]);
+    g.pass(3);
+    g.pass(1);
+    // 場が流れて p2 から。p2 はもう 0 枚なので上がり済み
+    expect(g.s.order).toEqual([P(2).id]);
+  });
+
+  it('11 バック: J のあとは弱いほうが勝ち、場が流れたら戻る', () => {
+    const g = ruled(['jback'], [[C(11), C(4)], [C(10), C(1)], [C(12), C(5)]]);
+    g.play(1, [C(11)]);
+    expect(reversed(g.s)).toBe(true);
+    expect(g.play(2, [C(1)])).toEqual({ ok: false, error: 'weak' });
+    g.play(2, [C(10)]);
+    g.pass(3);
+    g.pass(1);
+    expect(g.s.field).toBeNull();
+    expect(g.s.jback).toBe(false);
+    expect(reversed(g.s)).toBe(false);
+  });
+
+  it('5 飛ばし・しばり・♠3 返し', () => {
+    const skip = ruled(['skip5'], [[C(5), C(6)], [C(7), C(8)], [C(9), C(10)]]);
+    skip.play(1, [C(5)]);
+    expect(skip.s.turn).toBe(2);
+    const lock = ruled(['shibari'], [[C(4), C(13)], [C(6), C(12)], [C(9, 1), C(9)]]);
+    lock.play(1, [C(4)]);
+    lock.play(2, [C(6)]);
+    expect(lock.s.lock).toEqual([0]);
+    expect(lock.play(3, [C(9, 1)])).toEqual({ ok: false, error: 'locked' });
+    expect(lock.play(3, [C(9)]).ok).toBe(true);
+    const sp = ruled(['joker', 'spade3'], [[JOKER, C(13)], [C(3), C(12)], [C(9), C(10)]]);
+    sp.play(1, [JOKER]);
+    sp.play(2, [C(3)]);
+    expect(sp.s.field).toBeNull();
+    expect(sp.s.turn).toBe(1);
+  });
+
+  it('反則上がり: 2 で上がると最下位', () => {
+    const g = ruled(['foul'], [[C(2)], [C(4), C(6)], [C(5), C(7)]]);
+    g.play(1, [C(2)]);
+    expect(g.s.fouls).toEqual([P(1).id]);
+    g.pass(2);
+    g.pass(3);
+    // p1 が上がったので、場が流れて p2 から
+    expect(g.s.turn).toBe(1);
+    g.play(2, [C(4)]);
+    g.play(3, [C(5)]);
+    g.play(2, [C(6)]);
+    expect(g.s.phase).toBe('done');
+    expect(g.s.order).toEqual([P(2).id, P(3).id, P(1).id]);
+    expect(g.s.payouts.map((p) => p.amount)).toEqual([210, 90, 0]);
   });
 
   it('相手待ちで作った人が抜けたら、みんなに返して閉じる', () => {

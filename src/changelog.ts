@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-01-daifugo-rules',
+    date: '2026-10-01',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '👑 大富豪のルールを選べるように',
+    items: [
+      '卓を立てる人が、ローカルルールをチェックで選べる（はじめは革命・8 切り・ジョーカー）',
+      '選べるルール: 革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり',
+      '卓の一覧と卓の画面に、その卓のルールが出る（押すと説明）。11 バック中・しばり中も表示',
+    ],
+  },
+  {
     id: '2026-10-01-juggler',
     date: '2026-10-01',
     kind: 'improve',

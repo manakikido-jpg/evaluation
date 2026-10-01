@@ -5,7 +5,7 @@ import { BAC_BETS, type BacBet } from '../../services/casino/baccarat.js';
 import { handValue } from '../../services/casino/blackjack.js';
 import { rouletteBetLabel, rouletteColor } from '../../services/casino/roulette.js';
 import type { BacTableState, BjTableState, RlTableState } from '../../services/casino/tables/dealer.js';
-import { cardLabel, JOKER, type BabaState, type DaifugoState } from '../../services/casino/tables/party.js';
+import { cardLabel, DAIFUGO_RULE_KEYS, DAIFUGO_RULES, JOKER, reversed, rulesOf, type BabaState, type DaifugoState } from '../../services/casino/tables/party.js';
 import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
 import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
 import { PACES, paceMult, TABLE_LABEL, type Pace } from '../../services/casino/tables/types.js';
@@ -114,7 +114,7 @@ const RULES: Record<TableKind, string> = {
   baccarat_table: 'みんなで同じ勝負に賭けます。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。',
   roulette_table: 'みんなで同じ回転に賭けます。チップを選んで盤のマスを押すと置けます（10 か所まで）。座っている全員が「賭けて回す」を押すか、だれかが賭けてから 25 秒たつと回ります。',
   poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
-  daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。8 切り・4 枚で革命あり。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
+  daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
 };
 
@@ -168,7 +168,31 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
       </>
     );
   }
-  if (p.kind === 'daifugo' || p.kind === 'babanuki') {
+  if (p.kind === 'daifugo') {
+    return (
+      <>
+        <label>
+          参加費
+          <input type="number" name="entry" min={0} max={p.casino.maxBet} value={String(Math.min(100, p.casino.maxBet))} inputmode="numeric" />
+          {p.coin.name}（0 で賭けない）
+        </label>
+        <fieldset class="c-rules-pick">
+          <legend>📜 ルール（ローカルルール）</legend>
+          <input type="hidden" name="rules_set" value="1" />
+          {DAIFUGO_RULE_KEYS.map((k) => (
+            <label class="c-rule-opt">
+              <input type="checkbox" name="rules" value={k} checked={DAIFUGO_RULES[k].on} />
+              <span>
+                <b>{DAIFUGO_RULES[k].label}</b>
+                <small>{DAIFUGO_RULES[k].note}</small>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      </>
+    );
+  }
+  if (p.kind === 'babanuki') {
     return (
       <label>
         参加費
@@ -196,7 +220,8 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
   }
   if (t.kind === 'daifugo' || t.kind === 'babanuki') {
     const ps = t.state as DaifugoState;
-    return `参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）`;
+    const rules = t.kind === 'daifugo' ? `・${rulesOf(ps).map((k) => DAIFUGO_RULES[k].label.replace(/^\S+ /, '')).join('・') || 'ルールなし'}` : '';
+    return `参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}`;
   }
   return `${seats.length} 人（${who}）`;
 }
@@ -927,18 +952,43 @@ const seatState = (s: PartyState, i: number) => {
   const x = s.seats[i]!;
   const rank = s.order.indexOf(x.id);
   if (rank >= 0) return s.kind === 'babanuki' && rank === s.seats.length - 1 ? '🃏 ババ' : `${rank + 1} 番目に上がり`;
+  if (s.kind === 'daifugo' && s.fouls?.includes(x.id)) return '🚫 反則上がり';
   if (x.gone) return '抜けた（自動）';
   return `${x.hand.length} 枚`;
 };
 
 // 👑 大富豪
+/** この卓のルール（押すと説明） */
+function DaifugoRules({ s }: { s: DaifugoState }) {
+  const on = rulesOf(s);
+  return (
+    <details class="c-rules-on">
+      <summary>
+        📜 ルール: {on.length ? on.map((k) => DAIFUGO_RULES[k].label).join('・') : 'ローカルルールなし'}
+      </summary>
+      <ul>
+        {DAIFUGO_RULE_KEYS.map((k) => (
+          <li class={on.includes(k) ? 'on' : 'off'}>
+            <b>
+              {on.includes(k) ? '✅' : '—'} {DAIFUGO_RULES[k].label}
+            </b>
+            ：{DAIFUGO_RULES[k].note}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
   const i = s.seats.findIndex((x) => x.id === me.session.userId);
   const my = i >= 0 ? s.seats[i]! : undefined;
   const csrf = me.session.csrfToken;
+  const stairs = rulesOf(s).includes('stairs');
   if (s.phase === 'lobby')
     return (
       <>
+        <DaifugoRules s={s} />
         <PartyLobby t={t} s={s} me={me} min={3} />
         <SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length >= 5} join={s.entry > 0 ? <span>参加費 {fmt(s.entry)} {me.coin.name}</span> : undefined} />
       </>
@@ -950,8 +1000,12 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
         <div class="c-phase">
           {s.phase === 'playing' ? `${s.seats[s.turn ?? 0]?.name} さんの番` : '終わり'}
           {s.revolution && <span class="c-tag c-rev">⚡ 革命中</span>}
+          {s.jback && <span class="c-tag c-rev">↩ 11 バック中</span>}
+          {s.lock && <span class="c-tag c-lock">🔒 {s.lock.map((k) => ['♠', '♥', '♦', '♣'][k]).join('')} しばり</span>}
+          {reversed(s) && <span class="c-tag">いまは 3 が強い</span>}
           <Countdown at={s.phase === 'playing' ? s.deadline : null} now={now} />
         </div>
+        <DaifugoRules s={s} />
         <div class="c-field">
           {s.field ? (
             <div class="c-cards c-cards-center">
@@ -997,7 +1051,11 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
                   パス
                 </button>
               )}
-              <span class="c-muted">{s.field ? `場: ${s.field.n} 枚（${s.field.cards.map(cardLabel).join(' ')}）より強いもの` : '場が空です。何枚でも（同じ数字）'}</span>
+              <span class="c-muted">
+                {s.field
+                  ? `場: ${s.field.type === 'seq' ? `${s.field.n} 枚の階段` : `${s.field.n} 枚`}（${s.field.cards.map(cardLabel).join(' ')}）より${reversed(s) ? '弱い' : '強い'}もの${s.lock ? '・同じマーク' : ''}`
+                  : `場が空です。同じ数字なら何枚でも${stairs ? '・同じマークの 3 枚以上の連番（階段）も' : ''}`}
+              </span>
             </div>
           )}
         </form>
