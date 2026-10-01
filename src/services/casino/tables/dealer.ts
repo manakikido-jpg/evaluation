@@ -2,7 +2,7 @@ import type { GuildConfig } from '../../../config.js';
 import { bacDeal, bacPayout, BAC_BETS, type BacBet, type BacResult } from '../baccarat.js';
 import { bjPayout, handValue, isBlackjack, type BjResult } from '../blackjack.js';
 import { shuffledShoe, type Rng } from '../cards.js';
-import { isRouletteBet, rouletteMultiplier, rouletteSpin, type RouletteBet } from '../roulette.js';
+import { isRouletteBet, parseStakes, rouletteMultiplier, rouletteSpin, stakesTotal, type RouletteBet } from '../roulette.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type Ctx, type Credit, type Form, type Pace, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
@@ -301,6 +301,8 @@ export type RlTableState = {
 
 const rlSeat = (w: Who, now: number): RlSeat => ({ ...w, lastActive: now, bets: [], ready: false });
 const rlTotal = (x: RlSeat) => x.bets.reduce((n, b) => n + b.amount, 0);
+/** 座っているみんなが賭けて「回す」を押したら、時間を待たずに回す（考え中の人がいれば時間まで待つ） */
+const allReady = (s: RlTableState) => s.seats.every((x) => x.bets.length > 0 && x.ready);
 
 function rlRound(state: RlTableState, ctx: Ctx): Step<RlTableState> {
   const s = structuredClone(state);
@@ -354,6 +356,26 @@ export const rouletteTable: TableEngine<RlTableState> = {
       if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);
       return ok(s, { debits: [{ memberId: id, amount, reason: 'casino_bet', limited: true }] });
     }
+    if (a === 'bets') {
+      // 盤でまとめて置いた分（bets=red:100,n7:50）。置いたら「回す」も押したことにする
+      const stakes = parseStakes(str(f, 'bets'));
+      if (!stakes) return fail('invalid');
+      if (stakes.some((x) => !validBet(ctx.cfg, x.amount))) return fail('bad_bet');
+      const merged = new Map(seat.bets.map((b) => [b.on as string, b.amount]));
+      for (const x of stakes) merged.set(x.on, (merged.get(x.on) ?? 0) + x.amount);
+      if (merged.size > ROULETTE_MAX_BETS) return fail('too_many');
+      const add = stakesTotal(stakes);
+      if (rlTotal(seat) + add > ctx.cfg.casino.maxBet * ROULETTE_MAX_BETS) return fail('bad_bet');
+      seat.bets = [...merged].map(([on, amount]) => ({ on: on as RouletteBet, amount }));
+      seat.ready = true;
+      if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);
+      const debit = { debits: [{ memberId: id, amount: add, reason: 'casino_bet' as const, limited: true }] };
+      if (allReady(s)) {
+        const r = rlRound(s, ctx);
+        return r.ok ? ok(r.state, { ...debit, ...r.fx }) : r;
+      }
+      return ok(s, debit);
+    }
     if (a === 'clear') {
       const refund = rlTotal(seat);
       seat.bets = [];
@@ -364,9 +386,7 @@ export const rouletteTable: TableEngine<RlTableState> = {
     if (a === 'ready') {
       if (!seat.bets.length) return fail('invalid');
       seat.ready = true;
-      // 賭けた人がみんな「回す」を押したら、すぐ回す（賭けていない人は待たない）
-      const betting = s.seats.filter((x) => x.bets.length);
-      if (betting.every((x) => x.ready)) return rlRound(s, ctx);
+      if (allReady(s)) return rlRound(s, ctx);
       return ok(s);
     }
     return fail('invalid');

@@ -161,6 +161,12 @@ describe('🎰 カジノ: 遊ぶ', () => {
     expect((await post('/casino/roulette', cookie!, { bet: '100', on: 'purple' })).headers.get('location')).toBe('/casino/roulette?e=invalid');
     const r = await post('/casino/roulette', cookie!, { bet: 'custom', betCustom: '50', on: 'n7' });
     expect(r.headers.get('location')).toMatch(/\?g=\d+/);
+    // 盤からまとめて（赤 100 と 7 に 50）
+    const multi = await post('/casino/roulette', cookie!, { bets: 'red:100,n7:50' });
+    const shown = await (await get(multi.headers.get('location')!, cookie!)).text();
+    expect(shown).toContain('c-rb-result');
+    expect(shown).toContain('data-bet="n7"');
+    expect((await post('/casino/roulette', cookie!, { bets: 'red:100,blue:1' })).headers.get('location')).toBe('/casino/roulette?e=invalid');
     const page = await (await get('/casino/roulette?e=limit', cookie!)).text();
     expect(page).toContain('今日賭けられる上限');
   });

@@ -7,7 +7,8 @@ import { cardText, isRed, rankText, SUITS, suitOf } from '../../services/casino/
 import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState, type SlotsState } from '../../services/casino/casino.js';
 import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
 import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
-import { rouletteBetLabel, rouletteColor, ROULETTE_BETS } from '../../services/casino/roulette.js';
+import { rouletteColor, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
+import { RouletteBoard, RouletteStakes } from './rouletteBoard.js';
 import { SLOT_SYMBOLS, slotEmoji } from '../../services/casino/slots.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
 import { assetUrl } from '../assets.js';
@@ -566,56 +567,33 @@ export function SlotsPage(p: GamePage) {
 export function RoulettePage(p: GamePage) {
   const csrf = p.me.session.csrfToken;
   const s = p.row?.state as RouletteState | undefined;
-  const numbers = Array.from({ length: 36 }, (_, i) => i + 1);
+  // 前の形（1 か所だけ）の結果も出せるように
+  const stakes = s?.stakes ?? (s?.bet ? [{ on: s.bet, amount: p.row!.bet, payout: p.row!.payout }] : []);
   return (
     <CasinoLayout title="ルーレット" me={p.me} back>
       <h1 class="c-h1">🎡 ルーレット</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-table">
-        <div class="c-wheel-wrap">
-          <div class={`c-wheel${s ? ` land-${s.number}` : ''}`} aria-hidden="true"></div>
-          <div class="c-wheel-pin" aria-hidden="true">
-            ▼
+      <section class="c-table c-rl-table">
+        <div class="c-rl-top">
+          <div class="c-wheel-wrap">
+            <div class={`c-wheel${s ? ` land-${s.number}` : ''}`} aria-hidden="true"></div>
+            <div class="c-wheel-pin" aria-hidden="true">
+              ▼
+            </div>
+            {s && <div class={`c-ball-num ${rouletteColor(s.number)}`}>{s.number}</div>}
           </div>
-          {s && <div class={`c-ball-num ${rouletteColor(s.number)}`}>{s.number}</div>}
+          {s && (
+            <div class="c-rl-outcome">
+              <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={`${s.number}（${s.number === 0 ? '緑' : rouletteColor(s.number) === 'red' ? '赤' : '黒'}）`} />
+              <RouletteStakes stakes={stakes} number={s.number} coin={p.me.coin} />
+            </div>
+          )}
         </div>
-        {s && <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={`${s.number}（${s.number === 0 ? '緑' : rouletteColor(s.number) === 'red' ? '赤' : '黒'}）・あなたは ${rouletteBetLabel(s.bet)}`} />}
       </section>
-      <BetForm
-        action="/casino/roulette"
-        csrf={csrf}
-        casino={p.casino}
-        coin={p.me.coin}
-        label="回す"
-        last={p.row?.bet}
-        extra={
-          <div class="c-rl">
-            <div class="c-rl-outside">
-              {(Object.keys(ROULETTE_BETS) as (keyof typeof ROULETTE_BETS)[]).map((k, i) => (
-                <label class={`c-pick c-rl-${k}`}>
-                  <input type="radio" name="on" value={k} checked={s ? s.bet === k : i === 0} />
-                  <span>
-                    {ROULETTE_BETS[k].label} <small>×{ROULETTE_BETS[k].mult}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div class="c-rl-grid">
-              <label class="c-pick c-rl-n green zero">
-                <input type="radio" name="on" value="n0" checked={s?.bet === 'n0'} />
-                <span>0</span>
-              </label>
-              {numbers.map((n) => (
-                <label class={`c-pick c-rl-n ${rouletteColor(n)}`}>
-                  <input type="radio" name="on" value={`n${n}`} checked={s?.bet === `n${n}`} />
-                  <span>{n}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        }
-      />
-      <Rules>0〜36 の 37 マス（ヨーロピアン）。数字 1 つに賭けて当たれば 36 倍。赤・黒・奇数・偶数・1〜18・19〜36 は 2 倍、1〜12 などのまとまりと列は 3 倍。0 は数字にしか入りません。</Rules>
+      <RouletteBoard action="/casino/roulette" csrf={csrf} casino={p.casino} coin={p.me.coin} number={s?.number} submitLabel="🎡 回す" memoryKey="solo" />
+      <Rules>
+        0〜36 の 37 マス（ヨーロピアン）。チップを選んでマスを押すと置けます（何か所でも・{ROULETTE_MAX_SPOTS} か所まで）。数字 1 つは 36 倍、赤・黒・奇数・偶数・1〜18・19〜36 は 2 倍、1st 12 などのまとまりと「2:1」（その列）は 3 倍。0 は数字にしか入りません。
+      </Rules>
     </CasinoLayout>
   );
 }

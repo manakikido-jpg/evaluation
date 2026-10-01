@@ -4,6 +4,7 @@ document.addEventListener('click', (e) => {
   if (b && !window.confirm(b.getAttribute('data-confirm') || 'よろしいですか？')) e.preventDefault();
 });
 document.addEventListener('submit', (e) => {
+  if (e.defaultPrevented) return;
   const form = e.target;
   if (!(form instanceof HTMLFormElement) || form.dataset.sent === '1') {
     if (form instanceof HTMLFormElement) e.preventDefault();
@@ -64,6 +65,7 @@ window.addEventListener('pageshow', () => {
     share();
     dirtyAt = 0;
     tickCountdowns();
+    document.dispatchEvent(new Event('c-live-updated'));
   };
   const poll = async () => {
     if (busy || document.hidden) return;
@@ -129,4 +131,135 @@ window.addEventListener('pageshow', () => {
   };
   mark();
   setInterval(mark, 250);
+})();
+
+// ───── 🎡 ルーレットの盤: チップを選んでマスを押すと置ける。「回す」でまとめて送る ─────
+(() => {
+  const STORE = 'casino-rb-';
+  // 盤ごとの置いた分（卓の画面が差し替わっても残す）
+  const boards = new Map();
+  const stateOf = (form) => {
+    const key = form.getAttribute('action');
+    if (!boards.has(key)) boards.set(key, { bets: new Map(), history: [], chip: 0 });
+    return boards.get(key);
+  };
+  const fmt = (n) => n.toLocaleString('ja-JP');
+  const paint = (form) => {
+    const st = stateOf(form);
+    const max = Number(form.dataset.max);
+    if (!st.chip) {
+      const on = form.querySelector('[data-chip].on');
+      st.chip = Number(on?.getAttribute('data-chip') || form.dataset.min);
+    }
+    form.querySelectorAll('[data-chip]').forEach((b) => {
+      const on = Number(b.getAttribute('data-chip')) === st.chip;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    form.querySelectorAll('.c-rb-cell').forEach((cell) => {
+      const amount = st.bets.get(cell.getAttribute('data-bet')) || 0;
+      let badge = cell.querySelector('.c-rb-chip');
+      if (amount && !badge) {
+        badge = document.createElement('span');
+        badge.className = 'c-rb-chip';
+        cell.appendChild(badge);
+      }
+      if (badge) {
+        if (amount) badge.textContent = fmt(amount);
+        else badge.remove();
+      }
+      cell.classList.toggle('placed', Boolean(amount));
+    });
+    const total = [...st.bets.values()].reduce((a, b) => a + b, 0);
+    form.querySelector('[data-rb-total]').textContent = fmt(total);
+    form.querySelector('[data-rb-count]').textContent = String(st.bets.size);
+    form.querySelector('[data-rb-bets]').value = [...st.bets].map(([k, v]) => `${k}:${v}`).join(',');
+    const submit = form.querySelector('[data-rb-submit]');
+    if (submit) submit.disabled = total === 0;
+    void max;
+  };
+  const say = (form, text) => {
+    const m = form.querySelector('[data-rb-msg]');
+    if (m) m.textContent = text;
+  };
+  const changed = (form) => {
+    paint(form);
+    // 卓の画面の差し替えを少し待ってもらう
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  document.addEventListener('click', (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    const form = t?.closest('form[data-rb]');
+    if (!form) return;
+    const st = stateOf(form);
+    const max = Number(form.dataset.max);
+    const spots = Number(form.dataset.spots);
+    const chip = t.closest('[data-chip]');
+    if (chip) {
+      st.chip = Number(chip.getAttribute('data-chip'));
+      paint(form);
+      return;
+    }
+    const cell = t.closest('.c-rb-cell');
+    if (cell && !cell.disabled) {
+      const bet = cell.getAttribute('data-bet');
+      const cur = st.bets.get(bet) || 0;
+      if (!cur && st.bets.size >= spots) return say(form, `置けるのは ${spots} か所までです`);
+      const next = Math.min(max, cur + st.chip);
+      if (next === cur) return say(form, `1 か所に置けるのは ${fmt(max)} までです`);
+      st.history.push([bet, cur]);
+      st.bets.set(bet, next);
+      say(form, '');
+      return changed(form);
+    }
+    if (t.closest('[data-rb-undo]')) {
+      const last = st.history.pop();
+      if (last) {
+        if (last[1]) st.bets.set(last[0], last[1]);
+        else st.bets.delete(last[0]);
+      }
+      return changed(form);
+    }
+    if (t.closest('[data-rb-clear]')) {
+      st.bets.clear();
+      st.history = [];
+      return changed(form);
+    }
+    if (t.closest('[data-rb-double]')) {
+      for (const [k, v] of st.bets) st.bets.set(k, Math.min(max, v * 2));
+      st.history = [];
+      return changed(form);
+    }
+    if (t.closest('[data-rb-repeat]')) {
+      let saved = '';
+      try {
+        saved = localStorage.getItem(STORE + form.dataset.rb) || '';
+      } catch {
+        saved = '';
+      }
+      if (!saved) return say(form, 'まだ前回の賭けがありません');
+      st.bets = new Map(saved.split(',').filter(Boolean).map((p) => [p.split(':')[0], Math.min(max, Number(p.split(':')[1]))]));
+      st.history = [];
+      return changed(form);
+    }
+  });
+  document.addEventListener('submit', (e) => {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement) || !form.matches('[data-rb]')) return;
+    const st = stateOf(form);
+    if (!st.bets.size) {
+      e.preventDefault();
+      return;
+    }
+    try {
+      localStorage.setItem(STORE + form.dataset.rb, form.querySelector('[data-rb-bets]').value);
+    } catch {
+      // 覚えられなくても送る
+    }
+    // 送ったら空にする（戻ってきたときに二重にならないように）
+    boards.delete(form.getAttribute('action'));
+  }, true);
+  const all = () => document.querySelectorAll('form[data-rb]').forEach(paint);
+  all();
+  document.addEventListener('c-live-updated', all);
 })();

@@ -29,7 +29,7 @@ import {
   type Played,
 } from '../services/casino/casino.js';
 import { isOthelloLevel } from '../services/casino/othello.js';
-import { isRouletteBet } from '../services/casino/roulette.js';
+import { isRouletteBet, parseStakes } from '../services/casino/roulette.js';
 import { cancelMatch, createMatch, MOVE_SECONDS, joinMatch, moveMatch, myMatch, openMatches, readMatch, recentMatches, resignMatch, sweepMatches, type MatchResult } from '../services/casino/versus.js';
 import { walletOf } from '../services/economy.js';
 import { namesOf } from '../services/members.js';
@@ -293,8 +293,10 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     '/casino/roulette',
     page(async (c, me) => {
       const body = await c.req.parseBody();
-      if (!isRouletteBet(body.on)) return c.redirect('/casino/roulette?e=invalid');
-      return after(c, 'roulette', await playRoulette(db, d.cfg(), me.session.userId, betOf(body), body.on, undefined, d.now()));
+      // 盤から（いくつもの所: bets=red:100,n7:50）・前の形（on と bet）
+      const stakes = typeof body.bets === 'string' && body.bets ? parseStakes(body.bets) : isRouletteBet(body.on) ? [{ on: body.on, amount: betOf(body) }] : null;
+      if (!stakes) return c.redirect('/casino/roulette?e=invalid');
+      return after(c, 'roulette', await playRoulette(db, d.cfg(), me.session.userId, stakes, undefined, d.now()));
     }, { post: true }),
   );
 

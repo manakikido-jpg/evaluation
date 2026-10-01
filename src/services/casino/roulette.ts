@@ -61,3 +61,25 @@ export function rouletteMultiplier(bet: RouletteBet, n: number): number {
 }
 
 export const rouletteSpin = (rng: Rng) => rng(37);
+
+// ───────── いくつもの所に賭ける ─────────
+
+/** 1 回に賭けられる所の数 */
+export const ROULETTE_MAX_SPOTS = 10;
+export type RouletteStake = { on: RouletteBet; amount: number };
+
+/** フォームの「red:100,n7:50」を読む（同じ所はまとめる）。おかしければ null */
+export function parseStakes(raw: unknown): RouletteStake[] | null {
+  if (typeof raw !== 'string' || !raw || raw.length > 600) return null;
+  const map = new Map<string, number>();
+  for (const part of raw.split(',')) {
+    const m = /^([a-z0-9]{2,7}):(\d{1,9})$/.exec(part);
+    if (!m || !isRouletteBet(m[1])) return null;
+    map.set(m[1]!, (map.get(m[1]!) ?? 0) + Number(m[2]));
+  }
+  if (!map.size || map.size > ROULETTE_MAX_SPOTS) return null;
+  return [...map].map(([on, amount]) => ({ on: on as RouletteBet, amount }));
+}
+
+export const stakesTotal = (xs: { amount: number }[]) => xs.reduce((n, x) => n + x.amount, 0);
+export const stakePayout = (x: RouletteStake, n: number) => x.amount * rouletteMultiplier(x.on, n);

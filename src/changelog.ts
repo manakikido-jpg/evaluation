@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-01-roulette-board',
+    date: '2026-10-01',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🎡 ルーレットが本物の台みたいに',
+    items: [
+      'チップを選んで盤のマスを押すと置ける（何か所でも・10 か所まで）。1 つ戻す・クリア・×2・前回と同じ',
+      'スマホは縦長の盤で押しやすく。結果は当たったマスが光り、置いた所ごとに勝ち負けが出る',
+      'ルーレット卓は、座っているみんなが「賭けて回す」を押したら回る（考え中の人がいれば時間まで待つ）',
+    ],
+  },
+  {
     id: '2026-09-30-casino-look',
     date: '2026-09-30',
     kind: 'improve',

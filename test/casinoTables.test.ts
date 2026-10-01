@@ -219,9 +219,28 @@ describe('🎴🎡 バカラ卓・ルーレット卓', () => {
     s = t.run(rouletteTable.act(s, P(2).id, { action: 'clear' }, t.ctx()));
     expect(t.bank.get(P(2).id)).toBe(0);
     s = t.run(rouletteTable.act(s, P(1).id, { action: 'ready' }, t.ctx()));
+    // 考え中の人（P2）がいるので、時間まで待つ
+    expect(s.phase).toBe('betting');
+    s = t.advance(s, 26_000);
     expect(s.phase).toBe('result');
     const seat = s.seats.find((x) => x.id === P(1).id)!;
     expect(t.bank.get(P(1).id)).toBe(-150 + seat.payout!);
+  });
+});
+
+describe('🎡 ルーレット卓（盤からまとめて）', () => {
+  it('まとめて置くと「回す」も押したことになる。みんな押したら回る', () => {
+    const t = sim(rouletteTable, 8);
+    let s = t.run(rouletteTable.create(P(1), {}, t.ctx()));
+    s = t.run(rouletteTable.join(s, P(2), {}, t.ctx()));
+    expect(rouletteTable.act(s, P(1).id, { action: 'bets', bets: 'purple:10' }, t.ctx())).toEqual({ ok: false, error: 'invalid' });
+    expect(rouletteTable.act(s, P(1).id, { action: 'bets', bets: 'red:5' }, t.ctx())).toEqual({ ok: false, error: 'bad_bet' });
+    s = t.run(rouletteTable.act(s, P(1).id, { action: 'bets', bets: 'red:100,n7:50' }, t.ctx()));
+    expect(s.seats[0]).toMatchObject({ ready: true, bets: [{ on: 'red', amount: 100 }, { on: 'n7', amount: 50 }] });
+    expect(s.phase).toBe('betting');
+    s = t.run(rouletteTable.act(s, P(2).id, { action: 'bets', bets: 'odd:30' }, t.ctx()));
+    expect(s.phase).toBe('result');
+    expect(t.bank.get(P(1).id)).toBe(-150 + s.seats[0]!.payout!);
   });
 });
 

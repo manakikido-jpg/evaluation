@@ -9,7 +9,7 @@ import { bjDouble, bjHit, bjPayout, bjStand, bjStart, canDouble, type BjState } 
 import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
-import { rouletteMultiplier, rouletteSpin, type RouletteBet } from './roulette.js';
+import { ROULETTE_MAX_SPOTS, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { slotSpin, type SlotKey } from './slots.js';
 
 /**
@@ -198,12 +198,21 @@ export function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet: numbe
   }, now);
 }
 
-export type RouletteState = { bet: RouletteBet; number: number; multiplier: number };
-export function playRoulette(db: Db, cfg: GuildConfig, memberId: string, bet: number, on: RouletteBet, rng: Rng = cryptoRng, now = new Date()) {
-  return start(db, cfg, memberId, 'roulette', bet, () => {
+/** stakes: 賭けた所ごとの結果（前の形は bet・multiplier だけ） */
+export type RouletteState = { number: number; stakes?: (RouletteStake & { payout: number })[]; bet?: RouletteBet; multiplier?: number };
+
+/** ルーレット（いくつもの所に賭けられる。1 か所ごとに最低〜最高、合計は最高の ROULETTE_MAX_SPOTS 倍まで） */
+export async function playRoulette(db: Db, cfg: GuildConfig, memberId: string, stakes: RouletteStake[], rng: Rng = cryptoRng, now = new Date()): Promise<Played> {
+  const c = cfg.casino;
+  if (!stakes.length || stakes.length > ROULETTE_MAX_SPOTS || stakes.some((x) => !Number.isInteger(x.amount) || x.amount < c.minBet || x.amount > c.maxBet)) return { status: 'bad_bet' };
+  const total = stakesTotal(stakes);
+  // 合計の上限は「1 回の最高 × 所の数」（1 日の上限・残高はそのまま確かめる）
+  const wide = { ...cfg, casino: { ...c, maxBet: c.maxBet * ROULETTE_MAX_SPOTS } };
+  return start(db, wide, memberId, 'roulette', total, () => {
     const n = rouletteSpin(rng);
-    const multiplier = rouletteMultiplier(on, n);
-    return { state: { bet: on, number: n, multiplier } satisfies RouletteState, done: true, payout: bet * multiplier };
+    const results = stakes.map((x) => ({ ...x, payout: stakePayout(x, n) }));
+    const payout = results.reduce((sum, x) => sum + x.payout, 0);
+    return { state: { number: n, stakes: results } satisfies RouletteState, done: true, payout };
   }, now);
 }
 

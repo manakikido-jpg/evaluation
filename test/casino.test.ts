@@ -78,8 +78,17 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     expect((await bigWins(db, new Date(NOW.getTime() - 3_600_000))).map((g) => g.payout)).toEqual([7770]);
   });
 
+  it('ルーレット: いくつもの所に賭けられる（当たった所だけ払う）。1 か所ごとに最低〜最高', async () => {
+    const r = await playRoulette(db, ccfg(), A, [{ on: 'n7', amount: 50 }, { on: 'red', amount: 100 }, { on: 'black', amount: 100 }], seq([7]), NOW);
+    expect(r.status === 'ok' && r.row).toMatchObject({ bet: 250, payout: 50 * 36 + 200 });
+    expect(await bal(A)).toBe(5000 - 250 + 2000);
+    expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 5 }], seq([7]), NOW)).status).toBe('bad_bet');
+    // 1 か所は最高まで、合計は最高 × 10 まで
+    expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 1000 }, { on: 'black', amount: 1000 }], seq([0]), NOW)).status).toBe('ok');
+  });
+
   it('ルーレット・バカラ', async () => {
-    const r = await playRoulette(db, ccfg(), A, 100, 'n17', seq([17]), NOW);
+    const r = await playRoulette(db, ccfg(), A, [{ on: 'n17', amount: 100 }], seq([17]), NOW);
     expect(r.status === 'ok' && r.row.payout).toBe(3600);
     // プレイヤー 9 / バンカー 5 → プレイヤーの勝ち
     const b = await playBaccarat(db, ccfg(), B, 100, 'banker', seq([card(9), card(13), card(2), card(3)]), NOW);

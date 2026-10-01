@@ -4,7 +4,7 @@ import { bjDouble, bjHit, bjPayout, bjStand, bjStart, bjView, handValue, type Bj
 import { cardText, cryptoRng, rankOf, shuffledShoe, type Rng } from '../src/services/casino/cards.js';
 import { HL_MAX_STEPS, hlCashout, hlGuess, hlNextMult, hlPayout, hlStart, hlWays } from '../src/services/casino/highlow.js';
 import { applyMove, countStones, cpuMove, flipsFor, initialBoard, legalMoves, nextTurn, othelloPlay, winnerOf } from '../src/services/casino/othello.js';
-import { isRouletteBet, rouletteMultiplier } from '../src/services/casino/roulette.js';
+import { isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
 import { slotMultiplier, slotRtp, spinReel } from '../src/services/casino/slots.js';
 
 /** 決めた数を順に返す乱数 */
@@ -192,6 +192,21 @@ describe('🎡 ルーレット', () => {
       for (let n = 0; n <= 36; n++) ev += rouletteMultiplier(bet, n) / 37;
       expect(ev).toBeCloseTo(36 / 37);
     }
+  });
+});
+
+describe('🎡 ルーレット（いくつもの所）', () => {
+  it('「red:100,n7:50」を読む。同じ所はまとめる。おかしい・多すぎるものは断る', () => {
+    expect(parseStakes('red:100,n7:50,red:20')).toEqual([
+      { on: 'red', amount: 120 },
+      { on: 'n7', amount: 50 },
+    ]);
+    expect(parseStakes('')).toBeNull();
+    expect(parseStakes('purple:100')).toBeNull();
+    expect(parseStakes('red:-1')).toBeNull();
+    expect(parseStakes(Array.from({ length: 11 }, (_, i) => `n${i}:10`).join(','))).toBeNull();
+    expect(stakePayout({ on: 'n7', amount: 50 }, 7)).toBe(1800);
+    expect(stakePayout({ on: 'red', amount: 100 }, 7)).toBe(200);
   });
 });
 

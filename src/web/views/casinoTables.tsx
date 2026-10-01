@@ -3,13 +3,14 @@ import type { CasinoConfig, TableKind } from '../../config.js';
 import type { CasinoTable } from '../../db/schema.js';
 import { BAC_BETS, type BacBet } from '../../services/casino/baccarat.js';
 import { handValue } from '../../services/casino/blackjack.js';
-import { rouletteBetLabel, rouletteColor, ROULETTE_BETS } from '../../services/casino/roulette.js';
+import { rouletteBetLabel, rouletteColor } from '../../services/casino/roulette.js';
 import type { BacTableState, BjTableState, RlTableState } from '../../services/casino/tables/dealer.js';
 import { cardLabel, JOKER, type BabaState, type DaifugoState } from '../../services/casino/tables/party.js';
 import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
 import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
 import { PACES, paceMult, TABLE_LABEL, type Pace } from '../../services/casino/tables/types.js';
 import { BetForm, CasinoLayout, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
+import { RouletteBoard, RouletteStakes } from './rouletteBoard.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -109,7 +110,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
 const RULES: Record<TableKind, string> = {
   bj_table: 'みんなで同じディーラーと勝負します。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。順番に 20 秒ずつ（卓を立てる人が「ゆっくり」「のんびり」にすると 2 倍・4 倍）。配当は 1 人のときと同じです。',
   baccarat_table: 'みんなで同じ勝負に賭けます。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。',
-  roulette_table: 'みんなで同じ回転に賭けます。いくつでも賭けられて（10 か所まで）、賭けた人がみんな「回す」を押すか、25 秒たつと回ります。',
+  roulette_table: 'みんなで同じ回転に賭けます。チップを選んで盤のマスを押すと置けます（10 か所まで）。座っている全員が「賭けて回す」を押すか、だれかが賭けてから 25 秒たつと回ります。',
   poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。8 切り・4 枚で革命あり。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
@@ -489,51 +490,41 @@ function RlView({ t, s, me, casino, now }: ViewProps<RlTableState>) {
       </section>
       {my && s.phase === 'betting' && (
         <>
-          <BetForm
-            action={`/casino/t/${t.id}/act`}
-            csrf={csrf}
-            casino={casino}
-            coin={me.coin}
-            label="ここに賭ける"
-            extra={
-              <div class="c-rl">
-                <Hidden v={{ action: 'bet' }} />
-                <div class="c-rl-outside">
-                  {(Object.keys(ROULETTE_BETS) as (keyof typeof ROULETTE_BETS)[]).map((k, i) => (
-                    <label class={`c-pick c-rl-${k}`}>
-                      <input type="radio" name="on" value={k} checked={i === 0} />
-                      <span>
-                        {ROULETTE_BETS[k].label} <small>×{ROULETTE_BETS[k].mult}</small>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <div class="c-rl-grid">
-                  <label class="c-pick c-rl-n green zero">
-                    <input type="radio" name="on" value="n0" />
-                    <span>0</span>
-                  </label>
-                  {numbers.map((n) => (
-                    <label class={`c-pick c-rl-n ${rouletteColor(n)}`}>
-                      <input type="radio" name="on" value={`n${n}`} />
-                      <span>{n}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            }
-          />
           {my.bets.length > 0 && (
-            <ActForm id={t.id} csrf={csrf}>
-              <button type="submit" name="action" value="ready" class="c-btn c-btn-gold" disabled={my.ready}>
-                {my.ready ? 'みんなを待っています…' : '🎡 これで回す'}
-              </button>
-              <button type="submit" name="action" value="clear" class="c-btn c-btn-ghost">
-                賭けを取り消す
-              </button>
-            </ActForm>
+            <div class="c-panel">
+              <h2>あなたの賭け{my.ready ? '（回すのを待っています）' : ''}</h2>
+              <RouletteStakes stakes={my.bets} number={null} coin={me.coin} />
+              <ActForm id={t.id} csrf={csrf}>
+                {!my.ready && (
+                  <button type="submit" name="action" value="ready" class="c-btn c-btn-gold">
+                    🎡 これで回す
+                  </button>
+                )}
+                <button type="submit" name="action" value="clear" class="c-btn c-btn-ghost">
+                  賭けを取り消す（返金）
+                </button>
+              </ActForm>
+            </div>
+          )}
+          {(!my.ready || my.bets.length === 0) && (
+            <RouletteBoard
+              action={`/casino/t/${t.id}/act`}
+              csrf={csrf}
+              casino={casino}
+              coin={me.coin}
+              hidden={{ action: 'bets' }}
+              number={s.history.length ? s.history[s.history.length - 1] : null}
+              submitLabel={my.bets.length ? '足して回す' : '🎡 賭けて回す'}
+              memoryKey="table"
+            />
           )}
         </>
+      )}
+      {my && s.phase === 'result' && my.bets.length > 0 && (
+        <section class="c-panel">
+          <h2>あなたの結果</h2>
+          <RouletteStakes stakes={my.bets} number={s.number} coin={me.coin} />
+        </section>
       )}
       <SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length >= 8} />
     </>
