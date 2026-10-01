@@ -1,6 +1,8 @@
 import { shuffledShoe } from '../cards.js';
+import { BOT_THINK_MS, nextBot } from './bots.js';
+import { pokerBotMove } from './pokerBot.js';
 import { bestHand, handName } from './pokerHands.js';
-import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Debit, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * ポーカー（テキサスホールデム・ノーリミット）。2〜6 人。
@@ -8,6 +10,7 @@ import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type For
  * - 2 人以上そろうと START_SECONDS 秒で配る。ボタンは毎回ひとつ進む（2 人のときはボタンがスモールブラインド）
  * - 持ち時間 ACT_SECONDS 秒（卓を立てる人が「ゆっくり 2 倍」「のんびり 4 倍」を選べる）。過ぎたらチェック（できなければフォールド）。2 回続けて過ぎたら「休み」にする
  * - サイドポットあり。同じ強さなら分ける（端数はボタンの次の人から）
+ * - 🤖 座っている人は BOT を入れられる（持ち込みは胴元が出す・100bb。チップがなくなったら足す。人がいなくなったら BOT も立つ）
  */
 
 export const ACT_SECONDS = 30;
@@ -36,6 +39,7 @@ export type PSeat = Who & {
   leaving: boolean;
   /** 最後に動いた時刻（休んだままの人を立たせる） */
   lastActive?: number;
+  bot?: boolean;
 };
 
 export type PokerResult = {
@@ -135,7 +139,7 @@ function proceed(s: PokerState, ctx: Ctx, from: number | null): Step<PokerState>
   const next = from === null ? null : nextSeat(s, from, need);
   if (next !== null) {
     s.turn = next;
-    s.deadline = ctx.now + ACT_SECONDS * 1000 * paceMult(s);
+    s.deadline = ctx.now + (s.seats[next]!.bot ? BOT_THINK_MS : ACT_SECONDS * 1000 * paceMult(s));
     return ok(s);
   }
   return nextStreet(s, ctx);
@@ -228,6 +232,7 @@ function endHand(s: PokerState, ctx: Ctx, seconds: number): Step<PokerState> {
 function afterHand(state: PokerState, ctx: Ctx): Step<PokerState> {
   const s = structuredClone(state);
   const credits: Credit[] = [];
+  const debits: Debit[] = [];
   s.seats = s.seats.map((x) => {
     if (!x) return null;
     if (x.leaving) {
@@ -236,11 +241,30 @@ function afterHand(state: PokerState, ctx: Ctx): Step<PokerState> {
     }
     return { ...x, hole: [], bet: 0, total: 0, inHand: false, folded: false, allIn: false, acted: false, sittingOut: x.sittingOut || x.timeouts >= 2 };
   });
+  // 🤖 チップが少なくなった BOT は、持ち込みの最高まで足す（胴元が出す）
+  const max = buyRange(s).max;
+  for (const x of s.seats) {
+    if (x?.bot && x.chips < s.bb * BUYIN_MIN_BB) {
+      debits.push({ memberId: x.id, amount: max - x.chips, reason: 'casino_buyin', limited: false });
+      log(s, `${x.name} がチップを足しました（+${max - x.chips}）`);
+      x.chips = max;
+    }
+  }
   s.phase = 'waiting';
   s.board = [];
   s.deadline = null;
   s.currentBet = 0;
-  return ok(arm(s, ctx.now), credits.length ? { credits } : undefined);
+  dropLonelyBots(s, credits);
+  return ok(arm(s, ctx.now), credits.length || debits.length ? { credits, debits } : undefined);
+}
+
+/** 人がだれも座っていなければ、BOT も立つ（チップは胴元に戻る） */
+function dropLonelyBots(s: PokerState, credits: Credit[]): void {
+  if (s.seats.some((x) => x && !x.bot)) return;
+  s.seats = s.seats.map((x) => {
+    if (x?.bot && x.chips > 0) credits.push({ memberId: x.id, amount: x.chips, reason: 'casino_cashout' });
+    return null;
+  });
 }
 
 function doAction(s: PokerState, i: number, action: string, amount: number, ctx: Ctx): Step<PokerState> {
@@ -280,7 +304,7 @@ function doAction(s: PokerState, i: number, action: string, amount: number, ctx:
 const newSeat = (who: Who, chips: number, now: number): PSeat => ({ ...who, chips, hole: [], bet: 0, total: 0, inHand: false, folded: false, allIn: false, acted: false, sittingOut: false, timeouts: 0, leaving: false, lastActive: now });
 const idleAt = (x: PSeat) => (x.lastActive ?? 0) + IDLE_MINUTES * 60_000;
 /** 手の合間に、長く動いていない人（休んでいる・ひとりで待っている・チップがない） */
-const idleSeats = (s: PokerState, now: number) => s.seats.filter((x): x is PSeat => Boolean(x && idleAt(x) <= now));
+const idleSeats = (s: PokerState, now: number) => s.seats.filter((x): x is PSeat => Boolean(x && !x.bot && idleAt(x) <= now));
 
 export const poker: TableEngine<PokerState> = {
   kind: 'poker',
@@ -330,8 +354,10 @@ export const poker: TableEngine<PokerState> = {
     if (!midHand) {
       s.seats[i] = null;
       log(s, `${x.name} が席を立ちました`);
+      const credits: Credit[] = x.chips > 0 ? [{ memberId: id, amount: x.chips, reason: 'casino_cashout' }] : [];
+      if (s.phase === 'waiting' || s.phase === 'showdown') dropLonelyBots(s, credits);
       if (s.phase === 'waiting') arm(s, ctx.now);
-      return ok(s, x.chips > 0 ? { credits: [{ memberId: id, amount: x.chips, reason: 'casino_cashout' }] } : undefined);
+      return ok(s, credits.length ? { credits } : undefined);
     }
     // 手の途中: 降りて、終わったら立つ
     x.leaving = true;
@@ -351,6 +377,23 @@ export const poker: TableEngine<PokerState> = {
     const x = s.seats[i]!;
     x.lastActive = ctx.now;
     const a = str(f, 'action') ?? '';
+    // 🤖 BOT を入れる（空いている席に・100bb）・外す
+    if (a === 'add_bot') {
+      if (x.bot) return fail('invalid');
+      const empty = s.seats.findIndex((y) => y === null);
+      if (empty < 0) return fail('full');
+      const b = nextBot(s.seats.filter((y): y is PSeat => Boolean(y)).map((y) => y.id));
+      const buy = buyRange(s).max;
+      s.seats[empty] = { ...newSeat(b, buy, ctx.now), bot: true };
+      log(s, `${b.name} が座りました（${buy}）`);
+      return ok(arm(s, ctx.now), { debits: [{ memberId: b.id, amount: buy, reason: 'casino_buyin', limited: false }] });
+    }
+    if (a === 'remove_bot') {
+      const bid = str(f, 'bot');
+      const b = s.seats.find((y) => y?.bot && (!bid || y.id === bid));
+      if (!b) return fail('invalid');
+      return poker.leave(s, b.id, ctx);
+    }
     if (a === 'sitout' || a === 'sitin') {
       x.sittingOut = a === 'sitout';
       x.timeouts = 0;
@@ -378,7 +421,8 @@ export const poker: TableEngine<PokerState> = {
         const ids = new Set(idle.map((x) => x.id));
         s.seats = s.seats.map((x) => (x && ids.has(x.id) ? null : x));
         for (const x of idle) log(s, `${x.name} は休んだままなので、席を立ちました`);
-        const credits = idle.filter((x) => x.chips > 0).map((x) => ({ memberId: x.id, amount: x.chips, reason: 'casino_cashout' as const }));
+        const credits: Credit[] = idle.filter((x) => x.chips > 0).map((x) => ({ memberId: x.id, amount: x.chips, reason: 'casino_cashout' as const }));
+        dropLonelyBots(s, credits);
         return ok(arm(s, ctx.now), credits.length ? { credits } : undefined);
       }
     }
@@ -389,6 +433,13 @@ export const poker: TableEngine<PokerState> = {
     if (t === null) return null;
     const s = structuredClone(state);
     const x = s.seats[t]!;
+    if (x.bot) {
+      // 🤖 BOT の番。出せない手なら（念のため）チェックかフォールド
+      const m = pokerBotMove(s, t, ctx.rng);
+      const r = doAction(structuredClone(s), t, m.action, m.amount ?? 0, ctx);
+      if (r.ok) return r;
+      return doAction(s, t, s.currentBet - x.bet > 0 ? (m.action === 'call' || m.action === 'allin' ? 'call' : 'fold') : 'check', 0, ctx);
+    }
     x.timeouts++;
     log(s, `${x.name}: 時間切れ`);
     return doAction(s, t, s.currentBet - x.bet > 0 ? 'fold' : 'check', 0, ctx);
@@ -399,7 +450,7 @@ export const poker: TableEngine<PokerState> = {
     const all = [s.deadline, ...idle].filter((v): v is number => v !== null);
     return all.length ? Math.min(...all) : null;
   },
-  seats: (s) => s.seats.filter((x): x is PSeat => Boolean(x && !x.leaving)).map((x) => x.id),
+  seats: (s) => s.seats.filter((x): x is PSeat => Boolean(x && !x.leaving && !x.bot)).map((x) => x.id),
   closed: (s) => s.seats.every((x) => x === null),
 };
 

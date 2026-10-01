@@ -1264,3 +1264,6 @@ body.casino { background: #070d0b; }
   .cc b { font-size: 1rem; }
   .c-floor { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
+/* 🤖 BOT を入れる・外す */
+.c-bots { flex-wrap: wrap; justify-content: center; gap: 6px; }
+.c-bots .c-small { flex-basis: 100%; text-align: center; font-size: .8rem; margin: 2px 0 0; }

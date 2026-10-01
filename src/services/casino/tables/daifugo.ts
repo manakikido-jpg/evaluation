@@ -291,6 +291,85 @@ export const cardLabel = (c: number) => {
   return `${['♠', '♥', '♦', '♣'][Math.floor(c / 13)]}${['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'][r]}`;
 };
 
+// ───────── 🤖 BOT ─────────
+
+/** 出せる組の候補（同じ数字の組・ジョーカー入り・階段） */
+function botCandidates(s: DaifugoState, hand: number[]): number[][] {
+  const out: number[][] = [];
+  const joker = hand.includes(JOKER);
+  const byRank = new Map<number, number[]>();
+  for (const c of hand) if (c !== JOKER) byRank.set(rankOf(c), [...(byRank.get(rankOf(c)) ?? []), c]);
+  for (const cs of byRank.values()) {
+    for (let mask = 1; mask < 1 << cs.length; mask++) {
+      const sub = cs.filter((_, k) => mask & (1 << k));
+      out.push(sub);
+      if (joker && sub.length < 4) out.push([...sub, JOKER]);
+    }
+  }
+  if (joker) out.push([JOKER]);
+  if (has(s, 'stairs')) {
+    for (let st = 0; st < 4; st++) {
+      const cs = sortHand(hand.filter((c) => c !== JOKER && suitOf(c) === st));
+      for (let a = 0; a < cs.length; a++)
+        for (let b = a + 1; b < cs.length; b++) {
+          const w = cs.slice(a, b + 1);
+          if (w.length >= 3) out.push(w);
+          if (joker && w.length >= 2) out.push([...w, JOKER]);
+        }
+    }
+  }
+  return out;
+}
+
+/** 札の強さ（今の向きで。ジョーカーはいつも一番） */
+const botPower = (s: DaifugoState, c: number) => (c === JOKER ? 13 : reversed(s) ? 12 - dStrength(c) : dStrength(c));
+
+/**
+ * BOT の手: 出せる組を全部ためして、点の低いものを出す（強い札・ジョーカーは温存、組は崩さない、多く出せるならまとめて、
+ * 8 切りで親を取る、弱い手なら革命、上がれるなら上がる）。場があって高くつくならパス（だれかが上がりそうなら粘る）
+ */
+function dBot(s: DaifugoState, i: number): Step<DaifugoState> {
+  const x = s.seats[i]!;
+  if (s.pending) {
+    // 渡す・捨てる: 弱い 1 枚から（ジョーカーは最後）
+    const n = Math.min(s.pending.steps[0]!.n, x.hand.length);
+    const order = [...x.hand].sort((a, b) => botPower(s, a) - botPower(s, b));
+    return dChoose(s, i, order.slice(0, n));
+  }
+  const others = active(s).filter((j) => j !== i).map((j) => s.seats[j]!.hand.length);
+  const danger = Math.min(...others, 99) <= 2;
+  let best: { cards: number[]; cost: number; step: Step<DaifugoState> } | undefined;
+  for (const cards of botCandidates(s, x.hand)) {
+    const step = dPlay(structuredClone(s), i, cards);
+    if (!step.ok) continue;
+    const after = step.state;
+    const rest = after.seats[i]!.hand;
+    let cost = 0;
+    for (const c of cards) cost += botPower(s, c) ** 1.5;
+    cost -= (cards.length - 1) * 3;
+    // 同じ数字を崩す
+    const ranks = new Set(cards.filter((c) => c !== JOKER).map(rankOf));
+    for (const r of ranks) cost += rest.filter((c) => c !== JOKER && rankOf(c) === r).length * 5;
+    if (cards.includes(JOKER) && rest.length > 2) cost += 12;
+    // 場が流れて親が取れる（8 切りなど）
+    if (!after.field && rest.length) cost -= 6;
+    // 革命: 残りが弱ければよい手
+    if (after.revolution !== s.revolution && rest.length) {
+      const avg = (h: number[], st: DaifugoState) => h.reduce((n, c) => n + botPower(st, c), 0) / Math.max(1, h.length);
+      cost += (avg(rest, s) - avg(rest, after)) * 4;
+    }
+    if (!rest.length) cost = after.fouls?.includes(x.id) ? 1000 : -1000;
+    // 残り 1 組なら、確実に親が取れる組を先に（取ってから最後の組で上がる）
+    if (rest.length && botCandidates(after, rest).some((c) => c.length === rest.length && dSet(c, { stairs: has(s, 'stairs') })) && !after.field) cost -= 25;
+    if (!best || cost < best.cost) best = { cards, cost, step };
+  }
+  if (!s.field) return best ? best.step : dPlay(s, i, [sortHand(x.hand, reversed(s))[0]!]);
+  // 場があるとき: 高くつくならパス（だれかが上がりそう・手が少ないときは粘る）
+  const limit = danger || x.hand.length <= 4 ? 200 : 24;
+  if (!best || best.cost > limit) return dPass(s, i);
+  return best.step;
+}
+
 export const daifugo = partyEngine<DaifugoState>({
   kind: 'daifugo',
   min: 3,
@@ -314,6 +393,7 @@ export const daifugo = partyEngine<DaifugoState>({
     if (str(f, 'action') === 'pass') return dPass(s, i);
     return dPlay(s, i, cards);
   },
+  bot: (s, i) => dBot(s, i),
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから
     if (s.pending) {

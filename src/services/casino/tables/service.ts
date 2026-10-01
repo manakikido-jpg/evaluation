@@ -5,6 +5,7 @@ import { casinoGames, casinoTables, type CasinoTable } from '../../../db/schema.
 import { addCoins, spendWithin } from '../../economy.js';
 import { todayBets } from '../casino.js';
 import { cryptoRng, type Rng } from '../cards.js';
+import { HOUSE_BOT_ID, isBot } from './bots.js';
 import { ENGINES } from './engines.js';
 import type { Ctx, Effects, Form, Step, TableEngine, Who } from './types.js';
 
@@ -25,6 +26,14 @@ const engineOf = (kind: string) => (ENGINES as Record<string, TableEngine<unknow
 
 async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: Date, tableId: number, kind: string): Promise<void> {
   if (!fx) return;
+  // 🤖 BOT の銭は胴元が出す（引かない・渡さない）。収支には鯖が出した分・戻った分として入れる
+  const house: { bet: number; payout: number }[] = [];
+  for (const d of fx.debits ?? []) if (isBot(d.memberId) && d.amount > 0) house.push({ bet: 0, payout: d.amount });
+  for (const c of fx.credits ?? []) if (isBot(c.memberId) && c.amount > 0) house.push({ bet: c.amount, payout: 0 });
+  fx = { ...fx, debits: fx.debits?.filter((d) => !isBot(d.memberId)), credits: fx.credits?.filter((c) => !isBot(c.memberId)) };
+  for (const h of house) {
+    await tx.insert(casinoGames).values({ memberId: HOUSE_BOT_ID, game: kind, bet: h.bet, payout: h.payout, state: { table: tableId, bot: true }, status: 'done', createdAt: now, finishedAt: now });
+  }
   const limited = new Map<string, number>();
   for (const d of fx.debits ?? []) if (d.limited) limited.set(d.memberId, (limited.get(d.memberId) ?? 0) + d.amount);
   if (cfg.casino.dailyBetLimit > 0) {

@@ -848,6 +848,7 @@ function PokerTableView({ t, s, me, now }: ViewProps<PokerState>) {
           </ActForm>
         </div>
       )}
+      {v.seat && !v.seat.leaving && <BotButtons id={t.id} csrf={csrf} canAdd={!s.seats.every(Boolean)} bots={s.seats.filter((x): x is NonNullable<typeof x> => Boolean(x?.bot))} note="BOT の持ち込み（100bb）は胴元が出します。ソルバーのレンジを参考に打つ、強めの BOT です" />}
       {!betting || !v.myTurn ? (
         <SeatControls
           t={t}
@@ -965,6 +966,30 @@ const Log = (p: { lines: string[] }) =>
     </details>
   ) : null;
 
+/** 🤖 BOT を入れる・外す */
+function BotButtons(p: { id: number; csrf: string; canAdd: boolean; bots: { id: string; name: string }[]; note: string }) {
+  return (
+    <div class="c-actions c-bots">
+      {p.canAdd && (
+        <ActForm id={p.id} csrf={p.csrf} action="add_bot" class="c-inline">
+          <button type="submit" class="c-btn c-btn-small">
+            🤖 BOT を入れる
+          </button>
+        </ActForm>
+      )}
+      {p.bots.map((b) => (
+        <ActForm id={p.id} csrf={p.csrf} action="remove_bot" class="c-inline">
+          <input type="hidden" name="bot" value={b.id} />
+          <button type="submit" class="c-btn c-btn-small c-btn-ghost">
+            {b.name} を外す
+          </button>
+        </ActForm>
+      ))}
+      <p class="c-muted c-small">{p.note}</p>
+    </div>
+  );
+}
+
 // 大富豪・ババ抜き（相手待ち・結果）
 type PartyState = DaifugoState | BabaState;
 function PartyLobby({ t, s, me, min }: { t: CasinoTable; s: PartyState; me: CasinoMe; min: number }) {
@@ -984,6 +1009,15 @@ function PartyLobby({ t, s, me, min }: { t: CasinoTable; s: PartyState; me: Casi
           </div>
         ))}
       </div>
+      {host && (
+        <BotButtons
+          id={t.id}
+          csrf={me.session.csrfToken}
+          canAdd={s.seats.length < 5}
+          bots={s.seats.filter((x) => x.bot)}
+          note={s.entry > 0 ? 'BOT の参加費は胴元が出します（BOT が勝った分は鯖に戻ります）' : 'BOT は少し考えてから動きます'}
+        />
+      )}
       {host ? (
         <ActForm id={t.id} csrf={me.session.csrfToken} action="start">
           <button type="submit" class="c-btn c-btn-gold" disabled={s.seats.length < min}>

@@ -1,5 +1,6 @@
 import type { TableKind } from '../../../config.js';
 import type { Rng } from '../cards.js';
+import { BOT_THINK_MS, nextBot } from './bots.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Step, type TableEngine, type Who, type Pace } from './types.js';
 
 /**
@@ -7,13 +8,14 @@ import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type For
  * 参加費は座るときに預かり、終わったら上がった順に配る（0 銭なら賭けない）。
  * - 相手待ちのまま LOBBY_MINUTES 分たつと、部屋を閉じて返す
  * - 持ち時間を過ぎたら自動で動かす。途中で抜けた人は、すぐ自動で動かす
+ * - 🤖 作った人は、相手待ちのあいだ BOT を入れられる（参加費は胴元が出す・BOT は少し考えてから動く）
  */
 
 export const LOBBY_MINUTES = 30;
 export const JOKER = 52;
 const DONE_SECONDS = 90;
 
-export type PartySeat = Who & { hand: number[]; out: boolean; gone: boolean; timeouts: number };
+export type PartySeat = Who & { hand: number[]; out: boolean; gone: boolean; timeouts: number; bot?: boolean };
 export type PartyBase = {
   seats: PartySeat[];
   entry: number;
@@ -59,6 +61,8 @@ export type PartyRules<S extends PartyBase> = {
   deal(s: S, rng: Rng, now: number): S;
   /** 持ち時間切れ・抜けた人の代わりに動かす */
   auto(s: S, i: number, ctx: Ctx): Step<S>;
+  /** 🤖 BOT の手（なければ auto） */
+  bot?(s: S, i: number, ctx: Ctx): Step<S>;
   play(s: S, i: number, form: Form, ctx: Ctx): Step<S>;
   /** 終わったときの配り方 */
   finish(s: S): Credit[];
@@ -67,7 +71,14 @@ export type PartyRules<S extends PartyBase> = {
 };
 
 export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<S> {
-  const seat = (w: Who): PartySeat => ({ ...w, hand: [], out: false, gone: false, timeouts: 0 });
+  const seat = (w: Who, bot = false): PartySeat => ({ ...w, hand: [], out: false, gone: false, timeouts: 0, ...(bot ? { bot: true } : {}) });
+  const refundAll = (state: S) =>
+    ok({ ...state, seats: [], phase: 'closed', deadline: null } as S, state.entry > 0 ? { credits: state.seats.map((x) => ({ memberId: x.id, amount: state.entry, reason: 'casino_refund' as const })) } : undefined);
+  /** 次の番の人の持ち時間（抜けた人はすぐ・BOT は少し考えて） */
+  const turnDeadline = (s: S, now: number) => {
+    const x = s.turn !== null ? s.seats[s.turn] : undefined;
+    return x?.gone ? now + 800 : x?.bot ? now + BOT_THINK_MS : now + r.turnSeconds * 1000 * paceMult(s);
+  };
   return {
     kind: r.kind,
     maxSeats: r.max,
@@ -88,10 +99,8 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
       if (i < 0) return fail('not_seated');
       if (state.phase === 'lobby') {
         const seats = state.seats.filter((x) => x.id !== id);
-        // 作った人が抜けたら、みんなに返して閉じる
-        if (i === 0 || !seats.length) {
-          return ok({ ...state, seats: [], phase: 'closed', deadline: null }, state.entry > 0 ? { credits: state.seats.map((x) => ({ memberId: x.id, amount: state.entry, reason: 'casino_refund' as const })) } : undefined);
-        }
+        // 作った人が抜けたら（BOT だけになったら）、みんなに返して閉じる
+        if (i === 0 || !seats.some((x) => !x.bot)) return refundAll(state);
         return ok({ ...state, seats }, state.entry > 0 ? { credits: [{ memberId: id, amount: state.entry, reason: 'casino_refund' }] } : undefined);
       }
       if (state.phase !== 'playing') return ok({ ...state, seats: state.seats.map((x) => (x.id === id ? { ...x, gone: true } : x)) });
@@ -104,13 +113,27 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
     act(state, id, f, ctx) {
       const i = state.seats.findIndex((x) => x.id === id);
       if (i < 0) return fail('not_seated');
-      if (str(f, 'action') === 'start') {
+      const a = str(f, 'action');
+      if (a === 'start') {
         if (state.phase !== 'lobby' || i !== 0) return fail('invalid');
         if (state.seats.length < r.min) return fail('need_players');
         const s = r.deal(structuredClone(state), ctx.rng, ctx.now);
         s.phase = 'playing';
-        s.deadline = ctx.now + r.turnSeconds * 1000 * paceMult(s);
+        s.deadline = turnDeadline(s, ctx.now);
         return ok(s);
+      }
+      // 🤖 BOT を入れる・外す（作った人・相手待ちのあいだ）
+      if (a === 'add_bot') {
+        if (state.phase !== 'lobby' || i !== 0) return fail('invalid');
+        if (state.seats.length >= r.max) return fail('full');
+        const b = nextBot(state.seats.map((x) => x.id));
+        return ok({ ...state, seats: [...state.seats, seat(b, true)] }, state.entry > 0 ? { debits: [{ memberId: b.id, amount: state.entry, reason: 'casino_bet', limited: false }] } : undefined);
+      }
+      if (a === 'remove_bot') {
+        if (state.phase !== 'lobby' || i !== 0) return fail('invalid');
+        const b = state.seats.find((x) => x.bot && x.id === str(f, 'bot')) ?? [...state.seats].reverse().find((x) => x.bot);
+        if (!b) return fail('invalid');
+        return ok({ ...state, seats: state.seats.filter((x) => x !== b) }, state.entry > 0 ? { credits: [{ memberId: b.id, amount: state.entry, reason: 'casino_refund' }] } : undefined);
       }
       if (state.phase !== 'playing' || state.turn !== i) return fail('not_your_turn');
       const s = structuredClone(state);
@@ -119,13 +142,12 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
     },
     tick(state, ctx) {
       if (state.deadline === null || state.deadline > ctx.now) return null;
-      if (state.phase === 'lobby') {
-        return ok({ ...state, seats: [], phase: 'closed', deadline: null }, state.entry > 0 ? { credits: state.seats.map((x) => ({ memberId: x.id, amount: state.entry, reason: 'casino_refund' as const })) } : undefined);
-      }
+      if (state.phase === 'lobby') return refundAll(state);
       if (state.phase === 'done') return ok({ ...state, phase: 'closed', deadline: null });
       if (state.phase !== 'playing' || state.turn === null) return null;
       const s = structuredClone(state);
       const x = s.seats[s.turn!]!;
+      if (x.bot && !x.gone) return after((r.bot ?? r.auto)(s, s.turn!, ctx), ctx);
       if (!x.gone) {
         x.timeouts++;
         addLog(s, `${x.name}: 時間切れ`);
@@ -134,7 +156,7 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
     },
     due: (s) => s.deadline,
     // 終わった卓は、結果を見ている間もほかの卓に座れるように数えない
-    seats: (s) => (s.phase === 'lobby' || s.phase === 'playing' ? s.seats.filter((x) => !x.gone).map((x) => x.id) : []),
+    seats: (s) => (s.phase === 'lobby' || s.phase === 'playing' ? s.seats.filter((x) => !x.gone && !x.bot).map((x) => x.id) : []),
     closed: (s) => s.phase === 'closed',
   };
 
@@ -153,8 +175,7 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
       const credits = r.finish(s);
       return ok(s, { debits: step.fx?.debits, credits: [...(step.fx?.credits ?? []), ...credits] });
     }
-    const t = s.turn;
-    s.deadline = t !== null && s.seats[t]!.gone ? ctx.now + 800 : ctx.now + r.turnSeconds * 1000 * paceMult(s);
+    s.deadline = turnDeadline(s, ctx.now);
     return ok(s, step.fx);
   }
 }

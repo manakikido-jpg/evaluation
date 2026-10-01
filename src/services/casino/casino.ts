@@ -354,7 +354,7 @@ export async function casinoStats(db: Db, since: Date): Promise<CasinoStat[]> {
       plays: sql<number>`count(*)::int`,
       wagered: sql<number>`coalesce(sum(${casinoGames.bet}), 0)::bigint`,
       paid: sql<number>`coalesce(sum(${casinoGames.payout}), 0)::bigint`,
-      players: sql<number>`count(distinct ${casinoGames.memberId})::int`,
+      players: sql<number>`count(distinct ${casinoGames.memberId}) filter (where ${casinoGames.memberId} <> 'bot')::int`,
     })
     .from(casinoGames)
     .where(and(eq(casinoGames.status, 'done'), gte(casinoGames.finishedAt, since)))
@@ -365,7 +365,7 @@ export async function casinoStats(db: Db, since: Date): Promise<CasinoStat[]> {
 /** 遊んだ人の数 */
 export async function casinoPlayers(db: Db, since: Date): Promise<number> {
   const [row] = await db
-    .select({ n: sql<number>`count(distinct ${casinoGames.memberId})::int` })
+    .select({ n: sql<number>`count(distinct ${casinoGames.memberId}) filter (where ${casinoGames.memberId} <> 'bot')::int` })
     .from(casinoGames)
     .where(gte(casinoGames.createdAt, since));
   return row?.n ?? 0;

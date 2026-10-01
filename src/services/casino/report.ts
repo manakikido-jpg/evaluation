@@ -20,7 +20,8 @@ export async function casinoDaily(db: Db, days: number, now = new Date()): Promi
       plays: sql<number>`count(*)::int`,
       wagered: sql<number>`coalesce(sum(${casinoGames.bet}), 0)::bigint`,
       paid: sql<number>`coalesce(sum(${casinoGames.payout}), 0)::bigint`,
-      players: sql<number>`count(distinct ${casinoGames.memberId})::int`,
+      // 🤖 BOT の分（memberId = 'bot'）は遊んだ人に数えない
+      players: sql<number>`count(distinct ${casinoGames.memberId}) filter (where ${casinoGames.memberId} <> 'bot')::int`,
     })
     .from(casinoGames)
     .where(and(eq(casinoGames.status, 'done'), gte(casinoGames.createdAt, first)))

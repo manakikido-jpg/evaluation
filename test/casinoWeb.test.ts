@@ -428,6 +428,14 @@ describe('👥 みんなで座る卓（画面）', () => {
     const actor = fa.includes('value="fold"') ? a : b;
     const r = await post(`/casino/t/${id}/act`, actor, { action: 'fold' });
     expect(r.headers.get('location')).toBe(loc);
+    // 🤖 BOT を入れる（持ち込みは胴元。人の銭は変わらない）
+    expect(await (await get(`/casino/t/${id}/frag`, a)).text()).toContain('value="add_bot"');
+    const before = await balance(A);
+    expect((await post(`/casino/t/${id}/act`, a, { action: 'add_bot' })).headers.get('location')).toBe(loc);
+    expect(await balance(A)).toBe(before);
+    const withBot = await (await get(`/casino/t/${id}/frag`, a)).text();
+    expect(withBot).toContain('🤖 鶴丸');
+    expect(withBot).toContain('🤖 鶴丸 を外す');
     // ほかの卓は立てられない
     expect((await post('/casino/tables/bj_table', a, {})).headers.get('location')).toBe('/casino/tables/bj_table?e=seated');
   });
@@ -458,6 +466,11 @@ describe('👥 みんなで座る卓（画面）', () => {
     const bl = (await post('/casino/tables/babanuki', a, { entry: '50' })).headers.get('location')!;
     const bid = bl.split('/').pop()!;
     await post(`/casino/t/${bid}/join`, b, {});
+    // 作った人にだけ「🤖 BOT を入れる」
+    expect(await (await get(`/casino/t/${bid}/frag`, a)).text()).toContain('value="add_bot"');
+    expect(await (await get(`/casino/t/${bid}/frag`, b)).text()).not.toContain('value="add_bot"');
+    await post(`/casino/t/${bid}/act`, a, { action: 'add_bot' });
+    expect(await (await get(`/casino/t/${bid}/frag`, a)).text()).toContain('🤖 鶴丸');
     expect((await post(`/casino/t/${bid}/act`, b, { action: 'start' })).headers.get('location')).toBe(`${bl}?e=invalid`);
     await post(`/casino/t/${bid}/act`, a, { action: 'start' });
     const bf = await (await get(`/casino/t/${bid}/frag`, a)).text();
