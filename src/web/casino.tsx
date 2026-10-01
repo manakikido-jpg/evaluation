@@ -19,6 +19,7 @@ import {
   playBaccarat,
   playRoulette,
   aimSlots,
+  playChinchiro,
   playSlots,
   recentGames,
   startBlackjack,
@@ -53,6 +54,7 @@ import {
   type CasinoMe,
 } from './views/casino.js';
 import { SlotsPage } from './views/slots.js';
+import { ChinchiroPage } from './views/chinchiro.js';
 
 /**
  * 🎰 カジノ（/casino）。メンバーが Discord でログインして、サーバーの銭で遊ぶ。
@@ -68,7 +70,7 @@ type Me = CasinoMe;
 /** 位のロールがあるか（requireRank を止めていれば、サーバーにいればよい） */
 export const casinoAllowed = (cfg: GuildConfig, roles: string[]) => !cfg.casino.requireRank || cfg.ranks.some((r) => roles.includes(r.roleId));
 
-const SOLO: CasinoGame[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'othello'];
+const SOLO: CasinoGame[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'chinchiro', 'othello'];
 
 export function mountCasino(app: Hono<any>, d: Deps): void {
   const { db, api } = d;
@@ -219,7 +221,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     return row && row.memberId === me.session.userId && row.game === game ? row : undefined;
   }
 
-  const VIEWS = { blackjack: BlackjackPage, highlow: HighLowPage, baccarat: BaccaratPage, slots: SlotsPage, roulette: RoulettePage, othello: OthelloPage } as const;
+  const VIEWS = { blackjack: BlackjackPage, highlow: HighLowPage, baccarat: BaccaratPage, slots: SlotsPage, roulette: RoulettePage, chinchiro: ChinchiroPage, othello: OthelloPage } as const;
   for (const game of SOLO) {
     const View = VIEWS[game as keyof typeof VIEWS];
     app.get(
@@ -302,6 +304,11 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       if (!row) return c.redirect('/casino/slots?e=not_found');
       return after(c, 'slots', await aimSlots(db, row.id, me.session.userId, pressed, d.now()));
     }, { post: true }),
+  );
+
+  app.post(
+    '/casino/chinchiro',
+    page(async (c, me) => after(c, 'chinchiro', await playChinchiro(db, d.cfg(), me.session.userId, betOf(await c.req.parseBody()), undefined, d.now())), { post: true }),
   );
 
   app.post(

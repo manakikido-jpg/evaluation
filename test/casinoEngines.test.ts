@@ -4,6 +4,7 @@ import { bjDouble, bjHit, bjPayout, bjStand, bjStart, bjView, handValue, type Bj
 import { cardText, cryptoRng, rankOf, shuffledShoe, type Rng } from '../src/services/casino/cards.js';
 import { HL_MAX_STEPS, hlCashout, hlGuess, hlNextMult, hlPayout, hlStart, hlWays } from '../src/services/casino/highlow.js';
 import { applyMove, countStones, cpuMove, flipsFor, initialBoard, legalMoves, nextTurn, othelloPlay, winnerOf } from '../src/services/casino/othello.js';
+import { chinEdge, chinMoney, chinSettle, handOf, rollTurn, turnHand } from '../src/services/casino/chinchiro.js';
 import { isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
 import { aimStops, bonusStops, drawRole, gridOf, judge, lineOf, PAYLINES, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
 
@@ -240,6 +241,46 @@ describe('🎰 スロット（ジャグラー風）', () => {
     }
     for (const b of ['big', 'reg'] as const) expect(judge(bonusStops(b))).toMatchObject({ role: b, roles: [b] });
     expect(roleOfLine(['seven', 'seven', 'bar'])).toBe('reg');
+  });
+});
+
+describe('🎲 ちんちろりん', () => {
+  it('役', () => {
+    expect(handOf([1, 1, 1])).toEqual({ kind: 'pin' });
+    expect(handOf([4, 4, 4])).toEqual({ kind: 'zoro', value: 4 });
+    expect(handOf([6, 4, 5])).toEqual({ kind: 'shigoro' });
+    expect(handOf([3, 1, 2])).toEqual({ kind: 'hifumi' });
+    expect(handOf([2, 5, 2])).toEqual({ kind: 'me', value: 5 });
+    expect(handOf([1, 3, 6])).toBeNull();
+  });
+
+  it('3 回まで振る。役か目が出たら止める', () => {
+    // 1・3・6（なし）→ 2・2・5（5 の目）
+    expect(rollTurn(seq([0, 2, 5, 1, 1, 4])).map((r) => r.dice)).toEqual([[1, 3, 6], [2, 2, 5]]);
+    const none = rollTurn(seq([0, 2, 5]));
+    expect(none).toHaveLength(3);
+    expect(turnHand(none)).toEqual({ kind: 'menashi' });
+  });
+
+  it('倍率（子から見て）と、引く銭・戻す銭', () => {
+    expect(chinSettle({ kind: 'pin' }, null)).toBe(-5);
+    expect(chinSettle({ kind: 'zoro', value: 3 }, null)).toBe(-3);
+    expect(chinSettle({ kind: 'hifumi' }, null)).toBe(2);
+    expect(chinSettle({ kind: 'menashi' }, null)).toBe(1);
+    const me4 = { kind: 'me' as const, value: 4 };
+    expect(chinSettle(me4, { kind: 'pin' })).toBe(5);
+    expect(chinSettle(me4, { kind: 'me', value: 6 })).toBe(1);
+    expect(chinSettle(me4, { kind: 'me', value: 4 })).toBe(0);
+    expect(chinSettle(me4, { kind: 'me', value: 2 })).toBe(-1);
+    expect(chinSettle(me4, { kind: 'hifumi' })).toBe(-2);
+    expect(chinMoney(100, -5)).toEqual({ stake: 500, payout: 0 });
+    expect(chinMoney(100, 2)).toEqual({ stake: 100, payout: 300 });
+    expect(chinMoney(100, 0)).toEqual({ stake: 100, payout: 100 });
+  });
+
+  it('子の期待値は -1% くらい（本物と同じ倍率）', () => {
+    expect(chinEdge()).toBeGreaterThan(-0.02);
+    expect(chinEdge()).toBeLessThan(0);
   });
 });
 

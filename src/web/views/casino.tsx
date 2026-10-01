@@ -17,7 +17,7 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 
 /** みんなで遊ぶもの（ロビーで分けて出す） */
-const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'daifugo', 'babanuki', 'versus'];
+const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus'];
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
 export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean };
@@ -257,6 +257,7 @@ const MSG: Record<string, string> = {
   bad_bet: '賭ける銭の量を確かめてください。',
   limit: '今日賭けられる上限に届きました。また明日どうぞ。',
   poor: '銭が足りません。',
+  reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
   invalid: 'その操作はいまできません。',
   conflict: '同時に押されたので、1 回だけ受け付けました。',
   busy: '遊んでいる途中のものがあります。',

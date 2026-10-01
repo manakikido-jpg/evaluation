@@ -11,6 +11,9 @@ import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.
 import { PACES, paceMult, TABLE_LABEL, type Pace } from '../../services/casino/tables/types.js';
 import { BetForm, CasinoLayout, FlipCard, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
+import { Bowl, ChinGuide } from './chinchiro.js';
+import { CHIN_MAX_LOSS, CHIN_MAX_ROLLS, handName, parentDecides, turnHand } from '../../services/casino/chinchiro.js';
+import type { ChTableState } from '../../services/casino/tables/chinchiroTable.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -113,6 +116,7 @@ const RULES: Record<TableKind, string> = {
   bj_table: 'みんなで同じディーラーと勝負します。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。順番に 20 秒ずつ（卓を立てる人が「ゆっくり」「のんびり」にすると 2 倍・4 倍）。配当は 1 人のときと同じです。',
   baccarat_table: 'みんなで同じ勝負に賭けます。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。',
   roulette_table: 'みんなで同じ回転に賭けます。チップを選んで盤のマスを押すと置けます（10 か所まで）。座っている全員が「賭けて回す」を押すか、だれかが賭けてから 25 秒たつと回ります。',
+  chinchiro_table: `みんなで同じ親（胴元）にサイコロで挑みます。だれかが賭けてから 15 秒で親が振ります（全員賭けたらすぐ）。親が目なら、子が 1 人ずつ「振る」（3 回まで・持ち時間 20 秒）。負けは最大で賭けの ${CHIN_MAX_LOSS} 倍なので、賭けるときに ${CHIN_MAX_LOSS} 倍を預かり、残りは終わったら返します。`,
   poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
@@ -125,6 +129,7 @@ const BASE_SECONDS: Record<TableKind, { sec: number; what: string }> = {
   baccarat_table: { sec: 15, what: '賭ける時間' },
   roulette_table: { sec: 25, what: '賭ける時間' },
   daifugo: { sec: 40, what: '1 回の持ち時間' },
+  chinchiro_table: { sec: 20, what: '1 人の持ち時間' },
   babanuki: { sec: 25, what: '1 回の持ち時間' },
 };
 const secText = (n: number) => (n >= 60 && n % 60 === 0 ? `${n / 60} 分` : n > 60 ? `${Math.floor(n / 60)} 分 ${n % 60} 秒` : `${n} 秒`);
@@ -271,6 +276,8 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
       <BacView t={t} s={t.state as BacTableState} {...p} />
     ) : t.kind === 'roulette_table' ? (
       <RlView t={t} s={t.state as RlTableState} {...p} />
+    ) : t.kind === 'chinchiro_table' ? (
+      <ChView t={t} s={t.state as ChTableState} {...p} />
     ) : t.kind === 'poker' ? (
       <PokerTableView t={t} s={t.state as PokerState} {...p} />
     ) : t.kind === 'daifugo' ? (
@@ -379,6 +386,69 @@ function BjView({ t, s, me, casino, now }: ViewProps<BjTableState>) {
         </ActForm>
       )}
       <SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length >= 5} leaveNote="席を立ちますか？（勝負の途中ならスタンドしたことになります）" />
+    </>
+  );
+}
+
+// 🎲 ちんちろ卓
+function ChView({ t, s, me, casino, now }: ViewProps<ChTableState>) {
+  const my = s.seats.find((x) => x.id === me.session.userId);
+  const csrf = me.session.csrfToken;
+  const decided = s.parent.length > 0 && parentDecides(turnHand(s.parent));
+  return (
+    <>
+      <section class="c-table c-chin">
+        <div class="c-phase">
+          {s.phase === 'betting'
+            ? s.deadline
+              ? PHASE_BET
+              : 'だれかが賭けると始まります'
+            : s.phase === 'rolling'
+              ? `${s.seats.find((x) => x.id === s.turn)?.name ?? ''} さんが振る番`
+              : '結果'}
+          <Countdown at={s.deadline} now={now} />
+        </div>
+        {s.parent.length > 0 && <Bowl who="👺 親（胴元）" rolls={s.parent} ck={`p:${s.round}`} />}
+        {decided && s.phase === 'result' && (
+          <p class="c-center c-chin-decided c-later">
+            親が {handName(turnHand(s.parent))} なので、子は振らずに決まりました
+          </p>
+        )}
+        <div class="c-seats c-chin-seats">
+          {s.seats.map((x) => (
+            <div class={`c-seat${x.id === me.session.userId ? ' me' : ''}${s.turn === x.id ? ' turn' : ''}`}>
+              <div class="c-seat-name">
+                {x.name}
+                {x.bet > 0 && <span class="c-chipmini">{fmt(x.bet)}</span>}
+              </div>
+              {x.rolls.length > 0 && <Bowl who="" rolls={x.rolls} ck={`${x.id}:${s.round}`} active={s.turn === x.id} />}
+              {x.mult !== undefined && (
+                <div class="c-later">
+                  <SeatResult bet={x.mult < 0 ? x.bet * -x.mult : x.bet} payout={x.payout ?? 0} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+      {my && s.phase === 'betting' && my.bet === 0 && (
+        <>
+          <BetForm action={`/casino/t/${t.id}/act`} csrf={csrf} casino={casino} coin={me.coin} label="賭ける" extra={<Hidden v={{ action: 'bet' }} />} />
+          <p class="c-muted c-center">賭けると、その {CHIN_MAX_LOSS} 倍を預かります（負けの備え。残りは終わったら返ります）。</p>
+        </>
+      )}
+      {my && s.phase === 'rolling' && s.turn === my.id && (
+        <ActForm id={t.id} csrf={csrf}>
+          <button type="submit" name="action" value="roll" class="c-btn c-btn-gold c-roll-btn">
+            🎲 振る（{my.rolls.length + 1} / {CHIN_MAX_ROLLS} 回目）
+          </button>
+        </ActForm>
+      )}
+      <details class="c-rules">
+        <summary>役と倍率</summary>
+        <ChinGuide />
+      </details>
+      <SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length >= 6} leaveNote="席を立ちますか？（勝負の途中なら、残りは自動で振ります）" />
     </>
   );
 }

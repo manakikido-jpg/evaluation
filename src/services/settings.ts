@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { casinoSchema, coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -134,7 +134,15 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       return merged;
     })(),
     applications: { ...base.applications, ...o.applications },
-    casino: { ...base.casino, ...o.casino },
+    casino: (() => {
+      const merged = { ...base.casino, ...o.casino };
+      // 一覧を保存したあとに足したゲームは、遊べるようにしておく
+      if (o.casino.games) {
+        const known = new Set(o.casino.knownGames ?? CASINO_GAMES_V1);
+        merged.games = CASINO_GAMES.filter((g) => o.casino.games!.includes(g) || !known.has(g));
+      }
+      return merged;
+    })(),
     ranks: [
       ...base.ranks.map((r) => {
         const x = o.ranks[r.key] ?? {};

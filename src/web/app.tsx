@@ -1249,7 +1249,7 @@ export function createWebApp(deps: WebDeps) {
     const int = (k: string) => (typeof body[k] === 'string' && /^\d{1,9}$/.test(body[k] as string) ? Number(body[k]) : NaN);
     const raw = body.games;
     const list = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((g): g is CasinoGame => typeof g === 'string' && (CASINO_GAMES as readonly string[]).includes(g));
-    const casino = { enabled: body.enabled === 'yes', requireRank: body.requireRank === 'yes', minBet: int('minBet'), maxBet: int('maxBet'), dailyBetLimit: int('dailyBetLimit'), games: CASINO_GAMES.filter((g) => list.includes(g)) };
+    const casino = { enabled: body.enabled === 'yes', requireRank: body.requireRank === 'yes', minBet: int('minBet'), maxBet: int('maxBet'), dailyBetLimit: int('dailyBetLimit'), games: CASINO_GAMES.filter((g) => list.includes(g)), knownGames: [...CASINO_GAMES] };
     if (!(casino.minBet <= casino.maxBet)) return c.redirect('/economy/casino?msg=invalid');
     const current = await loadOverrides(db);
     let overrides: Overrides;

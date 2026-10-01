@@ -183,6 +183,13 @@ const Sound = (() => {
       notes(m, at, { type: 'square', vol: 0.08 });
       notes(big ? [[262, 0.45, 1.6], [330, 0.45, 1.6], [392, 0.45, 1.6]] : [[330, 0.45, 0.9], [392, 0.45, 0.9]], at, { type: 'triangle', vol: 0.07 });
     },
+    /** サイコロがどんぶりの中で跳ねる（チン・チロ・リン） */
+    dice(at = 0) {
+      [0.12, 0.3, 0.44, 0.56, 0.66].forEach((t, k) => {
+        tone(2300 + Math.random() * 900 - k * 120, at + t, 0.09, { type: 'triangle', vol: 0.12 - k * 0.015 });
+        noise(at + t, 0.025, { freq: 4500, q: 4, vol: 0.12 });
+      });
+    },
     /** 戻りを数えるチャリチャリ */
     tick: (at = 0) => tone(2400 + Math.random() * 1200, at, 0.03, { type: 'square', vol: 0.025 }),
   };
@@ -221,21 +228,24 @@ const delayOf = (el) => {
 /** 前からあるカードは動かさない。新しいカードは順番に配る（卓の差し替え・画面の差し替えのとき） */
 const markCards = (root, before) => {
   if (!before) return 0;
+  // 新しいカードは 0.4 秒ずつ、サイコロ（1 回振った目）は 1.2 秒ずつ
+  let t = 0;
   let k = 0;
-  root.querySelectorAll('.fc[data-ck]').forEach((el) => {
+  root.querySelectorAll('.fc[data-ck], .c-roll[data-ck]').forEach((el) => {
     if (before.has(el.getAttribute('data-ck'))) el.classList.add('still');
     else {
-      el.style.setProperty('--d', `${(k * 0.4).toFixed(2)}s`);
+      el.style.setProperty('--d', `${t.toFixed(2)}s`);
+      t += el.classList.contains('c-roll') ? 1.2 : 0.4;
       k++;
     }
   });
-  const end = k ? k * 0.4 + 0.5 : 0;
+  const end = k ? t + 0.5 : 0;
   root.querySelectorAll('.c-later:not(.wait)').forEach((el) => {
     if (k) el.style.setProperty('--d', `${end.toFixed(2)}s`);
   });
   return end;
 };
-const cardKeys = (root) => new Set([...(root?.querySelectorAll('.fc[data-ck]') ?? [])].map((e) => e.getAttribute('data-ck')));
+const cardKeys = (root) => new Set([...(root?.querySelectorAll('.fc[data-ck], .c-roll[data-ck]') ?? [])].map((e) => e.getAttribute('data-ck')));
 
 /** 画面の中の動きに合わせて音を鳴らす */
 const playFx = (root, tableEnd) => {
@@ -245,6 +255,8 @@ const playFx = (root, tableEnd) => {
     if (!el.classList.contains('down')) Sound.flip(d + (el.classList.contains('slow') ? 1.0 : 0.34));
   });
   if (root.querySelector('.c-wheel2.spun')) Sound.wheel();
+  // サイコロがどんぶりに入る（ちんちろりん）
+  root.querySelectorAll('.c-roll:not(.still)').forEach((el) => Sound.dice(delayOf(el)));
   // 結果（スロットは initSlots が鳴らす）
   const res = root.querySelector('.c-jug') ? null : root.querySelector('.c-later:not(.wait) .c-result, .c-rl-outcome .c-result');
   if (res) {

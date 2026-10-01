@@ -9,7 +9,7 @@ import type { Rng } from '../cards.js';
 export type Who = { id: string; name: string };
 
 /** 引く銭（足りなければ動かさない）。limited: 1 日の上限に数える */
-export type Debit = { memberId: string; amount: number; reason: 'casino_bet' | 'casino_buyin'; limited: boolean };
+export type Debit = { memberId: string; amount: number; reason: 'casino_bet' | 'casino_buyin' | 'casino_hold'; limited: boolean };
 export type Credit = { memberId: string; amount: number; reason: 'casino_win' | 'casino_refund' | 'casino_cashout' };
 /** カジノの収支（運営の画面）に入れる 1 回分 */
 export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };
@@ -69,6 +69,7 @@ export const TABLE_LABEL: Record<TableKind, { emoji: string; name: string; note:
   bj_table: { emoji: '🃏', name: 'ブラックジャック卓', note: 'みんなで同じディーラーと勝負', players: '1〜5 人' },
   baccarat_table: { emoji: '🎴', name: 'バカラ卓', note: 'みんなで同じ勝負に賭ける', players: '1〜8 人' },
   roulette_table: { emoji: '🎡', name: 'ルーレット卓', note: 'みんなで同じ回転に賭ける', players: '1〜8 人' },
+  chinchiro_table: { emoji: '🎲', name: 'ちんちろ卓', note: 'みんなで同じ親にサイコロで挑む', players: '1〜6 人' },
   poker: { emoji: '♠\uFE0F', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う', players: '2〜6 人' },
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金', players: '3〜5 人' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け', players: '2〜5 人' },

@@ -3,6 +3,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import type { Rng } from '../src/services/casino/cards.js';
 import { baccaratTable, bjTable, BET_SECONDS, rouletteTable, type BjTableState } from '../src/services/casino/tables/dealer.js';
+import { chinchiroTable, type ChTableState } from '../src/services/casino/tables/chinchiroTable.js';
 import { babanuki, daifugo, daifugoRulesOf, dBeats, dropPairs, dSet, JOKER, reversed, type BabaState, type DaifugoRule, type DaifugoState } from '../src/services/casino/tables/party.js';
 import { poker, settlePots, type PokerState, type PSeat } from '../src/services/casino/tables/poker.js';
 import { bestHand, handName, score5 } from '../src/services/casino/tables/pokerHands.js';
@@ -449,6 +450,46 @@ describe('👑 大富豪', () => {
     s = t.run(daifugo.leave(s, P(1).id, t.ctx()));
     expect(s.phase).toBe('closed');
     expect([...t.bank.values()].every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('🎲 ちんちろ卓', () => {
+  it('賭けると 5 倍を預かり、終わったら勝ち負けの分だけ動く（何回やっても合う）', () => {
+    for (const seed of [3, 4, 5, 6, 7, 8]) {
+      const t = sim(chinchiroTable, seed);
+      let s: ChTableState = t.run(chinchiroTable.create(P(1), {}, t.ctx()));
+      s = t.run(chinchiroTable.join(s, P(2), {}, t.ctx()));
+      for (let round = 0; round < 5; round++) {
+        const before = new Map(t.bank);
+        const r1 = chinchiroTable.act(s, P(1).id, { action: 'bet', bet: '100' }, t.ctx());
+        expect(r1.ok && r1.fx?.debits?.map((d) => [d.reason, d.amount])).toEqual([['casino_bet', 100], ['casino_hold', 400]]);
+        s = t.run(r1);
+        s = t.run(chinchiroTable.act(s, P(2).id, { action: 'bet', bet: '50' }, t.ctx()));
+        expect(s.phase === 'rolling' || s.phase === 'result').toBe(true);
+        // 子は自分の番に振る（1 人目は手で、2 人目は時間切れで自動）
+        for (let k = 0; k < 10 && s.phase === 'rolling'; k++) {
+          if (s.turn === P(1).id) s = t.run(chinchiroTable.act(s, P(1).id, { action: 'roll' }, t.ctx()));
+          else s = t.advance(s, 21_000);
+        }
+        expect(s.phase).toBe('result');
+        for (const [n, bet] of [[1, 100], [2, 50]] as const) {
+          const seat = s.seats.find((x) => x.id === P(n).id)!;
+          expect((t.bank.get(P(n).id) ?? 0) - (before.get(P(n).id) ?? 0)).toBe(bet * seat.mult!);
+        }
+        s = t.advance(s, 20_000);
+        expect(s.phase).toBe('betting');
+      }
+    }
+  });
+
+  it('賭けの時間に立てば、預けた分も返る。振る番でない人は振れない', () => {
+    const t = sim(chinchiroTable, 9);
+    let s: ChTableState = t.run(chinchiroTable.create(P(1), {}, t.ctx()));
+    s = t.run(chinchiroTable.join(s, P(2), {}, t.ctx()));
+    s = t.run(chinchiroTable.act(s, P(1).id, { action: 'bet', bet: '100' }, t.ctx()));
+    expect(chinchiroTable.act(s, P(2).id, { action: 'roll' }, t.ctx())).toEqual({ ok: false, error: 'not_your_turn' });
+    s = t.run(chinchiroTable.leave(s, P(1).id, t.ctx()));
+    expect(t.bank.get(P(1).id)).toBe(0);
   });
 });
 

@@ -8,6 +8,7 @@ import { bacDeal, bacPayout, type BacBet, type BacResult } from './baccarat.js';
 import { bjDouble, bjHit, bjPayout, bjStand, bjStart, canDouble, type BjState } from './blackjack.js';
 import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
+import { CHIN_MAX_LOSS, chinMoney, chinSettle, parentDecides, rollTurn, turnHand, type ChinRoll } from './chinchiro.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_MAX_SPOTS, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
@@ -23,17 +24,19 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   baccarat: { emoji: '🎴', name: 'バカラ', note: 'プレイヤー・バンカー・タイ、どれが勝つか' },
   slots: { emoji: '🎰', name: 'スロット', note: 'ジャグラー風。ペカったら 7 を狙って BIG' },
   roulette: { emoji: '🎡', name: 'ルーレット', note: '赤黒は 2 倍・数字 1 つは 36 倍' },
+  chinchiro: { emoji: '🎲', name: 'ちんちろりん', note: '親とサイコロ勝負。ピンゾロは 5 倍' },
   othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.2〜2.2 倍' },
   versus: { emoji: '⚔\uFE0F', name: 'メンバー対戦（オセロ）', note: 'メンバー同士で賭けて対戦。勝った人が総取り' },
   bj_table: { emoji: '🃏', name: 'ブラックジャック卓', note: 'みんなで同じディーラーと勝負' },
   baccarat_table: { emoji: '🎴', name: 'バカラ卓', note: 'みんなで同じ勝負に賭ける' },
   roulette_table: { emoji: '🎡', name: 'ルーレット卓', note: 'みんなで同じ回転に賭ける' },
+  chinchiro_table: { emoji: '🎲', name: 'ちんちろ卓', note: 'みんなで同じ親にサイコロで挑む' },
   poker: { emoji: '♠\uFE0F', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う' },
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け' },
 };
 
-export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor';
+export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor' | 'reserve';
 
 /** 今日（日本時間）カジノで賭けた合計 */
 export async function todayBets(db: Db, memberId: string, now = new Date()): Promise<number> {
@@ -61,6 +64,7 @@ export const BET_ERROR: Record<Exclude<BetCheck, 'ok'>, string> = {
   bad_bet: '賭ける銭の量を確かめてください。',
   limit: '今日賭けられる上限に届きました。また明日遊んでください。',
   poor: '銭が足りません。',
+  reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
 };
 
 export type Played = { status: 'ok'; row: CasinoGameRow } | { status: Exclude<BetCheck, 'ok'> } | { status: 'busy'; row: CasinoGameRow };
@@ -241,6 +245,34 @@ export async function playRoulette(db: Db, cfg: GuildConfig, memberId: string, s
     const payout = results.reduce((sum, x) => sum + x.payout, 0);
     return { state: { number: n, stakes: results } satisfies RouletteState, done: true, payout };
   }, now);
+}
+
+// ───────── 🎲 ちんちろりん（CPU の親と勝負） ─────────
+
+/** parent・child: 振った目（child は親が決めたら null）。mult: 子の勝ち負けの倍率。base: 賭けた量 */
+export type ChinchiroState = { parent: ChinRoll[]; child: ChinRoll[] | null; mult: number; base: number };
+
+/**
+ * 1 回で終わる。負けは最大で賭けの 5 倍なので、始める前に 5 倍の銭（と今日の上限）を確かめる。
+ * 引くのは負けた分（勝ち・引き分けは賭けた分）、戻すのは 賭け + 勝った分
+ */
+export async function playChinchiro(db: Db, cfg: GuildConfig, memberId: string, bet: number, rng: Rng = cryptoRng, now = new Date()): Promise<Played> {
+  const check = await checkBet(db, cfg, memberId, 'chinchiro', bet, now);
+  if (check !== 'ok') return { status: check };
+  if ((await walletOf(db, memberId)).balance < bet * CHIN_MAX_LOSS) return { status: 'reserve' };
+  if (cfg.casino.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + bet * CHIN_MAX_LOSS > cfg.casino.dailyBetLimit) return { status: 'limit' };
+  const parent = rollTurn(rng);
+  const child = parentDecides(turnHand(parent)) ? null : rollTurn(rng);
+  const mult = chinSettle(turnHand(parent), child && turnHand(child));
+  const { stake, payout } = chinMoney(bet, mult);
+  const state: ChinchiroState = { parent, child, mult, base: bet };
+  const row = await db.transaction(async (tx) => {
+    if (!(await spendWithin(tx, memberId, stake, 'casino_bet', { game: 'chinchiro' }))) return undefined;
+    const [r] = await tx.insert(casinoGames).values({ memberId, game: 'chinchiro', bet: stake, state, status: 'done', payout, createdAt: now, finishedAt: now }).returning();
+    if (payout > 0) await addCoins(tx, memberId, payout, 'casino_win', { game: 'chinchiro', id: r!.id });
+    return r;
+  });
+  return row ? { status: 'ok', row } : { status: 'poor' };
 }
 
 // ───────── ⚫ オセロ（CPU） ─────────

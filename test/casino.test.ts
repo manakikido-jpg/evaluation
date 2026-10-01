@@ -15,6 +15,7 @@ import {
   casinoStats,
   checkBet,
   playBaccarat,
+  playChinchiro,
   playRoulette,
   playSlots,
   startBlackjack,
@@ -70,6 +71,22 @@ describe('🎰 カジノ: 賭けの決まり', () => {
 });
 
 describe('🎰 カジノ: 1 回で終わるゲーム', () => {
+  it('ちんちろ: 親のピンゾロは 5 倍負け。5 倍の銭がなければ遊べない', async () => {
+    expect((await playChinchiro(db, ccfg(), A, 1001, seq([0]), NOW)).status).toBe('bad_bet');
+    await addCoins(db, C, 400, 'admin_grant');
+    expect((await playChinchiro(db, ccfg(), C, 100, seq([0]), NOW)).status).toBe('reserve');
+    // 親: 1・1・1
+    const r = await playChinchiro(db, ccfg(), A, 100, seq([0, 0, 0]), NOW);
+    expect(r.status === 'ok' && r.row).toMatchObject({ bet: 500, payout: 0 });
+    expect(await bal(A)).toBe(4500);
+    // 親: 3・3・2（2 の目）、子: 5・5・6（6 の目）→ 子の勝ち
+    const w = await playChinchiro(db, ccfg(), A, 100, seq([2, 2, 1, 4, 4, 5]), NOW);
+    expect(w.status === 'ok' && w.row).toMatchObject({ bet: 100, payout: 200 });
+    expect(await bal(A)).toBe(4600);
+    // 1 日の上限も 5 倍で見る
+    expect((await playChinchiro(db, ccfg({ dailyBetLimit: 900 }), A, 100, seq([0]), NOW)).status).toBe('limit');
+  });
+
   it('スロット: 小役はその回に払う・はずれは 0', async () => {
     // 1000 / 65536 はぶどう（×2.5）
     const win = await playSlots(db, ccfg(), A, 10, seq([1000, 3, 5, 7]), NOW);

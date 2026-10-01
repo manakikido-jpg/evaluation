@@ -49,6 +49,7 @@ export type CoinReason =
   | 'casino_refund'
   | 'casino_buyin'
   | 'casino_cashout'
+  | 'casino_hold'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -273,5 +274,6 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   casino_refund: 'カジノの返金',
   casino_buyin: 'ポーカーの卓に持ち込んだ',
   casino_cashout: 'ポーカーの卓から引き上げた',
+  casino_hold: 'ちんちろ卓で預けた（負けの備え・残りは返る）',
   adjust: '調整',
 };

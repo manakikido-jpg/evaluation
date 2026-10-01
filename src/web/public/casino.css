@@ -1165,3 +1165,55 @@ body.casino { background: #070d0b; }
 .c-rules-on ul { margin: 6px 0 0; padding-left: 1.1em; }
 .c-rules-on li.off { opacity: 0.5; }
 .c-tag.c-lock { background: rgba(80, 140, 255, 0.25); }
+
+/* ───── 🎲 ちんちろりん（どんぶりとサイコロ） ───── */
+.c-chin { display: flex; flex-direction: column; gap: 12px; }
+.c-bowl-wrap { display: flex; flex-direction: column; gap: 6px; }
+.c-bowl-who { display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; }
+.c-bowl-hand { padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: var(--c-gold); }
+.c-bowl-hand.h-pin, .c-bowl-hand.h-zoro, .c-bowl-hand.h-shigoro { background: linear-gradient(90deg, #c8961e, #f7d77a); color: #2a1606; }
+.c-bowl-hand.h-hifumi, .c-bowl-hand.h-menashi { color: #ff8a9a; }
+.c-bowl { position: relative; margin: 0 auto; width: min(100%, 420px); min-height: 92px; padding: 16px 18px; border-radius: 50% / 34%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: radial-gradient(ellipse at 50% 42%, #fdfbf4 0 38%, #e9e2cf 58%, #b8ac8e 72%, #6a5a3a 74%, #2a2014 82%); box-shadow: inset 0 -10px 22px rgba(0, 0, 0, 0.25), 0 10px 22px rgba(0, 0, 0, 0.5), 0 0 0 3px #1e140a; }
+.c-bowl::before { content: ''; position: absolute; inset: 8% 12% auto; height: 22%; border-radius: 50%; background: radial-gradient(ellipse, rgba(255, 255, 255, 0.5), transparent 70%); pointer-events: none; }
+.c-bowl-empty { color: #6a5a3a; margin: 0; }
+.c-bowl-wrap.active .c-bowl { box-shadow: inset 0 -10px 22px rgba(0, 0, 0, 0.25), 0 10px 22px rgba(0, 0, 0, 0.5), 0 0 0 3px var(--c-gold), 0 0 20px rgba(226, 179, 64, 0.5); }
+.c-roll { display: flex; align-items: center; gap: 10px; opacity: 0.55; }
+.c-roll.got, .c-roll:last-child { opacity: 1; }
+.c-roll-no { font-size: 0.7rem; color: #6a5a3a; width: 1.2em; text-align: right; }
+.c-roll-no::after { content: '投'; }
+.c-roll-hand { min-width: 5.5em; font-size: 0.82rem; font-weight: 800; color: #6a4a10; animation: fadein 0.3s ease-out both; animation-delay: calc(var(--d, 0s) + 0.8s); }
+.c-roll:not(.got) .c-roll-hand { color: #9a8a6a; font-weight: 600; }
+.c-roll.got.h-pin .c-roll-hand, .c-roll.got.h-zoro .c-roll-hand, .c-roll.got.h-shigoro .c-roll-hand { color: #c8103a; }
+.c-dice { display: inline-flex; gap: 8px; }
+.c-die { --s: 40px; position: relative; display: inline-grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); width: var(--s); height: var(--s); padding: 5px; box-sizing: border-box; border-radius: 9px; background: linear-gradient(145deg, #ffffff, #e6e0d4); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12), 0 3px 6px rgba(0, 0, 0, 0.35); }
+.c-die .p { width: 70%; height: 70%; margin: auto; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #555, #111); }
+.c-die .p.tl { grid-area: 1 / 1; } .c-die .p.tr { grid-area: 1 / 3; } .c-die .p.ml { grid-area: 2 / 1; } .c-die .p.mr { grid-area: 2 / 3; } .c-die .p.c { grid-area: 2 / 2; } .c-die .p.bl { grid-area: 3 / 1; } .c-die .p.br { grid-area: 3 / 3; }
+.c-die.f-1 .p.c { width: 95%; height: 95%; background: radial-gradient(circle at 35% 30%, #ff5a6a, #b8001a); }
+.c-roll:not(.still) .c-die { animation: tumble 0.75s cubic-bezier(0.25, 1.4, 0.45, 1) both; animation-delay: var(--d, 0s); }
+.c-roll:not(.still) .c-die:nth-child(2) { animation-delay: calc(var(--d, 0s) + 0.06s); animation-duration: 0.85s; }
+.c-roll:not(.still) .c-die:nth-child(3) { animation-delay: calc(var(--d, 0s) + 0.12s); animation-duration: 0.95s; }
+.c-roll:not(.still) { animation: fadein 0.01s both; animation-delay: var(--d, 0s); }
+.c-roll.still .c-roll-hand { animation: none; }
+@keyframes tumble { 0% { transform: translate(-60px, -46px) rotate(-260deg) scale(0.6); opacity: 0; } 35% { opacity: 1; } 60% { transform: translate(8px, 6px) rotate(30deg) scale(1.05); } 80% { transform: translate(-3px, -2px) rotate(-8deg); } 100% { transform: none; } }
+@keyframes fadein { from { opacity: 0; } }
+.c-bowl-idle .c-die { animation: idle 2.4s ease-in-out infinite alternate; }
+.c-bowl-idle .c-die:nth-child(2) { animation-delay: 0.3s; } .c-bowl-idle .c-die:nth-child(3) { animation-delay: 0.6s; }
+@keyframes idle { to { transform: rotate(12deg) translateY(-3px); } }
+.c-chin-guide { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+.c-chin-guide li { display: flex; gap: 8px; align-items: baseline; }
+.c-chin-guide li span { margin-left: auto; font-weight: 800; color: var(--c-gold); white-space: nowrap; }
+.c-chin-decided { margin: 0; font-weight: 700; }
+.c-chin-note { margin-top: -6px; font-size: 0.8rem; }
+.c-chin-seats .c-seat { min-width: 0; }
+.c-chin-seats .c-bowl { min-height: 0; padding: 10px 12px; border-radius: 18px; }
+.c-chin-seats .c-die { --s: 28px; padding: 3px; border-radius: 6px; }
+.c-chin-seats .c-dice { gap: 5px; }
+.c-chin-seats .c-roll-hand { min-width: 0; font-size: 0.72rem; }
+.c-roll-btn { font-size: 1.1rem; padding: 12px 22px; }
+@media (max-width: 520px) {
+  .c-die { --s: 34px; }
+  .c-bowl { padding: 14px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .c-roll .c-die, .c-bowl-idle .c-die { animation: none !important; }
+}
