@@ -761,3 +761,90 @@ body.casino { background: #070d0b; }
   .c-rb-board .rn-35 { grid-column: 2; grid-row: 13; }
   .c-rb-board .rn-36 { grid-column: 3; grid-row: 13; }
 }
+
+/* ───── 🎡 回るルーレット（数字入りの盤・逆に回る玉・止まってから結果） ───── */
+.c-wheel2 { position: relative; width: min(330px, 84vw); aspect-ratio: 1; margin: 6px auto; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.6)); }
+.c-wheel2::before { content: ''; position: absolute; inset: -12px; border-radius: 50%; background: radial-gradient(circle, transparent 60%, rgba(0, 0, 0, 0.5) 61%, transparent 64%), conic-gradient(from 0deg, #6b4216, #c8961e, #6b4216, #3b2412, #c8961e, #6b4216, #3b2412, #c8961e, #6b4216); box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.8), 0 0 0 2px #f7da8b; }
+.c-wheel2-disc { position: absolute; inset: 0; width: 100%; height: 100%; border: 6px solid #2a190b; }
+.c-wheel2 .pk { position: absolute; left: 50%; top: 0; width: 0; height: 50%; transform-origin: 50% 100%; pointer-events: none; }
+.c-wheel2 .pk b { position: absolute; top: 4px; left: 0; transform: translateX(-50%); font-size: clamp(0.5rem, 2.6vw, 0.72rem); font-weight: 800; color: #fff; text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums; }
+.c-wheel2-hub { position: absolute; inset: 34%; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff3c9 0 6%, #e2b340 7% 18%, #6b4216 19% 22%, #2b1a0e 23% 60%, #c8961e 61% 64%, #2b1a0e 65%); box-shadow: 0 0 12px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.8); }
+.c-wheel2-hub::before { content: ''; position: absolute; left: 50%; top: 12%; bottom: 12%; width: 8%; transform: translateX(-50%); border-radius: 6px; background: linear-gradient(90deg, #8a6114, #f7da8b, #8a6114); }
+.c-wheel2-hub::after { content: ''; position: absolute; top: 50%; left: 12%; right: 12%; height: 8%; transform: translateY(-50%); border-radius: 6px; background: linear-gradient(180deg, #8a6114, #f7da8b, #8a6114); }
+.c-wheel2 .c-wheel-pin { top: -26px; font-size: 1.8rem; z-index: 3; color: #f7da8b; text-shadow: 0 0 10px rgba(226, 179, 64, 0.9), 0 2px 3px #000; }
+.c-wheel2.idle .c-wheel2-disc { animation: idlespin 40s linear infinite; }
+@keyframes idlespin { to { transform: rotate(360deg); } }
+.c-wheel2.spun .c-wheel2-disc { animation: spin 5s cubic-bezier(0.1, 0.62, 0.16, 1) forwards; }
+/* 玉: 逆に回って減速し、内側へ落ちて跳ねる */
+.c-ball-track { position: absolute; inset: 0; z-index: 2; animation: orbit 5s cubic-bezier(0.12, 0.55, 0.2, 1) forwards; pointer-events: none; }
+@keyframes orbit { from { transform: rotate(0deg); } to { transform: rotate(-2160deg); } }
+.c-ball { position: absolute; left: 50%; top: 1.5%; width: 4.6%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #dcdcdc 55%, #9a9a9a); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.7); animation: drop 5s linear forwards; }
+@keyframes drop {
+  0%, 62% { top: 1.5%; }
+  70% { top: 7%; }
+  75% { top: 4.5%; }
+  81% { top: 10%; }
+  86% { top: 8.4%; }
+  92% { top: 11.5%; }
+  96% { top: 10.8%; }
+  100% { top: 11.8%; }
+}
+.c-wheel2 .c-ball-num { z-index: 4; width: 30%; height: 30%; font-size: clamp(1.4rem, 7vw, 2.2rem); animation: reveal 0.5s 5s ease-out both; }
+@keyframes reveal { 0% { opacity: 0; transform: scale(0.3); } 70% { transform: scale(1.18); } 100% { opacity: 1; transform: scale(1); } }
+.c-wheel2.spun::after { content: ''; position: absolute; inset: -16px; border-radius: 50%; pointer-events: none; animation: flash 1.2s 5s ease-out both; }
+@keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(255, 234, 150, 0.9); } 100% { box-shadow: 0 0 0 30px rgba(255, 234, 150, 0); } }
+/* 止まるまで結果は隠す */
+.c-rl-outcome { animation: fadeup 0.5s 5.2s ease-out both; }
+@keyframes fadeup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.c-rl-outcome .c-result { animation: none; }
+.c-rb-cell.hit { box-shadow: none; animation: hitglow 0.6s 5.3s ease-out both; }
+@keyframes hitglow { from { box-shadow: none; } to { box-shadow: 0 0 0 3px var(--c-gold), 0 0 18px rgba(226, 179, 64, 0.8); } }
+.c-balance .bal-old, .c-balance .bal-new { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; }
+.c-balance .bal-old { animation: collapse 0s 5.2s forwards; }
+.c-balance .bal-new { max-width: 0; animation: expand 0.4s 5.2s ease-out forwards; }
+@keyframes collapse { to { max-width: 0; } }
+@keyframes expand { to { max-width: 12em; } }
+@media (prefers-reduced-motion: reduce) {
+  .c-wheel2.idle .c-wheel2-disc { animation: none; }
+  .c-wheel2.spun .c-wheel2-disc, .c-ball-track, .c-ball { animation-duration: 0.01s; }
+  .c-wheel2 .c-ball-num, .c-rl-outcome, .c-rb-cell.hit, .c-wheel2.spun::after { animation-delay: 0s; }
+  .c-balance .bal-old { max-width: 0; animation: none; }
+  .c-balance .bal-new { max-width: 12em; animation: none; }
+}
+.c-wheel2 .pk-0 { transform: rotate(4.86deg); }
+.c-wheel2 .pk-1 { transform: rotate(14.59deg); }
+.c-wheel2 .pk-2 { transform: rotate(24.32deg); }
+.c-wheel2 .pk-3 { transform: rotate(34.05deg); }
+.c-wheel2 .pk-4 { transform: rotate(43.78deg); }
+.c-wheel2 .pk-5 { transform: rotate(53.51deg); }
+.c-wheel2 .pk-6 { transform: rotate(63.24deg); }
+.c-wheel2 .pk-7 { transform: rotate(72.97deg); }
+.c-wheel2 .pk-8 { transform: rotate(82.70deg); }
+.c-wheel2 .pk-9 { transform: rotate(92.43deg); }
+.c-wheel2 .pk-10 { transform: rotate(102.16deg); }
+.c-wheel2 .pk-11 { transform: rotate(111.89deg); }
+.c-wheel2 .pk-12 { transform: rotate(121.62deg); }
+.c-wheel2 .pk-13 { transform: rotate(131.35deg); }
+.c-wheel2 .pk-14 { transform: rotate(141.08deg); }
+.c-wheel2 .pk-15 { transform: rotate(150.81deg); }
+.c-wheel2 .pk-16 { transform: rotate(160.54deg); }
+.c-wheel2 .pk-17 { transform: rotate(170.27deg); }
+.c-wheel2 .pk-18 { transform: rotate(180.00deg); }
+.c-wheel2 .pk-19 { transform: rotate(189.73deg); }
+.c-wheel2 .pk-20 { transform: rotate(199.46deg); }
+.c-wheel2 .pk-21 { transform: rotate(209.19deg); }
+.c-wheel2 .pk-22 { transform: rotate(218.92deg); }
+.c-wheel2 .pk-23 { transform: rotate(228.65deg); }
+.c-wheel2 .pk-24 { transform: rotate(238.38deg); }
+.c-wheel2 .pk-25 { transform: rotate(248.11deg); }
+.c-wheel2 .pk-26 { transform: rotate(257.84deg); }
+.c-wheel2 .pk-27 { transform: rotate(267.57deg); }
+.c-wheel2 .pk-28 { transform: rotate(277.30deg); }
+.c-wheel2 .pk-29 { transform: rotate(287.03deg); }
+.c-wheel2 .pk-30 { transform: rotate(296.76deg); }
+.c-wheel2 .pk-31 { transform: rotate(306.49deg); }
+.c-wheel2 .pk-32 { transform: rotate(316.22deg); }
+.c-wheel2 .pk-33 { transform: rotate(325.95deg); }
+.c-wheel2 .pk-34 { transform: rotate(335.68deg); }
+.c-wheel2 .pk-35 { transform: rotate(345.41deg); }
+.c-wheel2 .pk-36 { transform: rotate(355.14deg); }

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-01-roulette-spin',
+    date: '2026-10-01',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🎡 ルーレットの回転に臨場感を',
+    items: [
+      '盤に数字が入り、白い玉が逆向きに回って減速し、カラカラと跳ねてポケットに落ちる',
+      '玉が止まるまで（約 5 秒）、出た数字・勝ち負け・残高は見せない。止まると数字が光って出る',
+      '回していないときは、盤がゆっくり回っている',
+    ],
+  },
+  {
     id: '2026-10-01-roulette-board',
     date: '2026-10-01',
     kind: 'improve',

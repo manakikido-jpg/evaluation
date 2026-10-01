@@ -146,9 +146,9 @@ describe('🎰 カジノ: 遊ぶ', () => {
     const html = await (await get(loc, cookie!)).text();
     expect(html).toContain('c-slot spun');
     expect(html).toMatch(/賭け 100 → 戻り \d/);
-    const b = await balance(A);
-    expect(b).toBeLessThanOrEqual(5000 - 100 + 77_700);
-    expect(b).not.toBe(5000);
+    // 残高は「5000 − 賭け + 戻り」（×1 で戻りが 100 のときもある）
+    const back = Number(/戻り ([\d,]+)/.exec(html)![1]!.replace(/,/g, ''));
+    expect(await balance(A)).toBe(5000 - 100 + back);
     // ほかの人の結果は見えない
     const other = await casinoLogin(B);
     expect(await (await get(loc, other.cookie!)).text()).not.toContain('c-slot spun');

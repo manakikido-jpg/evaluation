@@ -1,5 +1,5 @@
 import type { CasinoConfig } from '../../config.js';
-import { rouletteBetLabel, rouletteColor, rouletteMultiplier, ROULETTE_BETS, ROULETTE_MAX_SPOTS, type RouletteBet } from '../../services/casino/roulette.js';
+import { rouletteBetLabel, rouletteColor, rouletteMultiplier, ROULETTE_BETS, ROULETTE_MAX_SPOTS, ROULETTE_ORDER, type RouletteBet } from '../../services/casino/roulette.js';
 import type { Coin } from './casino.js';
 
 /**
@@ -114,5 +114,34 @@ export function RouletteStakes(p: { stakes: { on: RouletteBet; amount: number; p
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * 回るルーレット。盤は勝った数字が上（▼）に来るように止まり、玉は逆に回って減速し、跳ねてそのポケットに落ちる。
+ * 止まるまで（約 5 秒）当たりの数字・結果は見せない（CSS の遅れ）。回していないときはゆっくり回り続ける
+ */
+export function RouletteWheel(p: { number: number | null | undefined }) {
+  const spun = p.number !== null && p.number !== undefined;
+  return (
+    <div class={`c-wheel2${spun ? ' spun' : ' idle'}`} aria-label={spun ? `出た数字 ${p.number}` : 'ルーレット'}>
+      <div class={`c-wheel c-wheel2-disc${spun ? ` land-${p.number}` : ''}`} aria-hidden="true">
+        {ROULETTE_ORDER.map((n, i) => (
+          <span class={`pk pk-${i}`}>
+            <b>{n}</b>
+          </span>
+        ))}
+        <span class="c-wheel2-hub"></span>
+      </div>
+      <div class="c-wheel-pin" aria-hidden="true">
+        ▼
+      </div>
+      {spun && (
+        <div class="c-ball-track" aria-hidden="true">
+          <span class="c-ball"></span>
+        </div>
+      )}
+      {spun && <div class={`c-ball-num ${rouletteColor(p.number!)}`}>{p.number}</div>}
+    </div>
   );
 }

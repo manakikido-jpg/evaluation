@@ -8,7 +8,7 @@ import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteSt
 import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
 import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteColor, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
-import { RouletteBoard, RouletteStakes } from './rouletteBoard.js';
+import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
 import { SLOT_SYMBOLS, slotEmoji } from '../../services/casino/slots.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
 import { assetUrl } from '../assets.js';
@@ -20,7 +20,8 @@ const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 /** みんなで遊ぶもの（ロビーで分けて出す） */
 const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'daifugo', 'babanuki', 'versus'];
 
-export type CasinoMe = { session: MemberSession; balance: number; coin: Coin };
+/** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
+export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number };
 
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean }) {
   const me = props.me;
@@ -51,7 +52,14 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
           {me && (
             <div class="c-me">
               <span class="c-balance" title="持っている銭">
-                {money(me.coin, me.balance)}
+                {me.revealFrom !== undefined && me.revealFrom !== me.balance ? (
+                  <>
+                    <span class="bal-old">{money(me.coin, me.revealFrom)}</span>
+                    <span class="bal-new">{money(me.coin, me.balance)}</span>
+                  </>
+                ) : (
+                  money(me.coin, me.balance)
+                )}
               </span>
               {me.session.avatarUrl && <img src={me.session.avatarUrl} alt="" class="c-avatar" />}
               <span class="c-name">{me.session.displayName}</span>
@@ -569,19 +577,16 @@ export function RoulettePage(p: GamePage) {
   const s = p.row?.state as RouletteState | undefined;
   // 前の形（1 か所だけ）の結果も出せるように
   const stakes = s?.stakes ?? (s?.bet ? [{ on: s.bet, amount: p.row!.bet, payout: p.row!.payout }] : []);
+  // 回したばかり（1 分以内）なら、止まるまで残高は戻りを足す前を出す
+  const fresh = p.row?.finishedAt && Date.now() - p.row.finishedAt.getTime() < 60_000;
+  const me = s && fresh ? { ...p.me, revealFrom: p.me.balance - p.row!.payout } : p.me;
   return (
-    <CasinoLayout title="ルーレット" me={p.me} back>
+    <CasinoLayout title="ルーレット" me={me} back>
       <h1 class="c-h1">🎡 ルーレット</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-table c-rl-table">
         <div class="c-rl-top">
-          <div class="c-wheel-wrap">
-            <div class={`c-wheel${s ? ` land-${s.number}` : ''}`} aria-hidden="true"></div>
-            <div class="c-wheel-pin" aria-hidden="true">
-              ▼
-            </div>
-            {s && <div class={`c-ball-num ${rouletteColor(s.number)}`}>{s.number}</div>}
-          </div>
+          <RouletteWheel number={s?.number} />
           {s && (
             <div class="c-rl-outcome">
               <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={`${s.number}（${s.number === 0 ? '緑' : rouletteColor(s.number) === 'red' ? '赤' : '黒'}）`} />

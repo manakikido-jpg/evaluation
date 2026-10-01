@@ -10,7 +10,7 @@ import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pok
 import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
 import { PACES, paceMult, TABLE_LABEL, type Pace } from '../../services/casino/tables/types.js';
 import { BetForm, CasinoLayout, Msg, PlayingCard, type CasinoMe, type Coin } from './casino.js';
-import { RouletteBoard, RouletteStakes } from './rouletteBoard.js';
+import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -446,25 +446,20 @@ function RlView({ t, s, me, casino, now }: ViewProps<RlTableState>) {
     <>
       <section class="c-table">
         <div class="c-phase">
-          {s.phase === 'betting' ? (s.deadline ? PHASE_BET : 'だれかが賭けると始まります') : `結果: ${s.number}`}
+          {s.phase === 'betting' ? (s.deadline ? PHASE_BET : 'だれかが賭けると始まります') : '🎡 回っています…'}
           <Countdown at={s.deadline} now={now} />
         </div>
         {s.history.length > 0 && (
           <div class="c-road">
-            {s.history.map((n) => (
+            {/* 回っている間は、いま出た数字を見せない */}
+            {(s.phase === 'result' ? s.history.slice(0, -1) : s.history).map((n) => (
               <span class={`c-rl-hist ${rouletteColor(n)}`}>{n}</span>
             ))}
           </div>
         )}
-        {s.phase === 'result' && s.number !== null && (
-          <div class="c-wheel-wrap">
-            <div class={`c-wheel land-${s.number}`} aria-hidden="true"></div>
-            <div class="c-wheel-pin" aria-hidden="true">
-              ▼
-            </div>
-            <div class={`c-ball-num ${rouletteColor(s.number)}`}>{s.number}</div>
-          </div>
-        )}
+        <div class="c-rl-top">
+          <RouletteWheel number={s.phase === 'result' ? s.number : null} />
+        </div>
         <div class="c-seats">
           {s.seats.map((x) => (
             <div class={`c-seat${x.id === me.session.userId ? ' me' : ''}${x.ready ? ' ready' : ''}`}>
@@ -483,7 +478,11 @@ function RlView({ t, s, me, casino, now }: ViewProps<RlTableState>) {
               ) : (
                 <div class="c-muted">{s.phase === 'betting' ? '考え中…' : '見ている'}</div>
               )}
-              {x.payout !== undefined && <SeatResult bet={x.bets.reduce((n, b) => n + b.amount, 0)} payout={x.payout} />}
+              {x.payout !== undefined && (
+                <div class="c-rl-outcome">
+                  <SeatResult bet={x.bets.reduce((n, b) => n + b.amount, 0)} payout={x.payout} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -521,7 +520,7 @@ function RlView({ t, s, me, casino, now }: ViewProps<RlTableState>) {
         </>
       )}
       {my && s.phase === 'result' && my.bets.length > 0 && (
-        <section class="c-panel">
+        <section class="c-panel c-rl-outcome">
           <h2>あなたの結果</h2>
           <RouletteStakes stakes={my.bets} number={s.number} coin={me.coin} />
         </section>

@@ -317,7 +317,8 @@ function rlRound(state: RlTableState, ctx: Ctx): Step<RlTableState> {
   s.number = n;
   s.history = [...s.history, n].slice(-20);
   s.phase = 'result';
-  s.deadline = ctx.now + (RESULT_SECONDS + 3) * 1000;
+  // 玉が落ちるまで約 5 秒。そのあと結果を見る時間
+  s.deadline = ctx.now + (RESULT_SECONDS + 7) * 1000;
   return ok(s, { credits, records });
 }
 
