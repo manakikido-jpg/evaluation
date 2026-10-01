@@ -96,7 +96,28 @@ const LOGIN_ERROR: Record<string, string> = {
   no_role: 'カジノのロールがある人だけ入れます。入りたいときは運営に声をかけてください。',
   expired: 'ログインの期限が切れました。もう一度ログインしてください。',
   closed: 'いまカジノはお休みです。',
+  link: 'このリンクはもう使えません（10 分たったか、1 回使ったリンクです）。Discord で /カジノ をもう一度打つと、新しいリンクが届きます。',
 };
+
+/** ログインなしで入るリンクを開いたとき（押すまでは入らない。リンクの下見で使われてしまわないように） */
+export function CasinoLinkPage(props: { name: string; action: string }) {
+  return (
+    <CasinoLayout title="入る">
+      <section class="c-hero">
+        <h1>咲楽ノ宮カジノ</h1>
+        <p>
+          <b>{props.name}</b> さんとして入ります。
+        </p>
+        <form method="post" action={props.action}>
+          <button type="submit" class="c-btn c-btn-gold">
+            🎰 入る
+          </button>
+        </form>
+        <p class="c-note">このリンクは 1 回だけ・10 分だけ使えます。人には渡さないでください。</p>
+      </section>
+    </CasinoLayout>
+  );
+}
 
 export function CasinoLanding(props: { error?: string; roleName?: string }) {
   return (
@@ -117,6 +138,7 @@ export function CasinoLanding(props: { error?: string; roleName?: string }) {
           Discord でログインして入る
         </a>
         <p class="c-note">ログインで分かるのは Discord の名前とアイコンだけです（メールなどは見ません）。</p>
+        <p class="c-note">💡 Discord で <b>/カジノ</b> を打つと、ログインしなくても入れるリンクが届きます。</p>
       </section>
     </CasinoLayout>
   );

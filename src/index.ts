@@ -82,7 +82,7 @@ async function main(): Promise<void> {
   const gacha = new GachaApp(db, cfg);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
-  const casino = new CasinoApp(cfg, env.WEB_BASE_URL);
+  const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
   const glossary = new GlossaryApp(db, cfg);
   const tempGrants = new TempGrantApp(db, cfg, actions);
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);

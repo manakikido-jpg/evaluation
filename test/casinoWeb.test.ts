@@ -3,6 +3,7 @@ import type { Db } from '../src/db/client.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
 import { casinoGames } from '../src/db/schema.js';
 import { REELS } from '../src/services/casino/slots.js';
+import { createLoginLink } from '../src/services/casino/loginLinks.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
 import { loadOverrides } from '../src/services/settings.js';
@@ -132,6 +133,27 @@ describe('🎰 カジノ: 入口とログイン', () => {
     roles.set(B, [ROLE.ujiko]);
     clock = new Date(clock.getTime() + 11 * 60_000);
     expect((await get('/casino/slots', cookie!)).headers.get('location')).toBe('/casino?e=no_role');
+  });
+
+  it('/カジノ のリンク: 開くと確かめる画面（まだ入らない）、「入る」で入れる。1 回きり・10 分・ほかのサイトからは送れない', async () => {
+    const token = await createLoginLink(db, { id: A, displayName: 'あや', avatarUrl: null }, clock);
+    const page = await (await app.request(`/casino/link/${token}`)).text();
+    expect(page).toContain('あや</b> さんとして入ります');
+    expect((await app.request(`/casino/link/${token}`, { method: 'POST', headers: { origin: 'https://evil.example' } })).status).toBe(403);
+    const res = await app.request(`/casino/link/${token}`, { method: 'POST', headers: { origin: BASE } });
+    expect(res.headers.get('location')).toBe('/casino');
+    const cookie = cookiesFrom(res).sakura_casino!;
+    expect(await (await get('/casino', cookie)).text()).toContain('ようこそ');
+    // 2 回目は使えない
+    expect((await app.request(`/casino/link/${token}`, { method: 'POST' })).headers.get('location')).toBe('/casino?e=link');
+    expect(await (await app.request(`/casino/link/${token}`)).text()).toContain('このリンクはもう使えません');
+    // 10 分たったら使えない
+    const old = await createLoginLink(db, { id: A, displayName: 'あや', avatarUrl: null }, new Date(clock.getTime() - 11 * 60_000));
+    expect((await app.request(`/casino/link/${old}`, { method: 'POST' })).headers.get('location')).toBe('/casino?e=link');
+    // 位のない人は、リンクがあっても入れない
+    const norank = await createLoginLink(db, { id: NORANK, displayName: 'x', avatarUrl: null }, clock);
+    expect((await app.request(`/casino/link/${norank}`, { method: 'POST' })).headers.get('location')).toBe('/casino?e=no_rank');
+    expect((await app.request('/casino/link/short')).status).toBe(200);
   });
 
   it('位が外れたら、次に確かめたときにログアウト', async () => {

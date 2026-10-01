@@ -126,6 +126,17 @@ export const memberSessions = pgTable('member_sessions', {
 
 export type MemberSession = typeof memberSessions.$inferSelect;
 
+/** カジノにログインなしで入るリンク（/カジノ で BOT が作る。1 回きり・短い時間だけ）。id はリンクの印のハッシュ */
+export const memberLoginLinks = pgTable('member_login_links', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  displayName: text('display_name').notNull(),
+  avatarUrl: text('avatar_url'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** カジノの 1 回のゲーム（1 人で遊ぶもの）。state は BOT 側だけが持つ（山札など、見せない分も入る） */
 export const casinoGames = pgTable(
   'casino_games',

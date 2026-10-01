@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-01-casino-link',
+    date: '2026-10-01',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🎰 /カジノ からログインなしで入れるように',
+    items: [
+      'Discord で /カジノ を打つと、自分にだけ見える「🎰 カジノに入る」ボタンが届く。押して「入る」でそのまま入れる（Discord のログイン画面なし）',
+      'リンクは 1 回きり・10 分だけ。入るときにサーバーにいるか・入れるロールがあるかは確かめる',
+    ],
+  },
+  {
     id: '2026-10-01-casino-role',
     date: '2026-10-01',
     kind: 'new',

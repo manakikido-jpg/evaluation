@@ -407,6 +407,13 @@
       "when": 1790790153666,
       "tag": "0057_casino_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790857349827,
+      "tag": "0058_casino_login_links",
+      "breakpoints": true
     }
   ]
 }

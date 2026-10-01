@@ -44,6 +44,7 @@ import {
   BlackjackPage,
   CasinoClosed,
   CasinoLanding,
+  CasinoLinkPage,
   CasinoLobby,
   casinoMsg,
   HighLowPage,
@@ -55,6 +56,7 @@ import {
   type CasinoMe,
 } from './views/casino.js';
 import { SlotFloor, SlotsPage } from './views/slots.js';
+import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 
@@ -164,6 +166,33 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const state = randomToken();
     setCookie(c, STATE, state, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino/auth', maxAge: 600 });
     return c.redirect(api.authorizeUrl(state, redirectUri));
+  });
+
+  // ── ログインなしで入るリンク（Discord の /カジノ で本人にだけ渡す） ──
+  app.get('/casino/link/:token', async (c) => {
+    const user = await peekLoginLink(db, c.req.param('token') ?? '', d.now());
+    if (!user) return c.html(<CasinoLanding error="link" />);
+    return c.html(<CasinoLinkPage name={user.displayName} action={`/casino/link/${c.req.param('token')}`} />);
+  });
+  app.post('/casino/link/:token', async (c) => {
+    // ほかのサイトから送らせて、別の人として入らせることはさせない
+    const origin = c.req.header('origin');
+    if (origin && origin !== new URL(d.baseUrl).origin) return c.text('不正なリクエストです。', 403);
+    const user = await useLoginLink(db, c.req.param('token') ?? '', d.now());
+    if (!user) return c.redirect('/casino?e=link');
+    let roles;
+    try {
+      roles = await api.memberRoles(d.cfg().guildId, user.id);
+    } catch (err) {
+      logger.warn({ err }, 'casino link login failed');
+      return c.redirect('/casino?e=failed');
+    }
+    if (!roles) return c.redirect('/casino?e=not_member');
+    if (!casinoAllowed(d.cfg(), roles)) return c.redirect(`/casino?e=${deniedCode(d.cfg())}`);
+    const token = await createMemberSession(db, { id: user.id, username: user.displayName, displayName: user.displayName, avatarUrl: user.avatarUrl }, d.now());
+    setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino', maxAge: MEMBER_SESSION_DAYS * 86_400 });
+    await audit(db, { actorId: user.id, action: 'casino.login', detail: { via: 'link' }, via: 'web' });
+    return c.redirect('/casino');
   });
 
   app.get('/casino/auth/callback', async (c) => {
