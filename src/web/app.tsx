@@ -7,6 +7,7 @@ import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
 import { casinoDaily, slotSettingStats } from '../services/casino/report.js';
+import { resetState, runDemotions, startEvaluationReset, undoShuinReset } from '../services/evalReset.js';
 import { dayPicks, slotFloorData } from '../services/casino/slotFloor.js';
 import { matchStats, recentMatches } from '../services/casino/versus.js';
 import { CASINO_GAMES, type CasinoGame } from '../config.js';
@@ -3001,8 +3002,43 @@ export function createWebApp(deps: WebDeps) {
   const rankRoles = async () => (await loadRoles())?.filter((r) => r.id !== cfg.guildId && !r.managed);
 
   app.get('/ranks', async (c) => {
-    const [roles, { counts }] = await Promise.all([rankRoles(), roleMemberCounts(db)]);
-    return c.html(<RanksPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} roles={roles} counts={counts} flash={c.req.query('msg')} />);
+    const [roles, { counts }, reset] = await Promise.all([rankRoles(), roleMemberCounts(db), resetState(db)]);
+    // 役職の付け替えが途中なら続ける（再起動したあとなど）
+    if (reset && !reset.finishedAt) kickReset();
+    return c.html(<RanksPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} roles={roles} counts={counts} flash={c.req.query('msg')} reset={reset} />);
+  });
+
+  /** 🔄 評価のリセット（一度だけ・宮司）。役職の付け替えは裏で少しずつ */
+  let resetRunning = false;
+  const kickReset = () => {
+    if (resetRunning) return;
+    resetRunning = true;
+    void (async () => {
+      try {
+        for (let i = 0; i < 100_000; i++) {
+          if (await runDemotions(db, cfg, deps.discord, 10, now())) break;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      } catch (err) {
+        logger.warn({ err }, 'evaluation reset runner stopped');
+      } finally {
+        resetRunning = false;
+      }
+    })();
+  };
+  app.post('/ranks/reset', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'リセット') return c.redirect('/ranks?msg=reset_confirm#reset');
+    const r = await startEvaluationReset(db, cfg, c.get('session').userId, now());
+    if (r.status === 'already') return c.redirect('/ranks?msg=reset_already#reset');
+    kickReset();
+    return c.redirect('/ranks?msg=reset_started#reset');
+  });
+  app.post('/ranks/reset/undo', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    await undoShuinReset(db, c.get('session').userId, now());
+    return c.redirect('/ranks?msg=reset_undone#reset');
   });
 
   /** 役職の上書きを保存して、BOT・掲示に反映する */

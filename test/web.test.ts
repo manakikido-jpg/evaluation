@@ -637,6 +637,19 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.economy.menzaifuPrice).toBe(300);
   });
 
+  it('評価のリセット: 宮司だけ・「リセット」と入れたときだけ・一度だけ', async () => {
+    const s = await login(STAFF);
+    expect((await post('/ranks/reset', s, { _csrf: await csrfOf(s), confirm: 'リセット' })).status).toBe(403);
+    const g = await login(GUJI);
+    expect(await (await get('/ranks', g)).text()).toContain('action="/ranks/reset"');
+    expect((await post('/ranks/reset', g, { _csrf: await csrfOf(g), confirm: 'はい' })).headers.get('location')).toBe('/ranks?msg=reset_confirm#reset');
+    expect((await post('/ranks/reset', g, { _csrf: await csrfOf(g), confirm: 'リセット' })).headers.get('location')).toBe('/ranks?msg=reset_started#reset');
+    expect((await post('/ranks/reset', g, { _csrf: await csrfOf(g), confirm: 'リセット' })).headers.get('location')).toBe('/ranks?msg=reset_already#reset');
+    const page = await (await get('/ranks', g)).text();
+    expect(page).toContain('にリセットしました');
+    expect(page).toContain('action="/ranks/reset/undo"');
+  });
+
   it('役職: 宮司だけ。名前・絵文字・ロール・格・昇格ラインを変える・足す・消す', async () => {
     const { ROLE } = await import('./helpers.js');
     const { renderNotice } = await import('../src/services/notices.js');

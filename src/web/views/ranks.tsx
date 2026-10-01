@@ -2,6 +2,8 @@ import type { GuildConfig, Rank } from '../../config.js';
 import type { AdminSession } from '../../db/schema.js';
 import type { GuildRole } from '../../lib/discordRest.js';
 import { Layout } from './layout.js';
+import type { ResetState } from '../../services/evalReset.js';
+import { autoRanks } from '../../domain/ranks.js';
 
 export const RANKS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   saved: { text: '保存しました（BOT には 1 分以内に反映されます）。', kind: 'ok' },
@@ -11,6 +13,10 @@ export const RANKS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   invalid: { text: '保存できませんでした。名前が空・ロールが重なっている・昇格に必要なご縁が同じ役職がある、などを確かめてください。', kind: 'warn' },
   no_roles: { text: 'Discord からロールを読めませんでした。時間をおいてもう一度お試しください。', kind: 'warn' },
   locked: { text: 'この役職は消せません（設定ファイルの役職です）。', kind: 'warn' },
+  reset_started: { text: '🔄 評価をリセットしました。朱印は取り消し済み。役職の付け替えを少しずつ進めています（このページで進み具合が見られます）。', kind: 'ok' },
+  reset_confirm: { text: 'リセットするときは、確かめの欄に「リセット」と入れてください。', kind: 'warn' },
+  reset_already: { text: '評価のリセットはもう行っています（一度だけです）。', kind: 'warn' },
+  reset_undone: { text: '朱印を元に戻しました（役職は戻していません）。', kind: 'ok' },
 };
 
 function Csrf(props: { session: AdminSession }) {
@@ -49,6 +55,8 @@ export function RanksPage(props: {
   /** ロールごとの人数 */
   counts: Map<string, number>;
   flash?: string;
+  /** 評価のリセット（していなければ undefined） */
+  reset?: ResetState;
 }) {
   const { session, cfg, fileCfg } = props;
   const f = props.flash && Object.hasOwn(RANKS_FLASH, props.flash) ? RANKS_FLASH[props.flash] : undefined;
@@ -214,9 +222,64 @@ export function RanksPage(props: {
           </form>
         </section>
       )}
+      {session.level === 'guji' && <EvalReset session={session} cfg={cfg} reset={props.reset} />}
       <p>
         <a href="/settings#sec-ranks">← 設定へ</a> ・ <a href="/roles">ロールのページへ →</a>
       </p>
     </Layout>
+  );
+}
+
+/** 🔄 評価のリセット（一度だけ・宮司） */
+function EvalReset(props: { session: AdminSession; cfg: GuildConfig; reset?: ResetState }) {
+  const r = props.reset;
+  const base = autoRanks(props.cfg.ranks)[0];
+  const at = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  return (
+    <section class="card" id="reset">
+      <h2>🔄 評価のリセット（一度だけ）</h2>
+      {r ? (
+        <>
+          <p>
+            {at(r.at)} にリセットしました。取り消した朱印 {r.revoked.toLocaleString('ja-JP')} 件・役職を戻す人 {r.targets.length} 人。
+          </p>
+          <p class={r.finishedAt ? 'note' : 'flash ok'}>
+            役職の付け替え: {r.done} / {r.targets.length} 人{r.finishedAt ? `（${at(r.finishedAt)} に終わりました）` : '（進めています。ページを開き直すと進み具合が変わります）'}
+            {r.failed.length > 0 && `・うまくいかなかった人 ${r.failed.length} 人（BOT より上のロールなど。Discord で直してください）`}
+          </p>
+          {r.undoneAt ? (
+            <p class="note">{at(r.undoneAt)} に朱印を元に戻しました。</p>
+          ) : (
+            <form method="post" action="/ranks/reset/undo" class="inline-form">
+              <Csrf session={props.session} />
+              <button type="submit">
+                朱印だけ元に戻す（まちがえたとき）
+              </button>
+            </form>
+          )}
+        </>
+      ) : (
+        <>
+          <p>
+            みんなの評価をはじめからにします。<b>一度だけ</b>できます。
+          </p>
+          <ul>
+            <li>押されている朱印を全部「取り消し」にします（記録は残ります）。ご縁は全員 0 から。同じ相手にまた朱印を押せます（押し直しでは銭は出ません）。</li>
+            <li>ご縁で上がる役職を、全員 {base ? `${base.emoji ?? ''} ${base.name}` : 'いちばん下の役職'} に戻します。任命制の役職（宮司・神職など）と銭はそのままです。</li>
+            <li>役職の付け替えは Discord に 1 人ずつ頼むので、人数が多いと少し時間がかかります。</li>
+          </ul>
+          <form method="post" action="/ranks/reset" class="fields">
+            <Csrf session={props.session} />
+            <label class="field">
+              <span>確かめ: 「リセット」と入れてください</span>
+              <input type="text" name="confirm" required autocomplete="off" />
+            </label>
+            <button type="submit" class="danger">
+              評価をリセットする
+            </button>
+          </form>
+        </>
+      )}
+    </section>
   );
 }
