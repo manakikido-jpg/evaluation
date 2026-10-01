@@ -93,11 +93,12 @@ const LOGIN_ERROR: Record<string, string> = {
   failed: 'Discord とつながりませんでした。時間をおいてもう一度どうぞ。',
   not_member: '咲楽ノ宮のメンバーだけが入れます。',
   no_rank: '位（🔰参拝者 など）のロールがある人だけ入れます。',
+  no_role: 'カジノのロールがある人だけ入れます。入りたいときは運営に声をかけてください。',
   expired: 'ログインの期限が切れました。もう一度ログインしてください。',
   closed: 'いまカジノはお休みです。',
 };
 
-export function CasinoLanding(props: { error?: string }) {
+export function CasinoLanding(props: { error?: string; roleName?: string }) {
   return (
     <CasinoLayout title="入口">
       <section class="c-hero">
@@ -109,7 +110,9 @@ export function CasinoLanding(props: { error?: string }) {
         </div>
         <h1>咲楽ノ宮カジノ</h1>
         <p>ブラックジャック・バカラ・スロット・ルーレット・オセロ。サーバーの銭で遊べます。</p>
-        {props.error && LOGIN_ERROR[props.error] && <p class="c-alert">{LOGIN_ERROR[props.error]}</p>}
+        {props.error && LOGIN_ERROR[props.error] && (
+          <p class="c-alert">{props.error === 'no_role' && props.roleName ? `「${props.roleName}」のロールがある人だけ入れます。入りたいときは運営に声をかけてください。` : LOGIN_ERROR[props.error]}</p>
+        )}
         <a class="c-btn c-btn-discord" href="/casino/auth/discord">
           Discord でログインして入る
         </a>

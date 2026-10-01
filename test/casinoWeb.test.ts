@@ -121,6 +121,19 @@ describe('🎰 カジノ: 入口とログイン', () => {
     expect(admin.status).toBe(404);
   });
 
+  it('「カジノ」のロールを決めたら、そのロールがある人だけ（位は見ない）。外されたら次に確かめたときにログアウト', async () => {
+    current = { ...cfg, casino: { ...cfg.casino, accessRoleId: '760000000000000555', accessRoleName: '🎰 カジノ' } };
+    roles.set(B, [ROLE.ujiko, '760000000000000555']);
+    roles.set(NORANK, ['760000000000000555']);
+    expect((await casinoLogin(A)).location).toBe('/casino?e=no_role');
+    expect(await (await app.request('/casino?e=no_role')).text()).toContain('「🎰 カジノ」のロールがある人だけ');
+    expect((await casinoLogin(NORANK)).location).toBe('/casino');
+    const { cookie } = await casinoLogin(B);
+    roles.set(B, [ROLE.ujiko]);
+    clock = new Date(clock.getTime() + 11 * 60_000);
+    expect((await get('/casino/slots', cookie!)).headers.get('location')).toBe('/casino?e=no_role');
+  });
+
   it('位が外れたら、次に確かめたときにログアウト', async () => {
     const { cookie } = await casinoLogin(A);
     roles.set(A, []);
@@ -334,6 +347,20 @@ describe('🎰 カジノ（運営の画面）', () => {
     });
     expect(save.headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino).toMatchObject({ minBet: 20, maxBet: 3000, dailyBetLimit: 0, games: ['slots', 'versus'], slotMachines: [6, 'random', 2] });
+    // 入れる人をロールに（ロールを選ばなければ断る）
+    const pick = (extra: [string, string][]) =>
+      app.request('/economy/casino', {
+        method: 'POST',
+        headers: { cookie: g, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams([['_csrf', csrf], ['enabled', 'yes'], ['minBet', '10'], ['maxBet', '1000'], ['dailyBetLimit', '0'], ['games', 'slots'], ...extra]),
+      });
+    expect((await pick([['access', 'role']])).headers.get('location')).toBe('/economy/casino?msg=no_role_picked');
+    expect((await pick([['access', 'role'], ['accessRoleId', '760000000000000555']])).headers.get('location')).toBe('/economy/casino?msg=saved');
+    expect((await loadOverrides(db)).casino).toMatchObject({ requireRank: false, accessRoleId: '760000000000000555' });
+    await pick([['access', 'all']]);
+    const all = (await loadOverrides(db)).casino;
+    expect(all.requireRank).toBe(false);
+    expect(all.accessRoleId).toBeUndefined();
     const bad = await app.request('/economy/casino', {
       method: 'POST',
       headers: { cookie: g, 'content-type': 'application/x-www-form-urlencoded' },

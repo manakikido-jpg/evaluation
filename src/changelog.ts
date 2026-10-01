@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-01-casino-role',
+    date: '2026-10-01',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '🎰 カジノに入れる人をロールで決められるように',
+    items: [
+      '社務所の「カジノ」で、入れる人を「決めたロールがある人だけ」「位のロールがある人」「だれでも」から選べる',
+      '「🎰 カジノ ロールを用意する」で、カジノ用のロールを作ってすぐ使える。Discord でロールを渡した人だけが入れる',
+      'ロールを外された人は、10 分以内にカジノからログアウトされる',
+    ],
+  },
+  {
     id: '2026-10-01-slot-floor',
     date: '2026-10-01',
     kind: 'new',

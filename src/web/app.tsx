@@ -1222,7 +1222,7 @@ export function createWebApp(deps: WebDeps) {
     const q = c.req.query('range');
     const range: CasinoRange = q && Object.hasOwn(CASINO_RANGES, q) ? (q as CasinoRange) : '7d';
     const since = new Date(now().getTime() - CASINO_RANGES[range].days * 86_400_000);
-    const [stats, matches, recent, players7d, daily, floor, picks, settingStats] = await Promise.all([
+    const [stats, matches, recent, players7d, daily, floor, picks, settingStats, guildRoles] = await Promise.all([
       casinoStats(db, since),
       matchStats(db, since),
       recentMatches(db, 10),
@@ -1231,6 +1231,7 @@ export function createWebApp(deps: WebDeps) {
       slotFloorData(db, cfg, now()),
       dayPicks(db, now()),
       slotSettingStats(db, new Date(now().getTime() - 30 * 86_400_000)),
+      loadRoles(),
     ]);
     return c.html(
       <CasinoAdminPage
@@ -1248,6 +1249,7 @@ export function createWebApp(deps: WebDeps) {
         floor={floor.today}
         picks={picks}
         settingStats={settingStats}
+        roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed)}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
       />,
@@ -1268,7 +1270,22 @@ export function createWebApp(deps: WebDeps) {
     const int = (k: string) => (typeof body[k] === 'string' && /^\d{1,9}$/.test(body[k] as string) ? Number(body[k]) : NaN);
     const raw = body.games;
     const list = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((g): g is CasinoGame => typeof g === 'string' && (CASINO_GAMES as readonly string[]).includes(g));
-    const casino = { enabled: body.enabled === 'yes', requireRank: body.requireRank === 'yes', minBet: int('minBet'), maxBet: int('maxBet'), dailyBetLimit: int('dailyBetLimit'), games: CASINO_GAMES.filter((g) => list.includes(g)), knownGames: [...CASINO_GAMES], slotMachines: slotMachinesOf(body) };
+    // 入れる人: rank（位のロール）・role（決めたロール）・all（だれでも）。前の形（requireRank のチェック）も読む
+    const access = body.access === 'rank' || body.access === 'role' || body.access === 'all' ? body.access : body.requireRank === 'yes' ? 'rank' : 'all';
+    const roleId = typeof body.accessRoleId === 'string' && /^\d{5,25}$/.test(body.accessRoleId) ? body.accessRoleId : undefined;
+    if (access === 'role' && !roleId) return c.redirect('/economy/casino?msg=no_role_picked');
+    const roleName = access === 'role' ? ((await loadRoles())?.find((r) => r.id === roleId)?.name ?? cfg.casino.accessRoleName) : undefined;
+    const casino = {
+      enabled: body.enabled === 'yes',
+      requireRank: access === 'rank',
+      ...(access === 'role' ? { accessRoleId: roleId, ...(roleName ? { accessRoleName: roleName } : {}) } : {}),
+      minBet: int('minBet'),
+      maxBet: int('maxBet'),
+      dailyBetLimit: int('dailyBetLimit'),
+      games: CASINO_GAMES.filter((g) => list.includes(g)),
+      knownGames: [...CASINO_GAMES],
+      slotMachines: slotMachinesOf(body),
+    };
     if (!(casino.minBet <= casino.maxBet)) return c.redirect('/economy/casino?msg=invalid');
     const current = await loadOverrides(db);
     let overrides: Overrides;
@@ -1282,6 +1299,24 @@ export function createWebApp(deps: WebDeps) {
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'casino.settings', detail: casino, via: 'web' });
     return c.redirect('/economy/casino?msg=saved');
+  });
+
+  /** 🎰 カジノのロールを作って（同じ名前のロールがあればそれを）、入れる人をそのロールにする */
+  app.post('/economy/casino/role', async (c) => {
+    try {
+      const name = '🎰 カジノ';
+      const role = (await loadRoles())?.find((r) => r.name === name) ?? (await deps.discord.createRole(cfg.guildId, { name, color: 0xe2b340, permissions: '0', hoist: false, mentionable: false }, '管理画面（カジノに入れる人）'));
+      const current = await loadOverrides(db);
+      const overrides = overridesSchema.parse({ ...current, casino: { ...cfg.casino, ...current.casino, requireRank: false, accessRoleId: role.id, accessRoleName: role.name } });
+      applyOverrides(fileCfg(), overrides);
+      await saveOverrides(db, overrides, c.get('session').userId);
+      await deps.onSettingsSaved?.();
+      await audit(db, { actorId: c.get('session').userId, action: 'casino.role', detail: { roleId: role.id }, via: 'web' });
+      return c.redirect('/economy/casino?msg=role_made');
+    } catch (err) {
+      logger.warn({ err }, 'casino role create failed');
+      return c.redirect('/economy/casino?msg=role_failed');
+    }
   });
 
   /** ⚙ 見守りの設定 */

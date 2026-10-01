@@ -13,6 +13,9 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 export const CASINO_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   saved: { text: '🎰 カジノの設定を保存しました（1 分以内に反映されます）。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（最低の賭けは最高以下に）。', kind: 'warn' },
+  no_role_picked: { text: '「決めたロールがある人だけ」にするときは、ロールを選んでください。', kind: 'warn' },
+  role_made: { text: '🎰 カジノのロールを用意して、入れる人をそのロールにしました。Discord でメンバーにロールを渡してください。', kind: 'ok' },
+  role_failed: { text: 'ロールを作れませんでした。BOT に「ロールの管理」の権限があるか確かめてください。', kind: 'warn' },
 };
 
 export const CASINO_RANGES = { '1d': { label: '今日から 24 時間', days: 1 }, '7d': { label: '7 日', days: 7 }, '30d': { label: '30 日', days: 30 } } as const;
@@ -36,6 +39,7 @@ export function CasinoAdminPage(p: {
   /** 今日のおまかせの設定（台の番号 → 設定） */
   picks: Record<string, number>;
   settingStats: SettingStat[];
+  roles: { id: string; name: string }[];
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -51,7 +55,7 @@ export function CasinoAdminPage(p: {
           <code>{p.url}</code>
         </p>
         <p class="note">
-          メンバーはここから Discord でログインして遊びます（{c.requireRank ? '位のロールがある人だけ' : 'サーバーにいる人ならだれでも'}）。運営の画面（秘密の入口・ID とパスワード）とは別のログインで、こちらから運営の画面には入れません。Discord の
+          メンバーはここから Discord でログインして遊びます（{accessText(c)}）。運営の画面（秘密の入口・ID とパスワード）とは別のログインで、こちらから運営の画面には入れません。Discord の
           「/カジノ」でもこのリンクが出ます。
         </p>
         <p class="note">
@@ -140,10 +144,27 @@ export function CasinoAdminPage(p: {
               <input type="checkbox" name="enabled" value="yes" checked={c.enabled} />
               <span>カジノを開ける（止めるとメンバーには「お休み」と出ます。途中のゲームは開けたときに続けられます）</span>
             </label>
-            <label class="field check">
-              <input type="checkbox" name="requireRank" value="yes" checked={c.requireRank} />
-              <span>位のロール（🔰参拝者 など）がある人だけ入れる</span>
-            </label>
+            <fieldset class="perms access-fieldset">
+              <legend>入れる人</legend>
+              <label class="check">
+                <input type="radio" name="access" value="role" checked={Boolean(c.accessRoleId)} /> 決めたロールがある人だけ：
+                <select name="accessRoleId">
+                  <option value="">（ロールを選ぶ）</option>
+                  {p.roles.map((r) => (
+                    <option value={r.id} selected={r.id === c.accessRoleId}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label class="check">
+                <input type="radio" name="access" value="rank" checked={!c.accessRoleId && c.requireRank} /> 位のロール（🔰参拝者 など）がある人
+              </label>
+              <label class="check">
+                <input type="radio" name="access" value="all" checked={!c.accessRoleId && !c.requireRank} /> サーバーにいる人ならだれでも
+              </label>
+              <p class="note">「🎰 カジノ」のようなロールを作って、入れたい人にだけ Discord で渡す使い方ができます（下の「🎰 カジノ ロールを用意する」で作れます）。ロールを外された人は、10 分以内にカジノからログアウトされます。</p>
+            </fieldset>
             <label class="field">
               <span>1 回に賭けられる最低（{p.coinName}）</span>
               <input type="number" name="minBet" min={1} max={1000000} value={String(c.minBet)} required />
@@ -195,6 +216,10 @@ export function CasinoAdminPage(p: {
             <button type="submit" class="ok">
               保存
             </button>
+          </form>
+          <form method="post" action="/economy/casino/role" class="inline-form">
+            <input type="hidden" name="_csrf" value={p.session.csrfToken} />
+            <button type="submit">🎰 カジノ ロールを用意する（なければ作る）・入れる人をそのロールにする</button>
           </form>
         </section>
       )}
@@ -380,3 +405,7 @@ function SlotSelect(p: { i: number; value: number | 'random' | undefined }) {
     </label>
   );
 }
+
+/** 入れる人の説明 */
+const accessText = (c: CasinoConfig) =>
+  c.accessRoleId ? `「${c.accessRoleName ?? 'カジノ'}」のロールがある人だけ` : c.requireRank ? '位のロールがある人だけ' : 'サーバーにいる人ならだれでも';

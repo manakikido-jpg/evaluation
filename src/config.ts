@@ -348,8 +348,12 @@ export const casinoSchema = z.object({
   games: z.array(z.enum(CASINO_GAMES)).default([...CASINO_GAMES]),
   /** games を保存したときにあったゲーム（これにないゲームは、あとから足したものなので遊べるようにする） */
   knownGames: z.array(z.string()).optional(),
-  /** 位のロールがある人だけ入れる */
+  /** 位のロールがある人だけ入れる（accessRoleId を決めたときは、そちらを使う） */
   requireRank: z.boolean().default(true),
+  /** このロールがある人だけ入れる（「🎰 カジノ」など。決めると位のロールは見ない） */
+  accessRoleId: z.string().regex(/^\d{5,25}$/).optional(),
+  /** そのロールの名前（入れなかった人への案内に出す） */
+  accessRoleName: z.string().max(100).optional(),
   /** スロットの台（並び順に 1 番台・2 番台…）。それぞれの設定 1〜6、random はおまかせ（日替わり） */
   slotMachines: z
     .array(z.union([z.literal('random'), z.number().int().min(1).max(6)]))

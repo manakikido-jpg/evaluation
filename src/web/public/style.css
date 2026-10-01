@@ -769,3 +769,6 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .slot-settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 12px; margin: 8px 0; }
 .slot-more summary { cursor: pointer; margin: 6px 0; }
 .fields > button.ok { justify-self: start; align-self: end; }
+.fields .access-fieldset { grid-column: 1 / -1; display: block; }
+.access-fieldset label.check { display: block; margin: 4px 0; }
+.access-fieldset select { margin-left: 6px; }

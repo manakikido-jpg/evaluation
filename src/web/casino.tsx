@@ -70,7 +70,10 @@ type Deps = { db: Db; api: DiscordApi; cfg: () => GuildConfig; baseUrl: string; 
 type Me = CasinoMe;
 
 /** 位のロールがあるか（requireRank を止めていれば、サーバーにいればよい） */
-export const casinoAllowed = (cfg: GuildConfig, roles: string[]) => !cfg.casino.requireRank || cfg.ranks.some((r) => roles.includes(r.roleId));
+export const casinoAllowed = (cfg: GuildConfig, roles: string[]) =>
+  cfg.casino.accessRoleId ? roles.includes(cfg.casino.accessRoleId) : !cfg.casino.requireRank || cfg.ranks.some((r) => roles.includes(r.roleId));
+/** 入れなかったときの案内（カジノのロールか、位のロールか） */
+const deniedCode = (cfg: GuildConfig) => (cfg.casino.accessRoleId ? 'no_role' : 'no_rank');
 
 const SOLO: CasinoGame[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'chinchiro', 'othello'];
 
@@ -101,7 +104,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         if (!roles || !casinoAllowed(d.cfg(), roles)) {
           await deleteMemberSession(db, session.id);
           deleteCookie(c, COOKIE, { path: '/casino' });
-          return { error: roles ? 'no_rank' : 'not_member' };
+          return { error: roles ? deniedCode(d.cfg()) : 'not_member' };
         }
         await markMemberChecked(db, session.id, d.now());
       }
@@ -133,7 +136,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   app.get('/casino', async (c) => {
     const r = await current(c);
-    if (!r || 'error' in r) return c.html(<CasinoLanding error={r ? r.error : c.req.query('e')} />);
+    if (!r || 'error' in r) return c.html(<CasinoLanding error={r ? r.error : c.req.query('e')} roleName={d.cfg().casino.accessRoleName} />);
     const me = await meOf(r.session);
     const cfg = d.cfg();
     if (!cfg.casino.enabled) return c.html(<CasinoClosed me={me} />);
@@ -179,7 +182,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return c.redirect('/casino?e=failed');
     }
     if (!roles) return c.redirect('/casino?e=not_member');
-    if (!casinoAllowed(d.cfg(), roles)) return c.redirect('/casino?e=no_rank');
+    if (!casinoAllowed(d.cfg(), roles)) return c.redirect(`/casino?e=${deniedCode(d.cfg())}`);
     const token = await createMemberSession(db, user, d.now());
     setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: '/casino', maxAge: MEMBER_SESSION_DAYS * 86_400 });
     await audit(db, { actorId: user.id, action: 'casino.login', via: 'web' });
