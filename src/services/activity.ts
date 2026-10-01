@@ -54,10 +54,9 @@ export async function voiceTick(
   economy: EconomyConfig,
   memberIds: string[],
   now: Date,
-  /** コアタイム中なら、10 分ごとに増える分（1 日の上限に数えない） */
-  opts: { coreBonus?: number } = {},
+  /** コアタイム中なら、10 分ごとに増える分（1 日の上限に数えない）。percentOf: 役職ごとの倍率（%。10 分ごとの量・上限・コアタイムの分にかかる） */
+  opts: { coreBonus?: number; percentOf?: (memberId: string) => number } = {},
 ): Promise<{ memberId: string; amount: number }[]> {
-  const bonus = Math.max(0, opts.coreBonus ?? 0);
   const date = jstDate(now);
   const awarded: { memberId: string; amount: number }[] = [];
   for (const memberId of new Set(memberIds)) {
@@ -71,7 +70,12 @@ export async function voiceTick(
       .returning({ vcMinutes: activityDaily.vcMinutes, vcCoins: activityDaily.vcCoins });
     if (!row || row.vcMinutes % 10 !== 0) continue;
 
-    const amount = Math.max(0, Math.min(economy.voicePer10Min, economy.voiceDailyCap - row.vcCoins));
+    const pct = Math.max(0, opts.percentOf?.(memberId) ?? 100);
+    const scale = (n: number) => Math.round((n * pct) / 100);
+    const per10 = scale(economy.voicePer10Min);
+    const cap = scale(economy.voiceDailyCap);
+    const bonus = scale(Math.max(0, opts.coreBonus ?? 0));
+    const amount = Math.max(0, Math.min(per10, cap - row.vcCoins));
     if (amount + bonus <= 0) continue;
     // 上限の判定と加算を同時に行う（二重に渡さない）。今日の枠と花びらは一緒に記録する
     const paid = await db.transaction(async (tx) => {
@@ -84,7 +88,7 @@ export async function voiceTick(
             and(
               eq(activityDaily.memberId, memberId),
               eq(activityDaily.date, date),
-              sql`${activityDaily.vcCoins} + ${amount} <= ${economy.voiceDailyCap}`,
+              sql`${activityDaily.vcCoins} + ${amount} <= ${cap}`,
             ),
           )
           .returning({ vcCoins: activityDaily.vcCoins });
@@ -103,6 +107,7 @@ export async function voiceTick(
         ...(bonus ? { coreTime: bonus } : {}),
         ...(fuku ? { fuku } : {}),
         ...(event ? { event } : {}),
+        ...(pct !== 100 ? { rankPercent: pct } : {}),
       });
       return total;
     });

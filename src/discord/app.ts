@@ -23,7 +23,7 @@ import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../ser
 import { introOf, introUrl } from '../services/intros.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { decidePromotion, highestRank, type Promotion } from '../domain/ranks.js';
+import { decidePromotion, highestRank, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
@@ -198,7 +198,9 @@ export class ShuinApp {
     if (!ids.length) return;
     // コアタイム中は、10 分ごとの花びらが増える
     const coreBonus = activeCoreTime(this.cfg.coreTime, now) ? coreTimeBonus(this.cfg.economy) : 0;
-    const awarded = await voiceTick(this.db, this.cfg.economy, ids, now, { coreBonus }).catch((err) => {
+    // 役職ごとの倍率（いちばん格の高い役職の %）
+    const percentOf = (id: string) => voicePercentOf(this.cfg.ranks, guild.members.cache.get(id)?.roles.cache.keys() ?? []);
+    const awarded = await voiceTick(this.db, this.cfg.economy, ids, now, { coreBonus, percentOf }).catch((err) => {
       logger.warn({ err }, 'voice tick failed');
       return [];
     });

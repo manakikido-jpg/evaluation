@@ -90,6 +90,7 @@ export function RanksPage(props: {
                 <th>人数</th>
                 <th>なり方</th>
                 <th>朱印の格</th>
+                <th>通話の銭</th>
                 <th></th>
               </tr>
             </thead>
@@ -158,6 +159,10 @@ export function RanksPage(props: {
                       <input type="number" name={`${k}.weight`} value={String(r.weight)} min={1} max={100} required size={3} />
                       {fr && fr.weight !== r.weight && <small> ファイル: {fr.weight}</small>}
                     </td>
+                    <td class="nowrap">
+                      <input type="number" name={`${k}.voicePercent`} value={String(r.voicePercent)} min={0} max={1000} required size={4} aria-label="通話でもらえる銭の倍率（%）" /> %
+                      {fr && fr.voicePercent !== r.voicePercent && <small> ファイル: {fr.voicePercent}</small>}
+                    </td>
                     <td>
                       {!fr && (
                         <button type="submit" formaction={`/ranks/${r.key}/delete`} class="danger" title="この役職を消す（ロールは残る）">
@@ -175,6 +180,7 @@ export function RanksPage(props: {
           朱印の格 = 朱印 1 回で渡すご縁。「ご縁で自動」の役職は、ご縁がたまると自動で上がります（下がることはありません）。昇格に必要なご縁は役職ごとに別の数にしてください。
           「任命制」の役職は、運営が Discord でロールを付けた人がなります（ご縁では上がりません）。任命制の役職は運営として扱うので、「読むだけ」のチャンネルにも書けます。
           宮司・神職と、入鯖時に付く役職のなり方は変えられません。
+          通話の銭 = 通話でもらえる銭の倍率（100% でふつう・150% で 1.5 倍・0% でもらえない）。10 分ごとの量・1 日の上限・コアタイムで増える分にかかります。いくつか役職を持っている人は、朱印の格がいちばん高い役職の倍率です。
         </p>
         <button type="submit" class="ok">
           保存
@@ -214,6 +220,10 @@ export function RanksPage(props: {
               <label class="field">
                 <span>朱印の格</span>
                 <input type="number" name="weight" min={1} max={100} value="1" required />
+              </label>
+              <label class="field">
+                <span>通話の銭（%。100 でふつう）</span>
+                <input type="number" name="voicePercent" min={0} max={1000} value="100" required />
               </label>
             </div>
             <button type="submit" class="ok">

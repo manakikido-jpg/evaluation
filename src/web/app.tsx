@@ -3201,6 +3201,8 @@ export function createWebApp(deps: WebDeps) {
     const extraRanks: Overrides['extraRanks'] = [];
     for (const r of cfg.ranks) {
       const k = `rank.${r.key}`;
+      // 通話の銭の倍率（%）。フォームになければ今のまま
+      const voicePercent = typeof body[`${k}.voicePercent`] === 'string' ? num(`${k}.voicePercent`) : r.voicePercent;
       const name = field(body, `${k}.name`, 20);
       const emoji = typeof body[`${k}.emoji`] === 'string' ? (body[`${k}.emoji`] as string).trim().slice(0, 16) : r.emoji;
       const fr = file.ranks.find((x) => x.key === r.key);
@@ -3217,6 +3219,7 @@ export function createWebApp(deps: WebDeps) {
           ...(name !== fr.name ? { name, formerNames: [...new Set([...(prev.ranks[r.key]?.formerNames ?? []), ...(name !== r.name ? [r.name] : [])])].slice(-20) } : {}),
           ...(emoji !== fr.emoji ? { emoji } : {}),
           ...(roleId !== fr.roleId ? { roleId } : {}),
+          ...(voicePercent !== fr.voicePercent ? { voicePercent } : {}),
         };
       } else {
         const auto = body[`${k}.kind`] !== 'appointed';
@@ -3228,6 +3231,7 @@ export function createWebApp(deps: WebDeps) {
           weight: num(`${k}.weight`),
           auto,
           requiredGoen: auto ? num(`${k}.requiredGoen`) : 0,
+          voicePercent,
           formerNames: name && name !== r.name ? [...new Set([...(r.formerNames ?? []), r.name])].slice(-20) : r.formerNames,
         });
       }
@@ -3251,6 +3255,7 @@ export function createWebApp(deps: WebDeps) {
       weight: Number(body.weight),
       auto,
       requiredGoen: auto ? Number(body.requiredGoen) : 0,
+      voicePercent: typeof body.voicePercent === 'string' && body.voicePercent !== '' ? Number(body.voicePercent) : 100,
     };
     const msg = await saveRanks(c, { ...prev, extraRanks: [...prev.extraRanks, rank] }, 'ranks.create');
     return c.redirect(msg ? '/ranks?msg=added' : '/ranks?msg=invalid#rank-add');
@@ -4358,7 +4363,7 @@ function diff<T extends Record<string, unknown>>(a: T, b: T): Record<string, [un
 
 function rankDiff(a: GuildConfig, b: GuildConfig): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  const keys = ['name', 'emoji', 'roleId', 'weight', 'requiredGoen', 'auto'] as const;
+  const keys = ['name', 'emoji', 'roleId', 'weight', 'requiredGoen', 'auto', 'voicePercent'] as const;
   for (const r of b.ranks) {
     const old = a.ranks.find((x) => x.key === r.key);
     if (!old) {

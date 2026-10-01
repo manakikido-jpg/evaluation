@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-02-rank-voice-percent',
+    date: '2026-10-02',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🎙 役職ごとの通話の銭の倍率',
+    items: [
+      '役職のページに「通話の銭（%）」。100% でふつう・150% で 1.5 倍・0% でもらえない',
+      '10 分ごとの量・1 日の上限・コアタイムで増える分にかかる。いくつか役職を持っている人は、朱印の格がいちばん高い役職の倍率',
+    ],
+  },
+  {
     id: '2026-10-02-omikuji-voice-only',
     date: '2026-10-02',
     kind: 'improve',

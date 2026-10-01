@@ -79,6 +79,25 @@ describe('予告と花びら', () => {
     expect(sent[1]).toContain('このあと 21:00 からコアタイム');
   });
 
+  it('役職ごとの倍率: 10 分ごとの量・1 日の上限・コアタイムの分にかかる。0% ならもらえない', async () => {
+    const [A, B, C] = ['820000000000000011', '820000000000000012', '820000000000000013'];
+    const e = { ...cfg.economy, voicePer10Min: 10, voiceDailyCap: 20 };
+    const pct: Record<string, number> = { [A]: 150, [B]: 0, [C]: 100 };
+    const t = jst('2026-09-25T12:00:00');
+    for (let i = 0; i < 40; i++) await voiceTick(db, e, [A, B, C], t, { percentOf: (id) => pct[id]! });
+    // A: 15 ずつ・上限 30 / B: なし / C: 10 ずつ・上限 20
+    expect((await walletOf(db, A)).balance).toBe(30);
+    expect((await walletOf(db, B)).balance).toBe(0);
+    expect((await walletOf(db, C)).balance).toBe(20);
+    // コアタイムで増える分（10 → 13 の 3）も 1.5 倍（5）
+    const D = '820000000000000014';
+    for (let i = 0; i < 10; i++) await voiceTick(db, e, [D], jst('2026-09-25T21:00:00'), { coreBonus: 3, percentOf: () => 150 });
+    expect((await walletOf(db, D)).balance).toBe(15 + 5);
+    const { voicePercentOf } = await import('../src/domain/ranks.js');
+    expect(voicePercentOf([{ ...cfg.ranks[0]!, voicePercent: 120 }], [cfg.ranks[0]!.roleId])).toBe(120);
+    expect(voicePercentOf(cfg.ranks, [])).toBe(100);
+  });
+
   it('コアタイム中の通話: 10 分で 8 枚。増えた分は 1 日の上限に数えず、上限に届いていてももらえる', async () => {
     const A = '820000000000000001';
     const e = { ...cfg.economy, voicePer10Min: 5, voiceDailyCap: 10 };

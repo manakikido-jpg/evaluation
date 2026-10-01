@@ -53,6 +53,8 @@ export const rankSchema = z.object({
   requiredGoen: z.number().int().min(0).default(0),
   /** 前の名前（社務所Web で名前を変えたとき。掲示の {前の名前のご縁} なども使えるように） */
   formerNames: z.array(z.string()).optional(),
+  /** 通話でもらえる銭の倍率（%。100 = ふつう・150 で 1.5 倍・0 でなし）。10 分ごとの量と 1 日の上限の両方にかかる */
+  voicePercent: z.number().int().min(0).max(1000).default(100),
 });
 
 export type Rank = z.infer<typeof rankSchema>;

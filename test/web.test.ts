@@ -705,6 +705,13 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       // 掲示の {氏子のご縁} は前の名前でも使える
       expect(renderNotice('{氏子のご縁} {氏子さんのご縁}', store.current, []).text).toBe('20 20');
       expect((await listAudit(db, { action: 'ranks.update' }))[0]?.detail).toMatchObject({ ranks: { ujiko: { name: ['氏子', '氏子さん'] } } });
+      // 通話の銭の倍率（%）。フォームになければそのまま、範囲の外は保存しない
+      expect(await (await get('/ranks', g)).text()).toContain('name="rank.ujiko.voicePercent"');
+      expect((await post('/ranks', g, await form({ 'rank.ujiko.voicePercent': '150' }))).headers.get('location')).toBe('/ranks?msg=saved');
+      expect(store.current.ranks.find((r) => r.key === 'ujiko')?.voicePercent).toBe(150);
+      expect(store.current.ranks.find((r) => r.key === 'sodai')?.voicePercent).toBe(100);
+      expect((await post('/ranks', g, await form({ 'rank.ujiko.voicePercent': '2000' }))).headers.get('location')).toBe('/ranks?msg=invalid');
+      expect(store.current.ranks.find((r) => r.key === 'ujiko')?.voicePercent).toBe(150);
 
       // 昇格ラインが重なる・選べないロール・名前が空は保存しない
       const bads: Record<string, string>[] = [{ 'rank.ujiko.requiredGoen': '100' }, { 'rank.ujiko.roleId': '980000000000000012' }, { 'rank.sodai.name': '' }];

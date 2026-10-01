@@ -10,6 +10,11 @@ export function highestRank(ranks: readonly Rank[], roleIds: Iterable<string>): 
   return best;
 }
 
+/** 通話でもらえる銭の倍率（%）: いちばん格の高い役職の倍率（役職がなければ 100） */
+export function voicePercentOf(ranks: readonly Rank[], roleIds: Iterable<string>): number {
+  return highestRank(ranks, roleIds)?.voicePercent ?? 100;
+}
+
 /** 自動昇格の役職を、必要なご縁の少ない順に */
 export function autoRanks(ranks: readonly Rank[]): Rank[] {
   return ranks.filter((r) => r.auto).sort((a, b) => a.requiredGoen - b.requiredGoen);
