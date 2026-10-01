@@ -328,7 +328,13 @@ describe('👑 大富豪', () => {
       return r;
     };
     const pass = (n: number) => (s = t.run(daifugo.act(s, P(n).id, { action: 'pass' }, t.ctx())));
-    return { t, get s() { return s; }, play, pass };
+    const choose = (n: number, cards: number[]) => {
+      const r = daifugo.act(s, P(n).id, { action: 'choose', cards: cards.map(String) }, t.ctx());
+      if (r.ok) s = t.run(r);
+      return r;
+    };
+    const wait = (ms: number) => (s = t.advance(s, ms));
+    return { t, get s() { return s; }, play, pass, choose, wait };
   }
 
   it('8 切りなし・革命なしなら、ふつうのカードと同じ', () => {
@@ -392,6 +398,48 @@ describe('👑 大富豪', () => {
     expect(g.s.phase).toBe('done');
     expect(g.s.order).toEqual([P(2).id, P(3).id, P(1).id]);
     expect(g.s.payouts.map((p) => p.amount)).toEqual([210, 90, 0]);
+  });
+
+  it('7 渡し: 出した枚数だけ次の人に渡してから番が回る（時間切れなら弱いカード）', () => {
+    const g = ruled(['give7'], [[C(7), C(4), C(6), C(13)], [C(10), C(12)], [C(9), C(11)]]);
+    g.play(1, [C(7)]);
+    expect(g.s.pending?.steps).toEqual([{ kind: 'give', n: 1 }]);
+    expect(g.s.turn).toBe(0);
+    expect(g.play(1, [C(4)])).toEqual({ ok: false, error: 'pending' });
+    expect(g.choose(1, [C(4), C(6)])).toEqual({ ok: false, error: 'pick_count' });
+    g.choose(1, [C(13)]);
+    expect(g.s.seats[1]!.hand).toContain(C(13));
+    expect(g.s.seats[0]!.hand).toEqual([C(4), C(6)]);
+    expect(g.s.turn).toBe(1);
+    expect(g.s.log.at(-1)).not.toContain('K');
+    const auto = ruled(['give7'], [[C(7), C(13), C(4)], [C(10), C(12)], [C(9), C(11)]]);
+    auto.play(1, [C(7)]);
+    auto.wait(41_000);
+    expect(auto.s.seats[1]!.hand).toContain(C(4));
+    expect(auto.s.turn).toBe(1);
+  });
+
+  it('10 捨て・9 リバース・砂嵐', () => {
+    const drop = ruled(['drop10'], [[C(10), C(3), C(5)], [C(12), C(13)], [C(1), C(11)]]);
+    drop.play(1, [C(10)]);
+    drop.choose(1, [C(3)]);
+    expect(drop.s.seats[0]!.hand).toEqual([C(5)]);
+    expect(drop.s.turn).toBe(1);
+    const rev = ruled(['reverse9'], [[C(9), C(4)], [C(10), C(12)], [C(11), C(13)]]);
+    rev.play(1, [C(9)]);
+    expect(rev.s.dir).toBe(-1);
+    expect(rev.s.turn).toBe(2);
+    rev.pass(3);
+    expect(rev.s.turn).toBe(1);
+    const storm = ruled(['sandstorm'], [[C(9), C(9, 1), C(9, 2), C(4)], [C(3), C(3, 1), C(3, 2), C(6)], [C(12), C(13)]]);
+    storm.play(1, [C(9), C(9, 1), C(9, 2)]);
+    expect(storm.play(2, [C(3), C(3, 1), C(3, 2)]).ok).toBe(true);
+    expect(storm.s.field).toBeNull();
+    expect(storm.s.turn).toBe(1);
+    // 砂嵐なしなら 3 は 9 に勝てない
+    const plain = ruled([], [[C(9), C(9, 1), C(9, 2), C(4)], [C(3), C(3, 1), C(3, 2), C(6)], [C(12), C(13)]]);
+    plain.play(1, [C(9), C(9, 1), C(9, 2)]);
+    expect(plain.play(2, [C(3), C(3, 1), C(3, 2)])).toEqual({ ok: false, error: 'weak' });
   });
 
   it('相手待ちで作った人が抜けたら、みんなに返して閉じる', () => {

@@ -114,7 +114,7 @@ const RULES: Record<TableKind, string> = {
   baccarat_table: 'みんなで同じ勝負に賭けます。だれかが賭けてから 15 秒で配ります（全員賭けたらすぐ）。',
   roulette_table: 'みんなで同じ回転に賭けます。チップを選んで盤のマスを押すと置けます（10 か所まで）。座っている全員が「賭けて回す」を押すか、だれかが賭けてから 25 秒たつと回ります。',
   poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
-  daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
+  daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
 };
 
@@ -998,7 +998,12 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
     <>
       <section class="c-table">
         <div class="c-phase">
-          {s.phase === 'playing' ? `${s.seats[s.turn ?? 0]?.name} さんの番` : '終わり'}
+          {s.phase === 'playing'
+            ? s.pending
+              ? `${s.seats[s.pending.by]?.name} さんが${s.pending.steps[0]!.kind === 'give' ? '🎁 渡す' : '🗑 捨てる'}カードを選んでいます`
+              : `${s.seats[s.turn ?? 0]?.name} さんの番`
+            : '終わり'}
+          {s.dir === -1 && <span class="c-tag">🔄 逆回り</span>}
           {s.revolution && <span class="c-tag c-rev">⚡ 革命中</span>}
           {s.jback && <span class="c-tag c-rev">↩ 11 バック中</span>}
           {s.lock && <span class="c-tag c-lock">🔒 {s.lock.map((k) => ['♠', '♥', '♦', '♣'][k]).join('')} しばり</span>}
@@ -1041,7 +1046,17 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
               </label>
             ))}
           </div>
-          {myTurn && (
+          {myTurn && s.pending && (
+            <div class="c-actions">
+              <button type="submit" name="action" value="choose" class="c-btn c-btn-gold">
+                選んだ {Math.min(s.pending.steps[0]!.n, my.hand.length)} 枚を{s.pending.steps[0]!.kind === 'give' ? '次の人に渡す' : '捨てる'}
+              </button>
+              <span class="c-muted">
+                {s.pending.steps[0]!.kind === 'give' ? '🎁 7 渡し' : '🗑 10 捨て'}: 手札から {Math.min(s.pending.steps[0]!.n, my.hand.length)} 枚選んでください（時間切れなら弱いカードから）
+              </span>
+            </div>
+          )}
+          {myTurn && !s.pending && (
             <div class="c-actions">
               <button type="submit" name="action" value="play" class="c-btn c-btn-gold">
                 選んだカードを出す

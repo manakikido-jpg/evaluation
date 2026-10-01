@@ -16,6 +16,10 @@ export const DAIFUGO_RULES = {
   shibari: { label: '🔒 しばり', note: '同じマークが続くと、場が流れるまでそのマークしか出せない', on: false },
   stairs: { label: '🪜 階段', note: '同じマークの 3 枚以上の連番を出せる', on: false },
   skip5: { label: '⏭ 5 飛ばし', note: '5 を出すと、出した枚数だけ次の人を飛ばす', on: false },
+  give7: { label: '🎁 7 渡し', note: '7 を出すと、出した枚数だけ好きなカードを次の人に渡せる', on: false },
+  drop10: { label: '🗑 10 捨て', note: '10 を出すと、出した枚数だけ好きなカードを捨てられる', on: false },
+  reverse9: { label: '🔄 9 リバース', note: '9 を出すと、順番が逆回りになる', on: false },
+  sandstorm: { label: '🌪 砂嵐', note: '3 を 3 枚出すと、3 枚出しなら何にでも勝って場が流れる', on: false },
   foul: { label: '🚫 反則上がり', note: 'ジョーカー・2（革命中は 3）・8 切りの 8・♠3 返しの ♠3 で上がると最下位', on: false },
 } as const;
 export type DaifugoRule = keyof typeof DAIFUGO_RULES;
@@ -52,6 +56,10 @@ export type DaifugoState = PartyBase & {
   lock?: number[] | null;
   /** 反則上がりした人（最下位から） */
   fouls?: string[];
+  /** 順番の向き（9 リバースで -1） */
+  dir?: 1 | -1;
+  /** 出したあとに選ぶもの（7 渡し・10 捨て）。終わったら then のとおりに番を回す */
+  pending?: { by: number; steps: { kind: 'give' | 'drop'; n: number }[]; then: { cut: boolean; skips: number } } | null;
 };
 
 export type DSet = { n: number; strength: number; joker: boolean; rank: number | null; type: 'same' | 'seq'; suits: number[]; ranks: number[] };
@@ -110,6 +118,17 @@ function suitsFit(suits: number[], lock: number[]): boolean {
 
 export const sortHand = (h: number[], rev = false) => [...h].sort((a, b) => (rev ? dStrength(b) - dStrength(a) : dStrength(a) - dStrength(b)) || a - b);
 
+/** 次の人（9 リバースで逆回りのときは前の人） */
+function nextIn(s: DaifugoState, from: number): number | null {
+  if ((s.dir ?? 1) === 1) return nextActive(s, from);
+  const n = s.seats.length;
+  for (let k = 1; k <= n; k++) {
+    const j = (((from - k) % n) + n) % n;
+    if (!s.seats[j]!.out) return j;
+  }
+  return null;
+}
+
 /** 場を流す（しばり・11 バックも終わる） */
 function clearField(s: DaifugoState): void {
   s.field = null;
@@ -130,7 +149,10 @@ function dPlay(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> 
   const set = dSet(cards, { stairs: has(s, 'stairs') });
   if (!set) return fail('bad_set');
   const beatsJoker = Boolean(s.field?.joker && has(s, 'spade3') && cards.length === 1 && cards[0] === SPADE3);
-  if (!dBeats(s.field, set, reversed(s), { spade3: has(s, 'spade3'), lock: s.lock ?? null, cards })) return fail(s.lock && s.field && !suitsFit(set.suits, s.lock) ? 'locked' : 'weak');
+  // 砂嵐: 3 を 3 枚（ジョーカーで代わりも可）。3 枚出しの場なら何にでも勝つ
+  const sandstorm = has(s, 'sandstorm') && set.type === 'same' && set.n === 3 && set.rank === 3;
+  const stormBeats = sandstorm && (!s.field || ((s.field.type ?? 'same') === 'same' && s.field.n === 3));
+  if (!stormBeats && !dBeats(s.field, set, reversed(s), { spade3: has(s, 'spade3'), lock: s.lock ?? null, cards })) return fail(s.lock && s.field && !suitsFit(set.suits, s.lock) ? 'locked' : 'weak');
   const before = s.field;
   x.hand = x.hand.filter((c) => !cards.includes(c));
   s.played++;
@@ -153,10 +175,16 @@ function dPlay(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> 
   const eight = has(s, 'eight') && set.ranks.includes(8);
   if (eight) notes.push('✂ 8 切り');
   if (beatsJoker) notes.push('♠3 返し！');
+  if (sandstorm) notes.push('🌪 砂嵐！');
   const skips = has(s, 'skip5') ? set.ranks.filter((r) => r === 5).length : 0;
   if (skips) notes.push(`⏭ ${skips} 人飛ばし`);
+  const nines = has(s, 'reverse9') ? set.ranks.filter((r) => r === 9).length : 0;
+  if (nines % 2 === 1) {
+    s.dir = (s.dir ?? 1) === 1 ? -1 : 1;
+    notes.push(s.dir === -1 ? '🔄 逆回り' : '🔄 もとの向き');
+  }
   addLog(s, `${x.name}: ${cards.map(cardLabel).join(' ')}${notes.length ? `・${notes.join('・')}` : ''}`);
-  const cut = eight || beatsJoker;
+  const cut = eight || beatsJoker || sandstorm;
   if (cut) clearField(s);
   else s.field = { cards, n: set.n, strength: set.type === 'same' && set.joker ? 13 : set.strength, joker: set.joker, by: i, type: set.type, suits: set.suits };
   if (!x.hand.length) {
@@ -170,19 +198,70 @@ function dPlay(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> 
     }
   }
   if (active(s).length <= 1) return ok(s);
-  // 8 切り・♠3 返しは同じ人から（上がっていれば次の人）。5 飛ばしは、その数だけ飛ばす
-  if (cut) {
-    s.turn = !x.out ? i : nextActive(s, i);
+  // 7 渡し・10 捨て: 手札が残っていれば、選んでもらってから番を回す
+  const steps: { kind: 'give' | 'drop'; n: number }[] = [];
+  const sevens = has(s, 'give7') ? set.ranks.filter((r) => r === 7).length : 0;
+  const tens = has(s, 'drop10') ? set.ranks.filter((r) => r === 10).length : 0;
+  if (sevens) steps.push({ kind: 'give', n: sevens });
+  if (tens) steps.push({ kind: 'drop', n: tens });
+  if (steps.length && x.hand.length) {
+    s.pending = { by: i, steps, then: { cut, skips } };
+    s.turn = i;
     return ok(s);
   }
-  let t = nextActive(s, i);
+  passTurn(s, i, cut, skips);
+  return ok(s);
+}
+
+/** 出したあとの番の回し方。8 切り・♠3 返し・砂嵐は同じ人から（上がっていれば次の人）。5 飛ばしは、その数だけ飛ばす */
+function passTurn(s: DaifugoState, i: number, cut: boolean, skips: number): void {
+  const x = s.seats[i]!;
+  if (cut) {
+    s.turn = !x.out ? i : nextIn(s, i);
+    return;
+  }
+  let t = nextIn(s, i);
   for (let k = 0; k < skips && t !== null; k++) {
-    const nx = nextActive(s, t);
+    const nx = nextIn(s, t);
     if (nx === null || nx === i) break;
     addLog(s, `${s.seats[t]!.name} は飛ばされました`);
     t = nx;
   }
   s.turn = t;
+}
+
+/** 7 渡し・10 捨てのカードを選んだ */
+function dChoose(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> {
+  const p = s.pending;
+  const x = s.seats[i]!;
+  if (!p || p.by !== i) return fail('invalid');
+  const step = p.steps[0]!;
+  const n = Math.min(step.n, x.hand.length);
+  if (cards.length !== n || new Set(cards).size !== n || !cards.every((c) => x.hand.includes(c))) return fail('pick_count');
+  x.hand = x.hand.filter((c) => !cards.includes(c));
+  if (step.kind === 'give') {
+    const to = nextIn(s, i);
+    if (to !== null) {
+      s.seats[to]!.hand = sortHand([...s.seats[to]!.hand, ...cards]);
+      // 渡したカードは、渡した人と渡された人だけが知っている
+      addLog(s, `🎁 ${x.name} → ${s.seats[to]!.name} に ${n} 枚渡しました`);
+    }
+  } else {
+    addLog(s, `🗑 ${x.name}: ${cards.map(cardLabel).join(' ')} を捨てました`);
+  }
+  const rest = p.steps.slice(1);
+  if (!x.hand.length) {
+    x.out = true;
+    s.order.push(x.id);
+    addLog(s, `🎉 ${x.name} が ${s.order.length} 番目に上がりました`);
+  }
+  if (rest.length && x.hand.length) {
+    s.pending = { ...p, steps: rest };
+    return ok(s);
+  }
+  s.pending = null;
+  if (active(s).length <= 1) return ok(s);
+  passTurn(s, i, p.then.cut, p.then.skips);
   return ok(s);
 }
 
@@ -193,7 +272,7 @@ function maybeClear(s: DaifugoState): void {
   if (others.length && others.every((j) => s.passes.includes(j))) {
     clearField(s);
     addLog(s, '— 場が流れました —');
-    s.turn = s.seats[s.lastBy]!.out ? nextActive(s, s.lastBy) : s.lastBy;
+    s.turn = s.seats[s.lastBy]!.out ? nextIn(s, s.lastBy) : s.lastBy;
   }
 }
 
@@ -201,7 +280,7 @@ function dPass(s: DaifugoState, i: number): Step<DaifugoState> {
   if (!s.field) return fail('must_play');
   s.passes.push(i);
   addLog(s, `${s.seats[i]!.name}: パス`);
-  s.turn = nextActive(s, i);
+  s.turn = nextIn(s, i);
   maybeClear(s);
   return ok(s);
 }
@@ -217,7 +296,7 @@ export const daifugo = partyEngine<DaifugoState>({
   min: 3,
   max: 5,
   turnSeconds: 40,
-  init: (f) => ({ kind: 'daifugo', field: null, passes: [], lastBy: null, revolution: false, played: 0, rules: daifugoRulesOf(f), jback: false, lock: null, fouls: [] }) as never,
+  init: (f) => ({ kind: 'daifugo', field: null, passes: [], lastBy: null, revolution: false, played: 0, rules: daifugoRulesOf(f), jback: false, lock: null, fouls: [], dir: 1, pending: null }) as never,
   deal(s, rng) {
     const deck = shuffle([...shuffledShoe(1, rng), ...(has(s, 'joker') ? [JOKER] : [])], rng);
     deck.forEach((c, k) => s.seats[k % s.seats.length]!.hand.push(c));
@@ -229,11 +308,18 @@ export const daifugo = partyEngine<DaifugoState>({
     return s;
   },
   play(s, i, f) {
-    if (str(f, 'action') === 'pass') return dPass(s, i);
     const cards = list(f, 'cards').map(Number).filter((n) => Number.isInteger(n));
+    // 7 渡し・10 捨ての途中は、選ぶことしかできない
+    if (s.pending) return str(f, 'action') === 'choose' ? dChoose(s, i, cards) : fail('pending');
+    if (str(f, 'action') === 'pass') return dPass(s, i);
     return dPlay(s, i, cards);
   },
   auto(s, i) {
+    // 選ばないうちに時間切れなら、弱いカードから
+    if (s.pending) {
+      const n = Math.min(s.pending.steps[0]!.n, s.seats[i]!.hand.length);
+      return dChoose(s, i, sortHand(s.seats[i]!.hand, reversed(s)).filter((c) => c !== JOKER).concat(JOKER).filter((c) => s.seats[i]!.hand.includes(c)).slice(0, n));
+    }
     if (s.field) return dPass(s, i);
     // 場が空なら、一番弱い 1 枚
     const weakest = sortHand(s.seats[i]!.hand, reversed(s)).find((c) => c !== JOKER) ?? s.seats[i]!.hand[0]!;
