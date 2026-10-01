@@ -531,7 +531,7 @@ export async function tidyGuild(api: SetupApi, guildId: string, layout: Layout, 
   return done;
 }
 
-const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', shop: '授与品', gender: '性別', market: '市場', contact: 'DM・フレンド', bell: '呼び鈴', gacha: '物御籤' };
+const PANEL_LABEL: Record<PanelKind, string> = { apply: '入鯖申請', yoimairi: '宵参り申請', shop: '授与品', gender: '性別', market: '市場', contact: 'DM・フレンド', bell: '呼び鈴', gacha: '物御籤', notify: '通知 OK／NG' };
 
 /** 作った（見つけた）DM・フレンドのロール → config の roles.contact */
 export function contactConfig(roleIds: Partial<Record<RoleKey, string>>) {

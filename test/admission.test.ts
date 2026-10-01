@@ -94,6 +94,15 @@ describe('入鯖申請', () => {
     expect(await decide(ctx, shinshoku, (r as { id: number }).id, false)).toEqual({ status: 'already_decided' });
   });
 
+  it('🔔 通知 OK／NG を用意していれば、承認した人は通知 OK から', async () => {
+    const OK = '870000000000000001';
+    const NG = '870000000000000002';
+    ctx = { ...ctx, cfg: { ...cfg, notify: { okRoleId: OK, ngRoleId: NG } } };
+    const r = (await submitJoin(ctx, { id: NEW, roleIds: [], accountCreatedAt: recentAccount }, answers, now)) as { id: number };
+    await decide(ctx, shinshoku, r.id, true, '', now);
+    expect(calls).toContain(`addRole ${NEW} ${OK}`);
+  });
+
   it('却下すると DM とキック', async () => {
     const r = (await submitJoin(ctx, { id: NEW, roleIds: [], accountCreatedAt: recentAccount }, answers, now)) as { id: number };
     expect(await decide(ctx, shinshoku, r.id, false, '雰囲気が合わない')).toMatchObject({ status: 'rejected' });

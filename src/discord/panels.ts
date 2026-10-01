@@ -7,7 +7,7 @@ const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha';
+export type PanelKind = 'apply' | 'yoimairi' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha' | 'notify';
 
 export type PanelMessage = {
   embeds: { title: string; description: string; color: number }[];
@@ -80,6 +80,33 @@ export function panelMessage(kind: PanelKind, opts: { /** 通貨の名前（な�
           components: [
             { type: 2, style: 1, label: '物御籤売り場へ入る', custom_id: 'gacha:open', emoji: { name: '🎁' } },
             { type: 2, style: 2, label: '中身と排出率', custom_id: 'gacha:rates', emoji: { name: '📜' } },
+          ],
+        },
+      ],
+    };
+  }
+  if (kind === 'notify') {
+    return {
+      embeds: [
+        {
+          title: '🔔 通知 OK／🔕 通知 NG',
+          description: [
+            '募集（「〇〇を募集する」）と、運営のお知らせの通知を受け取るかを選んでください。',
+            '',
+            '🔔 **通知OK** … 通知が鳴ります（はじめはこちら）',
+            '🔕 **通知NG** … BOT の募集・お知らせで鳴りません',
+            '',
+            '-# いつでも押し直して変えられます。NG でも、チャンネルを見ればお知らせは読めます（@everyone のお知らせは鳴ります）',
+          ].join('\n'),
+          color: SHU,
+        },
+      ],
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 3, label: '通知OK', custom_id: 'notify:ok', emoji: { name: '🔔' } },
+            { type: 2, style: 2, label: '通知NG', custom_id: 'notify:ng', emoji: { name: '🔕' } },
           ],
         },
       ],

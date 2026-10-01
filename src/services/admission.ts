@@ -19,6 +19,7 @@ import { activeYakuCount } from './yaku.js';
 import { grantJoinBonus } from './economy.js';
 import { inviterOf, recordInvite, rewardInviter } from './invites.js';
 import { CONTACT_KINDS, isContactLevel, setContact, type ContactLevel } from './contact.js';
+import { notifyOf, notifyReady, setNotify } from './notify.js';
 import { checkTarget, SYSTEM, type Actor, type ModCtx } from './moderation.js';
 import { appendFromStaff, getSoudan, senderOf, setSoudanStatus } from './soudan.js';
 
@@ -268,6 +269,11 @@ export async function decide(ctx: ModCtx, actor: Actor, id: number, approve: boo
       for (const kind of CONTACT_KINDS) {
         const level = app.answers[kind];
         if (isContactLevel(level)) await safely('set contact', () => setContact(ctx, app.memberId, kind, level));
+      }
+      // 🔔 通知は、はじめは OK（用意していれば。入り直した人で NG を持っていればそのまま）
+      if (notifyReady(ctx.cfg)) {
+        const had = (await getMember(ctx.db, app.memberId))?.roleIds ?? [];
+        if (!notifyOf(ctx.cfg, had)) await safely('set notify', () => setNotify(ctx, app.memberId, 'ok', had));
       }
       const intro = introChannelOf(ctx.cfg, gender);
       const pending = ctx.cfg.roles.emaPending;

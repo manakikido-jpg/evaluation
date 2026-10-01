@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-02-notify-ok-ng',
+    date: '2026-10-02',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🔔 通知 OK／🔕 通知 NG',
+    items: [
+      '設定 → 🔔 通知 OK／NG で、ロールを用意して今いる人を全員 🔔通知OK に（BOT が少しずつ付ける）',
+      '用意すると、募集と「⛩ すべての役職」のお知らせ（掲示・面談告知・プレゼント）は 🔔通知OK の人だけに鳴る',
+      'メンバーは `/パネル 通知` で置いたボタンで 🔔通知OK／🔕通知NG を切り替えられる。新しく承認した人は 🔔通知OK から',
+    ],
+  },
+  {
     id: '2026-10-01-omikuji-streak',
     date: '2026-10-01',
     kind: 'new',

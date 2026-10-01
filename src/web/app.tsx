@@ -8,6 +8,8 @@ import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casino
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
 import { casinoDaily, slotSettingStats } from '../services/casino/report.js';
 import { resetState, runDemotions, startEvaluationReset, undoShuinReset } from '../services/evalReset.js';
+import { panelMessage } from '../discord/panels.js';
+import { NOTIFY_LABEL, notifyCounts, notifyReady, notifySetupState, pingRoleIds, runNotifySetup, startNotifySetup } from '../services/notify.js';
 import { dayPicks, slotFloorData } from '../services/casino/slotFloor.js';
 import { matchStats, recentMatches } from '../services/casino/versus.js';
 import { CASINO_GAMES, type CasinoGame } from '../config.js';
@@ -1764,6 +1766,7 @@ export function createWebApp(deps: WebDeps) {
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         streakRoles={allRoles.filter((r) => giftableRole(cfg, r, allRoles, deps.botId)).map((r) => ({ id: r.id, name: r.name }))}
+        notify={await notifyView(allRoles)}
         gachaStats={await gachaStats(db)}
         botCanMentionAll={botCanMentionAll}
         webAccessNames={await namesOf(db, webAccessEntries(cfg).filter((e) => e.kind === 'member').map((e) => e.id))}
@@ -1772,6 +1775,81 @@ export function createWebApp(deps: WebDeps) {
         discordLogin={discordLogin}
       />,
     );
+  });
+
+  /** 🔔 通知 OK／NG: 設定のページに出すもの */
+  const notifyView = async (allRoles: GuildRole[]) => {
+    const ready = notifyReady(cfg);
+    const setup = await notifySetupState(db);
+    if (setup && !setup.finishedAt) kickNotify();
+    if (!ready) return { ready, setup };
+    const name = (id?: string) => allRoles.find((r) => r.id === id)?.name;
+    return { ready, setup, okName: name(cfg.notify.okRoleId), ngName: name(cfg.notify.ngRoleId), ...(await notifyCounts(db, cfg)) };
+  };
+
+  /** 通知 OK を今いる人に配る（裏で少しずつ） */
+  let notifyRunning = false;
+  const kickNotify = () => {
+    if (notifyRunning) return;
+    notifyRunning = true;
+    void (async () => {
+      try {
+        for (let i = 0; i < 100_000; i++) {
+          if (await runNotifySetup(db, cfg, deps.discord, 10, now())) break;
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      } catch (err) {
+        logger.warn({ err }, 'notify setup runner stopped');
+      } finally {
+        notifyRunning = false;
+      }
+    })();
+  };
+
+  /** 通知 OK／NG のロールを作って（同じ名前があれば使う）、今いる人に通知 OK を付けはじめる */
+  app.post('/settings/notify/create', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const by = c.get('session').userId;
+    try {
+      const roles = (await loadRoles()) ?? [];
+      const find = (name: string) => roles.find((r) => r.name === name && !r.managed);
+      // 前に作ったロール → 同じ名前のロール → 新しく作る
+      const make = async (id: string | undefined, name: string, color: number) =>
+        roles.find((r) => r.id === id) ??
+        find(name) ??
+        (await deps.discord.createRole(cfg.guildId, { name, color, permissions: '0', hoist: false, mentionable: false }, '管理画面（通知 OK／NG）'));
+      const ok = await make(cfg.notify.okRoleId, NOTIFY_LABEL.ok, 0xe2b340);
+      const ng = await make(cfg.notify.ngRoleId, NOTIFY_LABEL.ng, 0x7a6d71);
+      const current = await loadOverrides(db);
+      const overrides = overridesSchema.parse({ ...current, notify: { okRoleId: ok.id, ngRoleId: ng.id } });
+      const after = applyOverrides(fileCfg(), overrides);
+      await saveOverrides(db, overrides, by);
+      await deps.onSettingsSaved?.();
+      cfg = after;
+      const st = await startNotifySetup(db, after, by, now());
+      await audit(db, { actorId: by, action: 'notify.setup', detail: { okRoleId: ok.id, ngRoleId: ng.id, targets: st.targets.length }, via: 'web' });
+      kickNotify();
+      return c.redirect('/settings?msg=notify_started&at=notify#sec-notify');
+    } catch (err) {
+      logger.warn({ err }, 'notify setup failed');
+      return c.redirect('/settings?msg=notify_failed&at=notify#sec-notify');
+    }
+  });
+
+  /** ボタン（🔔 通知OK／🔕 通知NG）をチャンネルに置く */
+  app.post('/settings/notify/panel', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : undefined;
+    if (!channelId || !notifyReady(cfg)) return c.redirect('/settings?msg=notify_panel_invalid&at=notify#sec-notify');
+    try {
+      await deps.discord.sendMessage(channelId, panelMessage('notify'));
+      await audit(db, { actorId: c.get('session').userId, action: 'notify.panel', detail: { channelId }, via: 'web' });
+      return c.redirect('/settings?msg=notify_panel&at=notify#sec-notify');
+    } catch (err) {
+      logger.warn({ err }, 'notify panel post failed');
+      return c.redirect('/settings?msg=notify_failed&at=notify#sec-notify');
+    }
   });
 
   const longText = (v: unknown) => (typeof v === 'string' && v.trim() ? v.replace(/\r\n/g, '\n').trim().slice(0, 1000) : undefined);
@@ -1850,6 +1928,8 @@ export function createWebApp(deps: WebDeps) {
       economyOps: prev.economyOps,
       // カジノはカジノのページで変える（ここでは残す）
       casino: prev.casino,
+      // 通知 OK／NG のロールは「🔔 通知 OK／NG」の項目で用意する（ここでは残す）
+      notify: prev.notify,
       // おみくじの連続日数のおまけ（フォームにあるときだけ。日数が空の行は使わない）
       omikujiStreak:
         typeof body['streak.0.days'] === 'string'
@@ -3343,7 +3423,7 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, action: 'interview.create', detail: { id: i.id, at: form.at!.toISOString(), label: `${p.date} ${p.time}`, postAt: form.postAt!.toISOString() }, via: 'web' });
     if (form.postAt!.getTime() > t.getTime()) return c.redirect('/interview?msg=scheduled#iv-upcoming');
     try {
-      await postInterview({ db, discord: deps.discord, rankRoleIds: cfg.ranks.map((r) => r.roleId) }, i.id, st, t);
+      await postInterview({ db, discord: deps.discord, rankRoleIds: pingRoleIds(cfg) }, i.id, st, t);
     } catch (err) {
       logger.warn({ err }, 'interview post failed');
       return c.redirect('/interview?msg=failed#iv-upcoming');
@@ -3620,7 +3700,7 @@ export function createWebApp(deps: WebDeps) {
     const roleName = roleId ? (await loadRoles())?.find((x) => x.id === roleId)?.name : undefined;
     const pingKind = body.ping === 'everyone' || body.everyone === 'yes' ? 'everyone' : body.ping === 'ranks' ? 'ranks' : '';
     const ping = pingKind !== '';
-    const rankIds = [...new Set(cfg.ranks.map((x) => x.roleId))];
+    const rankIds = pingRoleIds(cfg);
     const pingRoles = roleId ? [roleId] : pingKind === 'ranks' ? rankIds : [];
     const head = !ping ? '' : pingRoles.length ? `${pingRoles.map((id) => `<@&${id}>`).join(' ')}\n` : '@everyone\n';
     const howToUse = item.kind === 'coins' ? '' : item.kind === 'role' ? '\n-# ロールは少しずつ付きます' : item.kind === 'shop' ? '\n-# ロールは少しずつ付きます（もう持っている人には、期間のある品はその分のばします）' : '\n-# `/物御籤` の「🎟 券を使う」から使えます（持っている券は `/残高` で見られます）';

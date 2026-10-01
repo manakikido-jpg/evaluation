@@ -35,6 +35,10 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   coins_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回送られないようにしています）。', kind: 'warn' },
   coins_invalid: { text: '枚数（1〜100,000）と理由を入れて、「送る」にチェックしてください。', kind: 'warn' },
   saved_notices: { text: '設定を保存しました。BOT には 1 分以内に反映されます。投稿済みの掲示の数字も書き換えました。', kind: 'ok' },
+  notify_started: { text: '🔔 通知OK・🔕 通知NG のロールを用意しました。今いる人に 🔔 通知OK を少しずつ付けています（このページで進み具合が見られます）。', kind: 'ok' },
+  notify_failed: { text: 'できませんでした。BOT に「ロールの管理」の権限があるか、BOT のロールが上のほうにあるかを確かめてください。', kind: 'warn' },
+  notify_panel: { text: 'ボタンを置きました。', kind: 'ok' },
+  notify_panel_invalid: { text: '置くチャンネルを選んでください（先にロールを用意してください）。', kind: 'warn' },
   settings_invalid: { text: '設定を保存できませんでした。値を確認してください（昇格ラインは役職ごとに違う値にする必要があります）。', kind: 'warn' },
   age_changed: { text: '年齢区分を変更しました。', kind: 'ok' },
   nickname_changed: { text: 'ニックネームを変えました（Discord に反映しました）。', kind: 'ok' },
@@ -497,6 +501,7 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['coretime', '🕘 コアタイム'],
   ['boost', '💝 ブースト（奉納）'],
   ['join', '📝 入鯖申請・お参り'],
+  ['notify', '🔔 通知 OK／NG'],
   ['give', '🎁 今いる人に配る'],
   ['accounts', '🪪 社務所Web のアカウント'],
   ['webaccess', '🔑 Discord ログインで入れる人'],
@@ -673,6 +678,84 @@ function WebAccessRow(props: { session: AdminSession; entry: WebAccessEntry; nam
   );
 }
 
+/** 🔔 通知 OK／NG（ロールを用意する・今いる人に OK を付ける・ボタンを置く） */
+function NotifySection(props: {
+  session: AdminSession;
+  notify: NonNullable<Parameters<typeof SettingsPage>[0]['notify']>;
+  flash?: string;
+  textChannels: { id: string; name: string; category?: string }[];
+  botCanMentionAll?: boolean;
+}) {
+  const n = props.notify;
+  const st = n.setup;
+  const running = st && !st.finishedAt;
+  return (
+    <section class="card anchor" id="sec-notify">
+      <h2>🔔 通知 OK／NG</h2>
+      <p class="note">
+        メンバーが「🔔 通知OK」か「🔕 通知NG」を選べるようにします。用意すると、<b>募集（「〇〇を募集する」）</b>と、掲示・面談告知・プレゼントのお知らせの<b>「⛩ すべての役職」</b>は、🔔 通知OK の人だけに鳴ります（@everyone・@here・選んだロールはそのまま）。はじめは今いる人（役職のある人）全員を 🔔 通知OK にし、新しく承認した人も 🔔 通知OK から。本人は #授与所 などのボタンで切り替えます。
+      </p>
+      {props.flash && <Flash code={props.flash} />}
+      {!n.ready ? (
+        <form method="post" action="/settings/notify/create" class="inline-actions">
+          <Csrf session={props.session} />
+          <button type="submit" class="ok">
+            🔔 ロールを用意して、今いる人を全員 通知OK にする
+          </button>
+        </form>
+      ) : (
+        <>
+          <ul class="notify-counts">
+            <li>
+              🔔 <b>{n.okName ?? '通知OK'}</b>: {(n.ok ?? 0).toLocaleString('ja-JP')} 人
+            </li>
+            <li>
+              🔕 <b>{n.ngName ?? '通知NG'}</b>: {(n.ng ?? 0).toLocaleString('ja-JP')} 人
+            </li>
+            <li>どちらもない: {(n.none ?? 0).toLocaleString('ja-JP')} 人（この人たちは鳴りません）</li>
+          </ul>
+          {running ? (
+            <p class="note">
+              🔔 通知OK を付けています: {st.done} / {st.targets.length} 人
+            </p>
+          ) : (
+            st && st.failed.length > 0 && <p class="note">付けられなかった人: {st.failed.length} 人（抜けた人など）。下のボタンでもう一度付けられます。</p>
+          )}
+          {props.botCanMentionAll === false && (
+            <p class="note warn">⚠ BOT に「@everyone、@here、全てのロールにメンション」の権限がないので、通知が鳴りません。BOT のロールに付けてください。</p>
+          )}
+          <form method="post" action="/settings/notify/create" class="inline-actions">
+            <Csrf session={props.session} />
+            <button type="submit" disabled={running}>
+              まだどちらもない人に 🔔 通知OK を付ける
+            </button>
+          </form>
+          <form method="post" action="/settings/notify/panel" class="fields">
+            <Csrf session={props.session} />
+            <label class="field">
+              <span>切り替えのボタンを置くチャンネル（#授与所 など）</span>
+              <select name="channelId" required>
+                <option value="">選ぶ</option>
+                {props.textChannels.map((ch) => (
+                  <option value={ch.id}>
+                    {ch.category ? `${ch.category} / ` : ''}#{ch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div class="inline-actions">
+              <button type="submit" class="ok">
+                ボタンを置く
+              </button>
+            </div>
+          </form>
+          <p class="note">Discord の `/パネル 通知` でも置けます。</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 /** おみくじの連続日数のおまけ（5 行まで。日数を空にした行は使わない） */
 function StreakRewards(props: { cfg: GuildConfig; roles: { id: string; name: string }[] }) {
   const rows = props.cfg.omikujiStreak.rewards;
@@ -766,6 +849,16 @@ export function SettingsPage(props: {
   textChannels?: { id: string; name: string; category?: string }[];
   /** ロール（呼び鈴で呼べるロールを選ぶ） */
   roles?: { id: string; name: string }[];
+  /** 🔔 通知 OK／NG */
+  notify?: {
+    ready: boolean;
+    setup?: { targets: string[]; done: number; failed: string[]; finishedAt?: string };
+    okName?: string;
+    ngName?: string;
+    ok?: number;
+    ng?: number;
+    none?: number;
+  };
   /** おみくじのおまけで付けられるロール（役目のない・危ない権限のないもの） */
   streakRoles?: { id: string; name: string }[];
   /** 物御籤の回数 */
@@ -1164,6 +1257,7 @@ export function SettingsPage(props: {
           <Save at="join" />
         </section>
       </form>
+      {props.notify && <NotifySection session={props.session} notify={props.notify} flash={props.at === 'notify' ? props.flash : undefined} textChannels={props.textChannels ?? []} botCanMentionAll={props.botCanMentionAll} />}
       <section class="card anchor" id="sec-accounts">
         <h2>🪪 社務所Web のアカウント（ID とパスワード）</h2>
         <p class="note">

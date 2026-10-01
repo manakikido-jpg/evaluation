@@ -215,6 +215,13 @@ export const TICKET_KINDS = [
 ] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
 
+/** 🔔 通知 OK／🔕 通知 NG（社務所Web で用意する）。用意すると、募集と「すべての役職」のお知らせは通知 OK のロールだけを鳴らす */
+export const notifySchema = z.object({
+  okRoleId: snowflake.optional(),
+  ngRoleId: snowflake.optional(),
+});
+export type NotifyConfig = z.infer<typeof notifySchema>;
+
 /** おみくじの連続日数のおまけ（days 日続けた日に。repeat: days 日ごとに毎回。ロールは一度付いたらそのまま） */
 export const streakRewardSchema = z.object({
   days: z.number().int().min(2).max(365),
@@ -464,6 +471,7 @@ export const guildConfigSchema = z
     ranks: z.array(rankSchema).min(1),
     economy: economySchema.default(economySchema.parse({})),
     omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
+    notify: notifySchema.default({}),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),
     /** ブースト（奉納）のお礼の文面。{名前} は奉納した人（メンションになるが通知は飛ばない） */

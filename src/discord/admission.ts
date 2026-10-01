@@ -60,6 +60,7 @@ import {
   type ContactKind,
   type ContactLevel,
 } from '../services/contact.js';
+import { isNotifyLevel, notifyReady, setNotify, type NotifyLevel } from '../services/notify.js';
 import type { Actor, ModCtx } from '../services/moderation.js';
 import { appendFromSender, createSoudan, setSoudanCard } from '../services/soudan.js';
 import { goshuinchoOf } from '../services/shuin.js';
@@ -136,6 +137,7 @@ export class AdmissionApp {
         }
         if (ns === 'gender' && isGender(action)) return await this.chooseGender(interaction, action);
         if (ns === 'contact' && isContactKind(action) && isContactLevel(arg)) return await this.chooseContact(interaction, action, arg);
+        if (ns === 'notify' && isNotifyLevel(action)) return await this.chooseNotify(interaction, action);
         if (ns === 'yoimairi' && action === 'start') return await this.yoimairiStart(interaction);
         if (ns === 'app' && (action === 'approve' || action === 'reject') && arg) return await this.decideApp(interaction, Number(arg), action === 'approve');
         if (ns === 'soudan' && action === 'reply' && arg) return await this.soudanReplyModal(interaction, Number(arg));
@@ -290,6 +292,9 @@ export class AdmissionApp {
     if (kind === 'contact' && !CONTACT_KINDS.some((k) => contactEnabled(this.cfg, k))) {
       return void (await i.reply({ content: 'DM・フレンドのロールがまだありません。セットアップを実行してください。', ...EPHEMERAL }));
     }
+    if (kind === 'notify' && !notifyReady(this.cfg)) {
+      return void (await i.reply({ content: '通知 OK／NG のロールがまだありません。社務所Web の「設定 → 🔔 通知 OK／NG」で用意してください。', ...EPHEMERAL }));
+    }
     if (kind === 'shuin') {
       // いちばん下に出し続ける（掲示として覚えるので、社務所Web の「掲示」から外したり直したりもできる）
       await i.deferReply(EPHEMERAL);
@@ -299,7 +304,7 @@ export class AdmissionApp {
         failed ? '置けませんでした（このチャンネルの掲示の文字数が多すぎます）。' : '🌸 このチャンネルのいちばん下に「朱印を押す」ボタンを置きました（書き込みがあると、下に出し直します）。',
       ));
     }
-    const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha'] as const;
+    const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha', 'notify'] as const;
     await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { coinName: this.cfg.economy.currencyName }));
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
@@ -347,6 +352,18 @@ export class AdmissionApp {
     await i.deferReply(EPHEMERAL);
     const r = await setContact(this.ctx, i.user.id, kind, level, [...i.member.roles.cache.keys()]);
     await i.editReply(r === 'ok' ? `${CONTACT_KIND_LABEL[kind]}を「${CONTACT_LEVEL_EMOJI[level]} ${CONTACT_LEVEL_LABEL[level]}」にしました。` : 'このロールはまだありません。神職に知らせてください。');
+  }
+
+  private async chooseNotify(i: ButtonInteraction<'cached'>, level: NotifyLevel): Promise<void> {
+    await i.deferReply(EPHEMERAL);
+    const r = await setNotify(this.ctx, i.user.id, level, [...i.member.roles.cache.keys()]);
+    await i.editReply(
+      r === 'ok'
+        ? level === 'ok'
+          ? '🔔 **通知OK** にしました。募集・お知らせの通知が鳴ります。'
+          : '🔕 **通知NG** にしました。BOT の募集・お知らせでは鳴りません（@everyone のお知らせは鳴ります）。'
+        : 'まだ用意されていません。神職に知らせてください。',
+    );
   }
 
   /** 性別のあと: DM → フレンド追加（ロールがあれば）→ 招待してくれた人 → フォーム */

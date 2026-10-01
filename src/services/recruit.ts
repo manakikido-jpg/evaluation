@@ -2,6 +2,7 @@ import { and, desc, eq, gte } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { recruitPosts } from '../db/schema.js';
+import { pingRoleIds } from './notify.js';
 
 /**
  * 募集: チャンネルのいちばん下に「募集する」ボタンを置く。
@@ -106,9 +107,9 @@ export async function recordRecruit(db: Db, memberId: string, channelId: string,
   await db.insert(recruitPosts).values({ memberId, channelId, createdAt: at });
 }
 
-/** 募集の通知先: 役職のロール全部（Discord は、そのチャンネルを見られる人にだけ知らせる） */
+/** 募集の通知先: 通知 OK のロール（用意していなければ役職のロール全部。Discord は、そのチャンネルを見られる人にだけ知らせる） */
 export function recruitMentionRoleIds(cfg: GuildConfig): string[] {
-  return [...new Set(cfg.ranks.map((r) => r.roleId))];
+  return pingRoleIds(cfg);
 }
 
 /** 募集カード（mention: 知らせるロール。通話にいれば、その通話へのボタンを付ける） */

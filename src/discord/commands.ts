@@ -251,6 +251,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
           .setDescriptionLocalizations({ ja: '「🌸 朱印を押す」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）' }),
       )
       .addSubcommand((s) =>
+        s.setName('notify').setNameLocalizations({ ja: '通知' }).setDescription('Notification on/off').setDescriptionLocalizations({ ja: '募集・お知らせの 🔔通知OK／🔕通知NG を選ぶボタン（#授与所 用）' }),
+      )
+      .addSubcommand((s) =>
         s.setName('contact').setNameLocalizations({ ja: 'dmとフレンド' }).setDescription('DM / friend requests').setDescriptionLocalizations({ ja: 'DM・フレンド追加の OK／要相談／NG を選ぶボタン（#授与所 用）' }),
       )
       .toJSON(),

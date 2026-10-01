@@ -1644,6 +1644,44 @@ describe('物御籤（管理画面）', () => {
     expect((await app.request('/economy')).status).toBe(302);
   });
 
+  it('🔔 通知 OK／NG: ロールを用意して今いる人を OK に・ボタンを置く・設定を保存しても残る', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const OK = '980000000000000070';
+    const saved = roleList;
+    // 🔔 通知OK は前からある（同じ名前を使う）・🔕 通知NG は新しく作る
+    roleList = [{ id: OK, name: '🔔 通知OK', position: 1, managed: false, color: 0, permissions: '0' }];
+    try {
+      const s = await login(STAFF);
+      expect((await post(s, '/settings/notify/create', {})).status).toBe(403);
+      const g = await login(GUJI);
+      expect(await (await get('/settings', g)).text()).toContain('action="/settings/notify/create"');
+      actions = [];
+      const r = await post(g, '/settings/notify/create', {});
+      expect(r.headers.get('location')).toBe('/settings?msg=notify_started&at=notify#sec-notify');
+      expect(store.current.notify).toEqual({ okRoleId: OK, ngRoleId: '980000000000000099' });
+      expect(actions.some((a) => a.startsWith('createRole') && a.includes('🔕 通知NG'))).toBe(true);
+      for (let i = 0; i < 50 && !actions.includes(`addRole ${USER} ${OK}`); i++) await new Promise((res) => setTimeout(res, 20));
+      expect(actions).toContain(`addRole ${USER} ${OK}`);
+      const page = await (await get('/settings', g)).text();
+      expect(page).toContain('🔔 <b>🔔 通知OK</b>: 1 人');
+      expect(page).toContain('action="/settings/notify/panel"');
+      // ボタンを置く
+      actions = [];
+      expect((await post(g, '/settings/notify/panel', { channelId: '' })).headers.get('location')).toContain('notify_panel_invalid');
+      expect((await post(g, '/settings/notify/panel', { channelId: '910000000000000003' })).headers.get('location')).toContain('msg=notify_panel');
+      expect(actions.some((a) => a.startsWith('send 910000000000000003'))).toBe(true);
+      // 設定のほかの項目を保存しても残る
+      const form = Object.fromEntries([...page.matchAll(/name="([^"]+)"[^>]*?value="([^"]*)"/g)].map((m) => [m[1]!, m[2]!]));
+      delete form._csrf;
+      expect((await post(g, '/settings', { ...form, at: 'coins' })).headers.get('location')).toContain('msg=saved');
+      expect(store.current.notify.okRoleId).toBe(OK);
+    } finally {
+      roleList = saved;
+    }
+  });
+
   it('おみくじを続けたおまけ: 設定で決める（日数が空の行は使わない・危ないロールは選べない）', async () => {
     const { ConfigStore } = await import('../src/services/settings.js');
     const store = new ConfigStore(db, cfg);

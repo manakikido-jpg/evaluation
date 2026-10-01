@@ -874,7 +874,7 @@ export function GachaPage(props: {
               <select name="ping">
                 <option value="">通知しない</option>
                 <option value="everyone">@everyone（ロールで絞ったときは、そのロール）</option>
-                <option value="ranks">⛩ すべての役職（ロールで絞ったときは、そのロール）</option>
+                <option value="ranks">⛩ すべての役職（🔕通知NG の人には鳴らない。ロールで絞ったときは、そのロール）</option>
               </select>
             </label>
             <label class="field check">

@@ -9,6 +9,7 @@ import { audit } from './audit.js';
 import { memberCommandsText } from './commandList.js';
 import { coreName } from '../lib/names.js';
 import { DEFAULT_GUIDES, DEFAULT_NOTICES, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
+import { notifyReady, pingRoleIds } from './notify.js';
 import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
 
@@ -153,7 +154,8 @@ export function resolveMention(raw: string | null | undefined, rankRoleIds: read
   return [...new Set(rankRoleIds.filter((id) => /^\d{17,20}$/.test(id)))].join(',');
 }
 
-const mentionFor = (ctx: Pick<NoticeCtx, 'cfg'>, raw: string | null | undefined) => resolveMention(raw, ctx.cfg.ranks.map((r) => r.roleId));
+// 「すべての役職」は、通知 OK を用意していればそのロールだけ
+const mentionFor = (ctx: Pick<NoticeCtx, 'cfg'>, raw: string | null | undefined) => resolveMention(raw, pingRoleIds(ctx.cfg));
 
 /** メッセージのいちばん上に付けるメンション */
 export function mentionHead(raw: string | null | undefined): string {
@@ -214,6 +216,7 @@ export function noticeVariables(cfg: GuildConfig): NoticeVariable[] {
     { name: '初期配布', value: String(e.joinBonus), note: '入鯖が承認されたときに配る量' },
     { name: '招待のお礼', value: String(e.inviteReward), note: '招待した人が参拝者になったときにもらえる量' },
     { name: 'おみくじの銭', value: omikujiRange(e), note: 'おみくじでもらえる量（凶〜大吉）' },
+    { name: '募集の通知先', value: notifyReady(cfg) ? '🔔通知OK の人' : '役職のある人みんな', note: '募集・「すべての役職」で鳴る人（通知 OK／NG を用意すると「🔔通知OK の人」）' },
     { name: 'おみくじのおまけ', value: describeStreakRewards(cfg.omikujiStreak, e), note: 'おみくじを毎日続けたおまけ（設定の「おみくじを続けたおまけ」）' },
     { name: 'コアタイム', value: describeCoreTime(cfg.coreTime), note: 'コアタイムの曜日と時間' },
     { name: 'コアタイム倍率', value: coreTimeRate(e), note: 'コアタイムの通話でもらえる量の倍率' },

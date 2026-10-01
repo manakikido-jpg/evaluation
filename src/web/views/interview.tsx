@@ -349,7 +349,7 @@ export function InterviewPage(props: {
                 { value: 'none', label: 'なし' },
                 { value: 'here', label: '@here', sub: 'いま見ている人' },
                 { value: 'everyone', label: '@everyone', sub: '全員' },
-                { value: 'ranks', label: '⛩ すべての役職', sub: '役職のロール全部' },
+                { value: 'ranks', label: '⛩ すべての役職', sub: '役職のロール全部（🔕通知NG の人には鳴らない）' },
                 { value: 'role', label: 'ロールに通知' },
               ]}
               checked={st.mention}
