@@ -25,6 +25,9 @@ const ROLE_TEXT: Record<SlotRole, string> = {
 /** 中段の役（casino.js で 7 がそろったか見るのに使う） */
 const LINES = (Object.keys(SLOT_ROLES) as (keyof typeof SLOT_ROLES)[]).map((k) => `${k}:${SLOT_ROLES[k].line.map((x) => x ?? '*').join('.')}`).join('|');
 const IDLE_STOPS = [0, 0, 0];
+/** 電光表示の文字 */
+const LED_TEXT: Record<SlotRole, string> = { big: 'BIG!', reg: 'REG!', grape: 'GRAPE', cherry: 'CHERRY', replay: 'REPLAY', bell: 'BELL', clown: 'PIERROT', none: '-----' };
+const pad = (n: number) => String(n).padStart(4, '0');
 const odds = (w: number) => {
   const n = 65536 / w;
   return n >= 20 ? `1/${Math.round(n)}` : `1/${n.toFixed(1)}`;
@@ -63,7 +66,7 @@ export function SlotsPage(p: GamePage) {
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-slot-stage">
         <div
-          class={`c-jug mode-${mode}${mode === 'spin' && s?.lamp === 'pre' ? ' lamp-pre' : ''}${bonusFresh ? ` bonus-${s!.role}` : ''}`}
+          class={`c-jug mode-${mode}${holding ? ' holding' : ''}${mode === 'spin' && s?.lamp === 'pre' ? ' lamp-pre' : ''}${bonusFresh ? ` bonus-${s!.role}` : ''}`}
           data-mode={mode}
           data-auto={autoAim ? '1' : undefined}
           data-stops={stops.join(',')}
@@ -75,6 +78,8 @@ export function SlotsPage(p: GamePage) {
           data-n={String(REEL_LEN)}
           data-win={s && row?.status === 'done' ? String(s.mult) : ''}
         >
+          <span class="c-jug-side l" aria-hidden="true"></span>
+          <span class="c-jug-side r" aria-hidden="true"></span>
           <div class="c-jug-top">
             <Art
               name="top"
@@ -101,6 +106,34 @@ export function SlotsPage(p: GamePage) {
               <span>中段</span>
             </div>
           </div>
+          <div class="c-jug-led" aria-hidden="true">
+            <span class="c-seg">
+              <i>BET</i>
+              <b>{row ? pad(row.bet) : '----'}</b>
+            </span>
+            <span class="c-seg c-seg-mid">
+              <i>{holding ? 'CHANCE' : 'SAKURA 777'}</i>
+              {holding ? (
+                <b class="c-seg-blink">BONUS</b>
+              ) : s && row?.status === 'done' ? (
+                <b class={`c-later${wait}${s.mult > 0 ? ' c-seg-win' : ''}`} data-after-stop>
+                  {LED_TEXT[s.role]}
+                </b>
+              ) : (
+                <b>READY</b>
+              )}
+            </span>
+            <span class="c-seg">
+              <i>WIN</i>
+              {s && row?.status === 'done' ? (
+                <b class={`c-later${wait}`} data-after-stop>
+                  {pad(row.payout)}
+                </b>
+              ) : (
+                <b>0000</b>
+              )}
+            </span>
+          </div>
           <div class="c-jug-bottom">
             <span class={`c-gogo${lampLit ? ' lit' : ''}`} aria-label={lampLit ? 'ランプが光っています（ボーナス）' : 'ボーナスのランプ'}>
               <Art name="lamp" class="c-gogo-art" fallback={<b>GOGO!</b>} />
@@ -123,6 +156,9 @@ export function SlotsPage(p: GamePage) {
             )}
           </div>
           <Art name="bottom" class="c-jug-art c-jug-art-bottom" />
+          <div class="c-jug-tray" aria-hidden="true">
+            <span>咲 楽 ノ 宮</span>
+          </div>
           {bonusFresh && (
             <div class={`c-bonus ${s!.role}`}>
               <b>{s!.role === 'big' ? 'BIG BONUS' : 'REG BONUS'}</b>
