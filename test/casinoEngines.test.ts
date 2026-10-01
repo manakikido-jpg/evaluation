@@ -5,7 +5,7 @@ import { cardText, cryptoRng, rankOf, shuffledShoe, type Rng } from '../src/serv
 import { HL_MAX_STEPS, hlCashout, hlGuess, hlNextMult, hlPayout, hlStart, hlWays } from '../src/services/casino/highlow.js';
 import { applyMove, countStones, cpuMove, flipsFor, initialBoard, legalMoves, nextTurn, othelloPlay, winnerOf } from '../src/services/casino/othello.js';
 import { isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
-import { slotMultiplier, slotRtp, spinReel } from '../src/services/casino/slots.js';
+import { aimStops, bonusStops, drawRole, gridOf, lineOf, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
 
 /** 決めた数を順に返す乱数 */
 const seq = (xs: number[]): Rng => {
@@ -155,21 +155,75 @@ describe('🎴 バカラ', () => {
   });
 });
 
-describe('🎰 スロット', () => {
+describe('🎰 スロット（ジャグラー風）', () => {
   it('払い戻し率はおよそ 95%', () => {
-    expect(slotRtp()).toBeGreaterThan(0.93);
-    expect(slotRtp()).toBeLessThan(0.97);
+    expect(slotRtp()).toBeGreaterThan(0.94);
+    expect(slotRtp()).toBeLessThan(0.96);
   });
 
-  it('そろった・🌸 の数で倍率', () => {
-    expect(slotMultiplier(['sakura', 'sakura', 'sakura'])).toBe(777);
-    expect(slotMultiplier(['dango', 'dango', 'dango'])).toBe(6);
-    expect(slotMultiplier(['sakura', 'fox', 'sakura'])).toBe(15);
-    expect(slotMultiplier(['fox', 'sakura', 'dango'])).toBe(1);
-    expect(slotMultiplier(['torii', 'torii', 'dango'])).toBe(3);
-    expect(slotMultiplier(['dango', 'chime', 'fox'])).toBe(0);
-    expect(spinReel(seq([29]))).toBe('sakura');
-    expect(spinReel(seq([0]))).toBe('dango');
+  it('リールは 21 コマで、どのリールにも 7・BAR がある', () => {
+    for (const r of REELS) {
+      expect(r).toHaveLength(REEL_LEN);
+      expect(r.filter((k) => k === 'seven')).toHaveLength(1);
+      expect(r).toContain('bar');
+    }
+  });
+
+  it('中段の役', () => {
+    expect(roleOfLine(['seven', 'seven', 'seven'])).toBe('big');
+    expect(roleOfLine(['seven', 'seven', 'bar'])).toBe('reg');
+    expect(roleOfLine(['grape', 'grape', 'grape'])).toBe('grape');
+    expect(roleOfLine(['cherry', 'bell', 'seven'])).toBe('cherry');
+    expect(roleOfLine(['seven', 'seven', 'grape'])).toBe('none');
+    expect(slotPayout(100, 'big')).toBe(8000);
+    expect(slotPayout(15, 'grape')).toBe(37);
+    expect(slotPayout(100, 'none')).toBe(0);
+  });
+
+  it('役の引き方（65536 分の重み）', () => {
+    expect(drawRole(seq([0]))).toBe('big');
+    expect(drawRole(seq([273]))).toBe('reg');
+    expect(drawRole(seq([65535]))).toBe('none');
+    const n: Record<string, number> = {};
+    const rng = seeded(7);
+    for (let i = 0; i < 40000; i++) {
+      const r = drawRole(rng);
+      n[r] = (n[r] ?? 0) + 1;
+    }
+    expect(n.grape! / 40000).toBeGreaterThan(0.12);
+    expect(n.grape! / 40000).toBeLessThan(0.165);
+  });
+
+  it('決まった役どおりに止まる（はずれ・小役のとき、左にチェリーは見えない）', () => {
+    const rng = seeded(3);
+    for (const role of ['none', 'grape', 'replay', 'cherry', 'bell', 'clown', 'big', 'reg'] as SlotRole[]) {
+      for (let i = 0; i < 30; i++) {
+        const stops = stopsFor(role, rng);
+        expect(roleOfLine(lineOf(stops))).toBe(role);
+        if (role !== 'cherry') expect(gridOf(stops)[0]).not.toContain('cherry');
+      }
+    }
+  });
+
+  it('目押し: 7 の 4 コマ手前までに押せばすべってそろう。遠ければそろわず、ほかの役にも見えない', () => {
+    const at7 = REELS.map((r) => r.indexOf('seven'));
+    // ちょうど 7 で押す・4 コマ手前（上の絵柄が下りてくるので、番号が大きい側）で押す
+    expect(roleOfLine(lineOf(aimStops('big', at7)))).toBe('big');
+    expect(roleOfLine(lineOf(aimStops('big', at7.map((x) => (x + SLIP) % REEL_LEN))))).toBe('big');
+    // 5 コマ手前では届かない
+    const far = aimStops('big', at7.map((x) => (x + SLIP + 1) % REEL_LEN));
+    expect(roleOfLine(lineOf(far))).toBe('none');
+    expect(gridOf(far)[0]).not.toContain('cherry');
+    // REG: 右は BAR に向かってすべる。7・7・7 には見せない
+    const reg = aimStops('reg', [at7[0]!, at7[1]!, REELS[2]!.indexOf('bar')]);
+    expect(roleOfLine(lineOf(reg))).toBe('reg');
+    for (let p = 0; p < REEL_LEN; p++) {
+      const s = aimStops('reg', [at7[0]!, at7[1]!, p]);
+      expect(['reg', 'none']).toContain(roleOfLine(lineOf(s)));
+      expect(Math.abs((((p - s[2]!) % REEL_LEN) + REEL_LEN) % REEL_LEN)).toBeLessThanOrEqual(SLIP);
+    }
+    expect(roleOfLine(lineOf(bonusStops('big')))).toBe('big');
+    expect(roleOfLine(lineOf(bonusStops('reg')))).toBe('reg');
   });
 });
 

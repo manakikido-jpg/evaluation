@@ -4,12 +4,11 @@ import type { CasinoGameRow, CasinoMatch, MemberSession } from '../../db/schema.
 import { BAC_BETS, type BacBet } from '../../services/casino/baccarat.js';
 import { bjView, type BjResult, type BjState } from '../../services/casino/blackjack.js';
 import { cardText, isRed, rankText, SUITS, suitOf } from '../../services/casino/cards.js';
-import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState, type SlotsState } from '../../services/casino/casino.js';
+import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState } from '../../services/casino/casino.js';
 import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
 import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteColor, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
-import { LAMP_MIN, SLOT_SYMBOLS, slotEmoji, type SlotKey } from '../../services/casino/slots.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
 import { assetUrl } from '../assets.js';
 
@@ -354,10 +353,10 @@ export const revealMe = (me: CasinoMe, row: CasinoGameRow | undefined, at: numbe
   return { ...me, revealFrom: me.balance - row.payout, revealAt: at };
 };
 /** 終わったばかり（演出する）か */
-const freshDone = (row: CasinoGameRow | undefined) => Boolean(row && row.status === 'done' && row.finishedAt && Date.now() - row.finishedAt.getTime() < 60_000);
+export const freshDone = (row: CasinoGameRow | undefined) => Boolean(row && row.status === 'done' && row.finishedAt && Date.now() - row.finishedAt.getTime() < 60_000);
 
 /** 結果（勝ち・負け・引き分け） */
-function Result(p: { bet: number; payout: number; coin: Coin; text: string }) {
+export function Result(p: { bet: number; payout: number; coin: Coin; text: string }) {
   const net = p.payout - p.bet;
   return (
     <div class={`c-result ${net > 0 ? 'win' : net < 0 ? 'lose' : 'even'}`}>
@@ -370,7 +369,7 @@ function Result(p: { bet: number; payout: number; coin: Coin; text: string }) {
   );
 }
 
-type GamePage = { me: CasinoMe; casino: CasinoConfig; row?: CasinoGameRow; msg?: string };
+export type GamePage = { me: CasinoMe; casino: CasinoConfig; row?: CasinoGameRow; msg?: string };
 
 // ───────── 🃏 ブラックジャック ─────────
 
@@ -488,7 +487,7 @@ export function BlackjackPage(p: GamePage) {
   );
 }
 
-const Rules = (p: { children: Child }) => (
+export const Rules = (p: { children: Child }) => (
   <details class="c-rules">
     <summary>遊び方・配当</summary>
     <p>{p.children}</p>
@@ -652,91 +651,6 @@ export function BaccaratPage(p: GamePage) {
         />
       </Later>
       <Rules>10・絵札は 0。合計が 8・9 なら引かず、それ以外は決まりどおり 3 枚目を引きます。タイのとき、プレイヤー・バンカーに賭けた分は戻ります。</Rules>
-    </CasinoLayout>
-  );
-}
-
-// ───────── 🎰 スロット（3 × 3。回り続けて、STOP で 1 本ずつ止める） ─────────
-
-/** 回っている帯の飾り（同じ並びを 2 回つなげて、切れ目なく回す） */
-const SPIN_STRIP: SlotKey[] = ['dango', 'sakura', 'chime', 'fox', 'lantern', 'torii', 'dango', 'chime', 'lantern', 'fox'];
-
-export function SlotsPage(p: GamePage) {
-  const csrf = p.me.session.csrfToken;
-  const s = p.row?.state as SlotsState | undefined;
-  const fresh = freshDone(p.row);
-  const grid: SlotKey[][] = s?.grid ?? (s ? s.reels.map((r) => [r, r, r]) : [['dango', 'sakura', 'chime'], ['fox', 'sakura', 'torii'], ['lantern', 'sakura', 'dango']]);
-  const spinning = Boolean(s && fresh);
-  const me = s && fresh ? { ...p.me, revealFrom: p.me.balance - p.row!.payout, revealAt: 0, revealWait: true } : p.me;
-  const big = s && s.multiplier >= 100 ? 'JACKPOT!!' : s && s.multiplier >= 10 ? 'BIG WIN!' : '';
-  return (
-    <CasinoLayout title="スロット" me={me} back>
-      <h1 class="c-h1">🎰 スロット</h1>
-      {p.msg && <Msg msg={p.msg} />}
-      <section class="c-slot-stage">
-        <div
-          class={`c-jug${spinning ? ' spinning' : ''}${s?.lamp === 'pre' && spinning ? ' lamp-pre' : ''}${s?.lamp && !spinning ? ' lamp-on' : ''}`}
-          data-lamp={s?.lamp ?? ''}
-          data-win={s ? String(s.multiplier) : ''}
-        >
-          <div class="c-jug-top">
-            <span class="c-jug-title">🌸 SAKURA 777 🌸</span>
-            <span class="c-bulbs" aria-hidden="true"></span>
-          </div>
-          <div class="c-jug-window">
-            {grid.map((col, i) => (
-              <div class={`c-jreel r${i}`} data-reel={String(i)} data-final={col.map(slotEmoji).join(',')}>
-                <div class="c-jstrip" aria-hidden="true">
-                  {spinning
-                    ? [...SPIN_STRIP, ...SPIN_STRIP].map((k) => <span>{slotEmoji(k)}</span>)
-                    : col.map((k) => <span>{slotEmoji(k)}</span>)}
-                </div>
-              </div>
-            ))}
-            <div class="c-payline" aria-hidden="true">
-              <span>中段</span>
-            </div>
-          </div>
-          <div class="c-jug-bottom">
-            <span class="c-gogo" aria-label="大当たりのランプ">
-              <b>GOGO!</b>
-            </span>
-            {spinning ? (
-              <span class="c-stops">
-                {[0, 1, 2].map((i) => (
-                  <button type="button" class="c-stop" data-stop={String(i)} aria-label={`${i + 1} 本目を止める`}>
-                    STOP
-                  </button>
-                ))}
-              </span>
-            ) : (
-              <span class="c-muted c-jug-note">{s ? '↓ もう一度回す' : '↓ 賭ける量を選ぶと回ります'}</span>
-            )}
-          </div>
-          {big && spinning && (
-            <div class="c-later wait c-bigwin" data-after-stop>
-              <b>{big}</b>
-              <span class="c-coins" aria-hidden="true">
-                {Array.from({ length: 16 }, () => (
-                  <i>🪙</i>
-                ))}
-              </span>
-            </div>
-          )}
-        </div>
-        {s && (
-          <div class={`c-later${spinning ? ' wait' : ''}`} data-after-stop>
-            <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={s.multiplier > 0 ? `🎉 ${s.multiplier} 倍！` : 'はずれ…'} />
-          </div>
-        )}
-        {spinning && <p class="c-muted c-center c-jug-help">STOP を押す（キーボードならスペース）と、1 本ずつ止まります。押さなくても少したつと止まります。</p>}
-      </section>
-      <div class={spinning ? 'c-later wait' : ''} data-after-stop>
-        <BetForm action="/casino/slots" csrf={csrf} casino={p.casino} coin={p.me.coin} label="回す" last={p.row?.bet} />
-      </div>
-      <Rules>
-        払うのは真ん中の段（中段）だけです。{SLOT_SYMBOLS.map((x) => `${x.emoji}${x.emoji}${x.emoji} ×${x.three}`).join('・')}。🌸 が 2 つで ×15、1 つで ×1（賭けた分が戻る）。左の 2 つがそろうと 🏮×1・🦊×2・⛩×3。止まる絵柄は回したときに決まっていて、STOP は止める合図です（押す早さで当たりは変わりません）。×{LAMP_MIN} 以上の当たりのときは「GOGO!」ランプが光ります（回したときに光ることも、止めたあとに光ることも）。
-      </Rules>
     </CasinoLayout>
   );
 }

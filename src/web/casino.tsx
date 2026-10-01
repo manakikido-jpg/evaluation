@@ -18,6 +18,7 @@ import {
   gameById,
   playBaccarat,
   playRoulette,
+  aimSlots,
   playSlots,
   recentGames,
   startBlackjack,
@@ -46,12 +47,12 @@ import {
   HighLowPage,
   OthelloPage,
   RoulettePage,
-  SlotsPage,
   VersusBoard,
   VersusLobby,
   VersusRoom,
   type CasinoMe,
 } from './views/casino.js';
+import { SlotsPage } from './views/slots.js';
 
 /**
  * 🎰 カジノ（/casino）。メンバーが Discord でログインして、サーバーの銭で遊ぶ。
@@ -287,6 +288,20 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   app.post(
     '/casino/slots',
     page(async (c, me) => after(c, 'slots', await playSlots(db, d.cfg(), me.session.userId, betOf(await c.req.parseBody()), undefined, d.now())), { post: true }),
+  );
+
+  app.post(
+    '/casino/slots/:id',
+    page(async (c, me) => {
+      const body = await c.req.parseBody();
+      // p=3,10,17（STOP を押したときのコマ・左から）か、assist=1（おまかせ）
+      const pressed = body.assist === '1' ? 'assist' : typeof body.p === 'string' && /^\d{1,2},\d{1,2},\d{1,2}$/.test(body.p) ? body.p.split(',').map(Number) : undefined;
+      if (!pressed) return c.redirect('/casino/slots?e=invalid');
+      const row = await fresh(idOf(c), me, body);
+      if (row === 'stale') return c.redirect('/casino/slots?e=conflict');
+      if (!row) return c.redirect('/casino/slots?e=not_found');
+      return after(c, 'slots', await aimSlots(db, row.id, me.session.userId, pressed, d.now()));
+    }, { post: true }),
   );
 
   app.post(

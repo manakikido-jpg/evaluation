@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
+import { casinoGames } from '../src/db/schema.js';
+import { REELS } from '../src/services/casino/slots.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
 import { loadOverrides } from '../src/services/settings.js';
@@ -145,14 +147,43 @@ describe('🎰 カジノ: 遊ぶ', () => {
     expect(loc).toMatch(/^\/casino\/slots\?g=\d+$/);
     const html = await (await get(loc, cookie!)).text();
     expect(html).toContain('c-jug');
-    expect(html).toContain('data-final=');
-    expect(html).toMatch(/賭け 100 → 戻り \d/);
-    // 残高は「5000 − 賭け + 戻り」（×1 で戻りが 100 のときもある）
-    const back = Number(/戻り ([\d,]+)/.exec(html)![1]!.replace(/,/g, ''));
-    expect(await balance(A)).toBe(5000 - 100 + back);
+    expect(html).toContain('data-stops=');
+    if (html.includes('data-aim')) {
+      // ボーナスを引いた（持ち越し中）
+      expect(await balance(A)).toBe(4900);
+    } else {
+      expect(html).toMatch(/賭け 100 → 戻り \d/);
+      // 残高は「5000 − 賭け + 戻り」（リプレイで戻りが 100 のときもある）
+      const back = Number(/戻り ([\d,]+)/.exec(html)![1]!.replace(/,/g, ''));
+      expect(await balance(A)).toBe(5000 - 100 + back);
+    }
     // ほかの人の結果は見えない
     const other = await casinoLogin(B);
-    expect(await (await get(loc, other.cookie!)).text()).not.toContain('c-result');
+    const seen = await (await get(loc, other.cookie!)).text();
+    expect(seen).not.toContain('c-result');
+    expect(seen).not.toContain('data-aim');
+  });
+
+  it('スロット: ボーナスを持っていたら狙う画面。押した所を送ると、すべりを計算してそろえる', async () => {
+    const { cookie } = await casinoLogin(A);
+    const [row] = await db
+      .insert(casinoGames)
+      .values({ memberId: A, game: 'slots', bet: 100, status: 'playing', payout: 0, createdAt: clock, state: { v: 2, role: 'big', stops: [5, 5, 5], lamp: 'post', phase: 'aim', mult: 0, tries: 0 } })
+      .returning();
+    const page = await (await get('/casino/slots', cookie!)).text();
+    expect(page).toContain('data-aim');
+    expect(page).toContain('data-want="seven,seven,seven"');
+    // 新しく回そうとしても、持っている回に戻る
+    expect((await post('/casino/slots', cookie!, { bet: '100' })).headers.get('location')).toBe(`/casino/slots?g=${row!.id}`);
+    expect((await post(`/casino/slots/${row!.id}`, cookie!, { p: 'x' })).headers.get('location')).toBe('/casino/slots?e=invalid');
+    // 7 の 2 コマ手前で押す
+    const p = REELS.map((r) => (r.indexOf('seven') + 2) % 21).join(',');
+    const res = await post(`/casino/slots/${row!.id}`, cookie!, { p, v: String(row!.version) });
+    expect(res.headers.get('location')).toBe(`/casino/slots?g=${row!.id}`);
+    expect(await balance(A)).toBe(5000 + 8000);
+    const html = await (await get(res.headers.get('location')!, cookie!)).text();
+    expect(html).toContain('BIG BONUS');
+    expect(html).toContain('data-stops="0,0,0"');
   });
 
   it('好きな量・上限・足りない', async () => {

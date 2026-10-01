@@ -10,6 +10,7 @@ import {
   actHighLow,
   actOthello,
   activeGame,
+  aimSlots,
   bigWins,
   casinoStats,
   checkBet,
@@ -23,6 +24,7 @@ import {
 } from '../src/services/casino/casino.js';
 import type { BjState } from '../src/services/casino/blackjack.js';
 import { legalMoves } from '../src/services/casino/othello.js';
+import { REELS, SLIP } from '../src/services/casino/slots.js';
 import { cancelMatch, createMatch, joinMatch, MOVE_SECONDS, moveMatch, myMatch, OPEN_MINUTES, readMatch, resignMatch, sweepMatches } from '../src/services/casino/versus.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -57,8 +59,8 @@ describe('🎰 カジノ: 賭けの決まり', () => {
     expect(await checkBet(db, ccfg(), A, 'slots', 1001, NOW)).toBe('bad_bet');
     expect(await checkBet(db, ccfg(), C, 'slots', 100, NOW)).toBe('poor');
     const lim = ccfg({ dailyBetLimit: 250 });
-    await playSlots(db, lim, A, 100, seq([0, 7, 20]), NOW);
-    await playSlots(db, lim, A, 100, seq([0, 7, 20]), NOW);
+    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), NOW);
+    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), NOW);
     expect(await todayBets(db, A, NOW)).toBe(200);
     expect(await checkBet(db, lim, A, 'slots', 100, NOW)).toBe('limit');
     expect(await checkBet(db, lim, A, 'slots', 50, NOW)).toBe('ok');
@@ -68,14 +70,48 @@ describe('🎰 カジノ: 賭けの決まり', () => {
 });
 
 describe('🎰 カジノ: 1 回で終わるゲーム', () => {
-  it('スロット: 🌸🌸🌸 で 777 倍、外れは 0', async () => {
-    const win = await playSlots(db, ccfg(), A, 10, seq([29, 29, 29]), NOW);
-    expect(win.status).toBe('ok');
-    expect(await bal(A)).toBe(5000 - 10 + 7770);
-    const lose = await playSlots(db, ccfg(), A, 10, seq([0, 9, 16]), NOW);
+  it('スロット: 小役はその回に払う・はずれは 0', async () => {
+    // 1000 / 65536 はぶどう（×2.5）
+    const win = await playSlots(db, ccfg(), A, 10, seq([1000, 3, 5, 7]), NOW);
+    expect(win.status === 'ok' && win.row.status).toBe('done');
+    expect(await bal(A)).toBe(5000 - 10 + 25);
+    const lose = await playSlots(db, ccfg(), A, 10, seq([65000, 9, 16]), NOW);
     expect(lose.status === 'ok' && lose.row.payout).toBe(0);
-    expect(await bal(A)).toBe(5000 - 20 + 7770);
-    expect((await bigWins(db, new Date(NOW.getTime() - 3_600_000))).map((g) => g.payout)).toEqual([7770]);
+    expect(await bal(A)).toBe(5000 - 20 + 25);
+  });
+
+  it('スロット: BIG を引いたら持ち越し。7 を狙ってそろえたら払う（狙う回は賭けない）', async () => {
+    const r = await playSlots(db, ccfg(), A, 100, seq([0, 1, 2, 3, 4, 5]), NOW);
+    expect(r.status).toBe('ok');
+    const row = r.status === 'ok' ? r.row : undefined!;
+    expect(row.status).toBe('playing');
+    expect(row.payout).toBe(0);
+    expect(await bal(A)).toBe(4900);
+    // 持っている間は新しく回せない
+    expect((await playSlots(db, ccfg(), A, 100, seq([1000]), NOW)).status).toBe('busy');
+    const at7 = REELS.map((x) => x.indexOf('seven'));
+    // 遠い所で押すと、はずれて持ち越し
+    const miss = await aimSlots(db, row.id, A, at7.map((x) => (x + SLIP + 3) % 21), NOW);
+    expect(miss.status === 'ok' && miss.row.status).toBe('playing');
+    expect(await bal(A)).toBe(4900);
+    expect((await aimSlots(db, row.id, A, [1, 2], NOW)).status).toBe('invalid');
+    expect((await aimSlots(db, row.id, B, at7, NOW)).status).toBe('not_found');
+    // 少し手前で押せば、すべってそろう
+    const hit = await aimSlots(db, row.id, A, at7.map((x) => (x + 2) % 21), NOW);
+    expect(hit.status === 'ok' && hit.row.status).toBe('done');
+    expect(hit.status === 'ok' && hit.row.payout).toBe(8000);
+    expect(await bal(A)).toBe(4900 + 8000);
+    expect((await aimSlots(db, row.id, A, at7, NOW)).status).toBe('done');
+    expect((await bigWins(db, new Date(NOW.getTime() - 3_600_000))).map((g) => g.payout)).toEqual([8000]);
+  });
+
+  it('スロット: REG はおまかせでもそろう', async () => {
+    const r = await playSlots(db, ccfg(), A, 10, seq([300, 1, 2, 3]), NOW);
+    const row = r.status === 'ok' ? r.row : undefined!;
+    expect(row.status).toBe('playing');
+    const done = await aimSlots(db, row.id, A, 'assist', NOW);
+    expect(done.status === 'ok' && done.row.payout).toBe(300);
+    expect(await bal(A)).toBe(5000 - 10 + 300);
   });
 
   it('ルーレット: いくつもの所に賭けられる（当たった所だけ払う）。1 か所ごとに最低〜最高', async () => {

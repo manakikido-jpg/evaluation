@@ -10,7 +10,7 @@ import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_MAX_SPOTS, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
-import { slotGrid, slotLamp, slotSpin, type SlotKey } from './slots.js';
+import { aimStops, bonusStops, drawRole, isBonus, lineOf, REEL_LEN, roleMult, roleOfLine, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
 
 /**
  * カジノ（1 人で遊ぶゲーム）。賭けた銭は始めたときに引き、終わったときに 1 回だけ戻す（負けは 0）。
@@ -21,7 +21,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   blackjack: { emoji: '🃏', name: 'ブラックジャック', note: '21 に近いほうが勝ち。ブラックジャックは 2.5 倍' },
   highlow: { emoji: '🔼', name: 'ハイ＆ロー', note: '次のカードが上か下か。当てるほど倍率が上がる' },
   baccarat: { emoji: '🎴', name: 'バカラ', note: 'プレイヤー・バンカー・タイ、どれが勝つか' },
-  slots: { emoji: '🎰', name: 'スロット', note: '🌸🌸🌸 で 777 倍' },
+  slots: { emoji: '🎰', name: 'スロット', note: 'ジャグラー風。ペカったら 7 を狙って BIG' },
   roulette: { emoji: '🎡', name: 'ルーレット', note: '赤黒は 2 倍・数字 1 つは 36 倍' },
   othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.2〜2.2 倍' },
   versus: { emoji: '⚔\uFE0F', name: 'メンバー対戦（オセロ）', note: 'メンバー同士で賭けて対戦。勝った人が総取り' },
@@ -190,13 +190,38 @@ export function playBaccarat(db: Db, cfg: GuildConfig, memberId: string, bet: nu
   }, now);
 }
 
-/** grid: リールごとの上・中・下（中段が reels）。lamp: GOGO ランプ */
-export type SlotsState = { reels: SlotKey[]; multiplier: number; grid?: SlotKey[][]; lamp?: 'pre' | 'post' | null };
+/**
+ * スロット（ジャグラー風）。stops: 見せている止まり方（リールごとの中段のコマ）。
+ * phase aim: ボーナスを引いて、7 を狙っている途中（tries: 狙った回数・aimed: 最後が目押しだった）
+ * 前の形（reels・multiplier）も残っている
+ */
+export type SlotsSpin = { v: 2; role: SlotRole; stops: number[]; lamp: 'pre' | 'post' | null; phase: 'aim' | 'done'; mult: number; tries?: number; aimed?: boolean; assist?: boolean };
+export type SlotsState = SlotsSpin | { v?: undefined; reels: SlotKey[] | string[]; multiplier: number };
+
 export function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet: number, rng: Rng = cryptoRng, now = new Date()) {
   return start(db, cfg, memberId, 'slots', bet, () => {
-    const r = slotSpin(rng);
-    const state: SlotsState = { ...r, grid: slotGrid(r.reels, rng), lamp: slotLamp(r.multiplier, rng) };
-    return { state, done: true, payout: bet * r.multiplier };
+    const role = drawRole(rng);
+    // ボーナス: はずれの目で止めて、ランプを光らせる（払うのは 7 がそろってから）
+    if (isBonus(role)) {
+      const state: SlotsSpin = { v: 2, role, stops: stopsFor('none', rng), lamp: slotLamp(rng), phase: 'aim', mult: 0, tries: 0 };
+      return { state, done: false, payout: 0 };
+    }
+    const state: SlotsSpin = { v: 2, role, stops: stopsFor(role, rng), lamp: null, phase: 'done', mult: roleMult(role) };
+    return { state, done: true, payout: slotPayout(bet, role) };
+  }, now);
+}
+
+/** 7 を狙う（pressed: STOP を押したときのコマ・左から）。'assist' はおまかせでそろえる。狙う回は賭けない */
+export function aimSlots(db: Db, id: number, memberId: string, pressed: number[] | 'assist', now = new Date()): Promise<Acted> {
+  return act(db, id, memberId, (row) => {
+    const s = row.state as SlotsState;
+    if (s.v !== 2 || s.phase !== 'aim' || !isBonus(s.role)) return undefined;
+    if (pressed !== 'assist' && (pressed.length !== 3 || pressed.some((x) => !Number.isInteger(x) || x < 0 || x >= REEL_LEN))) return undefined;
+    const stops = pressed === 'assist' ? bonusStops(s.role) : aimStops(s.role, pressed);
+    const tries = (s.tries ?? 0) + 1;
+    if (roleOfLine(lineOf(stops)) !== s.role) return { state: { ...s, stops, tries, aimed: true } satisfies SlotsSpin, done: false, payout: 0 };
+    const state: SlotsSpin = { ...s, stops, tries, aimed: true, phase: 'done', mult: roleMult(s.role), assist: pressed === 'assist' };
+    return { state, done: true, payout: slotPayout(row.bet, s.role) };
   }, now);
 }
 

@@ -163,6 +163,28 @@ const Sound = (() => {
       notes([[1568, 0.22, 0.25], [2093, 0.36, 0.5]], at, { type: 'sine', vol: 0.16 });
     },
     bell: (at = 0) => notes([[1319, 0, 0.5], [1760, 0.12, 0.6]], at, { type: 'sine', vol: 0.12 }),
+    /** スロットのレバー（ガコッ） */
+    lever: (at = 0) => {
+      tone(110, at, 0.16, { type: 'square', vol: 0.12, to: 45 });
+      noise(at, 0.07, { freq: 700, q: 1.5, vol: 0.35 });
+    },
+    /** GOGO ランプが光った（ペカッ） */
+    peka(at = 0) {
+      tone(2600, at, 0.06, { type: 'square', vol: 0.05 });
+      notes([[2093, 0.05, 0.12], [3136, 0.12, 0.4]], at, { type: 'sine', vol: 0.18 });
+    },
+    /** 7 がそろわなかった */
+    miss: (at = 0) => tone(330, at, 0.22, { type: 'triangle', vol: 0.1, to: 220 }),
+    /** BIG・REG のファンファーレ */
+    bonus(big = true, at = 0) {
+      const m = big
+        ? [[784, 0, 0.14], [784, 0.15, 0.14], [784, 0.3, 0.14], [1047, 0.45, 0.4], [988, 0.9, 0.14], [1047, 1.05, 0.14], [1175, 1.2, 0.14], [1568, 1.35, 0.8]]
+        : [[659, 0, 0.14], [784, 0.15, 0.14], [988, 0.3, 0.14], [1319, 0.45, 0.6]];
+      notes(m, at, { type: 'square', vol: 0.08 });
+      notes(big ? [[262, 0.45, 1.6], [330, 0.45, 1.6], [392, 0.45, 1.6]] : [[330, 0.45, 0.9], [392, 0.45, 0.9]], at, { type: 'triangle', vol: 0.07 });
+    },
+    /** 戻りを数えるチャリチャリ */
+    tick: (at = 0) => tone(2400 + Math.random() * 1200, at, 0.03, { type: 'square', vol: 0.025 }),
   };
   return api;
 })();
@@ -223,8 +245,8 @@ const playFx = (root, tableEnd) => {
     if (!el.classList.contains('down')) Sound.flip(d + (el.classList.contains('slow') ? 1.0 : 0.34));
   });
   if (root.querySelector('.c-wheel2.spun')) Sound.wheel();
-  // 結果（スロットは止めたときに鳴らす）
-  const res = root.querySelector('.c-later:not(.wait) .c-result, .c-rl-outcome .c-result');
+  // 結果（スロットは initSlots が鳴らす）
+  const res = root.querySelector('.c-jug') ? null : root.querySelector('.c-later:not(.wait) .c-result, .c-rl-outcome .c-result');
   if (res) {
     const holder = res.closest('.c-later, .c-rl-outcome');
     const d = holder?.classList.contains('c-rl-outcome') ? 5.2 : holder ? delayOf(holder) : 0;
@@ -523,79 +545,259 @@ document.addEventListener('submit', (e) => {
 }, true);
 document.addEventListener('c-live-updated', () => document.querySelectorAll('form[data-rb]').forEach(paintBoard));
 
-// ───── 🎰 スロット: 回り続けて、STOP で 1 本ずつ止める（止まる絵柄はもう決まっている） ─────
-let slotLoop = null;
+// ───── 🎰 スロット（ジャグラー風）: リールを回し、STOP で左から 1 本ずつ止める ─────
+// - spin: 止まる目はもう決まっている（data-stops）。遠ければ、ぼやけている間にずらしてから最大 4 コマすべらせる
+// - aim: ボーナスを持っている。押した所から最大 4 コマ以内に 7（狙う絵柄）があればそこで止まる。
+//   止め終わったら押した所を送り、サーバーが同じ計算で確かめる（services/casino/slots.ts と同じ決まり）
+const REEL_SPEED = 15; // コマ / 秒
+let slotCtl = null;
 const initSlots = (root) => {
-  if (slotLoop) slotLoop.stop();
-  slotLoop = null;
-  const jug = root.querySelector('.c-jug.spinning');
+  if (slotCtl) slotCtl.stop();
+  slotCtl = null;
+  const jug = root.querySelector('.c-jug');
   if (!jug) return;
-  const reels = [...jug.querySelectorAll('.c-jreel')];
-  const stops = [...jug.querySelectorAll('[data-stop]')];
-  const win = Number(jug.dataset.win || 0);
-  let stopped = 0;
-  let done = false;
-  slotLoop = Sound.reelLoop();
-  if (jug.classList.contains('lamp-pre')) Sound.gogo(0.15);
-  const mark = () => stops.forEach((b) => b.classList.toggle('next', !b.disabled && stops.find((x) => !x.disabled) === b));
-  const finish = () => {
-    if (done) return;
-    done = true;
-    slotLoop?.stop();
-    slotLoop = null;
-    if (win > 0) reels.forEach((r) => r.classList.add('win-mid'));
-    let wait = 0.5;
-    if (jug.dataset.lamp === 'post') {
-      jug.querySelector('.c-gogo')?.classList.add('lit');
-      Sound.gogo(0.25);
-      wait = 1.1;
+  const N = Number(jug.dataset.n) || 21;
+  const SLIP = Number(jug.dataset.slip) || 4;
+  let mode = jug.dataset.mode;
+  const bonus = jug.dataset.role;
+  const speed = matchMedia('(prefers-reduced-motion: reduce)').matches ? 7 : REEL_SPEED;
+  const stops = (jug.dataset.stops || '0,0,0').split(',').map(Number);
+  const want = (jug.dataset.want || '').split(',');
+  const lines = (jug.dataset.lines || '').split('|').filter(Boolean).map((x) => {
+    const [k, l] = x.split(':');
+    return [k, l.split('.')];
+  });
+  const roleOf = (line) => (lines.find(([, w]) => w.every((x, i) => x === '*' || x === line[i])) || ['none'])[0];
+  const reels = [...jug.querySelectorAll('.c-jreel')].map((el, i) => ({ el, strip: el.querySelector('.c-jstrip'), keys: (el.dataset.strip || '').split(','), pos: N + (stops[i] || 0), state: 'still', anim: null, at: stops[i] || 0 }));
+  const keyAt = (r, i) => reels[r].keys[((i % N) + N) % N];
+  const cherryShown = (i) => [i - 1, i, i + 1].some((j) => keyAt(0, j) === 'cherry');
+  const paint = (r) => r.strip.style.setProperty('--at', r.pos.toFixed(3));
+  const stopBtns = [...jug.querySelectorAll('[data-stop]')];
+  const lever = jug.querySelector('[data-lever]');
+  const lamp = jug.querySelector('.c-gogo');
+  const form = document.querySelector('form[data-aim]');
+  let alive = true;
+  let raf = 0;
+  let last = 0;
+  let loop = null;
+  let pressed = [];
+  let timers = [];
+  const later = (fn, ms) => timers.push(setTimeout(() => alive && fn(), ms));
+  const nextIdx = () => reels.findIndex((r) => r.state === 'spin');
+  const mark = () => {
+    const n = nextIdx();
+    stopBtns.forEach((b, i) => b.classList.toggle('next', i === n));
+  };
+  const frame = (t) => {
+    if (!alive) return;
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
+    last = t;
+    for (const r of reels) {
+      if (r.state === 'spin') {
+        r.pos -= speed * dt;
+        while (r.pos < N) r.pos += N;
+        paint(r);
+      } else if (r.state === 'slide') {
+        const a = r.anim;
+        const p = Math.min(1, (t - a.t0) / a.dur);
+        r.pos = a.from + (a.to - a.from) * (1 - (1 - p) ** 3);
+        if (p >= 1) {
+          r.pos = N + r.at;
+          r.state = 'still';
+          a.done();
+        }
+        paint(r);
+      }
     }
-    setTimeout(() => {
+    raf = requestAnimationFrame(frame);
+  };
+  reels.forEach(paint);
+  raf = requestAnimationFrame(frame);
+
+  /** 目押しのすべり（slots.ts の slipStop・aimStops と同じ） */
+  const slipStop = (reel, p) => {
+    const cand = Array.from({ length: SLIP + 1 }, (_, k) => (((p - k) % N) + N) % N);
+    const avoid = (i) => {
+      if (reel === 0) return cherryShown(i);
+      if (reel < 2) return false;
+      const r = roleOf([keyAt(0, reels[0].at), keyAt(1, reels[1].at), keyAt(2, i)]);
+      return r !== 'none' && r !== bonus;
+    };
+    return cand.find((i) => keyAt(reel, i) === want[reel]) ?? cand.find((i) => !avoid(i)) ?? cand[0];
+  };
+
+  const startSpin = () => {
+    pressed = [];
+    reels.forEach((r) => {
+      r.state = 'spin';
+      r.el.classList.add('spin');
+      r.el.classList.remove('hit');
+    });
+    stopBtns.forEach((b) => {
+      b.disabled = false;
+      b.classList.remove('pressed');
+    });
+    if (lever) lever.disabled = true;
+    jug.classList.add('running');
+    loop?.stop();
+    loop = Sound.reelLoop();
+    mark();
+  };
+
+  const allStopped = () => {
+    loop?.stop();
+    loop = null;
+    jug.classList.remove('running');
+    const line = reels.map((r, i) => keyAt(i, r.at));
+    const role = roleOf(line);
+    if (mode === 'aim') {
+      const hit = role === bonus;
+      if (hit) reels.forEach((r) => r.el.classList.add('hit'));
+      else Sound.miss(0.1);
+      later(() => {
+        const input = form?.querySelector('[data-aim-p]');
+        if (!input) return;
+        input.value = pressed.join(',');
+        form.requestSubmit();
+      }, hit ? 250 : 650);
+      return;
+    }
+    const win = Number(jug.dataset.win || 0);
+    if (win > 0) reels.forEach((r) => r.el.classList.add('hit'));
+    let wait = 450;
+    const held = !jug.dataset.win && (bonus === 'big' || bonus === 'reg');
+    if (held) {
+      if (jug.dataset.lamp === 'post') {
+        lamp?.classList.add('lit', 'peka');
+        Sound.peka(0.2);
+        wait = 1100;
+      }
+      // ここからは 7 を狙う
+      later(() => {
+        mode = 'aim';
+        jug.dataset.mode = 'aim';
+        if (lever) lever.disabled = false;
+        document.querySelector('.c-jug-help')?.remove();
+      }, wait);
+    }
+    later(() => {
       document.querySelectorAll('[data-after-stop]').forEach((e) => e.classList.add('go'));
       document.querySelectorAll('.c-balance.wait').forEach((b) => {
         b.classList.remove('wait');
         b.classList.add('go');
       });
-      if (win >= 10) Sound.bigWin();
-      else if (win > 1) Sound.win();
+      if (win >= 2) Sound.win();
       else if (win === 1) Sound.even();
-      else Sound.lose();
-    }, wait * 1000);
+    }, wait);
   };
+
   const stopReel = (i) => {
     const r = reels[i];
-    if (!r || r.classList.contains('stopped')) return;
-    const strip = r.querySelector('.c-jstrip');
-    strip.textContent = '';
-    for (const e of (r.dataset.final || '').split(',')) {
-      const s = document.createElement('span');
-      s.textContent = e;
-      strip.appendChild(s);
+    if (!r || r.state !== 'spin' || i !== nextIdx()) return;
+    const pf = Math.floor(r.pos);
+    const p = pf % N;
+    let target;
+    let from = r.pos;
+    if (mode === 'aim') {
+      pressed.push(p);
+      target = slipStop(i, p);
+    } else {
+      target = stops[i];
     }
-    r.classList.add('stopped');
-    stops[i].disabled = true;
-    stops[i].classList.add('pressed');
-    Sound.reelStop();
-    stopped++;
+    let d = (((p - target) % N) + N) % N;
+    if (mode !== 'aim' && d > SLIP) {
+      const k = Math.floor(Math.random() * (SLIP + 1));
+      from = r.pos - (d - k);
+      if (from < N) from += N;
+      d = k;
+    }
+    r.at = target;
+    const to = Math.floor(from) - d;
+    r.anim = {
+      from,
+      to,
+      t0: performance.now(),
+      dur: ((from - to) / speed) * 1000 * 1.6 + 70,
+      done: () => {
+        r.el.classList.remove('spin');
+        r.strip.classList.remove('bump');
+        void r.strip.offsetWidth;
+        r.strip.classList.add('bump');
+        Sound.reelStop();
+        if (reels.every((x) => x.state === 'still')) allStopped();
+      },
+    };
+    r.state = 'slide';
+    const b = stopBtns[i];
+    if (b) {
+      b.disabled = true;
+      b.classList.add('pressed');
+    }
     mark();
-    if (stopped === reels.length) finish();
   };
-  stops.forEach((b, i) => b.addEventListener('click', () => stopReel(i)));
-  mark();
+
+  stopBtns.forEach((b, i) => b.addEventListener('click', () => stopReel(i)));
+  lever?.addEventListener('click', () => {
+    if (reels.some((r) => r.state !== 'still')) return;
+    Sound.lever();
+    startSpin();
+  });
   const onKey = (e) => {
-    if (done || !document.body.contains(jug)) return document.removeEventListener('keydown', onKey);
-    if (e.code === 'Space' || e.key === ' ' || ['1', '2', '3'].includes(e.key)) {
-      if (e.target instanceof HTMLInputElement) return;
-      e.preventDefault();
-      const i = ['1', '2', '3'].includes(e.key) ? Number(e.key) - 1 : reels.findIndex((r) => !r.classList.contains('stopped'));
-      stopReel(i);
+    if (!alive) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    const n = ['1', '2', '3'].indexOf(e.key);
+    if (e.code !== 'Space' && e.key !== ' ' && n < 0) return;
+    e.preventDefault();
+    if (lever && !lever.disabled && reels.every((r) => r.state === 'still')) {
+      lever.click();
+      return;
     }
+    stopReel(n >= 0 ? n : nextIdx());
   };
   document.addEventListener('keydown', onKey);
-  // 押さなくても、少したつと順に止まる
-  setTimeout(() => {
-    reels.forEach((_, i) => setTimeout(() => document.body.contains(jug) && stopReel(i), i * 700));
-  }, 9000);
+
+  if (mode === 'spin') {
+    Sound.lever();
+    startSpin();
+    // 押さなくても、少したつと左から止まる
+    later(() => reels.forEach((_, i) => later(() => stopReel(i), i * 700)), 9000);
+  } else if (mode === 'aim' && jug.dataset.auto === '1') {
+    // 先ペカ: レバーでランプが光って、そのまま狙える
+    lamp?.classList.add('peka');
+    Sound.lever();
+    Sound.peka(0.15);
+    startSpin();
+  } else if (mode === 'still') {
+    const win = Number(jug.dataset.win || 0);
+    if (win > 0) reels.forEach((r) => r.el.classList.add('hit'));
+    // そろえたばかりのボーナス: ファンファーレと、戻りを数え上げる
+    const count = jug.querySelector('[data-count]');
+    if (count) {
+      const total = Number(count.getAttribute('data-count')) || 0;
+      Sound.bonus(bonus === 'big');
+      const t0 = performance.now();
+      const dur = 2600;
+      const tick = (t) => {
+        if (!alive) return;
+        const p = Math.min(1, (t - t0) / dur);
+        count.textContent = Math.round(total * p).toLocaleString('ja-JP');
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      for (let i = 0; i < 26; i++) Sound.tick(0.6 + i * 0.08);
+    }
+  }
+
+  slotCtl = {
+    stop() {
+      alive = false;
+      cancelAnimationFrame(raf);
+      loop?.stop();
+      timers.forEach(clearTimeout);
+      timers = [];
+      document.removeEventListener('keydown', onKey);
+    },
+  };
 };
 
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────

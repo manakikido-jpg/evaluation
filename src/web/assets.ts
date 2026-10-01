@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,8 +10,17 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const readText = (p: string) => readFileSync(p, 'utf8');
 
-export const STATIC: Record<string, { body: string; type: string; version: string }> = Object.fromEntries(
+/**
+ * スロットの絵（public/slots/ に置いた画像。名前は「絵柄.拡張子」: seven.webp・top.png など）。
+ * 同じ名前なら webp → png → jpg → svg の順に使う（あとから画像を足せば、仮の SVG と入れ替わる）
+ */
+const SLOT_DIR = path.join(here, 'public/slots');
+const IMAGE_TYPES: Record<string, string> = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', svg: 'image/svg+xml' };
+const slotFiles = existsSync(SLOT_DIR) ? readdirSync(SLOT_DIR).filter((f) => /^[a-z0-9-]+\.(webp|png|jpg|svg)$/.test(f)) : [];
+
+export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
+    ...Object.fromEntries(slotFiles.map((f) => [`slots-${f}`, { body: new Uint8Array(readFileSync(path.join(SLOT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
@@ -24,3 +33,12 @@ export const STATIC: Record<string, { body: string; type: string; version: strin
 );
 
 export const assetUrl = (name: keyof typeof STATIC & string) => `/static/${name}?v=${STATIC[name]?.version ?? ''}`;
+
+/** スロットの絵の URL（その名前の画像がなければ undefined） */
+export function slotArt(name: string): string | undefined {
+  for (const ext of ['webp', 'png', 'jpg', 'svg']) {
+    const key = `slots-${name}.${ext}`;
+    if (Object.hasOwn(STATIC, key)) return `/static/${key}?v=${STATIC[key]!.version}`;
+  }
+  return undefined;
+}
