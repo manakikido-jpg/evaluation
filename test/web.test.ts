@@ -648,6 +648,24 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.economy.menzaifuPrice).toBe(300);
   });
 
+  it('🏮 設定のブースト: だれが何回ブーストしているか', async () => {
+    const { boostMessages, members } = await import('../src/db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const g = await login(GUJI);
+    expect(await (await get('/settings', g)).text()).toContain('今ブーストしている人はいません');
+    const since = new Date('2026-09-20T12:00:00+09:00');
+    await db.update(members).set({ boostingSince: since }).where(eq(members.id, USER));
+    await db.insert(boostMessages).values([
+      { messageId: '1', memberId: USER, count: 1, granted: 0, at: new Date(since.getTime() + 60_000) },
+      { messageId: '2', memberId: USER, count: 1, granted: 0, at: new Date('2026-09-25T12:00:00+09:00') },
+    ]);
+    const page = await (await get('/settings', g)).text();
+    expect(page).toContain('今ブーストしている人（1 人・ブースト 2 回）');
+    expect(page).toContain(`href="/members/${USER}"`);
+    expect(page).toContain('2 回');
+    expect(page).toContain('最近の「ブーストしました」');
+  });
+
   it('評価のリセット: 宮司だけ・「リセット」と入れたときだけ・一度だけ', async () => {
     const s = await login(STAFF);
     expect((await post('/ranks/reset', s, { _csrf: await csrfOf(s), confirm: 'リセット' })).status).toBe(403);

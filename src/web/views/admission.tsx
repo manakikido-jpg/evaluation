@@ -837,6 +837,63 @@ function StreakRewards(props: { cfg: GuildConfig; roles: { id: string; name: str
   );
 }
 
+/** 🏮 今ブーストしている人（だれが何回） */
+function BoosterList(props: { boosters: { id: string; name: string; since: Date; boosts: number }[]; log: { memberId: string; name: string | null; count: number; at: Date }[] }) {
+  const total = props.boosters.reduce((n, b) => n + b.boosts, 0);
+  return (
+    <>
+      <h3>
+        今ブーストしている人（{props.boosters.length} 人・ブースト {total} 回）
+      </h3>
+      {props.boosters.length === 0 ? (
+        <p class="empty">今ブーストしている人はいません。</p>
+      ) : (
+        <table class="compact">
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>始めた日</th>
+              <th>回数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.boosters.map((b) => (
+              <tr>
+                <td>
+                  <a href={`/members/${b.id}`}>{b.name}</a>
+                </td>
+                <td>{fmtDate(b.since)}</td>
+                <td>{b.boosts} 回</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p class="note">
+        回数は、Discord の「ブーストしました」のメッセージを BOT が数えたものです（数えられていない人は 1 回）。数え始める前のブースト・1 人が一部だけやめたブーストは反映されないので、サーバー全体の合計は Discord のサーバー設定 →「サーバーブースト」で確かめてください。
+      </p>
+      {props.log.length > 0 && (
+        <details>
+          <summary>最近の「ブーストしました」（{props.log.length} 件まで）</summary>
+          <table class="compact">
+            <tbody>
+              {props.log.map((m) => (
+                <tr>
+                  <td>{fmtDateTime(m.at)}</td>
+                  <td>
+                    <a href={`/members/${m.memberId}`}>{m.name ?? m.memberId}</a>
+                  </td>
+                  <td>{m.count} 回分</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+    </>
+  );
+}
+
 export function SettingsPage(props: {
   session: AdminSession;
   cfg: GuildConfig;
@@ -873,6 +930,9 @@ export function SettingsPage(props: {
   accountNames?: Names;
   /** Discord でログインできるか（止めていれば「Discord ログインで入れる人」は出さない） */
   discordLogin?: boolean;
+  /** 🏮 今ブーストしている人と、最近の「ブーストしました」 */
+  boosters?: { id: string; name: string; since: Date; boosts: number }[];
+  boostLog?: { memberId: string; name: string | null; count: number; at: Date }[];
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -1208,6 +1268,7 @@ export function SettingsPage(props: {
             <br />
             ブースト 1 回ごとに数えるには、Discord のサーバー設定 →「システムメッセージチャンネル」を選び、「サーバーがブーストされた時にメッセージを送信する」を ON にしてください（OFF だと 1 人 1 回分になります）。
           </p>
+          {props.boosters && <BoosterList boosters={props.boosters} log={props.boostLog ?? []} />}
           <div class="fields">
             <Num name="boostDiscountPercent" label="授与品の割引 %（免罪符・贈り物はのぞく。0 で割引なし。90 まで）" value={e.boostDiscountPercent} file={f.boostDiscountPercent} />
           </div>

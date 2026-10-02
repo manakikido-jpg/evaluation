@@ -146,6 +146,7 @@ import {
   recentGifts,
   validGiftCount,
 } from '../services/gifts.js';
+import { currentBoosters, recentBoostMessages } from '../services/boost.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
 import { EconomyPage, MemberLedgerPage } from './views/economy.js';
 import { cancelEvent, createEvent, EVENT_TICKET_MAX, isEventKind, isTicketKind, listEvents, validEventValue } from '../services/economyEvents.js';
@@ -1781,6 +1782,8 @@ export function createWebApp(deps: WebDeps) {
         accounts={accounts}
         accountNames={await namesOf(db, accounts.map((a) => a.memberId).filter((x): x is string => Boolean(x)))}
         discordLogin={discordLogin}
+        boosters={await currentBoosters(db)}
+        boostLog={await recentBoostMessages(db)}
       />,
     );
   });

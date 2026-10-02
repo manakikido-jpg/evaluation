@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-03-boosters-web',
+    date: '2026-10-03',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🏮 だれが何回ブーストしているかを社務所Webで',
+    items: [
+      '設定の「💝 ブースト（奉納）」に、今ブーストしている人（名前・始めた日・回数）と合計の回数',
+      '最近の「ブーストしました」の記録（30 件まで）も開いて見られる',
+    ],
+  },
+  {
     id: '2026-10-03-gift-narrow',
     date: '2026-10-03',
     kind: 'new',

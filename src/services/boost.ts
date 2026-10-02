@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { boostMessages, boostThanks, members, settings, shopItems, shopPurchases } from '../db/schema.js';
@@ -64,6 +64,16 @@ export async function currentBoosters(db: Db): Promise<{ id: string; name: strin
     const counted = msgs.filter((m) => m.memberId === r.id && m.at.getTime() >= since.getTime() - SINCE_SLACK_MS).reduce((n, m) => n + m.count, 0);
     return { id: r.id, name: r.name, since, boosts: Math.max(1, counted) };
   });
+}
+
+/** 最近の「ブーストしました」（社務所Web）。新しい順 */
+export async function recentBoostMessages(db: Db, limit = 30): Promise<{ memberId: string; name: string | null; count: number; at: Date }[]> {
+  return db
+    .select({ memberId: boostMessages.memberId, name: members.displayName, count: boostMessages.count, at: boostMessages.at })
+    .from(boostMessages)
+    .leftJoin(members, eq(members.id, boostMessages.memberId))
+    .orderBy(desc(boostMessages.at), desc(boostMessages.messageId))
+    .limit(limit);
 }
 
 /** Discord の「ブーストを始めた日時」と「ブーストしました」のメッセージの時刻のずれ */
