@@ -134,6 +134,18 @@ describe('🀄 麻雀の卓（操作）', () => {
     expect(closed?.ok && closed.state.phase).toBe('closed');
   });
 
+  it('賭けない卓（立てる人が選ぶ・運営が賭けなしにしている）は参加費 0。終わっても銭は動かない', () => {
+    const ctx = (c = cfg): Ctx => ({ now: 1, rng: seeded(2), cfg: c });
+    const off = mahjong.create(HOST, { wager: 'off', entry: '500', length: 'tonpu' }, ctx());
+    expect(off.ok && [off.state.entry, off.fx]).toEqual([0, undefined]);
+    const noBets = mahjong.create(HOST, { wager: 'on', entry: '500' }, ctx({ ...cfg, casino: { ...cfg.casino, mahjongBets: false } }));
+    expect(noBets.ok && [noBets.state.entry, noBets.fx]).toEqual([0, undefined]);
+    const on = mahjong.create(HOST, { wager: 'on', entry: '100' }, ctx());
+    expect(on.ok && on.state.entry).toBe(100);
+    const { fxs } = playOut(4, 'tonpu', 0);
+    expect(fxs.flatMap((f) => [...(f.debits ?? []), ...(f.credits ?? [])])).toEqual([]);
+  });
+
   it('人の捨て牌で BOT がロンすると、点数が動いて結果になる（本場・供託も）', () => {
     const { s: s0, ctx, step, h } = started();
     const s = structuredClone(s0);

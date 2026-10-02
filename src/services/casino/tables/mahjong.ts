@@ -667,7 +667,9 @@ export const mahjong: TableEngine<MjState> = {
   kind: 'mahjong',
   maxSeats: 4,
   create(host, f, ctx) {
-    const entry = intOf(f, 'entry');
+    // 賭けない卓（立てる人が選ぶ・運営が賭けなしにしている）は参加費 0
+    const free = !ctx.cfg.casino.mahjongBets || str(f, 'wager') === 'off';
+    const entry = free ? 0 : intOf(f, 'entry');
     if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > ctx.cfg.casino.maxBet))) return fail('bad_bet');
     const length: MjLength = str(f, 'length') === 'hanchan' ? 'hanchan' : 'tonpu';
     const s = blank(host, entry, length, paceOf(f), ctx.now);

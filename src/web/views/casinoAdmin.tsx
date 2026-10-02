@@ -182,6 +182,16 @@ export function CasinoAdminPage(p: {
               <input type="number" name="dailyBetLimit" min={0} max={100000000} value={String(c.dailyBetLimit)} required />
             </label>
             <fieldset class="perms">
+              <legend>🀄 咲楽ノ宮雀荘の賭け</legend>
+              <label class="check">
+                <input type="radio" name="mahjongBets" value="yes" checked={c.mahjongBets} /> 賭けられる（卓を立てる人が、参加費を賭けるか賭けないかを選ぶ）
+              </label>
+              <label class="check">
+                <input type="radio" name="mahjongBets" value="no" checked={!c.mahjongBets} /> 賭けなし（どの卓も銭を動かさず、点数だけで遊ぶ）
+              </label>
+              <p class="note">賭けなしにしても、もう賭けて始まっている卓はそのまま最後まで進みます。</p>
+            </fieldset>
+            <fieldset class="perms">
               <legend>遊べるゲーム</legend>
               {CASINO_GAMES.map((g) => (
                 <label class="check">

@@ -385,6 +385,10 @@ describe('🎰 カジノ（運営の画面）', () => {
     // ルーレットの 1 か所の最高
     expect((await pick([['access', 'all'], ['rouletteMaxBet', '20000']])).headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino.rouletteMaxBet).toBe(20000);
+    // 🀄 麻雀の賭けをなしに
+    expect(html).toContain('name="mahjongBets"');
+    await pick([['access', 'all'], ['mahjongBets', 'no']]);
+    expect((await loadOverrides(db)).casino.mahjongBets).toBe(false);
     await pick([['access', 'all']]);
     const all = (await loadOverrides(db)).casino;
     expect(all.requireRank).toBe(false);
@@ -488,7 +492,8 @@ describe('🀄 咲楽ノ宮雀荘（画面）', () => {
     const lobby = await (await get('/casino/jansou', a)).text();
     expect(lobby).toContain('咲楽ノ宮雀荘');
     expect(lobby).toContain('東風戦');
-    const made = await post('/casino/tables/mahjong', a, { entry: '100', length: 'tonpu', pace: 'normal' });
+    expect(lobby).toContain('賭けない（点数だけで遊ぶ）');
+    const made = await post('/casino/tables/mahjong', a, { wager: 'on', entry: '100', length: 'tonpu', pace: 'normal' });
     const loc = made.headers.get('location')!;
     expect(loc).toMatch(/^\/casino\/t\/\d+$/);
     expect(await balance(A)).toBe(4900);

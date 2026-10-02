@@ -245,7 +245,7 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
   if (t.kind === 'mahjong') {
     const ms = t.state as MjState;
     const state = ms.phase === 'lobby' ? `相手待ち（空きは BOT）` : ms.phase === 'done' ? '終わり' : `${'東南西北'[ms.wind]}${ms.kyoku + 1}局`;
-    return `${MJ_LENGTHS[ms.length].label}・参加費 ${ms.entry > 0 ? `${coin.emoji}${fmt(ms.entry)}` : 'なし'}・${state}・${seats.filter((x) => !(x as { bot?: boolean }).bot).length} 人（${who}）`;
+    return `${MJ_LENGTHS[ms.length].label}・${ms.entry > 0 ? `参加費 ${coin.emoji}${fmt(ms.entry)}` : '賭けなし'}・${state}・${seats.filter((x) => !(x as { bot?: boolean }).bot).length} 人（${who}）`;
   }
   if (t.kind === 'daifugo' || t.kind === 'babanuki') {
     const ps = t.state as DaifugoState;

@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-03-jansou-free',
+    date: '2026-10-03',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '🀄 雀荘を賭けなしでも遊べるように',
+    items: [
+      '卓を立てるときに「賭けない（点数だけで遊ぶ）」か「参加費を賭ける」かを選べる（はじめは賭けない）',
+      '社務所の「🎰 カジノ」で「🀄 咲楽ノ宮雀荘の賭け」を「賭けなし」にすると、どの卓も賭けなし',
+    ],
+  },
+  {
     id: '2026-10-03-jansou',
     date: '2026-10-03',
     kind: 'new',

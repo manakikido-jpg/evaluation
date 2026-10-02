@@ -429,7 +429,7 @@ function Lobby(p: { t: CasinoTable; s: MjState; me: CasinoMe }) {
   return (
     <section class="c-table c-center mj-lobby">
       <p>
-        {MJ_LENGTHS[s.length].label}・参加費 <b class="c-gold">{s.entry > 0 ? `${me.coin.emoji}${fmt(s.entry)} ${me.coin.name}` : 'なし'}</b>・⏱ 1 打 {MJ_TURN_SECONDS * paceMult(s)} 秒
+        {MJ_LENGTHS[s.length].label}・<b class="c-gold">{s.entry > 0 ? `参加費 ${me.coin.emoji}${fmt(s.entry)} ${me.coin.name}` : '賭けなし（点数だけ）'}</b>・⏱ 1 打 {MJ_TURN_SECONDS * paceMult(s)} 秒
       </p>
       <div class="c-seats">
         {s.seats.map((x, i) => (
@@ -551,11 +551,24 @@ export function MjCreateFields(p: { casino: CasinoConfig; coin: Coin }) {
           <option value="hanchan">半荘戦（8 局〜・40 分くらい）</option>
         </select>
       </label>
-      <label>
-        参加費
-        <input type="number" name="entry" min={0} max={p.casino.maxBet} value={String(Math.min(100, p.casino.maxBet))} inputmode="numeric" />
-        {p.coin.name}（0 で賭けない）
-      </label>
+      {p.casino.mahjongBets ? (
+        <fieldset class="mj-wager">
+          <legend>賭け</legend>
+          <label>
+            <input type="radio" name="wager" value="off" checked /> 賭けない（点数だけで遊ぶ）
+          </label>
+          <label>
+            <input type="radio" name="wager" value="on" /> 参加費を賭ける
+            <input type="number" name="entry" min={p.casino.minBet} max={p.casino.maxBet} value={String(Math.min(Math.max(100, p.casino.minBet), p.casino.maxBet))} inputmode="numeric" />
+            {p.coin.name}
+          </label>
+        </fieldset>
+      ) : (
+        <>
+          <input type="hidden" name="wager" value="off" />
+          <span class="c-muted">いまは賭けなし（点数だけで遊びます）</span>
+        </>
+      )}
       <label>
         ⏱ 1 打の持ち時間
         <select name="pace">
@@ -570,7 +583,7 @@ export function MjCreateFields(p: { casino: CasinoConfig; coin: Coin }) {
   );
 }
 
-export const MJ_RULES = `4 人打ちのリーチ麻雀です。${fmt(START_POINTS)} 点持ち・赤ドラ 3 枚・喰いタンあり・後付けあり。ロンが重なったときは、出した人から近い 1 人だけ（頭ハネ）。0 点を下回った人が出たら終わり。オーラスで親がトップなら和了りやめ。途中流局は九種九牌だけ。空いた席・抜けた人・2 回続けて時間切れになった人は BOT が打ちます。参加費は終わったら順位で分けます（1 位 ${MJ_SHARES[0]}%・2 位 ${MJ_SHARES[1]}%・3 位 ${MJ_SHARES[2]}%・4 位 0）。`;
+export const MJ_RULES = `4 人打ちのリーチ麻雀です。卓を立てる人が、賭けない（点数だけ）か参加費を賭けるかを選べます。${fmt(START_POINTS)} 点持ち・赤ドラ 3 枚・喰いタンあり・後付けあり。ロンが重なったときは、出した人から近い 1 人だけ（頭ハネ）。0 点を下回った人が出たら終わり。オーラスで親がトップなら和了りやめ。途中流局は九種九牌だけ。空いた席・抜けた人・2 回続けて時間切れになった人は BOT が打ちます。賭ける卓の参加費は、終わったら順位で分けます（1 位 ${MJ_SHARES[0]}%・2 位 ${MJ_SHARES[1]}%・3 位 ${MJ_SHARES[2]}%・4 位 0）。`;
 
 const YAKU_LIST: [string, string][] = [
   ['1 翻', '立直・一発・門前清自摸和・平和・断么九・一盃口・役牌（白 發 中・自風・場風）・海底摸月・河底撈魚・嶺上開花・槍槓'],

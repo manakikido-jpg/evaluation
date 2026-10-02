@@ -1377,6 +1377,10 @@ button.mj-t.drawn { margin-left: 2px; }
 .mj-yakulist { padding-left: 1.1em; }
 .mj-yakulist li { margin: 4px 0; }
 .mj-lobby .c-seats { justify-content: center; }
+.mj-wager { border: 1px solid var(--c-line); border-radius: 10px; padding: 6px 12px 10px; display: grid; gap: 6px; }
+.mj-wager legend { color: var(--c-muted); padding: 0 4px; }
+.mj-wager label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mj-wager input[type=number] { width: 7em; }
 
 @media (max-width: 760px) {
   .mj-board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'top top' 'left right' 'center center' 'me me'; padding: 8px; gap: 8px; }

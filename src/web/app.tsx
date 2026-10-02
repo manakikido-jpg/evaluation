@@ -1301,6 +1301,7 @@ export function createWebApp(deps: WebDeps) {
       maxBet: int('maxBet'),
       rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
+      mahjongBets: typeof body.mahjongBets === 'string' ? body.mahjongBets === 'yes' : cfg.casino.mahjongBets,
       games: CASINO_GAMES.filter((g) => list.includes(g)),
       knownGames: [...CASINO_GAMES],
       slotMachines: slotMachinesOf(body),
