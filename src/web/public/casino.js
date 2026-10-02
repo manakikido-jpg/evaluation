@@ -195,6 +195,14 @@ const Sound = (() => {
     },
     /** 7 がそろわなかった */
     miss: (at = 0) => tone(330, at, 0.22, { type: 'triangle', vol: 0.1, to: 220 }),
+    /** 🏇 発走のファンファーレ・足音・ゴール */
+    fanfare: (at = 0) =>
+      notes([[523, 0, 0.16], [659, 0.16, 0.16], [784, 0.32, 0.16], [1047, 0.48, 0.3], [784, 0.82, 0.14], [1047, 0.98, 0.5]], at, { type: 'square', vol: 0.07 }),
+    gallop: (at = 0) => {
+      noise(at, 0.05, { freq: 300, q: 0.8, vol: 0.12 });
+      noise(at + 0.09, 0.05, { freq: 260, q: 0.8, vol: 0.09 });
+    },
+    goal: (at = 0) => notes([[784, 0, 0.12], [988, 0.12, 0.12], [1175, 0.24, 0.12], [1568, 0.36, 0.5]], at, { type: 'triangle', vol: 0.16 }),
     /** BIG・REG のファンファーレ */
     bonus(big = true, at = 0) {
       const m = big
@@ -385,7 +393,9 @@ const initLive = () => {
     if (!next || !cur) return;
     const before = cardKeys(cur);
     const wasMyTurn = myTurn(cur);
+    const kept = keepPicks(cur);
     cur.replaceWith(next);
+    restorePicks(next, kept);
     version = next.getAttribute('data-v');
     share(next.getAttribute('data-now'));
     dirtyAt = 0;
@@ -407,7 +417,8 @@ const initLive = () => {
       const j = await res.json();
       share(j.now);
       // 選んでいる途中なら 15 秒まで待つ（そのあいだに時間切れになれば、そのまま差し替え）
-      if (String(j.v) !== String(version) && (!dirtyAt || Date.now() - dirtyAt > 15000)) await refresh();
+      const due = [...(live()?.querySelectorAll('.c-count[data-deadline]') ?? [])].some((n) => Number(n.dataset.deadline) <= Number(j.now));
+      if (String(j.v) !== String(version) && (!dirtyAt || due || Date.now() - dirtyAt > 15000)) await refresh();
     } catch {
       // つながらないときは次にまた
     } finally {
@@ -1010,6 +1021,682 @@ const mjFx = () => {
 };
 document.addEventListener('c-live-updated', mjFx);
 
+// ───── 🏇 みんなでダービー: 楕円のコースを馬が走る（みんな同じ時刻に同じ動き）・実況・いまの順位 ─────
+/** 差し替える前に、馬券の選んだもの（賭け方・馬・量）を覚えておく */
+const keepPicks = (root) => {
+  const f = root?.querySelector('.kb-bet form');
+  if (!f) return null;
+  return { type: f.querySelector('input[name="type"]:checked')?.value, a: f.a?.value, b: f.b?.value, custom: f.betCustom?.value };
+};
+const restorePicks = (root, k) => {
+  const f = root?.querySelector('.kb-bet form');
+  if (!f || !k) return;
+  const r = k.type && f.querySelector(`input[name="type"][value="${k.type}"]`);
+  if (r) r.checked = true;
+  if (k.a && f.a) f.a.value = k.a;
+  if (k.b && f.b) f.b.value = k.b;
+  if (k.custom && f.betCustom) f.betCustom.value = k.custom;
+  paintKbForm(f);
+};
+/** 馬連・ワイドのときだけ「相手」を出す */
+const paintKbForm = (f) => {
+  const t = f.querySelector('input[name="type"]:checked')?.value;
+  f.querySelector('.kb-pick-b')?.classList.toggle('off', t !== 'quinella' && t !== 'wide');
+};
+document.addEventListener('change', (e) => {
+  const f = e.target.closest?.('.kb-bet form');
+  if (f) paintKbForm(f);
+});
+// 出馬表の行を押すと、その馬を選ぶ（馬連・ワイドなら、2 回目は相手）
+document.addEventListener('click', (e) => {
+  const row = e.target.closest?.('[data-kb-pick]');
+  if (!row) return;
+  const f = document.querySelector('.kb-bet form');
+  if (!f) return;
+  const no = row.dataset.kbPick;
+  const t = f.querySelector('input[name="type"]:checked')?.value;
+  const pair = t === 'quinella' || t === 'wide';
+  if (pair && f.a.value !== no && f.dataset.kbNext === 'b') {
+    f.b.value = no;
+    f.dataset.kbNext = 'a';
+  } else {
+    f.a.value = no;
+    f.dataset.kbNext = 'b';
+    if (f.b.value === no) f.b.value = String((Number(no) % 8) + 1);
+  }
+  document.querySelectorAll('[data-kb-pick].sel').forEach((x) => x.classList.remove('sel'));
+  row.classList.add('sel');
+  f.querySelector('.kb-picks')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  dirtyAt = Date.now();
+});
+
+// テレビ中継のように横から映す。カメラは先頭集団を追う。右上に小さなコース全体の図
+// 毛色（体・たてがみと脚の先）
+const KB_COAT = [
+  ['#7b4a26', '#22150c'],
+  ['#a9592a', '#7d3c17'],
+  ['#4a2d1b', '#170e08'],
+  ['#bdbdbd', '#6f6f6f'],
+  ['#25242b', '#0e0e12'],
+  ['#8d4f25', '#e7cf9f'],
+];
+// 帽子の色は枠の色
+const KB_CAP = ['#ffffff', '#222222', '#e53935', '#1e63d6', '#f4c430', '#2e9e4f', '#f08a24', '#f48fb1'];
+const KB_CAP_TEXT = ['#111', '#fff', '#fff', '#fff', '#111', '#fff', '#111', '#111'];
+const KB_LAP = 2000;
+/** 角の丸い四角（古いブラウザはふつうの四角） */
+const kbRound = (g, x, y, w, h, r) => (g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h));
+const kbStartOf = (d) => (((-d) % KB_LAP) + KB_LAP) % KB_LAP;
+
+/** 勝負服の柄を、いま描いている形（clip 済み）の中に塗る */
+const kbSilk = (g, silk, x, y, w, h) => {
+  g.fillStyle = silk.base;
+  g.fillRect(x, y, w, h);
+  g.fillStyle = silk.accent;
+  const p = silk.pattern;
+  if (p === 1) for (let i = x; i < x + w; i += 6) g.fillRect(i, y, 2.5, h);
+  else if (p === 2) {
+    g.beginPath();
+    g.moveTo(x, y + h * 0.15);
+    g.lineTo(x + w, y + h * 0.75);
+    g.lineTo(x + w, y + h);
+    g.lineTo(x, y + h * 0.4);
+    g.fill();
+  } else if (p === 3) for (let j = y; j < y + h; j += 7) g.fillRect(x, j, w, 3);
+  else if (p === 4) {
+    g.beginPath();
+    g.moveTo(x, y + h * 0.2);
+    g.lineTo(x + w / 2, y + h * 0.65);
+    g.lineTo(x + w, y + h * 0.2);
+    g.lineTo(x + w, y + h * 0.45);
+    g.lineTo(x + w / 2, y + h * 0.9);
+    g.lineTo(x, y + h * 0.45);
+    g.fill();
+  } else if (p === 5) for (let i = 0; i < 4; i++) g.fillRect(x + 3 + i * 5, y + 3 + (i % 2) * 6, 3, 3);
+};
+
+/**
+ * 横から見た、走っている馬と騎手。(x, y) は蹄の高さの真ん中、s は大きさ、ph は脚の動き（0〜1）、run は走っているか
+ */
+const kbHorse = (g, x, y, s, ph, h, run) => {
+  const [body, dark] = KB_COAT[h.coat] || KB_COAT[0];
+  const TAU = Math.PI * 2;
+  g.save();
+  g.translate(x, y);
+  g.scale(s, s);
+  // 蹄の高さから体の高さへ
+  g.translate(0, -44 + (run ? Math.sin(ph * TAU * 2) * 1.6 : 0));
+  // 影
+  g.save();
+  g.translate(0, 44 - (run ? Math.sin(ph * TAU * 2) * 1.6 : 0));
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.beginPath();
+  g.ellipse(4, 1, 40, 4.5, 0, 0, TAU);
+  g.fill();
+  g.restore();
+  // 脚（a1: 上の骨の角度、a2: 下の骨の角度。0 が真下、+ が前）
+  const leg = (hx, hy, a1, a2, far, fore) => {
+    const k = [hx + Math.sin(a1) * 19, hy + Math.cos(a1) * 19];
+    const f = [k[0] + Math.sin(a2) * 19, k[1] + Math.cos(a2) * 19];
+    g.lineCap = 'round';
+    g.strokeStyle = far ? dark : body;
+    g.lineWidth = fore ? 7 : 9;
+    g.beginPath();
+    g.moveTo(hx, hy);
+    g.lineTo(k[0], k[1]);
+    g.stroke();
+    g.strokeStyle = dark;
+    g.lineWidth = 4.2;
+    g.beginPath();
+    g.moveTo(k[0], k[1]);
+    g.lineTo(f[0], f[1]);
+    g.stroke();
+    g.fillStyle = '#121212';
+    g.beginPath();
+    g.ellipse(f[0] + 1.5, f[1] + 1, 3.6, 2.2, 0, 0, TAU);
+    g.fill();
+  };
+  // ギャロップ: 後ろ脚 → 前脚の順に地面をける
+  const legs = [
+    { hx: -26, hy: 4, o: 0.0, fore: false },
+    { hx: -22, hy: 5, o: 0.12, fore: false },
+    { hx: 22, hy: 5, o: 0.45, fore: true },
+    { hx: 26, hy: 4, o: 0.57, fore: true },
+  ].map((l, i) => {
+    const p = (ph + l.o) % 1;
+    const sw = run ? Math.sin(p * TAU) : 0;
+    const lift = run ? Math.max(0, Math.cos(p * TAU)) : 0;
+    const a1 = l.fore ? 0.55 * sw + 0.05 : -0.5 * sw + 0.12;
+    const a2 = l.fore ? a1 - 1.2 * lift : a1 + 0.9 * lift * (sw > 0 ? 1 : 0.4);
+    return { ...l, a1, a2, far: i % 2 === 0 };
+  });
+  for (const l of legs.filter((x) => x.far)) leg(l.hx, l.hy, l.a1, l.a2, true, l.fore);
+  // しっぽ
+  const wave = run ? Math.sin(ph * TAU) * 4 : 2;
+  g.strokeStyle = dark;
+  g.lineWidth = 5;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(-34, -6);
+  g.quadraticCurveTo(-50, -4 + wave, -60, 8 + wave);
+  g.stroke();
+  // 体・首・頭
+  g.fillStyle = body;
+  g.beginPath();
+  g.ellipse(0, -2, 37, 15, 0, 0, TAU);
+  g.fill();
+  g.beginPath();
+  g.moveTo(20, -12);
+  g.quadraticCurveTo(34, -30, 46, -40);
+  g.lineTo(56, -33);
+  g.quadraticCurveTo(44, -18, 36, 6);
+  g.closePath();
+  g.fill();
+  g.save();
+  g.translate(58, -33);
+  g.rotate(0.6);
+  g.beginPath();
+  g.ellipse(0, 0, 13, 6.2, 0, 0, TAU);
+  g.fill();
+  g.fillStyle = dark;
+  g.beginPath();
+  g.ellipse(9, 1, 4.5, 4.4, 0, 0, TAU);
+  g.fill();
+  g.restore();
+  // 耳・たてがみ
+  g.fillStyle = body;
+  g.beginPath();
+  g.moveTo(48, -42);
+  g.lineTo(50, -50);
+  g.lineTo(53, -41);
+  g.fill();
+  g.strokeStyle = dark;
+  g.lineWidth = 3.5;
+  g.beginPath();
+  g.moveTo(22, -16);
+  g.quadraticCurveTo(34, -32, 47, -42);
+  g.stroke();
+  // 手前の脚
+  for (const l of legs.filter((x) => !x.far)) leg(l.hx, l.hy, l.a1, l.a2, false, l.fore);
+  // 鞍とゼッケン
+  g.fillStyle = '#f7f7f2';
+  g.fillRect(-14, -14, 20, 15);
+  g.fillStyle = '#111';
+  g.font = 'bold 11px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(String(h.no), -4, -6);
+  // 騎手: 前かがみ。服は勝負服、帽子は枠の色
+  g.save();
+  g.translate(4, -18);
+  g.rotate(-0.42);
+  g.beginPath();
+  kbRound(g, -4, -14, 22, 12, 5);
+  g.clip();
+  kbSilk(g, h.silk, -4, -14, 22, 12);
+  g.restore();
+  g.strokeStyle = h.silk.base;
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(16, -28);
+  g.lineTo(30, -22);
+  g.stroke();
+  g.strokeStyle = '#2b2b2b';
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(30, -22);
+  g.lineTo(52, -30);
+  g.stroke();
+  // ひざと長靴
+  g.strokeStyle = '#f2f2f2';
+  g.lineWidth = 4.5;
+  g.beginPath();
+  g.moveTo(2, -18);
+  g.lineTo(10, -10);
+  g.stroke();
+  g.strokeStyle = '#1a1a1a';
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(10, -10);
+  g.lineTo(4, -4);
+  g.stroke();
+  g.fillStyle = KB_CAP[h.no - 1] || '#fff';
+  g.beginPath();
+  g.arc(21, -35, 5.6, Math.PI, 0);
+  g.lineTo(28, -35);
+  g.fill();
+  g.strokeStyle = 'rgba(0,0,0,0.45)';
+  g.lineWidth = 0.8;
+  g.stroke();
+  g.fillStyle = '#e9c7a8';
+  g.beginPath();
+  g.arc(22, -33, 3, 0, Math.PI);
+  g.fill();
+  g.restore();
+};
+
+/** 遠くの景色（木・スタンド・大型ビジョン）。px は遠いほど小さく動く */
+const kbScenery = (g, W, top, bottom, camX, ppm, weather) => {
+  const far = camX * ppm * 0.18;
+  g.fillStyle = weather === 0 ? '#5f8f5a' : '#5a7a58';
+  g.fillRect(0, top, W, bottom - top);
+  // 丘
+  g.fillStyle = weather === 0 ? '#4f7f4b' : '#4b6b49';
+  g.beginPath();
+  g.moveTo(0, bottom);
+  for (let x = 0; x <= W; x += 20) g.lineTo(x, top + (bottom - top) * (0.35 + 0.18 * Math.sin((x + far * 0.6) / 140)));
+  g.lineTo(W, bottom);
+  g.fill();
+  // 木（桜もまぜる）
+  const step = 46;
+  const off = ((far % step) + step) % step;
+  for (let i = -1; i < W / step + 2; i++) {
+    const idx = Math.floor((far + i * step) / step);
+    const tx = i * step - off + ((idx * 37) % 17);
+    const sz = 9 + ((idx * 13) % 7);
+    const sak = idx % 5 === 0;
+    g.fillStyle = '#4a3020';
+    g.fillRect(tx - 1.5, bottom - sz * 0.9, 3, sz * 0.9);
+    g.fillStyle = sak ? '#f3b6c8' : weather === 0 ? '#2f6b34' : '#2f5a33';
+    g.beginPath();
+    g.arc(tx, bottom - sz * 1.15, sz * 0.75, 0, Math.PI * 2);
+    g.arc(tx - sz * 0.45, bottom - sz * 0.9, sz * 0.55, 0, Math.PI * 2);
+    g.arc(tx + sz * 0.45, bottom - sz * 0.9, sz * 0.55, 0, Math.PI * 2);
+    g.fill();
+  }
+};
+
+/** ハロン棒・ゴール板・ラチ・芝の縞（近いほど速く動く） */
+const kbTrack = (g, W, H, geo, camX, ppm, surface, D) => {
+  const { railY, nearY } = geo;
+  const sx = (m) => (m - camX) * ppm + W * 0.5;
+  // コース
+  if (surface === 0) {
+    g.fillStyle = '#4da84a';
+    g.fillRect(0, railY, W, nearY - railY);
+    // 芝の縞（刈り込みの模様）
+    g.fillStyle = 'rgba(255,255,255,0.07)';
+    const band = 6;
+    const m0 = Math.floor((camX - W / ppm) / band) * band;
+    for (let m = m0; m < camX + W / ppm; m += band * 2) {
+      const a = sx(m);
+      const b = sx(m + band);
+      g.beginPath();
+      g.moveTo(a, railY);
+      g.lineTo(b, railY);
+      g.lineTo(b + (nearY - railY) * 0.35, nearY);
+      g.lineTo(a + (nearY - railY) * 0.35, nearY);
+      g.fill();
+    }
+  } else {
+    g.fillStyle = '#b5845a';
+    g.fillRect(0, railY, W, nearY - railY);
+    g.fillStyle = 'rgba(90,55,30,0.18)';
+    const m0 = Math.floor(camX - W / ppm);
+    for (let m = m0; m < camX + W / ppm; m += 0.7) {
+      const k = Math.abs(Math.sin(m * 91.7)) ;
+      g.fillRect(sx(m), railY + k * (nearY - railY), 2, 1.5);
+    }
+  }
+  // ゴールの線
+  const gx = sx(D);
+  if (gx > -20 && gx < W + 20) {
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.beginPath();
+    g.moveTo(gx - 1.5, railY);
+    g.lineTo(gx + 1.5, railY);
+    g.lineTo(gx + 1.5 + (nearY - railY) * 0.35, nearY);
+    g.lineTo(gx - 1.5 + (nearY - railY) * 0.35, nearY);
+    g.fill();
+  }
+  // 内ラチ（奥）
+  g.fillStyle = '#f4f4f4';
+  g.fillRect(0, railY - 9, W, 3);
+  const post = 4;
+  for (let m = Math.floor((camX - W / ppm) / post) * post; m < camX + W / ppm; m += post) g.fillRect(sx(m), railY - 9, 2, 10);
+  // ハロン棒（残り 200m ごと）とゴール板
+  for (let r = 200; r < D; r += 200) {
+    const x = sx(D - r);
+    if (x < -40 || x > W + 40) continue;
+    g.fillStyle = '#fff';
+    g.fillRect(x - 1.5, railY - 34, 3, 26);
+    g.fillStyle = r % 400 === 0 ? '#d83a3a' : '#2d6fd8';
+    g.fillRect(x - 13, railY - 44, 26, 13);
+    g.fillStyle = '#fff';
+    g.font = 'bold 10px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(String(r), x, railY - 37.5);
+  }
+  if (gx > -60 && gx < W + 60) {
+    g.fillStyle = '#fff';
+    g.fillRect(gx - 2, railY - 58, 4, 50);
+    g.fillStyle = '#e53950';
+    g.beginPath();
+    g.arc(gx, railY - 62, 13, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#fff';
+    g.font = 'bold 9px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.fillText('GOAL', gx, railY - 62);
+  }
+};
+
+/** 手前のラチ（いちばん前に描く） */
+const KB_CROWD = ['#e53935', '#1e63d6', '#f4c430', '#ffffff', '#2e9e4f', '#f48fb1', '#8e44ad', '#f08a24', '#333'];
+const kbNearRail = (g, W, geo, camX, ppm) => {
+  const sx = (m) => (m - camX) * ppm * 1.12 + W * 0.5;
+  g.fillStyle = '#2d5f2e';
+  g.fillRect(0, geo.nearY, W, geo.H - geo.nearY);
+  // スタンド（手前ほど速く動く）
+  const standY = geo.nearY + (geo.H - geo.nearY) * 0.32;
+  g.fillStyle = '#5b5f68';
+  g.fillRect(0, standY, W, geo.H - standY);
+  const rowH = Math.max(5, (geo.H - standY) / 4);
+  for (let row = 0; row < 4; row++) {
+    const y = standY + rowH * (row + 0.55);
+    const par = 1.2 + row * 0.08;
+    const gap = 7 + row;
+    const off = (((camX * ppm * par) % gap) + gap) % gap;
+    for (let x = -gap; x < W + gap; x += gap) {
+      const idx = Math.floor((camX * ppm * par + x) / gap) + row * 7;
+      g.fillStyle = KB_CROWD[Math.abs(idx * 7 + row) % KB_CROWD.length];
+      g.beginPath();
+      g.arc(x - off, y + ((idx * 3) % 3) - 1, 2.6 + row * 0.35, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  g.fillStyle = '#f7f7f7';
+  g.fillRect(0, geo.nearY + 2, W, 4);
+  const post = 3;
+  for (let m = Math.floor((camX - W / ppm) / post) * post; m < camX + W / ppm; m += post) g.fillRect(sx(m), geo.nearY + 2, 3, 14);
+};
+
+/** スタートのゲート */
+const kbGate = (g, W, geo, camX, ppm, n) => {
+  const x = (0 - camX) * ppm + W * 0.5 + 18;
+  if (x < -60 || x > W + 60) return;
+  for (let i = 0; i <= n; i++) {
+    const y = geo.laneY(i * 1.25 - 0.6);
+    g.fillStyle = 'rgba(210,210,215,0.95)';
+    g.fillRect(x + (y - geo.railY) * 0.35 - 2, y - 46 * geo.scale(i * 1.25), 4, 46 * geo.scale(i * 1.25));
+  }
+  g.fillStyle = 'rgba(80,90,110,0.9)';
+  const y0 = geo.laneY(-0.6);
+  const y1 = geo.laneY(n * 1.25);
+  g.beginPath();
+  g.moveTo(x - 3 + (y0 - geo.railY) * 0.35, y0 - 50);
+  g.lineTo(x + 3 + (y0 - geo.railY) * 0.35, y0 - 50);
+  g.lineTo(x + 3 + (y1 - geo.railY) * 0.35, y1 - 54 * geo.scale(n * 1.25));
+  g.lineTo(x - 3 + (y1 - geo.railY) * 0.35, y1 - 54 * geo.scale(n * 1.25));
+  g.fill();
+};
+
+/** 右上の小さなコース全体の図 */
+const kbMini = (g, W, H, D, pos) => {
+  const w = Math.min(150, W * 0.24);
+  const h = w * 0.48;
+  const x0 = W - w - 10;
+  const y0 = 10;
+  g.fillStyle = 'rgba(0,0,0,0.45)';
+  g.beginPath();
+  kbRound(g, x0 - 6, y0 - 6, w + 12, h + 12, 8);
+  g.fill();
+  const r = h / 2;
+  const cx1 = x0 + r;
+  const cx2 = x0 + w - r;
+  const cy = y0 + r;
+  g.strokeStyle = 'rgba(255,255,255,0.8)';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(cx1, y0);
+  g.lineTo(cx2, y0);
+  g.arc(cx2, cy, r, -Math.PI / 2, Math.PI / 2);
+  g.lineTo(cx1, y0 + h);
+  g.arc(cx1, cy, r, Math.PI / 2, (Math.PI * 3) / 2);
+  g.stroke();
+  // ゴールから: 100m 直線 → 400m カーブ → 600m → 400m カーブ → 500m でゴール（下の直線を左から右へ）
+  const straight = cx2 - cx1;
+  const pt = (lap) => {
+    let p = ((lap % KB_LAP) + KB_LAP) % KB_LAP;
+    const gx = cx1 + straight * (5 / 6);
+    if (p < 100) return [gx + straight * (p / 600), y0 + h];
+    p -= 100;
+    if (p < 400) {
+      const a = Math.PI / 2 - (p / 400) * Math.PI;
+      return [cx2 + r * Math.cos(a), cy + r * Math.sin(a)];
+    }
+    p -= 400;
+    if (p < 600) return [cx2 - straight * (p / 600), y0];
+    p -= 600;
+    if (p < 400) {
+      const a = -Math.PI / 2 - (p / 400) * Math.PI;
+      return [cx1 + r * Math.cos(a), cy + r * Math.sin(a)];
+    }
+    p -= 400;
+    return [cx1 + straight * (p / 600), y0 + h];
+  };
+  const gp = pt(0);
+  g.strokeStyle = '#ff4a64';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(gp[0], y0 + h - 5);
+  g.lineTo(gp[0], y0 + h + 5);
+  g.stroke();
+  [...pos].sort((a, b) => a.m - b.m).forEach((p) => {
+    const [x, y] = pt(kbStartOf(D) + p.m);
+    g.fillStyle = KB_CAP[p.no - 1];
+    g.beginPath();
+    g.arc(x, y, 3.4, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#000';
+    g.lineWidth = 0.8;
+    g.stroke();
+  });
+};
+
+/** 出馬表の勝負服の見本を塗る（CSP で style 属性が使えないので、ここで） */
+const paintSilks = () => {
+  document.querySelectorAll('.kb-silk[data-base]').forEach((el) => {
+    const b = el.dataset.base;
+    const a = el.dataset.accent;
+    const p = [...el.classList].find((c) => c.startsWith('kb-pat'))?.slice(6);
+    el.style.background =
+      p === '1' ? `repeating-linear-gradient(90deg, ${b} 0 3px, ${a} 3px 5px)` :
+      p === '2' ? `linear-gradient(135deg, ${b} 0 35%, ${a} 35% 60%, ${b} 60%)` :
+      p === '3' ? `repeating-linear-gradient(0deg, ${b} 0 3px, ${a} 3px 5px)` :
+      p === '4' ? `linear-gradient(160deg, ${b} 0 40%, ${a} 40% 60%, ${b} 60%)` :
+      p === '5' ? `radial-gradient(circle at 30% 35%, ${a} 0 18%, transparent 19%), radial-gradient(circle at 70% 65%, ${a} 0 18%, ${b} 19%)` : b;
+  });
+};
+let kbAnim = null;
+const initKeiba = () => {
+  paintSilks();
+  const el = document.querySelector('.kb-tv[data-kb]');
+  if (kbAnim && kbAnim.el === el) return;
+  if (kbAnim) cancelAnimationFrame(kbAnim.raf);
+  kbAnim = null;
+  document.querySelectorAll('.kb-bet form').forEach(paintKbForm);
+  if (!el) return;
+  let data;
+  try {
+    data = JSON.parse(el.dataset.kb);
+  } catch {
+    return;
+  }
+  const canvas = el.querySelector('canvas');
+  const g = canvas?.getContext('2d');
+  if (!g) return;
+  const call = el.querySelector('.kb-call');
+  const rankBox = el.querySelector('.kb-rank');
+  const remainBox = el.querySelector('.kb-remain');
+  const D = data.dist;
+  const horses = data.horses;
+  const n = horses.length;
+  const frames = data.frames;
+  const lanesF = data.lanes;
+  const last = frames ? frames[0].length - 1 : 0;
+  const skew = () => Number(document.documentElement.dataset.skew || 0);
+  const at = (rows, i, k) => {
+    const k0 = Math.min(last, Math.floor(k));
+    const k1 = Math.min(last, k0 + 1);
+    const f = k - Math.floor(k);
+    return rows[i][k0] + (rows[i][k1] - rows[i][k0]) * (k0 === k1 ? 0 : f);
+  };
+  let camX = null;
+  let ppm = null;
+  let shown = -1;
+  let rankAt = 0;
+  let started = false;
+  let goal = false;
+  const state = { el, raf: 0 };
+  kbAnim = state;
+  const draw = () => {
+    if (kbAnim !== state || !document.body.contains(el)) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = el.clientWidth;
+    const H = Math.round(W * (W < 560 ? 0.62 : 0.5));
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      canvas.style.height = `${H}px`;
+    }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const t = Date.now() + skew() - (data.start || 0);
+    const racing = data.phase === 'racing' || data.phase === 'result';
+    const k = data.phase === 'result' ? last : Math.max(0, t / (data.frameMs || 1));
+    // 位置（m）と内ラチからの距離（m）
+    const pos = horses.map((h, i) => {
+      if (!racing || t < 0) return { no: h.no, m: -1.5, lane: i * 1.25 };
+      return { no: h.no, m: (at(frames, i, k) / 1000) * D, lane: at(lanesF, i, k) / 10 };
+    });
+    // カメラ: 先頭の 3 頭を追う。ばらけたら少し引く
+    const sorted = [...pos].sort((a, b) => b.m - a.m);
+    const lead = sorted[0].m;
+    // 先頭はいつも画面に入れて、2・3 番手との間を映す
+    const third = sorted[Math.min(2, n - 1)].m;
+    const target = Math.min(D + 4, lead - Math.min(9, (lead - third) / 2) + 3);
+    const spread = lead - sorted[Math.min(3, n - 1)].m;
+    // 発走前はゲート全体が入るように引きで
+    const wantPpm = !racing || t < 0 ? W / 34 : W / Math.max(26, Math.min(44, spread + 18));
+    camX = camX === null || data.phase !== 'racing' ? target : camX + (target - camX) * 0.12;
+    ppm = ppm === null || data.phase !== 'racing' ? wantPpm : ppm + (wantPpm - ppm) * 0.05;
+    const top = H * 0.18;
+    const railY = H * 0.38;
+    const nearY = H * 0.78;
+    // 内ラチから 10m までを、奥から手前に。手前ほど大きい
+    const geo = {
+      H,
+      railY,
+      nearY,
+      laneY: (lane) => railY + (nearY - railY) * (0.2 + (Math.max(-1, Math.min(10, lane)) / 10) * 0.75),
+      scale: (lane) => 0.82 + (Math.max(0, Math.min(10, lane)) / 10) * 0.3,
+    };
+    // 空
+    const sky = g.createLinearGradient(0, 0, 0, top);
+    if (data.weather === 0) {
+      sky.addColorStop(0, '#5aa8e8');
+      sky.addColorStop(1, '#bfe2f7');
+    } else {
+      sky.addColorStop(0, '#7f8a96');
+      sky.addColorStop(1, '#c4cad0');
+    }
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, top);
+    kbScenery(g, W, top, railY - 9, camX, ppm, data.weather);
+    kbTrack(g, W, H, geo, camX, ppm, data.surface, D);
+    if (!racing || t < 1200) kbGate(g, W, geo, camX, ppm, n);
+    // 馬（奥の内ラチ側から）
+    const sec = Date.now() / 1000;
+    const draws = pos.map((p, i) => ({ p, h: horses[i] })).sort((a, b) => a.p.lane - b.p.lane);
+    for (const { p, h } of draws) {
+      const y = geo.laneY(p.lane);
+      const x = (p.m - camX) * ppm + W * 0.5 + (y - railY) * 0.35;
+      if (x < -80 || x > W + 80) continue;
+      const s = (ppm / 26) * geo.scale(p.lane);
+      const run = racing && t >= 0 && !(data.phase === 'result');
+      kbHorse(g, x, y, s, (sec * 2.4 + h.no * 0.37) % 1, h, run);
+      // 頭の上の番号
+      g.fillStyle = KB_CAP[h.no - 1];
+      g.strokeStyle = '#000';
+      g.lineWidth = 1;
+      const by = y - 70 * s;
+      g.beginPath();
+      g.arc(x + 14 * s, by, 7.5, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      g.fillStyle = KB_CAP_TEXT[h.no - 1];
+      g.font = 'bold 9px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(String(h.no), x + 14 * s, by + 0.5);
+    }
+    kbNearRail(g, W, geo, camX, ppm);
+    // 雨
+    if (data.weather === 2) {
+      g.strokeStyle = 'rgba(220,230,255,0.35)';
+      g.lineWidth = 1;
+      for (let i = 0; i < 70; i++) {
+        const rx = (i * 97 + sec * 600) % (W + 40) - 20;
+        const ry = (i * 53 + sec * 900) % H;
+        g.beginPath();
+        g.moveTo(rx, ry);
+        g.lineTo(rx - 4, ry + 11);
+        g.stroke();
+      }
+    }
+    kbMini(g, W, H, D, pos);
+    // 残りの距離
+    if (remainBox) remainBox.textContent = !racing || t < 0 ? `${D}m 発走前` : lead >= D ? 'ゴール' : `残り ${Math.max(0, Math.ceil((D - lead) / 100) * 100)}m`;
+    // 実況
+    if (call && data.calls) {
+      let idx = -1;
+      data.calls.forEach((c, j) => {
+        if (data.phase === 'result' || t >= c.t) idx = j;
+      });
+      if (idx !== shown && idx >= 0) {
+        shown = idx;
+        call.textContent = data.calls[idx].text;
+        call.classList.remove('pop');
+        void call.offsetWidth;
+        call.classList.add('pop');
+      } else if (idx < 0 && racing && t < 0) call.textContent = 'ゲートイン完了。まもなくスタートです…';
+    }
+    // いまの順位（0.3 秒ごと）
+    if (rankBox && racing && Date.now() - rankAt > 300) {
+      rankAt = Date.now();
+      const top8 = data.phase === 'result' ? data.order : sorted.map((p) => p.no);
+      rankBox.innerHTML = '';
+      top8.forEach((no) => {
+        const li = document.createElement('li');
+        li.className = `kb-g${no}`;
+        li.textContent = String(no);
+        rankBox.appendChild(li);
+      });
+    }
+    if (data.phase === 'racing') {
+      if (!started && t >= 0) {
+        started = true;
+        if (t < 1500) Sound.fanfare?.();
+      }
+      if (!goal && lead >= D) {
+        goal = true;
+        if (t - data.calls.at(-1).t < 1500) Sound.goal?.();
+      }
+      if (started && !goal && Math.random() < 0.08) Sound.gallop?.();
+    }
+    state.raf = requestAnimationFrame(draw);
+  };
+  draw();
+  // 結果: 当たったら音
+  const net = el.closest('.kb-stage')?.dataset.kbNet;
+  if (data.phase === 'result' && net !== undefined && !el.dataset.played) {
+    el.dataset.played = '1';
+    if (Number(net) > 0) Sound.win();
+    else if (Number(net) < 0) Sound.lose();
+  }
+};
+
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────
 const pageInit = (root, tableEnd) => {
   paintSoundButton();
@@ -1021,5 +1708,7 @@ const pageInit = (root, tableEnd) => {
   paintTwoTap();
   paintTapHint();
   mjFx();
+  initKeiba();
 };
+document.addEventListener('c-live-updated', () => initKeiba());
 pageInit(document);

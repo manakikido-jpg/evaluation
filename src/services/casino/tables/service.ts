@@ -4,6 +4,7 @@ import type { Db } from '../../../db/client.js';
 import { casinoGames, casinoTables, mahjongResults, type CasinoTable } from '../../../db/schema.js';
 import { addCoins, spendWithin } from '../../economy.js';
 import { todayBets } from '../casino.js';
+import { applyKeibaResults, loadRoster } from '../keibaStable.js';
 import { cryptoRng, type Rng } from '../cards.js';
 import { HOUSE_BOT_ID, isBot } from './bots.js';
 import { ENGINES } from './engines.js';
@@ -45,6 +46,7 @@ async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: D
   }
   for (const c of fx.credits ?? []) if (c.amount > 0) await addCoins(tx, c.memberId, c.amount, c.reason, { game: kind, table: tableId });
   for (const m of fx.mahjong ?? []) await tx.insert(mahjongResults).values({ ...m, tableId, finishedAt: now });
+  if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba);
   for (const r of fx.records ?? []) {
     await tx.insert(casinoGames).values({ memberId: r.memberId, game: r.game, bet: r.bet, payout: r.payout, state: { table: tableId }, status: 'done', createdAt: now, finishedAt: now });
   }
@@ -97,7 +99,8 @@ export async function onTable(
       if (!t || t.status !== 'open') throw new Stop('not_found');
       const engine = engineOf(t.kind);
       if (!engine) throw new Stop('not_found');
-      const ctx: Ctx = { now: now.getTime(), rng, cfg };
+      // 🏇 競馬は、次のレースの馬を名簿から選ぶ
+      const ctx: Ctx = { now: now.getTime(), rng, cfg, ...(t.kind === 'keiba' ? { roster: await loadRoster(tx) } : {}) };
       const fxs: Effects[] = [];
       let state = catchUp(engine, t.state, ctx, fxs);
       let error: string | undefined;
@@ -158,7 +161,7 @@ export async function createTable(db: Db, cfg: GuildConfig, kind: TableKind, hos
   const engine = engineOf(kind);
   if (!engine) return { status: 'not_found' };
   if (await myTable(db, host.id)) return { status: 'seated' };
-  const r = engine.create(host, form, { now: now.getTime(), rng, cfg });
+  const r = engine.create(host, form, { now: now.getTime(), rng, cfg, ...(kind === 'keiba' ? { roster: await loadRoster(db) } : {}) });
   if (!r.ok) return { status: r.error };
   try {
     const row = await db.transaction(async (tx) => {

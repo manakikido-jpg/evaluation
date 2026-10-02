@@ -17,7 +17,7 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 
 /** みんなで遊ぶもの（ロビーで分けて出す） */
-const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus', 'mahjong'];
+const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus', 'mahjong', 'keiba'];
 const gameHref = (g: CasinoGame) => (g === 'versus' ? '/casino/versus' : g === 'mahjong' ? '/casino/jansou' : `/casino/tables/${g}`);
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
@@ -369,6 +369,7 @@ const MSG: Record<string, string> = {
   must_play: '場が空のときはパスできません。',
   need_players: '人数が足りません。',
   too_many: '1 回に賭けられる数を超えました。',
+  host_only: 'レースを開いた人だけができます。',
 };
 export const casinoMsg = (k: string | undefined) => (k && MSG[k] ? k : undefined);
 export const Msg = (p: { msg: string }) => <p class="c-alert">{MSG[p.msg] ?? p.msg}</p>;

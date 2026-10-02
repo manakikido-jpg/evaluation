@@ -16,6 +16,8 @@ import { CHIN_MAX_LOSS, CHIN_MAX_ROLLS, handName, parentDecides, turnHand } from
 import type { ChTableState } from '../../services/casino/tables/chinchiroTable.js';
 import { MJ_LENGTHS, MJ_TURN_SECONDS, type MjState } from '../../services/casino/tables/mahjong.js';
 import { MahjongView, MJ_RULES, MjCreateFields, MjGuide } from './mahjong.js';
+import type { KbState } from '../../services/casino/tables/keiba.js';
+import { KB_RULES, KbCreateFields, KeibaView, kbSummary } from './keiba.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -116,7 +118,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
             ) : (
               <>
                 <CreateFields kind={p.kind} casino={p.casino} coin={coin} />
-                <PaceSelect kind={p.kind} />
+                {p.kind !== 'keiba' && <PaceSelect kind={p.kind} />}
               </>
             )}
             <button type="submit" class="c-btn c-btn-gold">
@@ -139,6 +141,7 @@ const RULES: Record<TableKind, string> = {
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
   mahjong: MJ_RULES,
+  keiba: KB_RULES,
 };
 
 /** ふつうのときの持ち時間（秒）。ディーラー卓は賭ける時間 */
@@ -151,6 +154,7 @@ const BASE_SECONDS: Record<TableKind, { sec: number; what: string }> = {
   chinchiro_table: { sec: 20, what: '1 人の持ち時間' },
   babanuki: { sec: 25, what: '1 回の持ち時間' },
   mahjong: { sec: MJ_TURN_SECONDS, what: '1 打の持ち時間' },
+  keiba: { sec: 120, what: '受付の時間' },
 };
 const secText = (n: number) => (n >= 60 && n % 60 === 0 ? `${n / 60} 分` : n > 60 ? `${Math.floor(n / 60)} 分 ${n % 60} 秒` : `${n} 秒`);
 
@@ -171,6 +175,7 @@ function PaceSelect(p: { kind: TableKind }) {
 }
 
 function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) {
+  if (p.kind === 'keiba') return <KbCreateFields />;
   if (p.kind === 'poker') {
     const opts = blindOptions(p.casino.minBet, p.casino.maxBet);
     return (
@@ -230,6 +235,7 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
 }
 
 function tableSummary(t: CasinoTable, coin: Coin): string {
+  if (t.kind === 'keiba') return kbSummary(t.state as KbState);
   const pace = (t.state as { pace?: Pace }).pace;
   const base = BASE_SECONDS[t.kind as TableKind];
   return `${summaryBody(t, coin)}・⏱ ${base ? secText(base.sec * paceMult({ pace })) : ''}`;
@@ -312,6 +318,8 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
       <PokerTableView t={t} s={t.state as PokerState} {...p} />
     ) : t.kind === 'mahjong' ? (
       <MahjongView t={t} s={t.state as MjState} me={p.me} now={p.now} />
+    ) : t.kind === 'keiba' ? (
+      <KbFrame t={t} s={t.state as KbState} {...p} />
     ) : t.kind === 'daifugo' ? (
       <DaifugoView t={t} s={t.state as DaifugoState} {...p} />
     ) : (
@@ -1308,4 +1316,18 @@ function BabaView({ t, s, me, now }: ViewProps<BabaState>) {
   );
 }
 
-
+// 🏇 みんなでダービー
+function KbFrame({ t, s, me, casino, now }: ViewProps<KbState>) {
+  const seated = s.seats.some((x) => x.id === me.session.userId);
+  return (
+    <KeibaView
+      t={t}
+      s={s}
+      me={me}
+      casino={casino}
+      now={now}
+      countdown={<Countdown at={s.deadline} now={now} />}
+      seatControls={<SeatControls t={t} me={me} seated={seated} full={s.seats.length >= 30} leaveNote="参加をやめますか？（受付中なら、このレースの馬券は銭に戻ります）" />}
+    />
+  );
+}

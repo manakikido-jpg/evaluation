@@ -782,6 +782,31 @@ export const mahjongResults = pgTable(
 );
 export type MahjongResultRow = typeof mahjongResults.$inferSelect;
 
+/** 🏇 競馬の名簿の馬（何度も走って成績がたまる。名前は運営がつけ直せる） */
+export const keibaHorses = pgTable('keiba_horses', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  name: text('name').notNull(),
+  /** 脚質 0〜3・速さ・スタミナ・得意な距離 0〜3・得意な馬場 0 芝 / 1 ダート / 2 どちらも・毛色 */
+  style: integer('style').notNull(),
+  spd: integer('spd_milli').notNull(),
+  sta: integer('sta_milli').notNull(),
+  apt: integer('apt').notNull(),
+  surf: integer('surf').notNull(),
+  coat: integer('coat').notNull(),
+  /** 勝負服 */
+  silk: jsonb('silk').$type<{ base: string; accent: string; pattern: number }>().notNull(),
+  starts: integer('starts').notNull().default(0),
+  wins: integer('wins').notNull().default(0),
+  seconds: integer('seconds').notNull().default(0),
+  thirds: integer('thirds').notNull().default(0),
+  /** 最近のレース（新しい順・5 走まで） */
+  recent: jsonb('recent').$type<{ pos: number; race: string; dist: number; surface: number }[]>().notNull().default([]),
+  /** 引退した日時（走らない） */
+  retiredAt: timestamp('retired_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type KeibaHorseRow = typeof keibaHorses.$inferSelect;
+
 /** 「はじめての参拝」を全部できた人（お祝いは 1 人 1 回） */
 export const onboardingDone = pgTable('onboarding_done', {
   memberId: text('member_id').primaryKey(),

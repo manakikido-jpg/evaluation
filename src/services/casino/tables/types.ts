@@ -1,5 +1,6 @@
 import type { CasinoGame, GuildConfig, TableKind } from '../../../config.js';
 import type { Rng } from '../cards.js';
+import type { KbStable } from '../keiba.js';
 
 /**
  * みんなで座る卓の決まりごと。ゲームごとに「状態 → 次の状態」を返す関数だけを書き、
@@ -15,7 +16,9 @@ export type Credit = { memberId: string; amount: number; reason: 'casino_win' | 
 export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };
 /** 🀄 麻雀の戦績（終局のとき 1 人 1 行） */
 export type MahjongResult = { memberId: string; name: string; rank: number; points: number; length: string; entry: number; payout: number; hands: number; wins: number; tsumo: number; dealins: number; riichi: number; bestPoints: number; bestName: string | null };
-export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[] };
+/** 🏇 名簿の馬の 1 走（レースが終わったとき 1 頭 1 行） */
+export type KeibaResult = { horseId: number; pos: number; race: string; dist: number; surface: number };
+export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[] };
 
 export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
 export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });
@@ -36,7 +39,8 @@ export const intOf = (f: Form, k: string) => {
   return v && /^\d{1,9}$/.test(v) ? Number(v) : NaN;
 };
 
-export type Ctx = { now: number; rng: Rng; cfg: GuildConfig };
+/** roster: 🏇 競馬の名簿の馬（競馬の卓のときだけ、卓のサービスが読み込んで渡す） */
+export type Ctx = { now: number; rng: Rng; cfg: GuildConfig; roster?: KbStable[] };
 
 /** 持ち時間の長さ（卓を立てる人が選ぶ）。ふつうの何倍か */
 export const PACES = { normal: { label: 'ふつう', mult: 1 }, slow: { label: 'ゆっくり', mult: 2 }, relaxed: { label: 'のんびり', mult: 4 } } as const;
@@ -76,4 +80,5 @@ export const TABLE_LABEL: Record<TableKind, { emoji: string; name: string; note:
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金', players: '3〜5 人' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け', players: '2〜5 人' },
   mahjong: { emoji: '🀄', name: '麻雀', note: '4 人打ちのリーチ麻雀。足りない席は BOT', players: '1〜4 人（残りは BOT）' },
+  keiba: { emoji: '🏇', name: 'みんなでダービー', note: '8 頭のレースにみんなで賭けて、同じレースを見る', players: '1〜30 人（見るだけもできる）' },
 };

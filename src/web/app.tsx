@@ -147,6 +147,7 @@ import {
   validGiftCount,
 } from '../services/gifts.js';
 import { currentBoosters, recentBoostMessages } from '../services/boost.js';
+import { addHorse, cleanName as cleanHorseName, listHorses, renameHorse, setRetired } from '../services/casino/keibaStable.js';
 import { balanceDistribution, bigTransactions, economyOverview, rangeStart, shopSales } from '../services/economyStats.js';
 import { EconomyPage, MemberLedgerPage } from './views/economy.js';
 import { cancelEvent, createEvent, EVENT_TICKET_MAX, isEventKind, isTicketKind, listEvents, validEventValue } from '../services/economyEvents.js';
@@ -1273,10 +1274,37 @@ export function createWebApp(deps: WebDeps) {
         picks={picks}
         settingStats={settingStats}
         roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed)}
+        horses={await listHorses(db)}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
       />,
     );
+  });
+
+  // 🏇 馬の名簿: 入れる・名前を変える・引退
+  app.post('/economy/casino/horses', async (c) => {
+    const body = await c.req.parseBody();
+    const name = typeof body.name === 'string' ? body.name : '';
+    if (!cleanHorseName(name)) return c.redirect('/economy/casino?msg=horse_invalid#casino-horses');
+    const row = await addHorse(db, name);
+    if (!row) return c.redirect('/economy/casino?msg=horse_taken#casino-horses');
+    await audit(db, { actorId: c.get('session').userId, action: 'keiba.horse_add', detail: { id: row.id, name: row.name }, via: 'web' });
+    return c.redirect('/economy/casino?msg=horse_saved#casino-horses');
+  });
+  app.post('/economy/casino/horses/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const body = await c.req.parseBody();
+    const r = Number.isSafeInteger(id) ? await renameHorse(db, id, typeof body.name === 'string' ? body.name : '') : 'not_found';
+    if (r === 'ok') await audit(db, { actorId: c.get('session').userId, action: 'keiba.horse_rename', detail: { id, name: body.name }, via: 'web' });
+    return c.redirect(`/economy/casino?msg=${r === 'ok' ? 'horse_saved' : r === 'taken' ? 'horse_taken' : 'horse_invalid'}#casino-horses`);
+  });
+  app.post('/economy/casino/horses/:id/retire', async (c) => {
+    const id = Number(c.req.param('id'));
+    const body = await c.req.parseBody();
+    if (Number.isSafeInteger(id) && (await setRetired(db, id, body.retired === 'yes', now()))) {
+      await audit(db, { actorId: c.get('session').userId, action: 'keiba.horse_retire', detail: { id, retired: body.retired === 'yes' }, via: 'web' });
+    }
+    return c.redirect('/economy/casino?msg=horse_saved#casino-horses');
   });
 
   /** スロットの台の数と、台ごとの設定（random か 1〜6） */

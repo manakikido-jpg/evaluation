@@ -385,6 +385,16 @@ describe('🎰 カジノ（運営の画面）', () => {
     // ルーレットの 1 か所の最高
     expect((await pick([['access', 'all'], ['rouletteMaxBet', '20000']])).headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino.rouletteMaxBet).toBe(20000);
+    // 🏇 馬の名簿: 名前を決めて入れる・変える
+    expect(html).toContain('馬の名簿');
+    const horse = (path: string, body: Record<string, string>) =>
+      app.request(path, { method: 'POST', headers: { cookie: g, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...body }) });
+    expect((await horse('/economy/casino/horses', { name: 'サクラノヒメ' })).headers.get('location')).toBe('/economy/casino?msg=horse_saved#casino-horses');
+    expect((await horse('/economy/casino/horses', { name: 'サクラノヒメ' })).headers.get('location')).toBe('/economy/casino?msg=horse_taken#casino-horses');
+    const roster = await (await app.request('/economy/casino', { headers: { cookie: g } })).text();
+    const hid = /action="\/economy\/casino\/horses\/(\d+)"/.exec(roster)![1]!;
+    expect((await horse(`/economy/casino/horses/${hid}`, { name: 'ハナノヒメ' })).headers.get('location')).toBe('/economy/casino?msg=horse_saved#casino-horses');
+    expect(await (await app.request('/economy/casino', { headers: { cookie: g } })).text()).toContain('value="ハナノヒメ"');
     // 🀄 麻雀の賭けをなしに
     expect(html).toContain('name="mahjongBets"');
     await pick([['access', 'all'], ['mahjongBets', 'no']]);
@@ -508,5 +518,31 @@ describe('🀄 咲楽ノ宮雀荘（画面）', () => {
     expect(page.match(/class="mj-t [^"]*big/g)?.length).toBeGreaterThanOrEqual(13);
     // 入口に「座っています」
     expect(await (await get('/casino', a)).text()).toContain(`卓 #${id}`);
+  });
+});
+
+describe('🏇 みんなでダービー（画面）', () => {
+  it('レースを開いて馬券を買う。テレビの映像・出馬表・みんなの馬券が出る', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const hall = await (await get('/casino/hall', a)).text();
+    expect(hall).toContain('/casino/tables/keiba');
+    const lobby = await (await get('/casino/tables/keiba', a)).text();
+    expect(lobby).toContain('みんなでダービー');
+    expect(lobby).toContain('name="window"');
+    const made = await post('/casino/tables/keiba', a, { title: '咲楽ノ宮ダービー', window: '2', dist: '2400' });
+    const loc = made.headers.get('location')!;
+    expect(loc).toMatch(/^\/casino\/t\/\d+$/);
+    const id = loc.split('/').pop()!;
+    const page = await (await get(loc, a)).text();
+    expect(page).toContain('class="kb-tv"');
+    expect(page).toContain('咲楽ノ宮ダービー');
+    expect(page).toContain('出馬表');
+    expect(page).toContain('初出走');
+    expect(page).toContain('締め切って発走');
+    expect((await post(`/casino/t/${id}/act`, a, { action: 'bet', type: 'win', a: '4', bet: '100' })).headers.get('location')).toBe(loc);
+    expect(await balance(A)).toBe(4900);
+    const frag = await (await get(`/casino/t/${id}/frag`, a)).text();
+    expect(frag).toContain('単勝 ④');
+    expect(frag).toContain('みんなの馬券（1 人');
   });
 });

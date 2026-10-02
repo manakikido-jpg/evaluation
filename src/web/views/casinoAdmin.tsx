@@ -1,6 +1,7 @@
 import type { CasinoConfig, CasinoGame } from '../../config.js';
 import { CASINO_GAMES } from '../../config.js';
-import type { CasinoMatch } from '../../db/schema.js';
+import type { CasinoMatch, KeibaHorseRow } from '../../db/schema.js';
+import { KB_APT, KB_COATS, KB_STYLES, KB_SURFACES } from '../../services/casino/keiba.js';
 import { CASINO_LABEL, type CasinoStat } from '../../services/casino/casino.js';
 import { Layout, type SessionView } from './layout.js';
 import { BarList, ColumnChart, LineChart, type ChartPoint } from './charts.js';
@@ -16,6 +17,9 @@ export const CASINO_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   no_role_picked: { text: '「決めたロールがある人だけ」にするときは、ロールを選んでください。', kind: 'warn' },
   role_made: { text: '🎰 カジノのロールを用意して、入れる人をそのロールにしました。Discord でメンバーにロールを渡してください。', kind: 'ok' },
   role_failed: { text: 'ロールを作れませんでした。BOT に「ロールの管理」の権限があるか確かめてください。', kind: 'warn' },
+  horse_saved: { text: '🏇 馬の名簿を変えました（次のレースから出ます）。', kind: 'ok' },
+  horse_invalid: { text: '馬の名前は 1〜18 文字で入れてください。', kind: 'warn' },
+  horse_taken: { text: 'その名前の馬はもういます（引退した馬とは同じ名前にできます）。', kind: 'warn' },
 };
 
 export const CASINO_RANGES = { '1d': { label: '今日から 24 時間', days: 1 }, '7d': { label: '7 日', days: 7 }, '30d': { label: '30 日', days: 30 } } as const;
@@ -40,6 +44,8 @@ export function CasinoAdminPage(p: {
   picks: Record<string, number>;
   settingStats: SettingStat[];
   roles: { id: string; name: string }[];
+  /** 🏇 競馬の名簿 */
+  horses?: KeibaHorseRow[];
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -237,6 +243,7 @@ export function CasinoAdminPage(p: {
           </form>
         </section>
       )}
+      {p.horses && <HorseRoster horses={p.horses} csrf={p.session.csrfToken} />}
     </Layout>
   );
 }
@@ -423,3 +430,71 @@ function SlotSelect(p: { i: number; value: number | 'random' | undefined }) {
 /** 入れる人の説明 */
 const accessText = (c: CasinoConfig) =>
   c.accessRoleId ? `「${c.accessRoleName ?? 'カジノ'}」のロールがある人だけ` : c.requireRank ? '位のロールがある人だけ' : 'サーバーにいる人ならだれでも';
+
+/** 🏇 みんなでダービーの馬の名簿（名前をつける・入れる・引退） */
+function HorseRoster(p: { horses: KeibaHorseRow[]; csrf: string }) {
+  const active = p.horses.filter((h) => !h.retiredAt);
+  const surf = (n: number) => (n === 2 ? '芝もダートも' : `${KB_SURFACES[n]}`);
+  return (
+    <section class="card anchor" id="casino-horses">
+      <h2>🏇 馬の名簿（みんなでダービー）</h2>
+      <p class="note">
+        レースの 8 頭はこの名簿から選ばれ、走るたびに成績がたまります。走れる馬が 16 頭より少ないと、BOT がおまかせの名前で足します（名前はあとから変えられます）。強さ（速さ・スタミナ）は入れたときに決まり、画面には出ません。名前は 1〜18 文字。
+      </p>
+      <form method="post" action="/economy/casino/horses" class="inline-form">
+        <input type="hidden" name="_csrf" value={p.csrf} />
+        <input type="text" name="name" maxlength={18} placeholder="新しい馬の名前" required />
+        <button type="submit" class="ok">
+          馬を入れる
+        </button>
+      </form>
+      <p>
+        走れる馬 <strong>{active.length} 頭</strong>（引退 {p.horses.length - active.length} 頭）
+      </p>
+      {p.horses.length === 0 ? (
+        <p class="empty">まだいません。最初のレースを開いたときに BOT が 16 頭入れます（先に名前を決めて入れておくこともできます）。</p>
+      ) : (
+        <table class="compact">
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>脚質・得意</th>
+              <th>成績</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.horses.map((h) => (
+              <tr class={h.retiredAt ? 'muted' : ''}>
+                <td>
+                  <form method="post" action={`/economy/casino/horses/${h.id}`} class="inline-form">
+                    <input type="hidden" name="_csrf" value={p.csrf} />
+                    <input type="text" name="name" value={h.name} maxlength={18} required aria-label="馬の名前" />
+                    <button type="submit">名前を変える</button>
+                  </form>
+                </td>
+                <td class="note">
+                  {KB_COATS[h.coat]}・{KB_STYLES[h.style]}・{KB_APT[h.apt]}・{surf(h.surf)}
+                </td>
+                <td>
+                  {h.starts} 戦 {h.wins} 勝
+                  <span class="note">
+                    {' '}
+                    [{h.wins}-{h.seconds}-{h.thirds}-{Math.max(0, h.starts - h.wins - h.seconds - h.thirds)}]
+                  </span>
+                </td>
+                <td>
+                  <form method="post" action={`/economy/casino/horses/${h.id}/retire`} class="inline-form">
+                    <input type="hidden" name="_csrf" value={p.csrf} />
+                    <input type="hidden" name="retired" value={h.retiredAt ? 'no' : 'yes'} />
+                    <button type="submit">{h.retiredAt ? '戻す' : '引退'}</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
