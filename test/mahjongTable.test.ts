@@ -210,6 +210,60 @@ describe('🀄 麻雀の卓（操作）', () => {
     expect(r.state.seats[h]!.gone).toBe(true);
   });
 
+  it('便利ボタン: 鳴きなしはポンを聞かない・自動和了はロンする・ツモ切りはすぐ切る', () => {
+    const { s: s0, ctx, step, h } = started();
+    const t = maker();
+    const base = () => {
+      const s = structuredClone(s0);
+      s.rivers = [[], [], [], []];
+      s.melds = [[], [], [], []];
+      s.riichi = [false, false, false, false];
+      s.tempFuriten = [false, false, false, false];
+      s.wall = s.wall.slice(0, 40);
+      return s;
+    };
+    // 鳴きなし: 人がポンできる牌を BOT が切っても、聞かずに次へ
+    let s = base();
+    const from = (h + 3) % 4;
+    const [x] = t('5z');
+    s.hands[h] = t('55z123m456p789s1z');
+    s.hands[from] = [...t('19m19p19s1234z6z7z'), x!];
+    s.turn = from;
+    s.step = 'turn';
+    s.drawn = x!;
+    s = step(mahjong.act(s, HOST.id, { action: 'pref', key: 'noCall', on: '1' }, ctx())).state;
+    expect(s.seats[h]!.prefs).toEqual({ noCall: true });
+    // 上家（BOT の席）に白を切らせる → 聞かずに次の人のツモへ
+    const next = step(mahjong.act(s, s.seats[from]!.id, { action: 'discard', tile: String(x) }, ctx())).state;
+    expect(next.step).toBe('turn');
+    expect(next.turn).toBe(h);
+    expect(next.melds[h]).toEqual([]);
+    // 自動和了: ロンできるときは聞かずにロン
+    s = base();
+    const [y] = t('6p');
+    s.hands[h] = t('234m456m78p234s55s');
+    s.seats[h]!.prefs = { autoWin: true };
+    const disc = (h + 3) % 4;
+    s.hands[disc] = [...t('19m19p19s1234z56z'), y!];
+    s.turn = disc;
+    s.step = 'turn';
+    s.drawn = y!;
+    const r = step(mahjong.act(s, s.seats[disc]!.id, { action: 'discard', tile: String(y) }, ctx())).state;
+    expect(r.phase).toBe('result');
+    expect(r.result?.winner).toBe(h);
+    // ツモ切り: 自分の番の持ち時間が短くなり、時間で引いた牌を切る（時間切れに数えない）
+    s = base();
+    s.turn = h;
+    s.step = 'turn';
+    s.hands[h] = t('19m19p19s1234z56z7z');
+    s.drawn = s.hands[h]!.at(-1)!;
+    const before = step(mahjong.act(s, HOST.id, { action: 'pref', key: 'tsumogiri', on: '1' }, ctx())).state;
+    expect(before.deadline! - 2_000_000).toBeLessThan(2000);
+    const after = step(mahjong.tick({ ...before, deadline: 0 }, ctx())).state;
+    expect(after.rivers[h]!.at(-1)).toMatchObject({ t: s.drawn, tsumogiri: true });
+    expect(after.seats[h]!.timeouts).toBe(0);
+  });
+
   it('時間切れはツモ切り。2 回続くとおまかせ（BOT が打つ）、自分で押すと戻る', () => {
     const { s: s0, ctx, step, h, advance } = started(8);
     let s = s0;

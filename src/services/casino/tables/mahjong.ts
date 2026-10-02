@@ -27,7 +27,10 @@ export const MJ_SHARES = [50, 30, 20, 0];
 export const MJ_LENGTHS = { tonpu: { label: '東風戦', winds: 1 }, hanchan: { label: '半荘戦', winds: 2 } } as const;
 export type MjLength = keyof typeof MJ_LENGTHS;
 
-export type MjSeat = Who & { bot?: boolean; gone: boolean; timeouts: number; points: number; auto?: boolean };
+/** じゃんたま風の便利ボタン: autoWin 自動和了・noCall 鳴きなし（ロンは聞く）・tsumogiri ツモ切り */
+export type MjPrefs = { autoWin?: boolean; noCall?: boolean; tsumogiri?: boolean };
+export const MJ_PREF_KEYS = ['autoWin', 'noCall', 'tsumogiri'] as const;
+export type MjSeat = Who & { bot?: boolean; gone: boolean; timeouts: number; points: number; auto?: boolean; prefs?: MjPrefs };
 export type RiverTile = { t: number; riichi?: boolean; called?: boolean; tsumogiri?: boolean };
 export type MjCall = CallOption;
 export type MjResponse = MjCall | { type: 'pass' };
@@ -194,8 +197,8 @@ export function canKyuushu(s: MjState, i: number): boolean {
   return YAOCHU.filter((k) => c[k]! > 0).length >= 9;
 }
 
-/** 見えている牌（その人から見て） */
-function visibleFor(s: MjState, i: number): number[] {
+/** 見えている牌（その人から見て。待ちの残り枚数にも使う） */
+export function visibleFor(s: MjState, i: number): number[] {
   const v = new Array<number>(KINDS).fill(0);
   const add = (t: number) => v[kindOf(t)]!++;
   s.hands[i]!.forEach(add);
@@ -215,7 +218,10 @@ const yakuhaiFor = (s: MjState, i: number) => Array.from({ length: KINDS }, (_, 
 function turnDeadline(s: MjState, now: number): number {
   const x = s.seats[s.turn]!;
   if (robot(x)) return now + BOT_MS;
-  if (s.riichi[s.turn] && !canTsumo(s, s.turn) && kanOptions(s, s.turn).length === 0) return now + RIICHI_AUTO_MS;
+  const win = canTsumo(s, s.turn);
+  if (win && x.prefs?.autoWin) return now + RIICHI_AUTO_MS;
+  if (!win && x.prefs?.tsumogiri && s.drawn !== null) return now + RIICHI_AUTO_MS;
+  if (s.riichi[s.turn] && !win && kanOptions(s, s.turn).length === 0) return now + RIICHI_AUTO_MS;
   return now + MJ_TURN_SECONDS * 1000 * paceMult(s);
 }
 
@@ -365,12 +371,22 @@ function openCalls(s: MjState, from: number, t: number, mode: 'discard' | 'chank
   s.responses = [null, null, null, null];
   if (!s.options.some(Boolean)) return afterCalls(s, mode, ctx);
   s.options.forEach((o, j) => {
-    if (o && robot(s.seats[j]!)) s.responses[j] = botResponse(s, j, o, t);
+    if (!o) return;
+    if (robot(s.seats[j]!)) s.responses[j] = botResponse(s, j, o, t);
+    else s.responses[j] = prefResponse(s.seats[j]!, o);
   });
   s.step = mode === 'discard' ? 'call' : 'chankan';
   if (s.options.every((o, j) => !o || s.responses[j])) return resolveCalls(s, ctx);
   s.deadline = ctx.now + MJ_CALL_SECONDS * 1000 * paceMult(s);
   return s;
+}
+
+/** 便利ボタンで決まる返事（自動和了ならロン・鳴きなしならスキップ。決まらなければ null で聞く） */
+function prefResponse(x: MjSeat, o: MjCall[]): MjResponse | null {
+  const ron = o.some((c) => c.type === 'ron');
+  if (ron && x.prefs?.autoWin) return { type: 'ron' };
+  if (!ron && x.prefs?.noCall) return { type: 'pass' };
+  return null;
 }
 
 /** だれも鳴かなかったとき */
@@ -731,6 +747,23 @@ export const mahjong: TableEngine<MjState> = {
     }
     const s = structuredClone(state);
     const me = s.seats[i]!;
+    // 便利ボタン（いつでも切り替えられる）
+    if (a === 'pref') {
+      const key = str(f, 'key') as (typeof MJ_PREF_KEYS)[number];
+      if (!(MJ_PREF_KEYS as readonly string[]).includes(key)) return fail('invalid');
+      me.prefs = { ...me.prefs, [key]: str(f, 'on') === '1' };
+      if (s.phase === 'playing' && waitingOn(s, i)) {
+        if (s.step === 'turn') s.deadline = turnDeadline(s, ctx.now);
+        else {
+          const r = prefResponse(me, s.options[i]!);
+          if (r) {
+            s.responses[i] = r;
+            if (s.options.every((o, j) => !o || s.responses[j])) return ok(resolveCalls(s, ctx));
+          }
+        }
+      }
+      return ok(s);
+    }
     if (a === 'resume') {
       me.auto = false;
       me.timeouts = 0;
@@ -777,6 +810,9 @@ export const mahjong: TableEngine<MjState> = {
     if (s.step === 'turn') {
       const x = s.seats[s.turn]!;
       if (robot(x)) return botTurn(s, s.turn, ctx);
+      // 便利ボタン（自動和了・ツモ切り）
+      if (x.prefs?.autoWin && canTsumo(s, s.turn)) return ok(win(s, s.turn, null, s.drawn!, ctx));
+      if (x.prefs?.tsumogiri && s.drawn !== null && !canTsumo(s, s.turn) && legalDiscards(s, s.turn).includes(s.drawn)) return discard(s, s.turn, s.drawn, false, ctx);
       // リーチ中のツモ切りは時間切れに数えない
       if (!(s.riichi[s.turn] && !canTsumo(s, s.turn))) {
         x.timeouts++;

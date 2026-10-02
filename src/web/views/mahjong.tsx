@@ -2,7 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { CasinoConfig } from '../../config.js';
 import type { CasinoTable } from '../../db/schema.js';
 import type { Meld } from '../../services/casino/mahjong/score.js';
-import { shanten } from '../../services/casino/mahjong/shanten.js';
+import { shanten, waitsOf } from '../../services/casino/mahjong/shanten.js';
 import { countsOf, isRedTile, kindName, KINDS, kindOf, suitOf, tileFace, WIND_NAME } from '../../services/casino/mahjong/tiles.js';
 import {
   canKyuushu,
@@ -13,12 +13,14 @@ import {
   legalDiscards,
   MJ_CALL_SECONDS,
   MJ_LENGTHS,
+  MJ_PREF_KEYS,
   MJ_SHARES,
   MJ_TURN_SECONDS,
   riichiDiscards,
   roundLabel,
   seatWindOf,
   START_POINTS,
+  visibleFor,
   waitsOfSeat,
   type MjState,
 } from '../../services/casino/tables/mahjong.js';
@@ -120,60 +122,114 @@ function Act(p: { id: number; csrf: string; action: string; children: Child; ext
   );
 }
 
-/** 席の名札（風・点数・リーチ・親） */
-function Plate(p: { s: MjState; i: number; meId: string; now: number }) {
-  const { s, i } = p;
+/** その人が動く番か（自分の番・鳴くか決める番） */
+const actingOf = (s: MjState, i: number) =>
+  s.phase === 'playing' && ((s.step === 'turn' && s.turn === i) || ((s.step === 'call' || s.step === 'chankan') && Boolean(s.options[i]) && !s.responses[i]));
+const seatTag = (s: MjState, i: number) => {
   const x = s.seats[i]!;
-  const playing = s.phase === 'playing';
-  const turn = playing && ((s.step === 'turn' && s.turn === i) || ((s.step === 'call' || s.step === 'chankan') && Boolean(s.options[i]) && !s.responses[i]));
+  return `${x.name}${x.gone ? '（BOT）' : x.auto ? '（おまかせ）' : ''}`;
+};
+
+/** 向かいの人（上）: 名前・伏せた手・鳴き */
+function OppTop(p: { s: MjState; i: number; reveal: boolean }) {
+  const { s, i } = p;
   return (
-    <div class={`mj-plate${turn ? ' turn' : ''}${x.id === p.meId ? ' me' : ''}`}>
-      <span class={`mj-wind${s.kyoku === i ? ' dealer' : ''}`}>{WIND_NAME[seatWindOf(s, i) - 27]}</span>
-      <span class="mj-pname">
-        {x.name}
-        {x.gone ? '（抜けた・BOT）' : x.auto ? '（おまかせ中）' : ''}
-      </span>
-      <b class="mj-points">{fmt(x.points)}</b>
-      {s.riichi[i] && <span class="mj-stick" title="リーチ">リーチ</span>}
-      {turn && <Countdown at={s.deadline} now={p.now} label="" />}
+    <div class={`mj-otop${actingOf(s, i) ? ' acting' : ''}`}>
+      <span class="mj-oname">{seatTag(s, i)}</span>
+      <div class="mj-ohand">{p.reveal ? (s.hands[i] ?? []).map((t) => <Tile t={t} size="tiny" />) : (s.hands[i] ?? []).map(() => <Back size="tiny" />)}</div>
+      <Melds melds={s.melds[i] ?? []} me={i} size="tiny" />
     </div>
   );
 }
 
-function Opp(p: { s: MjState; i: number; pos: 'top' | 'left' | 'right' | 'bottom'; meId: string; now: number; reveal: boolean }) {
+/** 左右の人: 縦書きの名前・横向きの伏せた手・鳴き */
+function OppSide(p: { s: MjState; i: number; side: 'left' | 'right'; reveal: boolean }) {
   const { s, i } = p;
-  const hand = s.hands[i] ?? [];
   return (
-    <section class={`mj-opp mj-${p.pos}`}>
-      <Plate s={s} i={i} meId={p.meId} now={p.now} />
-      <div class="mj-ohand">
-        {p.reveal ? hand.map((t) => <Tile t={t} size="tiny" />) : hand.map(() => <Back size="tiny" />)}
-        <Melds melds={s.melds[i] ?? []} me={i} size="tiny" />
-      </div>
-      <River s={s} i={i} size="small" />
-    </section>
+    <div class={`mj-oside mj-o${p.side}${actingOf(s, i) ? ' acting' : ''}`}>
+      <span class="mj-oname v" title={seatTag(s, i)}>
+        {[...s.seats[i]!.name.replace(/^🤖\s*/, '🤖')].slice(0, 6).map((ch) => (
+          <span>{ch}</span>
+        ))}
+      </span>
+      <div class="mj-bars">{p.reveal ? (s.hands[i] ?? []).map((t) => <Tile t={t} size="tiny" />) : (s.hands[i] ?? []).map(() => <span class="mj-bar"></span>)}</div>
+      <Melds melds={s.melds[i] ?? []} me={i} size="tiny" />
+    </div>
   );
 }
 
-function Center(p: { s: MjState; now: number }) {
+/** 真ん中の方角盤: 四辺に風・点数・リーチ棒、まんなかに局・残り・ドラ */
+function Compass(p: { s: MjState; at: (d: number) => number; now: number }) {
   const { s } = p;
+  const edge = (d: number, pos: 'b' | 'r' | 't' | 'l') => {
+    const i = p.at(d);
+    const x = s.seats[i]!;
+    return (
+      <div class={`mj-cedge ${pos}${actingOf(s, i) ? ' turn' : ''}`}>
+        {s.riichi[i] && <span class="mj-stickbar" title="リーチ"></span>}
+        <span class="mj-row">
+          <span class={`mj-cwind${s.kyoku === i ? ' dealer' : ''}`}>{WIND_NAME[seatWindOf(s, i) - 27]}</span>
+          <b class="mj-cpts">{fmt(x.points)}</b>
+        </span>
+      </div>
+    );
+  };
+  const acting = s.phase === 'playing' ? [0, 1, 2, 3].find((i) => actingOf(s, i)) : undefined;
   return (
-    <section class="mj-center">
-      <div class="mj-round">{roundLabel(s)}</div>
-      <div class="mj-info">
-        <span>残り {s.wall.length} 枚</span>
-        {s.sticks > 0 && <span>供託 {s.sticks}</span>}
+    <div class="mj-compass">
+      {edge(0, 'b')}
+      {edge(1, 'r')}
+      {edge(2, 't')}
+      {edge(3, 'l')}
+      <div class="mj-cmid">
+        <div class="mj-round">{roundLabel(s)}</div>
+        <div class="mj-info">
+          <span>残り {s.wall.length}</span>
+          {s.sticks > 0 && <span>供託 {s.sticks}</span>}
+        </div>
+        <div class="mj-dora">
+          {doraIndicators(s).map((t) => (
+            <Tile t={t} size="tiny" />
+          ))}
+        </div>
+        {acting !== undefined && <Countdown at={s.deadline} now={p.now} label="" />}
       </div>
-      <div class="mj-dora">
-        <span class="c-muted">ドラ表示</span>
-        {doraIndicators(s).map((t) => (
-          <Tile t={t} size="small" />
-        ))}
-      </div>
-      {s.log.length > 0 && <div class="mj-lastlog">{s.log.at(-1)}</div>}
-    </section>
+    </div>
   );
 }
+
+/** 卓: 方角盤のまわりに 4 人の河（それぞれの向き） */
+function Table(p: { s: MjState; at: (d: number) => number; now: number }) {
+  const { s, at } = p;
+  return (
+    <div class="mj-table">
+      <div class="mj-rv rt">
+        <River s={s} i={at(2)} size="tiny" />
+      </div>
+      <div class="mj-rv rl">
+        <River s={s} i={at(3)} size="tiny" />
+      </div>
+      <Compass s={s} at={at} now={p.now} />
+      <div class="mj-rv rr">
+        <River s={s} i={at(1)} size="tiny" />
+      </div>
+      <div class="mj-rv rb">
+        <River s={s} i={at(0)} size="tiny" />
+      </div>
+    </div>
+  );
+}
+
+/** 待ちと残り枚数（「三萬 残り2」） */
+function waitText(waits: number[], visible: number[]): string {
+  return waits.map((k) => `${kindName(k)} 残り${Math.max(0, 4 - visible[k]!)}`).join('・');
+}
+
+const PREF_LABEL: Record<(typeof MJ_PREF_KEYS)[number], { label: string; note: string }> = {
+  autoWin: { label: '自動和了', note: '和了れるときは自動でツモ・ロン' },
+  noCall: { label: '鳴きなし', note: 'ポン・チー・カンを聞かない（ロンは聞く）' },
+  tsumogiri: { label: 'ツモ切り', note: 'ツモった牌をそのまま切る' },
+};
 
 /** 切るとテンパイになる牌の種類 */
 function tenpaiKinds(hand: number[], melds: number): Set<number> {
@@ -205,15 +261,45 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
   const sh = hand.length % 3 === 1 ? shanten(countsOf(hand), melds.length) : null;
   const waits = sh === 0 ? waitsOfSeat(s, i) : [];
   const furiten = sh === 0 && isFuriten(s, i);
+  const visible = visibleFor(s, i);
+  // 切るとテンパイの牌: 切ったあとの待ちと残り枚数
+  const tpWaits = new Map<number, string>();
+  if (tp.size) {
+    const c = countsOf(hand);
+    for (const k of tp) {
+      c[k]!--;
+      const w = waitsOf(c, melds.length);
+      c[k]!++;
+      const left = w.reduce((a, x) => a + Math.max(0, 4 - visible[x]!), 0);
+      tpWaits.set(k, `${kindName(k)}を切ると 待ち ${waitText(w, visible)}（あと ${left} 枚）`);
+    }
+  }
   const tileBtn = (tt: number, extra = '') => (
-    <button type="submit" name="tile" value={String(tt)} class={tileClass(tt, `big${riichiable.has(tt) ? ' rc' : ''}${tp.has(kindOf(tt)) ? ' tp' : ''}${extra}`)} disabled={!legal.has(tt)} title={kindName(kindOf(tt))}>
+    <button
+      type="submit"
+      name="tile"
+      value={String(tt)}
+      class={tileClass(tt, `big${riichiable.has(tt) ? ' rc' : ''}${tp.has(kindOf(tt)) ? ' tp' : ''}${extra}`)}
+      disabled={!legal.has(tt)}
+      title={kindName(kindOf(tt))}
+      data-waits={tpWaits.get(kindOf(tt))}
+    >
       <Face t={tt} />
     </button>
   );
+  const prefs = x.prefs ?? {};
   return (
     <section class={`mj-mine${myTurn || opts ? ' myturn' : ''}`}>
-      <River s={s} i={i} size="small" />
-      <Plate s={s} i={i} meId={p.me.session.userId} now={p.now} />
+      <div class="mj-mybar">
+        <span class={`mj-cwind${s.kyoku === i ? ' dealer' : ''}`}>{WIND_NAME[seatWindOf(s, i) - 27]}</span>
+        <span class="mj-pname">{x.name}</span>
+        {s.riichi[i] && <span class="mj-stick">リーチ</span>}
+        {(myTurn || opts) && (
+          <span class="mj-yourturn">
+            {opts ? '鳴く？' : 'あなたの番'} <Countdown at={s.deadline} now={p.now} label="" />
+          </span>
+        )}
+      </div>
       {myTurn ? (
         <form method="post" action={`/casino/t/${t.id}/act`} class="mj-handform">
           <input type="hidden" name="_csrf" value={csrf} />
@@ -230,9 +316,10 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
               <span>🎯 リーチする（光っている牌を切るとリーチ・1,000 点を出します）</span>
             </label>
           )}
+          <p class="mj-waitinfo" aria-live="polite"></p>
           <p class="mj-hint">
-            {s.riichi[i] ? 'リーチ中: ツモった牌を切ります（和了れるときはツモを）' : '切る牌を押してください。'}
-            {tp.size > 0 && !s.riichi[i] && <span class="c-muted">・点のある牌は切るとテンパイ</span>}
+            {s.riichi[i] ? 'リーチ中: ツモった牌を切ります（和了れるときはツモを）' : <span class="mj-hint-tap">切る牌を押してください。</span>}
+            {tp.size > 0 && !s.riichi[i] && <span class="c-muted">・点のある牌は切るとテンパイ（押す前に待ちが出ます）</span>}
           </p>
         </form>
       ) : (
@@ -306,7 +393,7 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
       <p class="mj-status">
         {sh === 0 ? (
           <>
-            テンパイ・待ち <b>{waits.map(kindName).join('・') || 'なし'}</b>
+            テンパイ・待ち <b>{waitText(waits, visible) || 'なし'}</b>
             {furiten && <span class="mj-furiten">フリテン（ロンできません）</span>}
           </>
         ) : sh !== null && sh > 0 ? (
@@ -320,6 +407,20 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
           </Act>
         )}
       </p>
+      {(playing || s.phase === 'result') && (
+        <div class="mj-prefs">
+          {MJ_PREF_KEYS.map((k) => (
+            <Act id={t.id} csrf={csrf} action="pref" extra={{ key: k, on: prefs[k] ? '0' : '1' }}>
+              <button type="submit" class={`mj-pref${prefs[k] ? ' on' : ''}`} aria-pressed={prefs[k] ? 'true' : 'false'} title={PREF_LABEL[k].note}>
+                {PREF_LABEL[k].label}
+              </button>
+            </Act>
+          ))}
+          <button type="button" class="mj-pref" data-mj-twotap aria-pressed="true" title="スマホで、1 回目のタップで牌を浮かせ、2 回目で切る">
+            2 回タップで切る
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -531,15 +632,27 @@ export function MahjongView(p: { t: CasinoTable; s: MjState; me: CasinoMe; now: 
   const seated = i >= 0 && !s.seats[i]!.gone;
   return (
     <>
-      <div class="mj-board">
-        <Opp s={s} i={at(2)} pos="top" meId={meId} now={p.now} reveal={reveal} />
-        <Opp s={s} i={at(3)} pos="left" meId={meId} now={p.now} reveal={reveal} />
-        {s.phase === 'result' && s.result ? <ResultBox t={p.t} s={s} i={i} me={p.me} now={p.now} /> : s.phase === 'done' ? <DoneBox s={s} me={p.me} /> : <Center s={s} now={p.now} />}
-        <Opp s={s} i={at(1)} pos="right" meId={meId} now={p.now} reveal={reveal} />
+      <div class="mj-board2">
+        <OppTop s={s} i={at(2)} reveal={reveal} />
+        <OppSide s={s} i={at(3)} side="left" reveal={reveal} />
+        <Table s={s} at={at} now={p.now} />
+        <OppSide s={s} i={at(1)} side="right" reveal={reveal} />
         {i >= 0 ? (
           <MyArea t={p.t} s={s} i={i} me={p.me} now={p.now} />
         ) : (
-          <Opp s={s} i={at(0)} pos="bottom" meId={meId} now={p.now} reveal={reveal} />
+          <div class="mj-mine spectate">
+            <OppTop s={s} i={at(0)} reveal={reveal} />
+          </div>
+        )}
+        {s.phase === 'result' && s.result && (
+          <div class="mj-overlay">
+            <ResultBox t={p.t} s={s} i={i} me={p.me} now={p.now} />
+          </div>
+        )}
+        {s.phase === 'done' && (
+          <div class="mj-overlay">
+            <DoneBox s={s} me={p.me} />
+          </div>
         )}
       </div>
       <details class="c-rules mj-log">
@@ -621,7 +734,10 @@ export function MjGuide() {
       <summary>📖 遊び方・役の一覧</summary>
       <p>{MJ_RULES}</p>
       <p>
-        自分の番: 牌を押すと切ります。テンパイできる牌には点が付きます。リーチは「リーチする」に印を付けてから、光っている牌を押します。ほかの人の捨て牌で和了れる・鳴けるときは、ボタンが出ます（{MJ_CALL_SECONDS} 秒）。
+        自分の番: 牌を押すと切ります（スマホは 1 回目のタップで牌が浮き、もう一度タップで切ります。「2 回タップで切る」で切り替え）。テンパイできる牌には点が付き、押す前に「切ると待ち ○○ 残り n 枚」が出ます。リーチは「リーチする」に印を付けてから、光っている牌を押します。ほかの人の捨て牌で和了れる・鳴けるときは、ボタンが出ます（{MJ_CALL_SECONDS} 秒）。
+      </p>
+      <p>
+        便利ボタン: 「自動和了」和了れるときは自動でツモ・ロン／「鳴きなし」ポン・チー・カンを聞かない（ロンは聞く）／「ツモ切り」ツモった牌をそのまま切る。いつでも切り替えられます。
       </p>
       <ul class="mj-yakulist">
         {YAKU_LIST.map(([h, list]) => (

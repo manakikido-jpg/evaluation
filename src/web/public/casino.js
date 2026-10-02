@@ -555,7 +555,11 @@ document.addEventListener('submit', (e) => {
   }
   boards.delete(form.getAttribute('action'));
 }, true);
-document.addEventListener('c-live-updated', () => document.querySelectorAll('form[data-rb]').forEach(paintBoard));
+document.addEventListener('c-live-updated', () => {
+  document.querySelectorAll('form[data-rb]').forEach(paintBoard);
+  paintTwoTap();
+  paintTapHint();
+});
 
 // ───── 🎰 スロット（ジャグラー風）: リールを回し、STOP で左から 1 本ずつ止める ─────
 // - spin: 止まる目はもう決まっている（data-stops）。遠ければ、ぼやけている間にずらしてから最大 4 コマすべらせる
@@ -885,6 +889,62 @@ const initSlots = (root) => {
   };
 };
 
+// ───── 🀄 麻雀: スマホは 1 回目のタップで牌を浮かせ、2 回目で切る（誤タップを防ぐ）。待ちを先に見せる ─────
+const TWOTAP_KEY = 'mj-twotap';
+const coarsePointer = () => window.matchMedia('(pointer: coarse)').matches;
+/** 2 回タップで切るか（はじめはスマホ・タブレットだけ。ボタンで切り替え・ブラウザに覚える） */
+const twoTapOn = () => {
+  try {
+    const v = localStorage.getItem(TWOTAP_KEY);
+    if (v === 'on') return true;
+    if (v === 'off') return false;
+  } catch {
+    // 覚えられなくてもよい
+  }
+  return coarsePointer();
+};
+const paintTwoTap = () => document.querySelectorAll('[data-mj-twotap]').forEach((b) => b.setAttribute('aria-pressed', twoTapOn() ? 'true' : 'false'));
+const showWaits = (b) => {
+  const box = b?.closest('form')?.querySelector('.mj-waitinfo');
+  if (box) box.textContent = b?.dataset.waits || '';
+};
+document.addEventListener('click', (e) => {
+  const t = e.target instanceof Element ? e.target : null;
+  const toggle = t?.closest('[data-mj-twotap]');
+  if (toggle) {
+    try {
+      localStorage.setItem(TWOTAP_KEY, twoTapOn() ? 'off' : 'on');
+    } catch {
+      // この画面だけ
+    }
+    paintTwoTap();
+    return;
+  }
+  const b = t?.closest('.mj-handform button.mj-t');
+  if (!b || b.disabled) return;
+  if (twoTapOn() && !b.classList.contains('sel')) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    document.querySelectorAll('.mj-handform button.mj-t.sel').forEach((x) => x.classList.remove('sel'));
+    b.classList.add('sel');
+    showWaits(b);
+    // 選んでいるあいだは画面を差し替えない
+    dirtyAt = Date.now();
+  }
+}, true);
+document.addEventListener('mouseover', (e) => {
+  const b = e.target instanceof Element ? e.target.closest('.mj-handform button.mj-t') : null;
+  if (b) showWaits(b);
+});
+document.addEventListener('mouseout', (e) => {
+  const b = e.target instanceof Element ? e.target.closest('.mj-handform button.mj-t') : null;
+  if (b && !b.classList.contains('sel')) showWaits(document.querySelector('.mj-handform button.mj-t.sel'));
+});
+const paintTapHint = () =>
+  document.querySelectorAll('.mj-hint-tap').forEach((n) => {
+    n.textContent = twoTapOn() ? '切る牌をタップ → もう一度タップで切ります。' : '切る牌を押してください。';
+  });
+
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────
 const pageInit = (root, tableEnd) => {
   paintSoundButton();
@@ -893,5 +953,7 @@ const pageInit = (root, tableEnd) => {
   initLive();
   initSlots(root);
   playFx(root, tableEnd);
+  paintTwoTap();
+  paintTapHint();
 };
 pageInit(document);
