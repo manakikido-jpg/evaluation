@@ -11,6 +11,7 @@ import {
   KB_MAX_TICKETS,
   makeRace,
   margin,
+  prizesOf,
   pairKey,
   seeded,
   seedPools,
@@ -33,7 +34,9 @@ import { fail, intOf, list, ok, str, type Credit, type Ctx, type PlayRecord, typ
  */
 
 export const KB_WINDOWS = [1, 2, 3, 5] as const;
-export const KB_RESULT_SECONDS = 25;
+export const KB_RESULT_SECONDS = 30;
+/** 締め切ってから発走まで（本馬場入場 → ファンファーレ → ゲート入り） */
+export const KB_PRERACE_MS = 15_000;
 export const KB_IDLE_MINUTES = 15;
 export const KB_SEATS = 30;
 /** 画面でレースを見せる長さ（先頭がゴールするまで）。距離が長いほど少し長い */
@@ -74,6 +77,10 @@ export type KbState = {
   /** 開いた人がつけたレース名（なければおまかせ） */
   title: string | null;
   dist: number | null;
+  /** 開いた人が決めたクラス（null はおまかせ） */
+  cls?: number | null;
+  /** 結果を出しはじめた時刻（到達順位 → 確定 → 払戻金） */
+  resultAt?: number;
   race: KbRaceInfo;
   horses: KbHorse[];
   pools: KbPools;
@@ -82,6 +89,8 @@ export type KbState = {
   tickets: KbTicket[];
   run?: KbRun;
   final?: KbFinal;
+  /** 1〜5 着の賞金（結果を出したとき） */
+  prizes?: number[];
   /** これまでのレース（新しい順・10 回まで） */
   history: { n: number; name: string; order: number[]; win: number; names: string[] }[];
 };
@@ -89,8 +98,15 @@ export type KbState = {
 const seat = (w: Who, now: number): KbSeat => ({ id: w.id, name: w.name, lastActive: now });
 
 /** 次のレースを作る（馬・見込み・BOT のお客さんの賭け） */
-function newRace(s: Pick<KbState, 'title' | 'dist'>, n: number, ctx: Ctx): Pick<KbState, 'race' | 'horses' | 'pools' | 'real' | 'tickets'> {
-  const { race, horses } = makeRace(ctx.rng, n, { ...(s.title ? { name: s.title } : {}), ...(s.dist ? { dist: s.dist } : {}) }, ctx.roster ?? []);
+function newRace(s: Pick<KbState, 'title' | 'dist' | 'cls'> & { seats?: KbSeat[] }, n: number, ctx: Ctx): Pick<KbState, 'race' | 'horses' | 'pools' | 'real' | 'tickets'> {
+  // 座っている馬主の馬を先に出す
+  const priority = new Set((s.seats ?? []).map((x) => x.id));
+  const { race, horses } = makeRace(
+    ctx.rng,
+    n,
+    { ...(s.title ? { name: s.title } : {}), ...(s.dist ? { dist: s.dist } : {}), ...(s.cls !== null && s.cls !== undefined ? { cls: s.cls } : {}), priority },
+    ctx.roster ?? [],
+  );
   const est = estimate(race, horses, ctx.rng(2 ** 31));
   for (const h of horses) {
     h.p = Math.round(est.p[h.no - 1]! * 1000) / 1000;
@@ -108,8 +124,8 @@ function startRace(state: KbState, ctx: Ctx): Step<KbState> {
   const frameMs = (showMs / leader) * sim.frameSec!;
   const ordered = sim.order.map((no) => sim.times[no - 1]!);
   s.run = {
-    // ゲートに入って 3 秒で発走
-    start: ctx.now + 3000,
+    // 本馬場入場 → ファンファーレ → ゲート入りのあと発走
+    start: ctx.now + KB_PRERACE_MS,
     showMs,
     frameMs: Math.round(frameMs * 10) / 10,
     frames: sim.frames!,
@@ -148,10 +164,20 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     if (m.payout > 0) credits.push({ memberId, amount: m.payout, reason: 'casino_win' });
     records.push({ memberId, game: 'keiba', bet: m.bet, payout: m.payout });
   }
+  // 1〜5 着の賞金（メンバーが賭けた合計の数 %）。馬主のいる馬は、馬主に払う
+  const prizes = prizesOf(s.race.cls, s.real);
+  run.order.slice(0, prizes.length).forEach((no, i) => {
+    const h = s.horses[no - 1]!;
+    if (h.ownerId && prizes[i]! > 0) credits.push({ memberId: h.ownerId, amount: prizes[i]!, reason: 'keiba_prize' });
+  });
+  s.prizes = prizes;
   // 名簿の馬の成績
-  const keiba = run.order.map((no, i) => ({ horseId: s.horses[no - 1]!.id, pos: i + 1, race: s.race.name, dist: s.race.dist, surface: s.race.surface })).filter((r) => r.horseId > 0);
+  const keiba = run.order
+    .map((no, i) => ({ horseId: s.horses[no - 1]!.id, pos: i + 1, race: s.race.name, dist: s.race.dist, surface: s.race.surface, prize: prizes[i] ?? 0 }))
+    .filter((r) => r.horseId > 0);
   s.history = [{ n: s.race.n, name: s.race.name, order: run.order.slice(0, 3), win: s.final.win[1], names: run.order.slice(0, 3).map((no) => s.horses[no - 1]!.name) }, ...s.history].slice(0, 10);
   s.phase = 'result';
+  s.resultAt = ctx.now;
   s.deadline = ctx.now + KB_RESULT_SECONDS * 1000;
   return ok(s, { credits, records, keiba });
 }
@@ -166,6 +192,8 @@ function nextRace(state: KbState, ctx: Ctx): KbState {
   Object.assign(s, newRace(s, s.race.n + 1, ctx));
   delete s.run;
   delete s.final;
+  delete s.prizes;
+  delete s.resultAt;
   s.phase = 'betting';
   s.deadline = ctx.now + s.window * 60_000;
   return s;
@@ -199,11 +227,12 @@ export const keiba: TableEngine<KbState> = {
     const title = (str(f, 'title') ?? '').replace(/\s+/g, ' ').trim().slice(0, 20) || null;
     const d = Number(str(f, 'dist'));
     const dist = (KB_DISTANCES as readonly number[]).includes(d) ? d : null;
-    const base = { title, dist };
+    const c = str(f, 'cls');
+    const cls = c && /^[0-8]$/.test(c) ? Number(c) : null;
+    const base = { title, dist, cls, seats: [seat(host, ctx.now)] };
     return ok({
       kind: 'keiba',
       hostId: host.id,
-      seats: [seat(host, ctx.now)],
       phase: 'betting',
       deadline: ctx.now + window * 60_000,
       window,

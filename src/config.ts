@@ -380,6 +380,9 @@ export const casinoSchema = z.object({
   rouletteMaxBet: z.number().int().min(0).max(10_000_000).default(0),
   /** 🀄 麻雀で参加費を賭けられるか（false なら、どの卓も賭けなし・点数だけで遊ぶ） */
   mahjongBets: z.boolean().default(true),
+  /** 🏇 馬主: 馬 1 頭の値段（0 で買えない）・1 人が持てる頭数 */
+  keibaHorsePrice: z.number().int().min(0).max(10_000_000).default(3000),
+  keibaMaxOwned: z.number().int().min(0).max(20).default(3),
   /** 1 日（日本時間）に賭けられる合計（0 で上限なし） */
   dailyBetLimit: z.number().int().min(0).max(100_000_000).default(20000),
   /** 遊べるゲーム */

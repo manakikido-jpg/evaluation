@@ -549,6 +549,17 @@ describe('🏇 みんなでダービー（画面）', () => {
     await post(`/casino/t/${id}/act`, a, { action: 'bets', type: 'wide', h: ['1', '2', '3'], bet: '50' });
     expect(await balance(A)).toBe(4750);
     expect(await (await get(`/casino/t/${id}/frag`, a)).text()).toContain('ワイド ①-③');
+    // 🐴 馬主の部屋: 入口から行ける。名前をつけて買う
+    expect(lobby).toContain('/casino/keiba/stable');
+    const stable = await (await get('/casino/keiba/stable', a)).text();
+    expect(stable).toContain('馬主の部屋');
+    expect(stable).toContain('action="/casino/keiba/stable/buy"');
+    expect((await post('/casino/keiba/stable/buy', a, { name: 'サクラノヒメ' })).headers.get('location')).toBe('/casino/keiba/stable?e=horse_bought');
+    expect(await balance(A)).toBe(4750 - 3000);
+    const after = await (await get('/casino/keiba/stable', a)).text();
+    expect(after).toContain('サクラノヒメ');
+    expect(after).toContain('新馬');
+    expect((await post('/casino/keiba/stable/buy', a, { name: 'ツキノヒメ' })).headers.get('location')).toBe('/casino/keiba/stable?e=poor');
     expect(frag).toContain('みんなの馬券（1 人');
   });
 });

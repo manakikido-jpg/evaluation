@@ -801,6 +801,14 @@ export const keibaHorses = pgTable('keiba_horses', {
   thirds: integer('thirds').notNull().default(0),
   /** 最近のレース（新しい順・5 走まで） */
   recent: jsonb('recent').$type<{ pos: number; race: string; dist: number; surface: number }[]>().notNull().default([]),
+  /** 馬主（メンバー。BOT の馬は null） */
+  ownerId: text('owner_id'),
+  /** 獲得賞金（銭。馬主に払った分） */
+  prize: integer('prize').notNull().default(0),
+  /** 性 0 牡 / 1 牝 / 2 セン・年齢・ふだんの馬体重（kg） */
+  sex: integer('sex').notNull().default(0),
+  age: integer('age').notNull().default(3),
+  weight: integer('weight').notNull().default(480),
   /** 引退した日時（走らない） */
   retiredAt: timestamp('retired_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

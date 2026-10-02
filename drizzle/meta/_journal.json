@@ -442,6 +442,13 @@
       "when": 1790949605526,
       "tag": "0062_keiba_horses",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790957961305,
+      "tag": "0063_keiba_owners",
+      "breakpoints": true
     }
   ]
 }

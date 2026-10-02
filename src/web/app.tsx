@@ -1335,6 +1335,8 @@ export function createWebApp(deps: WebDeps) {
       rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
       mahjongBets: typeof body.mahjongBets === 'string' ? body.mahjongBets === 'yes' : cfg.casino.mahjongBets,
+      keibaHorsePrice: typeof body.keibaHorsePrice === 'string' ? int('keibaHorsePrice') : cfg.casino.keibaHorsePrice,
+      keibaMaxOwned: typeof body.keibaMaxOwned === 'string' ? int('keibaMaxOwned') : cfg.casino.keibaMaxOwned,
       games: CASINO_GAMES.filter((g) => list.includes(g)),
       knownGames: [...CASINO_GAMES],
       slotMachines: slotMachinesOf(body),

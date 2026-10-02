@@ -198,6 +198,23 @@ const Sound = (() => {
     /** 🏇 発走のファンファーレ・足音・ゴール */
     fanfare: (at = 0) =>
       notes([[523, 0, 0.16], [659, 0.16, 0.16], [784, 0.32, 0.16], [1047, 0.48, 0.3], [784, 0.82, 0.14], [1047, 0.98, 0.5]], at, { type: 'square', vol: 0.07 }),
+    /** G1 のファンファーレ（長い） */
+    fanfareG1: (at = 0) =>
+      notes(
+        [[392, 0, 0.18], [523, 0.2, 0.18], [659, 0.4, 0.18], [784, 0.6, 0.35], [659, 1.0, 0.16], [784, 1.18, 0.16], [1047, 1.36, 0.5], [988, 1.9, 0.16], [1047, 2.08, 0.16], [1175, 2.26, 0.16], [1319, 2.44, 0.8]],
+        at,
+        { type: 'square', vol: 0.07 },
+      ),
+    /** ゲートが開く音 */
+    gateOpen: (at = 0) => {
+      noise(at, 0.25, { freq: 900, q: 0.6, vol: 0.3 });
+      tone(180, at, 0.2, { type: 'square', vol: 0.08, to: 90 });
+    },
+    /** 最後の直線の大歓声 */
+    roar: (at = 0) => {
+      noise(at, 1.6, { freq: 700, q: 0.4, vol: 0.12 });
+      noise(at + 0.8, 2.4, { freq: 1100, q: 0.4, vol: 0.14 });
+    },
     gallop: (at = 0) => {
       noise(at, 0.05, { freq: 300, q: 0.8, vol: 0.12 });
       noise(at + 0.09, 0.05, { freq: 260, q: 0.8, vol: 0.09 });
@@ -1254,10 +1271,14 @@ const kbHorse = (g, x, y, s, ph, h, run) => {
   g.translate(x, y);
   g.scale(s, s);
   // 蹄の高さから体の高さへ
-  g.translate(0, -44 + (run ? Math.sin(ph * TAU * 2) * 1.6 : 0));
+  // run: true = 走る / 'walk' = 歩く（パドック） / false = 止まる
+  const walk = run === 'walk';
+  const gallop = run === true;
+  const bob = gallop ? Math.sin(ph * TAU * 2) * 1.6 : walk ? Math.sin(ph * TAU * 2) * 0.5 : 0;
+  g.translate(0, -44 + bob);
   // 影
   g.save();
-  g.translate(0, 44 - (run ? Math.sin(ph * TAU * 2) * 1.6 : 0));
+  g.translate(0, 44 - bob);
   g.fillStyle = 'rgba(0,0,0,0.22)';
   g.beginPath();
   g.ellipse(4, 1, 40, 4.5, 0, 0, TAU);
@@ -1292,16 +1313,17 @@ const kbHorse = (g, x, y, s, ph, h, run) => {
     { hx: 22, hy: 5, o: 0.45, fore: true },
     { hx: 26, hy: 4, o: 0.57, fore: true },
   ].map((l, i) => {
-    const p = (ph + l.o) % 1;
-    const sw = run ? Math.sin(p * TAU) : 0;
-    const lift = run ? Math.max(0, Math.cos(p * TAU)) : 0;
+    // 歩くときは 4 拍子で小さく
+    const p = (ph + (walk ? [0, 0.5, 0.25, 0.75][i] : l.o)) % 1;
+    const sw = gallop ? Math.sin(p * TAU) : walk ? Math.sin(p * TAU) * 0.38 : 0;
+    const lift = gallop ? Math.max(0, Math.cos(p * TAU)) : walk ? Math.max(0, Math.cos(p * TAU)) * 0.45 : 0;
     const a1 = l.fore ? 0.55 * sw + 0.05 : -0.5 * sw + 0.12;
     const a2 = l.fore ? a1 - 1.2 * lift : a1 + 0.9 * lift * (sw > 0 ? 1 : 0.4);
     return { ...l, a1, a2, far: i % 2 === 0 };
   });
   for (const l of legs.filter((x) => x.far)) leg(l.hx, l.hy, l.a1, l.a2, true, l.fore);
   // しっぽ
-  const wave = run ? Math.sin(ph * TAU) * 4 : 2;
+  const wave = gallop ? Math.sin(ph * TAU) * 4 : walk ? Math.sin(ph * TAU) * 1.5 : 2;
   g.strokeStyle = dark;
   g.lineWidth = 5;
   g.lineCap = 'round';
@@ -1638,6 +1660,69 @@ const paintSilks = () => {
       p === '5' ? `radial-gradient(circle at 30% 35%, ${a} 0 18%, transparent 19%), radial-gradient(circle at 70% 65%, ${a} 0 18%, ${b} 19%)` : b;
   });
 };
+/** 🐴 パドック: 1 頭ずつ大きく、厩務員さんに引かれて歩く。うしろにお客さん */
+const kbPaddock = (g, W, H, horses, sec) => {
+  const sky = g.createLinearGradient(0, 0, 0, H * 0.3);
+  sky.addColorStop(0, '#9fd0f2');
+  sky.addColorStop(1, '#e3f1fa');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, W, H * 0.3);
+  // 木とスタンドの屋根
+  g.fillStyle = '#6b7380';
+  g.fillRect(0, H * 0.12, W, H * 0.05);
+  for (let x = 0; x < W; x += 40) {
+    g.fillStyle = (x / 40) % 4 === 0 ? '#f3b6c8' : '#3f7f45';
+    g.beginPath();
+    g.arc(x + 20, H * 0.27, 18, 0, Math.PI * 2);
+    g.fill();
+  }
+  // お客さん（柵のむこう）
+  g.fillStyle = '#4c5260';
+  g.fillRect(0, H * 0.3, W, H * 0.16);
+  for (let row = 0; row < 3; row++) for (let x = (row % 2) * 4; x < W; x += 8) {
+    g.fillStyle = KB_CROWD[Math.abs(Math.floor(x * 7 + row * 13)) % KB_CROWD.length];
+    g.beginPath();
+    g.arc(x, H * 0.33 + row * H * 0.045, 2.8, 0, Math.PI * 2);
+    g.fill();
+  }
+  // 柵と芝・歩く道
+  g.fillStyle = '#58a85a';
+  g.fillRect(0, H * 0.46, W, H * 0.54);
+  g.fillStyle = '#c9a374';
+  g.fillRect(0, H * 0.62, W, H * 0.2);
+  g.fillStyle = '#fff';
+  g.fillRect(0, H * 0.46, W, 4);
+  const off = (sec * 46) % 30;
+  for (let x = -off; x < W; x += 30) g.fillRect(x, H * 0.46, 3, 16);
+  // 1 頭ずつ（3.2 秒ごとに次の馬）
+  const n = horses.length;
+  const f = Math.floor(sec / 3.2) % n;
+  const s = (W / 900) * 1.9;
+  const y = H * 0.8;
+  for (const [d, i] of [[-1, (f + n - 1) % n], [1, (f + 1) % n], [0, f]]) {
+    const x = W * 0.5 + d * W * 0.62 - ((sec % 3.2) / 3.2 - 0.5) * W * 0.12 * (d === 0 ? 1 : 1);
+    const h = horses[i];
+    kbHorse(g, x, y, s * (d === 0 ? 1 : 0.85), (sec * 1.1 + i * 0.3) % 1, h, 'walk');
+    // 厩務員さん
+    const hx = x + 66 * s;
+    g.fillStyle = '#2a3550';
+    g.fillRect(hx - 5 * s, y - 34 * s, 10 * s, 22 * s);
+    g.fillStyle = '#e9c7a8';
+    g.beginPath();
+    g.arc(hx, y - 39 * s, 5 * s, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#2a3550';
+    g.lineWidth = 3 * s;
+    g.beginPath();
+    g.moveTo(hx - 3 * s, y - 12 * s);
+    g.lineTo(hx - 5 * s + Math.sin(sec * 7) * 3 * s, y);
+    g.moveTo(hx + 3 * s, y - 12 * s);
+    g.lineTo(hx + 5 * s - Math.sin(sec * 7) * 3 * s, y);
+    g.stroke();
+  }
+  return horses[f];
+};
+
 let kbAnim = null;
 const initKeiba = () => {
   paintSilks();
@@ -1661,8 +1746,15 @@ const initKeiba = () => {
   const rankBox = el.querySelector('.kb-rank');
   const remainBox = el.querySelector('.kb-remain');
   const mineBox = el.querySelector('.kb-mine');
+  const paddockBox = el.querySelector('.kb-paddock');
+  const board = el.querySelector('.kb-board');
+  const reveal = el.querySelector('.kb-reveal');
+  const net = el.closest('.kb-stage')?.dataset.kbNet;
   const mine = new Set(data.mine || []);
   let photo = false;
+  let fanfared = false;
+  let roared = false;
+  let kakuteiDone = false;
   const D = data.dist;
   const horses = data.horses;
   const n = horses.length;
@@ -1697,10 +1789,31 @@ const initKeiba = () => {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const t = Date.now() + skew() - (data.start || 0);
     const racing = data.phase === 'racing' || data.phase === 'result';
+    const sec = Date.now() / 1000;
+    // 受付中はパドック
+    if (!racing) {
+      const h = kbPaddock(g, W, H, horses, sec);
+      if (paddockBox && paddockBox.dataset.no !== String(h.no)) {
+        paddockBox.dataset.no = String(h.no);
+        paddockBox.textContent = `パドック ${KB_NO_MARK[h.no - 1]} ${h.name}　${h.weight}kg${h.wdiff ? `（${h.wdiff > 0 ? '+' : ''}${h.wdiff}）` : ''}　気配: ${h.look}${h.owner ? `　馬主: ${h.owner}` : ''}`;
+      }
+      state.raf = requestAnimationFrame(draw);
+      return;
+    }
+    if (paddockBox) paddockBox.textContent = '';
     const k = data.phase === 'result' ? last : Math.max(0, t / (data.frameMs || 1));
+    // 発走前: 本馬場入場（返し馬）→ ファンファーレ → ゲート入り（奇数番から）
+    const pre = data.phase === 'racing' && t < 0 ? (t < -10_000 ? 'parade' : t < -5000 ? 'fanfare' : 'gate') : null;
+    const loadOrder = horses.map((h) => h.no).sort((a, b) => (b % 2) - (a % 2) || a - b);
     // 位置（m）と内ラチからの距離（m）
     const pos = horses.map((h, i) => {
-      if (!racing || t < 0) return { no: h.no, m: -1.5, lane: i * 1.25 };
+      if (pre === 'parade') return { no: h.no, m: -70 + ((t + data.prerace) / 1000) * 9 - i * 6, lane: 3 + (i % 3) * 2.5, canter: true };
+      if (pre === 'fanfare') return { no: h.no, m: -9 - (i % 2) * 2.5, lane: i * 1.25 };
+      if (pre === 'gate') {
+        const at0 = -5000 + loadOrder.indexOf(h.no) * 520;
+        const p = Math.max(0, Math.min(1, (t - at0) / 450));
+        return { no: h.no, m: -9 + p * 7.5 - (1 - p) * (i % 2) * 2.5, lane: i * 1.25 };
+      }
       return { no: h.no, m: (at(frames, i, k) / 1000) * D, lane: at(lanesF, i, k) / 10 };
     });
     // カメラ: 先頭の 3 頭を追う。ばらけたら少し引く
@@ -1711,9 +1824,11 @@ const initKeiba = () => {
     const target = Math.min(D + 4, lead - Math.min(9, (lead - third) / 2) + 3);
     const spread = lead - sorted[Math.min(3, n - 1)].m;
     // 発走前はゲート全体が入るように引きで
-    const wantPpm = !racing || t < 0 ? W / 34 : W / Math.max(26, Math.min(44, spread + 18));
-    camX = camX === null || data.phase !== 'racing' ? target : camX + (target - camX) * 0.12;
-    ppm = ppm === null || data.phase !== 'racing' ? wantPpm : ppm + (wantPpm - ppm) * 0.05;
+    const wantPpm = pre === 'parade' ? W / 40 : pre ? W / 34 : W / Math.max(26, Math.min(44, spread + 18));
+    // 返し馬のあいだは、スタンド前に置いたカメラで
+    const want = pre === 'parade' ? -35 : pre ? -4 : target;
+    camX = camX === null || data.phase !== 'racing' || pre ? want : camX + (want - camX) * 0.12;
+    ppm = ppm === null || data.phase !== 'racing' || pre ? wantPpm : ppm + (wantPpm - ppm) * 0.05;
     const top = H * 0.18;
     const railY = H * 0.38;
     const nearY = H * 0.78;
@@ -1738,16 +1853,15 @@ const initKeiba = () => {
     g.fillRect(0, 0, W, top);
     kbScenery(g, W, top, railY - 9, camX, ppm, data.weather);
     kbTrack(g, W, H, geo, camX, ppm, data.surface, D);
-    if (!racing || t < 1200) kbGate(g, W, geo, camX, ppm, n);
+    if (pre !== 'parade' && (!racing || t < 1200)) kbGate(g, W, geo, camX, ppm, n);
     // 馬（奥の内ラチ側から）
-    const sec = Date.now() / 1000;
     const draws = pos.map((p, i) => ({ p, h: horses[i] })).sort((a, b) => a.p.lane - b.p.lane);
     for (const { p, h } of draws) {
       const y = geo.laneY(p.lane);
       const x = (p.m - camX) * ppm + W * 0.5 + (y - railY) * 0.35;
       if (x < -80 || x > W + 80) continue;
       const s = (ppm / 26) * geo.scale(p.lane);
-      const run = racing && t >= 0 && !(data.phase === 'result');
+      const run = (racing && t >= 0 && !(data.phase === 'result')) || Boolean(p.canter);
       kbHorse(g, x, y, s, (sec * 2.4 + h.no * 0.37) % 1, h, run);
       // 頭の上の番号
       const by = y - 70 * s;
@@ -1807,7 +1921,43 @@ const initKeiba = () => {
         call.classList.remove('pop');
         void call.offsetWidth;
         call.classList.add('pop');
-      } else if (idx < 0 && racing && t < 0) call.textContent = 'ゲートイン完了。まもなくスタートです…';
+      } else if (idx < 0 && pre) {
+        const text =
+          pre === 'parade'
+            ? '本馬場入場です。各馬、元気よく返し馬へ向かいます'
+            : pre === 'fanfare'
+              ? data.cls === 8
+                ? '🎺 G1 のファンファーレが鳴り響きます！ スタンドは大歓声！'
+                : '🎺 ファンファーレ！ 各馬、ゲートの後ろで輪乗りをしています'
+              : t < -900
+                ? 'ゲートイン。奇数番の馬から順に入ります…'
+                : '体勢完了！';
+        if (call.textContent !== text) call.textContent = text;
+      }
+    }
+    if (pre === 'fanfare' && !fanfared) {
+      fanfared = true;
+      if (data.cls === 8) Sound.fanfareG1?.();
+      else Sound.fanfare?.();
+    }
+    // 結果: 到達順位 → 確定 → 払戻金。当たった・はずれたの発表は確定のあと
+    if (data.phase === 'result' && board && data.resultAt) {
+      const rs = Date.now() + skew() - data.resultAt;
+      board.classList.toggle('show-order', rs >= 1200);
+      board.classList.toggle('kakutei', rs >= 6000);
+      if (rs >= 6000 && !kakuteiDone) {
+        kakuteiDone = true;
+        Sound.bell?.();
+      }
+      if (rs >= 6800 && net !== undefined && !kbRevealed.has(data.key)) {
+        kbRevealed.add(data.key);
+        if (reveal) {
+          reveal.classList.add('show');
+          setTimeout(() => reveal.classList.remove('show'), 4500);
+        }
+        if (reveal?.classList.contains('hit')) Sound.win();
+        else Sound.lose();
+      }
     }
     // いまの順位（0.3 秒ごと）
     if (rankBox && racing && Date.now() - rankAt > 300) {
@@ -1829,7 +1979,7 @@ const initKeiba = () => {
     if (data.phase === 'racing') {
       if (!started && t >= 0) {
         started = true;
-        if (t < 1500) Sound.fanfare?.();
+        if (t < 1500) Sound.gateOpen?.();
       }
       const lastCall = data.calls.at(-1);
       if (!photo && lastCall.text.includes('写真判定') && t >= lastCall.t) {
@@ -1845,22 +1995,14 @@ const initKeiba = () => {
         if (t - data.calls.at(-1).t < 1500) Sound.goal?.();
       }
       if (started && !goal && Math.random() < 0.08) Sound.gallop?.();
+      if (started && !roared && lead >= D - 400) {
+        roared = true;
+        Sound.roar?.();
+      }
     }
     state.raf = requestAnimationFrame(draw);
   };
   draw();
-  // 結果: 当たったら音
-  const net = el.closest('.kb-stage')?.dataset.kbNet;
-  const reveal = el.querySelector('.kb-reveal');
-  if (data.phase === 'result' && net !== undefined && !kbRevealed.has(data.key)) {
-    kbRevealed.add(data.key);
-    if (reveal) {
-      reveal.classList.add('show');
-      setTimeout(() => reveal.classList.remove('show'), 4500);
-    }
-    if (reveal?.classList.contains('hit')) Sound.win();
-    else Sound.lose();
-  }
 };
 
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────

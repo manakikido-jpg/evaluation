@@ -370,6 +370,14 @@ const MSG: Record<string, string> = {
   need_players: '人数が足りません。',
   too_many: '1 回に賭けられる数を超えました。',
   host_only: 'レースを開いた人だけができます。',
+  horse_bought: '🐴 馬を買いました。次の新馬戦から走ります（卓に座っていると優先して出走）。',
+  horse_named: '名前を変えました。',
+  horse_retired: '引退させました。おつかれさまでした。',
+  horse_invalid: '馬の名前は 1〜18 文字で入れてください。',
+  horse_taken: 'その名前の馬はもういます。',
+  horse_too_many: '持てる頭数に届いています。',
+  horse_debuted: 'デビューした馬の名前は変えられません。',
+  horse_off: 'いまは馬を買えません。',
 };
 export const casinoMsg = (k: string | undefined) => (k && MSG[k] ? k : undefined);
 export const Msg = (p: { msg: string }) => <p class="c-alert">{MSG[p.msg] ?? p.msg}</p>;

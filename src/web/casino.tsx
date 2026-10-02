@@ -61,6 +61,8 @@ import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 import { MjRecords } from './views/mahjong.js';
+import { KbLobbyExtra, KbStablePage } from './views/keiba.js';
+import { buyHorse, myHorses, nameOwnHorse, retireOwnHorse } from '../services/casino/keibaStable.js';
 import { mjRanking, mjStats, monthStartJst } from '../services/casino/mahjongStats.js';
 
 /** ランキングに出る対局数 */
@@ -579,10 +581,57 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       if (kind === 'mahjong') return c.redirect(`/casino/jansou${c.req.query('e') ? `?e=${c.req.query('e')}` : ''}`);
       if (!isKind(kind) || !kindOn(kind)) return c.redirect('/casino?e=game_off');
       await sweepTables(db, d.cfg(), d.now());
+      const extra = kind === 'keiba' ? <KbLobbyExtra me={me} horses={await myHorses(db, me.session.userId)} price={d.cfg().casino.keibaHorsePrice} /> : undefined;
       return c.html(
-        <TablesLobby me={me} kind={kind} casino={d.cfg().casino} tables={await openTables(db, kind)} mine={await myTable(db, me.session.userId)} msg={casinoMsg(c.req.query('e'))} />,
+        <TablesLobby
+          me={me}
+          kind={kind}
+          casino={d.cfg().casino}
+          tables={await openTables(db, kind)}
+          mine={await myTable(db, me.session.userId)}
+          msg={casinoMsg(c.req.query('e'))}
+          extra={extra}
+        />,
       );
     }),
+  );
+
+  // 🐴 馬主の部屋（みんなでダービー）
+  app.get(
+    '/casino/keiba/stable',
+    page(async (c, me) => {
+      if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+      const cfg = d.cfg().casino;
+      return c.html(<KbStablePage me={me} horses={await myHorses(db, me.session.userId)} price={cfg.keibaHorsePrice} max={cfg.keibaMaxOwned} msg={casinoMsg(c.req.query('e'))} />);
+    }),
+  );
+  const stableBack = (c: Context, code: string) => c.redirect(`/casino/keiba/stable?e=${code}`);
+  app.post(
+    '/casino/keiba/stable/buy',
+    page(async (c, me) => {
+      if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+      const cfg = d.cfg().casino;
+      const f = await formOf(c);
+      const r = await buyHorse(db, me.session.userId, typeof f.name === 'string' ? f.name : '', cfg.keibaHorsePrice, cfg.keibaMaxOwned);
+      return stableBack(c, r.status === 'ok' ? 'horse_bought' : r.status === 'poor' ? 'poor' : `horse_${r.status}`);
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/keiba/stable/:id/name',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const f = await formOf(c);
+      const r = Number.isSafeInteger(id) ? await nameOwnHorse(db, me.session.userId, id, typeof f.name === 'string' ? f.name : '') : 'not_found';
+      return stableBack(c, r === 'ok' ? 'horse_named' : r === 'not_found' ? 'not_found' : `horse_${r}`);
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/keiba/stable/:id/retire',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const ok = Number.isSafeInteger(id) && (await retireOwnHorse(db, me.session.userId, id, d.now()));
+      return stableBack(c, ok ? 'horse_retired' : 'not_found');
+    }, { post: true }),
   );
 
   app.post(

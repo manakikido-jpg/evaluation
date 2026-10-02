@@ -7,6 +7,13 @@ import {
   isPairType,
   KB_APT,
   KB_COATS,
+  KB_CLASSES,
+  KB_SEXES,
+  classOf,
+  isGraded,
+  KB_LOOK,
+  KB_PRIZE_RATE,
+  prizesOf,
   KB_BET_LABEL,
   KB_BET_TYPES,
   KB_DISTANCES,
@@ -22,8 +29,9 @@ import {
   type KbBetType,
   type KbHorse,
 } from '../../services/casino/keiba.js';
-import { KB_RESULT_SECONDS, KB_WINDOWS, type KbState, type KbTicket } from '../../services/casino/tables/keiba.js';
-import { type CasinoMe, type Coin } from './casino.js';
+import { KB_PRERACE_MS, KB_RESULT_SECONDS, KB_WINDOWS, type KbState, type KbTicket } from '../../services/casino/tables/keiba.js';
+import { CasinoLayout, Msg, type CasinoMe, type Coin } from './casino.js';
+import type { KeibaHorseRow } from '../../db/schema.js';
 
 /**
  * 🏇 みんなでダービーの画面。コースの上を走る馬は casino.js が動かす（data-kb の動きを、みんな同じ時刻に）
@@ -59,6 +67,15 @@ export function KbCreateFields() {
         <input type="text" name="title" maxlength={20} placeholder="例: 咲楽ノ宮ダービー" />
       </label>
       <label>
+        クラス
+        <select name="cls">
+          <option value="">おまかせ（出られる馬の多いクラス。ときどき重賞）</option>
+          {KB_CLASSES.map((c, i) => (
+            <option value={String(i)}>{c}</option>
+          ))}
+        </select>
+      </label>
+      <label>
         受付の時間
         <select name="window">
           {KB_WINDOWS.map((m) => (
@@ -84,7 +101,7 @@ export function KbCreateFields() {
 /** ロビーの一覧の 1 行 */
 export function kbSummary(s: KbState): string {
   const phase = s.phase === 'betting' ? '受付中' : s.phase === 'racing' ? '🏇 走っています' : '結果';
-  return `第 ${s.race.n} レース ${s.race.name}（${KB_SURFACES[s.race.surface]} ${fmt(s.race.dist)}m）・${phase}・受付 ${s.window} 分・${s.seats.length} 人`;
+  return `第 ${s.race.n} レース ${s.race.name}（${KB_CLASSES[s.race.cls] ?? ''}・${KB_SURFACES[s.race.surface]} ${fmt(s.race.dist)}m）・${phase}・受付 ${s.window} 分・${s.seats.length} 人`;
 }
 
 /** テレビ中継の映像（casino.js が canvas に描く。みんな同じ時刻に同じ動き） */
@@ -96,12 +113,14 @@ function Tv(p: { s: KbState; mine: number[]; reveal?: { net: number; paid: numbe
     dist: s.race.dist,
     surface: s.race.surface,
     weather: s.race.weather,
-    horses: s.horses.map((h) => ({ no: h.no, coat: h.coat, silk: h.silk })),
+    cls: s.race.cls,
+    prerace: KB_PRERACE_MS,
+    horses: s.horses.map((h) => ({ no: h.no, coat: h.coat, silk: h.silk, name: h.name, weight: h.weight, wdiff: h.wdiff, look: KB_LOOK[h.cond + 2], owner: h.ownerName })),
   };
   const data =
     s.phase === 'betting' || !s.run
       ? { ...base, phase: 'betting' }
-      : { ...base, phase: s.phase, start: s.run.start, frameMs: s.run.frameMs, frames: s.run.frames, lanes: s.run.lanes, calls: s.run.calls, order: s.run.order };
+      : { ...base, phase: s.phase, start: s.run.start, frameMs: s.run.frameMs, frames: s.run.frames, lanes: s.run.lanes, calls: s.run.calls, order: s.run.order, resultAt: s.resultAt ?? null };
   return (
     <div class="kb-tv" data-kb={JSON.stringify(data)}>
       <canvas class="kb-canvas" role="img" aria-label="レースの映像"></canvas>
@@ -111,7 +130,9 @@ function Tv(p: { s: KbState; mine: number[]; reveal?: { net: number; paid: numbe
       <div class="kb-remain"></div>
       <ol class="kb-rank" aria-label="いまの順位"></ol>
       <div class="kb-mine" aria-live="polite"></div>
+      <div class="kb-paddock" aria-live="polite"></div>
       {s.phase === 'betting' && <div class="kb-hurry">⏰ 締め切り間近！</div>}
+      {s.phase === 'result' && s.run && s.final && <Board s={s} />}
       {p.reveal && (
         <div class={`kb-reveal ${p.reveal.paid > 0 ? 'hit' : 'miss'}`}>
           {p.reveal.paid > 0 ? (
@@ -133,6 +154,63 @@ function Tv(p: { s: KbState; mine: number[]; reveal?: { net: number; paid: numbe
       )}
       <div class="kb-call" aria-live="polite">
         {s.phase === 'betting' ? '各馬、返し馬を終えてゲートの後ろへ。馬券はお早めに！' : s.phase === 'result' ? s.run?.calls.at(-1)?.text : 'ゲートイン完了。まもなくスタートです…'}
+      </div>
+    </div>
+  );
+}
+
+/** 到達順位 → 確定 → 払戻金（100 銭あたり）の電光掲示板。出し方は casino.js（時間で順に） */
+function Board(p: { s: KbState }) {
+  const { s } = p;
+  const run = s.run!;
+  const f = s.final!;
+  const yen = (o10: number) => fmt(o10 * 10);
+  return (
+    <div class="kb-board">
+      <div class="kb-board-order">
+        <div class="kb-board-title">
+          到達順位 <span class="kb-lamp">確定</span>
+        </div>
+        <ol>
+          {run.order.slice(0, 5).map((no, i) => (
+            <li>
+              <span class="kb-board-pos">{i + 1}</span>
+              <span class={`kb-no kb-g${no} small`}>{no}</span>
+              <span class="kb-board-margin">{i === 0 ? run.times[0] : run.margins[i]}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div class="kb-board-pay">
+        <div class="kb-board-title">払戻金（100 銭につき）</div>
+        <table>
+          <tbody>
+            <tr>
+              <th>単勝</th>
+              <td>{f.win[0]}</td>
+              <td>{yen(f.win[1])}</td>
+            </tr>
+            {f.place.map(([no, o], i) => (
+              <tr>
+                <th>{i === 0 ? '複勝' : ''}</th>
+                <td>{no}</td>
+                <td>{yen(o)}</td>
+              </tr>
+            ))}
+            <tr>
+              <th>馬連</th>
+              <td>{f.quinella[0]}</td>
+              <td>{yen(f.quinella[1])}</td>
+            </tr>
+            {f.wide.map(([k, o], i) => (
+              <tr>
+                <th>{i === 0 ? 'ワイド' : ''}</th>
+                <td>{k}</td>
+                <td>{yen(o)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -183,7 +261,13 @@ function RaceCard(p: { s: KbState; clickable: boolean }) {
                     {h.name}
                   </b>
                   <small>
-                    {KB_COATS[h.coat]}・{KB_STYLES[h.style]}・{KB_APT[h.apt]}・{h.surf === 2 ? '芝もダートも' : `${KB_SURFACES[h.surf]}が得意`}・調子 <span title={COND_NOTE[h.cond + 2]}>{COND[h.cond + 2]}</span>
+                    {KB_SEXES[h.sex]}
+                    {h.age}・{KB_COATS[h.coat]}・{KB_STYLES[h.style]}・{KB_APT[h.apt]}・{h.surf === 2 ? '芝もダートも' : `${KB_SURFACES[h.surf]}が得意`}・調子{' '}
+                    <span title={COND_NOTE[h.cond + 2]}>{COND[h.cond + 2]}</span>
+                  </small>
+                  <small>
+                    馬体重 {h.weight}kg{h.wdiff ? `（${h.wdiff > 0 ? '+' : ''}${h.wdiff}）` : ''}・{KB_CLASSES[h.cls]}・賞金 {fmt(h.prize)}
+                    {h.ownerName ? <span class="kb-owner">・馬主 {h.ownerName}</span> : ''}
                   </small>
                   <small>
                     {h.starts ? (
@@ -472,9 +556,17 @@ export function KeibaView(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino:
       <section class="kb-stage" data-kb-net={s.phase === 'result' && mine.length ? String(net) : undefined}>
         <div class="kb-head">
           <div>
-            <p class="kb-kicker">第 {s.race.n} レース</p>
-            <h2 class="kb-title">{s.race.name}</h2>
+            <p class="kb-kicker">
+              第 {s.race.n} レース
+              <span class={`kb-cls${isGraded(s.race.cls) ? ` g${s.race.cls - 5}` : ''}`}>{KB_CLASSES[s.race.cls] ?? ''}</span>
+            </p>
+            <h2 class={`kb-title${s.race.cls === 8 ? ' g1' : ''}`}>{s.race.name}</h2>
             <p class="kb-cond">{raceLine(s)}</p>
+            <p class="kb-prize">
+              🏆 1 着賞金 {me.coin.emoji}
+              {fmt((s.prizes ?? prizesOf(s.race.cls, s.real))[0] ?? 0)}
+              <small>（メンバーが賭けた合計の {KB_PRIZE_RATE[s.race.cls]}%。馬主の馬が 1〜5 着なら馬主に）</small>
+            </p>
           </div>
           <div class="c-phase">
             {phaseText}
@@ -535,3 +627,134 @@ export function KeibaView(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino:
 
 /** 馬連・ワイドの組の数（テスト用） */
 export const KB_PAIR_COUNT = allPairs().length;
+
+// ───────── 🐴 馬主の部屋 ─────────
+
+const classLabel = (h: { starts: number; wins: number }) => KB_CLASSES[classOf(h)]!;
+
+/** みんなでダービーの入口に出す: 馬主の部屋への案内 */
+export function KbLobbyExtra(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: number }) {
+  const active = p.horses.filter((h) => !h.retiredAt);
+  return (
+    <section class="c-panel kb-owner-cta">
+      <h2>🐴 馬主になる</h2>
+      <p class="c-muted">
+        {p.price > 0
+          ? `${p.me.coin.emoji}${fmt(p.price)} ${p.me.coin.name}で馬を買って、名前をつけて走らせられます。1〜5 着に入ると賞金がもらえます。`
+          : 'いまは馬を買えません（運営が止めています）。'}
+      </p>
+      {active.length > 0 && (
+        <ul class="kb-mini-stable">
+          {active.map((h) => (
+            <li>
+              <b>{h.name}</b>
+              <span class="c-muted">
+                {classLabel(h)}・{h.starts} 戦 {h.wins} 勝・賞金 {p.me.coin.emoji}
+                {fmt(h.prize)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <a class="c-btn c-btn-gold" href="/casino/keiba/stable">
+        🐴 馬主の部屋へ
+      </a>
+    </section>
+  );
+}
+
+export function KbStablePage(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: number; max: number; msg?: string }) {
+  const csrf = p.me.session.csrfToken;
+  const active = p.horses.filter((h) => !h.retiredAt);
+  const coin = p.me.coin;
+  return (
+    <CasinoLayout title="馬主の部屋" me={p.me}>
+      <p class="c-back">
+        <a href="/casino/tables/keiba">← みんなでダービーへ</a>
+      </p>
+      <h1 class="c-h1">🐴 馬主の部屋</h1>
+      {p.msg && <Msg msg={p.msg} />}
+      <section class="c-panel">
+        <h2>🆕 馬を買う</h2>
+        {p.price <= 0 || p.max <= 0 ? (
+          <p class="c-muted">いまは馬を買えません。</p>
+        ) : active.length >= p.max ? (
+          <p class="c-muted">持てるのは {p.max} 頭までです（引退させると、また買えます）。</p>
+        ) : (
+          <form method="post" action="/casino/keiba/stable/buy" class="c-bet-custom">
+            <input type="hidden" name="_csrf" value={csrf} />
+            <label>
+              馬の名前（1〜18 文字。ほかの馬と同じ名前はつけられません）
+              <input type="text" name="name" maxlength={18} required placeholder="例: サクラノミヤビ" />
+            </label>
+            <button type="submit" class="c-btn c-btn-gold c-confirm" data-confirm={`${fmt(p.price)} ${coin.name}で馬を買いますか？（戻せません）`}>
+              {coin.emoji}
+              {fmt(p.price)} で買う
+            </button>
+          </form>
+        )}
+        <ul class="c-muted kb-owner-rules">
+          <li>買った馬はまず「新馬」戦から。勝つと 未勝利 → 1 勝クラス → 2 勝 → 3 勝 → オープン と上がり、オープンの馬は重賞（G3・G2・G1）にも出ます。</li>
+          <li>強さ（速さ・スタミナ・脚質・得意な距離と馬場）は生まれつき。走ってみるまで分かりません。</li>
+          <li>レースの 8 頭は名簿から選ばれます。あなたがみんなでダービーの卓に座っていると、あなたの馬が優先して出走します。</li>
+          <li>1〜5 着に入ると、そのレースでメンバーが賭けた合計の数 %（クラスが上ほど多い）が賞金として入ります。</li>
+          <li>名前はデビュー前なら変えられます。持てるのは {p.max} 頭まで。引退させると戻せません（払った銭も戻りません）。</li>
+        </ul>
+      </section>
+      <section class="c-panel">
+        <h2>🏠 あなたの馬（{active.length} 頭）</h2>
+        {p.horses.length === 0 ? (
+          <p class="c-muted">まだいません。</p>
+        ) : (
+          <div class="kb-stable">
+            {p.horses.map((h) => (
+              <div class={`kb-stable-card${h.retiredAt ? ' retired' : ''}`}>
+                <div class="kb-stable-head">
+                  <b>{h.name}</b>
+                  <span class="c-tag">{h.retiredAt ? '引退' : classLabel(h)}</span>
+                </div>
+                <p class="c-muted">
+                  {KB_SEXES[h.sex]}
+                  {h.age}・{KB_COATS[h.coat]}・{h.starts ? `${KB_STYLES[h.style]}・${KB_APT[h.apt]}` : '脚質・得意はデビューしてから'}
+                </p>
+                <p>
+                  {h.starts} 戦 {h.wins} 勝 [{h.wins}-{h.seconds}-{h.thirds}-{Math.max(0, h.starts - h.wins - h.seconds - h.thirds)}]・獲得賞金 {coin.emoji}
+                  {fmt(h.prize)}
+                </p>
+                {h.recent.length > 0 && (
+                  <p class="kb-stable-recent">
+                    近走:
+                    {h.recent.map((r) => (
+                      <span class={`kb-run${r.pos <= 3 ? ` p${r.pos}` : ''}`} title={`${r.race}（${KB_SURFACES[r.surface]} ${r.dist}m）`}>
+                        {r.pos}
+                      </span>
+                    ))}
+                  </p>
+                )}
+                {!h.retiredAt && (
+                  <div class="c-actions">
+                    {h.starts === 0 && (
+                      <form method="post" action={`/casino/keiba/stable/${h.id}/name`} class="c-bet-custom">
+                        <input type="hidden" name="_csrf" value={csrf} />
+                        <input type="text" name="name" value={h.name} maxlength={18} required aria-label="馬の名前" />
+                        <button type="submit" class="c-btn c-btn-small">
+                          名前を変える
+                        </button>
+                      </form>
+                    )}
+                    <form method="post" action={`/casino/keiba/stable/${h.id}/retire`}>
+                      <input type="hidden" name="_csrf" value={csrf} />
+                      <button type="submit" class="c-btn c-btn-small c-btn-ghost c-confirm" data-confirm={`${h.name} を引退させますか？（戻せません）`}>
+                        引退させる
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </CasinoLayout>
+  );
+}

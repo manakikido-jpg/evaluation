@@ -198,6 +198,20 @@ export function CasinoAdminPage(p: {
               <p class="note">賭けなしにしても、もう賭けて始まっている卓はそのまま最後まで進みます。</p>
             </fieldset>
             <fieldset class="perms">
+              <legend>🏇 みんなでダービーの馬主</legend>
+              <label class="field">
+                <span>馬 1 頭の値段（0 で買えない。払った銭は胴元へ）</span>
+                <input type="number" name="keibaHorsePrice" min={0} max={10000000} value={String(c.keibaHorsePrice)} required />
+              </label>
+              <label class="field">
+                <span>1 人が持てる頭数（引退した馬は数えない）</span>
+                <input type="number" name="keibaMaxOwned" min={0} max={20} value={String(c.keibaMaxOwned)} required />
+              </label>
+              <p class="note">
+                馬主の馬が 1〜5 着に入ると、そのレースでメンバーが賭けた合計の数 %（新馬・未勝利 4%・1〜3 勝クラス 5%・オープン 6%・G3 7%・G2 8%・G1 9%。胴元の取り分 10% の中から）を 50・20・13・10・7 の割合で馬主に払います。
+              </p>
+            </fieldset>
+            <fieldset class="perms">
               <legend>遊べるゲーム</legend>
               {CASINO_GAMES.map((g) => (
                 <label class="check">

@@ -72,7 +72,34 @@ export type KbStable = {
   thirds: number;
   /** 最近のレース（新しい順・5 走まで） */
   recent: { pos: number; race: string; dist: number; surface: number }[];
+  /** 馬主（メンバーの id と名前。BOT の馬は null） */
+  ownerId: string | null;
+  ownerName?: string | null;
+  /** 獲得賞金（銭） */
+  prize: number;
+  /** 性 0 牡 / 1 牝 / 2 セン・年齢・ふだんの馬体重 */
+  sex: number;
+  age: number;
+  weight: number;
 };
+
+// ───────── クラスと重賞 ─────────
+
+/** クラス（0 新馬 … 5 オープン）と重賞（6 G3・7 G2・8 G1） */
+export const KB_CLASSES = ['新馬', '未勝利', '1勝クラス', '2勝クラス', '3勝クラス', 'オープン', 'G3', 'G2', 'G1'] as const;
+export const KB_SEXES = ['牡', '牝', 'セ'] as const;
+/** その馬が出られるクラス（まだ走っていなければ新馬、勝っていなければ未勝利、勝った数で 1〜3 勝、4 勝からオープン） */
+export const classOf = (h: { starts: number; wins: number }) => (h.starts === 0 ? 0 : h.wins === 0 ? 1 : Math.min(5, h.wins + 1));
+export const isGraded = (cls: number) => cls >= 6;
+/** 馬主に払う賞金: そのレースでメンバーが賭けた合計の何 %（胴元の取り分 10% の中から。重賞ほど多い） */
+export const KB_PRIZE_RATE = [4, 4, 5, 5, 5, 6, 7, 8, 9] as const;
+/** 1〜5 着の分け方（%） */
+export const KB_PRIZE_SPLIT = [50, 20, 13, 10, 7] as const;
+/** 賞金（1〜5 着の銭）。real はメンバーが賭けた合計 */
+export const prizesOf = (cls: number, real: number) => KB_PRIZE_SPLIT.map((p) => Math.floor((real * (KB_PRIZE_RATE[cls] ?? 5) * p) / 10000));
+
+/** パドックの気配（調子から） */
+export const KB_LOOK = ['少し元気がない', 'まずまず', '落ち着いて歩けている', '毛ヅヤがよく、気合十分', '踏み込みが力強く、絶好の仕上がり'] as const;
 
 export type KbHorse = {
   /** 馬番（1〜8。枠も同じ） */
@@ -102,12 +129,23 @@ export type KbHorse = {
   recent: KbStable['recent'];
   /** 前走の着順（はじめてなら 0） */
   last: number;
+  /** 馬主・獲得賞金・クラス・性・年齢 */
+  ownerId: string | null;
+  ownerName: string | null;
+  prize: number;
+  cls: number;
+  sex: number;
+  age: number;
+  /** 今日の馬体重と、前走からの増減 */
+  weight: number;
+  wdiff: number;
   /** 勝つ見込み・3 着以内の見込み（BOT のお客さんの賭けと予想の印に使う） */
   p: number;
   p3: number;
 };
 
-export type KbRaceInfo = { n: number; name: string; dist: number; surface: number; going: number; weather: number };
+/** cls: クラス（KB_CLASSES の番号） */
+export type KbRaceInfo = { n: number; name: string; dist: number; surface: number; going: number; weather: number; cls: number };
 
 /** 0〜1 の乱数（同じ種なら同じ並び） */
 export function seeded(seed: number): () => number {
@@ -147,20 +185,63 @@ export function newStable(r: () => number, taken: ReadonlySet<string> = new Set(
     seconds: 0,
     thirds: 0,
     recent: [],
+    ownerId: null,
+    prize: 0,
+    sex: r() < 0.5 ? 0 : r() < 0.8 ? 1 : 2,
+    age: 2 + Math.floor(r() * 3),
+    weight: 430 + Math.floor(r() * 90),
   };
+}
+
+/**
+ * どのクラスのレースにするか: 決めていなければ、出られる馬の多いクラスから（オープンの馬が多ければ、ときどき重賞）
+ */
+function chooseClass(r: () => number, roster: readonly KbStable[], want?: number): number {
+  if (want !== undefined && want >= 0 && want < KB_CLASSES.length) return want;
+  if (roster.length < KB_HORSES) return 0;
+  const count = [0, 0, 0, 0, 0, 0];
+  for (const h of roster) {
+    const c = classOf(h);
+    count[c]!++;
+    // 新馬は未勝利にも出られる
+    if (c === 0) count[1]!++;
+  }
+  if (count[5]! >= 5 && r() < 0.3) return 6 + Math.floor(r() * 3);
+  const options = count.map((n, c) => ({ c, w: n >= 4 ? n : 0 })).filter((x) => x.w > 0);
+  if (!options.length) return 1;
+  let x = r() * options.reduce((a, b) => a + b.w, 0);
+  for (const o of options) if ((x -= o.w) <= 0) return o.c;
+  return options[0]!.c;
+}
+
+/** そのクラスに出られる馬か（未勝利は新馬も、重賞はオープンの馬） */
+const fits = (h: KbStable, cls: number) => (isGraded(cls) ? classOf(h) === 5 : cls === 1 ? classOf(h) <= 1 : classOf(h) === cls);
+/** 出られる馬が足りないとき、どのくらい離れたクラスから足すか */
+const gap = (h: KbStable, cls: number) => Math.abs(classOf(h) - Math.min(5, cls));
+
+/** レース名（下のクラスは「1勝クラス」など。オープンと重賞は名前つき） */
+function raceName(r: () => number, cls: number, title?: string): string {
+  const name = title || (cls >= 5 ? pick(r, RACE_NAMES) : KB_CLASSES[cls]!);
+  return isGraded(cls) ? `${name}（${KB_CLASSES[cls]}）` : name;
 }
 
 /**
  * レースの条件と 8 頭を決める。名簿（roster）があれば、そこから 8 頭を選ぶ（なければその場で作る）。
  * 見込み（p・p3）は estimate で入れる
  */
-export function makeRace(rng: Rng, n: number, opts: { name?: string; dist?: number } = {}, roster: readonly KbStable[] = []): { race: KbRaceInfo; horses: KbHorse[] } {
+export function makeRace(
+  rng: Rng,
+  n: number,
+  opts: { name?: string; dist?: number; cls?: number; priority?: ReadonlySet<string> } = {},
+  roster: readonly KbStable[] = [],
+): { race: KbRaceInfo; horses: KbHorse[] } {
   const r = seeded(rng(2 ** 31));
   const dist = opts.dist && (KB_DISTANCES as readonly number[]).includes(opts.dist) ? opts.dist : pick(r, KB_DISTANCES);
   const weather = r() < 0.6 ? 0 : r() < 0.6 ? 1 : 2;
   const going = weather === 2 ? (r() < 0.5 ? 1 : 2) : weather === 1 ? (r() < 0.3 ? 1 : 0) : 0;
-  const race: KbRaceInfo = { n, name: opts.name || pick(r, RACE_NAMES), dist, surface: r() < 0.65 ? 0 : 1, going, weather };
-  let pool: (Omit<KbStable, 'id'> & { id: number })[] = [...roster];
+  const cls = chooseClass(r, roster, opts.cls);
+  const race: KbRaceInfo = { n, name: raceName(r, cls, opts.name), dist, surface: r() < 0.65 ? 0 : 1, going, weather, cls };
+  let pool: KbStable[] = [...roster];
   if (pool.length < KB_HORSES) {
     const taken = new Set(pool.map((h) => h.name));
     while (pool.length < KB_HORSES) {
@@ -169,9 +250,16 @@ export function makeRace(rng: Rng, n: number, opts: { name?: string; dist?: numb
       pool.push({ ...h, id: 0 });
     }
   }
-  const chosen: typeof pool = [];
-  for (let i = 0; i < KB_HORSES; i++) chosen.push(pool.splice(Math.floor(r() * pool.length), 1)[0]!);
-  pool = chosen;
+  // 出られる馬から。卓に座っている馬主の馬を先に。足りなければ近いクラスから
+  const order = pool
+    .map((h) => ({ h, k: (fits(h, cls) ? 0 : 10 + gap(h, cls)) - (h.ownerId && opts.priority?.has(h.ownerId) && (fits(h, cls) || gap(h, cls) <= 1) ? 5 : 0) + r() }))
+    .sort((a, b) => a.k - b.k);
+  pool = order.slice(0, KB_HORSES).map((x) => x.h);
+  // 馬番はくじ
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
   const horses: KbHorse[] = pool.map((h, i) => ({
     no: i + 1,
     id: h.id,
@@ -190,6 +278,13 @@ export function makeRace(rng: Rng, n: number, opts: { name?: string; dist?: numb
     thirds: h.thirds,
     recent: h.recent.slice(0, 5),
     last: h.recent[0]?.pos ?? 0,
+    ownerId: h.ownerId,
+    ownerName: h.ownerName ?? null,
+    prize: h.prize,
+    cls: classOf(h),
+    sex: h.sex,
+    age: h.age,
+    ...((d) => ({ weight: h.weight + d, wdiff: h.starts ? d : 0 }))(Math.round((r() - 0.5) * 16)),
     p: 0,
     p3: 0,
   }));

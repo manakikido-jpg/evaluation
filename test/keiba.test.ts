@@ -18,8 +18,12 @@ import {
   simulate,
   startOf,
   ticketOdds,
+  classOf,
+  prizesOf,
+  newStable,
+  type KbStable,
 } from '../src/services/casino/keiba.js';
-import { addHorse, listHorses, loadRoster, renameHorse, setRetired, KB_ROSTER_MIN } from '../src/services/casino/keibaStable.js';
+import { addHorse, buyHorse, listHorses, loadRoster, myHorses, nameOwnHorse, renameHorse, retireOwnHorse, setRetired, KB_ROSTER_MIN } from '../src/services/casino/keibaStable.js';
 import { boxKeys, keiba, ticketKey, type KbState } from '../src/services/casino/tables/keiba.js';
 import { actTable, createTable, joinTable, leaveTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
 import type { Ctx } from '../src/services/casino/tables/types.js';
@@ -113,6 +117,45 @@ describe('🏇 レースとオッズ', () => {
   });
 });
 
+describe('🏇 クラスと重賞・賞金', () => {
+  const horse = (id: number, starts: number, wins: number, ownerId: string | null = null): KbStable => ({ ...newStable(seededFloat(id)), id, name: `H${id}`, starts, wins, ownerId });
+
+  it('クラス: 新馬 → 未勝利 → 1〜3 勝 → オープン。そのクラスの馬から選ぶ。座っている馬主の馬を先に', () => {
+    expect([classOf({ starts: 0, wins: 0 }), classOf({ starts: 3, wins: 0 }), classOf({ starts: 3, wins: 1 }), classOf({ starts: 9, wins: 3 }), classOf({ starts: 20, wins: 7 })]).toEqual([0, 1, 2, 4, 5]);
+    const roster = [
+      ...Array.from({ length: 10 }, (_, i) => horse(i + 1, 5, 0)),
+      ...Array.from({ length: 10 }, (_, i) => horse(i + 11, 12, 5)),
+      horse(99, 4, 5, A.id),
+    ];
+    const g1 = makeRace(rngOf(4), 1, { cls: 8, name: '咲楽ノ宮ダービー' }, roster);
+    expect(g1.race.name).toBe('咲楽ノ宮ダービー（G1）');
+    expect(g1.horses.every((h) => h.cls === 5)).toBe(true);
+    const maiden = makeRace(rngOf(4), 1, { cls: 1 }, roster);
+    expect(maiden.race.name).toBe('未勝利');
+    expect(maiden.horses.every((h) => h.wins === 0)).toBe(true);
+    // 馬主が座っていれば、その馬が出る
+    for (let seed = 1; seed < 6; seed++) expect(makeRace(rngOf(seed), 1, { cls: 6, priority: new Set([A.id]) }, roster).horses.some((h) => h.id === 99)).toBe(true);
+  });
+
+  it('賞金: メンバーが賭けた合計の数 %（重賞ほど多い）を 1〜5 着で 50・20・13・10・7', () => {
+    expect(prizesOf(0, 10000)).toEqual([200, 80, 52, 40, 28]);
+    expect(prizesOf(8, 10000)).toEqual([450, 180, 117, 90, 63]);
+    expect(prizesOf(5, 0)).toEqual([0, 0, 0, 0, 0]);
+    // ゴールで馬主に払う
+    const t0 = new Date('2026-10-02T12:00:00Z').getTime();
+    const roster = Array.from({ length: 8 }, (_, i) => horse(i + 1, 0, 0, i === 0 ? B.id : null));
+    let s = (keiba.create(A, { cls: '0' }, { ...ctx(t0), roster }) as { state: KbState }).state;
+    s = (keiba.act(s, A.id, { action: 'bets', type: 'win', h: ['1', '2', '3', '4', '5', '6', '7', '8'], bet: '1000' }, ctx(t0)) as { state: KbState }).state;
+    s = (keiba.act(s, A.id, { action: 'start' }, ctx(t0, 5)) as { state: KbState }).state;
+    const fin = keiba.tick(s, ctx(s.deadline));
+    if (!fin || !fin.ok) throw new Error('no finish');
+    const pos = fin.state.run!.order.indexOf(fin.state.horses.find((h) => h.ownerId === B.id)!.no);
+    const prize = pos < 5 ? prizesOf(0, 8000)[pos]! : 0;
+    expect(fin.fx?.credits?.filter((c) => c.reason === 'keiba_prize')).toEqual(prize ? [{ memberId: B.id, amount: prize, reason: 'keiba_prize' }] : []);
+    expect(fin.fx?.keiba?.find((r) => r.horseId === 1)?.prize).toBe(prize);
+  });
+});
+
 describe('🏇 卓（受付 → 発走 → 結果 → 次のレース）', () => {
   const t0 = new Date('2026-10-02T12:00:00Z').getTime();
 
@@ -198,6 +241,27 @@ describe('🏇 名簿と卓のサービス', () => {
     // 同じ名前の馬が走っているあいだは戻せない
     expect(await setRetired(db, h!.id, false)).toBe(false);
     expect((await listHorses(db)).at(-1)!.id).toBe(h!.id);
+  });
+
+  it('🐴 馬主: 買う（銭は胴元へ）・デビュー前は名前を変えられる・持てる頭数・引退', async () => {
+    expect(await buyHorse(db, A.id, 'サクラノヒメ', 3000, 2)).toMatchObject({ status: 'ok', horse: { name: 'サクラノヒメ', ownerId: A.id, starts: 0 } });
+    expect((await walletOf(db, A.id)).balance).toBe(2000);
+    expect((await buyHorse(db, B.id, 'サクラノヒメ', 3000, 2)).status).toBe('taken');
+    expect((await buyHorse(db, A.id, '', 3000, 2)).status).toBe('invalid');
+    expect((await buyHorse(db, A.id, 'ハナノヒメ', 3000, 2)).status).toBe('poor');
+    expect((await buyHorse(db, A.id, 'ハナノヒメ', 3000, 0)).status).toBe('off');
+    const [mine] = await myHorses(db, A.id);
+    expect(await nameOwnHorse(db, A.id, mine!.id, 'ハナノヒメ')).toBe('ok');
+    expect(await nameOwnHorse(db, B.id, mine!.id, 'ちがう人')).toBe('not_found');
+    await db.update(keibaHorses).set({ starts: 1 });
+    expect(await nameOwnHorse(db, A.id, mine!.id, 'もういちど')).toBe('debuted');
+    // 持てるのは 1 頭まで → 引退させるとまた買える
+    await addCoins(db, A.id, 3000, 'admin_grant');
+    expect((await buyHorse(db, A.id, 'ツキノヒメ', 3000, 1)).status).toBe('too_many');
+    expect(await retireOwnHorse(db, A.id, mine!.id)).toBe(true);
+    expect((await buyHorse(db, A.id, 'ツキノヒメ', 3000, 1)).status).toBe('ok');
+    // 名簿に馬主の名前が入る
+    expect((await loadRoster(db)).find((h) => h.name === 'ツキノヒメ')?.ownerId).toBe(A.id);
   });
 
   it('レースを開くと名簿から 8 頭。ゴールで払い、馬の成績がたまる', async () => {
