@@ -16,11 +16,15 @@ const readText = (p: string) => readFileSync(p, 'utf8');
  */
 const SLOT_DIR = path.join(here, 'public/slots');
 const IMAGE_TYPES: Record<string, string> = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', svg: 'image/svg+xml' };
+/** 🀄 麻雀の牌の絵（public/mahjong/。名前は m1〜m9・p1〜p9・s1〜s9・ton・nan・sha・pei・haku・hatsu・chun・m5r・p5r・s5r（赤）・back） */
+const MJ_DIR = path.join(here, 'public/mahjong');
+const mjFiles = existsSync(MJ_DIR) ? readdirSync(MJ_DIR).filter((f) => /^[a-z0-9-]+\.(webp|png|jpg|svg)$/.test(f)) : [];
 const slotFiles = existsSync(SLOT_DIR) ? readdirSync(SLOT_DIR).filter((f) => /^[a-z0-9-]+\.(webp|png|jpg|svg)$/.test(f)) : [];
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     ...Object.fromEntries(slotFiles.map((f) => [`slots-${f}`, { body: new Uint8Array(readFileSync(path.join(SLOT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
+    ...Object.fromEntries(mjFiles.map((f) => [`mahjong-${f}`, { body: new Uint8Array(readFileSync(path.join(MJ_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
@@ -36,9 +40,13 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
 export const assetUrl = (name: keyof typeof STATIC & string) => `/static/${name}?v=${STATIC[name]?.version ?? ''}`;
 
 /** スロットの絵の URL（その名前の画像がなければ undefined） */
-export function slotArt(name: string): string | undefined {
+export const slotArt = (name: string) => artOf('slots', name);
+/** 麻雀の牌の絵の URL（なければ undefined。そのときは字で描く） */
+export const mahjongArt = (name: string) => artOf('mahjong', name);
+
+function artOf(dir: string, name: string): string | undefined {
   for (const ext of ['webp', 'png', 'jpg', 'svg']) {
-    const key = `slots-${name}.${ext}`;
+    const key = `${dir}-${name}.${ext}`;
     if (Object.hasOwn(STATIC, key)) return `/static/${key}?v=${STATIC[key]!.version}`;
   }
   return undefined;

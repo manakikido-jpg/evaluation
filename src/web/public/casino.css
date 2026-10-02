@@ -1309,7 +1309,9 @@ body.jansou .c-logo b { color: var(--c-sakura); }
 .mj-k31 b { display: block; width: 52%; height: 62%; border: max(1.5px, calc(var(--tw) * 0.07)) solid #3a74c4; border-radius: 2px; font-size: 0; }
 .mj-t.red b, .mj-t.red i { color: #d4142b; }
 .mj-t.red::after { content: ''; position: absolute; top: calc(var(--tw) * 0.1); right: calc(var(--tw) * 0.1); width: calc(var(--tw) * 0.16); height: calc(var(--tw) * 0.16); border-radius: 50%; background: #d4142b; }
-.mj-t.back { background: linear-gradient(180deg, #2e9c6f, #1d6b4f); box-shadow: inset 0 calc(var(--tw) * -0.1) 0 #155239, 0 calc(var(--tw) * 0.08) 3px rgba(0, 0, 0, 0.35); }
+.mj-t.img { background: transparent; box-shadow: 0 calc(var(--tw) * 0.06) 3px rgba(0, 0, 0, 0.35); padding: 0; overflow: hidden; }
+.mj-t.img img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+.mj-t.back:not(.img) { background: linear-gradient(180deg, #2e9c6f, #1d6b4f); box-shadow: inset 0 calc(var(--tw) * -0.1) 0 #155239, 0 calc(var(--tw) * 0.08) 3px rgba(0, 0, 0, 0.35); }
 .mj-t.side { transform: rotate(-90deg); margin-left: calc(var(--tw) * 0.2); margin-right: calc(var(--tw) * 0.2); }
 .mj-t.taken { opacity: 0.32; }
 .mj-t.last { outline: 2px solid var(--c-gold); outline-offset: 1px; }

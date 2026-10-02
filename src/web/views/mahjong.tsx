@@ -23,16 +23,31 @@ import {
   type MjState,
 } from '../../services/casino/tables/mahjong.js';
 import { PACES, paceMult, type Pace } from '../../services/casino/tables/types.js';
+import { mahjongArt } from '../assets.js';
 import type { CasinoMe, Coin } from './casino.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const SUIT_CLASS = ['m', 'p', 's', 'z'];
 
+const HONOR_ART = ['ton', 'nan', 'sha', 'pei', 'haku', 'hatsu', 'chun'];
+/** 牌の絵の名前（m1・p5r・chun など） */
+export const artName = (t: number) => {
+  const k = kindOf(t);
+  if (k >= 27) return HONOR_ART[k - 27]!;
+  return `${'mps'[suitOf(k)]}${(k % 9) + 1}${isRedTile(t) ? 'r' : ''}`;
+};
+/** 絵があればその URL（赤 5 の絵がなければ、ふつうの 5 の絵に赤の印） */
+const artOf = (t: number) => mahjongArt(artName(t)) ?? (isRedTile(t) ? mahjongArt(artName(t).slice(0, -1)) : undefined);
+
 const tileClass = (t: number, extra = '') => {
   const k = kindOf(t);
-  return `mj-t mj-${SUIT_CLASS[suitOf(k)]} mj-k${k}${isRedTile(t) ? ' red' : ''}${extra ? ` ${extra}` : ''}`;
+  const art = artOf(t);
+  const redArt = art && isRedTile(t) && !mahjongArt(artName(t));
+  return `mj-t mj-${SUIT_CLASS[suitOf(k)]} mj-k${k}${isRedTile(t) && (!art || redArt) ? ' red' : ''}${art ? ' img' : ''}${extra ? ` ${extra}` : ''}`;
 };
 const Face = (p: { t: number }) => {
+  const art = artOf(p.t);
+  if (art) return <img src={art} alt="" draggable={false} />;
   const f = tileFace(kindOf(p.t));
   return (
     <>
@@ -50,7 +65,14 @@ export function Tile(p: { t: number; size?: 'big' | 'small' | 'tiny'; cls?: stri
     </span>
   );
 }
-const Back = (p: { size?: 'big' | 'small' | 'tiny' }) => <span class={`mj-t back ${p.size ?? 'small'}`} aria-hidden="true"></span>;
+const Back = (p: { size?: 'big' | 'small' | 'tiny' }) => {
+  const art = mahjongArt('back');
+  return (
+    <span class={`mj-t back ${p.size ?? 'small'}${art ? ' img' : ''}`} aria-hidden="true">
+      {art && <img src={art} alt="" draggable={false} />}
+    </span>
+  );
+};
 
 function Melds(p: { melds: Meld[]; me: number; size?: 'small' | 'tiny' }) {
   return (
