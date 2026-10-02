@@ -428,6 +428,13 @@
       "when": 1790926099255,
       "tag": "0060_mahjong_results",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790943230111,
+      "tag": "0061_gift_joined_by",
+      "breakpoints": true
     }
   ]
 }

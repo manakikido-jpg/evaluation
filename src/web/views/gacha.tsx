@@ -1,5 +1,6 @@
 import { GACHA_TIERS, TICKET_KINDS, type GachaConfig, type GachaTier, type TicketKind } from '../../config.js';
 import type { AdminSession, CustomTicket, GachaClaim, GachaDraw, GachaPrizeRow, GiftBatch, ShopItem } from '../../db/schema.js';
+import type { NarrowTarget } from '../../services/gifts.js';
 import { effectiveRates, inPeriod, PRIZE_KIND_LABEL, PRIZE_KINDS, prizeChances, prizeLabel, roundRate, TIER_LABEL, untilPity } from '../../services/gacha.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { fmtDateTime } from '../format.js';
@@ -45,6 +46,9 @@ export const GACHA_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   claim_done_already: { text: 'もう「渡した」になっています。', kind: 'warn' },
   gacha_reset: { text: '物御籤をリセットしました（銭を返し、出たものを取り上げました）。くわしくは「記録」に残っています。', kind: 'ok' },
   gacha_reset_confirm: { text: 'リセットするときは「リセット」と入れてください。', kind: 'warn' },
+  gift_narrowed: { text: '🎁 入った日を直して、余分に渡った人から取り消しました。', kind: 'ok' },
+  gift_narrow_none: { text: 'その日より後に入って受け取った人はいませんでした（もう取り消し済みかもしれません）。', kind: 'warn' },
+  gift_narrow_invalid: { text: '直す日を入れて、「取り消す」にチェックしてください。', kind: 'warn' },
 };
 
 export function GachaFlash(props: { code?: string }) {
@@ -53,6 +57,75 @@ export function GachaFlash(props: { code?: string }) {
 }
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
+/** 日本時間の日付（M月D日） */
+const fmtJstDate = (d: Date) => {
+  const j = new Date(d.getTime() + 9 * 3_600_000);
+  return `${j.getUTCMonth() + 1}月${j.getUTCDate()}日`;
+};
+
+/** 入った日を直す前の確認: 取り消す相手と、取り消すもの */
+function GiftNarrow(props: { narrow: { batch: GiftBatch; joinedBy: string; targets: NarrowTarget[] }; coinName: string; csrfToken: string }) {
+  const { batch: b, joinedBy, targets } = props.narrow;
+  const [y, m, d] = joinedBy.split('-').map(Number);
+  const kind = b.item === 'coins' || b.item.startsWith('custom:') || TICKET_KINDS.includes(b.item as TicketKind) ? 'count' : 'role';
+  return (
+    <section class="card anchor danger-zone" id="gacha-gift-narrow">
+      <h2>🎁 プレゼントの入った日を直す</h2>
+      <p>
+        {fmtDateTime(b.createdAt)} に贈った <strong>{b.label} × {fmt(b.count)}</strong>（{b.note}）
+      </p>
+      {!joinedBy ? (
+        <p class="empty">直す日を入れてください。</p>
+      ) : targets.length === 0 ? (
+        <p class="empty">
+          {y}年{m}月{d}日より後に入って受け取った人はいません（もう取り消し済みか、その日より後に入った人には渡っていません）。
+        </p>
+      ) : (
+        <>
+          <p>
+            本当は <strong>{m}月{d}日までに入った人</strong>だけ。それより後に入って受け取った <strong>{fmt(targets.length)} 人</strong>から取り消します。
+          </p>
+          <ul>
+            {kind === 'count' ? (
+              <li>
+                1 人 {fmt(b.count)} ずつ取り戻します（もう使っていたら、残っている分まで。{b.item === 'coins' ? `${props.coinName}の出入りに「運営が減らした」と残ります` : '券は持っている分まで'}）
+              </li>
+            ) : (
+              <li>ロールを外します（授与品は、前に持っていた品・期限に戻します）</li>
+            )}
+            <li>本人への DM やお知らせは出しません（チャンネルのお知らせの文は、Discord で直してください）</li>
+          </ul>
+          <details>
+            <summary>取り消す人（{fmt(targets.length)} 人）</summary>
+            <table class="compact">
+              <tbody>
+                {targets.map((t) => (
+                  <tr>
+                    <td>
+                      <a href={`/members/${t.memberId}`}>{t.name}</a>
+                    </td>
+                    <td class="note">{t.joinedAt ? `${fmtDateTime(t.joinedAt)} に入った` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+          <form method="post" action={`/gacha/gift/${b.id}/narrow`} class="fields">
+            <input type="hidden" name="_csrf" value={props.csrfToken} />
+            <input type="hidden" name="joinedBy" value={joinedBy} />
+            <label class="field check">
+              <input type="checkbox" name="confirm" value="yes" required />
+              <span>この {fmt(targets.length)} 人から取り消す</span>
+            </label>
+            <button type="submit" class="danger">
+              取り消す
+            </button>
+          </form>
+        </>
+      )}
+    </section>
+  );
+}
 const pct = (n: number, total: number) => (total > 0 ? `${Math.round((n / total) * 1000) / 10}%` : '—');
 
 /** 1 回分の中身（ロール名は分かれば） */
@@ -235,7 +308,17 @@ export function GachaPage(props: {
   /** リセットしたら返す・取り上げる量（宮司だけ） */
   reset?: { members: number; draws: number; refund: number; coins: number; tickets: number; roles: number };
   /** 全員へのプレゼント（宮司だけ） */
-  gift?: { nonce: string; targets: number; roles: { id: string; name: string }[]; channels: { id: string; name: string; category: string | null }[]; recent: GiftBatch[] };
+  gift?: {
+    nonce: string;
+    targets: number;
+    roles: { id: string; name: string }[];
+    channels: { id: string; name: string; category: string | null }[];
+    recent: GiftBatch[];
+    /** 入った日を直す前の確認（取り消す相手） */
+    narrow?: { batch: GiftBatch; joinedBy: string; targets: NarrowTarget[] };
+    /** 取り消したあと */
+    narrowed?: { members: number; taken: number; short: number };
+  };
 }) {
   const { session, gacha: g, stats } = props;
   const guji = session.level === 'guji';
@@ -879,7 +962,7 @@ export function GachaPage(props: {
             </label>
             <label class="field check">
               <input type="checkbox" name="confirm" value="yes" required />
-              <span>全員に贈る（取り消しはメンバーごとに「減らす」で。ロールは「ロール」のページから外せます）</span>
+              <span>全員に贈る（取り消しはメンバーごとに「減らす」で。入った日のまちがいは下の「入った日を直す…」で）</span>
             </label>
             <button type="submit" class="ok">
               🎁 贈る
@@ -888,6 +971,13 @@ export function GachaPage(props: {
           {props.gift.recent.length > 0 && (
             <>
               <h3>これまでのプレゼント</h3>
+              {props.gift.narrowed && (
+                <p class="flash ok">
+                  {fmt(props.gift.narrowed.members)} 人から取り消しました
+                  {props.gift.narrowed.taken > 0 ? `（取り戻した数 ${fmt(props.gift.narrowed.taken)}）` : ''}。
+                  {props.gift.narrowed.short > 0 ? ` ${fmt(props.gift.narrowed.short)} 人はもう使っていたので、残っていた分だけ取り戻しました。` : ''}
+                </p>
+              )}
               <table class="compact">
                 <tbody>
                   {props.gift.recent.map((b) => (
@@ -898,16 +988,27 @@ export function GachaPage(props: {
                       </td>
                       <td>
                         {fmt(b.recipients)} 人{b.roleId ? `（@${roleName(b.roleId)}）` : ''}
+                        {b.joinedBy ? <span class="note">（{fmtJstDate(b.joinedBy)} までに入った人）</span> : ''}
                       </td>
                       <td class="wrap note">{b.note}</td>
+                      <td>
+                        <form method="get" action="/gacha#gacha-gift-narrow" class="inline-actions">
+                          <input type="hidden" name="narrow" value={String(b.id)} />
+                          <input type="date" name="joinedBy" required aria-label="本当はこの日までに入った人だけ" />
+                          <button type="submit">入った日を直す…</button>
+                        </form>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <p class="note">入った日の絞り込みをまちがえたときは、「入った日を直す…」で正しい日を入れると、その日より後に入って受け取った人だけから取り消せます（先に相手を確かめてから）。</p>
             </>
           )}
         </section>
       )}
+
+      {guji && props.gift?.narrow && <GiftNarrow narrow={props.gift.narrow} coinName={props.coinName} csrfToken={session.csrfToken} />}
 
       {guji && props.reset && (
         <section class="card anchor danger-zone" id="gacha-reset">

@@ -1834,6 +1834,27 @@ describe('物御籤（管理画面）', () => {
       );
       expect((await ticketsOf(db, USER)).gacha_free).toBe(2);
       expect((await ticketsOf(db, LATE)).gacha_free).toBe(0);
+      // 日をまちがえた（10 月 29 日）: LATE にも渡る → 入った日を 9 月 29 日に直して取り消す
+      expect((await post(g, '/gacha/gift', { item: 'fuku', count: '3', note: '秋', confirm: 'yes', nonce: randomUUIDLike(35), joinedBy: '2026-10-29' })).headers.get('location')).toContain('gift_given');
+      expect((await ticketsOf(db, LATE)).fuku).toBe(3);
+      const { recentGifts } = await import('../src/services/gifts.js');
+      const [wrong] = await recentGifts(db);
+      expect(await (await get('/gacha', g)).text()).toContain('入った日を直す…');
+      const preview = await (await get(`/gacha?narrow=${wrong!.id}&joinedBy=2026-09-29`, g)).text();
+      expect(preview).toContain('プレゼントの入った日を直す');
+      expect(preview).toContain('9月29日までに入った人');
+      expect(preview).toContain('>late</a>');
+      expect(preview).toContain(`action="/gacha/gift/${wrong!.id}/narrow"`);
+      // スタッフはできない・チェックがないとしない
+      expect((await post(await login(STAFF), `/gacha/gift/${wrong!.id}/narrow`, { joinedBy: '2026-09-29', confirm: 'yes' })).status).toBe(403);
+      expect((await post(g, `/gacha/gift/${wrong!.id}/narrow`, { joinedBy: '2026-09-29' })).headers.get('location')).toContain('gift_narrow_invalid');
+      expect((await ticketsOf(db, LATE)).fuku).toBe(3);
+      const done = await post(g, `/gacha/gift/${wrong!.id}/narrow`, { joinedBy: '2026-09-29', confirm: 'yes' });
+      expect(done.headers.get('location')).toBe('/gacha?msg=gift_narrowed&n=1&taken=3&short=0#gacha-gift');
+      expect((await ticketsOf(db, LATE)).fuku).toBe(0);
+      expect((await ticketsOf(db, USER)).fuku).toBeGreaterThanOrEqual(3);
+      expect(await (await get('/gacha?msg=gift_narrowed&n=1&taken=3&short=0', g)).text()).toContain('1 人から取り消しました');
+      expect((await post(g, `/gacha/gift/${wrong!.id}/narrow`, { joinedBy: '2026-09-29', confirm: 'yes' })).headers.get('location')).toContain('gift_narrow_none');
     } finally {
       roleList = saved;
     }

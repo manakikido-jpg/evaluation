@@ -1115,6 +1115,10 @@ export const giftBatches = pgTable('gift_batches', {
   /** このロールを持っている人だけに贈ったとき */
   roleId: text('role_id'),
   recipients: integer('recipients').notNull(),
+  /** この時までに入った人だけに贈ったとき（あとで入った日を直したら、直した日） */
+  joinedBy: timestamp('joined_by', { withTimezone: true }),
+  /** 贈った相手（前からのプレゼントは null。あとで取り消すときに使う） */
+  memberIds: text('member_ids').array(),
   by: text('by').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,14 +1,14 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import type { DiscordActions, GuildRole } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { TICKET_KINDS, type GuildConfig, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { giftBatches, members, type GiftBatch } from '../db/schema.js';
-import { addCustom, customName, listCustomTickets } from './customTickets.js';
-import { ADMIN_COINS_MAX, addCoins } from './economy.js';
+import { coinTx, giftBatches, members, shopPurchases, type GiftBatch } from '../db/schema.js';
+import { addCustom, customName, listCustomTickets, takeCustom } from './customTickets.js';
+import { ADMIN_COINS_MAX, addCoins, deductUpTo } from './economy.js';
 import { botTopPosition, dangerLabels, permsOf, roleKind } from './roles.js';
 import { getItem, grantRoleItem } from './shop.js';
-import { addTickets, TICKET_LABEL } from './tickets.js';
+import { addTickets, takeTickets, TICKET_LABEL } from './tickets.js';
 
 /**
  * 全員へのプレゼント（社務所Web・/配る・宮司）: 銭・券・自由な券・授与品（色守りなどのロール）を、今いる人みんなに同じだけ贈る。
@@ -84,6 +84,8 @@ export type GiftInput = {
   note: string;
   memberIds: readonly string[];
   roleId?: string;
+  /** この時までに入った人だけ（絞ったとき） */
+  joinedBy?: Date;
   by: string;
   nonce: string;
 };
@@ -106,6 +108,8 @@ export async function giftToAll(
         note: input.note,
         roleId: input.roleId ?? null,
         recipients: ids.length,
+        joinedBy: input.joinedBy ?? null,
+        memberIds: ids,
         by: input.by,
       })
       .onConflictDoNothing({ target: giftBatches.nonce })
@@ -161,6 +165,156 @@ export async function recentGifts(db: Db, limit = 10): Promise<GiftBatch[]> {
 export async function getGift(db: Db, id: number): Promise<GiftBatch | undefined> {
   const [row] = await db.select().from(giftBatches).where(eq(giftBatches.id, id));
   return row;
+}
+
+// ───────── 入った日を直す（あとから取り消す） ─────────
+
+export type NarrowTarget = { memberId: string; name: string; joinedAt: Date | null };
+
+/** いまの「入った日」の上限（贈った時より後の日にしていても、贈った時までに入った人にしか渡っていない） */
+const upperOf = (b: GiftBatch) => (b.joinedBy && b.joinedBy < b.createdAt ? b.joinedBy : b.createdAt);
+
+/**
+ * 入った日を joinedBy（その日の終わり）に直したとき、取り消す相手: 贈った相手のうち、joinedBy より後に入った人。
+ * 贈った相手が記録されていない前のプレゼントは、銭なら出入りの記録から、券・ロールは「入った日が joinedBy の後で、贈った時まで」で探す
+ * （入った日がわからない人は、前からいる人として取り消さない）
+ */
+export async function narrowTargets(db: Db, batch: GiftBatch, joinedBy: Date, rankRoleIds: readonly string[]): Promise<NarrowTarget[]> {
+  const upper = upperOf(batch);
+  if (joinedBy >= upper) return [];
+  let ids: string[] | undefined = batch.memberIds ?? undefined;
+  if (!ids && batch.item === 'coins') {
+    const rows = await db
+      .select({ id: coinTx.memberId })
+      .from(coinTx)
+      .where(and(eq(coinTx.reason, 'admin_grant'), sql`${coinTx.detail}->>'gift' = ${String(batch.id)}`));
+    ids = rows.map((r) => r.id);
+  }
+  const rows = await db
+    .select({ id: members.id, name: members.displayName, roleIds: members.roleIds, joinedAt: members.joinedAt, leftAt: members.leftAt, isBot: members.isBot })
+    .from(members)
+    .where(and(isNotNull(members.joinedAt), gt(members.joinedAt, joinedBy), lte(members.joinedAt, upper), ...(ids ? [inArray(members.id, ids.length ? ids : [''])] : [])));
+  // 記録がないときは、贈ったときにいた・役職のある人（ロールで絞っていたら、そのロールを持っている人）
+  const present = (m: (typeof rows)[number]) =>
+    !m.isBot && (!m.leftAt || m.leftAt > batch.createdAt) && m.roleIds.some((r) => rankRoleIds.includes(r)) && (!batch.roleId || m.roleIds.includes(batch.roleId));
+  return rows
+    .filter((m) => ids || present(m))
+    .sort((a, b) => (a.joinedAt?.getTime() ?? 0) - (b.joinedAt?.getTime() ?? 0))
+    .map((m) => ({ memberId: m.id, name: m.name, joinedAt: m.joinedAt }));
+}
+
+/** 取り消したあと、Discord で外す・付け直すロール */
+export type NarrowRoleChange = { memberId: string; remove: string[]; add: string[] };
+
+export type NarrowResult = {
+  status: 'ok';
+  members: number;
+  /** 取り戻せた量（銭・券の合計） */
+  taken: number;
+  /** もう使っていて、全部は取り戻せなかった人 */
+  short: number;
+  roles: NarrowRoleChange[];
+};
+
+/**
+ * 入った日を直して、余分に渡った人から取り消す（宮司）。銭・券は残っている分まで。ロールは外す（授与品は、前に持っていた分に戻す）。
+ * 同じ日で 2 回押しても、2 回目は相手がいないので何もしない
+ */
+export async function narrowGift(
+  db: Db,
+  batchId: number,
+  joinedBy: Date,
+  rankRoleIds: readonly string[],
+  by: string,
+  now = new Date(),
+): Promise<NarrowResult | { status: 'not_found' | 'none' }> {
+  return db.transaction(async (tx) => {
+    const [batch] = await tx.select().from(giftBatches).where(eq(giftBatches.id, batchId)).for('update');
+    if (!batch) return { status: 'not_found' as const };
+    const targets = await narrowTargets(tx, batch, joinedBy, rankRoleIds);
+    if (!targets.length) return { status: 'none' as const };
+    const item = batch.item;
+    const custom = /^custom:(\d+)$/.exec(item);
+    const shop = /^shop:(\d+)$/.exec(item);
+    const role = /^role:(\d+)$/.exec(item);
+    let taken = 0;
+    let short = 0;
+    const roles: NarrowRoleChange[] = [];
+    const note = `プレゼントの取り消し（入った日の直し）: ${batch.label}`;
+    for (const t of targets) {
+      let got = batch.count;
+      if (item === 'coins') got = await deductUpTo(tx, t.memberId, batch.count, 'admin_take', { note, by, gift: batch.id });
+      else if (TICKET_KINDS.includes(item as TicketKind)) got = await takeTickets(tx, t.memberId, item as TicketKind, batch.count);
+      else if (custom) got = await takeCustom(tx, t.memberId, Number(custom[1]), batch.count);
+      else if (role) roles.push({ memberId: t.memberId, remove: [role[1]!], add: [] });
+      else if (shop) {
+        const r = await undoShopGift(tx, batch, Number(shop[1]), t.memberId, now);
+        if (r) roles.push(r);
+      }
+      if (item === 'coins' || TICKET_KINDS.includes(item as TicketKind) || custom) {
+        taken += got;
+        if (got < batch.count) short++;
+      }
+    }
+    const left = new Set(targets.map((t) => t.memberId));
+    await tx
+      .update(giftBatches)
+      .set({ joinedBy, recipients: Math.max(0, batch.recipients - targets.length), ...(batch.memberIds ? { memberIds: batch.memberIds.filter((id) => !left.has(id)) } : {}) })
+      .where(eq(giftBatches.id, batch.id));
+    return { status: 'ok' as const, members: targets.length, taken, short, roles };
+  });
+}
+
+/**
+ * 授与品のプレゼントを取り消す: そのとき増えた品を終わりにして、そのとき終わった品（同じ品の前の期限・入れ替えた色）を戻す
+ */
+async function undoShopGift(tx: Db, batch: GiftBatch, itemId: number, memberId: string, now: Date): Promise<NarrowRoleChange | undefined> {
+  const at = batch.createdAt.getTime();
+  const [p] = await tx
+    .select()
+    .from(shopPurchases)
+    .where(
+      and(
+        eq(shopPurchases.memberId, memberId),
+        eq(shopPurchases.itemId, itemId),
+        eq(shopPurchases.price, 0),
+        gte(shopPurchases.createdAt, new Date(at)),
+        lt(shopPurchases.createdAt, new Date(at + 1)),
+      ),
+    );
+  if (!p) return undefined;
+  await tx.update(shopPurchases).set({ endedAt: now }).where(and(eq(shopPurchases.id, p.id), isNull(shopPurchases.endedAt)));
+  const ended = await tx
+    .select()
+    .from(shopPurchases)
+    .where(
+      and(
+        eq(shopPurchases.memberId, memberId),
+        eq(shopPurchases.kind, 'role'),
+        lt(shopPurchases.id, p.id),
+        gte(shopPurchases.endedAt, new Date(at - 60_000)),
+        lte(shopPurchases.endedAt, new Date(at + 60_000)),
+      ),
+    );
+  const back = ended.filter((q) => q.roleId && (!q.expiresAt || q.expiresAt > now));
+  for (const q of back) await tx.update(shopPurchases).set({ endedAt: null }).where(eq(shopPurchases.id, q.id));
+  const add = [...new Set(back.map((q) => q.roleId!))];
+  return { memberId, remove: p.roleId && !add.includes(p.roleId) ? [p.roleId] : [], add: add.filter((r) => r !== p.roleId) };
+}
+
+/** 取り消したロールを Discord に反映する。できた人数 */
+export async function applyNarrowRoles(discord: Pick<DiscordActions, 'addRole' | 'removeRole'>, guildId: string, roles: readonly NarrowRoleChange[]): Promise<number> {
+  let ok = 0;
+  for (const r of roles) {
+    try {
+      for (const id of r.remove) await discord.removeRole(guildId, r.memberId, id, 'プレゼントの取り消し（入った日の直し）');
+      for (const id of r.add) await discord.addRole(guildId, r.memberId, id, 'プレゼントの取り消し（前の品に戻す）');
+      ok++;
+    } catch (err) {
+      logger.warn({ err, memberId: r.memberId }, 'gift narrow role change failed');
+    }
+  }
+  return ok;
 }
 
 /** お知らせの文面（チャンネルに出す） */

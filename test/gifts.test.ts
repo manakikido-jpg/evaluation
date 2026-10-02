@@ -154,4 +154,80 @@ describe('🎁 全員にプレゼント', () => {
     expect(await applyGiftRoles(discord, cfg.guildId, [{ memberId: A, roleId: 'R1', removeRoleIds: ['R0'] }, { memberId: B, roleId: 'R1', removeRoleIds: [] }])).toBe(1);
     expect(log).toEqual([`remove ${A} R0`, `add ${A} R1`]);
   });
+
+  describe('入った日を直す（あとから取り消す）', () => {
+    const OLD = '850000000000000011';
+    const LATE = '850000000000000012';
+    const LATE2 = '850000000000000013';
+    beforeEach(async () => {
+      await recordJoin(db, { ...snap(OLD, [ROLE.sanpaisha]), joinedAt: new Date('2026-09-29T23:00:00+09:00') });
+      await recordJoin(db, { ...snap(LATE, [ROLE.sanpaisha]), joinedAt: new Date('2026-09-30T00:00:00+09:00') });
+      await recordJoin(db, { ...snap(LATE2, [ROLE.sanpaisha]), joinedAt: new Date('2026-10-01T12:00:00+09:00') });
+    });
+
+    it('10 月 29 日でまちがえて贈った券を、9 月 29 日に直す（相手の記録がない前のプレゼントも）。使った分は残っている分まで', async () => {
+      const { endOfJstDay, narrowGift, narrowTargets } = await import('../src/services/gifts.js');
+      const { useTicket } = await import('../src/services/tickets.js');
+      const { giftBatches } = await import('../src/db/schema.js');
+      const { eq } = await import('drizzle-orm');
+      const wrong = endOfJstDay('2026-10-29')!;
+      const r = await giftToAll(db, { item: { kind: 'ticket', ticket: 'fuku' }, label: '🧧福の札', count: 2, note: '秋', memberIds: await giftTargets(db, ranks, undefined, wrong), by: GUJI, nonce: '00000000-0000-0000-0000-00000000cc01' });
+      if (r.status !== 'ok') throw new Error('gift failed');
+      expect(r.batch.recipients).toBe(5);
+      // 前のプレゼント（贈った相手の記録がない）と同じにする
+      await db.update(giftBatches).set({ memberIds: null, joinedBy: null }).where(eq(giftBatches.id, r.batch.id));
+      const [batch] = await db.select().from(giftBatches).where(eq(giftBatches.id, r.batch.id));
+      const right = endOfJstDay('2026-09-29')!;
+      expect((await narrowTargets(db, batch!, right, ranks)).map((t) => t.memberId)).toEqual([LATE, LATE2]);
+      await useTicket(db, LATE2, 'fuku');
+      const n = await narrowGift(db, batch!.id, right, ranks, GUJI);
+      expect(n).toEqual({ status: 'ok', members: 2, taken: 3, short: 1, roles: [] });
+      expect((await ticketsOf(db, LATE)).fuku).toBe(0);
+      expect((await ticketsOf(db, LATE2)).fuku).toBe(0);
+      expect((await ticketsOf(db, OLD)).fuku).toBe(2);
+      expect((await ticketsOf(db, A)).fuku).toBe(2);
+      // 2 回押しても、2 回目は何もしない
+      expect(await narrowGift(db, batch!.id, right, ranks, GUJI)).toEqual({ status: 'none' });
+      expect((await recentGifts(db))[0]).toMatchObject({ recipients: 3, joinedBy: right });
+    });
+
+    it('銭: 出入りの記録から相手を探す。新しいプレゼントは相手を覚えている', async () => {
+      const { endOfJstDay, narrowGift } = await import('../src/services/gifts.js');
+      const { giftBatches } = await import('../src/db/schema.js');
+      const { eq } = await import('drizzle-orm');
+      const wrong = endOfJstDay('2026-10-29')!;
+      const r = await giftToAll(db, { item: { kind: 'coins' }, label: '🪙銭', count: 500, note: '秋', memberIds: await giftTargets(db, ranks, undefined, wrong), joinedBy: wrong, by: GUJI, nonce: '00000000-0000-0000-0000-00000000cc02' });
+      if (r.status !== 'ok') throw new Error('gift failed');
+      expect(r.batch.memberIds?.length).toBe(5);
+      expect(r.batch.joinedBy).toEqual(wrong);
+      await db.update(giftBatches).set({ memberIds: null }).where(eq(giftBatches.id, r.batch.id));
+      expect(await narrowGift(db, r.batch.id, endOfJstDay('2026-09-30')!, ranks, GUJI)).toMatchObject({ status: 'ok', members: 1, taken: 500, short: 0 });
+      expect(await walletOf(db, LATE2)).toMatchObject({ balance: 0 });
+      expect(await walletOf(db, LATE)).toMatchObject({ balance: 500 });
+      // さらに前の日に直せる（残りの人だけ）
+      expect(await narrowGift(db, r.batch.id, endOfJstDay('2026-09-29')!, ranks, GUJI)).toMatchObject({ status: 'ok', members: 1, taken: 500 });
+      expect(await walletOf(db, LATE)).toMatchObject({ balance: 0 });
+      expect(await walletOf(db, OLD)).toMatchObject({ balance: 500 });
+    });
+
+    it('授与品: そのとき増えた品を終わりにして、前の期限に戻す。ロールは外す', async () => {
+      const { endOfJstDay, narrowGift } = await import('../src/services/gifts.js');
+      const { createItem, activeRolePurchases, grantRoleItem } = await import('../src/services/shop.js');
+      const color = await createItem(db, { kind: 'role', name: '色守り（桜）', emoji: '🌸', description: '', price: 1500, roleId: '100000000000000081', roleGroup: 'color', durationDays: 30 });
+      const T0 = new Date();
+      // LATE はもう持っていた（期限 10 日後）
+      await grantRoleItem(db, color, LATE, new Date(T0.getTime() - 20 * 86_400_000));
+      const before = (await activeRolePurchases(db, LATE))[0]!.expiresAt;
+      const r = await giftToAll(db, { item: { kind: 'shop', id: color.id, label: '🌸' }, label: '🌸', count: 1, note: '秋', memberIds: await giftTargets(db, ranks, undefined, endOfJstDay('2026-10-29')), by: GUJI, nonce: '00000000-0000-0000-0000-00000000cc03' }, T0);
+      if (r.status !== 'ok') throw new Error('gift failed');
+      const n = await narrowGift(db, r.batch.id, endOfJstDay('2026-09-29')!, ranks, GUJI, T0);
+      expect(n.status === 'ok' && n.roles).toEqual([
+        { memberId: LATE, remove: [], add: [] },
+        { memberId: LATE2, remove: ['100000000000000081'], add: [] },
+      ]);
+      expect((await activeRolePurchases(db, LATE)).map((p) => p.expiresAt)).toEqual([before]);
+      expect(await activeRolePurchases(db, LATE2)).toEqual([]);
+      expect(await activeRolePurchases(db, OLD)).toHaveLength(1);
+    });
+  });
 });

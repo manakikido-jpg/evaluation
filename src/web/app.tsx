@@ -130,13 +130,17 @@ import {
 } from '../services/notices.js';
 import {
   applyGiftRoles,
+  applyNarrowRoles,
   endOfJstDay,
+  getGift,
   giftableRole,
   giftAnnouncement,
   giftItemLabel,
   giftTargets,
   giftToAll,
   giftUnit,
+  narrowGift,
+  narrowTargets,
   parseGiftItem,
   parseGiftRole,
   recentGifts,
@@ -3686,6 +3690,10 @@ export function createWebApp(deps: WebDeps) {
           roles: (guildRoles ?? []).filter((r) => giftableRole(cfg, r, guildRoles ?? [], deps.botId)).map((r) => ({ id: r.id, name: r.name })),
           channels: postableChannels(await loadChannels().catch(() => [])),
           recent: await recentGifts(db),
+          narrow: await giftNarrowPreview(c.req.query('narrow'), c.req.query('joinedBy')),
+          ...(c.req.query('msg') === 'gift_narrowed'
+            ? { narrowed: { members: Number(c.req.query('n')) || 0, taken: Number(c.req.query('taken')) || 0, short: Number(c.req.query('short')) || 0 } }
+            : {}),
         }
       : undefined;
     return c.html(
@@ -3825,7 +3833,7 @@ export function createWebApp(deps: WebDeps) {
     if (targets.length === 0) return to('gift_none');
     const by = c.get('session').userId;
     const label = giftItemLabel(item, { name: cfg.economy.currencyName, emoji: cfg.economy.currencyEmoji });
-    const r = await giftToAll(db, { item, label, count, note, memberIds: targets, roleId, by, nonce }, now());
+    const r = await giftToAll(db, { item, label, count, note, memberIds: targets, roleId, joinedBy, by, nonce }, now());
     if (r.status === 'duplicate') return to('gift_dup');
     if (r.status !== 'ok') return to('gift_invalid');
     // 授与品・ロール: Discord でロールを付ける（人数が多いと時間がかかるので、待たずに進める）
@@ -3852,6 +3860,33 @@ export function createWebApp(deps: WebDeps) {
       logger.warn({ err }, 'gift announce failed');
       return to('gift_announce_failed');
     }
+  });
+
+  /** 入った日を直す: 取り消す相手を先に見せる（?narrow=<id>&joinedBy=YYYY-MM-DD） */
+  async function giftNarrowPreview(rawId: string | undefined, rawDate: string | undefined) {
+    const id = Number(rawId);
+    if (!rawId || !Number.isSafeInteger(id)) return undefined;
+    const batch = await getGift(db, id);
+    const joinedBy = endOfJstDay(rawDate);
+    if (!batch) return undefined;
+    const targets = joinedBy ? await narrowTargets(db, batch, joinedBy, cfg.ranks.map((x) => x.roleId)) : [];
+    return { batch, joinedBy: joinedBy ? rawDate! : '', targets };
+  }
+
+  /** 🎁 入った日を直して、余分に渡った人から取り消す（宮司だけ） */
+  app.post('/gacha/gift/:id/narrow', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = Number(c.req.param('id'));
+    const body = await c.req.parseBody();
+    const joinedBy = endOfJstDay(body.joinedBy);
+    if (!Number.isSafeInteger(id) || !joinedBy || body.confirm !== 'yes') return c.redirect(`/gacha?msg=gift_narrow_invalid#gacha-gift`);
+    const by = c.get('session').userId;
+    const r = await narrowGift(db, id, joinedBy, cfg.ranks.map((x) => x.roleId), by, now());
+    if (r.status !== 'ok') return c.redirect(`/gacha?msg=${r.status === 'none' ? 'gift_narrow_none' : 'gift_narrow_invalid'}#gacha-gift`);
+    // ロールは Discord で外す（人数が多いと時間がかかるので、待たずに進める）
+    if (r.roles.length) void applyNarrowRoles(deps.discord, cfg.guildId, r.roles);
+    await audit(db, { actorId: by, action: 'gift.narrow', detail: { gift: id, joinedBy: body.joinedBy, members: r.members, taken: r.taken, short: r.short, roles: r.roles.length }, via: 'web' });
+    return c.redirect(`/gacha?msg=gift_narrowed&n=${r.members}&taken=${r.taken}&short=${r.short}#gacha-gift`);
   });
 
   app.post('/gacha/custom', async (c) => {
