@@ -414,6 +414,13 @@
       "when": 1790857349827,
       "tag": "0058_casino_login_links",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790898274909,
+      "tag": "0059_market_v2",
+      "breakpoints": true
     }
   ]
 }

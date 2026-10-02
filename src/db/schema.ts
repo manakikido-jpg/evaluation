@@ -633,7 +633,17 @@ export const marketListings = pgTable(
     category: text('category').notNull(),
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
+    /** fixed: 値段を決めた / offer: 値段の提案を受ける（price は最低額） */
     price: integer('price').notNull(),
+    pricing: text('pricing').$type<'fixed' | 'offer'>().notNull().default('fixed'),
+    /** 通話の種類（twoshot / sleep / care / consult / other） */
+    subcategory: text('subcategory'),
+    /** 同時に受けられる取引の数（0 = いくつでも） */
+    capacity: integer('capacity').notNull().default(0),
+    /** 📞 今すぐ通話 OK（この時刻まで） */
+    standbyUntil: timestamp('standby_until', { withTimezone: true }),
+    /** カードの画像（Discord に上げ直した URL） */
+    imageUrl: text('image_url'),
     /** open 受付中 / closed 売った人が終了 / removed 運営が取り下げ */
     status: text('status').$type<'open' | 'closed' | 'removed'>().notNull().default('open'),
     channelId: text('channel_id'),
@@ -663,12 +673,84 @@ export const marketOrders = pgTable(
     /** この時刻までに「受け取った」「問題あり」がなければ、売った人に渡す */
     autoReleaseAt: timestamp('auto_release_at', { withTimezone: true }).notNull(),
     decidedBy: text('decided_by'),
+    /** 依頼の募集から（market_requests.id） */
+    requestId: bigint('request_id', { mode: 'number' }),
+    /** 通話の予定（📅 予定を決める） */
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+    /** 問題ありの種類（problem: 問題あり / noshow: 🚫 来なかった） */
+    disputeKind: text('dispute_kind'),
+    /** ⭐ 評価（1〜5）と一言（買った人が、終わったあとに） */
+    rating: integer('rating'),
+    review: text('review'),
+    ratedAt: timestamp('rated_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
   },
-  (t) => [index('market_orders_status_idx').on(t.status, t.autoReleaseAt)],
+  (t) => [index('market_orders_status_idx').on(t.status, t.autoReleaseAt), index('market_orders_seller_idx').on(t.sellerId)],
 );
 export type MarketOrder = typeof marketOrders.$inferSelect;
+
+/** 💬 値段の提案（買いたい人 → 出品した人）。受けると、その値段で取引を始める */
+export const marketOffers = pgTable(
+  'market_offers',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    listingId: bigint('listing_id', { mode: 'number' }).notNull(),
+    buyerId: text('buyer_id').notNull(),
+    sellerId: text('seller_id').notNull(),
+    amount: integer('amount').notNull(),
+    note: text('note').notNull().default(''),
+    /** pending 返事待ち / accepted 受けた / declined 断った / cancelled 取り下げ / expired 期限切れ */
+    status: text('status').$type<'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired'>().notNull().default('pending'),
+    orderId: bigint('order_id', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => [index('market_offers_listing_idx').on(t.listingId, t.status), check('market_offers_amount', sql`${t.amount} > 0`)],
+);
+export type MarketOffer = typeof marketOffers.$inferSelect;
+
+/** 📝 依頼の募集（買いたい人が出す）。出品できる人が手を挙げ、依頼した人が選ぶと取引になる */
+export const marketRequests = pgTable(
+  'market_requests',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    requesterId: text('requester_id').notNull(),
+    category: text('category').notNull(),
+    subcategory: text('subcategory'),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    /** 予算（目安） */
+    budget: integer('budget').notNull(),
+    imageUrl: text('image_url'),
+    /** open 募集中 / matched 決まった / closed 締め切った・取り下げ */
+    status: text('status').$type<'open' | 'matched' | 'closed'>().notNull().default('open'),
+    channelId: text('channel_id'),
+    messageId: text('message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('market_requests_status_idx').on(t.status), check('market_requests_budget', sql`${t.budget} > 0`)],
+);
+export type MarketRequest = typeof marketRequests.$inferSelect;
+
+/** ✋ 依頼に手を挙げた（出品できる人が、値段と一言つきで） */
+export const marketBids = pgTable(
+  'market_bids',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    requestId: bigint('request_id', { mode: 'number' }).notNull(),
+    sellerId: text('seller_id').notNull(),
+    amount: integer('amount').notNull(),
+    note: text('note').notNull().default(''),
+    /** pending / accepted / declined（ほかの人に決まった・取り下げ） */
+    status: text('status').$type<'pending' | 'accepted' | 'declined'>().notNull().default('pending'),
+    orderId: bigint('order_id', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('market_bids_one_idx').on(t.requestId, t.sellerId), check('market_bids_amount', sql`${t.amount} > 0`)],
+);
+export type MarketBid = typeof marketBids.$inferSelect;
 
 /** 「はじめての参拝」を全部できた人（お祝いは 1 人 1 回） */
 export const onboardingDone = pgTable('onboarding_done', {

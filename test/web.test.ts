@@ -1391,6 +1391,18 @@ describe('市場（管理画面）', () => {
     expect(actions.some((a) => a.startsWith('edit 920000000000000002'))).toBe(true);
     expect((await form(s, `/market/listings/${listing.id}/remove`)).headers.get('location')).toBe('/market?msg=done_already');
   });
+
+  it('依頼の募集が出て、運営が締め切れる（カードも直す）', async () => {
+    const { createRequest, setRequestMessage } = await import('../src/services/market.js');
+    const r = await createRequest(db, USER, { category: 'illust', title: '立ち絵がほしい', description: '', budget: 1500 });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await setRequestMessage(db, r.request.id, '920000000000000001', '920000000000000003');
+    const s = await login(STAFF);
+    expect(await (await get('/market', s)).text()).toContain('立ち絵がほしい');
+    expect((await form(s, `/market/requests/${r.request.id}/close`)).headers.get('location')).toBe('/market?msg=request_closed');
+    expect(actions.some((a) => a.startsWith('edit 920000000000000003'))).toBe(true);
+    expect((await form(s, `/market/requests/${r.request.id}/close`)).headers.get('location')).toBe('/market?msg=done_already');
+  });
 });
 
 describe('物御籤（管理画面）', () => {

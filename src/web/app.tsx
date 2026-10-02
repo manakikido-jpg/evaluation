@@ -195,8 +195,8 @@ import { isTri, overwriteRows, permKeysFor, planOverwrites, sameOverwrites, whoC
 import { ChannelEditPage, type ChannelPermView, ChannelNewPage, ChannelsPage, type ChannelInfo } from './views/channels.js';
 import { RolePage, RolesPage } from './views/roles.js';
 import { MarketPage } from './views/market.js';
-import { closeListing, recentListings, recentOrders, refundOrder, releaseOrder } from '../services/market.js';
-import { listingCard } from '../discord/market.js';
+import { closeListing, closeRequest, recentListings, recentOrders, recentRequests, refundOrder, releaseOrder } from '../services/market.js';
+import { listingCard, requestCard } from '../discord/market.js';
 import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
@@ -4048,9 +4048,11 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.get('/market', async (c) => {
-    const [orders, listings] = await Promise.all([recentOrders(db), recentListings(db)]);
-    const names = await namesOf(db, [...orders.flatMap((o) => [o.buyerId, o.sellerId]), ...listings.map((l) => l.sellerId)]);
-    return c.html(<MarketPage session={c.get('session')} orders={orders} listings={listings} names={names} feePercent={cfg.market.feePercent} flash={c.req.query('msg')} />);
+    const [orders, listings, requests] = await Promise.all([recentOrders(db), recentListings(db), recentRequests(db)]);
+    const names = await namesOf(db, [...orders.flatMap((o) => [o.buyerId, o.sellerId]), ...listings.map((l) => l.sellerId), ...requests.map((r) => r.requesterId)]);
+    return c.html(
+      <MarketPage session={c.get('session')} orders={orders} listings={listings} requests={requests} names={names} feePercent={cfg.market.feePercent} flash={c.req.query('msg')} />,
+    );
   });
 
   app.post('/market/orders/:id/:action', async (c) => {
@@ -4299,6 +4301,16 @@ export function createWebApp(deps: WebDeps) {
     if (l.channelId && l.messageId) await deps.discord.editMessage(l.channelId, l.messageId, listingCard(l, cfg) as never).catch(() => undefined);
     await audit(db, { actorId: c.get('session').userId, targetId: l.sellerId, action: 'market.close', detail: { listingId: id, by: 'removed' }, via: 'web' });
     return c.redirect('/market?msg=removed');
+  });
+
+  app.post('/market/requests/:id/close', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/market');
+    const r = await closeRequest(db, id);
+    if (!r) return c.redirect('/market?msg=done_already');
+    if (r.channelId && r.messageId) await deps.discord.editMessage(r.channelId, r.messageId, requestCard(r, cfg) as never).catch(() => undefined);
+    await audit(db, { actorId: c.get('session').userId, targetId: r.requesterId, action: 'market.request_close', detail: { requestId: id, by: 'staff' }, via: 'web' });
+    return c.redirect('/market?msg=request_closed');
   });
 
   // ───────── ショップ（宮司のみ） ─────────

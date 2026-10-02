@@ -156,6 +156,7 @@ async function main(): Promise<void> {
     gacha.attach(guild);
     // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
     await gacha.refreshPanels(guild).catch((err) => logger.warn({ err }, 'gacha panels refresh failed'));
+    await market.refreshPanels(guild).catch((err) => logger.warn({ err }, 'market panels refresh failed'));
     // ショップ: 最初の品物を並べる
     await shop.attach(guild).catch((err) => logger.warn({ err }, 'shop attach failed'));
     // ブースト: 止まっていた間の「ブーストしました」を拾う
@@ -169,6 +170,8 @@ async function main(): Promise<void> {
       void app.everyMinute(guild);
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
+      // 市場: 期限が来た取引を渡す・返事のない提案を取り下げる・📞 待機の時間切れ
+      void market.tick().catch((err) => logger.warn({ err }, 'market tick failed'));
       // 1 時間ごとの部屋（宵宮）の支払い
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
@@ -213,8 +216,6 @@ async function main(): Promise<void> {
       void board.tick().catch((err) => logger.warn({ err }, 'board tick failed'));
       // #面談日程: 案内待ちが外れた人・抜けた人の書き込みの取りこぼしを消す
       void guidePending.sweepSchedule(guild);
-      // 市場: 期限が来た取引を売った人に渡す
-      void market.tick().catch((err) => logger.warn({ err }, 'market release failed'));
       // はじめての参拝: 全部できた人にお祝い
       void onboardingTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'onboarding tick failed'));
       // 招待: 招待された人が浮上した日ごとに、招待した人へボーナス
