@@ -163,6 +163,26 @@ const Sound = (() => {
       notes([[1568, 0.22, 0.25], [2093, 0.36, 0.5]], at, { type: 'sine', vol: 0.16 });
     },
     bell: (at = 0) => notes([[1319, 0, 0.5], [1760, 0.12, 0.6]], at, { type: 'sine', vol: 0.12 }),
+    /** 🀄 牌を切る（カッ） */
+    pai: (at = 0) => {
+      noise(at, 0.03, { freq: 2400, q: 4, vol: 0.32 });
+      tone(460, at, 0.05, { type: 'triangle', vol: 0.12, to: 280 });
+    },
+    /** 🀄 ポン・チー・カン */
+    call: (at = 0) => notes([[880, 0, 0.08], [1175, 0.09, 0.14]], at, { type: 'triangle', vol: 0.16 }),
+    /** 🀄 リーチ（シャラン） */
+    riichi(at = 0) {
+      tone(600, at, 0.22, { type: 'sine', vol: 0.14, to: 1500 });
+      notes([[1568, 0.2, 0.2], [2093, 0.3, 0.5]], at, { type: 'sine', vol: 0.14 });
+    },
+    /** 🀄 ロン・ツモ（ドーン + 和音） */
+    agari(at = 0) {
+      tone(140, at, 0.6, { type: 'sine', vol: 0.3, to: 70 });
+      noise(at, 0.25, { freq: 300, q: 0.8, vol: 0.3 });
+      notes([[523, 0.12, 0.5], [659, 0.12, 0.5], [784, 0.12, 0.5], [1047, 0.3, 0.6]], at, { type: 'triangle', vol: 0.1 });
+    },
+    /** 🀄 流局 */
+    ryukyoku: (at = 0) => notes([[660, 0, 0.18], [494, 0.2, 0.35]], at, { type: 'triangle', vol: 0.1 }),
     /** スロットのレバー（ガコッ） */
     lever: (at = 0) => {
       tone(110, at, 0.16, { type: 'square', vol: 0.12, to: 45 });
@@ -945,6 +965,48 @@ const paintTapHint = () =>
     n.textContent = twoTapOn() ? '切る牌をタップ → もう一度タップで切ります。' : '切る牌を押してください。';
   });
 
+// ───── 🀄 麻雀の演出: 切った牌が落ちる音と動き・鳴き/リーチ/和了の文字（前に見た番号より新しいものだけ） ─────
+let mjSeen = null;
+const MJ_SHOUT = { riichi: 'リーチ', pon: 'ポン', chi: 'チー', kan: 'カン', ron: 'ロン', tsumo: 'ツモ', draw: '流局' };
+const MJ_SOUND = { riichi: 'riichi', pon: 'call', chi: 'call', kan: 'call', ron: 'agari', tsumo: 'agari', draw: 'ryukyoku' };
+const mjFx = () => {
+  const el = document.querySelector('.mj-fxdata');
+  const board = document.querySelector('.mj-board2');
+  if (!el || !board) return;
+  const table = live()?.dataset.table || '';
+  let list = [];
+  try {
+    list = JSON.parse(el.getAttribute('data-fx') || '[]');
+  } catch {
+    return;
+  }
+  const max = list.reduce((a, e) => Math.max(a, e.n), 0);
+  // はじめて開いたときは鳴らさない
+  if (!mjSeen || mjSeen.table !== table) {
+    mjSeen = { table, n: max };
+    return;
+  }
+  const fresh = list.filter((e) => e.n > mjSeen.n).slice(-3);
+  mjSeen.n = Math.max(mjSeen.n, max);
+  fresh.forEach((e, k) => {
+    const at = k * 0.28;
+    if (e.k === 'discard' || e.k === 'riichi') {
+      Sound.pai(at);
+      board.querySelector(`.mj-rv.r${e.pos} .mj-river > .mj-t:last-child`)?.classList.add('fresh');
+    }
+    if (!MJ_SHOUT[e.k]) return;
+    setTimeout(() => {
+      Sound[MJ_SOUND[e.k]]?.();
+      const d = document.createElement('div');
+      d.className = `mj-shout p-${e.pos} k-${e.k}`;
+      d.textContent = MJ_SHOUT[e.k];
+      board.appendChild(d);
+      setTimeout(() => d.remove(), 1500);
+    }, at * 1000);
+  });
+};
+document.addEventListener('c-live-updated', mjFx);
+
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────
 const pageInit = (root, tableEnd) => {
   paintSoundButton();
@@ -955,5 +1017,6 @@ const pageInit = (root, tableEnd) => {
   playFx(root, tableEnd);
   paintTwoTap();
   paintTapHint();
+  mjFx();
 };
 pageInit(document);

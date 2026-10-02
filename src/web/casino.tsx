@@ -60,6 +60,11 @@ import { SlotFloor, SlotsPage } from './views/slots.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
+import { MjRecords } from './views/mahjong.js';
+import { mjRanking, mjStats, monthStartJst } from '../services/casino/mahjongStats.js';
+
+/** ランキングに出る対局数 */
+const MJ_RANK_MIN = 3;
 
 /**
  * 🎰 カジノ（/casino）。メンバーが Discord でログインして、サーバーの銭で遊ぶ。
@@ -163,8 +168,17 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     page(async (c, me) => {
       if (!kindOn('mahjong')) return c.redirect('/casino?e=game_off');
       await sweepTables(db, d.cfg(), d.now());
+      const [stats, ranking] = await Promise.all([mjStats(db, me.session.userId), mjRanking(db, monthStartJst(d.now()), MJ_RANK_MIN)]);
       return c.html(
-        <TablesLobby me={me} kind="mahjong" casino={d.cfg().casino} tables={await openTables(db, 'mahjong')} mine={await myTable(db, me.session.userId)} msg={casinoMsg(c.req.query('e'))} />,
+        <TablesLobby
+          me={me}
+          kind="mahjong"
+          casino={d.cfg().casino}
+          tables={await openTables(db, 'mahjong')}
+          mine={await myTable(db, me.session.userId)}
+          msg={casinoMsg(c.req.query('e'))}
+          extra={<MjRecords me={me} stats={stats} ranking={ranking} minGames={MJ_RANK_MIN} />}
+        />,
       );
     }),
   );

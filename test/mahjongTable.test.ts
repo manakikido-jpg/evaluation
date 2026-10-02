@@ -68,6 +68,18 @@ describe('🀄 麻雀の卓（BOT で最後まで）', () => {
     }
   });
 
+  it('終局で人の戦績を 1 行ずつ出す（BOT は出さない）。演出の番号は増えていく', () => {
+    const { s, fxs } = playOut(2, 'tonpu');
+    const rows = fxs.flatMap((f) => f.mahjong ?? []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ memberId: HOST.id, length: 'tonpu', entry: 100 });
+    expect(rows[0]!.rank).toBeGreaterThanOrEqual(1);
+    expect(rows[0]!.hands).toBe(s.handsPlayed);
+    const ns = (s.fx ?? []).map((e) => e.n);
+    expect(ns.length).toBeGreaterThan(0);
+    expect([...ns].sort((a, b) => a - b)).toEqual(ns);
+  });
+
   it('半荘戦も終わる', () => {
     const { s, hands } = playOut(9, 'hanchan', 0);
     expect(s.phase).toBe('closed');

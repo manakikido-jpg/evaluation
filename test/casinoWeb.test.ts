@@ -493,6 +493,8 @@ describe('🀄 咲楽ノ宮雀荘（画面）', () => {
     expect(lobby).toContain('咲楽ノ宮雀荘');
     expect(lobby).toContain('東風戦');
     expect(lobby).toContain('賭けない（点数だけで遊ぶ）');
+    expect(lobby).toContain('あなたの戦績');
+    expect(lobby).toContain('今月のランキング');
     const made = await post('/casino/tables/mahjong', a, { wager: 'on', entry: '100', length: 'tonpu', pace: 'normal' });
     const loc = made.headers.get('location')!;
     expect(loc).toMatch(/^\/casino\/t\/\d+$/);

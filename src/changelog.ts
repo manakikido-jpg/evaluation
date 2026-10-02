@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-03-jansou-fx-stats',
+    date: '2026-10-03',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🀄 雀荘に演出・音と、戦績・ランキング',
+    items: [
+      '切った牌が河に落ちる動きと音。ポン・チー・カン・リーチ・ロン・ツモ・流局は、その人の側に大きな文字と音',
+      '小さい牌に数字の札（萬子は赤・筒子は青・索子は緑）。8 筒・9 索などが見分けやすく',
+      '雀荘の入口に「あなたの戦績」（平均順位・トップ率・ラス回避・和了率・放銃率・リーチ率・最高の和了）と「今月のランキング」（3 戦以上）',
+    ],
+  },
+  {
     id: '2026-10-03-jansou-ui',
     date: '2026-10-03',
     kind: 'improve',

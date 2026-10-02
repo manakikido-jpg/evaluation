@@ -26,6 +26,7 @@ import {
 } from '../../services/casino/tables/mahjong.js';
 import { PACES, paceMult, type Pace } from '../../services/casino/tables/types.js';
 import { mahjongArt } from '../assets.js';
+import type { MjRankRow, MjStats } from '../../services/casino/mahjongStats.js';
 import type { CasinoMe, Coin } from './casino.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
@@ -49,7 +50,15 @@ const tileClass = (t: number, extra = '') => {
 };
 const Face = (p: { t: number }) => {
   const art = artOf(p.t);
-  if (art) return <img src={art} alt="" draggable={false} />;
+  const k = kindOf(p.t);
+  // 絵の牌は、小さいときに数字の札を角に出す（8 筒・9 索などを見分けやすく）
+  if (art)
+    return (
+      <>
+        <img src={art} alt="" draggable={false} />
+        {k < 27 && <i class="mj-idx">{(k % 9) + 1}</i>}
+      </>
+    );
   const f = tileFace(kindOf(p.t));
   return (
     <>
@@ -630,9 +639,12 @@ export function MahjongView(p: { t: CasinoTable; s: MjState; me: CasinoMe; now: 
   const at = (d: number) => (base + d) % 4;
   const reveal = s.phase === 'done';
   const seated = i >= 0 && !s.seats[i]!.gone;
+  const posOf = (seat: number) => (['b', 'r', 't', 'l'] as const)[(seat - base + 4) % 4];
+  const fx = (s.fx ?? []).map((e) => ({ n: e.n, k: e.k, pos: posOf(e.seat), mine: e.seat === i }));
   return (
     <>
       <div class="mj-board2">
+        <div class="mj-fxdata" hidden data-fx={JSON.stringify(fx)}></div>
         <OppTop s={s} i={at(2)} reveal={reveal} />
         <OppSide s={s} i={at(3)} side="left" reveal={reveal} />
         <Table s={s} at={at} now={p.now} />
@@ -748,5 +760,100 @@ export function MjGuide() {
       </ul>
       <p class="c-muted">点数: 30 符 1 翻 1,000 点（親 1,500）… 満貫 8,000（親 12,000）・跳満 12,000・倍満 16,000・三倍満 24,000・役満 32,000（親は 1.5 倍）。本場は 1 本 300 点。</p>
     </details>
+  );
+}
+
+const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+
+/** 雀荘の入口: あなたの戦績（通算）と今月のランキング */
+export function MjRecords(p: { me: CasinoMe; stats: MjStats; ranking: MjRankRow[]; minGames: number }) {
+  const { stats: st } = p;
+  const myRank = p.ranking.findIndex((r) => r.memberId === p.me.session.userId);
+  return (
+    <div class="mj-records">
+      <section class="c-panel">
+        <h2>📊 あなたの戦績（通算）</h2>
+        {st.games === 0 ? (
+          <p class="c-muted">まだ対局がありません。終局まで打つと、ここに残ります。</p>
+        ) : (
+          <>
+            <div class="mj-tiles">
+              <div>
+                <span>対局</span>
+                <b>{fmt(st.games)}</b>
+              </div>
+              <div>
+                <span>平均順位</span>
+                <b>{st.avgRank.toFixed(2)}</b>
+              </div>
+              <div>
+                <span>トップ率</span>
+                <b>{pct(st.ranks[0] / st.games)}</b>
+              </div>
+              <div>
+                <span>ラス回避</span>
+                <b>{pct(1 - st.ranks[3] / st.games)}</b>
+              </div>
+              <div>
+                <span>和了率</span>
+                <b>{pct(st.winRate)}</b>
+              </div>
+              <div>
+                <span>放銃率</span>
+                <b>{pct(st.dealinRate)}</b>
+              </div>
+              <div>
+                <span>リーチ率</span>
+                <b>{pct(st.riichiRate)}</b>
+              </div>
+              <div>
+                <span>最高の和了</span>
+                <b>{st.best ? `${fmt(st.best.points)}` : '—'}</b>
+                {st.best?.name && <small>{st.best.name}</small>}
+              </div>
+            </div>
+            <p class="mj-rankchips" aria-label="順位の回数">
+              {st.ranks.map((n, k) => (
+                <span class={`r${k + 1}`}>
+                  {k + 1} 位 <b>{n}</b> 回
+                </span>
+              ))}
+            </p>
+          </>
+        )}
+      </section>
+      <section class="c-panel">
+        <h2>🏆 今月のランキング</h2>
+        {p.ranking.length === 0 ? (
+          <p class="c-muted">今月 {p.minGames} 戦以上打った人がまだいません。</p>
+        ) : (
+          <table class="mj-ranking">
+            <thead>
+              <tr>
+                <th></th>
+                <th>名前</th>
+                <th class="num">平均順位</th>
+                <th class="num">トップ率</th>
+                <th class="num">対局</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.ranking.map((r, n) => (
+                <tr class={r.memberId === p.me.session.userId ? 'me' : ''}>
+                  <td>{['🥇', '🥈', '🥉'][n] ?? n + 1}</td>
+                  <td>{r.name}</td>
+                  <td class="num">{r.avgRank.toFixed(2)}</td>
+                  <td class="num">{pct(r.topRate)}</td>
+                  <td class="num">{r.games}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p class="c-muted c-small">
+          {p.minGames} 戦以上・平均順位の低い順（同じなら対局の多い順）。BOT は入りません。{myRank >= 0 ? `あなたは ${myRank + 1} 位です。` : ''}
+        </p>
+      </section>
+    </div>
   );
 }

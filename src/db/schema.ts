@@ -752,6 +752,36 @@ export const marketBids = pgTable(
 );
 export type MarketBid = typeof marketBids.$inferSelect;
 
+/** 🀄 麻雀の戦績（終局ごとに 1 人 1 行。BOT は入れない） */
+export const mahjongResults = pgTable(
+  'mahjong_results',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    tableId: bigint('table_id', { mode: 'number' }).notNull(),
+    memberId: text('member_id').notNull(),
+    name: text('name').notNull(),
+    /** 順位 1〜4・終わったときの点数 */
+    rank: integer('rank').notNull(),
+    points: integer('points').notNull(),
+    /** tonpu / hanchan */
+    length: text('length').notNull(),
+    entry: integer('entry').notNull().default(0),
+    payout: integer('payout').notNull().default(0),
+    /** その対局の局の数・和了・ツモ・放銃・リーチの回数 */
+    hands: integer('hands').notNull().default(0),
+    wins: integer('wins').notNull().default(0),
+    tsumo: integer('tsumo').notNull().default(0),
+    dealins: integer('dealins').notNull().default(0),
+    riichi: integer('riichi').notNull().default(0),
+    /** いちばん高かった和了 */
+    bestPoints: integer('best_points').notNull().default(0),
+    bestName: text('best_name'),
+    finishedAt: timestamp('finished_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('mahjong_results_member_idx').on(t.memberId, t.finishedAt), index('mahjong_results_time_idx').on(t.finishedAt)],
+);
+export type MahjongResultRow = typeof mahjongResults.$inferSelect;
+
 /** 「はじめての参拝」を全部できた人（お祝いは 1 人 1 回） */
 export const onboardingDone = pgTable('onboarding_done', {
   memberId: text('member_id').primaryKey(),

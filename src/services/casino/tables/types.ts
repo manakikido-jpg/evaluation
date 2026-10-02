@@ -13,7 +13,9 @@ export type Debit = { memberId: string; amount: number; reason: 'casino_bet' | '
 export type Credit = { memberId: string; amount: number; reason: 'casino_win' | 'casino_refund' | 'casino_cashout' };
 /** カジノの収支（運営の画面）に入れる 1 回分 */
 export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };
-export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[] };
+/** 🀄 麻雀の戦績（終局のとき 1 人 1 行） */
+export type MahjongResult = { memberId: string; name: string; rank: number; points: number; length: string; entry: number; payout: number; hands: number; wins: number; tsumo: number; dealins: number; riichi: number; bestPoints: number; bestName: string | null };
+export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[] };
 
 export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
 export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });

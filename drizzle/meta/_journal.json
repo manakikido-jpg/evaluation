@@ -421,6 +421,13 @@
       "when": 1790898274909,
       "tag": "0059_market_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790926099255,
+      "tag": "0060_mahjong_results",
+      "breakpoints": true
     }
   ]
 }

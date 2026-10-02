@@ -97,7 +97,17 @@ export type MjState = {
   order: string[];
   payouts: { id: string; name: string; amount: number; points: number }[];
   log: string[];
+  /** 戦績（席ごと）・終わった局の数 */
+  stats?: MjSeatStats[];
+  handsPlayed?: number;
+  /** 演出（画面が音と動きを出す。n は通し番号） */
+  fx?: MjFx[];
+  fxN?: number;
 };
+
+export type MjSeatStats = { wins: number; tsumo: number; dealins: number; riichi: number; best: { points: number; name: string } | null };
+export type MjFxKind = 'discard' | 'riichi' | 'pon' | 'chi' | 'kan' | 'ron' | 'tsumo' | 'draw';
+export type MjFx = { n: number; k: MjFxKind; seat: number; t?: number };
 
 // ───────── 小さな道具 ─────────
 
@@ -213,6 +223,15 @@ const threatsFor = (s: MjState, i: number): Threat[] =>
 
 const yakuhaiFor = (s: MjState, i: number) => Array.from({ length: KINDS }, (_, k) => k).filter((k) => isYakuhaiKind(k, seatWindOf(s, i), roundWindOf(s)));
 
+const statOf = (s: MjState, i: number): MjSeatStats => {
+  s.stats ??= [0, 1, 2, 3].map(() => ({ wins: 0, tsumo: 0, dealins: 0, riichi: 0, best: null }));
+  return s.stats[i]!;
+};
+function pushFx(s: MjState, k: MjFxKind, seat: number, t?: number): void {
+  s.fxN = (s.fxN ?? 0) + 1;
+  s.fx = [...(s.fx ?? []), { n: s.fxN, k, seat, ...(t !== undefined ? { t } : {}) }].slice(-8);
+}
+
 // ───────── 局の進み ─────────
 
 function turnDeadline(s: MjState, now: number): number {
@@ -295,6 +314,7 @@ function establishRiichi(s: MjState): void {
   s.doubleRiichi[i] = s.clean && s.rivers[i]!.length === 1;
   s.tempFuriten[i] = false;
   s.riichiPending = null;
+  statOf(s, i).riichi++;
   addLog(s, `${name(s, i)}: ${s.doubleRiichi[i] ? 'ダブル' : ''}リーチ`);
 }
 
@@ -310,6 +330,7 @@ function discard(s: MjState, i: number, tile: number, riichi: boolean, ctx: Ctx)
   s.kuikae = [];
   if (!s.riichi[i]) s.tempFuriten[i] = false;
   s.last = { seat: i, t: tile };
+  pushFx(s, riichi ? 'riichi' : 'discard', i, tile);
   return ok(openCalls(s, i, tile, 'discard', ctx));
 }
 
@@ -425,6 +446,7 @@ function resolveCalls(s: MjState, ctx: Ctx): MjState {
   s.clean = false;
   s.turn = caller;
   const label = { pon: 'ポン', chi: 'チー', minkan: 'カン' }[resp.type];
+  pushFx(s, resp.type === 'minkan' ? 'kan' : resp.type, caller, t);
   addLog(s, `${name(s, caller)}: ${label} ${kindName(kindOf(t))}`);
   if (resp.type === 'minkan') {
     s.kans++;
@@ -447,6 +469,7 @@ function ankan(s: MjState, i: number, k: number, ctx: Ctx): Step<MjState> {
   s.ippatsu = [false, false, false, false];
   s.clean = false;
   addLog(s, `${name(s, i)}: 暗槓 ${kindName(k)}`);
+  pushFx(s, 'kan', i);
   return ok(drawRinshan(s, i, ctx));
 }
 
@@ -459,6 +482,7 @@ function kakan(s: MjState, i: number, k: number, ctx: Ctx): Step<MjState> {
   s.kakan = { seat: i, meld, t };
   s.last = { seat: i, t };
   addLog(s, `${name(s, i)}: 加槓 ${kindName(k)}`);
+  pushFx(s, 'kan', i, t);
   return ok(openCalls(s, i, t, 'chankan', ctx));
 }
 
@@ -511,6 +535,12 @@ function win(s: MjState, w: number, from: number | null, t: number, ctx: Ctx, ch
     ura: s.riichi[w] ? uraIndicators(s) : [],
   };
   s.renchan = w === dealer;
+  const st = statOf(s, w);
+  st.wins++;
+  if (!ron) st.tsumo++;
+  else statOf(s, from).dealins++;
+  if (!st.best || sc.total > st.best.points) st.best = { points: sc.total, name: sc.limit || sc.yaku.filter((y) => !y.name.includes('ドラ')).map((y) => y.name).slice(0, 2).join('・') };
+  pushFx(s, ron ? 'ron' : 'tsumo', w, t);
   const pts = ron ? `${sc.ron.toLocaleString('ja-JP')}` : w === dealer ? `${sc.tsumoOther.toLocaleString('ja-JP')} オール` : `${sc.tsumoOther.toLocaleString('ja-JP')}・${sc.tsumoDealer.toLocaleString('ja-JP')}`;
   addLog(s, ron ? `${name(s, w)}: ロン（${name(s, from)} から）${pts}` : `${name(s, w)}: ツモ ${pts}`);
   return toResult(s, ctx);
@@ -532,6 +562,7 @@ function exhaustiveDraw(s: MjState, ctx: Ctx): MjState {
     ura: [],
   };
   s.renchan = tenpai[s.kyoku]!;
+  pushFx(s, 'draw', s.kyoku);
   addLog(s, `流局（テンパイ: ${tenpai.map((tp, j) => (tp ? name(s, j) : '')).filter(Boolean).join('・') || 'なし'}）`);
   return toResult(s, ctx);
 }
@@ -544,6 +575,7 @@ function abortHand(s: MjState, i: number, ctx: Ctx): MjState {
 }
 
 function toResult(s: MjState, ctx: Ctx): MjState {
+  s.handsPlayed = (s.handsPlayed ?? 0) + 1;
   s.phase = 'result';
   s.step = 'turn';
   s.drawn = null;
@@ -590,7 +622,14 @@ function endGame(s: MjState, ctx: Ctx, note?: string): Step<MjState> {
   s.deadline = ctx.now + DONE_SECONDS * 1000;
   addLog(s, `🏁 終局${note ? `（${note}）` : ''}: ${s.payouts.map((p, n) => `${n + 1}位 ${p.name}`).join('・')}`);
   const credits: Credit[] = s.payouts.filter((p) => p.amount > 0).map((p) => ({ memberId: p.id, amount: p.amount, reason: 'casino_win' as const }));
-  return ok(s, credits.length ? { credits } : undefined);
+  // 戦績（人だけ。抜けた人も）
+  const mahjong = rank.flatMap((j, n) => {
+    const x = s.seats[j]!;
+    if (x.bot) return [];
+    const st = statOf(s, j);
+    return [{ memberId: x.id, name: x.name, rank: n + 1, points: x.points, length: s.length, entry: s.entry, payout: amounts[n] ?? 0, hands: s.handsPlayed ?? 0, wins: st.wins, tsumo: st.tsumo, dealins: st.dealins, riichi: st.riichi, bestPoints: st.best?.points ?? 0, bestName: st.best?.name ?? null }];
+  });
+  return ok(s, { ...(credits.length ? { credits } : {}), ...(mahjong.length ? { mahjong } : {}) });
 }
 
 // ───────── BOT・おまかせ・時間切れ ─────────

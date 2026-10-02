@@ -56,7 +56,7 @@ const Back = (p: { small?: boolean }) => <span class={`pc back${p.small ? ' smal
 
 // ───────── ロビー ─────────
 
-export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoConfig; tables: CasinoTable[]; mine?: CasinoTable; msg?: string }) {
+export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoConfig; tables: CasinoTable[]; mine?: CasinoTable; msg?: string; extra?: Child }) {
   const L = TABLE_LABEL[p.kind];
   const csrf = p.me.session.csrfToken;
   const coin = p.me.coin;
@@ -125,6 +125,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
           </form>
         </section>
       )}
+      {p.extra}
     </CasinoLayout>
   );
 }
