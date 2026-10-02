@@ -14,6 +14,8 @@ import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js
 import { Bowl, ChinGuide } from './chinchiro.js';
 import { CHIN_MAX_LOSS, CHIN_MAX_ROLLS, handName, parentDecides, turnHand } from '../../services/casino/chinchiro.js';
 import type { ChTableState } from '../../services/casino/tables/chinchiroTable.js';
+import { MJ_LENGTHS, MJ_TURN_SECONDS, type MjState } from '../../services/casino/tables/mahjong.js';
+import { MahjongView, MJ_RULES, MjCreateFields, MjGuide } from './mahjong.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -58,14 +60,23 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
   const L = TABLE_LABEL[p.kind];
   const csrf = p.me.session.csrfToken;
   const coin = p.me.coin;
+  const jansou = p.kind === 'mahjong';
   return (
-    <CasinoLayout title={L.name} me={p.me} back>
-      <h1 class="c-h1">
-        {L.emoji} {L.name}
-        <span class="c-tag">{L.players}</span>
-      </h1>
+    <CasinoLayout title={jansou ? '咲楽ノ宮雀荘' : L.name} me={p.me} back={jansou ? 'gate' : true} jansou={jansou}>
+      {jansou ? (
+        <section class="mj-sign">
+          <p class="mj-sign-kicker">SAKURANOMIYA JANSOU</p>
+          <h1>🀄 咲楽ノ宮雀荘</h1>
+          <p class="c-muted">4 人打ちのリーチ麻雀。人が足りなくても 🤖 BOT が入ります。</p>
+        </section>
+      ) : (
+        <h1 class="c-h1">
+          {L.emoji} {L.name}
+          <span class="c-tag">{L.players}</span>
+        </h1>
+      )}
       {p.msg && <Msg msg={p.msg} />}
-      <p class="c-muted">{RULES[p.kind]}</p>
+      {jansou ? <MjGuide /> : <p class="c-muted">{RULES[p.kind]}</p>}
       {p.mine && (
         <section class="c-panel c-center">
           <p>
@@ -100,8 +111,14 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
           <h2>🆕 卓を立てる</h2>
           <form method="post" action={`/casino/tables/${p.kind}`} class="c-bet-custom">
             <input type="hidden" name="_csrf" value={csrf} />
-            <CreateFields kind={p.kind} casino={p.casino} coin={coin} />
-            <PaceSelect kind={p.kind} />
+            {jansou ? (
+              <MjCreateFields casino={p.casino} coin={coin} />
+            ) : (
+              <>
+                <CreateFields kind={p.kind} casino={p.casino} coin={coin} />
+                <PaceSelect kind={p.kind} />
+              </>
+            )}
             <button type="submit" class="c-btn c-btn-gold">
               卓を立てて座る
             </button>
@@ -120,6 +137,7 @@ const RULES: Record<TableKind, string> = {
   poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
+  mahjong: MJ_RULES,
 };
 
 /** ふつうのときの持ち時間（秒）。ディーラー卓は賭ける時間 */
@@ -131,6 +149,7 @@ const BASE_SECONDS: Record<TableKind, { sec: number; what: string }> = {
   daifugo: { sec: 40, what: '1 回の持ち時間' },
   chinchiro_table: { sec: 20, what: '1 人の持ち時間' },
   babanuki: { sec: 25, what: '1 回の持ち時間' },
+  mahjong: { sec: MJ_TURN_SECONDS, what: '1 打の持ち時間' },
 };
 const secText = (n: number) => (n >= 60 && n % 60 === 0 ? `${n / 60} 分` : n > 60 ? `${Math.floor(n / 60)} 分 ${n % 60} 秒` : `${n} 秒`);
 
@@ -223,6 +242,11 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
     const ps = t.state as PokerState;
     return `ブラインド ${fmt(ps.sb)}/${fmt(ps.bb)}・${seats.length} 人（${who}）`;
   }
+  if (t.kind === 'mahjong') {
+    const ms = t.state as MjState;
+    const state = ms.phase === 'lobby' ? `相手待ち（空きは BOT）` : ms.phase === 'done' ? '終わり' : `${'東南西北'[ms.wind]}${ms.kyoku + 1}局`;
+    return `${MJ_LENGTHS[ms.length].label}・参加費 ${ms.entry > 0 ? `${coin.emoji}${fmt(ms.entry)}` : 'なし'}・${state}・${seats.filter((x) => !(x as { bot?: boolean }).bot).length} 人（${who}）`;
+  }
   if (t.kind === 'daifugo' || t.kind === 'babanuki') {
     const ps = t.state as DaifugoState;
     const rules = t.kind === 'daifugo' ? `・${rulesOf(ps).map((k) => DAIFUGO_RULES[k].label.replace(/^\S+ /, '')).join('・') || 'ルールなし'}` : '';
@@ -235,13 +259,14 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
 
 export function TablePage(p: { me: CasinoMe; table: CasinoTable; casino: CasinoConfig; msg?: string; now: number }) {
   const L = TABLE_LABEL[p.table.kind as TableKind];
+  const jansou = p.table.kind === 'mahjong';
   return (
-    <CasinoLayout title={L.name} me={p.me}>
+    <CasinoLayout title={jansou ? `雀荘 卓 #${p.table.id}` : L.name} me={p.me} jansou={jansou} wide={jansou}>
       <p class="c-back">
-        <a href={`/casino/tables/${p.table.kind}`}>← {L.name}の一覧へ</a>
+        <a href={jansou ? '/casino/jansou' : `/casino/tables/${p.table.kind}`}>← {jansou ? '雀荘の入口' : `${L.name}の一覧`}へ</a>
       </p>
       <h1 class="c-h1">
-        {L.emoji} {L.name} #{p.table.id}
+        {L.emoji} {jansou ? `卓 #${p.table.id}` : `${L.name} #${p.table.id}`}
       </h1>
       {p.msg && <Msg msg={p.msg} />}
       {p.table.kind === 'poker' && (
@@ -251,10 +276,14 @@ export function TablePage(p: { me: CasinoMe; table: CasinoTable; casino: CasinoC
         </div>
       )}
       <TableFrag table={p.table} me={p.me} casino={p.casino} now={p.now} />
-      <details class="c-rules">
-        <summary>遊び方</summary>
-        <p>{RULES[p.table.kind as TableKind]}</p>
-      </details>
+      {jansou ? (
+        <MjGuide />
+      ) : (
+        <details class="c-rules">
+          <summary>遊び方</summary>
+          <p>{RULES[p.table.kind as TableKind]}</p>
+        </details>
+      )}
     </CasinoLayout>
   );
 }
@@ -266,7 +295,7 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
     t.status !== 'open' ? (
       <section class="c-table c-center">
         <p>この卓は閉じました。</p>
-        <a class="c-btn" href={`/casino/tables/${t.kind}`}>
+        <a class="c-btn" href={t.kind === 'mahjong' ? '/casino/jansou' : `/casino/tables/${t.kind}`}>
           一覧へ
         </a>
       </section>
@@ -280,6 +309,8 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
       <ChView t={t} s={t.state as ChTableState} {...p} />
     ) : t.kind === 'poker' ? (
       <PokerTableView t={t} s={t.state as PokerState} {...p} />
+    ) : t.kind === 'mahjong' ? (
+      <MahjongView t={t} s={t.state as MjState} me={p.me} now={p.now} />
     ) : t.kind === 'daifugo' ? (
       <DaifugoView t={t} s={t.state as DaifugoState} {...p} />
     ) : (

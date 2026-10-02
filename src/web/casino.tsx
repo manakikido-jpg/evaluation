@@ -43,6 +43,7 @@ import {
   BaccaratPage,
   BlackjackPage,
   CasinoClosed,
+  CasinoGate,
   CasinoLanding,
   CasinoLinkPage,
   CasinoLobby,
@@ -136,9 +137,42 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   // ───────── 入口・ログイン ─────────
 
+  // 入口: カジノか雀荘かを選ぶ
   app.get('/casino', async (c) => {
     const r = await current(c);
     if (!r || 'error' in r) return c.html(<CasinoLanding error={r ? r.error : c.req.query('e')} roleName={d.cfg().casino.accessRoleName} />);
+    const me = await meOf(r.session);
+    const cfg = d.cfg();
+    if (!cfg.casino.enabled) return c.html(<CasinoClosed me={me} />);
+    await sweepTables(db, cfg, d.now());
+    return c.html(
+      <CasinoGate
+        me={me}
+        casinoOn={cfg.casino.games.some((g) => g !== 'mahjong')}
+        jansouOn={cfg.casino.games.includes('mahjong')}
+        jansouTables={(await tableCounts(db)).get('mahjong') ?? 0}
+        mine={await myTable(db, me.session.userId)}
+        msg={casinoMsg(c.req.query('e'))}
+      />,
+    );
+  });
+
+  // 🀄 咲楽ノ宮雀荘（麻雀の卓の一覧）
+  app.get(
+    '/casino/jansou',
+    page(async (c, me) => {
+      if (!kindOn('mahjong')) return c.redirect('/casino?e=game_off');
+      await sweepTables(db, d.cfg(), d.now());
+      return c.html(
+        <TablesLobby me={me} kind="mahjong" casino={d.cfg().casino} tables={await openTables(db, 'mahjong')} mine={await myTable(db, me.session.userId)} msg={casinoMsg(c.req.query('e'))} />,
+      );
+    }),
+  );
+
+  // 🎰 カジノのロビー
+  app.get('/casino/hall', async (c) => {
+    const r = await current(c);
+    if (!r || 'error' in r) return c.redirect(`/casino${r ? `?e=${r.error}` : ''}`);
     const me = await meOf(r.session);
     const cfg = d.cfg();
     if (!cfg.casino.enabled) return c.html(<CasinoClosed me={me} />);
@@ -528,6 +562,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     '/casino/tables/:kind',
     page(async (c, me) => {
       const kind = c.req.param('kind') ?? '';
+      if (kind === 'mahjong') return c.redirect(`/casino/jansou${c.req.query('e') ? `?e=${c.req.query('e')}` : ''}`);
       if (!isKind(kind) || !kindOn(kind)) return c.redirect('/casino?e=game_off');
       await sweepTables(db, d.cfg(), d.now());
       return c.html(

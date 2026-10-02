@@ -112,10 +112,13 @@ describe('🎰 カジノ: 入口とログイン', () => {
   it('ログインするとロビー。カジノの Cookie では運営の画面に入れない。名前はそのまま出さない', async () => {
     const { cookie, location } = await casinoLogin(A);
     expect(location).toBe('/casino');
-    const lobby = await (await get('/casino', cookie!)).text();
-    expect(lobby).toContain('ようこそ');
-    expect(lobby).toContain('あや&lt;b&gt;');
-    expect(lobby).not.toContain('あや<b>');
+    const gate = await (await get('/casino', cookie!)).text();
+    expect(gate).toContain('ようこそ');
+    expect(gate).toContain('あや&lt;b&gt;');
+    expect(gate).not.toContain('あや<b>');
+    expect(gate).toContain('カジノに入る');
+    expect(gate).toContain('咲楽ノ宮雀荘に入る');
+    const lobby = await (await get('/casino/hall', cookie!)).text();
     for (const g of ['ブラックジャック', 'ハイ＆ロー', 'バカラ', 'スロット', 'ルーレット', 'オセロ（CPU）', 'メンバー対戦']) expect(lobby).toContain(g);
     expect(lobby).toContain('5,000');
     const admin = await app.request('/', { headers: { cookie: `shamusho_session=${cookie}; sakura_casino=${cookie}` } });
@@ -399,7 +402,7 @@ describe('👥 みんなで座る卓（画面）', () => {
   it('ロビーに「みんなで遊ぶ」が出る。ポーカー卓を立てて、2 人目が座り、配られる', async () => {
     const a = (await casinoLogin(A)).cookie!;
     const b = (await casinoLogin(B)).cookie!;
-    const lobby = await (await get('/casino', a)).text();
+    const lobby = await (await get('/casino/hall', a)).text();
     expect(lobby).toContain('みんなで遊ぶ');
     expect(lobby).toContain('/casino/tables/poker');
     expect(lobby).toContain('/casino/tables/daifugo');
@@ -475,5 +478,28 @@ describe('👥 みんなで座る卓（画面）', () => {
     await post(`/casino/t/${bid}/act`, a, { action: 'start' });
     const bf = await (await get(`/casino/t/${bid}/frag`, a)).text();
     expect(bf).toContain('あなたの手札');
+  });
+});
+
+describe('🀄 咲楽ノ宮雀荘（画面）', () => {
+  it('入口から雀荘へ。卓を立てて始めると、空いた席に BOT が入って配られる', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    expect((await get('/casino/tables/mahjong', a)).headers.get('location')).toBe('/casino/jansou');
+    const lobby = await (await get('/casino/jansou', a)).text();
+    expect(lobby).toContain('咲楽ノ宮雀荘');
+    expect(lobby).toContain('東風戦');
+    const made = await post('/casino/tables/mahjong', a, { entry: '100', length: 'tonpu', pace: 'normal' });
+    const loc = made.headers.get('location')!;
+    expect(loc).toMatch(/^\/casino\/t\/\d+$/);
+    expect(await balance(A)).toBe(4900);
+    const id = loc.split('/').pop()!;
+    expect(await (await get(loc, a)).text()).toContain('空いた 3 席は BOT');
+    expect((await post(`/casino/t/${id}/act`, a, { action: 'start' })).headers.get('location')).toBe(loc);
+    const page = await (await get(loc, a)).text();
+    expect(page).toContain('mj-board');
+    expect(page).toContain('東1局');
+    expect(page.match(/class="mj-t [^"]*big/g)?.length).toBeGreaterThanOrEqual(13);
+    // 入口に「座っています」
+    expect(await (await get('/casino', a)).text()).toContain(`卓 #${id}`);
   });
 });

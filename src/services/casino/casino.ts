@@ -35,6 +35,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   poker: { emoji: '♠\uFE0F', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う' },
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け' },
+  mahjong: { emoji: '🀄', name: '麻雀（咲楽ノ宮雀荘）', note: '4 人打ちのリーチ麻雀。順位で参加費を分ける' },
 };
 
 export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor' | 'reserve';

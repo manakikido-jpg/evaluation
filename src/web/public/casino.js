@@ -342,7 +342,7 @@ const tickCountdowns = () => {
   });
 };
 setInterval(tickCountdowns, 250);
-const myTurn = (root) => Boolean(root?.querySelector('.c-pbar, .c-turn.mine, .c-hero.myturn, button[value="stand"], .c-draw, button[value="play"]'));
+const myTurn = (root) => Boolean(root?.querySelector('.c-pbar, .c-turn.mine, .c-hero.myturn, button[value="stand"], .c-draw, button[value="play"], .mj-mine.myturn'));
 const initLive = () => {
   if (liveTimer) clearInterval(liveTimer);
   liveTimer = null;

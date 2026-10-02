@@ -1267,3 +1267,125 @@ body.casino { background: #070d0b; }
 /* 🤖 BOT を入れる・外す */
 .c-bots { flex-wrap: wrap; justify-content: center; gap: 6px; }
 .c-bots .c-small { flex-basis: 100%; text-align: center; font-size: .8rem; margin: 2px 0 0; }
+
+/* ───────── 入口（カジノ・雀荘） ───────── */
+.c-gate-head { text-align: center; padding: 18px 0 8px; }
+.c-gate-head h1 { margin: 4px 0 6px; font-size: clamp(1.3rem, 4.6vw, 1.9rem); }
+.c-doors { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0 8px; }
+.c-door { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 30px 20px 26px; border-radius: 18px; text-decoration: none; color: var(--c-text); border: 1px solid var(--c-line); transition: transform 0.12s, box-shadow 0.2s, filter 0.2s; min-height: 220px; justify-content: center; overflow: hidden; }
+.c-door:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45); filter: brightness(1.06); }
+.c-door b { font-size: 1.35rem; letter-spacing: 0.04em; }
+.c-door small { color: var(--c-muted); line-height: 1.5; }
+.c-door .c-badge { position: absolute; top: 12px; right: 12px; }
+.c-door-mark { font-size: 3.4rem; line-height: 1; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5)); }
+.c-door-casino { background: radial-gradient(420px 220px at 50% 0%, rgba(226, 179, 64, 0.22), transparent 70%), linear-gradient(180deg, #17402f, #0d2a1f); }
+.c-door-casino b { color: var(--c-gold); }
+.c-door-jansou { background: radial-gradient(420px 220px at 50% 0%, rgba(244, 167, 192, 0.22), transparent 70%), linear-gradient(180deg, #3a1420, #1f0b12); border-color: rgba(244, 167, 192, 0.35); }
+.c-door-jansou b { color: var(--c-sakura); }
+.c-door.off { opacity: 0.45; cursor: not-allowed; }
+.c-door.off:hover { transform: none; box-shadow: none; filter: none; }
+
+/* ───────── 🀄 雀荘 ───────── */
+body.jansou { background: radial-gradient(1100px 560px at 50% -10%, #3a1a24 0%, transparent 70%), #120b0e; }
+body.jansou .c-logo b { color: var(--c-sakura); }
+.c-main.wide { max-width: 1240px; }
+.mj-sign { text-align: center; padding: 14px 0 6px; }
+.mj-sign h1 { margin: 2px 0 6px; font-size: clamp(1.5rem, 5vw, 2.2rem); color: var(--c-sakura); letter-spacing: 0.08em; }
+.mj-sign-kicker { margin: 0; color: var(--c-muted); font-size: 0.75rem; letter-spacing: 0.3em; }
+.c-seat.empty { border-style: dashed; opacity: 0.6; }
+
+/* 牌 */
+.mj-t { --tw: 26px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; width: var(--tw); height: calc(var(--tw) * 1.36); border-radius: calc(var(--tw) * 0.14); background: linear-gradient(180deg, #fffdf4, #f1ead2); box-shadow: inset 0 calc(var(--tw) * -0.1) 0 #d9cfae, 0 calc(var(--tw) * 0.07) 0 #1f6b4f, 0 calc(var(--tw) * 0.1) 4px rgba(0, 0, 0, 0.35); color: #1b1b1b; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif; line-height: 1; vertical-align: bottom; flex: none; padding: 0 0 calc(var(--tw) * 0.08); border: 0; margin: 0 1px calc(var(--tw) * 0.1); position: relative; user-select: none; }
+.mj-t b { font-size: calc(var(--tw) * 0.56); font-weight: 800; }
+.mj-t i { font-style: normal; font-size: calc(var(--tw) * 0.36); margin-top: calc(var(--tw) * 0.04); font-weight: 700; }
+.mj-t.big { --tw: clamp(22px, 6.3vw, 44px); }
+.mj-t.small { --tw: clamp(17px, 4.3vw, 26px); }
+.mj-t.tiny { --tw: clamp(13px, 3.2vw, 18px); }
+.mj-m i { color: #c3202f; }
+.mj-p b, .mj-p i { color: #1d4fa8; }
+.mj-s b, .mj-s i { color: #18784a; }
+.mj-k32 b { color: #18784a; }
+.mj-k33 b { color: #c3202f; }
+.mj-k31 b { display: block; width: 52%; height: 62%; border: max(1.5px, calc(var(--tw) * 0.07)) solid #3a74c4; border-radius: 2px; font-size: 0; }
+.mj-t.red b, .mj-t.red i { color: #d4142b; }
+.mj-t.red::after { content: ''; position: absolute; top: calc(var(--tw) * 0.1); right: calc(var(--tw) * 0.1); width: calc(var(--tw) * 0.16); height: calc(var(--tw) * 0.16); border-radius: 50%; background: #d4142b; }
+.mj-t.back { background: linear-gradient(180deg, #2e9c6f, #1d6b4f); box-shadow: inset 0 calc(var(--tw) * -0.1) 0 #155239, 0 calc(var(--tw) * 0.08) 3px rgba(0, 0, 0, 0.35); }
+.mj-t.side { transform: rotate(-90deg); margin-left: calc(var(--tw) * 0.2); margin-right: calc(var(--tw) * 0.2); }
+.mj-t.taken { opacity: 0.32; }
+.mj-t.last { outline: 2px solid var(--c-gold); outline-offset: 1px; }
+.mj-t.win { outline: 3px solid var(--c-sakura); outline-offset: 2px; }
+button.mj-t { cursor: pointer; transition: transform 0.08s; }
+button.mj-t:not(:disabled):hover { transform: translateY(-6px); }
+button.mj-t:disabled { filter: grayscale(0.6) brightness(0.75); cursor: not-allowed; }
+button.mj-t.tp::before { content: ''; position: absolute; bottom: calc(var(--tw) * -0.32); left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--c-sakura); }
+button.mj-t.drawn { margin-left: 2px; }
+.mj-handform:has(.mj-riichi input:checked) button.mj-t:not(.rc) { opacity: 0.3; pointer-events: none; }
+.mj-handform:has(.mj-riichi input:checked) button.mj-t.rc { box-shadow: 0 0 0 3px var(--c-gold), 0 0 14px rgba(226, 179, 64, 0.8); }
+
+/* 卓 */
+.mj-board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: 'top top top' 'left center right' 'me me me'; gap: 10px; background: radial-gradient(ellipse at center, #1a6a4c 0%, #0f4a36 60%, #0a3324 100%); border: 1px solid var(--c-line); border-radius: 18px; padding: 12px; box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45); }
+.mj-opp { background: rgba(0, 0, 0, 0.18); border-radius: 12px; padding: 8px; min-width: 0; }
+.mj-opp.mj-top { grid-area: top; }
+.mj-opp.mj-left { grid-area: left; }
+.mj-opp.mj-right { grid-area: right; }
+.mj-opp.mj-bottom { grid-area: me; }
+.mj-center, .mj-result { grid-area: center; }
+.mj-mine { grid-area: me; background: rgba(0, 0, 0, 0.22); border-radius: 12px; padding: 10px; }
+.mj-mine.myturn { box-shadow: 0 0 0 2px var(--c-gold) inset; }
+.mj-plate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 6px; font-size: 0.92rem; }
+.mj-plate.turn { color: var(--c-gold); }
+.mj-plate.turn .mj-pname::before { content: '▶ '; }
+.mj-wind { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 6px; background: rgba(255, 255, 255, 0.12); font-weight: 800; }
+.mj-wind.dealer { background: var(--c-red); color: #fff; }
+.mj-pname { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
+.mj-points { font-variant-numeric: tabular-nums; color: var(--c-text); }
+.mj-stick { font-size: 0.72rem; padding: 1px 8px; border-radius: 999px; background: #f5f0e2; color: #222; border: 1px solid #c8283c; font-weight: 800; }
+.mj-plate .c-count { margin-left: auto; }
+.mj-ohand { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 0; margin-bottom: 6px; }
+.mj-river { display: grid; grid-template-columns: repeat(6, max-content); gap: 3px 1px; min-height: 2em; }
+.mj-melds { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; align-items: flex-end; }
+.mj-meld { display: inline-flex; align-items: flex-end; padding: 0 2px; }
+.mj-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: rgba(0, 0, 0, 0.28); border-radius: 14px; padding: 12px; text-align: center; }
+.mj-round { font-size: 1.25rem; font-weight: 800; color: var(--c-gold); letter-spacing: 0.06em; }
+.mj-info { display: flex; gap: 12px; color: var(--c-muted); font-size: 0.9rem; }
+.mj-dora { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.mj-lastlog { color: var(--c-muted); font-size: 0.85rem; }
+.mj-hand { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 0; margin: 8px 0 4px; }
+.mj-gap { width: 10px; flex: none; }
+.mj-riichi { display: inline-flex; gap: 8px; align-items: center; margin: 6px 0; padding: 6px 12px; border: 1px solid var(--c-gold2); border-radius: 10px; background: rgba(226, 179, 64, 0.1); cursor: pointer; }
+.mj-riichi input { width: 1.2em; height: 1.2em; accent-color: var(--c-gold); }
+.mj-hint { margin: 2px 0; font-size: 0.85rem; }
+.mj-acts .c-btn.mj-big, .mj-callbox .c-btn.mj-big { font-size: 1.15rem; padding: 10px 26px; }
+.mj-callbox { margin-top: 8px; padding: 10px; border-radius: 12px; background: rgba(226, 179, 64, 0.12); border: 1px solid var(--c-gold2); }
+.mj-callbox p { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mj-callbtn { display: inline-flex; align-items: center; gap: 8px; }
+.mj-callt { display: inline-flex; }
+.mj-status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 0; font-size: 0.9rem; }
+.mj-furiten { color: #ff8a9a; font-weight: 700; }
+.mj-result { background: rgba(0, 0, 0, 0.5); border: 1px solid var(--c-gold2); border-radius: 14px; padding: 12px 14px; }
+.mj-result h2 { margin: 0 0 6px; }
+.mj-yaku { list-style: none; margin: 6px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 14px; }
+.mj-yaku li { display: flex; justify-content: space-between; border-bottom: 1px dotted rgba(255, 255, 255, 0.15); padding: 2px 0; }
+.mj-score { font-size: 1.1rem; margin: 6px 0; }
+.mj-deltas { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.92rem; }
+.mj-deltas td { padding: 3px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.mj-deltas td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mj-deltas tr.me td { color: var(--c-gold); }
+.mj-tenpai { display: grid; gap: 6px; }
+.mj-final li b { margin-left: 6px; }
+.mj-log ul { margin: 6px 0; padding-left: 1.2em; color: var(--c-muted); font-size: 0.88rem; }
+.mj-yakulist { padding-left: 1.1em; }
+.mj-yakulist li { margin: 4px 0; }
+.mj-lobby .c-seats { justify-content: center; }
+
+@media (max-width: 760px) {
+  .mj-board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'top top' 'left right' 'center center' 'me me'; padding: 8px; gap: 8px; }
+  .mj-opp { padding: 6px; }
+  .mj-plate { font-size: 0.82rem; gap: 6px; }
+  .mj-pname { max-width: 7em; }
+  .mj-opp .mj-t.small { --tw: clamp(14px, 3.6vw, 20px); }
+  .mj-mine { padding: 8px; }
+  .mj-hand { gap: 4px 0; }
+  .mj-t.big { --tw: clamp(18px, calc((100vw - 84px) / 14.8), 34px); margin-left: 0.5px; margin-right: 0.5px; }
+  .mj-gap { width: 5px; }
+}

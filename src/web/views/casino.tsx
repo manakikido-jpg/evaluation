@@ -17,12 +17,14 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 
 /** みんなで遊ぶもの（ロビーで分けて出す） */
-const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus'];
+const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus', 'mahjong'];
+const gameHref = (g: CasinoGame) => (g === 'versus' ? '/casino/versus' : g === 'mahjong' ? '/casino/jansou' : `/casino/tables/${g}`);
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
 export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean };
 
-export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean }) {
+/** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
+export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean }) {
   const me = props.me;
   return (
     <html lang="ja">
@@ -30,22 +32,24 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="noindex" />
-        <title>{props.title} | 咲楽ノ宮カジノ</title>
+        <title>
+          {props.title} | {props.jansou ? '咲楽ノ宮雀荘' : '咲楽ノ宮カジノ'}
+        </title>
         <link rel="stylesheet" href={assetUrl('casino.css')} />
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino.js')} defer></script>
       </head>
-      <body class="casino">
+      <body class={`casino${props.jansou ? ' jansou' : ''}`}>
         <div class="c-sky" aria-hidden="true">
           {Array.from({ length: 14 }, () => (
             <span class="c-petal"></span>
           ))}
         </div>
         <header class="c-top">
-          <a href="/casino" class="c-logo">
-            <span class="c-logo-mark">🌸</span>
+          <a href={props.jansou ? '/casino/jansou' : '/casino'} class="c-logo">
+            <span class="c-logo-mark">{props.jansou ? '🀄' : '🌸'}</span>
             <span>
-              咲楽ノ宮<b>カジノ</b>
+              咲楽ノ宮<b>{props.jansou ? '雀荘' : 'カジノ'}</b>
             </span>
           </a>
           <button type="button" class="c-sound" data-sound-toggle aria-pressed="true" title="音を消す">
@@ -74,10 +78,10 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
             </div>
           )}
         </header>
-        <main class="c-main">
+        <main class={`c-main${props.wide ? ' wide' : ''}`}>
           {props.back && (
             <p class="c-back">
-              <a href="/casino">← ロビーへ</a>
+              {props.back === 'gate' ? <a href="/casino">← 入口へ</a> : <a href="/casino/hall">← ロビーへ</a>}
             </p>
           )}
           {props.children}
@@ -155,6 +159,66 @@ export function CasinoClosed(props: { me: CasinoMe }) {
   );
 }
 
+/** 入口: カジノか雀荘か */
+export function CasinoGate(p: { me: CasinoMe; casinoOn: boolean; jansouOn: boolean; jansouTables: number; mine?: { id: number; kind: string }; msg?: string }) {
+  return (
+    <CasinoLayout title="入口" me={p.me}>
+      <section class="c-gate-head">
+        <p class="c-welcome-kicker">SAKURANOMIYA</p>
+        <h1>ようこそ、{p.me.session.displayName} さん</h1>
+        <p class="c-muted">どちらに入りますか？</p>
+      </section>
+      {p.msg && <Msg msg={p.msg} />}
+      {p.mine && (
+        <a class="c-mine" href={`/casino/t/${p.mine.id}`}>
+          <span class="c-mine-dot" aria-hidden="true"></span>
+          <span>
+            {CASINO_LABEL[p.mine.kind as CasinoGame]?.emoji} 卓 #{p.mine.id}（{CASINO_LABEL[p.mine.kind as CasinoGame]?.name}）に座っています
+          </span>
+          <b>戻る →</b>
+        </a>
+      )}
+      <div class="c-doors">
+        {p.casinoOn ? (
+          <a href="/casino/hall" class="c-door c-door-casino">
+            <span class="c-door-mark" aria-hidden="true">
+              🎰
+            </span>
+            <b>カジノに入る</b>
+            <small>ブラックジャック・ポーカー・スロット・ルーレット・ちんちろ・大富豪…</small>
+          </a>
+        ) : (
+          <span class="c-door c-door-casino off">
+            <span class="c-door-mark" aria-hidden="true">
+              🎰
+            </span>
+            <b>カジノ</b>
+            <small>いまはお休みです</small>
+          </span>
+        )}
+        {p.jansouOn ? (
+          <a href="/casino/jansou" class="c-door c-door-jansou">
+            <span class="c-door-mark" aria-hidden="true">
+              🀄
+            </span>
+            <b>咲楽ノ宮雀荘に入る</b>
+            <small>4 人打ちのリーチ麻雀。人が足りなくても BOT が入ります</small>
+            {p.jansouTables > 0 && <span class="c-badge">{p.jansouTables} 卓</span>}
+          </a>
+        ) : (
+          <span class="c-door c-door-jansou off">
+            <span class="c-door-mark" aria-hidden="true">
+              🀄
+            </span>
+            <b>咲楽ノ宮雀荘</b>
+            <small>いまはお休みです</small>
+          </span>
+        )}
+      </div>
+    </CasinoLayout>
+  );
+}
+
 export type LobbyProps = {
   me: CasinoMe;
   casino: CasinoConfig;
@@ -209,7 +273,7 @@ export function CasinoLobby(p: LobbyProps) {
       <h2 class="c-section">👥 みんなで遊ぶ</h2>
       <section class="c-games">
         {TABLE_GAMES.filter((g) => games.includes(g)).map((g) => (
-            <a href={g === 'versus' ? '/casino/versus' : `/casino/tables/${g}`} class={`c-game c-game-${g} c-game-multi`}>
+            <a href={gameHref(g)} class={`c-game c-game-${g} c-game-multi`}>
               <span class="c-game-emoji">
                 <span>{CASINO_LABEL[g].emoji}</span>
               </span>

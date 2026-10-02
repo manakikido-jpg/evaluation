@@ -73,4 +73,5 @@ export const TABLE_LABEL: Record<TableKind, { emoji: string; name: string; note:
   poker: { emoji: '♠\uFE0F', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う', players: '2〜6 人' },
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金', players: '3〜5 人' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け', players: '2〜5 人' },
+  mahjong: { emoji: '🀄', name: '麻雀', note: '4 人打ちのリーチ麻雀。足りない席は BOT', players: '1〜4 人（残りは BOT）' },
 };
