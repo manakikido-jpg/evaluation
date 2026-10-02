@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-03-slots-aim',
+    date: '2026-10-03',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '🎰 スロットを目押ししやすく',
+    items: [
+      'リールの速さを左が速く、右に行くほどゆっくりに（左 15・中 12・右 9.5 コマ／秒）',
+      '7 は回っているあいだも赤く光って少し大きく見える。7 を狙うとき（GOGO ランプのあと）はリールのぼかしをなくした',
+    ],
+  },
+  {
     id: '2026-10-03-jansou-fx-stats',
     date: '2026-10-03',
     kind: 'new',

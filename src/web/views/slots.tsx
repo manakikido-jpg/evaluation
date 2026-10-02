@@ -37,7 +37,8 @@ const odds = (w: number) => {
 
 function Sym(p: { k: SlotKey }) {
   const src = slotArt(p.k);
-  return src ? <img class="sy" src={src} alt="" draggable="false" /> : <span class="sy">{SLOT_SYMBOLS[p.k].emoji}</span>;
+  // 絵柄ごとの印（7 は回っているあいだも目立つように光らせる）
+  return src ? <img class={`sy sy-${p.k}`} src={src} alt="" draggable="false" /> : <span class={`sy sy-${p.k}`}>{SLOT_SYMBOLS[p.k].emoji}</span>;
 }
 
 function PaySym(p: { k: SlotKey }) {

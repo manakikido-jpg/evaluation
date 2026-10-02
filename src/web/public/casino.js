@@ -586,7 +586,8 @@ document.addEventListener('c-live-updated', () => {
 // - aim: ボーナスを持っている。押した所から最大 4 コマ以内で、どれかのライン（5 本）に 7 がつながる所で止まる。
 //   止め終わったら押した所を送り、サーバーが同じ計算で確かめる（services/casino/slots.ts の judge・aimStops と同じ決まり）
 // - still: 止まったまま。レバー（スペース）で同じ量を賭けて回す
-const REEL_SPEED = 15; // コマ / 秒
+/** リールの速さ（コマ / 秒）。左が速く、右に行くほど遅い（目押ししやすいように） */
+const REEL_SPEEDS = [15, 12, 9.5];
 let slotCtl = null;
 let leverAt = 0;
 const initSlots = (root) => {
@@ -598,7 +599,9 @@ const initSlots = (root) => {
   const SLIP = Number(jug.dataset.slip) || 4;
   let mode = jug.dataset.mode;
   const bonus = jug.dataset.role;
-  const speed = matchMedia('(prefers-reduced-motion: reduce)').matches ? 7 : REEL_SPEED;
+  // 動きを減らす設定なら半分の速さ
+  const slow = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.5 : 1;
+  const speedOf = (i) => (REEL_SPEEDS[i] ?? REEL_SPEEDS.at(-1)) * slow;
   const stops = (jug.dataset.stops || '0,0,0').split(',').map(Number);
   const want = (jug.dataset.want || '').split(',');
   const lines = (jug.dataset.lines || '').split('|').filter(Boolean).map((x) => {
@@ -642,9 +645,9 @@ const initSlots = (root) => {
     if (!alive) return;
     const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
     last = t;
-    for (const r of reels) {
+    for (const [i, r] of reels.entries()) {
       if (r.state === 'spin') {
-        r.pos -= speed * dt;
+        r.pos -= speedOf(i) * dt;
         while (r.pos < N) r.pos += N;
         paint(r);
       } else if (r.state === 'slide') {
@@ -816,7 +819,7 @@ const initSlots = (root) => {
       from,
       to,
       t0: performance.now(),
-      dur: ((from - to) / speed) * 1000 * 1.6 + 70,
+      dur: ((from - to) / speedOf(i)) * 1000 * 1.6 + 70,
       done: () => {
         r.el.classList.remove('spin');
         r.strip.classList.remove('bump');

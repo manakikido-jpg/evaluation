@@ -987,7 +987,12 @@ body.casino { background: #070d0b; }
 .c-jreel::before { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; box-shadow: inset 0 18px 16px -10px rgba(0, 0, 0, 0.6), inset 0 -18px 16px -10px rgba(0, 0, 0, 0.6); border-radius: 10px; }
 .c-jstrip { --at: 21; display: flex; flex-direction: column; align-items: center; transform: translateY(calc((1 - var(--at)) * var(--h))); will-change: transform; }
 .c-jstrip .sy { flex: none; display: block; width: calc(var(--h) - 8px); height: var(--h); padding: 4px 0; box-sizing: border-box; object-fit: contain; text-align: center; line-height: calc(var(--h) - 8px); font-size: calc(var(--h) * 0.62); user-select: none; -webkit-user-drag: none; }
-.c-jreel.spin .c-jstrip { filter: blur(1.6px) saturate(1.2); }
+.c-jreel.spin .c-jstrip { filter: blur(0.7px) saturate(1.15); }
+/* 7 は回っているあいだも赤く光って、目押しの目印になる */
+.c-jstrip .sy-seven { background: radial-gradient(circle at 50% 50%, rgba(255, 70, 90, 0.5) 0%, rgba(255, 70, 90, 0.2) 48%, transparent 74%); border-radius: 10px; }
+.c-jreel.spin .c-jstrip .sy-seven { transform: scale(1.1); background: radial-gradient(circle at 50% 50%, rgba(255, 60, 80, 0.7) 0%, rgba(255, 60, 80, 0.32) 50%, transparent 78%); filter: drop-shadow(0 0 8px rgba(255, 30, 60, 1)) drop-shadow(0 0 2px #fff) brightness(1.15); }
+.c-jug[data-mode='aim'] .c-jreel.spin .c-jstrip { filter: none; }
+.c-jug[data-mode='aim'] .c-jreel.spin .c-jstrip .sy-seven { background: radial-gradient(circle at 50% 50%, rgba(255, 70, 90, 0.6) 0%, rgba(255, 70, 90, 0.25) 50%, transparent 75%); }
 .c-jreel.hit-0::after { top: 0; }
 .c-jreel.hit-2::after { top: calc(var(--h) * 2); }
 .c-jstrip.bump { animation: jbump 0.26s cubic-bezier(0.3, 1.8, 0.5, 1); }
