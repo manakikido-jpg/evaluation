@@ -22,7 +22,7 @@ import {
   type KbPools,
   type KbRaceInfo,
 } from '../keiba.js';
-import { fail, intOf, ok, str, type Credit, type Ctx, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, list, ok, str, type Credit, type Ctx, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * 🏇 みんなでダービー（競馬の卓）。だれかがレースを開くと受付が始まり、締め切ったら全員が同じレースを見る。
@@ -179,6 +179,17 @@ export function ticketKey(t: KbBetType, a: number, b: number): string | undefine
   return okNo(b) && a !== b ? pairKey(a, b) : undefined;
 }
 
+/** 選んだ馬から馬券を作る。単勝・複勝は 1 頭ずつ、馬連・ワイドは 2 頭以上の組み合わせ全部（ボックス） */
+export function boxKeys(t: KbBetType, picks: number[]): (string | undefined)[] {
+  const nos = [...new Set(picks)];
+  if (!nos.length || nos.some((n) => !Number.isInteger(n) || n < 1 || n > KB_HORSES)) return [undefined];
+  if (!isPairType(t)) return nos.map((n) => String(n));
+  if (nos.length < 2) return [undefined];
+  const out: string[] = [];
+  for (let i = 0; i < nos.length; i++) for (let j = i + 1; j < nos.length; j++) out.push(pairKey(nos[i]!, nos[j]!));
+  return out;
+}
+
 export const keiba: TableEngine<KbState> = {
   kind: 'keiba',
   maxSeats: KB_SEATS,
@@ -226,24 +237,29 @@ export const keiba: TableEngine<KbState> = {
     const s: KbState = structuredClone(state);
     s.seats.find((x) => x.id === id)!.lastActive = ctx.now;
     const a = str(f, 'action');
-    if (a === 'bet') {
+    if (a === 'bet' || a === 'bets') {
       if (s.phase !== 'betting' || s.deadline <= ctx.now) return fail('started');
       const t = str(f, 'type');
       if (!isKbBetType(t)) return fail('invalid');
-      const key = ticketKey(t, Number(str(f, 'a')), Number(str(f, 'b')));
-      if (!key) return fail('invalid');
+      // bet: 1 枚（a・b）。bets: 選んだ馬（h）ごとに 1 枚。馬連・ワイドは選んだ馬の組み合わせ全部（ボックス）
+      const keys = a === 'bet' ? [ticketKey(t, Number(str(f, 'a')), Number(str(f, 'b')))] : boxKeys(t, list(f, 'h').map(Number));
+      if (!keys.length || keys.some((k) => !k)) return fail('invalid');
       const amount = intOf(f, 'bet');
       const c = ctx.cfg.casino;
       if (!Number.isInteger(amount) || amount < c.minBet || amount > c.maxBet) return fail('bad_bet');
       const mine = s.tickets.filter((x) => x.memberId === id);
-      const same = mine.find((x) => x.t === t && x.key === key);
-      if (!same && mine.length >= KB_MAX_TICKETS) return fail('too_many');
-      if ((same?.amount ?? 0) + amount > c.maxBet) return fail('bad_bet');
-      if (same) same.amount += amount;
-      else s.tickets.push({ memberId: id, name: me.name, t, key, amount });
-      addToPool(s.pools, t, key, amount);
-      s.real += amount;
-      return ok(s, { debits: [{ memberId: id, amount, reason: 'casino_bet', limited: true }] });
+      const fresh = keys.filter((k) => !mine.some((x) => x.t === t && x.key === k));
+      if (mine.length + fresh.length > KB_MAX_TICKETS) return fail('too_many');
+      for (const key of keys as string[]) {
+        const same = s.tickets.find((x) => x.memberId === id && x.t === t && x.key === key);
+        if ((same?.amount ?? 0) + amount > c.maxBet) return fail('bad_bet');
+        if (same) same.amount += amount;
+        else s.tickets.push({ memberId: id, name: me.name, t, key, amount });
+        addToPool(s.pools, t, key, amount);
+      }
+      const total = amount * keys.length;
+      s.real += total;
+      return ok(s, { debits: [{ memberId: id, amount: total, reason: 'casino_bet', limited: true }] });
     }
     if (a === 'cancel') {
       // そのレースの自分の賭けを全部取り消す

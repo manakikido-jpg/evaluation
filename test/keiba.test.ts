@@ -20,7 +20,7 @@ import {
   ticketOdds,
 } from '../src/services/casino/keiba.js';
 import { addHorse, listHorses, loadRoster, renameHorse, setRetired, KB_ROSTER_MIN } from '../src/services/casino/keibaStable.js';
-import { keiba, ticketKey, type KbState } from '../src/services/casino/tables/keiba.js';
+import { boxKeys, keiba, ticketKey, type KbState } from '../src/services/casino/tables/keiba.js';
 import { actTable, createTable, joinTable, leaveTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
 import type { Ctx } from '../src/services/casino/tables/types.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -87,6 +87,22 @@ describe('🏇 レースとオッズ', () => {
     // 当たりの賭けがとても多くても 1.0 倍（元返し）より下にはならない
     addToPool(pools, 'win', '1', 100000);
     expect(finalOdds(pools, [1, 2, 3, 4, 5, 6, 7, 8]).win[1]).toBe(10);
+  });
+
+  it('まとめて買う: 単勝は 1 頭ずつ、馬連・ワイドは選んだ馬の組み合わせ全部（ボックス）', () => {
+    expect(boxKeys('win', [3, 5, 3])).toEqual(['3', '5']);
+    expect(boxKeys('quinella', [1, 4, 2])).toEqual(['1-4', '1-2', '2-4']);
+    expect(boxKeys('wide', [2])).toEqual([undefined]);
+    expect(boxKeys('place', [9])).toEqual([undefined]);
+    const t0 = new Date('2026-10-02T12:00:00Z').getTime();
+    let s = (keiba.create(A, {}, ctx(t0)) as { state: KbState }).state;
+    const r = keiba.act(s, A.id, { action: 'bets', type: 'wide', h: ['1', '2', '3'], bet: '100' }, ctx(t0));
+    expect(r.ok && r.fx?.debits).toEqual([{ memberId: A.id, amount: 300, reason: 'casino_bet', limited: true }]);
+    s = (r as { state: KbState }).state;
+    expect(s.tickets.map((x) => x.key)).toEqual(['1-2', '1-3', '2-3']);
+    // 20 枚まで（8 頭のボックスは 28 点）
+    expect(keiba.act(s, A.id, { action: 'bets', type: 'quinella', h: ['1', '2', '3', '4', '5', '6', '7', '8'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'too_many' });
+    expect(keiba.act(s, A.id, { action: 'bets', type: 'quinella', h: ['1'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'invalid' });
   });
 
   it('馬券の書き方', () => {

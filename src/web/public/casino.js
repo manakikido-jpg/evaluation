@@ -1022,53 +1022,181 @@ const mjFx = () => {
 document.addEventListener('c-live-updated', mjFx);
 
 // ───── 🏇 みんなでダービー: 楕円のコースを馬が走る（みんな同じ時刻に同じ動き）・実況・いまの順位 ─────
-/** 差し替える前に、馬券の選んだもの（賭け方・馬・量）を覚えておく */
+/** 差し替える前に、馬券の選んだもの（賭け方・馬・量）と、オッズを覚えておく */
 const keepPicks = (root) => {
-  const f = root?.querySelector('.kb-bet form');
-  if (!f) return null;
-  return { type: f.querySelector('input[name="type"]:checked')?.value, a: f.a?.value, b: f.b?.value, custom: f.betCustom?.value };
+  const odds = {};
+  root?.querySelectorAll('[data-kb-odd]').forEach((el) => {
+    odds[el.dataset.kbOdd] = Number(el.dataset.v);
+  });
+  const f = root?.querySelector('.kb-slip');
+  if (!f) return { odds };
+  return {
+    odds,
+    type: f.querySelector('input[name="type"]:checked')?.value,
+    h: [...f.querySelectorAll('input[name="h"]:checked')].map((x) => x.value),
+    bet: f.querySelector('input[name="bet"]:checked')?.value,
+    custom: f.betCustom?.value,
+  };
 };
 const restorePicks = (root, k) => {
-  const f = root?.querySelector('.kb-bet form');
-  if (!f || !k) return;
-  const r = k.type && f.querySelector(`input[name="type"][value="${k.type}"]`);
+  if (!root || !k) return;
+  // オッズが動いたら光らせる（上がった = 赤、下がった = 青）
+  root.querySelectorAll('[data-kb-odd]').forEach((el) => {
+    const before = k.odds?.[el.dataset.kbOdd];
+    const now = Number(el.dataset.v);
+    if (before === undefined || before === now) return;
+    el.classList.add(now > before ? 'kb-up' : 'kb-down');
+  });
+  const f = root.querySelector('.kb-slip');
+  if (!f || k.type === undefined) return;
+  const r = f.querySelector(`input[name="type"][value="${k.type}"]`);
   if (r) r.checked = true;
-  if (k.a && f.a) f.a.value = k.a;
-  if (k.b && f.b) f.b.value = k.b;
+  f.querySelectorAll('input[name="h"]').forEach((x) => {
+    x.checked = k.h.includes(x.value);
+  });
+  const b = k.bet && f.querySelector(`input[name="bet"][value="${k.bet}"]`);
+  if (b) b.checked = true;
   if (k.custom && f.betCustom) f.betCustom.value = k.custom;
-  paintKbForm(f);
+  paintSlip(f);
 };
-/** 馬連・ワイドのときだけ「相手」を出す */
-const paintKbForm = (f) => {
-  const t = f.querySelector('input[name="type"]:checked')?.value;
-  f.querySelector('.kb-pick-b')?.classList.toggle('off', t !== 'quinella' && t !== 'wide');
+
+const kbFmt = (n) => Math.round(n).toLocaleString('ja-JP');
+const kbOdd = (o10) => (o10 / 10).toFixed(1);
+const kbPair = (a, b) => (Number(a) < Number(b) ? `${a}-${b}` : `${b}-${a}`);
+/** 馬券の画面: 選んだ馬のオッズ・何点・合計・当たるといくら */
+const paintSlip = (f) => {
+  let odds;
+  try {
+    odds = JSON.parse(f.dataset.odds);
+  } catch {
+    return;
+  }
+  const type = f.querySelector('input[name="type"]:checked')?.value || 'win';
+  const picks = [...f.querySelectorAll('input[name="h"]:checked')].map((x) => x.value);
+  const sel = f.querySelector('input[name="bet"]:checked');
+  const amount = sel?.value === 'custom' ? Number(f.betCustom?.value) : Number(sel?.value);
+  const pair = type === 'quinella' || type === 'wide';
+  // 馬のボタンに、いまの賭け方のオッズ（馬連・ワイドは、選んだ 1 頭目との組み）
+  const anchor = pair && picks.length ? picks[0] : null;
+  f.querySelectorAll('[data-kb-hodds]').forEach((el) => {
+    const no = el.dataset.kbHodds;
+    if (type === 'win') el.textContent = `単 ${kbOdd(odds.win[no])}`;
+    else if (type === 'place') el.textContent = `複 ${kbOdd(odds.place[no][0])}-${kbOdd(odds.place[no][1])}`;
+    else if (!anchor) el.textContent = type === 'quinella' ? '連 —' : 'ワ —';
+    else if (anchor === no) el.textContent = '軸';
+    else {
+      const o = odds[type][kbPair(anchor, no)];
+      el.textContent = type === 'quinella' ? `連 ${kbOdd(o[0])}` : `ワ ${kbOdd(o[0])}`;
+    }
+  });
+  // 何点
+  const keys = [];
+  if (!pair) picks.forEach((no) => keys.push(no));
+  else for (let i = 0; i < picks.length; i++) for (let j = i + 1; j < picks.length; j++) keys.push(kbPair(picks[i], picks[j]));
+  const lo = keys.map((k) => (type === 'win' ? odds.win[k] : type === 'place' ? odds.place[k][0] : odds[type][k][0]));
+  const hi = keys.map((k) => (type === 'win' ? odds.win[k] : type === 'place' ? odds.place[k][1] : type === 'wide' ? odds.wide[k][1] : odds.quinella[k][0]));
+  const out = f.querySelector('.kb-preview');
+  const buy = f.querySelector('.kb-buy');
+  const coin = f.dataset.coin || '';
+  let ok = keys.length > 0 && amount > 0;
+  if (!keys.length) out.textContent = pair ? '2 頭以上選んでください（選んだ馬の組み合わせを全部買います）' : '馬を選んでください';
+  else if (!(amount > 0)) out.textContent = '量を選んでください';
+  else {
+    const min = Math.min(...lo) * amount / 10;
+    const max = Math.max(...hi) * amount / 10;
+    out.innerHTML = '';
+    const a = document.createElement('b');
+    a.textContent = `${keys.length} 点 × ${kbFmt(amount)} = 合計 ${kbFmt(keys.length * amount)} ${coin}`;
+    const b = document.createElement('span');
+    b.textContent = `当たると 約 ${kbFmt(min)}${max > min ? `〜${kbFmt(max)}` : ''} ${coin}`;
+    out.append(a, b);
+    if (keys.length > 20) {
+      ok = false;
+      b.textContent = '1 レースに 20 枚までです。馬を減らしてください';
+    }
+  }
+  if (buy) {
+    buy.disabled = !ok;
+    buy.textContent = ok ? `🎫 ${keys.length} 点 買う（${kbFmt(keys.length * amount)} ${coin}）` : '🎫 馬券を買う';
+  }
 };
 document.addEventListener('change', (e) => {
-  const f = e.target.closest?.('.kb-bet form');
-  if (f) paintKbForm(f);
+  const f = e.target.closest?.('.kb-slip');
+  if (!f) return;
+  if (e.target.name === 'betCustom') f.querySelector('input[name="bet"][value="custom"]').checked = true;
+  paintSlip(f);
 });
-// 出馬表の行を押すと、その馬を選ぶ（馬連・ワイドなら、2 回目は相手）
+document.addEventListener('input', (e) => {
+  const f = e.target.closest?.('.kb-slip');
+  if (f && e.target.name === 'betCustom') {
+    f.querySelector('input[name="bet"][value="custom"]').checked = true;
+    paintSlip(f);
+  }
+});
 document.addEventListener('click', (e) => {
+  // 🎲 おまかせ・⭐ 1 番人気・選び直す
+  const q = e.target.closest?.('[data-kb-quick]');
+  if (q) {
+    const f = q.closest('.kb-slip');
+    const boxes = [...f.querySelectorAll('input[name="h"]')];
+    const type = f.querySelector('input[name="type"]:checked')?.value;
+    const n = type === 'quinella' || type === 'wide' ? 2 : 1;
+    boxes.forEach((x) => {
+      x.checked = false;
+    });
+    if (q.dataset.kbQuick === 'random') {
+      const pool = [...boxes];
+      for (let i = 0; i < n; i++) pool.splice(Math.floor(Math.random() * pool.length), 1)[0].checked = true;
+      Sound.chip?.();
+    } else if (q.dataset.kbQuick === 'fav') {
+      let odds = {};
+      try {
+        odds = JSON.parse(f.dataset.odds).win;
+      } catch {
+        odds = {};
+      }
+      boxes.sort((a, b) => (odds[a.value] ?? 0) - (odds[b.value] ?? 0)).slice(0, n).forEach((x) => {
+        x.checked = true;
+      });
+    }
+    dirtyAt = Date.now();
+    paintSlip(f);
+    return;
+  }
+  // 出馬表の行を押すと、その馬を選ぶ（もう一度押すと外す）
   const row = e.target.closest?.('[data-kb-pick]');
   if (!row) return;
-  const f = document.querySelector('.kb-bet form');
-  if (!f) return;
-  const no = row.dataset.kbPick;
-  const t = f.querySelector('input[name="type"]:checked')?.value;
-  const pair = t === 'quinella' || t === 'wide';
-  if (pair && f.a.value !== no && f.dataset.kbNext === 'b') {
-    f.b.value = no;
-    f.dataset.kbNext = 'a';
-  } else {
-    f.a.value = no;
-    f.dataset.kbNext = 'b';
-    if (f.b.value === no) f.b.value = String((Number(no) % 8) + 1);
-  }
-  document.querySelectorAll('[data-kb-pick].sel').forEach((x) => x.classList.remove('sel'));
-  row.classList.add('sel');
-  f.querySelector('.kb-picks')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const box = document.querySelector(`.kb-slip input[name="h"][value="${row.dataset.kbPick}"]`);
+  if (!box) return;
+  box.checked = !box.checked;
+  paintSlip(box.form);
+  box.closest('.kb-hbtn')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   dirtyAt = Date.now();
 });
+/** 人気の棒の長さ（CSP で style 属性が使えないので、ここで） */
+const paintPopBars = () => {
+  document.querySelectorAll('.kb-popbar i[data-w]').forEach((el) => {
+    el.style.width = `${Math.min(100, Number(el.dataset.w))}%`;
+  });
+};
+// ⏰ 締め切り 10 秒前から「締め切り間近！」、5 秒前からカウントの音
+let kbBeep = -1;
+setInterval(() => {
+  const stage = document.querySelector('.kb-stage');
+  const banner = stage?.querySelector('.kb-hurry');
+  const cd = stage?.querySelector('.kb-head .c-count[data-deadline]');
+  if (!stage || !banner || !cd) return;
+  const left = Number(cd.dataset.deadline) - (Date.now() + Number(document.documentElement.dataset.skew || 0));
+  const hurry = left > 0 && left <= 10_000;
+  stage.classList.toggle('kb-hurrying', hurry);
+  const sec = Math.ceil(left / 1000);
+  if (hurry && sec <= 5 && sec !== kbBeep) {
+    kbBeep = sec;
+    Sound.click?.();
+  }
+}, 250);
+// 的中の発表は、同じレースで 1 回だけ
+const kbRevealed = new Set();
 
 // テレビ中継のように横から映す。カメラは先頭集団を追う。右上に小さなコース全体の図
 // 毛色（体・たてがみと脚の先）
@@ -1084,6 +1212,7 @@ const KB_COAT = [
 const KB_CAP = ['#ffffff', '#222222', '#e53935', '#1e63d6', '#f4c430', '#2e9e4f', '#f08a24', '#f48fb1'];
 const KB_CAP_TEXT = ['#111', '#fff', '#fff', '#fff', '#111', '#fff', '#111', '#111'];
 const KB_LAP = 2000;
+const KB_NO_MARK = '①②③④⑤⑥⑦⑧';
 /** 角の丸い四角（古いブラウザはふつうの四角） */
 const kbRound = (g, x, y, w, h, r) => (g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h));
 const kbStartOf = (d) => (((-d) % KB_LAP) + KB_LAP) % KB_LAP;
@@ -1512,11 +1641,12 @@ const paintSilks = () => {
 let kbAnim = null;
 const initKeiba = () => {
   paintSilks();
+  document.querySelectorAll('.kb-slip').forEach(paintSlip);
+  paintPopBars();
   const el = document.querySelector('.kb-tv[data-kb]');
   if (kbAnim && kbAnim.el === el) return;
   if (kbAnim) cancelAnimationFrame(kbAnim.raf);
   kbAnim = null;
-  document.querySelectorAll('.kb-bet form').forEach(paintKbForm);
   if (!el) return;
   let data;
   try {
@@ -1530,6 +1660,9 @@ const initKeiba = () => {
   const call = el.querySelector('.kb-call');
   const rankBox = el.querySelector('.kb-rank');
   const remainBox = el.querySelector('.kb-remain');
+  const mineBox = el.querySelector('.kb-mine');
+  const mine = new Set(data.mine || []);
+  let photo = false;
   const D = data.dist;
   const horses = data.horses;
   const n = horses.length;
@@ -1617,10 +1750,24 @@ const initKeiba = () => {
       const run = racing && t >= 0 && !(data.phase === 'result');
       kbHorse(g, x, y, s, (sec * 2.4 + h.no * 0.37) % 1, h, run);
       // 頭の上の番号
-      g.fillStyle = KB_CAP[h.no - 1];
-      g.strokeStyle = '#000';
-      g.lineWidth = 1;
       const by = y - 70 * s;
+      if (mine.has(h.no)) {
+        g.strokeStyle = '#ffd34d';
+        g.lineWidth = 3;
+        g.beginPath();
+        g.ellipse(x + 2 * s, y + 1, 44 * s, 7 * s, 0, 0, Math.PI * 2);
+        g.stroke();
+        const ay = by - 12 + Math.sin(sec * 6) * 2;
+        g.fillStyle = '#ffd34d';
+        g.beginPath();
+        g.moveTo(x + 14 * s - 6, ay - 8);
+        g.lineTo(x + 14 * s + 6, ay - 8);
+        g.lineTo(x + 14 * s, ay);
+        g.fill();
+      }
+      g.fillStyle = KB_CAP[h.no - 1];
+      g.strokeStyle = mine.has(h.no) ? '#ffd34d' : '#000';
+      g.lineWidth = mine.has(h.no) ? 2.5 : 1;
       g.beginPath();
       g.arc(x + 14 * s, by, 7.5, 0, Math.PI * 2);
       g.fill();
@@ -1669,15 +1816,29 @@ const initKeiba = () => {
       rankBox.innerHTML = '';
       top8.forEach((no) => {
         const li = document.createElement('li');
-        li.className = `kb-g${no}`;
+        li.className = `kb-g${no}${mine.has(no) ? ' kb-mine-rank' : ''}`;
         li.textContent = String(no);
         rankBox.appendChild(li);
       });
+      if (mineBox) {
+        const mineRanks = top8.map((no, r) => [no, r + 1]).filter(([no]) => mine.has(no)).slice(0, 3);
+        mineBox.textContent = mineRanks.length && t >= 0 ? `あなたの ${mineRanks.map(([no, r]) => `${KB_NO_MARK[no - 1]} ${r} 番手`).join('・')}` : '';
+        mineBox.classList.toggle('top', mineRanks.some(([, r]) => r <= 3));
+      }
     }
     if (data.phase === 'racing') {
       if (!started && t >= 0) {
         started = true;
         if (t < 1500) Sound.fanfare?.();
+      }
+      const lastCall = data.calls.at(-1);
+      if (!photo && lastCall.text.includes('写真判定') && t >= lastCall.t) {
+        photo = true;
+        const d = document.createElement('div');
+        d.className = 'kb-photo';
+        d.textContent = '📸 写真判定';
+        el.appendChild(d);
+        setTimeout(() => d.remove(), 2600);
       }
       if (!goal && lead >= D) {
         goal = true;
@@ -1690,10 +1851,15 @@ const initKeiba = () => {
   draw();
   // 結果: 当たったら音
   const net = el.closest('.kb-stage')?.dataset.kbNet;
-  if (data.phase === 'result' && net !== undefined && !el.dataset.played) {
-    el.dataset.played = '1';
-    if (Number(net) > 0) Sound.win();
-    else if (Number(net) < 0) Sound.lose();
+  const reveal = el.querySelector('.kb-reveal');
+  if (data.phase === 'result' && net !== undefined && !kbRevealed.has(data.key)) {
+    kbRevealed.add(data.key);
+    if (reveal) {
+      reveal.classList.add('show');
+      setTimeout(() => reveal.classList.remove('show'), 4500);
+    }
+    if (reveal?.classList.contains('hit')) Sound.win();
+    else Sound.lose();
   }
 };
 

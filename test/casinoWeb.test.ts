@@ -84,11 +84,11 @@ const csrfOf = async (cookie: string) => {
   const html = await (await get('/casino', cookie)).text();
   return /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
 };
-const post = async (path: string, cookie: string, body: Record<string, string>, csrf?: string) =>
+const post = async (path: string, cookie: string, body: Record<string, string | string[]>, csrf?: string) =>
   app.request(path, {
     method: 'POST',
     headers: { cookie: `sakura_casino=${cookie}`, 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ _csrf: csrf ?? (await csrfOf(cookie)), ...body }),
+    body: new URLSearchParams([['_csrf', csrf ?? (await csrfOf(cookie))], ...Object.entries(body).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x): [string, string] => [k, x]) : [[k, v] as [string, string]]))]),
   });
 const balance = async (id: string) => (await walletOf(db, id)).balance;
 
@@ -543,6 +543,12 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(await balance(A)).toBe(4900);
     const frag = await (await get(`/casino/t/${id}/frag`, a)).text();
     expect(frag).toContain('単勝 ④');
+    // まとめて買う（ワイドのボックス 3 頭 = 3 点）
+    expect(page).toContain('class="kb-slip"');
+    expect(page).toContain('🎲 おまかせ');
+    await post(`/casino/t/${id}/act`, a, { action: 'bets', type: 'wide', h: ['1', '2', '3'], bet: '50' });
+    expect(await balance(A)).toBe(4750);
+    expect(await (await get(`/casino/t/${id}/frag`, a)).text()).toContain('ワイド ①-③');
     expect(frag).toContain('みんなの馬券（1 人');
   });
 });

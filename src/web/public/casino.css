@@ -1602,3 +1602,74 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
   .kb-card { font-size: 0.82rem; }
   .kb-card td { padding: 5px 3px; }
 }
+
+/* 🏇 馬券を買う（v2）: 押して選ぶ・ボックス・当たるといくら */
+.kb-slip { display: grid; gap: 8px; }
+.kb-step { margin: 6px 0 0; font-weight: 800; color: var(--c-gold); }
+.kb-step .kb-hint { font-weight: 400; }
+.kb-hint { color: var(--c-muted); font-size: 0.78rem; }
+.kb-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.kb-horses { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.kb-hbtn { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 2px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: transform 0.12s, border-color 0.12s, background 0.12s; user-select: none; }
+.kb-hbtn input { position: absolute; opacity: 0; pointer-events: none; }
+.kb-hbtn .kb-no { grid-row: 1 / 3; width: 32px; height: 32px; font-size: 1.05rem; }
+.kb-hbtn-name { font-weight: 800; font-size: 0.9rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-hbtn-mark { font-style: normal; color: var(--c-gold); margin-right: 3px; }
+.kb-hbtn-odds { font-size: 0.78rem; color: #ffe08a; font-variant-numeric: tabular-nums; font-weight: 700; }
+.kb-hbtn:hover { border-color: rgba(226, 179, 64, 0.5); }
+.kb-hbtn:has(input:checked) { border-color: var(--c-gold); background: linear-gradient(180deg, rgba(226, 179, 64, 0.28), rgba(226, 179, 64, 0.12)); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(226, 179, 64, 0.25); }
+.kb-hbtn:has(input:checked)::after { content: '✓'; position: absolute; right: 8px; top: 6px; color: var(--c-gold); font-weight: 900; }
+.kb-hbtn:has(input:focus-visible) { outline: 2px solid var(--c-gold); outline-offset: 2px; }
+.kb-amounts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.kb-amt { position: relative; cursor: pointer; display: inline-grid; place-items: center; }
+.kb-amt span { grid-area: 1 / 1; text-align: center; }
+.kb-amt input { position: absolute; opacity: 0; pointer-events: none; }
+.kb-amt:has(input:checked) { outline: 3px solid #fff; outline-offset: 2px; transform: translateY(-2px); }
+.kb-amt-custom { display: flex; align-items: center; gap: 4px; }
+.kb-amt-custom input[type='number'] { width: 90px; }
+.kb-preview { margin: 4px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.3); border: 1px dashed rgba(226, 179, 64, 0.4); color: var(--c-muted); display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+.kb-preview b { color: #fff; }
+.kb-preview span { color: #ffe08a; font-weight: 800; font-size: 1.05rem; }
+.kb-buy { width: 100%; font-size: 1.05rem; padding: 12px; }
+.kb-buy:disabled { opacity: 0.5; cursor: not-allowed; }
+/* 人気の棒・オッズが動いたとき */
+.kb-popbar { display: block; height: 3px; margin-top: 3px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+.kb-popbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--c-gold), #ff8a5c); transition: width 0.6s; }
+.kb-up, .kb-down { display: inline-block; border-radius: 4px; padding: 0 3px; }
+.kb-up { animation: kbup 1.6s ease-out; }
+.kb-down { animation: kbdown 1.6s ease-out; }
+.kb-up::after { content: '↑'; color: #ff6b6b; margin-left: 2px; }
+.kb-down::after { content: '↓'; color: #6bb6ff; margin-left: 2px; }
+@keyframes kbup { 0% { background: rgba(255, 90, 90, 0.6); } 100% { background: transparent; } }
+@keyframes kbdown { 0% { background: rgba(90, 160, 255, 0.6); } 100% { background: transparent; } }
+/* ⏰ 締め切り間近 */
+.kb-hurry { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(0.9); padding: 8px 18px; border-radius: 12px; background: rgba(200, 30, 50, 0.9); color: #fff; font-weight: 900; font-size: clamp(1rem, 3.6vw, 1.6rem); letter-spacing: 0.08em; opacity: 0; pointer-events: none; z-index: 3; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.kb-hurrying .kb-hurry { opacity: 1; animation: kbhurry 0.9s ease-in-out infinite; }
+.kb-hurrying .kb-head .c-count { color: #ff6b6b; animation: kbbeat 0.9s ease-in-out infinite; }
+@keyframes kbbeat { 50% { transform: scale(1.12); } }
+@keyframes kbhurry { 0%, 100% { transform: translate(-50%, -50%) scale(0.96); } 50% { transform: translate(-50%, -50%) scale(1.06); } }
+.kb-head .c-count { display: inline-block; }
+/* 自分の馬 */
+.kb-mine { position: absolute; left: 50%; transform: translateX(-50%); top: 10px; white-space: nowrap; background: rgba(0, 0, 0, 0.6); color: #ffd34d; font-weight: 900; font-size: 0.85rem; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(255, 211, 77, 0.6); z-index: 2; }
+.kb-mine:empty { display: none; }
+.kb-mine.top { background: rgba(200, 140, 0, 0.85); color: #fff; animation: kbpulse 1s ease-in-out infinite; }
+@keyframes kbpulse { 50% { box-shadow: 0 0 0 6px rgba(255, 211, 77, 0.25); } }
+.kb-rank li.kb-mine-rank { box-shadow: 0 0 0 2px #ffd34d, 0 0 8px #ffd34d; }
+/* 📸 写真判定・🎉 的中 */
+.kb-photo { position: absolute; inset: 0; display: grid; place-items: center; z-index: 4; font-size: clamp(1.4rem, 6vw, 3rem); font-weight: 900; color: #fff; text-shadow: 0 3px 0 #000; background: rgba(255, 255, 255, 0.35); animation: kbflash 2.6s ease-out forwards; pointer-events: none; }
+@keyframes kbflash { 0% { background: rgba(255, 255, 255, 0.95); } 20% { background: rgba(255, 255, 255, 0.25); } 100% { background: transparent; opacity: 0; } }
+.kb-reveal { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%) scale(0.6); display: grid; gap: 4px; text-align: center; padding: 16px 30px; border-radius: 18px; z-index: 5; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.4s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.kb-reveal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.kb-reveal b { font-size: clamp(1.3rem, 5vw, 2.4rem); }
+.kb-reveal span { font-size: clamp(1rem, 3.6vw, 1.6rem); font-weight: 900; }
+.kb-reveal small { font-size: 0.85rem; font-weight: 700; opacity: 0.8; }
+.kb-reveal.hit { background: linear-gradient(180deg, #ffe08a, #e2a520); color: #3a2400; box-shadow: 0 0 0 4px #fff3c4, 0 12px 40px rgba(226, 179, 64, 0.6); }
+.kb-reveal.miss { background: rgba(20, 24, 40, 0.92); color: #cfd6e6; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+.kb-man td, .kb-man th { color: #ffe08a; }
+.kb-man-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: linear-gradient(90deg, #e53950, #f08a24); color: #fff; font-size: 0.75rem; animation: kbpulse 1.2s ease-in-out infinite; }
+@media (max-width: 560px) {
+  .kb-horses { grid-template-columns: repeat(2, 1fr); }
+  .kb-hbtn { padding: 7px 8px; }
+  .kb-hbtn-name { font-size: 0.82rem; }
+  .kb-mine { top: auto; bottom: 48px; font-size: 0.72rem; }
+}
