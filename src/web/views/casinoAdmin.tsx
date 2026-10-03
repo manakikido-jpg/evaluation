@@ -46,6 +46,8 @@ export function CasinoAdminPage(p: {
   roles: { id: string; name: string }[];
   /** 🏇 競馬の名簿 */
   horses?: KeibaHorseRow[];
+  /** お祝いを流すチャンネルを選ぶ */
+  channels?: { id: string; name: string }[];
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -207,8 +209,45 @@ export function CasinoAdminPage(p: {
                 <span>1 人が持てる頭数（引退した馬は数えない）</span>
                 <input type="number" name="keibaMaxOwned" min={0} max={20} value={String(c.keibaMaxOwned)} required />
               </label>
+              <label class="field">
+                <span>調教 1 回の値段（0 で調教できない）</span>
+                <input type="number" name="keibaTrainPrice" min={0} max={1000000} value={String(c.keibaTrainPrice)} required />
+              </label>
+              <label class="field">
+                <span>馬主の馬が勝ったときに、お祝いを流すチャンネル</span>
+                <select name="keibaAnnounceChannelId">
+                  <option value="none">流さない</option>
+                  {(p.channels ?? []).map((ch) => (
+                    <option value={ch.id} selected={ch.id === c.keibaAnnounceChannelId}>
+                      #{ch.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label class="field">
+                <span>🐴 馬主ロール（走れる馬を持っている人に付ける・いなくなったら外す）</span>
+                <select name="keibaOwnerRoleId">
+                  <option value="none">付けない</option>
+                  {p.roles.map((r) => (
+                    <option value={r.id} selected={r.id === c.keibaOwnerRoleId}>
+                      @{r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label class="field">
+                <span>🏆 G1 馬主ロール（G1 を勝ったことがある人に付ける。外さない）</span>
+                <select name="keibaG1RoleId">
+                  <option value="none">付けない</option>
+                  {p.roles.map((r) => (
+                    <option value={r.id} selected={r.id === c.keibaG1RoleId}>
+                      @{r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <p class="note">
-                馬主の馬が 1〜5 着に入ると、そのレースでメンバーが賭けた合計の数 %（新馬・未勝利 4%・1〜3 勝クラス 5%・オープン 6%・G3 7%・G2 8%・G1 9%。胴元の取り分 10% の中から）を 50・20・13・10・7 の割合で馬主に払います。
+                馬主の馬が 1〜5 着に入ると、そのレースでメンバーが賭けた合計の数 %（新馬・未勝利 3%・1〜3 勝クラス 4%・オープン 5%・G3 6%・G2 7%・G1 8%）を 50・20・13・10・7 の割合で、出走した馬主の馬には 1 頭 0.25% の出走手当も払います（合わせて胴元の取り分 10% の中から）。
               </p>
             </fieldset>
             <fieldset class="perms">

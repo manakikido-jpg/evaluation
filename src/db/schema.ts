@@ -809,11 +809,49 @@ export const keibaHorses = pgTable('keiba_horses', {
   sex: integer('sex').notNull().default(0),
   age: integer('age').notNull().default(3),
   weight: integer('weight').notNull().default(480),
+  /** 疲れ（0〜100。fatigueAt から 1 時間に 10 ずつ抜ける）・次のレースの調子の上乗せ（調教）・最後に調教した日時・放牧の終わり */
+  fatigue: integer('fatigue').notNull().default(0),
+  fatigueAt: timestamp('fatigue_at', { withTimezone: true }),
+  trainBoost: integer('train_boost').notNull().default(0),
+  trainedAt: timestamp('trained_at', { withTimezone: true }),
+  restUntil: timestamp('rest_until', { withTimezone: true }),
+  /** 売りに出している値段（null は売っていない） */
+  salePrice: integer('sale_price'),
+  /** 親（産駒のとき）・繁殖入りした馬か */
+  parentId: bigint('parent_id', { mode: 'number' }),
+  breeding: boolean('breeding').notNull().default(false),
   /** 引退した日時（走らない） */
   retiredAt: timestamp('retired_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export type KeibaHorseRow = typeof keibaHorses.$inferSelect;
+
+/** 🏇 馬主ごとの設定（勝負服） */
+export const keibaOwners = pgTable('keiba_owners', {
+  memberId: text('member_id').primaryKey(),
+  silk: jsonb('silk').$type<{ base: string; accent: string; pattern: number }>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 🏇 馬主の馬の 1 走（リーディングオーナー・お祝いのお知らせに使う） */
+export const keibaRuns = pgTable(
+  'keiba_runs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    horseId: bigint('horse_id', { mode: 'number' }).notNull(),
+    horseName: text('horse_name').notNull(),
+    ownerId: text('owner_id').notNull(),
+    pos: integer('pos').notNull(),
+    /** 賞金と出走手当（銭） */
+    prize: integer('prize').notNull().default(0),
+    cls: integer('cls').notNull(),
+    race: text('race').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    /** Discord に流した日時（流さないものは null のまま） */
+    announcedAt: timestamp('announced_at', { withTimezone: true }),
+  },
+  (t) => [index('keiba_runs_owner_idx').on(t.ownerId, t.at), index('keiba_runs_time_idx').on(t.at)],
+);
 
 /** 「はじめての参拝」を全部できた人（お祝いは 1 人 1 回） */
 export const onboardingDone = pgTable('onboarding_done', {

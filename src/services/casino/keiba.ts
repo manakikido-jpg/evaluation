@@ -81,7 +81,26 @@ export type KbStable = {
   sex: number;
   age: number;
   weight: number;
+  /** いまの疲れ（0〜100）・調教の上乗せ・親の名前（産駒のとき） */
+  fatigue?: number;
+  trainBoost?: number;
+  sire?: string | null;
 };
+
+// ───────── 疲れと調教 ─────────
+
+/** 1 走でたまる疲れ・1 時間で抜ける疲れ */
+export const KB_FATIGUE_RUN = 25;
+export const KB_FATIGUE_RECOVER = 10;
+/** 疲れがこれ以上だと調子が 1 つ下がる・これ以上だと出走しない */
+export const KB_FATIGUE_TIRED = 50;
+export const KB_FATIGUE_REST = 80;
+/** いまの疲れ（時間で抜ける） */
+export const fatigueNow = (fatigue: number, at: Date | null, now: Date) =>
+  Math.max(0, Math.round(fatigue - (at ? ((now.getTime() - at.getTime()) / 3_600_000) * KB_FATIGUE_RECOVER : fatigue)));
+/** 調子（-2〜+2）: 運 + 調教の上乗せ - 疲れ */
+export const condOf = (luck: number, h: { fatigue?: number; trainBoost?: number }) =>
+  Math.max(-2, Math.min(2, luck + (h.trainBoost ?? 0) - ((h.fatigue ?? 0) >= KB_FATIGUE_TIRED ? 1 : 0)));
 
 // ───────── クラスと重賞 ─────────
 
@@ -92,7 +111,10 @@ export const KB_SEXES = ['牡', '牝', 'セ'] as const;
 export const classOf = (h: { starts: number; wins: number }) => (h.starts === 0 ? 0 : h.wins === 0 ? 1 : Math.min(5, h.wins + 1));
 export const isGraded = (cls: number) => cls >= 6;
 /** 馬主に払う賞金: そのレースでメンバーが賭けた合計の何 %（胴元の取り分 10% の中から。重賞ほど多い） */
-export const KB_PRIZE_RATE = [4, 4, 5, 5, 5, 6, 7, 8, 9] as const;
+export const KB_PRIZE_RATE = [3, 3, 4, 4, 4, 5, 6, 7, 8] as const;
+/** 出走手当: 馬主のいる馬 1 頭につき、メンバーが賭けた合計の 0.25%（賞金と合わせて 10% を超えない） */
+export const KB_APPEARANCE_BP = 25;
+export const appearanceOf = (real: number) => Math.floor((real * KB_APPEARANCE_BP) / 10000);
 /** 1〜5 着の分け方（%） */
 export const KB_PRIZE_SPLIT = [50, 20, 13, 10, 7] as const;
 /** 賞金（1〜5 着の銭）。real はメンバーが賭けた合計 */
@@ -129,9 +151,11 @@ export type KbHorse = {
   recent: KbStable['recent'];
   /** 前走の着順（はじめてなら 0） */
   last: number;
-  /** 馬主・獲得賞金・クラス・性・年齢 */
+  /** 馬主・獲得賞金・クラス・性・年齢・親・疲れ */
   ownerId: string | null;
   ownerName: string | null;
+  sire?: string | null;
+  fatigue?: number;
   prize: number;
   cls: number;
   sex: number;
@@ -267,7 +291,7 @@ export function makeRace(
     style: h.style,
     spd: h.spd,
     sta: h.sta,
-    cond: Math.floor(r() * 5) - 2,
+    cond: condOf(Math.floor(r() * 5) - 2, h),
     apt: h.apt,
     surf: h.surf,
     coat: h.coat,
@@ -280,6 +304,8 @@ export function makeRace(
     last: h.recent[0]?.pos ?? 0,
     ownerId: h.ownerId,
     ownerName: h.ownerName ?? null,
+    sire: h.sire ?? null,
+    fatigue: h.fatigue ?? 0,
     prize: h.prize,
     cls: classOf(h),
     sex: h.sex,

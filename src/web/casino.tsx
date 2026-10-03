@@ -62,7 +62,25 @@ import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 import { MjRecords } from './views/mahjong.js';
 import { KbLobbyExtra, KbStablePage } from './views/keiba.js';
-import { buyHorse, myHorses, nameOwnHorse, retireOwnHorse } from '../services/casino/keibaStable.js';
+import {
+  breedFoal,
+  buyFromOwner,
+  buyHorse,
+  foalsOf,
+  horsesForSale,
+  isSilk,
+  leadingOwners,
+  myHorses,
+  nameOwnHorse,
+  ownerSilk,
+  restHorse,
+  retireOwnHorse,
+  retireToBreed,
+  setOwnerSilk,
+  setSale,
+  trainHorse,
+} from '../services/casino/keibaStable.js';
+import { fatigueNow } from '../services/casino/keiba.js';
 import { mjRanking, mjStats, monthStartJst } from '../services/casino/mahjongStats.js';
 
 /** ランキングに出る対局数 */
@@ -581,7 +599,10 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       if (kind === 'mahjong') return c.redirect(`/casino/jansou${c.req.query('e') ? `?e=${c.req.query('e')}` : ''}`);
       if (!isKind(kind) || !kindOn(kind)) return c.redirect('/casino?e=game_off');
       await sweepTables(db, d.cfg(), d.now());
-      const extra = kind === 'keiba' ? <KbLobbyExtra me={me} horses={await myHorses(db, me.session.userId)} price={d.cfg().casino.keibaHorsePrice} /> : undefined;
+      const extra =
+        kind === 'keiba' ? (
+          <KbLobbyExtra me={me} horses={await myHorses(db, me.session.userId)} price={d.cfg().casino.keibaHorsePrice} leading={await leadingOwners(db, monthStartJst(d.now()), 5)} />
+        ) : undefined;
       return c.html(
         <TablesLobby
           me={me}
@@ -602,7 +623,23 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     page(async (c, me) => {
       if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
       const cfg = d.cfg().casino;
-      return c.html(<KbStablePage me={me} horses={await myHorses(db, me.session.userId)} price={cfg.keibaHorsePrice} max={cfg.keibaMaxOwned} msg={casinoMsg(c.req.query('e'))} />);
+      const now = d.now();
+      const horses = await Promise.all(
+        (await myHorses(db, me.session.userId)).map(async (h) => ({ ...h, fatigueNow: fatigueNow(h.fatigue, h.fatigueAt, now), ...(h.breeding ? { foals: await foalsOf(db, h.id) } : {}) })),
+      );
+      return c.html(
+        <KbStablePage
+          me={me}
+          horses={horses}
+          price={cfg.keibaHorsePrice}
+          max={cfg.keibaMaxOwned}
+          trainPrice={cfg.keibaTrainPrice}
+          silk={await ownerSilk(db, me.session.userId)}
+          forSale={await horsesForSale(db)}
+          leading={await leadingOwners(db, monthStartJst(now), 10)}
+          msg={casinoMsg(c.req.query('e'))}
+        />,
+      );
     }),
   );
   const stableBack = (c: Context, code: string) => c.redirect(`/casino/keiba/stable?e=${code}`);
@@ -623,6 +660,74 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const f = await formOf(c);
       const r = Number.isSafeInteger(id) ? await nameOwnHorse(db, me.session.userId, id, typeof f.name === 'string' ? f.name : '') : 'not_found';
       return stableBack(c, r === 'ok' ? 'horse_named' : r === 'not_found' ? 'not_found' : `horse_${r}`);
+    }, { post: true }),
+  );
+  // 🎽 勝負服
+  app.post(
+    '/casino/keiba/stable/silk',
+    page(async (c, me) => {
+      const f = await formOf(c);
+      const silk = { base: f.base, accent: f.accent, pattern: Number(f.pattern) };
+      if (!isSilk(silk)) return stableBack(c, 'invalid');
+      await setOwnerSilk(db, me.session.userId, silk);
+      return stableBack(c, 'silk_saved');
+    }, { post: true }),
+  );
+  // 💪 調教・🌿 放牧
+  app.post(
+    '/casino/keiba/stable/:id/train',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const r = Number.isSafeInteger(id) ? await trainHorse(db, me.session.userId, id, d.cfg().casino.keibaTrainPrice, d.now()) : 'not_found';
+      return stableBack(c, r === 'ok' ? 'horse_trained' : r === 'poor' || r === 'not_found' ? r : `horse_${r}`);
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/keiba/stable/:id/rest',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const ok = Number.isSafeInteger(id) && (await restHorse(db, me.session.userId, id, d.now()));
+      return stableBack(c, ok ? 'horse_rested' : 'not_found');
+    }, { post: true }),
+  );
+  // 💱 売りに出す・取り下げる・買う
+  app.post(
+    '/casino/keiba/stable/:id/sale',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const f = await formOf(c);
+      const price = f.cancel ? null : Number(f.price);
+      const ok = Number.isSafeInteger(id) && (await setSale(db, me.session.userId, id, price));
+      return stableBack(c, ok ? (price === null ? 'horse_unsale' : 'horse_sale') : 'horse_bad_price');
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/keiba/stable/buy/:id',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const r = Number.isSafeInteger(id) ? await buyFromOwner(db, me.session.userId, id, d.cfg().casino.keibaMaxOwned) : 'not_found';
+      return stableBack(c, r === 'ok' ? 'horse_traded' : r === 'poor' || r === 'not_found' ? r : `horse_${r}`);
+    }, { post: true }),
+  );
+  // 🌸 繁殖入り・🐣 産駒
+  app.post(
+    '/casino/keiba/stable/:id/breed',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const r = Number.isSafeInteger(id) ? await retireToBreed(db, me.session.userId, id, d.now()) : 'not_found';
+      return stableBack(c, r === 'ok' ? 'horse_bred' : r === 'not_found' ? r : `horse_${r}`);
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/keiba/stable/:id/foal',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const f = await formOf(c);
+      const cfg = d.cfg().casino;
+      const r = Number.isSafeInteger(id)
+        ? await breedFoal(db, me.session.userId, id, typeof f.name === 'string' ? f.name : '', Math.floor(cfg.keibaHorsePrice / 2), cfg.keibaMaxOwned)
+        : { status: 'not_found' as const };
+      return stableBack(c, r.status === 'ok' ? 'horse_foal' : r.status === 'poor' || r.status === 'not_found' ? r.status : `horse_${r.status}`);
     }, { post: true }),
   );
   app.post(

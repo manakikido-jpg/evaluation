@@ -12,6 +12,7 @@ import {
   makeRace,
   margin,
   prizesOf,
+  appearanceOf,
   pairKey,
   seeded,
   seedPools,
@@ -164,16 +165,21 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     if (m.payout > 0) credits.push({ memberId, amount: m.payout, reason: 'casino_win' });
     records.push({ memberId, game: 'keiba', bet: m.bet, payout: m.payout });
   }
-  // 1〜5 着の賞金（メンバーが賭けた合計の数 %）。馬主のいる馬は、馬主に払う
+  // 1〜5 着の賞金（メンバーが賭けた合計の数 %）と出走手当（馬主のいる馬はみんな）。馬主に払う
   const prizes = prizesOf(s.race.cls, s.real);
-  run.order.slice(0, prizes.length).forEach((no, i) => {
+  const fee = appearanceOf(s.real);
+  const earned = run.order.map((no, i) => (prizes[i] ?? 0) + (s.horses[no - 1]!.ownerId ? fee : 0));
+  run.order.forEach((no, i) => {
     const h = s.horses[no - 1]!;
-    if (h.ownerId && prizes[i]! > 0) credits.push({ memberId: h.ownerId, amount: prizes[i]!, reason: 'keiba_prize' });
+    if (h.ownerId && earned[i]! > 0) credits.push({ memberId: h.ownerId, amount: earned[i]!, reason: 'keiba_prize' });
   });
   s.prizes = prizes;
-  // 名簿の馬の成績
+  // 名簿の馬の成績（馬主の馬は 1 走ずつ記録して、リーディングとお祝いに使う）
   const keiba = run.order
-    .map((no, i) => ({ horseId: s.horses[no - 1]!.id, pos: i + 1, race: s.race.name, dist: s.race.dist, surface: s.race.surface, prize: prizes[i] ?? 0 }))
+    .map((no, i) => {
+      const h = s.horses[no - 1]!;
+      return { horseId: h.id, pos: i + 1, race: s.race.name, dist: s.race.dist, surface: s.race.surface, prize: earned[i]!, ownerId: h.ownerId, name: h.name, cls: s.race.cls };
+    })
     .filter((r) => r.horseId > 0);
   s.history = [{ n: s.race.n, name: s.race.name, order: run.order.slice(0, 3), win: s.final.win[1], names: run.order.slice(0, 3).map((no) => s.horses[no - 1]!.name) }, ...s.history].slice(0, 10);
   s.phase = 'result';

@@ -32,6 +32,7 @@ import {
 import { KB_PRERACE_MS, KB_RESULT_SECONDS, KB_WINDOWS, type KbState, type KbTicket } from '../../services/casino/tables/keiba.js';
 import { CasinoLayout, Msg, type CasinoMe, type Coin } from './casino.js';
 import type { KeibaHorseRow } from '../../db/schema.js';
+import { KB_FOALS_MAX, KB_SALE_FEE } from '../../services/casino/keibaStable.js';
 
 /**
  * 🏇 みんなでダービーの画面。コースの上を走る馬は casino.js が動かす（data-kb の動きを、みんな同じ時刻に）
@@ -114,6 +115,7 @@ function Tv(p: { s: KbState; mine: number[]; reveal?: { net: number; paid: numbe
     surface: s.race.surface,
     weather: s.race.weather,
     cls: s.race.cls,
+    raceName: s.race.name,
     prerace: KB_PRERACE_MS,
     horses: s.horses.map((h) => ({ no: h.no, coat: h.coat, silk: h.silk, name: h.name, weight: h.weight, wdiff: h.wdiff, look: KB_LOOK[h.cond + 2], owner: h.ownerName })),
   };
@@ -267,6 +269,7 @@ function RaceCard(p: { s: KbState; clickable: boolean }) {
                   </small>
                   <small>
                     馬体重 {h.weight}kg{h.wdiff ? `（${h.wdiff > 0 ? '+' : ''}${h.wdiff}）` : ''}・{KB_CLASSES[h.cls]}・賞金 {fmt(h.prize)}
+                    {h.sire ? `・父 ${h.sire}` : ''}
                     {h.ownerName ? <span class="kb-owner">・馬主 {h.ownerName}</span> : ''}
                   </small>
                   <small>
@@ -632,41 +635,131 @@ export const KB_PAIR_COUNT = allPairs().length;
 
 const classLabel = (h: { starts: number; wins: number }) => KB_CLASSES[classOf(h)]!;
 
-/** みんなでダービーの入口に出す: 馬主の部屋への案内 */
-export function KbLobbyExtra(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: number }) {
-  const active = p.horses.filter((h) => !h.retiredAt);
+export type StableHorse = KeibaHorseRow & { fatigueNow: number; foals?: number };
+export type LeadingView = { ownerId: string; name: string; prize: number; wins: number; runs: number };
+
+/** リーディングオーナー（今月） */
+function Leading(p: { rows: LeadingView[]; coin: Coin; me: string }) {
   return (
-    <section class="c-panel kb-owner-cta">
-      <h2>🐴 馬主になる</h2>
-      <p class="c-muted">
-        {p.price > 0
-          ? `${p.me.coin.emoji}${fmt(p.price)} ${p.me.coin.name}で馬を買って、名前をつけて走らせられます。1〜5 着に入ると賞金がもらえます。`
-          : 'いまは馬を買えません（運営が止めています）。'}
-      </p>
-      {active.length > 0 && (
-        <ul class="kb-mini-stable">
-          {active.map((h) => (
-            <li>
-              <b>{h.name}</b>
+    <section class="c-panel">
+      <h2>👑 今月のリーディングオーナー</h2>
+      {p.rows.length === 0 ? (
+        <p class="c-muted">今月はまだだれも賞金を取っていません。</p>
+      ) : (
+        <ol class="kb-leading">
+          {p.rows.map((r, i) => (
+            <li class={r.ownerId === p.me ? 'me' : ''}>
+              <span class="kb-leading-rank">{i + 1}</span>
+              <b>{r.name}</b>
+              <span>
+                {p.coin.emoji}
+                {fmt(r.prize)}
+              </span>
               <span class="c-muted">
-                {classLabel(h)}・{h.starts} 戦 {h.wins} 勝・賞金 {p.me.coin.emoji}
-                {fmt(h.prize)}
+                {r.wins} 勝 / {r.runs} 走
               </span>
             </li>
           ))}
-        </ul>
+        </ol>
       )}
-      <a class="c-btn c-btn-gold" href="/casino/keiba/stable">
-        🐴 馬主の部屋へ
-      </a>
     </section>
   );
 }
 
-export function KbStablePage(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: number; max: number; msg?: string }) {
+/** みんなでダービーの入口に出す: 馬主の部屋への案内とリーディング */
+export function KbLobbyExtra(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: number; leading: LeadingView[] }) {
+  const active = p.horses.filter((h) => !h.retiredAt);
+  return (
+    <>
+      <section class="c-panel kb-owner-cta">
+        <h2>🐴 馬主になる</h2>
+        <p class="c-muted">
+          {p.price > 0
+            ? `${p.me.coin.emoji}${fmt(p.price)} ${p.me.coin.name}で馬を買って、名前と勝負服を決めて走らせられます。賞金・出走手当・調教・売り買い・産駒も。`
+            : 'いまは馬を買えません（運営が止めています）。'}
+        </p>
+        {active.length > 0 && (
+          <ul class="kb-mini-stable">
+            {active.map((h) => (
+              <li>
+                <b>{h.name}</b>
+                <span class="c-muted">
+                  {classLabel(h)}・{h.starts} 戦 {h.wins} 勝・賞金 {p.me.coin.emoji}
+                  {fmt(h.prize)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <a class="c-btn c-btn-gold" href="/casino/keiba/stable">
+          🐴 馬主の部屋へ
+        </a>
+      </section>
+      <Leading rows={p.leading.slice(0, 5)} coin={p.me.coin} me={p.me.session.userId} />
+    </>
+  );
+}
+
+const SILK_COLORS = ['#e53935', '#1e63d6', '#f4c430', '#2e9e4f', '#ffffff', '#222222', '#8e44ad', '#f08a24', '#f48fb1', '#00a6a6', '#8b1a1a', '#0b3d91'] as const;
+const COLOR_NAMES = ['赤', '青', '黄', '緑', '白', '黒', '紫', '橙', '桃', '水色', 'えんじ', '紺'] as const;
+const PATTERNS = ['無地', '縦縞', '襷', '輪', '山形', '星'] as const;
+
+/** 勝負服を決める */
+function SilkForm(p: { csrf: string; silk?: { base: string; accent: string; pattern: number } }) {
+  const cur = p.silk ?? { base: SILK_COLORS[0], accent: SILK_COLORS[4], pattern: 0 };
+  const colorPick = (name: string, value: string) => (
+    <div class="kb-swatches" role="radiogroup">
+      {SILK_COLORS.map((c, i) => (
+        <label class="kb-swatch" title={COLOR_NAMES[i]}>
+          <input type="radio" name={name} value={c} checked={c === value} />
+          <span class="kb-silk kb-pat0" data-base={c} data-accent={c} aria-label={COLOR_NAMES[i]}></span>
+        </label>
+      ))}
+    </div>
+  );
+  return (
+    <form method="post" action="/casino/keiba/stable/silk" class="kb-silk-form">
+      <input type="hidden" name="_csrf" value={p.csrf} />
+      <div class="kb-silk-preview">
+        <span class={`kb-silk big kb-pat${cur.pattern}`} data-base={cur.base} data-accent={cur.accent} aria-label="いまの勝負服"></span>
+      </div>
+      <p class="kb-step">服の色</p>
+      {colorPick('base', cur.base)}
+      <p class="kb-step">柄の色</p>
+      {colorPick('accent', cur.accent)}
+      <p class="kb-step">柄</p>
+      <div class="kb-swatches">
+        {PATTERNS.map((name, i) => (
+          <label class="kb-type">
+            <input type="radio" name="pattern" value={String(i)} checked={i === cur.pattern} />
+            <span>{name}</span>
+          </label>
+        ))}
+      </div>
+      <button type="submit" class="c-btn c-btn-gold">
+        🎽 この勝負服にする
+      </button>
+    </form>
+  );
+}
+
+export function KbStablePage(p: {
+  me: CasinoMe;
+  horses: StableHorse[];
+  price: number;
+  max: number;
+  trainPrice: number;
+  silk?: { base: string; accent: string; pattern: number };
+  forSale: (KeibaHorseRow & { ownerName: string | null })[];
+  leading: LeadingView[];
+  msg?: string;
+}) {
   const csrf = p.me.session.csrfToken;
   const active = p.horses.filter((h) => !h.retiredAt);
   const coin = p.me.coin;
+  const now = Date.now();
+  const foalPrice = Math.floor(p.price / 2);
+  const Hidden = () => <input type="hidden" name="_csrf" value={csrf} />;
   return (
     <CasinoLayout title="馬主の部屋" me={p.me}>
       <p class="c-back">
@@ -675,6 +768,140 @@ export function KbStablePage(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: 
       <h1 class="c-h1">🐴 馬主の部屋</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-panel">
+        <h2>🏠 あなたの馬（{active.length} / {p.max} 頭）</h2>
+        {p.horses.length === 0 ? (
+          <p class="c-muted">まだいません。下の「馬を買う」から迎えましょう。</p>
+        ) : (
+          <div class="kb-stable">
+            {p.horses.map((h) => {
+              const resting = h.restUntil && h.restUntil.getTime() > now;
+              const cooldown = h.trainedAt ? h.trainedAt.getTime() + 6 * 3_600_000 - now : 0;
+              return (
+                <div class={`kb-stable-card${h.retiredAt ? ' retired' : ''}`}>
+                  <div class="kb-stable-head">
+                    <b>
+                      <span class={`kb-silk kb-pat${h.silk.pattern}`} data-base={h.silk.base} data-accent={h.silk.accent} aria-hidden="true"></span>
+                      {h.name}
+                    </b>
+                    <span class="c-tag">{h.retiredAt ? (h.breeding ? '繁殖' : '引退') : classLabel(h)}</span>
+                  </div>
+                  <p class="c-muted">
+                    {KB_SEXES[h.sex]}
+                    {h.age}・{KB_COATS[h.coat]}・{h.starts ? `${KB_STYLES[h.style]}・${KB_APT[h.apt]}` : '脚質・得意はデビューしてから'}
+                  </p>
+                  <p>
+                    {h.starts} 戦 {h.wins} 勝 [{h.wins}-{h.seconds}-{h.thirds}-{Math.max(0, h.starts - h.wins - h.seconds - h.thirds)}]・獲得賞金 {coin.emoji}
+                    {fmt(h.prize)}
+                  </p>
+                  {!h.retiredAt && (
+                    <div class="kb-condbar" aria-label={`疲れ ${h.fatigueNow}`}>
+                      <span>疲れ</span>
+                      <span class="kb-popbar">
+                        <i data-w={String(h.fatigueNow)}></i>
+                      </span>
+                      <span class="c-muted">
+                        {resting ? '🌿 放牧中' : h.fatigueNow >= 80 ? '休ませて（出走しません）' : h.fatigueNow >= 50 ? '疲れぎみ（調子 −1）' : '元気'}
+                        {h.trainBoost > 0 ? '・💪 調教ずみ（次のレース調子 +1）' : ''}
+                      </span>
+                    </div>
+                  )}
+                  {h.recent.length > 0 && (
+                    <p class="kb-stable-recent">
+                      近走:
+                      {h.recent.map((r) => (
+                        <span class={`kb-run${r.pos <= 3 ? ` p${r.pos}` : ''}`} title={`${r.race}（${KB_SURFACES[r.surface]} ${r.dist}m）`}>
+                          {r.pos}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  {!h.retiredAt ? (
+                    <div class="kb-stable-actions">
+                      {p.trainPrice > 0 && (
+                        <form method="post" action={`/casino/keiba/stable/${h.id}/train`}>
+                          <Hidden />
+                          <button type="submit" class="c-btn c-btn-small" disabled={Boolean(resting) || cooldown > 0}>
+                            💪 調教（{coin.emoji}
+                            {fmt(p.trainPrice)}）{cooldown > 0 ? ` あと ${Math.ceil(cooldown / 3_600_000)} 時間` : ''}
+                          </button>
+                        </form>
+                      )}
+                      <form method="post" action={`/casino/keiba/stable/${h.id}/rest`}>
+                        <Hidden />
+                        <button type="submit" class="c-btn c-btn-small" disabled={Boolean(resting)}>
+                          🌿 放牧（1 時間休む）
+                        </button>
+                      </form>
+                      {h.starts === 0 && (
+                        <form method="post" action={`/casino/keiba/stable/${h.id}/name`} class="c-bet-custom">
+                          <Hidden />
+                          <input type="text" name="name" value={h.name} maxlength={18} required aria-label="馬の名前" />
+                          <button type="submit" class="c-btn c-btn-small">
+                            名前を変える
+                          </button>
+                        </form>
+                      )}
+                      <form method="post" action={`/casino/keiba/stable/${h.id}/sale`} class="c-bet-custom">
+                        <Hidden />
+                        {h.salePrice !== null ? (
+                          <button type="submit" name="cancel" value="1" class="c-btn c-btn-small c-btn-ghost">
+                            売りに出し中（{coin.emoji}
+                            {fmt(h.salePrice)}）→ 取り下げる
+                          </button>
+                        ) : (
+                          <>
+                            <input type="number" name="price" min={100} max={10000000} placeholder="値段" required aria-label="売る値段" />
+                            <button type="submit" class="c-btn c-btn-small">
+                              💱 売りに出す
+                            </button>
+                          </>
+                        )}
+                      </form>
+                      {h.wins > 0 && (
+                        <form method="post" action={`/casino/keiba/stable/${h.id}/breed`}>
+                          <Hidden />
+                          <button type="submit" class="c-btn c-btn-small c-btn-ghost c-confirm" data-confirm={`${h.name} を引退させて繁殖入りさせますか？（もう走りません。産駒を ${KB_FOALS_MAX} 頭まで迎えられます）`}>
+                            🌸 引退して繁殖入り
+                          </button>
+                        </form>
+                      )}
+                      <form method="post" action={`/casino/keiba/stable/${h.id}/retire`}>
+                        <Hidden />
+                        <button type="submit" class="c-btn c-btn-small c-btn-ghost c-confirm" data-confirm={`${h.name} を引退させますか？（戻せません）`}>
+                          引退させる
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    h.breeding && (
+                      <div class="kb-stable-actions">
+                        {(h.foals ?? 0) < KB_FOALS_MAX && active.length < p.max ? (
+                          <form method="post" action={`/casino/keiba/stable/${h.id}/foal`} class="c-bet-custom">
+                            <Hidden />
+                            <input type="text" name="name" maxlength={18} required placeholder="産駒の名前" aria-label="産駒の名前" />
+                            <button type="submit" class="c-btn c-btn-small c-btn-gold c-confirm" data-confirm={`${fmt(foalPrice)} ${coin.name}で産駒を迎えますか？`}>
+                              🐣 産駒を迎える（{coin.emoji}
+                              {fmt(foalPrice)}・あと {KB_FOALS_MAX - (h.foals ?? 0)} 頭）
+                            </button>
+                          </form>
+                        ) : (
+                          <p class="c-muted">{(h.foals ?? 0) >= KB_FOALS_MAX ? '産駒はもう迎えきりました' : '持てる頭数に届いています'}</p>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+      <section class="c-panel">
+        <h2>🎽 勝負服</h2>
+        <p class="c-muted">あなたの馬は、みんなこの勝負服で走ります（帽子の色は枠の色）。</p>
+        <SilkForm csrf={csrf} silk={p.silk} />
+      </section>
+      <section class="c-panel">
         <h2>🆕 馬を買う</h2>
         {p.price <= 0 || p.max <= 0 ? (
           <p class="c-muted">いまは馬を買えません。</p>
@@ -682,7 +909,7 @@ export function KbStablePage(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: 
           <p class="c-muted">持てるのは {p.max} 頭までです（引退させると、また買えます）。</p>
         ) : (
           <form method="post" action="/casino/keiba/stable/buy" class="c-bet-custom">
-            <input type="hidden" name="_csrf" value={csrf} />
+            <Hidden />
             <label>
               馬の名前（1〜18 文字。ほかの馬と同じ名前はつけられません）
               <input type="text" name="name" maxlength={18} required placeholder="例: サクラノミヤビ" />
@@ -693,67 +920,53 @@ export function KbStablePage(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: 
             </button>
           </form>
         )}
+      </section>
+      <section class="c-panel">
+        <h2>💱 売りに出ている馬</h2>
+        {p.forSale.length === 0 ? (
+          <p class="c-muted">いまはありません。</p>
+        ) : (
+          <ul class="kb-market">
+            {p.forSale.map((h) => (
+              <li>
+                <span>
+                  <b>{h.name}</b>
+                  <span class="c-muted">
+                    {' '}
+                    {classLabel(h)}・{KB_SEXES[h.sex]}
+                    {h.age}・{h.starts} 戦 {h.wins} 勝・賞金 {fmt(h.prize)}・馬主 {h.ownerName ?? ''}
+                  </span>
+                </span>
+                {h.ownerId === p.me.session.userId ? (
+                  <span class="c-muted">あなたの馬</span>
+                ) : (
+                  <form method="post" action={`/casino/keiba/stable/buy/${h.id}`}>
+                    <Hidden />
+                    <button type="submit" class="c-btn c-btn-small c-btn-gold c-confirm" data-confirm={`${h.name} を ${fmt(h.salePrice ?? 0)} ${coin.name}で買いますか？`}>
+                      {coin.emoji}
+                      {fmt(h.salePrice ?? 0)} で買う
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="c-muted">売れると、値段から手数料 {KB_SALE_FEE}% を引いた銭が売った人に入ります。</p>
+      </section>
+      <Leading rows={p.leading} coin={coin} me={p.me.session.userId} />
+      <section class="c-panel">
+        <h2>📖 馬主のきまり</h2>
         <ul class="c-muted kb-owner-rules">
           <li>買った馬はまず「新馬」戦から。勝つと 未勝利 → 1 勝クラス → 2 勝 → 3 勝 → オープン と上がり、オープンの馬は重賞（G3・G2・G1）にも出ます。</li>
           <li>強さ（速さ・スタミナ・脚質・得意な距離と馬場）は生まれつき。走ってみるまで分かりません。</li>
           <li>レースの 8 頭は名簿から選ばれます。あなたがみんなでダービーの卓に座っていると、あなたの馬が優先して出走します。</li>
-          <li>1〜5 着に入ると、そのレースでメンバーが賭けた合計の数 %（クラスが上ほど多い）が賞金として入ります。</li>
-          <li>名前はデビュー前なら変えられます。持てるのは {p.max} 頭まで。引退させると戻せません（払った銭も戻りません）。</li>
+          <li>1〜5 着に入ると賞金（メンバーが賭けた合計の数 %・クラスが上ほど多い）。着外でも出走手当（0.25%）が入ります。</li>
+          <li>💪 調教（6 時間に 1 回）: 次のレースの調子が 1 つ上がり、速さも少し伸びます。疲れが少したまります。</li>
+          <li>🌿 疲れ: 1 走で 25 たまり、1 時間に 10 抜けます。50 から調子 −1、80 からは出走しません。放牧すると 1 時間休む代わりに疲れがすっかり抜けます。</li>
+          <li>🌸 1 勝以上した馬は、引退して繁殖入りできます。親の能力を受け継ぎやすい産駒を、半額で {KB_FOALS_MAX} 頭まで迎えられます。</li>
+          <li>💱 自分の馬に値段をつけて売りに出せます。馬主の馬が勝つと、Discord でお祝いが流れることがあります。</li>
         </ul>
-      </section>
-      <section class="c-panel">
-        <h2>🏠 あなたの馬（{active.length} 頭）</h2>
-        {p.horses.length === 0 ? (
-          <p class="c-muted">まだいません。</p>
-        ) : (
-          <div class="kb-stable">
-            {p.horses.map((h) => (
-              <div class={`kb-stable-card${h.retiredAt ? ' retired' : ''}`}>
-                <div class="kb-stable-head">
-                  <b>{h.name}</b>
-                  <span class="c-tag">{h.retiredAt ? '引退' : classLabel(h)}</span>
-                </div>
-                <p class="c-muted">
-                  {KB_SEXES[h.sex]}
-                  {h.age}・{KB_COATS[h.coat]}・{h.starts ? `${KB_STYLES[h.style]}・${KB_APT[h.apt]}` : '脚質・得意はデビューしてから'}
-                </p>
-                <p>
-                  {h.starts} 戦 {h.wins} 勝 [{h.wins}-{h.seconds}-{h.thirds}-{Math.max(0, h.starts - h.wins - h.seconds - h.thirds)}]・獲得賞金 {coin.emoji}
-                  {fmt(h.prize)}
-                </p>
-                {h.recent.length > 0 && (
-                  <p class="kb-stable-recent">
-                    近走:
-                    {h.recent.map((r) => (
-                      <span class={`kb-run${r.pos <= 3 ? ` p${r.pos}` : ''}`} title={`${r.race}（${KB_SURFACES[r.surface]} ${r.dist}m）`}>
-                        {r.pos}
-                      </span>
-                    ))}
-                  </p>
-                )}
-                {!h.retiredAt && (
-                  <div class="c-actions">
-                    {h.starts === 0 && (
-                      <form method="post" action={`/casino/keiba/stable/${h.id}/name`} class="c-bet-custom">
-                        <input type="hidden" name="_csrf" value={csrf} />
-                        <input type="text" name="name" value={h.name} maxlength={18} required aria-label="馬の名前" />
-                        <button type="submit" class="c-btn c-btn-small">
-                          名前を変える
-                        </button>
-                      </form>
-                    )}
-                    <form method="post" action={`/casino/keiba/stable/${h.id}/retire`}>
-                      <input type="hidden" name="_csrf" value={csrf} />
-                      <button type="submit" class="c-btn c-btn-small c-btn-ghost c-confirm" data-confirm={`${h.name} を引退させますか？（戻せません）`}>
-                        引退させる
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </section>
     </CasinoLayout>
   );

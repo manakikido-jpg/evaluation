@@ -1646,6 +1646,20 @@ const kbMini = (g, W, H, D, pos) => {
   });
 };
 
+// 🎽 勝負服えらび: 選ぶと見本が変わる
+document.addEventListener('change', (e) => {
+  const f = e.target.closest?.('.kb-silk-form');
+  if (!f) return;
+  const prev = f.querySelector('.kb-silk-preview .kb-silk');
+  const base = f.querySelector('input[name="base"]:checked')?.value;
+  const accent = f.querySelector('input[name="accent"]:checked')?.value;
+  const pattern = f.querySelector('input[name="pattern"]:checked')?.value ?? '0';
+  if (!prev || !base || !accent) return;
+  prev.dataset.base = base;
+  prev.dataset.accent = accent;
+  prev.className = `kb-silk big kb-pat${pattern}`;
+  paintSilks();
+});
 /** 出馬表の勝負服の見本を塗る（CSP で style 属性が使えないので、ここで） */
 const paintSilks = () => {
   document.querySelectorAll('.kb-silk[data-base]').forEach((el) => {
@@ -1721,6 +1735,66 @@ const kbPaddock = (g, W, H, horses, sec) => {
     g.stroke();
   }
   return horses[f];
+};
+
+/** 🏆 口取り式: 勝った馬を囲んで記念撮影 */
+const kbWinnerCircle = (g, W, H, h, data, sec) => {
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#2f6b3a');
+  bg.addColorStop(1, '#1d4a26');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  // 花の飾り
+  for (let x = 10; x < W; x += 26) {
+    g.fillStyle = (x / 26) % 2 < 1 ? '#f3b6c8' : '#ffe08a';
+    g.beginPath();
+    g.arc(x, H * 0.9 + Math.sin(x) * 4, 9, 0, Math.PI * 2);
+    g.fill();
+  }
+  const s = (W / 900) * 2.1;
+  const y = H * 0.84;
+  kbHorse(g, W * 0.5, y, s, 0, h, false);
+  // 囲む人たち（馬主・関係者）
+  const people = [-0.28, -0.2, 0.22, 0.3, 0.37];
+  people.forEach((dx, i) => {
+    const px = W * (0.5 + dx);
+    const ps = s * (i === 0 ? 1.15 : 1);
+    g.fillStyle = i === 0 ? '#1f2a44' : ['#5a3b2b', '#3d4f6b', '#6b3b4a', '#2f4f3f'][i % 4];
+    g.fillRect(px - 9 * ps, y - 52 * ps, 18 * ps, 40 * ps);
+    g.fillStyle = '#e9c7a8';
+    g.beginPath();
+    g.arc(px, y - 60 * ps, 8 * ps, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = g.fillStyle === '#e9c7a8' ? '#1f2a44' : '#1f2a44';
+    g.lineWidth = 4 * ps;
+    g.beginPath();
+    g.moveTo(px - 4 * ps, y - 12 * ps);
+    g.lineTo(px - 5 * ps, y);
+    g.moveTo(px + 4 * ps, y - 12 * ps);
+    g.lineTo(px + 5 * ps, y);
+    g.stroke();
+  });
+  // 横断幕
+  g.fillStyle = 'rgba(0,0,0,0.55)';
+  g.fillRect(W * 0.08, H * 0.06, W * 0.84, H * 0.22);
+  g.strokeStyle = '#ffd34d';
+  g.lineWidth = 2;
+  g.strokeRect(W * 0.08, H * 0.06, W * 0.84, H * 0.22);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#ffd34d';
+  g.font = `900 ${Math.round(W * 0.034)}px system-ui, sans-serif`;
+  g.fillText(`🏆 ${data.raceName || ''} 優勝`, W / 2, H * 0.13);
+  g.fillStyle = '#fff';
+  g.font = `800 ${Math.round(W * 0.028)}px system-ui, sans-serif`;
+  g.fillText(`${KB_NO_MARK[h.no - 1]} ${h.name}　馬主 ${h.owner || '咲楽ノ宮ファーム'}`, W / 2, H * 0.22);
+  // 紙吹雪
+  for (let i = 0; i < 40; i++) {
+    const cx = (i * 137 + sec * 40 * (1 + (i % 3))) % W;
+    const cy = (i * 71 + sec * 90) % (H * 0.8);
+    g.fillStyle = KB_CROWD[i % KB_CROWD.length];
+    g.fillRect(cx, cy, 4, 7);
+  }
 };
 
 let kbAnim = null;
@@ -1941,6 +2015,13 @@ const initKeiba = () => {
       else Sound.fanfare?.();
     }
     // 結果: 到達順位 → 確定 → 払戻金。当たった・はずれたの発表は確定のあと
+    const circle = data.phase === 'result' && data.resultAt && Date.now() + skew() - data.resultAt >= 12_000;
+    el.classList.toggle('kb-circle', Boolean(circle));
+    if (circle) {
+      board?.classList.add('done');
+      kbWinnerCircle(g, W, H, horses[data.order[0] - 1], data, sec);
+      if (call) call.textContent = `口取り式。${data.raceName || ''}を勝った ${horses[data.order[0] - 1].name}、おめでとう！`;
+    }
     if (data.phase === 'result' && board && data.resultAt) {
       const rs = Date.now() + skew() - data.resultAt;
       board.classList.toggle('show-order', rs >= 1200);

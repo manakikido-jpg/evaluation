@@ -383,6 +383,13 @@ export const casinoSchema = z.object({
   /** 🏇 馬主: 馬 1 頭の値段（0 で買えない）・1 人が持てる頭数 */
   keibaHorsePrice: z.number().int().min(0).max(10_000_000).default(3000),
   keibaMaxOwned: z.number().int().min(0).max(20).default(3),
+  /** 🏇 調教 1 回の値段（0 で調教できない） */
+  keibaTrainPrice: z.number().int().min(0).max(1_000_000).default(300),
+  /** 🏇 馬主の馬が勝ったときにお祝いを流すチャンネル（なければ流さない） */
+  keibaAnnounceChannelId: z.string().regex(/^\d{5,25}$/).optional(),
+  /** 🐴 馬主ロール（走れる馬を持っている人）・🏆 G1 馬主ロール（G1 を勝ったことがある人）。なければ付けない */
+  keibaOwnerRoleId: z.string().regex(/^\d{5,25}$/).optional(),
+  keibaG1RoleId: z.string().regex(/^\d{5,25}$/).optional(),
   /** 1 日（日本時間）に賭けられる合計（0 で上限なし） */
   dailyBetLimit: z.number().int().min(0).max(100_000_000).default(20000),
   /** 遊べるゲーム */

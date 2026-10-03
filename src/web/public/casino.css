@@ -1714,3 +1714,29 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
   .kb-board-order li { font-size: 0.75rem; }
   .kb-paddock { bottom: 46px; font-size: 0.68rem; }
 }
+
+/* 🐴 馬主のうれしいこと */
+.kb-board.done { opacity: 0 !important; }
+.kb-silk.big { width: 64px; height: 64px; border-radius: 12px; margin: 0; }
+.kb-silk-preview { display: flex; justify-content: center; margin-bottom: 6px; }
+.kb-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.kb-swatch { position: relative; cursor: pointer; }
+.kb-swatch input { position: absolute; opacity: 0; pointer-events: none; }
+.kb-swatch .kb-silk { width: 28px; height: 28px; margin: 0; border-radius: 6px; }
+.kb-swatch:has(input:checked) .kb-silk { outline: 3px solid var(--c-gold); outline-offset: 2px; }
+.kb-silk-form { display: grid; gap: 6px; max-width: 520px; }
+.kb-silk-form .kb-type { padding: 4px 10px; }
+.kb-condbar { display: grid; grid-template-columns: auto 80px 1fr; gap: 8px; align-items: center; font-size: 0.8rem; margin: 4px 0; }
+.kb-condbar .kb-popbar { height: 6px; margin: 0; }
+.kb-condbar .kb-popbar i { background: linear-gradient(90deg, #6bd36b, #f4c430, #e53935); }
+.kb-stable-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.kb-stable-actions form { margin: 0; }
+.kb-stable-actions input[type='number'], .kb-stable-actions input[type='text'] { width: 120px; }
+.kb-leading { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.kb-leading li { display: grid; grid-template-columns: 2em 1fr auto auto; gap: 10px; align-items: center; padding: 4px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
+.kb-leading li:first-child { background: linear-gradient(90deg, rgba(226, 179, 64, 0.3), transparent); }
+.kb-leading li.me { outline: 1px solid var(--c-gold); }
+.kb-leading-rank { font-weight: 900; color: var(--c-gold); text-align: center; }
+.kb-market { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.kb-market li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: center; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
+.kb-circle .kb-rank, .kb-circle .kb-mine, .kb-circle .kb-remain { display: none; }

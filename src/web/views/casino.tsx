@@ -378,6 +378,20 @@ const MSG: Record<string, string> = {
   horse_too_many: '持てる頭数に届いています。',
   horse_debuted: 'デビューした馬の名前は変えられません。',
   horse_off: 'いまは馬を買えません。',
+  silk_saved: '🎽 勝負服を決めました。あなたの馬はみんなこの服で走ります。',
+  horse_trained: '💪 調教しました。次のレースの調子が上がります。',
+  horse_cooldown: '調教は 6 時間に 1 回までです。',
+  horse_resting: '放牧中は調教できません。',
+  horse_rested: '🌿 放牧に出しました。1 時間休んで、疲れがすっかり抜けます。',
+  horse_sale: '💱 売りに出しました。',
+  horse_unsale: '売るのをやめました。',
+  horse_bad_price: '値段は 100〜10,000,000 で入れてください。',
+  horse_traded: '💱 馬を買いました。あなたの勝負服で走ります。',
+  horse_self: '自分の馬は買えません。',
+  horse_no_wins: '繁殖入りできるのは、1 勝以上した馬だけです。',
+  horse_bred: '🌸 引退して繁殖入りしました。産駒を迎えられます。',
+  horse_foal: '🐣 産駒を迎えました。新馬戦から走ります。',
+  horse_no_foals: 'この馬の産駒は、もう迎えきりました。',
 };
 export const casinoMsg = (k: string | undefined) => (k && MSG[k] ? k : undefined);
 export const Msg = (p: { msg: string }) => <p class="c-alert">{MSG[p.msg] ?? p.msg}</p>;

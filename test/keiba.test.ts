@@ -20,10 +20,34 @@ import {
   ticketOdds,
   classOf,
   prizesOf,
+  appearanceOf,
   newStable,
   type KbStable,
 } from '../src/services/casino/keiba.js';
-import { addHorse, buyHorse, listHorses, loadRoster, myHorses, nameOwnHorse, renameHorse, retireOwnHorse, setRetired, KB_ROSTER_MIN } from '../src/services/casino/keibaStable.js';
+import {
+  addHorse,
+  applyKeibaResults,
+  breedFoal,
+  buyFromOwner,
+  buyHorse,
+  horsesForSale,
+  leadingOwners,
+  listHorses,
+  loadRoster,
+  myHorses,
+  nameOwnHorse,
+  ownerSilk,
+  renameHorse,
+  restHorse,
+  retireOwnHorse,
+  retireToBreed,
+  setOwnerSilk,
+  setRetired,
+  setSale,
+  trainHorse,
+  KB_ROSTER_MIN,
+} from '../src/services/casino/keibaStable.js';
+import { keibaTick, winMessage } from '../src/services/casino/keibaNotify.js';
 import { boxKeys, keiba, ticketKey, type KbState } from '../src/services/casino/tables/keiba.js';
 import { actTable, createTable, joinTable, leaveTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
 import type { Ctx } from '../src/services/casino/tables/types.js';
@@ -137,9 +161,11 @@ describe('🏇 クラスと重賞・賞金', () => {
     for (let seed = 1; seed < 6; seed++) expect(makeRace(rngOf(seed), 1, { cls: 6, priority: new Set([A.id]) }, roster).horses.some((h) => h.id === 99)).toBe(true);
   });
 
-  it('賞金: メンバーが賭けた合計の数 %（重賞ほど多い）を 1〜5 着で 50・20・13・10・7', () => {
-    expect(prizesOf(0, 10000)).toEqual([200, 80, 52, 40, 28]);
-    expect(prizesOf(8, 10000)).toEqual([450, 180, 117, 90, 63]);
+  it('賞金: メンバーが賭けた合計の数 %（重賞ほど多い）を 1〜5 着で 50・20・13・10・7。馬主の馬には出走手当も', () => {
+    expect(prizesOf(0, 10000)).toEqual([150, 60, 39, 30, 21]);
+    expect(prizesOf(8, 10000)).toEqual([400, 160, 104, 80, 56]);
+    // 賞金と出走手当（8 頭）を合わせても、胴元の取り分 10% を超えない
+    expect(Math.max(...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((c) => prizesOf(c, 100000).reduce((a, b) => a + b, 0) + 8 * appearanceOf(100000)))).toBeLessThanOrEqual(10000);
     expect(prizesOf(5, 0)).toEqual([0, 0, 0, 0, 0]);
     // ゴールで馬主に払う
     const t0 = new Date('2026-10-02T12:00:00Z').getTime();
@@ -150,7 +176,7 @@ describe('🏇 クラスと重賞・賞金', () => {
     const fin = keiba.tick(s, ctx(s.deadline));
     if (!fin || !fin.ok) throw new Error('no finish');
     const pos = fin.state.run!.order.indexOf(fin.state.horses.find((h) => h.ownerId === B.id)!.no);
-    const prize = pos < 5 ? prizesOf(0, 8000)[pos]! : 0;
+    const prize = (pos < 5 ? prizesOf(0, 8000)[pos]! : 0) + appearanceOf(8000);
     expect(fin.fx?.credits?.filter((c) => c.reason === 'keiba_prize')).toEqual(prize ? [{ memberId: B.id, amount: prize, reason: 'keiba_prize' }] : []);
     expect(fin.fx?.keiba?.find((r) => r.horseId === 1)?.prize).toBe(prize);
   });
@@ -262,6 +288,90 @@ describe('🏇 名簿と卓のサービス', () => {
     expect((await buyHorse(db, A.id, 'ツキノヒメ', 3000, 1)).status).toBe('ok');
     // 名簿に馬主の名前が入る
     expect((await loadRoster(db)).find((h) => h.name === 'ツキノヒメ')?.ownerId).toBe(A.id);
+  });
+
+  it('🐴 馬主のうれしいこと: 勝負服・調教・放牧・売り買い・繁殖と産駒', async () => {
+    const t0 = new Date('2026-10-03T03:00:00Z');
+    await addCoins(db, A.id, 20000, 'admin_grant');
+    const bought = await buyHorse(db, A.id, 'サクラノヒメ', 3000, 3);
+    if (bought.status !== 'ok') throw new Error(bought.status);
+    const id = bought.horse.id;
+    // 勝負服: 持っている馬もこれから買う馬もその服
+    await setOwnerSilk(db, A.id, { base: '#1e63d6', accent: '#ffffff', pattern: 2 });
+    expect(await ownerSilk(db, A.id)).toEqual({ base: '#1e63d6', accent: '#ffffff', pattern: 2 });
+    expect((await myHorses(db, A.id))[0]!.silk).toEqual({ base: '#1e63d6', accent: '#ffffff', pattern: 2 });
+    // 調教: 調子 +1・速さが少し伸びる・6 時間に 1 回
+    const spd0 = (await myHorses(db, A.id))[0]!.spd;
+    expect(await trainHorse(db, A.id, id, 300, t0)).toBe('ok');
+    expect(await trainHorse(db, A.id, id, 300, new Date(t0.getTime() + 3_600_000))).toBe('cooldown');
+    expect(await trainHorse(db, B.id, id, 300, t0)).toBe('not_found');
+    const trained = (await myHorses(db, A.id))[0]!;
+    expect(trained).toMatchObject({ trainBoost: 1, fatigue: 15 });
+    expect(trained.spd).toBe(spd0 + 2);
+    // 走ると疲れがたまり、調教の上乗せは使い切る。疲れすぎると名簿に出ない
+    await applyKeibaResults(db, [{ horseId: id, pos: 1, race: '新馬', dist: 1600, surface: 0, prize: 120, ownerId: A.id, name: 'サクラノヒメ', cls: 0 }], t0);
+    await applyKeibaResults(db, [{ horseId: id, pos: 2, race: '未勝利', dist: 1600, surface: 0, prize: 50, ownerId: A.id, name: 'サクラノヒメ', cls: 1 }], t0);
+    await applyKeibaResults(db, [{ horseId: id, pos: 9, race: '1勝クラス', dist: 1600, surface: 0, prize: 5, ownerId: A.id, name: 'サクラノヒメ', cls: 2 }], t0);
+    expect((await myHorses(db, A.id))[0]).toMatchObject({ fatigue: 90, trainBoost: 0, wins: 1, prize: 175 });
+    expect((await loadRoster(db, t0)).some((h) => h.id === id)).toBe(false);
+    expect((await loadRoster(db, new Date(t0.getTime() + 3 * 3_600_000))).some((h) => h.id === id)).toBe(true);
+    // 放牧: 1 時間出ない・疲れが抜ける
+    expect(await restHorse(db, A.id, id, t0)).toBe(true);
+    expect((await myHorses(db, A.id))[0]!.fatigue).toBe(0);
+    expect((await loadRoster(db, new Date(t0.getTime() + 30 * 60_000))).some((h) => h.id === id)).toBe(false);
+    // リーディングオーナー
+    expect(await leadingOwners(db, new Date(t0.getTime() - 1000))).toMatchObject([{ ownerId: A.id, prize: 175, wins: 1, runs: 3 }]);
+    // 売り買い: 手数料 5% を引いて売った人へ。買った人の勝負服になる
+    expect(await setSale(db, A.id, id, 50)).toBe(false);
+    expect(await setSale(db, A.id, id, 5000)).toBe(true);
+    expect((await horsesForSale(db)).map((h) => h.id)).toEqual([id]);
+    expect(await buyFromOwner(db, A.id, id, 3)).toBe('self');
+    const before = (await walletOf(db, A.id)).balance;
+    expect(await buyFromOwner(db, B.id, id, 3)).toBe('ok');
+    expect((await walletOf(db, B.id)).balance).toBe(0);
+    expect((await walletOf(db, A.id)).balance).toBe(before + 4750);
+    expect((await myHorses(db, B.id))[0]).toMatchObject({ id, salePrice: null });
+    // 繁殖入り（1 勝以上）→ 産駒を半額で 3 頭まで
+    await addCoins(db, B.id, 10000, 'admin_grant');
+    const other = await buyHorse(db, B.id, 'ツキノヒメ', 1000, 3);
+    if (other.status !== 'ok') throw new Error(other.status);
+    expect(await retireToBreed(db, B.id, other.horse.id)).toBe('no_wins');
+    expect(await retireToBreed(db, B.id, id)).toBe('ok');
+    const foal = await breedFoal(db, B.id, id, 'サクラノコ', 1500, 3);
+    expect(foal).toMatchObject({ status: 'ok', horse: { name: 'サクラノコ', parentId: id, ownerId: B.id, age: 2 } });
+    expect((await loadRoster(db, new Date(t0.getTime() + 10 * 3_600_000))).find((h) => h.name === 'サクラノコ')?.sire).toBe('サクラノヒメ');
+    expect((await breedFoal(db, A.id, id, 'ちがう人の', 1500, 3)).status).toBe('not_found');
+  });
+
+  it('🏆 馬主の馬が勝ったら Discord でお祝い。馬主ロール・G1 馬主ロール', async () => {
+    const tcfg2: GuildConfig = { ...tcfg, casino: { ...tcfg.casino, keibaAnnounceChannelId: '760000000000000900', keibaOwnerRoleId: '760000000000000901', keibaG1RoleId: '760000000000000902' } };
+    const { recordJoin } = await import('../src/services/members.js');
+    await recordJoin(db, { id: A.id, username: 'a', displayName: 'さくら', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await recordJoin(db, { id: B.id, username: 'b', displayName: 'もみじ', avatarUrl: null, roleIds: ['760000000000000901'], isBot: false, joinedAt: null });
+    const h = await buyHorse(db, A.id, 'サクラノヒメ', 1000, 3);
+    if (h.status !== 'ok') throw new Error(h.status);
+    await applyKeibaResults(db, [{ horseId: h.horse.id, pos: 1, race: '咲楽ノ宮ダービー（G1）', dist: 2400, surface: 0, prize: 800, ownerId: A.id, name: 'サクラノヒメ', cls: 8 }]);
+    const log: string[] = [];
+    const discord = {
+      sendMessage: async (ch: string, b: { content?: string }) => {
+        log.push(`send ${ch} ${b.content}`);
+        return { id: '1' };
+      },
+      addRole: async (_g: string, u: string, r: string) => void log.push(`add ${u} ${r}`),
+      removeRole: async (_g: string, u: string, r: string) => void log.push(`remove ${u} ${r}`),
+    };
+    await keibaTick({ db, cfg: tcfg2, discord });
+    expect(log[0]).toContain('🏆 **咲楽ノ宮ダービー（G1）** を **サクラノヒメ** が制しました！');
+    expect(log[0]).toContain(`<@${A.id}>`);
+    expect(log).toContain(`add ${A.id} 760000000000000901`);
+    expect(log).toContain(`add ${A.id} 760000000000000902`);
+    // B は馬を持っていないので外す
+    expect(log).toContain(`remove ${B.id} 760000000000000901`);
+    // 2 回目は流さない
+    log.length = 0;
+    await keibaTick({ db, cfg: tcfg2, discord });
+    expect(log.some((l) => l.startsWith('send'))).toBe(false);
+    expect(winMessage({ race: '1勝クラス', horseName: 'X', ownerId: A.id, prize: 0, cls: 2 }, '銭')).toContain('1勝クラス「1勝クラス」で **X** が勝ちました！');
   });
 
   it('レースを開くと名簿から 8 頭。ゴールで払い、馬の成績がたまる', async () => {

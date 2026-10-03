@@ -449,6 +449,13 @@
       "when": 1790957961305,
       "tag": "0063_keiba_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791067488276,
+      "tag": "0064_keiba_owner_perks",
+      "breakpoints": true
     }
   ]
 }

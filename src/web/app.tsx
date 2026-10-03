@@ -1275,6 +1275,7 @@ export function createWebApp(deps: WebDeps) {
         settingStats={settingStats}
         roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed)}
         horses={await listHorses(db)}
+        channels={textChannelsOf(await loadChannels().catch(() => [] as GuildChannel[])).map((ch) => ({ id: ch.id, name: ch.name }))}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
       />,
@@ -1337,6 +1338,13 @@ export function createWebApp(deps: WebDeps) {
       mahjongBets: typeof body.mahjongBets === 'string' ? body.mahjongBets === 'yes' : cfg.casino.mahjongBets,
       keibaHorsePrice: typeof body.keibaHorsePrice === 'string' ? int('keibaHorsePrice') : cfg.casino.keibaHorsePrice,
       keibaMaxOwned: typeof body.keibaMaxOwned === 'string' ? int('keibaMaxOwned') : cfg.casino.keibaMaxOwned,
+      keibaTrainPrice: typeof body.keibaTrainPrice === 'string' ? int('keibaTrainPrice') : cfg.casino.keibaTrainPrice,
+      ...(['keibaAnnounceChannelId', 'keibaOwnerRoleId', 'keibaG1RoleId'] as const).reduce<Record<string, string>>((o, k) => {
+        const v = body[k];
+        if (typeof v === 'string' && /^\d{5,25}$/.test(v)) o[k] = v;
+        else if (v === undefined && cfg.casino[k]) o[k] = cfg.casino[k]!;
+        return o;
+      }, {}),
       games: CASINO_GAMES.filter((g) => list.includes(g)),
       knownGames: [...CASINO_GAMES],
       slotMachines: slotMachinesOf(body),

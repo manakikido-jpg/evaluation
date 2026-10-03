@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-03-keiba-owner-perks',
+    date: '2026-10-03',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🐴 馬主のうれしいことを増やしました',
+    items: [
+      '🎽 勝負服を自分で決められる。💪 調教で調子と速さアップ、🌿 放牧で疲れが抜ける（走ると疲れがたまる）',
+      '着外でも出走手当。💱 馬の売り買い。🌸 勝った馬は繁殖入りして、能力を受け継いだ産駒を半額で迎えられる',
+      '👑 今月のリーディングオーナー。🏆 勝った馬の口取り式の画面と、Discord でのお祝い。🐴 馬主ロール・🏆 G1 馬主ロール',
+    ],
+  },
+  {
     id: '2026-10-03-keiba-real',
     date: '2026-10-03',
     kind: 'new',
