@@ -20,11 +20,17 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   confirm_name: { text: '消すときは、確認のためロールの名前をそのまま入力してください。', kind: 'warn' },
   nickname_locked: { text: '「ニックネームの変更」を外しました。これからは、メンバーは自分でニックネームを変えられません（運営がメンバーのページから変えられます）。', kind: 'ok' },
   invites_bot_only: { text: '「招待を作成」を外しました。これからは BOT の /招待リンク だけで招待できます。', kind: 'ok' },
+  members_added: { text: 'ロールを付けました。', kind: 'ok' },
+  members_removed: { text: 'ロールを外しました。', kind: 'ok' },
+  members_failed_some: { text: '一部の人にはできませんでした（抜けた人・BOT より上の運営など）。', kind: 'warn' },
+  pick_members: { text: '人を選んでください。', kind: 'warn' },
+  too_many_members: { text: '1 回に 50 人までです。分けてください。', kind: 'warn' },
+  need_confirm_danger: { text: '注意の権限があるロールを付けるときは、確認のチェックを入れてください。', kind: 'warn' },
 };
 
-function Flash(props: { code?: string }) {
+function Flash(props: { code?: string; n?: number }) {
   const f = props.code && Object.hasOwn(ROLE_FLASH, props.code) ? ROLE_FLASH[props.code] : undefined;
-  return f ? <p class={`flash ${f.kind}`}>{f.text}</p> : null;
+  return f ? <p class={`flash ${f.kind}`}>{props.n ? `${f.text}（${props.n} 人）` : f.text}</p> : null;
 }
 
 const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
@@ -209,9 +215,26 @@ export function RolePage(props: {
   inUse?: boolean;
   isEveryone: boolean;
   members: Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[];
+  /** 付ける人を探した言葉と、見つかった人（まだ持っていない人） */
+  q?: string;
+  candidates?: Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[];
+  /** 注意の権限（あれば付けるときに確認） */
+  danger?: string[];
   flash?: string;
+  n?: number;
 }) {
   const { session, role } = props;
+  const canEdit = !props.isEveryone && !props.locked;
+  const Csrf = () => <input type="hidden" name="_csrf" value={session.csrfToken} />;
+  const Who = (p: { m: Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'> }) => (
+    <span class="who">
+      <Avatar url={p.m.avatarUrl} />
+      <span>
+        {p.m.displayName}
+        <small>@{p.m.username}</small>
+      </span>
+    </span>
+  );
   const bits = permsOf(role);
   const disabled = props.locked;
   return (
@@ -225,7 +248,7 @@ export function RolePage(props: {
           {props.kind && <small> {props.kind}</small>}
         </h1>
       </div>
-      <Flash code={props.flash} />
+      <Flash code={props.flash} n={props.n} />
       {props.locked && <p class="flash warn">{ROLE_FLASH.locked!.text}</p>}
       <form method="post" action={`/roles/${role.id}`} class="card">
         <input type="hidden" name="_csrf" value={session.csrfToken} />
@@ -281,6 +304,84 @@ export function RolePage(props: {
           </>
         )}
       </form>
+      {canEdit && (
+        <section class="card anchor" id="role-add">
+          <h2>➕ 人に付ける</h2>
+          {props.kind && <p class="note">⚠ このロールは BOT も付けたり外したりします（{props.kind}）。ここで変えても、BOT が決まりに合わせて戻すことがあります。</p>}
+          <form method="get" action={`/roles/${role.id}`} class="inline-actions">
+            <input type="search" name="q" value={props.q ?? ''} maxlength={50} placeholder="名前・ユーザー名・ID" aria-label="付ける人を探す" />
+            <button type="submit">探す</button>
+          </form>
+          {props.q &&
+            (props.candidates?.length ? (
+              <form method="post" action={`/roles/${role.id}/members/add`}>
+                <Csrf />
+                <ul class="role-members pick">
+                  {props.candidates.map((m) => (
+                    <li>
+                      <label class="check">
+                        <input type="checkbox" name="member" value={m.id} checked={props.candidates!.length === 1} />
+                        <Who m={m} />
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                {props.danger && props.danger.length > 0 && (
+                  <label class="field check">
+                    <input type="checkbox" name="confirmDanger" value="yes" />
+                    <span>注意の権限（{props.danger.join('・')}）があるロールだと分かって付ける</span>
+                  </label>
+                )}
+                <button type="submit" class="ok">
+                  選んだ人に「{role.name}」を付ける
+                </button>
+                <p class="note">見つかったのは、まだこのロールを持っていない今いる人だけです（30 人まで。1 回に 50 人まで付けられます）。</p>
+              </form>
+            ) : (
+              <p class="empty">「{props.q}」に合う人（まだこのロールを持っていない人）はいません。</p>
+            ))}
+        </section>
+      )}
+      <section class="card anchor" id="role-members">
+        <h2>このロールを持っている人（{props.members.length} 人）</h2>
+        {props.members.length === 0 ? (
+          <p class="empty">{props.isEveryone ? '全員が持っています。' : 'いません。'}</p>
+        ) : canEdit ? (
+          <form method="post" action={`/roles/${role.id}/members/remove`}>
+            <Csrf />
+            <ul class="role-members pick">
+              {props.members.map((m) => (
+                <li>
+                  <label class="check">
+                    <input type="checkbox" name="member" value={m.id} />
+                    <Who m={m} />
+                  </label>
+                  <a class="role-member-open" href={`/members/${m.id}`} title="メンバーのページ">
+                    開く
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <button type="submit" class="danger">
+              選んだ人から「{role.name}」を外す
+            </button>
+          </form>
+        ) : (
+          <ul class="role-members">
+            {props.members.map((m) => (
+              <li>
+                <a class="who" href={`/members/${m.id}`}>
+                  <Avatar url={m.avatarUrl} />
+                  <span>
+                    {m.displayName}
+                    <small>@{m.username}</small>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {!props.isEveryone && !props.locked && (
         <section class="card">
           <h2>🗑 ロールを消す</h2>
@@ -298,26 +399,6 @@ export function RolePage(props: {
           )}
         </section>
       )}
-      <section class="card">
-        <h2>このロールを持っている人（{props.members.length} 人）</h2>
-        {props.members.length === 0 ? (
-          <p class="empty">{props.isEveryone ? '全員が持っています。' : 'いません。'}</p>
-        ) : (
-          <ul class="role-members">
-            {props.members.map((m) => (
-              <li>
-                <a class="who" href={`/members/${m.id}`}>
-                  <Avatar url={m.avatarUrl} />
-                  <span>
-                    {m.displayName}
-                    <small>@{m.username}</small>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </Layout>
   );
 }

@@ -365,6 +365,34 @@ export async function roleMemberCounts(db: Db): Promise<{ counts: Map<string, nu
   return { counts, total: rows.length };
 }
 
+/** そのロールを付けられる人を探す（今いる人・BOT とすでに持っている人はのぞく。名前・ユーザー名・ID で。名前順・最大 limit 人） */
+export async function searchMembersWithoutRole(db: Db, roleId: string, q: string, limit = 30): Promise<Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[]> {
+  const term = q.trim().slice(0, 50);
+  if (!term) return [];
+  const like = `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  return db
+    .select({ id: members.id, displayName: members.displayName, username: members.username, avatarUrl: members.avatarUrl })
+    .from(members)
+    .where(
+      and(
+        isNull(members.leftAt),
+        eq(members.isBot, false),
+        sql`not (${roleId} = any(${members.roleIds}))`,
+        or(ilike(members.displayName, like), ilike(members.username, like), eq(members.id, term)),
+      ),
+    )
+    .orderBy(asc(members.displayName))
+    .limit(limit);
+}
+
+/** 付けた・外したロールを、こちらの記録にもすぐ入れる（Discord からの知らせを待たずに一覧に出すため） */
+export async function setMemberRole(db: Db, memberId: string, roleId: string, has: boolean): Promise<void> {
+  await db
+    .update(members)
+    .set({ roleIds: has ? sql`case when ${roleId} = any(${members.roleIds}) then ${members.roleIds} else array_append(${members.roleIds}, ${roleId}) end` : sql`array_remove(${members.roleIds}, ${roleId})` })
+    .where(eq(members.id, memberId));
+}
+
 /** そのロールを持っている、今いる人（名前順・最大 limit 人） */
 export async function membersWithRole(db: Db, roleId: string, limit = 300): Promise<Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[]> {
   return db

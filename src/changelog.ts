@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-04-role-members',
+    date: '2026-10-04',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🎭 ロールのページで、人に付ける・外すができるように',
+    items: [
+      '「➕ 人に付ける」で名前・ID を探して選んで付ける。「このロールを持っている人」で選んで外す（1 回に 50 人まで）',
+      '注意の権限があるロールを付けるときは確認のチェック。記録に残ります',
+    ],
+  },
+  {
     id: '2026-10-04-ops-watch',
     date: '2026-10-04',
     kind: 'new',

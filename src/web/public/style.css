@@ -318,6 +318,13 @@ form.rename input[type="text"] { flex: 1; min-width: 160px; }
 fieldset.perms { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 12px; }
 fieldset.perms legend { font-weight: bold; padding: 0 4px; }
 ul.role-members { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+ul.role-members.pick { margin-bottom: 10px; }
+ul.role-members.pick li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line, rgba(0, 0, 0, 0.1)); }
+ul.role-members.pick li:has(input:checked) { border-color: var(--shu, #c8102e); background: color-mix(in srgb, var(--shu, #c8102e) 8%, transparent); }
+ul.role-members.pick label.check { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; cursor: pointer; }
+ul.role-members.pick .who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+ul.role-members.pick .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-member-open { font-size: 0.8rem; white-space: nowrap; }
 
 /* ───────── チャンネル: 一覧（押すとそこへ移動） ───────── */
 html { scroll-behavior: smooth; }

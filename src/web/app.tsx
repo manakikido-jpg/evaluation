@@ -69,7 +69,7 @@ import type { Db } from '../db/client.js';
 import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
-import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, shuinHistory, type MemberListQuery } from '../services/members.js';
+import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, searchMembersWithoutRole, setMemberRole, shuinHistory, type MemberListQuery } from '../services/members.js';
 import { goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
@@ -3128,6 +3128,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.get('/roles/:id', async (c) => {
+    const q = (c.req.query('q') ?? '').trim().slice(0, 50);
     const roles = await loadRoles();
     const role = roles?.find((r) => r.id === c.req.param('id'));
     if (!roles || !role) return c.html(<NotFoundPage session={c.get('session')} />, 404);
@@ -3141,10 +3142,56 @@ export function createWebApp(deps: WebDeps) {
         inUse={Boolean(roleKind(cfg, role)) || (await roleUsedByShop(role.id))}
         isEveryone={isEveryone}
         members={isEveryone ? [] : await membersWithRole(db, role.id)}
+        q={q}
+        candidates={q && !isEveryone ? await searchMembersWithoutRole(db, role.id, q) : []}
+        danger={dangerLabels(permsOf(role))}
         flash={c.req.query('msg')}
+        n={Number(c.req.query('n')) || 0}
       />,
     );
   });
+
+  /** ロールを人に付ける・外す（まとめて 50 人まで。危ない権限のロールは確認のチェックが要る） */
+  const roleMembers = async (c: Context<Env>, add: boolean) => {
+    const id = c.req.param('id') ?? '';
+    if (!/^\d{17,20}$/.test(id)) return c.redirect('/roles');
+    const back = (msg: string, n = 0) => c.redirect(`/roles/${id}?msg=${msg}${n ? `&n=${n}` : ''}#role-members`);
+    const roles = await loadRoles();
+    const role = roles?.find((r) => r.id === id);
+    if (!roles || !role || id === cfg.guildId) return c.redirect('/roles');
+    if (roleLocked(role, roles)) return back('locked');
+    const body = await c.req.parseBody({ all: true });
+    const raw = body.member === undefined ? [] : Array.isArray(body.member) ? body.member : [body.member];
+    const ids = [...new Set(raw.filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v)))];
+    if (!ids.length) return back('pick_members');
+    if (ids.length > 50) return back('too_many_members');
+    if (add && dangerLabels(permsOf(role)).length && body.confirmDanger !== 'yes') return back('need_confirm_danger');
+    const names = await namesOf(db, ids);
+    const done: string[] = [];
+    for (const memberId of ids) {
+      try {
+        if (add) await deps.discord.addRole(cfg.guildId, memberId, id, '管理画面（ロール）');
+        else await deps.discord.removeRole(cfg.guildId, memberId, id, '管理画面（ロール）');
+        await setMemberRole(db, memberId, id, add);
+        done.push(memberId);
+      } catch (err) {
+        logger.warn({ err, memberId, roleId: id }, 'role member change failed');
+      }
+    }
+    if (done.length) {
+      await audit(db, {
+        actorId: c.get('session').userId,
+        action: add ? 'role.member_add' : 'role.member_remove',
+        detail: { roleId: id, name: role.name, members: done.map((m) => ({ id: m, name: names.get(m) ?? m })) },
+        via: 'web',
+      });
+    }
+    if (!done.length) return back('failed');
+    if (done.length < ids.length) return back('members_failed_some', done.length);
+    return back(add ? 'members_added' : 'members_removed', done.length);
+  };
+  app.post('/roles/:id/members/add', (c) => roleMembers(c, true));
+  app.post('/roles/:id/members/remove', (c) => roleMembers(c, false));
 
   /** ロールを作る（いちばん下にできる。権限はなしで作って、あとからロールのページで付ける） */
   app.post('/roles/new', async (c) => {

@@ -2458,6 +2458,44 @@ describe('ロール（管理画面）', () => {
     expect((await listAudit(db, { action: 'role.delete' }))[0]?.detail).toMatchObject({ name: 'イベント係' });
   });
 
+  it('ロールを人に付ける・外す: 名前で探して選ぶ・選んだ人から外す。注意の権限は確認・🔒 はできない', async () => {
+    const EV = '980000000000000060';
+    const MOD = '980000000000000061';
+    roleList.push({ id: EV, name: 'イベント係', position: 3, managed: false, color: 0, permissions: '0' });
+    roleList.push({ id: MOD, name: '見回り', position: 4, managed: false, color: 0, permissions: String(1n << 2n) });
+    const NEW1 = '700000000000000881';
+    const NEW2 = '700000000000000882';
+    await recordJoin(db, { id: NEW1, username: 'hanako', displayName: 'はなこ', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await recordJoin(db, { id: NEW2, username: 'hanabi', displayName: 'はなび', avatarUrl: null, roleIds: [EV], isBot: false, joinedAt: null });
+    const g = await login(GUJI);
+    // 探す: まだ持っていない人だけ
+    const found = await (await get(`/roles/${EV}?q=はな`, g)).text();
+    expect(found).toContain('はなこ');
+    expect(found).not.toMatch(/name="member" value="700000000000000882"[^>]*>\s*<span class="who">[\s\S]*?はなび[\s\S]*?選んだ人に/);
+    expect(found).toContain(`action="/roles/${EV}/members/add"`);
+    const add = await form(g, `/roles/${EV}/members/add`, [['member', NEW1]]);
+    expect(add.headers.get('location')).toBe(`/roles/${EV}?msg=members_added&n=1#role-members`);
+    expect(actions).toContain(`addRole ${NEW1} ${EV}`);
+    // こちらの記録にもすぐ入る（持っている人に出る）
+    const after = await (await get(add.headers.get('location')!.replace(/#.*/, ''), g)).text();
+    expect(after).toContain('このロールを持っている人（2 人）');
+    expect(after).toContain('ロールを付けました。（1 人）');
+    expect((await listAudit(db, { action: 'role.member_add' }))[0]?.detail).toMatchObject({ roleId: EV, members: [{ id: NEW1, name: 'はなこ' }] });
+    // 外す
+    const rm = await form(g, `/roles/${EV}/members/remove`, [['member', NEW1], ['member', NEW2]]);
+    expect(rm.headers.get('location')).toBe(`/roles/${EV}?msg=members_removed&n=2#role-members`);
+    expect(actions).toContain(`removeRole ${NEW2} ${EV}`);
+    expect(await (await get(`/roles/${EV}`, g)).text()).toContain('このロールを持っている人（0 人）');
+    // 選んでいない・注意の権限（キック）は確認が要る・🔒 はできない
+    expect((await form(g, `/roles/${EV}/members/add`, [])).headers.get('location')).toBe(`/roles/${EV}?msg=pick_members#role-members`);
+    expect((await form(g, `/roles/${MOD}/members/add`, [['member', NEW1]])).headers.get('location')).toBe(`/roles/${MOD}?msg=need_confirm_danger#role-members`);
+    expect((await form(g, `/roles/${MOD}/members/add`, [['member', NEW1], ['confirmDanger', 'yes']])).headers.get('location')).toBe(`/roles/${MOD}?msg=members_added&n=1#role-members`);
+    expect((await form(g, `/roles/${TOP}/members/add`, [['member', NEW1]])).headers.get('location')).toBe(`/roles/${TOP}?msg=locked#role-members`);
+    expect(await (await get(`/roles/${TOP}`, g)).text()).not.toContain('人に付ける');
+    // 神職は使えない
+    expect((await form(await login(STAFF), `/roles/${EV}/members/add`, [['member', NEW1]])).status).toBe(403);
+  });
+
   it('招待リンクを BOT だけに: @everyone とロールから「招待を作成」を外す（🔒 はのぞく）', async () => {
     roleList = roleList.map((r) => (r.id === cfg.guildId ? { ...r, permissions: String((1n << 10n) | 1n) } : r));
     const g = await login(GUJI);
