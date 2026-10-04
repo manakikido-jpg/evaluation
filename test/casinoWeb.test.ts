@@ -561,5 +561,21 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(after).toContain('新馬');
     expect((await post('/casino/keiba/stable/buy', a, { name: 'ツキノヒメ' })).headers.get('location')).toBe('/casino/keiba/stable?e=poor');
     expect(frag).toContain('みんなの馬券（1 人');
+    // 3 連単（着順どおり）: 押した順の 1 点
+    await post(`/casino/t/${id}/act`, a, { action: 'bets', type: 'trifecta', mode: 'order', seq: '3,1,2', h: ['1', '2', '3'], bet: '10' });
+    expect(await balance(A)).toBe(4750 - 3000 - 10);
+    expect(await (await get(`/casino/t/${id}/frag`, a)).text()).toContain('3連単 ③→①→②');
+    expect(page).toContain('name="mode" value="order"');
+    // 📊 成績のページ: 入口から行ける。馬の成績・馬名鑑・自分の馬券
+    expect(lobby).toContain('/casino/keiba/mine');
+    expect(await (await get('/casino/keiba/mine', a)).text()).toContain('まだ記録がありません');
+    const dir = await (await get('/casino/keiba/horses', a)).text();
+    expect(dir).toContain('馬名鑑');
+    expect(dir).toContain('サクラノヒメ');
+    const hid = /\/casino\/keiba\/horse\/(\d+)">サクラノヒメ/.exec(dir)![1];
+    const hp = await (await get(`/casino/keiba/horse/${hid}`, a)).text();
+    expect(hp).toContain('通算成績');
+    expect(hp).toContain('馬主');
+    expect((await get('/casino/keiba/horse/999999', a)).headers.get('location')).toBe('/casino/keiba/horses');
   });
 });

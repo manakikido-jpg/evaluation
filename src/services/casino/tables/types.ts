@@ -17,8 +17,30 @@ export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payo
 /** 🀄 麻雀の戦績（終局のとき 1 人 1 行） */
 export type MahjongResult = { memberId: string; name: string; rank: number; points: number; length: string; players: number; entry: number; payout: number; hands: number; wins: number; tsumo: number; dealins: number; riichi: number; bestPoints: number; bestName: string | null };
 /** 🏇 名簿の馬の 1 走（レースが終わったとき 1 頭 1 行） */
-export type KeibaResult = { horseId: number; pos: number; race: string; dist: number; surface: number; prize?: number; ownerId?: string | null; name?: string; cls?: number };
-export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[] };
+export type KeibaResult = {
+  horseId: number;
+  pos: number;
+  race: string;
+  dist: number;
+  surface: number;
+  prize?: number;
+  ownerId?: string | null;
+  name?: string;
+  cls?: number;
+  /** 成績ページ用: 馬場・頭数・馬番・人気・単勝（10 倍）・タイム・着差・上がり 3F（10 倍）・通過順 */
+  going?: number;
+  field?: number;
+  no?: number;
+  pop?: number;
+  odds?: number;
+  time?: string;
+  margin?: string;
+  last3f?: number;
+  corners?: string;
+};
+/** メンバーの馬券 1 枚（結果が出たとき） */
+export type KeibaBet = { memberId: string; race: string; cls: number; type: string; key: string; names: string; amount: number; odds: number; payout: number };
+export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[] };
 
 export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
 export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });

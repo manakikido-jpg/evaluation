@@ -1050,6 +1050,8 @@ const keepPicks = (root) => {
   return {
     odds,
     type: f.querySelector('input[name="type"]:checked')?.value,
+    mode: f.querySelector('input[name="mode"]:checked')?.value,
+    seq: f.seq?.value,
     h: [...f.querySelectorAll('input[name="h"]:checked')].map((x) => x.value),
     bet: f.querySelector('input[name="bet"]:checked')?.value,
     custom: f.betCustom?.value,
@@ -1068,6 +1070,9 @@ const restorePicks = (root, k) => {
   if (!f || k.type === undefined) return;
   const r = f.querySelector(`input[name="type"][value="${k.type}"]`);
   if (r) r.checked = true;
+  const md = k.mode && f.querySelector(`input[name="mode"][value="${k.mode}"]`);
+  if (md) md.checked = true;
+  if (f.seq) f.seq.value = k.seq || '';
   f.querySelectorAll('input[name="h"]').forEach((x) => {
     x.checked = k.h.includes(x.value);
   });
@@ -1080,6 +1085,34 @@ const restorePicks = (root, k) => {
 const kbFmt = (n) => Math.round(n).toLocaleString('ja-JP');
 const kbOdd = (o10) => (o10 / 10).toFixed(1);
 const kbPair = (a, b) => (Number(a) < Number(b) ? `${a}-${b}` : `${b}-${a}`);
+/** 1 枚に選ぶ馬の数・順番どおりか・組の書き方（サーバーの comboKey と同じ） */
+const KB_PICKS = { win: 1, place: 1, quinella: 2, wide: 2, exacta: 2, trio: 3, trifecta: 3 };
+const kbOrdered = (t) => t === 'exacta' || t === 'trifecta';
+const kbKey = (t, nos) => (kbOrdered(t) ? nos.join('>') : [...nos].sort((a, b) => a - b).join('-'));
+/** 選んだ馬の組み合わせ全部（ボックス。順番どおりの賭け方は順番ちがいも） */
+const kbBox = (t, picks) => {
+  const k = KB_PICKS[t] || 1;
+  if (k === 1) return picks.map(String);
+  const out = new Set();
+  const walk = (cur) => {
+    if (cur.length === k) return void out.add(kbKey(t, cur));
+    picks.forEach((n) => {
+      if (!cur.includes(n)) walk([...cur, n]);
+    });
+  };
+  walk([]);
+  return [...out];
+};
+/** 押した順（着順どおりで使う）。外した馬は抜き、まだ入っていない選んだ馬は後ろに */
+const kbSeq = (f) => {
+  const picks = [...f.querySelectorAll('input[name="h"]:checked')].map((x) => Number(x.value));
+  const seq = (f.seq?.value || '').split(',').filter(Boolean).map(Number).filter((n) => picks.includes(n));
+  picks.forEach((n) => {
+    if (!seq.includes(n)) seq.push(n);
+  });
+  if (f.seq) f.seq.value = seq.join(',');
+  return seq;
+};
 /** 馬券の画面: 選んだ馬のオッズ・何点・合計・当たるといくら */
 const paintSlip = (f) => {
   let odds;
@@ -1092,31 +1125,58 @@ const paintSlip = (f) => {
   const picks = [...f.querySelectorAll('input[name="h"]:checked')].map((x) => x.value);
   const sel = f.querySelector('input[name="bet"]:checked');
   const amount = sel?.value === 'custom' ? Number(f.betCustom?.value) : Number(sel?.value);
-  const pair = type === 'quinella' || type === 'wide';
-  // 馬のボタンに、いまの賭け方のオッズ（馬連・ワイドは、選んだ 1 頭目との組み）
-  const anchor = pair && picks.length ? picks[0] : null;
+  const need = KB_PICKS[type] || 1;
+  const pair = need > 1;
+  const order = kbOrdered(type) && f.querySelector('input[name="mode"]:checked')?.value === 'order';
+  const seq = kbSeq(f);
+  // 着順どおり: 押した順に「1着」「2着」「3着」
+  f.querySelectorAll('[data-kb-seq]').forEach((el) => {
+    const at = seq.indexOf(Number(el.dataset.kbSeq));
+    el.textContent = order && at >= 0 && at < need ? `${at + 1}着` : '';
+  });
+  // 馬のボタンに、いまの賭け方のオッズ。2 頭・3 頭の賭け方は、先に選んだ馬（1 頭・2 頭）とこの馬の組
+  const anchors = need > 1 && seq.length >= need - 1 ? seq.slice(0, need - 1) : null;
+  const SHORT = { quinella: '連', wide: 'ワ', exacta: '馬単', trio: '3連複', trifecta: '3連単' };
   f.querySelectorAll('[data-kb-hodds]').forEach((el) => {
-    const no = el.dataset.kbHodds;
+    const no = Number(el.dataset.kbHodds);
     if (type === 'win') el.textContent = `単 ${kbOdd(odds.win[no])}`;
     else if (type === 'place') el.textContent = `複 ${kbOdd(odds.place[no][0])}-${kbOdd(odds.place[no][1])}`;
-    else if (!anchor) el.textContent = type === 'quinella' ? '連 —' : 'ワ —';
-    else if (anchor === no) el.textContent = '軸';
+    else if (!anchors) el.textContent = `${SHORT[type]} —`;
+    else if (anchors.includes(no)) el.textContent = kbOrdered(type) ? `${anchors.indexOf(no) + 1}着` : '軸';
     else {
-      const o = odds[type][kbPair(anchor, no)];
-      el.textContent = type === 'quinella' ? `連 ${kbOdd(o[0])}` : `ワ ${kbOdd(o[0])}`;
+      const o = odds[type]?.[kbKey(type, [...anchors, no])];
+      const v = Array.isArray(o) ? o[0] : o;
+      el.textContent = `${SHORT[type]} ${v ? kbOdd(v) : '—'}`;
     }
   });
   // 何点
-  const keys = [];
-  if (!pair) picks.forEach((no) => keys.push(no));
-  else for (let i = 0; i < picks.length; i++) for (let j = i + 1; j < picks.length; j++) keys.push(kbPair(picks[i], picks[j]));
-  const lo = keys.map((k) => (type === 'win' ? odds.win[k] : type === 'place' ? odds.place[k][0] : odds[type][k][0]));
-  const hi = keys.map((k) => (type === 'win' ? odds.win[k] : type === 'place' ? odds.place[k][1] : type === 'wide' ? odds.wide[k][1] : odds.quinella[k][0]));
+  const keys = order ? (seq.length === need ? [kbKey(type, seq.slice(0, need))] : []) : picks.length >= need ? kbBox(type, picks.map(Number)) : [];
+  const range = (k) => {
+    if (type === 'win') return [odds.win[k], odds.win[k]];
+    const o = odds[type]?.[k];
+    if (o === undefined) return [10, 10];
+    return Array.isArray(o) ? (type === 'quinella' ? [o[0], o[0]] : o) : [o, o];
+  };
+  // 自分が賭けた分も箱に入るので、そのぶんオッズは下がる（払い戻し率 90% で見込む）
+  const total = odds.totals?.[type] ?? 0;
+  const after = (o10) => {
+    if (!total || !(amount > 0) || o10 <= 10) return o10;
+    const stake = (total * 0.9 * 10) / o10;
+    return Math.max(10, Math.floor(((total + amount * keys.length) * 0.9 * 10) / (stake + amount)));
+  };
+  const lo = keys.map((k) => after(range(k)[0]));
+  const hi = keys.map((k) => after(range(k)[1]));
   const out = f.querySelector('.kb-preview');
   const buy = f.querySelector('.kb-buy');
   const coin = f.dataset.coin || '';
+  const max = Number(f.dataset.max) || 30;
   let ok = keys.length > 0 && amount > 0;
-  if (!keys.length) out.textContent = pair ? '2 頭以上選んでください（選んだ馬の組み合わせを全部買います）' : '馬を選んでください';
+  if (!keys.length)
+    out.textContent = order
+      ? `${need} 頭を、1 着にする馬から順に押してください（いま ${Math.min(seq.length, need)} 頭）${seq.length > need ? '。多すぎるので外してください' : ''}`
+      : pair
+        ? `${need} 頭以上選んでください（選んだ馬の組み合わせを全部買います）`
+        : '馬を選んでください';
   else if (!(amount > 0)) out.textContent = '量を選んでください';
   else {
     const min = Math.min(...lo) * amount / 10;
@@ -1127,9 +1187,9 @@ const paintSlip = (f) => {
     const b = document.createElement('span');
     b.textContent = `当たると 約 ${kbFmt(min)}${max > min ? `〜${kbFmt(max)}` : ''} ${coin}`;
     out.append(a, b);
-    if (keys.length > 20) {
+    if (keys.length > max) {
       ok = false;
-      b.textContent = '1 レースに 20 枚までです。馬を減らしてください';
+      b.textContent = `1 レースに ${max} 枚までです。馬を減らしてください`;
     }
   }
   if (buy) {
@@ -1157,10 +1217,11 @@ document.addEventListener('click', (e) => {
     const f = q.closest('.kb-slip');
     const boxes = [...f.querySelectorAll('input[name="h"]')];
     const type = f.querySelector('input[name="type"]:checked')?.value;
-    const n = type === 'quinella' || type === 'wide' ? 2 : 1;
+    const n = KB_PICKS[type] || 1;
     boxes.forEach((x) => {
       x.checked = false;
     });
+    if (f.seq) f.seq.value = '';
     if (q.dataset.kbQuick === 'random') {
       const pool = [...boxes];
       for (let i = 0; i < n; i++) pool.splice(Math.floor(Math.random() * pool.length), 1)[0].checked = true;
@@ -1180,9 +1241,9 @@ document.addEventListener('click', (e) => {
     paintSlip(f);
     return;
   }
-  // 出馬表の行を押すと、その馬を選ぶ（もう一度押すと外す）
+  // 出馬表の行を押すと、その馬を選ぶ（もう一度押すと外す）。リンク（成績）は選ばない
   const row = e.target.closest?.('[data-kb-pick]');
-  if (!row) return;
+  if (!row || e.target.closest('a')) return;
   const box = document.querySelector(`.kb-slip input[name="h"][value="${row.dataset.kbPick}"]`);
   if (!box) return;
   box.checked = !box.checked;

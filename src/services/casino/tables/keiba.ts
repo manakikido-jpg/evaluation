@@ -4,8 +4,11 @@ import {
   estimate,
   finalOdds,
   fmtTime,
+  comboKey,
   isKbBetType,
-  isPairType,
+  isOrderedType,
+  keyNos,
+  liveOdds,
   KB_DISTANCES,
   KB_HORSES,
   KB_MAX_TICKETS,
@@ -13,7 +16,7 @@ import {
   margin,
   prizesOf,
   appearanceOf,
-  pairKey,
+  picksOf,
   seeded,
   seedPools,
   simulate,
@@ -24,7 +27,7 @@ import {
   type KbPools,
   type KbRaceInfo,
 } from '../keiba.js';
-import { fail, intOf, list, ok, str, type Credit, type Ctx, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, list, ok, str, type Credit, type Ctx, type KeibaBet, type KeibaResult, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * 🏇 みんなでダービー（競馬の卓）。だれかがレースを開くと受付が始まり、締め切ったら全員が同じレースを見る。
@@ -161,6 +164,20 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
   }
   const credits: Credit[] = [];
   const records: PlayRecord[] = [];
+  // 馬券 1 枚ずつ（自分の馬券成績）
+  const keibaBets: KeibaBet[] = s.tickets.map((t) => ({
+    memberId: t.memberId,
+    race: s.race.name,
+    cls: s.race.cls,
+    type: t.t,
+    key: t.key,
+    names: keyNos(t.key)
+      .map((no) => s.horses[no - 1]?.name ?? String(no))
+      .join(t.key.includes('>') ? '→' : '・'),
+    amount: t.amount,
+    odds: t.odds ?? 0,
+    payout: t.payout ?? 0,
+  }));
   for (const [memberId, m] of per) {
     if (m.payout > 0) credits.push({ memberId, amount: m.payout, reason: 'casino_win' });
     records.push({ memberId, game: 'keiba', bet: m.bet, payout: m.payout });
@@ -174,18 +191,39 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     if (h.ownerId && earned[i]! > 0) credits.push({ memberId: h.ownerId, amount: earned[i]!, reason: 'keiba_prize' });
   });
   s.prizes = prizes;
-  // 名簿の馬の成績（馬主の馬は 1 走ずつ記録して、リーディングとお祝いに使う）
-  const keiba = run.order
+  // 名簿の馬の成績（1 走ずつ残して馬の成績ページに。馬主の馬はリーディングとお祝いにも使う）
+  const winOdds = s.horses.map((h) => liveOdds(s.pools, 'win', String(h.no)).lo);
+  const popular = [...s.horses].sort((a, b) => winOdds[a.no - 1]! - winOdds[b.no - 1]! || a.no - b.no).map((h) => h.no);
+  const keiba: KeibaResult[] = run.order
     .map((no, i) => {
       const h = s.horses[no - 1]!;
-      return { horseId: h.id, pos: i + 1, race: s.race.name, dist: s.race.dist, surface: s.race.surface, prize: earned[i]!, ownerId: h.ownerId, name: h.name, cls: s.race.cls };
+      return {
+        horseId: h.id,
+        pos: i + 1,
+        race: s.race.name,
+        dist: s.race.dist,
+        surface: s.race.surface,
+        prize: earned[i]!,
+        ownerId: h.ownerId,
+        name: h.name,
+        cls: s.race.cls,
+        going: s.race.going,
+        field: s.horses.length,
+        no,
+        pop: popular.indexOf(no) + 1,
+        odds: winOdds[no - 1]!,
+        time: run.times[i]!,
+        margin: run.margins[i] ?? '',
+        last3f: Math.round((run.last3f[i] ?? 0) * 10),
+        corners: run.corners[i] ?? '',
+      };
     })
     .filter((r) => r.horseId > 0);
   s.history = [{ n: s.race.n, name: s.race.name, order: run.order.slice(0, 3), win: s.final.win[1], names: run.order.slice(0, 3).map((no) => s.horses[no - 1]!.name) }, ...s.history].slice(0, 10);
   s.phase = 'result';
   s.resultAt = ctx.now;
   s.deadline = ctx.now + KB_RESULT_SECONDS * 1000;
-  return ok(s, { credits, records, keiba });
+  return ok(s, { credits, records, keiba, ...(keibaBets.length ? { keibaBets } : {}) });
 }
 
 /** 次のレースの受付 */
@@ -205,23 +243,32 @@ function nextRace(state: KbState, ctx: Ctx): KbState {
   return s;
 }
 
-/** 賭けた馬・組の書き方（"3" / "2-5"） */
-export function ticketKey(t: KbBetType, a: number, b: number): string | undefined {
-  const okNo = (n: number) => Number.isInteger(n) && n >= 1 && n <= KB_HORSES;
-  if (!okNo(a)) return undefined;
-  if (!isPairType(t)) return String(a);
-  return okNo(b) && a !== b ? pairKey(a, b) : undefined;
+const okNo = (n: number) => Number.isInteger(n) && n >= 1 && n <= KB_HORSES;
+
+/** 賭けた馬・組の書き方（"3" / "2-5" / 馬単 "5>2" / 3 連複 "1-2-5" / 3 連単 "5>1>2"）。nos は着順の順 */
+export function ticketKey(t: KbBetType, ...nos: number[]): string | undefined {
+  const use = nos.slice(0, picksOf(t));
+  if (use.length < picksOf(t) || !use.every(okNo) || new Set(use).size !== use.length) return undefined;
+  return picksOf(t) === 1 ? String(use[0]) : comboKey(t, use);
 }
 
-/** 選んだ馬から馬券を作る。単勝・複勝は 1 頭ずつ、馬連・ワイドは 2 頭以上の組み合わせ全部（ボックス） */
+/**
+ * 選んだ馬から馬券を作る。単勝・複勝は 1 頭ずつ、ほかは選んだ馬の組み合わせ全部（ボックス）。
+ * 馬単・3 連単のボックスは順番ちがいも全部
+ */
 export function boxKeys(t: KbBetType, picks: number[]): (string | undefined)[] {
   const nos = [...new Set(picks)];
-  if (!nos.length || nos.some((n) => !Number.isInteger(n) || n < 1 || n > KB_HORSES)) return [undefined];
-  if (!isPairType(t)) return nos.map((n) => String(n));
-  if (nos.length < 2) return [undefined];
-  const out: string[] = [];
-  for (let i = 0; i < nos.length; i++) for (let j = i + 1; j < nos.length; j++) out.push(pairKey(nos[i]!, nos[j]!));
-  return out;
+  if (!nos.length || !nos.every(okNo)) return [undefined];
+  const k = picksOf(t);
+  if (k === 1) return nos.map((n) => String(n));
+  if (nos.length < k) return [undefined];
+  const out = new Set<string>();
+  const walk = (cur: number[]) => {
+    if (cur.length === k) return void out.add(comboKey(t, cur));
+    for (const n of nos) if (!cur.includes(n)) walk([...cur, n]);
+  };
+  walk([]);
+  return [...out];
 }
 
 export const keiba: TableEngine<KbState> = {
@@ -276,8 +323,15 @@ export const keiba: TableEngine<KbState> = {
       if (s.phase !== 'betting' || s.deadline <= ctx.now) return fail('started');
       const t = str(f, 'type');
       if (!isKbBetType(t)) return fail('invalid');
-      // bet: 1 枚（a・b）。bets: 選んだ馬（h）ごとに 1 枚。馬連・ワイドは選んだ馬の組み合わせ全部（ボックス）
-      const keys = a === 'bet' ? [ticketKey(t, Number(str(f, 'a')), Number(str(f, 'b')))] : boxKeys(t, list(f, 'h').map(Number));
+      // bet: 1 枚（a・b・c）。bets: 選んだ馬（h）ごとに 1 枚・2 頭以上の賭け方は組み合わせ全部（ボックス）。
+      // 馬単・3 連単の「着順どおり」（mode=order）は、押した順（seq）の 1 枚
+      const order = isOrderedType(t) && str(f, 'mode') === 'order';
+      const keys =
+        a === 'bet'
+          ? [ticketKey(t, Number(str(f, 'a')), Number(str(f, 'b')), Number(str(f, 'c')))]
+          : order
+            ? [((seq) => (seq.length === picksOf(t) ? ticketKey(t, ...seq) : undefined))((str(f, 'seq') ?? '').split(',').filter(Boolean).map(Number))]
+            : boxKeys(t, list(f, 'h').map(Number));
       if (!keys.length || keys.some((k) => !k)) return fail('invalid');
       const amount = intOf(f, 'bet');
       const c = ctx.cfg.casino;

@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { keibaHorses, keibaOwners, keibaRuns, members, type KeibaHorseRow } from '../../db/schema.js';
+import { keibaEntries, keibaHorses, keibaOwners, keibaRuns, members, type KeibaHorseRow } from '../../db/schema.js';
 import { addCoins, spendWithin } from '../economy.js';
 import { cryptoRng } from './cards.js';
 import { fatigueNow, KB_FATIGUE_REST, KB_FATIGUE_RUN, newStable, seeded, type KbSilk, type KbStable } from './keiba.js';
@@ -190,6 +190,28 @@ export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], no
     const [h] = await tx.select().from(keibaHorses).where(eq(keibaHorses.id, r.horseId)).for('update');
     if (!h) continue;
     if (r.ownerId) await tx.insert(keibaRuns).values({ horseId: h.id, horseName: r.name ?? h.name, ownerId: r.ownerId, pos: r.pos, prize: r.prize ?? 0, cls: r.cls ?? 0, race: r.race, at: now });
+    if (r.time !== undefined)
+      await tx.insert(keibaEntries).values({
+        horseId: h.id,
+        horseName: r.name ?? h.name,
+        ownerId: r.ownerId ?? null,
+        race: r.race,
+        cls: r.cls ?? 0,
+        dist: r.dist,
+        surface: r.surface,
+        going: r.going ?? 0,
+        field: r.field ?? 8,
+        no: r.no ?? 0,
+        pop: r.pop ?? 0,
+        odds: r.odds ?? 0,
+        pos: r.pos,
+        time: r.time,
+        margin: r.margin ?? '',
+        last3f: r.last3f ?? 0,
+        corners: r.corners ?? '',
+        prize: r.prize ?? 0,
+        at: now,
+      });
     await tx
       .update(keibaHorses)
       .set({

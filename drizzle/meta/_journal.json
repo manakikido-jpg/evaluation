@@ -463,6 +463,13 @@
       "when": 1791117171443,
       "tag": "0065_mahjong_players",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791119296521,
+      "tag": "0066_keiba_records",
+      "breakpoints": true
     }
   ]
 }

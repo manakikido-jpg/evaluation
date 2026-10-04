@@ -5,6 +5,9 @@ import { keibaHorses } from '../src/db/schema.js';
 import type { Rng } from '../src/services/casino/cards.js';
 import {
   addToPool,
+  allOrdered,
+  harville,
+  KB_MAX_TICKETS,
   estimate,
   finalOdds,
   KB_HORSES,
@@ -48,6 +51,7 @@ import {
   KB_ROSTER_MIN,
 } from '../src/services/casino/keibaStable.js';
 import { keibaTick, winMessage } from '../src/services/casino/keibaNotify.js';
+import { horseDirectory, horseProfile, myBetStats } from '../src/services/casino/keibaRecords.js';
 import { boxKeys, keiba, ticketKey, type KbState } from '../src/services/casino/tables/keiba.js';
 import { actTable, createTable, joinTable, leaveTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
 import type { Ctx } from '../src/services/casino/tables/types.js';
@@ -128,8 +132,9 @@ describe('🏇 レースとオッズ', () => {
     expect(r.ok && r.fx?.debits).toEqual([{ memberId: A.id, amount: 300, reason: 'casino_bet', limited: true }]);
     s = (r as { state: KbState }).state;
     expect(s.tickets.map((x) => x.key)).toEqual(['1-2', '1-3', '2-3']);
-    // 20 枚まで（8 頭のボックスは 28 点）
-    expect(keiba.act(s, A.id, { action: 'bets', type: 'quinella', h: ['1', '2', '3', '4', '5', '6', '7', '8'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'too_many' });
+    // 30 枚まで（3 連単の 5 頭ボックスは 60 点）
+    expect(KB_MAX_TICKETS).toBe(30);
+    expect(keiba.act(s, A.id, { action: 'bets', type: 'trifecta', h: ['1', '2', '3', '4', '5'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'too_many' });
     expect(keiba.act(s, A.id, { action: 'bets', type: 'quinella', h: ['1'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'invalid' });
   });
 
@@ -138,6 +143,53 @@ describe('🏇 レースとオッズ', () => {
     expect(ticketKey('quinella', 5, 2)).toBe('2-5');
     expect(ticketKey('wide', 2, 2)).toBeUndefined();
     expect(ticketKey('place', 9, 0)).toBeUndefined();
+    expect(ticketKey('exacta', 5, 2)).toBe('5>2');
+    expect(ticketKey('trio', 5, 2, 7)).toBe('2-5-7');
+    expect(ticketKey('trifecta', 5, 2, 7)).toBe('5>2>7');
+    expect(ticketKey('trifecta', 5, 2, 2)).toBeUndefined();
+    expect(ticketKey('trio', 5, 2)).toBeUndefined();
+  });
+
+  it('馬単・3連複・3連単: ボックスの点数・着順どおりの 1 点・当たり', () => {
+    expect(boxKeys('exacta', [1, 2, 3])).toHaveLength(6);
+    expect(boxKeys('trio', [1, 2, 3, 4]).sort()).toEqual(['1-2-3', '1-2-4', '1-3-4', '2-3-4']);
+    expect(boxKeys('trifecta', [1, 2, 3, 4])).toHaveLength(24);
+    expect(boxKeys('trio', [1, 2])).toEqual([undefined]);
+    const t0 = new Date('2026-10-02T12:00:00Z').getTime();
+    let s = (keiba.create(A, {}, ctx(t0)) as { state: KbState }).state;
+    // BOT のお客さんも 3 つの賭け方に賭けている（どの組にも 1 以上）
+    expect(Object.keys(s.pools.trifecta!)).toHaveLength(336);
+    expect(Object.keys(s.pools.trio!)).toHaveLength(56);
+    expect(Object.keys(s.pools.exacta!)).toHaveLength(56);
+    expect(Math.min(...Object.values(s.pools.trifecta!))).toBeGreaterThanOrEqual(1);
+    // 着順どおり: 押した順（seq）の 1 点。数が合わなければだめ
+    let r = keiba.act(s, A.id, { action: 'bets', type: 'trifecta', mode: 'order', seq: '5,2,7', h: ['2', '5', '7'], bet: '100' }, ctx(t0));
+    expect(r.ok).toBe(true);
+    s = (r as { state: KbState }).state;
+    expect(s.tickets.map((x) => x.key)).toEqual(['5>2>7']);
+    expect(keiba.act(s, A.id, { action: 'bets', type: 'exacta', mode: 'order', seq: '5,2,7', bet: '100' }, ctx(t0))).toEqual({ ok: false, error: 'invalid' });
+    r = keiba.act(s, A.id, { action: 'bets', type: 'exacta', mode: 'box', h: ['5', '2'], bet: '100' }, ctx(t0));
+    s = (r as { state: KbState }).state;
+    expect(s.tickets.map((x) => x.key).sort()).toEqual(['2>5', '5>2', '5>2>7']);
+    // 確定の払い戻し: 当たりの組だけ
+    const f = finalOdds(s.pools, [5, 2, 7, 1, 3, 4, 6, 8]);
+    expect(f.exacta?.[0]).toBe('5>2');
+    expect(f.trio?.[0]).toBe('2-5-7');
+    expect(f.trifecta?.[0]).toBe('5>2>7');
+    expect(ticketOdds(f, 'trifecta', '5>2>7')).toBeGreaterThan(10);
+    expect(ticketOdds(f, 'exacta', '2>5')).toBe(0);
+    // 前からある受付中のレース（新しい賭け方の箱がない）でも賭けられる
+    const old = structuredClone(s);
+    delete old.pools.trio;
+    expect(keiba.act(old, A.id, { action: 'bets', type: 'trio', h: ['1', '2', '3'], bet: '100' }, ctx(t0)).ok).toBe(true);
+  });
+
+  it('ハービル: 着順どおりの見込みを全部足すと 1', () => {
+    const p = [0.3, 0.2, 0.15, 0.1, 0.1, 0.07, 0.05, 0.03];
+    expect(allOrdered(3)).toHaveLength(336);
+    expect(allOrdered(2).reduce((a, o) => a + harville(p, o), 0)).toBeCloseTo(1);
+    expect(allOrdered(3).reduce((a, o) => a + harville(p, o), 0)).toBeCloseTo(1);
+    expect(harville(p, [1, 2])).toBeCloseTo(0.3 * (0.2 / 0.7));
   });
 });
 
@@ -404,5 +456,19 @@ describe('🏇 名簿と卓のサービス', () => {
     // 発走のあとに立っても、払い戻しはそのまま（受付中なら戻る）
     expect((await leaveTable(db, tcfg, id, B.id, new Date(r.deadline + 20))).status).toBe('ok');
     expect((await tableById(db, id))?.status).toBe('open');
+    // 📊 成績: 馬は 1 走ずつ（馬主がいなくても）、馬券は 1 枚ずつ残る
+    const p = await horseProfile(db, winner.id);
+    expect(p?.entries).toHaveLength(1);
+    expect(p!.entries[0]).toMatchObject({ pos: 1, dist: 1200, field: 8, no: d.run!.order[0], time: d.run!.times[0] });
+    expect(p!.entries[0]!.pop).toBeGreaterThanOrEqual(1);
+    expect(p!.entries[0]!.odds).toBeGreaterThanOrEqual(10);
+    expect(p!.byDist).toEqual([{ dist: 1200, t: { starts: 1, wins: 1, top2: 1, top3: 1 } }]);
+    const mine = await myBetStats(db, A.id);
+    expect(mine.total).toMatchObject({ races: 1, tickets: 1, bet: 200, payout: paidA });
+    expect(mine.byType.find((x) => x.type === 'win')?.t.tickets).toBe(1);
+    expect(mine.recent[0]).toMatchObject({ type: 'win', key: '1', amount: 200, names: d.horses[0]!.name });
+    expect((await myBetStats(db, B.id)).recent[0]).toMatchObject({ type: 'wide', key: '1-2', names: `${d.horses[0]!.name}・${d.horses[1]!.name}` });
+    expect((await horseDirectory(db)).length).toBeGreaterThanOrEqual(8);
+    expect(await horseProfile(db, 999999)).toBeNull();
   });
 });

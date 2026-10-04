@@ -2,9 +2,12 @@ import type { Child } from 'hono/jsx';
 import type { CasinoConfig } from '../../config.js';
 import type { CasinoTable } from '../../db/schema.js';
 import {
+  allOrdered,
   allPairs,
+  comboKey,
   fmtOdds,
-  isPairType,
+  keyNos,
+  picksOf,
   KB_APT,
   KB_COATS,
   KB_CLASSES,
@@ -46,16 +49,14 @@ const COND_NOTE = ['不調', 'いまひとつ', 'ふつう', '好調', '絶好�
 
 export const KB_RULES =
   `8 頭のレースに、みんなで賭けて同じレースを見ます。だれかがレースを開くと受付が始まり（1〜5 分）、締め切ると発走。結果を出したら、座っている人がいるあいだは次のレースの受付が自動で始まります。` +
-  `賭け方は 単勝（1 着）・複勝（3 着まで）・馬連（1・2 着の 2 頭）・ワイド（3 着までの 2 頭）。オッズは賭けられた銭で決まり（払い戻し率 ${Math.round((1 - KB_TAKE) * 100)}%）、発走まで動きます。人が少なくても極端にならないよう、BOT のお客さんも少し賭けています。`;
+  `賭け方は 単勝（1 着）・複勝（3 着まで）・馬連（1・2 着の 2 頭）・ワイド（3 着までの 2 頭）・馬単（1・2 着を順番どおり）・3連複（1〜3 着の 3 頭）・3連単（1〜3 着を順番どおり）。オッズは賭けられた銭で決まり（払い戻し率 ${Math.round((1 - KB_TAKE) * 100)}%）、発走まで動きます。人が少なくても極端にならないよう、BOT のお客さんも少し賭けています。`;
 
 /** 馬番の札（枠の色） */
 export const HorseNo = (p: { no: number; small?: boolean }) => <span class={`kb-no kb-g${p.no}${p.small ? ' small' : ''}`}>{p.no}</span>;
 
-const pairLabel = (key: string) => {
-  const [a, b] = key.split('-').map(Number);
-  return `${noMark(a!)}-${noMark(b!)}`;
-};
-export const ticketLabel = (t: Pick<KbTicket, 't' | 'key'>) => `${KB_BET_LABEL[t.t].name} ${isPairType(t.t) ? pairLabel(t.key) : noMark(Number(t.key))}`;
+/** 組の見せ方（①-③・順番どおりは ⑤→②） */
+const pairLabel = (key: string) => keyNos(key).map(noMark).join(key.includes('>') ? '→' : '-');
+export const ticketLabel = (t: Pick<KbTicket, 't' | 'key'>) => `${KB_BET_LABEL[t.t].name} ${pairLabel(t.key)}`;
 
 const raceLine = (s: KbState) => `${KB_SURFACES[s.race.surface]} ${fmt(s.race.dist)}m・${KB_WEATHERS[s.race.weather]}・馬場 ${KB_GOINGS[s.race.going]}`;
 
@@ -211,6 +212,16 @@ function Board(p: { s: KbState }) {
                 <td>{yen(o)}</td>
               </tr>
             ))}
+            {(['exacta', 'trio', 'trifecta'] as const).map((t) => {
+              const x = f[t];
+              return x ? (
+                <tr>
+                  <th>{KB_BET_LABEL[t].name}</th>
+                  <td>{x[0].replace(/>/g, '→')}</td>
+                  <td>{yen(x[1])}</td>
+                </tr>
+              ) : null;
+            })}
           </tbody>
         </table>
       </div>
@@ -271,6 +282,14 @@ function RaceCard(p: { s: KbState; clickable: boolean }) {
                     馬体重 {h.weight}kg{h.wdiff ? `（${h.wdiff > 0 ? '+' : ''}${h.wdiff}）` : ''}・{KB_CLASSES[h.cls]}・賞金 {fmt(h.prize)}
                     {h.sire ? `・父 ${h.sire}` : ''}
                     {h.ownerName ? <span class="kb-owner">・馬主 {h.ownerName}</span> : ''}
+                    {h.id > 0 && (
+                      <>
+                        ・
+                        <a class="kb-horse-link" href={`/casino/keiba/horse/${h.id}`}>
+                          成績
+                        </a>
+                      </>
+                    )}
                   </small>
                   <small>
                     {h.starts ? (
@@ -354,11 +373,21 @@ function PairOdds(p: { s: KbState; t: 'quinella' | 'wide' }) {
 function oddsData(s: KbState) {
   const nos = s.horses.map((h) => h.no);
   const pair = (t: 'quinella' | 'wide') => Object.fromEntries(allPairs().map((k) => [k, ((o) => [o.lo, o.hi])(liveOdds(s.pools, t, k))]));
+  // 馬単・3 連複・3 連単は 1 つの倍率
+  const combos = (t: 'exacta' | 'trio' | 'trifecta') => {
+    const keys = [...new Set(allOrdered(picksOf(t), nos.length).map((o) => comboKey(t, o)))];
+    return Object.fromEntries(keys.map((k) => [k, liveOdds(s.pools, t, k).lo]));
+  };
   return {
     win: Object.fromEntries(nos.map((n) => [n, liveOdds(s.pools, 'win', String(n)).lo])),
     place: Object.fromEntries(nos.map((n) => ((o) => [n, [o.lo, o.hi]])(liveOdds(s.pools, 'place', String(n))))),
     quinella: pair('quinella'),
     wide: pair('wide'),
+    exacta: combos('exacta'),
+    trio: combos('trio'),
+    trifecta: combos('trifecta'),
+    // 賭け方ごとの合計（自分が賭けた分でオッズが下がるのを見込むため）
+    totals: Object.fromEntries(KB_BET_TYPES.map((t) => [t, poolTotal(s.pools, t)])),
   };
 }
 
@@ -373,9 +402,10 @@ function BetPanel(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino: CasinoC
   return (
     <section class="c-panel kb-bet">
       <h2>🎫 馬券を買う</h2>
-      <form method="post" action={`/casino/t/${p.t.id}/act`} class="kb-slip" data-odds={JSON.stringify(oddsData(s))} data-fav={String(fav)} data-coin={p.me.coin.name}>
+      <form method="post" action={`/casino/t/${p.t.id}/act`} class="kb-slip" data-odds={JSON.stringify(oddsData(s))} data-fav={String(fav)} data-coin={p.me.coin.name} data-max={String(KB_MAX_TICKETS)}>
         <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />
         <input type="hidden" name="action" value="bets" />
+        <input type="hidden" name="seq" value="" />
         <p class="kb-step">① 賭け方</p>
         <div class="kb-types" role="radiogroup" aria-label="賭け方">
           {KB_BET_TYPES.map((t: KbBetType, i) => (
@@ -388,8 +418,24 @@ function BetPanel(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino: CasinoC
             </label>
           ))}
         </div>
+        <div class="kb-mode" role="radiogroup" aria-label="馬単・3連単の買い方">
+          <label>
+            <input type="radio" name="mode" value="box" checked />
+            <span>
+              <b>ボックス</b>
+              <small>選んだ馬の、順番ちがいも全部</small>
+            </span>
+          </label>
+          <label>
+            <input type="radio" name="mode" value="order" />
+            <span>
+              <b>着順どおり</b>
+              <small>押した順が 1 着 → 2 着 → 3 着（1 点）</small>
+            </span>
+          </label>
+        </div>
         <p class="kb-step">
-          ② 馬を選ぶ <small class="kb-hint">何頭でも。馬連・ワイドは 2 頭以上選ぶと、その組み合わせを全部買います（ボックス）</small>
+          ② 馬を選ぶ <small class="kb-hint">何頭でも。2 頭・3 頭の賭け方は、選んだ馬の組み合わせを全部買います（ボックス）</small>
         </p>
         <div class="kb-quick">
           <button type="button" class="c-btn c-btn-small" data-kb-quick="random">
@@ -407,6 +453,7 @@ function BetPanel(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino: CasinoC
             <label class={`kb-hbtn kb-g${h.no}-edge`}>
               <input type="checkbox" name="h" value={String(h.no)} />
               <span class={`kb-no kb-g${h.no}`}>{h.no}</span>
+              <i class="kb-hbtn-seq" data-kb-seq={String(h.no)}></i>
               <span class="kb-hbtn-name">
                 {mk.get(h.no) && <i class="kb-hbtn-mark">{mk.get(h.no)}</i>}
                 {h.name}
@@ -449,7 +496,12 @@ function MyTickets(p: { t: CasinoTable; s: KbState; me: CasinoMe; mine: KbTicket
   const paid = mine.reduce((n, x) => n + (x.payout ?? 0), 0);
   return (
     <section class="c-panel">
-      <h2>🎫 あなたの馬券（{fmt(bet)} {p.me.coin.name}）</h2>
+      <h2>
+        🎫 あなたの馬券（{fmt(bet)} {p.me.coin.name}）
+        <a class="kb-h2-link" href="/casino/keiba/mine">
+          これまでの成績 →
+        </a>
+      </h2>
       <ul class="kb-tickets">
         {mine.map((x) => (
           <li class={x.payout ? 'hit' : x.odds === 0 ? 'miss' : ''}>
@@ -538,6 +590,7 @@ function Payouts(p: { s: KbState }) {
           {f.place.map(([no, o], i) => row(i === 0 ? '複勝' : '', noMark(no), o))}
           {row('馬連', pairLabel(f.quinella[0]), f.quinella[1])}
           {f.wide.map(([k, o], i) => row(i === 0 ? 'ワイド' : '', pairLabel(k), o))}
+          {(['exacta', 'trio', 'trifecta'] as const).map((t) => ((x) => (x ? row(KB_BET_LABEL[t].name, pairLabel(x[0]), x[1]) : null))(f[t]))}
         </tbody>
       </table>
       <p class="c-muted">賭けた銭 × 倍率 が戻ります（BOT のお客さんの分も含めたオッズです）。</p>
@@ -576,7 +629,7 @@ export function KeibaView(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino:
             {s.phase !== 'racing' && p.countdown}
           </div>
         </div>
-        <Tv s={s} mine={[...new Set(mine.flatMap((x) => x.key.split('-').map(Number)))]} {...(s.phase === 'result' && mine.length ? { reveal: { net, paid: mine.reduce((n, x) => n + (x.payout ?? 0), 0), big: mine.some((x) => (x.odds ?? 0) >= 1000 && (x.payout ?? 0) > 0) } } : {})} />
+        <Tv s={s} mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]} {...(s.phase === 'result' && mine.length ? { reveal: { net, paid: mine.reduce((n, x) => n + (x.payout ?? 0), 0), big: mine.some((x) => (x.odds ?? 0) >= 1000 && (x.payout ?? 0) > 0) } } : {})} />
         {past.length > 0 && (
           <div class="kb-history">
             <span class="c-muted">これまで:</span>
@@ -682,7 +735,9 @@ export function KbLobbyExtra(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: 
           <ul class="kb-mini-stable">
             {active.map((h) => (
               <li>
-                <b>{h.name}</b>
+                <b>
+                  <a href={`/casino/keiba/horse/${h.id}`}>{h.name}</a>
+                </b>
                 <span class="c-muted">
                   {classLabel(h)}・{h.starts} 戦 {h.wins} 勝・賞金 {p.me.coin.emoji}
                   {fmt(h.prize)}
@@ -694,6 +749,17 @@ export function KbLobbyExtra(p: { me: CasinoMe; horses: KeibaHorseRow[]; price: 
         <a class="c-btn c-btn-gold" href="/casino/keiba/stable">
           🐴 馬主の部屋へ
         </a>
+      </section>
+      <section class="c-panel kb-rec-links">
+        <h2>📊 成績</h2>
+        <p class="c-actions">
+          <a class="c-btn" href="/casino/keiba/mine">
+            🎫 あなたの馬券成績
+          </a>
+          <a class="c-btn" href="/casino/keiba/horses">
+            📖 馬名鑑（馬ごとの成績）
+          </a>
+        </p>
       </section>
       <Leading rows={p.leading.slice(0, 5)} coin={p.me.coin} me={p.me.session.userId} />
     </>
@@ -781,7 +847,7 @@ export function KbStablePage(p: {
                   <div class="kb-stable-head">
                     <b>
                       <span class={`kb-silk kb-pat${h.silk.pattern}`} data-base={h.silk.base} data-accent={h.silk.accent} aria-hidden="true"></span>
-                      {h.name}
+                      <a href={`/casino/keiba/horse/${h.id}`}>{h.name}</a>
                     </b>
                     <span class="c-tag">{h.retiredAt ? (h.breeding ? '繁殖' : '引退') : classLabel(h)}</span>
                   </div>

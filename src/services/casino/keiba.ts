@@ -17,8 +17,8 @@ export const KB_HORSES = 8;
 export const KB_TAKE = 0.1;
 /** BOT のお客さんが賭けておく量（賭け方ごと） */
 export const KB_SEED = 2000;
-/** 1 人が 1 レースに賭けられる数 */
-export const KB_MAX_TICKETS = 20;
+/** 1 人が 1 レースに賭けられる数（3 連単の 4 頭ボックス 24 点が入る） */
+export const KB_MAX_TICKETS = 30;
 
 export const KB_STYLES = ['逃げ', '先行', '差し', '追込'] as const;
 export const KB_DISTANCES = [1200, 1600, 2000, 2400] as const;
@@ -30,16 +30,26 @@ export const KB_APT = ['短距離', 'マイル', '中距離', '長距離'] as co
 /** 枠の色（1〜8 枠） */
 export const KB_GATE_COLORS = ['#ffffff', '#222222', '#e53935', '#1e63d6', '#f4c430', '#2e9e4f', '#f08a24', '#f48fb1'] as const;
 
-export const KB_BET_TYPES = ['win', 'place', 'quinella', 'wide'] as const;
+export const KB_BET_TYPES = ['win', 'place', 'quinella', 'wide', 'exacta', 'trio', 'trifecta'] as const;
 export type KbBetType = (typeof KB_BET_TYPES)[number];
 export const KB_BET_LABEL: Record<KbBetType, { name: string; note: string }> = {
   win: { name: '単勝', note: '1 着を当てる' },
   place: { name: '複勝', note: '3 着までに入る馬を当てる' },
   quinella: { name: '馬連', note: '1 着と 2 着の 2 頭を当てる（順番はどちらでも）' },
   wide: { name: 'ワイド', note: '3 着までに入る 2 頭を当てる（順番はどちらでも）' },
+  exacta: { name: '馬単', note: '1 着と 2 着を順番どおりに当てる' },
+  trio: { name: '3連複', note: '1〜3 着の 3 頭を当てる（順番はどちらでも）' },
+  trifecta: { name: '3連単', note: '1〜3 着を順番どおりに当てる（いちばん大きい）' },
 };
 export const isKbBetType = (v: unknown): v is KbBetType => typeof v === 'string' && (KB_BET_TYPES as readonly string[]).includes(v);
-export const isPairType = (t: KbBetType) => t === 'quinella' || t === 'wide';
+/** 1 枚に選ぶ馬の数（単勝・複勝 1・馬連・ワイド・馬単 2・3 連複・3 連単 3） */
+export const picksOf = (t: KbBetType) => (t === 'win' || t === 'place' ? 1 : t === 'trio' || t === 'trifecta' ? 3 : 2);
+/** 順番どおりに当てる賭け方（馬単・3 連単） */
+export const isOrderedType = (t: KbBetType) => t === 'exacta' || t === 'trifecta';
+export const isPairType = (t: KbBetType) => picksOf(t) > 1;
+/** 組の書き方: 順番どおりは "3>1>5"、どちらでもよいのは小さい順に "1-3-5" */
+export const comboKey = (t: KbBetType, nos: readonly number[]) => (isOrderedType(t) ? nos.join('>') : [...nos].sort((a, b) => a - b).join('-'));
+export const keyNos = (key: string) => key.split(/[->]/).map(Number);
 
 const NAME_HEAD = ['サクラ', 'ハナ', 'ツキ', 'ヨイ', 'キツネ', 'オミクジ', 'コマ', 'カグラ', 'シュイン', 'ホウノウ', 'エマ', 'ミコ', 'スズ', 'ヤタ', 'ワタアメ', 'ユカタ', 'カザ', 'モミジ', 'ユキ', 'ウメ', 'フジ', 'ナデシコ', 'ホタル', 'カミナリ', 'ギン', 'ヨザクラ', 'ハル', 'アキ', 'シロ', 'クロ', 'ミヤ', 'トリイ'] as const;
 const NAME_TAIL = ['ノミヤビ', 'ダンサー', 'スター', 'ノヨメイリ', 'ダイキチ', 'パワー', 'ノマイ', 'ハンター', 'ボーイ', 'ノネガイ', 'ライト', 'ノカンザシ', 'ノネイロ', 'クイーン', 'ビジン', 'グルマ', 'ガリ', 'ロード', 'ジェット', 'ノユメ', 'マル', 'ノカミ', 'スマイル', 'ボルト', 'シルク', 'ロマン', 'イチバン', 'ノヨナガ', 'ダッシュ', 'フブキ', 'キング', 'エース'] as const;
@@ -616,8 +626,45 @@ export function commentary(race: KbRaceInfo, horses: readonly KbHorse[], sim: Kb
 
 // ───────── 賭けとオッズ ─────────
 
-/** 賭け方ごとの、賭けられた銭（BOT のお客さんの分を含む）。単勝・複勝は馬番 - 1、馬連・ワイドは "a-b" */
-export type KbPools = { win: number[]; place: number[]; quinella: Record<string, number>; wide: Record<string, number> };
+/**
+ * 賭け方ごとの、賭けられた銭（BOT のお客さんの分を含む）。単勝・複勝は馬番 - 1、ほかは組の書き方（comboKey）。
+ * 馬単・3 連複・3 連単は、前からある受付中のレースにはない（なければ空）
+ */
+export type KbPools = {
+  win: number[];
+  place: number[];
+  quinella: Record<string, number>;
+  wide: Record<string, number>;
+  exacta?: Record<string, number>;
+  trio?: Record<string, number>;
+  trifecta?: Record<string, number>;
+};
+type ComboType = Exclude<KbBetType, 'win' | 'place'>;
+const comboPool = (p: KbPools, t: ComboType): Record<string, number> => p[t] ?? {};
+
+/** 順番どおりの組を全部（n 頭から k 頭） */
+export function allOrdered(k: number, n = KB_HORSES): number[][] {
+  const out: number[][] = [];
+  const walk = (cur: number[]) => {
+    if (cur.length === k) return void out.push(cur);
+    for (let no = 1; no <= n; no++) if (!cur.includes(no)) walk([...cur, no]);
+  };
+  walk([]);
+  return out;
+}
+
+/** 1 着になる見込みから、着順どおりになる見込み（ハービル: 残った馬の中で 1 着になる見込みで順に決まる） */
+export function harville(p: readonly number[], order: readonly number[]): number {
+  let rest = 1;
+  let out = 1;
+  for (const no of order) {
+    const q = p[no - 1] ?? 0;
+    if (rest <= 0) return 0;
+    out *= q / rest;
+    rest -= q;
+  }
+  return out;
+}
 
 /** BOT のお客さんの賭け（見込みの割合で KB_SEED を分ける。どの馬・組にも 1 は置く） */
 export function seedPools(est: ReturnType<typeof estimate>, seed = KB_SEED): KbPools {
@@ -628,28 +675,46 @@ export function seedPools(est: ReturnType<typeof estimate>, seed = KB_SEED): KbP
   const keys = allPairs();
   const q = split(keys.map((k) => est.pairs2.get(k) ?? 0.0005));
   const w = split(keys.map((k) => est.pairs3.get(k) ?? 0.0005));
+  // 馬単・3 連複・3 連単は、1 着の見込みからハービルで（組が多いので、走らせた回数では足りない）
+  const pw = est.p.map((x) => Math.max(x, 0.002));
+  const sum = pw.reduce((a, b) => a + b, 0);
+  const pn = pw.map((x) => x / sum);
+  const ordered = (k: number) => {
+    const combos = allOrdered(k, pn.length);
+    const v = split(combos.map((o) => harville(pn, o)));
+    return combos.map((o, i) => [o, v[i]!] as const);
+  };
+  const ex = ordered(2);
+  const tf = ordered(3);
+  const trioW = new Map<string, number>();
+  for (const [o] of tf) trioW.set(comboKey('trio', o), (trioW.get(comboKey('trio', o)) ?? 0) + harville(pn, o));
+  const trioKeys = [...trioW.keys()];
+  const tr = split(trioKeys.map((k) => trioW.get(k)!));
   return {
-    win: split(est.p.map((x) => Math.max(x, 0.002))),
+    win: split(pw),
     place: split(est.p3.map((x) => Math.max(x, 0.004))),
     quinella: Object.fromEntries(keys.map((k, i) => [k, q[i]!])),
     wide: Object.fromEntries(keys.map((k, i) => [k, w[i]!])),
+    exacta: Object.fromEntries(ex.map(([o, v]) => [comboKey('exacta', o), v])),
+    trio: Object.fromEntries(trioKeys.map((k, i) => [k, tr[i]!])),
+    trifecta: Object.fromEntries(tf.map(([o, v]) => [comboKey('trifecta', o), v])),
   };
 }
 
 export function poolTotal(p: KbPools, t: KbBetType): number {
-  const v = t === 'win' ? p.win : t === 'place' ? p.place : Object.values(t === 'quinella' ? p.quinella : p.wide);
+  const v = t === 'win' ? p.win : t === 'place' ? p.place : Object.values(comboPool(p, t));
   return v.reduce((a, b) => a + b, 0);
 }
 
 export function stakeOn(p: KbPools, t: KbBetType, key: string): number {
   if (t === 'win' || t === 'place') return (t === 'win' ? p.win : p.place)[Number(key) - 1] ?? 0;
-  return (t === 'quinella' ? p.quinella : p.wide)[key] ?? 0;
+  return comboPool(p, t)[key] ?? 0;
 }
 
 export function addToPool(p: KbPools, t: KbBetType, key: string, amount: number): void {
   if (t === 'win' || t === 'place') (t === 'win' ? p.win : p.place)[Number(key) - 1]! += amount;
   else {
-    const m = t === 'quinella' ? p.quinella : p.wide;
+    const m = (p[t] ??= {});
     m[key] = (m[key] ?? 0) + amount;
   }
 }
@@ -669,11 +734,11 @@ function shareOdds(total: number, stake: number, winners: number[]): number {
   return odds10(1 + profit / 3 / stake);
 }
 
-/** いまのオッズ（発走前）。単勝・馬連は 1 つ、複勝・ワイドは「いちばん低い〜高い」の幅 */
+/** いまのオッズ（発走前）。1 つだけ当たる賭け方は 1 つ、複勝・ワイドは「いちばん低い〜高い」の幅 */
 export function liveOdds(p: KbPools, t: KbBetType, key: string): { lo: number; hi: number } {
   const total = poolTotal(p, t);
   const s = stakeOn(p, t, key);
-  if (t === 'win' || t === 'quinella') {
+  if (t !== 'place' && t !== 'wide') {
     const o = singleOdds(total, s);
     return { lo: o, hi: o };
   }
@@ -693,7 +758,10 @@ const sharesNone = (a: string, b: string) => {
 };
 
 /** 確定した払い戻し（10 倍した倍率）。order は着順の馬番 */
-export function finalOdds(p: KbPools, order: readonly number[]): { win: [number, number]; place: [number, number][]; quinella: [string, number]; wide: [string, number][] } {
+export function finalOdds(
+  p: KbPools,
+  order: readonly number[],
+): { win: [number, number]; place: [number, number][]; quinella: [string, number]; wide: [string, number][]; exacta?: [string, number]; trio?: [string, number]; trifecta?: [string, number] } {
   const [a, b, c] = order as [number, number, number];
   const top3 = [a, b, c];
   const placeStakes = top3.map((no) => p.place[no - 1]!);
@@ -702,11 +770,18 @@ export function finalOdds(p: KbPools, order: readonly number[]): { win: [number,
   const wides = [pairKey(a, b), pairKey(a, c), pairKey(b, c)];
   const wideStakes = wides.map((k) => p.wide[k] ?? 0);
   const wideTotal = poolTotal(p, 'wide');
+  const one = (t: 'exacta' | 'trio' | 'trifecta', nos: number[]): [string, number] => {
+    const k = comboKey(t, nos);
+    return [k, singleOdds(poolTotal(p, t), stakeOn(p, t, k))];
+  };
   return {
     win: [a, singleOdds(poolTotal(p, 'win'), p.win[a - 1]!)],
     place: top3.map((no, i) => [no, shareOdds(placeTotal, placeStakes[i]!, placeStakes)]),
     quinella: [q, singleOdds(poolTotal(p, 'quinella'), p.quinella[q] ?? 0)],
     wide: wides.map((k, i) => [k, shareOdds(wideTotal, wideStakes[i]!, wideStakes)]),
+    exacta: one('exacta', [a, b]),
+    trio: one('trio', top3),
+    trifecta: one('trifecta', top3),
   };
 }
 
@@ -717,7 +792,9 @@ export function ticketOdds(f: KbFinal, t: KbBetType, key: string): number {
   if (t === 'win') return f.win[0] === Number(key) ? f.win[1] : 0;
   if (t === 'place') return f.place.find(([no]) => no === Number(key))?.[1] ?? 0;
   if (t === 'quinella') return f.quinella[0] === key ? f.quinella[1] : 0;
-  return f.wide.find(([k]) => k === key)?.[1] ?? 0;
+  if (t === 'wide') return f.wide.find(([k]) => k === key)?.[1] ?? 0;
+  const hit = f[t];
+  return hit && hit[0] === key ? hit[1] : 0;
 }
 
 export const fmtOdds = (o10: number) => (o10 / 10).toFixed(1);

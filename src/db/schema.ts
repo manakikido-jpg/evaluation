@@ -855,6 +855,60 @@ export const keibaRuns = pgTable(
   (t) => [index('keiba_runs_owner_idx').on(t.ownerId, t.at), index('keiba_runs_time_idx').on(t.at)],
 );
 
+/** 🏇 名簿の馬の 1 走ずつ（馬の成績ページ。馬主がいなくても残す） */
+export const keibaEntries = pgTable(
+  'keiba_entries',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    horseId: bigint('horse_id', { mode: 'number' }).notNull(),
+    horseName: text('horse_name').notNull(),
+    ownerId: text('owner_id'),
+    race: text('race').notNull(),
+    cls: integer('cls').notNull(),
+    dist: integer('dist').notNull(),
+    /** 0 芝 / 1 ダート・馬場 0 良 / 1 稍重 / 2 重 */
+    surface: integer('surface').notNull(),
+    going: integer('going').notNull().default(0),
+    /** 頭数・馬番・人気・単勝（10 倍した倍率）・着順 */
+    field: integer('field').notNull(),
+    no: integer('no').notNull(),
+    pop: integer('pop').notNull(),
+    odds: integer('odds').notNull(),
+    pos: integer('pos').notNull(),
+    /** 走破タイム（1:34.5）・着差・上がり 3F（10 倍した秒）・通過順 */
+    time: text('time').notNull(),
+    margin: text('margin').notNull().default(''),
+    last3f: integer('last3f').notNull().default(0),
+    corners: text('corners').notNull().default(''),
+    /** 賞金と出走手当（銭） */
+    prize: integer('prize').notNull().default(0),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('keiba_entries_horse_idx').on(t.horseId, t.at)],
+);
+
+/** 🎫 メンバーの馬券（1 枚ずつ。自分の馬券成績のページ） */
+export const keibaBets = pgTable(
+  'keiba_bets',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    race: text('race').notNull(),
+    cls: integer('cls').notNull().default(0),
+    /** 賭け方（win・place・quinella・wide・exacta・trio・trifecta）と組（"3" / "2-5" / "5>2>7"） */
+    type: text('type').notNull(),
+    key: text('key').notNull(),
+    /** 馬の名前（組の順） */
+    names: text('names').notNull().default(''),
+    amount: integer('amount').notNull(),
+    /** 10 倍した倍率（はずれは 0）・払い戻し */
+    odds: integer('odds').notNull().default(0),
+    payout: integer('payout').notNull().default(0),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('keiba_bets_member_idx').on(t.memberId, t.at)],
+);
+
 /** 「はじめての参拝」を全部できた人（お祝いは 1 人 1 回） */
 export const onboardingDone = pgTable('onboarding_done', {
   memberId: text('member_id').primaryKey(),

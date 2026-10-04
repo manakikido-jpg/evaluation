@@ -62,6 +62,8 @@ import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 import { MjRecords } from './views/mahjong.js';
 import { KbLobbyExtra, KbStablePage } from './views/keiba.js';
+import { KbDirectoryPage, KbHorsePage, KbMyBetsPage } from './views/keibaRecords.js';
+import { horseDirectory, horseProfile, myBetStats } from '../services/casino/keibaRecords.js';
 import {
   breedFoal,
   buyFromOwner,
@@ -625,6 +627,32 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
           extra={extra}
         />,
       );
+    }),
+  );
+
+  // 🏇 成績: 馬の成績・馬名鑑・自分の馬券成績
+  app.get(
+    '/casino/keiba/horse/:id',
+    page(async (c, me) => {
+      if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+      const id = Number(c.req.param('id'));
+      const profile = Number.isSafeInteger(id) && id > 0 ? await horseProfile(db, id) : null;
+      if (!profile) return c.redirect('/casino/keiba/horses');
+      return c.html(<KbHorsePage me={me} profile={profile} />);
+    }),
+  );
+  app.get(
+    '/casino/keiba/horses',
+    page(async (c, me) => {
+      if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+      return c.html(<KbDirectoryPage me={me} horses={await horseDirectory(db)} />);
+    }),
+  );
+  app.get(
+    '/casino/keiba/mine',
+    page(async (c, me) => {
+      if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+      return c.html(<KbMyBetsPage me={me} stats={await myBetStats(db, me.session.userId)} />);
     }),
   );
 

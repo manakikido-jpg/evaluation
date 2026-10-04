@@ -1460,11 +1460,11 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 
 /* 🀄 戦績・ランキング */
 .mj-records { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 14px; }
-.mj-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.mj-tiles > div { background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
-.mj-tiles span { color: var(--c-muted); font-size: 0.75rem; }
-.mj-tiles b { font-size: 1.1rem; font-variant-numeric: tabular-nums; color: var(--c-text); }
-.mj-tiles small { color: var(--c-sakura); font-size: 0.7rem; }
+.mj-tiles, .kb-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.mj-tiles > div, .kb-tiles > div { background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.mj-tiles span, .kb-tiles span { color: var(--c-muted); font-size: 0.75rem; }
+.mj-tiles b, .kb-tiles b { font-size: 1.1rem; font-variant-numeric: tabular-nums; color: var(--c-text); }
+.mj-tiles small, .kb-tiles small { color: var(--c-sakura); font-size: 0.7rem; }
 .mj-rankchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
 .mj-rankchips span { padding: 3px 10px; border-radius: 999px; font-size: 0.8rem; background: rgba(255, 255, 255, 0.08); }
 .mj-rankchips .r1 { background: rgba(226, 179, 64, 0.25); color: var(--c-gold); }
@@ -1473,7 +1473,7 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .mj-ranking th, .mj-ranking td { padding: 5px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: left; }
 .mj-ranking .num { text-align: right; font-variant-numeric: tabular-nums; }
 .mj-ranking tr.me td { color: var(--c-gold); }
-@media (max-width: 760px) { .mj-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .mj-tiles, .kb-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ⑤ 小さい絵の牌の数字の札 */
 .mj-t .mj-idx { position: absolute; left: 0; top: 0; font-style: normal; font-weight: 900; font-size: calc(var(--tw) * 0.46); line-height: 1; padding: calc(var(--tw) * 0.05) calc(var(--tw) * 0.1); border-radius: calc(var(--tw) * 0.12) 0 calc(var(--tw) * 0.14) 0; color: #fff; font-family: system-ui, sans-serif; pointer-events: none; }
@@ -1581,6 +1581,12 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .kb-type { display: flex; gap: 6px; align-items: flex-start; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 6px 8px; cursor: pointer; }
 .kb-type:has(input:checked) { border-color: var(--c-gold); background: rgba(226, 179, 64, 0.14); }
 .kb-type small { display: block; color: var(--c-muted); font-size: 0.7rem; line-height: 1.35; }
+/* 馬単・3連単の買い方（ボックス・着順どおり）。その 2 つを選んだときだけ出す */
+.kb-mode { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: -2px 0 8px; }
+.kb-slip:has(input[name=type][value=exacta]:checked) .kb-mode, .kb-slip:has(input[name=type][value=trifecta]:checked) .kb-mode { display: grid; }
+.kb-mode label { display: flex; gap: 6px; align-items: flex-start; padding: 5px 8px; border-radius: 10px; border: 1px dashed rgba(226, 179, 64, 0.4); cursor: pointer; }
+.kb-mode label:has(input:checked) { border-style: solid; border-color: var(--c-gold); background: rgba(226, 179, 64, 0.12); }
+.kb-mode small { display: block; color: var(--c-muted); font-size: 0.7rem; line-height: 1.35; }
 .kb-picks { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 8px; }
 .kb-picks label { display: flex; flex-direction: column; gap: 2px; font-size: 0.8rem; color: var(--c-muted); }
 .kb-picks select { min-width: 170px; }
@@ -1626,6 +1632,8 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .kb-hbtn:has(input:checked) { border-color: var(--c-gold); background: linear-gradient(180deg, rgba(226, 179, 64, 0.28), rgba(226, 179, 64, 0.12)); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(226, 179, 64, 0.25); }
 .kb-hbtn:has(input:checked)::after { content: '✓'; position: absolute; right: 8px; top: 6px; color: var(--c-gold); font-weight: 900; }
 .kb-hbtn:has(input:focus-visible) { outline: 2px solid var(--c-gold); outline-offset: 2px; }
+.kb-hbtn-seq { position: absolute; left: 4px; top: -8px; font-style: normal; font-size: 0.7rem; font-weight: 900; color: #3a2600; background: var(--c-gold); border-radius: 999px; padding: 0 6px; line-height: 1.5; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+.kb-hbtn-seq:empty { display: none; }
 .kb-amounts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .kb-amt { position: relative; cursor: pointer; display: inline-grid; place-items: center; }
 .kb-amt span { grid-area: 1 / 1; text-align: center; }
@@ -1746,3 +1754,24 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .kb-market { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .kb-market li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: center; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
 .kb-circle .kb-rank, .kb-circle .kb-mine, .kb-circle .kb-remain { display: none; }
+
+/* 🏇 成績ページ */
+.kb-horse-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kb-horse-title .kb-silk { width: 22px; height: 22px; }
+.kb-horse-line { margin-top: -6px; }
+.kb-tiles b.kb-tile-small { font-size: 0.8rem; line-height: 1.4; }
+.kb-rec-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.kb-rec-table th, .kb-rec-table td { padding: 6px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: center; white-space: nowrap; }
+.kb-rec-table thead th { color: var(--c-muted); font-weight: 600; font-size: 0.75rem; }
+.kb-rec-table .l { text-align: left; }
+.kb-rec-table td small { display: block; color: var(--c-muted); font-size: 0.7rem; }
+.kb-rec-table .kb-silk { margin-right: 4px; vertical-align: -2px; }
+.kb-entries tr.kb-top1 .kb-fin { color: var(--c-gold); font-weight: 900; }
+.kb-entries tr.kb-top2 .kb-fin, .kb-entries tr.kb-top3 .kb-fin { color: #ffe08a; font-weight: 800; }
+.kb-bet-history li > span:first-child small { display: block; font-size: 0.7rem; }
+.kb-bet-history li { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(7em, auto); align-items: center; }
+.kb-bet-history li > b { text-align: right; }
+@media (max-width: 560px) { .kb-bet-history li { grid-template-columns: minmax(0, 1fr) auto; } .kb-bet-history li > b { grid-column: 1 / -1; } }
+.kb-h2-link { margin-left: 8px; font-size: 0.75rem; font-weight: 600; }
+.kb-horse-link { font-size: 0.75rem; }
+.kb-rec-links .c-actions { flex-wrap: wrap; gap: 8px; }
