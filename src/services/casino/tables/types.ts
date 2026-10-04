@@ -15,7 +15,7 @@ export type Credit = { memberId: string; amount: number; reason: 'casino_win' | 
 /** カジノの収支（運営の画面）に入れる 1 回分 */
 export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };
 /** 🀄 麻雀の戦績（終局のとき 1 人 1 行） */
-export type MahjongResult = { memberId: string; name: string; rank: number; points: number; length: string; entry: number; payout: number; hands: number; wins: number; tsumo: number; dealins: number; riichi: number; bestPoints: number; bestName: string | null };
+export type MahjongResult = { memberId: string; name: string; rank: number; points: number; length: string; players: number; entry: number; payout: number; hands: number; wins: number; tsumo: number; dealins: number; riichi: number; bestPoints: number; bestName: string | null };
 /** 🏇 名簿の馬の 1 走（レースが終わったとき 1 頭 1 行） */
 export type KeibaResult = { horseId: number; pos: number; race: string; dist: number; surface: number; prize?: number; ownerId?: string | null; name?: string; cls?: number };
 export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[] };
@@ -79,6 +79,6 @@ export const TABLE_LABEL: Record<TableKind, { emoji: string; name: string; note:
   poker: { emoji: '♠\uFE0F', name: 'ポーカー', note: 'テキサスホールデム。持ち込んだ銭で賭け合う', players: '2〜6 人' },
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金', players: '3〜5 人' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け', players: '2〜5 人' },
-  mahjong: { emoji: '🀄', name: '麻雀', note: '4 人打ちのリーチ麻雀。足りない席は BOT', players: '1〜4 人（残りは BOT）' },
+  mahjong: { emoji: '🀄', name: '麻雀', note: '4 人打ち・3 人打ち（サンマ）のリーチ麻雀。足りない席は BOT', players: '1〜4 人（残りは BOT）' },
   keiba: { emoji: '🏇', name: 'みんなでダービー', note: '8 頭のレースにみんなで賭けて、同じレースを見る', players: '1〜30 人（見るだけもできる）' },
 };

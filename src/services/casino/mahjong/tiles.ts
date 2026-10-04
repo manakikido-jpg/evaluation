@@ -1,7 +1,7 @@
 /**
  * 🀄 麻雀の牌。136 枚に 0〜135 の番号を付け、4 枚ずつ同じ種類（0〜33）。
  * 種類: 0〜8 萬子 1〜9 / 9〜17 筒子 / 18〜26 索子 / 27 東 28 南 29 西 30 北 / 31 白 32 發 33 中。
- * 赤ドラ: 各色の 5 の 1 枚目（16・52・88）。
+ * 赤ドラ: 各色の 5 の 1 枚目（16・52・88）。三人打ちは二萬〜八萬を抜いた 108 枚（赤は 5 筒・5 索の 2 枚）。
  */
 
 export const TILES = 136;
@@ -26,8 +26,15 @@ export const isTerminal = (k: number) => k < 27 && (k % 9 === 0 || k % 9 === 8);
 export const isYaochu = (k: number) => isHonor(k) || isTerminal(k);
 export const YAOCHU = [0, 8, 9, 17, 18, 26, 27, 28, 29, 30, 31, 32, 33] as const;
 
-/** ドラ表示牌の次の牌（ドラ） */
-export function doraOf(indicator: number): number {
+export const NORTH = 30;
+/** 三人打ちで抜く牌（二萬〜八萬）の種類 */
+export const isSanmaCut = (k: number) => k >= 1 && k <= 7;
+/** 三人打ちの牌 108 枚の番号 */
+export const SANMA_TILES = Array.from({ length: TILES }, (_, i) => i).filter((t) => !isSanmaCut(kindOf(t)));
+
+/** ドラ表示牌の次の牌（ドラ）。三人打ちは一萬の次が九萬・九萬の次が一萬 */
+export function doraOf(indicator: number, sanma = false): number {
+  if (sanma && (indicator === 0 || indicator === 8)) return 8 - indicator;
   if (indicator < 27) return indicator - (indicator % 9) + (((indicator % 9) + 1) % 9);
   if (indicator <= 30) return 27 + ((indicator - 27 + 1) % 4);
   return 31 + ((indicator - 31 + 1) % 3);

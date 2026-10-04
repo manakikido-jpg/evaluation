@@ -765,6 +765,8 @@ export const mahjongResults = pgTable(
     points: integer('points').notNull(),
     /** tonpu / hanchan */
     length: text('length').notNull(),
+    /** 人数（4 人打ち・3 人打ち） */
+    players: integer('players').notNull().default(4),
     entry: integer('entry').notNull().default(0),
     payout: integer('payout').notNull().default(0),
     /** その対局の局の数・和了・ツモ・放銃・リーチの回数 */

@@ -1,17 +1,19 @@
 import { chooseCall, chooseDiscard, isYakuhaiKind, type CallOption, type Threat } from '../mahjong/bot.js';
 import { scoreWin, type Meld, type Score } from '../mahjong/score.js';
 import { shanten, waitsOf } from '../mahjong/shanten.js';
-import { countsOf, doraOf, EAST, isYaochu, KINDS, kindName, kindOf, sortTiles, TILES, WIND_NAME, YAOCHU } from '../mahjong/tiles.js';
+import { countsOf, doraOf, EAST, isSanmaCut, isYaochu, KINDS, kindName, kindOf, NORTH, SANMA_TILES, sortTiles, TILES, WIND_NAME, YAOCHU } from '../mahjong/tiles.js';
 import { nextBot } from './bots.js';
 import { shuffle } from './partyBase.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
 
 /**
- * 🀄 咲楽ノ宮雀荘: 4 人打ちのリーチ麻雀（東風戦・半荘戦）。足りない席は 🤖 BOT（参加費は胴元が出す）。
+ * 🀄 咲楽ノ宮雀荘: 4 人打ち・3 人打ち（サンマ）のリーチ麻雀（東風戦・半荘戦）。足りない席は 🤖 BOT（参加費は胴元が出す）。
  * 25,000 点持ち。赤ドラ 3 枚・喰いタンあり・後付けあり・頭ハネ（ロンは 1 人だけ）・箱下なし（0 点未満で終わり）。
  * 途中流局は九種九牌だけ。オーラスで親が和了・テンパイしてトップなら終わり（和了りやめ）。
  * 参加費は座るときに預かり、終わったら順位で配る（1 位 50%・2 位 30%・3 位 20%）。
  * 抜けた人・2 回続けて時間切れになった人は、BOT が代わりに打つ（「おまかせ」）。
+ * 三人打ち: 二萬〜八萬を抜いた 108 枚・チーなし・北抜き（抜きドラ・嶺上から補充・抜いた北でロンできる）・ツモ損・
+ * 35,000 点持ち・流局のノーテン罰符は 2,000 点・終わったら 1 位 60%・2 位 40%。
  */
 
 export const MJ_TURN_SECONDS = 15;
@@ -24,6 +26,11 @@ const LOBBY_MINUTES = 30;
 const DONE_SECONDS = 180;
 export const START_POINTS = 25_000;
 export const MJ_SHARES = [50, 30, 20, 0];
+export const SANMA_START_POINTS = 35_000;
+export const SANMA_SHARES = [60, 40, 0];
+export const MJ_PLAYERS = { 4: '4 人打ち', 3: '3 人打ち（サンマ）' } as const;
+export const startPointsOf = (n: number) => (n === 3 ? SANMA_START_POINTS : START_POINTS);
+export const sharesOf = (n: number) => (n === 3 ? SANMA_SHARES : MJ_SHARES);
 export const MJ_LENGTHS = { tonpu: { label: '東風戦', winds: 1 }, hanchan: { label: '半荘戦', winds: 2 } } as const;
 export type MjLength = keyof typeof MJ_LENGTHS;
 
@@ -42,6 +49,7 @@ export type MjResult = {
   score?: Score;
   hand?: number[];
   melds?: Meld[];
+  nuki?: number[];
   winTile?: number;
   tenpai?: boolean[];
   /** 流局で見せる手（テンパイの人だけ） */
@@ -54,6 +62,8 @@ export type MjResult = {
 
 export type MjState = {
   seats: MjSeat[];
+  /** 人数（3 は三人打ち。前からある卓はなし = 4） */
+  n?: 3 | 4;
   entry: number;
   length: MjLength;
   pace?: Pace;
@@ -71,6 +81,8 @@ export type MjState = {
   kans: number;
   hands: number[][];
   melds: Meld[][];
+  /** 抜いた北（三人打ち） */
+  nuki?: number[][];
   rivers: RiverTile[][];
   riichi: boolean[];
   doubleRiichi: boolean[];
@@ -82,7 +94,7 @@ export type MjState = {
   /** 鳴きがまだない（ダブルリーチ・天和・地和・九種九牌） */
   clean: boolean;
   turn: number;
-  step: 'turn' | 'call' | 'chankan';
+  step: 'turn' | 'call' | 'chankan' | 'kita';
   drawn: number | null;
   rinshan: boolean;
   /** 喰い替えで切れない種類 */
@@ -106,7 +118,7 @@ export type MjState = {
 };
 
 export type MjSeatStats = { wins: number; tsumo: number; dealins: number; riichi: number; best: { points: number; name: string } | null };
-export type MjFxKind = 'discard' | 'riichi' | 'pon' | 'chi' | 'kan' | 'ron' | 'tsumo' | 'draw';
+export type MjFxKind = 'discard' | 'riichi' | 'pon' | 'chi' | 'kan' | 'kita' | 'ron' | 'tsumo' | 'draw';
 export type MjFx = { n: number; k: MjFxKind; seat: number; t?: number };
 
 // ───────── 小さな道具 ─────────
@@ -115,7 +127,12 @@ const addLog = (s: MjState, line: string) => {
   s.log = [...s.log, line].slice(-14);
 };
 export const roundLabel = (s: Pick<MjState, 'wind' | 'kyoku' | 'honba'>) => `${WIND_NAME[s.wind]}${s.kyoku + 1}局${s.honba ? ` ${s.honba}本場` : ''}`;
-export const seatWindOf = (s: Pick<MjState, 'kyoku'>, i: number) => EAST + ((i - s.kyoku + 4) % 4);
+/** 人数（3 か 4） */
+export const nOf = (s: Pick<MjState, 'n'>): 3 | 4 => s.n ?? 4;
+export const isSanma = (s: Pick<MjState, 'n'>) => s.n === 3;
+const seatIdx = (s: Pick<MjState, 'n'>) => Array.from({ length: nOf(s) }, (_, j) => j);
+const fill = <T,>(s: Pick<MjState, 'n'>, v: () => T): T[] => seatIdx(s).map(v);
+export const seatWindOf = (s: Pick<MjState, 'kyoku' | 'n'>, i: number) => EAST + ((i - s.kyoku + nOf(s)) % nOf(s));
 export const roundWindOf = (s: Pick<MjState, 'wind'>) => EAST + s.wind;
 export const doraIndicators = (s: Pick<MjState, 'dead' | 'kans'>) => s.dead.slice(4, 5 + s.kans);
 const uraIndicators = (s: MjState) => s.dead.slice(9, 10 + s.kans);
@@ -125,6 +142,7 @@ const humanActive = (x: MjSeat) => !x.bot && !x.gone;
 /** BOT が代わりに打つ席（BOT・抜けた人・おまかせ中） */
 const robot = (x: MjSeat) => Boolean(x.bot || x.gone || x.auto);
 const name = (s: MjState, i: number) => s.seats[i]!.name;
+const nukiOf = (s: MjState, i: number) => s.nuki?.[i] ?? [];
 
 function winScore(s: MjState, i: number, t: number, ron: boolean, chankan = false): Score | null {
   const hand = ron ? [...s.hands[i]!, t] : s.hands[i]!;
@@ -150,6 +168,8 @@ function winScore(s: MjState, i: number, t: number, ron: boolean, chankan = fals
     chiihou: !ron && !dealer && s.clean && s.rivers[i]!.length === 0,
     doraIndicators: doraIndicators(s),
     uraIndicators: uraIndicators(s),
+    players: nOf(s),
+    nuki: nukiOf(s, i),
   });
 }
 
@@ -215,6 +235,9 @@ export function visibleFor(s: MjState, i: number): number[] {
   s.rivers.forEach((r) => r.forEach((x) => !x.called && add(x.t)));
   s.melds.forEach((ms) => ms.forEach((m) => m.tiles.forEach(add)));
   doraIndicators(s).forEach(add);
+  s.nuki?.forEach((ts) => ts.forEach(add));
+  // 三人打ちで抜いた牌は、もうない（全部見えている扱い）
+  if (isSanma(s)) for (let k = 0; k < KINDS; k++) if (isSanmaCut(k)) v[k] = 4;
   return v;
 }
 
@@ -224,7 +247,7 @@ const threatsFor = (s: MjState, i: number): Threat[] =>
 const yakuhaiFor = (s: MjState, i: number) => Array.from({ length: KINDS }, (_, k) => k).filter((k) => isYakuhaiKind(k, seatWindOf(s, i), roundWindOf(s)));
 
 const statOf = (s: MjState, i: number): MjSeatStats => {
-  s.stats ??= [0, 1, 2, 3].map(() => ({ wins: 0, tsumo: 0, dealins: 0, riichi: 0, best: null }));
+  s.stats ??= fill(s, () => ({ wins: 0, tsumo: 0, dealins: 0, riichi: 0, best: null }));
   return s.stats[i]!;
 };
 function pushFx(s: MjState, k: MjFxKind, seat: number, t?: number): void {
@@ -245,28 +268,27 @@ function turnDeadline(s: MjState, now: number): number {
 }
 
 function startHand(s: MjState, ctx: Ctx): MjState {
-  const all = shuffle(
-    Array.from({ length: TILES }, (_, i) => i),
-    ctx.rng,
-  );
+  const n = nOf(s);
+  const all = shuffle(isSanma(s) ? [...SANMA_TILES] : Array.from({ length: TILES }, (_, i) => i), ctx.rng);
   s.dead = all.slice(0, 14);
   s.wall = all.slice(14);
-  s.hands = [[], [], [], []];
-  for (let n = 0; n < 13; n++) for (let j = 0; j < 4; j++) s.hands[(s.kyoku + j) % 4]!.push(s.wall.pop()!);
+  s.hands = fill(s, () => []);
+  for (let r = 0; r < 13; r++) for (let j = 0; j < n; j++) s.hands[(s.kyoku + j) % n]!.push(s.wall.pop()!);
   s.hands = s.hands.map(sortTiles);
-  s.melds = [[], [], [], []];
-  s.rivers = [[], [], [], []];
-  s.riichi = [false, false, false, false];
-  s.doubleRiichi = [false, false, false, false];
-  s.ippatsu = [false, false, false, false];
-  s.tempFuriten = [false, false, false, false];
+  s.melds = fill(s, () => []);
+  if (isSanma(s)) s.nuki = fill(s, () => []);
+  s.rivers = fill(s, () => []);
+  s.riichi = fill(s, () => false);
+  s.doubleRiichi = fill(s, () => false);
+  s.ippatsu = fill(s, () => false);
+  s.tempFuriten = fill(s, () => false);
   s.riichiPending = null;
   s.clean = true;
   s.kans = 0;
   s.kuikae = [];
   s.last = null;
-  s.options = [null, null, null, null];
-  s.responses = [null, null, null, null];
+  s.options = fill(s, () => null);
+  s.responses = fill(s, () => null);
   s.kakan = null;
   s.result = null;
   s.renchan = false;
@@ -304,6 +326,40 @@ function drawRinshan(s: MjState, i: number, ctx: Ctx): MjState {
   return s;
 }
 
+/** 北抜きのあとの補充（山の最後から 1 枚。王牌は 14 枚のまま） */
+function drawNukiReplacement(s: MjState, i: number, ctx: Ctx): MjState {
+  const t = s.wall.shift()!;
+  s.turn = i;
+  s.hands[i] = sortTiles([...s.hands[i]!, t]);
+  s.drawn = t;
+  s.rinshan = true;
+  s.kuikae = [];
+  s.step = 'turn';
+  s.deadline = turnDeadline(s, ctx.now);
+  return s;
+}
+
+/** 北を抜けるか（三人打ち。リーチ中はツモった北だけ） */
+export function canKita(s: MjState, i: number): boolean {
+  if (!isSanma(s) || s.step !== 'turn' || s.turn !== i || s.drawn === null || s.wall.length === 0) return false;
+  if (s.riichi[i]) return kindOf(s.drawn) === NORTH;
+  return s.hands[i]!.some((t) => kindOf(t) === NORTH);
+}
+
+function kita(s: MjState, i: number, ctx: Ctx): Step<MjState> {
+  if (!canKita(s, i)) return fail('invalid');
+  const t = s.riichi[i] ? s.drawn! : s.hands[i]!.find((x) => kindOf(x) === NORTH)!;
+  s.hands[i] = removeTiles(s.hands[i]!, [t]);
+  s.nuki ??= fill(s, () => []);
+  s.nuki[i] = [...nukiOf(s, i), t];
+  s.drawn = null;
+  s.last = { seat: i, t };
+  addLog(s, `${name(s, i)}: 北抜き`);
+  pushFx(s, 'kita', i, t);
+  // 抜いた北でロンできる人がいれば聞く
+  return ok(openCalls(s, i, t, 'kita', ctx));
+}
+
 function establishRiichi(s: MjState): void {
   const i = s.riichiPending;
   if (i === null) return;
@@ -334,7 +390,9 @@ function discard(s: MjState, i: number, tile: number, riichi: boolean, ctx: Ctx)
   return ok(openCalls(s, i, tile, 'discard', ctx));
 }
 
-function callOptions(s: MjState, j: number, from: number, t: number, mode: 'discard' | 'chankan'): MjCall[] {
+type CallMode = 'discard' | 'chankan' | 'kita';
+
+function callOptions(s: MjState, j: number, from: number, t: number, mode: CallMode): MjCall[] {
   const out: MjCall[] = [];
   if (winScore(s, j, t, true, mode === 'chankan') && !isFuriten(s, j)) out.push({ type: 'ron' });
   if (mode !== 'discard' || s.riichi[j] || s.wall.length === 0) return out;
@@ -343,7 +401,8 @@ function callOptions(s: MjState, j: number, from: number, t: number, mode: 'disc
   const same = hand.filter((x) => kindOf(x) === k);
   if (same.length >= 2) out.push({ type: 'pon', use: same.slice(0, 2) });
   if (same.length >= 3 && s.kans < 4) out.push({ type: 'minkan', use: same.slice(0, 3) });
-  if (j === (from + 1) % 4 && k < 27) {
+  // チーは 4 人打ちだけ
+  if (!isSanma(s) && j === (from + 1) % 4 && k < 27) {
     const n = k % 9;
     const pairs: [number, number][] = [];
     if (n >= 2) pairs.push([k - 2, k - 1]);
@@ -383,20 +442,20 @@ function botResponse(s: MjState, j: number, opts: MjCall[], t: number): MjRespon
   });
 }
 
-function openCalls(s: MjState, from: number, t: number, mode: 'discard' | 'chankan', ctx: Ctx): MjState {
-  s.options = [0, 1, 2, 3].map((j) => {
+function openCalls(s: MjState, from: number, t: number, mode: CallMode, ctx: Ctx): MjState {
+  s.options = seatIdx(s).map((j) => {
     if (j === from) return null;
     const o = callOptions(s, j, from, t, mode);
     return o.length ? o : null;
   });
-  s.responses = [null, null, null, null];
+  s.responses = fill(s, () => null);
   if (!s.options.some(Boolean)) return afterCalls(s, mode, ctx);
   s.options.forEach((o, j) => {
     if (!o) return;
     if (robot(s.seats[j]!)) s.responses[j] = botResponse(s, j, o, t);
     else s.responses[j] = prefResponse(s.seats[j]!, o);
   });
-  s.step = mode === 'discard' ? 'call' : 'chankan';
+  s.step = mode === 'discard' ? 'call' : mode;
   if (s.options.every((o, j) => !o || s.responses[j])) return resolveCalls(s, ctx);
   s.deadline = ctx.now + MJ_CALL_SECONDS * 1000 * paceMult(s);
   return s;
@@ -411,38 +470,43 @@ function prefResponse(x: MjSeat, o: MjCall[]): MjResponse | null {
 }
 
 /** だれも鳴かなかったとき */
-function afterCalls(s: MjState, mode: 'discard' | 'chankan', ctx: Ctx): MjState {
-  s.options = [null, null, null, null];
-  s.responses = [null, null, null, null];
+function afterCalls(s: MjState, mode: CallMode, ctx: Ctx): MjState {
+  s.options = fill(s, () => null);
+  s.responses = fill(s, () => null);
   if (mode === 'chankan') return completeKakan(s, ctx);
+  if (mode === 'kita') return drawNukiReplacement(s, s.last!.seat, ctx);
   establishRiichi(s);
-  return draw(s, (s.last!.seat + 1) % 4, ctx);
+  return draw(s, (s.last!.seat + 1) % nOf(s), ctx);
 }
 
 function resolveCalls(s: MjState, ctx: Ctx): MjState {
-  const mode = s.step === 'chankan' ? 'chankan' : 'discard';
+  const mode: CallMode = s.step === 'chankan' || s.step === 'kita' ? s.step : 'discard';
   const { seat: from, t } = s.last!;
   // ロンを見逃した人はフリテン
   s.options.forEach((o, j) => {
     if (o?.some((x) => x.type === 'ron') && s.responses[j]?.type !== 'ron') s.tempFuriten[j] = true;
   });
-  const order = [1, 2, 3].map((d) => (from + d) % 4);
+  const order = seatIdx(s)
+    .slice(1)
+    .map((d) => (from + d) % nOf(s));
   const ronner = order.find((j) => s.responses[j]?.type === 'ron');
   if (ronner !== undefined) {
-    s.options = [null, null, null, null];
-    s.responses = [null, null, null, null];
+    s.options = fill(s, () => null);
+    s.responses = fill(s, () => null);
+    // 抜いた北でロンされたら、その北は抜きドラから外す
+    if (mode === 'kita') s.nuki![from] = nukiOf(s, from).filter((x) => x !== t);
     return win(s, ronner, from, t, ctx, mode === 'chankan');
   }
   const caller = order.find((j) => s.responses[j]?.type === 'pon' || s.responses[j]?.type === 'minkan') ?? order.find((j) => s.responses[j]?.type === 'chi');
-  if (caller === undefined || mode === 'chankan') return afterCalls(s, mode, ctx);
+  if (caller === undefined || mode !== 'discard') return afterCalls(s, mode, ctx);
   const resp = s.responses[caller] as Exclude<MjCall, { type: 'ron' }>;
-  s.options = [null, null, null, null];
-  s.responses = [null, null, null, null];
+  s.options = fill(s, () => null);
+  s.responses = fill(s, () => null);
   establishRiichi(s);
   s.hands[caller] = removeTiles(s.hands[caller]!, resp.use);
   s.melds[caller]!.push({ type: resp.type, tiles: sortTiles([...resp.use, t]), from, called: t });
   s.rivers[from]!.at(-1)!.called = true;
-  s.ippatsu = [false, false, false, false];
+  s.ippatsu = fill(s, () => false);
   s.clean = false;
   s.turn = caller;
   const label = { pon: 'ポン', chi: 'チー', minkan: 'カン' }[resp.type];
@@ -466,7 +530,7 @@ function ankan(s: MjState, i: number, k: number, ctx: Ctx): Step<MjState> {
   s.hands[i] = removeTiles(s.hands[i]!, four);
   s.melds[i]!.push({ type: 'ankan', tiles: four, from: null, called: null });
   s.kans++;
-  s.ippatsu = [false, false, false, false];
+  s.ippatsu = fill(s, () => false);
   s.clean = false;
   addLog(s, `${name(s, i)}: 暗槓 ${kindName(k)}`);
   pushFx(s, 'kan', i);
@@ -493,7 +557,7 @@ function completeKakan(s: MjState, ctx: Ctx): MjState {
   m.tiles = sortTiles([...m.tiles, kk.t]);
   s.kakan = null;
   s.kans++;
-  s.ippatsu = [false, false, false, false];
+  s.ippatsu = fill(s, () => false);
   s.clean = false;
   return drawRinshan(s, kk.seat, ctx);
 }
@@ -501,7 +565,8 @@ function completeKakan(s: MjState, ctx: Ctx): MjState {
 function win(s: MjState, w: number, from: number | null, t: number, ctx: Ctx, chankan = false): MjState {
   const ron = from !== null;
   const sc = winScore(s, w, t, ron, chankan)!;
-  const deltas = [0, 0, 0, 0];
+  const n = nOf(s);
+  const deltas = fill(s, () => 0);
   const add = (j: number, d: number) => (deltas[j] = deltas[j]! + d);
   const h = s.honba;
   const dealer = s.kyoku;
@@ -510,9 +575,10 @@ function win(s: MjState, w: number, from: number | null, t: number, ctx: Ctx, ch
     add(from, -pay);
     add(w, pay);
   } else {
-    for (let j = 0; j < 4; j++) {
+    for (let j = 0; j < n; j++) {
       if (j === w) continue;
-      const pay = (w === dealer ? sc.tsumoOther : j === dealer ? sc.tsumoDealer : sc.tsumoOther) + 100 * h;
+      // 本場は 1 本 300 点を払う人で割る（4 人なら 100 点ずつ・3 人なら 150 点ずつ）
+      const pay = (w === dealer ? sc.tsumoOther : j === dealer ? sc.tsumoDealer : sc.tsumoOther) + (300 * h) / (n - 1);
       add(j, -pay);
       add(w, pay);
     }
@@ -529,6 +595,7 @@ function win(s: MjState, w: number, from: number | null, t: number, ctx: Ctx, ch
     score: sc,
     hand: ron ? [...s.hands[w]!, t] : s.hands[w]!,
     melds: s.melds[w]!,
+    ...(nukiOf(s, w).length ? { nuki: nukiOf(s, w) } : {}),
     winTile: t,
     deltas,
     dora: doraIndicators(s),
@@ -547,10 +614,13 @@ function win(s: MjState, w: number, from: number | null, t: number, ctx: Ctx, ch
 }
 
 function exhaustiveDraw(s: MjState, ctx: Ctx): MjState {
-  const tenpai = [0, 1, 2, 3].map((j) => s.riichi[j] || shanten(countsOf(s.hands[j]!), s.melds[j]!.length) === 0);
+  const players = nOf(s);
+  const tenpai = seatIdx(s).map((j) => s.riichi[j]! || shanten(countsOf(s.hands[j]!), s.melds[j]!.length) === 0);
   const n = tenpai.filter(Boolean).length;
-  const deltas = [0, 0, 0, 0];
-  if (n > 0 && n < 4) tenpai.forEach((tp, j) => (deltas[j] = tp ? 3000 / n : -3000 / (4 - n)));
+  const deltas = fill(s, () => 0);
+  // ノーテン罰符: 4 人は 3,000 点・3 人は 2,000 点
+  const pot = players === 3 ? 2000 : 3000;
+  if (n > 0 && n < players) tenpai.forEach((tp, j) => (deltas[j] = tp ? pot / n : -pot / (players - n)));
   deltas.forEach((d, j) => (s.seats[j]!.points += d));
   s.result = {
     kind: 'draw',
@@ -568,7 +638,7 @@ function exhaustiveDraw(s: MjState, ctx: Ctx): MjState {
 }
 
 function abortHand(s: MjState, i: number, ctx: Ctx): MjState {
-  s.result = { kind: 'abort', label: roundLabel(s), deltas: [0, 0, 0, 0], dora: doraIndicators(s), ura: [], note: `${name(s, i)} の九種九牌`, hands: [0, 1, 2, 3].map((j) => (j === i ? s.hands[j]! : null)) };
+  s.result = { kind: 'abort', label: roundLabel(s), deltas: fill(s, () => 0), dora: doraIndicators(s), ura: [], note: `${name(s, i)} の九種九牌`, hands: seatIdx(s).map((j) => (j === i ? s.hands[j]! : null)) };
   s.renchan = true;
   addLog(s, `途中流局（${name(s, i)} の九種九牌）`);
   return toResult(s, ctx);
@@ -580,8 +650,8 @@ function toResult(s: MjState, ctx: Ctx): MjState {
   s.step = 'turn';
   s.drawn = null;
   s.ready = [];
-  s.options = [null, null, null, null];
-  s.responses = [null, null, null, null];
+  s.options = fill(s, () => null);
+  s.responses = fill(s, () => null);
   s.deadline = ctx.now + RESULT_SECONDS * 1000 * Math.min(2, paceMult(s));
   // 人がいなければ待たない
   if (!s.seats.some(humanActive)) s.deadline = ctx.now + 2000;
@@ -592,14 +662,14 @@ function nextHand(s: MjState, ctx: Ctx): Step<MjState> {
   const r = s.result!;
   if (s.seats.some((x) => x.points < 0)) return endGame(s, ctx, '0 点を下回った人が出たので終わりです');
   const lastWind = MJ_LENGTHS[s.length].winds - 1;
-  const allLast = s.wind === lastWind && s.kyoku === 3;
+  const allLast = s.wind === lastWind && s.kyoku === nOf(s) - 1;
   const dealerTop = s.seats.every((x, j) => j === s.kyoku || x.points < s.seats[s.kyoku]!.points);
   if (allLast && s.renchan && dealerTop) return endGame(s, ctx, '親がトップなので終わりです（和了りやめ）');
   if (s.renchan) s.honba++;
   else {
     s.honba = r.kind === 'draw' || r.kind === 'abort' ? s.honba + 1 : 0;
     s.kyoku++;
-    if (s.kyoku === 4) {
+    if (s.kyoku === nOf(s)) {
       s.kyoku = 0;
       s.wind++;
     }
@@ -609,13 +679,13 @@ function nextHand(s: MjState, ctx: Ctx): Step<MjState> {
 }
 
 function endGame(s: MjState, ctx: Ctx, note?: string): Step<MjState> {
-  const rank = [0, 1, 2, 3].sort((a, b) => s.seats[b]!.points - s.seats[a]!.points || a - b);
+  const rank = seatIdx(s).sort((a, b) => s.seats[b]!.points - s.seats[a]!.points || a - b);
   // 残った供託はトップに
   s.seats[rank[0]!]!.points += s.sticks * 1000;
   s.sticks = 0;
   s.order = rank.map((j) => s.seats[j]!.id);
   const pot = s.entry * s.seats.length;
-  const amounts = MJ_SHARES.map((p) => Math.floor((pot * p) / 100));
+  const amounts = sharesOf(nOf(s)).map((p) => Math.floor((pot * p) / 100));
   amounts[0]! += pot - amounts.reduce((a, b) => a + b, 0);
   s.payouts = rank.map((j, n) => ({ id: s.seats[j]!.id, name: s.seats[j]!.name, amount: amounts[n] ?? 0, points: s.seats[j]!.points }));
   s.phase = 'done';
@@ -627,7 +697,7 @@ function endGame(s: MjState, ctx: Ctx, note?: string): Step<MjState> {
     const x = s.seats[j]!;
     if (x.bot) return [];
     const st = statOf(s, j);
-    return [{ memberId: x.id, name: x.name, rank: n + 1, points: x.points, length: s.length, entry: s.entry, payout: amounts[n] ?? 0, hands: s.handsPlayed ?? 0, wins: st.wins, tsumo: st.tsumo, dealins: st.dealins, riichi: st.riichi, bestPoints: st.best?.points ?? 0, bestName: st.best?.name ?? null }];
+    return [{ memberId: x.id, name: x.name, rank: n + 1, points: x.points, length: s.length, players: nOf(s), entry: s.entry, payout: amounts[n] ?? 0, hands: s.handsPlayed ?? 0, wins: st.wins, tsumo: st.tsumo, dealins: st.dealins, riichi: st.riichi, bestPoints: st.best?.points ?? 0, bestName: st.best?.name ?? null }];
   });
   return ok(s, { ...(credits.length ? { credits } : {}), ...(mahjong.length ? { mahjong } : {}) });
 }
@@ -640,6 +710,7 @@ function botTurn(s: MjState, i: number, ctx: Ctx): Step<MjState> {
     const c = countsOf(s.hands[i]!);
     if (YAOCHU.filter((k) => c[k]! > 0).length >= 10) return ok(abortHand(s, i, ctx));
   }
+  if (canKita(s, i)) return kita(s, i, ctx);
   const honorKan = kanOptions(s, i).find((o) => o.type === 'ankan' && isYaochu(o.k) && threatsFor(s, i).length === 0);
   if (honorKan) return ankan(s, i, honorKan.k, ctx);
   const d = chooseDiscard({
@@ -649,7 +720,7 @@ function botTurn(s: MjState, i: number, ctx: Ctx): Step<MjState> {
     riichiable: riichiDiscards(s, i),
     visible: visibleFor(s, i),
     threats: threatsFor(s, i),
-    doraKinds: doraIndicators(s).map((t) => doraOf(kindOf(t))),
+    doraKinds: doraIndicators(s).map((t) => doraOf(kindOf(t), isSanma(s))),
     yakuhai: yakuhaiFor(s, i),
   });
   return discard(s, i, d.tile, d.riichi, ctx);
@@ -658,6 +729,8 @@ function botTurn(s: MjState, i: number, ctx: Ctx): Step<MjState> {
 /** 時間切れの人の代わり（和了れるなら和了る・ほかはツモ切り） */
 function timeoutTurn(s: MjState, i: number, ctx: Ctx): Step<MjState> {
   if (canTsumo(s, i)) return ok(win(s, i, null, s.drawn!, ctx));
+  // ツモった北は抜く（リーチ中・ツモ切りでも損がない）
+  if (s.drawn !== null && kindOf(s.drawn) === NORTH && canKita(s, i)) return kita(s, i, ctx);
   const legal = legalDiscards(s, i);
   const t = s.drawn !== null && legal.includes(s.drawn) ? s.drawn : legal.at(-1)!;
   return discard(s, i, t, false, ctx);
@@ -667,9 +740,10 @@ function timeoutTurn(s: MjState, i: number, ctx: Ctx): Step<MjState> {
 
 const seat = (w: Who, bot = false): MjSeat => ({ ...w, gone: false, timeouts: 0, points: START_POINTS, ...(bot ? { bot: true } : {}) });
 
-function blank(host: Who, entry: number, length: MjLength, pace: Pace, now: number): MjState {
+function blank(host: Who, entry: number, length: MjLength, pace: Pace, now: number, n: 3 | 4 = 4): MjState {
   return {
     seats: [seat(host)],
+    ...(n === 3 ? { n } : {}),
     entry,
     length,
     pace,
@@ -715,8 +789,7 @@ const refundAll = (s: MjState) =>
   ok({ ...s, seats: [], phase: 'closed', deadline: null } as MjState, s.entry > 0 ? { credits: s.seats.map((x) => ({ memberId: x.id, amount: s.entry, reason: 'casino_refund' as const })) } : undefined);
 
 /** 返事を待っている人がいるか */
-const waitingOn = (s: MjState, i: number) =>
-  s.phase === 'playing' && ((s.step === 'turn' && s.turn === i) || ((s.step === 'call' || s.step === 'chankan') && Boolean(s.options[i]) && !s.responses[i]));
+const waitingOn = (s: MjState, i: number) => s.phase === 'playing' && ((s.step === 'turn' && s.turn === i) || (s.step !== 'turn' && Boolean(s.options[i]) && !s.responses[i]));
 
 export const mahjong: TableEngine<MjState> = {
   kind: 'mahjong',
@@ -727,13 +800,13 @@ export const mahjong: TableEngine<MjState> = {
     const entry = free ? 0 : intOf(f, 'entry');
     if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > ctx.cfg.casino.maxBet))) return fail('bad_bet');
     const length: MjLength = str(f, 'length') === 'hanchan' ? 'hanchan' : 'tonpu';
-    const s = blank(host, entry, length, paceOf(f), ctx.now);
+    const s = blank(host, entry, length, paceOf(f), ctx.now, str(f, 'players') === '3' ? 3 : 4);
     return ok(s, entryDebit(s, host.id));
   },
   join(s, who) {
     if (s.seats.some((x) => x.id === who.id)) return ok(s);
     if (s.phase !== 'lobby') return fail('started');
-    if (s.seats.length >= 4) return fail('full');
+    if (s.seats.length >= nOf(s)) return fail('full');
     return ok({ ...s, seats: [...s.seats, seat(who)] }, entryDebit(s, who.id));
   },
   leave(state, id, ctx) {
@@ -759,7 +832,7 @@ export const mahjong: TableEngine<MjState> = {
     if (state.phase === 'lobby') {
       if (i !== 0) return fail('invalid');
       if (a === 'add_bot') {
-        if (state.seats.length >= 4) return fail('full');
+        if (state.seats.length >= nOf(state)) return fail('full');
         const b = nextBot(state.seats.map((x) => x.id));
         return ok({ ...state, seats: [...state.seats, seat(b, true)] }, entryDebit(state, b.id, false));
       }
@@ -772,14 +845,14 @@ export const mahjong: TableEngine<MjState> = {
         // 足りない席は BOT で埋める
         const s = structuredClone(state);
         const debits = [];
-        while (s.seats.length < 4) {
+        while (s.seats.length < nOf(s)) {
           const b = nextBot(s.seats.map((x) => x.id));
           s.seats.push(seat(b, true));
           if (s.entry > 0) debits.push({ memberId: b.id, amount: s.entry, reason: 'casino_bet' as const, limited: false });
         }
         s.seats = shuffle(s.seats, ctx.rng);
-        s.seats.forEach((x) => (x.points = START_POINTS));
-        addLog(s, `${MJ_LENGTHS[s.length].label}・起家は ${s.seats[0]!.name}`);
+        s.seats.forEach((x) => (x.points = startPointsOf(nOf(s))));
+        addLog(s, `${isSanma(s) ? '三人打ち・' : ''}${MJ_LENGTHS[s.length].label}・起家は ${s.seats[0]!.name}`);
         return ok(startHand(s, ctx), debits.length ? { debits } : undefined);
       }
       return fail('invalid');
@@ -825,6 +898,7 @@ export const mahjong: TableEngine<MjState> = {
       if (a === 'ankan') return ankan(s, i, intOf(f, 'k'), ctx);
       if (a === 'kakan') return kakan(s, i, intOf(f, 'k'), ctx);
       if (a === 'kyuushu') return canKyuushu(s, i) ? ok(abortHand(s, i, ctx)) : fail('invalid');
+      if (a === 'kita') return kita(s, i, ctx);
       return fail('invalid');
     }
     const opts = s.options[i]!;
@@ -851,7 +925,9 @@ export const mahjong: TableEngine<MjState> = {
       if (robot(x)) return botTurn(s, s.turn, ctx);
       // 便利ボタン（自動和了・ツモ切り）
       if (x.prefs?.autoWin && canTsumo(s, s.turn)) return ok(win(s, s.turn, null, s.drawn!, ctx));
-      if (x.prefs?.tsumogiri && s.drawn !== null && !canTsumo(s, s.turn) && legalDiscards(s, s.turn).includes(s.drawn)) return discard(s, s.turn, s.drawn, false, ctx);
+      if (x.prefs?.tsumogiri && s.drawn !== null && !canTsumo(s, s.turn) && legalDiscards(s, s.turn).includes(s.drawn)) {
+        return kindOf(s.drawn) === NORTH && canKita(s, s.turn) ? kita(s, s.turn, ctx) : discard(s, s.turn, s.drawn, false, ctx);
+      }
       // リーチ中のツモ切りは時間切れに数えない
       if (!(s.riichi[s.turn] && !canTsumo(s, s.turn))) {
         x.timeouts++;

@@ -31,6 +31,10 @@ export type WinInput = {
   chiihou?: boolean;
   doraIndicators: number[];
   uraIndicators: number[];
+  /** 三人打ち（ツモ損・一萬の次のドラは九萬） */
+  players?: 3 | 4;
+  /** 抜いた北（三人打ち。1 枚 1 翻の抜きドラ・ドラ表示が西なら北もドラ） */
+  nuki?: number[];
 };
 
 export type Yaku = { name: string; han: number };
@@ -226,9 +230,11 @@ function evalRegular(w: WinInput, groups: G[], winIdx: number, wait: Wait, all: 
 }
 
 function doraCount(w: WinInput, all: readonly number[]): Yaku[] {
+  const nuki = w.nuki ?? [];
+  const tiles = [...all, ...nuki];
   const count = (inds: number[]) => {
-    const d = inds.map((t) => doraOf(kindOf(t)));
-    return all.reduce((a, t) => a + d.filter((k) => k === kindOf(t)).length, 0);
+    const d = inds.map((t) => doraOf(kindOf(t), w.players === 3));
+    return tiles.reduce((a, t) => a + d.filter((k) => k === kindOf(t)).length, 0);
   };
   const out: Yaku[] = [];
   const dora = count(w.doraIndicators);
@@ -236,6 +242,7 @@ function doraCount(w: WinInput, all: readonly number[]): Yaku[] {
   const ura = w.riichi || w.doubleRiichi ? count(w.uraIndicators) : 0;
   if (dora) out.push({ name: 'ドラ', han: dora });
   if (red) out.push({ name: '赤ドラ', han: red });
+  if (nuki.length) out.push({ name: '抜きドラ', han: nuki.length });
   if (ura) out.push({ name: '裏ドラ', han: ura });
   return out;
 }
@@ -264,16 +271,18 @@ function finish(w: WinInput, e: Eval, all: readonly number[]): Score | null {
     if (han >= 5 || base > 2000) [base, limit] = [2000, '満貫'];
   }
   const s: Score = { yaku, han, fu: e.fu, yakuman, base, limit, ron: 0, tsumoDealer: 0, tsumoOther: 0, total: 0 };
+  // ツモで払う人の数（三人打ちはツモ損: いない北家の分はもらえない）
+  const others = (w.players ?? 4) - 1;
   if (w.dealer) {
     s.ron = ceil100(base * 6);
     s.tsumoOther = ceil100(base * 2);
     s.tsumoDealer = s.tsumoOther;
-    s.total = w.ron ? s.ron : s.tsumoOther * 3;
+    s.total = w.ron ? s.ron : s.tsumoOther * others;
   } else {
     s.ron = ceil100(base * 4);
     s.tsumoDealer = ceil100(base * 2);
     s.tsumoOther = ceil100(base);
-    s.total = w.ron ? s.ron : s.tsumoDealer + s.tsumoOther * 2;
+    s.total = w.ron ? s.ron : s.tsumoDealer + s.tsumoOther * (others - 1);
   }
   return s;
 }

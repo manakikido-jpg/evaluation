@@ -57,4 +57,15 @@ describe('🀄 雀荘の戦績', () => {
     expect(r[0]).toMatchObject({ games: 3, avgRank: 4 / 3 });
     expect(r[0]!.topRate).toBeCloseTo(2 / 3);
   });
+
+  it('4 人打ちと 3 人打ちは分けて数える', async () => {
+    await db.insert(mahjongResults).values([row('a', 1), row('a', 3, { players: 3 }), row('a', 2, { players: 3 })]);
+    expect((await mjStats(db, 'a')).games).toBe(1);
+    const s3 = await mjStats(db, 'a', 3);
+    expect(s3.games).toBe(2);
+    expect(s3.ranks.slice(0, 3)).toEqual([0, 1, 1]);
+    const since = new Date('2000-01-01T00:00:00Z');
+    expect((await mjRanking(db, since, 2, 20, 3)).map((x) => x.memberId)).toEqual(['a']);
+    expect(await mjRanking(db, since, 2)).toEqual([]);
+  });
 });

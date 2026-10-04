@@ -998,8 +998,8 @@ const paintTapHint = () =>
 
 // ───── 🀄 麻雀の演出: 切った牌が落ちる音と動き・鳴き/リーチ/和了の文字（前に見た番号より新しいものだけ） ─────
 let mjSeen = null;
-const MJ_SHOUT = { riichi: 'リーチ', pon: 'ポン', chi: 'チー', kan: 'カン', ron: 'ロン', tsumo: 'ツモ', draw: '流局' };
-const MJ_SOUND = { riichi: 'riichi', pon: 'call', chi: 'call', kan: 'call', ron: 'agari', tsumo: 'agari', draw: 'ryukyoku' };
+const MJ_SHOUT = { riichi: 'リーチ', pon: 'ポン', chi: 'チー', kan: 'カン', kita: '北', ron: 'ロン', tsumo: 'ツモ', draw: '流局' };
+const MJ_SOUND = { riichi: 'riichi', pon: 'call', chi: 'call', kan: 'call', kita: 'call', ron: 'agari', tsumo: 'agari', draw: 'ryukyoku' };
 const mjFx = () => {
   const el = document.querySelector('.mj-fxdata');
   const board = document.querySelector('.mj-board2');

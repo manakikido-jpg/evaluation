@@ -5,6 +5,7 @@ import type { Meld } from '../../services/casino/mahjong/score.js';
 import { shanten, waitsOf } from '../../services/casino/mahjong/shanten.js';
 import { countsOf, isRedTile, kindName, KINDS, kindOf, suitOf, tileFace, WIND_NAME } from '../../services/casino/mahjong/tiles.js';
 import {
+  canKita,
   canKyuushu,
   canTsumo,
   doraIndicators,
@@ -14,11 +15,16 @@ import {
   MJ_CALL_SECONDS,
   MJ_LENGTHS,
   MJ_PREF_KEYS,
+  MJ_PLAYERS,
   MJ_SHARES,
   MJ_TURN_SECONDS,
+  nOf,
   riichiDiscards,
   roundLabel,
+  SANMA_SHARES,
+  SANMA_START_POINTS,
   seatWindOf,
+  sharesOf,
   START_POINTS,
   visibleFor,
   waitsOfSeat,
@@ -85,9 +91,16 @@ const Back = (p: { size?: 'big' | 'small' | 'tiny' }) => {
   );
 };
 
-function Melds(p: { melds: Meld[]; me: number; size?: 'small' | 'tiny' }) {
+function Melds(p: { melds: Meld[]; me: number; size?: 'small' | 'tiny'; nuki?: number[] }) {
   return (
     <div class="mj-melds">
+      {p.nuki && p.nuki.length > 0 && (
+        <span class="mj-meld mj-nuki" title={`抜いた北 ${p.nuki.length} 枚（抜きドラ）`}>
+          {p.nuki.map((t) => (
+            <Tile t={t} size={p.size} />
+          ))}
+        </span>
+      )}
       {p.melds.map((m) => (
         <span class={`mj-meld ${m.type}`}>
           {m.type === 'ankan'
@@ -132,8 +145,9 @@ function Act(p: { id: number; csrf: string; action: string; children: Child; ext
 }
 
 /** その人が動く番か（自分の番・鳴くか決める番） */
-const actingOf = (s: MjState, i: number) =>
-  s.phase === 'playing' && ((s.step === 'turn' && s.turn === i) || ((s.step === 'call' || s.step === 'chankan') && Boolean(s.options[i]) && !s.responses[i]));
+const actingOf = (s: MjState, i: number) => s.phase === 'playing' && ((s.step === 'turn' && s.turn === i) || (s.step !== 'turn' && Boolean(s.options[i]) && !s.responses[i]));
+/** 自分から見た向き（d は自分から右回りに何人目か）。三人打ちは向かいが空き */
+const posOfD = (n: number, d: number) => (n === 3 ? (['b', 'r', 'l'] as const)[d]! : (['b', 'r', 't', 'l'] as const)[d]!);
 const seatTag = (s: MjState, i: number) => {
   const x = s.seats[i]!;
   return `${x.name}${x.gone ? '（BOT）' : x.auto ? '（おまかせ）' : ''}`;
@@ -146,7 +160,7 @@ function OppTop(p: { s: MjState; i: number; reveal: boolean }) {
     <div class={`mj-otop${actingOf(s, i) ? ' acting' : ''}`}>
       <span class="mj-oname">{seatTag(s, i)}</span>
       <div class="mj-ohand">{p.reveal ? (s.hands[i] ?? []).map((t) => <Tile t={t} size="tiny" />) : (s.hands[i] ?? []).map(() => <Back size="tiny" />)}</div>
-      <Melds melds={s.melds[i] ?? []} me={i} size="tiny" />
+      <Melds melds={s.melds[i] ?? []} me={i} size="tiny" nuki={s.nuki?.[i]} />
     </div>
   );
 }
@@ -162,7 +176,7 @@ function OppSide(p: { s: MjState; i: number; side: 'left' | 'right'; reveal: boo
         ))}
       </span>
       <div class="mj-bars">{p.reveal ? (s.hands[i] ?? []).map((t) => <Tile t={t} size="tiny" />) : (s.hands[i] ?? []).map(() => <span class="mj-bar"></span>)}</div>
-      <Melds melds={s.melds[i] ?? []} me={i} size="tiny" />
+      <Melds melds={s.melds[i] ?? []} me={i} size="tiny" nuki={s.nuki?.[i]} />
     </div>
   );
 }
@@ -170,6 +184,7 @@ function OppSide(p: { s: MjState; i: number; side: 'left' | 'right'; reveal: boo
 /** 真ん中の方角盤: 四辺に風・点数・リーチ棒、まんなかに局・残り・ドラ */
 function Compass(p: { s: MjState; at: (d: number) => number; now: number }) {
   const { s } = p;
+  const n = nOf(s);
   const edge = (d: number, pos: 'b' | 'r' | 't' | 'l') => {
     const i = p.at(d);
     const x = s.seats[i]!;
@@ -183,13 +198,10 @@ function Compass(p: { s: MjState; at: (d: number) => number; now: number }) {
       </div>
     );
   };
-  const acting = s.phase === 'playing' ? [0, 1, 2, 3].find((i) => actingOf(s, i)) : undefined;
+  const acting = s.phase === 'playing' ? s.seats.findIndex((_, i) => actingOf(s, i)) : -1;
   return (
-    <div class="mj-compass">
-      {edge(0, 'b')}
-      {edge(1, 'r')}
-      {edge(2, 't')}
-      {edge(3, 'l')}
+    <div class={`mj-compass${n === 3 ? ' sanma' : ''}`}>
+      {Array.from({ length: n }, (_, d) => edge(d, posOfD(n, d)))}
       <div class="mj-cmid">
         <div class="mj-round">{roundLabel(s)}</div>
         <div class="mj-info">
@@ -201,7 +213,7 @@ function Compass(p: { s: MjState; at: (d: number) => number; now: number }) {
             <Tile t={t} size="tiny" />
           ))}
         </div>
-        {acting !== undefined && <Countdown at={s.deadline} now={p.now} label="" />}
+        {acting >= 0 && <Countdown at={s.deadline} now={p.now} label="" />}
       </div>
     </div>
   );
@@ -210,13 +222,12 @@ function Compass(p: { s: MjState; at: (d: number) => number; now: number }) {
 /** 卓: 方角盤のまわりに 4 人の河（それぞれの向き） */
 function Table(p: { s: MjState; at: (d: number) => number; now: number }) {
   const { s, at } = p;
+  const n = nOf(s);
   return (
-    <div class="mj-table">
-      <div class="mj-rv rt">
-        <River s={s} i={at(2)} size="tiny" />
-      </div>
+    <div class={`mj-table${n === 3 ? ' sanma' : ''}`}>
+      <div class="mj-rv rt">{n === 4 && <River s={s} i={at(2)} size="tiny" />}</div>
       <div class="mj-rv rl">
-        <River s={s} i={at(3)} size="tiny" />
+        <River s={s} i={at(n - 1)} size="tiny" />
       </div>
       <Compass s={s} at={at} now={p.now} />
       <div class="mj-rv rr">
@@ -317,7 +328,7 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
             {rest.map((tt) => tileBtn(tt))}
             {drawn !== null && <span class="mj-gap"></span>}
             {drawn !== null && tileBtn(drawn, ' drawn')}
-            <Melds melds={melds} me={i} size="small" />
+            <Melds melds={melds} me={i} size="small" nuki={s.nuki?.[i]} />
           </div>
           {riichiable.size > 0 && (
             <label class="mj-riichi">
@@ -336,7 +347,7 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
           {hand.map((tt) => (
             <Tile t={tt} size="big" />
           ))}
-          <Melds melds={melds} me={i} size="small" />
+          <Melds melds={melds} me={i} size="small" nuki={s.nuki?.[i]} />
         </div>
       )}
       {myTurn && (
@@ -345,6 +356,13 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
             <Act id={t.id} csrf={csrf} action="tsumo">
               <button type="submit" class="c-btn c-btn-gold mj-big">
                 ツモ
+              </button>
+            </Act>
+          )}
+          {canKita(s, i) && (
+            <Act id={t.id} csrf={csrf} action="kita">
+              <button type="submit" class="c-btn mj-kita" title="北を横に抜いて、嶺上から 1 枚引きます（1 枚 1 翻の抜きドラ）">
+                北抜き
               </button>
             </Act>
           )}
@@ -367,7 +385,7 @@ function MyArea(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now: n
       {opts && s.last && (
         <div class="mj-callbox">
           <p>
-            {s.seats[s.last.seat]!.name} さんの <Tile t={s.last.t} size="small" /> {s.step === 'chankan' ? '（加槓）' : ''}を…
+            {s.seats[s.last.seat]!.name} さんの <Tile t={s.last.t} size="small" /> {s.step === 'chankan' ? '（加槓）' : s.step === 'kita' ? '（北抜き）' : ''}を…
           </p>
           <div class="c-actions">
             {opts.map((o) =>
@@ -455,7 +473,7 @@ function ResultBox(p: { t: CasinoTable; s: MjState; i: number; me: CasinoMe; now
               ))}
             <span class="mj-gap"></span>
             <Tile t={r.winTile!} size="small" cls="win" />
-            <Melds melds={r.melds ?? []} me={r.winner!} size="small" />
+            <Melds melds={r.melds ?? []} me={r.winner!} size="small" nuki={r.nuki} />
           </div>
           <ul class="mj-yaku">
             {r.score.yaku.map((y) => (
@@ -558,9 +576,12 @@ function Lobby(p: { t: CasinoTable; s: MjState; me: CasinoMe }) {
   const csrf = me.session.csrfToken;
   const host = s.seats[0]?.id === me.session.userId;
   const seated = s.seats.some((x) => x.id === me.session.userId);
+  const n = nOf(s);
+  const shares = sharesOf(n);
   return (
     <section class="c-table c-center mj-lobby">
       <p>
+        {n === 3 && <b class="mj-sanma-tag">三人打ち</b>}
         {MJ_LENGTHS[s.length].label}・<b class="c-gold">{s.entry > 0 ? `参加費 ${me.coin.emoji}${fmt(s.entry)} ${me.coin.name}` : '賭けなし（点数だけ）'}</b>・⏱ 1 打 {MJ_TURN_SECONDS * paceMult(s)} 秒
       </p>
       <div class="c-seats">
@@ -572,7 +593,7 @@ function Lobby(p: { t: CasinoTable; s: MjState; me: CasinoMe }) {
             </div>
           </div>
         ))}
-        {Array.from({ length: 4 - s.seats.length }, () => (
+        {Array.from({ length: n - s.seats.length }, () => (
           <div class="c-seat empty">
             <div class="c-seat-name c-muted">空き（始めると 🤖 BOT）</div>
           </div>
@@ -580,7 +601,7 @@ function Lobby(p: { t: CasinoTable; s: MjState; me: CasinoMe }) {
       </div>
       {host && (
         <div class="c-actions c-bots">
-          {s.seats.length < 4 && (
+          {s.seats.length < n && (
             <Act id={p.t.id} csrf={csrf} action="add_bot">
               <button type="submit" class="c-btn c-btn-small">
                 🤖 BOT を入れる
@@ -601,13 +622,22 @@ function Lobby(p: { t: CasinoTable; s: MjState; me: CasinoMe }) {
       {host ? (
         <Act id={p.t.id} csrf={csrf} action="start" class="c-actions">
           <button type="submit" class="c-btn c-btn-gold">
-            {s.seats.length < 4 ? `始める（空いた ${4 - s.seats.length} 席は BOT）` : 'このメンバーで始める'}
+            {s.seats.length < n ? `始める（空いた ${n - s.seats.length} 席は BOT）` : 'このメンバーで始める'}
           </button>
         </Act>
       ) : (
         <p class="c-muted">卓を立てた人が始めるのを待っています…（空いた席は BOT が入ります）</p>
       )}
-      {s.entry > 0 && <p class="c-muted c-small">BOT の参加費は胴元が出します。終わったら 1 位 {MJ_SHARES[0]}%・2 位 {MJ_SHARES[1]}%・3 位 {MJ_SHARES[2]}% で分けます。</p>}
+      {s.entry > 0 && (
+        <p class="c-muted c-small">
+          BOT の参加費は胴元が出します。終わったら{' '}
+          {shares
+            .filter((x) => x > 0)
+            .map((x, k) => `${k + 1} 位 ${x}%`)
+            .join('・')}{' '}
+          で分けます。
+        </p>
+      )}
       {seated ? (
         <form method="post" action={`/casino/t/${p.t.id}/leave`} class="c-actions">
           <input type="hidden" name="_csrf" value={csrf} />
@@ -615,7 +645,7 @@ function Lobby(p: { t: CasinoTable; s: MjState; me: CasinoMe }) {
             席を立つ
           </button>
         </form>
-      ) : s.seats.length < 4 ? (
+      ) : s.seats.length < n ? (
         <form method="post" action={`/casino/t/${p.t.id}/join`} class="c-actions">
           <input type="hidden" name="_csrf" value={csrf} />
           <button type="submit" class="c-btn c-btn-gold">
@@ -636,17 +666,18 @@ export function MahjongView(p: { t: CasinoTable; s: MjState; me: CasinoMe; now: 
   const meId = p.me.session.userId;
   const i = s.seats.findIndex((x) => x.id === meId);
   const base = i >= 0 ? i : 0;
-  const at = (d: number) => (base + d) % 4;
+  const n = nOf(s);
+  const at = (d: number) => (base + d) % n;
   const reveal = s.phase === 'done';
   const seated = i >= 0 && !s.seats[i]!.gone;
-  const posOf = (seat: number) => (['b', 'r', 't', 'l'] as const)[(seat - base + 4) % 4];
+  const posOf = (seat: number) => posOfD(n, (seat - base + n) % n);
   const fx = (s.fx ?? []).map((e) => ({ n: e.n, k: e.k, pos: posOf(e.seat), mine: e.seat === i }));
   return (
     <>
-      <div class="mj-board2">
+      <div class={`mj-board2${n === 3 ? ' sanma' : ''}`}>
         <div class="mj-fxdata" hidden data-fx={JSON.stringify(fx)}></div>
-        <OppTop s={s} i={at(2)} reveal={reveal} />
-        <OppSide s={s} i={at(3)} side="left" reveal={reveal} />
+        {n === 4 ? <OppTop s={s} i={at(2)} reveal={reveal} /> : <div class="mj-otop mj-empty" aria-hidden="true"></div>}
+        <OppSide s={s} i={at(n - 1)} side="left" reveal={reveal} />
         <Table s={s} at={at} now={p.now} />
         <OppSide s={s} i={at(1)} side="right" reveal={reveal} />
         {i >= 0 ? (
@@ -691,11 +722,20 @@ export function MahjongView(p: { t: CasinoTable; s: MjState; me: CasinoMe; now: 
 export function MjCreateFields(p: { casino: CasinoConfig; coin: Coin }) {
   return (
     <>
+      <fieldset class="mj-players">
+        <legend>人数</legend>
+        <label>
+          <input type="radio" name="players" value="4" checked /> {MJ_PLAYERS[4]}
+        </label>
+        <label>
+          <input type="radio" name="players" value="3" /> {MJ_PLAYERS[3]}
+        </label>
+      </fieldset>
       <label>
         長さ
         <select name="length">
-          <option value="tonpu">東風戦（4 局〜・20 分くらい）</option>
-          <option value="hanchan">半荘戦（8 局〜・40 分くらい）</option>
+          <option value="tonpu">東風戦（4 局〜・20 分くらい。三人打ちは 3 局〜）</option>
+          <option value="hanchan">半荘戦（8 局〜・40 分くらい。三人打ちは 6 局〜）</option>
         </select>
       </label>
       {p.casino.mahjongBets ? (
@@ -732,6 +772,8 @@ export function MjCreateFields(p: { casino: CasinoConfig; coin: Coin }) {
 
 export const MJ_RULES = `4 人打ちのリーチ麻雀です。卓を立てる人が、賭けない（点数だけ）か参加費を賭けるかを選べます。${fmt(START_POINTS)} 点持ち・赤ドラ 3 枚・喰いタンあり・後付けあり。ロンが重なったときは、出した人から近い 1 人だけ（頭ハネ）。0 点を下回った人が出たら終わり。オーラスで親がトップなら和了りやめ。途中流局は九種九牌だけ。空いた席・抜けた人・2 回続けて時間切れになった人は BOT が打ちます。賭ける卓の参加費は、終わったら順位で分けます（1 位 ${MJ_SHARES[0]}%・2 位 ${MJ_SHARES[1]}%・3 位 ${MJ_SHARES[2]}%・4 位 0）。`;
 
+export const SANMA_RULES = `3 人打ち（サンマ）は、二萬〜八萬を抜いた 108 枚で打ちます（萬子は一萬と九萬だけ。一萬のドラ表示なら九萬がドラ）。${fmt(SANMA_START_POINTS)} 点持ち・チーなし・赤ドラは 5 筒と 5 索の 2 枚。北は「北抜き」で横に抜くと 1 枚 1 翻の抜きドラになり、嶺上から 1 枚引きます（抜いた北でロンされることもあります）。ツモ和了は北家の分がなくなるツモ損。流局のノーテン罰符は 2,000 点。賭ける卓は 1 位 ${SANMA_SHARES[0]}%・2 位 ${SANMA_SHARES[1]}%・3 位 0 で分けます。`;
+
 const YAKU_LIST: [string, string][] = [
   ['1 翻', '立直・一発・門前清自摸和・平和・断么九・一盃口・役牌（白 發 中・自風・場風）・海底摸月・河底撈魚・嶺上開花・槍槓'],
   ['2 翻', 'ダブル立直・七対子・三色同順（鳴き 1）・一気通貫（鳴き 1）・混全帯么九（鳴き 1）・対々和・三暗刻・三色同刻・三槓子・混老頭・小三元'],
@@ -745,6 +787,7 @@ export function MjGuide() {
     <details class="c-rules mj-guide">
       <summary>📖 遊び方・役の一覧</summary>
       <p>{MJ_RULES}</p>
+      <p>{SANMA_RULES}</p>
       <p>
         自分の番: 牌を押すと切ります（スマホは 1 回目のタップで牌が浮き、もう一度タップで切ります。「2 回タップで切る」で切り替え）。テンパイできる牌には点が付き、押す前に「切ると待ち ○○ 残り n 枚」が出ます。リーチは「リーチする」に印を付けてから、光っている牌を押します。ほかの人の捨て牌で和了れる・鳴けるときは、ボタンが出ます（{MJ_CALL_SECONDS} 秒）。
       </p>
@@ -766,13 +809,15 @@ export function MjGuide() {
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
 /** 雀荘の入口: あなたの戦績（通算）と今月のランキング */
-export function MjRecords(p: { me: CasinoMe; stats: MjStats; ranking: MjRankRow[]; minGames: number }) {
+export function MjRecords(p: { me: CasinoMe; stats: MjStats; ranking: MjRankRow[]; minGames: number; players?: 3 | 4 }) {
   const { stats: st } = p;
+  const players = p.players ?? 4;
+  const tag = players === 3 ? '・三人打ち' : '';
   const myRank = p.ranking.findIndex((r) => r.memberId === p.me.session.userId);
   return (
     <div class="mj-records">
       <section class="c-panel">
-        <h2>📊 あなたの戦績（通算）</h2>
+        <h2>📊 あなたの戦績（通算{tag}）</h2>
         {st.games === 0 ? (
           <p class="c-muted">まだ対局がありません。終局まで打つと、ここに残ります。</p>
         ) : (
@@ -792,7 +837,7 @@ export function MjRecords(p: { me: CasinoMe; stats: MjStats; ranking: MjRankRow[
               </div>
               <div>
                 <span>ラス回避</span>
-                <b>{pct(1 - st.ranks[3] / st.games)}</b>
+                <b>{pct(1 - st.ranks[players - 1]! / st.games)}</b>
               </div>
               <div>
                 <span>和了率</span>
@@ -813,7 +858,7 @@ export function MjRecords(p: { me: CasinoMe; stats: MjStats; ranking: MjRankRow[
               </div>
             </div>
             <p class="mj-rankchips" aria-label="順位の回数">
-              {st.ranks.map((n, k) => (
+              {st.ranks.slice(0, players).map((n, k) => (
                 <span class={`r${k + 1}`}>
                   {k + 1} 位 <b>{n}</b> 回
                 </span>
@@ -823,7 +868,7 @@ export function MjRecords(p: { me: CasinoMe; stats: MjStats; ranking: MjRankRow[
         )}
       </section>
       <section class="c-panel">
-        <h2>🏆 今月のランキング</h2>
+        <h2>🏆 今月のランキング{players === 3 ? '（三人打ち）' : ''}</h2>
         {p.ranking.length === 0 ? (
           <p class="c-muted">今月 {p.minGames} 戦以上打った人がまだいません。</p>
         ) : (

@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-04-sanma',
+    date: '2026-10-04',
+    kind: 'new',
+    where: ['Discord'],
+    title: '🀄 雀荘で 3 人打ち（サンマ）ができるようになりました',
+    items: [
+      '卓を立てるときに「3 人打ち（サンマ）」を選べます。二萬〜八萬を抜いた 108 枚・35,000 点持ち・チーなし',
+      '北は「北抜き」で横に抜くと抜きドラ（1 枚 1 翻）。ツモは北家の分がないツモ損',
+      '戦績とランキングは 4 人打ちと分けて数えます',
+    ],
+  },
+  {
     id: '2026-10-03-keiba-owner-perks',
     date: '2026-10-03',
     kind: 'new',

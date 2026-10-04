@@ -1369,10 +1369,10 @@ button.mj-t.drawn { margin-left: 2px; }
 .mj-yakulist { padding-left: 1.1em; }
 .mj-yakulist li { margin: 4px 0; }
 .mj-lobby .c-seats { justify-content: center; }
-.mj-wager { border: 1px solid var(--c-line); border-radius: 10px; padding: 6px 12px 10px; display: grid; gap: 6px; }
-.mj-wager legend { color: var(--c-muted); padding: 0 4px; }
-.mj-wager label { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; text-align: left; }
-.mj-wager input[type=radio] { width: auto; margin: 0; flex: none; }
+.mj-wager, .mj-players { border: 1px solid var(--c-line); border-radius: 10px; padding: 6px 12px 10px; display: grid; gap: 6px; }
+.mj-wager legend, .mj-players legend { color: var(--c-muted); padding: 0 4px; }
+.mj-wager label, .mj-players label { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; text-align: left; }
+.mj-wager input[type=radio], .mj-players input[type=radio] { width: auto; margin: 0; flex: none; }
 .mj-wager input[type=number] { width: 7em; }
 
 
@@ -1422,7 +1422,7 @@ button.mj-t.drawn { margin-left: 2px; }
 .mj-stickbar { position: relative; width: 46%; height: 4px; margin-bottom: 2px; border-radius: 3px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3); }
 .mj-stickbar::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--c-red); }
 .mj-cmid { position: absolute; inset: 22%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
-.mj-cmid .mj-round { font-size: clamp(0.8rem, 2.8vw, 1.15rem); }
+.mj-cmid .mj-round { font-size: clamp(0.72rem, 2.8vw, 1.15rem); white-space: nowrap; letter-spacing: 0.02em; }
 .mj-cmid .mj-info { font-size: clamp(0.6rem, 2vw, 0.8rem); gap: 6px; }
 .mj-cmid .mj-dora .mj-t.tiny { --tw: clamp(11px, 2.8vw, 18px); }
 .mj-cmid .c-count { font-size: 0.75rem; padding: 0 6px; }
@@ -1493,6 +1493,12 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .mj-shout.p-t { left: 50%; top: 14%; --tx: -50%; }
 .mj-shout.p-l { left: 8%; top: 40%; }
 .mj-shout.p-r { right: 8%; top: 40%; }
+/* 🀄 三人打ち: 向かいは空き・抜いた北・北抜きボタン */
+.mj-otop.mj-empty { min-height: 0.6em; }
+.mj-meld.mj-nuki { gap: 1px; margin-right: 4px; padding: 1px 3px; border-radius: 5px; background: rgba(226, 179, 64, 0.16); box-shadow: inset 0 0 0 1px rgba(226, 179, 64, 0.45); }
+.mj-kita { border-color: rgba(226, 179, 64, 0.6); }
+.mj-sanma-tag { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(226, 179, 64, 0.18); color: var(--c-gold); font-size: 0.85em; }
+.mj-shout.k-kita { -webkit-text-stroke-color: #a5780f; text-shadow: 0 0 18px rgba(255, 215, 120, 0.95), 0 4px 0 #6b4c06; }
 .mj-shout.k-riichi { -webkit-text-stroke-color: #b8860b; text-shadow: 0 0 20px rgba(255, 215, 120, 0.95), 0 4px 0 #6b4a00; }
 .mj-shout.k-ron, .mj-shout.k-tsumo { font-size: clamp(2.4rem, 11vw, 4.4rem); -webkit-text-stroke: 3px #c2185b; }
 .mj-shout.k-draw { font-size: clamp(1.4rem, 6vw, 2.4rem); -webkit-text-stroke-color: #555; text-shadow: 0 0 12px rgba(255, 255, 255, 0.6); }

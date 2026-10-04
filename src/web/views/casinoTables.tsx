@@ -69,7 +69,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
         <section class="mj-sign">
           <p class="mj-sign-kicker">SAKURANOMIYA JANSOU</p>
           <h1>🀄 咲楽ノ宮雀荘</h1>
-          <p class="c-muted">4 人打ちのリーチ麻雀。人が足りなくても 🤖 BOT が入ります。</p>
+          <p class="c-muted">4 人打ち・3 人打ち（サンマ）のリーチ麻雀。人が足りなくても 🤖 BOT が入ります。</p>
         </section>
       ) : (
         <h1 class="c-h1">
@@ -252,7 +252,7 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
   if (t.kind === 'mahjong') {
     const ms = t.state as MjState;
     const state = ms.phase === 'lobby' ? `相手待ち（空きは BOT）` : ms.phase === 'done' ? '終わり' : `${'東南西北'[ms.wind]}${ms.kyoku + 1}局`;
-    return `${MJ_LENGTHS[ms.length].label}・${ms.entry > 0 ? `参加費 ${coin.emoji}${fmt(ms.entry)}` : '賭けなし'}・${state}・${seats.filter((x) => !(x as { bot?: boolean }).bot).length} 人（${who}）`;
+    return `${ms.n === 3 ? '🀄 三人打ち・' : ''}${MJ_LENGTHS[ms.length].label}・${ms.entry > 0 ? `参加費 ${coin.emoji}${fmt(ms.entry)}` : '賭けなし'}・${state}・${seats.filter((x) => !(x as { bot?: boolean }).bot).length} 人（${who}）`;
   }
   if (t.kind === 'daifugo' || t.kind === 'babanuki') {
     const ps = t.state as DaifugoState;

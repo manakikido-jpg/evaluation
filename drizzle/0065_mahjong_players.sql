@@ -1,0 +1,1 @@
+ALTER TABLE "mahjong_results" ADD COLUMN "players" integer DEFAULT 4 NOT NULL;

@@ -188,7 +188,13 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     page(async (c, me) => {
       if (!kindOn('mahjong')) return c.redirect('/casino?e=game_off');
       await sweepTables(db, d.cfg(), d.now());
-      const [stats, ranking] = await Promise.all([mjStats(db, me.session.userId), mjRanking(db, monthStartJst(d.now()), MJ_RANK_MIN)]);
+      const since = monthStartJst(d.now());
+      const [stats, ranking, stats3, ranking3] = await Promise.all([
+        mjStats(db, me.session.userId),
+        mjRanking(db, since, MJ_RANK_MIN),
+        mjStats(db, me.session.userId, 3),
+        mjRanking(db, since, MJ_RANK_MIN, 20, 3),
+      ]);
       return c.html(
         <TablesLobby
           me={me}
@@ -197,7 +203,12 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
           tables={await openTables(db, 'mahjong')}
           mine={await myTable(db, me.session.userId)}
           msg={casinoMsg(c.req.query('e'))}
-          extra={<MjRecords me={me} stats={stats} ranking={ranking} minGames={MJ_RANK_MIN} />}
+          extra={
+            <>
+              <MjRecords me={me} stats={stats} ranking={ranking} minGames={MJ_RANK_MIN} />
+              {(stats3.games > 0 || ranking3.length > 0) && <MjRecords me={me} stats={stats3} ranking={ranking3} minGames={MJ_RANK_MIN} players={3} />}
+            </>
+          }
         />,
       );
     }),

@@ -52,4 +52,27 @@ describe('🀄 麻雀の画面', () => {
     expect(html).toMatch(/class="mj-pref on"[^>]*>鳴きなし/);
     expect(html).toContain('data-mj-twotap');
   });
+
+  it('三人打ち: 3 席の方角盤（向かいは空き）・北抜きボタン・抜いた北', () => {
+    const ctx = { now: 5, rng: seeded(3), cfg };
+    let r = mahjong.create(HOST, { wager: 'off', length: 'tonpu', players: '3' }, ctx);
+    if (!r.ok) throw new Error(r.error);
+    r = mahjong.act(r.state, HOST.id, { action: 'start' }, ctx);
+    if (!r.ok) throw new Error(r.error);
+    const s: MjState = structuredClone(r.state);
+    const h = s.seats.findIndex((x) => x.id === HOST.id);
+    s.turn = h;
+    s.step = 'turn';
+    s.hands[h] = ids('111m456p789s11z22z4z');
+    s.drawn = s.hands[h]!.at(-1)!;
+    s.nuki = [[], [], []];
+    s.nuki[h] = ids('4z').map((t) => t + 1);
+    const me = { session: { userId: HOST.id, csrfToken: 'x', displayName: 'ほすと' } as MemberSession, balance: 0, coin: { name: '銭', emoji: '🪙' } };
+    const html = String(MahjongView({ t: { id: 1 } as CasinoTable, s, me, now: 5 }));
+    expect(html).toContain('mj-board2 sanma');
+    expect(html).toContain('mj-otop mj-empty');
+    expect(html.match(/class="mj-cedge /g)).toHaveLength(3);
+    expect(html).toContain('value="kita"');
+    expect(html).toContain('mj-meld mj-nuki');
+  });
 });

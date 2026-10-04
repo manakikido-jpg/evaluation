@@ -4,7 +4,7 @@ import { mahjongResults } from '../../db/schema.js';
 
 /**
  * 🀄 雀荘の戦績とランキング（mahjong_results から）。
- * 和了率・放銃率・リーチ率は、遊んだ局の数あたり。
+ * 和了率・放銃率・リーチ率は、遊んだ局の数あたり。4 人打ちと 3 人打ち（players）は分けて数える。
  */
 
 export type MjStats = {
@@ -19,7 +19,7 @@ export type MjStats = {
   best: { points: number; name: string | null } | null;
 };
 
-export async function mjStats(db: Db, memberId: string): Promise<MjStats> {
+export async function mjStats(db: Db, memberId: string, players = 4): Promise<MjStats> {
   const [row] = await db
     .select({
       games: sql<number>`count(*)::int`,
@@ -34,11 +34,11 @@ export async function mjStats(db: Db, memberId: string): Promise<MjStats> {
       riichi: sql<number>`coalesce(sum(${mahjongResults.riichi}), 0)::int`,
     })
     .from(mahjongResults)
-    .where(eq(mahjongResults.memberId, memberId));
+    .where(and(eq(mahjongResults.memberId, memberId), eq(mahjongResults.players, players)));
   const [best] = await db
     .select({ points: mahjongResults.bestPoints, name: mahjongResults.bestName })
     .from(mahjongResults)
-    .where(and(eq(mahjongResults.memberId, memberId), sql`${mahjongResults.bestPoints} > 0`))
+    .where(and(eq(mahjongResults.memberId, memberId), eq(mahjongResults.players, players), sql`${mahjongResults.bestPoints} > 0`))
     .orderBy(desc(mahjongResults.bestPoints), desc(mahjongResults.finishedAt))
     .limit(1);
   const r = row!;
@@ -58,7 +58,7 @@ export async function mjStats(db: Db, memberId: string): Promise<MjStats> {
 export type MjRankRow = { memberId: string; name: string; games: number; avgRank: number; topRate: number; avgPoints: number };
 
 /** ランキング（since から・minGames 戦以上。平均順位が低い順 → 対局数が多い順） */
-export async function mjRanking(db: Db, since: Date, minGames = 3, limit = 20): Promise<MjRankRow[]> {
+export async function mjRanking(db: Db, since: Date, minGames = 3, limit = 20, players = 4): Promise<MjRankRow[]> {
   const rows = await db
     .select({
       memberId: mahjongResults.memberId,
@@ -69,7 +69,7 @@ export async function mjRanking(db: Db, since: Date, minGames = 3, limit = 20): 
       avgPoints: sql<number>`avg(${mahjongResults.points})::float`,
     })
     .from(mahjongResults)
-    .where(gte(mahjongResults.finishedAt, since))
+    .where(and(gte(mahjongResults.finishedAt, since), eq(mahjongResults.players, players)))
     .groupBy(mahjongResults.memberId)
     .having(sql`count(*) >= ${minGames}`)
     .orderBy(sql`avg(${mahjongResults.rank})`, sql`count(*) desc`)
