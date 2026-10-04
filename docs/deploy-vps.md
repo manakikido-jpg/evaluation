@@ -182,6 +182,28 @@ crontab -e
 - 戻すときは `./scripts/restore.sh backups/（ファイル名）`（今のデータは消えるので注意）
 - VPS が壊れたときに備えて、VPS 会社の「自動バックアップ／スナップショット」も使うと安心
 
+### 鯖の外（Discord）にも置く（おすすめ）
+VPS の中のバックアップは、VPS が壊れると一緒に消えます。毎日のバックアップを暗号にして、宮司だけが見られる Discord のチャンネルにも置けます。
+
+1. Discord で宮司だけが見られるチャンネル（例: #バックアップ）を作る
+2. そのチャンネルの ⚙ →「連携サービス」→「ウェブフック」→「新しいウェブフック」→「ウェブフック URL をコピー」
+3. VPS にログインする（PowerShell で `ssh shamusho@（IP）` → パスワード → `shamusho@vm-…:~$` になったら `cd ~/evaluation`）
+4. あいことばを作る: `openssl rand -base64 24`（出てきた文字列があいことば）
+5. **あいことばは VPS の外にも必ず控える**（パスワード管理アプリなど。VPS が壊れたとき、あいことばがないと開けません。チャットなどには貼らない）
+6. `nano .env` で、いちばん下に 2 行足して保存（Ctrl+O → Enter → Ctrl+X）:
+   ```
+   BACKUP_WEBHOOK_URL=（2 でコピーした URL）
+   BACKUP_PASSPHRASE=（4 のあいことば）
+   ```
+7. ためしに送る: `./scripts/backup.sh` のあと `FORCE=1 ./scripts/offsite-backup.sh $(ls -t backups/*.sql.gz | head -1)` → チャンネルに「🗄 バックアップ …（暗号つき）1/1」が届けば OK
+
+あとは毎日 4 時のバックアップのあとに 1 回送ります。Webhook の URL とあいことばはパスワードと同じに扱ってください（だれにも見せない・チャットに貼らない）。
+
+**戻すとき**（VPS が壊れて作り直したときなど）
+1. Discord のチャンネルから、戻したい日のファイルを全部（`….enc.part00`・`part01` …）ダウンロードして VPS の `~/evaluation` に置く（`scp` か WinSCP などで）
+2. `./scripts/decrypt-backup.sh sakuranomiya-…enc.part00 sakuranomiya-…enc.part01`（分かれていれば全部。あいことばを聞かれる）
+3. できた `backups/sakuranomiya-….sql.gz` を `./scripts/restore.sh backups/sakuranomiya-….sql.gz` で戻す
+
 ---
 
 ## 8. 更新（新しいコードにする）

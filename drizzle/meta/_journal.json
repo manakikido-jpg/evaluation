@@ -470,6 +470,13 @@
       "when": 1791119296521,
       "tag": "0066_keiba_records",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791125712578,
+      "tag": "0067_ops_notices",
+      "breakpoints": true
     }
   ]
 }

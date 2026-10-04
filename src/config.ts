@@ -363,6 +363,29 @@ export const economyOpsSchema = z.object({
 });
 export type EconomyOpsConfig = z.infer<typeof economyOpsSchema>;
 
+/** 運営の見守り: 対応待ちがそのままなら知らせる・週ごとのまとめ */
+export const opsWatchSchema = z.object({
+  /** 対応待ちのお知らせ */
+  remindEnabled: z.boolean().default(true),
+  /** 知らせるチャンネル（なければ #記録） */
+  channelId: snowflake.optional(),
+  /** そのままにしてから知らせるまで（0 で知らせない）。入鯖・宵参り申請・相談（未対応）・お参り判定は時間、呼び鈴は分 */
+  applicationHours: z.number().int().min(0).max(168).default(12),
+  soudanHours: z.number().int().min(0).max(168).default(24),
+  omairiHours: z.number().int().min(0).max(168).default(24),
+  bellMinutes: z.number().int().min(0).max(1440).default(30),
+  /** 神職・宮司のロールに通知を飛ばす（@ロール） */
+  mention: z.boolean().default(true),
+  /** 夜は知らせない（日本時間。quietStart 時〜quietEnd 時。同じなら止めない） */
+  quietStart: z.number().int().min(0).max(23).default(1),
+  quietEnd: z.number().int().min(0).max(23).default(8),
+  /** 週ごとのまとめ（曜日 0 = 日曜 … 6 = 土曜・時は日本時間） */
+  reportEnabled: z.boolean().default(true),
+  reportWeekday: z.number().int().min(0).max(6).default(1),
+  reportHour: z.number().int().min(0).max(23).default(9),
+});
+export type OpsWatchConfig = z.infer<typeof opsWatchSchema>;
+
 /** カジノ（社務所Web の /casino。メンバーが Discord でログインして銭で遊ぶ） */
 export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba'] as const;
 /** ゲームの一覧を保存したとき（knownGames がない）にあったゲーム。あとから足したゲームは、保存した一覧になくても遊べる */
@@ -504,6 +527,7 @@ export const guildConfigSchema = z
     bell: bellSchema.default(bellSchema.parse({})),
     gacha: gachaSchema.default(gachaSchema.parse({})),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
+    opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
     casino: casinoSchema.default(casinoSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集を役職のある人みんなに知らせる */
     recruit: z

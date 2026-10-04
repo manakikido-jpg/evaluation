@@ -604,6 +604,13 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     });
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), bellChannel: '', bellCooldown: '3' });
     expect(store.current.bell).toEqual({ cooldownMinutes: 3, mentionStaff: false, roleIds: [], channelIds: [] });
+    // ⏰ 対応待ちのお知らせ・週報（フォームにないときは今の値を残す）
+    expect(await (await get('/settings', g)).text()).toContain('⏰ 対応待ちのお知らせ・週報');
+    const ops = { opsChannel: '910000000000000003', opsRemind: 'yes', opsAppHours: '6', opsSoudanHours: '12', opsOmairiHours: '0', opsBellMinutes: '15', opsQuietStart: '0', opsQuietEnd: '7', opsReportWeekday: '5', opsReportHour: '20' };
+    expect((await post('/settings', g, { ...form, _csrf: await csrfOf(g), ...ops, at: 'opswatch' })).headers.get('location')).toBe('/settings?msg=saved&at=opswatch#sec-opswatch');
+    expect(store.current.opsWatch).toMatchObject({ channelId: '910000000000000003', remindEnabled: true, mention: false, applicationHours: 6, soudanHours: 12, omairiHours: 0, bellMinutes: 15, quietStart: 0, quietEnd: 7, reportEnabled: false, reportWeekday: 5, reportHour: 20 });
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'room.hourly.public': '50' });
+    expect(store.current.opsWatch.applicationHours).toBe(6);
     // 募集の荒らし対策
     expect(await (await get('/settings', g)).text()).toContain('📣 募集（荒らし対策）');
     actions = [];

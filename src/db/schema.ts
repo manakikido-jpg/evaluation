@@ -855,6 +855,12 @@ export const keibaRuns = pgTable(
   (t) => [index('keiba_runs_owner_idx').on(t.ownerId, t.at), index('keiba_runs_time_idx').on(t.at)],
 );
 
+/** 運営の見守り: 知らせた印（同じものを 2 回知らせない。key は stale:種類:ID:回 / weekly:日付） */
+export const opsNotices = pgTable('ops_notices', {
+  key: text('key').primaryKey(),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** 🏇 名簿の馬の 1 走ずつ（馬の成績ページ。馬主がいなくても残す） */
 export const keibaEntries = pgTable(
   'keiba_entries',

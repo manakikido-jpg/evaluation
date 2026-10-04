@@ -128,9 +128,10 @@ export function entryMessage(entry: BoardEntry, post: BoardPost, cfg: GuildConfi
 export async function postBoardPanel(db: Db, cfg: GuildConfig, discord: Pick<DiscordActions, 'sendMessage' | 'deleteMessage'>, by = 'system'): Promise<boolean> {
   const place = await loadBoardPlace(db);
   if (!place.channelId) return false;
-  if (place.panelMessageId) await discord.deleteMessage(place.channelId, place.panelMessageId).catch(() => undefined);
+  // 新しいものを出して覚えてから、前のものを消す（消えた知らせで「消された」と思って出し直さないように）
   const { id } = await discord.sendMessage(place.channelId, boardPanel(cfg));
   await saveBoardPlace(db, { ...place, panelMessageId: id }, by);
+  if (place.panelMessageId) await discord.deleteMessage(place.channelId, place.panelMessageId).catch(() => undefined);
   return true;
 }
 
@@ -400,9 +401,14 @@ export class BoardApp {
 
   // ───────── カードが消されたとき ─────────
 
-  /** 募集のカードが消されたら（BOT が覚えている書き込みのとき）、出し直す */
+  /** 募集のカード・「募集を書く」が消されたら（BOT が覚えている書き込みのとき）、出し直す */
   async onMessageDelete(msg: { id: string; channelId: string; guildId: string | null }): Promise<void> {
     if (msg.guildId !== this.cfg().guildId) return;
+    const place = await loadBoardPlace(this.db);
+    if (place.panelMessageId === msg.id) {
+      await this.restorePanel(await this.deletedBy(msg.channelId));
+      return;
+    }
     const post = await postByMessage(this.db, msg.id);
     if (!post || !(post.status === 'open' || post.escrow > 0)) return;
     await this.restoreCard(post, await this.deletedBy(msg.channelId));
@@ -421,6 +427,45 @@ export class BoardApp {
       if (gone && (await this.restoreCard(post))) restored++;
     }
     return restored;
+  }
+
+  /**
+   * 「募集を書く」がいちばん下にあるか確かめる。消されていたり、ほかの書き込みで上に流れていたら、いちばん下に出し直す。
+   * 消されていたときは #記録 に知らせる
+   */
+  async checkPanel(): Promise<'ok' | 'moved' | 'restored' | 'off'> {
+    const place = await loadBoardPlace(this.db);
+    const channel = place.channelId ? this.guild?.channels.cache.get(place.channelId) : undefined;
+    if (channel?.type !== ChannelType.GuildText) return 'off';
+    const last = await channel.messages.fetch({ limit: 1 }).then(
+      (m) => m.first()?.id,
+      () => undefined,
+    );
+    if (place.panelMessageId && last === place.panelMessageId) return 'ok';
+    const exists = place.panelMessageId
+      ? await channel.messages.fetch(place.panelMessageId).then(
+          () => true,
+          (err: unknown) => !(err instanceof DiscordAPIError && err.code === 10008),
+        )
+      : false;
+    if (!exists) {
+      await this.restorePanel();
+      return 'restored';
+    }
+    await this.panelToBottom();
+    return 'moved';
+  }
+
+  /** 消された「募集を書く」を出し直して、#記録 に知らせる */
+  private async restorePanel(by?: string): Promise<void> {
+    await this.panelToBottom();
+    await audit(this.db, { actorId: by ?? 'system', action: 'board.panel_restored', detail: { deletedBy: by }, via: 'system' });
+    const log = this.cfg().channels.log;
+    if (log) {
+      await this.discord
+        .sendMessage(log, { content: `🛡 掲示板の「📝 募集を書く」が消されていたので、出し直しました（消した人: ${by ? `<@${by}>` : '分かりません（BOT・本人以外の記録なし）'}）。` })
+        .catch(() => undefined);
+    }
   }
 
   /** だれが消したか（Discord の監査ログ。本人以外が消したときだけ残る。見られなければ undefined） */
@@ -461,6 +506,7 @@ export class BoardApp {
   /** 10 分ごと: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す。消されたカードを出し直す */
   async tick(): Promise<void> {
     await this.checkCards().catch((err: unknown) => logger.warn({ err }, 'board card check failed'));
+    await this.checkPanel().catch((err: unknown) => logger.warn({ err }, 'board panel check failed'));
     const r = await boardTick(this.db, this.cfg());
     for (const p of r.closed) {
       await this.refreshCard(p);

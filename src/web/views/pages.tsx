@@ -76,7 +76,7 @@ export function LoginPage(props: { error?: string; /** Discord でログイン�
 export function HomePage(props: {
   session: SessionView;
   stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
-  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number };
+  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number; bells?: number };
   recent: AuditLog[];
   names: Names;
   now: Date;
@@ -129,6 +129,12 @@ export function HomePage(props: {
             <a href="/soudan" class={props.todo.soudan ? '' : 'zero'}>
               <span>未対応の相談</span>
               <strong>{props.todo.soudan} 件</strong>
+            </a>
+          </li>
+          <li>
+            <a class={props.todo.bells ? '' : 'zero'} title="Discord の呼び鈴のカードで「対応する」を押すと消えます">
+              <span>呼び鈴（だれも対応していない）</span>
+              <strong>{props.todo.bells ?? 0} 件</strong>
             </a>
           </li>
           <li>

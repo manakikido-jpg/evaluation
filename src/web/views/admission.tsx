@@ -496,6 +496,7 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['voicegroups', '🔊 自動で増える通話'],
   ['voicechat', '💬 通話のチャット'],
   ['bell', '🔔 呼び鈴'],
+  ['opswatch', '⏰ 対応待ちのお知らせ・週報'],
   ['recruit', '📣 募集（荒らし対策）'],
   ['market', '🏮 市場'],
   ['coretime', '🕘 コアタイム'],
@@ -1137,6 +1138,84 @@ export function SettingsPage(props: {
             ))}
           </fieldset>
           <Save at="bell" />
+        </section>
+        <section class="card anchor" id="sec-opswatch">
+          <h2>⏰ 対応待ちのお知らせ・週報</h2>
+          <p class="note">
+            申請・相談・お参りの判定・呼び鈴が、決めた時間そのままになっていたら、BOT が運営のチャンネルで知らせます（10 分ごとに見る）。同じものは 1 回だけ、まだそのままなら 1 日ごと（呼び鈴は 3 時間ごと）にもう一度。相談はだれからかを出しません。
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>知らせ先のチャンネル（運営だけが見られるところ）</span>
+              <select name="opsChannel">
+                <option value="" selected={!cfg.opsWatch.channelId}>
+                  #記録（設定ファイルの log）
+                </option>
+                {(props.textChannels ?? []).map((c) => (
+                  <option value={c.id} selected={c.id === cfg.opsWatch.channelId}>
+                    #{c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="opsRemind" value="yes" checked={cfg.opsWatch.remindEnabled} />
+              <span>対応待ちがそのままなら知らせる</span>
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="opsMention" value="yes" checked={cfg.opsWatch.mention} />
+              <span>神職・宮司のロールに通知を飛ばす（@ロール）</span>
+            </label>
+            <label class="field">
+              <span>入鯖・宵参り申請: 何時間そのままなら（0 で知らせない）</span>
+              <input type="number" name="opsAppHours" value={String(cfg.opsWatch.applicationHours)} min={0} max={168} required />
+            </label>
+            <label class="field">
+              <span>相談（未対応）: 何時間</span>
+              <input type="number" name="opsSoudanHours" value={String(cfg.opsWatch.soudanHours)} min={0} max={168} required />
+            </label>
+            <label class="field">
+              <span>お参り期間が終わった人の判定: 何時間</span>
+              <input type="number" name="opsOmairiHours" value={String(cfg.opsWatch.omairiHours)} min={0} max={168} required />
+            </label>
+            <label class="field">
+              <span>呼び鈴（だれも「対応する」を押していない）: 何分</span>
+              <input type="number" name="opsBellMinutes" value={String(cfg.opsWatch.bellMinutes)} min={0} max={1440} required />
+            </label>
+            <label class="field">
+              <span>夜は知らせない: 何時から（日本時間）</span>
+              <input type="number" name="opsQuietStart" value={String(cfg.opsWatch.quietStart)} min={0} max={23} required />
+            </label>
+            <label class="field">
+              <span>何時まで（同じ時にすると夜も知らせる）</span>
+              <input type="number" name="opsQuietEnd" value={String(cfg.opsWatch.quietEnd)} min={0} max={23} required />
+            </label>
+          </div>
+          <h3>🗓 週報</h3>
+          <p class="note">
+            週に 1 回、メンバーの出入り・にぎわい（発言・通話・来た人の数、先週との比べ）・よく来た人・静かになった人（先週は来ていて、この 1 週間は来ていない人）・申請や相談や呼び鈴の対応の数を、同じチャンネルにまとめて流します。
+          </p>
+          <div class="fields">
+            <label class="field check">
+              <input type="checkbox" name="opsReport" value="yes" checked={cfg.opsWatch.reportEnabled} />
+              <span>週報を流す</span>
+            </label>
+            <label class="field">
+              <span>曜日</span>
+              <select name="opsReportWeekday">
+                {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
+                  <option value={String(i)} selected={i === cfg.opsWatch.reportWeekday}>
+                    {d}曜日
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>時（日本時間 0〜23）</span>
+              <input type="number" name="opsReportHour" value={String(cfg.opsWatch.reportHour)} min={0} max={23} required />
+            </label>
+          </div>
+          <Save at="opswatch" />
         </section>
         <section class="card anchor" id="sec-recruit">
           <h2>📣 募集（荒らし対策）</h2>

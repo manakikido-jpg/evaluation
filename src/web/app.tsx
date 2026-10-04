@@ -1,3 +1,4 @@
+import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
@@ -14,7 +15,7 @@ import { panelMessage } from '../discord/panels.js';
 import { NOTIFY_LABEL, notifyCounts, notifyReady, notifySetupState, pingRoleIds, runNotifySetup, startNotifySetup } from '../services/notify.js';
 import { dayPicks, slotFloorData } from '../services/casino/slotFloor.js';
 import { matchStats, recentMatches } from '../services/casino/versus.js';
-import { CASINO_GAMES, type CasinoGame } from '../config.js';
+import { CASINO_GAMES, opsWatchSchema, type CasinoGame } from '../config.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
@@ -562,7 +563,7 @@ export function createWebApp(deps: WebDeps) {
       memberTrend(db, '30d', t),
     ]);
     const stats = { ...base, yaku: yakuRows.length };
-    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db) };
+    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db), bells: await openBells(db) };
     const names = await namesOf(db, recent.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
     return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} />);
   });
@@ -1913,6 +1914,10 @@ export function createWebApp(deps: WebDeps) {
     // チェックボックスの ID（いくつでも）
     const ids = (k: string) => (body[k] === undefined ? [] : Array.isArray(body[k]) ? body[k] : [body[k]]).filter((v): v is string => typeof v === 'string' && validId(v));
     const prev = await loadOverrides(db);
+    // 運営の見守りの数（空なら今の値のまま）
+    const opsNow = { ...opsWatchSchema.parse({}), ...prev.opsWatch };
+    const opsNum = (k: string, key: 'applicationHours' | 'soudanHours' | 'omairiHours' | 'bellMinutes' | 'quietStart' | 'quietEnd' | 'reportWeekday' | 'reportHour') =>
+      Number.isFinite(num(k)) && typeof body[k] === 'string' && body[k] !== '' ? num(k) : opsNow[key];
     const raw = {
       economy: {
         currencyName: field(body, 'currencyName', 20),
@@ -1960,6 +1965,24 @@ export function createWebApp(deps: WebDeps) {
             },
           }
         : {}),
+      // 運営の見守り（フォームにあるときだけ。なければ今の値を残す）
+      opsWatch:
+        typeof body.opsAppHours === 'string'
+          ? {
+              channelId: field(body, 'opsChannel', 20) || null,
+              remindEnabled: body.opsRemind === 'yes',
+              mention: body.opsMention === 'yes',
+              applicationHours: opsNum('opsAppHours', 'applicationHours'),
+              soudanHours: opsNum('opsSoudanHours', 'soudanHours'),
+              omairiHours: opsNum('opsOmairiHours', 'omairiHours'),
+              bellMinutes: opsNum('opsBellMinutes', 'bellMinutes'),
+              quietStart: opsNum('opsQuietStart', 'quietStart'),
+              quietEnd: opsNum('opsQuietEnd', 'quietEnd'),
+              reportEnabled: body.opsReport === 'yes',
+              reportWeekday: opsNum('opsReportWeekday', 'reportWeekday'),
+              reportHour: opsNum('opsReportHour', 'reportHour'),
+            }
+          : prev.opsWatch,
       ...(typeof body.recruitCooldownSec === 'string'
         ? {
             recruit: {

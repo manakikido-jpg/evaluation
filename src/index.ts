@@ -1,3 +1,4 @@
+import { opsWeeklyTick, pruneOpsNotices, staleTick } from './services/opsWatch.js';
 import { createServer } from 'node:http';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { loadEnv, loadGuildConfig } from './config.js';
@@ -152,7 +153,10 @@ async function main(): Promise<void> {
     market.attach(guild);
     board.attach(guild);
     // 止まっていた間に消された募集のカードを出し直す
-    void board.checkCards().catch((err) => logger.warn({ err }, 'board card check failed'));
+    void board
+      .checkCards()
+      .then(() => board.checkPanel())
+      .catch((err) => logger.warn({ err }, 'board card check failed'));
     cast.attach(guild);
     gacha.attach(guild);
     // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
@@ -233,6 +237,13 @@ async function main(): Promise<void> {
         await checkAlerts(ctx);
         await weeklyTick(ctx);
       })().catch((err) => logger.warn({ err }, 'economy watch failed'));
+      // 運営の見守り: 対応待ちがそのままなら知らせる・週ごとのまとめ
+      void (async () => {
+        const ctx = { db, cfg: cfg(), discord: actions, baseUrl: env.WEB_BASE_URL };
+        await staleTick(ctx);
+        await opsWeeklyTick(ctx);
+        await pruneOpsNotices(db);
+      })().catch((err) => logger.warn({ err }, 'ops watch failed'));
     };
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);

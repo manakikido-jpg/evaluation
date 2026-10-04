@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { postCard, entryMessage, boardPanel } from '../src/discord/board.js';
+import { postCard, entryMessage, boardPanel, postBoardPanel, BoardApp } from '../src/discord/board.js';
 import {
   applyPost,
   boardTick,
@@ -12,6 +12,8 @@ import {
   getPost,
   hire,
   livePosts,
+  loadBoardPlace,
+  saveBoardPlace,
   postByMessage,
   refundEntry,
   setPostMessage,
@@ -169,5 +171,50 @@ describe('📌 消されたカードの見守り', () => {
     await hire(db, cfg, x.entry.id, AUTHOR, T0);
     expect((await getPost(db, a.post.id))!.status).toBe('closed');
     expect((await livePosts(db)).map((p) => p.id)).toEqual([a.post.id]);
+  });
+});
+
+describe('📌 「募集を書く」の見守り', () => {
+  const CH = '930000000000000020';
+  it('出し直すときは、新しいものを出して覚えてから前のものを消す（消えた知らせで出し直しが止まらなくならない）', async () => {
+    await saveBoardPlace(db, { channelId: CH, panelMessageId: '930000000000000021' }, 'test');
+    const calls: string[] = [];
+    let place: Awaited<ReturnType<typeof loadBoardPlace>> | undefined;
+    const discord = {
+      sendMessage: async () => {
+        calls.push('send');
+        return { id: '930000000000000022' };
+      },
+      deleteMessage: async (_c: string, m: string) => {
+        // 消すときには、もう新しいものを覚えている
+        place = await loadBoardPlace(db);
+        calls.push(`delete:${m}`);
+      },
+    };
+    expect(await postBoardPanel(db, cfg, discord as never)).toBe(true);
+    expect(calls).toEqual(['send', 'delete:930000000000000021']);
+    expect(place?.panelMessageId).toBe('930000000000000022');
+  });
+
+  it('「募集を書く」が消されたら出し直して #記録 に知らせる。BOT が前のものを消したときは何もしない', async () => {
+    await saveBoardPlace(db, { channelId: CH, panelMessageId: '930000000000000031' }, 'test');
+    const sent: { channel: string; content?: string }[] = [];
+    let n = 40;
+    const discord = {
+      sendMessage: async (channel: string, body: { content?: string }) => {
+        sent.push({ channel, content: body.content });
+        return { id: `9300000000000000${n++}` };
+      },
+      deleteMessage: async () => undefined,
+    };
+    const app = new BoardApp(db, () => cfg, discord as never);
+    // 前の「募集を書く」（もう覚えていない ID）が消えた知らせ: 何もしない
+    await app.onMessageDelete({ id: '930000000000000030', channelId: CH, guildId: cfg.guildId });
+    expect(sent).toEqual([]);
+    // いまの「募集を書く」が消された: 出し直して #記録 へ
+    await app.onMessageDelete({ id: '930000000000000031', channelId: CH, guildId: cfg.guildId });
+    expect(sent[0]?.channel).toBe(CH);
+    expect((await loadBoardPlace(db)).panelMessageId).toBe('930000000000000040');
+    expect(sent.some((x) => x.content?.includes('募集を書く」が消されていた'))).toBe(cfg.channels.log ? true : false);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -94,6 +94,8 @@ export const overridesSchema = z.object({
     .default({}),
   /** 経済の見守り（channelId を空にすると #記録 へ） */
   economyOps: economyOpsSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
+  /** 運営の見守り（channelId を空にすると #記録 へ） */
+  opsWatch: opsWatchSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   /** カジノ */
   casino: casinoSchema.partial().default({}),
 });
@@ -139,6 +141,13 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     economyOps: (() => {
       const { channelId, ...rest } = o.economyOps;
       const merged = { ...base.economyOps, ...rest };
+      if (channelId === null) delete (merged as { channelId?: string }).channelId;
+      else if (channelId) merged.channelId = channelId;
+      return merged;
+    })(),
+    opsWatch: (() => {
+      const { channelId, ...rest } = o.opsWatch;
+      const merged = { ...base.opsWatch, ...rest };
       if (channelId === null) delete (merged as { channelId?: string }).channelId;
       else if (channelId) merged.channelId = channelId;
       return merged;

@@ -21,3 +21,5 @@ mv "$tmp" "$file"
 find backups -name 'sakuranomiya-*.sql.gz' -mtime +"$KEEP_DAYS" -delete
 find backups -name '*.tmp' -mmin +60 -delete
 echo "backup: $file ($(du -h "$file" | cut -f1))"
+# 鯖の外（Discord の宮司だけのチャンネル）にも 1 日 1 回。.env に設定がなければ何もしない。失敗しても、ここのバックアップはできている
+./scripts/offsite-backup.sh "$file" || echo "offsite: 失敗しました（ここのバックアップはできています）" >&2
