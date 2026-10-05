@@ -1,5 +1,5 @@
 import type { Rng } from './cards.js';
-import type { SlotSetting } from './slots.js';
+import { PAYLINES, type SlotSetting } from './slots.js';
 
 /**
  * 🦊 鬼斬り白狐（AT 機）。1 ゲームの賭けは島ごとに決まっている（AT のときだけ多く賭けられないように）。
@@ -60,22 +60,40 @@ const symAt = (reel: number, i: number) => AT_REELS[reel]![((i % AT_REEL_LEN) + 
 /** 3 × 3（リールごとに上・中・下） */
 export const atGrid = (stops: number[]) => stops.map((s, r) => [symAt(r, s - 1), symAt(r, s), symAt(r, s + 1)]);
 
-/** 見た目の役（中段の並び・左リールのチェリー） */
+/** ライン（SAKURA 777 と同じ 5 本）: 上段・中段・下段・右下がり・右上がり。rows はリールごとの段（0 上・1 中・2 下） */
+export const AT_PAYLINES = PAYLINES;
+
+/** 見た目の役: ベル・リプレイ・スイカ・チャンス目（BAR・リプレイ・BAR）・白狐目（白狐 7 そろい）はどれか 1 本のラインに。チェリーは左リール（中段なら強） */
 type Look = Exclude<AtRole, 'oshijun' | 'none'>;
-const LOOKS: Record<Look, (g: AtSym[][]) => boolean> = {
-  bell: (g) => g.every((c) => c[1] === 'bell'),
-  replay: (g) => g.every((c) => c[1] === 'replay'),
-  suika: (g) => g.every((c) => c[1] === 'suika'),
-  chance: (g) => g[0]![1] === 'bar' && g[1]![1] === 'replay' && g[2]![1] === 'bar',
-  byakko: (g) => g.every((c) => c[1] === 'w7'),
-  scherry: (g) => g[0]![1] === 'cherry',
-  wcherry: (g) => g[0]![1] !== 'cherry' && (g[0]![0] === 'cherry' || g[0]![2] === 'cherry'),
+type LineLook = 'bell' | 'replay' | 'suika' | 'chance' | 'byakko';
+const LINE_LOOKS: Record<LineLook, (l: AtSym[]) => boolean> = {
+  bell: (l) => l.every((x) => x === 'bell'),
+  replay: (l) => l.every((x) => x === 'replay'),
+  suika: (l) => l.every((x) => x === 'suika'),
+  chance: (l) => l[0] === 'bar' && l[1] === 'replay' && l[2] === 'bar',
+  byakko: (l) => l.every((x) => x === 'w7'),
 };
-/** 止まった目の見た目の役（なければ none） */
+const LINE_KEYS = Object.keys(LINE_LOOKS) as LineLook[];
+/** その目で見えている役（ラインの役はラインごと・チェリーは 1 つ） */
+function looksOf(g: AtSym[][]): { look: Look; line: number }[] {
+  const out: { look: Look; line: number }[] = [];
+  PAYLINES.forEach((l, i) => {
+    const syms = l.rows.map((row, r) => g[r]![row]!);
+    for (const k of LINE_KEYS) if (LINE_LOOKS[k](syms)) out.push({ look: k, line: i });
+  });
+  if (g[0]![1] === 'cherry') out.push({ look: 'scherry', line: -1 });
+  else if (g[0]![0] === 'cherry' || g[0]![2] === 'cherry') out.push({ look: 'wcherry', line: -1 });
+  return out;
+}
+/** 止まった目の見た目の役（1 つだけ見えているとき。なければ none） */
 export function atLookOf(stops: number[]): Look | 'none' {
-  const g = atGrid(stops);
-  const hit = (Object.keys(LOOKS) as Look[]).filter((k) => LOOKS[k](g));
-  return hit.length === 1 ? hit[0]! : 'none';
+  const hit = looksOf(atGrid(stops));
+  return hit.length === 1 ? hit[0]!.look : 'none';
+}
+/** そろったライン（0〜4。チェリー・はずれは -1） */
+export function atWinLine(stops: number[]): number {
+  const hit = looksOf(atGrid(stops));
+  return hit.length === 1 ? hit[0]!.line : -1;
 }
 
 /** 役ごとの止まり方（はじめに 1 回だけ全部しらべる。その役だけに見えるもの） */
@@ -85,10 +103,9 @@ const CANDS = (() => {
     for (let b = 0; b < AT_REEL_LEN; b++)
       for (let c = 0; c < AT_REEL_LEN; c++) {
         const st = [a, b, c];
-        const g = atGrid(st);
-        const hit = (Object.keys(LOOKS) as Look[]).filter((k) => LOOKS[k](g));
+        const hit = looksOf(atGrid(st));
         if (hit.length > 1) continue;
-        const k = hit[0] ?? 'none';
+        const k = hit[0]?.look ?? 'none';
         out.set(k, [...(out.get(k) ?? []), st]);
       }
   return out;

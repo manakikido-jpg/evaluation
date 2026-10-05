@@ -1,5 +1,5 @@
 import type { CasinoGameRow } from '../../db/schema.js';
-import { AT_CEILING, AT_HEAVEN_CEILING, AT_IDLE_STOPS, AT_RATES, AT_REEL_LEN, AT_REELS, AT_ROLES, AT_SET_GAMES, AT_SYMBOLS, atGrid, type AtEvent, type AtMachine, type AtSym } from '../../services/casino/slotAt.js';
+import { AT_CEILING, AT_HEAVEN_CEILING, AT_IDLE_STOPS, AT_PAYLINES, AT_RATES, AT_REEL_LEN, AT_REELS, AT_ROLES, AT_SET_GAMES, AT_SYMBOLS, atGrid, atWinLine, type AtEvent, type AtMachine, type AtSym } from '../../services/casino/slotAt.js';
 import { AT_SEAT_MINUTES, type AtDay, type AtGameState } from '../../services/casino/slotAtPlay.js';
 import type { AtShow, AtStage } from '../../services/casino/slotAtShow.js';
 import { assetUrl, slotArt } from '../assets.js';
@@ -250,6 +250,9 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
   const tokkaPre = moving && s ? s.during === 'tokka' : (p.view.state.at?.tokka ?? 0) > 0;
   const atPost = p.view.state.phase === 'at';
   const tokkaPost = (p.view.state.at?.tokka ?? 0) > 0;
+  // そろったライン（止め終わってから光らせる。止まったまま見せるときははじめから）
+  const winLine = done && s ? atWinLine(stops) : -1;
+  const lineLit = (l: number) => mode === 'still' && winLine === l;
   // 液晶の下の数字（BET・GAME・PAYOUT）。PAYOUT は止め終わってから出す
   const payout = done && row ? row.payout : 0;
   // 前兆の鬼の近さは、止まったあとも残す（AT に入ったら消える）
@@ -352,6 +355,8 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
             data-stage-js={assetUrl('atslot.js')}
             data-demo={p.demo ? '1' : undefined}
             data-unit={String(Math.max(1, Math.round(bet / 3)))}
+            data-paylines={AT_PAYLINES.map((l) => l.rows.join(',')).join('|')}
+            data-winline={winLine >= 0 ? String(winLine) : undefined}
           >
             <i class="c-at-led l" aria-hidden="true"></i>
             <i class="c-at-led r" aria-hidden="true"></i>
@@ -383,11 +388,15 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
               <div class="c-at-fx" aria-live="polite"></div>
             </div>
             <div class="c-at-bezel">
-            <div class="c-jug-window c-at-window" role="img" aria-label={`中段: ${atGrid(stops).map((c) => AT_SYMBOLS[c[1]!].name).join('・')}`}>
+            <div
+              class="c-jug-window c-at-window"
+              role="img"
+              aria-label={['上段', '中段', '下段'].map((row, k) => `${row}: ${atGrid(stops).map((c) => AT_SYMBOLS[c[k]!].name).join('・')}`).join(' / ')}
+            >
               {AT_REELS.map((strip, i) => {
                 const at = mode === 'spin' || mode === 'wait' ? (stops[i]! + 6 + i * 5) % AT_REEL_LEN : stops[i]!;
                 return (
-                  <div class={`c-jreel r${i}`} data-reel={String(i)} data-at={String(at)}>
+                  <div class={`c-jreel r${i}${mode === 'still' && winLine >= 0 ? ` hit-${AT_PAYLINES[winLine]!.rows[i]}` : ''}`} data-reel={String(i)} data-at={String(at)}>
                     <div class={`c-jstrip at-${at}`} aria-hidden="true">
                       {[...strip, ...strip, ...strip].map((k) => (
                         <Sym k={k} art={p.art} />
@@ -396,6 +405,17 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                   </div>
                 );
               })}
+              <span class="c-linelamps l" aria-hidden="true">
+                {[3, 0, 1, 2, 4].map((l) => (
+                  <i class={`ln${lineLit(l) ? ' on' : ''}`} data-line={String(l)}></i>
+                ))}
+              </span>
+              <span class="c-linelamps r" aria-hidden="true">
+                {[4, 0, 1, 2, 3].map((l) => (
+                  <i class={`ln${lineLit(l) ? ' on' : ''}`} data-line={String(l)}></i>
+                ))}
+              </span>
+              <span class="c-winline" aria-hidden="true"></span>
             </div>
             </div>
             <div class="c-at-seg" aria-hidden="true">
@@ -498,7 +518,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
       </section>
       {p.demo && <AtDemoPanel />}
       {!p.demo && <Rules>
-        1 ゲーム {fmt(bet)} {p.me.coin.name}（島で決まっています）。通常時はレア役（チェリー・スイカ・チャンス目・白狐目）で AT「白狐ラッシュ」を抽選し、当たると前兆のあと突入します。{AT_CEILING} G ハマると天井で AT（継続率 66% 以上）。AT のあとは
+        1 ゲーム {fmt(bet)} {p.me.coin.name}（島で決まっています）。ラインは 5 本（上段・中段・下段・右下がり・右上がり）。通常時はレア役（チェリー・スイカ・チャンス目・白狐目）で AT「白狐ラッシュ」を抽選し、当たると前兆のあと突入します。{AT_CEILING} G ハマると天井で AT（継続率 66% 以上）。AT のあとは
         {AT_HEAVEN_CEILING} G 以内に当たる天国モードのことも。AT は 1 セット {AT_SET_GAMES} G。押し順ベル（ナビの順に止めると ×{AT_ROLES.oshijun.mult}）で増やし、レア役で上乗せ、チャンス目で特化ゾーン「白狐乱舞」。セットの終わりに鬼との継続バトル（継続率{' '}
         {AT_RATES.map((r) => `${r.rate}%`).join('・')}）。通常時の押し順ベルは押し順が分からないので、そろうのは 6 回に 1 回くらい。台ごとに設定（1〜6）があり、高いほど AT に当たりやすい（払い戻し率は設定 1 で約 95%）。台の回転数・AT の残りは台に残るので、席を立つと次の人が続きを打てます。
       </Rules>}

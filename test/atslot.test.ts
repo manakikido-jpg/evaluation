@@ -3,7 +3,7 @@ import { parseGuildConfig, type GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { slotAtMachines } from '../src/db/schema.js';
 import type { Rng } from '../src/services/casino/cards.js';
-import { AT_CEILING, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
+import { AT_CEILING, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, atWinLine, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
 import { atFloorData, leaveAt, orderAt, playAt, type AtGameState } from '../src/services/casino/slotAtPlay.js';
 import { atBattle, atShow } from '../src/services/casino/slotAtShow.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -29,6 +29,22 @@ describe('🦊 AT 機の中身', () => {
       for (const seed of [1, 2, 3]) expect(atLookOf(atStopsFor(look, seeded(seed)))).toBe(look);
     }
     expect(atLookOf(AT_IDLE_STOPS)).toBe('none');
+  });
+
+  it('ラインは 5 本: ベル・リプレイ・スイカ・チャンス目・白狐目は、上段・中段・下段・斜めのどれか 1 本にそろう', () => {
+    for (const look of ['bell', 'replay', 'suika', 'chance', 'byakko'] as const) {
+      const lines = new Set<number>();
+      for (let seed = 1; seed < 400; seed++) {
+        const st = atStopsFor(look, seeded(seed));
+        expect(atLookOf(st)).toBe(look);
+        lines.add(atWinLine(st));
+      }
+      expect(lines.has(-1)).toBe(false);
+      // 中段だけではない
+      expect(lines.size).toBeGreaterThan(1);
+    }
+    expect(atWinLine(AT_IDLE_STOPS)).toBe(-1);
+    expect(atWinLine(atStopsFor('scherry', seeded(3)))).toBe(-1);
   });
 
   it('押し順ベル: AT 中はナビどおりなら 3 倍、ちがえば 0。通常時は 6 回に 1 回（lucky）', () => {

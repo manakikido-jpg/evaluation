@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-atslot-5lines',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🦊 鬼斬り白狐のラインを 5 本にしました',
+    items: ['SAKURA 777 と同じく、上段・中段・下段・右下がり・右上がりのどれかにそろいます。そろったラインはランプと光る線で分かります（当たりやすさ・払い戻しは同じ）'],
+  },
+  {
     id: '2026-10-05-role-templates',
     date: '2026-10-05',
     kind: 'new',

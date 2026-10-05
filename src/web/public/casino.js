@@ -728,6 +728,29 @@ const Real = (() => {
   };
 })();
 
+/** そろったラインを光らせる（両方の台。rows はリールごとの段 0 上・1 中・2 下） */
+const showPayline = (win, rows) => {
+  if (!win || !rows) return;
+  const reels = [...win.querySelectorAll('.c-jreel')];
+  reels.forEach((el, i) => el.classList.add(`hit-${rows[i]}`));
+  const line = win.querySelector('.c-winline');
+  if (!line || reels.length < 3) return;
+  const box = win.getBoundingClientRect();
+  const pt = (i) => {
+    const rb = reels[i].getBoundingClientRect();
+    return [rb.left + rb.width / 2 - box.left, rb.top + (rb.height / 3) * (rows[i] + 0.5) - box.top];
+  };
+  const [x0, y0] = pt(0);
+  const [x2, y2] = pt(2);
+  const pad = reels[0].getBoundingClientRect().width / 2;
+  const len = Math.hypot(x2 - x0, y2 - y0) + pad * 2;
+  line.style.setProperty('left', `${(x0 + x2) / 2 - len / 2}px`);
+  line.style.setProperty('top', `${(y0 + y2) / 2}px`);
+  line.style.setProperty('width', `${len}px`);
+  line.style.setProperty('transform', `rotate(${Math.atan2(y2 - y0, x2 - x0)}rad)`);
+  line.classList.add('show');
+};
+
 const REEL_SPEEDS = [15, 12, 9.5];
 let slotCtl = null;
 let leverAt = 0;
@@ -2443,6 +2466,14 @@ const initAtSlot = (root) => {
       box.classList.toggle('in-at', box.dataset.atPost === '1');
       box.classList.toggle('in-tokka', box.dataset.tokkaPost === '1');
       if (win > 0) box.querySelector('.c-at-window')?.classList.add('bl-flash');
+      // そろったライン（5 本のどれか）
+      const wl = box.dataset.winline;
+      if (wl) {
+        const rows = (box.dataset.paylines || '').split('|')[Number(wl)]?.split(',').map(Number);
+        const win2 = box.querySelector('.c-at-window');
+        showPayline(win2, rows);
+        win2?.querySelectorAll(`.ln[data-line="${wl}"]`).forEach((e) => e.classList.add('on'));
+      }
       Real.payout(box);
       Real.unbet(box);
       const note = box.querySelector('.c-deck-note');
@@ -2620,6 +2651,11 @@ const initAtSlot = (root) => {
     } else startSpin();
   };
 
+  // 止まったまま見せるときも、そろったラインを光らせる
+  if (mode === 'still' && box.dataset.winline) {
+    const rows = (box.dataset.paylines || '').split('|')[Number(box.dataset.winline)]?.split(',').map(Number);
+    showPayline(box.querySelector('.c-at-window'), rows);
+  }
   loadAtStage(box.dataset.stageJs, () => {
     if (!alive || st || !window.AtStage) return;
     st = window.AtStage.mount(box, { Sound, mode });
