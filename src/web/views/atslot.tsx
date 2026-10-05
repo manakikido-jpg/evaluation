@@ -4,6 +4,7 @@ import { AT_SEAT_MINUTES, type AtDay, type AtGameState } from '../../services/ca
 import type { AtShow, AtStage } from '../../services/casino/slotAtShow.js';
 import { assetUrl, slotArt } from '../assets.js';
 import { CasinoLayout, Msg, Rules, type GamePage } from './casino.js';
+import { MaxBet, MedalTray } from './slotParts.js';
 
 /**
  * 🦊 AT 機「鬼斬り白狐」の島と台。リールの動き・押し順・演出は casino.js（initAtSlot）
@@ -350,6 +351,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
             data-art={JSON.stringify(p.art ?? {})}
             data-stage-js={assetUrl('atslot.js')}
             data-demo={p.demo ? '1' : undefined}
+            data-unit={String(Math.max(1, Math.round(bet / 3)))}
           >
             <i class="c-at-led l" aria-hidden="true"></i>
             <i class="c-at-led r" aria-hidden="true"></i>
@@ -398,8 +400,10 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
             </div>
             <div class="c-at-seg" aria-hidden="true">
               <span>
-                <i>BET</i>
-                <b>{bet}</b>
+                <i>CREDIT</i>
+                <b data-credit={String(p.me.balance)} data-credit-from={moving ? String(p.me.balance - payout) : undefined}>
+                  {fmt(moving ? p.me.balance - payout : p.me.balance)}
+                </b>
               </span>
               <span>
                 <i>GAME</i>
@@ -426,6 +430,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                   </button>
                 </form>
               )}
+              <MaxBet lit={mode !== 'still'} />
               <span class="c-stops c-at-stops">
                 {[0, 1, 2].map((i) => (
                   <span class="c-at-stopwrap">
@@ -465,6 +470,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                 </>
               )}
             </div>
+            <MedalTray name="鬼 斬 り 白 狐" class="c-at-tray" />
           </div>
           <div class="c-cab-base" aria-hidden="true"></div>
         </div>

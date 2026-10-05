@@ -2046,3 +2046,55 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 @media (prefers-reduced-motion: reduce) {
   .c-at-shine, .c-at-led, .c-at-top, .c-at-lamp::after, .c-at-gimmick > *, .c-at-panel::after { animation: none !important; }
 }
+
+/* ───── 🎰 実機っぽさ（SAKURA 777・AT 機）───── */
+/* MAX BET と BET ランプ */
+.c-maxbet-wrap { flex: none; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.c-betlamps { display: flex; gap: 3px; }
+.c-betlamps i { display: grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; font-style: normal; font-size: 0.5rem; font-weight: 900; color: #3a2000; background: radial-gradient(circle at 35% 30%, #6a4a20, #2a1606); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6); transition: background 0.08s, box-shadow 0.08s; }
+.c-betlamps i.on { background: radial-gradient(circle at 35% 30%, #fff8c8, #ffb020 55%, #c86a00); box-shadow: 0 0 8px #ffb020, inset 0 0 0 1px rgba(255, 255, 255, 0.4); color: #4a1a00; }
+.c-maxbet { appearance: none; width: 48px; height: 44px; padding: 0; border: 2px solid #5a3a0a; border-radius: 10px; font: inherit; font-size: 0.62rem; font-weight: 900; line-height: 1.05; letter-spacing: 0.04em; color: #3a1a00; cursor: pointer; touch-action: manipulation; background: linear-gradient(180deg, #fff6c8 0%, #ffd23a 45%, #d89a10 100%); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -3px 0 rgba(0, 0, 0, 0.18), 0 4px 0 #6a4206, 0 7px 10px rgba(0, 0, 0, 0.5); transition: transform 0.06s, box-shadow 0.06s, filter 0.2s; }
+.c-maxbet:active, .betted .c-maxbet { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 0 #6a4206, 0 3px 6px rgba(0, 0, 0, 0.5); filter: brightness(0.8); }
+.c-jug.mode-still:not(.betted) .c-maxbet, .c-atm.mode-still:not(.betted) .c-maxbet { animation: maxbetblink 1.4s ease-in-out infinite; }
+@keyframes maxbetblink { 50% { filter: brightness(1.25) drop-shadow(0 0 6px #ffd23a); } }
+/* STOP ボタンは押せるときに光る（実機と同じ）。押すと消える */
+.c-stop:not(:disabled) { box-shadow: 0 6px 0 #6a0614, 0 10px 18px rgba(0, 0, 0, 0.5), 0 0 14px rgba(255, 90, 120, 0.55), inset 0 0 12px rgba(255, 220, 230, 0.55); }
+.c-at-stops .c-stop:not(:disabled):not(.col) { box-shadow: 0 6px 0 #3a4568, 0 10px 18px rgba(0, 0, 0, 0.5), 0 0 14px rgba(160, 200, 255, 0.75), inset 0 0 14px rgba(255, 255, 255, 0.95); }
+.c-stop.pressed { filter: brightness(0.55) saturate(0.6); }
+/* CREDIT・PAYOUT の数字 */
+[data-payout].lit, .c-seg b.lit { color: #ffe04a !important; text-shadow: 0 0 8px #ffb000 !important; }
+/* ガラスの映り込み（液晶・リール） */
+.c-at-screen::after { content: ''; position: absolute; inset: 0; z-index: 7; pointer-events: none; border-radius: inherit; background: linear-gradient(118deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 26%, transparent 38%, transparent 76%, rgba(255, 255, 255, 0.06) 90%, rgba(255, 255, 255, 0.12) 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 10px 24px rgba(0, 0, 0, 0.45); }
+/* リールのバックライト: 当たりで光る・暗転で消える */
+.c-jug-window .c-jreel, .c-at-window .c-jreel { transition: filter 0.15s; }
+.bl-flash .c-jreel { animation: backlight 0.18s steps(2) 6; }
+@keyframes backlight { 50% { filter: brightness(1.45) saturate(1.2); } }
+.c-atm.led-off .c-at-window .c-jreel, .c-atm.sc-freeze .c-at-window .c-jreel { filter: brightness(0.25); }
+/* 筐体の厚み・ネジ */
+.c-jug, .c-atm { box-shadow: inset 10px 0 16px -10px rgba(0, 0, 0, 0.75), inset -10px 0 16px -10px rgba(0, 0, 0, 0.75), inset 0 2px 0 rgba(255, 255, 255, 0.25), inset 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 0 1px #2a1606, 0 26px 60px rgba(0, 0, 0, 0.7), 14px 18px 0 -6px rgba(0, 0, 0, 0.35); }
+.c-jug-deck { background: radial-gradient(circle at 10px 10px, #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), radial-gradient(circle at calc(100% - 10px) 10px, #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), radial-gradient(circle at 10px calc(100% - 10px), #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), radial-gradient(circle at calc(100% - 10px) calc(100% - 10px), #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), linear-gradient(180deg, #3a1020, #1a060e 60%, #12040a); }
+.c-at-deck { background: radial-gradient(circle at 10px 10px, #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), radial-gradient(circle at calc(100% - 10px) 10px, #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), radial-gradient(circle at 10px calc(100% - 10px), #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), radial-gradient(circle at calc(100% - 10px) calc(100% - 10px), #d8d8d8 0 2px, #6a6a6a 2.5px, transparent 3.5px), linear-gradient(180deg, #1c2244, #0c1024 60%, #080a16); }
+/* ウェイト中（前のゲームから 4.1 秒たつまで）はレバーが下がったまま */
+.waiting .c-lever .c-lever-knob, .waiting .c-lever::after { transform: rotate(18deg); }
+/* 下皿にメダルが落ちる */
+[data-tray] { overflow: visible; }
+.c-medal-drop { position: absolute; bottom: 6px; z-index: 3; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffffff, #d8dce8 40%, #7a8298); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.6); animation: medaldrop 0.42s cubic-bezier(0.4, 0, 1, 1) both; }
+.c-medal-drop.rest { animation: medalbounce 0.25s ease-out both; }
+@keyframes medaldrop { from { transform: translateY(-90px) rotate(0); opacity: 0.6; } to { transform: translateY(0) rotate(200deg); opacity: 1; } }
+@keyframes medalbounce { 40% { transform: translateY(-5px) rotate(220deg); } to { transform: none; } }
+/* AT 機の下皿 */
+.c-medal-tray { position: relative; display: flex; align-items: flex-end; justify-content: center; height: 40px; margin: 10px -10px 0; padding-bottom: 5px; border-radius: 8px 8px 18px 18px; background: radial-gradient(ellipse 70% 60% at 50% 0, #000 0 60%, transparent 62%), linear-gradient(180deg, #2a2a3a, #0a0a12); border-top: 3px solid #c8961e; box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.6); }
+.c-medal-tray-name { font-size: 0.62rem; letter-spacing: 0.3em; color: #c8961e; opacity: 0.85; text-shadow: 0 1px 0 #000; }
+/* AT 機: 液晶を大きく（実機のように液晶が主役）、リールは少し小さく */
+.c-slot-stage .c-at-cab { max-width: 520px; }
+.c-atm { max-width: 500px; --h: 58px; }
+@media (max-width: 520px) {
+  .c-atm { --h: 48px; }
+  .c-maxbet { width: 40px; height: 40px; font-size: 0.55rem; }
+  .c-betlamps i { width: 11px; height: 11px; font-size: 0.45rem; }
+  .c-jug .c-medal-slot { display: none; }
+  .c-stops { gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .c-maxbet, .bl-flash .c-jreel, .c-medal-drop { animation: none !important; }
+}

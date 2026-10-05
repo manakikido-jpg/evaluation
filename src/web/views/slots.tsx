@@ -4,6 +4,7 @@ import { slotArt } from '../assets.js';
 import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
 import { BetForm, CasinoLayout, freshDone, Msg, Result, revealMe, Rules, type GamePage } from './casino.js';
 import { SlotIslands } from './atslot.js';
+import { MaxBet } from './slotParts.js';
 
 /**
  * 🎰 スロット（ジャグラー風）。絵柄・上のパネル・下のパネル・ランプは public/slots/ の画像（なければ仮の絵・文字）。
@@ -258,6 +259,7 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
             data-win={s && row?.status === 'done' ? String(s.mult) : ''}
             data-paylines={PAYLINE_ROWS}
             data-winline={winLine >= 0 ? String(winLine) : undefined}
+            data-unit={String(Math.max(1, Math.round((row?.bet ?? leverBet) / 3)))}
           >
             <span class="c-jug-side l" aria-hidden="true"></span>
             <span class="c-jug-side r" aria-hidden="true"></span>
@@ -302,8 +304,10 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
               </span>
               <div class="c-jug-led" aria-hidden="true">
                 <span class="c-seg">
-                  <i>BET</i>
-                  <b>{row ? pad(row.bet) : '----'}</b>
+                  <i>CREDIT</i>
+                  <b data-credit={String(p.me.balance)} data-credit-from={mode === 'spin' && row ? String(p.me.balance - row.payout) : undefined}>
+                    {fmt(mode === 'spin' && row ? p.me.balance - row.payout : p.me.balance)}
+                  </b>
                 </span>
                 <span class="c-seg c-seg-mid">
                   <i>{holding ? 'CHANCE' : 'SAKURA 777'}</i>
@@ -318,13 +322,13 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
                   )}
                 </span>
                 <span class="c-seg">
-                  <i>WIN</i>
+                  <i>PAYOUT</i>
                   {s && row?.status === 'done' ? (
-                    <b class={`c-later${wait}`} data-after-stop>
-                      {pad(row.payout)}
+                    <b data-payout={mode === 'spin' ? String(row.payout) : undefined} class={mode !== 'spin' && row.payout > 0 ? 'lit' : ''}>
+                      {mode === 'spin' ? '0' : fmt(row.payout)}
                     </b>
                   ) : (
-                    <b>0000</b>
+                    <b>0</b>
                   )}
                 </span>
               </div>
@@ -344,6 +348,7 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
                   </button>
                 </form>
               )}
+              <MaxBet lit={mode !== 'still'} />
               <span class="c-stops">
                 {[0, 1, 2].map((i) => (
                   <button type="button" class="c-stop" data-stop={String(i)} disabled={mode !== 'spin'} aria-label={`${['左', '中', '右'][i]}のリールを止める`}>
@@ -384,7 +389,7 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
                 </div>
               }
             />
-            <div class={`c-jug-tray${s && row?.status === 'done' && row.payout > 0 ? ' paid' : ''}`} aria-hidden="true">
+            <div class={`c-jug-tray${s && row?.status === 'done' && row.payout > 0 ? ' paid' : ''}`} data-tray aria-hidden="true">
               <span class={`c-tray-coins${mode === 'spin' ? ' c-later wait' : ''}`} data-after-stop={mode === 'spin' ? '' : undefined}>
                 {Array.from({ length: 9 }, () => (
                   <i></i>

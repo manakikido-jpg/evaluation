@@ -20,6 +20,19 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-slot-real',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🎰 スロットを実機っぽくしました（SAKURA 777・鬼斬り白狐）',
+    items: [
+      'MAX BET ボタンと BET ランプ、CREDIT・PAYOUT の数字。払い出しはメダルの音で数え上げ、下皿にメダルが落ちます',
+      '実機と同じウェイト（前のゲームから 4.1 秒たつまでリールが回らない）。リールは少しずつ速くなって回り始めます',
+      'STOP ボタンは押せるときに光り、押すと消えます。当たるとリールのバックライトが点滅します',
+      'ガラスの映り込み・筐体の厚み・ネジ。鬼斬り白狐は液晶を大きくしました',
+    ],
+  },
+  {
     id: '2026-10-05-keiba-owner-pay',
     date: '2026-10-05',
     kind: 'improve',

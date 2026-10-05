@@ -237,6 +237,16 @@ const Sound = (() => {
     },
     /** 戻りを数えるチャリチャリ */
     tick: (at = 0) => tone(2400 + Math.random() * 1200, at, 0.03, { type: 'square', vol: 0.025 }),
+    /** 🎰 メダル 1 枚（チャリッ） */
+    medal(at = 0) {
+      tone(2600 + Math.random() * 900, at, 0.05, { type: 'triangle', vol: 0.07 });
+      noise(at, 0.035, { freq: 6500, q: 3, vol: 0.1 });
+    },
+    /** 🎰 MAX BET（ピピピッ） */
+    bet(at = 0) {
+      [0, 0.07, 0.14].forEach((t, k) => tone(1800 + k * 200, at + t, 0.05, { type: 'square', vol: 0.05 }));
+      noise(at + 0.02, 0.05, { freq: 5500, q: 2, vol: 0.1 });
+    },
     // 🦊 AT 機の演出（atslot.js）が自分で音を組むためのもの
     tone,
     noise,
@@ -621,6 +631,103 @@ document.addEventListener('c-live-updated', () => {
 //   止め終わったら押した所を送り、サーバーが同じ計算で確かめる（services/casino/slots.ts の judge・aimStops と同じ決まり）
 // - still: 止まったまま。レバー（スペース）で同じ量を賭けて回す
 /** リールの速さ（コマ / 秒）。左が速く、右に行くほど遅い（目押ししやすいように） */
+// ───── 🎰 実機っぽさ（SAKURA 777 と AT 機で同じ）─────
+// - ウェイト: 前のゲームのリールが回り始めてから 4.1 秒たつまで、次のリールは回らない
+// - MAX BET: レバーの前に BET ランプが 1・2・3 と点く（押さなくてもレバーで自動で）
+// - 払い出し: PAYOUT と CREDIT を数え上げて、下皿にメダルが落ちる
+// - リールの回り始めは少しずつ速くなる
+const Real = (() => {
+  const KEY = 'casino-reel-start';
+  const WAIT = 4100;
+  const lastStart = () => {
+    try {
+      return Number(sessionStorage.getItem(KEY)) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  let local = 0;
+  return {
+    SPINUP: 320,
+    /** 次のリールが回れるまでの ms（ウェイト） */
+    waitMs: () => Math.max(0, WAIT - (Date.now() - lastStart())),
+    /** レバーの前の画面で、もう回し始めたか（次の画面ではそのまま回す。1 回だけ） */
+    justStarted() {
+      const yes = Date.now() - local < 3000;
+      local = 0;
+      return yes;
+    },
+    /** レバーで回し始めた（次の画面に知らせる） */
+    leverSpun() {
+      local = Date.now();
+    },
+    markStart() {
+      try {
+        sessionStorage.setItem(KEY, String(Date.now()));
+      } catch {
+        // 覚えられなければウェイトなし
+      }
+    },
+    /** 回り始めの速さ（0〜1） */
+    ramp: (spinAt, t) => (spinAt ? Math.min(1, Math.max(0.08, (t - spinAt) / 320)) : 1),
+    /** MAX BET（もう点いていれば何もしない） */
+    bet(box) {
+      if (!box || box.classList.contains('betted')) return;
+      box.classList.add('betted');
+      Sound.bet();
+      box.querySelectorAll('[data-bet-lamp]').forEach((l, i) => setTimeout(() => l.classList.add('on'), i * 70));
+    },
+    unbet(box) {
+      if (!box) return;
+      box.classList.remove('betted');
+      box.querySelectorAll('[data-bet-lamp]').forEach((l) => l.classList.remove('on'));
+    },
+    /** 払い出し: PAYOUT・CREDIT を数え上げ、メダルの音と下皿 */
+    payout(box) {
+      if (!box) return;
+      const out = box.querySelector('[data-payout]');
+      const credit = box.querySelector('[data-credit]');
+      const total = Number(out?.dataset.payout || 0);
+      const from = Number(credit?.dataset.creditFrom || credit?.dataset.credit || 0);
+      const to = Number(credit?.dataset.credit || 0);
+      if (!out && !credit) return;
+      if (total <= 0) {
+        if (out) out.textContent = '0';
+        if (credit) credit.textContent = to.toLocaleString('ja-JP');
+        return;
+      }
+      const steps = Math.max(1, Math.min(30, Math.round(total / Math.max(1, Number(box.dataset.unit) || 10))));
+      const dur = Math.min(2200, steps * 70);
+      out?.classList.add('lit');
+      for (let k = 0; k < steps; k++) Sound.medal((k * dur) / steps / 1000);
+      const t0 = performance.now();
+      const tick = (t) => {
+        const p = Math.min(1, (t - t0) / dur);
+        if (out) out.textContent = Math.round(total * p).toLocaleString('ja-JP');
+        if (credit) credit.textContent = Math.round(from + (to - from) * p).toLocaleString('ja-JP');
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      // 下皿にメダルが落ちる
+      const tray = box.querySelector('[data-tray]');
+      if (tray && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        for (let k = 0; k < Math.min(steps, 24); k++) {
+          setTimeout(() => {
+            const m = document.createElement('i');
+            m.className = 'c-medal-drop';
+            m.style.left = `${8 + Math.random() * 84}%`;
+            tray.append(m);
+            setTimeout(() => m.classList.add('rest'), 420);
+            // 多すぎたら古いものから消す
+            const all = tray.querySelectorAll('.c-medal-drop');
+            if (all.length > 40) all[0].remove();
+          }, (k * dur) / steps);
+        }
+      }
+    },
+  };
+})();
+
 const REEL_SPEEDS = [15, 12, 9.5];
 let slotCtl = null;
 let leverAt = 0;
@@ -681,7 +788,7 @@ const initSlots = (root) => {
     last = t;
     for (const [i, r] of reels.entries()) {
       if (r.state === 'spin') {
-        r.pos -= speedOf(i) * dt;
+        r.pos -= speedOf(i) * dt * Real.ramp(r.spinAt, t);
         while (r.pos < N) r.pos += N;
         paint(r);
       } else if (r.state === 'slide') {
@@ -746,8 +853,11 @@ const initSlots = (root) => {
 
   const spinAll = () => {
     clearLine();
+    Real.markStart();
+    const t = performance.now();
     reels.forEach((r) => {
       r.state = 'spin';
+      r.spinAt = t;
       r.el.classList.add('spin');
     });
     jug.classList.add('running');
@@ -788,6 +898,7 @@ const initSlots = (root) => {
     }
     const win = Number(jug.dataset.win || 0);
     if (win > 0) showLine(Number(jug.dataset.winline ?? j.line));
+    if (win > 0) jug.querySelector('.c-jug-window')?.classList.add('bl-flash');
     let wait = 450;
     const held = !jug.dataset.win && (bonus === 'big' || bonus === 'reg');
     if (held) {
@@ -824,6 +935,10 @@ const initSlots = (root) => {
       });
       if (win >= 2) Sound.win();
       else if (win === 1) Sound.even();
+      if (!held) {
+        Real.payout(jug);
+        Real.unbet(jug);
+      }
     }, wait);
   };
 
@@ -874,17 +989,30 @@ const initSlots = (root) => {
 
   stopBtns.forEach((b, i) => b.addEventListener('click', () => stopReel(i)));
   lever?.addEventListener('click', () => {
-    if (reels.some((r) => r.state !== 'still')) return;
+    if (reels.some((r) => r.state !== 'still') || jug.classList.contains('waiting')) return;
     Sound.lever();
-    startSpin();
+    lever.classList.add('pulled');
+    // ウェイト（前のゲームから 4.1 秒）がすんでから回る
+    const w = Real.waitMs();
+    if (w > 0) jug.classList.add('waiting');
+    later(() => {
+      jug.classList.remove('waiting');
+      startSpin();
+    }, w);
   });
   // 止まっているときのレバー: 送るのと同時に回し始める（次の画面が来たら、決まった目で止められる）
   spinLever?.addEventListener('click', () => {
     leverAt = Date.now();
+    Real.bet(jug);
     spinLever.classList.add('pulled');
     Sound.lever();
-    spinAll();
+    // ウェイト中なら、次の画面で回り始める
+    if (Real.waitMs() <= 0) {
+      Real.leverSpun();
+      spinAll();
+    }
   });
+  jug.querySelector('[data-maxbet]')?.addEventListener('click', () => Real.bet(jug));
   const onKey = (e) => {
     if (!alive) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.repeat) return;
@@ -905,9 +1033,17 @@ const initSlots = (root) => {
 
   if (mode === 'spin') {
     if (Date.now() - leverAt > 3000) Sound.lever();
-    startSpin();
-    // 押さなくても、少したつと左から止まる
-    later(() => reels.forEach((_, i) => later(() => stopReel(i), i * 700)), 9000);
+    jug.classList.add('betted');
+    jug.querySelectorAll('[data-bet-lamp]').forEach((l) => l.classList.add('on'));
+    // ウェイト（前のゲームから 4.1 秒）がすんでから回る
+    const w = Real.justStarted() ? 0 : Real.waitMs();
+    if (w > 0) jug.classList.add('waiting');
+    later(() => {
+      jug.classList.remove('waiting');
+      startSpin();
+      // 押さなくても、少したつと左から止まる
+      later(() => reels.forEach((_, i) => later(() => stopReel(i), i * 700)), 9000);
+    }, w);
   } else if (mode === 'aim' && jug.dataset.auto === '1') {
     // 先ペカ: レバーでランプが光って、そのまま狙える
     lamp?.classList.add('peka');
@@ -2221,7 +2357,7 @@ const initAtSlot = (root) => {
     last = t;
     for (const r of reels) {
       if (r.state === 'spin') {
-        r.pos -= speed * dt;
+        r.pos -= speed * dt * Real.ramp(r.spinAt, t);
         while (r.pos < N) r.pos += N;
         paint(r);
       } else if (r.state === 'slide') {
@@ -2306,10 +2442,9 @@ const initAtSlot = (root) => {
       // 台の光り方を、このゲームのあとに・PAYOUT を出す
       box.classList.toggle('in-at', box.dataset.atPost === '1');
       box.classList.toggle('in-tokka', box.dataset.tokkaPost === '1');
-      box.querySelectorAll('[data-payout]').forEach((e) => {
-        e.textContent = e.dataset.payout;
-        if (Number(e.dataset.payout) > 0) e.classList.add('lit');
-      });
+      if (win > 0) box.querySelector('.c-at-window')?.classList.add('bl-flash');
+      Real.payout(box);
+      Real.unbet(box);
       const note = box.querySelector('.c-deck-note');
       if (note && note.dataset.still) note.textContent = note.dataset.still;
       st?.settle();
@@ -2416,16 +2551,24 @@ const initAtSlot = (root) => {
   // 止まっているときのレバー: 送るのと同時に回し始める
   lever?.addEventListener('click', () => {
     atLeverAt = Date.now();
+    Real.bet(box);
     lever.classList.add('pulled');
     Sound.lever();
+    // ウェイト中なら、次の画面で回り始める
+    if (Real.waitMs() > 0) return;
+    Real.leverSpun();
+    Real.markStart();
+    const t = performance.now();
     reels.forEach((r) => {
       r.state = 'spin';
+      r.spinAt = t;
       r.el.classList.add('spin');
     });
     box.classList.add('running');
     loop?.stop();
     loop = Sound.reelLoop();
   });
+  box.querySelector('[data-maxbet]')?.addEventListener('click', () => Real.bet(box));
   const onKey = (e) => {
     if (!alive) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.repeat) return;
@@ -2447,8 +2590,11 @@ const initAtSlot = (root) => {
   const startSpin = () => {
     frozen = false;
     box.classList.remove('frozen');
+    Real.markStart();
+    const t = performance.now();
     reels.forEach((r) => {
       r.state = 'spin';
+      r.spinAt = t;
       r.el.classList.add('spin');
     });
     box.classList.add('running');
@@ -2480,8 +2626,18 @@ const initAtSlot = (root) => {
   });
   if (mode === 'spin' || mode === 'wait') {
     if (Date.now() - atLeverAt > 3000) Sound.lever();
-    // 演出の台本がまだ読めていないときは、少しだけ待つ（最初の 1 回だけ）
-    if (window.AtStage || !box.dataset.stageJs) begin();
+    box.classList.add('betted');
+    box.querySelectorAll('[data-bet-lamp]').forEach((l) => l.classList.add('on'));
+    // ウェイト（前のゲームから 4.1 秒）。待つ間はリールが止まったまま
+    const w = Real.justStarted() ? 0 : Real.waitMs();
+    if (w > 0) {
+      frozen = true;
+      box.classList.add('waiting');
+      later(() => {
+        box.classList.remove('waiting');
+        begin();
+      }, w);
+    } else if (window.AtStage || !box.dataset.stageJs) begin();
     else {
       frozen = true;
       let started = false;
