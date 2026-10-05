@@ -3,6 +3,7 @@ import { gridOf, isBonus, judge, PAYLINES, REEL_LEN, REELS, SLIP, SLOT_ROLES, SL
 import { slotArt } from '../assets.js';
 import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
 import { BetForm, CasinoLayout, freshDone, Msg, Result, revealMe, Rules, type GamePage } from './casino.js';
+import { SlotIslands } from './atslot.js';
 
 /**
  * 🎰 スロット（ジャグラー風）。絵柄・上のパネル・下のパネル・ランプは public/slots/ の画像（なければ仮の絵・文字）。
@@ -172,6 +173,7 @@ function SlotCounter(p: { machine: number; today: MachineDay; yesterday: Machine
 export function SlotFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; msg?: string }) {
   return (
     <CasinoLayout title="スロット" me={p.me} back>
+      <SlotIslands on="slots" games={p.casino.games} atOpen={p.casino.atOpen} />
       <h1 class="c-h1">🎰 スロット（台を選ぶ）</h1>
       {p.msg && <Msg msg={p.msg} />}
       <p class="c-muted">台ごとに設定（1〜6）があり、BIG・REG の出やすさが違います。データ（今日の当たり回数・回転数・差枚のグラフ）を見て、好きな台を選んでください。データはみんなで同じです。</p>

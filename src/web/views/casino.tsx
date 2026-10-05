@@ -233,7 +233,8 @@ export type LobbyProps = {
 };
 
 export function CasinoLobby(p: LobbyProps) {
-  const games = p.casino.games;
+  // AT 機は公開するまで出さない（準備中）
+  const games = p.casino.games.filter((g) => g !== 'atslot' || p.casino.atOpen);
   return (
     <CasinoLayout title="ロビー" me={p.me}>
       <section class="c-welcome">
@@ -349,6 +350,7 @@ const MSG: Record<string, string> = {
   reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
   invalid: 'その操作はいまできません。',
   conflict: '同時に押されたので、1 回だけ受け付けました。',
+  occupied: 'この台はほかの人が遊んでいます（しばらく回さないと空きます）。ほかの台を選んでください。',
   busy: '遊んでいる途中のものがあります。',
   self: '自分の部屋には入れません。',
   taken: 'ほかの人が先に入りました。',

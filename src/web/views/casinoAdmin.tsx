@@ -8,6 +8,7 @@ import { BarList, ColumnChart, LineChart, type ChartPoint } from './charts.js';
 import type { CasinoDay, SettingStat } from '../../services/casino/report.js';
 import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
 import { RANDOM_SETTING_ODDS, roleOdds, SETTING_KEYS, slotRtp, type SlotSetting } from '../../services/casino/slots.js';
+import { AT_RTP_APPROX } from '../../services/casino/slotAt.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -42,6 +43,8 @@ export function CasinoAdminPage(p: {
   floor: MachineDay[];
   /** 今日のおまかせの設定（台の番号 → 設定） */
   picks: Record<string, number>;
+  /** AT の島の今日のおまかせの設定 */
+  atPicks?: Record<string, number>;
   settingStats: SettingStat[];
   roles: { id: string; name: string }[];
   /** 🏇 競馬の名簿 */
@@ -286,6 +289,41 @@ export function CasinoAdminPage(p: {
                 {RANDOM_SETTING_ODDS[5]}%・6: {RANDOM_SETTING_ODDS[6]}%）。かっこの中は戻り率。設定 4 以上は 100% を超えるので、メンバーが平均で増やせます。
               </p>
             </fieldset>
+            <fieldset class="perms slot-fieldset" id="casino-at">
+              <legend>🦊 AT 機（鬼斬り白狐）の島</legend>
+              <label class="field check">
+                <input type="checkbox" name="atOpen" value="yes" checked={c.atOpen} />
+                <span>公開する（メンバーが遊べるようにする。外すと準備中になり、ホールにも出ません）</span>
+              </label>
+              <label class="field">
+                <span>1 ゲームの賭け（{p.coinName}。島で決まっていて、メンバーは変えられません）</span>
+                <input type="number" name="atBet" min={1} max={1000000} value={String(c.atBet)} required />
+              </label>
+              <label class="field">
+                <span>台の数（1〜20）</span>
+                <input type="number" name="atCount" min={1} max={20} value={String(c.atMachines.length)} required />
+              </label>
+              <div class="slot-settings">
+                {Array.from({ length: 20 }, (_, i) =>
+                  i < c.atMachines.length ? <SlotSelect i={i} value={c.atMachines[i]} at today={p.atPicks?.[String(i + 1)]} /> : null,
+                )}
+              </div>
+              {c.atMachines.length < 20 && (
+                <details class="slot-more">
+                  <summary>
+                    {c.atMachines.length + 1} 番台〜20 番台（台の数を増やしたときの設定）
+                  </summary>
+                  <div class="slot-settings">
+                    {Array.from({ length: 20 - c.atMachines.length }, (_, k) => (
+                      <SlotSelect i={c.atMachines.length + k} value={undefined} at />
+                    ))}
+                  </div>
+                </details>
+              )}
+              <p class="note">
+                設定が高いほど AT に当たりやすくなります（かっこの中は戻り率の目安。AT 中にナビどおり押したとき）。おまかせは毎日、その日に最初に回されたときに引きます（出やすさはスロットと同じ）。台の回転数・AT の残りは台に残ります。
+              </p>
+            </fieldset>
             <button type="submit" class="ok">
               保存
             </button>
@@ -462,17 +500,19 @@ function SlotMachines(p: { casino: CasinoConfig; floor: MachineDay[]; picks: Rec
 }
 
 /** 1 台の設定の選び方 */
-function SlotSelect(p: { i: number; value: number | 'random' | undefined }) {
+function SlotSelect(p: { i: number; value: number | 'random' | undefined; at?: boolean; today?: number }) {
   return (
     <label class="field">
-      <span>{p.i + 1} 番台</span>
-      <select name={`slot_${p.i + 1}`}>
+      <span>
+        {p.i + 1} 番台{p.today ? <small>（今日は設定 {p.today}）</small> : null}
+      </span>
+      <select name={`${p.at ? 'at' : 'slot'}_${p.i + 1}`}>
         <option value="random" selected={(p.value ?? 'random') === 'random'}>
           おまかせ（日替わり）
         </option>
         {SETTING_KEYS.map((k) => (
           <option value={String(k)} selected={p.value === k}>
-            設定 {k}（{pct(slotRtp(k))}）
+            設定 {k}（{pct(p.at ? AT_RTP_APPROX[k] : slotRtp(k))}）
           </option>
         ))}
       </select>

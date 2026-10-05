@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-atslot',
+    date: '2026-10-05',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🦊 スロットの新台「鬼斬り白狐」（AT 機）を入れました（準備中）',
+    items: [
+      'レア役で AT「白狐ラッシュ」。押し順ナビで増やし、上乗せ・特化ゾーン・鬼との継続バトル・天井 700 G。台の回転数や AT の残りは台に残ります',
+      'スロットとは別の島。いまは準備中で、メンバーは遊べません。社務所Web「🎰 カジノ」の「🦊 AT 機の島」で「公開する」に印を付けると遊べるようになります（賭け・台の数・設定もそこで）',
+    ],
+  },
+  {
     id: '2026-10-04-role-members',
     date: '2026-10-04',
     kind: 'new',

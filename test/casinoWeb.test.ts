@@ -521,6 +521,29 @@ describe('🀄 咲楽ノ宮雀荘（画面）', () => {
   });
 });
 
+describe('🦊 AT 機（画面）', () => {
+  it('はじめは準備中（ホールにも出ない・入れない）。公開すると島・台・レバーが使える', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    expect(await (await get('/casino/hall', a)).text()).not.toContain('/casino/atslot');
+    expect((await get('/casino/atslot', a)).headers.get('location')).toBe('/casino?e=game_off');
+    expect((await post('/casino/atslot', a, { m: '1' })).headers.get('location')).toBe('/casino/atslot?m=1&e=game_off');
+    current = { ...cfg, casino: { ...cfg.casino, atOpen: true } };
+    expect(await (await get('/casino/hall', a)).text()).toContain('/casino/atslot');
+    const floor = await (await get('/casino/atslot', a)).text();
+    expect(floor).toContain('鬼斬り白狐の島');
+    expect(floor).toContain('/casino/atslot?m=1');
+    expect(floor).toContain('🌸 SAKURA 777 の島');
+    const page = await (await get('/casino/atslot?m=1', a)).text();
+    expect(page).toContain('data-at-lever');
+    expect(page).toContain('白狐の社');
+    const res = await post('/casino/atslot', a, { m: '1' });
+    expect(res.headers.get('location')).toMatch(/^\/casino\/atslot\?g=\d+$/);
+    expect(await balance(A)).toBeLessThanOrEqual(5000 - cfg.casino.atBet + cfg.casino.atBet * 5);
+    const after = await (await get(res.headers.get('location')!, a)).text();
+    expect(after).toMatch(/class="c-atm mode-(spin|wait)/);
+  });
+});
+
 describe('🏇 みんなでダービー（画面）', () => {
   it('レースを開いて馬券を買う。テレビの映像・出馬表・みんなの馬券が出る', async () => {
     const a = (await casinoLogin(A)).cookie!;

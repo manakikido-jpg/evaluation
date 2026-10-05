@@ -855,6 +855,15 @@ export const keibaRuns = pgTable(
   (t) => [index('keiba_runs_owner_idx').on(t.ownerId, t.at), index('keiba_runs_time_idx').on(t.at)],
 );
 
+/** 🦊 AT 機の台（台の状態は台に残る: 回転数・前兆・AT の残り。座っている人と、最後に回した時刻） */
+export const slotAtMachines = pgTable('slot_at_machines', {
+  machine: integer('machine').primaryKey(),
+  state: jsonb('state').$type<Record<string, unknown>>().notNull(),
+  seatBy: text('seat_by'),
+  seatAt: timestamp('seat_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** 運営の見守り: 知らせた印（同じものを 2 回知らせない。key は stale:種類:ID:回 / weekly:日付） */
 export const opsNotices = pgTable('ops_notices', {
   key: text('key').primaryKey(),

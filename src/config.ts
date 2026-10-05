@@ -387,7 +387,7 @@ export const opsWatchSchema = z.object({
 export type OpsWatchConfig = z.infer<typeof opsWatchSchema>;
 
 /** カジノ（社務所Web の /casino。メンバーが Discord でログインして銭で遊ぶ） */
-export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba'] as const;
+export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'atslot', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba'] as const;
 /** ゲームの一覧を保存したとき（knownGames がない）にあったゲーム。あとから足したゲームは、保存した一覧になくても遊べる */
 export const CASINO_GAMES_V1: readonly string[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'poker', 'daifugo', 'babanuki'];
 /** みんなで座る卓（ゲームの種類） */
@@ -431,6 +431,16 @@ export const casinoSchema = z.object({
     .min(1)
     .max(20)
     .default(['random', 'random', 'random', 'random', 'random', 'random', 'random', 'random']),
+  /** 🦊 AT 機（鬼斬り白狐）の島の台。それぞれの設定 1〜6、random はおまかせ（日替わり） */
+  atMachines: z
+    .array(z.union([z.literal('random'), z.number().int().min(1).max(6)]))
+    .min(1)
+    .max(20)
+    .default(['random', 'random', 'random', 'random', 'random', 'random']),
+  /** AT 機を公開する（はじめは準備中で、メンバーは遊べない。社務所Web で公開する） */
+  atOpen: z.boolean().default(false),
+  /** AT 機の 1 ゲームの賭け（島で決まっている。AT のときだけ多く賭けられないように） */
+  atBet: z.number().int().min(1).max(1_000_000).default(30),
 });
 export type CasinoConfig = z.infer<typeof casinoSchema>;
 

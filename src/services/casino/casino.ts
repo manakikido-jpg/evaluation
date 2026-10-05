@@ -24,6 +24,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   highlow: { emoji: '🔼', name: 'ハイ＆ロー', note: '次のカードが上か下か。当てるほど倍率が上がる' },
   baccarat: { emoji: '🎴', name: 'バカラ', note: 'プレイヤー・バンカー・タイ、どれが勝つか' },
   slots: { emoji: '🎰', name: 'スロット', note: 'ジャグラー風。ペカったら 7 を狙って BIG' },
+  atslot: { emoji: '🦊', name: 'AT 機（鬼斬り白狐）', note: 'レア役で AT。押し順ナビで増やし、上乗せ・継続バトル・天井つき' },
   roulette: { emoji: '🎡', name: 'ルーレット', note: '赤黒は 2 倍・数字 1 つは 36 倍' },
   chinchiro: { emoji: '🎲', name: 'ちんちろりん', note: '親とサイコロ勝負。ピンゾロは 5 倍' },
   othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.2〜2.2 倍' },
@@ -116,7 +117,7 @@ async function start(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGam
 export type Acted = { status: 'ok'; row: CasinoGameRow } | { status: 'not_found' | 'done' | 'invalid' | 'poor' | 'conflict' };
 
 /** 途中のゲームを 1 手進める。同時に 2 回押しても 1 回だけ（version で見分ける） */
-async function act(db: Db, id: number, memberId: string, step: (row: CasinoGameRow) => (Outcome & { extraBet?: number }) | undefined, now: Date): Promise<Acted> {
+export async function act(db: Db, id: number, memberId: string, step: (row: CasinoGameRow) => (Outcome & { extraBet?: number }) | undefined, now: Date): Promise<Acted> {
   const row = await gameById(db, id);
   if (!row || row.memberId !== memberId) return { status: 'not_found' };
   if (row.status !== 'playing') return { status: 'done' };

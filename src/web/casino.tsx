@@ -57,6 +57,8 @@ import {
   type CasinoMe,
 } from './views/casino.js';
 import { SlotFloor, SlotsPage } from './views/slots.js';
+import { AtFloor, AtSlotPage } from './views/atslot.js';
+import { atFloorData, atMachineRows, leaveAt, orderAt, playAt, validAtMachine, type AtGameState } from '../services/casino/slotAtPlay.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
 import { ChinchiroPage } from './views/chinchiro.js';
@@ -441,6 +443,64 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       if (row === 'stale') return c.redirect('/casino/slots?e=conflict');
       if (!row) return c.redirect('/casino/slots?e=not_found');
       return after(c, 'slots', await aimSlots(db, row.id, me.session.userId, pressed, d.now()));
+    }, { post: true }),
+  );
+
+  // ───────── 🦊 AT 機の島（鬼斬り白狐） ─────────
+
+  /** 台を選ぶ島（?m がなく、途中も結果もないとき）か、その台の画面 */
+  async function atPage(c: Context, me: Me) {
+    const cfg = d.cfg();
+    const now = d.now();
+    const row = await shown(c, me, 'atslot');
+    const st = row?.state as AtGameState | undefined;
+    const q = Number(c.req.query('m'));
+    const machine = st?.machine ?? (validAtMachine(cfg, q) ? q : undefined);
+    const fresh = row && now.getTime() - (row.finishedAt ?? row.createdAt).getTime() < 60_000;
+    const [data, machines] = await Promise.all([atFloorData(db, cfg, now, fresh ? row.id : undefined), atMachineRows(db, cfg)]);
+    const msg = casinoMsg(c.req.query('e'));
+    if (!machine || !machines[machine - 1]) return c.html(<AtFloor me={me} casino={cfg.casino} data={data} machines={machines} msg={msg} now={now.getTime()} />);
+    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} />);
+  }
+  app.get(
+    '/casino/atslot',
+    page(async (c, me) => {
+      // 公開するまでは準備中（メンバーは入れない）
+      if (!d.cfg().casino.games.includes('atslot') || !d.cfg().casino.atOpen) return c.redirect('/casino?e=game_off');
+      return atPage(c, me);
+    }),
+  );
+  app.post(
+    '/casino/atslot',
+    page(async (c, me) => {
+      const body = await c.req.parseBody();
+      const m = typeof body.m === 'string' && /^\d{1,2}$/.test(body.m) ? Number(body.m) : 0;
+      const r = await playAt(db, d.cfg(), me.session.userId, m, undefined, d.now());
+      if (r.status === 'ok' || r.status === 'busy') return c.redirect(`/casino/atslot?g=${r.row.id}`);
+      return c.redirect(`/casino/atslot?m=${m}&e=${r.status}`);
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/atslot/leave',
+    page(async (c, me) => {
+      const body = await c.req.parseBody();
+      const m = typeof body.m === 'string' && /^\d{1,2}$/.test(body.m) ? Number(body.m) : 0;
+      if (m) await leaveAt(db, me.session.userId, m);
+      return c.redirect('/casino/atslot');
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/atslot/:id',
+    page(async (c, me) => {
+      const body = await c.req.parseBody();
+      // order=1,0,2（STOP を押した順のリール）か、assist=1（ナビどおり）
+      const order = body.assist === '1' ? 'assist' : typeof body.order === 'string' && /^[012],[012],[012]$/.test(body.order) ? body.order.split(',').map(Number) : undefined;
+      if (!order) return c.redirect('/casino/atslot?e=invalid');
+      const row = await fresh(idOf(c), me, body);
+      if (row === 'stale') return c.redirect('/casino/atslot?e=conflict');
+      if (!row) return c.redirect('/casino/atslot?e=not_found');
+      const r = await orderAt(db, row.id, me.session.userId, order, undefined, d.now());
+      return r.status === 'ok' ? c.redirect(`/casino/atslot?g=${r.row.id}`) : c.redirect(`/casino/atslot?e=${r.status}`);
     }, { post: true }),
   );
 

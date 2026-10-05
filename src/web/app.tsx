@@ -1,3 +1,4 @@
+import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
@@ -1273,6 +1274,7 @@ export function createWebApp(deps: WebDeps) {
         daily={daily}
         floor={floor.today}
         picks={picks}
+        atPicks={await atDayPicks(db, now())}
         settingStats={settingStats}
         roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed)}
         horses={await listHorses(db)}
@@ -1318,6 +1320,16 @@ export function createWebApp(deps: WebDeps) {
     }) as (number | 'random')[];
   };
 
+  /** AT 機の島の台の数と、台ごとの設定 */
+  const atMachinesOf = (body: Record<string, unknown>) => {
+    if (typeof body.atCount !== 'string') return cfg.casino.atMachines;
+    const n = /^\d{1,2}$/.test(body.atCount) ? Math.min(20, Math.max(1, Number(body.atCount))) : cfg.casino.atMachines.length;
+    return Array.from({ length: n }, (_, i) => {
+      const v = body[`at_${i + 1}`];
+      return typeof v === 'string' && /^[1-6]$/.test(v) ? Number(v) : 'random';
+    }) as (number | 'random')[];
+  };
+
   app.post('/economy/casino', async (c) => {
     const body = await c.req.parseBody({ all: true });
     const int = (k: string) => (typeof body[k] === 'string' && /^\d{1,9}$/.test(body[k] as string) ? Number(body[k]) : NaN);
@@ -1349,6 +1361,9 @@ export function createWebApp(deps: WebDeps) {
       games: CASINO_GAMES.filter((g) => list.includes(g)),
       knownGames: [...CASINO_GAMES],
       slotMachines: slotMachinesOf(body),
+      atMachines: atMachinesOf(body),
+      atBet: typeof body.atBet === 'string' ? int('atBet') : cfg.casino.atBet,
+      atOpen: typeof body.atCount === 'string' ? body.atOpen === 'yes' : cfg.casino.atOpen,
     };
     if (!(casino.minBet <= casino.maxBet)) return c.redirect('/economy/casino?msg=invalid');
     const current = await loadOverrides(db);

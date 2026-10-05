@@ -303,7 +303,7 @@ const playFx = (root, tableEnd) => {
   // サイコロがどんぶりに入る（ちんちろりん）
   root.querySelectorAll('.c-roll:not(.still)').forEach((el) => Sound.dice(delayOf(el)));
   // 結果（スロットは initSlots が鳴らす）
-  const res = root.querySelector('.c-jug') ? null : root.querySelector('.c-later:not(.wait) .c-result, .c-rl-outcome .c-result');
+  const res = root.querySelector('.c-jug, .c-atm') ? null : root.querySelector('.c-later:not(.wait) .c-result, .c-rl-outcome .c-result');
   if (res) {
     const holder = res.closest('.c-later, .c-rl-outcome');
     const d = holder?.classList.contains('c-rl-outcome') ? 5.2 : holder ? delayOf(holder) : 0;
@@ -2147,6 +2147,266 @@ const initKeiba = () => {
   draw();
 };
 
+// ───── 🦊 AT 機（鬼斬り白狐）: STOP はどの順でも。AT 中の押し順ベルは押した順を送る ─────
+// - spin: 止まる目は決まっている（data-stops）。遠ければ、ぼやけている間にずらしてから最大 4 コマすべらせる
+// - wait: 押し順ベル（AT 中）。止め終わったら押した順を送る（サーバーが 3 倍かこぼしかを決める）
+// - settle: 押した順を送ったあと。data-from の目から data-stops へすべらせる（ベルがそろう）
+// - still: 止まったまま。レバー（スペース）で回す
+let atCtl = null;
+let atLeverAt = 0;
+const initAtSlot = (root) => {
+  if (atCtl) atCtl.stop();
+  atCtl = null;
+  const box = root.querySelector('.c-atm');
+  if (!box) return;
+  const N = Number(box.dataset.n) || 21;
+  const SLIP = 4;
+  const mode = box.dataset.mode;
+  const slow = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.5 : 1;
+  const speed = 13 * slow;
+  const stops = (box.dataset.stops || '0,0,0').split(',').map(Number);
+  const from = box.dataset.from ? box.dataset.from.split(',').map(Number) : null;
+  const navi = box.dataset.navi ? box.dataset.navi.split(',').map(Number) : null;
+  const reels = [...box.querySelectorAll('.c-jreel')].map((el) => {
+    const at = Number(el.dataset.at) || 0;
+    return { el, strip: el.querySelector('.c-jstrip'), pos: N + at, state: 'still', anim: null };
+  });
+  const stopBtns = [...box.querySelectorAll('[data-at-stop]')];
+  const lever = box.querySelector('[data-at-lever]');
+  const fx = box.querySelector('.c-at-fx');
+  let alive = true;
+  let raf = 0;
+  let last = 0;
+  let loop = null;
+  const order = [];
+  const timers = [];
+  const later = (fn, ms) => timers.push(setTimeout(() => alive && fn(), ms));
+  const paint = (r) => r.strip.style.setProperty('--at', r.pos.toFixed(3));
+  const frame = (t) => {
+    if (!alive) return;
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
+    last = t;
+    for (const r of reels) {
+      if (r.state === 'spin') {
+        r.pos -= speed * dt;
+        while (r.pos < N) r.pos += N;
+        paint(r);
+      } else if (r.state === 'slide') {
+        const a = r.anim;
+        const p = Math.min(1, (t - a.t0) / a.dur);
+        r.pos = a.from + (a.to - a.from) * (1 - (1 - p) ** 3);
+        if (p >= 1) {
+          r.pos = N + a.target;
+          r.state = 'still';
+          a.done();
+        }
+        paint(r);
+      }
+    }
+    raf = requestAnimationFrame(frame);
+  };
+  reels.forEach(paint);
+  raf = requestAnimationFrame(frame);
+
+  /** 次に止めるリール（ナビがあればその順・なければ左から） */
+  const nextIdx = () => {
+    if (navi) {
+      const n = navi.find((i) => reels[i].state === 'spin');
+      return n === undefined ? -1 : n;
+    }
+    return reels.findIndex((r) => r.state === 'spin');
+  };
+  const mark = () => stopBtns.forEach((b, i) => b.classList.toggle('next', reels[i].state === 'spin' && i === nextIdx()));
+
+  /** 演出（AT 突入・上乗せ・継続バトル…）を順に出す */
+  const showEvents = () => {
+    let list = [];
+    try {
+      list = JSON.parse(box.dataset.events || '[]');
+    } catch {
+      list = [];
+    }
+    list.forEach((e, k) => {
+      later(() => {
+        if (!fx) return;
+        fx.innerHTML = '';
+        const d = document.createElement('div');
+        d.className = `c-at-ev ${e.cls}`;
+        const b = document.createElement('b');
+        b.textContent = e.big;
+        d.append(b);
+        if (e.small) {
+          const sm = document.createElement('small');
+          sm.textContent = e.small;
+          d.append(sm);
+        }
+        fx.append(d);
+        if (e.cls === 'start') Sound.bonus(true);
+        else if (e.cls === 'win') Sound.bigWin();
+        else if (e.cls === 'lose') Sound.lose();
+        else if (e.cls === 'add' || e.cls === 'tokka') Sound.peka();
+        else if (e.cls === 'end') Sound.fanfare?.();
+        later(() => d.classList.add('out'), 1500);
+      }, k * 1700);
+    });
+    return list.length * 1700;
+  };
+
+  const reveal = () => {
+    loop?.stop();
+    loop = null;
+    box.classList.remove('running');
+    lever?.classList.remove('pulled');
+    const win = Number(box.dataset.win || 0);
+    const wait = showEvents();
+    later(() => {
+      // 液晶をこのゲームのあとに替える（同時に替えて、高さが変わらないように）
+      box.querySelectorAll('[data-before-stop]').forEach((e) => e.setAttribute('hidden', ''));
+      box.querySelectorAll('[data-after-lcd]').forEach((e) => e.removeAttribute('hidden'));
+      document.querySelectorAll('[data-after-stop]').forEach((e) => e.classList.add('go'));
+      document.querySelectorAll('.c-balance.wait').forEach((b) => {
+        b.classList.remove('wait');
+        b.classList.add('go');
+      });
+      if (win >= 2) Sound.win();
+      else if (win === 1) Sound.even();
+      if (lever && !box.dataset.taken) lever.disabled = false;
+      const note = box.querySelector('.c-deck-note');
+      if (note && note.dataset.still) note.textContent = note.dataset.still;
+    }, Math.min(wait, 1200) + 250);
+  };
+
+  const allStopped = () => {
+    if (mode === 'wait') {
+      loop?.stop();
+      loop = null;
+      const form = document.querySelector('form[data-at-order]');
+      const input = form?.querySelector('[data-at-order-input]');
+      if (!form || !input) return;
+      input.value = order.join(',');
+      later(() => form.requestSubmit(), 250);
+      return;
+    }
+    reveal();
+  };
+
+  /** そのリールを target まで止める（遠ければ、ぼやけている間にずらす） */
+  const slideTo = (i, target, done) => {
+    const r = reels[i];
+    const p = Math.floor(r.pos) % N;
+    let d = (((p - target) % N) + N) % N;
+    let start = r.pos;
+    if (d > SLIP) {
+      const k = Math.floor(Math.random() * (SLIP + 1));
+      start = r.pos - (d - k);
+      if (start < N) start += N;
+      d = k;
+    }
+    const to = Math.floor(start) - d;
+    r.anim = {
+      from: start,
+      to,
+      target,
+      t0: performance.now(),
+      dur: ((start - to) / speed) * 1000 * 1.6 + 70,
+      done: () => {
+        r.el.classList.remove('spin');
+        r.strip.classList.remove('bump');
+        void r.strip.offsetWidth;
+        r.strip.classList.add('bump');
+        Sound.reelStop();
+        done?.();
+      },
+    };
+    r.state = 'slide';
+  };
+
+  const stopReel = (i) => {
+    const r = reels[i];
+    if (!r || r.state !== 'spin') return;
+    order.push(i);
+    const b = stopBtns[i];
+    if (b) {
+      b.disabled = true;
+      b.classList.add('pressed');
+    }
+    slideTo(i, stops[i], () => {
+      if (reels.every((x) => x.state === 'still')) allStopped();
+    });
+    mark();
+  };
+
+  stopBtns.forEach((b) => b.addEventListener('click', () => stopReel(Number(b.dataset.atStop))));
+  // 止まっているときのレバー: 送るのと同時に回し始める
+  lever?.addEventListener('click', () => {
+    atLeverAt = Date.now();
+    lever.classList.add('pulled');
+    Sound.lever();
+    reels.forEach((r) => {
+      r.state = 'spin';
+      r.el.classList.add('spin');
+    });
+    box.classList.add('running');
+    loop?.stop();
+    loop = Sound.reelLoop();
+  });
+  const onKey = (e) => {
+    if (!alive) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.repeat) return;
+    const n = ['1', '2', '3'].indexOf(e.key);
+    if (e.code !== 'Space' && e.key !== ' ' && n < 0) return;
+    e.preventDefault();
+    if (reels.every((r) => r.state === 'still')) {
+      if (n < 0 && lever && !lever.disabled) lever.click();
+      return;
+    }
+    stopReel(n >= 0 ? n : nextIdx());
+  };
+  document.addEventListener('keydown', onKey);
+
+  if (mode === 'spin' || mode === 'wait') {
+    if (Date.now() - atLeverAt > 3000) Sound.lever();
+    reels.forEach((r) => {
+      r.state = 'spin';
+      r.el.classList.add('spin');
+    });
+    box.classList.add('running');
+    loop = Sound.reelLoop();
+    // 演出（レバーで出る）
+    const hint = Number(box.dataset.hint || 0);
+    if (hint >= 2) Sound.peka(0.2);
+    else if (hint === 1) Sound.gogo?.(0.2);
+    mark();
+    // 押さなくても、少したつと止まる（ナビがあればナビの順）
+    later(() => [0, 1, 2].forEach((k) => later(() => stopReel(nextIdx()), k * 700)), 12000);
+  } else if (mode === 'settle' && from) {
+    // そろえる: 送る前の目から、決まった目へ
+    reels.forEach((r, i) => {
+      r.pos = N + from[i];
+      paint(r);
+    });
+    const moving = reels.map((_, i) => i).filter((i) => from[i] !== stops[i]);
+    if (!moving.length) later(reveal, 150);
+    moving.forEach((i, k) =>
+      later(() => {
+        reels[i].state = 'spin';
+        slideTo(i, stops[i], () => {
+          if (reels.every((x) => x.state === 'still')) reveal();
+        });
+      }, 120 + k * 120),
+    );
+  }
+  atCtl = {
+    stop() {
+      alive = false;
+      cancelAnimationFrame(raf);
+      timers.forEach(clearTimeout);
+      loop?.stop();
+      document.removeEventListener('keydown', onKey);
+    },
+  };
+};
+
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────
 const pageInit = (root, tableEnd) => {
   paintSoundButton();
@@ -2154,6 +2414,7 @@ const pageInit = (root, tableEnd) => {
   document.querySelectorAll('form[data-rb]').forEach(paintBoard);
   initLive();
   initSlots(root);
+  initAtSlot(root);
   playFx(root, tableEnd);
   paintTwoTap();
   paintTapHint();

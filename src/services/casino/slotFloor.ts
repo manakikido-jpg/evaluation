@@ -18,15 +18,19 @@ export const machineCount = (cfg: GuildConfig) => cfg.casino.slotMachines.length
 export const validMachine = (cfg: GuildConfig, m: unknown): m is number => typeof m === 'number' && Number.isInteger(m) && m >= 1 && m <= machineCount(cfg);
 
 /** その日のおまかせの設定（まだ引いていなければ undefined） */
-export async function dayPicks(db: Db, now = new Date()): Promise<Record<string, number>> {
-  const [row] = await db.select().from(settings).where(eq(settings.key, DAY_KEY));
+export async function dayPicks(db: Db, now = new Date(), dayKey = DAY_KEY): Promise<Record<string, number>> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, dayKey));
   const v = row?.value as DayPick | undefined;
   return v && v.date === jstDate(now) ? v.settings : {};
 }
 
 /** 台の今日の設定。決めてある台はそのまま、おまかせの台はその日に 1 回だけ引く（同時に回しても 1 つに決まる） */
-export async function machineSetting(db: Db, cfg: GuildConfig, machine: number, now: Date, rng: Rng): Promise<SlotSetting> {
-  const conf = cfg.casino.slotMachines[machine - 1];
+export function machineSetting(db: Db, cfg: GuildConfig, machine: number, now: Date, rng: Rng): Promise<SlotSetting> {
+  return pickSetting(db, cfg.casino.slotMachines[machine - 1], DAY_KEY, machine, now, rng);
+}
+
+/** 島ごとの台の今日の設定（conf: 決めた設定か random・dayKey: おまかせを覚えておく所） */
+export async function pickSetting(db: Db, conf: number | 'random' | undefined, dayKey: string, machine: number, now: Date, rng: Rng): Promise<SlotSetting> {
   if (isSetting(conf)) return conf;
   const day = jstDate(now);
   const pick = randomSetting(rng);
@@ -34,7 +38,7 @@ export async function machineSetting(db: Db, cfg: GuildConfig, machine: number, 
   const fresh = { date: day, settings: { [m]: pick } };
   const [row] = await db
     .insert(settings)
-    .values({ key: DAY_KEY, value: fresh, updatedBy: 'system', updatedAt: now })
+    .values({ key: dayKey, value: fresh, updatedBy: 'system', updatedAt: now })
     .onConflictDoUpdate({
       target: settings.key,
       set: {
