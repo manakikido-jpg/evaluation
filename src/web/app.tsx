@@ -6,6 +6,7 @@ import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, u
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { inviteCountOf, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
+import { allRoleTemplates, deleteRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
@@ -3209,7 +3210,7 @@ export function createWebApp(deps: WebDeps) {
       members: role.id === cfg.guildId ? total : (counts.get(role.id) ?? 0),
       locked: roleLocked(role, roles ?? []),
     }));
-    return c.html(<RolesPage session={c.get('session')} rows={rows} flash={c.req.query('msg')} loadFailed={!roles} />);
+    return c.html(<RolesPage session={c.get('session')} rows={rows} flash={c.req.query('msg')} loadFailed={!roles} templates={await allRoleTemplates(db)} />);
   });
 
   app.get('/roles/:id', async (c) => {
@@ -3230,6 +3231,7 @@ export function createWebApp(deps: WebDeps) {
         q={q}
         candidates={q && !isEveryone ? await searchMembersWithoutRole(db, role.id, q) : []}
         danger={dangerLabels(permsOf(role))}
+        templates={await allRoleTemplates(db)}
         flash={c.req.query('msg')}
         n={Number(c.req.query('n')) || 0}
       />,
@@ -3279,17 +3281,41 @@ export function createWebApp(deps: WebDeps) {
   app.post('/roles/:id/members/remove', (c) => roleMembers(c, false));
 
   /** ロールを作る（いちばん下にできる。権限はなしで作って、あとからロールのページで付ける） */
+  // 📋 権限のテンプレート: 今のロールの権限から作る（同じ名前なら上書き）・消す
+  app.post('/roles/templates', async (c) => {
+    const body = await c.req.parseBody();
+    const roleId = typeof body.roleId === 'string' && /^\d{17,20}$/.test(body.roleId) ? body.roleId : '';
+    const back = (msg: string) => c.redirect(roleId ? `/roles/${roleId}?msg=${msg}#role-template` : `/roles?msg=${msg}#role-templates`);
+    const role = roleId ? (await loadRoles())?.find((r) => r.id === roleId) : undefined;
+    if (!role) return back('template_invalid');
+    const r = await saveRoleTemplate(db, typeof body.name === 'string' ? body.name : '', permsOf(role), c.get('session').userId);
+    if (r !== 'ok') return back(`template_${r}`);
+    await audit(db, { actorId: c.get('session').userId, action: 'role.template_save', detail: { name: body.name, from: role.name }, via: 'web' });
+    return back('template_saved');
+  });
+  app.post('/roles/templates/:id/delete', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (Number.isSafeInteger(id) && (await deleteRoleTemplate(db, id))) {
+      await audit(db, { actorId: c.get('session').userId, action: 'role.template_delete', detail: { id }, via: 'web' });
+      return c.redirect('/roles?msg=template_deleted#role-templates');
+    }
+    return c.redirect('/roles#role-templates');
+  });
+
   app.post('/roles/new', async (c) => {
     const body = await c.req.parseBody();
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const colorRaw = typeof body.color === 'string' ? body.color : '';
     if (!name || name.length > 100 || (body.noColor !== 'yes' && !/^#[0-9a-f]{6}$/i.test(colorRaw))) return c.redirect('/roles?msg=invalid#new-role');
+    // テンプレートを選んでいれば、その権限で作る（管理者入りは作るときには付けない）
+    const tpl = typeof body.template === 'string' && body.template ? await findRoleTemplate(db, body.template) : undefined;
+    if (tpl && (tpl.bits & ADMINISTRATOR) !== 0n) return c.redirect('/roles?msg=template_admin#new-role');
     const patch: RolePatch = {
       name,
       color: body.noColor === 'yes' ? 0 : parseInt(colorRaw.slice(1), 16),
       hoist: body.hoist === 'yes',
       mentionable: body.mentionable === 'yes',
-      permissions: '0',
+      permissions: (tpl?.bits ?? 0n).toString(),
     };
     let role: GuildRole;
     try {
@@ -3298,7 +3324,7 @@ export function createWebApp(deps: WebDeps) {
       logger.warn({ err }, 'role create failed');
       return c.redirect('/roles?msg=failed#new-role');
     }
-    await audit(db, { actorId: c.get('session').userId, action: 'role.create', detail: { roleId: role.id, name }, via: 'web' });
+    await audit(db, { actorId: c.get('session').userId, action: 'role.create', detail: { roleId: role.id, name, ...(tpl ? { template: tpl.name } : {}) }, via: 'web' });
     return c.redirect(`/roles/${role.id}?msg=created`);
   });
 

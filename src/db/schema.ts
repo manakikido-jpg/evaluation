@@ -1659,3 +1659,14 @@ export const castImages = pgTable('cast_images', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+
+/** 📋 ロールの権限のテンプレート（運営が作ったもの。はじめからあるものはコードの中） */
+export const roleTemplates = pgTable('role_templates', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  name: text('name').notNull().unique(),
+  /** 権限のビット（10 進の文字列） */
+  bits: text('bits').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type RoleTemplateRow = typeof roleTemplates.$inferSelect;

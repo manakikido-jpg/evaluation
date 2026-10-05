@@ -1,6 +1,7 @@
 import type { AdminSession, Member } from '../../db/schema.js';
 import type { GuildRole } from '../../lib/discordRest.js';
 import { dangerLabels, hasPerm, PERMISSION_GROUPS, permsOf } from '../../services/roles.js';
+import { bitLabels, bitList, TEMPLATE_MAX, type RoleTemplate } from '../../services/roleTemplates.js';
 import { Avatar, Layout } from './layout.js';
 
 export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
@@ -26,7 +27,75 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   pick_members: { text: '人を選んでください。', kind: 'warn' },
   too_many_members: { text: '1 回に 50 人までです。分けてください。', kind: 'warn' },
   need_confirm_danger: { text: '注意の権限があるロールを付けるときは、確認のチェックを入れてください。', kind: 'warn' },
+  template_saved: { text: '📋 今の権限をテンプレートにしました（同じ名前があれば上書き）。', kind: 'ok' },
+  template_deleted: { text: '📋 テンプレートを消しました。', kind: 'ok' },
+  template_invalid: { text: 'テンプレートの名前を 1〜40 文字で入れてください（はじめからあるものと同じ名前はつけられません）。', kind: 'warn' },
+  template_too_many: { text: `テンプレートは ${TEMPLATE_MAX} 個までです。使わないものを消してください。`, kind: 'warn' },
+  template_admin: { text: '「管理者」の入った権限はテンプレートにできません（作るときに付けると危ないため）。', kind: 'warn' },
 };
+
+/** テンプレートを選ぶ欄（option の value は key。data-bits に付く権限） */
+function TemplateOptions(p: { templates: RoleTemplate[]; withNone?: boolean }) {
+  const custom = p.templates.filter((t) => !t.builtin);
+  return (
+    <>
+      {p.withNone && <option value="">使わない（権限なしで作る）</option>}
+      <optgroup label="はじめからあるもの">
+        {p.templates
+          .filter((t) => t.builtin)
+          .map((t) => (
+            <option value={t.key} data-bits={bitList(t.bits)}>
+              {t.name}
+            </option>
+          ))}
+      </optgroup>
+      {custom.length > 0 && (
+        <optgroup label="作ったもの">
+          {custom.map((t) => (
+            <option value={t.key} data-bits={bitList(t.bits)}>
+              📋 {t.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  );
+}
+
+/** ロールの一覧ページのテンプレートの一覧 */
+function TemplateList(p: { templates: RoleTemplate[]; csrf: string }) {
+  return (
+    <section class="card anchor" id="role-templates">
+      <h2>📋 権限のテンプレート</h2>
+      <p class="note">
+        ロールを作るとき・ロールのページで選ぶと、その権限にまとめてチェックが付きます。自分のテンプレートは、ロールのページの「今の権限をテンプレートにする」で作れます（{TEMPLATE_MAX} 個まで）。
+      </p>
+      <ul class="tpl-list">
+        {p.templates.map((t) => {
+          const labels = bitLabels(t.bits);
+          return (
+            <li>
+              <div>
+                <strong>{t.builtin ? t.name : `📋 ${t.name}`}</strong>
+                {t.note && <span class="note"> {t.note}</span>}
+                <details>
+                  <summary class="note">付く権限（{labels.length}）</summary>
+                  <p class="note">{labels.length ? labels.join('・') : 'なし'}</p>
+                </details>
+              </div>
+              {!t.builtin && (
+                <form method="post" action={`/roles/templates/${t.key.slice(2)}/delete`} class="inline-form">
+                  <input type="hidden" name="_csrf" value={p.csrf} />
+                  <button type="submit">消す</button>
+                </form>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 function Flash(props: { code?: string; n?: number }) {
   const f = props.code && Object.hasOwn(ROLE_FLASH, props.code) ? ROLE_FLASH[props.code] : undefined;
@@ -46,7 +115,7 @@ function Swatch(props: { color: number }) {
 
 export type RoleRow = { role: GuildRole; kind?: string; members: number; locked: boolean };
 
-export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash?: string; loadFailed?: boolean }) {
+export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash?: string; loadFailed?: boolean; templates?: RoleTemplate[] }) {
   // @everyone は位置 0
   const editable = props.rows.filter((r) => !r.locked && r.role.position !== 0);
   const offCount = editable.filter((r) => !r.role.mentionable).length;
@@ -175,8 +244,14 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
       <form method="post" action="/roles/new" class="card anchor" id="new-role">
         <input type="hidden" name="_csrf" value={props.session.csrfToken} />
         <h2>➕ ロールを作る</h2>
-        <p class="note">いちばん下（@everyone のすぐ上）にできます。権限はなしで作るので、作ったあとに開くページで付けてください。並び順は Discord のサーバー設定 → ロールで変えられます。</p>
+        <p class="note">いちばん下（@everyone のすぐ上）にできます。テンプレートを選ぶとその権限で、選ばなければ権限なしで作ります（あとから開くページで変えられます）。並び順は Discord のサーバー設定 → ロールで変えられます。</p>
         <div class="fields">
+          <label class="field">
+            <span>📋 権限のテンプレート</span>
+            <select name="template">
+              <TemplateOptions templates={props.templates ?? []} withNone />
+            </select>
+          </label>
           <label class="field">
             <span>名前</span>
             <input type="text" name="name" maxlength={100} required />
@@ -202,6 +277,7 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
           作る
         </button>
       </form>
+      {props.templates && <TemplateList templates={props.templates} csrf={props.session.csrfToken} />}
     </Layout>
   );
 }
@@ -220,6 +296,7 @@ export function RolePage(props: {
   candidates?: Pick<Member, 'id' | 'displayName' | 'username' | 'avatarUrl'>[];
   /** 注意の権限（あれば付けるときに確認） */
   danger?: string[];
+  templates?: RoleTemplate[];
   flash?: string;
   n?: number;
 }) {
@@ -277,6 +354,24 @@ export function RolePage(props: {
           </div>
         )}
         {props.isEveryone && <p class="note">「みんな（@everyone）」はサーバーの全員の基本の権限です。名前・色は変えられません。</p>}
+        {!disabled && props.templates && (
+          <div class="tpl-pick">
+            <label class="field">
+              <span>📋 テンプレートから選ぶ（下のチェックがまとめて変わります。保存するまで Discord は変わりません）</span>
+              <span class="inline-actions">
+                <select data-perm-template aria-label="権限のテンプレート">
+                  <TemplateOptions templates={props.templates} />
+                </select>
+                <button type="button" data-perm-apply>
+                  当てはめる
+                </button>
+              </span>
+            </label>
+            <p class="note" data-perm-applied hidden>
+              テンプレートを当てはめました。確かめて「保存」を押すと Discord に入ります。
+            </p>
+          </div>
+        )}
         {PERMISSION_GROUPS.map((g) => (
           <fieldset class="perms">
             <legend>{g.title}</legend>
@@ -304,6 +399,18 @@ export function RolePage(props: {
           </>
         )}
       </form>
+      {!props.locked && (
+        <form method="post" action="/roles/templates" class="card anchor" id="role-template">
+          <input type="hidden" name="_csrf" value={session.csrfToken} />
+          <input type="hidden" name="roleId" value={role.id} />
+          <h2>📋 今の権限をテンプレートにする</h2>
+          <p class="note">保存してある今の権限（{bitLabels(bits).length} 個）を、名前をつけてテンプレートにします。ほかのロールを作るとき・直すときに選べます。同じ名前があれば上書きします。</p>
+          <span class="inline-actions">
+            <input type="text" name="name" maxlength={40} required placeholder="例: 配信者" aria-label="テンプレートの名前" />
+            <button type="submit">テンプレートにする</button>
+          </span>
+        </form>
+      )}
       {canEdit && (
         <section class="card anchor" id="role-add">
           <h2>➕ 人に付ける</h2>

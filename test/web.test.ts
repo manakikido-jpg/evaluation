@@ -2458,6 +2458,40 @@ describe('ロール（管理画面）', () => {
     expect((await listAudit(db, { action: 'role.delete' }))[0]?.detail).toMatchObject({ name: 'イベント係' });
   });
 
+  it('📋 権限のテンプレート: はじめからあるもので作る・今の権限から作る・消す。管理者入りは作れない', async () => {
+    const { BUILTIN_ROLE_TEMPLATES, allRoleTemplates } = await import('../src/services/roleTemplates.js');
+    const g = await login(GUJI);
+    const list = await (await get('/roles', g)).text();
+    expect(list).toContain('id="role-templates"');
+    expect(list).toContain('👀 見るだけ');
+    expect(list).toContain('name="template"');
+    // はじめからあるもの（見るだけ）で作る
+    const ro = BUILTIN_ROLE_TEMPLATES.find((t) => t.key === 'b:readonly')!;
+    await form(g, '/roles/new', [['name', '見学'], ['color', '#00ff00'], ['template', 'b:readonly']]);
+    expect(actions).toContain(`createRole ${JSON.stringify({ name: '見学', color: 0x00ff00, hoist: false, mentionable: false, permissions: ro.bits.toString() })}`);
+    expect(ro.bits).toBe((1n << 10n) | (1n << 16n) | (1n << 6n));
+    // ロールのページ: 選ぶ欄と、今の権限からテンプレートを作る
+    const page = await (await get(`/roles/${ROLE.sanpaisha}`, g)).text();
+    expect(page).toContain('data-perm-template');
+    expect(page).toContain('action="/roles/templates"');
+    const saved = await form(g, '/roles/templates', [['roleId', ROLE.sanpaisha], ['name', '参拝者のまね']]);
+    expect(saved.headers.get('location')).toBe(`/roles/${ROLE.sanpaisha}?msg=template_saved#role-template`);
+    const mine = (await allRoleTemplates(db)).find((t) => t.name === '参拝者のまね')!;
+    expect(mine.bits).toBe(BigInt(roleList.find((r) => r.id === ROLE.sanpaisha)!.permissions ?? '0'));
+    expect((await form(g, '/roles/templates', [['roleId', ROLE.sanpaisha], ['name', '']])).headers.get('location')).toBe(`/roles/${ROLE.sanpaisha}?msg=template_invalid#role-template`);
+    // 作ったテンプレートで作る
+    await form(g, '/roles/new', [['name', '二人目'], ['noColor', 'yes'], ['template', mine.key]]);
+    expect(actions.at(-1)).toContain(`"permissions":"${mine.bits.toString()}"`);
+    // 管理者の入ったロールからは作れない
+    const ADMIN = '980000000000000070';
+    roleList.push({ id: ADMIN, name: '管理', position: 3, managed: false, color: 0, permissions: String(1n << 3n) });
+    expect((await form(g, '/roles/templates', [['roleId', ADMIN], ['name', '管理のまね']])).headers.get('location')).toBe(`/roles/${ADMIN}?msg=template_admin#role-template`);
+    // 消す
+    const del = await form(g, `/roles/templates/${mine.key.slice(2)}/delete`, []);
+    expect(del.headers.get('location')).toBe('/roles?msg=template_deleted#role-templates');
+    expect((await allRoleTemplates(db)).some((t) => t.name === '参拝者のまね')).toBe(false);
+  });
+
   it('ロールを人に付ける・外す: 名前で探して選ぶ・選んだ人から外す。注意の権限は確認・🔒 はできない', async () => {
     const EV = '980000000000000060';
     const MOD = '980000000000000061';

@@ -87,3 +87,19 @@ document.addEventListener('change', (e) => {
     form.classList.toggle('dirty', picked.length > 0);
   }
 });
+
+// 📋 ロールの権限のテンプレート: 選んで「当てはめる」と、権限のチェックがまとめて変わる（保存するまで Discord は変わらない）
+document.addEventListener('click', (e) => {
+  const btn = e.target instanceof Element ? e.target.closest('[data-perm-apply]') : null;
+  if (!btn) return;
+  const form = btn.closest('form');
+  const select = form && form.querySelector('[data-perm-template]');
+  const opt = select && select.selectedOptions[0];
+  if (!form || !opt) return;
+  const bits = new Set((opt.getAttribute('data-bits') || '').split(',').filter(Boolean));
+  form.querySelectorAll('input[type=checkbox][name=perm]').forEach((box) => {
+    if (!box.disabled) box.checked = bits.has(box.value);
+  });
+  const note = form.querySelector('[data-perm-applied]');
+  if (note) note.hidden = false;
+});
