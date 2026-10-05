@@ -408,6 +408,18 @@ export const casinoSchema = z.object({
   keibaMaxOwned: z.number().int().min(0).max(20).default(3),
   /** 🏇 調教 1 回の値段（0 で調教できない） */
   keibaTrainPrice: z.number().int().min(0).max(1_000_000).default(300),
+  /** 🏇 馬主への還元: 賞金・出走手当の倍率（%。100 で元のまま） */
+  keibaPrizeMult: z.number().int().min(0).max(1000).default(150),
+  /** 🏇 最低保証の 1 着賞金（クラスごと: 新馬・未勝利・1〜3 勝・オープン・G3・G2・G1。2〜5 着はその 20・13・10・7 / 50）。胴元が出す */
+  keibaPurse: z.array(z.number().int().min(0).max(1_000_000)).length(9).default([300, 300, 400, 500, 700, 1000, 2000, 3000, 5000]),
+  /** 🏇 最低保証で足す分（胴元が出す）を、1 人が 1 日（日本時間）に受け取れる上限（0 で上限なし） */
+  keibaPurseDailyCap: z.number().int().min(0).max(100_000_000).default(20000),
+  /** 🏇 応援金: その馬の単勝・複勝に、馬主でない人が賭けた額の何 % を馬主へ */
+  keibaFanPct: z.number().int().min(0).max(20).default(3),
+  /** 🏇 血統ロイヤリティ: 産駒が稼いだ賞金の何 % を親の馬主へ（胴元が出す） */
+  keibaRoyaltyPct: z.number().int().min(0).max(50).default(10),
+  /** 🏇 功労金: 引退するとき 1 勝につき（重賞の勝ちは 3 倍）。胴元が出す */
+  keibaRetirePerWin: z.number().int().min(0).max(1_000_000).default(300),
   /** 🏇 馬主の馬が勝ったときにお祝いを流すチャンネル（なければ流さない） */
   keibaAnnounceChannelId: z.string().regex(/^\d{5,25}$/).optional(),
   /** 🐴 馬主ロール（走れる馬を持っている人）・🏆 G1 馬主ロール（G1 を勝ったことがある人）。なければ付けない */

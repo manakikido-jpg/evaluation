@@ -758,6 +758,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         <KbStablePage
           me={me}
           horses={horses}
+          pay={cfg}
           price={cfg.keibaHorsePrice}
           max={cfg.keibaMaxOwned}
           trainPrice={cfg.keibaTrainPrice}
@@ -841,7 +842,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     '/casino/keiba/stable/:id/breed',
     page(async (c, me) => {
       const id = Number(c.req.param('id'));
-      const r = Number.isSafeInteger(id) ? await retireToBreed(db, me.session.userId, id, d.now()) : 'not_found';
+      const r = Number.isSafeInteger(id) ? await retireToBreed(db, me.session.userId, id, d.now(), d.cfg().casino.keibaRetirePerWin) : 'not_found';
       return stableBack(c, r === 'ok' ? 'horse_bred' : r === 'not_found' ? r : `horse_${r}`);
     }, { post: true }),
   );
@@ -861,8 +862,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     '/casino/keiba/stable/:id/retire',
     page(async (c, me) => {
       const id = Number(c.req.param('id'));
-      const ok = Number.isSafeInteger(id) && (await retireOwnHorse(db, me.session.userId, id, d.now()));
-      return stableBack(c, ok ? 'horse_retired' : 'not_found');
+      const r = Number.isSafeInteger(id) ? await retireOwnHorse(db, me.session.userId, id, d.now(), d.cfg().casino.keibaRetirePerWin) : false;
+      return stableBack(c, r === false ? 'not_found' : r > 0 ? 'horse_retired_bonus' : 'horse_retired');
     }, { post: true }),
   );
 

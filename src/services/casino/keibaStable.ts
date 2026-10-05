@@ -127,14 +127,32 @@ export async function nameOwnHorse(db: Db, memberId: string, id: number, raw: st
   return renameHorse(db, id, raw);
 }
 
-/** 馬主が引退させる（もう走らない。銭は戻らない） */
-export async function retireOwnHorse(db: Db, memberId: string, id: number, now = new Date()): Promise<boolean> {
-  const r = await db
-    .update(keibaHorses)
-    .set({ retiredAt: now })
-    .where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)))
-    .returning({ id: keibaHorses.id });
-  return r.length > 0;
+/** 功労金: 1 勝につき perWin（重賞の勝ちは 3 倍） */
+export async function retireBonusOf(db: Db, horseId: number, wins: number, perWin: number): Promise<number> {
+  if (perWin <= 0 || wins <= 0) return 0;
+  const [{ n } = { n: 0 }] = await db
+    .select({ n: count() })
+    .from(keibaEntries)
+    .where(and(eq(keibaEntries.horseId, horseId), eq(keibaEntries.pos, 1), gte(keibaEntries.cls, 6)));
+  return perWin * (wins + 2 * Math.min(n, wins));
+}
+async function payRetireBonus(tx: Db, memberId: string, h: { id: number; wins: number; name: string }, perWin: number): Promise<number> {
+  const bonus = await retireBonusOf(tx, h.id, h.wins, perWin);
+  if (bonus > 0) await addCoins(tx, memberId, bonus, 'keiba_prize', { retire: h.id, name: h.name });
+  return bonus;
+}
+
+/** 馬主が引退させる（もう走らない。勝っていれば功労金が出る。いくら出たかを返す・引退できなければ false） */
+export async function retireOwnHorse(db: Db, memberId: string, id: number, now = new Date(), perWin = 0): Promise<number | false> {
+  return db.transaction(async (tx) => {
+    const r = await tx
+      .update(keibaHorses)
+      .set({ retiredAt: now })
+      .where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)))
+      .returning({ id: keibaHorses.id, wins: keibaHorses.wins, name: keibaHorses.name });
+    if (!r[0]) return false;
+    return payRetireBonus(tx, memberId, r[0], perWin);
+  });
 }
 
 /** 走れる馬（足りなければ入れてから）。放牧中・疲れすぎの馬は出さない */
@@ -185,10 +203,16 @@ export async function setRetired(db: Db, id: number, retired: boolean, now = new
 }
 
 /** レースが終わったら、名簿の馬の成績を足す（疲れがたまり、調教の上乗せは使い切る）。馬主の馬は 1 走ずつ記録 */
-export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], now = new Date()): Promise<void> {
+export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], now = new Date(), royaltyPct = 0): Promise<void> {
   for (const r of rows) {
     const [h] = await tx.select().from(keibaHorses).where(eq(keibaHorses.id, r.horseId)).for('update');
     if (!h) continue;
+    // 🧬 血統ロイヤリティ: 産駒が稼いだら、親の馬主にも（胴元が出す）
+    const royalty = h.parentId && r.ownerId ? Math.floor(((r.prize ?? 0) * royaltyPct) / 100) : 0;
+    if (royalty > 0) {
+      const [parent] = await tx.select({ ownerId: keibaHorses.ownerId, name: keibaHorses.name }).from(keibaHorses).where(eq(keibaHorses.id, h.parentId!));
+      if (parent?.ownerId) await addCoins(tx, parent.ownerId, royalty, 'keiba_prize', { royalty: h.id, foal: h.name, parent: parent.name });
+    }
     if (r.ownerId) await tx.insert(keibaRuns).values({ horseId: h.id, horseName: r.name ?? h.name, ownerId: r.ownerId, pos: r.pos, prize: r.prize ?? 0, cls: r.cls ?? 0, race: r.race, at: now });
     if (r.time !== undefined)
       await tx.insert(keibaEntries).values({
@@ -341,12 +365,15 @@ export async function buyFromOwner(db: Db, buyerId: string, id: number, max: num
 export const KB_FOALS_MAX = 3;
 
 /** 引退させる。1 勝以上していれば繁殖入り（breed）もできる */
-export async function retireToBreed(db: Db, memberId: string, id: number, now = new Date()): Promise<'ok' | 'not_found' | 'no_wins'> {
-  const [h] = await db.select().from(keibaHorses).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)));
-  if (!h) return 'not_found';
-  if (h.wins < 1) return 'no_wins';
-  await db.update(keibaHorses).set({ retiredAt: now, breeding: true, salePrice: null }).where(eq(keibaHorses.id, id));
-  return 'ok';
+export async function retireToBreed(db: Db, memberId: string, id: number, now = new Date(), perWin = 0): Promise<'ok' | 'not_found' | 'no_wins'> {
+  return db.transaction(async (tx) => {
+    const [h] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt))).for('update');
+    if (!h) return 'not_found' as const;
+    if (h.wins < 1) return 'no_wins' as const;
+    await tx.update(keibaHorses).set({ retiredAt: now, breeding: true, salePrice: null }).where(eq(keibaHorses.id, id));
+    await payRetireBonus(tx, memberId, h, perWin);
+    return 'ok' as const;
+  });
 }
 
 export async function foalsOf(db: Db, parentId: number): Promise<number> {

@@ -11,7 +11,13 @@ export type Who = { id: string; name: string };
 
 /** 引く銭（足りなければ動かさない）。limited: 1 日の上限に数える */
 export type Debit = { memberId: string; amount: number; reason: 'casino_bet' | 'casino_buyin' | 'casino_hold'; limited: boolean };
-export type Credit = { memberId: string; amount: number; reason: 'casino_win' | 'casino_refund' | 'casino_cashout' | 'keiba_prize' };
+export type Credit = {
+  memberId: string;
+  amount: number;
+  reason: 'casino_win' | 'casino_refund' | 'casino_cashout' | 'keiba_prize';
+  /** 胴元が出す最低保証の賞金（1 人 1 日の上限まで） */
+  cap?: 'keiba_purse';
+};
 /** カジノの収支（運営の画面）に入れる 1 回分 */
 export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };
 /** 🀄 麻雀の戦績（終局のとき 1 人 1 行） */

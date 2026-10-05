@@ -375,6 +375,7 @@ const MSG: Record<string, string> = {
   horse_bought: '🐴 馬を買いました。次の新馬戦から走ります（卓に座っていると優先して出走）。',
   horse_named: '名前を変えました。',
   horse_retired: '引退させました。おつかれさまでした。',
+  horse_retired_bonus: '引退させました。おつかれさまでした。🎖 勝った数に応じた功労金を受け取りました。',
   horse_invalid: '馬の名前は 1〜18 文字で入れてください。',
   horse_taken: 'その名前の馬はもういます。',
   horse_too_many: '持てる頭数に届いています。',
@@ -391,7 +392,7 @@ const MSG: Record<string, string> = {
   horse_traded: '💱 馬を買いました。あなたの勝負服で走ります。',
   horse_self: '自分の馬は買えません。',
   horse_no_wins: '繁殖入りできるのは、1 勝以上した馬だけです。',
-  horse_bred: '🌸 引退して繁殖入りしました。産駒を迎えられます。',
+  horse_bred: '🌸 引退して繁殖入りしました。産駒を迎えられます。🎖 勝った数に応じた功労金も受け取りました。',
   horse_foal: '🐣 産駒を迎えました。新馬戦から走ります。',
   horse_no_foals: 'この馬の産駒は、もう迎えきりました。',
 };

@@ -861,3 +861,8 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .art-warn { position: absolute; left: 4px; right: 4px; bottom: 4px; padding: 2px 6px; border-radius: 4px; background: #b3261e; color: #fff; font-size: 0.8em; text-align: center; }
 .art-savebar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card, #fff); box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.12); }
 form.dirty .art-savebar { border-color: #e0a020; }
+
+/* 🏇 最低保証の賞金（クラスごと） */
+.purse-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; margin-top: 4px; }
+.purse-grid label { display: flex; flex-direction: column; gap: 2px; }
+.purse-grid input { width: 100%; }

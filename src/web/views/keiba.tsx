@@ -15,8 +15,8 @@ import {
   classOf,
   isGraded,
   KB_LOOK,
-  KB_PRIZE_RATE,
-  prizesOf,
+  kbPayConf,
+  racePrizes,
   KB_BET_LABEL,
   KB_BET_TYPES,
   KB_DISTANCES,
@@ -620,8 +620,8 @@ export function KeibaView(p: { t: CasinoTable; s: KbState; me: CasinoMe; casino:
             <p class="kb-cond">{raceLine(s)}</p>
             <p class="kb-prize">
               🏆 1 着賞金 {me.coin.emoji}
-              {fmt((s.prizes ?? prizesOf(s.race.cls, s.real))[0] ?? 0)}
-              <small>（メンバーが賭けた合計の {KB_PRIZE_RATE[s.race.cls]}%。馬主の馬が 1〜5 着なら馬主に）</small>
+              {fmt((s.prizes ?? racePrizes(s.race.cls, s.real, kbPayConf(p.casino)))[0] ?? 0)}
+              <small>（賭けが増えるほど上がる。最低 {fmt(p.casino.keibaPurse[s.race.cls] ?? 0)}。馬主の馬が 1〜5 着なら馬主に）</small>
             </p>
           </div>
           <div class="c-phase">
@@ -810,6 +810,8 @@ function SilkForm(p: { csrf: string; silk?: { base: string; accent: string; patt
 }
 
 export function KbStablePage(p: {
+  /** 馬主への還元の設定 */
+  pay?: Pick<CasinoConfig, 'keibaPrizeMult' | 'keibaPurse' | 'keibaFanPct' | 'keibaRoyaltyPct' | 'keibaRetirePerWin'>;
   me: CasinoMe;
   horses: StableHorse[];
   price: number;
@@ -1027,7 +1029,19 @@ export function KbStablePage(p: {
           <li>買った馬はまず「新馬」戦から。勝つと 未勝利 → 1 勝クラス → 2 勝 → 3 勝 → オープン と上がり、オープンの馬は重賞（G3・G2・G1）にも出ます。</li>
           <li>強さ（速さ・スタミナ・脚質・得意な距離と馬場）は生まれつき。走ってみるまで分かりません。</li>
           <li>レースの 8 頭は名簿から選ばれます。あなたがみんなでダービーの卓に座っていると、あなたの馬が優先して出走します。</li>
-          <li>1〜5 着に入ると賞金（メンバーが賭けた合計の数 %・クラスが上ほど多い）。着外でも出走手当（0.25%）が入ります。</li>
+          <li>
+            1〜5 着に入ると賞金（メンバーが賭けた合計の数 %・クラスが上ほど多い）。
+            {p.pay && p.pay.keibaPurse.some((v) => v > 0) ? `賭けが少なくても、1 着なら最低 ${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜 ${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）は出ます。` : ''}
+            着外でも出走手当が入ります。
+          </li>
+          {p.pay && p.pay.keibaFanPct > 0 && <li>📣 応援金: ほかの人があなたの馬の単勝・複勝に賭けると、その {p.pay.keibaFanPct}% が着順に関係なく入ります。</li>}
+          {p.pay && p.pay.keibaRoyaltyPct > 0 && <li>🧬 血統ロイヤリティ: あなたの繁殖馬の産駒が賞金を取ると、その {p.pay.keibaRoyaltyPct}% があなたにも入ります（産駒を売っても続きます）。</li>}
+          {p.pay && p.pay.keibaRetirePerWin > 0 && (
+            <li>
+              🎖 功労金: 引退させるとき（繁殖入りも）、1 勝につき {p.me.coin.emoji}
+              {fmt(p.pay.keibaRetirePerWin)}（重賞の勝ちは 3 倍）が入ります。
+            </li>
+          )}
           <li>💪 調教（6 時間に 1 回）: 次のレースの調子が 1 つ上がり、速さも少し伸びます。疲れが少したまります。</li>
           <li>🌿 疲れ: 1 走で 25 たまり、1 時間に 10 抜けます。50 から調子 −1、80 からは出走しません。放牧すると 1 時間休む代わりに疲れがすっかり抜けます。</li>
           <li>🌸 1 勝以上した馬は、引退して繁殖入りできます。親の能力を受け継ぎやすい産駒を、半額で {KB_FOALS_MAX} 頭まで迎えられます。</li>

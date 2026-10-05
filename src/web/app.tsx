@@ -1416,6 +1416,12 @@ export function createWebApp(deps: WebDeps) {
       keibaHorsePrice: typeof body.keibaHorsePrice === 'string' ? int('keibaHorsePrice') : cfg.casino.keibaHorsePrice,
       keibaMaxOwned: typeof body.keibaMaxOwned === 'string' ? int('keibaMaxOwned') : cfg.casino.keibaMaxOwned,
       keibaTrainPrice: typeof body.keibaTrainPrice === 'string' ? int('keibaTrainPrice') : cfg.casino.keibaTrainPrice,
+      // 🏇 馬主への還元（欄がない古い画面から送られたら、今のまま）
+      ...(['keibaPrizeMult', 'keibaFanPct', 'keibaRoyaltyPct', 'keibaRetirePerWin', 'keibaPurseDailyCap'] as const).reduce<Record<string, number>>((o, k) => {
+        o[k] = typeof body[k] === 'string' ? int(k) : cfg.casino[k];
+        return o;
+      }, {}),
+      keibaPurse: cfg.casino.keibaPurse.map((v, i) => (typeof body[`keibaPurse_${i}`] === 'string' ? int(`keibaPurse_${i}`) : v)),
       ...(['keibaAnnounceChannelId', 'keibaOwnerRoleId', 'keibaG1RoleId'] as const).reduce<Record<string, string>>((o, k) => {
         const v = body[k];
         if (typeof v === 'string' && /^\d{5,25}$/.test(v)) o[k] = v;

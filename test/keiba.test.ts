@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { keibaHorses } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
 import type { Rng } from '../src/services/casino/cards.js';
 import {
   addToPool,
@@ -24,6 +25,10 @@ import {
   classOf,
   prizesOf,
   appearanceOf,
+  racePrizes,
+  raceAppearance,
+  fanMoney,
+  kbPayConf,
   newStable,
   type KbStable,
 } from '../src/services/casino/keiba.js';
@@ -68,6 +73,7 @@ const rngOf = (seed: number): Rng => {
 const tcfg: GuildConfig = { ...cfg, casino: { ...cfg.casino, dailyBetLimit: 0 } };
 const A = { id: '760000000000000001', name: 'さくら' };
 const B = { id: '760000000000000002', name: 'もみじ' };
+const C = { id: '760000000000000003', name: 'かえで' };
 const ctx = (now: number, seed = 1): Ctx => ({ now, rng: rngOf(seed), cfg: tcfg });
 
 describe('🏇 レースとオッズ', () => {
@@ -228,9 +234,45 @@ describe('🏇 クラスと重賞・賞金', () => {
     const fin = keiba.tick(s, ctx(s.deadline));
     if (!fin || !fin.ok) throw new Error('no finish');
     const pos = fin.state.run!.order.indexOf(fin.state.horses.find((h) => h.ownerId === B.id)!.no);
-    const prize = (pos < 5 ? prizesOf(0, 8000)[pos]! : 0) + appearanceOf(8000);
-    expect(fin.fx?.credits?.filter((c) => c.reason === 'keiba_prize')).toEqual(prize ? [{ memberId: B.id, amount: prize, reason: 'keiba_prize' }] : []);
+    // 賞金は倍率（150%）・出走手当・応援金（馬主でない A が 1 番に単勝 1000 → 3%）。賭けたのが 1 人なので最低保証はなし
+    const conf = kbPayConf(tcfg.casino);
+    const prize = (pos < 5 ? racePrizes(0, 8000, { ...conf, purse: [] })[pos]! : 0) + raceAppearance(8000, conf) + 30;
+    expect(fin.fx?.credits?.filter((c) => c.reason === 'keiba_prize')).toEqual([{ memberId: B.id, amount: prize, reason: 'keiba_prize' }]);
     expect(fin.fx?.keiba?.find((r) => r.horseId === 1)?.prize).toBe(prize);
+  });
+
+  it('最低保証は 2 人以上が賭けたレースだけ。足す分は別に渡す（1 日の上限のため）', () => {
+    const t0 = new Date('2026-10-02T12:00:00Z').getTime();
+    const roster = Array.from({ length: 8 }, (_, i) => horse(i + 1, 0, 0, B.id));
+    let s = (keiba.create(A, { cls: '0' }, { ...ctx(t0), roster }) as { state: KbState }).state;
+    s = (keiba.join(s, C, {}, ctx(t0)) as { state: KbState }).state;
+    s = (keiba.act(s, A.id, { action: 'bet', type: 'win', a: '1', bet: '10' }, ctx(t0)) as { state: KbState }).state;
+    s = (keiba.act(s, C.id, { action: 'bet', type: 'win', a: '2', bet: '10' }, ctx(t0)) as { state: KbState }).state;
+    s = (keiba.act(s, A.id, { action: 'start' }, ctx(t0, 5)) as { state: KbState }).state;
+    const fin = keiba.tick(s, ctx(s.deadline));
+    if (!fin || !fin.ok) throw new Error('no finish');
+    const topped = fin.fx!.credits!.filter((c) => c.cap === 'keiba_purse');
+    expect(topped.map((c) => c.amount).sort((a, b) => b - a)).toEqual([300, 120, 78, 60, 42]);
+    expect(topped.every((c) => c.memberId === B.id)).toBe(true);
+  });
+
+  it('馬主への還元: 賞金の倍率・最低保証（2〜5 着はその割合）・応援金は馬主の分を数えない', () => {
+    const conf = { prizeMult: 150, purse: [300, 300, 400, 500, 700, 1000, 2000, 3000, 5000], fanPct: 3 };
+    // 賭けが少なければ最低保証
+    expect(racePrizes(0, 0, conf)).toEqual([300, 120, 78, 60, 42]);
+    expect(racePrizes(8, 1000, conf)).toEqual([5000, 2000, 1300, 1000, 700]);
+    // 賭けが多ければ「賭けた合計の数 %」×倍率
+    expect(racePrizes(0, 1_000_000, conf)).toEqual(prizesOf(0, 1_000_000).map((p) => Math.floor(p * 1.5)));
+    expect(raceAppearance(10000, conf)).toBe(37);
+    const tickets = [
+      { memberId: 'x', t: 'win', key: '3', amount: 1000 },
+      { memberId: 'y', t: 'place', key: '3', amount: 500 },
+      { memberId: 'own', t: 'win', key: '3', amount: 5000 },
+      { memberId: 'x', t: 'quinella', key: '3-4', amount: 900 },
+      { memberId: 'x', t: 'win', key: '4', amount: 900 },
+    ];
+    expect(fanMoney(tickets, 3, 'own', conf)).toBe(45);
+    expect(fanMoney(tickets, 3, 'own', { ...conf, fanPct: 0 })).toBe(0);
   });
 });
 
@@ -336,7 +378,8 @@ describe('🏇 名簿と卓のサービス', () => {
     // 持てるのは 1 頭まで → 引退させるとまた買える
     await addCoins(db, A.id, 3000, 'admin_grant');
     expect((await buyHorse(db, A.id, 'ツキノヒメ', 3000, 1)).status).toBe('too_many');
-    expect(await retireOwnHorse(db, A.id, mine!.id)).toBe(true);
+    expect(await retireOwnHorse(db, A.id, mine!.id)).toBe(0);
+    expect(await retireOwnHorse(db, A.id, mine!.id)).toBe(false);
     expect((await buyHorse(db, A.id, 'ツキノヒメ', 3000, 1)).status).toBe('ok');
     // 名簿に馬主の名前が入る
     expect((await loadRoster(db)).find((h) => h.name === 'ツキノヒメ')?.ownerId).toBe(A.id);
@@ -388,11 +431,37 @@ describe('🏇 名簿と卓のサービス', () => {
     const other = await buyHorse(db, B.id, 'ツキノヒメ', 1000, 3);
     if (other.status !== 'ok') throw new Error(other.status);
     expect(await retireToBreed(db, B.id, other.horse.id)).toBe('no_wins');
-    expect(await retireToBreed(db, B.id, id)).toBe('ok');
+    // 繁殖入りでも功労金（1 勝 × 300）
+    const beforeBreed = (await walletOf(db, B.id)).balance;
+    expect(await retireToBreed(db, B.id, id, t0, 300)).toBe('ok');
+    expect((await walletOf(db, B.id)).balance).toBe(beforeBreed + 300);
     const foal = await breedFoal(db, B.id, id, 'サクラノコ', 1500, 3);
     expect(foal).toMatchObject({ status: 'ok', horse: { name: 'サクラノコ', parentId: id, ownerId: B.id, age: 2 } });
     expect((await loadRoster(db, new Date(t0.getTime() + 10 * 3_600_000))).find((h) => h.name === 'サクラノコ')?.sire).toBe('サクラノヒメ');
     expect((await breedFoal(db, A.id, id, 'ちがう人の', 1500, 3)).status).toBe('not_found');
+    // 🧬 産駒が稼ぐと、親の馬主にロイヤリティ 10%（産駒を A に売っても B に入る）
+    if (foal.status !== 'ok') throw new Error(foal.status);
+    await db.update(keibaHorses).set({ ownerId: A.id }).where(eq(keibaHorses.id, foal.horse.id));
+    const beforeRoyalty = (await walletOf(db, B.id)).balance;
+    await applyKeibaResults(db, [{ horseId: foal.horse.id, pos: 1, race: '新馬', dist: 1600, surface: 0, prize: 900, ownerId: A.id, name: 'サクラノコ', cls: 0 }], t0, 10);
+    expect((await walletOf(db, B.id)).balance).toBe(beforeRoyalty + 90);
+    // 引退の功労金: 1 勝 × 300（勝っていなければ 0）
+    expect(await retireOwnHorse(db, A.id, foal.horse.id, t0, 300)).toBe(300);
+    expect(await retireOwnHorse(db, B.id, other.horse.id, t0, 300)).toBe(0);
+  });
+
+  it('最低保証で足す分は、1 人 1 日の上限まで（日本時間の 0 時に戻る）', async () => {
+    const { payCredit } = await import('../src/services/casino/tables/service.js');
+    const cfg2: GuildConfig = { ...tcfg, casino: { ...tcfg.casino, keibaPurseDailyCap: 500 } };
+    const now = new Date();
+    const c = { memberId: A.id, amount: 300, reason: 'keiba_prize' as const, cap: 'keiba_purse' as const };
+    const before = (await walletOf(db, A.id)).balance;
+    expect(await payCredit(db, cfg2, c, now, 'keiba', 1)).toBe(300);
+    expect(await payCredit(db, cfg2, c, now, 'keiba', 1)).toBe(200);
+    expect(await payCredit(db, cfg2, c, now, 'keiba', 1)).toBe(0);
+    // ふつうの賞金は上限なし
+    expect(await payCredit(db, cfg2, { ...c, cap: undefined }, now, 'keiba', 1)).toBe(300);
+    expect((await walletOf(db, A.id)).balance).toBe(before + 800);
   });
 
   it('🏆 馬主の馬が勝ったら Discord でお祝い。馬主ロール・G1 馬主ロール', async () => {

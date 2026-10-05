@@ -1,14 +1,15 @@
-import { and, arrayContains, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, arrayContains, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { GuildConfig, TableKind } from '../../../config.js';
 import type { Db } from '../../../db/client.js';
-import { casinoGames, casinoTables, keibaBets, mahjongResults, type CasinoTable } from '../../../db/schema.js';
+import { casinoGames, casinoTables, coinTx, keibaBets, mahjongResults, type CasinoTable } from '../../../db/schema.js';
+import { jstDate } from '../../activity.js';
 import { addCoins, spendWithin } from '../../economy.js';
 import { todayBets } from '../casino.js';
 import { applyKeibaResults, loadRoster } from '../keibaStable.js';
 import { cryptoRng, type Rng } from '../cards.js';
 import { HOUSE_BOT_ID, isBot } from './bots.js';
 import { ENGINES } from './engines.js';
-import type { Ctx, Effects, Form, Step, TableEngine, Who } from './types.js';
+import type { Credit, Ctx, Effects, Form, Step, TableEngine, Who } from './types.js';
 
 /**
  * 卓を動かす。どの操作も「行をロック → 時間の分を進める → 操作 → 銭の出し入れ → 保存」を 1 つのトランザクションで行う。
@@ -24,6 +25,24 @@ class Stop extends Error {
 export type TableResult = { status: 'ok'; table: CasinoTable } | { status: string };
 
 const engineOf = (kind: string) => (ENGINES as Record<string, TableEngine<unknown> | undefined>)[kind];
+
+/** 銭を渡す（🏇 最低保証で足す分は 1 人 1 日の上限まで。渡した額を返す） */
+export async function payCredit(tx: Db, cfg: GuildConfig, c: Credit, now: Date, kind: string, tableId: number): Promise<number> {
+  if (c.amount <= 0) return 0;
+  if (c.cap !== 'keiba_purse') {
+    await addCoins(tx, c.memberId, c.amount, c.reason, { game: kind, table: tableId });
+    return c.amount;
+  }
+  const limit = cfg.casino.keibaPurseDailyCap;
+  const since = new Date(`${jstDate(now)}T00:00:00+09:00`);
+  const [got] = await tx
+    .select({ n: sql<number>`coalesce(sum(${coinTx.amount}), 0)::int` })
+    .from(coinTx)
+    .where(and(eq(coinTx.memberId, c.memberId), eq(coinTx.reason, 'keiba_prize'), gte(coinTx.at, since), sql`${coinTx.detail}->>'purse' = 'true'`));
+  const pay = limit > 0 ? Math.min(c.amount, Math.max(0, limit - Number(got?.n ?? 0))) : c.amount;
+  if (pay > 0) await addCoins(tx, c.memberId, pay, c.reason, { game: kind, table: tableId, purse: true });
+  return pay;
+}
 
 async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: Date, tableId: number, kind: string): Promise<void> {
   if (!fx) return;
@@ -44,9 +63,9 @@ async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: D
     if (d.amount <= 0) continue;
     if (!(await spendWithin(tx, d.memberId, d.amount, d.reason, { game: kind, table: tableId }))) throw new Stop('poor');
   }
-  for (const c of fx.credits ?? []) if (c.amount > 0) await addCoins(tx, c.memberId, c.amount, c.reason, { game: kind, table: tableId });
+  for (const c of fx.credits ?? []) await payCredit(tx, cfg, c, now, kind, tableId);
   for (const m of fx.mahjong ?? []) await tx.insert(mahjongResults).values({ ...m, tableId, finishedAt: now });
-  if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba, now);
+  if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba, now, cfg.casino.keibaRoyaltyPct);
   if (fx.keibaBets?.length) await tx.insert(keibaBets).values(fx.keibaBets.map((b) => ({ ...b, at: now })));
   for (const r of fx.records ?? []) {
     await tx.insert(casinoGames).values({ memberId: r.memberId, game: r.game, bet: r.bet, payout: r.payout, state: { table: tableId }, status: 'done', createdAt: now, finishedAt: now });

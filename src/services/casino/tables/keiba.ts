@@ -14,8 +14,10 @@ import {
   KB_MAX_TICKETS,
   makeRace,
   margin,
-  prizesOf,
-  appearanceOf,
+  racePrizes,
+  raceAppearance,
+  fanMoney,
+  kbPayConf,
   picksOf,
   seeded,
   seedPools,
@@ -182,13 +184,23 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     if (m.payout > 0) credits.push({ memberId, amount: m.payout, reason: 'casino_win' });
     records.push({ memberId, game: 'keiba', bet: m.bet, payout: m.payout });
   }
-  // 1〜5 着の賞金（メンバーが賭けた合計の数 %）と出走手当（馬主のいる馬はみんな）。馬主に払う
-  const prizes = prizesOf(s.race.cls, s.real);
-  const fee = appearanceOf(s.real);
-  const earned = run.order.map((no, i) => (prizes[i] ?? 0) + (s.horses[no - 1]!.ownerId ? fee : 0));
+  // 1〜5 着の賞金（メンバーが賭けた合計の数 % に倍率・最低保証）と出走手当・応援金（馬主のいる馬はみんな）。馬主に払う
+  // 最低保証で足す分は、2 人以上が賭けたレースだけ（ひとりで何度も走らせて集められないように。1 人 1 日の上限もある）
+  const conf = kbPayConf(ctx.cfg.casino);
+  const base = racePrizes(s.race.cls, s.real, { ...conf, purse: [] });
+  const bettors = new Set(s.tickets.map((t) => t.memberId)).size;
+  const prizes = bettors >= 2 ? racePrizes(s.race.cls, s.real, conf) : base;
+  const fee = raceAppearance(s.real, conf);
+  const earned = run.order.map((no, i) => {
+    const owner = s.horses[no - 1]!.ownerId;
+    return (prizes[i] ?? 0) + (owner ? fee + fanMoney(s.tickets, no, owner, conf) : 0);
+  });
   run.order.forEach((no, i) => {
     const h = s.horses[no - 1]!;
-    if (h.ownerId && earned[i]! > 0) credits.push({ memberId: h.ownerId, amount: earned[i]!, reason: 'keiba_prize' });
+    if (!h.ownerId) return;
+    const top = (prizes[i] ?? 0) - (base[i] ?? 0);
+    if (earned[i]! - top > 0) credits.push({ memberId: h.ownerId, amount: earned[i]! - top, reason: 'keiba_prize' });
+    if (top > 0) credits.push({ memberId: h.ownerId, amount: top, reason: 'keiba_prize', cap: 'keiba_purse' });
   });
   s.prizes = prizes;
   // 名簿の馬の成績（1 走ずつ残して馬の成績ページに。馬主の馬はリーディングとお祝いにも使う）

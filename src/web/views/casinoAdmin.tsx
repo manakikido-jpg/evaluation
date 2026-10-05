@@ -1,7 +1,7 @@
 import type { CasinoConfig, CasinoGame } from '../../config.js';
 import { CASINO_GAMES } from '../../config.js';
 import type { CasinoMatch, KeibaHorseRow } from '../../db/schema.js';
-import { KB_APT, KB_COATS, KB_STYLES, KB_SURFACES } from '../../services/casino/keiba.js';
+import { KB_APT, KB_CLASSES, KB_COATS, KB_STYLES, KB_SURFACES } from '../../services/casino/keiba.js';
 import { CASINO_LABEL, type CasinoStat } from '../../services/casino/casino.js';
 import { Layout, type SessionView } from './layout.js';
 import { BarList, ColumnChart, LineChart, type ChartPoint } from './charts.js';
@@ -226,6 +226,38 @@ export function CasinoAdminPage(p: {
               <label class="field">
                 <span>調教 1 回の値段（0 で調教できない）</span>
                 <input type="number" name="keibaTrainPrice" min={0} max={1000000} value={String(c.keibaTrainPrice)} required />
+              </label>
+              <h3 class="sub">🎁 馬主への還元</h3>
+              <label class="field">
+                <span>賞金・出走手当の倍率（%。100 で「賭けた合計の数 %」のまま）</span>
+                <input type="number" name="keibaPrizeMult" min={0} max={1000} value={String(c.keibaPrizeMult)} required />
+              </label>
+              <div class="field">
+                <span>最低保証の 1 着賞金（賭けが少なくても、この額は出る。2〜5 着はその 4・2.6・2・1.4 割。胴元が出す）</span>
+                <div class="purse-grid">
+                  {KB_CLASSES.map((name, i) => (
+                    <label>
+                      <small>{name}</small>
+                      <input type="number" name={`keibaPurse_${i}`} min={0} max={1000000} value={String(c.keibaPurse[i] ?? 0)} required />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <label class="field">
+                <span>最低保証で足す分を、1 人が 1 日に受け取れる上限（0 で上限なし）。最低保証は 2 人以上が賭けたレースだけ</span>
+                <input type="number" name="keibaPurseDailyCap" min={0} max={100000000} value={String(c.keibaPurseDailyCap)} required />
+              </label>
+              <label class="field">
+                <span>応援金（その馬の単勝・複勝に、馬主でない人が賭けた額の何 %。着順に関係なく馬主へ）</span>
+                <input type="number" name="keibaFanPct" min={0} max={20} value={String(c.keibaFanPct)} required />
+              </label>
+              <label class="field">
+                <span>血統ロイヤリティ（産駒が稼いだ賞金の何 % を親の馬主へ。胴元が出す）</span>
+                <input type="number" name="keibaRoyaltyPct" min={0} max={50} value={String(c.keibaRoyaltyPct)} required />
+              </label>
+              <label class="field">
+                <span>功労金（馬主が引退させるとき、1 勝につき。重賞の勝ちは 3 倍。胴元が出す）</span>
+                <input type="number" name="keibaRetirePerWin" min={0} max={1000000} value={String(c.keibaRetirePerWin)} required />
               </label>
               <label class="field">
                 <span>馬主の馬が勝ったときに、お祝いを流すチャンネル</span>

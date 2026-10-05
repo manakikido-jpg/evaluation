@@ -130,6 +130,25 @@ export const KB_PRIZE_SPLIT = [50, 20, 13, 10, 7] as const;
 /** 賞金（1〜5 着の銭）。real はメンバーが賭けた合計 */
 export const prizesOf = (cls: number, real: number) => KB_PRIZE_SPLIT.map((p) => Math.floor((real * (KB_PRIZE_RATE[cls] ?? 5) * p) / 10000));
 
+/** 馬主への還元の設定（社務所Web で変えられる） */
+export type KbPayConf = { prizeMult: number; purse: readonly number[]; fanPct: number };
+export const kbPayConf = (c: { keibaPrizeMult: number; keibaPurse: readonly number[]; keibaFanPct: number }): KbPayConf => ({ prizeMult: c.keibaPrizeMult, purse: c.keibaPurse, fanPct: c.keibaFanPct });
+/**
+ * そのレースの 1〜5 着の賞金: 賭けた合計の数 % に倍率をかけたものと、最低保証（1 着が purse、2〜5 着はその割合）の多いほう
+ */
+export function racePrizes(cls: number, real: number, conf: KbPayConf): number[] {
+  const base = prizesOf(cls, real).map((p) => Math.floor((p * conf.prizeMult) / 100));
+  const purse = conf.purse[cls] ?? 0;
+  return base.map((p, i) => Math.max(p, Math.floor((purse * KB_PRIZE_SPLIT[i]!) / KB_PRIZE_SPLIT[0])));
+}
+/** 出走手当（倍率をかけたもの） */
+export const raceAppearance = (real: number, conf: KbPayConf) => Math.floor((appearanceOf(real) * conf.prizeMult) / 100);
+/** 応援金: 馬主でない人がその馬の単勝・複勝に賭けた額の fanPct % */
+export function fanMoney(tickets: readonly { memberId: string; t: string; key: string; amount: number }[], no: number, ownerId: string, conf: KbPayConf): number {
+  const cheer = tickets.filter((t) => (t.t === 'win' || t.t === 'place') && t.key === String(no) && t.memberId !== ownerId).reduce((a, t) => a + t.amount, 0);
+  return Math.floor((cheer * conf.fanPct) / 100);
+}
+
 /** パドックの気配（調子から） */
 export const KB_LOOK = ['少し元気がない', 'まずまず', '落ち着いて歩けている', '毛ヅヤがよく、気合十分', '踏み込みが力強く、絶好の仕上がり'] as const;
 
