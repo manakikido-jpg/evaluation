@@ -1,7 +1,7 @@
 import { artUrls } from '../services/casino/slotArt.js';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { TABLE_KINDS, type CasinoGame, type GuildConfig, type TableKind } from '../config.js';
+import { adminLevelOf, TABLE_KINDS, type CasinoGame, type GuildConfig, type TableKind } from '../config.js';
 import { actTable, createTable, joinTable, leaveTable, myTable, openTables, pollTable, sweepTables, tableById, tableCounts, type TableResult } from '../services/casino/tables/service.js';
 import type { Form } from '../services/casino/tables/types.js';
 import { TableFrag, TablePage, TablesLobby } from './views/casinoTables.js';
@@ -37,6 +37,8 @@ import { isRouletteBet, parseStakes } from '../services/casino/roulette.js';
 import { cancelMatch, createMatch, MOVE_SECONDS, joinMatch, moveMatch, myMatch, openMatches, readMatch, recentMatches, resignMatch, sweepMatches, type MatchResult } from '../services/casino/versus.js';
 import { walletOf } from '../services/economy.js';
 import { namesOf } from '../services/members.js';
+import { eq } from 'drizzle-orm';
+import { members } from '../db/schema.js';
 import type { DiscordApi } from './discordApi.js';
 import { createMemberSession, deleteMemberSession, findMemberSession, markMemberChecked, MEMBER_RECHECK_MS, MEMBER_SESSION_DAYS } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
@@ -58,7 +60,7 @@ import {
   type CasinoMe,
 } from './views/casino.js';
 import { SlotFloor, SlotsPage } from './views/slots.js';
-import { AtFloor, AtSlotPage } from './views/atslot.js';
+import { AtDemoPage, AtFloor, AtSlotPage } from './views/atslot.js';
 import { atFloorData, atMachineRows, leaveAt, orderAt, playAt, validAtMachine, type AtGameState } from '../services/casino/slotAtPlay.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
@@ -449,8 +451,22 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   // ───────── 🦊 AT 機の島（鬼斬り白狐） ─────────
 
+  /** 運営（宮司・神職）か。AT 機は公開する前でも、運営だけは打てる・演出を見られる */
+  const isStaff = async (userId: string) => {
+    const [m] = await db.select({ roleIds: members.roleIds }).from(members).where(eq(members.id, userId));
+    return adminLevelOf(d.cfg(), m?.roleIds ?? []) !== undefined;
+  };
+  /** この人にとって AT 機が開いているか（開いていれば、その人に使う設定） */
+  const atCfgFor = async (userId: string): Promise<{ cfg: GuildConfig; preview: boolean } | undefined> => {
+    const cfg = d.cfg();
+    if (!cfg.casino.games.includes('atslot')) return undefined;
+    if (cfg.casino.atOpen) return { cfg, preview: false };
+    if (!(await isStaff(userId))) return undefined;
+    return { cfg: { ...cfg, casino: { ...cfg.casino, atOpen: true } }, preview: true };
+  };
+
   /** 台を選ぶ島（?m がなく、途中も結果もないとき）か、その台の画面 */
-  async function atPage(c: Context, me: Me) {
+  async function atPage(c: Context, me: Me, preview = false) {
     const cfg = d.cfg();
     const now = d.now();
     const row = await shown(c, me, 'atslot');
@@ -460,15 +476,24 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const fresh = row && now.getTime() - (row.finishedAt ?? row.createdAt).getTime() < 60_000;
     const [data, machines] = await Promise.all([atFloorData(db, cfg, now, fresh ? row.id : undefined), atMachineRows(db, cfg)]);
     const msg = casinoMsg(c.req.query('e'));
-    if (!machine || !machines[machine - 1]) return c.html(<AtFloor me={me} casino={cfg.casino} data={data} machines={machines} msg={msg} now={now.getTime()} />);
-    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} art={await artUrls(db)} />);
+    if (!machine || !machines[machine - 1]) return c.html(<AtFloor me={me} casino={cfg.casino} data={data} machines={machines} msg={msg} now={now.getTime()} preview={preview} />);
+    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} art={await artUrls(db)} preview={preview} />);
   }
   app.get(
     '/casino/atslot',
     page(async (c, me) => {
-      // 公開するまでは準備中（メンバーは入れない）
-      if (!d.cfg().casino.games.includes('atslot') || !d.cfg().casino.atOpen) return c.redirect('/casino?e=game_off');
-      return atPage(c, me);
+      // 公開するまでは準備中（運営だけ入れる）
+      const open = await atCfgFor(me.session.userId);
+      if (!open) return c.redirect('/casino?e=game_off');
+      return atPage(c, me, open.preview);
+    }),
+  );
+  // 🦊 演出を見る（銭は動かない。入れた絵の確かめにも）
+  app.get(
+    '/casino/atslot/demo',
+    page(async (c, me) => {
+      if (!(await atCfgFor(me.session.userId))) return c.redirect('/casino?e=game_off');
+      return c.html(<AtDemoPage me={me} casino={d.cfg().casino} art={await artUrls(db)} />);
     }),
   );
   app.post(
@@ -476,7 +501,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     page(async (c, me) => {
       const body = await c.req.parseBody();
       const m = typeof body.m === 'string' && /^\d{1,2}$/.test(body.m) ? Number(body.m) : 0;
-      const r = await playAt(db, d.cfg(), me.session.userId, m, undefined, d.now());
+      const open = await atCfgFor(me.session.userId);
+      const r = await playAt(db, open?.cfg ?? d.cfg(), me.session.userId, m, undefined, d.now());
       if (r.status === 'ok' || r.status === 'busy') return c.redirect(`/casino/atslot?g=${r.row.id}`);
       return c.redirect(`/casino/atslot?m=${m}&e=${r.status}`);
     }, { post: true }),

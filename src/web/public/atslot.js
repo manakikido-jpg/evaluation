@@ -209,6 +209,72 @@
     };
   })();
 
+  // ───── 入れた絵のまわりの透明な余白を切る（ChatGPT の絵は余白が大きい。1 回切ったら覚えておく）─────
+  const trimmed = new Map();
+  const ready = new Map();
+  const trim = (url) => {
+    if (!trimmed.has(url)) {
+      trimmed.set(
+        url,
+        new Promise((res) => {
+          const done = (u) => {
+            ready.set(url, u);
+            res(u);
+          };
+          const im = new Image();
+          im.onerror = () => done(url);
+          im.onload = () => {
+            try {
+              const s = Math.min(1, 400 / Math.max(im.naturalWidth, im.naturalHeight));
+              const w = Math.max(1, Math.round(im.naturalWidth * s));
+              const h = Math.max(1, Math.round(im.naturalHeight * s));
+              const cv = document.createElement('canvas');
+              cv.width = w;
+              cv.height = h;
+              const cx = cv.getContext('2d', { willReadFrequently: true });
+              cx.drawImage(im, 0, 0, w, h);
+              const d = cx.getImageData(0, 0, w, h).data;
+              let x0 = w;
+              let y0 = h;
+              let x1 = -1;
+              let y1 = -1;
+              for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                  if (d[(y * w + x) * 4 + 3] > 20) {
+                    if (x < x0) x0 = x;
+                    if (x > x1) x1 = x;
+                    if (y < y0) y0 = y;
+                    if (y > y1) y1 = y;
+                  }
+                }
+              }
+              // 透明なところがない・ほとんど余白がない絵はそのまま
+              if (x1 < 0 || (x1 - x0 + 1) * (y1 - y0 + 1) > w * h * 0.9) return done(url);
+              const sx = Math.max(0, Math.floor((x0 - 1) / s));
+              const sy = Math.max(0, Math.floor((y0 - 1) / s));
+              const sw = Math.min(im.naturalWidth - sx, Math.ceil((x1 - x0 + 3) / s));
+              const sh = Math.min(im.naturalHeight - sy, Math.ceil((y1 - y0 + 3) / s));
+              const out = document.createElement('canvas');
+              out.width = sw;
+              out.height = sh;
+              out.getContext('2d').drawImage(im, sx, sy, sw, sh, 0, 0, sw, sh);
+              out.toBlob((b) => done(b ? URL.createObjectURL(b) : url), 'image/png');
+            } catch {
+              done(url);
+            }
+          };
+          im.src = url;
+        }),
+      );
+    }
+    return trimmed.get(url);
+  };
+  /** 絵を img に入れる（切ったものがあればそれ、まだなら切れたら差し替える） */
+  const putArt = (img, url) => {
+    img.src = ready.get(url) || url;
+    if (!ready.has(url)) trim(url).then((u) => img.isConnected && img.getAttribute('src') === url && (img.src = u));
+  };
+
   // ───── 小さな道具 ─────
   const el = (tag, cls, html) => {
     const e = document.createElement(tag);
@@ -250,6 +316,13 @@
       return a;
     };
 
+    // キャラ・ロゴの余白を先に切っておく（台の名前のロゴも）
+    Object.entries(art).forEach(([k, u]) => {
+      if (!k.startsWith('bg-') && !k.startsWith('sym-')) trim(u);
+    });
+    const title = box.querySelector('.c-at-title-img');
+    if (title) putArt(title, title.getAttribute('src'));
+
     // 層: 背景・流れる線・キャラ・上にかぶせるもの・光
     scene.innerHTML = '';
     const bg = el('div', 'sc-bg');
@@ -279,7 +352,7 @@
       const src = art[key] || art[kind];
       if (src) {
         const img = el('img', `sc-actor-img${art[key] ? ' exact' : ''}`);
-        img.src = src;
+        putArt(img, src);
         img.alt = '';
         img.draggable = false;
         a.append(img);
@@ -290,7 +363,7 @@
       const d = el('div', `sc-logo ${key} ${cls}`);
       if (art[key]) {
         const img = el('img');
-        img.src = art[key];
+        putArt(img, art[key]);
         img.alt = LOGO[key]?.[0] || '';
         d.append(img);
       } else {
@@ -547,6 +620,14 @@
             dark.remove();
           }
           me.classList.add('attack');
+          // 攻める絵があれば、その間だけ替える
+          const kind = b.who;
+          const img = me.querySelector('.sc-actor-img');
+          const base = img?.getAttribute('src');
+          if (img && art[`${kind}-attack`]) {
+            img.src = ready.get(art[`${kind}-attack`]) || art[`${kind}-attack`];
+            me.classList.add('pose-attack');
+          }
           fx.whoosh();
           anim(me, [{ transform: `translateX(0)${flip}` }, { transform: `translateX(${dir * 70}%)${flip}`, offset: 0.5 }, { transform: `translateX(0)${flip}` }], { duration: last ? 520 : 420, easing: 'ease-in-out', fill: 'none' });
           await sleep(220);
@@ -571,10 +652,21 @@
           }
           await sleep(last ? 700 : 560);
           me.classList.remove('attack');
+          if (img && base && !(last && kind === 'byakko' && e.win)) {
+            img.src = base;
+            me.classList.remove('pose-attack');
+          }
         }
         if (e.win) {
-          oni.classList.add('down');
-          anim(oni, [{ transform: 'scaleX(-1)', opacity: 1 }, { transform: 'translateY(20%) rotate(18deg) scaleX(-1)', opacity: 0 }], { duration: 700, easing: 'ease-in' });
+          if (art['oni-down']) {
+            const down = actor('oni', 'down');
+            down.classList.add('duel', 'right');
+            oni.replaceWith(down);
+            anim(down, [{ transform: 'scaleX(-1)', opacity: 1 }, { transform: 'scaleX(-1)', opacity: 1, offset: 0.6 }, { transform: 'translateY(12%) scaleX(-1)', opacity: 0 }], { duration: 1600, easing: 'ease-in' });
+          } else {
+            oni.classList.add('down');
+            anim(oni, [{ transform: 'scaleX(-1)', opacity: 1 }, { transform: 'translateY(20%) rotate(18deg) scaleX(-1)', opacity: 0 }], { duration: 700, easing: 'ease-in' });
+          }
           const winner = actor('byakko', 'win');
           winner.classList.add('duel', 'left', 'win');
           fox.replaceWith(winner);
@@ -589,8 +681,15 @@
           idle('rush');
           Bgm.play('rush');
         } else {
-          fox.classList.add('down');
-          anim(fox, [{ opacity: 1, filter: 'none' }, { opacity: 0.5, filter: 'grayscale(1)', transform: 'translateY(14%) rotate(-10deg)' }], { duration: 800 });
+          if (art['byakko-down']) {
+            const down = actor('byakko', 'down');
+            down.classList.add('duel', 'left');
+            fox.replaceWith(down);
+            anim(down, [{ opacity: 0.4, filter: 'brightness(2)' }, { opacity: 1, filter: 'none' }], { duration: 500 });
+          } else {
+            fox.classList.add('down');
+            anim(fox, [{ opacity: 1, filter: 'none' }, { opacity: 0.5, filter: 'grayscale(1)', transform: 'translateY(14%) rotate(-10deg)' }], { duration: 800 });
+          }
           screen.classList.add('lost');
           const t = text('lose', '鬼に敗れた…', '白狐ラッシュ 終了');
           over.append(t);
@@ -726,6 +825,11 @@
         over.querySelectorAll('.sc-text, .sc-logo, .sc-black, .sc-result, .sc-coin, .sc-slash, .sc-actor').forEach((n) => n.remove());
       },
       /** 止め終わって演出も終わった: 台の今の舞台にする */
+      /** 舞台を替える（演出を見る画面から） */
+      setStage(name, oni = 0) {
+        oniNow = oni;
+        idle(name);
+      },
       settle() {
         const post = box.dataset.stagePost || 'shrine';
         const postOni = Number(box.dataset.oni || 0);

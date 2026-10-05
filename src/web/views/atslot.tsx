@@ -69,12 +69,23 @@ function MiniSlump(p: { values: number[]; label: string }) {
 }
 
 /** 🦊 AT の島（台を選ぶ） */
-export function AtFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; machines: AtMachineView[]; msg?: string; now: number }) {
+/** 公開する前に運営が見ているとき */
+function PreviewNote() {
+  return (
+    <p class="c-msg c-at-preview">
+      🔒 準備中です（運営だけ入れます。メンバーにはまだ見えません）。打つと銭は本当に動きます。{' '}
+      <a href="/casino/atslot/demo">🎬 演出を見る（銭は動きません）</a>
+    </p>
+  );
+}
+
+export function AtFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; machines: AtMachineView[]; msg?: string; now: number; preview?: boolean }) {
   const uid = p.me.session.userId;
   return (
     <CasinoLayout title="鬼斬り白狐（AT 機）" me={p.me} back>
       <SlotIslands on="atslot" games={p.casino.games} atOpen={p.casino.atOpen} />
       <h1 class="c-h1">🦊 鬼斬り白狐の島（台を選ぶ）</h1>
+      {p.preview && <PreviewNote />}
       {p.msg && <Msg msg={p.msg} />}
       <p class="c-muted">
         レア役で AT「白狐ラッシュ」を狙う台です。台の回転数・AT の残りは台に残るので、ハマっている台（天井 {AT_CEILING} G）を狙うのもあり。だれかが遊んでいる台は、{AT_SEAT_MINUTES} 分回さないと空きます。1 ゲーム {p.me.coin.emoji}
@@ -193,7 +204,7 @@ function Lcd(p: { v: LcdView; phase: 'pre' | 'post' | 'only' }) {
 /** 液晶の舞台（台の状態から。前兆の鬼の森は、そのゲームの演出が森だったときだけ残す） */
 const stageOf = (m: AtMachine, last?: AtShow): AtStage => (m.phase === 'at' ? ((m.at?.tokka ?? 0) > 0 ? 'ranbu' : 'rush') : last?.stage === 'forest' ? 'forest' : 'shrine');
 
-export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView; data: FloorData; now: number; art?: Record<string, string> }) {
+export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView; data: FloorData; now: number; art?: Record<string, string>; preview?: boolean; demo?: boolean }) {
   const csrf = p.me.session.csrfToken;
   const row: CasinoGameRow | undefined = p.row;
   const s = row ? (row.state as AtGameState) : undefined;
@@ -217,10 +228,17 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
   return (
     <CasinoLayout title="鬼斬り白狐（AT 機）" me={me} back>
       <SlotIslands on="atslot" games={p.casino.games} atOpen={p.casino.atOpen} />
-      <h1 class="c-h1">🦊 鬼斬り白狐・{p.machine} 番台</h1>
+      <h1 class="c-h1">{p.demo ? '🎬 鬼斬り白狐の演出を見る' : `🦊 鬼斬り白狐・${p.machine} 番台`}</h1>
+      {p.preview && <PreviewNote />}
+      {p.demo && (
+        <p class="c-muted">
+          下のボタンで演出を試せます（銭は動きません）。「レバーから」のものは STOP を押して止めてください。社務所Web で入れた絵がそのまま出ます。{' '}
+          <a href="/casino/atslot">台の島へ</a>
+        </p>
+      )}
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-slot-stage">
-        <section class="c-counter c-at-counter" aria-label={`${p.machine} 番台のデータ`}>
+        {!p.demo && <section class="c-counter c-at-counter" aria-label={`${p.machine} 番台のデータ`}>
           <div class="c-counter-head">
             <b class="c-counter-no">
               {p.machine}
@@ -280,7 +298,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
               </table>
             </details>
           )}
-        </section>
+        </section>}
         <div class="c-cab c-at-cab">
           <div
             class={`c-atm mode-${mode}${p.view.state.phase === 'at' ? ' in-at' : ''}${(p.view.state.at?.tokka ?? 0) > 0 ? ' in-tokka' : ''}`}
@@ -301,6 +319,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
             data-at-left={String(p.view.state.at?.left ?? '')}
             data-art={JSON.stringify(p.art ?? {})}
             data-stage-js={assetUrl('atslot.js')}
+            data-demo={p.demo ? '1' : undefined}
           >
             <div class="c-at-top">
               {p.art?.['logo-title'] ? (
@@ -339,13 +358,21 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
               })}
             </div>
             <div class="c-at-deck">
-              <form method="post" action="/casino/atslot" class="c-lever-form">
-                <input type="hidden" name="_csrf" value={csrf} />
-                <input type="hidden" name="m" value={String(p.machine)} />
-                <button type="submit" class={`c-lever${mode === 'spin' || mode === 'wait' ? ' pulled' : ''}`} data-at-lever disabled={mode !== 'still' || taken} aria-label={`レバー（${fmt(bet)} ${p.me.coin.name}で回す）`}>
-                  <span class="c-lever-knob"></span>
-                </button>
-              </form>
+              {p.demo ? (
+                <span class="c-lever-form">
+                  <span class="c-lever" aria-hidden="true">
+                    <span class="c-lever-knob"></span>
+                  </span>
+                </span>
+              ) : (
+                <form method="post" action="/casino/atslot" class="c-lever-form">
+                  <input type="hidden" name="_csrf" value={csrf} />
+                  <input type="hidden" name="m" value={String(p.machine)} />
+                  <button type="submit" class={`c-lever${mode === 'spin' || mode === 'wait' ? ' pulled' : ''}`} data-at-lever disabled={mode !== 'still' || taken} aria-label={`レバー（${fmt(bet)} ${p.me.coin.name}で回す）`}>
+                    <span class="c-lever-knob"></span>
+                  </button>
+                </form>
+              )}
               <span class="c-stops c-at-stops">
                 {[0, 1, 2].map((i) => (
                   <span class="c-at-stopwrap">
@@ -359,8 +386,10 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                 ))}
               </span>
             </div>
-            <p class="c-deck-note" data-still={taken ? undefined : `レバー（スペース）で ${fmt(bet)} ${p.me.coin.name}を賭けて回す`}>
-              {taken
+            <p class="c-deck-note" data-still={taken ? undefined : p.demo ? '下のボタンで演出を選ぶ' : `レバー（スペース）で ${fmt(bet)} ${p.me.coin.name}を賭けて回す`}>
+              {p.demo
+                ? '下のボタンで演出を選ぶ'
+                : taken
                 ? `${p.view.seatName ?? 'ほかの人'}が遊んでいます（${AT_SEAT_MINUTES} 分回さないと空きます）`
                 : mode === 'wait'
                   ? 'ナビの順に STOP（1・2・3 キーでも）'
@@ -393,11 +422,75 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
           </div>
         )}
       </section>
-      <Rules>
+      {p.demo && <AtDemoPanel />}
+      {!p.demo && <Rules>
         1 ゲーム {fmt(bet)} {p.me.coin.name}（島で決まっています）。通常時はレア役（チェリー・スイカ・チャンス目・白狐目）で AT「白狐ラッシュ」を抽選し、当たると前兆のあと突入します。{AT_CEILING} G ハマると天井で AT（継続率 66% 以上）。AT のあとは
         {AT_HEAVEN_CEILING} G 以内に当たる天国モードのことも。AT は 1 セット {AT_SET_GAMES} G。押し順ベル（ナビの順に止めると ×{AT_ROLES.oshijun.mult}）で増やし、レア役で上乗せ、チャンス目で特化ゾーン「白狐乱舞」。セットの終わりに鬼との継続バトル（継続率{' '}
         {AT_RATES.map((r) => `${r.rate}%`).join('・')}）。通常時の押し順ベルは押し順が分からないので、そろうのは 6 回に 1 回くらい。台ごとに設定（1〜6）があり、高いほど AT に当たりやすい（払い戻し率は設定 1 で約 95%）。台の回転数・AT の残りは台に残るので、席を立つと次の人が続きを打てます。
-      </Rules>
+      </Rules>}
     </CasinoLayout>
   );
+}
+
+// ───────── 🎬 演出を見る（銭は動かない） ─────────
+
+type DemoPreset = { label: string; d: Record<string, unknown> };
+const ev = (e: AtEvent) => ({ ev: e });
+const DEMO_GROUPS: { title: string; items: DemoPreset[] }[] = [
+  {
+    title: '通常時・前兆（レバーから。STOP を押して止める）',
+    items: [
+      { label: 'キュイン（弱い）', d: { spin: true, stage: 'shrine', show: { lever: 'kyuin', stop3: 'blue' } } },
+      { label: '台が揺れる・赤 STOP', d: { spin: true, stage: 'shrine', show: { lever: 'shake', stop3: 'red' } } },
+      { label: '鬼の森・暗転・金 STOP・溜め', d: { spin: true, stage: 'forest', oni: 2, show: { lever: 'blackout', stop3: 'gold', hold: true } } },
+      { label: '虹（確定）・確定音', d: { spin: true, stage: 'shrine', show: { lever: 'rainbow', stop3: 'rainbow', kakutei: true } } },
+      { label: 'フリーズ', d: { spin: true, stage: 'shrine', show: { freeze: true } } },
+      { label: '前兆の最後 → AT 突入', d: { spin: true, stage: 'forest', oni: 3, post: 'rush', show: { lever: 'shake', stop3: 'gold', hold: true }, list: [ev({ k: 'at_start', rate: 80, tenjou: false })] } },
+    ],
+  },
+  {
+    title: 'AT 中',
+    items: [
+      { label: '押し順ナビ', d: { stage: 'rush', navi: [2, 0, 1] } },
+      { label: '上乗せ +10G', d: { stage: 'rush', list: [ev({ k: 'add', games: 10, why: 'scherry' })] } },
+      { label: '白狐目 +100G（フリーズから）', d: { spin: true, stage: 'rush', show: { freeze: true }, list: [ev({ k: 'add', games: 100, why: 'byakko' })] } },
+      { label: '特化ゾーン「白狐乱舞」', d: { stage: 'rush', post: 'ranbu', list: [ev({ k: 'tokka_start' })] } },
+      { label: '乱舞の上乗せ → 終了', d: { stage: 'ranbu', post: 'rush', list: [ev({ k: 'add', games: 20, why: 'none' }), ev({ k: 'tokka_end', added: 20 })] } },
+      {
+        label: '継続バトル（勝ち）',
+        d: { stage: 'rush', list: [ev({ k: 'battle', win: true, set: 2 })], show: { battle: [{ who: 'oni', hit: true }, { who: 'byakko', hit: false }, { who: 'oni', hit: false }, { who: 'byakko', hit: true }] } },
+      },
+      {
+        label: '継続バトル（負け）→ AT 終了',
+        d: { stage: 'rush', post: 'shrine', list: [ev({ k: 'battle', win: false, set: 3 }), ev({ k: 'at_end', games: 135, won: 2450, sets: 3 })], show: { battle: [{ who: 'byakko', hit: true }, { who: 'oni', hit: true }, { who: 'oni', hit: true }] } },
+      },
+    ],
+  },
+];
+
+function AtDemoPanel() {
+  return (
+    <section class="c-at-demo" aria-label="演出を選ぶ">
+      {DEMO_GROUPS.map((g) => (
+        <div class="c-at-demo-group">
+          <h2>{g.title}</h2>
+          <div class="c-at-demo-btns">
+            {g.items.map((it) => (
+              <button type="button" class="c-btn c-btn-small" data-at-demo={JSON.stringify(it.d)}>
+                {it.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** 演出を見る画面（AT 中の台のふりをした 1 台） */
+export function AtDemoPage(p: { me: GamePage['me']; casino: GamePage['casino']; art: Record<string, string> }) {
+  const state: AtMachine = { games: 0, heaven: false, phase: 'at', zenchou: 0, nextRate: 80, tenjou: false, at: { left: 12, set: 2, rate: 80, tokka: 0, games: 50, added: 15, won: 1200 } };
+  const view: AtMachineView = { machine: 1, state, seatBy: null, seatAt: null, seatName: null };
+  const data = { today: [], yesterday: [] };
+  return <AtSlotPage me={p.me} casino={p.casino} machine={1} view={view} data={data} now={Date.now()} art={p.art} demo />;
 }

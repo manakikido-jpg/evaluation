@@ -2503,7 +2503,32 @@ const initAtSlot = (root) => {
       }, 120 + k * 120),
     );
   }
+  /** 🎬 演出を見る: 選んだ演出をこの台で（銭は動かない） */
+  const demo = (d) => {
+    if (!st || reels.some((r) => r.state !== 'still') || st.busy()) return;
+    show = d.show || null;
+    box.dataset.events = JSON.stringify(d.list || []);
+    box.dataset.stagePost = d.post || d.stage || box.dataset.stagePost;
+    box.dataset.oni = '0';
+    st.setStage(d.stage || 'rush', d.oni || 0);
+    if (d.navi) {
+      st.navi(d.navi);
+      return;
+    }
+    if (d.spin) {
+      order.length = 0;
+      stopBtns.forEach((b) => {
+        b.disabled = false;
+        b.classList.remove('pressed', 'col', 'col-blue', 'col-red', 'col-gold', 'col-rainbow');
+      });
+      Sound.lever();
+      begin();
+      return;
+    }
+    if (d.list) st.play(d.list, show, () => st.settle());
+  };
   atCtl = {
+    demo,
     stop() {
       st?.unmount();
       alive = false;
@@ -2514,6 +2539,16 @@ const initAtSlot = (root) => {
     },
   };
 };
+
+document.addEventListener('click', (e) => {
+  const b = e.target instanceof Element ? e.target.closest('[data-at-demo]') : null;
+  if (!b || !atCtl) return;
+  try {
+    atCtl.demo(JSON.parse(b.getAttribute('data-at-demo') || '{}'));
+  } catch {
+    // 読めない演出は出さない
+  }
+});
 
 // ───── ページごとの準備（最初に開いたとき・中身を差し替えたとき） ─────
 const pageInit = (root, tableEnd) => {

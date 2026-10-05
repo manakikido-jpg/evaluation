@@ -587,6 +587,25 @@ describe('🦊 AT 機（画面）', () => {
     const after = await (await get(res.headers.get('location')!, a)).text();
     expect(after).toMatch(/class="c-atm mode-(spin|wait)/);
   });
+
+  it('準備中でも運営（宮司・神職）は入れて打てる。演出を見る画面は銭が動かない（メンバーは入れない）', async () => {
+    await recordJoin(db, { id: GUJI, username: 'g', displayName: '宮司', avatarUrl: null, roleIds: [ROLE.guji], isBot: false, joinedAt: new Date('2026-09-01T00:00:00Z') });
+    await addCoins(db, GUJI, 5000, 'admin_grant');
+    const a = (await casinoLogin(A)).cookie!;
+    expect((await get('/casino/atslot/demo', a)).headers.get('location')).toBe('/casino?e=game_off');
+    const g = (await casinoLogin(GUJI)).cookie!;
+    expect(await (await get('/casino/hall', g)).text()).not.toContain('/casino/atslot');
+    const floor = await (await get('/casino/atslot', g)).text();
+    expect(floor).toContain('準備中です');
+    expect(floor).toContain('/casino/atslot/demo');
+    const demo = await (await get('/casino/atslot/demo', g)).text();
+    expect(demo).toContain('data-at-demo=');
+    expect(demo).toContain('継続バトル（勝ち）');
+    expect(demo).not.toContain('action="/casino/atslot"');
+    expect(await balance(GUJI)).toBe(5000);
+    const res = await post('/casino/atslot', g, { m: '1' });
+    expect(res.headers.get('location')).toMatch(/^\/casino\/atslot\?g=\d+$/);
+  });
 });
 
 describe('🏇 みんなでダービー（画面）', () => {

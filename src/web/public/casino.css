@@ -1859,7 +1859,7 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .c-jstrip .sy-at-bar b { display: inline-block; padding: 2px 8px; border-radius: 6px; background: linear-gradient(180deg, #2a2a2a, #000); color: #fff; font-size: calc(var(--h) * 0.3); font-weight: 900; letter-spacing: 0.06em; line-height: 1.2; border: 2px solid #c8c8c8; box-shadow: 0 2px 0 #555; }
 
 /* ───── 🦊 AT 機の液晶の演出（atslot.js）───── */
-.c-at-title-img { display: block; max-width: 72%; max-height: 64px; margin: 0 auto; object-fit: contain; filter: drop-shadow(0 0 10px rgba(255, 60, 90, 0.4)); }
+.c-at-title-img { display: block; max-width: 88%; max-height: 84px; margin: 0 auto; object-fit: contain; filter: drop-shadow(0 0 10px rgba(255, 60, 90, 0.4)); }
 .c-at-scene { position: absolute; inset: 0; z-index: 1; }
 .sc-bg, .sc-lines, .sc-actors, .sc-over, .sc-flash { position: absolute; inset: 0; }
 .sc-bg { z-index: 0; background: #0a0f24; }
@@ -1904,6 +1904,11 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .sc-actor.cutin { left: 0; right: 0; width: 100%; height: 56%; top: 22%; bottom: auto; aspect-ratio: auto; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, transparent, rgba(10, 20, 60, 0.92) 12%, rgba(10, 20, 60, 0.92) 88%, transparent); border-top: 2px solid #9fd0ff; border-bottom: 2px solid #9fd0ff; }
 .sc-actor.cutin .sc-svg, .sc-actor.cutin .sc-actor-img { height: 160%; width: auto; }
 .sc-actor.cutin .sc-svg { transform: translateY(18%); }
+.sc-actor.cutin { overflow: hidden; }
+.sc-actor.cutin .sc-actor-img.exact { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; }
+/* 入れた絵: 攻める絵は横長なので、枠も横長に */
+.sc-actor.pose-attack:has(.sc-actor-img.exact) { aspect-ratio: 4 / 3; }
+.sc-actor.lunge:has(.sc-actor-img.exact) { left: 0; }
 .sc-actor.duel { height: 74%; bottom: 2%; }
 .sc-actor.duel.left { left: 6%; }
 .sc-actor.duel.right { right: 6%; transform: scaleX(-1); }
@@ -1965,3 +1970,10 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 @media (prefers-reduced-motion: reduce) {
   .sc-bg, .sc-bg-svg, .sc-lines, .sc-actor, .sc-navi b, .c-at-screen.hold { animation: none !important; }
 }
+
+/* 🎬 演出を見る・準備中の知らせ */
+.c-at-preview a { font-weight: 700; }
+.c-at-demo { max-width: 640px; margin: 16px auto 0; display: grid; gap: 14px; }
+.c-at-demo h2 { font-size: 0.95rem; margin: 0 0 6px; }
+.c-at-demo-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.c-atm[data-demo] .c-lever { opacity: 0.5; cursor: default; }

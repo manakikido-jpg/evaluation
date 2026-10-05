@@ -343,7 +343,7 @@ export function CasinoAdminPage(p: {
         </section>
       )}
       {p.horses && <HorseRoster horses={p.horses} csrf={p.session.csrfToken} />}
-      {p.guji && p.art && <AtArt art={p.art} csrf={p.session.csrfToken} />}
+      {p.guji && p.art && <AtArt art={p.art} csrf={p.session.csrfToken} demoUrl={`${p.url}/atslot/demo`} />}
     </Layout>
   );
 }
@@ -609,7 +609,7 @@ const ART_GROUPS: { group: ArtSlot['group']; title: string }[] = [
 ];
 
 /** 🦊 AT 機の絵（入れた絵は液晶・リールにすぐ出る。入れていないところは仮の絵） */
-function AtArt(p: { art: Record<string, string>; csrf: string }) {
+function AtArt(p: { art: Record<string, string>; csrf: string; demoUrl: string }) {
   const filled = AT_ART_SLOTS.filter((s) => p.art[s.key]).length;
   return (
     <section class="card anchor" id="casino-art">
@@ -618,7 +618,11 @@ function AtArt(p: { art: Record<string, string>; csrf: string }) {
         液晶の演出・リールに使う絵です。入れていないところはコードで描いた仮の絵が出ます。キャラ・ロゴ・リールの絵柄は、背景が透明な PNG か WebP にしてください（1 枚 4MB まで。大きさはおすすめ）。入れ替えるとすぐ新しい絵になります。
       </p>
       <p>
-        入っている絵 <strong>{filled}</strong> / {AT_ART_SLOTS.length}
+        入っている絵 <strong>{filled}</strong> / {AT_ART_SLOTS.length}・{' '}
+        <a href={p.demoUrl} target="_blank" rel="noopener">
+          🎬 カジノで演出を見る
+        </a>
+        <span class="note">（運営だけ。準備中でも見られて、銭は動きません。カジノに Discord でログインして開きます）</span>
       </p>
       {ART_GROUPS.map((g) => (
         <>

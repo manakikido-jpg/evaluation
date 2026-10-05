@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-atslot-demo',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🎬 AT 機の演出を、準備中のまま運営が見られるようにしました',
+    items: [
+      'カジノの「🎬 演出を見る」で、AT 突入・上乗せ・バトルなどをボタンで出せます（銭は動きません）。社務所Web「🎰 カジノ」の絵の欄から開けます',
+      '公開する前でも、宮司・神職は AT 機の島に入って打てます（メンバーにはまだ見えません）',
+      '入れた絵のまわりの透明な余白を自動で切って、キャラやロゴを大きく出すようにしました',
+    ],
+  },
+  {
     id: '2026-10-05-atslot-anim',
     date: '2026-10-05',
     kind: 'new',
