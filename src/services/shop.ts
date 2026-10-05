@@ -3,7 +3,7 @@ import { salePrice } from './economyEvents.js';
 import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coinTx, shopItems, shopPurchases, type ShopItem, type ShopPurchase } from '../db/schema.js';
-import { autoRanks, currentAutoRank } from '../domain/ranks.js';
+import { giftBlockedRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { addTickets, useTicket } from './tickets.js';
@@ -241,7 +241,7 @@ export type PresentBuyResult =
 
 /**
  * 授与品をプレゼントとして買う: 買う人が払い、相手が受ける（ロールを付けるのは呼び出し側）。
- * 贈れるのは 2 段目の役職（氏子）以上か運営（サブアカウントの初期配布で買って集められないように）。相手は役職のある人。
+ * 贈れるのは役職（参拝者から）のある人か運営。相手は役職のある人。
  * ずっと持てる品を相手がもう持っていれば 'owned'、期限つきなら相手の期限が延びる
  */
 export async function buyPresent(
@@ -256,10 +256,8 @@ export async function buyPresent(
   if (!item.enabled || !presentable(item)) return { status: 'disabled' };
   if (from.id === to.id) return { status: 'self' };
   if (to.bot || !cfg.ranks.some((r) => to.roleIds.includes(r.roleId))) return { status: 'not_member' };
-  const [first, second] = autoRanks(cfg.ranks);
-  const current = currentAutoRank(cfg.ranks, from.roleIds);
-  const isStaff = cfg.ranks.some((r) => !r.auto && from.roleIds.includes(r.roleId));
-  if (second && !isStaff && (!current || current.key === first?.key)) return { status: 'rank_too_low', rankName: second.name };
+  const need = giftBlockedRank(cfg.ranks, from.roleIds);
+  if (need) return { status: 'rank_too_low', rankName: need.name };
   return db.transaction(async (tx) => {
     // 2 人とも順番に（いつも同じ順で取って、待ち合わせにならないように）
     for (const id of [from.id, to.id].sort()) await lock(tx, id);
@@ -428,16 +426,14 @@ export type GiftResult =
   | { status: 'insufficient'; balance: number };
 
 /**
- * 花びらを贈る（手数料なし）。サブアカウントで初期配布を集められないよう、
- * 贈れるのは 2 段目の役職（氏子）以上の人だけ。1 日に贈れる合計にも上限がある。
+ * 花びらを贈る（手数料なし）。贈れるのは役職（参拝者から）のある人か運営。
+ * 1 日に贈れる合計に上限がある（サブアカウントで集めにくいように）。
  */
 export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; roleIds: readonly string[] }, toId: string, amount: number, now = new Date()): Promise<GiftResult> {
   const e = cfg.economy;
   if (from.id === toId) return { status: 'self' };
-  const [first, second] = autoRanks(cfg.ranks);
-  const current = currentAutoRank(cfg.ranks, from.roleIds);
-  const isStaff = cfg.ranks.some((r) => !r.auto && from.roleIds.includes(r.roleId));
-  if (second && !isStaff && (!current || current.key === first?.key)) return { status: 'rank_too_low', rankName: second.name };
+  const need = giftBlockedRank(cfg.ranks, from.roleIds);
+  if (need) return { status: 'rank_too_low', rankName: need.name };
   if (!Number.isInteger(amount) || amount < e.giftMin || amount > e.giftMax) return { status: 'bad_amount', min: e.giftMin, max: e.giftMax };
   return db.transaction(async (tx) => {
     await lock(tx, from.id);

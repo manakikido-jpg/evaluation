@@ -267,7 +267,7 @@ export class ShopApp {
       this.price(i, item),
     );
     if (r.status === 'self' || r.status === 'not_member') return void (await i.editReply(done(r.status === 'self' ? '自分には贈れません。' : 'その方には贈れません（BOT や、まだ役職のない方）。')));
-    if (r.status === 'rank_too_low') return void (await i.editReply(done(`プレゼントを贈れるのは「${r.rankName}」になってからです（作ったばかりのアカウントから贈れないようにしています）。`)));
+    if (r.status === 'rank_too_low') return void (await i.editReply(done(`プレゼントを贈れるのは「${r.rankName}」になってからです。`)));
     if (r.status === 'owned') return void (await i.editReply(done(`${target.displayName} さんはもう持っています（${this.coinName}は減っていません）。`)));
     if (r.status !== 'ok') return void (await i.editReply(done(this.insufficientText(r) ?? 'この授与品は、今は受けられません。')));
     try {

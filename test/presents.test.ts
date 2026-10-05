@@ -29,14 +29,16 @@ describe('💝 /贈る', () => {
     expect((await sendPresent(db, cfg, ujiko(A), { id: B, roleIds: [] }, fuku, 1)).status).toBe('not_member');
     expect((await sendPresent(db, cfg, ujiko(A), { ...ujiko(B), bot: true }, fuku, 1)).status).toBe('not_member');
     expect((await sendPresent(db, cfg, ujiko(A), ujiko(B), fuku, 0)).status).toBe('invalid');
-    // 作ったばかりのアカウント（参拝者）からは贈れない
-    expect(await sendPresent(db, cfg, { id: A, roleIds: [ROLE.sanpaisha] }, ujiko(B), fuku, 1)).toEqual({ status: 'rank_too_low', rankName: '氏子' });
+    // 役職のない人からは贈れない（参拝者からは贈れる: 下で確かめる）
+    expect((await sendPresent(db, cfg, { id: A, roleIds: [] }, ujiko(B), fuku, 1)).status).toBe('no_rank');
     expect(await sendPresent(db, cfg, ujiko(A), ujiko(B), fuku, 5)).toEqual({ status: 'not_enough', label: '🧧福の札', have: 3 });
     expect(await sendPresent(db, cfg, ujiko(A), { id: B, roleIds: [ROLE.sanpaisha] }, fuku, 2)).toEqual({ status: 'ok', label: '🧧福の札', count: 2, left: 1 });
     expect((await ticketsOf(db, A)).fuku).toBe(1);
     expect((await ticketsOf(db, B)).fuku).toBe(2);
+    // 参拝者（1 段目）も贈れる
+    expect((await sendPresent(db, cfg, { id: B, roleIds: [ROLE.sanpaisha] }, ujiko(A), fuku, 1)).status).toBe('ok');
     // 運営は 1 段目でも贈れる
-    expect((await sendPresent(db, cfg, { id: B, roleIds: [ROLE.shinshoku] }, ujiko(A), fuku, 2)).status).toBe('ok');
+    expect((await sendPresent(db, cfg, { id: B, roleIds: [ROLE.shinshoku] }, ujiko(A), fuku, 1)).status).toBe('ok');
   });
 
   it('自由な券も贈れる', async () => {

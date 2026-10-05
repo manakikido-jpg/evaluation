@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-gift-sanpaisha',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '💝 贈り物・プレゼント・/贈る が参拝者からできるようになりました',
+    items: ['これまでは氏子からでした。1 日に贈れる合計の上限は今までどおりです'],
+  },
+  {
     id: '2026-10-05-atslot-demo',
     date: '2026-10-05',
     kind: 'improve',

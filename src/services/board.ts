@@ -65,7 +65,7 @@ export async function createPost(db: Db, cfg: GuildConfig, author: { id: string;
   if (!isBoardCategory(input.category) || !title || title.length > 60 || body.length > 1000) return { status: 'invalid' };
   if (!Number.isInteger(slots) || slots < 1 || slots > BOARD.maxSlots || !Number.isInteger(days) || days < 1 || days > BOARD.maxDays) return { status: 'invalid' };
   if (!Number.isInteger(reward) || reward < 0 || reward * slots > BOARD.maxEscrow) return { status: 'invalid' };
-  // 報酬を付けられるのは、贈り物と同じく 2 段目の役職（氏子）以上か運営（サブ垢で銭を流せないように）
+  // 報酬を付けられるのは 2 段目の役職（氏子）以上か運営（サブ垢で銭を流せないように）
   if (reward > 0) {
     const [first, second] = autoRanks(cfg.ranks);
     const current = currentAutoRank(cfg.ranks, author.roleIds);

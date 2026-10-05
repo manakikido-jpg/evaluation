@@ -43,7 +43,7 @@ export function parseCount(raw: string): number {
 
 /**
  * 袋を置く（入れる量と手数料を払って、袋を作る）。投稿は呼び出し側。
- * サブアカウントで集めた銭を流せないよう、置けるのは贈り物と同じく 2 段目の役職（氏子）以上か運営。
+ * サブアカウントで集めた銭を流せないよう、置けるのは 2 段目の役職（氏子）以上か運営。
  */
 export async function putBag(
   db: Db,

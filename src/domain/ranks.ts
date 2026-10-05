@@ -34,6 +34,16 @@ export function currentAutoRank(ranks: readonly Rank[], roleIds: Iterable<string
     .at(-1);
 }
 
+/**
+ * 贈り物・プレゼント・/贈る ができないときの「なるべき役職」（できるなら undefined）。
+ * 贈れるのは自動役職のどれか（いちばん下の参拝者から）か運営
+ */
+export function giftBlockedRank(ranks: readonly Rank[], roleIds: readonly string[]): Rank | undefined {
+  const isStaff = ranks.some((r) => !r.auto && roleIds.includes(r.roleId));
+  if (isStaff || currentAutoRank(ranks, roleIds)) return undefined;
+  return autoRanks(ranks)[0];
+}
+
 /** ご縁から見て、なれる自動役職のうちいちばん上のもの */
 export function autoRankForGoen(ranks: readonly Rank[], goen: number): Rank | undefined {
   return autoRanks(ranks)

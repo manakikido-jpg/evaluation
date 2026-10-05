@@ -55,7 +55,7 @@ export const DEFAULT_TERMS: GlossaryDefault[] = [
   { category: 'economy', emoji: '🎁', term: '初期配布', reading: 'しょきはいふ', description: '参拝者になったときに 1 回だけもらえる{通貨}（{初期配布} 枚）' },
   { category: 'economy', emoji: '🏮', term: '授与所', reading: 'じゅよしょ', description: '{通貨}で授与品（色守り・称号・ピン留めなど）を受けるところ（{#授与所}）', aliases: 'ショップ' },
   { category: 'economy', emoji: '🎀', term: '授与品', reading: 'じゅよひん', description: '授与所で受けられる品物' },
-  { category: 'economy', emoji: '💝', term: '贈り物', reading: 'おくりもの', description: 'ほかの人に{通貨}を贈る授与品（氏子以上）', aliases: '送金' },
+  { category: 'economy', emoji: '💝', term: '贈り物', reading: 'おくりもの', description: 'ほかの人に{通貨}を贈る授与品（参拝者から）', aliases: '送金' },
   { category: 'economy', emoji: '🌸', term: '花吹雪', reading: 'はなふぶき', description: '相手に花吹雪を降らせてお祝いする授与品' },
   { category: 'economy', emoji: '🏪', term: '市場', reading: 'いちば', description: '開業した人のイラスト・歌・作成物・通話などを{通貨}で売り買いするところ（{#市場}）' },
   { category: 'economy', emoji: '🎴', term: 'おみくじ', description: '1 日 1 回引ける（`/おみくじ`）。{通貨}がもらえる（{おみくじの銭}）' },

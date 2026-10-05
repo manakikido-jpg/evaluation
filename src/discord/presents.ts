@@ -214,7 +214,7 @@ export class PresentApp {
       item,
       count,
     );
-    if (r.status === 'rank_too_low') return `贈れるのは「${r.rankName}」になってからです（作ったばかりのアカウントから集められないようにしています）。`;
+    if (r.status === 'rank_too_low') return `贈れるのは「${r.rankName}」になってからです。`;
     if (r.status === 'not_enough') return `${r.label} が足りません（いま ${r.have} 枚）。`;
     if (r.status !== 'ok') return PRESENT_MESSAGES[r.status];
     await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'present.send', detail: { item, label: r.label, count: r.count, note: note || undefined }, via: 'discord' });

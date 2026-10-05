@@ -125,9 +125,10 @@ describe('贈り物', () => {
     expect((await walletOf(db, 'B')).balance).toBe(500);
   });
 
-  it('参拝者（1 段目）は贈れない。自分にも贈れない。量の範囲', async () => {
+  it('役職のない人は贈れない（参拝者から贈れる）。自分にも贈れない。量の範囲', async () => {
     await addCoins(db, 'A', 3000, 'adjust');
-    expect(await giveGift(db, cfg, { id: 'A', roleIds: [ROLE.sanpaisha] }, 'B', 100, now)).toEqual({ status: 'rank_too_low', rankName: '氏子' });
+    expect(await giveGift(db, cfg, { id: 'A', roleIds: [] }, 'B', 100, now)).toEqual({ status: 'rank_too_low', rankName: '参拝者' });
+    expect((await giveGift(db, cfg, { id: 'A', roleIds: [ROLE.sanpaisha] }, 'B', 100, now)).status).toBe('ok');
     expect(await giveGift(db, cfg, ujiko, 'A', 100, now)).toEqual({ status: 'self' });
     expect(await giveGift(db, cfg, ujiko, 'B', 5, now)).toEqual({ status: 'bad_amount', min: 10, max: 1000 });
     expect(await giveGift(db, cfg, ujiko, 'B', 1001, now)).toEqual({ status: 'bad_amount', min: 10, max: 1000 });
@@ -158,7 +159,7 @@ describe('🎁 授与品のプレゼント', () => {
   const A = '960000000000000101';
   const B = '960000000000000102';
   const ujiko = (id: string) => ({ id, roleIds: [ROLE.ujiko] });
-  it('買う人が払い、相手が受ける。払い戻しは買った人へ。自分・役職のない人・1 段目の人は贈れない', async () => {
+  it('買う人が払い、相手が受ける。払い戻しは買った人へ。自分・役職のない人は贈れない（参拝者から贈れる）', async () => {
     const { buyPresent, presentable } = await import('../src/services/shop.js');
     const sakura = await item((i) => i.roleId === SAKURA);
     const title = await item((i) => i.roleId === TITLE);
@@ -166,7 +167,8 @@ describe('🎁 授与品のプレゼント', () => {
     expect(presentable(await item((i) => i.kind === 'gift'))).toBe(false);
     expect((await buyPresent(db, cfg, sakura, ujiko(A), ujiko(A))).status).toBe('self');
     expect((await buyPresent(db, cfg, sakura, ujiko(A), { id: B, roleIds: [] })).status).toBe('not_member');
-    expect(await buyPresent(db, cfg, sakura, { id: A, roleIds: [ROLE.sanpaisha] }, ujiko(B))).toEqual({ status: 'rank_too_low', rankName: '氏子' });
+    expect(await buyPresent(db, cfg, sakura, { id: A, roleIds: [] }, ujiko(B))).toEqual({ status: 'rank_too_low', rankName: '参拝者' });
+    expect((await buyPresent(db, cfg, sakura, { id: A, roleIds: [ROLE.sanpaisha] }, ujiko(B))).status).toBe('insufficient');
     expect((await buyPresent(db, cfg, sakura, ujiko(A), ujiko(B))).status).toBe('insufficient');
     await addCoins(db, A, 5000, 'adjust');
     const r = await buyPresent(db, cfg, sakura, ujiko(A), { id: B, roleIds: [ROLE.sanpaisha] }, sakura.price, now);

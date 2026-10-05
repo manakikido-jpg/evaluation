@@ -2,13 +2,13 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { TICKET_KINDS, type GuildConfig, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { customTicketHoldings, customTickets, tickets } from '../db/schema.js';
-import { autoRanks, currentAutoRank } from '../domain/ranks.js';
+import { giftBlockedRank } from '../domain/ranks.js';
 import { customHoldingsOf, customName } from './customTickets.js';
 import { TICKET_LABEL, ticketName, ticketsOf } from './tickets.js';
 
 /**
  * 💝 /贈る: 持っている券・自由な券を、サーバーのほかの人に贈る（個人から個人へ）。
- * 贈れるのは 2 段目の自動役職（氏子）以上か運営（作ったばかりのサブ垢から集められないように）。
+ * 贈れるのは役職（参拝者から）のある人か運営。
  */
 
 export type PresentItem = { kind: 'ticket'; ticket: TicketKind } | { kind: 'custom'; id: number };
@@ -50,10 +50,8 @@ export async function sendPresent(db: Db, cfg: GuildConfig, from: PresentMember,
   const hasRank = (roleIds: readonly string[]) => cfg.ranks.some((r) => roleIds.includes(r.roleId));
   if (to.bot || !hasRank(to.roleIds)) return { status: 'not_member' };
   if (!hasRank(from.roleIds)) return { status: 'no_rank' };
-  const [first, second] = autoRanks(cfg.ranks);
-  const current = currentAutoRank(cfg.ranks, from.roleIds);
-  const isStaff = cfg.ranks.some((r) => !r.auto && from.roleIds.includes(r.roleId));
-  if (second && !isStaff && (!current || current.key === first?.key)) return { status: 'rank_too_low', rankName: second.name };
+  const need = giftBlockedRank(cfg.ranks, from.roleIds);
+  if (need) return { status: 'rank_too_low', rankName: need.name };
 
   return db.transaction(async (tx) => {
     if (item.kind === 'ticket') {
