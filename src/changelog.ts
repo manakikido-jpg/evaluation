@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-atslot-cz',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🔥 鬼斬り白狐にチャンスゾーン「鬼退治チャンス」を入れました',
+    items: [
+      'レア役（チェリー・スイカ・チャンス目）でチャンスゾーンへ。液晶に残りゲーム数が大きく出ます',
+      'CZ 中のレア役で成功しやすくなり、最後のゲームで鬼を退治できれば AT「白狐ラッシュ」突入',
+      'AT に入りやすくなったぶん、AT は 1 セット 28 G に（払い戻し率はほぼ同じ）',
+    ],
+  },
+  {
     id: '2026-10-05-atslot-5lines',
     date: '2026-10-05',
     kind: 'improve',

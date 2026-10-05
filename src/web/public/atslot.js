@@ -68,13 +68,17 @@
       <rect width="160" height="90" fill="url(#bg-b)"/><circle cx="80" cy="30" r="20" fill="#ffd0a0" opacity=".9"/>
       <path d="M0 74 L40 70 L60 76 L100 70 L130 76 L160 72 V90 H0 Z" fill="#100204"/><path d="M50 82 L62 76 L70 84 M104 80 L114 74" stroke="#ff6a3a" stroke-width=".8" fill="none"/>`,
   };
-  const BG_KEY = { shrine: 'bg-normal', forest: 'bg-zenchou', rush: 'bg-at', ranbu: 'bg-tokka', battle: 'bg-battle' };
+  const BG_KEY = { shrine: 'bg-normal', forest: 'bg-zenchou', cz: 'bg-cz', rush: 'bg-at', ranbu: 'bg-tokka', battle: 'bg-battle' };
+  // チャンスゾーンの仮の背景は鬼の森（絵がなければ前兆の絵）
+  BG.cz = BG.forest;
+  const BG_FALLBACK = { cz: 'bg-zenchou' };
   const LOGO = {
+    'logo-cz': ['鬼退治チャンス', 'CHANCE ZONE'],
     'logo-rush': ['白狐ラッシュ', 'BYAKKO RUSH'],
     'logo-ranbu': ['白狐乱舞', 'RANBU ZONE'],
     'logo-battle': ['決戦', 'VS 鬼'],
   };
-  const TRACK = { shrine: null, forest: 'forest', rush: 'rush', ranbu: 'ranbu', battle: 'battle' };
+  const TRACK = { shrine: null, forest: 'forest', cz: 'battle', rush: 'rush', ranbu: 'ranbu', battle: 'battle' };
 
   // ───── 音 ─────
   const fx = {
@@ -333,7 +337,7 @@
     scene.append(bg, lines, actors, over, flash);
 
     const setBg = (stage) => {
-      const key = BG_KEY[stage] || 'bg-normal';
+      const key = art[BG_KEY[stage]] ? BG_KEY[stage] : BG_FALLBACK[stage] || BG_KEY[stage] || 'bg-normal';
       bg.innerHTML = '';
       bg.className = `sc-bg st-${stage}`;
       if (art[key]) {
@@ -456,13 +460,13 @@
       setBg(st);
       actors.innerHTML = '';
       const oni = oniNow;
-      if (st === 'forest' && oni > 0) {
+      if ((st === 'forest' || st === 'cz') && oni > 0) {
         const o = actor('oni');
         o.classList.add('idle-oni', `near-${Math.min(3, oni)}`);
         actors.append(o);
       }
       const b = actor('byakko');
-      b.classList.add('idle', st === 'forest' ? 'side' : 'center');
+      b.classList.add('idle', st === 'forest' || st === 'cz' ? 'side' : 'center');
       actors.append(b);
       Bgm.play(TRACK[st] ?? null);
     };
@@ -600,6 +604,85 @@
         lg.remove();
         t.remove();
         Bgm.play('ranbu');
+      },
+      async cz_start(_e, _show, item) {
+        // 🔥 チャンスゾーン突入: 暗転 → 鬼が吠える → ロゴ
+        Bgm.play(null);
+        const black = el('div', 'sc-black');
+        black.append(el('i', 'sc-eyes-red'));
+        over.append(black);
+        led('led-off', 700);
+        fx.roar();
+        await sleep(800);
+        black.remove();
+        doFlash('red', 450);
+        shake(9, 500);
+        led('led-red', 2600);
+        oniNow = 2;
+        idle('cz');
+        const lg = logo('logo-cz', 'slam');
+        over.append(lg);
+        fx.stamp();
+        anim(lg, [{ transform: 'translate(-50%, -50%) scale(2.8)', opacity: 0 }, { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }], { duration: 280, easing: 'ease-out' });
+        await sleep(600);
+        const t = text('rate', item?.small || '鬼を退治せよ', 'レア役で成功しやすくなる');
+        over.append(t);
+        await sleep(1700);
+        lg.remove();
+        t.remove();
+      },
+      async cz_end(e) {
+        // 🔥 チャンスゾーンの最後: 白狐と鬼の一騎打ち
+        Bgm.play('battle');
+        setBg('battle');
+        actors.innerHTML = '';
+        const fox = actor('byakko');
+        const oni = actor('oni');
+        fox.classList.add('duel', 'left');
+        oni.classList.add('duel', 'right');
+        actors.append(fox, oni);
+        anim(fox, [{ transform: 'translateX(-90%)' }, { transform: 'none' }], { duration: 320, easing: 'ease-out' });
+        anim(oni, [{ transform: 'translateX(90%) scaleX(-1)' }, { transform: 'scaleX(-1)' }], { duration: 320, easing: 'ease-out' });
+        const dark = el('div', 'sc-black soft');
+        over.append(dark);
+        fx.heart();
+        fx.heart(0.7);
+        await sleep(1300);
+        dark.remove();
+        if (e.win) {
+          fx.whoosh();
+          anim(fox, [{ transform: 'translateX(0)' }, { transform: 'translateX(70%)', offset: 0.5 }, { transform: 'translateX(0)' }], { duration: 520, fill: 'none' });
+          await sleep(240);
+          fx.slash();
+          fx.hit(0.04);
+          doFlash('white', 300);
+          shake(10, 380);
+          oni.classList.add('down');
+          anim(oni, [{ transform: 'scaleX(-1)', opacity: 1 }, { transform: 'translateY(20%) rotate(18deg) scaleX(-1)', opacity: 0 }], { duration: 700, easing: 'ease-in' });
+          const t = text('win', '鬼退治 成功！！', 'AT 突入');
+          over.append(t);
+          anim(t, [{ transform: 'translate(-50%, -50%) scale(3)', opacity: 0 }, { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }], { duration: 300, easing: 'ease-out' });
+          doFlash('gold', 600);
+          coins(30);
+          Sound.bigWin();
+          led('led-rainbow', 3000);
+          gimmick(1400);
+          await sleep(1700);
+          t.remove();
+        } else {
+          // 鬼が笑って逃げていく
+          fx.roar();
+          anim(oni, [{ transform: 'scaleX(-1)', opacity: 1 }, { transform: 'translateX(130%) scaleX(-1)', opacity: 0 }], { duration: 900, easing: 'ease-in' });
+          const t = text('lose', '鬼に逃げられた…', 'チャンスゾーン 終了');
+          over.append(t);
+          led('led-off', 1500);
+          Bgm.play(null);
+          Sound.lose();
+          await sleep(1700);
+          t.remove();
+          oniNow = 0;
+          idle('shrine');
+        }
       },
       async tokka_end() {
         const t = text('end', '白狐乱舞 終了', 'AT に戻ります');
@@ -853,7 +936,7 @@
             if (!alive) return;
             const e = item.ev;
             const f = e && scenes[e.k];
-            if (f) await f(e, show);
+            if (f) await f(e, show, item);
           }
         })()
           .catch(() => undefined)

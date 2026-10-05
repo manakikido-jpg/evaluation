@@ -15,6 +15,7 @@ export type ArtSlot = { key: string; group: 'bg' | 'char' | 'logo' | 'sym' | 'ca
 export const AT_ART_SLOTS: ArtSlot[] = [
   { key: 'bg-normal', group: 'bg', label: '通常時の背景（白狐の社・夜）', size: '960×540', note: '液晶いっぱいに出す' },
   { key: 'bg-zenchou', group: 'bg', label: '前兆の背景（鬼の森）', size: '960×540', note: '演出が強いときに切り替わる' },
+  { key: 'bg-cz', group: 'bg', label: 'チャンスゾーン「鬼退治チャンス」の背景', size: '960×540', note: 'なければ前兆の背景' },
   { key: 'bg-at', group: 'bg', label: 'AT「白狐ラッシュ」の背景', size: '960×540', note: '流れる線を上に重ねる' },
   { key: 'bg-tokka', group: 'bg', label: '特化ゾーン「白狐乱舞」の背景', size: '960×540', note: '色が回る' },
   { key: 'bg-battle', group: 'bg', label: '継続バトルの背景（決戦の場）', size: '960×540', note: '' },
@@ -27,6 +28,7 @@ export const AT_ART_SLOTS: ArtSlot[] = [
   { key: 'oni-attack', group: 'char', label: '鬼（襲いかかる）', size: '800×600・透明', note: 'バトルで攻めてくるとき' },
   { key: 'oni-down', group: 'char', label: '鬼（斬られた）', size: '600×800・透明', note: '白狐が勝ったとき' },
   { key: 'logo-rush', group: 'logo', label: '「白狐ラッシュ」のロゴ', size: '900×300・透明', note: 'AT 突入' },
+  { key: 'logo-cz', group: 'logo', label: '「鬼退治チャンス」のロゴ', size: '900×300・透明', note: 'チャンスゾーン突入' },
   { key: 'logo-ranbu', group: 'logo', label: '「白狐乱舞」のロゴ', size: '900×300・透明', note: '特化ゾーン' },
   { key: 'logo-battle', group: 'logo', label: '「決戦」のロゴ', size: '900×300・透明', note: '継続バトルの始まり' },
   { key: 'logo-title', group: 'logo', label: '台の名前「鬼斬り白狐」', size: '900×240・透明', note: '筐体のいちばん上' },

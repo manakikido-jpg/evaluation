@@ -126,7 +126,7 @@ export function atStopsFor(look: Look | 'none', rng: Rng): number[] {
 export const AT_CEILING = 700;
 export const AT_HEAVEN_CEILING = 100;
 /** AT 1 セットのゲーム数 */
-export const AT_SET_GAMES = 40;
+export const AT_SET_GAMES = 28;
 /** 継続率（%）と、AT に入ったときの出やすさ（%） */
 export const AT_RATES: { rate: number; odds: number }[] = [
   { rate: 50, odds: 55 },
@@ -138,13 +138,22 @@ export const AT_RATES: { rate: number; odds: number }[] = [
 export const AT_HEAVEN_PERCENT = 20;
 
 /** 設定ごとの AT 抽選の重み（設定 1 を 1 として） */
-export const AT_SETTING_BOOST: Record<SlotSetting, number> = { 1: 1, 2: 1.12, 3: 1.25, 4: 1.42, 5: 1.62, 6: 1.9 };
+export const AT_SETTING_BOOST: Record<SlotSetting, number> = { 1: 1, 2: 1.06, 3: 1.12, 4: 1.21, 5: 1.32, 6: 1.48 };
 /** 設定ごとの払い戻し率の目安（シミュレーションで出したもの。運営の画面に出す） */
-export const AT_RTP_APPROX: Record<SlotSetting, number> = { 1: 0.95, 2: 0.957, 3: 0.967, 4: 0.984, 5: 1.001, 6: 1.026 };
-/** 通常時の役ごとの AT 当選率（設定 1。千分率） */
-export const AT_HIT_PERMIL: Partial<Record<AtRole, number>> = { wcherry: 10, scherry: 120, suika: 15, chance: 120, none: 0.03 };
+export const AT_RTP_APPROX: Record<SlotSetting, number> = { 1: 0.954, 2: 0.964, 3: 0.972, 4: 0.988, 5: 1.004, 6: 1.018 };
+/**
+ * 🔥 チャンスゾーン「鬼退治チャンス」: 通常時のレア役で入る（設定 1 の %。設定が高いほど入りやすい）。
+ * 入ったときに成功（AT）かを決め、CZ 中のレア役で引き直せる。最後のゲームで結果が出る
+ */
+export const AT_CZ_GAMES = 10;
+export const AT_CZ_PERCENT: Partial<Record<AtRole, number>> = { wcherry: 8, suika: 10, scherry: 40, chance: 40 };
+/** レア役からいきなり AT（設定 1 の %） */
+export const AT_DIRECT_PERCENT: Partial<Record<AtRole, number>> = { scherry: 5, chance: 5 };
+/** CZ の成功率（入ったとき）と、CZ 中のレア役で引き直すときの成功率（%） */
+export const AT_CZ_WIN = 33;
+export const AT_CZ_RARE_WIN: Partial<Record<AtRole, number>> = { wcherry: 25, suika: 35, scherry: 70, chance: 70, byakko: 100 };
 
-export type AtPhase = 'normal' | 'zenchou' | 'at';
+export type AtPhase = 'normal' | 'zenchou' | 'at' | 'cz';
 export type AtRun = {
   /** このセットの残りゲーム・何セット目・継続率・特化ゾーンの残り */
   left: number;
@@ -166,11 +175,15 @@ export type AtMachine = {
   nextRate: number;
   tenjou: boolean;
   at: AtRun | null;
+  /** チャンスゾーン（残りゲーム・成功するか。成功は画面には出さない） */
+  cz?: { left: number; win: boolean } | null;
 };
-export const newAtMachine = (): AtMachine => ({ games: 0, heaven: false, phase: 'normal', zenchou: 0, nextRate: 0, tenjou: false, at: null });
+export const newAtMachine = (): AtMachine => ({ games: 0, heaven: false, phase: 'normal', zenchou: 0, nextRate: 0, tenjou: false, at: null, cz: null });
 
 /** 画面に出す出来事 */
 export type AtEvent =
+  | { k: 'cz_start'; why: AtRole }
+  | { k: 'cz_end'; win: boolean }
   | { k: 'at_start'; rate: number; tenjou: boolean }
   | { k: 'add'; games: number; why: AtRole }
   | { k: 'tokka_start' }
@@ -181,8 +194,8 @@ export type AtEvent =
 /** 1 ゲームの結果（台の状態はこのあとのもの） */
 export type AtStep = {
   role: AtRole;
-  /** このゲームのときの状態（at = AT 中・tokka = 特化ゾーン中） */
-  during: 'normal' | 'zenchou' | 'at' | 'tokka';
+  /** このゲームのときの状態（at = AT 中・tokka = 特化ゾーン中・cz = チャンスゾーン中） */
+  during: 'normal' | 'zenchou' | 'at' | 'tokka' | 'cz';
   /** AT 中の押し順ベルのナビ（押す順のリール。[1, 2, 0] = 中 → 右 → 左） */
   navi: number[] | null;
   events: AtEvent[];
@@ -274,6 +287,38 @@ export function stepAt(prev: AtMachine, setting: SlotSetting, rng: Rng): { next:
   }
 
   m.games++;
+  const rare = role === 'scherry' || role === 'chance' || role === 'byakko';
+  if (m.phase === 'cz') {
+    // 🔥 チャンスゾーン: レア役で成功を引き直す。最後のゲームで結果
+    const cz = m.cz ?? { left: 1, win: false };
+    cz.left--;
+    if (!cz.win && rng(100) < (AT_CZ_RARE_WIN[role] ?? 0)) cz.win = true;
+    hint = cz.left <= 0 ? (cz.win ? 3 : 1 + rng(2)) : rare ? 2 : role === 'wcherry' || role === 'suika' ? 1 : 0;
+    if (cz.left > 0) {
+      m.cz = cz;
+      return { next: m, step: { role, during, navi, events, hint } };
+    }
+    events.push({ k: 'cz_end', win: cz.win });
+    m.cz = null;
+    if (cz.win) {
+      m.phase = 'at';
+      m.tenjou = false;
+      const rate = drawRate(rng);
+      m.at = { left: AT_SET_GAMES, set: 1, rate, tokka: 0, games: 0, added: 0, won: 0 };
+      events.push({ k: 'at_start', rate, tenjou: false });
+    } else {
+      m.phase = 'normal';
+      // 天井に届いていれば、そのまま前兆へ
+      const ceiling = m.heaven ? AT_HEAVEN_CEILING : AT_CEILING;
+      if (m.games >= ceiling) {
+        m.phase = 'zenchou';
+        m.zenchou = 2 + rng(4);
+        m.tenjou = !m.heaven;
+        m.nextRate = drawRate(rng, m.tenjou ? 66 : 0);
+      }
+    }
+    return { next: m, step: { role, during, navi, events, hint } };
+  }
   if (m.phase === 'zenchou') {
     m.zenchou--;
     // 前兆中は演出が出やすい（最後のゲームはいちばん強く）
@@ -286,17 +331,25 @@ export function stepAt(prev: AtMachine, setting: SlotSetting, rng: Rng): { next:
     return { next: m, step: { role, during, navi, events, hint } };
   }
 
-  // 通常時: レア役で AT 抽選・天井
-  const permil = role === 'byakko' ? 1000 : (AT_HIT_PERMIL[role] ?? 0) * AT_SETTING_BOOST[setting];
-  const lucky = permil > 0 && rng(1_000_000) < permil * 1000;
+  // 通常時: レア役で AT 直撃かチャンスゾーン・天井
+  const boost = AT_SETTING_BOOST[setting];
+  const x = rng(10000);
+  const direct = role === 'byakko' ? 10000 : Math.round((AT_DIRECT_PERCENT[role] ?? 0) * boost * 100);
+  const czp = Math.round((AT_CZ_PERCENT[role] ?? 0) * boost * 100);
+  const lucky = x < direct;
+  const toCz = !lucky && x < direct + czp;
   const ceiling = m.heaven ? AT_HEAVEN_CEILING : AT_CEILING;
-  const tenjou = !lucky && m.games >= ceiling;
+  const tenjou = !lucky && !toCz && m.games >= ceiling;
   // ガセの演出（当たっていなくても、たまに出る）
-  hint = role === 'chance' || role === 'scherry' ? 2 : role === 'wcherry' || role === 'suika' ? 1 : rng(100) < 4 ? 1 : 0;
-  if (lucky || tenjou) {
+  hint = rare ? 2 : role === 'wcherry' || role === 'suika' ? 1 : rng(100) < 4 ? 1 : 0;
+  if (toCz) {
+    m.phase = 'cz';
+    m.cz = { left: AT_CZ_GAMES, win: rng(100) < AT_CZ_WIN };
+    events.push({ k: 'cz_start', why: role });
+  } else if (lucky || tenjou) {
     m.phase = 'zenchou';
-    // 前兆は 3〜24 ゲーム（白狐目はすぐ）
-    m.zenchou = role === 'byakko' ? 1 : 3 + rng(22);
+    // 前兆は 2〜8 ゲーム（白狐目はすぐ）
+    m.zenchou = role === 'byakko' ? 1 : 2 + rng(7);
     m.tenjou = tenjou && !m.heaven;
     m.nextRate = drawRate(rng, m.tenjou ? 66 : 0);
   }

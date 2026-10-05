@@ -48,6 +48,8 @@ export type AtGameState = {
   atRate: number | null;
   atTokka: number;
   atWon: number | null;
+  /** 回す前のチャンスゾーンの残りゲーム（CZ 中だけ） */
+  czLeft?: number | null;
   /** 回す前の AT（液晶はレバーから止め終わりまでこちらを出す。上乗せを先に見せないように） */
   pre?: { left: number; set: number; rate: number; won: number; tokka: number } | null;
   /** 演出（見せ方だけ。古い記録にはない） */
@@ -124,6 +126,7 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
         atRate: next.at?.rate ?? null,
         atTokka: next.at?.tokka ?? 0,
         atWon: next.at?.won ?? (step.events.find((e) => e.k === 'at_end') as { won: number } | undefined)?.won ?? null,
+        czLeft: prev.phase === 'cz' ? (prev.cz?.left ?? null) : null,
         pre: prev.at ? { left: prev.at.left, set: prev.at.set, rate: prev.at.rate, won: prev.at.won, tokka: prev.at.tokka } : null,
         show,
       };
@@ -209,7 +212,7 @@ export async function atFloorData(db: Db, cfg: GuildConfig, now = new Date(), hi
     const d = (isToday ? today : yesterday)[m - 1]!;
     const key = `${isToday ? 't' : 'y'}${m}`;
     d.games++;
-    if (s.during === 'normal' || s.during === 'zenchou') gaps.set(key, (gaps.get(key) ?? 0) + 1);
+    if (s.during === 'normal' || s.during === 'zenchou' || s.during === 'cz') gaps.set(key, (gaps.get(key) ?? 0) + 1);
     if (r.id !== hide) {
       d.net += r.status === 'done' ? r.payout - r.bet : -r.bet;
       d.slump.push(d.net);

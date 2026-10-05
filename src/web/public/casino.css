@@ -2098,3 +2098,13 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 @media (prefers-reduced-motion: reduce) {
   .c-maxbet, .bl-flash .c-jreel, .c-medal-drop { animation: none !important; }
 }
+
+/* 🔥 チャンスゾーン（鬼退治チャンス）: 残りゲームを大きく */
+.c-at-lcd.cz { justify-content: space-between; align-items: center; }
+.c-at-lcd.cz .c-at-lcd-title { align-self: flex-start; color: #fff; background: linear-gradient(90deg, #c8102e, #6a0010); box-shadow: 0 0 10px rgba(255, 40, 60, 0.6); }
+.c-at-cz-left { font-size: 1rem; font-weight: 900; color: #fff; text-shadow: 0 0 10px #ff2a3a, 0 2px 0 #000; }
+.c-at-cz-left b { font-size: clamp(2.4rem, 11vw, 3.4rem); line-height: 1; color: #ffe04a; text-shadow: 0 0 14px #ff3a1a, 0 3px 0 #5a0000; font-variant-numeric: tabular-nums; }
+.c-at-lcd.cz.last .c-at-cz-left b { font-size: clamp(1.8rem, 8vw, 2.4rem); color: #fff; animation: atblink 0.4s steps(2) infinite; }
+.c-at-lcd.cz .c-at-lcd-sub { padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.5); }
+.sc-logo.logo-cz b { background: linear-gradient(180deg, #fff, #ff8a3a 45%, #c8102e); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 3px 0 #2a0000) drop-shadow(0 0 14px rgba(255, 60, 30, 0.9)); }
+.c-at-ev.cz { border-color: #ff5a3a; background: linear-gradient(135deg, rgba(200, 20, 40, 0.92), rgba(90, 0, 20, 0.92)); }

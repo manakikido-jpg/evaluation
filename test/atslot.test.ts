@@ -3,7 +3,7 @@ import { parseGuildConfig, type GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { slotAtMachines } from '../src/db/schema.js';
 import type { Rng } from '../src/services/casino/cards.js';
-import { AT_CEILING, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, atWinLine, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
+import { AT_CEILING, AT_CZ_GAMES, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, atWinLine, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
 import { atFloorData, leaveAt, orderAt, playAt, type AtGameState } from '../src/services/casino/slotAtPlay.js';
 import { atBattle, atShow } from '../src/services/casino/slotAtShow.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -84,6 +84,42 @@ describe('🦊 AT 機の中身', () => {
     expect(bell.step.role).toBe('oshijun');
     expect(bell.step.navi).toEqual([0, 1, 2]);
     expect(bell.next.at!.left).toBe(19);
+  });
+
+  it('🔥 チャンスゾーン: レア役で入る → 最後のゲームで成功なら AT・失敗なら通常へ。CZ 中のレア役で成功を引き直す', () => {
+    // 決まった順に返す（なくなったら最大）
+    const script = (...xs: number[]): Rng => (n) => (xs.length ? xs.shift()! % n : n - 1);
+    const SCHERRY = 39600;
+    // 強チェリー → CZ（成功）
+    let r = stepAt(newAtMachine(), 1, script(SCHERRY, 600, 0));
+    expect(r.step.role).toBe('scherry');
+    expect(r.next.phase).toBe('cz');
+    expect(r.next.cz).toEqual({ left: AT_CZ_GAMES, win: true });
+    expect(r.step.events).toEqual([{ k: 'cz_start', why: 'scherry' }]);
+    let m = r.next;
+    for (let i = 0; i < AT_CZ_GAMES - 1; i++) {
+      r = stepAt(m, 1, top);
+      expect(r.step.during).toBe('cz');
+      expect(r.step.events).toEqual([]);
+      m = r.next;
+    }
+    expect(m.cz?.left).toBe(1);
+    r = stepAt(m, 1, top);
+    expect(r.step.events.map((e) => e.k)).toEqual(['cz_end', 'at_start']);
+    expect(r.step.events[0]).toEqual({ k: 'cz_end', win: true });
+    expect(r.next).toMatchObject({ phase: 'at', cz: null, at: { left: AT_SET_GAMES, set: 1 } });
+    expect(r.step.hint).toBe(3);
+    // CZ（失敗）→ 通常へ。回転数は CZ のぶんも数える
+    r = stepAt(newAtMachine(), 1, script(SCHERRY, 600, 99));
+    m = r.next;
+    for (let i = 0; i < AT_CZ_GAMES; i++) m = stepAt(m, 1, top).next;
+    expect(m).toMatchObject({ phase: 'normal', cz: null, games: 1 + AT_CZ_GAMES });
+    // CZ 中の強チェリーで成功を引き直す
+    r = stepAt(newAtMachine(), 1, script(SCHERRY, 600, 99));
+    const again = stepAt(r.next, 1, script(SCHERRY, 0));
+    expect(again.next.cz).toEqual({ left: AT_CZ_GAMES - 1, win: true });
+    // はずれでは入らない
+    expect(stepAt(newAtMachine(), 1, top).next.phase).toBe('normal');
   });
 
   it('払い戻し率: 設定 1 はおよそ 95%（胴元が勝つ）・設定 6 のほうが高い', () => {

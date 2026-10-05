@@ -1,5 +1,5 @@
 import type { CasinoGameRow } from '../../db/schema.js';
-import { AT_CEILING, AT_HEAVEN_CEILING, AT_IDLE_STOPS, AT_PAYLINES, AT_RATES, AT_REEL_LEN, AT_REELS, AT_ROLES, AT_SET_GAMES, AT_SYMBOLS, atGrid, atWinLine, type AtEvent, type AtMachine, type AtSym } from '../../services/casino/slotAt.js';
+import { AT_CEILING, AT_CZ_GAMES, AT_HEAVEN_CEILING, AT_IDLE_STOPS, AT_PAYLINES, AT_RATES, AT_REEL_LEN, AT_REELS, AT_ROLES, AT_SET_GAMES, AT_SYMBOLS, atGrid, atWinLine, type AtEvent, type AtMachine, type AtSym } from '../../services/casino/slotAt.js';
 import { AT_SEAT_MINUTES, type AtDay, type AtGameState } from '../../services/casino/slotAtPlay.js';
 import type { AtShow, AtStage } from '../../services/casino/slotAtShow.js';
 import { assetUrl, slotArt } from '../assets.js';
@@ -68,7 +68,7 @@ export type AtMachineView = { machine: number; state: AtMachine; seatBy: string 
 type FloorData = { today: AtDay[]; yesterday: AtDay[] };
 
 /** 台の上の数字: 通常時はいまの回転数、AT 中は「AT 中」 */
-const counterText = (m: AtMachine) => (m.phase === 'at' ? 'AT中' : String(m.games));
+const counterText = (m: AtMachine) => (m.phase === 'at' ? 'AT中' : m.phase === 'cz' ? 'CZ中' : String(m.games));
 const seatTakenNow = (v: AtMachineView, me: string, now: number) => Boolean(v.seatBy && v.seatBy !== me && v.seatAt && now - v.seatAt.getTime() < AT_SEAT_MINUTES * 60_000);
 
 /** 差枚のグラフ（小さいもの） */
@@ -127,7 +127,7 @@ export function AtFloor(p: { me: GamePage['me']; casino: GamePage['casino']; dat
               <span class="c-floor-cells">
                 <span>
                   <i>回転数</i>
-                  <b class={v.state.phase === 'at' ? 'c-at-on' : ''}>{counterText(v.state)}</b>
+                  <b class={v.state.phase === 'at' || v.state.phase === 'cz' ? 'c-at-on' : ''}>{counterText(v.state)}</b>
                 </span>
                 <span>
                   <i>AT</i>
@@ -170,23 +170,30 @@ function eventText(e: AtEvent): { cls: string; big: string; small?: string; ev: 
   return { ...eventLine(e), ev: e };
 }
 function eventLine(e: AtEvent): { cls: string; big: string; small?: string } {
+  if (e.k === 'cz_start') return { cls: 'cz', big: '鬼退治チャンス！', small: `${AT_CZ_GAMES} G 以内に鬼を退治せよ` };
+  if (e.k === 'cz_end') return e.win ? { cls: 'win', big: '鬼退治 成功！！', small: 'AT へ' } : { cls: 'lose', big: '鬼に逃げられた…', small: 'チャンスゾーン 終了' };
   if (e.k === 'at_start') return { cls: 'start', big: '白狐ラッシュ突入！', small: `${e.tenjou ? '天井到達！ ' : ''}継続率 ${e.rate}%` };
   if (e.k === 'add') return { cls: 'add', big: `+${e.games} G`, small: '上乗せ！' };
   if (e.k === 'tokka_start') return { cls: 'tokka', big: '白狐乱舞', small: '上乗せ特化ゾーン突入！' };
   if (e.k === 'tokka_end') return { cls: 'tokka', big: '白狐乱舞 終了', small: 'AT に戻ります' };
   if (e.k === 'battle') return e.win ? { cls: 'win', big: '鬼を斬った！', small: `継続！ SET ${e.set + 1} へ` } : { cls: 'lose', big: '鬼に敗れた…', small: '白狐ラッシュ 終了' };
-  return { cls: 'end', big: `獲得 ${fmt(e.won)}`, small: `${e.sets} セット・${e.games} G` };
+  if (e.k === 'at_end') return { cls: 'end', big: `獲得 ${fmt(e.won)}`, small: `${e.sets} セット・${e.games} G` };
+  return { cls: 'end', big: '' };
 }
 
 /** 液晶に出すもの */
-type LcdView = { at: boolean; tokka: number; set: number | null; left: number | null; rate: number | null; won: number | null; added?: number; games: number; hint: number };
+type LcdView = { at: boolean; tokka: number; set: number | null; left: number | null; rate: number | null; won: number | null; added?: number; games: number; hint: number; cz?: number | null };
 const lcdOfMachine = (m: AtMachine): LcdView =>
-  m.phase === 'at' && m.at
+  m.phase === 'cz'
+    ? { at: false, tokka: 0, set: null, left: null, rate: null, won: null, games: m.games, hint: 0, cz: m.cz?.left ?? 0 }
+    : m.phase === 'at' && m.at
     ? { at: true, tokka: m.at.tokka, set: m.at.set, left: m.at.left, rate: m.at.rate, won: m.at.won, added: m.at.added, games: m.games, hint: 0 }
     : { at: false, tokka: 0, set: null, left: null, rate: null, won: null, games: m.games, hint: 0 };
 /** 回しているあいだ（このゲームのとき）。演出はレバーで出る */
 const lcdOfGame = (s: AtGameState): LcdView =>
-  s.during === 'at' || s.during === 'tokka'
+  s.during === 'cz'
+    ? { at: false, tokka: 0, set: null, left: null, rate: null, won: null, games: s.games, hint: s.hint, cz: s.czLeft ?? 0 }
+    : s.during === 'at' || s.during === 'tokka'
     ? s.pre
       ? { at: true, tokka: s.pre.tokka, set: s.pre.set, left: s.pre.left, rate: s.pre.rate, won: s.pre.won, games: s.games, hint: s.hint }
       : { at: true, tokka: s.during === 'tokka' ? Math.max(1, s.atTokka) : 0, set: s.atSet, left: s.atLeft, rate: s.atRate, won: s.atWon, games: s.games, hint: s.hint }
@@ -212,19 +219,38 @@ function Lcd(p: { v: LcdView; phase: 'pre' | 'post' | 'only' }) {
       </div>
     );
   }
+  if (v.cz !== undefined && v.cz !== null) {
+    // 🔥 チャンスゾーン: 残りゲームを大きく
+    return (
+      <div class={`c-at-lcd cz${v.cz <= 1 ? ' last' : ''}`} {...attrs}>
+        <span class="c-at-lcd-title">🔥 鬼退治チャンス</span>
+        <span class="c-at-cz-left">
+          {v.cz <= 1 ? (
+            <b>ラストゲーム！</b>
+          ) : (
+            <>
+              残り <b>{v.cz}</b> G
+            </>
+          )}
+        </span>
+        <span class="c-at-lcd-sub">レア役で成功を引き寄せろ！</span>
+      </div>
+    );
+  }
   return (
     <div class={`c-at-lcd normal h${v.hint}`} {...attrs}>
       <span class="c-at-lcd-title">⛩ 白狐の社</span>
       <span class="c-at-lcd-row">
         <b>{v.games} G</b>
       </span>
-      <span class={`c-at-lcd-hint h${v.hint}`}>{HINT_TEXT[v.hint] || 'レア役で AT を狙え'}</span>
+      <span class={`c-at-lcd-hint h${v.hint}`}>{HINT_TEXT[v.hint] || 'レア役でチャンスゾーンを狙え'}</span>
     </div>
   );
 }
 
 /** 液晶の舞台（台の状態から。前兆の鬼の森は、そのゲームの演出が森だったときだけ残す） */
-const stageOf = (m: AtMachine, last?: AtShow): AtStage => (m.phase === 'at' ? ((m.at?.tokka ?? 0) > 0 ? 'ranbu' : 'rush') : last?.stage === 'forest' ? 'forest' : 'shrine');
+const stageOf = (m: AtMachine, last?: AtShow): AtStage =>
+  m.phase === 'at' ? ((m.at?.tokka ?? 0) > 0 ? 'ranbu' : 'rush') : m.phase === 'cz' ? 'cz' : last?.stage === 'forest' ? 'forest' : 'shrine';
 
 export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView; data: FloorData; now: number; art?: Record<string, string>; preview?: boolean; demo?: boolean }) {
   const csrf = p.me.session.csrfToken;
@@ -518,7 +544,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
       </section>
       {p.demo && <AtDemoPanel />}
       {!p.demo && <Rules>
-        1 ゲーム {fmt(bet)} {p.me.coin.name}（島で決まっています）。ラインは 5 本（上段・中段・下段・右下がり・右上がり）。通常時はレア役（チェリー・スイカ・チャンス目・白狐目）で AT「白狐ラッシュ」を抽選し、当たると前兆のあと突入します。{AT_CEILING} G ハマると天井で AT（継続率 66% 以上）。AT のあとは
+        1 ゲーム {fmt(bet)} {p.me.coin.name}（島で決まっています）。ラインは 5 本（上段・中段・下段・右下がり・右上がり）。通常時はレア役（チェリー・スイカ・チャンス目・白狐目）でチャンスゾーン「鬼退治チャンス」（{AT_CZ_GAMES} G。液晶に残りゲーム）を抽選。最後のゲームで鬼を退治できれば AT「白狐ラッシュ」突入、CZ 中のレア役で成功しやすくなります。強チェリー・チャンス目は AT 直撃も、白狐目は AT 確定。{AT_CEILING} G ハマると天井で AT（継続率 66% 以上）。AT のあとは
         {AT_HEAVEN_CEILING} G 以内に当たる天国モードのことも。AT は 1 セット {AT_SET_GAMES} G。押し順ベル（ナビの順に止めると ×{AT_ROLES.oshijun.mult}）で増やし、レア役で上乗せ、チャンス目で特化ゾーン「白狐乱舞」。セットの終わりに鬼との継続バトル（継続率{' '}
         {AT_RATES.map((r) => `${r.rate}%`).join('・')}）。通常時の押し順ベルは押し順が分からないので、そろうのは 6 回に 1 回くらい。台ごとに設定（1〜6）があり、高いほど AT に当たりやすい（払い戻し率は設定 1 で約 95%）。台の回転数・AT の残りは台に残るので、席を立つと次の人が続きを打てます。
       </Rules>}
@@ -539,6 +565,9 @@ const DEMO_GROUPS: { title: string; items: DemoPreset[] }[] = [
       { label: '鬼の森・暗転・金 STOP・溜め', d: { spin: true, stage: 'forest', oni: 2, show: { lever: 'blackout', stop3: 'gold', hold: true } } },
       { label: '虹（確定）・確定音', d: { spin: true, stage: 'shrine', show: { lever: 'rainbow', stop3: 'rainbow', kakutei: true } } },
       { label: 'フリーズ', d: { spin: true, stage: 'shrine', show: { freeze: true } } },
+      { label: '🔥 チャンスゾーン突入（強チェリー）', d: { spin: true, stage: 'shrine', post: 'cz', show: { lever: 'shake', stop3: 'gold', hold: true }, list: [ev({ k: 'cz_start', why: 'scherry' })] } },
+      { label: '🔥 CZ 成功 → AT 突入', d: { spin: true, stage: 'cz', oni: 3, post: 'rush', show: { lever: 'blackout', stop3: 'rainbow', hold: true, kakutei: true }, list: [ev({ k: 'cz_end', win: true }), ev({ k: 'at_start', rate: 66, tenjou: false })] } },
+      { label: '🔥 CZ 失敗', d: { spin: true, stage: 'cz', oni: 3, post: 'shrine', show: { lever: 'flash', stop3: 'red', hold: true }, list: [ev({ k: 'cz_end', win: false })] } },
       { label: '前兆の最後 → AT 突入', d: { spin: true, stage: 'forest', oni: 3, post: 'rush', show: { lever: 'shake', stop3: 'gold', hold: true }, list: [ev({ k: 'at_start', rate: 80, tenjou: false })] } },
     ],
   },

@@ -11,8 +11,8 @@ import type { AtMachine, AtStep } from './slotAt.js';
 export type AtLever = 'none' | 'kyuin' | 'flash' | 'shake' | 'blackout' | 'rainbow';
 /** 最後の STOP ボタンの色（青 < 赤 < 金 < 虹） */
 export type AtStopColor = 'none' | 'blue' | 'red' | 'gold' | 'rainbow';
-/** 液晶の舞台: 白狐の社（通常）・鬼の森（前兆）・白狐ラッシュ（AT）・白狐乱舞（特化） */
-export type AtStage = 'shrine' | 'forest' | 'rush' | 'ranbu';
+/** 液晶の舞台: 白狐の社（通常）・鬼の森（前兆）・鬼退治チャンス（CZ）・白狐ラッシュ（AT）・白狐乱舞（特化） */
+export type AtStage = 'shrine' | 'forest' | 'cz' | 'rush' | 'ranbu';
 /** 継続バトルの 1 手（who が攻めて、hit なら当たる） */
 export type AtBlow = { who: 'byakko' | 'oni'; hit: boolean };
 
@@ -124,6 +124,21 @@ export function atShow(prev: AtMachine, step: AtStep, next: AtMachine, rng: Rng)
     return show;
   }
 
+  // 🔥 チャンスゾーン: 鬼が目の前。最後のゲームは溜めて、成功なら強い演出
+  if (step.during === 'cz') {
+    const end = step.events.find((e) => e.k === 'cz_end');
+    show.stage = 'cz';
+    show.oni = end ? 3 : 2;
+    show.lever = pick(rng, LEVER_BY_HINT[hint]!);
+    show.stop3 = pick(rng, STOP_BY_HINT[hint]!);
+    show.hold = Boolean(end) || (rare && rng(100) < 60);
+    if (end && end.k === 'cz_end' && end.win) {
+      if (rng(100) < 30) show.stop3 = 'rainbow';
+      show.kakutei = rng(100) < 40;
+    }
+    return show;
+  }
+
   // 通常時・前兆
   if (step.during === 'zenchou') {
     show.stage = atStart || rng(100) < 85 ? 'forest' : 'shrine';
@@ -137,6 +152,12 @@ export function atShow(prev: AtMachine, step: AtStep, next: AtMachine, rng: Rng)
   show.stop3 = pick(rng, STOP_BY_HINT[hint]!);
   show.hold = hint >= 2 || rare ? rng(100) < 60 : false;
   if (atStart) show.hold = true;
+  // レア役でチャンスゾーンへ: 予告を 1 段強く
+  if (step.events.some((e) => e.k === 'cz_start')) {
+    show.lever = upLever(show.lever);
+    show.stop3 = upStop(show.stop3);
+    show.hold = true;
+  }
 
   if (won) {
     // AT が決まった: フリーズ・虹・確定音のどれか（なければ 1 段強く）

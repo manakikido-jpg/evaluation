@@ -2571,11 +2571,12 @@ const initAtSlot = (root) => {
       }
     }
   };
-  /** 押さなくても止める（溜め・フリーズ中は待つ） */
-  const autoStop = () => {
-    if (!reels.some((r) => r.state === 'spin')) return;
+  /** 押さなくても止める（溜め・フリーズ中は待つ）。回し直したら前の分はやめる */
+  let spinGen = 0;
+  const autoStop = (gen) => {
+    if (gen !== spinGen || !reels.some((r) => r.state === 'spin')) return;
     stopReel(nextIdx());
-    later(autoStop, 700);
+    later(() => autoStop(gen), 700);
   };
 
   stopBtns.forEach((b) => b.addEventListener('click', () => stopReel(Number(b.dataset.atStop))));
@@ -2634,7 +2635,8 @@ const initAtSlot = (root) => {
     mark();
     if (navi) st?.navi(navi);
     // 押さなくても、少したつと止まる（ナビがあればナビの順）
-    later(autoStop, 12000);
+    const gen = ++spinGen;
+    later(() => autoStop(gen), 12000);
   };
   const begin = () => {
     // レバーの予告（液晶の演出がなければ音だけ）。フリーズのあいだはリールが回らない
