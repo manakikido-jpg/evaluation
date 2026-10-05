@@ -484,6 +484,13 @@
       "when": 1791175258796,
       "tag": "0068_slot_at_machines",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791176348221,
+      "tag": "0069_slot_art",
+      "breakpoints": true
     }
   ]
 }

@@ -844,3 +844,12 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .pm-tpl .pm-pick-group { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .pm-pick > span:not(.pm-no) { min-width: 0; }
 .pm-pick select { flex: 0 0 8.5em; width: 8.5em; min-width: 0; }
+
+/* 🦊 AT 機の絵 */
+.art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.art-slot { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.art-slot.has { border-color: var(--ok, #3a8); }
+.art-preview { display: flex; align-items: center; justify-content: center; height: 120px; border-radius: 6px; background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+.art-preview img { max-width: 100%; max-height: 120px; object-fit: contain; }
+.art-slot .inline-form { flex-wrap: wrap; }
+.art-slot input[type=file] { max-width: 100%; font-size: 0.85em; }

@@ -1,3 +1,4 @@
+import { artUrls } from '../src/services/casino/slotArt.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
@@ -409,6 +410,50 @@ describe('🎰 カジノ（運営の画面）', () => {
       body: new URLSearchParams({ _csrf: csrf, minBet: '500', maxBet: '100', dailyBetLimit: '0' }),
     });
     expect(bad.headers.get('location')).toBe('/economy/casino?msg=invalid');
+  });
+
+  it('🦊 AT 機の絵: 宮司が入れる → 液晶に出る（URL に印・長く覚える）→ 消すと仮の絵に戻る', async () => {
+    const g = await adminLogin(GUJI);
+    const html = await (await app.request('/economy/casino', { headers: { cookie: g } })).text();
+    expect(html).toContain('id="casino-art"');
+    expect(html).toContain('action="/economy/casino/art/byakko"');
+    expect(html).toContain('enctype="multipart/form-data"');
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    const upload = (key: string, data: Uint8Array | string) => {
+      const fd = new FormData();
+      fd.append('_csrf', csrf);
+      fd.append('image', new File([data], 'a.png', { type: 'image/png' }));
+      return app.request(`/economy/casino/art/${key}`, { method: 'POST', headers: { cookie: g }, body: fd });
+    };
+    expect((await upload('byakko', '<svg/>')).headers.get('location')).toBe('/economy/casino?msg=art_bad#casino-art');
+    expect((await upload('nope', png)).headers.get('location')).toBe('/economy/casino?msg=art_bad#casino-art');
+    expect((await upload('byakko', png)).headers.get('location')).toBe('/economy/casino?msg=art_saved#art-byakko');
+    const urls = await artUrls(db);
+    expect(urls.byakko).toMatch(/^\/casino\/art\/byakko\?v=[0-9a-f]{16}$/);
+    const img = await app.request(urls.byakko!);
+    expect(img.status).toBe(200);
+    expect(img.headers.get('content-type')).toBe('image/png');
+    expect(img.headers.get('cache-control')).toContain('immutable');
+    expect(img.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(new Uint8Array(await img.arrayBuffer())).toEqual(png);
+    expect((await app.request('/casino/art/oni')).status).toBe(404);
+    expect((await app.request('/casino/art/..%2Fsecret')).status).toBe(404);
+    // 液晶（台の画面）に URL が渡る
+    current = { ...cfg, casino: { ...cfg.casino, atOpen: true } };
+    const a = (await casinoLogin(A)).cookie!;
+    const page = await (await get('/casino/atslot?m=1', a)).text();
+    expect(page).toContain(urls.byakko!);
+    expect(page).toContain('data-stage-js="/static/atslot.js?v=');
+    // 消す
+    const del = await app.request('/economy/casino/art/byakko/delete', {
+      method: 'POST',
+      headers: { cookie: g, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf }),
+    });
+    expect(del.headers.get('location')).toBe('/economy/casino?msg=art_deleted#art-byakko');
+    expect(await artUrls(db)).toEqual({});
+    expect((await app.request('/casino/art/byakko')).status).toBe(404);
   });
 });
 

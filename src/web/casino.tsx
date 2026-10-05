@@ -1,3 +1,4 @@
+import { artUrls } from '../services/casino/slotArt.js';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { TABLE_KINDS, type CasinoGame, type GuildConfig, type TableKind } from '../config.js';
@@ -460,7 +461,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const [data, machines] = await Promise.all([atFloorData(db, cfg, now, fresh ? row.id : undefined), atMachineRows(db, cfg)]);
     const msg = casinoMsg(c.req.query('e'));
     if (!machine || !machines[machine - 1]) return c.html(<AtFloor me={me} casino={cfg.casino} data={data} machines={machines} msg={msg} now={now.getTime()} />);
-    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} />);
+    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} art={await artUrls(db)} />);
   }
   app.get(
     '/casino/atslot',

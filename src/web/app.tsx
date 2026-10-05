@@ -1,4 +1,5 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
+import { artUrls, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
@@ -308,12 +309,20 @@ export function createWebApp(deps: WebDeps) {
   const smallBody = bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) });
   // 掲示の写真だけは大きめに（写真の上限 8MB ＋ 本文）
   const noticeBody = bodyLimit({ maxSize: 9 * 1024 * 1024, onError: (c) => c.text('写真が大きすぎます（8MB まで）。', 413) });
-  app.use((c, next) => (c.req.method === 'POST' && /^\/notices(?:\/\d+)?$/.test(c.req.path) ? noticeBody(c, next) : smallBody(c, next)));
+  // 🦊 AT 機の絵（1 枚 4MB まで）
+  const artBody = bodyLimit({ maxSize: 5 * 1024 * 1024, onError: (c) => c.text('絵が大きすぎます（4MB まで）。', 413) });
+  app.use((c, next) =>
+    c.req.method === 'POST' && /^\/notices(?:\/\d+)?$/.test(c.req.path)
+      ? noticeBody(c, next)
+      : c.req.method === 'POST' && /^\/economy\/casino\/art\/[a-z0-9-]+$/.test(c.req.path)
+        ? artBody(c, next)
+        : smallBody(c, next),
+  );
 
   // 管理画面の中身（相談・メモなど）をブラウザや共用 PC に残さない。htmx の部分表示と全体表示を取り違えないように
   app.use(async (c, next) => {
     await next();
-    if (!c.req.path.startsWith('/static/') && c.req.path !== '/healthz') {
+    if (!c.req.path.startsWith('/static/') && !c.req.path.startsWith('/casino/art/') && c.req.path !== '/healthz') {
       c.header('Cache-Control', 'no-store');
       c.header('Vary', 'HX-Request');
     }
@@ -332,6 +341,16 @@ export function createWebApp(deps: WebDeps) {
     // 印（?v=）が今の中身と同じなら長く覚えてよい。印なし・古い印は短く
     const cache = c.req.query('v') === f.version ? 'public, max-age=31536000, immutable' : 'public, max-age=300';
     return c.body(f.body, 200, { 'content-type': f.type, 'cache-control': cache });
+  });
+
+  // 🦊 AT 機の絵（運営が入れたもの）。印（?v=）が今の絵と同じなら長く覚えてよい
+  app.get('/casino/art/:key', async (c) => {
+    const key = c.req.param('key');
+    if (!isArtKey(key)) return c.notFound();
+    const art = await loadArt(db, key);
+    if (!art) return c.notFound();
+    const cache = c.req.query('v') === art.hash ? 'public, max-age=31536000, immutable' : 'public, max-age=60';
+    return c.body(Buffer.from(art.data), 200, { 'content-type': art.contentType, 'cache-control': cache, 'x-content-type-options': 'nosniff' });
   });
 
   // ───────── ログイン ─────────
@@ -1278,11 +1297,33 @@ export function createWebApp(deps: WebDeps) {
         settingStats={settingStats}
         roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed)}
         horses={await listHorses(db)}
+        art={await artUrls(db)}
         channels={textChannelsOf(await loadChannels().catch(() => [] as GuildChannel[])).map((ch) => ({ id: ch.id, name: ch.name }))}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
       />,
     );
+  });
+
+  // 🦊 AT 機の絵: 入れる・入れ替える・消す
+  app.post('/economy/casino/art/:key', async (c) => {
+    const key = c.req.param('key');
+    if (!isArtKey(key)) return c.redirect('/economy/casino?msg=art_bad#casino-art');
+    const f = (await c.req.parseBody()).image;
+    const file = Array.isArray(f) ? f[0] : f;
+    if (!(file instanceof File) || file.size === 0) return c.redirect('/economy/casino?msg=art_none#casino-art');
+    const r = await saveArt(db, key, new Uint8Array(await file.arrayBuffer()));
+    if (r !== 'ok') return c.redirect(`/economy/casino?msg=${r === 'too_big' ? 'art_big' : 'art_bad'}#casino-art`);
+    await audit(db, { actorId: c.get('session').userId, action: 'casino.art_saved', detail: { key }, via: 'web' });
+    return c.redirect(`/economy/casino?msg=art_saved#art-${key}`);
+  });
+  app.post('/economy/casino/art/:key/delete', async (c) => {
+    const key = c.req.param('key');
+    if (isArtKey(key)) {
+      await deleteArt(db, key);
+      await audit(db, { actorId: c.get('session').userId, action: 'casino.art_deleted', detail: { key }, via: 'web' });
+    }
+    return c.redirect(`/economy/casino?msg=art_deleted#art-${key}`);
   });
 
   // 🏇 馬の名簿: 入れる・名前を変える・引退

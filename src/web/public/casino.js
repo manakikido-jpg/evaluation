@@ -237,6 +237,12 @@ const Sound = (() => {
     },
     /** 戻りを数えるチャリチャリ */
     tick: (at = 0) => tone(2400 + Math.random() * 1200, at, 0.03, { type: 'square', vol: 0.025 }),
+    // 🦊 AT 機の演出（atslot.js）が自分で音を組むためのもの
+    tone,
+    noise,
+    notes,
+    /** 今の音の時刻（鳴らせないときは null） */
+    time: () => ready()?.currentTime ?? null,
   };
   return api;
 })();
@@ -2154,11 +2160,27 @@ const initKeiba = () => {
 // - still: 止まったまま。レバー（スペース）で回す
 let atCtl = null;
 let atLeverAt = 0;
+/** 液晶の演出（atslot.js）は AT 機の画面を開いたときだけ読む */
+let atStageLoading = false;
+const loadAtStage = (src, then) => {
+  if (window.AtStage) return then();
+  if (!src) return;
+  document.addEventListener('at-stage-ready', then, { once: true });
+  if (atStageLoading) return;
+  atStageLoading = true;
+  const sc = document.createElement('script');
+  sc.src = src;
+  sc.onload = () => document.dispatchEvent(new Event('at-stage-ready'));
+  document.head.append(sc);
+};
 const initAtSlot = (root) => {
   if (atCtl) atCtl.stop();
   atCtl = null;
   const box = root.querySelector('.c-atm');
-  if (!box) return;
+  if (!box) {
+    window.AtStage?.leave();
+    return;
+  }
   const N = Number(box.dataset.n) || 21;
   const SLIP = 4;
   const mode = box.dataset.mode;
@@ -2181,6 +2203,17 @@ const initAtSlot = (root) => {
   const order = [];
   const timers = [];
   const later = (fn, ms) => timers.push(setTimeout(() => alive && fn(), ms));
+  let show = null;
+  try {
+    show = JSON.parse(box.dataset.show || 'null');
+  } catch {
+    show = null;
+  }
+  /** 液晶の演出（読めていなければ null。文字だけの演出になる） */
+  let st = null;
+  /** フリーズ中（リールが回らない）・溜め中（最後のリールを少し止められない） */
+  let frozen = false;
+  let held = false;
   const paint = (r) => r.strip.style.setProperty('--at', r.pos.toFixed(3));
   const frame = (t) => {
     if (!alive) return;
@@ -2258,8 +2291,7 @@ const initAtSlot = (root) => {
     box.classList.remove('running');
     lever?.classList.remove('pulled');
     const win = Number(box.dataset.win || 0);
-    const wait = showEvents();
-    later(() => {
+    const finish = () => {
       // 液晶をこのゲームのあとに替える（同時に替えて、高さが変わらないように）
       box.querySelectorAll('[data-before-stop]').forEach((e) => e.setAttribute('hidden', ''));
       box.querySelectorAll('[data-after-lcd]').forEach((e) => e.removeAttribute('hidden'));
@@ -2273,7 +2305,17 @@ const initAtSlot = (root) => {
       if (lever && !box.dataset.taken) lever.disabled = false;
       const note = box.querySelector('.c-deck-note');
       if (note && note.dataset.still) note.textContent = note.dataset.still;
-    }, Math.min(wait, 1200) + 250);
+      st?.settle();
+    };
+    let list = [];
+    try {
+      list = JSON.parse(box.dataset.events || '[]');
+    } catch {
+      list = [];
+    }
+    // 液晶の演出があれば、そちらで見せる（画面をたたく・スペースで飛ばせる）。なければ文字だけ
+    if (st && list.length) st.play(list, show, () => later(finish, 120));
+    else later(finish, Math.min(showEvents(), 1200) + 250);
   };
 
   const allStopped = () => {
@@ -2287,6 +2329,7 @@ const initAtSlot = (root) => {
       later(() => form.requestSubmit(), 250);
       return;
     }
+    if (show?.kakutei) st?.kakutei();
     reveal();
   };
 
@@ -2323,7 +2366,7 @@ const initAtSlot = (root) => {
 
   const stopReel = (i) => {
     const r = reels[i];
-    if (!r || r.state !== 'spin') return;
+    if (!r || r.state !== 'spin' || frozen || held) return;
     order.push(i);
     const b = stopBtns[i];
     if (b) {
@@ -2334,6 +2377,32 @@ const initAtSlot = (root) => {
       if (reels.every((x) => x.state === 'still')) allStopped();
     });
     mark();
+    // 最後のリール: ボタンの色（青・赤・金・虹）と溜め
+    const rest = reels.filter((x) => x.state === 'spin');
+    if (rest.length === 1 && show && mode !== 'settle') {
+      const k = reels.indexOf(rest[0]);
+      const lastBtn = stopBtns[k];
+      if (show.stop3 && show.stop3 !== 'none' && lastBtn) {
+        lastBtn.classList.add('col', `col-${show.stop3}`);
+        st?.stopColor(show.stop3);
+      }
+      if (show.hold) {
+        held = true;
+        if (lastBtn) lastBtn.disabled = true;
+        st?.hold();
+        later(() => {
+          held = false;
+          if (lastBtn && reels[k].state === 'spin') lastBtn.disabled = false;
+          mark();
+        }, 1400);
+      }
+    }
+  };
+  /** 押さなくても止める（溜め・フリーズ中は待つ） */
+  const autoStop = () => {
+    if (!reels.some((r) => r.state === 'spin')) return;
+    stopReel(nextIdx());
+    later(autoStop, 700);
   };
 
   stopBtns.forEach((b) => b.addEventListener('click', () => stopReel(Number(b.dataset.atStop))));
@@ -2356,6 +2425,10 @@ const initAtSlot = (root) => {
     const n = ['1', '2', '3'].indexOf(e.key);
     if (e.code !== 'Space' && e.key !== ' ' && n < 0) return;
     e.preventDefault();
+    if (st?.busy()) {
+      if (n < 0) st.skip();
+      return;
+    }
     if (reels.every((r) => r.state === 'still')) {
       if (n < 0 && lever && !lever.disabled) lever.click();
       return;
@@ -2364,21 +2437,55 @@ const initAtSlot = (root) => {
   };
   document.addEventListener('keydown', onKey);
 
-  if (mode === 'spin' || mode === 'wait') {
-    if (Date.now() - atLeverAt > 3000) Sound.lever();
+  const startSpin = () => {
+    frozen = false;
+    box.classList.remove('frozen');
     reels.forEach((r) => {
       r.state = 'spin';
       r.el.classList.add('spin');
     });
     box.classList.add('running');
+    loop?.stop();
     loop = Sound.reelLoop();
-    // 演出（レバーで出る）
-    const hint = Number(box.dataset.hint || 0);
-    if (hint >= 2) Sound.peka(0.2);
-    else if (hint === 1) Sound.gogo?.(0.2);
     mark();
+    if (navi) st?.navi(navi);
     // 押さなくても、少したつと止まる（ナビがあればナビの順）
-    later(() => [0, 1, 2].forEach((k) => later(() => stopReel(nextIdx()), k * 700)), 12000);
+    later(autoStop, 12000);
+  };
+  const begin = () => {
+    // レバーの予告（液晶の演出がなければ音だけ）。フリーズのあいだはリールが回らない
+    const wait = st && show ? st.lever(show) : 0;
+    if (!st) {
+      const hint = Number(box.dataset.hint || 0);
+      if (hint >= 2) Sound.peka(0.2);
+      else if (hint === 1) Sound.gogo?.(0.2);
+    }
+    if (wait > 0) {
+      frozen = true;
+      box.classList.add('frozen');
+      later(startSpin, wait);
+    } else startSpin();
+  };
+
+  loadAtStage(box.dataset.stageJs, () => {
+    if (!alive || st || !window.AtStage) return;
+    st = window.AtStage.mount(box, { Sound, mode });
+  });
+  if (mode === 'spin' || mode === 'wait') {
+    if (Date.now() - atLeverAt > 3000) Sound.lever();
+    // 演出の台本がまだ読めていないときは、少しだけ待つ（最初の 1 回だけ）
+    if (window.AtStage || !box.dataset.stageJs) begin();
+    else {
+      frozen = true;
+      let started = false;
+      const go = () => {
+        if (started || !alive) return;
+        started = true;
+        begin();
+      };
+      document.addEventListener('at-stage-ready', () => setTimeout(go, 0), { once: true });
+      later(go, 600);
+    }
   } else if (mode === 'settle' && from) {
     // そろえる: 送る前の目から、決まった目へ
     reels.forEach((r, i) => {
@@ -2398,6 +2505,7 @@ const initAtSlot = (root) => {
   }
   atCtl = {
     stop() {
+      st?.unmount();
       alive = false;
       cancelAnimationFrame(raf);
       timers.forEach(clearTimeout);

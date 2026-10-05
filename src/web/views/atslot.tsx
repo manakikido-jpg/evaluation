@@ -1,7 +1,8 @@
 import type { CasinoGameRow } from '../../db/schema.js';
 import { AT_CEILING, AT_HEAVEN_CEILING, AT_IDLE_STOPS, AT_RATES, AT_REEL_LEN, AT_REELS, AT_ROLES, AT_SET_GAMES, AT_SYMBOLS, atGrid, type AtEvent, type AtMachine, type AtSym } from '../../services/casino/slotAt.js';
 import { AT_SEAT_MINUTES, type AtDay, type AtGameState } from '../../services/casino/slotAtPlay.js';
-import { slotArt } from '../assets.js';
+import type { AtShow, AtStage } from '../../services/casino/slotAtShow.js';
+import { assetUrl, slotArt } from '../assets.js';
 import { CasinoLayout, Msg, Rules, type GamePage } from './casino.js';
 
 /**
@@ -31,8 +32,8 @@ export function SlotIslands(p: { on: 'slots' | 'atslot'; games: string[]; atOpen
   );
 }
 
-function Sym(p: { k: AtSym }) {
-  const src = slotArt(`at-${p.k}`);
+function Sym(p: { k: AtSym; art?: Record<string, string> }) {
+  const src = p.art?.[`sym-${p.k}`] ?? slotArt(`at-${p.k}`);
   if (src) return <img class={`sy sy-at-${p.k}`} src={src} alt="" draggable="false" />;
   // BAR は文字で（絵文字だと細い線になる）
   if (p.k === 'bar') return <span class="sy sy-at-bar">
@@ -132,7 +133,10 @@ const ROLE_TEXT: Record<string, string> = {
 const HINT_TEXT = ['', '…鬼の気配がする', '白狐が鳴いた！', '鬼が現れた…！'];
 
 /** 演出の文字（止め終わってから順に出す） */
-function eventText(e: AtEvent): { cls: string; big: string; small?: string } {
+function eventText(e: AtEvent): { cls: string; big: string; small?: string; ev: AtEvent } {
+  return { ...eventLine(e), ev: e };
+}
+function eventLine(e: AtEvent): { cls: string; big: string; small?: string } {
   if (e.k === 'at_start') return { cls: 'start', big: '白狐ラッシュ突入！', small: `${e.tenjou ? '天井到達！ ' : ''}継続率 ${e.rate}%` };
   if (e.k === 'add') return { cls: 'add', big: `+${e.games} G`, small: '上乗せ！' };
   if (e.k === 'tokka_start') return { cls: 'tokka', big: '白狐乱舞', small: '上乗せ特化ゾーン突入！' };
@@ -150,7 +154,9 @@ const lcdOfMachine = (m: AtMachine): LcdView =>
 /** 回しているあいだ（このゲームのとき）。演出はレバーで出る */
 const lcdOfGame = (s: AtGameState): LcdView =>
   s.during === 'at' || s.during === 'tokka'
-    ? { at: true, tokka: s.during === 'tokka' ? Math.max(1, s.atTokka) : 0, set: s.atSet, left: s.atLeft, rate: s.atRate, won: s.atWon, games: s.games, hint: s.hint }
+    ? s.pre
+      ? { at: true, tokka: s.pre.tokka, set: s.pre.set, left: s.pre.left, rate: s.pre.rate, won: s.pre.won, games: s.games, hint: s.hint }
+      : { at: true, tokka: s.during === 'tokka' ? Math.max(1, s.atTokka) : 0, set: s.atSet, left: s.atLeft, rate: s.atRate, won: s.atWon, games: s.games, hint: s.hint }
     : { at: false, tokka: 0, set: null, left: null, rate: null, won: null, games: s.games, hint: s.hint };
 
 /** 液晶 */
@@ -184,7 +190,10 @@ function Lcd(p: { v: LcdView; phase: 'pre' | 'post' | 'only' }) {
   );
 }
 
-export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView; data: FloorData; now: number }) {
+/** 液晶の舞台（台の状態から。前兆の鬼の森は、そのゲームの演出が森だったときだけ残す） */
+const stageOf = (m: AtMachine, last?: AtShow): AtStage => (m.phase === 'at' ? ((m.at?.tokka ?? 0) > 0 ? 'ranbu' : 'rush') : last?.stage === 'forest' ? 'forest' : 'shrine');
+
+export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView; data: FloorData; now: number; art?: Record<string, string> }) {
   const csrf = p.me.session.csrfToken;
   const row: CasinoGameRow | undefined = p.row;
   const s = row ? (row.state as AtGameState) : undefined;
@@ -199,6 +208,12 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
   const done = Boolean(s && row?.status === 'done');
   const me = mode === 'spin' || mode === 'settle' ? { ...p.me, revealFrom: p.me.balance - (row?.payout ?? 0), revealAt: 0, revealWait: true } : p.me;
   const bet = p.casino.atBet;
+  const moving = mode === 'spin' || mode === 'wait' || mode === 'settle';
+  const show = moving ? s?.show : undefined;
+  const postStage = stageOf(p.view.state, s?.show);
+  const preStage = moving && s?.show ? s.show.stage : postStage;
+  // 前兆の鬼の近さは、止まったあとも残す（AT に入ったら消える）
+  const oni = p.view.state.phase === 'at' ? 0 : (s?.show?.oni ?? 0);
   return (
     <CasinoLayout title="鬼斬り白狐（AT 機）" me={me} back>
       <SlotIslands on="atslot" games={p.casino.games} atOpen={p.casino.atOpen} />
@@ -278,21 +293,37 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
             data-events={events.length ? JSON.stringify(events) : undefined}
             data-hint={String(s?.hint ?? 0)}
             data-taken={taken ? '1' : undefined}
+            data-show={show ? JSON.stringify(show) : undefined}
+            data-stage-pre={preStage}
+            data-stage-post={postStage}
+            data-oni-pre={String(moving ? (s?.show?.oni ?? 0) : oni)}
+            data-oni={String(oni)}
+            data-at-left={String(p.view.state.at?.left ?? '')}
+            data-art={JSON.stringify(p.art ?? {})}
+            data-stage-js={assetUrl('atslot.js')}
           >
             <div class="c-at-top">
-              <span class="c-at-title">
-                <b>鬼斬り</b>
-                <span>白狐</span>
-              </span>
+              {p.art?.['logo-title'] ? (
+                <img class="c-at-title-img" src={p.art['logo-title']} alt="鬼斬り白狐" />
+              ) : (
+                <span class="c-at-title">
+                  <b>鬼斬り</b>
+                  <span>白狐</span>
+                </span>
+              )}
             </div>
-            {s && mode !== 'still' ? (
-              <>
-                <Lcd v={lcdOfGame(s)} phase="pre" />
-                <Lcd v={lcdOfMachine(p.view.state)} phase="post" />
-              </>
-            ) : (
-              <Lcd v={lcdOfMachine(p.view.state)} phase="only" />
-            )}
+            <div class={`c-at-screen stage-${preStage}`} data-screen>
+              <div class="c-at-scene" aria-hidden="true" data-scene></div>
+              {s && mode !== 'still' ? (
+                <>
+                  <Lcd v={lcdOfGame(s)} phase="pre" />
+                  <Lcd v={lcdOfMachine(p.view.state)} phase="post" />
+                </>
+              ) : (
+                <Lcd v={lcdOfMachine(p.view.state)} phase="only" />
+              )}
+              <div class="c-at-fx" aria-live="polite"></div>
+            </div>
             <div class="c-jug-window c-at-window" role="img" aria-label={`中段: ${atGrid(stops).map((c) => AT_SYMBOLS[c[1]!].name).join('・')}`}>
               {AT_REELS.map((strip, i) => {
                 const at = mode === 'spin' || mode === 'wait' ? (stops[i]! + 6 + i * 5) % AT_REEL_LEN : stops[i]!;
@@ -300,14 +331,13 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                   <div class={`c-jreel r${i}`} data-reel={String(i)} data-at={String(at)}>
                     <div class={`c-jstrip at-${at}`} aria-hidden="true">
                       {[...strip, ...strip, ...strip].map((k) => (
-                        <Sym k={k} />
+                        <Sym k={k} art={p.art} />
                       ))}
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div class="c-at-fx" aria-live="polite"></div>
             <div class="c-at-deck">
               <form method="post" action="/casino/atslot" class="c-lever-form">
                 <input type="hidden" name="_csrf" value={csrf} />

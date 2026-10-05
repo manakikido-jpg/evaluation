@@ -9,6 +9,7 @@ import type { CasinoDay, SettingStat } from '../../services/casino/report.js';
 import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
 import { RANDOM_SETTING_ODDS, roleOdds, SETTING_KEYS, slotRtp, type SlotSetting } from '../../services/casino/slots.js';
 import { AT_RTP_APPROX } from '../../services/casino/slotAt.js';
+import { AT_ART_SLOTS, type ArtSlot } from '../../services/casino/slotArt.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -21,6 +22,11 @@ export const CASINO_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   horse_saved: { text: '🏇 馬の名簿を変えました（次のレースから出ます）。', kind: 'ok' },
   horse_invalid: { text: '馬の名前は 1〜18 文字で入れてください。', kind: 'warn' },
   horse_taken: { text: 'その名前の馬はもういます（引退した馬とは同じ名前にできます）。', kind: 'warn' },
+  art_saved: { text: '🦊 絵を入れました（AT 機の画面はすぐ新しい絵になります）。', kind: 'ok' },
+  art_deleted: { text: '🦊 絵を消しました（仮の絵に戻ります）。', kind: 'ok' },
+  art_none: { text: '絵のファイルを選んでください。', kind: 'warn' },
+  art_big: { text: '絵が大きすぎます（1 枚 4MB まで）。', kind: 'warn' },
+  art_bad: { text: '絵として読めませんでした（PNG・WebP・JPEG・GIF）。', kind: 'warn' },
 };
 
 export const CASINO_RANGES = { '1d': { label: '今日から 24 時間', days: 1 }, '7d': { label: '7 日', days: 7 }, '30d': { label: '30 日', days: 30 } } as const;
@@ -51,6 +57,8 @@ export function CasinoAdminPage(p: {
   horses?: KeibaHorseRow[];
   /** お祝いを流すチャンネルを選ぶ */
   channels?: { id: string; name: string }[];
+  /** 🦊 AT 機の入っている絵（key → URL） */
+  art?: Record<string, string>;
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -335,6 +343,7 @@ export function CasinoAdminPage(p: {
         </section>
       )}
       {p.horses && <HorseRoster horses={p.horses} csrf={p.session.csrfToken} />}
+      {p.guji && p.art && <AtArt art={p.art} csrf={p.session.csrfToken} />}
     </Layout>
   );
 }
@@ -588,6 +597,59 @@ function HorseRoster(p: { horses: KeibaHorseRow[]; csrf: string }) {
           </tbody>
         </table>
       )}
+    </section>
+  );
+}
+
+const ART_GROUPS: { group: ArtSlot['group']; title: string }[] = [
+  { group: 'bg', title: '液晶の背景' },
+  { group: 'char', title: 'キャラ（白狐・鬼）' },
+  { group: 'logo', title: 'ロゴ' },
+  { group: 'sym', title: 'リールの絵柄' },
+];
+
+/** 🦊 AT 機の絵（入れた絵は液晶・リールにすぐ出る。入れていないところは仮の絵） */
+function AtArt(p: { art: Record<string, string>; csrf: string }) {
+  const filled = AT_ART_SLOTS.filter((s) => p.art[s.key]).length;
+  return (
+    <section class="card anchor" id="casino-art">
+      <h2>🦊 AT 機「鬼斬り白狐」の絵</h2>
+      <p class="note">
+        液晶の演出・リールに使う絵です。入れていないところはコードで描いた仮の絵が出ます。キャラ・ロゴ・リールの絵柄は、背景が透明な PNG か WebP にしてください（1 枚 4MB まで。大きさはおすすめ）。入れ替えるとすぐ新しい絵になります。
+      </p>
+      <p>
+        入っている絵 <strong>{filled}</strong> / {AT_ART_SLOTS.length}
+      </p>
+      {ART_GROUPS.map((g) => (
+        <>
+          <h3>{g.title}</h3>
+          <div class="art-grid">
+            {AT_ART_SLOTS.filter((s) => s.group === g.group).map((s) => (
+              <div class={`art-slot${p.art[s.key] ? ' has' : ''}`} id={`art-${s.key}`}>
+                <div class="art-preview">{p.art[s.key] ? <img src={p.art[s.key]} alt={s.label} loading="lazy" /> : <span class="note">まだ（仮の絵）</span>}</div>
+                <strong>{s.label}</strong>
+                <span class="note">
+                  {s.size}
+                  {s.note ? `・${s.note}` : ''}
+                </span>
+                <form method="post" action={`/economy/casino/art/${s.key}`} enctype="multipart/form-data" class="inline-form">
+                  <input type="hidden" name="_csrf" value={p.csrf} />
+                  <input type="file" name="image" accept="image/png,image/webp,image/jpeg,image/gif" required aria-label={`${s.label}の絵`} />
+                  <button type="submit" class="ok">
+                    {p.art[s.key] ? '入れ替える' : '入れる'}
+                  </button>
+                </form>
+                {p.art[s.key] && (
+                  <form method="post" action={`/economy/casino/art/${s.key}/delete`} class="inline-form">
+                    <input type="hidden" name="_csrf" value={p.csrf} />
+                    <button type="submit">消す</button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ))}
     </section>
   );
 }

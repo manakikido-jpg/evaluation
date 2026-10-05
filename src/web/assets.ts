@@ -32,6 +32,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'casino.css': { body: readText(path.join(here, 'public/casino.css')), type: 'text/css; charset=utf-8' },
     'casino-bg.svg': { body: readText(path.join(here, 'public/casino-bg.svg')), type: 'image/svg+xml' },
     'casino.js': { body: readText(path.join(here, 'public/casino.js')), type: 'text/javascript; charset=utf-8' },
+    'atslot.js': { body: readText(path.join(here, 'public/atslot.js')), type: 'text/javascript; charset=utf-8' },
     'popup.js': { body: readText(path.join(here, 'public/popup.js')), type: 'text/javascript; charset=utf-8' },
     'htmx.min.js': { body: readText(path.join(here, '../../node_modules/htmx.org/dist/htmx.min.js')), type: 'text/javascript; charset=utf-8' },
   }).map(([name, f]) => [name, { ...f, version: createHash('sha256').update(f.body).digest('hex').slice(0, 10) }]),

@@ -855,6 +855,15 @@ export const keibaRuns = pgTable(
   (t) => [index('keiba_runs_owner_idx').on(t.ownerId, t.at), index('keiba_runs_time_idx').on(t.at)],
 );
 
+/** 🦊 AT 機の絵（運営が社務所Web で入れる。キャラ・背景・ロゴ・絵柄。なければコードで描いた仮の絵） */
+export const slotArt = pgTable('slot_art', {
+  key: text('key').primaryKey(),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  hash: text('hash').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** 🦊 AT 機の台（台の状態は台に残る: 回転数・前兆・AT の残り。座っている人と、最後に回した時刻） */
 export const slotAtMachines = pgTable('slot_at_machines', {
   machine: integer('machine').primaryKey(),

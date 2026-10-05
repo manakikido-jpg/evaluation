@@ -5,6 +5,7 @@ import { slotAtMachines } from '../src/db/schema.js';
 import type { Rng } from '../src/services/casino/cards.js';
 import { AT_CEILING, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
 import { atFloorData, leaveAt, orderAt, playAt, type AtGameState } from '../src/services/casino/slotAtPlay.js';
+import { atBattle, atShow } from '../src/services/casino/slotAtShow.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -80,6 +81,54 @@ describe('🦊 AT 機の中身', () => {
   }, 60_000);
 });
 
+describe('🦊 AT 機の演出（見せ方だけ）', () => {
+  it('AT が決まったゲームは、フリーズ・虹・確定音・1 段強い予告のどれか。白狐目はいつもフリーズ', () => {
+    const prev = newAtMachine();
+    for (let seed = 1; seed < 200; seed++) {
+      const rng = seeded(seed);
+      const r = stepAt(prev, 1, rng);
+      const show = atShow(prev, r.step, r.next, rng);
+      const won = r.next.phase === 'zenchou';
+      // 虹とフリーズは当たりのときだけ
+      if (!won) {
+        expect(show.freeze).toBe(false);
+        expect(show.lever).not.toBe('rainbow');
+        expect(show.stop3).not.toBe('rainbow');
+        expect(show.kakutei).toBe(false);
+      }
+    }
+    const byakko = stepAt(prev, 1, top);
+    const fake = { ...byakko.step, role: 'byakko' as const };
+    const won = atShow(prev, fake, { ...prev, phase: 'zenchou', zenchou: 1 }, top);
+    expect(won.freeze).toBe(true);
+  });
+
+  it('前兆の最後（AT 突入）は鬼が目の前・溜めあり。AT 中は舞台が白狐ラッシュ・特化は乱舞', () => {
+    const z: AtMachine = { ...newAtMachine(), phase: 'zenchou', zenchou: 1, nextRate: 66 };
+    const r = stepAt(z, 1, top);
+    const s = atShow(z, r.step, r.next, top);
+    expect(s).toMatchObject({ stage: 'forest', oni: 3, hold: true });
+    const at: AtMachine = { ...newAtMachine(), phase: 'at', at: { left: 20, set: 1, rate: 50, tokka: 0, games: 0, added: 0, won: 0 } };
+    expect(atShow(at, stepAt(at, 1, zero).step, at, zero).stage).toBe('rush');
+    const tk: AtMachine = { ...at, at: { ...at.at!, tokka: 2 } };
+    expect(atShow(tk, stepAt(tk, 1, zero).step, tk, zero).stage).toBe('ranbu');
+  });
+
+  it('継続バトル: 勝ちは白狐の一撃、負けは鬼の一撃で終わる（3〜5 手）', () => {
+    for (let seed = 1; seed < 50; seed++) {
+      const w = atBattle(true, seeded(seed));
+      const l = atBattle(false, seeded(seed));
+      expect(w.at(-1)).toEqual({ who: 'byakko', hit: true });
+      expect(l.at(-1)).toEqual({ who: 'oni', hit: true });
+      expect(w.length).toBeGreaterThanOrEqual(3);
+      expect(w.length).toBeLessThanOrEqual(5);
+    }
+    const at: AtMachine = { ...newAtMachine(), phase: 'at', at: { left: 1, set: 1, rate: 100, tokka: 0, games: 10, added: 0, won: 0 } };
+    const r = stepAt(at, 1, top);
+    expect(atShow(at, r.step, r.next, top).battle?.at(-1)).toEqual({ who: 'byakko', hit: true });
+  });
+});
+
 describe('🦊 AT 機の島（サービス）', () => {
   const A = '700000000000000501';
   const B = '700000000000000502';
@@ -128,7 +177,8 @@ describe('🦊 AT 機の島（サービス）', () => {
     if (r.status !== 'ok') return;
     expect(r.row.status).toBe('playing');
     const s = r.row.state as AtGameState;
-    expect(s).toMatchObject({ role: 'oshijun', waiting: true, navi: [0, 1, 2], during: 'at' });
+    expect(s).toMatchObject({ role: 'oshijun', waiting: true, navi: [0, 1, 2], during: 'at', pre: { left: 20, set: 1, rate: 66 } });
+    expect(s.show).toMatchObject({ stage: 'rush', freeze: false });
     // 待っているあいだは次を回せない（同じ 1 回に戻る）
     expect((await playAt(db, cfg, A, 2, zero, T0)).status).toBe('busy');
     const done = await orderAt(db, r.row.id, A, [0, 1, 2], zero, T0);

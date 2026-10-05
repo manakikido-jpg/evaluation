@@ -8,6 +8,7 @@ import { act, activeGame, checkBet, type Acted, type Played } from './casino.js'
 import { cryptoRng, type Rng } from './cards.js';
 import { atLookFor, atMult, atStopsFor, isOrder, newAtMachine, stepAt, type AtEvent, type AtMachine, type AtRole, type AtStep } from './slotAt.js';
 import { dayPicks, pickSetting } from './slotFloor.js';
+import { atShow, type AtShow } from './slotAtShow.js';
 
 /**
  * 🦊 AT 機の島（鬼斬り白狐）を遊ぶ。1 ゲーム = casino_games の 1 行（game = 'atslot'）。
@@ -47,6 +48,10 @@ export type AtGameState = {
   atRate: number | null;
   atTokka: number;
   atWon: number | null;
+  /** 回す前の AT（液晶はレバーから止め終わりまでこちらを出す。上乗せを先に見せないように） */
+  pre?: { left: number; set: number; rate: number; won: number; tokka: number } | null;
+  /** 演出（見せ方だけ。古い記録にはない） */
+  show?: AtShow;
 };
 
 /** 今日のその台の設定（おまかせは日替わり） */
@@ -94,6 +99,8 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
       const lucky = step.role === 'oshijun' && !step.navi && rng(6) === 0;
       const mult = waiting ? 0 : atMult(step.role, { navi: step.navi, lucky });
       const stops = atStopsFor(atLookFor(step.role, mult > 0), rng);
+      const prev = m!.state as unknown as AtMachine;
+      const show = atShow(prev, step, next, rng);
       const payout = Math.floor(bet * mult);
       // AT の獲得（AT 中に払い戻した銭の合計。押し順ベルは押したあとに足す）
       if (next.at && !waiting && (step.during === 'at' || step.during === 'tokka')) next.at.won += payout;
@@ -117,6 +124,8 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
         atRate: next.at?.rate ?? null,
         atTokka: next.at?.tokka ?? 0,
         atWon: next.at?.won ?? (step.events.find((e) => e.k === 'at_end') as { won: number } | undefined)?.won ?? null,
+        pre: prev.at ? { left: prev.at.left, set: prev.at.set, rate: prev.at.rate, won: prev.at.won, tokka: prev.at.tokka } : null,
+        show,
       };
       const [r] = await tx
         .insert(casinoGames)
