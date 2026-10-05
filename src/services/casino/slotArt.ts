@@ -30,6 +30,8 @@ export const AT_ART_SLOTS: ArtSlot[] = [
   { key: 'logo-ranbu', group: 'logo', label: '「白狐乱舞」のロゴ', size: '900×300・透明', note: '特化ゾーン' },
   { key: 'logo-battle', group: 'logo', label: '「決戦」のロゴ', size: '900×300・透明', note: '継続バトルの始まり' },
   { key: 'logo-title', group: 'logo', label: '台の名前「鬼斬り白狐」', size: '900×240・透明', note: '筐体のいちばん上' },
+  { key: 'cab-gimmick', group: 'cab', label: '役物（台の上の白狐の面）', size: '500×500・透明', note: '大きな当たりで液晶の上に降りてきて光る' },
+  { key: 'cab-panel', group: 'cab', label: '腰パネル（ボタンの下の飾りの絵）', size: '900×360', note: '台のいちばん下に出る' },
   { key: 'sym-w7', group: 'sym', label: 'リールの絵柄: 白狐7', size: '200×200・透明', note: '' },
   { key: 'sym-r7', group: 'sym', label: 'リールの絵柄: 鬼7', size: '200×200・透明', note: '' },
   { key: 'sym-bar', group: 'sym', label: 'リールの絵柄: BAR', size: '200×200・透明', note: '' },

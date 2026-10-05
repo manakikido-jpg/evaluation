@@ -54,3 +54,36 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+// 🦊 AT 機の絵: 選んだらその場で見せて、何枚選んだかを保存ボタンの横に出す（保存はまとめて 1 回）
+document.addEventListener('change', (e) => {
+  const input = e.target;
+  if (!(input instanceof HTMLInputElement) || !input.matches('[data-art-input]')) return;
+  const slot = input.closest('.art-slot');
+  const box = slot && slot.querySelector('.art-preview');
+  const file = input.files && input.files[0];
+  if (slot) slot.classList.toggle('picked', Boolean(file));
+  if (box && file) {
+    box.textContent = '';
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = URL.createObjectURL(file);
+    box.append(img);
+    if (file.size > 4 * 1024 * 1024) {
+      const warn = document.createElement('span');
+      warn.className = 'art-warn';
+      warn.textContent = '4MB をこえています（保存できません）';
+      box.append(warn);
+    }
+  }
+  const form = input.closest('form[data-art-form]');
+  const count = form && form.querySelector('[data-art-count]');
+  if (count) {
+    const picked = [...form.querySelectorAll('[data-art-input]')].filter((x) => x.files && x.files.length > 0);
+    const total = picked.reduce((a, x) => a + x.files[0].size, 0);
+    count.textContent = picked.length
+      ? `${picked.length} 枚選んでいます（${(total / 1024 / 1024).toFixed(1)}MB）。「選んだ絵を保存」で入ります。`
+      : '絵を選んだら、ここで保存します（何枚でもまとめて）。';
+    form.classList.toggle('dirty', picked.length > 0);
+  }
+});

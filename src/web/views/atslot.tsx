@@ -42,6 +42,27 @@ function Sym(p: { k: AtSym; art?: Record<string, string> }) {
   return <span class={`sy sy-at-${p.k}`}>{AT_SYMBOLS[p.k].emoji}</span>;
 }
 
+/** 白狐の面（役物・腰パネルの仮の絵） */
+function FoxMask() {
+  return (
+    <svg class="c-at-mask" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="mask-gold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#fff3b0" />
+          <stop offset=".5" stop-color="#d6a531" />
+          <stop offset="1" stop-color="#7a5210" />
+        </linearGradient>
+      </defs>
+      <path d="M60 18 L28 4 L30 46 C18 58 20 82 36 94 L60 114 L84 94 C100 82 102 58 90 46 L92 4 Z" fill="#fbfbff" stroke="url(#mask-gold)" stroke-width="5" stroke-linejoin="round" />
+      <path d="M33 14 L42 40 L35 43 Z M87 14 L78 40 L85 43 Z" fill="#e8203c" />
+      <path d="M38 62 Q48 54 56 66 M82 62 Q72 54 64 66" stroke="#e8203c" stroke-width="4" fill="none" stroke-linecap="round" />
+      <path d="M60 30 L55 42 L60 48 L65 42 Z" fill="#e8203c" />
+      <path class="c-at-mask-eye" d="M40 72 Q48 66 56 74 Q48 76 40 72 Z M80 72 Q72 66 64 74 Q72 76 80 72 Z" fill="#d0102e" />
+      <path d="M50 96 Q60 102 70 96" stroke="#e8203c" stroke-width="3" fill="none" stroke-linecap="round" />
+    </svg>
+  );
+}
+
 export type AtMachineView = { machine: number; state: AtMachine; seatBy: string | null; seatAt: Date | null; seatName: string | null };
 type FloorData = { today: AtDay[]; yesterday: AtDay[] };
 
@@ -223,6 +244,13 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
   const show = moving ? s?.show : undefined;
   const postStage = stageOf(p.view.state, s?.show);
   const preStage = moving && s?.show ? s.show.stage : postStage;
+  // 台の光り方（AT 中・特化中）は、止め終わるまで回す前のまま（先に光って当たりが分からないように）
+  const atPre = moving && s ? s.during === 'at' || s.during === 'tokka' : p.view.state.phase === 'at';
+  const tokkaPre = moving && s ? s.during === 'tokka' : (p.view.state.at?.tokka ?? 0) > 0;
+  const atPost = p.view.state.phase === 'at';
+  const tokkaPost = (p.view.state.at?.tokka ?? 0) > 0;
+  // 液晶の下の数字（BET・GAME・PAYOUT）。PAYOUT は止め終わってから出す
+  const payout = done && row ? row.payout : 0;
   // 前兆の鬼の近さは、止まったあとも残す（AT に入ったら消える）
   const oni = p.view.state.phase === 'at' ? 0 : (s?.show?.oni ?? 0);
   return (
@@ -301,7 +329,9 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
         </section>}
         <div class="c-cab c-at-cab">
           <div
-            class={`c-atm mode-${mode}${p.view.state.phase === 'at' ? ' in-at' : ''}${(p.view.state.at?.tokka ?? 0) > 0 ? ' in-tokka' : ''}`}
+            class={`c-atm mode-${mode}${atPre ? ' in-at' : ''}${tokkaPre ? ' in-tokka' : ''}`}
+            data-at-post={atPost ? '1' : '0'}
+            data-tokka-post={tokkaPost ? '1' : '0'}
             data-mode={mode}
             data-stops={stops.join(',')}
             data-from={mode === 'settle' && s?.from ? s.from.join(',') : undefined}
@@ -321,7 +351,11 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
             data-stage-js={assetUrl('atslot.js')}
             data-demo={p.demo ? '1' : undefined}
           >
+            <i class="c-at-led l" aria-hidden="true"></i>
+            <i class="c-at-led r" aria-hidden="true"></i>
+            <i class="c-at-shine" aria-hidden="true"></i>
             <div class="c-at-top">
+              <i class="c-at-lamp" aria-hidden="true"></i>
               {p.art?.['logo-title'] ? (
                 <img class="c-at-title-img" src={p.art['logo-title']} alt="鬼斬り白狐" />
               ) : (
@@ -330,6 +364,9 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                   <span>白狐</span>
                 </span>
               )}
+            </div>
+            <div class="c-at-gimmick" data-gimmick aria-hidden="true">
+              {p.art?.['cab-gimmick'] ? <img src={p.art['cab-gimmick']} alt="" draggable="false" /> : <FoxMask />}
             </div>
             <div class={`c-at-screen stage-${preStage}`} data-screen>
               <div class="c-at-scene" aria-hidden="true" data-scene></div>
@@ -343,6 +380,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
               )}
               <div class="c-at-fx" aria-live="polite"></div>
             </div>
+            <div class="c-at-bezel">
             <div class="c-jug-window c-at-window" role="img" aria-label={`中段: ${atGrid(stops).map((c) => AT_SYMBOLS[c[1]!].name).join('・')}`}>
               {AT_REELS.map((strip, i) => {
                 const at = mode === 'spin' || mode === 'wait' ? (stops[i]! + 6 + i * 5) % AT_REEL_LEN : stops[i]!;
@@ -356,6 +394,21 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                   </div>
                 );
               })}
+            </div>
+            </div>
+            <div class="c-at-seg" aria-hidden="true">
+              <span>
+                <i>BET</i>
+                <b>{bet}</b>
+              </span>
+              <span>
+                <i>GAME</i>
+                <b>{s && moving ? s.games : p.view.state.games}</b>
+              </span>
+              <span>
+                <i>PAYOUT</i>
+                <b data-payout={moving ? String(payout) : undefined}>{moving ? 0 : payout}</b>
+              </span>
             </div>
             <div class="c-at-deck">
               {p.demo ? (
@@ -397,6 +450,21 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
                     ? 'STOP（スペースで左から・1・2・3 キー）'
                     : `レバー（スペース）で ${fmt(bet)} ${p.me.coin.name}を賭けて回す`}
             </p>
+            <div class={`c-at-panel${p.art?.['cab-panel'] ? ' art' : ''}`} aria-hidden="true">
+              {p.art?.['cab-panel'] ? (
+                <img src={p.art['cab-panel']} alt="" draggable="false" />
+              ) : (
+                <>
+                  <FoxMask />
+                  <span class="c-at-panel-name">
+                    <b>鬼斬り</b>
+                    <span>白狐</span>
+                    <small>BYAKKO RUSH</small>
+                  </span>
+                  <FoxMask />
+                </>
+              )}
+            </div>
           </div>
           <div class="c-cab-base" aria-hidden="true"></div>
         </div>

@@ -22,7 +22,8 @@ export const CASINO_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   horse_saved: { text: '🏇 馬の名簿を変えました（次のレースから出ます）。', kind: 'ok' },
   horse_invalid: { text: '馬の名前は 1〜18 文字で入れてください。', kind: 'warn' },
   horse_taken: { text: 'その名前の馬はもういます（引退した馬とは同じ名前にできます）。', kind: 'warn' },
-  art_saved: { text: '🦊 絵を入れました（AT 機の画面はすぐ新しい絵になります）。', kind: 'ok' },
+  art_saved: { text: '🦊 絵を保存しました（AT 機の画面はすぐ新しい絵になります）。', kind: 'ok' },
+  art_partial: { text: '一部の絵は保存できませんでした（1 枚 4MB まで・PNG・WebP・JPEG・GIF）。保存できなかった欄は「まだ」のままです。', kind: 'warn' },
   art_deleted: { text: '🦊 絵を消しました（仮の絵に戻ります）。', kind: 'ok' },
   art_none: { text: '絵のファイルを選んでください。', kind: 'warn' },
   art_big: { text: '絵が大きすぎます（1 枚 4MB まで）。', kind: 'warn' },
@@ -605,6 +606,7 @@ const ART_GROUPS: { group: ArtSlot['group']; title: string }[] = [
   { group: 'bg', title: '液晶の背景' },
   { group: 'char', title: 'キャラ（白狐・鬼）' },
   { group: 'logo', title: 'ロゴ' },
+  { group: 'cab', title: '台の飾り' },
   { group: 'sym', title: 'リールの絵柄' },
 ];
 
@@ -624,35 +626,45 @@ function AtArt(p: { art: Record<string, string>; csrf: string; demoUrl: string }
         </a>
         <span class="note">（運営だけ。準備中でも見られて、銭は動きません。カジノに Discord でログインして開きます）</span>
       </p>
-      {ART_GROUPS.map((g) => (
-        <>
-          <h3>{g.title}</h3>
-          <div class="art-grid">
-            {AT_ART_SLOTS.filter((s) => s.group === g.group).map((s) => (
-              <div class={`art-slot${p.art[s.key] ? ' has' : ''}`} id={`art-${s.key}`}>
-                <div class="art-preview">{p.art[s.key] ? <img src={p.art[s.key]} alt={s.label} loading="lazy" /> : <span class="note">まだ（仮の絵）</span>}</div>
-                <strong>{s.label}</strong>
-                <span class="note">
-                  {s.size}
-                  {s.note ? `・${s.note}` : ''}
-                </span>
-                <form method="post" action={`/economy/casino/art/${s.key}`} enctype="multipart/form-data" class="inline-form">
-                  <input type="hidden" name="_csrf" value={p.csrf} />
-                  <input type="file" name="image" accept="image/png,image/webp,image/jpeg,image/gif" required aria-label={`${s.label}の絵`} />
-                  <button type="submit" class="ok">
-                    {p.art[s.key] ? '入れ替える' : '入れる'}
-                  </button>
-                </form>
-                {p.art[s.key] && (
-                  <form method="post" action={`/economy/casino/art/${s.key}/delete`} class="inline-form">
-                    <input type="hidden" name="_csrf" value={p.csrf} />
-                    <button type="submit">消す</button>
-                  </form>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
+      <form method="post" action="/economy/casino/art" enctype="multipart/form-data" id="art-form" data-art-form>
+        <input type="hidden" name="_csrf" value={p.csrf} />
+        {ART_GROUPS.map((g) => (
+          <>
+            <h3>{g.title}</h3>
+            <div class="art-grid">
+              {AT_ART_SLOTS.filter((s) => s.group === g.group).map((s) => (
+                <div class={`art-slot${p.art[s.key] ? ' has' : ''}`} id={`art-${s.key}`}>
+                  <div class="art-preview">{p.art[s.key] ? <img src={p.art[s.key]} alt={s.label} loading="lazy" /> : <span class="note">まだ（仮の絵）</span>}</div>
+                  <strong>{s.label}</strong>
+                  <span class="note">
+                    {s.size}
+                    {s.note ? `・${s.note}` : ''}
+                  </span>
+                  <label class="art-pick">
+                    <span>{p.art[s.key] ? '別の絵にする' : '絵を選ぶ'}</span>
+                    <input type="file" name={`img_${s.key}`} accept="image/png,image/webp,image/jpeg,image/gif" data-art-input aria-label={`${s.label}の絵`} />
+                  </label>
+                  {p.art[s.key] && (
+                    <button type="submit" form={`art-del-${s.key}`} class="art-del">
+                      消す（仮の絵に戻す）
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        ))}
+        <div class="art-savebar">
+          <span data-art-count>絵を選んだら、ここで保存します（何枚でもまとめて）。</span>
+          <button type="submit" class="ok">
+            選んだ絵を保存
+          </button>
+        </div>
+      </form>
+      {AT_ART_SLOTS.filter((s) => p.art[s.key]).map((s) => (
+        <form method="post" action={`/economy/casino/art/${s.key}/delete`} id={`art-del-${s.key}`} hidden>
+          <input type="hidden" name="_csrf" value={p.csrf} />
+        </form>
       ))}
     </section>
   );

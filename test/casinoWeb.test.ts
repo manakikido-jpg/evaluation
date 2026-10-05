@@ -1,4 +1,4 @@
-import { artUrls } from '../src/services/casino/slotArt.js';
+import { artUrls, deleteArt } from '../src/services/casino/slotArt.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
@@ -416,7 +416,10 @@ describe('🎰 カジノ（運営の画面）', () => {
     const g = await adminLogin(GUJI);
     const html = await (await app.request('/economy/casino', { headers: { cookie: g } })).text();
     expect(html).toContain('id="casino-art"');
-    expect(html).toContain('action="/economy/casino/art/byakko"');
+    expect(html).toContain('action="/economy/casino/art"');
+    expect(html).toContain('name="img_byakko"');
+    expect(html).toContain('name="img_cab-panel"');
+    expect(html).toContain('選んだ絵を保存');
     expect(html).toContain('enctype="multipart/form-data"');
     const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
@@ -426,6 +429,20 @@ describe('🎰 カジノ（運営の画面）', () => {
       fd.append('image', new File([data], 'a.png', { type: 'image/png' }));
       return app.request(`/economy/casino/art/${key}`, { method: 'POST', headers: { cookie: g }, body: fd });
     };
+    // まとめて保存（選んだ欄だけ。絵でないものは入れない）
+    const bulk = (files: Record<string, Uint8Array | string>) => {
+      const fd = new FormData();
+      fd.append('_csrf', csrf);
+      for (const [k, v] of Object.entries(files)) fd.append(`img_${k}`, new File([v], 'a.png', { type: 'image/png' }));
+      fd.append('img_oni', new File([], ''));
+      return app.request('/economy/casino/art', { method: 'POST', headers: { cookie: g }, body: fd });
+    };
+    expect((await bulk({})).headers.get('location')).toBe('/economy/casino?msg=art_none#casino-art');
+    expect((await bulk({ 'cab-panel': png, 'logo-rush': png, 'sym-bell': '<svg/>' })).headers.get('location')).toBe('/economy/casino?msg=art_partial#casino-art');
+    expect(Object.keys(await artUrls(db)).sort()).toEqual(['cab-panel', 'logo-rush']);
+    expect((await bulk({ 'sym-bell': png })).headers.get('location')).toBe('/economy/casino?msg=art_saved#casino-art');
+    for (const k of ['cab-panel', 'logo-rush', 'sym-bell']) await deleteArt(db, k);
+    // 1 枚ずつ
     expect((await upload('byakko', '<svg/>')).headers.get('location')).toBe('/economy/casino?msg=art_bad#casino-art');
     expect((await upload('nope', png)).headers.get('location')).toBe('/economy/casino?msg=art_bad#casino-art');
     expect((await upload('byakko', png)).headers.get('location')).toBe('/economy/casino?msg=art_saved#art-byakko');

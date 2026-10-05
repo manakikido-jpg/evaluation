@@ -1,5 +1,5 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
-import { artUrls, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
+import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
@@ -309,14 +309,19 @@ export function createWebApp(deps: WebDeps) {
   const smallBody = bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) });
   // 掲示の写真だけは大きめに（写真の上限 8MB ＋ 本文）
   const noticeBody = bodyLimit({ maxSize: 9 * 1024 * 1024, onError: (c) => c.text('写真が大きすぎます（8MB まで）。', 413) });
-  // 🦊 AT 機の絵（1 枚 4MB まで）
+  // 🦊 AT 機の絵（1 枚 4MB まで。まとめて保存するときは全部で 100MB まで）
   const artBody = bodyLimit({ maxSize: 5 * 1024 * 1024, onError: (c) => c.text('絵が大きすぎます（4MB まで）。', 413) });
+  const artsBody = bodyLimit({ maxSize: 100 * 1024 * 1024, onError: (c) => c.text('一度に送る絵が多すぎます（全部で 100MB まで）。何回かに分けて保存してください。', 413) });
   app.use((c, next) =>
-    c.req.method === 'POST' && /^\/notices(?:\/\d+)?$/.test(c.req.path)
-      ? noticeBody(c, next)
-      : c.req.method === 'POST' && /^\/economy\/casino\/art\/[a-z0-9-]+$/.test(c.req.path)
-        ? artBody(c, next)
-        : smallBody(c, next),
+    c.req.method !== 'POST'
+      ? smallBody(c, next)
+      : /^\/notices(?:\/\d+)?$/.test(c.req.path)
+        ? noticeBody(c, next)
+        : c.req.path === '/economy/casino/art'
+          ? artsBody(c, next)
+          : /^\/economy\/casino\/art\/[a-z0-9-]+$/.test(c.req.path)
+            ? artBody(c, next)
+            : smallBody(c, next),
   );
 
   // 管理画面の中身（相談・メモなど）をブラウザや共用 PC に残さない。htmx の部分表示と全体表示を取り違えないように
@@ -1305,7 +1310,24 @@ export function createWebApp(deps: WebDeps) {
     );
   });
 
-  // 🦊 AT 機の絵: 入れる・入れ替える・消す
+  // 🦊 AT 機の絵: 選んだ絵をまとめて保存（欄ごとに img_<名前>）
+  app.post('/economy/casino/art', async (c) => {
+    const body = await c.req.parseBody();
+    let saved = 0;
+    let failed = 0;
+    for (const slot of AT_ART_SLOTS) {
+      const f = body[`img_${slot.key}`];
+      const file = Array.isArray(f) ? f[0] : f;
+      if (!(file instanceof File) || file.size === 0) continue;
+      const r = await saveArt(db, slot.key, new Uint8Array(await file.arrayBuffer()));
+      if (r === 'ok') saved++;
+      else failed++;
+    }
+    if (saved) await audit(db, { actorId: c.get('session').userId, action: 'casino.art_saved', detail: { count: saved }, via: 'web' });
+    const msg = failed ? (saved ? 'art_partial' : 'art_bad') : saved ? 'art_saved' : 'art_none';
+    return c.redirect(`/economy/casino?msg=${msg}#casino-art`);
+  });
+  // 🦊 AT 機の絵: 1 枚ずつ入れる・入れ替える・消す
   app.post('/economy/casino/art/:key', async (c) => {
     const key = c.req.param('key');
     if (!isArtKey(key)) return c.redirect('/economy/casino?msg=art_bad#casino-art');

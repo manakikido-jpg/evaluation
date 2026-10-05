@@ -390,6 +390,30 @@
       flash.className = `sc-flash ${cls}`;
       anim(flash, [{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-out' });
     };
+    /** 台の横の光・上のランプ（しばらくだけ） */
+    const LEDS = ['led-blue', 'led-white', 'led-red', 'led-gold', 'led-rainbow', 'led-off'];
+    let ledTimer = 0;
+    const led = (cls, ms = 1200) => {
+      clearTimeout(ledTimer);
+      box.classList.remove(...LEDS);
+      if (!cls) return;
+      box.classList.add(cls);
+      ledTimer = setTimeout(() => box.classList.remove(cls), ms);
+      timers.push(ledTimer);
+    };
+    /** 役物（白狐の面）が液晶の上に降りてきて光る */
+    const gimmick = (ms = 1600) => {
+      const g = box.querySelector('[data-gimmick]');
+      if (!g || reduce) return;
+      g.classList.add('on');
+      Sound.notes([[1568, 0, 0.1], [2093, 0.08, 0.1], [2637, 0.16, 0.3]], 0, { type: 'square', vol: 0.05 });
+      anim(g, [{ transform: 'translate(-50%, 0) scale(1)' }, { transform: 'translate(-50%, 90%) scale(1.9) rotate(-6deg)', offset: 0.25 }, { transform: 'translate(-50%, 85%) scale(1.8) rotate(4deg)', offset: 0.45 }, { transform: 'translate(-50%, 90%) scale(1.9)', offset: 0.75 }, { transform: 'translate(-50%, 0) scale(1)' }], {
+        duration: ms,
+        easing: 'cubic-bezier(.3,1.4,.5,1)',
+        fill: 'none',
+      });
+      timers.push(setTimeout(() => g.classList.remove('on'), ms));
+    };
     const shake = (px = 6, ms = 420) =>
       anim(box, [0, 1, 2, 3, 4, 5, 6].map((k) => ({ transform: k === 6 ? 'none' : `translate(${rand(-px, px)}px, ${rand(-px, px)}px)` })), { duration: ms, fill: 'none' });
     const coins = (n = 24, gold = true) => {
@@ -456,9 +480,12 @@
         Bgm.play(null);
         const black = el('div', 'sc-black');
         over.append(black);
+        led('led-off', 700);
         fx.zukyun();
         await sleep(700);
         doFlash('white', 500);
+        led('led-rainbow', 5000);
+        gimmick(1800);
         black.remove();
         const cut = actor('byakko', 'cutin');
         cut.classList.add('cutin');
@@ -504,7 +531,9 @@
           black.remove();
           doFlash('rainbow', 900);
           fx.kyuinKyuin();
-        }
+          led('led-rainbow', 4000);
+          gimmick(1600);
+        } else led('led-gold', 1200);
         const atk = actor('byakko', 'attack');
         atk.classList.add('lunge');
         over.append(atk);
@@ -556,6 +585,8 @@
         doFlash('rainbow', 800);
         fx.kyuinKyuin();
         shake(8, 600);
+        led('led-rainbow', 3000);
+        gimmick();
         idle('ranbu');
         const lg = logo('logo-ranbu', 'zoom');
         over.append(lg);
@@ -676,6 +707,8 @@
           doFlash('gold', 600);
           coins(40);
           Sound.bigWin();
+          led('led-gold', 2000);
+          gimmick(1400);
           await sleep(1900);
           t.remove();
           idle('rush');
@@ -691,6 +724,7 @@
             anim(fox, [{ opacity: 1, filter: 'none' }, { opacity: 0.5, filter: 'grayscale(1)', transform: 'translateY(14%) rotate(-10deg)' }], { duration: 800 });
           }
           screen.classList.add('lost');
+          led('led-off', 1800);
           const t = text('lose', '鬼に敗れた…', '白狐ラッシュ 終了');
           over.append(t);
           Bgm.play(null);
@@ -727,6 +761,7 @@
         if (show.freeze) {
           Bgm.play(null);
           box.classList.add('sc-freeze');
+          led('led-off', 1700);
           fx.zukyun();
           const eyes = el('div', 'sc-eyes');
           over.append(eyes);
@@ -735,6 +770,8 @@
               doFlash('rainbow', 900);
               fx.kyuinKyuin();
               shake(10, 600);
+              led('led-rainbow', 3000);
+              gimmick(1400);
             }, 1700),
             setTimeout(() => {
               eyes.remove();
@@ -747,33 +784,41 @@
         if (l === 'kyuin') {
           fx.kyuin();
           doFlash('blue', 300);
+          led('led-blue', 800);
         } else if (l === 'flash') {
           fx.flash();
           doFlash('white', 420);
+          led('led-white', 700);
         } else if (l === 'shake') {
           fx.roar();
           shake(8, 600);
           doFlash('red', 300);
+          led('led-red', 1200);
         } else if (l === 'blackout') {
           fx.heart();
           fx.heart(0.6);
           const black = el('div', 'sc-black');
           black.append(el('i', 'sc-eyes-red'));
           over.append(black);
+          led('led-off', 1300);
           timers.push(setTimeout(() => black.remove(), 1300));
         } else if (l === 'rainbow') {
           fx.kyuinKyuin();
           doFlash('rainbow', 1000);
           shake(6, 500);
+          led('led-rainbow', 3000);
+          gimmick();
         }
         return 0;
       },
       stopColor(c) {
         fx.stopCol(c);
         if (c === 'gold' || c === 'rainbow') doFlash(c === 'gold' ? 'gold' : 'rainbow', 400);
+        if (c === 'red' || c === 'gold' || c === 'rainbow') led(`led-${c === 'red' ? 'red' : c}`, 1500);
       },
       hold() {
         screen.classList.add('hold');
+        led('led-red', 1400);
         fx.heart();
         fx.heart(0.7);
         timers.push(setTimeout(() => screen.classList.remove('hold'), 1400));
@@ -781,6 +826,8 @@
       kakutei() {
         fx.kyuinKyuin();
         doFlash('rainbow', 900);
+        led('led-rainbow', 2500);
+        gimmick();
       },
       navi(order) {
         const row = el('div', 'sc-navi');
@@ -845,7 +892,7 @@
         timers.forEach(clearTimeout);
         [...wakers].forEach((w) => w());
         screen.removeEventListener('click', onTap);
-        box.classList.remove('sc-freeze');
+        box.classList.remove('sc-freeze', ...LEDS);
       },
     };
     if (opts.mode === 'still') ctl.settle();

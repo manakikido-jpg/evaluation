@@ -2303,6 +2303,13 @@ const initAtSlot = (root) => {
       if (win >= 2) Sound.win();
       else if (win === 1) Sound.even();
       if (lever && !box.dataset.taken) lever.disabled = false;
+      // 台の光り方を、このゲームのあとに・PAYOUT を出す
+      box.classList.toggle('in-at', box.dataset.atPost === '1');
+      box.classList.toggle('in-tokka', box.dataset.tokkaPost === '1');
+      box.querySelectorAll('[data-payout]').forEach((e) => {
+        e.textContent = e.dataset.payout;
+        if (Number(e.dataset.payout) > 0) e.classList.add('lit');
+      });
       const note = box.querySelector('.c-deck-note');
       if (note && note.dataset.still) note.textContent = note.dataset.still;
       st?.settle();

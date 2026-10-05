@@ -1977,3 +1977,72 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .c-at-demo h2 { font-size: 0.95rem; margin: 0 0 6px; }
 .c-at-demo-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .c-atm[data-demo] .c-lever { opacity: 0.5; cursor: default; }
+
+/* ───── 🦊 豪華な筐体（横の光・上のランプ・電飾・役物・枠・数字・腰パネル）───── */
+.c-atm { padding: 14px 28px 14px; }
+.c-at-shine { position: absolute; inset: 0; z-index: 8; pointer-events: none; border-radius: inherit; background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.16) 48%, rgba(255, 255, 255, 0.04) 52%, transparent 58%); background-size: 320% 100%; animation: atshine 8s ease-in-out infinite; }
+@keyframes atshine { 0%, 72% { background-position: 160% 0; } 100% { background-position: -160% 0; } }
+/* 横の光（LED） */
+.c-at-led { --led: #5a9aff; position: absolute; top: 74px; bottom: 120px; z-index: 3; width: 9px; border-radius: 6px; background: repeating-linear-gradient(180deg, var(--led) 0 7px, transparent 7px 12px); box-shadow: 0 0 10px var(--led), inset 0 0 0 1px rgba(255, 255, 255, 0.15); animation: ledbreathe 2.4s ease-in-out infinite alternate; }
+.c-at-led.l { left: 9px; }
+.c-at-led.r { right: 9px; }
+@keyframes ledbreathe { from { opacity: 0.35; } to { opacity: 0.9; } }
+.c-atm.in-at .c-at-led, .c-atm.led-rainbow .c-at-led { background: repeating-linear-gradient(180deg, #ff3a6a 0 7px, transparent 7px 10px, #ffd03a 10px 17px, transparent 17px 20px, #3aff8a 20px 27px, transparent 27px 30px, #3ac8ff 30px 37px, transparent 37px 40px, #b46aff 40px 47px, transparent 47px 50px); background-size: 100% 50px; box-shadow: 0 0 14px rgba(255, 220, 120, 0.8); opacity: 1; animation: ledchase 0.8s linear infinite; }
+.c-atm.in-tokka .c-at-led, .c-atm.led-rainbow .c-at-led { animation-duration: 0.25s; }
+@keyframes ledchase { to { background-position: 0 50px; } }
+.c-atm.led-blue .c-at-led, .c-atm.led-white .c-at-led, .c-atm.led-red .c-at-led, .c-atm.led-gold .c-at-led { background: repeating-linear-gradient(180deg, var(--led) 0 7px, transparent 7px 12px); background-size: auto; opacity: 1; animation: ledblink 0.14s steps(2) infinite; }
+.c-atm.led-blue .c-at-led { --led: #3ab0ff; }
+.c-atm.led-white .c-at-led { --led: #ffffff; }
+.c-atm.led-red .c-at-led { --led: #ff2a3a; }
+.c-atm.led-gold .c-at-led { --led: #ffd03a; }
+.c-atm.led-off .c-at-led { opacity: 0.06; animation: none; box-shadow: none; }
+@keyframes ledblink { 50% { opacity: 0.3; } }
+/* 上の電飾とランプ */
+.c-at-top { position: relative; flex-direction: column; align-items: center; gap: 4px; margin: -4px -10px 12px; padding: 8px 10px 12px; border-radius: 18px 18px 10px 10px; border: 2px solid #c8961e; background: radial-gradient(circle, #fff3b0 0 2px, transparent 2.6px) 0 3px / 14px 7px repeat-x, radial-gradient(circle, #fff3b0 0 2px, transparent 2.6px) 7px calc(100% - 3px) / 14px 7px repeat-x, linear-gradient(180deg, #2a0a20, #120612); box-shadow: inset 0 0 16px rgba(255, 180, 60, 0.28), 0 0 12px rgba(255, 160, 60, 0.18); animation: bulbs 1.2s steps(2) infinite; }
+.c-atm.in-at .c-at-top { animation-duration: 0.3s; border-color: #ffe08a; }
+@keyframes bulbs { 50% { background-position: 7px 3px, 0 calc(100% - 3px), 0 0; } }
+.c-at-lamp { position: relative; display: block; width: 52px; height: 22px; border-radius: 52px 52px 6px 6px; overflow: hidden; background: radial-gradient(ellipse at 50% 90%, #ff6a6a, #7a0010 75%); border: 2px solid #c8961e; box-shadow: 0 0 8px rgba(255, 60, 60, 0.35); }
+.c-at-lamp::after { content: ''; position: absolute; inset: -20px; background: conic-gradient(rgba(255, 255, 255, 0.95), transparent 22%, transparent 50%, rgba(255, 255, 255, 0.95) 50%, transparent 72%); opacity: 0; animation: lampspin 0.7s linear infinite; }
+.c-atm.in-at .c-at-lamp, .c-atm.led-rainbow .c-at-lamp, .c-atm.led-gold .c-at-lamp { box-shadow: 0 0 22px #ff3a3a, 0 0 40px rgba(255, 80, 80, 0.6); }
+.c-atm.in-at .c-at-lamp::after, .c-atm.led-rainbow .c-at-lamp::after, .c-atm.led-gold .c-at-lamp::after { opacity: 1; }
+.c-atm.led-rainbow .c-at-lamp { background: conic-gradient(#ff3a6a, #ffd03a, #3aff8a, #3ac8ff, #b46aff, #ff3a6a); }
+.c-atm.led-gold .c-at-lamp { background: radial-gradient(ellipse at 50% 90%, #fff3b0, #c8961e 75%); }
+@keyframes lampspin { to { transform: rotate(360deg); } }
+/* 役物（白狐の面）: ふだんは液晶の上にちょこんと。大きな当たりで降りてくる */
+.c-at-gimmick { position: relative; z-index: 9; left: 50%; width: 58px; height: 58px; margin: -30px 0 -28px; transform: translate(-50%, 0); pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7)); }
+.c-at-gimmick > svg, .c-at-gimmick > img { display: block; width: 100%; height: 100%; object-fit: contain; animation: gimbob 3s ease-in-out infinite alternate; }
+@keyframes gimbob { to { translate: 0 3px; } }
+.c-at-gimmick.on { filter: drop-shadow(0 0 10px #ffe08a) drop-shadow(0 0 24px #ff6a3a); }
+.c-at-gimmick.on .c-at-mask-eye { fill: #ffe040; }
+.c-at-mask { display: block; }
+/* リールの枠（金） */
+.c-at-bezel { position: relative; z-index: 2; padding: 6px; border-radius: 20px; background: linear-gradient(180deg, #fff3b0, #c8961e 28%, #6a4410 58%, #e8c060 88%, #8a5e12); box-shadow: 0 0 0 2px #2a1606, 0 0 18px rgba(255, 200, 80, 0.25); }
+.c-atm.in-at .c-at-bezel { box-shadow: 0 0 0 2px #2a1606, 0 0 24px rgba(200, 140, 255, 0.7); }
+.c-at-bezel .c-at-window { border-radius: 14px; }
+/* BET・GAME・PAYOUT の数字 */
+.c-at-seg { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+.c-at-seg span { display: flex; flex-direction: column; align-items: center; min-width: 76px; padding: 3px 8px 4px; border-radius: 6px; background: #0a0204; border: 1px solid #4a2a14; box-shadow: inset 0 0 8px #000, 0 1px 0 rgba(255, 255, 255, 0.08); }
+.c-at-seg i { font-style: normal; font-size: 0.58rem; font-weight: 800; color: #c8a060; letter-spacing: 0.14em; }
+.c-at-seg b { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 1.15rem; line-height: 1.1; color: #ff4a2a; text-shadow: 0 0 6px #ff2a00; font-variant-numeric: tabular-nums; }
+.c-at-seg b.lit { color: #ffe04a; text-shadow: 0 0 8px #ffb000; animation: atblink 0.3s steps(2) 6; }
+/* 腰パネル */
+.c-at-panel { position: relative; display: flex; align-items: center; justify-content: space-around; height: 92px; margin: 10px -12px 0; overflow: hidden; border-radius: 12px; border: 3px solid #c8961e; background: radial-gradient(circle at 20% 30%, rgba(255, 210, 120, 0.12) 0 18px, transparent 19px), radial-gradient(circle at 80% 70%, rgba(255, 210, 120, 0.12) 0 22px, transparent 23px), radial-gradient(ellipse at 50% 120%, #7a1020, transparent 60%), linear-gradient(180deg, #2a0410, #0e0206); box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.85); }
+.c-at-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.14) 48%, transparent 56%); background-size: 300% 100%; animation: atshine 6s ease-in-out infinite; }
+.c-atm.in-at .c-at-panel { box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.85), 0 0 16px rgba(255, 200, 80, 0.5); }
+.c-at-panel.art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.c-at-panel .c-at-mask { width: 58px; height: 58px; filter: drop-shadow(0 0 8px rgba(255, 200, 80, 0.5)); }
+.c-at-panel-name { display: flex; flex-direction: column; align-items: center; line-height: 1.05; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; }
+.c-at-panel-name b { font-size: 1.05rem; color: #ff5a6e; text-shadow: 0 0 8px #ff1e46; letter-spacing: 0.2em; }
+.c-at-panel-name span { font-size: 1.8rem; font-weight: 900; color: #fff; text-shadow: 0 0 10px #9fc4ff; letter-spacing: 0.24em; }
+.c-at-panel-name small { margin-top: 2px; font-family: inherit; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.4em; color: #e8c060; }
+@media (max-width: 520px) {
+  .c-atm { padding: 12px 20px 12px; }
+  .c-at-led { width: 6px; }
+  .c-at-led.l { left: 6px; }
+  .c-at-led.r { right: 6px; }
+  .c-at-seg span { min-width: 64px; }
+  .c-at-panel { height: 76px; margin: 10px -6px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .c-at-shine, .c-at-led, .c-at-top, .c-at-lamp::after, .c-at-gimmick > *, .c-at-panel::after { animation: none !important; }
+}

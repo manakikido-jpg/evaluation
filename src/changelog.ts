@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-atslot-cabinet',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🦊 AT 機の台を豪華にしました・絵をまとめて保存できるようにしました',
+    items: [
+      '上の電飾と回るランプ、横で流れる光（予告や当たりで色が変わる）、金のリール枠、BET・GAME・PAYOUT の数字、腰パネル',
+      '役物（白狐の面）が、AT 突入やフリーズなどの大きな当たりで液晶に降りてきて光ります',
+      '社務所Web の絵の欄は、選ぶとその場で見えて、「選んだ絵を保存」で何枚でもまとめて入ります。役物と腰パネルの絵も入れられます',
+    ],
+  },
+  {
     id: '2026-10-05-gift-sanpaisha',
     date: '2026-10-05',
     kind: 'improve',
