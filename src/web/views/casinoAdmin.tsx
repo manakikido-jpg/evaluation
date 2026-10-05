@@ -58,8 +58,10 @@ export function CasinoAdminPage(p: {
   horses?: KeibaHorseRow[];
   /** お祝いを流すチャンネルを選ぶ */
   channels?: { id: string; name: string }[];
-  /** 🦊 AT 機の入っている絵（key → URL） */
+  /** 🦊 AT 機の入っている絵（key → URL。社務所で入れたもの） */
   art?: Record<string, string>;
+  /** 🦊 GitHub のフォルダ（src/web/public/at/）に置いた絵 */
+  fileArt?: Record<string, string>;
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -344,7 +346,7 @@ export function CasinoAdminPage(p: {
         </section>
       )}
       {p.horses && <HorseRoster horses={p.horses} csrf={p.session.csrfToken} />}
-      {p.guji && p.art && <AtArt art={p.art} csrf={p.session.csrfToken} demoUrl={`${p.url}/atslot/demo`} />}
+      {p.guji && p.art && <AtArt art={p.art} fileArt={p.fileArt ?? {}} csrf={p.session.csrfToken} demoUrl={`${p.url}/atslot/demo`} />}
     </Layout>
   );
 }
@@ -611,11 +613,15 @@ const ART_GROUPS: { group: ArtSlot['group']; title: string }[] = [
 ];
 
 /** 🦊 AT 機の絵（入れた絵は液晶・リールにすぐ出る。入れていないところは仮の絵） */
-function AtArt(p: { art: Record<string, string>; csrf: string; demoUrl: string }) {
-  const filled = AT_ART_SLOTS.filter((s) => p.art[s.key]).length;
+function AtArt(p: { art: Record<string, string>; fileArt: Record<string, string>; csrf: string; demoUrl: string }) {
+  const shown = (key: string) => p.art[key] ?? p.fileArt[key];
+  const filled = AT_ART_SLOTS.filter((s) => shown(s.key)).length;
   return (
     <section class="card anchor" id="casino-art">
       <h2>🦊 AT 機「鬼斬り白狐」の絵</h2>
+      <p class="note">
+        📁 GitHub の <code>src/web/public/at/</code> に、下の名前（例: <code>bg-normal.png</code>）で絵を置いても入ります（自動更新のあと、数分で台に出ます）。社務所で入れた絵があれば、そちらが先に出ます。
+      </p>
       <p class="note">
         液晶の演出・リールに使う絵です。入れていないところはコードで描いた仮の絵が出ます。キャラ・ロゴ・リールの絵柄は、背景が透明な PNG か WebP にしてください（1 枚 4MB まで。大きさはおすすめ）。入れ替えるとすぐ新しい絵になります。
       </p>
@@ -633,20 +639,26 @@ function AtArt(p: { art: Record<string, string>; csrf: string; demoUrl: string }
             <h3>{g.title}</h3>
             <div class="art-grid">
               {AT_ART_SLOTS.filter((s) => s.group === g.group).map((s) => (
-                <div class={`art-slot${p.art[s.key] ? ' has' : ''}`} id={`art-${s.key}`}>
-                  <div class="art-preview">{p.art[s.key] ? <img src={p.art[s.key]} alt={s.label} loading="lazy" /> : <span class="note">まだ（仮の絵）</span>}</div>
+                <div class={`art-slot${shown(s.key) ? ' has' : ''}`} id={`art-${s.key}`}>
+                  <div class="art-preview">{shown(s.key) ? <img src={shown(s.key)} alt={s.label} loading="lazy" /> : <span class="note">まだ（仮の絵）</span>}</div>
                   <strong>{s.label}</strong>
+                  <code class="art-key">{s.key}</code>
+                  {p.art[s.key] ? (
+                    <span class="art-src">🖼 社務所で入れた絵{p.fileArt[s.key] ? '（フォルダの絵より先）' : ''}</span>
+                  ) : p.fileArt[s.key] ? (
+                    <span class="art-src">📁 フォルダの絵</span>
+                  ) : null}
                   <span class="note">
                     {s.size}
                     {s.note ? `・${s.note}` : ''}
                   </span>
                   <label class="art-pick">
-                    <span>{p.art[s.key] ? '別の絵にする' : '絵を選ぶ'}</span>
+                    <span>{shown(s.key) ? '別の絵にする' : '絵を選ぶ'}</span>
                     <input type="file" name={`img_${s.key}`} accept="image/png,image/webp,image/jpeg,image/gif" data-art-input aria-label={`${s.label}の絵`} />
                   </label>
                   {p.art[s.key] && (
                     <button type="submit" form={`art-del-${s.key}`} class="art-del">
-                      消す（仮の絵に戻す）
+                      {p.fileArt[s.key] ? '消す（フォルダの絵に戻す）' : '消す（仮の絵に戻す）'}
                     </button>
                   )}
                 </div>

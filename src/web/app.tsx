@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { inviteCountOf, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
-import { STATIC } from './assets.js';
+import { AT_FILE_ART, STATIC } from './assets.js';
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
@@ -1303,6 +1303,7 @@ export function createWebApp(deps: WebDeps) {
         roles={(guildRoles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed)}
         horses={await listHorses(db)}
         art={await artUrls(db)}
+        fileArt={AT_FILE_ART}
         channels={textChannelsOf(await loadChannels().catch(() => [] as GuildChannel[])).map((ch) => ({ id: ch.id, name: ch.name }))}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}

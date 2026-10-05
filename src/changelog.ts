@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-05-atslot-folder',
+    date: '2026-10-05',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '📁 AT 機の絵を、GitHub のフォルダに置くだけで入れられるようにしました',
+    items: [
+      '`src/web/public/at/` に、絵の欄と同じ名前（例: bg-normal.png）で置くと、自動更新のあと台に出ます',
+      '社務所Web で入れた絵があれば、そちらが先に出ます。絵の欄に、どちらの絵が出ているかが出ます',
+    ],
+  },
+  {
     id: '2026-10-05-atslot-cabinet',
     date: '2026-10-05',
     kind: 'improve',

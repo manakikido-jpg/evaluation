@@ -1,4 +1,5 @@
 import { artUrls } from '../services/casino/slotArt.js';
+import { AT_FILE_ART } from './assets.js';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { adminLevelOf, TABLE_KINDS, type CasinoGame, type GuildConfig, type TableKind } from '../config.js';
@@ -477,7 +478,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const [data, machines] = await Promise.all([atFloorData(db, cfg, now, fresh ? row.id : undefined), atMachineRows(db, cfg)]);
     const msg = casinoMsg(c.req.query('e'));
     if (!machine || !machines[machine - 1]) return c.html(<AtFloor me={me} casino={cfg.casino} data={data} machines={machines} msg={msg} now={now.getTime()} preview={preview} />);
-    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} art={await artUrls(db)} preview={preview} />);
+    return c.html(<AtSlotPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} view={machines[machine - 1]!} data={data} now={now.getTime()} art={{ ...AT_FILE_ART, ...(await artUrls(db)) }} preview={preview} />);
   }
   app.get(
     '/casino/atslot',
@@ -493,7 +494,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     '/casino/atslot/demo',
     page(async (c, me) => {
       if (!(await atCfgFor(me.session.userId))) return c.redirect('/casino?e=game_off');
-      return c.html(<AtDemoPage me={me} casino={d.cfg().casino} art={await artUrls(db)} />);
+      return c.html(<AtDemoPage me={me} casino={d.cfg().casino} art={{ ...AT_FILE_ART, ...(await artUrls(db)) }} />);
     }),
   );
   app.post(

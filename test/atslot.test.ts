@@ -207,3 +207,14 @@ describe('🦊 AT 機の島（サービス）', () => {
     expect(d.today[1]).toMatchObject({ games: 0, ats: 0 });
   });
 });
+
+describe('🦊 フォルダに置いた AT 機の絵', () => {
+  it('名前が絵の欄と同じものだけ読む。同じ名前なら webp → png → jpg → gif の順', async () => {
+    const { pickAtFiles } = await import('../src/web/assets.js');
+    expect(pickAtFiles(['bg-normal.png', 'bg-normal.webp', 'byakko.jpg', 'byakko.gif', 'README.md', 'nope.png', 'Oni.png', 'logo-rush.jpeg'])).toEqual({
+      'bg-normal': 'bg-normal.webp',
+      byakko: 'byakko.jpg',
+      'logo-rush': 'logo-rush.jpeg',
+    });
+  });
+});
