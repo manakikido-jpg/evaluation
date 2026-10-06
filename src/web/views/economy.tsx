@@ -38,7 +38,7 @@ export function EconomyPage(props: {
   const who = (id: string) => <a href={`/economy/members/${id}`}>{props.names.get(id) ?? id}</a>;
   const guji = props.session.level === 'guji';
   return (
-    <Layout title="経済" session={props.session} nav="economy">
+    <Layout title="経済" session={props.session} nav="economy" scripts={['charts.js']}>
       <h1>🪙 経済（{coin}の流れ）</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
@@ -636,7 +636,7 @@ export function MemberLedgerPage(props: { session: AdminSession; cfg: GuildConfi
       </table>
     );
   return (
-    <Layout title={`収支: ${name}`} session={props.session} nav="economy">
+    <Layout title={`収支: ${name}`} session={props.session} nav="economy" scripts={['charts.js']}>
       <p>
         <a href="/economy">← 経済</a> ／ <a href={`/members/${props.memberId}`}>{name} のページ</a>
       </p>

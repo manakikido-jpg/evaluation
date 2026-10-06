@@ -2420,6 +2420,16 @@ describe('推移（管理画面）', () => {
     expect(a).toContain('浮上した人の男女');
     expect(a).toContain('時間帯の記録はまだありません');
     expect(a).toContain('href="/stats?range=1y&amp;view=active"');
+    // 日付で選ぶ・前の期間とくらべる・平均の線・マウスを乗せたカード
+    const custom = await (await get('/stats?from=2026-01-01&to=2026-01-20&view=overview', s)).text();
+    expect(custom).toContain('value="2026-01-01"');
+    expect(custom).toContain('href="/stats?from=2026-01-01&amp;to=2026-01-20&amp;view=gender"');
+    expect(custom).toContain('前の期間より');
+    expect(custom).toContain('7 日の平均');
+    expect(custom).toContain('data-tip=');
+    expect(custom).toContain('/static/charts.js');
+    // おかしな日付は 30 日に
+    expect(await (await get('/stats?from=2026-13-01&to=2026-01-20', s)).text()).toMatch(/aria-current="page"[^>]*>30 日/);
   });
 
   it('ホームのいちばん上に、30 日の人数のグラフが出る', async () => {

@@ -95,7 +95,7 @@ import type { SessionView } from './views/layout.js';
 import { CHANGELOG, LATEST_CHANGE_ID, unseenChanges } from '../changelog.js';
 import { markChangesSeen, seenChangeId } from '../services/updates.js';
 import { inScope, loadUpdateNews, newsChannelOf, postNews, saveUpdateNews } from '../services/updateNews.js';
-import { isTrendRange, memberTrend } from '../services/stats.js';
+import { addDays, isTrendRange, memberTrend, parseSpan, previousSpan, SPAN_MAX_DAYS, unitOf, type TrendRange, type TrendSpan } from '../services/stats.js';
 import { AuditPage, HomePage, LeftFeed, LoginPage, MemberDiffBody, MemberDiffPage, MemberPage, MemberResults, MembersPage, NotFoundPage } from './views/pages.js';
 import { ConfirmPage, FLASH, ModerationSection, YakuPage } from './views/moderation.js';
 import { AccountIssuedPage, ADMISSION_FLASH, ApplicationsPage, MemberAdmissionSection, OmairiPage, SettingsPage, SoudanListPage, SoudanPage } from './views/admission.js';
@@ -1178,17 +1178,69 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.get('/stats', async (c) => {
+    const t = now();
     const q = c.req.query('range');
-    const range = isTrendRange(q) ? q : '30d';
+    // 日付で選んだ期間（おかしければ 30 日）
+    const custom = c.req.query('from') ? parseSpan(c.req.query('from'), c.req.query('to'), t) : undefined;
+    const range = custom ? ('custom' as const) : isTrendRange(q) ? q : '30d';
+    const span: TrendSpan = custom ?? (range as TrendRange);
     const v = c.req.query('view');
     const view = isStatsView(v) ? v : 'overview';
-    const [buckets, gender, genderToday, activity] = await Promise.all([
-      memberTrend(db, range, now()),
-      view === 'gender' ? genderTrend(db, cfg, range, now()) : undefined,
-      view === 'gender' ? genderNow(db, cfg, now()) : undefined,
-      view === 'active' ? activityStats(db, cfg, range, now()) : undefined,
+    const buckets = await memberTrend(db, span, t);
+    // すぐ前の、同じ長さの期間（くらべる用）
+    const before = previousSpan(buckets);
+    const [prevTrend, gender, prevGender, genderToday, activity, prevActivity] = await Promise.all([
+      view === 'overview' ? memberTrend(db, before, t) : undefined,
+      view === 'gender' ? genderTrend(db, cfg, span, t) : undefined,
+      view === 'gender' ? genderTrend(db, cfg, before, t) : undefined,
+      view === 'gender' ? genderNow(db, cfg, t) : undefined,
+      view === 'active' ? activityStats(db, cfg, span, t) : undefined,
+      view === 'active' ? activityStats(db, cfg, before, t) : undefined,
     ]);
-    return c.html(<StatsPage session={c.get('session')} range={range} view={view} buckets={buckets} gender={gender} genderNow={genderToday} activity={activity} />);
+    const add = (a: number[]) => a.reduce((x, y) => x + y, 0);
+    const sexSum = (list: { male: number; female: number; unknown: number }[]) => list.reduce((a, c) => ({ male: a.male + c.male, female: a.female + c.female, unknown: a.unknown + c.unknown }), { male: 0, female: 0, unknown: 0 });
+    const total = (c: { male: number; female: number; unknown: number }) => c.male + c.female + c.unknown;
+    const prev = {
+      ...(prevTrend
+        ? {
+            overview: {
+              members: prevTrend.at(-1)?.members ?? 0,
+              joined: add(prevTrend.map((x) => x.joined)),
+              left: add(prevTrend.map((x) => x.left)),
+              shuin: add(prevTrend.map((x) => x.shuin)),
+              messages: add(prevTrend.map((x) => x.messages)),
+              vcMinutes: add(prevTrend.map((x) => x.vcMinutes)),
+            },
+          }
+        : {}),
+      ...(prevGender ? { gender: { members: prevGender.at(-1)!.members, joined: sexSum(prevGender.map((x) => x.joined)) } } : {}),
+      ...(prevActivity
+        ? {
+            active: {
+              people: add(prevActivity.buckets.map((x) => total(x.people))),
+              vcMinutes: add(prevActivity.buckets.map((x) => total(x.vcMinutes))),
+              messages: add(prevActivity.buckets.map((x) => total(x.messages))),
+            },
+          }
+        : {}),
+    };
+    const today = jstDate(t);
+    return c.html(
+      <StatsPage
+        session={c.get('session')}
+        range={range}
+        span={{ from: buckets[0]!.from, to: buckets.at(-1)!.to }}
+        unit={unitOf(span)}
+        view={view}
+        buckets={buckets}
+        gender={gender}
+        genderNow={genderToday}
+        activity={activity}
+        prev={prev}
+        today={today}
+        minDate={addDays(today, -SPAN_MAX_DAYS + 1)}
+      />,
+    );
   });
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */

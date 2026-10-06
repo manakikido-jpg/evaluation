@@ -164,3 +164,32 @@ describe('🌙 浮上の男女と時間帯', () => {
     expect(day.messages).toEqual({ male: 2, female: 0, unknown: 0 });
   });
 });
+
+describe('📅 日付で選んだ期間・前の期間', () => {
+  it('期間を確かめる（未来は今日まで・逆・長すぎるのはだめ）。長さで区切り方が変わる', async () => {
+    const { parseSpan, customBuckets, unitOf, previousSpan } = await import('../src/services/stats.js');
+    expect(parseSpan('2026-09-01', '2026-12-31', NOW)).toEqual({ from: '2026-09-01', to: '2026-09-26' });
+    expect(parseSpan('2026-09-10', '2026-09-01', NOW)).toBeUndefined();
+    expect(parseSpan('2026-02-30', '2026-03-01', NOW)).toBeUndefined();
+    expect(parseSpan('2020-01-01', '2026-09-01', NOW)).toBeUndefined();
+    expect(parseSpan(undefined, '2026-09-01', NOW)).toBeUndefined();
+    expect(unitOf({ from: '2026-09-01', to: '2026-09-30' })).toBe('day');
+    expect(unitOf({ from: '2026-06-01', to: '2026-09-26' })).toBe('week');
+    expect(unitOf({ from: '2025-06-01', to: '2026-09-26' })).toBe('month');
+    expect(customBuckets('2026-09-01', '2026-09-03').map((b) => b.from)).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
+    // 週: 月曜はじまり、両端は期間で切る（9/3 は木曜）
+    const w = customBuckets('2026-09-03', '2026-11-30');
+    expect(w[0]).toMatchObject({ from: '2026-09-03', to: '2026-09-06' });
+    expect(w[1]).toMatchObject({ from: '2026-09-07', to: '2026-09-13' });
+    expect(w.at(-1)!.to).toBe('2026-11-30');
+    const m = customBuckets('2025-06-15', '2026-09-26');
+    expect(m[0]).toMatchObject({ from: '2025-06-15', to: '2025-06-30' });
+    expect(m[1]).toMatchObject({ from: '2025-07-01', to: '2025-07-31', title: '2025年7月' });
+    expect(previousSpan(customBuckets('2026-09-01', '2026-09-30'))).toEqual({ from: '2026-08-02', to: '2026-08-31' });
+  });
+
+  it('7 日の平均（はじめの 6 日は出さない）', async () => {
+    const { ma7 } = await import('../src/web/views/stats.js');
+    expect(ma7([7, 7, 7, 7, 7, 7, 7, 14])).toEqual([null, null, null, null, null, null, 7, 8]);
+  });
+});

@@ -49,6 +49,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
     'perms.js': { body: readText(path.join(here, 'public/perms.js')), type: 'text/javascript; charset=utf-8' },
+    'charts.js': { body: readText(path.join(here, 'public/charts.js')), type: 'text/javascript; charset=utf-8' },
     'casino.css': { body: readText(path.join(here, 'public/casino.css')), type: 'text/css; charset=utf-8' },
     'casino-bg.svg': { body: readText(path.join(here, 'public/casino-bg.svg')), type: 'image/svg+xml' },
     'casino.js': { body: readText(path.join(here, 'public/casino.js')), type: 'text/javascript; charset=utf-8' },

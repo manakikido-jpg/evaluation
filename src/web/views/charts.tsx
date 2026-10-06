@@ -1,7 +1,7 @@
 /**
  * 管理画面のグラフ（サーバーで SVG を作る。JavaScript なし）。
  * 色は style.css の --series-1・--series-2（ライト・ダークそれぞれ色覚の多様性を確かめ済み）。
- * 各区切りにマウスを乗せると値が出る（<title>）。同じ数字は「表で見る」にも出す。
+ * 各区切りにマウスを乗せると値が出る（charts.js のカード。JavaScript がなければ <title>）。同じ数字は「表で見る」にも出す。
  */
 
 export type ChartPoint = { label: string; title: string };
@@ -16,6 +16,28 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 
 /** CSS が読めなかったとき（古い CSS が残っているときなど）の色。ふだんは style.css の色が上書きする */
 const C = { s1: '#c8102e', s2: '#2a78d6', grid: '#eadfe1', muted: '#7a6d71' };
+
+/** マウスを乗せたときのカード（charts.js）: 1 行目が見出し、あとは 1 行ずつ */
+const tip = (head: string, lines: string[]) => [head, ...lines].join('\n');
+
+/** 7 日の平均など、棒に重ねる線（null は線を切る） */
+export type AvgLine = { name: string; values: (number | null)[] };
+
+/** 平均の線（棒の上に重ねる） */
+function AvgPath(props: { avg?: AvgLine; x: (i: number) => number; y: (v: number) => number }) {
+  if (!props.avg) return null;
+  let d = '';
+  let pen = false;
+  props.avg.values.forEach((v, i) => {
+    if (v === null || v === undefined) {
+      pen = false;
+      return;
+    }
+    d += `${pen ? 'L' : 'M'}${props.x(i).toFixed(1)},${props.y(v).toFixed(1)}`;
+    pen = true;
+  });
+  return <path class="avgline" d={d} fill="none" stroke={C.muted} stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" />;
+}
 
 /** 0 から max までのきりのよい目盛り */
 export function niceTicks(max: number): number[] {
@@ -90,7 +112,7 @@ export function LineChart(props: { points: ChartPoint[]; values: number[]; unit:
         </text>
         <XLabels points={points} x={x} />
         {points.map((p, i) => (
-          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
+          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent" data-tip={tip(p.title, [`${fmt(values[i]!)}${props.unit}`])}>
             <title>{`${p.title}: ${fmt(values[i]!)}${props.unit}`}</title>
           </rect>
         ))}
@@ -111,11 +133,13 @@ export function ColumnChart(props: {
   label: string;
   /** 値の見せ方（通話の「時間」など） */
   format?: (v: number) => string;
+  /** 上の棒に重ねる平均の線 */
+  avg?: AvgLine;
 }) {
   const { points, up, down } = props;
   const f = props.format ?? fmt;
   const n = points.length;
-  const upTicks = niceTicks(Math.max(...up.values, 0));
+  const upTicks = niceTicks(Math.max(...up.values, ...(props.avg?.values.filter((v): v is number => v !== null) ?? []), 0));
   const downMax = down ? Math.max(...down.values, 0) : 0;
   // 上下で同じ目盛りの幅にする
   const step = upTicks[1]! - upTicks[0]!;
@@ -130,16 +154,24 @@ export function ColumnChart(props: {
   for (let v = -downTop; v <= upTop + 1e-9; v += step) ticks.push(Math.round(v * 100) / 100 || 0);
   return (
     <div class="chart-wrap">
-      {down && (
+      {(down || props.avg) && (
         <p class="legend">
           <span class="key">
             <i class="swatch s1" />
             {up.name}
           </span>
-          <span class="key">
-            <i class="swatch s2" />
-            {down.name}
-          </span>
+          {down && (
+            <span class="key">
+              <i class="swatch s2" />
+              {down.name}
+            </span>
+          )}
+          {props.avg && (
+            <span class="key">
+              <i class="swatch avg" />
+              {props.avg.name}
+            </span>
+          )}
         </p>
       )}
       <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={props.label}>
@@ -153,9 +185,18 @@ export function ColumnChart(props: {
         ))}
         {up.values.map((v, i) => (v > 0 ? <path class="bar s1" d={barPath(x(i) - w / 2, w, y(0), y(v))} fill={C.s1} /> : null))}
         {down?.values.map((v, i) => (v > 0 ? <path class="bar s2" d={barPath(x(i) - w / 2, w, y(0), y(-v))} fill={C.s2} /> : null))}
+        <AvgPath avg={props.avg} x={x} y={y} />
         <XLabels points={points} x={x} />
         {points.map((p, i) => (
-          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
+          <rect
+            class="hit"
+            x={M.left + band * i}
+            y={M.top}
+            width={band}
+            height={PH}
+            fill="transparent"
+            data-tip={tip(p.title, [`${up.name} ${f(up.values[i]!)}${props.unit}`, ...(down ? [`${down.name} ${f(down.values[i]!)}${props.unit}`] : []), ...(props.avg && props.avg.values[i] != null ? [`${props.avg.name} ${f(props.avg.values[i]!)}${props.unit}`] : [])])}
+          >
             <title>{`${p.title}: ${up.name} ${f(up.values[i]!)}${props.unit}${down ? ` ／ ${down.name} ${f(down.values[i]!)}${props.unit}` : ''}`}</title>
           </rect>
         ))}
@@ -198,7 +239,7 @@ export function BarList(props: { rows: { name: string; value: number }[]; unit: 
                 {f(r.value)}
                 {props.unit}
               </text>
-              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent">
+              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent" data-tip={tip(r.name, [`${f(r.value)}${props.unit}`])}>
                 <title>{`${r.name}: ${f(r.value)}${props.unit}`}</title>
               </rect>
             </g>
@@ -227,11 +268,11 @@ function Legend(props: { series: { name: string; cls: string }[] }) {
 }
 
 /** 積み上げの縦棒（入った人の男性・女性・不明など）。区切りの合計を棒の上に出す */
-export function StackedColumnChart(props: { points: ChartPoint[]; series: Series[]; unit: string; label: string }) {
+export function StackedColumnChart(props: { points: ChartPoint[]; series: Series[]; unit: string; label: string; avg?: AvgLine }) {
   const { points, series } = props;
   const n = points.length;
   const totals = points.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
-  const ticks = niceTicks(Math.max(...totals, 0));
+  const ticks = niceTicks(Math.max(...totals, ...(props.avg?.values.filter((v): v is number => v !== null) ?? []), 0));
   const top = ticks.at(-1)!;
   const band = PW / n;
   const w = Math.min(24, band * 0.6);
@@ -239,7 +280,7 @@ export function StackedColumnChart(props: { points: ChartPoint[]; series: Series
   const y = (v: number) => M.top + PH - (v / top) * PH;
   return (
     <div class="chart-wrap">
-      <Legend series={series} />
+      <Legend series={props.avg ? [...series, { name: props.avg.name, cls: 'avg' }] : series} />
       <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={props.label}>
         {ticks.map((t) => (
           <g>
@@ -266,9 +307,18 @@ export function StackedColumnChart(props: { points: ChartPoint[]; series: Series
           });
           return <g>{segs}</g>;
         })}
+        <AvgPath avg={props.avg} x={x} y={y} />
         <XLabels points={points} x={x} />
         {points.map((p, i) => (
-          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
+          <rect
+            class="hit"
+            x={M.left + band * i}
+            y={M.top}
+            width={band}
+            height={PH}
+            fill="transparent"
+            data-tip={tip(p.title, [`合計 ${fmt(totals[i]!)}${props.unit}`, ...series.map((s) => `${s.name} ${fmt(s.values[i] ?? 0)}${props.unit}${totals[i] ? `（${Math.round(((s.values[i] ?? 0) / totals[i]!) * 100)}%）` : ''}`), ...(props.avg && props.avg.values[i] != null ? [`${props.avg.name} ${fmt(props.avg.values[i]!)}${props.unit}`] : [])])}
+          >
             <title>{`${p.title}: 合計 ${fmt(totals[i]!)}${props.unit}（${series.map((s) => `${s.name} ${fmt(s.values[i] ?? 0)}`).join('・')}）`}</title>
           </rect>
         ))}
@@ -332,7 +382,7 @@ export function MultiLineChart(props: { points: ChartPoint[]; series: { name: st
         })}
         <XLabels points={points} x={x} />
         {points.map((p, i) => (
-          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
+          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent" data-tip={tip(p.title, series.map((s) => `${s.name} ${s.values[i] === null ? '—' : `${f(s.values[i]!)}${props.unit}`}`))}>
             <title>{`${p.title}: ${series.map((s) => `${s.name} ${s.values[i] === null ? '—' : `${f(s.values[i]!)}${props.unit}`}`).join('・')}`}</title>
           </rect>
         ))}
@@ -383,7 +433,7 @@ export function ShareBars(props: { rows: { name: string; unit?: string; parts: {
                     .map((p) => `・${p.name.slice(0, 1)} ${Math.round((p.value / total) * 100)}%`)
                     .join('')}
               </text>
-              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent">
+              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent" data-tip={tip(r.name, [`合計 ${fmt(total)}${r.unit ?? '人'}`, ...r.parts.map((p) => `${p.name} ${fmt(p.value)}${r.unit ?? '人'}（${Math.round((p.value / (total || 1)) * 100)}%）`)])}>
                 <title>{`${r.name}: ${text || 'なし'}`}</title>
               </rect>
             </g>
@@ -419,7 +469,7 @@ export function Heatmap(props: { rows: string[]; cols: string[]; values: number[
             {props.cols.map((c, j) => {
               const v = props.values[i]?.[j] ?? 0;
               return (
-                <rect class="cell" x={L + cw * j + 1} y={T + ch * i + 1} width={cw - 2} height={ch - 2} rx={3} fill={C.s1} fill-opacity={op(v)}>
+                <rect class="cell" x={L + cw * j + 1} y={T + ch * i + 1} width={cw - 2} height={ch - 2} rx={3} fill={C.s1} fill-opacity={op(v)} data-tip={tip(`${r}曜 ${c}台`, [`${f(v)}${props.unit}`])}>
                   <title>{`${r} ${c}: ${f(v)}${props.unit}`}</title>
                 </rect>
               );

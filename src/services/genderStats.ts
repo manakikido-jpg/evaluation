@@ -4,7 +4,7 @@ import type { Db } from '../db/client.js';
 import { activityDaily, activityHourly, applications, members } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
-import { trendBuckets, type TrendRange } from './stats.js';
+import { spanBuckets, type TrendSpan } from './stats.js';
 
 /**
  * 👫 男女の割合（推移のページ）。性別は、男性・女性のロール → なければ入鯖申請の答え → どちらもなければ「不明」。
@@ -56,10 +56,10 @@ const count = (list: Person[]): SexCount => {
 export type GenderBucket = { label: string; title: string; from: string; to: string; members: SexCount; joined: SexCount; left: SexCount };
 
 /** 区切りごとの、いる人・入った人・抜けた人の男女 */
-export async function genderTrend(db: Db, cfg: Pick<GuildConfig, 'roles'>, range: TrendRange, now: Date): Promise<GenderBucket[]> {
+export async function genderTrend(db: Db, cfg: Pick<GuildConfig, 'roles'>, range: TrendSpan, now: Date): Promise<GenderBucket[]> {
   const list = await people(db, cfg);
   const inside = (d: string, b: { from: string; to: string }) => d >= b.from && d <= b.to;
-  return trendBuckets(range, now).map((b) => ({
+  return spanBuckets(range, now).map((b) => ({
     ...b,
     members: count(list.filter((p) => p.joined <= b.to && (p.left === null || p.left > b.to))),
     joined: count(list.filter((p) => inside(p.joined, b))),
@@ -120,10 +120,10 @@ export type ActivityStats = {
   days: number;
 };
 
-export async function activityStats(db: Db, cfg: Pick<GuildConfig, 'roles'>, range: TrendRange, now: Date): Promise<ActivityStats> {
+export async function activityStats(db: Db, cfg: Pick<GuildConfig, 'roles'>, range: TrendSpan, now: Date): Promise<ActivityStats> {
   const sexOf = new Map((await people(db, cfg)).map((p) => [p.id, p.sex] as const));
   const sex = (id: string): Sex => sexOf.get(id) ?? 'unknown';
-  const bs = trendBuckets(range, now);
+  const bs = spanBuckets(range, now);
   const from = bs[0]!.from;
   const to = bs.at(-1)!.to;
   const daily = await db

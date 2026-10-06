@@ -899,3 +899,23 @@ form.dirty .art-savebar { border-color: #e0a020; }
 .heat-legend { display: flex; align-items: center; gap: 8px; }
 .heat-scale { display: inline-block; width: 120px; height: 10px; border-radius: 4px; background: linear-gradient(90deg, color-mix(in srgb, var(--series-1) 8%, transparent), var(--series-1)); }
 .stats-views { margin-top: 4px; }
+/* 📈 グラフ: マウスを乗せたときのカード・平均の線・スマホ */
+.chart-tip { position: absolute; z-index: 60; pointer-events: none; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / .18); font-size: .88rem; line-height: 1.5; min-width: 9em; font-variant-numeric: tabular-nums; }
+.chart-tip b { display: block; margin-bottom: 2px; }
+.chart .hit.on { fill: var(--ink); fill-opacity: .08; }
+.chart.heat .cell.on { stroke: var(--ink); stroke-width: 2; }
+.chart .avgline { stroke: var(--ink); opacity: .7; }
+.legend .swatch.avg { background: none; border-top: 2px dashed var(--ink); height: 0; width: 18px; opacity: .7; vertical-align: middle; }
+.delta { display: block; font-size: .8rem; color: var(--muted); margin-top: 2px; font-weight: normal; }
+.delta.up::before { content: '▲ '; }
+.delta.down::before { content: '▼ '; }
+.span-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 4px; }
+.span-form input[type="date"] { width: auto; }
+@media (max-width: 640px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat .value { font-size: 1.4rem; }
+  .chart { min-width: 560px; }
+  .chart text { font-size: 17px; }
+  .chart .xlabels text { font-size: 16px; }
+  .chart-wrap { margin: 0 -8px; }
+}

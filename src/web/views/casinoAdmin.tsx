@@ -68,7 +68,7 @@ export function CasinoAdminPage(p: {
   const total = p.stats.reduce((a, s) => ({ plays: a.plays + s.plays, wagered: a.wagered + s.wagered, paid: a.paid + s.paid }), { plays: 0, wagered: 0, paid: 0 });
   const name = (id: string | null) => (id ? (p.names.get(id) ?? id) : '—');
   return (
-    <Layout title="カジノ" session={p.session} nav="casino">
+    <Layout title="カジノ" session={p.session} nav="casino" scripts={['charts.js']}>
       <h1>🎰 カジノ</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <section class="card">

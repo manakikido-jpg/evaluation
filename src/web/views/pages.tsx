@@ -85,7 +85,7 @@ export function HomePage(props: {
 }) {
   const { stats, trend } = props;
   return (
-    <Layout title="ホーム" session={props.session} nav="home">
+    <Layout title="ホーム" session={props.session} nav="home" scripts={['charts.js']}>
       <h1>🏠 今日の社務所</h1>
       {trend && trend.length > 0 && (
         <section class="card">
@@ -527,7 +527,7 @@ export function MemberPage(props: {
   const next = auto ? nextAutoRank(cfg.ranks, card.goen, auto) : undefined;
   const otherRoles = m.roleIds.filter((id) => !cfg.ranks.some((r) => r.roleId === id));
   return (
-    <Layout title={m.displayName} session={props.session} nav="members">
+    <Layout title={m.displayName} session={props.session} nav="members" scripts={['charts.js']}>
       <p class="crumbs">
         <a href="/members">メンバー</a> / {m.displayName}
       </p>

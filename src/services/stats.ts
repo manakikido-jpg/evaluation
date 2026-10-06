@@ -76,11 +76,74 @@ export function trendBuckets(range: TrendRange, now: Date): Pick<TrendBucket, 'l
   return out;
 }
 
+/** 期間: 決まった期間（30 日など）か、日付で選んだ期間（両端を含む） */
+export type TrendSpan = TrendRange | { from: string; to: string };
+export type TrendUnit = 'day' | 'week' | 'month';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const validDate = (d: string) => DATE_RE.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+/** 2 つの日付のあいだの日数（両端を含む） */
+export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+/** 日付で選んだ期間の上限（3 年） */
+export const SPAN_MAX_DAYS = 3 * 366;
+
+/** 日付で選んだ期間を確かめる（おかしければ undefined）。未来は今日まで */
+export function parseSpan(from: unknown, to: unknown, now: Date): { from: string; to: string } | undefined {
+  if (typeof from !== 'string' || typeof to !== 'string' || !validDate(from) || !validDate(to)) return undefined;
+  const today = jstDate(now);
+  const end = to > today ? today : to;
+  if (from > end || daysBetween(from, end) > SPAN_MAX_DAYS) return undefined;
+  return { from, to: end };
+}
+
+/** 選んだ期間の区切り方（45 日まで 1 日ごと・200 日まで 1 週ごと・それより長いと 1 か月ごと） */
+export const unitOf = (span: TrendSpan): TrendUnit => (typeof span === 'string' ? TREND_RANGES[span].unit : daysBetween(span.from, span.to) <= 45 ? 'day' : daysBetween(span.from, span.to) <= 200 ? 'week' : 'month');
+
+/** 日付で選んだ期間の区切り（古い順。週は月曜はじまり・月は 1 日はじまりで、両端は期間で切る） */
+export function customBuckets(from: string, to: string): Pick<TrendBucket, 'label' | 'title' | 'from' | 'to'>[] {
+  const unit = unitOf({ from, to });
+  const out: Pick<TrendBucket, 'label' | 'title' | 'from' | 'to'>[] = [];
+  if (unit === 'day') {
+    for (let d = from; d <= to; d = addDays(d, 1)) out.push({ label: md(d), title: md(d), from: d, to: d });
+  } else if (unit === 'week') {
+    let start = from;
+    while (start <= to) {
+      const dow = (new Date(`${start}T00:00:00Z`).getUTCDay() + 6) % 7;
+      const sunday = addDays(start, 6 - dow);
+      const end = sunday > to ? to : sunday;
+      out.push({ label: md(start), title: `${md(start)}〜${md(end)}`, from: start, to: end });
+      start = addDays(end, 1);
+    }
+  } else {
+    let start = from;
+    while (start <= to) {
+      const y = Number(start.slice(0, 4));
+      const m = Number(start.slice(5, 7));
+      const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+      const end = last > to ? to : last;
+      out.push({ label: `${m}月`, title: `${y}年${m}月${start.slice(8) !== '01' || end !== last ? `（${md(start)}〜${md(end)}）` : ''}`, from: start, to: end });
+      start = addDays(end, 1);
+    }
+  }
+  return out;
+}
+
+/** 期間の区切り */
+export const spanBuckets = (span: TrendSpan, now: Date) => (typeof span === 'string' ? trendBuckets(span, now) : customBuckets(span.from, span.to));
+
+/** すぐ前の、同じ長さの期間（くらべる用） */
+export function previousSpan(buckets: readonly Pick<TrendBucket, 'from' | 'to'>[]): { from: string; to: string } {
+  const from = buckets[0]!.from;
+  const to = buckets.at(-1)!.to;
+  const n = daysBetween(from, to);
+  return { from: addDays(from, -n), to: addDays(from, -1) };
+}
+
 /** JST の日付の始まり（UTC の Date） */
 const startOfJstDate = (date: string) => new Date(`${date}T00:00:00+09:00`);
 
-export async function memberTrend(db: Db, range: TrendRange, now: Date): Promise<TrendBucket[]> {
-  const buckets = trendBuckets(range, now);
+export async function memberTrend(db: Db, range: TrendSpan, now: Date): Promise<TrendBucket[]> {
+  const buckets = spanBuckets(range, now);
   const first = buckets[0]!.from;
   const since = startOfJstDate(first);
 

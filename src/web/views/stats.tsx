@@ -1,6 +1,6 @@
 import type { AdminSession } from '../../db/schema.js';
 import { femaleShare, totalOf, type ActivityStats, type GenderBucket, type GenderNow, type SexCount } from '../../services/genderStats.js';
-import { TREND_RANGES, type TrendBucket, type TrendRange } from '../../services/stats.js';
+import { TREND_RANGES, type TrendBucket, type TrendRange, type TrendUnit } from '../../services/stats.js';
 import { ColumnChart, Heatmap, LineChart, MultiLineChart, ShareBars, StackedColumnChart } from './charts.js';
 import { Layout } from './layout.js';
 
@@ -16,16 +16,59 @@ const VIEWS: [StatsView, string][] = [
 ];
 export const isStatsView = (v: unknown): v is StatsView => VIEWS.some(([k]) => k === v);
 
-export function StatsPage(props: { session: AdminSession; range: TrendRange; view?: StatsView; buckets: TrendBucket[]; gender?: GenderBucket[]; genderNow?: GenderNow; activity?: ActivityStats }) {
+/** 前の期間とくらべた増減（▲▼ と文字で。色だけにしない） */
+function Delta(props: { now: number; before: number | undefined; label?: string; unit?: string; format?: (n: number) => string }) {
+  if (props.before === undefined) return null;
+  const d = props.now - props.before;
+  const f = props.format ?? fmt;
+  const text = d === 0 ? '±0' : `${d > 0 ? '+' : '−'}${f(Math.abs(d))}`;
+  return (
+    <span class={`delta ${d > 0 ? 'up' : d < 0 ? 'down' : ''}`}>
+      {props.label ?? '前の期間より'} {text}
+      {props.unit ?? ''}
+    </span>
+  );
+}
+
+/** 7 日の平均（はじめの 6 日は出さない） */
+export const ma7 = (values: number[]): (number | null)[] => values.map((_, i) => (i < 6 ? null : Math.round((values.slice(i - 6, i + 1).reduce((a, b) => a + b, 0) / 7) * 10) / 10));
+const AVG_NAME = '7 日の平均';
+
+/** 前の期間（同じ長さ）の合計 */
+export type StatsPrev = {
+  overview?: { members: number; joined: number; left: number; shuin: number; messages: number; vcMinutes: number };
+  gender?: { members: SexCount; joined: SexCount };
+  active?: { people: number; vcMinutes: number; messages: number };
+};
+
+export function StatsPage(props: {
+  session: AdminSession;
+  /** custom: 日付で選んだ期間 */
+  range: TrendRange | 'custom';
+  span: { from: string; to: string };
+  unit: TrendUnit;
+  view?: StatsView;
+  buckets: TrendBucket[];
+  gender?: GenderBucket[];
+  genderNow?: GenderNow;
+  activity?: ActivityStats;
+  prev?: StatsPrev;
+  /** 選べるいちばん古い日（日付で選ぶ欄の min） */
+  minDate?: string;
+  today?: string;
+}) {
   const view = props.view ?? 'overview';
   const b = props.buckets;
   const points = b.map((x) => ({ label: x.label, title: x.title }));
   const joined = b.reduce((n, x) => n + x.joined, 0);
   const left = b.reduce((n, x) => n + x.left, 0);
   const now = b.at(-1)?.members ?? 0;
-  const per = TREND_RANGES[props.range].unit === 'day' ? '1 日ごと' : TREND_RANGES[props.range].unit === 'week' ? '1 週ごと' : '1 か月ごと';
+  const per = props.unit === 'day' ? '1 日ごと' : props.unit === 'week' ? '1 週ごと' : '1 か月ごと';
+  const daily = props.unit === 'day';
+  const pv = props.prev?.overview;
+  const q = props.range === 'custom' ? `from=${props.span.from}&to=${props.span.to}` : `range=${props.range}`;
   return (
-    <Layout title="推移" session={props.session} nav="stats">
+    <Layout title="推移" session={props.session} nav="stats" scripts={['charts.js']}>
       <h1>📈 推移</h1>
       <nav class="tabs" aria-label="期間">
         {(Object.keys(TREND_RANGES) as TrendRange[]).map((r) => (
@@ -34,25 +77,39 @@ export function StatsPage(props: { session: AdminSession; range: TrendRange; vie
           </a>
         ))}
       </nav>
+      <form method="get" action="/stats" class="span-form">
+        <input type="hidden" name="view" value={view} />
+        <span>📅 日付で選ぶ:</span>
+        <input type="date" name="from" value={props.span.from} min={props.minDate} max={props.today} aria-label="はじめの日" required />
+        〜
+        <input type="date" name="to" value={props.span.to} min={props.minDate} max={props.today} aria-label="おわりの日" required />
+        <button type="submit" class={props.range === 'custom' ? 'ok' : ''}>
+          表示
+        </button>
+        <small class="note">
+          {props.span.from.replaceAll('-', '/')}〜{props.span.to.replaceAll('-', '/')}（{per}）。45 日までは 1 日ごと・200 日までは 1 週ごと・それより長いと 1 か月ごと
+        </small>
+      </form>
       <nav class="tabs stats-views" aria-label="見るもの">
         {VIEWS.map(([k, label]) => (
-          <a href={`/stats?range=${props.range}&view=${k}`} class={k === view ? 'on' : ''} aria-current={k === view ? 'page' : undefined}>
+          <a href={`/stats?${q}&view=${k}`} class={k === view ? 'on' : ''} aria-current={k === view ? 'page' : undefined}>
             {label}
           </a>
         ))}
       </nav>
-      {view === 'gender' && props.gender && props.genderNow && <GenderSections buckets={props.gender} now={props.genderNow} per={per} />}
-      {view === 'active' && props.activity && <ActiveSections a={props.activity} per={per} />}
+      {view === 'gender' && props.gender && props.genderNow && <GenderSections buckets={props.gender} now={props.genderNow} per={per} daily={daily} prev={props.prev?.gender} />}
+      {view === 'active' && props.activity && <ActiveSections a={props.activity} per={per} daily={daily} prev={props.prev?.active} />}
       {view === 'overview' && (
         <>
 
       <div class="stats">
         <div class="stat">
-          <div class="label">今の人数</div>
+          <div class="label">{props.range === 'custom' ? '期間のおわりの人数' : '今の人数'}</div>
           <div class="value">
             {fmt(now)}
             <small>人</small>
           </div>
+          <Delta now={now} before={pv?.members} label="期間のはじめより" unit="人" />
         </div>
         <div class="stat">
           <div class="label">この期間に入った</div>
@@ -60,6 +117,7 @@ export function StatsPage(props: { session: AdminSession; range: TrendRange; vie
             {fmt(joined)}
             <small>人</small>
           </div>
+          <Delta now={joined} before={pv?.joined} unit="人" />
         </div>
         <div class="stat">
           <div class="label">この期間に抜けた</div>
@@ -67,6 +125,7 @@ export function StatsPage(props: { session: AdminSession; range: TrendRange; vie
             {fmt(left)}
             <small>人</small>
           </div>
+          <Delta now={left} before={pv?.left} unit="人" />
         </div>
         <div class="stat">
           <div class="label">増減</div>
@@ -74,6 +133,7 @@ export function StatsPage(props: { session: AdminSession; range: TrendRange; vie
             {signed(joined - left)}
             <small>人</small>
           </div>
+          <Delta now={joined - left} before={pv ? pv.joined - pv.left : undefined} unit="人" />
         </div>
       </div>
 
@@ -91,21 +151,29 @@ export function StatsPage(props: { session: AdminSession; range: TrendRange; vie
           down={{ name: '抜けた', values: b.map((x) => x.left) }}
           unit="人"
           label="入った人（上）と抜けた人（下）"
+          avg={daily ? { name: `入った人の${AVG_NAME}`, values: ma7(b.map((x) => x.joined)) } : undefined}
         />
       </section>
 
       <section class="card">
           <h2>朱印（{per}）</h2>
-          <ColumnChart points={points} up={{ name: '朱印', values: b.map((x) => x.shuin) }} unit="件" label="押された朱印の数" />
+          <ColumnChart points={points} up={{ name: '朱印', values: b.map((x) => x.shuin) }} unit="件" label="押された朱印の数" avg={daily ? { name: AVG_NAME, values: ma7(b.map((x) => x.shuin)) } : undefined} />
         </section>
         <section class="card">
           <h2>通話（{per}・時間）</h2>
-          <ColumnChart points={points} up={{ name: '通話', values: b.map((x) => x.vcMinutes / 60) }} unit="時間" label="みんなの通話時間の合計" format={(v) => v.toLocaleString('ja-JP', { maximumFractionDigits: 1 })} />
+          <ColumnChart
+            points={points}
+            up={{ name: '通話', values: b.map((x) => x.vcMinutes / 60) }}
+            unit="時間"
+            label="みんなの通話時間の合計"
+            format={(v) => v.toLocaleString('ja-JP', { maximumFractionDigits: 1 })}
+            avg={daily ? { name: AVG_NAME, values: ma7(b.map((x) => x.vcMinutes / 60)) } : undefined}
+          />
         </section>
 
       <section class="card">
         <h2>発言（{per}）</h2>
-        <ColumnChart points={points} up={{ name: '発言', values: b.map((x) => x.messages) }} unit="件" label="メッセージの数" />
+        <ColumnChart points={points} up={{ name: '発言', values: b.map((x) => x.messages) }} unit="件" label="メッセージの数" avg={daily ? { name: AVG_NAME, values: ma7(b.map((x) => x.messages)) } : undefined} />
       </section>
 
       <details class="card">
@@ -155,7 +223,7 @@ const sum = (list: SexCount[]): SexCount => list.reduce((a, c) => ({ male: a.mal
 const oneDecimal = (v: number) => v.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
 
 /** 👫 男女（今の割合・位や年齢ごと・入った人／抜けた人の男女・割合の推移・定着） */
-function GenderSections(props: { buckets: GenderBucket[]; now: GenderNow; per: string }) {
+function GenderSections(props: { buckets: GenderBucket[]; now: GenderNow; per: string; daily: boolean; prev?: { members: SexCount; joined: SexCount } }) {
   const b = props.buckets;
   const nw = props.now;
   const points = b.map((x) => ({ label: x.label, title: x.title }));
@@ -177,6 +245,7 @@ function GenderSections(props: { buckets: GenderBucket[]; now: GenderNow; per: s
             {fmt(all.male)}
             <small>人（{pct(all.male, totalOf(all))}）</small>
           </div>
+          <Delta now={b.at(-1)?.members.male ?? all.male} before={props.prev?.members.male} label="期間のはじめより" unit="人" />
         </div>
         <div class="stat">
           <div class="label">今いる女性</div>
@@ -184,6 +253,7 @@ function GenderSections(props: { buckets: GenderBucket[]; now: GenderNow; per: s
             {fmt(all.female)}
             <small>人（{pct(all.female, totalOf(all))}）</small>
           </div>
+          <Delta now={b.at(-1)?.members.female ?? all.female} before={props.prev?.members.female} label="期間のはじめより" unit="人" />
         </div>
         <div class="stat">
           <div class="label">不明</div>
@@ -223,6 +293,7 @@ function GenderSections(props: { buckets: GenderBucket[]; now: GenderNow; per: s
           ]}
           unit="人"
           label="入った人の男女"
+          avg={props.daily ? { name: AVG_NAME, values: ma7(b.map((x) => totalOf(x.joined))) } : undefined}
         />
       </section>
 
@@ -356,7 +427,7 @@ function GenderSections(props: { buckets: GenderBucket[]; now: GenderNow; per: s
 }
 
 /** 🌙 浮上（発言・通話）の男女と時間帯 */
-function ActiveSections(props: { a: ActivityStats; per: string }) {
+function ActiveSections(props: { a: ActivityStats; per: string; daily: boolean; prev?: { people: number; vcMinutes: number; messages: number } }) {
   const { a } = props;
   const b = a.buckets;
   const points = b.map((x) => ({ label: x.label, title: x.title }));
@@ -395,6 +466,33 @@ function ActiveSections(props: { a: ActivityStats; per: string }) {
         </div>
       </div>
 
+      <div class="stats">
+        <div class="stat">
+          <div class="label">浮上した人（のべ）</div>
+          <div class="value">
+            {fmt(totalOf(avgPeople))}
+            <small>人</small>
+          </div>
+          <Delta now={totalOf(avgPeople)} before={props.prev?.people} unit="人" />
+        </div>
+        <div class="stat">
+          <div class="label">通話の時間</div>
+          <div class="value">
+            {oneDecimal(hrs(totalOf(vc)))}
+            <small>時間</small>
+          </div>
+          <Delta now={Math.round(hrs(totalOf(vc)) * 10) / 10} before={props.prev ? Math.round(hrs(props.prev.vcMinutes) * 10) / 10 : undefined} unit="時間" format={oneDecimal} />
+        </div>
+        <div class="stat">
+          <div class="label">発言</div>
+          <div class="value">
+            {fmt(totalOf(msg))}
+            <small>件</small>
+          </div>
+          <Delta now={totalOf(msg)} before={props.prev?.messages} unit="件" />
+        </div>
+      </div>
+
       <section class="card">
         <h2>浮上の男女（この期間の合計）</h2>
         <ShareBars
@@ -419,6 +517,7 @@ function ActiveSections(props: { a: ActivityStats; per: string }) {
           ]}
           unit="人"
           label="浮上した人の男女"
+          avg={props.daily ? { name: AVG_NAME, values: ma7(b.map((x) => totalOf(x.people))) } : undefined}
         />
       </section>
 
@@ -433,6 +532,7 @@ function ActiveSections(props: { a: ActivityStats; per: string }) {
           ]}
           unit="時間"
           label="通話の時間の男女"
+          avg={props.daily ? { name: AVG_NAME, values: ma7(b.map((x) => Math.round(hrs(totalOf(x.vcMinutes)) * 10) / 10)) } : undefined}
         />
       </section>
 
