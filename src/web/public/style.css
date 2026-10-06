@@ -278,6 +278,11 @@ details summary { cursor: pointer; margin: 12px 0 6px; color: var(--muted); }
 .chart .dot { fill: var(--series-1); stroke: var(--card); stroke-width: 2; }
 .chart .bar.s1 { fill: var(--series-1); }
 .chart .bar.s2 { fill: var(--series-2); }
+.chart .bar.s3 { fill: var(--muted); opacity: .45; }
+.chart .line.s2 { stroke: var(--series-2); }
+.chart .line.s3 { stroke: var(--muted); }
+.chart .dot.s2 { fill: var(--series-2); }
+.chart .dot.s3 { fill: var(--muted); }
 .chart .hit { fill: transparent; }
 .chart .hit:hover { fill: var(--ink); fill-opacity: .06; }
 .legend { display: flex; gap: 16px; margin: 0 0 4px; font-size: .85rem; color: var(--muted); }
@@ -285,6 +290,7 @@ details summary { cursor: pointer; margin: 12px 0 6px; color: var(--muted); }
 .legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .legend .swatch.s1 { background: var(--series-1); }
 .legend .swatch.s2 { background: var(--series-2); }
+.legend .swatch.s3 { background: var(--muted); opacity: .45; }
 
 /* ───────── 更新履歴 ───────── */
 .tag.new { background: var(--shu); color: #fff; }
@@ -887,3 +893,4 @@ form.dirty .art-savebar { border-color: #e0a020; }
 .tpl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .tpl-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
 .tpl-list details summary { cursor: pointer; }
+.section-title { margin: 28px 0 8px; font-size: 1.25rem; }

@@ -3,7 +3,7 @@ import type { Db } from '../src/db/client.js';
 import { activityDaily, members, shuin } from '../src/db/schema.js';
 import { memberTrend, trendBuckets } from '../src/services/stats.js';
 import { niceTicks } from '../src/web/views/charts.js';
-import { makeDb } from './helpers.js';
+import { cfg, makeDb, ROLE } from './helpers.js';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -86,5 +86,47 @@ describe('目盛り', () => {
     expect(niceTicks(3)).toEqual([0, 1, 2, 3]);
     expect(niceTicks(87)).toEqual([0, 20, 40, 60, 80, 100]);
     expect(niceTicks(1234).at(-1)).toBeGreaterThanOrEqual(1234);
+  });
+});
+
+describe('👫 男女の割合', () => {
+  const MALE = '990000000000000001';
+  const FEMALE = '990000000000000002';
+  const gcfg = { ...cfg, roles: { ...cfg.roles, male: MALE, female: FEMALE } };
+  it('ロール → 申請の答え → 不明。入った人・抜けた人・いる人を男女で数える。定着も', async () => {
+    const { genderNow, genderTrend, femaleShare } = await import('../src/services/genderStats.js');
+    const { applications } = await import('../src/db/schema.js');
+    const m = (id: string, roleIds: string[], joined: string, left?: string, active?: string) => ({
+      id,
+      username: id,
+      displayName: id,
+      roleIds,
+      joinedAt: at(joined),
+      leftAt: left ? at(left) : null,
+      lastActiveAt: active ? at(active) : null,
+      ageGroup: 'adult',
+    });
+    await db.insert(members).values([
+      m('a', [MALE, ROLE.sanpaisha], '2026-09-20T10:00:00', undefined, '2026-09-25T10:00:00'),
+      m('b', [FEMALE, ROLE.ujiko], '2026-09-20T11:00:00'),
+      m('c', [], '2026-09-25T10:00:00'), // 申請で女性
+      m('d', [MALE], '2026-09-21T10:00:00', '2026-09-24T10:00:00'), // 抜けた男性
+      m('e', [], '2026-01-01T10:00:00'), // 不明・前からいる
+      { ...m('bot', [], '2026-09-20T10:00:00'), isBot: true },
+    ]);
+    await db.insert(applications).values({ memberId: 'c', kind: 'join', answers: { gender: 'female' }, status: 'approved' });
+    const t = await genderTrend(db, gcfg, '30d', NOW);
+    const day = (d: string) => t.find((x) => x.from === d)!;
+    expect(day('2026-09-20').joined).toEqual({ male: 1, female: 1, unknown: 0 });
+    expect(day('2026-09-24').left).toEqual({ male: 1, female: 0, unknown: 0 });
+    expect(day('2026-09-23').members).toEqual({ male: 2, female: 1, unknown: 1 });
+    expect(t.at(-1)!.members).toEqual({ male: 1, female: 2, unknown: 1 });
+    expect(femaleShare(t.at(-1)!.members)).toBeCloseTo(66.67, 1);
+    expect(femaleShare({ male: 0, female: 0, unknown: 3 })).toBeNull();
+    const n = await genderNow(db, gcfg, NOW);
+    expect(n.all).toEqual({ male: 1, female: 2, unknown: 1 });
+    expect(n.active7).toEqual({ male: 1, female: 0, unknown: 0 });
+    expect(n.byRank.map((r) => r.name)).toContain('位なし');
+    expect(n.stay[0]).toEqual({ days: 30, joined: { male: 2, female: 2, unknown: 0 }, stayed: { male: 1, female: 2, unknown: 0 } });
   });
 });

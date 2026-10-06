@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-gender-stats',
+    date: '2026-10-06',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '👫 推移に男女の割合を足しました',
+    items: [
+      '今いる人の男女の人数・割合・男女比、最近 7 日に来た人・この期間に入った人・抜けた人の男女をくらべる横棒',
+      '入った人・抜けた人の男女（日・週・月ごと）、いる人数の男女の推移、女性の割合の推移',
+      '位ごと・年齢ごとの男女、入った人の定着（今もいる割合）を男女で',
+    ],
+  },
+  {
     id: '2026-10-06-perm-matrix-easier',
     date: '2026-10-06',
     kind: 'improve',

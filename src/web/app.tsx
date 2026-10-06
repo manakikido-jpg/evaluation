@@ -1,5 +1,6 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
+import { genderNow, genderTrend } from '../services/genderStats.js';
 import { deleteOmikujiArt, isOmikujiArtNo, loadOmikujiArt, omikujiArtHashes, saveOmikujiArt } from '../services/omikujiArt.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -1179,8 +1180,8 @@ export function createWebApp(deps: WebDeps) {
   app.get('/stats', async (c) => {
     const q = c.req.query('range');
     const range = isTrendRange(q) ? q : '30d';
-    const buckets = await memberTrend(db, range, now());
-    return c.html(<StatsPage session={c.get('session')} range={range} buckets={buckets} />);
+    const [buckets, gender, genderToday] = await Promise.all([memberTrend(db, range, now()), genderTrend(db, cfg, range, now()), genderNow(db, cfg, now())]);
+    return c.html(<StatsPage session={c.get('session')} range={range} buckets={buckets} gender={gender} genderNow={genderToday} />);
   });
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */

@@ -208,3 +208,187 @@ export function BarList(props: { rows: { name: string; value: number }[]; unit: 
     </div>
   );
 }
+
+/** 系列の色（s1・s2・s3）。s3 は「不明」などの灰色 */
+const SC: Record<string, string> = { s1: C.s1, s2: C.s2, s3: C.muted };
+export type Series = { name: string; cls: 's1' | 's2' | 's3'; values: number[] };
+
+function Legend(props: { series: { name: string; cls: string }[] }) {
+  return (
+    <p class="legend">
+      {props.series.map((s) => (
+        <span class="key">
+          <i class={`swatch ${s.cls}`} />
+          {s.name}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/** 積み上げの縦棒（入った人の男性・女性・不明など）。区切りの合計を棒の上に出す */
+export function StackedColumnChart(props: { points: ChartPoint[]; series: Series[]; unit: string; label: string }) {
+  const { points, series } = props;
+  const n = points.length;
+  const totals = points.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
+  const ticks = niceTicks(Math.max(...totals, 0));
+  const top = ticks.at(-1)!;
+  const band = PW / n;
+  const w = Math.min(24, band * 0.6);
+  const x = (i: number) => M.left + band * (i + 0.5);
+  const y = (v: number) => M.top + PH - (v / top) * PH;
+  return (
+    <div class="chart-wrap">
+      <Legend series={series} />
+      <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={props.label}>
+        {ticks.map((t) => (
+          <g>
+            <line class={t === 0 ? 'base' : 'grid'} x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? C.muted : C.grid} />
+            <text class="ytick" x={M.left - 8} y={y(t) + 4} text-anchor="end" fill={C.muted} font-size="12">
+              {fmt(t)}
+            </text>
+          </g>
+        ))}
+        {points.map((_, i) => {
+          let base = 0;
+          const segs = series.map((s, k) => {
+            const v = s.values[i] ?? 0;
+            const from = base;
+            base += v;
+            if (v <= 0) return null;
+            // いちばん上の段だけ角を丸く。段のあいだは 2px あける
+            const isTop = series.slice(k + 1).every((r) => (r.values[i] ?? 0) <= 0);
+            const y0 = y(from) - (from > 0 ? 1 : 0);
+            const y1 = y(base) + (isTop ? 0 : 1);
+            if (y0 - y1 < 0.5) return null;
+            const d = isTop ? barPath(x(i) - w / 2, w, y0, y1) : `M${x(i) - w / 2},${y0}V${y1}H${x(i) + w / 2}V${y0}Z`;
+            return <path class={`bar ${s.cls}`} d={d} fill={SC[s.cls]} />;
+          });
+          return <g>{segs}</g>;
+        })}
+        <XLabels points={points} x={x} />
+        {points.map((p, i) => (
+          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
+            <title>{`${p.title}: 合計 ${fmt(totals[i]!)}${props.unit}（${series.map((s) => `${s.name} ${fmt(s.values[i] ?? 0)}`).join('・')}）`}</title>
+          </rect>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/** 折れ線（いくつかの系列。null は線を切る）。割合（%）の推移など */
+export function MultiLineChart(props: { points: ChartPoint[]; series: { name: string; cls: 's1' | 's2' | 's3'; values: (number | null)[] }[]; unit: string; label: string; max?: number; format?: (v: number) => string }) {
+  const { points, series } = props;
+  const f = props.format ?? fmt;
+  const n = points.length;
+  const all = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
+  const ticks = props.max !== undefined ? [0, props.max / 4, props.max / 2, (props.max * 3) / 4, props.max] : niceTicks(Math.max(...all, 0));
+  const top = ticks.at(-1)!;
+  const band = PW / n;
+  const x = (i: number) => M.left + band * (i + 0.5);
+  const y = (v: number) => M.top + PH - (v / top) * PH;
+  const pathOf = (vals: (number | null)[]) => {
+    let d = '';
+    let pen = false;
+    vals.forEach((v, i) => {
+      if (v === null) {
+        pen = false;
+        return;
+      }
+      d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+      pen = true;
+    });
+    return d;
+  };
+  return (
+    <div class="chart-wrap">
+      <Legend series={series} />
+      <svg class="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={props.label}>
+        {ticks.map((t) => (
+          <g>
+            <line class="grid" x1={M.left} x2={W - M.right} y1={y(t)} y2={y(t)} stroke={C.grid} />
+            <text class="ytick" x={M.left - 8} y={y(t) + 4} text-anchor="end" fill={C.muted} font-size="12">
+              {f(t)}
+            </text>
+          </g>
+        ))}
+        {series.map((s) => {
+          const lastI = s.values.map((v, i) => (v === null ? -1 : i)).reduce((a, b) => Math.max(a, b), -1);
+          return (
+            <g>
+              <path class={`line ${s.cls}`} d={pathOf(s.values)} fill="none" stroke={SC[s.cls]} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+              {lastI >= 0 && (
+                <>
+                  <circle class={`dot ${s.cls}`} cx={x(lastI)} cy={y(s.values[lastI]!)} r={4} fill={SC[s.cls]} />
+                  <text class="endlabel" x={x(lastI) + 8} y={y(s.values[lastI]!) + 4} fill={C.muted} font-size="12">
+                    {f(s.values[lastI]!)}
+                    {props.unit}
+                  </text>
+                </>
+              )}
+            </g>
+          );
+        })}
+        <XLabels points={points} x={x} />
+        {points.map((p, i) => (
+          <rect class="hit" x={M.left + band * i} y={M.top} width={band} height={PH} fill="transparent">
+            <title>{`${p.title}: ${series.map((s) => `${s.name} ${s.values[i] === null ? '—' : `${f(s.values[i]!)}${props.unit}`}`).join('・')}`}</title>
+          </rect>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/** 100% の横棒（行ごと: 男性・女性・不明の割合）。人数と % は文字で横に出す */
+export function ShareBars(props: { rows: { name: string; parts: { name: string; cls: 's1' | 's2' | 's3'; value: number }[] }[]; label: string }) {
+  const ROW = 34;
+  const L = 150;
+  const R = 230;
+  const bw = W - L - R;
+  const bar = 16;
+  const h = ROW * props.rows.length + 8;
+  const legend = props.rows[0]?.parts.map((p) => ({ name: p.name, cls: p.cls })) ?? [];
+  return (
+    <div class="chart-wrap">
+      <Legend series={legend} />
+      <svg class="chart" viewBox={`0 0 ${W} ${h}`} role="img" aria-label={props.label}>
+        {props.rows.map((r, i) => {
+          const total = r.parts.reduce((s, p) => s + p.value, 0);
+          const y = 4 + i * ROW + (ROW - bar) / 2;
+          let at = L;
+          const text = r.parts
+            .filter((p) => p.value > 0)
+            .map((p) => `${p.name} ${fmt(p.value)}（${Math.round((p.value / (total || 1)) * 100)}%）`)
+            .join(' ');
+          return (
+            <g>
+              <text x={L - 8} y={y + bar - 3} text-anchor="end" fill={C.muted} font-size="12">
+                {r.name.length > 12 ? `${r.name.slice(0, 11)}…` : r.name}
+              </text>
+              {total > 0 &&
+                r.parts.map((p) => {
+                  const len = (p.value / total) * bw;
+                  const x0 = at;
+                  at += len;
+                  return len >= 1 ? <rect class={`bar ${p.cls}`} x={x0 + (x0 > L ? 1 : 0)} y={y} width={Math.max(0.5, len - (x0 > L ? 1 : 0))} height={bar} rx={2} fill={SC[p.cls]} /> : null;
+                })}
+              <text class="barvalue" x={L + bw + 8} y={y + bar - 3} fill={C.muted} font-size="12">
+                {fmt(total)}人
+                {total > 0 &&
+                  r.parts
+                    .filter((p) => p.cls !== 's3')
+                    .map((p) => `・${p.name.slice(0, 1)} ${Math.round((p.value / total) * 100)}%`)
+                    .join('')}
+              </text>
+              <rect class="hit" x={0} y={4 + i * ROW} width={W} height={ROW} fill="transparent">
+                <title>{`${r.name}: ${text || 'なし'}`}</title>
+              </rect>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
