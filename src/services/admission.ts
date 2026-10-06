@@ -16,7 +16,7 @@ import {
 import { audit } from './audit.js';
 import { getMember } from './members.js';
 import { activeYakuCount } from './yaku.js';
-import { grantJoinBonus } from './economy.js';
+import { grantJoinBonus, walletOf } from './economy.js';
 import { inviterOf, recordInvite, rewardInviter } from './invites.js';
 import { CONTACT_KINDS, isContactLevel, setContact, type ContactLevel } from './contact.js';
 import { notifyOf, notifyReady, setNotify } from './notify.js';
@@ -83,6 +83,18 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
   // 初期配布（1 人 1 回。入り直した人にはもう配らない）
   const e = ctx.cfg.economy;
   const bonus = await grantJoinBonus(ctx.db, memberId, e.joinBonus);
+  // 運営のチャンネルに「配りました」（通知は飛ばさない）
+  const bonusChannel = e.joinBonusChannelId ?? ctx.cfg.channels.log;
+  if (bonus > 0 && e.joinBonusNotify && bonusChannel) {
+    const balance = await walletOf(ctx.db, memberId)
+      .then((w) => w.balance)
+      .catch(() => undefined);
+    await safely('join bonus notice', () =>
+      ctx.discord.sendMessage(bonusChannel, {
+        content: `${e.currencyEmoji} **初期配布**: <@${memberId}> さんに ${e.currencyName} ${bonus.toLocaleString('ja-JP')} 枚を振り込みました${balance !== undefined ? `（残高 ${balance.toLocaleString('ja-JP')} 枚）` : ''}。`,
+      }),
+    );
+  }
   // 招待してくれた人にお礼（1 回だけ）
   await rewardInviter(ctx, memberId, now).catch((err: unknown) => logger.warn({ err }, 'invite reward failed'));
   // #お出迎え に「参拝しました」（通知は飛ばさない）

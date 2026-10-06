@@ -91,6 +91,9 @@ export const economySchema = z.object({
   giftDailyLimit: z.number().int().min(0).default(1000),
   /** 初期配布: 入鯖が承認されたときに 1 回だけ配る量（入り直しても 2 回目はない。0 で配らない） */
   joinBonus: z.number().int().min(0).default(3000),
+  /** 初期配布を配ったら、運営のチャンネルに知らせる（joinBonusChannelId。なければ #記録） */
+  joinBonusNotify: z.boolean().default(true),
+  joinBonusChannelId: snowflake.optional(),
   /** おみくじ（1 日 1 回のログボ）の基本の量。吉でこの量、大吉は 3 倍、凶は半分（0 なら花びらなし） */
   omikujiBase: z.number().int().min(0).default(10),
   /** おみくじは通話に入っているときだけ引ける（AFK・数えない通話はのぞく） */

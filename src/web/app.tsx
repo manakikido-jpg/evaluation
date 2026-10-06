@@ -2072,6 +2072,8 @@ export function createWebApp(deps: WebDeps) {
         omikujiBase: num('omikujiBase'),
         omikujiVoiceOnly: body.omikujiVoiceOnly === 'yes',
         joinBonus: num('joinBonus'),
+        joinBonusNotify: body.joinBonusNotify === 'yes',
+        joinBonusChannelId: field(body, 'joinBonusChannel', 20) || null,
         giftMin: num('giftMin'),
         giftMax: num('giftMax'),
         giftDailyLimit: num('giftDailyLimit'),

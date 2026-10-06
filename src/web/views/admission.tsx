@@ -1088,6 +1088,23 @@ export function SettingsPage(props: {
             <Num name="giftMax" label="贈り物: 1 回に贈れる最大" value={e.giftMax} file={f.giftMax} min={1} />
             <Num name="giftDailyLimit" label="贈り物: 1 人が 1 日に贈れる合計" value={e.giftDailyLimit} file={f.giftDailyLimit} />
             <Num name="joinBonus" label="初期配布（入鯖が承認されたときに 1 回だけ。0 で配らない）" value={e.joinBonus} file={f.joinBonus} />
+            <label class="field check">
+              <input type="checkbox" name="joinBonusNotify" value="yes" {...(e.joinBonusNotify ? { checked: true } : {})} />
+              <span>初期配布を配ったら、運営のチャンネルに知らせる</span>
+            </label>
+            <label class="field">
+              <span>初期配布を知らせるチャンネル（運営だけが見られるところ）</span>
+              <select name="joinBonusChannel">
+                <option value="" selected={!e.joinBonusChannelId}>
+                  #記録（設定ファイルの log）
+                </option>
+                {(props.textChannels ?? []).map((c) => (
+                  <option value={c.id} selected={c.id === e.joinBonusChannelId}>
+                    #{c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Num name="inviteReward" label="招待のお礼（招待した人に、招待された人が参拝者になったとき 1 回。0 でなし）" value={e.inviteReward} file={f.inviteReward} />
             <Num name="inviteActiveReward" label="招待した人の浮上ボーナス（招待された人が発言・通話 10 分した日ごと。0 でなし）" value={e.inviteActiveReward} file={f.inviteActiveReward} />
             <Num name="inviteActiveDays" label="浮上ボーナスを続ける日数（参拝者になってから）" value={e.inviteActiveDays} file={f.inviteActiveDays} min={1} />

@@ -23,6 +23,9 @@ export const overridesSchema = z.object({
       omikujiBase: z.number().int().min(0).max(10000),
       omikujiVoiceOnly: z.boolean(),
       joinBonus: z.number().int().min(0).max(1_000_000),
+      joinBonusNotify: z.boolean(),
+      /** null: #記録 に戻す */
+      joinBonusChannelId: z.string().regex(/^\d{17,20}$/).nullable(),
       giftMin: z.number().int().positive().max(1_000_000),
       giftMax: z.number().int().positive().max(1_000_000),
       giftDailyLimit: z.number().int().min(0).max(10_000_000),
@@ -119,7 +122,14 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
         ...(vip ? [{ channelId: vip.hubId, name: '💎 {name}の極の部屋', plan: 'free' as const }] : []),
       ],
     },
-    economy: { ...base.economy, ...o.economy },
+    economy: (() => {
+      const { joinBonusChannelId, ...rest } = o.economy;
+      const merged = { ...base.economy, ...rest };
+      // null は「決めない（#記録 へ）」
+      if (joinBonusChannelId === null) delete (merged as { joinBonusChannelId?: string }).joinBonusChannelId;
+      else if (joinBonusChannelId) merged.joinBonusChannelId = joinBonusChannelId;
+      return merged;
+    })(),
     omikujiStreak: { ...base.omikujiStreak, ...o.omikujiStreak },
     omikujiSpecial: o.omikujiSpecial ?? base.omikujiSpecial,
     notify: { ...base.notify, ...o.notify },

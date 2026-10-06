@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-join-bonus-notice',
+    date: '2026-10-06',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🪙 初期配布を振り込んだら運営のチャンネルに知らせます',
+    items: [
+      '🔰参拝者 になって初期配布が自動で振り込まれたら、運営のチャンネル（はじめは #記録）に「○○ さんに ○ 枚を振り込みました（残高）」と出ます',
+      '設定 → 銭と免罪符 で、知らせるチャンネルを選んだり、知らせないようにしたりできます',
+    ],
+  },
+  {
     id: '2026-10-06-gender-stats',
     date: '2026-10-06',
     kind: 'new',

@@ -48,7 +48,7 @@ beforeEach(async () => {
     unban: async () => undefined,
     kick: async (_g, u) => void calls.push(`kick ${u}`),
     editMessage: async () => undefined,
-    sendMessage: async () => ({ id: '0' }),
+    sendMessage: async (ch, b) => (calls.push(`msg ${ch} ${b.content ?? ''}`), { id: '0' }),
     deleteMessage: async () => undefined,
     guildChannels: async () => [],
     guildRoles: async () => [],
@@ -342,8 +342,27 @@ describe('初期配布', () => {
     await join();
     expect((await walletOf(db, NEW)).balance).toBe(3000);
     expect(calls.find((c) => c.startsWith(`dm ${NEW}`))).toBeDefined();
+    // 運営のチャンネル（#記録）に「振り込みました」
+    const notice = (list: string[]) => list.filter((c) => c.includes('初期配布'));
+    expect(notice(calls)).toEqual([`msg ${cfg.channels.log} 🪙 **初期配布**: <@${NEW}> さんに 銭 3,000 枚を振り込みました（残高 3,000 枚）。`]);
+    calls = [];
     await join();
     expect((await walletOf(db, NEW)).balance).toBe(3000);
+    // 2 回目は配らないので知らせない
+    expect(notice(calls)).toEqual([]);
+  });
+
+  it('知らせるチャンネルを選べる・止められる', async () => {
+    const join = async (c: typeof cfg, id: string) => {
+      await recordJoin(db, snap(id, []));
+      const r = (await submitJoin({ ...ctx, cfg: c }, { id, roleIds: [], accountCreatedAt: recentAccount }, answers, now)) as { id: number };
+      await decide({ ...ctx, cfg: c }, shinshoku, r.id, true, '', now);
+    };
+    await join({ ...cfg, economy: { ...cfg.economy, joinBonusChannelId: '900000000000000099' } }, '700000000000000061');
+    expect(calls.filter((c) => c.includes('初期配布'))[0]).toMatch(/^msg 900000000000000099 /);
+    calls = [];
+    await join({ ...cfg, economy: { ...cfg.economy, joinBonusNotify: false } }, '700000000000000062');
+    expect(calls.filter((c) => c.includes('初期配布'))).toEqual([]);
   });
 });
 
