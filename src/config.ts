@@ -249,6 +249,21 @@ export const omikujiStreakSchema = z.object({
 });
 export type OmikujiStreakConfig = z.infer<typeof omikujiStreakSchema>;
 
+/** 🎴 運営吉（おみくじでまれに出る、運営の特別な運勢）。絵は社務所Web で入れる（omikuji-1〜4） */
+export const OMIKUJI_SPECIAL_MAX = 4;
+export const omikujiSpecialSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** 出る確率（%・全部合わせて。出たら、その中から同じ確率で 1 つ） */
+  percent: z.number().min(0).max(100).default(1),
+  /** {通貨}の倍率（おみくじの基本の量に掛ける。大吉は 3） */
+  mult: z.number().min(0).max(100).default(3),
+  list: z
+    .array(z.object({ name: z.string().trim().min(1).max(20), message: z.string().trim().max(200).default('') }))
+    .max(OMIKUJI_SPECIAL_MAX)
+    .default([]),
+});
+export type OmikujiSpecialConfig = z.infer<typeof omikujiSpecialSchema>;
+
 const gachaPrizeSchema = z.object({
   /** 物御籤限定のロール（色守り・称号）を 1 つ（まだ持っていないもの）。全部持っていたら・なければ券 */
   role: z.boolean().default(false),
@@ -536,6 +551,7 @@ export const guildConfigSchema = z
     ranks: z.array(rankSchema).min(1),
     economy: economySchema.default(economySchema.parse({})),
     omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
+    omikujiSpecial: omikujiSpecialSchema.default(omikujiSpecialSchema.parse({})),
     notify: notifySchema.default({}),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),

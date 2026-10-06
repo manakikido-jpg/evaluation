@@ -1,5 +1,5 @@
 import { and, desc, eq, notLike } from 'drizzle-orm';
-import type { EconomyConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
+import type { EconomyConfig, OmikujiSpecialConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { omikuji } from '../db/schema.js';
 import { jstDate } from './activity.js';
@@ -33,7 +33,29 @@ export const SAYINGS: { label: string; list: string[] }[] = [
 
 type Rand = () => number;
 
-export function drawFortune(rand: Rand = Math.random): Fortune {
+/** 🎴 運営吉の運勢（key は unei1〜unei4。何番目かで絵が決まる） */
+export const SPECIAL_COLOR = 0xd4a017;
+export const specialIndex = (key: string): number | undefined => {
+  const m = /^unei([1-9])$/.exec(key);
+  return m ? Number(m[1]) : undefined;
+};
+export function specialFortune(cfg: OmikujiSpecialConfig, n: number): Fortune | undefined {
+  const s = cfg.list[n - 1];
+  if (!s) return undefined;
+  return { key: `unei${n}`, name: s.name, weight: 0, mult: cfg.mult, message: s.message || '運営からの特別なおみくじ。今日はきっといい日', color: SPECIAL_COLOR };
+}
+/** 引いた記録の key から運勢（運営吉は今の設定から。消えていれば名前だけ） */
+export function fortuneOf(key: string, special?: OmikujiSpecialConfig): Fortune | undefined {
+  const n = specialIndex(key);
+  if (n !== undefined) return (special && specialFortune(special, n)) ?? { key, name: '運営吉', weight: 0, mult: 0, message: '', color: SPECIAL_COLOR };
+  return FORTUNES.find((f) => f.key === key);
+}
+
+export function drawFortune(rand: Rand = Math.random, special?: OmikujiSpecialConfig): Fortune {
+  // 🎴 運営吉（決めた確率で。出たら、その中から 1 つ）
+  if (special?.enabled && special.list.length && special.percent > 0 && rand() * 100 < special.percent) {
+    return specialFortune(special, 1 + Math.floor(rand() * special.list.length))!;
+  }
   let r = rand() * FORTUNES.reduce((n, f) => n + f.weight, 0);
   for (const f of FORTUNES) {
     r -= f.weight;
@@ -141,10 +163,10 @@ export async function drawOmikuji(
   memberId: string,
   now: Date,
   rand: Rand = Math.random,
-  opts: { extra?: boolean; streak?: OmikujiStreakConfig } = {},
+  opts: { extra?: boolean; streak?: OmikujiStreakConfig; special?: OmikujiSpecialConfig } = {},
 ): Promise<OmikujiResult> {
   const date = opts.extra ? extraKey(jstDate(now)) : jstDate(now);
-  const fortune = drawFortune(rand);
+  const fortune = drawFortune(rand, opts.special);
   const amount = omikujiReward(economy, fortune);
   // (member_id, date) が主キーなので、同じ日に 2 回目は入らない（連打しても 1 回だけ）
   // 引いた記録と花びらを一緒に（途中で失敗したら、その日はまた引ける）
@@ -166,7 +188,7 @@ export async function drawOmikuji(
       .select()
       .from(omikuji)
       .where(and(eq(omikuji.memberId, memberId), eq(omikuji.date, date)));
-    return { status: 'already', fortune: FORTUNES.find((f) => f.key === row?.fortune) ?? fortune, streak: await omikujiStreak(db, memberId, now) };
+    return { status: 'already', fortune: (row && fortuneOf(row.fortune, opts.special)) ?? fortune, streak: await omikujiStreak(db, memberId, now) };
   }
   const sayings = SAYINGS.map((s) => ({ label: s.label, text: s.list[Math.floor(rand() * s.list.length)]! }));
   return { status: 'drawn', fortune, amount, balance: done.balance, sayings, streak: done.streak, bonus: done.bonus };

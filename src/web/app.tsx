@@ -1,5 +1,6 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
+import { deleteOmikujiArt, isOmikujiArtNo, loadOmikujiArt, omikujiArtHashes, saveOmikujiArt } from '../services/omikujiArt.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
@@ -18,7 +19,7 @@ import { panelMessage } from '../discord/panels.js';
 import { NOTIFY_LABEL, notifyCounts, notifyReady, notifySetupState, pingRoleIds, runNotifySetup, startNotifySetup } from '../services/notify.js';
 import { dayPicks, slotFloorData } from '../services/casino/slotFloor.js';
 import { matchStats, recentMatches } from '../services/casino/versus.js';
-import { CASINO_GAMES, opsWatchSchema, type CasinoGame } from '../config.js';
+import { CASINO_GAMES, OMIKUJI_SPECIAL_MAX, omikujiSpecialSchema, opsWatchSchema, type CasinoGame } from '../config.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
@@ -318,7 +319,7 @@ export function createWebApp(deps: WebDeps) {
       ? smallBody(c, next)
       : /^\/notices(?:\/\d+)?$/.test(c.req.path)
         ? noticeBody(c, next)
-        : c.req.path === '/economy/casino/art'
+        : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special'
           ? artsBody(c, next)
           : /^\/economy\/casino\/art\/[a-z0-9-]+$/.test(c.req.path)
             ? artBody(c, next)
@@ -1909,8 +1910,61 @@ export function createWebApp(deps: WebDeps) {
         discordLogin={discordLogin}
         boosters={await currentBoosters(db)}
         boostLog={await recentBoostMessages(db)}
+        omikujiArt={await omikujiArtHashes(db)}
       />,
     );
+  });
+
+  // 🎴 運営吉: 名前・ひとこと・確率・倍率と絵をまとめて保存（絵は選んだ枠だけ入れ替える）
+  app.post('/settings/omikuji-special', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const back = (msg: string) => c.redirect(`/settings?msg=${msg}&at=unei#sec-unei`);
+    const text = (k: string, max: number) => (typeof body[k] === 'string' ? (body[k] as string).trim().slice(0, max) : '');
+    const list = [...Array(OMIKUJI_SPECIAL_MAX).keys()].flatMap((i) => {
+      const name = text(`name.${i + 1}`, 20);
+      return name ? [{ name, message: text(`message.${i + 1}`, 200) }] : [];
+    });
+    // 枠の番号と絵の番号をそろえるので、途中の枠を空にはできない（使わない枠は後ろから空にする）
+    const slots = [...Array(OMIKUJI_SPECIAL_MAX).keys()].map((i) => text(`name.${i + 1}`, 20));
+    const lastUsed = slots.reduce((m, n, i) => (n ? i + 1 : m), 0);
+    if (slots.slice(0, lastUsed).some((n) => !n)) return back('unei_gap');
+    const dec = (k: string) => (typeof body[k] === 'string' && /^\d{1,3}(\.\d{1,4})?$/.test(body[k] as string) ? Number(body[k]) : NaN);
+    const raw = { enabled: body.enabled === 'yes', percent: dec('percent'), mult: dec('mult'), list };
+    const current = await loadOverrides(db);
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, omikujiSpecial: omikujiSpecialSchema.parse(raw) });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return back('unei_invalid');
+    }
+    let failed = 0;
+    for (let n = 1; n <= OMIKUJI_SPECIAL_MAX; n++) {
+      const f = body[`img.${n}`];
+      const file = Array.isArray(f) ? f[0] : f;
+      if (!(file instanceof File) || file.size === 0) continue;
+      if ((await saveOmikujiArt(db, n, new Uint8Array(await file.arrayBuffer()))) !== 'ok') failed++;
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'omikuji.special', detail: raw, via: 'web' });
+    return back(failed ? 'unei_partial' : 'unei_saved');
+  });
+  app.get('/settings/omikuji-art/:n', async (c) => {
+    if (!gujiOnly(c)) return c.notFound();
+    const art = await loadOmikujiArt(db, Number(c.req.param('n')));
+    if (!art) return c.notFound();
+    return c.body(Buffer.from(art.data), 200, { 'content-type': art.contentType, 'x-content-type-options': 'nosniff' });
+  });
+  app.post('/settings/omikuji-art/:n/delete', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const n = Number(c.req.param('n'));
+    if (isOmikujiArtNo(n)) {
+      await deleteOmikujiArt(db, n);
+      await audit(db, { actorId: c.get('session').userId, action: 'omikuji.art_deleted', detail: { n }, via: 'web' });
+    }
+    return c.redirect('/settings?msg=unei_art_deleted&at=unei#sec-unei');
   });
 
   /** 🔔 通知 OK／NG: 設定のページに出すもの */
@@ -2087,6 +2141,8 @@ export function createWebApp(deps: WebDeps) {
       economyOps: prev.economyOps,
       // カジノはカジノのページで変える（ここでは残す）
       casino: prev.casino,
+      // 🎴 運営吉は「運営吉」の項目で変える（ここでは残す）
+      omikujiSpecial: prev.omikujiSpecial,
       // 通知 OK／NG のロールは「🔔 通知 OK／NG」の項目で用意する（ここでは残す）
       notify: prev.notify,
       // おみくじの連続日数のおまけ（フォームにあるときだけ。日数が空の行は使わない）

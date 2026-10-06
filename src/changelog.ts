@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-omikuji-unei',
+    date: '2026-10-06',
+    kind: 'new',
+    where: ['Discord', '社務所Web'],
+    title: '🎴 おみくじに「運営吉」が出るようになりました',
+    items: [
+      '/おみくじ で、まれに運営の特別な運勢（運営吉）が出ます。出たら結果のカードに運営の絵が大きく出て、#慶事 でもお知らせします',
+      '社務所Web の 設定 → 🎴 運営吉 で、名前・ひとこと・出る確率・銭の倍率・絵（4 枠まで）を決められます（はじめは出さない）',
+    ],
+  },
+  {
     id: '2026-10-05-atslot-cz',
     date: '2026-10-05',
     kind: 'improve',

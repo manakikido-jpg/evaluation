@@ -510,6 +510,46 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(await (await get('/audit', s)).text()).not.toContain('さくら');
   });
 
+  it('🎴 運営吉: 宮司が名前・確率・絵を入れる（途中の枠は空にできない）→ 絵を消せる', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const { omikujiArtHashes, loadOmikujiArt } = await import('../src/services/omikujiArt.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const s = await login(STAFF);
+    expect((await get('/settings/omikuji-art/1', s)).status).toBe(404);
+    const g = await login(GUJI);
+    const page = await (await get('/settings', g)).text();
+    expect(page).toContain('id="sec-unei"');
+    expect(page).toContain('action="/settings/omikuji-special"');
+    expect(page).toContain('name="img.1"');
+    const csrf = await csrfOf(g);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    const send = (fields: Record<string, string>, files: Record<string, Uint8Array | string> = {}) => {
+      const fd = new FormData();
+      fd.append('_csrf', csrf);
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+      for (const [k, v] of Object.entries(files)) fd.append(k, new File([v], 'a.png', { type: 'image/png' }));
+      return app.request('/settings/omikuji-special', { method: 'POST', headers: { cookie: `shamusho_session=${g}` }, body: fd });
+    };
+    const base = { enabled: 'yes', percent: '0.5', mult: '5', 'name.1': '小林吉', 'message.1': '今日はいい日', 'name.2': 'ais吉', 'message.2': '' };
+    expect((await send({ ...base, 'name.2': '', 'name.3': '三' })).headers.get('location')).toBe('/settings?msg=unei_gap&at=unei#sec-unei');
+    expect((await send({ ...base, percent: '' })).headers.get('location')).toBe('/settings?msg=unei_invalid&at=unei#sec-unei');
+    expect((await send(base, { 'img.1': png, 'img.2': '<svg/>' })).headers.get('location')).toBe('/settings?msg=unei_partial&at=unei#sec-unei');
+    expect(store.current.omikujiSpecial).toEqual({ enabled: true, percent: 0.5, mult: 5, list: [{ name: '小林吉', message: '今日はいい日' }, { name: 'ais吉', message: '' }] });
+    expect(Object.keys(await omikujiArtHashes(db))).toEqual(['1']);
+    expect((await loadOmikujiArt(db, 1))?.name).toBe('unei1.png');
+    const img = await get('/settings/omikuji-art/1', g);
+    expect(img.headers.get('content-type')).toBe('image/png');
+    expect(new Uint8Array(await img.arrayBuffer())).toEqual(png);
+    expect(await (await get('/settings', g)).text()).toContain('/settings/omikuji-art/1?v=');
+    // AT 機の絵の一覧には出ない
+    const { artUrls } = await import('../src/services/casino/slotArt.js');
+    expect(await artUrls(db)).toEqual({});
+    const del = await post('/settings/omikuji-art/1/delete', g, { _csrf: csrf });
+    expect(del.headers.get('location')).toBe('/settings?msg=unei_art_deleted&at=unei#sec-unei');
+    expect(await omikujiArtHashes(db)).toEqual({});
+  });
+
   it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {
     const s = await login(STAFF);
     expect((await get('/settings', s)).status).toBe(403);
@@ -565,7 +605,12 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     // カジノ（カジノのページで変える）・おみくじのおまけ（フォームにないとき）も残る
     await saveOverrides(
       db,
-      os.parse({ gacha: { price: 777, enabled: false }, casino: { slotMachines: [3, 'random'] }, omikujiStreak: { rewards: [{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }] } }),
+      os.parse({
+        gacha: { price: 777, enabled: false },
+        casino: { slotMachines: [3, 'random'] },
+        omikujiStreak: { rewards: [{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }] },
+        omikujiSpecial: { enabled: true, percent: 1, mult: 3, list: [{ name: '小林吉', message: '' }] },
+      }),
       GUJI,
     );
     const res = await post('/settings', g, form);
@@ -574,6 +619,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.gacha).toMatchObject({ price: 777, enabled: false });
     expect(store.current.casino.slotMachines).toEqual([3, 'random']);
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
+    expect(store.current.omikujiSpecial.list.map((x) => x.name)).toEqual(['小林吉']);
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
     // おみくじの「通話中だけ」はチェックを外すと OFF
     expect(store.current.economy.omikujiVoiceOnly).toBe(false);

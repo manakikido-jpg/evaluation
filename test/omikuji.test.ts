@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { omikujiEmbed, omikujiVoiceBlock } from '../src/discord/omikuji.js';
 import { walletOf } from '../src/services/economy.js';
-import { describeStreakRewards, drawFortune, drawOmikuji, FORTUNES, nextStreakReward, omikujiRange, omikujiReward, streakOf } from '../src/services/omikuji.js';
+import { describeStreakRewards, drawFortune, drawOmikuji, FORTUNES, fortuneOf, nextStreakReward, omikujiRange, omikujiReward, streakOf } from '../src/services/omikuji.js';
 import { ticketsOf } from '../src/services/tickets.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -28,6 +28,35 @@ describe('おみくじ', () => {
     expect(drawFortune(() => 0.079).name).toBe('大吉');
     expect(drawFortune(() => 0.08).name).toBe('中吉');
     expect(drawFortune(() => 0.999).name).toBe('大凶');
+  });
+
+  it('🎴 運営吉: 決めた確率で出て、その中から 1 つ。止めている・名前がないと出ない', () => {
+    const special = { enabled: true, percent: 1, mult: 5, list: [{ name: '小林吉', message: '' }, { name: 'ais吉', message: 'やあ' }] };
+    expect(drawFortune(seq(0.0099, 0), special).name).toBe('小林吉');
+    const ais = drawFortune(seq(0.005, 0.9), special);
+    expect(ais).toMatchObject({ key: 'unei2', name: 'ais吉', mult: 5, message: 'やあ' });
+    expect(omikujiReward({ omikujiBase: 10 }, ais)).toBe(50);
+    // 1% を超えたら、ふつうの運勢（そこで引き直す）
+    expect(drawFortune(seq(0.01, 0), special).name).toBe('大吉');
+    expect(drawFortune(seq(0, 0), { ...special, enabled: false }).name).toBe('大吉');
+    expect(drawFortune(seq(0, 0), { ...special, list: [] }).name).toBe('大吉');
+    expect(fortuneOf('unei1', special)?.name).toBe('小林吉');
+    expect(fortuneOf('unei3', special)?.name).toBe('運営吉');
+    expect(fortuneOf('kichi')?.name).toBe('吉');
+  });
+
+  it('🎴 運営吉を引いた記録: 同じ日にもう一度引くと、その運営吉が出る', async () => {
+    const special = { enabled: true, percent: 100, mult: 5, list: [{ name: '小林吉', message: '' }] };
+    const economy = { ...cfg.economy, omikujiBase: 10 };
+    const now = new Date('2026-09-26T03:00:00Z');
+    const r = await drawOmikuji(db, economy, 'A', now, seq(0, 0, 0.5), { special });
+    expect(r.status).toBe('drawn');
+    if (r.status !== 'drawn') return;
+    expect(r.fortune.key).toBe('unei1');
+    expect(r.amount).toBe(50);
+    expect(omikujiEmbed(r, 'A', economy).title).toBe('🎴 御神籤 ― 小林吉');
+    const again = await drawOmikuji(db, economy, 'A', now, seq(0.9), { special });
+    expect(again.status === 'already' && again.fortune.name).toBe('小林吉');
   });
 
   it('花びら: 基本 10 なら 吉 10・大吉 30・凶 5。基本 0 ならなし', () => {

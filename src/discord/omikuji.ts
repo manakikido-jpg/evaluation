@@ -1,8 +1,9 @@
-import { MessageFlags, type ChatInputCommandInteraction, type GuildMember, type Interaction } from 'discord.js';
+import { AttachmentBuilder, MessageFlags, type APIEmbed, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction } from 'discord.js';
 import type { EconomyConfig, GuildConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { drawOmikuji, nextStreakReward, streakRewardText, type OmikujiResult } from '../services/omikuji.js';
+import { drawOmikuji, nextStreakReward, specialIndex, streakRewardText, type Fortune, type OmikujiResult } from '../services/omikuji.js';
+import { loadOmikujiArt } from '../services/omikujiArt.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -37,7 +38,36 @@ export function omikujiEmbed(r: Extract<OmikujiResult, { status: 'drawn' }>, nam
     ...streakLines(r.streak, r.bonus, streak, economy),
     `-# おみくじは 1 日 1 回。日本時間の 0 時にまた引けます${streak?.rewards.length ? '（毎日続けるとおまけがあります。1 日空けると 1 日目から）' : ''}`,
   ];
-  return { title: `⛩ おみくじ ― ${r.fortune.name}`, description: lines.join('\n'), color: r.fortune.color };
+  const special = specialIndex(r.fortune.key) !== undefined;
+  return { title: special ? `🎴 御神籤 ― ${r.fortune.name}` : `⛩ おみくじ ― ${r.fortune.name}`, description: lines.join('\n'), color: r.fortune.color };
+}
+
+/** 結果のメッセージ（🎴 運営吉なら、社務所Web で入れた絵を大きく添える）。suffix: 題につける「（もう 1 回）」など */
+export async function omikujiMessage(
+  db: Db,
+  r: Extract<OmikujiResult, { status: 'drawn' }>,
+  name: string,
+  economy: EconomyConfig,
+  streak?: OmikujiStreakConfig,
+  suffix = '',
+): Promise<{ embeds: APIEmbed[]; files: AttachmentBuilder[] }> {
+  const embed: APIEmbed = omikujiEmbed(r, name, economy, streak);
+  embed.title = `${embed.title}${suffix}`;
+  const n = specialIndex(r.fortune.key);
+  const art = n === undefined ? undefined : await loadOmikujiArt(db, n).catch(() => undefined);
+  if (!art) return { embeds: [embed], files: [] };
+  embed.image = { url: `attachment://${art.name}` };
+  return { embeds: [embed], files: [new AttachmentBuilder(Buffer.from(art.data), { name: art.name })] };
+}
+
+/** 🎴 運営吉を引いたら #慶事 でお知らせ（運勢がふつうなら何もしない） */
+export async function announceSpecial(guild: Guild, cfg: GuildConfig, memberId: string, fortune: Fortune): Promise<void> {
+  if (specialIndex(fortune.key) === undefined) return;
+  const ch = guild.channels.cache.get(cfg.channels.keiji);
+  if (!ch?.isSendable()) return;
+  await ch
+    .send({ content: `🎴 <@${memberId}> さまが、おみくじで **${fortune.name}** を引きました！ おめでとうございます🎉`, allowedMentions: { users: [memberId] } })
+    .catch((err) => logger.warn({ err }, 'omikuji special announce failed'));
 }
 
 /** /おみくじ（1 日 1 回のログボ） */
@@ -72,13 +102,14 @@ export class OmikujiApp {
       await i.reply({ content: blocked, ...EPHEMERAL });
       return;
     }
-    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak });
+    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak, special: cfg.omikujiSpecial });
     if (r.status === 'already') {
       const streak = r.streak ? `（🔥 連続 ${r.streak} 日目）` : '';
       await i.reply({ content: `今日はもう引きました（${r.fortune.name}）${streak}。日本時間の 0 時にまた引けます。`, ...EPHEMERAL });
       return;
     }
-    await i.reply({ embeds: [omikujiEmbed(r, i.member.displayName, cfg.economy, cfg.omikujiStreak)], allowedMentions: { parse: [] } });
+    await i.reply({ ...(await omikujiMessage(this.db, r, i.member.displayName, cfg.economy, cfg.omikujiStreak)), allowedMentions: { parse: [] } });
+    await announceSpecial(i.guild, cfg, i.user.id, r.fortune);
     // おまけの称号ロール（もう持っていれば何もしない）
     for (const b of r.bonus) {
       if (!b.roleId || i.member.roles.cache.has(b.roleId)) continue;

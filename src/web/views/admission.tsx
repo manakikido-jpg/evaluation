@@ -1,4 +1,4 @@
-import { WEB_PAGES, webAccessEntries, type GachaTier, type GuildConfig, type WebAccessEntry } from '../../config.js';
+import { OMIKUJI_SPECIAL_MAX, WEB_PAGES, webAccessEntries, type GachaTier, type GuildConfig, type WebAccessEntry } from '../../config.js';
 import { contactSummary } from '../../services/contact.js';
 import type { AdminSession, Application, Omairi, Soudan, SoudanMessage, WebAccount } from '../../db/schema.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
@@ -57,6 +57,11 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   account_disabled: { text: '止めました。ログイン中だった人も入れなくなりました。', kind: 'ok' },
   account_enabled: { text: '使えるようにしました。', kind: 'ok' },
   account_deleted: { text: '消しました。', kind: 'ok' },
+  unei_saved: { text: '🎴 運営吉を保存しました（BOT には 1 分以内に反映されます）。', kind: 'ok' },
+  unei_partial: { text: '🎴 運営吉を保存しましたが、入らなかった絵があります（PNG・JPEG・WebP・GIF で 4MB まで）。', kind: 'warn' },
+  unei_invalid: { text: '🎴 運営吉を保存できませんでした。確率（0〜100）・倍率・名前（20 文字まで）を確かめてください。', kind: 'warn' },
+  unei_gap: { text: '🎴 名前は 1 枠目からつめて入れてください（途中の枠を空にはできません。絵は枠の番号で決まります）。', kind: 'warn' },
+  unei_art_deleted: { text: '🎴 絵を消しました。', kind: 'ok' },
   account_last_guji: { text: '使える宮司が 1 人もいなくなるので、できません（先にほかの宮司を発行してください）。', kind: 'warn' },
   account_member_not_found: { text: 'Discord の人が見つかりませんでした（ID で入れてみてください）。', kind: 'warn' },
 };
@@ -503,6 +508,7 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['boost', '💝 ブースト（奉納）'],
   ['join', '📝 入鯖申請・お参り'],
   ['notify', '🔔 通知 OK／NG'],
+  ['unei', '🎴 運営吉（おみくじ）'],
   ['give', '🎁 今いる人に配る'],
   ['accounts', '🪪 社務所Web のアカウント'],
   ['webaccess', '🔑 Discord ログインで入れる人'],
@@ -757,6 +763,84 @@ function NotifySection(props: {
   );
 }
 
+/** 🎴 運営吉: おみくじでまれに出る、運営の特別な運勢（名前・ひとこと・絵）。絵と設定は 1 つのフォームでまとめて保存 */
+function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Record<number, string>; flash?: string }) {
+  const sp = props.cfg.omikujiSpecial;
+  const e = props.cfg.economy;
+  const slots = [...Array(OMIKUJI_SPECIAL_MAX).keys()].map((i) => i + 1);
+  const coins = e.omikujiBase > 0 ? Math.max(1, Math.round(e.omikujiBase * sp.mult)) : 0;
+  return (
+    <section class="card anchor" id="sec-unei">
+      <h2>🎴 運営吉（おみくじ）</h2>
+      <p class="note">
+        /おみくじ で、決めた確率で運営の特別な運勢（「小林吉」など）が出ます。出たら結果のカードに絵を大きく出して、#慶事 でもお知らせします（「もう 1 回」で引いたときも）。名前を入れた枠だけ使います。何枠あっても、全部合わせた確率で出て、その中から同じ確率で 1 つ選びます。絵は縦長の PNG・JPEG・WebP（1 枚 4MB まで）。
+      </p>
+      {props.flash && <Flash code={props.flash} />}
+      <form method="post" action="/settings/omikuji-special" enctype="multipart/form-data" id="unei-form" data-art-form>
+        <Csrf session={props.session} />
+        <div class="fields">
+          <label class="field check">
+            <input type="checkbox" name="enabled" value="yes" {...(sp.enabled ? { checked: true } : {})} />
+            <span>運営吉を出す</span>
+          </label>
+          <label class="field">
+            <span>出る確率（%・全部合わせて。小数も OK。1 なら 100 回に 1 回）</span>
+            <input type="number" name="percent" value={String(sp.percent)} min={0} max={100} step="0.01" required />
+          </label>
+          <label class="field">
+            <span>
+              {e.currencyName}の倍率（おみくじの基本の量 {e.omikujiBase} に掛ける。大吉は 3）→ いま {coins} 枚
+            </span>
+            <input type="number" name="mult" value={String(sp.mult)} min={0} max={100} step="0.5" required />
+          </label>
+        </div>
+        <div class="art-grid">
+          {slots.map((n) => {
+            const s = sp.list[n - 1];
+            const hash = props.art[n];
+            return (
+              <div class={`art-slot${hash ? ' has' : ''}`} id={`unei-${n}`}>
+                <div class="art-preview">{hash ? <img src={`/settings/omikuji-art/${n}?v=${hash}`} alt={s?.name ?? `${n} 枠目`} loading="lazy" /> : <span class="note">絵はまだ</span>}</div>
+                <strong>{n} 枠目</strong>
+                <label class="field">
+                  <span>名前（例: 小林吉。空にするとこの枠は使わない）</span>
+                  <input type="text" name={`name.${n}`} value={s?.name ?? ''} maxlength={20} />
+                </label>
+                <label class="field">
+                  <span>ひとこと（カードに出る。空なら決まった文）</span>
+                  <input type="text" name={`message.${n}`} value={s?.message ?? ''} maxlength={200} />
+                </label>
+                <label class="art-pick">
+                  <span>{hash ? '別の絵にする' : '絵を選ぶ'}</span>
+                  <input type="file" name={`img.${n}`} accept="image/png,image/webp,image/jpeg,image/gif" data-art-input aria-label={`${n} 枠目の絵`} />
+                </label>
+                {hash && (
+                  <button type="submit" form={`unei-del-${n}`} class="art-del">
+                    絵を消す
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div class="art-savebar">
+          <span data-art-count>名前・確率・絵をまとめて保存します。</span>
+          <button type="submit" class="ok">
+            保存する
+          </button>
+        </div>
+      </form>
+      {slots
+        .filter((n) => props.art[n])
+        .map((n) => (
+          <form method="post" action={`/settings/omikuji-art/${n}/delete`} id={`unei-del-${n}`} hidden>
+            <Csrf session={props.session} />
+          </form>
+        ))}
+    </section>
+  );
+}
+
 /** おみくじの連続日数のおまけ（5 行まで。日数を空にした行は使わない） */
 function StreakRewards(props: { cfg: GuildConfig; roles: { id: string; name: string }[] }) {
   const rows = props.cfg.omikujiStreak.rewards;
@@ -934,6 +1018,8 @@ export function SettingsPage(props: {
   /** 🏮 今ブーストしている人と、最近の「ブーストしました」 */
   boosters?: { id: string; name: string; since: Date; boosts: number }[];
   boostLog?: { memberId: string; name: string | null; count: number; at: Date }[];
+  /** 🎴 運営吉の絵の印（番号 → hash） */
+  omikujiArt?: Record<number, string>;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -1402,6 +1488,7 @@ export function SettingsPage(props: {
         </section>
       </form>
       {props.notify && <NotifySection session={props.session} notify={props.notify} flash={props.at === 'notify' ? props.flash : undefined} textChannels={props.textChannels ?? []} botCanMentionAll={props.botCanMentionAll} />}
+      <UneiSection session={props.session} cfg={cfg} art={props.omikujiArt ?? {}} flash={props.at === 'unei' ? props.flash : undefined} />
       <section class="card anchor" id="sec-accounts">
         <h2>🪪 社務所Web のアカウント（ID とパスワード）</h2>
         <p class="note">
