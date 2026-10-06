@@ -259,4 +259,22 @@ describe('おみくじ', () => {
     expect(m.embeds).toEqual([]);
     expect(m.content).toBe(`🎁 **7 日続いたおまけ**: ${cfg.economy.currencyEmoji}${cfg.economy.currencyName} 50`);
   });
+
+  it('台紙: 無地のところを探して、その中に字を書く（飾りのふちは避ける）', async () => {
+    const { Resvg } = await import('@resvg/resvg-js');
+    const { plainBox } = await import('../src/services/omikujiSlip.js');
+    // 884×1792・まわりに濃い飾り・真ん中（215〜670 × 195〜1665）がうすいグラデーションの無地
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="884" height="1792"><defs><radialGradient id="g"><stop offset="0" stop-color="#fdf0f2"/><stop offset="1" stop-color="#f6c9d1"/></radialGradient></defs><rect width="884" height="1792" fill="#8e0d1c"/>${[250, 500, 750, 1000, 1250].map((y) => `<rect x="160" y="${y}" width="44" height="120" fill="#d01c2c"/><rect x="680" y="${y}" width="44" height="120" fill="#d01c2c"/>`).join('')}<rect x="215" y="195" width="455" height="1470" fill="url(#g)"/></svg>`;
+    const bg = { contentType: 'image/png', data: new Resvg(svg).render().asPng() };
+    const box = plainBox(bg)!;
+    // 600 幅にすると 0.679 倍・上下が 8 ずつ切れる。無地は x 146〜455・y 124〜1122（内側に 12 あける）
+    expect(box.x).toBeGreaterThanOrEqual(150);
+    expect(box.x + box.w).toBeLessThanOrEqual(452);
+    expect(box.y).toBeGreaterThanOrEqual(128);
+    expect(box.y + box.h).toBeLessThanOrEqual(1118);
+    expect(box.w).toBeGreaterThan(260);
+    // ほぼ全面が無地なら、ふつうの紙の大きさ
+    const plain = { contentType: 'image/png', data: new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="1200"><rect width="600" height="1200" fill="#fff8ee"/></svg>').render().asPng() };
+    expect(plainBox(plain)).toBeUndefined();
+  });
 });
