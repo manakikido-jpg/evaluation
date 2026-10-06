@@ -57,7 +57,7 @@ export function OmikujiTextsSection(props: { session: AdminSession; cfg: GuildCo
     <section class="card anchor" id="sec-omikujitexts">
       <h2>📜 おみくじの文と紙</h2>
       <p class="note">
-        /おみくじ の結果は、縦書きのおみくじの紙（画像）で出ます。一言は運勢ごとに選び、同じ人には、その運勢の文をひととおり出し切るまで同じ文を出しません。項目は運勢の向き（いい日・ふつうの日・よくない日）に合わせて選びます。どれも <strong>1 行に 1 つ</strong>（{OMIKUJI_LINE_MAX} 文字まで）。台紙は運勢ごとに入れられます（縦長 1:2 の PNG・JPEG。真ん中に紙が重なるので、まわりの柄が見えます）。紙の見本は保存すると新しくなります。
+        /おみくじ の結果は、縦書きのおみくじの紙（画像）で出ます。一言は運勢ごとに選び、同じ人には、その運勢の文をひととおり出し切るまで同じ文を出しません。項目は運勢の向き（いい日・ふつうの日・よくない日）に合わせて選びます。どれも <strong>1 行に 1 つ</strong>（{OMIKUJI_LINE_MAX} 文字まで）。台紙は運勢ごとに入れられます（縦長 1:2 の PNG・JPEG）。台紙を入れると、BOT は紙や枠を描かずに字だけ書くので、字の入るところは明るい無地にしておいてください（字の場所はガイド画像のとおり）。紙の見本は保存すると新しくなります。
       </p>
       {props.flash && <Flash code={props.flash} />}
       <form method="post" action="/settings/omikuji-texts" enctype="multipart/form-data" id="otexts-form" data-art-form>

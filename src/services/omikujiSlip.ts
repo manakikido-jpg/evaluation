@@ -29,7 +29,7 @@ export type SlipInput = {
   date: Date;
   /** 🎴 運営吉（金の枠・特別な柄） */
   special?: boolean;
-  /** 台紙（PNG・JPEG・WebP・GIF） */
+  /** 台紙（PNG・JPEG）。あれば紙・枠・線は描かず、字と朱印だけ書く */
   bg?: { contentType: string; data: Uint8Array };
   /** 運勢の向き（台紙がないときの柄: good = 桜と金 / normal = 桜 / bad = 雲） */
   tone?: 'good' | 'normal' | 'bad';
@@ -193,17 +193,20 @@ export function slipSvg(inp: SlipInput): string {
   const c = inp.color;
   const accent = inp.special ? GOLD : c;
   const nameColor = inp.special ? c : c;
+  // 台紙があるときは、紙・枠・線は台紙に描いてあるものとして、字（と朱印）だけ書く
+  const deco = !inp.bg;
   const out: string[] = [background(inp)];
   // 紙
-  out.push(
-    `<rect x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" rx="6" fill="${PAPER}" fill-opacity="${inp.bg ? 0.93 : 0.97}"/>`,
-    `<rect x="${P.x + 10}" y="${P.y + 10}" width="${P.w - 20}" height="${P.h - 20}" fill="none" stroke="${accent}" stroke-width="3"/>`,
-    `<rect x="${P.x + 16}" y="${P.y + 16}" width="${P.w - 32}" height="${P.h - 32}" fill="none" stroke="${accent}" stroke-width="1"/>`,
-  );
+  if (deco)
+    out.push(
+      `<rect x="${P.x}" y="${P.y}" width="${P.w}" height="${P.h}" rx="6" fill="${PAPER}" fill-opacity="0.97"/>`,
+      `<rect x="${P.x + 10}" y="${P.y + 10}" width="${P.w - 20}" height="${P.h - 20}" fill="none" stroke="${accent}" stroke-width="3"/>`,
+      `<rect x="${P.x + 16}" y="${P.y + 16}" width="${P.w - 32}" height="${P.h - 32}" fill="none" stroke="${accent}" stroke-width="1"/>`,
+    );
   // 上: 〇〇　御神籤（運営吉は「特別御神籤」）
   const head = `${inp.shrine ? `${inp.shrine}　` : ''}${inp.special ? '特別御神籤' : '御神籤'}`;
   out.push(`<text x="${SLIP_W / 2}" y="${P.y + 62}" text-anchor="middle" font-family="${BOLD}" font-size="26" letter-spacing="5" fill="${accent}">${esc(head)}</text>`);
-  out.push(`<path d="M${P.x + 40} ${P.y + 82} H ${P.x + P.w - 40}" stroke="${accent}" stroke-width="1.5"/>`);
+  if (deco) out.push(`<path d="M${P.x + 40} ${P.y + 82} H ${P.x + P.w - 40}" stroke="${accent}" stroke-width="1.5"/>`);
 
   // 運勢の名前（大きく・枠つき）
   const name = [...inp.name].slice(0, 8);
@@ -213,8 +216,8 @@ export function slipSvg(inp: SlipInput): string {
   const bw = size + 44;
   const bh = Math.min(n * size * 1.0 + 40, 470);
   const bx = SLIP_W / 2 - bw / 2;
-  out.push(`<rect x="${bx}" y="${top}" width="${bw}" height="${bh}" fill="#ffffff" fill-opacity="0.85" stroke="${accent}" stroke-width="5"/>`);
-  if (inp.special) out.push(`<rect x="${bx + 7}" y="${top + 7}" width="${bw - 14}" height="${bh - 14}" fill="none" stroke="${GOLD}" stroke-width="1.5"/>`);
+  if (deco) out.push(`<rect x="${bx}" y="${top}" width="${bw}" height="${bh}" fill="#ffffff" fill-opacity="0.85" stroke="${accent}" stroke-width="5"/>`);
+  if (deco && inp.special) out.push(`<rect x="${bx + 7}" y="${top + 7}" width="${bw - 14}" height="${bh - 14}" fill="none" stroke="${GOLD}" stroke-width="1.5"/>`);
   out.push(vcol(name, SLIP_W / 2, top + 20, size, `font-family="${BOLD}" fill="${nameColor}"${inp.special ? ` stroke="${GOLD}" stroke-width="1.5"` : ''}`, 1.0));
 
   // 一言（右）: 入りきる大きさを探す
@@ -238,7 +241,7 @@ export function slipSvg(inp: SlipInput): string {
 
   // 区切り
   const divY = P.y + 590;
-  out.push(`<path d="M${P.x + 30} ${divY} H ${P.x + P.w - 30}" stroke="${accent}" stroke-width="2.5"/><path d="M${P.x + 30} ${divY + 6} H ${P.x + P.w - 30}" stroke="${accent}" stroke-width="1"/>`);
+  if (deco) out.push(`<path d="M${P.x + 30} ${divY} H ${P.x + P.w - 30}" stroke="${accent}" stroke-width="2.5"/><path d="M${P.x + 30} ${divY + 6} H ${P.x + P.w - 30}" stroke="${accent}" stroke-width="1"/>`);
 
   // 項目（右から左へ。見出しは太字・色。折り返しは見出しの下にそろえる）
   const itemTop = divY + 26;
