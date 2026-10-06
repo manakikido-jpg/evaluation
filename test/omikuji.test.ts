@@ -82,7 +82,8 @@ describe('おみくじ', () => {
     expect(r1.fortune.name).toBe('大吉');
     expect(r1.amount).toBe(30);
     expect(r1.balance).toBe(30);
-    expect(r1.sayings).toHaveLength(4);
+    // 願い事・待ち人・勝負事（毎日）＋恋愛か寝落ち＋ラッキー場所
+    expect(r1.sayings).toHaveLength(5);
 
     const again = await drawOmikuji(db, economy, 'A', new Date('2026-09-26T14:59:00Z'), seq(0.999));
     expect(again).toEqual({ status: 'already', fortune: r1.fortune, streak: 1 });
