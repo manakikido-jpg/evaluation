@@ -2192,6 +2192,26 @@ describe('チャンネル（管理画面）', () => {
     expect((await listTemplates(db))[0]).toMatchObject({ id: t!.id, name: '告知', target: 'all', perms: { '6': 'deny' } });
     expect((await form(g, `/channels/perms/templates/${t!.id}/delete`, {})).headers.get('location')).toContain('tpl_deleted');
     expect(await listTemplates(db)).toEqual([]);
+
+    // 見出しに短い名前・まとめて変えるボタン
+    expect(page).toContain('<span class="pm-th-label">閲覧</span>');
+    expect(page).toContain(`data-pm-rowset="${TORII}"`);
+    expect(page).toContain('data-pm-colset="11"');
+    // まとめて変える（テキストのチャンネルにボイスの権限は付けない）
+    actions = [];
+    const bulk = await formMulti(g, '/channels/perms/bulk', [['role', ROLE.ujiko], ['cell', 'deny'], ['channels', TORII], ['channels', '910000000000000004'], ['bits', '11'], ['bits', '20']]);
+    const br = (await bulk.json()) as { ok: boolean; changed: number; cells: { ch: string; bit: number }[] };
+    expect(br.ok).toBe(true);
+    expect(br.cells.map((x) => `${x.ch}:${x.bit}`).sort()).toEqual([`${TORII}:11`, '910000000000000004:11', '910000000000000004:20'].sort());
+    expect(actions).toContain(`overwrite ${TORII} ${ROLE.ujiko} allow=0 deny=2048`);
+    expect(actions).toContain(`overwrite 910000000000000004 ${ROLE.ujiko} allow=0 deny=${2048 + 2 ** 20}`);
+    expect((await formMulti(g, '/channels/perms/bulk', [['role', ROLE.ujiko], ['cell', 'deny'], ['channels', TORII]])).status).toBe(400);
+    expect((await formMulti(g, '/channels/perms/bulk', [['role', '980000000000000088'], ['cell', 'deny'], ['channels', TORII], ['bits', '11']])).status).toBe(400);
+    // 👥 ロールを並べて見る（1 つのチャンネル × ロール）
+    const byRole = await (await get(`/channels/perms?tab=roles&ch=${TORII}&all=1`, g)).text();
+    expect(byRole).toContain('ロールを並べて見る');
+    expect(byRole).toContain(`data-ch="${TORII}" data-role="${ROLE.ujiko}" data-bit="11"`);
+    expect(byRole).not.toContain('BOT 連携');
     roleList = [];
   });
 

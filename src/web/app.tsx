@@ -13,7 +13,7 @@ import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casino
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
 import { casinoDaily, slotSettingStats } from '../services/casino/report.js';
 import { applies, isCell, listTemplates, MATRIX_PERMS, planCells, saveTemplates, templateChanges, templateFits, templateSchema } from '../services/permMatrix.js';
-import { PermMatrixPage, PermTemplatesPage } from './views/permMatrix.js';
+import { PermMatrixPage, PermRolesPage, PermTemplatesPage } from './views/permMatrix.js';
 import { resetState, runDemotions, startEvaluationReset, undoShuinReset } from '../services/evalReset.js';
 import { panelMessage } from '../discord/panels.js';
 import { NOTIFY_LABEL, notifyCounts, notifyReady, notifySetupState, pingRoleIds, runNotifySetup, startNotifySetup } from '../services/notify.js';
@@ -2842,6 +2842,12 @@ export function createWebApp(deps: WebDeps) {
       const edit = templates.find((t) => t.id === c.req.query('edit'));
       return c.html(<PermTemplatesPage session={c.get('session')} roles={roles} roleId={roleId} templates={templates} edit={edit} groups={groups} flash={c.req.query('msg')} applyId={c.req.query('t')} />);
     }
+    if (c.req.query('tab') === 'roles') {
+      const want = c.req.query('ch');
+      const listed = groups.flatMap((g) => [...(g.category ? [g.category] : []), ...g.items]);
+      const channel = listed.find((x) => x.id === want) ?? listed.find((x) => x.type !== 4) ?? listed[0];
+      return c.html(<PermRolesPage session={c.get('session')} roles={roles} channel={channel} groups={groups} all={c.req.query('all') === '1'} flash={c.req.query('msg')} />);
+    }
     const k = c.req.query('kind');
     const kind = k === 'text' || k === 'voice' ? k : 'all';
     return c.html(<PermMatrixPage session={c.get('session')} roles={roles} roleId={roleId} kind={kind} groups={groups} flash={c.req.query('msg')} />);
@@ -2876,6 +2882,54 @@ export function createWebApp(deps: WebDeps) {
     await loadChannels(true);
     if (plan) await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_cell', detail: { channelId, name: ch.name, roleId, role: role.name, perm: p.key, cell }, via: 'web' });
     return c.json({ ok: true, cell });
+  });
+
+  /** まとめて変える: 選んだチャンネル × 選んだ権限を、1 つのロールで 許可・拒否・中立 に（perms.js から。答えは JSON） */
+  app.post('/channels/perms/bulk', async (c) => {
+    const body = await c.req.parseBody({ all: true });
+    const list = (k: string) => {
+      const v = body[k];
+      return (Array.isArray(v) ? v : v === undefined ? [] : [v]).filter((x): x is string => typeof x === 'string');
+    };
+    const roleId = typeof body.role === 'string' && validId(body.role) ? body.role : '';
+    const cell = body.cell;
+    const ids = new Set(list('channels').filter(validId));
+    const perms = MATRIX_PERMS.filter((m) => list('bits').includes(String(m.bit)));
+    if (!roleId || !isCell(cell) || !ids.size || ids.size > 300 || !perms.length) return c.json({ ok: false, error: 'invalid' }, 400);
+    const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
+    const role = (roles ?? []).find((r) => r.id === roleId);
+    if (!role || role.managed) return c.json({ ok: false, error: 'invalid' }, 400);
+    const targets = channels.filter((ch) => ids.has(ch.id));
+    const reason = 'チャンネル権限のマトリクス・まとめて変える（管理画面）';
+    const done: { ch: string; bit: number; cell: string }[] = [];
+    let changed = 0;
+    let failed = false;
+    for (const ch of targets) {
+      const usable = perms.filter((m) => applies(m, ch));
+      if (!usable.length) continue;
+      const plan = planCells(ch, roleId, usable.map((m) => ({ bit: m.bit, cell })));
+      try {
+        if (plan && 'set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
+        if (plan && 'del' in plan) {
+          if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
+          else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
+        }
+      } catch (err) {
+        logger.warn({ err }, 'perm matrix bulk failed');
+        failed = true;
+        break;
+      }
+      if (plan) changed++;
+      for (const m of usable) done.push({ ch: ch.id, bit: m.bit, cell });
+    }
+    await loadChannels(true);
+    await audit(db, {
+      actorId: c.get('session').userId,
+      action: 'channel.perm_bulk',
+      detail: { roleId, role: role.name, cell, perms: perms.map((m) => m.key), channels: targets.map((x) => x.name), changed, ...(failed ? { failed: true } : {}) },
+      via: 'web',
+    });
+    return c.json({ ok: !failed, changed, cells: done, ...(failed ? { error: 'failed' } : {}) }, failed ? 502 : 200);
   });
 
   /** テンプレートを作る・直す */

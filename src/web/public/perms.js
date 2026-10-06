@@ -6,6 +6,13 @@
   const NEXT = { neutral: 'allow', allow: 'deny', deny: 'neutral' };
   const MARK = { allow: '✓', deny: '✕', neutral: '-' };
   const LABEL = { allow: '許可', deny: '拒否', neutral: '中立' };
+  /** マスの見た目を変える */
+  const paint = (cell, v) => {
+    cell.setAttribute('data-cell', v);
+    cell.className = `pm-cell ${v}`;
+    cell.textContent = MARK[v];
+    cell.title = (cell.title || '').replace(/[^:]*$/, ` ${LABEL[v]}`);
+  };
 
   // ───────── 列を選ぶ ─────────
   const boxes = () => [...document.querySelectorAll('[data-pm-col]')];
@@ -48,7 +55,7 @@
   if (bar) {
     bar.addEventListener('change', (e) => {
       const t = e.target;
-      if (t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && t.type === 'radio')) bar.submit();
+      if (t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && (t.type === 'radio' || t.type === 'checkbox') && !t.hasAttribute('data-pm-col'))) bar.submit();
     });
   }
 
@@ -93,6 +100,62 @@
       for (const r of document.querySelectorAll('[data-pm-parent]')) if (r.getAttribute('data-pm-parent')) r.hidden = close;
       return;
     }
+    // ✏ まとめて変える（ボタンを出す・しまう）
+    const mode = t.closest('[data-pm-bulkmode]');
+    if (mode && root) {
+      const on = root.classList.toggle('pm-bulk-on');
+      mode.setAttribute('aria-pressed', String(on));
+      return;
+    }
+    // 行（チャンネル）・列（権限）をまとめて変える
+    const bulk = t.closest('[data-pm-rowset],[data-pm-colset]');
+    if (bulk && root && !bulk.disabled) {
+      const to = bulk.getAttribute('data-to');
+      const shownCell = (b) => !b.closest('td')?.hidden && !b.closest('tr')?.hidden;
+      let targets;
+      if (bulk.hasAttribute('data-pm-rowset')) {
+        const row = bulk.closest('tr');
+        targets = row ? [...row.querySelectorAll('button.pm-cell[data-ch]')].filter(shownCell) : [];
+      } else {
+        targets = [...root.querySelectorAll(`button.pm-cell[data-bit="${bulk.getAttribute('data-pm-colset')}"]`)].filter(shownCell);
+      }
+      targets = targets.filter((b) => b.getAttribute('data-cell') !== to);
+      const status = document.querySelector('[data-pm-status]');
+      if (!targets.length) {
+        if (status) status.textContent = `変わるところはありません（もう全部${LABEL[to]}です）。`;
+        return;
+      }
+      if (!confirm(`${bulk.getAttribute('data-what')}「${LABEL[to]}」にします（${targets.length} マス）。すぐ Discord に反映されます。よろしいですか？`)) return;
+      const body = new URLSearchParams({ _csrf: root.getAttribute('data-csrf') || '', role: root.getAttribute('data-role') || '', cell: to });
+      for (const ch of new Set(targets.map((b) => b.getAttribute('data-ch')))) body.append('channels', ch);
+      for (const bit of new Set(targets.map((b) => b.getAttribute('data-bit')))) body.append('bits', bit);
+      for (const b of targets) b.disabled = true;
+      if (status) status.textContent = `変えています…（${targets.length} マス）`;
+      try {
+        const res = await fetch('/channels/perms/bulk', {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': root.getAttribute('data-csrf') || '' },
+          body,
+        });
+        const r = await res.json().catch(() => ({ ok: false, cells: [] }));
+        const want = new Set(targets.map((b) => `${b.getAttribute('data-ch')}:${b.getAttribute('data-bit')}`));
+        let n = 0;
+        for (const x of r.cells || []) {
+          if (!want.has(`${x.ch}:${x.bit}`)) continue;
+          const b = root.querySelector(`button.pm-cell[data-ch="${x.ch}"][data-bit="${x.bit}"]`);
+          if (b) {
+            paint(b, x.cell);
+            n++;
+          }
+        }
+        if (status) status.textContent = r.ok ? `${n} マスを${LABEL[to]}にしました。` : `途中で Discord に断られました（${n} マスは変えました。BOT が持っていない権限は許可できません）。ページを読み直してください。`;
+      } catch {
+        if (status) status.textContent = '変えられませんでした。ページを読み直してください。';
+      } finally {
+        for (const b of targets) b.disabled = false;
+      }
+      return;
+    }
     // マスを押した
     const cell = t.closest('button.pm-cell[data-ch]');
     if (cell && root && !cell.disabled) {
@@ -103,14 +166,11 @@
         const res = await fetch('/channels/perms/cell', {
           method: 'POST',
           headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': root.getAttribute('data-csrf') || '' },
-          body: new URLSearchParams({ _csrf: root.getAttribute('data-csrf') || '', channel: cell.getAttribute('data-ch'), role: root.getAttribute('data-role'), bit: cell.getAttribute('data-bit'), cell: next }),
+          body: new URLSearchParams({ _csrf: root.getAttribute('data-csrf') || '', channel: cell.getAttribute('data-ch'), role: cell.getAttribute('data-role') || root.getAttribute('data-role'), bit: cell.getAttribute('data-bit'), cell: next }),
         });
         const r = await res.json().catch(() => ({ ok: false }));
         if (!r.ok) throw new Error(r.error || 'failed');
-        cell.setAttribute('data-cell', r.cell);
-        cell.className = `pm-cell ${r.cell}`;
-        cell.textContent = MARK[r.cell];
-        cell.title = (cell.title || '').replace(/[^:]*$/, ` ${LABEL[r.cell]}`);
+        paint(cell, r.cell);
         if (status) status.textContent = `保存しました（${LABEL[r.cell]}）`;
       } catch {
         if (status) status.textContent = '変えられませんでした（BOT が持っていない権限は許可できません）。ページを読み直してください。';

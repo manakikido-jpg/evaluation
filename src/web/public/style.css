@@ -808,6 +808,20 @@ a.chip-link.on { background: var(--shu); border-color: var(--shu); color: #fff; 
 .pm-pick > span:not(.pm-no) { display: flex; flex-direction: column; line-height: 1.25; flex: 1; }
 .pm-pick small { color: var(--muted); font-family: ui-monospace, monospace; font-size: .72rem; }
 .pm-pick select { margin-left: auto; }
+.pm-th { vertical-align: top; }
+.pm-th-label { display: block; writing-mode: vertical-rl; margin: 4px auto 0; font-size: .78rem; font-weight: 600; line-height: 1.1; max-height: 9em; letter-spacing: .02em; }
+.pm-bulk { display: none; }
+.pm-bulk-on .pm-bulk { display: inline-flex; gap: 2px; }
+.pm-th .pm-bulk { flex-direction: column; align-items: center; margin-top: 4px; }
+.pm-name .pm-bulk { margin-left: 8px; vertical-align: middle; }
+.pm-bulk-btn { width: 1.6em; height: 1.6em; padding: 0; border-radius: 5px; border: 1px dashed var(--line); background: var(--card); font-size: .78rem; font-weight: 700; cursor: pointer; color: var(--muted); }
+.pm-bulk-btn.allow { color: #1d6b40; border-color: #2e8b57; }
+.pm-bulk-btn.deny { color: var(--shu-dark); border-color: var(--shu); }
+.pm-bulk-note { display: none; }
+.pm-bulk-on .pm-bulk-note { display: block; }
+.pm-bulkmode[aria-pressed="true"] { background: var(--shu); color: #fff; border-color: var(--shu); }
+.pm-row.none .pm-name { color: var(--muted); font-weight: 400; }
+.pm-name small { margin-left: 4px; }
 .pm-no { display: inline-grid; place-items: center; min-width: 1.9em; height: 1.9em; border-radius: 999px; border: 1px solid var(--line); font-size: .78rem; font-weight: 700; background: var(--card); }
 .pm-scroll { max-height: calc(100vh - 220px); min-height: 360px; overflow: auto; }
 .pm-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }

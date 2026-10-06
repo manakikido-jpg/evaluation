@@ -28,12 +28,15 @@ const SCOPES: PermScope[] = ['base', 'text', 'voice'];
 export type MatrixGroup = { category: GuildChannel | null; items: GuildChannel[] };
 type RoleOpt = { id: string; name: string; members?: number };
 
-function Tabs(p: { tab: 'matrix' | 'templates'; roleId?: string }) {
+function Tabs(p: { tab: 'matrix' | 'roles' | 'templates'; roleId?: string; channelId?: string }) {
   const q = p.roleId ? `&role=${p.roleId}` : '';
   return (
     <nav class="pm-tabs" aria-label="切り替え">
       <a href={`/channels/perms?tab=matrix${q}`} class={p.tab === 'matrix' ? 'on' : ''}>
         📊 権限マトリクス一覧
+      </a>
+      <a href={`/channels/perms?tab=roles${q}${p.channelId ? `&ch=${p.channelId}` : ''}`} class={p.tab === 'roles' ? 'on' : ''}>
+        👥 ロールを並べて見る
       </a>
       <a href={`/channels/perms?tab=templates${q}`} class={p.tab === 'templates' ? 'on' : ''}>
         ⚡ テンプレート一括適用
@@ -96,6 +99,31 @@ function ColumnPicker() {
   );
 }
 
+/** 見出しのマス（番号と短い名前。まとめて変えるボタンつき） */
+function HeadCell(p: { m: (typeof MATRIX_PERMS)[number]; bulk?: boolean }) {
+  const { m } = p;
+  return (
+    <th scope="col" class="pm-th" data-pm-colno={m.no} hidden={!MAIN_PERMS.includes(m.no)} title={`${m.no}. ${m.label}（${m.key}）${m.note ? `: ${m.note}` : ''}`}>
+      <span class="pm-no">{m.no}</span>
+      <span class="pm-th-label">{m.short}</span>
+      {p.bulk && <BulkButtons attr="data-pm-colset" value={String(m.bit)} what={`「${m.label}」を、表に出ているチャンネル全部で`} />}
+    </th>
+  );
+}
+
+/** まとめて 許可・拒否・中立 にするボタン（「まとめて変える」を押したときだけ出る） */
+function BulkButtons(p: { attr: 'data-pm-colset' | 'data-pm-rowset'; value: string; what: string }) {
+  return (
+    <span class="pm-bulk" role="group" aria-label="まとめて変える">
+      {(['allow', 'deny', 'neutral'] as const).map((c) => (
+        <button type="button" class={`pm-bulk-btn ${c}`} {...{ [p.attr]: p.value }} data-to={c} data-what={p.what} title={`${p.what}${CELL_LABEL[c]}にする`}>
+          {CELL_MARK[c]}
+        </button>
+      ))}
+    </span>
+  );
+}
+
 function Legend() {
   return (
     <section class="card pm-legend">
@@ -140,6 +168,7 @@ export function PermMatrixPage(props: {
             </button>
           ) : null}
           <span class="pm-icon">{KIND_ICON[k]}</span> {p.c.name}
+          <BulkButtons attr="data-pm-rowset" value={p.c.id} what={`「${p.c.name}」の、表に出ている権限を全部`} />
         </th>
         {MATRIX_PERMS.map((m) => {
           if (!applies(m, p.c))
@@ -207,7 +236,13 @@ export function PermMatrixPage(props: {
           <button type="button" data-pm-foldall class="pm-foldall">
             📁 すべて折りたたみ
           </button>
+          <button type="button" data-pm-bulkmode class="pm-bulkmode" aria-pressed="false">
+            ✏ まとめて変える
+          </button>
         </form>
+        <p class="note pm-bulk-note">
+          「✏ まとめて変える」を押すと、チャンネル名の横と権限の見出しに <b>✓ ✕ -</b> が出ます。チャンネルの横は「そのチャンネルの、表に出ている権限を全部」、見出しは「その権限を、表に出ているチャンネル全部で」変えます（たたんだカテゴリの中・出していない列は変えません）。
+        </p>
         <p class="pm-status note" data-pm-status aria-live="polite"></p>
         <div class="table-wrap pm-scroll">
           <table class="pm-table">
@@ -217,9 +252,7 @@ export function PermMatrixPage(props: {
                   チャンネル名
                 </th>
                 {MATRIX_PERMS.map((m) => (
-                  <th scope="col" class="pm-th" data-pm-colno={m.no} hidden={!MAIN_PERMS.includes(m.no)} title={`${m.no}. ${m.label}（${m.key}）`}>
-                    <span class="pm-no">{m.no}</span>
-                  </th>
+                  <HeadCell m={m} bulk />
                 ))}
               </tr>
             </thead>
@@ -239,6 +272,127 @@ export function PermMatrixPage(props: {
             </tbody>
           </table>
         </div>
+      </section>
+      <Legend />
+    </Layout>
+  );
+}
+
+/** 👥 1 つのチャンネルで、ロールを並べて見る（縦: ロール・横: 権限）。マスを押すとそのロールの上書きが変わる */
+export function PermRolesPage(props: {
+  session: AdminSession;
+  roles: RoleOpt[];
+  /** 選んだチャンネル */
+  channel: GuildChannel | undefined;
+  groups: MatrixGroup[];
+  /** true: 上書きのないロールも全部出す */
+  all: boolean;
+  flash?: string;
+}) {
+  const { session, channel } = props;
+  const f = props.flash && Object.hasOwn(FLASH, props.flash) ? FLASH[props.flash] : undefined;
+  const overwrites = channel?.permission_overwrites ?? [];
+  const has = (id: string) => overwrites.some((o) => o.id === id);
+  const shown = props.all ? props.roles : props.roles.filter((r) => has(r.id));
+  const hiddenCount = props.roles.length - shown.length;
+  const firstRole = props.roles[1]?.id;
+  return (
+    <Layout title="チャンネル権限" session={session} nav="channels" scripts={['perms.js']} wide>
+      <div class="page-head">
+        <h1>🧮 チャンネル権限 &amp; テンプレート適用</h1>
+        <a href="/channels">← チャンネル</a>
+      </div>
+      <Tabs tab="roles" roleId={firstRole} channelId={channel?.id} />
+      {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
+      <section class="card pm-wrap" data-pm data-csrf={session.csrfToken}>
+        <form method="get" action="/channels/perms" class="pm-bar" data-pm-autosubmit>
+          <input type="hidden" name="tab" value="roles" />
+          <label>
+            チャンネル:{' '}
+            <select name="ch">
+              {props.groups.map((g) => {
+                const opts = [...(g.category ? [g.category] : []), ...g.items].map((c) => (
+                  <option value={c.id} selected={c.id === channel?.id}>
+                    {KIND_ICON[kindOf(c)]} {c.name}
+                  </option>
+                ));
+                return g.category ? <optgroup label={`📁 ${g.category.name}`}>{opts}</optgroup> : opts;
+              })}
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" name="all" value="1" checked={props.all} /> 上書きのないロールも出す
+          </label>
+          <noscript>
+            <button type="submit">表示</button>
+          </noscript>
+          <ColumnPicker />
+          <button type="button" data-pm-quick="all" class="pm-showall">
+            🌐 すべての権限を表示
+          </button>
+        </form>
+        {channel ? (
+          <>
+            <p class="note">
+              「{KIND_ICON[kindOf(channel)]} {channel.name}」で、ロールごとの上書き。中立（-）は「カテゴリ・ほかのロールに従う」。メンバーは、持っているロールの上書きを合わせて決まります（どれかのロールで許可なら、ほかのロールで拒否でもできます）。ロール名を押すと、そのロールのマトリクスへ。
+              {!props.all && hiddenCount > 0 && ` 上書きのないロール ${hiddenCount} 個は出していません（全部中立）。`}
+            </p>
+            <p class="pm-status note" data-pm-status aria-live="polite"></p>
+            {shown.length ? (
+              <div class="table-wrap pm-scroll">
+                <table class="pm-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="pm-name">
+                        ロール
+                      </th>
+                      {MATRIX_PERMS.map((m) => (
+                        <HeadCell m={m} />
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((r) => {
+                      const o = overwrites.find((x) => x.id === r.id);
+                      return (
+                        <tr class={`pm-row${o ? '' : ' none'}`}>
+                          <th scope="row" class="pm-name">
+                            <a href={`/channels/perms?tab=matrix&role=${r.id}`} title="このロールのマトリクスを見る">
+                              {r.name}
+                            </a>
+                            {r.members !== undefined && <small class="note">（{r.members} 名）</small>}
+                          </th>
+                          {MATRIX_PERMS.map((m) => {
+                            if (!applies(m, channel))
+                              return (
+                                <td class="pm-td" data-pm-colno={m.no} hidden={!MAIN_PERMS.includes(m.no)}>
+                                  <span class="pm-na" title="このチャンネルにない権限">
+                                    /
+                                  </span>
+                                </td>
+                              );
+                            const cell = cellOf(o, m.bit);
+                            return (
+                              <td class="pm-td" data-pm-colno={m.no} hidden={!MAIN_PERMS.includes(m.no)}>
+                                <button type="button" class={`pm-cell ${cell}`} data-ch={channel.id} data-role={r.id} data-bit={String(m.bit)} data-cell={cell} title={`${r.name} ・ ${m.no}. ${m.label}: ${CELL_LABEL[cell]}`}>
+                                  {CELL_MARK[cell]}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p class="empty">このチャンネルには、ロールの上書きがありません（全部カテゴリ・サーバーの設定どおり）。「上書きのないロールも出す」で、ロールを選んで変えられます。</p>
+            )}
+          </>
+        ) : (
+          <p class="empty">チャンネルを選んでください。</p>
+        )}
       </section>
       <Legend />
     </Layout>
