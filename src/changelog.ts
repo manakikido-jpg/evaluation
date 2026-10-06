@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-wallet-next-voice',
+    date: '2026-10-07',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '💰 /残高 に「あと何分で通話の銭が入るか」',
+    items: ['/残高 の今日の通話の下に「あと 6 分で +5 枚」のように、次に通話の銭が入るまでの時間が出ます。2 人以上の通話で、スピーカーミュートしていない時間だけ数えることも書いてあります'],
+  },
+  {
     id: '2026-10-07-omikuji-game-daily',
     date: '2026-10-07',
     kind: 'improve',

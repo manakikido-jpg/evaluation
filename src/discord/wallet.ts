@@ -17,6 +17,19 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const unix = (d: Date) => Math.floor(d.getTime() / 1000);
 
+/**
+ * 次に通話の銭が入るまで（「あと 6 分で +5 枚」）。通話の銭は、数えられた時間が 10 分たまるごとに入る。
+ * 今日の上限に届いていればそう書く。10 分ごとの量が 0（役職の倍率）なら出さない
+ */
+export function nextVoiceLine(e: Pick<EconomyConfig, 'voicePer10Min'>, today: { vcCoins: number; vcMinutes: number }, cap: number, voicePercent = 100): string[] {
+  if (today.vcCoins >= cap) return ['-# 今日の上限に届きました（日本時間の 0 時からまた）'];
+  const per10 = Math.round((e.voicePer10Min * voicePercent) / 100);
+  const amount = Math.min(per10, cap - today.vcCoins);
+  if (amount <= 0) return [];
+  const left = 10 - (today.vcMinutes % 10);
+  return [`-# あと **${left} 分**で +${fmt(amount)} 枚（2 人以上の通話で、スピーカーミュートしていない時間だけ数えます）`];
+}
+
 /** /残高 の中身（本人にだけ） */
 export function walletView(
   e: EconomyConfig,
@@ -34,11 +47,13 @@ export function walletView(
   },
 ) {
   const coin = `${e.currencyEmoji}${e.currencyName}`;
+  const cap = Math.round((e.voiceDailyCap * (d.voiceCapPercent ?? 100)) / 100);
   const lines = [
     `# ${coin} **${fmt(d.balance)}** 枚`,
     `-# これまでにもらった合計 ${fmt(d.lifetimeEarned)} 枚`,
     '',
-    `📞 今日の通話で ${fmt(d.today.vcCoins)} / ${fmt(Math.round((e.voiceDailyCap * (d.voiceCapPercent ?? 100)) / 100))} 枚（${fmt(d.today.vcMinutes)} 分）`,
+    `📞 今日の通話で ${fmt(d.today.vcCoins)} / ${fmt(cap)} 枚（${fmt(d.today.vcMinutes)} 分）`,
+    ...nextVoiceLine(e, d.today, cap, d.voicePercent ?? 100),
     ...((d.voicePercent ?? 100) !== 100 || (d.voiceCapPercent ?? 100) !== 100
       ? [`-# 役職の倍率: 10 分ごと ${fmt(Math.round((e.voicePer10Min * (d.voicePercent ?? 100)) / 100))} 枚（${d.voicePercent ?? 100}%）・1 日の上限 ${d.voiceCapPercent ?? 100}%`]
       : []),
