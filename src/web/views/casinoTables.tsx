@@ -268,7 +268,7 @@ export function TablePage(p: { me: CasinoMe; table: CasinoTable; casino: CasinoC
   const L = TABLE_LABEL[p.table.kind as TableKind];
   const jansou = p.table.kind === 'mahjong';
   return (
-    <CasinoLayout title={jansou ? `雀荘 卓 #${p.table.id}` : L.name} me={p.me} jansou={jansou} wide={jansou}>
+    <CasinoLayout title={jansou ? `雀荘 卓 #${p.table.id}` : L.name} me={p.me} jansou={jansou} wide={jansou || p.table.kind === 'keiba'}>
       <p class="c-back">
         <a href={jansou ? '/casino/jansou' : `/casino/tables/${p.table.kind}`}>← {jansou ? '雀荘の入口' : `${L.name}の一覧`}へ</a>
       </p>

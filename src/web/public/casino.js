@@ -358,6 +358,7 @@ const swapPage = (html, url) => {
   // 同じ卓の画面なら、前からあるカードは動かさない
   const end = samePath ? markCards(main, before) : 0;
   pageInit(main, samePath ? end : undefined);
+  document.dispatchEvent(new Event('c-page-swapped'));
 };
 document.addEventListener('submit', async (e) => {
   if (e.defaultPrevented) return;
@@ -2767,3 +2768,47 @@ const pageInit = (root, tableEnd) => {
 };
 document.addEventListener('c-live-updated', () => initKeiba());
 pageInit(document);
+
+// 🖥 PC: スロットの台を「🔍 大きく」（高さを気にせず横いっぱいまで）。このブラウザに覚える
+(() => {
+  const KEY = 'c-big';
+  const get = () => {
+    try {
+      return localStorage.getItem(KEY) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const set = (on) => {
+    document.documentElement.classList.toggle('c-big', on);
+    try {
+      localStorage.setItem(KEY, on ? '1' : '0');
+    } catch {
+      /* 覚えられなくても動く */
+    }
+  };
+  document.documentElement.classList.toggle('c-big', get());
+  // ページを入れ替えたあと（レバーを叩いたあとなど）も付け直す
+  const init = () => {
+    if (!document.querySelector('.c-main > .c-slot-stage')) return;
+    const h1 = document.querySelector('.c-main > .c-h1');
+    if (!h1 || h1.querySelector('.c-bigbtn')) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'c-bigbtn';
+    const paint = () => {
+      const on = document.documentElement.classList.contains('c-big');
+      b.setAttribute('aria-pressed', String(on));
+      b.textContent = on ? '🔍 ふつうの大きさ' : '🔍 もっと大きく';
+      b.title = on ? '台を画面の高さに合わせる' : '台を横いっぱいまで大きくする（スクロールして遊ぶ。キーボードでも遊べます）';
+    };
+    paint();
+    b.addEventListener('click', () => {
+      set(!document.documentElement.classList.contains('c-big'));
+      paint();
+    });
+    h1.appendChild(b);
+  };
+  init();
+  document.addEventListener('c-page-swapped', init);
+})();
