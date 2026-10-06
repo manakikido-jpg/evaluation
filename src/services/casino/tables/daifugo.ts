@@ -563,6 +563,9 @@ export const daifugo = partyEngine<DaifugoState>({
     return dPlay(s, i, cards);
   },
   bot: (s, i) => dBotStrong(s, i),
+  // 強い BOT（カードを数える）にしたので 2。ルールの組み合わせごとに分けて記録する
+  aiVersion: '2',
+  aiVariant: (s) => [...rulesOf(s)].sort().join(','),
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから
     if (s.pending) {

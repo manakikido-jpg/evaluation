@@ -46,7 +46,13 @@ export type KeibaResult = {
 };
 /** メンバーの馬券 1 枚（結果が出たとき） */
 export type KeibaBet = { memberId: string; race: string; cls: number; type: string; key: string; names: string; amount: number; odds: number; payout: number };
-export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[] };
+/**
+ * 🤖 AI（BOT）と人の勝負の記録（人と AI が両方いた勝負だけ。1 勝負 1 行）。AI の強さを直すときに使う。
+ * place: 順位（1 から。ポーカーは 1 手ごとで、勝った人が 1・ほかは 2）。net: その勝負での増減（銭・ポーカーはチップ）
+ */
+export type AiMatch = { game: string; variant: string; aiVersion: string; seats: { id: string; name: string; bot: boolean; place: number; net: number; left?: boolean }[] };
+
+export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[]; aiMatch?: AiMatch[] };
 
 export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
 export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });

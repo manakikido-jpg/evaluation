@@ -7,6 +7,7 @@ import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikuj
 import { fortuneOf, omikujiSayings, specialIndex } from '../services/omikuji.js';
 import { renderSlip } from '../services/omikujiSlip.js';
 import { trialUnei } from '../services/omikujiTrial.js';
+import { aiStats } from '../services/casino/aiStats.js';
 import { FORTUNE_KEYS, toneOf, TONES, type FortuneKey } from '../omikujiTexts.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -1532,6 +1533,7 @@ export function createWebApp(deps: WebDeps) {
         channels={textChannelsOf(await loadChannels().catch(() => [] as GuildChannel[])).map((ch) => ({ id: ch.id, name: ch.name }))}
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
+        ai={await aiStats(db, since)}
       />,
     );
   });

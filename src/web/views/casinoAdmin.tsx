@@ -1,4 +1,6 @@
 import type { CasinoConfig, CasinoGame } from '../../config.js';
+import type { AiStats } from '../../services/casino/aiStats.js';
+import { AiStatsSection } from './aiStats.js';
 import { CASINO_GAMES } from '../../config.js';
 import type { CasinoMatch, KeibaHorseRow } from '../../db/schema.js';
 import { KB_APT, KB_CLASSES, KB_COATS, KB_STYLES, KB_SURFACES } from '../../services/casino/keiba.js';
@@ -62,6 +64,8 @@ export function CasinoAdminPage(p: {
   art?: Record<string, string>;
   /** 🦊 GitHub のフォルダ（src/web/public/at/）に置いた絵 */
   fileArt?: Record<string, string>;
+  /** 🤖 AI との勝負 */
+  ai?: AiStats;
 }) {
   const f = p.flash && Object.hasOwn(CASINO_FLASH, p.flash) ? CASINO_FLASH[p.flash] : undefined;
   const c = p.casino;
@@ -155,6 +159,7 @@ export function CasinoAdminPage(p: {
       </section>
 
       <CasinoCharts daily={p.daily} stats={p.stats} coinName={p.coinName} range={CASINO_RANGES[p.range].label} />
+      {p.ai && <AiStatsSection ai={p.ai} coinName={p.coinName} rangeLabel={CASINO_RANGES[p.range].label} />}
       <SlotMachines casino={c} floor={p.floor} picks={p.picks} settingStats={p.settingStats} coinName={p.coinName} />
 
       {p.guji && (

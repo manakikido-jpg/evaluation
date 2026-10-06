@@ -699,7 +699,13 @@ function endGame(s: MjState, ctx: Ctx, note?: string): Step<MjState> {
     const st = statOf(s, j);
     return [{ memberId: x.id, name: x.name, rank: n + 1, points: x.points, length: s.length, players: nOf(s), entry: s.entry, payout: amounts[n] ?? 0, hands: s.handsPlayed ?? 0, wins: st.wins, tsumo: st.tsumo, dealins: st.dealins, riichi: st.riichi, bestPoints: st.best?.points ?? 0, bestName: st.best?.name ?? null }];
   });
-  return ok(s, { ...(credits.length ? { credits } : {}), ...(mahjong.length ? { mahjong } : {}) });
+  // 🤖 人と BOT が両方いた対局（AI の強さを見る）
+  const bots = s.seats.filter((x) => x.bot).length;
+  const aiMatch =
+    bots && bots < s.seats.length
+      ? [{ game: 'mahjong', variant: `${nOf(s)}人・${MJ_LENGTHS[s.length].label}`, aiVersion: '1', seats: rank.map((j, n) => ({ id: s.seats[j]!.id, name: s.seats[j]!.name, bot: Boolean(s.seats[j]!.bot), place: n + 1, net: (amounts[n] ?? 0) - s.entry, ...(s.seats[j]!.gone ? { left: true } : {}) })) }]
+      : [];
+  return ok(s, { ...(credits.length ? { credits } : {}), ...(mahjong.length ? { mahjong } : {}), ...(aiMatch.length ? { aiMatch } : {}) });
 }
 
 // ───────── BOT・おまかせ・時間切れ ─────────

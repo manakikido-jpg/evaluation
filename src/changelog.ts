@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-ai-matches',
+    date: '2026-10-06',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🤖 AI との勝負の記録',
+    items: [
+      '大富豪・ババ抜き・ポーカー・麻雀で、人と BOT が同じ卓にいた勝負を記録するようにしました（オセロ CPU は前からの記録から）',
+      'カジノのページの「🤖 AI との勝負」で、人と AI の 1 位の割合・順位・人の増減と、「AI が強め・弱め・ちょうどよい」の判定が見られます。ルールの組み合わせや AI の版ごとにも分けて見られます',
+    ],
+  },
+  {
     id: '2026-10-06-unei-trial',
     date: '2026-10-06',
     kind: 'new',

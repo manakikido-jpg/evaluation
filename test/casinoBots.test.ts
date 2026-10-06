@@ -281,6 +281,42 @@ describe('🤖 BOT の銭（DB）', () => {
     // 胴元の収支 = BOT が取った分 - BOT の参加費 = -(人が増えた分)
     expect(after.wagered - after.paid).toBe(-(won - 100));
     expect(st.payouts.filter((p) => isBot(p.id)).length).toBeGreaterThanOrEqual(0);
+    // 🤖 AI との勝負の記録（人 1・BOT 2）。まとめでは人と AI の順位・増減が出る
+    const { aiMatches } = await import('../src/db/schema.js');
+    const rows = await db.select().from(aiMatches);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ game: 'daifugo', aiVersion: '2', variant: 'eight,joker,revolution', players: 3, bots: 2, tableId: id });
+    const me = rows[0]!.seats.find((x) => x.id === A.id)!;
+    expect(me).toMatchObject({ bot: false, place: st.order.indexOf(A.id) + 1, net: won - 100 });
+    const { aiStats } = await import('../src/services/casino/aiStats.js');
+    const ai = await aiStats(db, new Date(now.getTime() - 60_000));
+    expect(ai.totals).toHaveLength(1);
+    expect(ai.totals[0]).toMatchObject({ game: 'daifugo', matches: 1, humanSeats: 1, botSeats: 2, humanNet: won - 100, verdict: 'few' });
     await leaveTable(db, tcfg, id, A.id, now).catch(() => undefined);
+  });
+
+  it('AI との勝負のまとめ: 順位をそろえてくらべる・判定・オセロは強さごと', async () => {
+    const { aiMatches, casinoGames } = await import('../src/db/schema.js');
+    const { aiStats, verdictOf } = await import('../src/services/casino/aiStats.js');
+    const now = new Date('2026-10-01T12:00:00Z');
+    // 4 人の大富豪（人 1・BOT 3）を 20 回: 人はいつも最下位
+    const seats = (humanPlace: number) => [
+      { id: A.id, name: 'p1', bot: false, place: humanPlace, net: -100 },
+      ...[1, 2, 3].map((k) => ({ id: `bot:${k}`, name: `b${k}`, bot: true, place: k >= humanPlace ? k + 1 : k, net: 0 })),
+    ];
+    await db.insert(aiMatches).values(Array.from({ length: 20 }, () => ({ game: 'daifugo', variant: 'eight', aiVersion: '2', players: 4, bots: 3, seats: seats(4), at: now })));
+    // ポーカー 1 手（人が勝った）
+    await db.insert(aiMatches).values({ game: 'poker', variant: '', aiVersion: '1', players: 2, bots: 1, seats: [{ id: A.id, name: 'p1', bot: false, place: 1, net: 50 }, { id: 'bot:9', name: 'b9', bot: true, place: 2, net: -50 }], at: now });
+    // オセロ（つよい）: 25 回で 3 勝
+    await db.insert(casinoGames).values(Array.from({ length: 25 }, (_, k) => ({ memberId: A.id, game: 'othello', bet: 100, payout: k < 3 ? 220 : 0, state: { level: 'hard', result: k < 3 ? 'win' : 'lose' }, status: 'done', createdAt: now, finishedAt: now })));
+    const ai = await aiStats(db, new Date(now.getTime() - 60_000));
+    const d = ai.totals.find((r) => r.game === 'daifugo')!;
+    expect(d).toMatchObject({ matches: 20, humanTop: 0, humanPlace: 1, verdict: 'strong', humanNet: -2000, humanNetPer: -100 });
+    expect(d.botPlace).toBeCloseTo(1 / 3, 2);
+    expect(ai.totals.find((r) => r.game === 'poker')).toMatchObject({ humanTop: 100, botTop: 0, verdict: 'few' });
+    expect(ai.players[0]).toMatchObject({ id: A.id, matches: 21 });
+    expect(ai.othello).toEqual([{ level: 'hard', games: 25, win: 3, draw: 0, lose: 22, resign: 0, humanNet: 3 * 120 - 22 * 100, mult: 2.2, verdict: 'strong' }]);
+    expect(verdictOf(0.2, 0.6, 30)).toBe('weak');
+    expect(verdictOf(0.5, 0.5, 30)).toBe('fair');
   });
 });

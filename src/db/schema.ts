@@ -213,6 +213,27 @@ export const casinoTables = pgTable(
 
 export type CasinoTable = typeof casinoTables.$inferSelect;
 
+/** 🤖 AI（BOT）と人の勝負（人と AI が両方いた勝負だけ）。AI の強さを直すときに見る */
+export const aiMatches = pgTable(
+  'ai_matches',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** daifugo / babanuki / poker / mahjong / sanma */
+    game: text('game').notNull(),
+    /** ルールの違い（大富豪のローカルルール・麻雀の長さなど） */
+    variant: text('variant').notNull().default(''),
+    /** AI の版（AI を変えたら上げる。前とくらべられるように） */
+    aiVersion: text('ai_version').notNull().default('1'),
+    tableId: bigint('table_id', { mode: 'number' }),
+    players: integer('players').notNull(),
+    bots: integer('bots').notNull(),
+    /** [{ id, name, bot, place, net, left? }] */
+    seats: jsonb('seats').$type<{ id: string; name: string; bot: boolean; place: number; net: number; left?: boolean }[]>().notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('ai_matches_game_idx').on(t.game, t.at)],
+);
+
 /** 社務所Web の ID とパスワード（宮司が発行する。パスワードは scrypt のハッシュだけ保存） */
 export const webAccounts = pgTable('web_accounts', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),

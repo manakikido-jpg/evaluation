@@ -2,7 +2,7 @@ import { shuffledShoe } from '../cards.js';
 import { BOT_THINK_MS, nextBot } from './bots.js';
 import { pokerBotMove } from './pokerBot.js';
 import { bestHand, handName } from './pokerHands.js';
-import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Debit, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
+import { fail, intOf, ok, paceMult, paceOf, str, type AiMatch, type Credit, type Ctx, type Debit, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * ポーカー（テキサスホールデム・ノーリミット）。2〜6 人。
@@ -225,7 +225,22 @@ function endHand(s: PokerState, ctx: Ctx, seconds: number): Step<PokerState> {
   s.phase = 'showdown';
   s.turn = null;
   s.deadline = ctx.now + seconds * 1000;
-  return ok(s);
+  const ai = handAiMatch(s);
+  return ok(s, ai ? { aiMatch: [ai] } : undefined);
+}
+
+/** 🤖 人と BOT が両方入った手の記録（勝った人が 1・ほかは 2。増減はチップ） */
+function handAiMatch(s: PokerState): AiMatch | undefined {
+  const inHand = s.seats.filter((x): x is PSeat => Boolean(x?.inHand));
+  const bots = inHand.filter((x) => x.bot).length;
+  if (!bots || bots === inHand.length || !s.result) return undefined;
+  const won = new Map(s.result.winners.map((w) => [w.id, w.amount]));
+  return {
+    game: 'poker',
+    variant: '',
+    aiVersion: '1',
+    seats: inHand.map((x) => ({ id: x.id, name: x.name, bot: Boolean(x.bot), place: won.has(x.id) ? 1 : 2, net: (won.get(x.id) ?? 0) - x.total, ...(x.leaving ? { left: true } : {}) })),
+  };
 }
 
 /** 手が終わって少したったら: 立つ人を立たせ、次の手を待つ */

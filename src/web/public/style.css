@@ -992,3 +992,13 @@ form.dirty .art-savebar { border-color: #e0a020; }
 .idea-comments .idea-photos { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); max-width: 640px; }
 .idea-comments .idea-photo img { height: 110px; }
 .idea-card .idea-foot { clear: both; }
+
+/* 🤖 AI との勝負 */
+.ai-table { margin-bottom: 10px; }
+.ai-variant { max-width: 320px; font-size: 0.88em; }
+.ai-verdict { white-space: nowrap; font-weight: 600; }
+.ai-verdict.warn { color: #b45309; }
+.ai-verdict.ok { color: #15803d; }
+.ai-verdict.muted { color: var(--muted, #888); font-weight: 400; }
+.ai-details { margin: 8px 0; }
+.ai-details > summary { cursor: pointer; padding: 4px 0; }

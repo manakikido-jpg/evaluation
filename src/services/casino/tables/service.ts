@@ -1,7 +1,7 @@
 import { and, arrayContains, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { GuildConfig, TableKind } from '../../../config.js';
 import type { Db } from '../../../db/client.js';
-import { casinoGames, casinoTables, coinTx, keibaBets, mahjongResults, type CasinoTable } from '../../../db/schema.js';
+import { aiMatches, casinoGames, casinoTables, coinTx, keibaBets, mahjongResults, type CasinoTable } from '../../../db/schema.js';
 import { jstDate } from '../../activity.js';
 import { addCoins, spendWithin } from '../../economy.js';
 import { todayBets } from '../casino.js';
@@ -65,6 +65,12 @@ async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: D
   }
   for (const c of fx.credits ?? []) await payCredit(tx, cfg, c, now, kind, tableId);
   for (const m of fx.mahjong ?? []) await tx.insert(mahjongResults).values({ ...m, tableId, finishedAt: now });
+  // 🤖 AI と人の勝負
+  for (const m of fx.aiMatch ?? []) {
+    const bots = m.seats.filter((x) => x.bot).length;
+    if (!bots || bots === m.seats.length) continue;
+    await tx.insert(aiMatches).values({ game: m.game, variant: m.variant, aiVersion: m.aiVersion, tableId, players: m.seats.length, bots, seats: m.seats, at: now });
+  }
   if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba, now, cfg.casino.keibaRoyaltyPct);
   if (fx.keibaBets?.length) await tx.insert(keibaBets).values(fx.keibaBets.map((b) => ({ ...b, at: now })));
   for (const r of fx.records ?? []) {

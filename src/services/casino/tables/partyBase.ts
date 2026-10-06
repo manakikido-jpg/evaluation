@@ -1,7 +1,7 @@
 import type { TableKind } from '../../../config.js';
 import type { Rng } from '../cards.js';
 import { BOT_THINK_MS, nextBot } from './bots.js';
-import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Step, type TableEngine, type Who, type Pace } from './types.js';
+import { fail, intOf, ok, paceMult, paceOf, str, type AiMatch, type Credit, type Ctx, type Form, type Step, type TableEngine, type Who, type Pace } from './types.js';
 
 /**
  * みんなで遊ぶトランプ（大富豪・ババ抜き）の共通の流れ。部屋を作った人が参加費を決め、そろったら作った人が始める。
@@ -68,7 +68,24 @@ export type PartyRules<S extends PartyBase> = {
   finish(s: S): Credit[];
   /** f: 卓を立てたときのフォーム（ルールの選び方など） */
   init(f: Form): Omit<S, keyof PartyBase>;
+  /** 🤖 AI の版（BOT の考え方を変えたら上げる）と、ルールの違い（AI との勝負の記録を分ける） */
+  aiVersion?: string;
+  aiVariant?(s: S): string;
 };
+
+/** 🤖 人と BOT が両方いた勝負の記録（上がった順・増減） */
+export function partyAiMatch(s: PartyBase, kind: string, finishCredits: Credit[], version = '1', variant = ''): AiMatch | undefined {
+  const bots = s.seats.filter((x) => x.bot).length;
+  if (!bots || bots === s.seats.length) return undefined;
+  const got = new Map<string, number>();
+  for (const c of finishCredits) got.set(c.memberId, (got.get(c.memberId) ?? 0) + c.amount);
+  return {
+    game: kind,
+    variant,
+    aiVersion: version,
+    seats: s.seats.map((x) => ({ id: x.id, name: x.name, bot: Boolean(x.bot), place: s.order.indexOf(x.id) + 1, net: (got.get(x.id) ?? 0) - s.entry, ...(x.gone ? { left: true } : {}) })),
+  };
+}
 
 export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<S> {
   const seat = (w: Who, bot = false): PartySeat => ({ ...w, hand: [], out: false, gone: false, timeouts: 0, ...(bot ? { bot: true } : {}) });
@@ -173,7 +190,8 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
       s.turn = null;
       s.deadline = ctx.now + DONE_SECONDS * 1000;
       const credits = r.finish(s);
-      return ok(s, { debits: step.fx?.debits, credits: [...(step.fx?.credits ?? []), ...credits] });
+      const ai = partyAiMatch(s, r.kind, credits, r.aiVersion, r.aiVariant?.(s) ?? '');
+      return ok(s, { debits: step.fx?.debits, credits: [...(step.fx?.credits ?? []), ...credits], ...(ai ? { aiMatch: [ai] } : {}) });
     }
     s.deadline = turnDeadline(s, ctx.now);
     return ok(s, step.fx);
