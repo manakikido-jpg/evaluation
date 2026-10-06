@@ -56,22 +56,17 @@ export async function trialUnei(
   const artFile: MessageFile | undefined = art && { name: art.name, contentType: art.contentType, data: art.data };
   const note = `-# 🧪 運営吉の試し（<@${by}> が社務所Web から。くじは引いていません・銭は動きません）`;
   const head = { title: '⛩ おみくじ', color: 0x8b5a2b };
-  const artEmbed = artFile && {
-    title: `🎴✨ ${fortune.name} ✨`,
-    description: `**（試し）** さんに、運営の特別な御神籤「**${fortune.name}**」が出ました！`,
-    color: fortune.color,
-    image: { url: `attachment://${artFile.name}` },
-  };
   const msg = await discord.sendMessage(channelId, { content: note, embeds: [{ ...head, description: '🎋 **（試し）** さんが御神籤を振っています……\nガラガラ……' }] });
   const done = (async () => {
     const edit = (body: MessageBody) => discord.editMessage(channelId, msg.id, { content: note, ...body });
     await sleep(TRIAL_MS.shake);
     await edit({ embeds: [{ ...head, description: '⚡ ……！？\n**御神籤が金色に光りだした……！**', color: 0xffd700 }] });
     await sleep(TRIAL_MS.glow);
-    if (artFile && artEmbed) {
-      await edit({ embeds: [artEmbed], files: [artFile] });
+    // 写真だけ（カードにしない）。絵を大きく → 絵と紙の 2 枚（横に並ぶ）
+    if (artFile) {
+      await edit({ embeds: [], files: [artFile] });
       await sleep(TRIAL_MS.art);
-      await edit({ embeds: [artEmbed, { color: fortune.color, image: { url: `attachment://${slip.name}` } }], files: [artFile, slip] });
+      await edit({ embeds: [], files: [artFile, slip] });
     } else await edit({ embeds: [], files: [slip] });
   })();
   return { ok: true, channelId, done };

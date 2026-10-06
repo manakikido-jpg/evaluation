@@ -118,9 +118,8 @@ export async function omikujiMessage(db: Db, cfg: GuildConfig, r: Drawn, name: s
     ...r.bonus.map((b) => `🎁 **${b.days} 日続いたおまけ**: ${streakRewardText(b, cfg.economy)}`),
   ].join('\n');
   const text = content ? { content } : {};
-  // 運営吉は、絵のあとに紙が来るように、どちらもカードの絵にする（ふつうは紙をそのまま添える）
-  if (art) return { ...text, embeds: [artEmbed(r, name, art), { color: r.fortune.color, image: { url: `attachment://${slip.name}` } }], files: [art, slip] };
-  return { ...text, embeds: [], files: [slip] };
+  // 写真だけ（カードにしない）。運営吉は絵と紙の 2 枚を添えると、横に並んで出る（左が絵・右が紙）
+  return { ...text, embeds: [], files: art ? [art, slip] : [slip] };
 }
 
 /** 演出の待ち時間（ミリ秒。テストでは 0 にする） */
@@ -151,7 +150,8 @@ export async function revealOmikuji(db: Db, cfg: GuildConfig, r: Drawn, name: st
       await sleep(REVEAL_MS.glow);
       const art = await uneiArt(db, r.fortune.key);
       if (art) {
-        await msg.edit({ embeds: [artEmbed(r, name, art)], files: [art], attachments: [] });
+        // 絵だけを大きく（写真だけ）
+        await msg.edit({ embeds: [], files: [art], attachments: [] });
         await sleep(REVEAL_MS.art);
       }
     }
@@ -170,7 +170,7 @@ export async function announceSpecial(db: Db, guild: Guild, cfg: GuildConfig, me
   await ch
     .send({
       content: `🎴 <@${memberId}> さまが、おみくじで **${fortune.name}** を引きました！ おめでとうございます🎉`,
-      ...(art ? { embeds: [{ title: `🎴✨ ${fortune.name} ✨`, color: fortune.color, image: { url: `attachment://${art.name}` } }], files: [art] } : {}),
+      ...(art ? { files: [art] } : {}),
       allowedMentions: { users: [memberId] },
     })
     .catch((err) => logger.warn({ err }, 'omikuji special announce failed'));

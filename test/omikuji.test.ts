@@ -236,7 +236,9 @@ describe('おみくじ', () => {
     const png = (await import('../src/services/omikujiSlip.js')).renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
     await saveOmikujiArt(db, 1, png);
     await revealOmikuji(db, conf, r, 'さくら', send, { suffix: '（もう 1 回）' });
-    expect(steps.map((x) => x.title)).toEqual(['⛩ おみくじ（もう 1 回）', '⛩ おみくじ（もう 1 回）', '🎴✨ 小林吉 ✨', undefined]);
+    // 絵だけ（写真だけ）→ 絵と紙の 2 枚（横に並ぶ）
+    expect(steps.map((x) => x.title)).toEqual(['⛩ おみくじ（もう 1 回）', '⛩ おみくじ（もう 1 回）', undefined, undefined]);
+    expect(steps[2]!.files).toEqual(['unei1.png']);
     // 絵のあとに紙（どちらもカードの絵）。「もう 1 回」はだれが引いたかを 1 行
     expect(steps.at(-1)).toEqual({ title: undefined, files: ['unei1.png', 'omikuji.png'], content: '-# ⛩ **さくら** さんのおみくじ（もう 1 回）' });
     // ふつうの運勢・演出なし・紙なし
@@ -314,7 +316,7 @@ describe('おみくじ', () => {
     expect(calls.map((x) => [x.title, x.files.join(',')])).toEqual([
       ['⛩ おみくじ', ''],
       ['⛩ おみくじ', ''],
-      ['🎴✨ 小林吉 ✨', 'unei1.png'],
+      [undefined, 'unei1.png'],
       [undefined, 'unei1.png,omikuji.png'],
     ]);
     // くじは引いていない・銭は動かない
