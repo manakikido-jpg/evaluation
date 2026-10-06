@@ -50,7 +50,7 @@ describe('おみくじ', () => {
   });
 
   it('🎴 運営吉を引いた記録: 同じ日にもう一度引くと、その運営吉が出る', async () => {
-    const special = { enabled: true, percent: 100, mult: 5, list: [{ name: '小林吉', message: '' }] };
+    const special = { ...cfg.omikujiSpecial, enabled: true, percent: 100, mult: 5, list: [{ name: '小林吉', message: '' }] };
     const economy = { ...cfg.economy, omikujiBase: 10 };
     const now = new Date('2026-09-26T03:00:00Z');
     const r = await drawOmikuji(db, economy, 'A', now, seq(0, 0, 0.5), { special });
@@ -215,7 +215,7 @@ describe('おみくじ', () => {
 
   it('演出: ふつうは「ガラガラ…」→ 紙。運営吉は 光る → 絵 → 絵と紙。紙を出さない設定なら文字だけ', async () => {
     Object.assign(REVEAL_MS, { shake: 0, glow: 0, art: 0 });
-    const special = { enabled: true, percent: 100, mult: 3, list: [{ name: '小林吉', message: '', color: '#1f4fbf' }] };
+    const special = { ...cfg.omikujiSpecial, enabled: true, percent: 100, mult: 3, list: [{ name: '小林吉', message: '', color: '#1f4fbf' }] };
     const conf = { ...cfg, omikujiSpecial: special };
     const steps: { title?: string; files: string[]; content?: string }[] = [];
     const record = (p: { content?: string; embeds: { title?: string }[]; files?: { name: string | null }[] }) =>
@@ -293,7 +293,7 @@ describe('おみくじ', () => {
         calls.push({ kind: 'edit', channel, title: b.embeds?.at(-1)?.title, files: (b.files ?? []).map((f) => f.name) });
       },
     };
-    const conf = { ...cfg, bell: { ...cfg.bell, channelId: '900000000000000099' }, omikujiSpecial: { enabled: false, percent: 1, mult: 3, list: [{ name: '小林吉', message: '', color: '#1f4fbf' }] } };
+    const conf = { ...cfg, bell: { ...cfg.bell, channelId: '900000000000000099' }, omikujiSpecial: { ...cfg.omikujiSpecial, enabled: false, percent: 1, mult: 3, list: [{ name: '小林吉', message: '', color: '#1f4fbf' }] } };
     expect(await trialUnei(db, discord as never, conf, 2, 'A')).toEqual({ ok: false, reason: 'no_slot' });
     expect(await trialUnei(db, discord as never, { ...conf, bell: { ...conf.bell, channelId: undefined }, channels: { ...conf.channels, log: undefined } }, 1, 'A')).toEqual({ ok: false, reason: 'no_channel' });
     // 出す設定が OFF でも試せる。絵がなければ 光る → 紙
@@ -332,5 +332,30 @@ describe('おみくじ', () => {
     const meta = await sharp(out).metadata();
     // 絵 300×600 ＋ すき間 10 ＋ 紙 300×600
     expect(meta).toMatchObject({ format: 'png', width: 610, height: 600 });
+  });
+
+  it('🎴 運営吉の確率を出したい間隔で決める: 100 ÷（1 日の平均回数 × 日数）を下限・上限におさめる', async () => {
+    const { specialPercent, omikujiDailyAverage } = await import('../src/services/omikuji.js');
+    const base = { mode: 'interval' as const, percent: 1, everyDays: 30, minPercent: 0.01, maxPercent: 1 };
+    // 1 日 50 回・30 日に 1 回 → 1500 回に 1 回
+    expect(specialPercent(base, 50)).toBeCloseTo(100 / 1500, 6);
+    // 鯖が大きくなる（1 日 200 回）と下がる
+    expect(specialPercent(base, 200)).toBeCloseTo(100 / 6000, 6);
+    // 下限・上限・まだ引かれていない・決めた確率
+    expect(specialPercent(base, 100000)).toBe(0.01);
+    expect(specialPercent(base, 1)).toBe(1);
+    expect(specialPercent(base, 0)).toBe(1);
+    expect(specialPercent({ ...base, mode: 'fixed', percent: 0.04 }, 50)).toBe(0.04);
+    // 1 日の平均回数（最近 30 日・もう 1 回も入れる）
+    const now = new Date('2026-10-06T03:00:00Z');
+    for (let d = 0; d < 6; d++) await drawOmikuji(db, cfg.economy, `m${d}`, new Date(now.getTime() - d * 86_400_000), () => 0.5);
+    await drawOmikuji(db, cfg.economy, 'old', new Date(now.getTime() - 40 * 86_400_000), () => 0.5);
+    expect(await omikujiDailyAverage(db, now, { fresh: true })).toBeCloseTo(6 / 30, 6);
+    // 間隔で決めるとき: 平均 0.2 回・30 日 → 100 ÷ 6 で上限 1% → 乱数 0.005（0.5%）で出る
+    const special = { ...cfg.omikujiSpecial, enabled: true, mode: 'interval' as const, everyDays: 30, minPercent: 0.01, maxPercent: 1, list: [{ name: '小林吉', message: '' }] };
+    const r = await drawOmikuji(db, cfg.economy, 'X', now, () => 0.005, { special });
+    expect(r.status === 'drawn' && r.fortune.key).toBe('unei1');
+    const r2 = await drawOmikuji(db, cfg.economy, 'Y', now, () => 0.02, { special });
+    expect(r2.status === 'drawn' && r2.fortune.key).not.toBe('unei1');
   });
 });

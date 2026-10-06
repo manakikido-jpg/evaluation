@@ -1,4 +1,4 @@
-import { and, desc, eq, notLike } from 'drizzle-orm';
+import { and, desc, eq, gte, notLike, sql } from 'drizzle-orm';
 import { omikujiTextsSchema, type EconomyConfig, type OmikujiSpecialConfig, type OmikujiStreakConfig, type OmikujiTextsConfig, type StreakReward } from '../config.js';
 import { toneOf, type FortuneKey } from '../omikujiTexts.js';
 import type { Db } from '../db/client.js';
@@ -64,6 +64,8 @@ export async function chooseMessage(db: Db, memberId: string, fortune: Fortune, 
 
 
 type Rand = () => number;
+/** 運営吉の設定（確率の決め方は書かなければ「決めた確率」） */
+type SpecialCfg = Pick<OmikujiSpecialConfig, 'enabled' | 'percent' | 'mult' | 'list'> & Partial<Pick<OmikujiSpecialConfig, 'mode' | 'everyDays' | 'minPercent' | 'maxPercent'>>;
 const DEFAULT_TEXTS = omikujiTextsSchema.parse({});
 
 /** 🎴 運営吉の運勢（key は unei1〜unei4。何番目かで絵が決まる） */
@@ -72,19 +74,19 @@ export const specialIndex = (key: string): number | undefined => {
   const m = /^unei([1-9])$/.exec(key);
   return m ? Number(m[1]) : undefined;
 };
-export function specialFortune(cfg: OmikujiSpecialConfig, n: number): Fortune | undefined {
+export function specialFortune(cfg: SpecialCfg, n: number): Fortune | undefined {
   const s = cfg.list[n - 1];
   if (!s) return undefined;
   return { key: `unei${n}`, name: s.name, weight: 0, mult: cfg.mult, message: s.message || '運営からの特別なおみくじ。今日はきっといい日', color: s.color ? parseInt(s.color.slice(1), 16) : SPECIAL_COLOR };
 }
 /** 引いた記録の key から運勢（運営吉は今の設定から。消えていれば名前だけ） */
-export function fortuneOf(key: string, special?: OmikujiSpecialConfig): Fortune | undefined {
+export function fortuneOf(key: string, special?: SpecialCfg): Fortune | undefined {
   const n = specialIndex(key);
   if (n !== undefined) return (special && specialFortune(special, n)) ?? { key, name: '運営吉', weight: 0, mult: 0, message: '', color: SPECIAL_COLOR };
   return FORTUNES.find((f) => f.key === key);
 }
 
-export function drawFortune(rand: Rand = Math.random, special?: OmikujiSpecialConfig): Fortune {
+export function drawFortune(rand: Rand = Math.random, special?: SpecialCfg): Fortune {
   // 🎴 運営吉（決めた確率で。出たら、その中から 1 つ）
   if (special?.enabled && special.list.length && special.percent > 0 && rand() * 100 < special.percent) {
     return specialFortune(special, 1 + Math.floor(rand() * special.list.length))!;
@@ -193,16 +195,46 @@ export async function omikujiToday(db: Db, memberId: string, now: Date): Promise
   return { drawn: rows.some((r) => r.date === date), extraUsed: rows.some((r) => r.date === extraKey(date)) };
 }
 
+// ───────── 🎴 運営吉の確率（出したい間隔から） ─────────
+
+/** 最近何日のおみくじの回数で計るか */
+export const SPECIAL_WINDOW_DAYS = 30;
+let dailyCache: { at: number; avg: number } | undefined;
+
+/** 最近 30 日のおみくじの 1 日の平均回数（「もう 1 回」も入れる。10 分おぼえておく） */
+export async function omikujiDailyAverage(db: Db, now: Date, opts: { fresh?: boolean } = {}): Promise<number> {
+  if (!opts.fresh && dailyCache && now.getTime() - dailyCache.at < 10 * 60_000 && now.getTime() >= dailyCache.at) return dailyCache.avg;
+  const since = new Date(now.getTime() - SPECIAL_WINDOW_DAYS * 86_400_000);
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(omikuji).where(gte(omikuji.createdAt, since));
+  const avg = Number(row?.n ?? 0) / SPECIAL_WINDOW_DAYS;
+  dailyCache = { at: now.getTime(), avg };
+  return avg;
+}
+
+/**
+ * 今の運営吉の確率（%）。fixed なら決めた確率。interval なら 100 ÷（1 日の平均回数 × 出したい日数）を下限・上限におさめる
+ * （まだおみくじが引かれていなければ上限）
+ */
+export function specialPercent(cfg: Pick<SpecialCfg, 'mode' | 'percent' | 'everyDays' | 'minPercent' | 'maxPercent'>, dailyAverage: number): number {
+  if (cfg.mode !== 'interval') return cfg.percent;
+  const lo = Math.min(cfg.minPercent ?? 0.01, cfg.maxPercent ?? 1);
+  const hi = Math.max(cfg.minPercent ?? 0.01, cfg.maxPercent ?? 1);
+  if (dailyAverage <= 0) return hi;
+  return Math.min(hi, Math.max(lo, 100 / (dailyAverage * (cfg.everyDays ?? 30))));
+}
+
 export async function drawOmikuji(
   db: Db,
   economy: EconomyConfig,
   memberId: string,
   now: Date,
   rand: Rand = Math.random,
-  opts: { extra?: boolean; streak?: OmikujiStreakConfig; special?: OmikujiSpecialConfig; texts?: OmikujiTextsConfig } = {},
+  opts: { extra?: boolean; streak?: OmikujiStreakConfig; special?: SpecialCfg; texts?: OmikujiTextsConfig } = {},
 ): Promise<OmikujiResult> {
   const date = opts.extra ? extraKey(jstDate(now)) : jstDate(now);
-  const fortune = drawFortune(rand, opts.special);
+  // 🎴 運営吉: 間隔で決めるときは、最近のおみくじの回数から今の確率を出す
+  const special = opts.special?.enabled && opts.special.mode === 'interval' ? { ...opts.special, percent: specialPercent(opts.special, await omikujiDailyAverage(db, now)) } : opts.special;
+  const fortune = drawFortune(rand, special);
   const amount = omikujiReward(economy, fortune);
   const texts = opts.texts ?? DEFAULT_TEXTS;
   const chosen = await chooseMessage(db, memberId, fortune, texts, rand);
@@ -210,7 +242,7 @@ export async function drawOmikuji(
   // 引いた記録と花びらを一緒に（途中で失敗したら、その日はまた引ける）
   // 連続日数のおまけも同じ記録と一緒に（その日の記録は 1 つだけなので、おまけも 1 回だけ）
   const done = await db.transaction(async (tx) => {
-    const inserted = await tx.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount, message: chosen.message }).onConflictDoNothing().returning();
+    const inserted = await tx.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount, message: chosen.message, createdAt: now }).onConflictDoNothing().returning();
     if (!inserted.length) return undefined;
     let balance = amount > 0 ? await addCoins(tx, memberId, amount, 'omikuji', { date, fortune: fortune.key }) : (await walletOf(tx, memberId)).balance;
     const streak = opts.extra ? 0 : streakOf(await drawnDates(tx, memberId), date);

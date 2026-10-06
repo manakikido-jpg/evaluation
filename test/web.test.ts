@@ -535,7 +535,11 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect((await send({ ...base, 'name.2': '', 'name.3': '三' })).headers.get('location')).toBe('/settings?msg=unei_gap&at=unei#sec-unei');
     expect((await send({ ...base, percent: '' })).headers.get('location')).toBe('/settings?msg=unei_invalid&at=unei#sec-unei');
     expect((await send(base, { 'img.1': png, 'img.2': '<svg/>' })).headers.get('location')).toBe('/settings?msg=unei_partial&at=unei#sec-unei');
-    expect(store.current.omikujiSpecial).toEqual({ enabled: true, percent: 0.5, mult: 5, list: [{ name: '小林吉', message: '今日はいい日' }, { name: 'ais吉', message: '' }] });
+    expect(store.current.omikujiSpecial).toEqual({ enabled: true, percent: 0.5, mult: 5, mode: 'fixed', everyDays: 30, minPercent: 0.01, maxPercent: 1, list: [{ name: '小林吉', message: '今日はいい日' }, { name: 'ais吉', message: '' }] });
+    // 出したい間隔で決める（30 日の平均回数から計算した今の確率が出る）
+    expect((await send({ ...base, mode: 'interval', everyDays: '14', minPercent: '0.02', maxPercent: '0.8' })).headers.get('location')).toBe('/settings?msg=unei_saved&at=unei#sec-unei');
+    expect(store.current.omikujiSpecial).toMatchObject({ mode: 'interval', everyDays: 14, minPercent: 0.02, maxPercent: 0.8 });
+    expect(await (await get('/settings', g)).text()).toContain('いまの確率 <strong>0.8%</strong>');
     expect(Object.keys(await omikujiArtHashes(db))).toEqual(['1']);
     expect((await loadOmikujiArt(db, 1))?.name).toBe('unei1.png');
     const img = await get('/settings/omikuji-art/1', g);

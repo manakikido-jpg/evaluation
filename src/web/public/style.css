@@ -1002,3 +1002,11 @@ form.dirty .art-savebar { border-color: #e0a020; }
 .ai-verdict.muted { color: var(--muted, #888); font-weight: 400; }
 .ai-details { margin: 8px 0; }
 .ai-details > summary { cursor: pointer; padding: 4px 0; }
+
+/* 🎴 運営吉の確率の決め方 */
+.unei-mode { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.unei-mode legend { padding: 0 4px; }
+.unei-mode .check { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; }
+.inline-fields { display: flex; gap: 8px; align-items: center; }
+.inline-fields input { max-width: 120px; }
+.unei-now { grid-column: 1 / -1; }

@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-unei-interval',
+    date: '2026-10-06',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🎴 運営吉の確率を「出したい間隔」で決められるように',
+    items: [
+      '設定 → 🎴 運営吉 で「出したい間隔で決める」を選ぶと、「何日に 1 回くらい出したいか」から、最近 30 日のおみくじの回数で確率を自動で決めます。鯖が大きくなるほど確率は下がります',
+      '確率の下限・上限を決められます。いまの確率（約何回に 1 回・約何日に 1 回）も設定のページに出ます',
+    ],
+  },
+  {
     id: '2026-10-06-ai-matches',
     date: '2026-10-06',
     kind: 'new',

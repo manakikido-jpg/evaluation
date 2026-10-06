@@ -4,6 +4,7 @@ import type { AdminSession, Application, Omairi, Soudan, SoudanMessage, WebAccou
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
 import { GENDER_LABEL, isGender } from '../../services/admission.js';
 import { recruitWaits } from '../../services/recruit.js';
+import { specialPercent } from '../../services/omikuji.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { Avatar, Layout } from './layout.js';
 import { OmikujiTextsSection } from './omikujiTexts.js';
@@ -60,7 +61,7 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   account_deleted: { text: '消しました。', kind: 'ok' },
   unei_saved: { text: '🎴 運営吉を保存しました（BOT には 1 分以内に反映されます）。', kind: 'ok' },
   unei_partial: { text: '🎴 運営吉を保存しましたが、入らなかった絵があります（PNG・JPEG・WebP・GIF で 4MB まで）。', kind: 'warn' },
-  unei_invalid: { text: '🎴 運営吉を保存できませんでした。確率（0〜100）・倍率・名前（20 文字まで）を確かめてください。', kind: 'warn' },
+  unei_invalid: { text: '🎴 運営吉を保存できませんでした。確率（0〜100）・間隔（1〜365 日）・倍率・名前（20 文字まで）を確かめてください。', kind: 'warn' },
   unei_gap: { text: '🎴 名前は 1 枠目からつめて入れてください（途中の枠を空にはできません。絵は枠の番号で決まります）。', kind: 'warn' },
   unei_art_deleted: { text: '🎴 絵を消しました。', kind: 'ok' },
   unei_trial: { text: '🧪 運営のチャンネル（呼び鈴の知らせ先か #記録）に、運営吉を試しに出しました。ガラガラ → 光る → 絵 → 紙 の順に、6 秒ほどで全部出ます（くじは引いていません・銭は動きません）。', kind: 'ok' },
@@ -770,8 +771,11 @@ function NotifySection(props: {
 }
 
 /** 🎴 運営吉: おみくじでまれに出る、運営の特別な運勢（名前・ひとこと・絵）。絵と設定は 1 つのフォームでまとめて保存 */
-function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Record<number, string>; flash?: string }) {
+function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Record<number, string>; flash?: string; daily: number }) {
   const sp = props.cfg.omikujiSpecial;
+  const daily = props.daily;
+  const now = specialPercent(sp, daily);
+  const fmtPct = (v: number) => String(Math.round(v * 10000) / 10000);
   const e = props.cfg.economy;
   const slots = [...Array(OMIKUJI_SPECIAL_MAX).keys()].map((i) => i + 1);
   const coins = e.omikujiBase > 0 ? Math.max(1, Math.round(e.omikujiBase * sp.mult)) : 0;
@@ -789,10 +793,39 @@ function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Reco
             <input type="checkbox" name="enabled" value="yes" {...(sp.enabled ? { checked: true } : {})} />
             <span>運営吉を出す</span>
           </label>
+          <fieldset class="field unei-mode">
+            <legend>出る確率の決め方</legend>
+            <label class="check">
+              <input type="radio" name="mode" value="interval" {...(sp.mode === 'interval' ? { checked: true } : {})} />
+              <span>
+                <strong>出したい間隔で決める</strong>（最近 30 日のおみくじの回数から、BOT が毎回確率を計算。鯖が大きくなるほど下がる）
+              </span>
+            </label>
+            <label class="check">
+              <input type="radio" name="mode" value="fixed" {...(sp.mode !== 'interval' ? { checked: true } : {})} />
+              <span>決めた確率で出す</span>
+            </label>
+          </fieldset>
           <label class="field">
-            <span>出る確率（%・全部合わせて。小数も OK。1 なら 100 回に 1 回）</span>
-            <input type="number" name="percent" value={String(sp.percent)} min={0} max={100} step="0.01" required />
+            <span>出したい間隔（日。全部の枠を合わせて、だいたい何日に 1 回）</span>
+            <input type="number" name="everyDays" value={String(sp.everyDays)} min={1} max={365} step="0.5" />
           </label>
+          <label class="field">
+            <span>確率の下限・上限（%・間隔で決めるとき。この中におさめる）</span>
+            <span class="inline-fields">
+              <input type="number" name="minPercent" value={String(sp.minPercent)} min={0} max={100} step="0.001" aria-label="下限（%）" />
+              〜
+              <input type="number" name="maxPercent" value={String(sp.maxPercent)} min={0} max={100} step="0.001" aria-label="上限（%）" />
+            </span>
+          </label>
+          <label class="field">
+            <span>決めた確率（%・全部合わせて。小数も OK。1 なら 100 回に 1 回）</span>
+            <input type="number" name="percent" value={String(sp.percent)} min={0} max={100} step="0.001" required />
+          </label>
+          <p class="note unei-now">
+            最近 30 日のおみくじ: 1 日 平均 {daily.toFixed(1)} 回 → いまの確率 <strong>{fmtPct(now)}%</strong>（{now > 0 ? `約 ${Math.round(100 / now).toLocaleString('ja-JP')} 回に 1 回` : '出ない'}
+            {now > 0 && daily > 0 ? `・約 ${Math.round(100 / now / daily).toLocaleString('ja-JP')} 日に 1 回` : ''}。1 人ずつはこれを枠の数で割ったもの）
+          </p>
           <label class="field">
             <span>
               {e.currencyName}の倍率（おみくじの基本の量 {e.omikujiBase} に掛ける。大吉は 3）→ いま {coins} 枚
@@ -1044,6 +1077,8 @@ export function SettingsPage(props: {
   omikujiArt?: Record<number, string>;
   /** 📜 おみくじの紙の台紙の印（運勢 → hash） */
   slipBg?: Record<string, string>;
+  /** 🎴 最近 30 日のおみくじの 1 日の平均回数（運営吉の確率を出す） */
+  omikujiDaily?: number;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -1529,7 +1564,7 @@ export function SettingsPage(props: {
         </section>
       </form>
       {props.notify && <NotifySection session={props.session} notify={props.notify} flash={props.at === 'notify' ? props.flash : undefined} textChannels={props.textChannels ?? []} botCanMentionAll={props.botCanMentionAll} />}
-      <UneiSection session={props.session} cfg={cfg} art={props.omikujiArt ?? {}} flash={props.at === 'unei' ? props.flash : undefined} />
+      <UneiSection session={props.session} cfg={cfg} art={props.omikujiArt ?? {}} flash={props.at === 'unei' ? props.flash : undefined} daily={props.omikujiDaily ?? 0} />
       <OmikujiTextsSection session={props.session} cfg={cfg} bg={props.slipBg ?? {}} flash={props.at === 'omikujitexts' ? props.flash : undefined} />
       <section class="card anchor" id="sec-accounts">
         <h2>🪪 社務所Web のアカウント（ID とパスワード）</h2>

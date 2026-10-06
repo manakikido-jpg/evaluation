@@ -4,7 +4,7 @@ import { activityStats, genderNow, genderTrend } from '../services/genderStats.j
 import { addIdeaComment, addIdeaFiles, canEditIdea, createIdea, deleteIdea, deleteIdeaComment, deleteIdeaFile, getIdea, getIdeaFile, ideaCounts, ideaFilesZip, isIdeaKind, isIdeaStatus, listIdeas, setIdeaPinned, setIdeaStatus, toggleIdeaVote, updateIdea, type IdeaKind } from '../services/ideas.js';
 import { IdeaPage, IdeasPage } from './views/ideas.js';
 import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikujiArt, loadSlipBg, omikujiArtHashes, saveOmikujiArt, saveSlipBg, SLIP_BG_KEYS, slipBgHashes } from '../services/omikujiArt.js';
-import { fortuneOf, omikujiSayings, specialIndex } from '../services/omikuji.js';
+import { fortuneOf, omikujiDailyAverage, omikujiSayings, specialIndex } from '../services/omikuji.js';
 import { renderSlip } from '../services/omikujiSlip.js';
 import { trialUnei } from '../services/omikujiTrial.js';
 import { aiStats } from '../services/casino/aiStats.js';
@@ -2137,6 +2137,7 @@ export function createWebApp(deps: WebDeps) {
         boostLog={await recentBoostMessages(db)}
         omikujiArt={await omikujiArtHashes(db)}
         slipBg={await slipBgHashes(db)}
+        omikujiDaily={await omikujiDailyAverage(db, now(), { fresh: true })}
       />,
     );
   });
@@ -2157,7 +2158,19 @@ export function createWebApp(deps: WebDeps) {
     const lastUsed = slots.reduce((m, n, i) => (n ? i + 1 : m), 0);
     if (slots.slice(0, lastUsed).some((n) => !n)) return back('unei_gap');
     const dec = (k: string) => (typeof body[k] === 'string' && /^\d{1,3}(\.\d{1,4})?$/.test(body[k] as string) ? Number(body[k]) : NaN);
-    const raw = { enabled: body.enabled === 'yes', percent: dec('percent'), mult: dec('mult'), list };
+    // 間隔で決めるときの欄（送られてこなければ今の値）
+    const cur = cfg.omikujiSpecial;
+    const opt = (k: string, now: number) => (typeof body[k] === 'string' && body[k] !== '' ? dec(k) : now);
+    const raw = {
+      enabled: body.enabled === 'yes',
+      percent: dec('percent'),
+      mult: dec('mult'),
+      mode: body.mode === 'interval' ? ('interval' as const) : body.mode === 'fixed' ? ('fixed' as const) : cur.mode,
+      everyDays: opt('everyDays', cur.everyDays),
+      minPercent: opt('minPercent', cur.minPercent),
+      maxPercent: opt('maxPercent', cur.maxPercent),
+      list,
+    };
     const current = await loadOverrides(db);
     let overrides: Overrides;
     try {

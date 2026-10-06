@@ -258,8 +258,15 @@ export type OmikujiStreakConfig = z.infer<typeof omikujiStreakSchema>;
 export const OMIKUJI_SPECIAL_MAX = 4;
 export const omikujiSpecialSchema = z.object({
   enabled: z.boolean().default(false),
-  /** 出る確率（%・全部合わせて。出たら、その中から同じ確率で 1 つ） */
+  /** 出る確率（%・全部合わせて。出たら、その中から同じ確率で 1 つ）。mode が interval のときは使わない */
   percent: z.number().min(0).max(100).default(1),
+  /** fixed: 決めた確率 / interval: 出したい間隔から、最近のおみくじの回数で確率を決める（鯖が大きくなると下がる） */
+  mode: z.enum(['fixed', 'interval']).default('fixed'),
+  /** 出したい間隔（日。全部の枠を合わせて、だいたい何日に 1 回出るか） */
+  everyDays: z.number().min(1).max(365).default(30),
+  /** 間隔で決めるときの確率の下限・上限（%） */
+  minPercent: z.number().min(0).max(100).default(0.01),
+  maxPercent: z.number().min(0).max(100).default(1),
   /** {通貨}の倍率（おみくじの基本の量に掛ける。大吉は 3） */
   mult: z.number().min(0).max(100).default(3),
   list: z
