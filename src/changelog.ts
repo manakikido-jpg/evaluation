@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-idea-files',
+    date: '2026-10-06',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '📎 アイデア・共有に写真・ファイルを付けられるように',
+    items: [
+      '書く・直す・コメントのときに、写真やファイルを付けられます（1 回 10 個・1 つ 10MB まで）。スクショは Ctrl+V で貼り付けても入ります',
+      '写真は小さく並んで、押すと大きく。「⬇ ダウンロード」で保存できます。いくつもあるときは「まとめてダウンロード（zip）」',
+      '一覧に 📎 の数と写真が出ます。一覧のコメントの数がずれることがあったのも直しました',
+    ],
+  },
+  {
     id: '2026-10-06-omikuji-slip',
     date: '2026-10-06',
     kind: 'improve',

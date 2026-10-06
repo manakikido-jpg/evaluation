@@ -1,7 +1,7 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
 import { activityStats, genderNow, genderTrend } from '../services/genderStats.js';
-import { addIdeaComment, canEditIdea, createIdea, deleteIdea, deleteIdeaComment, getIdea, ideaCounts, isIdeaKind, isIdeaStatus, listIdeas, setIdeaPinned, setIdeaStatus, toggleIdeaVote, updateIdea, type IdeaKind } from '../services/ideas.js';
+import { addIdeaComment, addIdeaFiles, canEditIdea, createIdea, deleteIdea, deleteIdeaComment, deleteIdeaFile, getIdea, getIdeaFile, ideaCounts, ideaFilesZip, isIdeaKind, isIdeaStatus, listIdeas, setIdeaPinned, setIdeaStatus, toggleIdeaVote, updateIdea, type IdeaKind } from '../services/ideas.js';
 import { IdeaPage, IdeasPage } from './views/ideas.js';
 import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikujiArt, loadSlipBg, omikujiArtHashes, saveOmikujiArt, saveSlipBg, SLIP_BG_KEYS, slipBgHashes } from '../services/omikujiArt.js';
 import { fortuneOf, omikujiSayings, specialIndex } from '../services/omikuji.js';
@@ -320,6 +320,8 @@ export function createWebApp(deps: WebDeps) {
   // 🦊 AT 機の絵（1 枚 4MB まで。まとめて保存するときは全部で 100MB まで）
   const artBody = bodyLimit({ maxSize: 5 * 1024 * 1024, onError: (c) => c.text('絵が大きすぎます（4MB まで）。', 413) });
   const artsBody = bodyLimit({ maxSize: 100 * 1024 * 1024, onError: (c) => c.text('一度に送る絵が多すぎます（全部で 100MB まで）。何回かに分けて保存してください。', 413) });
+  // 💡 アイデア・共有の写真・ファイル（1 つ 10MB・1 回 10 個まで）
+  const ideaBody = bodyLimit({ maxSize: 105 * 1024 * 1024, onError: (c) => c.text('一度に送るファイルが大きすぎます（1 つ 10MB・全部で 100MB まで）。', 413) });
   app.use((c, next) =>
     c.req.method !== 'POST'
       ? smallBody(c, next)
@@ -327,6 +329,8 @@ export function createWebApp(deps: WebDeps) {
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
+          : /^\/ideas(?:\/\d+\/(?:edit|comments))?$/.test(c.req.path)
+            ? ideaBody(c, next)
           : /^\/economy\/casino\/art\/[a-z0-9-]+$/.test(c.req.path)
             ? artBody(c, next)
             : smallBody(c, next),
@@ -814,13 +818,22 @@ export function createWebApp(deps: WebDeps) {
     return c.html(<IdeasPage session={c.get('session')} ideas={list} counts={counts} name={name} kind={kind} status={status} q={q || undefined} flash={c.req.query('msg')} />);
   });
 
+  /** 送られた写真・ファイル（name="files"。いくつでも） */
+  const ideaUploads = async (body: Record<string, unknown>) => {
+    const v = body.files;
+    const list = (Array.isArray(v) ? v : [v]).filter((f): f is File => f instanceof File && f.size > 0);
+    return Promise.all(list.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
+  };
+  const one = (v: unknown) => (typeof v === 'string' ? v : Array.isArray(v) && typeof v[0] === 'string' ? v[0] : '');
+
   app.post('/ideas', async (c) => {
-    const body = await c.req.parseBody();
-    const kind = isIdeaKind(body.kind) ? body.kind : 'idea';
-    const row = await createIdea(db, { kind, title: typeof body.title === 'string' ? body.title : '', body: typeof body.body === 'string' ? body.body : '', by: c.get('session').userId });
+    const body = await c.req.parseBody({ all: true });
+    const kind = isIdeaKind(one(body.kind)) ? (one(body.kind) as IdeaKind) : 'idea';
+    const row = await createIdea(db, { kind, title: one(body.title), body: one(body.body), by: c.get('session').userId });
     if (!row) return c.redirect('/ideas?msg=invalid');
-    await audit(db, { actorId: c.get('session').userId, action: 'idea.create', detail: { id: row.id, kind, title: row.title }, via: 'web' });
-    return c.redirect(`/ideas/${row.id}?msg=created`);
+    const files = await addIdeaFiles(db, row.id, null, await ideaUploads(body), c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'idea.create', detail: { id: row.id, kind, title: row.title, files: files.saved }, via: 'web' });
+    return c.redirect(`/ideas/${row.id}?msg=${files.rejected.length ? 'files_rejected' : 'created'}`);
   });
 
   app.get('/ideas/:id', async (c) => {
@@ -833,6 +846,7 @@ export function createWebApp(deps: WebDeps) {
         idea={found.idea}
         comments={found.comments}
         voters={found.voters}
+        files={found.files}
         name={name}
         canEdit={canEditIdea(found.idea, ideaWho(c))}
         edit={c.req.query('edit') === '1'}
@@ -846,12 +860,13 @@ export function createWebApp(deps: WebDeps) {
     const found = await getIdea(db, id, c.get('session').userId);
     if (!found) return c.redirect('/ideas');
     if (!canEditIdea(found.idea, ideaWho(c))) return c.redirect(`/ideas/${id}?msg=forbidden`);
-    const body = await c.req.parseBody();
-    const kind = isIdeaKind(body.kind) ? body.kind : (found.idea.kind as IdeaKind);
-    const ok = await updateIdea(db, id, { kind, title: typeof body.title === 'string' ? body.title : '', body: typeof body.body === 'string' ? body.body : '', by: c.get('session').userId });
+    const body = await c.req.parseBody({ all: true });
+    const kind = isIdeaKind(one(body.kind)) ? (one(body.kind) as IdeaKind) : (found.idea.kind as IdeaKind);
+    const ok = await updateIdea(db, id, { kind, title: one(body.title), body: one(body.body), by: c.get('session').userId });
     if (!ok) return c.redirect(`/ideas/${id}?edit=1&msg=invalid`);
-    await audit(db, { actorId: c.get('session').userId, action: 'idea.edit', detail: { id }, via: 'web' });
-    return c.redirect(`/ideas/${id}?msg=saved`);
+    const files = await addIdeaFiles(db, id, null, await ideaUploads(body), c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'idea.edit', detail: { id, files: files.saved }, via: 'web' });
+    return c.redirect(`/ideas/${id}?msg=${files.rejected.length ? 'files_rejected' : 'saved'}`);
   });
 
   app.post('/ideas/:id/status', async (c) => {
@@ -880,10 +895,42 @@ export function createWebApp(deps: WebDeps) {
 
   app.post('/ideas/:id/comments', async (c) => {
     const id = ideaId(c);
-    const body = await c.req.parseBody();
-    const row = await addIdeaComment(db, id, typeof body.body === 'string' ? body.body : '', c.get('session').userId);
+    const body = await c.req.parseBody({ all: true });
+    const uploads = await ideaUploads(body);
+    // 写真・ファイルだけのコメントも OK
+    const row = await addIdeaComment(db, id, one(body.body), c.get('session').userId, { allowEmpty: uploads.length > 0 });
     if (!row) return c.redirect(`/ideas/${id}#comments`);
-    return c.redirect(`/ideas/${id}?msg=commented#comments`);
+    const files = await addIdeaFiles(db, id, row.id, uploads, c.get('session').userId);
+    return c.redirect(`/ideas/${id}?msg=${files.rejected.length ? 'files_rejected' : 'commented'}#comments`);
+  });
+
+  // 📎 写真はそのまま見られる（?dl=1 でダウンロード）。写真でないものはいつもダウンロード
+  app.get('/ideas/files/:id', async (c) => {
+    const f = await getIdeaFile(db, ideaId(c));
+    if (!f) return c.notFound();
+    const image = f.contentType.startsWith('image/');
+    const dl = !image || c.req.query('dl') === '1';
+    return c.body(new Uint8Array(f.data), 200, {
+      'content-type': f.contentType,
+      'content-disposition': `${dl ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(f.name)}`,
+      'content-security-policy': "default-src 'none'; sandbox",
+      'x-content-type-options': 'nosniff',
+    });
+  });
+  app.get('/ideas/:id/files.zip', async (c) => {
+    const id = ideaId(c);
+    const z = await ideaFilesZip(db, id);
+    if (!z) return c.notFound();
+    return c.body(new Uint8Array(z), 200, {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="idea-${id}.zip"`,
+      'x-content-type-options': 'nosniff',
+    });
+  });
+  app.post('/ideas/files/:id/delete', async (c) => {
+    const ideaOf = await deleteIdeaFile(db, ideaId(c), ideaWho(c));
+    if (ideaOf) await audit(db, { actorId: c.get('session').userId, action: 'idea.file_delete', detail: { id: ideaOf, file: ideaId(c) }, via: 'web' });
+    return c.redirect(ideaOf ? `/ideas/${ideaOf}?msg=file_deleted` : '/ideas?msg=forbidden');
   });
 
   app.post('/ideas/comments/:id/delete', async (c) => {

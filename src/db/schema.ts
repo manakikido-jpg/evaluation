@@ -1730,5 +1730,26 @@ export const ideaVotes = pgTable(
   (t) => [primaryKey({ columns: [t.ideaId, t.memberId] })],
 );
 
+/** 📎 アイデア・コメントにつけた写真・ファイル（社務所Web から見る・ダウンロードする） */
+export const ideaFiles = pgTable(
+  'idea_files',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    ideaId: bigint('idea_id', { mode: 'number' }).notNull(),
+    /** コメントにつけたもの（本文につけたものは null） */
+    commentId: bigint('comment_id', { mode: 'number' }),
+    /** 元のファイル名（ダウンロードするときの名前） */
+    name: text('name').notNull(),
+    /** 写真なら image/○○（そのまま見られる）。ほかは application/octet-stream（ダウンロードだけ） */
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    data: bytea('data').notNull(),
+    by: text('by').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idea_files_idea_idx').on(t.ideaId, t.at)],
+);
+
 export type Idea = typeof ideas.$inferSelect;
 export type IdeaComment = typeof ideaComments.$inferSelect;
+export type IdeaFile = Omit<typeof ideaFiles.$inferSelect, 'data'>;

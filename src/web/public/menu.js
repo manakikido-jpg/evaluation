@@ -109,3 +109,32 @@ document.addEventListener('submit', (e) => {
   const f = e.target;
   if (f instanceof HTMLFormElement && f.hasAttribute('data-confirm') && !window.confirm(f.getAttribute('data-confirm') || 'よろしいですか？')) e.preventDefault();
 });
+
+// 📎 アイデア・共有: 選んだ写真・ファイルの名前を出す。スクショは Ctrl+V で貼り付けても入る（今まで選んだものに足す）
+function showPickedFiles(input) {
+  const list = input.closest('.idea-files-pick') && input.closest('.idea-files-pick').querySelector('[data-file-list]');
+  if (!list) return;
+  const files = [...(input.files || [])];
+  list.textContent = files.length ? `選んだもの（${files.length} 個）: ${files.map((f) => f.name).join('・')}` : '';
+}
+document.addEventListener('change', (e) => {
+  const input = e.target;
+  if (input instanceof HTMLInputElement && input.matches('[data-file-input]')) showPickedFiles(input);
+});
+document.addEventListener('paste', (e) => {
+  const form = e.target instanceof Element ? e.target.closest('form[data-paste-files]') : null;
+  const input = form && form.querySelector('[data-file-input]');
+  const pasted = e.clipboardData ? [...e.clipboardData.files] : [];
+  if (!input || !pasted.length || typeof DataTransfer === 'undefined') return;
+  e.preventDefault();
+  const dt = new DataTransfer();
+  [...(input.files || [])].forEach((f) => dt.items.add(f));
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+  pasted.forEach((f, k) => {
+    // 貼り付けた画像は名前が「image.png」になるので、日時の名前にする
+    const name = /^image\.(png|jpe?g|gif|webp)$/i.test(f.name) ? `paste-${stamp}-${k + 1}.${f.name.split('.').pop()}` : f.name;
+    dt.items.add(new File([f], name, { type: f.type }));
+  });
+  input.files = dt.files;
+  showPickedFiles(input);
+});

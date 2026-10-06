@@ -1,6 +1,6 @@
 import { raw } from 'hono/html';
-import type { AdminSession, IdeaComment } from '../../db/schema.js';
-import { IDEA_BODY_MAX, IDEA_COMMENT_MAX, IDEA_KINDS, IDEA_STATUSES, IDEA_TITLE_MAX, type IdeaKind, type IdeaRow, type IdeaStatus } from '../../services/ideas.js';
+import type { AdminSession, IdeaComment, IdeaFile } from '../../db/schema.js';
+import { IDEA_BODY_MAX, IDEA_COMMENT_MAX, IDEA_FILE_ACCEPT, IDEA_FILE_MAX_BYTES, IDEA_FILES_PER_POST, IDEA_KINDS, IDEA_STATUSES, IDEA_TITLE_MAX, type IdeaKind, type IdeaRow, type IdeaStatus } from '../../services/ideas.js';
 import { fmtDateTime } from '../format.js';
 import { discordMarkdownToHtml } from '../markdown.js';
 import { Layout } from './layout.js';
@@ -15,7 +15,73 @@ export const IDEAS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   deleted: { text: '消しました。', kind: 'ok' },
   invalid: { text: '題を入れてください。', kind: 'warn' },
   forbidden: { text: '直す・消すのは、書いた人と宮司だけです。', kind: 'warn' },
+  files_rejected: { text: `保存しましたが、入らなかったファイルがあります（写真・PDF・zip・動画などで 1 つ ${IDEA_FILE_MAX_BYTES / 1024 / 1024}MB まで・1 回 ${IDEA_FILES_PER_POST} 個まで）。`, kind: 'warn' },
+  file_deleted: { text: 'ファイルを消しました。', kind: 'ok' },
 };
+
+const sizeText = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
+
+/** 写真・ファイルを選ぶ（貼り付けでも入る） */
+function FilePick() {
+  return (
+    <label class="field idea-files-pick">
+      <span>
+        📎 写真・ファイル（{IDEA_FILES_PER_POST} 個まで・1 つ {IDEA_FILE_MAX_BYTES / 1024 / 1024}MB まで。スクショは Ctrl+V で貼り付けても入ります）
+      </span>
+      <input type="file" name="files" multiple accept={IDEA_FILE_ACCEPT} data-file-input />
+      <span class="note" data-file-list></span>
+    </label>
+  );
+}
+
+/** 付いている写真・ファイル（写真は小さく並べる。押すと大きく・⬇ でダウンロード） */
+function Files(p: { session: AdminSession; files: IdeaFile[]; canDelete: (f: IdeaFile) => boolean }) {
+  if (!p.files.length) return null;
+  const images = p.files.filter((f) => f.contentType.startsWith('image/'));
+  const others = p.files.filter((f) => !f.contentType.startsWith('image/'));
+  const Del = (q: { f: IdeaFile }) =>
+    p.canDelete(q.f) ? (
+      <form method="post" action={`/ideas/files/${q.f.id}/delete`} class="inline" data-confirm={`「${q.f.name}」を消しますか？`}>
+        <Csrf session={p.session} />
+        <button type="submit" class="link small" title="消す">
+          消す
+        </button>
+      </form>
+    ) : null;
+  return (
+    <div class="idea-files">
+      {images.length > 0 && (
+        <div class="idea-photos">
+          {images.map((f) => (
+            <figure class="idea-photo">
+              <a href={`/ideas/files/${f.id}`} target="_blank" rel="noopener" title="大きく見る">
+                <img src={`/ideas/files/${f.id}`} alt={f.name} loading="lazy" />
+              </a>
+              <figcaption>
+                <a href={`/ideas/files/${f.id}?dl=1`} download={f.name} title={`${f.name}（${sizeText(f.size)}）をダウンロード`}>
+                  ⬇ ダウンロード
+                </a>
+                <Del f={f} />
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+      {others.length > 0 && (
+        <ul class="idea-docs">
+          {others.map((f) => (
+            <li>
+              <a href={`/ideas/files/${f.id}`} download={f.name}>
+                📄 {f.name}
+              </a>{' '}
+              <span class="note">{sizeText(f.size)}</span> <Del f={f} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function Flash(props: { code?: string }) {
   const f = props.code && Object.hasOwn(IDEAS_FLASH, props.code) ? IDEAS_FLASH[props.code] : undefined;
@@ -58,7 +124,7 @@ function Vote(p: { session: AdminSession; idea: IdeaRow; back: string }) {
 function IdeaForm(p: { session: AdminSession; idea?: IdeaRow; kind?: IdeaKind }) {
   const kind = (p.idea?.kind as IdeaKind | undefined) ?? p.kind ?? 'idea';
   return (
-    <form method="post" action={p.idea ? `/ideas/${p.idea.id}/edit` : '/ideas'} class="idea-form">
+    <form method="post" action={p.idea ? `/ideas/${p.idea.id}/edit` : '/ideas'} class="idea-form" enctype="multipart/form-data" data-paste-files>
       <Csrf session={p.session} />
       <div class="idea-kinds" role="radiogroup" aria-label="種類">
         {(Object.keys(IDEA_KINDS) as IdeaKind[]).map((k) => (
@@ -80,6 +146,8 @@ function IdeaForm(p: { session: AdminSession; idea?: IdeaRow; kind?: IdeaKind })
           {p.idea?.body ?? ''}
         </textarea>
       </label>
+      <FilePick />
+      {p.idea && <p class="note">付いている写真・ファイルはそのまま残ります（消すときは、下の「消す」から）。</p>}
       <div class="inline-actions">
         {p.idea && <a href={`/ideas/${p.idea.id}`}>やめる</a>}
         <button type="submit" class="ok">
@@ -168,10 +236,16 @@ export function IdeasPage(props: {
                   {i.title}
                 </a>
               </div>
+              {i.thumb !== null && (
+                <a href={`/ideas/${i.id}`} class="idea-thumb">
+                  <img src={`/ideas/files/${i.thumb}`} alt="" loading="lazy" />
+                </a>
+              )}
               {i.body && <div class="idea-body clamp">{raw(discordMarkdownToHtml(i.body))}</div>}
               <div class="idea-foot">
                 <Vote session={session} idea={i} back={back} />
                 <a href={`/ideas/${i.id}#comments`}>💬 {i.comments}</a>
+                {i.files > 0 && <a href={`/ideas/${i.id}#files`}>📎 {i.files}</a>}
                 <span class="note">
                   {props.name(i.createdBy)} ・ {fmtDateTime(i.createdAt)}
                 </span>
@@ -184,10 +258,14 @@ export function IdeasPage(props: {
   );
 }
 
-export function IdeaPage(props: { session: AdminSession; idea: IdeaRow; comments: IdeaComment[]; voters: string[]; name: Names; canEdit: boolean; edit?: boolean; flash?: string }) {
+export function IdeaPage(props: { session: AdminSession; idea: IdeaRow; comments: IdeaComment[]; voters: string[]; files: IdeaFile[]; name: Names; canEdit: boolean; edit?: boolean; flash?: string }) {
   const { session, idea: i } = props;
   const guji = session.level === 'guji';
   const back = `/ideas/${i.id}`;
+  const bodyFiles = props.files.filter((f) => f.commentId === null);
+  const filesOf = (commentId: number) => props.files.filter((f) => f.commentId === commentId);
+  // 消せるのは、付けた人・宮司（本文のものは書いた人も）
+  const canDelete = (f: IdeaFile) => guji || f.by === session.userId || (f.commentId === null && i.createdBy === session.userId);
   return (
     <Layout title={i.title} session={session} nav="ideas">
       <div class="page-head">
@@ -209,7 +287,17 @@ export function IdeaPage(props: { session: AdminSession; idea: IdeaRow; comments
             <KindBadge kind={i.kind} />
             <StatusBadge status={i.status} />
           </div>
-          {i.body ? <div class="idea-body">{raw(discordMarkdownToHtml(i.body))}</div> : <p class="note">（中身なし）</p>}
+          {i.body ? <div class="idea-body">{raw(discordMarkdownToHtml(i.body))}</div> : !bodyFiles.length && <p class="note">（中身なし）</p>}
+          <div class="anchor" id="files">
+            <Files session={session} files={bodyFiles} canDelete={canDelete} />
+          </div>
+          {props.files.length > 1 && (
+            <p class="idea-zip">
+              <a href={`/ideas/${i.id}/files.zip`} class="button-link">
+                ⬇ 写真・ファイルをまとめてダウンロード（{props.files.length} 個・zip）
+              </a>
+            </p>
+          )}
           <p class="note">
             書いた人: {props.name(i.createdBy)} ・ {fmtDateTime(i.createdAt)}
             {i.updatedBy !== i.createdBy && ` ・ さいごに動かした人: ${props.name(i.updatedBy)}`}
@@ -276,13 +364,15 @@ export function IdeaPage(props: { session: AdminSession; idea: IdeaRow; comments
                   </form>
                 )}
               </div>
-              <div class="idea-body">{raw(discordMarkdownToHtml(c.body))}</div>
+              {c.body && <div class="idea-body">{raw(discordMarkdownToHtml(c.body))}</div>}
+              <Files session={session} files={filesOf(c.id)} canDelete={canDelete} />
             </li>
           ))}
         </ul>
-        <form method="post" action={`/ideas/${i.id}/comments`} class="idea-comment-form">
+        <form method="post" action={`/ideas/${i.id}/comments`} class="idea-comment-form" enctype="multipart/form-data" data-paste-files>
           <Csrf session={session} />
-          <textarea name="body" rows={3} maxlength={IDEA_COMMENT_MAX} required placeholder="コメントを書く（賛成・反対・こうしたら？など）"></textarea>
+          <textarea name="body" rows={3} maxlength={IDEA_COMMENT_MAX} placeholder="コメントを書く（賛成・反対・こうしたら？など。写真だけでも OK）"></textarea>
+          <FilePick />
           <button type="submit" class="ok">
             コメントする
           </button>

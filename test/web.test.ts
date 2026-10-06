@@ -988,6 +988,74 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect((await get(`/ideas/${id}`, g)).status).toBe(404);
   });
 
+  it('📎 アイデア・共有: 写真・ファイルを付けられる（本文・コメント）。見る・ダウンロード・まとめて zip・消す', async () => {
+    const { renderSlip } = await import('../src/services/omikujiSlip.js');
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    const png = renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
+    const send = (path: string, fields: Record<string, string>, files: [string, Uint8Array][]) => {
+      const fd = new FormData();
+      fd.append('_csrf', csrf);
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+      for (const [name, data] of files) fd.append('files', new File([data], name));
+      return app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}` }, body: fd });
+    };
+    expect(await (await get('/ideas', s)).text()).toContain('enctype="multipart/form-data"');
+    // 写真 2 枚（1 つは名前と中身がちがう）・PDF・付けられないもの（.exe）
+    const created = await send('/ideas', { kind: 'share', title: 'POP の写真' }, [
+      ['pop.png', png],
+      ['写真.jpg', png],
+      ['資料.pdf', new TextEncoder().encode('%PDF-1.4 test')],
+      ['virus.exe', new Uint8Array([1, 2, 3])],
+    ]);
+    const loc = created.headers.get('location')!;
+    expect(loc).toMatch(/^\/ideas\/\d+\?msg=files_rejected$/);
+    const id = Number(/\/ideas\/(\d+)/.exec(loc)![1]);
+    const detail = await (await get(`/ideas/${id}`, s)).text();
+    const fileIds = [...detail.matchAll(/\/ideas\/files\/(\d+)\?dl=1/g)].map((m) => Number(m[1]));
+    expect(fileIds).toHaveLength(2);
+    expect(detail).toContain('写真.png');
+    expect(detail).toContain('📄 資料.pdf');
+    expect(detail).not.toContain('virus.exe');
+    expect(detail).toContain(`/ideas/${id}/files.zip`);
+    // 写真はそのまま見られる・?dl=1 でダウンロード
+    const img = await get(`/ideas/files/${fileIds[0]}`, s);
+    expect(img.headers.get('content-type')).toBe('image/png');
+    expect(img.headers.get('content-disposition')).toBe("inline; filename*=UTF-8''pop.png");
+    expect(Buffer.from(await img.arrayBuffer()).equals(png)).toBe(true);
+    expect((await get(`/ideas/files/${fileIds[1]}?dl=1`, s)).headers.get('content-disposition')).toBe(`attachment; filename*=UTF-8''${encodeURIComponent('写真.png')}`);
+    // 写真でないものはいつもダウンロード（中身の種類は信じない）
+    const pdfId = Number(/\/ideas\/files\/(\d+)" download="資料.pdf"/.exec(detail)![1]);
+    const pdf = await get(`/ideas/files/${pdfId}`, s);
+    expect(pdf.headers.get('content-type')).toBe('application/octet-stream');
+    expect(pdf.headers.get('content-disposition')).toContain('attachment;');
+    // 一覧に 📎 と小さい写真
+    const list = await (await get('/ideas', s)).text();
+    expect(list).toContain('📎 3');
+    expect(list).toContain(`/ideas/files/${fileIds[0]}`);
+    // 写真だけのコメント
+    expect((await send(`/ideas/${id}/comments`, { body: '' }, [['screenshot.png', png]])).headers.get('location')).toBe(`/ideas/${id}?msg=commented#comments`);
+    expect((await send(`/ideas/${id}/comments`, { body: '' }, [])).headers.get('location')).toBe(`/ideas/${id}#comments`);
+    // 一覧のコメントの数（前は、ほかの表の id と取りちがえて数えていた）
+    expect(await (await get('/ideas', s)).text()).toContain(`<a href="/ideas/${id}#comments">💬 1</a>`);
+    // まとめて zip（4 つ）
+    const z = await get(`/ideas/${id}/files.zip`, s);
+    expect(z.headers.get('content-type')).toBe('application/zip');
+    const zb = Buffer.from(await z.arrayBuffer());
+    expect(zb.readUInt32LE(0)).toBe(0x04034b50);
+    expect(zb.readUInt16LE(zb.length - 22 + 10)).toBe(4);
+    for (const n of ['pop.png', '写真.png', '資料.pdf', 'screenshot.png']) expect(zb.includes(Buffer.from(n))).toBe(true);
+    // ほかの神職は消せない・付けた人は消せる
+    const other = await login('700000000000000077');
+    if (other) expect((await post(`/ideas/files/${fileIds[0]}/delete`, other, { _csrf: await csrfOf(other) })).headers.get('location')).toBe('/ideas?msg=forbidden');
+    expect((await post(`/ideas/files/${fileIds[0]}/delete`, s, { _csrf: csrf })).headers.get('location')).toBe(`/ideas/${id}?msg=file_deleted`);
+    expect((await get(`/ideas/files/${fileIds[0]}`, s)).status).toBe(404);
+    // アイデアを消すと、写真も消える
+    const g = await login(GUJI);
+    await post(`/ideas/${id}/delete`, g, { _csrf: await csrfOf(g) });
+    expect((await get(`/ideas/files/${fileIds[1]}`, g)).status).toBe(404);
+  });
+
   it('📓 議事録: 神職も書ける・直せる・やることを済にできる・まとめを Discord に出せる。消すのは宮司だけ', async () => {
     const { listAudit: audits } = await import('../src/services/audit.js');
     const s = await login(STAFF);
