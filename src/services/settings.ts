@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -68,6 +68,8 @@ export const overridesSchema = z.object({
   omikujiStreak: z.object({ rewards: z.array(streakRewardSchema).max(5) }).partial().default({}),
   /** 🎴 運営吉（送られたときは全部置きかえる） */
   omikujiSpecial: omikujiSpecialSchema.optional(),
+  /** ⛩ おみくじの文と紙（送られたときは全部置きかえる） */
+  omikujiTexts: omikujiTextsSchema.optional(),
   omairi: z.object({ days: z.number().int().positive().max(365), extendDays: z.number().int().min(0).max(365) }).partial().default({}),
   coreTime: coreTimeSchema.partial().default({}),
   rooms: roomsSchema.partial().default({}),
@@ -132,6 +134,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     })(),
     omikujiStreak: { ...base.omikujiStreak, ...o.omikujiStreak },
     omikujiSpecial: o.omikujiSpecial ?? base.omikujiSpecial,
+    omikujiTexts: o.omikujiTexts ?? base.omikujiTexts,
     notify: { ...base.notify, ...o.notify },
     omairi: { ...base.omairi, ...o.omairi },
     boost: { ...base.boost, ...o.boost },

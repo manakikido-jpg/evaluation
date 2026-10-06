@@ -3,6 +3,7 @@ import { eq, like } from 'drizzle-orm';
 import { OMIKUJI_SPECIAL_MAX } from '../config.js';
 import type { Db } from '../db/client.js';
 import { slotArt } from '../db/schema.js';
+import { FORTUNE_KEYS } from '../omikujiTexts.js';
 import { detectImage } from './notices.js';
 
 /**
@@ -42,4 +43,41 @@ export async function deleteOmikujiArt(db: Db, n: number): Promise<void> {
 export async function omikujiArtHashes(db: Db): Promise<Record<number, string>> {
   const rows = await db.select({ key: slotArt.key, hash: slotArt.hash }).from(slotArt).where(like(slotArt.key, 'omikuji-%'));
   return Object.fromEntries(rows.flatMap((r) => (/^omikuji-(\d)$/.test(r.key) ? [[Number(r.key.slice(8)), r.hash]] : [])));
+}
+
+// ───────── 📜 おみくじの紙の台紙（運勢ごと・運営吉の枠ごと） ─────────
+// 紙の画像を作るときに読むので、PNG・JPEG だけ（WebP は読めない）
+
+/** 台紙を入れられる運勢（ふつうの 7 つ＋運営吉 1〜4） */
+export const SLIP_BG_KEYS = [...FORTUNE_KEYS, ...Array.from({ length: OMIKUJI_SPECIAL_MAX }, (_, k) => `unei${k + 1}`)];
+export const isSlipBgKey = (k: string) => SLIP_BG_KEYS.includes(k);
+const bgKeyOf = (k: string) => `omikuji-bg-${k}`;
+
+export async function saveSlipBg(db: Db, key: string, data: Uint8Array): Promise<'ok' | 'bad_key' | 'bad_image' | 'too_big'> {
+  if (!isSlipBgKey(key)) return 'bad_key';
+  if (data.byteLength > OMIKUJI_ART_MAX_BYTES) return 'too_big';
+  const kind = detectImage(data);
+  if (!kind || (kind.type !== 'image/png' && kind.type !== 'image/jpeg')) return 'bad_image';
+  const hash = createHash('sha256').update(data).digest('hex').slice(0, 16);
+  await db
+    .insert(slotArt)
+    .values({ key: bgKeyOf(key), contentType: kind.type, data, hash })
+    .onConflictDoUpdate({ target: slotArt.key, set: { contentType: kind.type, data, hash, updatedAt: new Date() } });
+  return 'ok';
+}
+
+export async function loadSlipBg(db: Db, key: string): Promise<{ contentType: string; data: Uint8Array; hash: string } | undefined> {
+  if (!isSlipBgKey(key)) return undefined;
+  const [row] = await db.select().from(slotArt).where(eq(slotArt.key, bgKeyOf(key)));
+  return row && { contentType: row.contentType, data: row.data, hash: row.hash };
+}
+
+export async function deleteSlipBg(db: Db, key: string): Promise<void> {
+  if (isSlipBgKey(key)) await db.delete(slotArt).where(eq(slotArt.key, bgKeyOf(key)));
+}
+
+/** 入っている台紙の印（運勢 → hash） */
+export async function slipBgHashes(db: Db): Promise<Record<string, string>> {
+  const rows = await db.select({ key: slotArt.key, hash: slotArt.hash }).from(slotArt).where(like(slotArt.key, 'omikuji-bg-%'));
+  return Object.fromEntries(rows.map((r) => [r.key.slice('omikuji-bg-'.length), r.hash]));
 }

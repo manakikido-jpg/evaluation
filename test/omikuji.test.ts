@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { omikujiEmbed, omikujiVoiceBlock } from '../src/discord/omikuji.js';
+import { omikujiEmbed, omikujiVoiceBlock, REVEAL_MS, revealOmikuji } from '../src/discord/omikuji.js';
+import { saveOmikujiArt } from '../src/services/omikujiArt.js';
 import { walletOf } from '../src/services/economy.js';
-import { describeStreakRewards, drawFortune, drawOmikuji, FORTUNES, fortuneOf, nextStreakReward, omikujiRange, omikujiReward, streakOf } from '../src/services/omikuji.js';
+import { omikujiTextsSchema } from '../src/config.js';
+import { DEFAULT_ITEMS, DEFAULT_MESSAGES } from '../src/omikujiTexts.js';
+import { describeStreakRewards, drawFortune, drawOmikuji, FORTUNES, fortuneOf, nextStreakReward, omikujiRange, omikujiReward, omikujiSayings, streakOf } from '../src/services/omikuji.js';
+import { kanjiNumber, renderSlip, wareki, wrapColumns } from '../src/services/omikujiSlip.js';
 import { ticketsOf } from '../src/services/tickets.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -163,7 +167,80 @@ describe('おみくじ', () => {
     const e = omikujiEmbed(r, 'さくら', cfg.economy);
     expect(e.title).toBe('⛩ おみくじ ― 大吉');
     expect(e.description).toContain('**さくら** さんの運勢');
-    expect(e.description).toContain('📞 待ち人 … 通話で来る');
+    expect(e.description).toContain('📞 待ち人 … 来る。音信あり');
     expect(e.description).toContain('🪙銭 **+30**（いま 30 枚）');
+  });
+
+  it('一言: 同じ人には、その運勢の文を出し切るまで同じ文を出さない（第〇番つき）', async () => {
+    const pool = DEFAULT_MESSAGES.daikichi;
+    const seen: string[] = [];
+    for (let d = 0; d < pool.length + 1; d++) {
+      const r = await drawOmikuji(db, cfg.economy, 'A', new Date(Date.UTC(2026, 9, 1 + d, 3)), () => 0);
+      if (r.status !== 'drawn') throw new Error('not drawn');
+      expect(r.fortune.key).toBe('daikichi');
+      expect(r.number).toBe(pool.indexOf(r.message) + 1);
+      seen.push(r.message);
+    }
+    // はじめの 8 回は全部ちがう。9 回目は、すぐ前とはちがう
+    expect(new Set(seen.slice(0, pool.length)).size).toBe(pool.length);
+    expect(seen[pool.length]).not.toBe(seen[pool.length - 1]);
+    // ほかの人は関係ない
+    const b = await drawOmikuji(db, cfg.economy, 'B', new Date(Date.UTC(2026, 9, 1, 3)), () => 0);
+    expect(b.status === 'drawn' && b.message).toBe(pool[0]);
+  });
+
+  it('項目: 運勢の向きに合わせる（凶はよくない日の文）。毎日出す項目＋日替わり 1 つ＋ラッキー場所', () => {
+    const texts = omikujiTextsSchema.parse({});
+    const kyo = omikujiSayings(texts, 'kyo', () => 0.99);
+    const fixed = DEFAULT_ITEMS.filter((it) => it.fixed);
+    expect(kyo.map((x) => x.label)).toEqual([...fixed.map((x) => x.label), DEFAULT_ITEMS.filter((it) => !it.fixed).at(-1)!.label, 'ラッキー場所']);
+    for (const x of kyo.slice(0, -1)) expect(DEFAULT_ITEMS.find((it) => it.label === x.label)!.bad).toContain(x.text);
+    // 運営吉はいい日
+    const unei = omikujiSayings(texts, 'unei1', () => 0);
+    expect(unei[0]!.text).toBe(DEFAULT_ITEMS[0]!.good[0]);
+    // 文が空の項目は出さない・ラッキー場所が空なら出さない
+    const few = omikujiSayings({ ...texts, items: [{ ...texts.items[0]!, bad: [] }], places: [] }, 'daikyo', () => 0);
+    expect(few).toEqual([]);
+  });
+
+  it('おみくじの紙: 縦書きの折り返し（句読点は前の列にぶら下げる）・漢数字・和暦・PNG', () => {
+    expect(wrapColumns('あいうえお。かきく', 5)).toEqual([[...'あいうえお。'], [...'かきく']]);
+    expect(wrapColumns('あいうえおかきく', 3, 2).map((c) => c.join(''))).toEqual(['あい', 'うえお', 'かきく']);
+    expect([1, 10, 17, 20, 31, 100, 105].map(kanjiNumber)).toEqual(['一', '十', '十七', '二十', '三十一', '百', '百五']);
+    expect(wareki(new Date('2026-10-05T15:30:00Z'))).toBe('令和八年十月六日');
+    const png = renderSlip({ name: '大吉', color: '#b8860b', message: '今日のあなたは無敵。', items: [{ label: '願い事', text: '叶う' }], shrine: '咲楽ノ宮', number: 3, date: new Date('2026-10-06T00:00:00Z'), tone: 'good' });
+    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(png.byteLength).toBeGreaterThan(10_000);
+  });
+
+  it('演出: ふつうは「ガラガラ…」→ 紙。運営吉は 光る → 絵 → 絵と紙。紙を出さない設定なら文字だけ', async () => {
+    Object.assign(REVEAL_MS, { shake: 0, glow: 0, art: 0 });
+    const special = { enabled: true, percent: 100, mult: 3, list: [{ name: '小林吉', message: '', color: '#1f4fbf' }] };
+    const conf = { ...cfg, omikujiSpecial: special };
+    const steps: { title?: string; files: string[] }[] = [];
+    const record = (p: { embeds: { title?: string }[]; files?: { name: string | null }[] }) => steps.push({ title: p.embeds.at(-1)?.title, files: (p.files ?? []).map((f) => f.name ?? '') });
+    const send = async (p: Parameters<typeof record>[0]) => {
+      record(p);
+      return { edit: async (q: Parameters<typeof record>[0]) => void record(q) };
+    };
+    const r = await drawOmikuji(db, cfg.economy, 'A', new Date('2026-10-06T03:00:00Z'), () => 0, { special });
+    if (r.status !== 'drawn') throw new Error('not drawn');
+    expect(r.fortune.color).toBe(0x1f4fbf);
+    // 絵がないときは、光ったあとすぐ紙
+    await revealOmikuji(db, conf, r, 'さくら', send);
+    expect(steps.map((x) => x.title)).toEqual(['⛩ おみくじ', '⛩ おみくじ', '🎴 御神籤 ― 小林吉']);
+    expect(steps.at(-1)!.files).toEqual(['omikuji.png']);
+    steps.length = 0;
+    const png = (await import('../src/services/omikujiSlip.js')).renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
+    await saveOmikujiArt(db, 1, png);
+    await revealOmikuji(db, conf, r, 'さくら', send, { suffix: '（もう 1 回）' });
+    expect(steps.map((x) => x.title)).toEqual(['⛩ おみくじ（もう 1 回）', '⛩ おみくじ（もう 1 回）', '🎴✨ 小林吉 ✨', '🎴 御神籤 ― 小林吉（もう 1 回）']);
+    expect(steps.at(-1)!.files).toEqual(['unei1.png', 'omikuji.png']);
+    // ふつうの運勢・演出なし・紙なし
+    steps.length = 0;
+    const n = await drawOmikuji(db, cfg.economy, 'B', new Date('2026-10-06T03:00:00Z'), () => 0);
+    if (n.status !== 'drawn') throw new Error('not drawn');
+    await revealOmikuji(db, { ...cfg, omikujiTexts: { ...cfg.omikujiTexts, shake: false, slip: false } }, n, 'もみじ', send);
+    expect(steps).toEqual([{ title: '⛩ おみくじ ― 大吉', files: [] }]);
   });
 });

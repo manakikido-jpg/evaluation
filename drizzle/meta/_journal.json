@@ -512,6 +512,13 @@
       "when": 1791267983361,
       "tag": "0072_ideas",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791292047140,
+      "tag": "0073_omikuji_message",
+      "breakpoints": true
     }
   ]
 }

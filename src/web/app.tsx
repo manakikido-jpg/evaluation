@@ -3,7 +3,10 @@ import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '..
 import { activityStats, genderNow, genderTrend } from '../services/genderStats.js';
 import { addIdeaComment, canEditIdea, createIdea, deleteIdea, deleteIdeaComment, getIdea, ideaCounts, isIdeaKind, isIdeaStatus, listIdeas, setIdeaPinned, setIdeaStatus, toggleIdeaVote, updateIdea, type IdeaKind } from '../services/ideas.js';
 import { IdeaPage, IdeasPage } from './views/ideas.js';
-import { deleteOmikujiArt, isOmikujiArtNo, loadOmikujiArt, omikujiArtHashes, saveOmikujiArt } from '../services/omikujiArt.js';
+import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikujiArt, loadSlipBg, omikujiArtHashes, saveOmikujiArt, saveSlipBg, SLIP_BG_KEYS, slipBgHashes } from '../services/omikujiArt.js';
+import { fortuneOf, omikujiSayings, specialIndex } from '../services/omikuji.js';
+import { renderSlip } from '../services/omikujiSlip.js';
+import { FORTUNE_KEYS, toneOf, TONES, type FortuneKey } from '../omikujiTexts.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
@@ -22,7 +25,7 @@ import { panelMessage } from '../discord/panels.js';
 import { NOTIFY_LABEL, notifyCounts, notifyReady, notifySetupState, pingRoleIds, runNotifySetup, startNotifySetup } from '../services/notify.js';
 import { dayPicks, slotFloorData } from '../services/casino/slotFloor.js';
 import { matchStats, recentMatches } from '../services/casino/versus.js';
-import { CASINO_GAMES, OMIKUJI_SPECIAL_MAX, omikujiSpecialSchema, opsWatchSchema, type CasinoGame } from '../config.js';
+import { CASINO_GAMES, OMIKUJI_LINE_MAX, OMIKUJI_SPECIAL_MAX, omikujiSpecialSchema, omikujiTextsSchema, opsWatchSchema, type CasinoGame } from '../config.js';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
@@ -322,7 +325,7 @@ export function createWebApp(deps: WebDeps) {
       ? smallBody(c, next)
       : /^\/notices(?:\/\d+)?$/.test(c.req.path)
         ? noticeBody(c, next)
-        : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special'
+        : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
           : /^\/economy\/casino\/art\/[a-z0-9-]+$/.test(c.req.path)
             ? artBody(c, next)
@@ -2083,6 +2086,7 @@ export function createWebApp(deps: WebDeps) {
         boosters={await currentBoosters(db)}
         boostLog={await recentBoostMessages(db)}
         omikujiArt={await omikujiArtHashes(db)}
+        slipBg={await slipBgHashes(db)}
       />,
     );
   });
@@ -2095,7 +2099,8 @@ export function createWebApp(deps: WebDeps) {
     const text = (k: string, max: number) => (typeof body[k] === 'string' ? (body[k] as string).trim().slice(0, max) : '');
     const list = [...Array(OMIKUJI_SPECIAL_MAX).keys()].flatMap((i) => {
       const name = text(`name.${i + 1}`, 20);
-      return name ? [{ name, message: text(`message.${i + 1}`, 200) }] : [];
+      const color = text(`color.${i + 1}`, 7);
+      return name ? [{ name, message: text(`message.${i + 1}`, 200), ...(/^#[0-9a-fA-F]{6}$/.test(color) ? { color } : {}) }] : [];
     });
     // 枠の番号と絵の番号をそろえるので、途中の枠を空にはできない（使わない枠は後ろから空にする）
     const slots = [...Array(OMIKUJI_SPECIAL_MAX).keys()].map((i) => text(`name.${i + 1}`, 20));
@@ -2137,6 +2142,95 @@ export function createWebApp(deps: WebDeps) {
       await audit(db, { actorId: c.get('session').userId, action: 'omikuji.art_deleted', detail: { n }, via: 'web' });
     }
     return c.redirect('/settings?msg=unei_art_deleted&at=unei#sec-unei');
+  });
+
+  // 📜 おみくじの文と紙: 一言・項目・ラッキー場所（1 行 1 つ）と台紙をまとめて保存（台紙は選んだものだけ入れ替える）
+  app.post('/settings/omikuji-texts', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const back = (msg: string) => c.redirect(`/settings?msg=${msg}&at=omikujitexts#sec-omikujitexts`);
+    const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+    const many = (k: string) => [...new Set(str(k).replace(/\r\n/g, '\n').split('\n').map((x) => x.trim()).filter(Boolean))];
+    const fields = [...FORTUNE_KEYS.map((k) => `msg.${k}`), 'places', ...Array.from({ length: 9 }, (_, n) => TONES.map((t) => `item.${n}.${t}`)).flat()];
+    if (fields.some((k) => many(k).some((x) => [...x].length > OMIKUJI_LINE_MAX))) return back('otexts_long');
+    const items = Array.from({ length: 9 }, (_, n) => n).flatMap((n) => {
+      const label = str(`item.${n}.label`).trim();
+      if (!label) return [];
+      const key = str(`item.${n}.key`).trim() || `item${Date.now().toString(36)}${n}`;
+      return [{ key, label, emoji: str(`item.${n}.emoji`).trim(), fixed: body[`item.${n}.fixed`] === 'yes', good: many(`item.${n}.good`), normal: many(`item.${n}.normal`), bad: many(`item.${n}.bad`) }];
+    });
+    const raw = {
+      shrine: str('shrine').trim(),
+      slip: body.slip === 'yes',
+      shake: body.shake === 'yes',
+      messages: Object.fromEntries(FORTUNE_KEYS.map((k) => [k, many(`msg.${k}`)])),
+      items,
+      places: many('places'),
+    };
+    const current = await loadOverrides(db);
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, omikujiTexts: omikujiTextsSchema.parse(raw) });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return back('otexts_invalid');
+    }
+    let failed = 0;
+    for (const k of SLIP_BG_KEYS) {
+      const f = body[`bg.${k}`];
+      const file = Array.isArray(f) ? f[0] : f;
+      if (!(file instanceof File) || file.size === 0) continue;
+      if ((await saveSlipBg(db, k, new Uint8Array(await file.arrayBuffer()))) !== 'ok') failed++;
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'omikuji.texts', detail: { shrine: raw.shrine, slip: raw.slip, shake: raw.shake, items: items.length }, via: 'web' });
+    return back(failed ? 'otexts_partial' : 'otexts_saved');
+  });
+  app.post('/settings/omikuji-texts/reset', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const current = await loadOverrides(db);
+    const def = omikujiTextsSchema.parse({});
+    const keep = cfg.omikujiTexts;
+    const overrides = overridesSchema.parse({ ...current, omikujiTexts: { ...def, shrine: keep.shrine, slip: keep.slip, shake: keep.shake } });
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'omikuji.texts_reset', detail: {}, via: 'web' });
+    return c.redirect('/settings?msg=otexts_reset&at=omikujitexts#sec-omikujitexts');
+  });
+  app.post('/settings/omikuji-bg/:k/delete', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const k = c.req.param('k');
+    if (isSlipBgKey(k)) {
+      await deleteSlipBg(db, k);
+      await audit(db, { actorId: c.get('session').userId, action: 'omikuji.bg_deleted', detail: { key: k }, via: 'web' });
+    }
+    return c.redirect('/settings?msg=otexts_bg_deleted&at=omikujitexts#sec-omikujitexts');
+  });
+  // 紙の見本（今の文から 1 つ選んで描く。運営吉は決めたひとこと）
+  app.get('/settings/omikuji-preview/:k', async (c) => {
+    if (!gujiOnly(c)) return c.notFound();
+    const k = c.req.param('k');
+    if (!isSlipBgKey(k)) return c.notFound();
+    const fortune = fortuneOf(k, cfg.omikujiSpecial);
+    if (!fortune) return c.notFound();
+    const texts = cfg.omikujiTexts;
+    const pool = texts.messages[k as FortuneKey] ?? [];
+    const message = specialIndex(k) !== undefined ? fortune.message : (pool[0] ?? fortune.message);
+    const bg = await loadSlipBg(db, k);
+    const png = renderSlip({
+      name: fortune.name,
+      color: `#${fortune.color.toString(16).padStart(6, '0')}`,
+      message,
+      items: omikujiSayings(texts, k).map((x) => ({ label: x.label, text: x.text })),
+      shrine: texts.shrine,
+      ...(pool.length && specialIndex(k) === undefined ? { number: 1 } : {}),
+      date: now(),
+      special: specialIndex(k) !== undefined,
+      tone: toneOf(specialIndex(k) !== undefined ? 'daikichi' : k),
+      ...(bg ? { bg } : {}),
+    });
+    return c.body(new Uint8Array(png), 200, { 'content-type': 'image/png', 'x-content-type-options': 'nosniff' });
   });
 
   /** 🔔 通知 OK／NG: 設定のページに出すもの */
@@ -2317,6 +2411,8 @@ export function createWebApp(deps: WebDeps) {
       casino: prev.casino,
       // 🎴 運営吉は「運営吉」の項目で変える（ここでは残す）
       omikujiSpecial: prev.omikujiSpecial,
+      // ⛩ おみくじの文と紙は「おみくじの文と紙」の項目で変える（ここでは残す）
+      omikujiTexts: prev.omikujiTexts,
       // 通知 OK／NG のロールは「🔔 通知 OK／NG」の項目で用意する（ここでは残す）
       notify: prev.notify,
       // おみくじの連続日数のおまけ（フォームにあるときだけ。日数が空の行は使わない）

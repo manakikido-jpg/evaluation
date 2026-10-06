@@ -6,6 +6,7 @@ import { GENDER_LABEL, isGender } from '../../services/admission.js';
 import { recruitWaits } from '../../services/recruit.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { Avatar, Layout } from './layout.js';
+import { OmikujiTextsSection } from './omikujiTexts.js';
 
 type Names = Map<string, string>;
 const who = (names: Names, id: string | null) => (id ? (id === 'system' ? '自動' : names.get(id) ?? `ID ${id}`) : '—');
@@ -509,6 +510,7 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['join', '📝 入鯖申請・お参り'],
   ['notify', '🔔 通知 OK／NG'],
   ['unei', '🎴 運営吉（おみくじ）'],
+  ['omikujitexts', '📜 おみくじの文と紙'],
   ['give', '🎁 今いる人に配る'],
   ['accounts', '🪪 社務所Web のアカウント'],
   ['webaccess', '🔑 Discord ログインで入れる人'],
@@ -773,7 +775,7 @@ function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Reco
     <section class="card anchor" id="sec-unei">
       <h2>🎴 運営吉（おみくじ）</h2>
       <p class="note">
-        /おみくじ で、決めた確率で運営の特別な運勢（「小林吉」など）が出ます。出たら結果のカードに絵を大きく出して、#慶事 でもお知らせします（「もう 1 回」で引いたときも）。名前を入れた枠だけ使います。何枠あっても、全部合わせた確率で出て、その中から同じ確率で 1 つ選びます。絵は縦長の PNG・JPEG・WebP（1 枚 4MB まで）。
+        /おみくじ で、決めた確率で運営の特別な運勢（「小林吉」など）が出ます。出たら「御神籤が光りだした…！？」→ 絵を大きく → 運営吉の特別な紙、の順に出して、#慶事 でも絵つきでお知らせします（「もう 1 回」で引いたときも）。名前を入れた枠だけ使います。何枠あっても、全部合わせた確率で出て、その中から同じ確率で 1 つ選びます。絵は縦長の PNG・JPEG・WebP（1 枚 4MB まで）。
       </p>
       {props.flash && <Flash code={props.flash} />}
       <form method="post" action="/settings/omikuji-special" enctype="multipart/form-data" id="unei-form" data-art-form>
@@ -807,8 +809,12 @@ function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Reco
                   <input type="text" name={`name.${n}`} value={s?.name ?? ''} maxlength={20} />
                 </label>
                 <label class="field">
-                  <span>ひとこと（カードに出る。空なら決まった文）</span>
+                  <span>ひとこと（紙に出る。空なら決まった文）</span>
                   <input type="text" name={`message.${n}`} value={s?.message ?? ''} maxlength={200} />
+                </label>
+                <label class="field">
+                  <span>その人の色（カードと紙の柄）</span>
+                  <input type="color" name={`color.${n}`} value={s?.color ?? '#d4a017'} />
                 </label>
                 <label class="art-pick">
                   <span>{hash ? '別の絵にする' : '絵を選ぶ'}</span>
@@ -1020,6 +1026,8 @@ export function SettingsPage(props: {
   boostLog?: { memberId: string; name: string | null; count: number; at: Date }[];
   /** 🎴 運営吉の絵の印（番号 → hash） */
   omikujiArt?: Record<number, string>;
+  /** 📜 おみくじの紙の台紙の印（運勢 → hash） */
+  slipBg?: Record<string, string>;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -1506,6 +1514,7 @@ export function SettingsPage(props: {
       </form>
       {props.notify && <NotifySection session={props.session} notify={props.notify} flash={props.at === 'notify' ? props.flash : undefined} textChannels={props.textChannels ?? []} botCanMentionAll={props.botCanMentionAll} />}
       <UneiSection session={props.session} cfg={cfg} art={props.omikujiArt ?? {}} flash={props.at === 'unei' ? props.flash : undefined} />
+      <OmikujiTextsSection session={props.session} cfg={cfg} bg={props.slipBg ?? {}} flash={props.at === 'omikujitexts' ? props.flash : undefined} />
       <section class="card anchor" id="sec-accounts">
         <h2>🪪 社務所Web のアカウント（ID とパスワード）</h2>
         <p class="note">

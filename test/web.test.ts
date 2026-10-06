@@ -550,6 +550,79 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(await omikujiArtHashes(db)).toEqual({});
   });
 
+  it('📜 おみくじの文と紙: 1 行 1 つで保存・長い行は断る・台紙（PNG・JPEG だけ）・紙の見本・はじめの文に戻す', async () => {
+    const { ConfigStore } = await import('../src/services/settings.js');
+    const { slipBgHashes } = await import('../src/services/omikujiArt.js');
+    const { renderSlip } = await import('../src/services/omikujiSlip.js');
+    const { DEFAULT_MESSAGES } = await import('../src/omikujiTexts.js');
+    const store = new ConfigStore(db, cfg);
+    app = createWebApp({ db, cfg: () => store.current, fileCfg: cfg, onSettingsSaved: () => store.refresh(), api: fakeApi, discord: fakeActions, baseUrl: BASE, now: () => clock });
+    const s = await login(STAFF);
+    expect((await get('/settings/omikuji-preview/daikichi', s)).status).toBe(404);
+    const g = await login(GUJI);
+    const page = await (await get('/settings', g)).text();
+    expect(page).toContain('id="sec-omikujitexts"');
+    expect(page).toContain('name="msg.daikichi"');
+    expect(page).toContain(DEFAULT_MESSAGES.kichi[0]);
+    const csrf = await csrfOf(g);
+    const send = (fields: Record<string, string>, files: Record<string, Uint8Array | string> = {}) => {
+      const fd = new FormData();
+      fd.append('_csrf', csrf);
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+      for (const [k, v] of Object.entries(files)) fd.append(k, new File([v], 'a.png', { type: 'image/png' }));
+      return app.request('/settings/omikuji-texts', { method: 'POST', headers: { cookie: `shamusho_session=${g}` }, body: fd });
+    };
+    const base = {
+      shrine: '咲楽ノ宮',
+      slip: 'yes',
+      'msg.daikichi': '一つめ\r\n\r\n二つめ\n一つめ',
+      'item.0.key': 'wish',
+      'item.0.label': '願い事',
+      'item.0.emoji': '🙏',
+      'item.0.fixed': 'yes',
+      'item.0.good': '叶う',
+      'item.0.normal': 'まあまあ',
+      'item.0.bad': '叶わない',
+      'item.1.label': '金運',
+      'item.1.good': '上がる',
+      places: '縁側\n屋台',
+    };
+    expect((await send({ ...base, places: 'あ'.repeat(61) })).headers.get('location')).toBe('/settings?msg=otexts_long&at=omikujitexts#sec-omikujitexts');
+    expect((await send({ ...base, 'item.1.label': '七文字の項目名' })).headers.get('location')).toBe('/settings?msg=otexts_invalid&at=omikujitexts#sec-omikujitexts');
+    const real = renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
+    expect((await send(base, { 'bg.daikichi': real, 'bg.unei1': '<svg/>' })).headers.get('location')).toBe('/settings?msg=otexts_partial&at=omikujitexts#sec-omikujitexts');
+    const t = store.current.omikujiTexts;
+    expect(t.messages.daikichi).toEqual(['一つめ', '二つめ']);
+    expect(t.messages.kichi).toEqual([]);
+    expect(t.shake).toBe(false);
+    expect(t.items.map((x) => [x.label, x.fixed])).toEqual([
+      ['願い事', true],
+      ['金運', false],
+    ]);
+    expect(t.items[1]!.key).toMatch(/^item/);
+    expect(t.places).toEqual(['縁側', '屋台']);
+    expect(Object.keys(await slipBgHashes(db))).toEqual(['daikichi']);
+    // 紙の見本（台紙つき・運営吉）
+    for (const k of ['daikichi', 'kyo', 'unei1']) {
+      const img = await get(`/settings/omikuji-preview/${k}`, g);
+      expect(img.headers.get('content-type')).toBe('image/png');
+      expect((await img.arrayBuffer()).byteLength).toBeGreaterThan(10_000);
+    }
+    expect((await get('/settings/omikuji-preview/nope', g)).status).toBe(404);
+    // 台紙を消す・はじめの文に戻す（神社の名前・紙の出し方はそのまま）
+    expect((await post('/settings/omikuji-bg/daikichi/delete', g, { _csrf: csrf })).headers.get('location')).toBe('/settings?msg=otexts_bg_deleted&at=omikujitexts#sec-omikujitexts');
+    expect(await slipBgHashes(db)).toEqual({});
+    expect((await post('/settings/omikuji-texts/reset', g, { _csrf: csrf })).headers.get('location')).toBe('/settings?msg=otexts_reset&at=omikujitexts#sec-omikujitexts');
+    expect(store.current.omikujiTexts.messages.daikichi).toEqual(DEFAULT_MESSAGES.daikichi);
+    expect(store.current.omikujiTexts.shake).toBe(false);
+    // 運営吉の色
+    const fd = new FormData();
+    fd.append('_csrf', csrf);
+    for (const [k, v] of Object.entries({ enabled: 'yes', percent: '1', mult: '3', 'name.1': '小林吉', 'color.1': '#1f4fbf' })) fd.append(k, v);
+    await app.request('/settings/omikuji-special', { method: 'POST', headers: { cookie: `shamusho_session=${g}` }, body: fd });
+    expect(store.current.omikujiSpecial.list).toEqual([{ name: '小林吉', message: '', color: '#1f4fbf' }]);
+  });
+
   it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {
     const s = await login(STAFF);
     expect((await get('/settings', s)).status).toBe(403);

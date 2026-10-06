@@ -530,6 +530,8 @@ export const omikuji = pgTable(
     fortune: text('fortune').notNull(),
     /** もらった花びら */
     amount: integer('amount').notNull(),
+    /** 出た一言（同じ人に同じ文が続かないように） */
+    message: text('message'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.date] })],

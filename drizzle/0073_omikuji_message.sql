@@ -1,0 +1,1 @@
+ALTER TABLE "omikuji" ADD COLUMN "message" text;

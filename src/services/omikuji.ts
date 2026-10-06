@@ -1,5 +1,6 @@
 import { and, desc, eq, notLike } from 'drizzle-orm';
-import type { EconomyConfig, OmikujiSpecialConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
+import { omikujiTextsSchema, type EconomyConfig, type OmikujiSpecialConfig, type OmikujiStreakConfig, type OmikujiTextsConfig, type StreakReward } from '../config.js';
+import { toneOf, type FortuneKey } from '../omikujiTexts.js';
 import type { Db } from '../db/client.js';
 import { omikuji } from '../db/schema.js';
 import { jstDate } from './activity.js';
@@ -23,15 +24,47 @@ export const FORTUNES: Fortune[] = [
   { key: 'daikyo', name: '大凶', weight: 5, mult: 0.5, message: 'あとは上がるだけ。逆に縁起がいいかも', color: 0x5b0e14 },
 ];
 
-/** 運勢のほかに出す一言（毎回ひとつずつ選ぶ） */
-export const SAYINGS: { label: string; list: string[] }[] = [
-  { label: '📞 待ち人', list: ['通話で来る', '遅れて来る', '意外な人', 'すぐそばにいる', 'ゲームの中で出会う', '来ない。こちらから行け'] },
-  { label: '🎮 勝負事', list: ['勝てる。攻めよ', '引き分けが吉', '慎重に進め', '味方を信じよ', '今日は観戦が吉', '初めてのゲームが吉'] },
-  { label: '🌙 寝落ち', list: ['よく眠れる', '誰かと一緒なら吉', '早寝が吉', '夜ふかし注意', '子守唄が吉', '朝まで話が弾む'] },
-  { label: '🍀 ラッキー場所', list: ['拝殿', '縁側', '屋台', '宿坊', '手水舎', '絵馬'] },
-];
+/** 運勢のほかに出す項目（運勢の向きに合わせて選ぶ。毎日出す項目＋日替わり 1 つ＋ラッキー場所） */
+export type Saying = { emoji: string; label: string; text: string };
+
+const pick = <T>(list: readonly T[], rand: Rand): T => list[Math.floor(rand() * list.length)]!;
+
+export function omikujiSayings(texts: OmikujiTextsConfig, fortuneKey: string, rand: Rand = Math.random): Saying[] {
+  const tone = toneOf(specialIndex(fortuneKey) !== undefined ? 'daikichi' : fortuneKey);
+  const usable = texts.items.filter((it) => it[tone].length);
+  const rotating = usable.filter((it) => !it.fixed);
+  const today = rotating.length ? pick(rotating, rand) : undefined;
+  const out: Saying[] = usable.filter((it) => it.fixed || it === today).map((it) => ({ emoji: it.emoji, label: it.label, text: pick(it[tone], rand) }));
+  if (texts.places.length) out.push({ emoji: '🍀', label: 'ラッキー場所', text: pick(texts.places, rand) });
+  return out;
+}
+
+/**
+ * 一言を選ぶ。同じ人には、その運勢の文をひととおり出し切るまで同じ文を出さない（前に出た文を数えて外す）。
+ * 運営吉は決めたひとこと。number: 第〇番（文の何番目か）
+ */
+export async function chooseMessage(db: Db, memberId: string, fortune: Fortune, texts: OmikujiTextsConfig, rand: Rand = Math.random): Promise<{ message: string; number?: number }> {
+  if (specialIndex(fortune.key) !== undefined) return { message: fortune.message };
+  const pool = texts.messages[fortune.key as FortuneKey]?.length ? texts.messages[fortune.key as FortuneKey] : [fortune.message];
+  let candidates = pool;
+  if (pool.length > 1) {
+    const rows = await db
+      .select({ message: omikuji.message })
+      .from(omikuji)
+      .where(and(eq(omikuji.memberId, memberId), eq(omikuji.fortune, fortune.key)))
+      .orderBy(desc(omikuji.createdAt))
+      .limit(pool.length - 1);
+    const recent = rows.map((r) => r.message);
+    candidates = pool.filter((m) => !recent.includes(m));
+    if (!candidates.length) candidates = pool.filter((m) => m !== recent[0]);
+  }
+  const message = pick(candidates, rand);
+  return { message, number: pool.indexOf(message) + 1 };
+}
+
 
 type Rand = () => number;
+const DEFAULT_TEXTS = omikujiTextsSchema.parse({});
 
 /** 🎴 運営吉の運勢（key は unei1〜unei4。何番目かで絵が決まる） */
 export const SPECIAL_COLOR = 0xd4a017;
@@ -42,7 +75,7 @@ export const specialIndex = (key: string): number | undefined => {
 export function specialFortune(cfg: OmikujiSpecialConfig, n: number): Fortune | undefined {
   const s = cfg.list[n - 1];
   if (!s) return undefined;
-  return { key: `unei${n}`, name: s.name, weight: 0, mult: cfg.mult, message: s.message || '運営からの特別なおみくじ。今日はきっといい日', color: SPECIAL_COLOR };
+  return { key: `unei${n}`, name: s.name, weight: 0, mult: cfg.mult, message: s.message || '運営からの特別なおみくじ。今日はきっといい日', color: s.color ? parseInt(s.color.slice(1), 16) : SPECIAL_COLOR };
 }
 /** 引いた記録の key から運勢（運営吉は今の設定から。消えていれば名前だけ） */
 export function fortuneOf(key: string, special?: OmikujiSpecialConfig): Fortune | undefined {
@@ -139,7 +172,10 @@ export type OmikujiResult =
       fortune: Fortune;
       amount: number;
       balance: number;
-      sayings: { label: string; text: string }[];
+      /** 一言（第〇番は number） */
+      message: string;
+      number?: number;
+      sayings: Saying[];
       /** 連続日数（もう 1 回のときは 0） */
       streak: number;
       /** 今日もらえたおまけ（ロールは呼び出し側が付ける） */
@@ -163,16 +199,18 @@ export async function drawOmikuji(
   memberId: string,
   now: Date,
   rand: Rand = Math.random,
-  opts: { extra?: boolean; streak?: OmikujiStreakConfig; special?: OmikujiSpecialConfig } = {},
+  opts: { extra?: boolean; streak?: OmikujiStreakConfig; special?: OmikujiSpecialConfig; texts?: OmikujiTextsConfig } = {},
 ): Promise<OmikujiResult> {
   const date = opts.extra ? extraKey(jstDate(now)) : jstDate(now);
   const fortune = drawFortune(rand, opts.special);
   const amount = omikujiReward(economy, fortune);
+  const texts = opts.texts ?? DEFAULT_TEXTS;
+  const chosen = await chooseMessage(db, memberId, fortune, texts, rand);
   // (member_id, date) が主キーなので、同じ日に 2 回目は入らない（連打しても 1 回だけ）
   // 引いた記録と花びらを一緒に（途中で失敗したら、その日はまた引ける）
   // 連続日数のおまけも同じ記録と一緒に（その日の記録は 1 つだけなので、おまけも 1 回だけ）
   const done = await db.transaction(async (tx) => {
-    const inserted = await tx.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount }).onConflictDoNothing().returning();
+    const inserted = await tx.insert(omikuji).values({ memberId, date, fortune: fortune.key, amount, message: chosen.message }).onConflictDoNothing().returning();
     if (!inserted.length) return undefined;
     let balance = amount > 0 ? await addCoins(tx, memberId, amount, 'omikuji', { date, fortune: fortune.key }) : (await walletOf(tx, memberId)).balance;
     const streak = opts.extra ? 0 : streakOf(await drawnDates(tx, memberId), date);
@@ -190,6 +228,6 @@ export async function drawOmikuji(
       .where(and(eq(omikuji.memberId, memberId), eq(omikuji.date, date)));
     return { status: 'already', fortune: (row && fortuneOf(row.fortune, opts.special)) ?? fortune, streak: await omikujiStreak(db, memberId, now) };
   }
-  const sayings = SAYINGS.map((s) => ({ label: s.label, text: s.list[Math.floor(rand() * s.list.length)]! }));
-  return { status: 'drawn', fortune, amount, balance: done.balance, sayings, streak: done.streak, bonus: done.bonus };
+  const sayings = omikujiSayings(texts, fortune.key, rand);
+  return { status: 'drawn', fortune, amount, balance: done.balance, message: chosen.message, ...(chosen.number ? { number: chosen.number } : {}), sayings, streak: done.streak, bonus: done.bonus };
 }

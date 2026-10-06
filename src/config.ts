@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
+import { DEFAULT_ITEMS, DEFAULT_MESSAGES, DEFAULT_PLACES, FORTUNE_KEYS, type FortuneKey } from './omikujiTexts.js';
 
 const snowflake = z.string().regex(/^\d{17,20}$/, 'Discord の ID（17〜20 桁の数字）を入れてください');
 
@@ -262,11 +263,51 @@ export const omikujiSpecialSchema = z.object({
   /** {通貨}の倍率（おみくじの基本の量に掛ける。大吉は 3） */
   mult: z.number().min(0).max(100).default(3),
   list: z
-    .array(z.object({ name: z.string().trim().min(1).max(20), message: z.string().trim().max(200).default('') }))
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(20),
+        message: z.string().trim().max(200).default(''),
+        /** その人の色（#rrggbb。結果のカードとおみくじの紙の柄） */
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .optional(),
+      }),
+    )
     .max(OMIKUJI_SPECIAL_MAX)
     .default([]),
 });
 export type OmikujiSpecialConfig = z.infer<typeof omikujiSpecialSchema>;
+
+/** ⛩ おみくじの文（運勢ごとの一言・項目・ラッキー場所）と紙。はじめの文は omikujiTexts.ts */
+export const OMIKUJI_LINE_MAX = 60;
+const omikujiLine = z.string().trim().min(1).max(OMIKUJI_LINE_MAX);
+const omikujiLines = (d: string[]) => z.array(omikujiLine).max(80).default(d);
+export const omikujiItemSchema = z.object({
+  key: z.string().trim().min(1).max(20),
+  emoji: z.string().trim().max(8).default(''),
+  label: z.string().trim().min(1).max(6),
+  /** 毎日出す（外すと、外した項目の中から毎日 1 つ） */
+  fixed: z.boolean().default(false),
+  good: z.array(omikujiLine).max(40).default([]),
+  normal: z.array(omikujiLine).max(40).default([]),
+  bad: z.array(omikujiLine).max(40).default([]),
+});
+export type OmikujiItem = z.infer<typeof omikujiItemSchema>;
+export const omikujiTextsSchema = z.object({
+  /** 紙の上と印に出る神社の名前（空なら「御神籤」だけ） */
+  shrine: z.string().trim().max(8).default('咲楽ノ宮'),
+  /** 結果を紙の画像で出す（外すと、前のように文字だけ） */
+  slip: z.boolean().default(true),
+  /** 引いたとき「ガラガラ…」と少し待たせる */
+  shake: z.boolean().default(true),
+  messages: z
+    .object(Object.fromEntries(FORTUNE_KEYS.map((k) => [k, omikujiLines(DEFAULT_MESSAGES[k])])) as Record<FortuneKey, ReturnType<typeof omikujiLines>>)
+    .default(DEFAULT_MESSAGES),
+  items: z.array(omikujiItemSchema).max(8).default(DEFAULT_ITEMS),
+  places: omikujiLines(DEFAULT_PLACES),
+});
+export type OmikujiTextsConfig = z.infer<typeof omikujiTextsSchema>;
 
 const gachaPrizeSchema = z.object({
   /** 物御籤限定のロール（色守り・称号）を 1 つ（まだ持っていないもの）。全部持っていたら・なければ券 */
@@ -556,6 +597,7 @@ export const guildConfigSchema = z
     economy: economySchema.default(economySchema.parse({})),
     omikujiStreak: omikujiStreakSchema.default(omikujiStreakSchema.parse({})),
     omikujiSpecial: omikujiSpecialSchema.default(omikujiSpecialSchema.parse({})),
+    omikujiTexts: omikujiTextsSchema.default(omikujiTextsSchema.parse({})),
     notify: notifySchema.default({}),
     applications: applicationsSchema.default(applicationsSchema.parse({})),
     omairi: omairiSchema.default(omairiSchema.parse({})),

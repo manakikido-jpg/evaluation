@@ -2,8 +2,10 @@ import { AttachmentBuilder, MessageFlags, type APIEmbed, type ChatInputCommandIn
 import type { EconomyConfig, GuildConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
+import { toneOf } from '../omikujiTexts.js';
 import { drawOmikuji, nextStreakReward, specialIndex, streakRewardText, type Fortune, type OmikujiResult } from '../services/omikuji.js';
-import { loadOmikujiArt } from '../services/omikujiArt.js';
+import { loadOmikujiArt, loadSlipBg } from '../services/omikujiArt.js';
+import { renderSlip } from '../services/omikujiSlip.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -25,48 +27,133 @@ export function omikujiVoiceBlock(economy: Pick<EconomyConfig, 'omikujiVoiceOnly
   return '🔊 おみくじは **通話に入っているときだけ** 引けます。どこかの通話に入ってから、もう一度どうぞ（AFK の通話はのぞく）。';
 }
 
-/** 引いた結果のカード（みんなに見える） */
-export function omikujiEmbed(r: Extract<OmikujiResult, { status: 'drawn' }>, name: string, economy: EconomyConfig, streak?: OmikujiStreakConfig) {
+type Drawn = Extract<OmikujiResult, { status: 'drawn' }>;
+type Payload = { embeds: APIEmbed[]; files: AttachmentBuilder[] };
+const NO_PINGS = { parse: [] } as const;
+const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
+
+/** 結果の下に出す行（花びら・連続日数・案内） */
+function footLines(r: Drawn, economy: EconomyConfig, streak?: OmikujiStreakConfig): string[] {
   const coin = `${economy.currencyEmoji}${economy.currencyName}`;
-  const lines = [
-    `**${name}** さんの運勢`,
-    r.fortune.message,
-    '',
-    ...r.sayings.map((s) => `${s.label} … ${s.text}`),
-    '',
+  return [
     ...(r.amount > 0 ? [`${coin} **+${r.amount}**（いま ${r.balance} 枚）`] : []),
     ...streakLines(r.streak, r.bonus, streak, economy),
     `-# おみくじは 1 日 1 回。日本時間の 0 時にまた引けます${streak?.rewards.length ? '（毎日続けるとおまけがあります。1 日空けると 1 日目から）' : ''}`,
   ];
-  const special = specialIndex(r.fortune.key) !== undefined;
-  return { title: special ? `🎴 御神籤 ― ${r.fortune.name}` : `⛩ おみくじ ― ${r.fortune.name}`, description: lines.join('\n'), color: r.fortune.color };
 }
 
-/** 結果のメッセージ（🎴 運営吉なら、社務所Web で入れた絵を大きく添える）。suffix: 題につける「（もう 1 回）」など */
-export async function omikujiMessage(
-  db: Db,
-  r: Extract<OmikujiResult, { status: 'drawn' }>,
-  name: string,
-  economy: EconomyConfig,
-  streak?: OmikujiStreakConfig,
-  suffix = '',
-): Promise<{ embeds: APIEmbed[]; files: AttachmentBuilder[] }> {
-  const embed: APIEmbed = omikujiEmbed(r, name, economy, streak);
-  embed.title = `${embed.title}${suffix}`;
-  const n = specialIndex(r.fortune.key);
+const titleOf = (r: Drawn) => (specialIndex(r.fortune.key) !== undefined ? `🎴 御神籤 ― ${r.fortune.name}` : `⛩ おみくじ ― ${r.fortune.name}`);
+
+/** 引いた結果のカード（文字だけ。紙の画像を出さないとき・作れなかったとき） */
+export function omikujiEmbed(r: Drawn, name: string, economy: EconomyConfig, streak?: OmikujiStreakConfig): APIEmbed {
+  const lines = [`**${name}** さんの運勢`, r.message, '', ...r.sayings.map((s) => `${s.emoji ? `${s.emoji} ` : ''}${s.label} … ${s.text}`), '', ...footLines(r, economy, streak)];
+  return { title: titleOf(r), description: lines.join('\n'), color: r.fortune.color };
+}
+
+/** おみくじの紙（画像）。紙を出さない設定・作れなかったときは undefined */
+export async function omikujiSlip(db: Db, cfg: Pick<GuildConfig, 'omikujiTexts'>, r: Drawn, now = new Date()): Promise<AttachmentBuilder | undefined> {
+  if (!cfg.omikujiTexts.slip) return undefined;
+  try {
+    const special = specialIndex(r.fortune.key) !== undefined;
+    const bg = await loadSlipBg(db, r.fortune.key).catch(() => undefined);
+    const png = renderSlip({
+      name: r.fortune.name,
+      color: hex(r.fortune.color),
+      message: r.message,
+      items: r.sayings.map((s) => ({ label: s.label, text: s.text })),
+      shrine: cfg.omikujiTexts.shrine,
+      ...(r.number ? { number: r.number } : {}),
+      date: now,
+      special,
+      tone: toneOf(special ? 'daikichi' : r.fortune.key),
+      ...(bg ? { bg } : {}),
+    });
+    return new AttachmentBuilder(png, { name: 'omikuji.png' });
+  } catch (err) {
+    logger.warn({ err, fortune: r.fortune.key }, 'omikuji slip failed');
+    return undefined;
+  }
+}
+
+/** 🎴 運営吉の絵（社務所Web で入れたもの。なければ undefined） */
+async function uneiArt(db: Db, key: string): Promise<AttachmentBuilder | undefined> {
+  const n = specialIndex(key);
   const art = n === undefined ? undefined : await loadOmikujiArt(db, n).catch(() => undefined);
-  if (!art) return { embeds: [embed], files: [] };
-  embed.image = { url: `attachment://${art.name}` };
-  return { embeds: [embed], files: [new AttachmentBuilder(Buffer.from(art.data), { name: art.name })] };
+  return art && new AttachmentBuilder(Buffer.from(art.data), { name: art.name });
 }
 
-/** 🎴 運営吉を引いたら #慶事 でお知らせ（運勢がふつうなら何もしない） */
-export async function announceSpecial(guild: Guild, cfg: GuildConfig, memberId: string, fortune: Fortune): Promise<void> {
+/** 運営吉の絵を大きく出すカード */
+const artEmbed = (r: Drawn, name: string, file: AttachmentBuilder): APIEmbed => ({
+  title: `🎴✨ ${r.fortune.name} ✨`,
+  description: `**${name}** さんに、運営の特別な御神籤「**${r.fortune.name}**」が出ました！`,
+  color: r.fortune.color,
+  image: { url: `attachment://${file.name}` },
+});
+
+/**
+ * 結果のメッセージ。おみくじの紙（画像）に、花びら・連続日数を添える。
+ * 🎴 運営吉なら、社務所Web で入れた絵を大きく出してから、紙を出す。suffix: 題につける「（もう 1 回）」など
+ */
+export async function omikujiMessage(db: Db, cfg: GuildConfig, r: Drawn, name: string, opts: { suffix?: string; streak?: boolean; now?: Date } = {}): Promise<Payload> {
+  const streak = opts.streak ? cfg.omikujiStreak : undefined;
+  const [slip, art] = await Promise.all([omikujiSlip(db, cfg, r, opts.now), uneiArt(db, r.fortune.key)]);
+  const main: APIEmbed = slip
+    ? { title: titleOf(r), description: [`**${name}** さんの運勢`, ...footLines(r, cfg.economy, streak)].join('\n'), color: r.fortune.color, image: { url: `attachment://${slip.name}` } }
+    : omikujiEmbed(r, name, cfg.economy, streak);
+  main.title = `${main.title}${opts.suffix ?? ''}`;
+  return { embeds: [...(art ? [artEmbed(r, name, art)] : []), main], files: [...(art ? [art] : []), ...(slip ? [slip] : [])] };
+}
+
+/** 演出の待ち時間（ミリ秒。テストでは 0 にする） */
+export const REVEAL_MS = { shake: 1400, glow: 1800, art: 2800 };
+const sleep = (ms: number) => (ms > 0 ? new Promise((res) => setTimeout(res, ms)) : Promise.resolve());
+
+type Editable = { edit: (p: { embeds: APIEmbed[]; files?: AttachmentBuilder[]; attachments?: []; allowedMentions?: typeof NO_PINGS }) => Promise<unknown> };
+
+/**
+ * 引いた結果を出す（演出つき）。「ガラガラ…」→ 結果。
+ * 🎴 運営吉は「光りだした…！？」→ 絵を大きく → 絵と紙、と順に出す。send: 最初のメッセージを出す（返したものを書きかえていく）
+ */
+export async function revealOmikuji(db: Db, cfg: GuildConfig, r: Drawn, name: string, send: (p: Payload & { allowedMentions: typeof NO_PINGS }) => Promise<Editable>, opts: { suffix?: string; streak?: boolean } = {}): Promise<void> {
+  const final = omikujiMessage(db, cfg, r, name, opts);
+  if (!cfg.omikujiTexts.shake) {
+    await send({ ...(await final), allowedMentions: NO_PINGS });
+    return;
+  }
+  const msg = await send({
+    embeds: [{ title: `⛩ おみくじ${opts.suffix ?? ''}`, description: `🎋 **${name}** さんが御神籤を振っています……\nガラガラ……`, color: 0x8b5a2b }],
+    files: [],
+    allowedMentions: NO_PINGS,
+  });
+  try {
+    await sleep(REVEAL_MS.shake);
+    if (specialIndex(r.fortune.key) !== undefined) {
+      await msg.edit({ embeds: [{ title: `⛩ おみくじ${opts.suffix ?? ''}`, description: '⚡ ……！？\n**御神籤が金色に光りだした……！**', color: 0xffd700 }] });
+      await sleep(REVEAL_MS.glow);
+      const art = await uneiArt(db, r.fortune.key);
+      if (art) {
+        await msg.edit({ embeds: [artEmbed(r, name, art)], files: [art], attachments: [] });
+        await sleep(REVEAL_MS.art);
+      }
+    }
+    await msg.edit({ ...(await final), attachments: [] });
+  } catch (err) {
+    logger.warn({ err }, 'omikuji reveal failed');
+  }
+}
+
+/** 🎴 運営吉を引いたら #慶事 でお知らせ（絵があれば添える。運勢がふつうなら何もしない） */
+export async function announceSpecial(db: Db, guild: Guild, cfg: GuildConfig, memberId: string, fortune: Fortune): Promise<void> {
   if (specialIndex(fortune.key) === undefined) return;
   const ch = guild.channels.cache.get(cfg.channels.keiji);
   if (!ch?.isSendable()) return;
+  const art = await uneiArt(db, fortune.key);
   await ch
-    .send({ content: `🎴 <@${memberId}> さまが、おみくじで **${fortune.name}** を引きました！ おめでとうございます🎉`, allowedMentions: { users: [memberId] } })
+    .send({
+      content: `🎴 <@${memberId}> さまが、おみくじで **${fortune.name}** を引きました！ おめでとうございます🎉`,
+      ...(art ? { embeds: [{ title: `🎴✨ ${fortune.name} ✨`, color: fortune.color, image: { url: `attachment://${art.name}` } }], files: [art] } : {}),
+      allowedMentions: { users: [memberId] },
+    })
     .catch((err) => logger.warn({ err }, 'omikuji special announce failed'));
 }
 
@@ -102,14 +189,14 @@ export class OmikujiApp {
       await i.reply({ content: blocked, ...EPHEMERAL });
       return;
     }
-    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak, special: cfg.omikujiSpecial });
+    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak, special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
     if (r.status === 'already') {
       const streak = r.streak ? `（🔥 連続 ${r.streak} 日目）` : '';
       await i.reply({ content: `今日はもう引きました（${r.fortune.name}）${streak}。日本時間の 0 時にまた引けます。`, ...EPHEMERAL });
       return;
     }
-    await i.reply({ ...(await omikujiMessage(this.db, r, i.member.displayName, cfg.economy, cfg.omikujiStreak)), allowedMentions: { parse: [] } });
-    await announceSpecial(i.guild, cfg, i.user.id, r.fortune);
+    await revealOmikuji(this.db, cfg, r, i.member.displayName, (p) => i.reply(p), { streak: true });
+    await announceSpecial(this.db, i.guild, cfg, i.user.id, r.fortune);
     // おまけの称号ロール（もう持っていれば何もしない）
     for (const b of r.bonus) {
       if (!b.roleId || i.member.roles.cache.has(b.roleId)) continue;

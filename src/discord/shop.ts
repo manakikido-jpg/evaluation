@@ -50,7 +50,7 @@ import {
 
 /** サーバーブースト（奉納）している人 */
 const isBooster = (i: { member: { premiumSince: Date | null } }) => i.member.premiumSince !== null;
-import { announceSpecial, omikujiMessage, omikujiVoiceBlock } from './omikuji.js';
+import { announceSpecial, omikujiVoiceBlock, revealOmikuji } from './omikuji.js';
 import { hanafubukiMessage, myColorConfirm, myColorPicker, otoshidamaPickChannel, presentConfirm, presentPickTarget, shopConfirm, shopList, shopPickTarget } from './shopViews.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -354,7 +354,7 @@ export class ShopApp {
     if (blocked) return `${blocked}（${this.coinName}は減っていません）`;
     const r = await buySimple(this.db, item, i.user.id, {}, new Date(), this.price(i, item), discount);
     if (r.status !== 'ok') return this.insufficientText(r)!;
-    const d = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { extra: true, special: cfg.omikujiSpecial });
+    const d = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { extra: true, special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
     if (d.status !== 'drawn') {
       await refund(this.db, r.purchase);
       return `今日の「もう 1 回」は使いました（${this.coinName}は戻しました）。`;
@@ -362,9 +362,11 @@ export class ShopApp {
     const home = cfg.channels.omikuji ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
     const channel = home ? i.guild.channels.cache.get(home) : undefined;
     if (channel?.isSendable()) {
-      await channel.send({ ...(await omikujiMessage(this.db, d, i.member.displayName, cfg.economy, undefined, '（もう 1 回）')), allowedMentions: { parse: [] } }).catch(() => undefined);
-    }
-    await announceSpecial(i.guild, cfg, i.user.id, d.fortune);
+      // 演出は待たずに先へ（買った人への返事を遅らせない）。#慶事 は演出のあとで
+      void revealOmikuji(this.db, cfg, d, i.member.displayName, (p) => channel.send(p), { suffix: '（もう 1 回）' })
+        .catch(() => undefined)
+        .then(() => announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune));
+    } else await announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune);
     return `🎟 もう 1 回引きました: **${d.fortune.name}**${home ? `（<#${home}> に出しました）` : ''}${this.discountNote(r)}`;
   }
 

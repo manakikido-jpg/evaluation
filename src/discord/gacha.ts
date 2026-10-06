@@ -58,7 +58,7 @@ import {
 import { customHoldingsOf, customName, listCustomTickets, useCustom } from '../services/customTickets.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket } from '../services/tickets.js';
-import { announceSpecial, omikujiMessage, omikujiVoiceBlock } from './omikuji.js';
+import { announceSpecial, omikujiVoiceBlock, revealOmikuji } from './omikuji.js';
 import { panelMessage } from './panels.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -649,14 +649,18 @@ export class GachaApp {
     const blocked = omikujiVoiceBlock(cfg.economy, i.member);
     if (blocked) return `${blocked}（券は使っていません）`;
     if (!(await useTicket(this.db, i.user.id, 'omikuji_extra'))) return '🎴 おみくじもう 1 回券がありません。';
-    const d = await drawOmikuji(this.db, cfg.economy, i.user.id, now, Math.random, { extra: true, special: cfg.omikujiSpecial });
+    const d = await drawOmikuji(this.db, cfg.economy, i.user.id, now, Math.random, { extra: true, special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
     if (d.status !== 'drawn') {
       await addTickets(this.db, i.user.id, 'omikuji_extra', 1);
       return '今日の「もう 1 回」はもう使いました（券は戻しました）。';
     }
     const channel = this.omikujiChannel(i.guild);
-    if (channel) await channel.send({ ...(await omikujiMessage(this.db, d, i.member.displayName, cfg.economy, undefined, '（もう 1 回）')), allowedMentions: { parse: [] } }).catch(() => undefined);
-    await announceSpecial(i.guild, cfg, i.user.id, d.fortune);
+    // 演出は待たずに先へ（券を使った人への返事を遅らせない）。#慶事 は演出のあとで
+    if (channel)
+      void revealOmikuji(this.db, cfg, d, i.member.displayName, (p) => channel.send(p), { suffix: '（もう 1 回）' })
+        .catch(() => undefined)
+        .then(() => announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune));
+    else await announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune);
     return `🎴 もう 1 回引きました: **${d.fortune.name}**${channel ? `（<#${channel.id}> に出しました）` : ''}`;
   }
 
