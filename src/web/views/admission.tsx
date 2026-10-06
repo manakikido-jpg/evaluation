@@ -63,6 +63,10 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   unei_invalid: { text: '🎴 運営吉を保存できませんでした。確率（0〜100）・倍率・名前（20 文字まで）を確かめてください。', kind: 'warn' },
   unei_gap: { text: '🎴 名前は 1 枠目からつめて入れてください（途中の枠を空にはできません。絵は枠の番号で決まります）。', kind: 'warn' },
   unei_art_deleted: { text: '🎴 絵を消しました。', kind: 'ok' },
+  unei_trial: { text: '🧪 運営のチャンネル（呼び鈴の知らせ先か #記録）に、運営吉を試しに出しました。ガラガラ → 光る → 絵 → 紙 の順に、6 秒ほどで全部出ます（くじは引いていません・銭は動きません）。', kind: 'ok' },
+  unei_trial_noslot: { text: '🧪 その枠には名前が入っていません。名前を入れて「保存する」を押してから試してください。', kind: 'warn' },
+  unei_trial_nochannel: { text: '🧪 試しを出すチャンネルがありません（呼び鈴の知らせ先か #記録 を決めてください）。', kind: 'warn' },
+  unei_trial_failed: { text: '🧪 試しを出せませんでした（BOT がそのチャンネルに書けるか確かめてください）。', kind: 'warn' },
   account_last_guji: { text: '使える宮司が 1 人もいなくなるので、できません（先にほかの宮司を発行してください）。', kind: 'warn' },
   account_member_not_found: { text: 'Discord の人が見つかりませんでした（ID で入れてみてください）。', kind: 'warn' },
 };
@@ -825,12 +829,17 @@ function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Reco
                     絵を消す
                   </button>
                 )}
+                {s && (
+                  <button type="submit" form={`unei-trial-${n}`} class="small" title="運営のチャンネルにだけ、本番と同じ流れで出します（保存してある名前・絵・台紙で）">
+                    🧪 Discord で試す
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
         <div class="art-savebar">
-          <span data-art-count>名前・確率・絵をまとめて保存します。</span>
+          <span data-art-count>名前・確率・絵をまとめて保存します。「🧪 Discord で試す」は、保存してあるもので試します。</span>
           <button type="submit" class="ok">
             保存する
           </button>
@@ -840,6 +849,13 @@ function UneiSection(props: { session: AdminSession; cfg: GuildConfig; art: Reco
         .filter((n) => props.art[n])
         .map((n) => (
           <form method="post" action={`/settings/omikuji-art/${n}/delete`} id={`unei-del-${n}`} hidden>
+            <Csrf session={props.session} />
+          </form>
+        ))}
+      {slots
+        .filter((n) => sp.list[n - 1])
+        .map((n) => (
+          <form method="post" action={`/settings/omikuji-trial/${n}`} id={`unei-trial-${n}`} hidden>
             <Csrf session={props.session} />
           </form>
         ))}

@@ -6,6 +6,7 @@ import { IdeaPage, IdeasPage } from './views/ideas.js';
 import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikujiArt, loadSlipBg, omikujiArtHashes, saveOmikujiArt, saveSlipBg, SLIP_BG_KEYS, slipBgHashes } from '../services/omikujiArt.js';
 import { fortuneOf, omikujiSayings, specialIndex } from '../services/omikuji.js';
 import { renderSlip } from '../services/omikujiSlip.js';
+import { trialUnei } from '../services/omikujiTrial.js';
 import { FORTUNE_KEYS, toneOf, TONES, type FortuneKey } from '../omikujiTexts.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -2174,6 +2175,23 @@ export function createWebApp(deps: WebDeps) {
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'omikuji.special', detail: raw, via: 'web' });
     return back(failed ? 'unei_partial' : 'unei_saved');
+  });
+  // 🧪 運営吉を試しに出す（運営のチャンネルに、本番と同じ流れで。くじは引かない）
+  app.post('/settings/omikuji-trial/:n', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const n = Number(c.req.param('n'));
+    const back = (msg: string) => c.redirect(`/settings?msg=${msg}&at=unei#sec-unei`);
+    if (!isOmikujiArtNo(n)) return back('unei_trial_noslot');
+    try {
+      const r = await trialUnei(db, deps.discord, cfg, n, c.get('session').userId, now());
+      if (!r.ok) return back(r.reason === 'no_slot' ? 'unei_trial_noslot' : 'unei_trial_nochannel');
+      r.done.catch((err) => logger.warn({ err }, 'omikuji trial failed'));
+      await audit(db, { actorId: c.get('session').userId, action: 'omikuji.trial', detail: { n }, via: 'web' });
+      return back('unei_trial');
+    } catch (err) {
+      logger.warn({ err }, 'omikuji trial failed');
+      return back('unei_trial_failed');
+    }
   });
   app.get('/settings/omikuji-art/:n', async (c) => {
     if (!gujiOnly(c)) return c.notFound();

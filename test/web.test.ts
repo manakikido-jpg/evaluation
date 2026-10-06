@@ -621,6 +621,14 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     for (const [k, v] of Object.entries({ enabled: 'yes', percent: '1', mult: '3', 'name.1': '小林吉', 'color.1': '#1f4fbf' })) fd.append(k, v);
     await app.request('/settings/omikuji-special', { method: 'POST', headers: { cookie: `shamusho_session=${g}` }, body: fd });
     expect(store.current.omikujiSpecial.list).toEqual([{ name: '小林吉', message: '', color: '#1f4fbf' }]);
+    // 🧪 Discord で試す（運営のチャンネルへ）。名前のない枠はできない
+    const { TRIAL_MS } = await import('../src/services/omikujiTrial.js');
+    Object.assign(TRIAL_MS, { shake: 0, glow: 0, art: 0 });
+    expect(await (await get('/settings', g)).text()).toContain('action="/settings/omikuji-trial/1"');
+    expect((await post('/settings/omikuji-trial/2', g, { _csrf: csrf })).headers.get('location')).toBe('/settings?msg=unei_trial_noslot&at=unei#sec-unei');
+    const before = actions.length;
+    expect((await post('/settings/omikuji-trial/1', g, { _csrf: csrf })).headers.get('location')).toBe('/settings?msg=unei_trial&at=unei#sec-unei');
+    expect(actions.slice(before)[0]).toMatch(/^send \d+ -# 🧪 運営吉の試し/);
   });
 
   it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {

@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-unei-trial',
+    date: '2026-10-06',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🧪 運営吉を Discord で試せるように',
+    items: ['設定 → 🎴 運営吉 の「🧪 Discord で試す」で、運営のチャンネルにだけ、本番と同じ流れ（ガラガラ → 光る → 絵 → 紙）で出せます。くじは引かず、銭も動きません'],
+  },
+  {
     id: '2026-10-06-omikuji-slip-only',
     date: '2026-10-06',
     kind: 'improve',

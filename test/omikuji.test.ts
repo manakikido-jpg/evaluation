@@ -277,4 +277,47 @@ describe('おみくじ', () => {
     const plain = { contentType: 'image/png', data: new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="1200"><rect width="600" height="1200" fill="#fff8ee"/></svg>').render().asPng() };
     expect(plainBox(plain)).toBeUndefined();
   });
+
+  it('🧪 運営吉を試しに出す: 運営のチャンネルに 光る → 絵 → 絵と紙。くじは引かない・銭は動かない', async () => {
+    const { trialUnei, TRIAL_MS } = await import('../src/services/omikujiTrial.js');
+    Object.assign(TRIAL_MS, { shake: 0, glow: 0, art: 0 });
+    const calls: { kind: string; channel: string; title?: string; files: string[]; content?: string }[] = [];
+    const discord = {
+      sendMessage: async (channel: string, b: { content?: string; embeds?: { title?: string }[]; files?: { name: string }[] }) => {
+        calls.push({ kind: 'send', channel, title: b.embeds?.at(-1)?.title, files: (b.files ?? []).map((f) => f.name), content: b.content });
+        return { id: 'm1' };
+      },
+      editMessage: async (channel: string, _m: string, b: { content?: string; embeds?: { title?: string }[]; files?: { name: string }[] }) => {
+        calls.push({ kind: 'edit', channel, title: b.embeds?.at(-1)?.title, files: (b.files ?? []).map((f) => f.name) });
+      },
+    };
+    const conf = { ...cfg, bell: { ...cfg.bell, channelId: '900000000000000099' }, omikujiSpecial: { enabled: false, percent: 1, mult: 3, list: [{ name: '小林吉', message: '', color: '#1f4fbf' }] } };
+    expect(await trialUnei(db, discord as never, conf, 2, 'A')).toEqual({ ok: false, reason: 'no_slot' });
+    expect(await trialUnei(db, discord as never, { ...conf, bell: { ...conf.bell, channelId: undefined }, channels: { ...conf.channels, log: undefined } }, 1, 'A')).toEqual({ ok: false, reason: 'no_channel' });
+    // 出す設定が OFF でも試せる。絵がなければ 光る → 紙
+    const r1 = await trialUnei(db, discord as never, conf, 1, 'A');
+    if (!r1.ok) throw new Error('not ok');
+    await r1.done;
+    expect(calls.map((x) => [x.kind, x.title, x.files.join(',')])).toEqual([
+      ['send', '⛩ おみくじ', ''],
+      ['edit', '⛩ おみくじ', ''],
+      ['edit', undefined, 'omikuji.png'],
+    ]);
+    expect(calls[0]!.channel).toBe('900000000000000099');
+    expect(calls[0]!.content).toContain('試し');
+    calls.length = 0;
+    const png = (await import('../src/services/omikujiSlip.js')).renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
+    await saveOmikujiArt(db, 1, png);
+    const r2 = await trialUnei(db, discord as never, conf, 1, 'A');
+    if (!r2.ok) throw new Error('not ok');
+    await r2.done;
+    expect(calls.map((x) => [x.title, x.files.join(',')])).toEqual([
+      ['⛩ おみくじ', ''],
+      ['⛩ おみくじ', ''],
+      ['🎴✨ 小林吉 ✨', 'unei1.png'],
+      [undefined, 'unei1.png,omikuji.png'],
+    ]);
+    // くじは引いていない・銭は動かない
+    expect((await walletOf(db, 'A')).balance).toBe(0);
+  });
 });
