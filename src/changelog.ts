@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-omikuji-game-daily',
+    date: '2026-10-07',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🎮 おみくじに「勝負事」が毎日出るように',
+    items: ['おみくじの紙に、願い事・待ち人と一緒に「勝負事」が毎日出ます（恋愛・寝落ちはどちらか 1 つが日替わり）'],
+  },
+  {
     id: '2026-10-06-unei-interval',
     date: '2026-10-06',
     kind: 'improve',
