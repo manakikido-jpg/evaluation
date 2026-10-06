@@ -28,7 +28,7 @@ export function omikujiVoiceBlock(economy: Pick<EconomyConfig, 'omikujiVoiceOnly
 }
 
 type Drawn = Extract<OmikujiResult, { status: 'drawn' }>;
-type Payload = { embeds: APIEmbed[]; files: AttachmentBuilder[] };
+type Payload = { content?: string; embeds: APIEmbed[]; files: AttachmentBuilder[] };
 const NO_PINGS = { parse: [] } as const;
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
@@ -50,8 +50,17 @@ export function omikujiEmbed(r: Drawn, name: string, economy: EconomyConfig, str
   return { title: titleOf(r), description: lines.join('\n'), color: r.fortune.color };
 }
 
+/** 紙のいちばん下に書く行（もらった銭・連続日数と次のおまけ。絵文字は字がないので使わない） */
+export function slipFoot(r: Drawn, economy: Pick<EconomyConfig, 'currencyName'>, streak?: OmikujiStreakConfig): string[] {
+  const next = streak && r.streak ? nextStreakReward(streak, r.streak) : undefined;
+  return [
+    ...(r.amount > 0 ? [`${economy.currencyName} +${r.amount.toLocaleString('ja-JP')}（いま ${r.balance.toLocaleString('ja-JP')} 枚）`] : []),
+    ...(r.streak ? [`連続 ${r.streak} 日目${next ? `・あと ${next.left} 日でおまけ` : ''}`] : []),
+  ];
+}
+
 /** おみくじの紙（画像）。紙を出さない設定・作れなかったときは undefined */
-export async function omikujiSlip(db: Db, cfg: Pick<GuildConfig, 'omikujiTexts'>, r: Drawn, now = new Date()): Promise<AttachmentBuilder | undefined> {
+export async function omikujiSlip(db: Db, cfg: Pick<GuildConfig, 'omikujiTexts'>, r: Drawn, now = new Date(), foot: string[] = []): Promise<AttachmentBuilder | undefined> {
   if (!cfg.omikujiTexts.slip) return undefined;
   try {
     const special = specialIndex(r.fortune.key) !== undefined;
@@ -66,6 +75,7 @@ export async function omikujiSlip(db: Db, cfg: Pick<GuildConfig, 'omikujiTexts'>
       date: now,
       special,
       tone: toneOf(special ? 'daikichi' : r.fortune.key),
+      foot,
       ...(bg ? { bg } : {}),
     });
     return new AttachmentBuilder(png, { name: 'omikuji.png' });
@@ -91,24 +101,33 @@ const artEmbed = (r: Drawn, name: string, file: AttachmentBuilder): APIEmbed => 
 });
 
 /**
- * 結果のメッセージ。おみくじの紙（画像）に、花びら・連続日数を添える。
- * 🎴 運営吉なら、社務所Web で入れた絵を大きく出してから、紙を出す。suffix: 題につける「（もう 1 回）」など
+ * 結果のメッセージ。おみくじの紙（画像）だけを出す（もらった銭・連続日数は紙のいちばん下に書く）。
+ * 文字で出すのは、続けたおまけをもらえた日の行と、「もう 1 回」のときのだれが引いたか（suffix）だけ。
+ * 🎴 運営吉なら、社務所Web で入れた絵を大きく出してから、紙を出す。紙を作れないときは前のように文字のカード
  */
 export async function omikujiMessage(db: Db, cfg: GuildConfig, r: Drawn, name: string, opts: { suffix?: string; streak?: boolean; now?: Date } = {}): Promise<Payload> {
   const streak = opts.streak ? cfg.omikujiStreak : undefined;
-  const [slip, art] = await Promise.all([omikujiSlip(db, cfg, r, opts.now), uneiArt(db, r.fortune.key)]);
-  const main: APIEmbed = slip
-    ? { title: titleOf(r), description: [`**${name}** さんの運勢`, ...footLines(r, cfg.economy, streak)].join('\n'), color: r.fortune.color, image: { url: `attachment://${slip.name}` } }
-    : omikujiEmbed(r, name, cfg.economy, streak);
-  main.title = `${main.title}${opts.suffix ?? ''}`;
-  return { embeds: [...(art ? [artEmbed(r, name, art)] : []), main], files: [...(art ? [art] : []), ...(slip ? [slip] : [])] };
+  const [slip, art] = await Promise.all([omikujiSlip(db, cfg, r, opts.now, slipFoot(r, cfg.economy, streak)), uneiArt(db, r.fortune.key)]);
+  if (!slip) {
+    const main = omikujiEmbed(r, name, cfg.economy, streak);
+    main.title = `${main.title}${opts.suffix ?? ''}`;
+    return { embeds: [...(art ? [artEmbed(r, name, art)] : []), main], files: art ? [art] : [] };
+  }
+  const content = [
+    ...(opts.suffix ? [`-# ⛩ **${name}** さんのおみくじ${opts.suffix}`] : []),
+    ...r.bonus.map((b) => `🎁 **${b.days} 日続いたおまけ**: ${streakRewardText(b, cfg.economy)}`),
+  ].join('\n');
+  const text = content ? { content } : {};
+  // 運営吉は、絵のあとに紙が来るように、どちらもカードの絵にする（ふつうは紙をそのまま添える）
+  if (art) return { ...text, embeds: [artEmbed(r, name, art), { color: r.fortune.color, image: { url: `attachment://${slip.name}` } }], files: [art, slip] };
+  return { ...text, embeds: [], files: [slip] };
 }
 
 /** 演出の待ち時間（ミリ秒。テストでは 0 にする） */
 export const REVEAL_MS = { shake: 1400, glow: 1800, art: 2800 };
 const sleep = (ms: number) => (ms > 0 ? new Promise((res) => setTimeout(res, ms)) : Promise.resolve());
 
-type Editable = { edit: (p: { embeds: APIEmbed[]; files?: AttachmentBuilder[]; attachments?: []; allowedMentions?: typeof NO_PINGS }) => Promise<unknown> };
+type Editable = { edit: (p: { content?: string; embeds: APIEmbed[]; files?: AttachmentBuilder[]; attachments?: []; allowedMentions?: typeof NO_PINGS }) => Promise<unknown> };
 
 /**
  * 引いた結果を出す（演出つき）。「ガラガラ…」→ 結果。

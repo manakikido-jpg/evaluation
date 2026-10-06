@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-omikuji-slip-only',
+    date: '2026-10-06',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '📜 おみくじは紙だけに',
+    items: ['おみくじの結果は紙の画像だけになりました。もらった銭と連続日数（あと何日でおまけか）は、紙のいちばん下に書いてあります', '続けたおまけをもらえた日は、紙の上に「🎁 ○ 日続いたおまけ」が出ます'],
+  },
+  {
     id: '2026-10-06-idea-files',
     date: '2026-10-06',
     kind: 'improve',

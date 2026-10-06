@@ -31,6 +31,8 @@ export type SlipInput = {
   special?: boolean;
   /** 台紙（PNG・JPEG）。あれば紙・枠・線は描かず、字と朱印だけ書く */
   bg?: { contentType: string; data: Uint8Array };
+  /** いちばん下に書く行（もらった銭・連続日数。2 行まで）。なければ「吉凶は心がけ次第」 */
+  foot?: string[];
   /** 運勢の向き（台紙がないときの柄: good = 桜と金 / normal = 桜 / bad = 雲） */
   tone?: 'good' | 'normal' | 'bad';
 };
@@ -267,8 +269,19 @@ export function slipSvg(inp: SlipInput): string {
     }
   }
 
-  // 下: ひとこと・印
-  out.push(`<text x="${SLIP_W / 2 + 30}" y="${P.y + P.h - 40}" text-anchor="middle" font-family="${BODY}" font-size="17" letter-spacing="3" fill="#6b5040">― 吉凶は心がけ次第 ―</text>`);
+  // 下: もらった銭・連続日数（なければ ひとこと）・印
+  const foot = (inp.foot ?? []).filter(Boolean).slice(0, 2);
+  if (foot.length) {
+    const fx = (P.x + 120 + P.x + P.w - 24) / 2;
+    const room = P.w - 144;
+    foot.forEach((line, k) => {
+      // 数字・空白は半分の幅として数える
+      const width = [...line].reduce((w, ch) => w + (/[\x20-\x7e]/.test(ch) ? 0.55 : 1), 0);
+      const size = Math.min(k === 0 ? 27 : 22, Math.floor(room / Math.max(1, width)));
+      const y = P.y + P.h - (foot.length === 2 ? 66 - k * 34 : 48);
+      out.push(`<text x="${fx}" y="${y}" text-anchor="middle" font-family="${k === 0 ? BOLD : BODY}" font-size="${size}" fill="${k === 0 ? INK : '#6b5040'}">${esc(line)}</text>`);
+    });
+  } else out.push(`<text x="${SLIP_W / 2 + 30}" y="${P.y + P.h - 40}" text-anchor="middle" font-family="${BODY}" font-size="17" letter-spacing="3" fill="#6b5040">― 吉凶は心がけ次第 ―</text>`);
   const seal = [...(inp.shrine || '御神籤')].slice(0, 4);
   const sx = P.x + 34;
   const sy = P.y + P.h - 104;
