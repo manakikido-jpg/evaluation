@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-active-stats',
+    date: '2026-10-06',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🌙 推移に「浮上・時間帯」を足して、ページをタブに分けました',
+    items: [
+      '推移のページを「📈 全体」「👫 男女」「🌙 浮上・時間帯」のタブに分けました',
+      '浮上した人・通話の時間・発言の男女（日・週・月ごと）、いちばん人が多い時間・静かな時間',
+      '時間帯ごとの浮上と通話の人数（男女）、曜日 × 時間帯のヒートマップ（今日から記録をはじめます）',
+    ],
+  },
+  {
     id: '2026-10-06-join-bonus-notice',
     date: '2026-10-06',
     kind: 'improve',

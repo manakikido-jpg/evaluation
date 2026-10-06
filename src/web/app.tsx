@@ -1,6 +1,6 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
-import { genderNow, genderTrend } from '../services/genderStats.js';
+import { activityStats, genderNow, genderTrend } from '../services/genderStats.js';
 import { deleteOmikujiArt, isOmikujiArtNo, loadOmikujiArt, omikujiArtHashes, saveOmikujiArt } from '../services/omikujiArt.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -89,7 +89,7 @@ import { createSession, deleteSession, findSession, markChecked, randomToken, re
 
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
 const RECHECK_GRACE_MS = 30 * 60_000;
-import { StatsPage } from './views/stats.js';
+import { isStatsView, StatsPage } from './views/stats.js';
 import { RecentUpdates, UpdatesPage } from './views/updates.js';
 import type { SessionView } from './views/layout.js';
 import { CHANGELOG, LATEST_CHANGE_ID, unseenChanges } from '../changelog.js';
@@ -1180,8 +1180,15 @@ export function createWebApp(deps: WebDeps) {
   app.get('/stats', async (c) => {
     const q = c.req.query('range');
     const range = isTrendRange(q) ? q : '30d';
-    const [buckets, gender, genderToday] = await Promise.all([memberTrend(db, range, now()), genderTrend(db, cfg, range, now()), genderNow(db, cfg, now())]);
-    return c.html(<StatsPage session={c.get('session')} range={range} buckets={buckets} gender={gender} genderNow={genderToday} />);
+    const v = c.req.query('view');
+    const view = isStatsView(v) ? v : 'overview';
+    const [buckets, gender, genderToday, activity] = await Promise.all([
+      memberTrend(db, range, now()),
+      view === 'gender' ? genderTrend(db, cfg, range, now()) : undefined,
+      view === 'gender' ? genderNow(db, cfg, now()) : undefined,
+      view === 'active' ? activityStats(db, cfg, range, now()) : undefined,
+    ]);
+    return c.html(<StatsPage session={c.get('session')} range={range} view={view} buckets={buckets} gender={gender} genderNow={genderToday} activity={activity} />);
   });
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */

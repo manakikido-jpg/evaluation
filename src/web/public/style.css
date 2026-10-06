@@ -894,3 +894,8 @@ form.dirty .art-savebar { border-color: #e0a020; }
 .tpl-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
 .tpl-list details summary { cursor: pointer; }
 .section-title { margin: 28px 0 8px; font-size: 1.25rem; }
+.chart.heat .cell { fill: var(--series-1); }
+.chart.heat .cell:hover { stroke: var(--ink); stroke-width: 1.5; }
+.heat-legend { display: flex; align-items: center; gap: 8px; }
+.heat-scale { display: inline-block; width: 120px; height: 10px; border-radius: 4px; background: linear-gradient(90deg, color-mix(in srgb, var(--series-1) 8%, transparent), var(--series-1)); }
+.stats-views { margin-top: 4px; }

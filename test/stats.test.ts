@@ -130,3 +130,37 @@ describe('👫 男女の割合', () => {
     expect(n.stay[0]).toEqual({ days: 30, joined: { male: 2, female: 2, unknown: 0 }, stayed: { male: 1, female: 2, unknown: 0 } });
   });
 });
+
+describe('🌙 浮上の男女と時間帯', () => {
+  const MALE = '990000000000000001';
+  const FEMALE = '990000000000000002';
+  const gcfg = { ...cfg, roles: { ...cfg.roles, male: MALE, female: FEMALE } };
+  it('1 分ごとに 1 時間ごとの記録を足す（発言・通話）。時間帯・曜日 × 時・区切りごとの男女', async () => {
+    const { addHourlyActivity, addMessageCounts, jstHour } = await import('../src/services/activity.js');
+    const { activityStats } = await import('../src/services/genderStats.js');
+    const { activityHourly } = await import('../src/db/schema.js');
+    await db.insert(members).values([
+      { id: 'a', username: 'a', displayName: 'a', roleIds: [MALE], joinedAt: at('2026-09-01T10:00:00') },
+      { id: 'b', username: 'b', displayName: 'b', roleIds: [FEMALE], joinedAt: at('2026-09-01T10:00:00') },
+    ]);
+    // 9/26（土）21 時台: a は発言 2 回と通話 2 分、b は通話 1 分
+    const t1 = at('2026-09-26T21:05:00');
+    expect(jstHour(t1)).toBe(21);
+    await addHourlyActivity(db, new Map([['a', 2]]), ['a', 'b'], t1);
+    await addHourlyActivity(db, new Map(), ['a'], at('2026-09-26T21:06:00'));
+    await addMessageCounts(db, new Map([['a', 2]]), t1);
+    await db.insert(activityDaily).values({ memberId: 'b', date: '2026-09-26', vcMinutes: 1 });
+    const rows = await db.select().from(activityHourly);
+    expect(rows.find((r) => r.memberId === 'a')).toMatchObject({ date: '2026-09-26', hour: 21, messages: 2, vcMinutes: 2 });
+    expect(rows.find((r) => r.memberId === 'b')).toMatchObject({ hour: 21, messages: 0, vcMinutes: 1 });
+    const s = await activityStats(db, gcfg, '30d', NOW);
+    expect(s.days).toBe(1);
+    expect(s.hours[21]!.people).toEqual({ male: 1, female: 1, unknown: 0 });
+    expect(s.hours[21]!.vcMinutes).toEqual({ male: 2, female: 1, unknown: 0 });
+    expect(s.hours[20]!.people).toEqual({ male: 0, female: 0, unknown: 0 });
+    expect(s.week[5]![21]).toBe(2); // 土曜
+    const day = s.buckets.find((x) => x.from === '2026-09-26')!;
+    expect(day.people).toEqual({ male: 1, female: 1, unknown: 0 });
+    expect(day.messages).toEqual({ male: 2, female: 0, unknown: 0 });
+  });
+});

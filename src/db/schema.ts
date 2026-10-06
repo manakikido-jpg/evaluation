@@ -319,6 +319,20 @@ export const activityDaily = pgTable(
   (t) => [primaryKey({ columns: [t.memberId, t.date] })],
 );
 
+/** 1 時間ごとの浮上（人 × 日本時間の日付 × 時。発言数と通話の分。浮上の時間帯のグラフ用） */
+export const activityHourly = pgTable(
+  'activity_hourly',
+  {
+    memberId: text('member_id').notNull(),
+    date: text('date').notNull(),
+    /** 日本時間の時（0〜23） */
+    hour: integer('hour').notNull(),
+    messages: integer('messages').notNull().default(0),
+    vcMinutes: integer('vc_minutes').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.memberId, t.date, t.hour] }), index('activity_hourly_date_idx').on(t.date)],
+);
+
 export type Wallet = typeof wallets.$inferSelect;
 export type CoinTx = typeof coinTx.$inferSelect;
 export type Yaku = typeof yaku.$inferSelect;

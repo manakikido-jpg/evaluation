@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { EconomyConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { activityDaily } from '../db/schema.js';
+import { activityDaily, activityHourly } from '../db/schema.js';
 import { fukuActive } from './buffs.js';
 import { addCoins } from './economy.js';
 
@@ -21,6 +21,28 @@ export async function addMessageCounts(db: Db, counts: Map<string, number>, now:
     .onConflictDoUpdate({
       target: [activityDaily.memberId, activityDaily.date],
       set: { messageCount: sql`${activityDaily.messageCount} + excluded.message_count` },
+    });
+}
+
+/** 日本時間の時（0〜23） */
+export const jstHour = (now: Date): number => new Date(now.getTime() + 9 * 3_600_000).getUTCHours();
+
+/**
+ * 1 時間ごとの浮上を足す（1 分ごと）。counts: この 1 分の発言数 / inVoice: いま通話にいる人（AFK・BOT をのぞく。1 人でも数える）
+ */
+export async function addHourlyActivity(db: Db, counts: Map<string, number>, inVoice: Iterable<string>, now: Date): Promise<void> {
+  const date = jstDate(now);
+  const hour = jstHour(now);
+  const rows = new Map<string, { messages: number; vcMinutes: number }>();
+  for (const [id, n] of counts) rows.set(id, { messages: n, vcMinutes: 0 });
+  for (const id of inVoice) rows.set(id, { messages: rows.get(id)?.messages ?? 0, vcMinutes: 1 });
+  if (!rows.size) return;
+  await db
+    .insert(activityHourly)
+    .values([...rows].map(([memberId, r]) => ({ memberId, date, hour, ...r })))
+    .onConflictDoUpdate({
+      target: [activityHourly.memberId, activityHourly.date, activityHourly.hour],
+      set: { messages: sql`${activityHourly.messages} + excluded.messages`, vcMinutes: sql`${activityHourly.vcMinutes} + excluded.vc_minutes` },
     });
 }
 

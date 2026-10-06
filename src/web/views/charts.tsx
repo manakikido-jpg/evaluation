@@ -342,7 +342,7 @@ export function MultiLineChart(props: { points: ChartPoint[]; series: { name: st
 }
 
 /** 100% の横棒（行ごと: 男性・女性・不明の割合）。人数と % は文字で横に出す */
-export function ShareBars(props: { rows: { name: string; parts: { name: string; cls: 's1' | 's2' | 's3'; value: number }[] }[]; label: string }) {
+export function ShareBars(props: { rows: { name: string; unit?: string; parts: { name: string; cls: 's1' | 's2' | 's3'; value: number }[] }[]; label: string }) {
   const ROW = 34;
   const L = 150;
   const R = 230;
@@ -375,7 +375,8 @@ export function ShareBars(props: { rows: { name: string; parts: { name: string; 
                   return len >= 1 ? <rect class={`bar ${p.cls}`} x={x0 + (x0 > L ? 1 : 0)} y={y} width={Math.max(0.5, len - (x0 > L ? 1 : 0))} height={bar} rx={2} fill={SC[p.cls]} /> : null;
                 })}
               <text class="barvalue" x={L + bw + 8} y={y + bar - 3} fill={C.muted} font-size="12">
-                {fmt(total)}人
+                {fmt(total)}
+                {r.unit ?? '人'}
                 {total > 0 &&
                   r.parts
                     .filter((p) => p.cls !== 's3')
@@ -389,6 +390,54 @@ export function ShareBars(props: { rows: { name: string; parts: { name: string; 
           );
         })}
       </svg>
+    </div>
+  );
+}
+
+/**
+ * ヒートマップ（曜日 × 時など）。濃いほど多い（1 色の濃淡）。数字はマウスを乗せると出る。
+ * rows: 行の名前 / cols: 列の名前（間引いて出す）
+ */
+export function Heatmap(props: { rows: string[]; cols: string[]; values: number[][]; unit: string; label: string; format?: (v: number) => string }) {
+  const f = props.format ?? fmt;
+  const L = 40;
+  const T = 8;
+  const cw = (W - L - 8) / props.cols.length;
+  const ch = 24;
+  const h = T + ch * props.rows.length + 24;
+  const max = Math.max(...props.values.flat(), 0) || 1;
+  // 薄い色でも見えるように 0.08〜1
+  const op = (v: number) => (v <= 0 ? 0 : 0.08 + 0.92 * (v / max));
+  return (
+    <div class="chart-wrap">
+      <svg class="chart heat" viewBox={`0 0 ${W} ${h}`} role="img" aria-label={props.label}>
+        {props.rows.map((r, i) => (
+          <g>
+            <text x={L - 8} y={T + ch * i + ch / 2 + 4} text-anchor="end" fill={C.muted} font-size="12">
+              {r}
+            </text>
+            {props.cols.map((c, j) => {
+              const v = props.values[i]?.[j] ?? 0;
+              return (
+                <rect class="cell" x={L + cw * j + 1} y={T + ch * i + 1} width={cw - 2} height={ch - 2} rx={3} fill={C.s1} fill-opacity={op(v)}>
+                  <title>{`${r} ${c}: ${f(v)}${props.unit}`}</title>
+                </rect>
+              );
+            })}
+          </g>
+        ))}
+        {props.cols.map((c, j) =>
+          j % 3 === 0 ? (
+            <text x={L + cw * j + cw / 2} y={h - 8} text-anchor="middle" fill={C.muted} font-size="12">
+              {c}
+            </text>
+          ) : null,
+        )}
+      </svg>
+      <p class="legend heat-legend">
+        少ない <span class="heat-scale" aria-hidden="true" /> 多い（いちばん多いところ {f(max)}
+        {props.unit}）
+      </p>
     </div>
   );
 }

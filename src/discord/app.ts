@@ -27,7 +27,7 @@ import { decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type P
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
-import { addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
+import { addHourlyActivity, addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
 import { ticketsOf } from '../services/tickets.js';
 import { customHoldingsOf } from '../services/customTickets.js';
@@ -191,6 +191,8 @@ export class ShuinApp {
         memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [],
       }));
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
+    // 浮上の時間帯（1 時間ごと）: この 1 分の発言と、通話にいる人
+    await addHourlyActivity(this.db, counts, new Set(presence.flatMap((c) => c.memberIds)), now).catch((err) => logger.warn({ err }, 'hourly activity failed'));
     // 議事録の「参加した人」を、いま通話にいる人から入れられるように
     await saveVoiceNow(this.db, presence.map((c) => ({ id: c.id, name: c.name, memberIds: c.memberIds })), now).catch((err) => logger.warn({ err }, 'voice now save failed'));
 

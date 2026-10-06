@@ -2412,6 +2412,14 @@ describe('推移（管理画面）', () => {
     expect(fallback).toContain('aria-current="page"');
     expect(fallback).toMatch(/aria-current="page"[^>]*>30 日/);
     expect((await app.request('/stats')).status).toBe(302);
+    // 男女・浮上のタブ
+    const g = await (await get('/stats?range=30d&view=gender', s)).text();
+    expect(g).toContain('男女の割合');
+    expect(g).not.toContain('サーバーにいる人数');
+    const a = await (await get('/stats?range=90d&view=active', s)).text();
+    expect(a).toContain('浮上した人の男女');
+    expect(a).toContain('時間帯の記録はまだありません');
+    expect(a).toContain('href="/stats?range=1y&amp;view=active"');
   });
 
   it('ホームのいちばん上に、30 日の人数のグラフが出る', async () => {

@@ -1,7 +1,7 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { applications, members } from '../db/schema.js';
+import { activityDaily, activityHourly, applications, members } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { trendBuckets, type TrendRange } from './stats.js';
@@ -104,4 +104,71 @@ export async function genderNow(db: Db, cfg: Pick<GuildConfig, 'roles' | 'ranks'
     byAge,
     stay,
   };
+}
+
+// ───────── 🌙 浮上（発言・通話）の男女と時間帯 ─────────
+
+export type ActiveBucket = { label: string; title: string; from: string; to: string; people: SexCount; vcMinutes: SexCount; messages: SexCount };
+export type HourRow = { hour: number; people: SexCount; vcMinutes: SexCount };
+export type ActivityStats = {
+  buckets: ActiveBucket[];
+  /** 時間帯（0〜23 時）: 1 日あたりの平均の浮上人数・通話の分（記録のある日で割る） */
+  hours: HourRow[];
+  /** 曜日（月=0）× 時: 1 日あたりの平均の浮上人数（男女合わせて） */
+  week: number[][];
+  /** 時間帯の記録がある日数 */
+  days: number;
+};
+
+export async function activityStats(db: Db, cfg: Pick<GuildConfig, 'roles'>, range: TrendRange, now: Date): Promise<ActivityStats> {
+  const sexOf = new Map((await people(db, cfg)).map((p) => [p.id, p.sex] as const));
+  const sex = (id: string): Sex => sexOf.get(id) ?? 'unknown';
+  const bs = trendBuckets(range, now);
+  const from = bs[0]!.from;
+  const to = bs.at(-1)!.to;
+  const daily = await db
+    .select({ memberId: activityDaily.memberId, date: activityDaily.date, messages: activityDaily.messageCount, vc: activityDaily.vcMinutes })
+    .from(activityDaily)
+    .where(and(gte(activityDaily.date, from), lte(activityDaily.date, to)));
+  const buckets = bs.map((b) => {
+    const rows = daily.filter((r) => r.date >= b.from && r.date <= b.to && (r.messages > 0 || r.vc > 0) && sexOf.has(r.memberId));
+    const peopleSet = new Map<string, Sex>();
+    const vc = zero();
+    const msg = zero();
+    for (const r of rows) {
+      peopleSet.set(r.memberId, sex(r.memberId));
+      vc[sex(r.memberId)] += r.vc;
+      msg[sex(r.memberId)] += r.messages;
+    }
+    const ppl = zero();
+    for (const s of peopleSet.values()) ppl[s]++;
+    return { ...b, people: ppl, vcMinutes: vc, messages: msg };
+  });
+  const hourly = await db
+    .select({ memberId: activityHourly.memberId, date: activityHourly.date, hour: activityHourly.hour, vc: activityHourly.vcMinutes })
+    .from(activityHourly)
+    .where(and(gte(activityHourly.date, from), lte(activityHourly.date, to)));
+  const dates = new Set(hourly.map((r) => r.date));
+  const days = dates.size;
+  const hours: HourRow[] = Array.from({ length: 24 }, (_, hour) => ({ hour, people: zero(), vcMinutes: zero() }));
+  const weekSum = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  const dow = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const daysOfWeek = Array<number>(7).fill(0);
+  for (const d of dates) daysOfWeek[dow(d)]!++;
+  for (const r of hourly) {
+    if (!sexOf.has(r.memberId) || r.hour < 0 || r.hour > 23) continue;
+    hours[r.hour]!.people[sex(r.memberId)]++;
+    hours[r.hour]!.vcMinutes[sex(r.memberId)] += r.vc;
+    weekSum[dow(r.date)]![r.hour]!++;
+  }
+  // 1 日あたりの平均に（小数 1 桁）
+  const avg = (n: number, d: number) => (d ? Math.round((n / d) * 10) / 10 : 0);
+  for (const h of hours) {
+    for (const k of SEXES) {
+      h.people[k] = avg(h.people[k], days);
+      h.vcMinutes[k] = avg(h.vcMinutes[k], days);
+    }
+  }
+  const week = weekSum.map((row, i) => row.map((n) => avg(n, daysOfWeek[i]!)));
+  return { buckets, hours, week, days };
 }
