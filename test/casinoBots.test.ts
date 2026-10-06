@@ -3,7 +3,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import type { Rng } from '../src/services/casino/cards.js';
 import { isBot } from '../src/services/casino/tables/bots.js';
-import { babanuki, daifugo, type BabaState, type DaifugoState } from '../src/services/casino/tables/party.js';
+import { active, babanuki, daifugo, dBotSimple, dBotStrong, type BabaState, type DaifugoState } from '../src/services/casino/tables/party.js';
 import { poker, type PokerState } from '../src/services/casino/tables/poker.js';
 import { chen, equity, handClass, parseRange, pokerBotMove, positionOf } from '../src/services/casino/tables/pokerBot.js';
 import { actTable, createTable, leaveTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
@@ -181,6 +181,55 @@ describe('🤖 大富豪・ババ抜きの BOT', () => {
     if (!r?.ok) return;
     // 3 のペアを出す（崩さない・強い札は残す）
     expect(r.state.seats[b]!.hand.sort((x, y) => x - y)).toEqual([C(2, 0), C(9, 0), 52].sort((x, y) => x - y));
+  });
+
+  it('大富豪の強い BOT: 相手の手札はのぞかない（見えている枚数が同じなら、中身が入れ替わっても同じ手）', () => {
+    const t = sim(daifugo, 11);
+    let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '0' }, t.ctx()));
+    for (let k = 0; k < 3; k++) s = t.run(daifugo.act(s, P(1).id, { action: 'add_bot' }, t.ctx()));
+    s = t.run(daifugo.act(s, P(1).id, { action: 'start' }, t.ctx()));
+    for (let k = 0; k < 20 && s.phase === 'playing'; k++) {
+      const i = s.turn!;
+      const a = dBotStrong(structuredClone(s), i);
+      // ほかの人の手札をまぜて配りなおす（枚数は同じ）
+      const b = structuredClone(s);
+      const others = b.seats.map((_, j) => j).filter((j) => j !== i);
+      const pool = others.flatMap((j) => b.seats[j]!.hand).reverse();
+      for (const j of others) b.seats[j]!.hand = pool.splice(0, s.seats[j]!.hand.length);
+      const c = dBotStrong(b, i);
+      expect(a.ok && c.ok).toBe(true);
+      if (!a.ok || !c.ok) return;
+      expect(c.state.seats[i]!.hand).toEqual(a.state.seats[i]!.hand);
+      s = a.state;
+    }
+  });
+
+  it('大富豪の強い BOT は、かんたんな BOT より上に上がる（反則上がりもしない）', () => {
+    let strong = 0;
+    let simple = 0;
+    let fouls = 0;
+    const games = 24;
+    for (let g = 0; g < games; g++) {
+      const t = sim(daifugo, 100 + g);
+      let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '0', rules_set: '1', rules: ['revolution', 'eight', 'joker', 'stairs', 'foul'] }, t.ctx()));
+      for (let k = 0; k < 3; k++) s = t.run(daifugo.act(s, P(1).id, { action: 'add_bot' }, t.ctx()));
+      s = t.run(daifugo.act(s, P(1).id, { action: 'start' }, t.ctx()));
+      const me = g % 4;
+      for (let k = 0; k < 1000 && active(s).length > 1; k++) {
+        const i = s.turn!;
+        const r = (i === me ? dBotStrong : dBotSimple)(structuredClone(s), i);
+        if (!r.ok) throw new Error(r.error);
+        s = r.state;
+      }
+      expect(active(s).length).toBeLessThanOrEqual(1);
+      const order = [...s.order, ...s.seats.filter((x) => !x.out).map((x) => x.id), ...[...(s.fouls ?? [])].reverse()];
+      s.seats.forEach((x, k) => (k === me ? (strong += order.indexOf(x.id)) : (simple += order.indexOf(x.id) / 3)));
+      if (s.fouls?.includes(s.seats[me]!.id)) fouls++;
+    }
+    // 4 人なので、どちらも同じ強さなら平均 1.5（0 が 1 位）
+    expect(strong / games).toBeLessThan(1.0);
+    expect(strong / games).toBeLessThan(simple / games - 0.8);
+    expect(fouls).toBe(0);
   });
 
   it('ババ抜き: BOT と最後まで', () => {

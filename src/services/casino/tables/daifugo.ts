@@ -60,6 +60,8 @@ export type DaifugoState = PartyBase & {
   dir?: 1 | -1;
   /** 出したあとに選ぶもの（7 渡し・10 捨て）。終わったら then のとおりに番を回す */
   pending?: { by: number; steps: { kind: 'give' | 'drop'; n: number }[]; then: { cut: boolean; skips: number } } | null;
+  /** みんなに見えて、もう使われないカード（出した・10 捨てで捨てた）。BOT がカードを数えるのに使う */
+  seen?: number[];
 };
 
 export type DSet = { n: number; strength: number; joker: boolean; rank: number | null; type: 'same' | 'seq'; suits: number[]; ranks: number[] };
@@ -155,6 +157,7 @@ function dPlay(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> 
   if (!stormBeats && !dBeats(s.field, set, reversed(s), { spade3: has(s, 'spade3'), lock: s.lock ?? null, cards })) return fail(s.lock && s.field && !suitsFit(set.suits, s.lock) ? 'locked' : 'weak');
   const before = s.field;
   x.hand = x.hand.filter((c) => !cards.includes(c));
+  s.seen = [...(s.seen ?? []), ...cards];
   s.played++;
   s.passes = [];
   s.lastBy = i;
@@ -247,6 +250,7 @@ function dChoose(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState
       addLog(s, `🎁 ${x.name} → ${s.seats[to]!.name} に ${n} 枚渡しました`);
     }
   } else {
+    s.seen = [...(s.seen ?? []), ...cards];
     addLog(s, `🗑 ${x.name}: ${cards.map(cardLabel).join(' ')} を捨てました`);
   }
   const rest = p.steps.slice(1);
@@ -325,10 +329,10 @@ function botCandidates(s: DaifugoState, hand: number[]): number[][] {
 const botPower = (s: DaifugoState, c: number) => (c === JOKER ? 13 : reversed(s) ? 12 - dStrength(c) : dStrength(c));
 
 /**
- * BOT の手: 出せる組を全部ためして、点の低いものを出す（強い札・ジョーカーは温存、組は崩さない、多く出せるならまとめて、
+ * （かんたんな BOT。くらべる用に残す）BOT の手: 出せる組を全部ためして、点の低いものを出す（強い札・ジョーカーは温存、組は崩さない、多く出せるならまとめて、
  * 8 切りで親を取る、弱い手なら革命、上がれるなら上がる）。場があって高くつくならパス（だれかが上がりそうなら粘る）
  */
-function dBot(s: DaifugoState, i: number): Step<DaifugoState> {
+export function dBotSimple(s: DaifugoState, i: number): Step<DaifugoState> {
   const x = s.seats[i]!;
   if (s.pending) {
     // 渡す・捨てる: 弱い 1 枚から（ジョーカーは最後）
@@ -370,6 +374,171 @@ function dBot(s: DaifugoState, i: number): Step<DaifugoState> {
   return best.step;
 }
 
+
+// ───────── 🤖 強い BOT（カードを数えて、上がるまでの手数を読む） ─────────
+//
+// 1. カードを数える: 山（52 枚＋ジョーカー）から、自分の手札と「もう出た・捨てられたカード」を引いた残りが、
+//    相手の手にありうるカード。相手の手札はのぞかない（みんなに見えていることだけで考える）
+// 2. 切り札: まだ見えていないカードでは返せない組（いまの最強の 2・ジョーカーなど）と、場を流せる組（8 切り・砂嵐）。
+//    出せば必ず親が取れる
+// 3. 手数: 手札を数字ごとの組に分けた数。「手数 − 切り札」が少ないほど上がりに近い（弱い組は親のときに出して、
+//    切り札で親を取り返す）。その差を一番減らす手を選ぶ。上がれるなら上がる、反則上がりはしない
+// 4. 相手が上がりそうなら止めにいく。親のとき、残り 1〜2 枚の相手が返せない枚数で出す
+
+const ALL_CARDS = Array.from({ length: 52 }, (_, k) => k);
+
+type BotView = { s: DaifugoState; i: number; unseen: number[]; oppMax: number; oppMin: number };
+
+function botView(s: DaifugoState, i: number): BotView {
+  const mine = new Set(s.seats[i]!.hand);
+  const seen = new Set(s.seen ?? []);
+  const deck = has(s, 'joker') ? [...ALL_CARDS, JOKER] : ALL_CARDS;
+  // seen がない前の卓は、自分の手札以外を全部「ありうる」とする（強く見積もる）
+  const unseen = deck.filter((c) => !mine.has(c) && !seen.has(c));
+  const others = active(s)
+    .filter((j) => j !== i)
+    .map((j) => s.seats[j]!.hand.length);
+  return { s, i, unseen, oppMax: Math.max(0, ...others), oppMin: Math.min(99, ...others) };
+}
+
+/** 強さ（向きをそろえて、大きいほど強い。ジョーカーはいつも 13） */
+const dirPower = (rev: boolean, c: number) => (c === JOKER ? 13 : rev ? 12 - dStrength(c) : dStrength(c));
+
+/** この組を、相手がだれか返せるかもしれないか（見えていないカードから） */
+function canBeBeaten(v: BotView, cards: number[], rev: boolean): boolean {
+  const s = v.s;
+  const n = cards.length;
+  if (n > v.oppMax) return false;
+  const set = dSet(cards, { stairs: has(s, 'stairs') });
+  if (!set) return true;
+  const jokerOut = v.unseen.includes(JOKER);
+  if (set.joker && n === 1) return Boolean(has(s, 'spade3') && v.unseen.includes(SPADE3));
+  // 砂嵐: 3 枚出しは 3・3・3 で返される
+  if (has(s, 'sandstorm') && n === 3 && set.type === 'same') {
+    const threes = v.unseen.filter((c) => c !== JOKER && rankOf(c) === 3).length + (jokerOut ? 1 : 0);
+    if (threes >= 3 && set.rank !== 3) return true;
+  }
+  if (set.type === 'seq') {
+    // 同じマークで、もっと強い n 枚の連番がありうるか（ジョーカーで 1 か所埋められる）
+    for (let st = 0; st < 4; st++) {
+      const have = new Set(v.unseen.filter((c) => c !== JOKER && suitOf(c) === st).map(dStrength));
+      for (let low = 0; low + n - 1 <= 12; low++) {
+        if (rev ? low >= set.strength : low <= set.strength) continue;
+        let missing = 0;
+        for (let k = low; k < low + n; k++) if (!have.has(k)) missing++;
+        if (missing <= (jokerOut ? 1 : 0)) return true;
+      }
+    }
+    return false;
+  }
+  // 同じ数字: もっと強い数字が n 枚（ジョーカーで 1 枚おぎなえる）ありうるか。1 枚ならジョーカーだけでも返される
+  if (n === 1 && jokerOut) return true;
+  const count = new Map<number, number>();
+  for (const c of v.unseen) if (c !== JOKER) count.set(dStrength(c), (count.get(dStrength(c)) ?? 0) + 1);
+  for (const [st, k] of count) {
+    const stronger = rev ? st < set.strength : st > set.strength;
+    if (stronger && k + (jokerOut ? 1 : 0) >= n) return true;
+  }
+  return false;
+}
+
+/** 出すと場を流せる組（8 切り・砂嵐の 3 枚） */
+function cutsField(s: DaifugoState, cards: number[]): boolean {
+  if (has(s, 'eight') && cards.some((c) => c !== JOKER && rankOf(c) === 8)) return true;
+  return has(s, 'sandstorm') && cards.length === 3 && cards.every((c) => c === JOKER || rankOf(c) === 3);
+}
+
+/** 切り札か（出せば親が取れる） */
+const isControl = (v: BotView, cards: number[], rev: boolean) => cutsField(v.s, cards) || !canBeBeaten(v, cards, rev);
+
+/** 手札を数字ごとの組に分ける（ジョーカーは 1 枚で 1 組） */
+function groupsOf(hand: number[]): number[][] {
+  const by = new Map<number, number[]>();
+  const out: number[][] = [];
+  for (const c of hand) {
+    if (c === JOKER) out.push([c]);
+    else by.set(rankOf(c), [...(by.get(rankOf(c)) ?? []), c]);
+  }
+  return [...out, ...by.values()];
+}
+
+/** 手札の重さ（小さいほど上がりに近い）: 10 ×（手数 − 切り札）＋ 弱い札の残り具合。反則上がりしか残らないなら重く */
+function handWeight(v: BotView, hand: number[], rev: boolean): number {
+  if (!hand.length) return -100;
+  const groups = groupsOf(hand);
+  let controls = 0;
+  let weak = 0;
+  for (const g of groups) {
+    if (isControl(v, g, rev)) controls++;
+    else weak += 12 - Math.min(12, dirPower(rev, g[0]!));
+  }
+  // 切り札は「手数を 1 つ減らす」働き。全部が切り札でも、最後の 1 組は出すだけでよい
+  let w = 10 * Math.max(0, groups.length - controls) + 2 * groups.length + weak * 0.3;
+  if (has(v.s, 'foul') && hand.every((c) => fouling(v.s, [c]))) w += 30;
+  return w;
+}
+
+/** 強い BOT の手 */
+export function dBotStrong(s: DaifugoState, i: number): Step<DaifugoState> {
+  const x = s.seats[i]!;
+  const v = botView(s, i);
+  const rev = reversed(s);
+  if (s.pending) {
+    // 7 渡し・10 捨て: 手札がいちばん軽くなるものを 1 枚ずつ（渡すときは強い札を相手にあげない）
+    const step = s.pending.steps[0]!;
+    const n = Math.min(step.n, x.hand.length);
+    let hand = [...x.hand];
+    const picked: number[] = [];
+    for (let k = 0; k < n; k++) {
+      let best: { c: number; cost: number } | undefined;
+      for (const c of hand) {
+        const rest = hand.filter((y) => y !== c);
+        const cost = handWeight(v, rest, rev) + (step.kind === 'give' ? dirPower(rev, c) * 0.8 : 0);
+        if (!best || cost < best.cost) best = { c, cost };
+      }
+      picked.push(best!.c);
+      hand = hand.filter((y) => y !== best!.c);
+    }
+    return dChoose(s, i, picked);
+  }
+  const danger = v.oppMin <= 2;
+  let best: { cost: number; step: Step<DaifugoState> } | undefined;
+  for (const cards of botCandidates(s, x.hand)) {
+    const step = dPlay(structuredClone(s), i, cards);
+    if (!step.ok) continue;
+    const after = step.state;
+    const rest = after.seats[i]!.hand;
+    let cost: number;
+    if (!rest.length) cost = after.fouls?.includes(x.id) ? 1000 : -1000;
+    else {
+      const revAfter = reversed(after);
+      cost = handWeight(v, rest, after.revolution !== s.revolution ? !rev : revAfter);
+      // 親が取れる（切り札・場が流れる）なら、次に弱い組を出せる
+      const keep = !after.field || isControl(v, cards, revAfter);
+      const weakLeft = groupsOf(rest).some((g) => !isControl(v, g, revAfter));
+      if (keep) cost -= weakLeft ? 4 : 1;
+      // 組を崩す・ジョーカーを早く使うのは少しもったいない
+      const ranks = new Set(cards.filter((c) => c !== JOKER).map(rankOf));
+      for (const r of ranks) if (rest.some((c) => c !== JOKER && rankOf(c) === r)) cost += 3;
+      // ジョーカーはどの組にも足せる切り札。上がりが近くないうちは、弱い組の水増しに使わない
+      if (cards.includes(JOKER) && rest.length >= 2) cost += cards.length > 1 ? 6 : 3;
+      // 親のとき: 残り少ない相手が返せない枚数で出す
+      if (!s.field && !keep) {
+        if (v.oppMin === 1 && cards.length === 1) cost += 8;
+        if (v.oppMin === 2 && cards.length <= 2) cost += 4;
+      }
+      // 同じくらいなら弱い札から
+      cost += Math.max(...cards.map((c) => dirPower(rev, c))) * 0.15;
+    }
+    if (!best || cost < best.cost) best = { cost, step };
+  }
+  if (!s.field) return best ? best.step : dPlay(s, i, [sortHand(x.hand, rev)[0]!]);
+  // 場があるとき: パスとくらべる（だれかが上がりそうなら止めにいく）
+  const passCost = handWeight(v, x.hand, rev) + (danger ? 12 : 0);
+  if (!best || best.cost > passCost) return dPass(s, i);
+  return best.step;
+}
+
 export const daifugo = partyEngine<DaifugoState>({
   kind: 'daifugo',
   min: 3,
@@ -393,7 +562,7 @@ export const daifugo = partyEngine<DaifugoState>({
     if (str(f, 'action') === 'pass') return dPass(s, i);
     return dPlay(s, i, cards);
   },
-  bot: (s, i) => dBot(s, i),
+  bot: (s, i) => dBotStrong(s, i),
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから
     if (s.pending) {
