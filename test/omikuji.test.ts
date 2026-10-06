@@ -240,7 +240,7 @@ describe('おみくじ', () => {
     expect(steps.map((x) => x.title)).toEqual(['⛩ おみくじ（もう 1 回）', '⛩ おみくじ（もう 1 回）', undefined, undefined]);
     expect(steps[2]!.files).toEqual(['unei1.png']);
     // 絵のあとに紙（どちらもカードの絵）。「もう 1 回」はだれが引いたかを 1 行
-    expect(steps.at(-1)).toEqual({ title: undefined, files: ['unei1.png', 'omikuji.png'], content: '-# ⛩ **さくら** さんのおみくじ（もう 1 回）' });
+    expect(steps.at(-1)).toEqual({ title: undefined, files: ['omikuji.png'], content: '-# ⛩ **さくら** さんのおみくじ（もう 1 回）' });
     // ふつうの運勢・演出なし・紙なし
     steps.length = 0;
     const n = await drawOmikuji(db, cfg.economy, 'B', new Date('2026-10-06T03:00:00Z'), () => 0);
@@ -317,9 +317,20 @@ describe('おみくじ', () => {
       ['⛩ おみくじ', ''],
       ['⛩ おみくじ', ''],
       [undefined, 'unei1.png'],
-      [undefined, 'unei1.png,omikuji.png'],
+      [undefined, 'omikuji.png'],
     ]);
     // くじは引いていない・銭は動かない
     expect((await walletOf(db, 'A')).balance).toBe(0);
+  });
+
+  it('運営吉の絵と紙を横に並べて 1 枚に（高さをそろえる・WebP も読める）', async () => {
+    const sharp = (await import('sharp')).default;
+    const { joinSideBySide } = await import('../src/services/imageJoin.js');
+    const art = await sharp({ create: { width: 500, height: 1000, channels: 3, background: '#c8102e' } }).webp().toBuffer();
+    const slip = (await import('../src/services/omikujiSlip.js')).renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
+    const out = await joinSideBySide([art, slip], { height: 600, gap: 10 });
+    const meta = await sharp(out).metadata();
+    // 絵 300×600 ＋ すき間 10 ＋ 紙 300×600
+    expect(meta).toMatchObject({ format: 'png', width: 610, height: 600 });
   });
 });

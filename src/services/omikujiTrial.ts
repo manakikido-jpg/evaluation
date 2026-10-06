@@ -4,6 +4,7 @@ import type { DiscordActions, MessageBody, MessageFile } from '../lib/discordRes
 import { toneOf } from '../omikujiTexts.js';
 import { omikujiReward, omikujiSayings, specialFortune } from './omikuji.js';
 import { loadOmikujiArt, loadSlipBg } from './omikujiArt.js';
+import { joinSideBySide } from './imageJoin.js';
 import { renderSlip } from './omikujiSlip.js';
 
 /**
@@ -66,7 +67,9 @@ export async function trialUnei(
     if (artFile) {
       await edit({ embeds: [], files: [artFile] });
       await sleep(TRIAL_MS.art);
-      await edit({ embeds: [], files: [artFile, slip] });
+      // 絵（左）と紙（右）を 1 枚に（2 枚のままだと Discord が上下を切る）
+      const joined = await joinSideBySide([artFile.data, slip.data]).catch(() => undefined);
+      await edit({ embeds: [], files: joined ? [{ name: 'omikuji.png', contentType: 'image/png', data: joined }] : [artFile, slip] });
     } else await edit({ embeds: [], files: [slip] });
   })();
   return { ok: true, channelId, done };

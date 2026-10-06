@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 import { toneOf } from '../omikujiTexts.js';
 import { drawOmikuji, nextStreakReward, specialIndex, streakRewardText, type Fortune, type OmikujiResult } from '../services/omikuji.js';
 import { loadOmikujiArt, loadSlipBg } from '../services/omikujiArt.js';
+import { joinSideBySide } from '../services/imageJoin.js';
 import { renderSlip } from '../services/omikujiSlip.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
@@ -118,8 +119,13 @@ export async function omikujiMessage(db: Db, cfg: GuildConfig, r: Drawn, name: s
     ...r.bonus.map((b) => `🎁 **${b.days} 日続いたおまけ**: ${streakRewardText(b, cfg.economy)}`),
   ].join('\n');
   const text = content ? { content } : {};
-  // 写真だけ（カードにしない）。運営吉は絵と紙の 2 枚を添えると、横に並んで出る（左が絵・右が紙）
-  return { ...text, embeds: [], files: art ? [art, slip] : [slip] };
+  // 写真だけ（カードにしない）。運営吉は絵（左）と紙（右）を 1 枚に並べる（2 枚のままだと Discord が上下を切る）
+  if (!art) return { ...text, embeds: [], files: [slip] };
+  const joined = await joinSideBySide([art.attachment as Buffer, slip.attachment as Buffer]).catch((err) => {
+    logger.warn({ err }, 'omikuji join failed');
+    return undefined;
+  });
+  return { ...text, embeds: [], files: joined ? [new AttachmentBuilder(joined, { name: 'omikuji.png' })] : [art, slip] };
 }
 
 /** 演出の待ち時間（ミリ秒。テストでは 0 にする） */
