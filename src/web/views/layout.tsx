@@ -23,6 +23,7 @@ type Nav =
   | 'audit'
   | 'commands'
   | 'minutes'
+  | 'ideas'
   | 'temp'
   | 'invites'
   | 'gift'
@@ -62,6 +63,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'invites', href: '/invites', icon: '🔗', label: '招待' },
       { key: 'interview', href: '/interview', icon: '🍵', label: '面談告知' },
       { key: 'minutes', href: '/minutes', icon: '📓', label: '議事録' },
+      { key: 'ideas', href: '/ideas', icon: '💡', label: 'アイデア・共有' },
     ],
   },
   {

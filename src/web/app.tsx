@@ -1,6 +1,8 @@
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
 import { activityStats, genderNow, genderTrend } from '../services/genderStats.js';
+import { addIdeaComment, canEditIdea, createIdea, deleteIdea, deleteIdeaComment, getIdea, ideaCounts, isIdeaKind, isIdeaStatus, listIdeas, setIdeaPinned, setIdeaStatus, toggleIdeaVote, updateIdea, type IdeaKind } from '../services/ideas.js';
+import { IdeaPage, IdeasPage } from './views/ideas.js';
 import { deleteOmikujiArt, isOmikujiArtNo, loadOmikujiArt, omikujiArtHashes, saveOmikujiArt } from '../services/omikujiArt.js';
 import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -565,7 +567,9 @@ export function createWebApp(deps: WebDeps) {
   app.use('/market', requireAdmin);
   app.use('/gacha', requireAdmin);
   app.use('/interview', requireAdmin);
-  for (const p of ['/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/market/*', '/gacha/*', '/interview/*']) {
+  app.use('/ideas', requireAdmin);
+  app.use('/ideas', requireCsrf);
+  for (const p of ['/ideas/*', '/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -785,6 +789,114 @@ export function createWebApp(deps: WebDeps) {
       .map((ch) => ({ id: ch.id, name: ch.name, category: ch.parent_id ? (cats.get(ch.parent_id)?.name ?? null) : null }));
   };
   const textChannelsOf = (channels: GuildChannel[]) => postableChannels(channels).filter((ch) => ch.type === 0 || ch.type === 5);
+
+  // ───────── 💡 アイデア・共有（運営どうし） ─────────
+
+  const ideaWho = (c: Context<Env>) => ({ userId: c.get('session').userId, guji: c.get('session').level === 'guji' });
+  const ideaId = (c: Context<Env>) => {
+    const n = Number(c.req.param('id'));
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+  };
+  /** 戻り先（/ideas から始まるものだけ） */
+  const ideaBack = (v: unknown, fallback: string) => (typeof v === 'string' && /^\/ideas(?:[/?][^\s]*)?$/.test(v) && !v.startsWith('//') ? v : fallback);
+
+  app.get('/ideas', async (c) => {
+    const k = c.req.query('kind');
+    const st = c.req.query('status');
+    const kind = isIdeaKind(k) ? k : undefined;
+    const status = st === 'open' || isIdeaStatus(st) ? st : undefined;
+    const q = (c.req.query('q') ?? '').slice(0, 100);
+    const [list, counts] = await Promise.all([listIdeas(db, c.get('session').userId, { kind, status, q }), ideaCounts(db)]);
+    const name = await nameFn(list.map((i) => i.createdBy));
+    return c.html(<IdeasPage session={c.get('session')} ideas={list} counts={counts} name={name} kind={kind} status={status} q={q || undefined} flash={c.req.query('msg')} />);
+  });
+
+  app.post('/ideas', async (c) => {
+    const body = await c.req.parseBody();
+    const kind = isIdeaKind(body.kind) ? body.kind : 'idea';
+    const row = await createIdea(db, { kind, title: typeof body.title === 'string' ? body.title : '', body: typeof body.body === 'string' ? body.body : '', by: c.get('session').userId });
+    if (!row) return c.redirect('/ideas?msg=invalid');
+    await audit(db, { actorId: c.get('session').userId, action: 'idea.create', detail: { id: row.id, kind, title: row.title }, via: 'web' });
+    return c.redirect(`/ideas/${row.id}?msg=created`);
+  });
+
+  app.get('/ideas/:id', async (c) => {
+    const found = await getIdea(db, ideaId(c), c.get('session').userId);
+    if (!found) return c.html(<NotFoundPage session={c.get('session')} />, 404);
+    const name = await nameFn([found.idea.createdBy, found.idea.updatedBy, ...found.comments.map((x) => x.by), ...found.voters]);
+    return c.html(
+      <IdeaPage
+        session={c.get('session')}
+        idea={found.idea}
+        comments={found.comments}
+        voters={found.voters}
+        name={name}
+        canEdit={canEditIdea(found.idea, ideaWho(c))}
+        edit={c.req.query('edit') === '1'}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.post('/ideas/:id/edit', async (c) => {
+    const id = ideaId(c);
+    const found = await getIdea(db, id, c.get('session').userId);
+    if (!found) return c.redirect('/ideas');
+    if (!canEditIdea(found.idea, ideaWho(c))) return c.redirect(`/ideas/${id}?msg=forbidden`);
+    const body = await c.req.parseBody();
+    const kind = isIdeaKind(body.kind) ? body.kind : (found.idea.kind as IdeaKind);
+    const ok = await updateIdea(db, id, { kind, title: typeof body.title === 'string' ? body.title : '', body: typeof body.body === 'string' ? body.body : '', by: c.get('session').userId });
+    if (!ok) return c.redirect(`/ideas/${id}?edit=1&msg=invalid`);
+    await audit(db, { actorId: c.get('session').userId, action: 'idea.edit', detail: { id }, via: 'web' });
+    return c.redirect(`/ideas/${id}?msg=saved`);
+  });
+
+  app.post('/ideas/:id/status', async (c) => {
+    const id = ideaId(c);
+    const body = await c.req.parseBody();
+    if (!isIdeaStatus(body.status)) return c.redirect(`/ideas/${id}`);
+    const row = await setIdeaStatus(db, id, body.status, c.get('session').userId);
+    if (!row) return c.redirect('/ideas');
+    await audit(db, { actorId: c.get('session').userId, action: 'idea.status', detail: { id, title: row.title, status: body.status }, via: 'web' });
+    return c.redirect(`/ideas/${id}?msg=status`);
+  });
+
+  app.post('/ideas/:id/pin', async (c) => {
+    const id = ideaId(c);
+    const body = await c.req.parseBody();
+    await setIdeaPinned(db, id, body.pinned === 'yes', c.get('session').userId);
+    return c.redirect(`/ideas/${id}`);
+  });
+
+  app.post('/ideas/:id/vote', async (c) => {
+    const id = ideaId(c);
+    const body = await c.req.parseBody();
+    await toggleIdeaVote(db, id, c.get('session').userId);
+    return c.redirect(ideaBack(body.back, `/ideas/${id}`));
+  });
+
+  app.post('/ideas/:id/comments', async (c) => {
+    const id = ideaId(c);
+    const body = await c.req.parseBody();
+    const row = await addIdeaComment(db, id, typeof body.body === 'string' ? body.body : '', c.get('session').userId);
+    if (!row) return c.redirect(`/ideas/${id}#comments`);
+    return c.redirect(`/ideas/${id}?msg=commented#comments`);
+  });
+
+  app.post('/ideas/comments/:id/delete', async (c) => {
+    const ideaOf = await deleteIdeaComment(db, ideaId(c), ideaWho(c));
+    return c.redirect(ideaOf ? `/ideas/${ideaOf}?msg=deleted#comments` : '/ideas?msg=forbidden');
+  });
+
+  app.post('/ideas/:id/delete', async (c) => {
+    const id = ideaId(c);
+    const found = await getIdea(db, id, c.get('session').userId);
+    if (!found) return c.redirect('/ideas');
+    if (!canEditIdea(found.idea, ideaWho(c))) return c.redirect(`/ideas/${id}?msg=forbidden`);
+    await deleteIdea(db, id);
+    await audit(db, { actorId: c.get('session').userId, action: 'idea.delete', detail: { id, title: found.idea.title }, via: 'web' });
+    return c.redirect('/ideas?msg=deleted');
+  });
 
   app.get('/minutes', async (c) => {
     const q = c.req.query('q');

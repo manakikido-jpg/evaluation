@@ -103,3 +103,9 @@ document.addEventListener('click', (e) => {
   const note = form.querySelector('[data-perm-applied]');
   if (note) note.hidden = false;
 });
+
+// 消すなど、確かめてから送るフォーム（data-confirm の文で聞く）
+document.addEventListener('submit', (e) => {
+  const f = e.target;
+  if (f instanceof HTMLFormElement && f.hasAttribute('data-confirm') && !window.confirm(f.getAttribute('data-confirm') || 'よろしいですか？')) e.preventDefault();
+});

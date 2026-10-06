@@ -1684,3 +1684,49 @@ export const roleTemplates = pgTable('role_templates', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export type RoleTemplateRow = typeof roleTemplates.$inferSelect;
+
+/** 💡 アイデア・共有メモ（運営どうし。足したい機能・共有・不具合・メモ） */
+export const ideas = pgTable(
+  'ideas',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** idea: 足したい機能 / share: 共有 / bug: 不具合 / memo: メモ */
+    kind: text('kind').notNull().default('idea'),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    /** new: アイデア / review: 検討中 / todo: やる / doing: 作業中 / done: できた / dropped: 見送り */
+    status: text('status').notNull().default('new'),
+    pinned: boolean('pinned').notNull().default(false),
+    createdBy: text('created_by').notNull(),
+    updatedBy: text('updated_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('ideas_updated_idx').on(t.updatedAt)],
+);
+
+export const ideaComments = pgTable(
+  'idea_comments',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    ideaId: bigint('idea_id', { mode: 'number' }).notNull(),
+    body: text('body').notNull(),
+    by: text('by').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idea_comments_idea_idx').on(t.ideaId, t.at)],
+);
+
+/** 👍（1 人 1 回） */
+export const ideaVotes = pgTable(
+  'idea_votes',
+  {
+    ideaId: bigint('idea_id', { mode: 'number' }).notNull(),
+    memberId: text('member_id').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.ideaId, t.memberId] })],
+);
+
+export type Idea = typeof ideas.$inferSelect;
+export type IdeaComment = typeof ideaComments.$inferSelect;

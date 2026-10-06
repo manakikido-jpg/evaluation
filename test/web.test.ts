@@ -877,6 +877,44 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(await (await get(r.headers.get('location')!, g)).text()).toContain('コマンドのまとめの掲示を作りました');
   });
 
+  it('💡 アイデア・共有: 神職も書ける・👍・コメント・状態。直す・消すのは書いた人と宮司', async () => {
+    const s = await login(STAFF);
+    const page = await (await get('/ideas', s)).text();
+    expect(page).toContain('アイデア・共有');
+    expect(page).toContain('href="/ideas"');
+    expect((await post('/ideas', s, { _csrf: await csrfOf(s), kind: 'idea', title: '  ' })).headers.get('location')).toBe('/ideas?msg=invalid');
+    const created = await post('/ideas', s, { _csrf: await csrfOf(s), kind: 'idea', title: '運営吉を足したい', body: '**小林吉**と ais吉' });
+    const loc = created.headers.get('location')!;
+    expect(loc).toMatch(/^\/ideas\/\d+\?msg=created$/);
+    const id = Number(/\/ideas\/(\d+)/.exec(loc)![1]);
+    const detail = await (await get(`/ideas/${id}`, s)).text();
+    expect(detail).toContain('<strong>小林吉</strong>');
+    expect(detail).toContain('💡 足したい機能');
+    // 👍（もう一度で外れる）・戻り先は /ideas だけ
+    expect((await post(`/ideas/${id}/vote`, s, { _csrf: await csrfOf(s), back: '/ideas?status=open' })).headers.get('location')).toBe('/ideas?status=open');
+    expect(await (await get('/ideas?status=open', s)).text()).toContain('aria-pressed="true"');
+    expect((await post(`/ideas/${id}/vote`, s, { _csrf: await csrfOf(s), back: 'https://evil.example/' })).headers.get('location')).toBe(`/ideas/${id}`);
+    expect(await (await get('/ideas', s)).text()).toContain('aria-pressed="false"');
+    // コメント・状態・ピン留め
+    expect((await post(`/ideas/${id}/comments`, s, { _csrf: await csrfOf(s), body: 'いいね' })).headers.get('location')).toBe(`/ideas/${id}?msg=commented#comments`);
+    expect((await post(`/ideas/${id}/status`, s, { _csrf: await csrfOf(s), status: 'todo' })).headers.get('location')).toBe(`/ideas/${id}?msg=status`);
+    await post(`/ideas/${id}/pin`, s, { _csrf: await csrfOf(s), pinned: 'yes' });
+    const list = await (await get('/ideas?status=todo', s)).text();
+    expect(list).toContain('運営吉を足したい');
+    expect(list).toContain('📌');
+    expect(await (await get('/ideas?status=done', s)).text()).not.toContain('運営吉を足したい');
+    expect(await (await get('/ideas?q=小林', s)).text()).toContain('運営吉を足したい');
+    // 書いた人は直せる。ほかの神職は直せない・消せない（宮司はできる）
+    expect((await post(`/ideas/${id}/edit`, s, { _csrf: await csrfOf(s), kind: 'share', title: '運営吉（決定）', body: '' })).headers.get('location')).toBe(`/ideas/${id}?msg=saved`);
+    const other = await login('700000000000000077');
+    if (other) {
+      expect((await post(`/ideas/${id}/delete`, other, { _csrf: await csrfOf(other) })).headers.get('location')).toBe(`/ideas/${id}?msg=forbidden`);
+    }
+    const g = await login(GUJI);
+    expect((await post(`/ideas/${id}/delete`, g, { _csrf: await csrfOf(g) })).headers.get('location')).toBe('/ideas?msg=deleted');
+    expect((await get(`/ideas/${id}`, g)).status).toBe(404);
+  });
+
   it('📓 議事録: 神職も書ける・直せる・やることを済にできる・まとめを Discord に出せる。消すのは宮司だけ', async () => {
     const { listAudit: audits } = await import('../src/services/audit.js');
     const s = await login(STAFF);

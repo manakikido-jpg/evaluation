@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-06-ideas',
+    date: '2026-10-06',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '💡 「アイデア・共有」ページ',
+    items: [
+      '足したい機能・共有したいこと・不具合・メモを、運営どうしで書いておけます（メニューの「メンバー対応」）',
+      '👍 で賛成、コメントで相談、状態（アイデア → 検討中 → やる → 作業中 → できた／見送り）で進み具合が分かります',
+      '大事なものは 📌 でいちばん上に留められます',
+    ],
+  },
+  {
     id: '2026-10-06-charts-easier',
     date: '2026-10-06',
     kind: 'improve',
