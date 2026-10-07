@@ -189,7 +189,7 @@ export function InvitesPage(props: {
                     </details>}
 
                   </td>
-                  <td>{r.leftAt ? '退出' : (highestRank(props.cfg.ranks, r.roleIds)?.name ?? '役職待ち')}</td>
+                  <td>{r.leftAt ? '退出' : (highestRank(props.cfg.ranks, r.roleIds)?.name ?? '案内待ち')}</td>
                   <td>{status(r, 'sanpaisha')}</td>
                   <td>{status(r, 'ujiko')}</td>
                 </tr>

@@ -1216,6 +1216,8 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       expect(page).toContain('期限が付いているリンクが 1 個あります');
       expect(page).toContain('招待リンクで入った');
       expect(page).toContain('参加者・報酬');
+      expect(page).toContain('案内待ち');
+      expect(page).not.toContain('役職待ち');
       expect(page).toContain('氏子の報酬');
       expect(page).toContain('参拝者で 150銭');
       expect(page).toContain('氏子で追加 350銭');
