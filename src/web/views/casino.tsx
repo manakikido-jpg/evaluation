@@ -1,3 +1,4 @@
+import { styleItem, type StyleSlot } from '../../services/casino/styles.js';
 import type { Child } from 'hono/jsx';
 import type { CasinoConfig, CasinoGame } from '../../config.js';
 import type { CasinoGameRow, CasinoMatch, MemberSession } from '../../db/schema.js';
@@ -21,7 +22,7 @@ const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roule
 const gameHref = (g: CasinoGame) => (g === 'versus' ? '/casino/versus' : g === 'mahjong' ? '/casino/jansou' : `/casino/tables/${g}`);
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
-export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date };
+export type CasinoMe = { styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date };
 
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean }) {
@@ -39,7 +40,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino.js')} defer></script>
       </head>
-      <body class={`casino${props.jansou ? ' jansou' : ''}`}>
+      <body class={`casino${props.jansou ? ' jansou' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})}>
         <div class="c-sky" aria-hidden="true">
           {Array.from({ length: 14 }, () => (
             <span class="c-petal"></span>
@@ -68,7 +69,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
                 )}
               </span>
               {me.session.avatarUrl && <img src={me.session.avatarUrl} alt="" class="c-avatar" />}
-              <span class="c-name">{me.session.displayName}</span>
+              <span class="c-name">{me.session.displayName}{me.styles?.title && <small class="cs-title">{styleItem(me.styles.title)?.emoji} {styleItem(me.styles.title)?.name}</small>}</span><a href="/casino/wardrobe" class="c-link">🪭 着せ替え</a><a href="/casino/style-gacha" class="c-link">🎰 勝負の御籤</a>
               <form method="post" action="/casino/logout" class="c-inline">
                 <input type="hidden" name="_csrf" value={me.session.csrfToken} />
                 <button type="submit" class="c-link">

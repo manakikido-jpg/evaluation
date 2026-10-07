@@ -3,6 +3,10 @@
  * BOT の /panel とセットアップスクリプトの両方で使う。
  */
 
+import { fileURLToPath } from 'node:url';
+import type { APIEmbed } from 'discord.js';
+const GACHA_BANNER = fileURLToPath(new URL('../web/public/gacha/prayer-banner.png', import.meta.url));
+
 const SHU = 0xd7003a;
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
@@ -10,11 +14,16 @@ const SHU = 0xd7003a;
 export type PanelKind = 'apply' | 'yoimairi' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha' | 'notify';
 
 export type PanelMessage = {
-  embeds: { title: string; description: string; color: number }[];
+  embeds: APIEmbed[];
   components: { type: 1; components: { type: 2; style: 1 | 2 | 3; label: string; custom_id: string; emoji?: { name: string } }[] }[];
 };
 
-export function panelMessage(kind: PanelKind, opts: { /** 通貨の名前（なければ銭） */ coinName?: string } = {}): PanelMessage {
+type PanelOptions = { /** 通貨の名前（なければ銭） */ coinName?: string };
+export type GachaPanelMessage = PanelMessage & { files: { attachment: string; name: string; description: string }[] };
+
+export function panelMessage(kind: 'gacha', opts?: PanelOptions): GachaPanelMessage;
+export function panelMessage(kind: PanelKind, opts?: PanelOptions): PanelMessage;
+export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMessage | GachaPanelMessage {
   const coin = opts.coinName ?? '銭';
   if (kind === 'shop') return shopPanel(coin);
   if (kind === 'market') {
@@ -70,32 +79,12 @@ export function panelMessage(kind: PanelKind, opts: { /** 通貨の名前（な�
   }
   if (kind === 'gacha') {
     return {
-      embeds: [
-        {
-          title: '🎁 物御籤（ものみくじ）',
-          description: [
-            `${coin}で引くくじです。運勢に応じて、物御籤でしか受けられない色守り・称号や、いろいろな券が出ます。`,
-            '',
-            '・「物御籤売り場へ入る」を押すと、値段・出る割合・天井までの回数が（自分にだけ）出ます。そこから 1 回か 10 連で引けます',
-            '・🎉 はじめての 1 回は無料です',
-            '・「📜 中身と排出率」で、出る中身と、それぞれの出る確率を見られます',
-            '・大吉が出たら #おみくじ でお祝いします',
-            `・${coin}だけで引けます（本物のお金は使いません）`,
-            '',
-            '-# `/物御籤` でも引けます',
-          ].join('\n'),
-          color: SHU,
-        },
-      ],
-      components: [
-        {
-          type: 1,
-          components: [
-            { type: 2, style: 1, label: '物御籤売り場へ入る', custom_id: 'gacha:open', emoji: { name: '🎁' } },
-            { type: 2, style: 2, label: '中身と排出率', custom_id: 'gacha:rates', emoji: { name: '📜' } },
-          ],
-        },
-      ],
+      embeds: [{ image: { url: 'attachment://gacha-prayer.png' } }],
+      files: [{ attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '咲楽ノ宮の祈願所。物御籤と、カジノの景品が当たる勝負の御籤。下の2つのボタンから選べます。' }],
+      components: [{ type: 1, components: [
+        { type: 2, style: 1, label: '物御籤売り場へ入る', custom_id: 'gacha:open', emoji: { name: '🎁' } },
+        { type: 2, style: 2, label: '勝負の御籤（カジノの景品）', custom_id: 'casino-gacha:open', emoji: { name: '🎰' } },
+      ] }],
     };
   }
   if (kind === 'notify') {

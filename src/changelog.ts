@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-casino-styles-gacha', date: '2026-10-07', kind: 'new', where: ['Discord', '社務所Web'],
+    title: '🪭 カジノの着せ替え・勝負の御籤',
+    items: ['背景・卓のふち・席の飾り・チップ・カード・勝利の動きと音・称号を着せ替えできます。', '祈願所の「勝負の御籤」で18種類の景品を引けます。見た目の品は重複せず、期限なし。お試し券は24時間です。', '大勝負の札は既存の持ち物に入ります。値段・割合・天井はカジノの管理画面で変えられます。初めはお休み中です。'],
+  },
+  {
     id: '2026-10-07-casino-boost',
     date: '2026-10-07',
     kind: 'new',

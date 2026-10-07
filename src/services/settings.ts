@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -83,6 +83,7 @@ export const overridesSchema = z.object({
   bell: bellSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   /** 物御籤（送られたときは全部置きかえる） */
   gacha: gachaSchema.optional(),
+  casinoGacha: casinoGachaSchema.optional(),
   boost: z.object({ announceText: z.string().min(1).max(1000), dmText: z.string().min(1).max(1000) }).partial().default({}),
   applications: z.object({ autoApproveAccountDays: z.number().int().min(0).max(3650), kickOnReject: z.boolean() }).partial().default({}),
   /** 募集の荒らし対策（募集ボタンの置き場所はファイルで決める） */
@@ -169,6 +170,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       return merged;
     })(),
     applications: { ...base.applications, ...o.applications },
+    casinoGacha: o.casinoGacha ?? base.casinoGacha,
     casino: (() => {
       const merged = { ...base.casino, ...o.casino };
       // 一覧を保存したあとに足したゲームは、遊べるようにしておく

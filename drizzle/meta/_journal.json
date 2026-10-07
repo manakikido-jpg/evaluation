@@ -533,6 +533,13 @@
       "when": 1791301762955,
       "tag": "0075_ai_matches",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791373944746,
+      "tag": "0076_lonely_enchantress",
+      "breakpoints": true
     }
   ]
 }

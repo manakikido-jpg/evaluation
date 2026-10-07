@@ -1,3 +1,4 @@
+import { drawStyles, stylesOf, styleChances, styleItem } from '../services/casino/styles.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -329,7 +330,7 @@ export class GachaApp {
     const next = panelMessage('gacha', { coinName: cfg.economy.currencyName });
     const label = next.components[0]?.components.find((b) => b.custom_id === 'gacha:open')?.label;
     let edited = 0;
-    const places = guild.channels.cache.filter((c) => c.type === ChannelType.GuildText && (c.id === cfg.channels.omikuji || c.name.includes('おみくじ') || c.name.includes('授与所')));
+    const places = guild.channels.cache.filter((c) => c.type === ChannelType.GuildText && (c.id === cfg.channels.omikuji || c.name.includes('おみくじ') || c.name.includes('授与所') || c.name.includes('祈願所')));
     for (const ch of places.values()) {
       if (ch.type !== ChannelType.GuildText) continue;
       const msgs = await ch.messages.fetch({ limit: 50 }).catch(() => undefined);
@@ -338,7 +339,7 @@ export class GachaApp {
         const rows = m.components.map((row) => row.toJSON()) as { components?: { custom_id?: string; label?: string }[] }[];
         const open = rows.flatMap((row) => row.components ?? []).find((b) => b.custom_id === 'gacha:open');
         if (!open) continue;
-        if (open.label === label && m.embeds[0]?.title === next.embeds[0]?.title) continue;
+        if (open.label === label && m.embeds[0]?.title === next.embeds[0]?.title && rows.some((row) => row.components?.some((b) => b.custom_id === 'casino-gacha:open'))) continue;
         await m.edit(next).then(() => edited++).catch((err: unknown) => logger.warn({ err, channelId: ch.id }, 'gacha panel refresh failed'));
       }
     }
@@ -349,6 +350,7 @@ export class GachaApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     const id = 'customId' in interaction ? interaction.customId : '';
     try {
+      if (interaction.isButton() && id.startsWith('casino-gacha:')) return await this.casinoMenu(interaction);
       if (interaction.isChatInputCommand() && interaction.commandName === 'gacha') return await this.menu(interaction);
       if (interaction.isButton() && id === 'gacha:open') return await this.menu(interaction);
       if (interaction.isButton() && id === 'gacha:draw:free') return await this.draw(interaction, 1, 'free');
@@ -371,6 +373,33 @@ export class GachaApp {
       const msg = { content: '物御籤を引けませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL };
       if (interaction.isRepliable()) await (interaction.deferred || interaction.replied ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => undefined);
     }
+  }
+
+  private async casinoMenu(i: ButtonInteraction<'cached'>): Promise<void> {
+    const cfg = this.cfg();
+    const roles = i.member.roles.cache;
+    const allowed = cfg.casino.accessRoleId ? roles.has(cfg.casino.accessRoleId) : !cfg.casino.requireRank || cfg.ranks.some((r) => roles.has(r.roleId));
+    if (!allowed) return void await i.reply({ content: 'カジノに入れるロールがある人だけ使えます。', ...EPHEMERAL, allowedMentions: { parse: [] } });
+    await i.deferReply(EPHEMERAL);
+    let results: string[] | undefined;
+    let message = '';
+    if (i.customId.startsWith('casino-gacha:draw:')) {
+      if (!cfg.casino.enabled) return void await i.editReply({ content: 'カジノは今お休み中です。', allowedMentions: { parse: [] } });
+      const r = await drawStyles(this.db, cfg.casinoGacha, i.user.id, `discord:${i.message.id}`, Number(i.customId.split(':')[2]), 'discord');
+      if (r.status === 'ok') { results = r.results; if (r.replay) message = '同じボタンの結果です。追加の支払いはありません。'; }
+      else message = r.status === 'funds' ? '銭が足りません。' : r.status === 'off' ? '今はお休み中です。' : 'もう一度開いてください。';
+    }
+    const state = await stylesOf(this.db, i.user.id);
+    const w = await walletOf(this.db, i.user.id);
+    const chances = styleChances(cfg.casinoGacha, state.owned);
+    const lines = chances.map((item) => `${item.emoji} **${item.name}** · ${item.chance.toLocaleString('ja-JP', { maximumFractionDigits: 3 })}％ · ${item.slot ? state.owned.includes(item.key) ? '所持済み' : '期限なし' : '券'}`);
+    const allOwned = chances.filter((x) => x.slot).every((x) => state.owned.includes(x.key));
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...[1, 10].map((n) => new ButtonBuilder().setCustomId(`casino-gacha:draw:${n}`).setLabel(`${n === 1 ? '1回' : '10連'}（${fmt(n * cfg.casinoGacha.price)}${cfg.economy.currencyName}）`).setStyle(ButtonStyle.Primary).setDisabled(!cfg.casino.enabled || !cfg.casinoGacha.enabled || w.balance < n * cfg.casinoGacha.price)));
+    await i.editReply({
+      content: [message, results ? '**今回の景品**\n' + results.map((key) => { const item = styleItem(key)!; return `${item.emoji} ${item.name}`; }).join('\n') : ''].filter(Boolean).join('\n') || null,
+      embeds: [{ title: '🎰 勝負の御籤 · 中身と排出率', color: 0xb99553, description: [!cfg.casinoGacha.enabled ? '今はお休み中です。' : '', `所持：${fmt(w.balance)}${cfg.economy.currencyName} · お試し券${state.tickets}枚`, allOwned ? '見た目の品は全部そろいました！その分はお試し券になります。' : `あと${Math.max(1, cfg.casinoGacha.pity - state.pity)}回以内に未所持の見た目の品を保証。`, '', ...lines, '', '見た目の品は重複しません。天井では未所持の品の中で均等です。物御籤の券・天井とは別です。', '背景・卓のふち・席の飾り・称号などは、カジノWebの「🪭 着せ替え」で装備できます。入口は `/カジノ`。', '見た目は勝つ割合を変えません。大勝負の札は `/持ち物` から使います。'].filter(Boolean).join('\n') }],
+      components: [row], allowedMentions: { parse: [] },
+    });
   }
 
   private coin(): string {

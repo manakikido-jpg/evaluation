@@ -1,3 +1,5 @@
+import { casinoStyles } from '../src/db/schema.js';
+import { stylesOf } from '../src/services/casino/styles.js';
 import { artUrls, deleteArt } from '../src/services/casino/slotArt.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
@@ -351,6 +353,7 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect(html).toContain('日ごとの胴元の収支');
     expect(html).toContain('設定ごとの結果');
     expect(html).toContain('name="slot_8"');
+    expect(html).toContain('name="stylePrice"');
     const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
     const save = await app.request('/economy/casino', {
       method: 'POST',
@@ -369,10 +372,12 @@ describe('🎰 カジノ（運営の画面）', () => {
         ['slot_2', 'random'],
         ['slot_3', '2'],
         ['slot_4', '5'],
+        ['styleEnabled', 'yes'], ['stylePrice', '250'], ['stylePity', '20'], ['styleCosmeticPercent', '60'], ['styleBoostPercent', '15'],
       ]),
     });
     expect(save.headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino).toMatchObject({ minBet: 20, maxBet: 3000, dailyBetLimit: 0, games: ['slots', 'versus'], slotMachines: [6, 'random', 2] });
+    expect((await loadOverrides(db)).casinoGacha).toMatchObject({ enabled: true, price: 250, pity: 20, cosmeticPercent: 60, boostPercent: 15 });
     // 入れる人をロールに（ロールを選ばなければ断る）
     const pick = (extra: [string, string][]) =>
       app.request('/economy/casino', {
@@ -386,6 +391,8 @@ describe('🎰 カジノ（運営の画面）', () => {
     // ルーレットの 1 か所の最高
     expect((await pick([['access', 'all'], ['rouletteMaxBet', '20000']])).headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino.rouletteMaxBet).toBe(20000);
+    expect((await loadOverrides(db)).casinoGacha?.price).toBe(250);
+    expect((await pick([['stylePrice', '250'], ['styleCosmeticPercent', '99'], ['styleBoostPercent', '10'], ['stylePity', '20']])).headers.get('location')).toBe('/economy/casino?msg=invalid');
     // 🏇 馬の名簿: 名前を決めて入れる・変える
     expect(html).toContain('馬の名簿');
     const horse = (path: string, body: Record<string, string>) =>
@@ -681,5 +688,38 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(hp).toContain('通算成績');
     expect(hp).toContain('馬主');
     expect((await get('/casino/keiba/horse/999999', a)).headers.get('location')).toBe('/casino/keiba/horses');
+  });
+});
+
+
+describe('カジノの着せ替えと景品ガチャ', () => {
+  it('ログインとCSRFを確かめ、未所持や別の種類の装備を拒否する', async () => {
+    expect((await app.request('/casino/wardrobe')).status).toBe(302);
+    const { cookie } = await casinoLogin(A);
+    expect((await post('/casino/wardrobe/equip', cookie!, { slot: 'title', key: 'gambler' }, 'wrong')).status).toBe(403);
+    await post('/casino/wardrobe/equip', cookie!, { slot: 'title', key: 'gambler' });
+    expect((await stylesOf(db, A)).equipped).toEqual({});
+    await db.update(casinoStyles).set({ owned: ['gambler'] });
+    await post('/casino/wardrobe/equip', cookie!, { slot: 'title', key: 'gambler' });
+    expect((await get('/casino/hall', cookie!)).status).toBe(200);
+    const html = await (await get('/casino/wardrobe', cookie!)).text();
+    expect(html).toContain('勝負師');
+    expect(html).toContain('装備中');
+    expect(html).not.toContain('onclick=');
+    expect(html).not.toContain('style="');
+  });
+  it('見本は保存せず、ガチャの同じフォームの再送では2度払わない', async () => {
+    current = { ...cfg, casinoGacha: { ...cfg.casinoGacha, enabled: true } };
+    const { cookie } = await casinoLogin(A);
+    const preview = await (await get('/casino/wardrobe?preview=gold', cookie!)).text();
+    expect(preview).toContain('cs-background-gold');
+    expect((await stylesOf(db, A)).equipped).toEqual({});
+    expect((await post('/casino/style-gacha/draw', cookie!, { times: '1', requestId: 'web-draw' }, 'wrong')).status).toBe(403);
+    for (let n = 0; n < 2; n++) {
+      const res = await post('/casino/style-gacha/draw', cookie!, { times: '1', requestId: 'web-draw' });
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain('今回の景品');
+    }
+    expect(await balance(A)).toBe(4500);
   });
 });

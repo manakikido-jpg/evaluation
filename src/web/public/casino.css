@@ -2153,3 +2153,50 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 @media (min-width: 1600px) {
   .c-main.wide:has(.kb-layout) { max-width: 1560px; }
 }
+
+/* 着せ替え・勝負の御籤 */
+.cs-banner { padding: 38px 24px; border: 1px solid #b88846; border-radius: 22px; text-align: center; background: radial-gradient(ellipse at top, #513646, transparent 65%), linear-gradient(130deg, #1d2728, #18191d); box-shadow: 0 18px 60px #0004; }
+.cs-banner > span { font-size: 3rem; }
+.cs-banner h1 { margin: 8px 0; font-size: 2rem; letter-spacing: .18em; color: #f5d191; }
+.cs-banner p { color: #b7aaa1; letter-spacing: .1em; }
+.cs-section { margin: 30px 0; }
+.cs-section > h2 { font-size: 1.2rem; }
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px; margin: 16px 0; }
+.cs-item { display: flex; flex-direction: column; align-items: flex-start; padding: 20px; background: linear-gradient(145deg, #25312eea, #151e1bea); border: 1px solid #88744966; border-radius: 16px; gap: 8px; }
+.cs-item h3, .cs-item p { margin: 0; }
+.cs-item p { color: #c4ccc5; font-size: .88rem; flex: 1; }
+.cs-item small { color: #afa898; }
+.cs-item.equipped { border: 2px solid #e8bd77; }
+.cs-icon { font-size: 2.2rem; }
+.cs-preview { min-height: 160px; padding: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 18px; border: 2px solid #b99553; border-radius: 22px; background: #113c30dc; margin: 20px 0; }
+.cs-preview p { width: 100%; text-align: center; }
+.cs-emblem { font-size: 2rem; }
+.cs-title { display: block; color: #f8d894; font-size: .75rem; }
+.cs-seats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.cs-seat { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; background: #172b24; border: 2px solid #576a5c; border-radius: 12px; }
+.cs-seat > span { font-size: 1.7rem; }
+.cs-seat small { display: block; flex-basis: 100%; }
+.cs-table-sakura.cs-seat, .cs-table-sakura .cs-preview { border-color: #f4a7c0; box-shadow: 0 0 18px #e875a740, inset 0 0 12px #f4a7c030; background: radial-gradient(circle at top right, #86435d80, transparent 70%), #15382d; }
+.cs-table-dragon.cs-seat, .cs-table-dragon .cs-preview { border-color: #e2b340; border-style: double; border-width: 5px; background: repeating-linear-gradient(45deg, #184232, #184232 12px, #20513b 13px, #20513b 14px); }
+body.cs-background-yozakura { background: radial-gradient(ellipse at 15% 10%, #673152 0, transparent 50%), radial-gradient(ellipse at 90% 40%, #532839, transparent 50%), #131523; }
+body.cs-background-stars { background: radial-gradient(circle at 15% 20%, #f2e6bd 0 1px, transparent 2px) 0 0 / 130px 130px, radial-gradient(circle at 70% 70%, #b4caf7 0 1px, transparent 2px) 0 0 / 170px 170px, linear-gradient(155deg, #0b122b, #2c1c45); }
+body.cs-background-gold { background: repeating-linear-gradient(90deg, transparent 0 170px, #d9b85b25 171px 174px), radial-gradient(ellipse at top, #746039, #302719 55%, #17190f); }
+body.cs-background-foxroom { background: radial-gradient(circle at 12% 30%, #64dce53b, transparent 35%), radial-gradient(circle at 85% 60%, #899feb40, transparent 40%), #0e202d; }
+body.cs-background-festival { background: radial-gradient(circle at 15% 12%, #db645a60 0, transparent 17%), radial-gradient(circle at 85% 20%, #e6ae4360 0, transparent 17%), repeating-linear-gradient(120deg, #151827, #151827 220px, #2c1631 440px); }
+.cs-chips-gem .c-chip, .cs-chips-gem .cs-chip { background: conic-gradient(#55ccd8, #5165ad, #c1fbff, #4c81a5, #55ccd8); color: #071a29; border-radius: 35%; border-color: #b5f3ff; }
+.cs-chips-gem .c-chipmini, .cs-chips-gem .c-potchips, .cs-chips-gem .c-chipicon { background: linear-gradient(135deg, #a8eff8, #6263bb); color: #0b173b; }
+.cs-cards-hanafuda .pc.back { background: radial-gradient(circle at 50% 30%, #f7dad4 0 5px, transparent 6px), repeating-linear-gradient(45deg, #201b38 0 8px, #723b52 9px 10px); border-color: #e5caa1; }
+.cs-cards-hanafuda .pc.back::after { content: '🎴'; }
+.cs-victory { position: fixed; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
+.cs-victory span { position: absolute; top: -50px; left: calc(var(--petal) * 8%); font-size: 26px; animation: cs-fall 2.8s ease-in forwards; animation-delay: calc(var(--petal) * .06s); }
+@keyframes cs-fall { to { transform: translate(60px, 100vh) rotate(260deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cs-victory { display: none; } }
+@media (max-width: 600px) { .cs-banner { padding: 24px 14px; } .cs-banner h1 { font-size: 1.6rem; } .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .cs-item { padding: 12px; } .cs-item h3 { font-size: .93rem; } .cs-item .c-btn { font-size: .78rem; padding: 8px; } }
+
+.cs-background-yozakura .c-sky::after, .cs-background-foxroom .c-sky::after, .cs-background-festival .c-sky::after, .cs-background-gold .c-sky::after { position: fixed; bottom: 5vh; right: -30px; font-size: min(35vw, 350px); opacity: .09; filter: grayscale(.3); }
+.cs-background-yozakura .c-sky::after { content: '🌸'; }
+.cs-background-foxroom .c-sky::after { content: '🦊'; }
+.cs-background-festival .c-sky::after { content: '🏮'; }
+.cs-background-gold .c-sky::after { content: '🏯'; }
+.cs-table-sakura .c-seat.me, .cs-table-sakura .c-pseat.me .c-pseat-box { border-color: #f4a7c0; box-shadow: 0 0 16px #f4a7c04d; }
+.cs-table-dragon .c-seat.me, .cs-table-dragon .c-pseat.me .c-pseat-box { border: 4px double #e2b340; }

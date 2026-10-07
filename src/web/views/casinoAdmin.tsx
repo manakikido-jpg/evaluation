@@ -1,3 +1,4 @@
+import type { GuildConfig } from '../../config.js';
 import type { CasinoConfig, CasinoGame } from '../../config.js';
 import type { AiStats } from '../../services/casino/aiStats.js';
 import { AiStatsSection } from './aiStats.js';
@@ -38,6 +39,7 @@ export type CasinoRange = keyof typeof CASINO_RANGES;
 export function CasinoAdminPage(p: {
   session: SessionView;
   casino: CasinoConfig;
+  casinoGacha?: GuildConfig['casinoGacha'];
   coinName: string;
   url: string;
   range: CasinoRange;
@@ -215,6 +217,14 @@ export function CasinoAdminPage(p: {
               </span>
               <input type="number" name="boostMult" min={2} max={20} value={String(c.boostMult)} required />
             </label>
+            {p.casinoGacha && <fieldset><legend>🎰 勝負の御籤（カジノの景品ガチャ）</legend>
+              <label><input type="checkbox" name="styleEnabled" value="yes" checked={p.casinoGacha.enabled}/> 開く</label>
+              <label>1回の値段<input type="number" name="stylePrice" min="1" max="100000" value={String(p.casinoGacha.price)} required/></label>
+              <label>天井（未所持の見た目の品）<input type="number" name="stylePity" min="1" max="1000" value={String(p.casinoGacha.pity)} required/></label>
+              <label>見た目の品（％）<input type="number" name="styleCosmeticPercent" min="0" max="100" step="0.1" value={String(p.casinoGacha.cosmeticPercent)} required/></label>
+              <label>大勝負の札（％）<input type="number" name="styleBoostPercent" min="0" max="100" step="0.1" value={String(p.casinoGacha.boostPercent)} required/></label>
+              <p>残りはお試し券。2つの割合の合計は100％まで。全部そろうと、見た目の品の分もお試し券になります。</p>
+            </fieldset>}
             <fieldset class="perms">
               <legend>🀄 咲楽ノ宮雀荘の賭け</legend>
               <label class="check">

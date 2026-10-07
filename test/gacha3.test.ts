@@ -130,7 +130,7 @@ describe('📜 中身と排出率', () => {
     const text = JSON.stringify(view);
     expect(view.embeds.map((e) => e.title)).toEqual(['🎊 超大当たり　0.016%', '🌸 大吉　4.76%', '🍡 吉　95.22%']);
     for (const t of ['**0.016%** … 🎊 Discord Nitro 1 か月分（残り 1）', '「金色」（持っていたら出ない）', '代わり … 🎫部屋代無料券 ×3', '🎍 10/31 まで', '天井', '1 回 500 枚']) expect(text).toContain(t);
-    expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:rates');
+    expect(panelMessage('gacha').components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'casino-gacha:open']);
   });
 });
 

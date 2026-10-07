@@ -1,3 +1,5 @@
+import { activeStyles, stylesOf, equipStyle, drawStyles, tableStyles } from '../services/casino/styles.js';
+import { StyleGachaPage, Wardrobe } from './views/casinoStyles.js';
 import { artUrls } from '../services/casino/slotArt.js';
 import { AT_FILE_ART } from './assets.js';
 import type { Context, Hono } from 'hono';
@@ -150,8 +152,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   }
 
   const meOf = async (session: MemberSession): Promise<Me> => {
-    const [w, boostUntil] = await Promise.all([walletOf(db, session.userId), casinoBoostUntil(db, session.userId, d.now())]);
-    return { session, balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil } : {}) };
+    const [w, boostUntil, wardrobe] = await Promise.all([walletOf(db, session.userId), casinoBoostUntil(db, session.userId, d.now()), stylesOf(db, session.userId)]);
+    return { session, styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil } : {}) };
   };
   /** その人の上限（🎰 大勝負の札が効いていれば上がる）。画面に出す用。賭けるときは、それぞれのゲームが確かめ直す */
   const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino) : d.cfg().casino);
@@ -173,6 +175,21 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       if (!d.cfg().casino.enabled) return c.html(<CasinoClosed me={me} />);
       return handler(c, me);
     };
+
+  app.get('/casino/wardrobe', page(async (c, me) => c.html(<Wardrobe me={me} state={await stylesOf(db, me.session.userId)} preview={c.req.query('preview')} now={d.now()} message={c.req.query('msg')} />)));
+  app.post('/casino/wardrobe/equip', page(async (c, me) => {
+    const b = await c.req.parseBody();
+    const result = await equipStyle(db, me.session.userId, String(b.slot ?? ''), String(b.key ?? ''), b.trial === '1', d.now());
+    const messages = { ok: '見た目を変えました。', invalid: 'その見た目は選べません。', not_owned: 'まだ持っていません。', no_ticket: 'お試し券がありません。', active: '今のお試しが終わってから使えます。' };
+    return c.redirect('/casino/wardrobe?msg=' + encodeURIComponent(messages[result]));
+  }, { post: true }));
+  app.get('/casino/style-gacha', page(async (c, me) => c.html(<StyleGachaPage me={me} state={await stylesOf(db, me.session.userId)} g={d.cfg().casinoGacha} requestId={randomToken()} />)));
+  app.post('/casino/style-gacha/draw', page(async (c, me) => {
+    const b = await c.req.parseBody();
+    const r = await drawStyles(db, d.cfg().casinoGacha, me.session.userId, String(b.requestId ?? ''), Number(b.times), 'web');
+    const messages = { off: '今はお休み中です。', invalid: 'もう一度画面を開いてください。', funds: '銭が足りません。' };
+    return c.html(<StyleGachaPage me={await meOf(me.session)} state={await stylesOf(db, me.session.userId)} g={d.cfg().casinoGacha} requestId={randomToken()} results={r.status === 'ok' ? r.results : undefined} message={r.status === 'ok' ? r.replay ? '同じ操作の結果を表示しています。追加の支払いはありません。' : '景品が所持品に入りました。' : messages[r.status]} />);
+  }, { post: true }));
 
   // ───────── 入口・ログイン ─────────
 
@@ -889,6 +906,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const id = idOf(c);
       const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
       if (!t) return c.redirect('/casino?e=not_found');
+      me.sharedStyles = await tableStyles(db, t.state, d.now());
       return c.html(<TablePage me={me} table={t} casino={casinoOf(me)} msg={casinoMsg(c.req.query('e'))} now={d.now().getTime()} />);
     }),
   );
@@ -896,10 +914,10 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   /** 2 秒ごと: 時間が来ていれば進めて、今の番号を返す（変わっていたら中身を読み直す） */
   app.get(
     '/casino/t/:id/poll',
-    page(async (c) => {
+    page(async (c, me) => {
       const id = idOf(c);
       const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
-      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime() });
+      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime(), styles: me.styles, styleVersion: JSON.stringify(t ? await tableStyles(db, t.state, d.now()) : {}) });
     }),
   );
 
@@ -909,6 +927,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const id = idOf(c);
       const t = id ? await tableById(db, id) : undefined;
       if (!t) return c.body(null, 204);
+      me.sharedStyles = await tableStyles(db, t.state, d.now());
       return c.html(<TableFrag table={t} me={me} casino={casinoOf(me)} now={d.now().getTime()} />);
     }),
   );
