@@ -349,6 +349,8 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect(html).toContain('ルーレット');
     expect(html).toContain('action="/economy/casino"');
     expect(html).toContain('日ごとの胴元の収支');
+    expect(html).toContain('💰 収益の分け前（日ごと）');
+    expect(html).toContain('name="profitSharePercent"');
     expect(html).toContain('設定ごとの結果');
     expect(html).toContain('name="slot_8"');
     const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
@@ -681,5 +683,25 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(hp).toContain('通算成績');
     expect(hp).toContain('馬主');
     expect((await get('/casino/keiba/horse/999999', a)).headers.get('location')).toBe('/casino/keiba/horses');
+  });
+});
+
+describe('📊 カジノの記録', () => {
+  it('自分の成績・勝ち額ランキング・今日の人気・大当たり。ロビーから行ける。中に直接書いたスクリプトや style はない', async () => {
+    // 銭の出入りは DB の今の時刻で残るので、今の時刻で見る
+    clock = new Date();
+    const a = (await casinoLogin(A)).cookie!;
+    const b = (await casinoLogin(B)).cookie!;
+    await post('/casino/roulette', a, { bet: '100', on: 'red' });
+    await post('/casino/roulette', b, { bet: '200', on: 'black' });
+    expect(await (await get('/casino/hall', a)).text()).toContain('href="/casino/stats"');
+    const html = await (await get('/casino/stats', a)).text();
+    for (const t of ['あなたの成績（30 日）', '勝ち額ランキング（今日）', '今日の人気', '大当たり（7 日', '高い倍率の当たり', '🎡']) expect(html).toContain(t);
+    expect(html).toContain('href="/casino/stats?r=week"');
+    expect(html).toMatch(/あなたは 2 人中 [12] 位/);
+    expect(html).not.toMatch(/<script>|style="/);
+    expect(await (await get('/casino/stats?r=month', a)).text()).toContain('勝ち額ランキング（今月）');
+    // ログインしていなければ入口へ
+    expect((await app.request('/casino/stats')).status).toBe(302);
   });
 });

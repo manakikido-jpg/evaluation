@@ -32,6 +32,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   gacha_share: 'issue',
   gacha_reset: 'issue',
   keiba_prize: 'issue',
+  casino_share: 'issue',
   shop: 'income',
   shop_refund: 'income',
   room: 'income',

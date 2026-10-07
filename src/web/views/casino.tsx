@@ -169,6 +169,9 @@ export function CasinoGate(p: { me: CasinoMe; casinoOn: boolean; jansouOn: boole
         <p class="c-muted">どちらに入りますか？</p>
       </section>
       {p.msg && <Msg msg={p.msg} />}
+      <a class="c-stats-link" href="/casino/stats">
+        📊 記録を見る（自分の成績・勝ち額ランキング・今日の人気・大当たり）→
+      </a>
       {p.mine && (
         <a class="c-mine" href={`/casino/t/${p.mine.id}`}>
           <span class="c-mine-dot" aria-hidden="true"></span>
@@ -262,6 +265,9 @@ export function CasinoLobby(p: LobbyProps) {
         </div>
       </section>
       {p.msg && <Msg msg={p.msg} />}
+      <a class="c-stats-link" href="/casino/stats">
+        📊 記録を見る（自分の成績・勝ち額ランキング・今日の人気・大当たり）→
+      </a>
       {p.mine && (
         <a class="c-mine" href={`/casino/t/${p.mine.id}`}>
           <span class="c-mine-dot" aria-hidden="true"></span>

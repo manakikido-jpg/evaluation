@@ -521,6 +521,8 @@ export const casinoSchema = z.object({
   atOpen: z.boolean().default(false),
   /** AT 機の 1 ゲームの賭け（島で決まっている。AT のときだけ多く賭けられないように） */
   atBet: z.number().int().min(1).max(1_000_000).default(30),
+  /** 💰 収益の分け前: 前の日（日本時間）の胴元の収支が黒字なら、宮司のロールの人それぞれにこの %（0 で止める。合計が 100% を超えるときは山分け） */
+  profitSharePercent: z.number().int().min(0).max(50).default(25),
   /** 🎰 大勝負の札（その日だけ、カジノの上限を上げる）: 1 回の最高と 1 日の合計を何倍にするか */
   boostMult: z.number().int().min(2).max(20).default(5),
   /**

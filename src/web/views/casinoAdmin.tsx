@@ -2,7 +2,7 @@ import type { CasinoConfig, CasinoGame } from '../../config.js';
 import type { AiStats } from '../../services/casino/aiStats.js';
 import { AiStatsSection } from './aiStats.js';
 import { CASINO_GAMES } from '../../config.js';
-import type { CasinoMatch, KeibaHorseRow } from '../../db/schema.js';
+import type { CasinoMatch, CasinoProfitShare, KeibaHorseRow } from '../../db/schema.js';
 import { KB_APT, KB_CLASSES, KB_COATS, KB_STYLES, KB_SURFACES } from '../../services/casino/keiba.js';
 import { CASINO_LABEL, type CasinoStat } from '../../services/casino/casino.js';
 import { Layout, type SessionView } from './layout.js';
@@ -49,6 +49,9 @@ export function CasinoAdminPage(p: {
   flash?: string;
   guji: boolean;
   daily: CasinoDay[];
+  /** 💰 収益の分け前（新しい順）と、受け取った人の名前 */
+  shares?: CasinoProfitShare[];
+  shareNames?: Map<string, string>;
   floor: MachineDay[];
   /** 今日のおまかせの設定（台の番号 → 設定） */
   picks: Record<string, number>;
@@ -159,6 +162,7 @@ export function CasinoAdminPage(p: {
       </section>
 
       <CasinoCharts daily={p.daily} stats={p.stats} coinName={p.coinName} range={CASINO_RANGES[p.range].label} />
+      <ProfitShares casino={c} daily={p.daily} shares={p.shares ?? []} names={p.shareNames ?? new Map()} coinName={p.coinName} />
       {p.ai && <AiStatsSection ai={p.ai} coinName={p.coinName} rangeLabel={CASINO_RANGES[p.range].label} />}
       <SlotMachines casino={c} floor={p.floor} picks={p.picks} settingStats={p.settingStats} coinName={p.coinName} />
 
@@ -207,6 +211,10 @@ export function CasinoAdminPage(p: {
             <label class="field">
               <span>1 日（日本時間）に賭けられる合計（0 で上限なし。大きく賭けられるようにしたら、こちらも上げてください）</span>
               <input type="number" name="dailyBetLimit" min={0} max={100000000} value={String(c.dailyBetLimit)} required />
+            </label>
+            <label class="field">
+              <span>💰 収益の分け前（%）: 前の日の胴元の収支が黒字なら、宮司のロールの人それぞれにこの % を渡す（0〜50。0 で止める。合計が収支を超えるときは山分け）</span>
+              <input type="number" name="profitSharePercent" min={0} max={50} value={String(c.profitSharePercent)} required />
             </label>
             <label class="field">
               <span>
@@ -398,6 +406,55 @@ export function CasinoAdminPage(p: {
 const pct = (x: number) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
 const sign = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
 const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+
+const SHARE_NOTE: Record<string, string> = { start: '始めた日（渡していない）', off: '止めていた', loss: '黒字ではない（0）', no_one: '宮司がいない' };
+
+/** 💰 収益の分け前: 日ごとの胴元の収支と、宮司に渡した量（30 日。今日の分は 0 時を過ぎてから） */
+function ProfitShares(p: { casino: CasinoConfig; daily: CasinoDay[]; shares: CasinoProfitShare[]; names: Map<string, string>; coinName: string }) {
+  const by = new Map(p.shares.map((s) => [s.date, s]));
+  const paid = p.shares.reduce((n, s) => n + s.paid, 0);
+  return (
+    <section class="card">
+      <h2>💰 収益の分け前（日ごと）</h2>
+      <p class="note">
+        日が変わったら（日本時間の 0 時）、前の日の胴元の収支が黒字なら、宮司のロールの人それぞれに {p.casino.profitSharePercent}% を渡します
+        {p.casino.profitSharePercent > 0 ? '' : '（いまは止めています）'}。赤字の日は 0 で、次の日に持ちこしません。受け取った人には DM、#記録 にも残します。% は下の設定で変えられます（0 で止める）。銭の出入りは「💰 カジノの収益の分け前（宮司）」。
+      </p>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">渡した合計（30 日）</div>
+          <div class="value">
+            {fmt(paid)}
+            <small>{p.coinName}</small>
+          </div>
+        </div>
+      </div>
+      <table class="compact">
+        <thead>
+          <tr>
+            <th>日</th>
+            <th class="num">胴元の収支</th>
+            <th class="num">宮司に渡した</th>
+            <th>受け取った人</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...p.daily].reverse().map((d) => {
+            const s = by.get(d.date);
+            return (
+              <tr>
+                <td>{d.date}</td>
+                <td class="num">{sign(d.wagered - d.paid)}</td>
+                <td class="num">{s ? (s.paid > 0 ? `${fmt(s.paid)}（${s.percent}% ずつ）` : '0') : '—'}</td>
+                <td>{s ? (s.recipients.length ? s.recipients.map((r) => `${p.names.get(r.memberId) ?? r.memberId} ${fmt(r.amount)}`).join('・') : (SHARE_NOTE[s.note ?? ''] ?? '')) : 'まだ（0 時を過ぎたら）'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
 /** 日ごとのグラフ（30 日）と、ゲームごとの賭けた額。表でも見られる */
 function CasinoCharts(p: { daily: CasinoDay[]; stats: CasinoStat[]; coinName: string; range: string }) {

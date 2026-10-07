@@ -248,6 +248,7 @@ import {
   updateItem as updateShopItem,
 } from '../services/shop.js';
 import type { GuildChannel, GuildRole, RolePatch } from '../lib/discordRest.js';
+import { recentProfitShares } from '../services/casino/profitShare.js';
 
 export type WebDeps = {
   db: Db;
@@ -1498,7 +1499,7 @@ export function createWebApp(deps: WebDeps) {
     const q = c.req.query('range');
     const range: CasinoRange = q && Object.hasOwn(CASINO_RANGES, q) ? (q as CasinoRange) : '7d';
     const since = new Date(now().getTime() - CASINO_RANGES[range].days * 86_400_000);
-    const [stats, matches, recent, players7d, daily, floor, picks, settingStats, guildRoles] = await Promise.all([
+    const [stats, matches, recent, players7d, daily, floor, picks, settingStats, guildRoles, shares] = await Promise.all([
       casinoStats(db, since),
       matchStats(db, since),
       recentMatches(db, 10),
@@ -1508,6 +1509,7 @@ export function createWebApp(deps: WebDeps) {
       dayPicks(db, now()),
       slotSettingStats(db, new Date(now().getTime() - 30 * 86_400_000)),
       loadRoles(),
+      recentProfitShares(db, 30),
     ]);
     return c.html(
       <CasinoAdminPage
@@ -1522,6 +1524,8 @@ export function createWebApp(deps: WebDeps) {
         names={await namesOf(db, recent.flatMap((m) => [m.hostId, m.guestId ?? '', m.winnerId ?? '']))}
         players7d={players7d}
         daily={daily}
+        shares={shares}
+        shareNames={await namesOf(db, shares.flatMap((s) => s.recipients.map((r) => r.memberId)))}
         floor={floor.today}
         picks={picks}
         atPicks={await atDayPicks(db, now())}
@@ -1639,6 +1643,8 @@ export function createWebApp(deps: WebDeps) {
       maxBet: int('maxBet'),
       rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
+      // 💰 収益の分け前の %（欄がない古い画面から送られたら、今のまま）
+      profitSharePercent: typeof body.profitSharePercent === 'string' ? int('profitSharePercent') : cfg.casino.profitSharePercent,
       // 🎰 大勝負の札の倍率（欄がない古い画面から送られたら、今のまま）
       boostMult: typeof body.boostMult === 'string' ? int('boostMult') : cfg.casino.boostMult,
       mahjongBets: typeof body.mahjongBets === 'string' ? body.mahjongBets === 'yes' : cfg.casino.mahjongBets,

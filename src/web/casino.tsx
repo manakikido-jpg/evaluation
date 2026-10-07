@@ -91,6 +91,8 @@ import {
 import { fatigueNow } from '../services/casino/keiba.js';
 import { mjRanking, mjStats, monthStartJst } from '../services/casino/mahjongStats.js';
 import { boostCasino, casinoBoostUntil } from '../services/casino/boost.js';
+import { myBest, myByGame, myDaily, popularToday, rangeStart, topMultipliers, winRanking, type RankRange } from '../services/casino/memberStats.js';
+import { CasinoStatsPage } from './views/casinoStats.js';
 
 /** ランキングに出る対局数 */
 const MJ_RANK_MIN = 3;
@@ -224,6 +226,30 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
             </>
           }
         />,
+      );
+    }),
+  );
+
+  // 📊 カジノの記録（自分の成績・勝ち額ランキング・今日の人気・大当たり）
+  app.get(
+    '/casino/stats',
+    page(async (c, me) => {
+      const now = d.now();
+      const q = c.req.query('r');
+      const range: RankRange = q === 'week' || q === 'month' ? q : 'today';
+      const month = new Date(now.getTime() - 30 * 86_400_000);
+      const [daily, games, best, ranking, popular, wins, multipliers] = await Promise.all([
+        myDaily(db, me.session.userId, 30, now),
+        myByGame(db, me.session.userId, month),
+        myBest(db, me.session.userId, 5),
+        winRanking(db, rangeStart(range, now), me.session.userId, 10),
+        popularToday(db, now),
+        bigWins(db, new Date(now.getTime() - 7 * 86_400_000), 10),
+        topMultipliers(db, month, 10),
+      ]);
+      const names = await namesOf(db, [...ranking.top.map((r) => r.memberId), ...wins.map((w) => w.memberId), ...multipliers.map((w) => w.memberId), me.session.userId]);
+      return c.html(
+        <CasinoStatsPage me={me} daily={daily} games={games} best={best} range={range} ranking={ranking} popular={popular} bigWins={wins} multipliers={multipliers} names={names} />,
       );
     }),
   );

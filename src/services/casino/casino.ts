@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ne, sql } from 'drizzle-orm';
 import type { CasinoGame, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
 import { casinoGames, coinTx, type CasinoGameRow } from '../../db/schema.js';
@@ -342,12 +342,12 @@ export async function recentGames(db: Db, memberId: string, limit = 10): Promise
     .limit(limit);
 }
 
-/** 最近の大当たり（戻った銭が賭けの 5 倍以上） */
+/** 最近の大当たり（戻った銭が賭けの 5 倍以上。胴元の BOT の記録は入れない） */
 export async function bigWins(db: Db, since: Date, limit = 8): Promise<CasinoGameRow[]> {
   return db
     .select()
     .from(casinoGames)
-    .where(and(eq(casinoGames.status, 'done'), gte(casinoGames.finishedAt, since), sql`${casinoGames.payout} >= ${casinoGames.bet} * 5`))
+    .where(and(eq(casinoGames.status, 'done'), gte(casinoGames.finishedAt, since), sql`${casinoGames.bet} > 0`, sql`${casinoGames.payout} >= ${casinoGames.bet} * 5`, ne(casinoGames.memberId, 'bot')))
     .orderBy(desc(casinoGames.payout))
     .limit(limit);
 }

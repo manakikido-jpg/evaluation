@@ -533,6 +533,13 @@
       "when": 1791301762955,
       "tag": "0075_ai_matches",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1791375354513,
+      "tag": "0076_casino_profit_shares",
+      "breakpoints": true
     }
   ]
 }

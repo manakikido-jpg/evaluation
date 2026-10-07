@@ -55,6 +55,7 @@ export type CoinReason =
   | 'keiba_prize'
   | 'keiba_train'
   | 'keiba_trade'
+  | 'casino_share'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -283,6 +284,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   casino_hold: 'ちんちろ卓で預けた（負けの備え・残りは返る）',
   keiba_buy: '🏇 馬を買った（馬主）',
   keiba_prize: '🏇 馬主の賞金・出走手当',
+  casino_share: '💰 カジノの収益の分け前（宮司）',
   keiba_train: '🏇 調教',
   keiba_trade: '🏇 馬の売り買い',
   adjust: '調整',

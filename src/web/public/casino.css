@@ -2153,3 +2153,27 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 @media (min-width: 1600px) {
   .c-main.wide:has(.kb-layout) { max-width: 1560px; }
 }
+
+/* ───────── 📊 カジノの記録 ───────── */
+.c-stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 6px 0 12px; }
+.c-stat { display: flex; flex-direction: column; gap: 2px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 8px 12px; }
+.c-stat b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.c-note { font-size: 0.82rem; margin: 6px 0 0; }
+.c-chart { display: block; width: 100%; height: auto; margin: 4px 0; }
+.c-chart-axis { stroke: var(--c-line); stroke-width: 1; }
+.c-chart-up { fill: var(--c-green); }
+.c-chart-down { fill: var(--c-red); }
+.c-chart-hit { fill: transparent; }
+.c-chart g:hover .c-chart-hit { fill: rgba(255, 255, 255, 0.06); }
+.c-chart-label { fill: var(--c-muted); font-size: 16px; }
+.c-details { margin-top: 8px; }
+.c-details summary { cursor: pointer; color: var(--c-muted); }
+.c-stable { width: 100%; border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.c-stable th, .c-stable td { padding: 5px 6px; border-bottom: 1px dashed rgba(255, 255, 255, 0.08); text-align: left; }
+.c-stable .num { text-align: right; }
+.c-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+.c-tabs a { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--c-line); color: var(--c-text); text-decoration: none; font-size: 0.9rem; }
+.c-tabs a.on { background: var(--c-gold); color: #1a1208; border-color: var(--c-gold); font-weight: 700; }
+.c-ranking li.me { color: var(--c-sakura); font-weight: 700; }
+.c-rank-no { display: inline-block; min-width: 1.6em; color: var(--c-gold); }
+.c-stats-link { display: inline-block; margin: 4px 0 10px; color: var(--c-gold); }

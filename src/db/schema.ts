@@ -213,6 +213,21 @@ export const casinoTables = pgTable(
 
 export type CasinoTable = typeof casinoTables.$inferSelect;
 
+/**
+ * 💰 カジノの収益の分け前: 日本時間の 1 日ごとに 1 行（同じ日は 2 回渡さない）。
+ * profit: その日の胴元の収支（賭けた − 戻した。マイナスもある）。note: start（始めた日・渡さない）/ off / loss（赤字）/ no_one（宮司がいない）
+ */
+export const casinoProfitShares = pgTable('casino_profit_shares', {
+  date: text('date').primaryKey(),
+  profit: bigint('profit', { mode: 'number' }).notNull(),
+  percent: integer('percent').notNull(),
+  paid: bigint('paid', { mode: 'number' }).notNull().default(0),
+  recipients: jsonb('recipients').$type<{ memberId: string; amount: number }[]>().notNull().default([]),
+  note: text('note'),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type CasinoProfitShare = typeof casinoProfitShares.$inferSelect;
+
 /** 🤖 AI（BOT）と人の勝負（人と AI が両方いた勝負だけ）。AI の強さを直すときに見る */
 export const aiMatches = pgTable(
   'ai_matches',

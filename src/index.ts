@@ -54,6 +54,7 @@ import { commandDefinitions } from './discord/commands.js';
 import { logger } from './lib/logger.js';
 import { pingRoleIds } from './services/notify.js';
 import { explainStartupError } from './lib/startupErrors.js';
+import { profitShareDm, profitShareLog, settleProfitShare } from './services/casino/profitShare.js';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -203,6 +204,17 @@ async function main(): Promise<void> {
       void sweepTables(db, cfg())
         .then(() => sweepMatches(db))
         .catch((err) => logger.warn({ err }, 'casino sweep failed'));
+      // 💰 カジノの収益の分け前: 日が変わったら、前の日の分を宮司へ（1 日 1 回だけ。DM と #記録）
+      void settleProfitShare(db, cfg())
+        .then(async (row) => {
+          if (!row) return;
+          const coin = `${cfg().economy.currencyEmoji}${cfg().economy.currencyName}`;
+          for (const r of row.recipients) await actions.sendDm(r.memberId, profitShareDm(row, r.amount, coin)).catch(() => false);
+          const log = cfg().channels.log;
+          const text = profitShareLog(row, coin);
+          if (log && text) await actions.sendMessage(log, { content: text, allowed_mentions: { parse: [] } }).catch(() => undefined);
+        })
+        .catch((err) => logger.warn({ err }, 'casino profit share failed'));
       // 🎫 通話で券: 決めた日に、通話が決めた分数になった人へ券を配って DM で知らせる
       void voiceTicketTick(db, cfg())
         .then(async (granted) => {
