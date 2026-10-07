@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-07-automatic-pr', date: '2026-10-07', kind: 'improve', where: ['運用'], title: '確認用PRを自動で作る', items: ['Codexのブランチをpushすると、全テスト・型チェック・ビルドの成功後にClaude確認用の下書きPRを作ります。合流はClaudeが行います。'] },
   {
     id: '2026-10-07-casino-lobby-merge',
     date: '2026-10-07',
