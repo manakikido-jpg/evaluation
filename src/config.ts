@@ -223,6 +223,7 @@ export const TICKET_KINDS = [
   'gacha_gold10',
   'gacha_gift',
   'name_deco',
+  'casino_boost',
 ] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
 
@@ -520,8 +521,17 @@ export const casinoSchema = z.object({
   atOpen: z.boolean().default(false),
   /** AT 機の 1 ゲームの賭け（島で決まっている。AT のときだけ多く賭けられないように） */
   atBet: z.number().int().min(1).max(1_000_000).default(30),
+  /** 🎰 大勝負の札（その日だけ、カジノの上限を上げる）: 1 回の最高と 1 日の合計を何倍にするか */
+  boostMult: z.number().int().min(2).max(20).default(5),
+  /**
+   * BOT が中で使う（保存しない）: 大勝負の札が効いている人の、元の上限。
+   * 卓の参加費・ブラインド（みんなが同じだけ払うもの）は元の「1 回の最高」まで。卓のほかの人は元の上限で数える
+   */
+  boostBase: z.object({ maxBet: z.number().int(), rouletteMaxBet: z.number().int(), dailyBetLimit: z.number().int() }).optional(),
 });
 export type CasinoConfig = z.infer<typeof casinoSchema>;
+/** 卓の参加費・ブラインド（みんなが同じだけ払うもの）の最高。🎰 大勝負の札が効いていても、元の 1 回の最高 */
+export const sharedMaxBet = (c: Pick<CasinoConfig, 'maxBet' | 'boostBase'>) => c.boostBase?.maxBet ?? c.maxBet;
 
 export const guildConfigSchema = z
   .object({

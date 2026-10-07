@@ -34,6 +34,7 @@ import { PACES, paceMult, type Pace } from '../../services/casino/tables/types.j
 import { mahjongArt } from '../assets.js';
 import type { MjRankRow, MjStats } from '../../services/casino/mahjongStats.js';
 import type { CasinoMe, Coin } from './casino.js';
+import { sharedMaxBet } from '../../config.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const SUIT_CLASS = ['m', 'p', 's', 'z'];
@@ -746,7 +747,7 @@ export function MjCreateFields(p: { casino: CasinoConfig; coin: Coin }) {
           </label>
           <label>
             <input type="radio" name="wager" value="on" /> 参加費を賭ける
-            <input type="number" name="entry" min={p.casino.minBet} max={p.casino.maxBet} value={String(Math.min(Math.max(100, p.casino.minBet), p.casino.maxBet))} inputmode="numeric" />
+            <input type="number" name="entry" min={p.casino.minBet} max={sharedMaxBet(p.casino)} value={String(Math.min(Math.max(100, p.casino.minBet), sharedMaxBet(p.casino)))} inputmode="numeric" />
             {p.coin.name}
           </label>
         </fieldset>

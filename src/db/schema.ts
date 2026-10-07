@@ -567,7 +567,7 @@ export const shopItems = pgTable(
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor'>().notNull(),
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -1221,7 +1221,7 @@ export const memberBuffs = pgTable(
   'member_buffs',
   {
     memberId: text('member_id').notNull(),
-    kind: text('kind').$type<'fuku' | 'luck'>().notNull(),
+    kind: text('kind').$type<'fuku' | 'luck' | 'casino'>().notNull(),
     until: timestamp('until', { withTimezone: true }),
     remaining: integer('remaining').notNull().default(0),
   },

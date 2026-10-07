@@ -13,7 +13,8 @@ import {
   type UserSelectMenuInteraction,
   type Message,
 } from 'discord.js';
-import { emaChannelIds, type GuildConfig } from '../config.js';
+import { emaChannelIds, type CasinoConfig, type GuildConfig } from '../config.js';
+import { boostCasino } from '../services/casino/boost.js';
 import type { Db } from '../db/client.js';
 import type { ShopItem } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -58,6 +59,16 @@ const done = (content: string) => ({ content, embeds: [], components: [] });
 const fmtDate = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).format(d);
 
 type Buyable = ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>;
+
+/** 🎰 大勝負の札を受ける前の説明（上がる前と後の上限） */
+export function casinoBoostNote(c: CasinoConfig): string {
+  const b = boostCasino(c);
+  const f = (n: number) => n.toLocaleString('ja-JP');
+  return [
+    `-# 持ち物に 1 枚入ります。\`/持ち物\` で「✨ 使う」を押した日（日本時間の 0 時まで）だけ効きます（効いている日にもう 1 枚使うことはできません）`,
+    `-# 1 回の最高 ${f(c.maxBet)} → **${f(b.maxBet)}** 枚${c.dailyBetLimit > 0 ? `・1 日の合計 ${f(c.dailyBetLimit)} → **${f(b.dailyBetLimit)}** 枚` : ''}（卓の参加費・ブラインドはそのまま）`,
+  ].join('\n');
+}
 
 /** #授与所 のショップ（授与品） */
 export class ShopApp {
@@ -179,6 +190,7 @@ export class ShopApp {
       const t = (await ticketsOf(this.db, i.user.id)).ema_pin;
       if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、${this.coinName}は減りません**（いま ${t} 枚）\n${note}`;
     }
+    if (item.kind === 'casino_boost') note = casinoBoostNote(this.cfg().casino);
     const t = await ticketsOf(this.db, i.user.id);
     await i.update(shopConfirm(item, e, balance, note, isBooster(i), DISCOUNT_TICKETS.map((d) => ({ ticket: d, count: t[d] }))));
   }
@@ -310,6 +322,12 @@ export class ShopApp {
         return this.omikujiExtra(i, item, discount);
       case 'ema_pin':
         return this.emaPin(i, item, discount);
+      case 'casino_boost': {
+        const r = await buySimple(this.db, item, userId, {}, new Date(), this.price(i, item), discount);
+        if (r.status !== 'ok') return this.insufficientText(r)!;
+        const have = (await ticketsOf(this.db, userId)).casino_boost;
+        return `🎰 大勝負の札を 1 枚受けました（持っている: ${have} 枚）${this.discountNote(r)}。残り ${r.balance} 枚。\n\`/持ち物\` で選んで「✨ 使う」を押すと、その日（日本時間の 0 時まで）だけ、カジノの上限が ${cfg.casino.boostMult} 倍になります。`;
+      }
       case 'hanafubuki':
         return this.hanafubuki(i, item, extra.targetId ?? '', extra.message ?? '');
       default:

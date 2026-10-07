@@ -58,6 +58,7 @@ export function walletView(
       ? [`-# 役職の倍率: 10 分ごと ${fmt(Math.round((e.voicePer10Min * (d.voicePercent ?? 100)) / 100))} 枚（${d.voicePercent ?? 100}%）・1 日の上限 ${d.voiceCapPercent ?? 100}%`]
       : []),
     ...(d.buffs.fukuUntil ? [`🧧 福の札: <t:${unix(d.buffs.fukuUntil)}:f> まで、通話の${e.currencyName}が 2 倍`] : []),
+    ...(d.buffs.casinoUntil ? [`🎰 大勝負の札: <t:${unix(d.buffs.casinoUntil)}:t> まで、カジノの上限が上がっている`] : []),
     ...(d.buffs.luck > 0 ? [`🍀 運気アップ: 物御籤あと ${d.buffs.luck} 回`] : []),
     `🎟 券: ${allTicketsLine(d.tickets, d.custom) ?? 'なし'}`,
     '',

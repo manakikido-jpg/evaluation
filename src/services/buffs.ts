@@ -13,16 +13,18 @@ export const FUKU_HOURS = 24;
 export const LUCK_DRAWS = 10;
 export const NAME_DECO_DAYS = 7;
 
-export type Buffs = { fukuUntil?: Date; luck: number; deco?: NameDeco };
+export type Buffs = { fukuUntil?: Date; luck: number; deco?: NameDeco; /** 🎰 大勝負の札が効いている間 */ casinoUntil?: Date };
 
 export async function buffsOf(db: Db, memberId: string, now = new Date()): Promise<Buffs> {
   const rows = await db.select().from(memberBuffs).where(eq(memberBuffs.memberId, memberId));
   const fuku = rows.find((r) => r.kind === 'fuku');
   const luck = rows.find((r) => r.kind === 'luck');
+  const casino = rows.find((r) => r.kind === 'casino');
   const [deco] = await db.select().from(nameDecos).where(eq(nameDecos.memberId, memberId));
   return {
     ...(fuku?.until && fuku.until > now ? { fukuUntil: fuku.until } : {}),
     luck: luck?.remaining ?? 0,
+    ...(casino?.until && casino.until > now ? { casinoUntil: casino.until } : {}),
     ...(deco && deco.until > now ? { deco } : {}),
   };
 }

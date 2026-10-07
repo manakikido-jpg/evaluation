@@ -18,6 +18,7 @@ import { MJ_LENGTHS, MJ_TURN_SECONDS, type MjState } from '../../services/casino
 import { MahjongView, MJ_RULES, MjCreateFields, MjGuide } from './mahjong.js';
 import type { KbState } from '../../services/casino/tables/keiba.js';
 import { KB_RULES, KbCreateFields, KeibaView, kbSummary } from './keiba.js';
+import { sharedMaxBet } from '../../config.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -177,7 +178,7 @@ function PaceSelect(p: { kind: TableKind }) {
 function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) {
   if (p.kind === 'keiba') return <KbCreateFields />;
   if (p.kind === 'poker') {
-    const opts = blindOptions(p.casino.minBet, p.casino.maxBet);
+    const opts = blindOptions(p.casino.minBet, sharedMaxBet(p.casino));
     return (
       <>
         <label>
@@ -203,7 +204,7 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
       <>
         <label>
           参加費
-          <input type="number" name="entry" min={0} max={p.casino.maxBet} value={String(Math.min(100, p.casino.maxBet))} inputmode="numeric" />
+          <input type="number" name="entry" min={0} max={sharedMaxBet(p.casino)} value={String(Math.min(100, sharedMaxBet(p.casino)))} inputmode="numeric" />
           {p.coin.name}（0 で賭けない）
         </label>
         <fieldset class="c-rules-pick">
@@ -226,7 +227,7 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
     return (
       <label>
         参加費
-        <input type="number" name="entry" min={0} max={p.casino.maxBet} value={String(Math.min(100, p.casino.maxBet))} inputmode="numeric" />
+        <input type="number" name="entry" min={0} max={sharedMaxBet(p.casino)} value={String(Math.min(100, sharedMaxBet(p.casino)))} inputmode="numeric" />
         {p.coin.name}（0 で賭けない）
       </label>
     );

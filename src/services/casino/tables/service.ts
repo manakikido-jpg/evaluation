@@ -5,6 +5,7 @@ import { aiMatches, casinoGames, casinoTables, coinTx, keibaBets, mahjongResults
 import { jstDate } from '../../activity.js';
 import { addCoins, spendWithin } from '../../economy.js';
 import { todayBets } from '../casino.js';
+import { casinoCfgFor } from '../boost.js';
 import { applyKeibaResults, loadRoster } from '../keibaStable.js';
 import { cryptoRng, type Rng } from '../cards.js';
 import { HOUSE_BOT_ID, isBot } from './bots.js';
@@ -56,8 +57,10 @@ async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: D
   }
   const limited = new Map<string, number>();
   for (const d of fx.debits ?? []) if (d.limited) limited.set(d.memberId, (limited.get(d.memberId) ?? 0) + d.amount);
-  if (cfg.casino.dailyBetLimit > 0) {
-    for (const [memberId, amount] of limited) if ((await todayBets(tx, memberId, now)) + amount > cfg.casino.dailyBetLimit) throw new Stop('limit');
+  // 1 日の上限は人ごと（🎰 大勝負の札が効いている人は上がる）
+  for (const [memberId, amount] of limited) {
+    const limit = (await casinoCfgFor(tx, cfg, memberId, now)).casino.dailyBetLimit;
+    if (limit > 0 && (await todayBets(tx, memberId, now)) + amount > limit) throw new Stop('limit');
   }
   for (const d of fx.debits ?? []) {
     if (d.amount <= 0) continue;
@@ -184,6 +187,8 @@ export async function openTables(db: Db, kind?: TableKind): Promise<CasinoTable[
 
 /** 卓を作る（作った人が座る）。1 人 1 卓まで */
 export async function createTable(db: Db, cfg: GuildConfig, kind: TableKind, host: Who, form: Form, now = new Date(), rng: Rng = cryptoRng): Promise<TableResult> {
+  // 操作する人の上限（🎰 大勝負の札）で確かめる
+  cfg = await casinoCfgFor(db, cfg, host.id, now);
   const engine = engineOf(kind);
   if (!engine) return { status: 'not_found' };
   if (await myTable(db, host.id)) return { status: 'seated' };
@@ -209,14 +214,15 @@ export async function joinTable(db: Db, cfg: GuildConfig, id: number, who: Who, 
   const mine = await myTable(db, who.id);
   if (mine && mine.id !== id) return { status: 'seated' };
   if (mine) return { status: 'ok', table: mine };
-  return onTable(db, cfg, id, (e, s, ctx) => e.join(s, who, form, ctx), now, rng);
+  return onTable(db, await casinoCfgFor(db, cfg, who.id, now), id, (e, s, ctx) => e.join(s, who, form, ctx), now, rng);
 }
 
 export const leaveTable = (db: Db, cfg: GuildConfig, id: number, memberId: string, now = new Date(), rng: Rng = cryptoRng) =>
   onTable(db, cfg, id, (e, s, ctx) => e.leave(s, memberId, ctx), now, rng);
 
-export const actTable = (db: Db, cfg: GuildConfig, id: number, memberId: string, form: Form, now = new Date(), rng: Rng = cryptoRng) =>
-  onTable(db, cfg, id, (e, s, ctx) => e.act(s, memberId, form, ctx), now, rng);
+/** 卓で賭ける・打つなど（操作する人の上限で確かめる） */
+export const actTable = async (db: Db, cfg: GuildConfig, id: number, memberId: string, form: Form, now = new Date(), rng: Rng = cryptoRng) =>
+  onTable(db, await casinoCfgFor(db, cfg, memberId, now), id, (e, s, ctx) => e.act(s, memberId, form, ctx), now, rng);
 
 /** 見に来たとき・2 秒ごとに: 時間が来ていれば進める */
 export async function pollTable(db: Db, cfg: GuildConfig, id: number, now = new Date(), rng: Rng = cryptoRng): Promise<CasinoTable | undefined> {

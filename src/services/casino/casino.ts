@@ -13,6 +13,7 @@ import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay
 import { ROULETTE_MAX_SPOTS, rouletteMaxOf, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
+import { casinoCfgFor } from './boost.js';
 
 /**
  * カジノ（1 人で遊ぶゲーム）。賭けた銭は始めたときに引き、終わったときに 1 回だけ戻す（負けは 0）。
@@ -53,7 +54,8 @@ export async function todayBets(db: Db, memberId: string, now = new Date()): Pro
 }
 
 export async function checkBet(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, now = new Date()): Promise<BetCheck> {
-  const c = cfg.casino;
+  // 🎰 大勝負の札が効いていれば、上限が上がる
+  const c = (await casinoCfgFor(db, cfg, memberId, now)).casino;
   if (!c.enabled) return 'closed';
   if (!c.games.includes(game)) return 'game_off';
   if (!Number.isInteger(bet) || bet < c.minBet || bet > c.maxBet) return 'bad_bet';
@@ -160,6 +162,7 @@ export type BjAction = 'hit' | 'stand' | 'double';
 export async function actBlackjack(db: Db, cfg: GuildConfig, id: number, memberId: string, action: BjAction, now = new Date()): Promise<Acted> {
   // ダブルダウンは、今日の上限にも数える
   if (action === 'double') {
+    cfg = await casinoCfgFor(db, cfg, memberId, now);
     const row = await gameById(db, id);
     if (row && row.memberId === memberId && cfg.casino.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + row.bet > cfg.casino.dailyBetLimit) return { status: 'invalid' };
   }
@@ -244,6 +247,7 @@ export type RouletteState = { number: number; stakes?: (RouletteStake & { payout
 
 /** ルーレット（いくつもの所に賭けられる。1 か所ごとに最低〜最高、合計は最高の ROULETTE_MAX_SPOTS 倍まで） */
 export async function playRoulette(db: Db, cfg: GuildConfig, memberId: string, stakes: RouletteStake[], rng: Rng = cryptoRng, now = new Date()): Promise<Played> {
+  cfg = await casinoCfgFor(db, cfg, memberId, now);
   const c = cfg.casino;
   const max = rouletteMaxOf(c);
   if (!stakes.length || stakes.length > ROULETTE_MAX_SPOTS || stakes.some((x) => !Number.isInteger(x.amount) || x.amount < c.minBet || x.amount > max)) return { status: 'bad_bet' };
@@ -268,6 +272,7 @@ export type ChinchiroState = { parent: ChinRoll[]; child: ChinRoll[] | null; mul
  * 引くのは負けた分（勝ち・引き分けは賭けた分）、戻すのは 賭け + 勝った分
  */
 export async function playChinchiro(db: Db, cfg: GuildConfig, memberId: string, bet: number, rng: Rng = cryptoRng, now = new Date()): Promise<Played> {
+  cfg = await casinoCfgFor(db, cfg, memberId, now);
   const check = await checkBet(db, cfg, memberId, 'chinchiro', bet, now);
   if (check !== 'ok') return { status: check };
   if ((await walletOf(db, memberId)).balance < bet * CHIN_MAX_LOSS) return { status: 'reserve' };

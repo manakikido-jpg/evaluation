@@ -46,7 +46,7 @@ export function categoryOf(i: Pick<ShopItem, 'kind' | 'roleGroup'>): ShopCategor
   if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : i.roleGroup === 'vip' ? 'vip' : 'other';
   if (i.kind === 'mycolor') return 'color';
   if (i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
-  if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin') return 'fun';
+  if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin' || i.kind === 'casino_boost') return 'fun';
   if (i.kind === 'menzaifu') return 'menzaifu';
   return 'other';
 }
@@ -135,7 +135,7 @@ export function shopList(
 
 /** 選んだ品物の確認（買う・やめる） */
 /** 割引券が使える品（ロール・おみくじもう 1 回・絵馬の奉納。免罪符・贈り物・花吹雪はのぞく） */
-export const discountableKinds = ['role', 'omikuji_extra', 'ema_pin'];
+export const discountableKinds = ['role', 'omikuji_extra', 'ema_pin', 'casino_boost'];
 
 export function shopConfirm(
   item: ShopItem,

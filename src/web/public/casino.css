@@ -49,6 +49,7 @@ h2 { font-size: 1.05rem; margin: 0 0 0.6rem; color: var(--c-gold); }
 .c-back { margin: 0 0 6px; font-size: 0.9rem; }
 .c-h1 { font-size: 1.5rem; margin: 4px 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .c-muted { color: var(--c-muted); }
+.c-boost { margin: 0.35rem 0 0; color: var(--c-gold); font-weight: 600; font-size: 0.9rem; }
 .c-center { text-align: center; }
 .c-note { color: var(--c-muted); font-size: 0.85rem; }
 .c-alert { background: rgba(200, 40, 60, 0.15); border: 1px solid rgba(200, 40, 60, 0.5); border-radius: 10px; padding: 8px 12px; }

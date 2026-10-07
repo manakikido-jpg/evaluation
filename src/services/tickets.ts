@@ -37,6 +37,7 @@ export const TICKET_LABEL = {
   gacha_gold10: { emoji: '🌟', name: '金の10連券', note: '物御籤を 10 連タダで引ける（10 回のうち 1 回は大吉以上が確定）', use: 'manual' },
   gacha_gift: { emoji: '💝', name: '物御籤の贈り券', note: 'ほかの人に「物御籤の無料券」を贈れる', use: 'manual' },
   name_deco: { emoji: '🏷', name: '名前の飾り札', note: '使うと 7 日間、名前の前に好きな絵文字を 1 つ付けられる', use: 'manual' },
+  casino_boost: { emoji: '🎰', name: '大勝負の札', note: '使うと、その日（日本時間の 0 時まで）だけ、カジノで賭けられる上限（1 回・1 日の合計）が上がる', use: 'manual' },
 } as Record<TicketKind, TicketDef>;
 
 /** 券の選び方（管理画面の選ぶ欄を、まとまりごとに分ける） */
@@ -48,7 +49,7 @@ export const TICKET_GROUPS: { label: string; kinds: TicketKind[] }[] = [
   })),
   { label: '🏷 授与所（ショップ）', kinds: ['shop_10', 'shop_30', 'shop_50', 'ema_pin'] },
   { label: '🏪 市場', kinds: ['market_nofee'] },
-  { label: '🧧 使うと効く札（/物御籤 の「券を使う」から）', kinds: ['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco'] },
+  { label: '🧧 使うと効く札（/物御籤 の「券を使う」から）', kinds: ['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco', 'casino_boost'] },
 ];
 
 /** /物御籤 の「券を使う」から使う券 */

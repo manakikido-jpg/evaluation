@@ -5,6 +5,7 @@ import { countsOf, doraOf, EAST, isSanmaCut, isYaochu, KINDS, kindName, kindOf, 
 import { nextBot } from './bots.js';
 import { shuffle } from './partyBase.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type Credit, type Ctx, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
+import { sharedMaxBet } from '../../../config.js';
 
 /**
  * 🀄 咲楽ノ宮雀荘: 4 人打ち・3 人打ち（サンマ）のリーチ麻雀（東風戦・半荘戦）。足りない席は 🤖 BOT（参加費は胴元が出す）。
@@ -804,7 +805,7 @@ export const mahjong: TableEngine<MjState> = {
     // 賭けない卓（立てる人が選ぶ・運営が賭けなしにしている）は参加費 0
     const free = !ctx.cfg.casino.mahjongBets || str(f, 'wager') === 'off';
     const entry = free ? 0 : intOf(f, 'entry');
-    if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > ctx.cfg.casino.maxBet))) return fail('bad_bet');
+    if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > sharedMaxBet(ctx.cfg.casino)))) return fail('bad_bet');
     const length: MjLength = str(f, 'length') === 'hanchan' ? 'hanchan' : 'tonpu';
     const s = blank(host, entry, length, paceOf(f), ctx.now, str(f, 'players') === '3' ? 3 : 4);
     return ok(s, entryDebit(s, host.id));

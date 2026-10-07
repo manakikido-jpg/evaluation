@@ -17,7 +17,7 @@ import {
   type StringSelectMenuInteraction,
   type UserSelectMenuInteraction,
 } from 'discord.js';
-import { GACHA_TIERS, type GachaConfig, type GuildConfig, type TicketKind } from '../config.js';
+import { GACHA_TIERS, type CasinoConfig, type GachaConfig, type GuildConfig, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { shopItems, type CustomTicket, type GachaPrizeRow, type ShopItem } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -57,6 +57,7 @@ import {
 } from '../services/buffs.js';
 import { customHoldingsOf, customName, listCustomTickets, useCustom } from '../services/customTickets.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
+import { boostCasino, useCasinoBoost, type BoostUse } from '../services/casino/boost.js';
 import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket } from '../services/tickets.js';
 import { announceSpecial, omikujiVoiceBlock, revealOmikuji } from './omikuji.js';
 import { panelMessage } from './panels.js';
@@ -201,6 +202,7 @@ export function gachaMenu(
     `🎟 持っている券: ${allTicketsLine(s.tickets, s.custom) ?? 'なし'}`,
     ...(buffs?.fukuUntil ? [`🧧 福の札: <t:${Math.floor(buffs.fukuUntil.getTime() / 1000)}:f> まで、通話の${coin}が 2 倍`] : []),
     ...(buffs && buffs.luck > 0 ? [`🍀 運気アップ: あと **${buffs.luck}** 回、大吉が出やすい`] : []),
+    ...(buffs?.casinoUntil ? [`🎰 大勝負の札: <t:${Math.floor(buffs.casinoUntil.getTime() / 1000)}:t> まで、カジノの上限が上がっている`] : []),
     ...(s.zodiac?.length ? [`🐉 十二支: ${zodiacLine(s.zodiac)}（${s.zodiac.length}/12）`] : []),
     ...(buffs?.deco ? [`🏷 名前の飾り ${buffs.deco.emoji}: <t:${Math.floor(buffs.deco.until.getTime() / 1000)}:d> まで`] : []),
     '-# 部屋代・授与所の券は使う場面で。札は「🎟 券を使う」から',
@@ -293,6 +295,16 @@ export function pullLine(p: GachaPull, roleName: (id: string) => string, coinNam
   else if (p.coins > 0) got = `${coinName} ${fmt(p.coins)} 枚`;
   else got = 'なし';
   return `${t.emoji} **${t.name}**${p.pity ? '（天井）' : ''} … ${got}`;
+}
+
+/** 🎰 大勝負の札を使ったときの文（上がったあとの上限つき） */
+export function casinoBoostText(c: CasinoConfig, coin: string, r: BoostUse): string {
+  if (r.status === 'no_ticket') return '🎰 大勝負の札がありません。';
+  const b = boostCasino(c);
+  const at = `<t:${Math.floor(r.until.getTime() / 1000)}:t>`;
+  const limits = `1 回 **${fmt(b.maxBet)}** 枚まで${b.dailyBetLimit > 0 ? `・1 日の合計 **${fmt(b.dailyBetLimit)}** 枚まで` : ''}`;
+  if (r.status === 'active') return `🎰 今日はもう大勝負の札が効いています（${at} まで・${limits}）。札は減っていません。`;
+  return [`🎰 大勝負の札を使いました。今日（${at} まで）、カジノで${coin}を ${limits} 賭けられます（ふだんは 1 回 ${fmt(c.maxBet)} 枚${c.dailyBetLimit > 0 ? `・1 日 ${fmt(c.dailyBetLimit)} 枚` : ''}）。`, '-# みんなで払う卓の参加費・ブラインドは、ふだんの上限のままです'].join('\n');
 }
 
 /** 物御籤を引く・券を使う */
@@ -583,6 +595,10 @@ export class GachaApp {
       }
       case 'omikuji_extra':
         return void (await i.update({ content: await this.omikujiExtra(i), components: [] }));
+      case 'casino_boost': {
+        const r = await useCasinoBoost(this.db, i.user.id);
+        return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r), components: [] }));
+      }
       case 'gacha_free':
         return void (await i.update({ content: '🎫 下の「無料券で引く」から引けます（/物御籤 をひらき直してください）。', components: [] }));
       case 'gacha_gold10':

@@ -208,6 +208,13 @@ export function CasinoAdminPage(p: {
               <span>1 日（日本時間）に賭けられる合計（0 で上限なし。大きく賭けられるようにしたら、こちらも上げてください）</span>
               <input type="number" name="dailyBetLimit" min={0} max={100000000} value={String(c.dailyBetLimit)} required />
             </label>
+            <label class="field">
+              <span>
+                🎰 大勝負の札の倍率（2〜20 倍。札を使った日だけ、1 回の最高・ルーレットの 1 か所の最高・1 日の合計がこの倍になる。いまなら 1 回 {fmt(c.maxBet * c.boostMult)}・1 日{' '}
+                {c.dailyBetLimit > 0 ? fmt(c.dailyBetLimit * c.boostMult) : '上限なし'}。札は授与所で売る・物御籤の中身にできる。卓の参加費・ブラインドは上げない）
+              </span>
+              <input type="number" name="boostMult" min={2} max={20} value={String(c.boostMult)} required />
+            </label>
             <fieldset class="perms">
               <legend>🀄 咲楽ノ宮雀荘の賭け</legend>
               <label class="check">

@@ -90,6 +90,7 @@ import {
 } from '../services/casino/keibaStable.js';
 import { fatigueNow } from '../services/casino/keiba.js';
 import { mjRanking, mjStats, monthStartJst } from '../services/casino/mahjongStats.js';
+import { boostCasino, casinoBoostUntil } from '../services/casino/boost.js';
 
 /** ランキングに出る対局数 */
 const MJ_RANK_MIN = 3;
@@ -148,7 +149,12 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     return { session };
   }
 
-  const meOf = async (session: MemberSession): Promise<Me> => ({ session, balance: (await walletOf(db, session.userId)).balance, coin: coin() });
+  const meOf = async (session: MemberSession): Promise<Me> => {
+    const [w, boostUntil] = await Promise.all([walletOf(db, session.userId), casinoBoostUntil(db, session.userId, d.now())]);
+    return { session, balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil } : {}) };
+  };
+  /** その人の上限（🎰 大勝負の札が効いていれば上がる）。画面に出す用。賭けるときは、それぞれのゲームが確かめ直す */
+  const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino) : d.cfg().casino);
 
   /** ログインが要るページ。お休み中はお休みの画面 */
   const page =
@@ -207,7 +213,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         <TablesLobby
           me={me}
           kind="mahjong"
-          casino={d.cfg().casino}
+          casino={casinoOf(me)}
           tables={await openTables(db, 'mahjong')}
           mine={await myTable(db, me.session.userId)}
           msg={casinoMsg(c.req.query('e'))}
@@ -237,7 +243,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     return c.html(
       <CasinoLobby
         me={me}
-        casino={cfg.casino}
+        casino={casinoOf(me)}
         today={await todayBets(db, me.session.userId, d.now())}
         recent={await recentGames(db, me.session.userId, 10)}
         bigWins={wins.map((w) => ({ ...w, name: names.get(w.memberId) ?? 'だれか' }))}
@@ -350,7 +356,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       page(async (c, me) => {
         if (!d.cfg().casino.games.includes(game)) return c.redirect('/casino?e=game_off');
         if (game === 'slots') return slotsPage(c, me);
-        return c.html(<View me={me} casino={d.cfg().casino} row={await shown(c, me, game)} msg={casinoMsg(c.req.query('e'))} />);
+        return c.html(<View me={me} casino={casinoOf(me)} row={await shown(c, me, game)} msg={casinoMsg(c.req.query('e'))} />);
       }),
     );
   }
@@ -368,8 +374,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const hide = row && st && !st.aimed && (row.status === 'playing' || (row.finishedAt && d.now().getTime() - row.finishedAt.getTime() < 60_000)) ? row.id : undefined;
     const data = await slotFloorData(db, cfg, d.now(), hide);
     const msg = casinoMsg(c.req.query('e'));
-    if (!machine) return c.html(<SlotFloor me={me} casino={cfg.casino} data={data} msg={msg} />);
-    return c.html(<SlotsPage me={me} casino={cfg.casino} row={row} msg={msg} machine={machine} data={data} />);
+    if (!machine) return c.html(<SlotFloor me={me} casino={casinoOf(me)} data={data} msg={msg} />);
+    return c.html(<SlotsPage me={me} casino={casinoOf(me)} row={row} msg={msg} machine={machine} data={data} />);
   }
 
   /** 途中のゲームを進める前に: 画面が古い（2 回押した）なら断る */
@@ -494,7 +500,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     '/casino/atslot/demo',
     page(async (c, me) => {
       if (!(await atCfgFor(me.session.userId))) return c.redirect('/casino?e=game_off');
-      return c.html(<AtDemoPage me={me} casino={d.cfg().casino} art={{ ...AT_FILE_ART, ...(await artUrls(db)) }} />);
+      return c.html(<AtDemoPage me={me} casino={casinoOf(me)} art={{ ...AT_FILE_ART, ...(await artUrls(db)) }} />);
     }),
   );
   app.post(
@@ -587,7 +593,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return c.html(
         <VersusLobby
           me={me}
-          casino={d.cfg().casino}
+          casino={casinoOf(me)}
           matches={matches}
           recent={recent}
           names={await matchNames([...matches, ...recent])}
@@ -708,7 +714,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         <TablesLobby
           me={me}
           kind={kind}
-          casino={d.cfg().casino}
+          casino={casinoOf(me)}
           tables={await openTables(db, kind)}
           mine={await myTable(db, me.session.userId)}
           msg={casinoMsg(c.req.query('e'))}
@@ -883,7 +889,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const id = idOf(c);
       const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
       if (!t) return c.redirect('/casino?e=not_found');
-      return c.html(<TablePage me={me} table={t} casino={d.cfg().casino} msg={casinoMsg(c.req.query('e'))} now={d.now().getTime()} />);
+      return c.html(<TablePage me={me} table={t} casino={casinoOf(me)} msg={casinoMsg(c.req.query('e'))} now={d.now().getTime()} />);
     }),
   );
 
@@ -903,7 +909,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const id = idOf(c);
       const t = id ? await tableById(db, id) : undefined;
       if (!t) return c.body(null, 204);
-      return c.html(<TableFrag table={t} me={me} casino={d.cfg().casino} now={d.now().getTime()} />);
+      return c.html(<TableFrag table={t} me={me} casino={casinoOf(me)} now={d.now().getTime()} />);
     }),
   );
 

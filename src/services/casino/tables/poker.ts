@@ -3,6 +3,7 @@ import { BOT_THINK_MS, nextBot } from './bots.js';
 import { pokerBotMove } from './pokerBot.js';
 import { bestHand, handName } from './pokerHands.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type AiMatch, type Credit, type Ctx, type Debit, type Form, type Pace, type Step, type TableEngine, type Who } from './types.js';
+import { sharedMaxBet } from '../../../config.js';
 
 /**
  * ポーカー（テキサスホールデム・ノーリミット）。2〜6 人。
@@ -326,7 +327,7 @@ export const poker: TableEngine<PokerState> = {
   maxSeats: POKER_SEATS,
   create(host, f, ctx) {
     const bb = intOf(f, 'bb');
-    if (!blindOptions(ctx.cfg.casino.minBet, ctx.cfg.casino.maxBet).includes(bb)) return fail('bad_bet');
+    if (!blindOptions(ctx.cfg.casino.minBet, sharedMaxBet(ctx.cfg.casino)).includes(bb)) return fail('bad_bet');
     const s: PokerState = {
       kind: 'poker',
       sb: Math.max(1, Math.floor(bb / 2)),

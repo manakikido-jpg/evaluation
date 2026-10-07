@@ -26,6 +26,7 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   menzaifu: '免罪符',
   otoshidama: 'お年玉袋',
   mycolor: '自分だけの色',
+  casino_boost: '🎰 大勝負の札（持ち物に 1 枚）',
 };
 
 function Csrf(props: { session: AdminSession }) {

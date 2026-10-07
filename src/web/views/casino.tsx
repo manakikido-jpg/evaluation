@@ -21,7 +21,7 @@ const TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roule
 const gameHref = (g: CasinoGame) => (g === 'versus' ? '/casino/versus' : g === 'mahjong' ? '/casino/jansou' : `/casino/tables/${g}`);
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
-export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean };
+export type CasinoMe = { session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date };
 
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean }) {
@@ -249,6 +249,9 @@ export function CasinoLobby(p: LobbyProps) {
             </>
           )}
         </p>
+        {p.me.boostUntil && (
+          <p class="c-boost">🎰 大勝負の札が効いています（今日の夜 0 時まで）。みんなで払う卓の参加費・ブラインドは、ふだんの上限のままです</p>
+        )}
         </div>
         <div class="c-welcome-bal">
           <span class="c-muted">持っている{p.me.coin.name}</span>

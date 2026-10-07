@@ -1639,6 +1639,8 @@ export function createWebApp(deps: WebDeps) {
       maxBet: int('maxBet'),
       rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
+      // 🎰 大勝負の札の倍率（欄がない古い画面から送られたら、今のまま）
+      boostMult: typeof body.boostMult === 'string' ? int('boostMult') : cfg.casino.boostMult,
       mahjongBets: typeof body.mahjongBets === 'string' ? body.mahjongBets === 'yes' : cfg.casino.mahjongBets,
       keibaHorsePrice: typeof body.keibaHorsePrice === 'string' ? int('keibaHorsePrice') : cfg.casino.keibaHorsePrice,
       keibaMaxOwned: typeof body.keibaMaxOwned === 'string' ? int('keibaMaxOwned') : cfg.casino.keibaMaxOwned,

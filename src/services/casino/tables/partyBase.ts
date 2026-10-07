@@ -2,6 +2,7 @@ import type { TableKind } from '../../../config.js';
 import type { Rng } from '../cards.js';
 import { BOT_THINK_MS, nextBot } from './bots.js';
 import { fail, intOf, ok, paceMult, paceOf, str, type AiMatch, type Credit, type Ctx, type Form, type Step, type TableEngine, type Who, type Pace } from './types.js';
+import { sharedMaxBet } from '../../../config.js';
 
 /**
  * みんなで遊ぶトランプ（大富豪・ババ抜き）の共通の流れ。部屋を作った人が参加費を決め、そろったら作った人が始める。
@@ -101,7 +102,7 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
     maxSeats: r.max,
     create(host, f, ctx) {
       const entry = intOf(f, 'entry');
-      if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > ctx.cfg.casino.maxBet))) return fail('bad_bet');
+      if (!Number.isInteger(entry) || entry < 0 || (entry > 0 && (entry < ctx.cfg.casino.minBet || entry > sharedMaxBet(ctx.cfg.casino)))) return fail('bad_bet');
       const s = { ...r.init(f), seats: [seat(host)], entry, phase: 'lobby', deadline: ctx.now + LOBBY_MINUTES * 60_000, createdAt: ctx.now, turn: null, order: [], payouts: [], log: [], pace: paceOf(f) } as unknown as S;
       return ok(s, entry > 0 ? { debits: [{ memberId: host.id, amount: entry, reason: 'casino_bet', limited: true }] } : undefined);
     },
