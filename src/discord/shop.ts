@@ -24,7 +24,7 @@ import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { ticketsOf } from '../services/tickets.js';
 import { canBuyVip } from '../services/vip.js';
-import { bagMessage, OTOSHIDAMA, parseCount, putBag, setBagMessage, undoBag } from '../services/otoshidama.js';
+import { bagMessage, canPutBag, OTOSHIDAMA, parseCount, putBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import {
   activeMyColor,
   activeRolePurchases,
@@ -173,6 +173,7 @@ export class ShopApp {
     if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     if (item.kind === 'mycolor') return this.myColorPick(i, item.id);
     if (item.kind === 'otoshidama') {
+      if (!canPutBag(this.cfg(), [...i.member.roles.cache.keys()])) return void (await i.update(done('お年玉袋を置けるのは、氏子以上になってからです。')));
       const cfg = this.cfg();
       const home = cfg.channels.keidai ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === '境内')?.id;
       const homeName = home ? i.guild.channels.cache.get(home)?.name : undefined;
@@ -542,6 +543,7 @@ export class ShopApp {
   private async otoshidamaModal(i: ChannelSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>, itemId: number, channelId: string): Promise<void> {
     const item = await getItem(this.db, itemId);
     if (!item?.enabled || item.kind !== 'otoshidama') return void (await i.update(done('この授与品は、今は受けられません。')));
+    if (!canPutBag(this.cfg(), [...i.member.roles.cache.keys()])) return void (await i.update(done('お年玉袋を置けるのは、氏子以上になってからです。')));
     const ch = i.guild.channels.cache.get(channelId);
     const me = i.guild.members.me;
     if (!ch?.isTextBased() || !ch.permissionsFor(i.member).has(['ViewChannel', 'SendMessages']) || !me || !ch.permissionsFor(me).has(['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
@@ -585,6 +587,7 @@ export class ShopApp {
       itemId: item.id,
       itemName: item.name,
     });
+    if (r.status === 'rank_too_low') return void (await i.editReply(done('お年玉袋を置けるのは、氏子以上になってからです。')));
     if (r.status === 'bad_amount')
       return void (await i.editReply(done(`入れる量は ${o.minTotal}〜${o.maxTotal.toLocaleString('ja-JP')} 枚、人数は ${o.minCount}〜${o.maxCount} 人にしてください（量は人数以上）。`)));
     if (r.status === 'insufficient') return void (await i.editReply(done(`${this.coinName}が足りません（${r.need.toLocaleString('ja-JP')} 枚必要・いま ${r.balance.toLocaleString('ja-JP')} 枚）。`)));

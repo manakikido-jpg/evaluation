@@ -1,4 +1,5 @@
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm';
+import { currentAutoRank } from '../domain/ranks.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { otoshidamaBags, otoshidamaClaims, type OtoshidamaBag, type OtoshidamaClaim } from '../db/schema.js';
@@ -30,8 +31,17 @@ async function lock(tx: Db, key: string): Promise<void> {
 
 export type PutResult =
   | { status: 'ok'; bag: OtoshidamaBag; balance: number }
+  | { status: 'rank_too_low' }
   | { status: 'bad_amount' }
   | { status: 'insufficient'; need: number; balance: number };
+
+/** 置くのは氏子以上。運営は今までどおり使える。 */
+export function canPutBag(cfg: GuildConfig, roleIds: readonly string[]): boolean {
+  if (cfg.ranks.some((r) => !r.auto && roleIds.includes(r.roleId))) return true;
+  const need = cfg.ranks.find((r) => r.key === 'ujiko' && r.auto);
+  const held = currentAutoRank(cfg.ranks, roleIds);
+  return !!need && !!held && held.requiredGoen >= need.requiredGoen;
+}
 
 /** 読みやすい数（全角・カンマ・「枚」も読む） */
 export function parseCount(raw: string): number {
@@ -40,7 +50,7 @@ export function parseCount(raw: string): number {
 }
 
 /**
- * 袋を置く（入れる量と手数料を払って、袋を作る）。投稿は呼び出し側。役職を問わずだれでも置ける
+ * 袋を置く（入れる量と手数料を払って、袋を作る）。投稿は呼び出し側。置くのは氏子以上
  * （受け取りは経済の見守りの「やり取りが多い組」で見る）
  */
 export async function putBag(
@@ -50,6 +60,7 @@ export async function putBag(
   now = new Date(),
   rand: Rand = Math.random,
 ): Promise<PutResult> {
+  if (!canPutBag(cfg, input.roleIds)) return { status: 'rank_too_low' };
   const { total, count } = input;
   const o = OTOSHIDAMA;
   if (!Number.isInteger(total) || !Number.isInteger(count) || total < o.minTotal || total > o.maxTotal || count < o.minCount || count > o.maxCount || total < count) {

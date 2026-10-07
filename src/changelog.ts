@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-otoshidama-ujiko', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'お年玉袋を置くのは氏子からに', items: ['お年玉袋を置けるのは氏子以上になりました。支払い前にも役職を確かめます。受け取りは今までどおり承認済みの人が対象です。'] },
   { id: '2026-10-07-automatic-pr', date: '2026-10-07', kind: 'improve', where: ['運用'], title: '確認用PRを自動で作る', items: ['Codexのブランチをpushすると、全テスト・型チェック・ビルドの成功後にClaude確認用の下書きPRを作ります。合流はClaudeが行います。'] },
   { id: '2026-10-07-visitor-initial-currency', date: '2026-10-07', kind: 'fix', where: ['Discord'], title: '参拝者ロールで初期通貨を自動発行', items: ['手動で参拝者ロールを付けたときも、初期通貨を1人1回だけ発行します。', '本人に発行のお知らせをDMで送り、運営の記録に発行完了を知らせます。DMが届かなくても発行は取り消しません。'] },
   {

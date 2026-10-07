@@ -41,7 +41,7 @@ describe('🧧 お年玉袋', () => {
     expect(parseCount('abc')).toBeNaN();
   });
 
-  it('置く: 役職を問わずだれでも・量と人数の範囲・入れた量と手数料を払う', async () => {
+  it('置く: 氏子以上・量と人数の範囲・入れた量と手数料を払う', async () => {
     await addCoins(db, OWNER, 2000, 'adjust');
     expect((await putBag(db, cfg, { ...base, total: 50, count: 5 }, T0)).status).toBe('bad_amount');
     expect((await putBag(db, cfg, { ...base, total: 500, count: 1 }, T0)).status).toBe('bad_amount');
@@ -133,9 +133,22 @@ describe('🎨 自分だけの色', () => {
     expect((await walletOf(db, A)).balance).toBe(12_000);
   });
 
-  it('参拝者（1 段目の役職）でも置ける', async () => {
+  it('参拝者（1段目の役職）は置けず、支払いも発生しない', async () => {
     await addCoins(db, OWNER, 2000, 'adjust');
     const r = await putBag(db, cfg, { ...base, roleIds: [ROLE.sanpaisha], total: 500, count: 5 }, T0);
-    expect(r.status).toBe('ok');
+    expect(r.status).toBe('rank_too_low');
+    expect((await walletOf(db, OWNER)).balance).toBe(2000);
   });
+});
+
+
+it('参拝者・未承認では置けず、銭や袋の記録も動かさない。上位の役職は置ける', async () => {
+  await addCoins(db, OWNER, 1000, 'adjust');
+  for (const roleIds of [[], [ROLE.sanpaisha]]) {
+    expect(await putBag(db, cfg, { ...base, roleIds, total: 100, count: 2 }, T0)).toEqual({ status: 'rank_too_low' });
+  }
+  expect((await walletOf(db, OWNER)).balance).toBe(1000);
+  const { otoshidamaBags } = await import('../src/db/schema.js');
+  expect(await db.select().from(otoshidamaBags)).toHaveLength(0);
+  expect((await putBag(db, cfg, { ...base, roleIds: [ROLE.sewayaku], total: 100, count: 2 }, T0)).status).toBe('ok');
 });
