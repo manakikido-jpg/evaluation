@@ -2,6 +2,7 @@ import { OMIKUJI_LINE_MAX, OMIKUJI_SPECIAL_MAX, type GuildConfig } from '../../c
 import { FORTUNE_KEYS, TONE_LABEL, TONES } from '../../omikujiTexts.js';
 import { FORTUNES } from '../../services/omikuji.js';
 import type { AdminSession } from '../../db/schema.js';
+import type { OmikujiResetPlan } from '../../services/omikujiReset.js';
 
 /** 社務所Web の知らせ（⛩ おみくじの文と紙） */
 export const OMIKUJI_TEXTS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
@@ -11,6 +12,10 @@ export const OMIKUJI_TEXTS_FLASH: Record<string, { text: string; kind: 'ok' | 'w
   otexts_long: { text: `⛩ 保存できませんでした。1 行は ${OMIKUJI_LINE_MAX} 文字までです（長い行を 2 つに分けてください）。`, kind: 'warn' },
   otexts_reset: { text: '⛩ おみくじの文を、はじめの文に戻しました（台紙はそのまま）。', kind: 'ok' },
   otexts_bg_deleted: { text: '⛩ 台紙を消しました（ここで描いた柄に戻ります）。', kind: 'ok' },
+  oreset_done: { text: '🔄 今日のおみくじをリセットしました（引いた人はもう一度引けます。くわしくは記録に残りました）。', kind: 'ok' },
+  oreset_none: { text: '🔄 今日はまだだれもおみくじを引いていないので、何もしませんでした。', kind: 'warn' },
+  oreset_stale: { text: '🔄 画面を開いたあとに日が変わったので、リセットしませんでした。もう一度確かめてから押してください。', kind: 'warn' },
+  oreset_confirm: { text: '🔄 リセットしませんでした。「リセットしてよい」にチェックを入れてから押してください。', kind: 'warn' },
 };
 
 const lines = (xs: readonly string[]) => xs.join('\n');
@@ -48,7 +53,7 @@ function BgSlot(props: { k: string; title: string; hash?: string; note?: string;
 }
 
 /** ⛩ おみくじの文と紙: 運勢ごとの一言・項目（運勢の向きごと）・ラッキー場所・台紙。1 行 1 つ */
-export function OmikujiTextsSection(props: { session: AdminSession; cfg: GuildConfig; bg: Record<string, string>; flash?: string }) {
+export function OmikujiTextsSection(props: { session: AdminSession; cfg: GuildConfig; bg: Record<string, string>; flash?: string; reset?: OmikujiResetPlan }) {
   const t = props.cfg.omikujiTexts;
   const sp = props.cfg.omikujiSpecial;
   // 項目は今あるもの＋新しい 1 つ（名前を空にすると消える）
@@ -159,11 +164,48 @@ export function OmikujiTextsSection(props: { session: AdminSession; cfg: GuildCo
           はじめの文に戻す
         </button>
       </form>
+      {props.reset && props.session.level === 'guji' && <ResetDay plan={props.reset} session={props.session} cfg={props.cfg} />}
       {Object.keys(props.bg).map((k) => (
         <form method="post" action={`/settings/omikuji-bg/${k}/delete`} id={`otexts-bgdel-${k}`} hidden>
           <Csrf session={props.session} />
         </form>
       ))}
     </section>
+  );
+}
+
+/** 🔄 今日のおみくじをリセット（宮司だけ。荒らし対策などで変になったとき） */
+function ResetDay(props: { plan: OmikujiResetPlan; session: AdminSession; cfg: GuildConfig }) {
+  const { plan } = props;
+  const coin = (n: number) => `${props.cfg.economy.currencyEmoji}${props.cfg.economy.currencyName} ${n.toLocaleString('ja-JP')}`;
+  const short = plan.coins - plan.take;
+  return (
+    <div class="otexts-dayreset">
+      <h3>🔄 今日のおみくじをリセット（{plan.date}）</h3>
+      <p class="note">
+        今日おみくじを引いた<strong>全員</strong>を、引く前に戻します。引いた記録（「もう 1 回」も）を消すので、もう一度引けます。今日のおみくじと連続日数のおまけで入った銭・券を取り戻します（もう使っていたら、残っている分まで。マイナスにはしません）。おまけの称号ロールはそのままです。
+      </p>
+      {plan.members.length === 0 ? (
+        <p class="note">今日はまだだれも引いていません。</p>
+      ) : (
+        <>
+          <p>
+            引いた人 <strong>{plan.members.length} 人</strong>・記録 <strong>{plan.draws} 回</strong>・入った銭 <strong>{coin(plan.coins)}</strong> → 取り戻せる銭 <strong>{coin(plan.take)}</strong>
+            {short > 0 ? `（もう使われていて取り戻せない分 ${coin(short)}）` : ''}
+          </p>
+          <form method="post" action="/settings/omikuji-reset" class="otexts-reset" data-confirm={`今日（${plan.date}）のおみくじを、引いた ${plan.members.length} 人ぶんリセットします。元に戻せません。よいですか？`}>
+            <Csrf session={props.session} />
+            <input type="hidden" name="date" value={plan.date} />
+            <label class="field check">
+              <input type="checkbox" name="confirm" value="yes" required />
+              <span>リセットしてよい</span>
+            </label>
+            <button type="submit" class="danger">
+              今日のおみくじをリセットする
+            </button>
+          </form>
+        </>
+      )}
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikuj
 import { fortuneOf, omikujiDailyAverage, omikujiSayings, specialIndex } from '../services/omikuji.js';
 import { renderSlip } from '../services/omikujiSlip.js';
 import { trialUnei } from '../services/omikujiTrial.js';
+import { planOmikujiReset, resetOmikujiDay } from '../services/omikujiReset.js';
 import { aiStats } from '../services/casino/aiStats.js';
 import { FORTUNE_KEYS, toneOf, TONES, type FortuneKey } from '../omikujiTexts.js';
 import { openBells } from '../services/opsWatch.js';
@@ -2150,6 +2151,7 @@ export function createWebApp(deps: WebDeps) {
         omikujiArt={await omikujiArtHashes(db)}
         slipBg={await slipBgHashes(db)}
         omikujiDaily={await omikujiDailyAverage(db, now(), { fresh: true })}
+        omikujiReset={c.get('session').level === 'guji' ? await planOmikujiReset(db, jstDate(now()), cfg.omikujiStreak) : undefined}
       />,
     );
   });
@@ -2289,6 +2291,26 @@ export function createWebApp(deps: WebDeps) {
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'omikuji.texts_reset', detail: {}, via: 'web' });
     return c.redirect('/settings?msg=otexts_reset&at=omikujitexts#sec-omikujitexts');
+  });
+  // 🔄 今日のおみくじをリセット（引いた全員。記録を消し、入った銭・券を残高まで取り戻す）
+  app.post('/settings/omikuji-reset', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const back = (code: string) => c.redirect(`/settings?msg=${code}&at=omikujitexts#sec-omikujitexts`);
+    if (body.confirm !== 'yes') return back('oreset_confirm');
+    const date = jstDate(now());
+    // 画面を開いたあとに日が変わっていたら、ちがう日を消さないように止める
+    if (body.date !== date) return back('oreset_stale');
+    const by = c.get('session').userId;
+    const plan = await resetOmikujiDay(db, date, cfg.omikujiStreak, by);
+    if (!plan.members.length) return back('oreset_none');
+    await audit(db, {
+      actorId: by,
+      action: 'omikuji.reset_day',
+      detail: { date, members: plan.members.length, draws: plan.draws, coins: plan.coins, take: plan.take, memberIds: plan.members.map((m) => m.memberId) },
+      via: 'web',
+    });
+    return back('oreset_done');
   });
   app.post('/settings/omikuji-bg/:k/delete', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);

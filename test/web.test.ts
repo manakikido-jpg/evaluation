@@ -635,6 +635,32 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(actions.slice(before)[0]).toMatch(/^send \d+ -# 🧪 運営吉の試し/);
   });
 
+  it('🔄 今日のおみくじをリセット: 宮司だけ・チェックが要る・日が変わったら止める。引いた全員の記録と銭を戻し、記録に残す', async () => {
+    const { drawOmikuji, omikujiToday } = await import('../src/services/omikuji.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    const economy = { ...cfg.economy, omikujiBase: 10 };
+    await drawOmikuji(db, economy, STAFF, clock, () => 0.5);
+    await drawOmikuji(db, economy, GUJI, clock, () => 0.5);
+    const s = await login(STAFF);
+    expect((await post('/settings/omikuji-reset', s, { _csrf: await csrfOf(s), confirm: 'yes', date: '2026-09-25' })).status).toBe(403);
+    const g = await login(GUJI);
+    const page = await (await get('/settings', g)).text();
+    expect(page).toContain('🔄 今日のおみくじをリセット（2026-09-25）');
+    expect(page).toContain('引いた人 <strong>2 人</strong>');
+    const csrf = await csrfOf(g);
+    const go = async (body: Record<string, string>) => (await post('/settings/omikuji-reset', g, { _csrf: csrf, ...body })).headers.get('location');
+    expect(await go({ date: '2026-09-25' })).toBe('/settings?msg=oreset_confirm&at=omikujitexts#sec-omikujitexts');
+    expect(await go({ confirm: 'yes', date: '2026-09-24' })).toBe('/settings?msg=oreset_stale&at=omikujitexts#sec-omikujitexts');
+    expect((await omikujiToday(db, STAFF, clock)).drawn).toBe(true);
+    expect(await go({ confirm: 'yes', date: '2026-09-25' })).toBe('/settings?msg=oreset_done&at=omikujitexts#sec-omikujitexts');
+    expect((await omikujiToday(db, STAFF, clock)).drawn).toBe(false);
+    expect((await walletOf(db, STAFF)).balance).toBe(0);
+    expect((await walletOf(db, GUJI)).balance).toBe(0);
+    expect((await listAudit(db, { action: 'omikuji.reset_day' }))[0]).toMatchObject({ actorId: GUJI, detail: { date: '2026-09-25', members: 2, draws: 2 } });
+    expect(await go({ confirm: 'yes', date: '2026-09-25' })).toBe('/settings?msg=oreset_none&at=omikujitexts#sec-omikujitexts');
+    expect(await (await get('/settings', g)).text()).toContain('今日はまだだれも引いていません。');
+  });
+
   it('設定は宮司だけ。保存すると反映され、記録に残る', async () => {
     const s = await login(STAFF);
     expect((await get('/settings', s)).status).toBe(403);

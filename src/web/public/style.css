@@ -976,6 +976,7 @@ form.dirty .art-savebar { border-color: #e0a020; }
 .otexts-tones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .slip-preview img { display: block; width: 100%; max-width: 220px; aspect-ratio: 1 / 2; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: #f3ece0; }
 .otexts-reset { margin-top: 10px; }
+.otexts-dayreset { margin-top: 22px; padding-top: 6px; border-top: 1px dashed var(--line); }
 #sec-omikujitexts h3 { margin-top: 18px; }
 @media (max-width: 720px) {
   .otexts-row, .otexts-tones { grid-template-columns: 1fr; }

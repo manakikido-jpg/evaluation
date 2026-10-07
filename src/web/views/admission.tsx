@@ -8,6 +8,7 @@ import { specialPercent } from '../../services/omikuji.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { Avatar, Layout } from './layout.js';
 import { OmikujiTextsSection } from './omikujiTexts.js';
+import type { OmikujiResetPlan } from '../../services/omikujiReset.js';
 
 type Names = Map<string, string>;
 const who = (names: Names, id: string | null) => (id ? (id === 'system' ? '自動' : names.get(id) ?? `ID ${id}`) : '—');
@@ -1079,6 +1080,8 @@ export function SettingsPage(props: {
   slipBg?: Record<string, string>;
   /** 🎴 最近 30 日のおみくじの 1 日の平均回数（運営吉の確率を出す） */
   omikujiDaily?: number;
+  /** 🔄 今日のおみくじをリセットしたら、どうなるか（宮司だけ） */
+  omikujiReset?: OmikujiResetPlan;
 }) {
   const { cfg, fileCfg } = props;
   const e = cfg.economy;
@@ -1565,7 +1568,7 @@ export function SettingsPage(props: {
       </form>
       {props.notify && <NotifySection session={props.session} notify={props.notify} flash={props.at === 'notify' ? props.flash : undefined} textChannels={props.textChannels ?? []} botCanMentionAll={props.botCanMentionAll} />}
       <UneiSection session={props.session} cfg={cfg} art={props.omikujiArt ?? {}} flash={props.at === 'unei' ? props.flash : undefined} daily={props.omikujiDaily ?? 0} />
-      <OmikujiTextsSection session={props.session} cfg={cfg} bg={props.slipBg ?? {}} flash={props.at === 'omikujitexts' ? props.flash : undefined} />
+      <OmikujiTextsSection session={props.session} cfg={cfg} bg={props.slipBg ?? {}} flash={props.at === 'omikujitexts' ? props.flash : undefined} reset={props.omikujiReset} />
       <section class="card anchor" id="sec-accounts">
         <h2>🪪 社務所Web のアカウント（ID とパスワード）</h2>
         <p class="note">
