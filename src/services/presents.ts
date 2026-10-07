@@ -1,7 +1,8 @@
+import { spendWithin } from './economy.js';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { TICKET_KINDS, type GuildConfig, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { customTicketHoldings, customTickets, tickets } from '../db/schema.js';
+import { customTicketHoldings, customTickets, tickets, wallets } from '../db/schema.js';
 import { giftBlockedRank } from '../domain/ranks.js';
 import { customHoldingsOf, customName } from './customTickets.js';
 import { TICKET_LABEL, ticketName, ticketsOf } from './tickets.js';
@@ -14,6 +15,9 @@ import { TICKET_LABEL, ticketName, ticketsOf } from './tickets.js';
 export type PresentItem = { kind: 'ticket'; ticket: TicketKind } | { kind: 'custom'; id: number };
 
 export const PRESENT_MAX = 100;
+/** 持ち物は1個100銭を基準に、20%を送り手が銭で払う。 */
+export const PRESENT_BASE_PRICE = 100;
+export const presentFee = (count: number) => count * 20;
 
 export function parsePresentItem(raw: string): PresentItem | undefined {
   if ((TICKET_KINDS as readonly string[]).includes(raw)) return { kind: 'ticket', ticket: raw as TicketKind };
@@ -41,6 +45,7 @@ export type PresentResult =
   | { status: 'ok'; label: string; count: number; left: number }
   | { status: 'self' | 'not_member' | 'invalid' | 'no_rank' }
   | { status: 'rank_too_low'; rankName: string }
+  | { status: 'insufficient'; fee: number; balance: number }
   | { status: 'not_enough'; label: string; have: number };
 
 /** 贈る: 送る人から減らして、相手に足す（同時に押しても持っている分より多くは減らない） */
@@ -54,6 +59,14 @@ export async function sendPresent(db: Db, cfg: GuildConfig, from: PresentMember,
   if (need) return { status: 'rank_too_low', rankName: need.name };
 
   return db.transaction(async (tx) => {
+    for (const id of [from.id, to.id].sort()) await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'shop:' + id}))`);
+    // 送り手の残高をロック。券と手数料を同じ取引で動かす。
+    const fee = presentFee(count);
+    const [wallet] = await tx.select({ balance: wallets.balance }).from(wallets).where(eq(wallets.memberId, from.id)).for('update');
+    if (!wallet || wallet.balance < fee) return { status: 'insufficient' as const, fee, balance: wallet?.balance ?? 0 };
+    const charge = async () => {
+      if (!(await spendWithin(tx, from.id, fee, 'gift_fee', { to: to.id, item, count, basePrice: PRESENT_BASE_PRICE, percent: 20 }))) throw new Error('present fee payment failed');
+    };
     if (item.kind === 'ticket') {
       const label = ticketName(item.ticket);
       const [row] = await tx
@@ -62,6 +75,7 @@ export async function sendPresent(db: Db, cfg: GuildConfig, from: PresentMember,
         .where(and(eq(tickets.memberId, from.id), eq(tickets.kind, item.ticket), gte(tickets.count, count)))
         .returning({ count: tickets.count });
       if (!row) return { status: 'not_enough' as const, label, have: (await ticketsOf(tx, from.id))[item.ticket] };
+      await charge();
       await tx
         .insert(tickets)
         .values({ memberId: to.id, kind: item.ticket, count })
@@ -83,6 +97,7 @@ export async function sendPresent(db: Db, cfg: GuildConfig, from: PresentMember,
         .where(and(eq(customTicketHoldings.memberId, from.id), eq(customTicketHoldings.ticketId, item.id)));
       return { status: 'not_enough' as const, label, have: have?.count ?? 0 };
     }
+    await charge();
     await tx
       .insert(customTicketHoldings)
       .values({ memberId: to.id, ticketId: item.id, count })
@@ -91,7 +106,7 @@ export async function sendPresent(db: Db, cfg: GuildConfig, from: PresentMember,
   });
 }
 
-export const PRESENT_MESSAGES: Record<Exclude<PresentResult['status'], 'ok' | 'rank_too_low' | 'not_enough'>, string> = {
+export const PRESENT_MESSAGES: Record<Exclude<PresentResult['status'], 'ok' | 'rank_too_low' | 'not_enough' | 'insufficient'>, string> = {
   self: '自分には贈れません。',
   not_member: 'その方には贈れません（BOT や、まだ役職のない方・サーバーにいない方）。',
   invalid: '贈るものか数が正しくありません（候補から選んで、数は 1〜100）。',

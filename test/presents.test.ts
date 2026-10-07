@@ -1,3 +1,4 @@
+import { addCoins, walletOf } from '../src/services/economy.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { addCustom, createCustomTicket, customHoldingsOf } from '../src/services/customTickets.js';
@@ -13,6 +14,8 @@ let db: Db;
 let close: () => Promise<void>;
 beforeEach(async () => {
   ({ db, close } = await makeDb());
+  await addCoins(db, A, 1000, 'adjust');
+  await addCoins(db, B, 1000, 'adjust');
 });
 afterEach(async () => {
   await close();
@@ -71,6 +74,46 @@ describe('🎒 /持ち物 の見た目', () => {
     const counts = (itemGiveCount(custom, to).components[0]!.components[0] as { options: { value: string; label: string }[] }).options;
     expect(counts.map((o) => o.value)).toEqual(['1', '2', '3', '5', '10', '12']);
     expect(counts.at(-1)!.label).toBe('全部（12 枚）');
-    expect(JSON.stringify(itemGiveConfirm(custom, to, 5))).toContain(`items:ok:custom:7:${to.id}:5`);
+    expect(JSON.stringify(itemGiveConfirm(custom, to, 5))).toContain('present:ok:preview');
   });
+});
+
+
+it('持ち物の手数料は1個20銭。残高不足・券不足では移動も徴収もしない', async () => {
+  const { spendWithin, recentCoinTx } = await import('../src/services/economy.js');
+  await db.transaction(tx => spendWithin(tx, A, 990, 'adjust'));
+  await addTickets(db, A, 'fuku', 1);
+  const item = { kind: 'ticket', ticket: 'fuku' } as const;
+  expect(await sendPresent(db, cfg, ujiko(A), ujiko(B), item, 1)).toEqual({ status: 'insufficient', fee: 20, balance: 10 });
+  expect((await ticketsOf(db, A)).fuku).toBe(1);
+  expect((await ticketsOf(db, B)).fuku).toBe(0);
+  await addCoins(db, A, 30, 'adjust');
+  const results = await Promise.all([sendPresent(db, cfg, ujiko(A), ujiko(B), item, 1), sendPresent(db, cfg, ujiko(A), ujiko(B), item, 1)]);
+  expect(results.map(r => r.status).sort()).toEqual(['not_enough', 'ok']);
+  expect((await walletOf(db, A)).balance).toBe(20);
+  expect((await walletOf(db, B)).balance).toBe(1000);
+  expect((await ticketsOf(db, B)).fuku).toBe(1);
+  expect((await recentCoinTx(db, A)).filter(r => r.reason === 'gift_fee')).toMatchObject([{ amount: -20 }]);
+});
+
+
+it('持ち物の確定ボタンを同時に二度押しても、券と手数料は1回だけ動く', async () => {
+  const { PresentApp } = await import('../src/discord/presents.js');
+  const app = new PresentApp(db, () => cfg);
+  await addTickets(db, A, 'fuku', 3);
+  const view = (app as any).confirmHolding(A, { value: 'fuku', label: '福の札', count: 3 }, { id: B, name: 'さくら' }, 1);
+  const customId = view.components[0].components[0].custom_id;
+  const replies: string[] = [];
+  const makeInteraction = () => ({
+    inCachedGuild: () => true, guildId: cfg.guildId, isAutocomplete: () => false, isChatInputCommand: () => false,
+    isButton: () => true, isRepliable: () => true, customId, user: { id: A }, member: { displayName: 'もみじ', roles: { cache: new Map([[ROLE.ujiko, {}]]) } },
+    guild: { members: { fetch: async () => ({ roles: { cache: new Map([[ROLE.ujiko, {}]]) }, user: { bot: false } }) } },
+    client: { users: { send: async () => undefined } }, deferUpdate: async () => undefined,
+    update: async (p: any) => { replies.push(p.content); }, editReply: async (p: any) => { replies.push(p.content); },
+  });
+  await Promise.all([app.onInteraction(makeInteraction() as any), app.onInteraction(makeInteraction() as any)]);
+  expect((await ticketsOf(db, A)).fuku).toBe(2);
+  expect((await ticketsOf(db, B)).fuku).toBe(1);
+  expect((await walletOf(db, A)).balance).toBe(980);
+  expect(replies.some(r => r.includes('手数料 20'))).toBe(true);
 });

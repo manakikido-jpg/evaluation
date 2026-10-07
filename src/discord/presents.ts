@@ -14,7 +14,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
-import { parsePresentItem, PRESENT_MAX, PRESENT_MESSAGES, presentChoices, sendPresent, type Holding, type PresentItem } from '../services/presents.js';
+import { parsePresentItem, presentFee, PRESENT_MAX, PRESENT_MESSAGES, presentChoices, sendPresent, type Holding, type PresentItem } from '../services/presents.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 確かめるボタンを押せる時間 */
@@ -95,11 +95,11 @@ export function itemGiveCount(h: Holding, to: { id: string; name: string }) {
 }
 
 /** 贈る前に確かめる */
-export function itemGiveConfirm(h: Holding, to: { id: string; name: string }, count: number) {
+export function itemGiveConfirm(h: Holding, to: { id: string; name: string }, count: number, currencyName = '銭', nonce = 'preview') {
   return {
     content: '',
-    embeds: [{ title: `💝 ${to.name} さんに ${h.label} ×${count}`, description: '贈ったら取り消せません。相手には DM で知らせます。', color: COLOR }],
-    components: [row(btn(`items:ok:${h.value}:${to.id}:${count}`, `💝 ${count} 枚贈る`, 3), btn('items:back', 'やめる'))],
+    embeds: [{ title: `💝 ${to.name} さんに ${h.label} ×${count}`, description: `手数料20%: **${presentFee(count)} ${currencyName}**を送る人が払います（1個の基準価格100）。\n贈ったら取り消せません。相手には DM で知らせます。`, color: COLOR }],
+    components: [row(btn(`present:ok:${nonce}`, `💝 ${count} 枚贈る`, 3), btn('items:back', 'やめる'))],
   };
 }
 
@@ -129,16 +129,11 @@ export class PresentApp {
       if (interaction.isButton() && id.startsWith('items:give:')) return await this.itemGive(interaction, id.slice('items:give:'.length));
       if (interaction.isUserSelectMenu() && id.startsWith('items:to:')) return await this.itemTo(interaction, id.slice('items:to:'.length));
       if (interaction.isStringSelectMenu() && id.startsWith('items:count:')) {
-        const [, , value, toId] = id.split(':');
-        return await this.itemCount(interaction, value ?? '', toId ?? '', Number(interaction.values[0]));
-      }
-      if (interaction.isButton() && id.startsWith('items:ok:')) {
         const parts = id.split(':');
-        // value は custom:ID のときに「:」を含む
-        const count = Number(parts.at(-1));
-        const toId = parts.at(-2) ?? '';
-        return await this.itemSend(interaction, parts.slice(2, -2).join(':'), toId, count);
+        const toId = parts.pop() ?? '';
+        return await this.itemCount(interaction, parts.slice(2).join(':'), toId, Number(interaction.values[0]));
       }
+      if (interaction.isButton() && id.startsWith('items:ok:')) return void (await interaction.update({ content: '手数料の表示を確かめるため、もう一度 `/持ち物` から開いてください。', embeds: [], components: [] }));
     } catch (err) {
       logger.error({ err }, 'present failed');
       if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
@@ -172,6 +167,7 @@ export class PresentApp {
     await i.reply({
       content: [
         `💝 **${to.displayName}** さんに **${choice.label} ×${count}** を贈りますか？`,
+        `手数料20%: **${presentFee(count)} ${this.cfg().economy.currencyName}**を追加で払います（1個の基準価格100）。`,
         ...(note ? [`> ${note.replace(/\n/g, ' ')}`] : []),
         '-# 贈ったら取り消せません。相手には DM で知らせます',
       ].join('\n'),
@@ -200,7 +196,8 @@ export class PresentApp {
       return void (await i.update({ content: '時間が経ったので、もう一度 `/贈る` からやり直してください。', components: [] }));
     }
     this.pending.delete(nonce!);
-    await i.update({ content: await this.deliver(i, p.toId, p.item, p.count, p.note), embeds: [], components: [], allowedMentions: { parse: [] } });
+    await i.deferUpdate();
+    await i.editReply({ content: await this.deliver(i, p.toId, p.item, p.count, p.note), embeds: [], components: [], allowedMentions: { parse: [] } });
   }
 
   /** 贈る（確かめたあと）。結果の文を返す */
@@ -214,15 +211,16 @@ export class PresentApp {
       item,
       count,
     );
+    if (r.status === 'insufficient') return `手数料 ${r.fee} ${this.cfg().economy.currencyName}が必要です（残高 ${r.balance}）。券は移動していません。`;
     if (r.status === 'rank_too_low') return `贈れるのは「${r.rankName}」になってからです。`;
     if (r.status === 'not_enough') return `${r.label} が足りません（いま ${r.have} 枚）。`;
     if (r.status !== 'ok') return PRESENT_MESSAGES[r.status];
-    await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'present.send', detail: { item, label: r.label, count: r.count, note: note || undefined }, via: 'discord' });
+    await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'present.send', detail: { item, label: r.label, count: r.count, fee: presentFee(r.count), note: note || undefined }, via: 'discord' });
     const dm = await i.client.users
       .send(toId, [`💝 **${i.member.displayName}** さんから **${r.label} ×${r.count}** が届きました（咲楽ノ宮）。`, ...(note ? [`> ${note.replace(/\n/g, ' ')}`] : []), '-# 持っている券は `/持ち物` で見て、使う・贈るができます'].join('\n'))
       .then(() => true)
       .catch(() => false);
-    return `💝 <@${toId}> さんに **${r.label} ×${r.count}** を贈りました（残り ${r.left} 枚）。${dm ? '' : '\n-# 相手が DM を受け取らない設定のため、知らせは届いていません'}`;
+    return `💝 <@${toId}> さんに **${r.label} ×${r.count}** を贈りました（残り ${r.left} 枚）。手数料 ${presentFee(r.count)} ${this.cfg().economy.currencyName}を払いました。${dm ? '' : '\n-# 相手が DM を受け取らない設定のため、知らせは届いていません'}`;
   }
 
   // ───────── 🎒 /持ち物 ─────────
@@ -257,7 +255,7 @@ export class PresentApp {
     if (toId === i.user.id) return void (await i.update({ ...(itemGiveTarget(h) as object), content: PRESENT_MESSAGES.self } as never));
     if (!to || i.users.get(toId)?.bot) return void (await i.update({ ...(itemGiveTarget(h) as object), content: PRESENT_MESSAGES.not_member } as never));
     const target = { id: toId, name: to.displayName };
-    await i.update((h.count > 1 ? itemGiveCount(h, target) : itemGiveConfirm(h, target, 1)) as never);
+    await i.update((h.count > 1 ? itemGiveCount(h, target) : this.confirmHolding(i.user.id, h, target, 1)) as never);
   }
 
   private async itemCount(i: StringSelectMenuInteraction<'cached'>, value: string, toId: string, count: number): Promise<void> {
@@ -266,13 +264,14 @@ export class PresentApp {
     if (!h || !to || !Number.isInteger(count) || count < 1 || count > h.count) {
       return void (await i.update(itemsView(await presentChoices(this.db, i.user.id), '枚数を選び直してください。') as never));
     }
-    await i.update(itemGiveConfirm(h, { id: toId, name: to.displayName }, count) as never);
+    await i.update(this.confirmHolding(i.user.id, h, { id: toId, name: to.displayName }, count) as never);
   }
 
-  private async itemSend(i: ButtonInteraction<'cached'>, value: string, toId: string, count: number): Promise<void> {
-    const item = parsePresentItem(value);
-    if (!item || !/^\d{17,20}$/.test(toId) || !Number.isInteger(count)) return void (await i.update(itemsView(await presentChoices(this.db, i.user.id)) as never));
-    const text = await this.deliver(i, toId, item, count);
-    await i.update({ ...(itemsView(await presentChoices(this.db, i.user.id), text) as object), allowedMentions: { parse: [] } } as never);
+  private confirmHolding(by: string, h: Holding, to: { id: string; name: string }, count: number) {
+    const item = parsePresentItem(h.value)!;
+    const nonce = randomUUID();
+    for (const [k, p] of this.pending) if (Date.now() - p.at > PENDING_MS) this.pending.delete(k);
+    this.pending.set(nonce, { item, label: h.label, count, toId: to.id, note: '', by, at: Date.now() });
+    return itemGiveConfirm(h, to, count, this.cfg().economy.currencyName, nonce);
   }
 }

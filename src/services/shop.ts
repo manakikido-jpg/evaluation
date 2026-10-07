@@ -2,7 +2,7 @@ import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { salePrice } from './economyEvents.js';
 import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
-import { coinTx, shopItems, shopPurchases, type ShopItem, type ShopPurchase } from '../db/schema.js';
+import { coinTx, shopItems, shopPurchases, wallets, type ShopItem, type ShopPurchase } from '../db/schema.js';
 import { currentAutoRank, giftBlockedRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
@@ -16,6 +16,10 @@ import { addTickets, useTicket } from './tickets.js';
 
 export type ShopKind = ShopItem['kind'];
 const DAY = 86_400_000;
+/** 送金・贈り物・購入するプレゼントの手数料。端数は切り上げる。 */
+export const GIFT_FEE_PERCENT = 20;
+export const giftFee = (amount: number) => Math.ceil(amount / 5);
+export const giftCost = (amount: number) => amount + giftFee(amount);
 
 /** 1 人ずつ順番に（二重に押しても二重に払わない） */
 async function lock(tx: Db, memberId: string): Promise<void> {
@@ -101,7 +105,7 @@ export async function seedDefaultItems(
   }
   const singles: Omit<typeof shopItems.$inferInsert, 'id' | 'updatedAt' | 'position'>[] = [
     { kind: 'hanafubuki', name: '花吹雪', emoji: '🌸', description: '選んだ人へ、#境内 にお祝いのメッセージを出す', price: 300 },
-    { kind: 'gift', name: '贈り物', emoji: '🎁', description: '銭をほかの人に贈る（手数料なし）', price: 0 },
+    { kind: 'gift', name: '贈り物', emoji: '🎁', description: '銭をほかの人に贈る（手数料20%を追加で払う）', price: 0 },
     { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '自分の自己紹介（#絵馬-男性・#絵馬-女性）を 7 日間ピン留め', price: 800, durationDays: 7 },
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
     { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
@@ -268,10 +272,12 @@ export async function buyPresent(
       .where(and(eq(shopPurchases.memberId, to.id), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt)));
     const same = active.find((p) => p.roleId === item.roleId);
     if (same && !item.durationDays) return { status: 'owned' as const };
-    if (price > 0 && !(await spendWithin(tx, from.id, price, 'shop', { itemId: item.id, name: item.name, presentTo: to.id }))) {
-      return { status: 'insufficient' as const, price, balance: (await walletOf(tx, from.id)).balance };
+    const total = giftCost(price);
+    if (total > 0 && !(await spendWithin(tx, from.id, total, 'shop', { itemId: item.id, name: item.name, presentTo: to.id, basePrice: price, fee: giftFee(price) }))) {
+      return { status: 'insufficient' as const, price: total, balance: (await walletOf(tx, from.id)).balance };
     }
-    const r = await recordRoleItem(tx, item, to.id, now, price, active, same);
+    // 払い戻しでは手数料も戻すため、実際に払った合計を記録する。
+    const r = await recordRoleItem(tx, item, to.id, now, total, active, same);
     const [purchase] = await tx.update(shopPurchases).set({ giftFrom: from.id }).where(eq(shopPurchases.id, r.purchase.id)).returning();
     return { status: 'ok' as const, purchase: purchase!, balance: (await walletOf(tx, from.id)).balance, removeRoleIds: r.removeRoleIds };
   });
@@ -438,7 +444,7 @@ export function giftDailyLimitOf(cfg: GuildConfig, roleIds: readonly string[]): 
 }
 
 /**
- * 花びらを贈る（手数料なし）。贈れるのは役職（参拝者から）のある人か運営。
+ * 花びらを贈る（送り手が手数料 20% を追加で払う）。贈れるのは役職（参拝者から）のある人か運営。
  * 1 日に贈れる合計に上限がある（サブアカウントで集めにくいように）。
  */
 export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; roleIds: readonly string[] }, toId: string, amount: number, now = new Date()): Promise<GiftResult> {
@@ -448,10 +454,15 @@ export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; rol
   if (need) return { status: 'rank_too_low', rankName: need.name };
   if (!Number.isInteger(amount) || amount < e.giftMin || amount > e.giftMax) return { status: 'bad_amount', min: e.giftMin, max: e.giftMax };
   return db.transaction(async (tx) => {
-    await lock(tx, from.id);
+    for (const id of [from.id, toId].sort()) await lock(tx, id);
     const left = giftDailyLimitOf(cfg, from.roleIds) - (await giftSentToday(tx, from.id, now));
     if (amount > left) return { status: 'daily_limit', left: Math.max(0, left) };
-    if (!(await spendWithin(tx, from.id, amount, 'gift_send', { to: toId }))) return { status: 'insufficient', balance: (await walletOf(tx, from.id)).balance };
+    const fee = giftFee(amount);
+    // 手数料込みの残高を行ロックで確かめ、途中だけ払うことを防ぐ。
+    const [wallet] = await tx.select({ balance: wallets.balance }).from(wallets).where(eq(wallets.memberId, from.id)).for('update');
+    if (!wallet || wallet.balance < amount + fee) return { status: 'insufficient', balance: wallet?.balance ?? 0 };
+    if (!(await spendWithin(tx, from.id, amount, 'gift_send', { to: toId }))) throw new Error('gift payment failed');
+    if (!(await spendWithin(tx, from.id, fee, 'gift_fee', { to: toId, amount, percent: GIFT_FEE_PERCENT }))) throw new Error('gift fee payment failed');
     await addCoins(tx, toId, amount, 'gift_receive', { from: from.id });
     return { status: 'ok', balance: (await walletOf(tx, from.id)).balance };
   });

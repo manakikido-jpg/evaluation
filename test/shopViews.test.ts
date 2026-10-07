@@ -133,3 +133,12 @@ describe('新しい授与品の見た目', () => {
     expect(JSON.stringify(otoshidamaPickChannel(bag, cfg.economy, 1000))).not.toContain('shop:otoshi:here');
   });
 });
+
+
+it('購入プレゼントは手数料込みの合計と残高を表示し、手数料が足りなければ確定できない', async () => {
+  const { presentConfirm } = await import('../src/discord/shopViews.js');
+  const item = { id: 99, name: '称号', emoji: '🌸', kind: 'role', price: 100, enabled: true, roleId: '123', roleGroup: 'title', durationDays: null } as ShopItem;
+  const view = presentConfirm(item, cfg.economy, 100, { id: '456', name: 'さくら' });
+  expect(view.embeds[0]!.description).toContain('合計支払い: **120 枚**');
+  expect(view.components[0]!.components[0]).toMatchObject({ disabled: true, label: '🎁 120 枚で贈る' });
+});

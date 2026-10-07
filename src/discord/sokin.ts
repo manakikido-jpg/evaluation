@@ -17,7 +17,7 @@ import { giftBlockedRank } from '../domain/ranks.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
 import { walletOf } from '../services/economy.js';
-import { giftDailyLimitOf, giftSentToday, giveGift, type GiftResult } from '../services/shop.js';
+import { giftCost, giftFee, giftDailyLimitOf, giftSentToday, giveGift, type GiftResult } from '../services/shop.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** パネルを開いたままにできる時間（さわるたびに延びる） */
@@ -46,7 +46,7 @@ export function sokinBlocker(e: EconomyConfig, d: SokinDraft, info: { balance: n
   if (!d.amount) return '枚数を選んでください';
   if (d.amount < e.giftMin || d.amount > e.giftMax) return `${fmt(e.giftMin)}〜${fmt(e.giftMax)} 枚の間で選んでください`;
   if (d.amount > info.left) return `今日送れるのは、あと ${fmt(info.left)} 枚までです`;
-  if (d.amount > info.balance) return `${e.currencyName}が足りません（いま ${fmt(info.balance)} 枚）`;
+  if (giftCost(d.amount) > info.balance) return `${e.currencyName}が足りません（いま ${fmt(info.balance)} 枚）`;
   return undefined;
 }
 
@@ -55,7 +55,7 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
   const coin = `${e.currencyEmoji}${e.currencyName}`;
   const blocker = sokinBlocker(e, d, info);
   const presets = SOKIN_PRESETS.filter((n) => n >= e.giftMin && n <= e.giftMax);
-  const can = Math.min(info.balance, info.left);
+  const can = info.left;
   return {
     content: note,
     embeds: [
@@ -64,6 +64,7 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
         description: [
           `相手: ${d.toName ? `**${d.toName}** さん` : '（下で選ぶ）'}`,
           `枚数: ${d.amount ? `${coin} **${fmt(d.amount)} 枚**` : '（下で選ぶ）'}`,
+          ...(d.amount ? [`手数料（20%）: ${fmt(giftFee(d.amount))} 枚・合計支払い: **${fmt(giftCost(d.amount))} 枚**`] : ['手数料20%は送る人が追加で払います']),
           `ひとこと: ${d.note ? d.note.replace(/\n/g, ' ') : 'なし'}`,
           '',
           ...(d.toId && d.amount && blocker ? [`⚠ ${blocker}`, ''] : []),
@@ -75,7 +76,7 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
     ],
     components: [
       row({ type: 5, custom_id: `sokin:to:${nonce}`, placeholder: '送る相手を選ぶ', ...(d.toId ? { default_values: [{ id: d.toId, type: 'user' }] } : {}) }),
-      ...(presets.length ? [row(...presets.map((n) => btn(`sokin:amt:${nonce}:${n}`, `${fmt(n)} 枚`, d.amount === n ? 1 : 2, n > can)))] : []),
+      ...(presets.length ? [row(...presets.map((n) => btn(`sokin:amt:${nonce}:${n}`, `${fmt(n)} 枚`, d.amount === n ? 1 : 2, n > can || giftCost(n) > info.balance)))] : []),
       row(btn(`sokin:amtm:${nonce}`, '✏ 枚数を入れる'), btn(`sokin:notem:${nonce}`, d.note ? '💬 ひとことを直す' : '💬 ひとことを添える')),
       row(
         btn(`sokin:send:${nonce}`, blocker ? '💸 送る' : `💸 ${d.toName} さんに ${fmt(d.amount!)} 枚送る`.slice(0, 80), 3, Boolean(blocker)),
@@ -89,7 +90,7 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
 export function sokinResultText(e: EconomyConfig, r: GiftResult, toId: string, amount: number): string {
   switch (r.status) {
     case 'ok':
-      return `💸 <@${toId}> さんに ${e.currencyEmoji}${e.currencyName} ${fmt(amount)} 枚を送りました。残り ${fmt(r.balance)} 枚。`;
+      return `💸 <@${toId}> さんに ${e.currencyEmoji}${e.currencyName} ${fmt(amount)} 枚を送りました。手数料 ${fmt(giftFee(amount))} 枚（合計 ${fmt(giftCost(amount))} 枚）。残り ${fmt(r.balance)} 枚。`;
     case 'self':
       return '自分には送れません。';
     case 'rank_too_low':
@@ -285,7 +286,7 @@ export class SokinApp {
       this.pending.set(nonce, { ...d, at: Date.now() });
       return await this.show(i, nonce, d, text);
     }
-    await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'coins.send', detail: { amount, note: note || undefined }, via: 'discord' });
+    await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'coins.send', detail: { amount, fee: giftFee(amount), total: giftCost(amount), note: note || undefined }, via: 'discord' });
     const dm = await i.client.users
       .send(toId, sokinDm(cfg.economy, i.member.displayName, amount, note))
       .then(() => true)

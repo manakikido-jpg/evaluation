@@ -1148,6 +1148,7 @@ export function SettingsPage(props: {
             <Num name="shuinReceive" label="朱印を頂くともらえる量" value={e.shuinReceive} file={f.shuinReceive} />
             <Num name="giftMin" label="贈り物: 1 回に贈れる最小" value={e.giftMin} file={f.giftMin} min={1} />
             <Num name="giftMax" label="贈り物: 1 回に贈れる最大" value={e.giftMax} file={f.giftMax} min={1} />
+            <p class="note">送金・銭の贈り物は手数料20%を送り手が追加で払います。1日の上限は相手に渡す額だけを数えます。持ち物の贈与は1個につき20銭です。</p>
             <Num name="giftDailyLimit" label="送金・贈り物: 全役職共通の1日上限" value={e.giftDailyLimit} file={f.giftDailyLimit} />
             <Num name="giftSanpaishaDailyLimit" label="送金・贈り物: 参拝者の1日上限" value={e.giftSanpaishaDailyLimit} file={f.giftSanpaishaDailyLimit} />
             <Num name="giftUjikoDailyLimit" label="送金・贈り物: 氏子の1日上限" value={e.giftUjikoDailyLimit} file={f.giftUjikoDailyLimit} />

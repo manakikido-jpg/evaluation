@@ -1,3 +1,4 @@
+import { giftCost, giftFee } from '../services/shop.js';
 import {
   ActionRowBuilder,
   MessageFlags,
@@ -217,7 +218,8 @@ export class ShopApp {
       item.kind === 'gift'
         ? new TextInputBuilder()
             .setCustomId('amount')
-            .setLabel(`贈る${e.currencyName}の量（${e.giftMin}〜${e.giftMax}）`)
+            .setLabel(`贈る量（${e.giftMin}〜${e.giftMax}・手数料20%別）`)
+            .setPlaceholder('100枚なら120枚を払います')
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
             .setMaxLength(7)
@@ -297,7 +299,7 @@ export class ShopApp {
       .then((ok) => ok !== false)
       .catch(() => false);
     await i.editReply(
-      done(`🎁 ${target.displayName} さんに ${item.emoji} ${item.name}を贈りました（${until}）。残り ${r.balance} 枚。${dm ? '' : '\n-# 相手が DM を受け取らない設定のため、知らせは届いていません'}`),
+      done(`🎁 ${target.displayName} さんに ${item.emoji} ${item.name}を贈りました（${until}・支払い合計 ${r.purchase.price} 枚、手数料込み）。残り ${r.balance} 枚。${dm ? '' : '\n-# 相手が DM を受け取らない設定のため、知らせは届いていません'}`),
     );
   }
 
@@ -441,7 +443,7 @@ export class ShopApp {
     switch (r.status) {
       case 'ok':
         await this.discord.sendDm(targetId, `🎁 ${i.member.displayName} さんから ${e.currencyEmoji}${e.currencyName} ${amount} 枚の贈り物が届きました（咲楽ノ宮）。`).catch(() => false);
-        return `🎁 <@${targetId}> さんに ${amount} 枚贈りました。残り ${r.balance} 枚。`;
+        return `🎁 <@${targetId}> さんに ${amount} 枚贈りました。手数料 ${giftFee(amount)} 枚（合計 ${giftCost(amount)} 枚）。残り ${r.balance} 枚。`;
       case 'self':
         return '自分には贈れません。';
       case 'rank_too_low':
