@@ -3434,3 +3434,30 @@ it('招待一覧は並び替えと絞り込みを保ち、参加日で順番を�
   expect(invalid).toContain('value="joined" selected');
   expect(invalid).toContain('value="desc" selected');
 });
+
+
+it('運営の招待なしを選べる。招待元不明・未払い・支払済みから除き、一般メンバーには出さない', async () => {
+  await recordJoin(db, { id: STAFF, username: 'staff', displayName: '運営さん', avatarUrl: null, roleIds: [ROLE.shinshoku, ROLE.ujiko], isBot: false, joinedAt: clock });
+  const s = await login(GUJI);
+  const section = (html: string) => html.split('id="invite-rewards"')[1]!.split('id="invite-inviters"')[0]!;
+  const before = section(await (await get('/invites', s)).text());
+  expect(before).toContain('value="staff_none">招待なし（運営）');
+  const userRow = before.split(`<a href="/members/${USER}">`)[1]!.split('</tr>')[0]!;
+  expect(userRow).not.toContain('value="staff_none"');
+  const token = /name="_csrf" value="([^"]+)"/.exec(before)![1]!;
+  const assign = (member: string, data: Record<string, string>) => app.request(`/invites/members/${member}/assign`, {
+    method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data).toString(),
+  });
+  expect((await assign(USER, { _csrf: token, inviterId: 'staff_none', confirm: 'yes' })).headers.get('location')).toContain('assign_invalid');
+  expect((await assign(STAFF, { _csrf: token, inviterId: 'staff_none', confirm: 'yes' })).headers.get('location')).toContain('assign_no_invite');
+  const all = section(await (await get('/invites', s)).text());
+  expect(all).toContain('招待なし（運営）');
+  expect(all).toContain('対象外・招待なし');
+  const staffRow = all.split(`<a href="/members/${STAFF}">`)[1]!.split('</tr>')[0]!;
+  expect(staffRow).not.toContain('name="inviterId"');
+  for (const filter of ['unknown', 'waiting', 'paid']) {
+    expect(section(await (await get(`/invites?filter=${filter}`, s)).text())).not.toContain(`/members/${STAFF}`);
+  }
+  expect((await listAudit(db, { action: 'invite.assign' }))).toHaveLength(1);
+  expect(actions).not.toContain(`dm ${STAFF}`);
+});

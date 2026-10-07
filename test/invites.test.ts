@@ -4,7 +4,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { activityDaily, auditLogs, invites, members } from '../src/db/schema.js';
 import { walletOf } from '../src/services/economy.js';
-import { assignUnknownInviter, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { STAFF_NO_INVITER, assignUnknownInviter, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -235,5 +235,33 @@ it('退出・BOT・メンバー情報のない人は参加者一覧に出さず�
   await db.update(members).set({ leftAt: null }).where(eq(members.id, NEW));
   expect((await inviteRewardRows(db)).find(r => r.memberId === NEW)?.rewardedAt).toEqual(T0);
   expect((await rewardInviter(ctx(), NEW, T0)).status).toBe('already');
+  expect((await walletOf(db, INVITER)).balance).toBe(150);
+});
+
+
+it('運営の招待なしは不明と区別し、昇格・再入鯖でも報酬を払わず登録を上書きしない', async () => {
+  expect(await assignUnknownInviter(ctx(), NEW, STAFF_NO_INVITER, INVITER)).toBe('invalid');
+  const staff = cfg.ranks.find(r => !r.auto)!;
+  const ujiko = cfg.ranks.find(r => r.key === 'ujiko')!;
+  await db.update(members).set({ roleIds: [staff.roleId, ujiko.roleId] }).where(eq(members.id, NEW));
+  const results = await Promise.all([assignUnknownInviter(ctx(), NEW, STAFF_NO_INVITER, INVITER), assignUnknownInviter(ctx(), NEW, STAFF_NO_INVITER, INVITER)]);
+  expect(results.sort()).toEqual(['known', 'no_invite']);
+  expect(await inviterOf(db, NEW)).toBeUndefined();
+  expect((await inviteRewardRows(db)).find(r => r.memberId === NEW)).toMatchObject({ inviterId: null, source: STAFF_NO_INVITER, reward: 0, ujikoReward: 0 });
+  for (const stage of ['sanpaisha', 'ujiko'] as const) expect((await rewardInviter(ctx(), NEW, T0, stage)).status).toBe('none');
+  await rewardInviteRanks(ctx(), NEW, [staff.roleId, ujiko.roleId]);
+  await db.update(members).set({ leftAt: T0 }).where(eq(members.id, NEW));
+  await db.update(members).set({ leftAt: null, roleIds: [ujiko.roleId] }).where(eq(members.id, NEW));
+  await rewardInviteRanks(ctx(), NEW, [ujiko.roleId]);
+  expect(await recordInvite(db, NEW, INVITER)).toBe(false);
+  expect(await assignUnknownInviter(ctx(), NEW, INVITER, INVITER)).toBe('known');
+  expect(dms).toHaveLength(0);
+  expect(logs).toHaveLength(0);
+  expect((await walletOf(db, INVITER)).balance).toBe(0);
+  await recordInvite(db, NEW2, INVITER);
+  await rewardInviter(ctx(), NEW2, T0);
+  await db.update(members).set({ roleIds: [staff.roleId] }).where(eq(members.id, NEW2));
+  expect(await assignUnknownInviter(ctx(), NEW2, STAFF_NO_INVITER, INVITER)).toBe('known');
+  expect(await inviterOf(db, NEW2)).toBe(INVITER);
   expect((await walletOf(db, INVITER)).balance).toBe(150);
 });
