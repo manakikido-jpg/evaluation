@@ -102,6 +102,7 @@ export function ChannelsPage(props: {
   /** 名前で絞り込み */
   q?: string;
   total: number;
+  checkSummary?: { total: number; warn: number } | null;
 }) {
   const { session } = props;
   const q = (props.q ?? '').trim().toLowerCase();
@@ -114,6 +115,7 @@ export function ChannelsPage(props: {
       <div class="page-head">
         <h1>チャンネル</h1>
         <span class="inline-actions">
+          <a class="button-link" href="/channels/check">🔎 権限の点検・見える範囲</a>
           <a class="button-link" href="/channels/perms">
             🧮 権限マトリクス・テンプレート
           </a>
@@ -123,6 +125,9 @@ export function ChannelsPage(props: {
         </span>
       </div>
       <Flash code={props.flash} />
+      {props.checkSummary === null && <p class="flash warn">権限の点検データを取得できませんでした。<a href="/channels/check">点検画面で読み直す</a></p>}
+      {props.checkSummary && <p class={props.checkSummary.total ? 'flash warn' : 'note'}>権限の点検: 注意{props.checkSummary.warn}件・要確認{props.checkSummary.total - props.checkSummary.warn}件。<a href="/channels/check">理由と見える範囲を確認する</a></p>}
+
       <form method="get" action="/channels" class="ch-search">
         <input type="search" name="q" value={props.q ?? ''} placeholder="名前・説明で探す" aria-label="チャンネルを探す" />
         <button type="submit">探す</button>

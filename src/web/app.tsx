@@ -1,3 +1,5 @@
+import { PermissionCheckPage } from './views/permissionCheck.js';
+import { permissionIssues, validatePermissionSnapshot } from '../services/permissionCheck.js';
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
 import { artUrls, AT_ART_SLOTS, deleteArt, isArtKey, loadArt, saveArt } from '../services/casino/slotArt.js';
 import { activityStats, genderNow, genderTrend } from '../services/genderStats.js';
@@ -3254,14 +3256,20 @@ export function createWebApp(deps: WebDeps) {
   };
 
   app.get('/channels', async (c) => {
-    const channels = await loadChannels(true);
+    const [channels, checkRoles] = await Promise.all([loadChannels(true), loadRoles()]);
+    let checkSummary: { total: number; warn: number } | null = null;
+    try {
+      validatePermissionSnapshot(channels, checkRoles ?? [], cfg.guildId);
+      const issues = permissionIssues(channels, checkRoles!, cfg);
+      checkSummary = { total: issues.length, warn: issues.filter(i => i.level === 'warn').length };
+    } catch { /* 不完全な取得は正常と決めない */ }
     const groups = listTextChannels(channels).map((g) => ({
       category: g.category ? channelInfo(g.category, channels) : null,
       // テキストのあとに通話（Discord と同じ並び）
       items: [...g.items, ...g.voice].map((ch) => channelInfo(ch, channels)),
     }));
     const total = groups.reduce((n, g) => n + g.items.length, 0);
-    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} q={c.req.query('q')} total={total} />);
+    return c.html(<ChannelsPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} q={c.req.query('q')} total={total} checkSummary={checkSummary} />);
   });
 
   // ───────── 🧮 チャンネル権限（マトリクス・テンプレート） ─────────
@@ -3457,6 +3465,22 @@ export function createWebApp(deps: WebDeps) {
       return back(changed ? 'applied' : 'apply_unchanged', roleId);
     }),
   );
+
+  // 点検は現在のDiscordの値だけを使う。取得失敗を空の正常結果にしない。
+  app.get('/channels/check', async (c) => {
+    try {
+      const [channels, roles] = await Promise.all([deps.discord.guildChannels(cfg.guildId), deps.discord.guildRoles(cfg.guildId)]);
+      validatePermissionSnapshot(channels, roles, cfg.guildId);
+      const raw = c.req.queries('role') ?? [];
+      const selected = [...new Set(raw.filter(id => roles.some(r => r.id === id)))];
+      const want = c.req.query('permission');
+      const permission = want && MATRIX_PERMS.some(p => p.bit === Number(want)) ? Number(want) : undefined;
+      return c.html(<PermissionCheckPage session={c.get('session')} channels={channels} roles={roles} guildId={cfg.guildId} selected={selected} issues={permissionIssues(channels, roles, cfg)} checkedAt={now()} invalidRole={raw.some(id => !roles.some(r => r.id === id))} q={(c.req.query('q') ?? '').slice(0, 100)} only={c.req.query('only')} permission={permission} />);
+    } catch (err) {
+      logger.warn({ err }, 'permission check unavailable');
+      return c.html(<PermissionCheckPage session={c.get('session')} channels={[]} roles={[]} guildId={cfg.guildId} selected={[]} issues={[]} checkedAt={now()} failed />, 503);
+    }
+  });
 
   app.get('/channels/new', async (c) => {
     const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
