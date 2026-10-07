@@ -2583,8 +2583,8 @@ export function createWebApp(deps: WebDeps) {
         noticeMinutesBefore: num('ctNoticeMinutesBefore'),
       },
       boost: {
-        // 空なら標準の文面に戻す
-        announceText: longText(body.boostAnnounce),
+        // 通知を止めた文面は、ほかの設定の保存で消さない
+        announceText: prev.boost?.announceText,
         dmText: longText(body.boostDm),
       },
       omairi: { days: num('omairiDays'), extendDays: num('omairiExtendDays') },

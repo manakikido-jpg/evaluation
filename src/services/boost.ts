@@ -8,7 +8,7 @@ import { banzukeChannelId } from './banzuke.js';
 
 /**
  * サーバーブースト（奉納）のお礼。お金（花びら）は渡さない（2026-09 にやめた）。
- * - ブースト 1 回ごとに: #慶事 にお知らせ・本人に DM
+ * - ブースト 1 回ごとに: 本人に DM（チャンネルへのお知らせは出さない）
  *   Discord がシステムメッセージチャンネルに出す「ブーストしました」のメッセージで数える（1 人が何回ブーストしているかは BOT に分からないため）。
  *   そのメッセージが出ない設定のときは、1 人が始めたときに 1 回。
  * - #番付 に「奉納板」（今奉納してくれている人の一覧・回数）を貼って書き換える
@@ -87,11 +87,6 @@ function fill(text: string, memberId: string, cfg: GuildConfig): string {
     .replaceAll('{通貨絵文字}', cfg.economy.currencyEmoji);
 }
 
-export function boostAnnouncement(memberId: string, cfg: GuildConfig, count = 1): MessageBody {
-  const text = fill(cfg.boost.announceText, memberId, cfg) + (count > 1 ? `\n-# ブースト ${count} 回分` : '');
-  return { content: '', embeds: [{ description: text, color: SHU }] };
-}
-
 /** 本人への DM。お礼の花びら・割引の案内を BOT が足す */
 export function boostDm(memberId: string, cfg: GuildConfig, r: ThankResult): string {
   const e = cfg.economy;
@@ -111,7 +106,7 @@ export function boostDm(memberId: string, cfg: GuildConfig, r: ThankResult): str
   ].join('\n');
 }
 
-/** 今奉納している人全員について、お礼が要るか見て、お知らせ・DM を出す */
+/** 今奉納している人全員について、お礼が要るか見て、本人に DM を出す */
 export async function processBoosters(
   ctx: BoostCtx,
   now = new Date(),
@@ -122,21 +117,16 @@ export async function processBoosters(
   for (const b of await currentBoosters(ctx.db)) {
     if (only && b.id !== only) continue;
     const r = await thankBooster(ctx.db, b.id, b.since, now);
-    // お知らせ・DM は、「ブーストしました」のメッセージが出る設定ならそちらで出す
+    // DM は、「ブーストしました」のメッセージが出る設定ならそちらで出す
     if (r.kind === 'none' || opts.byMessage) continue;
     announced++;
-    try {
-      await ctx.discord.sendMessage(ctx.cfg.channels.keiji, boostAnnouncement(b.id, ctx.cfg));
-    } catch (err) {
-      logger.warn({ err, memberId: b.id }, 'boost announcement failed');
-    }
     await ctx.discord.sendDm(b.id, boostDm(b.id, ctx.cfg, r));
   }
   return { announced };
 }
 
 /**
- * ブースト 1 回ごとのお知らせと DM（Discord の「ブーストしました」のメッセージ 1 件につき 1 回）。
+ * ブースト 1 回ごとの DM（Discord の「ブーストしました」のメッセージ 1 件につき 1 回）。
  * 同じメッセージでは 2 回出さない。BOT が止まっていた間のものは、起動したときに読み直して拾う。回数は奉納板に使う。
  */
 export async function thankBoostMessage(
@@ -150,11 +140,6 @@ export async function thankBoostMessage(
     .onConflictDoNothing()
     .returning({ id: boostMessages.messageId });
   if (!inserted.length) return { status: 'duplicate' };
-  try {
-    await ctx.discord.sendMessage(ctx.cfg.channels.keiji, boostAnnouncement(input.memberId, ctx.cfg, input.count));
-  } catch (err) {
-    logger.warn({ err, memberId: input.memberId }, 'boost announcement failed');
-  }
   await ctx.discord.sendDm(input.memberId, boostDm(input.memberId, ctx.cfg, { kind: 'new', count: input.count }));
   return { status: 'ok' };
 }
