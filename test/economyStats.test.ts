@@ -100,3 +100,12 @@ describe('経済', () => {
     expect(d.bands.find((b) => b.label === '5,000〜9,999')).toMatchObject({ members: 1, total: 9000 });
   });
 });
+
+
+it('贈与の手数料は鯖の収入に数える', async () => {
+  await addCoins(db, A, 100, 'adjust');
+  await db.transaction(tx => spendWithin(tx, A, 20, 'gift_fee', { to: B }));
+  expect(flowOf('gift_fee')).toBe('income');
+  const o = await economyOverview(db, '30d', new Date());
+  expect(o.incomeLines).toContainEqual(expect.objectContaining({ label: '送金・贈り物の手数料', amount: 20 }));
+});

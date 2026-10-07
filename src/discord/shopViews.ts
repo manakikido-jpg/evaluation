@@ -1,3 +1,4 @@
+import { giftCost, giftFee } from '../services/shop.js';
 import type { EconomyConfig } from '../config.js';
 import type { ShopItem } from '../db/schema.js';
 import { OTOSHIDAMA } from '../services/otoshidama.js';
@@ -83,7 +84,7 @@ export function shopList(
         `**${priceText(i, e, booster)}**${durationText(i) && !(i.boosterOnly && !booster) ? `・${durationText(i)}` : ''}`,
         owned.has(i.id) ? `✅ 受けている${until ? `（${fmtDay(until)} まで）` : ''}` : lack ? `あと ${lack.toLocaleString('ja-JP')} 枚` : '',
         i.kind === 'otoshidama' ? '置けるのは氏子以上（運営も使えます）' : '',
-        withNote ? i.description : '',
+        withNote ? (i.kind === 'gift' ? i.description.replace('手数料なし', '手数料20%を追加で払う') : i.description) : '',
       ]
         .filter(Boolean)
         .join('\n')
@@ -221,14 +222,16 @@ export function presentPickTarget(item: ShopItem, e: EconomyConfig, balance: num
 /** 🎁 プレゼント: 相手と値段を確かめる */
 export function presentConfirm(item: ShopItem, e: EconomyConfig, balance: number, target: { id: string; name: string }, booster = false, note?: string) {
   const price = priceOf(item, e, booster);
+  const total = giftCost(price);
   return {
     embeds: [
       {
         title: `🎁 ${target.name} さんに ${label(item)}`,
         description: [
           `**${price.toLocaleString('ja-JP')} 枚**で、<@${target.id}> さんへのプレゼントにします（${durationText(item) || 'ずっと'}）。相手には DM で知らせます。`,
+          `手数料（20%）: ${giftFee(price).toLocaleString('ja-JP')} 枚・合計支払い: **${total.toLocaleString('ja-JP')} 枚**`,
           ...(note ? [note] : []),
-          `-# いま ${balance.toLocaleString('ja-JP')} 枚 → 贈ったあと ${(balance - price).toLocaleString('ja-JP')} 枚`,
+          `-# いま ${balance.toLocaleString('ja-JP')} 枚 → 贈ったあと ${(balance - total).toLocaleString('ja-JP')} 枚`,
         ].join('\n'),
         color: SHU,
       },
@@ -237,7 +240,7 @@ export function presentConfirm(item: ShopItem, e: EconomyConfig, balance: number
       {
         type: 1,
         components: [
-          { type: 2, style: 3, label: `🎁 ${price.toLocaleString('ja-JP')} 枚で贈る`, custom_id: `shop:presentok:${item.id}:${target.id}`, disabled: balance < price },
+          { type: 2, style: 3, label: `🎁 ${total.toLocaleString('ja-JP')} 枚で贈る`, custom_id: `shop:presentok:${item.id}:${target.id}`, disabled: balance < total },
           { type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' },
         ],
       },
@@ -247,9 +250,9 @@ export function presentConfirm(item: ShopItem, e: EconomyConfig, balance: number
 
 /** 花吹雪・贈り物: 相手を選ぶ */
 export function shopPickTarget(item: ShopItem, e: EconomyConfig, balance: number, booster = false) {
-  const what = item.kind === 'gift' ? `${coin(e)}を贈る相手` : `花吹雪（${priceText(item, e, booster)}）を贈る相手`;
+  const what = item.kind === 'gift' ? `${coin(e)}を贈る相手（手数料20%を追加で払います）` : `花吹雪（${priceText(item, e, booster)}）を贈る相手`;
   return {
-    embeds: [{ title: label(item), description: [item.description, `いま ${balance.toLocaleString('ja-JP')} 枚`, '', `${what}を選んでください。`].join('\n'), color: SHU }],
+    embeds: [{ title: label(item), description: [item.kind === 'gift' ? item.description.replace('手数料なし', '手数料20%を追加で払う') : item.description, `いま ${balance.toLocaleString('ja-JP')} 枚`, '', `${what}を選んでください。`].join('\n'), color: SHU }],
     components: [
       { type: 1, components: [{ type: 5, custom_id: `shop:target:${item.id}`, placeholder: '相手を選ぶ' }] },
       { type: 1, components: [{ type: 2, style: 2, label: 'やめる', custom_id: 'shop:cancel' }] },

@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-gift-fee-20', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: '送金とプレゼントに20%の手数料', items: ['送金・銭の贈り物・購入するプレゼントは、送る人が20%を追加で払います。確定前に支払い合計を表示します。', '持ち物の贈与は1個100銭を基準に、1個につき20銭を払います。残高不足なら券も銭も動きません。', '送金の1日上限は相手に渡す額だけを数えます。購入プレゼントのロール付与に失敗した場合は手数料も戻します。'] },
   { id: '2026-10-08-boost-dm-perks', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'ブーストのお礼DMを短く', items: ['本人へのお礼DMから、自己紹介のピン留めと奉納板の案内を外しました。'] },
   { id: '2026-10-08-boost-channel-notice-off', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: 'チャンネルへのブースト通知を停止', items: ['社務所BOTからチャンネルへのブースト通知を出さなくしました。本人へのお礼DMは送ります。', '回数の記録・奉納板・奉納の特典はこれまで通りです。'] },
   { id: '2026-10-08-omikuji-drawer-label', date: '2026-10-08', kind: 'fix', where: ['Discord'], title: '御神籤を引いた人を結果に表示', items: ['御神籤の結果に引いた人を表示します。返信元のメッセージが消えても分かります。通知は飛ばしません。', '通常・特別な御神籤・もう1回のすべてに対応します。'] },

@@ -23,6 +23,7 @@ export type CoinReason =
   | 'shop_refund'
   | 'gift_send'
   | 'gift_receive'
+  | 'gift_fee'
   | 'otoshidama_put'
   | 'otoshidama_get'
   | 'otoshidama_refund'
@@ -249,6 +250,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   shop_refund: 'ショップの払い戻し',
   gift_send: '贈り物を贈った',
   gift_receive: '贈り物をもらった',
+  gift_fee: '送金・贈り物の手数料',
   otoshidama_put: 'お年玉袋を置いた',
   otoshidama_get: 'お年玉袋から受け取った',
   otoshidama_refund: 'お年玉袋の残りが戻った',

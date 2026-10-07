@@ -4,6 +4,7 @@ import { parseAmount, sokinBlocker, sokinDone, sokinDm, sokinPanel, sokinResultT
 import { cfg } from './helpers.js';
 
 const e = cfg.economy;
+const ids = (v: ReturnType<typeof sokinPanel>) => v.components.flatMap((r) => r.components as { custom_id: string; disabled?: boolean; style?: number; label?: string }[]);
 
 describe('💸 /送金', () => {
   it('コマンド: 相手・枚数・ひとこと（どれも入れなくてよい。パネルで選ぶ）', () => {
@@ -16,7 +17,6 @@ describe('💸 /送金', () => {
     ]);
   });
 
-  const ids = (v: ReturnType<typeof sokinPanel>) => v.components.flatMap((r) => r.components as { custom_id: string; disabled?: boolean; style?: number; label?: string }[]);
   const g = { ...e, giftMin: 10, giftMax: 1000, giftDailyLimit: 1000 };
 
   it('パネル: はじめは何も選んでいない（送るは押せない）', () => {
@@ -71,7 +71,7 @@ describe('💸 /送金', () => {
   });
 
   it('結果の文: 送れた・送れなかったわけ', () => {
-    expect(sokinResultText(e, { status: 'ok', balance: 2500 }, '123', 500)).toBe(`💸 <@123> さんに ${e.currencyEmoji}${e.currencyName} 500 枚を送りました。残り 2,500 枚。`);
+    expect(sokinResultText(e, { status: 'ok', balance: 2500 }, '123', 500)).toBe(`💸 <@123> さんに ${e.currencyEmoji}${e.currencyName} 500 枚を送りました。手数料 100 枚（合計 600 枚）。残り 2,500 枚。`);
     expect(sokinResultText(e, { status: 'self' }, '1', 10)).toBe('自分には送れません。');
     expect(sokinResultText(e, { status: 'rank_too_low', rankName: '参拝者' }, '1', 10)).toContain('「参拝者」以上');
     expect(sokinResultText(e, { status: 'bad_amount', min: 10, max: 1000 }, '1', 5)).toBe('10〜1,000 枚の間で送ってください。');
@@ -83,4 +83,12 @@ describe('💸 /送金', () => {
     expect(sokinDm(e, 'もみじ', 100, 'お礼')).toBe(`💸 **もみじ** さんから ${e.currencyEmoji}${e.currencyName} **100 枚**が届きました（咲楽ノ宮）。\n> お礼\n-# 残りは \`/残高\` で見られます`);
     expect(sokinDm(e, 'もみじ', 100, '')).not.toContain('>');
   });
+});
+
+
+it('手数料を含めると残高不足になる送金は、確定ボタンと額のボタンを押せない', () => {
+  const v = sokinPanel(cfg.economy, { toId: '1', toName: 'さくら', amount: 100, note: '' }, { balance: 100, left: 125 }, 'fee');
+  expect(v.embeds[0]!.description).toContain('合計支払い: **120 枚**');
+  expect(ids(v).find(c => c.custom_id === 'sokin:send:fee')!.disabled).toBe(true);
+  expect(ids(v).find(c => c.custom_id === 'sokin:amt:fee:100')!.disabled).toBe(true);
 });
