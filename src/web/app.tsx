@@ -1514,7 +1514,7 @@ export function createWebApp(deps: WebDeps) {
     return c.html(
       <CasinoAdminPage
         session={c.get('session')}
-        casino={cfg.casino}
+        casino={cfg.casino} casinoGacha={cfg.casinoGacha}
         coinName={cfg.economy.currencyName}
         url={`${deps.baseUrl}/casino`}
         range={range}
@@ -1674,14 +1674,18 @@ export function createWebApp(deps: WebDeps) {
     const current = await loadOverrides(db);
     let overrides: Overrides;
     try {
-      overrides = overridesSchema.parse({ ...current, casino });
+      overrides = overridesSchema.parse({ ...current, casino, casinoGacha: typeof body.stylePrice === 'string' ? {
+        prayerChannelId: typeof body.stylePrayerChannelId === 'string' ? body.stylePrayerChannelId : cfg.casinoGacha.prayerChannelId,
+        enabled: body.styleEnabled === 'yes', price: int('stylePrice'), pity: int('stylePity'),
+        cosmeticPercent: Number(body.styleCosmeticPercent), boostPercent: Number(body.styleBoostPercent),
+      } : current.casinoGacha });
       applyOverrides(fileCfg(), overrides);
     } catch {
       return c.redirect('/economy/casino?msg=invalid');
     }
     await saveOverrides(db, overrides, c.get('session').userId);
     await deps.onSettingsSaved?.();
-    await audit(db, { actorId: c.get('session').userId, action: 'casino.settings', detail: casino, via: 'web' });
+    await audit(db, { actorId: c.get('session').userId, action: 'casino.settings', detail: { ...casino, casinoGacha: overrides.casinoGacha }, via: 'web' });
     return c.redirect('/economy/casino?msg=saved');
   });
 
@@ -2493,6 +2497,7 @@ export function createWebApp(deps: WebDeps) {
         : {}),
       // 物御籤は「物御籤」のページで変える（ここでは今の値を残す）
       gacha: prev.gacha,
+      casinoGacha: prev.casinoGacha,
       // 経済の見守りの設定は経済のページで変える（ここでは残す）
       economyOps: prev.economyOps,
       // カジノはカジノのページで変える（ここでは残す）

@@ -147,8 +147,9 @@ const Sound = (() => {
       [3.45, 3.75, 4.1, 4.35, 4.62].forEach((t, k) => tone(1800 - k * 150, t, 0.05, { type: 'triangle', vol: 0.16 - k * 0.02 }));
       tone(500, 4.9, 0.12, { type: 'triangle', vol: 0.2 });
     },
-    win: (at = 0) => notes([[523, 0, 0.12], [659, 0.1, 0.12], [784, 0.2, 0.12], [1047, 0.3, 0.35]], at, { type: 'triangle', vol: 0.18 }),
+    win: (at = 0) => document.body.dataset.styleSound === 'bell' ? notes([[1568, 0, .5], [2093, .18, .6], [2637, .36, .8]], at, { type: 'sine', vol: .12 }) : notes([[523, 0, 0.12], [659, 0.1, 0.12], [784, 0.2, 0.12], [1047, 0.3, 0.35]], at, { type: 'triangle', vol: 0.18 }),
     bigWin(at = 0) {
+      if (document.body.dataset.styleSound === 'bell') { notes([[1568, 0, .5], [2093, .18, .6], [2637, .36, .8]], at, { type: 'sine', vol: .12 }); return; }
       notes([[523, 0, 0.12], [659, 0.1, 0.12], [784, 0.2, 0.12], [1047, 0.3, 0.2], [784, 0.5, 0.1], [1047, 0.6, 0.12], [1319, 0.72, 0.6]], at, { type: 'square', vol: 0.09 });
       notes([[262, 0.3, 0.9], [330, 0.3, 0.9], [392, 0.3, 0.9]], at, { type: 'triangle', vol: 0.08 });
       for (let i = 0; i < 10; i++) tone(2000 + Math.random() * 2000, at + 0.8 + i * 0.07, 0.08, { vol: 0.05 });
@@ -308,6 +309,39 @@ const markCards = (root, before) => {
 };
 const cardKeys = (root) => new Set([...(root?.querySelectorAll('.fc[data-ck], .c-roll[data-ck]') ?? [])].map((e) => e.getAttribute('data-ck')));
 
+/** お試しの時間が来たら、開いたままの画面も元の装備に戻す */
+setInterval(() => {
+  const until = Number(document.body.dataset.styleUntil);
+  const skew = Number(document.documentElement.dataset.skew || 0);
+  if (!until || Date.now() + skew < until) return;
+  const styles = JSON.parse(document.body.dataset.baseStyles || '{}');
+  for (const cls of [...document.body.classList]) if (/^cs-(background|table|ornament|chips|cards|effect|sound|title)-/.test(cls)) document.body.classList.remove(cls);
+  for (const [slot, key] of Object.entries(styles)) document.body.classList.add(`cs-${slot}-${key}`);
+  document.body.dataset.styleSound = styles.sound || '';
+  document.body.dataset.styleEffect = styles.effect || '';
+  document.body.dataset.styleUntil = '';
+}, 1000);
+
+/** 勝った人の画面だけに出す、着せ替えの桜吹雪 */
+const styleVictory = (at = 0) => {
+  if (document.body.dataset.styleEffect !== 'petals' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const effect = document.body.dataset.styleEffect;
+  setTimeout(() => {
+    if (document.body.dataset.styleEffect !== effect) return;
+    document.querySelector('.cs-victory')?.remove();
+    const box = document.createElement('div');
+    box.className = 'cs-victory';
+    box.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 13; i++) { const petal = document.createElement('span'); petal.textContent = '🌸'; petal.style.setProperty('--petal', String(i)); box.append(petal); }
+    document.body.append(box);
+    setTimeout(() => box.remove(), 4200);
+  }, at * 1000);
+};
+document.addEventListener('click', (e) => { if (e.target instanceof Element && e.target.closest('[data-style-demo]')) Sound.win(); });
+const originalWin = Sound.win, originalBigWin = Sound.bigWin;
+Sound.win = (at = 0) => { originalWin(at); styleVictory(at); };
+Sound.bigWin = (at = 0) => { originalBigWin(at); styleVictory(at); };
+
 /** 画面の中の動きに合わせて音を鳴らす */
 const playFx = (root, tableEnd) => {
   root.querySelectorAll('.fc:not(.still)').forEach((el) => {
@@ -352,6 +386,11 @@ const swapPage = (html, url) => {
   document.querySelector('.c-main')?.replaceWith(main);
   const top = doc.querySelector('.c-top');
   if (top) document.querySelector('.c-top')?.replaceWith(top);
+  document.body.className = doc.body.className;
+  document.body.dataset.styleSound = doc.body.dataset.styleSound || '';
+  document.body.dataset.styleEffect = doc.body.dataset.styleEffect || '';
+  document.body.dataset.styleUntil = doc.body.dataset.styleUntil || '';
+  document.body.dataset.baseStyles = doc.body.dataset.baseStyles || '{}';
   document.title = doc.title;
   history.pushState(null, '', url);
   if (!samePath) window.scrollTo(0, 0);
@@ -412,12 +451,13 @@ const initLive = () => {
   if (!el) return;
   const id = el.dataset.table;
   let version = el.dataset.v;
+  let styleVersion = el.dataset.styleV;
   const share = (now) => {
     document.documentElement.dataset.skew = String(Number(now || Date.now()) - Date.now());
   };
   share(el.dataset.now);
   let busy = false;
-  const refresh = async () => {
+  const refresh = async (styleOnly = false) => {
     const res = await fetch(`/casino/t/${id}/frag`, { headers: { accept: 'text/html' }, credentials: 'same-origin' });
     if (res.status !== 200) return;
     const box = document.createElement('div');
@@ -431,11 +471,12 @@ const initLive = () => {
     cur.replaceWith(next);
     restorePicks(next, kept);
     version = next.getAttribute('data-v');
+    styleVersion = next.getAttribute('data-style-v');
     share(next.getAttribute('data-now'));
     dirtyAt = 0;
     tickCountdowns();
     const end = markCards(next, before);
-    playFx(next, end);
+    if (!styleOnly) playFx(next, end);
     if (!wasMyTurn && myTurn(next)) Sound.bell();
     document.dispatchEvent(new Event('c-live-updated'));
   };
@@ -450,9 +491,14 @@ const initLive = () => {
       }
       const j = await res.json();
       share(j.now);
+      for (const cls of [...document.body.classList]) if (/^cs-(background|table|ornament|chips|cards|effect|sound|title)-/.test(cls)) document.body.classList.remove(cls);
+      for (const [slot, key] of Object.entries(j.styles || {})) document.body.classList.add(`cs-${slot}-${key}`);
+      document.body.dataset.styleUntil = '';
+      document.body.dataset.styleSound = j.styles?.sound || '';
+      document.body.dataset.styleEffect = j.styles?.effect || '';
       // 選んでいる途中なら 15 秒まで待つ（そのあいだに時間切れになれば、そのまま差し替え）
       const due = [...(live()?.querySelectorAll('.c-count[data-deadline]') ?? [])].some((n) => Number(n.dataset.deadline) <= Number(j.now));
-      if (String(j.v) !== String(version) && (!dirtyAt || due || Date.now() - dirtyAt > 15000)) await refresh();
+      if ((String(j.v) !== String(version) || j.styleVersion !== styleVersion) && (!dirtyAt || due || Date.now() - dirtyAt > 15000)) await refresh(String(j.v) === String(version));
     } catch {
       // つながらないときは次にまた
     } finally {

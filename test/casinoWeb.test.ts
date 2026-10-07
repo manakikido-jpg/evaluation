@@ -1,3 +1,5 @@
+import { casinoStyles } from '../src/db/schema.js';
+import { stylesOf } from '../src/services/casino/styles.js';
 import { artUrls, deleteArt } from '../src/services/casino/slotArt.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
@@ -353,6 +355,7 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect(html).toContain('name="profitSharePercent"');
     expect(html).toContain('設定ごとの結果');
     expect(html).toContain('name="slot_8"');
+    expect(html).toContain('name="stylePrice"');
     const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
     const save = await app.request('/economy/casino', {
       method: 'POST',
@@ -371,10 +374,12 @@ describe('🎰 カジノ（運営の画面）', () => {
         ['slot_2', 'random'],
         ['slot_3', '2'],
         ['slot_4', '5'],
+        ['styleEnabled', 'yes'], ['stylePrice', '250'], ['stylePity', '20'], ['styleCosmeticPercent', '60'], ['styleBoostPercent', '15'],
       ]),
     });
     expect(save.headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino).toMatchObject({ minBet: 20, maxBet: 3000, dailyBetLimit: 0, games: ['slots', 'versus'], slotMachines: [6, 'random', 2] });
+    expect((await loadOverrides(db)).casinoGacha).toMatchObject({ enabled: true, price: 250, pity: 20, cosmeticPercent: 60, boostPercent: 15 });
     // 入れる人をロールに（ロールを選ばなければ断る）
     const pick = (extra: [string, string][]) =>
       app.request('/economy/casino', {
@@ -388,6 +393,8 @@ describe('🎰 カジノ（運営の画面）', () => {
     // ルーレットの 1 か所の最高
     expect((await pick([['access', 'all'], ['rouletteMaxBet', '20000']])).headers.get('location')).toBe('/economy/casino?msg=saved');
     expect((await loadOverrides(db)).casino.rouletteMaxBet).toBe(20000);
+    expect((await loadOverrides(db)).casinoGacha?.price).toBe(250);
+    expect((await pick([['stylePrice', '250'], ['styleCosmeticPercent', '99'], ['styleBoostPercent', '10'], ['stylePity', '20']])).headers.get('location')).toBe('/economy/casino?msg=invalid');
     // 🏇 馬の名簿: 名前を決めて入れる・変える
     expect(html).toContain('馬の名簿');
     const horse = (path: string, body: Record<string, string>) =>
@@ -703,5 +710,95 @@ describe('📊 カジノの記録', () => {
     expect(await (await get('/casino/stats?r=month', a)).text()).toContain('勝ち額ランキング（今月）');
     // ログインしていなければ入口へ
     expect((await app.request('/casino/stats')).status).toBe(302);
+  });
+});
+
+describe('カジノの着せ替えと景品ガチャ', () => {
+  it('ログインとCSRFを確かめ、未所持や別の種類の装備を拒否する', async () => {
+    expect((await app.request('/casino/wardrobe')).status).toBe(302);
+    const { cookie } = await casinoLogin(A);
+    expect((await post('/casino/wardrobe/equip', cookie!, { slot: 'title', key: 'gambler' }, 'wrong')).status).toBe(403);
+    await post('/casino/wardrobe/equip', cookie!, { slot: 'title', key: 'gambler' });
+    expect((await stylesOf(db, A)).equipped).toEqual({});
+    await db.update(casinoStyles).set({ owned: ['gambler'] });
+    await post('/casino/wardrobe/equip', cookie!, { slot: 'title', key: 'gambler' });
+    expect((await get('/casino/hall', cookie!)).status).toBe(200);
+    const html = await (await get('/casino/wardrobe', cookie!)).text();
+    expect(html).toContain('勝負師');
+    expect(html).toContain('装備中');
+    expect(html).not.toContain('onclick=');
+    expect(html).not.toContain('style="');
+  });
+  it('見本は保存せず、Webで抽選できない。景品一覧から祈願所へ案内する', async () => {
+    current = { ...cfg, casinoGacha: { ...cfg.casinoGacha, enabled: true } };
+    const { cookie } = await casinoLogin(A);
+    const preview = await (await get('/casino/wardrobe?preview=gold', cookie!)).text();
+    expect(preview).toContain('cs-background-gold');
+    expect((await stylesOf(db, A)).equipped).toEqual({});
+    expect((await post('/casino/style-gacha/draw', cookie!, { times: '1', requestId: 'web-draw' }, 'wrong')).status).toBe(403);
+    for (let n = 0; n < 2; n++) {
+      const res = await post('/casino/style-gacha/draw', cookie!, { times: '1', requestId: 'web-draw' });
+      expect(res.status).toBe(410);
+      expect(await res.text()).toContain('Discordの祈願所');
+    }
+    expect(await balance(A)).toBe(5000);
+    const catalog = await (await get('/casino/style-gacha', cookie!)).text();
+    expect(catalog).toContain(`https://discord.com/channels/${cfg.guildId}/${cfg.casinoGacha.prayerChannelId}`);
+    expect(catalog).not.toContain('action="/casino/style-gacha/draw"');
+    expect(catalog).not.toContain('name="times"');
+  });
+});
+
+
+describe('夜桜の新しいカジノロビー', () => {
+  it('実際の残高・着せ替え・祈願所のリンクを出し、Webの抽選操作は出さない', async () => {
+    current = { ...cfg, casinoGacha: { ...cfg.casinoGacha, prayerChannelId: '1553587045073551000' } };
+    const { cookie } = await casinoLogin(A);
+    await db.insert(casinoStyles).values({ memberId: A, owned: ['stars', 'lucky', 'fox'], equipped: { background: 'stars', title: 'lucky', ornament: 'fox' }, tickets: 2 });
+    const html = await (await get('/casino/hall', cookie!)).text();
+    for (const text of ['c-lobby-page', 'casino-lobby.css', '今夜は、どの遊びから？', 'あなたの着せ替え', '景品 18種類', '星降る遊技場', '幸運の持ち主', '5,000', 'お試し券 2枚']) expect(html).toContain(text);
+    expect(html).toContain(`https://discord.com/channels/${cfg.guildId}/1553587045073551000`);
+    expect(html).not.toContain('/casino/style-gacha/draw');
+    expect(html).not.toContain('onclick=');
+    expect(html).not.toContain('style="');
+    expect((await get('/casino/hall', cookie!)).headers.get('content-security-policy')).toBeTruthy();
+    expect((await app.request('/static/casino-lobby-art.webp')).headers.get('content-type')).toContain('image/webp');
+  });
+  it('人数の絞り込み・公開設定を守り、休止中と準備中のカードを出さない', async () => {
+    current = { ...cfg, casino: { ...cfg.casino, games: ['blackjack', 'poker', 'atslot'], atOpen: false } };
+    const { cookie } = await casinoLogin(A);
+    const solo = await (await get('/casino/hall?group=solo', cookie!)).text();
+    const group = /<div class="cl-games">([\s\S]*?)<\/section>/.exec(solo)![1]!;
+    expect(group).toContain('ブラックジャック');
+    expect(group).not.toContain('ポーカー');
+    expect(solo).not.toContain('/casino/atslot');
+    expect(solo).not.toContain('/casino/roulette');
+    const table = await (await get('/casino/hall?group=table', cookie!)).text();
+    const tableGroup = /<div class="cl-games">([\s\S]*?)<\/section>/.exec(table)![1]!;
+    expect(tableGroup).toContain('ポーカー');
+    expect(tableGroup).not.toContain('ブラックジャック');
+    expect(await (await get('/casino/hall?group=unknown', cookie!)).text()).toContain('class="selected" aria-current="page">すべて');
+  });
+  it('進行中の勝負と自分の卓へ戻れる。参加の案内で銭は動かさない', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const b = (await casinoLogin(B)).cookie!;
+    const made = await post('/casino/tables/poker', a, { bb: '20', buyin: '1000' });
+    const location = made.headers.get('location')!;
+    const myLobby = await (await get('/casino/hall', a)).text();
+    expect(myLobby).toContain('続きから遊ぶ');
+    expect(myLobby).toContain(`href="${location}"`);
+    expect(myLobby).toContain('卓に戻る');
+    expect(myLobby).toContain('1/6人');
+    const otherLobby = await (await get('/casino/hall', b)).text();
+    expect(otherLobby).toContain(`href="${location}"`);
+    expect(otherLobby).toContain('卓を見る');
+    expect(await balance(A)).toBe(4000);
+    expect(await balance(B)).toBe(5000);
+    await db.insert(casinoGames).values({ memberId: B, game: 'highlow', bet: 20, status: 'playing', state: { secret: 'hidden-game-state' } });
+    const resumed = await (await get('/casino/hall', b)).text();
+    expect(resumed).toContain('続きを遊ぶ');
+    expect(resumed).toContain('/casino/highlow?g=');
+    expect(resumed).not.toContain('hidden-game-state');
+    expect(await (await get('/casino/hall', a)).text()).not.toContain('続きを遊ぶ');
   });
 });

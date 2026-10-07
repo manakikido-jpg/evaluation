@@ -1789,3 +1789,22 @@ export const ideaFiles = pgTable(
 export type Idea = typeof ideas.$inferSelect;
 export type IdeaComment = typeof ideaComments.$inferSelect;
 export type IdeaFile = Omit<typeof ideaFiles.$inferSelect, 'data'>;
+
+/** カジノの見た目。ゲームの勝ち負けのデータとは分ける */
+export const casinoStyles = pgTable('casino_styles', {
+  memberId: text('member_id').primaryKey(),
+  owned: jsonb('owned').$type<string[]>().notNull().default([]),
+  equipped: jsonb('equipped').$type<Record<string, string>>().notNull().default({}),
+  trialKey: text('trial_key'),
+  trialUntil: timestamp('trial_until', { withTimezone: true }),
+  tickets: integer('tickets').notNull().default(0),
+  pity: integer('pity').notNull().default(0),
+});
+/** 同じボタン・フォームを再送しても、もう一度引かない */
+export const casinoStyleDraws = pgTable('casino_style_draws', {
+  memberId: text('member_id').notNull(),
+  requestId: text('request_id').notNull(),
+  results: jsonb('results').$type<string[]>().notNull(),
+  cost: integer('cost').notNull(),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.memberId, t.requestId] })]);

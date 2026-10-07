@@ -80,13 +80,14 @@ export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMes
   if (kind === 'gacha') {
     return {
       embeds: [{ image: { url: 'attachment://gacha-prayer.png' } }],
-      files: [{ attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '咲楽ノ宮の祈願所・物御籤（ものみくじ）。願いをこめて、ひと引き。下のボタンから売り場や中身と排出率を開けます。' }],
+      files: [{ attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '咲楽ノ宮の祈願所。物御籤（ものみくじ）と、カジノの景品が当たる勝負の御籤。下のボタンから売り場・中身と排出率・勝負の御籤を開けます。' }],
       components: [
         {
           type: 1,
           components: [
             { type: 2, style: 1, label: '物御籤売り場へ入る', custom_id: 'gacha:open', emoji: { name: '🎁' } },
             { type: 2, style: 2, label: '中身と排出率', custom_id: 'gacha:rates', emoji: { name: '📜' } },
+            { type: 2, style: 2, label: '勝負の御籤（カジノの景品）', custom_id: 'casino-gacha:open', emoji: { name: '🎰' } },
           ],
         },
       ],

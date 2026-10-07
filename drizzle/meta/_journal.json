@@ -540,6 +540,13 @@
       "when": 1791375354513,
       "tag": "0076_casino_profit_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1791380204297,
+      "tag": "0077_casino_styles",
+      "breakpoints": true
     }
   ]
 }

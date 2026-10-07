@@ -147,12 +147,12 @@ describe('祈願所の入口', () => {
     expect(await app.refreshPanels(guild)).toBe(0);
   });
 
-  it('入口は添付画像と2つのボタンだけ。価格や確率は画像に固定しない', () => {
+  it('入口は添付画像と3つのボタンだけ（物御籤売り場・中身と排出率・勝負の御籤）。価格や確率は画像に固定しない', () => {
     const panel = panelMessage('gacha');
     expect(panel.embeds).toEqual([{ image: { url: 'attachment://gacha-prayer.png' } }]);
     expect(panel.files?.[0]?.name).toBe('gacha-prayer.png');
     expect(existsSync(panel.files![0]!.attachment)).toBe(true);
-    expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates']);
+    expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates', 'casino-gacha:open']);
   });
 });
 
@@ -167,7 +167,8 @@ describe('📜 中身と排出率', () => {
     expect(view.embeds.map((e) => e.title)).toEqual(['🎊 超大当たり　0.016%', '🌸 大吉　4.76%', '🍡 吉　95.22%']);
     for (const t of ['**🎊 Discord Nitro 1 か月分**', '出る確率 **0.016%**', '残り 1', '**🎀「金色」**', '持っていたら出ない', '🔁 代わりの中身', '**🎫部屋代無料券 ×3**', '🎍 10/31 まで', '天井', '1 回 500 枚']) expect(text).toContain(t);
     expect(text).toContain('天井や運気アップがないとき');
-    expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:rates');
+    // 祈願所のボタン: 物御籤売り場・中身と排出率・勝負の御籤
+    expect(panelMessage('gacha').components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates', 'casino-gacha:open']);
   });
 
   it('中身が多くても最後まで読める。全ページが Discord の文字数上限に収まり、端のボタンは押せない', async () => {

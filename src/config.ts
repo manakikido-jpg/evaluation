@@ -535,6 +535,17 @@ export type CasinoConfig = z.infer<typeof casinoSchema>;
 /** 卓の参加費・ブラインド（みんなが同じだけ払うもの）の最高。🎰 大勝負の札が効いていても、元の 1 回の最高 */
 export const sharedMaxBet = (c: Pick<CasinoConfig, 'maxBet' | 'boostBase'>) => c.boostBase?.maxBet ?? c.maxBet;
 
+/** 勝負の御籤は、ふつうの物御籤と別の値段・天井 */
+export const casinoGachaSchema = z.object({
+  enabled: z.boolean().default(false),
+  // 共有されたチャンネル一覧の祈願所。移したときは社務所Webで変えられる
+  prayerChannelId: snowflake.default('1553587045073551447'),
+  price: z.number().int().min(1).max(100000).default(500),
+  pity: z.number().int().min(1).max(1000).default(30),
+  cosmeticPercent: z.number().min(0).max(100).default(70),
+  boostPercent: z.number().min(0).max(100).default(10),
+}).refine((g) => g.cosmeticPercent + g.boostPercent <= 100, '出る割合の合計は100％までです');
+
 export const guildConfigSchema = z
   .object({
     guildId: snowflake,
@@ -631,6 +642,7 @@ export const guildConfigSchema = z
     gacha: gachaSchema.default(gachaSchema.parse({})),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
+    casinoGacha: casinoGachaSchema.default(casinoGachaSchema.parse({})),
     casino: casinoSchema.default(casinoSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集を役職のある人みんなに知らせる */
     recruit: z

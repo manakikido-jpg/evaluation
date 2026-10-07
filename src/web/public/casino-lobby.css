@@ -1,0 +1,140 @@
+/* ロビーだけに使う。ゲーム中の卓や操作の見た目には当てない */
+.c-lobby-page { --cl-bg: #071521; --cl-panel: #0d1d28; --cl-line: #b98a4b70; --cl-gold: #f0cd91; --cl-muted: #b5c1ca; }
+body.c-lobby-page:not([class*="cs-background-"]) { background: radial-gradient(ellipse at 90% 100%, #38263855, transparent 55%), #071521; }
+.c-lobby-page .c-sky { opacity: .1; }
+.c-lobby-page .c-sky::after { display: none; }
+body.c-lobby-page.cs-background-yozakura { background: radial-gradient(ellipse at 0% 0%, #45233b80, transparent 55%), #071521; }
+.c-lobby-page .c-top { gap: 16px; padding: 14px 26px; background: #06131eee; border-color: #7f64384d; }
+.c-lobby-page .c-logo { font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; letter-spacing: .08em; color: #fae0b0; }
+.c-lobby-page .c-logo > span:last-child { display: flex; gap: 8px; align-items: baseline; }
+.c-lobby-page .c-logo b { font-size: 1rem; }
+.c-lobby-page .c-logo-mark { font-size: 1.8rem; }
+.cl-top-nav { display: flex; gap: 5px; margin-right: auto; }
+.cl-top-nav a { color: #e8e3da; padding: 8px 14px; border: 1px solid transparent; border-radius: 9px; text-decoration: none; white-space: nowrap; font-size: .9rem; }
+.cl-top-nav a[aria-current] { border-color: #c8995e; background: #24303944; }
+.cl-top-nav a:hover { background: #ffffff0d; }
+.c-lobby-page .c-me { gap: 10px; }
+.c-lobby-page .c-name { max-width: 140px; overflow-wrap: anywhere; font-size: .85rem; }
+.c-lobby-page .c-balance { padding: 6px 12px; font-size: .9rem; border-color: #bd955b; }
+.c-lobby-page .c-avatar { width: 30px; height: 30px; }
+.c-lobby-page .c-link { font-size: .75rem; }
+.c-lobby-page .c-sound { flex-shrink: 0; }
+.c-lobby-page .c-main.cl-main { width: 100%; max-width: 1660px; margin: 0 auto; padding: 26px; }
+.cl-shell { display: grid; grid-template-columns: 174px minmax(0, 1fr) 270px; gap: 24px; align-items: start; }
+.cl-rail { display: flex; flex-direction: column; gap: 24px; position: sticky; top: 106px; max-height: calc(100vh - 120px); overflow-y: auto; scrollbar-width: thin; padding: 4px 8px 4px 0; }
+.cl-rail section { display: flex; flex-direction: column; gap: 4px; }
+.cl-rail-heading { text-decoration: none; color: #f3d39d; font-size: .85rem; margin: 0 0 12px; }
+.cl-rail-game { display: flex; align-items: center; gap: 10px; padding: 8px 6px; text-decoration: none; color: #e2e6e9; border-radius: 8px; font-size: .82rem; }
+.cl-rail-game > span:first-child { flex-shrink: 0; display: grid; place-items: center; width: 30px; height: 34px; font-size: 1.15rem; border-radius: 7px; background: #142736; }
+.cl-rail-game:hover { background: #223443; }
+.cl-rail-foot { border-top: 1px solid #46535b; padding-top: 14px; font-size: .8rem; text-decoration: none; color: #c6c4ba; }
+.cl-content { min-width: 0; }
+.cl-hero { min-height: 195px; padding: 26px 22px; border-radius: 16px; background: linear-gradient(90deg, #071521dd, #07152165 58%, #07152100), url('/static/casino-lobby-night.webp') center / cover; margin-bottom: 20px; }
+.cl-eyebrow { margin: 0 0 8px; font-size: .63rem; letter-spacing: .2em; color: #e6bb84; }
+.cl-greeting-name { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cl-greeting { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: .92rem; color: #ede6dc; margin: 0; overflow-wrap: anywhere; }
+.cl-title-pill { border: 1px solid #ad884b; color: #f4d59c; background: #0d1b24c9; padding: 2px 10px; border-radius: 99px; font-size: .72rem; }
+.cl-hero h1 { font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; font-size: clamp(1.6rem, 2.5vw, 2.8rem); font-weight: 700; line-height: 1.35; margin: 14px 0 8px; color: #fff0da; letter-spacing: .025em; text-shadow: 0 2px 12px #000; }
+.cl-hero > p:last-child { margin: 0; color: #f0e9e0; font-size: .91rem; }
+.cl-panel { padding: 17px; background: linear-gradient(145deg, #122330ed, #071721f7); border: 1px solid #64788477; border-radius: 14px; }
+.cl-panel h2, .cl-section-heading h2 { font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; color: #f2dfba; font-size: 1.1rem; margin: 0; }
+.cl-resume { margin-bottom: 22px; border-color: var(--cl-line); background: linear-gradient(135deg, #2b252eaa, #122b27c9); }
+.cl-resume h2 { margin-bottom: 12px; }
+.cl-resume-row { display: flex; align-items: center; gap: 14px; color: #e9e5de; text-decoration: none; padding: 12px; border-radius: 10px; border: 1px solid #ad875a80; background: #10222aa6; }
+.cl-resume-row + .cl-resume-row { margin-top: 10px; }
+.cl-resume-art { width: 86px; height: 66px; flex-shrink: 0; border-radius: 8px; }
+.cl-resume-icon { font-size: 1.8rem; }
+.cl-resume-info { display: flex; flex-direction: column; gap: 4px; }
+.cl-resume-info b { font-size: 1rem; }
+.cl-resume-info small { color: #c3c7c9; font-size: .77rem; }
+.cl-state { flex-shrink: 0; font-size: .72rem; color: #cad0d2; border: 1px solid #728290; border-radius: 99px; padding: 3px 9px; }
+.cl-state.my-turn { border-color: #e5c086; color: #ffe0a1; background: #4d3b1d; }
+.cl-action { display: inline-flex; align-items: center; justify-content: center; gap: 16px; background: linear-gradient(#285b4a, #123c32); border: 1px solid #79ad89; border-radius: 8px; padding: 8px 16px; color: #f2fff5; text-decoration: none; font-size: .82rem; font-weight: 700; white-space: nowrap; box-shadow: inset 0 0 12px #85b49213; }
+.cl-action:hover { background: #326c54; }
+.cl-resume-row .cl-action { margin-left: auto; min-width: 130px; }
+.cl-resume-row:focus-visible { outline-offset: 5px; }
+.cl-games-section { scroll-margin-top: 125px; margin-bottom: 22px; }
+.cl-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.cl-section-heading p { margin: 0; font-size: .73rem; color: #c2c2bc; }
+.cl-section-heading > a { color: #d5d7d0; font-size: .75rem; text-decoration: none; }
+.cl-filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.cl-filters a { color: #bfcbd2; text-decoration: none; font-size: .75rem; padding: 5px 12px; border: 1px solid #44525f; border-radius: 99px; }
+.cl-filters a.selected { border-color: #c9a465; color: #f9dfb2; background: #4037266b; }
+.cl-games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.cl-game { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid #c79552a8; border-radius: 13px; text-decoration: none; background: #0c1d27; color: #f5eee6; transition: border-color .15s, transform .15s; }
+.cl-game:hover { border-color: #ffdcaa; transform: translateY(-2px); }
+.cl-game-art { aspect-ratio: 1.7; width: 100%; position: relative; }
+.cl-game-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 55%, #0c1d27); }
+.cl-art-blackjack, .cl-art-slots, .cl-art-roulette, .cl-art-poker, .cl-art-mahjong, .cl-art-keiba, .cl-art-fox, .cl-art-gacha { background-image: url('/static/casino-lobby-art.webp'); background-size: 200% 400%; }
+.cl-art-blackjack { background-position: 0 0; }
+.cl-art-slots { background-position: 100% 0; }
+.cl-art-roulette { background-position: 0 33.333333%; }
+.cl-art-poker { background-position: 100% 33.333333%; }
+.cl-art-mahjong { background-position: 0 66.666667%; }
+.cl-art-keiba { background-position: 100% 66.666667%; }
+.cl-art-fox { background-position: 0 100%; }
+.cl-art-gacha { background-position: 100% 100%; }
+.cl-art-other { display: grid; place-items: center; background: radial-gradient(ellipse at center, #3f3847, #10222f); }
+.cl-art-other > span { font-size: 3rem; }
+.cl-game-body { padding: 0 12px 12px; flex: 1; display: flex; flex-direction: column; }
+.cl-game-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.cl-game h3 { font-size: .98rem; margin: 0; font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; }
+.cl-game-heading small { color: #c9d9d1; border: 1px solid #56796d; border-radius: 99px; padding: 1px 6px; font-size: .65rem; white-space: nowrap; }
+.cl-game-body > p { margin: 7px 0 10px; color: #d3d8d9; font-size: .77rem; line-height: 1.55; flex: 1; }
+.cl-game-bottom { display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+.cl-game-bottom > span { font-size: .62rem; color: #aebfc7; }
+.cl-game-bottom > b { display: inline-flex; align-items: center; gap: 16px; border: 1px solid #759a76; border-radius: 7px; padding: 3px 13px; background: linear-gradient(#285c49, #113b30); font-size: .74rem; }
+.cl-more { margin-top: 16px; }
+.cl-more summary { cursor: pointer; color: #e5c68f; padding: 12px 14px; border-radius: 9px; background: #10232e; border: 1px solid #53616b; font-size: .82rem; }
+.cl-more[open] > summary { margin-bottom: 12px; }
+.cl-empty { color: #bdc8d0; font-size: .82rem; margin: 12px 0 0; }
+#available-tables { scroll-margin-top: 125px; }
+.cl-tables { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cl-tables li { display: flex; align-items: center; gap: 10px; border: 1px solid #425765; border-radius: 9px; padding: 12px 9px; background: #0a1a25; min-width: 0; }
+.cl-table-icon { flex-shrink: 0; font-size: 1.3rem; }
+.cl-tables li > span:nth-child(2) { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.cl-tables b { font-size: .8rem; }
+.cl-tables small { font-size: .62rem; color: #c2cad0; }
+.cl-tables .cl-action { padding: 6px 8px; gap: 4px; font-size: .68rem; margin-left: auto; }
+.cl-aside { display: flex; flex-direction: column; gap: 16px; }
+.cl-aside h2 { margin-bottom: 12px; }
+.cl-wardrobe-scene { height: 176px; border: 1px solid #cda66a; border-radius: 10px; display: grid; place-items: center; background-color: #154339; }
+.cl-wardrobe-scene > span { font-size: 4rem; }
+.cl-style-list { margin: 12px 0 0; }
+.cl-style-list > div { display: flex; gap: 12px; align-items: center; border: 1px solid #5067786b; border-radius: 7px; padding: 9px; margin: 8px 0; background: #0b1a25; }
+.cl-style-list dt { font-size: .66rem; color: #b6c3cc; flex-shrink: 0; }
+.cl-style-list dd { margin: 0; font-size: .75rem; color: #ebe6da; }
+.cl-small { font-size: .69rem; color: #b8c5ce; line-height: 1.6; }
+.cl-gold-action { display: flex; align-items: center; justify-content: center; gap: 20px; background: linear-gradient(#f3d5a0, #cfad73); padding: 10px; border-radius: 9px; border: 1px solid #ffdda6; color: #241c0e; font-size: .86rem; font-weight: 700; text-decoration: none; }
+.cl-gold-action:hover { background: #f5d29a; }
+.cl-gacha > p:first-of-type { color: #d4dade; font-size: .8rem; margin: 0 0 12px; }
+.cl-gacha-scene { height: 200px; border-radius: 9px; position: relative; border: 1px solid #bd965c; }
+.cl-prize-count { position: absolute; right: 9px; top: 9px; border: 1px solid #ddbb7b; background: #071521cc; padding: 3px 9px; border-radius: 99px; color: #f4d49c; font-size: .65rem; }
+.cl-gacha-price { text-align: center; font-size: .85rem; font-weight: 700; color: #f0d9b6; margin: 12px 0; }
+.cl-gacha-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cl-outline-action, .cl-pink-action { border: 1px solid #a9afab; border-radius: 8px; padding: 9px 5px; font-weight: 700; text-align: center; text-decoration: none; color: #e6e9e7; font-size: .73rem; }
+.cl-pink-action { background: linear-gradient(#f6bcbf, #dc8f9c); color: #351521; border-color: #ffd0d1; }
+.cl-outline-action:hover { background: #273a48; }
+.cl-pink-action:hover { background: #ffd0d1; }
+.cl-record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cl-history { list-style: none; margin: 10px 0 0; padding: 0; }
+.cl-history li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #6478844d; font-size: .75rem; }
+.cl-limits { margin-top: 18px; color: #bdc6cd; font-size: .74rem; }
+.c-lobby-page a:focus-visible, .c-lobby-page summary:focus-visible, .c-lobby-page button:focus-visible { outline: 3px solid #ffd68f; outline-offset: 3px; }
+@media (max-width: 1380px) { .cl-shell { grid-template-columns: 150px minmax(0, 1fr) 242px; gap: 18px; } .c-lobby-page .c-top { gap: 10px; } .cl-top-nav a { padding: 7px 10px; font-size: .81rem; } .c-lobby-page .c-name { max-width: 100px; } .cl-panel { padding: 14px; } }
+@media (max-width: 1160px) { .cl-shell { grid-template-columns: minmax(0, 1fr) 260px; } .cl-rail { display: none; } .c-lobby-page .c-top { padding: 12px 20px; flex-wrap: wrap; } .cl-top-nav { order: 3; flex-basis: 100%; justify-content: center; } .c-lobby-page .c-me { margin-left: auto; } }
+@media (max-width: 850px) { .cl-shell { grid-template-columns: minmax(0, 1fr); } .cl-aside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } .cl-top-nav a { padding: 8px 14px; } .cl-hero h1 { font-size: 2.2rem; } .cl-hero { min-height: 185px; } }
+@media (max-width: 540px) {
+  .c-main.cl-main { padding: 14px; } .c-lobby-page .c-top { padding: 10px 14px; gap: 8px; } .c-lobby-page .c-logo > span:last-child { gap: 5px; font-size: 1rem; } .c-lobby-page .c-logo b { font-size: .8rem; } .c-lobby-page .c-logo-mark { font-size: 1.3rem; }
+  .c-lobby-page .c-me { order: 2; flex-basis: 100%; justify-content: flex-start; gap: 8px; } .c-lobby-page .c-me .c-name { max-width: min(140px, 32vw); } .c-lobby-page .c-me .c-inline { margin-left: auto; } .c-lobby-page .c-sound { margin-left: auto; width: 32px; height: 32px; }
+  .cl-top-nav { justify-content: flex-start; gap: 2px; overflow-x: auto; } .cl-top-nav a { padding: 6px 10px; font-size: .74rem; } .c-lobby-page .c-top { position: relative; }
+  .cl-hero { padding: 22px 16px; min-height: 190px; background-position: 65% center; } .cl-hero h1 { font-size: 1.9rem; max-width: 290px; } .cl-greeting-name { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cl-greeting { font-size: .78rem; } .cl-hero > p:last-child { font-size: .8rem; }
+  .cl-games { grid-template-columns: minmax(0, 1fr); gap: 14px; } .cl-game { display: grid; grid-template-columns: 39% minmax(0, 1fr); min-height: 165px; } .cl-game-art { aspect-ratio: auto; height: 100%; } .cl-game-art::after { background: linear-gradient(90deg, transparent 60%, #0c1d27); } .cl-game-body { padding: 12px 12px 12px 6px; } .cl-game h3 { font-size: 1rem; } .cl-game-heading small { font-size: .65rem; } .cl-game-body > p { font-size: .78rem; } .cl-game-bottom > span { font-size: .64rem; } .cl-game-bottom > b { padding: 5px 10px; }
+  .cl-section-heading { flex-wrap: wrap; gap: 5px; } .cl-section-heading h2 { font-size: 1.02rem; } .cl-section-heading p { font-size: .67rem; } .cl-filters a { padding: 6px 11px; }
+  .cl-resume-row { flex-wrap: wrap; gap: 10px; } .cl-resume-art { width: 62px; height: 56px; } .cl-resume-row .cl-action { width: 100%; margin: 2px 0 0; padding: 10px; } .cl-resume-info { flex: 1; } .cl-resume-info b { font-size: .9rem; } .cl-state { font-size: .65rem; }
+  .cl-tables, .cl-record-grid, .cl-aside { grid-template-columns: minmax(0, 1fr); } .cl-tables .cl-action { padding: 10px; font-size: .75rem; } .cl-tables small { font-size: .72rem; } .cl-tables b { font-size: .9rem; }
+  .cl-wardrobe-scene { height: 235px; } .cl-gacha-scene { height: 245px; } .cl-small, .cl-style-list dd { font-size: .78rem; } .cl-gold-action, .cl-pink-action, .cl-outline-action { padding: 12px; font-size: .85rem; } .cl-limits { font-size: .74rem; }
+  .cl-games-section, #available-tables { scroll-margin-top: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .cl-game { transition: none; } .cl-game:hover { transform: none; } }

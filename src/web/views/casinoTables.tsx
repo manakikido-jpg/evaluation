@@ -1,3 +1,4 @@
+import { styleItem } from '../../services/casino/styles.js';
 import type { Child } from 'hono/jsx';
 import type { CasinoConfig, TableKind } from '../../config.js';
 import type { CasinoTable } from '../../db/schema.js';
@@ -327,7 +328,12 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
       <BabaView t={t} s={t.state as BabaState} {...p} />
     );
   return (
-    <div id="c-live" data-table={String(t.id)} data-v={String(t.version)} data-now={String(p.now)} data-open={t.status === 'open' ? '1' : '0'}>
+    <div id="c-live" data-style-v={JSON.stringify(p.me.sharedStyles ?? {})} data-table={String(t.id)} data-v={String(t.version)} data-now={String(p.now)} data-open={t.status === 'open' ? '1' : '0'}>
+      <div class="cs-seats" aria-label="席の飾り">{((t.state as { seats?: ({ id: string; name: string } | null)[] }).seats ?? []).filter((seat) => seat && p.me.sharedStyles?.[seat.id]).map((seat) => {
+        if (!seat) return null;
+        const st = p.me.sharedStyles![seat.id]!;
+        return <div class={`cs-seat cs-table-${st.table ?? 'default'}`}><span>{styleItem(st.ornament ?? '')?.emoji}</span><b>{seat.name}</b>{st.table && <small>{styleItem(st.table)?.emoji} {styleItem(st.table)?.name}</small>}{st.title && <small class="cs-title">{styleItem(st.title)?.emoji} {styleItem(st.title)?.name}</small>}</div>;
+      })}</div>
       {body}
     </div>
   );

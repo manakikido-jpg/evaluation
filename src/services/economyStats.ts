@@ -33,6 +33,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   gacha_reset: 'issue',
   keiba_prize: 'issue',
   casino_share: 'issue',
+  casino_gacha: 'income',
   shop: 'income',
   shop_refund: 'income',
   room: 'income',
@@ -70,6 +71,7 @@ const INCOME_GROUP: Record<string, string> = {
   shop_refund: 'shop',
   gacha: 'gacha',
   gacha_refund: 'gacha',
+  casino_gacha: 'casino_gacha',
   room: 'room',
   menzaifu: 'menzaifu',
   saisen: 'saisen',
@@ -86,6 +88,7 @@ const INCOME_GROUP: Record<string, string> = {
 export const INCOME_LABEL: Record<string, string> = {
   shop: '授与品（ショップ）',
   gacha: '物御籤',
+  casino_gacha: '勝負の御籤（カジノの景品）',
   room: '通話部屋',
   menzaifu: '免罪符',
   market: '市場の手数料',
