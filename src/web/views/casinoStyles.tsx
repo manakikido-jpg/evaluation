@@ -75,7 +75,7 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
     </CasinoLayout>
   );
 }
-export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildConfig['casinoGacha']; requestId: string; results?: string[]; message?: string }) {
+export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildConfig['casinoGacha']; prayerHref: string }) {
   const chances = styleChances(p.g, p.state.owned);
   const complete = STYLE_ITEMS.filter((i) => i.slot).every((i) => p.state.owned.includes(i.key));
   return (
@@ -86,24 +86,6 @@ export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildCon
         <p>祈願所 · カジノの景品ガチャ</p>
         <b>自分だけの遊技場を、彩ろう。</b>
       </section>
-      {p.message && <p role="status">{p.message}</p>}
-      {p.results && (
-        <section class="cs-section" role="status">
-          <h2>今回の景品</h2>
-          <div class="cs-grid">
-            {p.results.map((key) => {
-              const i = styleItem(key)!;
-              return (
-                <article class="cs-item">
-                  <span class="cs-icon">{i.emoji}</span>
-                  <h3>{i.name}</h3>
-                  <p>{i.slot ? '所持品に入りました。着せ替えで装備できます。' : i.note}</p>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
       <p>
         1回 {p.g.price.toLocaleString('ja-JP')}
         {p.me.coin.name} · 10連 {(p.g.price * 10).toLocaleString('ja-JP')}
@@ -114,18 +96,8 @@ export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildCon
           ? '見た目の品は全部そろいました！見た目の品の分は、お試し券になります。'
           : `あと${Math.max(1, p.g.pity - p.state.pity)}回以内に、未所持の見た目の品を保証（${p.g.pity}回の天井）`}
       </p>
-      <form method="post" action="/casino/style-gacha/draw" class="c-actions">
-        <Hidden me={p.me} />
-        <input type="hidden" name="requestId" value={p.requestId} />
-        {[1, 10].map((n) => (
-          <button class="c-btn" type="submit" name="times" value={String(n)} disabled={!p.g.enabled || p.me.balance < n * p.g.price}>
-            {n === 1 ? '1回引く' : '10連で引く'}
-          </button>
-        ))}
-        <a class="c-btn c-btn-ghost" href="/casino/wardrobe">
-          着せ替えへ
-        </a>
-      </form>
+      <p>御籤を引く場所は、Discordの祈願所です。この画面は景品の紹介です。</p>
+      <div class="c-actions"><a class="c-btn" href={p.prayerHref} target="_blank" rel="noopener noreferrer">⛩ 祈願所へ（Discord）</a><a class="c-btn c-btn-ghost" href="/casino/wardrobe">着せ替えへ</a></div>
       {!p.g.enabled && <p>今はお休み中です。中身は下で見られます。</p>}
       <h2>中身と、今の出る割合</h2>
       <p>見た目の品は期限なし・同じ品は出ません。所持が増えると残りの品の割合が上がります。天井の回は未所持の見た目の品の中で均等です。物御籤の券・セール・天井とは別です。</p>

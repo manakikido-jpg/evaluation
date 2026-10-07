@@ -1,4 +1,5 @@
-import { activeStyles, stylesOf, equipStyle, drawStyles, tableStyles } from '../services/casino/styles.js';
+import { lobbyTable, lobbyResumes, visibleLobbyGames, prayerHref } from '../services/casino/lobby.js';
+import { activeStyles, stylesOf, equipStyle, tableStyles } from '../services/casino/styles.js';
 import { StyleGachaPage, Wardrobe } from './views/casinoStyles.js';
 import { artUrls } from '../services/casino/slotArt.js';
 import { AT_FILE_ART } from './assets.js';
@@ -183,13 +184,9 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const messages = { ok: '見た目を変えました。', invalid: 'その見た目は選べません。', not_owned: 'まだ持っていません。', no_ticket: 'お試し券がありません。', active: '今のお試しが終わってから使えます。' };
     return c.redirect('/casino/wardrobe?msg=' + encodeURIComponent(messages[result]));
   }, { post: true }));
-  app.get('/casino/style-gacha', page(async (c, me) => c.html(<StyleGachaPage me={me} state={await stylesOf(db, me.session.userId)} g={d.cfg().casinoGacha} requestId={randomToken()} />)));
-  app.post('/casino/style-gacha/draw', page(async (c, me) => {
-    const b = await c.req.parseBody();
-    const r = await drawStyles(db, d.cfg().casinoGacha, me.session.userId, String(b.requestId ?? ''), Number(b.times), 'web');
-    const messages = { off: '今はお休み中です。', invalid: 'もう一度画面を開いてください。', funds: '銭が足りません。' };
-    return c.html(<StyleGachaPage me={await meOf(me.session)} state={await stylesOf(db, me.session.userId)} g={d.cfg().casinoGacha} requestId={randomToken()} results={r.status === 'ok' ? r.results : undefined} message={r.status === 'ok' ? r.replay ? '同じ操作の結果を表示しています。追加の支払いはありません。' : '景品が所持品に入りました。' : messages[r.status]} />);
-  }, { post: true }));
+  app.get('/casino/style-gacha', page(async (c, me) => c.html(<StyleGachaPage me={me} state={await stylesOf(db, me.session.userId)} g={d.cfg().casinoGacha} prayerHref={prayerHref(d.cfg())} />)));
+  // 古い画面から送られても、Webでは銭を動かさない
+  app.post('/casino/style-gacha/draw', page((c) => c.text('御籤はDiscordの祈願所で引いてください。', 410), { post: true }));
 
   // ───────── 入口・ログイン ─────────
 
@@ -257,16 +254,26 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const wins = await bigWins(db, new Date(d.now().getTime() - 7 * 86_400_000));
     const names = await namesOf(db, wins.map((w) => w.memberId));
     const open = (await openMatches(db)).filter((m) => m.status === 'open').length;
+    const games = visibleLobbyGames(cfg.casino);
+    const group = c.req.query('group');
+    const [wardrobe, mine, available, resumes] = await Promise.all([stylesOf(db, me.session.userId), myTable(db, me.session.userId), openTables(db), lobbyResumes(db, me.session.userId, games)]);
+    const summaries = available.map((t) => lobbyTable(t, me.session.userId)).filter((t): t is NonNullable<typeof t> => !!t && t.canJoin && games.includes(t.kind));
     return c.html(
       <CasinoLobby
         me={me}
         casino={casinoOf(me)}
+        casinoGacha={cfg.casinoGacha}
+        wardrobe={wardrobe}
+        prayerHref={prayerHref(cfg)}
+        group={group === 'solo' || group === 'table' ? group : 'all'}
+        openTables={summaries}
+        resumes={resumes}
         today={await todayBets(db, me.session.userId, d.now())}
         recent={await recentGames(db, me.session.userId, 10)}
         bigWins={wins.map((w) => ({ ...w, name: names.get(w.memberId) ?? 'だれか' }))}
         openMatches={open}
         tables={await tableCounts(db)}
-        mine={await myTable(db, me.session.userId)}
+        mine={mine ? lobbyTable(mine, me.session.userId) : undefined}
         msg={casinoMsg(c.req.query('e'))}
       />,
     );

@@ -219,6 +219,7 @@ export function CasinoAdminPage(p: {
             </label>
             {p.casinoGacha && <fieldset><legend>🎰 勝負の御籤（カジノの景品ガチャ）</legend>
               <label><input type="checkbox" name="styleEnabled" value="yes" checked={p.casinoGacha.enabled}/> 開く</label>
+              <label>祈願所のチャンネルID<input type="text" name="stylePrayerChannelId" inputmode="numeric" pattern="[0-9]{17,20}" value={p.casinoGacha.prayerChannelId} required/></label>
               <label>1回の値段<input type="number" name="stylePrice" min="1" max="100000" value={String(p.casinoGacha.price)} required/></label>
               <label>天井（未所持の見た目の品）<input type="number" name="stylePity" min="1" max="1000" value={String(p.casinoGacha.pity)} required/></label>
               <label>見た目の品（％）<input type="number" name="styleCosmeticPercent" min="0" max="100" step="0.1" value={String(p.casinoGacha.cosmeticPercent)} required/></label>

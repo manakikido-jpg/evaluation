@@ -1669,6 +1669,7 @@ export function createWebApp(deps: WebDeps) {
     let overrides: Overrides;
     try {
       overrides = overridesSchema.parse({ ...current, casino, casinoGacha: typeof body.stylePrice === 'string' ? {
+        prayerChannelId: typeof body.stylePrayerChannelId === 'string' ? body.stylePrayerChannelId : cfg.casinoGacha.prayerChannelId,
         enabled: body.styleEnabled === 'yes', price: int('stylePrice'), pity: int('stylePity'),
         cosmeticPercent: Number(body.styleCosmeticPercent), boostPercent: Number(body.styleBoostPercent),
       } : current.casinoGacha });

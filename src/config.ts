@@ -536,6 +536,8 @@ export const sharedMaxBet = (c: Pick<CasinoConfig, 'maxBet' | 'boostBase'>) => c
 /** 勝負の御籤は、ふつうの物御籤と別の値段・天井 */
 export const casinoGachaSchema = z.object({
   enabled: z.boolean().default(false),
+  // 共有されたチャンネル一覧の祈願所。移したときは社務所Webで変えられる
+  prayerChannelId: snowflake.default('1553587045073551447'),
   price: z.number().int().min(1).max(100000).default(500),
   pity: z.number().int().min(1).max(1000).default(30),
   cosmeticPercent: z.number().min(0).max(100).default(70),
