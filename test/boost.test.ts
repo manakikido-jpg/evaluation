@@ -88,13 +88,11 @@ describe('奉納の記録', () => {
 });
 
 describe('お知らせ・DM・奉納板', () => {
-  it('#慶事 にお知らせ、本人に DM（特典の案内つき・花びらはなし）。2 回目は何もしない', async () => {
+  it('チャンネル通知は出さず、本人に DM（特典の案内つき・花びらはなし）。2 回目は何もしない', async () => {
     await recordJoin(db, snap(A, at(0)));
     await recordJoin(db, snap(B, null));
     expect(await processBoosters({ db, cfg, discord }, at(0))).toEqual({ announced: 1 });
-    const announce = log.find((l) => l.startsWith(`send ${cfg.channels.keiji}`))!;
-    expect(announce).toContain(`<@${A}>`);
-    expect(announce).toContain('奉納');
+    expect(log.filter((l) => l.startsWith('send '))).toEqual([]);
     const dm = log.find((l) => l.startsWith(`dm ${A}`))!;
     expect(dm).toContain('20% 引き');
     expect(dm).toContain('奉納板');
@@ -146,13 +144,14 @@ describe('お知らせ・DM・奉納板', () => {
 });
 
 describe('ブースト 1 回ごとのお礼', () => {
-  it('「ブーストしました」1 件ごとにお知らせと DM（花びらはなし）。同じメッセージでは 2 回出さない', async () => {
+  it('「ブーストしました」1 件ごとに本人への DM だけ送る。同じメッセージでは 2 回送らない', async () => {
     const ctx = { db, cfg, discord };
     expect(await thankBoostMessage(ctx, { messageId: '1', memberId: A, count: 1 }, at(0))).toEqual({ status: 'ok' });
     expect(await thankBoostMessage(ctx, { messageId: '2', memberId: A, count: 2 }, at(0))).toEqual({ status: 'ok' });
     expect(await thankBoostMessage(ctx, { messageId: '2', memberId: A, count: 2 }, at(0))).toEqual({ status: 'duplicate' });
     expect((await walletOf(db, A)).balance).toBe(0);
-    expect(log.filter((l) => l.startsWith(`send ${cfg.channels.keiji}`))).toHaveLength(2);
+    expect(log.filter((l) => l.startsWith('send '))).toEqual([]);
+    expect(log.filter((l) => l.startsWith(`dm ${A}`))).toHaveLength(2);
     expect(log.find((l) => l.includes('ブースト 2 回分'))).toBeDefined();
   });
 

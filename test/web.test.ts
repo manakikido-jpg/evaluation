@@ -673,6 +673,9 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const g = await login(GUJI);
     const page = await (await get('/settings', g)).text();
     expect(page).toContain('免罪符の値段');
+    expect(page).toContain('チャンネルへのブースト通知は出さず、本人にお礼の DM を送ります');
+    expect(page).not.toContain('name="boostAnnounce"');
+    expect(page).toContain('name="boostDm"');
     const form: Record<string, string> = {
       _csrf: await csrfOf(g),
       currencyName: '花びら',

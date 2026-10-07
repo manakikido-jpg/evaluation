@@ -1513,7 +1513,7 @@ export function SettingsPage(props: {
         <section class="card anchor" id="sec-boost">
           <h2>🏮 ブースト（奉納）のお礼と特典</h2>
           <p class="note">
-            ブースト 1 回ごとに、#慶事 でお知らせ・本人に DM を送ります（お金・{e.currencyName}は渡しません）。#番付 に今奉納してくれている人の「奉納板」を出します。奉納している間は授与品が割引になります（何回ブーストしても同じ）。
+            チャンネルへのブースト通知は出さず、本人にお礼の DM を送ります（お金・{e.currencyName}は渡しません）。#番付 に今奉納してくれている人の「奉納板」を出します。奉納している間は授与品が割引になります（何回ブーストしても同じ）。
             <br />
             ブースト 1 回ごとに数えるには、Discord のサーバー設定 →「システムメッセージチャンネル」を選び、「サーバーがブーストされた時にメッセージを送信する」を ON にしてください（OFF だと 1 人 1 回分になります）。
           </p>
@@ -1522,13 +1522,7 @@ export function SettingsPage(props: {
             <Num name="boostDiscountPercent" label="授与品の割引 %（免罪符・贈り物はのぞく。0 で割引なし。90 まで）" value={e.boostDiscountPercent} file={f.boostDiscountPercent} />
           </div>
           <label class="field">
-            <span>#慶事 に出すお知らせ（{'{名前}'} が奉納した人になります。通知は飛びません）</span>
-            <textarea name="boostAnnounce" rows={3} maxlength={1000} required>
-              {cfg.boost.announceText}
-            </textarea>
-          </label>
-          <label class="field">
-            <span>本人への DM の最初の文（お礼の{e.currencyName}・割引の案内は BOT が下に足します）</span>
+            <span>本人への DM の最初の文（特典の案内は BOT が下に足します）</span>
             <textarea name="boostDm" rows={3} maxlength={1000} required>
               {cfg.boost.dmText}
             </textarea>
