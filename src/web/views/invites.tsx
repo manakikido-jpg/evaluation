@@ -1,10 +1,10 @@
 import { INVITE_SORTS, sortInviteRows, type InviteSort, type InviteOrder } from '../../services/inviteList.js';
-import type { GuildConfig } from '../../config.js';
+import { adminLevelOf, type GuildConfig } from '../../config.js';
 import { highestRank } from '../../domain/ranks.js';
 import type { InviteRewardRow } from '../../services/invites.js';
 import type { AdminSession, Invite, InviteLink } from '../../db/schema.js';
 import type { GuildInvite } from '../../lib/discordRest.js';
-import { SHARED_INVITER } from '../../services/invites.js';
+import { SHARED_INVITER, STAFF_NO_INVITER } from '../../services/invites.js';
 import { jstShort, remaining } from '../../services/tempGrants.js';
 import { Layout } from './layout.js';
 
@@ -13,6 +13,7 @@ function Csrf(props: { session: AdminSession }) {
 }
 
 export const INVITES_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  assign_no_invite: { text: '招待なし（運営）として登録しました。招待報酬の対象外です。', kind: 'ok' },
   assign_assigned: { text: '招待した人を登録し、今の役職で達成した報酬を確認しました。支払状況を一覧で確認してください。', kind: 'ok' },
   assign_known: { text: '招待した人はすでに登録されています。前の記録は変えていません。', kind: 'warn' },
   assign_invalid: { text: '登録できませんでした。自分・BOT・退出した人は選べません。', kind: 'warn' },
@@ -69,7 +70,7 @@ export function InvitesPage(props: {
   const shown = sortInviteRows(props.rewards.filter(
     (r) =>
       props.filter === 'all' ||
-      (props.filter === 'unknown' ? !r.inviterId : props.filter === 'paid' ? !!r.rewardedAt && !!r.ujikoRewardedAt : !!r.inviterId && (!r.rewardedAt || !r.ujikoRewardedAt)),
+      (props.filter === 'unknown' ? !r.inviterId && r.source !== STAFF_NO_INVITER : props.filter === 'paid' ? !!r.rewardedAt && !!r.ujikoRewardedAt : !!r.inviterId && (!r.rewardedAt || !r.ujikoRewardedAt)),
   ), props.sort, props.order, props.cfg, name);
   const totals = new Map<string, { invited: number; paid: number; waiting: number }>();
   for (const r of props.rewards)
@@ -81,6 +82,7 @@ export function InvitesPage(props: {
       totals.set(r.inviterId, v);
     }
   const status = (r: InviteRewardRow, stage: 'sanpaisha' | 'ujiko') => {
+    if (r.source === STAFF_NO_INVITER) return <span class="tag gray">対象外・招待なし</span>;
     const at = stage === 'sanpaisha' ? r.rewardedAt : r.ujikoRewardedAt;
     const amount = stage === 'sanpaisha' ? r.reward : r.ujikoReward;
     if (at)
@@ -140,10 +142,10 @@ export function InvitesPage(props: {
           {props.cfg.economy.currencyName}、🍃氏子で追加 {props.cfg.economy.inviteUjikoReward}
           {props.cfg.economy.currencyName}。各段階1人1回です。
         </p>
-        <p class="note">宮司は招待元不明の行から招待した人を選べます。登録すると、今の役職で達成した未払いの段階を支払います。登録済みの招待元は変更できません。</p>
+        <p class="note">宮司は招待元不明の行から招待した人を選べます。登録すると、今の役職で達成した未払いの段階を支払います。運営には「招待なし（運営）」も選べます。招待報酬の対象外になり、招待元不明とは分けて表示します。登録済みの招待元は変更できません。</p>
         <p class="note">在籍者の新しい記録から最大200人を表示対象にして、その中で並び替えます。参加日が不明な人は最後に表示します。退出した人の記録は残し、一覧から非表示にします。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
         <p>
-          招待元不明 {props.rewards.filter((r) => !r.inviterId).length}人 · 両段階完了 {props.rewards.filter((r) => r.rewardedAt && r.ujikoRewardedAt).length}人 · 支払額{' '}
+          招待元不明 {props.rewards.filter((r) => !r.inviterId && r.source !== STAFF_NO_INVITER).length}人 · 両段階完了 {props.rewards.filter((r) => r.rewardedAt && r.ujikoRewardedAt).length}人 · 支払額{' '}
           {props.rewards.reduce((sum, r) => sum + r.reward + r.ujikoReward, 0).toLocaleString('ja-JP')}
           {props.cfg.economy.currencyName}
         </p>
@@ -186,13 +188,13 @@ export function InvitesPage(props: {
                     <div class="note">参加日: {r.joinedAt ? jstShort(r.joinedAt) : '不明'}</div>
                   </td>
                   <td>
-                    {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : '不明'}
-                    <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : '招待元の記録なし'}</div>
-                    {!r.inviterId && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
+                    {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : r.source === STAFF_NO_INVITER ? '招待なし（運営）' : '不明'}
+                    <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : r.source === STAFF_NO_INVITER ? '招待報酬の対象外' : '招待元の記録なし'}</div>
+                    {!r.inviterId && r.source !== STAFF_NO_INVITER && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
                       <form method="post" action={`/invites/members/${r.memberId}/assign`}>
                         <Csrf session={session} />
-                        <label class="field"><span>招待した人</span><select name="inviterId" required><option value="">選んでください</option>{props.candidates.filter(m => m.id !== r.memberId).map(m => <option value={m.id}>{m.name}（{m.id}）</option>)}</select></label>
-                        <label class="field"><span><input type="checkbox" name="confirm" value="yes" required /> この人の招待と確認しました。達成済みの未払い報酬を支払います。</span></label>
+                        <label class="field"><span>招待した人</span><select name="inviterId" required><option value="">選んでください</option>{adminLevelOf(props.cfg, r.roleIds) && <option value={STAFF_NO_INVITER}>招待なし（運営）</option>}{props.candidates.filter(m => m.id !== r.memberId).map(m => <option value={m.id}>{m.name}（{m.id}）</option>)}</select></label>
+                        <label class="field"><span><input type="checkbox" name="confirm" value="yes" required /> 招待元を確認しました。個人を選んだ場合は達成済みの未払い報酬を支払います。「招待なし（運営）」は報酬対象外です。</span></label>
                         <button type="submit">登録して報酬を確認</button>
                       </form>
                     </details>}

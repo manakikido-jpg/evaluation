@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { autoRanks } from '../domain/ranks.js';
-import type { GuildConfig } from '../config.js';
+import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily, inviteActive, inviteLinks, invites, members, type Invite, type InviteLink } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -13,6 +13,9 @@ import { audit } from './audit.js';
  * 招待のお礼。参拝者・氏子の段階ごとに、招待した人へ渡す。
  * 招待された人・段階ごとに1回だけ（抜けて入り直しても重ねて渡さない）。
  */
+
+/** 運営の招待元なし。DiscordのユーザーIDとは分けて記録する。 */
+export const STAFF_NO_INVITER = 'staff_none';
 
 const isSnowflake = (v: unknown): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v);
 
@@ -36,7 +39,7 @@ export async function rewardInviter(ctx: RewardContext, memberId: string, now = 
   const amount = stage === 'sanpaisha' ? ctx.cfg.economy.inviteSanpaishaReward : ctx.cfg.economy.inviteUjikoReward;
   const column = stage === 'sanpaisha' ? invites.rewardedAt : invites.ujikoRewardedAt;
   const [inv] = await ctx.db.select().from(invites).where(eq(invites.memberId, memberId));
-  if (!inv) return { status: 'none' };
+  if (!inv || inv.source === STAFF_NO_INVITER) return { status: 'none' };
   if ((stage === 'sanpaisha' ? inv.rewardedAt : inv.ujikoRewardedAt)) return { status: 'already' };
   const [inviter] = await ctx.db.select().from(members).where(eq(members.id, inv.inviterId));
   if (!inviter || inviter.leftAt || inviter.isBot || inv.inviterId === memberId) return { status: 'inviter_gone' };
@@ -80,16 +83,22 @@ export async function rewardInviteRanks(ctx: RewardContext, memberId: string, ro
 }
 
 /** 不明な招待元だけ宮司が補う。既存記録は変えず、操作記録も同時に残す。 */
-export async function assignUnknownInviter(ctx: RewardContext, memberId: string, inviterId: unknown, actorId: string, now = new Date()): Promise<'assigned' | 'known' | 'invalid'> {
-  if (!isSnowflake(memberId) || !isSnowflake(inviterId) || memberId === inviterId) return 'invalid';
+export async function assignUnknownInviter(ctx: RewardContext, memberId: string, inviterId: unknown, actorId: string, now = new Date()): Promise<'assigned' | 'no_invite' | 'known' | 'invalid'> {
+  const noInvite = inviterId === STAFF_NO_INVITER;
+  if (!isSnowflake(memberId) || (!noInvite && !isSnowflake(inviterId)) || memberId === inviterId) return 'invalid';
   const result = await ctx.db.transaction(async tx => {
     const [member] = await tx.select().from(members).where(eq(members.id, memberId));
-    const [inviter] = await tx.select().from(members).where(eq(members.id, inviterId));
-    if (!member || member.isBot || member.leftAt || !inviter || inviter.isBot || inviter.leftAt) return 'invalid' as const;
-    const [row] = await tx.insert(invites).values({ memberId, inviterId, source: 'admin', createdAt: now }).onConflictDoNothing().returning();
+    if (!member || member.isBot || member.leftAt) return 'invalid' as const;
+    if (noInvite) {
+      if (!adminLevelOf(ctx.cfg, member.roleIds)) return 'invalid' as const;
+    } else {
+      const [inviter] = await tx.select().from(members).where(eq(members.id, inviterId as string));
+      if (!inviter || inviter.isBot || inviter.leftAt) return 'invalid' as const;
+    }
+    const [row] = await tx.insert(invites).values({ memberId, inviterId: inviterId as string, source: noInvite ? STAFF_NO_INVITER : 'admin', createdAt: now }).onConflictDoNothing().returning();
     if (!row) return 'known' as const;
-    await audit(tx, { actorId, targetId: memberId, action: 'invite.assign', detail: { inviterId }, via: 'web' });
-    return 'assigned' as const;
+    await audit(tx, { actorId, targetId: memberId, action: 'invite.assign', detail: { inviterId, noInvite }, via: 'web' });
+    return noInvite ? 'no_invite' as const : 'assigned' as const;
   });
   // 登録後、現在の役職で未払いの段階だけ渡す。通常の昇格と同じ二重払い防止を使う。
   if (result === 'assigned') {
@@ -114,7 +123,7 @@ export async function inviterOf(db: Db, memberId: string): Promise<string | unde
 /** 招待の記録（だれが・リンクか申請か） */
 export async function inviteOf(db: Db, memberId: string): Promise<{ inviterId: string; source: string } | undefined> {
   const [row] = await db.select({ inviterId: invites.inviterId, source: invites.source }).from(invites).where(eq(invites.memberId, memberId));
-  return row;
+  return row?.source === STAFF_NO_INVITER ? undefined : row;
 }
 
 // ───────── BOT が作る招待リンク ─────────
@@ -272,7 +281,7 @@ export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
     .from(members).leftJoin(invites, eq(invites.memberId, members.id))
     .where(and(isNull(invites.memberId), isNull(members.leftAt), eq(members.isBot, false)))
     .orderBy(desc(members.joinedAt)).limit(200);
-  return [...known.map((r) => ({ ...r, roleIds: r.roleIds ?? [] })), ...unknown.map((r) => ({
+  return [...known.map((r) => ({ ...r, inviterId: r.source === STAFF_NO_INVITER ? null : r.inviterId, roleIds: r.roleIds ?? [] })), ...unknown.map((r) => ({
     memberId: r.memberId, roleIds: r.roleIds, createdAt: r.createdAt ?? new Date(0), joinedAt: r.createdAt, inviterId: null, leftAt: null,
     source: null, rewardedAt: null, reward: 0, ujikoRewardedAt: null, ujikoReward: 0, legacyReward: false,
   }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 200);
