@@ -257,14 +257,14 @@ export async function inviteActiveTick(db: Db, cfg: GuildConfig, now = new Date(
 
 export type InviteRewardRow = {
   memberId: string; inviterId: string | null; roleIds: string[]; leftAt: Date | null;
-  source: string | null; createdAt: Date; rewardedAt: Date | null; reward: number;
+  source: string | null; createdAt: Date; joinedAt: Date | null; rewardedAt: Date | null; reward: number;
   ujikoRewardedAt: Date | null; ujikoReward: number; legacyReward: boolean;
 };
 /** 記録された招待と、招待元が分からない在籍者。新しい順で200人まで。 */
 export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
   const known = await db.select({
     memberId: invites.memberId, inviterId: invites.inviterId, roleIds: members.roleIds, leftAt: members.leftAt,
-    source: invites.source, createdAt: invites.createdAt, rewardedAt: invites.rewardedAt, reward: invites.reward,
+    source: invites.source, createdAt: invites.createdAt, joinedAt: members.joinedAt, rewardedAt: invites.rewardedAt, reward: invites.reward,
     ujikoRewardedAt: invites.ujikoRewardedAt, ujikoReward: invites.ujikoReward, legacyReward: invites.legacyReward,
   }).from(invites).innerJoin(members, eq(invites.memberId, members.id))
     .where(and(isNull(members.leftAt), eq(members.isBot, false))).orderBy(desc(invites.createdAt)).limit(200);
@@ -273,7 +273,7 @@ export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
     .where(and(isNull(invites.memberId), isNull(members.leftAt), eq(members.isBot, false)))
     .orderBy(desc(members.joinedAt)).limit(200);
   return [...known.map((r) => ({ ...r, roleIds: r.roleIds ?? [] })), ...unknown.map((r) => ({
-    memberId: r.memberId, roleIds: r.roleIds, createdAt: r.createdAt ?? new Date(0), inviterId: null, leftAt: null,
+    memberId: r.memberId, roleIds: r.roleIds, createdAt: r.createdAt ?? new Date(0), joinedAt: r.createdAt, inviterId: null, leftAt: null,
     source: null, rewardedAt: null, reward: 0, ujikoRewardedAt: null, ujikoReward: 0, legacyReward: false,
   }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 200);
 }

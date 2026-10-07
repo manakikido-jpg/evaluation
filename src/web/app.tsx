@@ -1,3 +1,4 @@
+import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
 import { permissionIssues, validatePermissionSnapshot } from '../services/permissionCheck.js';
 import { atDayPicks } from '../services/casino/slotAtPlay.js';
@@ -1213,6 +1214,8 @@ export function createWebApp(deps: WebDeps) {
         joins={joins}
         rewards={rewards}
         candidates={candidates}
+        sort={inviteSort(c.req.query('sort'))}
+        order={inviteOrder(c.req.query('order'))}
         cfg={cfg}
         filter={(['unknown', 'waiting', 'paid'] as const).find((f) => f === c.req.query('filter')) ?? 'all'}
         links={alive}

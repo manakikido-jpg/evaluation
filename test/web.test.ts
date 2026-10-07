@@ -3414,3 +3414,23 @@ it('招待一覧から宮司が不明な招待元を登録する。確認・CSRF
   expect((await walletOf(db, inviter)).balance).toBe(150);
 
 });
+
+it('招待一覧は並び替えと絞り込みを保ち、参加日で順番を変える', async () => {
+  const other = '870000000000000222';
+  await recordJoin(db, { id: other, username: 'aoi', displayName: 'あおい', avatarUrl: null, roleIds: [], isBot: false, joinedAt: new Date('2026-08-01T00:00:00Z') });
+  const s = await login(STAFF);
+  const section = (html: string) => html.split('id="invite-rewards"')[1]!.split('id="invite-inviters"')[0]!;
+  const asc = section(await (await get('/invites?filter=unknown&sort=joined&order=asc', s)).text());
+  expect(asc).toContain('name="filter" value="unknown"');
+  expect(asc).toContain('value="joined" selected');
+  expect(asc).toContain('value="asc" selected');
+  expect(asc).toContain('filter=paid&amp;sort=joined&amp;order=asc');
+  expect(asc.indexOf(`/members/${other}`)).toBeLessThan(asc.indexOf(`/members/${USER}`));
+  const desc = section(await (await get('/invites?filter=unknown&sort=joined&order=desc', s)).text());
+  expect(desc.indexOf(`/members/${USER}`)).toBeLessThan(desc.indexOf(`/members/${other}`));
+  expect(desc).toContain('参加日:');
+  expect(desc).not.toMatch(/onclick=|style=|<script(?![^>]*src=)/);
+  const invalid = section(await (await get('/invites?sort=oops&order=oops', s)).text());
+  expect(invalid).toContain('value="joined" selected');
+  expect(invalid).toContain('value="desc" selected');
+});
