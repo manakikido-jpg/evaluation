@@ -16,7 +16,7 @@ import {
 import { audit } from './audit.js';
 import { getMember } from './members.js';
 import { activeYakuCount } from './yaku.js';
-import { grantJoinBonus, walletOf } from './economy.js';
+import { issueInitialCurrency } from './initialCurrency.js';
 import { inviterOf, recordInvite, rewardInviter } from './invites.js';
 import { CONTACT_KINDS, isContactLevel, setContact, type ContactLevel } from './contact.js';
 import { notifyOf, notifyReady, setNotify } from './notify.js';
@@ -80,21 +80,8 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
     await safely('add yakudoshi', () => ctx.discord.addRole(g, memberId, yakudoshi, '厄が残っている'));
   }
   await startOmairi(ctx.db, memberId, ctx.cfg.omairi.days, now);
-  // 初期配布（1 人 1 回。入り直した人にはもう配らない）
   const e = ctx.cfg.economy;
-  const bonus = await grantJoinBonus(ctx.db, memberId, e.joinBonus);
-  // 運営のチャンネルに「配りました」（通知は飛ばさない）
-  const bonusChannel = e.joinBonusChannelId ?? ctx.cfg.channels.log;
-  if (bonus > 0 && e.joinBonusNotify && bonusChannel) {
-    const balance = await walletOf(ctx.db, memberId)
-      .then((w) => w.balance)
-      .catch(() => undefined);
-    await safely('join bonus notice', () =>
-      ctx.discord.sendMessage(bonusChannel, {
-        content: `${e.currencyEmoji} **初期配布**: <@${memberId}> さんに ${e.currencyName} ${bonus.toLocaleString('ja-JP')} 枚を振り込みました${balance !== undefined ? `（残高 ${balance.toLocaleString('ja-JP')} 枚）` : ''}。`,
-      }),
-    );
-  }
+  await issueInitialCurrency(ctx.db, ctx.cfg, ctx.discord, memberId);
   // 招待してくれた人にお礼（1 回だけ）
   await rewardInviter(ctx, memberId, now).catch((err: unknown) => logger.warn({ err }, 'invite reward failed'));
   // #お出迎え に「参拝しました」（通知は飛ばさない）
@@ -120,7 +107,6 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
       ...(opts.introChannelId ? [`まだの方は、<#${opts.introChannelId}> に自己紹介を書いてください（いちばん下のひな形をコピーして使えます）。`] : []),
       `今日から ${ctx.cfg.omairi.days} 日間は「お参り期間」です。いいと思った方に朱印を押し、ご縁を結んでいってください。`,
       '相手の名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」→「🌸 朱印を押す」でできます。',
-      ...(bonus > 0 ? [`お近づきのしるしに ${e.currencyEmoji}${e.currencyName} を ${bonus} 枚お渡ししました。`] : []),
       '',
       `まずは \`/はじめて\` で「はじめての参拝」（おみくじ・朱印・通話）を見てみてください。${e.onboardingReward > 0 ? `全部できたら ${e.currencyEmoji}${e.onboardingReward} 枚のお祝いがあります。` : ''}`,
     ].join('\n'),

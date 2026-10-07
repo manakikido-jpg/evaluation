@@ -281,7 +281,7 @@ async function main(): Promise<void> {
   });
   client.on(Events.GuildMemberUpdate, (old, m) => {
     void (async () => {
-      await app.onMemberUpdate(m);
+      await app.onMemberUpdate(m, old);
       // 承認されて絵馬待ち・役職になったら 🧭案内待ちを外す
       await guidePending.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'guide pending update failed'));
       // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
