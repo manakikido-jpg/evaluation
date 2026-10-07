@@ -82,6 +82,7 @@ export function shopList(
       value: [
         `**${priceText(i, e, booster)}**${durationText(i) && !(i.boosterOnly && !booster) ? `・${durationText(i)}` : ''}`,
         owned.has(i.id) ? `✅ 受けている${until ? `（${fmtDay(until)} まで）` : ''}` : lack ? `あと ${lack.toLocaleString('ja-JP')} 枚` : '',
+        i.kind === 'otoshidama' ? '置けるのは氏子以上（運営も使えます）' : '',
         withNote ? i.description : '',
       ]
         .filter(Boolean)
@@ -368,7 +369,7 @@ export function otoshidamaPickChannel(item: ShopItem, e: EconomyConfig, balance:
           `いま ${balance.toLocaleString('ja-JP')} 枚`,
           `-# 受け取れるのは 1 人 1 回・入鯖が承認された人だけ。${o.hours} 時間で締め切り、残りはあなたに戻ります`,
           '',
-          '袋を置くチャンネルを選んでください。',
+          '氏子以上の人が袋を置けます。袋を置くチャンネルを選んでください。',
         ].join('\n'),
         color: 0xd7003a,
       },

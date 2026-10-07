@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-otoshidama-ujiko', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'お年玉袋を置くのは氏子からに', items: ['お年玉袋を置けるのは氏子以上になりました。支払い前にも役職を確かめます。受け取りは今までどおり承認済みの人が対象です。'] },
   {
     id: '2026-10-07-omikuji-reset-day',
     date: '2026-10-07',
