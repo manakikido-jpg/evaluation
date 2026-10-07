@@ -1,3 +1,4 @@
+import { INVITE_SORTS, sortInviteRows, type InviteSort, type InviteOrder } from '../../services/inviteList.js';
 import type { GuildConfig } from '../../config.js';
 import { highestRank } from '../../domain/ranks.js';
 import type { InviteRewardRow } from '../../services/invites.js';
@@ -46,6 +47,8 @@ export function InvitesPage(props: {
   candidates: { id: string; name: string }[];
   cfg: GuildConfig;
   filter: 'all' | 'unknown' | 'waiting' | 'paid';
+  sort: InviteSort;
+  order: InviteOrder;
   links: InviteLink[];
   /** Discord にある、BOT 以外が作ったリンク（読めなければ null） */
   others: GuildInvite[] | null;
@@ -63,11 +66,11 @@ export function InvitesPage(props: {
   for (const j of props.joins) joinedBy.set(j.inviterId, (joinedBy.get(j.inviterId) ?? 0) + 1);
   const usesOf = (l: InviteLink) => props.uses.get(l.code) ?? l.uses;
   const limited = (props.others ?? []).filter((i) => i.max_age);
-  const shown = props.rewards.filter(
+  const shown = sortInviteRows(props.rewards.filter(
     (r) =>
       props.filter === 'all' ||
       (props.filter === 'unknown' ? !r.inviterId : props.filter === 'paid' ? !!r.rewardedAt && !!r.ujikoRewardedAt : !!r.inviterId && (!r.rewardedAt || !r.ujikoRewardedAt)),
-  );
+  ), props.sort, props.order, props.cfg, name);
   const totals = new Map<string, { invited: number; paid: number; waiting: number }>();
   for (const r of props.rewards)
     if (r.inviterId && props.candidates.some(m => m.id === r.inviterId)) {
@@ -138,7 +141,7 @@ export function InvitesPage(props: {
           {props.cfg.economy.currencyName}。各段階1人1回です。
         </p>
         <p class="note">宮司は招待元不明の行から招待した人を選べます。登録すると、今の役職で達成した未払いの段階を支払います。登録済みの招待元は変更できません。</p>
-        <p class="note">在籍者だけ・新しい順・最大200人。退出した人の記録は残し、一覧から非表示にします。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
+        <p class="note">在籍者の新しい記録から最大200人を表示対象にして、その中で並び替えます。参加日が不明な人は最後に表示します。退出した人の記録は残し、一覧から非表示にします。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
         <p>
           招待元不明 {props.rewards.filter((r) => !r.inviterId).length}人 · 両段階完了 {props.rewards.filter((r) => r.rewardedAt && r.ujikoRewardedAt).length}人 · 支払額{' '}
           {props.rewards.reduce((sum, r) => sum + r.reward + r.ujikoReward, 0).toLocaleString('ja-JP')}
@@ -153,11 +156,17 @@ export function InvitesPage(props: {
               ['paid', '両段階完了'],
             ] as const
           ).map(([key, text]) => (
-            <a class={props.filter === key ? 'on' : undefined} href={`/invites?filter=${key}#invite-rewards`} aria-current={props.filter === key ? 'page' : undefined}>
+            <a class={props.filter === key ? 'on' : undefined} href={`/invites?filter=${key}&sort=${props.sort}&order=${props.order}#invite-rewards`} aria-current={props.filter === key ? 'page' : undefined}>
               {text}
             </a>
           ))}
         </nav>
+        <form method="get" action="/invites#invite-rewards" class="inline-actions">
+          <input type="hidden" name="filter" value={props.filter} />
+          <label class="field"><span>並び替え</span><select name="sort">{INVITE_SORTS.map(([key, label]) => <option value={key} selected={props.sort === key}>{label}</option>)}</select></label>
+          <label class="field"><span>順番</span><select name="order"><option value="asc" selected={props.order === 'asc'}>昇順（あ→ん・古い→新しい・少ない→多い）</option><option value="desc" selected={props.order === 'desc'}>降順（ん→あ・新しい→古い・多い→少ない）</option></select></label>
+          <button type="submit">並び替える</button>
+        </form>
         <div class="table-wrap">
           <table>
             <thead>
@@ -174,7 +183,7 @@ export function InvitesPage(props: {
                 <tr>
                   <td>
                     <a href={`/members/${r.memberId}`}>{name(r.memberId)}</a>
-                    <div class="note">{jstShort(r.createdAt)}</div>
+                    <div class="note">参加日: {r.joinedAt ? jstShort(r.joinedAt) : '不明'}</div>
                   </td>
                   <td>
                     {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : '不明'}
