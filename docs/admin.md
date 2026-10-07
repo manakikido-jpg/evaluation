@@ -1134,3 +1134,10 @@ src/
 GitHubの Settings → Actions → General → Workflow permissions で「Read and write permissions」と「Allow GitHub Actions to create and approve pull requests」を有効にします。個人のトークンや追加の秘密設定は不要です。PR作成の権限は専用ジョブだけに付けています。GITHUB_TOKENで作成したPRでは新しいpull_requestイベントのCIが起動しないため、成功済みのpush側CIを確認してください。設定や組織の制限で作成が拒否された場合は、ActionsのCI → open-pull-requestのログを確認します。
 
 この仕組みを本番へ合流した後は、新しくpushされたCodexのブランチで動きます。すでにpush済みで仕組みを含まないブランチは、Claudeが本番の変更を取り込んでからpushしてください。
+
+
+### 役職ごとの1日の送金上限
+
+参拝者は1日合計125銭、氏子は150銭まで送れます。`/送金` と授与所の銭の「贈り物」を合算し、日本時間の午前0時にリセットします。送金画面の「今日あと」もこの上限で表示します。同時に送っても上限を超えません。氏子と参拝者の両方のロールがある人は、上位の氏子の上限です。ほかの自動役職と運営は現行の共通上限を使います。
+
+社務所の「設定 → 銭」の参拝者・氏子の1日上限（`giftSanpaishaDailyLimit`・`giftUjikoDailyLimit`）で変更できます。共通上限（`giftDailyLimit`）がそれより低い場合は共通上限を優先します。すでに当日の上限以上を送っていた人は、その日の残り枠が0になります。役職が変わってもその日の送金合計は引き継ぎます。

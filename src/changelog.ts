@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-rank-transfer-limits', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: '参拝者・氏子の1日の送金上限', items: ['参拝者は1日125銭、氏子は150銭まで送金できます。授与所の贈り物と合算し、日本時間の午前0時にリセットします。', '送金画面の残り枠も役職に合わせて表示し、社務所の設定で上限を変更できます。'] },
   { id: '2026-10-07-automatic-pr', date: '2026-10-07', kind: 'improve', where: ['運用'], title: '確認用PRを自動で作る', items: ['Codexのブランチをpushすると、全テスト・型チェック・ビルドの成功後にClaude確認用の下書きPRを作ります。合流はClaudeが行います。'] },
   { id: '2026-10-07-visitor-initial-currency', date: '2026-10-07', kind: 'fix', where: ['Discord'], title: '参拝者ロールで初期通貨を自動発行', items: ['手動で参拝者ロールを付けたときも、初期通貨を1人1回だけ発行します。', '本人に発行のお知らせをDMで送り、運営の記録に発行完了を知らせます。DMが届かなくても発行は取り消しません。'] },
   {

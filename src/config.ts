@@ -91,6 +91,8 @@ export const economySchema = z.object({
   giftMin: z.number().int().positive().default(10),
   giftMax: z.number().int().positive().default(1000),
   giftDailyLimit: z.number().int().min(0).default(1000),
+  giftSanpaishaDailyLimit: z.number().int().min(0).default(125),
+  giftUjikoDailyLimit: z.number().int().min(0).default(150),
   /** 初期配布: 入鯖が承認されたときに 1 回だけ配る量（入り直しても 2 回目はない。0 で配らない） */
   joinBonus: z.number().int().min(0).default(3000),
   /** 初期配布を配ったら、運営のチャンネルに知らせる（joinBonusChannelId。なければ #記録） */

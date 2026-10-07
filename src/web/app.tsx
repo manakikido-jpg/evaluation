@@ -2434,6 +2434,8 @@ export function createWebApp(deps: WebDeps) {
         giftMin: num('giftMin'),
         giftMax: num('giftMax'),
         giftDailyLimit: num('giftDailyLimit'),
+        giftSanpaishaDailyLimit: typeof body.giftSanpaishaDailyLimit === 'string' ? num('giftSanpaishaDailyLimit') : prev.economy.giftSanpaishaDailyLimit,
+        giftUjikoDailyLimit: typeof body.giftUjikoDailyLimit === 'string' ? num('giftUjikoDailyLimit') : prev.economy.giftUjikoDailyLimit,
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
         onboardingReward: num('onboardingReward'),
