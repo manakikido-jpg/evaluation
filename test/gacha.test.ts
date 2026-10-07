@@ -526,6 +526,7 @@ describe('物御籤のはじめての 1 回', () => {
     // 置くボタンは「物御籤売り場へ入る」・読みは「ものみくじ」
     const panel = JSON.stringify(panelMessage('gacha'));
     expect(panel).toContain('物御籤売り場へ入る');
+    expect(panel).toContain('gacha-prayer.png');
     expect(panel).toContain('ものみくじ');
   });
 });
