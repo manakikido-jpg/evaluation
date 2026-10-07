@@ -382,7 +382,7 @@ export class ShopApp {
     const channel = home ? i.guild.channels.cache.get(home) : undefined;
     if (channel?.isSendable()) {
       // 演出は待たずに先へ（買った人への返事を遅らせない）。#慶事 は演出のあとで
-      void revealOmikuji(this.db, cfg, d, i.member.displayName, (p) => channel.send(p), { suffix: '（もう 1 回）' })
+      void revealOmikuji(this.db, cfg, d, i.member.displayName, (p) => channel.send(p), { memberId: i.user.id, suffix: '（もう 1 回）' })
         .catch(() => undefined)
         .then(() => announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune));
     } else await announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune);

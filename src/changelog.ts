@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-omikuji-drawer-label', date: '2026-10-08', kind: 'fix', where: ['Discord'], title: '御神籤を引いた人を結果に表示', items: ['御神籤の結果に引いた人を表示します。返信元のメッセージが消えても分かります。通知は飛ばしません。', '通常・特別な御神籤・もう1回のすべてに対応します。'] },
   { id: '2026-10-08-rank-transfer-limits', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: '参拝者・氏子の1日の送金上限', items: ['参拝者は1日125銭、氏子は150銭まで送金できます。授与所の贈り物と合算し、日本時間の午前0時にリセットします。', '送金画面の残り枠も役職に合わせて表示し、社務所の設定で上限を変更できます。'] },
   { id: '2026-10-08-otoshidama-ujiko', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'お年玉袋を置くのは氏子からに', items: ['お年玉袋を置けるのは氏子以上になりました。支払い前にも役職を確かめます。受け取りは今までどおり承認済みの人が対象です。'] },
   { id: '2026-10-07-invite-stage-rewards', date: '2026-10-07', kind: 'improve', where: ['Discord', '社務所Web'], title: '招待のお礼を参拝者・氏子の2段階に', items: ['招待された人が参拝者になると150銭、氏子になると追加350銭を招待した人へ渡し、DMと運営の記録で知らせます。', '社務所の招待ページで、招待元・今の役職・各段階の支払いと招待した人ごとの集計を確認できます。旧制度で500銭以上を支払った分は追加で払いません。'] },
