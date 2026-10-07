@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-gacha-readable-guide',
+    date: '2026-10-07',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '⛩ 祈願所の物御籤を見やすく',
+    items: [
+      '祈願所の入口は画像と2つのボタンに。引く画面の確率・天井・持ち物は分けて表示します',
+      '中身と排出率は商品名を大きく、その下に確率・期限・残りを表示します',
+      '中身が多いときはページを切り替えて、最後の商品まで見られます。抽選や排出率は変わりません',
+    ],
+  },
+  {
     id: '2026-10-07-casino-boost',
     date: '2026-10-07',
     kind: 'new',

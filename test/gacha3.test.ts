@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChannelType, Collection, type Guild } from 'discord.js';
+import { existsSync } from 'node:fs';
 import { gachaSchema } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { members } from '../src/db/schema.js';
-import { gachaFeatured, gachaMenu, gachaRatesView, pullLine } from '../src/discord/gacha.js';
+import { GachaApp, gachaFeatured, gachaMenu, gachaRatesView, pullLine } from '../src/discord/gacha.js';
 import { panelMessage } from '../src/discord/panels.js';
 import { banzukeData, jstMonth, renderBanzuke } from '../src/services/banzuke.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -22,7 +24,7 @@ import {
 } from '../src/services/gacha.js';
 import { addPresetPrizes, presetPrizes } from '../src/services/gachaPresets.js';
 import { emptyTickets } from '../src/services/tickets.js';
-import { makeDb } from './helpers.js';
+import { cfg, makeDb } from './helpers.js';
 
 const U = '830000000000000001';
 const B = '830000000000000002';
@@ -120,6 +122,40 @@ describe('🍶 おすそ分け・番付・おすすめ', () => {
   });
 });
 
+describe('祈願所の入口', () => {
+  it('祈願所や半角ガチャの古い案内を更新する。他人の投稿には触れず、二度目は書き換えない', async () => {
+    const botId = '100000000000000080';
+    const next = panelMessage('gacha', { coinName: cfg.economy.currencyName });
+    const makeMessage = (authorId: string) => {
+      const message = {
+        author: { id: authorId },
+        embeds: [{ title: '🎁 物御籤（ものみくじ）' }] as typeof next.embeds,
+        components: [{ toJSON: () => next.components[0]! }],
+        edit: vi.fn(async (view: typeof next) => { message.embeds = view.embeds; }),
+      };
+      return message;
+    };
+    const old = makeMessage(botId);
+    const other = makeMessage('100000000000000079');
+    const second = makeMessage(botId);
+    const channel = (name: string, message: typeof old) => ({ type: ChannelType.GuildText, name, id: name, messages: { fetch: async () => new Collection([['old', message], ['other', other]]) } });
+    const guild = { client: { user: { id: botId } }, channels: { cache: new Collection([['prayer', channel('⛩️祈願所-ｶﾞﾁｬ⛩️', old)], ['gacha', channel('ｶﾞﾁｬ', second)]]) } } as unknown as Guild;
+    const app = new GachaApp(db, () => cfg);
+    expect(await app.refreshPanels(guild)).toBe(2);
+    expect(old.edit).toHaveBeenCalledWith({ ...next, attachments: [], allowedMentions: { parse: [] } });
+    expect(other.edit).not.toHaveBeenCalled();
+    expect(await app.refreshPanels(guild)).toBe(0);
+  });
+
+  it('入口は添付画像と2つのボタンだけ。価格や確率は画像に固定しない', () => {
+    const panel = panelMessage('gacha');
+    expect(panel.embeds).toEqual([{ image: { url: 'attachment://gacha-prayer.png' } }]);
+    expect(panel.files?.[0]?.name).toBe('gacha-prayer.png');
+    expect(existsSync(panel.files![0]!.attachment)).toBe(true);
+    expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates']);
+  });
+});
+
 describe('📜 中身と排出率', () => {
   it('運勢ごとに中身を全部と、それぞれの %。代わり・残り・期間限定も出る。パネルにもボタン', async () => {
     await createPrize(db, { tier: 'super', kind: 'special', label: 'Discord Nitro 1 か月分', stock: 1, amount: 1, weight: 1, fallback: false });
@@ -129,8 +165,42 @@ describe('📜 中身と排出率', () => {
     const view = gachaRatesView(g, await listPrizes(db), { role: () => '金色', shop: () => undefined, coin: '🪙銭' }, '🪙銭', T0);
     const text = JSON.stringify(view);
     expect(view.embeds.map((e) => e.title)).toEqual(['🎊 超大当たり　0.016%', '🌸 大吉　4.76%', '🍡 吉　95.22%']);
-    for (const t of ['**0.016%** … 🎊 Discord Nitro 1 か月分（残り 1）', '「金色」（持っていたら出ない）', '代わり … 🎫部屋代無料券 ×3', '🎍 10/31 まで', '天井', '1 回 500 枚']) expect(text).toContain(t);
+    for (const t of ['**🎊 Discord Nitro 1 か月分**', '出る確率 **0.016%**', '残り 1', '**🎀「金色」**', '持っていたら出ない', '🔁 代わりの中身', '**🎫部屋代無料券 ×3**', '🎍 10/31 まで', '天井', '1 回 500 枚']) expect(text).toContain(t);
+    expect(text).toContain('天井や運気アップがないとき');
     expect(JSON.stringify(panelMessage('gacha'))).toContain('gacha:rates');
+  });
+
+  it('中身が多くても最後まで読める。全ページが Discord の文字数上限に収まり、端のボタンは押せない', async () => {
+    const base = await createPrize(db, { tier: 'super', kind: 'special', label: 'サンプル', stock: 1, amount: 1, weight: 1, fallback: false });
+    const prizes = Array.from({ length: 120 }, (_, n) => ({ ...base, id: n + 1, label: `賞品${n}・${'説明'.repeat(45)}` }));
+    const names = { role: () => undefined, shop: () => undefined };
+    const first = gachaRatesView(g, prizes, names, '銭', T0);
+    const total = Number(first.content.match(/1 \/ (\d+) ページ/)?.[1]);
+    expect(total).toBeGreaterThan(1);
+    const all: string[] = [];
+    for (let page = 0; page < total; page++) {
+      const view = gachaRatesView(g, prizes, names, '銭', T0, page);
+      expect(view.embeds.length).toBeLessThanOrEqual(10);
+      expect(view.embeds.reduce((n, e) => n + e.title.length + e.description.length, 0)).toBeLessThanOrEqual(6000);
+      for (const card of view.embeds) expect(card.description.length).toBeLessThanOrEqual(4096);
+      const buttons = view.components[0]!.toJSON().components as { disabled?: boolean }[];
+      expect(Boolean(buttons[0]!.disabled)).toBe(page === 0);
+      expect(Boolean(buttons[1]!.disabled)).toBe(page === total - 1);
+      all.push(...view.embeds.map((e) => e.description));
+    }
+    for (const prize of prizes) expect(all.join('\n')).toContain(`**🎊 ${prize.label}**`);
+    expect(all.join('\n').match(/出る確率/g)).toHaveLength(prizes.length);
+    expect(gachaRatesView(g, prizes, names, '銭', T0, 999).content).toContain(`${total} / ${total} ページ`);
+  });
+
+  it('販売停止・期間外・在庫なしは表示しない。中身がなければ空の一覧を案内する', async () => {
+    await createPrize(db, { tier: 'super', kind: 'special', label: '在庫なし', stock: 0, amount: 1, weight: 1, fallback: false });
+    await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 50, weight: 1, fallback: false, endsAt: new Date('2026-10-01T00:00:00Z') });
+    const view = gachaRatesView(g, await listPrizes(db), { role: () => undefined, shop: () => undefined }, '銭', T0);
+    expect(view.embeds).toEqual([]);
+    expect(view.components).toEqual([]);
+    expect(view.content).toContain('今出る中身はありません');
+    expect(JSON.stringify(view)).not.toContain('在庫なし');
   });
 });
 
