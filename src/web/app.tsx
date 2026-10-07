@@ -3216,61 +3216,33 @@ export function createWebApp(deps: WebDeps) {
     return c.html(<PermMatrixPage session={c.get('session')} roles={roles} roleId={roleId} kind={kind} groups={groups} flash={c.req.query('msg')} />);
   });
 
-  /** マスを 1 つ変える（perms.js から。答えは JSON） */
-  app.post('/channels/perms/cell', async (c) => {
-    const body = await c.req.parseBody();
-    const channelId = typeof body.channel === 'string' && validId(body.channel) ? body.channel : '';
-    const roleId = typeof body.role === 'string' && validId(body.role) ? body.role : '';
-    const bit = Number(body.bit);
-    const cell = body.cell;
-    const p = MATRIX_PERMS.find((m) => m.bit === bit);
-    if (!channelId || !roleId || !p || !isCell(cell)) return c.json({ ok: false, error: 'invalid' }, 400);
-    const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
-    const ch = channels.find((x) => x.id === channelId);
-    const role = (roles ?? []).find((r) => r.id === roleId);
-    if (!ch || !role || role.managed || !applies(p, ch)) return c.json({ ok: false, error: 'invalid' }, 400);
-    const plan = planCells(ch, roleId, [{ bit, cell }]);
-    const reason = 'チャンネル権限のマトリクス（管理画面）';
-    try {
-      if (plan && 'set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
-      if (plan && 'del' in plan) {
-        if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
-        else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
-      }
-    } catch (err) {
-      logger.warn({ err }, 'perm matrix cell failed');
-      return c.json({ ok: false, error: 'failed' }, 502);
-    }
-    // 次に開いたときに新しい上書きが出るように
-    await loadChannels(true);
-    if (plan) await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_cell', detail: { channelId, name: ch.name, roleId, role: role.name, perm: p.key, cell }, via: 'web' });
-    return c.json({ ok: true, cell });
-  });
+  /**
+   * 権限の書きかえは 1 つずつ順番に。チャンネルの上書きは「読んで → 1 か所変えて → 全部書く」ので、
+   * 同時に動くと（すばやく 2 マス押す・まとめて変えている間に押す）、あとの書きこみが前の変更を消してしまうため
+   */
+  let permQueue: Promise<unknown> = Promise.resolve();
+  const permLocked = <T,>(fn: () => Promise<T>): Promise<T> => {
+    const run = permQueue.then(fn, fn);
+    permQueue = run.catch(() => undefined);
+    return run;
+  };
 
-  /** まとめて変える: 選んだチャンネル × 選んだ権限を、1 つのロールで 許可・拒否・中立 に（perms.js から。答えは JSON） */
-  app.post('/channels/perms/bulk', async (c) => {
-    const body = await c.req.parseBody({ all: true });
-    const list = (k: string) => {
-      const v = body[k];
-      return (Array.isArray(v) ? v : v === undefined ? [] : [v]).filter((x): x is string => typeof x === 'string');
-    };
-    const roleId = typeof body.role === 'string' && validId(body.role) ? body.role : '';
-    const cell = body.cell;
-    const ids = new Set(list('channels').filter(validId));
-    const perms = MATRIX_PERMS.filter((m) => list('bits').includes(String(m.bit)));
-    if (!roleId || !isCell(cell) || !ids.size || ids.size > 300 || !perms.length) return c.json({ ok: false, error: 'invalid' }, 400);
-    const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
-    const role = (roles ?? []).find((r) => r.id === roleId);
-    if (!role || role.managed) return c.json({ ok: false, error: 'invalid' }, 400);
-    const targets = channels.filter((ch) => ids.has(ch.id));
-    const reason = 'チャンネル権限のマトリクス・まとめて変える（管理画面）';
-    const done: { ch: string; bit: number; cell: string }[] = [];
-    let changed = 0;
-    let failed = false;
-    for (const ch of targets) {
-      const usable = perms.filter((m) => applies(m, ch));
-      if (!usable.length) continue;
-      const plan = planCells(ch, roleId, usable.map((m) => ({ bit: m.bit, cell })));
+  /** マスを 1 つ変える（perms.js から。答えは JSON） */
+  app.post('/channels/perms/cell', (c) =>
+    permLocked(async () => {
+      const body = await c.req.parseBody();
+      const channelId = typeof body.channel === 'string' && validId(body.channel) ? body.channel : '';
+      const roleId = typeof body.role === 'string' && validId(body.role) ? body.role : '';
+      const bit = Number(body.bit);
+      const cell = body.cell;
+      const p = MATRIX_PERMS.find((m) => m.bit === bit);
+      if (!channelId || !roleId || !p || !isCell(cell)) return c.json({ ok: false, error: 'invalid' }, 400);
+      const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
+      const ch = channels.find((x) => x.id === channelId);
+      const role = (roles ?? []).find((r) => r.id === roleId);
+      if (!ch || !role || role.managed || !applies(p, ch)) return c.json({ ok: false, error: 'invalid' }, 400);
+      const plan = planCells(ch, roleId, [{ bit, cell }]);
+      const reason = 'チャンネル権限のマトリクス（管理画面）';
       try {
         if (plan && 'set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
         if (plan && 'del' in plan) {
@@ -3278,22 +3250,65 @@ export function createWebApp(deps: WebDeps) {
           else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
         }
       } catch (err) {
-        logger.warn({ err }, 'perm matrix bulk failed');
-        failed = true;
-        break;
+        logger.warn({ err }, 'perm matrix cell failed');
+        return c.json({ ok: false, error: 'failed' }, 502);
       }
-      if (plan) changed++;
-      for (const m of usable) done.push({ ch: ch.id, bit: m.bit, cell });
-    }
-    await loadChannels(true);
-    await audit(db, {
-      actorId: c.get('session').userId,
-      action: 'channel.perm_bulk',
-      detail: { roleId, role: role.name, cell, perms: perms.map((m) => m.key), channels: targets.map((x) => x.name), changed, ...(failed ? { failed: true } : {}) },
-      via: 'web',
-    });
-    return c.json({ ok: !failed, changed, cells: done, ...(failed ? { error: 'failed' } : {}) }, failed ? 502 : 200);
-  });
+      // 次に開いたときに新しい上書きが出るように
+      await loadChannels(true);
+      if (plan) await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_cell', detail: { channelId, name: ch.name, roleId, role: role.name, perm: p.key, cell }, via: 'web' });
+      return c.json({ ok: true, cell });
+    }),
+  );
+
+  /** まとめて変える: 選んだチャンネル × 選んだ権限を、1 つのロールで 許可・拒否・中立 に（perms.js から。答えは JSON） */
+  app.post('/channels/perms/bulk', (c) =>
+    permLocked(async () => {
+      const body = await c.req.parseBody({ all: true });
+      const list = (k: string) => {
+        const v = body[k];
+        return (Array.isArray(v) ? v : v === undefined ? [] : [v]).filter((x): x is string => typeof x === 'string');
+      };
+      const roleId = typeof body.role === 'string' && validId(body.role) ? body.role : '';
+      const cell = body.cell;
+      const ids = new Set(list('channels').filter(validId));
+      const perms = MATRIX_PERMS.filter((m) => list('bits').includes(String(m.bit)));
+      if (!roleId || !isCell(cell) || !ids.size || ids.size > 300 || !perms.length) return c.json({ ok: false, error: 'invalid' }, 400);
+      const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);
+      const role = (roles ?? []).find((r) => r.id === roleId);
+      if (!role || role.managed) return c.json({ ok: false, error: 'invalid' }, 400);
+      const targets = channels.filter((ch) => ids.has(ch.id));
+      const reason = 'チャンネル権限のマトリクス・まとめて変える（管理画面）';
+      const done: { ch: string; bit: number; cell: string }[] = [];
+      let changed = 0;
+      let failed = false;
+      for (const ch of targets) {
+        const usable = perms.filter((m) => applies(m, ch));
+        if (!usable.length) continue;
+        const plan = planCells(ch, roleId, usable.map((m) => ({ bit: m.bit, cell })));
+        try {
+          if (plan && 'set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
+          if (plan && 'del' in plan) {
+            if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
+            else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
+          }
+        } catch (err) {
+          logger.warn({ err }, 'perm matrix bulk failed');
+          failed = true;
+          break;
+        }
+        if (plan) changed++;
+        for (const m of usable) done.push({ ch: ch.id, bit: m.bit, cell });
+      }
+      await loadChannels(true);
+      await audit(db, {
+        actorId: c.get('session').userId,
+        action: 'channel.perm_bulk',
+        detail: { roleId, role: role.name, cell, perms: perms.map((m) => m.key), channels: targets.map((x) => x.name), changed, ...(failed ? { failed: true } : {}) },
+        via: 'web',
+      });
+      return c.json({ ok: !failed, changed, cells: done, ...(failed ? { error: 'failed' } : {}) }, failed ? 502 : 200);
+    }),
+  );
 
   /** テンプレートを作る・直す */
   app.post('/channels/perms/templates', async (c) => {
@@ -3323,42 +3338,44 @@ export function createWebApp(deps: WebDeps) {
   });
 
   /** テンプレートを、選んだチャンネルのロールの上書きに当てる */
-  app.post('/channels/perms/apply', async (c) => {
-    const body = await c.req.parseBody({ all: true });
-    const one = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
-    const back = (msg: string, role?: string) => c.redirect(`/channels/perms?tab=templates&msg=${msg}${role ? `&role=${role}` : ''}`);
-    const t = (await listTemplates(db)).find((x) => x.id === one('template'));
-    const roleId = validId(one('role')) ? one('role') : '';
-    const roles = (await loadRoles()) ?? [];
-    const role = roles.find((r) => r.id === roleId);
-    if (!t || !role || role.managed || one('confirm') !== 'yes') return back('invalid');
-    const raw = body.channels;
-    const ids = new Set((Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((v): v is string => typeof v === 'string' && validId(v)));
-    const channels = await loadChannels(true);
-    const targets = channels.filter((ch) => ids.has(ch.id) && templateFits(t, ch));
-    if (!targets.length) return back('apply_none', roleId);
-    const changes = templateChanges(t);
-    const reason = `権限テンプレート「${t.name}」（管理画面）`;
-    let changed = 0;
-    try {
-      for (const ch of targets) {
-        const plan = planCells(ch, roleId, changes);
-        if (!plan) continue;
-        if ('set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
-        else if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
-        else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
-        changed++;
+  app.post('/channels/perms/apply', (c) =>
+    permLocked(async () => {
+      const body = await c.req.parseBody({ all: true });
+      const one = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+      const back = (msg: string, role?: string) => c.redirect(`/channels/perms?tab=templates&msg=${msg}${role ? `&role=${role}` : ''}`);
+      const t = (await listTemplates(db)).find((x) => x.id === one('template'));
+      const roleId = validId(one('role')) ? one('role') : '';
+      const roles = (await loadRoles()) ?? [];
+      const role = roles.find((r) => r.id === roleId);
+      if (!t || !role || role.managed || one('confirm') !== 'yes') return back('invalid');
+      const raw = body.channels;
+      const ids = new Set((Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((v): v is string => typeof v === 'string' && validId(v)));
+      const channels = await loadChannels(true);
+      const targets = channels.filter((ch) => ids.has(ch.id) && templateFits(t, ch));
+      if (!targets.length) return back('apply_none', roleId);
+      const changes = templateChanges(t);
+      const reason = `権限テンプレート「${t.name}」（管理画面）`;
+      let changed = 0;
+      try {
+        for (const ch of targets) {
+          const plan = planCells(ch, roleId, changes);
+          if (!plan) continue;
+          if ('set' in plan) await deps.discord.setChannelOverwrite(ch.id, plan.set, reason);
+          else if (deps.discord.deleteChannelOverwrite) await deps.discord.deleteChannelOverwrite(ch.id, plan.del, reason);
+          else await deps.discord.setChannelOverwrite(ch.id, { id: plan.del, type: 0, allow: '0', deny: '0' }, reason);
+          changed++;
+        }
+      } catch (err) {
+        logger.warn({ err }, 'perm template apply failed');
+        await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_apply', detail: { template: t.name, roleId, role: role.name, changed, failed: true }, via: 'web' });
+        await loadChannels(true);
+        return back('apply_failed', roleId);
       }
-    } catch (err) {
-      logger.warn({ err }, 'perm template apply failed');
-      await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_apply', detail: { template: t.name, roleId, role: role.name, changed, failed: true }, via: 'web' });
       await loadChannels(true);
-      return back('apply_failed', roleId);
-    }
-    await loadChannels(true);
-    await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_apply', detail: { template: t.name, roleId, role: role.name, channels: targets.map((x) => x.name), changed }, via: 'web' });
-    return back(changed ? 'applied' : 'apply_unchanged', roleId);
-  });
+      await audit(db, { actorId: c.get('session').userId, action: 'channel.perm_apply', detail: { template: t.name, roleId, role: role.name, channels: targets.map((x) => x.name), changed }, via: 'web' });
+      return back(changed ? 'applied' : 'apply_unchanged', roleId);
+    }),
+  );
 
   app.get('/channels/new', async (c) => {
     const [channels, roles] = await Promise.all([loadChannels(true), loadRoles()]);

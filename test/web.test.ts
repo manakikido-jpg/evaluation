@@ -2406,6 +2406,45 @@ describe('チャンネル（管理画面）', () => {
     roleList = [];
   });
 
+  it('🧮 権限マトリクス: 同じチャンネルの別のマスを同時に変えても、両方残る（前の変更を消さない）。ホイールのボタンがある', async () => {
+    roleList = [{ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0' }];
+    // Discord のまね: 上書きを覚えていて、書きこみに少し時間がかかる
+    let ow = { allow: 0n, deny: 0n };
+    const original = { guildChannels: fakeActions.guildChannels, setChannelOverwrite: fakeActions.setChannelOverwrite };
+    fakeActions.guildChannels = async () => [
+      { id: '910000000000000001', name: '⛩ 鳥居', type: 4, parent_id: null, position: 0 },
+      { id: TORII, name: '鳥居', type: 0, parent_id: '910000000000000001', position: 0, permission_overwrites: ow.allow || ow.deny ? [{ id: ROLE.ujiko, type: 0, allow: String(ow.allow), deny: String(ow.deny) }] : [] },
+    ];
+    fakeActions.setChannelOverwrite = async (_c, o) => {
+      await new Promise((r) => setTimeout(r, 30));
+      ow = { allow: BigInt(o.allow), deny: BigInt(o.deny) };
+    };
+    try {
+      const g = await login(GUJI);
+      const page = await (await get(`/channels/perms?role=${ROLE.ujiko}`, g)).text();
+      expect(page).toContain('data-pm-wheel');
+      expect(await (await get('/channels/perms?tab=templates', g)).text()).toContain('data-pm-wheel');
+      // 送信（11）を拒否・閲覧（10）を許可を、同時に
+      const [a, b] = await Promise.all([
+        form(g, '/channels/perms/cell', { channel: TORII, role: ROLE.ujiko, bit: '11', cell: 'deny' }),
+        form(g, '/channels/perms/cell', { channel: TORII, role: ROLE.ujiko, bit: '10', cell: 'allow' }),
+      ]);
+      expect(((await a.json()) as { ok: boolean }).ok).toBe(true);
+      expect(((await b.json()) as { ok: boolean }).ok).toBe(true);
+      expect(ow).toEqual({ allow: 1024n, deny: 2048n });
+      // まとめて変えるのと同時に押しても、両方残る
+      const [c1, c2] = await Promise.all([
+        formMulti(g, '/channels/perms/bulk', [['role', ROLE.ujiko], ['cell', 'deny'], ['channels', TORII], ['bits', '14']]),
+        form(g, '/channels/perms/cell', { channel: TORII, role: ROLE.ujiko, bit: '15', cell: 'allow' }),
+      ]);
+      expect(c1.status).toBe(200);
+      expect(c2.status).toBe(200);
+      expect(ow).toEqual({ allow: 1024n + 2n ** 15n, deny: 2048n + 2n ** 14n });
+    } finally {
+      Object.assign(fakeActions, original);
+    }
+  });
+
   it('チャンネルを作れる（プライベートは選んだロールと運営・BOT だけ見られる）。おかしな入力は作らない', async () => {
     roleList = [{ id: ROLE.ujiko, name: '🍃 氏子', position: 3, managed: false, color: 0, permissions: '0' }];
     const g = await login(GUJI);

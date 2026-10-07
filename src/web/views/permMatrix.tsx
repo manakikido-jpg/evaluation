@@ -239,6 +239,9 @@ export function PermMatrixPage(props: {
           <button type="button" data-pm-bulkmode class="pm-bulkmode" aria-pressed="false">
             ✏ まとめて変える
           </button>
+          <button type="button" data-pm-wheel class="pm-wheel" aria-pressed="false" title="ON にすると、マスの上でマウスホイールを回して 中立 → 許可 → 拒否 と変えられます（止めて少したつと Discord に保存）">
+            🖱 ホイールで変える
+          </button>
         </form>
         <p class="note pm-bulk-note">
           「✏ まとめて変える」を押すと、チャンネル名の横と権限の見出しに <b>✓ ✕ -</b> が出ます。チャンネルの横は「そのチャンネルの、表に出ている権限を全部」、見出しは「その権限を、表に出ているチャンネル全部で」変えます（たたんだカテゴリの中・出していない列は変えません）。
@@ -329,6 +332,9 @@ export function PermRolesPage(props: {
           <ColumnPicker />
           <button type="button" data-pm-quick="all" class="pm-showall">
             🌐 すべての権限を表示
+          </button>
+          <button type="button" data-pm-wheel class="pm-wheel" aria-pressed="false" title="ON にすると、マスの上でマウスホイールを回して 中立 → 許可 → 拒否 と変えられます（止めて少したつと Discord に保存）">
+            🖱 ホイールで変える
           </button>
         </form>
         {channel ? (
@@ -576,6 +582,9 @@ export function PermTemplatesPage(props: {
             <b>権限（当てるロールのルール）</b>
             <button type="button" data-pm-tpl-reset>
               すべて「変えない」にする
+            </button>
+            <button type="button" data-pm-wheel class="pm-wheel" aria-pressed="false" title="ON にすると、選ぶ欄の上でマウスホイールを回して変えられます（「保存」を押すまで保存しません）">
+              🖱 ホイールで変える
             </button>
           </div>
           {SCOPES.map((sc) => (

@@ -1,4 +1,6 @@
-// 🧮 チャンネル権限のマトリクス: マスを押すと 中立 → 許可 → 拒否 と変える。出す列はこのブラウザに覚える
+// 🧮 チャンネル権限のマトリクス: マスを押すと 中立 → 許可 → 拒否 と変える。出す列はこのブラウザに覚える。
+// 🖱 ホイールで変える（ボタンで ON/OFF。このブラウザに覚える）: マスの上で回すと変わり、止めて少したったら保存する。
+// 変えたものは 1 つずつ順番に送る（同時に送ると、あとの変更が前の変更を消してしまうことがあるため）
 (() => {
   const root = document.querySelector('[data-pm]');
   const MAIN = [1, 6, 7, 11, 12, 15, 18, 20, 21, 22, 23, 24, 25, 26];
@@ -6,13 +8,124 @@
   const NEXT = { neutral: 'allow', allow: 'deny', deny: 'neutral' };
   const MARK = { allow: '✓', deny: '✕', neutral: '-' };
   const LABEL = { allow: '許可', deny: '拒否', neutral: '中立' };
-  /** マスの見た目を変える */
-  const paint = (cell, v) => {
+  const ORDER = ['neutral', 'allow', 'deny'];
+  /** マスの見た目を変える。saved: Discord に入った値（まだ送っていないときは false） */
+  const paint = (cell, v, saved = true) => {
+    if (!cell.hasAttribute('data-saved')) cell.setAttribute('data-saved', cell.getAttribute('data-cell') || 'neutral');
     cell.setAttribute('data-cell', v);
-    cell.className = `pm-cell ${v}`;
+    if (saved) cell.setAttribute('data-saved', v);
+    cell.className = `pm-cell ${v}${cell.getAttribute('data-saved') === v ? '' : ' pending'}`;
     cell.textContent = MARK[v];
     cell.title = (cell.title || '').replace(/[^:]*$/, ` ${LABEL[v]}`);
   };
+
+  // ───────── 送るのは 1 つずつ順番に ─────────
+  let chain = Promise.resolve();
+  let busy = 0;
+  const enqueue = (fn) => {
+    busy++;
+    const run = chain.then(fn).catch(() => undefined).finally(() => busy--);
+    chain = run;
+    return run;
+  };
+  /** まだ送っていないマス（マス → タイマー） */
+  const waiting = new Map();
+  const statusEl = () => document.querySelector('[data-pm-status]');
+  /** マスの今の見た目の値を送る（Discord に入っている値と同じなら送らない） */
+  const send = (cell) =>
+    enqueue(async () => {
+      const want = cell.getAttribute('data-cell');
+      if (want === cell.getAttribute('data-saved')) return paint(cell, want);
+      const status = statusEl();
+      try {
+        const res = await fetch('/channels/perms/cell', {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': root.getAttribute('data-csrf') || '' },
+          body: new URLSearchParams({ _csrf: root.getAttribute('data-csrf') || '', channel: cell.getAttribute('data-ch'), role: cell.getAttribute('data-role') || root.getAttribute('data-role'), bit: cell.getAttribute('data-bit'), cell: want }),
+        });
+        const r = await res.json().catch(() => ({ ok: false }));
+        if (!r.ok) throw new Error(r.error || 'failed');
+        cell.setAttribute('data-saved', r.cell);
+        // 送っている間にもっと回したときは、見た目はそのまま（あとでもう一度送る）
+        if (cell.getAttribute('data-cell') === want) paint(cell, r.cell);
+        if (status) status.textContent = `保存しました（${LABEL[r.cell]}）`;
+      } catch {
+        // 送れなかったら、Discord に入っている値に戻す
+        clearTimeout(waiting.get(cell));
+        waiting.delete(cell);
+        paint(cell, cell.getAttribute('data-saved') || 'neutral');
+        if (status) status.textContent = '変えられませんでした（BOT が持っていない権限は許可できません）。ページを読み直してください。';
+      }
+    });
+  /** 見た目を先に変えて、delay ミリ秒さわらなければ送る */
+  const change = (cell, v, delay) => {
+    paint(cell, v, false);
+    clearTimeout(waiting.get(cell));
+    waiting.set(
+      cell,
+      setTimeout(() => {
+        waiting.delete(cell);
+        void send(cell);
+      }, delay),
+    );
+  };
+  // 送り終わる前に閉じようとしたら、知らせる
+  window.addEventListener('beforeunload', (e) => {
+    if (busy > 0 || waiting.size > 0) e.preventDefault();
+  });
+
+  // ───────── 🖱 ホイールで変える ─────────
+  const WHEEL = 'pm-wheel';
+  const wheelOn = () => document.body.classList.contains('pm-wheel-on');
+  const setWheel = (on) => {
+    document.body.classList.toggle('pm-wheel-on', on);
+    for (const b of document.querySelectorAll('[data-pm-wheel]')) b.setAttribute('aria-pressed', String(on));
+    try {
+      localStorage.setItem(WHEEL, on ? '1' : '0');
+    } catch {
+      /* 覚えられなくても動く */
+    }
+  };
+  try {
+    if (localStorage.getItem(WHEEL) === '1') setWheel(true);
+  } catch {
+    /* はじめは OFF */
+  }
+  // トラックパッドは細かく何回も来るので、たまった量で 1 段ずつ
+  let acc = 0;
+  let accAt = 0;
+  document.addEventListener(
+    'wheel',
+    (e) => {
+      if (!wheelOn() || !(e.target instanceof Element)) return;
+      const cell = e.target.closest('button.pm-cell[data-ch]');
+      const sel = cell ? null : e.target.closest('select.pm-sel');
+      if ((!cell || cell.disabled || !root) && !sel) return;
+      e.preventDefault();
+      const now = Date.now();
+      if (now - accAt > 400) acc = 0;
+      accAt = now;
+      acc += e.deltaMode === 0 ? e.deltaY : e.deltaY * 40;
+      if (Math.abs(acc) < 40) return;
+      const step = acc > 0 ? 1 : -1;
+      acc = 0;
+      if (cell) {
+        const i = ORDER.indexOf(cell.getAttribute('data-cell') || 'neutral');
+        change(cell, ORDER[(i + step + ORDER.length) % ORDER.length], 700);
+      } else if (sel) {
+        const n = sel.options.length;
+        sel.selectedIndex = (sel.selectedIndex + step + n) % n;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    },
+    { passive: false },
+  );
+
+  // テンプレートの選ぶ欄: 選んだ値で色を変える
+  document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t instanceof HTMLSelectElement && t.classList.contains('pm-sel')) t.className = `pm-sel ${t.value}`;
+  });
 
   // ───────── 列を選ぶ ─────────
   const boxes = () => [...document.querySelectorAll('[data-pm-col]')];
@@ -100,6 +213,11 @@
       for (const r of document.querySelectorAll('[data-pm-parent]')) if (r.getAttribute('data-pm-parent')) r.hidden = close;
       return;
     }
+    // 🖱 ホイールで変える（ON/OFF）
+    if (t.closest('[data-pm-wheel]')) {
+      setWheel(!wheelOn());
+      return;
+    }
     // ✏ まとめて変える（ボタンを出す・しまう）
     const mode = t.closest('[data-pm-bulkmode]');
     if (mode && root) {
@@ -131,52 +249,46 @@
       for (const bit of new Set(targets.map((b) => b.getAttribute('data-bit')))) body.append('bits', bit);
       for (const b of targets) b.disabled = true;
       if (status) status.textContent = `変えています…（${targets.length} マス）`;
-      try {
-        const res = await fetch('/channels/perms/bulk', {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': root.getAttribute('data-csrf') || '' },
-          body,
-        });
-        const r = await res.json().catch(() => ({ ok: false, cells: [] }));
-        const want = new Set(targets.map((b) => `${b.getAttribute('data-ch')}:${b.getAttribute('data-bit')}`));
-        let n = 0;
-        for (const x of r.cells || []) {
-          if (!want.has(`${x.ch}:${x.bit}`)) continue;
-          const b = root.querySelector(`button.pm-cell[data-ch="${x.ch}"][data-bit="${x.bit}"]`);
-          if (b) {
-            paint(b, x.cell);
-            n++;
-          }
-        }
-        if (status) status.textContent = r.ok ? `${n} マスを${LABEL[to]}にしました。` : `途中で Discord に断られました（${n} マスは変えました。BOT が持っていない権限は許可できません）。ページを読み直してください。`;
-      } catch {
-        if (status) status.textContent = '変えられませんでした。ページを読み直してください。';
-      } finally {
-        for (const b of targets) b.disabled = false;
+      // 前に押したマスを送り終えてから（順番が入れかわらないように）
+      for (const [b, timer] of waiting) {
+        clearTimeout(timer);
+        waiting.delete(b);
+        void send(b);
       }
+      await enqueue(async () => {
+        try {
+          const res = await fetch('/channels/perms/bulk', {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': root.getAttribute('data-csrf') || '' },
+            body,
+          });
+          const r = await res.json().catch(() => ({ ok: false, cells: [] }));
+          const want = new Set(targets.map((b) => `${b.getAttribute('data-ch')}:${b.getAttribute('data-bit')}`));
+          let n = 0;
+          for (const x of r.cells || []) {
+            if (!want.has(`${x.ch}:${x.bit}`)) continue;
+            const b = root.querySelector(`button.pm-cell[data-ch="${x.ch}"][data-bit="${x.bit}"]`);
+            if (b) {
+              clearTimeout(waiting.get(b));
+              waiting.delete(b);
+              paint(b, x.cell);
+              n++;
+            }
+          }
+          if (status) status.textContent = r.ok ? `${n} マスを${LABEL[to]}にしました。` : `途中で Discord に断られました（${n} マスは変えました。BOT が持っていない権限は許可できません）。ページを読み直してください。`;
+        } catch {
+          if (status) status.textContent = '変えられませんでした。ページを読み直してください。';
+        } finally {
+          for (const b of targets) b.disabled = false;
+        }
+      });
       return;
     }
     // マスを押した
     const cell = t.closest('button.pm-cell[data-ch]');
     if (cell && root && !cell.disabled) {
-      const next = NEXT[cell.getAttribute('data-cell')] || 'neutral';
-      const status = document.querySelector('[data-pm-status]');
-      cell.disabled = true;
-      try {
-        const res = await fetch('/channels/perms/cell', {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': root.getAttribute('data-csrf') || '' },
-          body: new URLSearchParams({ _csrf: root.getAttribute('data-csrf') || '', channel: cell.getAttribute('data-ch'), role: cell.getAttribute('data-role') || root.getAttribute('data-role'), bit: cell.getAttribute('data-bit'), cell: next }),
-        });
-        const r = await res.json().catch(() => ({ ok: false }));
-        if (!r.ok) throw new Error(r.error || 'failed');
-        paint(cell, r.cell);
-        if (status) status.textContent = `保存しました（${LABEL[r.cell]}）`;
-      } catch {
-        if (status) status.textContent = '変えられませんでした（BOT が持っていない権限は許可できません）。ページを読み直してください。';
-      } finally {
-        cell.disabled = false;
-      }
+      // 見た目をすぐ変えて、少しだけ待って送る（すばやく何回か押したら、最後の値を 1 回だけ送る）
+      change(cell, NEXT[cell.getAttribute('data-cell')] || 'neutral', 250);
       return;
     }
     // 一括で当てる: チャンネルをまとめて選ぶ
