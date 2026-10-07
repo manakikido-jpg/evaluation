@@ -12,7 +12,7 @@
 
 ## 2. いちばん大事なこと: ブランチと本番
 
-- **本番の VPS は、ブランチ `claude/compassionate-sagan-8fqy8p`（本番ブランチ）を 1 分ごとに取りこんで、そのまま本番に出している。**
+- **本番の VPS は、ブランチ `claude/compassionate-sagan-8fqy8p`（本番ブランチ）を 15 秒ごとに取りこんで、そのまま本番に出している。**
   このブランチに push したものは、数分で本番の Discord に出る。
 - **本番ブランチの担当は Claude（Claude Code）。** 本番ブランチに直接 push してよいのは担当の Claude だけ（テストを全部通してから）。
 - **ほかの AI（ChatGPT / Codex など）は、本番ブランチに直接 push しない。** 自分用のブランチ（例: `codex/○○`）を作って作業し、

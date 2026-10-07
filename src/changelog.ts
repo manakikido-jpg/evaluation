@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-auto-update-15s',
+    date: '2026-10-07',
+    kind: 'improve',
+    where: ['運用'],
+    title: '🔄 自動の更新を 15 秒ごとに',
+    items: [
+      'VPS が新しいコードを確かめる間隔を、1 分ごとから 15 秒ごとにしました（cron の設定はそのまま）',
+      '手で `./scripts/auto-update.sh` を打つと、待たずに 1 回だけ確かめます',
+    ],
+  },
+  {
     id: '2026-10-07-omikuji-button',
     date: '2026-10-07',
     kind: 'new',
