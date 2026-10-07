@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-omikuji-drawer-label', date: '2026-10-08', kind: 'fix', where: ['Discord'], title: '御神籤を引いた人を結果に表示', items: ['御神籤の結果に引いた人を表示します。返信元のメッセージが消えても分かります。通知は飛ばしません。', '通常・特別な御神籤・もう1回のすべてに対応します。'] },
   {
     id: '2026-10-07-omikuji-reset-day',
     date: '2026-10-07',

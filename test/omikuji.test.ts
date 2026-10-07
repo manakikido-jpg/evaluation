@@ -232,7 +232,7 @@ describe('おみくじ', () => {
     await revealOmikuji(db, conf, r, 'さくら', send);
     // 紙だけ（文字のカードなし）
     expect(steps.map((x) => x.title)).toEqual(['⛩ おみくじ', '⛩ おみくじ', undefined]);
-    expect(steps.at(-1)).toEqual({ title: undefined, files: ['omikuji.png'] });
+    expect(steps.at(-1)).toEqual({ title: undefined, files: ['omikuji.png'], content: '-# ⛩ **さくら** さんのおみくじ' });
     steps.length = 0;
     const png = (await import('../src/services/omikujiSlip.js')).renderSlip({ name: '吉', color: '#e0607e', message: 'a', items: [], shrine: '', date: new Date() });
     await saveOmikujiArt(db, 1, png);
@@ -247,7 +247,7 @@ describe('おみくじ', () => {
     const n = await drawOmikuji(db, cfg.economy, 'B', new Date('2026-10-06T03:00:00Z'), () => 0);
     if (n.status !== 'drawn') throw new Error('not drawn');
     await revealOmikuji(db, { ...cfg, omikujiTexts: { ...cfg.omikujiTexts, shake: false, slip: false } }, n, 'もみじ', send);
-    expect(steps).toEqual([{ title: '⛩ おみくじ ― 大吉', files: [] }]);
+    expect(steps).toEqual([{ title: '⛩ おみくじ ― 大吉', files: [], content: '-# ⛩ **もみじ** さんのおみくじ' }]);
   });
 
   it('紙のいちばん下: もらった銭と連続日数（次のおまけまで）。おまけの日は文字でも出す', async () => {
@@ -260,7 +260,7 @@ describe('おみくじ', () => {
     const { omikujiMessage } = await import('../src/discord/omikuji.js');
     const m = await omikujiMessage(db, { ...cfg, omikujiStreak: sc }, { ...r, streak: 7, bonus: sc.rewards }, 'さくら', { streak: true });
     expect(m.embeds).toEqual([]);
-    expect(m.content).toBe(`🎁 **7 日続いたおまけ**: ${cfg.economy.currencyEmoji}${cfg.economy.currencyName} 50`);
+    expect(m.content).toBe(`-# ⛩ **さくら** さんのおみくじ\n🎁 **7 日続いたおまけ**: ${cfg.economy.currencyEmoji}${cfg.economy.currencyName} 50`);
   });
 
   it('台紙: 無地のところを探して、その中に字を書く（飾りのふちは避ける）', async () => {
@@ -359,4 +359,21 @@ describe('おみくじ', () => {
     const r2 = await drawOmikuji(db, cfg.economy, 'Y', now, () => 0.02, { special });
     expect(r2.status === 'drawn' && r2.fortune.key).not.toBe('unei1');
   });
+});
+
+
+it('結果に引いた人のIDを残し、返信元なしでも分かる。送信と結果編集では通知しない', async () => {
+  Object.assign(REVEAL_MS, { shake: 0, glow: 0, art: 0 });
+  const r = await drawOmikuji(db, cfg.economy, 'A', new Date('2026-10-07T03:00:00Z'), () => 0);
+  if (r.status !== 'drawn') throw new Error(r.status);
+  const sent: any[] = [];
+  const edited: any[] = [];
+  const send = async (p: any) => { sent.push(p); return { edit: async (q: any) => { edited.push(q); } }; };
+  await revealOmikuji(db, cfg, r, '@everyone **同じ名前**', send, { memberId: '870000000000000001' });
+  expect(sent[0]).toMatchObject({ content: '-# ⛩ <@870000000000000001> さんのおみくじ', allowedMentions: { parse: [] } });
+  expect(edited.at(-1)).toMatchObject({ content: '-# ⛩ <@870000000000000001> さんのおみくじ', allowedMentions: { parse: [] } });
+  expect(edited.at(-1).files).toHaveLength(1);
+  const { omikujiMessage } = await import('../src/discord/omikuji.js');
+  const text = await omikujiMessage(db, { ...cfg, omikujiTexts: { ...cfg.omikujiTexts, slip: false } }, r, 'さくら', { memberId: '870000000000000001', suffix: '（もう 1 回）' });
+  expect(text.content).toBe('-# ⛩ <@870000000000000001> さんのおみくじ（もう 1 回）');
 });

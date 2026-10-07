@@ -742,7 +742,7 @@ export class GachaApp {
     const channel = this.omikujiChannel(i.guild);
     // 演出は待たずに先へ（券を使った人への返事を遅らせない）。#慶事 は演出のあとで
     if (channel)
-      void revealOmikuji(this.db, cfg, d, i.member.displayName, (p) => channel.send(p), { suffix: '（もう 1 回）' })
+      void revealOmikuji(this.db, cfg, d, i.member.displayName, (p) => channel.send(p), { memberId: i.user.id, suffix: '（もう 1 回）' })
         .catch(() => undefined)
         .then(() => announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune));
     else await announceSpecial(this.db, i.guild, cfg, i.user.id, d.fortune);
