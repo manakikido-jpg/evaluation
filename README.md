@@ -8,6 +8,7 @@
 - 設計書: [docs/design.md](docs/design.md)（PDF: [docs/sakuranomiya-design.pdf](docs/sakuranomiya-design.pdf)）
 - コンセプト: [docs/concept.md](docs/concept.md)
 - 管理システム（社務所 Web）: [docs/admin.md](docs/admin.md)
+- **AI（ChatGPT / Codex・Claude など）に作業してもらうときの決まり: [AGENTS.md](AGENTS.md)**
 
 ## いまできること（第 1 段階）
 
