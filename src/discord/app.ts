@@ -10,6 +10,7 @@ import {
   type Client,
   type Guild,
   type GuildMember,
+  type PartialGuildMember,
   type Interaction,
   type Message,
   type UserContextMenuCommandInteraction,
@@ -18,6 +19,8 @@ import {
 import { channelPosters, posterPage, type Poster } from '../services/posters.js';
 import { SHUIN_PICK_ID } from '../services/notices.js';
 import { recordPresence } from '../services/voiceUsage.js';
+import { issueInitialCurrency } from '../services/initialCurrency.js';
+import { autoRanks } from '../domain/ranks.js';
 import { genderOfRoles } from '../services/admission.js';
 import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../services/contact.js';
 import { introOf, introUrl } from '../services/intros.js';
@@ -161,9 +164,23 @@ export class ShuinApp {
     }
   }
 
-  async onMemberUpdate(m: GuildMember): Promise<void> {
+  async onMemberUpdate(m: GuildMember, old?: GuildMember | PartialGuildMember): Promise<void> {
     if (m.guild.id !== this.cfg.guildId) return;
     await upsertMember(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'upsertMember failed'));
+    const cfg = this.cfg;
+    const visitor = autoRanks(cfg.ranks)[0];
+    if (!m.user.bot && visitor && m.roles.cache.has(visitor.roleId) && (!old || !old.roles.cache.has(visitor.roleId))) {
+      await issueInitialCurrency(this.db, cfg, {
+        sendDm: async (_id, content) => { await m.send({ content, allowedMentions: { parse: [] } }); return true; },
+        sendMessage: async (channelId, body) => {
+          const ch = await this.client.channels.fetch(channelId);
+          if (!ch?.isSendable()) throw new Error('初期通貨のお知らせ先に投稿できません。');
+          const sent = await ch.send({ content: body.content, allowedMentions: { parse: [] } });
+          return { id: sent.id };
+        },
+      }, m.id).catch((err) => logger.error({ err }, 'initial currency failed'));
+    }
+
   }
 
   /** 1 分ごと: 発言数を書き込み、通話している人に通話時間と花びらを足す */

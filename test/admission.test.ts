@@ -344,7 +344,7 @@ describe('初期配布', () => {
     expect(calls.find((c) => c.startsWith(`dm ${NEW}`))).toBeDefined();
     // 運営のチャンネル（#記録）に「振り込みました」
     const notice = (list: string[]) => list.filter((c) => c.includes('初期配布'));
-    expect(notice(calls)).toEqual([`msg ${cfg.channels.log} 🪙 **初期配布**: <@${NEW}> さんに 銭 3,000 枚を振り込みました（残高 3,000 枚）。`]);
+    expect(notice(calls)).toEqual([`msg ${cfg.channels.log} 🪙 **初期通貨発行完了（初期配布）**\n<@${NEW}> さんに 🪙 銭 3,000 枚（残高 3,000 枚） を発行しました。`]);
     calls = [];
     await join();
     expect((await walletOf(db, NEW)).balance).toBe(3000);

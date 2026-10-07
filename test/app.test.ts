@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { ShuinApp } from '../src/discord/app.js';
 import { shuinId } from '../src/discord/ids.js';
+import { walletOf, grantJoinBonus } from '../src/services/economy.js';
 import { giveShuin } from '../src/services/shuin.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -17,8 +18,9 @@ function fakeMember(id: string, roleIds: string[], bot = false) {
     get guild() {
       return guild;
     },
-    user: { id, bot },
+    user: { id, bot, username: `user${id.slice(-2)}` },
     displayName: `user${id.slice(-2)}`,
+    send: vi.fn(async (_p: unknown) => undefined),
     displayAvatarURL: () => 'https://example.com/a.png',
     toString: () => `<@${id}>`,
     roles: {
@@ -37,6 +39,7 @@ let sent: Sent[];
 let app: ShuinApp;
 
 const guild = {
+  id: cfg.guildId,
   members: {
     fetch: async (arg: string | { user: string; force?: boolean }) => {
       const id = typeof arg === 'string' ? arg : arg.user;
@@ -55,7 +58,7 @@ beforeEach(async () => {
     channels: {
       fetch: async (channelId: string) => ({
         isSendable: () => true,
-        send: async (p: { content: string; allowedMentions?: unknown }) => void sent.push({ channelId, ...p }),
+        send: async (p: { content: string; allowedMentions?: unknown }) => { sent.push({ channelId, ...p }); return { id: 'message' }; },
       }),
     },
   };
@@ -292,5 +295,47 @@ describe('#絵馬', () => {
       await withEma.onMessage(m as never);
       expect(reply).not.toHaveBeenCalled();
     }
+  });
+});
+
+
+describe('参拝者ロールで初期通貨を発行', () => {
+  it('手動のロール付与でも発行し、本人と運営へ1回だけ知らせる', async () => {
+    const id = '700000000000000090';
+    const old = fakeMember(id, []);
+    const m = add(id, ROLE.sanpaisha);
+    await Promise.all([app.onMemberUpdate(m as never, old as never), app.onMemberUpdate(m as never, old as never)]);
+    expect((await walletOf(db, id)).balance).toBe(cfg.economy.joinBonus);
+    expect(m.send).toHaveBeenCalledTimes(1);
+    expect(m.send.mock.calls[0]?.[0]).toMatchObject({ content: expect.stringContaining('初期通貨を発行されました。'), allowedMentions: { parse: [] } });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ channelId: cfg.channels.log, content: expect.stringContaining('初期通貨発行完了'), allowedMentions: { parse: [] } });
+    await app.onMemberUpdate(m as never, m as never);
+    await app.onMemberUpdate(old as never, m as never);
+    await app.onMemberUpdate(m as never, old as never);
+    expect(m.send).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveLength(1);
+    expect((await walletOf(db, id)).balance).toBe(cfg.economy.joinBonus);
+  });
+  it('DMが届かなくても発行し、運営の記録を出す', async () => {
+    const m = add('700000000000000091', ROLE.sanpaisha);
+    m.send.mockRejectedValue(new Error('DM disabled'));
+    await app.onMemberUpdate(m as never, fakeMember(m.id, []) as never);
+    expect((await walletOf(db, m.id)).balance).toBe(cfg.economy.joinBonus);
+    expect(sent[0]?.content).toContain('本人へのDMは届きませんでした');
+  });
+  it('参拝者以外・BOT・別のサーバーには配らず、承認時の発行済みも重ねない', async () => {
+    const other = add('700000000000000092', ROLE.ujiko);
+    const bot = fakeMember('700000000000000093', [ROLE.sanpaisha], true);
+    const foreign = { ...fakeMember('700000000000000094', [ROLE.sanpaisha]), guild: { id: '900000000000000099' } };
+    for (const m of [other, bot, foreign]) {
+      await app.onMemberUpdate(m as never);
+      expect((await walletOf(db, m.id)).balance).toBe(0);
+    }
+    const paid = add('700000000000000095', ROLE.sanpaisha);
+    await grantJoinBonus(db, paid.id, cfg.economy.joinBonus);
+    await app.onMemberUpdate(paid as never, fakeMember(paid.id, []) as never);
+    expect(paid.send).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
   });
 });

@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-07-visitor-initial-currency', date: '2026-10-07', kind: 'fix', where: ['Discord'], title: '参拝者ロールで初期通貨を自動発行', items: ['手動で参拝者ロールを付けたときも、初期通貨を1人1回だけ発行します。', '本人に発行のお知らせをDMで送り、運営の記録に発行完了を知らせます。DMが届かなくても発行は取り消しません。'] },
   {
     id: '2026-10-07-perm-matrix-wheel',
     date: '2026-10-07',
