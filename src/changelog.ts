@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-otoshidama-anyone',
+    date: '2026-10-07',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🧧 お年玉袋をだれでも置けるように',
+    items: ['お年玉袋は、氏子でなくても（参拝者でも）置けるようになりました'],
+  },
+  {
     id: '2026-10-07-at-limit',
     date: '2026-10-07',
     kind: 'improve',

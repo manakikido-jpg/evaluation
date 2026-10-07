@@ -2,7 +2,6 @@ import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { otoshidamaBags, otoshidamaClaims, type OtoshidamaBag, type OtoshidamaClaim } from '../db/schema.js';
-import { autoRanks, currentAutoRank } from '../domain/ranks.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 
 /**
@@ -31,7 +30,6 @@ async function lock(tx: Db, key: string): Promise<void> {
 
 export type PutResult =
   | { status: 'ok'; bag: OtoshidamaBag; balance: number }
-  | { status: 'rank_too_low'; rankName: string }
   | { status: 'bad_amount' }
   | { status: 'insufficient'; need: number; balance: number };
 
@@ -42,8 +40,8 @@ export function parseCount(raw: string): number {
 }
 
 /**
- * 袋を置く（入れる量と手数料を払って、袋を作る）。投稿は呼び出し側。
- * サブアカウントで集めた銭を流せないよう、置けるのは 2 段目の役職（氏子）以上か運営。
+ * 袋を置く（入れる量と手数料を払って、袋を作る）。投稿は呼び出し側。役職を問わずだれでも置ける
+ * （受け取りは経済の見守りの「やり取りが多い組」で見る）
  */
 export async function putBag(
   db: Db,
@@ -52,10 +50,6 @@ export async function putBag(
   now = new Date(),
   rand: Rand = Math.random,
 ): Promise<PutResult> {
-  const [first, second] = autoRanks(cfg.ranks);
-  const current = currentAutoRank(cfg.ranks, input.roleIds);
-  const isStaff = cfg.ranks.some((r) => !r.auto && input.roleIds.includes(r.roleId));
-  if (second && !isStaff && (!current || current.key === first?.key)) return { status: 'rank_too_low', rankName: second.name };
   const { total, count } = input;
   const o = OTOSHIDAMA;
   if (!Number.isInteger(total) || !Number.isInteger(count) || total < o.minTotal || total > o.maxTotal || count < o.minCount || count > o.maxCount || total < count) {

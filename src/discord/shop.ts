@@ -567,7 +567,6 @@ export class ShopApp {
       itemId: item.id,
       itemName: item.name,
     });
-    if (r.status === 'rank_too_low') return void (await i.editReply(done(`お年玉袋は ${r.rankName} 以上になると置けます。`)));
     if (r.status === 'bad_amount')
       return void (await i.editReply(done(`入れる量は ${o.minTotal}〜${o.maxTotal.toLocaleString('ja-JP')} 枚、人数は ${o.minCount}〜${o.maxCount} 人にしてください（量は人数以上）。`)));
     if (r.status === 'insufficient') return void (await i.editReply(done(`${this.coinName}が足りません（${r.need.toLocaleString('ja-JP')} 枚必要・いま ${r.balance.toLocaleString('ja-JP')} 枚）。`)));

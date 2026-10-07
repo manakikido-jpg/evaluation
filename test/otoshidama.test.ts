@@ -41,9 +41,8 @@ describe('🧧 お年玉袋', () => {
     expect(parseCount('abc')).toBeNaN();
   });
 
-  it('置く: 2 段目の役職以上・量と人数の範囲・入れた量と手数料を払う', async () => {
+  it('置く: 役職を問わずだれでも・量と人数の範囲・入れた量と手数料を払う', async () => {
     await addCoins(db, OWNER, 2000, 'adjust');
-    expect((await putBag(db, cfg, { ...base, roleIds: [ROLE.sanpaisha], total: 500, count: 5 }, T0)).status).toBe('rank_too_low');
     expect((await putBag(db, cfg, { ...base, total: 50, count: 5 }, T0)).status).toBe('bad_amount');
     expect((await putBag(db, cfg, { ...base, total: 500, count: 1 }, T0)).status).toBe('bad_amount');
     expect(await putBag(db, cfg, { ...base, total: 1990, count: 5 }, T0)).toMatchObject({ status: 'insufficient', need: 2040 });
@@ -132,5 +131,11 @@ describe('🎨 自分だけの色', () => {
     await undoMyColor(db, r, 5000);
     expect(await activeMyColor(db, A)).toBeUndefined();
     expect((await walletOf(db, A)).balance).toBe(12_000);
+  });
+
+  it('参拝者（1 段目の役職）でも置ける', async () => {
+    await addCoins(db, OWNER, 2000, 'adjust');
+    const r = await putBag(db, cfg, { ...base, roleIds: [ROLE.sanpaisha], total: 500, count: 5 }, T0);
+    expect(r.status).toBe('ok');
   });
 });
