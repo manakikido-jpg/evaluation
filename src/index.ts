@@ -152,6 +152,8 @@ async function main(): Promise<void> {
     voiceChatClear.attach(guild);
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
     bellSticky.attach(guild);
+    // ⛩ 「御神籤を引く」ボタンを #おみくじ のいちばん下に
+    await omikuji.attach(guild).catch((err) => logger.warn({ err }, 'omikuji panel attach failed'));
     market.attach(guild);
     board.attach(guild);
     // 止まっていた間に消された募集のカードを出し直す
@@ -231,6 +233,7 @@ async function main(): Promise<void> {
       void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));
       // 呼び鈴のボタン（設定で足したチャンネルにも）
       bellSticky.checkAll();
+      omikuji.checkPanel();
       // いちばん下に表示し続ける掲示（#絵馬 のひな形・朱印ボタン）が下にないときは出し直す
       void sticky.checkAll(guild).catch((err) => logger.warn({ err }, 'sticky check failed'));
       // 経済の見守り: 動きが多い人の警告、週ごとのお知らせとお賽銭
@@ -323,11 +326,14 @@ async function main(): Promise<void> {
     voicePanel.onMessage(m);
     // 呼び鈴のボタン: 話が落ち着いたらいちばん下へ
     bellSticky.onMessage(m);
+    // ⛩ 御神籤のボタン: 書き込みが落ち着いたらいちばん下へ
+    omikuji.onMessage(m);
     // 絵馬待ちの人が自己紹介を書いたら、🔰参拝者 に
     void admission.onMessage(m).catch((err) => logger.warn({ err }, 'intro check failed'));
   });
   // 📌 掲示板: 募集のカードが消されたら出し直す
   client.on(Events.MessageDelete, (m) => void board.onMessageDelete(m).catch((err) => logger.warn({ err }, 'board message delete failed')));
+  client.on(Events.MessageDelete, (m) => void omikuji.onMessageDelete(m).catch((err) => logger.warn({ err }, 'omikuji panel delete failed')));
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 
   const health =

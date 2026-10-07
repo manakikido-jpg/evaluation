@@ -254,6 +254,13 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
         s.setName('gacha').setNameLocalizations({ ja: '物御籤' }).setDescription('Prize lottery').setDescriptionLocalizations({ ja: '物御籤売り場へ入るボタン（#おみくじ・#授与所 用）' }),
       )
       .addSubcommand((s) =>
+        s
+          .setName('omikuji')
+          .setNameLocalizations({ ja: 'おみくじ' })
+          .setDescription('Omikuji button')
+          .setDescriptionLocalizations({ ja: '「⛩ 御神籤を引く」ボタンだけを、このチャンネルのいちばん下に出し続ける（#おみくじ 用）' }),
+      )
+      .addSubcommand((s) =>
         s.setName('bell').setNameLocalizations({ ja: '呼び鈴' }).setDescription('Call staff button').setDescriptionLocalizations({ ja: '運営を呼ぶ「🔔 呼び鈴」のボタン' }),
       )
       .addSubcommand((s) =>

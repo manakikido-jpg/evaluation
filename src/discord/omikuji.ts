@@ -1,5 +1,5 @@
-import { AttachmentBuilder, MessageFlags, type APIEmbed, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction } from 'discord.js';
-import type { EconomyConfig, GuildConfig, OmikujiStreakConfig, StreakReward } from '../config.js';
+import { AttachmentBuilder, MessageFlags, type APIEmbed, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type Message } from 'discord.js';
+import { adminLevelOf, type EconomyConfig, type GuildConfig, type OmikujiStreakConfig, type StreakReward } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { toneOf } from '../omikujiTexts.js';
@@ -7,6 +7,8 @@ import { drawOmikuji, nextStreakReward, specialIndex, streakRewardText, type For
 import { loadOmikujiArt, loadSlipBg } from '../services/omikujiArt.js';
 import { joinSideBySide } from '../services/imageJoin.js';
 import { renderSlip } from '../services/omikujiSlip.js';
+import { audit } from '../services/audit.js';
+import { loadOmikujiPanel, restickPanel, saveOmikujiPanel, type OmikujiPanelPlace } from '../services/omikujiPanel.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -182,29 +184,125 @@ export async function announceSpecial(db: Db, guild: Guild, cfg: GuildConfig, me
     .catch((err) => logger.warn({ err }, 'omikuji special announce failed'));
 }
 
-/** /おみくじ（1 日 1 回のログボ） */
+/** ⛩ 「御神籤を引く」ボタン（ボタンだけ。/パネル おみくじ で置く） */
+export function omikujiPanelBody(e: Pick<EconomyConfig, 'omikujiVoiceOnly'>) {
+  return {
+    content: `-# 1 日 1 回（日本時間の 0 時から）${e.omikujiVoiceOnly ? '・通話に入っているときだけ' : ''}`,
+    components: [{ type: 1 as const, components: [{ type: 2 as const, style: 3 as const, label: '御神籤を引く', custom_id: 'omikuji:draw', emoji: { name: '⛩' } }] }],
+  };
+}
+
+/** 書き込みが落ち着いてから、ボタンを下に出し直すまで */
+const RESTICK_MS = 3_000;
+
+/** /おみくじ・「⛩ 御神籤を引く」ボタン（1 日 1 回のログボ） */
 export class OmikujiApp {
+  private guild?: Guild;
+  private place: OmikujiPanelPlace = {};
+  private timer?: NodeJS.Timeout;
+  private queue: Promise<unknown> = Promise.resolve();
+
   constructor(
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
+    private readonly restickMs = RESTICK_MS,
   ) {}
 
+  /** 起動したとき: 置き場所を読んで、ボタンが下になければ出し直す */
+  async attach(guild: Guild): Promise<void> {
+    this.guild = guild;
+    this.place = await loadOmikujiPanel(this.db);
+    this.checkPanel();
+  }
+
+  /** 10 分ごと・書き込みが落ち着いたとき */
+  checkPanel(): void {
+    this.queue = this.queue.then(() => this.restick()).catch((err: unknown) => logger.warn({ err }, 'omikuji panel restick failed'));
+  }
+
+  onMessage(msg: Message): void {
+    if (!this.place.channelId || msg.channelId !== this.place.channelId || msg.id === this.place.messageId) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.checkPanel(), this.restickMs);
+  }
+
+  /** ボタンが消されたら（BOT が出し直したときはのぞく）、置くのをやめる */
+  async onMessageDelete(msg: { id: string; guildId: string | null }): Promise<void> {
+    if (msg.guildId !== this.cfg().guildId || !this.place.messageId || msg.id !== this.place.messageId) return;
+    const channelId = this.place.channelId;
+    this.place = {};
+    await saveOmikujiPanel(this.db, {}, 'system');
+    await audit(this.db, { actorId: 'system', action: 'omikuji.panel_off', detail: { channelId }, via: 'system' });
+  }
+
+  private async restick(): Promise<void> {
+    const ch = this.place.channelId ? this.guild?.channels.cache.get(this.place.channelId) : undefined;
+    if (!ch?.isTextBased() || !ch.isSendable()) return;
+    await restickPanel(
+      this.place,
+      {
+        lastMessageId: async () => (await ch.messages.fetch({ limit: 1 })).first()?.id,
+        send: async () => (await ch.send({ ...omikujiPanelBody(this.cfg().economy), allowedMentions: NO_PINGS })).id,
+        remove: async (id) => void (await ch.messages.delete(id)),
+      },
+      async (p) => {
+        this.place = p;
+        await saveOmikujiPanel(this.db, p, 'system');
+      },
+    );
+  }
+
   async onInteraction(interaction: Interaction): Promise<void> {
-    if (!interaction.isChatInputCommand() || interaction.commandName !== 'omikuji') return;
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+    const isCommand = interaction.isChatInputCommand() && interaction.commandName === 'omikuji';
+    const isButton = interaction.isButton() && interaction.customId === 'omikuji:draw';
+    const isPanel = interaction.isChatInputCommand() && interaction.commandName === 'panel' && interaction.options.getSubcommand(false) === 'omikuji';
+    if (!isCommand && !isButton && !isPanel) return;
     try {
-      await this.draw(interaction);
+      if (isPanel) return await this.placePanel(interaction as ChatInputCommandInteraction<'cached'>);
+      await this.draw(interaction as ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>);
     } catch (err) {
       logger.error({ err }, 'omikuji failed');
+      if (!interaction.isRepliable()) return;
       const msg = { content: 'おみくじを引けませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL };
       await (interaction.replied || interaction.deferred ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => undefined);
     }
   }
 
-  private async draw(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  /** /パネル おみくじ: このチャンネルのいちばん下に「⛩ 御神籤を引く」を置く（前に置いた所のボタンは消す） */
+  private async placePanel(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
+    if (!adminLevelOf(this.cfg(), [...i.member.roles.cache.keys()])) return void (await i.reply({ content: '神職・宮司のみ使えます。', ...EPHEMERAL }));
+    if (!i.channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', ...EPHEMERAL }));
+    await i.deferReply(EPHEMERAL);
+    const old = this.place;
+    // 前のボタンは先に忘れてから消す（消されたの知らせで止めないように）
+    this.place = { channelId: i.channelId };
+    await saveOmikujiPanel(this.db, this.place, i.user.id);
+    if (old.channelId && old.messageId) {
+      const oldCh = i.guild.channels.cache.get(old.channelId);
+      if (oldCh?.isTextBased()) await oldCh.messages.delete(old.messageId).catch(() => undefined);
+    }
+    this.checkPanel();
+    await this.queue;
+    await audit(this.db, { actorId: i.user.id, action: 'omikuji.panel', detail: { channelId: i.channelId }, via: 'discord' });
+    const home = this.homeOf(i.guild);
+    await i.editReply(
+      [
+        '⛩ このチャンネルのいちばん下に「御神籤を引く」ボタンを置きました（書き込みがあると、下に出し直します）。',
+        '-# やめるときは、ボタンの書き込みを消してください',
+        ...(home && home !== i.channelId ? [`-# ⚠ おみくじは <#${home}> でしか引けません。ボタンは <#${home}> に置いてください`] : []),
+      ].join('\n'),
+    );
+  }
+
+  private homeOf(guild: Guild): string | undefined {
+    return this.cfg().channels.omikuji ?? guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
+  }
+
+  private async draw(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<void> {
     const cfg = this.cfg();
     // #おみくじ があれば、そこで引いてもらう（ほかのチャンネルが流れないように）
-    const home = cfg.channels.omikuji ?? i.guild.channels.cache.find((c) => c.isTextBased() && c.name === 'おみくじ')?.id;
+    const home = this.homeOf(i.guild);
     if (home && i.channelId !== home) {
       await i.reply({ content: `おみくじは <#${home}> で引けます。`, ...EPHEMERAL });
       return;

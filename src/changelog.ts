@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-omikuji-button',
+    date: '2026-10-07',
+    kind: 'new',
+    where: ['Discord'],
+    title: '⛩ #おみくじ に「御神籤を引く」ボタン',
+    items: [
+      '#おみくじ のいちばん下に「⛩ 御神籤を引く」ボタンを置けるようになりました。押すだけで引けます（`/おみくじ` もそのまま使えます）',
+      'だれかが引いてボタンが上に流れても、すぐ下に出し直します',
+      '運営は #おみくじ で `/パネル おみくじ` を打つと置けます。やめるときはボタンの書き込みを消します',
+    ],
+  },
+  {
     id: '2026-10-07-sokin-panel',
     date: '2026-10-07',
     kind: 'improve',
