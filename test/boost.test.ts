@@ -95,7 +95,10 @@ describe('お知らせ・DM・奉納板', () => {
     expect(log.filter((l) => l.startsWith('send '))).toEqual([]);
     const dm = log.find((l) => l.startsWith(`dm ${A}`))!;
     expect(dm).toContain('20% 引き');
-    expect(dm).toContain('奉納板');
+    expect(dm).not.toContain('奉納板');
+    expect(dm).not.toContain('ピン留め');
+    expect(dm).toContain('奉納限定');
+    expect(dm).toContain('部屋代が無料');
     expect(dm).not.toContain('枚');
     expect(log.some((l) => l.includes(B))).toBe(false);
     expect((await walletOf(db, A)).balance).toBe(0);

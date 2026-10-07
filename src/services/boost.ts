@@ -94,9 +94,7 @@ export function boostDm(memberId: string, cfg: GuildConfig, r: ThankResult): str
   const perks = [
     '・#授与所 の「🏮 奉納限定」の授与品（金色の色守り・奉納者の称号など）が受けられます',
     e.boostDiscountPercent > 0 ? `・授与品が **${e.boostDiscountPercent}% 引き**（免罪符・贈り物をのぞく）` : '',
-    '・「絵馬の奉納」（自己紹介のピン留め）が無料',
     room >= 100 ? '・宿坊・宵宮の部屋代が無料' : room > 0 ? `・宿坊・宵宮の部屋代が **${room}% 引き**` : '',
-    '・#番付 の「🏮 奉納板」にお名前が載ります',
   ].filter(Boolean);
   return [
     fill(cfg.boost.dmText, memberId, cfg),

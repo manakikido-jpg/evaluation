@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-boost-dm-perks', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'ブーストのお礼DMを短く', items: ['本人へのお礼DMから、自己紹介のピン留めと奉納板の案内を外しました。'] },
   { id: '2026-10-08-boost-channel-notice-off', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: 'チャンネルへのブースト通知を停止', items: ['社務所BOTからチャンネルへのブースト通知を出さなくしました。本人へのお礼DMは送ります。', '回数の記録・奉納板・奉納の特典はこれまで通りです。'] },
   { id: '2026-10-08-rank-transfer-limits', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: '参拝者・氏子の1日の送金上限', items: ['参拝者は1日125銭、氏子は150銭まで送金できます。授与所の贈り物と合算し、日本時間の午前0時にリセットします。', '送金画面の残り枠も役職に合わせて表示し、社務所の設定で上限を変更できます。'] },
   { id: '2026-10-08-otoshidama-ujiko', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'お年玉袋を置くのは氏子からに', items: ['お年玉袋を置けるのは氏子以上になりました。支払い前にも役職を確かめます。受け取りは今までどおり承認済みの人が対象です。'] },
