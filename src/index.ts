@@ -178,6 +178,8 @@ async function main(): Promise<void> {
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
     ticker = setInterval(() => {
       void app.everyMinute(guild);
+      // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
+      void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
       // 市場: 期限が来た取引を渡す・返事のない提案を取り下げる・📞 待機の時間切れ

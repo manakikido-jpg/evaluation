@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { activityDaily, memberEvents, members, shuin, wallets, type Member } from '../db/schema.js';
+import { specialGoenSumFor } from './specialGoen.js';
 
 /** Discord から取ったメンバー情報（BOT が渡す） */
 export type MemberSnapshot = {
@@ -209,7 +210,8 @@ export const isMemberSort = (v: unknown): v is MemberSort => typeof v === 'strin
 
 export type MemberRow = Member & { goen: number; coins: number; given: number; vc30: number; msg30: number };
 
-const goenExpr = sql<number>`coalesce((select sum(${shuin.weight}) from ${shuin} where ${shuin.receiverId} = ${members.id} and ${shuin.revokedAt} is null), 0)::int`;
+// ご縁は朱印と ✨ 特別ご縁の合計
+const goenExpr = sql<number>`(coalesce((select sum(${shuin.weight}) from ${shuin} where ${shuin.receiverId} = ${members.id} and ${shuin.revokedAt} is null), 0) + ${specialGoenSumFor(members.id)})::int`;
 const coinsExpr = sql<number>`coalesce((select ${wallets.balance} from ${wallets} where ${wallets.memberId} = ${members.id}), 0)::int`;
 const givenExpr = sql<number>`(select count(*) from ${shuin} where ${shuin.giverId} = ${members.id} and ${shuin.revokedAt} is null)::int`;
 const activity30 = (col: typeof activityDaily.vcMinutes | typeof activityDaily.messageCount, since: string) =>

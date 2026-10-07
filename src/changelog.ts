@@ -19,6 +19,18 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-10-08-special-goen',
+    date: '2026-10-08',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '✨ 特別ご縁',
+    items: [
+      'メンバーのページから、宮司が朱印とは別にご縁を振れるようにしました（1〜1000・理由は必須）。',
+      '振ると本人に DM で知らせ、#記録 に残します。ご縁の合計に足され、役職の昇格にも数えます（1 分以内に BOT が確かめます）。',
+      '振った分は 1 つずつ取り消せます（役職は下げません）。',
+    ],
+  },
   { id: '2026-10-08-boost-dm-perks', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: 'ブーストのお礼DMを短く', items: ['本人へのお礼DMから、自己紹介のピン留めと奉納板の案内を外しました。'] },
   { id: '2026-10-08-boost-channel-notice-off', date: '2026-10-08', kind: 'improve', where: ['Discord', '社務所Web'], title: 'チャンネルへのブースト通知を停止', items: ['社務所BOTからチャンネルへのブースト通知を出さなくしました。本人へのお礼DMは送ります。', '回数の記録・奉納板・奉納の特典はこれまで通りです。'] },
   { id: '2026-10-08-omikuji-drawer-label', date: '2026-10-08', kind: 'fix', where: ['Discord'], title: '御神籤を引いた人を結果に表示', items: ['御神籤の結果に引いた人を表示します。返信元のメッセージが消えても分かります。通知は飛ばしません。', '通常・特別な御神籤・もう1回のすべてに対応します。'] },

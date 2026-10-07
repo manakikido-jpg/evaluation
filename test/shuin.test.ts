@@ -136,6 +136,7 @@ describe('御朱印帳', () => {
   it('まだ誰からも押されていない人', async () => {
     expect(await goshuinchoOf(db, B)).toEqual({
       goen: 0,
+      special: 0,
       receivedCount: 0,
       byRank: {},
       recentGiverIds: [],

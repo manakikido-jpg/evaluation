@@ -554,6 +554,13 @@
       "when": 1791384754551,
       "tag": "0078_peaceful_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1791389786788,
+      "tag": "0079_special_goen",
+      "breakpoints": true
     }
   ]
 }

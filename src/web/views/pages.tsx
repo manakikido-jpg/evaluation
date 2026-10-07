@@ -547,6 +547,7 @@ export function MemberPage(props: {
               <dt>ご縁</dt>
               <dd>
                 <strong>{card.goen}</strong>
+                {card.special ? <small>（うち ✨ 特別ご縁 +{card.special}）</small> : null}
                 {next && <small>（{next.rank.name}まで あと {next.remaining}）</small>}
               </dd>
             </div>

@@ -2,6 +2,7 @@ import { COIN_REASON_LABEL } from '../../services/economy.js';
 import type { GuildConfig } from '../../config.js';
 import type { ActivityDaily, AdminSession, CoinTx, Memo, Yaku } from '../../db/schema.js';
 import { ADMIN_COINS_MAX } from '../../services/economy.js';
+import { SPECIAL_GOEN_MAX } from '../../services/specialGoen.js';
 import { fmtAgo, fmtDate, fmtDateTime } from '../format.js';
 import { Avatar, Layout } from './layout.js';
 
@@ -36,6 +37,13 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   coins_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回送られないようにしています）。', kind: 'warn' },
   coins_invalid: { text: `枚数（1〜${ADMIN_COINS_MAX.toLocaleString('ja-JP')}）と理由を入れてください。`, kind: 'warn' },
   coins_forbidden: { text: '送る・減らすのは宮司のみできます。', kind: 'warn' },
+  goen_given: { text: '✨ 特別ご縁を振りました。本人に DM で知らせ、#記録 に残しました（昇格は 1 分以内に BOT が確かめます）。', kind: 'ok' },
+  goen_given_nodm: { text: '✨ 特別ご縁を振りました。DM は届きませんでした（DM を受け取らない設定の可能性）。#記録 には残しました。', kind: 'warn' },
+  goen_revoked: { text: '✨ 特別ご縁を取り消しました（役職はそのままです）。', kind: 'ok' },
+  goen_not_found: { text: 'その特別ご縁は、もう取り消されているか、見つかりません。', kind: 'warn' },
+  goen_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回振られないようにしています）。', kind: 'warn' },
+  goen_invalid: { text: `特別ご縁の量（1〜${SPECIAL_GOEN_MAX}）と理由を入れてください。`, kind: 'warn' },
+  goen_forbidden: { text: '特別ご縁は宮司のみ振れます。', kind: 'warn' },
 };
 
 export function Flash(props: { code?: string }) {

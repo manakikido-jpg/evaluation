@@ -1,6 +1,7 @@
 import { and, count, desc, eq, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { shuin } from '../db/schema.js';
+import { specialGoenOf } from './specialGoen.js';
 
 export type GiveResult =
   | { status: 'given'; weight: number; goen: number; restamped: boolean }
@@ -8,13 +9,13 @@ export type GiveResult =
 
 export type RevokeResult = { status: 'revoked'; weight: number; goen: number } | { status: 'not_found'; goen: number };
 
-/** 受け取ったご縁の合計（取り消し分を除く） */
+/** 受け取ったご縁の合計（取り消し分を除く）。✨ 特別ご縁も足す */
 export async function goenOf(db: Db, userId: string): Promise<number> {
   const [row] = await db
     .select({ total: sum(shuin.weight) })
     .from(shuin)
     .where(and(eq(shuin.receiverId, userId), isNull(shuin.revokedAt)));
-  return Number(row?.total ?? 0);
+  return Number(row?.total ?? 0) + (await specialGoenOf(db, userId));
 }
 
 /**
@@ -67,7 +68,10 @@ export async function revokeShuin(db: Db, input: { giverId: string; receiverId: 
 }
 
 export type GoshuinchoData = {
+  /** ご縁の合計（朱印＋特別ご縁） */
   goen: number;
+  /** そのうち ✨ 特別ご縁 */
+  special?: number;
   /** 朱印をくれた人数 */
   receivedCount: number;
   /** くれた人の役職（押した時点）ごとの人数 */
@@ -109,7 +113,8 @@ export async function goshuinchoOf(db: Db, userId: string, recentLimit = 5): Pro
     goen += Number(r.total ?? 0);
   }
 
-  return { goen, receivedCount, byRank, recentGiverIds: recent.map((r) => r.giverId), givenCount: given?.n ?? 0 };
+  const special = await specialGoenOf(db, userId);
+  return { goen: goen + special, special, receivedCount, byRank, recentGiverIds: recent.map((r) => r.giverId), givenCount: given?.n ?? 0 };
 }
 
 /** 朱印をくれた人数 */

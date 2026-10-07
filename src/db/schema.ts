@@ -30,6 +30,34 @@ export const shuin = pgTable(
 export type Shuin = typeof shuin.$inferSelect;
 
 /**
+ * ✨ 特別ご縁（宮司が社務所Web から振る）。朱印のご縁に足して数える。
+ * 取り消しは revoked_at を入れる（役職は下げない）。nonce で二度押しを 1 回にする。
+ * checked_at は、BOT が昇格を確かめたら入れる（社務所Web からは Discord のロールを変えないため）。
+ */
+export const specialGoen = pgTable(
+  'special_goen',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    memberId: text('member_id').notNull(),
+    amount: integer('amount').notNull(),
+    reason: text('reason').notNull(),
+    grantedBy: text('granted_by').notNull(),
+    nonce: text('nonce').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedBy: text('revoked_by'),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('special_goen_member_idx').on(t.memberId),
+    uniqueIndex('special_goen_nonce_idx').on(t.nonce),
+    check('special_goen_amount_positive', sql`${t.amount} > 0`),
+  ],
+);
+
+export type SpecialGoen = typeof specialGoen.$inferSelect;
+
+/**
  * サーバーのメンバー（BOT が参加・退出・ロール変更を同期する）。
  * 管理画面の一覧・検索はこのテーブルだけで作る（Discord に問い合わせない）。
  */

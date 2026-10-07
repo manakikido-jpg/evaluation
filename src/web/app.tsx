@@ -7,6 +7,8 @@ import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikuj
 import { fortuneOf, omikujiDailyAverage, omikujiSayings, specialIndex } from '../services/omikuji.js';
 import { renderSlip } from '../services/omikujiSlip.js';
 import { trialUnei } from '../services/omikujiTrial.js';
+import { grantSpecialGoen, revokeSpecialGoen, specialGoenDm, specialGoenHistory, specialGoenLog, validSpecialGoen } from '../services/specialGoen.js';
+import { SpecialGoenSection } from './views/specialGoen.js';
 import { planOmikujiReset, resetOmikujiDay } from '../services/omikujiReset.js';
 import { aiStats } from '../services/casino/aiStats.js';
 import { FORTUNE_KEYS, toneOf, TONES, type FortuneKey } from '../omikujiTexts.js';
@@ -83,7 +85,7 @@ import type { AdminSession } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { audit, listAudit } from '../services/audit.js';
 import { eventsOf, findMemberByNameOrId, getMember, memberDiff, recentLeaves, homeStats, isMemberSort, listMembers, membersWithRole, namesOf, roleMemberCounts, searchMembersWithoutRole, setMemberRole, shuinHistory, type MemberListQuery } from '../services/members.js';
-import { goshuinchoOf } from '../services/shuin.js';
+import { goenOf, goshuinchoOf } from '../services/shuin.js';
 import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
@@ -703,7 +705,9 @@ export function createWebApp(deps: WebDeps) {
       memosOf(db, id),
       checkTarget(mod(), actorOf(session), id),
     ]);
+    const goenRows = await specialGoenHistory(db, id);
     const names = await namesOf(db, [
+      ...goenRows.flatMap((r) => [r.grantedBy, r.revokedBy ?? '']),
       ...history.received.map((r) => r.other),
       ...history.given.map((r) => r.other),
       ...audits.map((a) => a.actorId),
@@ -777,6 +781,14 @@ export function createWebApp(deps: WebDeps) {
             names={names}
             showUnban={session.level === 'guji' && isBannedByEvents(events)}
             coinsNonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
+          />
+          <SpecialGoenSection
+            memberId={id}
+            csrf={session.csrfToken}
+            rows={goenRows}
+            special={card.special ?? 0}
+            names={names}
+            nonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
           />
           </>
         }
@@ -1900,6 +1912,45 @@ export function createWebApp(deps: WebDeps) {
       `${e.currencyEmoji} 咲楽ノ宮の社務所から、${e.currencyName}が **${amount.toLocaleString('ja-JP')} 枚** 届きました。\n> ${note}\n残高は \`/御朱印帳\` で見られます。`,
     );
     return back(c, id, sent ? 'coins_given' : 'coins_given_nodm');
+  });
+
+  // ✨ 特別ご縁を振る・取り消す（宮司のみ）。昇格は BOT が 1 分ごとに確かめる
+  const goenBack = (c: Context<Env>, id: string, msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-goen`);
+  const goenLog = async (content: string) => {
+    if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content, allowed_mentions: { parse: [] } }).catch((err: unknown) => logger.warn({ err }, 'special goen log failed'));
+  };
+  app.post('/members/:id/special-goen', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    if (!gujiOnly(c)) return goenBack(c, id, 'goen_forbidden');
+    const body = await c.req.parseBody();
+    const amount = Number(body.amount);
+    const reason = field(body, 'reason', 200);
+    const nonce = typeof body.nonce === 'string' ? body.nonce : '';
+    if (!validSpecialGoen(amount) || !reason || !NONCE.test(nonce)) return goenBack(c, id, 'goen_invalid');
+    const m = await getMember(db, id);
+    if (!m || m.isBot) return back(c, id, 'denied_not_found');
+    const by = c.get('session').userId;
+    const r = await grantSpecialGoen(db, { memberId: id, amount, reason, by, nonce });
+    if (r.status === 'duplicate') return goenBack(c, id, 'goen_dup');
+    const goen = await goenOf(db, id);
+    await audit(db, { actorId: by, targetId: id, action: 'goen.special_grant', detail: { id: r.row.id, amount, reason, goen }, via: 'web' });
+    await goenLog(specialGoenLog('grant', id, by, amount, reason, goen));
+    const sent = await deps.discord.sendDm(id, specialGoenDm(amount, reason, goen)).catch(() => false);
+    return goenBack(c, id, sent ? 'goen_given' : 'goen_given_nodm');
+  });
+  app.post('/members/:id/special-goen/:gid/revoke', async (c) => {
+    const id = c.req.param('id');
+    const gid = Number(c.req.param('gid'));
+    if (!validId(id) || !Number.isSafeInteger(gid) || gid < 1) return c.notFound();
+    if (!gujiOnly(c)) return goenBack(c, id, 'goen_forbidden');
+    const by = c.get('session').userId;
+    const row = await revokeSpecialGoen(db, gid, id, by);
+    if (!row) return goenBack(c, id, 'goen_not_found');
+    const goen = await goenOf(db, id);
+    await audit(db, { actorId: by, targetId: id, action: 'goen.special_revoke', detail: { id: gid, amount: row.amount, reason: row.reason, goen }, via: 'web' });
+    await goenLog(specialGoenLog('revoke', id, by, row.amount, row.reason, goen));
+    return goenBack(c, id, 'goen_revoked');
   });
 
   // 券を渡す・減らす（宮司のみ）

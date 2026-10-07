@@ -1533,6 +1533,56 @@ describe('運営から花びらを送る（管理画面）', () => {
   });
 });
 
+describe('✨ 特別ご縁（管理画面）', () => {
+  const post = async (session: string, path: string, form: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...form }).toString(),
+    });
+  };
+  /** 特別ご縁のフォームの番号 */
+  const goenNonce = async (session: string) =>
+    new RegExp(`action="/members/${USER}/special-goen"[^]*?name="nonce" value="([^"]+)"`).exec(await (await get(`/members/${USER}`, session)).text())?.[1];
+
+  it('宮司だけが振れる。DM と #記録 で知らせ、二度押ししても 1 回だけ。取り消すとご縁が減る', async () => {
+    const { goenOf } = await import('../src/services/shuin.js');
+    const s = await login(STAFF);
+    const staffPage = await (await get(`/members/${USER}`, s)).text();
+    expect(staffPage).toContain('id="sec-goen"');
+    expect(staffPage).not.toContain(`action="/members/${USER}/special-goen"`);
+    const fake = '11111111-2222-3333-4444-555555555555';
+    expect((await post(s, `/members/${USER}/special-goen`, { amount: '10', reason: 'x', nonce: fake })).headers.get('location')).toBe(`/members/${USER}?msg=goen_forbidden#sec-goen`);
+
+    const g = await login(GUJI);
+    const bad = async (form: Record<string, string>) => (await post(g, `/members/${USER}/special-goen`, { nonce: (await goenNonce(g))!, ...form })).headers.get('location');
+    expect(await bad({ amount: '0', reason: 'x' })).toBe(`/members/${USER}?msg=goen_invalid#sec-goen`);
+    expect(await bad({ amount: '1001', reason: 'x' })).toBe(`/members/${USER}?msg=goen_invalid#sec-goen`);
+    expect(await bad({ amount: '10', reason: '' })).toBe(`/members/${USER}?msg=goen_invalid#sec-goen`);
+    expect(await goenOf(db, USER)).toBe(0);
+
+    const form = { amount: '30', reason: 'イベントの運営のお礼', nonce: (await goenNonce(g))! };
+    expect((await post(g, `/members/${USER}/special-goen`, form)).headers.get('location')).toBe(`/members/${USER}?msg=goen_given#sec-goen`);
+    expect((await post(g, `/members/${USER}/special-goen`, form)).headers.get('location')).toBe(`/members/${USER}?msg=goen_dup#sec-goen`);
+    expect(await goenOf(db, USER)).toBe(30);
+    expect(actions.filter((a) => a === `dm ${USER}`)).toHaveLength(1);
+    expect(actions.filter((a) => a.startsWith(`send ${cfg.channels.log} ✨`))).toHaveLength(1);
+    expect((await listAudit(db, { action: 'goen.special_grant' }))[0]).toMatchObject({ actorId: GUJI, targetId: USER, detail: { amount: 30, goen: 30 } });
+    const page = await (await get(`/members/${USER}`, g)).text();
+    expect(page).toContain('イベントの運営のお礼');
+    expect(page).toContain('うち ✨ 特別ご縁 +30');
+
+    const { specialGoenHistory } = await import('../src/services/specialGoen.js');
+    const [row] = await specialGoenHistory(db, USER);
+    expect((await post(s, `/members/${USER}/special-goen/${row!.id}/revoke`, {})).headers.get('location')).toBe(`/members/${USER}?msg=goen_forbidden#sec-goen`);
+    expect((await post(g, `/members/${USER}/special-goen/${row!.id}/revoke`, {})).headers.get('location')).toBe(`/members/${USER}?msg=goen_revoked#sec-goen`);
+    expect((await post(g, `/members/${USER}/special-goen/${row!.id}/revoke`, {})).headers.get('location')).toBe(`/members/${USER}?msg=goen_not_found#sec-goen`);
+    expect(await goenOf(db, USER)).toBe(0);
+    expect(actions.filter((a) => a.startsWith(`send ${cfg.channels.log} ✨`))).toHaveLength(2);
+  });
+});
+
 describe('通話の記録（管理画面）', () => {
   it('運営が見られる。カテゴリで絞ると、その場所が多い順。メンバーのページにも出る', async () => {
     const { recordPresence } = await import('../src/services/voiceUsage.js');

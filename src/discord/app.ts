@@ -41,6 +41,7 @@ import { activeCoreTime, coreTimeBonus } from '../services/coreTime.js';
 import { setOmairiStatus } from '../services/applications.js';
 import { ActivityTracker, getMember, leaveNotice, recordJoin, recordLeave, recordPromotion, syncAllMembers, upsertMember, type MemberSnapshot } from '../services/members.js';
 import { giversOf, goenOf, goshuinchoOf, receivedCountOf, stampedBy } from '../services/shuin.js';
+import { takeUncheckedSpecialGoen } from '../services/specialGoen.js';
 import { COMMAND, parseShuinId } from './ids.js';
 import {
   giveLog,
@@ -458,6 +459,15 @@ export class ShuinApp {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const [givers, total] = await Promise.all([giversOf(this.db, ownerId, 100), receivedCountOf(this.db, ownerId)]);
     await this.reply(interaction, giversReply(ownerId, givers, total));
+  }
+
+  /** 1 分ごと: ✨ 特別ご縁を振られた人の昇格を確かめる（社務所Web から振ったもの） */
+  async checkSpecialGoen(guild: Guild): Promise<void> {
+    for (const id of await takeUncheckedSpecialGoen(this.db)) {
+      const member = await guild.members.fetch(id).catch(() => undefined);
+      if (!member || member.user.bot) continue;
+      await this.lock.run(id, () => this.ensurePromotion(member)).catch((err) => logger.warn({ err, memberId: id }, 'special goen promotion failed'));
+    }
   }
 
   private async ensurePromotion(member: GuildMember): Promise<void> {
