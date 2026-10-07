@@ -547,6 +547,13 @@
       "when": 1791380204297,
       "tag": "0077_casino_styles",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1791384754551,
+      "tag": "0078_peaceful_vermin",
+      "breakpoints": true
     }
   ]
 }

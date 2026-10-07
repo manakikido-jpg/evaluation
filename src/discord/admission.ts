@@ -401,7 +401,7 @@ export class AdmissionApp {
         this.step(this.applySteps - 1, '招待してくれた人'),
         ...(warning ? [`⚠️ ${warning}`] : []),
         'だれかに招待されて来ましたか？ 招待してくれた人を下から選んでください（名前で検索できます）。',
-        e.inviteReward > 0 ? `-# 選ばれた人には、あなたが参拝者になったときに招待のお礼（${e.currencyEmoji}${e.inviteReward} 枚）が届きます` : '',
+        (e.inviteSanpaishaReward > 0 || e.inviteUjikoReward > 0) ? `-# 選ばれた人には、あなたが参拝者になると${e.currencyEmoji}${e.inviteSanpaishaReward}枚、氏子になると追加で${e.inviteUjikoReward}枚の招待報酬が届きます` : '',
       ]
         .filter(Boolean)
         .join('\n'),

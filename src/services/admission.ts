@@ -73,7 +73,7 @@ export function genderOfRoles(cfg: ModCtx['cfg'], roleIds: readonly string[]): G
 export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date(), opts: { introChannelId?: string; introUrl?: string } = {}): Promise<boolean> {
   const g = ctx.cfg.guildId;
   const first = autoRanks(ctx.cfg.ranks)[0];
-  if (first) await safely('add first rank', () => ctx.discord.addRole(g, memberId, first.roleId, '入鯖（自己紹介を書いた・承認）'));
+  const firstReady = first ? await safely('add first rank', () => ctx.discord.addRole(g, memberId, first.roleId, '入鯖（自己紹介を書いた・承認）')) : false;
   // BAN を解除して入り直した人などで厄が残っていれば、👹厄年 を付け直す
   const yakudoshi = ctx.cfg.roles.yakudoshi;
   if (yakudoshi && (await activeYakuCount(ctx.db, memberId)) > 0) {
@@ -83,7 +83,7 @@ export async function completeJoin(ctx: ModCtx, memberId: string, now = new Date
   const e = ctx.cfg.economy;
   await issueInitialCurrency(ctx.db, ctx.cfg, ctx.discord, memberId);
   // 招待してくれた人にお礼（1 回だけ）
-  await rewardInviter(ctx, memberId, now).catch((err: unknown) => logger.warn({ err }, 'invite reward failed'));
+  if (firstReady) await rewardInviter(ctx, memberId, now).catch((err: unknown) => logger.warn({ err }, 'invite reward failed'));
   // #お出迎え に「参拝しました」（通知は飛ばさない）
   const welcome = ctx.cfg.channels.welcome;
   const invitedBy = welcome ? await inviterOf(ctx.db, memberId).catch(() => undefined) : undefined;

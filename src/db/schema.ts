@@ -992,7 +992,7 @@ export const onboardingDone = pgTable('onboarding_done', {
   doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** 招待（入鯖申請で「招待してくれた人」に選ばれた人）。お礼は招待された人 1 人につき 1 回 */
+/** 招待（申請・リンクで記録した人）。お礼は招待された人・段階ごとに1回 */
 export const invites = pgTable(
   'invites',
   {
@@ -1001,6 +1001,9 @@ export const invites = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     rewardedAt: timestamp('rewarded_at', { withTimezone: true }),
     reward: integer('reward').notNull().default(0),
+    ujikoRewardedAt: timestamp('ujiko_rewarded_at', { withTimezone: true }),
+    ujikoReward: integer('ujiko_reward').notNull().default(0),
+    legacyReward: boolean('legacy_reward').notNull().default(false),
     /** answer: 申請で選んだ / link: その人の招待リンクで入った */
     source: text('source').notNull().default('answer'),
   },

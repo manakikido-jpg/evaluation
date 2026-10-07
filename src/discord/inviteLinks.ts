@@ -102,7 +102,7 @@ export class InviteLinkApp {
         '```',
         '-# すぐ下に、リンクだけのメッセージも出します。長押し（右クリック）→「テキストをコピー」でそのままコピーできます',
         'このリンクで入った人は、あなたの招待として記録されます（申請で選ばなくても分かります）。',
-        e.inviteReward > 0 ? `招待した人が 🔰参拝者 になると ${e.currencyEmoji}${e.inviteReward} 枚のお礼${e.inviteActiveReward > 0 ? `、その人が浮上した日ごとに ${e.inviteActiveReward} 枚` : ''}が届きます。` : '',
+        (e.inviteSanpaishaReward > 0 || e.inviteUjikoReward > 0) ? `招待した人が 🔰参拝者 になると ${e.currencyEmoji}${e.inviteSanpaishaReward} 枚、🍃氏子になると追加で ${e.inviteUjikoReward} 枚のお礼${e.inviteActiveEnabled && e.inviteActiveReward > 0 ? `、その人が浮上した日ごとに ${e.inviteActiveReward} 枚` : ''}が届きます。` : '',
         `-# これまでに招待した人: 参拝者になった ${n.joined} 人${n.pending ? `・まだ ${n.pending} 人` : ''}`,
         '-# 招待リンクは BOT だけが作ります。何度打っても同じリンクです',
       ]

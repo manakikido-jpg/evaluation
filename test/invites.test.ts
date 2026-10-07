@@ -13,15 +13,17 @@ const NEW = '870000000000000002';
 const NEW2 = '870000000000000003';
 const T0 = new Date('2026-09-27T03:00:00Z'); // 日本時間 12:00
 const DAY = 86_400_000;
-const cfg: GuildConfig = { ...baseCfg, economy: { ...baseCfg.economy, inviteReward: 500, inviteActiveReward: 20, inviteActiveDays: 30 } };
+const cfg: GuildConfig = { ...baseCfg, economy: { ...baseCfg.economy, inviteReward: 500, inviteSanpaishaReward: 150, inviteUjikoReward: 350, inviteActiveEnabled: true, inviteActiveReward: 20, inviteActiveDays: 30 } };
 
 let db: Db;
 let close: () => Promise<void>;
 let dms: string[];
-const ctx = (c = cfg) => ({ db, cfg: c, discord: { sendDm: async (u: string, t: string) => (dms.push(`${u} ${t}`), true) } });
+let logs: { channel: string; body: any }[];
+const ctx = (c = cfg) => ({ db, cfg: c, discord: { sendDm: async (u: string, t: string) => (dms.push(`${u} ${t}`), true), sendMessage: async (channel: string, body: any) => { logs.push({ channel, body }); return { id: 'message' }; } } });
 beforeEach(async () => {
   ({ db, close } = await makeDb());
   dms = [];
+  logs = [];
   for (const id of [INVITER, NEW, NEW2]) await recordJoin(db, { id, username: id, displayName: id, avatarUrl: null, roleIds: [], isBot: false, joinedAt: T0 });
 });
 afterEach(async () => {
@@ -40,10 +42,10 @@ describe('招待のお礼', () => {
   it('参拝者になったら 1 回だけお礼と DM。抜けて入り直しても 2 回目はない', async () => {
     await recordInvite(db, NEW, INVITER);
     expect(await inviteCountOf(db, INVITER)).toEqual({ joined: 0, pending: 1 });
-    expect(await rewardInviter(ctx(), NEW, T0)).toEqual({ status: 'rewarded', inviterId: INVITER, amount: 500 });
+    expect(await rewardInviter(ctx(), NEW, T0)).toEqual({ status: 'rewarded', inviterId: INVITER, amount: 150 });
     expect(await rewardInviter(ctx(), NEW, T0)).toEqual({ status: 'already' });
-    expect((await walletOf(db, INVITER)).balance).toBe(500);
-    expect(dms[0]).toContain(`<@${NEW}> さんが、咲楽ノ宮に参拝しました`);
+    expect((await walletOf(db, INVITER)).balance).toBe(150);
+    expect(dms[0]).toContain(`<@${NEW}> さんが参拝者になったため、招待報酬150銭`);
     expect(await inviteCountOf(db, INVITER)).toEqual({ joined: 1, pending: 0 });
     expect(await rewardInviter(ctx(), NEW2, T0)).toEqual({ status: 'none' });
   });
@@ -53,7 +55,7 @@ describe('招待のお礼', () => {
     await db.update(members).set({ leftAt: T0 }).where(eq(members.id, INVITER));
     expect((await rewardInviter(ctx(), NEW, T0)).status).toBe('inviter_gone');
     await db.update(members).set({ leftAt: null }).where(eq(members.id, INVITER));
-    const off = { ...cfg, economy: { ...cfg.economy, inviteReward: 0 } };
+    const off = { ...cfg, economy: { ...cfg.economy, inviteSanpaishaReward: 0 } };
     expect((await rewardInviter(ctx(off), NEW, T0)).status).toBe('disabled');
     const [row] = await db.select().from(invites).where(eq(invites.memberId, NEW));
     expect(row?.rewardedAt).toEqual(T0);
@@ -76,7 +78,13 @@ describe('招待した人の浮上ボーナス', () => {
     expect(await inviteActiveTick(db, cfg, T0)).toEqual([]);
     await active(NEW, '2026-09-28', { vcMinutes: 10 });
     expect(await inviteActiveTick(db, cfg, new Date(T0.getTime() + DAY))).toHaveLength(1);
-    expect((await walletOf(db, INVITER)).balance).toBe(540);
+    expect((await walletOf(db, INVITER)).balance).toBe(190);
+  });
+
+  it('浮上ボーナスを止めた設定では配らない', async () => {
+    await active(NEW, '2026-09-27', { messageCount: 1 });
+    expect(await inviteActiveTick(db, { ...cfg, economy: { ...cfg.economy, inviteActiveEnabled: false } }, T0)).toEqual([]);
+    expect((await walletOf(db, INVITER)).balance).toBe(150);
   });
 
   it('参拝者になってから決めた日数を過ぎたら、もう渡さない。招待された人が抜けていても渡さない', async () => {
@@ -124,5 +132,57 @@ describe('BOT が作る招待リンク', () => {
     expect(await recordInvite(db, NEW, INVITER, 'link')).toBe(true);
     expect(await recordInvite(db, NEW, NEW2, 'answer')).toBe(false);
     expect(await inviteOf(db, NEW)).toEqual({ inviterId: INVITER, source: 'link' });
+  });
+});
+
+
+describe('段階別の招待報酬', () => {
+  it('参拝者150・氏子350。同時操作・付け直しで二重払いしない', async () => {
+    await recordInvite(db, NEW, INVITER);
+    await Promise.all([rewardInviter(ctx(), NEW, T0), rewardInviter(ctx(), NEW, T0)]);
+    await Promise.all([rewardInviter(ctx(), NEW, T0, 'ujiko'), rewardInviter(ctx(), NEW, T0, 'ujiko')]);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    expect(dms).toHaveLength(2); expect(logs).toHaveLength(2);
+    expect(dms[1]).toContain('氏子になったため、招待報酬350銭');
+    expect(logs[1]?.body).toMatchObject({ content: expect.stringContaining('招待報酬の支払い完了'), allowed_mentions: { parse: [] } });
+    expect((await rewardInviter(ctx(), NEW, T0, 'ujiko')).status).toBe('already');
+  });
+  it('旧制度で500支払済みの人は移行後に追加で払わない', async () => {
+    await recordInvite(db, NEW, INVITER);
+    await db.update(invites).set({ rewardedAt: T0, reward: 500 }).where(eq(invites.memberId, NEW));
+    const { readFileSync } = await import('node:fs');
+    const { sql } = await import('drizzle-orm');
+    const migration = readFileSync(new URL('../drizzle/0078_peaceful_vermin.sql', import.meta.url), 'utf8');
+    for (const statement of migration.split('--> statement-breakpoint').filter((s) => s.includes('UPDATE'))) await db.execute(sql.raw(statement));
+    expect((await rewardInviter(ctx(), NEW, T0)).status).toBe('already');
+    expect((await rewardInviter(ctx(), NEW, T0, 'ujiko')).status).toBe('already');
+    expect(dms).toHaveLength(0); expect(logs).toHaveLength(0);
+    const [row] = await db.select().from(invites).where(eq(invites.memberId, NEW));
+    expect(row).toMatchObject({ legacyReward: true, ujikoReward: 0, ujikoRewardedAt: T0 });
+  });
+  it('DM拒否でも支払いと運営通知は完了する', async () => {
+    await recordInvite(db, NEW, INVITER);
+    const c = ctx(); c.discord.sendDm = async () => { throw new Error('DM disabled'); };
+    await rewardInviter(c, NEW, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(150);
+    expect(logs[0]?.body.content).toContain('DMは届きませんでした');
+  });
+  it('役職到達で支払い、招待元不明・BOTには配らない', async () => {
+    const { rewardInviteRanks, inviteRewardRows } = await import('../src/services/invites.js');
+    const { ROLE } = await import('./helpers.js');
+    await rewardInviteRanks(ctx(), NEW, [ROLE.ujiko], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await recordInvite(db, NEW, INVITER);
+    await rewardInviteRanks(ctx(), NEW, [ROLE.sanpaisha], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(150);
+    await rewardInviteRanks(ctx(), NEW, [ROLE.ujiko], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    await recordInvite(db, NEW2, INVITER);
+    await db.update(members).set({ isBot: true }).where(eq(members.id, NEW2));
+    await rewardInviteRanks(ctx(), NEW2, [ROLE.ujiko], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    const rows = await inviteRewardRows(db);
+    expect(rows.find((r) => r.memberId === NEW)).toMatchObject({ inviterId: INVITER, reward: 150, ujikoReward: 350 });
+    expect(rows.find((r) => r.memberId === INVITER)?.inviterId).toBeNull();
   });
 });

@@ -14,7 +14,7 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
-import { inviteCountOf, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountCasino } from './casino.js';
@@ -1186,17 +1186,20 @@ export function createWebApp(deps: WebDeps) {
 
   // 🔗 招待: だれのリンクか・だれがだれを招待したか（Discord の設定では BOT のリンクは全部「BOT」と出るので）
   app.get('/invites', async (c) => {
-    const [joins, links, known] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db)]);
+    const [joins, links, known, rewards] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db), inviteRewardRows(db)]);
     const discordInvites = deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => null) : null;
     const others = discordInvites ? discordInvites.filter((i) => !known.has(i.code) && !i.inviter?.bot && (!deps.botId || i.inviter?.id !== deps.botId)) : null;
     const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
     // Discord で消されていた BOT のリンクは出さない（読めたときだけ）
     const alive = discordInvites ? links.filter((l) => uses.has(l.code)) : links;
-    const names = await namesOf(db, [...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
+    const names = await namesOf(db, [...rewards.flatMap((r) => [r.memberId, r.inviterId ?? '']), ...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
     return c.html(
       <InvitesPage
         session={c.get('session')}
         joins={joins}
+        rewards={rewards}
+        cfg={cfg}
+        filter={(['unknown', 'waiting', 'paid'] as const).find((f) => f === c.req.query('filter')) ?? 'all'}
         links={alive}
         others={others}
         uses={uses}
@@ -2461,7 +2464,10 @@ export function createWebApp(deps: WebDeps) {
         boostDiscountPercent: num('boostDiscountPercent'),
         coreTimePercent: num('coreTimePercent'),
         onboardingReward: num('onboardingReward'),
-        inviteReward: num('inviteReward'),
+        inviteReward: prev.economy.inviteReward,
+        inviteSanpaishaReward: typeof body.inviteSanpaishaReward === 'string' ? num('inviteSanpaishaReward') : prev.economy.inviteSanpaishaReward,
+        inviteUjikoReward: typeof body.inviteUjikoReward === 'string' ? num('inviteUjikoReward') : prev.economy.inviteUjikoReward,
+        inviteActiveEnabled: typeof body.inviteActiveConfigured === 'string' ? body.inviteActiveEnabled === 'yes' : prev.economy.inviteActiveEnabled,
         inviteActiveReward: num('inviteActiveReward'),
         inviteActiveDays: num('inviteActiveDays'),
       },
