@@ -437,17 +437,21 @@ export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; rol
   if (!Number.isInteger(amount) || amount < e.giftMin || amount > e.giftMax) return { status: 'bad_amount', min: e.giftMin, max: e.giftMax };
   return db.transaction(async (tx) => {
     await lock(tx, from.id);
-    const since = startOfJstDay(now);
-    const [sent] = await tx
-      .select({ total: sql<number>`coalesce(sum(-${coinTx.amount}), 0)::int` })
-      .from(coinTx)
-      .where(and(eq(coinTx.memberId, from.id), eq(coinTx.reason, 'gift_send'), gte(coinTx.at, since)));
-    const left = e.giftDailyLimit - Number(sent?.total ?? 0);
+    const left = e.giftDailyLimit - (await giftSentToday(tx, from.id, now));
     if (amount > left) return { status: 'daily_limit', left: Math.max(0, left) };
     if (!(await spendWithin(tx, from.id, amount, 'gift_send', { to: toId }))) return { status: 'insufficient', balance: (await walletOf(tx, from.id)).balance };
     await addCoins(tx, toId, amount, 'gift_receive', { from: from.id });
     return { status: 'ok', balance: (await walletOf(tx, from.id)).balance };
   });
+}
+
+/** 今日（日本時間）贈った・送った合計（🎁 贈り物と 💸 /送金 を合わせて） */
+export async function giftSentToday(db: Db, memberId: string, now = new Date()): Promise<number> {
+  const [sent] = await db
+    .select({ total: sql<number>`coalesce(sum(-${coinTx.amount}), 0)::int` })
+    .from(coinTx)
+    .where(and(eq(coinTx.memberId, memberId), eq(coinTx.reason, 'gift_send'), gte(coinTx.at, startOfJstDay(now))));
+  return Number(sent?.total ?? 0);
 }
 
 function startOfJstDay(now: Date): Date {

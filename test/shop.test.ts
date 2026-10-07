@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { drawOmikuji, omikujiToday } from '../src/services/omikuji.js';
-import { buyRole, buySimple, duePurchases, giveGift, listItems, priceOf, refund, seedDefaultItems } from '../src/services/shop.js';
+import { buyRole, buySimple, duePurchases, giftSentToday, giveGift, listItems, priceOf, refund, seedDefaultItems } from '../src/services/shop.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const SAKURA = '960000000000000001';
@@ -140,7 +140,10 @@ describe('贈り物', () => {
     // 贈った記録は DB の今の時刻で残るので、決まった日付ではなく今の時刻で確かめる
     const now = new Date();
     await addCoins(db, 'A', 5000, 'adjust');
+    expect(await giftSentToday(db, 'A', now)).toBe(0);
     expect((await giveGift(db, cfg, ujiko, 'B', 700, now)).status).toBe('ok');
+    // 今日送った合計（/送金 のパネルの「今日あと ○ 枚」）
+    expect(await giftSentToday(db, 'A', now)).toBe(700);
     expect(await giveGift(db, cfg, ujiko, 'C', 400, now)).toEqual({ status: 'daily_limit', left: 300 });
     // 同時に贈っても上限は超えない
     const rs = await Promise.all([giveGift(db, cfg, ujiko, 'B', 300, now), giveGift(db, cfg, ujiko, 'C', 300, now)]);

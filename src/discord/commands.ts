@@ -62,10 +62,10 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('sokin')
       .setNameLocalizations({ ja: '送金' })
       .setDescription('Send coins to someone')
-      .setDescriptionLocalizations({ ja: '銭をほかの人に送る（押す前に確かめる。1 日の上限つき）' })
+      .setDescriptionLocalizations({ ja: '銭をほかの人に送る（自分にだけ出るパネルで相手・枚数を選ぶ）' })
       .setContexts(InteractionContextType.Guild)
-      .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setDescriptionLocalizations({ ja: '送る相手' }).setRequired(true))
-      .addIntegerOption((o) => o.setName('amount').setNameLocalizations({ ja: '枚数' }).setDescription('amount').setDescriptionLocalizations({ ja: '何枚送るか' }).setRequired(true).setMinValue(1))
+      .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setDescriptionLocalizations({ ja: '送る相手（パネルでも選べる）' }))
+      .addIntegerOption((o) => o.setName('amount').setNameLocalizations({ ja: '枚数' }).setDescription('amount').setDescriptionLocalizations({ ja: '何枚送るか（パネルでも選べる）' }).setMinValue(1))
       .addStringOption((o) =>
         o.setName('message').setNameLocalizations({ ja: 'ひとこと' }).setDescription('message').setDescriptionLocalizations({ ja: '相手への DM に添える（例: この前のお礼）' }).setMaxLength(200),
       )
