@@ -59,6 +59,19 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('sokin')
+      .setNameLocalizations({ ja: '送金' })
+      .setDescription('Send coins to someone')
+      .setDescriptionLocalizations({ ja: '銭をほかの人に送る（押す前に確かめる。1 日の上限つき）' })
+      .setContexts(InteractionContextType.Guild)
+      .addUserOption((o) => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('user').setDescriptionLocalizations({ ja: '送る相手' }).setRequired(true))
+      .addIntegerOption((o) => o.setName('amount').setNameLocalizations({ ja: '枚数' }).setDescription('amount').setDescriptionLocalizations({ ja: '何枚送るか' }).setRequired(true).setMinValue(1))
+      .addStringOption((o) =>
+        o.setName('message').setNameLocalizations({ ja: 'ひとこと' }).setDescription('message').setDescriptionLocalizations({ ja: '相手への DM に添える（例: この前のお礼）' }).setMaxLength(200),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('casino')
       .setNameLocalizations({ ja: 'カジノ' })
       .setDescription('Open the casino on the web')

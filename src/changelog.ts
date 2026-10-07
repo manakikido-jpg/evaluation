@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-sokin',
+    date: '2026-10-07',
+    kind: 'new',
+    where: ['Discord'],
+    title: '💸 /送金 で銭を送れるように',
+    items: [
+      '`/送金 相手 枚数 ひとこと` で、自分の銭をほかの人に送れます（押す前に確かめるボタンが出ます）',
+      '決まりは授与所の「🎁 贈り物」と同じです（1 回 10〜1,000 枚・1 日の合計 1,000 枚まで。贈り物と合わせて数えます）',
+      '相手には DM で知らせます',
+    ],
+  },
+  {
     id: '2026-10-07-otoshidama-anyone',
     date: '2026-10-07',
     kind: 'improve',
