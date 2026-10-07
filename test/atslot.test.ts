@@ -221,6 +221,24 @@ describe('🦊 AT 機の島（サービス）', () => {
     expect((await playAt(db, cfg, A, 1, top, new Date(T0.getTime() + 4 * 60_000 + 1000))).status).toBe('ok');
   });
 
+  it('1 日の上限: 通常時は止まる。AT 中・AT が決まった前兆中は、自分の台なら AT が終わるまで回せる', async () => {
+    const limited = parseGuildConfig({ ...cfg, casino: { ...cfg.casino, dailyBetLimit: 30 } });
+    // 通常時: 1 回（30）で上限 → 次は止まる
+    expect((await playAt(db, limited, A, 1, top, T0)).status).toBe('ok');
+    expect((await playAt(db, limited, A, 1, top, T0)).status).toBe('limit');
+    // AT 中の台: 上限を超えても回せる
+    const atState = { ...newAtMachine(), phase: 'at', at: { left: 20, set: 1, rate: 66, tokka: 0, games: 0, added: 0, won: 0 } };
+    await db.insert(slotAtMachines).values({ machine: 2, state: atState as unknown as Record<string, unknown> });
+    expect((await playAt(db, limited, A, 2, top, T0)).status).toBe('ok');
+    // 前兆中（AT が決まっている）も
+    await db.insert(slotAtMachines).values({ machine: 3, state: { ...newAtMachine(), phase: 'zenchou', zenchou: 3, nextRate: 66 } as unknown as Record<string, unknown> });
+    expect((await playAt(db, limited, B, 3, top, T0)).status).toBe('ok');
+    // ほかの人が座っている AT 台は回せない（席はそのまま）
+    const C = '760000000000000099';
+    await addCoins(db, C, 1000, 'admin_grant');
+    expect((await playAt(db, limited, C, 2, top, new Date(T0.getTime() + 60_000))).status).toBe('occupied');
+  });
+
   it('AT 中の押し順ベル: 押した順を送るまで待つ。ナビどおりなら 3 倍、ちがえばこぼし', async () => {
     const atState = { ...newAtMachine(), phase: 'at', at: { left: 20, set: 1, rate: 66, tokka: 0, games: 0, added: 0, won: 0 } };
     await db.insert(slotAtMachines).values({ machine: 2, state: atState as unknown as Record<string, unknown> });

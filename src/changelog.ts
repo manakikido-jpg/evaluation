@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-07-at-limit',
+    date: '2026-10-07',
+    kind: 'improve',
+    where: ['Discord'],
+    title: '🦊 AT 中は 1 日の上限で打ち切らない',
+    items: ['鬼斬り白狐で AT 中（AT が決まった前兆中も）に 1 日の賭けの上限に届いても、自分の台なら AT が終わるまで回せます。AT が終わったら、いつもどおり上限で止まります'],
+  },
+  {
     id: '2026-10-07-wallet-next-voice',
     date: '2026-10-07',
     kind: 'improve',

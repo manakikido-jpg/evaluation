@@ -69,6 +69,9 @@ export async function atMachineRows(db: Db, cfg: GuildConfig): Promise<{ machine
   });
 }
 
+/** AT が続いているか（AT 中・AT が決まった前兆中）。このあいだは 1 日の上限で打ち切らない */
+export const atContinues = (m: Pick<AtMachine, 'phase' | 'at'>) => m.phase === 'zenchou' || (m.phase === 'at' && m.at !== null);
+
 /** だれかが座っているか（自分以外・AT_SEAT_MINUTES 以内に回した） */
 export const seatTaken = (seatBy: string | null, seatAt: Date | null, me: string, now: Date) => Boolean(seatBy && seatBy !== me && seatAt && now.getTime() - seatAt.getTime() < AT_SEAT_MINUTES * 60_000);
 
@@ -87,8 +90,12 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
   const busy = await activeGame(db, memberId, 'atslot');
   if (busy) return { status: 'busy', row: busy };
   const bet = cfg.casino.atBet;
+  // AT 中（AT が決まった前兆中も）は、自分が座っている台なら 1 日の上限を見ない（AT が終わるまで回せる）
+  const [cur] = await db.select().from(slotAtMachines).where(eq(slotAtMachines.machine, machine));
+  const inAt = Boolean(cur && atContinues(cur.state as unknown as AtMachine) && !seatTaken(cur.seatBy, cur.seatAt, memberId, now));
   // 賭けは島で決まっているので、ほかのゲームの最低・最高とは別
-  const check = await checkBet(db, { ...cfg, casino: { ...cfg.casino, minBet: Math.min(cfg.casino.minBet, bet), maxBet: Math.max(cfg.casino.maxBet, bet) } }, memberId, 'atslot', bet, now);
+  const casino = { ...cfg.casino, minBet: Math.min(cfg.casino.minBet, bet), maxBet: Math.max(cfg.casino.maxBet, bet), ...(inAt ? { dailyBetLimit: 0 } : {}) };
+  const check = await checkBet(db, { ...cfg, casino }, memberId, 'atslot', bet, now);
   if (check !== 'ok') return { status: check };
   const setting = await atSetting(db, cfg, machine, now, rng);
   try {
