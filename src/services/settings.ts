@@ -33,6 +33,9 @@ export const overridesSchema = z.object({
       coreTimePercent: z.number().int().min(100).max(500),
       onboardingReward: z.number().int().min(0).max(1_000_000),
       inviteReward: z.number().int().min(0).max(1_000_000),
+      inviteSanpaishaReward: z.number().int().min(0).max(1_000_000),
+      inviteUjikoReward: z.number().int().min(0).max(1_000_000),
+      inviteActiveEnabled: z.boolean(),
       inviteActiveReward: z.number().int().min(0).max(1_000_000),
       inviteActiveDays: z.number().int().min(1).max(365),
     })

@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
+import { autoRanks } from '../domain/ranks.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily, inviteActive, inviteLinks, invites, members, type Invite, type InviteLink } from '../db/schema.js';
@@ -8,9 +9,8 @@ import { jstDate } from './activity.js';
 import { addCoins } from './economy.js';
 
 /**
- * 招待のお礼。入鯖申請で「招待してくれた人」を選んでもらい、
- * 招待された人が 🔰参拝者 になったとき（承認 → 自己紹介）に、招待した人へお礼の花びらを渡す。
- * 招待された人 1 人につき 1 回だけ（抜けて入り直しても、もう一度は渡さない）。
+ * 招待のお礼。参拝者・氏子の段階ごとに、招待した人へ渡す。
+ * 招待された人・段階ごとに1回だけ（抜けて入り直しても重ねて渡さない）。
  */
 
 const isSnowflake = (v: unknown): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v);
@@ -27,36 +27,55 @@ export async function recordInvite(db: Db, memberId: string, inviterId: unknown,
 
 export type InviteRewardResult = { status: 'rewarded'; inviterId: string; amount: number } | { status: 'none' | 'already' | 'inviter_gone' | 'disabled' };
 
-/** 招待された人が 🔰参拝者 になったとき: 招待した人にお礼（1 回だけ） */
-export async function rewardInviter(ctx: { db: Db; cfg: GuildConfig; discord: Pick<DiscordActions, 'sendDm'> }, memberId: string, now = new Date()): Promise<InviteRewardResult> {
-  const amount = ctx.cfg.economy.inviteReward;
+export type InviteStage = 'sanpaisha' | 'ujiko';
+type RewardContext = { db: Db; cfg: GuildConfig; discord: Pick<DiscordActions, 'sendDm' | 'sendMessage'> };
+
+/** 招待された人・段階ごとに1回。記録と振り込みは同じトランザクション。 */
+export async function rewardInviter(ctx: RewardContext, memberId: string, now = new Date(), stage: InviteStage = 'sanpaisha'): Promise<InviteRewardResult> {
+  const amount = stage === 'sanpaisha' ? ctx.cfg.economy.inviteSanpaishaReward : ctx.cfg.economy.inviteUjikoReward;
+  const column = stage === 'sanpaisha' ? invites.rewardedAt : invites.ujikoRewardedAt;
   const [inv] = await ctx.db.select().from(invites).where(eq(invites.memberId, memberId));
   if (!inv) return { status: 'none' };
-  if (inv.rewardedAt) return { status: 'already' };
-  if (amount <= 0) {
-    // お礼はなしでも、参拝者になった日は記録する（浮上のボーナスはここから数える）
-    await ctx.db.update(invites).set({ rewardedAt: now, reward: 0 }).where(and(eq(invites.memberId, memberId), isNull(invites.rewardedAt)));
-    return { status: 'disabled' };
-  }
-  // 招待した人がもういない・BOT なら渡さない
+  if ((stage === 'sanpaisha' ? inv.rewardedAt : inv.ujikoRewardedAt)) return { status: 'already' };
   const [inviter] = await ctx.db.select().from(members).where(eq(members.id, inv.inviterId));
-  if (!inviter || inviter.leftAt || inviter.isBot) return { status: 'inviter_gone' };
+  if (!inviter || inviter.leftAt || inviter.isBot || inv.inviterId === memberId) return { status: 'inviter_gone' };
   const done = await ctx.db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(invites)
-      .set({ rewardedAt: now, reward: amount })
-      .where(and(eq(invites.memberId, memberId), isNull(invites.rewardedAt)))
-      .returning();
+    const [row] = await tx.update(invites)
+      .set(stage === 'sanpaisha' ? { rewardedAt: now, reward: amount } : { ujikoRewardedAt: now, ujikoReward: amount })
+      .where(and(eq(invites.memberId, memberId), isNull(column))).returning();
     if (!row) return false;
-    await addCoins(tx, inv.inviterId, amount, 'invite', { memberId });
+    if (amount > 0) await addCoins(tx, inv.inviterId, amount, 'invite', { memberId, stage });
     return true;
   });
   if (!done) return { status: 'already' };
+  if (amount <= 0) return { status: 'disabled' };
   const e = ctx.cfg.economy;
-  await ctx.discord
-    .sendDm(inv.inviterId, `🌸 あなたが招待した <@${memberId}> さんが、咲楽ノ宮に参拝しました（🔰参拝者）。\n招待のお礼に ${e.currencyEmoji}${e.currencyName} を ${amount} 枚お渡ししました。ありがとうございます！`)
-    .catch((err: unknown) => logger.warn({ err }, 'invite dm failed'));
+  const rank = stage === 'sanpaisha' ? '参拝者' : '氏子';
+  let delivered = false;
+  try {
+    delivered = await ctx.discord.sendDm(inv.inviterId, `あなたが招待した <@${memberId}> さんが${rank}になったため、招待報酬${amount.toLocaleString('ja-JP')}${e.currencyName}を受け取りました。\nありがとうございます！`);
+  } catch (err) { logger.warn({ err }, 'invite dm failed'); }
+  if (ctx.cfg.channels.log && ctx.discord.sendMessage) {
+    await ctx.discord.sendMessage(ctx.cfg.channels.log, {
+      allowed_mentions: { parse: [] },
+      content: `🤝 **招待報酬の支払い完了**\n招待された人: <@${memberId}>（${rank}）\n招待した人: <@${inv.inviterId}>\n報酬: ${e.currencyEmoji}${amount.toLocaleString('ja-JP')}${e.currencyName}${delivered ? '' : '\n招待した人へのDMは届きませんでした。'}`,
+    }).catch((err: unknown) => logger.warn({ err }, 'invite reward log failed'));
+  }
   return { status: 'rewarded', inviterId: inv.inviterId, amount };
+}
+
+/** 現在の役職で達成した段階を確認する。上位へ飛んだ場合も各段階1回だけ。 */
+export async function rewardInviteRanks(ctx: RewardContext, memberId: string, roleIds: readonly string[], now = new Date()): Promise<void> {
+  const [member] = await ctx.db.select().from(members).where(eq(members.id, memberId));
+  if (!member || member.isBot || member.leftAt) return;
+  const ranks = autoRanks(ctx.cfg.ranks);
+  const held = ranks.filter((r) => roleIds.includes(r.roleId));
+  if (!held.length) return;
+  const current = Math.max(...held.map((r) => r.requiredGoen));
+  for (const stage of ['sanpaisha', 'ujiko'] as const) {
+    const rank = ranks.find((r) => r.key === stage);
+    if (rank && current >= rank.requiredGoen) await rewardInviter(ctx, memberId, now, stage);
+  }
 }
 
 /** 招待した人数（参拝者になった人・まだの人） */
@@ -181,7 +200,7 @@ const DAY = 86_400_000;
  */
 export async function inviteActiveTick(db: Db, cfg: GuildConfig, now = new Date()): Promise<{ memberId: string; inviterId: string }[]> {
   const amount = cfg.economy.inviteActiveReward;
-  if (amount <= 0) return [];
+  if (!cfg.economy.inviteActiveEnabled || amount <= 0) return [];
   const date = jstDate(now);
   const since = new Date(now.getTime() - cfg.economy.inviteActiveDays * DAY);
   const rows = await db
@@ -212,4 +231,27 @@ export async function inviteActiveTick(db: Db, cfg: GuildConfig, now = new Date(
     if (ok) paid.push(r);
   }
   return paid;
+}
+
+
+export type InviteRewardRow = {
+  memberId: string; inviterId: string | null; roleIds: string[]; leftAt: Date | null;
+  source: string | null; createdAt: Date; rewardedAt: Date | null; reward: number;
+  ujikoRewardedAt: Date | null; ujikoReward: number; legacyReward: boolean;
+};
+/** 記録された招待と、招待元が分からない在籍者。新しい順で200人まで。 */
+export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
+  const known = await db.select({
+    memberId: invites.memberId, inviterId: invites.inviterId, roleIds: members.roleIds, leftAt: members.leftAt,
+    source: invites.source, createdAt: invites.createdAt, rewardedAt: invites.rewardedAt, reward: invites.reward,
+    ujikoRewardedAt: invites.ujikoRewardedAt, ujikoReward: invites.ujikoReward, legacyReward: invites.legacyReward,
+  }).from(invites).leftJoin(members, eq(invites.memberId, members.id)).orderBy(desc(invites.createdAt)).limit(200);
+  const unknown = await db.select({ memberId: members.id, roleIds: members.roleIds, createdAt: members.joinedAt })
+    .from(members).leftJoin(invites, eq(invites.memberId, members.id))
+    .where(and(isNull(invites.memberId), isNull(members.leftAt), eq(members.isBot, false)))
+    .orderBy(desc(members.joinedAt)).limit(200);
+  return [...known.map((r) => ({ ...r, roleIds: r.roleIds ?? [] })), ...unknown.map((r) => ({
+    memberId: r.memberId, roleIds: r.roleIds, createdAt: r.createdAt ?? new Date(0), inviterId: null, leftAt: null,
+    source: null, rewardedAt: null, reward: 0, ujikoRewardedAt: null, ujikoReward: 0, legacyReward: false,
+  }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 200);
 }

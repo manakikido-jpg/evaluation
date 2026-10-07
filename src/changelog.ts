@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-07-invite-stage-rewards', date: '2026-10-07', kind: 'improve', where: ['Discord', '社務所Web'], title: '招待のお礼を参拝者・氏子の2段階に', items: ['招待された人が参拝者になると150銭、氏子になると追加350銭を招待した人へ渡し、DMと運営の記録で知らせます。', '社務所の招待ページで、招待元・今の役職・各段階の支払いと招待した人ごとの集計を確認できます。旧制度で500銭以上を支払った分は追加で払いません。'] },
   {
     id: '2026-10-07-perm-matrix-wheel',
     date: '2026-10-07',

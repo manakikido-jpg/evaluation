@@ -18,6 +18,7 @@ import {
 import { channelPosters, posterPage, type Poster } from '../services/posters.js';
 import { SHUIN_PICK_ID } from '../services/notices.js';
 import { recordPresence } from '../services/voiceUsage.js';
+import { rewardInviteRanks } from '../services/invites.js';
 import { genderOfRoles } from '../services/admission.js';
 import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../services/contact.js';
 import { introOf, introUrl } from '../services/intros.js';
@@ -164,6 +165,19 @@ export class ShuinApp {
   async onMemberUpdate(m: GuildMember): Promise<void> {
     if (m.guild.id !== this.cfg.guildId) return;
     await upsertMember(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'upsertMember failed'));
+    await this.rewardInvites(m);
+  }
+
+  private async rewardInvites(m: GuildMember): Promise<void> {
+    await rewardInviteRanks({ db: this.db, cfg: this.cfg, discord: {
+      sendDm: async (id, content) => { const user = await this.client.users.fetch(id); await user.send({ content, allowedMentions: { parse: [] } }); return true; },
+      sendMessage: async (channelId, body) => {
+        const ch = await this.client.channels.fetch(channelId);
+        if (!ch?.isSendable()) throw new Error('招待報酬の記録先に投稿できません。');
+        const message = await ch.send({ content: body.content, allowedMentions: { parse: [] } });
+        return { id: message.id };
+      },
+    } }, m.id, [...m.roles.cache.keys()]).catch((err) => logger.warn({ err }, 'invite rank reward failed'));
   }
 
   /** 1 分ごと: 発言数を書き込み、通話している人に通話時間と花びらを足す */
@@ -458,6 +472,7 @@ export class ShuinApp {
       await this.log(`⚠️ ${member} さまの昇格（${promotion.to.name}）でロールを変更できませんでした。BOT のロールの位置と権限を確認してください。`);
       return;
     }
+    await this.rewardInvites(member);
     // 新しい役職は付いた。古い役職を外せなくても、昇格の発表と記録はする（あとから手で外せばよい）
     if (promotion.removeRoleIds.length) {
       await member.roles.remove(promotion.removeRoleIds, reason).catch(async (err) => {

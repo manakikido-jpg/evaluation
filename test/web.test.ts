@@ -1185,6 +1185,16 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
       expect(page).toContain('discord.gg/handMade');
       expect(page).toContain('期限が付いているリンクが 1 個あります');
       expect(page).toContain('招待リンクで入った');
+      expect(page).toContain('参加者・報酬');
+      expect(page).toContain('氏子の報酬');
+      expect(page).toContain('参拝者で 150銭');
+      expect(page).toContain('氏子で追加 350銭');
+      expect(page).toContain('要確認・招待元不明');
+      const unknown = await (await get('/invites?filter=unknown', s)).text();
+      const participant = unknown.split('id="invite-rewards"')[1]!.split('id="invite-inviters"')[0]!;
+      expect(participant).not.toContain('/members/800000000000000077');
+      expect(participant).toContain('招待元の記録なし');
+
       expect((await post('/invites/handMade/delete', s, { _csrf: await csrfOf(s) })).headers.get('location')).toBe('/invites?msg=deleted');
       expect(deleted).toEqual(['handMade']);
       expect((await post('/invites/sakuraLink/delete', s, { _csrf: await csrfOf(s) })).headers.get('location')).toBe('/invites?msg=deleted');

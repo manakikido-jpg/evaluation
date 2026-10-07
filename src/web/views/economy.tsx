@@ -221,7 +221,8 @@ export function EconomyPage(props: {
               <Row k="通話 10 分ごと" v={`${fmt(e.voicePer10Min)} 枚（1 日 ${fmt(e.voiceDailyCap)} 枚まで）`} />
               <Row k="朱印を押す／頂く" v={`${fmt(e.shuinGive)} ／ ${fmt(e.shuinReceive)} 枚`} />
               <Row k="初期配布" v={`${fmt(e.joinBonus)} 枚`} />
-              <Row k="招待のお礼" v={`${fmt(e.inviteReward)} 枚`} />
+              <Row k="招待のお礼・参拝者" v={`${fmt(e.inviteSanpaishaReward)} 枚`} />
+              <Row k="招待のお礼・氏子" v={`${fmt(e.inviteUjikoReward)} 枚（追加）`} />
               <Row k="免罪符" v={`${fmt(e.menzaifuPrice)} 枚`} />
               <Row k="物御籤" v={cfg.gacha.enabled ? `1 回 ${fmt(cfg.gacha.price)} 枚` : '止めている'} />
               <Row k="市場の手数料" v={`${cfg.market.feePercent}%`} />

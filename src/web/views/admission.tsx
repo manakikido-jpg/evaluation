@@ -1164,7 +1164,10 @@ export function SettingsPage(props: {
                 ))}
               </select>
             </label>
-            <Num name="inviteReward" label="招待のお礼（招待した人に、招待された人が参拝者になったとき 1 回。0 でなし）" value={e.inviteReward} file={f.inviteReward} />
+            <Num name="inviteSanpaishaReward" label="招待のお礼・参拝者（1人1回。0でなし）" value={e.inviteSanpaishaReward} file={f.inviteSanpaishaReward} />
+            <Num name="inviteUjikoReward" label="招待のお礼・氏子（参拝者の分に追加。1人1回。0でなし）" value={e.inviteUjikoReward} file={f.inviteUjikoReward} />
+            <input type="hidden" name="inviteActiveConfigured" value="yes" />
+            <label><input type="checkbox" name="inviteActiveEnabled" value="yes" checked={e.inviteActiveEnabled} /> 昇格報酬とは別に、日ごとの浮上ボーナスを使う</label>
             <Num name="inviteActiveReward" label="招待した人の浮上ボーナス（招待された人が発言・通話 10 分した日ごと。0 でなし）" value={e.inviteActiveReward} file={f.inviteActiveReward} />
             <Num name="inviteActiveDays" label="浮上ボーナスを続ける日数（参拝者になってから）" value={e.inviteActiveDays} file={f.inviteActiveDays} min={1} />
             <Num name="onboardingReward" label="「はじめての参拝」を全部できたときのお祝い（1 人 1 回。0 でなし）" value={e.onboardingReward} file={f.onboardingReward} />
