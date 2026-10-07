@@ -3,7 +3,7 @@ import { salePrice } from './economyEvents.js';
 import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coinTx, shopItems, shopPurchases, type ShopItem, type ShopPurchase } from '../db/schema.js';
-import { giftBlockedRank } from '../domain/ranks.js';
+import { currentAutoRank, giftBlockedRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { addTickets, useTicket } from './tickets.js';
@@ -428,6 +428,15 @@ export type GiftResult =
   | { status: 'daily_limit'; left: number }
   | { status: 'insufficient'; balance: number };
 
+/** 1 日に贈れる合計（参拝者・氏子はそれぞれの上限。運営・ほかの役職は共通の上限。共通の上限より多くはしない） */
+export function giftDailyLimitOf(cfg: GuildConfig, roleIds: readonly string[]): number {
+  const global = cfg.economy.giftDailyLimit;
+  if (cfg.ranks.some((r) => !r.auto && roleIds.includes(r.roleId))) return global;
+  const rank = currentAutoRank(cfg.ranks, roleIds);
+  const cap = rank?.key === 'sanpaisha' ? cfg.economy.giftSanpaishaDailyLimit : rank?.key === 'ujiko' ? cfg.economy.giftUjikoDailyLimit : global;
+  return Math.min(global, cap);
+}
+
 /**
  * 花びらを贈る（手数料なし）。贈れるのは役職（参拝者から）のある人か運営。
  * 1 日に贈れる合計に上限がある（サブアカウントで集めにくいように）。
@@ -440,7 +449,7 @@ export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; rol
   if (!Number.isInteger(amount) || amount < e.giftMin || amount > e.giftMax) return { status: 'bad_amount', min: e.giftMin, max: e.giftMax };
   return db.transaction(async (tx) => {
     await lock(tx, from.id);
-    const left = e.giftDailyLimit - (await giftSentToday(tx, from.id, now));
+    const left = giftDailyLimitOf(cfg, from.roleIds) - (await giftSentToday(tx, from.id, now));
     if (amount > left) return { status: 'daily_limit', left: Math.max(0, left) };
     if (!(await spendWithin(tx, from.id, amount, 'gift_send', { to: toId }))) return { status: 'insufficient', balance: (await walletOf(tx, from.id)).balance };
     await addCoins(tx, toId, amount, 'gift_receive', { from: from.id });

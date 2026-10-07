@@ -17,7 +17,7 @@ import { giftBlockedRank } from '../domain/ranks.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
 import { walletOf } from '../services/economy.js';
-import { giftSentToday, giveGift, type GiftResult } from '../services/shop.js';
+import { giftDailyLimitOf, giftSentToday, giveGift, type GiftResult } from '../services/shop.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** パネルを開いたままにできる時間（さわるたびに延びる） */
@@ -179,10 +179,10 @@ export class SokinApp {
     }
   }
 
-  private async info(userId: string) {
-    const e = this.cfg().economy;
+  private async info(userId: string, roleIds: readonly string[]) {
+    const cfg = this.cfg();
     const [w, sent] = await Promise.all([walletOf(this.db, userId), giftSentToday(this.db, userId)]);
-    return { balance: w.balance, left: Math.max(0, e.giftDailyLimit - sent) };
+    return { balance: w.balance, left: Math.max(0, giftDailyLimitOf(cfg, roleIds) - sent) };
   }
 
   /** パネルを開く（/送金・「続けて送る」） */
@@ -210,7 +210,7 @@ export class SokinApp {
     const nonce = randomUUID();
     for (const [k, p] of this.pending) if (Date.now() - p.at > PENDING_MS) this.pending.delete(k);
     this.pending.set(nonce, d);
-    const view = sokinPanel(cfg.economy, d, await this.info(i.user.id), nonce, note);
+    const view = sokinPanel(cfg.economy, d, await this.info(i.user.id, [...i.member.roles.cache.keys()]), nonce, note);
     if (i.isButton()) await i.update({ ...view, allowedMentions: { parse: [] } } as never);
     else await i.reply({ ...view, allowedMentions: { parse: [] }, ...EPHEMERAL } as never);
   }
@@ -222,7 +222,7 @@ export class SokinApp {
   }
 
   private async show(i: ButtonInteraction<'cached'> | UserSelectMenuInteraction<'cached'> | ModalSubmitInteraction<'cached'>, nonce: string, d: Pending, note = ''): Promise<void> {
-    const view = { ...sokinPanel(this.cfg().economy, d, await this.info(i.user.id), nonce, note), allowedMentions: { parse: [] } } as never;
+    const view = { ...sokinPanel(this.cfg().economy, d, await this.info(i.user.id, [...i.member.roles.cache.keys()]), nonce, note), allowedMentions: { parse: [] } } as never;
     if (i.isModalSubmit()) {
       if (i.isFromMessage()) await i.update(view);
       return;

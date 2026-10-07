@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { drawOmikuji, omikujiToday } from '../src/services/omikuji.js';
-import { buyRole, buySimple, duePurchases, giftSentToday, giveGift, listItems, priceOf, refund, seedDefaultItems } from '../src/services/shop.js';
+import { buyRole, buySimple, duePurchases, giftDailyLimitOf, giftSentToday, giveGift, listItems, priceOf, refund, seedDefaultItems } from '../src/services/shop.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const SAKURA = '960000000000000001';
@@ -121,8 +121,8 @@ describe('贈り物', () => {
 
   it('贈った分が相手に届く（手数料なし）', async () => {
     await addCoins(db, 'A', 3000, 'adjust');
-    expect(await giveGift(db, cfg, ujiko, 'B', 500, now)).toEqual({ status: 'ok', balance: 2500 });
-    expect((await walletOf(db, 'B')).balance).toBe(500);
+    expect(await giveGift(db, cfg, ujiko, 'B', 150, now)).toEqual({ status: 'ok', balance: 2850 });
+    expect((await walletOf(db, 'B')).balance).toBe(150);
   });
 
   it('役職のない人は贈れない（参拝者から贈れる）。自分にも贈れない。量の範囲', async () => {
@@ -139,17 +139,18 @@ describe('贈り物', () => {
   it('1 日に贈れる合計は 1000 まで（日本時間の 0 時に戻る）', async () => {
     // 贈った記録は DB の今の時刻で残るので、決まった日付ではなく今の時刻で確かめる
     const now = new Date();
+    const higher = { id: 'A', roleIds: [ROLE.sewayaku] };
     await addCoins(db, 'A', 5000, 'adjust');
     expect(await giftSentToday(db, 'A', now)).toBe(0);
-    expect((await giveGift(db, cfg, ujiko, 'B', 700, now)).status).toBe('ok');
+    expect((await giveGift(db, cfg, higher, 'B', 700, now)).status).toBe('ok');
     // 今日送った合計（/送金 のパネルの「今日あと ○ 枚」）
     expect(await giftSentToday(db, 'A', now)).toBe(700);
-    expect(await giveGift(db, cfg, ujiko, 'C', 400, now)).toEqual({ status: 'daily_limit', left: 300 });
+    expect(await giveGift(db, cfg, higher, 'C', 400, now)).toEqual({ status: 'daily_limit', left: 300 });
     // 同時に贈っても上限は超えない
-    const rs = await Promise.all([giveGift(db, cfg, ujiko, 'B', 300, now), giveGift(db, cfg, ujiko, 'C', 300, now)]);
+    const rs = await Promise.all([giveGift(db, cfg, higher, 'B', 300, now), giveGift(db, cfg, higher, 'C', 300, now)]);
     expect(rs.map((r) => r.status).sort()).toEqual(['daily_limit', 'ok']);
     const tomorrow = new Date(now.getTime() + DAY);
-    expect((await giveGift(db, cfg, ujiko, 'B', 1000, tomorrow)).status).toBe('ok');
+    expect((await giveGift(db, cfg, higher, 'B', 1000, tomorrow)).status).toBe('ok');
   });
 
   it('花びらが足りなければ贈れない', async () => {
@@ -187,4 +188,25 @@ describe('🎁 授与品のプレゼント', () => {
     expect((await walletOf(db, A)).balance).toBe(5000 - title.price);
     expect((await walletOf(db, B)).balance).toBe(0);
   });
+});
+
+
+it('参拝者125・氏子150の上限。昇格しても今日の合計を引き継ぐ', async () => {
+  const now = new Date();
+  await addCoins(db, 'A', 5000, 'adjust');
+  const visitor = { id: 'A', roleIds: [ROLE.sanpaisha] };
+  expect((await giveGift(db, cfg, visitor, 'B', 125, now)).status).toBe('ok');
+  expect(await giveGift(db, cfg, visitor, 'B', 10, now)).toEqual({ status: 'daily_limit', left: 0 });
+  const ujiko = { id: 'A', roleIds: [ROLE.sanpaisha, ROLE.ujiko] };
+  const results = await Promise.all([giveGift(db, cfg, ujiko, 'B', 25, now), giveGift(db, cfg, ujiko, 'C', 25, now)]);
+  expect(results.map((r) => r.status).sort()).toEqual(['daily_limit', 'ok']);
+  expect(await giftSentToday(db, 'A', now)).toBe(150);
+  expect((await giveGift(db, cfg, visitor, 'B', 125, new Date(now.getTime() + DAY))).status).toBe('ok');
+});
+it('上位役職・運営は共通上限。共通設定が低い場合はそちらを優先', () => {
+  expect(giftDailyLimitOf(cfg, [ROLE.sanpaisha])).toBe(125);
+  expect(giftDailyLimitOf(cfg, [ROLE.ujiko])).toBe(150);
+  expect(giftDailyLimitOf(cfg, [ROLE.sewayaku])).toBe(1000);
+  expect(giftDailyLimitOf(cfg, [ROLE.shinshoku, ROLE.sanpaisha])).toBe(1000);
+  expect(giftDailyLimitOf({ ...cfg, economy: { ...cfg.economy, giftDailyLimit: 100 } }, [ROLE.ujiko])).toBe(100);
 });
