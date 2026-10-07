@@ -18,7 +18,7 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
-import { inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountCasino } from './casino.js';
@@ -1200,7 +1200,7 @@ export function createWebApp(deps: WebDeps) {
 
   // 🔗 招待: だれのリンクか・だれがだれを招待したか（Discord の設定では BOT のリンクは全部「BOT」と出るので）
   app.get('/invites', async (c) => {
-    const [joins, links, known, rewards] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db), inviteRewardRows(db)]);
+    const [joins, links, known, rewards, candidates] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db), inviteRewardRows(db), activeMemberNames(db)]);
     const discordInvites = deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => null) : null;
     const others = discordInvites ? discordInvites.filter((i) => !known.has(i.code) && !i.inviter?.bot && (!deps.botId || i.inviter?.id !== deps.botId)) : null;
     const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
@@ -1212,6 +1212,7 @@ export function createWebApp(deps: WebDeps) {
         session={c.get('session')}
         joins={joins}
         rewards={rewards}
+        candidates={candidates}
         cfg={cfg}
         filter={(['unknown', 'waiting', 'paid'] as const).find((f) => f === c.req.query('filter')) ?? 'all'}
         links={alive}
@@ -1222,6 +1223,14 @@ export function createWebApp(deps: WebDeps) {
         now={now()}
       />,
     );
+  });
+
+  app.post('/invites/members/:id/assign', async (c) => {
+    if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/invites?msg=assign_confirm#invite-rewards');
+    const result = await assignUnknownInviter({ db, cfg, discord: deps.discord }, c.req.param('id'), body.inviterId, c.get('session').userId, now());
+    return c.redirect(`/invites?msg=assign_${result}#invite-rewards`);
   });
 
   app.post('/invites/:code/delete', async (c) => {

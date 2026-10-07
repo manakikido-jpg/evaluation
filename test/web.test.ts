@@ -1195,6 +1195,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await recordJoin(db, { id: GUJI, username: 'g', displayName: 'ぐうじ', avatarUrl: null, roleIds: [ROLE.guji], isBot: false, joinedAt: null });
     await saveLink(db, { code: 'sakuraLink', inviterId: USER, channelId: '910000000000000002', uses: 1 });
     await saveLink(db, { code: 'snsLink', inviterId: SHARED_INVITER, channelId: '910000000000000002', uses: 0, label: 'X 用', createdBy: GUJI });
+    await recordJoin(db, { id: '800000000000000077', username: 'guest', displayName: '招待された人', avatarUrl: null, roleIds: [], isBot: false, joinedAt: clock });
     await recordInvite(db, '800000000000000077', USER, 'link');
     const created = new Date(clock.getTime() - 86_400_000).toISOString();
     fakeActions.guildInvites = async () => [
@@ -3362,4 +3363,52 @@ it('権限の点検はDiscordの取得失敗・不完全なロール情報を問
   } finally {
     fakeActions.guildChannels = oldChannels; fakeActions.guildRoles = oldRoles;
   }
+});
+
+it('招待一覧から宮司が不明な招待元を登録する。確認・CSRFが必要で神職は変更できない', async () => {
+  const csrfOf = async (session: string) => {
+    const html = await (await get('/invites', session)).text();
+    return html.match(/name="_csrf" value="([^"]+)"/)![1]!;
+  };
+  const post = (path: string, session: string, data: Record<string, string>) => app.request(path, {
+    method: 'POST', headers: { cookie: `shamusho_session=${session}`, origin: BASE, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data),
+  });
+
+  const inviter = '870000000000000111';
+  await recordJoin(db, { id: inviter, username: 'aoi', displayName: 'あおい', avatarUrl: null, roleIds: [], isBot: false, joinedAt: clock });
+  const staff = await login(STAFF);
+  expect(await (await get('/invites', staff)).text()).not.toContain('name="inviterId"');
+  expect((await post(`/invites/members/${USER}/assign`, staff, { _csrf: await csrfOf(staff), inviterId: inviter, confirm: 'yes' })).status).toBe(403);
+  const guji = await login(GUJI);
+  const page = await (await get('/invites?filter=unknown', guji)).text();
+  expect(page).toContain('招待した人を登録');
+  expect(page).toContain('あおい');
+  expect(page).toContain(`/invites/members/${USER}/assign`);
+  expect(page).not.toMatch(/onclick=|style=|<script(?![^>]*src=)/);
+  expect((await post(`/invites/members/${USER}/assign`, guji, { inviterId: inviter, confirm: 'yes' })).status).toBe(403);
+  const token = await csrfOf(guji);
+  expect((await post(`/invites/members/${USER}/assign`, guji, { _csrf: token, inviterId: inviter })).headers.get('location')).toContain('assign_confirm');
+  const { inviterOf } = await import('../src/services/invites.js');
+  expect(await inviterOf(db, USER)).toBeUndefined();
+  expect((await post(`/invites/members/${USER}/assign`, guji, { _csrf: token, inviterId: inviter, confirm: 'yes' })).headers.get('location')).toContain('assign_assigned');
+  expect(await inviterOf(db, USER)).toBe(inviter);
+  const { walletOf } = await import('../src/services/economy.js');
+  expect((await walletOf(db, inviter)).balance).toBe(150);
+  expect(await (await get('/invites', guji)).text()).toContain('運営が登録した');
+  expect((await post(`/invites/members/${USER}/assign`, guji, { _csrf: token, inviterId: inviter, confirm: 'yes' })).headers.get('location')).toContain('assign_known');
+  expect((await walletOf(db, inviter)).balance).toBe(150);
+  expect((await listAudit(db, { action: 'invite.assign' }))).toHaveLength(1);
+  const { members } = await import('../src/db/schema.js');
+  const { eq } = await import('drizzle-orm');
+  await db.update(members).set({ leftAt: clock }).where(eq(members.id, inviter));
+  const afterInviterLeft = await (await get('/invites', guji)).text();
+  const inviterTable = afterInviterLeft.split('id="invite-inviters"')[1]!.split('id="invite-links"')[0]!;
+  expect(inviterTable).not.toContain(`/members/${inviter}`);
+  expect(await inviterOf(db, USER)).toBe(inviter);
+  await db.update(members).set({ leftAt: clock }).where(eq(members.id, USER));
+  const afterMemberLeft = await (await get('/invites', guji)).text();
+  const participants = afterMemberLeft.split('id="invite-rewards"')[1]!.split('id="invite-inviters"')[0]!;
+  expect(participants).not.toContain(`/members/${USER}`);
+  expect((await walletOf(db, inviter)).balance).toBe(150);
+
 });

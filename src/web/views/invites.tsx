@@ -12,6 +12,10 @@ function Csrf(props: { session: AdminSession }) {
 }
 
 export const INVITES_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  assign_assigned: { text: '招待した人を登録し、今の役職で達成した報酬を確認しました。支払状況を一覧で確認してください。', kind: 'ok' },
+  assign_known: { text: '招待した人はすでに登録されています。前の記録は変えていません。', kind: 'warn' },
+  assign_invalid: { text: '登録できませんでした。自分・BOT・退出した人は選べません。', kind: 'warn' },
+  assign_confirm: { text: '招待した人と報酬の扱いを確認して、確認欄にチェックしてください。', kind: 'warn' },
   deleted: { text: '招待リンクを消しました（もう使えません）。', kind: 'ok' },
   failed: { text: '消せませんでした。BOT に「サーバーの管理」か、そのチャンネルの「チャンネルの管理」の権限があるか確かめてください。', kind: 'warn' },
   invalid: { text: 'リンクが見つかりませんでした。', kind: 'warn' },
@@ -39,6 +43,7 @@ export function InvitesPage(props: {
   session: AdminSession;
   joins: Invite[];
   rewards: InviteRewardRow[];
+  candidates: { id: string; name: string }[];
   cfg: GuildConfig;
   filter: 'all' | 'unknown' | 'waiting' | 'paid';
   links: InviteLink[];
@@ -65,7 +70,7 @@ export function InvitesPage(props: {
   );
   const totals = new Map<string, { invited: number; paid: number; waiting: number }>();
   for (const r of props.rewards)
-    if (r.inviterId) {
+    if (r.inviterId && props.candidates.some(m => m.id === r.inviterId)) {
       const v = totals.get(r.inviterId) ?? { invited: 0, paid: 0, waiting: 0 };
       v.invited++;
       v.paid += r.reward + r.ujikoReward;
@@ -132,7 +137,8 @@ export function InvitesPage(props: {
           {props.cfg.economy.currencyName}、🍃氏子で追加 {props.cfg.economy.inviteUjikoReward}
           {props.cfg.economy.currencyName}。各段階1人1回です。
         </p>
-        <p class="note">新しい順・最大200人。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
+        <p class="note">宮司は招待元不明の行から招待した人を選べます。登録すると、今の役職で達成した未払いの段階を支払います。登録済みの招待元は変更できません。</p>
+        <p class="note">在籍者だけ・新しい順・最大200人。退出した人の記録は残し、一覧から非表示にします。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
         <p>
           招待元不明 {props.rewards.filter((r) => !r.inviterId).length}人 · 両段階完了 {props.rewards.filter((r) => r.rewardedAt && r.ujikoRewardedAt).length}人 · 支払額{' '}
           {props.rewards.reduce((sum, r) => sum + r.reward + r.ujikoReward, 0).toLocaleString('ja-JP')}
@@ -172,7 +178,16 @@ export function InvitesPage(props: {
                   </td>
                   <td>
                     {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : '不明'}
-                    <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : '招待元の記録なし'}</div>
+                    <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : '招待元の記録なし'}</div>
+                    {!r.inviterId && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
+                      <form method="post" action={`/invites/members/${r.memberId}/assign`}>
+                        <Csrf session={session} />
+                        <label class="field"><span>招待した人</span><select name="inviterId" required><option value="">選んでください</option>{props.candidates.filter(m => m.id !== r.memberId).map(m => <option value={m.id}>{m.name}（{m.id}）</option>)}</select></label>
+                        <label class="field"><span><input type="checkbox" name="confirm" value="yes" required /> この人の招待と確認しました。達成済みの未払い報酬を支払います。</span></label>
+                        <button type="submit">登録して報酬を確認</button>
+                      </form>
+                    </details>}
+
                   </td>
                   <td>{r.leftAt ? '退出' : (highestRank(props.cfg.ranks, r.roleIds)?.name ?? '役職待ち')}</td>
                   <td>{status(r, 'sanpaisha')}</td>

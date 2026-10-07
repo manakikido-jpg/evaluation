@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
-import { activityDaily, invites, members } from '../src/db/schema.js';
+import { activityDaily, auditLogs, invites, members } from '../src/db/schema.js';
 import { walletOf } from '../src/services/economy.js';
-import { inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { assignUnknownInviter, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -185,4 +185,55 @@ describe('段階別の招待報酬', () => {
     expect(rows.find((r) => r.memberId === NEW)).toMatchObject({ inviterId: INVITER, reward: 150, ujikoReward: 350 });
     expect(rows.find((r) => r.memberId === INVITER)?.inviterId).toBeNull();
   });
+});
+
+
+describe('一覧から不明な招待元を補う', () => {
+  it('氏子の招待元を登録し各段階1回。二重クリックも前の招待元も変更しない', async () => {
+    const rank = cfg.ranks.find(r => r.key === 'ujiko')!;
+    await db.update(members).set({ roleIds: [rank.roleId] }).where(eq(members.id, NEW));
+    const results = await Promise.all([assignUnknownInviter(ctx(), NEW, INVITER, NEW2, T0), assignUnknownInviter(ctx(), NEW, INVITER, NEW2, T0)]);
+    expect(results.sort()).toEqual(['assigned', 'known']);
+    expect(await inviterOf(db, NEW)).toBe(INVITER);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    expect(dms).toHaveLength(2);
+    expect(logs).toHaveLength(2);
+    expect(await assignUnknownInviter(ctx(), NEW, NEW2, NEW2, T0)).toBe('known');
+    expect((await walletOf(db, NEW2)).balance).toBe(0);
+    const records = await db.select().from(auditLogs).where(eq(auditLogs.action, 'invite.assign'));
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ actorId: NEW2, targetId: NEW, detail: { inviterId: INVITER } });
+    expect((await db.select().from(invites))[0]!.source).toBe('admin');
+  });
+  it('自己招待・不正ID・BOT・退出・存在しない人は不可。役職待ちの登録は支払わない', async () => {
+    expect(await assignUnknownInviter(ctx(), NEW, NEW, NEW2)).toBe('invalid');
+    expect(await assignUnknownInviter(ctx(), NEW, 'bad', NEW2)).toBe('invalid');
+    expect(await assignUnknownInviter(ctx(), NEW, '870000000000000999', NEW2)).toBe('invalid');
+    await db.update(members).set({ isBot: true }).where(eq(members.id, INVITER));
+    expect(await assignUnknownInviter(ctx(), NEW, INVITER, NEW2)).toBe('invalid');
+    await db.update(members).set({ isBot: false, leftAt: T0 }).where(eq(members.id, INVITER));
+    expect(await assignUnknownInviter(ctx(), NEW, INVITER, NEW2)).toBe('invalid');
+    await db.update(members).set({ leftAt: null }).where(eq(members.id, INVITER));
+    await db.update(members).set({ leftAt: T0 }).where(eq(members.id, NEW));
+    expect(await assignUnknownInviter(ctx(), NEW, INVITER, NEW2)).toBe('invalid');
+    await db.update(members).set({ leftAt: null }).where(eq(members.id, NEW));
+    expect(await assignUnknownInviter(ctx(), NEW, INVITER, NEW2)).toBe('assigned');
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    expect(dms).toHaveLength(0);
+  });
+});
+
+
+it('退出・BOT・メンバー情報のない人は参加者一覧に出さず、再入鯖でも支払記録を保つ', async () => {
+  await recordInvite(db, NEW, INVITER);
+  await rewardInviter(ctx(), NEW, T0);
+  await recordInvite(db, '870000000000000999', INVITER);
+  await db.update(members).set({ leftAt: T0 }).where(eq(members.id, NEW));
+  await db.update(members).set({ isBot: true }).where(eq(members.id, NEW2));
+  expect((await inviteRewardRows(db)).map(r => r.memberId)).toEqual([INVITER]);
+  expect(await inviterOf(db, NEW)).toBe(INVITER);
+  await db.update(members).set({ leftAt: null }).where(eq(members.id, NEW));
+  expect((await inviteRewardRows(db)).find(r => r.memberId === NEW)?.rewardedAt).toEqual(T0);
+  expect((await rewardInviter(ctx(), NEW, T0)).status).toBe('already');
+  expect((await walletOf(db, INVITER)).balance).toBe(150);
 });
