@@ -3300,3 +3300,66 @@ describe('🔐 チャンネルの見られる人・ロール', () => {
     }
   });
 });
+
+it('権限点検は宮司だけ。複数ロール・権限で絞り、現在のDiscordの値と確認事項を表示する', async () => {
+  const oldChannels = fakeActions.guildChannels, oldRoles = fakeActions.guildRoles;
+  const parent = '910000000000000101', child = '910000000000000102';
+  const b = '980000000000000101';
+  let name = '点検する部屋';
+  fakeActions.guildRoles = async () => [
+    { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: '68608' },
+    { id: ROLE.ujiko, name: '氏子', position: 2, managed: false, color: 0, permissions: '0' },
+    { id: b, name: '追加ロール', position: 1, managed: false, color: 0, permissions: '0' },
+  ];
+  fakeActions.guildChannels = async () => [
+    { id: parent, name: '限定カテゴリ', type: 4, position: 0, parent_id: null, permission_overwrites: [{ id: cfg.guildId, type: 0, allow: '0', deny: '1024' }] },
+    { id: child, name, type: 0, position: 0, parent_id: parent, permission_overwrites: [{ id: cfg.guildId, type: 0, allow: '0', deny: '1024' }, { id: ROLE.ujiko, type: 0, allow: '3072', deny: '0' }, { id: b, type: 0, allow: '0', deny: '2048' }] },
+  ];
+  try {
+    const s = await login(STAFF);
+    expect((await get('/channels/check', s)).status).toBe(403);
+    const g = await login(GUJI);
+    const before = [...actions];
+    const url = `/channels/check?role=${ROLE.ujiko}&role=${b}&permission=11&only=visible`;
+    const res = await get(url, g);
+    expect(res.status).toBe(200);
+    const page = await res.text();
+    expect(page).toContain('権限の点検・見える範囲');
+    expect(page).toContain('カテゴリと未同期');
+    expect(page).toContain('カテゴリより公開範囲が広い');
+    expect(page).toContain('個人への上書き');
+    expect(page).toContain('点検する部屋');
+    expect(page).toContain('追加ロール');
+    expect(page).toContain('同期差分');
+    expect(page).not.toMatch(/<script[^>]*>[^<]+<\/script>|onclick=|style=/);
+    const list = await (await get('/channels', g)).text();
+    expect(list).toContain('href="/channels/check"');
+    expect(list).toContain('権限の点検: 注意');
+    name = 'Discordで変えた名前';
+    expect(await (await get(url, g)).text()).toContain(name);
+    expect(actions).toEqual(before);
+  } finally {
+    fakeActions.guildChannels = oldChannels; fakeActions.guildRoles = oldRoles;
+  }
+});
+
+it('権限の点検はDiscordの取得失敗・不完全なロール情報を問題なしにしない', async () => {
+  const oldChannels = fakeActions.guildChannels, oldRoles = fakeActions.guildRoles;
+  const g = await login(GUJI);
+  try {
+    fakeActions.guildChannels = async () => { throw new Error('403'); };
+    let r = await get('/channels/check', g);
+    expect(r.status).toBe(503);
+    let text = await r.text();
+    expect(text).toContain('点検できませんでした');
+    expect(text).not.toContain('気になる点は見つかりませんでした');
+    fakeActions.guildChannels = async () => [{ id: '910000000000000111', name: '部屋', type: 0, parent_id: null, position: 0, permission_overwrites: [] }];
+    fakeActions.guildRoles = async () => [{ id: cfg.guildId, name: '@everyone', managed: false, position: 0, color: 0 }];
+    r = await get('/channels/check', g);
+    expect(r.status).toBe(503);
+    text = await r.text();
+    expect(text).toContain('「問題なし」とは判定していません');
+  } finally {
+    fakeActions.guildChannels = oldChannels; fakeActions.guildRoles = oldRoles;
+  }
+});
