@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-invite-manual-assignment', date: '2026-10-08', kind: 'new', where: ['社務所Web'], title: '招待元不明の人を一覧から登録', items: ['宮司は招待の「参加者・報酬」一覧から招待した人を選んで登録できます。', '登録時に現在の役職に応じた未払いの招待報酬を確認し、各段階1回だけ支払います。既存の招待元は変更せず、操作記録を残します。', '退出した人は参加者・招待した人の一覧から非表示にします。再入鯖で重ねて払わないよう、招待と支払いの記録は残します。'] },
   {
     id: '2026-10-08-special-goen',
     date: '2026-10-08',

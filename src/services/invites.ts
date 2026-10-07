@@ -7,6 +7,7 @@ import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { jstDate } from './activity.js';
 import { addCoins } from './economy.js';
+import { audit } from './audit.js';
 
 /**
  * 招待のお礼。参拝者・氏子の段階ごとに、招待した人へ渡す。
@@ -76,6 +77,26 @@ export async function rewardInviteRanks(ctx: RewardContext, memberId: string, ro
     const rank = ranks.find((r) => r.key === stage);
     if (rank && current >= rank.requiredGoen) await rewardInviter(ctx, memberId, now, stage);
   }
+}
+
+/** 不明な招待元だけ宮司が補う。既存記録は変えず、操作記録も同時に残す。 */
+export async function assignUnknownInviter(ctx: RewardContext, memberId: string, inviterId: unknown, actorId: string, now = new Date()): Promise<'assigned' | 'known' | 'invalid'> {
+  if (!isSnowflake(memberId) || !isSnowflake(inviterId) || memberId === inviterId) return 'invalid';
+  const result = await ctx.db.transaction(async tx => {
+    const [member] = await tx.select().from(members).where(eq(members.id, memberId));
+    const [inviter] = await tx.select().from(members).where(eq(members.id, inviterId));
+    if (!member || member.isBot || member.leftAt || !inviter || inviter.isBot || inviter.leftAt) return 'invalid' as const;
+    const [row] = await tx.insert(invites).values({ memberId, inviterId, source: 'admin', createdAt: now }).onConflictDoNothing().returning();
+    if (!row) return 'known' as const;
+    await audit(tx, { actorId, targetId: memberId, action: 'invite.assign', detail: { inviterId }, via: 'web' });
+    return 'assigned' as const;
+  });
+  // 登録後、現在の役職で未払いの段階だけ渡す。通常の昇格と同じ二重払い防止を使う。
+  if (result === 'assigned') {
+    const [member] = await ctx.db.select().from(members).where(eq(members.id, memberId));
+    if (member) await rewardInviteRanks(ctx, memberId, member.roleIds, now);
+  }
+  return result;
 }
 
 /** 招待した人数（参拝者になった人・まだの人） */
@@ -245,7 +266,8 @@ export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
     memberId: invites.memberId, inviterId: invites.inviterId, roleIds: members.roleIds, leftAt: members.leftAt,
     source: invites.source, createdAt: invites.createdAt, rewardedAt: invites.rewardedAt, reward: invites.reward,
     ujikoRewardedAt: invites.ujikoRewardedAt, ujikoReward: invites.ujikoReward, legacyReward: invites.legacyReward,
-  }).from(invites).leftJoin(members, eq(invites.memberId, members.id)).orderBy(desc(invites.createdAt)).limit(200);
+  }).from(invites).innerJoin(members, eq(invites.memberId, members.id))
+    .where(and(isNull(members.leftAt), eq(members.isBot, false))).orderBy(desc(invites.createdAt)).limit(200);
   const unknown = await db.select({ memberId: members.id, roleIds: members.roleIds, createdAt: members.joinedAt })
     .from(members).leftJoin(invites, eq(invites.memberId, members.id))
     .where(and(isNull(invites.memberId), isNull(members.leftAt), eq(members.isBot, false)))
