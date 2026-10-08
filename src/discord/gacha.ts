@@ -1,4 +1,4 @@
-import { drawStyles, stylesOf, styleChances, styleItem } from '../services/casino/styles.js';
+import { drawCost, drawableStyles, drawStyles, stylesOf, styleChances, styleItem } from '../services/casino/styles.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -430,12 +430,15 @@ export class GachaApp {
     const state = await stylesOf(this.db, i.user.id);
     const w = await walletOf(this.db, i.user.id);
     const chances = styleChances(cfg.casinoGacha, state.owned);
-    const lines = chances.map((item) => `${item.emoji} **${item.name}** · ${item.chance.toLocaleString('ja-JP', { maximumFractionDigits: 3 })}％ · ${item.slot ? state.owned.includes(item.key) ? '所持済み' : '期限なし' : '券'}`);
-    const allOwned = chances.filter((x) => x.slot).every((x) => state.owned.includes(x.key));
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...[1, 10].map((n) => new ButtonBuilder().setCustomId(`casino-gacha:draw:${n}`).setLabel(`${n === 1 ? '1回' : '10連'}（${fmt(n * cfg.casinoGacha.price)}${cfg.economy.currencyName}）`).setStyle(ButtonStyle.Primary).setDisabled(!cfg.casino.enabled || !cfg.casinoGacha.enabled || w.balance < n * cfg.casinoGacha.price)));
+    // 今は出さない品（社務所Web で外した品）は、持っていなければ一覧に出さない
+    const lines = chances
+      .filter((item) => item.chance > 0 || (item.slot && state.owned.includes(item.key)))
+      .map((item) => `${item.emoji} **${item.name}** · ${item.chance.toLocaleString('ja-JP', { maximumFractionDigits: 3 })}％ · ${item.slot ? state.owned.includes(item.key) ? '所持済み' : '期限なし' : '券'}`);
+    const allOwned = drawableStyles(cfg.casinoGacha, state.owned).length === 0;
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...[1, 10].map((n) => new ButtonBuilder().setCustomId(`casino-gacha:draw:${n}`).setLabel(`${n === 1 ? '1回' : '10連'}（${fmt(drawCost(cfg.casinoGacha, n))}${cfg.economy.currencyName}）`).setStyle(ButtonStyle.Primary).setDisabled(!cfg.casino.enabled || !cfg.casinoGacha.enabled || w.balance < drawCost(cfg.casinoGacha, n))));
     await i.editReply({
       content: [message, results ? '**今回の景品**\n' + results.map((key) => { const item = styleItem(key)!; return `${item.emoji} ${item.name}`; }).join('\n') : ''].filter(Boolean).join('\n') || null,
-      embeds: [{ title: '🎰 勝負の御籤 · 中身と排出率', color: 0xb99553, description: [!cfg.casinoGacha.enabled ? '今はお休み中です。' : '', `所持：${fmt(w.balance)}${cfg.economy.currencyName} · お試し券${state.tickets}枚`, allOwned ? '見た目の品は全部そろいました！その分はお試し券になります。' : `あと${Math.max(1, cfg.casinoGacha.pity - state.pity)}回以内に未所持の見た目の品を保証。`, '', ...lines, '', '見た目の品は重複しません。天井では未所持の品の中で均等です。物御籤の券・天井とは別です。', '背景・卓のふち・席の飾り・称号などは、カジノWebの「🪭 着せ替え」で装備できます。入口は `/カジノ`。', '見た目は勝つ割合を変えません。大勝負の札は `/持ち物` から使います。'].filter(Boolean).join('\n') }],
+      embeds: [{ title: '🎰 勝負の御籤 · 中身と排出率', color: 0xb99553, description: [!cfg.casinoGacha.enabled ? '今はお休み中です。' : '', `所持：${fmt(w.balance)}${cfg.economy.currencyName} · お試し券${state.tickets}枚`, allOwned ? '見た目の品は全部そろいました！その分はお試し券になります。' : `あと${Math.max(1, cfg.casinoGacha.pity - state.pity)}回以内に未所持の見た目の品を保証。`, '', ...lines, '', '見た目の品は重複しません。天井では未所持の品の中から、出やすさに合わせて選びます。物御籤の券・天井とは別です。', '背景・卓のふち・席の飾り・称号などは、カジノWebの「🪭 着せ替え」で装備できます。入口は `/カジノ`。', '見た目は勝つ割合を変えません。大勝負の札は `/持ち物` から使います。'].filter(Boolean).join('\n') }],
       components: [row], allowedMentions: { parse: [] },
     });
   }

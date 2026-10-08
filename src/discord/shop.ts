@@ -24,6 +24,7 @@ import { walletOf } from '../services/economy.js';
 import { purchaseMenzaifu } from '../services/moderation.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { ticketsOf } from '../services/tickets.js';
+import { styleItem } from '../services/casino/styles.js';
 import { canBuyVip } from '../services/vip.js';
 import { bagMessage, canPutBag, OTOSHIDAMA, parseCount, putBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import {
@@ -193,6 +194,12 @@ export class ShopApp {
       if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、${this.coinName}は減りません**（いま ${t} 枚）\n${note}`;
     }
     if (item.kind === 'casino_boost') note = casinoBoostNote(this.cfg().casino);
+    if (item.kind === 'casino_style') {
+      const st = styleItem(item.styleKey ?? '');
+      note = item.styleKey === 'trial'
+        ? '-# 見た目のお試し券が 1 枚増えます。カジノWeb の「🪭 着せ替え」で、まだ持っていない背景か卓のふちを 24 時間ためせます'
+        : `-# ${st ? `${st.emoji} ${st.name}（${st.note}）を` : ''}カジノの見た目の品として受けます（期限なし）。カジノWeb の「🪭 着せ替え」で付けられます。もう持っていたら受けられません`;
+    }
     const t = await ticketsOf(this.db, i.user.id);
     await i.update(shopConfirm(item, e, balance, note, isBooster(i), DISCOUNT_TICKETS.map((d) => ({ ticket: d, count: t[d] }))));
   }
@@ -330,6 +337,14 @@ export class ShopApp {
         if (r.status !== 'ok') return this.insufficientText(r)!;
         const have = (await ticketsOf(this.db, userId)).casino_boost;
         return `🎰 大勝負の札を 1 枚受けました（持っている: ${have} 枚）${this.discountNote(r)}。残り ${r.balance} 枚。\n\`/持ち物\` で選んで「✨ 使う」を押すと、その日（日本時間の 0 時まで）だけ、カジノの上限が ${cfg.casino.boostMult} 倍になります。`;
+      }
+      case 'casino_style': {
+        const r = await buySimple(this.db, item, userId, {}, new Date(), this.price(i, item), discount);
+        if (r.status !== 'ok') return this.insufficientText(r)!;
+        const st = styleItem(item.styleKey ?? '');
+        return item.styleKey === 'trial'
+          ? `🎟 見た目のお試し券を 1 枚受けました${this.discountNote(r)}。残り ${r.balance} 枚。\nカジノWeb（\`/カジノ\`）の「🪭 着せ替え」で使えます。`
+          : `🎴 ${st?.emoji ?? ''} ${st?.name ?? item.name}を受けました${this.discountNote(r)}。残り ${r.balance} 枚。\nカジノWeb（\`/カジノ\`）の「🪭 着せ替え」で付けられます。`;
       }
       case 'hanafubuki':
         return this.hanafubuki(i, item, extra.targetId ?? '', extra.message ?? '');

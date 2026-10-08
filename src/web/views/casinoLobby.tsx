@@ -1,6 +1,6 @@
 import { CASINO_LABEL } from '../../services/casino/casino.js';
 import { LOBBY_TABLE_GAMES, lobbyGameHref, visibleLobbyGames } from '../../services/casino/lobby.js';
-import { STYLE_ITEMS, styleItem } from '../../services/casino/styles.js';
+import { STYLE_COSMETICS, STYLE_ITEMS, drawCost, styleItem } from '../../services/casino/styles.js';
 import type { CasinoGame } from '../../config.js';
 import type { LobbyProps } from './casino.js';
 
@@ -265,7 +265,7 @@ export function CasinoLobbyContent(p: LobbyProps) {
             </div>
           </dl>
           <p class="cl-small">
-            見た目の品 {p.wardrobe.owned.length}/{STYLE_ITEMS.filter((i) => i.slot).length}種類 · お試し券 {p.wardrobe.tickets}枚
+            見た目の品 {p.wardrobe.owned.length}/{STYLE_COSMETICS.length}種類 · お試し券 {p.wardrobe.tickets}枚
           </p>
           <a class="cl-gold-action" href="/casino/wardrobe">
             🪭 着せ替える <span aria-hidden="true">›</span>
@@ -279,6 +279,7 @@ export function CasinoLobbyContent(p: LobbyProps) {
           </div>
           <p class="cl-gacha-price">
             1回 {fmt(p.casinoGacha.price)}
+            {p.me.coin.name} · 10連 {fmt(drawCost(p.casinoGacha, 10))}
             {p.me.coin.name}
           </p>
           <div class="cl-gacha-actions">

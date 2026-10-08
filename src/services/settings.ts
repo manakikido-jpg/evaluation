@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { setStyleCatalog } from './casino/styles.js';
 import { casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
@@ -240,6 +241,7 @@ export class ConfigStore {
     private readonly base: GuildConfig,
   ) {
     this.cfg = base;
+    setStyleCatalog(base.casinoGacha.items);
   }
 
   get current(): GuildConfig {
@@ -254,6 +256,8 @@ export class ConfigStore {
     try {
       // 期間限定イベント（ボーナス週間・セール）は、その間だけ設定に入れる
       this.cfg = applyEvents(applyOverrides(this.base, await loadOverrides(this.db)), await activeEvents(this.db).catch(() => []));
+      // 🎰 勝負の御籤の品の名前（社務所Web で変えたもの）を画面に当てはめる
+      setStyleCatalog(this.cfg.casinoGacha.items);
     } catch (err) {
       logger.warn({ err }, 'failed to apply settings, keeping previous');
     }

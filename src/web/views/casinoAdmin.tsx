@@ -79,6 +79,7 @@ export function CasinoAdminPage(p: {
   return (
     <Layout title="カジノ" session={p.session} nav="casino" scripts={['charts.js']}>
       <h1>🎰 カジノ</h1>
+      <CasinoAdminTabs on="casino" />
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <section class="card">
         <h2>メンバーの入口</h2>
@@ -233,6 +234,7 @@ export function CasinoAdminPage(p: {
               <label>見た目の品（％）<input type="number" name="styleCosmeticPercent" min="0" max="100" step="0.1" value={String(p.casinoGacha.cosmeticPercent)} required/></label>
               <label>大勝負の札（％）<input type="number" name="styleBoostPercent" min="0" max="100" step="0.1" value={String(p.casinoGacha.boostPercent)} required/></label>
               <p>残りはお試し券。2つの割合の合計は100％まで。全部そろうと、見た目の品の分もお試し券になります。</p>
+              <p class="note">品ごとの出やすさ・名前・10 連の値段・引いた記録は <a href="/economy/casino/gacha">🎰 勝負の御籤のタブ</a> で。</p>
             </fieldset>}
             <fieldset class="perms">
               <legend>🀄 咲楽ノ宮雀荘の賭け</legend>
@@ -791,5 +793,19 @@ function AtArt(p: { art: Record<string, string>; fileArt: Record<string, string>
         </form>
       ))}
     </section>
+  );
+}
+
+/** カジノの運営の画面のタブ（カジノ全体・勝負の御籤） */
+export function CasinoAdminTabs(p: { on: 'casino' | 'gacha' }) {
+  return (
+    <nav class="tabs" aria-label="カジノの画面">
+      <a href="/economy/casino" class={p.on === 'casino' ? 'on' : ''} aria-current={p.on === 'casino' ? 'page' : undefined}>
+        🎰 カジノ
+      </a>
+      <a href="/economy/casino/gacha" class={p.on === 'gacha' ? 'on' : ''} aria-current={p.on === 'gacha' ? 'page' : undefined}>
+        🎴 勝負の御籤
+      </a>
+    </nav>
   );
 }

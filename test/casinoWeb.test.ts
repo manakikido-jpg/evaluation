@@ -481,6 +481,52 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect(await artUrls(db)).toEqual({});
     expect((await app.request('/casino/art/byakko')).status).toBe(404);
   });
+
+  it('🎴 勝負の御籤のタブ: 品ごとの出やすさ・名前・10 連の値段を保存し、記録が見られる。授与所に並べる・運営が渡す', async () => {
+    const { drawStyles, stylesOf } = await import('../src/services/casino/styles.js');
+    await drawStyles(db, { ...current.casinoGacha, enabled: true }, A, 'web-1', 1, 'web', () => 0);
+    const g = await adminLogin(GUJI);
+    const html = await (await app.request('/economy/casino/gacha', { headers: { cookie: g } })).text();
+    expect(html).toContain('🎴 勝負の御籤');
+    expect(html).toContain('name="w.yozakura"');
+    expect(html).toContain('name="tenPrice"');
+    expect(html).toContain('最近の引いた記録');
+    expect(html).toContain('/members/' + A);
+    expect(html).not.toMatch(/ style=|onclick=|<script>/);
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+    const send = (path: string, pairs: [string, string][]) =>
+      app.request(path, { method: 'POST', headers: { cookie: g, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...pairs]) });
+    const form: [string, string][] = [
+      ['enabled', 'yes'], ['prayerChannelId', '1553587045073551447'], ['price', '300'], ['tenPrice', '2700'], ['pity', '25'], ['cosmeticPercent', '60'], ['boostPercent', '15'],
+      ['on.yozakura', 'yes'], ['w.yozakura', '2'], ['name.yozakura', '春の夜'],
+      ['w.stars', '1'],
+      ['on.boost', 'yes'],
+    ];
+    expect((await send('/economy/casino/gacha', form)).headers.get('location')).toBe('/economy/casino/gacha?msg=saved');
+    const saved = (await loadOverrides(db)).casinoGacha!;
+    expect(saved).toMatchObject({ price: 300, tenPrice: 2700, pity: 25, cosmeticPercent: 60, boostPercent: 15 });
+    expect(saved.items.yozakura).toMatchObject({ enabled: true, weight: 2, name: '春の夜' });
+    expect(saved.items.stars).toMatchObject({ enabled: false });
+    expect(saved.items.boost).toMatchObject({ enabled: true });
+    // 割合の合計が 100 をこえる・重みがおかしいと保存しない
+    expect((await send('/economy/casino/gacha', form.map(([k, v]) => [k, k === 'boostPercent' ? '50' : v]))).headers.get('location')).toBe('/economy/casino/gacha?msg=invalid');
+    // カジノの設定の欄から保存しても、品ごとの調整は消えない
+    expect((await send('/economy/casino', [['enabled', 'yes'], ['minBet', '10'], ['maxBet', '1000'], ['dailyBetLimit', '0'], ['games', 'slots'], ['styleEnabled', 'yes'], ['stylePrice', '350'], ['stylePity', '25'], ['styleCosmeticPercent', '60'], ['styleBoostPercent', '15']])).headers.get('location')).toBe('/economy/casino?msg=saved');
+    expect((await loadOverrides(db)).casinoGacha).toMatchObject({ price: 350, tenPrice: 2700, items: { yozakura: { weight: 2, name: '春の夜' } } });
+    // 授与所に並べる（同じ品は 2 つ並べない）
+    expect((await send('/shop/style-items', [['styleKey', 'gold'], ['price', '3000']])).headers.get('location')).toBe('/shop?msg=style_created');
+    expect((await send('/shop/style-items', [['styleKey', 'gold'], ['price', '3000']])).headers.get('location')).toBe('/shop?msg=style_taken#shop-style');
+    expect((await send('/shop/style-items', [['styleKey', 'boost'], ['price', '3000']])).headers.get('location')).toBe('/shop?msg=invalid#shop-style');
+    const { listItems } = await import('../src/services/shop.js');
+    expect((await listItems(db)).find((i) => i.kind === 'casino_style')).toMatchObject({ styleKey: 'gold', price: 3000, name: '黄金の社' });
+    // 運営が渡す・取り上げる
+    expect((await send(`/members/${A}/casino-style`, [['mode', 'give'], ['styleKey', 'dragon'], ['note', 'イベントの景品']])).headers.get('location')).toBe(`/members/${A}?msg=style_given_quiet#sec-style`);
+    expect((await send(`/members/${A}/casino-style`, [['mode', 'give'], ['styleKey', 'dragon'], ['note', 'もう一度']])).headers.get('location')).toBe(`/members/${A}?msg=style_owned#sec-style`);
+    expect((await stylesOf(db, A)).owned).toContain('dragon');
+    expect((await send(`/members/${A}/casino-style`, [['mode', 'take'], ['styleKey', 'dragon'], ['note', 'まちがい']])).headers.get('location')).toBe(`/members/${A}?msg=style_taken#sec-style`);
+    expect((await stylesOf(db, A)).owned).not.toContain('dragon');
+    expect((await send(`/members/${A}/casino-style`, [['mode', 'give'], ['styleKey', 'dragon'], ['note', '']])).headers.get('location')).toBe(`/members/${A}?msg=style_invalid#sec-style`);
+  });
 });
 
 describe('👥 みんなで座る卓（画面）', () => {

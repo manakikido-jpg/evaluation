@@ -1,5 +1,5 @@
 import type { GuildConfig } from '../../config.js';
-import { STYLE_ITEMS, STYLE_SLOTS, activeStyles, styleChances, styleItem, type StyleSlot, type StyleState } from '../../services/casino/styles.js';
+import { STYLE_SLOTS, activeStyles, drawCost, drawableStyles, styleChances, styleItem, styleItems, type StyleSlot, type StyleState } from '../../services/casino/styles.js';
 import { CasinoLayout, type CasinoMe } from './casino.js';
 const Hidden = (p: { me: CasinoMe }) => <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />;
 export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string; now: Date; message?: string }) {
@@ -44,7 +44,7 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
             </button>
           </form>
           <div class="cs-grid">
-            {STYLE_ITEMS.filter((i) => i.slot === slot).map((i) => {
+            {styleItems().filter((i) => i.slot === slot).map((i) => {
               const owned = p.state.owned.includes(i.key);
               return (
                 <article class={`cs-item cs-${i.key}${styles[slot as StyleSlot] === i.key ? ' equipped' : ''}`}>
@@ -77,7 +77,7 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
 }
 export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildConfig['casinoGacha']; prayerHref: string }) {
   const chances = styleChances(p.g, p.state.owned);
-  const complete = STYLE_ITEMS.filter((i) => i.slot).every((i) => p.state.owned.includes(i.key));
+  const complete = drawableStyles(p.g, p.state.owned).length === 0;
   return (
     <CasinoLayout title="勝負の御籤" me={p.me} back>
       <section class="cs-banner">
@@ -88,7 +88,7 @@ export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildCon
       </section>
       <p>
         1回 {p.g.price.toLocaleString('ja-JP')}
-        {p.me.coin.name} · 10連 {(p.g.price * 10).toLocaleString('ja-JP')}
+        {p.me.coin.name} · 10連 {drawCost(p.g, 10).toLocaleString('ja-JP')}
         {p.me.coin.name}
       </p>
       <p>
@@ -100,9 +100,9 @@ export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildCon
       <div class="c-actions"><a class="c-btn" href={p.prayerHref} target="_blank" rel="noopener noreferrer">⛩ 祈願所へ（Discord）</a><a class="c-btn c-btn-ghost" href="/casino/wardrobe">着せ替えへ</a></div>
       {!p.g.enabled && <p>今はお休み中です。中身は下で見られます。</p>}
       <h2>中身と、今の出る割合</h2>
-      <p>見た目の品は期限なし・同じ品は出ません。所持が増えると残りの品の割合が上がります。天井の回は未所持の見た目の品の中で均等です。物御籤の券・セール・天井とは別です。</p>
+      <p>見た目の品は期限なし・同じ品は出ません。所持が増えると残りの品の割合が上がります。天井の回は未所持の見た目の品の中から、出やすさに合わせて選びます。物御籤の券・セール・天井とは別です。</p>
       <div class="cs-grid">
-        {chances.map((i) => (
+        {chances.filter((i) => i.chance > 0 || (i.slot && p.state.owned.includes(i.key))).map((i) => (
           <article class="cs-item">
             <span class="cs-icon">{i.emoji}</span>
             <h3>{i.name}</h3>

@@ -16,6 +16,7 @@ const base: ShopItem = {
   enabled: true,
   position: 1,
   boosterOnly: false,
+  styleKey: null,
   updatedAt: new Date(),
 };
 

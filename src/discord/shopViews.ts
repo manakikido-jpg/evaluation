@@ -47,7 +47,7 @@ export function categoryOf(i: Pick<ShopItem, 'kind' | 'roleGroup'>): ShopCategor
   if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : i.roleGroup === 'vip' ? 'vip' : 'other';
   if (i.kind === 'mycolor') return 'color';
   if (i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
-  if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin' || i.kind === 'casino_boost') return 'fun';
+  if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin' || i.kind === 'casino_boost' || i.kind === 'casino_style') return 'fun';
   if (i.kind === 'menzaifu') return 'menzaifu';
   return 'other';
 }

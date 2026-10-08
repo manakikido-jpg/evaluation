@@ -1,0 +1,1 @@
+ALTER TABLE "shop_items" ADD COLUMN "style_key" text;

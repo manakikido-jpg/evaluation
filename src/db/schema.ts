@@ -610,7 +610,8 @@ export const shopItems = pgTable(
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost'>().notNull(),
+    /** casino_style: 🎴 勝負の御籤の品（見た目の品・お試し券。style_key で決める） */
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_style'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -626,6 +627,8 @@ export const shopItems = pgTable(
     position: integer('position').notNull().default(0),
     /** 奉納（ブースト）している人だけが受けられる。ロールは奉納をやめると外れる */
     boosterOnly: boolean('booster_only').notNull().default(false),
+    /** kind = casino_style のとき渡す品（勝負の御籤の品の key。trial = お試し券） */
+    styleKey: text('style_key'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('shop_items_price', sql`${t.price} >= 0`)],

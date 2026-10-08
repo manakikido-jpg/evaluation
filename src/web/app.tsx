@@ -10,6 +10,9 @@ import { deleteOmikujiArt, deleteSlipBg, isOmikujiArtNo, isSlipBgKey, loadOmikuj
 import { fortuneOf, omikujiDailyAverage, omikujiSayings, specialIndex } from '../services/omikuji.js';
 import { renderSlip } from '../services/omikujiSlip.js';
 import { trialUnei } from '../services/omikujiTrial.js';
+import { gachaItemCounts, gachaSummaries, recentGachaDraws } from '../services/casino/gachaStats.js';
+import { STYLE_ITEMS, giveStyle, isGivableStyle, styleItem, stylesOf, takeStyle } from '../services/casino/styles.js';
+import { CasinoGachaAdminPage, CasinoStyleMemberSection } from './views/casinoGachaAdmin.js';
 import { grantSpecialGoen, revokeSpecialGoen, specialGoenDm, specialGoenHistory, specialGoenLog, validSpecialGoen } from '../services/specialGoen.js';
 import { SpecialGoenSection } from './views/specialGoen.js';
 import { planOmikujiReset, resetOmikujiDay } from '../services/omikujiReset.js';
@@ -796,6 +799,7 @@ export function createWebApp(deps: WebDeps) {
             showUnban={session.level === 'guji' && isBannedByEvents(events)}
             coinsNonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
           />
+          <CasinoStyleMemberSection memberId={id} csrf={session.csrfToken} state={await stylesOf(db, id)} guji={session.level === 'guji' && !member.isBot} />
           <SpecialGoenSection
             memberId={id}
             csrf={session.csrfToken}
@@ -1728,7 +1732,9 @@ export function createWebApp(deps: WebDeps) {
     const current = await loadOverrides(db);
     let overrides: Overrides;
     try {
+      // 品ごとの調整・10 連の値段（🎰 勝負の御籤のタブで決めたもの）は消さないように、今の値に重ねる
       overrides = overridesSchema.parse({ ...current, casino, casinoGacha: typeof body.stylePrice === 'string' ? {
+        ...(current.casinoGacha ?? cfg.casinoGacha),
         prayerChannelId: typeof body.stylePrayerChannelId === 'string' ? body.stylePrayerChannelId : cfg.casinoGacha.prayerChannelId,
         enabled: body.styleEnabled === 'yes', price: int('stylePrice'), pity: int('stylePity'),
         cosmeticPercent: Number(body.styleCosmeticPercent), boostPercent: Number(body.styleBoostPercent),
@@ -1741,6 +1747,60 @@ export function createWebApp(deps: WebDeps) {
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'casino.settings', detail: { ...casino, casinoGacha: overrides.casinoGacha }, via: 'web' });
     return c.redirect('/economy/casino?msg=saved');
+  });
+
+  // 🎴 勝負の御籤のタブ: 値段・割合・品ごとの出やすさと名前（宮司が変える）、回数・売上・引いた記録
+  app.get('/economy/casino/gacha', async (c) => {
+    const t = now();
+    const [summaries, counts, recent] = await Promise.all([gachaSummaries(db, t), gachaItemCounts(db, new Date(t.getTime() - 30 * 86_400_000)), recentGachaDraws(db, 50)]);
+    const names = await namesOf(db, [...new Set(recent.map((d) => d.memberId))]);
+    const msg = c.req.query('msg');
+    return c.html(
+      <CasinoGachaAdminPage session={c.get('session')} g={cfg.casinoGacha} coinName={cfg.economy.currencyName} summaries={summaries} counts={counts} recent={recent} names={names} guji={c.get('session').level === 'guji'} flash={msg} />,
+    );
+  });
+  app.post('/economy/casino/gacha', async (c) => {
+    const body = await c.req.parseBody();
+    const str = (k: string) => (typeof body[k] === 'string' ? String(body[k]).trim() : '');
+    const num = (k: string) => (str(k) === '' ? NaN : Number(str(k)));
+    const items: Record<string, { enabled: boolean; weight: number; name?: string; emoji?: string; note?: string }> = {};
+    for (const i of STYLE_ITEMS) {
+      // 出やすさの欄がない（送られていない）ときは今の値のまま
+      const w = i.slot && str(`w.${i.key}`) !== '' ? num(`w.${i.key}`) : (cfg.casinoGacha.items[i.key]?.weight ?? 1);
+      items[i.key] = {
+        // お試し券は「残り」なので、いつも出す
+        enabled: i.key === 'trial' ? true : body[`on.${i.key}`] === 'yes',
+        weight: Number.isFinite(w) ? w : NaN,
+        ...(str(`name.${i.key}`) ? { name: str(`name.${i.key}`) } : {}),
+        ...(str(`emoji.${i.key}`) ? { emoji: str(`emoji.${i.key}`) } : {}),
+        ...(str(`note.${i.key}`) ? { note: str(`note.${i.key}`) } : {}),
+      };
+    }
+    const current = await loadOverrides(db);
+    let overrides: Overrides;
+    try {
+      overrides = overridesSchema.parse({
+        ...current,
+        casinoGacha: {
+          ...(current.casinoGacha ?? cfg.casinoGacha),
+          enabled: body.enabled === 'yes',
+          prayerChannelId: str('prayerChannelId'),
+          price: num('price'),
+          tenPrice: num('tenPrice'),
+          pity: num('pity'),
+          cosmeticPercent: num('cosmeticPercent'),
+          boostPercent: num('boostPercent'),
+          items,
+        },
+      });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/economy/casino/gacha?msg=invalid');
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'casino.gacha_settings', detail: { casinoGacha: overrides.casinoGacha }, via: 'web' });
+    return c.redirect('/economy/casino/gacha?msg=saved');
   });
 
   /** 🎰 カジノのロールを作って（同じ名前のロールがあればそれを）、入れる人をそのロールにする */
@@ -1989,6 +2049,36 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, targetId: id, action: 'goen.special_revoke', detail: { id: gid, amount: row.amount, reason: row.reason, goen }, via: 'web' });
     await goenLog(specialGoenLog('revoke', id, by, row.amount, row.reason, goen));
     return goenBack(c, id, 'goen_revoked');
+  });
+
+  // 🎴 勝負の御籤の品（見た目の品・お試し券）を渡す・取り上げる（宮司のみ）
+  app.post('/members/:id/casino-style', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    const to = (msg: string) => c.redirect(`/members/${id}?msg=${msg}#sec-style`);
+    if (!gujiOnly(c)) return to('style_forbidden');
+    const body = await c.req.parseBody();
+    const key = typeof body.styleKey === 'string' ? body.styleKey : '';
+    const note = field(body, 'note', 200);
+    if (!isGivableStyle(key) || !note) return to('style_invalid');
+    const m = await getMember(db, id);
+    if (!m || m.isBot) return back(c, id, 'denied_not_found');
+    const by = c.get('session').userId;
+    const st = styleItem(key)!;
+    if (body.mode === 'take') {
+      const r = await takeStyle(db, id, key);
+      if (r === 'ok') await audit(db, { actorId: by, targetId: id, action: 'casino_style.take', detail: { key, name: st.name, note }, via: 'web' });
+      return to(r === 'ok' ? 'style_taken' : 'style_none');
+    }
+    const r = await giveStyle(db, id, key);
+    if (r === 'owned') return to('style_owned');
+    if (r !== 'ok') return to('style_invalid');
+    await audit(db, { actorId: by, targetId: id, action: 'casino_style.give', detail: { key, name: st.name, note }, via: 'web' });
+    if (body.dm !== 'yes') return to('style_given_quiet');
+    const sent = await deps.discord
+      .sendDm(id, `🎴 咲楽ノ宮の社務所から、カジノの見た目の品「${st.emoji} ${st.name}」が届きました。\n> ${note}\nカジノWeb（\`/カジノ\`）の「🪭 着せ替え」で${key === 'trial' ? '使え' : '付けられ'}ます。`)
+      .catch(() => false);
+    return to(sent ? 'style_given' : 'style_given_nodm');
   });
 
   // 券を渡す・減らす（宮司のみ）
@@ -5364,12 +5454,36 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect('/shop?msg=created');
   });
 
+  // 🎴 勝負の御籤の品（見た目の品・お試し券）を授与所に並べる
+  app.post('/shop/style-items', async (c) => {
+    const body = await c.req.parseBody();
+    const key = typeof body.styleKey === 'string' ? body.styleKey : '';
+    const price = Number(body.price);
+    if (!isGivableStyle(key) || !validInt(price, 0)) return c.redirect('/shop?msg=invalid#shop-style');
+    const items = await listShopItems(db);
+    if (items.some((i) => i.kind === 'casino_style' && i.styleKey === key)) return c.redirect('/shop?msg=style_taken#shop-style');
+    const st = styleItem(key)!;
+    const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 40) : st.name;
+    const description = typeof body.description === 'string' && body.description.trim() ? body.description.trim().slice(0, 100) : st.note;
+    const item = await createShopItem(db, {
+      kind: 'casino_style',
+      name,
+      emoji: st.emoji,
+      description,
+      price,
+      styleKey: key,
+      position: items.reduce((n, i) => Math.max(n, i.position), 0) + 1,
+    });
+    await audit(db, { actorId: c.get('session').userId, action: 'shop.create', detail: { id: item.id, name, styleKey: key, price }, via: 'web' });
+    return c.redirect('/shop?msg=style_created');
+  });
+
   app.post('/shop/items/:id/delete', async (c) => {
     const id = Number(c.req.param('id'));
     const body = await c.req.parseBody();
     const item = Number.isSafeInteger(id) ? await getShopItem(db, id) : undefined;
     // 決まった動きの品物（花吹雪など）は消さずに「販売しない」にする
-    if (!item || item.kind !== 'role' || body.confirm !== 'yes') return c.redirect('/shop');
+    if (!item || (item.kind !== 'role' && item.kind !== 'casino_style') || body.confirm !== 'yes') return c.redirect('/shop');
     await deleteShopItem(db, id);
     await audit(db, { actorId: c.get('session').userId, action: 'shop.delete', detail: { id, name: item.name }, via: 'web' });
     return c.redirect('/shop?msg=deleted');

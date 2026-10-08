@@ -549,7 +549,25 @@ export const casinoGachaSchema = z.object({
   pity: z.number().int().min(1).max(1000).default(30),
   cosmeticPercent: z.number().min(0).max(100).default(70),
   boostPercent: z.number().min(0).max(100).default(10),
+  /** 10 連の値段（0 なら 1 回の値段 × 10） */
+  tenPrice: z.number().int().min(0).max(1_000_000).default(0),
+  /** 品ごとの調整（社務所Web の「🎰 勝負の御籤」）。書いていない品は、出す・重み 1・はじめの名前 */
+  items: z
+    .record(
+      z.string().max(30),
+      z.object({
+        /** 出す（外すと御籤から出ない。持っている人はそのまま使える） */
+        enabled: z.boolean().default(true),
+        /** 見た目の品の中での出やすさ（重み。1 が標準・2 で 2 倍出やすい・0 で出さない） */
+        weight: z.number().min(0).max(100).default(1),
+        name: z.string().max(30).optional(),
+        emoji: z.string().max(16).optional(),
+        note: z.string().max(100).optional(),
+      }),
+    )
+    .default({}),
 }).refine((g) => g.cosmeticPercent + g.boostPercent <= 100, '出る割合の合計は100％までです');
+export type CasinoGachaConfig = z.infer<typeof casinoGachaSchema>;
 
 export const guildConfigSchema = z
   .object({

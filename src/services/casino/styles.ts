@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { GuildConfig } from '../../config.js';
+import type { CasinoGachaConfig, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
 import { casinoStyles, casinoStyleDraws } from '../../db/schema.js';
 import { audit } from '../audit.js';
@@ -39,7 +39,42 @@ export const STYLE_ITEMS: StyleItem[] = [
   { key: 'trial', name: '見た目のお試し券', emoji: '🎟', note: '未所持の背景か卓のふちを1つ、24時間お試し' },
   { key: 'boost', name: '大勝負の札', emoji: '🎰', note: '持ち物から使うと、その日だけ賭けの上限が上がる' },
 ];
-export const styleItem = (key: string) => STYLE_ITEMS.find((i) => i.key === key);
+
+// ───────── 社務所Web の調整（名前・絵文字・説明・出す・出やすさ） ─────────
+
+/** 社務所Web で変えた名前・絵文字・説明（設定を読み直すたびに setStyleCatalog で入れる。画面はここから名前を引く） */
+let catalog: CasinoGachaConfig['items'] = {};
+export function setStyleCatalog(items: CasinoGachaConfig['items'] | undefined): void {
+  catalog = items ?? {};
+}
+const applied = (i: StyleItem): StyleItem => {
+  const o = catalog[i.key];
+  if (!o) return i;
+  return { ...i, ...(o.name?.trim() ? { name: o.name.trim() } : {}), ...(o.emoji?.trim() ? { emoji: o.emoji.trim() } : {}), ...(o.note?.trim() ? { note: o.note.trim() } : {}) };
+};
+/** 品（名前は社務所Web で変えたもの） */
+export const styleItem = (key: string) => {
+  const i = STYLE_ITEMS.find((x) => x.key === key);
+  return i && applied(i);
+};
+/** 品の一覧（名前は社務所Web で変えたもの） */
+export const styleItems = (): StyleItem[] => STYLE_ITEMS.map(applied);
+/** 見た目の品（背景・称号など。お試し券・大勝負の札はのぞく） */
+export const STYLE_COSMETICS = STYLE_ITEMS.filter((i) => i.slot);
+
+type Gacha = Pick<CasinoGachaConfig, 'cosmeticPercent' | 'boostPercent' | 'pity'> & { items?: CasinoGachaConfig['items'] };
+/** 見た目の品の出やすさ（重み）。外した品・重み 0 は 0 */
+export const styleWeight = (g: Gacha, key: string): number => {
+  const o = g.items?.[key];
+  if (o && o.enabled === false) return 0;
+  return Math.max(0, o?.weight ?? 1);
+};
+/** 大勝負の札を御籤から出すか */
+const boostOn = (g: Gacha) => g.items?.boost?.enabled !== false;
+/** まだ持っていなくて、御籤から出る見た目の品 */
+export const drawableStyles = (g: Gacha, owned: readonly string[]) => STYLE_COSMETICS.filter((i) => !owned.includes(i.key) && styleWeight(g, i.key) > 0);
+/** 引く値段（10 連は決めた値段。0 なら 1 回 × 10） */
+export const drawCost = (g: Pick<CasinoGachaConfig, 'price' | 'tenPrice'>, times: number): number => (times === 10 && (g.tenPrice ?? 0) > 0 ? g.tenPrice : times * g.price);
 export type StyleState = typeof casinoStyles.$inferSelect;
 const blank = (memberId: string): StyleState => ({ memberId, owned: [], equipped: {}, trialKey: null, trialUntil: null, tickets: 0, pity: 0 });
 export async function stylesOf(db: Db, memberId: string): Promise<StyleState> {
@@ -97,24 +132,29 @@ export async function equipStyle(db: Db, memberId: string, slot: string, key: st
     return 'ok' as const;
   });
 }
-/** 未所持の見た目の品の中で均等。全部そろうと、その分はお試し券に */
-export function styleChances(g: GuildConfig['casinoGacha'], owned: string[]) {
-  const available = STYLE_ITEMS.filter((i) => i.slot && !owned.includes(i.key));
-  return STYLE_ITEMS.map((i) => ({
+/**
+ * 出る割合（%）。見た目の品は、まだ持っていない出る品の中で、重みに合わせて分ける。
+ * 全部そろう（出る品がない）と、その分はお試し券に。大勝負の札を外すと、その分もお試し券に
+ */
+export function styleChances(g: Gacha, owned: readonly string[]) {
+  const available = drawableStyles(g, owned);
+  const total = available.reduce((n, i) => n + styleWeight(g, i.key), 0);
+  const boost = boostOn(g) ? g.boostPercent : 0;
+  return styleItems().map((i) => ({
     ...i,
     chance: i.slot
       ? available.some((x) => x.key === i.key)
-        ? g.cosmeticPercent / available.length
+        ? (g.cosmeticPercent * styleWeight(g, i.key)) / total
         : 0
       : i.key === 'boost'
-        ? g.boostPercent
-        : 100 - g.boostPercent - (available.length ? g.cosmeticPercent : 0),
+        ? boost
+        : 100 - boost - (available.length ? g.cosmeticPercent : 0),
   }));
 }
 export type StyleDrawResult = { status: 'ok'; results: string[]; cost: number; replay: boolean } | { status: 'off' | 'invalid' | 'funds' };
 export async function drawStyles(
   db: Db,
-  g: GuildConfig['casinoGacha'],
+  g: CasinoGachaConfig,
   memberId: string,
   requestId: string,
   times: number,
@@ -130,19 +170,30 @@ export async function drawStyles(
       .where(and(eq(casinoStyleDraws.memberId, memberId), eq(casinoStyleDraws.requestId, requestId)));
     if (receipt) return { status: 'ok', results: receipt.results, cost: receipt.cost, replay: true };
     if (!g.enabled) return { status: 'off' };
-    const cost = times * g.price;
+    const cost = drawCost(g, times);
     if (!(await spendWithin(tx, memberId, cost, 'casino_gacha', { requestId, times }))) return { status: 'funds' };
     const results: string[] = [];
     const owned = [...s.owned];
     let pity = s.pity,
       tickets = s.tickets;
     for (let n = 0; n < times; n++) {
-      const available = STYLE_ITEMS.filter((i) => i.slot && !owned.includes(i.key));
+      const available = drawableStyles(g, owned);
       const r = rng();
       if (!Number.isFinite(r) || r < 0 || r >= 1) throw new Error('bad random value');
       let key: string;
-      if (available.length && pity + 1 >= g.pity) key = available[Math.floor(r * available.length)]!.key;
-      else {
+      if (available.length && pity + 1 >= g.pity) {
+        // 天井: まだ持っていない出る品の中から、重みに合わせて
+        const total = available.reduce((n, i) => n + styleWeight(g, i.key), 0);
+        let point = r * total;
+        key = available[available.length - 1]!.key;
+        for (const i of available) {
+          point -= styleWeight(g, i.key);
+          if (point < 0) {
+            key = i.key;
+            break;
+          }
+        }
+      } else {
         const chances = styleChances(g, owned);
         let point = r * 100;
         key = 'trial';
@@ -168,5 +219,49 @@ export async function drawStyles(
     await tx.insert(casinoStyleDraws).values({ memberId, requestId, results, cost });
     await audit(tx, { actorId: memberId, action: 'casino_gacha_draw', detail: { results, cost, requestId }, via });
     return { status: 'ok', results, cost, replay: false };
+  });
+}
+
+// ───────── 授与所で受ける・運営が渡す ─────────
+
+/** 渡せる品（見た目の品とお試し券。大勝負の札は券なので持ち物の券で渡す） */
+export const GIVABLE_STYLES = STYLE_ITEMS.filter((i) => i.slot || i.key === 'trial');
+export const isGivableStyle = (key: string | null | undefined): key is string => !!key && GIVABLE_STYLES.some((i) => i.key === key);
+
+/** もう持っているか（お試し券は何枚でも持てるので false） */
+export async function ownsStyle(db: Db, memberId: string, key: string): Promise<boolean> {
+  if (key === 'trial') return false;
+  return (await stylesOf(db, memberId)).owned.includes(key);
+}
+
+/** 渡す（見た目の品は持ち物に・お試し券は 1 枚足す）。もう持っている見た目の品は owned */
+export async function giveStyle(db: Db, memberId: string, key: string): Promise<'ok' | 'owned' | 'invalid'> {
+  if (!isGivableStyle(key)) return 'invalid';
+  return db.transaction(async (tx) => {
+    const s = await lock(tx, memberId);
+    if (key === 'trial') {
+      await tx.update(casinoStyles).set({ tickets: s.tickets + 1 }).where(eq(casinoStyles.memberId, memberId));
+      return 'ok' as const;
+    }
+    if (s.owned.includes(key)) return 'owned' as const;
+    await tx.update(casinoStyles).set({ owned: [...s.owned, key] }).where(eq(casinoStyles.memberId, memberId));
+    return 'ok' as const;
+  });
+}
+
+/** 取り上げる（渡しまちがえたとき。見た目の品は付けていたら外す・お試し券は 1 枚へらす） */
+export async function takeStyle(db: Db, memberId: string, key: string): Promise<'ok' | 'none' | 'invalid'> {
+  if (!isGivableStyle(key)) return 'invalid';
+  return db.transaction(async (tx) => {
+    const s = await lock(tx, memberId);
+    if (key === 'trial') {
+      if (s.tickets < 1) return 'none' as const;
+      await tx.update(casinoStyles).set({ tickets: s.tickets - 1 }).where(eq(casinoStyles.memberId, memberId));
+      return 'ok' as const;
+    }
+    if (!s.owned.includes(key)) return 'none' as const;
+    const equipped = Object.fromEntries(Object.entries(s.equipped).filter(([, v]) => v !== key));
+    await tx.update(casinoStyles).set({ owned: s.owned.filter((k) => k !== key), equipped }).where(eq(casinoStyles.memberId, memberId));
+    return 'ok' as const;
   });
 }

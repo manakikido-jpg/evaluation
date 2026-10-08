@@ -561,6 +561,13 @@
       "when": 1791389786788,
       "tag": "0079_special_goen",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1791453885189,
+      "tag": "0080_shop_casino_style",
+      "breakpoints": true
     }
   ]
 }

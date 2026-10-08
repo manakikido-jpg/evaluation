@@ -7,6 +7,7 @@ import { currentAutoRank, giftBlockedRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { addTickets, useTicket } from './tickets.js';
+import { giveStyle, isGivableStyle, ownsStyle } from './casino/styles.js';
 
 /**
  * ショップ（授与品）。花びらで品物を買う。
@@ -293,9 +294,13 @@ export async function buySimple(
   price = item.price,
   discount?: DiscountTicket,
 ): Promise<BuyResult> {
-  if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra', 'casino_boost'].includes(item.kind)) return { status: 'disabled' };
+  if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra', 'casino_boost', 'casino_style'].includes(item.kind)) return { status: 'disabled' };
+  // 🎴 勝負の御籤の品: 決めた品がないものは売らない
+  if (item.kind === 'casino_style' && !isGivableStyle(item.styleKey)) return { status: 'disabled' };
   return withDiscount(discount, () => db.transaction(async (tx) => {
     await lock(tx, memberId);
+    // 🎴 もう持っている見た目の品は、払う前に断る（お試し券は何枚でも）
+    if (item.kind === 'casino_style' && (await ownsStyle(tx, memberId, item.styleKey!))) return { status: 'owned' };
     // 絵馬の奉納: 絵馬のピン留め券を持っていれば、それを使って無料（割引券は使わない）
     const ticket = item.kind === 'ema_pin' && price > 0 && (await useTicket(tx, memberId, 'ema_pin'));
     if (ticket) price = 0;
@@ -305,6 +310,8 @@ export async function buySimple(
       return { status: 'insufficient', price, balance: (await walletOf(tx, memberId)).balance };
     }
     await takeDiscount(tx, memberId, used);
+    // 🎴 勝負の御籤の品: 払うのと同じトランザクションで渡す（渡せなければ全部戻す）
+    if (item.kind === 'casino_style' && (await giveStyle(tx, memberId, item.styleKey!)) !== 'ok') throw new Error('casino style give failed');
     // 🎰 大勝負の札: 持ち物に 1 枚（使うのは /持ち物 から。払うのと同じトランザクションで）
     if (item.kind === 'casino_boost') await addTickets(tx, memberId, 'casino_boost', 1);
     const expiresAt = item.durationDays ? new Date(now.getTime() + item.durationDays * DAY) : null;

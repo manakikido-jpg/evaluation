@@ -3,6 +3,7 @@ import type { AdminSession, ShopItem, ShopPurchase } from '../../db/schema.js';
 import type { GuildRole } from '../../lib/discordRest.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
+import { isGivableStyle, styleItem, styleItems } from '../../services/casino/styles.js';
 
 export const SHOP_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   saved: { text: '保存しました。Discord のショップには、次に一覧を開いたときから反映されます。', kind: 'ok' },
@@ -14,6 +15,8 @@ export const SHOP_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   vip_exists: { text: '💎 極はもう作ってあります。', kind: 'warn' },
   vip_nocategory: { text: '極の入口を置くカテゴリ（宵宮の部屋の入口があるカテゴリか、名前に「遊郭」「宵宮」が入ったカテゴリ）が見つかりませんでした。', kind: 'warn' },
   vip_failed: { text: '作れませんでした。BOT に「ロールの管理」「チャンネルの管理」の権限があるか確かめてください。', kind: 'warn' },
+  style_created: { text: '🎴 勝負の御籤の品を授与所に並べました。', kind: 'ok' },
+  style_taken: { text: 'その品は、もう授与所に並んでいます（一覧から値段を変えられます）。', kind: 'warn' },
   vip_off: { text: '💎 極をやめました（授与品は販売しないにしました。ロールと入口の通話は Discord に残っているので、いらなければ消してください）。', kind: 'ok' },
 };
 
@@ -27,6 +30,7 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   otoshidama: 'お年玉袋',
   mycolor: '自分だけの色',
   casino_boost: '🎰 大勝負の札（持ち物に 1 枚）',
+  casino_style: '🎴 勝負の御籤の品',
 };
 
 function Csrf(props: { session: AdminSession }) {
@@ -98,6 +102,7 @@ export function ShopPage(props: {
                     </div>
                     <div class="ch-topic">
                       {i.kind === 'role' ? `ロール: ${roleName(i.roleId)}${i.roleGroup === 'color' ? '（色守り）' : ''} ・ ` : ''}
+                      {i.kind === 'casino_style' ? `品: ${styleItem(i.styleKey ?? '')?.emoji ?? ''} ${styleItem(i.styleKey ?? '')?.name ?? i.styleKey ?? '（なし）'} ・ ` : ''}
                       {i.description}
                     </div>
                   </div>
@@ -183,12 +188,12 @@ export function ShopPage(props: {
                     </button>
                   </div>
                 </form>
-                {i.kind === 'role' && (
+                {(i.kind === 'role' || i.kind === 'casino_style') && (
                   <form method="post" action={`/shop/items/${i.id}/delete`} class="inline-actions item-delete">
                     <Csrf session={session} />
                     <label class="field check">
                       <input type="checkbox" name="confirm" value="yes" required />
-                      <span>この品物を消す（ロールは残る）</span>
+                      <span>{i.kind === 'casino_style' ? 'この品物を消す（もう受けた人の品はそのまま）' : 'この品物を消す（ロールは残る）'}</span>
                     </label>
                     <button type="submit" class="danger">
                       消す
@@ -295,6 +300,48 @@ export function ShopPage(props: {
           </label>
           <button type="submit" class="ok">
             追加
+          </button>
+        </form>
+      </section>
+
+      <section class="card anchor" id="shop-style">
+        <h2>＋ 🎴 勝負の御籤の品を授与所に並べる</h2>
+        <p class="note">
+          カジノの見た目の品（背景・卓のふち・称号など）や、見た目のお試し券を、決めた値段で授与所から受けられるようにします。見た目の品は 1 人 1 つ（もう持っている人は受けられません）、お試し券は何枚でも受けられます。名前・説明を空にすると、品の名前と説明を使います。🎰 大勝負の札は、上の一覧の「大勝負の札」で売れます。品の出やすさや名前は{' '}
+          <a href="/economy/casino/gacha">🎴 勝負の御籤のタブ</a> で変えられます。
+        </p>
+        <form method="post" action="/shop/style-items" class="shop-item">
+          <Csrf session={session} />
+          <div class="fields">
+            <label class="field">
+              <span>品</span>
+              <select name="styleKey" required>
+                <option value="">選んでください</option>
+                {styleItems()
+                  .filter((s) => isGivableStyle(s.key))
+                  .map((s) => (
+                    <option value={s.key} disabled={props.items.some((i) => i.kind === 'casino_style' && i.styleKey === s.key)}>
+                      {s.emoji} {s.name}
+                      {props.items.some((i) => i.kind === 'casino_style' && i.styleKey === s.key) ? '（もう並んでいる）' : ''}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>値段（銭）</span>
+              <input type="number" name="price" min={0} value="3000" required />
+            </label>
+            <label class="field">
+              <span>名前（空なら品の名前）</span>
+              <input type="text" name="name" maxlength={40} />
+            </label>
+          </div>
+          <label class="field">
+            <span>説明（空なら品の説明）</span>
+            <input type="text" name="description" maxlength={100} />
+          </label>
+          <button type="submit" class="ok">
+            並べる
           </button>
         </form>
       </section>
