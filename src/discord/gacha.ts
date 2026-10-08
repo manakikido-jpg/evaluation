@@ -336,11 +336,17 @@ export function pullLine(p: GachaPull, roleName: (id: string) => string, coinNam
 /** 🎰 大勝負の札を使ったときの文（上がったあとの上限つき） */
 export function casinoBoostText(c: CasinoConfig, coin: string, r: BoostUse): string {
   if (r.status === 'no_ticket') return '🎰 大勝負の札がありません。';
-  const b = boostCasino(c);
-  const at = `<t:${Math.floor(r.until.getTime() / 1000)}:t>`;
+  if (r.status === 'limit') return `🎰 今日はもう大勝負の札を ${c.boostPerDay ?? 1} 枚使いました。日本時間の 0 時をすぎると、また使えます。札は減っていません。`;
+  const b = boostCasino(c, r.level);
+  const at = `<t:${Math.floor(r.until.getTime() / 1000)}:f>`;
   const limits = `1 回 **${fmt(b.maxBet)}** 枚まで${b.dailyBetLimit > 0 ? `・1 日の合計 **${fmt(b.dailyBetLimit)}** 枚まで` : ''}`;
-  if (r.status === 'active') return `🎰 今日はもう大勝負の札が効いています（${at} まで・${limits}）。札は減っていません。`;
-  return [`🎰 大勝負の札を使いました。今日（${at} まで）、カジノで${coin}を ${limits} 賭けられます（ふだんは 1 回 ${fmt(c.maxBet)} 枚${c.dailyBetLimit > 0 ? `・1 日 ${fmt(c.dailyBetLimit)} 枚` : ''}）。`, '-# みんなで払う卓の参加費・ブラインドは、ふだんの上限のままです'].join('\n');
+  const stack = r.level > 1 ? `（${r.level} 枚重ね）` : '';
+  if (r.status === 'active') return `🎰 大勝負の札はもう効いています${stack}（${at} まで・${limits}）。${(c.boostPerDay ?? 1) > r.level ? '' : 'これ以上は重ねられません。'}札は減っていません。`;
+  return [
+    `🎰 大勝負の札を使いました${stack}。${at} まで、カジノで${coin}を ${limits} 賭けられます（ふだんは 1 回 ${fmt(c.maxBet)} 枚${c.dailyBetLimit > 0 ? `・1 日 ${fmt(c.dailyBetLimit)} 枚` : ''}）。`,
+    (c.boostPerDay ?? 1) > r.level ? `-# 効いている間に、もう 1 枚使うと重ねられます（今日あと ${(c.boostPerDay ?? 1) - r.level} 枚まで・効く長さは延びません）` : '',
+    '-# みんなで払う卓の参加費・ブラインドは、ふだんの上限のままです',
+  ].filter(Boolean).join('\n');
 }
 
 /** 物御籤を引く・券を使う */
@@ -673,7 +679,7 @@ export class GachaApp {
       case 'omikuji_extra':
         return void (await i.update({ content: await this.omikujiExtra(i), components: [] }));
       case 'casino_boost': {
-        const r = await useCasinoBoost(this.db, i.user.id);
+        const r = await useCasinoBoost(this.db, i.user.id, new Date(), cfg.casino);
         return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r), components: [] }));
       }
       case 'gacha_free':

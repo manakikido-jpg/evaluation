@@ -1273,6 +1273,9 @@ export const memberBuffs = pgTable(
     kind: text('kind').$type<'fuku' | 'luck' | 'casino'>().notNull(),
     until: timestamp('until', { withTimezone: true }),
     remaining: integer('remaining').notNull().default(0),
+    /** 🎰 大勝負の札: 今日（日本時間）使った枚数を数える日と枚数（重ねて使える枚数の上限に使う） */
+    day: text('day'),
+    uses: integer('uses').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.kind] })],
 );

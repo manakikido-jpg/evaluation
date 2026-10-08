@@ -93,7 +93,7 @@ import {
 } from '../services/casino/keibaStable.js';
 import { fatigueNow } from '../services/casino/keiba.js';
 import { mjRanking, mjStats, monthStartJst } from '../services/casino/mahjongStats.js';
-import { boostCasino, casinoBoostUntil } from '../services/casino/boost.js';
+import { boostCasino, casinoBoostOf } from '../services/casino/boost.js';
 import { myBest, myByGame, myDaily, popularToday, rangeStart, topMultipliers, winRanking, type RankRange } from '../services/casino/memberStats.js';
 import { CasinoStatsPage } from './views/casinoStats.js';
 
@@ -155,11 +155,13 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   }
 
   const meOf = async (session: MemberSession): Promise<Me> => {
-    const [w, boostUntil, wardrobe] = await Promise.all([walletOf(db, session.userId), casinoBoostUntil(db, session.userId, d.now()), stylesOf(db, session.userId)]);
-    return { session, styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil } : {}) };
+    const [w, boost, wardrobe] = await Promise.all([walletOf(db, session.userId), casinoBoostOf(db, session.userId, d.now()), stylesOf(db, session.userId)]);
+    const boostUntil = boost?.until;
+    const boostLevel = boost?.level ?? 1;
+    return { session, styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel } : {}) };
   };
   /** その人の上限（🎰 大勝負の札が効いていれば上がる）。画面に出す用。賭けるときは、それぞれのゲームが確かめ直す */
-  const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino) : d.cfg().casino);
+  const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino, me.boostLevel ?? 1) : d.cfg().casino);
 
   /** ログインが要るページ。お休み中はお休みの画面 */
   const page =

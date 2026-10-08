@@ -67,7 +67,7 @@ export function casinoBoostNote(c: CasinoConfig): string {
   const b = boostCasino(c);
   const f = (n: number) => n.toLocaleString('ja-JP');
   return [
-    `-# 持ち物に 1 枚入ります。\`/持ち物\` で「✨ 使う」を押した日（日本時間の 0 時まで）だけ効きます（効いている日にもう 1 枚使うことはできません）`,
+    `-# 持ち物に 1 枚入ります。\`/持ち物\` で「✨ 使う」を押してから${(c.boostHours ?? 0) > 0 ? ` ${c.boostHours} 時間` : 'その日（日本時間の 0 時まで）'}だけ効きます${(c.boostPerDay ?? 1) > 1 ? `（1 日 ${c.boostPerDay} 枚まで重ねて使えて、重ねると倍率が足されます）` : '（効いている間にもう 1 枚使うことはできません）'}`,
     `-# 1 回の最高 ${f(c.maxBet)} → **${f(b.maxBet)}** 枚${c.dailyBetLimit > 0 ? `・1 日の合計 ${f(c.dailyBetLimit)} → **${f(b.dailyBetLimit)}** 枚` : ''}（卓の参加費・ブラインドはそのまま）`,
   ].join('\n');
 }
