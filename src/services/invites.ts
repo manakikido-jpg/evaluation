@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { autoRanks } from '../domain/ranks.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -308,4 +308,11 @@ export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
     memberId: r.memberId, roleIds: r.roleIds, createdAt: r.createdAt ?? new Date(0), joinedAt: r.createdAt, inviterId: null, leftAt: null,
     source: null, rewardedAt: null, reward: 0, ujikoRewardedAt: null, ujikoReward: 0, legacyReward: false,
   }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 200);
+}
+
+/** ホーム用。表示200人の制限とは別に、在籍中の招待元不明を数える。 */
+export async function countUnknownInviters(db: Db): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(members).leftJoin(invites, eq(invites.memberId, members.id))
+    .where(and(isNull(members.leftAt), eq(members.isBot, false), or(isNull(invites.memberId), eq(invites.source, UNKNOWN_INVITER))));
+  return row?.n ?? 0;
 }

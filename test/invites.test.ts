@@ -4,7 +4,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { activityDaily, auditLogs, invites, members } from '../src/db/schema.js';
 import { walletOf } from '../src/services/economy.js';
-import { STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { countUnknownInviters, STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -31,6 +31,18 @@ afterEach(async () => {
 });
 
 describe('招待のお礼', () => {
+  it('ホームの不明人数は在籍する人だけ数え、確認済み不明を含める', async () => {
+    expect(await countUnknownInviters(db)).toBe(3);
+    await recordInvite(db, NEW, INVITER);
+    expect(await countUnknownInviters(db)).toBe(2);
+    await db.insert(invites).values({ memberId: NEW2, inviterId: UNKNOWN_INVITER, source: UNKNOWN_INVITER });
+    expect(await countUnknownInviters(db)).toBe(2);
+    await db.update(members).set({ leftAt: T0 }).where(eq(members.id, NEW2));
+    expect(await countUnknownInviters(db)).toBe(1);
+    await db.update(members).set({ isBot: true }).where(eq(members.id, INVITER));
+    expect(await countUnknownInviters(db)).toBe(0);
+  });
+
   it('自分は記録しない。前の記録は変えない', async () => {
     expect(await recordInvite(db, NEW, NEW)).toBe(false);
     expect(await recordInvite(db, NEW, 'abc')).toBe(false);
