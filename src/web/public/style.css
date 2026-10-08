@@ -1255,3 +1255,5 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .task-list .task-copy span { font-size: .75rem; }
 }
 .card[id], .invite-rows { scroll-margin-top: 84px; }
+
+.cast-profile-preview { display: block; width: 120px; height: 120px; object-fit: cover; border-radius: 12px; margin: 8px 0; }

@@ -20,6 +20,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-08-cast-profile-photos', date: '2026-10-08', kind: 'improve', where: ['社務所Web', 'Discord'],
+    title: 'キャストごとの写真を登録できるように',
+    items: [
+      '社務所Webのキャスト一覧で、名前とDiscord IDを確かめて、その人の写真を保存・確認・削除できます。名前はDiscordの名前を使います。',
+      '写真はDiscordの紹介カードと本人の受付画像に使います。自動で正方形に整え、写真がなければ受付はDiscordのアイコンを使います。',
+      'キャストの画像だけ256KBで止まっていた制限を直し、メニュー画像も紹介写真も8MBまで送れるようにしました。',
+    ],
+  },
+  {
     id: '2026-10-08-cast-reception-image', date: '2026-10-08', kind: 'new', where: ['Discord'],
     title: 'キャスト本人の受付を1枚の画像に',
     items: [

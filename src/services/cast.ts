@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -93,6 +94,31 @@ export async function loadMenuImage(db: Db): Promise<{ contentType: string; data
 
 export async function deleteMenuImage(db: Db): Promise<void> {
   await db.delete(castImages).where(eq(castImages.key, 'menu'));
+}
+
+/** 紹介用の写真。Discord に送りやすい大きさにして、名前や位置情報は残さない。 */
+export async function saveCastPhoto(db: Db, memberId: string, data: Uint8Array): Promise<string | undefined> {
+  if (!sf(memberId) || data.length > 8 * 1024 * 1024 || !detectImage(data)) return undefined;
+  const cast = await getCast(db, memberId);
+  if (!cast || cast.status === 'removed') return undefined;
+  let photo: Buffer;
+  try {
+    photo = await sharp(data, { limitInputPixels: 40_000_000 }).rotate().resize(600, 600, { fit: 'cover' }).png().toBuffer();
+  } catch { return undefined; }
+  const hash = createHash('sha256').update(photo).digest('hex').slice(0, 16);
+  await db.insert(castImages).values({ key: `profile:${memberId}`, contentType: 'image/png', data: photo, hash })
+    .onConflictDoUpdate({ target: castImages.key, set: { contentType: 'image/png', data: photo, hash, updatedAt: new Date() } });
+  return hash;
+}
+
+export async function loadCastPhoto(db: Db, memberId: string) {
+  if (!sf(memberId)) return undefined;
+  const [row] = await db.select().from(castImages).where(eq(castImages.key, `profile:${memberId}`));
+  return row && { contentType: row.contentType, data: row.data, hash: row.hash };
+}
+
+export async function deleteCastPhoto(db: Db, memberId: string): Promise<void> {
+  if (sf(memberId)) await db.delete(castImages).where(eq(castImages.key, `profile:${memberId}`));
 }
 
 // ───────── 年齢・時刻 ─────────

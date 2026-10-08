@@ -3066,6 +3066,41 @@ describe('キャスト（管理画面）', () => {
     });
   };
 
+  it('256KBを超える写真を本人ごとに保存し、8MB超・CSRFなし・未登録は拒む', async () => {
+    const sharp = (await import('sharp')).default;
+    const { applyCast, CAST_DEFAULTS, setCastStatus, loadCastPhoto } = await import('../src/services/cast.js');
+    const id = '880000000000000021';
+    await applyCast(db, CAST_DEFAULTS, { id, adult: true }, { bio: '写真の紹介', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: false });
+    await setCastStatus(db, id, 'active', STAFF);
+    const s = await login(STAFF);
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
+    const png = await sharp({ create: { width: 30, height: 20, channels: 3, background: '#de789a' } }).png().toBuffer();
+    const large = new Uint8Array(300 * 1024); large.set(png);
+    const send = (path: string, data: Uint8Array, token = csrf) => {
+      const fd = new FormData(); fd.append('_csrf', token); fd.append('image', new File([data as Uint8Array<ArrayBuffer>], 'photo.png', { type: 'image/png' }));
+      return app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}` }, body: fd });
+    };
+    expect((await send('/cast/image', large)).headers.get('location')).toBe('/cast?msg=image_saved');
+    expect((await send(`/cast/casts/${id}/photo`, large)).headers.get('location')).toBe('/cast?msg=photo_saved');
+    const photo = (await loadCastPhoto(db, id))!;
+    expect((await sharp(photo.data).metadata()).width).toBe(600);
+    const page = await (await get('/cast', s)).text();
+    expect(page).toContain(`Discord ID: ${id}`);
+    expect(page).toContain(`/cast/casts/${id}/photo?v=${photo.hash}`);
+    expect((await get(`/cast/casts/${id}/photo`, s)).headers.get('content-type')).toBe('image/png');
+    expect((await get(`/cast/casts/${id}/photo`, '')).status).toBe(302);
+    expect((await send(`/cast/casts/${id}/photo`, large, 'wrong')).status).toBe(403);
+    expect((await send('/cast/casts/880000000000000099/photo', large)).headers.get('location')).toBe('/cast?msg=image_bad');
+    expect((await send('/cast/image', new Uint8Array(8 * 1024 * 1024 + 1))).headers.get('location')).toBe('/cast?msg=image_big');
+    const tooBig = await send(`/cast/casts/${id}/photo`, new Uint8Array(10 * 1024 * 1024));
+    expect(tooBig.status).toBe(413); expect(await tooBig.text()).toContain('8MB');
+    expect((await loadCastPhoto(db, id))?.hash).toBe(photo.hash);
+    expect((await listAudit(db, { action: 'cast.photo' })).length).toBe(1);
+    await form(s, `/cast/casts/${id}/photo/delete`, {});
+    expect(await loadCastPhoto(db, id)).toBeUndefined();
+    expect((await get('/cast/image', s)).status).toBe(200);
+  });
+
   it('設定・画像・承認・メニューを出す・通報を決める', async () => {
     const { applyCast, requestSession, acceptSession, disputeSession, getCast, CAST_DEFAULTS } = await import('../src/services/cast.js');
     const { walletOf } = await import('../src/services/economy.js');
