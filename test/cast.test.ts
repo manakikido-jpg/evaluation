@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChannelType, type Guild, type Interaction } from 'discord.js';
+import { CastApp } from '../src/discord/cast.js';
+import type { DiscordActions } from '../src/lib/discordRest.js';
 import type { Db } from '../src/db/client.js';
 import {
   acceptSession,
@@ -10,6 +13,8 @@ import {
   disputeSession,
   extendSession,
   finishSession,
+  getSession,
+  setSessionPlace,
   minorWindowOk,
   nightEnd,
   parsePrice,
@@ -21,8 +26,9 @@ import {
   setCastStatus,
   setWaiting,
 } from '../src/services/cast.js';
+import { upsertMember } from '../src/services/members.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { makeDb } from './helpers.js';
+import { cfg, makeDb } from './helpers.js';
 
 const CAST = '880000000000000001';
 const ADULT = '880000000000000002';
@@ -43,6 +49,7 @@ beforeEach(async () => {
   await addCoins(db, MINOR, 10_000, 'adjust');
 });
 afterEach(async () => {
+  vi.useRealTimers();
   await close();
 });
 
@@ -146,12 +153,124 @@ describe('🎀 キャスト', () => {
     await setWaiting(db, CAST, 2, T20);
     expect((await castTick(db, c, new Date(T20.getTime() + 121 * MIN))).waitingOff).toBe(1);
   });
+  it('予約時間の重なりを拒み、直後の予約は受ける。拒んだときは課金しない', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    expect(r.status).toBe('ok');
+    const overlap = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 59 * MIN) }, T20);
+    expect(overlap.status).toBe('overlap');
+    expect((await walletOf(db, MINOR)).balance).toBe(10_000);
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 60 * MIN) }, T20)).status).toBe('ok');
+  });
+
+  it('寝落ちの予約・即時指名・返事待ちの時間も重なりに数える', async () => {
+    const at = new Date(T20.getTime() + 30 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: 'night', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30' }, T20)).status).toBe('overlap');
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 120 * MIN) }, T20)).status).toBe('overlap');
+    await cancelSession(db, r.session.id, ADULT, 'canceled', T20);
+    const immediate = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30' }, T20);
+    expect(immediate.status).toBe('ok');
+    // 返事が 10 分遅れても次の予約と重ならないようにする
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(T20.getTime() + 35 * MIN) }, T20)).status).toBe('overlap');
+  });
+
+  it('次の予約に重なる延長は課金せず、同じ延長ボタンの連打は1回だけ', async () => {
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30' }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const at = new Date(T20.getTime() + 60 * MIN);
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: at }, T20)).status).toBe('ok');
+    const results = await Promise.all([
+      extendSession(db, r.session.id, ADULT, T20, 0),
+      extendSession(db, r.session.id, ADULT, T20, 0),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(['already_extended', 'ok']);
+    expect((await walletOf(db, ADULT)).balance).toBe(9400);
+    expect(await getSession(db, r.session.id)).toMatchObject({ minutes: 60, price: 600, extensions: 1 });
+    expect((await extendSession(db, r.session.id, ADULT, T20, 1)).status).toBe('overlap');
+    expect((await walletOf(db, ADULT)).balance).toBe(9400);
+    await finishSession(db, c, r.session.id, 'system', at);
+    expect((await walletOf(db, CAST)).balance).toBe(540);
+  });
+
+  it('予約の部屋を作れなかったら開始せず全額を1回だけ戻す', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const create = vi.fn(async () => { throw new Error('missing permission'); });
+    const tick = await castTick(db, c, at, create);
+    expect(create).toHaveBeenCalledOnce();
+    expect(tick.started).toHaveLength(0);
+    expect(tick.expired).toHaveLength(1);
+    expect(await getSession(db, r.session.id)).toMatchObject({ status: 'declined', startedAt: null, paid: 0 });
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000);
+    expect((await castTick(db, c, new Date(at.getTime() + 120 * MIN), create)).finished).toHaveLength(0);
+    expect(create).toHaveBeenCalledOnce();
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000);
+    expect((await walletOf(db, CAST)).balance).toBe(0);
+  });
+
+  it('予約は部屋ができてから開始し、定刻の終了を守って次の予約と重ならない', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const next = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 30 * MIN) }, T20);
+    if (next.status !== 'ok') throw new Error(next.status);
+    await acceptSession(db, next.session.id, CAST, T20);
+    const tick = await castTick(db, c, new Date(at.getTime() + 5 * MIN), async (s) => {
+      expect((await getSession(db, s.id))?.status).toBe('accepted');
+      await setSessionPlace(db, s.id, { channelId: '990000000000000001' });
+      return true;
+    });
+    expect(tick.started).toHaveLength(1);
+    expect(tick.started[0]?.endsAt).toEqual(new Date(at.getTime() + 30 * MIN));
+    expect(tick.expired).toHaveLength(0);
+  });
+
+  it('予約の終了時刻を過ぎていたら始めず返金する', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const tick = await castTick(db, c, new Date(at.getTime() + 31 * MIN), async (s) => {
+      await setSessionPlace(db, s.id, { channelId: '990000000000000001' });
+      return true;
+    });
+    expect(tick.started).toHaveLength(0);
+    expect(tick.expired).toHaveLength(1);
+    expect(tick.cleanup).toHaveLength(1);
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000);
+  });
+
+  it('同時の予約は1件だけ。延長した後に古い終了処理が来ても精算しない', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const results = await Promise.all([ADULT, MINOR].map((id) => requestSession(db, c, { castId: CAST, customerId: id, customerAdult: true, plan: '30', startAt: at }, T20)));
+    expect(results.map((r) => r.status).sort()).toEqual(['ok', 'overlap']);
+    const booked = results.find((r) => r.status === 'ok');
+    if (!booked || booked.status !== 'ok') throw new Error('no booking');
+    await cancelSession(db, booked.session.id, booked.session.customerId, 'canceled', T20);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30' }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    await extendSession(db, r.session.id, ADULT, T20, 0);
+    expect(await finishSession(db, c, r.session.id, 'system', new Date(T20.getTime() + 30 * MIN))).toBeUndefined();
+    expect((await getSession(db, r.session.id))?.status).toBe('active');
+    expect((await walletOf(db, CAST)).balance).toBe(0);
+  });
+
 });
 
 describe('🎀 キャストの見た目', () => {
   it('メニュー: 画像と、待機中から並ぶ選ぶメニュー・ボタン。部屋のメッセージ', async () => {
-    const { castPanel, sessionMessage } = await import('../src/discord/cast.js');
+    const { castPanel, sessionMessage, castRoomName, roomEntry } = await import('../src/discord/cast.js');
     const { getCast } = await import('../src/services/cast.js');
+    expect(castRoomName('さくら')).toBe('🌸 さくらの間');
+    expect(castRoomName('あ'.repeat(200)).length).toBeLessThanOrEqual(100);
+    expect(roomEntry(cfg.guildId, CAST)).toMatchObject({ style: 5, label: '部屋へ入る', url: `https://discord.com/channels/${cfg.guildId}/${CAST}` });
     const cast = (await getCast(db, CAST))!;
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const p = castPanel(
@@ -174,6 +293,97 @@ describe('🎀 キャストの見た目', () => {
     const a = (await acceptSession(db, r.session.id, CAST, T20))!;
     const active = JSON.stringify(sessionMessage(a, c, '🪙銭'));
     expect(active).toContain('公開の部屋です');
+    expect(active).toContain(`cast:ext:${r.session.id}:0`);
     expect(active).toContain(`cast:report:${r.session.id}`);
   });
+});
+
+
+describe('🎀 キャストのDiscord操作', () => {
+  const roomId = '990000000000000001';
+  function fixture(fail = false) {
+    const room = { id: roomId, type: ChannelType.GuildVoice, send: vi.fn(async () => ({})), delete: vi.fn(async () => undefined) };
+    const cache = new Map<string, unknown>();
+    const create = vi.fn(async () => {
+      if (fail) throw new Error('missing channel permission');
+      cache.set(roomId, room);
+      return room;
+    });
+    const guild = { id: cfg.guildId, channels: { cache, create }, members: { me: null } } as unknown as Guild;
+    const discord = { sendDm: vi.fn(async () => true), sendMessage: vi.fn(async () => ({ id: '990000000000000002' })), editMessage: vi.fn(async () => undefined) };
+    const tcfg = { ...cfg, roles: { ...cfg.roles, yoimairi: '990000000000000003' } };
+    const app = new CastApp(db, () => tcfg, discord as unknown as DiscordActions);
+    app.attach(guild);
+    const interaction = {
+      customId: `cast:go:${CAST}:30`, guildId: cfg.guildId, user: { id: ADULT },
+      member: { roles: { cache: new Map([[tcfg.roles.yoimairi, {}]]) } },
+      inCachedGuild: () => true, isStringSelectMenu: () => false, isUserSelectMenu: () => false,
+      isModalSubmit: () => false, isButton: () => true,
+      deferUpdate: vi.fn(async () => undefined), editReply: vi.fn(async () => undefined),
+    };
+    return { app, room, create, discord, interaction };
+  }
+
+  it('即時指名はキャスト名の部屋を作り、利用者に入室ボタンを出す', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T20);
+    await upsertMember(db, { id: CAST, username: 'sakura', displayName: 'さくら', avatarUrl: null, joinedAt: null, roleIds: [], isBot: false });
+    const f = fixture();
+    await f.app.onInteraction(f.interaction as unknown as Interaction);
+    expect(f.create).toHaveBeenCalledWith(expect.objectContaining({ name: '🌸 さくらの間', userLimit: 2 }));
+    expect(f.interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({ components: [{ type: 1, components: [expect.objectContaining({ label: '部屋へ入る', url: `https://discord.com/channels/${cfg.guildId}/${roomId}` })] }] }));
+    expect((await walletOf(db, ADULT)).balance).toBe(9700);
+  });
+
+  it('即時指名の部屋作成が失敗したら全額戻す', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T20);
+    const f = fixture(true);
+    await f.app.onInteraction(f.interaction as unknown as Interaction);
+    expect(f.interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('銭を戻しました') }));
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000);
+    expect((await walletOf(db, CAST)).balance).toBe(0);
+  });
+
+  it('予約開始では部屋を1つ作り、スレッドに入室ボタンを出す', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    await setSessionPlace(db, r.session.id, { threadId: '990000000000000004' });
+    const f = fixture();
+    await Promise.all([f.app.tick(at), f.app.tick(at)]);
+    expect(f.create).toHaveBeenCalledOnce();
+    expect((await getSession(db, r.session.id))?.status).toBe('active');
+    expect(f.discord.sendMessage).toHaveBeenCalledWith('990000000000000004', expect.objectContaining({ components: [{ type: 1, components: [expect.objectContaining({ label: '部屋へ入る' })] }] }));
+    expect(f.discord.sendDm).toHaveBeenCalledWith(ADULT, expect.stringContaining(`https://discord.com/channels/${cfg.guildId}/${roomId}`));
+  });
+
+  it('予約の部屋作成が失敗したら、その後もキャストに払わない', async () => {
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const f = fixture(true);
+    await f.app.tick(at);
+    await f.app.tick(new Date(at.getTime() + 120 * MIN));
+    expect(f.create).toHaveBeenCalledOnce();
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000);
+    expect((await walletOf(db, CAST)).balance).toBe(0);
+    expect((await getSession(db, r.session.id))?.startedAt).toBeNull();
+  });
+  it('部屋を消せなかったら次の確認で消し直す', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T20);
+    const f = fixture();
+    await f.app.onInteraction(f.interaction as unknown as Interaction);
+    const session = (await import('../src/services/cast.js')).recentSessions;
+    const [r] = await session(db, 1);
+    if (!r) throw new Error('no session');
+    await cancelSession(db, r.id, ADULT, 'canceled', T20);
+    f.room.delete.mockRejectedValueOnce(new Error('temporarily unavailable'));
+    await f.app.tick(T20);
+    expect((await getSession(db, r.id))?.channelId).toBe(roomId);
+    await f.app.tick(T20);
+    expect(f.room.delete).toHaveBeenCalledTimes(2);
+    expect((await getSession(db, r.id))?.channelId).toBeNull();
+  });
+
 });

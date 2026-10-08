@@ -222,7 +222,24 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 export type RequestResult =
   | { status: 'ok'; session: CastSession; balance: number }
   | { status: 'insufficient'; price: number; balance: number }
-  | { status: 'not_cast' | 'self' | 'blocked' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' };
+  | { status: 'not_cast' | 'self' | 'blocked' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' };
+
+/** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
+async function overlaps(tx: Db, castId: string, start: Date, end: Date, now: Date, except?: number): Promise<boolean> {
+  const sessions = await tx.select().from(castSessions).where(and(eq(castSessions.castId, castId), inArray(castSessions.status, OPEN)));
+  return sessions.some((s) => {
+    if (s.id === except) return false;
+    const from = s.startedAt ?? s.startAt ?? s.createdAt;
+    const until = s.endsAt ?? (s.plan === 'night' ? nightEnd(s.startAt ?? s.acceptBy ?? from) : new Date((s.startAt ?? s.acceptBy ?? from).getTime() + s.minutes * MIN));
+    // 返事の期限が切れた指名は、すぐに払い戻されるので数えない
+    if ((s.status === 'requested' || s.status === 'reserved') && s.acceptBy && s.acceptBy <= now) return false;
+    return from < end && start < until;
+  });
+}
+
+async function lockCast(tx: Db, castId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast:' + castId}))`);
+}
 
 /**
  * 指名する（今すぐ、または予約 startAt）。銭を預かる。
@@ -250,7 +267,8 @@ export async function requestSession(
     if (!minorWindowOk(start, minutes)) return { status: 'minor_hours' };
   }
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast:' + input.castId}))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);
+    await lockCast(tx, input.castId);
     const mine = await tx
       .select({ id: castSessions.id })
       .from(castSessions)
@@ -263,6 +281,9 @@ export async function requestSession(
         .where(and(eq(castSessions.castId, input.castId), inArray(castSessions.status, ['requested', 'active'])));
       if (busy) return { status: 'busy' as const };
     }
+    const latestStart = input.startAt ?? new Date(now.getTime() + c.acceptMinutes * MIN);
+    const end = input.plan === 'night' ? nightEnd(latestStart) : new Date(latestStart.getTime() + minutes * MIN);
+    if (await overlaps(tx, input.castId, start, end, now)) return { status: 'overlap' as const };
     if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan: input.plan }))) {
       return { status: 'insufficient' as const, price, balance: (await walletOf(tx, input.customerId)).balance };
     }
@@ -301,18 +322,27 @@ async function move(tx: Db, id: number, from: CastSession['status'][], set: Part
 
 /** キャストが受ける: 今すぐ → 通話中（時間が動く）/ 予約 → 受けた */
 export async function acceptSession(db: Db, id: number, castId: string, now = new Date()): Promise<CastSession | undefined> {
-  const s = await getSession(db, id);
-  if (!s || s.castId !== castId) return undefined;
-  if (s.status === 'reserved') return move(db, id, ['reserved'], { status: 'accepted', acceptBy: null });
-  if (s.acceptBy && s.acceptBy <= now) return undefined;
-  const endsAt = s.plan === 'night' ? nightEnd(now) : new Date(now.getTime() + s.minutes * MIN);
-  return move(db, id, ['requested'], { status: 'active', startedAt: now, endsAt, acceptBy: null });
+  const before = await getSession(db, id);
+  if (!before || before.castId !== castId) return undefined;
+  return db.transaction(async (tx) => {
+    await lockCast(tx, castId);
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s) return undefined;
+    if (s.status === 'reserved') {
+      if (s.acceptBy && s.acceptBy <= now) return undefined;
+      return move(tx, id, ['reserved'], { status: 'accepted', acceptBy: null });
+    }
+    if (s.acceptBy && s.acceptBy <= now) return undefined;
+    const endsAt = s.plan === 'night' ? nightEnd(now) : new Date(now.getTime() + s.minutes * MIN);
+    if (await overlaps(tx, castId, now, endsAt, now, id)) return undefined;
+    return move(tx, id, ['requested'], { status: 'active', startedAt: now, endsAt, acceptBy: null });
+  });
 }
 
 /** 断る（キャスト）・取り消す（お客。始まる前だけ）・返事がない: 全額戻す */
 export async function cancelSession(db: Db, id: number, by: string, reason: 'declined' | 'canceled', now = new Date()): Promise<CastSession | undefined> {
   return db.transaction(async (tx) => {
-    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)))[0];
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
     if (!s) return undefined;
     if (by !== 'system' && by !== (reason === 'declined' ? s.castId : s.customerId)) return undefined;
     const row = await move(tx, id, ['reserved', 'accepted', 'requested'], { status: reason, closedAt: now, decidedBy: by, deleteAt: now });
@@ -324,31 +354,40 @@ export async function cancelSession(db: Db, id: number, by: string, reason: 'dec
 
 /** 予約の時刻が来た: 通話中にする */
 export async function startReserved(db: Db, id: number, now = new Date()): Promise<CastSession | undefined> {
-  const s = await getSession(db, id);
-  if (!s) return undefined;
-  const endsAt = s.plan === 'night' ? nightEnd(s.startAt ?? now) : new Date(now.getTime() + s.minutes * MIN);
-  return move(db, id, ['accepted'], { status: 'active', startedAt: now, endsAt });
+  const before = await getSession(db, id);
+  if (!before) return undefined;
+  return db.transaction(async (tx) => {
+    await lockCast(tx, before.castId);
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s || s.status !== 'accepted' || !s.startAt || s.startAt > now) return undefined;
+    const endsAt = s.plan === 'night' ? nightEnd(s.startAt) : new Date(s.startAt.getTime() + s.minutes * MIN);
+    if (endsAt <= now || await overlaps(tx, s.castId, now, endsAt, now, id)) return undefined;
+    return move(tx, id, ['accepted'], { status: 'active', startedAt: now, endsAt });
+  });
 }
 
-export type ExtendResult = { status: 'ok'; session: CastSession; balance: number } | { status: 'insufficient'; price: number; balance: number } | { status: 'not_active' | 'minor_limit' | 'not_customer' };
+export type ExtendResult = { status: 'ok'; session: CastSession; balance: number } | { status: 'insufficient'; price: number; balance: number } | { status: 'not_active' | 'minor_limit' | 'not_customer' | 'already_extended' | 'overlap' };
 
 /** 30 分のばす（お客）。未成年の人は合わせて 60 分・22 時まで */
-export async function extendSession(db: Db, id: number, customerId: string, now = new Date()): Promise<ExtendResult> {
-  const s = await getSession(db, id);
-  if (!s || s.status !== 'active' || !s.endsAt) return { status: 'not_active' };
-  if (s.customerId !== customerId) return { status: 'not_customer' };
-  const cast = await getCast(db, s.castId);
-  const add = cast?.price30 ?? 0;
-  if (!cast || add <= 0) return { status: 'not_active' };
-  if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' };
+export async function extendSession(db: Db, id: number, customerId: string, now = new Date(), expectedExtensions?: number): Promise<ExtendResult> {
+  const before = await getSession(db, id);
+  if (!before) return { status: 'not_active' };
+  const expected = expectedExtensions ?? before.extensions;
   return db.transaction(async (tx) => {
+    await lockCast(tx, before.castId);
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s || s.status !== 'active' || !s.endsAt || s.endsAt <= now) return { status: 'not_active' as const };
+    if (s.customerId !== customerId) return { status: 'not_customer' as const };
+    if (!Number.isSafeInteger(expected) || expected < 0 || s.extensions !== expected) return { status: 'already_extended' as const };
+    const cast = await getCast(tx, s.castId);
+    const add = cast?.price30 ?? 0;
+    if (!cast || add <= 0) return { status: 'not_active' as const };
+    if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' as const };
+    const endsAt = new Date(s.endsAt.getTime() + 30 * MIN);
+    if (await overlaps(tx, s.castId, now, endsAt, now, id)) return { status: 'overlap' as const };
     if (!(await spendWithin(tx, customerId, add, 'cast_pay', { sessionId: id, extend: true }))) return { status: 'insufficient' as const, price: add, balance: (await walletOf(tx, customerId)).balance };
     const row = await move(tx, id, ['active'], {
-      minutes: s.minutes + 30,
-      price: s.price + add,
-      extensions: s.extensions + 1,
-      endsAt: new Date(s.endsAt!.getTime() + 30 * MIN),
-      warned: false,
+      minutes: s.minutes + 30, price: s.price + add, extensions: s.extensions + 1, endsAt, warned: false,
     });
     if (!row) throw new Error('session ended while extending');
     return { status: 'ok' as const, session: row, balance: (await walletOf(tx, customerId)).balance };
@@ -361,8 +400,9 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
  */
 export async function finishSession(db: Db, c: CastConfig, id: number, by: string, now = new Date()): Promise<CastSession | undefined> {
   return db.transaction(async (tx) => {
-    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)))[0];
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
     if (!s || s.status !== 'active') return undefined;
+    if (by === 'system' && s.endsAt && s.endsAt > now) return undefined;
     if (by !== 'system' && by !== s.castId && by !== s.customerId) return undefined;
     let earned = s.price;
     if (by === s.castId && s.startedAt && s.endsAt && now < s.endsAt) {
@@ -390,7 +430,7 @@ export async function disputeSession(db: Db, id: number, by: string): Promise<Ca
 /** 運営: 通報された指名を、キャストに渡す（手数料を引く）か、お客に戻す */
 export async function resolveSession(db: Db, c: CastConfig, id: number, action: 'pay' | 'refund', by: string, now = new Date()): Promise<CastSession | undefined> {
   return db.transaction(async (tx) => {
-    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)))[0];
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
     if (!s || s.status !== 'disputed') return undefined;
     const pay = action === 'pay' ? s.price - castFee(c, s.price) : 0;
     const row = await move(tx, id, ['disputed'], { status: action === 'pay' ? 'done' : 'refunded', closedAt: now, paid: pay, decidedBy: by, deleteAt: now });
@@ -429,15 +469,20 @@ export type TickResult = {
   waitingOff: number;
 };
 
-export async function castTick(db: Db, c: CastConfig, now = new Date()): Promise<TickResult> {
+export async function castTick(db: Db, c: CastConfig, now = new Date(), prepareRoom?: (s: CastSession) => Promise<boolean>): Promise<TickResult> {
   const out: TickResult = { expired: [], started: [], warn: [], finished: [], cleanup: [], waitingOff: 0 };
   for (const s of await db.select().from(castSessions).where(and(inArray(castSessions.status, ['requested', 'reserved']), lte(castSessions.acceptBy, now)))) {
     const r = await cancelSession(db, s.id, 'system', 'declined', now);
     if (r) out.expired.push(r);
   }
   for (const s of await db.select().from(castSessions).where(and(eq(castSessions.status, 'accepted'), lte(castSessions.startAt, now)))) {
-    const r = await startReserved(db, s.id, now);
+    const ready = prepareRoom ? await prepareRoom(s).catch(() => false) : true;
+    const r = ready ? await startReserved(db, s.id, now) : undefined;
     if (r) out.started.push(r);
+    else {
+      const refunded = await cancelSession(db, s.id, 'system', 'declined', now);
+      if (refunded) out.expired.push(refunded);
+    }
   }
   const soon = new Date(now.getTime() + 5 * MIN);
   for (const s of await db.select().from(castSessions).where(and(eq(castSessions.status, 'active'), eq(castSessions.warned, false), lte(castSessions.endsAt, soon)))) {
