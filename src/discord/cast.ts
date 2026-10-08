@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ChannelType,
   MessageFlags,
   ModalBuilder,
@@ -34,9 +35,11 @@ import {
   extendSession,
   finishSession,
   getCast,
+  getSession,
   isAdult,
   listCasts,
   loadCastConfig,
+  loadCastReception,
   loadMenuImage,
   MINOR,
   monthStart,
@@ -53,16 +56,19 @@ import {
   setWaiting,
   updateProfile,
   type CastConfig,
+  type CastReception,
   type CastPlan,
   type ProfileInput,
 } from '../services/cast.js';
 import { staffRoleIds } from '../services/meetings.js';
 import { namesOf } from '../services/members.js';
+import { loadReceptionAvatar, renderCastReception } from '../services/castReceptionImage.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const PINK = 0xe86a92;
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const unix = (d: Date) => Math.floor(d.getTime() / 1000);
+const jstTime = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(11, 16);
 type Btn = { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; emoji?: { name: string }; disabled?: boolean };
 const button = (custom_id: string, label: string, style: Btn['style'] = 2, emoji?: string, disabled = false): Btn => ({
   type: 2,
@@ -72,7 +78,10 @@ const button = (custom_id: string, label: string, style: Btn['style'] = 2, emoji
   ...(emoji ? { emoji: { name: emoji } } : {}),
   ...(disabled ? { disabled } : {}),
 });
-const row = (...b: Btn[]) => ({ type: 1 as const, components: b });
+type LinkBtn = { type: 2; style: 5; label: string; url: string };
+export const castRoomName = (name: string) => `🌸 ${name.slice(0, 90)}の間`;
+export const roomEntry = (guildId: string, channelId: string): LinkBtn => ({ type: 2, style: 5, label: '部屋へ入る', url: `https://discord.com/channels/${guildId}/${channelId}` });
+const row = (...b: (Btn | LinkBtn)[]) => ({ type: 1 as const, components: b });
 const STATE = { busy: { emoji: '📞', label: '通話中' }, waiting: { emoji: '🟢', label: '待機中' }, off: { emoji: '💤', label: 'お休み' } } as const;
 const pricesText = (c: Pick<Cast, 'price30' | 'price60' | 'priceNight'>) => `30分 ${fmt(c.price30)}・1時間 ${fmt(c.price60)}${c.priceNight ? `・寝落ち ${fmt(c.priceNight)}` : ''}`;
 const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先の交換・録音は禁止です（しきたり）。困ったら部屋の「🚨 通報」を';
@@ -164,7 +173,7 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
     title = '📞 通話中';
     lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。時間が来たら終わって、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。` : '');
     if (s.isPublic) lines.push(`-# 公開の部屋です（18 歳未満の方との雑談。${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`);
-    buttons = [button(`cast:ext:${s.id}`, '30 分のばす（お客）', 1, '⏰'), button(`cast:end:${s.id}`, '終える'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
+    buttons = [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰'), button(`cast:end:${s.id}`, '終える'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
   } else if (s.status === 'done') {
     title = '🎉 おつかれさまでした';
     lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、よければ評価をお願いします（この部屋は少しあとに消えます）。`);
@@ -184,8 +193,29 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
   return { embeds: [{ title, description: lines.filter(Boolean).join('\n'), color: s.status === 'disputed' ? 0xd7003a : PINK }], components: rows };
 }
 
+/** キャスト本人だけに表示する画像と受付ボタン */
+export function castReceptionBody(d: CastReception, name: string, names: ReadonlyMap<string, string>, currency: string, guildId: string, avatar?: Uint8Array) {
+  const png = renderCastReception({ reception: d, name, names, currency, avatar });
+  const off = d.cast.status !== 'active';
+  const state = { waiting: '待機中', busy: '対応中', off: '受付停止', pending: '運営の確認待ち', paused: '運営による休止' }[d.state];
+  const summary = name + 'さんの受付。' + state + '。今日の予約' + d.today.length + '件。現在の指名' + d.current.length + '件。今月の受取額' + fmt(d.stat.earned) + currency + '、指名' + d.stat.count + '回。';
+  return {
+    content: '',
+    embeds: [{ title: 'キャスト受付', image: { url: 'attachment://cast-reception.png' }, color: PINK }],
+    files: [new AttachmentBuilder(png, { name: 'cast-reception.png', description: summary.slice(0, 1000) })],
+    attachments: [],
+    allowedMentions: { parse: [] as never[] },
+    components: [
+      row(button('cast:wait:2', '2時間待機', 3, '🟢', off), button('cast:wait:4', '4時間待機', 3, undefined, off), button('cast:wait:0', '受付停止', 2, undefined, off), button('cast:refresh', '更新', 1, '🔄')),
+      row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅')),
+      row(button('cast:edit', '紹介・値段を変える', 1, '✏️'), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
+    ],
+  };
+}
+
 export class CastApp {
   private guild?: Guild;
+  private ticking = false;
 
   constructor(
     private readonly db: Db,
@@ -233,6 +263,8 @@ export class CastApp {
       if (action === 'rank') return await this.ranking(interaction);
       if (action === 'apply') return await this.applyModal(interaction);
       if (action === 'me') return await this.mine(interaction);
+      if (action === 'refresh') return await this.mine(interaction, true);
+      if (action === 'schedule') return await this.schedule(interaction, Number(a ?? 0));
       if (action === 'edit') return await this.editModal(interaction);
       if (action === 'wait') return await this.wait(interaction, Number(a));
       if (action === 'minor') return await this.toggleMinor(interaction);
@@ -245,7 +277,7 @@ export class CastApp {
       if (!Number.isSafeInteger(id)) return;
       if (action === 'accept') return await this.accept(interaction, id);
       if (action === 'decline' || action === 'cancel') return await this.cancel(interaction, id, action === 'decline' ? 'declined' : 'canceled');
-      if (action === 'ext') return await this.extend(interaction, id);
+      if (action === 'ext') return await this.extend(interaction, id, b === undefined ? 0 : Number(b));
       if (action === 'end') return await this.end(interaction, id);
       if (action === 'report') return await this.report(interaction, id);
       if (action === 'rate') return await this.rate(interaction, id, Number(b));
@@ -389,52 +421,54 @@ export class CastApp {
     await i.editReply('🎀 申し込みました。運営が確認して、承認されるとメニューに並びます。');
   }
 
-  private settingsView(cast: Cast) {
-    const state = cast.available === 'waiting' && cast.waitingUntil ? `🟢 待機中（<t:${unix(cast.waitingUntil)}:t> まで）` : '💤 お休み';
-    return {
-      embeds: [
-        {
-          title: '⚙ キャストの設定',
-          description: [
-            cast.status === 'pending' ? '⏳ 申し込み中（運営の確認待ち）' : cast.status === 'paused' ? '⏸ 運営がお休みにしています' : state,
-            `💰 ${pricesText(cast)}`,
-            `18 歳未満の方の公開の雑談: ${cast.minorOk ? '受ける' : '受けない'}`,
-            `ブロック中: ${cast.blocked.length} 人`,
-          ].join('\n'),
-          color: PINK,
-        },
-      ],
-      components: [
-        row(button('cast:wait:2', '2 時間待機', 3, '🟢'), button('cast:wait:4', '4 時間待機', 3), button('cast:wait:0', 'お休み', 2, '💤')),
-        row(
-          button('cast:edit', '紹介・値段を変える', 1, '✏️'),
-          button('cast:minor', cast.minorOk ? '18 歳未満の雑談を受けない' : '18 歳未満の雑談を受ける'),
-          button('cast:blockui', 'ブロック', 4),
-          button('cast:unblockui', 'ブロックを外す'),
-        ),
-      ],
-    };
+  private async receptionView(member: GuildMember) {
+    const d = await loadCastReception(this.db, member.id);
+    if (!d) return { content: 'キャストの方だけが使えます。キャストになるには「🎀 キャストになる」から。', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] as never[] } };
+    const [names, avatar] = await Promise.all([
+      namesOf(this.db, [...d.current, ...d.today].map((s) => s.customerId)),
+      loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 })),
+    ]);
+    return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar);
   }
 
-  private async mine(i: ButtonInteraction<'cached'>): Promise<void> {
-    const cast = await getCast(this.db, i.user.id);
-    if (!cast || cast.status === 'removed') return void (await i.reply({ content: 'キャストの方だけが使えます。キャストになるには「🎀 キャストになる」から。', ...EPHEMERAL }));
-    await i.reply({ ...this.settingsView(cast), ...EPHEMERAL });
+  private async mine(i: ButtonInteraction<'cached'>, refresh = false): Promise<void> {
+    if (refresh) await i.deferUpdate();
+    else await i.deferReply(EPHEMERAL);
+    await i.editReply(await this.receptionView(i.member));
   }
 
   private async wait(i: ButtonInteraction<'cached'>, hours: number): Promise<void> {
+    await i.deferUpdate();
     const r = await setWaiting(this.db, i.user.id, [0, 2, 4].includes(hours) ? hours : 0);
-    if (!r) return void (await i.reply({ content: '承認されたキャストの方だけが待機できます。', ...EPHEMERAL }));
-    await i.update(this.settingsView(r));
+    if (!r) return void (await i.followUp({ content: '承認されたキャストの方だけが待機できます。', ...EPHEMERAL }));
+    await i.editReply(await this.receptionView(i.member));
     this.refresh();
   }
 
   private async toggleMinor(i: ButtonInteraction<'cached'>): Promise<void> {
+    await i.deferUpdate();
     const cur = await getCast(this.db, i.user.id);
-    if (!cur) return;
+    if (!cur || cur.status === 'removed') return void (await i.followUp({ content: 'キャストの方だけが使えます。', ...EPHEMERAL }));
     const c = await loadCastConfig(this.db);
     const r = await updateProfile(this.db, c, i.user.id, { bio: cur.bio, tags: cur.tags, price30: cur.price30, price60: cur.price60, priceNight: cur.priceNight, minorOk: !cur.minorOk });
-    if (r) await i.update(this.settingsView(r));
+    if (r) await i.editReply(await this.receptionView(i.member));
+  }
+
+  private async schedule(i: ButtonInteraction<'cached'>, page: number): Promise<void> {
+    await i.deferUpdate();
+    const d = await loadCastReception(this.db, i.user.id);
+    if (!d) return void (await i.editReply({ content: 'キャストの方だけが使えます。', embeds: [], components: [], attachments: [] }));
+    const pages = Math.max(1, Math.ceil(d.today.length / 10));
+    const selected = Number.isSafeInteger(page) ? Math.max(0, Math.min(page, pages - 1)) : 0;
+    const bookings = d.today.slice(selected * 10, (selected + 1) * 10);
+    const names = await namesOf(this.db, bookings.map((s) => s.customerId));
+    const description = bookings.map((s) => (s.startAt ? jstTime(s.startAt) : '') + ' ｜ ' + (names.get(s.customerId) ?? '利用者').replace(/[@*_~`<>|\r\n]/g, '').slice(0, 28) + ' さん ｜ ' + PLAN_LABEL[s.plan] + ' ｜ ' + ({ reserved: '返事待ち', accepted: '確定', active: '通話中', done: '終了', disputed: '運営確認中' } as Record<string, string>)[s.status]).join('\n');
+    await i.editReply({
+      content: '', attachments: [],
+      embeds: [{ title: '今日の予約（日本時間） ' + (selected + 1) + '/' + pages, description: description || '今日の予約はありません。', color: PINK }],
+      components: [row(button('cast:schedule:' + (selected - 1), '前へ', 2, undefined, selected === 0), button('cast:schedule:' + (selected + 1), '次へ', 2, undefined, selected === pages - 1), button('cast:refresh', '受付に戻る', 1))],
+      allowedMentions: { parse: [] },
+    });
   }
 
   private async blockPicker(i: ButtonInteraction<'cached'>, on: boolean): Promise<void> {
@@ -477,15 +511,17 @@ export class CastApp {
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
-    const room = await this.openRoom(r.session).catch((err: unknown) => (logger.warn({ err }, 'cast room failed'), undefined));
+    const room = await this.openRoom(r.session).then(async (room) => {
+      if (room) await room.send({ content: `<@${castId}>`, ...sessionMessage(r.session, c, this.coin()), allowedMentions: { users: [castId] } } as Parameters<typeof room.send>[0]);
+      return room;
+    }).catch((err: unknown) => (logger.warn({ err }, 'cast room failed'), undefined));
     if (!room) {
       await cancelSession(this.db, r.session.id, 'system', 'declined');
       return void (await i.editReply({ content: '部屋を作れなかったので、取り消して銭を戻しました。神職に知らせてください。', components: [] }));
     }
-    await room.send({ content: `<@${castId}>`, ...sessionMessage(r.session, c, this.coin()), allowedMentions: { users: [castId] } } as Parameters<typeof room.send>[0]);
     await this.discord.sendDm(castId, `🎀 指名が入りました（${PLAN_LABEL[plan]}）。<#${room.id}> で「受ける」を押してください。`).catch(() => false);
     this.refresh();
-    await i.editReply({ content: `🎀 指名しました。<#${room.id}> に入って、キャストの返事を待ってください（残り ${fmt(r.balance)} 枚）。`, components: [] });
+    await i.editReply({ content: `🎀 指名しました。<#${room.id}> に入って、キャストの返事を待ってください（残り ${fmt(r.balance)} 枚）。`, components: [row(roomEntry(i.guildId, room.id))] });
   }
 
   private requestError(r: Exclude<Awaited<ReturnType<typeof requestSession>>, { status: 'ok' }>): string {
@@ -500,6 +536,7 @@ export class CastApp {
       minor_off: 'このキャストは、18 歳未満の方の指名を受けていません。',
       minor_hours: `18 歳未満の方の雑談は ${MINOR.startHour} 時〜${MINOR.endHour} 時に終わる時間だけです。`,
       has_open: 'もうほかの指名（返事待ち・通話中・予約）があります。終わってからどうぞ。',
+      overlap: 'その時間は、ほかの指名か予約と重なっています。時間を変えてください。',
       bad_time: '予約は 10 分後〜7 日後の時刻にしてください。',
     };
     return r.status === 'insufficient' ? `${this.cfg().economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。` : (map[r.status] ?? 'いまは指名できません。');
@@ -509,6 +546,7 @@ export class CastApp {
   private async openRoom(s: CastSession): Promise<VoiceChannel | undefined> {
     const g = this.guild;
     if (!g) return undefined;
+    if (s.channelId) return this.voice(s.channelId);
     const c = await loadCastConfig(this.db);
     const panel = c.channelId ? g.channels.cache.get(c.channelId) : undefined;
     const fallback = panel && 'parentId' in panel ? panel.parentId : null;
@@ -530,14 +568,19 @@ export class CastApp {
           ...people,
         ];
     const room = await g.channels.create({
-      name: `${s.isPublic ? '☕' : '🎀'} ${name}の部屋`.slice(0, 100),
+      name: castRoomName(name),
       type: ChannelType.GuildVoice,
       parent: parent?.id ?? null,
       userLimit: 2,
       permissionOverwrites: overwrites,
       reason: `キャストの指名 #${s.id}`,
     });
-    await setSessionPlace(this.db, s.id, { channelId: room.id });
+    try {
+      await setSessionPlace(this.db, s.id, { channelId: room.id });
+    } catch (err) {
+      await room.delete('指名の部屋を保存できませんでした').catch(() => undefined);
+      throw err;
+    }
     return room;
   }
 
@@ -570,21 +613,27 @@ export class CastApp {
     this.refresh();
   }
 
-  private async extend(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
-    const r = await extendSession(this.db, id, i.user.id);
+  private async extend(i: ButtonInteraction<'cached'>, id: number, expected: number): Promise<void> {
+    await i.deferUpdate();
+    const r = await extendSession(this.db, id, i.user.id, new Date(), expected);
     if (r.status !== 'ok') {
-      const text =
-        r.status === 'insufficient'
-          ? `${this.cfg().economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。`
-          : r.status === 'minor_limit'
-            ? `18 歳未満の方は ${MINOR.maxMinutes} 分・${MINOR.endHour} 時までです。`
-            : r.status === 'not_customer'
-              ? 'のばせるのは、指名した人だけです。'
-              : 'もう終わっています。';
-      return void (await i.reply({ content: text, ...EPHEMERAL }));
+      if (r.status === 'already_extended') {
+        const current = await getSession(this.db, id);
+        if (current) await i.editReply({ ...sessionMessage(current, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
+      }
+      const text = r.status === 'insufficient'
+        ? `${this.cfg().economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。`
+        : ({
+            already_extended: 'このボタンの延長は、もう済んでいます。新しいボタンを使ってください。',
+            overlap: '次の予約と重なるので、のばせません。銭は使っていません。',
+            minor_limit: `18 歳未満の方は ${MINOR.maxMinutes} 分・${MINOR.endHour} 時までです。`,
+            not_customer: 'のばせるのは、指名した人だけです。',
+            not_active: 'もう終わっています。',
+          })[r.status];
+      return void (await i.followUp({ content: text, ...EPHEMERAL }));
     }
-    await i.update({ ...sessionMessage(r.session, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
-    await i.followUp({ content: `⏰ 30 分のばしました（残り ${fmt(r.balance)} 枚）。` });
+    await i.editReply({ ...sessionMessage(r.session, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
+    await i.followUp({ content: `⏰ 30 分のばしました（残り ${fmt(r.balance)} 枚）。`, ...EPHEMERAL });
   }
 
   private async end(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
@@ -704,20 +753,27 @@ export class CastApp {
   // ───────── 1 分ごと ─────────
 
   async tick(now = new Date()): Promise<void> {
+    if (!this.guild || this.ticking) return;
+    this.ticking = true;
+    try { await this.runTick(now); } finally { this.ticking = false; }
+  }
+
+  private async runTick(now: Date): Promise<void> {
     const c = await loadCastConfig(this.db);
-    const r = await castTick(this.db, c, now);
+    const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;
     for (const s of r.expired) {
       changed = true;
-      await this.discord.sendDm(s.customerId, `🙇 キャストの返事がなかったので、指名を取り消して ${fmt(s.price)} 枚を戻しました。`).catch(() => false);
+      await this.discord.sendDm(s.customerId, `🙇 指名を始められなかったので、取り消して ${fmt(s.price)} 枚を戻しました。`).catch(() => false);
       if (s.threadId) await this.discord.sendMessage(s.threadId, { ...this.reserveMessage(s) } as MessageBody).catch(() => undefined);
     }
     for (const s of r.started) {
       changed = true;
-      const room = await this.openRoom(s).catch((err: unknown) => (logger.warn({ err }, 'cast reserved room failed'), undefined));
+      const room = this.voice(s.channelId);
       if (!room) continue;
+      await this.discord.sendDm(s.customerId, `📅 予約の部屋ができました。${roomEntry(this.guild!.id, room.id).url}`).catch(() => false);
       await room.send({ content: `<@${s.castId}> <@${s.customerId}>`, ...sessionMessage(s, c, this.coin()), allowedMentions: { users: [s.castId, s.customerId] } } as Parameters<typeof room.send>[0]).catch(() => undefined);
-      if (s.threadId) await this.discord.sendMessage(s.threadId, { content: `📅 予約の時間です。<#${room.id}> へどうぞ。` }).catch(() => undefined);
+      if (s.threadId) await this.discord.sendMessage(s.threadId, { content: `📅 予約の時間です。<#${room.id}> へどうぞ。`, components: [row(roomEntry(this.guild!.id, room.id))], allowed_mentions: { parse: [] } }).catch(() => undefined);
     }
     for (const s of r.warn) {
       const room = this.voice(s.channelId);
@@ -731,7 +787,10 @@ export class CastApp {
     }
     for (const s of r.cleanup) {
       const room = s.channelId ? this.guild?.channels.cache.get(s.channelId) : undefined;
-      if (room) await room.delete('キャストの指名が終わった').catch((err: unknown) => logger.warn({ err }, 'cast room delete failed'));
+      if (room) {
+        try { await room.delete('キャストの指名が終わった'); }
+        catch (err) { logger.warn({ err }, 'cast room delete failed'); continue; }
+      }
       await roomDeleted(this.db, s.id);
     }
     if (changed) this.refresh();
