@@ -44,14 +44,14 @@ describe('🎰 大勝負の札', () => {
     await addTickets(db, A.id, 'casino_boost', 2);
     const midnight = new Date('2026-10-07T15:00:00Z');
     expect(nextJstMidnight(now)).toEqual(midnight);
-    expect(await useCasinoBoost(db, A.id, now)).toEqual({ status: 'ok', until: midnight });
-    expect(await useCasinoBoost(db, A.id, new Date(now.getTime() + 60_000))).toEqual({ status: 'active', until: midnight });
+    expect(await useCasinoBoost(db, A.id, now)).toEqual({ status: 'ok', until: midnight, level: 1 });
+    expect(await useCasinoBoost(db, A.id, new Date(now.getTime() + 60_000))).toEqual({ status: 'active', until: midnight, level: 1 });
     expect((await ticketsOf(db, A.id)).casino_boost).toBe(1);
     expect(await casinoBoostUntil(db, A.id, now)).toEqual(midnight);
     // 0 時を過ぎたら切れる。次の日はまた使える
     const next = new Date('2026-10-07T15:00:01Z');
     expect(await casinoBoostUntil(db, A.id, next)).toBeUndefined();
-    expect(await useCasinoBoost(db, A.id, next)).toEqual({ status: 'ok', until: new Date('2026-10-08T15:00:00Z') });
+    expect(await useCasinoBoost(db, A.id, next)).toEqual({ status: 'ok', until: new Date('2026-10-08T15:00:00Z'), level: 1 });
     expect((await ticketsOf(db, A.id)).casino_boost).toBe(0);
   });
 
@@ -135,8 +135,8 @@ describe('🎰 大勝負の札', () => {
 
   it('文: 使ったとき・授与所の説明・/残高', async () => {
     const until = new Date('2026-10-07T15:00:00Z');
-    expect(casinoBoostText(c0, '銭', { status: 'ok', until })).toContain('1 回 **5,000** 枚まで・1 日の合計 **100,000** 枚まで');
-    expect(casinoBoostText(c0, '銭', { status: 'active', until })).toContain('札は減っていません');
+    expect(casinoBoostText(c0, '銭', { status: 'ok', until, level: 1 })).toContain('1 回 **5,000** 枚まで・1 日の合計 **100,000** 枚まで');
+    expect(casinoBoostText(c0, '銭', { status: 'active', until, level: 1 })).toContain('札は減っていません');
     expect(casinoBoostText(c0, '銭', { status: 'no_ticket' })).toBe('🎰 大勝負の札がありません。');
     expect(casinoBoostNote(c0)).toContain('1 回の最高 1,000 → **5,000** 枚・1 日の合計 20,000 → **100,000** 枚');
     await addTickets(db, A.id, 'casino_boost', 1);
@@ -145,5 +145,27 @@ describe('🎰 大勝負の札', () => {
     expect(buffs.casinoUntil).toEqual(until);
     const v = walletView(cfg.economy, { balance: 0, lifetimeEarned: 0, today: { vcCoins: 0, vcMinutes: 0 }, recent: [], tickets: emptyTickets(), custom: [], buffs });
     expect(v.embeds[0]!.description).toContain('🎰 大勝負の札');
+  });
+});
+
+describe('🎰 大勝負の札の設定', () => {
+  it('上限ごとに別の倍率（0 は全体の倍率・1 は上げない）と、重ねた枚数', () => {
+    const c = { ...c0, rouletteMaxBet: 300, boostMaxBetMult: 3, boostRouletteMult: 1, boostDailyMult: 0 };
+    expect(boostCasino(c)).toMatchObject({ maxBet: 3000, rouletteMaxBet: 300, dailyBetLimit: 100000 });
+    expect(boostCasino(c, 2)).toMatchObject({ maxBet: 6000, rouletteMaxBet: 300, dailyBetLimit: 200000 });
+  });
+
+  it('効く長さを時間で・1 日に 2 枚まで重ねられる（長さは延びない）・3 枚目は今日は使えない', async () => {
+    await addTickets(db, A.id, 'casino_boost', 5);
+    const opts = { boostHours: 2, boostPerDay: 2 };
+    const end = new Date(now.getTime() + 2 * 3_600_000);
+    expect(await useCasinoBoost(db, A.id, now, opts)).toEqual({ status: 'ok', until: end, level: 1 });
+    expect(await useCasinoBoost(db, A.id, new Date(now.getTime() + 60_000), opts)).toEqual({ status: 'ok', until: end, level: 2 });
+    expect(await useCasinoBoost(db, A.id, new Date(now.getTime() + 120_000), opts)).toEqual({ status: 'active', until: end, level: 2 });
+    expect((await casinoCfgFor(db, bcfg, A.id, new Date(now.getTime() + 180_000))).casino.maxBet).toBe(10000);
+    // 切れたあとも、今日（日本時間）はもう使えない
+    expect(await useCasinoBoost(db, A.id, new Date(end.getTime() + 1000), opts)).toEqual({ status: 'limit' });
+    expect((await ticketsOf(db, A.id)).casino_boost).toBe(3);
+    expect(casinoBoostText(c0, '銭', { status: 'limit' })).toContain('今日はもう大勝負の札を 1 枚使いました');
   });
 });

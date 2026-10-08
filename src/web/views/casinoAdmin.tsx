@@ -13,6 +13,7 @@ import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.j
 import { RANDOM_SETTING_ODDS, roleOdds, SETTING_KEYS, slotRtp, type SlotSetting } from '../../services/casino/slots.js';
 import { AT_RTP_APPROX } from '../../services/casino/slotAt.js';
 import { AT_ART_SLOTS, type ArtSlot } from '../../services/casino/slotArt.js';
+import { boostCasino } from '../../services/casino/boost.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
@@ -226,6 +227,32 @@ export function CasinoAdminPage(p: {
               </span>
               <input type="number" name="boostMult" min={2} max={20} value={String(c.boostMult)} required />
             </label>
+            <fieldset>
+              <legend>🎰 大勝負の札（くわしく）</legend>
+              <label class="field">
+                <span>効く長さ（時間。0 なら使った日の日本時間の 0 時まで）</span>
+                <input type="number" name="boostHours" min={0} max={168} value={String(c.boostHours)} required />
+              </label>
+              <label class="field">
+                <span>1 回の最高を何倍に（0 なら上の倍率・1 なら上げない）</span>
+                <input type="number" name="boostMaxBetMult" min={0} max={20} value={String(c.boostMaxBetMult)} required />
+              </label>
+              <label class="field">
+                <span>ルーレットの 1 か所の最高を何倍に（0 なら上の倍率・1 なら上げない）</span>
+                <input type="number" name="boostRouletteMult" min={0} max={20} value={String(c.boostRouletteMult)} required />
+              </label>
+              <label class="field">
+                <span>1 日の合計を何倍に（0 なら上の倍率・1 なら上げない）</span>
+                <input type="number" name="boostDailyMult" min={0} max={20} value={String(c.boostDailyMult)} required />
+              </label>
+              <label class="field">
+                <span>1 日に使える枚数（2 以上なら、効いている間に重ねると倍率が足される。5 倍 → 10 倍。効く長さは延びない）</span>
+                <input type="number" name="boostPerDay" min={1} max={10} value={String(c.boostPerDay)} required />
+              </label>
+              <p class="note">
+                いま 1 枚で: 1 回 {fmt(boostCasino(c).maxBet)}・ルーレット 1 か所 {fmt(boostCasino(c).rouletteMaxBet)}・1 日 {c.dailyBetLimit > 0 ? fmt(boostCasino(c).dailyBetLimit) : '上限なし'}。値段・名前・販売は「ショップ」の「大勝負の札」で変えます。
+              </p>
+            </fieldset>
             {p.casinoGacha && <fieldset><legend>🎰 勝負の御籤（カジノの景品ガチャ）</legend>
               <label><input type="checkbox" name="styleEnabled" value="yes" checked={p.casinoGacha.enabled}/> 開く</label>
               <label>祈願所のチャンネルID<input type="text" name="stylePrayerChannelId" inputmode="numeric" pattern="[0-9]{17,20}" value={p.casinoGacha.prayerChannelId} required/></label>

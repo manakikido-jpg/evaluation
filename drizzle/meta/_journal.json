@@ -568,6 +568,13 @@
       "when": 1791453885189,
       "tag": "0080_shop_casino_style",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1791460153213,
+      "tag": "0081_buff_uses",
+      "breakpoints": true
     }
   ]
 }

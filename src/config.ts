@@ -530,6 +530,14 @@ export const casinoSchema = z.object({
   profitSharePercent: z.number().int().min(0).max(50).default(25),
   /** 🎰 大勝負の札（その日だけ、カジノの上限を上げる）: 1 回の最高と 1 日の合計を何倍にするか */
   boostMult: z.number().int().min(2).max(20).default(5),
+  /** 札が効く長さ（時間。0 なら使った日の日本時間の 0 時まで） */
+  boostHours: z.number().int().min(0).max(168).default(0),
+  /** 上がる上限を別々に（0 なら boostMult と同じ・1 なら上げない）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計 */
+  boostMaxBetMult: z.number().int().min(0).max(20).default(0),
+  boostRouletteMult: z.number().int().min(0).max(20).default(0),
+  boostDailyMult: z.number().int().min(0).max(20).default(0),
+  /** 1 日（日本時間）に使える枚数。2 以上なら、効いている間に重ねて使うと倍率が足される（5 倍 → 10 倍） */
+  boostPerDay: z.number().int().min(1).max(10).default(1),
   /**
    * BOT が中で使う（保存しない）: 大勝負の札が効いている人の、元の上限。
    * 卓の参加費・ブラインド（みんなが同じだけ払うもの）は元の「1 回の最高」まで。卓のほかの人は元の上限で数える
