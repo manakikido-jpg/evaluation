@@ -1,5 +1,7 @@
+import type { InviteRewardRow } from '../../services/invites.js';
+import { STAFF_NO_INVITER, UNKNOWN_INVITER } from '../../services/invites.js';
 import type { GuildConfig } from '../../config.js';
-import { currentAutoRank, nextAutoRank } from '../../domain/ranks.js';
+import { currentAutoRank, nextAutoRank, highestRank } from '../../domain/ranks.js';
 import type { AdminSession, AuditLog, Member, MemberEvent } from '../../db/schema.js';
 import type { GoshuinchoData } from '../../services/shuin.js';
 import type { TrendBucket } from '../../services/stats.js';
@@ -76,18 +78,32 @@ export function LoginPage(props: { error?: string; /** Discord でログイン�
 export function HomePage(props: {
   session: SessionView;
   stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
-  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number; bells?: number };
+  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number; bells?: number; invites?: number; permissions?: number | null };
   recent: AuditLog[];
   names: Names;
   now: Date;
   /** 直近 30 日の人数（上のグラフ） */
   trend?: TrendBucket[];
+  inviteRows?: InviteRewardRow[];
+  cfg?: GuildConfig;
 }) {
   const { stats, trend } = props;
+  const canSee = (page: string) => !props.session.pages || props.session.pages.includes(page as never);
+  const tasks = [
+    { key: 'applications', label: '申請の確認', hint: '入鯖・宵参りの申請', count: props.todo.applications, unit: '件', href: '/applications', icon: '📝' },
+    { key: 'invites', label: '招待元が不明', hint: '招待した人の確認・不明として登録', count: props.todo.invites, unit: '人', href: '/invites?filter=unknown#invite-rewards', icon: '🔗' },
+    { key: 'channels', label: '権限の要確認', hint: props.todo.permissions === null ? '取得できませんでした。点検画面で読み直してください。' : 'カテゴリとの同期・見える範囲を点検', count: props.todo.permissions, unit: '件', href: '/channels/check', icon: '⚠' },
+    { key: 'applications', label: 'お参り期間の判定待ち', hint: '次の役職へ案内する人', count: props.todo.omairi, unit: '人', href: '/omairi', icon: '⛩' },
+    { key: 'soudan', label: '未対応の相談', hint: '回答を待っている相談', count: props.todo.soudan, unit: '件', href: '/soudan', icon: '💌' },
+    { key: 'home', label: '呼び鈴（だれも対応していない）', hint: 'Discordの呼び鈴で対応してください', count: props.todo.bells ?? 0, unit: '件', href: undefined, icon: '🔔' },
+    { key: 'minutes', label: '議事録のやること（まだ）', hint: '未完了のやること', count: props.todo.meetingTodos ?? 0, unit: '件', href: '/minutes', icon: '📓' },
+  ].filter(task => task.count !== undefined && canSee(task.key) && (task.key !== 'channels' || props.session.level === 'guji'));
+
   return (
     <Layout title="ホーム" session={props.session} nav="home" scripts={['charts.js']}>
-      <h1>🏠 今日の社務所</h1>
-      {trend && trend.length > 0 && (
+      <div class="home-welcome"><div><p class="eyebrow">咲楽ノ宮 / 社務所Web</p><h1>おつかれさまです</h1><p class="note">今日の社務所 — 対応と鯖の状況をまとめて確認できます。</p></div><time datetime={props.now.toISOString()}>{new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'long' }).format(props.now)}</time></div>
+      <section class="card home-attention"><div class="section-head"><h2>今やること</h2><span class="note">対応待ち</span></div><ul class="task-list">{tasks.map(task => <li class={task.count ? 'pending' : 'clear'}><span class="task-icon" aria-hidden="true">{task.icon}</span><div class="task-copy"><strong>{task.label}</strong><span>{task.hint}</span></div><span class="task-count">{task.count === null ? '未取得' : <>{task.count}<small>{task.unit}</small></>}</span>{task.href ? <a class="task-action" href={task.href}>確認する<span aria-hidden="true"> →</span></a> : <span class="task-action note">Discordで確認</span>}</li>)}</ul></section>
+      {canSee('stats') && trend && trend.length > 0 && (
         <section class="card">
           <h2>メンバーの推移（30 日）</h2>
           <LineChart
@@ -103,48 +119,14 @@ export function HomePage(props: {
       )}
       <div class="stats">
         <Stat label="メンバー" value={stats.members.toLocaleString('ja-JP')} unit="人" />
-        <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" href="/members/diff?since=today" popup="/members/diff?since=today&popup=1" />
-        <Stat label="今日の退出" value={`-${stats.left}`} unit="人" href="/members/diff?since=today" popup="/members/diff?since=today&popup=1" />
+        <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" href={canSee('members') ? '/members/diff?since=today' : undefined} popup={canSee('members') ? '/members/diff?since=today&popup=1' : undefined} />
+        <Stat label="今日の退出" value={`-${stats.left}`} unit="人" href={canSee('members') ? '/members/diff?since=today' : undefined} popup={canSee('members') ? '/members/diff?since=today&popup=1' : undefined} />
         <Stat label="今日の朱印" value={String(stats.shuin)} unit="件" />
         <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
-        <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href="/yaku" />
+        <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href={canSee('yaku') ? '/yaku' : undefined} />
       </div>
 
-      <section class="card">
-        <h2>対応待ち</h2>
-        <ul class="todo">
-          <li>
-            <a href="/applications" class={props.todo.applications ? '' : 'zero'}>
-              <span>申請（入鯖・宵参り）</span>
-              <strong>{props.todo.applications} 件</strong>
-            </a>
-          </li>
-          <li>
-            <a href="/omairi" class={props.todo.omairi ? '' : 'zero'}>
-              <span>お参り期間の判定待ち</span>
-              <strong>{props.todo.omairi} 人</strong>
-            </a>
-          </li>
-          <li>
-            <a href="/soudan" class={props.todo.soudan ? '' : 'zero'}>
-              <span>未対応の相談</span>
-              <strong>{props.todo.soudan} 件</strong>
-            </a>
-          </li>
-          <li>
-            <a class={props.todo.bells ? '' : 'zero'} title="Discord の呼び鈴のカードで「対応する」を押すと消えます">
-              <span>呼び鈴（だれも対応していない）</span>
-              <strong>{props.todo.bells ?? 0} 件</strong>
-            </a>
-          </li>
-          <li>
-            <a href="/minutes" class={props.todo.meetingTodos ? '' : 'zero'}>
-              <span>議事録のやること（まだ）</span>
-              <strong>{props.todo.meetingTodos ?? 0} 件</strong>
-            </a>
-          </li>
-        </ul>
-      </section>
+      {props.inviteRows && <section class="card home-invites"><div class="section-head"><h2>最近の招待・報酬</h2><a href="/invites">一覧を開く →</a></div><div class="home-invite-grid">{props.inviteRows.map(r => <article><a class="home-invite-name" href={canSee('members') ? `/members/${r.memberId}` : '/invites'}>{who(props.names, r.memberId)}</a><span class="tag gray">{props.cfg && highestRank(props.cfg.ranks, r.roleIds) ? memberRankLabel(props.cfg, r.roleIds) : '案内待ち'}</span><dl><dt>招待した人</dt><dd>{r.source === STAFF_NO_INVITER ? '招待なし（運営）' : r.inviterId ? who(props.names, r.inviterId) : r.source === UNKNOWN_INVITER ? '不明（確認済み）' : '不明'}</dd><dt>報酬</dt><dd>{r.source === STAFF_NO_INVITER ? '対象外' : !r.inviterId ? '保留' : r.rewardedAt && r.ujikoRewardedAt ? '支払済み' : '段階待ち・未払い'}</dd></dl></article>)}</div>{!props.inviteRows.length && <p class="note">表示する記録はありません。</p>}</section>}
 
       {(!props.session.pages || props.session.pages.includes('members')) && (
         <section class="card">
@@ -162,13 +144,13 @@ export function HomePage(props: {
 
       <RecentUpdates unseen={props.session.updatesUnseen ?? 0} />
 
-      <section class="card">
+      {canSee('audit') && <section class="card">
         <h2>最近の操作</h2>
         <AuditTable rows={props.recent} names={props.names} now={props.now} />
         <p class="more">
           <a href="/audit">すべて見る →</a>
         </p>
-      </section>
+      </section>}
     </Layout>
   );
 }

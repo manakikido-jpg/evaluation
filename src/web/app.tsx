@@ -19,7 +19,7 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
-import { markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountCasino } from './casino.js';
@@ -601,7 +601,9 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/', async (c) => {
     const t = now();
-    const [base, recent, yakuRows, pending, review, soudanOpen, trend] = await Promise.all([
+    const session = c.get('session');
+    const canSee = (page: string) => !session.pages || session.pages.includes(page as never);
+    const [base, recent, yakuRows, pending, review, soudanOpen, trend, unknownInvites, permissionCount, inviteRows] = await Promise.all([
       homeStats(db, startOfTodayJst(t)),
       listAudit(db, { limit: 10 }),
       membersWithYaku(db),
@@ -609,11 +611,20 @@ export function createWebApp(deps: WebDeps) {
       omairiList(db, ['review']),
       listSoudan(db, ['open']),
       memberTrend(db, '30d', t),
+      canSee('invites') ? countUnknownInviters(db) : undefined,
+      session.level === 'guji' && canSee('channels') ? (async () => {
+        try {
+          const [channels, roles] = await Promise.all([deps.discord.guildChannels(cfg.guildId), deps.discord.guildRoles(cfg.guildId)]);
+          validatePermissionSnapshot(channels, roles, cfg.guildId);
+          return permissionIssues(channels, roles, cfg).length;
+        } catch { return null; }
+      })() : undefined,
+      canSee('invites') ? inviteRewardRows(db).then(rows => rows.slice(0, 4)) : undefined,
     ]);
     const stats = { ...base, yaku: yakuRows.length };
-    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db), bells: await openBells(db) };
-    const names = await namesOf(db, recent.flatMap((a) => [a.actorId, a.targetId ?? '']).filter(Boolean));
-    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} />);
+    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db), bells: await openBells(db), invites: unknownInvites, permissions: permissionCount };
+    const names = await namesOf(db, [...recent.flatMap((a) => [a.actorId, a.targetId ?? '']), ...(inviteRows ?? []).flatMap(r => [r.memberId, r.inviterId ?? ''])].filter(Boolean));
+    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} inviteRows={inviteRows} cfg={cfg} />);
   });
 
   app.get('/members', async (c) => {

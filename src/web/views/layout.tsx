@@ -43,7 +43,7 @@ type NavItem = { key: Nav; href: string; icon: string; label: string; gujiOnly?:
 /** 左のメニュー（仲間ごと） */
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: '見る',
+    title: 'ホーム・記録',
     items: [
       { key: 'home', href: '/', icon: '🏠', label: 'ホーム' },
       { key: 'stats', href: '/stats', icon: '📈', label: '推移' },
@@ -60,7 +60,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'yaku', href: '/yaku', icon: '👹', label: '厄' },
       { key: 'soudan', href: '/soudan', icon: '💌', label: '相談' },
       { key: 'temp', href: '/temp', icon: '⏳', label: '一時的な権限' },
-      { key: 'invites', href: '/invites', icon: '🔗', label: '招待' },
+      { key: 'invites', href: '/invites', icon: '🔗', label: '招待・報酬' },
       { key: 'interview', href: '/interview', icon: '🍵', label: '面談告知' },
       { key: 'minutes', href: '/minutes', icon: '📓', label: '議事録' },
       { key: 'ideas', href: '/ideas', icon: '💡', label: 'アイデア・共有' },
@@ -80,7 +80,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     ],
   },
   {
-    title: 'Discord の設定',
+    title: '鯖の設定',
     items: [
       { key: 'notices', href: '/notices', icon: '🪧', label: '掲示', gujiOnly: true },
       { key: 'channels', href: '/channels', icon: '📁', label: 'チャンネル', gujiOnly: true },
@@ -91,6 +91,13 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     ],
   },
 ];
+
+function ThemeChoice() {
+  return <label class="theme-choice"><span aria-hidden="true">◐</span><span class="sr-only">表示モード</span>
+    <select data-theme-choice aria-label="表示モード" disabled><option value="auto">端末に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select>
+    <span class="sr-only" data-theme-status role="status"></span>
+  </label>;
+}
 
 export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
@@ -103,6 +110,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         <meta name="robots" content="noindex, nofollow" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false}' />
         <title>{`${props.title} | 社務所 Web`}</title>
+        <script src={assetUrl('theme.js')}></script>
         <link rel="stylesheet" href={assetUrl('style.css')} />
         <script src={assetUrl('htmx.min.js')} defer></script>
         {(props.scripts ?? []).map((s) => (
@@ -110,6 +118,8 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         ))}
       </head>
       <body class={session ? 'with-side' : ''}>
+        <a class="skip-link" href="#main-content">本文へ移動</a>
+        {!session && <div class="guest-theme"><ThemeChoice /></div>}
         {session && (
           <>
             {/* ☰ で開け閉め（パソコン: チェックで閉じる／スマホ: チェックで開く）。JS がなくても動き、JS はパソコンで閉じたかを覚えるだけ */}
@@ -125,13 +135,16 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                 <span class="torii">⛩</span> 社務所 Web
                 <small>咲楽ノ宮</small>
               </a>
+              <span class="topbar-page">{props.title}</span>
+              {(!session.pages || session.pages.includes('members')) && <form class="topbar-search" method="get" action="/members"><label class="sr-only" for="nav-search">メンバーを検索</label><input id="nav-search" type="search" name="q" placeholder="メンバーを検索" /><button type="submit" aria-label="メンバーを検索">⌕</button></form>}
+              <div class="topbar-tools"><ThemeChoice /></div>
               {unseen > 0 && (
                 <a class="topbar-updates" href="/updates" title="新しい更新">
                   📰 <span class="badge">{unseen}</span>
                 </a>
               )}
             </header>
-            <aside class="side">
+            <aside class="side" id="main-navigation">
               <nav class="side-nav" aria-label="メニュー">
                 {NAV_GROUPS.map((g) => {
                   // 宮司だけのページ・見られるページを選ばれている人の、ほかのページは出さない
@@ -186,7 +199,15 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
           </>
         )}
-        <main class={props.wide ? 'wide' : undefined}>{props.children}</main>
+        <main id="main-content" class={props.wide ? 'wide' : undefined}>{props.children}</main>
+        {session && <nav class="mobile-nav" aria-label="よく使うページ">
+          {[
+            { key: 'home', href: '/', icon: '⌂', label: 'ホーム' },
+            { key: 'members', href: '/members', icon: '♙', label: 'メンバー' },
+            { key: 'invites', href: '/invites', icon: '↗', label: '招待' },
+          ].filter(item => !session.pages || session.pages.includes(item.key as never)).map(item => <a href={item.href} class={nav === item.key ? 'on' : ''} aria-current={nav === item.key ? 'page' : undefined}><span aria-hidden="true">{item.icon}</span>{item.label}</a>)}
+          <button type="button" data-nav-toggle aria-controls="main-navigation" aria-expanded="false"><span aria-hidden="true">☰</span>メニュー</button>
+        </nav>}
         {session && (
           <>
             {/* ポップアップ（data-popup の付いたものを押すと、ここに中身を出す） */}

@@ -479,7 +479,8 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await pendingApplication();
     const s = await login(STAFF);
     const html = await (await get('/', s)).text();
-    expect(html).toMatch(/申請（入鯖・宵参り）<\/span><strong>1 件/);
+    expect(html).toMatch(/<strong>申請の確認<\/strong>[\s\S]*?class="task-count">1<small>件<\/small>/);
+    expect(html).toContain('href="/applications"');
   });
 
   it('相談: 神職は送った人を見られない・宮司は理由を書いて確認できる', async () => {
@@ -2754,9 +2755,11 @@ describe('推移（管理画面）', () => {
     expect(await (await get('/stats?from=2026-13-01&to=2026-01-20', s)).text()).toMatch(/aria-current="page"[^>]*>30 日/);
   });
 
-  it('ホームのいちばん上に、30 日の人数のグラフが出る', async () => {
+  it('ホームは対応待ち、30 日の人数のグラフ、人数の順で出る', async () => {
     const s = await login(STAFF);
     const home = await (await get('/', s)).text();
+    expect(home.indexOf('今やること')).toBeGreaterThan(-1);
+    expect(home.indexOf('今やること')).toBeLessThan(home.indexOf('メンバーの推移'));
     expect(home.indexOf('メンバーの推移')).toBeGreaterThan(-1);
     expect(home.indexOf('メンバーの推移')).toBeLessThan(home.indexOf('class="stats"'));
     expect(home).toContain('<svg');
@@ -2764,6 +2767,17 @@ describe('推移（管理画面）', () => {
 });
 
 describe('CSS・JS の読み込み', () => {
+  it('ログイン前も表示色を先に読み、外部JSで切り替える', async () => {
+    const page = await (await app.request('/login')).text();
+    const src = /src="(\/static\/theme\.js\?v=[0-9a-f]{10})"/.exec(page)?.[1];
+    expect(src).toBeDefined();
+    expect(page.indexOf(src!)).toBeLessThan(page.indexOf('/static/style.css'));
+    expect(page).toContain('data-theme-choice');
+    expect(page).toContain('端末に合わせる');
+    const res = await app.request(src!);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('javascript');
+  });
   it('URL に中身の印が付き、更新すると別の URL になる（古い CSS を使い続けない）', async () => {
     const page = await (await app.request('/login')).text();
     const href = /href="(\/static\/style\.css\?v=[0-9a-f]{10})"/.exec(page)?.[1];

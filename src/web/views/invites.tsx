@@ -111,15 +111,17 @@ export function InvitesPage(props: {
   return (
     <Layout title="招待" session={session} nav="invites" scripts={session.level === 'guji' ? ['invite-selection.js'] : []}>
       <div class="page-head">
-        <h1>🔗 招待</h1>
+        <div><p class="eyebrow">メンバー対応</p><h1>招待・報酬</h1><p class="note">招待元の確認と、昇格ごとのお礼をまとめて管理します。</p></div>
       </div>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       {props.bulkResult && <p class="flash ok">不明として{props.bulkResult.added}人を登録しました。登録済み・退出などで対象外の{props.bulkResult.skipped}人は変更していません。</p>}
+      <details class="invite-help"><summary>招待リンクの見方</summary>
       <p class="note">
         だれの招待リンクか・だれがだれを招待したかを見るページです。Discord の <b>サーバー設定 →「招待」</b> では、BOT が作ったリンク（<code>/招待リンク</code>・
         <code>/共通招待リンク</code>）は招待した人がすべて「BOT」と出ます（Discord の決まりで変えられません）。 だれのリンクかは、ここでコード（<code>discord.gg/</code>{' '}
         のあと）を見比べてください。BOT が作るリンクはすべて期限なしです。
       </p>
+      </details>
       {limited.length > 0 && (
         <p class="flash warn">
           期限が付いているリンクが {limited.length} 個あります。これは Discord
@@ -146,13 +148,15 @@ export function InvitesPage(props: {
           {props.cfg.economy.currencyName}、🍃氏子で追加 {props.cfg.economy.inviteUjikoReward}
           {props.cfg.economy.currencyName}。各段階1人1回です。
         </p>
+        <details class="invite-help"><summary>登録と報酬の決まり</summary>
         <p class="note">宮司は招待元不明の行から招待した人を選べます。登録すると、今の役職で達成した未払いの段階を支払います。運営には「招待なし（運営）」も選べます。招待報酬の対象外になり、招待元不明とは分けて表示します。分からないときは「不明」のまま登録し、後から招待した人を登録できます。登録済みの個人の招待元は変更できません。</p>
         <p class="note">在籍者の新しい記録から最大200人を表示対象にして、その中で並び替えます。参加日が不明な人は最後に表示します。退出した人の記録は残し、一覧から非表示にします。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
-        <p>
-          招待元不明 {props.rewards.filter((r) => !r.inviterId && r.source !== STAFF_NO_INVITER).length}人 · 両段階完了 {props.rewards.filter((r) => r.rewardedAt && r.ujikoRewardedAt).length}人 · 支払額{' '}
-          {props.rewards.reduce((sum, r) => sum + r.reward + r.ujikoReward, 0).toLocaleString('ja-JP')}
-          {props.cfg.economy.currencyName}
-        </p>
+        </details>
+        <div class="invite-summary">
+          <div><span>招待元不明</span><strong>{props.rewards.filter(r => !r.inviterId && r.source !== STAFF_NO_INVITER).length}<small>人</small></strong></div>
+          <div><span>両段階完了</span><strong>{props.rewards.filter(r => r.rewardedAt && r.ujikoRewardedAt).length}<small>人</small></strong></div>
+          <div><span>支払額（表示対象）</span><strong>{props.rewards.reduce((sum, r) => sum + r.reward + r.ujikoReward, 0).toLocaleString('ja-JP')}<small>{props.cfg.economy.currencyName}</small></strong></div>
+        </div>
         <nav class="tabs" aria-label="報酬の絞り込み">
           {(
             [
@@ -167,23 +171,23 @@ export function InvitesPage(props: {
             </a>
           ))}
         </nav>
-        <form method="get" action="/invites#invite-rewards" class="inline-actions">
+        <form method="get" action="/invites#invite-rewards" class="invite-sort">
           <input type="hidden" name="filter" value={props.filter} />
           <label class="field"><span>並び替え</span><select name="sort">{INVITE_SORTS.map(([key, label]) => <option value={key} selected={props.sort === key}>{label}</option>)}</select></label>
           <label class="field"><span>順番</span><select name="order"><option value="asc" selected={props.order === 'asc'}>昇順（あ→ん・古い→新しい・少ない→多い）</option><option value="desc" selected={props.order === 'desc'}>降順（ん→あ・新しい→古い・多い→少ない）</option></select></label>
           <button type="submit">並び替える</button>
         </form>
-        {session.level === 'guji' && <form id="invite-unknown-bulk" method="post" action="/invites/unknown/bulk">
+        {session.level === 'guji' && <form id="invite-unknown-bulk" class="invite-bulk-bar" method="post" action="/invites/unknown/bulk">
           <Csrf session={session} />
           <input type="hidden" name="filter" value={props.filter} /><input type="hidden" name="sort" value={props.sort} /><input type="hidden" name="order" value={props.order} />
           <p class="note">行にチェックを入れると、まとめて不明として登録できます。表示中の未登録の人だけが対象です。招待報酬は保留し、後から招待した人を登録できます。</p>
           <button type="button" data-invite-select="all">表示中の対象者をすべて選ぶ</button> <button type="button" data-invite-select="clear">チェックを外す</button>
           <span id="invite-unknown-selected" aria-live="polite"></span>
           <label class="field"><span><input type="checkbox" name="confirm" value="yes" required /> 選んだ人を不明として登録し、招待報酬は保留します。</span></label>
-          <button type="submit">チェックした人を不明で登録</button>
+          <button type="submit" class="invite-primary">チェックした人を不明で登録</button>
         </form>}
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap invite-table-wrap">
+          <table class="invite-rows">
             <thead>
               <tr>
                 {session.level === 'guji' && <th>不明にする</th>}
@@ -197,12 +201,12 @@ export function InvitesPage(props: {
             <tbody>
               {shown.map((r) => (
                 <tr>
-                  {session.level === 'guji' && <td>{!r.inviterId && !r.source && !r.leftAt ? <input type="checkbox" name="memberId" value={r.memberId} form="invite-unknown-bulk" aria-label={`${name(r.memberId)}を不明として登録`} /> : '—'}</td>}
-                  <td>
+                  {session.level === 'guji' && <td class="invite-select-cell" data-label="不明にする">{!r.inviterId && !r.source && !r.leftAt ? <input type="checkbox" name="memberId" value={r.memberId} form="invite-unknown-bulk" aria-label={`${name(r.memberId)}を不明として登録`} /> : '—'}</td>}
+                  <td class="invite-member-cell" data-label="参加者">
                     <a href={`/members/${r.memberId}`}>{name(r.memberId)}</a>
                     <div class="note">参加日: {r.joinedAt ? jstShort(r.joinedAt) : '不明'}</div>
                   </td>
-                  <td>
+                  <td data-label="招待した人">
                     {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : r.source === STAFF_NO_INVITER ? '招待なし（運営）' : r.source === UNKNOWN_INVITER ? '不明（確認済み）' : '不明'}
                     <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : r.source === STAFF_NO_INVITER ? '招待報酬の対象外' : r.source === UNKNOWN_INVITER ? '運営が不明として登録・報酬は保留' : '招待元の記録なし'}</div>
                     {!r.inviterId && r.source !== STAFF_NO_INVITER && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
@@ -215,9 +219,9 @@ export function InvitesPage(props: {
                     </details>}
 
                   </td>
-                  <td>{r.leftAt ? '退出' : (highestRank(props.cfg.ranks, r.roleIds)?.name ?? '案内待ち')}</td>
-                  <td>{status(r, 'sanpaisha')}</td>
-                  <td>{status(r, 'ujiko')}</td>
+                  <td data-label="今の役職"><span class="tag gray">{r.leftAt ? '退出' : (highestRank(props.cfg.ranks, r.roleIds)?.name ?? '案内待ち')}</span></td>
+                  <td data-label="参拝者の報酬">{status(r, 'sanpaisha')}</td>
+                  <td data-label="氏子の報酬">{status(r, 'ujiko')}</td>
                 </tr>
               ))}
             </tbody>

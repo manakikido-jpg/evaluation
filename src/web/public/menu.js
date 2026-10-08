@@ -138,3 +138,15 @@ document.addEventListener('paste', (e) => {
   input.files = dt.files;
   showPickedFiles(input);
 });
+
+// スマホの下部メニューも同じ開閉状態を使う。
+document.addEventListener('DOMContentLoaded', () => {
+  const toggle = document.getElementById('nav-toggle');
+  const buttons = document.querySelectorAll('[data-nav-toggle]');
+  if (!(toggle instanceof HTMLInputElement)) return;
+  const sync = () => buttons.forEach(button => button.setAttribute('aria-expanded', String(toggle.checked)));
+  buttons.forEach(button => button.addEventListener('click', () => { toggle.checked = !toggle.checked; toggle.dispatchEvent(new Event('change')); }));
+  toggle.addEventListener('change', sync);
+  window.addEventListener('pageshow', sync);
+  sync();
+});
