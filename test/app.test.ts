@@ -117,6 +117,29 @@ const G2 = '400000000000000002';
 const R = '400000000000000009';
 
 describe('ShuinApp', () => {
+  it('通話の一覧は昇格後に開き直すとチェックが外れ、押し直すと戻る', async () => {
+    const giver = add(G, ROLE.sanpaisha);
+    const receiver = add(R, ROLE.sanpaisha);
+    const channel = { isVoiceBased: () => true, members: new Map([[G, giver], [R, receiver]]) };
+    Object.assign(giver, { voice: { channel } });
+    await giveShuin(db, { giverId: G, receiverId: R, weight: 1, giverRank: 'sanpaisha' });
+    const list = async () => {
+      const b = interaction('button', giver, { customId: shuinId('vc', '950000000000000001') });
+      await app.onInteraction(b.i as never);
+      return JSON.stringify((b.replies[0] as { components?: unknown[] } | undefined)?.components);
+    };
+    expect(await list()).toContain('✅');
+    giver.roles.cache.delete(ROLE.sanpaisha);
+    giver.roles.cache.set(ROLE.ujiko, {});
+    const fresh = await list();
+    expect(fresh).not.toContain('✅');
+    expect(fresh).toContain('📕');
+    const press = interaction('button', giver, { customId: shuinId('give', R) });
+    await app.onInteraction(press.i as never);
+    expect(press.replies[0]?.content).toContain('格 2・ご縁 +1');
+    expect(await list()).toContain('✅');
+  });
+
   it('#絵馬 のひな形の「🌸 朱印を押す」: そのチャンネルに投稿している人から選び、選ぶと朱印を押す', async () => {
     const { recordJoin } = await import('../src/services/members.js');
     const giver = add(G, ROLE.sewayaku);
