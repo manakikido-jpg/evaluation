@@ -229,7 +229,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { refreshCastPanel } from '../discord/cast.js';
-import { castStats, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -327,7 +327,7 @@ export function createWebApp(deps: WebDeps) {
 
   // 送れる大きさの上限（掲示の本文でも十分な 256KB）
   const smallBody = bodyLimit({ maxSize: 256 * 1024, onError: (c) => c.text('送る内容が大きすぎます。', 413) });
-  // 掲示の写真だけは大きめに（写真の上限 8MB ＋ 本文）
+  // 掲示・キャストの写真は大きめに（写真の上限 8MB ＋ 本文）
   const noticeBody = bodyLimit({ maxSize: 9 * 1024 * 1024, onError: (c) => c.text('写真が大きすぎます（8MB まで）。', 413) });
   // 🦊 AT 機の絵（1 枚 4MB まで。まとめて保存するときは全部で 100MB まで）
   const artBody = bodyLimit({ maxSize: 5 * 1024 * 1024, onError: (c) => c.text('絵が大きすぎます（4MB まで）。', 413) });
@@ -337,7 +337,7 @@ export function createWebApp(deps: WebDeps) {
   app.use((c, next) =>
     c.req.method !== 'POST'
       ? smallBody(c, next)
-      : /^\/notices(?:\/\d+)?$/.test(c.req.path)
+      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
@@ -5168,6 +5168,7 @@ export function createWebApp(deps: WebDeps) {
         categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
         roles={(roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
         hasImage={Boolean(image)}
+        photos={new Map((await Promise.all(list.map(async (x) => [x.memberId, (await loadCastPhoto(db, x.memberId))?.hash] as const))).filter((x): x is readonly [string, string] => Boolean(x[1])))}
         casts={list}
         stats={stats}
         sessions={sessions}
@@ -5213,11 +5214,35 @@ export function createWebApp(deps: WebDeps) {
 
   app.post('/cast/image', async (c) => {
     const upload = await imageUpload(await c.req.parseBody());
+    if (upload === 'too_big') return c.redirect('/cast?msg=image_big');
     if (!(upload instanceof Uint8Array)) return c.redirect('/cast?msg=image_bad');
     if (!(await saveMenuImage(db, upload))) return c.redirect('/cast?msg=image_bad');
     await audit(db, { actorId: c.get('session').userId, action: 'cast.image', via: 'web' });
     await castPanelNow();
     return c.redirect('/cast?msg=image_saved');
+  });
+
+  app.get('/cast/casts/:id/photo', async (c) => {
+    const photo = await loadCastPhoto(db, c.req.param('id'));
+    if (!photo) return c.notFound();
+    return c.body(Buffer.from(photo.data), 200, { 'content-type': photo.contentType, 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store' });
+  });
+
+  app.post('/cast/casts/:id/photo', async (c) => {
+    const id = c.req.param('id');
+    const upload = await imageUpload(await c.req.parseBody());
+    if (upload === 'too_big') return c.redirect('/cast?msg=image_big');
+    if (!(upload instanceof Uint8Array) || !await saveCastPhoto(db, id, upload)) return c.redirect('/cast?msg=image_bad');
+    await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.photo', via: 'web' });
+    return c.redirect('/cast?msg=photo_saved');
+  });
+
+  app.post('/cast/casts/:id/photo/delete', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast?msg=invalid');
+    await deleteCastPhoto(db, id);
+    await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.photo.delete', via: 'web' });
+    return c.redirect('/cast?msg=photo_removed');
   });
 
   app.post('/cast/image/delete', async (c) => {

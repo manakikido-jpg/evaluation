@@ -7,6 +7,9 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   saved: { text: '設定を保存しました。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（値段は 1 以上・下限は上限以下・手数料は 0〜90%）。', kind: 'warn' },
   image_saved: { text: 'メニューの画像を入れかえました（メニューも書き換えました）。', kind: 'ok' },
+  image_big: { text: '写真は8MBまでです。小さくしてから上げてください。', kind: 'warn' },
+  photo_saved: { text: 'キャストの写真を保存しました。紹介と本人の受付に出ます。', kind: 'ok' },
+  photo_removed: { text: 'キャストの写真を外しました。', kind: 'ok' },
   image_bad: { text: '画像（PNG・JPEG・GIF・WebP、8MB まで）を選んでください。', kind: 'warn' },
   image_removed: { text: 'メニューの画像を外しました。', kind: 'ok' },
   posted: { text: 'メニューを出しました。', kind: 'ok' },
@@ -64,6 +67,7 @@ export function CastPage(props: {
   categories: Opt[];
   roles: Opt[];
   hasImage: boolean;
+  photos: ReadonlyMap<string, string>;
   casts: Cast[];
   stats: CastStat[];
   sessions: CastSession[];
@@ -206,7 +210,14 @@ export function CastPage(props: {
                       </span>
                       {!x.minorOk && <span class="tag gray">18 歳未満は受けない</span>}
                     </div>
-                    <div class="ch-topic">{x.bio}</div>
+                    <div class="ch-topic">{x.bio} ・ Discord ID: {x.memberId}</div>
+                    {props.photos.has(x.memberId) && <img src={`/cast/casts/${x.memberId}/photo?v=${props.photos.get(x.memberId)}`} alt={`${name(x.memberId)}の紹介写真`} class="cast-profile-preview" />}
+                    <form method="post" action={`/cast/casts/${x.memberId}/photo`} enctype="multipart/form-data" class="inline-actions">
+                      <Csrf session={session} />
+                      <label class="field"><span>{name(x.memberId)}の写真（8MBまで）</span><input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required /></label>
+                      <button type="submit">写真を保存</button>
+                    </form>
+                    {props.photos.has(x.memberId) && <form method="post" action={`/cast/casts/${x.memberId}/photo/delete`} class="row-actions"><Csrf session={session} /><button type="submit" class="danger">写真を外す</button></form>}
                   </div>
                   <span class="ch-actions">
                     <form method="post" action={`/cast/casts/${x.memberId}/${x.status === 'paused' ? 'active' : 'paused'}`} class="row-actions">
@@ -231,7 +242,7 @@ export function CastPage(props: {
 
       <section class="card">
         <h2>🖼 メニューの画像</h2>
-        <p class="note">作ったメニューの画像を上げると、#キャスト一覧 のメニュー（画像の下に「指名するキャストを選ぶ」）に出ます。キャストの状態（🟢 待機中・📞 通話中・💤 お休み）はメニューの名前の横に出ます。</p>
+        <p class="note">各キャストの写真は上の一覧から登録できます。名前はDiscordの名前を使い、IDで本人を区別します。全体のメニュー画像はPNG・JPEG・GIF・WebP、8MBまでです。作ったメニューの画像を上げると、#キャスト一覧 のメニュー（画像の下に「指名するキャストを選ぶ」）に出ます。キャストの状態（🟢 待機中・📞 通話中・💤 お休み）はメニューの名前の横に出ます。</p>
         {props.hasImage && <img src="/cast/image" alt="いまのメニューの画像" class="cast-menu-preview" />}
         <form method="post" action="/cast/image" enctype="multipart/form-data" class="inline-actions">
           <Csrf session={session} />

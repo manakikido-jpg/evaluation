@@ -5,7 +5,7 @@ import type { Db } from '../src/db/client.js';
 import { castSessions } from '../src/db/schema.js';
 import { CastApp, castReceptionBody } from '../src/discord/cast.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
-import { applyCast, CAST_DEFAULTS, loadCastReception, setCastStatus, setWaiting } from '../src/services/cast.js';
+import { applyCast, CAST_DEFAULTS, loadCastReception, setCastStatus, setWaiting, saveCastPhoto, loadCastPhoto, deleteCastPhoto } from '../src/services/cast.js';
 import { loadReceptionAvatar, receptionSvg, renderCastReception } from '../src/services/castReceptionImage.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -30,6 +30,23 @@ async function booking(values: Partial<typeof castSessions.$inferInsert> = {}) {
   const [s] = await db.insert(castSessions).values({ castId: CAST, customerId: CUSTOMER, plan: '30', minutes: 30, price: 300, status: 'accepted', startAt: DAY, createdAt: DAY, ...values }).returning();
   return s!;
 }
+
+describe('キャストの写真', () => {
+  it('本人ごとに整えて保存し、壊れた写真で上書きせず、他の写真を消さない', async () => {
+    const png = await sharp({ create: { width: 90, height: 60, channels: 3, background: '#ff8899' } }).png().toBuffer();
+    const hash = await saveCastPhoto(db, CAST, png);
+    expect(hash).toBeTruthy();
+    await saveCastPhoto(db, OTHER, png);
+    expect(await saveCastPhoto(db, CUSTOMER, png)).toBeUndefined();
+    expect(await saveCastPhoto(db, CAST, png.subarray(0, 16))).toBeUndefined();
+    const photo = (await loadCastPhoto(db, CAST))!;
+    expect(photo.hash).toBe(hash);
+    expect(await sharp(photo.data).metadata()).toMatchObject({ width: 600, height: 600, format: 'png' });
+    await deleteCastPhoto(db, CAST);
+    expect(await loadCastPhoto(db, CAST)).toBeUndefined();
+    expect(await loadCastPhoto(db, OTHER)).toBeDefined();
+  });
+});
 
 describe('キャスト本人の受付情報', () => {
   it('日本時間の今日だけを選び、他のキャストと取り消した予約は混ぜない', async () => {
@@ -159,6 +176,27 @@ describe('本人向けDiscord受付', () => {
     const stop = interaction('cast:wait:0');
     await a.onInteraction(stop as unknown as Interaction);
     expect((await loadCastReception(db, CAST, NOW))?.state).toBe('off');
+  });
+
+  it('紹介カードには選んだキャストの写真を添付する', async () => {
+    const png = await sharp({ create: { width: 20, height: 20, channels: 3, background: '#00aa00' } }).png().toBuffer();
+    await saveCastPhoto(db, CAST, png);
+    const a = app();
+    const i = { ...interaction('cast:pick', CUSTOMER), values: [CAST], member: { id: CUSTOMER, roles: { cache: new Map() } }, isStringSelectMenu: () => true };
+    await a.onInteraction(i as unknown as Interaction);
+    const body = i.editReply.mock.calls[0]?.[0] as { embeds: { image?: { url: string } }[]; files: { attachment: Buffer }[] };
+    expect(i.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+    expect(body.embeds[0]?.image?.url).toBe('attachment://cast-profile.png');
+    expect(Buffer.from(body.files[0]!.attachment)).toEqual(Buffer.from((await loadCastPhoto(db, CAST))!.data));
+  });
+
+  it('本人の写真を受付に使い、Discordのアイコンを取りにいかない', async () => {
+    const png = await sharp({ create: { width: 20, height: 20, channels: 3, background: '#00aa00' } }).png().toBuffer();
+    await saveCastPhoto(db, CAST, png);
+    const a = app(), i = interaction();
+    await a.onInteraction(i as unknown as Interaction);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(i.editReply).toHaveBeenCalledWith(expect.objectContaining({ files: [expect.objectContaining({ name: 'cast-reception.png' })] }));
   });
 
   it('キャストでない人には予約・売上や画像を見せない', async () => {

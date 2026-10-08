@@ -40,6 +40,7 @@ import {
   listCasts,
   loadCastConfig,
   loadCastReception,
+  loadCastPhoto,
   loadMenuImage,
   MINOR,
   monthStart,
@@ -295,6 +296,7 @@ export class CastApp {
   private async castCard(cast: Cast, adult: boolean) {
     const [states, stats] = await Promise.all([castStates(this.db), castStats(this.db, monthStart())]);
     const name = (await namesOf(this.db, [cast.memberId])).get(cast.memberId) ?? cast.memberId;
+    const photo = await loadCastPhoto(this.db, cast.memberId);
     const state = STATE[states.get(cast.memberId) ?? 'off'];
     const st = stats.find((x) => x.castId === cast.memberId);
     const plans = (['30', '60', 'night'] as CastPlan[]).filter((p) => priceOfPlan(cast, p) > 0 && (adult || (p !== 'night' && cast.minorOk)));
@@ -313,8 +315,10 @@ export class CastApp {
             .filter((l, i) => l || i === 2)
             .join('\n'),
           color: PINK,
+          ...(photo ? { image: { url: 'attachment://cast-profile.png' } } : {}),
         },
       ],
+      ...(photo ? { files: [new AttachmentBuilder(Buffer.from(photo.data), { name: 'cast-profile.png' })] } : {}),
       components: plans.length
         ? [
             row(
@@ -330,7 +334,8 @@ export class CastApp {
     const cast = await getCast(this.db, castId);
     if (!cast || cast.status !== 'active') return void (await i.reply({ content: 'このキャストは、いまは指名できません。', ...EPHEMERAL }));
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    await i.reply({ ...(await this.castCard(cast, adult)), allowedMentions: { parse: [] }, ...EPHEMERAL } as Parameters<typeof i.reply>[0]);
+    await i.deferReply(EPHEMERAL);
+    await i.editReply({ ...(await this.castCard(cast, adult)), allowedMentions: { parse: [] } });
   }
 
   private async waitingList(i: ButtonInteraction<'cached'>): Promise<void> {
@@ -426,7 +431,7 @@ export class CastApp {
     if (!d) return { content: 'キャストの方だけが使えます。キャストになるには「🎀 キャストになる」から。', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] as never[] } };
     const [names, avatar] = await Promise.all([
       namesOf(this.db, [...d.current, ...d.today].map((s) => s.customerId)),
-      loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 })),
+      loadCastPhoto(this.db, member.id).then((photo) => photo?.data ?? loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 }))),
     ]);
     return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar);
   }
