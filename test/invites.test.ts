@@ -4,7 +4,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { activityDaily, auditLogs, invites, members } from '../src/db/schema.js';
 import { walletOf } from '../src/services/economy.js';
-import { STAFF_NO_INVITER, assignUnknownInviter, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -264,4 +264,47 @@ it('運営の招待なしは不明と区別し、昇格・再入鯖でも報酬�
   expect(await assignUnknownInviter(ctx(), NEW2, STAFF_NO_INVITER, INVITER)).toBe('known');
   expect(await inviterOf(db, NEW2)).toBe(INVITER);
   expect((await walletOf(db, INVITER)).balance).toBe(150);
+});
+
+
+it('不明で登録して報酬を保留し、後から判明した招待者へ段階ごとに1回だけ払う', async () => {
+  const ujiko = cfg.ranks.find(r => r.key === 'ujiko')!;
+  await db.update(members).set({ roleIds: [ujiko.roleId] }).where(eq(members.id, NEW));
+  expect(await assignUnknownInviter(ctx(), NEW, UNKNOWN_INVITER, INVITER)).toBe('unknown');
+  expect(await inviterOf(db, NEW)).toBeUndefined();
+  expect((await inviteRewardRows(db)).find(r => r.memberId === NEW)).toMatchObject({ source: UNKNOWN_INVITER, inviterId: null });
+  await rewardInviteRanks(ctx(), NEW, [ujiko.roleId]);
+  expect(dms).toHaveLength(0);
+  expect((await walletOf(db, INVITER)).balance).toBe(0);
+  expect(await recordInvite(db, NEW, INVITER)).toBe(false);
+  expect(await assignUnknownInviter(ctx(), NEW, UNKNOWN_INVITER, INVITER)).toBe('known');
+  const results = await Promise.all([assignUnknownInviter(ctx(), NEW, INVITER, INVITER), assignUnknownInviter(ctx(), NEW, NEW2, INVITER)]);
+  expect(results.sort()).toEqual(['assigned', 'known']);
+  const chosen = (await inviterOf(db, NEW))!;
+  expect((await walletOf(db, chosen)).balance).toBe(500);
+  expect(dms).toHaveLength(2);
+  expect(await assignUnknownInviter(ctx(), NEW, UNKNOWN_INVITER, INVITER)).toBe('known');
+  expect(await inviterOf(db, NEW)).toBe(chosen);
+  expect((await walletOf(db, chosen)).balance).toBe(500);
+  expect((await db.select().from(auditLogs).where(eq(auditLogs.action, 'invite.assign')))).toHaveLength(2);
+});
+
+
+it('チェックした人だけ一括で不明にし、登録済み・BOT・退出者は変えない', async () => {
+  await recordInvite(db, NEW2, INVITER);
+  await rewardInviter(ctx(), NEW2, T0);
+  await db.update(members).set({ isBot: true }).where(eq(members.id, INVITER));
+  expect(await markUnknownInviters(db, [NEW, NEW2, INVITER, NEW], NEW2, T0)).toEqual({ added: 1, skipped: 2 });
+  expect((await inviteRewardRows(db)).find(r => r.memberId === NEW)).toMatchObject({ source: UNKNOWN_INVITER, inviterId: null });
+  expect(await inviterOf(db, NEW2)).toBe(INVITER);
+  expect((await walletOf(db, INVITER)).balance).toBe(150);
+  expect(await markUnknownInviters(db, [NEW, NEW2], NEW2, T0)).toEqual({ added: 0, skipped: 2 });
+  expect(await markUnknownInviters(db, [], NEW2)).toBeNull();
+  expect(await markUnknownInviters(db, [NEW, 'bad'], NEW2)).toBeNull();
+  expect(await markUnknownInviters(db, Array(201).fill(NEW), NEW2)).toBeNull();
+  expect((await db.select().from(auditLogs).where(eq(auditLogs.action, 'invite.unknown_bulk')))).toHaveLength(1);
+  const gone = '870000000000000444';
+  await recordJoin(db, { id: gone, username: 'g', displayName: 'g', avatarUrl: null, roleIds: [], isBot: false, joinedAt: T0 });
+  await db.update(members).set({ leftAt: T0 }).where(eq(members.id, gone));
+  expect(await markUnknownInviters(db, [gone], NEW2)).toEqual({ added: 0, skipped: 1 });
 });
