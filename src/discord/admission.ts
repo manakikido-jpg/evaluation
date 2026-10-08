@@ -307,7 +307,7 @@ export class AdmissionApp {
       ));
     }
     const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha', 'notify'] as const;
-    await channel.send(panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { coinName: this.cfg.economy.currencyName }));
+    await channel.send({ ...panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { coinName: this.cfg.economy.currencyName }), allowedMentions: { parse: [] } });
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }
 

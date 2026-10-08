@@ -363,7 +363,6 @@ export class GachaApp {
   async refreshPanels(guild: Guild): Promise<number> {
     const cfg = this.cfg();
     const next = panelMessage('gacha', { coinName: cfg.economy.currencyName });
-    const label = next.components[0]?.components.find((b) => b.custom_id === 'gacha:open')?.label;
     let edited = 0;
     const places = guild.channels.cache.filter((c) => c.type === ChannelType.GuildText && (c.id === cfg.channels.omikuji || ['おみくじ', '授与所', '祈願所', 'ガチャ'].some((name) => c.name.normalize('NFKC').includes(name))));
     for (const ch of places.values()) {
@@ -371,13 +370,18 @@ export class GachaApp {
       const msgs = await ch.messages.fetch({ limit: 50 }).catch(() => undefined);
       for (const m of msgs?.values() ?? []) {
         if (m.author.id !== guild.client.user.id) continue;
-        const rows = m.components.map((row) => row.toJSON()) as { components?: { custom_id?: string; label?: string }[] }[];
+        const rows = m.components.map((row) => row.toJSON()) as { type?: number; items?: { media?: { url?: string } }[]; components?: { custom_id?: string; label?: string }[] }[];
         const open = rows.flatMap((row) => row.components ?? []).find((b) => b.custom_id === 'gacha:open');
         if (!open) continue;
-        // 祈願所の画像・3 つのボタン（物御籤売り場・中身と排出率・勝負の御籤）がそろっていれば、そのまま
-        const ids = new Set(rows.flatMap((row) => row.components ?? []).map((b) => b.custom_id));
-        if (open.label === label && m.embeds[0]?.image?.url?.includes('gacha-prayer.png') && ids.has('gacha:rates') && ids.has('casino-gacha:open')) continue;
-        await m.edit({ ...next, attachments: [], allowedMentions: { parse: [] } }).then(() => edited++).catch((err: unknown) => logger.warn({ err, channelId: ch.id }, 'gacha panel refresh failed'));
+        // 写真と2つのボタンを上下に並べた入口なら、そのまま。
+        const same = rows.length === next.components.length && rows.every((row, index) => {
+          const expected = next.components[index]!;
+          if (row.type !== expected.type) return false;
+          if (expected.type === 12) return row.items?.length === 1 && row.items[0]?.media?.url?.includes(next.files[index === 0 ? 0 : 1]!.name);
+          return row.components?.length === expected.components.length && row.components.every((button, n) => button.custom_id === expected.components[n]?.custom_id && button.label === expected.components[n]?.label);
+        });
+        if (same && m.flags?.has(MessageFlags.IsComponentsV2)) continue;
+        await m.edit({ ...next, content: null, embeds: [], attachments: [], allowedMentions: { parse: [] } }).then(() => edited++).catch((err: unknown) => logger.warn({ err, channelId: ch.id }, 'gacha panel refresh failed'));
       }
     }
     return edited;
@@ -387,7 +391,7 @@ export class GachaApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     const id = 'customId' in interaction ? interaction.customId : '';
     try {
-      if (interaction.isButton() && id.startsWith('casino-gacha:')) return await this.casinoMenu(interaction);
+      if (interaction.isButton() && /^(?:casino-gacha:(?:open|rates)|casino-gacha:draw:(?:1|10))$/.test(id)) return await this.casinoMenu(interaction);
       if (interaction.isChatInputCommand() && interaction.commandName === 'gacha') return await this.menu(interaction);
       if (interaction.isButton() && id === 'gacha:open') return await this.menu(interaction);
       if (interaction.isButton() && id === 'gacha:draw:free') return await this.draw(interaction, 1, 'free');
@@ -430,13 +434,14 @@ export class GachaApp {
     const state = await stylesOf(this.db, i.user.id);
     const w = await walletOf(this.db, i.user.id);
     const chances = styleChances(cfg.casinoGacha, state.owned);
+    const ratesOnly = i.customId === 'casino-gacha:rates';
     const lines = chances.map((item) => `${item.emoji} **${item.name}** · ${item.chance.toLocaleString('ja-JP', { maximumFractionDigits: 3 })}％ · ${item.slot ? state.owned.includes(item.key) ? '所持済み' : '期限なし' : '券'}`);
     const allOwned = chances.filter((x) => x.slot).every((x) => state.owned.includes(x.key));
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...[1, 10].map((n) => new ButtonBuilder().setCustomId(`casino-gacha:draw:${n}`).setLabel(`${n === 1 ? '1回' : '10連'}（${fmt(n * cfg.casinoGacha.price)}${cfg.economy.currencyName}）`).setStyle(ButtonStyle.Primary).setDisabled(!cfg.casino.enabled || !cfg.casinoGacha.enabled || w.balance < n * cfg.casinoGacha.price)));
     await i.editReply({
       content: [message, results ? '**今回の景品**\n' + results.map((key) => { const item = styleItem(key)!; return `${item.emoji} ${item.name}`; }).join('\n') : ''].filter(Boolean).join('\n') || null,
-      embeds: [{ title: '🎰 勝負の御籤 · 中身と排出率', color: 0xb99553, description: [!cfg.casinoGacha.enabled ? '今はお休み中です。' : '', `所持：${fmt(w.balance)}${cfg.economy.currencyName} · お試し券${state.tickets}枚`, allOwned ? '見た目の品は全部そろいました！その分はお試し券になります。' : `あと${Math.max(1, cfg.casinoGacha.pity - state.pity)}回以内に未所持の見た目の品を保証。`, '', ...lines, '', '見た目の品は重複しません。天井では未所持の品の中で均等です。物御籤の券・天井とは別です。', '背景・卓のふち・席の飾り・称号などは、カジノWebの「🪭 着せ替え」で装備できます。入口は `/カジノ`。', '見た目は勝つ割合を変えません。大勝負の札は `/持ち物` から使います。'].filter(Boolean).join('\n') }],
-      components: [row], allowedMentions: { parse: [] },
+      embeds: [{ title: ratesOnly ? '📜 勝負の御籤 · 中身と排出率' : '🎰 勝負の御籤 · 売り場', color: 0xb99553, description: [!cfg.casino.enabled || !cfg.casinoGacha.enabled ? '今はお休み中です。' : '', `所持：${fmt(w.balance)}${cfg.economy.currencyName} · お試し券${state.tickets}枚`, allOwned ? '見た目の品は全部そろいました！その分はお試し券になります。' : `あと${Math.max(1, cfg.casinoGacha.pity - state.pity)}回以内に未所持の見た目の品を保証。`, '', ...(ratesOnly ? lines : [`1回 ${fmt(cfg.casinoGacha.price)}${cfg.economy.currencyName}・10連 ${fmt(cfg.casinoGacha.price * 10)}${cfg.economy.currencyName}`, '景品は背景・卓の飾り・称号・お試し券・大勝負の札など。中身と確率は下のボタンから確認できます。']), '', '見た目の品は重複しません。天井では未所持の品の中で均等です。物御籤の券・天井とは別です。', '背景・卓のふち・席の飾り・称号などは、カジノWebの「🪭 着せ替え」で装備できます。入口は `/カジノ`。', '見た目は勝つ割合を変えません。大勝負の札は `/持ち物` から使います。'].filter(Boolean).join('\n') }],
+      components: ratesOnly ? [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('casino-gacha:open').setLabel('売り場へ入る').setStyle(ButtonStyle.Primary))] : [row, new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('casino-gacha:rates').setLabel('中身と排出率').setStyle(ButtonStyle.Secondary))], allowedMentions: { parse: [] },
     });
   }
 

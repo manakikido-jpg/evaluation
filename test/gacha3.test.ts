@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, Collection, type Guild } from 'discord.js';
+import { ChannelType, Collection, MessageFlags, type Guild } from 'discord.js';
 import { existsSync } from 'node:fs';
 import { gachaSchema } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
@@ -129,9 +129,10 @@ describe('祈願所の入口', () => {
     const makeMessage = (authorId: string) => {
       const message = {
         author: { id: authorId },
-        embeds: [{ title: '🎁 物御籤（ものみくじ）' }] as typeof next.embeds,
-        components: [{ toJSON: () => next.components[0]! }],
-        edit: vi.fn(async (view: typeof next) => { message.embeds = view.embeds; }),
+        embeds: [{ title: '🎁 物御籤（ものみくじ）' }],
+        flags: { has: () => false },
+        components: [{ toJSON: () => next.components[1]! }],
+        edit: vi.fn(async (view: typeof next) => { message.embeds = []; message.components = view.components.map(row => ({ toJSON: () => row })) as typeof message.components; message.flags = { has: () => true }; }),
       };
       return message;
     };
@@ -142,17 +143,24 @@ describe('祈願所の入口', () => {
     const guild = { client: { user: { id: botId } }, channels: { cache: new Collection([['prayer', channel('⛩️祈願所-ｶﾞﾁｬ⛩️', old)], ['gacha', channel('ｶﾞﾁｬ', second)]]) } } as unknown as Guild;
     const app = new GachaApp(db, () => cfg);
     expect(await app.refreshPanels(guild)).toBe(2);
-    expect(old.edit).toHaveBeenCalledWith({ ...next, attachments: [], allowedMentions: { parse: [] } });
+    expect(old.edit).toHaveBeenCalledWith({ ...next, content: null, embeds: [], attachments: [], allowedMentions: { parse: [] } });
     expect(other.edit).not.toHaveBeenCalled();
     expect(await app.refreshPanels(guild)).toBe(0);
   });
 
-  it('入口は添付画像と3つのボタンだけ（物御籤売り場・中身と排出率・勝負の御籤）。価格や確率は画像に固定しない', () => {
+  it('入口は物御籤の画像と2つのボタン、勝負の御籤の画像と2つのボタンを上下に並べる', () => {
     const panel = panelMessage('gacha');
-    expect(panel.embeds).toEqual([{ image: { url: 'attachment://gacha-prayer.png' } }]);
+    expect(panel.embeds).toBeUndefined();
+    expect(panel.flags).toBe(MessageFlags.IsComponentsV2);
+    expect(panel.components.map(c => c.type)).toEqual([12, 1, 12, 1]);
+    expect(panel.components[0].items[0]?.media.url).toBe('attachment://gacha-prayer.png');
+    expect(panel.components[2].items[0]?.media.url).toBe('attachment://casino-gacha-banner.png');
+    expect(panel.files).toHaveLength(2);
+    expect(existsSync(panel.files[1]!.attachment)).toBe(true);
+    expect(panel.components[3].components.map(b => [b.label, b.custom_id])).toEqual([['売り場へ入る', 'casino-gacha:open'], ['中身と排出率', 'casino-gacha:rates']]);
     expect(panel.files?.[0]?.name).toBe('gacha-prayer.png');
     expect(existsSync(panel.files![0]!.attachment)).toBe(true);
-    expect(panel.components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates', 'casino-gacha:open']);
+    expect(panel.components[1]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates']);
   });
 });
 
@@ -168,7 +176,7 @@ describe('📜 中身と排出率', () => {
     for (const t of ['**🎊 Discord Nitro 1 か月分**', '出る確率 **0.016%**', '残り 1', '**🎀「金色」**', '持っていたら出ない', '🔁 代わりの中身', '**🎫部屋代無料券 ×3**', '🎍 10/31 まで', '天井', '1 回 500 枚']) expect(text).toContain(t);
     expect(text).toContain('天井や運気アップがないとき');
     // 祈願所のボタン: 物御籤売り場・中身と排出率・勝負の御籤
-    expect(panelMessage('gacha').components[0]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates', 'casino-gacha:open']);
+    expect(panelMessage('gacha').components[1]!.components.map((b) => b.custom_id)).toEqual(['gacha:open', 'gacha:rates']);
   });
 
   it('中身が多くても最後まで読める。全ページが Discord の文字数上限に収まり、端のボタンは押せない', async () => {

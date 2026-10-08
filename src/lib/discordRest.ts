@@ -78,6 +78,7 @@ export type GuildRole = {
 export type RolePatch = { name?: string; color?: number; hoist?: boolean; mentionable?: boolean; permissions?: string };
 
 export type MessageBody = {
+  flags?: number;
   content?: string;
   /** image.url に attachment://ファイル名 と書くと、いっしょに送った写真をカードの中に出す */
   embeds?: {
