@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { panelMessage, type PanelKind } from '../discord/panels.js';
 import { CONTACT_SPECS, FULL, MINIMAL, P, RETIRED, ROLES, SHOP_COLORS, SHOP_TITLES, type ChannelSpec, type Layout, type RecruitSpec, type RoleKey, type Visibility } from './layout.js';
 import { coreName } from '../lib/names.js';
@@ -363,7 +364,8 @@ export async function applyLayout(
       if (ch.recruit) recruitIn.push({ channelId: found.id, spec: ch.recruit, parentId: catId });
       if (ch.panels && (isNew || opts.postPanels) && !opts.dryRun) {
         for (const kind of ch.panels as PanelKind[]) {
-          await api.sendMessage(found.id, panelMessage(kind));
+          const panel = panelMessage(kind);
+          await api.sendMessage(found.id, 'files' in panel ? { ...panel, files: panel.files.map(f => ({ name: f.name, contentType: 'image/png', data: new Uint8Array(readFileSync(f.attachment)) })) } : panel);
           result.panelsPosted.push(`#${ch.name}（${PANEL_LABEL[kind]}）`);
         }
       }

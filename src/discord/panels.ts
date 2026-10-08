@@ -4,9 +4,10 @@
  */
 
 import { fileURLToPath } from 'node:url';
-import type { APIEmbed } from 'discord.js';
+import { MessageFlags, type APIEmbed } from 'discord.js';
 
 const SHU = 0xd7003a;
+const CASINO_GACHA_BANNER = fileURLToPath(new URL('../web/public/gacha/casino-banner.png', import.meta.url));
 const GACHA_BANNER = fileURLToPath(new URL('../web/public/gacha/prayer-banner.png', import.meta.url));
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
@@ -19,10 +20,17 @@ export type PanelMessage = {
 };
 
 type PanelOptions = { /** 通貨の名前（なければ銭） */ coinName?: string };
-export type GachaPanelMessage = PanelMessage & { files: { attachment: string; name: string; description: string }[] };
+type Gallery = { type: 12; items: { media: { url: string }; description: string }[] };
+export type GachaPanelMessage = {
+  embeds?: never;
+  flags: MessageFlags.IsComponentsV2;
+  components: [Gallery, PanelMessage['components'][number], Gallery, PanelMessage['components'][number]];
+  files: { attachment: string; name: string; description: string }[];
+};
 
 export function panelMessage(kind: 'gacha', opts?: PanelOptions): GachaPanelMessage;
-export function panelMessage(kind: PanelKind, opts?: PanelOptions): PanelMessage;
+export function panelMessage(kind: Exclude<PanelKind, 'gacha'>, opts?: PanelOptions): PanelMessage;
+export function panelMessage(kind: PanelKind, opts?: PanelOptions): PanelMessage | GachaPanelMessage;
 export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMessage | GachaPanelMessage {
   const coin = opts.coinName ?? '銭';
   if (kind === 'shop') return shopPanel(coin);
@@ -79,17 +87,22 @@ export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMes
   }
   if (kind === 'gacha') {
     return {
-      embeds: [{ image: { url: 'attachment://gacha-prayer.png' } }],
-      files: [{ attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '咲楽ノ宮の祈願所。物御籤（ものみくじ）と、カジノの景品が当たる勝負の御籤。下のボタンから売り場・中身と排出率・勝負の御籤を開けます。' }],
+      flags: MessageFlags.IsComponentsV2,
+      files: [
+        { attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '祈願所の物御籤（ものみくじ）。下のボタンから売り場や中身と排出率を開けます。' },
+        { attachment: CASINO_GACHA_BANNER, name: 'casino-gacha-banner.png', description: '祈願所の勝負の御籤。背景・卓の飾り・称号など、カジノの景品が当たります。' },
+      ],
       components: [
-        {
-          type: 1,
-          components: [
-            { type: 2, style: 1, label: '物御籤売り場へ入る', custom_id: 'gacha:open', emoji: { name: '🎁' } },
-            { type: 2, style: 2, label: '中身と排出率', custom_id: 'gacha:rates', emoji: { name: '📜' } },
-            { type: 2, style: 2, label: '勝負の御籤（カジノの景品）', custom_id: 'casino-gacha:open', emoji: { name: '🎰' } },
-          ],
-        },
+        { type: 12, items: [{ media: { url: 'attachment://gacha-prayer.png' }, description: '祈願所・物御籤（ものみくじ）' }] },
+        { type: 1, components: [
+          { type: 2, style: 1, label: '物御籤売り場へ入る', custom_id: 'gacha:open', emoji: { name: '🎁' } },
+          { type: 2, style: 2, label: '中身と排出率', custom_id: 'gacha:rates', emoji: { name: '📜' } },
+        ] },
+        { type: 12, items: [{ media: { url: 'attachment://casino-gacha-banner.png' }, description: '祈願所・勝負の御籤（カジノの景品）' }] },
+        { type: 1, components: [
+          { type: 2, style: 1, label: '売り場へ入る', custom_id: 'casino-gacha:open', emoji: { name: '🎰' } },
+          { type: 2, style: 2, label: '中身と排出率', custom_id: 'casino-gacha:rates', emoji: { name: '📜' } },
+        ] },
       ],
     };
   }

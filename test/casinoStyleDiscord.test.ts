@@ -29,7 +29,7 @@ const interaction = (customId: string, roles: string[] = [ROLE.sanpaisha]) => ({
 it('祈願所の入口から、本人だけの中身と排出率を表示する', async () => {
   expect(JSON.stringify(panelMessage('gacha'))).toContain('casino-gacha:open');
   const app = new GachaApp(db, () => ({ ...cfg, casinoGacha: { ...cfg.casinoGacha, enabled: true } }));
-  const i = interaction('casino-gacha:open');
+  const i = interaction('casino-gacha:rates');
   await app.onInteraction(i as unknown as Interaction);
   expect(i.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
   const view = i.editReply.mock.calls[0]![0];
@@ -65,12 +65,31 @@ it('既存の祈願所パネルにも2つ目の入口を足す', async () => {
   const panel = panelMessage('gacha');
   const msg = {
     author: { id: 'bot' },
-    components: [{ toJSON: () => ({ components: [{ custom_id: 'gacha:open', label: panel.components[0]!.components[0]!.label }] }) }],
-    embeds: panel.embeds,
+    components: [{ toJSON: () => ({ components: [{ custom_id: 'gacha:open', label: panel.components[1]!.components[0]!.label }] }) }],
+    embeds: [],
     edit,
   };
   const channel = { id: 'prayer', type: ChannelType.GuildText, name: '祈願所', messages: { fetch: async () => new Collection([['message', msg]]) } };
   const guild = { client: { user: { id: 'bot' } }, channels: { cache: new Collection([['prayer', channel]]) } };
   expect(await new GachaApp(db, () => cfg).refreshPanels(guild as unknown as Guild)).toBe(1);
   expect(JSON.stringify(edit.mock.calls[0])).toContain('casino-gacha:open');
+});
+
+it('売り場と排出率を別のボタンで開き、見るだけでは銭を使わない', async () => {
+  const app = new GachaApp(db, () => ({ ...cfg, casinoGacha: { ...cfg.casinoGacha, enabled: true } }));
+  for (const id of ['casino-gacha:open', 'casino-gacha:rates']) {
+    const i = interaction(id);
+    await app.onInteraction(i as unknown as Interaction);
+    const view = i.editReply.mock.calls[0]![0];
+    if (id.endsWith(':open')) {
+      expect(view.embeds[0].title).toContain('売り場');
+      expect(JSON.stringify(view.components)).toContain('casino-gacha:draw:1');
+      expect(JSON.stringify(view.components)).toContain('casino-gacha:rates');
+    } else {
+      expect(view.embeds[0].title).toContain('中身と排出率');
+      expect(JSON.stringify(view.components)).not.toContain('casino-gacha:draw:');
+      expect(JSON.stringify(view.components)).toContain('casino-gacha:open');
+    }
+  }
+  expect((await walletOf(db, A)).balance).toBe(10000);
 });

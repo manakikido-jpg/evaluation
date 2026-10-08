@@ -528,6 +528,6 @@ describe('物御籤のはじめての 1 回', () => {
     expect(panel).toContain('物御籤売り場へ入る');
     expect(panel).toContain('attachment://gacha-prayer.png');
     expect(panel).toContain('ものみくじ');
-    expect(panelMessage('gacha').embeds[0]?.description).toBeUndefined();
+    expect(panelMessage('gacha')).not.toHaveProperty('embeds');
   });
 });

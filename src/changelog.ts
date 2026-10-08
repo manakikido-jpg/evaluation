@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-08-casino-gacha-panel', date: '2026-10-08', kind: 'improve', where: ['Discord'], title: '祈願所に写真付きの勝負の御籤の入口', items: ['物御籤の写真と2つのボタンの下に、勝負の御籤の写真と「売り場へ入る」「中身と排出率」を並べます。', '売り場では引くボタン、排出率では景品ごとの確率を表示します。見るだけでは銭を使いません。', '起動時に既存の祈願所の入口も更新します。新しい入口を別の投稿として増やすことはありません。'] },
   {
     id: '2026-10-08-casino-gacha-tuning',
     date: '2026-10-08',

@@ -55,3 +55,18 @@ describe('Discord REST', () => {
     expect(new Uint8Array(await file.arrayBuffer())).toEqual(data);
   });
 });
+
+it('上下2枚の写真とボタンの旗を、multipartでも保持する', async () => {
+  const { panelMessage } = await import('../src/discord/panels.js');
+  const panel = panelMessage('gacha');
+  const calls: RequestInit[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { calls.push(init); return new Response('{"id":"sample"}', {status: 200}); }));
+  await createDiscordActions('test-only').sendMessage('sample', { ...panel, files: panel.files.map(f => ({name: f.name, contentType: 'image/png', data: new Uint8Array([1,2,3])})) });
+  const form = calls[0]!.body as FormData;
+  const body = JSON.parse(form.get('payload_json') as string);
+  expect(body.flags).toBe(panel.flags);
+  expect(body.components.map((c: {type: number}) => c.type)).toEqual([12,1,12,1]);
+  expect(body).not.toHaveProperty('embeds');
+  expect(body.attachments.map((a: {filename: string}) => a.filename)).toEqual(['gacha-prayer.png', 'casino-gacha-banner.png']);
+  expect(form.get('files[1]')).toBeInstanceOf(File);
+});

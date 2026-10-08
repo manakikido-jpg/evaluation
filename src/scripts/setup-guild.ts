@@ -19,10 +19,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseGuildConfig } from '../config.js';
 import { applyLayout, dedupeGuild, mergeIntoConfig, SetupError, tidyGuild, type KnownIds, type SetupApi } from '../setup/apply.js';
 import { FULL, MINIMAL } from '../setup/layout.js';
+import { createDiscordActions, type MessageBody } from '../lib/discordRest.js';
 
 const API = 'https://discord.com/api/v10';
 
 function createSetupApi(token: string): SetupApi {
+  const messages = createDiscordActions(token);
   const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(`${API}${path}`, {
@@ -54,7 +56,7 @@ function createSetupApi(token: string): SetupApi {
     channels: (g) => call('GET', `/guilds/${g}/channels`),
     createChannel: (g, body) => call('POST', `/guilds/${g}/channels`, body),
     modifyGuild: async (g, body) => void (await call('PATCH', `/guilds/${g}`, body)),
-    sendMessage: async (c, body) => void (await call('POST', `/channels/${c}/messages`, body)),
+    sendMessage: async (c, body) => void (await messages.sendMessage(c, body as MessageBody)),
     deleteChannel: async (c) => void (await call('DELETE', `/channels/${c}`)),
     reorderChannels: async (g, body) => void (await call('PATCH', `/guilds/${g}/channels`, body)),
     reorderRoles: async (g, body) => void (await call('PATCH', `/guilds/${g}/roles`, body)),
