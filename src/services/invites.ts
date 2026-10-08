@@ -64,7 +64,7 @@ export async function rewardInviter(ctx: RewardContext, memberId: string, now = 
   const amount = stage === 'sanpaisha' ? ctx.cfg.economy.inviteSanpaishaReward : ctx.cfg.economy.inviteUjikoReward;
   const column = stage === 'sanpaisha' ? invites.rewardedAt : invites.ujikoRewardedAt;
   const [inv] = await ctx.db.select().from(invites).where(eq(invites.memberId, memberId));
-  if (!inv || inv.source === STAFF_NO_INVITER || inv.source === UNKNOWN_INVITER) return { status: 'none' };
+  if (!inv || inv.source === STAFF_NO_INVITER || inv.source === UNKNOWN_INVITER || inv.inviterId === SHARED_INVITER) return { status: 'none' };
   if ((stage === 'sanpaisha' ? inv.rewardedAt : inv.ujikoRewardedAt)) return { status: 'already' };
   const [inviter] = await ctx.db.select().from(members).where(eq(members.id, inv.inviterId));
   if (!inviter || inviter.leftAt || inviter.isBot || inv.inviterId === memberId) return { status: 'inviter_gone' };
@@ -169,7 +169,7 @@ export async function inviterOf(db: Db, memberId: string): Promise<string | unde
 /** 招待の記録（だれが・リンクか申請か） */
 export async function inviteOf(db: Db, memberId: string): Promise<{ inviterId: string; source: string } | undefined> {
   const [row] = await db.select({ inviterId: invites.inviterId, source: invites.source }).from(invites).where(eq(invites.memberId, memberId));
-  return (row?.source === STAFF_NO_INVITER || row?.source === UNKNOWN_INVITER) ? undefined : row;
+  return (row?.source === STAFF_NO_INVITER || row?.source === UNKNOWN_INVITER || row?.inviterId === SHARED_INVITER) ? undefined : row;
 }
 
 // ───────── BOT が作る招待リンク ─────────
@@ -251,6 +251,11 @@ export function inviteCodeOf(text: string): string {
  * 増えたリンクが 1 つだけのときだけ（同時に入ったなど、分からなければ undefined）。回数は覚え直し、Discord にないリンクは無効にする。
  */
 export async function matchJoin(db: Db, current: { code: string; uses: number }[], now = new Date()): Promise<string | undefined> {
+  return (await matchJoinLink(db, current, now))?.inviterId;
+}
+
+/** matchJoin と同じ。使われたリンク（BOT が作ったもの）を返す（共通リンクの名前を使うため） */
+export async function matchJoinLink(db: Db, current: { code: string; uses: number }[], now = new Date()): Promise<InviteLink | undefined> {
   const stored = await db.select().from(inviteLinks).where(isNull(inviteLinks.revokedAt));
   const byCode = new Map(current.map((c) => [c.code, c.uses]));
   const grew: InviteLink[] = [];
@@ -263,7 +268,33 @@ export async function matchJoin(db: Db, current: { code: string; uses: number }[
     if (uses > s.uses) grew.push(s);
     if (uses !== s.uses) await db.update(inviteLinks).set({ uses }).where(eq(inviteLinks.code, s.code));
   }
-  return grew.length === 1 ? grew[0]!.inviterId : undefined;
+  return grew.length === 1 ? grew[0] : undefined;
+}
+
+// ───────── 🔗 どのリンクで入ったか（BOT 以外が作ったリンクも） ─────────
+
+/** Discord にある招待リンク（作った人つき） */
+export type AnyInvite = { code: string; uses: number; inviterId?: string | null; inviterBot?: boolean; inviterName?: string | null };
+
+/**
+ * BOT が覚えていないリンク（メンバーが Discord で作ったもの・DISBOARD などの BOT が作ったもの）のうち、
+ * 前に数えたときから使われた回数が増えたリンクを 1 つ探す（2 つ以上増えたら分からないので undefined）。
+ * before にないリンクは、新しくできたリンク（使われた回数があれば、それで入ったとみなす）
+ */
+export function grewInvite(before: ReadonlyMap<string, number>, current: readonly AnyInvite[], known: ReadonlySet<string>): AnyInvite | undefined {
+  const grew = current.filter((c) => !known.has(c.code) && c.uses > (before.get(c.code) ?? 0));
+  return grew.length === 1 ? grew[0] : undefined;
+}
+
+/** 共通リンク（だれの招待でもない）で入った記録の source（「shared:DISBOARD」など） */
+export const sharedSource = (label: string) => `shared:${label.trim().slice(0, 40) || '共通リンク'}`;
+export const sharedLabelOf = (source: string | null | undefined) => (source?.startsWith('shared:') ? source.slice('shared:'.length) : undefined);
+
+/** 共通リンク（SNS・宣伝サイト・DISBOARD など）で入ったことを記録する（招待のお礼は出さない） */
+export async function recordSharedJoin(db: Db, memberId: string, label: string): Promise<boolean> {
+  if (!isSnowflake(memberId)) return false;
+  const rows = await db.insert(invites).values({ memberId, inviterId: SHARED_INVITER, source: sharedSource(label) }).onConflictDoNothing().returning();
+  return rows.length > 0;
 }
 
 /** 浮上したとみなす通話の分数（発言は 1 回でよい） */
@@ -327,7 +358,7 @@ export async function inviteRewardRows(db: Db): Promise<InviteRewardRow[]> {
     .from(members).leftJoin(invites, eq(invites.memberId, members.id))
     .where(and(isNull(invites.memberId), isNull(members.leftAt), eq(members.isBot, false)))
     .orderBy(desc(members.joinedAt)).limit(200);
-  return [...known.map((r) => ({ ...r, inviterId: (r.source === STAFF_NO_INVITER || r.source === UNKNOWN_INVITER) ? null : r.inviterId, roleIds: r.roleIds ?? [] })), ...unknown.map((r) => ({
+  return [...known.map((r) => ({ ...r, inviterId: (r.source === STAFF_NO_INVITER || r.source === UNKNOWN_INVITER || r.inviterId === SHARED_INVITER) ? null : r.inviterId, roleIds: r.roleIds ?? [] })), ...unknown.map((r) => ({
     memberId: r.memberId, roleIds: r.roleIds, createdAt: r.createdAt ?? new Date(0), joinedAt: r.createdAt, inviterId: null, leftAt: null,
     source: null, rewardedAt: null, reward: 0, ujikoRewardedAt: null, ujikoReward: 0, legacyReward: false,
   }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 200);

@@ -3,7 +3,7 @@ import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coreName } from '../lib/names.js';
 import { logger } from '../lib/logger.js';
-import { activeLinkOf, inviteCodeOf, inviteCountOf, matchJoin, recordInvite, revokeSharedLink, saveLink, SHARED_INVITER, sharedLinkNamed, sharedLinks } from '../services/invites.js';
+import { activeLinkOf, grewInvite, inviteCodeOf, inviteCountOf, knownLinkCodes, matchJoin, matchJoinLink, recordInvite, recordSharedJoin, type AnyInvite, revokeSharedLink, saveLink, SHARED_INVITER, sharedLinkNamed, sharedLinks } from '../services/invites.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -21,11 +21,16 @@ export class InviteLinkApp {
     private readonly cfg: () => GuildConfig,
   ) {}
 
+  /** BOT が覚えていないリンク（メンバー・DISBOARD などが作ったもの）の、前に数えた使われた回数 */
+  private others = new Map<string, number>();
+
   /** 起動したとき: 止まっていた間に使われた分は、だれか分からないので回数だけ覚え直す */
   async attach(guild: Guild): Promise<void> {
     this.guild = guild;
-    const current = await this.current().catch((err: unknown) => (logger.warn({ err }, 'invite links fetch failed'), undefined));
-    if (current) await matchJoin(this.db, current);
+    const current = await this.all().catch((err: unknown) => (logger.warn({ err }, 'invite links fetch failed'), undefined));
+    if (!current) return;
+    await matchJoin(this.db, current);
+    this.others = new Map(current.map((c) => [c.code, c.uses]));
   }
 
   /** 招待リンクを置く入口（#鳥居） */
@@ -44,17 +49,42 @@ export class InviteLinkApp {
     return [...invites.values()].map((i) => ({ code: i.code, uses: i.uses ?? 0 }));
   }
 
+  /** サーバーにある招待リンク全部（作った人つき）。読めなければ（「サーバーの管理」がない）#鳥居 のリンクだけ */
+  private async all(): Promise<AnyInvite[] | undefined> {
+    const g = this.guild;
+    if (!g) return undefined;
+    const list = await g.invites.fetch({ cache: false }).catch(() => undefined);
+    if (!list) return this.current();
+    return [...list.values()].map((i) => ({ code: i.code, uses: i.uses ?? 0, inviterId: i.inviter?.id ?? null, inviterBot: i.inviter?.bot ?? false, inviterName: i.inviter?.username ?? null }));
+  }
+
   onMemberAdd(member: GuildMember): Promise<void> {
     if (member.guild.id !== this.cfg().guildId || member.user.bot) return Promise.resolve();
     const run = this.queue.then(async () => {
-      const current = await this.current();
+      const current = await this.all();
       if (!current) return;
-      const inviterId = await matchJoin(this.db, current);
-      // 共通の招待リンク（SNS・宣伝用）で入った人は、だれの招待にもしない
-      if (inviterId === SHARED_INVITER) return void logger.info({ memberId: member.id }, 'joined by shared invite link');
-      if (inviterId && inviterId !== member.id && (await recordInvite(this.db, member.id, inviterId, 'link'))) {
-        logger.info({ memberId: member.id, inviterId }, 'joined by invite link');
+      const before = this.others;
+      this.others = new Map(current.map((c) => [c.code, c.uses]));
+      const link = await matchJoinLink(this.db, current);
+      // 共通の招待リンク（SNS・宣伝用）で入った人は、だれの招待にもしない（どの共通リンクかは残す）
+      if (link?.inviterId === SHARED_INVITER) {
+        await recordSharedJoin(this.db, member.id, link.label ?? '共通リンク');
+        return void logger.info({ memberId: member.id, label: link.label }, 'joined by shared invite link');
       }
+      if (link) {
+        if (link.inviterId !== member.id && (await recordInvite(this.db, member.id, link.inviterId, 'link'))) logger.info({ memberId: member.id, inviterId: link.inviterId }, 'joined by invite link');
+        return;
+      }
+      // BOT が覚えていないリンク: メンバーが作ったリンクなら、その人の招待。DISBOARD などの BOT のリンクは共通リンクとしてまとめる
+      const known = new Set((await knownLinkCodes(this.db)));
+      const other = grewInvite(before, current, known);
+      if (!other) return;
+      if (other.inviterId && !other.inviterBot) {
+        if (other.inviterId !== member.id && (await recordInvite(this.db, member.id, other.inviterId, 'link'))) logger.info({ memberId: member.id, inviterId: other.inviterId, code: other.code }, 'joined by member-made invite');
+        return;
+      }
+      await recordSharedJoin(this.db, member.id, other.inviterName ?? 'Discord の招待');
+      logger.info({ memberId: member.id, label: other.inviterName, code: other.code }, 'joined by bot-made invite');
     });
     this.queue = run.catch((err: unknown) => logger.warn({ err }, 'invite link match failed'));
     return this.queue.then(() => undefined);

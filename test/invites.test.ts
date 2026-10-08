@@ -383,3 +383,30 @@ describe('取りこぼした招待報酬の再確認', () => {
     expect((await walletOf(db, INVITER)).balance).toBe(500);
   });
 });
+
+describe('🔗 どのリンクで入ったか（BOT が覚えていないリンクも）', () => {
+  it('増えたリンクを 1 つだけ見つける（2 つ以上・BOT のリンクは数えない）', async () => {
+    const { grewInvite } = await import('../src/services/invites.js');
+    const before = new Map([['mine', 3], ['disb', 10], ['bot1', 1]]);
+    const known = new Set(['bot1']);
+    expect(grewInvite(before, [{ code: 'mine', uses: 4, inviterId: INVITER }, { code: 'disb', uses: 10 }, { code: 'bot1', uses: 2 }], known)?.code).toBe('mine');
+    expect(grewInvite(before, [{ code: 'mine', uses: 4 }, { code: 'disb', uses: 11 }], known)).toBeUndefined();
+    // 新しくできたリンク（前にない）で 1 回使われた
+    expect(grewInvite(before, [{ code: 'new', uses: 1 }, { code: 'mine', uses: 3 }], known)?.code).toBe('new');
+    expect(grewInvite(before, [{ code: 'mine', uses: 3 }], known)).toBeUndefined();
+  });
+
+  it('共通リンク（DISBOARD など）で入った人はまとめて記録し、招待のお礼は出さない・不明とは分ける', async () => {
+    const { recordSharedJoin, sharedLabelOf } = await import('../src/services/invites.js');
+    const ujiko = cfg.ranks.find((r) => r.key === 'ujiko')!;
+    await db.update(members).set({ roleIds: [ujiko.roleId] }).where(eq(members.id, NEW));
+    expect(await recordSharedJoin(db, NEW, 'DISBOARD')).toBe(true);
+    expect(await recordSharedJoin(db, NEW, 'ルミナ')).toBe(false);
+    for (const stage of ['sanpaisha', 'ujiko'] as const) expect((await rewardInviter(ctx(), NEW, T0, stage)).status).toBe('none');
+    expect(await inviterOf(db, NEW)).toBeUndefined();
+    const row = (await inviteRewardRows(db)).find((r) => r.memberId === NEW)!;
+    expect(row.inviterId).toBeNull();
+    expect(sharedLabelOf(row.source)).toBe('DISBOARD');
+    expect(dms).toHaveLength(0);
+  });
+});

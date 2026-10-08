@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-08-invite-any-link',
+    date: '2026-10-08',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🔗 どのリンクで入ったかを、全部のリンクで調べる',
+    items: [
+      'メンバーが Discord で自分で作った招待リンクで入った人も、作った人の招待として記録します。',
+      'DISBOARD などの BOT のリンクや共通リンク（SNS・宣伝用）で入った人は「🔗 共通リンク: 名前」としてまとめ、招待元不明と分けて人数を出します（招待のお礼は出ません）。',
+    ],
+  },
+  {
     id: '2026-10-08-cast-profile-photos', date: '2026-10-08', kind: 'improve', where: ['社務所Web', 'Discord'],
     title: 'キャストごとの写真を登録できるように',
     items: [

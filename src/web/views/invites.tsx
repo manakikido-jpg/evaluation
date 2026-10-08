@@ -4,7 +4,7 @@ import { highestRank } from '../../domain/ranks.js';
 import type { InviteRewardRow } from '../../services/invites.js';
 import type { AdminSession, Invite, InviteLink } from '../../db/schema.js';
 import type { GuildInvite } from '../../lib/discordRest.js';
-import { SHARED_INVITER, STAFF_NO_INVITER, UNKNOWN_INVITER } from '../../services/invites.js';
+import { SHARED_INVITER, STAFF_NO_INVITER, UNKNOWN_INVITER, sharedLabelOf } from '../../services/invites.js';
 import { jstShort, remaining } from '../../services/tempGrants.js';
 import { Layout } from './layout.js';
 
@@ -73,7 +73,7 @@ export function InvitesPage(props: {
   const shown = sortInviteRows(props.rewards.filter(
     (r) =>
       props.filter === 'all' ||
-      (props.filter === 'unknown' ? !r.inviterId && r.source !== STAFF_NO_INVITER : props.filter === 'paid' ? !!r.rewardedAt && !!r.ujikoRewardedAt : !!r.inviterId && (!r.rewardedAt || !r.ujikoRewardedAt)),
+      (props.filter === 'unknown' ? !r.inviterId && r.source !== STAFF_NO_INVITER && !sharedLabelOf(r.source) : props.filter === 'paid' ? !!r.rewardedAt && !!r.ujikoRewardedAt : !!r.inviterId && (!r.rewardedAt || !r.ujikoRewardedAt)),
   ), props.sort, props.order, props.cfg, name);
   const totals = new Map<string, { invited: number; paid: number; waiting: number }>();
   for (const r of props.rewards)
@@ -86,6 +86,7 @@ export function InvitesPage(props: {
     }
   const status = (r: InviteRewardRow, stage: 'sanpaisha' | 'ujiko') => {
     if (r.source === STAFF_NO_INVITER) return <span class="tag gray">対象外・招待なし</span>;
+    if (sharedLabelOf(r.source)) return <span class="tag gray">対象外・共通リンク</span>;
     const at = stage === 'sanpaisha' ? r.rewardedAt : r.ujikoRewardedAt;
     const amount = stage === 'sanpaisha' ? r.reward : r.ujikoReward;
     if (at)
@@ -153,10 +154,19 @@ export function InvitesPage(props: {
         <p class="note">在籍者の新しい記録から最大200人を表示対象にして、その中で並び替えます。参加日が不明な人は最後に表示します。退出した人の記録は残し、一覧から非表示にします。以下の集計は表示対象の記録だけです。招待元が不明な人には自動で払いません。</p>
         </details>
         <div class="invite-summary">
-          <div><span>招待元不明</span><strong>{props.rewards.filter(r => !r.inviterId && r.source !== STAFF_NO_INVITER).length}<small>人</small></strong></div>
+          <div><span>招待元不明</span><strong>{props.rewards.filter(r => !r.inviterId && r.source !== STAFF_NO_INVITER && !sharedLabelOf(r.source)).length}<small>人</small></strong></div>
+          <div><span>共通リンク</span><strong>{props.rewards.filter(r => sharedLabelOf(r.source)).length}<small>人</small></strong></div>
           <div><span>両段階完了</span><strong>{props.rewards.filter(r => r.rewardedAt && r.ujikoRewardedAt).length}<small>人</small></strong></div>
           <div><span>支払額（表示対象）</span><strong>{props.rewards.reduce((sum, r) => sum + r.reward + r.ujikoReward, 0).toLocaleString('ja-JP')}<small>{props.cfg.economy.currencyName}</small></strong></div>
         </div>
+        {(() => {
+          const counts = new Map<string, number>();
+          for (const r of props.rewards) {
+            const l = sharedLabelOf(r.source);
+            if (l) counts.set(l, (counts.get(l) ?? 0) + 1);
+          }
+          return counts.size ? <p class="note">🔗 共通リンクで入った人（リンクの名前・作った BOT ごと）: {[...counts].sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l} ${n}人`).join(' · ')}</p> : null;
+        })()}
         <nav class="tabs" aria-label="報酬の絞り込み">
           {(
             [
@@ -207,9 +217,9 @@ export function InvitesPage(props: {
                     <div class="note">参加日: {r.joinedAt ? jstShort(r.joinedAt) : '不明'}</div>
                   </td>
                   <td data-label="招待した人">
-                    {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : r.source === STAFF_NO_INVITER ? '招待なし（運営）' : r.source === UNKNOWN_INVITER ? '不明（確認済み）' : '不明'}
-                    <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : r.source === STAFF_NO_INVITER ? '招待報酬の対象外' : r.source === UNKNOWN_INVITER ? '運営が不明として登録・報酬は保留' : '招待元の記録なし'}</div>
-                    {!r.inviterId && r.source !== STAFF_NO_INVITER && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
+                    {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : sharedLabelOf(r.source) ? `🔗 共通リンク: ${sharedLabelOf(r.source)}` : r.source === STAFF_NO_INVITER ? '招待なし（運営）' : r.source === UNKNOWN_INVITER ? '不明（確認済み）' : '不明'}
+                    <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : r.source === STAFF_NO_INVITER ? '招待報酬の対象外' : sharedLabelOf(r.source) ? 'SNS・宣伝サイトなどの共通リンクで入った（招待報酬の対象外）' : r.source === UNKNOWN_INVITER ? '運営が不明として登録・報酬は保留' : '招待元の記録なし'}</div>
+                    {!r.inviterId && r.source !== STAFF_NO_INVITER && !sharedLabelOf(r.source) && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
                       <form method="post" action={`/invites/members/${r.memberId}/assign`}>
                         <Csrf session={session} />
                         <label class="field"><span>招待した人</span><select name="inviterId" required><option value="">選んでください</option><option value={UNKNOWN_INVITER} selected={r.source === UNKNOWN_INVITER}>不明</option>{adminLevelOf(props.cfg, r.roleIds) && <option value={STAFF_NO_INVITER}>招待なし（運営）</option>}{props.candidates.filter(m => m.id !== r.memberId).map(m => <option value={m.id}>{m.name}（{m.id}）</option>)}</select></label>
