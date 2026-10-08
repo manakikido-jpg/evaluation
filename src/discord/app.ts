@@ -355,7 +355,7 @@ export class ShuinApp {
 
     await this.reply(interaction, giveReply(receiverId, outcome));
     if (outcome.kind === 'given') {
-      await this.log(giveLog(interaction.user.id, outcome.giverRank, receiverId, outcome.weight, outcome.goen));
+      await this.log(giveLog(interaction.user.id, outcome.giverRank, receiverId, outcome.weight, outcome.goen, outcome.addedGoen));
     }
   }
 
@@ -372,7 +372,8 @@ export class ShuinApp {
   private async vcList(interaction: ButtonInteraction<'cached'>, channelId: string): Promise<void> {
     const channel = interaction.member.voice.channel ?? interaction.guild.channels.cache.get(channelId);
     const others = channel?.isVoiceBased() ? [...channel.members.values()].filter((m) => !m.user.bot && m.id !== interaction.user.id) : [];
-    const stamped = await stampedBy(this.db, interaction.user.id, others.map((m) => m.id));
+    const giverRank = highestRank(this.cfg.ranks, toInfo(interaction.member).roleIds);
+    const stamped = await stampedBy(this.db, interaction.user.id, others.map((m) => m.id), giverRank?.weight ?? 0);
     const people = others
       .map((m) => ({ id: m.id, name: m.displayName, stamped: stamped.has(m.id) }))
       // まだ押していない人を先に

@@ -1,10 +1,10 @@
-import { and, count, desc, eq, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { shuin } from '../db/schema.js';
 import { specialGoenOf } from './specialGoen.js';
 
 export type GiveResult =
-  | { status: 'given'; weight: number; goen: number; restamped: boolean }
+  | { status: 'given'; weight: number; goen: number; restamped: boolean; addedGoen: number }
   | { status: 'already'; weight: number; goen: number };
 
 export type RevokeResult = { status: 'revoked'; weight: number; goen: number } | { status: 'not_found'; goen: number };
@@ -19,41 +19,29 @@ export async function goenOf(db: Db, userId: string): Promise<number> {
 }
 
 /**
- * 朱印を押す。同じ相手には 1 回だけ。
- * 取り消し済みの朱印があれば、今の格で押し直す。
- * 二重クリックなどで同時に呼ばれても、主キーと条件付き UPDATE で 1 回分しか入らない。
+ * 同じ相手には1回分。格が上がったら、前のご縁を残して差額だけ足す。
+ * 取り消し済みなら今の格で押し直す。行をロックし、連打でも差額は1回だけ。
  */
 export async function giveShuin(
   db: Db,
   input: { giverId: string; receiverId: string; weight: number; giverRank: string },
 ): Promise<GiveResult> {
   if (input.giverId === input.receiverId) throw new Error('自分には朱印を押せません');
-
-  const inserted = await db
-    .insert(shuin)
-    .values({ ...input })
-    .onConflictDoNothing()
-    .returning({ weight: shuin.weight });
-  if (inserted[0]) {
-    return { status: 'given', weight: inserted[0].weight, goen: await goenOf(db, input.receiverId), restamped: false };
-  }
-
-  const restamped = await db
-    .update(shuin)
-    .set({ weight: input.weight, giverRank: input.giverRank, createdAt: sql`now()`, revokedAt: null })
-    .where(
-      and(eq(shuin.giverId, input.giverId), eq(shuin.receiverId, input.receiverId), isNotNull(shuin.revokedAt)),
-    )
-    .returning({ weight: shuin.weight });
-  if (restamped[0]) {
-    return { status: 'given', weight: restamped[0].weight, goen: await goenOf(db, input.receiverId), restamped: true };
-  }
-
-  const [existing] = await db
-    .select({ weight: shuin.weight })
-    .from(shuin)
-    .where(and(eq(shuin.giverId, input.giverId), eq(shuin.receiverId, input.receiverId)));
-  return { status: 'already', weight: existing?.weight ?? 0, goen: await goenOf(db, input.receiverId) };
+  return db.transaction(async (tx) => {
+    const inserted = await tx.insert(shuin).values(input).onConflictDoNothing().returning({ weight: shuin.weight });
+    if (inserted[0]) {
+      return { status: 'given', weight: inserted[0].weight, goen: await goenOf(tx, input.receiverId), restamped: false, addedGoen: inserted[0].weight };
+    }
+    const [previous] = await tx.select({ weight: shuin.weight, revokedAt: shuin.revokedAt }).from(shuin)
+      .where(and(eq(shuin.giverId, input.giverId), eq(shuin.receiverId, input.receiverId))).for('update');
+    if (previous && (previous.revokedAt !== null || input.weight > previous.weight)) {
+      await tx.update(shuin).set({ weight: input.weight, giverRank: input.giverRank, createdAt: sql`now()`, revokedAt: null })
+        .where(and(eq(shuin.giverId, input.giverId), eq(shuin.receiverId, input.receiverId)));
+      const addedGoen = input.weight - (previous.revokedAt === null ? previous.weight : 0);
+      return { status: 'given', weight: input.weight, goen: await goenOf(tx, input.receiverId), restamped: true, addedGoen };
+    }
+    return { status: 'already', weight: previous?.weight ?? 0, goen: await goenOf(tx, input.receiverId) };
+  });
 }
 
 /** 朱印を取り消す（ご縁も減る。役職は下げない） */
@@ -136,12 +124,12 @@ export async function giversOf(db: Db, userId: string, limit = 100): Promise<{ g
     .limit(limit);
 }
 
-/** その人が今朱印を押している相手（取り消したものは除く）のうち、ids にいる人 */
-export async function stampedBy(db: Db, giverId: string, ids: string[]): Promise<Set<string>> {
+/** 今の格で押し済みの相手。前の格の朱印は残すが、押し直せるのでチェックを外す */
+export async function stampedBy(db: Db, giverId: string, ids: string[], currentWeight = 0): Promise<Set<string>> {
   if (!ids.length) return new Set();
   const rows = await db
     .select({ id: shuin.receiverId })
     .from(shuin)
-    .where(and(eq(shuin.giverId, giverId), inArray(shuin.receiverId, ids), isNull(shuin.revokedAt)));
+    .where(and(eq(shuin.giverId, giverId), inArray(shuin.receiverId, ids), isNull(shuin.revokedAt), gte(shuin.weight, currentWeight)));
   return new Set(rows.map((r) => r.id));
 }

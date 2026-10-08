@@ -21,7 +21,7 @@ export type GiveDenied =
 
 export type GiveOutcome =
   | { kind: 'denied'; reason: GiveDenied }
-  | { kind: 'given'; giverRank: Rank; weight: number; goen: number; restamped: boolean; promotion?: Promotion }
+  | { kind: 'given'; giverRank: Rank; weight: number; goen: number; restamped: boolean; addedGoen: number; promotion?: Promotion }
   | { kind: 'already'; weight: number; goen: number };
 
 export async function giveFlow(
@@ -66,6 +66,7 @@ export async function giveFlow(
     weight: res.weight,
     goen: res.goen,
     restamped: res.restamped,
+    addedGoen: res.addedGoen,
     ...(promotion ? { promotion } : {}),
   };
 }

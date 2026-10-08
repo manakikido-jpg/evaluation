@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { giveFlow, revokeFlow } from '../src/services/flows.js';
-import { giversOf, giveShuin, goenOf, goshuinchoOf } from '../src/services/shuin.js';
+import { giversOf, giveShuin, goenOf, goshuinchoOf, stampedBy } from '../src/services/shuin.js';
+import { walletOf } from '../src/services/economy.js';
 import { cfg, makeDb, member, ROLE } from './helpers.js';
 
 let db: Db;
@@ -71,6 +72,43 @@ describe('朱印を押す', () => {
 });
 
 describe('昇格', () => {
+  it('昇格前のご縁を残し、押し直すと差額だけ付く。通貨は再発行しない', async () => {
+    const receiver = member(B, ROLE.sanpaisha);
+    await giveFlow(db, cfg, member(A, ROLE.sanpaisha), receiver);
+    const beforeGiver = (await walletOf(db, A)).balance;
+    const beforeReceiver = (await walletOf(db, B)).balance;
+    expect(await goenOf(db, B)).toBe(1);
+    expect(await stampedBy(db, A, [B], 1)).toEqual(new Set([B]));
+    expect(await stampedBy(db, A, [B], 2)).toEqual(new Set());
+    expect(await goenOf(db, B)).toBe(1);
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), receiver)).toMatchObject({ kind: 'given', weight: 2, addedGoen: 1, goen: 2, restamped: true });
+    expect(await stampedBy(db, A, [B], 2)).toEqual(new Set([B]));
+    expect((await walletOf(db, A)).balance).toBe(beforeGiver);
+    expect((await walletOf(db, B)).balance).toBe(beforeReceiver);
+    expect((await goshuinchoOf(db, B)).receivedCount).toBe(1);
+    expect((await goshuinchoOf(db, B)).byRank).toEqual({ ujiko: 1 });
+    expect(await giveFlow(db, cfg, member(A, ROLE.ujiko), receiver)).toMatchObject({ kind: 'already', weight: 2, goen: 2 });
+    expect(await giveFlow(db, cfg, member(A, ROLE.sanpaisha), receiver)).toMatchObject({ kind: 'already', weight: 2, goen: 2 });
+  });
+
+  it('さらに昇格して連打しても、同じ相手へ差額は1回だけ', async () => {
+    await giveShuin(db, { giverId: A, receiverId: B, weight: 1, giverRank: 'sanpaisha' });
+    const results = await Promise.all(Array.from({ length: 5 }, () => giveShuin(db, { giverId: A, receiverId: B, weight: 3, giverRank: 'sewayaku' })));
+    expect(results.filter(r => r.status === 'given')).toHaveLength(1);
+    expect(results.find(r => r.status === 'given')).toMatchObject({ addedGoen: 2, weight: 3, restamped: true });
+    expect(await goenOf(db, B)).toBe(3);
+    expect(await revokeFlow(db, A, B)).toEqual({ status: 'revoked', weight: 3, goen: 0 });
+    expect(await giveFlow(db, cfg, member(A, ROLE.sewayaku), member(B, ROLE.sanpaisha))).toMatchObject({ kind: 'given', addedGoen: 3, goen: 3, restamped: true });
+  });
+
+  it('差額で相手の昇格条件に届いたら、昇格も判定する', async () => {
+    const receiver = member(B, ROLE.sanpaisha);
+    await giveShuin(db, { giverId: C, receiverId: B, weight: 18, giverRank: 'guji' });
+    await giveFlow(db, cfg, member(A, ROLE.sanpaisha), receiver);
+    const result = await giveFlow(db, cfg, member(A, ROLE.ujiko), receiver);
+    expect(result).toMatchObject({ kind: 'given', addedGoen: 1, goen: 20, promotion: { to: { key: 'ujiko' } } });
+  });
+
   it('ご縁が基準を超えたら昇格が返る', async () => {
     const receiver = member(B, ROLE.sanpaisha);
     // 宮司(10) + 神職(5) で 15、世話役(3) で 18、氏子(2) で 20

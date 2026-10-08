@@ -58,7 +58,7 @@ export function giveReply(receiverId: string, outcome: GiveOutcome): Reply {
     case 'given': {
       const verb = outcome.restamped ? '押し直しました' : '押しました';
       return {
-        content: `🌸 ${mention(receiverId)} さまに朱印を${verb}（格 ${outcome.weight}・ご縁 +${outcome.weight}）`,
+        content: `🌸 ${mention(receiverId)} さまに朱印を${verb}（格 ${outcome.weight}・ご縁 +${outcome.addedGoen}）`,
         components: [row(cardButton(receiverId), revokeButton(receiverId))],
       };
     }
@@ -175,8 +175,8 @@ export function promotionAnnouncement(userId: string, promotion: Promotion, goen
 }
 
 /** #記録 用のログ */
-export function giveLog(giverId: string, giverRank: Rank, receiverId: string, weight: number, goen: number): string {
-  return `🌸 朱印 ${mention(giverId)}（${giverRank.name}・格 ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}`;
+export function giveLog(giverId: string, giverRank: Rank, receiverId: string, weight: number, goen: number, addedGoen: number): string {
+  return `🌸 朱印 ${mention(giverId)}（${giverRank.name}・格 ${weight}）→ ${mention(receiverId)}　ご縁 ${goen}（+${addedGoen}）`;
 }
 
 export function revokeLog(giverId: string, receiverId: string, weight: number, goen: number): string {
@@ -205,7 +205,7 @@ export function vcPanel(channelId: string): Reply {
   };
 }
 
-/** 通話にいる人のボタン。押すとその人のプロフィール（そこから朱印を押せる）。朱印を押した人は ✅ */
+/** 通話にいる人のボタン。押すとその人のプロフィール（そこから朱印を押せる）。今の格で朱印を押した人は ✅。昇格前の朱印は差額を付けられるので 📕 */
 export function vcList(people: { id: string; name: string; stamped: boolean }[], total: number): Reply {
   if (!people.length) return { content: '今この通話には、ほかの方がいません。' };
   const buttons = people.slice(0, VC_LIST_MAX).map((p) => {
@@ -219,5 +219,6 @@ export function vcList(people: { id: string; name: string; stamped: boolean }[],
   const rows: Row[] = [];
   for (let i = 0; i < buttons.length; i += 5) rows.push(row(...buttons.slice(i, i + 5)));
   const more = total > VC_LIST_MAX ? `\n-# ほかの方は、名前を右クリック（スマホは長押し）→「アプリ」→「プロフィール」` : '';
-  return { content: `📕 プロフィールを見る人を選んでください（プロフィールの「🌸 朱印を押す」で朱印を押せます。押した人は ✅）${more}`, components: rows };
+  return { content: `📕 プロフィールを見る人を選んでください（プロフィールの「🌸 朱印を押す」で朱印を押せます。今の格で押した人は ✅）
+-# 昇格で格が上がったら押し直せます。前のご縁を残し、差額だけ付きます。${more}`, components: rows };
 }

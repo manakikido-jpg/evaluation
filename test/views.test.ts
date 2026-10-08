@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { commandDefinitions } from '../src/discord/commands.js';
 import { parseShuinId, shuinId } from '../src/discord/ids.js';
-import { breakdownLine, giveReply, goshuinchoReply, giversReply, promotionAnnouncement, revokeReply } from '../src/discord/views.js';
+import { breakdownLine, giveLog, giveReply, goshuinchoReply, giversReply, promotionAnnouncement, revokeReply } from '../src/discord/views.js';
 import { decidePromotion } from '../src/domain/ranks.js';
 import { KeyedLock } from '../src/lib/lock.js';
 import { cfg, ROLE } from './helpers.js';
@@ -35,8 +35,14 @@ describe('コマンド定義', () => {
 });
 
 describe('表示', () => {
+  it('昇格後の押し直しは合計の格と追加の差額を分けて表示する', () => {
+    const rank = cfg.ranks.find(r => r.key === 'ujiko')!;
+    const result = giveReply(B, {kind: 'given', giverRank: rank, weight: 2, addedGoen: 1, goen: 2, restamped: true});
+    expect(result.content).toContain('押し直しました（格 2・ご縁 +1）');
+    expect(giveLog('200000000000000001', rank, B, 2, 2, 1)).toContain('ご縁 2（+1）');
+  });
   it('押した結果', () => {
-    const r = giveReply(B, { kind: 'given', giverRank: cfg.ranks[2]!, weight: 3, goen: 42, restamped: false });
+    const r = giveReply(B, { kind: 'given', giverRank: cfg.ranks[2]!, weight: 3, addedGoen: 3, goen: 42, restamped: false });
     expect(r.content).toBe(`🌸 <@${B}> さまに朱印を押しました（格 3・ご縁 +3）`);
     expect(r.components?.[0]?.components).toHaveLength(2);
   });
