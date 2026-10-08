@@ -20,6 +20,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-08-cast-reception-image', date: '2026-10-08', kind: 'new', where: ['Discord'],
+    title: 'キャスト本人の受付を1枚の画像に',
+    items: [
+      '「キャストの方」から、アイコン・待機状況・今日の予約・現在の指名・今月の受取額と回数を、本人だけに見える画像で確認できます。',
+      '画像の下に待機切り替え・受付停止・部屋へ入る・更新のボタンを並べます。待機を切り替えると画像も描き直します。',
+      '予約が多いときは「予約一覧」で10件ずつ確認できます。日付と月の区切りは日本時間です。',
+    ],
+  },
+  {
     id: '2026-10-08-cast-session-safety', date: '2026-10-08', kind: 'improve', where: ['Discord'],
     title: 'キャストの専用VC・予約と延長を整える',
     items: [

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, gte, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { castImages, castSessions, casts, members, settings, type Cast, type CastSession } from '../db/schema.js';
@@ -518,7 +518,7 @@ export async function roomDeleted(db: Db, id: number): Promise<void> {
 export type CastStat = { castId: string; count: number; earned: number; ratingAvg: number | null; ratings: number };
 
 /** since からの指名数・売り上げ・評価（終わったものだけ） */
-export async function castStats(db: Db, since: Date): Promise<CastStat[]> {
+export async function castStats(db: Db, since: Date, castId?: string, until?: Date): Promise<CastStat[]> {
   const rows = await db
     .select({
       castId: castSessions.castId,
@@ -528,7 +528,7 @@ export async function castStats(db: Db, since: Date): Promise<CastStat[]> {
       ratings: sql<number>`count(${castSessions.rating})::int`,
     })
     .from(castSessions)
-    .where(and(eq(castSessions.status, 'done'), gte(castSessions.closedAt, since)))
+    .where(and(eq(castSessions.status, 'done'), gte(castSessions.closedAt, since), castId ? eq(castSessions.castId, castId) : undefined, until ? lt(castSessions.closedAt, until) : undefined))
     .groupBy(castSessions.castId);
   return rows.map((r) => ({ ...r, ratingAvg: r.ratingAvg === null ? null : Math.round(r.ratingAvg * 10) / 10 })).sort((a, b) => b.count - a.count || b.earned - a.earned);
 }
@@ -537,6 +537,31 @@ export async function castStats(db: Db, since: Date): Promise<CastStat[]> {
 export function monthStart(now = new Date()): Date {
   const j = new Date(now.getTime() + JST);
   return new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), 1) - JST);
+}
+
+export type CastReception = {
+  cast: Cast;
+  state: 'waiting' | 'busy' | 'off' | 'pending' | 'paused';
+  current: CastSession[];
+  today: CastSession[];
+  stat: CastStat;
+  now: Date;
+};
+
+/** キャスト本人の受付。予約の日付と売上の月は日本時間で数える */
+export async function loadCastReception(db: Db, castId: string, now = new Date()): Promise<CastReception | undefined> {
+  const cast = await getCast(db, castId);
+  if (!cast || cast.status === 'removed') return undefined;
+  const j = new Date(now.getTime() + JST);
+  const start = new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate()) - JST);
+  const end = new Date(start.getTime() + 24 * 60 * MIN);
+  const [current, today, stats] = await Promise.all([
+    db.select().from(castSessions).where(and(eq(castSessions.castId, castId), inArray(castSessions.status, ['requested', 'active']))).orderBy(asc(castSessions.createdAt)),
+    db.select().from(castSessions).where(and(eq(castSessions.castId, castId), gte(castSessions.startAt, start), lt(castSessions.startAt, end), inArray(castSessions.status, ['reserved', 'accepted', 'active', 'done', 'disputed']))).orderBy(asc(castSessions.startAt)),
+    castStats(db, monthStart(now), castId, new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth() + 1, 1) - JST)),
+  ]);
+  const state = cast.status === 'pending' ? 'pending' : cast.status === 'paused' ? 'paused' : current.length ? 'busy' : cast.available === 'waiting' && cast.waitingUntil && cast.waitingUntil > now ? 'waiting' : 'off';
+  return { cast, state, current, today, stat: stats[0] ?? { castId, count: 0, earned: 0, ratingAvg: null, ratings: 0 }, now };
 }
 
 export async function recentSessions(db: Db, limit = 100): Promise<CastSession[]> {
