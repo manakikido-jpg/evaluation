@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-08-invite-appointed-rank',
+    date: '2026-10-08',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '🤝 招待した人が巫女などの役職になっても、招待のお礼を出す',
+    items: [
+      '招待した人が、参拝者・氏子を通らずに巫女などの任命制の役職になったときも、参拝者・氏子の両方のお礼（合わせて 500 銭）を出します。',
+      'お礼は今までどおり、1 人につき各段階 1 回だけです。',
+    ],
+  },
+  {
     id: '2026-10-08-at-light',
     date: '2026-10-08',
     kind: 'fix',

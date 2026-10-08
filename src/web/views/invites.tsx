@@ -4,7 +4,7 @@ import { highestRank } from '../../domain/ranks.js';
 import type { InviteRewardRow } from '../../services/invites.js';
 import type { AdminSession, Invite, InviteLink } from '../../db/schema.js';
 import type { GuildInvite } from '../../lib/discordRest.js';
-import { SHARED_INVITER, STAFF_NO_INVITER, UNKNOWN_INVITER, sharedLabelOf } from '../../services/invites.js';
+import { SHARED_INVITER, STAFF_NO_INVITER, inviteRankLevel, UNKNOWN_INVITER, sharedLabelOf } from '../../services/invites.js';
 import { jstShort, remaining } from '../../services/tempGrants.js';
 import { Layout } from './layout.js';
 
@@ -102,11 +102,7 @@ export function InvitesPage(props: {
     if (!r.inviterId) return <span class="tag gray">要確認・招待元不明</span>;
     if (r.leftAt) return <span class="tag gray">退出</span>;
     const rank = props.cfg.ranks.find((v) => v.key === stage && v.auto);
-    const current = highestRank(
-      props.cfg.ranks.filter((v) => v.auto),
-      r.roleIds,
-    );
-    return <span class="tag gray">{rank && current && current.requiredGoen >= rank.requiredGoen ? '未払い・要確認' : '昇格待ち'}</span>;
+    return <span class="tag gray">{rank && inviteRankLevel(props.cfg.ranks, r.roleIds) >= rank.requiredGoen ? '未払い・要確認' : '昇格待ち'}</span>;
   };
 
   return (

@@ -409,4 +409,18 @@ describe('🔗 どのリンクで入ったか（BOT が覚えていないリン�
     expect(sharedLabelOf(row.source)).toBe('DISBOARD');
     expect(dms).toHaveLength(0);
   });
+  it('巫女などの任命制の役職になっても、参拝者・氏子の両方のお礼を出す（1 回だけ）', async () => {
+    const { ROLE, cfg } = await import('./helpers.js');
+    const { inviteRankLevel } = await import('../src/services/invites.js');
+    const c = ctx();
+    const miko = { key: 'miko', name: '巫女', emoji: '🌸', roleId: '990000000000000777', weight: 3, auto: false } as (typeof cfg.ranks)[number];
+    c.cfg = { ...c.cfg, ranks: [...c.cfg.ranks, miko] };
+    expect(inviteRankLevel(c.cfg.ranks, [])).toBe(-1);
+    expect(inviteRankLevel(c.cfg.ranks, [miko.roleId])).toBe(Number.POSITIVE_INFINITY);
+    await recordInvite(db, NEW, INVITER);
+    await rewardInviteRanks(c, NEW, [miko.roleId], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    await rewardInviteRanks(c, NEW, [miko.roleId, ROLE.ujiko], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+  });
 });

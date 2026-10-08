@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { autoRanks } from '../domain/ranks.js';
-import { adminLevelOf, type GuildConfig } from '../config.js';
+import { adminLevelOf, type GuildConfig, type Rank } from '../config.js';
 import type { Db } from '../db/client.js';
 import { activityDaily, inviteActive, inviteLinks, invites, members, type Invite, type InviteLink } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
@@ -37,6 +37,17 @@ export type InviteStage = 'sanpaisha' | 'ujiko';
 type RewardContext = { db: Db; cfg: GuildConfig; discord: Pick<DiscordActions, 'sendDm' | 'sendMessage'> };
 
 /** 昇格の通知を逃した分を再確認する。失敗した人がいても次の人を調べる。 */
+/**
+ * 招待のお礼で数える「どこまで上がったか」（ご縁の数で表す）。
+ * 巫女などの任命制の役職（ご縁で自動ではない役職）を持っていれば、いちばん上まで上がった扱い（参拝者・氏子の両方のお礼が出る）。
+ * 役職がなければ -1
+ */
+export function inviteRankLevel(ranks: readonly Rank[], roleIds: readonly string[]): number {
+  if (ranks.some((r) => !r.auto && r.roleId && roleIds.includes(r.roleId))) return Number.POSITIVE_INFINITY;
+  const held = autoRanks(ranks).filter((r) => roleIds.includes(r.roleId));
+  return held.length ? Math.max(...held.map((r) => r.requiredGoen)) : -1;
+}
+
 export async function reconcileInviteRewards(
   ctx: RewardContext,
   refresh?: (memberId: string, inviterId: string) => Promise<readonly string[] | undefined>,
@@ -49,8 +60,7 @@ export async function reconcileInviteRewards(
   for (const row of rows) {
     if (!isSnowflake(row.inviterId) || row.memberId === row.inviterId) continue;
     // 昇格待ちの人には、毎回Discordへの問い合わせをしない。
-    const held = ranks.filter((r) => row.roleIds.includes(r.roleId));
-    const current = held.length ? Math.max(...held.map((r) => r.requiredGoen)) : -1;
+    const current = inviteRankLevel(ctx.cfg.ranks, row.roleIds);
     if (!ranks.some((r) => ((r.key === 'sanpaisha' && !row.rewardedAt) || (r.key === 'ujiko' && !row.ujikoRewardedAt)) && current >= r.requiredGoen)) continue;
     try {
       const roles = refresh ? await refresh(row.memberId, row.inviterId) : row.roleIds;
@@ -98,9 +108,8 @@ export async function rewardInviteRanks(ctx: RewardContext, memberId: string, ro
   const [member] = await ctx.db.select().from(members).where(eq(members.id, memberId));
   if (!member || member.isBot || member.leftAt) return;
   const ranks = autoRanks(ctx.cfg.ranks);
-  const held = ranks.filter((r) => roleIds.includes(r.roleId));
-  if (!held.length) return;
-  const current = Math.max(...held.map((r) => r.requiredGoen));
+  const current = inviteRankLevel(ctx.cfg.ranks, roleIds);
+  if (current < 0) return;
   for (const stage of ['sanpaisha', 'ujiko'] as const) {
     const rank = ranks.find((r) => r.key === stage);
     if (rank && current >= rank.requiredGoen) await rewardInviter(ctx, memberId, now, stage);
