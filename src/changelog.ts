@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-08-at-light',
+    date: '2026-10-08',
+    kind: 'fix',
+    where: ['Discord'],
+    title: '🎰 AT 中にカジノの画面が重くなるのを直しました',
+    items: [
+      'AT 中の台の光り方を、軽い動き（濃さだけを変える）に変えました。',
+      '乱舞の背景と特化中の台全体の色が回り続ける動きをやめました（スマホで特に重くなっていました）。',
+    ],
+  },
+  {
     id: '2026-10-08-invite-any-link',
     date: '2026-10-08',
     kind: 'improve',
