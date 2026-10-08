@@ -20,6 +20,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-08-invite-reward-recovery', date: '2026-10-08', kind: 'fix', where: ['Discord', '社務所Web'],
+    title: '昇格済みの未払い招待報酬を再確認',
+    items: [
+      '起動時のメンバー同期後と10分ごとに、達成済みなのに未払いの招待報酬を再確認します。支払い前にDiscordの現在の役職と、本人・招待した人の在籍を取り直します。',
+      '参拝者150銭・氏子350銭（設定による）を各段階1回だけ支払い、通常と同じDMと運営の記録を出します。支払済みの分は重ねて払いません。',
+      '取得や支払いが一時的に失敗した分は次の確認でやり直します。招待元不明・招待なし（運営）・BOT・退出者・昇格待ちは払いません。',
+    ],
+  },
+  {
     id: '2026-10-08-cast-reception-image', date: '2026-10-08', kind: 'new', where: ['Discord'],
     title: 'キャスト本人の受付を1枚の画像に',
     items: [

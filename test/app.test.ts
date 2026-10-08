@@ -55,6 +55,7 @@ beforeEach(async () => {
   members = new Map();
   sent = [];
   const client = {
+    users: { fetch: async (id: string) => members.get(id)! },
     channels: {
       fetch: async (channelId: string) => ({
         isSendable: () => true,
@@ -360,5 +361,44 @@ describe('参拝者ロールで初期通貨を発行', () => {
     await app.onMemberUpdate(paid as never, fakeMember(paid.id, []) as never);
     expect(paid.send).not.toHaveBeenCalled();
     expect(sent).toHaveLength(0);
+  });
+});
+
+
+describe('起動と定期確認で未払い招待報酬を拾う', () => {
+  it('起動時の最新メンバー同期から過去の参拝者分を払う', async () => {
+    const { recordInvite } = await import('../src/services/invites.js');
+    const inviter = add('700000000000000080', ROLE.sanpaisha);
+    const guest = add('700000000000000081', ROLE.sanpaisha);
+    await recordInvite(db, guest.id, inviter.id, 'link');
+    await app.syncAll(members.values() as never);
+    expect((await walletOf(db, inviter.id)).balance).toBe(cfg.economy.inviteSanpaishaReward);
+    expect(inviter.send).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('招待報酬150銭') }));
+    expect(sent.some(x => x.content.includes('招待報酬の支払い完了'))).toBe(true);
+    await app.reconcileInviteRewards(guild as never);
+    expect(inviter.send).toHaveBeenCalledTimes(1);
+    expect((await walletOf(db, inviter.id)).balance).toBe(150);
+  });
+
+  it('現在の役職・在籍を取り直し、失敗後に再確認しても二重払いしない', async () => {
+    const { recordInvite } = await import('../src/services/invites.js');
+    const { recordJoin } = await import('../src/services/members.js');
+    const id = '700000000000000082', invited = '700000000000000083';
+    for (const who of [id, invited]) await recordJoin(db, { id: who, username: who, displayName: who, avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date() });
+    await recordInvite(db, invited, id, 'link');
+    // 招待者がDiscordにいない間は、古いDBの在籍だけで支払わない。
+    const guest = add(invited, ROLE.sanpaisha);
+    await app.reconcileInviteRewards(guild as never);
+    expect((await walletOf(db, id)).balance).toBe(0);
+    add(id, ROLE.sanpaisha);
+    // 昇格の記録が残っていても、現在ロールが外れていれば保留。
+    guest.roles.cache.clear();
+    await app.reconcileInviteRewards(guild as never);
+    expect((await walletOf(db, id)).balance).toBe(0);
+    guest.roles.cache.set(ROLE.sanpaisha, {});
+    // ロール更新でDBが追いついたあと、定期確認と昇格処理が同時でも1回。
+    await app.onMemberUpdate(guest as never);
+    await Promise.all([app.reconcileInviteRewards(guild as never), app.reconcileInviteRewards(guild as never)]);
+    expect((await walletOf(db, id)).balance).toBe(150);
   });
 });

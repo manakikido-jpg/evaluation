@@ -21,7 +21,7 @@ import { SHUIN_PICK_ID } from '../services/notices.js';
 import { recordPresence } from '../services/voiceUsage.js';
 import { issueInitialCurrency } from '../services/initialCurrency.js';
 import { autoRanks } from '../domain/ranks.js';
-import { rewardInviteRanks } from '../services/invites.js';
+import { reconcileInviteRewards, rewardInviteRanks } from '../services/invites.js';
 import { genderOfRoles } from '../services/admission.js';
 import { CONTACT_LEVEL_EMOJI, CONTACT_LEVEL_LABEL, contactOfRoles } from '../services/contact.js';
 import { introOf, introUrl } from '../services/intros.js';
@@ -141,8 +141,11 @@ export class ShuinApp {
   // ───────── メンバーの同期（管理画面用） ─────────
 
   async syncAll(guildMembers: Iterable<GuildMember>): Promise<void> {
-    const result = await syncAllMembers(this.db, [...guildMembers].map(toSnapshot));
+    const all = [...guildMembers];
+    const result = await syncAllMembers(this.db, all.map(toSnapshot));
     logger.info(result, 'members synced');
+    const guild = all[0]?.guild;
+    if (guild) await this.reconcileInviteRewards(guild);
   }
 
   async onMemberAdd(m: GuildMember): Promise<void> {
@@ -185,16 +188,40 @@ export class ShuinApp {
     await this.rewardInvites(m);
   }
 
-  private async rewardInvites(m: GuildMember): Promise<void> {
-    await rewardInviteRanks({ db: this.db, cfg: this.cfg, discord: {
-      sendDm: async (id, content) => { const user = await this.client.users.fetch(id); await user.send({ content, allowedMentions: { parse: [] } }); return true; },
-      sendMessage: async (channelId, body) => {
+  private inviteRewardContext() {
+    return { db: this.db, cfg: this.cfg, discord: {
+      sendDm: async (id: string, content: string) => { const user = await this.client.users.fetch(id); await user.send({ content, allowedMentions: { parse: [] as never[] } }); return true; },
+      sendMessage: async (channelId: string, body: { content?: string }) => {
         const ch = await this.client.channels.fetch(channelId);
         if (!ch?.isSendable()) throw new Error('招待報酬の記録先に投稿できません。');
         const message = await ch.send({ content: body.content, allowedMentions: { parse: [] } });
         return { id: message.id };
       },
-    } }, m.id, [...m.roles.cache.keys()]).catch((err) => logger.warn({ err }, 'invite rank reward failed'));
+    } };
+  }
+
+  private async rewardInvites(m: GuildMember): Promise<void> {
+    await rewardInviteRanks(this.inviteRewardContext(), m.id, [...m.roles.cache.keys()])
+      .catch((err) => logger.warn({ err }, 'invite rank reward failed'));
+  }
+
+  private checkingInviteRewards = false;
+
+  /** 起動時と10分ごと。未払いは現在の役職・在籍を取り直してから確認する。 */
+  async reconcileInviteRewards(guild: Guild): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingInviteRewards) return;
+    this.checkingInviteRewards = true;
+    try {
+      await reconcileInviteRewards(this.inviteRewardContext(), async (id, inviterId) => {
+        const [member, inviter] = await Promise.all([
+          guild.members.fetch({ user: id, force: true }),
+          guild.members.fetch({ user: inviterId, force: true }),
+        ]);
+        await upsertMember(this.db, toSnapshot(member), { leftAt: null });
+        await upsertMember(this.db, toSnapshot(inviter), { leftAt: null });
+        return [...member.roles.cache.keys()];
+      });
+    } finally { this.checkingInviteRewards = false; }
   }
 
   /** 1 分ごと: 発言数を書き込み、通話している人に通話時間と花びらを足す */

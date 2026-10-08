@@ -4,7 +4,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { activityDaily, auditLogs, invites, members } from '../src/db/schema.js';
 import { walletOf } from '../src/services/economy.js';
-import { countUnknownInviters, STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
+import { countUnknownInviters, STAFF_NO_INVITER, UNKNOWN_INVITER, markUnknownInviters, assignUnknownInviter, reconcileInviteRewards, rewardInviteRanks, inviteRewardRows, inviteActiveTick, inviteCountOf, inviterOf, recordInvite, rewardInviter } from '../src/services/invites.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
@@ -319,4 +319,67 @@ it('チェックした人だけ一括で不明にし、登録済み・BOT・退�
   await recordJoin(db, { id: gone, username: 'g', displayName: 'g', avatarUrl: null, roleIds: [], isBot: false, joinedAt: T0 });
   await db.update(members).set({ leftAt: T0 }).where(eq(members.id, gone));
   expect(await markUnknownInviters(db, [gone], NEW2)).toEqual({ added: 0, skipped: 1 });
+});
+
+
+describe('取りこぼした招待報酬の再確認', () => {
+  const visitor = cfg.ranks.find(r => r.key === 'sanpaisha')!.roleId;
+  const ujiko = cfg.ranks.find(r => r.key === 'ujiko')!.roleId;
+  it('昇格イベントがなくても過去の未払いを拾い、繰り返しても各段階1回だけ', async () => {
+    await recordInvite(db, NEW, INVITER, 'link');
+    await db.update(members).set({ roleIds: [visitor] }).where(eq(members.id, NEW));
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await Promise.all([reconcileInviteRewards(ctx(), undefined, T0), reconcileInviteRewards(ctx(), undefined, T0)]);
+    expect((await walletOf(db, INVITER)).balance).toBe(150);
+    expect(dms).toHaveLength(1);
+    await db.update(members).set({ roleIds: [ujiko] }).where(eq(members.id, NEW));
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+    expect(dms).toHaveLength(2);
+    expect(logs).toHaveLength(2);
+  });
+
+  it('最新の役職が下がっていれば払わず、取得失敗は次回やり直し、他の人は止めない', async () => {
+    for (const id of [NEW, NEW2]) {
+      await recordInvite(db, id, INVITER, 'link');
+      await db.update(members).set({ roleIds: [visitor] }).where(eq(members.id, id));
+    }
+    await reconcileInviteRewards(ctx(), async id => { if (id === NEW) throw new Error('一時的な通信失敗'); return []; }, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await reconcileInviteRewards(ctx(), async id => { if (id === NEW) throw new Error('まだ取得できない'); return [visitor]; }, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(150);
+    await reconcileInviteRewards(ctx(), async () => [visitor], T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(300);
+  });
+
+  it('招待元不明・運営・退出者・BOT・昇格待ちは払わず、支払い済みは問い合わせない', async () => {
+    await recordInvite(db, NEW, INVITER);
+    await db.update(members).set({ roleIds: [ujiko], leftAt: T0 }).where(eq(members.id, NEW));
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await db.update(members).set({ leftAt: null, isBot: true }).where(eq(members.id, NEW));
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await db.update(members).set({ isBot: false }).where(eq(members.id, NEW));
+    await db.update(members).set({ leftAt: T0 }).where(eq(members.id, INVITER));
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await db.update(members).set({ leftAt: null }).where(eq(members.id, INVITER));
+    for (const source of [UNKNOWN_INVITER, STAFF_NO_INVITER]) {
+      await db.update(invites).set({ inviterId: source, source }).where(eq(invites.memberId, NEW));
+      await reconcileInviteRewards(ctx(), async () => { throw new Error('問い合わせてはいけない'); }, T0);
+      expect((await walletOf(db, INVITER)).balance).toBe(0);
+    }
+    await db.update(invites).set({ inviterId: INVITER, source: 'link' }).where(eq(invites.memberId, NEW));
+    await db.update(members).set({ roleIds: [] }).where(eq(members.id, NEW));
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    expect((await walletOf(db, INVITER)).balance).toBe(0);
+    await db.update(members).set({ roleIds: [ujiko] }).where(eq(members.id, NEW));
+    await reconcileInviteRewards(ctx(), undefined, T0);
+    let queries = 0;
+    await reconcileInviteRewards(ctx(), async () => { queries++; return [ujiko]; }, T0);
+    expect(queries).toBe(0);
+    expect((await walletOf(db, INVITER)).balance).toBe(500);
+  });
 });
