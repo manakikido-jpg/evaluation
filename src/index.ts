@@ -229,6 +229,8 @@ async function main(): Promise<void> {
     // 10 分ごと: 番付の書き換え
     const banzuke = () => void updateBanzukeQuietly({ db, cfg: cfg(), discord: actions });
     const every10 = () => {
+      // 招待: 昇格の通知を逃した未払いを拾う（支払済みは重ねて渡さない）
+      void app.reconcileInviteRewards(guild).catch((err) => logger.warn({ err }, 'invite reward reconciliation failed'));
       omairi();
       banzuke();
       // 期限が来た授与品（色守り・絵馬のピン留め）を外す

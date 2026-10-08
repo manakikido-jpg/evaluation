@@ -36,6 +36,29 @@ export type InviteRewardResult = { status: 'rewarded'; inviterId: string; amount
 export type InviteStage = 'sanpaisha' | 'ujiko';
 type RewardContext = { db: Db; cfg: GuildConfig; discord: Pick<DiscordActions, 'sendDm' | 'sendMessage'> };
 
+/** 昇格の通知を逃した分を再確認する。失敗した人がいても次の人を調べる。 */
+export async function reconcileInviteRewards(
+  ctx: RewardContext,
+  refresh?: (memberId: string, inviterId: string) => Promise<readonly string[] | undefined>,
+  now = new Date(),
+): Promise<void> {
+  const rows = await ctx.db.select({ memberId: invites.memberId, inviterId: invites.inviterId, roleIds: members.roleIds, rewardedAt: invites.rewardedAt, ujikoRewardedAt: invites.ujikoRewardedAt })
+    .from(invites).innerJoin(members, eq(members.id, invites.memberId))
+    .where(and(isNull(members.leftAt), eq(members.isBot, false), or(isNull(invites.rewardedAt), isNull(invites.ujikoRewardedAt))));
+  const ranks = autoRanks(ctx.cfg.ranks);
+  for (const row of rows) {
+    if (!isSnowflake(row.inviterId) || row.memberId === row.inviterId) continue;
+    // 昇格待ちの人には、毎回Discordへの問い合わせをしない。
+    const held = ranks.filter((r) => row.roleIds.includes(r.roleId));
+    const current = held.length ? Math.max(...held.map((r) => r.requiredGoen)) : -1;
+    if (!ranks.some((r) => ((r.key === 'sanpaisha' && !row.rewardedAt) || (r.key === 'ujiko' && !row.ujikoRewardedAt)) && current >= r.requiredGoen)) continue;
+    try {
+      const roles = refresh ? await refresh(row.memberId, row.inviterId) : row.roleIds;
+      if (roles) await rewardInviteRanks(ctx, row.memberId, roles, now);
+    } catch (err) { logger.warn({ err, memberId: row.memberId }, 'invite reward reconciliation failed'); }
+  }
+}
+
 /** 招待された人・段階ごとに1回。記録と振り込みは同じトランザクション。 */
 export async function rewardInviter(ctx: RewardContext, memberId: string, now = new Date(), stage: InviteStage = 'sanpaisha'): Promise<InviteRewardResult> {
   const amount = stage === 'sanpaisha' ? ctx.cfg.economy.inviteSanpaishaReward : ctx.cfg.economy.inviteUjikoReward;
