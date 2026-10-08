@@ -3461,3 +3461,61 @@ it('運営の招待なしを選べる。招待元不明・未払い・支払済�
   expect((await listAudit(db, { action: 'invite.assign' }))).toHaveLength(1);
   expect(actions).not.toContain(`dm ${STAFF}`);
 });
+
+
+it('招待元を不明のまま登録し、一覧から後で招待者を登録できる', async () => {
+  const inviter = '870000000000000333';
+  await recordJoin(db, { id: inviter, username: 'aoi', displayName: 'あおい', avatarUrl: null, roleIds: [], isBot: false, joinedAt: clock });
+  const s = await login(GUJI);
+  const section = (html: string) => html.split('id="invite-rewards"')[1]!.split('id="invite-inviters"')[0]!;
+  const before = section(await (await get('/invites', s)).text());
+  expect(before).toContain('value="unknown">不明');
+  const token = /name="_csrf" value="([^"]+)"/.exec(before)![1]!;
+  const assign = (choice: string) => app.request(`/invites/members/${USER}/assign`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: token, inviterId: choice, confirm: 'yes' }).toString() });
+  expect((await assign('unknown')).headers.get('location')).toContain('assign_unknown');
+  const unknown = section(await (await get('/invites?filter=unknown', s)).text());
+  expect(unknown).toContain(`/members/${USER}`);
+  expect(unknown).toContain('不明（確認済み）');
+  expect(unknown).toContain('報酬は保留');
+  expect(unknown).toContain('name="inviterId"');
+  const { walletOf } = await import('../src/services/economy.js');
+  expect((await walletOf(db, inviter)).balance).toBe(0);
+  expect((await assign(inviter)).headers.get('location')).toContain('assign_assigned');
+  const after = section(await (await get('/invites?filter=unknown', s)).text());
+  expect(after).not.toContain(`/members/${USER}`);
+  expect((await walletOf(db, inviter)).balance).toBe(150);
+  expect((await assign('unknown')).headers.get('location')).toContain('assign_known');
+  expect((await walletOf(db, inviter)).balance).toBe(150);
+});
+
+
+it('宮司はチェックボックスで不明を一括登録でき、CSRFと確認が必要で並び順を保つ', async () => {
+  const other = '870000000000000555';
+  await recordJoin(db, { id: other, username: 'aoi', displayName: 'あおい', avatarUrl: null, roleIds: [], isBot: false, joinedAt: clock });
+  const staff = await login(STAFF);
+  expect(await (await get('/invites', staff)).text()).not.toContain('id="invite-unknown-bulk"');
+  const guji = await login(GUJI);
+  const page = await (await get('/invites?filter=unknown&sort=member&order=asc', guji)).text();
+  expect(page).toContain('form="invite-unknown-bulk"');
+  expect(page).toContain('表示中の対象者をすべて選ぶ');
+  expect(page).toContain('/static/invite-selection.js');
+  expect(page).not.toMatch(/onclick=|style=|<script(?![^>]*src=)/);
+  const token = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const send = (session: string, data: [string, string][]) => app.request('/invites/unknown/bulk', { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data).toString() });
+  expect((await send(guji, [['memberId', USER], ['confirm', 'yes']])).status).toBe(403);
+  expect((await send(staff, [['_csrf', /name="_csrf" value="([^"]+)"/.exec(await (await get('/', staff)).text())![1]!], ['memberId', USER], ['confirm', 'yes']])).status).toBe(403);
+  const data: [string, string][] = [['_csrf', token], ['memberId', USER], ['memberId', other], ['filter', 'unknown'], ['sort', 'member'], ['order', 'asc']];
+  expect((await send(guji, data)).headers.get('location')).toContain('assign_confirm');
+  const response = await send(guji, [...data, ['confirm', 'yes']]);
+  expect(response.headers.get('location')).toContain('filter=unknown&sort=member&order=asc');
+  expect(response.headers.get('location')).toContain('added=2&skipped=0');
+  const after = await (await get(response.headers.get('location')!, guji)).text();
+  expect(after).toContain('不明として2人を登録しました');
+  expect(after).toContain('不明（確認済み）');
+  expect(after).not.toContain(`name="memberId" value="${USER}"`);
+  expect(after).not.toContain(`name="memberId" value="${other}"`);
+  expect((await send(guji, [...data, ['confirm', 'yes']])).headers.get('location')).toContain('added=0&skipped=2');
+  expect((await listAudit(db, { action: 'invite.unknown_bulk' }))).toHaveLength(1);
+  const js = await get('/static/invite-selection.js', guji);
+  expect(js.status).toBe(200);
+});

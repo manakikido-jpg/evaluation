@@ -19,7 +19,7 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
-import { assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountCasino } from './casino.js';
@@ -1214,6 +1214,7 @@ export function createWebApp(deps: WebDeps) {
         joins={joins}
         rewards={rewards}
         candidates={candidates}
+        bulkResult={c.req.query('msg') === 'bulk_unknown' ? { added: Math.min(200, Math.max(0, Number.parseInt(c.req.query('added') ?? '0') || 0)), skipped: Math.min(200, Math.max(0, Number.parseInt(c.req.query('skipped') ?? '0') || 0)) } : undefined}
         sort={inviteSort(c.req.query('sort'))}
         order={inviteOrder(c.req.query('order'))}
         cfg={cfg}
@@ -1226,6 +1227,18 @@ export function createWebApp(deps: WebDeps) {
         now={now()}
       />,
     );
+  });
+
+  app.post('/invites/unknown/bulk', async (c) => {
+    if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    const body = await c.req.parseBody({ all: true });
+    const filter = ['unknown', 'waiting', 'paid'].includes(String(body.filter)) ? String(body.filter) : 'all';
+    const back = `filter=${filter}&sort=${inviteSort(typeof body.sort === 'string' ? body.sort : undefined)}&order=${inviteOrder(typeof body.order === 'string' ? body.order : undefined)}`;
+    if (body.confirm !== 'yes') return c.redirect(`/invites?${back}&msg=assign_confirm#invite-rewards`);
+    const ids = Array.isArray(body.memberId) ? body.memberId : body.memberId === undefined ? [] : [body.memberId];
+    const result = await markUnknownInviters(db, ids, c.get('session').userId, now());
+    if (!result) return c.redirect(`/invites?${back}&msg=bulk_invalid#invite-rewards`);
+    return c.redirect(`/invites?${back}&msg=bulk_unknown&added=${result.added}&skipped=${result.skipped}#invite-rewards`);
   });
 
   app.post('/invites/members/:id/assign', async (c) => {
