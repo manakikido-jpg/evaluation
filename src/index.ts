@@ -21,6 +21,7 @@ import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
 import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
+import { MaikuraApp } from './discord/maikura.js';
 import { GuideReceptionApp } from './discord/guideReception.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
@@ -95,6 +96,7 @@ async function main(): Promise<void> {
   const tempGrants = new TempGrantApp(db, cfg, actions);
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
   const help = new HelpApp(cfg);
+  const maikura = new MaikuraApp(db, cfg);
   const guideReception = new GuideReceptionApp(db, cfg, actions);
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
@@ -318,6 +320,7 @@ async function main(): Promise<void> {
     void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
+    void maikura.onInteraction(i);
     void guideReception.onInteraction(i);
     void app.onInteraction(i);
     void staff.onInteraction(i);
