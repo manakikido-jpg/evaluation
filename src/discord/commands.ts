@@ -72,6 +72,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('cast')
+      .setNameLocalizations({ ja: 'キャスト' })
+      .setDescription('Open your cast desk (for casts)')
+      .setDescriptionLocalizations({ ja: 'キャストの方の受付（予約の受付・予約一覧・メニュー編集）を開く（自分にだけ表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('casino')
       .setNameLocalizations({ ja: 'カジノ' })
       .setDescription('Open the casino on the web')

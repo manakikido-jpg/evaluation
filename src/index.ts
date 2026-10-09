@@ -113,7 +113,7 @@ async function main(): Promise<void> {
   const sticky = new StickyApp(db, cfg, actions);
   const market = new MarketApp(db, cfg, actions);
   const board = new BoardApp(db, cfg, actions);
-  const cast = new CastApp(db, cfg, actions);
+  const cast = new CastApp(db, cfg, actions, env.WEB_BASE_URL);
   const supportTickets = new TicketApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;

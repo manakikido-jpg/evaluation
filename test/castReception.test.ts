@@ -112,6 +112,8 @@ describe('受付の画像とボタン', () => {
     expect(body.files[0]?.name).toBe('cast-reception.png');
     expect(body.files[0]?.description).toContain('対応中');
     expect(JSON.stringify(body.components)).toContain('https://discord.com/channels/' + cfg.guildId + '/990000000000000001');
+    // /キャスト と「⚙ キャストの方」から、キャスト用 社務所（メニュー・写真の編集）へ行ける
+    expect(JSON.stringify(castReceptionBody(reception, 'さくら', new Map(), '銭', cfg.guildId, undefined, 'https://example.test/cast-office/login').components)).toContain('https://example.test/cast-office/login');
     for (const id of ['cast:wait:1', 'cast:wait:0', 'cast:refresh', 'cast:schedule:0', 'cast:edit']) expect(JSON.stringify(body.components)).toContain(id);
   });
 

@@ -316,7 +316,7 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
 }
 
 /** キャスト本人だけに表示する画像と受付ボタン */
-export function castReceptionBody(d: CastReception, name: string, names: ReadonlyMap<string, string>, currency: string, guildId: string, avatar?: Uint8Array) {
+export function castReceptionBody(d: CastReception, name: string, names: ReadonlyMap<string, string>, currency: string, guildId: string, avatar?: Uint8Array, /** キャスト用 社務所（メニュー・写真の編集）へのリンク */ officeUrl?: string) {
   const png = renderCastReception({ reception: d, name, names, currency, avatar });
   const off = d.cast.status !== 'active';
   const state = { waiting: '予約受付中', busy: '対応中', off: '受付停止', pending: '運営の確認待ち', paused: '運営による休止' }[d.state];
@@ -330,7 +330,7 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
     components: [
       row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄')),
       row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅')),
-      row(button('cast:edit', '紹介を変える', 1, '✏️'), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
+      row(button('cast:edit', '紹介を変える', 1, '✏️'), ...(officeUrl ? [{ type: 2 as const, style: 5 as const, label: '🖊 メニュー・写真を編集', url: officeUrl }] : []), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
     ],
   };
 }
@@ -348,6 +348,8 @@ export class CastApp {
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
     private readonly discord: DiscordActions,
+    /** 社務所Web の場所（キャスト用 社務所へのリンク） */
+    private readonly baseUrl?: string,
   ) {}
 
   attach(guild: Guild): void {
@@ -403,6 +405,18 @@ export class CastApp {
   }
 
   async onInteraction(interaction: Interaction): Promise<void> {
+    // /キャスト: キャスト本人の受付（待機の切り替え・予約一覧・メニュー編集へのリンク）を自分にだけ出す
+    if ('commandName' in interaction && interaction.commandName === 'cast' && interaction.isChatInputCommand()) {
+      if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+      try {
+        await interaction.deferReply(EPHEMERAL);
+        await interaction.editReply(await this.receptionView(interaction.member));
+      } catch (err) {
+        logger.warn({ err }, 'cast command failed');
+        await interaction.editReply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。' }).catch(() => undefined);
+      }
+      return;
+    }
     if (!('customId' in interaction) || !interaction.customId.startsWith('cast:')) return;
     const [, action, a, b, ...rest] = interaction.customId.split(':');
     // 社務所からキャストへの DM のボタン（受ける・別の日時を提案・断る・納品した）
@@ -608,7 +622,7 @@ export class CastApp {
       // 受付の画像のアイコンは、写真のまん中を正方形に切りぬいて使う
       loadCastPhoto(this.db, member.id).then(async (photo) => (photo ? new Uint8Array(await sharp(photo.data).resize(264, 264, { fit: 'cover' }).png().toBuffer()) : loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 })))),
     ]);
-    return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar);
+    return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar, this.baseUrl ? `${this.baseUrl}/cast-office/login` : undefined);
   }
 
   private async mine(i: ButtonInteraction<'cached'>, refresh = false): Promise<void> {

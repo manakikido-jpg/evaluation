@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-cast-command', date: '2026-10-10', kind: 'new', where: ['Discord'],
+    title: '/キャスト でキャストの受付を開けるように',
+    items: ['キャストの方は `/キャスト` で、自分の受付（予約の受付・予約一覧など）をどこからでも開けます（自分にだけ表示）。', '受付の「🖊 メニュー・写真を編集」から、キャスト用 社務所に入れます。'],
+  },
+  {
     id: '2026-10-10-cast-self-editor', date: '2026-10-10', kind: 'new', where: ['Discord', '社務所Web'],
     title: 'キャスト本人がDiscord認証でメニューを編集',
     items: ['キャスト用社務所から自分の画像・紹介文・メニューを変更できます。運営の画面やほかの人の編集はできません。', 'スマホとPCに合わせた画面で画像の見本を確認でき、保存すると登録済みの紹介投稿にも反映します。'],
