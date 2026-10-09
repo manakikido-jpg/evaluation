@@ -1257,7 +1257,7 @@ body.casino { background: #070d0b; }
 .c-floor { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 12px 0 20px; }
 .c-floor-m { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; text-decoration: none; color: #e8ecf4; background: linear-gradient(180deg, #43122a, #1c0611 60%, #12040a); border: 2px solid #c8961e; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5); transition: transform 0.12s, box-shadow 0.12s; }
 .c-floor-m:hover, .c-floor-m:focus-visible { transform: translateY(-2px); box-shadow: 0 12px 22px rgba(0, 0, 0, 0.6), 0 0 0 2px #ffd34a; }
-.c-floor-top { display: flex; align-items: baseline; gap: 8px; }
+.c-floor-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .c-floor-no { font-size: 1.6rem; font-weight: 900; color: #ffd34a; font-variant-numeric: tabular-nums; }
 .c-floor-name { font-size: 0.7rem; letter-spacing: 0.15em; color: #f7d77a; }
 .c-floor-cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px; border-radius: 8px; background: #000; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
@@ -2202,11 +2202,29 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .cs-seat small { display: block; flex-basis: 100%; }
 .cs-table-sakura.cs-seat, .cs-table-sakura .cs-preview { border-color: #f4a7c0; box-shadow: 0 0 18px #e875a740, inset 0 0 12px #f4a7c030; background: radial-gradient(circle at top right, #86435d80, transparent 70%), #15382d; }
 .cs-table-dragon.cs-seat, .cs-table-dragon .cs-preview { border-color: #e2b340; border-style: double; border-width: 5px; background: repeating-linear-gradient(45deg, #184232, #184232 12px, #20513b 13px, #20513b 14px); }
-body.cs-background-yozakura { background: radial-gradient(ellipse at 15% 10%, #673152 0, transparent 50%), radial-gradient(ellipse at 90% 40%, #532839, transparent 50%), #131523; }
-body.cs-background-stars { background: radial-gradient(circle at 15% 20%, #f2e6bd 0 1px, transparent 2px) 0 0 / 130px 130px, radial-gradient(circle at 70% 70%, #b4caf7 0 1px, transparent 2px) 0 0 / 170px 170px, linear-gradient(155deg, #0b122b, #2c1c45); }
-body.cs-background-gold { background: repeating-linear-gradient(90deg, transparent 0 170px, #d9b85b25 171px 174px), radial-gradient(ellipse at top, #746039, #302719 55%, #17190f); }
-body.cs-background-foxroom { background: radial-gradient(circle at 12% 30%, #64dce53b, transparent 35%), radial-gradient(circle at 85% 60%, #899feb40, transparent 40%), #0e202d; }
-body.cs-background-festival { background: radial-gradient(circle at 15% 12%, #db645a60 0, transparent 17%), radial-gradient(circle at 85% 20%, #e6ae4360 0, transparent 17%), repeating-linear-gradient(120deg, #151827, #151827 220px, #2c1631 440px); }
+/* 風景は見本・ロビー・ゲーム画面で同じ絵を使う。文字の後ろは暗くする。 */
+.cs-background-yozakura { --cs-art: url('/static/casino-scene-yozakura.svg'); }
+.cs-background-stars { --cs-art: url('/static/casino-scene-stars.svg'); }
+.cs-background-gold { --cs-art: url('/static/casino-scene-gold.svg'); }
+.cs-background-foxroom { --cs-art: url('/static/casino-scene-foxroom.svg'); }
+.cs-background-festival { --cs-art: url('/static/casino-scene-festival.svg'); }
+body[class*="cs-background-"] { background: linear-gradient(#070d17b8, #070d17dc), var(--cs-art) center top / cover fixed, #101725; }
+body[class*="cs-background-"] .c-sky { background: transparent; }
+.cs-preview-scene { padding: 36px 20px; border: 1px solid #b9955366; border-radius: 22px; background: linear-gradient(#07121c20, #07121c70), var(--cs-art, url('/static/casino-lobby-night.webp')) center / cover; margin: 20px 0; }
+.cs-preview-scene .cs-preview { max-width: 500px; margin: 65px auto 0; backdrop-filter: blur(3px); }
+.cs-scene-thumbnail { width: 100%; aspect-ratio: 8 / 5; border: 1px solid #d2b77750; border-radius: 10px; background: var(--cs-art) center / cover; }
+.cs-equipped-summary { padding: 12px 16px; border-left: 3px solid var(--c-gold); background: #0c171ddd; font-size: .88rem; line-height: 1.8; }
+.c-slot-seating { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; margin: 14px 0; border: 1px solid var(--c-line); border-radius: 12px; background: #0b181fd9; }
+.c-slot-player { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: .85rem; }
+.c-slot-player > span:last-child { overflow-wrap: anywhere; }
+.c-slot-player.me { color: var(--c-gold); }
+.c-slot-avatar { display: inline-grid; flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #b99553; border-radius: 50%; background: #354650; overflow: hidden; }
+.c-slot-avatar > img, .c-slot-avatar > span { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: cover; }
+.c-slot-avatar > span { display: grid; place-items: center; font-weight: 700; }
+.c-slot-avatar > [hidden] { display: none; }
+.c-slot-seat-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.c-slot-floor-seat { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex-basis: 100%; padding-top: 6px; min-width: 0; }
+.c-slot-floor-seat small { color: var(--c-muted); font-size: .7rem; }
 .cs-chips-gem .c-chip, .cs-chips-gem .cs-chip { background: conic-gradient(#55ccd8, #5165ad, #c1fbff, #4c81a5, #55ccd8); color: #071a29; border-radius: 35%; border-color: #b5f3ff; }
 .cs-chips-gem .c-chipmini, .cs-chips-gem .c-potchips, .cs-chips-gem .c-chipicon { background: linear-gradient(135deg, #a8eff8, #6263bb); color: #0b173b; }
 .cs-cards-hanafuda .pc.back { background: radial-gradient(circle at 50% 30%, #f7dad4 0 5px, transparent 6px), repeating-linear-gradient(45deg, #201b38 0 8px, #723b52 9px 10px); border-color: #e5caa1; }
@@ -2217,10 +2235,5 @@ body.cs-background-festival { background: radial-gradient(circle at 15% 12%, #db
 @media (prefers-reduced-motion: reduce) { .cs-victory { display: none; } }
 @media (max-width: 600px) { .cs-banner { padding: 24px 14px; } .cs-banner h1 { font-size: 1.6rem; } .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .cs-item { padding: 12px; } .cs-item h3 { font-size: .93rem; } .cs-item .c-btn { font-size: .78rem; padding: 8px; } }
 
-.cs-background-yozakura .c-sky::after, .cs-background-foxroom .c-sky::after, .cs-background-festival .c-sky::after, .cs-background-gold .c-sky::after { position: fixed; bottom: 5vh; right: -30px; font-size: min(35vw, 350px); opacity: .09; filter: grayscale(.3); }
-.cs-background-yozakura .c-sky::after { content: '🌸'; }
-.cs-background-foxroom .c-sky::after { content: '🦊'; }
-.cs-background-festival .c-sky::after { content: '🏮'; }
-.cs-background-gold .c-sky::after { content: '🏯'; }
 .cs-table-sakura .c-seat.me, .cs-table-sakura .c-pseat.me .c-pseat-box { border-color: #f4a7c0; box-shadow: 0 0 16px #f4a7c04d; }
 .cs-table-dragon .c-seat.me, .cs-table-dragon .c-pseat.me .c-pseat-box { border: 4px double #e2b340; }

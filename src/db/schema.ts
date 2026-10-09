@@ -953,7 +953,16 @@ export const slotAtMachines = pgTable('slot_at_machines', {
   state: jsonb('state').$type<Record<string, unknown>>().notNull(),
   seatBy: text('seat_by'),
   seatAt: timestamp('seat_at', { withTimezone: true }),
+  awayUntil: timestamp('away_until', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** 通常スロットの席。回した人だけ座れて、離席は5分だけ確保する。 */
+export const slotSeats = pgTable('slot_seats', {
+  machine: integer('machine').primaryKey(),
+  memberId: text('member_id').notNull(),
+  playedAt: timestamp('played_at', { withTimezone: true }).notNull(),
+  awayUntil: timestamp('away_until', { withTimezone: true }),
 });
 
 /** 運営の見守り: 知らせた印（同じものを 2 回知らせない。key は stale:種類:ID:回 / weekly:日付） */

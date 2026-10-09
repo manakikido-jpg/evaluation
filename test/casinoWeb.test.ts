@@ -1,4 +1,7 @@
-import { casinoStyles } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
+import { casinoStyles, members } from '../src/db/schema.js';
+import { playSlots } from '../src/services/casino/casino.js';
+import { playAt } from '../src/services/casino/slotAtPlay.js';
 import { stylesOf } from '../src/services/casino/styles.js';
 import { artUrls, deleteArt } from '../src/services/casino/slotArt.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -760,6 +763,27 @@ describe('📊 カジノの記録', () => {
 });
 
 describe('カジノの着せ替えと景品ガチャ', () => {
+  it('背景の見本・装備中の案内・風景の画像を表示し、見本だけでは装備を変えない', async () => {
+    const { cookie } = await casinoLogin(A);
+    await db.insert(casinoStyles).values({ memberId: A, owned: ['yozakura', 'gold'], equipped: { background: 'yozakura' } });
+    const wardrobe = await (await get('/casino/wardrobe', cookie!)).text();
+    expect(wardrobe).toContain('装備中：背景：夜桜の間');
+    expect(wardrobe).toContain('cs-preview-scene');
+    expect(wardrobe).toContain('黄金の社の見本');
+    const preview = await (await get('/casino/wardrobe?preview=gold', cookie!)).text();
+    expect(preview).toMatch(/<body class="[^"]*cs-background-gold/);
+    expect((await stylesOf(db, A)).equipped).toEqual({ background: 'yozakura' });
+    await post('/casino/wardrobe/equip', cookie!, { slot: 'background', key: 'gold' });
+    const lobby = await (await get('/casino/hall', cookie!)).text();
+    expect(lobby).toMatch(/<body class="[^"]*cs-background-gold/);
+    expect(lobby).toContain('装備中の背景：黄金の社');
+    for (const key of ['yozakura', 'stars', 'gold', 'foxroom', 'festival']) {
+      const image = await app.request(`/static/casino-scene-${key}.svg`);
+      expect(image.status).toBe(200);
+      expect(image.headers.get('content-type')).toContain('image/svg+xml');
+      expect(await image.text()).toContain('<svg');
+    }
+  });
   it('ログインとCSRFを確かめ、未所持や別の種類の装備を拒否する', async () => {
     expect((await app.request('/casino/wardrobe')).status).toBe(302);
     const { cookie } = await casinoLogin(A);
@@ -793,6 +817,40 @@ describe('カジノの着せ替えと景品ガチャ', () => {
     expect(catalog).not.toContain('action="/casino/style-gacha/draw"');
     expect(catalog).not.toContain('name="times"');
   });
+});
+
+describe('スロットのアイコンと離席ボタン', () => {
+  for (const game of ['slots', 'atslot'] as const) {
+    it(`${game}: 本人だけ離席・戻る・退席でき、他の人のレバーを無効にする`, async () => {
+      current = { ...cfg, casino: { ...cfg.casino, atOpen: true } };
+      const { cookie: a } = await casinoLogin(A);
+      const { cookie: b } = await casinoLogin(B);
+      await db.update(members).set({ avatarUrl: 'https://cdn.discordapp.com/avatars/a/icon.png' }).where(eq(members.id, A));
+      const top = (n: number) => n - 1;
+      const play = game === 'slots' ? await playSlots(db, current, A, 100, top, clock, 1) : await playAt(db, current, A, 1, top, clock);
+      expect(play.status).toBe('ok');
+      const floor = await (await get(`/casino/${game}`, b!)).text();
+      expect(floor).toContain('https://cdn.discordapp.com/avatars/a/icon.png');
+      expect(floor).toContain('あや&lt;b&gt;');
+      expect(floor).toContain('遊技中');
+      const other = await (await get(`/casino/${game}?m=1`, b!)).text();
+      expect(other).not.toContain('離席（5分）');
+      expect(other).toMatch(/data-(?:at-lever|lever-spin)[^>]*disabled/);
+      expect((await post(`/casino/${game}/seat`, a!, { m: '1', action: 'away' }, 'wrong')).status).toBe(403);
+      const away = await post(`/casino/${game}/seat`, a!, { m: '1', action: 'away' });
+      expect(away.headers.get('location')).toBe(`/casino/${game}?m=1`);
+      const own = await (await get(`/casino/${game}?m=1`, a!)).text();
+      expect(own).toContain('離席中');
+      expect(own).toContain('戻る');
+      const denied = await post(`/casino/${game}/seat`, b!, { m: '1', action: 'leave' });
+      expect(denied.headers.get('location')).toContain('seat_expired');
+      await post(`/casino/${game}/seat`, a!, { m: '1', action: 'return' });
+      expect(await (await get(`/casino/${game}?m=1`, a!)).text()).toContain('離席（5分）');
+      const leave = await post(`/casino/${game}/seat`, a!, { m: '1', action: 'leave' });
+      expect(leave.headers.get('location')).toBe(`/casino/${game}`);
+      expect(await (await get(`/casino/${game}`, b!)).text()).not.toContain('https://cdn.discordapp.com/avatars/a/icon.png');
+    });
+  }
 });
 
 

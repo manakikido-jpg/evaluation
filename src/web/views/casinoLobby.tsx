@@ -249,8 +249,8 @@ export function CasinoLobbyContent(p: LobbyProps) {
       <aside class="cl-aside" aria-label="着せ替えと御籤">
         <section class="cl-panel cl-wardrobe">
           <h2>♧ あなたの着せ替え</h2>
-          <div class={`cl-wardrobe-scene${ornament?.key === 'fox' ? ' cl-art-fox' : ''}`} aria-label="装備中の席の飾り">
-            {ornament?.key !== 'fox' && <span aria-hidden="true">{ornament?.emoji ?? '🌸'}</span>}
+          <div class="cl-wardrobe-scene" aria-label={`装備中の背景：${background?.name ?? '標準'}・席の飾り：${ornament?.name ?? '標準'}`}>
+            <span aria-hidden="true">{ornament?.emoji ?? '🌸'}</span>
           </div>
           <dl class="cl-style-list">
             <div>

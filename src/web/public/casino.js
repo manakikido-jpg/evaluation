@@ -5,6 +5,31 @@
 // - みんなで座る卓の自動更新・ヒント・ルーレットの盤・スロットの STOP
 
 // ───── 確かめてから送る・2 回押しを防ぐ ─────
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (img instanceof HTMLImageElement && img.hasAttribute('data-seat-avatar')) {
+    img.hidden = true;
+    if (img.nextElementSibling instanceof HTMLElement) img.nextElementSibling.hidden = false;
+  }
+}, true);
+
+/** 台を選ぶ画面だけ、着席者や空き台を読み直す。遊技中のリールは差し替えない。 */
+let checkingSlotFloor = false;
+setInterval(async () => {
+  const floor = document.querySelector('.c-floor');
+  if (!floor || document.hidden || checkingSlotFloor) return;
+  checkingSlotFloor = true;
+  try {
+    const res = await fetch(location.href, { credentials: 'same-origin' });
+    if (!res.ok || res.redirected) return;
+    const next = new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('.c-floor');
+    if (next && document.querySelector('.c-floor') === floor) floor.replaceWith(next);
+  } catch {
+    // つながらないときは次の確認を待つ。
+  } finally {
+    checkingSlotFloor = false;
+  }
+}, 15000);
 document.addEventListener('click', (e) => {
   const b = e.target instanceof Element ? e.target.closest('.c-confirm') : null;
   if (b && !window.confirm(b.getAttribute('data-confirm') || 'よろしいですか？')) e.preventDefault();

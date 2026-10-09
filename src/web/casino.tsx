@@ -65,9 +65,10 @@ import {
 } from './views/casino.js';
 import { SlotFloor, SlotsPage } from './views/slots.js';
 import { AtDemoPage, AtFloor, AtSlotPage } from './views/atslot.js';
-import { atFloorData, atMachineRows, leaveAt, orderAt, playAt, validAtMachine, type AtGameState } from '../services/casino/slotAtPlay.js';
+import { atFloorData, atMachineRows, orderAt, playAt, validAtMachine, type AtGameState } from '../services/casino/slotAtPlay.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import { slotFloorData, validMachine } from '../services/casino/slotFloor.js';
+import { changeSlotSeat, slotSeatViews } from '../services/casino/slotSeats.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 import { MjRecords } from './views/mahjong.js';
 import { KbLobbyExtra, KbStablePage } from './views/keiba.js';
@@ -424,10 +425,10 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const q = Number(c.req.query('m'));
     const machine = st?.machine ?? (row ? 1 : validMachine(cfg, q) ? q : undefined);
     const hide = row && st && !st.aimed && (row.status === 'playing' || (row.finishedAt && d.now().getTime() - row.finishedAt.getTime() < 60_000)) ? row.id : undefined;
-    const data = await slotFloorData(db, cfg, d.now(), hide);
+    const [data, seats] = await Promise.all([slotFloorData(db, cfg, d.now(), hide), slotSeatViews(db, d.now())]);
     const msg = casinoMsg(c.req.query('e'));
-    if (!machine) return c.html(<SlotFloor me={me} casino={casinoOf(me)} data={data} msg={msg} />);
-    return c.html(<SlotsPage me={me} casino={casinoOf(me)} row={row} msg={msg} machine={machine} data={data} />);
+    if (!machine) return c.html(<SlotFloor me={me} casino={casinoOf(me)} data={data} seats={seats} msg={msg} />);
+    return c.html(<SlotsPage me={me} casino={casinoOf(me)} row={row} msg={msg} machine={machine} data={data} seat={seats[machine]} />);
   }
 
   /** 途中のゲームを進める前に: 画面が古い（2 回押した）なら断る */
@@ -494,6 +495,18 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     }, { post: true }),
   );
 
+  for (const game of ['slots', 'atslot'] as const) {
+    app.post(`/casino/${game}/seat`, page(async (c, me) => {
+      const body = await c.req.parseBody();
+      const machine = Number(body.m);
+      const action = String(body.action ?? '');
+      const cfg = d.cfg();
+      if (!cfg.casino.games.includes(game) || (game === 'atslot' && !(await atCfgFor(me.session.userId)))) return c.redirect('/casino?e=game_off');
+      if (!(game === 'slots' ? validMachine(cfg, machine) : validAtMachine(cfg, machine)) || !['away', 'return', 'leave'].includes(action)) return c.redirect(`/casino/${game}?e=invalid`);
+      const result = await changeSlotSeat(db, game, me.session.userId, machine, action as 'away' | 'return' | 'leave', d.now());
+      return c.redirect(`/casino/${game}${result === 'ok' && action === 'leave' ? '' : `?m=${machine}${result === 'ok' ? '' : `&e=seat_${result}`}`}`);
+    }, { post: true }));
+  }
   app.post(
     '/casino/slots/:id',
     page(async (c, me) => {
@@ -566,15 +579,13 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return c.redirect(`/casino/atslot?m=${m}&e=${r.status}`);
     }, { post: true }),
   );
-  app.post(
-    '/casino/atslot/leave',
-    page(async (c, me) => {
-      const body = await c.req.parseBody();
-      const m = typeof body.m === 'string' && /^\d{1,2}$/.test(body.m) ? Number(body.m) : 0;
-      if (m) await leaveAt(db, me.session.userId, m);
-      return c.redirect('/casino/atslot');
-    }, { post: true }),
-  );
+  // 前の「台を移る」ボタンも、本人の席だけを空ける。
+  app.post('/casino/atslot/leave', page(async (c, me) => {
+    const body = await c.req.parseBody();
+    const machine = Number(body.m);
+    const result = validAtMachine(d.cfg(), machine) ? await changeSlotSeat(db, 'atslot', me.session.userId, machine, 'leave', d.now()) : 'expired';
+    return c.redirect(result === 'unfinished' ? `/casino/atslot?m=${machine}&e=seat_unfinished` : '/casino/atslot');
+  }, { post: true }));
   app.post(
     '/casino/atslot/:id',
     page(async (c, me) => {

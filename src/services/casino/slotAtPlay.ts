@@ -8,6 +8,7 @@ import { act, activeGame, checkBet, type Acted, type Played } from './casino.js'
 import { cryptoRng, type Rng } from './cards.js';
 import { atLookFor, atMult, atStopsFor, isOrder, newAtMachine, stepAt, type AtEvent, type AtMachine, type AtRole, type AtStep } from './slotAt.js';
 import { dayPicks, pickSetting } from './slotFloor.js';
+import { seatUntil } from './slotSeats.js';
 import { atShow, type AtShow } from './slotAtShow.js';
 
 /**
@@ -61,11 +62,11 @@ export const atSetting = (db: Db, cfg: GuildConfig, machine: number, now: Date, 
 export const atDayPicks = (db: Db, now = new Date()) => dayPicks(db, now, DAY_KEY);
 
 /** 台の今の状態（なければ新しい台）と、座っている人 */
-export async function atMachineRows(db: Db, cfg: GuildConfig): Promise<{ machine: number; state: AtMachine; seatBy: string | null; seatAt: Date | null; seatName: string | null }[]> {
-  const rows = await db.select({ m: slotAtMachines, name: members.displayName }).from(slotAtMachines).leftJoin(members, eq(members.id, slotAtMachines.seatBy));
+export async function atMachineRows(db: Db, cfg: GuildConfig): Promise<{ machine: number; state: AtMachine; seatBy: string | null; seatAt: Date | null; seatName: string | null; seatAvatar: string | null; awayUntil: Date | null }[]> {
+  const rows = await db.select({ m: slotAtMachines, name: members.displayName, avatar: members.avatarUrl }).from(slotAtMachines).leftJoin(members, eq(members.id, slotAtMachines.seatBy));
   return Array.from({ length: atMachineCount(cfg) }, (_, i) => {
     const r = rows.find((x) => x.m.machine === i + 1);
-    return { machine: i + 1, state: (r?.m.state as AtMachine | undefined) ?? newAtMachine(), seatBy: r?.m.seatBy ?? null, seatAt: r?.m.seatAt ?? null, seatName: r?.name ?? null };
+    return { machine: i + 1, state: (r?.m.state as AtMachine | undefined) ?? newAtMachine(), seatBy: r?.m.seatBy ?? null, seatAt: r?.m.seatAt ?? null, seatName: r?.name ?? null, seatAvatar: r?.avatar ?? null, awayUntil: r?.m.awayUntil ?? null };
   });
 }
 
@@ -73,7 +74,7 @@ export async function atMachineRows(db: Db, cfg: GuildConfig): Promise<{ machine
 export const atContinues = (m: Pick<AtMachine, 'phase' | 'at'>) => m.phase === 'zenchou' || (m.phase === 'at' && m.at !== null);
 
 /** だれかが座っているか（自分以外・AT_SEAT_MINUTES 以内に回した） */
-export const seatTaken = (seatBy: string | null, seatAt: Date | null, me: string, now: Date) => Boolean(seatBy && seatBy !== me && seatAt && now.getTime() - seatAt.getTime() < AT_SEAT_MINUTES * 60_000);
+export const seatTaken = (seatBy: string | null, seatAt: Date | null, me: string, now: Date, awayUntil: Date | null = null) => Boolean(seatBy && seatBy !== me && (seatUntil(seatAt, awayUntil)?.getTime() ?? 0) > now.getTime());
 
 class Stop extends Error {
   constructor(readonly code: 'occupied' | 'poor') {
@@ -92,7 +93,7 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
   const bet = cfg.casino.atBet;
   // AT 中（AT が決まった前兆中も）は、自分が座っている台なら 1 日の上限を見ない（AT が終わるまで回せる）
   const [cur] = await db.select().from(slotAtMachines).where(eq(slotAtMachines.machine, machine));
-  const inAt = Boolean(cur && atContinues(cur.state as unknown as AtMachine) && !seatTaken(cur.seatBy, cur.seatAt, memberId, now));
+  const inAt = Boolean(cur && atContinues(cur.state as unknown as AtMachine) && !seatTaken(cur.seatBy, cur.seatAt, memberId, now, cur.awayUntil));
   // 賭けは島で決まっているので、ほかのゲームの最低・最高とは別
   const casino = { ...cfg.casino, minBet: Math.min(cfg.casino.minBet, bet), maxBet: Math.max(cfg.casino.maxBet, bet), ...(inAt ? { dailyBetLimit: 0 } : {}) };
   const check = await checkBet(db, { ...cfg, casino }, memberId, 'atslot', bet, now);
@@ -102,7 +103,7 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
     const row = await db.transaction(async (tx) => {
       await tx.insert(slotAtMachines).values({ machine, state: newAtMachine() as unknown as Record<string, unknown> }).onConflictDoNothing();
       const [m] = await tx.select().from(slotAtMachines).where(eq(slotAtMachines.machine, machine)).for('update');
-      if (seatTaken(m!.seatBy, m!.seatAt, memberId, now)) throw new Stop('occupied');
+      if (seatTaken(m!.seatBy, m!.seatAt, memberId, now, m!.awayUntil)) throw new Stop('occupied');
       const { next, step } = stepAt(m!.state as unknown as AtMachine, setting, rng);
       const waiting = step.role === 'oshijun' && step.navi !== null;
       const lucky = step.role === 'oshijun' && !step.navi && rng(6) === 0;
@@ -144,7 +145,7 @@ export async function playAt(db: Db, cfg: GuildConfig, memberId: string, machine
       if (!waiting && payout > 0) await addCoins(tx, memberId, payout, 'casino_win', { game: 'atslot', id: r!.id });
       await tx
         .update(slotAtMachines)
-        .set({ state: next as unknown as Record<string, unknown>, seatBy: memberId, seatAt: now, updatedAt: now })
+        .set({ state: next as unknown as Record<string, unknown>, seatBy: memberId, seatAt: now, awayUntil: null, updatedAt: now })
         .where(eq(slotAtMachines.machine, machine));
       return r!;
     });
@@ -187,7 +188,7 @@ export async function orderAt(db: Db, id: number, memberId: string, order: numbe
 
 /** 席を立つ（自分が座っているときだけ。台の状態はそのまま残る） */
 export async function leaveAt(db: Db, memberId: string, machine: number): Promise<void> {
-  await db.update(slotAtMachines).set({ seatBy: null, seatAt: null }).where(and(eq(slotAtMachines.machine, machine), eq(slotAtMachines.seatBy, memberId)));
+  await db.update(slotAtMachines).set({ seatBy: null, seatAt: null, awayUntil: null }).where(and(eq(slotAtMachines.machine, machine), eq(slotAtMachines.seatBy, memberId)));
 }
 
 // ───────── 島のデータ ─────────

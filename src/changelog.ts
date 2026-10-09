@@ -20,6 +20,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-casino-seats-scenes-draws',
+    date: '2026-10-09',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '🎰 スロットの席・背景・勝負の御籤を整えました',
+    items: [
+      'スロットの台に利用者のアイコンと名前を表示します。遊技中の台はほかの人が回せません。離席は5分だけ確保でき、戻る・退席ボタンもあります。',
+      '背景5種類を和風の風景に変えました。着せ替えの見本・装備中の案内・ロビーにも同じ背景が出ます。',
+      '勝負の御籤を同じ売り場から続けて引けるように直しました。引いた回数と今回の景品を表示し、処理の再送では二重に払いません。',
+    ],
+  },
+  {
     id: '2026-10-09-cast-price-min-1',
     date: '2026-10-09',
     kind: 'improve',

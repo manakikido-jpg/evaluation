@@ -55,10 +55,27 @@ it('カジノの権限と休止を守り、Discordから景品を渡す', async 
   await app.onInteraction(draw as unknown as Interaction);
   expect(draw.editReply.mock.calls[0]![0].content).toContain('今回の景品');
   expect((await walletOf(db, A)).balance).toBe(9500);
-  const again = { ...interaction('casino-gacha:draw:10'), id: 'another-interaction' };
+  const again = interaction('casino-gacha:draw:1');
   await app.onInteraction(again as unknown as Interaction);
   expect(again.editReply.mock.calls[0]![0].content).toContain('追加の支払いはありません');
   expect((await walletOf(db, A)).balance).toBe(9500);
+  const next = { ...interaction('casino-gacha:draw:10'), id: 'another-interaction' };
+  await app.onInteraction(next as unknown as Interaction);
+  expect(next.editReply.mock.calls[0]![0].content).toContain('10連引きました');
+  expect((await walletOf(db, A)).balance).toBe(4500);
+});
+
+it('同じ売り場から続けて1回ずつ引けて、景品の受け取り先も表示する', async () => {
+  const app = new GachaApp(db, () => ({ ...cfg, casinoGacha: { ...cfg.casinoGacha, enabled: true } }));
+  for (const id of ['first-press', 'next-press']) {
+    const i = { ...interaction('casino-gacha:draw:1'), id };
+    await app.onInteraction(i as unknown as Interaction);
+    const content = i.editReply.mock.calls[0]![0].content;
+    expect(content).toContain('1回引きました');
+    expect(content).toContain('景品は持ち物に入りました');
+    expect(content).not.toContain('追加の支払いはありません');
+  }
+  expect((await walletOf(db, A)).balance).toBe(9000);
 });
 it('既存の祈願所パネルにも2つ目の入口を足す', async () => {
   const edit = vi.fn(async () => {});
