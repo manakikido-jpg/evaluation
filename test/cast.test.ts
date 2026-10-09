@@ -62,7 +62,7 @@ afterEach(async () => {
 describe('🎀 キャスト', () => {
   it('申し込み: 18 歳以上だけ・値段は範囲の中。読みやすい数とタグ', async () => {
     expect((await applyCast(db, c, { id: MINOR, adult: false }, profile, T20)).status).toBe('not_adult');
-    expect((await applyCast(db, c, { id: ADULT, adult: true }, { ...profile, price30: 50 }, T20)).status).toBe('invalid');
+    expect((await applyCast(db, c, { id: ADULT, adult: true }, { ...profile, price30: -1 }, T20)).status).toBe('invalid');
     expect((await applyCast(db, c, { id: CAST, adult: true }, profile, T20)).status).toBe('already');
     expect(parsePrice('１，０００枚')).toBe(1000);
     expect(parsePrice('')).toBe(0);
@@ -403,7 +403,11 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     const cast0 = (await getCast(db, CAST))!;
     expect(menuOf(cast0).map((m) => m.id)).toEqual(['30', '60', 'night']);
     expect(await addMenuItem(db, c, CAST, { name: 'ゲーム', note: '一緒に遊ぶ', minutes: 90, price: 900, night: false })).toBe('ok');
-    expect(await addMenuItem(db, c, CAST, { name: 'x', note: '', minutes: 90, price: 1, night: false })).toBe('invalid');
+    expect(await addMenuItem(db, c, CAST, { name: 'x', note: '', minutes: 90, price: 0, night: false })).toBe('invalid');
+    // 値段は 1 銭からつけられる（はじめの下限は 1）
+    expect(c.priceMin).toBe(1);
+    expect(await addMenuItem(db, c, CAST, { name: '1 銭', note: '', minutes: 30, price: 1, night: false })).toBe('ok');
+    expect(await removeMenuItem(db, CAST, (await getCast(db, CAST))!.menu.at(-1)!.id)).toBe(true);
     const cast = (await getCast(db, CAST))!;
     expect(cast.menu.map((m) => m.name)).toEqual(['30 分', '1 時間', '寝落ち', 'ゲーム']);
     expect(cast.price30).toBe(0);
@@ -436,7 +440,7 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     // 値段なしでは指名できない・ほかのメニューに値段を付けられない・範囲の外はだめ
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id }, T20)).status).toBe('no_plan');
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', quote: { minutes: 30, price: 100 } }, T20)).status).toBe('no_plan');
-    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 30, price: 1 } }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 30, price: 0 } }, T20)).status).toBe('no_plan');
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 30, price: 500 } }, T20)).status).toBe('minor_plan');
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 45, price: 700 } }, T20);
     expect(r).toMatchObject({ status: 'ok', session: { menuName: 'おねがい（相談）', minutes: 45, price: 700 } });

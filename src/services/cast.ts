@@ -47,7 +47,7 @@ export type CastConfig = {
   /** メニューのテンプレ（登録のときやボタン 1 つでキャストに入れる）。なければ DEFAULT_MENU_TEMPLATE */
   menuTemplate?: CastMenuItem[];
 };
-export const CAST_DEFAULTS: CastConfig = { priceMin: 100, priceMax: 30_000, feePercent: 10, acceptMinutes: 10 };
+export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10 };
 const KEY = 'cast';
 const sf = (x: unknown) => (typeof x === 'string' && /^\d{17,20}$/.test(x) ? x : undefined);
 const int = (x: unknown, d: number, lo: number, hi: number) => (typeof x === 'number' && Number.isInteger(x) && x >= lo && x <= hi ? x : d);
