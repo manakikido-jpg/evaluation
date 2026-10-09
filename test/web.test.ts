@@ -3078,6 +3078,40 @@ describe('キャスト（管理画面）', () => {
     });
   };
 
+  it('写真・メニューの保存で紹介投稿を更新し、更新失敗は保存内容を残して待機を表示する', async () => {
+    const { applyCast, CAST_DEFAULTS, setCastStatus, getCast } = await import('../src/services/cast.js');
+    const { postCastIntro, refreshCastIntros } = await import('../src/discord/cast.js');
+    const id = '880000000000000028';
+    await applyCast(db, CAST_DEFAULTS, { id, adult: true }, { bio: '紹介', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: false });
+    await setCastStatus(db, id, 'active', STAFF);
+    await postCastIntro(db, fakeActions, id, '910000000000000003', '銭');
+    const s = await login(STAFF);
+    const oldEdit = fakeActions.editMessage;
+    const edits: MessageBody[] = [];
+    let fail = false;
+    try {
+      fakeActions.editMessage = async (_c, _m, b) => { if (fail) throw new Error('紹介の更新失敗'); edits.push(b); };
+      const r = await form(s, `/cast/casts/${id}/menu`, { menuName: 'ゲーム', menuNote: '', menuMinutes: '30', menuPrice: '800' });
+      expect(r.headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${id}`);
+      expect(JSON.stringify(edits.at(-1)?.components)).toContain('ゲーム');
+      expect(JSON.stringify(edits.at(-1)?.components)).toContain('800銭');
+      const sharp = (await import('sharp')).default;
+      const photo = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#aaaa00' } }).png().toBuffer();
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
+      const fd = new FormData(); fd.append('_csrf', csrf); fd.append('image', new File([new Uint8Array(photo)], 'photo.png', { type: 'image/png' }));
+      const saved = await app.request(`/cast/casts/${id}/photo`, { method: 'POST', headers: { cookie: `shamusho_session=${s}` }, body: fd });
+      expect(saved.headers.get('location')).toBe('/cast?msg=photo_saved');
+      expect(edits.at(-1)?.files).toHaveLength(1);
+      fail = true;
+      const option = await form(s, `/cast/casts/${id}/options`, { optionName: 'カメラ', optionPrice: '100' });
+      expect(option.headers.get('location')).toBe(`/cast?msg=sync_pending#cast-${id}`);
+      expect((await getCast(db, id))?.options[0]?.name).toBe('カメラ');
+      fail = false;
+      await refreshCastIntros(db, fakeActions, id);
+      expect(JSON.stringify(edits.at(-1)?.components)).toContain('カメラ');
+    } finally { fakeActions.editMessage = oldEdit; }
+  });
+
   it('256KBを超える写真を本人ごとに保存し、8MB超・CSRFなし・未登録は拒む', async () => {
     const sharp = (await import('sharp')).default;
     const { applyCast, CAST_DEFAULTS, setCastStatus, loadCastPhoto } = await import('../src/services/cast.js');

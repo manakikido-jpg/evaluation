@@ -228,7 +228,7 @@ import { listingCard, requestCard } from '../discord/market.js';
 import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
-import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
+import { postCastIntro, refreshCastIntros, refreshCastPanel } from '../discord/cast.js';
 import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
@@ -5146,6 +5146,20 @@ export function createWebApp(deps: WebDeps) {
     await deps.discord.sendDm(r.post.authorId, `📌 募集「${r.post.title}」は運営の判断で、報酬（${e.currencyEmoji} ${r.post.reward} 枚）をお返ししました。`).catch(() => false);
     await deps.discord.sendDm(r.entry.memberId, `📌 募集「${r.post.title}」は運営の判断で、報酬を募集した方に戻しました。`).catch(() => false);
     return c.redirect('/board?msg=refunded');
+  });
+
+  // 写真・メニュー・オプション・登録状態を保存したら、その人の紹介も更新する
+  app.use('/cast/casts/*', async (c, next) => {
+    await next();
+    if (c.req.method !== 'POST' || c.res.status !== 302) return;
+    const id = /^\/cast\/casts\/(\d{17,20})\//.exec(c.req.path)?.[1];
+    const location = c.res.headers.get('location');
+    if (!id || !location) return;
+    const msg = new URL(location, 'https://local.invalid').searchParams.get('msg');
+    const saved = ['photo_saved', 'photo_removed', 'menu_ok', 'menu_saved', 'menu_removed', 'option_ok', 'option_removed', 'template_applied', 'gender_saved', 'status', 'approved'];
+    if (!msg || !saved.includes(msg)) return;
+    const ok = await refreshCastIntros(db, deps.discord, id).catch(err => { logger.warn({ err }, 'cast saved intro sync failed'); return false; });
+    if (!ok) c.res = c.redirect(`/cast?msg=sync_pending#cast-${id}`);
   });
 
   // ───────── 🎀 キャスト ─────────

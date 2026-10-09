@@ -181,7 +181,7 @@ export class ShuinApp {
         sendMessage: async (channelId, body) => {
           const ch = await this.client.channels.fetch(channelId);
           if (!ch?.isSendable()) throw new Error('初期通貨のお知らせ先に投稿できません。');
-          const sent = await ch.send({ content: body.content, allowedMentions: { parse: [] } });
+          const sent = await ch.send({ content: body.content ?? undefined, allowedMentions: { parse: [] } });
           return { id: sent.id };
         },
       }, m.id).catch((err) => logger.error({ err }, 'initial currency failed'));
@@ -195,7 +195,7 @@ export class ShuinApp {
       sendMessage: async (channelId: string, body: { content?: string }) => {
         const ch = await this.client.channels.fetch(channelId);
         if (!ch?.isSendable()) throw new Error('招待報酬の記録先に投稿できません。');
-        const message = await ch.send({ content: body.content, allowedMentions: { parse: [] } });
+        const message = await ch.send({ content: body.content ?? undefined, allowedMentions: { parse: [] } });
         return { id: message.id };
       },
     } };
@@ -254,7 +254,7 @@ export class ShuinApp {
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
       const ch = await this.client.channels.fetch(channelId);
       if (!ch?.isSendable()) throw new Error('浮上ボーナスの通知先に投稿できません。');
-      const message = await ch.send({ content: body.content, allowedMentions: { parse: [], users: body.allowed_mentions?.users ?? [] } });
+      const message = await ch.send({ content: body.content ?? undefined, allowedMentions: { parse: [], users: body.allowed_mentions?.users ?? [] } });
       return { id: message.id };
     } }, now).catch(err => logger.warn({ err }, 'long voice bonus notices failed'));
     // 浮上の時間帯（1 時間ごと）: この 1 分の発言と、通話にいる人

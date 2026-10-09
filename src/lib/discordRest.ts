@@ -79,7 +79,8 @@ export type RolePatch = { name?: string; color?: number; hoist?: boolean; mentio
 
 export type MessageBody = {
   flags?: number;
-  content?: string;
+  /** null は、古い本文を消して写真と操作の表示へ切り替えるときに使う */
+  content?: string | null;
   /** image.url に attachment://ファイル名 と書くと、いっしょに送った写真をカードの中に出す */
   embeds?: {
     title?: string;
