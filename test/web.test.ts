@@ -3696,3 +3696,40 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
   const js = await get('/static/invite-selection.js', guji);
   expect(js.status).toBe(200);
 });
+
+ describe('案内の設定と登録', () => {
+  const postGuide = (path: string, session: string, form: URLSearchParams) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded', origin: BASE }, body: form.toString() });
+  it('管理画面はログインが必要で、設定は宮司とCSRFに限定する', async () => {
+    expect((await app.request('/guide')).headers.get('location')).toBe('/login');
+    const s = await login(STAFF);
+    const html = await (await get('/guide', s)).text();
+    expect(html).toContain('案内・給与');
+    const sessionRows = await import('../src/db/schema.js').then(m => db.select().from(m.adminSessions));
+    const csrf = sessionRows.find(r => r.userId === STAFF)!.csrfToken;
+    expect((await postGuide('/guide/settings', s, new URLSearchParams({ _csrf: csrf }))).status).toBe(403);
+    expect((await postGuide('/guide/settings', s, new URLSearchParams({ _csrf: 'wrong' }))).status).toBe(403);
+  });
+  it('宮司が複数VCの設定を保存し、申請を承認してロールを付ける', async () => {
+    const { loadGuideConfig, registerGuide } = await import('../src/services/guideReception.js');
+    const { adminSessions, guideEmployees } = await import('../src/db/schema.js');
+    const s = await login(GUJI);
+    const rows = await db.select().from(adminSessions);
+    const csrf = rows.find(r => r.userId === GUJI)!.csrfToken;
+    const roleId = '980000000000000080';
+    roleList = [{ id: roleId, name: '案内人', position: 1, managed: false, color: 0 }];
+    const config = await loadGuideConfig(db);
+    const form = new URLSearchParams({ _csrf: csrf, salary: '150', roleId, staffChannelId: '910000000000000002' });
+    config.links.forEach((l, n) => { form.set(`emoji_${n}`, `<:${l.emojiName}:${l.emojiId}>`); form.set(`links_${n}`, l.channelIds.join(' ')); });
+    form.append('voiceChannelIds', '910000000000000004');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
+    expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
+    await registerGuide(db, USER);
+    expect((await postGuide(`/guide/employees/${USER}`, s, new URLSearchParams({ _csrf: csrf, status: 'active' }))).headers.get('location')).toBe('/guide?msg=status');
+    expect(actions).toContain(`addRole ${USER} ${roleId}`);
+    expect((await db.select().from(guideEmployees))[0]?.status).toBe('active');
+    // テキストチャンネルを監視VCとして保存することはできない
+    form.set('voiceChannelIds', '910000000000000002');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=invalid');
+    expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
+  });
+ });

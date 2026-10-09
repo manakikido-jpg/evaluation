@@ -21,6 +21,7 @@ import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
 import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
+import { GuideReceptionApp } from './discord/guideReception.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { SokinApp } from './discord/sokin.js';
@@ -94,6 +95,7 @@ async function main(): Promise<void> {
   const tempGrants = new TempGrantApp(db, cfg, actions);
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
   const help = new HelpApp(cfg);
+  const guideReception = new GuideReceptionApp(db, cfg, actions);
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
@@ -180,6 +182,7 @@ async function main(): Promise<void> {
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
     ticker = setInterval(() => {
+      void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
       void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
@@ -303,6 +306,7 @@ async function main(): Promise<void> {
     if (after.channelId && after.channelId !== before.channelId && after.member) {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
     }
+    void guideReception.onVoiceStateUpdate(before, after);
     void tempVoice.onVoiceStateUpdate(before, after);
     // 自動で増える通話: 全部埋まったら増やし、空きが増えたら減らす
     voiceGroups.onVoiceStateUpdate(before, after);
@@ -314,6 +318,7 @@ async function main(): Promise<void> {
     void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
+    void guideReception.onInteraction(i);
     void app.onInteraction(i);
     void staff.onInteraction(i);
     void admission.onInteraction(i);

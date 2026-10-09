@@ -1,3 +1,8 @@
+import { desc, eq } from 'drizzle-orm';
+import { GuidePage } from './views/guide.js';
+import { guideEmployeePanel } from '../discord/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus } from '../services/guideReception.js';
+import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
 import { permissionIssues, validatePermissionSnapshot } from '../services/permissionCheck.js';
@@ -581,6 +586,9 @@ export function createWebApp(deps: WebDeps) {
   app.use('/temp', requireAdmin);
   app.use('/invites', requireAdmin);
   app.use('/board', requireAdmin);
+  app.use('/guide', requireAdmin);
+  app.use('/guide/*', requireAdmin);
+  app.use('/guide/*', requireCsrf);
   app.use('/cast', requireAdmin);
   app.use('/tickets', requireAdmin);
   app.use('/voice', requireAdmin);
@@ -1471,6 +1479,59 @@ export function createWebApp(deps: WebDeps) {
   });
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */
+  app.get('/guide', async c => {
+    const [config, employees, receptions, payroll, channels, roles] = await Promise.all([
+      loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
+    ]);
+    const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.map(r => r.memberId)].filter(Boolean));
+    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} />);
+  });
+  app.post('/guide/settings', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが変更できます。', 403);
+    const b = await c.req.parseBody({ all: true });
+    try {
+      const voiceChannelIds = (Array.isArray(b.voiceChannelIds) ? b.voiceChannelIds : b.voiceChannelIds ? [b.voiceChannelIds] : []);
+      const config = guideConfigSchema.parse({ voiceChannelIds, staffChannelId: b.staffChannelId || undefined, roleId: b.roleId || undefined, salary: Number(b.salary), links: parseGuideLinks(b) });
+      const channels = await loadChannels(true);
+      const roles = await loadRoles() ?? [];
+      if (config.voiceChannelIds.some(id => !channels.some(ch => ch.id === id && ch.type === 2)) || (config.staffChannelId && !channels.some(ch => ch.id === config.staffChannelId && ch.type === 0)) || (config.roleId && !roles.some(r => r.id === config.roleId && !r.managed && r.id !== cfg.guildId))) return c.redirect('/guide?msg=invalid');
+      await saveGuideConfig(db, config, c.get('session').userId);
+      return c.redirect('/guide?msg=saved');
+    } catch { return c.redirect('/guide?msg=invalid'); }
+  });
+  app.post('/guide/panel', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが操作できます。', 403);
+    const b = await c.req.parseBody();
+    const id = typeof b.channelId === 'string' ? b.channelId : '';
+    try {
+      const channels = await loadChannels(true);
+      if (!channels.some(ch => ch.id === id && ch.type === 0)) return c.redirect('/guide?msg=invalid');
+      await deps.discord.sendMessage(id, guideEmployeePanel());
+      await audit(db, { actorId: c.get('session').userId, action: 'guide.panel', detail: { channelId: id }, via: 'web' });
+      return c.redirect('/guide?msg=posted');
+    } catch { return c.redirect('/guide?msg=failed'); }
+  });
+  app.post('/guide/employees/:id', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが承認できます。', 403);
+    const id = c.req.param('id');
+    const b = await c.req.parseBody();
+    if (!/^\d{17,20}$/.test(id) || !['active', 'paused'].includes(String(b.status))) return c.redirect('/guide?msg=invalid');
+    const [employee] = await db.select().from(guideEmployees).where(eq(guideEmployees.memberId, id));
+    if (!employee) return c.redirect('/guide?msg=invalid');
+    try {
+      const config = await loadGuideConfig(db);
+      const roles = await loadRoles() ?? [];
+      const candidates = roles.filter(r => r.name.includes('案内人') && !r.managed);
+      const roleId = config.roleId ?? (candidates.length === 1 ? candidates[0]!.id : undefined);
+      if (!roleId || roleId === cfg.guildId) return c.redirect('/guide?msg=invalid');
+      if (b.status === 'active') await deps.discord.addRole(cfg.guildId, id, roleId, '案内人の登録を承認');
+      else await deps.discord.removeRole(cfg.guildId, id, roleId, '案内人の登録を休止');
+      await setGuideStatus(db, id, b.status as 'active' | 'paused', c.get('session').userId);
+      await deps.discord.sendDm(id, b.status === 'active' ? '案内人の登録が承認されました。受付パネルから待機を切り替えてください。' : '案内人の登録を休止しました。').catch(() => false);
+      return c.redirect('/guide?msg=status');
+    } catch { return c.redirect('/guide?msg=failed'); }
+  });
+
   app.get('/economy', async (c) => {
     const q = c.req.query('range');
     const range = isTrendRange(q) ? q : '30d';

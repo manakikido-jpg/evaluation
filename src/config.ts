@@ -28,6 +28,7 @@ export const WEB_PAGES = [
   { key: 'gacha', label: '物御籤', href: '/gacha', prefixes: ['gacha'] },
   { key: 'market', label: '市場', href: '/market', prefixes: ['market'] },
   { key: 'board', label: '掲示板', href: '/board', prefixes: ['board'] },
+  { key: 'guide', label: '案内・給与', href: '/guide', prefixes: ['guide'] },
   { key: 'cast', label: 'キャスト', href: '/cast', prefixes: ['cast'] },
   { key: 'glossary', label: '用語集', href: '/glossary', prefixes: ['glossary'] },
 ] as const;

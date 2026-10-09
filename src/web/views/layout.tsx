@@ -28,6 +28,7 @@ type Nav =
   | 'invites'
   | 'gift'
   | 'board'
+  | 'guide'
   | 'cast'
   | 'tickets'
   | 'notices'
@@ -77,6 +78,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'gacha', href: '/gacha', icon: '🎲', label: '物御籤' },
       { key: 'market', href: '/market', icon: '🏮', label: '市場' },
       { key: 'board', href: '/board', icon: '📌', label: '掲示板' },
+      { key: 'guide', href: '/guide', icon: '🌸', label: '案内・給与' },
       { key: 'cast', href: '/cast', icon: '🎀', label: 'キャスト' },
       { key: 'shop', href: '/shop', icon: '🛍', label: 'ショップ', gujiOnly: true },
     ],
