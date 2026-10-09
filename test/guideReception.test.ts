@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
-import { employeePayroll, guideEmployees, guideReceptions } from '../src/db/schema.js';
+import { auditLogs, employeePayroll, guideEmployees, guideReceptions } from '../src/db/schema.js';
 import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting } from '../src/services/guideReception.js';
 import { GuideReceptionApp, guideVisitorPanel } from '../src/discord/guideReception.js';
 import * as economy from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
 import { makeDb, cfg } from './helpers.js';
 const GUIDE = '870000000000000001', OTHER = '870000000000000002', VISITOR = '870000000000000003', VOICE = '870000000000000004', STAFF = '870000000000000005', ROLE = '870000000000000006';
+const PENDING = '870000000000000007';
+const guideCfg = { ...cfg, roles: { ...cfg.roles, guidePending: PENDING } };
 const now = new Date('2026-10-09T03:00:00Z');
 let db: Db, close: () => Promise<void>;
 beforeEach(async () => {
@@ -17,6 +20,23 @@ beforeEach(async () => {
 afterEach(async () => { vi.restoreAllMocks(); await close(); });
 async function active(id = GUIDE) { await registerGuide(db, id); await setGuideStatus(db, id, 'active', 'staff'); }
 async function reception(time = now) { return (await openGuideReception(db, VISITOR, VOICE, time))!; }
+
+function mockGuild(visitorRoles = [PENDING], guideRoles = [ROLE]) {
+  const member = (id: string, roles: string[], bot = false) => ({ id, user: { bot }, roles: { cache: new Collection(roles.map(role => [role, { id: role }])) }, voice: { channelId: VOICE as string | null } });
+  const visitor = member(VISITOR, visitorRoles);
+  const guide = member(GUIDE, guideRoles);
+  const regular = member(OTHER, []);
+  const bot = member('870000000000000008', [PENDING], true);
+  const people = new Collection([visitor, guide, regular, bot].map(m => [m.id, m]));
+  const guild = { id: cfg.guildId, roles: { cache: new Collection([[PENDING, { id: PENDING, name: '🧭 案内 待ち' }], [ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Collection([[VOICE, { type: 2, members: people }]]) }, members: { cache: people, fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } };
+  const discord = { sendMessage: vi.fn(async (_channel: string, _body: unknown) => ({ id: 'message' })), editMessage: vi.fn(), sendDm: vi.fn(async () => true) };
+  const app = new GuideReceptionApp(db, () => guideCfg, discord as never);
+  const interaction = (id: number, actor = GUIDE, action = 'claim') => ({ isButton: () => true, inCachedGuild: () => true, customId: `guide:${action}:${id}`, guildId: guild.id, guild, user: { id: actor }, deferReply: vi.fn(), editReply: vi.fn() });
+  return { visitor, guide, regular, bot, guild, discord, app, interaction };
+}
+async function configure() {
+  await saveGuideConfig(db, { ...(await loadGuideConfig(db)), voiceChannelIds: [VOICE], staffChannelId: STAFF, roleId: ROLE }, GUIDE);
+}
 
 describe('案内の受付と給与', () => {
   it('貼り付けた案内文から複数リンクと見えない区切りを読み、不正な行を拒否する', () => {
@@ -98,11 +118,11 @@ describe('案内の受付と給与', () => {
     await active(); await active(OTHER); await setGuideWaiting(db, GUIDE, true);
     const config = { ...(await loadGuideConfig(db)), voiceChannelIds: [VOICE], staffChannelId: STAFF, roleId: ROLE };
     await saveGuideConfig(db, config, GUIDE);
-    const visitor = { id: VISITOR, user: { bot: false }, roles: { cache: new Map() }, voice: { channelId: VOICE } };
+    const visitor = { id: VISITOR, user: { bot: false }, roles: { cache: new Map([[PENDING, {}]]) }, voice: { channelId: VOICE } };
     const guide = { id: GUIDE, user: { bot: false }, roles: { cache: new Map([[ROLE, {}]]) }, voice: { channelId: VOICE } };
-    const guild = { id: cfg.guildId, roles: { cache: { filter: () => ({ size: 0 }) } }, channels: { cache: new Map([[VOICE, { type: 2, members: new Map([[VISITOR, visitor], [GUIDE, guide]]) }]]) }, members: { cache: new Map([[VISITOR, visitor], [GUIDE, guide]]), fetch: vi.fn(async () => guide) } };
+    const guild = { id: cfg.guildId, roles: { cache: new Collection() }, channels: { cache: new Map([[VOICE, { type: 2, members: new Map([[VISITOR, visitor], [GUIDE, guide]]) }]]) }, members: { cache: new Map([[VISITOR, visitor], [GUIDE, guide]]), fetch: vi.fn(async () => guide) } };
     const discord = { sendMessage: vi.fn(async (ch: string) => { if (ch === STAFF && discord.sendMessage.mock.calls.filter(x => x[0] === STAFF).length === 1) throw new Error('通知失敗'); return { id: 'message' }; }), editMessage: vi.fn(), sendDm: vi.fn(async (_id: string, _text: string) => true) };
-    const app = new GuideReceptionApp(db, () => cfg, discord as never);
+    const app = new GuideReceptionApp(db, () => guideCfg, discord as never);
     await app.tick(guild as never); await app.tick(guild as never); await app.tick(guild as never);
     expect(discord.sendMessage.mock.calls.filter(x => x[0] === VOICE)).toHaveLength(1);
     expect(discord.sendMessage.mock.calls.filter(x => x[0] === STAFF)).toHaveLength(2);
@@ -113,9 +133,103 @@ describe('案内の受付と給与', () => {
   it('部屋の案内は通知対象を限定し、退出時にはボタンを止める', async () => {
     const r = await reception();
     const panel = guideVisitorPanel(r, await loadGuideConfig(db));
+    expect(JSON.stringify(panel.components)).toContain('案内を開始する');
     expect(panel.allowed_mentions).toEqual({ parse: [], users: [VISITOR] });
     expect(panel.content).toContain('<:a_006:1557360917057110046>');
     const [left] = await leaveGuideReception(db, VISITOR, now);
     expect(guideVisitorPanel(left!, await loadGuideConfig(db)).content).toContain('退出済み');
+  });
+});
+
+describe('案内待ちだけの受付と案内人の開始', () => {
+  it('入室イベントと再起動の確認は、案内待ちの人だけを数える', async () => {
+    await configure();
+    const m = mockGuild();
+    for (const member of [m.regular, m.guide, m.bot, m.visitor]) {
+      await m.app.onVoiceStateUpdate({ channelId: null } as never, { channelId: VOICE, guild: m.guild, member, id: member.id } as never);
+    }
+    await m.app.tick(m.guild as never);
+    expect((await db.select().from(guideReceptions)).map(r => r.visitorId)).toEqual([VISITOR]);
+    expect(m.discord.sendMessage.mock.calls.filter(c => c[0] === VOICE)).toHaveLength(1);
+    // 案内待ちを持っていても、案内人自身は受付の対象にしない。
+    m.guide.roles.cache.set(PENDING, { id: PENDING });
+    await m.app.tick(m.guild as never);
+    expect(await db.select().from(guideReceptions)).toHaveLength(1);
+  });
+  it('ロール名でも案内待ちを見つけ、見つからなければ全員を数えない', async () => {
+    await configure();
+    const m = mockGuild();
+    const app = new GuideReceptionApp(db, () => cfg, m.discord as never);
+    m.guild.roles.cache.delete(PENDING);
+    await app.tick(m.guild as never);
+    expect(await db.select().from(guideReceptions)).toHaveLength(0);
+    m.guild.roles.cache.set(PENDING, { id: PENDING, name: '🧭 案内 待ち' });
+    await app.tick(m.guild as never);
+    expect((await db.select().from(guideReceptions))[0]?.visitorId).toBe(VISITOR);
+  });
+  it('同時開始は案内人1人・記録1件で、給与はまだ出ない', async () => {
+    const r = await reception();
+    const results = await Promise.all([assignGuide(db, r.id, GUIDE, { roleVerified: true }), assignGuide(db, r.id, OTHER, { roleVerified: true })]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await db.select().from(guideEmployees)).toHaveLength(1);
+    expect(await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.start'))).toHaveLength(1);
+    expect(await db.select().from(employeePayroll)).toHaveLength(0);
+  });
+  it('案内人ロールがなければ、承認済みでも開始できない', async () => {
+    await configure(); await active();
+    const m = mockGuild([PENDING], []);
+    const r = await reception();
+    const i = m.interaction(r.id);
+    await m.app.onInteraction(i as never);
+    expect(i.editReply).toHaveBeenCalledWith('案内人ロールが必要です。運営に確認してください。');
+    expect((await db.select().from(guideReceptions))[0]?.guideId).toBeNull();
+    expect(await db.select().from(employeePayroll)).toHaveLength(0);
+  });
+  it('案内人ロールの人を開始時に担当へ記録し、連打で記録や通知を増やさない', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception();
+    const i = m.interaction(r.id);
+    await m.app.onInteraction(i as never);
+    await m.app.onInteraction(i as never);
+    const [assigned] = await db.select().from(guideReceptions);
+    expect(assigned).toMatchObject({ status: 'assigned', guideId: GUIDE });
+    expect((await db.select().from(guideEmployees))[0]?.status).toBe('active');
+    const starts = await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.start'));
+    expect(starts).toHaveLength(1);
+    expect(starts[0]).toMatchObject({ actorId: GUIDE, targetId: VISITOR });
+    expect(m.discord.sendMessage).toHaveBeenCalledOnce();
+    expect(m.discord.sendMessage.mock.calls[0]?.[1]).toMatchObject({ content: expect.stringContaining(`案内開始：<@${GUIDE}>`), allowed_mentions: { parse: [] } });
+    expect(await db.select().from(employeePayroll)).toHaveLength(0);
+    expect(guideVisitorPanel(assigned!, await loadGuideConfig(db)).content).toContain(`対応中：<@${GUIDE}>`);
+    // 案内中の承認で案内待ちが外れても、担当者が完了を押して給与を受け取れる。
+    m.visitor.roles.cache.delete(PENDING);
+    await m.app.tick(m.guild as never);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'done') as never);
+    expect((await db.select().from(guideReceptions))[0]?.status).toBe('done');
+    expect((await economy.walletOf(db, GUIDE)).balance).toBe(150);
+  });
+  it('開始前に案内待ちが外れた人・別のVCの人は開始できず、未対応の通知を止める', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception();
+    m.guide.voice.channelId = null;
+    const away = m.interaction(r.id);
+    await m.app.onInteraction(away as never);
+    expect(away.editReply).toHaveBeenCalledWith(expect.stringContaining('同じ案内VC'));
+    m.guide.voice.channelId = VOICE;
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), voiceChannelIds: [] }, GUIDE);
+    const disabled = m.interaction(r.id);
+    await m.app.onInteraction(disabled as never);
+    expect(disabled.editReply).toHaveBeenCalledWith('この部屋は現在、案内VCに設定されていません。');
+    await configure();
+    m.visitor.roles.cache.delete(PENDING);
+    const i = m.interaction(r.id);
+    await m.app.onInteraction(i as never);
+    expect(i.editReply).toHaveBeenCalledWith('案内待ちロールの人だけ案内を開始できます。');
+    await m.app.tick(m.guild as never);
+    expect((await db.select().from(guideReceptions))[0]?.status).toBe('left');
+    expect(m.discord.sendMessage).not.toHaveBeenCalled();
+    expect(await db.select().from(employeePayroll)).toHaveLength(0);
   });
 });

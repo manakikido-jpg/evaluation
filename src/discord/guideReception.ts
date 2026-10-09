@@ -1,10 +1,11 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { ChannelType, MessageFlags, type Guild, type Interaction, type VoiceState } from 'discord.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import { ChannelType, MessageFlags, type Guild, type GuildMember, type Interaction, type VoiceState } from 'discord.js';
 import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
 import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, type GuideConfig } from '../services/guideReception.js';
+import { guideRoleOf } from './guidePending.js';
 import { logger } from '../lib/logger.js';
 const btn = (id: string, label: string, disabled = false) => ({ type: 2, custom_id: id, label, style: 2, disabled });
 export const guideEmployeePanel = (): MessageBody => ({
@@ -17,7 +18,7 @@ export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config
   return {
     content: [`**🌸 咲楽ノ宮へようこそ**`, `<@${r.visitorId}> さん、案内人が来るまでに、こちらをご確認ください。`, ...config.links.map(l => `<:${l.emojiName}:${l.emojiId}> ${l.channelIds.map(id => `<#${id}>`).join(' ・ ')}`), `**案内状況：${label}**`].join('\n\n'),
     allowed_mentions: { parse: [], users: r.status === 'waiting' ? [r.visitorId] : [] },
-    components: [{ type: 1, components: [btn(`guide:claim:${r.id}`, '対応する', r.status !== 'waiting'), btn(`guide:done:${r.id}`, '案内完了', r.status !== 'assigned')] }],
+    components: [{ type: 1, components: [btn(`guide:claim:${r.id}`, '案内を開始する', r.status !== 'waiting'), btn(`guide:done:${r.id}`, '案内完了', r.status !== 'assigned')] }],
   };
 }
 export class GuideReceptionApp {
@@ -26,7 +27,10 @@ export class GuideReceptionApp {
   private async options(guild: Guild) {
     const c = await loadGuideConfig(this.db);
     const matches = guild.roles.cache.filter(r => r.name.includes('案内人'));
-    return { ...c, staffChannelId: c.staffChannelId ?? this.cfg().channels.log, roleId: c.roleId ?? (matches.size === 1 ? matches.first()!.id : undefined) };
+    return { ...c, pendingRoleId: guideRoleOf(this.cfg(), guild.roles.cache.values()), staffChannelId: c.staffChannelId ?? this.cfg().channels.log, roleId: c.roleId ?? (matches.size === 1 ? matches.first()!.id : undefined) };
+  }
+  private isVisitor(member: GuildMember | null | undefined, config: GuideConfig & { pendingRoleId?: string }) {
+    return Boolean(member && !member.user.bot && config.pendingRoleId && member.roles.cache.has(config.pendingRoleId) && (!config.roleId || !member.roles.cache.has(config.roleId)));
   }
   private async refresh(r: typeof guideReceptions.$inferSelect, config: GuideConfig) {
     if (r.messageId) await this.discord.editMessage(r.channelId, r.messageId, guideVisitorPanel(r, config));
@@ -39,8 +43,7 @@ export class GuideReceptionApp {
         for (const r of await leaveGuideReception(this.db, after.id)) await this.refresh(r, c).catch(err => logger.warn({ err }, 'guide exit display failed'));
       }
       if (after.channelId && c.voiceChannelIds.includes(after.channelId)) {
-        const [employee] = await this.db.select().from(guideEmployees).where(eq(guideEmployees.memberId, after.id));
-        if (employee?.status === 'active' || (c.roleId && after.member?.roles.cache.has(c.roleId))) return;
+        if (!this.isVisitor(after.member, c)) return;
         await openGuideReception(this.db, after.id, after.channelId);
         await this.tick(after.guild);
       }
@@ -48,7 +51,7 @@ export class GuideReceptionApp {
   }
   /** 未通知の受付を再送する。再起動時の在室者も確認する */
   async tick(guild: Guild) {
-    if (this.ticking) return;
+    if (this.ticking || guild.id !== this.cfg().guildId) return;
     this.ticking = true;
     try {
       const c = await this.options(guild);
@@ -57,15 +60,13 @@ export class GuideReceptionApp {
         const ch = guild.channels.cache.get(channelId);
         if (ch?.type !== ChannelType.GuildVoice) continue;
         for (const member of ch.members.values()) {
-          if (member.user.bot || (c.roleId && member.roles.cache.has(c.roleId))) continue;
-          const [e] = await this.db.select().from(guideEmployees).where(eq(guideEmployees.memberId, member.id));
-          if (e?.status !== 'active') await openGuideReception(this.db, member.id, channelId);
+          if (this.isVisitor(member, c)) await openGuideReception(this.db, member.id, channelId);
         }
       }
       const rows = await this.db.select().from(guideReceptions).where(isNull(guideReceptions.departedAt));
       for (let r of rows) {
         const visitor = guild.members.cache.get(r.visitorId);
-        if (!c.voiceChannelIds.includes(r.channelId) || visitor?.voice.channelId !== r.channelId) {
+        if (!c.voiceChannelIds.includes(r.channelId) || visitor?.voice.channelId !== r.channelId || (r.status === 'waiting' && !this.isVisitor(visitor, c))) {
           for (const left of await leaveGuideReception(this.db, r.visitorId)) await this.refresh(left, c).catch(() => undefined);
           continue;
         }
@@ -99,7 +100,7 @@ export class GuideReceptionApp {
         await registerGuide(this.db, i.user.id);
         return void await i.editReply('案内人の登録申請を受け付けました。運営の承認をお待ちください。');
       }
-      if (!c.roleId || !member.roles.cache.has(c.roleId)) return void await i.editReply('案内人ロールが必要です。運営に確認してください。');
+      if (member.user.bot || !c.roleId || !member.roles.cache.has(c.roleId)) return void await i.editReply('案内人ロールが必要です。運営に確認してください。');
       if (action === 'wait' || action === 'off') {
         const ok = await setGuideWaiting(this.db, i.user.id, action === 'wait');
         return void await i.editReply(ok ? (action === 'wait' ? '待機中にしました。入室があるとDMで知らせます。' : '受付を停止しました。') : '案内人の登録と承認が必要です。');
@@ -117,10 +118,15 @@ export class GuideReceptionApp {
       if (!r) return void await i.editReply('受付が見つかりません。');
       const visitor = await i.guild.members.fetch({ user: r.visitorId, force: true }).catch(() => undefined);
       if (visitor?.voice.channelId !== r.channelId || member.voice.channelId !== r.channelId) return void await i.editReply('案内を受ける人と担当者が、同じ案内VCにいるときに操作してください。');
+      if (!c.voiceChannelIds.includes(r.channelId)) return void await i.editReply('この部屋は現在、案内VCに設定されていません。');
       if (action === 'claim') {
-        const assigned = await assignGuide(this.db, id, i.user.id);
-        if (assigned) await this.refresh(assigned, c).catch(() => undefined);
-        return void await i.editReply(assigned ? 'あなたを担当者にしました。終わったら「案内完了」を押してください。' : '担当済み・退出済み、または登録が承認されていません。');
+        if (!this.isVisitor(visitor, c)) return void await i.editReply('案内待ちロールの人だけ案内を開始できます。');
+        const assigned = await assignGuide(this.db, id, i.user.id, { roleVerified: true });
+        if (assigned) {
+          await this.refresh(assigned, c).catch(() => undefined);
+          if (c.staffChannelId) await this.discord.sendMessage(c.staffChannelId, { content: `案内開始：<@${i.user.id}> さん → <@${assigned.visitorId}> さん\n場所：<#${assigned.channelId}>`, allowed_mentions: { parse: [] } }).catch(err => logger.warn({ err }, 'guide start notice failed'));
+        }
+        return void await i.editReply(assigned ? '案内を開始しました。あなたを担当者として記録しました。終わったら「案内完了」を押してください。' : '担当済み、または退出済みです。');
       }
       if (action === 'done') {
         const done = await completeGuide(this.db, id, i.user.id);
