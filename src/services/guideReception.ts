@@ -94,11 +94,15 @@ export async function openGuideReception(db: Db, visitorId: string, channelId: s
     return r;
   });
 }
-export async function assignGuide(db: Db, id: number, memberId: string) {
+/** Discordで案内人ロールを確認したときだけ、登録も合わせて案内を開始する */
+export async function assignGuide(db: Db, id: number, memberId: string, authorization?: { roleVerified: true }) {
   return db.transaction(async tx => {
     const [e] = await tx.select().from(guideEmployees).where(eq(guideEmployees.memberId, memberId));
-    if (e?.status !== 'active') return undefined;
-    const [r] = await tx.update(guideReceptions).set({ status: 'assigned', guideId: memberId }).where(and(eq(guideReceptions.id, id), eq(guideReceptions.status, 'waiting'), sql`${guideReceptions.visitorId} <> ${memberId}`)).returning();
+    if (!authorization?.roleVerified && e?.status !== 'active') return undefined;
+    const [r] = await tx.update(guideReceptions).set({ status: 'assigned', guideId: memberId }).where(and(eq(guideReceptions.id, id), eq(guideReceptions.status, 'waiting'), isNull(guideReceptions.departedAt), sql`${guideReceptions.visitorId} <> ${memberId}`)).returning();
+    if (!r) return undefined;
+    if (authorization?.roleVerified) await tx.insert(guideEmployees).values({ memberId, status: 'active' }).onConflictDoUpdate({ target: guideEmployees.memberId, set: { status: 'active' } });
+    await audit(tx as Db, { actorId: memberId, targetId: r.visitorId, action: 'guide.start', detail: { receptionId: id, channelId: r.channelId }, via: 'discord' });
     return r;
   });
 }
