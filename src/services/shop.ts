@@ -115,6 +115,7 @@ export async function seedDefaultItems(
     { kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', description: '銭を入れた袋をチャンネルに置くと、先着の人がボタンで受け取れる（量は運しだい）', price: 0 },
     { kind: 'mycolor', name: '自分だけの色', emoji: '🎨', description: '好きな色の、自分専用の色ロールを BOT が作る（色守りより上に出る）', price: 5000, durationDays: 30 },
     { kind: 'casino_boost', name: '大勝負の札', emoji: '🎰', description: '使った日（日本時間の 0 時まで）だけ、カジノで賭けられる上限（1 回・1 日の合計）が上がる。/持ち物 から使う', price: 1000 },
+    { kind: 'name_change', name: '名前変更の札', emoji: '✏️', description: 'このサーバーでの自分の名前（ニックネーム）を 1 回変えられる。/持ち物 から使う', price: 1000 },
   );
   for (const s of singles) if (!existing.some((i) => i.kind === s.kind)) await add(s);
   return created;
@@ -294,7 +295,7 @@ export async function buySimple(
   price = item.price,
   discount?: DiscountTicket,
 ): Promise<BuyResult> {
-  if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra', 'casino_boost', 'casino_style'].includes(item.kind)) return { status: 'disabled' };
+  if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra', 'casino_boost', 'casino_style', 'name_change'].includes(item.kind)) return { status: 'disabled' };
   // 🎴 勝負の御籤の品: 決めた品がないものは売らない
   if (item.kind === 'casino_style' && !isGivableStyle(item.styleKey)) return { status: 'disabled' };
   return withDiscount(discount, () => db.transaction(async (tx) => {
@@ -314,6 +315,8 @@ export async function buySimple(
     if (item.kind === 'casino_style' && (await giveStyle(tx, memberId, item.styleKey!)) !== 'ok') throw new Error('casino style give failed');
     // 🎰 大勝負の札: 持ち物に 1 枚（使うのは /持ち物 から。払うのと同じトランザクションで）
     if (item.kind === 'casino_boost') await addTickets(tx, memberId, 'casino_boost', 1);
+    // ✏️ 名前変更の札: 持ち物に 1 枚（使うのは /持ち物 から）
+    if (item.kind === 'name_change') await addTickets(tx, memberId, 'name_change', 1);
     const expiresAt = item.durationDays ? new Date(now.getTime() + item.durationDays * DAY) : null;
     const [purchase] = await tx
       .insert(shopPurchases)

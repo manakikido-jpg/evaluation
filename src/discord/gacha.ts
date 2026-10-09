@@ -59,7 +59,8 @@ import {
 import { customHoldingsOf, customName, listCustomTickets, useCustom } from '../services/customTickets.js';
 import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
 import { boostCasino, useCasinoBoost, type BoostUse } from '../services/casino/boost.js';
-import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket } from '../services/tickets.js';
+import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket, cleanNick, useNameChange, refundNameChange } from '../services/tickets.js';
+import { audit } from '../services/audit.js';
 import { announceSpecial, omikujiVoiceBlock, revealOmikuji } from './omikuji.js';
 import { panelMessage } from './panels.js';
 
@@ -416,6 +417,7 @@ export class GachaApp {
       }
       if (interaction.isUserSelectMenu() && id === 'gacha:giftto') return await this.gift(interaction);
       if (interaction.isModalSubmit() && id === 'gacha:deco') return await this.deco(interaction);
+      if (interaction.isModalSubmit() && id === 'gacha:rename') return await this.rename(interaction);
     } catch (err) {
       logger.error({ err, id }, 'gacha failed');
       const msg = { content: '物御籤を引けませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL };
@@ -692,6 +694,10 @@ export class GachaApp {
           content: '💝 物御籤の無料券を贈る相手を選んでください。',
           components: [new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(new UserSelectMenuBuilder().setCustomId('gacha:giftto').setPlaceholder('贈る相手'))],
         }));
+      case 'name_change': {
+        const input = new TextInputBuilder().setCustomId('nick').setLabel('新しい名前（32 文字まで）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32);
+        return void (await i.showModal(new ModalBuilder().setCustomId('gacha:rename').setTitle('✏️ 名前変更の札').addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input))));
+      }
       case 'name_deco': {
         const input = new TextInputBuilder()
           .setCustomId('emoji')
@@ -775,6 +781,24 @@ export class GachaApp {
       .send(toId, `💝 ${i.member.displayName} さんから、物御籤の無料券が届きました（咲楽ノ宮）。\n\`/物御籤\` の「🎫 無料券で引く」から、タダで 1 回引けます。`)
       .catch(() => undefined);
     await i.update({ content: `💝 <@${toId}> さんに、物御籤の無料券を贈りました。`, components: [], allowedMentions: { parse: [] } });
+  }
+
+  /** ✏️ 名前変更の札: 名前を 1 回変える（変えられなければ札を戻す） */
+  private async rename(i: ModalSubmitInteraction<'cached'>): Promise<void> {
+    const nick = cleanNick(i.fields.getTextInputValue('nick'));
+    if (!nick) return void (await i.reply({ content: '名前を入れてください（32 文字まで）。札は使っていません。', ...EPHEMERAL }));
+    if (!i.member.manageable) return void (await i.reply({ content: 'あなたの名前は BOT から変えられません（サーバーの持ち主・BOT より上の役職）。札は使っていません。', ...EPHEMERAL }));
+    if (!(await useNameChange(this.db, i.user.id))) return void (await i.reply({ content: '✏️ 名前変更の札がありません。', ...EPHEMERAL }));
+    const before = i.member.displayName;
+    try {
+      await i.member.setNickname(nick, '名前変更の札');
+    } catch (err) {
+      logger.warn({ err }, 'name change failed');
+      await refundNameChange(this.db, i.user.id);
+      return void (await i.reply({ content: '名前を変えられませんでした（札は戻しました）。神職に知らせてください（BOT の「ニックネームの管理」権限）。', ...EPHEMERAL }));
+    }
+    await audit(this.db, { actorId: i.user.id, targetId: i.user.id, action: 'shop.name_change', detail: { before, after: nick }, via: 'discord' });
+    await i.reply({ content: `✏️ 名前を「${nick}」にしました。`, ...EPHEMERAL, allowedMentions: { parse: [] } });
   }
 
   /** 🏷 名前の飾り（7 日間、名前の前に絵文字） */

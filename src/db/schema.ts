@@ -611,7 +611,7 @@ export const shopItems = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
     /** casino_style: 🎴 勝負の御籤の品（見た目の品・お試し券。style_key で決める） */
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_style'>().notNull(),
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_style' | 'name_change'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),

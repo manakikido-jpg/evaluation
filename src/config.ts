@@ -235,6 +235,7 @@ export const TICKET_KINDS = [
   'gacha_gift',
   'name_deco',
   'casino_boost',
+  'name_change',
 ] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
 

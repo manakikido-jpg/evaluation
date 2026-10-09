@@ -38,6 +38,7 @@ export const TICKET_LABEL = {
   gacha_gift: { emoji: '💝', name: '物御籤の贈り券', note: 'ほかの人に「物御籤の無料券」を贈れる', use: 'manual' },
   name_deco: { emoji: '🏷', name: '名前の飾り札', note: '使うと 7 日間、名前の前に好きな絵文字を 1 つ付けられる', use: 'manual' },
   casino_boost: { emoji: '🎰', name: '大勝負の札', note: '使うと、その日（日本時間の 0 時まで）だけ、カジノで賭けられる上限（1 回・1 日の合計）が上がる', use: 'manual' },
+  name_change: { emoji: '✏️', name: '名前変更の札', note: '使うと、このサーバーでの自分の名前（ニックネーム）を 1 回だけ BOT が変える', use: 'manual' },
 } as Record<TicketKind, TicketDef>;
 
 /** 券の選び方（管理画面の選ぶ欄を、まとまりごとに分ける） */
@@ -49,7 +50,7 @@ export const TICKET_GROUPS: { label: string; kinds: TicketKind[] }[] = [
   })),
   { label: '🏷 授与所（ショップ）', kinds: ['shop_10', 'shop_30', 'shop_50', 'ema_pin'] },
   { label: '🏪 市場', kinds: ['market_nofee'] },
-  { label: '🧧 使うと効く札（/物御籤 の「券を使う」から）', kinds: ['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco', 'casino_boost'] },
+  { label: '🧧 使うと効く札（/物御籤 の「券を使う」から）', kinds: ['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco', 'casino_boost', 'name_change'] },
 ];
 
 /** /物御籤 の「券を使う」から使う券 */
@@ -121,4 +122,20 @@ export async function ticketHolders(db: Db): Promise<{ memberId: string; tickets
   }
   const sum = (t: Record<TicketKind, number>) => TICKET_KINDS.reduce((n, k) => n + t[k], 0);
   return [...by.entries()].map(([memberId, t]) => ({ memberId, tickets: t })).sort((a, b) => sum(b.tickets) - sum(a.tickets));
+}
+
+/** ✏️ 名前の形を整える（前後の空白・改行を除く。1〜32 文字） */
+export function cleanNick(raw: string): string | undefined {
+  const nick = raw.replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+  return nick.length >= 1 && [...nick].length <= 32 ? nick : undefined;
+}
+
+/** ✏️ 名前変更の札を 1 枚使う（なければ false） */
+export async function useNameChange(db: Db, memberId: string): Promise<boolean> {
+  return db.transaction((tx) => useTicket(tx as Db, memberId, 'name_change'));
+}
+
+/** 名前を変えられなかったときに、札を戻す */
+export async function refundNameChange(db: Db, memberId: string): Promise<void> {
+  await addTickets(db, memberId, 'name_change', 1);
 }

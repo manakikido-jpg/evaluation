@@ -194,6 +194,7 @@ export class ShopApp {
       if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、${this.coinName}は減りません**（いま ${t} 枚）\n${note}`;
     }
     if (item.kind === 'casino_boost') note = casinoBoostNote(this.cfg().casino);
+    if (item.kind === 'name_change') note = '-# 持ち物に 1 枚入ります。`/持ち物` で選んで「✨ 使う」を押し、新しい名前（32 文字まで）を入れると BOT が変えます';
     if (item.kind === 'casino_style') {
       const st = styleItem(item.styleKey ?? '');
       note = item.styleKey === 'trial'
@@ -337,6 +338,12 @@ export class ShopApp {
         if (r.status !== 'ok') return this.insufficientText(r)!;
         const have = (await ticketsOf(this.db, userId)).casino_boost;
         return `🎰 大勝負の札を 1 枚受けました（持っている: ${have} 枚）${this.discountNote(r)}。残り ${r.balance} 枚。\n\`/持ち物\` で選んで「✨ 使う」を押すと、その日（日本時間の 0 時まで）だけ、カジノの上限が ${cfg.casino.boostMult} 倍になります。`;
+      }
+      case 'name_change': {
+        const r = await buySimple(this.db, item, userId, {}, new Date(), this.price(i, item), discount);
+        if (r.status !== 'ok') return this.insufficientText(r)!;
+        const have = (await ticketsOf(this.db, userId)).name_change;
+        return `✏️ 名前変更の札を 1 枚受けました（持っている: ${have} 枚）${this.discountNote(r)}。残り ${r.balance} 枚。\n\`/持ち物\` で選んで「✨ 使う」を押すと、新しい名前を入れられます。`;
       }
       case 'casino_style': {
         const r = await buySimple(this.db, item, userId, {}, new Date(), this.price(i, item), discount);

@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-name-change-card', date: '2026-10-10', kind: 'new', where: ['Discord', '社務所Web'],
+    title: '授与所に「✏️ 名前変更の札」',
+    items: ['授与所で買うと持ち物に入り、/持ち物 から使うと新しい名前を入れて、BOT が 1 回だけ名前（ニックネーム）を変えます。', '値段は社務所Web の授与所で変えられます（はじめ 1,000 枚）。変えられなかったときは札を戻します。'],
+  },
+  {
     id: '2026-10-10-guide-role-recheck', date: '2026-10-10', kind: 'improve', where: ['Discord'],
     title: '案内の「ロールを付与する」で、動かしたロールを見せて、あとで確かめる',
     items: ['返事に、付けたロールと外したロールの名前を出します。', '15 秒後にもう一度確かめ、戻されていたら記録のチャンネルに知らせます。'],
