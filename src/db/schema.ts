@@ -1929,7 +1929,7 @@ export const supportTickets = pgTable(
 );
 export type SupportTicket = typeof supportTickets.$inferSelect;
 
-/** 案内人の登録と待機。承認前は案内を担当できない */
+/** 案内人の登録と待機。案内人ロールがある人は開始時にも登録を合わせる */
 export const guideEmployees = pgTable('guide_employees', {
   memberId: text('member_id').primaryKey(),
   status: text('status').$type<'pending' | 'active' | 'paused'>().notNull().default('pending'),
