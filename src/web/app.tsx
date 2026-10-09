@@ -16,7 +16,7 @@ import { fortuneOf, omikujiDailyAverage, omikujiSayings, specialIndex } from '..
 import { renderSlip } from '../services/omikujiSlip.js';
 import { trialUnei } from '../services/omikujiTrial.js';
 import { gachaItemCounts, gachaSummaries, recentGachaDraws } from '../services/casino/gachaStats.js';
-import { STYLE_ITEMS, giveStyle, isGivableStyle, styleItem, stylesOf, takeStyle } from '../services/casino/styles.js';
+import { STYLE_ITEMS, giveStyle, giveAllStyles, isGivableStyle, styleItem, stylesOf, takeStyle } from '../services/casino/styles.js';
 import { CasinoGachaAdminPage, CasinoStyleMemberSection } from './views/casinoGachaAdmin.js';
 import { grantSpecialGoen, revokeSpecialGoen, specialGoenDm, specialGoenHistory, specialGoenLog, validSpecialGoen } from '../services/specialGoen.js';
 import { SpecialGoenSection } from './views/specialGoen.js';
@@ -2129,6 +2129,14 @@ export function createWebApp(deps: WebDeps) {
     const body = await c.req.parseBody();
     const key = typeof body.styleKey === 'string' ? body.styleKey : '';
     const note = field(body, 'note', 200);
+    // 🎁 見た目の品を全部渡す（お試し券はのぞく）
+    if (key === '__all__' && note && body.mode !== 'take') {
+      const m0 = await getMember(db, id);
+      if (!m0 || m0.isBot) return back(c, id, 'denied_not_found');
+      const n = await giveAllStyles(db, id);
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'casino_style.give_all', detail: { added: n, note }, via: 'web' });
+      return to(n ? 'style_given_all' : 'style_owned');
+    }
     if (!isGivableStyle(key) || !note) return to('style_invalid');
     const m = await getMember(db, id);
     if (!m || m.isBot) return back(c, id, 'denied_not_found');

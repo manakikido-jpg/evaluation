@@ -39,6 +39,7 @@ export const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   coins_forbidden: { text: '送る・減らすのは宮司のみできます。', kind: 'warn' },
   style_given: { text: '🎴 勝負の御籤の品を渡しました。本人に DM で知らせました。', kind: 'ok' },
   style_given_quiet: { text: '🎴 勝負の御籤の品を渡しました（DM は送っていません）。', kind: 'ok' },
+  style_given_all: { text: '🎁 見た目の品を全部渡しました（カジノの「🪭 着せ替え」で付けられます）。', kind: 'ok' },
   style_given_nodm: { text: '🎴 勝負の御籤の品を渡しました。DM は届きませんでした（DM を受け取らない設定の可能性）。', kind: 'warn' },
   style_owned: { text: 'その見た目の品は、もう持っています（何もしていません）。', kind: 'warn' },
   style_taken: { text: '🎴 勝負の御籤の品を取り上げました（付けていたら外しました）。', kind: 'ok' },

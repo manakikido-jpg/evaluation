@@ -26,6 +26,7 @@
     filter();
     update();
     editor.open = false;
+    editor.querySelector('summary').focus();
   });
   update();
 })();

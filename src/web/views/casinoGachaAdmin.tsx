@@ -238,6 +238,7 @@ export function CasinoStyleMemberSection(p: { memberId: string; csrf: string; st
           </div>
           <select name="styleKey" required aria-label="品">
             <option value="">品を選んでください</option>
+            <option value="__all__">🎁 見た目の品を全部（持っていない品だけ・お試し券はのぞく）</option>
             {GIVABLE_STYLES.map((base) => {
               const i = styleItem(base.key)!;
               return (
