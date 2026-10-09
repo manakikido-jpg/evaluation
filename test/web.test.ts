@@ -3725,6 +3725,20 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
     form.append('voiceChannelIds', '910000000000000004');
     expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
     expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
+    const html = await (await get('/guide', s)).text();
+    expect(html).toContain('data-voice-editor');
+    expect(html).not.toMatch(/<details[^>]*data-voice-editor[^>]*open/);
+    expect(html).toContain('変更する');
+    expect(html).toMatch(/type="checkbox"[^>]*name="voiceChannelIds"[^>]*value="910000000000000004"[^>]*checked/);
+    expect(html).toContain('data-voice-search');
+    // 閉じた選択欄の保存でも、VCとリンクを保持する。
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
+    expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
+    expect((await loadGuideConfig(db)).links).toEqual(config.links);
+    form.set('bulkLinks', '間違った案内文');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=invalid');
+    expect((await loadGuideConfig(db)).links).toEqual(config.links);
+    form.delete('bulkLinks');
     await registerGuide(db, USER);
     expect((await postGuide(`/guide/employees/${USER}`, s, new URLSearchParams({ _csrf: csrf, status: 'active' }))).headers.get('location')).toBe('/guide?msg=status');
     expect(actions).toContain(`addRole ${USER} ${roleId}`);

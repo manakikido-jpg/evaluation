@@ -1257,3 +1257,28 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .card[id], .invite-rows { scroll-margin-top: 84px; }
 
 .cast-profile-preview { display: block; width: 120px; height: 120px; object-fit: cover; border-radius: 12px; margin: 8px 0; }
+
+/* 案内の設定。選んだ部屋は変更するときだけ開く。 */
+.guide-nav { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.guide-nav a { padding:10px 16px; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+.guide-overview { display:flex; flex-wrap:wrap; gap:12px; margin:20px 0; }
+.guide-overview span { flex:1; min-width:160px; padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+.guide-overview strong { display:block; font-size:1.4rem; margin-top:6px; }
+.guide-section { scroll-margin-top:24px; }
+.guide-section form > label { display:block; margin:18px 0; }
+.guide-section form > label select, .guide-section form > label input, .guide-section textarea { display:block; width:100%; margin-top:8px; }
+.guide-voice { min-width:0; border:1px solid var(--line); border-radius:12px; padding:16px; }
+.guide-voice legend { font-weight:700; }
+.guide-selected { display:flex; flex-wrap:wrap; gap:8px; padding:0; list-style:none; }
+.guide-selected li { padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--sakura-2); }
+.guide-voice summary { cursor:pointer; padding:12px; font-weight:700; color:var(--accent-text); }
+.guide-voice-tools { padding:12px; background:var(--bg); border-radius:8px; }
+.guide-voice-tools input { display:block; width:100%; margin-top:6px; }
+.guide-voice-list { max-height:360px; overflow:auto; margin:12px 0; }
+.guide-voice-group h3 { font-size:1rem; color:var(--muted); margin:16px 8px 8px; }
+.guide-voice-option { display:flex; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--line); cursor:pointer; }
+.guide-voice-option input { width:20px; height:20px; flex-shrink:0; }
+.guide-voice-option:has(input:checked) { background:var(--sakura-2); }
+.guide-voice-option[hidden], .guide-voice-group[hidden] { display:none; }
+.guide-table { overflow-x:auto; max-width:100%; margin:16px 0; }
+.guide-table input { min-width:220px; width:100%; }
