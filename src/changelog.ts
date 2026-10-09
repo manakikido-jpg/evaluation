@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-casino-game-art', date: '2026-10-09', kind: 'improve', where: ['Discord'],
+    title: 'カジノのゲーム一覧に和風の画像を追加',
+    items: ['ハイ＆ロー、バカラ、AT機、ちんちろりん、オセロ、メンバー対戦、大富豪、ババ抜きにも桜と提灯のゲーム画像を付けました。', 'バカラ卓・ちんちろ卓にも画像が出ます。ゲームのルールと配当は変わりません。'],
+  },
+  {
     id: '2026-10-09-maikura-role-panel', date: '2026-10-09', kind: 'new', where: ['Discord'],
     title: '舞倉の参加POPとロールのボタン',
     items: ['運営の「/パネル 舞倉」で、Minecraftの参加POPとボタンを置けます。', '本人が「舞倉に参加する」を押すと参加用の「舞倉」ロールが付きます。何度押してもロールは外れません。'],

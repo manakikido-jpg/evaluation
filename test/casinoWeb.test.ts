@@ -874,6 +874,22 @@ describe('夜桜の新しいカジノロビー', () => {
     expect((await get('/casino/hall', cookie!)).headers.get('content-security-policy')).toBeTruthy();
     expect((await app.request('/static/casino-lobby-art.webp')).headers.get('content-type')).toContain('image/webp');
   });
+  it('追加したゲームと卓に画像を出し、画像ファイルを配信する', async () => {
+    current = { ...cfg, casino: { ...cfg.casino, games: ['highlow', 'baccarat', 'atslot', 'chinchiro', 'othello', 'versus', 'daifugo', 'babanuki', 'baccarat_table', 'chinchiro_table'], atOpen: true } };
+    const { cookie } = await casinoLogin(A);
+    const html = await (await get('/casino/hall', cookie!)).text();
+    for (const name of ['highlow', 'baccarat', 'atslot', 'chinchiro', 'othello', 'versus', 'daifugo', 'babanuki']) expect(html).toContain(`cl-art-${name}`);
+    expect(html).not.toContain('cl-art-other');
+    expect(html).toContain('/casino/tables/baccarat_table');
+    expect(html).toContain('/casino/tables/chinchiro_table');
+    const image = await app.request('/static/casino-lobby-more.webp');
+    expect(image.status).toBe(200);
+    expect(image.headers.get('content-type')).toContain('image/webp');
+    expect((await image.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+    const cards = await app.request('/static/casino-lobby-cards.webp');
+    expect(cards.status).toBe(200);
+    expect(cards.headers.get('content-type')).toContain('image/webp');
+  });
   it('人数の絞り込み・公開設定を守り、休止中と準備中のカードを出さない', async () => {
     current = { ...cfg, casino: { ...cfg.casino, games: ['blackjack', 'poker', 'atslot'], atOpen: false } };
     const { cookie } = await casinoLogin(A);
