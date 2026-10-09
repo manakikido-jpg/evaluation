@@ -1685,6 +1685,8 @@ export const casts = pgTable('casts', {
    * night: 寝落ち（朝 7 時まで。minutes は使わない）/ consult: 内容により相談（値段と時間は、キャストがそのつど出す）
    */
   menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
+  /** male 男性 / female 女性 / '' まだ決めていない（両方のメニューに出る）。メニューを出すチャンネルを分ける */
+  gender: text('gender').$type<'male' | 'female' | ''>().notNull().default(''),
   /** 未成年の人の公開の雑談を受ける */
   minorOk: boolean('minor_ok').notNull().default(true),
   /** off お休み / waiting 待機中（waitingUntil まで） */

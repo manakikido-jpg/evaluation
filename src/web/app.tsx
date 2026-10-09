@@ -229,7 +229,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -5151,7 +5151,7 @@ export function createWebApp(deps: WebDeps) {
   // ───────── 🎀 キャスト ─────────
 
   app.get('/cast', async (c) => {
-    const [conf, channels, roles, list, stats, sessions, image] = await Promise.all([
+    const [conf, channels, roles, list, stats, sessions, image, femaleImage] = await Promise.all([
       loadCastConfig(db),
       loadChannels().catch(() => [] as GuildChannel[]),
       loadRoles(),
@@ -5159,6 +5159,7 @@ export function createWebApp(deps: WebDeps) {
       castStats(db, monthStart(now())),
       recentSessions(db, 100),
       loadMenuImage(db),
+      loadMenuImage(db, 'female'),
     ]);
     const names = await namesOf(db, [...list.map((x) => x.memberId), ...sessions.flatMap((x) => [x.castId, x.customerId])]);
     const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch.name]));
@@ -5170,6 +5171,7 @@ export function createWebApp(deps: WebDeps) {
         categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
         roles={(roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
         hasImage={Boolean(image)}
+        hasFemaleImage={Boolean(femaleImage)}
         photos={new Map((await Promise.all(list.map(async (x) => [x.memberId, (await loadCastPhoto(db, x.memberId))?.hash] as const))).filter((x): x is readonly [string, string] => Boolean(x[1])))}
         casts={list}
         members={await activeMemberNames(db)}
@@ -5183,7 +5185,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.get('/cast/image', async (c) => {
-    const img = await loadMenuImage(db);
+    const img = await loadMenuImage(db, c.req.query('g') === 'female' ? 'female' : 'male');
     if (!img) return c.notFound();
     return c.body(Buffer.from(img.data), 200, { 'content-type': img.contentType, 'x-content-type-options': 'nosniff' });
   });
@@ -5198,6 +5200,7 @@ export function createWebApp(deps: WebDeps) {
     const next = {
       ...prev,
       channelId: id('channelId'),
+      femaleChannelId: id('femaleChannelId'),
       privateCategoryId: id('privateCategoryId'),
       publicCategoryId: id('publicCategoryId'),
       roleId: id('roleId'),
@@ -5210,17 +5213,20 @@ export function createWebApp(deps: WebDeps) {
     if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.priceMax, next.priceMin, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
     // チャンネルを変えたら、前のメニューはそのままにして、新しいチャンネルに出し直す
     if (next.channelId !== prev.channelId) delete next.panelMessageId;
+    if (next.femaleChannelId !== prev.femaleChannelId) delete next.femalePanelMessageId;
     await saveCastConfig(db, next, c.get('session').userId);
     await audit(db, { actorId: c.get('session').userId, action: 'cast.settings', detail: { ...next }, via: 'web' });
     return c.redirect('/cast?msg=saved');
   });
 
   app.post('/cast/image', async (c) => {
-    const upload = await imageUpload(await c.req.parseBody());
+    const body = await c.req.parseBody();
+    const group = body.group === 'female' ? 'female' : 'male';
+    const upload = await imageUpload(body);
     if (upload === 'too_big') return c.redirect('/cast?msg=image_big');
     if (!(upload instanceof Uint8Array)) return c.redirect('/cast?msg=image_bad');
-    if (!(await saveMenuImage(db, upload))) return c.redirect('/cast?msg=image_bad');
-    await audit(db, { actorId: c.get('session').userId, action: 'cast.image', via: 'web' });
+    if (!(await saveMenuImage(db, upload, group))) return c.redirect('/cast?msg=image_bad');
+    await audit(db, { actorId: c.get('session').userId, action: 'cast.image', detail: { group }, via: 'web' });
     await castPanelNow();
     return c.redirect('/cast?msg=image_saved');
   });
@@ -5249,7 +5255,8 @@ export function createWebApp(deps: WebDeps) {
   });
 
   app.post('/cast/image/delete', async (c) => {
-    await deleteMenuImage(db);
+    const body = await c.req.parseBody();
+    await deleteMenuImage(db, body.group === 'female' ? 'female' : 'male');
     await castPanelNow();
     return c.redirect('/cast?msg=image_removed');
   });
@@ -5298,13 +5305,28 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(`/cast?msg=menu_removed#cast-${id}`);
   });
 
+  // 👨👩 キャストの男性・女性（出すメニューのチャンネル）
+  app.post('/cast/casts/:id/gender', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const body = await c.req.parseBody();
+    const gender = body.gender === 'male' || body.gender === 'female' ? body.gender : '';
+    const row = await setCastGender(db, id, gender);
+    if (row) {
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.gender', detail: { gender }, via: 'web' });
+      await castPanelNow();
+    }
+    return c.redirect(`/cast?msg=gender_saved#cast-${id}`);
+  });
+
   // 🎀 キャストごとの紹介パネルを出す（みんなに見える。写真・メニュー・指名の選ぶ欄）
   app.post('/cast/casts/:id/intro', async (c) => {
     const id = c.req.param('id');
     if (!validId(id)) return c.redirect('/cast');
     const body = await c.req.parseBody();
     const conf = await loadCastConfig(db);
-    const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : conf.channelId;
+    const cast = await getCast(db, id);
+    const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : cast ? castHomeChannel(conf, cast) : conf.channelId;
     if (!channelId) return c.redirect(`/cast?msg=intro_failed#cast-${id}`);
     const ok = await postCastIntro(db, deps.discord, id, channelId, `${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`).catch((err: unknown) => (logger.warn({ err }, 'cast intro post failed'), false));
     if (ok) await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.intro', detail: { channelId }, via: 'web' });
@@ -5319,7 +5341,7 @@ export function createWebApp(deps: WebDeps) {
     if (!id) return c.redirect('/cast?msg=no_member#cast-register');
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
     const conf = await loadCastConfig(db);
-    const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), minorOk: body.minorOk === 'yes' };
+    const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), minorOk: body.minorOk === 'yes', gender: (body.gender === 'male' || body.gender === 'female' ? body.gender : '') as 'male' | 'female' | '' };
     const adult = await isAdult(db, cfg, id, await memberRoleIdsOf(db, id));
     const r = await registerCast(db, conf, { id, adult }, p, castMenuInput(body), by, now());
     if (r.status !== 'ok') return c.redirect(`/cast?msg=reg_${r.status}#cast-register`);

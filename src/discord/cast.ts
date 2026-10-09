@@ -48,6 +48,13 @@ import {
   parseTags,
   MENU_MINUTES,
   menuLabel,
+  CAST_GROUPS,
+  GROUP_LABEL,
+  castHomeChannel,
+  groupPlace,
+  inGroup,
+  isCastGroup,
+  type CastGroup,
   menuPriceText,
   validQuote,
   menuOf,
@@ -107,7 +114,7 @@ const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先�
 // ───────── メニュー（画像の下に、指名するメニュー） ─────────
 
 /** #キャスト一覧 のメニュー: 上げた画像と、キャストを選ぶメニュー・ボタン */
-export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'waiting' | 'off' }[], image?: { data: Uint8Array; contentType: string }): MessageBody {
+export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'waiting' | 'off' }[], image?: { data: Uint8Array; contentType: string }, group?: CastGroup): MessageBody {
   const ext = image?.contentType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png';
   const order = { waiting: 0, busy: 1, off: 2 } as const;
   const sorted = [...list].sort((a, b) => order[a.state] - order[b.state]);
@@ -115,7 +122,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
   return {
     embeds: [
       {
-        title: '🎀 キャスト',
+        title: group ? `🎀 ${GROUP_LABEL[group]}` : '🎀 キャスト',
         description: [
           '寝落ち・雑談・ゲームなどの通話を、銭で指名できます。下のメニューからキャストを選んでください。',
           `🟢 いま待機中 **${waiting}** 人 ・ 在籍 ${list.length} 人`,
@@ -148,32 +155,44 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
             },
           ]
         : []),
-      row(button('cast:now', '今すぐ話せる人', 3, '🟢'), button('cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙')),
+      row(button(group ? `cast:now:${group}` : 'cast:now', '今すぐ話せる人', 3, '🟢'), button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙')),
     ],
   };
 }
 
 /** メニューを出す・書き換える（社務所Web・BOT の両方から）。出せたら true */
 export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'sendMessage' | 'editMessage'>, opts: { repost?: boolean; by?: string } = {}): Promise<boolean> {
-  const c = await loadCastConfig(db);
-  if (!c.channelId) return false;
-  const [list, states, image] = await Promise.all([listCasts(db), castStates(db), loadMenuImage(db)]);
+  let c = await loadCastConfig(db);
+  if (!c.channelId && !c.femaleChannelId) return false;
+  const [list, states] = await Promise.all([listCasts(db), castStates(db)]);
   const names = await namesOf(db, list.map((x) => x.memberId));
-  const body = castPanel(
-    list.map((cast) => ({ cast, name: names.get(cast.memberId) ?? cast.memberId, state: states.get(cast.memberId) ?? 'off' })),
-    image,
-  );
-  if (c.panelMessageId && !opts.repost) {
-    try {
-      await discord.editMessage(c.channelId, c.panelMessageId, body);
-      return true;
-    } catch (err) {
-      logger.warn({ err }, 'cast panel edit failed, posting again');
+  // 男性・女性のチャンネルが両方あれば分けて出す。片方だけなら、そこに全員を出す
+  const split = Boolean(c.channelId && c.femaleChannelId);
+  let posted = false;
+  for (const g of CAST_GROUPS) {
+    const place = groupPlace(c, g);
+    if (!place.channelId) continue;
+    const image = (await loadMenuImage(db, g)) ?? (g === 'female' ? await loadMenuImage(db, 'male') : undefined);
+    const body = castPanel(
+      list.filter((cast) => !split || inGroup(cast, g)).map((cast) => ({ cast, name: names.get(cast.memberId) ?? cast.memberId, state: states.get(cast.memberId) ?? 'off' })),
+      image,
+      split ? g : undefined,
+    );
+    if (place.messageId && !opts.repost) {
+      try {
+        await discord.editMessage(place.channelId, place.messageId, body);
+        posted = true;
+        continue;
+      } catch (err) {
+        logger.warn({ err }, 'cast panel edit failed, posting again');
+      }
     }
+    const { id } = await discord.sendMessage(place.channelId, body);
+    c = { ...(await loadCastConfig(db)), ...(g === 'female' ? { femalePanelMessageId: id } : { panelMessageId: id }) };
+    await saveCastConfig(db, c, opts.by ?? 'system');
+    posted = true;
   }
-  const { id } = await discord.sendMessage(c.channelId, body);
-  await saveCastConfig(db, { ...c, panelMessageId: id }, opts.by ?? 'system');
-  return true;
+  return posted;
 }
 
 /**
@@ -313,8 +332,8 @@ export class CastApp {
         return;
       }
       if (!interaction.isButton()) return;
-      if (action === 'now') return await this.waitingList(interaction);
-      if (action === 'rank') return await this.ranking(interaction);
+      if (action === 'now') return await this.waitingList(interaction, isCastGroup(a) ? a : undefined);
+      if (action === 'rank') return await this.ranking(interaction, isCastGroup(a) ? a : undefined);
       if (action === 'apply') return await this.applyModal(interaction);
       if (action === 'me') return await this.mine(interaction);
       if (action === 'refresh') return await this.mine(interaction, true);
@@ -386,9 +405,9 @@ export class CastApp {
     await i.editReply({ ...(await this.castCard(cast, adult)), allowedMentions: { parse: [] } });
   }
 
-  private async waitingList(i: ButtonInteraction<'cached'>): Promise<void> {
+  private async waitingList(i: ButtonInteraction<'cached'>, group?: CastGroup): Promise<void> {
     const [list, states] = await Promise.all([listCasts(this.db), castStates(this.db)]);
-    const waiting = list.filter((x) => states.get(x.memberId) === 'waiting');
+    const waiting = list.filter((x) => states.get(x.memberId) === 'waiting' && (!group || inGroup(x, group)));
     const names = await namesOf(this.db, waiting.map((x) => x.memberId));
     await i.reply({
       content: waiting.length
@@ -398,13 +417,15 @@ export class CastApp {
     });
   }
 
-  private async ranking(i: ButtonInteraction<'cached'>): Promise<void> {
-    const stats = (await castStats(this.db, monthStart())).slice(0, 10);
+  private async ranking(i: ButtonInteraction<'cached'>, group?: CastGroup): Promise<void> {
+    const all = await castStats(this.db, monthStart());
+    const members = group ? new Map((await listCasts(this.db, ['active', 'paused'])).map((x) => [x.memberId, x])) : undefined;
+    const stats = all.filter((x) => !members || (members.get(x.castId) && inGroup(members.get(x.castId)!, group!))).slice(0, 10);
     const names = await namesOf(this.db, stats.map((x) => x.castId));
     const medal = ['🥇', '🥈', '🥉'];
     await i.reply({
       content: stats.length
-        ? ['🏆 **今月のキャスト**（指名の多い順）', ...stats.map((x, n) => `${medal[n] ?? `${n + 1}.`} ${names.get(x.castId) ?? x.castId} … ${x.count} 回${x.ratingAvg !== null ? ` ・ ⭐ ${x.ratingAvg}` : ''}`)].join('\n')
+        ? [`🏆 **今月の${group ? GROUP_LABEL[group].slice(3) : 'キャスト'}**（指名の多い順）`, ...stats.map((x, n) => `${medal[n] ?? `${n + 1}.`} ${names.get(x.castId) ?? x.castId} … ${x.count} 回${x.ratingAvg !== null ? ` ・ ⭐ ${x.ratingAvg}` : ''}`)].join('\n')
         : '今月はまだ指名がありません。',
       ...EPHEMERAL,
     });
@@ -579,7 +600,8 @@ export class CastApp {
     if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.editReply('相談のメニューは 18 歳以上の方だけです。'));
     const wish = i.fields.getTextInputValue('wish').trim().slice(0, 500);
     const c = await loadCastConfig(this.db);
-    const panel = c.channelId ? this.guild?.channels.cache.get(c.channelId) : undefined;
+    const home = castHomeChannel(c, cast);
+    const panel = home ? this.guild?.channels.cache.get(home) : undefined;
     if (panel?.type !== ChannelType.GuildText) return void (await i.editReply('相談の場所を作れませんでした。神職に知らせてください。'));
     const thread = await panel.threads.create({ name: `💬 相談 ${item.name}`.slice(0, 90), type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの相談' }).catch(() => undefined);
     if (!thread) return void (await i.editReply('相談の場所を作れませんでした。神職に知らせてください。'));
@@ -669,7 +691,8 @@ export class CastApp {
     if (!g) return undefined;
     if (s.channelId) return this.voice(s.channelId);
     const c = await loadCastConfig(this.db);
-    const panel = c.channelId ? g.channels.cache.get(c.channelId) : undefined;
+    const homeId = c.channelId ?? c.femaleChannelId;
+    const panel = homeId ? g.channels.cache.get(homeId) : undefined;
     const fallback = panel && 'parentId' in panel ? panel.parentId : null;
     const parentId = (s.isPublic ? c.publicCategoryId : c.privateCategoryId) ?? fallback ?? null;
     const parent = parentId ? g.channels.cache.get(parentId) : undefined;
@@ -852,8 +875,10 @@ export class CastApp {
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
-    // やり取りは #キャスト一覧 の中の、2 人だけのスレッドで
-    const panel = c.channelId ? this.guild?.channels.cache.get(c.channelId) : undefined;
+    // やり取りは、そのキャストのメニューのチャンネルの中の、2 人だけのスレッドで
+    const castRow = await getCast(this.db, castId);
+    const home = castRow ? castHomeChannel(c, castRow) : c.channelId;
+    const panel = home ? this.guild?.channels.cache.get(home) : undefined;
     let threadId: string | undefined;
     if (panel?.type === ChannelType.GuildText) {
       const thread = await panel.threads

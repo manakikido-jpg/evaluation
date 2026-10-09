@@ -28,8 +28,12 @@ const JST = 9 * 3_600_000;
 // ───────── 設定 ─────────
 
 export type CastConfig = {
+  /** 男性キャストのメニューを出すチャンネル（#キャスト一覧） */
   channelId?: string;
   panelMessageId?: string;
+  /** 女性キャストのメニューを出すチャンネル */
+  femaleChannelId?: string;
+  femalePanelMessageId?: string;
   roleId?: string;
   /** 2 人だけの部屋を作るカテゴリ（遊郭など） */
   privateCategoryId?: string;
@@ -54,6 +58,8 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
   return {
     channelId: sf(v.channelId),
     panelMessageId: sf(v.panelMessageId),
+    femaleChannelId: sf(v.femaleChannelId),
+    femalePanelMessageId: sf(v.femalePanelMessageId),
     roleId: sf(v.roleId),
     privateCategoryId: sf(v.privateCategoryId),
     publicCategoryId: sf(v.publicCategoryId),
@@ -74,26 +80,46 @@ export async function saveCastConfig(db: Db, c: CastConfig, by: string): Promise
 
 export const castFee = (c: Pick<CastConfig, 'feePercent'>, price: number) => Math.floor((price * c.feePercent) / 100);
 
+// ───────── 男性・女性 ─────────
+
+export type CastGroup = 'male' | 'female';
+export const CAST_GROUPS: CastGroup[] = ['male', 'female'];
+export const GROUP_LABEL: Record<CastGroup, string> = { male: '👨 男性キャスト', female: '👩 女性キャスト' };
+export const isCastGroup = (x: unknown): x is CastGroup => x === 'male' || x === 'female';
+/** そのメニューに出るキャストか（まだ決めていない人は両方に出る） */
+export const inGroup = (c: Pick<Cast, 'gender'>, g: CastGroup) => c.gender === g || c.gender === '';
+/** そのメニューのチャンネルと出したメッセージ */
+export const groupPlace = (c: CastConfig, g: CastGroup) => (g === 'female' ? { channelId: c.femaleChannelId, messageId: c.femalePanelMessageId } : { channelId: c.channelId, messageId: c.panelMessageId });
+/** そのキャストの相談・予約のスレッドを作るチャンネル（自分のメニューのチャンネル。なければもう片方） */
+export const castHomeChannel = (c: CastConfig, cast: Pick<Cast, 'gender'>) => (cast.gender === 'female' ? (c.femaleChannelId ?? c.channelId) : (c.channelId ?? c.femaleChannelId));
+
+export async function setCastGender(db: Db, id: string, gender: Cast['gender']): Promise<Cast | undefined> {
+  const [row] = await db.update(casts).set({ gender }).where(eq(casts.memberId, id)).returning();
+  return row;
+}
+
 // ───────── メニューの画像 ─────────
 
-export async function saveMenuImage(db: Db, data: Uint8Array): Promise<string | undefined> {
+const imageKey = (g: CastGroup) => (g === 'female' ? 'menu:female' : 'menu');
+
+export async function saveMenuImage(db: Db, data: Uint8Array, g: CastGroup = 'male'): Promise<string | undefined> {
   const kind = detectImage(data);
   if (!kind) return undefined;
   const hash = createHash('sha256').update(data).digest('hex').slice(0, 16);
   await db
     .insert(castImages)
-    .values({ key: 'menu', contentType: kind.type, data, hash })
+    .values({ key: imageKey(g), contentType: kind.type, data, hash })
     .onConflictDoUpdate({ target: castImages.key, set: { contentType: kind.type, data, hash, updatedAt: new Date() } });
   return hash;
 }
 
-export async function loadMenuImage(db: Db): Promise<{ contentType: string; data: Uint8Array; hash: string } | undefined> {
-  const [row] = await db.select().from(castImages).where(eq(castImages.key, 'menu'));
+export async function loadMenuImage(db: Db, g: CastGroup = 'male'): Promise<{ contentType: string; data: Uint8Array; hash: string } | undefined> {
+  const [row] = await db.select().from(castImages).where(eq(castImages.key, imageKey(g)));
   return row && { contentType: row.contentType, data: row.data, hash: row.hash };
 }
 
-export async function deleteMenuImage(db: Db): Promise<void> {
-  await db.delete(castImages).where(eq(castImages.key, 'menu'));
+export async function deleteMenuImage(db: Db, g: CastGroup = 'male'): Promise<void> {
+  await db.delete(castImages).where(eq(castImages.key, imageKey(g)));
 }
 
 /** 紹介用の写真。切りぬかずに全体を残し、長い辺 1600px までに小さくする。名前や位置情報は残さない。 */
@@ -287,14 +313,15 @@ export async function updateProfile(db: Db, c: CastConfig, id: string, p: Profil
 export type RegisterCastResult = { status: 'ok'; cast: Cast } | { status: 'not_adult' | 'invalid' | 'already' };
 
 /** 運営が社務所Web でキャストを登録する（すぐ承認ずみ。18 歳以上の人だけ）。外された人・申し込み中の人も登録できる */
-export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: Pick<ProfileInput, 'bio' | 'tags' | 'minorOk'>, firstInput: MenuInput | MenuInput[], by: string, now = new Date()): Promise<RegisterCastResult> {
+export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: Pick<ProfileInput, 'bio' | 'tags' | 'minorOk'> & { gender?: Cast['gender'] }, firstInput: MenuInput | MenuInput[], by: string, now = new Date()): Promise<RegisterCastResult> {
   if (!who.adult) return { status: 'not_adult' };
-  const profile = { ...p, price30: 0, price60: 0, priceNight: 0 };
+  const { gender = '', ...rest } = p;
+  const profile = { ...rest, price30: 0, price60: 0, priceNight: 0 };
   const first = Array.isArray(firstInput) ? firstInput : [firstInput];
   if (!validProfile(c, profile) || !first.length || first.length > MENU_MAX || !first.every((m) => validMenuItem(c, m))) return { status: 'invalid' };
   const cur = await getCast(db, who.id);
   if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
-  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...profile, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
+  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...profile, gender, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
   const [row] = await db.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
   return { status: 'ok', cast: row! };
 }

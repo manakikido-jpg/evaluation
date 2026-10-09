@@ -1,0 +1,1 @@
+ALTER TABLE "casts" ADD COLUMN "gender" text DEFAULT '' NOT NULL;

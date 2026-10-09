@@ -1,5 +1,5 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -25,6 +25,7 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   reg_not_adult: { text: 'キャストに登録できるのは、18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。', kind: 'warn' },
   reg_invalid: { text: 'はじめのメニュー（内容・時間・値段）を確かめてください。値段は設定の下限〜上限の数。紹介は 300 文字まで。', kind: 'warn' },
   reg_already: { text: 'その人はもうキャストです。', kind: 'warn' },
+  gender_saved: { text: '男性・女性を保存しました（メニューも書き換えました）。', kind: 'ok' },
   intro_posted: { text: '🎀 紹介パネルを出しました（みんなに見えます。選んだ人にだけ確かめの画面が出ます）。', kind: 'ok' },
   intro_failed: { text: '紹介パネルを出せませんでした。チャンネルを選んで、BOT がそこに書きこめるか・キャストがお休み中でないか確かめてください。', kind: 'warn' },
   menu_ok: { text: '🎀 メニューを足しました（Discord のメニューにも出ます）。', kind: 'ok' },
@@ -71,6 +72,19 @@ function Select(props: { name: string; value?: string; options: Opt[]; empty: st
 }
 
 const prices = (c: Cast) => menuText(c) || 'メニューなし';
+
+function GenderSelect(props: { value?: string }) {
+  return (
+    <label class="field">
+      <span>男性・女性（出すメニューのチャンネル）</span>
+      <select name="gender">
+        <option value="" selected={!props.value}>まだ決めない（両方に出る）</option>
+        <option value="male" selected={props.value === 'male'}>👨 男性</option>
+        <option value="female" selected={props.value === 'female'}>👩 女性</option>
+      </select>
+    </label>
+  );
+}
 
 /** メニューの欄（内容・説明・時間・値段・寝落ち）。登録とメニューを足すで使う */
 function MenuFields(props: { c: CastConfig }) {
@@ -119,6 +133,7 @@ export function CastPage(props: {
   categories: Opt[];
   roles: Opt[];
   hasImage: boolean;
+  hasFemaleImage: boolean;
   photos: ReadonlyMap<string, string>;
   casts: Cast[];
   members: { id: string; name: string }[];
@@ -259,6 +274,7 @@ export function CastPage(props: {
             <span>得意なこと（「、」で区切る。7 つまで）</span>
             <input type="text" name="tags" maxlength={120} placeholder="雑談、ゲーム、寝落ち" />
           </label>
+          <GenderSelect />
           <p class="note">はじめのメニュー（あとから一覧でいくつでも足せます）</p>
           <MenuFields c={c} />
           <label class="field check">
@@ -303,9 +319,14 @@ export function CastPage(props: {
                       <button type="submit">写真を保存</button>
                     </form>
                     {props.photos.has(x.memberId) && <form method="post" action={`/cast/casts/${x.memberId}/photo/delete`} class="row-actions"><Csrf session={session} /><button type="submit" class="danger">写真を外す</button></form>}
+                    <form method="post" action={`/cast/casts/${x.memberId}/gender`} class="inline-actions">
+                      <Csrf session={session} />
+                      <GenderSelect value={x.gender} />
+                      <button type="submit">保存</button>
+                    </form>
                     <form method="post" action={`/cast/casts/${x.memberId}/intro`} class="inline-actions">
                       <Csrf session={session} />
-                      <Select name="channelId" value={c.channelId} options={props.channels} empty="キャスト一覧のチャンネル" label="紹介パネルを出すチャンネル" />
+                      <Select name="channelId" value={c.channelId} options={props.channels} empty="その人のメニューのチャンネル" label="紹介パネルを出すチャンネル" />
                       <button type="submit">🎀 紹介パネルを出す</button>
                     </form>
                     <details class="anchor" id={`cast-${x.memberId}`}>
@@ -356,27 +377,33 @@ export function CastPage(props: {
       <section class="card">
         <h2>🖼 メニューの画像</h2>
         <p class="note">各キャストの写真は上の一覧から登録できます。名前はDiscordの名前を使い、IDで本人を区別します。全体のメニュー画像はPNG・JPEG・GIF・WebP、8MBまでです。作ったメニューの画像を上げると、#キャスト一覧 のメニュー（画像の下に「指名するキャストを選ぶ」）に出ます。キャストの状態（🟢 待機中・📞 通話中・💤 お休み）はメニューの名前の横に出ます。</p>
-        {props.hasImage && <img src="/cast/image" alt="いまのメニューの画像" class="cast-menu-preview" />}
-        <form method="post" action="/cast/image" enctype="multipart/form-data" class="inline-actions">
-          <Csrf session={session} />
-          <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required />
-          <button type="submit" class="ok">
-            画像を上げる
-          </button>
-        </form>
+        {(['male', 'female'] as const).map((g) => {
+          const has = g === 'female' ? props.hasFemaleImage : props.hasImage;
+          return (
+            <div>
+              <h3>{GROUP_LABEL[g]}のメニューの画像{g === 'female' ? '（なければ男性と同じ画像）' : ''}</h3>
+              {has && <img src={`/cast/image?g=${g}`} alt={`${GROUP_LABEL[g]}のメニューの画像`} class="cast-menu-preview" />}
+              <form method="post" action="/cast/image" enctype="multipart/form-data" class="inline-actions">
+                <Csrf session={session} />
+                <input type="hidden" name="group" value={g} />
+                <input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp" required />
+                <button type="submit" class="ok">画像を上げる</button>
+              </form>
+              {has && (
+                <form method="post" action="/cast/image/delete" class="row-actions">
+                  <Csrf session={session} />
+                  <input type="hidden" name="group" value={g} />
+                  <button type="submit" class="danger">画像を外す</button>
+                </form>
+              )}
+            </div>
+          );
+        })}
         <div class="inline-actions">
           <form method="post" action="/cast/post" class="row-actions">
             <Csrf session={session} />
             <button type="submit">メニューを出す（出し直す）</button>
           </form>
-          {props.hasImage && (
-            <form method="post" action="/cast/image/delete" class="row-actions">
-              <Csrf session={session} />
-              <button type="submit" class="danger">
-                画像を外す
-              </button>
-            </form>
-          )}
         </div>
       </section>
 
@@ -384,7 +411,8 @@ export function CastPage(props: {
         <h2>⚙ 設定</h2>
         <form method="post" action="/cast/settings" class="fields">
           <Csrf session={session} />
-          <Select name="channelId" label="メニューを出すチャンネル（#キャスト一覧）" value={c.channelId} options={props.channels} empty="選ぶ" />
+          <Select name="channelId" label="👨 男性キャストのメニューを出すチャンネル" value={c.channelId} options={props.channels} empty="選ぶ" />
+          <Select name="femaleChannelId" label="👩 女性キャストのメニューを出すチャンネル（なければ、男性のチャンネルに全員を出す）" value={c.femaleChannelId} options={props.channels} empty="分けない" />
           <Select name="privateCategoryId" label="2 人だけの部屋を作るカテゴリ（遊郭など）" value={c.privateCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="publicCategoryId" label="公開の部屋（18 歳未満の方の雑談）を作るカテゴリ" value={c.publicCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="roleId" label="キャストのロール" value={c.roleId} options={props.roles} empty="なし（付けない）" />

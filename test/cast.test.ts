@@ -441,3 +441,41 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect(r.status === 'ok' && r.balance).toBe(19300);
   });
 });
+
+describe('👨👩 男性・女性のメニューを分ける', () => {
+  it('チャンネルが両方あれば分けて出す（決めていない人は両方）。片方だけなら全員を 1 つに', async () => {
+    const { refreshCastPanel } = await import('../src/discord/cast.js');
+    const { getCast, saveCastConfig, loadCastConfig, setCastGender, castHomeChannel } = await import('../src/services/cast.js');
+    for (const [id, name] of [[CAST, 'おとこ'], [ADULT, 'おんな'], [MINOR, 'まだ']] as const) {
+      await upsertMember(db, { id, username: id, displayName: name, avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+      await applyCast(db, c, { id, adult: true }, profile);
+      await setCastStatus(db, id, 'active', 'staff');
+    }
+    await setCastGender(db, CAST, 'male');
+    await setCastGender(db, ADULT, 'female');
+    const M = '990000000000000101', F = '990000000000000102';
+    const send = vi.fn(async (ch: string, _b: unknown) => ({ id: ch === M ? '990000000000000201' : '990000000000000202' }));
+    const discord = { sendMessage: send, editMessage: vi.fn(async () => undefined) };
+    await saveCastConfig(db, { ...c, channelId: M }, 'staff');
+    expect(await refreshCastPanel(db, discord as never)).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    const one = JSON.stringify(send.mock.calls[0]![1]);
+    for (const n of ['おとこ', 'おんな', 'まだ']) expect(one).toContain(n);
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), femaleChannelId: F }, 'staff');
+    send.mockClear();
+    expect(await refreshCastPanel(db, discord as never, { repost: true })).toBe(true);
+    const byCh = new Map(send.mock.calls.map(([ch, b]) => [ch, JSON.stringify(b)]));
+    expect(byCh.get(M)).toContain('おとこ');
+    expect(byCh.get(M)).not.toContain('おんな');
+    expect(byCh.get(M)).toContain('まだ');
+    expect(byCh.get(M)).toContain('cast:now:male');
+    expect(byCh.get(F)).toContain('おんな');
+    expect(byCh.get(F)).not.toContain('おとこ');
+    expect(byCh.get(F)).toContain('cast:rank:female');
+    expect(await loadCastConfig(db)).toMatchObject({ panelMessageId: '990000000000000201', femalePanelMessageId: '990000000000000202' });
+    // 相談・予約のスレッドは、その人のメニューのチャンネルに
+    const conf = await loadCastConfig(db);
+    expect(castHomeChannel(conf, (await getCast(db, ADULT))!)).toBe(F);
+    expect(castHomeChannel(conf, (await getCast(db, CAST))!)).toBe(M);
+  });
+});
