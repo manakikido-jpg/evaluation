@@ -5,6 +5,8 @@ import type { AtShow, AtStage } from '../../services/casino/slotAtShow.js';
 import { assetUrl, slotArt } from '../assets.js';
 import { CasinoLayout, Msg, Rules, type GamePage } from './casino.js';
 import { MaxBet, MedalTray } from './slotParts.js';
+import { seatUntil, type SlotSeat } from '../../services/casino/slotSeats.js';
+import { SlotPlayer, SlotSeatControls } from './slotPlayer.js';
 
 /**
  * 🦊 AT 機「鬼斬り白狐」の島と台。リールの動き・押し順・演出は casino.js（initAtSlot）
@@ -64,12 +66,16 @@ function FoxMask() {
   );
 }
 
-export type AtMachineView = { machine: number; state: AtMachine; seatBy: string | null; seatAt: Date | null; seatName: string | null };
+export type AtMachineView = { machine: number; state: AtMachine; seatBy: string | null; seatAt: Date | null; seatName: string | null; seatAvatar?: string | null; awayUntil?: Date | null };
 type FloorData = { today: AtDay[]; yesterday: AtDay[] };
 
 /** 台の上の数字: 通常時はいまの回転数、AT 中は「AT 中」 */
 const counterText = (m: AtMachine) => (m.phase === 'at' ? 'AT中' : m.phase === 'cz' ? 'CZ中' : String(m.games));
-const seatTakenNow = (v: AtMachineView, me: string, now: number) => Boolean(v.seatBy && v.seatBy !== me && v.seatAt && now - v.seatAt.getTime() < AT_SEAT_MINUTES * 60_000);
+export const atSeatView = (v: AtMachineView, now: number): SlotSeat | undefined => {
+  const until = seatUntil(v.seatAt, v.awayUntil ?? null);
+  return v.seatBy && until && until.getTime() > now ? { memberId: v.seatBy, name: v.seatName ?? 'メンバー', avatar: v.seatAvatar ?? null, until, away: Boolean(v.awayUntil) } : undefined;
+};
+const seatTakenNow = (v: AtMachineView, me: string, now: number) => { const seat = atSeatView(v, now); return Boolean(seat && seat.memberId !== me); };
 
 /** 差枚のグラフ（小さいもの） */
 function MiniSlump(p: { values: number[]; label: string }) {
@@ -110,7 +116,7 @@ export function AtFloor(p: { me: GamePage['me']; casino: GamePage['casino']; dat
       {p.preview && <PreviewNote />}
       {p.msg && <Msg msg={p.msg} />}
       <p class="c-muted">
-        レア役で AT「白狐ラッシュ」を狙う台です。台の回転数・AT の残りは台に残るので、ハマっている台（天井 {AT_CEILING} G）を狙うのもあり。だれかが遊んでいる台は、{AT_SEAT_MINUTES} 分回さないと空きます。1 ゲーム {p.me.coin.emoji}
+        レア役で AT「白狐ラッシュ」を狙う台です。台の回転数・AT の残りは台に残るので、ハマっている台（天井 {AT_CEILING} G）を狙うのもあり。だれかが遊んでいる台は、{AT_SEAT_MINUTES} 分回さないと空きます。離席ボタンを押すと5分だけ確保します。1 ゲーム {p.me.coin.emoji}
         {fmt(p.casino.atBet)} {p.me.coin.name}。
       </p>
       <section class="c-floor c-at-floor">
@@ -122,7 +128,7 @@ export function AtFloor(p: { me: GamePage['me']; casino: GamePage['casino']; dat
               <span class="c-floor-top">
                 <b class="c-floor-no">{i + 1}</b>
                 <span class="c-floor-name">鬼斬り白狐</span>
-                {taken && <span class="c-at-taken">遊技中{v.seatName ? `: ${v.seatName}` : ''}</span>}
+                <span class="c-slot-floor-seat">{atSeatView(v, p.now) ? <><SlotPlayer player={atSeatView(v, p.now)!} me={uid} /><small>{v.awayUntil ? '離席中・5分確保' : '遊技中'}</small></> : <small>空き台</small>}</span>
               </span>
               <span class="c-floor-cells">
                 <span>
@@ -295,6 +301,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
         </p>
       )}
       {p.msg && <Msg msg={p.msg} />}
+      {!p.demo && <SlotSeatControls seat={atSeatView(p.view, p.now)} me={p.me.session.userId} csrf={csrf} machine={p.machine} game="atslot" busy={row?.status === 'playing'} />}
       <section class="c-slot-stage">
         {!p.demo && <section class="c-counter c-at-counter" aria-label={`${p.machine} 番台のデータ`}>
           <div class="c-counter-head">
@@ -494,7 +501,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
               {p.demo
                 ? '下のボタンで演出を選ぶ'
                 : taken
-                ? `${p.view.seatName ?? 'ほかの人'}が遊んでいます（${AT_SEAT_MINUTES} 分回さないと空きます）`
+                ? `${p.view.seatName ?? 'ほかの人'}の利用中です。離席中の台も期限までは回せません。`
                 : mode === 'wait'
                   ? 'ナビの順に STOP（1・2・3 キーでも）'
                   : mode === 'spin'

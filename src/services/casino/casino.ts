@@ -14,6 +14,7 @@ import { ROULETTE_MAX_SPOTS, rouletteMaxOf, rouletteSpin, stakePayout, stakesTot
 import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
 import { casinoCfgFor } from './boost.js';
+import { claimSlotSeat, SlotOccupied } from './slotSeats.js';
 
 /**
  * カジノ（1 人で遊ぶゲーム）。賭けた銭は始めたときに引き、終わったときに 1 回だけ戻す（負けは 0）。
@@ -73,7 +74,7 @@ export const BET_ERROR: Record<Exclude<BetCheck, 'ok'>, string> = {
   reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
 };
 
-export type Played = { status: 'ok'; row: CasinoGameRow } | { status: Exclude<BetCheck, 'ok'> } | { status: 'busy'; row: CasinoGameRow };
+export type Played = { status: 'ok'; row: CasinoGameRow } | { status: Exclude<BetCheck, 'ok'> | 'occupied' } | { status: 'busy'; row: CasinoGameRow };
 
 /** 遊んでいる途中のゲーム（その種類で 1 つだけ） */
 export async function activeGame(db: Db, memberId: string, game: CasinoGame): Promise<CasinoGameRow | undefined> {
@@ -96,7 +97,7 @@ class NotEnough extends Error {}
 type Outcome = { state: unknown; done: boolean; payout: number };
 
 /** 賭けて始める。始めた時点で終わるもの（スロットなど）は、そのまま払い戻す */
-async function start(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, init: () => Outcome, now: Date): Promise<Played> {
+async function start(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, init: () => Outcome, now: Date, seat?: (tx: Db) => Promise<void>): Promise<Played> {
   const busy = await activeGame(db, memberId, game);
   if (busy) return { status: 'busy', row: busy };
   const check = await checkBet(db, cfg, memberId, game, bet, now);
@@ -105,6 +106,7 @@ async function start(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGam
   const row = await db.transaction(async (tx) => {
     const paid = await spendWithin(tx, memberId, bet, 'casino_bet', { game });
     if (!paid) return undefined;
+    if (seat) await seat(tx);
     const [r] = await tx
       .insert(casinoGames)
       .values({ memberId, game, bet, state: o.state, status: o.done ? 'done' : 'playing', payout: o.done ? o.payout : 0, createdAt: now, finishedAt: o.done ? now : null })
@@ -225,7 +227,10 @@ export async function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet:
     }
     const state: SlotsSpin = { v: 2, role, stops: stopsFor(role, rng), lamp: null, phase: 'done', mult: roleMult(role), machine, setting };
     return { state, done: true, payout: slotPayout(bet, role) };
-  }, now);
+  }, now, (tx) => claimSlotSeat(tx, memberId, machine, now)).catch((err: unknown) => {
+    if (err instanceof SlotOccupied) return { status: 'occupied' as const };
+    throw err;
+  });
 }
 
 /** 7 を狙う（pressed: STOP を押したときのコマ・左から）。'assist' はおまかせでそろえる。狙う回は賭けない */

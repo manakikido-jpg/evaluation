@@ -617,6 +617,13 @@
       "when": 1791531311417,
       "tag": "0087_guide_reception",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1791532281268,
+      "tag": "0088_bumpy_cerebro",
+      "breakpoints": true
     }
   ]
 }
