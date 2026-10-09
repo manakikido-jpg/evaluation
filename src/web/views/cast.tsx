@@ -1,5 +1,5 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
+import { MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -72,27 +72,39 @@ const prices = (c: Cast) => menuText(c) || 'メニューなし';
 
 /** メニューの欄（内容・説明・時間・値段・寝落ち）。登録とメニューを足すで使う */
 function MenuFields(props: { c: CastConfig }) {
+  const pair = (n: '' | '2' | '3', first: boolean) => (
+    <>
+      <label class="field">
+        <span>時間{n ? ` ${n}` : ''}（分。{MENU_MINUTES.min}〜{MENU_MINUTES.max}）</span>
+        <input type="number" name={`menuMinutes${n}`} min={MENU_MINUTES.min} max={MENU_MINUTES.max} step={5} placeholder={first ? '30' : n === '2' ? '60' : ''} />
+      </label>
+      <label class="field">
+        <span>値段{n ? ` ${n}` : ''}（{props.c.priceMin.toLocaleString('ja-JP')}〜{props.c.priceMax.toLocaleString('ja-JP')} 枚）</span>
+        <input type="number" name={`menuPrice${n}`} min={props.c.priceMin} max={props.c.priceMax} />
+      </label>
+    </>
+  );
   return (
     <>
       <label class="field">
         <span>内容（30 文字まで）</span>
-        <input type="text" name="menuName" maxlength={30} required placeholder="雑談・ゲーム・寝落ち など" />
+        <input type="text" name="menuName" maxlength={30} required placeholder="ツーショット・寝かしつけ など" />
       </label>
       <label class="field">
         <span>説明（なくてもよい・100 文字まで）</span>
         <input type="text" name="menuNote" maxlength={100} />
       </label>
-      <label class="field">
-        <span>時間（分。{MENU_MINUTES.min}〜{MENU_MINUTES.max}）</span>
-        <input type="number" name="menuMinutes" min={MENU_MINUTES.min} max={MENU_MINUTES.max} step={5} placeholder="30" />
-      </label>
-      <label class="field">
-        <span>値段（{props.c.priceMin.toLocaleString('ja-JP')}〜{props.c.priceMax.toLocaleString('ja-JP')} 枚）</span>
-        <input type="number" name="menuPrice" min={props.c.priceMin} max={props.c.priceMax} required />
-      </label>
+      {pair('', true)}
+      {pair('2', false)}
+      {pair('3', false)}
+      <p class="note">同じ内容で 30 分と 1 時間など、時間と値段の組を 3 つまで一度に足せます（使わない組は空のまま）。</p>
       <label class="field check">
         <input type="checkbox" name="menuNight" value="yes" />
-        <span>🌙 寝落ち（朝 7 時まで。時間は入れなくてよい・18 歳以上だけ）</span>
+        <span>🌙 寝落ち（朝 7 時まで。値段は 1 つめだけ・18 歳以上だけ）</span>
+      </label>
+      <label class="field check">
+        <input type="checkbox" name="menuConsult" value="yes" />
+        <span>💬 内容により相談（時間と値段は入れない。お客がお願いを書き、キャストがそのつど時間と値段を出す・18 歳以上だけ）</span>
       </label>
     </>
   );
@@ -295,7 +307,7 @@ export function CastPage(props: {
                         <ul>
                           {menuOf(x).map((m) => (
                             <li>
-                              {menuLabel(m)} ・ {m.price.toLocaleString('ja-JP')} 枚{m.note ? ` ・ ${m.note}` : ''}
+                              {menuLabel(m)} ・ {menuPriceText(m)}{m.note ? ` ・ ${m.note}` : ''}
                               <form method="post" action={`/cast/casts/${x.memberId}/menu/${m.id}/delete`} class="row-actions">
                                 <Csrf session={session} />
                                 <button type="submit" class="danger">外す</button>

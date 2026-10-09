@@ -422,4 +422,22 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect(await removeMenuItem(db, CAST, game.id)).toBe(false);
     expect((await getSession(db, r.session.id))?.status).toBe('active');
   });
+
+  it('💬 内容により相談: キャストが出した時間と値段でだけ指名できる（未成年は不可）', async () => {
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, c, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    expect(await addMenuItem(db, c, CAST, [{ name: 'おねがい', note: '', minutes: 0, price: 0, night: false, consult: true }])).toBe('ok');
+    const item = (await getCast(db, CAST))!.menu.find((m) => m.consult)!;
+    expect(item).toMatchObject({ price: 0, minutes: 0, consult: true });
+    await addCoins(db, ADULT, 10000, 'adjust');
+    // 値段なしでは指名できない・ほかのメニューに値段を付けられない・範囲の外はだめ
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', quote: { minutes: 30, price: 100 } }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 30, price: 1 } }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 30, price: 500 } }, T20)).status).toBe('minor_plan');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 45, price: 700 } }, T20);
+    expect(r).toMatchObject({ status: 'ok', session: { menuName: 'おねがい（相談）', minutes: 45, price: 700 } });
+    expect(r.status === 'ok' && r.balance).toBe(19300);
+  });
 });

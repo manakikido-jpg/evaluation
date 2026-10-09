@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-menu-consult',
+    date: '2026-10-09',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🎀 メニュー: 30 分と 1 時間を一度に・内容により相談',
+    items: [
+      '「メニューを足す」で、同じ内容の時間と値段の組を 3 つまで一度に足せます（例: ツーショット 30 分 200 銭・1 時間 350 銭）。Discord では時間ごとに選べます。',
+      '「💬 内容により相談」のメニューを作れます。お客がお願いを書くと 2 人だけのスレッドができ、キャストが時間と値段を出し、お客が「この値段で指名する」を押すといつもの指名になります（18 歳以上だけ）。',
+    ],
+  },
+  {
     id: '2026-10-09-long-voice-bonus', date: '2026-10-09', kind: 'new', where: ['Discord', '社務所Web'],
     title: '1日7時間の浮上で、週2回まで追加の銭を',
     items: [

@@ -5260,9 +5260,18 @@ export function createWebApp(deps: WebDeps) {
   });
 
   /** フォームのメニュー（内容・説明・時間・値段・寝落ち） */
-  const castMenuInput = (body: Record<string, unknown>): MenuInput => {
+  const castMenuInput = (body: Record<string, unknown>): MenuInput[] => {
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
-    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: body.menuNight === 'yes' };
+    const base = { name: str('menuName').trim(), note: str('menuNote').trim() };
+    if (body.menuConsult === 'yes') return [{ ...base, minutes: 0, price: 0, night: false, consult: true }];
+    if (body.menuNight === 'yes') return [{ ...base, minutes: 0, price: parsePrice(str('menuPrice')), night: true }];
+    // 時間と値段の組（3 つまで。空の組は飛ばす）。同じ内容の 30 分と 1 時間などを一度に足す
+    const out: MenuInput[] = [];
+    for (const [mk, pk] of [['menuMinutes', 'menuPrice'], ['menuMinutes2', 'menuPrice2'], ['menuMinutes3', 'menuPrice3']] as const) {
+      if (!str(mk).trim() && !str(pk).trim()) continue;
+      out.push({ ...base, minutes: parsePrice(str(mk)), price: parsePrice(str(pk)), night: false });
+    }
+    return out;
   };
 
   // 🎀 キャストのメニューを足す・外す（内容・時間・値段）
@@ -5272,7 +5281,7 @@ export function createWebApp(deps: WebDeps) {
     const m = castMenuInput(await c.req.parseBody());
     const r = await addMenuItem(db, await loadCastConfig(db), id, m);
     if (r === 'ok') {
-      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_add', detail: { ...m }, via: 'web' });
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_add', detail: { items: m }, via: 'web' });
       await castPanelNow();
     }
     return c.redirect(`/cast?msg=menu_${r}#cast-${id}`);

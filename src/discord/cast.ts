@@ -43,8 +43,12 @@ import {
   loadMenuImage,
   MINOR,
   monthStart,
+  parsePrice,
   parseTags,
+  MENU_MINUTES,
   menuLabel,
+  menuPriceText,
+  validQuote,
   menuOf,
   menuText,
   minorMenuOk,
@@ -93,7 +97,7 @@ const menuSelect = (custom_id: string, placeholder: string, items: ReturnType<ty
       type: 3 as const,
       custom_id,
       placeholder,
-      options: items.slice(0, 25).map((m) => ({ label: `${menuLabel(m)} ${fmt(m.price)} 枚`.slice(0, 100), value: m.id, ...(m.note ? { description: m.note.slice(0, 100) } : {}) })),
+      options: items.slice(0, 25).map((m) => ({ label: `${menuLabel(m)} ${m.consult ? '' : menuPriceText(m)}`.trim().slice(0, 100), value: m.id, ...(m.note ? { description: m.note.slice(0, 100) } : {}) })),
     },
   ],
 });
@@ -256,7 +260,7 @@ export class CastApp {
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     if (!('customId' in interaction) || !interaction.customId.startsWith('cast:')) return;
-    const [, action, a, b] = interaction.customId.split(':');
+    const [, action, a, b, ...rest] = interaction.customId.split(':');
     try {
       if (interaction.isStringSelectMenu()) {
         if (action === 'pick') return await this.pick(interaction, interaction.values[0] ?? '');
@@ -272,6 +276,8 @@ export class CastApp {
         if (action === 'applymodal') return void (await interaction.reply({ content: '🎀 キャストは、運営が登録します。キャストになりたい方は、運営に声をかけてください。', ...EPHEMERAL }));
         if (action === 'editmodal') return await this.profileSubmit(interaction);
         if (action === 'rmodal') return await this.reserveSubmit(interaction, a ?? '', b ?? '');
+        if (action === 'cmodal') return await this.consultSubmit(interaction, a ?? '', b ?? '');
+        if (action === 'qmodal') return await this.quoteSubmit(interaction, a ?? '', b ?? '', rest[0] ?? '');
         return;
       }
       if (!interaction.isButton()) return;
@@ -287,6 +293,8 @@ export class CastApp {
       if (action === 'blockui' || action === 'unblockui') return await this.blockPicker(interaction, action === 'blockui');
       if (action === 'plan') return await this.confirm(interaction, a ?? '', b ?? '');
       if (action === 'go') return await this.go(interaction, a ?? '', b ?? '');
+      if (action === 'quote') return await this.quoteModal(interaction, a ?? '', b ?? '', rest[0] ?? '');
+      if (action === 'qgo') return await this.quoteGo(interaction, a ?? '', b ?? '', rest);
       if (action === 'rsv') return await this.reservePlans(interaction, a ?? '');
       if (action === 'rplan') return await this.reserveModal(interaction, a ?? '', b ?? '');
       const id = Number(a);
@@ -314,7 +322,7 @@ export class CastApp {
     const photo = await loadCastPhoto(this.db, cast.memberId);
     const state = STATE[states.get(cast.memberId) ?? 'off'];
     const st = stats.find((x) => x.castId === cast.memberId);
-    const plans = menuOf(cast).filter((m) => m.price > 0 && (adult || (minorMenuOk(m) && cast.minorOk)));
+    const plans = menuOf(cast).filter((m) => (m.price > 0 || m.consult) && (adult || (minorMenuOk(m) && cast.minorOk)));
     return {
       embeds: [
         {
@@ -492,6 +500,19 @@ export class CastApp {
     const item = cast && menuOf(cast).find((m) => m.id === plan);
     if (!cast || cast.status !== 'active' || !item) return void (await i.update({ content: 'このキャストは、いまは指名できません（メニューが変わったかもしれません）。', embeds: [], components: [], attachments: [] }));
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
+    if (item.consult) {
+      if (!adult) return void (await i.update({ content: '相談のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
+      return void (await i.showModal(
+        new ModalBuilder()
+          .setCustomId(`cast:cmodal:${castId}:${item.id}`)
+          .setTitle(`💬 ${item.name}（内容により相談）`.slice(0, 45))
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder().setCustomId('wish').setLabel('お願いしたいこと（キャストが時間と値段を出します）').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500),
+            ),
+          ),
+      ));
+    }
     const price = item.price;
     await i.update({
       content: [
@@ -507,11 +528,69 @@ export class CastApp {
     });
   }
 
-  private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string): Promise<void> {
+  // ───────── 💬 相談のメニュー: お客がお願いを書く → キャストが時間と値段を出す → お客がその値段で指名する ─────────
+
+  private async consultSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string): Promise<void> {
+    await i.deferReply(EPHEMERAL);
+    const cast = await getCast(this.db, castId);
+    const item = cast && menuOf(cast).find((m) => m.id === itemId && m.consult);
+    if (!cast || cast.status !== 'active' || !item) return void (await i.editReply('このメニューは、いまは選べません。'));
+    if (cast.blocked.includes(i.user.id) || castId === i.user.id) return void (await i.editReply('このキャストには相談できません。'));
+    if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.editReply('相談のメニューは 18 歳以上の方だけです。'));
+    const wish = i.fields.getTextInputValue('wish').trim().slice(0, 500);
+    const c = await loadCastConfig(this.db);
+    const panel = c.channelId ? this.guild?.channels.cache.get(c.channelId) : undefined;
+    if (panel?.type !== ChannelType.GuildText) return void (await i.editReply('相談の場所を作れませんでした。神職に知らせてください。'));
+    const thread = await panel.threads.create({ name: `💬 相談 ${item.name}`.slice(0, 90), type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの相談' }).catch(() => undefined);
+    if (!thread) return void (await i.editReply('相談の場所を作れませんでした。神職に知らせてください。'));
+    await thread.members.add(castId).catch(() => undefined);
+    await thread.members.add(i.user.id).catch(() => undefined);
+    await thread.send({
+      content: [`<@${castId}> さん、<@${i.user.id}> さんから **${item.name}** の相談です。`, `> ${wish.replace(/\n/g, '\n> ')}`, '時間と値段を決めたら「値段を出す」を押してください（お客がその値段で指名すると、いつもの指名と同じように始まります）。', RULES].join('\n'),
+      components: [row(button(`cast:quote:${castId}:${item.id}:${i.user.id}`, '値段を出す（キャスト）', 1, '💬'))],
+      allowedMentions: { users: [castId] },
+    });
+    await this.discord.sendDm(castId, `💬 ${item.name} の相談が届きました。<#${thread.id}> で値段を出してください。`).catch(() => false);
+    await i.editReply(`💬 相談をお願いしました。キャストの返事は <#${thread.id}> に届きます（まだ銭は払っていません）。`);
+  }
+
+  private async quoteModal(i: ButtonInteraction<'cached'>, castId: string, itemId: string, customerId: string): Promise<void> {
+    if (i.user.id !== castId) return void (await i.reply({ content: '値段を出せるのはキャストだけです。', ...EPHEMERAL }));
+    await i.showModal(
+      new ModalBuilder()
+        .setCustomId(`cast:qmodal:${castId}:${itemId}:${customerId}`)
+        .setTitle('💬 時間と値段を出す')
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('minutes').setLabel('時間（分）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(4).setPlaceholder('30')),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('price').setLabel('値段（銭）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(9).setPlaceholder('500')),
+        ),
+    );
+  }
+
+  private async quoteSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string, customerId: string): Promise<void> {
+    if (i.user.id !== castId) return void (await i.reply({ content: '値段を出せるのはキャストだけです。', ...EPHEMERAL }));
+    const c = await loadCastConfig(this.db);
+    const minutes = parsePrice(i.fields.getTextInputValue('minutes'));
+    const price = parsePrice(i.fields.getTextInputValue('price'));
+    if (!validQuote(c, minutes, price)) return void (await i.reply({ content: `時間は ${MENU_MINUTES.min}〜${MENU_MINUTES.max} 分、値段は ${fmt(c.priceMin)}〜${fmt(c.priceMax)} 枚で入れてください。`, ...EPHEMERAL }));
+    await i.reply({
+      content: `💬 <@${customerId}> さん、<@${castId}> さんから **${minutes} 分 ・ ${this.coin()} ${fmt(price)} 枚** の提案です。よければ「この値段で指名する」を押してください。`,
+      components: [row(button(`cast:qgo:${castId}:${itemId}:${customerId}:${minutes}:${price}`, `${fmt(price)} 枚で指名する（お客）`, 3, '🎀'))],
+      allowedMentions: { users: [customerId] },
+    });
+  }
+
+  private async quoteGo(i: ButtonInteraction<'cached'>, castId: string, itemId: string, rest: string[]): Promise<void> {
+    const [customerId, minutes, price] = rest;
+    if (i.user.id !== customerId) return void (await i.reply({ content: 'この提案で指名できるのは、相談した人だけです。', ...EPHEMERAL }));
+    await this.go(i, castId, itemId, { minutes: Number(minutes), price: Number(price) });
+  }
+
+  private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }): Promise<void> {
     await i.deferUpdate();
     const c = await loadCastConfig(this.db);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan });
+    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
     const room = await this.openRoom(r.session).then(async (room) => {
       if (room) await room.send({ content: `<@${castId}>`, ...sessionMessage(r.session, c, this.coin()), allowedMentions: { users: [castId] } } as Parameters<typeof room.send>[0]);
@@ -673,8 +752,8 @@ export class CastApp {
     const cast = await getCast(this.db, castId);
     if (!cast || cast.status !== 'active') return void (await i.update({ content: 'このキャストは、いまは指名できません。', embeds: [], components: [] }));
     if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.update({ content: '予約は 18 歳以上の方だけです。', embeds: [], components: [] }));
-    const plans = menuOf(cast).filter((m) => m.price > 0);
-    if (!plans.length) return void (await i.update({ content: 'このキャストは、いまメニューがありません。', embeds: [], components: [], attachments: [] }));
+    const plans = menuOf(cast).filter((m) => m.price > 0 && !m.consult);
+    if (!plans.length) return void (await i.update({ content: 'このキャストは、いま予約できるメニューがありません。', embeds: [], components: [], attachments: [] }));
     await i.update({ content: '📅 予約するメニューを選んでください。', embeds: [], components: [menuSelect(`cast:rplansel:${castId}`, '📅 予約するメニュー', plans)], attachments: [] });
   }
 

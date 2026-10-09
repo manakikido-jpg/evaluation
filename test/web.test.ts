@@ -3136,11 +3136,17 @@ describe('キャスト（管理画面）', () => {
     expect((await add({ menuName: 'ゲーム', menuMinutes: '90', menuPrice: '800' })).headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${adult}`);
     expect((await add({ menuName: '寝落ち', menuPrice: '2000', menuNight: 'yes' })).headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${adult}`);
     expect((await add({ menuName: '短すぎ', menuMinutes: '5', menuPrice: '800' })).headers.get('location')).toBe(`/cast?msg=menu_invalid#cast-${adult}`);
-    const menu = (await getCast(db, adult))!.menu;
+    // 同じ内容の 30 分と 1 時間を一度に・内容により相談
+    expect((await add({ menuName: 'ツーショット', menuMinutes: '30', menuPrice: '200', menuMinutes2: '60', menuPrice2: '350' })).headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${adult}`);
+    expect((await add({ menuName: 'おねがい', menuPrice: '', menuConsult: 'yes' })).headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${adult}`);
+    const all = (await getCast(db, adult))!.menu;
+    expect(all.slice(3).map((m) => [m.name, m.minutes, m.price, m.consult ?? false])).toEqual([['ツーショット', 30, 200, false], ['ツーショット', 60, 350, false], ['おねがい', 0, 0, true]]);
+    expect(await (await get('/cast', s)).text()).toContain('おねがい（内容により相談）');
+    const menu = all.slice(0, 3);
     expect(menu.map((m) => [m.name, m.minutes, m.night])).toEqual([['雑談', 30, false], ['ゲーム', 90, false], ['寝落ち', 0, true]]);
     expect(await (await get('/cast', s)).text()).toContain('ゲーム（1 時間 30 分）');
     await form(s, `/cast/casts/${adult}/menu/${menu[0]!.id}/delete`, {});
-    expect((await getCast(db, adult))!.menu.map((m) => m.name)).toEqual(['ゲーム', '寝落ち']);
+    expect((await getCast(db, adult))!.menu.map((m) => m.name)).toEqual(['ゲーム', '寝落ち', 'ツーショット', 'ツーショット', 'おねがい']);
   });
 
   it('設定・画像・承認・メニューを出す・通報を決める', async () => {

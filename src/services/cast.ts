@@ -175,36 +175,50 @@ export function menuOf(c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNigh
 
 const durationText = (m: number) => (m % 60 === 0 ? `${m / 60} 時間` : m > 60 ? `${Math.floor(m / 60)} 時間 ${m % 60} 分` : `${m} 分`);
 /** 「雑談（30 分）」「🌙 寝落ち（朝 7 時まで）」 */
-export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night'>) => (m.night ? `🌙 ${m.name}（朝 7 時まで）` : `${m.name}（${durationText(m.minutes)}）`);
+export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night' | 'consult'>) =>
+  m.consult ? `💬 ${m.name}（内容により相談）` : m.night ? `🌙 ${m.name}（朝 7 時まで）` : `${m.name}（${durationText(m.minutes)}）`;
+/** 値段を出すところ（相談は「相談」） */
+export const menuPriceText = (m: Pick<CastMenuItem, 'price' | 'consult'>) => (m.consult ? '相談' : `${m.price.toLocaleString('ja-JP')} 枚`);
 /** 指名の名前（前の指名はプランの名前） */
 export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'>) => s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan;
 /** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
-export const minorMenuOk = (m: CastMenuItem) => !m.night && m.minutes <= MINOR.maxMinutes;
+export const minorMenuOk = (m: CastMenuItem) => !m.night && !m.consult && m.minutes <= MINOR.maxMinutes;
 /** メニューを 1 行で（紹介・一覧） */
-export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) => menuOf(c).map((m) => `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`).join('・');
+export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) =>
+  menuOf(c).map((m) => (m.consult ? `${m.name} 相談` : `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`)).join('・');
 
-export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean };
+export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean };
+
+const validMinutes = (n: number) => Number.isInteger(n) && n >= MENU_MINUTES.min && n <= MENU_MINUTES.max;
+const validPrice = (c: CastConfig, n: number) => Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax;
 
 export function validMenuItem(c: CastConfig, m: MenuInput): boolean {
-  return (
-    m.name.length >= 1 && m.name.length <= 30 && m.note.length <= 100 &&
-    Number.isInteger(m.price) && m.price >= c.priceMin && m.price <= c.priceMax &&
-    (m.night || (Number.isInteger(m.minutes) && m.minutes >= MENU_MINUTES.min && m.minutes <= MENU_MINUTES.max))
-  );
+  if (m.name.length < 1 || m.name.length > 30 || m.note.length > 100) return false;
+  // 相談は、値段と時間をそのつど決める
+  if (m.consult) return true;
+  return validPrice(c, m.price) && (m.night || validMinutes(m.minutes));
 }
 
-const newMenuId = () => Math.random().toString(36).slice(2, 8);
-const asItem = (m: MenuInput): CastMenuItem => ({ id: newMenuId(), name: m.name, note: m.note, minutes: m.night ? 0 : m.minutes, price: m.price, night: m.night });
+/** 相談のメニューで、キャストが出す時間と値段 */
+export const validQuote = (c: CastConfig, minutes: number, price: number) => validMinutes(minutes) && validPrice(c, price);
 
-/** メニューを足す（運営）。前の値段から作ったメニューは、そのまま引きつぐ */
-export async function addMenuItem(db: Db, c: CastConfig, castId: string, m: MenuInput): Promise<'ok' | 'invalid' | 'full' | 'not_cast'> {
-  if (!validMenuItem(c, m)) return 'invalid';
+const newMenuId = () => Math.random().toString(36).slice(2, 8);
+const asItem = (m: MenuInput): CastMenuItem => ({
+  id: newMenuId(), name: m.name, note: m.note,
+  minutes: m.night || m.consult ? 0 : m.minutes, price: m.consult ? 0 : m.price, night: !m.consult && m.night,
+  ...(m.consult ? { consult: true } : {}),
+});
+
+/** メニューを足す（運営。1 回に何こでも＝同じ内容の 30 分と 1 時間など）。前の値段から作ったメニューは、そのまま引きつぐ */
+export async function addMenuItem(db: Db, c: CastConfig, castId: string, input: MenuInput | MenuInput[]): Promise<'ok' | 'invalid' | 'full' | 'not_cast'> {
+  const items = Array.isArray(input) ? input : [input];
+  if (!items.length || !items.every((m) => validMenuItem(c, m))) return 'invalid';
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
     if (!cast || cast.status === 'removed') return 'not_cast' as const;
     const menu = menuOf(cast);
-    if (menu.length >= MENU_MAX) return 'full' as const;
-    await tx.update(casts).set({ menu: [...menu, asItem(m)], price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
+    if (menu.length + items.length > MENU_MAX) return 'full' as const;
+    await tx.update(casts).set({ menu: [...menu, ...items.map(asItem)], price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
     return 'ok' as const;
   });
 }
@@ -273,13 +287,14 @@ export async function updateProfile(db: Db, c: CastConfig, id: string, p: Profil
 export type RegisterCastResult = { status: 'ok'; cast: Cast } | { status: 'not_adult' | 'invalid' | 'already' };
 
 /** 運営が社務所Web でキャストを登録する（すぐ承認ずみ。18 歳以上の人だけ）。外された人・申し込み中の人も登録できる */
-export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: Pick<ProfileInput, 'bio' | 'tags' | 'minorOk'>, first: MenuInput, by: string, now = new Date()): Promise<RegisterCastResult> {
+export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: Pick<ProfileInput, 'bio' | 'tags' | 'minorOk'>, firstInput: MenuInput | MenuInput[], by: string, now = new Date()): Promise<RegisterCastResult> {
   if (!who.adult) return { status: 'not_adult' };
   const profile = { ...p, price30: 0, price60: 0, priceNight: 0 };
-  if (!validProfile(c, profile) || !validMenuItem(c, first)) return { status: 'invalid' };
+  const first = Array.isArray(firstInput) ? firstInput : [firstInput];
+  if (!validProfile(c, profile) || !first.length || first.length > MENU_MAX || !first.every((m) => validMenuItem(c, m))) return { status: 'invalid' };
   const cur = await getCast(db, who.id);
   if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
-  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...profile, menu: [asItem(first)], appliedAt: now, approvedAt: now, approvedBy: by };
+  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...profile, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
   const [row] = await db.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
   return { status: 'ok', cast: row! };
 }
@@ -354,14 +369,16 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 相談のメニュー: キャストが出した時間と値段 */ quote?: { minutes: number; price: number } },
   now = new Date(),
 ): Promise<RequestResult> {
   const cast = await getCast(db, input.castId);
   if (!cast || cast.status !== 'active') return { status: 'not_cast' };
   if (input.castId === input.customerId) return { status: 'self' };
   if (cast.blocked.includes(input.customerId)) return { status: 'blocked' };
-  const item = menuOf(cast).find((m) => m.id === input.plan);
+  const found = menuOf(cast).find((m) => m.id === input.plan);
+  // 相談のメニューは、キャストが出した時間と値段で（ほかのメニューに値段は付けられない）
+  const item = found?.consult ? (input.quote && validQuote(c, input.quote.minutes, input.quote.price) ? { ...found, ...input.quote } : undefined) : input.quote ? undefined : found;
   if (!item || item.price <= 0) return { status: 'no_plan' };
   const price = item.price;
   const plan = item.night ? 'night' : item.id;
@@ -401,7 +418,7 @@ export async function requestSession(
         castId: input.castId,
         customerId: input.customerId,
         plan,
-        menuName: cast.menu.length ? item.name : '',
+        menuName: cast.menu.length ? (item.consult ? `${item.name}（相談）` : item.name) : '',
         minutes,
         price,
         status: input.startAt ? 'reserved' : 'requested',

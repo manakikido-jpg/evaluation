@@ -113,7 +113,7 @@ export function receptionSvg(input: ReceptionImageInput): string {
     if (i < today.length - 1) svg += '<path d="M66 ' + (y + 17) + 'H894" stroke="#eee3d8"/>';
   }
   if (d.today.length > 4) svg += text(66, 1030, 'ほか ' + (d.today.length - 4) + ' 件（下の「予約一覧」で確認できます）', 19, '#8a7279');
-  svg += text(66, 1091, shorten('料金  ' + (menuOf(d.cast).map((m) => m.name + ' ' + fmt(m.price)).join(' ／ ') || 'メニューなし') + ' ' + currency, 44), 24, '#733d52');
+  svg += text(66, 1091, shorten('料金  ' + (menuOf(d.cast).map((m) => m.name + ' ' + (m.consult ? '相談' : fmt(m.price))).join(' ／ ') || 'メニューなし') + ' ' + currency, 44), 24, '#733d52');
   svg += text(66, 1133, '18歳未満の雑談：' + (d.cast.minorOk ? '受ける' : '受けない') + '  ／  ブロック：' + (d.cast.blocked?.length ?? 0) + '人', 23, '#8a7279');
   svg += '<path d="M66 1157H894" stroke="#dccbb9"/>' + text(66, 1190, day(d.now) + ' ' + clock(d.now) + ' 更新  ／  日本時間', 19, '#9a8385') + text(705, 1190, '本人だけに表示', 19, '#9a8385');
   return svg + '</svg>';

@@ -1682,9 +1682,9 @@ export const casts = pgTable('casts', {
   priceNight: integer('price_night').notNull().default(0),
   /**
    * 🎀 メニュー（内容・時間・値段。運営が社務所Web で足す）。空なら前の 30 分・1 時間・寝落ちの値段から作る
-   * night: 寝落ち（朝 7 時まで。minutes は使わない）
+   * night: 寝落ち（朝 7 時まで。minutes は使わない）/ consult: 内容により相談（値段と時間は、キャストがそのつど出す）
    */
-  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
+  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
   /** 未成年の人の公開の雑談を受ける */
   minorOk: boolean('minor_ok').notNull().default(true),
   /** off お休み / waiting 待機中（waitingUntil まで） */
