@@ -156,3 +156,25 @@ describe('案内人の受付のパネルを、いつもいちばん下に', () =
     }
   });
 });
+
+describe('案内完了で案内リンクのメッセージを消す', () => {
+  it('「案内完了」を押すと、VC のチャットの案内メッセージを消す', async () => {
+    await active();
+    const r = await reception();
+    await db.update(guideReceptions).set({ messageId: '870000000000000555', notifiedAt: now }).where(eq(guideReceptions.id, r.id));
+    await assignGuide(db, r.id, GUIDE);
+    const del = vi.fn(async () => undefined);
+    const app = new GuideReceptionApp(db, () => cfg, { deleteMessage: del, editMessage: vi.fn(), sendMessage: vi.fn(async () => ({ id: 'x' })), sendDm: vi.fn(async () => true) } as never);
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), roleId: ROLE }, 'staff');
+    const inVoice = { voice: { channelId: VOICE }, roles: { cache: new Map([[ROLE, {}]]) } };
+    const i = {
+      isButton: () => true, customId: `guide:done:${r.id}`, inCachedGuild: () => true, guildId: cfg.guildId, user: { id: GUIDE }, channelId: VOICE,
+      message: { components: [] },
+      guild: { members: { fetch: async () => inVoice }, roles: { cache: { filter: () => ({ size: 0 }) } } },
+      deferReply: vi.fn(async () => undefined), editReply: vi.fn(async () => undefined),
+    };
+    await app.onInteraction(i as never);
+    expect(del).toHaveBeenCalledWith(VOICE, '870000000000000555');
+    expect((await db.select().from(guideReceptions))[0]?.status).toBe('done');
+  });
+});

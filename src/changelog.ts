@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-guide-history-fix',
+    date: '2026-10-09',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🌸 案内: 最近の案内を直せるように・案内完了で案内リンクを消す',
+    items: [
+      '社務所Web の「最近の案内」で、宮司が行ごとに「担当にする」（名前で選ぶ）と「消す」ができます（状態と給与は変えません）。',
+      '「案内完了」を押すと、VC のチャットに出した案内リンクのメッセージを消します。',
+    ],
+  },
+  {
     id: '2026-10-09-guide-panel-sticky',
     date: '2026-10-09',
     kind: 'improve',

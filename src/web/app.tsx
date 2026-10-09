@@ -1484,7 +1484,8 @@ export function createWebApp(deps: WebDeps) {
       loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).where(eq(employeePayroll.job, 'guide')).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
     ]);
     const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.flatMap(r => [r.memberId, r.visitorId])].filter(Boolean));
-    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} />);
+    const members = c.get('session').level === 'guji' ? await activeMemberNames(db) : [];
+    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} members={members} flash={c.req.query('msg')} />);
   });
   app.post('/guide/settings', async c => {
     if (c.get('session').level !== 'guji') return c.text('宮司だけが変更できます。', 403);
@@ -1498,6 +1499,26 @@ export function createWebApp(deps: WebDeps) {
       await saveGuideConfig(db, config, c.get('session').userId);
       return c.redirect('/guide?msg=saved');
     } catch { return c.redirect('/guide?msg=invalid'); }
+  });
+  // 最近の案内を直す（宮司）: 担当を決める・記録を消す
+  app.post('/guide/receptions/:id/assign', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが直せます。', 403);
+    const id = Number(c.req.param('id'));
+    const b = await c.req.parseBody();
+    const memberId = Number.isSafeInteger(id) && typeof b.member === 'string' ? await findActiveMember(db, b.member) : undefined;
+    if (!memberId) return c.redirect('/guide?msg=invalid#guide-history');
+    const [row] = await db.update(guideReceptions).set({ guideId: memberId }).where(eq(guideReceptions.id, id)).returning();
+    if (!row) return c.redirect('/guide?msg=invalid#guide-history');
+    await audit(db, { actorId: c.get('session').userId, targetId: row.visitorId, action: 'guide.reception_assign', detail: { receptionId: id, guideId: memberId }, via: 'web' });
+    return c.redirect('/guide?msg=saved#guide-history');
+  });
+  app.post('/guide/receptions/:id/delete', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが直せます。', 403);
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/guide?msg=invalid#guide-history');
+    const [row] = await db.delete(guideReceptions).where(eq(guideReceptions.id, id)).returning();
+    if (row) await audit(db, { actorId: c.get('session').userId, targetId: row.visitorId, action: 'guide.reception_delete', detail: { receptionId: id, status: row.status, guideId: row.guideId }, via: 'web' });
+    return c.redirect('/guide?msg=saved#guide-history');
   });
   app.post('/guide/panel', async c => {
     if (c.get('session').level !== 'guji') return c.text('宮司だけが操作できます。', 403);
