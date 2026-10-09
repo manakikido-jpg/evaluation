@@ -1,5 +1,5 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { MINOR, PLAN_LABEL, type CastConfig, type CastStat } from '../../services/cast.js';
+import { MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -23,8 +23,13 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   registered: { text: '🎀 キャストに登録しました（ロールを付けて、メニューに並べました。本人に DM で知らせました）。写真は下の一覧から保存できます。', kind: 'ok' },
   no_member: { text: 'その人が見つかりません。名前を入れて、出てきた候補から選んでください（鯖にいる人だけ）。', kind: 'warn' },
   reg_not_adult: { text: 'キャストに登録できるのは、18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。', kind: 'warn' },
-  reg_invalid: { text: '値段を確かめてください（設定の下限〜上限の数。寝落ちは受けないなら空）。紹介は 300 文字まで。', kind: 'warn' },
+  reg_invalid: { text: 'はじめのメニュー（内容・時間・値段）を確かめてください。値段は設定の下限〜上限の数。紹介は 300 文字まで。', kind: 'warn' },
   reg_already: { text: 'その人はもうキャストです。', kind: 'warn' },
+  menu_ok: { text: '🎀 メニューを足しました（Discord のメニューにも出ます）。', kind: 'ok' },
+  menu_invalid: { text: 'メニューを足せませんでした。内容（30 文字まで）・時間（分）・値段（設定の下限〜上限）を確かめてください。', kind: 'warn' },
+  menu_full: { text: `メニューは 1 人 ${MENU_MAX} こまでです。`, kind: 'warn' },
+  menu_not_cast: { text: 'その人はキャストではありません。', kind: 'warn' },
+  menu_removed: { text: 'メニューを外しました（もう入っている指名・予約はそのままです）。', kind: 'ok' },
   done_already: { text: 'もう終わっています。', kind: 'warn' },
 };
 
@@ -63,7 +68,35 @@ function Select(props: { name: string; value?: string; options: Opt[]; empty: st
   );
 }
 
-const prices = (c: Cast) => `30分 ${c.price30.toLocaleString('ja-JP')}・1時間 ${c.price60.toLocaleString('ja-JP')}${c.priceNight ? `・寝落ち ${c.priceNight.toLocaleString('ja-JP')}` : ''}`;
+const prices = (c: Cast) => menuText(c) || 'メニューなし';
+
+/** メニューの欄（内容・説明・時間・値段・寝落ち）。登録とメニューを足すで使う */
+function MenuFields(props: { c: CastConfig }) {
+  return (
+    <>
+      <label class="field">
+        <span>内容（30 文字まで）</span>
+        <input type="text" name="menuName" maxlength={30} required placeholder="雑談・ゲーム・寝落ち など" />
+      </label>
+      <label class="field">
+        <span>説明（なくてもよい・100 文字まで）</span>
+        <input type="text" name="menuNote" maxlength={100} />
+      </label>
+      <label class="field">
+        <span>時間（分。{MENU_MINUTES.min}〜{MENU_MINUTES.max}）</span>
+        <input type="number" name="menuMinutes" min={MENU_MINUTES.min} max={MENU_MINUTES.max} step={5} placeholder="30" />
+      </label>
+      <label class="field">
+        <span>値段（{props.c.priceMin.toLocaleString('ja-JP')}〜{props.c.priceMax.toLocaleString('ja-JP')} 枚）</span>
+        <input type="number" name="menuPrice" min={props.c.priceMin} max={props.c.priceMax} required />
+      </label>
+      <label class="field check">
+        <input type="checkbox" name="menuNight" value="yes" />
+        <span>🌙 寝落ち（朝 7 時まで。時間は入れなくてよい・18 歳以上だけ）</span>
+      </label>
+    </>
+  );
+}
 
 export function CastPage(props: {
   session: AdminSession;
@@ -119,7 +152,7 @@ export function CastPage(props: {
                     </span>
                   </div>
                   <div class="ch-topic">
-                    {PLAN_LABEL[s.plan]} ・ {s.isPublic ? '公開の部屋' : '2 人だけの部屋'} ・ {fmtDateTime(s.createdAt)}
+                    {sessionLabel(s)} ・ {s.isPublic ? '公開の部屋' : '2 人だけの部屋'} ・ {fmtDateTime(s.createdAt)}
                   </div>
                 </div>
                 <span class="ch-actions">
@@ -193,7 +226,7 @@ export function CastPage(props: {
       <form method="post" action="/cast/register" class="card anchor" id="cast-register">
         <Csrf session={session} />
         <h2>➕ キャストを登録</h2>
-        <p class="note">登録するとすぐキャストになり、ロールが付いてメニューに並びます（本人に DM）。18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。値段は {c.priceMin.toLocaleString('ja-JP')}〜{c.priceMax.toLocaleString('ja-JP')} 枚。</p>
+        <p class="note">登録するとすぐキャストになり、ロールが付いてメニューに並びます（本人に DM）。18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。メニュー（内容・時間・値段）はキャストごとに決めます。</p>
         <div class="fields">
           <label class="field">
             <span>登録する人（名前か ID）</span>
@@ -212,18 +245,8 @@ export function CastPage(props: {
             <span>得意なこと（「、」で区切る。7 つまで）</span>
             <input type="text" name="tags" maxlength={120} placeholder="雑談、ゲーム、寝落ち" />
           </label>
-          <label class="field">
-            <span>30 分の値段</span>
-            <input type="number" name="price30" min={c.priceMin} max={c.priceMax} required />
-          </label>
-          <label class="field">
-            <span>1 時間の値段</span>
-            <input type="number" name="price60" min={c.priceMin} max={c.priceMax} required />
-          </label>
-          <label class="field">
-            <span>寝落ち（朝 7 時まで）の値段（受けないなら空）</span>
-            <input type="number" name="priceNight" min={c.priceMin} max={c.priceMax} />
-          </label>
+          <p class="note">はじめのメニュー（あとから一覧でいくつでも足せます）</p>
+          <MenuFields c={c} />
           <label class="field check">
             <input type="checkbox" name="minorOk" value="yes" checked />
             <span>18 歳未満の人の雑談も受ける（公開の部屋だけ）</span>
@@ -266,6 +289,29 @@ export function CastPage(props: {
                       <button type="submit">写真を保存</button>
                     </form>
                     {props.photos.has(x.memberId) && <form method="post" action={`/cast/casts/${x.memberId}/photo/delete`} class="row-actions"><Csrf session={session} /><button type="submit" class="danger">写真を外す</button></form>}
+                    <details class="anchor" id={`cast-${x.memberId}`}>
+                      <summary>🎀 メニュー（{menuOf(x).length}）</summary>
+                      {menuOf(x).length ? (
+                        <ul>
+                          {menuOf(x).map((m) => (
+                            <li>
+                              {menuLabel(m)} ・ {m.price.toLocaleString('ja-JP')} 枚{m.note ? ` ・ ${m.note}` : ''}
+                              <form method="post" action={`/cast/casts/${x.memberId}/menu/${m.id}/delete`} class="row-actions">
+                                <Csrf session={session} />
+                                <button type="submit" class="danger">外す</button>
+                              </form>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p class="note">メニューがありません（指名できません）。下から足してください。</p>
+                      )}
+                      <form method="post" action={`/cast/casts/${x.memberId}/menu`} class="fields">
+                        <Csrf session={session} />
+                        <MenuFields c={c} />
+                        <button type="submit" class="ok">メニューを足す</button>
+                      </form>
+                    </details>
                   </div>
                   <span class="ch-actions">
                     <form method="post" action={`/cast/casts/${x.memberId}/${x.status === 'paused' ? 'active' : 'paused'}`} class="row-actions">
@@ -373,7 +419,7 @@ export function CastPage(props: {
                     {s.isPublic ? '（公開）' : ''}
                   </td>
                   <td>
-                    {PLAN_LABEL[s.plan]}
+                    {sessionLabel(s)}
                     {s.extensions ? `＋${s.extensions * 30} 分` : ''}
                   </td>
                   <td class="num">{s.price.toLocaleString('ja-JP')}</td>

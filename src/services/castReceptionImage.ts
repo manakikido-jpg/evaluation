@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import type { CastSession } from '../db/schema.js';
-import type { CastReception } from './cast.js';
+import { menuOf, sessionLabel, type CastReception } from './cast.js';
 
 const FONT_DIR = fileURLToPath(new URL('../../assets/fonts/', import.meta.url));
 const FONT_FILES = ['ShipporiMinchoB1-500.ttf', 'ShipporiMinchoB1-800.ttf'].map((f) => FONT_DIR + f);
@@ -15,7 +15,7 @@ const shorten = (s: string, max: number) => [...s.replace(/[\r\n\t]/g, ' ')].len
 const clock = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(11, 16);
 const day = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(0, 10).replaceAll('-', '/');
 const fmt = (n: number) => n.toLocaleString('ja-JP');
-const plan = (s: CastSession) => (s.plan === 'night' ? '寝落ち' : s.plan === '60' ? '1時間' : '30分') + (s.extensions ? ' ＋' + s.extensions * 30 + '分' : '');
+const plan = (s: CastSession) => (s.menuName || (s.plan === 'night' ? '寝落ち' : s.plan === '60' ? '1時間' : s.plan === '30' ? '30分' : sessionLabel(s))) + (s.extensions ? ' ＋' + s.extensions * 30 + '分' : '');
 const STATUS: Record<CastSession['status'], string> = { reserved: '返事待ち', accepted: '予約確定', requested: '返事待ち', active: '通話中', done: '終了', declined: '受付終了', canceled: '取消', disputed: '運営確認中', refunded: '返金済み' };
 const STATES = { waiting: ['待機中', '#8cc4a6'], busy: ['対応中', '#efd39a'], off: ['受付停止', '#d4c6d1'], pending: ['運営の確認待ち', '#d4c6d1'], paused: ['運営による休止', '#d4c6d1'] } as const;
 
@@ -113,7 +113,7 @@ export function receptionSvg(input: ReceptionImageInput): string {
     if (i < today.length - 1) svg += '<path d="M66 ' + (y + 17) + 'H894" stroke="#eee3d8"/>';
   }
   if (d.today.length > 4) svg += text(66, 1030, 'ほか ' + (d.today.length - 4) + ' 件（下の「予約一覧」で確認できます）', 19, '#8a7279');
-  svg += text(66, 1091, '料金  30分 ' + fmt(d.cast.price30) + ' ／ 1時間 ' + fmt(d.cast.price60) + (d.cast.priceNight ? ' ／ 寝落ち ' + fmt(d.cast.priceNight) : '') + ' ' + shorten(currency, 6), 24, '#733d52');
+  svg += text(66, 1091, shorten('料金  ' + (menuOf(d.cast).map((m) => m.name + ' ' + fmt(m.price)).join(' ／ ') || 'メニューなし') + ' ' + currency, 44), 24, '#733d52');
   svg += text(66, 1133, '18歳未満の雑談：' + (d.cast.minorOk ? '受ける' : '受けない') + '  ／  ブロック：' + (d.cast.blocked?.length ?? 0) + '人', 23, '#8a7279');
   svg += '<path d="M66 1157H894" stroke="#dccbb9"/>' + text(66, 1190, day(d.now) + ' ' + clock(d.now) + ' 更新  ／  日本時間', 19, '#9a8385') + text(705, 1190, '本人だけに表示', 19, '#9a8385');
   return svg + '</svg>';

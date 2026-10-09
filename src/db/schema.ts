@@ -1680,6 +1680,11 @@ export const casts = pgTable('casts', {
   price60: integer('price_60').notNull().default(0),
   /** 寝落ち（朝 7 時まで）。0 = 受けない */
   priceNight: integer('price_night').notNull().default(0),
+  /**
+   * 🎀 メニュー（内容・時間・値段。運営が社務所Web で足す）。空なら前の 30 分・1 時間・寝落ちの値段から作る
+   * night: 寝落ち（朝 7 時まで。minutes は使わない）
+   */
+  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
   /** 未成年の人の公開の雑談を受ける */
   minorOk: boolean('minor_ok').notNull().default(true),
   /** off お休み / waiting 待機中（waitingUntil まで） */
@@ -1700,8 +1705,10 @@ export const castSessions = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     castId: text('cast_id').notNull(),
     customerId: text('customer_id').notNull(),
-    /** 30 / 60 / night */
-    plan: text('plan').$type<'30' | '60' | 'night'>().notNull(),
+    /** メニューの番号（寝落ちは night）。前の指名は 30 / 60 / night */
+    plan: text('plan').notNull(),
+    /** 指名したメニューの名前（前の指名は空） */
+    menuName: text('menu_name').notNull().default(''),
     minutes: integer('minutes').notNull(),
     /** 預かっている銭（延長で増える） */
     price: integer('price').notNull(),

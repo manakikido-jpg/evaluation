@@ -3111,14 +3111,24 @@ describe('キャスト（管理画面）', () => {
     await db.update(mt).set({ ageGroup: 'adult' }).where(eqq(mt.id, adult));
     const s = await login(STAFF);
     expect(await (await get('/cast', s)).text()).toContain('/cast/register');
-    const reg = (member: string, price30 = '300') => form(s, '/cast/register', { member, bio: 'よろしく', tags: '雑談、ゲーム', price30, price60: '500', priceNight: '', minorOk: 'yes' });
+    const reg = (member: string, menuPrice = '300') => form(s, '/cast/register', { member, bio: 'よろしく', tags: '雑談、ゲーム', menuName: '雑談', menuNote: '', menuMinutes: '30', menuPrice, minorOk: 'yes' });
     expect((await reg('だれもいない')).headers.get('location')).toBe('/cast?msg=no_member#cast-register');
     expect((await reg('こども')).headers.get('location')).toBe('/cast?msg=reg_not_adult#cast-register');
     expect((await reg('おとな', '0')).headers.get('location')).toBe('/cast?msg=reg_invalid#cast-register');
     expect((await reg('おとな')).headers.get('location')).toBe('/cast?msg=registered');
-    expect(await getCast(db, adult)).toMatchObject({ status: 'active', approvedBy: STAFF, tags: ['雑談', 'ゲーム'], priceNight: 0, minorOk: true });
+    expect(await getCast(db, adult)).toMatchObject({ status: 'active', approvedBy: STAFF, tags: ['雑談', 'ゲーム'], priceNight: 0, minorOk: true, menu: [{ name: '雑談', minutes: 30, price: 300, night: false }] });
     expect((await reg(adult)).headers.get('location')).toBe('/cast?msg=reg_already#cast-register');
     expect((await listAudit(db, { action: 'cast.register' })).length).toBe(1);
+    // メニューを足す・外す
+    const add = (data: Record<string, string>) => form(s, `/cast/casts/${adult}/menu`, { menuNote: '', menuMinutes: '', ...data });
+    expect((await add({ menuName: 'ゲーム', menuMinutes: '90', menuPrice: '800' })).headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${adult}`);
+    expect((await add({ menuName: '寝落ち', menuPrice: '2000', menuNight: 'yes' })).headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${adult}`);
+    expect((await add({ menuName: '短すぎ', menuMinutes: '5', menuPrice: '800' })).headers.get('location')).toBe(`/cast?msg=menu_invalid#cast-${adult}`);
+    const menu = (await getCast(db, adult))!.menu;
+    expect(menu.map((m) => [m.name, m.minutes, m.night])).toEqual([['雑談', 30, false], ['ゲーム', 90, false], ['寝落ち', 0, true]]);
+    expect(await (await get('/cast', s)).text()).toContain('ゲーム（1 時間 30 分）');
+    await form(s, `/cast/casts/${adult}/menu/${menu[0]!.id}/delete`, {});
+    expect((await getCast(db, adult))!.menu.map((m) => m.name)).toEqual(['ゲーム', '寝落ち']);
   });
 
   it('設定・画像・承認・メニューを出す・通報を決める', async () => {

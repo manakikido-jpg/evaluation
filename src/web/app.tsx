@@ -229,7 +229,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { refreshCastPanel } from '../discord/cast.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -5257,6 +5257,36 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(`/cast?msg=${ok ? 'posted' : 'post_failed'}`);
   });
 
+  /** フォームのメニュー（内容・説明・時間・値段・寝落ち） */
+  const castMenuInput = (body: Record<string, unknown>): MenuInput => {
+    const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: body.menuNight === 'yes' };
+  };
+
+  // 🎀 キャストのメニューを足す・外す（内容・時間・値段）
+  app.post('/cast/casts/:id/menu', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const m = castMenuInput(await c.req.parseBody());
+    const r = await addMenuItem(db, await loadCastConfig(db), id, m);
+    if (r === 'ok') {
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_add', detail: { ...m }, via: 'web' });
+      await castPanelNow();
+    }
+    return c.redirect(`/cast?msg=menu_${r}#cast-${id}`);
+  });
+
+  app.post('/cast/casts/:id/menu/:item/delete', async (c) => {
+    const id = c.req.param('id');
+    const item = c.req.param('item');
+    if (!validId(id)) return c.redirect('/cast');
+    if (await removeMenuItem(db, id, item)) {
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_remove', detail: { item }, via: 'web' });
+      await castPanelNow();
+    }
+    return c.redirect(`/cast?msg=menu_removed#cast-${id}`);
+  });
+
   // ➕ キャストを登録する（運営だけ。Discord からの申し込みはない）
   app.post('/cast/register', async (c) => {
     const body = await c.req.parseBody();
@@ -5265,12 +5295,12 @@ export function createWebApp(deps: WebDeps) {
     if (!id) return c.redirect('/cast?msg=no_member#cast-register');
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
     const conf = await loadCastConfig(db);
-    const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), price30: parsePrice(str('price30')), price60: parsePrice(str('price60')), priceNight: parsePrice(str('priceNight')), minorOk: body.minorOk === 'yes' };
+    const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), minorOk: body.minorOk === 'yes' };
     const adult = await isAdult(db, cfg, id, await memberRoleIdsOf(db, id));
-    const r = await registerCast(db, conf, { id, adult }, p, by, now());
+    const r = await registerCast(db, conf, { id, adult }, p, castMenuInput(body), by, now());
     if (r.status !== 'ok') return c.redirect(`/cast?msg=reg_${r.status}#cast-register`);
     if (conf.roleId) await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの登録').catch((err: unknown) => logger.warn({ err }, 'cast role add failed'));
-    await audit(db, { actorId: by, targetId: id, action: 'cast.register', detail: { price30: p.price30, price60: p.price60, priceNight: p.priceNight }, via: 'web' });
+    await audit(db, { actorId: by, targetId: id, action: 'cast.register', detail: { menu: r.cast.menu }, via: 'web' });
     await deps.discord.sendDm(id, '🎀 キャストに登録されました。#キャスト一覧 の「⚙ キャストの方」から待機できます。').catch(() => false);
     await castPanelNow();
     return c.redirect('/cast?msg=registered');

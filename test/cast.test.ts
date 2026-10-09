@@ -6,6 +6,10 @@ import type { Db } from '../src/db/client.js';
 import {
   acceptSession,
   applyCast,
+  addMenuItem,
+  getCast,
+  menuOf,
+  removeMenuItem,
   CAST_DEFAULTS,
   cancelSession,
   castStats,
@@ -387,4 +391,35 @@ describe('🎀 キャストのDiscord操作', () => {
     expect((await getSession(db, r.id))?.channelId).toBeNull();
   });
 
+});
+
+describe('🎀 キャストごとのメニュー（内容・時間・値段）', () => {
+  it('前の値段から作ったメニューを引きつぎ、足したメニューで指名・延長・未成年の決まり', async () => {
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, c, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    const cast0 = (await getCast(db, CAST))!;
+    expect(menuOf(cast0).map((m) => m.id)).toEqual(['30', '60', 'night']);
+    expect(await addMenuItem(db, c, CAST, { name: 'ゲーム', note: '一緒に遊ぶ', minutes: 90, price: 900, night: false })).toBe('ok');
+    expect(await addMenuItem(db, c, CAST, { name: 'x', note: '', minutes: 90, price: 1, night: false })).toBe('invalid');
+    const cast = (await getCast(db, CAST))!;
+    expect(cast.menu.map((m) => m.name)).toEqual(['30 分', '1 時間', '寝落ち', 'ゲーム']);
+    expect(cast.price30).toBe(0);
+    const game = cast.menu.find((m) => m.name === 'ゲーム')!;
+    await addCoins(db, ADULT, 10000, 'adjust');
+    await addCoins(db, MINOR, 10000, 'adjust');
+    // 未成年の人は 60 分をこえるメニューを選べない
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: game.id }, T20)).status).toBe('minor_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: 'nope' }, T20)).status).toBe('no_plan');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: game.id }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.session).toMatchObject({ plan: game.id, menuName: 'ゲーム', minutes: 90, price: 900 });
+    await acceptSession(db, r.session.id, CAST, T20);
+    // 30 分のばすと、同じ割合（900 / 90 分 × 30 分 = 300）
+    const e = await extendSession(db, r.session.id, ADULT, new Date(T20.getTime() + MIN));
+    expect(e).toMatchObject({ status: 'ok', session: { minutes: 120, price: 1200 } });
+    expect(await removeMenuItem(db, CAST, game.id)).toBe(true);
+    expect(await removeMenuItem(db, CAST, game.id)).toBe(false);
+    expect((await getSession(db, r.session.id))?.status).toBe('active');
+  });
 });

@@ -156,6 +156,71 @@ export function planMinutes(plan: CastPlan, start: Date): number {
 
 export const priceOfPlan = (c: Pick<Cast, 'price30' | 'price60' | 'priceNight'>, plan: CastPlan) => (plan === '30' ? c.price30 : plan === '60' ? c.price60 : c.priceNight);
 
+// ───────── メニュー（キャストごと。内容・時間・値段） ─────────
+
+export type CastMenuItem = Cast['menu'][number];
+/** 1 人のメニューの数（Discord の選ぶ欄に入る数） */
+export const MENU_MAX = 20;
+export const MENU_MINUTES = { min: 10, max: 720 } as const;
+
+/** そのキャストのメニュー。まだ作っていなければ、前の 30 分・1 時間・寝落ちの値段から作る（番号は 30 / 60 / night） */
+export function menuOf(c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>): CastMenuItem[] {
+  if (c.menu.length) return c.menu;
+  const out: CastMenuItem[] = [];
+  if (c.price30 > 0) out.push({ id: '30', name: '30 分', note: '', minutes: 30, price: c.price30, night: false });
+  if (c.price60 > 0) out.push({ id: '60', name: '1 時間', note: '', minutes: 60, price: c.price60, night: false });
+  if (c.priceNight > 0) out.push({ id: 'night', name: '寝落ち', note: '', minutes: 0, price: c.priceNight, night: true });
+  return out;
+}
+
+const durationText = (m: number) => (m % 60 === 0 ? `${m / 60} 時間` : m > 60 ? `${Math.floor(m / 60)} 時間 ${m % 60} 分` : `${m} 分`);
+/** 「雑談（30 分）」「🌙 寝落ち（朝 7 時まで）」 */
+export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night'>) => (m.night ? `🌙 ${m.name}（朝 7 時まで）` : `${m.name}（${durationText(m.minutes)}）`);
+/** 指名の名前（前の指名はプランの名前） */
+export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'>) => s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan;
+/** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
+export const minorMenuOk = (m: CastMenuItem) => !m.night && m.minutes <= MINOR.maxMinutes;
+/** メニューを 1 行で（紹介・一覧） */
+export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) => menuOf(c).map((m) => `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`).join('・');
+
+export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean };
+
+export function validMenuItem(c: CastConfig, m: MenuInput): boolean {
+  return (
+    m.name.length >= 1 && m.name.length <= 30 && m.note.length <= 100 &&
+    Number.isInteger(m.price) && m.price >= c.priceMin && m.price <= c.priceMax &&
+    (m.night || (Number.isInteger(m.minutes) && m.minutes >= MENU_MINUTES.min && m.minutes <= MENU_MINUTES.max))
+  );
+}
+
+const newMenuId = () => Math.random().toString(36).slice(2, 8);
+const asItem = (m: MenuInput): CastMenuItem => ({ id: newMenuId(), name: m.name, note: m.note, minutes: m.night ? 0 : m.minutes, price: m.price, night: m.night });
+
+/** メニューを足す（運営）。前の値段から作ったメニューは、そのまま引きつぐ */
+export async function addMenuItem(db: Db, c: CastConfig, castId: string, m: MenuInput): Promise<'ok' | 'invalid' | 'full' | 'not_cast'> {
+  if (!validMenuItem(c, m)) return 'invalid';
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast || cast.status === 'removed') return 'not_cast' as const;
+    const menu = menuOf(cast);
+    if (menu.length >= MENU_MAX) return 'full' as const;
+    await tx.update(casts).set({ menu: [...menu, asItem(m)], price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
+    return 'ok' as const;
+  });
+}
+
+/** メニューを外す（運営）。もう入っている指名・予約はそのまま */
+export async function removeMenuItem(db: Db, castId: string, itemId: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast) return false;
+    const menu = menuOf(cast);
+    if (!menu.some((m) => m.id === itemId)) return false;
+    await tx.update(casts).set({ menu: menu.filter((m) => m.id !== itemId), price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
+    return true;
+  });
+}
+
 // ───────── キャスト ─────────
 
 export async function getCast(db: Db, id: string): Promise<Cast | undefined> {
@@ -170,8 +235,9 @@ export async function listCasts(db: Db, statuses: Cast['status'][] = ['active'])
 export type ProfileInput = { bio: string; tags: string[]; price30: number; price60: number; priceNight: number; minorOk: boolean };
 
 export function validProfile(c: CastConfig, p: ProfileInput): boolean {
-  const inRange = (n: number) => Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax;
-  return p.bio.length <= 300 && inRange(p.price30) && inRange(p.price60) && (p.priceNight === 0 || inRange(p.priceNight)) && p.tags.length <= 7;
+  // 値段は前の決まった 3 つ（今はメニューで決める）。0 は「なし」
+  const ok = (n: number) => n === 0 || (Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax);
+  return p.bio.length <= 300 && ok(p.price30) && ok(p.price60) && ok(p.priceNight) && p.tags.length <= 7;
 }
 
 /** 読みやすい数（全角・カンマ・「枚」も読む。空は 0） */
@@ -207,12 +273,13 @@ export async function updateProfile(db: Db, c: CastConfig, id: string, p: Profil
 export type RegisterCastResult = { status: 'ok'; cast: Cast } | { status: 'not_adult' | 'invalid' | 'already' };
 
 /** 運営が社務所Web でキャストを登録する（すぐ承認ずみ。18 歳以上の人だけ）。外された人・申し込み中の人も登録できる */
-export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: ProfileInput, by: string, now = new Date()): Promise<RegisterCastResult> {
+export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: Pick<ProfileInput, 'bio' | 'tags' | 'minorOk'>, first: MenuInput, by: string, now = new Date()): Promise<RegisterCastResult> {
   if (!who.adult) return { status: 'not_adult' };
-  if (!validProfile(c, p)) return { status: 'invalid' };
+  const profile = { ...p, price30: 0, price60: 0, priceNight: 0 };
+  if (!validProfile(c, profile) || !validMenuItem(c, first)) return { status: 'invalid' };
   const cur = await getCast(db, who.id);
   if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
-  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...p, appliedAt: now, approvedAt: now, approvedBy: by };
+  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...profile, menu: [asItem(first)], appliedAt: now, approvedAt: now, approvedBy: by };
   const [row] = await db.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
   return { status: 'ok', cast: row! };
 }
@@ -287,21 +354,23 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; plan: CastPlan; startAt?: Date },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date },
   now = new Date(),
 ): Promise<RequestResult> {
   const cast = await getCast(db, input.castId);
   if (!cast || cast.status !== 'active') return { status: 'not_cast' };
   if (input.castId === input.customerId) return { status: 'self' };
   if (cast.blocked.includes(input.customerId)) return { status: 'blocked' };
-  const price = priceOfPlan(cast, input.plan);
-  if (price <= 0) return { status: 'no_plan' };
+  const item = menuOf(cast).find((m) => m.id === input.plan);
+  if (!item || item.price <= 0) return { status: 'no_plan' };
+  const price = item.price;
+  const plan = item.night ? 'night' : item.id;
   const start = input.startAt ?? now;
   if (input.startAt && (input.startAt.getTime() < now.getTime() + 10 * MIN || input.startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN)) return { status: 'bad_time' };
-  const minutes = planMinutes(input.plan, start);
+  const minutes = item.night ? planMinutes('night', start) : item.minutes;
   if (!input.customerAdult) {
     if (input.startAt) return { status: 'minor_reserve' };
-    if (input.plan === 'night') return { status: 'minor_plan' };
+    if (!minorMenuOk(item)) return { status: 'minor_plan' };
     if (!cast.minorOk) return { status: 'minor_off' };
     if (!minorWindowOk(start, minutes)) return { status: 'minor_hours' };
   }
@@ -321,9 +390,9 @@ export async function requestSession(
       if (busy) return { status: 'busy' as const };
     }
     const latestStart = input.startAt ?? new Date(now.getTime() + c.acceptMinutes * MIN);
-    const end = input.plan === 'night' ? nightEnd(latestStart) : new Date(latestStart.getTime() + minutes * MIN);
+    const end = item.night ? nightEnd(latestStart) : new Date(latestStart.getTime() + minutes * MIN);
     if (await overlaps(tx, input.castId, start, end, now)) return { status: 'overlap' as const };
-    if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan: input.plan }))) {
+    if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan, menu: item.name }))) {
       return { status: 'insufficient' as const, price, balance: (await walletOf(tx, input.customerId)).balance };
     }
     const [session] = await tx
@@ -331,7 +400,8 @@ export async function requestSession(
       .values({
         castId: input.castId,
         customerId: input.customerId,
-        plan: input.plan,
+        plan,
+        menuName: cast.menu.length ? item.name : '',
         minutes,
         price,
         status: input.startAt ? 'reserved' : 'requested',
@@ -419,7 +489,8 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
     if (s.customerId !== customerId) return { status: 'not_customer' as const };
     if (!Number.isSafeInteger(expected) || expected < 0 || s.extensions !== expected) return { status: 'already_extended' as const };
     const cast = await getCast(tx, s.castId);
-    const add = cast?.price30 ?? 0;
+    // 30 分のばす値段: 前のプランは 30 分の値段。メニューの指名は、その指名と同じ割合（1 分あたり）
+    const add = !cast ? 0 : s.menuName ? Math.ceil((s.price * 30) / Math.max(1, s.minutes)) : cast.price30 || Math.ceil((s.price * 30) / Math.max(1, s.minutes));
     if (!cast || add <= 0) return { status: 'not_active' as const };
     if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' as const };
     const endsAt = new Date(s.endsAt.getTime() + 30 * MIN);
