@@ -56,7 +56,8 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
   const [row] = await db.select().from(settings).where(eq(settings.key, KEY));
   const v = (row?.value ?? {}) as Record<string, unknown>;
   const d = CAST_DEFAULTS;
-  const priceMin = int(v.priceMin, d.priceMin, 1, 1_000_000);
+  // 値段の下限はいつも 1 銭（前に保存した下限は使わない）
+  const priceMin = d.priceMin;
   return {
     channelId: sf(v.channelId),
     panelMessageId: sf(v.panelMessageId),
