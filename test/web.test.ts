@@ -3151,7 +3151,7 @@ describe('キャスト（管理画面）', () => {
     const cur = (await getCast(db, adult))!.menu;
     expect((await form(s, `/cast/casts/${adult}/menu/${cur[0]!.id}`, { menuName: 'ゲーム2', menuNote: 'たのしく', menuMinutes: '60', menuPrice: '700' })).headers.get('location')).toBe(`/cast?msg=menu_saved#cast-${adult}`);
     expect((await form(s, `/cast/casts/${adult}/menu/${cur[4]!.id}`, { menuName: 'なんでも', menuNote: '' })).headers.get('location')).toBe(`/cast?msg=menu_saved#cast-${adult}`);
-    expect((await form(s, `/cast/casts/${adult}/menu/${cur[0]!.id}`, { menuName: 'x', menuMinutes: '60', menuPrice: '1' })).headers.get('location')).toBe(`/cast?msg=menu_invalid#cast-${adult}`);
+    expect((await form(s, `/cast/casts/${adult}/menu/${cur[0]!.id}`, { menuName: 'x', menuMinutes: '60', menuPrice: '0' })).headers.get('location')).toBe(`/cast?msg=menu_invalid#cast-${adult}`);
     const edited = (await getCast(db, adult))!.menu;
     expect(edited[0]).toMatchObject({ id: cur[0]!.id, name: 'ゲーム2', note: 'たのしく', minutes: 60, price: 700 });
     expect(edited[4]).toMatchObject({ name: 'なんでも', consult: true, price: 0 });

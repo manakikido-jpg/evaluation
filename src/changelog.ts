@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-price-min-1',
+    date: '2026-10-09',
+    kind: 'improve',
+    where: ['社務所Web'],
+    title: '🎀 キャストの値段を 1 銭から決められるように',
+    items: ['キャストの値段の下限のはじめの値を 100 銭から 1 銭にしました。メニュー・相談の値段を 1 銭から決められます。前に「値段の下限」を保存していれば、その値のままです（「⚙ 設定」で 1 にできます）。'],
+  },
+  {
     id: '2026-10-09-cast-options',
     date: '2026-10-09',
     kind: 'new',
