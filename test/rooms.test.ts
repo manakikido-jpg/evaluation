@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
-import { roomNotice, roomPanel } from '../src/discord/rooms.js';
+import { roomChannelName, roomNotice, roomPanel } from '../src/discord/rooms.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { addInvites, changeRoomKind, hourlyPerPerson, payEntry, planOf, roomOf, roomOverwrites, startRoom, transferRoom, type Overwrite } from '../src/services/rooms.js';
 import { applyOverrides, overridesSchema } from '../src/services/settings.js';
@@ -287,5 +287,17 @@ describe('部屋主の権限を譲渡', () => {
     expect(await changeRoomKind(db, cfg, ROOM, 'invite')).toEqual({ status: 'ok', charged: 150 });
     expect((await walletOf(db, OWNER)).balance).toBe(800);
     expect((await walletOf(db, FRIEND)).balance).toBe(1000);
+  });
+});
+
+
+describe('部屋名のシクレ表示', () => {
+  it('名前を変えても目印が残り、重複せず、公開に戻すと外れる', () => {
+    expect(roomChannelName('aisの部屋', 'secret')).toBe('🤫 シクレ｜aisの部屋');
+    expect(roomChannelName('🤫 シクレ｜🤫 シクレ｜aisの部屋', 'secret')).toBe('🤫 シクレ｜aisの部屋');
+    expect(roomChannelName('新しい名前', 'secret')).toBe('🤫 シクレ｜新しい名前');
+    expect(roomChannelName('🤫 シクレ｜aisの部屋', 'public')).toBe('aisの部屋');
+    expect(roomChannelName('招待の部屋', 'invite')).toBe('招待の部屋');
+    expect(roomChannelName('あ'.repeat(100), 'secret')).toHaveLength(100);
   });
 });
