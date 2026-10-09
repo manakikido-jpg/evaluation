@@ -228,7 +228,7 @@ import { listingCard, requestCard } from '../discord/market.js';
 import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
-import { refreshCastPanel } from '../discord/cast.js';
+import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
 import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
@@ -5296,6 +5296,19 @@ export function createWebApp(deps: WebDeps) {
       await castPanelNow();
     }
     return c.redirect(`/cast?msg=menu_removed#cast-${id}`);
+  });
+
+  // 🎀 キャストごとの紹介パネルを出す（みんなに見える。写真・メニュー・指名の選ぶ欄）
+  app.post('/cast/casts/:id/intro', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const body = await c.req.parseBody();
+    const conf = await loadCastConfig(db);
+    const channelId = typeof body.channelId === 'string' && validId(body.channelId) ? body.channelId : conf.channelId;
+    if (!channelId) return c.redirect(`/cast?msg=intro_failed#cast-${id}`);
+    const ok = await postCastIntro(db, deps.discord, id, channelId, `${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`).catch((err: unknown) => (logger.warn({ err }, 'cast intro post failed'), false));
+    if (ok) await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.intro', detail: { channelId }, via: 'web' });
+    return c.redirect(`/cast?msg=${ok ? 'intro_posted' : 'intro_failed'}#cast-${id}`);
   });
 
   // ➕ キャストを登録する（運営だけ。Discord からの申し込みはない）

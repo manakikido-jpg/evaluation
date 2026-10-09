@@ -3,9 +3,9 @@ import { MessageFlags, type Interaction } from 'discord.js';
 import sharp from 'sharp';
 import type { Db } from '../src/db/client.js';
 import { castSessions } from '../src/db/schema.js';
-import { CastApp, castReceptionBody } from '../src/discord/cast.js';
+import { CastApp, castReceptionBody, postCastIntro } from '../src/discord/cast.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
-import { applyCast, CAST_DEFAULTS, loadCastReception, setCastStatus, setWaiting, saveCastPhoto, loadCastPhoto, deleteCastPhoto } from '../src/services/cast.js';
+import { applyCast, getCast, menuOf, CAST_DEFAULTS, loadCastReception, setCastStatus, setWaiting, saveCastPhoto, loadCastPhoto, deleteCastPhoto } from '../src/services/cast.js';
 import { loadReceptionAvatar, receptionSvg, renderCastReception } from '../src/services/castReceptionImage.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -176,6 +176,28 @@ describe('本人向けDiscord受付', () => {
     const stop = interaction('cast:wait:0');
     await a.onInteraction(stop as unknown as Interaction);
     expect((await loadCastReception(db, CAST, NOW))?.state).toBe('off');
+  });
+
+  it('🎀 紹介パネルをみんなに見える形で出し、選んだ人にだけ確かめを返す（パネルは書き換えない）', async () => {
+    const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: '#aa0000' } }).png().toBuffer();
+    await saveCastPhoto(db, CAST, png);
+    const send = vi.fn(async (_ch: string, _b: unknown) => ({ id: 'm1' }));
+    expect(await postCastIntro(db, { sendMessage: send } as never, CAST, '990000000000000123', '🪙銭')).toBe(true);
+    const [ch, body] = send.mock.calls[0] as unknown as [string, { content: string; files: { name: string }[]; components: { components: { custom_id: string }[] }[]; allowed_mentions: unknown }];
+    expect(ch).toBe('990000000000000123');
+    expect(body.content).toContain('メニュー');
+    expect(body.files[0]?.name).toBe('cast-profile.png');
+    expect(body.components.flatMap((r) => r.components.map((x) => x.custom_id))).toEqual([`cast:plansel:${CAST}`, `cast:rsv:${CAST}`]);
+    expect(body.allowed_mentions).toEqual({ parse: [] });
+    expect(await postCastIntro(db, { sendMessage: send } as never, CUSTOMER, '990000000000000123', '銭')).toBe(false);
+    // みんなのパネルの選ぶ欄を押すと、押した人にだけ返事する
+    const a = app();
+    const plan = (await getCast(db, CAST))!;
+    const first = menuOf(plan)[0]!;
+    const i = { ...interaction(`cast:plansel:${CAST}`, CUSTOMER), values: [first.id], member: { id: CUSTOMER, roles: { cache: new Map() } }, isStringSelectMenu: () => true, isButton: () => false, message: { flags: { has: () => false } }, update: vi.fn(), reply: vi.fn(async () => undefined) };
+    await a.onInteraction(i as unknown as Interaction);
+    expect(i.update).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral, content: expect.stringContaining('指名しますか') }));
   });
 
   it('紹介カードには選んだキャストの写真を添付する', async () => {

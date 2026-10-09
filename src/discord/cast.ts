@@ -176,6 +176,37 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
   return true;
 }
 
+/**
+ * 🎀 キャストごとの紹介パネル（みんなに見える。社務所Web から出す）: 名前・紹介・メニュー・写真の全体と、指名の選ぶ欄・予約。
+ * 選んだあとのやり取りは、押した人にだけ見える形で返す（パネルは書き換えない）
+ */
+export async function postCastIntro(db: Db, discord: Pick<DiscordActions, 'sendMessage'>, castId: string, channelId: string, coin: string): Promise<boolean> {
+  const cast = await getCast(db, castId);
+  if (!cast || cast.status !== 'active') return false;
+  const [name, photo, stats] = await Promise.all([namesOf(db, [castId]).then((m) => m.get(castId) ?? castId), loadCastPhoto(db, castId), castStats(db, monthStart())]);
+  const st = stats.find((x) => x.castId === castId);
+  const menu = menuOf(cast).filter((m) => m.price > 0 || m.consult);
+  const content = [
+    `## 🎀 ${name}`,
+    cast.tags.length ? cast.tags.map((t) => `#${t}`).join(' ') : '',
+    cast.bio,
+    '',
+    `💰 **メニュー**（${coin}）`,
+    ...(menu.length ? menu.map((m) => `- ${menuLabel(m)} ${menuPriceText(m)}${m.note ? ` ・ ${m.note}` : ''}`) : ['- メニューなし']),
+    st ? `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` : '',
+    '-# 下の欄からメニューを選ぶと、あなたにだけ確かめの画面が出ます',
+  ]
+    .filter((l, i) => l || i === 3)
+    .join('\n');
+  await discord.sendMessage(channelId, {
+    content: content.slice(0, 2000),
+    allowed_mentions: { parse: [] },
+    ...(photo ? { files: [{ name: 'cast-profile.png', contentType: photo.contentType, data: photo.data }] } : {}),
+    components: menu.length ? [menuSelect(`cast:plansel:${castId}`, '🎀 メニューを選んで指名する', menu), row(button(`cast:rsv:${castId}`, '予約する', 2, '📅'))] : [],
+  });
+  return true;
+}
+
 /** 部屋のチャットに出す、指名の知らせ・通話中の操作・終わり */
 export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
   const who = `<@${s.customerId}> さん → <@${s.castId}> さん`;
@@ -495,13 +526,22 @@ export class CastApp {
 
   // ───────── 指名 ─────────
 
+  /** 押した人にだけ見えるメッセージなら書き換え、みんなに見えるパネル（紹介パネル）なら押した人にだけ返事する */
+  private async answer(i: ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, body: Record<string, unknown>): Promise<void> {
+    if (i.message.flags.has(MessageFlags.Ephemeral)) await i.update(body as never);
+    else {
+      const { attachments: _a, ...rest } = body;
+      await i.reply({ ...rest, ...EPHEMERAL } as never);
+    }
+  }
+
   private async confirm(i: ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, castId: string, plan: string): Promise<void> {
     const cast = await getCast(this.db, castId);
     const item = cast && menuOf(cast).find((m) => m.id === plan);
-    if (!cast || cast.status !== 'active' || !item) return void (await i.update({ content: 'このキャストは、いまは指名できません（メニューが変わったかもしれません）。', embeds: [], components: [], attachments: [] }));
+    if (!cast || cast.status !== 'active' || !item) return void (await this.answer(i, { content: 'このキャストは、いまは指名できません（メニューが変わったかもしれません）。', embeds: [], components: [], attachments: [] }));
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     if (item.consult) {
-      if (!adult) return void (await i.update({ content: '相談のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
+      if (!adult) return void (await this.answer(i, { content: '相談のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
       return void (await i.showModal(
         new ModalBuilder()
           .setCustomId(`cast:cmodal:${castId}:${item.id}`)
@@ -514,7 +554,7 @@ export class CastApp {
       ));
     }
     const price = item.price;
-    await i.update({
+    await this.answer(i, {
       content: [
         `🎀 <@${castId}> さんを **${menuLabel(item)}** ・ ${this.coin()} **${fmt(price)} 枚** で指名しますか？`,
         adult ? '-# 2 人だけの部屋ができます（運営は見守りのために見られます）' : `-# 公開の部屋での雑談になります（${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`,
@@ -750,11 +790,11 @@ export class CastApp {
 
   private async reservePlans(i: ButtonInteraction<'cached'>, castId: string): Promise<void> {
     const cast = await getCast(this.db, castId);
-    if (!cast || cast.status !== 'active') return void (await i.update({ content: 'このキャストは、いまは指名できません。', embeds: [], components: [] }));
-    if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.update({ content: '予約は 18 歳以上の方だけです。', embeds: [], components: [] }));
+    if (!cast || cast.status !== 'active') return void (await this.answer(i, { content: 'このキャストは、いまは指名できません。', embeds: [], components: [] }));
+    if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await this.answer(i, { content: '予約は 18 歳以上の方だけです。', embeds: [], components: [] }));
     const plans = menuOf(cast).filter((m) => m.price > 0 && !m.consult);
-    if (!plans.length) return void (await i.update({ content: 'このキャストは、いま予約できるメニューがありません。', embeds: [], components: [], attachments: [] }));
-    await i.update({ content: '📅 予約するメニューを選んでください。', embeds: [], components: [menuSelect(`cast:rplansel:${castId}`, '📅 予約するメニュー', plans)], attachments: [] });
+    if (!plans.length) return void (await this.answer(i, { content: 'このキャストは、いま予約できるメニューがありません。', embeds: [], components: [], attachments: [] }));
+    await this.answer(i, { content: '📅 予約するメニューを選んでください。', embeds: [], components: [menuSelect(`cast:rplansel:${castId}`, '📅 予約するメニュー', plans)], attachments: [] });
   }
 
   private async reserveModal(i: ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, castId: string, plan: string): Promise<void> {

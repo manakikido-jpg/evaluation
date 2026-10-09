@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-intro-panel',
+    date: '2026-10-09',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '🎀 キャストごとの紹介パネルを出せるように',
+    items: [
+      '社務所Web のキャストの一覧の「🎀 紹介パネルを出す」で、そのキャストの紹介（名前・紹介・メニュー・写真の全体）と、メニューを選ぶ欄・予約のボタンを、選んだチャンネルにみんなに見える形で出せます。',
+      'パネルからメニューを選ぶと、押した人にだけ確かめの画面が出ます（パネルは変わりません）。',
+    ],
+  },
+  {
     id: '2026-10-09-cast-photo-full',
     date: '2026-10-09',
     kind: 'improve',

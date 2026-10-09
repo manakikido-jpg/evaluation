@@ -25,6 +25,8 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   reg_not_adult: { text: 'キャストに登録できるのは、18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。', kind: 'warn' },
   reg_invalid: { text: 'はじめのメニュー（内容・時間・値段）を確かめてください。値段は設定の下限〜上限の数。紹介は 300 文字まで。', kind: 'warn' },
   reg_already: { text: 'その人はもうキャストです。', kind: 'warn' },
+  intro_posted: { text: '🎀 紹介パネルを出しました（みんなに見えます。選んだ人にだけ確かめの画面が出ます）。', kind: 'ok' },
+  intro_failed: { text: '紹介パネルを出せませんでした。チャンネルを選んで、BOT がそこに書きこめるか・キャストがお休み中でないか確かめてください。', kind: 'warn' },
   menu_ok: { text: '🎀 メニューを足しました（Discord のメニューにも出ます）。', kind: 'ok' },
   menu_invalid: { text: 'メニューを足せませんでした。内容（30 文字まで）・時間（分）・値段（設定の下限〜上限）を確かめてください。', kind: 'warn' },
   menu_full: { text: `メニューは 1 人 ${MENU_MAX} こまでです。`, kind: 'warn' },
@@ -301,6 +303,11 @@ export function CastPage(props: {
                       <button type="submit">写真を保存</button>
                     </form>
                     {props.photos.has(x.memberId) && <form method="post" action={`/cast/casts/${x.memberId}/photo/delete`} class="row-actions"><Csrf session={session} /><button type="submit" class="danger">写真を外す</button></form>}
+                    <form method="post" action={`/cast/casts/${x.memberId}/intro`} class="inline-actions">
+                      <Csrf session={session} />
+                      <Select name="channelId" value={c.channelId} options={props.channels} empty="キャスト一覧のチャンネル" label="紹介パネルを出すチャンネル" />
+                      <button type="submit">🎀 紹介パネルを出す</button>
+                    </form>
                     <details class="anchor" id={`cast-${x.memberId}`}>
                       <summary>🎀 メニュー（{menuOf(x).length}）</summary>
                       {menuOf(x).length ? (
