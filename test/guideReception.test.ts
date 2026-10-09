@@ -7,7 +7,7 @@ import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openG
 import { GuideReceptionApp, guideVisitorPanel } from '../src/discord/guideReception.js';
 import * as economy from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
-import { makeDb, cfg } from './helpers.js';
+import { makeDb, cfg, ROLE as RANK_ROLE } from './helpers.js';
 const GUIDE = '870000000000000001', OTHER = '870000000000000002', VISITOR = '870000000000000003', VOICE = '870000000000000004', STAFF = '870000000000000005', ROLE = '870000000000000006';
 const PENDING = '870000000000000007';
 const guideCfg = { ...cfg, roles: { ...cfg.roles, guidePending: PENDING } };
@@ -29,10 +29,15 @@ function mockGuild(visitorRoles = [PENDING], guideRoles = [ROLE]) {
   const bot = member('870000000000000008', [PENDING], true);
   const people = new Collection([visitor, guide, regular, bot].map(m => [m.id, m]));
   const guild = { id: cfg.guildId, roles: { cache: new Collection([[PENDING, { id: PENDING, name: '🧭 案内 待ち' }], [ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Collection([[VOICE, { type: 2, members: people }]]) }, members: { cache: people, fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } };
-  const discord = { sendMessage: vi.fn(async (_channel: string, _body: unknown) => ({ id: 'message' })), editMessage: vi.fn(), sendDm: vi.fn(async () => true) };
-  const app = new GuideReceptionApp(db, () => guideCfg, discord as never);
+  const discord = { sendMessage: vi.fn(async (_channel: string, _body: unknown) => ({ id: 'message' })), deleteMessage: vi.fn(async () => undefined), editMessage: vi.fn(async (_channel: string, _message: string, _body: unknown) => undefined), sendDm: vi.fn(async () => true) };
+  const roleActions = {
+    addRole: vi.fn(async (_guild: string, user: string, role: string) => { people.get(user)!.roles.cache.set(role, { id: role }); }),
+    removeRole: vi.fn(async (_guild: string, user: string, role: string) => { people.get(user)!.roles.cache.delete(role); }),
+  };
+  const actions = { ...discord, ...roleActions };
+  const app = new GuideReceptionApp(db, () => guideCfg, actions as never);
   const interaction = (id: number, actor = GUIDE, action = 'claim') => ({ isButton: () => true, inCachedGuild: () => true, customId: `guide:${action}:${id}`, guildId: guild.id, guild, user: { id: actor }, deferReply: vi.fn(), editReply: vi.fn() });
-  return { visitor, guide, regular, bot, guild, discord, app, interaction };
+  return { visitor, guide, regular, bot, guild, discord: actions, app, interaction };
 }
 async function configure() {
   await saveGuideConfig(db, { ...(await loadGuideConfig(db)), voiceChannelIds: [VOICE], staffChannelId: STAFF, roleId: ROLE }, GUIDE);
@@ -285,5 +290,117 @@ describe('案内待ちだけの受付と案内人の開始', () => {
     expect((await db.select().from(guideReceptions))[0]?.status).toBe('left');
     expect(m.discord.sendMessage).not.toHaveBeenCalled();
     expect(await db.select().from(employeePayroll)).toHaveLength(0);
+  });
+});
+
+describe('案内から参拝者ロールを付与', () => {
+  it('再起動後に既存の案内投稿を更新し、付与済みのボタンは止める', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception(); await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    await db.update(guideReceptions).set({ messageId: 'old', notifiedAt: now }).where(eq(guideReceptions.id, r.id));
+    m.visitor.roles.cache.set(RANK_ROLE.sanpaisha, { id: RANK_ROLE.sanpaisha });
+    m.visitor.roles.cache.delete(PENDING);
+    await m.app.tick(m.guild as never); await m.app.tick(m.guild as never);
+    expect(m.discord.editMessage).toHaveBeenCalledOnce();
+    const body = m.discord.editMessage.mock.calls[0]?.[2];
+    expect(JSON.stringify(body)).toContain('ロールを付与する');
+    expect(body).toMatchObject({ components: [{ type: 1 }, { components: [{ disabled: true }] }] });
+  });
+  it('開始の下にロール付与を置き、開始前・完了後・付与済みでは押せない表示にする', async () => {
+    const r = await reception();
+    const config = await loadGuideConfig(db);
+    const controls = (status: typeof r.status, granted = false) => JSON.parse(JSON.stringify(guideVisitorPanel({ ...r, status }, config, granted).components)) as { components: { custom_id: string; label: string; disabled: boolean }[] }[];
+    expect(controls('waiting')[1]?.components[0]).toMatchObject({ custom_id: `guide:role:${r.id}`, label: 'ロールを付与する', disabled: true });
+    expect(controls('assigned')[1]?.components[0]?.disabled).toBe(false);
+    expect(controls('assigned', true)[1]?.components[0]?.disabled).toBe(true);
+    expect(controls('done')[1]?.components[0]?.disabled).toBe(true);
+    expect(guideVisitorPanel(r, config).components).toHaveLength(2);
+  });
+  it('担当者が参拝者を付けてから案内待ちを外す。同時押しでも初期通貨・記録は1回', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception();
+    await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    await Promise.all([m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never), m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never)]);
+    expect(m.discord.addRole).toHaveBeenCalledOnce();
+    expect(m.discord.removeRole).toHaveBeenCalledOnce();
+    expect(m.discord.addRole.mock.invocationCallOrder[0]!).toBeLessThan(m.discord.removeRole.mock.invocationCallOrder[0]!);
+    expect(m.visitor.roles.cache.has(RANK_ROLE.sanpaisha)).toBe(true);
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(false);
+    expect((await economy.walletOf(db, VISITOR)).balance).toBe(cfg.economy.joinBonus);
+    expect(m.discord.sendDm).toHaveBeenCalledOnce();
+    expect(await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.role_grant'))).toHaveLength(1);
+    expect(await db.select().from(employeePayroll)).toHaveLength(0);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'done') as never);
+    expect((await economy.walletOf(db, GUIDE)).balance).toBe(150);
+  });
+  it('開始前・別の案内人・案内人ロールなし・退出後は付与しない', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception();
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    m.regular.roles.cache.set(ROLE, { id: ROLE });
+    await m.app.onInteraction(m.interaction(r.id, OTHER, 'role') as never);
+    m.guide.roles.cache.delete(ROLE);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    m.guide.roles.cache.set(ROLE, { id: ROLE });
+    await leaveGuideReception(db, VISITOR);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    expect(m.discord.addRole).not.toHaveBeenCalled();
+    expect(m.discord.removeRole).not.toHaveBeenCalled();
+  });
+  it('参拝者の付与失敗・未反映では案内待ちを外さず、初期通貨も発行しない', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception(); await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    m.discord.addRole.mockRejectedValueOnce(new Error('Missing Permissions'));
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(true);
+    expect(m.discord.removeRole).not.toHaveBeenCalled();
+    m.discord.addRole.mockResolvedValueOnce(undefined);
+    const i = m.interaction(r.id, GUIDE, 'role');
+    await m.app.onInteraction(i as never);
+    expect(i.editReply).toHaveBeenCalledWith(expect.stringContaining('参拝者ロールを確認できませんでした'));
+    expect(m.discord.removeRole).not.toHaveBeenCalled();
+    expect((await economy.walletOf(db, VISITOR)).balance).toBe(0);
+  });
+  it('案内待ちの解除失敗は再操作で直し、参拝者を付け直さない', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception(); await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    m.discord.removeRole.mockRejectedValueOnce(new Error('Missing Permissions'));
+    const i = m.interaction(r.id, GUIDE, 'role');
+    await m.app.onInteraction(i as never);
+    expect(i.editReply).toHaveBeenCalledWith(expect.stringContaining('参拝者ロールは付きましたが'));
+    expect(m.visitor.roles.cache.has(RANK_ROLE.sanpaisha)).toBe(true);
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(true);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(false);
+    expect(m.discord.addRole).toHaveBeenCalledOnce();
+    expect((await economy.walletOf(db, VISITOR)).balance).toBe(cfg.economy.joinBonus);
+  });
+});
+
+describe('案内完了で案内リンクのメッセージを消す', () => {
+  it('「案内完了」を押すと、VC のチャットの案内メッセージを消す', async () => {
+    await active();
+    const r = await reception();
+    await db.update(guideReceptions).set({ messageId: '870000000000000555', notifiedAt: now }).where(eq(guideReceptions.id, r.id));
+    await assignGuide(db, r.id, GUIDE);
+    const del = vi.fn(async () => undefined);
+    const app = new GuideReceptionApp(db, () => cfg, { deleteMessage: del, editMessage: vi.fn(), sendMessage: vi.fn(async () => ({ id: 'x' })), sendDm: vi.fn(async () => true) } as never);
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), roleId: ROLE, voiceChannelIds: [VOICE] }, 'staff');
+    const inVoice = { user: { bot: false }, voice: { channelId: VOICE }, roles: { cache: new Map([[ROLE, {}]]) } };
+    const i = {
+      isButton: () => true, customId: `guide:done:${r.id}`, inCachedGuild: () => true, guildId: cfg.guildId, user: { id: GUIDE }, channelId: VOICE,
+      message: { components: [] },
+      guild: { members: { fetch: async () => inVoice }, roles: { cache: new Collection() } },
+      deferReply: vi.fn(async () => undefined), editReply: vi.fn(async () => undefined),
+    };
+    await app.onInteraction(i as never);
+    expect(del).toHaveBeenCalledWith(VOICE, '870000000000000555');
+    expect((await db.select().from(guideReceptions))[0]?.status).toBe('done');
   });
 });
