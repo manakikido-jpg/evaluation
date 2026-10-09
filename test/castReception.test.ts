@@ -41,7 +41,7 @@ describe('キャストの写真', () => {
     expect(await saveCastPhoto(db, CAST, png.subarray(0, 16))).toBeUndefined();
     const photo = (await loadCastPhoto(db, CAST))!;
     expect(photo.hash).toBe(hash);
-    expect(await sharp(photo.data).metadata()).toMatchObject({ width: 600, height: 600, format: 'png' });
+    expect(await sharp(photo.data).metadata()).toMatchObject({ width: 90, height: 60, format: 'png' });
     await deleteCastPhoto(db, CAST);
     expect(await loadCastPhoto(db, CAST)).toBeUndefined();
     expect(await loadCastPhoto(db, OTHER)).toBeDefined();
@@ -184,9 +184,11 @@ describe('本人向けDiscord受付', () => {
     const a = app();
     const i = { ...interaction('cast:pick', CUSTOMER), values: [CAST], member: { id: CUSTOMER, roles: { cache: new Map() } }, isStringSelectMenu: () => true };
     await a.onInteraction(i as unknown as Interaction);
-    const body = i.editReply.mock.calls[0]?.[0] as { embeds: { image?: { url: string } }[]; files: { attachment: Buffer }[] };
+    const body = i.editReply.mock.calls[0]?.[0] as { content: string; embeds: unknown[]; files: { attachment: Buffer }[] };
     expect(i.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
-    expect(body.embeds[0]?.image?.url).toBe('attachment://cast-profile.png');
+    // カードにせず、文と写真の全体をそのまま出す
+    expect(body.embeds).toEqual([]);
+    expect(body.content).toContain('メニュー');
     expect(Buffer.from(body.files[0]!.attachment)).toEqual(Buffer.from((await loadCastPhoto(db, CAST))!.data));
   });
 

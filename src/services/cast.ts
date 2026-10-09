@@ -96,14 +96,14 @@ export async function deleteMenuImage(db: Db): Promise<void> {
   await db.delete(castImages).where(eq(castImages.key, 'menu'));
 }
 
-/** 紹介用の写真。Discord に送りやすい大きさにして、名前や位置情報は残さない。 */
+/** 紹介用の写真。切りぬかずに全体を残し、長い辺 1600px までに小さくする。名前や位置情報は残さない。 */
 export async function saveCastPhoto(db: Db, memberId: string, data: Uint8Array): Promise<string | undefined> {
   if (!sf(memberId) || data.length > 8 * 1024 * 1024 || !detectImage(data)) return undefined;
   const cast = await getCast(db, memberId);
   if (!cast || cast.status === 'removed') return undefined;
   let photo: Buffer;
   try {
-    photo = await sharp(data, { limitInputPixels: 40_000_000 }).rotate().resize(600, 600, { fit: 'cover' }).png().toBuffer();
+    photo = await sharp(data, { limitInputPixels: 40_000_000 }).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
   } catch { return undefined; }
   const hash = createHash('sha256').update(photo).digest('hex').slice(0, 16);
   await db.insert(castImages).values({ key: `profile:${memberId}`, contentType: 'image/png', data: photo, hash })

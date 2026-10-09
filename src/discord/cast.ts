@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import {
   ActionRowBuilder,
   AttachmentBuilder,
@@ -323,24 +324,22 @@ export class CastApp {
     const state = STATE[states.get(cast.memberId) ?? 'off'];
     const st = stats.find((x) => x.castId === cast.memberId);
     const plans = menuOf(cast).filter((m) => (m.price > 0 || m.consult) && (adult || (minorMenuOk(m) && cast.minorOk)));
+    // カードにせず、文と写真（切りぬかない全体）をそのまま出す
     return {
-      embeds: [
-        {
-          title: `🎀 ${name}`,
-          description: [
+      content: [
+            `## 🎀 ${name}`,
             `${state.emoji} ${state.label}${cast.tags.length ? ` ・ ${cast.tags.map((t) => `#${t}`).join(' ')}` : ''}`,
             cast.bio,
             '',
-            `💰 ${pricesText(cast)}（${this.coin()}）`,
+            `💰 **メニュー**（${this.coin()}）`,
+            ...(menuOf(cast).length ? menuOf(cast).map((m) => `- ${menuLabel(m)} ${menuPriceText(m)}${m.note ? ` ・ ${m.note}` : ''}`) : ['- メニューなし']),
             st ? `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` : '',
             adult ? '' : !cast.minorOk ? '-# このキャストは、18 歳未満の方の指名を受けていません' : `-# 18 歳未満の方は、公開の部屋での雑談（30 分・1 時間・${MINOR.endHour} 時まで）だけです`,
           ]
-            .filter((l, i) => l || i === 2)
+            .filter((l, i) => l || i === 3)
             .join('\n'),
-          color: PINK,
-          ...(photo ? { image: { url: 'attachment://cast-profile.png' } } : {}),
-        },
-      ],
+      embeds: [],
+      allowedMentions: { parse: [] as never[] },
       ...(photo ? { files: [new AttachmentBuilder(Buffer.from(photo.data), { name: 'cast-profile.png' })] } : {}),
       components: plans.length
         ? [menuSelect(`cast:plansel:${cast.memberId}`, '🎀 メニューを選んで指名する', plans), ...(adult ? [row(button(`cast:rsv:${cast.memberId}`, '予約する', 2, '📅'))] : [])]
@@ -434,7 +433,8 @@ export class CastApp {
     if (!d) return { content: 'キャストの方だけが使えます。キャストは運営が登録します。', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] as never[] } };
     const [names, avatar] = await Promise.all([
       namesOf(this.db, [...d.current, ...d.today].map((s) => s.customerId)),
-      loadCastPhoto(this.db, member.id).then((photo) => photo?.data ?? loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 }))),
+      // 受付の画像のアイコンは、写真のまん中を正方形に切りぬいて使う
+      loadCastPhoto(this.db, member.id).then(async (photo) => (photo ? new Uint8Array(await sharp(photo.data).resize(264, 264, { fit: 'cover' }).png().toBuffer()) : loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 })))),
     ]);
     return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar);
   }

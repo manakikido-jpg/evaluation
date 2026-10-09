@@ -3095,7 +3095,7 @@ describe('キャスト（管理画面）', () => {
     expect((await send('/cast/image', large)).headers.get('location')).toBe('/cast?msg=image_saved');
     expect((await send(`/cast/casts/${id}/photo`, large)).headers.get('location')).toBe('/cast?msg=photo_saved');
     const photo = (await loadCastPhoto(db, id))!;
-    expect((await sharp(photo.data).metadata()).width).toBe(600);
+    expect((await sharp(photo.data).metadata())).toMatchObject({ width: 30, height: 20 });
     const page = await (await get('/cast', s)).text();
     expect(page).toContain(`Discord ID: ${id}`);
     expect(page).toContain(`/cast/casts/${id}/photo?v=${photo.hash}`);

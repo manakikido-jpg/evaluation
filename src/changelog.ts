@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-photo-full',
+    date: '2026-10-09',
+    kind: 'improve',
+    where: ['Discord', '社務所Web'],
+    title: '🎀 キャストの紹介を、写真の全体が見える形に',
+    items: [
+      'キャストを選んだときの紹介を、カード（枠）ではなく文と写真にしました。写真は切りぬかずに全体を出します。メニューは 1 行ずつ並べます。',
+      '社務所Web で保存する写真を、正方形に切りぬかずにそのまま残すようにしました（長い辺 1600px まで）。前に保存した写真は切りぬかれているので、上げ直してください。',
+    ],
+  },
+  {
     id: '2026-10-09-cast-menu-consult',
     date: '2026-10-09',
     kind: 'improve',
