@@ -20,6 +20,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-long-voice-bonus', date: '2026-10-09', kind: 'new', where: ['Discord', '社務所Web'],
+    title: '1日7時間の浮上で、週2回まで追加の銭を',
+    items: [
+      '日本時間の1日にVCへ合計7時間参加すると、追加で300銭を受け取れます。1日1回・月曜始まりの週に1人2回まで。AFKとBOTは除き、1人の通話や移動したVCの時間も数えます。',
+      '金額と通知先は社務所Webの「設定 → 銭」で変更できます。0銭で停止。初期の通知先は慶事です。通常の通話報酬の上限とは別です。',
+      '支払いと週の回数は一緒に記録して二重払いを防ぎます。通知が失敗したら、入金を重ねずに次回通知をやり直します。',
+    ],
+  },
+  {
     id: '2026-10-08-invite-appointed-rank',
     date: '2026-10-08',
     kind: 'improve',

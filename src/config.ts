@@ -77,6 +77,9 @@ export const economySchema = z.object({
   /** 通話 10 分ごとにもらえる量（2 人以上いる通話のみ） */
   voicePer10Min: z.number().int().min(0).default(5),
   /** 通話でもらえる 1 日の上限 */
+  /** 1日7時間のVC参加で追加のお祝い。1日1回・週2回。0で停止。 */
+  longVoiceBonusAmount: z.number().int().min(0).max(1_000_000).default(300),
+  longVoiceBonusChannelId: snowflake.optional(),
   voiceDailyCap: z.number().int().min(0).default(150),
   /** 数えない通話チャンネル（AFK など） */
   excludedVoiceChannelIds: z.array(snowflake).default([]),

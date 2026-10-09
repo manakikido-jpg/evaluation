@@ -674,6 +674,8 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const g = await login(GUJI);
     const page = await (await get('/settings', g)).text();
     expect(page).toContain('免罪符の値段');
+    expect(page).toContain('7時間の浮上ボーナス');
+    expect(page).toContain('name="longVoiceBonusChannel"');
     expect(page).toContain('チャンネルへのブースト通知は出さず、本人にお礼の DM を送ります');
     expect(page).not.toContain('name="boostAnnounce"');
     expect(page).toContain('name="boostDm"');
@@ -736,6 +738,16 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
     expect(store.current.omikujiSpecial.list.map((x) => x.name)).toEqual(['小林吉']);
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g), longVoiceBonusAmount: '600', longVoiceBonusChannel: '910000000000000003' });
+    expect(store.current.economy.longVoiceBonusAmount).toBe(600);
+    expect(store.current.economy.longVoiceBonusChannelId).toBe('910000000000000003');
+    // 古いフォームや他の項目を保存しても、追加した値は消さない。
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g) });
+    expect(store.current.economy.longVoiceBonusAmount).toBe(600);
+    expect(store.current.economy.longVoiceBonusChannelId).toBe('910000000000000003');
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g), longVoiceBonusAmount: '0', longVoiceBonusChannel: '' });
+    expect(store.current.economy.longVoiceBonusAmount).toBe(0);
+    expect(store.current.economy.longVoiceBonusChannelId).toBeUndefined();
     // おみくじの「通話中だけ」はチェックを外すと OFF
     expect(store.current.economy.omikujiVoiceOnly).toBe(false);
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), omikujiVoiceOnly: 'yes' });

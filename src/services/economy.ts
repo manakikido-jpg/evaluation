@@ -8,6 +8,7 @@ import { coinTx, members, wallets } from '../db/schema.js';
  */
 
 export type CoinReason =
+  | 'long_voice_bonus'
   | 'voice'
   | 'shuin_give'
   | 'shuin_receive'
@@ -242,6 +243,7 @@ export async function adminTake(
 /** 銭の出入りの理由（社務所Web・/残高 で表示） */
 export const COIN_REASON_LABEL: Record<string, string> = {
   voice: '通話',
+  long_voice_bonus: '7時間の浮上ボーナス',
   shuin_give: '朱印を押した',
   shuin_receive: '朱印を頂いた',
   omikuji: 'おみくじ',

@@ -1143,6 +1143,12 @@ export function SettingsPage(props: {
             <Num name="menzaifuPrice" label="免罪符の値段" value={e.menzaifuPrice} file={f.menzaifuPrice} min={1} />
             <Num name="menzaifuMaxUses" label="免罪符を買える回数（1 人あたり）" value={e.menzaifuMaxUses} file={f.menzaifuMaxUses} />
             <Num name="voicePer10Min" label="通話 10 分ごとにもらえる量" value={e.voicePer10Min} file={f.voicePer10Min} />
+            <Num name="longVoiceBonusAmount" label="7時間の浮上ボーナス（1日1回・週2回まで。0で停止）" value={e.longVoiceBonusAmount} file={f.longVoiceBonusAmount} />
+            <p class="note">日本時間の1日にVC参加を合計7時間で追加支給。週は月曜始まり。AFK・BOTは除き、1人の通話も数えます。通常の通話報酬の上限とは別です。</p>
+            <label class="field"><span>浮上ボーナスを知らせるチャンネル</span><select name="longVoiceBonusChannel">
+              <option value="" selected={!e.longVoiceBonusChannelId}>#慶事（設定ファイルの keiji）</option>
+              {(props.textChannels ?? []).map(c => <option value={c.id} selected={c.id === e.longVoiceBonusChannelId}>#{c.name}</option>)}
+            </select></label>
             <Num name="voiceDailyCap" label="通話でもらえる 1 日の上限" value={e.voiceDailyCap} file={f.voiceDailyCap} />
             <Num name="shuinGive" label="朱印を押すともらえる量" value={e.shuinGive} file={f.shuinGive} />
             <Num name="shuinReceive" label="朱印を頂くともらえる量" value={e.shuinReceive} file={f.shuinReceive} />
