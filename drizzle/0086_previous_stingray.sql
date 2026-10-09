@@ -1,0 +1,1 @@
+ALTER TABLE "guide_receptions" ADD COLUMN "departed_at" timestamp with time zone;

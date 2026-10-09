@@ -1868,3 +1868,35 @@ export const longVoiceBonuses = pgTable('long_voice_bonuses', {
   notifiedAt: timestamp('notified_at', { withTimezone: true }),
   notifyClaimedAt: timestamp('notify_claimed_at', { withTimezone: true }),
 }, t => [primaryKey({ columns: [t.memberId, t.date] }), uniqueIndex('long_voice_bonus_week_slot_idx').on(t.memberId, t.week, t.weekSlot), check('long_voice_bonus_slot_check', sql`${t.weekSlot} between 1 and 2`)]);
+
+/** 案内人の登録と待機。承認前は案内を担当できない */
+export const guideEmployees = pgTable('guide_employees', {
+  memberId: text('member_id').primaryKey(),
+  status: text('status').$type<'pending' | 'active' | 'paused'>().notNull().default('pending'),
+  waiting: boolean('waiting').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+/** 案内の受付。通知と対応・退出を記録する */
+export const guideReceptions = pgTable('guide_receptions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  visitorId: text('visitor_id').notNull(),
+  channelId: text('channel_id').notNull(),
+  status: text('status').$type<'waiting' | 'assigned' | 'done' | 'left'>().notNull().default('waiting'),
+  guideId: text('guide_id'),
+  messageId: text('message_id'),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  departedAt: timestamp('departed_at', { withTimezone: true }),
+});
+/** 従業員の給与台帳。同じ仕事の二重払いを防ぐ */
+export const employeePayroll = pgTable('employee_payroll', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  memberId: text('member_id').notNull(),
+  job: text('job').notNull(),
+  sourceId: text('source_id').notNull(),
+  visitorId: text('visitor_id').notNull(),
+  date: text('date').notNull(),
+  amount: integer('amount').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex('employee_payroll_source_idx').on(t.job, t.sourceId), uniqueIndex('employee_payroll_visitor_day_idx').on(t.job, t.visitorId, t.date), check('employee_payroll_amount_check', sql`${t.amount} > 0`)]);

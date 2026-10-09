@@ -49,6 +49,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   board_reward: 'income',
   board_refund: 'income',
   cast_pay: 'income',
+  employee_salary: 'issue',
   cast_reward: 'income',
   cast_refund: 'income',
   keiba_buy: 'income',
