@@ -201,7 +201,7 @@ describe('本人向けDiscord受付', () => {
     const i = { ...interaction(`cast:plansel:${CAST}`, CUSTOMER), values: [first.id], member: { id: CUSTOMER, roles: { cache: new Map() } }, isStringSelectMenu: () => true, isButton: () => false, message: { flags: { has: () => false } }, update: vi.fn(), reply: vi.fn(async () => undefined) };
     await a.onInteraction(i as unknown as Interaction);
     expect(i.update).not.toHaveBeenCalled();
-    expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral, content: expect.stringContaining('指名しますか') }));
+    expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral, content: expect.stringContaining('予約しますか') }));
     // オプションがあれば、確かめの画面で選べて、指名のボタンに入る
     const { addOption: addOpt } = await import('../src/services/cast.js');
     await addOpt(db, CAST_DEFAULTS, CAST, { name: 'カメラあり', price: 100 });
@@ -210,8 +210,8 @@ describe('本人向けDiscord受付', () => {
     await a.onInteraction(j as unknown as Interaction);
     const shown = JSON.stringify(j.update.mock.calls[0]);
     expect(shown).toContain('カメラあり');
-    expect(shown).toContain(`cast:go:${CAST}:${first.id}:${opt.id}`);
-    expect(shown).toContain(`${(first.price + 100).toLocaleString('ja-JP')} 枚で指名する`);
+    expect(shown).toContain(`cast:rplan:${CAST}:${first.id}:${opt.id}`);
+    expect(shown).toContain(`予約する（${(first.price + 100).toLocaleString('ja-JP')} 枚）`);
   });
 
   it('紹介カードには選んだキャストの写真を添付する', async () => {

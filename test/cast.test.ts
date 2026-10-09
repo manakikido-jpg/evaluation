@@ -104,7 +104,10 @@ describe('🎀 キャスト', () => {
 
   it('未成年の人: 公開の雑談だけ（寝落ち・予約・22 時をこえる・60 分をこえる延長はできない）', async () => {
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: 'night' }, T20)).status).toBe('minor_plan');
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60', startAt: new Date(T20.getTime() + 60 * MIN) }, T20)).status).toBe('minor_reserve');
+    // 予約だけになったので、18 歳未満の人も予約できる（公開の部屋・22 時までに終わる 60 分まで）。ここでは 21:00 からの 60 分なので 22 時をこえない
+    const minorRsv = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60', startAt: new Date(T20.getTime() + 60 * MIN) }, T20);
+    expect(minorRsv.status === 'ok' ? minorRsv.session.isPublic : minorRsv.status).toBe(true);
+    if (minorRsv.status === 'ok') await cancelSession(db, minorRsv.session.id, MINOR, 'canceled', T20);
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60' }, new Date('2026-10-01T12:30:00Z'))).status).toBe('minor_hours');
     const r = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60' }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
@@ -167,6 +170,47 @@ describe('🎀 キャスト', () => {
     expect(overlap.status).toBe('overlap');
     expect((await walletOf(db, MINOR)).balance).toBe(10_000);
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 60 * MIN) }, T20)).status).toBe('ok');
+  });
+
+  it('1 人で何件も予約できる（5 件まで・自分の予約と時間が重ならないこと）', async () => {
+    const CAST2 = '880000000000000009';
+    await applyCast(db, c, { id: CAST2, adult: true }, profile, T20);
+    await setCastStatus(db, CAST2, 'active', 'staff', T20);
+    const at = (h: number) => new Date(T20.getTime() + h * 60 * MIN);
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('ok');
+    // べつのキャストでも、自分の予約と重なる時間はだめ
+    expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('self_overlap');
+    for (const h of [2, 3, 4, 5]) expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(h) }, T20)).status).toBe('ok');
+    expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(6) }, T20)).status).toBe('has_open');
+  });
+
+  it('別の日時の提案: お客が受けると、その時刻で受けた予約になる', async () => {
+    const { rescheduleSession } = await import('../src/services/cast.js');
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    const other = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '60', startAt: new Date(at.getTime() + 180 * MIN) }, T20);
+    expect(other.status).toBe('ok');
+    const next = new Date(at.getTime() + 120 * MIN);
+    expect((await rescheduleSession(db, r.session.id, MINOR, next, T20)).status).toBe('not_customer');
+    expect((await rescheduleSession(db, r.session.id, ADULT, new Date(at.getTime() + 150 * MIN), T20)).status).toBe('overlap');
+    expect((await rescheduleSession(db, r.session.id, ADULT, T20, T20)).status).toBe('bad_time');
+    const ok = await rescheduleSession(db, r.session.id, ADULT, next, T20);
+    expect(ok.status === 'ok' ? [ok.session.status, ok.session.startAt?.getTime()] : ok.status).toEqual(['accepted', next.getTime()]);
+  });
+
+  it('当日の部屋: 受けた予約で、キャストかお客が、日本時間の同じ日だけ立てられる', async () => {
+    const { earlyRoomOk } = await import('../src/services/cast.js');
+    const at = new Date(T20.getTime() + 60 * MIN); // 21:00
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(earlyRoomOk(r.session, ADULT, T20)).toBe('not_accepted');
+    const a = (await acceptSession(db, r.session.id, CAST, T20))!;
+    expect(earlyRoomOk(a, MINOR, T20)).toBe('not_member');
+    expect(earlyRoomOk(a, ADULT, T20)).toBe('ok');
+    expect(earlyRoomOk(a, CAST, T20)).toBe('ok');
+    // 前の日（日本時間 9/30 23:00）はまだ
+    expect(earlyRoomOk(a, CAST, new Date('2026-09-30T14:00:00Z'))).toBe('not_today');
   });
 
   it('寝落ちの予約・即時指名・返事待ちの時間も重なりに数える', async () => {
@@ -290,7 +334,9 @@ describe('🎀 キャストの見た目', () => {
     expect(p.files![0]!.name).toBe('cast-menu.png');
     const menu = JSON.stringify(p.components);
     expect(menu.indexOf('もも')).toBeLessThan(menu.indexOf('さくら'));
-    for (const id of ['cast:pick', 'cast:now', 'cast:rank', 'cast:me']) expect(menu).toContain(id);
+    for (const id of ['cast:pick', 'cast:rank', 'cast:me']) expect(menu).toContain(id);
+    // 予約だけなので「今すぐ話せる人」は出さない
+    expect(menu).not.toContain('cast:now');
     expect(menu).not.toContain('cast:apply');
     // キャストがいなければメニューは出さない
     expect(JSON.stringify(castPanel([]).components)).not.toContain('cast:pick');
@@ -331,20 +377,27 @@ describe('🎀 キャストのDiscord操作', () => {
     return { app, room, create, discord, interaction };
   }
 
-  it('即時指名はキャスト名の部屋を作り、利用者に入室ボタンを出す', async () => {
+  it('「指名する」のボタンは、日時を入れる予約の入力欄を出す（予約だけ）', async () => {
+    const f = fixture();
+    const showModal = vi.fn(async () => undefined);
+    await f.app.onInteraction({ ...f.interaction, showModal, message: { flags: { has: () => true } }, update: vi.fn() } as unknown as Interaction);
+    expect(JSON.stringify(showModal.mock.calls[0])).toContain(`cast:rmodal:${CAST}:30`);
+  });
+
+  it('部屋を作る（中の仕組み）: キャスト名の部屋を作り、利用者に入室ボタンを出す', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T20);
     await upsertMember(db, { id: CAST, username: 'sakura', displayName: 'さくら', avatarUrl: null, joinedAt: null, roleIds: [], isBot: false });
     const f = fixture();
-    await f.app.onInteraction(f.interaction as unknown as Interaction);
+    await (f.app as unknown as { go: (i: unknown, c: string, p: string) => Promise<void> }).go(f.interaction, CAST, '30');
     expect(f.create).toHaveBeenCalledWith(expect.objectContaining({ name: '🌸 さくらの間', userLimit: 2 }));
     expect(f.interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({ components: [{ type: 1, components: [expect.objectContaining({ label: '部屋へ入る', url: `https://discord.com/channels/${cfg.guildId}/${roomId}` })] }] }));
     expect((await walletOf(db, ADULT)).balance).toBe(9700);
   });
 
-  it('即時指名の部屋作成が失敗したら全額戻す', async () => {
+  it('部屋を作る（中の仕組み）: 部屋作成が失敗したら全額戻す', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T20);
     const f = fixture(true);
-    await f.app.onInteraction(f.interaction as unknown as Interaction);
+    await (f.app as unknown as { go: (i: unknown, c: string, p: string) => Promise<void> }).go(f.interaction, CAST, '30');
     expect(f.interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('銭を戻しました') }));
     expect((await walletOf(db, ADULT)).balance).toBe(10_000);
     expect((await walletOf(db, CAST)).balance).toBe(0);
@@ -380,7 +433,7 @@ describe('🎀 キャストのDiscord操作', () => {
   it('部屋を消せなかったら次の確認で消し直す', async () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(T20);
     const f = fixture();
-    await f.app.onInteraction(f.interaction as unknown as Interaction);
+    await (f.app as unknown as { go: (i: unknown, c: string, p: string) => Promise<void> }).go(f.interaction, CAST, '30');
     const session = (await import('../src/services/cast.js')).recentSessions;
     const [r] = await session(db, 1);
     if (!r) throw new Error('no session');
@@ -474,7 +527,7 @@ describe('👨👩 男性・女性のメニューを分ける', () => {
     expect(byCh.get(M)).toContain('おとこ');
     expect(byCh.get(M)).not.toContain('おんな');
     expect(byCh.get(M)).toContain('まだ');
-    expect(byCh.get(M)).toContain('cast:now:male');
+    expect(byCh.get(M)).toContain('cast:rank:male');
     expect(byCh.get(F)).toContain('おんな');
     expect(byCh.get(F)).not.toContain('おとこ');
     expect(byCh.get(F)).toContain('cast:rank:female');

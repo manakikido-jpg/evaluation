@@ -481,11 +481,15 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 export type RequestResult =
   | { status: 'ok'; session: CastSession; balance: number }
   | { status: 'insufficient'; price: number; balance: number }
-  | { status: 'not_cast' | 'self' | 'blocked' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' };
+  | { status: 'not_cast' | 'self' | 'blocked' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' };
 
 /** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
-async function overlaps(tx: Db, castId: string, start: Date, end: Date, now: Date, except?: number): Promise<boolean> {
-  const sessions = await tx.select().from(castSessions).where(and(eq(castSessions.castId, castId), inArray(castSessions.status, OPEN)));
+/** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数 */
+export const CUSTOMER_OPEN_MAX = 5;
+
+async function overlaps(tx: Db, castId: string, start: Date, end: Date, now: Date, except?: number, by: 'cast' | 'customer' = 'cast'): Promise<boolean> {
+  const who = by === 'cast' ? eq(castSessions.castId, castId) : eq(castSessions.customerId, castId);
+  const sessions = await tx.select().from(castSessions).where(and(who, inArray(castSessions.status, OPEN)));
   return sessions.some((s) => {
     if (s.id === except) return false;
     const from = s.startedAt ?? s.startAt ?? s.createdAt;
@@ -528,7 +532,7 @@ export async function requestSession(
   if (input.startAt && (input.startAt.getTime() < now.getTime() + 10 * MIN || input.startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN)) return { status: 'bad_time' };
   const minutes = item.night ? planMinutes('night', start) : free ? FREE_MINUTES : item.minutes;
   if (!input.customerAdult) {
-    if (input.startAt) return { status: 'minor_reserve' };
+    // 18 歳未満の人も予約できる（公開の部屋・60 分まで・22 時までに終わる）
     if (!minorMenuOk(item)) return { status: 'minor_plan' };
     if (!cast.minorOk) return { status: 'minor_off' };
     if (!minorWindowOk(start, minutes)) return { status: 'minor_hours' };
@@ -540,7 +544,8 @@ export async function requestSession(
       .select({ id: castSessions.id })
       .from(castSessions)
       .where(and(eq(castSessions.customerId, input.customerId), inArray(castSessions.status, OPEN)));
-    if (mine.length) return { status: 'has_open' as const };
+    // 時間が重ならなければ何件でも（5 件まで）。重なるかは下で確かめる
+    if (mine.length >= CUSTOMER_OPEN_MAX) return { status: 'has_open' as const };
     if (!input.startAt) {
       const [busy] = await tx
         .select({ id: castSessions.id })
@@ -551,6 +556,8 @@ export async function requestSession(
     const latestStart = input.startAt ?? new Date(now.getTime() + c.acceptMinutes * MIN);
     const end = item.night ? nightEnd(latestStart) : new Date(latestStart.getTime() + minutes * MIN);
     if (await overlaps(tx, input.castId, start, end, now)) return { status: 'overlap' as const };
+    // 同じお客の、ほかの指名と時間が重なる
+    if (await overlaps(tx, input.customerId, start, end, now, undefined, 'customer')) return { status: 'self_overlap' as const };
     if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan, menu: item.name, ...(opts.length ? { options: opts.map((o) => o.name) } : {}) }))) {
       return { status: 'insufficient' as const, price, balance: (await walletOf(tx, input.customerId)).balance };
     }
@@ -619,6 +626,31 @@ export async function cancelSession(db: Db, id: number, by: string, reason: 'dec
     if (!row) return undefined;
     if (s.price > 0) await addCoins(tx, s.customerId, s.price, 'cast_refund', { sessionId: id, reason });
     return row;
+  });
+}
+
+export type RescheduleResult = { status: 'ok'; session: CastSession } | { status: 'not_found' | 'not_customer' | 'bad_time' | 'minor_hours' | 'overlap' | 'self_overlap' };
+
+/**
+ * キャストが出した別の日時に、お客が「この日時にする」: 予約の時刻を変えて、受けた（確定）にする。
+ * キャストとお客のほかの指名と重ならないか・18 歳未満の人は 22 時までに終わるかを確かめる
+ */
+export async function rescheduleSession(db: Db, id: number, customerId: string, startAt: Date, now = new Date()): Promise<RescheduleResult> {
+  const before = await getSession(db, id);
+  if (!before) return { status: 'not_found' };
+  return db.transaction(async (tx) => {
+    await lockCast(tx, before.castId);
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s || (s.status !== 'reserved' && s.status !== 'accepted')) return { status: 'not_found' as const };
+    if (s.customerId !== customerId) return { status: 'not_customer' as const };
+    if (startAt.getTime() < now.getTime() + 10 * MIN || startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN) return { status: 'bad_time' as const };
+    const minutes = s.plan === 'night' ? planMinutes('night', startAt) : s.minutes;
+    if (s.isPublic && !minorWindowOk(startAt, minutes)) return { status: 'minor_hours' as const };
+    const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime() + minutes * MIN);
+    if (await overlaps(tx, s.castId, startAt, end, now, id)) return { status: 'overlap' as const };
+    if (await overlaps(tx, s.customerId, startAt, end, now, id, 'customer')) return { status: 'self_overlap' as const };
+    const row = await move(tx, id, ['reserved', 'accepted'], { status: 'accepted', startAt, acceptBy: null, minutes });
+    return row ? { status: 'ok' as const, session: row } : { status: 'not_found' as const };
   });
 }
 
@@ -855,4 +887,12 @@ export async function castStates(db: Db): Promise<Map<string, 'busy' | 'waiting'
     (await db.select({ castId: castSessions.castId }).from(castSessions).where(or(eq(castSessions.status, 'active'), eq(castSessions.status, 'requested')))).map((r) => r.castId),
   );
   return new Map(list.map((x) => [x.memberId, busy.has(x.memberId) ? 'busy' : x.available === 'waiting' ? 'waiting' : 'off']));
+}
+
+/** 当日に先に部屋を立ててよいか: 受けた予約で、キャストかお客で、日本時間で同じ日・まだ始まる前 */
+export function earlyRoomOk(s: CastSession, userId: string, now = new Date()): 'ok' | 'not_member' | 'not_accepted' | 'not_today' {
+  if (s.castId !== userId && s.customerId !== userId) return 'not_member';
+  if (s.status !== 'accepted' || !s.startAt) return 'not_accepted';
+  if (jstAt(now, 0).getTime() !== jstAt(s.startAt, 0).getTime()) return 'not_today';
+  return 'ok';
 }
