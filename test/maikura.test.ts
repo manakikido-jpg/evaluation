@@ -66,6 +66,13 @@ describe('舞倉の参加パネル', () => {
     await new MaikuraApp(env.db, () => cfg).onInteraction(h.i);
     expect(h.add).not.toHaveBeenCalled(); expect(await env.db.select().from(auditLogs)).toHaveLength(0);
   });
+  it('運営専用に設定した独自ロールも付けない', async () => {
+    const h = harness();
+    const customCfg = { ...cfg, admin: { ...cfg.admin, gujiRoleIds: [roleId], shinshokuRoleIds: [] } };
+    await new MaikuraApp(env.db, () => customCfg).onInteraction(h.i);
+    expect(h.add).not.toHaveBeenCalled();
+    expect(await env.db.select().from(auditLogs)).toHaveLength(0);
+  });
   it('ロールがないときは本人のボタンで作らない', async () => {
     const h = harness(); h.roles.clear();
     await new MaikuraApp(env.db, () => cfg).onInteraction(h.i);

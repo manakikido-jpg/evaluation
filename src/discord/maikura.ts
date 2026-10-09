@@ -28,7 +28,7 @@ export class MaikuraApp {
   constructor(private db: Db, private cfg: () => GuildConfig) {}
   private validate(role: Role) {
     const cfg = this.cfg();
-    if (role.name.replace(/\s/g, '') !== ROLE_NAME || role.id === cfg.guildId || role.managed || role.permissions.any(STAFF_PERMISSIONS) || [...cfg.ranks.map(r => r.roleId), ...roleIds(cfg.roles)].includes(role.id)) throw new MaikuraError('参加用の「舞倉」ロールを確認してください。運営用・ほかの機能用のロールは使えません。');
+    if (role.name.replace(/\s/g, '') !== ROLE_NAME || role.id === cfg.guildId || role.managed || role.permissions.any(STAFF_PERMISSIONS) || [...cfg.ranks.map(r => r.roleId), ...roleIds(cfg.roles), ...roleIds(cfg.admin)].includes(role.id)) throw new MaikuraError('参加用の「舞倉」ロールを確認してください。運営用・ほかの機能用のロールは使えません。');
     if (!role.editable) throw new MaikuraError('BOTに「ロールの管理」を許可し、BOTのロールを「舞倉」より上に置いてください。');
   }
   private async findRole(guild: Guild, create: boolean, db: Db) {
