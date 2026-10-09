@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-cast-office-link', date: '2026-10-10', kind: 'fix', where: ['Discord', '社務所Web'],
+    title: 'キャスト用 社務所に /キャスト のボタンから入れるように',
+    items: ['Discord のログインを止めていても、/キャスト の「🖊 メニュー・写真を編集」（本人だけ・10 分だけ使えるリンク）から入れます。'],
+  },
+  {
     id: '2026-10-10-cast-command', date: '2026-10-10', kind: 'new', where: ['Discord'],
     title: '/キャスト でキャストの受付を開けるように',
     items: ['キャストの方は `/キャスト` で、自分の受付（予約の受付・予約一覧など）をどこからでも開けます（自分にだけ表示）。', '受付の「🖊 メニュー・写真を編集」から、キャスト用 社務所に入れます。'],

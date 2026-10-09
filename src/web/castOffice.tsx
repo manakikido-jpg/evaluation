@@ -13,6 +13,7 @@ import { audit } from '../services/audit.js';
 import { logger } from '../lib/logger.js';
 import { getCast, menuOf, loadCastConfig, loadCastPhoto, saveCastPhoto, deleteCastPhoto, updateProfile, updateMenuItem, addMenuItem, removeMenuItem, parsePrice, parseTags } from '../services/cast.js';
 import { refreshCastIntros } from '../discord/cast.js';
+import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 
 const COOKIE = 'sakura_cast_office';
 const STATE = 'sakura_cast_office_state';
@@ -26,6 +27,7 @@ const messages: Record<string, string> = {
   denied: '登録済みのキャストだけが利用できます。運営に登録状況を確認してください。',
   failed: 'Discordに接続できませんでした。もう一度お試しください。',
   state: 'ログインを最初からやり直してください。',
+  link: 'リンクの期限が切れたか、もう使われています。Discord で /キャスト を打って、新しいボタンから入ってください。',
 };
 
 function Shell(p: { children: Child }) {
@@ -52,7 +54,7 @@ export function CastOfficeEditor(p: { cast: Cast; session: MemberSession; hash?:
 export function mountCastOffice(app: Hono<any>, d: { db: Db; api: DiscordApi; discord: DiscordActions; cfg: () => GuildConfig; baseUrl: string; secure: boolean; now: () => Date; enabled: boolean }) {
   const { db, api } = d;
   const redirectUri = `${d.baseUrl}/auth/callback`;
-  app.get(`${ROOT}/login`, c => c.html(<Shell><p class="eyebrow">咲楽ノ宮</p><h1>キャスト用 社務所</h1><p>自分のメニュー画像・紹介文・料金を編集できます。</p>{c.req.query('e') && <p role="alert" class="notice">{messages[c.req.query('e')!] || messages.state}</p>}{d.enabled ? <a class="primary login" href={`${ROOT}/auth`}>Discordでログイン</a> : <p>Discordログインは現在停止しています。</p>}</Shell>));
+  app.get(`${ROOT}/login`, c => c.html(<Shell><p class="eyebrow">咲楽ノ宮</p><h1>キャスト用 社務所</h1><p>自分のメニュー画像・紹介文・料金を編集できます。</p>{c.req.query('e') && <p role="alert" class="notice">{messages[c.req.query('e')!] || messages.state}</p>}{d.enabled && <a class="primary login" href={`${ROOT}/auth`}>Discordでログイン</a>}<p>Discord で <strong>/キャスト</strong> を打ち、出てきた「🖊 メニュー・写真を編集」を押すと、そのまま入れます（10 分だけ使えるリンク）。</p></Shell>));
   app.get(`${ROOT}/auth`, c => {
     if (!d.enabled) return c.notFound();
     const state = randomToken();
@@ -74,6 +76,27 @@ export function mountCastOffice(app: Hono<any>, d: { db: Db; api: DiscordApi; di
       await audit(db, { actorId: user.id, action: 'cast.office.login', via: 'web' });
       return c.redirect(ROOT);
     } catch (err) { logger.warn({ err }, 'cast office login failed'); return c.redirect(`${ROOT}/login?e=failed`); }
+  });
+  // /キャスト の受付に出す 1 回きりのリンク（Discord のログイン画面を通らない）
+  app.get(`${ROOT}/link/:token`, async (c) => {
+    const user = await peekLoginLink(db, c.req.param('token') ?? '', d.now());
+    if (!user) return c.redirect(`${ROOT}/login?e=link`);
+    return c.html(<Shell><p class="eyebrow">咲楽ノ宮</p><h1>キャスト用 社務所</h1><p>{user.displayName} さんとして入ります。</p><form action={`${ROOT}/link/${c.req.param('token')}`} method="post"><button class="primary">入る</button></form></Shell>);
+  });
+  app.post(`${ROOT}/link/:token`, async (c) => {
+    // ほかのサイトから送らせて、別の人として入らせることはさせない
+    const origin = c.req.header('origin');
+    if (origin && origin !== new URL(d.baseUrl).origin) return c.text('不正なリクエストです。', 403);
+    const user = await useLoginLink(db, c.req.param('token') ?? '', d.now());
+    if (!user) return c.redirect(`${ROOT}/login?e=link`);
+    try {
+      const roles = await api.memberRoles(d.cfg().guildId, user.id);
+      if (!roles || !allowed(await getCast(db, user.id))) return c.redirect(`${ROOT}/login?e=denied`);
+    } catch (err) { logger.warn({ err }, 'cast office link login failed'); return c.redirect(`${ROOT}/login?e=failed`); }
+    const token = await createMemberSession(db, { id: user.id, username: user.displayName, displayName: user.displayName, avatarUrl: user.avatarUrl }, d.now());
+    setCookie(c, COOKIE, token, { httpOnly: true, secure: d.secure, sameSite: 'Lax', path: ROOT, maxAge: 7 * 86400 });
+    await audit(db, { actorId: user.id, action: 'cast.office.login', detail: { via: 'link' }, via: 'web' });
+    return c.redirect(ROOT);
   });
   const page = (fn: (c: Context, session: MemberSession, cast: Cast, body: Record<string, unknown>) => Promise<Response>) => async (c: Context) => {
     const token = getCookie(c, COOKIE);

@@ -3783,6 +3783,24 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
 
  });
 
+it('キャスト用 社務所: /キャスト の 1 回きりのリンクで入れる。キャストでない人・2 回目・ほかのサイトからは入れない', async () => {
+  const { applyCast, CAST_DEFAULTS, setCastStatus } = await import('../src/services/cast.js');
+  const { createLoginLink } = await import('../src/services/casino/loginLinks.js');
+  await applyCast(db, CAST_DEFAULTS, { id: USER, adult: true }, { bio: '紹介', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: false });
+  await setCastStatus(db, USER, 'active', STAFF);
+  const link = await createLoginLink(db, { id: USER, displayName: 'さくら', avatarUrl: null });
+  expect(await (await app.request(`/cast-office/link/${link}`)).text()).toContain('さくら さんとして入ります');
+  expect((await app.request(`/cast-office/link/${link}`, { method: 'POST', headers: { origin: 'https://evil.example' } })).status).toBe(403);
+  const ok = await app.request(`/cast-office/link/${link}`, { method: 'POST' });
+  expect(ok.headers.get('location')).toBe('/cast-office');
+  const cookie = `sakura_cast_office=${/sakura_cast_office=([^;]+)/.exec(ok.headers.get('set-cookie')!)![1]!}`;
+  expect(await (await app.request('/cast-office', { headers: { cookie } })).text()).toContain('紹介文を保存');
+  expect((await app.request(`/cast-office/link/${link}`, { method: 'POST' })).headers.get('location')).toBe('/cast-office/login?e=link');
+  // キャストでない人のリンク
+  const other = await createLoginLink(db, { id: STAFF, displayName: 'しょくいん', avatarUrl: null });
+  expect((await app.request(`/cast-office/link/${other}`, { method: 'POST' })).headers.get('location')).toBe('/cast-office/login?e=denied');
+});
+
 it('キャスト専用のDiscord認証で本人だけ編集でき、運営の画面には入れない', async () => {
   const { applyCast, CAST_DEFAULTS, setCastStatus, getCast, menuOf, loadCastPhoto } = await import('../src/services/cast.js');
   const { postCastIntro } = await import('../src/discord/cast.js');

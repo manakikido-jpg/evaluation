@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createLoginLink } from '../services/casino/loginLinks.js';
 import { castIntroId, castIntroPosts, forgetCastIntroPost, saveCastIntroPost, withCastIntroLock } from '../services/castIntroPosts.js';
 import { DiscordHttpError } from '../lib/discordRest.js';
 import sharp from 'sharp';
@@ -622,7 +623,9 @@ export class CastApp {
       // 受付の画像のアイコンは、写真のまん中を正方形に切りぬいて使う
       loadCastPhoto(this.db, member.id).then(async (photo) => (photo ? new Uint8Array(await sharp(photo.data).resize(264, 264, { fit: 'cover' }).png().toBuffer()) : loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 })))),
     ]);
-    return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar, this.baseUrl ? `${this.baseUrl}/cast-office/login` : undefined);
+    // キャスト用 社務所へは、本人だけの 1 回きりのリンクで入る（Discord のログイン画面を通らない）
+    const link = this.baseUrl ? await createLoginLink(this.db, { id: member.id, displayName: member.displayName, avatarUrl: member.displayAvatarURL({ size: 128 }) }).catch(() => undefined) : undefined;
+    return castReceptionBody(d, member.displayName, names, this.cfg().economy.currencyName, this.cfg().guildId, avatar, link ? `${this.baseUrl}/cast-office/link/${link}` : undefined);
   }
 
   private async mine(i: ButtonInteraction<'cached'>, refresh = false): Promise<void> {
