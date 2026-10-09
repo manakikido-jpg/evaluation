@@ -233,7 +233,9 @@ export class GuideReceptionApp {
       if (action === 'done') {
         const done = await completeGuide(this.db, id, i.user.id);
         if (!done) return void await i.editReply('完了済み、またはあなたの担当ではありません。');
-        await this.refresh(done.reception, c).catch(() => undefined);
+        // 案内が終わったら、VC のチャットに出した案内リンクのメッセージを消す（消せなければ「案内完了」に書きかえる）
+        const rr = done.reception;
+        if (rr.messageId) await this.discord.deleteMessage(rr.channelId, rr.messageId).catch(() => this.refresh(rr, c).catch(() => undefined));
         const message = `案内完了：<@${i.user.id}> さん → <@${r.visitorId}> さん\n給与：${done.amount}銭${done.amount ? '（支払済み）' : '（給与停止中、または同じ利用者の本日分は支払済み）'}`;
         if (c.staffChannelId) await this.discord.sendMessage(c.staffChannelId, { content: message, allowed_mentions: { parse: [] } }).catch(err => logger.warn({ err }, 'guide completion notice failed'));
         await this.discord.sendDm(i.user.id, message).catch(() => false);

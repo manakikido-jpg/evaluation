@@ -3748,4 +3748,25 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
     expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=invalid');
     expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
   });
+  it('宮司が最近の案内の担当を直す・記録を消す（神職はできない）', async () => {
+    const { openGuideReception } = await import('../src/services/guideReception.js');
+    const { adminSessions, guideReceptions } = await import('../src/db/schema.js');
+    const visitor = '700000000000000777';
+    await recordJoin(db, { id: visitor, username: 'v', displayName: 'ぜいじゃく', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await recordJoin(db, { id: '700000000000000778', username: 'k', displayName: 'こばやし', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    const a = (await openGuideReception(db, visitor, '910000000000000004'))!;
+    const b = (await openGuideReception(db, '700000000000000778', '910000000000000004'))!;
+    const g = await login(GUJI);
+    const s = await login(STAFF);
+    const rows = await db.select().from(adminSessions);
+    const csrf = (id: string) => rows.find(r => r.userId === id)!.csrfToken;
+    expect(await (await get('/guide', g)).text()).toContain(`/guide/receptions/${a.id}/assign`);
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, s, new URLSearchParams({ _csrf: csrf(STAFF), member: 'こばやし' }))).status).toBe(403);
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), member: 'だれもいない' }))).headers.get('location')).toBe('/guide?msg=invalid#guide-history');
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), member: 'こばやし' }))).headers.get('location')).toBe('/guide?msg=saved#guide-history');
+    expect((await postGuide(`/guide/receptions/${b.id}/delete`, g, new URLSearchParams({ _csrf: csrf(GUJI) }))).headers.get('location')).toBe('/guide?msg=saved#guide-history');
+    const left = await db.select().from(guideReceptions);
+    expect(left.map(r => [r.visitorId, r.guideId])).toEqual([[visitor, '700000000000000778']]);
+    expect((await listAudit(db, { action: 'guide.reception_delete' }))).toHaveLength(1);
+  });
  });

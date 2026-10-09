@@ -29,7 +29,7 @@ function mockGuild(visitorRoles = [PENDING], guideRoles = [ROLE]) {
   const bot = member('870000000000000008', [PENDING], true);
   const people = new Collection([visitor, guide, regular, bot].map(m => [m.id, m]));
   const guild = { id: cfg.guildId, roles: { cache: new Collection([[PENDING, { id: PENDING, name: '🧭 案内 待ち' }], [ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Collection([[VOICE, { type: 2, members: people }]]) }, members: { cache: people, fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } };
-  const discord = { sendMessage: vi.fn(async (_channel: string, _body: unknown) => ({ id: 'message' })), editMessage: vi.fn(async (_channel: string, _message: string, _body: unknown) => undefined), sendDm: vi.fn(async () => true) };
+  const discord = { sendMessage: vi.fn(async (_channel: string, _body: unknown) => ({ id: 'message' })), deleteMessage: vi.fn(async () => undefined), editMessage: vi.fn(async (_channel: string, _message: string, _body: unknown) => undefined), sendDm: vi.fn(async () => true) };
   const roleActions = {
     addRole: vi.fn(async (_guild: string, user: string, role: string) => { people.get(user)!.roles.cache.set(role, { id: role }); }),
     removeRole: vi.fn(async (_guild: string, user: string, role: string) => { people.get(user)!.roles.cache.delete(role); }),
@@ -363,5 +363,27 @@ describe('案内から参拝者ロールを付与', () => {
     expect(m.visitor.roles.cache.has(PENDING)).toBe(false);
     expect(m.discord.addRole).toHaveBeenCalledOnce();
     expect((await economy.walletOf(db, VISITOR)).balance).toBe(cfg.economy.joinBonus);
+  });
+});
+
+describe('案内完了で案内リンクのメッセージを消す', () => {
+  it('「案内完了」を押すと、VC のチャットの案内メッセージを消す', async () => {
+    await active();
+    const r = await reception();
+    await db.update(guideReceptions).set({ messageId: '870000000000000555', notifiedAt: now }).where(eq(guideReceptions.id, r.id));
+    await assignGuide(db, r.id, GUIDE);
+    const del = vi.fn(async () => undefined);
+    const app = new GuideReceptionApp(db, () => cfg, { deleteMessage: del, editMessage: vi.fn(), sendMessage: vi.fn(async () => ({ id: 'x' })), sendDm: vi.fn(async () => true) } as never);
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), roleId: ROLE, voiceChannelIds: [VOICE] }, 'staff');
+    const inVoice = { user: { bot: false }, voice: { channelId: VOICE }, roles: { cache: new Map([[ROLE, {}]]) } };
+    const i = {
+      isButton: () => true, customId: `guide:done:${r.id}`, inCachedGuild: () => true, guildId: cfg.guildId, user: { id: GUIDE }, channelId: VOICE,
+      message: { components: [] },
+      guild: { members: { fetch: async () => inVoice }, roles: { cache: new Collection() } },
+      deferReply: vi.fn(async () => undefined), editReply: vi.fn(async () => undefined),
+    };
+    await app.onInteraction(i as never);
+    expect(del).toHaveBeenCalledWith(VOICE, '870000000000000555');
+    expect((await db.select().from(guideReceptions))[0]?.status).toBe('done');
   });
 });
