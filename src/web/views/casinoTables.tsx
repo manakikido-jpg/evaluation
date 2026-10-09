@@ -1,3 +1,4 @@
+import { StyleOrnament } from './casinoStyleParts.js';
 import { styleItem } from '../../services/casino/styles.js';
 import type { Child } from 'hono/jsx';
 import type { CasinoConfig, TableKind } from '../../config.js';
@@ -332,7 +333,7 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
       <div class="cs-seats" aria-label="席の飾り">{((t.state as { seats?: ({ id: string; name: string } | null)[] }).seats ?? []).filter((seat) => seat && p.me.sharedStyles?.[seat.id]).map((seat) => {
         if (!seat) return null;
         const st = p.me.sharedStyles![seat.id]!;
-        return <div class={`cs-seat cs-table-${st.table ?? 'default'}`}><span>{styleItem(st.ornament ?? '')?.emoji}</span><b>{seat.name}</b>{st.table && <small>{styleItem(st.table)?.emoji} {styleItem(st.table)?.name}</small>}{st.title && <small class="cs-title">{styleItem(st.title)?.emoji} {styleItem(st.title)?.name}</small>}</div>;
+        return <div class={`cs-seat cs-table-${st.table ?? 'default'}`}><StyleOrnament itemKey={st.ornament} /><b>{seat.name}</b>{st.table && <small>{styleItem(st.table)?.emoji} {styleItem(st.table)?.name}</small>}{st.title && <small class="cs-title">{styleItem(st.title)?.emoji} {styleItem(st.title)?.name}</small>}</div>;
       })}</div>
       {body}
     </div>

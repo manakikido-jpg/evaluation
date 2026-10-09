@@ -10,6 +10,13 @@ import { isArtKey } from '../services/casino/slotArt.js';
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const readText = (p: string) => readFileSync(p, 'utf8');
+/** 絵を差し替えたときも、着せ替えのCSSから新しい絵を読む。 */
+const premiumCss = () => readText(path.join(here, 'public/casino-premium.css')).replace(/\/static\/(casino-(scene|table|ornament|trim)-([a-z]+)\.(webp|svg))/g, (_url, name: string, kind: string, key: string, ext: string) => {
+  const folder = { scene: 'casino-scenes', table: 'casino-tables', ornament: 'casino-ornaments' }[kind as 'scene' | 'table' | 'ornament'];
+  const file = folder ? path.join(here, 'public', folder, `${key}.${ext}`) : path.join(here, 'public', `casino-trim-${key}.${ext}`);
+  const version = createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 10);
+  return `/static/${name}?v=${version}`;
+});
 
 /**
  * スロットの絵（public/slots/ に置いた画像。名前は「絵柄.拡張子」: seven.webp・top.png など）。
@@ -40,11 +47,11 @@ export function pickAtFiles(files: readonly string[]): Record<string, string> {
 const atFiles = existsSync(AT_DIR) ? Object.values(pickAtFiles(readdirSync(AT_DIR))) : [];
 const slotFiles = existsSync(SLOT_DIR) ? readdirSync(SLOT_DIR).filter((f) => /^[a-z0-9-]+\.(webp|png|jpg|svg)$/.test(f)) : [];
 const SCENE_DIR = path.join(here, 'public/casino-scenes');
-const sceneFiles = readdirSync(SCENE_DIR).filter((f) => /^[a-z]+\.svg$/.test(f));
+const sceneFiles = readdirSync(SCENE_DIR).filter((f) => /^[a-z]+\.(svg|webp)$/.test(f));
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
-    ...Object.fromEntries(sceneFiles.map((f) => [`casino-scene-${f}`, { body: readText(path.join(SCENE_DIR, f)), type: 'image/svg+xml' }])),
+    ...Object.fromEntries(sceneFiles.map((f) => [`casino-scene-${f}`, { body: new Uint8Array(readFileSync(path.join(SCENE_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(slotFiles.map((f) => [`slots-${f}`, { body: new Uint8Array(readFileSync(path.join(SLOT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(atFiles.map((f) => [`atart-${f}`, { body: new Uint8Array(readFileSync(path.join(AT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(mjFiles.map((f) => [`mahjong-${f}`, { body: new Uint8Array(readFileSync(path.join(MJ_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
@@ -59,6 +66,10 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'charts.js': { body: readText(path.join(here, 'public/charts.js')), type: 'text/javascript; charset=utf-8' },
     'casino-lobby.css': { body: readText(path.join(here, 'public/casino-lobby.css')), type: 'text/css; charset=utf-8' },
     'casino-lobby-night.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-night.webp'))), type: 'image/webp' },
+    ...Object.fromEntries(['fox', 'fan'].map(key => [`casino-ornament-${key}.webp`, { body: new Uint8Array(readFileSync(path.join(here, `public/casino-ornaments/${key}.webp`))), type: 'image/webp' }])),
+    ...Object.fromEntries(['yozakura', 'foxroom', 'gold', 'stars'].map(key => [`casino-table-${key}.webp`, { body: new Uint8Array(readFileSync(path.join(here, `public/casino-tables/${key}.webp`))), type: 'image/webp' }])),
+    'casino-premium.css': { body: premiumCss(), type: 'text/css; charset=utf-8' },
+    ...Object.fromEntries(['sakura', 'dragon'].map(key => [`casino-trim-${key}.svg`, { body: readText(path.join(here, `public/casino-trim-${key}.svg`)), type: 'image/svg+xml' }])),
     'casino-lobby-cards.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-cards.webp'))), type: 'image/webp' },
     'casino-lobby-more.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-more.webp'))), type: 'image/webp' },
     'casino-lobby-art.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-art.webp'))), type: 'image/webp' },

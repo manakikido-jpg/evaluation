@@ -345,6 +345,7 @@ setInterval(() => {
   document.body.dataset.styleSound = styles.sound || '';
   document.body.dataset.styleEffect = styles.effect || '';
   document.body.dataset.styleUntil = '';
+  document.querySelectorAll('[data-style-room-name]').forEach(el => { el.textContent = document.body.dataset.baseRoomName || 'あなたの遊技場'; });
 }, 1000);
 
 /** 勝った人の画面だけに出す、着せ替えの桜吹雪 */
@@ -416,6 +417,7 @@ const swapPage = (html, url) => {
   document.body.dataset.styleEffect = doc.body.dataset.styleEffect || '';
   document.body.dataset.styleUntil = doc.body.dataset.styleUntil || '';
   document.body.dataset.baseStyles = doc.body.dataset.baseStyles || '{}';
+  document.body.dataset.baseRoomName = doc.body.dataset.baseRoomName || 'あなたの遊技場';
   document.title = doc.title;
   history.pushState(null, '', url);
   if (!samePath) window.scrollTo(0, 0);

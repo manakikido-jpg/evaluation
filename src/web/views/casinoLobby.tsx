@@ -1,3 +1,4 @@
+import { StyleOrnament } from './casinoStyleParts.js';
 import { CASINO_LABEL } from '../../services/casino/casino.js';
 import { LOBBY_TABLE_GAMES, lobbyGameHref, visibleLobbyGames } from '../../services/casino/lobby.js';
 import { STYLE_COSMETICS, STYLE_ITEMS, drawCost, styleItem } from '../../services/casino/styles.js';
@@ -260,7 +261,7 @@ export function CasinoLobbyContent(p: LobbyProps) {
         <section class="cl-panel cl-wardrobe">
           <h2>♧ あなたの着せ替え</h2>
           <div class="cl-wardrobe-scene" aria-label={`装備中の背景：${background?.name ?? '標準'}・席の飾り：${ornament?.name ?? '標準'}`}>
-            <span aria-hidden="true">{ornament?.emoji ?? '🌸'}</span>
+            <StyleOrnament itemKey={ornament?.key} fallback="🌸" />
           </div>
           <dl class="cl-style-list">
             <div>
