@@ -20,6 +20,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-casino-style-give-all',
+    date: '2026-10-09',
+    kind: 'new',
+    where: ['社務所Web'],
+    title: '🎁 カジノの見た目の品を全部渡せるように',
+    items: ['メンバーのページの「🎴 勝負の御籤の品」の「渡す」で「🎁 見た目の品を全部」を選ぶと、持っていない見た目の品を全部渡します（宮司だけ。お試し券はのぞく）。'],
+  },
+  {
     id: '2026-10-09-casino-seats-scenes-draws',
     date: '2026-10-09',
     kind: 'improve',

@@ -529,6 +529,12 @@ describe('🎰 カジノ（運営の画面）', () => {
     expect((await send(`/members/${A}/casino-style`, [['mode', 'take'], ['styleKey', 'dragon'], ['note', 'まちがい']])).headers.get('location')).toBe(`/members/${A}?msg=style_taken#sec-style`);
     expect((await stylesOf(db, A)).owned).not.toContain('dragon');
     expect((await send(`/members/${A}/casino-style`, [['mode', 'give'], ['styleKey', 'dragon'], ['note', '']])).headers.get('location')).toBe(`/members/${A}?msg=style_invalid#sec-style`);
+    // 🎁 全部渡す（持っていない品だけ。2 回目は足すものがない）
+    expect((await send(`/members/${A}/casino-style`, [['mode', 'give'], ['styleKey', '__all__'], ['note', '宮司']])).headers.get('location')).toBe(`/members/${A}?msg=style_given_all#sec-style`);
+    const { GIVABLE_STYLES } = await import('../src/services/casino/styles.js');
+    const all = GIVABLE_STYLES.map((i) => i.key).filter((k) => k !== 'trial');
+    expect([...(await stylesOf(db, A)).owned].sort()).toEqual([...all].sort());
+    expect((await send(`/members/${A}/casino-style`, [['mode', 'give'], ['styleKey', '__all__'], ['note', 'もう一度']])).headers.get('location')).toBe(`/members/${A}?msg=style_owned#sec-style`);
   });
 });
 

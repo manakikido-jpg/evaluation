@@ -249,6 +249,16 @@ export async function giveStyle(db: Db, memberId: string, key: string): Promise<
   });
 }
 
+/** 見た目の品を全部渡す（運営。持っていない品だけ足す）。足した数 */
+export async function giveAllStyles(db: Db, memberId: string): Promise<number> {
+  return db.transaction(async (tx) => {
+    const s = await lock(tx, memberId);
+    const add = GIVABLE_STYLES.map((i) => i.key).filter((k) => k !== 'trial' && !s.owned.includes(k));
+    if (add.length) await tx.update(casinoStyles).set({ owned: [...s.owned, ...add] }).where(eq(casinoStyles.memberId, memberId));
+    return add.length;
+  });
+}
+
 /** 取り上げる（渡しまちがえたとき。見た目の品は付けていたら外す・お試し券は 1 枚へらす） */
 export async function takeStyle(db: Db, memberId: string, key: string): Promise<'ok' | 'none' | 'invalid'> {
   if (!isGivableStyle(key)) return 'invalid';
