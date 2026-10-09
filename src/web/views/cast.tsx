@@ -506,10 +506,6 @@ export function CastPage(props: {
           <Select name="publicCategoryId" label="公開の部屋（18 歳未満の方の雑談）を作るカテゴリ" value={c.publicCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="roleId" label="キャストのロール" value={c.roleId} options={props.roles} empty="なし（付けない）" />
           <label class="field">
-            <span>値段の下限（銭）</span>
-            <input type="number" name="priceMin" min={1} value={String(c.priceMin)} required />
-          </label>
-          <label class="field">
             <span>値段の上限（銭）</span>
             <input type="number" name="priceMax" min={1} value={String(c.priceMax)} required />
           </label>

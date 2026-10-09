@@ -5404,7 +5404,7 @@ export function createWebApp(deps: WebDeps) {
       privateCategoryId: id('privateCategoryId'),
       publicCategoryId: id('publicCategoryId'),
       roleId: id('roleId'),
-      priceMin: n('priceMin'),
+      priceMin: 1,
       priceMax: n('priceMax'),
       feePercent: n('feePercent'),
       acceptMinutes: n('acceptMinutes'),
