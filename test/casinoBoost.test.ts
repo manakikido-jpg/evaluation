@@ -144,7 +144,7 @@ describe('🎰 大勝負の札', () => {
     const buffs = await buffsOf(db, A.id, now);
     expect(buffs.casinoUntil).toEqual(until);
     const v = walletView(cfg.economy, { balance: 0, lifetimeEarned: 0, today: { vcCoins: 0, vcMinutes: 0 }, recent: [], tickets: emptyTickets(), custom: [], buffs });
-    expect(v.embeds[0]!.description).toContain('🎰 大勝負の札');
+    expect(v.embeds[0]!.fields.find(f => f.name === '✨ 効いている効果')!.value).toContain('🎰 大勝負の札');
   });
 });
 

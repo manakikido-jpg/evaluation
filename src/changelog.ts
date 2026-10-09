@@ -20,6 +20,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-wallet-layout', date: '2026-10-09', kind: 'improve', where: ['Discord'],
+    title: '残高を見やすく分け、浮上時間を時間と分に',
+    items: [
+      '残高・今日の浮上・通話報酬・持っている券・最近の出入りを、見出しごとに分けました。券は1種類ずつ、入出金は金額を太字で表示します。',
+      '浮上時間はAFKを除くVC参加時間を合計して「1時間33分」の形で表示します。通常の報酬対象時間も別に表示します。',
+      '通常の通話報酬が0の役職で「今日の上限に届きました」と出ていた案内を直しました。',
+    ],
+  },
+  {
     id: '2026-10-09-cast-menu',
     date: '2026-10-09',
     kind: 'new',
