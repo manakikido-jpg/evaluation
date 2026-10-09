@@ -14,12 +14,14 @@ import { GiftApp } from './discord/gifts.js';
 import { OtoshidamaApp } from './discord/otoshidama.js';
 import { BoardApp } from './discord/board.js';
 import { CastApp } from './discord/cast.js';
+import { TicketApp } from './discord/supportTickets.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { GachaApp } from './discord/gacha.js';
 import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
+import { GuideReceptionApp } from './discord/guideReception.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { SokinApp } from './discord/sokin.js';
@@ -93,6 +95,7 @@ async function main(): Promise<void> {
   const tempGrants = new TempGrantApp(db, cfg, actions);
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
   const help = new HelpApp(cfg);
+  const guideReception = new GuideReceptionApp(db, cfg, actions);
   const guidePending = new GuidePendingApp(cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
@@ -109,6 +112,7 @@ async function main(): Promise<void> {
   const market = new MarketApp(db, cfg, actions);
   const board = new BoardApp(db, cfg, actions);
   const cast = new CastApp(db, cfg, actions);
+  const supportTickets = new TicketApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -163,6 +167,7 @@ async function main(): Promise<void> {
       .then(() => board.checkPanel())
       .catch((err) => logger.warn({ err }, 'board card check failed'));
     cast.attach(guild);
+    supportTickets.attach(guild);
     gacha.attach(guild);
     // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
     await gacha.refreshPanels(guild).catch((err) => logger.warn({ err }, 'gacha panels refresh failed'));
@@ -177,6 +182,7 @@ async function main(): Promise<void> {
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
     ticker = setInterval(() => {
+      void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
       void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
@@ -189,7 +195,10 @@ async function main(): Promise<void> {
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
       // 🎀 キャスト: 返事待ちの期限・予約の始まり・通話の終わり・部屋の片付け
+      void cast.syncIntros().catch(err => logger.warn({ err }, 'cast intros sync failed'));
       void cast.tick().catch((err) => logger.warn({ err }, 'cast tick failed'));
+      // 🎫 チケット: 返事のない知らせ・自動で閉じる
+      void supportTickets.tick().catch((err) => logger.warn({ err }, 'ticket tick failed'));
       // 🧧 お年玉袋: 締め切りが来た袋の残りを置いた人に戻す
       void otoshidama.tick().catch((err) => logger.warn({ err }, 'otoshidama tick failed'));
       // ⏳ 一時的なロール・権限: 期限が来たものを外す
@@ -297,6 +306,7 @@ async function main(): Promise<void> {
     if (after.channelId && after.channelId !== before.channelId && after.member) {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
     }
+    void guideReception.onVoiceStateUpdate(before, after);
     void tempVoice.onVoiceStateUpdate(before, after);
     // 自動で増える通話: 全部埋まったら増やし、空きが増えたら減らす
     voiceGroups.onVoiceStateUpdate(before, after);
@@ -308,6 +318,7 @@ async function main(): Promise<void> {
     void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
+    void guideReception.onInteraction(i);
     void app.onInteraction(i);
     void staff.onInteraction(i);
     void admission.onInteraction(i);
@@ -332,9 +343,11 @@ async function main(): Promise<void> {
     void market.onInteraction(i);
     void board.onInteraction(i);
     void cast.onInteraction(i);
+    void supportTickets.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);
+    void supportTickets.onMessage(m).catch((err) => logger.warn({ err }, 'ticket message failed'));
     recruit.onMessage(m);
     void boost.onMessage(m);
     void sticky.onMessage(m);

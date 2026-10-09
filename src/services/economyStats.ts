@@ -49,8 +49,12 @@ export const REASON_FLOW: Record<string, Flow> = {
   board_reward: 'income',
   board_refund: 'income',
   cast_pay: 'income',
+  employee_salary: 'issue',
   cast_reward: 'income',
   cast_refund: 'income',
+  ticket_pay: 'income',
+  ticket_reward: 'income',
+  ticket_refund: 'income',
   keiba_buy: 'income',
   keiba_train: 'income',
   gift_fee: 'income',
@@ -87,6 +91,9 @@ const INCOME_GROUP: Record<string, string> = {
   cast_pay: 'cast',
   cast_reward: 'cast',
   cast_refund: 'cast',
+  ticket_pay: 'board',
+  ticket_reward: 'board',
+  ticket_refund: 'board',
 };
 export const INCOME_LABEL: Record<string, string> = {
   gift_fee: '送金・贈り物の手数料',

@@ -1,3 +1,8 @@
+import { desc, eq } from 'drizzle-orm';
+import { GuidePage } from './views/guide.js';
+import { guideEmployeePanel } from '../discord/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus } from '../services/guideReception.js';
+import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
 import { permissionIssues, validatePermissionSnapshot } from '../services/permissionCheck.js';
@@ -228,7 +233,10 @@ import { listingCard, requestCard } from '../discord/market.js';
 import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
-import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
+import { postCastIntro, refreshCastIntros, refreshCastPanel } from '../discord/cast.js';
+import { refreshTicketPanel } from '../discord/supportTickets.js';
+import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
+import { TicketsPage } from './views/supportTickets.js';
 import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
@@ -578,7 +586,11 @@ export function createWebApp(deps: WebDeps) {
   app.use('/temp', requireAdmin);
   app.use('/invites', requireAdmin);
   app.use('/board', requireAdmin);
+  app.use('/guide', requireAdmin);
+  app.use('/guide/*', requireAdmin);
+  app.use('/guide/*', requireCsrf);
   app.use('/cast', requireAdmin);
+  app.use('/tickets', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -588,7 +600,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/interview', requireAdmin);
   app.use('/ideas', requireAdmin);
   app.use('/ideas', requireCsrf);
-  for (const p of ['/ideas/*', '/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/ideas/*', '/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/tickets/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -1467,6 +1479,59 @@ export function createWebApp(deps: WebDeps) {
   });
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */
+  app.get('/guide', async c => {
+    const [config, employees, receptions, payroll, channels, roles] = await Promise.all([
+      loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
+    ]);
+    const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.map(r => r.memberId)].filter(Boolean));
+    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} />);
+  });
+  app.post('/guide/settings', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが変更できます。', 403);
+    const b = await c.req.parseBody({ all: true });
+    try {
+      const voiceChannelIds = (Array.isArray(b.voiceChannelIds) ? b.voiceChannelIds : b.voiceChannelIds ? [b.voiceChannelIds] : []);
+      const config = guideConfigSchema.parse({ voiceChannelIds, staffChannelId: b.staffChannelId || undefined, roleId: b.roleId || undefined, salary: Number(b.salary), links: parseGuideLinks(b) });
+      const channels = await loadChannels(true);
+      const roles = await loadRoles() ?? [];
+      if (config.voiceChannelIds.some(id => !channels.some(ch => ch.id === id && ch.type === 2)) || (config.staffChannelId && !channels.some(ch => ch.id === config.staffChannelId && ch.type === 0)) || (config.roleId && !roles.some(r => r.id === config.roleId && !r.managed && r.id !== cfg.guildId))) return c.redirect('/guide?msg=invalid');
+      await saveGuideConfig(db, config, c.get('session').userId);
+      return c.redirect('/guide?msg=saved');
+    } catch { return c.redirect('/guide?msg=invalid'); }
+  });
+  app.post('/guide/panel', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが操作できます。', 403);
+    const b = await c.req.parseBody();
+    const id = typeof b.channelId === 'string' ? b.channelId : '';
+    try {
+      const channels = await loadChannels(true);
+      if (!channels.some(ch => ch.id === id && ch.type === 0)) return c.redirect('/guide?msg=invalid');
+      await deps.discord.sendMessage(id, guideEmployeePanel());
+      await audit(db, { actorId: c.get('session').userId, action: 'guide.panel', detail: { channelId: id }, via: 'web' });
+      return c.redirect('/guide?msg=posted');
+    } catch { return c.redirect('/guide?msg=failed'); }
+  });
+  app.post('/guide/employees/:id', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが承認できます。', 403);
+    const id = c.req.param('id');
+    const b = await c.req.parseBody();
+    if (!/^\d{17,20}$/.test(id) || !['active', 'paused'].includes(String(b.status))) return c.redirect('/guide?msg=invalid');
+    const [employee] = await db.select().from(guideEmployees).where(eq(guideEmployees.memberId, id));
+    if (!employee) return c.redirect('/guide?msg=invalid');
+    try {
+      const config = await loadGuideConfig(db);
+      const roles = await loadRoles() ?? [];
+      const candidates = roles.filter(r => r.name.includes('案内人') && !r.managed);
+      const roleId = config.roleId ?? (candidates.length === 1 ? candidates[0]!.id : undefined);
+      if (!roleId || roleId === cfg.guildId) return c.redirect('/guide?msg=invalid');
+      if (b.status === 'active') await deps.discord.addRole(cfg.guildId, id, roleId, '案内人の登録を承認');
+      else await deps.discord.removeRole(cfg.guildId, id, roleId, '案内人の登録を休止');
+      await setGuideStatus(db, id, b.status as 'active' | 'paused', c.get('session').userId);
+      await deps.discord.sendDm(id, b.status === 'active' ? '案内人の登録が承認されました。受付パネルから待機を切り替えてください。' : '案内人の登録を休止しました。').catch(() => false);
+      return c.redirect('/guide?msg=status');
+    } catch { return c.redirect('/guide?msg=failed'); }
+  });
+
   app.get('/economy', async (c) => {
     const q = c.req.query('range');
     const range = isTrendRange(q) ? q : '30d';
@@ -5148,7 +5213,141 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect('/board?msg=refunded');
   });
 
+  // 写真・メニュー・オプション・登録状態を保存したら、その人の紹介も更新する
+  app.use('/cast/casts/*', async (c, next) => {
+    await next();
+    if (c.req.method !== 'POST' || c.res.status !== 302) return;
+    const id = /^\/cast\/casts\/(\d{17,20})\//.exec(c.req.path)?.[1];
+    const location = c.res.headers.get('location');
+    if (!id || !location) return;
+    const msg = new URL(location, 'https://local.invalid').searchParams.get('msg');
+    const saved = ['photo_saved', 'photo_removed', 'menu_ok', 'menu_saved', 'menu_removed', 'option_ok', 'option_removed', 'template_applied', 'gender_saved', 'status', 'approved'];
+    if (!msg || !saved.includes(msg)) return;
+    const ok = await refreshCastIntros(db, deps.discord, id).catch(err => { logger.warn({ err }, 'cast saved intro sync failed'); return false; });
+    if (!ok) c.res = c.redirect(`/cast?msg=sync_pending#cast-${id}`);
+  });
+
   // ───────── 🎀 キャスト ─────────
+
+  // ───────── 🎫 チケット ─────────
+
+  app.get('/tickets', async (c) => {
+    const [conf, open, closed, channels, roles] = await Promise.all([loadTicketConfig(db), openTickets(db), closedTickets(db, 50), loadChannels().catch(() => [] as GuildChannel[]), loadRoles()]);
+    const names = await namesOf(db, [...open, ...closed].flatMap((t) => [t.openerId, ...(t.assigneeId ? [t.assigneeId] : [])]));
+    return c.html(
+      <TicketsPage
+        session={c.get('session')}
+        config={conf}
+        open={open}
+        closed={closed}
+        channels={textChannelsOf(channels).map((ch) => ({ id: ch.id, name: `#${ch.name}` }))}
+        categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
+        roles={(roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
+        name={(id) => names.get(id) ?? id}
+        guji={gujiOnly(c)}
+        now={now()}
+        guildId={cfg.guildId}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.get('/tickets/:id/transcript', async (c) => {
+    const t = await getSupportTicket(db, Number(c.req.param('id')));
+    if (!t?.transcript) return c.notFound();
+    return c.body(t.transcript, 200, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store' });
+  });
+
+  const ticketPanelNow = () => refreshTicketPanel(db, deps.discord).catch((err: unknown) => (logger.warn({ err }, 'ticket panel failed'), false));
+
+  app.post('/tickets/settings', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const body = await c.req.parseBody();
+    const prev = await loadTicketConfig(db);
+    const id = (k: string) => (typeof body[k] === 'string' && validId(body[k] as string) ? (body[k] as string) : undefined);
+    const next = { ...prev, panelChannelId: id('panelChannelId'), categoryId: id('categoryId'), logChannelId: id('logChannelId'), staleHours: Number(body.staleHours), idleHours: Number(body.idleHours) };
+    const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (!ok(next.staleHours, 1, 336) || !ok(next.idleHours, 0, 720)) return c.redirect('/tickets?msg=invalid');
+    // チャンネルを変えたら、新しいチャンネルに出し直す
+    if (next.panelChannelId !== prev.panelChannelId) delete next.panelMessageId;
+    await saveTicketConfig(db, next, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.settings', detail: { ...next, types: undefined }, via: 'web' });
+    return c.redirect('/tickets?msg=saved');
+  });
+
+  /** 種類の欄を読む（名札は足すときだけ） */
+  const ticketTypeInput = (body: Record<string, string | File | (string | File)[]>, key: string): TicketType | undefined => {
+    const one = (k: string) => {
+      const v = body[k];
+      return typeof v === 'string' ? v : Array.isArray(v) && typeof v[0] === 'string' ? v[0] : '';
+    };
+    const many = (k: string) => {
+      const v = body[k];
+      return (Array.isArray(v) ? v : v === undefined ? [] : [v]).filter((x): x is string => typeof x === 'string' && validId(x));
+    };
+    const label = one('label').trim();
+    if (!label || !/^[a-z0-9_-]{1,20}$/.test(key)) return undefined;
+    const kind = one('kind') === 'role' ? 'role' : one('kind') === 'request' ? 'request' : 'normal';
+    const questions = Array.from({ length: TICKET_QUESTIONS_MAX }, (_, n) => ({ label: one(`q${n}`).trim().slice(0, 45), long: one(`q${n}long`) === 'yes', required: one(`q${n}req`) === 'yes' })).filter((q) => q.label);
+    const categoryId = one('categoryId');
+    return {
+      key,
+      label: label.slice(0, 40),
+      emoji: one('emoji').trim().slice(0, 16),
+      description: one('description').trim().slice(0, 100),
+      kind,
+      roleIds: many('roleIds'),
+      ...(validId(categoryId) ? { categoryId } : {}),
+      greeting: one('greeting').trim().slice(0, 1000),
+      questions,
+      roleChoices: many('roleChoices'),
+      enabled: one('enabled') === 'yes',
+    };
+  };
+
+  app.post('/tickets/types', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const body = await c.req.parseBody({ all: true });
+    const key = typeof body.key === 'string' ? body.key.trim() : '';
+    const t = ticketTypeInput(body, key);
+    if (!t) return c.redirect('/tickets?msg=invalid');
+    const conf = await loadTicketConfig(db);
+    if (conf.types.some((x) => x.key === key)) return c.redirect('/tickets?msg=type_dup');
+    if (conf.types.length >= TICKET_TYPES_MAX) return c.redirect('/tickets?msg=invalid');
+    await saveTicketConfig(db, { ...conf, types: [...conf.types, t] }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'add', key }, via: 'web' });
+    await ticketPanelNow();
+    return c.redirect('/tickets?msg=type_added');
+  });
+
+  app.post('/tickets/types/:key', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const key = c.req.param('key');
+    const conf = await loadTicketConfig(db);
+    if (!conf.types.some((x) => x.key === key)) return c.redirect('/tickets');
+    const t = ticketTypeInput(await c.req.parseBody({ all: true }), key);
+    if (!t) return c.redirect('/tickets?msg=invalid');
+    await saveTicketConfig(db, { ...conf, types: conf.types.map((x) => (x.key === key ? t : x)) }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'edit', key }, via: 'web' });
+    await ticketPanelNow();
+    return c.redirect('/tickets?msg=type_saved');
+  });
+
+  app.post('/tickets/types/:key/delete', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const key = c.req.param('key');
+    const conf = await loadTicketConfig(db);
+    await saveTicketConfig(db, { ...conf, types: conf.types.filter((x) => x.key !== key) }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'remove', key }, via: 'web' });
+    await ticketPanelNow();
+    return c.redirect('/tickets?msg=type_removed');
+  });
+
+  app.post('/tickets/post', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const ok = await refreshTicketPanel(db, deps.discord, { repost: true, by: c.get('session').userId }).catch(() => false);
+    return c.redirect(`/tickets?msg=${ok ? 'posted' : 'post_failed'}`);
+  });
 
   app.get('/cast', async (c) => {
     const [conf, channels, roles, list, stats, sessions, image, femaleImage] = await Promise.all([

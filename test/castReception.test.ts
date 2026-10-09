@@ -3,7 +3,7 @@ import { MessageFlags, type Interaction } from 'discord.js';
 import sharp from 'sharp';
 import type { Db } from '../src/db/client.js';
 import { castSessions } from '../src/db/schema.js';
-import { CastApp, castReceptionBody, castMenuText, postCastIntro } from '../src/discord/cast.js';
+import { CastApp, castReceptionBody, castMenuText, postCastIntro, refreshCastIntros } from '../src/discord/cast.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
 import { applyCast, getCast, menuOf, CAST_DEFAULTS, loadCastReception, setCastStatus, setWaiting, saveCastPhoto, loadCastPhoto, deleteCastPhoto } from '../src/services/cast.js';
 import { loadReceptionAvatar, receptionSvg, renderCastReception } from '../src/services/castReceptionImage.js';
@@ -186,8 +186,10 @@ describe('本人向けDiscord受付', () => {
     const [ch, body] = send.mock.calls[0] as unknown as [string, { flags: number; files: { name: string }[]; components: { type: number; content?: string; components?: { custom_id: string }[] }[]; allowed_mentions: unknown }];
     expect(ch).toBe('990000000000000123');
     expect(body.flags).toBe(MessageFlags.IsComponentsV2);
-    expect(body.components.slice(0, 3).map((c) => c.type)).toEqual([10, 12, 10]);
-    expect(body.components[0]?.content).not.toContain('🎀');
+    expect(body.components.slice(0, 4).map((c) => c.type)).toEqual([14, 10, 12, 10]);
+    expect(body.components.at(-1)?.type).toBe(14);
+    expect(body.components.some(c => c.type === 17)).toBe(false);
+    expect(body.components[1]?.content).not.toContain('🎀');
     expect(body.files[0]?.name).toBe('cast-profile.png');
     expect(body.components.flatMap((r) => (r.components ?? []).map((x) => x.custom_id))).toEqual([`cast:plansel:${CAST}`, `cast:rsv:${CAST}`]);
     expect(body.allowed_mentions).toEqual({ parse: [] });
@@ -269,3 +271,109 @@ describe('紹介の料金表示', () => {
     expect(castMenuText([item, { ...item, id: 'd', note: '別の内容' }]).match(/\*\*ツーショット\*\*/g)).toHaveLength(2);
   });
 });
+
+ describe('紹介投稿の自動更新', () => {
+  const CH = '990000000000000123', CH2 = '990000000000000124';
+  function sender() { return { sendMessage: vi.fn(async (_ch: string, _body: unknown) => ({ id: 'intro1' })), editMessage: vi.fn(async (_ch: string, _id: string, _body: unknown) => undefined) }; }
+  it('投稿の連打でも同じチャンネルに1つだけ。人とチャンネルを区別して記録する', async () => {
+    const d = sender();
+    await Promise.all([postCastIntro(db, d, CAST, CH, '銭'), postCastIntro(db, d, CAST, CH, '銭')]);
+    expect(d.sendMessage).toHaveBeenCalledOnce();
+    expect(d.editMessage).toHaveBeenCalledOnce();
+    const { castIntroPosts } = await import('../src/services/castIntroPosts.js');
+    expect(await castIntroPosts(db, CAST)).toMatchObject([{ channelId: CH, messageId: 'intro1' }]);
+    await postCastIntro(db, d, CAST, CH2, '銭');
+    await postCastIntro(db, d, OTHER, CH, '銭');
+    expect(await castIntroPosts(db)).toHaveLength(3);
+  });
+  it('写真・オプションを更新し、変更がないときは書き換えない。写真を外すと古い添付も外す', async () => {
+    const d = sender();
+    await postCastIntro(db, d, CAST, CH, '銭');
+    await refreshCastIntros(db, d, CAST);
+    expect(d.editMessage).not.toHaveBeenCalled();
+    const png = await sharp({ create: { width: 20, height: 30, channels: 3, background: '#00aa00' } }).png().toBuffer();
+    await saveCastPhoto(db, CAST, png);
+    const { addOption } = await import('../src/services/cast.js');
+    await addOption(db, CAST_DEFAULTS, CAST, { name: 'カメラ', price: 100 });
+    expect(await refreshCastIntros(db, d, CAST)).toBe(true);
+    const body = d.editMessage.mock.calls[0]?.[2] as { content: null; embeds: unknown[]; attachments: unknown[]; components: { type: number; content?: string }[]; files?: unknown[] };
+    expect(body).toMatchObject({ content: null, embeds: [], attachments: [] });
+    expect(body.files).toHaveLength(1);
+    expect(body.components.some(c => c.type === 12)).toBe(true);
+    expect(JSON.stringify(body.components)).toContain('カメラ');
+    await refreshCastIntros(db, d, CAST);
+    expect(d.editMessage).toHaveBeenCalledOnce();
+    await deleteCastPhoto(db, CAST);
+    await refreshCastIntros(db, d, CAST);
+    const cleared = d.editMessage.mock.calls[1]?.[2] as typeof body;
+    expect(cleared.files).toBeUndefined();
+    expect(cleared.attachments).toEqual([]);
+    expect(cleared.components.some(c => c.type === 12 || c.type === 17)).toBe(false);
+    expect(d.sendMessage).toHaveBeenCalledOnce();
+  });
+  it('更新失敗は保存した変更を残して再試行し、削除された投稿を勝手に再投稿しない', async () => {
+    const d = sender();
+    await postCastIntro(db, d, CAST, CH, '銭');
+    await setCastStatus(db, CAST, 'paused', 'staff');
+    d.editMessage.mockRejectedValueOnce(new Error('通信失敗'));
+    expect(await refreshCastIntros(db, d, CAST)).toBe(false);
+    expect(await refreshCastIntros(db, d, CAST)).toBe(true);
+    const { DiscordHttpError } = await import('../src/lib/discordRest.js');
+    await setCastStatus(db, CAST, 'active', 'staff');
+    d.editMessage.mockRejectedValueOnce(new DiscordHttpError('削除済み', 404));
+    await refreshCastIntros(db, d, CAST);
+    const { castIntroPosts } = await import('../src/services/castIntroPosts.js');
+    expect(await castIntroPosts(db, CAST)).toHaveLength(0);
+    await refreshCastIntros(db, d, CAST);
+    expect(d.sendMessage).toHaveBeenCalledOnce();
+    await postCastIntro(db, d, CAST, CH, '銭');
+    expect(d.sendMessage).toHaveBeenCalledTimes(2);
+  });
+  it('休止すると操作ボタンを外し、再開すると同じ投稿に戻す', async () => {
+    const d = sender();
+    await postCastIntro(db, d, CAST, CH, '銭');
+    await setCastStatus(db, CAST, 'paused', 'staff');
+    await refreshCastIntros(db, d, CAST);
+    expect(JSON.stringify(d.editMessage.mock.calls[0]?.[2])).toContain('受付を停止');
+    expect(JSON.stringify(d.editMessage.mock.calls[0]?.[2])).not.toContain(`cast:plansel:${CAST}`);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    await refreshCastIntros(db, d, CAST);
+    expect(JSON.stringify(d.editMessage.mock.calls[1]?.[2])).toContain(`cast:plansel:${CAST}`);
+    expect(d.sendMessage).toHaveBeenCalledOnce();
+  });
+  it('紹介の取得が待たされても、予約と通話の定期処理は動く', async () => {
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), channelId: CH }, 'staff');
+    let release!: (value: null) => void;
+    const pending = new Promise<null>(resolve => { release = resolve; });
+    const a = new CastApp(db, () => cfg, sender() as never);
+    a.attach({ id: cfg.guildId, channels: { cache: new Map(), fetch: () => pending } } as never);
+    const sync = a.syncIntros();
+    await a.tick(NOW);
+    release(null);
+    await sync;
+  });
+
+  it('従来の自分のBOTの紹介だけを引き継ぎ、ほかのBOTや別の操作欄は使わない', async () => {
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    const { castIntroPosts, castIntroId } = await import('../src/services/castIntroPosts.js');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), channelId: CH }, 'staff');
+    const rows = [{ type: 1, components: [{ type: 3, custom_id: `cast:plansel:${CAST}` }] }];
+    expect(castIntroId([{ type: 1, components: [{ type: 3, custom_id: 'cast:pick' }] }])).toBeUndefined();
+    const messages = new Map([
+      ['foreign', { id: 'foreign', author: { id: 'other-bot' }, components: rows.map(r => ({ toJSON: () => r })) }],
+      ['old', { id: 'old', author: { id: 'self' }, components: rows.map(r => ({ toJSON: () => r })) }],
+    ]);
+    const fetch = vi.fn(async () => messages);
+    const guild = { id: cfg.guildId, client: { user: { id: 'self' } }, channels: { cache: new Map(), fetch: async () => ({ isTextBased: () => true, messages: { fetch } }) } };
+    const d = sender();
+    const a = new CastApp(db, () => cfg, d as never);
+    a.attach(guild as never);
+    await a.syncIntros();
+    expect((await castIntroPosts(db, CAST))[0]?.messageId).toBe('old');
+    expect(d.editMessage).toHaveBeenCalledWith(CH, 'old', expect.objectContaining({ flags: MessageFlags.IsComponentsV2, content: null, embeds: [] }));
+    await a.syncIntros();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(d.sendMessage).not.toHaveBeenCalled();
+  });
+ });

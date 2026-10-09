@@ -18,6 +18,7 @@ export const WEB_PAGES = [
   { key: 'applications', label: '申請・お参り期間', href: '/applications', prefixes: ['applications', 'omairi'] },
   { key: 'yaku', label: '厄', href: '/yaku', prefixes: ['yaku'] },
   { key: 'soudan', label: '相談', href: '/soudan', prefixes: ['soudan'] },
+  { key: 'tickets', label: 'チケット', href: '/tickets', prefixes: ['tickets'] },
   { key: 'temp', label: '一時的な権限', href: '/temp', prefixes: ['temp'] },
   { key: 'invites', label: '招待', href: '/invites', prefixes: ['invites'] },
   { key: 'interview', label: '面談告知', href: '/interview', prefixes: ['interview'] },
@@ -27,6 +28,7 @@ export const WEB_PAGES = [
   { key: 'gacha', label: '物御籤', href: '/gacha', prefixes: ['gacha'] },
   { key: 'market', label: '市場', href: '/market', prefixes: ['market'] },
   { key: 'board', label: '掲示板', href: '/board', prefixes: ['board'] },
+  { key: 'guide', label: '案内・給与', href: '/guide', prefixes: ['guide'] },
   { key: 'cast', label: 'キャスト', href: '/cast', prefixes: ['cast'] },
   { key: 'glossary', label: '用語集', href: '/glossary', prefixes: ['glossary'] },
 ] as const;

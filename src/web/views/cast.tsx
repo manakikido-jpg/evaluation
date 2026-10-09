@@ -8,7 +8,8 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   invalid: { text: '入力を確かめてください（値段は 1 以上・下限は上限以下・手数料は 0〜90%）。', kind: 'warn' },
   image_saved: { text: 'メニューの画像を入れかえました（メニューも書き換えました）。', kind: 'ok' },
   image_big: { text: '写真は8MBまでです。小さくしてから上げてください。', kind: 'warn' },
-  photo_saved: { text: 'キャストの写真を保存しました。紹介と本人の受付に出ます。', kind: 'ok' },
+  sync_pending: { text: '保存しました。紹介投稿の更新は待機中です。BOTの権限を確認してください。毎分再試行します。', kind: 'warn' },
+  photo_saved: { text: '写真を保存し、登録済みの紹介投稿にも反映しました。', kind: 'ok' },
   photo_removed: { text: 'キャストの写真を外しました。', kind: 'ok' },
   image_bad: { text: '画像（PNG・JPEG・GIF・WebP、8MB まで）を選んでください。', kind: 'warn' },
   image_removed: { text: 'メニューの画像を外しました。', kind: 'ok' },
@@ -26,7 +27,7 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   reg_invalid: { text: 'はじめのメニュー（内容・時間・値段）を確かめてください。値段は設定の下限〜上限の数。紹介は 300 文字まで。', kind: 'warn' },
   reg_already: { text: 'その人はもうキャストです。', kind: 'warn' },
   gender_saved: { text: '男性・女性を保存しました（メニューも書き換えました）。', kind: 'ok' },
-  intro_posted: { text: '🎀 紹介パネルを出しました（みんなに見えます。選んだ人にだけ確かめの画面が出ます）。', kind: 'ok' },
+  intro_posted: { text: '🎀 紹介パネルを出しました（投稿済みなら同じメッセージを更新します）。', kind: 'ok' },
   intro_failed: { text: '紹介パネルを出せませんでした。チャンネルを選んで、BOT がそこに書きこめるか・キャストがお休み中でないか確かめてください。', kind: 'warn' },
   menu_ok: { text: '🎀 メニューを足しました（Discord のメニューにも出ます）。', kind: 'ok' },
   menu_invalid: { text: 'メニューを足せませんでした。内容（30 文字まで）・時間（分）・値段（設定の下限〜上限）を確かめてください。', kind: 'warn' },
@@ -397,7 +398,7 @@ export function CastPage(props: {
                     <form method="post" action={`/cast/casts/${x.memberId}/intro`} class="inline-actions">
                       <Csrf session={session} />
                       <Select name="channelId" options={props.channels} empty="その人のメニューのチャンネル" label="紹介パネルを出すチャンネル" />
-                      <button type="submit">🎀 紹介パネルを出す</button>
+                      <button type="submit">紹介パネルを出す・更新</button>
                     </form>
                     <details class="anchor" id={`cast-${x.memberId}`}>
                       <summary>🎀 メニュー（{menuOf(x).length}）</summary>

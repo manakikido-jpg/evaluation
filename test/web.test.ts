@@ -1801,7 +1801,7 @@ describe('物御籤（管理画面）', () => {
     const member = await (await get(`/members/${USER}`, s)).text();
     expect(member).toContain('🎁 物御籤');
     expect(member).toContain('引いた回数 <strong>2</strong>');
-    expect(member).not.toContain('/tickets"');
+    expect(member).not.toContain(`action="/members/${USER}/tickets"`);
   });
 
   it('ON/OFF・値段・天井・出やすさを変える（宮司のみ）', async () => {
@@ -3078,6 +3078,66 @@ describe('キャスト（管理画面）', () => {
     });
   };
 
+  it('🎫 チケット: ページ・設定・種類を足す／書きかえる／外す・やりとりの記録（宮司だけが変えられる）', async () => {
+    const { openTicket, closeTicket, loadTicketConfig } = await import('../src/services/supportTickets.js');
+    const g = await login(GUJI);
+    const s = await login(STAFF);
+    const page = await (await get('/tickets', g)).text();
+    expect(page).toContain('チケット');
+    expect(page).toContain('個人スタンプ依頼');
+    expect((await form(s, '/tickets/settings', { staleHours: '5', idleHours: '0' })).headers.get('location')).toBe('/tickets?msg=guji');
+    expect((await form(g, '/tickets/settings', { staleHours: '5', idleHours: '0' })).headers.get('location')).toBe('/tickets?msg=saved');
+    expect(await loadTicketConfig(db)).toMatchObject({ staleHours: 5, idleHours: 0 });
+    expect((await form(g, '/tickets/types', { key: 'goods', label: 'グッズ依頼', emoji: '🧸', kind: 'request', q0: 'ほしいもの', q0long: 'yes', q0req: 'yes', enabled: 'yes' })).headers.get('location')).toBe('/tickets?msg=type_added');
+    expect((await form(g, '/tickets/types', { key: 'goods', label: 'x' })).headers.get('location')).toBe('/tickets?msg=type_dup');
+    expect((await form(g, '/tickets/types/goods', { label: 'グッズ', emoji: '🧸', kind: 'request', q0: 'ほしいもの', enabled: 'yes' })).headers.get('location')).toBe('/tickets?msg=type_saved');
+    const goods = (await loadTicketConfig(db)).types.find((t) => t.key === 'goods');
+    expect(goods).toMatchObject({ label: 'グッズ', kind: 'request', questions: [{ label: 'ほしいもの', long: false, required: false }] });
+    expect((await form(g, '/tickets/types/goods/delete', {})).headers.get('location')).toBe('/tickets?msg=type_removed');
+    expect((await loadTicketConfig(db)).types.some((t) => t.key === 'goods')).toBe(false);
+    // 閉じたチケットのやりとり
+    const r = await openTicket(db, await loadTicketConfig(db), { typeKey: 'inquiry', openerId: STAFF, answers: [{ q: '内容', a: 'しつもん' }] });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await closeTicket(db, r.ticket.id, GUJI, 'staff', 'やりとりの文字');
+    const tr = await get(`/tickets/${r.ticket.id}/transcript`, s);
+    expect(await tr.text()).toBe('やりとりの文字');
+    expect((await get(`/tickets/${r.ticket.id}/transcript`, '')).status).toBe(302);
+  });
+
+  it('写真・メニューの保存で紹介投稿を更新し、更新失敗は保存内容を残して待機を表示する', async () => {
+    const { applyCast, CAST_DEFAULTS, setCastStatus, getCast } = await import('../src/services/cast.js');
+    const { postCastIntro, refreshCastIntros } = await import('../src/discord/cast.js');
+    const id = '880000000000000028';
+    await applyCast(db, CAST_DEFAULTS, { id, adult: true }, { bio: '紹介', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: false });
+    await setCastStatus(db, id, 'active', STAFF);
+    await postCastIntro(db, fakeActions, id, '910000000000000003', '銭');
+    const s = await login(STAFF);
+    const oldEdit = fakeActions.editMessage;
+    const edits: MessageBody[] = [];
+    let fail = false;
+    try {
+      fakeActions.editMessage = async (_c, _m, b) => { if (fail) throw new Error('紹介の更新失敗'); edits.push(b); };
+      const r = await form(s, `/cast/casts/${id}/menu`, { menuName: 'ゲーム', menuNote: '', menuMinutes: '30', menuPrice: '800' });
+      expect(r.headers.get('location')).toBe(`/cast?msg=menu_ok#cast-${id}`);
+      expect(JSON.stringify(edits.at(-1)?.components)).toContain('ゲーム');
+      expect(JSON.stringify(edits.at(-1)?.components)).toContain('800銭');
+      const sharp = (await import('sharp')).default;
+      const photo = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#aaaa00' } }).png().toBuffer();
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
+      const fd = new FormData(); fd.append('_csrf', csrf); fd.append('image', new File([new Uint8Array(photo)], 'photo.png', { type: 'image/png' }));
+      const saved = await app.request(`/cast/casts/${id}/photo`, { method: 'POST', headers: { cookie: `shamusho_session=${s}` }, body: fd });
+      expect(saved.headers.get('location')).toBe('/cast?msg=photo_saved');
+      expect(edits.at(-1)?.files).toHaveLength(1);
+      fail = true;
+      const option = await form(s, `/cast/casts/${id}/options`, { optionName: 'カメラ', optionPrice: '100' });
+      expect(option.headers.get('location')).toBe(`/cast?msg=sync_pending#cast-${id}`);
+      expect((await getCast(db, id))?.options[0]?.name).toBe('カメラ');
+      fail = false;
+      await refreshCastIntros(db, fakeActions, id);
+      expect(JSON.stringify(edits.at(-1)?.components)).toContain('カメラ');
+    } finally { fakeActions.editMessage = oldEdit; }
+  });
+
   it('256KBを超える写真を本人ごとに保存し、8MB超・CSRFなし・未登録は拒む', async () => {
     const sharp = (await import('sharp')).default;
     const { applyCast, CAST_DEFAULTS, setCastStatus, loadCastPhoto } = await import('../src/services/cast.js');
@@ -3636,3 +3696,40 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
   const js = await get('/static/invite-selection.js', guji);
   expect(js.status).toBe(200);
 });
+
+ describe('案内の設定と登録', () => {
+  const postGuide = (path: string, session: string, form: URLSearchParams) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded', origin: BASE }, body: form.toString() });
+  it('管理画面はログインが必要で、設定は宮司とCSRFに限定する', async () => {
+    expect((await app.request('/guide')).headers.get('location')).toBe('/login');
+    const s = await login(STAFF);
+    const html = await (await get('/guide', s)).text();
+    expect(html).toContain('案内・給与');
+    const sessionRows = await import('../src/db/schema.js').then(m => db.select().from(m.adminSessions));
+    const csrf = sessionRows.find(r => r.userId === STAFF)!.csrfToken;
+    expect((await postGuide('/guide/settings', s, new URLSearchParams({ _csrf: csrf }))).status).toBe(403);
+    expect((await postGuide('/guide/settings', s, new URLSearchParams({ _csrf: 'wrong' }))).status).toBe(403);
+  });
+  it('宮司が複数VCの設定を保存し、申請を承認してロールを付ける', async () => {
+    const { loadGuideConfig, registerGuide } = await import('../src/services/guideReception.js');
+    const { adminSessions, guideEmployees } = await import('../src/db/schema.js');
+    const s = await login(GUJI);
+    const rows = await db.select().from(adminSessions);
+    const csrf = rows.find(r => r.userId === GUJI)!.csrfToken;
+    const roleId = '980000000000000080';
+    roleList = [{ id: roleId, name: '案内人', position: 1, managed: false, color: 0 }];
+    const config = await loadGuideConfig(db);
+    const form = new URLSearchParams({ _csrf: csrf, salary: '150', roleId, staffChannelId: '910000000000000002' });
+    config.links.forEach((l, n) => { form.set(`emoji_${n}`, `<:${l.emojiName}:${l.emojiId}>`); form.set(`links_${n}`, l.channelIds.join(' ')); });
+    form.append('voiceChannelIds', '910000000000000004');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
+    expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
+    await registerGuide(db, USER);
+    expect((await postGuide(`/guide/employees/${USER}`, s, new URLSearchParams({ _csrf: csrf, status: 'active' }))).headers.get('location')).toBe('/guide?msg=status');
+    expect(actions).toContain(`addRole ${USER} ${roleId}`);
+    expect((await db.select().from(guideEmployees))[0]?.status).toBe('active');
+    // テキストチャンネルを監視VCとして保存することはできない
+    form.set('voiceChannelIds', '910000000000000002');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=invalid');
+    expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
+  });
+ });
