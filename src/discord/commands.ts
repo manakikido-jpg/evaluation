@@ -229,6 +229,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setNameLocalizations({ ja: 'パネル' })
       .setDescription('Post an application panel here')
       .setDescriptionLocalizations({ ja: '申請ボタンをこのチャンネルに置く【神職】' })
+      .addSubcommand((s) => s.setName('maikura').setNameLocalizations({ ja: '舞倉' }).setDescription('Minecraft participation').setDescriptionLocalizations({ ja: '舞倉のPOPと参加ロールのボタンを置く' }))
       .setContexts(InteractionContextType.Guild)
       .setDefaultMemberPermissions(staff)
       .addSubcommand((s) =>

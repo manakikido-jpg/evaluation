@@ -48,6 +48,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     ...Object.fromEntries(slotFiles.map((f) => [`slots-${f}`, { body: new Uint8Array(readFileSync(path.join(SLOT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(atFiles.map((f) => [`atart-${f}`, { body: new Uint8Array(readFileSync(path.join(AT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(mjFiles.map((f) => [`mahjong-${f}`, { body: new Uint8Array(readFileSync(path.join(MJ_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
+    'maikura-pop.png': { body: new Uint8Array(readFileSync(path.join(here, 'public/maikura-pop.png'))), type: 'image/png' },
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'guide.js': { body: readText(path.join(here, 'public/guide.js')), type: 'text/javascript; charset=utf-8' },
