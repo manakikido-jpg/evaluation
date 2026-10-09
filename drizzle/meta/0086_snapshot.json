@@ -1,6 +1,6 @@
 {
-  "id": "f9b9610f-0e38-4690-9344-849e12f599b1",
-  "prevId": "6960b08f-bc6c-48a7-afd6-58aaa4453319",
+  "id": "d6474e28-8c3a-47bb-84d3-dc9dd9be04fc",
+  "prevId": "c4bcd86a-64ed-4afb-b1d5-d377a28818c4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1583,6 +1583,20 @@
           "notNull": true,
           "default": "''"
         },
+        "option_names": {
+          "name": "option_names",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "option_price": {
+          "name": "option_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "minutes": {
           "name": "minutes",
           "type": "integer",
@@ -1801,6 +1815,13 @@
         },
         "menu": {
           "name": "menu",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "options": {
+          "name": "options",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,

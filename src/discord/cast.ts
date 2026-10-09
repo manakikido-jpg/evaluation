@@ -48,6 +48,7 @@ import {
   parseTags,
   MENU_MINUTES,
   menuLabel,
+  pickOptions,
   CAST_GROUPS,
   GROUP_LABEL,
   castHomeChannel,
@@ -127,6 +128,8 @@ export function castMenuText(menu: ReturnType<typeof menuOf>): string {
     return `**${first.name}**\n${prices}${first.note ? `\n${first.note}` : ''}`;
   }).join('\n\n') || 'メニューなし';
 }
+/** オプションを 1 行で（なければ空） */
+export const castOptionsText = (cast: Pick<Cast, 'options'>) => (cast.options.length ? `**➕ オプション**\n${cast.options.map((o) => `${o.name} **+${fmt(o.price)}銭**`).join(' ／ ')}` : '');
 const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先の交換・録音は禁止です（しきたり）。困ったら部屋の「🚨 通報」を';
 
 // ───────── メニュー（画像の下に、指名するメニュー） ─────────
@@ -232,6 +235,7 @@ export async function postCastIntro(db: Db, discord: Pick<DiscordActions, 'sendM
       { type: 10, content: header },
       ...(photo ? [{ type: 12, items: [{ media: { url: 'attachment://cast-profile.png' }, description: `${name}のメニュー画像` }] }] : []),
       { type: 10, content: castMenuText(menu) },
+      ...(cast.options.length ? [{ type: 10, content: castOptionsText(cast) }] : []),
       ...(st ? [{ type: 10, content: `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` }] : []),
       ...(menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
       { type: 10, content: '-# 選択後、あなただけに確認画面が表示されます。' },
@@ -330,6 +334,7 @@ export class CastApp {
       if (interaction.isStringSelectMenu()) {
         if (action === 'pick') return await this.pick(interaction, interaction.values[0] ?? '');
         if (action === 'plansel') return await this.confirm(interaction, a ?? '', interaction.values[0] ?? '');
+        if (action === 'opts') return await this.confirm(interaction, a ?? '', b ?? '', interaction.values);
         if (action === 'rplansel') return await this.reserveModal(interaction, a ?? '', interaction.values[0] ?? '');
         return;
       }
@@ -357,7 +362,7 @@ export class CastApp {
       if (action === 'minor') return await this.toggleMinor(interaction);
       if (action === 'blockui' || action === 'unblockui') return await this.blockPicker(interaction, action === 'blockui');
       if (action === 'plan') return await this.confirm(interaction, a ?? '', b ?? '');
-      if (action === 'go') return await this.go(interaction, a ?? '', b ?? '');
+      if (action === 'go') return await this.go(interaction, a ?? '', b ?? '', undefined, rest[0] ? rest[0].split(',') : undefined);
       if (action === 'quote') return await this.quoteModal(interaction, a ?? '', b ?? '', rest[0] ?? '');
       if (action === 'qgo') return await this.quoteGo(interaction, a ?? '', b ?? '', rest);
       if (action === 'rsv') return await this.reservePlans(interaction, a ?? '');
@@ -397,6 +402,7 @@ export class CastApp {
             '',
             `💰 **メニュー**（${this.coin()}）`,
             castMenuText(menuOf(cast)),
+            castOptionsText(cast),
             st ? `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` : '',
             adult ? '' : !cast.minorOk ? '-# このキャストは、18 歳未満の方の指名を受けていません' : `-# 18 歳未満の方は、公開の部屋での雑談（30 分・1 時間・${MINOR.endHour} 時まで）だけです`,
           ]
@@ -570,7 +576,7 @@ export class CastApp {
     }
   }
 
-  private async confirm(i: ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, castId: string, plan: string): Promise<void> {
+  private async confirm(i: ButtonInteraction<'cached'> | StringSelectMenuInteraction<'cached'>, castId: string, plan: string, chosen: string[] = []): Promise<void> {
     const cast = await getCast(this.db, castId);
     const item = cast && menuOf(cast).find((m) => m.id === plan);
     if (!cast || cast.status !== 'active' || !item) return void (await this.answer(i, { content: 'このキャストは、いまは指名できません（メニューが変わったかもしれません）。', embeds: [], components: [], attachments: [] }));
@@ -588,16 +594,31 @@ export class CastApp {
           ),
       ));
     }
-    const price = item.price;
+    const opts = pickOptions(cast, chosen);
+    const price = item.price + opts.reduce((n, o) => n + o.price, 0);
+    const optionRow = cast.options.length
+      ? [{
+          type: 1 as const,
+          components: [{
+            type: 3 as const,
+            custom_id: `cast:opts:${castId}:${plan}`,
+            placeholder: '➕ オプションを付ける（いくつでも・なくてもよい）',
+            min_values: 0,
+            max_values: cast.options.length,
+            options: cast.options.map((o) => ({ label: `${o.name} +${fmt(o.price)} 枚`.slice(0, 100), value: o.id, default: chosen.includes(o.id) })),
+          }],
+        }]
+      : [];
+    const goId = `cast:go:${castId}:${plan}${opts.length ? `:${opts.map((o) => o.id).join(',')}` : ''}`;
     await this.answer(i, {
       content: [
-        `🎀 <@${castId}> さんを **${menuLabel(item)}** ・ ${this.coin()} **${fmt(price)} 枚** で指名しますか？`,
+        `🎀 <@${castId}> さんを **${menuLabel(item)}**${opts.length ? ` ＋ ${opts.map((o) => o.name).join('・')}` : ''} ・ ${this.coin()} **${fmt(price)} 枚** で指名しますか？`,
         adult ? '-# 2 人だけの部屋ができます（運営は見守りのために見られます）' : `-# 公開の部屋での雑談になります（${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`,
         '-# 銭は社務所が預かり、受けてもらえなければ全額戻ります。途中でのばすこともできます',
         RULES,
       ].join('\n'),
       embeds: [],
-      components: [row(button(`cast:go:${castId}:${plan}`, `${fmt(price)} 枚で指名する`, 3, '🎀'))],
+      components: [...optionRow, row(button(goId, `${fmt(price)} 枚で指名する`, 3, '🎀'))],
       attachments: [],
       allowedMentions: { parse: [] },
     });
@@ -662,11 +683,11 @@ export class CastApp {
     await this.go(i, castId, itemId, { minutes: Number(minutes), price: Number(price) });
   }
 
-  private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }): Promise<void> {
+  private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }, options?: string[]): Promise<void> {
     await i.deferUpdate();
     const c = await loadCastConfig(this.db);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}) });
+    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}), ...(options ? { options } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
     const room = await this.openRoom(r.session).then(async (room) => {
       if (room) await room.send({ content: `<@${castId}>`, ...sessionMessage(r.session, c, this.coin()), allowedMentions: { users: [castId] } } as Parameters<typeof room.send>[0]);

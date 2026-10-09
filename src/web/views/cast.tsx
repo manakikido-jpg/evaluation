@@ -1,5 +1,5 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { GROUP_LABEL, type CastMenuItem, MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -36,6 +36,11 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   menu_none: { text: 'そのメニューはもうありません。', kind: 'warn' },
   template_applied: { text: '📋 テンプレのメニューを入れました。', kind: 'ok' },
   template_failed: { text: 'テンプレを入れられませんでした（テンプレが空か、外したキャストです）。', kind: 'warn' },
+  option_ok: { text: '➕ オプションを足しました。', kind: 'ok' },
+  option_invalid: { text: 'オプションの名前（30 文字まで）と値段（1 以上・上限まで）を確かめてください。', kind: 'warn' },
+  option_full: { text: `オプションは 1 人 ${OPTION_MAX} こまでです。`, kind: 'warn' },
+  option_not_cast: { text: 'その人はキャストではありません。', kind: 'warn' },
+  option_removed: { text: 'オプションを外しました（もう入っている指名はそのままです）。', kind: 'ok' },
   menu_removed: { text: 'メニューを外しました（もう入っている指名・予約はそのままです）。', kind: 'ok' },
   done_already: { text: 'もう終わっています。', kind: 'warn' },
 };
@@ -401,6 +406,33 @@ export function CastPage(props: {
                         <button type="submit">📋 テンプレのメニューを入れる（今のメニューと入れかえ）</button>
                       </form>
                       <MenuList items={menuOf(x)} base={`/cast/casts/${x.memberId}/menu`} session={session} c={c} empty="メニューがありません（指名できません）。テンプレを入れるか、下から足してください。" />
+                      <h3>➕ オプション（{x.options.length}／{OPTION_MAX}）</h3>
+                      <p class="note">お客がメニューを選んだあと、確かめの画面でいくつでも付けられます。値段はメニューに足して払います（30 分のばす値段には入りません）。</p>
+                      {x.options.length > 0 && (
+                        <ul>
+                          {x.options.map((o) => (
+                            <li>
+                              {o.name} ・ +{o.price.toLocaleString('ja-JP')} 枚
+                              <form method="post" action={`/cast/casts/${x.memberId}/options/${o.id}/delete`} class="row-actions">
+                                <Csrf session={session} />
+                                <button type="submit" class="danger">外す</button>
+                              </form>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <form method="post" action={`/cast/casts/${x.memberId}/options`} class="inline-actions">
+                        <Csrf session={session} />
+                        <label class="field">
+                          <span>オプションの名前（30 文字まで）</span>
+                          <input type="text" name="optionName" maxlength={30} required placeholder="カメラあり・歌 など" />
+                        </label>
+                        <label class="field">
+                          <span>値段（1〜{c.priceMax.toLocaleString('ja-JP')} 枚）</span>
+                          <input type="number" name="optionPrice" min={1} max={c.priceMax} required />
+                        </label>
+                        <button type="submit" class="ok">オプションを足す</button>
+                      </form>
                     </details>
                   </div>
                   <span class="ch-actions">

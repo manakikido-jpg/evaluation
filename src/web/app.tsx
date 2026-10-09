@@ -234,7 +234,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -5360,6 +5360,24 @@ export function createWebApp(deps: WebDeps) {
       await castPanelNow();
     }
     return c.redirect(`/cast?msg=menu_${r}#cast-${id}`);
+  });
+
+  // ➕ オプションを足す・外す
+  app.post('/cast/casts/:id/options', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const body = await c.req.parseBody();
+    const o = { name: typeof body.optionName === 'string' ? body.optionName.trim() : '', price: parsePrice(typeof body.optionPrice === 'string' ? body.optionPrice : '') };
+    const r = await addOption(db, await loadCastConfig(db), id, o);
+    if (r === 'ok') await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.option_add', detail: o, via: 'web' });
+    return c.redirect(`/cast?msg=option_${r}#cast-${id}`);
+  });
+
+  app.post('/cast/casts/:id/options/:opt/delete', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    if (await removeOption(db, id, c.req.param('opt'))) await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.option_remove', detail: { option: c.req.param('opt') }, via: 'web' });
+    return c.redirect(`/cast?msg=option_removed#cast-${id}`);
   });
 
   // 📋 テンプレのメニューを入れる（今のメニューと入れかえ）

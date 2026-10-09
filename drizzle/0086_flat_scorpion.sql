@@ -26,7 +26,8 @@ CREATE TABLE "guide_receptions" (
 	"message_id" text,
 	"notified_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"finished_at" timestamp with time zone
+	"finished_at" timestamp with time zone,
+	"departed_at" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "employee_payroll_source_idx" ON "employee_payroll" USING btree ("job","source_id");--> statement-breakpoint

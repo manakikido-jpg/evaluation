@@ -209,7 +209,8 @@ export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night' | '
 /** 値段を出すところ（相談は「相談」） */
 export const menuPriceText = (m: Pick<CastMenuItem, 'price' | 'consult'>) => (m.consult ? '相談' : `${m.price.toLocaleString('ja-JP')} 枚`);
 /** 指名の名前（前の指名はプランの名前） */
-export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'>) => s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan;
+export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'> & { optionNames?: string[] }) =>
+  (s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan) + (s.optionNames?.length ? `＋${s.optionNames.join('・')}` : '');
 /** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
 export const minorMenuOk = (m: CastMenuItem) => !m.night && !m.consult && m.minutes <= MINOR.maxMinutes;
 /** メニューを 1 行で（紹介・一覧） */
@@ -253,6 +254,41 @@ export async function addMenuItem(db: Db, c: CastConfig, castId: string, input: 
 }
 
 /** メニューを外す（運営）。もう入っている指名・予約はそのまま */
+// ───────── オプション（指名に足す追加。キャストごと） ─────────
+
+export type CastOption = Cast['options'][number];
+/** 1 人のオプションの数（選んだ番号をボタンに入れるので少なめ） */
+export const OPTION_MAX = 8;
+
+export function validOption(c: CastConfig, o: { name: string; price: number }): boolean {
+  return o.name.length >= 1 && o.name.length <= 30 && Number.isInteger(o.price) && o.price >= 1 && o.price <= c.priceMax;
+}
+
+/** オプションを足す（運営） */
+export async function addOption(db: Db, c: CastConfig, castId: string, o: { name: string; price: number }): Promise<'ok' | 'invalid' | 'full' | 'not_cast'> {
+  if (!validOption(c, o)) return 'invalid';
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast || cast.status === 'removed') return 'not_cast' as const;
+    if (cast.options.length >= OPTION_MAX) return 'full' as const;
+    await tx.update(casts).set({ options: [...cast.options, { id: newMenuId(), name: o.name, price: o.price }] }).where(eq(casts.memberId, castId));
+    return 'ok' as const;
+  });
+}
+
+/** オプションを外す（運営）。もう入っている指名はそのまま */
+export async function removeOption(db: Db, castId: string, optionId: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast || !cast.options.some((o) => o.id === optionId)) return false;
+    await tx.update(casts).set({ options: cast.options.filter((o) => o.id !== optionId) }).where(eq(casts.memberId, castId));
+    return true;
+  });
+}
+
+/** 選んだオプション（知らない番号・重なりは除く） */
+export const pickOptions = (cast: Pick<Cast, 'options'>, ids: readonly string[] = []) => cast.options.filter((o) => ids.includes(o.id));
+
 // ───────── メニューのテンプレ・書きかえ ─────────
 
 const tpl = (id: string, name: string, minutes: number, price: number, extra: Partial<CastMenuItem> = {}): CastMenuItem => ({ id, name, note: '', minutes, price, night: false, ...extra });
@@ -463,7 +499,7 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 相談のメニュー: キャストが出した時間と値段 */ quote?: { minutes: number; price: number } },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 相談のメニュー: キャストが出した時間と値段 */ quote?: { minutes: number; price: number }; /** 付けるオプションの番号 */ options?: string[] },
   now = new Date(),
 ): Promise<RequestResult> {
   const cast = await getCast(db, input.castId);
@@ -474,7 +510,10 @@ export async function requestSession(
   // 相談のメニューは、キャストが出した時間と値段で（ほかのメニューに値段は付けられない）
   const item = found?.consult ? (input.quote && validQuote(c, input.quote.minutes, input.quote.price) ? { ...found, ...input.quote } : undefined) : input.quote ? undefined : found;
   if (!item || item.price <= 0) return { status: 'no_plan' };
-  const price = item.price;
+  const opts = pickOptions(cast, input.options);
+  if (input.options && opts.length !== new Set(input.options).size) return { status: 'no_plan' };
+  const optionPrice = opts.reduce((n, o) => n + o.price, 0);
+  const price = item.price + optionPrice;
   const plan = item.night ? 'night' : item.id;
   const start = input.startAt ?? now;
   if (input.startAt && (input.startAt.getTime() < now.getTime() + 10 * MIN || input.startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN)) return { status: 'bad_time' };
@@ -503,7 +542,7 @@ export async function requestSession(
     const latestStart = input.startAt ?? new Date(now.getTime() + c.acceptMinutes * MIN);
     const end = item.night ? nightEnd(latestStart) : new Date(latestStart.getTime() + minutes * MIN);
     if (await overlaps(tx, input.castId, start, end, now)) return { status: 'overlap' as const };
-    if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan, menu: item.name }))) {
+    if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan, menu: item.name, ...(opts.length ? { options: opts.map((o) => o.name) } : {}) }))) {
       return { status: 'insufficient' as const, price, balance: (await walletOf(tx, input.customerId)).balance };
     }
     const [session] = await tx
@@ -513,6 +552,8 @@ export async function requestSession(
         customerId: input.customerId,
         plan,
         menuName: cast.menu.length ? (item.consult ? `${item.name}（相談）` : item.name) : '',
+        optionNames: opts.map((o) => o.name),
+        optionPrice,
         minutes,
         price,
         status: input.startAt ? 'reserved' : 'requested',
@@ -601,7 +642,9 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
     if (!Number.isSafeInteger(expected) || expected < 0 || s.extensions !== expected) return { status: 'already_extended' as const };
     const cast = await getCast(tx, s.castId);
     // 30 分のばす値段: 前のプランは 30 分の値段。メニューの指名は、その指名と同じ割合（1 分あたり）
-    const add = !cast ? 0 : s.menuName ? Math.ceil((s.price * 30) / Math.max(1, s.minutes)) : cast.price30 || Math.ceil((s.price * 30) / Math.max(1, s.minutes));
+    // オプションの分は、のばす値段に入れない
+    const base = s.price - s.optionPrice;
+    const add = !cast ? 0 : s.menuName ? Math.ceil((base * 30) / Math.max(1, s.minutes)) : cast.price30 || Math.ceil((base * 30) / Math.max(1, s.minutes));
     if (!cast || add <= 0) return { status: 'not_active' as const };
     if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' as const };
     const endsAt = new Date(s.endsAt.getTime() + 30 * MIN);
