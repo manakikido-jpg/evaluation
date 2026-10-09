@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-maikura-role-panel', date: '2026-10-09', kind: 'new', where: ['Discord'],
+    title: '舞倉の参加POPとロールのボタン',
+    items: ['運営の「/パネル 舞倉」で、Minecraftの参加POPとボタンを置けます。', '本人が「舞倉に参加する」を押すと参加用の「舞倉」ロールが付きます。何度押してもロールは外れません。'],
+  },
+  {
     id: '2026-10-09-guide-pending-only', date: '2026-10-09', kind: 'fix', where: ['Discord', '社務所Web'],
     title: '案内待ちだけを受付し、案内を開始した人を記録',
     items: ['案内VCの入室・再起動時の受付は「案内待ち」ロールの人だけを対象にします。通常のメンバー・案内人・BOTの入室は受付を作りません。', '「案内を開始する」を押せるのは案内人ロールの人だけです。開始した人を担当欄と記録に残し、案内人の登録も合わせます。給与は担当者の「案内完了」で支払います。'],

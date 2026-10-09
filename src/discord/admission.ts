@@ -285,8 +285,8 @@ export class AdmissionApp {
   // ───────── パネル（神職が #社務所 などに置く） ─────────
 
   private async panel(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
-    // ⛩ おみくじのボタンは OmikujiApp が置く（いちばん下に出し続ける）
-    if (i.options.getSubcommand() === 'omikuji') return;
+    // おみくじと舞倉のパネルは、それぞれの担当が置く
+    if (['omikuji', 'maikura'].includes(i.options.getSubcommand())) return;
     if (!this.staffOf(i)) return void (await i.reply({ content: '神職・宮司のみ使えます。', ...EPHEMERAL }));
     const kind = i.options.getSubcommand();
     const channel = i.channel;
