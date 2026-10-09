@@ -113,6 +113,27 @@ export async function leaveGuideReception(db: Db, visitorId: string, now = new D
     return tx.update(guideReceptions).set({ status: 'left', finishedAt: now }).where(and(eq(guideReceptions.visitorId, visitorId), inArray(guideReceptions.status, ['waiting', 'assigned']))).returning();
   });
 }
+/**
+ * 宮司が社務所Web で、最近の案内の担当を直す（案内人に登録されている人だけ）。
+ * pay なら完了にして給与を払う（案内完了と同じ決まり: 1 件 1 回・同じ利用者は日本時間で 1 日 1 件まで）
+ */
+export async function adminSetGuide(db: Db, id: number, guideId: string, by: string, pay: boolean, now = new Date()): Promise<{ status: 'ok'; amount: number; reception: typeof guideReceptions.$inferSelect } | { status: 'not_guide' | 'none' }> {
+  const config = await loadGuideConfig(db);
+  return db.transaction(async tx => {
+    const [e] = await tx.select().from(guideEmployees).where(eq(guideEmployees.memberId, guideId));
+    if (!e) return { status: 'not_guide' as const };
+    const [r] = await tx.update(guideReceptions).set({ guideId, ...(pay ? { status: 'done' as const, finishedAt: now } : {}) }).where(and(eq(guideReceptions.id, id), sql`${guideReceptions.visitorId} <> ${guideId}`)).returning();
+    if (!r) return { status: 'none' as const };
+    let amount = 0;
+    if (pay && config.salary > 0) {
+      const date = new Date(now.getTime() + 9 * 3_600_000).toISOString().slice(0, 10);
+      const [p] = await tx.insert(employeePayroll).values({ memberId: guideId, job: 'guide', sourceId: String(id), visitorId: r.visitorId, date, amount: config.salary }).onConflictDoNothing().returning();
+      if (p) { amount = p.amount; await addCoins(tx, guideId, amount, 'employee_salary', { job: 'guide', receptionId: id, by }); }
+    }
+    await audit(tx as Db, { actorId: by, targetId: r.visitorId, action: pay ? 'guide.reception_pay' : 'guide.reception_assign', detail: { receptionId: id, guideId, amount }, via: 'web' });
+    return { status: 'ok' as const, amount, reception: r };
+  });
+}
 export async function completeGuide(db: Db, id: number, memberId: string, now = new Date()) {
   const config = await loadGuideConfig(db);
   return db.transaction(async tx => {

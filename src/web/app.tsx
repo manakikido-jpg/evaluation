@@ -1,7 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
-import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel } from '../services/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
@@ -1484,8 +1484,7 @@ export function createWebApp(deps: WebDeps) {
       loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).where(eq(employeePayroll.job, 'guide')).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
     ]);
     const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.flatMap(r => [r.memberId, r.visitorId])].filter(Boolean));
-    const members = c.get('session').level === 'guji' ? await activeMemberNames(db) : [];
-    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} members={members} flash={c.req.query('msg')} />);
+    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} />);
   });
   app.post('/guide/settings', async c => {
     if (c.get('session').level !== 'guji') return c.text('宮司だけが変更できます。', 403);
@@ -1505,12 +1504,14 @@ export function createWebApp(deps: WebDeps) {
     if (c.get('session').level !== 'guji') return c.text('宮司だけが直せます。', 403);
     const id = Number(c.req.param('id'));
     const b = await c.req.parseBody();
-    const memberId = Number.isSafeInteger(id) && typeof b.member === 'string' ? await findActiveMember(db, b.member) : undefined;
-    if (!memberId) return c.redirect('/guide?msg=invalid#guide-history');
-    const [row] = await db.update(guideReceptions).set({ guideId: memberId }).where(eq(guideReceptions.id, id)).returning();
-    if (!row) return c.redirect('/guide?msg=invalid#guide-history');
-    await audit(db, { actorId: c.get('session').userId, targetId: row.visitorId, action: 'guide.reception_assign', detail: { receptionId: id, guideId: memberId }, via: 'web' });
-    return c.redirect('/guide?msg=saved#guide-history');
+    const guideId = typeof b.guideId === 'string' && validId(b.guideId) ? b.guideId : undefined;
+    if (!Number.isSafeInteger(id) || !guideId) return c.redirect('/guide?msg=invalid#guide-history');
+    const r = await adminSetGuide(db, id, guideId, c.get('session').userId, b.pay === 'yes', now());
+    if (r.status !== 'ok') return c.redirect('/guide?msg=invalid#guide-history');
+    if (b.pay === 'yes' && r.amount > 0) await deps.discord.sendDm(guideId, `案内の給与：${r.amount}銭（運営が社務所Webで支払いました）`).catch(() => false);
+    // 完了にしたら、VC のチャットの案内メッセージも消す
+    if (b.pay === 'yes' && r.reception.messageId) await deps.discord.deleteMessage(r.reception.channelId, r.reception.messageId).catch(() => undefined);
+    return c.redirect(`/guide?msg=${b.pay === 'yes' ? (r.amount > 0 ? 'paid' : 'paid_none') : 'saved'}#guide-history`);
   });
   app.post('/guide/receptions/:id/delete', async c => {
     if (c.get('session').level !== 'guji') return c.text('宮司だけが直せます。', 403);

@@ -3748,25 +3748,37 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
     expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=invalid');
     expect((await loadGuideConfig(db)).voiceChannelIds).toEqual(['910000000000000004']);
   });
-  it('宮司が最近の案内の担当を直す・記録を消す（神職はできない）', async () => {
-    const { openGuideReception } = await import('../src/services/guideReception.js');
-    const { adminSessions, guideReceptions } = await import('../src/db/schema.js');
-    const visitor = '700000000000000777';
-    await recordJoin(db, { id: visitor, username: 'v', displayName: 'ぜいじゃく', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
-    await recordJoin(db, { id: '700000000000000778', username: 'k', displayName: 'こばやし', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+  it('宮司が最近の案内の担当を案内人から選んで直す・給与を払う・記録を消す（神職はできない）', async () => {
+    const { openGuideReception, registerGuide } = await import('../src/services/guideReception.js');
+    const { adminSessions, guideReceptions, employeePayroll } = await import('../src/db/schema.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    const visitor = '700000000000000777', guide = '700000000000000778', visitor2 = '700000000000000779';
+    for (const [id, n] of [[visitor, 'ぜいじゃく'], [guide, 'こばやし'], [visitor2, 'ほか']] as const) await recordJoin(db, { id, username: id, displayName: n, avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await registerGuide(db, guide);
     const a = (await openGuideReception(db, visitor, '910000000000000004'))!;
-    const b = (await openGuideReception(db, '700000000000000778', '910000000000000004'))!;
+    const b = (await openGuideReception(db, visitor2, '910000000000000004'))!;
     const g = await login(GUJI);
     const s = await login(STAFF);
     const rows = await db.select().from(adminSessions);
     const csrf = (id: string) => rows.find(r => r.userId === id)!.csrfToken;
-    expect(await (await get('/guide', g)).text()).toContain(`/guide/receptions/${a.id}/assign`);
-    expect((await postGuide(`/guide/receptions/${a.id}/assign`, s, new URLSearchParams({ _csrf: csrf(STAFF), member: 'こばやし' }))).status).toBe(403);
-    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), member: 'だれもいない' }))).headers.get('location')).toBe('/guide?msg=invalid#guide-history');
-    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), member: 'こばやし' }))).headers.get('location')).toBe('/guide?msg=saved#guide-history');
+    const html = await (await get('/guide', g)).text();
+    expect(html).toContain(`/guide/receptions/${a.id}/assign`);
+    expect(html).toContain(`<option value="${guide}">こばやし`);
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, s, new URLSearchParams({ _csrf: csrf(STAFF), guideId: guide }))).status).toBe(403);
+    // 案内人に登録されていない人は担当にできない
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), guideId: visitor2 }))).headers.get('location')).toBe('/guide?msg=invalid#guide-history');
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), guideId: guide }))).headers.get('location')).toBe('/guide?msg=saved#guide-history');
+    expect((await walletOf(db, guide)).balance).toBe(0);
+    // 給与も払う（1 件 1 回）
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), guideId: guide, pay: 'yes' }))).headers.get('location')).toBe('/guide?msg=paid#guide-history');
+    expect((await walletOf(db, guide)).balance).toBe(150);
+    expect((await postGuide(`/guide/receptions/${a.id}/assign`, g, new URLSearchParams({ _csrf: csrf(GUJI), guideId: guide, pay: 'yes' }))).headers.get('location')).toBe('/guide?msg=paid_none#guide-history');
+    expect((await walletOf(db, guide)).balance).toBe(150);
+    expect(await db.select().from(employeePayroll)).toHaveLength(1);
     expect((await postGuide(`/guide/receptions/${b.id}/delete`, g, new URLSearchParams({ _csrf: csrf(GUJI) }))).headers.get('location')).toBe('/guide?msg=saved#guide-history');
     const left = await db.select().from(guideReceptions);
-    expect(left.map(r => [r.visitorId, r.guideId])).toEqual([[visitor, '700000000000000778']]);
-    expect((await listAudit(db, { action: 'guide.reception_delete' }))).toHaveLength(1);
+    expect(left.map(r => [r.visitorId, r.guideId, r.status])).toEqual([[visitor, guide, 'done']]);
+    expect((await listAudit(db, { action: 'guide.reception_pay' }))).toHaveLength(2);
   });
+
  });
