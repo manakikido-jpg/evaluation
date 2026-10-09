@@ -790,6 +790,45 @@ describe('カジノの着せ替えと景品ガチャ', () => {
       expect(await image.text()).toContain('<svg');
     }
   });
+  it('4つの背景に桜・龍と画像の置物を合わせ、見本では装備と銭を変えない', async () => {
+    const { cookie } = await casinoLogin(A);
+    await db.insert(casinoStyles).values({ memberId: A, owned: ['yozakura', 'dragon', 'fox'], equipped: { background: 'yozakura', table: 'dragon', ornament: 'fox' } });
+    for (const key of ['yozakura', 'foxroom', 'gold', 'stars']) {
+      const html = await (await get(`/casino/wardrobe?preview=${key}`, cookie!)).text();
+      expect(html).toContain(`cs-background-${key}`);
+      expect(html).toContain('cs-table-dragon');
+      expect(html).toContain('casino-ornament-fox.webp?v=');
+      expect(html).toContain('alt="白狐の置物"');
+      expect(html).toContain('カードとチップの見本');
+      expect(html).toContain('casino-premium.css?v=');
+      expect(html).not.toMatch(/<script>|onclick=|style="/);
+      const image = await app.request(`/static/casino-scene-${key}.webp`);
+      expect(image.status).toBe(200);
+      expect(image.headers.get('content-type')).toContain('image/webp');
+      expect(new TextDecoder().decode((await image.arrayBuffer()).slice(0, 4))).toBe('RIFF');
+      const table = await app.request(`/static/casino-table-${key}.webp`);
+      expect(table.status).toBe(200);
+      expect(table.headers.get('content-type')).toContain('image/webp');
+    }
+    for (const key of ['fox', 'fan']) {
+      const image = await app.request(`/static/casino-ornament-${key}.webp`);
+      expect(image.status).toBe(200);
+      expect(image.headers.get('content-type')).toContain('image/webp');
+    }
+    const premiumCss = await (await app.request('/static/casino-premium.css')).text();
+    expect(premiumCss).toMatch(/casino-scene-gold\.webp\?v=[a-f0-9]{10}/);
+    expect(premiumCss).toMatch(/casino-table-gold\.webp\?v=[a-f0-9]{10}/);
+    const fan = await (await get('/casino/wardrobe?preview=fan', cookie!)).text();
+    expect(fan).toContain('alt="勝負扇"');
+    expect(fan).toContain('cs-background-yozakura');
+    expect((await stylesOf(db, A)).equipped).toEqual({ background: 'yozakura', table: 'dragon', ornament: 'fox' });
+    expect(await balance(A)).toBe(5000);
+    const game = await (await get('/casino/blackjack', cookie!)).text();
+    expect(game).toContain('casino-premium.css?v=');
+    const bodyClass = /<body class="([^"]*)"/.exec(game)![1]!;
+    for (const cls of ['cs-background-yozakura', 'cs-table-dragon', 'cs-ornament-fox']) expect(bodyClass.split(' ')).toContain(cls);
+    expect(game).toContain('alt="白狐の置物"');
+  });
   it('ログインとCSRFを確かめ、未所持や別の種類の装備を拒否する', async () => {
     expect((await app.request('/casino/wardrobe')).status).toBe(302);
     const { cookie } = await casinoLogin(A);

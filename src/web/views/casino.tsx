@@ -1,3 +1,4 @@
+import { StyleOrnament } from './casinoStyleParts.js';
 import { CasinoLobbyContent } from './casinoLobby.js';
 import type { LobbyTable, LobbyResume } from '../../services/casino/lobby.js';
 import type { StyleState } from '../../services/casino/styles.js';
@@ -37,11 +38,12 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
           {props.title} | {props.jansou ? '咲楽ノ宮雀荘' : '咲楽ノ宮カジノ'}
         </title>
         <link rel="stylesheet" href={assetUrl('casino.css')} />
+        <link rel="stylesheet" href={assetUrl('casino-premium.css')} />
         {props.lobby && <link rel="stylesheet" href={assetUrl('casino-lobby.css')} />}
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino.js')} defer></script>
       </head>
-      <body class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})}>
+      <body class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})} data-base-room-name={styleItem(me?.baseStyles?.background ?? '')?.name ?? 'あなたの遊技場'}>
         <div class="c-sky" aria-hidden="true">
           {Array.from({ length: 14 }, () => (
             <span class="c-petal"></span>
@@ -87,6 +89,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
               {props.back === 'gate' ? <a href="/casino">← 入口へ</a> : <a href="/casino/hall">← ロビーへ</a>}
             </p>
           )}
+          {!props.lobby && (me?.styles?.background || me?.styles?.ornament) && <div class="cs-room-heading"><span data-style-room-name>{styleItem(me.styles?.background ?? '')?.name ?? 'あなたの遊技場'}</span><StyleOrnament itemKey={me.styles?.ornament} /></div>}
           {props.children}
         </main>
         <footer class="c-foot">銭はサーバーの中だけのものです。お金に換えることはできません。遊びすぎに気をつけて、楽しくどうぞ。</footer>

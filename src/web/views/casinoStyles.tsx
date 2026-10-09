@@ -1,6 +1,7 @@
+import { StyleOrnament } from './casinoStyleParts.js';
 import type { GuildConfig } from '../../config.js';
 import { STYLE_SLOTS, activeStyles, drawCost, drawableStyles, styleChances, styleItem, styleItems, type StyleSlot, type StyleState } from '../../services/casino/styles.js';
-import { CasinoLayout, type CasinoMe } from './casino.js';
+import { CasinoLayout, PlayingCard, type CasinoMe } from './casino.js';
 const Hidden = (p: { me: CasinoMe }) => <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />;
 export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string; now: Date; message?: string }) {
   const preview = styleItem(p.preview ?? '');
@@ -14,12 +15,17 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
       {p.message && <p role="status">{p.message}</p>}
       <p class="cs-equipped-summary">装備中：{equipped.length ? equipped.join(' ／ ') : 'すべて標準'}</p>
       <div class="cs-preview-scene">
+      <h2 class="cs-scene-title" data-style-room-name>{styleItem(me.styles?.background ?? '')?.name ?? 'あなたの遊技場'}</h2>
       <section class="cs-preview" aria-label="見た目の見本">
-        <span class="cs-emblem">{styleItem(me.styles?.ornament ?? '')?.emoji ?? '🌸'}</span>
+        <StyleOrnament itemKey={me.styles?.ornament} fallback="🌸" />
         <b>{p.me.session.displayName}</b>
         <span>{styleItem(me.styles?.title ?? '')?.name}</span>
-        <span class="pc back" aria-label="カードの裏"></span>
-        <span class="cs-chip">💎 100</span>
+        <div class="cs-preview-hands">
+          <div class="cs-preview-hand"><small>ディーラー</small><div class="c-cards"><PlayingCard c={6} /><span class="pc back" aria-label="カードの裏"></span></div></div>
+          <div class="cs-preview-hand"><small>あなた</small><div class="c-cards"><PlayingCard c={0} /><PlayingCard c={25} /></div></div>
+        </div>
+        <span class="cs-chip">100</span>
+        <small class="cs-preview-caption">カードとチップの見本</small>
         {preview && <p>見本：{preview.name}（まだ装備していません）</p>}
         {preview && ['effect', 'sound'].includes(preview.slot ?? '') && (
           <button type="button" class="c-btn" data-style-demo>
@@ -52,8 +58,9 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
               const owned = p.state.owned.includes(i.key);
               return (
                 <article class={`cs-item cs-${i.key}${styles[slot as StyleSlot] === i.key ? ' equipped' : ''}`}>
+                  {slot === 'table' && <div class={`cs-trim-thumbnail cs-table-${i.key}`} aria-hidden="true"><span>{i.name}</span></div>}
                   {slot === 'background' && <div class={`cs-scene-thumbnail cs-background-${i.key}`} role="img" aria-label={`${i.name}の見本`} />}
-                  <span class="cs-icon">{i.emoji}</span>
+                  <span class="cs-icon">{i.slot === 'ornament' ? <StyleOrnament itemKey={i.key} /> : i.emoji}</span>
                   <h3>{i.name}</h3>
                   <p>{i.note}</p>
                   <small>{styles[slot as StyleSlot] === i.key ? '装備中' : owned ? '所持・期限なし' : '未所持'}</small>
@@ -109,7 +116,8 @@ export function StyleGachaPage(p: { me: CasinoMe; state: StyleState; g: GuildCon
       <div class="cs-grid">
         {chances.filter((i) => i.chance > 0 || (i.slot && p.state.owned.includes(i.key))).map((i) => (
           <article class="cs-item">
-            <span class="cs-icon">{i.emoji}</span>
+            {i.slot === 'background' && <div class={`cs-scene-thumbnail cs-background-${i.key}`} role="img" aria-label={`${i.name}の見本`} />}
+            <span class="cs-icon">{i.slot === 'ornament' ? <StyleOrnament itemKey={i.key} /> : i.emoji}</span>
             <h3>{i.name}</h3>
             <b>{i.chance.toLocaleString('ja-JP', { maximumFractionDigits: 3 })}％</b>
             <p>{i.note}</p>

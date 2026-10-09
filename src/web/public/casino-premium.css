@@ -1,0 +1,58 @@
+/* 背景・卓・置物の見た目をそろえる。装備の種類ごとに重ねる。 */
+.cs-background-yozakura { --cs-table-art: url('/static/casino-table-yozakura.webp'); --cs-art: url('/static/casino-scene-yozakura.webp'); --c-felt: #124c3b; --c-felt2: #06281f; --cs-felt-light: #256a51; --cs-frame: #d5aa69; --cs-button: #235f49; --cs-button-dark: #10362a; }
+.cs-background-foxroom { --cs-table-art: url('/static/casino-table-foxroom.webp'); --cs-art: url('/static/casino-scene-foxroom.webp'); --c-felt: #152d55; --c-felt2: #081629; --cs-felt-light: #25456c; --cs-frame: #c6cfda; --cs-button: #294f75; --cs-button-dark: #14283f; }
+.cs-background-gold { --cs-table-art: url('/static/casino-table-gold.webp'); --cs-art: url('/static/casino-scene-gold.webp'); --c-felt: #571923; --c-felt2: #290b14; --cs-felt-light: #77323a; --cs-frame: #dfbc70; --cs-button: #77333c; --cs-button-dark: #401820; }
+.cs-background-stars { --cs-table-art: url('/static/casino-table-stars.webp'); --cs-art: url('/static/casino-scene-stars.webp'); --c-felt: #242445; --c-felt2: #0d142d; --cs-felt-light: #404366; --cs-frame: #cabdea; --cs-button: #4a4279; --cs-button-dark: #25223f; }
+body[class*="cs-background-"] { background: linear-gradient(#070d1730, #070d1780), var(--cs-art) center top / cover fixed, #101725; }
+body[class*="cs-background-"] .c-top { background: #08101de8; backdrop-filter: blur(10px); border-bottom-color: #ddc9a65c; }
+body[class*="cs-background-"] .c-main { padding-top: 24px; }
+.cs-room-heading { display: flex; align-items: center; justify-content: space-between; min-height: 64px; gap: 16px; margin: 0 0 12px; }
+.cs-room-heading > span { font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; font-size: clamp(1.3rem, 4vw, 2rem); color: #ffefd4; letter-spacing: .1em; text-shadow: 0 2px 12px #000; }
+.cs-room-heading .cs-ornament-art { width: 64px; height: 64px; }
+.cs-ornament-art { display: inline-block; width: 80px; height: 80px; flex: none; object-fit: contain; vertical-align: middle; filter: drop-shadow(0 4px 5px #0008); }
+.cs-seat .cs-ornament-art { width: 44px; height: 44px; }
+.cl-wardrobe-scene .cs-ornament-art { width: 96px; height: 96px; }
+.cs-icon .cs-ornament-art { width: 96px; height: 96px; }
+.cs-scene-title { margin: 0; text-align: center; color: #ffefd4; font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; font-size: clamp(1.6rem, 4vw, 2.6rem); letter-spacing: .1em; text-shadow: 0 2px 16px #000; }
+.cs-preview-scene { padding: 32px 24px 28px; border-color: #d3b77a; box-shadow: 0 18px 60px #0006; min-height: 350px; }
+.cs-preview-scene .cs-preview { max-width: 660px; margin-top: 36px; background: radial-gradient(ellipse at 50% 20%, var(--cs-felt-light, #256a51), var(--c-felt) 45%, var(--c-felt2)); border: 6px solid var(--cs-frame, #d5aa69); border-radius: 100px / 60px; box-shadow: inset 0 0 0 2px #f5db9e70, inset 0 0 35px #0008, 0 8px 0 #0a1012, 0 16px 25px #0007; padding: 28px 32px; backdrop-filter: none; }
+.cs-chip { display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 50%; border: 4px dashed #e9cf93; background: radial-gradient(circle, #37332c 0 48%, #c19a50 49% 55%, #15191d 56%); color: #fff3cf; font-weight: 800; box-shadow: 0 3px 0 #705529, 0 6px 0 #141619, 0 8px 8px #0007; }
+body[class*="cs-background-"] .c-table { background: radial-gradient(ellipse at 50% 20%, var(--cs-felt-light, #256a51), var(--c-felt) 48%, var(--c-felt2)); border-color: var(--cs-frame, #d5aa69); box-shadow: inset 0 0 0 2px #fff0ce66, inset 0 0 45px #0007, 0 7px 0 #111617, 0 18px 40px #0009; }
+body[class*="cs-background-"] .c-felt { border-radius: 110px / 65px; padding: 30px 32px; }
+body[class*="cs-background-"] .c-felt .c-cards { justify-content: center; }
+body[class*="cs-background-"] .c-felt .c-hand-label { text-align: center; }
+body[class*="cs-background-"] .c-btn:not(.c-btn-gold):not(.c-btn-ghost):not(.c-btn-discord) { background: linear-gradient(var(--cs-button, #235f49), var(--cs-button-dark, #10362a)); border-color: #d6bc8470; box-shadow: inset 0 1px 0 #fff2, 0 3px 8px #0004; }
+body[class*="cs-background-"] .c-btn-ghost { background: #09111be8; color: #e3e9e7; }
+body[class*="cs-background-"] .c-h1, body[class*="cs-background-"] .c-back a { text-shadow: 0 2px 8px #000; }
+.cs-table-sakura { --cs-table-art: url('/static/casino-table-yozakura.webp'); --cs-trim: url('/static/casino-trim-sakura.svg'); --cs-trim-frame: #ecc4ae; }
+.cs-table-dragon { --cs-table-art: url('/static/casino-table-gold.webp'); --cs-trim: url('/static/casino-trim-dragon.svg'); --cs-trim-frame: #e2bd6e; }
+:is(.cs-table-sakura, .cs-table-dragon) :is(.c-table.c-felt, .cs-preview-scene .cs-preview) { background-image: var(--cs-trim), radial-gradient(ellipse at 50% 20%, var(--cs-felt-light, #256a51), var(--c-felt) 48%, var(--c-felt2)); background-size: 100% 100%; border-color: var(--cs-trim-frame); }
+:is(.cs-table-sakura, .cs-table-dragon).cs-seat { background-image: var(--cs-trim), linear-gradient(#12231ef2, #101c19f2); background-size: 100% 100%; border-color: var(--cs-trim-frame); box-shadow: inset 0 0 0 1px #ffedc13b, 0 4px 12px #0004; }
+.cs-trim-thumbnail { width: 100%; padding: 20px 12px; min-height: 100px; background: #101c23; border-radius: 10px; }
+.cs-trim-thumbnail > span { display: block; padding: 24px 12px; border: 4px solid var(--cs-trim-frame); border-radius: 60px / 30px; background: var(--cs-trim) center / 100% 100%, #143e31; text-align: center; font-size: .8rem; color: #fff0ce; box-shadow: 0 4px 0 #050a0a; }
+.cs-preview-hands { width: 100%; display: grid; gap: 16px; }
+.cs-preview-hand { display: grid; gap: 8px; justify-items: center; }
+.cs-preview-hand > small { color: #ffebc7; letter-spacing: .1em; }
+.cs-preview-hand .c-cards { justify-content: center; }
+.cs-preview-caption { width: 100%; text-align: center; margin: 0; color: #f3e9d2; }
+@media (max-width: 600px) {
+  body[class*="cs-background-"] { background-attachment: scroll; }
+  .cs-preview-scene { padding: 22px 12px; }
+  .cs-preview-scene .cs-preview { padding: 24px 16px; border-width: 4px; border-radius: 40px; margin-top: 24px; gap: 12px; }
+  body[class*="cs-background-"] .c-felt { border-radius: 40px; padding: 24px 12px; }
+  .cs-ornament-art { width: 56px; height: 56px; }
+  .cs-room-heading .cs-ornament-art { width: 48px; height: 48px; }
+}
+
+/* 絵は空の卓だけ。実際のカードとボタンを中央に重ねる。 */
+body:is(.cs-background-yozakura, .cs-background-foxroom, .cs-background-gold, .cs-background-stars, .cs-table-sakura, .cs-table-dragon) :is(.c-table.c-felt, .cs-preview-scene .cs-preview) { background-color: transparent; background-image: var(--cs-table-art); background-size: 100% 100%; background-repeat: no-repeat; border: 0; border-radius: 0; box-shadow: none; filter: drop-shadow(0 12px 12px #0007); padding: 52px 64px 48px; }
+@media (max-width: 600px) {
+  body:is(.cs-background-yozakura, .cs-background-foxroom, .cs-background-gold, .cs-background-stars, .cs-table-sakura, .cs-table-dragon) :is(.c-table.c-felt, .cs-preview-scene .cs-preview) { padding: 42px 28px 48px; }
+  body[class*="cs-background-"] .c-felt .c-actions { gap: 10px; }
+  body[class*="cs-background-"] .c-felt .c-actions .c-btn { max-width: 100%; padding: 10px 12px; font-size: .85rem; }
+}
+
+body[class*="cs-background-"] .c-felt .c-hand-label { width: fit-content; max-width: 100%; margin-inline: auto; padding: 4px 10px; border-radius: 10px; background: #07121ccc; color: #f6efde; }
+
+.cs-trim-thumbnail > span { background-image: var(--cs-table-art); background-color: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 30px 12px; }
+body[class*="cs-background-"] .c-main > p.c-muted { color: #edf0ec; background: #08121ddd; border-radius: 8px; padding: 10px 12px; }
