@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { castIntroId, castIntroPosts, forgetCastIntroPost, saveCastIntroPost, withCastIntroLock } from '../services/castIntroPosts.js';
+import { DiscordHttpError } from '../lib/discordRest.js';
 import sharp from 'sharp';
 import {
   ActionRowBuilder,
@@ -220,28 +223,76 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
  * 🎀 キャストごとの紹介パネル（みんなに見える。社務所Web から出す）: 名前・紹介・メニュー・写真の全体と、指名の選ぶ欄・予約。
  * 選んだあとのやり取りは、押した人にだけ見える形で返す（パネルは書き換えない）
  */
-export async function postCastIntro(db: Db, discord: Pick<DiscordActions, 'sendMessage'>, castId: string, channelId: string, coin: string): Promise<boolean> {
+async function castIntroBody(db: Db, castId: string) {
   const cast = await getCast(db, castId);
-  if (!cast || cast.status !== 'active') return false;
+  if (!cast) return undefined;
   const [name, photo, stats] = await Promise.all([namesOf(db, [castId]).then((m) => m.get(castId) ?? castId), loadCastPhoto(db, castId), castStats(db, monthStart())]);
   const st = stats.find((x) => x.castId === castId);
   const menu = menuOf(cast).filter((m) => m.price > 0 || m.consult);
   const header = [`## ${name}`, cast.tags.length ? cast.tags.map((t) => `#${t}`).join(' ') : '', cast.bio].filter(Boolean).join('\n');
-  await discord.sendMessage(channelId, {
+  const body: MessageBody = {
     flags: MessageFlags.IsComponentsV2,
     allowed_mentions: { parse: [] },
+    attachments: [],
     ...(photo ? { files: [{ name: 'cast-profile.png', contentType: photo.contentType, data: photo.data }] } : {}),
     components: [
+      { type: 14, divider: true, spacing: 2 },
       { type: 10, content: header },
       ...(photo ? [{ type: 12, items: [{ media: { url: 'attachment://cast-profile.png' }, description: `${name}のメニュー画像` }] }] : []),
       { type: 10, content: castMenuText(menu) },
       ...(cast.options.length ? [{ type: 10, content: castOptionsText(cast) }] : []),
       ...(st ? [{ type: 10, content: `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` }] : []),
-      ...(menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
-      { type: 10, content: '-# 選択後、あなただけに確認画面が表示されます。' },
+      ...(cast.status === 'active' && menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
+      { type: 10, content: cast.status === 'active' ? '-# 選択後、あなただけに確認画面が表示されます。' : '-# 現在は受付を停止しています。' },
+      { type: 14, divider: true, spacing: 2 },
     ],
+  };
+  const hash = createHash('sha256').update(JSON.stringify({ components: body.components, photo: photo?.hash ?? null })).digest('hex');
+  return { body, hash, active: cast.status === 'active' };
+}
+
+
+/** 投稿済みなら同じメッセージを書き換える。消されているときだけ、操作した人の指定先に出す */
+export async function postCastIntro(db: Db, discord: Pick<DiscordActions, 'sendMessage' | 'editMessage'>, castId: string, channelId: string, _coin: string): Promise<boolean> {
+  return withCastIntroLock(db, castId, async locked => {
+    const view = await castIntroBody(locked, castId);
+    if (!view?.active) return false;
+    const old = (await castIntroPosts(locked, castId)).find(p => p.channelId === channelId);
+    let messageId = old?.messageId;
+    if (messageId) {
+      try { await discord.editMessage(channelId, messageId, { ...view.body, content: null, embeds: [] }); }
+      catch (err) {
+        if (!(err instanceof DiscordHttpError) || err.status !== 404) throw err;
+        messageId = undefined;
+      }
+    }
+    if (!messageId) messageId = (await discord.sendMessage(channelId, view.body)).id;
+    await saveCastIntroPost(locked, { castId, channelId, messageId, hash: view.hash });
+    return true;
   });
-  return true;
+}
+
+/** 写真やメニューを変えたときに更新する。失敗した投稿は毎分の確認で再試行する */
+export async function refreshCastIntros(db: Db, discord: Pick<DiscordActions, 'editMessage'>, castId?: string): Promise<boolean> {
+  let ok = true;
+  const ids = [...new Set((await castIntroPosts(db, castId)).map(p => p.castId))];
+  for (const id of ids) {
+    await withCastIntroLock(db, id, async locked => {
+      const view = await castIntroBody(locked, id);
+      if (!view) return;
+      for (const post of await castIntroPosts(locked, id)) {
+        if (post.hash === view.hash) continue;
+        try {
+          await discord.editMessage(post.channelId, post.messageId, { ...view.body, content: null, embeds: [] });
+          await saveCastIntroPost(locked, { ...post, hash: view.hash });
+        } catch (err) {
+          if (err instanceof DiscordHttpError && err.status === 404) await forgetCastIntroPost(locked, post);
+          else { ok = false; logger.warn({ err, castId: id }, 'cast intro sync failed'); }
+        }
+      }
+    });
+  }
+  return ok;
 }
 
 /** 部屋のチャットに出す、指名の知らせ・通話中の操作・終わり */
@@ -302,6 +353,8 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
 export class CastApp {
   private guild?: Guild;
   private ticking = false;
+  private introsDiscovered = false;
+  private syncingIntros = false;
 
   constructor(
     private readonly db: Db,
@@ -311,6 +364,40 @@ export class CastApp {
 
   attach(guild: Guild): void {
     this.guild = guild;
+  }
+
+  /** 従来の紹介投稿も、キャスト用チャンネルの最新100件から引き継ぐ */
+  private async discoverIntros(): Promise<void> {
+    if (this.introsDiscovered || !this.guild) return;
+    const c = await loadCastConfig(this.db);
+    const ids = [...new Set([c.channelId, c.femaleChannelId].filter((id): id is string => !!id))];
+    let ok = true;
+    for (const channelId of ids) {
+      try {
+        const channel = await this.guild.channels.fetch(channelId);
+        if (!channel?.isTextBased() || !('messages' in channel)) continue;
+        const messages = await channel.messages.fetch({ limit: 100 });
+        const seen = new Set<string>();
+        for (const message of messages.values()) {
+          if (message.author.id !== this.guild.client.user.id) continue;
+          const id = castIntroId(message.components.map(c => c.toJSON()));
+          if (!id || seen.has(id) || !await getCast(this.db, id)) continue;
+          seen.add(id);
+          await saveCastIntroPost(this.db, { castId: id, channelId, messageId: message.id, hash: '' }, true);
+        }
+      } catch (err) { ok = false; logger.warn({ err }, 'cast old intros lookup failed'); }
+    }
+    this.introsDiscovered = ok && ids.length > 0;
+  }
+
+  /** 画像の更新が予約や通話の終了処理を待たせないよう、別に動かす */
+  async syncIntros(): Promise<void> {
+    if (!this.guild || this.syncingIntros) return;
+    this.syncingIntros = true;
+    try {
+      await this.discoverIntros();
+      await refreshCastIntros(this.db, this.discord);
+    } finally { this.syncingIntros = false; }
   }
 
   private coin(): string {
@@ -323,6 +410,7 @@ export class CastApp {
   }
 
   private refresh(): void {
+    void refreshCastIntros(this.db, this.discord).catch(err => logger.warn({ err }, 'cast intros refresh failed'));
     void refreshCastPanel(this.db, this.discord).catch((err: unknown) => logger.warn({ err }, 'cast panel refresh failed'));
   }
 

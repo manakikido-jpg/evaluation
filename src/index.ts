@@ -192,6 +192,7 @@ async function main(): Promise<void> {
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
       // 🎀 キャスト: 返事待ちの期限・予約の始まり・通話の終わり・部屋の片付け
+      void cast.syncIntros().catch(err => logger.warn({ err }, 'cast intros sync failed'));
       void cast.tick().catch((err) => logger.warn({ err }, 'cast tick failed'));
       // 🎫 チケット: 返事のない知らせ・自動で閉じる
       void supportTickets.tick().catch((err) => logger.warn({ err }, 'ticket tick failed'));
