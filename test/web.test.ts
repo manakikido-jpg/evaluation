@@ -3782,3 +3782,61 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
   });
 
  });
+
+it('キャスト専用のDiscord認証で本人だけ編集でき、運営の画面には入れない', async () => {
+  const { applyCast, CAST_DEFAULTS, setCastStatus, getCast, menuOf, loadCastPhoto } = await import('../src/services/cast.js');
+  const { postCastIntro } = await import('../src/discord/cast.js');
+  const { createMemberSession } = await import('../src/web/memberSessions.js');
+  const OTHER = '880000000000000081';
+  for (const id of [USER, OTHER]) {
+    await applyCast(db, CAST_DEFAULTS, { id, adult: true }, { bio: '紹介', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: false });
+    await setCastStatus(db, id, 'active', STAFF);
+  }
+  await postCastIntro(db, fakeActions, USER, '910000000000000003', '銭');
+  loginAs = USER;
+  const start = await app.request('/cast-office/auth');
+  const state = /sakura_cast_office_state=([^;]+)/.exec(start.headers.get('set-cookie')!)![1]!;
+  const callback = await app.request(`/auth/callback?state=${state}&code=good`, { headers: { cookie: `sakura_cast_office_state=${state}` } });
+  expect(callback.headers.get('location')).toBe('/cast-office');
+  expect(callback.headers.get('set-cookie')).not.toContain('shamusho_session=');
+  const token = /sakura_cast_office=([^;]+)/.exec(callback.headers.get('set-cookie')!)![1]!;
+  const cookie = `sakura_cast_office=${token}`;
+  const html = await (await app.request('/cast-office', { headers: { cookie } })).text();
+  expect(html).toContain('紹介文を保存');
+  expect(html).toContain('cast-office.css?v=');
+  expect(html).not.toContain(OTHER);
+  expect(html).not.toMatch(/onclick=|style=|<script>/);
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+  const send = (path: string, body: Record<string, string>, security = csrf) => app.request(path, { method: 'POST', headers: { cookie }, body: new URLSearchParams({ _csrf: security, ...body }) });
+  expect((await send('/cast-office/profile', { bio: '新しい紹介', tags: 'ゲーム, 雑談', memberId: OTHER })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect((await getCast(db, USER))!.bio).toBe('新しい紹介');
+  expect((await getCast(db, OTHER))!.bio).toBe('紹介');
+  expect((await send('/cast-office/profile', { bio: '改ざん' }, 'bad')).status).toBe(403);
+  expect((await send(`/cast-office/casts/${OTHER}/profile`, { bio: '改ざん' })).status).toBe(404);
+  expect((await app.request('/cast', { headers: { cookie } })).status).toBe(302);
+  expect((await send('/cast-office/menu', { name: 'ゲーム', note: '一緒に', minutes: '30', price: '400', kind: 'call' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  const item = menuOf((await getCast(db, USER))!).find(m => m.name === 'ゲーム')!;
+  expect((await send(`/cast-office/menu/${item.id}`, { name: 'ゲーム', note: '', minutes: '60', price: '700' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect(menuOf((await getCast(db, USER))!).find(m => m.id === item.id)!.price).toBe(700);
+  expect((await send('/cast-office/menu', { name: '不正', minutes: '30', price: '-1' })).headers.get('location')).toBe('/cast-office?msg=invalid');
+  expect(actions.some(x => x.startsWith('edit '))).toBe(true);
+  const sharp = (await import('sharp')).default;
+  const photo = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#aaaa00' } }).png().toBuffer();
+  const fd = new FormData(); fd.append('_csrf', csrf); fd.append('image', new File([new Uint8Array(photo)], 'menu.png', { type: 'image/png' }));
+  expect((await app.request('/cast-office/photo', { method: 'POST', headers: { cookie }, body: fd })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect(await loadCastPhoto(db, USER)).toBeDefined();
+  expect(await loadCastPhoto(db, OTHER)).toBeUndefined();
+  expect((await app.request('/cast-office/photo', { headers: { cookie } })).headers.get('content-type')).toBe('image/png');
+  const edit = fakeActions.editMessage;
+  try {
+    fakeActions.editMessage = async () => { throw new Error('Discordの一時エラー'); };
+    expect((await send('/cast-office/profile', { bio: '保存は残る', tags: '' })).headers.get('location')).toBe('/cast-office?msg=pending');
+    expect((await getCast(db, USER))!.bio).toBe('保存は残る');
+  } finally { fakeActions.editMessage = edit; }
+  expect((await send('/cast-office/sync', {})).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect((await listAudit(db, { action: 'cast.office.profile' })).length).toBe(2);
+  await setCastStatus(db, USER, 'removed', STAFF);
+  expect((await app.request('/cast-office', { headers: { cookie } })).headers.get('location')).toBe('/cast-office/login?e=denied');
+  const forged = await createMemberSession(db, { id: OTHER, username: 'other', displayName: 'other', avatarUrl: null }, clock);
+  expect((await app.request('/cast-office', { headers: { cookie: `sakura_cast_office=${forged}` } })).headers.get('location')).toBe('/cast-office/login?e=denied');
+});

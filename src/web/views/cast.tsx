@@ -236,6 +236,7 @@ export function CastPage(props: {
     <Layout title="キャスト" session={session} nav="cast">
       <div class="page-head">
         <h1>🎀 キャスト</h1>
+        <a href="/cast-office/login" class="btn">キャスト本人の編集用ログイン</a>
       </div>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">

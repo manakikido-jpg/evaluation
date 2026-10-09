@@ -1,3 +1,4 @@
+import { mountCastOffice } from './castOffice.js';
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
@@ -345,7 +346,7 @@ export function createWebApp(deps: WebDeps) {
   app.use((c, next) =>
     c.req.method !== 'POST'
       ? smallBody(c, next)
-      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
+      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
@@ -389,6 +390,8 @@ export function createWebApp(deps: WebDeps) {
     const cache = c.req.query('v') === art.hash ? 'public, max-age=31536000, immutable' : 'public, max-age=60';
     return c.body(Buffer.from(art.data), 200, { 'content-type': art.contentType, 'cache-control': cache, 'x-content-type-options': 'nosniff' });
   });
+
+  mountCastOffice(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now, enabled: deps.discordLogin ?? true });
 
   // ───────── ログイン ─────────
 

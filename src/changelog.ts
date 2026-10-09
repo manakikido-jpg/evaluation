@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-cast-self-editor', date: '2026-10-10', kind: 'new', where: ['Discord', '社務所Web'],
+    title: 'キャスト本人がDiscord認証でメニューを編集',
+    items: ['キャスト用社務所から自分の画像・紹介文・メニューを変更できます。運営の画面やほかの人の編集はできません。', 'スマホとPCに合わせた画面で画像の見本を確認でき、保存すると登録済みの紹介投稿にも反映します。'],
+  },
+  {
     id: '2026-10-10-secret-room-label', date: '2026-10-10', kind: 'improve', where: ['Discord'],
     title: 'シクレの部屋を名前で分かりやすく',
     items: ['シークレットを選ぶと部屋名に「🤫 シクレ｜」が付きます。BOTから名前を変えても目印が残ります。', '運営が公開などに戻すと目印を外します。Discordの名前の変更制限で反映が遅れることがあります。'],
