@@ -3101,6 +3101,26 @@ describe('キャスト（管理画面）', () => {
     expect((await get('/cast/image', s)).status).toBe(200);
   });
 
+  it('➕ キャストを社務所Web で登録する（18 歳以上だけ・すぐ承認・ロールと DM）', async () => {
+    const { getCast } = await import('../src/services/cast.js');
+    const { members: mt } = await import('../src/db/schema.js');
+    const { eq: eqq } = await import('drizzle-orm');
+    const adult = '880000000000000031';
+    const minor = '880000000000000032';
+    for (const id of [adult, minor]) await recordJoin(db, { id, username: `u${id}`, displayName: id === adult ? 'おとな' : 'こども', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await db.update(mt).set({ ageGroup: 'adult' }).where(eqq(mt.id, adult));
+    const s = await login(STAFF);
+    expect(await (await get('/cast', s)).text()).toContain('/cast/register');
+    const reg = (member: string, price30 = '300') => form(s, '/cast/register', { member, bio: 'よろしく', tags: '雑談、ゲーム', price30, price60: '500', priceNight: '', minorOk: 'yes' });
+    expect((await reg('だれもいない')).headers.get('location')).toBe('/cast?msg=no_member#cast-register');
+    expect((await reg('こども')).headers.get('location')).toBe('/cast?msg=reg_not_adult#cast-register');
+    expect((await reg('おとな', '0')).headers.get('location')).toBe('/cast?msg=reg_invalid#cast-register');
+    expect((await reg('おとな')).headers.get('location')).toBe('/cast?msg=registered');
+    expect(await getCast(db, adult)).toMatchObject({ status: 'active', approvedBy: STAFF, tags: ['雑談', 'ゲーム'], priceNight: 0, minorOk: true });
+    expect((await reg(adult)).headers.get('location')).toBe('/cast?msg=reg_already#cast-register');
+    expect((await listAudit(db, { action: 'cast.register' })).length).toBe(1);
+  });
+
   it('設定・画像・承認・メニューを出す・通報を決める', async () => {
     const { applyCast, requestSession, acceptSession, disputeSession, getCast, CAST_DEFAULTS } = await import('../src/services/cast.js');
     const { walletOf } = await import('../src/services/economy.js');

@@ -284,7 +284,8 @@ describe('🎀 キャストの見た目', () => {
     expect(p.files![0]!.name).toBe('cast-menu.png');
     const menu = JSON.stringify(p.components);
     expect(menu.indexOf('もも')).toBeLessThan(menu.indexOf('さくら'));
-    for (const id of ['cast:pick', 'cast:now', 'cast:rank', 'cast:me', 'cast:apply']) expect(menu).toContain(id);
+    for (const id of ['cast:pick', 'cast:now', 'cast:rank', 'cast:me']) expect(menu).toContain(id);
+    expect(menu).not.toContain('cast:apply');
     // キャストがいなければメニューは出さない
     expect(JSON.stringify(castPanel([]).components)).not.toContain('cast:pick');
     const r = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '30' }, T20);

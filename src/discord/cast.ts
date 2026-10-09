@@ -25,7 +25,6 @@ import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
 import {
   acceptSession,
-  applyCast,
   cancelSession,
   castFee,
   castStates,
@@ -131,7 +130,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
             },
           ]
         : []),
-      row(button('cast:now', '今すぐ話せる人', 3, '🟢'), button('cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙'), button('cast:apply', 'キャストになる', 2, '🎀')),
+      row(button('cast:now', '今すぐ話せる人', 3, '🟢'), button('cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙')),
     ],
   };
 }
@@ -255,7 +254,8 @@ export class CastApp {
         return;
       }
       if (interaction.isModalSubmit()) {
-        if (action === 'applymodal' || action === 'editmodal') return await this.profileSubmit(interaction, action === 'applymodal');
+        if (action === 'applymodal') return void (await interaction.reply({ content: '🎀 キャストは、運営が登録します。キャストになりたい方は、運営に声をかけてください。', ...EPHEMERAL }));
+        if (action === 'editmodal') return await this.profileSubmit(interaction);
         if (action === 'rmodal') return await this.reserveSubmit(interaction, a ?? '', b as CastPlan);
         return;
       }
@@ -384,10 +384,8 @@ export class CastApp {
   }
 
   private async applyModal(i: ButtonInteraction<'cached'>): Promise<void> {
-    if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.reply({ content: '🎀 キャストになれるのは、18 歳以上（宵参り）の方だけです。', ...EPHEMERAL }));
-    const cur = await getCast(this.db, i.user.id);
-    if (cur && cur.status !== 'removed') return void (await i.reply({ content: cur.status === 'pending' ? '申し込みは受け付けています。運営の確認をお待ちください。' : 'もうキャストです。「⚙ キャストの方」から設定できます。', ...EPHEMERAL }));
-    await i.showModal(this.profileModal('cast:applymodal', '🎀 キャストになる（運営が確認します）'));
+    // 前のメニューに残っているボタン。キャストは運営が社務所Web で登録する
+    await i.reply({ content: '🎀 キャストは、運営が登録します。キャストになりたい方は、運営に声をかけてください。', ...EPHEMERAL });
   }
 
   private async editModal(i: ButtonInteraction<'cached'>): Promise<void> {
@@ -396,7 +394,7 @@ export class CastApp {
     await i.showModal(this.profileModal('cast:editmodal', '🎀 紹介と値段を変える', cur));
   }
 
-  private async profileSubmit(i: ModalSubmitInteraction<'cached'>, isNew: boolean): Promise<void> {
+  private async profileSubmit(i: ModalSubmitInteraction<'cached'>): Promise<void> {
     await i.deferReply(EPHEMERAL);
     const c = await loadCastConfig(this.db);
     const cur = await getCast(this.db, i.user.id);
@@ -409,26 +407,15 @@ export class CastApp {
       minorOk: cur?.minorOk ?? true,
     };
     const bad = `値段は ${fmt(c.priceMin)}〜${fmt(c.priceMax)} 枚の数で入れてください（寝落ちは受けないなら空）。`;
-    if (!isNew) {
-      const r = await updateProfile(this.db, c, i.user.id, p);
-      if (!r) return void (await i.editReply(bad));
-      this.refresh();
-      return void (await i.editReply('紹介と値段を変えました。'));
-    }
-    const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = await applyCast(this.db, c, { id: i.user.id, adult }, p);
-    if (r.status === 'not_adult') return void (await i.editReply('🎀 キャストになれるのは、18 歳以上（宵参り）の方だけです。'));
-    if (r.status === 'already') return void (await i.editReply('もう申し込んでいます。'));
-    if (r.status === 'invalid') return void (await i.editReply(bad));
-    await audit(this.db, { actorId: i.user.id, action: 'cast.apply', detail: { price30: p.price30, price60: p.price60, priceNight: p.priceNight }, via: 'discord' });
-    const log = this.cfg().channels.log;
-    if (log) await this.discord.sendMessage(log, { content: `🎀 ${i.member.displayName} さんがキャストに申し込みました。社務所Web の「🎀 キャスト」で確かめてください。` }).catch(() => undefined);
-    await i.editReply('🎀 申し込みました。運営が確認して、承認されるとメニューに並びます。');
+    const r = await updateProfile(this.db, c, i.user.id, p);
+    if (!r) return void (await i.editReply(bad));
+    this.refresh();
+    await i.editReply('紹介と値段を変えました。');
   }
 
   private async receptionView(member: GuildMember) {
     const d = await loadCastReception(this.db, member.id);
-    if (!d) return { content: 'キャストの方だけが使えます。キャストになるには「🎀 キャストになる」から。', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] as never[] } };
+    if (!d) return { content: 'キャストの方だけが使えます。キャストは運営が登録します。', embeds: [], components: [], attachments: [], allowedMentions: { parse: [] as never[] } };
     const [names, avatar] = await Promise.all([
       namesOf(this.db, [...d.current, ...d.today].map((s) => s.customerId)),
       loadCastPhoto(this.db, member.id).then((photo) => photo?.data ?? loadReceptionAvatar(member.displayAvatarURL({ extension: 'png', size: 128 }))),

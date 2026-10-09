@@ -20,6 +20,11 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   role_failed: { text: 'ロールを作れませんでした（BOT の「ロールの管理」の権限）。', kind: 'warn' },
   paid: { text: 'キャストに渡しました。', kind: 'ok' },
   refunded: { text: 'お客に戻しました。', kind: 'ok' },
+  registered: { text: '🎀 キャストに登録しました（ロールを付けて、メニューに並べました。本人に DM で知らせました）。写真は下の一覧から保存できます。', kind: 'ok' },
+  no_member: { text: 'その人が見つかりません。名前を入れて、出てきた候補から選んでください（鯖にいる人だけ）。', kind: 'warn' },
+  reg_not_adult: { text: 'キャストに登録できるのは、18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。', kind: 'warn' },
+  reg_invalid: { text: '値段を確かめてください（設定の下限〜上限の数。寝落ちは受けないなら空）。紹介は 300 文字まで。', kind: 'warn' },
+  reg_already: { text: 'その人はもうキャストです。', kind: 'warn' },
   done_already: { text: 'もう終わっています。', kind: 'warn' },
 };
 
@@ -69,6 +74,7 @@ export function CastPage(props: {
   hasImage: boolean;
   photos: ReadonlyMap<string, string>;
   casts: Cast[];
+  members: { id: string; name: string }[];
   stats: CastStat[];
   sessions: CastSession[];
   name: (id: string) => string;
@@ -180,9 +186,51 @@ export function CastPage(props: {
             ))}
           </ul>
         ) : (
-          <p class="note ch-empty">申し込みはありません。メンバーはメニューの「🎀 キャストになる」から申し込みます（18 歳以上の方だけ）。</p>
+          <p class="note ch-empty">申し込みはありません。キャストは下の「➕ キャストを登録」から運営が登録します。</p>
         )}
       </section>
+
+      <form method="post" action="/cast/register" class="card anchor" id="cast-register">
+        <Csrf session={session} />
+        <h2>➕ キャストを登録</h2>
+        <p class="note">登録するとすぐキャストになり、ロールが付いてメニューに並びます（本人に DM）。18 歳以上（宵参りのロールか、年齢区分が大人）の人だけです。値段は {c.priceMin.toLocaleString('ja-JP')}〜{c.priceMax.toLocaleString('ja-JP')} 枚。</p>
+        <div class="fields">
+          <label class="field">
+            <span>登録する人（名前か ID）</span>
+            <input type="text" name="member" list="cast-members" required autocomplete="off" placeholder="名前を入れると候補が出ます" />
+            <datalist id="cast-members">
+              {props.members.map((m) => (
+                <option value={m.name}>{m.id}</option>
+              ))}
+            </datalist>
+          </label>
+          <label class="field">
+            <span>紹介（300 文字まで）</span>
+            <textarea name="bio" maxlength={300} rows={3}></textarea>
+          </label>
+          <label class="field">
+            <span>得意なこと（「、」で区切る。7 つまで）</span>
+            <input type="text" name="tags" maxlength={120} placeholder="雑談、ゲーム、寝落ち" />
+          </label>
+          <label class="field">
+            <span>30 分の値段</span>
+            <input type="number" name="price30" min={c.priceMin} max={c.priceMax} required />
+          </label>
+          <label class="field">
+            <span>1 時間の値段</span>
+            <input type="number" name="price60" min={c.priceMin} max={c.priceMax} required />
+          </label>
+          <label class="field">
+            <span>寝落ち（朝 7 時まで）の値段（受けないなら空）</span>
+            <input type="number" name="priceNight" min={c.priceMin} max={c.priceMax} />
+          </label>
+          <label class="field check">
+            <input type="checkbox" name="minorOk" value="yes" checked />
+            <span>18 歳未満の人の雑談も受ける（公開の部屋だけ）</span>
+          </label>
+        </div>
+        <button type="submit" class="ok">登録する</button>
+      </form>
 
       <section class="card ch-group">
         <div class="ch-cat">

@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-register-web',
+    date: '2026-10-09',
+    kind: 'improve',
+    where: ['社務所Web', 'Discord'],
+    title: '🎀 キャストは社務所Web で運営が登録する形に',
+    items: [
+      '社務所Web の「🎀 キャスト」に「➕ キャストを登録」を足しました。人・紹介・得意なこと・値段を入れると、すぐキャストになり、ロールが付いてメニューに並びます（本人に DM）。18 歳以上の人だけです。',
+      'キャストのメニューから「🎀 キャストになる」のボタンを外しました（前のメニューに残ったボタンを押すと「運営が登録します」と出ます）。',
+    ],
+  },
+  {
     id: '2026-10-08-invite-appointed-rank',
     date: '2026-10-08',
     kind: 'improve',

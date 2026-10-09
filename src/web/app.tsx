@@ -229,7 +229,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { refreshCastPanel } from '../discord/cast.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -5170,6 +5170,7 @@ export function createWebApp(deps: WebDeps) {
         hasImage={Boolean(image)}
         photos={new Map((await Promise.all(list.map(async (x) => [x.memberId, (await loadCastPhoto(db, x.memberId))?.hash] as const))).filter((x): x is readonly [string, string] => Boolean(x[1])))}
         casts={list}
+        members={await activeMemberNames(db)}
         stats={stats}
         sessions={sessions}
         name={(id) => names.get(id) ?? id}
@@ -5254,6 +5255,25 @@ export function createWebApp(deps: WebDeps) {
   app.post('/cast/post', async (c) => {
     const ok = await refreshCastPanel(db, deps.discord, { repost: true, by: c.get('session').userId }).catch(() => false);
     return c.redirect(`/cast?msg=${ok ? 'posted' : 'post_failed'}`);
+  });
+
+  // ➕ キャストを登録する（運営だけ。Discord からの申し込みはない）
+  app.post('/cast/register', async (c) => {
+    const body = await c.req.parseBody();
+    const by = c.get('session').userId;
+    const id = typeof body.member === 'string' ? await findActiveMember(db, body.member) : undefined;
+    if (!id) return c.redirect('/cast?msg=no_member#cast-register');
+    const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+    const conf = await loadCastConfig(db);
+    const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), price30: parsePrice(str('price30')), price60: parsePrice(str('price60')), priceNight: parsePrice(str('priceNight')), minorOk: body.minorOk === 'yes' };
+    const adult = await isAdult(db, cfg, id, await memberRoleIdsOf(db, id));
+    const r = await registerCast(db, conf, { id, adult }, p, by, now());
+    if (r.status !== 'ok') return c.redirect(`/cast?msg=reg_${r.status}#cast-register`);
+    if (conf.roleId) await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの登録').catch((err: unknown) => logger.warn({ err }, 'cast role add failed'));
+    await audit(db, { actorId: by, targetId: id, action: 'cast.register', detail: { price30: p.price30, price60: p.price60, priceNight: p.priceNight }, via: 'web' });
+    await deps.discord.sendDm(id, '🎀 キャストに登録されました。#キャスト一覧 の「⚙ キャストの方」から待機できます。').catch(() => false);
+    await castPanelNow();
+    return c.redirect('/cast?msg=registered');
   });
 
   app.post('/cast/role', async (c) => {

@@ -204,6 +204,19 @@ export async function updateProfile(db: Db, c: CastConfig, id: string, p: Profil
   return row;
 }
 
+export type RegisterCastResult = { status: 'ok'; cast: Cast } | { status: 'not_adult' | 'invalid' | 'already' };
+
+/** 運営が社務所Web でキャストを登録する（すぐ承認ずみ。18 歳以上の人だけ）。外された人・申し込み中の人も登録できる */
+export async function registerCast(db: Db, c: CastConfig, who: { id: string; adult: boolean }, p: ProfileInput, by: string, now = new Date()): Promise<RegisterCastResult> {
+  if (!who.adult) return { status: 'not_adult' };
+  if (!validProfile(c, p)) return { status: 'invalid' };
+  const cur = await getCast(db, who.id);
+  if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
+  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...p, appliedAt: now, approvedAt: now, approvedBy: by };
+  const [row] = await db.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
+  return { status: 'ok', cast: row! };
+}
+
 /** 運営: 承認・お休み・外す（断る） */
 export async function setCastStatus(db: Db, id: string, status: Cast['status'], by: string, now = new Date()): Promise<Cast | undefined> {
   const [row] = await db
