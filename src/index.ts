@@ -347,6 +347,8 @@ async function main(): Promise<void> {
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);
+    // 案内人の受付のパネル: いつもいちばん下に
+    void guideReception.onMessage(m).catch((err) => logger.warn({ err }, 'guide panel message failed'));
     void supportTickets.onMessage(m).catch((err) => logger.warn({ err }, 'ticket message failed'));
     recruit.onMessage(m);
     void boost.onMessage(m);

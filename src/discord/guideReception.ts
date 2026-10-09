@@ -1,10 +1,10 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { ChannelType, MessageFlags, type Guild, type Interaction, type VoiceState } from 'discord.js';
+import { ChannelType, MessageFlags, type Guild, type Interaction, type Message, type VoiceState } from 'discord.js';
 import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, type GuideConfig } from '../services/guideReception.js';
 import { logger } from '../lib/logger.js';
 const btn = (id: string, label: string, disabled = false) => ({ type: 2, custom_id: id, label, style: 2, disabled });
 export const guideEmployeePanel = (): MessageBody => ({
@@ -20,8 +20,18 @@ export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config
     components: [{ type: 1, components: [btn(`guide:claim:${r.id}`, '対応する', r.status !== 'waiting'), btn(`guide:done:${r.id}`, '案内完了', r.status !== 'assigned')] }],
   };
 }
+/** 案内人の受付のパネルか（自分の BOT のメッセージで「登録を申請」のボタンがある） */
+export const isGuidePanel = (m: Pick<Message, 'components'>) =>
+  m.components.some((r) => 'components' in r && r.components.some((c) => 'customId' in c && c.customId === 'guide:register'));
+/** 書き込みがあってから、パネルを下に置き直すまで */
+const RESTICK_MS = 3_000;
+
 export class GuideReceptionApp {
   private ticking = false;
+  private panelChannels = new Set<string>();
+  private panelLoadedAt = 0;
+  private readonly timers = new Map<string, NodeJS.Timeout>();
+  private readonly queue = new Map<string, Promise<void>>();
   constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions) {}
   private async options(guild: Guild) {
     const c = await loadGuideConfig(this.db);
@@ -88,8 +98,42 @@ export class GuideReceptionApp {
       }
     } finally { this.ticking = false; }
   }
+  /** パネルのチャンネルで書きこみがあったら、少し待ってパネルをいちばん下に置き直す */
+  async onMessage(msg: Message) {
+    if (!msg.inGuild() || msg.guildId !== this.cfg().guildId) return;
+    if (Date.now() - this.panelLoadedAt > 60_000) {
+      this.panelChannels = new Set(await guidePanelChannels(this.db));
+      this.panelLoadedAt = Date.now();
+    }
+    if (!this.panelChannels.has(msg.channelId)) return;
+    if (msg.author.id === msg.client.user.id && isGuidePanel(msg)) return;
+    clearTimeout(this.timers.get(msg.channelId));
+    this.timers.set(msg.channelId, setTimeout(() => {
+      this.timers.delete(msg.channelId);
+      const prev = this.queue.get(msg.channelId) ?? Promise.resolve();
+      this.queue.set(msg.channelId, prev.then(() => this.restick(msg)).catch((err: unknown) => logger.warn({ err }, 'guide panel restick failed')));
+    }, RESTICK_MS));
+  }
+
+  private async restick(msg: Message) {
+    const ch = msg.channel;
+    if (!ch.isSendable()) return;
+    const me = msg.client.user.id;
+    const recent = await ch.messages.fetch({ limit: 20 }).catch(() => undefined);
+    const mine = (m: Message) => m.author.id === me && isGuidePanel(m);
+    const last = recent?.first();
+    if (last && mine(last)) return;
+    await this.discord.sendMessage(ch.id, guideEmployeePanel());
+    for (const m of recent?.values() ?? []) if (mine(m)) await m.delete().catch(() => undefined);
+  }
+
   async onInteraction(i: Interaction) {
     if (!i.isButton() || !i.customId.startsWith('guide:') || !i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
+    // 前に出したパネルも、押されたらそのチャンネルを覚えて、いちばん下に置き直す
+    if (i.message && isGuidePanel(i.message) && !this.panelChannels.has(i.channelId)) {
+      this.panelChannels.add(i.channelId);
+      void addGuidePanelChannel(this.db, i.channelId).catch(() => undefined);
+    }
     await i.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const c = await this.options(i.guild);

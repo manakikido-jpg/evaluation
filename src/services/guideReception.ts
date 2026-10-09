@@ -60,6 +60,19 @@ export async function saveGuideConfig(db: Db, config: GuideConfig, by: string) {
   await db.insert(settings).values({ key: 'guide_reception', value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
   await audit(db, { actorId: by, action: 'guide.settings', via: 'web' });
 }
+/** 「案内人の受付」のパネルを出したチャンネル（いちばん下に置き直す） */
+const PANEL_KEY = 'guide_panel_channels';
+export async function guidePanelChannels(db: Db): Promise<string[]> {
+  const [r] = await db.select().from(settings).where(eq(settings.key, PANEL_KEY));
+  const v = r?.value as { channelIds?: unknown } | undefined;
+  return Array.isArray(v?.channelIds) ? v.channelIds.filter((x): x is string => typeof x === 'string' && /^\d{17,20}$/.test(x)) : [];
+}
+export async function addGuidePanelChannel(db: Db, channelId: string, by = 'system') {
+  const cur = await guidePanelChannels(db);
+  if (cur.includes(channelId)) return;
+  const value = { channelIds: [...cur, channelId].slice(-10) };
+  await db.insert(settings).values({ key: PANEL_KEY, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+}
 export async function registerGuide(db: Db, memberId: string) {
   await db.insert(guideEmployees).values({ memberId }).onConflictDoNothing();
 }

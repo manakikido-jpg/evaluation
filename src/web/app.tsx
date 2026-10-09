@@ -1,7 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
-import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus } from '../services/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
@@ -1507,6 +1507,8 @@ export function createWebApp(deps: WebDeps) {
       const channels = await loadChannels(true);
       if (!channels.some(ch => ch.id === id && ch.type === 0)) return c.redirect('/guide?msg=invalid');
       await deps.discord.sendMessage(id, guideEmployeePanel());
+      // そのチャンネルでは、パネルをいつもいちばん下に置き直す
+      await addGuidePanelChannel(db, id, c.get('session').userId);
       await audit(db, { actorId: c.get('session').userId, action: 'guide.panel', detail: { channelId: id }, via: 'web' });
       return c.redirect('/guide?msg=posted');
     } catch { return c.redirect('/guide?msg=failed'); }

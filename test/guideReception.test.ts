@@ -119,3 +119,40 @@ describe('案内の受付と給与', () => {
     expect(guideVisitorPanel(left!, await loadGuideConfig(db)).content).toContain('退出済み');
   });
 });
+
+describe('案内人の受付のパネルを、いつもいちばん下に', () => {
+  it('出したチャンネルを覚え、書きこみがあれば少し待って下に出し直し、古いパネルを消す', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { addGuidePanelChannel, guidePanelChannels } = await import('../src/services/guideReception.js');
+      const { isGuidePanel, guideEmployeePanel } = await import('../src/discord/guideReception.js');
+      const CH = '870000000000000101', BOT = '870000000000000999';
+      await addGuidePanelChannel(db, CH);
+      await addGuidePanelChannel(db, CH);
+      expect(await guidePanelChannels(db)).toEqual([CH]);
+      const panelComponents = [{ components: [{ customId: 'guide:register' }] }];
+      expect(isGuidePanel({ components: panelComponents } as never)).toBe(true);
+      expect(isGuidePanel({ components: [] } as never)).toBe(false);
+      const deleted = vi.fn(async () => undefined);
+      const oldPanel = { author: { id: BOT }, components: panelComponents, delete: deleted };
+      const talk = { author: { id: OTHER }, components: [] };
+      const recent = new Map<string, unknown>([['2', talk], ['1', oldPanel]]);
+      const send = vi.fn(async () => ({ id: 'new' }));
+      const channel = { id: CH, isSendable: () => true, messages: { fetch: async () => Object.assign(recent, { first: () => talk }) } };
+      const app = new GuideReceptionApp(db, () => cfg, { sendMessage: send } as never);
+      const msg = { inGuild: () => true, guildId: cfg.guildId, channelId: CH, channel, author: { id: OTHER }, components: [], client: { user: { id: BOT } } };
+      await app.onMessage(msg as never);
+      expect(send).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(3_100);
+      expect(send).toHaveBeenCalledWith(CH, guideEmployeePanel());
+      expect(deleted).toHaveBeenCalledOnce();
+      // ほかのチャンネルでは何もしない
+      send.mockClear();
+      await app.onMessage({ ...msg, channelId: '870000000000000102' } as never);
+      await vi.advanceTimersByTimeAsync(3_100);
+      expect(send).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
