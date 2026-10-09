@@ -23,6 +23,8 @@ const art: Partial<Record<CasinoGame, string>> = {
   chinchiro_table: 'chinchiro',
   othello: 'othello',
   versus: 'versus',
+  daifugo: 'daifugo',
+  babanuki: 'babanuki',
 };
 const label = (g: CasinoGame) => (g === 'mahjong' ? '麻雀' : g === 'keiba' ? '競馬' : CASINO_LABEL[g].name);
 function GameCard(p: { game: CasinoGame; tables: Map<string, number>; openMatches: number }) {

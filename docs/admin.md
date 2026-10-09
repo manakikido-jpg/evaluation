@@ -1308,7 +1308,7 @@ GitHubの Settings → Actions → General → Workflow permissions で「Read a
 
 ## カジノのゲーム一覧の画像
 
-ハイ＆ロー・バカラ・AT機・ちんちろりん・オセロ（CPU）・メンバー対戦にも、桜と提灯の和風ゲーム画像を表示します。バカラ卓とちんちろ卓は各ゲームの画像を共通で使います。追加画像は `src/web/public/casino-lobby-more.webp`（2列×3段）で、設定せずに表示されます。ルールや配当は変わりません。
+ハイ＆ロー・バカラ・AT機・ちんちろりん・オセロ（CPU）・メンバー対戦・大富豪・ババ抜きにも、桜と提灯の和風ゲーム画像を表示します。バカラ卓とちんちろ卓は各ゲームの画像を共通で使います。追加画像は `src/web/public/casino-lobby-more.webp`（2列×3段）と `src/web/public/casino-lobby-cards.webp`（2列×1段）で、設定せずに表示されます。ルールや配当は変わりません。
 
 ## 舞倉（Minecraft）の参加ボタン
 

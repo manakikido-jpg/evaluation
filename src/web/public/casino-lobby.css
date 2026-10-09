@@ -83,6 +83,9 @@ body.c-lobby-page[class*="cs-background-"] .cl-wardrobe-scene { background: line
 .cl-art-chinchiro { background-size: 200% 306.586826%; background-position: 100% 46.859903%; }
 .cl-art-othello { background-size: 200% 279.272727%; background-position: 0 100%; }
 .cl-art-versus { background-size: 200% 279.272727%; background-position: 100% 100%; }
+.cl-art-daifugo, .cl-art-babanuki { background-image: url('/static/casino-lobby-cards.webp'); background-size: 200% 100%; }
+.cl-art-daifugo { background-position: 0 0; }
+.cl-art-babanuki { background-position: 100% 0; }
 .cl-art-other { display: grid; place-items: center; background: radial-gradient(ellipse at center, #3f3847, #10222f); }
 .cl-art-other > span { font-size: 3rem; }
 .cl-game-body { padding: 0 12px 12px; flex: 1; display: flex; flex-direction: column; }
