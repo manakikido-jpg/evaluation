@@ -102,6 +102,24 @@ const menuSelect = (custom_id: string, placeholder: string, items: ReturnType<ty
     },
   ],
 });
+/** 同じ内容の時間と料金をまとめる。説明が違うものは別にする */
+export function castMenuText(menu: ReturnType<typeof menuOf>): string {
+  const groups = new Map<string, typeof menu>();
+  for (const item of menu) {
+    const key = JSON.stringify([item.name, item.note, !!item.consult, item.night]);
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((items) => {
+    const first = items[0]!;
+    const prices = first.consult ? '内容・料金は相談' : items.map((m) => {
+      const time = m.night ? '朝7時まで' : m.minutes % 60 === 0 ? `${m.minutes / 60}時間` : m.minutes > 60 ? `${Math.floor(m.minutes / 60)}時間${m.minutes % 60}分` : `${m.minutes}分`;
+      return `${time} **${fmt(m.price)}銭**`;
+    }).join(' ／ ');
+    return `**${first.name}**\n${prices}${first.note ? `\n${first.note}` : ''}`;
+  }).join('\n\n') || 'メニューなし';
+}
 const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先の交換・録音は禁止です（しきたり）。困ったら部屋の「🚨 通報」を';
 
 // ───────── メニュー（画像の下に、指名するメニュー） ─────────
@@ -186,23 +204,19 @@ export async function postCastIntro(db: Db, discord: Pick<DiscordActions, 'sendM
   const [name, photo, stats] = await Promise.all([namesOf(db, [castId]).then((m) => m.get(castId) ?? castId), loadCastPhoto(db, castId), castStats(db, monthStart())]);
   const st = stats.find((x) => x.castId === castId);
   const menu = menuOf(cast).filter((m) => m.price > 0 || m.consult);
-  const content = [
-    `## 🎀 ${name}`,
-    cast.tags.length ? cast.tags.map((t) => `#${t}`).join(' ') : '',
-    cast.bio,
-    '',
-    `💰 **メニュー**（${coin}）`,
-    ...(menu.length ? menu.map((m) => `- ${menuLabel(m)} ${menuPriceText(m)}${m.note ? ` ・ ${m.note}` : ''}`) : ['- メニューなし']),
-    st ? `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` : '',
-    '-# 下の欄からメニューを選ぶと、あなたにだけ確かめの画面が出ます',
-  ]
-    .filter((l, i) => l || i === 3)
-    .join('\n');
+  const header = [`## ${name}`, cast.tags.length ? cast.tags.map((t) => `#${t}`).join(' ') : '', cast.bio].filter(Boolean).join('\n');
   await discord.sendMessage(channelId, {
-    content: content.slice(0, 2000),
+    flags: MessageFlags.IsComponentsV2,
     allowed_mentions: { parse: [] },
     ...(photo ? { files: [{ name: 'cast-profile.png', contentType: photo.contentType, data: photo.data }] } : {}),
-    components: menu.length ? [menuSelect(`cast:plansel:${castId}`, '🎀 メニューを選んで指名する', menu), row(button(`cast:rsv:${castId}`, '予約する', 2, '📅'))] : [],
+    components: [
+      { type: 10, content: header },
+      ...(photo ? [{ type: 12, items: [{ media: { url: 'attachment://cast-profile.png' }, description: `${name}のメニュー画像` }] }] : []),
+      { type: 10, content: castMenuText(menu) },
+      ...(st ? [{ type: 10, content: `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` }] : []),
+      ...(menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
+      { type: 10, content: '-# 選択後、あなただけに確認画面が表示されます。' },
+    ],
   });
   return true;
 }
@@ -358,12 +372,12 @@ export class CastApp {
     // カードにせず、文と写真（切りぬかない全体）をそのまま出す
     return {
       content: [
-            `## 🎀 ${name}`,
+            `## ${name}`,
             `${state.emoji} ${state.label}${cast.tags.length ? ` ・ ${cast.tags.map((t) => `#${t}`).join(' ')}` : ''}`,
             cast.bio,
             '',
             `💰 **メニュー**（${this.coin()}）`,
-            ...(menuOf(cast).length ? menuOf(cast).map((m) => `- ${menuLabel(m)} ${menuPriceText(m)}${m.note ? ` ・ ${m.note}` : ''}`) : ['- メニューなし']),
+            castMenuText(menuOf(cast)),
             st ? `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` : '',
             adult ? '' : !cast.minorOk ? '-# このキャストは、18 歳未満の方の指名を受けていません' : `-# 18 歳未満の方は、公開の部屋での雑談（30 分・1 時間・${MINOR.endHour} 時まで）だけです`,
           ]
@@ -373,7 +387,7 @@ export class CastApp {
       allowedMentions: { parse: [] as never[] },
       ...(photo ? { files: [new AttachmentBuilder(Buffer.from(photo.data), { name: 'cast-profile.png' })] } : {}),
       components: plans.length
-        ? [menuSelect(`cast:plansel:${cast.memberId}`, '🎀 メニューを選んで指名する', plans), ...(adult ? [row(button(`cast:rsv:${cast.memberId}`, '予約する', 2, '📅'))] : [])]
+        ? [menuSelect(`cast:plansel:${cast.memberId}`, 'メニュー・時間を選ぶ', plans), ...(adult ? [row(button(`cast:rsv:${cast.memberId}`, '予約する', 2, '📅'))] : [])]
         : [],
     };
   }

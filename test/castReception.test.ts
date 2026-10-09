@@ -3,7 +3,7 @@ import { MessageFlags, type Interaction } from 'discord.js';
 import sharp from 'sharp';
 import type { Db } from '../src/db/client.js';
 import { castSessions } from '../src/db/schema.js';
-import { CastApp, castReceptionBody, postCastIntro } from '../src/discord/cast.js';
+import { CastApp, castReceptionBody, castMenuText, postCastIntro } from '../src/discord/cast.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
 import { applyCast, getCast, menuOf, CAST_DEFAULTS, loadCastReception, setCastStatus, setWaiting, saveCastPhoto, loadCastPhoto, deleteCastPhoto } from '../src/services/cast.js';
 import { loadReceptionAvatar, receptionSvg, renderCastReception } from '../src/services/castReceptionImage.js';
@@ -183,11 +183,13 @@ describe('本人向けDiscord受付', () => {
     await saveCastPhoto(db, CAST, png);
     const send = vi.fn(async (_ch: string, _b: unknown) => ({ id: 'm1' }));
     expect(await postCastIntro(db, { sendMessage: send } as never, CAST, '990000000000000123', '🪙銭')).toBe(true);
-    const [ch, body] = send.mock.calls[0] as unknown as [string, { content: string; files: { name: string }[]; components: { components: { custom_id: string }[] }[]; allowed_mentions: unknown }];
+    const [ch, body] = send.mock.calls[0] as unknown as [string, { flags: number; files: { name: string }[]; components: { type: number; content?: string; components?: { custom_id: string }[] }[]; allowed_mentions: unknown }];
     expect(ch).toBe('990000000000000123');
-    expect(body.content).toContain('メニュー');
+    expect(body.flags).toBe(MessageFlags.IsComponentsV2);
+    expect(body.components.slice(0, 3).map((c) => c.type)).toEqual([10, 12, 10]);
+    expect(body.components[0]?.content).not.toContain('🎀');
     expect(body.files[0]?.name).toBe('cast-profile.png');
-    expect(body.components.flatMap((r) => r.components.map((x) => x.custom_id))).toEqual([`cast:plansel:${CAST}`, `cast:rsv:${CAST}`]);
+    expect(body.components.flatMap((r) => (r.components ?? []).map((x) => x.custom_id))).toEqual([`cast:plansel:${CAST}`, `cast:rsv:${CAST}`]);
     expect(body.allowed_mentions).toEqual({ parse: [] });
     expect(await postCastIntro(db, { sendMessage: send } as never, CUSTOMER, '990000000000000123', '銭')).toBe(false);
     // みんなのパネルの選ぶ欄を押すと、押した人にだけ返事する
@@ -210,7 +212,7 @@ describe('本人向けDiscord受付', () => {
     expect(i.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     // カードにせず、文と写真の全体をそのまま出す
     expect(body.embeds).toEqual([]);
-    expect(body.content).toContain('メニュー');
+    expect(body.content).toContain('銭**');
     expect(Buffer.from(body.files[0]!.attachment)).toEqual(Buffer.from((await loadCastPhoto(db, CAST))!.data));
   });
 
@@ -244,5 +246,16 @@ describe('本人向けDiscord受付', () => {
     const back = interaction('cast:refresh');
     await a.onInteraction(back as unknown as Interaction);
     expect(back.editReply).toHaveBeenCalledWith(expect.objectContaining({ attachments: [], files: [expect.objectContaining({ name: 'cast-reception.png' })] }));
+  });
+});
+
+
+describe('紹介の料金表示', () => {
+  it('サービスごとに時間と料金をまとめ、相談の重複を出さない', () => {
+    const item = { id: 'a', name: 'ツーショット', note: '', minutes: 30, price: 200, night: false };
+    const text = castMenuText([item, { ...item, id: 'b', minutes: 60, price: 350 }, { ...item, id: 'c', name: 'おねがい', price: 0, consult: true }]);
+    expect(text).toBe('**ツーショット**\n30分 **200銭** ／ 1時間 **350銭**\n\n**おねがい**\n内容・料金は相談');
+    expect(castMenuText([])).toBe('メニューなし');
+    expect(castMenuText([item, { ...item, id: 'd', note: '別の内容' }]).match(/\*\*ツーショット\*\*/g)).toHaveLength(2);
   });
 });
