@@ -199,6 +199,41 @@ describe('🎀 キャスト', () => {
     expect(ok.status === 'ok' ? [ok.session.status, ok.session.startAt?.getTime()] : ok.status).toEqual(['accepted', next.getTime()]);
   });
 
+  it('📦 納品・🎰 ガチャ: 預かる → 納品 → お客の受け取りで渡す。期限が過ぎたら戻す。受け取らなければ 3 日で渡す', async () => {
+    const { deliverSession, receiveSession } = await import('../src/services/cast.js');
+    expect(await addMenuItem(db, c, CAST, { name: 'ボイス', note: '', minutes: 0, price: 1000, night: false, delivery: true })).toBe('ok');
+    expect(await addMenuItem(db, c, CAST, { name: 'ボイスガチャ', note: '', minutes: 0, price: 300, night: false, delivery: true, gacha: ['おはよう', 'おやすみ'] })).toBe('ok');
+    const [voice, gacha] = menuOf((await getCast(db, CAST))!).slice(-2);
+    expect(voice).toMatchObject({ delivery: true, minutes: 0 });
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: voice!.id }, T20)).status).toBe('minor_plan');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: voice!.id }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.session).toMatchObject({ status: 'ordered', plan: `dlv:${voice!.id}` });
+    // 通話の予約とは重ならない・お客からは取り消せない
+    const call = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: new Date(T20.getTime() + 60 * MIN) }, T20);
+    if (call.status !== 'ok') throw new Error(call.status);
+    await cancelSession(db, call.session.id, ADULT, 'canceled', T20);
+    expect(await cancelSession(db, r.session.id, ADULT, 'canceled', T20)).toBeUndefined();
+    expect(await deliverSession(db, r.session.id, ADULT, T20)).toBeUndefined();
+    expect((await deliverSession(db, r.session.id, CAST, T20))?.status).toBe('delivered');
+    expect(await receiveSession(db, c, r.session.id, CAST, T20)).toBeUndefined();
+    expect((await receiveSession(db, c, r.session.id, ADULT, T20))?.paid).toBe(900);
+    expect((await walletOf(db, CAST)).balance).toBe(900);
+    // ガチャ: 中身のどれかが出る
+    const g = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: gacha!.id }, T20, () => 0.99);
+    expect(g.status === 'ok' ? [g.drawn, g.session.menuName] : g.status).toEqual(['おやすみ', 'ボイスガチャ：おやすみ']);
+    // 24 時間で納品がなければ戻す
+    const before = (await walletOf(db, ADULT)).balance;
+    expect((await castTick(db, c, new Date(T20.getTime() + 24 * 60 * MIN))).expired.map((s) => s.status)).toContain('declined');
+    expect((await walletOf(db, ADULT)).balance).toBe(before + 300);
+    // 納品して受け取らないまま 72 時間 → 自動で渡す
+    const r2 = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: voice!.id }, T20);
+    if (r2.status !== 'ok') throw new Error(r2.status);
+    await deliverSession(db, r2.session.id, CAST, T20);
+    expect((await castTick(db, c, new Date(T20.getTime() + 71 * 60 * MIN))).finished).toHaveLength(0);
+    expect((await castTick(db, c, new Date(T20.getTime() + 72 * 60 * MIN))).finished.map((s) => s.id)).toContain(r2.session.id);
+  });
+
   it('当日の部屋: 受けた予約で、キャストかお客が、日本時間の同じ日だけ立てられる', async () => {
     const { earlyRoomOk } = await import('../src/services/cast.js');
     const at = new Date(T20.getTime() + 60 * MIN); // 21:00
@@ -382,6 +417,22 @@ describe('🎀 キャストのDiscord操作', () => {
     const showModal = vi.fn(async () => undefined);
     await f.app.onInteraction({ ...f.interaction, showModal, message: { flags: { has: () => true } }, update: vi.fn() } as unknown as Interaction);
     expect(JSON.stringify(showModal.mock.calls[0])).toContain(`cast:rmodal:${CAST}:30`);
+  });
+
+  it('社務所からの DM で、キャストが予約を受けると DM を書き換え、スレッドにお客向けを出す', async () => {
+    const f = fixture();
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: new Date(Date.now() + 60 * MIN) });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await setSessionPlace(db, r.session.id, { threadId: '990000000000000077' });
+    const update = vi.fn(async () => undefined);
+    const dm = { customId: `cast:accept:${r.session.id}`, guildId: null, user: { id: CAST }, isModalSubmit: () => false, isButton: () => true, update };
+    // DM で押せないもの（受け取りなど）は何もしない
+    await f.app.onInteraction({ ...dm, customId: `cast:rcv:${r.session.id}` } as unknown as Interaction);
+    expect(update).not.toHaveBeenCalled();
+    await f.app.onInteraction(dm as unknown as Interaction);
+    expect((await getSession(db, r.session.id))?.status).toBe('accepted');
+    expect(JSON.stringify(update.mock.calls[0])).toContain('受けました');
+    expect(f.discord.sendMessage).toHaveBeenCalledWith('990000000000000077', expect.objectContaining({ embeds: [expect.objectContaining({ title: '📅 予約を受けました' })] }));
   });
 
   it('部屋を作る（中の仕組み）: キャスト名の部屋を作り、利用者に入室ボタンを出す', async () => {

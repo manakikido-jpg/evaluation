@@ -1692,8 +1692,9 @@ export const casts = pgTable('casts', {
   /**
    * 🎀 メニュー（内容・時間・値段。運営が社務所Web で足す）。空なら前の 30 分・1 時間・寝落ちの値段から作る
    * night: 寝落ち（朝 7 時まで。minutes は使わない）/ consult: 内容により相談（値段と時間は、キャストがそのつど出す）
+   * delivery: 📦 納品（シチュエーションボイスなど。通話しない）/ gacha: 納品のガチャの中身（どれか 1 つが出る）
    */
-  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
+  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; delivery?: boolean; gacha?: string[] }[]>().notNull().default(sql`'[]'::jsonb`),
   /** オプション（指名に足す追加。名前と値段。運営が社務所Web で足す） */
   options: jsonb('options').$type<{ id: string; name: string; price: number }[]>().notNull().default(sql`'[]'::jsonb`),
   /** male 男性 / female 女性 / '' まだ決めていない（両方のメニューに出る）。メニューを出すチャンネルを分ける */
@@ -1730,10 +1731,11 @@ export const castSessions = pgTable(
     price: integer('price').notNull(),
     /**
      * reserved 予約（キャストの返事待ち）/ accepted 予約を受けた（始まる時刻待ち）/ requested 今すぐ（返事待ち）/ active 通話中 /
+     * ordered 📦 納品の注文（キャストの納品待ち）/ delivered 納品した（お客の受け取り待ち）/
      * done 終わった（渡した）/ declined 断られた・返事がなかった / canceled 取り消し / disputed 通報（運営が決める）/ refunded 運営が戻した
      */
     status: text('status')
-      .$type<'reserved' | 'accepted' | 'requested' | 'active' | 'done' | 'declined' | 'canceled' | 'disputed' | 'refunded'>()
+      .$type<'reserved' | 'accepted' | 'requested' | 'active' | 'ordered' | 'delivered' | 'done' | 'declined' | 'canceled' | 'disputed' | 'refunded'>()
       .notNull(),
     /** 公開の部屋（未成年の人の雑談）。2 人だけの部屋は 18 歳以上どうしだけ */
     isPublic: boolean('is_public').notNull().default(false),

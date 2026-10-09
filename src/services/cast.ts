@@ -206,25 +206,29 @@ export function menuOf(c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNigh
 /** 時間フリー（時間 0 で作ったメニュー）。終えるまで続く。念のため、この分で自動で終わる */
 export const FREE_MINUTES = 12 * 60;
 /** 時間フリーのメニューか（寝落ち・相談でなく、時間 0） */
-export const isFreeMenu = (m: Pick<CastMenuItem, 'minutes' | 'night' | 'consult'>) => !m.night && !m.consult && m.minutes === 0;
+export const isFreeMenu = (m: Pick<CastMenuItem, 'minutes' | 'night' | 'consult'> & { delivery?: boolean }) => !m.night && !m.consult && !m.delivery && m.minutes === 0;
+/** 📦 納品の指名か（番号が dlv: で始まる） */
+export const isDeliverySession = (s: Pick<CastSession, 'plan'>) => s.plan.startsWith('dlv:');
+/** 納品の期限（注文から）と、納品してからお客が受け取らないときに自動で渡すまで */
+export const DELIVERY = { deadlineHours: 24, autoReceiveHours: 72, gachaMax: 20 } as const;
 /** 時間フリーの指名か（番号が free: で始まる） */
 export const isFreeSession = (s: Pick<CastSession, 'plan'>) => s.plan.startsWith('free:');
 const durationText = (m: number) => (m % 60 === 0 ? `${m / 60} 時間` : m > 60 ? `${Math.floor(m / 60)} 時間 ${m % 60} 分` : `${m} 分`);
 /** 「雑談（30 分）」「🌙 寝落ち（朝 7 時まで）」 */
-export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night' | 'consult'>) =>
-  m.consult ? `💬 ${m.name}（内容により相談）` : m.night ? `🌙 ${m.name}（朝 7 時まで）` : m.minutes === 0 ? `${m.name}（時間フリー）` : `${m.name}（${durationText(m.minutes)}）`;
+export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night' | 'consult'> & { delivery?: boolean; gacha?: string[] }) =>
+  m.delivery ? (m.gacha?.length ? `🎰 ${m.name}（ガチャ・${m.gacha.length} 種）` : `📦 ${m.name}（納品）`) : m.consult ? `💬 ${m.name}（内容により相談）` : m.night ? `🌙 ${m.name}（朝 7 時まで）` : m.minutes === 0 ? `${m.name}（時間フリー）` : `${m.name}（${durationText(m.minutes)}）`;
 /** 値段を出すところ（相談は「相談」） */
 export const menuPriceText = (m: Pick<CastMenuItem, 'price' | 'consult'>) => (m.consult ? '相談' : `${m.price.toLocaleString('ja-JP')} 枚`);
 /** 指名の名前（前の指名はプランの名前） */
 export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'> & { optionNames?: string[] }) =>
   (s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan) + (s.optionNames?.length ? `＋${s.optionNames.join('・')}` : '');
 /** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
-export const minorMenuOk = (m: CastMenuItem) => !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes;
+export const minorMenuOk = (m: CastMenuItem) => !m.delivery && !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes;
 /** メニューを 1 行で（紹介・一覧） */
 export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) =>
   menuOf(c).map((m) => (m.consult ? `${m.name} 相談` : `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`)).join('・');
 
-export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean };
+export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; /** 📦 納品 */ delivery?: boolean; /** 納品のガチャの中身 */ gacha?: string[] };
 
 const validMinutes = (n: number) => Number.isInteger(n) && n >= MENU_MINUTES.min && n <= MENU_MINUTES.max;
 const validPrice = (c: CastConfig, n: number) => Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax;
@@ -233,6 +237,7 @@ export function validMenuItem(c: CastConfig, m: MenuInput): boolean {
   if (m.name.length < 1 || m.name.length > 30 || m.note.length > 100) return false;
   // 相談は、値段と時間をそのつど決める
   if (m.consult) return true;
+  if (m.delivery) return validPrice(c, m.price) && (m.gacha ?? []).length <= DELIVERY.gachaMax && (m.gacha ?? []).every((g) => g.length >= 1 && g.length <= 50);
   // 時間 0 は時間フリー
   return validPrice(c, m.price) && (m.night || m.minutes === 0 || validMinutes(m.minutes));
 }
@@ -243,8 +248,9 @@ export const validQuote = (c: CastConfig, minutes: number, price: number) => val
 const newMenuId = () => Math.random().toString(36).slice(2, 8);
 const asItem = (m: MenuInput): CastMenuItem => ({
   id: newMenuId(), name: m.name, note: m.note,
-  minutes: m.night || m.consult ? 0 : m.minutes, price: m.consult ? 0 : m.price, night: !m.consult && m.night,
-  ...(m.consult ? { consult: true } : {}),
+  minutes: m.night || m.consult || m.delivery ? 0 : m.minutes, price: m.consult ? 0 : m.price, night: !m.consult && !m.delivery && m.night,
+  ...(m.consult && !m.delivery ? { consult: true } : {}),
+  ...(m.delivery ? { delivery: true, ...(m.gacha?.length ? { gacha: m.gacha } : {}) } : {}),
 });
 
 /** メニューを足す（運営。1 回に何こでも＝同じ内容の 30 分と 1 時間など）。前の値段から作ったメニューは、そのまま引きつぐ */
@@ -338,7 +344,7 @@ export async function editTemplate(db: Db, c: CastConfig, by: string, op: { add:
   } else {
     const old = cur.find((m) => m.id === op.update);
     if (!old) return 'none';
-    const input = { ...op.input, night: old.night, consult: old.consult };
+    const input = { ...op.input, night: old.night, consult: old.consult, delivery: old.delivery, gacha: op.input.gacha ?? old.gacha };
     if (!validMenuItem(c, input)) return 'invalid';
     next = cur.map((m) => (m.id === op.update ? { ...asItem(input), id: m.id } : m));
   }
@@ -354,7 +360,7 @@ export async function updateMenuItem(db: Db, c: CastConfig, castId: string, item
     const menu = menuOf(cast);
     const old = menu.find((m) => m.id === itemId);
     if (!old) return 'none' as const;
-    const fixed = { ...input, night: old.night, consult: old.consult };
+    const fixed = { ...input, night: old.night, consult: old.consult, delivery: old.delivery, gacha: input.gacha ?? old.gacha };
     if (!validMenuItem(c, fixed)) return 'invalid' as const;
     await tx.update(casts).set({ menu: menu.map((m) => (m.id === itemId ? { ...asItem(fixed), id: m.id } : m)), price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
     return 'ok' as const;
@@ -479,7 +485,7 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 }
 
 export type RequestResult =
-  | { status: 'ok'; session: CastSession; balance: number }
+  | { status: 'ok'; session: CastSession; balance: number; /** ガチャで出たもの */ drawn?: string }
   | { status: 'insufficient'; price: number; balance: number }
   | { status: 'not_cast' | 'self' | 'blocked' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' };
 
@@ -511,8 +517,9 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 相談のメニュー: キャストが出した時間と値段 */ quote?: { minutes: number; price: number }; /** 付けるオプションの番号 */ options?: string[] },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段 */ quote?: { minutes: number; price: number }; /** 付けるオプションの番号 */ options?: string[] },
   now = new Date(),
+  rand: () => number = Math.random,
 ): Promise<RequestResult> {
   const cast = await getCast(db, input.castId);
   if (!cast || cast.status !== 'active') return { status: 'not_cast' };
@@ -522,6 +529,7 @@ export async function requestSession(
   // 相談のメニューは、キャストが出した時間と値段で（ほかのメニューに値段は付けられない）
   const item = found?.consult ? (input.quote && validQuote(c, input.quote.minutes, input.quote.price) ? { ...found, ...input.quote } : undefined) : input.quote ? undefined : found;
   if (!item || item.price <= 0) return { status: 'no_plan' };
+  if (item.delivery) return input.startAt || input.quote || input.options?.length ? { status: 'no_plan' } : orderDelivery(db, cast.memberId, item, input, now, rand);
   const opts = pickOptions(cast, input.options);
   if (input.options && opts.length !== new Set(input.options).size) return { status: 'no_plan' };
   const optionPrice = opts.reduce((n, o) => n + o.price, 0);
@@ -582,6 +590,51 @@ export async function requestSession(
   });
 }
 
+/** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 24 時間）。18 歳以上だけ。通話の時間とは重ならない */
+async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean }, now: Date, rand: () => number): Promise<RequestResult> {
+  if (!input.customerAdult) return { status: 'minor_plan' };
+  const drawn = item.gacha?.length ? item.gacha[Math.min(item.gacha.length - 1, Math.floor(rand() * item.gacha.length))] : undefined;
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);
+    const mine = await tx.select({ id: castSessions.id }).from(castSessions).where(and(eq(castSessions.customerId, input.customerId), inArray(castSessions.status, ['ordered', 'delivered'])));
+    if (mine.length >= CUSTOMER_OPEN_MAX) return { status: 'has_open' as const };
+    if (!(await spendWithin(tx, input.customerId, item.price, 'cast_pay', { castId, plan: `dlv:${item.id}`, menu: item.name, ...(drawn ? { drawn } : {}) }))) {
+      return { status: 'insufficient' as const, price: item.price, balance: (await walletOf(tx, input.customerId)).balance };
+    }
+    const [session] = await tx
+      .insert(castSessions)
+      .values({
+        castId, customerId: input.customerId, plan: `dlv:${item.id}`,
+        menuName: drawn ? `${item.name}：${drawn}` : item.name,
+        minutes: 0, price: item.price, status: 'ordered',
+        acceptBy: new Date(now.getTime() + DELIVERY.deadlineHours * 60 * MIN), createdAt: now,
+      })
+      .returning();
+    return { status: 'ok' as const, session: session!, balance: (await walletOf(tx, input.customerId)).balance, ...(drawn ? { drawn } : {}) };
+  });
+}
+
+/** 📦 キャストが「納品した」: お客の受け取り待ちにする（受け取らないままなら 72 時間で自動で渡す） */
+export async function deliverSession(db: Db, id: number, castId: string, now = new Date()): Promise<CastSession | undefined> {
+  const s = await getSession(db, id);
+  if (!s || s.castId !== castId || (s.acceptBy && s.acceptBy <= now)) return undefined;
+  return move(db, id, ['ordered'], { status: 'delivered', acceptBy: null, endsAt: new Date(now.getTime() + DELIVERY.autoReceiveHours * 60 * MIN) });
+}
+
+/** 📦 お客が「受け取った」（か、自動で渡す時刻が来た）: 手数料を引いてキャストに渡す */
+export async function receiveSession(db: Db, c: CastConfig, id: number, by: string, now = new Date()): Promise<CastSession | undefined> {
+  return db.transaction(async (tx) => {
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s || s.status !== 'delivered') return undefined;
+    if (by === 'system' ? !s.endsAt || s.endsAt > now : by !== s.customerId) return undefined;
+    const pay = s.price - castFee(c, s.price);
+    const row = await move(tx, id, ['delivered'], { status: 'done', closedAt: now, paid: pay, decidedBy: by });
+    if (!row) return undefined;
+    if (pay > 0) await addCoins(tx, s.castId, pay, 'cast_reward', { sessionId: id, from: s.customerId, fee: s.price - pay, delivery: true });
+    return row;
+  });
+}
+
 export async function getSession(db: Db, id: number): Promise<CastSession | undefined> {
   const [row] = await db.select().from(castSessions).where(eq(castSessions.id, id));
   return row;
@@ -622,7 +675,9 @@ export async function cancelSession(db: Db, id: number, by: string, reason: 'dec
     const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
     if (!s) return undefined;
     if (by !== 'system' && by !== (reason === 'declined' ? s.castId : s.customerId)) return undefined;
-    const row = await move(tx, id, ['reserved', 'accepted', 'requested'], { status: reason, closedAt: now, decidedBy: by, deleteAt: now });
+    // 納品の注文は、お客からは取り消せない（キャストが作り始めているかもしれない）
+    if (s.status === 'ordered' && reason === 'canceled' && by !== 'system') return undefined;
+    const row = await move(tx, id, ['reserved', 'accepted', 'requested', 'ordered'], { status: reason, closedAt: now, decidedBy: by, deleteAt: now });
     if (!row) return undefined;
     if (s.price > 0) await addCoins(tx, s.customerId, s.price, 'cast_refund', { sessionId: id, reason });
     return row;
@@ -732,7 +787,7 @@ export async function disputeSession(db: Db, id: number, by: string): Promise<Ca
   const s = await getSession(db, id);
   if (!s || (by !== s.castId && by !== s.customerId)) return undefined;
   // 部屋は時間が来たら片付ける（銭は運営が決めるまで止めたまま）
-  return move(db, id, ['active', 'accepted'], { status: 'disputed', deleteAt: new Date((s.endsAt ?? new Date()).getTime() + 5 * MIN) });
+  return move(db, id, ['active', 'accepted', 'ordered', 'delivered'], { status: 'disputed', deleteAt: new Date((s.endsAt ?? new Date()).getTime() + 5 * MIN) });
 }
 
 /** 運営: 通報された指名を、キャストに渡す（手数料を引く）か、お客に戻す */
@@ -779,7 +834,7 @@ export type TickResult = {
 
 export async function castTick(db: Db, c: CastConfig, now = new Date(), prepareRoom?: (s: CastSession) => Promise<boolean>): Promise<TickResult> {
   const out: TickResult = { expired: [], started: [], warn: [], finished: [], cleanup: [], waitingOff: 0 };
-  for (const s of await db.select().from(castSessions).where(and(inArray(castSessions.status, ['requested', 'reserved']), lte(castSessions.acceptBy, now)))) {
+  for (const s of await db.select().from(castSessions).where(and(inArray(castSessions.status, ['requested', 'reserved', 'ordered']), lte(castSessions.acceptBy, now)))) {
     const r = await cancelSession(db, s.id, 'system', 'declined', now);
     if (r) out.expired.push(r);
   }
@@ -801,6 +856,10 @@ export async function castTick(db: Db, c: CastConfig, now = new Date(), prepareR
   }
   for (const s of await db.select().from(castSessions).where(and(eq(castSessions.status, 'active'), lte(castSessions.endsAt, now)))) {
     const r = await finishSession(db, c, s.id, 'system', now);
+    if (r) out.finished.push(r);
+  }
+  for (const s of await db.select().from(castSessions).where(and(eq(castSessions.status, 'delivered'), lte(castSessions.endsAt, now)))) {
+    const r = await receiveSession(db, c, s.id, 'system', now);
     if (r) out.finished.push(r);
   }
   out.cleanup = await db

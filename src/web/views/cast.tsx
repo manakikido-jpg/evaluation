@@ -1,5 +1,5 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -50,6 +50,8 @@ const SESSION_STATUS: Record<CastSession['status'], string> = {
   reserved: '📅 予約（返事待ち）',
   accepted: '📅 予約済み',
   requested: '⏳ 返事待ち',
+  ordered: '📦 納品待ち',
+  delivered: '📦 受け取り待ち',
   active: '📞 通話中',
   done: '🎉 終わった',
   declined: '🙇 断り・返事なし',
@@ -118,7 +120,13 @@ function MenuList(props: { items: CastMenuItem[]; base: string; session: AdminSe
                     <span>説明</span>
                     <input type="text" name="menuNote" maxlength={100} value={m.note} />
                   </label>
-                  {!m.night && !m.consult && (
+                  {m.delivery && (
+                    <label class="field">
+                      <span>🎰 ガチャの中身（1 行に 1 つ。空ならふつうの納品）</span>
+                      <textarea name="menuGacha" rows={3}>{(m.gacha ?? []).join('\n')}</textarea>
+                    </label>
+                  )}
+                  {!m.night && !m.consult && !m.delivery && (
                     <label class="field">
                       <span>時間（分。0 で時間フリー）</span>
                       <input type="number" name="menuMinutes" min={0} max={MENU_MINUTES.max} step={5} required value={String(m.minutes)} />
@@ -187,6 +195,14 @@ function MenuFields(props: { c: CastConfig; optional?: boolean }) {
       <label class="field check">
         <input type="checkbox" name="menuConsult" value="yes" />
         <span>💬 内容により相談（時間と値段は入れない。お客がお願いを書き、キャストがそのつど時間と値段を出す・18 歳以上だけ）</span>
+      </label>
+      <label class="field check">
+        <input type="checkbox" name="menuDelivery" value="yes" />
+        <span>📦 納品（シチュエーションボイスなど。通話しない。時間は入れず、値段は 1 つめだけ・18 歳以上だけ。キャストが 24 時間以内に納品し、お客の「受け取った」で渡す）</span>
+      </label>
+      <label class="field">
+        <span>🎰 ガチャの中身（納品のときだけ。1 行に 1 つ・{DELIVERY.gachaMax} こまで。空ならふつうの納品。どれか 1 つが同じ確率で出る）</span>
+        <textarea name="menuGacha" rows={3} placeholder={'おはようボイス\nおやすみボイス\n応援ボイス'} />
       </label>
     </>
   );

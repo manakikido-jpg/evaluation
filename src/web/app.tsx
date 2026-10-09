@@ -5498,11 +5498,15 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(`/cast?msg=${ok ? 'posted' : 'post_failed'}`);
   });
 
+  /** 🎰 ガチャの中身（1 行に 1 つ・同じものは 1 つに） */
+  const castGachaInput = (raw: string) => [...new Set(raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))];
+
   /** フォームのメニュー（内容・説明・時間・値段・寝落ち） */
   const castMenuInput = (body: Record<string, unknown>): MenuInput[] => {
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
     const base = { name: str('menuName').trim(), note: str('menuNote').trim() };
     if (body.menuConsult === 'yes') return [{ ...base, minutes: 0, price: 0, night: false, consult: true }];
+    if (body.menuDelivery === 'yes') return [{ ...base, minutes: 0, price: parsePrice(str('menuPrice')), night: false, delivery: true, gacha: castGachaInput(str('menuGacha')) }];
     if (body.menuNight === 'yes') return [{ ...base, minutes: 0, price: parsePrice(str('menuPrice')), night: true }];
     // 時間と値段の組（3 つまで。空の組は飛ばす）。同じ内容の 30 分と 1 時間などを一度に足す
     const out: MenuInput[] = [];
@@ -5516,7 +5520,7 @@ export function createWebApp(deps: WebDeps) {
   /** 書きかえの欄（内容・説明・時間・値段。寝落ち・相談は前のまま） */
   const castEditInput = (body: Record<string, unknown>): MenuInput => {
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
-    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: false };
+    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: false, ...(typeof body.menuGacha === 'string' ? { gacha: castGachaInput(body.menuGacha) } : {}) };
   };
 
   // 🎀 キャストのメニューを足す・外す（内容・時間・値段）

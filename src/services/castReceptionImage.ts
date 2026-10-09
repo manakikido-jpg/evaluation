@@ -16,7 +16,7 @@ const clock = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().s
 const day = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(0, 10).replaceAll('-', '/');
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const plan = (s: CastSession) => (s.menuName || (s.plan === 'night' ? '寝落ち' : s.plan === '60' ? '1時間' : s.plan === '30' ? '30分' : sessionLabel(s))) + (s.extensions ? ' ＋' + s.extensions * 30 + '分' : '');
-const STATUS: Record<CastSession['status'], string> = { reserved: '返事待ち', accepted: '予約確定', requested: '返事待ち', active: '通話中', done: '終了', declined: '受付終了', canceled: '取消', disputed: '運営確認中', refunded: '返金済み' };
+const STATUS: Record<CastSession['status'], string> = { reserved: '返事待ち', accepted: '予約確定', requested: '返事待ち', active: '通話中', ordered: '納品待ち', delivered: '受取待ち', done: '終了', declined: '受付終了', canceled: '取消', disputed: '運営確認中', refunded: '返金済み' };
 const STATES = { waiting: ['待機中', '#8cc4a6'], busy: ['対応中', '#efd39a'], off: ['受付停止', '#d4c6d1'], pending: ['運営の確認待ち', '#d4c6d1'], paused: ['運営による休止', '#d4c6d1'] } as const;
 
 /** Discord のアイコンだけ読みこむ。取れないときは、文字のアイコンで表示できる */
