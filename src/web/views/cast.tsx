@@ -120,8 +120,8 @@ function MenuList(props: { items: CastMenuItem[]; base: string; session: AdminSe
                   </label>
                   {!m.night && !m.consult && (
                     <label class="field">
-                      <span>時間（分）</span>
-                      <input type="number" name="menuMinutes" min={MENU_MINUTES.min} max={MENU_MINUTES.max} step={5} required value={String(m.minutes)} />
+                      <span>時間（分。0 で時間フリー）</span>
+                      <input type="number" name="menuMinutes" min={0} max={MENU_MINUTES.max} step={5} required value={String(m.minutes)} />
                     </label>
                   )}
                   {!m.consult && (
@@ -157,8 +157,8 @@ function MenuFields(props: { c: CastConfig; optional?: boolean }) {
   const pair = (n: '' | '2' | '3', first: boolean) => (
     <>
       <label class="field">
-        <span>時間{n ? ` ${n}` : ''}（分。{MENU_MINUTES.min}〜{MENU_MINUTES.max}）</span>
-        <input type="number" name={`menuMinutes${n}`} min={MENU_MINUTES.min} max={MENU_MINUTES.max} step={5} placeholder={first ? '30' : n === '2' ? '60' : ''} />
+        <span>時間{n ? ` ${n}` : ''}（分。{MENU_MINUTES.min}〜{MENU_MINUTES.max}・0 で時間フリー）</span>
+        <input type="number" name={`menuMinutes${n}`} min={0} max={MENU_MINUTES.max} step={5} placeholder={first ? '30' : n === '2' ? '60' : ''} />
       </label>
       <label class="field">
         <span>値段{n ? ` ${n}` : ''}（{props.c.priceMin.toLocaleString('ja-JP')}〜{props.c.priceMax.toLocaleString('ja-JP')} 枚）</span>

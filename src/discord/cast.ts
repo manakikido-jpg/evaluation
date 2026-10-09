@@ -51,6 +51,7 @@ import {
   parseTags,
   MENU_MINUTES,
   menuLabel,
+  isFreeSession,
   pickOptions,
   CAST_GROUPS,
   GROUP_LABEL,
@@ -125,7 +126,7 @@ export function castMenuText(menu: ReturnType<typeof menuOf>): string {
   return [...groups.values()].map((items) => {
     const first = items[0]!;
     const prices = first.consult ? '内容・料金は相談' : items.map((m) => {
-      const time = m.night ? '朝7時まで' : m.minutes % 60 === 0 ? `${m.minutes / 60}時間` : m.minutes > 60 ? `${Math.floor(m.minutes / 60)}時間${m.minutes % 60}分` : `${m.minutes}分`;
+      const time = m.night ? '朝7時まで' : m.minutes === 0 ? '時間フリー' : m.minutes % 60 === 0 ? `${m.minutes / 60}時間` : m.minutes > 60 ? `${Math.floor(m.minutes / 60)}時間${m.minutes % 60}分` : `${m.minutes}分`;
       return `${time} **${fmt(m.price)}銭**`;
     }).join(' ／ ');
     return `**${first.name}**\n${prices}${first.note ? `\n${first.note}` : ''}`;
@@ -310,7 +311,7 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
     title = '📞 通話中';
     lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。時間が来たら終わって、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。` : '');
     if (s.isPublic) lines.push(`-# 公開の部屋です（18 歳未満の方との雑談。${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`);
-    buttons = [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰'), button(`cast:end:${s.id}`, '終える'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
+    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
   } else if (s.status === 'done') {
     title = '🎉 おつかれさまでした';
     lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、よければ評価をお願いします（この部屋は少しあとに消えます）。`);

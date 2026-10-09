@@ -203,17 +203,23 @@ export function menuOf(c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNigh
   return out;
 }
 
+/** 時間フリー（時間 0 で作ったメニュー）。終えるまで続く。念のため、この分で自動で終わる */
+export const FREE_MINUTES = 12 * 60;
+/** 時間フリーのメニューか（寝落ち・相談でなく、時間 0） */
+export const isFreeMenu = (m: Pick<CastMenuItem, 'minutes' | 'night' | 'consult'>) => !m.night && !m.consult && m.minutes === 0;
+/** 時間フリーの指名か（番号が free: で始まる） */
+export const isFreeSession = (s: Pick<CastSession, 'plan'>) => s.plan.startsWith('free:');
 const durationText = (m: number) => (m % 60 === 0 ? `${m / 60} 時間` : m > 60 ? `${Math.floor(m / 60)} 時間 ${m % 60} 分` : `${m} 分`);
 /** 「雑談（30 分）」「🌙 寝落ち（朝 7 時まで）」 */
 export const menuLabel = (m: Pick<CastMenuItem, 'name' | 'minutes' | 'night' | 'consult'>) =>
-  m.consult ? `💬 ${m.name}（内容により相談）` : m.night ? `🌙 ${m.name}（朝 7 時まで）` : `${m.name}（${durationText(m.minutes)}）`;
+  m.consult ? `💬 ${m.name}（内容により相談）` : m.night ? `🌙 ${m.name}（朝 7 時まで）` : m.minutes === 0 ? `${m.name}（時間フリー）` : `${m.name}（${durationText(m.minutes)}）`;
 /** 値段を出すところ（相談は「相談」） */
 export const menuPriceText = (m: Pick<CastMenuItem, 'price' | 'consult'>) => (m.consult ? '相談' : `${m.price.toLocaleString('ja-JP')} 枚`);
 /** 指名の名前（前の指名はプランの名前） */
 export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'> & { optionNames?: string[] }) =>
   (s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan) + (s.optionNames?.length ? `＋${s.optionNames.join('・')}` : '');
 /** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
-export const minorMenuOk = (m: CastMenuItem) => !m.night && !m.consult && m.minutes <= MINOR.maxMinutes;
+export const minorMenuOk = (m: CastMenuItem) => !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes;
 /** メニューを 1 行で（紹介・一覧） */
 export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) =>
   menuOf(c).map((m) => (m.consult ? `${m.name} 相談` : `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`)).join('・');
@@ -227,7 +233,8 @@ export function validMenuItem(c: CastConfig, m: MenuInput): boolean {
   if (m.name.length < 1 || m.name.length > 30 || m.note.length > 100) return false;
   // 相談は、値段と時間をそのつど決める
   if (m.consult) return true;
-  return validPrice(c, m.price) && (m.night || validMinutes(m.minutes));
+  // 時間 0 は時間フリー
+  return validPrice(c, m.price) && (m.night || m.minutes === 0 || validMinutes(m.minutes));
 }
 
 /** 相談のメニューで、キャストが出す時間と値段 */
@@ -515,10 +522,11 @@ export async function requestSession(
   if (input.options && opts.length !== new Set(input.options).size) return { status: 'no_plan' };
   const optionPrice = opts.reduce((n, o) => n + o.price, 0);
   const price = item.price + optionPrice;
-  const plan = item.night ? 'night' : item.id;
+  const free = isFreeMenu(item);
+  const plan = item.night ? 'night' : free ? `free:${item.id}` : item.id;
   const start = input.startAt ?? now;
   if (input.startAt && (input.startAt.getTime() < now.getTime() + 10 * MIN || input.startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN)) return { status: 'bad_time' };
-  const minutes = item.night ? planMinutes('night', start) : item.minutes;
+  const minutes = item.night ? planMinutes('night', start) : free ? FREE_MINUTES : item.minutes;
   if (!input.customerAdult) {
     if (input.startAt) return { status: 'minor_reserve' };
     if (!minorMenuOk(item)) return { status: 'minor_plan' };
@@ -641,6 +649,8 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
     if (!s || s.status !== 'active' || !s.endsAt || s.endsAt <= now) return { status: 'not_active' as const };
     if (s.customerId !== customerId) return { status: 'not_customer' as const };
     if (!Number.isSafeInteger(expected) || expected < 0 || s.extensions !== expected) return { status: 'already_extended' as const };
+    // 時間フリーは、のばさない（終えるまで続く）
+    if (isFreeSession(s)) return { status: 'not_active' as const };
     const cast = await getCast(tx, s.castId);
     // 30 分のばす値段: 前のプランは 30 分の値段。メニューの指名は、その指名と同じ割合（1 分あたり）
     // オプションの分は、のばす値段に入れない
@@ -670,7 +680,8 @@ export async function finishSession(db: Db, c: CastConfig, id: number, by: strin
     if (by === 'system' && s.endsAt && s.endsAt > now) return undefined;
     if (by !== 'system' && by !== s.castId && by !== s.customerId) return undefined;
     let earned = s.price;
-    if (by === s.castId && s.startedAt && s.endsAt && now < s.endsAt) {
+    // 時間フリーは、キャストが終えても全額（時間で割らない）
+    if (by === s.castId && s.startedAt && s.endsAt && now < s.endsAt && !isFreeSession(s)) {
       const total = s.endsAt.getTime() - s.startedAt.getTime();
       const used = Math.max(0, now.getTime() - s.startedAt.getTime());
       earned = Math.min(s.price, Math.ceil((s.price * used) / Math.max(1, total)));

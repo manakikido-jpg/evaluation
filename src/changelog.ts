@@ -20,6 +20,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-free-time',
+    date: '2026-10-09',
+    kind: 'new',
+    where: ['社務所Web', 'Discord'],
+    title: '⏳ キャストのメニューに「時間フリー」',
+    items: [
+      'メニューの時間を 0 にすると「時間フリー」になります。時間を決めず、値段は 1 回分で、終えるまで続きます（念のため 12 時間で自動で終わります）。',
+      '時間フリーは「30 分のばす」がなく、キャストが途中で終えても全額をキャストに渡します。18 歳未満の人は選べません。',
+    ],
+  },
+  {
     id: '2026-10-09-cast-price-min-always-1',
     date: '2026-10-09',
     kind: 'fix',

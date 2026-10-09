@@ -510,3 +510,26 @@ describe('➕ キャストのオプション', () => {
     expect((await getCast(db, CAST))!.options.map((o) => o.name)).toEqual(['歌']);
   });
 });
+
+describe('⏳ 時間フリーのメニュー（時間 0）', () => {
+  it('時間を決めず 1 回の値段・のばせない・キャストが終えても全額・未成年は選べない', async () => {
+    const { FREE_MINUTES, menuLabel, finishSession } = await import('../src/services/cast.js');
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, c, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    expect(await addMenuItem(db, c, CAST, { name: 'まったり', note: '', minutes: 0, price: 1000, night: false })).toBe('ok');
+    const free = (await getCast(db, CAST))!.menu.find((m) => m.name === 'まったり')!;
+    expect(menuLabel(free)).toBe('まったり（時間フリー）');
+    await addCoins(db, ADULT, 10000, 'adjust');
+    await addCoins(db, MINOR, 10000, 'adjust');
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: free.id }, T20)).status).toBe('minor_plan');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: free.id }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.session).toMatchObject({ plan: `free:${free.id}`, minutes: FREE_MINUTES, price: 1000 });
+    await acceptSession(db, r.session.id, CAST, T20);
+    expect((await extendSession(db, r.session.id, ADULT, new Date(T20.getTime() + MIN))).status).toBe('not_active');
+    // 10 分でキャストが終えても全額（手数料 10% を引いて 900）
+    const done = await finishSession(db, c, r.session.id, CAST, new Date(T20.getTime() + 10 * MIN));
+    expect(done?.paid).toBe(900);
+  });
+});
