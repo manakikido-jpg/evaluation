@@ -6,11 +6,14 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
   const preview = styleItem(p.preview ?? '');
   const styles = activeStyles(p.state, p.now);
   const me = preview?.slot ? { ...p.me, styleUntil: undefined, styles: { ...styles, [preview.slot]: preview.key } } : p.me;
+  const equipped = Object.entries(styles).map(([slot, key]) => `${STYLE_SLOTS[slot as StyleSlot]}：${styleItem(key)?.name ?? ''}`);
   return (
     <CasinoLayout title="カジノの着せ替え" me={me} back>
       <h1 class="c-h1">🪭 カジノの着せ替え</h1>
       <p class="c-muted">背景・チップ・カード・動き・音は自分の画面。卓のふち・席の飾り・称号は同じ卓のみんなにも見えます。</p>
       {p.message && <p role="status">{p.message}</p>}
+      <p class="cs-equipped-summary">装備中：{equipped.length ? equipped.join(' ／ ') : 'すべて標準'}</p>
+      <div class="cs-preview-scene">
       <section class="cs-preview" aria-label="見た目の見本">
         <span class="cs-emblem">{styleItem(me.styles?.ornament ?? '')?.emoji ?? '🌸'}</span>
         <b>{p.me.session.displayName}</b>
@@ -24,6 +27,7 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
           </button>
         )}
       </section>
+      </div>
       <p>
         🎟 お試し券：{p.state.tickets}枚　<a href="/casino/style-gacha">🎰 景品を引く</a>　<a href="/casino/wardrobe">装備中の見た目に戻す</a>
       </p>
@@ -48,6 +52,7 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
               const owned = p.state.owned.includes(i.key);
               return (
                 <article class={`cs-item cs-${i.key}${styles[slot as StyleSlot] === i.key ? ' equipped' : ''}`}>
+                  {slot === 'background' && <div class={`cs-scene-thumbnail cs-background-${i.key}`} role="img" aria-label={`${i.name}の見本`} />}
                   <span class="cs-icon">{i.emoji}</span>
                   <h3>{i.name}</h3>
                   <p>{i.note}</p>
@@ -61,8 +66,8 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
                       <input type="hidden" name="slot" value={slot} />
                       <input type="hidden" name="key" value={i.key} />
                       {!owned && <input type="hidden" name="trial" value="1" />}
-                      <button type="submit" class="c-btn">
-                        {owned ? '装備する' : '券1枚で24時間お試し'}
+                      <button type="submit" class="c-btn" disabled={styles[slot as StyleSlot] === i.key}>
+                        {styles[slot as StyleSlot] === i.key ? '装備中' : owned ? '装備する' : '券1枚で24時間お試し'}
                       </button>
                     </form>
                   )}

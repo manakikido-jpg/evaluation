@@ -5,6 +5,8 @@ import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.j
 import { BetForm, CasinoLayout, freshDone, Msg, Result, revealMe, Rules, type GamePage } from './casino.js';
 import { SlotIslands } from './atslot.js';
 import { MaxBet } from './slotParts.js';
+import type { SlotSeat } from '../../services/casino/slotSeats.js';
+import { SlotPlayer, SlotSeatControls } from './slotPlayer.js';
 
 /**
  * 🎰 スロット（ジャグラー風）。絵柄・上のパネル・下のパネル・ランプは public/slots/ の画像（なければ仮の絵・文字）。
@@ -171,19 +173,20 @@ function SlotCounter(p: { machine: number; today: MachineDay; yesterday: Machine
 }
 
 /** 台を選ぶ（島）。台ごとの今日のデータとグラフ */
-export function SlotFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; msg?: string }) {
+export function SlotFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; seats?: Record<number, SlotSeat>; msg?: string }) {
   return (
     <CasinoLayout title="スロット" me={p.me} back>
       <SlotIslands on="slots" games={p.casino.games} atOpen={p.casino.atOpen} />
       <h1 class="c-h1">🎰 スロット（台を選ぶ）</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <p class="c-muted">台ごとに設定（1〜6）があり、BIG・REG の出やすさが違います。データ（今日の当たり回数・回転数・差枚のグラフ）を見て、好きな台を選んでください。データはみんなで同じです。</p>
+      <p class="c-muted">台ごとに設定（1〜6）があり、BIG・REG の出やすさが違います。データ（今日の当たり回数・回転数・差枚のグラフ）を見て、好きな台を選んでください。データはみんなで同じです。遊技中の台はほかの人が回せません。回さず3分で空きます。離席ボタンを押すと5分だけ確保します。</p>
       <section class="c-floor">
         {p.data.today.map((d, i) => (
           <a class="c-floor-m" href={`/casino/slots?m=${i + 1}`}>
             <span class="c-floor-top">
               <b class="c-floor-no">{i + 1}</b>
               <span class="c-floor-name">SAKURA 777</span>
+              <span class="c-slot-floor-seat">{p.seats?.[i + 1] ? <><SlotPlayer player={p.seats[i + 1]!} me={p.me.session.userId} /><small>{p.seats[i + 1]!.away ? '離席中・5分確保' : '遊技中'}</small></> : <small>空き台</small>}</span>
             </span>
             <span class="c-floor-cells">
               <span>
@@ -214,9 +217,10 @@ export function SlotFloor(p: { me: GamePage['me']; casino: GamePage['casino']; d
   );
 }
 
-export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
+export function SlotsPage(p: GamePage & { machine: number; data: FloorData; seat?: SlotSeat }) {
   const csrf = p.me.session.csrfToken;
   const row = p.row;
+  const taken = Boolean(p.seat && p.seat.memberId !== p.me.session.userId);
   const raw = row?.state as SlotsState | undefined;
   const s = raw && raw.v === 2 ? raw : undefined;
   const legacy = raw && !s ? (raw as Exclude<SlotsState, SlotsSpin>) : undefined;
@@ -238,6 +242,7 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
     <CasinoLayout title="スロット" me={me} back>
       <h1 class="c-h1">🎰 スロット・{p.machine} 番台</h1>
       {p.msg && <Msg msg={p.msg} />}
+      <SlotSeatControls seat={p.seat} me={p.me.session.userId} csrf={csrf} machine={p.machine} game="slots" busy={row?.status === 'playing'} />
       <section class="c-slot-stage">
         <SlotCounter machine={p.machine} today={p.data.today[p.machine - 1] ?? { games: 0, big: 0, reg: 0, since: 0, net: 0, history: [], slump: [] }} yesterday={p.data.yesterday[p.machine - 1] ?? { games: 0, big: 0, reg: 0, since: 0, net: 0, history: [], slump: [] }} />
         <div class="c-cab">
@@ -343,7 +348,7 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData }) {
                   <input type="hidden" name="_csrf" value={csrf} />
                   <input type="hidden" name="bet" value={String(leverBet)} />
                   <input type="hidden" name="m" value={String(p.machine)} />
-                  <button type="submit" class={`c-lever${mode === 'spin' ? ' pulled' : ''}`} data-lever-spin disabled={mode === 'spin'} aria-label={`レバー（${fmt(leverBet)} ${p.me.coin.name}で回す）`}>
+                  <button type="submit" class={`c-lever${mode === 'spin' ? ' pulled' : ''}`} data-lever-spin disabled={mode === 'spin' || taken} aria-label={`レバー（${fmt(leverBet)} ${p.me.coin.name}で回す）`}>
                     <span class="c-lever-knob"></span>
                   </button>
                 </form>

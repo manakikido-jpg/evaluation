@@ -433,7 +433,8 @@ export class GachaApp {
     let message = '';
     if (i.customId.startsWith('casino-gacha:draw:')) {
       if (!cfg.casino.enabled) return void await i.editReply({ content: 'カジノは今お休み中です。', allowedMentions: { parse: [] } });
-      const r = await drawStyles(this.db, cfg.casinoGacha, i.user.id, `discord:${i.message.id}`, Number(i.customId.split(':')[2]), 'discord');
+      // 押した回を覚える。同じ売り場から続けて引けて、処理の再送では二重払いしない。
+      const r = await drawStyles(this.db, cfg.casinoGacha, i.user.id, `discord:${i.id}`, Number(i.customId.split(':')[2]), 'discord');
       if (r.status === 'ok') { results = r.results; if (r.replay) message = '同じボタンの結果です。追加の支払いはありません。'; }
       else message = r.status === 'funds' ? '銭が足りません。' : r.status === 'off' ? '今はお休み中です。' : 'もう一度開いてください。';
     }
@@ -448,7 +449,7 @@ export class GachaApp {
     const allOwned = drawableStyles(cfg.casinoGacha, state.owned).length === 0;
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(...[1, 10].map((n) => new ButtonBuilder().setCustomId(`casino-gacha:draw:${n}`).setLabel(`${n === 1 ? '1回' : '10連'}（${fmt(drawCost(cfg.casinoGacha, n))}${cfg.economy.currencyName}）`).setStyle(ButtonStyle.Primary).setDisabled(!cfg.casino.enabled || !cfg.casinoGacha.enabled || w.balance < drawCost(cfg.casinoGacha, n))));
     await i.editReply({
-      content: [message, results ? '**今回の景品**\n' + results.map((key) => { const item = styleItem(key)!; return `${item.emoji} ${item.name}`; }).join('\n') : ''].filter(Boolean).join('\n') || null,
+      content: [message, results ? `🎊 **${results.length === 10 ? '10連' : '1回'}引きました！**\n**今回の景品**\n` + [...new Set(results)].map((key) => { const item = styleItem(key)!; const n = results!.filter((k) => k === key).length; return `${item.emoji} ${item.name}${n > 1 ? ` ×${n}` : ''}`; }).join('\n') + '\n景品は持ち物に入りました。背景などはカジノWebの「着せ替え」で装備できます。' : ''].filter(Boolean).join('\n') || null,
       embeds: [{ title: ratesOnly ? '📜 勝負の御籤 · 中身と排出率' : '🎰 勝負の御籤 · 売り場', color: 0xb99553, description: [!cfg.casino.enabled || !cfg.casinoGacha.enabled ? '今はお休み中です。' : '', `所持：${fmt(w.balance)}${cfg.economy.currencyName} · お試し券${state.tickets}枚`, allOwned ? '見た目の品は全部そろいました！その分はお試し券になります。' : `あと${Math.max(1, cfg.casinoGacha.pity - state.pity)}回以内に未所持の見た目の品を保証。`, '', ...(ratesOnly ? lines : [`1回 ${fmt(drawCost(cfg.casinoGacha, 1))}${cfg.economy.currencyName}・10連 ${fmt(drawCost(cfg.casinoGacha, 10))}${cfg.economy.currencyName}`, '景品は背景・卓の飾り・称号・お試し券・大勝負の札など。中身と確率は下のボタンから確認できます。']), '', '見た目の品は重複しません。天井では未所持の品の中から、出やすさに合わせて選びます。物御籤の券・天井とは別です。', '背景・卓のふち・席の飾り・称号などは、カジノWebの「🪭 着せ替え」で装備できます。入口は `/カジノ`。', '見た目は勝つ割合を変えません。大勝負の札は `/持ち物` から使います。'].filter(Boolean).join('\n') }],
       components: ratesOnly ? [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('casino-gacha:open').setLabel('売り場へ入る').setStyle(ButtonStyle.Primary))] : [row, new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('casino-gacha:rates').setLabel('中身と排出率').setStyle(ButtonStyle.Secondary))], allowedMentions: { parse: [] },
     });

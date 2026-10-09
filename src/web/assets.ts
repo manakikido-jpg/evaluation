@@ -39,9 +39,12 @@ export function pickAtFiles(files: readonly string[]): Record<string, string> {
 }
 const atFiles = existsSync(AT_DIR) ? Object.values(pickAtFiles(readdirSync(AT_DIR))) : [];
 const slotFiles = existsSync(SLOT_DIR) ? readdirSync(SLOT_DIR).filter((f) => /^[a-z0-9-]+\.(webp|png|jpg|svg)$/.test(f)) : [];
+const SCENE_DIR = path.join(here, 'public/casino-scenes');
+const sceneFiles = readdirSync(SCENE_DIR).filter((f) => /^[a-z]+\.svg$/.test(f));
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
+    ...Object.fromEntries(sceneFiles.map((f) => [`casino-scene-${f}`, { body: readText(path.join(SCENE_DIR, f)), type: 'image/svg+xml' }])),
     ...Object.fromEntries(slotFiles.map((f) => [`slots-${f}`, { body: new Uint8Array(readFileSync(path.join(SLOT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(atFiles.map((f) => [`atart-${f}`, { body: new Uint8Array(readFileSync(path.join(AT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(mjFiles.map((f) => [`mahjong-${f}`, { body: new Uint8Array(readFileSync(path.join(MJ_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
