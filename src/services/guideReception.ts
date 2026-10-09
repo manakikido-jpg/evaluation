@@ -21,6 +21,18 @@ export const guideConfigSchema = z.object({
 });
 /** 絵文字とDiscordのチャンネルリンクを、そのまま設定欄に貼れる */
 export function parseGuideLinks(body: Record<string, unknown>): GuideConfig['links'] {
+  if (typeof body.bulkLinks === 'string' && body.bulkLinks.trim()) {
+    const rows = body.bulkLinks.trim().split(/\r?\n/).filter(line => line.trim());
+    if (rows.length > 10) throw new Error('案内は10行までです');
+    const pasted: Record<string, unknown> = {};
+    rows.forEach((line, n) => {
+      const match = /^\s*(<a?:[a-zA-Z0-9_]{1,32}:\d{17,20}>)\s+(.+)$/.exec(line);
+      if (!match) throw new Error('案内文を確認してください');
+      pasted[`emoji_${n}`] = match[1];
+      pasted[`links_${n}`] = match[2]!.replace(/[\u200b-\u200f\u2060\ufeff]/g, '');
+    });
+    return parseGuideLinks(pasted);
+  }
   const links: GuideConfig['links'] = [];
   for (let n = 0; n < 10; n++) {
     const emoji = String(body[`emoji_${n}`] ?? '').trim();

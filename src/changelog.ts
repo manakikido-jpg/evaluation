@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-guide-setup-ui', date: '2026-10-09', kind: 'improve', where: ['社務所Web'],
+    title: '案内VCを検索して選び、保存後は固定表示に',
+    items: ['監視する案内VCをカテゴリごとのチェックボックスで選べます。保存後は選んだ部屋を表示し、「変更する」を押すまで選択欄を閉じます。変更を取り消すこともできます。', '初期設定・案内リンク・案内人・対応履歴・給与への移動を追加しました。今のリンク案内文をまとめて貼り付けて保存できます。'],
+  },
+  {
     id: '2026-10-09-cast-free-time',
     date: '2026-10-09',
     kind: 'new',

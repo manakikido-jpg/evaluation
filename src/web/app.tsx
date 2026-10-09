@@ -1481,9 +1481,9 @@ export function createWebApp(deps: WebDeps) {
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */
   app.get('/guide', async c => {
     const [config, employees, receptions, payroll, channels, roles] = await Promise.all([
-      loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
+      loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).where(eq(employeePayroll.job, 'guide')).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
     ]);
-    const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.map(r => r.memberId)].filter(Boolean));
+    const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.flatMap(r => [r.memberId, r.visitorId])].filter(Boolean));
     return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} />);
   });
   app.post('/guide/settings', async c => {

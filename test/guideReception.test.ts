@@ -19,6 +19,13 @@ async function active(id = GUIDE) { await registerGuide(db, id); await setGuideS
 async function reception(time = now) { return (await openGuideReception(db, VISITOR, VOICE, time))!; }
 
 describe('案内の受付と給与', () => {
+  it('貼り付けた案内文から複数リンクと見えない区切りを読み、不正な行を拒否する', () => {
+    const text = '<:a_001:1557360345054715924> ⁠https://discord.com/channels/1553060517642240011/1553189423200473188\n<:a_006:1557360917057110046> https://discord.com/channels/1553060517642240011/1553189433052889238 ⁠https://discord.com/channels/1553060517642240011/1553487265525923971';
+    expect(parseGuideLinks({ bulkLinks: text }).map(l => l.channelIds)).toEqual([['1553189423200473188'], ['1553189433052889238', '1553487265525923971']]);
+    expect(() => parseGuideLinks({ bulkLinks: '不正な案内文' })).toThrow();
+    expect(() => parseGuideLinks({ bulkLinks: Array(11).fill(text.split('\n')[0]).join('\n') })).toThrow();
+    expect(() => parseGuideLinks({ bulkLinks: '<:a_001:1557360345054715924> https://example.com' })).toThrow();
+  });
   it('初期150銭・7チャンネルのリンクを読み、保存時に不正な設定を拒否する', async () => {
     const c = await loadGuideConfig(db);
     expect(c.salary).toBe(150);

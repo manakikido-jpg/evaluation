@@ -103,7 +103,7 @@ function ThemeChoice() {
   </label>;
 }
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
   return (
