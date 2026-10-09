@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-09-cast-menu-layout', date: '2026-10-09', kind: 'improve', where: ['Discord'],
+    title: 'キャストの紹介を画像とサービスごとの料金で見やすく',
+    items: ['紹介パネルは名前・画像・料金・選ぶ欄の順に表示します。同じサービスの時間と料金をまとめ、料金は銭で表示します。', '名前と選ぶ欄のリボンを外しました。登録済みの料金や指名・予約の仕組みはそのままです。既存の紹介パネルは社務所Webから出し直してください。'],
+  },
+  {
     id: '2026-10-09-cast-menu-template',
     date: '2026-10-09',
     kind: 'new',
