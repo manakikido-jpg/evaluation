@@ -46,6 +46,15 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 名前の変更は Discord が 10 分に 2 回までにしているので、待ちすぎないように */
 const EDIT_TIMEOUT_MS = 5000;
 
+/** シクレの目印は名前を変えても残す。運営が公開に戻したら外す */
+export function roomChannelName(name: string, kind: RoomKind): string {
+  const prefix = '🤫 シクレ｜';
+  let base = name;
+  while (base.startsWith(prefix)) base = base.slice(prefix.length);
+  const head = kind === 'secret' ? prefix : '';
+  return head + base.slice(0, 100 - head.length);
+}
+
 type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'> & { payerId?: string | null };
 type Btn = { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; emoji?: { name: string }; disabled?: boolean };
 const button = (custom_id: string, label: string, emoji: string, style: Btn['style'] = 2, disabled = false): Btn => ({
@@ -205,6 +214,11 @@ export class RoomApp {
       list.map((o) => ({ id: o.id, type: o.type, allow: o.allow, deny: o.deny })),
       `部屋の種類: ${ROOM_KINDS[kind].label}`,
     );
+    const name = roomChannelName(ch.name, kind);
+    if (name !== ch.name) {
+      // 名前の制限待ちで、権限の変更や返事を止めない
+      await withTimeout(ch.setName(name, '部屋の種類の目印')).catch((err) => logger.warn({ err, channelId: ch.id }, '部屋の目印を変更できませんでした'));
+    }
     if (kind === 'twoshot') await ch.setUserLimit(2);
     else if (row.kind === 'twoshot') await ch.setUserLimit(0);
   }
@@ -303,7 +317,8 @@ export class RoomApp {
   /** 変えたあと: パネルを書き換える（パネルから開いたフォームなら、そのパネルを） */
   private async done(i: RoomInteraction, row: RoomRow, ch: { name: string; userLimit: number }, note: string, v: PanelView = {}): Promise<void> {
     const panel = roomPanel(this.cfg(), row, ch, note, v);
-    if (i.isModalSubmit() && i.isFromMessage()) await i.update(panel);
+    if (i.deferred) await i.editReply(panel);
+    else if (i.isModalSubmit() && i.isFromMessage()) await i.update(panel);
     else if (i.isMessageComponent()) await i.update(panel);
     else await i.reply({ ...panel, ...EPHEMERAL });
   }
@@ -311,6 +326,7 @@ export class RoomApp {
   private async rename(i: ModalSubmitInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, name: string, v: PanelView = {}): Promise<void> {
     if (!name) return void (await i.reply({ content: '名前を入れてください。', ...EPHEMERAL }));
     await i.deferUpdate();
+    name = roomChannelName(name, row.kind);
     const r = await withTimeout(ch.setName(name.slice(0, 100), v.staff ? '部屋の名前（運営）' : '部屋の名前（作った人）'));
     const note = r === 'timeout' ? 'チャンネル名を変えています（Discord が混んでいるので、反映まで少しかかります。名前は 10 分に 2 回まで変えられます）' : `チャンネル名を「${name}」にしました`;
     await i.editReply(roomPanel(this.cfg(), row, { name: r === 'timeout' ? ch.name : name.slice(0, 100), userLimit: ch.userLimit }, note, v));
@@ -386,6 +402,7 @@ export class RoomApp {
       // 運営: 決まっていても変えられ、差額は取らない
       const updated = await staffSetRoomKind(this.db, ch.id, kind);
       if (!updated) return void (await i.reply({ content: 'この部屋はもうありません。', ...EPHEMERAL }));
+      await i.deferUpdate();
       if (kind !== row.kind) await this.apply(ch, row, kind);
       const k = ROOM_KINDS[kind];
       const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
@@ -397,6 +414,7 @@ export class RoomApp {
     if (r.status === 'not_found') return void (await i.reply({ content: 'この部屋はもうありません。', ...EPHEMERAL }));
     if (r.status === 'locked') return void (await i.reply({ content: '部屋の種類はもう決まっています（1 回だけ選べます）。', ...EPHEMERAL }));
     if (r.status === 'insufficient') return void (await i.reply({ content: `${this.cfg().economy.currencyName}が足りません（${r.price} 枚必要）。`, ...EPHEMERAL }));
+    await i.deferUpdate();
     if (kind !== row.kind) await this.apply(ch, row, kind);
     const k = ROOM_KINDS[kind];
     const paid = r.ticketKind ? `（${ticketUsedText(r)}）` : r.charged ? `（${this.cfg().economy.currencyName} ${r.charged} 枚を払いました）` : '';
