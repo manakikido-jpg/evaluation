@@ -1685,6 +1685,8 @@ export const casts = pgTable('casts', {
    * night: 寝落ち（朝 7 時まで。minutes は使わない）/ consult: 内容により相談（値段と時間は、キャストがそのつど出す）
    */
   menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
+  /** オプション（指名に足す追加。名前と値段。運営が社務所Web で足す） */
+  options: jsonb('options').$type<{ id: string; name: string; price: number }[]>().notNull().default(sql`'[]'::jsonb`),
   /** male 男性 / female 女性 / '' まだ決めていない（両方のメニューに出る）。メニューを出すチャンネルを分ける */
   gender: text('gender').$type<'male' | 'female' | ''>().notNull().default(''),
   /** 未成年の人の公開の雑談を受ける */
@@ -1711,6 +1713,9 @@ export const castSessions = pgTable(
     plan: text('plan').notNull(),
     /** 指名したメニューの名前（前の指名は空） */
     menuName: text('menu_name').notNull().default(''),
+    /** 付けたオプションの名前と、その合計（延長の値段はオプションを除いて数える） */
+    optionNames: text('option_names').array().notNull().default(sql`'{}'::text[]`),
+    optionPrice: integer('option_price').notNull().default(0),
     minutes: integer('minutes').notNull(),
     /** 預かっている銭（延長で増える） */
     price: integer('price').notNull(),

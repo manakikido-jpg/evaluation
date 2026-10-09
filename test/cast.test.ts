@@ -7,6 +7,8 @@ import {
   acceptSession,
   applyCast,
   addMenuItem,
+  addOption,
+  removeOption,
   getCast,
   menuOf,
   removeMenuItem,
@@ -477,5 +479,30 @@ describe('👨👩 男性・女性のメニューを分ける', () => {
     const conf = await loadCastConfig(db);
     expect(castHomeChannel(conf, (await getCast(db, ADULT))!)).toBe(F);
     expect(castHomeChannel(conf, (await getCast(db, CAST))!)).toBe(M);
+  });
+});
+
+describe('➕ キャストのオプション', () => {
+  it('メニューにオプションを足して払う・知らない番号はだめ・のばす値段にはオプションを入れない', async () => {
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, c, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    expect(await addOption(db, c, CAST, { name: 'カメラあり', price: 100 })).toBe('ok');
+    expect(await addOption(db, c, CAST, { name: '歌', price: 50 })).toBe('ok');
+    expect(await addOption(db, c, CAST, { name: '', price: 50 })).toBe('invalid');
+    const cast = (await getCast(db, CAST))!;
+    const [cam, song] = cast.options;
+    await addCoins(db, ADULT, 10000, 'adjust');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', options: ['nope'] }, T20)).status).toBe('no_plan');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', options: [cam!.id, song!.id] }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    // 1 時間 500 ＋ 100 ＋ 50
+    expect(r.session).toMatchObject({ price: 650, optionPrice: 150, optionNames: ['カメラあり', '歌'] });
+    await acceptSession(db, r.session.id, CAST, T20);
+    // 前のプランの 30 分の値段（300）でのばす。オプションの分は足さない
+    const e = await extendSession(db, r.session.id, ADULT, new Date(T20.getTime() + MIN));
+    expect(e).toMatchObject({ status: 'ok', session: { price: 950, minutes: 90 } });
+    expect(await removeOption(db, CAST, cam!.id)).toBe(true);
+    expect((await getCast(db, CAST))!.options.map((o) => o.name)).toEqual(['歌']);
   });
 });
