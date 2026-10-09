@@ -229,6 +229,9 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
+import { refreshTicketPanel } from '../discord/supportTickets.js';
+import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
+import { TicketsPage } from './views/supportTickets.js';
 import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
@@ -579,6 +582,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/invites', requireAdmin);
   app.use('/board', requireAdmin);
   app.use('/cast', requireAdmin);
+  app.use('/tickets', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
@@ -588,7 +592,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/interview', requireAdmin);
   app.use('/ideas', requireAdmin);
   app.use('/ideas', requireCsrf);
-  for (const p of ['/ideas/*', '/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/market/*', '/gacha/*', '/interview/*']) {
+  for (const p of ['/ideas/*', '/applications/*', '/omairi/*', '/soudan/*', '/settings/*', '/notices/*', '/shop/*', '/channels/*', '/roles/*', '/ranks/*', '/updates/*', '/commands/*', '/minutes/*', '/temp/*', '/invites/*', '/board/*', '/cast/*', '/tickets/*', '/market/*', '/gacha/*', '/interview/*']) {
     app.use(p, requireAdmin);
     app.use(p, requireCsrf);
   }
@@ -5149,6 +5153,126 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // ───────── 🎀 キャスト ─────────
+
+  // ───────── 🎫 チケット ─────────
+
+  app.get('/tickets', async (c) => {
+    const [conf, open, closed, channels, roles] = await Promise.all([loadTicketConfig(db), openTickets(db), closedTickets(db, 50), loadChannels().catch(() => [] as GuildChannel[]), loadRoles()]);
+    const names = await namesOf(db, [...open, ...closed].flatMap((t) => [t.openerId, ...(t.assigneeId ? [t.assigneeId] : [])]));
+    return c.html(
+      <TicketsPage
+        session={c.get('session')}
+        config={conf}
+        open={open}
+        closed={closed}
+        channels={textChannelsOf(channels).map((ch) => ({ id: ch.id, name: `#${ch.name}` }))}
+        categories={channels.filter((ch) => ch.type === 4).map((ch) => ({ id: ch.id, name: ch.name }))}
+        roles={(roles ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }))}
+        name={(id) => names.get(id) ?? id}
+        guji={gujiOnly(c)}
+        now={now()}
+        guildId={cfg.guildId}
+        flash={c.req.query('msg')}
+      />,
+    );
+  });
+
+  app.get('/tickets/:id/transcript', async (c) => {
+    const t = await getSupportTicket(db, Number(c.req.param('id')));
+    if (!t?.transcript) return c.notFound();
+    return c.body(t.transcript, 200, { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff', 'cache-control': 'private, no-store' });
+  });
+
+  const ticketPanelNow = () => refreshTicketPanel(db, deps.discord).catch((err: unknown) => (logger.warn({ err }, 'ticket panel failed'), false));
+
+  app.post('/tickets/settings', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const body = await c.req.parseBody();
+    const prev = await loadTicketConfig(db);
+    const id = (k: string) => (typeof body[k] === 'string' && validId(body[k] as string) ? (body[k] as string) : undefined);
+    const next = { ...prev, panelChannelId: id('panelChannelId'), categoryId: id('categoryId'), logChannelId: id('logChannelId'), staleHours: Number(body.staleHours), idleHours: Number(body.idleHours) };
+    const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (!ok(next.staleHours, 1, 336) || !ok(next.idleHours, 0, 720)) return c.redirect('/tickets?msg=invalid');
+    // チャンネルを変えたら、新しいチャンネルに出し直す
+    if (next.panelChannelId !== prev.panelChannelId) delete next.panelMessageId;
+    await saveTicketConfig(db, next, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.settings', detail: { ...next, types: undefined }, via: 'web' });
+    return c.redirect('/tickets?msg=saved');
+  });
+
+  /** 種類の欄を読む（名札は足すときだけ） */
+  const ticketTypeInput = (body: Record<string, string | File | (string | File)[]>, key: string): TicketType | undefined => {
+    const one = (k: string) => {
+      const v = body[k];
+      return typeof v === 'string' ? v : Array.isArray(v) && typeof v[0] === 'string' ? v[0] : '';
+    };
+    const many = (k: string) => {
+      const v = body[k];
+      return (Array.isArray(v) ? v : v === undefined ? [] : [v]).filter((x): x is string => typeof x === 'string' && validId(x));
+    };
+    const label = one('label').trim();
+    if (!label || !/^[a-z0-9_-]{1,20}$/.test(key)) return undefined;
+    const kind = one('kind') === 'role' ? 'role' : one('kind') === 'request' ? 'request' : 'normal';
+    const questions = Array.from({ length: TICKET_QUESTIONS_MAX }, (_, n) => ({ label: one(`q${n}`).trim().slice(0, 45), long: one(`q${n}long`) === 'yes', required: one(`q${n}req`) === 'yes' })).filter((q) => q.label);
+    const categoryId = one('categoryId');
+    return {
+      key,
+      label: label.slice(0, 40),
+      emoji: one('emoji').trim().slice(0, 16),
+      description: one('description').trim().slice(0, 100),
+      kind,
+      roleIds: many('roleIds'),
+      ...(validId(categoryId) ? { categoryId } : {}),
+      greeting: one('greeting').trim().slice(0, 1000),
+      questions,
+      roleChoices: many('roleChoices'),
+      enabled: one('enabled') === 'yes',
+    };
+  };
+
+  app.post('/tickets/types', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const body = await c.req.parseBody({ all: true });
+    const key = typeof body.key === 'string' ? body.key.trim() : '';
+    const t = ticketTypeInput(body, key);
+    if (!t) return c.redirect('/tickets?msg=invalid');
+    const conf = await loadTicketConfig(db);
+    if (conf.types.some((x) => x.key === key)) return c.redirect('/tickets?msg=type_dup');
+    if (conf.types.length >= TICKET_TYPES_MAX) return c.redirect('/tickets?msg=invalid');
+    await saveTicketConfig(db, { ...conf, types: [...conf.types, t] }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'add', key }, via: 'web' });
+    await ticketPanelNow();
+    return c.redirect('/tickets?msg=type_added');
+  });
+
+  app.post('/tickets/types/:key', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const key = c.req.param('key');
+    const conf = await loadTicketConfig(db);
+    if (!conf.types.some((x) => x.key === key)) return c.redirect('/tickets');
+    const t = ticketTypeInput(await c.req.parseBody({ all: true }), key);
+    if (!t) return c.redirect('/tickets?msg=invalid');
+    await saveTicketConfig(db, { ...conf, types: conf.types.map((x) => (x.key === key ? t : x)) }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'edit', key }, via: 'web' });
+    await ticketPanelNow();
+    return c.redirect('/tickets?msg=type_saved');
+  });
+
+  app.post('/tickets/types/:key/delete', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const key = c.req.param('key');
+    const conf = await loadTicketConfig(db);
+    await saveTicketConfig(db, { ...conf, types: conf.types.filter((x) => x.key !== key) }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.type', detail: { op: 'remove', key }, via: 'web' });
+    await ticketPanelNow();
+    return c.redirect('/tickets?msg=type_removed');
+  });
+
+  app.post('/tickets/post', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const ok = await refreshTicketPanel(db, deps.discord, { repost: true, by: c.get('session').userId }).catch(() => false);
+    return c.redirect(`/tickets?msg=${ok ? 'posted' : 'post_failed'}`);
+  });
 
   app.get('/cast', async (c) => {
     const [conf, channels, roles, list, stats, sessions, image, femaleImage] = await Promise.all([

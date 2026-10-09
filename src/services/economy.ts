@@ -34,6 +34,9 @@ export type CoinReason =
   | 'cast_pay'
   | 'cast_reward'
   | 'cast_refund'
+  | 'ticket_pay'
+  | 'ticket_reward'
+  | 'ticket_refund'
   | 'boost'
   | 'room'
   | 'gacha'
@@ -262,6 +265,9 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   cast_pay: 'キャストを指名した',
   cast_reward: 'キャストの売り上げ',
   cast_refund: 'キャストの指名の払い戻し',
+  ticket_pay: 'チケットの依頼の代金を預けた',
+  ticket_reward: 'チケットの依頼の代金を受け取った',
+  ticket_refund: 'チケットの依頼の代金が戻った',
   boost: '奉納（ブースト）のお礼',
   room: '通話部屋',
   gacha: '物御籤',

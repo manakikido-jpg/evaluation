@@ -29,6 +29,7 @@ type Nav =
   | 'gift'
   | 'board'
   | 'cast'
+  | 'tickets'
   | 'notices'
   | 'channels'
   | 'shop'
@@ -59,6 +60,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'applications', href: '/applications', icon: '📝', label: '申請' },
       { key: 'yaku', href: '/yaku', icon: '👹', label: '厄' },
       { key: 'soudan', href: '/soudan', icon: '💌', label: '相談' },
+      { key: 'tickets', href: '/tickets', icon: '🎫', label: 'チケット' },
       { key: 'temp', href: '/temp', icon: '⏳', label: '一時的な権限' },
       { key: 'invites', href: '/invites', icon: '🔗', label: '招待・報酬' },
       { key: 'interview', href: '/interview', icon: '🍵', label: '面談告知' },

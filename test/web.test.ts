@@ -1801,7 +1801,7 @@ describe('物御籤（管理画面）', () => {
     const member = await (await get(`/members/${USER}`, s)).text();
     expect(member).toContain('🎁 物御籤');
     expect(member).toContain('引いた回数 <strong>2</strong>');
-    expect(member).not.toContain('/tickets"');
+    expect(member).not.toContain(`action="/members/${USER}/tickets"`);
   });
 
   it('ON/OFF・値段・天井・出やすさを変える（宮司のみ）', async () => {
@@ -3077,6 +3077,32 @@ describe('キャスト（管理画面）', () => {
       body: new URLSearchParams({ _csrf: csrf, ...data }).toString(),
     });
   };
+
+  it('🎫 チケット: ページ・設定・種類を足す／書きかえる／外す・やりとりの記録（宮司だけが変えられる）', async () => {
+    const { openTicket, closeTicket, loadTicketConfig } = await import('../src/services/supportTickets.js');
+    const g = await login(GUJI);
+    const s = await login(STAFF);
+    const page = await (await get('/tickets', g)).text();
+    expect(page).toContain('チケット');
+    expect(page).toContain('個人スタンプ依頼');
+    expect((await form(s, '/tickets/settings', { staleHours: '5', idleHours: '0' })).headers.get('location')).toBe('/tickets?msg=guji');
+    expect((await form(g, '/tickets/settings', { staleHours: '5', idleHours: '0' })).headers.get('location')).toBe('/tickets?msg=saved');
+    expect(await loadTicketConfig(db)).toMatchObject({ staleHours: 5, idleHours: 0 });
+    expect((await form(g, '/tickets/types', { key: 'goods', label: 'グッズ依頼', emoji: '🧸', kind: 'request', q0: 'ほしいもの', q0long: 'yes', q0req: 'yes', enabled: 'yes' })).headers.get('location')).toBe('/tickets?msg=type_added');
+    expect((await form(g, '/tickets/types', { key: 'goods', label: 'x' })).headers.get('location')).toBe('/tickets?msg=type_dup');
+    expect((await form(g, '/tickets/types/goods', { label: 'グッズ', emoji: '🧸', kind: 'request', q0: 'ほしいもの', enabled: 'yes' })).headers.get('location')).toBe('/tickets?msg=type_saved');
+    const goods = (await loadTicketConfig(db)).types.find((t) => t.key === 'goods');
+    expect(goods).toMatchObject({ label: 'グッズ', kind: 'request', questions: [{ label: 'ほしいもの', long: false, required: false }] });
+    expect((await form(g, '/tickets/types/goods/delete', {})).headers.get('location')).toBe('/tickets?msg=type_removed');
+    expect((await loadTicketConfig(db)).types.some((t) => t.key === 'goods')).toBe(false);
+    // 閉じたチケットのやりとり
+    const r = await openTicket(db, await loadTicketConfig(db), { typeKey: 'inquiry', openerId: STAFF, answers: [{ q: '内容', a: 'しつもん' }] });
+    if (r.status !== 'ok') throw new Error(r.status);
+    await closeTicket(db, r.ticket.id, GUJI, 'staff', 'やりとりの文字');
+    const tr = await get(`/tickets/${r.ticket.id}/transcript`, s);
+    expect(await tr.text()).toBe('やりとりの文字');
+    expect((await get(`/tickets/${r.ticket.id}/transcript`, '')).status).toBe(302);
+  });
 
   it('256KBを超える写真を本人ごとに保存し、8MB超・CSRFなし・未登録は拒む', async () => {
     const sharp = (await import('sharp')).default;

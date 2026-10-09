@@ -14,6 +14,7 @@ import { GiftApp } from './discord/gifts.js';
 import { OtoshidamaApp } from './discord/otoshidama.js';
 import { BoardApp } from './discord/board.js';
 import { CastApp } from './discord/cast.js';
+import { TicketApp } from './discord/supportTickets.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
@@ -109,6 +110,7 @@ async function main(): Promise<void> {
   const market = new MarketApp(db, cfg, actions);
   const board = new BoardApp(db, cfg, actions);
   const cast = new CastApp(db, cfg, actions);
+  const supportTickets = new TicketApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -163,6 +165,7 @@ async function main(): Promise<void> {
       .then(() => board.checkPanel())
       .catch((err) => logger.warn({ err }, 'board card check failed'));
     cast.attach(guild);
+    supportTickets.attach(guild);
     gacha.attach(guild);
     // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
     await gacha.refreshPanels(guild).catch((err) => logger.warn({ err }, 'gacha panels refresh failed'));
@@ -190,6 +193,8 @@ async function main(): Promise<void> {
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
       // 🎀 キャスト: 返事待ちの期限・予約の始まり・通話の終わり・部屋の片付け
       void cast.tick().catch((err) => logger.warn({ err }, 'cast tick failed'));
+      // 🎫 チケット: 返事のない知らせ・自動で閉じる
+      void supportTickets.tick().catch((err) => logger.warn({ err }, 'ticket tick failed'));
       // 🧧 お年玉袋: 締め切りが来た袋の残りを置いた人に戻す
       void otoshidama.tick().catch((err) => logger.warn({ err }, 'otoshidama tick failed'));
       // ⏳ 一時的なロール・権限: 期限が来たものを外す
@@ -332,9 +337,11 @@ async function main(): Promise<void> {
     void market.onInteraction(i);
     void board.onInteraction(i);
     void cast.onInteraction(i);
+    void supportTickets.onInteraction(i);
   });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);
+    void supportTickets.onMessage(m).catch((err) => logger.warn({ err }, 'ticket message failed'));
     recruit.onMessage(m);
     void boost.onMessage(m);
     void sticky.onMessage(m);

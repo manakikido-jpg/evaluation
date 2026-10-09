@@ -18,6 +18,7 @@ export const WEB_PAGES = [
   { key: 'applications', label: '申請・お参り期間', href: '/applications', prefixes: ['applications', 'omairi'] },
   { key: 'yaku', label: '厄', href: '/yaku', prefixes: ['yaku'] },
   { key: 'soudan', label: '相談', href: '/soudan', prefixes: ['soudan'] },
+  { key: 'tickets', label: 'チケット', href: '/tickets', prefixes: ['tickets'] },
   { key: 'temp', label: '一時的な権限', href: '/temp', prefixes: ['temp'] },
   { key: 'invites', label: '招待', href: '/invites', prefixes: ['invites'] },
   { key: 'interview', label: '面談告知', href: '/interview', prefixes: ['interview'] },

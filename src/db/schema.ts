@@ -1873,3 +1873,49 @@ export const longVoiceBonuses = pgTable('long_voice_bonuses', {
   notifiedAt: timestamp('notified_at', { withTimezone: true }),
   notifyClaimedAt: timestamp('notify_claimed_at', { withTimezone: true }),
 }, t => [primaryKey({ columns: [t.memberId, t.date] }), uniqueIndex('long_voice_bonus_week_slot_idx').on(t.memberId, t.week, t.weekSlot), check('long_voice_bonus_slot_check', sql`${t.weekSlot} between 1 and 2`)]);
+
+
+/**
+ * 🎫 チケット（お問い合わせ・相談・役職の希望と面接・個人スタンプ依頼など）。
+ * 開くと、開いた人と、その種類のロールの人だけが見えるチャンネルができる。閉じるとやりとりを文字で残してチャンネルを消す
+ */
+export const supportTickets = pgTable(
+  'support_tickets',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** 種類（設定の types[].key） */
+    typeKey: text('type_key').notNull(),
+    openerId: text('opener_id').notNull(),
+    channelId: text('channel_id'),
+    /** open 開いている / closed 閉じた */
+    status: text('status').$type<'open' | 'closed'>().notNull().default('open'),
+    /** 担当の運営 */
+    assigneeId: text('assignee_id'),
+    /** 開くときの質問と答え */
+    answers: jsonb('answers').$type<{ q: string; a: string }[]>().notNull().default(sql`'[]'::jsonb`),
+    /** 役職の希望: 希望したロール */
+    roleId: text('role_id'),
+    /** あとから足した人 */
+    members: text('members').array().notNull().default(sql`'{}'::text[]`),
+    /** 依頼（スタンプなど）: 見積もり・預かっている銭・渡した相手 */
+    quotePrice: integer('quote_price'),
+    quoteDeadline: text('quote_deadline'),
+    quoteBy: text('quote_by'),
+    escrow: integer('escrow').notNull().default(0),
+    paidTo: text('paid_to'),
+    /** 最後に話した時刻（放置の知らせ・自動で閉じる） */
+    lastUserAt: timestamp('last_user_at', { withTimezone: true }),
+    lastStaffAt: timestamp('last_staff_at', { withTimezone: true }),
+    staleNotifiedAt: timestamp('stale_notified_at', { withTimezone: true }),
+    idleWarnedAt: timestamp('idle_warned_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    closedBy: text('closed_by'),
+    closeReason: text('close_reason'),
+    /** 閉じたときのやりとり（文字） */
+    transcript: text('transcript'),
+    rating: integer('rating'),
+  },
+  (t) => [index('support_tickets_status_idx').on(t.status), index('support_tickets_opener_idx').on(t.openerId, t.typeKey), check('support_tickets_escrow', sql`${t.escrow} >= 0`)],
+);
+export type SupportTicket = typeof supportTickets.$inferSelect;
