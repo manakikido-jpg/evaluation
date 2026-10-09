@@ -107,7 +107,7 @@ type LinkBtn = { type: 2; style: 5; label: string; url: string };
 export const castRoomName = (name: string) => `🌸 ${name.slice(0, 90)}の間`;
 export const roomEntry = (guildId: string, channelId: string): LinkBtn => ({ type: 2, style: 5, label: '部屋へ入る', url: `https://discord.com/channels/${guildId}/${channelId}` });
 const row = (...b: (Btn | LinkBtn)[]) => ({ type: 1 as const, components: b });
-const STATE = { busy: { emoji: '📞', label: '通話中' }, waiting: { emoji: '🟢', label: '待機中' }, off: { emoji: '💤', label: 'お休み' } } as const;
+const STATE = { busy: { emoji: '📞', label: '通話中' }, waiting: { emoji: '🟢', label: '予約受付中' }, off: { emoji: '💤', label: '受付停止' } } as const;
 const pricesText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) => menuText(c) || 'メニューなし';
 /** メニューを選ぶ欄（内容・時間・値段） */
 const menuSelect = (custom_id: string, placeholder: string, items: ReturnType<typeof menuOf>) => ({
@@ -146,50 +146,26 @@ const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先�
 
 // ───────── メニュー（画像の下に、指名するメニュー） ─────────
 
-/** #キャスト一覧 のメニュー: 上げた画像と、キャストを選ぶメニュー・ボタン */
+/** #キャスト一覧 のメニュー: 上げた画像と、ランキング・キャストの方のボタン（予約・注文は 1 人ずつの紹介パネルから） */
 export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'waiting' | 'off' }[], image?: { data: Uint8Array; contentType: string }, group?: CastGroup): MessageBody {
   const ext = image?.contentType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png';
-  const order = { waiting: 0, busy: 1, off: 2 } as const;
-  const sorted = [...list].sort((a, b) => order[a.state] - order[b.state]);
-  const waiting = sorted.filter((x) => x.state === 'waiting').length;
+  const open = list.filter((x) => x.state !== 'off').length;
   return {
     embeds: [
       {
         title: group ? `🎀 ${GROUP_LABEL[group]}` : '🎀 キャスト',
         description: [
-          '寝落ち・雑談・ゲームなどの通話を、銭で指名できます。下のメニューからキャストを選んでください。',
-          `🟢 いま待機中 **${waiting}** 人 ・ 在籍 ${list.length} 人`,
-          '-# 銭は社務所が預かり、終わったらキャストに渡します（受けてもらえなければ全額戻ります）',
-          '-# 2 人だけの部屋・寝落ちは 18 歳以上どうしだけ。18 歳未満の方は、公開の部屋での雑談（1 時間まで・22 時まで）だけ指名できます',
+          '下の紹介から、メニューを選んで予約・注文できます。',
+          `🟢 予約受付中 **${open}** 人 ・ 在籍 ${list.length} 人`,
+          '-# 銭は社務所が預かり、受けてもらえなければ全額戻ります',
+          '-# 2 人だけの部屋・寝落ち・納品は 18 歳以上だけ。18 歳未満の方は、公開の部屋での雑談（1 時間まで・22 時まで）を予約できます',
         ].join('\n'),
         color: PINK,
         ...(image ? { image: { url: `attachment://cast-menu.${ext}` } } : {}),
       },
     ],
     ...(image ? { files: [{ name: `cast-menu.${ext}`, contentType: image.contentType, data: image.data }], attachments: [] } : {}),
-    components: [
-      ...(sorted.length
-        ? [
-            {
-              type: 1,
-              components: [
-                {
-                  type: 3,
-                  custom_id: 'cast:pick',
-                  placeholder: '🎀 指名するキャストを選ぶ',
-                  options: sorted.slice(0, 25).map((x) => ({
-                    label: x.name.slice(0, 100),
-                    value: x.cast.memberId,
-                    description: `${STATE[x.state].label}・${pricesText(x.cast)}`.slice(0, 100),
-                    emoji: { name: STATE[x.state].emoji },
-                  })),
-                },
-              ],
-            },
-          ]
-        : []),
-      row(button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙')),
-    ],
+    components: [row(button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙'))],
   };
 }
 
@@ -251,8 +227,8 @@ async function castIntroBody(db: Db, castId: string) {
       { type: 10, content: castMenuText(menu) },
       ...(cast.options.length ? [{ type: 10, content: castOptionsText(cast) }] : []),
       ...(st ? [{ type: 10, content: `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` }] : []),
-      ...(cast.status === 'active' && menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
-      { type: 10, content: cast.status === 'active' ? '-# 選択後、あなただけに確認画面が表示されます。' : '-# 現在は受付を停止しています。' },
+      ...(cast.status === 'active' && cast.available === 'waiting' && menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
+      { type: 10, content: cast.status === 'active' && cast.available === 'waiting' ? '-# 選択後、あなただけに確認画面が表示されます。' : '-# 現在は受付を停止しています。' },
       { type: 14, divider: true, spacing: 2 },
     ],
   };
@@ -343,7 +319,7 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
 export function castReceptionBody(d: CastReception, name: string, names: ReadonlyMap<string, string>, currency: string, guildId: string, avatar?: Uint8Array) {
   const png = renderCastReception({ reception: d, name, names, currency, avatar });
   const off = d.cast.status !== 'active';
-  const state = { waiting: '待機中', busy: '対応中', off: '受付停止', pending: '運営の確認待ち', paused: '運営による休止' }[d.state];
+  const state = { waiting: '予約受付中', busy: '対応中', off: '受付停止', pending: '運営の確認待ち', paused: '運営による休止' }[d.state];
   const summary = name + 'さんの受付。' + state + '。今日の予約' + d.today.length + '件。現在の指名' + d.current.length + '件。今月の受取額' + fmt(d.stat.earned) + currency + '、指名' + d.stat.count + '回。';
   return {
     content: '',
@@ -352,7 +328,7 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
     attachments: [],
     allowedMentions: { parse: [] as never[] },
     components: [
-      row(button('cast:wait:2', '2時間待機', 3, '🟢', off), button('cast:wait:4', '4時間待機', 3, undefined, off), button('cast:wait:0', '受付停止', 2, undefined, off), button('cast:refresh', '更新', 1, '🔄')),
+      row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄')),
       row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅')),
       row(button('cast:edit', '紹介を変える', 1, '✏️'), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
     ],
@@ -643,8 +619,9 @@ export class CastApp {
 
   private async wait(i: ButtonInteraction<'cached'>, hours: number): Promise<void> {
     await i.deferUpdate();
-    const r = await setWaiting(this.db, i.user.id, [0, 2, 4].includes(hours) ? hours : 0);
-    if (!r) return void (await i.followUp({ content: '承認されたキャストの方だけが待機できます。', ...EPHEMERAL }));
+    // 前の「2時間待機」「4時間待機」のボタンも、受付中にする
+    const r = await setWaiting(this.db, i.user.id, hours > 0 ? 1 : 0);
+    if (!r) return void (await i.followUp({ content: '承認されたキャストの方だけが切り替えられます。', ...EPHEMERAL }));
     await i.editReply(await this.receptionView(i.member));
     this.refresh();
   }
@@ -849,6 +826,7 @@ export class CastApp {
       not_cast: 'このキャストは、いまは指名できません。',
       self: '自分は指名できません。',
       blocked: 'このキャストは指名できません。',
+      closed: 'このキャストは、いまは予約・注文の受付を止めています。',
       busy: 'このキャストは、いま通話中か返事待ちです。少しあとか、予約でどうぞ。',
       no_plan: 'このキャストは、その時間では受けていません。',
       minor_plan: '寝落ちは 18 歳以上の方だけです。',

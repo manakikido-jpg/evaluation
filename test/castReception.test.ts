@@ -60,7 +60,8 @@ describe('キャスト本人の受付情報', () => {
     const d = (await loadCastReception(db, CAST, NOW))!;
     expect(d.today.map((s) => s.id)).toEqual([first.id, later.id]);
     expect(d.current).toHaveLength(0);
-    expect(d.state).toBe('off');
+    // 承認されたキャストは、はじめから予約受付中
+    expect(d.state).toBe('waiting');
     expect(await loadCastReception(db, CUSTOMER, NOW)).toBeUndefined();
   });
 
@@ -75,9 +76,11 @@ describe('キャスト本人の受付情報', () => {
   });
 
   it('待機期限と運営の休止を反映し、返事待ち・通話中を本人の分だけ表示する', async () => {
-    await setWaiting(db, CAST, 2, NOW);
-    expect((await loadCastReception(db, CAST, NOW))?.state).toBe('waiting');
-    expect((await loadCastReception(db, CAST, new Date(NOW.getTime() + 120 * 60_000)))?.state).toBe('off');
+    await setWaiting(db, CAST, 1, NOW);
+    // 受付中は時間で切れない
+    expect((await loadCastReception(db, CAST, new Date(NOW.getTime() + 120 * 60_000)))?.state).toBe('waiting');
+    await setWaiting(db, CAST, 0, NOW);
+    expect((await loadCastReception(db, CAST, NOW))?.state).toBe('off');
     const s = await booking({ status: 'requested', startAt: null, channelId: '990000000000000001' });
     await booking({ castId: OTHER, status: 'active' });
     const d = (await loadCastReception(db, CAST, NOW))!;
@@ -109,7 +112,7 @@ describe('受付の画像とボタン', () => {
     expect(body.files[0]?.name).toBe('cast-reception.png');
     expect(body.files[0]?.description).toContain('対応中');
     expect(JSON.stringify(body.components)).toContain('https://discord.com/channels/' + cfg.guildId + '/990000000000000001');
-    for (const id of ['cast:wait:2', 'cast:wait:4', 'cast:wait:0', 'cast:refresh', 'cast:schedule:0', 'cast:edit']) expect(JSON.stringify(body.components)).toContain(id);
+    for (const id of ['cast:wait:1', 'cast:wait:0', 'cast:refresh', 'cast:schedule:0', 'cast:edit']) expect(JSON.stringify(body.components)).toContain(id);
   });
 
   it('長い名前や多い予約でもはみ出さず、運営の休止中は待機ボタンを押せない', async () => {
@@ -121,7 +124,7 @@ describe('受付の画像とボタン', () => {
     expect(svg).toContain('予約一覧');
     expect(svg).not.toContain('桜'.repeat(14));
     const body = castReceptionBody(d, 'さくら', new Map(), '銭', cfg.guildId);
-    expect(body.components[0]?.components.slice(0, 3).every((b) => 'disabled' in b && b.disabled)).toBe(true);
+    expect(body.components[0]?.components.slice(0, 2).every((b) => 'disabled' in b && b.disabled)).toBe(true);
   });
 });
 

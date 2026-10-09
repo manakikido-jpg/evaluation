@@ -438,7 +438,7 @@ export async function registerCast(db: Db, c: CastConfig, who: { id: string; adu
   if (!validProfile(c, profile) || !first.length || first.length > MENU_MAX || !first.every((m) => validMenuItem(c, m))) return { status: 'invalid' };
   const cur = await getCast(db, who.id);
   if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
-  const values = { memberId: who.id, status: 'active' as const, available: 'off' as const, ...profile, gender, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
+  const values = { memberId: who.id, status: 'active' as const, available: 'waiting' as const, ...profile, gender, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
   const [row] = await db.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
   return { status: 'ok', cast: row! };
 }
@@ -447,7 +447,7 @@ export async function registerCast(db: Db, c: CastConfig, who: { id: string; adu
 export async function setCastStatus(db: Db, id: string, status: Cast['status'], by: string, now = new Date()): Promise<Cast | undefined> {
   const [row] = await db
     .update(casts)
-    .set({ status, ...(status === 'active' ? { approvedAt: now, approvedBy: by } : { available: 'off' as const }) })
+    .set({ status, ...(status === 'active' ? { approvedAt: now, approvedBy: by, available: 'waiting' as const, waitingUntil: null } : { available: 'off' as const }) })
     .where(eq(casts.memberId, id))
     .returning();
   return row;
@@ -457,7 +457,8 @@ export async function setCastStatus(db: Db, id: string, status: Cast['status'], 
 export async function setWaiting(db: Db, id: string, hours: number, now = new Date()): Promise<Cast | undefined> {
   const [row] = await db
     .update(casts)
-    .set(hours > 0 ? { available: 'waiting', waitingUntil: new Date(now.getTime() + hours * 60 * MIN) } : { available: 'off', waitingUntil: null })
+    // 予約だけになったので、時間では切れない（受付中 / 受付停止）
+    .set(hours > 0 ? { available: 'waiting', waitingUntil: null } : { available: 'off', waitingUntil: null })
     .where(and(eq(casts.memberId, id), eq(casts.status, 'active')))
     .returning();
   return row;
@@ -487,7 +488,7 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 export type RequestResult =
   | { status: 'ok'; session: CastSession; balance: number; /** ガチャで出たもの */ drawn?: string }
   | { status: 'insufficient'; price: number; balance: number }
-  | { status: 'not_cast' | 'self' | 'blocked' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' };
+  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' };
 
 /** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
 /** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数 */
@@ -525,6 +526,8 @@ export async function requestSession(
   if (!cast || cast.status !== 'active') return { status: 'not_cast' };
   if (input.castId === input.customerId) return { status: 'self' };
   if (cast.blocked.includes(input.customerId)) return { status: 'blocked' };
+  // キャストが「受付停止」にしている
+  if (cast.available !== 'waiting') return { status: 'closed' };
   const found = menuOf(cast).find((m) => m.id === input.plan);
   // 相談のメニューは、キャストが出した時間と値段で（ほかのメニューに値段は付けられない）
   const item = found?.consult ? (input.quote && validQuote(c, input.quote.minutes, input.quote.price) ? { ...found, ...input.quote } : undefined) : input.quote ? undefined : found;
@@ -927,7 +930,7 @@ export async function loadCastReception(db: Db, castId: string, now = new Date()
     db.select().from(castSessions).where(and(eq(castSessions.castId, castId), gte(castSessions.startAt, start), lt(castSessions.startAt, end), inArray(castSessions.status, ['reserved', 'accepted', 'active', 'done', 'disputed']))).orderBy(asc(castSessions.startAt)),
     castStats(db, monthStart(now), castId, new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth() + 1, 1) - JST)),
   ]);
-  const state = cast.status === 'pending' ? 'pending' : cast.status === 'paused' ? 'paused' : current.length ? 'busy' : cast.available === 'waiting' && cast.waitingUntil && cast.waitingUntil > now ? 'waiting' : 'off';
+  const state = cast.status === 'pending' ? 'pending' : cast.status === 'paused' ? 'paused' : current.length ? 'busy' : cast.available === 'waiting' ? 'waiting' : 'off';
   return { cast, state, current, today, stat: stats[0] ?? { castId, count: 0, earned: 0, ratingAvg: null, ratings: 0 }, now };
 }
 

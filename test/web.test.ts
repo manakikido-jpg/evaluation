@@ -3246,7 +3246,7 @@ describe('キャスト（管理画面）', () => {
     actions = [];
     const up = await app.request('/cast/image', { method: 'POST', headers: { cookie: `shamusho_session=${s}` }, body: fd });
     expect(up.headers.get('location')).toBe('/cast?msg=image_saved');
-    expect(actions.some((a) => a.startsWith('send 910000000000000003') && a.includes('指名できます'))).toBe(true);
+    expect(actions.some((a) => a.startsWith('send 910000000000000003') && a.includes('予約・注文できます'))).toBe(true);
     expect((await get('/cast/image', s)).headers.get('content-type')).toBe('image/png');
     // 申し込み → 承認（ロールを付ける）
     const CAST = '880000000000000011';

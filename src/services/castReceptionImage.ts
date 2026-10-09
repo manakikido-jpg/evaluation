@@ -17,7 +17,7 @@ const day = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().sli
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const plan = (s: CastSession) => (s.menuName || (s.plan === 'night' ? '寝落ち' : s.plan === '60' ? '1時間' : s.plan === '30' ? '30分' : sessionLabel(s))) + (s.extensions ? ' ＋' + s.extensions * 30 + '分' : '');
 const STATUS: Record<CastSession['status'], string> = { reserved: '返事待ち', accepted: '予約確定', requested: '返事待ち', active: '通話中', ordered: '納品待ち', delivered: '受取待ち', done: '終了', declined: '受付終了', canceled: '取消', disputed: '運営確認中', refunded: '返金済み' };
-const STATES = { waiting: ['待機中', '#8cc4a6'], busy: ['対応中', '#efd39a'], off: ['受付停止', '#d4c6d1'], pending: ['運営の確認待ち', '#d4c6d1'], paused: ['運営による休止', '#d4c6d1'] } as const;
+const STATES = { waiting: ['予約受付中', '#8cc4a6'], busy: ['対応中', '#efd39a'], off: ['受付停止', '#d4c6d1'], pending: ['運営の確認待ち', '#d4c6d1'], paused: ['運営による休止', '#d4c6d1'] } as const;
 
 /** Discord のアイコンだけ読みこむ。取れないときは、文字のアイコンで表示できる */
 export async function loadReceptionAvatar(url: string): Promise<Buffer | undefined> {
@@ -78,7 +78,7 @@ export function receptionSvg(input: ReceptionImageInput): string {
   svg += text(236, 132, shorten(name, 13), 40, '#fff5e8', true);
   svg += text(238, 174, shorten(d.cast.tags.join(' ・ ') || 'キャスト', 23), 23, '#ead4d6');
   svg += box(650, 196, 242, 42, stateColor, 'none', 21) + text(671, 225, state, 22, '#382b33', true);
-  const waiting = d.cast.available === 'waiting' && d.cast.waitingUntil && d.cast.waitingUntil > d.now ? '待機設定  ' + clock(d.cast.waitingUntil) + ' まで' : 'あなた専用の受付画面';
+  const waiting = d.cast.available === 'waiting' ? '予約を受け付けています' : '予約の受付を止めています';
   svg += text(238, 220, waiting, 22, '#ead4d6');
 
   svg += box(34, 282, 438, 142, '#fffdfa', '#e6d8c9') + box(488, 282, 438, 142, '#fffdfa', '#e6d8c9');

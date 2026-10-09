@@ -158,9 +158,11 @@ describe('🎀 キャスト', () => {
     expect((await castTick(db, c, new Date(at.getTime() + 61 * MIN))).finished).toEqual([]);
     expect((await resolveSession(db, c, r.session.id, 'refund', 'staff'))?.status).toBe('refunded');
     expect((await walletOf(db, ADULT)).balance).toBe(10_000);
-    // 待機は時間で切れる
-    await setWaiting(db, CAST, 2, T20);
-    expect((await castTick(db, c, new Date(T20.getTime() + 121 * MIN))).waitingOff).toBe(1);
+    // 予約だけなので、受付中は時間で切れない。受付停止なら予約できない
+    await setWaiting(db, CAST, 1, T20);
+    expect((await castTick(db, c, new Date(T20.getTime() + 121 * MIN))).waitingOff).toBe(0);
+    await setWaiting(db, CAST, 0, T20);
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: new Date(T20.getTime() + 180 * MIN) }, T20)).status).toBe('closed');
   });
   it('予約時間の重なりを拒み、直後の予約は受ける。拒んだときは課金しない', async () => {
     const at = new Date(T20.getTime() + 60 * MIN);
@@ -368,8 +370,10 @@ describe('🎀 キャストの見た目', () => {
     expect(p.embeds![0]!.image).toEqual({ url: 'attachment://cast-menu.png' });
     expect(p.files![0]!.name).toBe('cast-menu.png');
     const menu = JSON.stringify(p.components);
-    expect(menu.indexOf('もも')).toBeLessThan(menu.indexOf('さくら'));
-    for (const id of ['cast:pick', 'cast:rank', 'cast:me']) expect(menu).toContain(id);
+    // 予約・注文は 1 人ずつの紹介パネルから。一覧はランキングとキャストの方だけ
+    for (const id of ['cast:rank', 'cast:me']) expect(menu).toContain(id);
+    expect(menu).not.toContain('cast:pick');
+    expect(p.embeds![0]!.description).toContain('予約受付中 **1** 人');
     // 予約だけなので「今すぐ話せる人」は出さない
     expect(menu).not.toContain('cast:now');
     expect(menu).not.toContain('cast:apply');
@@ -570,17 +574,15 @@ describe('👨👩 男性・女性のメニューを分ける', () => {
     expect(await refreshCastPanel(db, discord as never)).toBe(true);
     expect(send).toHaveBeenCalledTimes(1);
     const one = JSON.stringify(send.mock.calls[0]![1]);
-    for (const n of ['おとこ', 'おんな', 'まだ']) expect(one).toContain(n);
+    expect(one).toContain('在籍 3 人');
     await saveCastConfig(db, { ...(await loadCastConfig(db)), femaleChannelId: F }, 'staff');
     send.mockClear();
     expect(await refreshCastPanel(db, discord as never, { repost: true })).toBe(true);
     const byCh = new Map(send.mock.calls.map(([ch, b]) => [ch, JSON.stringify(b)]));
-    expect(byCh.get(M)).toContain('おとこ');
-    expect(byCh.get(M)).not.toContain('おんな');
-    expect(byCh.get(M)).toContain('まだ');
+    // 男性 + まだ決めていない人 / 女性 + まだ決めていない人
+    expect(byCh.get(M)).toContain('在籍 2 人');
     expect(byCh.get(M)).toContain('cast:rank:male');
-    expect(byCh.get(F)).toContain('おんな');
-    expect(byCh.get(F)).not.toContain('おとこ');
+    expect(byCh.get(F)).toContain('在籍 2 人');
     expect(byCh.get(F)).toContain('cast:rank:female');
     expect(await loadCastConfig(db)).toMatchObject({ panelMessageId: '990000000000000201', femalePanelMessageId: '990000000000000202' });
     // 相談・予約のスレッドは、その人のメニューのチャンネルに
