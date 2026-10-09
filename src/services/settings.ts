@@ -16,6 +16,8 @@ export const overridesSchema = z.object({
       currencyName: z.string().min(1).max(20),
       currencyEmoji: z.string().max(10),
       voicePer10Min: z.number().int().min(0).max(1000),
+      longVoiceBonusAmount: z.number().int().min(0).max(1_000_000),
+      longVoiceBonusChannelId: z.string().regex(/^\d{17,20}$/).nullable(),
       voiceDailyCap: z.number().int().min(0).max(100000),
       shuinGive: z.number().int().min(0).max(1000),
       shuinReceive: z.number().int().min(0).max(1000),
@@ -132,9 +134,11 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       ],
     },
     economy: (() => {
-      const { joinBonusChannelId, ...rest } = o.economy;
+      const { joinBonusChannelId, longVoiceBonusChannelId, ...rest } = o.economy;
       const merged = { ...base.economy, ...rest };
       // null は「決めない（#記録 へ）」
+      if (longVoiceBonusChannelId === null) delete merged.longVoiceBonusChannelId;
+      else if (longVoiceBonusChannelId) merged.longVoiceBonusChannelId = longVoiceBonusChannelId;
       if (joinBonusChannelId === null) delete (merged as { joinBonusChannelId?: string }).joinBonusChannelId;
       else if (joinBonusChannelId) merged.joinBonusChannelId = joinBonusChannelId;
       return merged;

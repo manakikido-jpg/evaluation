@@ -18,6 +18,7 @@ export type Flow = 'issue' | 'income' | 'admin' | 'transfer';
 /** 出入りの理由ごとの分け方（知らない理由は「運営の調整」） */
 export const REASON_FLOW: Record<string, Flow> = {
   voice: 'issue',
+  long_voice_bonus: 'issue',
   shuin_give: 'issue',
   shuin_receive: 'issue',
   shuin_revoke: 'issue',

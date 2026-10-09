@@ -93,7 +93,7 @@ export type MessageBody = {
   }[];
   components?: unknown[];
   /** 通知を飛ばす相手（なければだれにも飛ばさない） */
-  allowed_mentions?: { parse?: ('everyone' | 'roles' | 'users')[]; roles?: string[] };
+  allowed_mentions?: { parse?: ('everyone' | 'roles' | 'users')[]; roles?: string[]; users?: string[] };
   /** 書き換えのとき: 残す添付（[] で全部外す。書かなければそのまま） */
   attachments?: { id: string | number; filename?: string }[];
   /** いっしょに送るファイル（写真など） */

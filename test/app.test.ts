@@ -402,3 +402,22 @@ describe('起動と定期確認で未払い招待報酬を拾う', () => {
     expect((await walletOf(db, id)).balance).toBe(150);
   });
 });
+
+
+describe('毎分の浮上ボーナス', () => {
+  it('1人のVCも数えて7時間で慶事へ通知し、AFKとBOTは数えない', async () => {
+    const { voiceUsage } = await import('../src/db/schema.js');
+    const { recordJoin } = await import('../src/services/members.js');
+    const m = add('700000000000000088', ROLE.sanpaisha);
+    await recordJoin(db, { id: m.id, username: 'sakura', displayName: 'さくら', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: new Date() });
+    await db.insert(voiceUsage).values({ memberId: m.id, date: '2026-10-09', channelId: 'room', minutes: 419 });
+    const afk = add('700000000000000089');
+    const bot = fakeMember('700000000000000090', [], true);
+    const room = { id: 'room', name: '通話', parentId: null, parent: null, isVoiceBased: () => true, members: new Map([[m.id, { ...m, voice: { deaf: false } }], [bot.id, { ...bot, voice: { deaf: false } }]]) };
+    const afkRoom = { ...room, id: 'afk', members: new Map([[afk.id, { ...afk, voice: { deaf: false } }]]) };
+    await app.everyMinute({ ...guild, afkChannelId: 'afk', channels: { cache: new Map([['room', room], ['afk', afkRoom]]) } } as never, new Date('2026-10-09T03:00:00Z'));
+    expect((await walletOf(db, m.id)).balance).toBe(300);
+    expect(sent).toContainEqual(expect.objectContaining({ channelId: cfg.channels.keiji, content: expect.stringContaining('7時間の浮上ボーナス'), allowedMentions: { parse: [], users: [m.id] } }));
+    expect((await db.select().from(voiceUsage)).map(r => r.memberId)).toEqual([m.id]);
+  });
+});

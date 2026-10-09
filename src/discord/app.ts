@@ -18,6 +18,7 @@ import {
 } from 'discord.js';
 import { channelPosters, posterPage, type Poster } from '../services/posters.js';
 import { SHUIN_PICK_ID } from '../services/notices.js';
+import { awardLongVoiceBonuses, notifyLongVoiceBonuses } from '../services/longVoiceBonus.js';
 import { recordPresence } from '../services/voiceUsage.js';
 import { issueInitialCurrency } from '../services/initialCurrency.js';
 import { autoRanks } from '../domain/ranks.js';
@@ -249,6 +250,13 @@ export class ShuinApp {
         memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [],
       }));
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
+    await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
+    await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
+      const ch = await this.client.channels.fetch(channelId);
+      if (!ch?.isSendable()) throw new Error('浮上ボーナスの通知先に投稿できません。');
+      const message = await ch.send({ content: body.content, allowedMentions: { parse: [], users: body.allowed_mentions?.users ?? [] } });
+      return { id: message.id };
+    } }, now).catch(err => logger.warn({ err }, 'long voice bonus notices failed'));
     // 浮上の時間帯（1 時間ごと）: この 1 分の発言と、通話にいる人
     await addHourlyActivity(this.db, counts, new Set(presence.flatMap((c) => c.memberIds)), now).catch((err) => logger.warn({ err }, 'hourly activity failed'));
     // 議事録の「参加した人」を、いま通話にいる人から入れられるように

@@ -1852,3 +1852,17 @@ export const casinoStyleDraws = pgTable('casino_style_draws', {
   cost: integer('cost').notNull(),
   at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.memberId, t.requestId] })]);
+
+
+/** 7時間の浮上ボーナス。支払いと通知の記録を残す。 */
+export const longVoiceBonuses = pgTable('long_voice_bonuses', {
+  memberId: text('member_id').notNull(),
+  date: text('date').notNull(),
+  /** 日本時間の週の月曜日 */
+  week: text('week').notNull(),
+  weekSlot: integer('week_slot').notNull(),
+  amount: integer('amount').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  notifyClaimedAt: timestamp('notify_claimed_at', { withTimezone: true }),
+}, t => [primaryKey({ columns: [t.memberId, t.date] }), uniqueIndex('long_voice_bonus_week_slot_idx').on(t.memberId, t.week, t.weekSlot), check('long_voice_bonus_slot_check', sql`${t.weekSlot} between 1 and 2`)]);

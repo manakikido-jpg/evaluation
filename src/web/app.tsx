@@ -2632,6 +2632,8 @@ export function createWebApp(deps: WebDeps) {
         menzaifuMaxUses: num('menzaifuMaxUses'),
         voicePer10Min: num('voicePer10Min'),
         voiceDailyCap: num('voiceDailyCap'),
+        longVoiceBonusAmount: typeof body.longVoiceBonusAmount === 'string' ? num('longVoiceBonusAmount') : prev.economy.longVoiceBonusAmount,
+        longVoiceBonusChannelId: typeof body.longVoiceBonusChannel === 'string' ? field(body, 'longVoiceBonusChannel', 20) || null : prev.economy.longVoiceBonusChannelId,
         shuinGive: num('shuinGive'),
         shuinReceive: num('shuinReceive'),
         omikujiBase: num('omikujiBase'),
