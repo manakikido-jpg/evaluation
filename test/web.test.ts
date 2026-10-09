@@ -3147,6 +3147,26 @@ describe('キャスト（管理画面）', () => {
     expect(await (await get('/cast', s)).text()).toContain('ゲーム（1 時間 30 分）');
     await form(s, `/cast/casts/${adult}/menu/${menu[0]!.id}/delete`, {});
     expect((await getCast(db, adult))!.menu.map((m) => m.name)).toEqual(['ゲーム', '寝落ち', 'ツーショット', 'ツーショット', 'おねがい']);
+    // メニューを書きかえる（相談は値段なしのまま）
+    const cur = (await getCast(db, adult))!.menu;
+    expect((await form(s, `/cast/casts/${adult}/menu/${cur[0]!.id}`, { menuName: 'ゲーム2', menuNote: 'たのしく', menuMinutes: '60', menuPrice: '700' })).headers.get('location')).toBe(`/cast?msg=menu_saved#cast-${adult}`);
+    expect((await form(s, `/cast/casts/${adult}/menu/${cur[4]!.id}`, { menuName: 'なんでも', menuNote: '' })).headers.get('location')).toBe(`/cast?msg=menu_saved#cast-${adult}`);
+    expect((await form(s, `/cast/casts/${adult}/menu/${cur[0]!.id}`, { menuName: 'x', menuMinutes: '60', menuPrice: '1' })).headers.get('location')).toBe(`/cast?msg=menu_invalid#cast-${adult}`);
+    const edited = (await getCast(db, adult))!.menu;
+    expect(edited[0]).toMatchObject({ id: cur[0]!.id, name: 'ゲーム2', note: 'たのしく', minutes: 60, price: 700 });
+    expect(edited[4]).toMatchObject({ name: 'なんでも', consult: true, price: 0 });
+    // 📋 テンプレ: はじめは決まったメニュー。書きかえて、キャストに入れる
+    const page = await (await get('/cast', s)).text();
+    expect(page).toContain('メニューのテンプレ');
+    expect(page).toContain('寝かしつけ（30 分）');
+    expect((await form(s, '/cast/template/t3', { menuName: '寝かしつけ', menuNote: '', menuMinutes: '45', menuPrice: '320' })).headers.get('location')).toBe('/cast?msg=menu_saved#cast-template');
+    expect((await form(s, '/cast/template', { menuName: '作業通話', menuNote: '', menuMinutes: '120', menuPrice: '500' })).headers.get('location')).toBe('/cast?msg=menu_ok#cast-template');
+    expect((await form(s, '/cast/template/t1/delete', {})).headers.get('location')).toBe('/cast?msg=menu_removed#cast-template');
+    expect((await form(s, `/cast/casts/${adult}/menu/template`, {})).headers.get('location')).toBe(`/cast?msg=template_applied#cast-${adult}`);
+    const applied = (await getCast(db, adult))!.menu;
+    expect(applied.map((m) => [m.name, m.minutes, m.price])).toEqual([['ツーショット', 60, 350], ['寝かしつけ', 45, 320], ['メンケア', 30, 250], ['メンケア', 60, 450], ['おねがい', 0, 0], ['作業通話', 120, 500]]);
+    expect(new Set(applied.map((m) => m.id)).size).toBe(6);
+    expect(applied.some((m) => ['t1', 't2', 't3', 't4', 't5', 't6'].includes(m.id))).toBe(false);
   });
 
   it('設定・画像・承認・メニューを出す・通報を決める', async () => {

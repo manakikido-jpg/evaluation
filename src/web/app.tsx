@@ -229,7 +229,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { postCastIntro, refreshCastPanel } from '../discord/cast.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -5175,6 +5175,7 @@ export function createWebApp(deps: WebDeps) {
         photos={new Map((await Promise.all(list.map(async (x) => [x.memberId, (await loadCastPhoto(db, x.memberId))?.hash] as const))).filter((x): x is readonly [string, string] => Boolean(x[1])))}
         casts={list}
         members={await activeMemberNames(db)}
+        template={templateOf(conf)}
         stats={stats}
         sessions={sessions}
         name={(id) => names.get(id) ?? id}
@@ -5281,6 +5282,12 @@ export function createWebApp(deps: WebDeps) {
     return out;
   };
 
+  /** 書きかえの欄（内容・説明・時間・値段。寝落ち・相談は前のまま） */
+  const castEditInput = (body: Record<string, unknown>): MenuInput => {
+    const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: false };
+  };
+
   // 🎀 キャストのメニューを足す・外す（内容・時間・値段）
   app.post('/cast/casts/:id/menu', async (c) => {
     const id = c.req.param('id');
@@ -5292,6 +5299,52 @@ export function createWebApp(deps: WebDeps) {
       await castPanelNow();
     }
     return c.redirect(`/cast?msg=menu_${r}#cast-${id}`);
+  });
+
+  // 📋 テンプレのメニューを入れる（今のメニューと入れかえ）
+  app.post('/cast/casts/:id/menu/template', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const ok = await applyTemplate(db, await loadCastConfig(db), id);
+    if (ok) {
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_template', via: 'web' });
+      await castPanelNow();
+    }
+    return c.redirect(`/cast?msg=${ok ? 'template_applied' : 'template_failed'}#cast-${id}`);
+  });
+
+  // メニューを 1 つ書きかえる（内容・説明・時間・値段）
+  app.post('/cast/casts/:id/menu/:item', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const input = castEditInput(await c.req.parseBody());
+    const r = await updateMenuItem(db, await loadCastConfig(db), id, c.req.param('item'), input);
+    if (r === 'ok') {
+      await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_edit', detail: { item: c.req.param('item'), ...input }, via: 'web' });
+      await castPanelNow();
+    }
+    return c.redirect(`/cast?msg=${r === 'ok' ? 'menu_saved' : `menu_${r}`}#cast-${id}`);
+  });
+
+  // 📋 テンプレ: 足す・書きかえる・外す
+  app.post('/cast/template', async (c) => {
+    const conf = await loadCastConfig(db);
+    const r = await editTemplate(db, conf, c.get('session').userId, { add: castMenuInput(await c.req.parseBody()) });
+    if (r === 'ok') await audit(db, { actorId: c.get('session').userId, action: 'cast.template', detail: { op: 'add' }, via: 'web' });
+    return c.redirect(`/cast?msg=menu_${r}#cast-template`);
+  });
+
+  app.post('/cast/template/:item/delete', async (c) => {
+    const r = await editTemplate(db, await loadCastConfig(db), c.get('session').userId, { remove: c.req.param('item') });
+    if (r === 'ok') await audit(db, { actorId: c.get('session').userId, action: 'cast.template', detail: { op: 'remove', item: c.req.param('item') }, via: 'web' });
+    return c.redirect(`/cast?msg=${r === 'ok' ? 'menu_removed' : 'menu_none'}#cast-template`);
+  });
+
+  app.post('/cast/template/:item', async (c) => {
+    const input = castEditInput(await c.req.parseBody());
+    const r = await editTemplate(db, await loadCastConfig(db), c.get('session').userId, { update: c.req.param('item'), input });
+    if (r === 'ok') await audit(db, { actorId: c.get('session').userId, action: 'cast.template', detail: { op: 'edit', item: c.req.param('item') }, via: 'web' });
+    return c.redirect(`/cast?msg=${r === 'ok' ? 'menu_saved' : `menu_${r}`}#cast-template`);
   });
 
   app.post('/cast/casts/:id/menu/:item/delete', async (c) => {
@@ -5343,7 +5396,9 @@ export function createWebApp(deps: WebDeps) {
     const conf = await loadCastConfig(db);
     const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), minorOk: body.minorOk === 'yes', gender: (body.gender === 'male' || body.gender === 'female' ? body.gender : '') as 'male' | 'female' | '' };
     const adult = await isAdult(db, cfg, id, await memberRoleIdsOf(db, id));
-    const r = await registerCast(db, conf, { id, adult }, p, castMenuInput(body), by, now());
+    // テンプレで登録するときは、テンプレの中身をそのまま入れる
+    const first = body.useTemplate === 'yes' ? templateOf(conf) : castMenuInput(body);
+    const r = await registerCast(db, conf, { id, adult }, p, first, by, now());
     if (r.status !== 'ok') return c.redirect(`/cast?msg=reg_${r.status}#cast-register`);
     if (conf.roleId) await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの登録').catch((err: unknown) => logger.warn({ err }, 'cast role add failed'));
     await audit(db, { actorId: by, targetId: id, action: 'cast.register', detail: { menu: r.cast.menu }, via: 'web' });

@@ -44,6 +44,8 @@ export type CastConfig = {
   feePercent: number;
   /** 今すぐの指名の返事を待つ分 */
   acceptMinutes: number;
+  /** メニューのテンプレ（登録のときやボタン 1 つでキャストに入れる）。なければ DEFAULT_MENU_TEMPLATE */
+  menuTemplate?: CastMenuItem[];
 };
 export const CAST_DEFAULTS: CastConfig = { priceMin: 100, priceMax: 30_000, feePercent: 10, acceptMinutes: 10 };
 const KEY = 'cast';
@@ -67,6 +69,7 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     priceMax: Math.max(priceMin, int(v.priceMax, d.priceMax, 1, 1_000_000)),
     feePercent: int(v.feePercent, d.feePercent, 0, 90),
     acceptMinutes: int(v.acceptMinutes, d.acceptMinutes, 1, 60),
+    ...(Array.isArray(v.menuTemplate) ? { menuTemplate: (v.menuTemplate as unknown[]).filter(isMenuItem).slice(0, MENU_MAX) } : {}),
   };
 }
 
@@ -250,6 +253,70 @@ export async function addMenuItem(db: Db, c: CastConfig, castId: string, input: 
 }
 
 /** メニューを外す（運営）。もう入っている指名・予約はそのまま */
+// ───────── メニューのテンプレ・書きかえ ─────────
+
+const tpl = (id: string, name: string, minutes: number, price: number, extra: Partial<CastMenuItem> = {}): CastMenuItem => ({ id, name, note: '', minutes, price, night: false, ...extra });
+/** はじめのテンプレ（社務所Web で変えられる） */
+export const DEFAULT_MENU_TEMPLATE: CastMenuItem[] = [
+  tpl('t1', 'ツーショット', 30, 200),
+  tpl('t2', 'ツーショット', 60, 350),
+  tpl('t3', '寝かしつけ', 30, 300),
+  tpl('t4', 'メンケア', 30, 250),
+  tpl('t5', 'メンケア', 60, 450),
+  tpl('t6', 'おねがい', 0, 0, { consult: true }),
+];
+export const templateOf = (c: CastConfig) => c.menuTemplate ?? DEFAULT_MENU_TEMPLATE;
+
+function isMenuItem(x: unknown): x is CastMenuItem {
+  const m = x as CastMenuItem;
+  return !!m && typeof m.id === 'string' && typeof m.name === 'string' && typeof m.note === 'string' && Number.isInteger(m.minutes) && Number.isInteger(m.price) && typeof m.night === 'boolean';
+}
+
+/** テンプレをそのキャストのメニューに入れる（今のメニューは入れかえる） */
+export async function applyTemplate(db: Db, c: CastConfig, castId: string): Promise<boolean> {
+  const menu = templateOf(c).map((m) => ({ ...m, id: newMenuId() }));
+  if (!menu.length) return false;
+  const [row] = await db.update(casts).set({ menu, price30: 0, price60: 0, priceNight: 0 }).where(and(eq(casts.memberId, castId), inArray(casts.status, ['pending', 'active', 'paused']))).returning();
+  return Boolean(row);
+}
+
+/** テンプレに足す・外す・書きかえる（設定に保存する） */
+export async function editTemplate(db: Db, c: CastConfig, by: string, op: { add: MenuInput[] } | { remove: string } | { update: string; input: MenuInput }): Promise<'ok' | 'invalid' | 'full' | 'none'> {
+  const cur = templateOf(c);
+  let next: CastMenuItem[];
+  if ('add' in op) {
+    if (!op.add.length || !op.add.every((m) => validMenuItem(c, m))) return 'invalid';
+    if (cur.length + op.add.length > MENU_MAX) return 'full';
+    next = [...cur, ...op.add.map(asItem)];
+  } else if ('remove' in op) {
+    if (!cur.some((m) => m.id === op.remove)) return 'none';
+    next = cur.filter((m) => m.id !== op.remove);
+  } else {
+    const old = cur.find((m) => m.id === op.update);
+    if (!old) return 'none';
+    const input = { ...op.input, night: old.night, consult: old.consult };
+    if (!validMenuItem(c, input)) return 'invalid';
+    next = cur.map((m) => (m.id === op.update ? { ...asItem(input), id: m.id } : m));
+  }
+  await saveCastConfig(db, { ...c, menuTemplate: next }, by);
+  return 'ok';
+}
+
+/** キャストのメニューを 1 つ書きかえる（内容・説明・時間・値段。寝落ち・相談はそのまま）。もう入っている指名はそのまま */
+export async function updateMenuItem(db: Db, c: CastConfig, castId: string, itemId: string, input: MenuInput): Promise<'ok' | 'invalid' | 'none'> {
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast) return 'none' as const;
+    const menu = menuOf(cast);
+    const old = menu.find((m) => m.id === itemId);
+    if (!old) return 'none' as const;
+    const fixed = { ...input, night: old.night, consult: old.consult };
+    if (!validMenuItem(c, fixed)) return 'invalid' as const;
+    await tx.update(casts).set({ menu: menu.map((m) => (m.id === itemId ? { ...asItem(fixed), id: m.id } : m)), price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
+    return 'ok' as const;
+  });
+}
+
 export async function removeMenuItem(db: Db, castId: string, itemId: string): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');

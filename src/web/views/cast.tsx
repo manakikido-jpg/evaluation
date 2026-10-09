@@ -1,5 +1,5 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { GROUP_LABEL, MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, type CastMenuItem, MENU_MAX, MENU_MINUTES, MINOR, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -32,6 +32,10 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   menu_invalid: { text: 'メニューを足せませんでした。内容（30 文字まで）・時間（分）・値段（設定の下限〜上限）を確かめてください。', kind: 'warn' },
   menu_full: { text: `メニューは 1 人 ${MENU_MAX} こまでです。`, kind: 'warn' },
   menu_not_cast: { text: 'その人はキャストではありません。', kind: 'warn' },
+  menu_saved: { text: 'メニューを書きかえました（もう入っている指名・予約はそのままです）。', kind: 'ok' },
+  menu_none: { text: 'そのメニューはもうありません。', kind: 'warn' },
+  template_applied: { text: '📋 テンプレのメニューを入れました。', kind: 'ok' },
+  template_failed: { text: 'テンプレを入れられませんでした（テンプレが空か、外したキャストです）。', kind: 'warn' },
   menu_removed: { text: 'メニューを外しました（もう入っている指名・予約はそのままです）。', kind: 'ok' },
   done_already: { text: 'もう終わっています。', kind: 'warn' },
 };
@@ -86,8 +90,64 @@ function GenderSelect(props: { value?: string }) {
   );
 }
 
+/** メニューの一覧（書きかえる・外す）と、足す欄。キャストのメニューとテンプレで使う */
+function MenuList(props: { items: CastMenuItem[]; base: string; session: AdminSession; c: CastConfig; empty: string }) {
+  return (
+    <>
+      {props.items.length ? (
+        <ul>
+          {props.items.map((m) => (
+            <li>
+              {menuLabel(m)} ・ {menuPriceText(m)}
+              {m.note ? ` ・ ${m.note}` : ''}
+              <details>
+                <summary>書きかえる</summary>
+                <form method="post" action={`${props.base}/${m.id}`} class="fields">
+                  <Csrf session={props.session} />
+                  <label class="field">
+                    <span>内容</span>
+                    <input type="text" name="menuName" maxlength={30} required value={m.name} />
+                  </label>
+                  <label class="field">
+                    <span>説明</span>
+                    <input type="text" name="menuNote" maxlength={100} value={m.note} />
+                  </label>
+                  {!m.night && !m.consult && (
+                    <label class="field">
+                      <span>時間（分）</span>
+                      <input type="number" name="menuMinutes" min={MENU_MINUTES.min} max={MENU_MINUTES.max} step={5} required value={String(m.minutes)} />
+                    </label>
+                  )}
+                  {!m.consult && (
+                    <label class="field">
+                      <span>値段（枚）</span>
+                      <input type="number" name="menuPrice" min={props.c.priceMin} max={props.c.priceMax} required value={String(m.price)} />
+                    </label>
+                  )}
+                  <button type="submit" class="ok">保存</button>
+                </form>
+              </details>
+              <form method="post" action={`${props.base}/${m.id}/delete`} class="row-actions">
+                <Csrf session={props.session} />
+                <button type="submit" class="danger">外す</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="note">{props.empty}</p>
+      )}
+      <form method="post" action={props.base} class="fields">
+        <Csrf session={props.session} />
+        <MenuFields c={props.c} />
+        <button type="submit" class="ok">メニューを足す</button>
+      </form>
+    </>
+  );
+}
+
 /** メニューの欄（内容・説明・時間・値段・寝落ち）。登録とメニューを足すで使う */
-function MenuFields(props: { c: CastConfig }) {
+function MenuFields(props: { c: CastConfig; optional?: boolean }) {
   const pair = (n: '' | '2' | '3', first: boolean) => (
     <>
       <label class="field">
@@ -104,7 +164,7 @@ function MenuFields(props: { c: CastConfig }) {
     <>
       <label class="field">
         <span>内容（30 文字まで）</span>
-        <input type="text" name="menuName" maxlength={30} required placeholder="ツーショット・寝かしつけ など" />
+        <input type="text" name="menuName" maxlength={30} required={!props.optional} placeholder="ツーショット・寝かしつけ など" />
       </label>
       <label class="field">
         <span>説明（なくてもよい・100 文字まで）</span>
@@ -137,6 +197,7 @@ export function CastPage(props: {
   photos: ReadonlyMap<string, string>;
   casts: Cast[];
   members: { id: string; name: string }[];
+  template: CastMenuItem[];
   stats: CastStat[];
   sessions: CastSession[];
   name: (id: string) => string;
@@ -275,8 +336,12 @@ export function CastPage(props: {
             <input type="text" name="tags" maxlength={120} placeholder="雑談、ゲーム、寝落ち" />
           </label>
           <GenderSelect />
-          <p class="note">はじめのメニュー（あとから一覧でいくつでも足せます）</p>
-          <MenuFields c={c} />
+          <label class="field check">
+            <input type="checkbox" name="useTemplate" value="yes" checked />
+            <span>📋 テンプレのメニューで登録する（外すと、下で入れたメニューで登録）</span>
+          </label>
+          <p class="note">テンプレを使わないときの、はじめのメニュー（あとから一覧でいくつでも足せます）</p>
+          <MenuFields c={c} optional />
           <label class="field check">
             <input type="checkbox" name="minorOk" value="yes" checked />
             <span>18 歳未満の人の雑談も受ける（公開の部屋だけ）</span>
@@ -326,31 +391,16 @@ export function CastPage(props: {
                     </form>
                     <form method="post" action={`/cast/casts/${x.memberId}/intro`} class="inline-actions">
                       <Csrf session={session} />
-                      <Select name="channelId" value={c.channelId} options={props.channels} empty="その人のメニューのチャンネル" label="紹介パネルを出すチャンネル" />
+                      <Select name="channelId" options={props.channels} empty="その人のメニューのチャンネル" label="紹介パネルを出すチャンネル" />
                       <button type="submit">🎀 紹介パネルを出す</button>
                     </form>
                     <details class="anchor" id={`cast-${x.memberId}`}>
                       <summary>🎀 メニュー（{menuOf(x).length}）</summary>
-                      {menuOf(x).length ? (
-                        <ul>
-                          {menuOf(x).map((m) => (
-                            <li>
-                              {menuLabel(m)} ・ {menuPriceText(m)}{m.note ? ` ・ ${m.note}` : ''}
-                              <form method="post" action={`/cast/casts/${x.memberId}/menu/${m.id}/delete`} class="row-actions">
-                                <Csrf session={session} />
-                                <button type="submit" class="danger">外す</button>
-                              </form>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p class="note">メニューがありません（指名できません）。下から足してください。</p>
-                      )}
-                      <form method="post" action={`/cast/casts/${x.memberId}/menu`} class="fields">
+                      <form method="post" action={`/cast/casts/${x.memberId}/menu/template`} class="row-actions">
                         <Csrf session={session} />
-                        <MenuFields c={c} />
-                        <button type="submit" class="ok">メニューを足す</button>
+                        <button type="submit">📋 テンプレのメニューを入れる（今のメニューと入れかえ）</button>
                       </form>
+                      <MenuList items={menuOf(x)} base={`/cast/casts/${x.memberId}/menu`} session={session} c={c} empty="メニューがありません（指名できません）。テンプレを入れるか、下から足してください。" />
                     </details>
                   </div>
                   <span class="ch-actions">
@@ -372,6 +422,12 @@ export function CastPage(props: {
         ) : (
           <p class="note ch-empty">まだキャストはいません。</p>
         )}
+      </section>
+
+      <section class="card anchor" id="cast-template">
+        <h2>📋 メニューのテンプレ</h2>
+        <p class="note">キャストを登録するときや、一覧の「テンプレのメニューを入れる」で、この中身をそのまま入れます。入れたあとは、キャストごとに書きかえられます（テンプレを変えても、もう入れたキャストのメニューは変わりません）。</p>
+        <MenuList items={props.template} base="/cast/template" session={session} c={c} empty="テンプレが空です。下から足してください。" />
       </section>
 
       <section class="card">
