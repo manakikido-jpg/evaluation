@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-guide-role-recheck', date: '2026-10-10', kind: 'improve', where: ['Discord'],
+    title: '案内の「ロールを付与する」で、動かしたロールを見せて、あとで確かめる',
+    items: ['返事に、付けたロールと外したロールの名前を出します。', '15 秒後にもう一度確かめ、戻されていたら記録のチャンネルに知らせます。'],
+  },
+  {
     id: '2026-10-10-cast-office-link', date: '2026-10-10', kind: 'fix', where: ['Discord', '社務所Web'],
     title: 'キャスト用 社務所に /キャスト のボタンから入れるように',
     items: ['Discord のログインを止めていても、/キャスト の「🖊 メニュー・写真を編集」（本人だけ・10 分だけ使えるリンク）から入れます。'],

@@ -29,6 +29,8 @@ export const isGuidePanel = (m: Pick<Message, 'components'>) =>
   m.components.some((r) => 'components' in r && r.components.some((c) => 'customId' in c && c.customId === 'guide:register'));
 /** 書き込みがあってから、パネルを下に置き直すまで */
 const RESTICK_MS = 3_000;
+/** ロールを付けてから、戻されていないか確かめるまで */
+const RECHECK_MS = 15_000;
 
 export class GuideReceptionApp {
   private ticking = false;
@@ -66,7 +68,8 @@ export class GuideReceptionApp {
       let visitor = await guild.members.fetch({ user: r.visitorId, force: true });
       if (actor.user.bot || !c.roleId || !actor.roles.cache.has(c.roleId)) return { error: '案内人ロールが必要です。運営に確認してください。' };
       if (visitor.user.bot || !c.voiceChannelIds.includes(r.channelId) || actor.voice.channelId !== r.channelId || visitor.voice.channelId !== r.channelId) return { error: '担当者と利用者が、同じ案内VCにいるときに操作してください。' };
-      if (visitor.roles.cache.has(first.roleId) && !visitor.roles.cache.has(c.pendingRoleId!)) return { reception: r, changed: false };
+      const ids = { addedRoleId: first.roleId, removedRoleId: c.pendingRoleId! };
+      if (visitor.roles.cache.has(first.roleId) && !visitor.roles.cache.has(c.pendingRoleId!)) return { reception: r, changed: false, ...ids };
       if (!visitor.roles.cache.has(c.pendingRoleId!)) return { error: '案内待ちロールの人だけに参拝者ロールを付与できます。' };
       try {
         if (!visitor.roles.cache.has(first.roleId)) await this.discord.addRole(guild.id, r.visitorId, first.roleId, '案内人が参拝者ロールを付与');
@@ -85,8 +88,21 @@ export class GuideReceptionApp {
         return { error: '参拝者ロールは付きましたが、案内待ちを外せませんでした。BOTの権限・ロールの位置を確認して、もう一度押してください。' };
       }
       await audit(tx as Db, { actorId, targetId: r.visitorId, action: 'guide.role_grant', detail: { receptionId: id, roleId: first.roleId, removedRoleId: c.pendingRoleId }, via: 'discord' });
-      return { reception: r, changed: true };
+      return { reception: r, changed: true, ...ids };
     });
+  }
+  /** 付けたあと少し待って、ロールが戻されていないか確かめる（ほかの BOT・サーバーの設定が戻すことがある） */
+  private recheckRoles(guild: Guild, visitorId: string, addedRoleId: string, removedRoleId: string, staffChannelId?: string, waitMs = RECHECK_MS) {
+    setTimeout(() => {
+      void (async () => {
+        const m = await guild.members.fetch({ user: visitorId, force: true }).catch(() => undefined);
+        if (!m) return;
+        const hasAdded = m.roles.cache.has(addedRoleId), hasRemoved = m.roles.cache.has(removedRoleId);
+        if (hasAdded && !hasRemoved) return;
+        logger.warn({ visitorId, hasAdded, hasRemoved }, 'guide roles reverted');
+        if (staffChannelId) await this.discord.sendMessage(staffChannelId, { content: `⚠️ <@${visitorId}> さんのロールが戻っています（<@&${addedRoleId}>: ${hasAdded ? 'あり' : 'なし'} ・ <@&${removedRoleId}>: ${hasRemoved ? 'あり' : 'なし'}）。ほかの BOT やサーバーの設定が戻していないか、Discord の監査ログで確かめてください。`, allowed_mentions: { parse: [] } });
+      })().catch((err) => logger.warn({ err }, 'guide role recheck failed'));
+    }, waitMs).unref?.();
   }
   async onVoiceStateUpdate(before: VoiceState, after: VoiceState) {
     if (before.channelId === after.channelId || after.guild.id !== this.cfg().guildId || after.member?.user.bot) return;
@@ -219,7 +235,10 @@ export class GuideReceptionApp {
         await issueInitialCurrency(this.db, this.cfg(), this.discord, result.reception.visitorId).catch(err => logger.warn({ err }, 'guide initial currency failed'));
         await this.refresh(result.reception, c, true).catch(err => logger.warn({ err }, 'guide role display failed'));
         if (result.changed && c.staffChannelId) await this.discord.sendMessage(c.staffChannelId, { content: `参拝者ロール付与：<@${i.user.id}> さん → <@${result.reception.visitorId}> さん\n案内待ちを外しました。`, allowed_mentions: { parse: [] } }).catch(err => logger.warn({ err }, 'guide role notice failed'));
-        return void await i.editReply(result.changed ? '参拝者ロールを付与し、案内待ちを外しました。案内が終わったら「案内完了」を押してください。' : '参拝者ロールは付与済みで、案内待ちも外れています。');
+        // どのロールを動かしたかを見せる（設定のロールがちがうときに気づけるように）
+        const which = `（付けた: <@&${result.addedRoleId}> ・ 外した: <@&${result.removedRoleId}>）`;
+        if (result.changed) this.recheckRoles(i.guild, result.reception.visitorId, result.addedRoleId, result.removedRoleId, c.staffChannelId);
+        return void await i.editReply({ content: (result.changed ? '参拝者ロールを付与し、案内待ちを外しました。案内が終わったら「案内完了」を押してください。' : '参拝者ロールは付与済みで、案内待ちも外れています。') + '\n' + which, allowedMentions: { parse: [] } });
       }
       if (action === 'claim') {
         if (!this.isVisitor(visitor, c)) return void await i.editReply('案内待ちロールの人だけ案内を開始できます。');
