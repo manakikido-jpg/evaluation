@@ -13,6 +13,7 @@ import { InviteLinkApp } from './discord/inviteLinks.js';
 import { GiftApp } from './discord/gifts.js';
 import { OtoshidamaApp } from './discord/otoshidama.js';
 import { BoardApp } from './discord/board.js';
+import { MessageLogApp } from './discord/messageLog.js';
 import { CastApp } from './discord/cast.js';
 import { TicketApp } from './discord/supportTickets.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
@@ -76,6 +77,8 @@ async function main(): Promise<void> {
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.GuildVoiceStates,
+      // 消されたメッセージの中身を記録するため（Developer Portal でオンにしたときだけ）
+      ...(env.DISCORD_MESSAGE_CONTENT === 'on' ? [GatewayIntentBits.MessageContent] : []),
     ],
   });
   const app = new ShuinApp(client, db, cfg);
@@ -113,7 +116,7 @@ async function main(): Promise<void> {
   const sticky = new StickyApp(db, cfg, actions);
   const market = new MarketApp(db, cfg, actions);
   const board = new BoardApp(db, cfg, actions);
-  const cast = new CastApp(db, cfg, actions, env.WEB_BASE_URL);
+  const cast = new CastApp(db, cfg, actions, env.WEB_BASE_URL, env.DISCORD_MESSAGE_CONTENT === 'on');
   const supportTickets = new TicketApp(db, cfg, actions);
   const voicePanel = new VoicePanelApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
@@ -367,6 +370,10 @@ async function main(): Promise<void> {
   });
   // 📌 掲示板: 募集のカードが消されたら出し直す
   client.on(Events.MessageDelete, (m) => void board.onMessageDelete(m).catch((err) => logger.warn({ err }, 'board message delete failed')));
+  // 🗑 消されたメッセージを #記録 に残す
+  const messageLog = new MessageLogApp(cfg, actions, env.DISCORD_MESSAGE_CONTENT === 'on');
+  client.on(Events.MessageDelete, (m) => void messageLog.onDelete(m).catch((err) => logger.warn({ err }, 'deleted message log failed')));
+  client.on(Events.MessageBulkDelete, (list) => void messageLog.onBulkDelete([...list.values()]).catch((err) => logger.warn({ err }, 'bulk deleted message log failed')));
   client.on(Events.MessageDelete, (m) => void omikuji.onMessageDelete(m).catch((err) => logger.warn({ err }, 'omikuji panel delete failed')));
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 

@@ -1753,6 +1753,8 @@ export const castSessions = pgTable(
     deleteAt: timestamp('delete_at', { withTimezone: true }),
     /** 終わりの 5 分前の知らせを出した */
     warned: boolean('warned').notNull().default(false),
+    /** 予約の前の知らせ（0 まだ / 1 1 時間前を出した / 2 10 分前も出した） */
+    reminded: integer('reminded').notNull().default(0),
     extensions: integer('extensions').notNull().default(0),
     /** キャストに渡した銭（手数料を引いたあと） */
     paid: integer('paid').notNull().default(0),

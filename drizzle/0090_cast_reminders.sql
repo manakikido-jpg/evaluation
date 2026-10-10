@@ -1,0 +1,1 @@
+ALTER TABLE "cast_sessions" ADD COLUMN "reminded" integer DEFAULT 0 NOT NULL;

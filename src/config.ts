@@ -594,6 +594,8 @@ export const guildConfigSchema = z
       keiji: snowflake,
       /** #記録: BOT のログ（任意） */
       log: snowflake.optional(),
+      /** 🗑 消されたメッセージの記録を出すところ（任意。なければ #記録） */
+      deletedLog: snowflake.optional(),
       /** #絵馬-男性: 自己紹介（任意） */
       ema: snowflake.optional(),
       /** #絵馬-女性: 自己紹介（任意） */
@@ -808,6 +810,11 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((u) => (u ? u.replace(/\/+$/, '') : undefined)),
+  /**
+   * メッセージの中身を受け取る（消されたメッセージの記録に使う）。
+   * Developer Portal の Bot →「MESSAGE CONTENT INTENT」をオンにしてから on にする（オンにしないまま on だと BOT が起きない）
+   */
+  DISCORD_MESSAGE_CONTENT: z.enum(['on', 'off']).default('off'),
 });
 
 export type Env = z.infer<typeof envSchema>;

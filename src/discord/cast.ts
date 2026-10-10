@@ -53,6 +53,8 @@ import {
   MENU_MINUTES,
   menuLabel,
   rescheduleSession,
+  castStatement,
+  monthRange,
   deliverSession,
   receiveSession,
   isDeliverySession,
@@ -95,6 +97,7 @@ const PINK = 0xe86a92;
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const unix = (d: Date) => Math.floor(d.getTime() / 1000);
 const jstTime = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(11, 16);
+const jstDay = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(5, 10).replace('-', '/');
 type Btn = { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; emoji?: { name: string }; disabled?: boolean };
 const button = (custom_id: string, label: string, style: Btn['style'] = 2, emoji?: string, disabled = false): Btn => ({
   type: 2,
@@ -330,7 +333,7 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
     allowedMentions: { parse: [] as never[] },
     components: [
       row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄')),
-      row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅')),
+      row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅'), button('cast:sales:0', '売上の明細', 2, '💰')),
       row(button('cast:edit', '紹介を変える', 1, '✏️'), ...(officeUrl ? [{ type: 2 as const, style: 5 as const, label: '🖊 メニュー・写真を編集', url: officeUrl }] : []), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
     ],
   };
@@ -351,6 +354,8 @@ export class CastApp {
     private readonly discord: DiscordActions,
     /** 社務所Web の場所（キャスト用 社務所へのリンク） */
     private readonly baseUrl?: string,
+    /** メッセージの中身・添付が見えるか（MESSAGE CONTENT INTENT）。見えれば納品のファイルを確かめる */
+    private readonly messageContent = false,
   ) {}
 
   attach(guild: Guild): void {
@@ -466,6 +471,7 @@ export class CastApp {
       if (action === 'me') return await this.mine(interaction);
       if (action === 'refresh') return await this.mine(interaction, true);
       if (action === 'schedule') return await this.schedule(interaction, Number(a ?? 0));
+      if (action === 'sales') return await this.sales(interaction, Number(a ?? 0));
       if (action === 'edit') return await this.editModal(interaction);
       if (action === 'wait') return await this.wait(interaction, Number(a));
       if (action === 'minor') return await this.toggleMinor(interaction);
@@ -650,6 +656,35 @@ export class CastApp {
     const c = await loadCastConfig(this.db);
     const r = await updateProfile(this.db, c, i.user.id, { bio: cur.bio, tags: cur.tags, price30: cur.price30, price60: cur.price60, priceNight: cur.priceNight, minorOk: !cur.minorOk });
     if (r) await i.editReply(await this.receptionView(i.member));
+  }
+
+  /** 💰 売上の明細（本人だけ。月ごと・新しい順に 20 件まで） */
+  private async sales(i: ButtonInteraction<'cached'>, back: number): Promise<void> {
+    await i.deferUpdate();
+    if (!(await getCast(this.db, i.user.id))) return void (await i.editReply({ content: 'キャストの方だけが使えます。', embeds: [], components: [], attachments: [] }));
+    const months = Number.isSafeInteger(back) ? Math.max(0, Math.min(back, 23)) : 0;
+    const range = monthRange(months);
+    const st = await castStatement(this.db, i.user.id, range.from, range.to);
+    const names = await namesOf(this.db, st.rows.slice(0, 20).map((r) => r.customerId));
+    const lines = st.rows.slice(0, 20).map((r) =>
+      `${jstDay(r.closedAt)} ｜ ${(names.get(r.customerId) ?? '利用者').replace(/[@*_~`<>|\r\n]/g, '').slice(0, 20)} さん ｜ ${r.delivery ? '📦 ' : ''}${r.label} ｜ ${fmt(r.price)} → **${fmt(r.paid)}**`);
+    const coin = this.cfg().economy.currencyName;
+    await i.editReply({
+      content: '', attachments: [],
+      embeds: [{
+        title: `💰 売上の明細（${range.label}）`,
+        description: [
+          `受け取った合計 **${fmt(st.total)} ${coin}** ・ ${st.count} 件`,
+          '-# 左が預かった額、右が受け取った額（手数料を引いたあと・途中で終えたときは話した分）',
+          '',
+          ...(lines.length ? lines : ['この月の精算はありません。']),
+          ...(st.rows.length > 20 ? [`-# ほか ${st.rows.length - 20} 件`] : []),
+        ].join('\n'),
+        color: PINK,
+      }],
+      components: [row(button(`cast:sales:${months + 1}`, '前の月', 2, undefined, months >= 23), button(`cast:sales:${months - 1}`, '次の月', 2, undefined, months === 0), button('cast:refresh', '受付に戻る', 1))],
+      allowedMentions: { parse: [] },
+    });
   }
 
   private async schedule(i: ButtonInteraction<'cached'>, page: number): Promise<void> {
@@ -1147,8 +1182,25 @@ export class CastApp {
     return thread;
   }
 
+  /**
+   * 納品の中身がスレッドにあるか: 注文のあとにキャストが出したファイルかリンク。
+   * 中身が見えないとき（MESSAGE CONTENT INTENT がオフ）は、キャストが何か書いていればよい。確かめられなければ止めない
+   */
+  private async deliveryPosted(s: CastSession): Promise<boolean> {
+    if (!s.threadId || !this.guild) return true;
+    const thread = await this.guild.channels.fetch(s.threadId).catch(() => null);
+    if (!thread?.isTextBased()) return true;
+    const msgs = await thread.messages.fetch({ limit: 50 }).catch(() => undefined);
+    if (!msgs) return true;
+    return [...msgs.values()].some((m) => m.author.id === s.castId && m.createdAt >= s.createdAt && (!this.messageContent || m.attachments.size > 0 || /https?:\/\//.test(m.content)));
+  }
+
   /** 📦 納品した（キャスト。DM かスレッドから） */
   private async deliver(i: ButtonInteraction, id: number): Promise<void> {
+    const before = await getSession(this.db, id);
+    if (before && before.status === 'ordered' && before.castId === i.user.id && !(await this.deliveryPosted(before))) {
+      return void (await i.reply({ content: `📦 まだスレッドに納品のファイル（かリンク）が見つかりません。${before.threadId ? `<#${before.threadId}> に出してから` : '出してから'}、もう一度「納品した」を押してください。`, ...(i.guildId ? EPHEMERAL : {}) }));
+    }
     const s = await deliverSession(this.db, id, i.user.id);
     if (!s) return void (await i.reply({ content: '納品できるのは、注文を受けたキャストだけです（期限が過ぎたか、もう納品ずみかもしれません）。', ...(i.guildId ? EPHEMERAL : {}) }));
     await this.afterCast(i, s);
@@ -1286,6 +1338,15 @@ export class CastApp {
     const c = await loadCastConfig(this.db);
     const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;
+    // ⏰ 予約の前の知らせ（キャストとお客に DM・スレッドにも）
+    for (const { session: s, stage } of r.remind) {
+      const when = `<t:${unix(s.startAt!)}:t>（<t:${unix(s.startAt!)}:R>）`;
+      const text = stage === 'hour'
+        ? `⏰ 予約の 1 時間前です。${when} から ${sessionLabel(s)}。時刻になったら部屋ができます（当日ならスレッドの「部屋を立てる」で先に作れます）。`
+        : `⏰ もうすぐ予約の時間です（${when}）。${sessionLabel(s)}。`;
+      for (const id of [s.castId, s.customerId]) await this.discord.sendDm(id, `${text}${s.threadId ? `\n<#${s.threadId}>` : ''}`).catch(() => false);
+      if (s.threadId) await this.discord.sendMessage(s.threadId, { content: text, allowed_mentions: { parse: [] } }).catch(() => undefined);
+    }
     for (const s of r.expired) {
       changed = true;
       await this.discord.sendDm(s.customerId, `🙇 指名を始められなかったので、取り消して ${fmt(s.price)} 枚を戻しました。`).catch(() => false);

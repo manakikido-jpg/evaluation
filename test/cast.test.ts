@@ -236,6 +236,38 @@ describe('🎀 キャスト', () => {
     expect((await castTick(db, c, new Date(T20.getTime() + 72 * 60 * MIN))).finished.map((s) => s.id)).toContain(r2.session.id);
   });
 
+  it('⏰ 予約の前の知らせ: 1 時間前と 10 分前に 1 回ずつ', async () => {
+    const at = new Date(T20.getTime() + 120 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect((await castTick(db, c, T20)).remind).toEqual([]);
+    await acceptSession(db, r.session.id, CAST, T20);
+    expect((await castTick(db, c, new Date(at.getTime() - 61 * MIN))).remind).toEqual([]);
+    expect((await castTick(db, c, new Date(at.getTime() - 60 * MIN))).remind.map((x) => x.stage)).toEqual(['hour']);
+    expect((await castTick(db, c, new Date(at.getTime() - 30 * MIN))).remind).toEqual([]);
+    expect((await castTick(db, c, new Date(at.getTime() - 10 * MIN))).remind.map((x) => x.stage)).toEqual(['soon']);
+    expect((await castTick(db, c, new Date(at.getTime() - 5 * MIN))).remind).toEqual([]);
+  });
+
+  it('💰 売上の明細: その月に精算した本人の分だけ。合計は受け取った額', async () => {
+    const { castStatement, monthRange } = await import('../src/services/cast.js');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: new Date(T20.getTime() + 60 * MIN) }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const started = new Date(T20.getTime() + 60 * MIN);
+    await castTick(db, c, started);
+    await castTick(db, c, new Date(started.getTime() + 60 * MIN));
+    const range = monthRange(0, T20);
+    expect(range.label).toBe('2026年10月');
+    const st = await castStatement(db, CAST, range.from, range.to);
+    expect(st).toMatchObject({ count: 1, total: 450 });
+    expect(st.rows[0]).toMatchObject({ price: 500, paid: 450, delivery: false });
+    const prev = monthRange(1, T20);
+    expect(prev.label).toBe('2026年9月');
+    expect((await castStatement(db, CAST, prev.from, prev.to)).count).toBe(0);
+    expect((await castStatement(db, ADULT, range.from, range.to)).count).toBe(0);
+  });
+
   it('当日の部屋: 受けた予約で、キャストかお客が、日本時間の同じ日だけ立てられる', async () => {
     const { earlyRoomOk } = await import('../src/services/cast.js');
     const at = new Date(T20.getTime() + 60 * MIN); // 21:00
@@ -421,6 +453,23 @@ describe('🎀 キャストのDiscord操作', () => {
     const showModal = vi.fn(async () => undefined);
     await f.app.onInteraction({ ...f.interaction, showModal, message: { flags: { has: () => true } }, update: vi.fn() } as unknown as Interaction);
     expect(JSON.stringify(showModal.mock.calls[0])).toContain(`cast:rmodal:${CAST}:30`);
+  });
+
+  it('📦 納品のファイル: 中身が見えるときはキャストのファイルかリンクが要る。見えないときはキャストの書き込みがあればよい', async () => {
+    const created = new Date('2026-10-01T00:00:00Z');
+    const msg = (author: string, extra: { files?: number; content?: string } = {}) => ({ author: { id: author }, createdAt: new Date(created.getTime() + 1000), attachments: { size: extra.files ?? 0 }, content: extra.content ?? '' });
+    const make = (list: unknown[], content: boolean) => {
+      const app = new CastApp(db, () => cfg, {} as DiscordActions, undefined, content);
+      app.attach({ channels: { fetch: async () => ({ isTextBased: () => true, messages: { fetch: async () => new Map(list.map((m, k) => [String(k), m])) } }) } } as unknown as Guild);
+      return (s: unknown) => (app as unknown as { deliveryPosted: (s: unknown) => Promise<boolean> }).deliveryPosted(s);
+    };
+    const s = { castId: CAST, threadId: '990000000000000555', createdAt: created };
+    expect(await make([msg(ADULT, { files: 1 })], true)(s)).toBe(false);
+    expect(await make([msg(CAST, { content: 'できた' })], true)(s)).toBe(false);
+    expect(await make([msg(CAST, { files: 1 })], true)(s)).toBe(true);
+    expect(await make([msg(CAST, { content: 'https://example.com/voice.mp3' })], true)(s)).toBe(true);
+    expect(await make([msg(CAST)], false)(s)).toBe(true);
+    expect(await make([], false)(s)).toBe(false);
   });
 
   it('社務所からの DM で、キャストが予約を受けると DM を書き換え、スレッドにお客向けを出す', async () => {

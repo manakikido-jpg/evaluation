@@ -833,13 +833,25 @@ export type TickResult = {
   cleanup: CastSession[];
   /** 待機の時間が切れた */
   waitingOff: number;
+  /** 予約の前の知らせ（hour: 1 時間前 / soon: 10 分前） */
+  remind: { session: CastSession; stage: 'hour' | 'soon' }[];
 };
 
 export async function castTick(db: Db, c: CastConfig, now = new Date(), prepareRoom?: (s: CastSession) => Promise<boolean>): Promise<TickResult> {
-  const out: TickResult = { expired: [], started: [], warn: [], finished: [], cleanup: [], waitingOff: 0 };
+  const out: TickResult = { expired: [], started: [], warn: [], finished: [], cleanup: [], waitingOff: 0, remind: [] };
   for (const s of await db.select().from(castSessions).where(and(inArray(castSessions.status, ['requested', 'reserved', 'ordered']), lte(castSessions.acceptBy, now)))) {
     const r = await cancelSession(db, s.id, 'system', 'declined', now);
     if (r) out.expired.push(r);
+  }
+  // 予約の前の知らせ: 1 時間前と 10 分前に 1 回ずつ（取りあいにならないよう、印を付けられた方だけが出す）
+  const hourLater = new Date(now.getTime() + 60 * MIN);
+  for (const s of await db.select().from(castSessions).where(and(eq(castSessions.status, 'accepted'), lte(castSessions.startAt, hourLater), sql`${castSessions.reminded} < 2`))) {
+    if (!s.startAt || s.startAt <= now) continue;
+    const soon = s.startAt.getTime() - now.getTime() <= 10 * MIN;
+    const stage = soon ? 2 : 1;
+    if (s.reminded >= stage) continue;
+    const [row] = await db.update(castSessions).set({ reminded: stage }).where(and(eq(castSessions.id, s.id), eq(castSessions.reminded, s.reminded))).returning();
+    if (row) out.remind.push({ session: row, stage: soon ? 'soon' : 'hour' });
   }
   for (const s of await db.select().from(castSessions).where(and(eq(castSessions.status, 'accepted'), lte(castSessions.startAt, now)))) {
     const ready = prepareRoom ? await prepareRoom(s).catch(() => false) : true;
@@ -957,4 +969,27 @@ export function earlyRoomOk(s: CastSession, userId: string, now = new Date()): '
   if (s.status !== 'accepted' || !s.startAt) return 'not_accepted';
   if (jstAt(now, 0).getTime() !== jstAt(s.startAt, 0).getTime()) return 'not_today';
   return 'ok';
+}
+
+/** 日本時間の、n か月前（0 = 今月）の月のはじめと次の月のはじめ */
+export function monthRange(back: number, now = new Date()): { from: Date; to: Date; label: string } {
+  const j = new Date(now.getTime() + JST);
+  const y = j.getUTCFullYear(), m = j.getUTCMonth() - back;
+  const from = new Date(Date.UTC(y, m, 1) - JST);
+  const to = new Date(Date.UTC(y, m + 1, 1) - JST);
+  const f = new Date(from.getTime() + JST);
+  return { from, to, label: `${f.getUTCFullYear()}年${f.getUTCMonth() + 1}月` };
+}
+
+export type CastStatementRow = { id: number; closedAt: Date; customerId: string; label: string; price: number; paid: number; delivery: boolean };
+
+/** 💰 キャスト本人の売上の明細（その月に精算した指名・納品。受け取った額は手数料を引いたあと） */
+export async function castStatement(db: Db, castId: string, from: Date, to: Date): Promise<{ rows: CastStatementRow[]; total: number; count: number }> {
+  const list = await db
+    .select()
+    .from(castSessions)
+    .where(and(eq(castSessions.castId, castId), eq(castSessions.status, 'done'), gte(castSessions.closedAt, from), lt(castSessions.closedAt, to)))
+    .orderBy(desc(castSessions.closedAt));
+  const rows = list.map((s) => ({ id: s.id, closedAt: s.closedAt!, customerId: s.customerId, label: sessionLabel(s), price: s.price, paid: s.paid, delivery: isDeliverySession(s) }));
+  return { rows, total: rows.reduce((n, r) => n + r.paid, 0), count: rows.length };
 }

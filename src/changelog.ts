@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-deleted-log-cast-tools', date: '2026-10-10', kind: 'new', where: ['Discord'],
+    title: '消されたメッセージの記録・予約の知らせ・納品の確認・キャストの売上の明細',
+    items: ['消されたメッセージを #記録 に残します（書いた人・消した人・中身。中身は MESSAGE CONTENT INTENT をオンにしたときだけ）。', 'キャストの予約は、始まる 1 時間前と 10 分前に、キャストとお客へ DM で知らせます。', '「📦 納品した」を押したとき、スレッドにファイルかリンクが出ているかを確かめます。', 'キャストの受付に「💰 売上の明細」を足しました。月ごとに受け取った額を見られます。'],
+  },
+  {
     id: '2026-10-10-long-voice-channels', date: '2026-10-10', kind: 'improve', where: ['社務所Web'],
     title: '7時間の浮上ボーナスに数える通話チャンネルを選べるように',
     items: ['社務所Web の「設定 → 銭」で、7時間に数える通話チャンネルを選べます。選ばなければ今までどおり AFK 以外の全部を数えます。'],
