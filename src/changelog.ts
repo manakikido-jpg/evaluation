@@ -20,6 +20,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-10-long-voice-channels', date: '2026-10-10', kind: 'improve', where: ['社務所Web'],
+    title: '7時間の浮上ボーナスに数える通話チャンネルを選べるように',
+    items: ['社務所Web の「設定 → 銭」で、7時間に数える通話チャンネルを選べます。選ばなければ今までどおり AFK 以外の全部を数えます。'],
+  },
+  {
     id: '2026-10-10-name-change-card', date: '2026-10-10', kind: 'new', where: ['Discord', '社務所Web'],
     title: '授与所に「✏️ 名前変更の札」',
     items: ['授与所で買うと持ち物に入り、/持ち物 から使うと新しい名前を入れて、BOT が 1 回だけ名前（ニックネーム）を変えます。', '値段は社務所Web の授与所で変えられます（はじめ 1,000 枚）。変えられなかったときは札を戻します。'],

@@ -1,4 +1,4 @@
-import { and, count, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { longVoiceBonuses, members, voiceUsage } from '../db/schema.js';
@@ -18,9 +18,11 @@ export async function awardLongVoiceBonuses(db: Db, cfg: GuildConfig, now = new 
   const amount = cfg.economy.longVoiceBonusAmount;
   if (amount <= 0) return;
   const date = jstDate(now), week = activityWeek(now);
+  const channels = cfg.economy.longVoiceBonusVoiceChannelIds ?? [];
   const candidates = await db.select({ memberId: voiceUsage.memberId })
     .from(voiceUsage).innerJoin(members, eq(members.id, voiceUsage.memberId))
-    .where(and(eq(voiceUsage.date, date), isNull(members.leftAt), eq(members.isBot, false)))
+    // 数えるチャンネルを決めていれば、そのチャンネルの時間だけ足す
+    .where(and(eq(voiceUsage.date, date), isNull(members.leftAt), eq(members.isBot, false), ...(channels.length ? [inArray(voiceUsage.channelId, channels)] : [])))
     .groupBy(voiceUsage.memberId).having(sql`sum(${voiceUsage.minutes}) >= 420`);
   for (const { memberId } of candidates) {
     try {

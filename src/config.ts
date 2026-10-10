@@ -82,6 +82,8 @@ export const economySchema = z.object({
   longVoiceBonusAmount: z.number().int().min(0).max(1_000_000).default(300),
   /** 7時間の浮上ボーナスを知らせるチャンネル（なければ慶事） */
   longVoiceBonusChannelId: snowflake.optional(),
+  /** 7時間の浮上ボーナスに数える通話チャンネル（空なら AFK 以外の全部） */
+  longVoiceBonusVoiceChannelIds: z.array(snowflake).max(200).default([]),
   /** 通話でもらえる 1 日の上限 */
   voiceDailyCap: z.number().int().min(0).default(150),
   /** 数えない通話チャンネル（AFK など） */

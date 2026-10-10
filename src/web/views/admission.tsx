@@ -1045,6 +1045,7 @@ export function SettingsPage(props: {
   at?: string;
   /** テキストチャンネル（呼び鈴の知らせ先を選ぶ。category はカテゴリ名） */
   textChannels?: { id: string; name: string; category?: string }[];
+  voiceChannels?: { id: string; name: string; category: string | null }[];
   /** ロール（呼び鈴で呼べるロールを選ぶ） */
   roles?: { id: string; name: string }[];
   /** 🔔 通知 OK／NG */
@@ -1149,6 +1150,12 @@ export function SettingsPage(props: {
               <option value="" selected={!e.longVoiceBonusChannelId}>#慶事（設定ファイルの keiji）</option>
               {(props.textChannels ?? []).map(c => <option value={c.id} selected={c.id === e.longVoiceBonusChannelId}>#{c.name}</option>)}
             </select></label>
+            <input type="hidden" name="longVoiceBonusVoiceForm" value="yes" />
+            <details class="field">
+              <summary>7時間に数える通話チャンネル（{e.longVoiceBonusVoiceChannelIds.length ? `${e.longVoiceBonusVoiceChannelIds.length} こ選択中` : 'すべて（AFK 以外）'}）</summary>
+              <p class="note">チェックしたチャンネルにいた時間だけを足して 7 時間を数えます。1 つもチェックしなければ、AFK 以外のすべての通話を数えます。ふつうの通話報酬には関係しません。</p>
+              {(props.voiceChannels ?? []).map(v => <label class="field check"><input type="checkbox" name="longVoiceBonusVoice" value={v.id} checked={e.longVoiceBonusVoiceChannelIds.includes(v.id)} /><span>🔊 {v.category ? `${v.category} / ` : ''}{v.name}</span></label>)}
+            </details>
             <Num name="voiceDailyCap" label="通話でもらえる 1 日の上限" value={e.voiceDailyCap} file={f.voiceDailyCap} />
             <Num name="shuinGive" label="朱印を押すともらえる量" value={e.shuinGive} file={f.shuinGive} />
             <Num name="shuinReceive" label="朱印を頂くともらえる量" value={e.shuinReceive} file={f.shuinReceive} />

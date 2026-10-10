@@ -32,6 +32,17 @@ describe('7時間の浮上ボーナス', () => {
     expect(await db.select().from(longVoiceBonuses)).toHaveLength(1);
   });
 
+  it('数える通話チャンネルを決めると、そのチャンネルの時間だけで 7 時間を数える', async () => {
+    const A = '870000000000000101', B = '870000000000000102';
+    await usage('2026-10-09', 300, A);
+    await usage('2026-10-09', 200, B);
+    const only = (ids: string[]) => ({ ...cfg, economy: { ...cfg.economy, longVoiceBonusVoiceChannelIds: ids } });
+    await awardLongVoiceBonuses(db, only([A]), now);
+    expect((await economy.walletOf(db, ID)).balance).toBe(0);
+    await awardLongVoiceBonuses(db, only([A, B]), now);
+    expect((await economy.walletOf(db, ID)).balance).toBe(300);
+  });
+
   it('同じ週の3日目は払わず、日本時間の月曜0時で週の回数を戻す', async () => {
     for (const date of ['2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12']) {
       await usage(date);

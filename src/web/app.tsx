@@ -2423,6 +2423,7 @@ export function createWebApp(deps: WebDeps) {
         at={c.req.query('at')}
         coinsNonce={randomUUID()}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
+        voiceChannels={voiceChannelsOf(channels)}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         streakRoles={allRoles.filter((r) => giftableRole(cfg, r, allRoles, deps.botId)).map((r) => ({ id: r.id, name: r.name }))}
         notify={await notifyView(allRoles)}
@@ -2734,6 +2735,8 @@ export function createWebApp(deps: WebDeps) {
         voiceDailyCap: num('voiceDailyCap'),
         longVoiceBonusAmount: typeof body.longVoiceBonusAmount === 'string' ? num('longVoiceBonusAmount') : prev.economy.longVoiceBonusAmount,
         longVoiceBonusChannelId: typeof body.longVoiceBonusChannel === 'string' ? field(body, 'longVoiceBonusChannel', 20) || null : prev.economy.longVoiceBonusChannelId,
+        // 数える通話チャンネル（この欄があるフォームから送ったときだけ変える。ほかの欄の保存では消さない）
+        longVoiceBonusVoiceChannelIds: body.longVoiceBonusVoiceForm === 'yes' ? [body.longVoiceBonusVoice ?? []].flat().filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v)).slice(0, 200) : prev.economy?.longVoiceBonusVoiceChannelIds,
         shuinGive: num('shuinGive'),
         shuinReceive: num('shuinReceive'),
         omikujiBase: num('omikujiBase'),

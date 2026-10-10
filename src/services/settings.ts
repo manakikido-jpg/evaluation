@@ -18,6 +18,7 @@ export const overridesSchema = z.object({
       voicePer10Min: z.number().int().min(0).max(1000),
       longVoiceBonusAmount: z.number().int().min(0).max(1_000_000),
       longVoiceBonusChannelId: z.string().regex(/^\d{17,20}$/).nullable(),
+      longVoiceBonusVoiceChannelIds: z.array(z.string().regex(/^\d{17,20}$/)).max(200),
       voiceDailyCap: z.number().int().min(0).max(100000),
       shuinGive: z.number().int().min(0).max(1000),
       shuinReceive: z.number().int().min(0).max(1000),
