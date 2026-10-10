@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { KB_DEFAULT_OUTFIT, type KbOutfit } from '../services/casino/keibaOutfit.js';
 import type { GachaTier, TicketKind } from '../config.js';
 import { bigint, bigserial, boolean, check, customType, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
@@ -878,6 +879,8 @@ export const keibaHorses = pgTable('keiba_horses', {
   apt: integer('apt').notNull(),
   surf: integer('surf').notNull(),
   coat: integer('coat').notNull(),
+  /** 馬ごとの装備（見た目だけ） */
+  outfit: jsonb('outfit').$type<KbOutfit>().notNull().default(KB_DEFAULT_OUTFIT),
   /** 勝負服 */
   silk: jsonb('silk').$type<{ base: string; accent: string; pattern: number }>().notNull(),
   starts: integer('starts').notNull().default(0),

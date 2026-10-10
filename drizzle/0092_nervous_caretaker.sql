@@ -1,0 +1,1 @@
+ALTER TABLE "keiba_horses" ADD COLUMN "outfit" jsonb DEFAULT '{"cloth":"#f7f7f2","bridle":"#232936","hood":"none","ornament":"none"}'::jsonb NOT NULL;

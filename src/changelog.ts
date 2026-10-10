@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-11-keiba-outfits', date: '2026-10-11', kind: 'new', where: ['Discord'], title: '自分の馬を着せ替えられるように', items: ['カジノの馬主の部屋で、馬ごとに布・手綱の色・カバー・飾りを選べます。', '保存前に見本を確認でき、次の出走からパドックとレースに反映します。馬の能力は変わりません。'] },
   {
     id: '2026-10-11-cast-office-options', date: '2026-10-11', kind: 'improve', where: ['Discord', '社務所Web'],
     title: 'キャスト本人のオプション編集と、延長料金の確認',

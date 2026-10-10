@@ -1,3 +1,4 @@
+import type { KbOutfit } from './keibaOutfit.js';
 import type { Rng } from './cards.js';
 
 /**
@@ -76,6 +77,7 @@ export type KbStable = {
   surf: number;
   coat: number;
   silk: KbSilk;
+  outfit?: KbOutfit;
   starts: number;
   wins: number;
   seconds: number;
@@ -172,6 +174,7 @@ export type KbHorse = {
   surf: number;
   coat: number;
   silk: KbSilk;
+  outfit?: KbOutfit;
   /** 走る前の成績 */
   starts: number;
   wins: number;
@@ -325,6 +328,7 @@ export function makeRace(
     surf: h.surf,
     coat: h.coat,
     silk: h.silk,
+    outfit: h.outfit,
     starts: h.starts,
     wins: h.wins,
     seconds: h.seconds,

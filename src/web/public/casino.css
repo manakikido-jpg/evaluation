@@ -2237,3 +2237,11 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 
 .cs-table-sakura .c-seat.me, .cs-table-sakura .c-pseat.me .c-pseat-box { border-color: #f4a7c0; box-shadow: 0 0 16px #f4a7c04d; }
 .cs-table-dragon .c-seat.me, .cs-table-dragon .c-pseat.me .c-pseat-box { border: 4px double #e2b340; }
+
+.kb-outfit-editor { margin-top: 12px; border-top: 1px solid #77613d; padding-top: 10px; }
+.kb-outfit-editor summary { cursor: pointer; padding: 8px 0; font-weight: bold; }
+.kb-outfit-preview { display: block; width: 100%; height: auto; background: linear-gradient(#24303c, #182c20); border-radius: 12px; }
+.kb-outfit-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.kb-outfit-fields label { display: grid; gap: 6px; }
+.kb-outfit-fields select { width: 100%; min-width: 0; min-height: 44px; }
+@media (max-width: 400px) { .kb-outfit-fields { grid-template-columns: 1fr; } }
