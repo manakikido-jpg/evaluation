@@ -1696,7 +1696,7 @@ export const casts = pgTable('casts', {
    */
   menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; delivery?: boolean; gacha?: string[] }[]>().notNull().default(sql`'[]'::jsonb`),
   /** オプション（指名に足す追加。名前と値段。運営が社務所Web で足す） */
-  options: jsonb('options').$type<{ id: string; name: string; price: number }[]>().notNull().default(sql`'[]'::jsonb`),
+  options: jsonb('options').$type<{ id: string; name: string; price: number; note?: string; enabled?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
   /** male 男性 / female 女性 / '' まだ決めていない（両方のメニューに出る）。メニューを出すチャンネルを分ける */
   gender: text('gender').$type<'male' | 'female' | ''>().notNull().default(''),
   /** 未成年の人の公開の雑談を受ける */
@@ -1756,6 +1756,8 @@ export const castSessions = pgTable(
     /** 予約の前の知らせ（0 まだ / 1 1 時間前を出した / 2 10 分前も出した） */
     reminded: integer('reminded').notNull().default(0),
     extensions: integer('extensions').notNull().default(0),
+    /** 予約時に確定した30分の延長料金。旧データは初回延長で固定する */
+    extensionPrice: integer('extension_price'),
     /** キャストに渡した銭（手数料を引いたあと） */
     paid: integer('paid').notNull().default(0),
     rating: integer('rating'),

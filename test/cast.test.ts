@@ -448,6 +448,26 @@ describe('🎀 キャストのDiscord操作', () => {
     return { app, room, create, discord, interaction };
   }
 
+  it('延長の料金確認では課金せず、確定ボタンの再処理も1回だけ課金する', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
+    const f = fixture();
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60' }, T20);
+    if(r.status !== 'ok') throw Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const reply = vi.fn(async () => undefined), followUp = vi.fn(async () => undefined);
+    const preview = { ...f.interaction, customId: `cast:ext:${r.session.id}:0`, reply, followUp, message: { id: '990000000000000010' } };
+    const before = (await walletOf(db, ADULT)).balance;
+    await f.app.onInteraction(preview as unknown as Interaction);
+    expect(JSON.stringify(reply.mock.calls)).toContain('300');
+    expect(JSON.stringify(reply.mock.calls)).toContain(`cast:extconfirm:${r.session.id}:0`);
+    expect((await walletOf(db, ADULT)).balance).toBe(before);
+    const confirm = { ...preview, customId: `cast:extconfirm:${r.session.id}:0` };
+    await f.app.onInteraction(confirm as unknown as Interaction);
+    expect((await walletOf(db, ADULT)).balance).toBe(before - 300);
+    await f.app.onInteraction(confirm as unknown as Interaction);
+    expect((await walletOf(db, ADULT)).balance).toBe(before - 300);
+  });
+
   it('「指名する」のボタンは、日時を入れる予約の入力欄を出す（予約だけ）', async () => {
     const f = fixture();
     const showModal = vi.fn(async () => undefined);
@@ -686,5 +706,34 @@ describe('⏳ 時間フリーのメニュー（時間 0）', () => {
     // 10 分でキャストが終えても全額（手数料 10% を引いて 900）
     const done = await finishSession(db, c, r.session.id, CAST, new Date(T20.getTime() + 10 * MIN));
     expect(done?.paid).toBe(900);
+  });
+});
+
+describe('本人のオプション編集・予約時の料金', () => {
+  it('編集・受付停止・並べ替え・削除で予約済みの内容は変わらない', async () => {
+    const { updateOption, moveOption, activeOptions } = await import('../src/services/cast.js');
+    await addOption(db, c, CAST, { name: '歌', price: 100 });
+    await addOption(db, c, CAST, { name: 'カメラ', price: 200 });
+    const [a, b] = (await getCast(db, CAST))!.options;
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', options: [a!.id], startAt: new Date(T20.getTime() + 120 * MIN) }, T20);
+    expect(r.status).toBe('ok');if(r.status !== 'ok') throw Error(r.status);
+    expect(await updateOption(db, c, CAST, a!.id, { name: '新しい歌', note: '説明', price: 900, enabled: false })).toBe(true);
+    expect(await moveOption(db, CAST, b!.id, 'up')).toBe(true);
+    expect((await getCast(db, CAST))!.options.map(o => o.id)).toEqual([b!.id,a!.id]);
+    expect(activeOptions((await getCast(db, CAST))!).map(o => o.id)).toEqual([b!.id]);
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', options: [a!.id] }, T20)).status).toBe('no_plan');
+    expect(await removeOption(db, CAST, a!.id)).toBe(true);
+    expect(await getSession(db, r.session.id)).toMatchObject({ price: 400, optionNames: ['歌'], optionPrice: 100 });
+    expect(await updateOption(db, c, CAST, b!.id, { name: 'カメラ', price: -1 })).toBe(false);
+  });
+  it('予約後の料金変更と複数回の延長でも、予約時の30分料金を維持する', async () => {
+    const { updateProfile } = await import('../src/services/cast.js');
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60' }, T20);
+    if(r.status !== 'ok') throw Error(r.status);
+    await updateProfile(db, c, CAST, { ...profile, price30: 999 });
+    await acceptSession(db, r.session.id, CAST, T20);
+    expect(await extendSession(db, r.session.id, ADULT, T20, 0)).toMatchObject({ status: 'ok', session: { price: 800, extensionPrice: 300 } });
+    expect(await extendSession(db, r.session.id, ADULT, T20, 1)).toMatchObject({ status: 'ok', session: { price: 1100, extensions: 2, minutes: 120 } });
+    expect(await extendSession(db, r.session.id, ADULT, T20, 1)).toMatchObject({ status: 'already_extended' });
   });
 });
