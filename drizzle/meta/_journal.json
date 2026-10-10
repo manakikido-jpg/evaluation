@@ -645,6 +645,13 @@
       "when": 1791657279920,
       "tag": "0091_fair_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791660867621,
+      "tag": "0092_nervous_caretaker",
+      "breakpoints": true
     }
   ]
 }

@@ -83,6 +83,7 @@ import {
   isSilk,
   leadingOwners,
   myHorses,
+  dressOwnHorse,
   nameOwnHorse,
   ownerSilk,
   restHorse,
@@ -859,6 +860,15 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return stableBack(c, r === 'ok' ? 'horse_named' : r === 'not_found' ? 'not_found' : `horse_${r}`);
     }, { post: true }),
   );
+  app.post('/casino/keiba/stable/:id/outfit', page(async (c, me) => {
+    if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+    const id = Number(c.req.param('id'));
+    const f = await formOf(c);
+    const outfit = { cloth: f.cloth, bridle: f.bridle, hood: f.hood, ornament: f.ornament };
+    const result = Number.isSafeInteger(id) && id > 0 ? await dressOwnHorse(db, me.session.userId, id, outfit) : 'not_found';
+    if (result === 'ok') await audit(db, { actorId: me.session.userId, action: 'keiba.outfit', detail: { horseId: id, outfit }, via: 'web' });
+    return stableBack(c, result === 'ok' ? 'outfit_saved' : result);
+  }, { post: true }));
   // 🎽 勝負服
   app.post(
     '/casino/keiba/stable/silk',

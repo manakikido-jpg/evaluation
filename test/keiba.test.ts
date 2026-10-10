@@ -34,6 +34,7 @@ import {
 } from '../src/services/casino/keiba.js';
 import {
   addHorse,
+  dressOwnHorse,
   applyKeibaResults,
   breedFoal,
   buyFromOwner,
@@ -383,6 +384,28 @@ describe('🏇 名簿と卓のサービス', () => {
     expect((await buyHorse(db, A.id, 'ツキノヒメ', 3000, 1)).status).toBe('ok');
     // 名簿に馬主の名前が入る
     expect((await loadRoster(db)).find((h) => h.name === 'ツキノヒメ')?.ownerId).toBe(A.id);
+  });
+
+  it('馬ごとの着せ替えは本人だけ。能力・残高を変えず、次の出走に反映する', async () => {
+    const horse = (await addHorse(db, 'キセカエ', undefined, A.id))!;
+    const other = (await addHorse(db, 'ソノママ', undefined, A.id))!;
+    const outfit = { cloth: '#d4af37', bridle: '#c53046', hood: 'full', ornament: 'sakura' };
+    const balance = (await walletOf(db, A.id)).balance;
+    expect(await dressOwnHorse(db, B.id, horse.id, outfit)).toBe('not_found');
+    expect(await dressOwnHorse(db, A.id, horse.id, { ...outfit, cloth: 'url(javascript:bad)' })).toBe('invalid');
+    expect(await dressOwnHorse(db, A.id, horse.id, { ...outfit, hood: '__proto__' })).toBe('invalid');
+    const rosterBefore = await loadRoster(db);
+    const before = makeRace(rngOf(73), 1, { priority: new Set([A.id]) }, rosterBefore);
+    expect(await dressOwnHorse(db, A.id, horse.id, outfit)).toBe('ok');
+    const horses = await myHorses(db, A.id);
+    expect(horses.find(h => h.id === horse.id)).toEqual({ ...horse, outfit });
+    expect(horses.find(h => h.id === other.id)?.outfit).toEqual(other.outfit);
+    expect((await walletOf(db, A.id)).balance).toBe(balance);
+    const after = makeRace(rngOf(73), 1, { priority: new Set([A.id]) }, await loadRoster(db));
+    expect(after.horses.find(h => h.id === horse.id)?.outfit).toEqual(outfit);
+    expect(before.horses.find(h => h.id === horse.id)?.outfit).toEqual(horse.outfit);
+    expect(after.horses.map(({ outfit, ...h }) => h)).toEqual(before.horses.map(({ outfit, ...h }) => h));
+    expect(await dressOwnHorse(db, A.id, horse.id, horse.outfit)).toBe('ok');
   });
 
   it('🐴 馬主のうれしいこと: 勝負服・調教・放牧・売り買い・繁殖と産駒', async () => {

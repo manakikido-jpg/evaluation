@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { isOutfit, type KbOutfit } from './keibaOutfit.js';
 import type { Db } from '../../db/client.js';
 import { keibaEntries, keibaHorses, keibaOwners, keibaRuns, members, type KeibaHorseRow } from '../../db/schema.js';
 import { addCoins, spendWithin } from '../economy.js';
@@ -25,6 +26,7 @@ const toStable = (r: KeibaHorseRow & { ownerName?: string | null; sire?: string 
   surf: r.surf,
   coat: r.coat,
   silk: r.silk,
+  outfit: r.outfit,
   starts: r.starts,
   wins: r.wins,
   seconds: r.seconds,
@@ -90,6 +92,17 @@ export async function myHorses(db: Db, memberId: string): Promise<KeibaHorseRow[
     .from(keibaHorses)
     .where(eq(keibaHorses.ownerId, memberId))
     .orderBy(sql`${keibaHorses.retiredAt} is not null`, asc(keibaHorses.id));
+}
+
+/** 馬主本人だけが装備を変更する。引退した馬も着せ替えられる。 */
+export async function dressOwnHorse(db: Db, memberId: string, id: number, input: unknown): Promise<'ok' | 'invalid' | 'not_found'> {
+  if (!isOutfit(input)) return 'invalid';
+  const outfit: KbOutfit = { cloth: input.cloth, bridle: input.bridle, hood: input.hood, ornament: input.ornament };
+  return db.transaction(async tx => {
+    const [horse] = await tx.update(keibaHorses).set({ outfit }).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId))).returning({ id: keibaHorses.id });
+    if (!horse) return 'not_found';
+    return 'ok';
+  });
 }
 
 export type BuyResult = { status: 'ok'; horse: KeibaHorseRow } | { status: 'invalid' | 'taken' | 'too_many' | 'poor' | 'off' };
