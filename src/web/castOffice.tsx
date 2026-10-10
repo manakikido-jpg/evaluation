@@ -11,7 +11,7 @@ import { randomToken, safeEqual } from './sessions.js';
 import { assetUrl } from './assets.js';
 import { audit } from '../services/audit.js';
 import { logger } from '../lib/logger.js';
-import { getCast, menuOf, loadCastConfig, loadCastPhoto, saveCastPhoto, deleteCastPhoto, updateProfile, updateMenuItem, addMenuItem, removeMenuItem, parsePrice, parseTags } from '../services/cast.js';
+import { getCast, menuOf, loadCastConfig, loadCastPhoto, saveCastPhoto, deleteCastPhoto, updateProfile, updateMenuItem, addMenuItem, removeMenuItem, parsePrice, parseTags, addOption, updateOption, removeOption, moveOption } from '../services/cast.js';
 import { refreshCastIntros } from '../discord/cast.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 
@@ -38,7 +38,7 @@ export function CastOfficeEditor(p: { cast: Cast; session: MemberSession; hash?:
   const csrf = <input type="hidden" name="_csrf" value={p.session.csrfToken} />;
   return <Shell><header><div><p class="eyebrow">咲楽ノ宮 ／ キャスト用 社務所</p><h1>{p.session.displayName}のメニュー編集</h1></div><form action={`${ROOT}/logout`} method="post">{csrf}<button>ログアウト</button></form></header>
     {p.message && <p role="status" class="notice">{messages[p.message] || '入力を確認してください。'}</p>}
-    <nav aria-label="編集する項目"><a href="#photo">画像</a><a href="#profile">紹介文</a><a href="#menu">メニュー</a></nav>
+    <nav aria-label="編集する項目"><a href="#photo">画像</a><a href="#profile">紹介文</a><a href="#menu">メニュー</a><a href="#options">オプション</a></nav>
     <p>自分の内容を編集できます。保存すると、登録済みのDiscord紹介投稿も更新します。</p>
     <div class="editor-layout"><section id="photo"><h2>メニュー画像・紹介写真</h2><img class="photo-preview" data-photo-preview src={p.hash ? `${ROOT}/photo?v=${p.hash}` : undefined} hidden={!p.hash} alt="現在のメニュー画像" /><p data-image-hint>画像は切り取らず、全体を表示します。</p>
       <form action={`${ROOT}/photo`} method="post" enctype="multipart/form-data">{csrf}<label>画像を選ぶ<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" required data-photo-input /></label><p>8MBまで。選ぶと保存前に見本が出ます。</p><button class="primary">画像を保存</button></form>
@@ -47,6 +47,9 @@ export function CastOfficeEditor(p: { cast: Cast; session: MemberSession; hash?:
     <section id="menu"><h2>料金メニュー</h2><p>料金は{p.min.toLocaleString()}〜{p.max.toLocaleString()}{p.coin}。1つずつ保存できます。</p>
       {menuOf(p.cast).map(m => <details class="menu-row"><summary><strong>{m.name}</strong><span>{m.consult ? '内容・料金は相談' : `${m.delivery ? '納品' : m.night ? '寝落ち' : `${m.minutes}分`} ／ ${m.price.toLocaleString()}${p.coin}`}</span><span>変更する</span></summary><form action={`${ROOT}/menu/${m.id}`} method="post">{csrf}<div class="fields"><label>メニュー名<input name="name" value={m.name} maxlength={30} required /></label><label>説明<textarea name="note" maxlength={100} rows={3}>{m.note}</textarea></label><label>時間（分）<input name="minutes" type="number" min={0} max={720} value={m.minutes} required readonly={m.consult || m.delivery || m.night} /></label><label>料金（{p.coin}）<input name="price" type="number" min={m.consult ? 0 : p.min} max={p.max} value={m.price} required readonly={m.consult} /></label>{m.gacha?.length ? <label>ガチャの中身（1行に1つ）<textarea name="gacha" rows={5}>{m.gacha.join('\n')}</textarea></label> : null}</div><button class="primary">このメニューを保存</button></form><form action={`${ROOT}/menu/${m.id}/delete`} method="post" data-confirm="このメニューを削除しますか？">{csrf}<button class="danger">このメニューを削除</button></form></details>)}
       <details class="menu-row"><summary>＋ メニューを追加する</summary><form action={`${ROOT}/menu`} method="post">{csrf}<div class="fields"><label>メニュー名<input name="name" maxlength={30} required /></label><label>説明<textarea name="note" maxlength={100} rows={3} /></label><label>種類<select name="kind" data-menu-kind><option value="call">通話</option><option value="consult">相談</option><option value="delivery">納品</option><option value="gacha">ガチャ（納品）</option></select></label><label>時間（分・相談や納品は0）<input name="minutes" type="number" min={0} max={720} value={30} required /></label><label>料金（相談は0）<input name="price" type="number" min={0} max={p.max} required /></label><label>ガチャの中身（ガチャのみ・1行に1つ）<textarea name="gacha" rows={4} maxlength={2000} /></label></div><button class="primary">メニューを追加</button></form></details>
+    </section><section id="options"><h2>追加オプション</h2><p>予約済みの内容・料金は変わりません。最大8個まで追加できます。</p>
+      {p.cast.options.map((o, index) => <details class="menu-row"><summary><strong>{o.name}</strong><span>＋{o.price.toLocaleString()}{p.coin} ／ {o.enabled === false ? '受付停止' : '受付中'}</span><span>変更する</span></summary><form action={`${ROOT}/options/${o.id}`} method="post">{csrf}<div class="fields"><label>名前<input name="name" value={o.name} maxlength={30} required /></label><label>説明<textarea name="note" maxlength={100} rows={3}>{o.note ?? ''}</textarea></label><label>追加料金<input name="price" type="number" min={1} max={p.max} value={o.price} required /></label><label class="check"><input name="enabled" type="checkbox" value="yes" checked={o.enabled !== false} />受付する</label></div><button class="primary">オプションを保存</button></form><form action={`${ROOT}/options/${o.id}/move`} method="post">{csrf}<button name="direction" value="up" disabled={index === 0}>上へ</button><button name="direction" value="down" disabled={index === p.cast.options.length - 1}>下へ</button></form><form action={`${ROOT}/options/${o.id}/delete`} method="post" data-confirm="このオプションを削除しますか？">{csrf}<button class="danger">削除する</button></form></details>)}
+      <details class="menu-row"><summary>＋ オプションを追加</summary><form action={`${ROOT}/options`} method="post">{csrf}<div class="fields"><label>名前<input name="name" maxlength={30} required /></label><label>説明<textarea name="note" maxlength={100} rows={3} /></label><label>追加料金<input name="price" type="number" min={1} max={p.max} required /></label></div><button class="primary">追加する</button></form></details>
     </section><footer><form action={`${ROOT}/sync`} method="post">{csrf}<button>紹介投稿を更新</button></form><span>運営への連絡はDiscordからお願いします。</span></footer></Shell>;
 }
 
@@ -147,6 +150,14 @@ export function mountCastOffice(app: Hono<any>, d: { db: Db; api: DiscordApi; di
     return r === 'ok' ? saved(c, s, 'cast.office.menu.edit') : c.redirect(`${ROOT}?msg=invalid`);
   }));
   app.post(`${ROOT}/menu/:item/delete`, page(async (c, s) => await removeMenuItem(db, s.userId, c.req.param('item') ?? '') ? saved(c, s, 'cast.office.menu.delete') : c.redirect(`${ROOT}?msg=invalid`)));
+  const optionInput = (b: Record<string, unknown>) => ({ name: String(b.name ?? '').trim(), note: String(b.note ?? '').trim(), price: parsePrice(String(b.price ?? '')), enabled: b.enabled === 'yes' });
+  app.post(`${ROOT}/options`, page(async (c, s, _cast, b) => {
+    const result = await addOption(db, await loadCastConfig(db), s.userId, { ...optionInput(b), enabled: true });
+    return result === 'ok' ? saved(c, s, 'cast.office.option.add') : c.redirect(`${ROOT}?msg=invalid`);
+  }));
+  app.post(`${ROOT}/options/:item`, page(async (c, s, _cast, b) => await updateOption(db, await loadCastConfig(db), s.userId, c.req.param('item')!, optionInput(b)) ? saved(c, s, 'cast.office.option.edit') : c.redirect(`${ROOT}?msg=invalid`)));
+  app.post(`${ROOT}/options/:item/delete`, page(async (c, s) => await removeOption(db, s.userId, c.req.param('item')!) ? saved(c, s, 'cast.office.option.delete') : c.redirect(`${ROOT}?msg=invalid`)));
+  app.post(`${ROOT}/options/:item/move`, page(async (c, s, _cast, b) => ['up', 'down'].includes(String(b.direction)) && await moveOption(db, s.userId, c.req.param('item')!, b.direction as 'up' | 'down') ? saved(c, s, 'cast.office.option.move') : c.redirect(`${ROOT}?msg=invalid`)));
   app.post(`${ROOT}/sync`, page(async (c, s) => saved(c, s, 'cast.office.sync')));
   app.post(`${ROOT}/logout`, page(async (c, s) => { await deleteMemberSession(db, s.id); deleteCookie(c, COOKIE, { path: ROOT }); return c.redirect(`${ROOT}/login`); }));
 }

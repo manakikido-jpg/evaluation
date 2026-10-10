@@ -274,34 +274,57 @@ export type CastOption = Cast['options'][number];
 /** 1 人のオプションの数（選んだ番号をボタンに入れるので少なめ） */
 export const OPTION_MAX = 8;
 
-export function validOption(c: CastConfig, o: { name: string; price: number }): boolean {
-  return o.name.length >= 1 && o.name.length <= 30 && Number.isInteger(o.price) && o.price >= 1 && o.price <= c.priceMax;
+export function validOption(c: CastConfig, o: { name: string; price: number; note?: string; enabled?: boolean }): boolean {
+  return (o.note ?? "").length <= 100 && (o.enabled === undefined || typeof o.enabled === "boolean") && o.name.length >= 1 && o.name.length <= 30 && Number.isInteger(o.price) && o.price >= 1 && o.price <= c.priceMax;
 }
 
 /** オプションを足す（運営） */
-export async function addOption(db: Db, c: CastConfig, castId: string, o: { name: string; price: number }): Promise<'ok' | 'invalid' | 'full' | 'not_cast'> {
+export async function addOption(db: Db, c: CastConfig, castId: string, o: { name: string; price: number; note?: string; enabled?: boolean }): Promise<'ok' | 'invalid' | 'full' | 'not_cast'> {
   if (!validOption(c, o)) return 'invalid';
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
     if (!cast || cast.status === 'removed') return 'not_cast' as const;
     if (cast.options.length >= OPTION_MAX) return 'full' as const;
-    await tx.update(casts).set({ options: [...cast.options, { id: newMenuId(), name: o.name, price: o.price }] }).where(eq(casts.memberId, castId));
+    await tx.update(casts).set({ options: [...cast.options, { id: newMenuId(), name: o.name, price: o.price, note: o.note ?? "", enabled: o.enabled ?? true }] }).where(eq(casts.memberId, castId));
     return 'ok' as const;
   });
 }
+
+/** 本人・運営の編集。IDを保つので予約済みの内容は変わらない。 */
+export async function updateOption(db: Db, c: CastConfig, castId: string, id: string, input: { name: string; price: number; note?: string; enabled?: boolean }): Promise<boolean> {
+  if (!validOption(c, input)) return false;
+  return db.transaction(async tx => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast || cast.status === 'removed' || !cast.options.some(o => o.id === id)) return false;
+    await tx.update(casts).set({ options: cast.options.map(o => o.id === id ? { ...o, ...input } : o) }).where(eq(casts.memberId, castId));
+    return true;
+  });
+}
+export async function moveOption(db: Db, castId: string, id: string, direction: 'up' | 'down'): Promise<boolean> {
+  return db.transaction(async tx => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast || cast.status === 'removed') return false;
+    const options = [...cast.options], index = options.findIndex(o => o.id === id), next = index + (direction === 'up' ? -1 : 1);
+    if (index < 0 || next < 0 || next >= options.length) return false;
+    [options[index], options[next]] = [options[next]!, options[index]!];
+    await tx.update(casts).set({ options }).where(eq(casts.memberId, castId));
+    return true;
+  });
+}
+export const activeOptions = (cast: Pick<Cast, 'options'>) => cast.options.filter(o => o.enabled !== false);
 
 /** オプションを外す（運営）。もう入っている指名はそのまま */
 export async function removeOption(db: Db, castId: string, optionId: string): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
-    if (!cast || !cast.options.some((o) => o.id === optionId)) return false;
+    if (!cast || cast.status === 'removed' || !cast.options.some((o) => o.id === optionId)) return false;
     await tx.update(casts).set({ options: cast.options.filter((o) => o.id !== optionId) }).where(eq(casts.memberId, castId));
     return true;
   });
 }
 
 /** 選んだオプション（知らない番号・重なりは除く） */
-export const pickOptions = (cast: Pick<Cast, 'options'>, ids: readonly string[] = []) => cast.options.filter((o) => ids.includes(o.id));
+export const pickOptions = (cast: Pick<Cast, 'options'>, ids: readonly string[] = []) => activeOptions(cast).filter((o) => ids.includes(o.id));
 
 // ───────── メニューのテンプレ・書きかえ ─────────
 
@@ -581,6 +604,7 @@ export async function requestSession(
         menuName: cast.menu.length ? (item.consult ? `${item.name}（相談）` : item.name) : '',
         optionNames: opts.map((o) => o.name),
         optionPrice,
+        extensionPrice: minutes > 0 ? (cast.menu.length ? Math.ceil(((price - optionPrice) * 30) / minutes) : cast.price30 || Math.ceil(((price - optionPrice) * 30) / minutes)) : null,
         minutes,
         price,
         status: input.startAt ? 'reserved' : 'requested',
@@ -726,6 +750,8 @@ export async function startReserved(db: Db, id: number, now = new Date()): Promi
   });
 }
 
+export const extensionPriceOf = (s: Pick<CastSession, 'extensionPrice' | 'price' | 'optionPrice' | 'minutes'>) => s.extensionPrice ?? Math.ceil(((s.price - s.optionPrice) * 30) / Math.max(1, s.minutes));
+
 export type ExtendResult = { status: 'ok'; session: CastSession; balance: number } | { status: 'insufficient'; price: number; balance: number } | { status: 'not_active' | 'minor_limit' | 'not_customer' | 'already_extended' | 'overlap' };
 
 /** 30 分のばす（お客）。未成年の人は合わせて 60 分・22 時まで */
@@ -744,15 +770,14 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
     const cast = await getCast(tx, s.castId);
     // 30 分のばす値段: 前のプランは 30 分の値段。メニューの指名は、その指名と同じ割合（1 分あたり）
     // オプションの分は、のばす値段に入れない
-    const base = s.price - s.optionPrice;
-    const add = !cast ? 0 : s.menuName ? Math.ceil((base * 30) / Math.max(1, s.minutes)) : cast.price30 || Math.ceil((base * 30) / Math.max(1, s.minutes));
+    const add = extensionPriceOf(s);
     if (!cast || add <= 0) return { status: 'not_active' as const };
     if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' as const };
     const endsAt = new Date(s.endsAt.getTime() + 30 * MIN);
     if (await overlaps(tx, s.castId, now, endsAt, now, id)) return { status: 'overlap' as const };
     if (!(await spendWithin(tx, customerId, add, 'cast_pay', { sessionId: id, extend: true }))) return { status: 'insufficient' as const, price: add, balance: (await walletOf(tx, customerId)).balance };
     const row = await move(tx, id, ['active'], {
-      minutes: s.minutes + 30, price: s.price + add, extensions: s.extensions + 1, endsAt, warned: false,
+      minutes: s.minutes + 30, price: s.price + add, extensionPrice: add, extensions: s.extensions + 1, endsAt, warned: false,
     });
     if (!row) throw new Error('session ended while extending');
     return { status: 'ok' as const, session: row, balance: (await walletOf(tx, customerId)).balance };

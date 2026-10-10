@@ -638,6 +638,13 @@
       "when": 1791656627837,
       "tag": "0090_cast_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1791657279920,
+      "tag": "0091_fair_power_man",
+      "breakpoints": true
     }
   ]
 }

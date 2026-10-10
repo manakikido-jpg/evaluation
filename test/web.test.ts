@@ -3826,6 +3826,18 @@ it('キャスト専用のDiscord認証で本人だけ編集でき、運営の画
   expect(html).not.toMatch(/onclick=|style=|<script>/);
   const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
   const send = (path: string, body: Record<string, string>, security = csrf) => app.request(path, { method: 'POST', headers: { cookie }, body: new URLSearchParams({ _csrf: security, ...body }) });
+  expect((await send('/cast-office/options', { name: '歌', note: '好きな歌', price: '100', memberId: OTHER })).headers.get('location')).toBe('/cast-office?msg=saved');
+  const option = (await getCast(db, USER))!.options[0]!;
+  expect((await getCast(db, OTHER))!.options).toEqual([]);
+  expect((await send(`/cast-office/options/${option.id}`, { name: '歌', note: '新しい説明', price: '200' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect((await getCast(db, USER))!.options[0]).toMatchObject({ price: 200, enabled: false, note: '新しい説明' });
+  expect((await send(`/cast-office/options/${option.id}`, { name: '改ざん', price: '300' }, 'bad')).status).toBe(403);
+  expect((await send('/cast-office/options', { name: 'カメラ', price: '50' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  const second = (await getCast(db, USER))!.options[1]!;
+  expect((await send(`/cast-office/options/${second.id}/move`, { direction: 'up' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect((await getCast(db, USER))!.options[0]!.id).toBe(second.id);
+  expect((await send(`/cast-office/options/${option.id}/delete`, {})).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect((await getCast(db, USER))!.options.map(o => o.id)).toEqual([second.id]);
   expect((await send('/cast-office/profile', { bio: '新しい紹介', tags: 'ゲーム, 雑談', memberId: OTHER })).headers.get('location')).toBe('/cast-office?msg=saved');
   expect((await getCast(db, USER))!.bio).toBe('新しい紹介');
   expect((await getCast(db, OTHER))!.bio).toBe('紹介');

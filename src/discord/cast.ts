@@ -63,6 +63,8 @@ import {
   CUSTOMER_OPEN_MAX,
   isFreeSession,
   pickOptions,
+  activeOptions,
+  extensionPriceOf,
   CAST_GROUPS,
   GROUP_LABEL,
   castHomeChannel,
@@ -145,7 +147,7 @@ export function castMenuText(menu: ReturnType<typeof menuOf>): string {
   }).join('\n\n') || 'メニューなし';
 }
 /** オプションを 1 行で（なければ空） */
-export const castOptionsText = (cast: Pick<Cast, 'options'>) => (cast.options.length ? `**➕ オプション**\n${cast.options.map((o) => `${o.name} **+${fmt(o.price)}銭**`).join(' ／ ')}` : '');
+export const castOptionsText = (cast: Pick<Cast, 'options'>) => (activeOptions(cast).length ? `**➕ オプション**\n${activeOptions(cast).map((o) => `${o.name} **+${fmt(o.price)}銭**${o.note ? `（${o.note}）` : ""}`).join(' ／ ')}` : '');
 const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先の交換・録音は禁止です（しきたり）。困ったら部屋の「🚨 通報」を';
 
 // ───────── メニュー（画像の下に、指名するメニュー） ─────────
@@ -229,7 +231,7 @@ async function castIntroBody(db: Db, castId: string) {
       { type: 10, content: header },
       ...(photo ? [{ type: 12, items: [{ media: { url: 'attachment://cast-profile.png' }, description: `${name}のメニュー画像` }] }] : []),
       { type: 10, content: castMenuText(menu) },
-      ...(cast.options.length ? [{ type: 10, content: castOptionsText(cast) }] : []),
+      ...(activeOptions(cast).length ? [{ type: 10, content: castOptionsText(cast) }] : []),
       ...(st ? [{ type: 10, content: `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` }] : []),
       ...(cast.status === 'active' && cast.available === 'waiting' && menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
       { type: 10, content: cast.status === 'active' && cast.available === 'waiting' ? '-# 選択後、あなただけに確認画面が表示されます。' : '-# 現在は受付を停止しています。' },
@@ -492,6 +494,7 @@ export class CastApp {
       if (action === 'rcv') return await this.receive(interaction, id);
       if (action === 'pok') return await this.proposeAccept(interaction, id, Number(b));
       if (action === 'decline' || action === 'cancel') return await this.cancel(interaction, id, action === 'decline' ? 'declined' : 'canceled');
+      if (action === 'extconfirm') return await this.confirmExtend(interaction, id, b === undefined ? 0 : Number(b), rest[0]);
       if (action === 'ext') return await this.extend(interaction, id, b === undefined ? 0 : Number(b));
       if (action === 'end') return await this.end(interaction, id);
       if (action === 'report') return await this.report(interaction, id);
@@ -767,7 +770,7 @@ export class CastApp {
     }
     const opts = pickOptions(cast, chosen);
     const price = item.price + opts.reduce((n, o) => n + o.price, 0);
-    const optionRow = cast.options.length
+    const optionRow = activeOptions(cast).length
       ? [{
           type: 1 as const,
           components: [{
@@ -775,8 +778,8 @@ export class CastApp {
             custom_id: `cast:opts:${castId}:${plan}`,
             placeholder: '➕ オプションを付ける（いくつでも・なくてもよい）',
             min_values: 0,
-            max_values: cast.options.length,
-            options: cast.options.map((o) => ({ label: `${o.name} +${fmt(o.price)} 枚`.slice(0, 100), value: o.id, default: chosen.includes(o.id) })),
+            max_values: activeOptions(cast).length,
+            options: activeOptions(cast).map((o) => ({ label: `${o.name} +${fmt(o.price)} 枚`.slice(0, 100), value: o.id, default: chosen.includes(o.id) })),
           }],
         }]
       : [];
@@ -965,6 +968,14 @@ export class CastApp {
   }
 
   private async extend(i: ButtonInteraction<'cached'>, id: number, expected: number): Promise<void> {
+    const s = await getSession(this.db, id);
+    if (!s || s.customerId !== i.user.id || s.status !== 'active' || !s.endsAt || s.endsAt <= new Date() || s.extensions !== expected || isFreeSession(s)) {
+      return void await i.reply({ content: 'この指名は延長できません。最新のボタンを確認してください。', ...EPHEMERAL });
+    }
+    await i.reply({ content: `30分の延長に ${fmt(extensionPriceOf(s))} ${this.coin()}かかります。確定するまで銭は使いません。`, components: [{ type: 1, components: [button(`cast:extconfirm:${id}:${expected}:${i.message.id}`, '料金を確認して30分延長', 1)] }], allowedMentions: { parse: [] }, ...EPHEMERAL });
+  }
+
+  private async confirmExtend(i: ButtonInteraction<'cached'>, id: number, expected: number, originalId?: string): Promise<void> {
     await i.deferUpdate();
     const r = await extendSession(this.db, id, i.user.id, new Date(), expected);
     if (r.status !== 'ok') {
@@ -984,6 +995,14 @@ export class CastApp {
       return void (await i.followUp({ content: text, ...EPHEMERAL }));
     }
     await i.editReply({ ...sessionMessage(r.session, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
+    if (originalId && /^\d{17,20}$/.test(originalId) && i.channel) {
+      const original = await i.channel.messages.fetch(originalId).catch(() => undefined);
+      if (original?.author.id === i.client.user.id && original.components.some(row => 'components' in row && row.components.some(component => 'customId' in component && component.customId === `cast:ext:${id}:${expected}`))) {
+        await original.edit({ ...sessionMessage(r.session, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof original.edit>[0]).catch(() => undefined);
+      }
+    }
+    await audit(this.db, { actorId: i.user.id, targetId: r.session.castId, action: 'cast.extend', detail: { sessionId: id, extensions: r.session.extensions, price: extensionPriceOf(r.session) }, via: 'discord' });
+    this.refresh();
     await i.followUp({ content: `⏰ 30 分のばしました（残り ${fmt(r.balance)} 枚）。`, ...EPHEMERAL });
   }
 
