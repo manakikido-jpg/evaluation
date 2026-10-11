@@ -191,7 +191,14 @@ export class RoomApp {
     const row = await roomOf(this.db, channelId);
     if (!row || planOf(cfg, row.hubId) === 'none') return;
     const ch = this.voice(channelId);
-    const r = await startRoom(this.db, cfg, channelId);
+    // 🤫 シクレの入口: はじめからシークレットの部屋代を払い、種類を決める（部屋は作ったときから見えない）
+    const secretHub = cfg.tempVoice.hubs.find((h) => h.channelId === row.hubId)?.kind === 'secret';
+    const r = secretHub ? await changeRoomKind(this.db, cfg, channelId, 'secret') : await startRoom(this.db, cfg, channelId);
+    if (r.status === 'not_found' || r.status === 'locked') return;
+    if (secretHub && ch) {
+      const fresh = await roomOf(this.db, channelId);
+      if (fresh) await this.apply(ch, { ...fresh, kind: 'public' }, 'secret').catch((err: unknown) => logger.warn({ err, channelId }, 'secret hub room apply failed'));
+    }
     if (r.status === 'insufficient') {
       await ch?.send({ content: `<@${ownerId}> さん、${this.cfg().economy.currencyName}が足りないため部屋をひらけませんでした（${r.price} 枚必要）。`, allowedMentions: { users: [ownerId] } }).catch(() => undefined);
       await this.close(channelId);

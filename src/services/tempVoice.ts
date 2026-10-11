@@ -16,7 +16,7 @@ export interface VoiceOps {
    * hub と同じカテゴリ・同じ見える範囲で通話を作り、作った人に名前などの変更を許す。作った通話の ID を返す。
    * fromHub: カテゴリではなく入口の見える範囲に合わせる（💎 極の部屋: VIP だけ）
    */
-  create(input: { hubId: string; name: string; ownerId: string; fromHub?: boolean }): Promise<string>;
+  create(input: { hubId: string; name: string; ownerId: string; fromHub?: boolean; /** 最初から見えない部屋（🤫 シクレの入口） */ secret?: boolean }): Promise<string>;
   /** 通話に移動させる（その人が通話にいなければ失敗する） */
   move(userId: string, channelId: string): Promise<void>;
   /** 通話を消す（すでになければ何もしない） */
@@ -67,6 +67,7 @@ export async function onVoiceJoin(ctx: TempVoiceCtx, input: { userId: string; di
         name: roomName(hub.name, input.displayName),
         ownerId: input.userId,
         ...(ctx.cfg.rooms.vip?.hubId === hub.channelId ? { fromHub: true } : {}),
+        ...(hub.kind === 'secret' ? { secret: true } : {}),
       });
     } catch (err) {
       logger.warn(

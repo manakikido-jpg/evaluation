@@ -132,6 +132,11 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
       hubs: [
         ...base.tempVoice.hubs.filter((h) => h.channelId !== vip?.hubId),
         ...(vip ? [{ channelId: vip.hubId, name: '💎 {name}の極の部屋', plan: 'free' as const }] : []),
+        // 🤫 シクレの入口: もとの入口と同じ名前・払い方で、最初から見えない部屋
+        ...(o.rooms.secretHubs ?? base.rooms.secretHubs ?? []).flatMap((s) => {
+          const from = base.tempVoice.hubs.find((h) => h.channelId === s.baseHubId);
+          return from && !base.tempVoice.hubs.some((h) => h.channelId === s.hubId) ? [{ channelId: s.hubId, name: from.name, ...(from.plan ? { plan: from.plan } : {}), kind: 'secret' as const }] : [];
+        }),
       ],
     },
     economy: (() => {

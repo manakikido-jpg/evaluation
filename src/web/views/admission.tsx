@@ -1238,6 +1238,19 @@ export function SettingsPage(props: {
               <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
             </label>
           </div>
+          <h3>🤫 シクレ専用の入口</h3>
+          <p class="note">入口のすぐ下に「➕ 🤫 シクレ部屋をつくる」の通話を作ります。ここに入ると、できた瞬間から作った人にしか見えない部屋ができ、シークレットの部屋代を払います（一瞬も公開になりません）。値段・名前はもとの入口と同じです。</p>
+          <ul class="plain">
+            {cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId).map((h) => {
+              const sh = cfg.rooms.secretHubs.find((s) => s.baseHubId === h.channelId);
+              const nameOf = (id: string) => props.voiceChannels?.find((v) => v.id === id)?.name ?? id;
+              return (
+                <li>
+                  🔊 {nameOf(h.channelId)} → {sh ? <>🤫 {nameOf(sh.hubId)} <button type="submit" form={`secret-hub-del-${sh.hubId}`} class="danger small">外す</button></> : <button type="submit" form={`secret-hub-${h.channelId}`} class="small">🤫 シクレの入口を作る</button>}
+                </li>
+              );
+            })}
+          </ul>
           <Save at="rooms" />
         </section>
         <section class="card anchor" id="sec-voicegroups">
@@ -1579,6 +1592,18 @@ export function SettingsPage(props: {
           <Save at="join" />
         </section>
       </form>
+      {cfg.tempVoice.hubs.map((h) => (
+        <form method="post" action="/settings/secret-hub" id={`secret-hub-${h.channelId}`} hidden>
+          <Csrf session={props.session} />
+          <input type="hidden" name="baseHubId" value={h.channelId} />
+        </form>
+      ))}
+      {cfg.rooms.secretHubs.map((s) => (
+        <form method="post" action="/settings/secret-hub/delete" id={`secret-hub-del-${s.hubId}`} hidden>
+          <Csrf session={props.session} />
+          <input type="hidden" name="hubId" value={s.hubId} />
+        </form>
+      ))}
       {props.notify && <NotifySection session={props.session} notify={props.notify} flash={props.at === 'notify' ? props.flash : undefined} textChannels={props.textChannels ?? []} botCanMentionAll={props.botCanMentionAll} />}
       <UneiSection session={props.session} cfg={cfg} art={props.omikujiArt ?? {}} flash={props.at === 'unei' ? props.flash : undefined} daily={props.omikujiDaily ?? 0} />
       <OmikujiTextsSection session={props.session} cfg={cfg} bg={props.slipBg ?? {}} flash={props.at === 'omikujitexts' ? props.flash : undefined} reset={props.omikujiReset} />

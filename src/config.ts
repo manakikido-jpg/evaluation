@@ -166,6 +166,8 @@ export const roomsSchema = z.object({
    * 社務所Web の「ショップ」の「💎 極の VIP を作る」で作る
    */
   vip: z.object({ roleId: snowflake, hubId: snowflake }).optional(),
+  /** 🤫 シクレ専用の入口（社務所Web で作る）。baseHubId の入口と同じ値段・名前で、最初から見えない部屋を作る */
+  secretHubs: z.array(z.object({ hubId: snowflake, baseHubId: snowflake })).max(10).default([]),
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
@@ -752,6 +754,8 @@ export const guildConfigSchema = z
                * 省略時は名前から決める（宿坊 → once、🍶・宵宮 → hourly）
                */
               plan: z.enum(['none', 'once', 'hourly', 'free']).optional(),
+              /** secret: 🤫 シクレ専用の入口。最初から見えない部屋を作り、シークレットの部屋代を払う（一瞬も公開にしない） */
+              kind: z.enum(['secret']).optional(),
             }),
           )
           .default([]),

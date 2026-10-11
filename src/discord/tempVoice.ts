@@ -3,13 +3,14 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { cleanupRooms, onVoiceJoin, onVoiceLeave, removeRoom, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
+import { roomOverwrites } from '../services/rooms.js';
 
 /** 作った人ができること: 名前・人数の上限の変更、入っている人を抜けさせる */
 export const OWNER_ALLOW = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.MoveMembers;
 
 export function discordVoiceOps(guild: Guild): VoiceOps {
   return {
-    async create({ hubId, name, ownerId, fromHub }) {
+    async create({ hubId, name, ownerId, fromHub, secret }) {
       const hub = guild.channels.cache.get(hubId);
       const parent = hub && 'parent' in hub ? hub.parent : null;
       // カテゴリと同じ見える範囲（宵宮なら宵参りの人だけ）にして、作った人の権限を足す。💎 極は入口と同じ（VIP だけ）
@@ -20,11 +21,17 @@ export function discordVoiceOps(guild: Guild): VoiceOps {
       const mine = overwrites.find((o) => o.id === ownerId);
       if (mine) mine.allow |= OWNER_ALLOW;
       else overwrites.push({ id: ownerId, type: OverwriteType.Member, allow: OWNER_ALLOW, deny: 0n });
+      // 🤫 シクレの入口: できた瞬間から、作った人（と BOT）にしか見えない
+      // カテゴリに @everyone の上書きがなくても、見えなくする
+      if (secret && !overwrites.some((o) => o.id === guild.id)) overwrites.push({ id: guild.id, type: OverwriteType.Role, allow: 0n, deny: 0n });
+      const list = secret
+        ? roomOverwrites(overwrites.map((o) => ({ ...o, type: o.type as 0 | 1 })), 'secret', { ownerId, botId: guild.client.user.id, invited: [], ownerAllow: OWNER_ALLOW })
+        : overwrites;
       const ch = await guild.channels.create({
-        name,
+        name: secret ? `🤫 シクレ｜${name}`.slice(0, 100) : name,
         type: ChannelType.GuildVoice,
         parent: parent?.id ?? null,
-        permissionOverwrites: overwrites,
+        permissionOverwrites: list,
         nsfw: Boolean(hub && 'nsfw' in hub && hub.nsfw),
         reason: '自分の通話部屋',
       });

@@ -2444,6 +2444,52 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 🎴 運営吉: 名前・ひとこと・確率・倍率と絵をまとめて保存（絵は選んだ枠だけ入れ替える）
+  // 🤫 シクレ専用の入口を作る（もとの入口のすぐ下に、同じ見える範囲で）
+  app.post('/settings/secret-hub', async (c) => {
+    const to = (msg: string) => c.redirect(`/settings?msg=${msg}&at=rooms#sec-rooms`);
+    const body = await c.req.parseBody();
+    const baseHubId = typeof body.baseHubId === 'string' ? body.baseHubId : '';
+    const prev = await loadOverrides(db);
+    const list = prev.rooms.secretHubs ?? [];
+    const plan = cfg.tempVoice.hubs.find((h) => h.channelId === baseHubId);
+    if (!plan || plan.kind === 'secret' || cfg.rooms.vip?.hubId === baseHubId || list.some((s) => s.baseHubId === baseHubId)) return to('invalid');
+    const channels = await loadChannels(true).catch(() => undefined);
+    const hub = channels?.find((ch) => ch.id === baseHubId);
+    if (!hub) return to('invalid');
+    try {
+      const made = await deps.discord.createChannel(
+        cfg.guildId,
+        { name: '➕ 🤫 シクレ部屋をつくる', type: 2, ...(hub.parent_id ? { parent_id: hub.parent_id } : {}), permission_overwrites: hub.permission_overwrites ?? [] },
+        '管理画面（🤫 シクレの入口）',
+      );
+      if ((hub as { nsfw?: boolean }).nsfw) await deps.discord.editChannel(made.id, { nsfw: true }).catch(() => undefined);
+      const by = c.get('session').userId;
+      await saveOverrides(db, { ...prev, rooms: { ...prev.rooms, secretHubs: [...list, { hubId: made.id, baseHubId }] } }, by);
+      await deps.onSettingsSaved?.();
+      await guildChannelsCached(deps.discord, cfg.guildId, true).catch(() => undefined);
+      await audit(db, { actorId: by, action: 'rooms.secret_hub_create', detail: { hubId: made.id, baseHubId }, via: 'web' });
+      return to('saved');
+    } catch (err) {
+      logger.warn({ err }, 'secret hub create failed');
+      return to('invalid');
+    }
+  });
+
+  // 🤫 シクレの入口を外す（入口の通話も消す。いまある部屋はそのまま）
+  app.post('/settings/secret-hub/delete', async (c) => {
+    const body = await c.req.parseBody();
+    const hubId = typeof body.hubId === 'string' ? body.hubId : '';
+    const prev = await loadOverrides(db);
+    const list = prev.rooms.secretHubs ?? [];
+    if (!list.some((s) => s.hubId === hubId)) return c.redirect('/settings?msg=invalid&at=rooms#sec-rooms');
+    const by = c.get('session').userId;
+    await saveOverrides(db, { ...prev, rooms: { ...prev.rooms, secretHubs: list.filter((s) => s.hubId !== hubId) } }, by);
+    await deps.discord.deleteChannel(hubId, '管理画面（🤫 シクレの入口を外す）').catch(() => undefined);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: by, action: 'rooms.secret_hub_delete', detail: { hubId }, via: 'web' });
+    return c.redirect('/settings?msg=saved&at=rooms#sec-rooms');
+  });
+
   app.post('/settings/omikuji-special', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
     const body = await c.req.parseBody();
@@ -2769,6 +2815,8 @@ export function createWebApp(deps: WebDeps) {
         boosterDiscountPercent: num('roomBoosterDiscount'),
         // 💎 極（VIP）はショップのページで作る（ここでは残す）
         ...(prev.rooms.vip ? { vip: prev.rooms.vip } : {}),
+        // 🤫 シクレの入口は、下の「入口を作る・外す」で変える（ここでは残す）
+        ...(prev.rooms.secretHubs ? { secretHubs: prev.rooms.secretHubs } : {}),
       },
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
       ...(typeof body.vcClearDelay === 'string' ? { voiceChat: { clearWhenEmpty: body.vcClear === 'yes', delayMinutes: num('vcClearDelay') } } : {}),

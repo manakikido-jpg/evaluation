@@ -34,6 +34,7 @@ const cfg: GuildConfig = {
     once: { public: 50, invite: 200, secret: 300, twoshot: 400 },
     hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 },
     boosterDiscountPercent: 100,
+    secretHubs: [],
   },
 };
 const T0 = new Date('2026-09-26T12:00:00Z');
@@ -87,6 +88,27 @@ describe('部屋の種類と見える範囲', () => {
     expect(find(o, MEMBER_ROLE).deny & VIEW).toBe(VIEW);
     expect(find(o, STAFF_ROLE).allow & VIEW).toBe(0n);
     expect(find(o, FRIEND).allow & VIEW).toBe(VIEW);
+  });
+
+  it('🤫 シクレの入口: もとの入口と同じ名前・払い方で足され、できた瞬間からロールに見えない部屋を作る', async () => {
+    const SECRET_HUB = '960000000000000077';
+    const merged = applyOverrides(cfg, overridesSchema.parse({ rooms: { secretHubs: [{ hubId: SECRET_HUB, baseHubId: NEOCHI }] } }));
+    const hub = merged.tempVoice.hubs.find((h) => h.channelId === SECRET_HUB);
+    expect(hub).toMatchObject({ name: '🌙 {name}の宿坊', kind: 'secret' });
+    expect(planOf(merged, SECRET_HUB)).toBe('once');
+    // もとの入口がなくなったら、シクレの入口も使わない
+    expect(applyOverrides({ ...cfg, tempVoice: { hubs: [] } } as GuildConfig, overridesSchema.parse({ rooms: { secretHubs: [{ hubId: SECRET_HUB, baseHubId: NEOCHI }] } })).tempVoice.hubs).toEqual([]);
+    const { discordVoiceOps } = await import('../src/discord/tempVoice.js');
+    let made: { name: string; permissionOverwrites: { id: string; allow: bigint; deny: bigint }[] } | undefined;
+    const cache = new Map<string, unknown>([[NEOCHI, { parent: { id: 'cat', permissionOverwrites: { cache: [{ id: MEMBER_ROLE, type: 0, allow: { bitfield: VIEW | CONNECT }, deny: { bitfield: 0n } }] } } }]]);
+    const guild = { id: '960000000000000999', client: { user: { id: BOT } }, channels: { cache, create: async (o: typeof made) => { made = o; return { id: ROOM }; } } };
+    await discordVoiceOps(guild as never).create({ hubId: NEOCHI, name: 'さくらの宿坊', ownerId: OWNER, secret: true });
+    expect(made!.name).toBe('🤫 シクレ｜さくらの宿坊');
+    const by = (id: string) => made!.permissionOverwrites.find((o) => o.id === id)!;
+    expect(by(MEMBER_ROLE).deny & VIEW).toBe(VIEW);
+    expect(by('960000000000000999').deny & VIEW).toBe(VIEW);
+    expect(by(OWNER).allow & VIEW).toBe(VIEW);
+    expect(by(BOT).allow & VIEW).toBe(VIEW);
   });
 
   it('部屋の案内: 値段が並び、「⚙ 部屋の設定」ボタンだけ（だれでも見える）', () => {
