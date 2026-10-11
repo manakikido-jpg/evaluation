@@ -89,8 +89,8 @@ export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMes
     return {
       flags: MessageFlags.IsComponentsV2,
       files: [
-        { attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '祈願所の物御籤（ものみくじ）。下のボタンから売り場や中身と排出率を開けます。' },
-        { attachment: CASINO_GACHA_BANNER, name: 'casino-gacha-banner.png', description: '祈願所の勝負の御籤。背景・卓の飾り・称号など、カジノの景品が当たります。' },
+        { attachment: GACHA_BANNER, name: 'gacha-prayer.png', description: '物御籤（ものみくじ）の入口画像。売り場・中身と排出率のボタンが下にあります。' },
+        { attachment: CASINO_GACHA_BANNER, name: 'casino-gacha-banner.png', description: '勝負の御籤の入口画像。売り場・中身と排出率のボタンが下にあります。' },
       ],
       components: [
         { type: 12, items: [{ media: { url: 'attachment://gacha-prayer.png' }, description: '祈願所・物御籤（ものみくじ）' }] },

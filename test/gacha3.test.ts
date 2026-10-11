@@ -131,8 +131,9 @@ describe('祈願所の入口', () => {
         author: { id: authorId },
         embeds: [{ title: '🎁 物御籤（ものみくじ）' }],
         flags: { has: () => false },
+        attachments: new Collection<string, { name: string; size: number; description: string }>(),
         components: [{ toJSON: () => next.components[1]! }],
-        edit: vi.fn(async (view: typeof next) => { message.embeds = []; message.components = view.components.map(row => ({ toJSON: () => row })) as typeof message.components; message.flags = { has: () => true }; }),
+        edit: vi.fn(async (view: typeof next) => { message.embeds = []; message.components = view.components.map(row => ({ toJSON: () => row })) as typeof message.components; message.flags = { has: () => true }; message.attachments = new Collection(view.files.map((file, i) => [String(i), { name: file.name, size: 10, description: file.description }])); }),
       };
       return message;
     };
@@ -146,6 +147,16 @@ describe('祈願所の入口', () => {
     expect(old.edit).toHaveBeenCalledWith({ ...next, content: null, embeds: [], attachments: [], allowedMentions: { parse: [] } });
     expect(other.edit).not.toHaveBeenCalled();
     expect(await app.refreshPanels(guild)).toBe(0);
+    // URLとボタンが正しくても、添付が消えた入口は修復する。
+    old.attachments.delete('0');
+    expect(await app.refreshPanels(guild)).toBe(1);
+    expect(await app.refreshPanels(guild)).toBe(0);
+    // 0バイトの添付や古い画像の案内も、2枚まとめて送り直す。
+    old.attachments.get('0')!.size = 0;
+    expect(await app.refreshPanels(guild)).toBe(1);
+    old.attachments.get('0')!.description = '古い入口';
+    expect(await app.refreshPanels(guild)).toBe(1);
+    expect(other.edit).not.toHaveBeenCalled();
   });
 
   it('入口は物御籤の画像と2つのボタン、勝負の御籤の画像と2つのボタンを上下に並べる', () => {

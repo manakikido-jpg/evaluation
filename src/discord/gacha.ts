@@ -380,14 +380,17 @@ export class GachaApp {
         const rows = m.components.map((row) => row.toJSON()) as { type?: number; items?: { media?: { url?: string } }[]; components?: { custom_id?: string; label?: string }[] }[];
         const open = rows.flatMap((row) => row.components ?? []).find((b) => b.custom_id === 'gacha:open');
         if (!open) continue;
-        // 写真と2つのボタンを上下に並べた入口なら、そのまま。
+        // ボタンだけでなく、実際の画像の添付も確かめる。URLだけ残った入口は送り直す。
         const same = rows.length === next.components.length && rows.every((row, index) => {
           const expected = next.components[index]!;
           if (row.type !== expected.type) return false;
           if (expected.type === 12) return row.items?.length === 1 && row.items[0]?.media?.url?.includes(next.files[index === 0 ? 0 : 1]!.name);
           return row.components?.length === expected.components.length && row.components.every((button, n) => button.custom_id === expected.components[n]?.custom_id && button.label === expected.components[n]?.label);
         });
-        if (same && m.flags?.has(MessageFlags.IsComponentsV2)) continue;
+        const hasImages = next.files.every(file => m.attachments?.some(attachment =>
+          attachment.name === file.name && attachment.size > 0 && attachment.description === file.description,
+        ));
+        if (same && hasImages && m.flags?.has(MessageFlags.IsComponentsV2)) continue;
         await m.edit({ ...next, content: null, embeds: [], attachments: [], allowedMentions: { parse: [] } }).then(() => edited++).catch((err: unknown) => logger.warn({ err, channelId: ch.id }, 'gacha panel refresh failed'));
       }
     }
