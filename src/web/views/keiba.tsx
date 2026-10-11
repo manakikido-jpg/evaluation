@@ -1,3 +1,4 @@
+import { KB_DEFAULT_OUTFIT, KB_OUTFIT_COLORS, KB_HOODS, KB_ORNAMENTS } from '../../services/casino/keibaOutfit.js';
 import type { Child } from "hono/jsx";
 import type { CasinoConfig } from "../../config.js";
 import type { CasinoTable } from "../../db/schema.js";
@@ -154,6 +155,7 @@ function Tv(p: {
       no: h.no,
       coat: h.coat,
       silk: h.silk,
+      outfit: h.outfit,
       name: h.name,
       weight: h.weight,
       wdiff: h.wdiff,
@@ -1244,6 +1246,17 @@ export function KbStablePage(p: {
                         : classLabel(h)}
                     </span>
                   </div>
+                  <details class="kb-outfit-editor"><summary>👘 この馬を着せ替える</summary>
+                    <form method="post" action={`/casino/keiba/stable/${h.id}/outfit`} class="kb-outfit-form">
+                      {csrf}
+                      <canvas class="kb-outfit-preview" width="480" height="220" data-horse={JSON.stringify({ no: h.id, coat: h.coat, silk: h.silk, outfit: h.outfit ?? KB_DEFAULT_OUTFIT })} aria-label={`${h.name}の装備の見本`}>馬の装備の見本</canvas>
+                      <div class="kb-outfit-fields">
+                        {(['cloth', 'bridle'] as const).map(key => <label>{key === 'cloth' ? '鞍の下の布' : '手綱・カバーの色'}<select name={key}>{Object.entries(KB_OUTFIT_COLORS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT)[key] === value}>{label}</option>)}</select></label>)}
+                        <label>カバー<select name="hood">{Object.entries(KB_HOODS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT).hood === value}>{label}</option>)}</select></label>
+                        <label>飾り<select name="ornament">{Object.entries(KB_ORNAMENTS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT).ornament === value}>{label}</option>)}</select></label>
+                      </div><p class="c-muted">選ぶと見本が変わります。着せ替えは無料で、馬の能力は変わりません。保存すると次の出走から反映します。</p><button class="c-btn">着せ替えを保存</button>
+                    </form>
+                  </details>
                   <p class="c-muted">
                     {KB_SEXES[h.sex]}
                     {h.age}・{KB_COATS[h.coat]}・

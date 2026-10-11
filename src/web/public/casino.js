@@ -1669,7 +1669,32 @@ const kbHorse = (g, x, y, s, ph, h, run) => {
   g.stroke();
   // 手前の脚
   for (const l of legs.filter((x) => !x.far)) leg(l.hx, l.hy, l.a1, l.a2, false, l.fore);
-  // 鞍とゼッケン
+  const outfit = h.outfit ?? { cloth: '#f7f7f2', bridle: '#232936', hood: 'none', ornament: 'none' };
+  // 顔と耳のカバー
+  if (outfit.hood !== 'none') {
+    g.fillStyle = outfit.bridle;
+    g.beginPath(); g.moveTo(48, -42); g.lineTo(50, -50); g.lineTo(54, -40); g.fill();
+    if (outfit.hood === 'full') {
+      g.save(); g.translate(58, -33); g.rotate(0.6);
+      g.beginPath(); g.ellipse(-2, 0, 10, 6.5, 0, 0, TAU); g.fill();
+      g.fillStyle = '#f7f7f2'; g.beginPath(); g.arc(-2, -2, 2.4, 0, TAU); g.fill(); g.restore();
+    }
+  }
+  // たてがみの飾り
+  if (outfit.ornament !== 'none') {
+    g.fillStyle = outfit.cloth;
+    g.save(); g.translate(38, -31);
+    if (outfit.ornament === 'ribbon') {
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(-6, -4); g.lineTo(-6, 4); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(6, -4); g.lineTo(6, 4); g.closePath(); g.fill();
+    } else {
+      for (let n = 0; n < 5; n++) { const a = n * TAU / 5; g.beginPath(); g.arc(Math.cos(a) * 3, Math.sin(a) * 3, 2.4, 0, TAU); g.fill(); }
+    }
+    g.fillStyle = '#d4af37'; g.beginPath(); g.arc(0, 0, 1.5, 0, TAU); g.fill(); g.restore();
+  }
+  // 鞍とゼッケン（番号は白い札で読みやすく）
+  g.fillStyle = outfit.cloth;
+  g.fillRect(-17, -16, 27, 20);
   g.fillStyle = '#f7f7f2';
   g.fillRect(-14, -14, 20, 15);
   g.fillStyle = '#111';
@@ -1692,8 +1717,8 @@ const kbHorse = (g, x, y, s, ph, h, run) => {
   g.moveTo(16, -28);
   g.lineTo(30, -22);
   g.stroke();
-  g.strokeStyle = '#2b2b2b';
-  g.lineWidth = 1;
+  g.strokeStyle = outfit.bridle;
+  g.lineWidth = 2;
   g.beginPath();
   g.moveTo(30, -22);
   g.lineTo(52, -30);
@@ -2885,3 +2910,22 @@ pageInit(document);
   init();
   document.addEventListener('c-page-swapped', init);
 })();
+
+// 馬ごとの着せ替え。保存前にレースと同じ描画で確認する。
+const paintHorseOutfit = form => {
+  const canvas = form.querySelector('.kb-outfit-preview');
+  if (!canvas) return;
+  const g = canvas.getContext('2d');
+  if (!g) return;
+  const horse = JSON.parse(canvas.dataset.horse);
+  horse.outfit = Object.fromEntries(['cloth', 'bridle', 'hood', 'ornament'].map(key => [key, form.elements.namedItem(key).value]));
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  kbHorse(g, 210, 155, 2, 0, horse, false);
+};
+const initHorseOutfits = () => document.querySelectorAll('.kb-outfit-form').forEach(paintHorseOutfit);
+initHorseOutfits();
+document.addEventListener('c-page-swapped', initHorseOutfits);
+document.addEventListener('change', event => {
+  const form = event.target.closest?.('.kb-outfit-form');
+  if (form) paintHorseOutfit(form);
+});

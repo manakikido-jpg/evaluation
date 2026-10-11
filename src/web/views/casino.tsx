@@ -294,6 +294,7 @@ const MSG: Record<string, string> = {
   horse_too_many: '持てる頭数に届いています。',
   horse_debuted: 'デビューした馬の名前は変えられません。',
   horse_off: 'いまは馬を買えません。',
+  outfit_saved: '🐴 馬の着せ替えを保存しました。次の出走からこの姿で走ります。',
   silk_saved: '🎽 勝負服を決めました。あなたの馬はみんなこの服で走ります。',
   horse_trained: '💪 調教しました。次のレースの調子が上がります。',
   horse_cooldown: '調教は 6 時間に 1 回までです。',

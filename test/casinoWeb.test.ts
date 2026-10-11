@@ -10,6 +10,7 @@ import type { DiscordActions } from '../src/lib/discordRest.js';
 import { casinoGames } from '../src/db/schema.js';
 import { REELS } from '../src/services/casino/slots.js';
 import { createLoginLink } from '../src/services/casino/loginLinks.js';
+import { addHorse, myHorses } from '../src/services/casino/keibaStable.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
 import { loadOverrides } from '../src/services/settings.js';
@@ -690,6 +691,26 @@ describe('🦊 AT 機（画面）', () => {
 });
 
 describe('🏇 みんなでダービー（画面）', () => {
+  it('馬の着せ替えを保存し、他人・CSRFなし・不正な色の変更を拒否する', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const b = (await casinoLogin(B)).cookie!;
+    const horse = (await addHorse(db, 'マイホース', undefined, A))!;
+    const path = `/casino/keiba/stable/${horse.id}/outfit`;
+    const outfit = { cloth: '#d4af37', bridle: '#c53046', hood: 'ears', ornament: 'ribbon' };
+    const page = await (await get('/casino/keiba/stable', a)).text();
+    expect(page).toContain(path);
+    expect(page).toContain('kb-outfit-preview');
+    expect(page).not.toMatch(/<script>|style="|onclick=/);
+    expect((await app.request(path, { method: 'POST', headers: { cookie: `sakura_casino=${a}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(outfit) })).status).toBe(403);
+    expect((await post(path, b, outfit)).headers.get('location')).toBe('/casino/keiba/stable?e=not_found');
+    expect((await post(path, a, { ...outfit, bridle: '#bad' })).headers.get('location')).toBe('/casino/keiba/stable?e=invalid');
+    expect((await myHorses(db, A))[0]!.outfit).toEqual(horse.outfit);
+    expect((await post(path, a, outfit)).headers.get('location')).toBe('/casino/keiba/stable?e=outfit_saved');
+    expect((await myHorses(db, A))[0]!.outfit).toEqual(outfit);
+    expect(await balance(A)).toBe(5000);
+    expect(await (await get('/casino/keiba/stable', a)).text()).toContain('value="ribbon" selected');
+  });
+
   it('レースを開いて馬券を買う。テレビの映像・出馬表・みんなの馬券が出る', async () => {
     const a = (await casinoLogin(A)).cookie!;
     const hall = await (await get('/casino/hall', a)).text();
