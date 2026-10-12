@@ -41,8 +41,17 @@ describe('ショップの見た目', () => {
     expect(m.embeds[3]!.fields![0]!.value).toContain('**好きな量**');
     expect(m.embeds[4]!.fields![0]!.value).toContain(`**${cfg.economy.menzaifuPrice} 枚**`);
     // 種類ごとの選ぶメニュー
-    expect(m.components.map((r) => r.components[0]!.custom_id)).toEqual(['shop:pick:color', 'shop:pick:title', 'shop:pick:gift', 'shop:pick:menzaifu']);
-    expect(m.components[0]!.components[0]!.options[0]!.description).toContain('✅ 受けている');
+    expect(m.components.map((r) => r.components[0]!.custom_id)).toEqual(['shop:pick:color', 'shop:pick:title', 'shop:pick:gift', 'shop:pick:menzaifu', 'diary:open']);
+    const select = m.components[0]!.components[0]!;
+    expect('options' in select && select.options[0]!.description).toContain('✅ 受けている');
+    expect(m.components.length).toBeLessThanOrEqual(5);
+  });
+
+  it('日記を足しても5行の上限を守り、5種類ある授与品の選択肢を減らさない', () => {
+    const items: ShopItem[] = [base, {...base,id:2,roleGroup:'title'}, {...base,id:3,kind:'gift',roleGroup:null}, {...base,id:4,kind:'menzaifu',roleGroup:null}, {...base,id:5,kind:'ema_pin',roleGroup:null}];
+    const view = shopList(items, cfg.economy, 5000);
+    expect(view.components).toHaveLength(5);
+    expect(view.components.flatMap(row => row.components.flatMap(c => 'options' in c ? c.options.map(o => o.value) : []))).toEqual(['1','2','3','5','4']);
   });
 
   it('一覧: 品物が多くても、カードは合わせて 6000 文字まで', () => {

@@ -19,6 +19,7 @@ import { TicketApp } from './discord/supportTickets.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
+import { DiaryApp } from './discord/diary.js';
 import { GachaApp } from './discord/gacha.js';
 import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
@@ -91,6 +92,7 @@ async function main(): Promise<void> {
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const gacha = new GachaApp(db, cfg);
+  const diary = new DiaryApp(db, cfg);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
   const sokin = new SokinApp(db, cfg);
@@ -174,6 +176,7 @@ async function main(): Promise<void> {
     cast.attach(guild);
     supportTickets.attach(guild);
     gacha.attach(guild);
+    await diary.attach(guild).catch(err => logger.warn({ err }, 'diary panel attach failed'));
     // 物御籤のボタンの名前を変えたら、置いてあるボタンも書き換える
     await gacha.refreshPanels(guild).catch((err) => logger.warn({ err }, 'gacha panels refresh failed'));
     await market.refreshPanels(guild).catch((err) => logger.warn({ err }, 'market panels refresh failed'));
@@ -345,6 +348,7 @@ async function main(): Promise<void> {
     void bell.onInteraction(i);
     void recruit.onInteraction(i);
     void shop.onInteraction(i);
+    void diary.onInteraction(i).catch(err => logger.warn({ err }, 'diary interaction failed'));
     void rooms.onInteraction(i);
     // 🤫 シクレ部屋のパネル
     void onSecretRoomInteraction(tempVoice, cfg, i).catch((err) => logger.warn({ err }, 'secret room panel failed'));
@@ -353,8 +357,10 @@ async function main(): Promise<void> {
     void cast.onInteraction(i);
     void supportTickets.onInteraction(i);
   });
+  client.on(Events.ThreadDelete, thread => { void diary.onThreadDelete(thread).catch(err => logger.warn({ err }, 'diary thread deletion failed')); });
   client.on(Events.MessageCreate, (m) => {
     void app.onMessage(m);
+    void diary.onMessage(m).catch(err => logger.warn({ err }, 'diary post cleanup failed'));
     // 案内人の受付のパネル: いつもいちばん下に
     void guideReception.onMessage(m).catch((err) => logger.warn({ err }, 'guide panel message failed'));
     void supportTickets.onMessage(m).catch((err) => logger.warn({ err }, 'ticket message failed'));

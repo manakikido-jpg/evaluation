@@ -240,6 +240,6 @@ function shopPanel(coin: string): PanelMessage {
         color: SHU,
       },
     ],
-    components: [{ type: 1, components: [{ type: 2, style: 1, label: '授与品を見る', custom_id: 'shop:open', emoji: { name: '🛍' } }] }],
+    components: [{ type: 1, components: [{ type: 2, style: 1, label: '授与品を見る', custom_id: 'shop:open', emoji: { name: '🛍' } }, { type: 2, style: 2, label: '日記の権利（500銭・期限なし）', custom_id: 'diary:open', emoji: { name: '📖' } } ] }],
   };
 }
