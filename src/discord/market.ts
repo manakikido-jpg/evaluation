@@ -45,6 +45,8 @@ import {
   getOffer,
   getOrder,
   getRequest,
+  hasMarketLicense,
+  marketLicenseRoles,
   isCallKind,
   isMarketCategory,
   isStandby,
@@ -346,8 +348,7 @@ export class MarketApp {
   }
 
   private isMerchant(m: GuildMember): boolean {
-    const merchant = this.cfg().roles.merchant;
-    return Boolean(merchant && m.roles.cache.has(merchant));
+    return hasMarketLicense(this.cfg(),[...m.roles.cache.keys()]);
   }
 
   private get coin() {
@@ -398,7 +399,7 @@ export class MarketApp {
 
   private async pickCategory(i: ButtonInteraction<'cached'>, mode: 'listing' | 'request'): Promise<void> {
     if (mode === 'listing' && !this.isMerchant(i.member)) {
-      return void (await i.reply({ content: '🏪 出品するには「開業権利」が要ります（#授与所 の授与品から受けられます）。', ...EPHEMERAL }));
+      return void (await i.reply({ content: marketLicenseRoles(this.cfg()).length ? '🏪 出品するには「開業権利」が要ります（#授与所 の授与品から受けられます）。' : '市場の開業ロールがまだ設定されていません。運営に知らせてください。', ...EPHEMERAL }));
     }
     await i.reply({
       content:

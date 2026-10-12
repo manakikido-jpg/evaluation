@@ -57,6 +57,10 @@ export const feeOf = (cfg: GuildConfig, price: number) => Math.floor((price * cf
 
 const isAdult = async (db: Db, id: string) => (await getMember(db, id))?.ageGroup === 'adult';
 
+/** 授与所の開業ロールも、市場専用の開業ロールも同じ権利として扱う。 */
+export const marketLicenseRoles = (cfg: GuildConfig): string[] => [...new Set([cfg.roles.merchant,cfg.shop.license?.roleId].filter((id):id is string=>Boolean(id)))];
+export const hasMarketLicense = (cfg: GuildConfig, roleIds: readonly string[]): boolean => marketLicenseRoles(cfg).some(id=>roleIds.includes(id));
+
 // ───────── 出品 ─────────
 
 export type ListingResult =
@@ -69,9 +73,8 @@ export async function createListing(
   seller: { id: string; roleIds: readonly string[] },
   input: { category: string; title: string; description: string; price: number; pricing?: 'fixed' | 'offer'; subcategory?: string | null; capacity?: number; imageUrl?: string | null },
 ): Promise<ListingResult> {
-  const merchant = cfg.roles.merchant;
-  if (!merchant) return { status: 'disabled' };
-  if (!seller.roleIds.includes(merchant)) return { status: 'no_license' };
+  if (!marketLicenseRoles(cfg).length) return { status: 'disabled' };
+  if (!hasMarketLicense(cfg,seller.roleIds)) return { status: 'no_license' };
   const title = input.title.trim();
   if (!isMarketCategory(input.category) || !title || title.length > 60 || input.description.length > 1000) return { status: 'invalid' };
   if (!Number.isInteger(input.price) || input.price < 1 || input.price > MARKET_PRICE_MAX) return { status: 'invalid' };
@@ -547,8 +550,7 @@ export async function bidRequest(
   const r = await getRequest(db, requestId);
   if (!r || r.status !== 'open') return { status: 'not_open' };
   if (r.requesterId === seller.id) return { status: 'self' };
-  const merchant = cfg.roles.merchant;
-  if (!merchant || !seller.roleIds.includes(merchant)) return { status: 'no_license' };
+  if (!hasMarketLicense(cfg,seller.roleIds)) return { status: 'no_license' };
   if (!Number.isInteger(amount) || amount < 1 || amount > MARKET_PRICE_MAX || note.length > 300) return { status: 'invalid' };
   if (!(await adultPair(db, r.category, r.requesterId, seller.id))) return { status: 'adult_only' };
   const [before] = await db.select().from(marketBids).where(and(eq(marketBids.requestId, requestId), eq(marketBids.sellerId, seller.id)));
