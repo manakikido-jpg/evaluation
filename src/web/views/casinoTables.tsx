@@ -1,4 +1,4 @@
-import { LIFE_VERSIONS, lifeBoard, lifeGoal, lifeMinutes, LIFE_TURN_SECONDS, lifeAssets, type LifeState } from '../../services/casino/tables/life.js';
+import { LIFE_CARDS, LIFE_VERSIONS, lifeBoard, lifeGoal, lifeMinutes, LIFE_TURN_SECONDS, type LifePlayer, lifeAssets, type LifeState } from '../../services/casino/tables/life.js';
 import { StyleOrnament } from './casinoStyleParts.js';
 import { styleItem } from '../../services/casino/styles.js';
 import type { Child } from 'hono/jsx';
@@ -145,7 +145,7 @@ const RULES: Record<TableKind, string> = {
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
   mahjong: MJ_RULES,
-  life: '2〜5人。最初に仕事を選び、20分（36マス）・40分（72マス）・60分（108マス）を選んで人生を進みます。選んだ時間が経つか全員がゴールすると、資産で順位を決めます。給料日を通るとゲーム内の資金が増え、家や保険を選べます。全員のゴール後に資産で順位を決めます。Gはゲーム内だけのお金で銭には交換できません。賞金は参加費だけを分けます（2人100:0、3人70:30:0、4人60:30:10:0、5人50:30:20:0:0。同点は該当順位の賞金を分けます）。時間切れ・途中退出は自動で進めます。BOTは参加費0銭の練習だけ。',
+  life: '2〜5人。最初に仕事を選び、20分（36マス）・40分（72マス）・60分（108マス）を選んで人生を進みます。選んだ時間が経つか全員がゴールすると、資産で順位を決めます。給料日を通るとゲーム内の資金が増え、家や保険を選べます。分かれ道では堅実／挑戦を選び、イベントでも受け取り方を選べます。切り札は出目指定・修理代の回避・失敗後の再挑戦の3種類です。Gはゲーム内だけのお金で銭には交換できません。賞金は参加費だけを分けます（2人100:0、3人70:30:0、4人60:30:10:0、5人50:30:20:0:0。同点は該当順位の賞金を分けます）。時間切れ・途中退出は自動で進めます。BOTは参加費0銭の練習だけ。',
   keiba: KB_RULES,
 };
 
@@ -1351,6 +1351,21 @@ function KbFrame({ t, s, me, casino, now }: ViewProps<KbState>) {
   );
 }
 
+/** 選択の結果は、押す前に見えるようにする。 */
+function LifeChoices({s,p,kind}:{s:LifeState;p:LifePlayer|undefined;kind:NonNullable<LifeState['pending']>['kind']|undefined}) {
+  if(kind==='career')return <><p>仕事を選びましょう。</p><button class="c-btn" name="choice" value="work">💼 すぐ就職（給料160G）</button><button class="c-btn" name="choice" value="study">📚 学んで就職（費用300G・給料240G）</button></>;
+  if(kind==='fork')return <><h4>🛤 どちらの道を進む？</h4><p>この先8マスで合流します。分かれ道では必ず止まり、残りの出目は使いません。</p><button class="c-btn" name="choice" value="steady">🌿 堅実の道：給料ごとに＋40G</button><button class="c-btn c-btn-gold" name="choice" value="venture">🔥 挑戦の道：給料ごとに50％で＋240G／50％で−120G</button></>;
+  if(kind==='event'){
+    if(s.pending?.event==='learn')return <><h4>📚 学ぶ？休む？</h4><button class="c-btn" name="choice" value="learn" disabled={!p||p.money<150}>学ぶ：150Gを払い、給料＋40G</button><button class="c-btn c-btn-ghost" name="choice" value="rest">休む：＋60G</button></>;
+    if(s.pending?.event==='travel')return <><h4>🧳 旅に出る？</h4><p>切り札は5枚まで持てます。旅では3種類から同じ確率で1枚もらえます。</p><button class="c-btn" name="choice" value="trip" disabled={!p||p.money<120||(p.cards?.length??0)>=5}>旅に出る：120Gで切り札を1枚</button><button class="c-btn c-btn-ghost" name="choice" value="stay">見送る：＋40G</button></>;
+    return <><h4>🎲 堅実に受け取る？挑戦する？</h4><button class="c-btn" name="choice" value="safe">堅実：必ず＋100G</button><button class="c-btn c-btn-gold" name="choice" value="challenge">挑戦：50％で＋500G／50％で−200G</button></>;
+  }
+  if(kind==='retry')return <><h4>🃏 挑戦に失敗しました（−200G）</h4><p>再挑戦で成功すれば、先ほどの200Gを戻して500Gを受け取れます。失敗しても追加の支払いはありません。</p><button class="c-btn" name="choice" value="retry" disabled={!p?.cards?.includes('retry')}>再挑戦の札を使う（成功率50％）</button><button class="c-btn c-btn-ghost" name="choice" value="accept">札を残して進む</button></>;
+  if(kind==='accident')return <><h4>🔧 修理代 {s.pending?.cost??0}Gが発生しました</h4><button class="c-btn" name="choice" value="shield" disabled={!p?.cards?.includes('shield')}>回避札で修理代を取り戻す</button><button class="c-btn c-btn-ghost" name="choice" value="pay">札を残して進む</button></>;
+  if(kind)return <><p>{kind==='house'?'家は600G。ゴール時の資産に750Gを加えます。':'保険は120G。修理代が220Gから40Gになります。'}</p><button class="c-btn" name="choice" value="buy" disabled={!p||p.money<(kind==='house'?600:120)}>購入する</button><button class="c-btn c-btn-ghost" name="choice" value="skip">今回は見送る</button></>;
+  return <button class="c-btn c-btn-gold">🎲 サイコロを振る</button>;
+}
+
 /** みんなの人生の道。操作は既存の卓と同じCSRF付きフォーム。 */
 function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
   const i=s.seats.findIndex(x=>x.id===me.session.userId), my=i>=0?s.seats[i]:undefined;
@@ -1365,8 +1380,8 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
     {s.phase==='playing' && s.endsAt && <p class="c-muted">⌛ 全体の残り <span class="c-count" data-deadline={String(s.endsAt)} data-time-format="minutes"><b>{Math.floor(Math.max(0,s.endsAt-now)/60_000)}分{Math.ceil(Math.max(0,s.endsAt-now)/1000)%60}秒</b></span> ／ 時間が来たら今の資産で順位を決めます。</p>}
     <div data-life-presentation data-life-view="flat">
       <div class="life-view-tools"><button type="button" class="c-btn c-btn-small" data-life-toggle aria-pressed="false">立体で見る</button><button type="button" class="c-btn c-btn-small c-btn-ghost" data-life-reset>向きを戻す</button></div>
-      <div class="life-scene" data-life3d={JSON.stringify({table:t.id,phase:s.phase,roll:s.lastRoll,tiles:board.map(([icon,label,kind])=>({icon,label,kind})),pawns:s.seats.map(x=>({id:x.id,name:x.name,position:s.people[x.id]?.position??0,family:s.people[x.id]?.family??0}))})} role="img" aria-label="立体の人生の盤面"></div>
-      <p class="c-muted life-scene-note" data-life-note role="status">盤面はドラッグで回転、ピンチやホイールで拡大できます。マスを押すと内容を確認できます。</p>
+      <div class="life-scene" data-life3d={JSON.stringify({table:t.id,phase:s.phase,roll:s.lastRoll,tiles:board.map(([icon,label,kind])=>({icon,label,kind})),pawns:s.seats.map(x=>({id:x.id,name:x.name,position:s.people[x.id]?.position??0,family:s.people[x.id]?.family??0,route:s.people[x.id]?.route,fork:s.people[x.id]?.fork}))})} role="img" aria-label="立体の人生の盤面"></div>
+      <p class="c-muted life-scene-note" data-life-note role="status">緑の縁が堅実、橙の縁が挑戦の道です。ドラッグで回転、ピンチやホイールで拡大。マスを押すと内容を確認できます。</p>
     <section class="life-board" aria-label="人生の道">
       {Array.from({length:Math.ceil(board.length/6)},(_,row)=><div class="life-row">{board.slice(row*6,row*6+6).map(([icon,name,kind],col)=>{
         const at=row*6+col;
@@ -1378,10 +1393,13 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
     {s.phase==='playing' && <section class="c-panel life-turn"><h3>{turn?'あなたの番です':`${current?.name??''}の番です`}</h3><Countdown at={s.deadline} now={now}/>
       {s.lastRoll && <p>🎲 {s.seats.find(x=>x.id===s.lastRoll!.id)?.name}：<b>{s.lastRoll.die}</b> の目 → {s.lastRoll.to}マス</p>}
       {turn && <ActForm id={t.id} csrf={csrf} action={pending?'choose':'roll'}><input type="hidden" name="nonce" value={String(s.nonce)}/>
-        {pending==='career'?<><p>仕事を選びましょう。</p><button class="c-btn" name="choice" value="work">💼 すぐ就職（給料160G）</button><button class="c-btn" name="choice" value="study">📚 学んで就職（費用300G・給料240G）</button></>:pending?<><p>{pending==='house'?'家は600G。ゴール時の資産に750Gを加えます。':'保険は120G。修理代が220Gから40Gになります。'}</p><button class="c-btn" name="choice" value="buy" disabled={!p || p.money<(pending==='house'?600:120)}>購入する</button><button class="c-btn c-btn-ghost" name="choice" value="skip">今回は見送る</button></>:<button class="c-btn c-btn-gold">🎲 サイコロを振る</button>}
+        <LifeChoices s={s} p={p} kind={pending}/>
       </ActForm>}
     </section>}
-    {Object.keys(s.people).length>0 && <section class="life-people" aria-label="みんなの暮らし">{s.seats.map((x,index)=>{const person=s.people[x.id]!;return <article class={`life-person${x.id===me.session.userId?' me':''}`}><h3><span class={`life-token p${index}`}>{index+1}</span> {x.name}{person.position===goal?' 🏁':''}{x.gone?'（自動）':''}</h3><p>{person.job}・給料{fmt(person.salary)}G</p><strong>資産 {fmt(lifeAssets(person))}G</strong><p>手持ち{fmt(person.money)}G ／ {person.position}/{goal}マス</p><small>{person.house?'🏠 家あり':'🏠 家なし'}・{person.insured?'🛡 保険あり':'🛡 保険なし'}・👪 家族{person.family}</small></article>;})}</section>}
+    {p?.cards && <section class="c-panel life-hand"><h3>🃏 あなたの切り札（{p.cards.length}／5枚）</h3><div class="life-card-list">{(Object.keys(LIFE_CARDS) as (keyof typeof LIFE_CARDS)[]).map(key=><div class="life-card"><b>{LIFE_CARDS[key].name} ×{p.cards!.filter(x=>x===key).length}</b><small>{LIFE_CARDS[key].note}</small></div>)}</div>
+      {turn && !pending && p.cards.includes('move') && <ActForm id={t.id} csrf={csrf} action="card"><input type="hidden" name="nonce" value={String(s.nonce)}/><input type="hidden" name="card" value="move"/><label>出目指定<select name="die">{[1,2,3,4,5,6].map(n=><option value={String(n)}>{n}マス進む</option>)}</select></label><button class="c-btn">出目指定の札を1枚使って進む</button><p class="c-muted">分かれ道では指定した目より手前でも止まります。回避札と再挑戦は、使える場面でボタンが出ます。</p></ActForm>}
+    </section>}
+    {Object.keys(s.people).length>0 && <section class="life-people" aria-label="みんなの暮らし">{s.seats.map((x,index)=>{const person=s.people[x.id]!;return <article class={`life-person${x.id===me.session.userId?' me':''}`}><h3><span class={`life-token p${index}`}>{index+1}</span> {x.name}{person.position===goal?' 🏁':''}{x.gone?'（自動）':''}</h3><p>{person.job}・給料{fmt(person.salary)}G{person.route && person.fork!==undefined && person.position<person.fork+8 && <span> ／ {person.route==='steady'?'🌿 堅実の道':'🔥 挑戦の道'}</span>}</p><strong>資産 {fmt(lifeAssets(person))}G</strong><p>手持ち{fmt(person.money)}G ／ {person.position}/{goal}マス</p><small>{person.house?'🏠 家あり':'🏠 家なし'}・{person.insured?'🛡 保険あり':'🛡 保険なし'}・👪 家族{person.family}</small></article>;})}</section>}
     {s.phase==='done' && <section class="c-result even"><h3>🏁 人生の結果</h3><ol class="c-rank">{s.order.map(id=>{
       const assets=lifeAssets(s.people[id]!),rank=s.order.findIndex(other=>lifeAssets(s.people[other]!)===assets)+1;
       return <li class={id===me.session.userId?'me':''}><b>{rank}位</b> {s.seats.find(x=>x.id===id)?.name} ／ 資産{fmt(assets)}G{s.entry>0 && <span> ／ 賞金{fmt(s.payouts.find(x=>x.id===id)?.amount??0)}{me.coin.name}</span>}</li>;

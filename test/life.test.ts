@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { casinoTables, casinoGames } from '../src/db/schema.js';
-import { life, lifeAssets, lifeBoard, lifeGoal, LIFE_GOAL, type LifeState } from '../src/services/casino/tables/life.js';
+import { life, lifeAutoChoice, lifeAssets, lifeBoard, lifeGoal, LIFE_GOAL, type LifeState } from '../src/services/casino/tables/life.js';
 import { createTable, joinTable, actTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import type { Ctx, Step } from '../src/services/casino/tables/types.js';
@@ -22,7 +22,7 @@ describe('人生ゲームの流れと賞金',()=>{
    for(let k=0;s.phase==='playing' && k<500;k++){
     clock+=1000;
     const id=s.seats[s.turn!]!.id,kind=s.pending?.kind??(s.people[id]!.job==='これから選ぶ'?'career':undefined);
-    const step=life.act(s,id,{action:kind?'choose':'roll',nonce:String(s.nonce),choice:kind==='career'?'work':'skip'},{...ctx,now:clock});
+    const step=life.act(s,id,{action:kind?'choose':'roll',nonce:String(s.nonce),choice:kind==='career'?'work':lifeAutoChoice(s)},{...ctx,now:clock});
     if(step.ok){paid+=(step.fx?.credits??[]).reduce((a,b)=>a+b.amount,0);records+=step.fx?.records?.length??0;}
     s=state(step);
    }
@@ -63,7 +63,7 @@ describe('人生ゲームの流れと賞金',()=>{
    s=state(life.act(s,P(0).id,{action:'roll',nonce:String(s.nonce)},ctx));
    expect(s.phase).toBe('playing');s=state(life.act(s,P(1).id,{action:'roll',nonce:String(s.nonce)},ctx));
    expect(s.phase).toBe('done');expect(Object.values(s.people).every(p=>p.position===107)).toBe(true);
-   const legacy=started(2);delete legacy.minutes;delete legacy.endsAt;
+   const legacy=started(2);delete legacy.minutes;delete legacy.endsAt;delete legacy.strategy;
    expect(lifeGoal(legacy)).toBe(35);
    expect(state(life.tick(legacy,{...ctx,now:ctx.now+100*60_000})!).phase).toBe('playing');
    expect(life.create(P(0),{entry:'0',minutes:'30'},ctx).ok).toBe(false);

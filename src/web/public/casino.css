@@ -2282,3 +2282,7 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 [data-life-view="3d"] .life-board { display: none; }
 .life-scene-note { font-size: .8rem; }
 @media(max-width:600px) { .life-scene { height: 370px; border-radius: 14px; } }
+
+.life-card-list { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }.life-card { flex:1 1 160px; padding:12px; border:1px solid #9a8057; border-radius:12px; background:#24372e; }.life-card small { display:block; margin-top:6px; color:#ccd8ce; }.life-hand form { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }.life-hand form p { flex-basis:100%; }.life-fork { border-color:#77bbad; background:#354b43; }
+
+.life-turn button { white-space:normal; max-width:100%; }.life-turn h4 { margin:14px 0 8px; }

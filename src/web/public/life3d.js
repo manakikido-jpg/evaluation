@@ -12,7 +12,7 @@ class LifeScene {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
     this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.9;
-    this.world=new T.Scene();this.world.background=new T.Color(0xb9dded);this.goal=data.tiles.length-1;this.route=createLifeRoute(T,data.tiles.length);
+    this.world=new T.Scene();this.world.background=new T.Color(0xb9dded);this.goal=data.tiles.length-1;this.route=createLifeRoute(T,data.tiles.length,data.tiles.flatMap((tile,n)=>tile.kind==='fork'?[n]:[]));
     this.camera=new T.PerspectiveCamera(40,1,.1,100);this.yaw=.72;this.elevation=.95;this.distance=innerWidth<600?65:54;
     this.world.add(new T.HemisphereLight(0xffffff,0x83986f,1.2));
     const sun=new T.DirectionalLight(0xfff5dd,2.5);sun.position.set(9,25,13);sun.castShadow=true;
@@ -39,10 +39,10 @@ class LifeScene {
     const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());
     return new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false});
   }
-  ribbon(start,end,width,height,color,parent=this.world) {
+  ribbon(start,end,width,height,color,parent=this.world,branch) {
     const T=this.T,positions=[],indices=[],steps=12;
     for(let i=0;i<=steps;i++){
-      const t=start+(end-start)*i/steps,p=this.route.point(t),v=this.route.tangent(t);
+      const t=start+(end-start)*i/steps,p=this.route.point(t,branch),v=this.route.tangent(t,branch);
       for(const side of [-1,1])positions.push(p.x+v.z*width/2*side,height,p.z-v.x*width/2*side);
       if(i<steps){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}
     }
@@ -53,12 +53,18 @@ class LifeScene {
     const T=this.T,group=new T.Group();group.userData.cell=n;this.world.add(group);this.tiles.push(group);
     const palette={pay:0xffd445,gift:0xffdd68,house:0x77d5ec,insurance:0x77d5ec,luck:0xccb7ee,accident:0xf78982,family:0xf89fbe,goal:0xffb639};
     const start=Math.max(0,n-.5),end=Math.min(this.goal,n+.5);
-    this.ribbon(start,end,3.05,.23,0xfaf5da,group);
-    this.ribbon(start+.025,end-.025,2.72,.25,palette[tile.kind]??0xf9e962,group);
-    const point=this.route.point(n),direction=this.route.tangent(n);
-    const label=new T.Mesh(new T.PlaneGeometry(2.15,2.15*35/this.goal),this.label(tile.label,n===0?'START':n===this.goal?'GOAL':String(n),tile.icon));
-    label.rotation.set(-Math.PI/2,0,-Math.atan2(direction.x,direction.z));label.position.set(point.x,.27,point.z);group.add(label);
+    const fork=this.route.forks.find(at=>n>at&&n<at+8);
+    const branches=fork===undefined?[undefined]:[{start:fork,kind:'steady'},{start:fork,kind:'venture'}];
+    for(const branch of branches){
+      this.ribbon(start,end,branch?1.95:3.05,.23,branch?.kind==='steady'?0x70cba5:branch?0xe7a46e:0xfaf5da,group,branch);
+      this.ribbon(start+.025,end-.025,branch?1.7:2.72,.25,palette[tile.kind]??0xf9e962,group,branch);
+      const point=this.route.point(n,branch),direction=this.route.tangent(n,branch);
+      const text=branch?`${branch.kind==='steady'?'堅実':'挑戦'}・${tile.label}`:tile.label;
+      const label=new T.Mesh(new T.PlaneGeometry(branch?1.5:2.15,2.15*35/this.goal),this.label(text,n===0?'START':n===this.goal?'GOAL':String(n),tile.icon));
+      label.rotation.set(-Math.PI/2,0,-Math.atan2(direction.x,direction.z));label.position.set(point.x,.27,point.z);group.add(label);
+    }
   }
+
   decorate() {
     const T=this.T;
     // 川と橋。道とは別の風景として、見通しを残して置く。
@@ -70,10 +76,11 @@ class LifeScene {
       for(const side of [-1,1])this.mesh(new T.BoxGeometry(4.4,.2,.12),0xf0d49c,-7,.47,z+side*1.45);
     }
     // 道にかぶらない場所を選んで、山・街・木を並べる。
-    const clear=(x,z,r=2.3)=>this.route.centers.every(p=>Math.hypot(x-p.x,z-p.z)>r);
+    const clear=(x,z,r=2.3)=>this.route.nearby.every(p=>Math.hypot(x-p.x,z-p.z)>r);
     for(const [x,z,r,h] of [[-15,-7,3.6,5],[-13,-14,3.8,6],[12,-14,3.8,6.2],[16,-8,3.1,4.8]]){
-      this.mesh(new T.ConeGeometry(r,h,7),0x858d77,x,h/2+.15,z);
-      this.mesh(new T.ConeGeometry(r*.42,h*.35,7),0xdbe3d2,x,h*.83+.15,z);
+      const room=Math.min(...this.route.nearby.map(p=>Math.hypot(x-p.x,z-p.z)))-1.6,radius=Math.min(r,room);if(radius<1.2)continue;const height=h*radius/r;
+      this.mesh(new T.ConeGeometry(radius,height,7),0x858d77,x,height/2+.15,z);
+      this.mesh(new T.ConeGeometry(radius*.42,height*.35,7),0xdbe3d2,x,height*.83+.15,z);
     }
     for(let row=0;row<6;row++)for(let col=0;col<7;col++){
       const x=-9+col*3,z=-8+row*3.2;
@@ -148,8 +155,8 @@ class LifeScene {
     for(const [id,actor] of this.cars)if(!ids.has(id)){this.world.remove(actor.mesh);actor.mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.cars.delete(id);}
     for(const [index,p] of data.pawns.entries()){
       let actor=this.cars.get(p.id);
-      if(!actor){actor=this.car(p.id,index,p.family);actor.cell=p.position;actor.target=p.position;this.cars.set(p.id,actor);this.place(actor,p.position);}
-      this.passengers(actor,p.family);
+      if(!actor){actor=this.car(p.id,index,p.family);actor.cell=p.position;actor.target=p.position;this.cars.set(p.id,actor);actor.route=p.route;actor.fork=p.fork;this.place(actor,p.position);}
+      actor.route=p.route;actor.fork=p.fork;this.passengers(actor,p.family);
       if(p.position!==actor.target){
         if(this.reduced||p.position<actor.target){actor.queue=[];actor.hop=null;actor.cell=actor.target=p.position;this.place(actor,p.position);}
         else {for(let cell=actor.target+1;cell<=p.position;cell++)actor.queue.push(cell);actor.target=p.position;actor.wait=rolled?now+900:now;}
@@ -157,8 +164,8 @@ class LifeScene {
     }
     root.dataset.lifeActors=String(this.cars.size);root.dataset.lifeRenderer='webgl';this.resize();
   }
-  point(actor,cell) { const p=this.route.point(cell),v=this.route.tangent(cell),lane=lanes[actor.index%5],off=[lane[0],lane[1]*35/this.goal];return new this.T.Vector3(p.x+v.z*off[0]+v.x*off[1],.25,p.z-v.x*off[0]+v.z*off[1]); }
-  place(actor,cell) {actor.mesh.position.copy(this.point(actor,cell));}
+  point(actor,cell) { const branch=actor.route?{start:actor.fork,kind:actor.route}:undefined,p=this.route.point(cell,branch),v=this.route.tangent(cell,branch),lane=lanes[actor.index%5],narrow=branch&&cell>branch.start&&cell<branch.start+8 ? .5 : 1,off=[lane[0]*narrow,lane[1]*35/this.goal];return new this.T.Vector3(p.x+v.z*off[0]+v.x*off[1],.25,p.z-v.x*off[0]+v.z*off[1]); }
+  place(actor,cell) {actor.mesh.position.copy(this.point(actor,cell));const direction=this.route.tangent(cell,actor.route?{start:actor.fork,kind:actor.route}:undefined);actor.mesh.rotation.y=Math.atan2(direction.x,direction.z);}
   resize() {
     const width=this.root.clientWidth||this.root.parentElement.clientWidth||800,height=this.root.clientHeight||420;
     this.renderer.setSize(width,height,false);this.camera.aspect=width/height;this.camera.updateProjectionMatrix();
@@ -171,7 +178,7 @@ class LifeScene {
       if(actor.hop){
         moving++;const hop=actor.hop,t=clamp((now-hop.at)/250,0,1),smooth=t*t*(3-2*t),from=this.point(actor,hop.from),to=this.point(actor,hop.to);
         actor.mesh.position.copy(this.point(actor,hop.from+(hop.to-hop.from)*smooth));actor.mesh.position.y+=Math.sin(t*Math.PI)*.18;
-        const direction=this.route.tangent(hop.from+(hop.to-hop.from)*smooth);actor.mesh.rotation.y=Math.atan2(direction.x,direction.z);
+        const direction=this.route.tangent(hop.from+(hop.to-hop.from)*smooth,actor.route?{start:actor.fork,kind:actor.route}:undefined);actor.mesh.rotation.y=Math.atan2(direction.x,direction.z);
         if(t===1){actor.cell=hop.to;actor.hop=null;}
       }else if(actor.queue.length)moving++;
     }

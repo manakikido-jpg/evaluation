@@ -993,6 +993,25 @@ describe('夜桜の新しいカジノロビー', () => {
 
 
 describe('カジノの人生ゲーム画面', () => {
+  it('切り札と分かれ道のフォームから操作し、選択と残り札を表示する',async()=>{
+    const a=(await casinoLogin(A)).cookie!,b=(await casinoLogin(B)).cookie!;
+    const created=await post('/casino/tables/life',a,{entry:'0'}),path=created.headers.get('location')!,id=Number(/\/casino\/t\/(\d+)/.exec(path)![1]);
+    await post(`/casino/t/${id}/join`,b,{});await post(`/casino/t/${id}/act`,a,{action:'start'});
+    await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'work',nonce:'0'});
+    let html=await(await get(path,a)).text();expect(html).toContain('出目指定の札を1枚使って進む');
+    const card={action:'card',card:'move',die:'6',nonce:'1'};
+    await post(`/casino/t/${id}/act`,a,card);
+    let s=(await tableById(db,id))!.state as LifeState;expect(s.people[A]!.position).toBe(4);expect(s.pending?.kind).toBe('fork');
+    html=await(await get(path,a)).text();expect(html).toContain('堅実の道');expect(html).toContain('挑戦の道');expect(html).toContain('50％');
+    await post(`/casino/t/${id}/act`,a,card);expect((await tableById(db,id))!.state).toEqual(s);
+    await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'venture',nonce:String(s.nonce)});
+    s=(await tableById(db,id))!.state as LifeState;expect(s.people[A]!.route).toBe('venture');expect(s.people[A]!.cards).not.toContain('move');
+    html=await(await get(path,a)).text();expect(html).toContain('🔥 挑戦の道');expect(html).not.toMatch(/onclick=|style="/);
+    await post(`/casino/t/${id}/act`,b,{action:'choose',choice:'work',nonce:String(s.nonce)});
+    s=(await tableById(db,id))!.state as LifeState;
+    await post(`/casino/t/${id}/act`,b,{action:'card',card:'move',die:'3',nonce:String(s.nonce)});
+    html=await(await get(path,b)).text();expect(html).toContain('必ず＋100G');expect(html).toContain('50％で＋500G');
+  });
   it('20・40・60分版を作れて、一覧と盤面に選んだ版を表示する',async()=>{
     const a=(await casinoLogin(A)).cookie!;
     const menu=await (await get('/casino/tables/life',a)).text();
