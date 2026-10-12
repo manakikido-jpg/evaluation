@@ -92,7 +92,7 @@ async function main(): Promise<void> {
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const gacha = new GachaApp(db, cfg);
-  const diary = new DiaryApp(db, cfg);
+  const diary = new DiaryApp(db, cfg, actions);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
   const sokin = new SokinApp(db, cfg);
@@ -205,6 +205,8 @@ async function main(): Promise<void> {
       // 🎀 キャスト: 返事待ちの期限・予約の始まり・通話の終わり・部屋の片付け
       void cast.syncIntros().catch(err => logger.warn({ err }, 'cast intros sync failed'));
       void cast.tick().catch((err) => logger.warn({ err }, 'cast tick failed'));
+      // 📖 日記: 更新の前の日の知らせ・自動更新・期限切れの鍵
+      void diary.tick().catch((err) => logger.warn({ err }, 'diary tick failed'));
       // 🎫 チケット: 返事のない知らせ・自動で閉じる
       void supportTickets.tick().catch((err) => logger.warn({ err }, 'ticket tick failed'));
       // 🧧 お年玉袋: 締め切りが来た袋の残りを置いた人に戻す

@@ -98,7 +98,7 @@ export function shopList(
       description: [
         ...sale,
         ...thanks,
-        '📖 日記の権利：500銭・期限なし（日記の受付からも購入できます）',
+        '📖 日記：2 週間ごと・自動更新（下のボタンか日記の受付から）',
         `👛 いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`,
         ...(mine.length ? ['', '**受けているもの**', ...mine] : []),
         ...(items.length ? [] : ['', 'いまは授与品がありません。']),
@@ -132,7 +132,7 @@ export function shopList(
       : [{ custom_id: 'shop:pick', placeholder: '授与品を選ぶ', options: groups.flatMap((g) => g.items).slice(0, 25).map(option) }];
   return {
     embeds,
-    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記の権利（500銭・期限なし）', custom_id: 'diary:open' }] }] : [])],
+    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }] }] : [])],
   };
 }
 

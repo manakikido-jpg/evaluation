@@ -2425,6 +2425,7 @@ export function createWebApp(deps: WebDeps) {
         coinsNonce={randomUUID()}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         voiceChannels={voiceChannelsOf(channels)}
+        forumChannels={channels.filter((ch) => ch.type === 15).map((ch) => ({ id: ch.id, name: ch.name }))}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         streakRoles={allRoles.filter((r) => giftableRole(cfg, r, allRoles, deps.botId)).map((r) => ({ id: r.id, name: r.name }))}
         notify={await notifyView(allRoles)}
@@ -2834,6 +2835,10 @@ export function createWebApp(deps: WebDeps) {
       },
       market: { feePercent: num('marketFee'), autoReleaseDays: num('marketAutoRelease') },
       ...(typeof body.vcClearDelay === 'string' ? { voiceChat: { clearWhenEmpty: body.vcClear === 'yes', delayMinutes: num('vcClearDelay') } } : {}),
+      // 📖 日記（この欄があるフォームから送ったときだけ変える。ほかの欄の保存では残す）
+      ...(typeof body.diaryPrice === 'string'
+        ? { diary: { ...(field(body, 'diaryChannel', 20) ? { channelId: field(body, 'diaryChannel', 20) } : {}), price: num('diaryPrice'), days: num('diaryDays') } }
+        : prev.diary ? { diary: prev.diary } : {}),
       ...(typeof body.bellCooldown === 'string'
         ? {
             bell: {

@@ -508,6 +508,7 @@ const SETTINGS_SECTIONS: [string, string][] = [
   ['voicegroups', '🔊 自動で増える通話'],
   ['voicechat', '💬 通話のチャット'],
   ['bell', '🔔 呼び鈴'],
+  ['diary', '📖 日記'],
   ['opswatch', '⏰ 対応待ちのお知らせ・週報'],
   ['recruit', '📣 募集（荒らし対策）'],
   ['market', '🏮 市場'],
@@ -1046,6 +1047,7 @@ export function SettingsPage(props: {
   /** テキストチャンネル（呼び鈴の知らせ先を選ぶ。category はカテゴリ名） */
   textChannels?: { id: string; name: string; category?: string }[];
   voiceChannels?: { id: string; name: string; category: string | null }[];
+  forumChannels?: { id: string; name: string }[];
   /** ロール（呼び鈴で呼べるロールを選ぶ） */
   roles?: { id: string; name: string }[];
   /** 🔔 通知 OK／NG */
@@ -1292,6 +1294,29 @@ export function SettingsPage(props: {
             </tbody>
           </table>
           <Save at="voicegroups" />
+        </section>
+        <section class="card anchor" id="sec-diary">
+          <h2>📖 日記</h2>
+          <p class="note">メンバーが銭を払って自分の日記（スレッド）を作れます。決めた日数ごとに自動で払って更新し、前の日に DM で知らせます。払えない・止めたときは、日記は残したまま鍵をかけます（読めるが書けない）。前に期限なしで受けた人は、ずっと使えます。日記のチャンネルはフォーラムがおすすめです（テキストチャンネルでもスレッドで作れます）。チャンネルを変えると、BOT が起きたときに新しいチャンネルへ受付を出します（前の日記はそのまま）。</p>
+          <div class="fields">
+            <label class="field">
+              <span>日記のチャンネル（フォーラムかテキスト）</span>
+              <select name="diaryChannel">
+                {[...(props.forumChannels ?? []).map((c) => ({ ...c, forum: true })), ...(props.textChannels ?? []).map((c) => ({ ...c, forum: false }))].map((c) => (
+                  <option value={c.id} selected={c.id === cfg.diary.channelId}>{c.forum ? '🗂 ' : '#'}{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>値段（銭）</span>
+              <input type="number" name="diaryPrice" value={String(cfg.diary.price)} min={1} required />
+            </label>
+            <label class="field">
+              <span>何日ごと</span>
+              <input type="number" name="diaryDays" value={String(cfg.diary.days)} min={1} max={365} required />
+            </label>
+          </div>
+          <Save at="diary" />
         </section>
         <section class="card anchor" id="sec-bell">
           <h2>🔔 呼び鈴</h2>

@@ -19,6 +19,11 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-10-12-diary-subscription', date: '2026-10-12', kind: 'improve', where: ['Discord', '社務所Web'],
+    title: '日記を 2 週間 500 銭のサブスクに',
+    items: ['日記は 14 日ごとに 500 銭で、自動で更新します（前の日に DM）。日記の受付から止められます。', '払えない・止めたときは、日記は残したまま書けないようにします。払えばすぐ再開できます。前に期限なしで受けた人はずっと使えます。', '社務所Web の「設定 → 📖 日記」で、日記のチャンネル（フォーラムも）・値段・日数を変えられます。'],
+  },
   { id: '2026-10-12-diaries', date: '2026-10-12', kind: 'new', where: ['Discord'], title: '自分の日記を作れるように', items: ['授与所と日記の受付から500銭で期限なしの権利を購入できます。', '公開・本人だけ投稿／公開・みんな投稿OKを選べます。購入後も本人が変更できます。'] },
   {
     id: '2026-10-12-secret-room-panel', date: '2026-10-12', kind: 'improve', where: ['Discord', '社務所Web'],

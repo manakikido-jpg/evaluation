@@ -1978,4 +1978,12 @@ export const diaries = pgTable('diaries', {
   threadId: text('thread_id').unique(),
   mode: text('mode').$type<'owner' | 'everyone'>().notNull().default('owner'),
   boughtAt: timestamp('bought_at', { withTimezone: true }).notNull().defaultNow(),
+  /** ここまで使える（2 週間ごとに自動で更新）。null は前に期限なしで買った人（ずっと使える） */
+  paidUntil: timestamp('paid_until', { withTimezone: true }),
+  /** 自動で更新する（本人が止められる） */
+  autoRenew: boolean('auto_renew').notNull().default(true),
+  /** 更新の前の日の知らせを出した期限（同じ期限で 2 回出さない） */
+  remindedFor: timestamp('reminded_for', { withTimezone: true }),
+  /** 期限が切れて、日記に鍵をかけた */
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
 }, t => [check('diaries_mode_check', sql`${t.mode} in ('owner', 'everyone')`)]);

@@ -683,7 +683,14 @@ export const guildConfigSchema = z
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     bell: bellSchema.default(bellSchema.parse({})),
-    diary: z.object({ channelId: snowflake.default('1559096148814336113') }).default({ channelId: '1559096148814336113' }),
+    diary: z
+      .object({
+        channelId: snowflake.default('1559096148814336113'),
+        /** 2 週間ごとの値段（銭）と日数。自動で更新する */
+        price: z.number().int().min(1).max(1_000_000).default(500),
+        days: z.number().int().min(1).max(365).default(14),
+      })
+      .default({ channelId: '1559096148814336113', price: 500, days: 14 }),
     gacha: gachaSchema.default(gachaSchema.parse({})),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),

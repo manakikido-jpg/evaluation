@@ -1,7 +1,8 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { buyDiary, createDiary, changeDiaryMode, clearDiaryThread, diaryOf, mayPostDiary } from '../src/services/diary.js';
+import { buyDiary, createDiary, changeDiaryMode, clearDiaryThread, diaryOf, diaryTick, mayPostDiary, setDiaryAutoRenew } from '../src/services/diary.js';
+import { diaries } from '../src/db/schema.js';
 import { DiaryApp } from '../src/discord/diary.js';
 import { ChannelType, type Message, type Interaction } from 'discord.js';
 import { cfg, makeDb } from './helpers.js';
@@ -9,6 +10,48 @@ let db: Db, close: () => Promise<void>;
 const U = '100000000000000111', OTHER = '100000000000000112', THREAD = '100000000000000113', BOT = '100000000000000114';
 beforeEach(async () => { ({db, close} = await makeDb()); await addCoins(db, U, 1000, 'adjust'); });
 afterEach(async () => { await close(); });
+describe('📖 日記のサブスク（2 週間ごとに自動で更新）', () => {
+  const DAY = 86_400_000;
+  const T = new Date('2026-10-12T00:00:00Z');
+  const plan = { price: 500, days: 14 };
+  it('前の日に 1 回知らせ、期限で自動で払って続ける。払えなければ鍵。また払えば再開。止めたら期限で終わる', async () => {
+    expect(await buyDiary(db, U, plan, T)).toBe('ok');
+    const until = (await diaryOf(db, U))!.paidUntil!;
+    expect(until.getTime()).toBe(T.getTime() + 14 * DAY);
+    expect((await diaryTick(db, plan, new Date(until.getTime() - 2 * DAY))).remind).toEqual([]);
+    expect((await diaryTick(db, plan, new Date(until.getTime() - DAY))).remind).toHaveLength(1);
+    expect((await diaryTick(db, plan, new Date(until.getTime() - DAY / 2))).remind).toEqual([]);
+    // 期限: 残り 500 → 払って 14 日のびる
+    const r = await diaryTick(db, plan, until);
+    expect(r.renewed.map((x) => x.paidUntil.getTime())).toEqual([until.getTime() + 14 * DAY]);
+    expect((await walletOf(db, U)).balance).toBe(0);
+    // 次の期限: 銭がない → 鍵
+    const next = (await diaryOf(db, U))!.paidUntil!;
+    expect((await diaryTick(db, plan, next)).expired).toEqual([{ memberId: U, threadId: null, reason: 'poor' }]);
+    expect((await diaryTick(db, plan, new Date(next.getTime() + 60_000))).expired).toEqual([]);
+    expect((await createDiary(db, U, 'owner', async () => THREAD, new Date(next.getTime() + 60_000))).status).toBe('no_right');
+    // また払う → 再開
+    await addCoins(db, U, 500, 'adjust');
+    expect(await buyDiary(db, U, plan, new Date(next.getTime() + DAY))).toBe('ok');
+    expect((await diaryOf(db, U))!.lockedAt).toBeNull();
+    // 止める → 期限で終わる（払わない）
+    await addCoins(db, U, 500, 'adjust');
+    expect(await setDiaryAutoRenew(db, U, false)).toBe(true);
+    const end = (await diaryOf(db, U))!.paidUntil!;
+    expect((await diaryTick(db, plan, new Date(end.getTime() - DAY))).remind).toEqual([]);
+    expect((await diaryTick(db, plan, end)).expired[0]?.reason).toBe('stopped');
+    expect((await walletOf(db, U)).balance).toBe(500);
+  });
+
+  it('前に期限なしで買った人は、ずっと使える（更新も鍵もない）', async () => {
+    await db.insert(diaries).values({ memberId: OTHER });
+    const r = await diaryTick(db, plan, new Date(T.getTime() + 365 * DAY));
+    expect([r.remind, r.renewed, r.expired]).toEqual([[], [], []]);
+    expect(await buyDiary(db, OTHER, plan, T)).toBe('owned');
+    expect(await setDiaryAutoRenew(db, OTHER, false)).toBe(false);
+  });
+});
+
 describe('日記の権利と投稿設定', () => {
   it('500銭を一度だけ払い、残高不足では権利を作らない', async () => {
     expect(await buyDiary(db, OTHER)).toBe('poor');
