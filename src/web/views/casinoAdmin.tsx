@@ -8,7 +8,7 @@ import { KB_APT, KB_CLASSES, KB_COATS, KB_STYLES, KB_SURFACES } from '../../serv
 import { CASINO_LABEL, type CasinoStat } from '../../services/casino/casino.js';
 import { Layout, type SessionView } from './layout.js';
 import { BarList, ColumnChart, LineChart, type ChartPoint } from './charts.js';
-import type { CasinoDay, SettingStat } from '../../services/casino/report.js';
+import type { CasinoDay, CasinoGameRow, CasinoWinner, SettingStat } from '../../services/casino/report.js';
 import { combinedOdds, type MachineDay } from '../../services/casino/slotFloor.js';
 import { RANDOM_SETTING_ODDS, roleOdds, SETTING_KEYS, slotRtp, type SlotSetting } from '../../services/casino/slots.js';
 import { AT_RTP_APPROX } from '../../services/casino/slotAt.js';
@@ -52,6 +52,10 @@ export function CasinoAdminPage(p: {
   flash?: string;
   guji: boolean;
   daily: CasinoDay[];
+  /** 📅 日別の結果（日 → ゲームごと）と 🏆 勝っている人 */
+  dailyGames?: Map<string, CasinoGameRow[]>;
+  winners?: CasinoWinner[];
+  winnerNames?: Map<string, string>;
   /** 💰 収益の分け前（新しい順）と、受け取った人の名前 */
   shares?: CasinoProfitShare[];
   shareNames?: Map<string, string>;
@@ -166,6 +170,8 @@ export function CasinoAdminPage(p: {
       </section>
 
       <CasinoCharts daily={p.daily} stats={p.stats} coinName={p.coinName} range={CASINO_RANGES[p.range].label} />
+      {p.dailyGames && <CasinoDays daily={p.daily} games={p.dailyGames} coinName={p.coinName} />}
+      {p.winners && <CasinoWinners winners={p.winners} names={p.winnerNames ?? new Map()} coinName={p.coinName} range={CASINO_RANGES[p.range].label} />}
       <ProfitShares casino={c} daily={p.daily} shares={p.shares ?? []} names={p.shareNames ?? new Map()} coinName={p.coinName} />
       {p.ai && <AiStatsSection ai={p.ai} coinName={p.coinName} rangeLabel={CASINO_RANGES[p.range].label} />}
       <SlotMachines casino={c} floor={p.floor} picks={p.picks} settingStats={p.settingStats} coinName={p.coinName} />
@@ -489,6 +495,77 @@ function ProfitShares(p: { casino: CasinoConfig; daily: CasinoDay[]; shares: Cas
           })}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+const gameName = (g: string) => `${CASINO_LABEL[g as CasinoGame]?.emoji ?? ''} ${CASINO_LABEL[g as CasinoGame]?.name ?? g}`.trim();
+
+/** ゲームごとの表（回数・賭けた・戻った・収支） */
+function GameTable(p: { rows: CasinoGameRow[]; who: 'house' | 'member' }) {
+  return (
+    <table class="compact">
+      <thead>
+        <tr>
+          <th>ゲーム</th>
+          <th class="num">回数</th>
+          <th class="num">賭けた</th>
+          <th class="num">戻った</th>
+          <th class="num">{p.who === 'house' ? '胴元の収支' : 'その人の収支'}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {p.rows.map((r) => (
+          <tr>
+            <td>{gameName(r.game)}</td>
+            <td class="num">{fmt(r.plays)}</td>
+            <td class="num">{fmt(r.wagered)}</td>
+            <td class="num">{fmt(r.paid)}</td>
+            <td class="num">{sign(p.who === 'house' ? r.wagered - r.paid : r.paid - r.wagered)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** 📅 日別の結果（新しい日から。押すとゲームごと） */
+function CasinoDays(p: { daily: CasinoDay[]; games: Map<string, CasinoGameRow[]>; coinName: string }) {
+  const days = [...p.daily].reverse().filter((d) => d.plays > 0);
+  return (
+    <section class="card anchor" id="casino-days">
+      <h2>📅 日別の結果（30 日）</h2>
+      <p class="note">日を押すと、その日のゲームごとの結果が出ます。収支は胴元から見た数（＋ならもうけ、−なら持ち出し）。</p>
+      {days.length ? days.map((d) => (
+        <details class="menu-row">
+          <summary>
+            <strong>{d.date}</strong> ・ 胴元 {sign(d.wagered - d.paid)} {p.coinName} ・ 賭けた {fmt(d.wagered)} ・ 戻った {fmt(d.paid)} ・ 戻り率 {d.wagered ? pct(d.paid / d.wagered) : '—'} ・ {d.players} 人・{fmt(d.plays)} 回
+          </summary>
+          <GameTable rows={p.games.get(d.date) ?? []} who="house" />
+        </details>
+      )) : <p class="note">まだ遊ばれていません。</p>}
+    </section>
+  );
+}
+
+/** 🏆 勝っている人（収支の多い順。押すと賭けた・勝った・ゲームごと） */
+function CasinoWinners(p: { winners: CasinoWinner[]; names: Map<string, string>; coinName: string; range: string }) {
+  return (
+    <section class="card anchor" id="casino-winners">
+      <h2>🏆 勝っている人（{p.range}）</h2>
+      <p class="note">収支（戻った − 賭けた）の多い順です（BOT は除く）。名前を押すと、賭けた額・勝った額・どのゲームで勝っているかが出ます。期間は上の「期間」で変えられます。</p>
+      {p.winners.length ? p.winners.map((w, i) => (
+        <details class="menu-row">
+          <summary>
+            <strong>{i + 1}. {p.names.get(w.memberId) ?? w.memberId}</strong> ・ 収支 {sign(w.net)} {p.coinName}
+          </summary>
+          <p>
+            賭けた {fmt(w.wagered)} ・ 戻った {fmt(w.paid)} ・ 収支 <strong>{sign(w.net)}</strong> ・ 戻り率 {w.wagered ? pct(w.paid / w.wagered) : '—'} ・ {fmt(w.plays)} 回
+            {' '}<a href={`/members/${w.memberId}`}>メンバーのページ</a>
+          </p>
+          <GameTable rows={w.games} who="member" />
+        </details>
+      )) : <p class="note">この期間に遊んだ人はいません。</p>}
     </section>
   );
 }

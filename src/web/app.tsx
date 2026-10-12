@@ -35,7 +35,7 @@ import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplat
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
-import { casinoDaily, slotSettingStats } from '../services/casino/report.js';
+import { casinoDaily, casinoDailyGames, casinoWinners, slotSettingStats } from '../services/casino/report.js';
 import { applies, isCell, listTemplates, MATRIX_PERMS, planCells, saveTemplates, templateChanges, templateFits, templateSchema } from '../services/permMatrix.js';
 import { PermMatrixPage, PermRolesPage, PermTemplatesPage } from './views/permMatrix.js';
 import { resetState, runDemotions, startEvaluationReset, undoShuinReset } from '../services/evalReset.js';
@@ -1675,6 +1675,8 @@ export function createWebApp(deps: WebDeps) {
         names={await namesOf(db, recent.flatMap((m) => [m.hostId, m.guestId ?? '', m.winnerId ?? '']))}
         players7d={players7d}
         daily={daily}
+        dailyGames={await casinoDailyGames(db, 30, now())}
+        {...await (async () => { const winners = await casinoWinners(db, since); return { winners, winnerNames: await namesOf(db, winners.map((w) => w.memberId)) }; })()}
         shares={shares}
         shareNames={await namesOf(db, shares.flatMap((s) => s.recipients.map((r) => r.memberId)))}
         floor={floor.today}

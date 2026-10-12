@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { casinoGames } from '../../db/schema.js';
 import { jstDate } from '../activity.js';
@@ -56,4 +56,53 @@ export async function slotSettingStats(db: Db, since: Date): Promise<SettingStat
     .filter((r) => r.setting !== null)
     .map((r) => ({ setting: Number(r.setting), plays: r.plays, wagered: Number(r.wagered), paid: Number(r.paid), big: r.big, reg: r.reg }))
     .sort((a, b) => a.setting - b.setting);
+}
+
+export type CasinoGameRow = { game: string; plays: number; wagered: number; paid: number };
+
+/** 📅 日別の結果: 日ごと × ゲームごと（days 日分。日本時間） */
+export async function casinoDailyGames(db: Db, days: number, now = new Date()): Promise<Map<string, CasinoGameRow[]>> {
+  const first = new Date(`${jstDate(new Date(now.getTime() - (days - 1) * 86_400_000))}T00:00:00+09:00`);
+  const day = sql<string>`to_char(${casinoGames.createdAt} + interval '9 hours', 'YYYY-MM-DD')`;
+  const rows = await db
+    .select({ date: day, game: casinoGames.game, plays: sql<number>`count(*)::int`, wagered: sql<number>`coalesce(sum(${casinoGames.bet}), 0)::bigint`, paid: sql<number>`coalesce(sum(${casinoGames.payout}), 0)::bigint` })
+    .from(casinoGames)
+    .where(and(eq(casinoGames.status, 'done'), gte(casinoGames.createdAt, first)))
+    .groupBy(day, casinoGames.game);
+  const out = new Map<string, CasinoGameRow[]>();
+  for (const r of rows) {
+    const list = out.get(r.date) ?? [];
+    list.push({ game: r.game, plays: r.plays, wagered: Number(r.wagered), paid: Number(r.paid) });
+    out.set(r.date, list);
+  }
+  for (const list of out.values()) list.sort((a, b) => b.wagered - a.wagered);
+  return out;
+}
+
+export type CasinoWinner = { memberId: string; plays: number; wagered: number; paid: number; net: number; games: CasinoGameRow[] };
+
+/**
+ * 🏆 勝っている人（since から。BOT は除く）: 収支（戻った − 賭けた）の多い順に limit 人。
+ * それぞれのゲームごとの回数・賭けた・戻ったも付ける
+ */
+export async function casinoWinners(db: Db, since: Date, limit = 30): Promise<CasinoWinner[]> {
+  const net = sql<number>`coalesce(sum(${casinoGames.payout}), 0) - coalesce(sum(${casinoGames.bet}), 0)`;
+  const where = and(eq(casinoGames.status, 'done'), gte(casinoGames.createdAt, since), ne(casinoGames.memberId, 'bot'));
+  const top = await db
+    .select({ memberId: casinoGames.memberId, plays: sql<number>`count(*)::int`, wagered: sql<number>`coalesce(sum(${casinoGames.bet}), 0)::bigint`, paid: sql<number>`coalesce(sum(${casinoGames.payout}), 0)::bigint`, net: sql<number>`(${net})::bigint` })
+    .from(casinoGames)
+    .where(where)
+    .groupBy(casinoGames.memberId)
+    .orderBy(desc(net))
+    .limit(limit);
+  if (!top.length) return [];
+  const per = await db
+    .select({ memberId: casinoGames.memberId, game: casinoGames.game, plays: sql<number>`count(*)::int`, wagered: sql<number>`coalesce(sum(${casinoGames.bet}), 0)::bigint`, paid: sql<number>`coalesce(sum(${casinoGames.payout}), 0)::bigint` })
+    .from(casinoGames)
+    .where(and(where, inArray(casinoGames.memberId, top.map((t) => t.memberId))))
+    .groupBy(casinoGames.memberId, casinoGames.game);
+  return top.map((t) => ({
+    memberId: t.memberId, plays: t.plays, wagered: Number(t.wagered), paid: Number(t.paid), net: Number(t.net),
+    games: per.filter((g) => g.memberId === t.memberId).map((g) => ({ game: g.game, plays: g.plays, wagered: Number(g.wagered), paid: Number(g.paid) })).sort((a, b) => (b.paid - b.wagered) - (a.paid - a.wagered)),
+  }));
 }
