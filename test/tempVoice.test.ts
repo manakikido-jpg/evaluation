@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
@@ -87,12 +87,24 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(v.rooms.has(r2.channelId)).toBe(false);
   });
 
-  it('パネル: 入口ごとのボタンと値段（入ってから払う・5 分で消える）', async () => {
+  it('公開パネルは開くボタン1つ。種類と料金は本人にだけ表示する', async () => {
     const { secretRoomPanel } = await import('../src/discord/tempVoice.js');
     const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] } } as GuildConfig;
     const p = JSON.stringify(secretRoomPanel(c));
-    expect(p).toContain(`secretroom:${HUB}`);
-    expect(p).toContain('5 分');
+    expect(p).toContain('secretroom:open');
+    expect(p).toContain('シクレ部屋を開く');
+    expect(p).not.toContain(`secretroom:${HUB}`);
+    expect(p).not.toContain('5 分');
+    const { onSecretRoomInteraction } = await import('../src/discord/tempVoice.js');
+    const { MessageFlags } = await import('discord.js');
+    const reply = vi.fn(), openSecret = vi.fn();
+    const interaction = { inCachedGuild: () => true, guildId: c.guildId, isChatInputCommand: () => false, isButton: () => true, customId: 'secretroom:open', guild: {channels: {cache: new Map([[HUB, {name:'宿坊をひらく',permissionsFor:() => ({has:()=>true})}]])}}, member: {}, reply };
+    await onSecretRoomInteraction({ openSecret } as never, () => c, interaction as never);
+    expect(openSecret).not.toHaveBeenCalled();
+    expect(reply.mock.calls[0]![0].flags).toBe(MessageFlags.Ephemeral);
+    expect(JSON.stringify(reply.mock.calls)).toContain(`secretroom:${HUB}`);
+    expect(JSON.stringify(reply.mock.calls)).toContain('5 分');
+    expect(JSON.stringify(reply.mock.calls)).toContain('宿坊をひらく');
     // 払い方のない入口（縁側）はボタンにしない
     expect(JSON.stringify(secretRoomPanel(cfg))).not.toContain('secretroom:');
   });

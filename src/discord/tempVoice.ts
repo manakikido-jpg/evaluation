@@ -131,7 +131,16 @@ export const secretRoomHubs = (cfg: GuildConfig) =>
   cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId && ['once', 'hourly'].includes(planOf(cfg, h.channelId)));
 
 /** 🤫 シクレ部屋のパネル（みんなに見える。押した人にだけ確かめを返す） */
-export function secretRoomPanel(cfg: GuildConfig, names: ReadonlyMap<string, string> = new Map()): MessageBody {
+export function secretRoomPanel(cfg: GuildConfig, _names: ReadonlyMap<string, string> = new Map()): MessageBody {
+  return {
+    embeds: [{ title: '🤫 シクレ部屋', description: '自分にだけ見える部屋を開けます。', color: 0x8e6bbf }],
+    components: secretRoomHubs(cfg).length ? [{ type: 1, components: [{ type: 2, style: ButtonStyle.Secondary, label: '🤫 シクレ部屋を開く', custom_id: 'secretroom:open' }] }] : [],
+    allowed_mentions: { parse: [] },
+  };
+}
+
+/** 種類と料金は押した本人にだけ見せる。 */
+function secretRoomChoices(cfg: GuildConfig, names: ReadonlyMap<string, string>): MessageBody {
   const hubs = secretRoomHubs(cfg).slice(0, 5);
   const coin = cfg.economy.currencyName;
   return {
@@ -160,12 +169,23 @@ export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => Guil
     return void (await i.reply({ content: '🤫 シクレ部屋のパネルを置きました。', ...EPHEMERAL }));
   }
   if (!i.isButton() || !i.customId.startsWith('secretroom:')) return;
+  if (i.customId === 'secretroom:open') {
+    const current = cfg();
+    const permitted = secretRoomHubs(current).filter(h => i.guild.channels.cache.get(h.channelId)?.permissionsFor(i.member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect));
+    if (!permitted.length) return void await i.reply({ content: 'いま開けるシクレ部屋はありません。', ...EPHEMERAL });
+    const names = new Map(permitted.map(h => [h.channelId, i.guild.channels.cache.get(h.channelId)?.name ?? h.name]));
+    return void await i.reply({ ...secretRoomChoices({ ...current, tempVoice: { ...current.tempVoice, hubs: permitted } }, names), allowedMentions: { parse: [] }, ...EPHEMERAL } as never);
+  }
   const hubId = i.customId.slice('secretroom:'.length);
   if (!secretRoomHubs(cfg()).some((h) => h.channelId === hubId)) return void (await i.reply({ content: 'この入口は、いまは使えません。', ...EPHEMERAL }));
   // 入口が見えない人（宵宮は宵参りの人だけ など）には作らない
   const hub = i.guild.channels.cache.get(hubId);
   if (!hub || !hub.permissionsFor(i.member).has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect)) return void (await i.reply({ content: 'この部屋は、あなたは作れません（入れる人が決まっている入口です）。', ...EPHEMERAL }));
   await i.deferReply(EPHEMERAL);
+  // 古い公開パネルから押した場合も、入口は1ボタンの表示に直す。
+  if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {
+    await i.message.edit({ ...secretRoomPanel(cfg()), content: null, allowedMentions: { parse: [] } } as never).catch(err => logger.warn({ err }, 'secret room panel update failed'));
+  }
   const r = await app.openSecret(hubId, i.user.id, i.member.displayName);
   if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : '部屋を作れませんでした。神職に知らせてください。'));
   const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
