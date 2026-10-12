@@ -139,24 +139,11 @@ export function secretRoomPanel(cfg: GuildConfig, _names: ReadonlyMap<string, st
   };
 }
 
-/** 種類と料金は押した本人にだけ見せる。 */
-function secretRoomChoices(cfg: GuildConfig, names: ReadonlyMap<string, string>): MessageBody {
-  const hubs = secretRoomHubs(cfg).slice(0, 5);
-  const coin = cfg.economy.currencyName;
-  return {
-    embeds: [{
-      title: '🤫 シクレ部屋をつくる',
-      description: [
-        '下のボタンを押すと、**あなたにしか見えない部屋**を BOT が作ります。どの通話も通らないので、だれにも見られません。',
-        ...hubs.map((h) => { const plan = planOf(cfg, h.channelId) as 'once' | 'hourly'; return `- ${names.get(h.channelId) ?? h.name.replace('{name}', '○○')}: ${cfg.rooms[plan].secret.toLocaleString('ja-JP')} ${coin}${plan === 'hourly' ? '（1 時間ごと）' : '（ひらくときに 1 回）'}`; }),
-        `-# 部屋代は、できた部屋に入ったときに払います。${SECRET_PENDING_MS / 60_000} 分たっても入らなければ部屋は消えます（銭は減りません）。`,
-      ].join('\n'),
-      color: 0x8e6bbf,
-    }],
-    components: hubs.length ? [{ type: 1, components: hubs.map((h) => ({ type: 2, style: ButtonStyle.Secondary, label: `🤫 ${(names.get(h.channelId) ?? h.name.replace('{name}', '')).replace(/^[➕\s]+/, '').slice(0, 70)}`, custom_id: `secretroom:${h.channelId}` })) }] : [],
-    allowed_mentions: { parse: [] },
-  };
-}
+/** シクレの部屋代（「300 銭」「300 銭・1 時間ごと」） */
+const priceText = (cfg: GuildConfig, hubId: string) => {
+  const plan = planOf(cfg, hubId) as 'once' | 'hourly';
+  return `${cfg.rooms[plan].secret.toLocaleString('ja-JP')} ${cfg.economy.currencyName}${plan === 'hourly' ? '・1 時間ごと' : ''}`;
+};
 
 /** パネルのボタン・/パネル シクレ部屋 */
 export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => GuildConfig, i: Interaction): Promise<void> {
@@ -169,14 +156,15 @@ export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => Guil
     return void (await i.reply({ content: '🤫 シクレ部屋のパネルを置きました。', ...EPHEMERAL }));
   }
   if (!i.isButton() || !i.customId.startsWith('secretroom:')) return;
-  if (i.customId === 'secretroom:open') {
+  // 「🤫 シクレ部屋を開く」: 押した人が開ける入口のうち、1 回払い（宿坊）を先に選んで、すぐ作る（選ぶ画面は出さない）
+  let hubId = i.customId.slice('secretroom:'.length);
+  if (hubId === 'open') {
     const current = cfg();
-    const permitted = secretRoomHubs(current).filter(h => i.guild.channels.cache.get(h.channelId)?.permissionsFor(i.member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect));
-    if (!permitted.length) return void await i.reply({ content: 'いま開けるシクレ部屋はありません。', ...EPHEMERAL });
-    const names = new Map(permitted.map(h => [h.channelId, i.guild.channels.cache.get(h.channelId)?.name ?? h.name]));
-    return void await i.reply({ ...secretRoomChoices({ ...current, tempVoice: { ...current.tempVoice, hubs: permitted } }, names), allowedMentions: { parse: [] }, ...EPHEMERAL } as never);
+    const permitted = secretRoomHubs(current).filter((h) => i.guild.channels.cache.get(h.channelId)?.permissionsFor(i.member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect));
+    const pick = permitted.find((h) => planOf(current, h.channelId) === 'once') ?? permitted[0];
+    if (!pick) return void (await i.reply({ content: 'いま開けるシクレ部屋はありません。', ...EPHEMERAL }));
+    hubId = pick.channelId;
   }
-  const hubId = i.customId.slice('secretroom:'.length);
   if (!secretRoomHubs(cfg()).some((h) => h.channelId === hubId)) return void (await i.reply({ content: 'この入口は、いまは使えません。', ...EPHEMERAL }));
   // 入口が見えない人（宵宮は宵参りの人だけ など）には作らない
   const hub = i.guild.channels.cache.get(hubId);
@@ -192,7 +180,7 @@ export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => Guil
   await i.editReply({
     content: r.status === 'exists'
       ? `🤫 あなたの部屋はもうあります。<#${r.channelId}>`
-      : `🤫 あなたにしか見えない部屋を作りました。<#${r.channelId}>\n-# 入ったときに部屋代を払います。${SECRET_PENDING_MS / 60_000} 分たっても入らなければ消えます。`,
+      : `🤫 あなたにしか見えない部屋を作りました。<#${r.channelId}>\n-# 入ったときに部屋代（${priceText(cfg(), hubId)}）を払います。${SECRET_PENDING_MS / 60_000} 分たっても入らなければ消えます。`,
     components: [{ type: 1, components: [{ type: 2, style: ButtonStyle.Link, label: '部屋に入る', url }] }],
   });
 }

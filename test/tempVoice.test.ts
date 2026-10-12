@@ -87,7 +87,7 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(v.rooms.has(r2.channelId)).toBe(false);
   });
 
-  it('公開パネルは開くボタン1つ。種類と料金は本人にだけ表示する', async () => {
+  it('公開パネルは開くボタン1つ。押したら 1 回で部屋ができ、料金とリンクは本人にだけ', async () => {
     const { secretRoomPanel } = await import('../src/discord/tempVoice.js');
     const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] } } as GuildConfig;
     const p = JSON.stringify(secretRoomPanel(c));
@@ -97,14 +97,14 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(p).not.toContain('5 分');
     const { onSecretRoomInteraction } = await import('../src/discord/tempVoice.js');
     const { MessageFlags } = await import('discord.js');
-    const reply = vi.fn(), openSecret = vi.fn();
-    const interaction = { inCachedGuild: () => true, guildId: c.guildId, isChatInputCommand: () => false, isButton: () => true, customId: 'secretroom:open', guild: {channels: {cache: new Map([[HUB, {name:'宿坊をひらく',permissionsFor:() => ({has:()=>true})}]])}}, member: {}, reply };
+    // 押したら選ぶ画面を出さずに、すぐ作って、本人にだけ入るリンクを返す
+    const deferReply = vi.fn(), editReply = vi.fn(), openSecret = vi.fn(async () => ({ status: 'created', channelId: '930000000000000001' }));
+    const interaction = { inCachedGuild: () => true, guildId: c.guildId, isChatInputCommand: () => false, isButton: () => true, customId: 'secretroom:open', user: { id: 'u1' }, guild: {channels: {cache: new Map([[HUB, {name:'宿坊をひらく',permissionsFor:() => ({has:()=>true})}]])}}, member: { displayName: 'さくら' }, message: { flags: { has: () => true } }, deferReply, editReply };
     await onSecretRoomInteraction({ openSecret } as never, () => c, interaction as never);
-    expect(openSecret).not.toHaveBeenCalled();
-    expect(reply.mock.calls[0]![0].flags).toBe(MessageFlags.Ephemeral);
-    expect(JSON.stringify(reply.mock.calls)).toContain(`secretroom:${HUB}`);
-    expect(JSON.stringify(reply.mock.calls)).toContain('5 分');
-    expect(JSON.stringify(reply.mock.calls)).toContain('宿坊をひらく');
+    expect(openSecret).toHaveBeenCalledWith(HUB, 'u1', 'さくら');
+    expect(deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+    expect(JSON.stringify(editReply.mock.calls)).toContain('930000000000000001');
+    expect(JSON.stringify(editReply.mock.calls)).toContain('5 分');
     // 払い方のない入口（縁側）はボタンにしない
     expect(JSON.stringify(secretRoomPanel(cfg))).not.toContain('secretroom:');
   });
