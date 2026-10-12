@@ -27,7 +27,7 @@ import type { BjState } from '../src/services/casino/blackjack.js';
 import { legalMoves } from '../src/services/casino/othello.js';
 import { REELS, SLIP } from '../src/services/casino/slots.js';
 import { dayPicks, machineSetting, slotFloorData } from '../src/services/casino/slotFloor.js';
-import { casinoDaily, slotSettingStats } from '../src/services/casino/report.js';
+import { casinoDaily, casinoDailyGames, casinoWinners, slotSettingStats } from '../src/services/casino/report.js';
 import { cancelMatch, createMatch, joinMatch, MOVE_SECONDS, moveMatch, myMatch, OPEN_MINUTES, readMatch, resignMatch, sweepMatches } from '../src/services/casino/versus.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -167,6 +167,12 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     expect(days[2]).toMatchObject({ plays: 4, wagered: 40, paid: 800, players: 1 });
     expect(days[0]).toMatchObject({ plays: 0 });
     expect(await slotSettingStats(db, new Date(NOW.getTime() - 86_400_000))).toEqual([{ setting: 1, plays: 4, wagered: 40, paid: 800, big: 1, reg: 0 }]);
+    // 📅 日別の結果（ゲームごと）と 🏆 勝っている人（ゲームごとの内訳つき）
+    const byDay = await casinoDailyGames(db, 3, NOW);
+    expect(byDay.get(days[2]!.date)).toEqual([{ game: 'slots', plays: 4, wagered: 40, paid: 800 }]);
+    const win = await casinoWinners(db, new Date(NOW.getTime() - 86_400_000));
+    expect(win).toEqual([{ memberId: A, plays: 4, wagered: 40, paid: 800, net: 760, games: [{ game: 'slots', plays: 4, wagered: 40, paid: 800 }] }]);
+    expect(await casinoWinners(db, new Date(NOW.getTime() + 86_400_000))).toEqual([]);
   });
 
   it('スロット: REG はおまかせでもそろう', async () => {
