@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { tempVoice } from '../db/schema.js';
@@ -95,6 +95,8 @@ export async function onVoiceLeave(ctx: TempVoiceCtx, channelId: string, now = n
   const [row] = await ctx.db.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
   if (!row) return false;
   if (now.getTime() - row.createdAt.getTime() < GRACE_MS) return false;
+  // パネルで作ったシクレ部屋は、作った人が入るのを待つ（期限が来ても入らなければ消す）
+  if (row.pendingUntil && row.pendingUntil > now) return false;
   const n = ctx.ops.occupancy(channelId);
   if (n === undefined) {
     await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
@@ -116,6 +118,52 @@ export async function cleanupRooms(ctx: TempVoiceCtx, now = new Date()): Promise
     }
   }
   return removed;
+}
+
+/** 🤫 パネルで作ったシクレ部屋を、作った人が入るまで待つ時間 */
+export const SECRET_PENDING_MS = 5 * 60_000;
+
+export type SecretRoomResult = { status: 'created' | 'exists'; channelId: string } | { status: 'busy' | 'failed' };
+
+/**
+ * 🤫 パネルのボタンでシクレ部屋を作る（どの通話も通らないので、だれにも見えない）。
+ * 部屋代はまだ取らない（作った人が入ったときに取る）。5 分入らなければ消す。同じ入口の自分の部屋がまだあれば、それを返す
+ */
+export async function createSecretRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string }, now = new Date()): Promise<SecretRoomResult> {
+  const hub = ctx.cfg.tempVoice.hubs.find((h) => h.channelId === input.hubId);
+  if (!hub) return { status: 'failed' };
+  if (busy.has(input.userId)) return { status: 'busy' };
+  busy.add(input.userId);
+  try {
+    for (const row of await ctx.db.select().from(tempVoice).where(and(eq(tempVoice.ownerId, input.userId), eq(tempVoice.hubId, hub.channelId)))) {
+      if (ctx.ops.occupancy(row.channelId) === undefined) {
+        await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, row.channelId));
+        continue;
+      }
+      return { status: 'exists', channelId: row.channelId };
+    }
+    let channelId: string;
+    try {
+      channelId = await ctx.ops.create({ hubId: hub.channelId, name: roomName(hub.name, input.displayName), ownerId: input.userId, secret: true });
+    } catch (err) {
+      logger.warn({ err }, 'シクレ部屋を作れませんでした（BOT の「チャンネルの管理」権限）');
+      return { status: 'failed' };
+    }
+    await ctx.db.insert(tempVoice).values({ channelId, ownerId: input.userId, hubId: hub.channelId, createdAt: now, pendingUntil: new Date(now.getTime() + SECRET_PENDING_MS) });
+    return { status: 'created', channelId };
+  } finally {
+    busy.delete(input.userId);
+  }
+}
+
+/** パネルで作った部屋に、作った人がはじめて入った: 待ちを外す（1 回だけ true） */
+export async function claimSecretRoom(db: Db, channelId: string, userId: string): Promise<boolean> {
+  const [row] = await db
+    .update(tempVoice)
+    .set({ pendingUntil: null })
+    .where(and(eq(tempVoice.channelId, channelId), eq(tempVoice.ownerId, userId), isNotNull(tempVoice.pendingUntil)))
+    .returning();
+  return Boolean(row);
 }
 
 export async function removeRoom(ctx: TempVoiceCtx, channelId: string): Promise<void> {

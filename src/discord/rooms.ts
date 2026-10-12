@@ -186,13 +186,13 @@ export class RoomApp {
   }
 
   /** 部屋ができたとき（宿坊・宵宮だけ。縁側・屋台などには出さない）: 公開の値段を払い、部屋の案内を出す */
-  async onCreated(channelId: string, ownerId: string): Promise<void> {
+  async onCreated(channelId: string, ownerId: string, opts: { secret?: boolean } = {}): Promise<void> {
     const cfg = this.cfg();
     const row = await roomOf(this.db, channelId);
     if (!row || planOf(cfg, row.hubId) === 'none') return;
     const ch = this.voice(channelId);
     // 🤫 シクレの入口: はじめからシークレットの部屋代を払い、種類を決める（部屋は作ったときから見えない）
-    const secretHub = cfg.tempVoice.hubs.find((h) => h.channelId === row.hubId)?.kind === 'secret';
+    const secretHub = opts.secret || cfg.tempVoice.hubs.find((h) => h.channelId === row.hubId)?.kind === 'secret';
     const r = secretHub ? await changeRoomKind(this.db, cfg, channelId, 'secret') : await startRoom(this.db, cfg, channelId);
     if (r.status === 'not_found' || r.status === 'locked') return;
     if (secretHub && ch) {

@@ -1,3 +1,4 @@
+import { secretRoomHubs, secretRoomPanel } from '../discord/tempVoice.js';
 import { mountCastOffice } from './castOffice.js';
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
@@ -2444,6 +2445,19 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 🎴 運営吉: 名前・ひとこと・確率・倍率と絵をまとめて保存（絵は選んだ枠だけ入れ替える）
+  // 🤫 シクレ部屋のパネルを出す
+  app.post('/settings/secret-panel', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = typeof body.secretPanelChannel === 'string' && /^\d{17,20}$/.test(body.secretPanelChannel) ? body.secretPanelChannel : '';
+    const to = (msg: string) => c.redirect(`/settings?msg=${msg}&at=rooms#sec-rooms`);
+    if (!channelId || !secretRoomHubs(cfg).length) return to('invalid');
+    const channels = await loadChannels().catch(() => []);
+    const names = new Map(secretRoomHubs(cfg).map((h) => [h.channelId, channels.find((ch) => ch.id === h.channelId)?.name ?? h.name]));
+    const ok = await deps.discord.sendMessage(channelId, secretRoomPanel(cfg, names)).then(() => true, (err: unknown) => (logger.warn({ err }, 'secret panel post failed'), false));
+    if (ok) await audit(db, { actorId: c.get('session').userId, action: 'rooms.secret_panel', detail: { channelId }, via: 'web' });
+    return to(ok ? 'saved' : 'invalid');
+  });
+
   // 🤫 シクレ専用の入口を作る（もとの入口のすぐ下に、同じ見える範囲で）
   app.post('/settings/secret-hub', async (c) => {
     const to = (msg: string) => c.redirect(`/settings?msg=${msg}&at=rooms#sec-rooms`);

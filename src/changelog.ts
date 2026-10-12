@@ -19,6 +19,11 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-10-12-secret-room-panel', date: '2026-10-12', kind: 'improve', where: ['Discord', '社務所Web'],
+    title: '🤫 シクレ部屋はパネルのボタンで作るように',
+    items: ['パネルのボタンを押すと、自分にしか見えない部屋ができ、「部屋に入る」のリンクが自分にだけ届きます。どの通話も通らないので、だれにも見られません。', '部屋代は部屋に入ったときに払います。5 分入らなければ部屋は消えます（銭は減りません）。'],
+  },
   { id: '2026-10-11-gacha-panel-images', date: '2026-10-11', kind: 'fix', where: ['Discord'], title: '祈願所の入口画像を復旧', items: ['画像のURLとボタンが残っていても、画像の添付が欠けているときはBOT起動時に送り直します。既存の入口画像も更新します。'] },
   { id: '2026-10-11-keiba-outfits', date: '2026-10-11', kind: 'new', where: ['Discord'], title: '自分の馬を着せ替えられるように', items: ['カジノの馬主の部屋で、馬ごとに布・手綱の色・カバー・飾りを選べます。', '保存前に見本を確認でき、次の出走からパドックとレースに反映します。馬の能力は変わりません。'] },
   {

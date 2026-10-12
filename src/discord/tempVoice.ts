@@ -1,9 +1,11 @@
-import { ChannelType, DiscordAPIError, OverwriteType, PermissionFlagsBits, type Guild, type VoiceState } from 'discord.js';
+import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type Interaction, type VoiceState } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { cleanupRooms, onVoiceJoin, onVoiceLeave, removeRoom, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
-import { roomOverwrites } from '../services/rooms.js';
+import { claimSecretRoom, cleanupRooms, createSecretRoom, onVoiceJoin, onVoiceLeave, removeRoom, SECRET_PENDING_MS, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
+import { planOf, roomOverwrites } from '../services/rooms.js';
+import { adminLevelOf } from '../config.js';
+import type { MessageBody } from '../lib/discordRest.js';
 
 /** 作った人ができること: 名前・人数の上限の変更、入っている人を抜けさせる */
 export const OWNER_ALLOW = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.MoveMembers;
@@ -65,9 +67,16 @@ export class TempVoiceApp {
   constructor(
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
-    /** 部屋ができたとき（宿坊・宵宮の部屋の設定を出す） */
-    private readonly onCreated?: (channelId: string, ownerId: string) => Promise<void>,
+    /** 部屋ができたとき（宿坊・宵宮の部屋の設定を出す）。secret: パネルで作ったシクレ部屋（シークレットの部屋代を取る） */
+    private readonly onCreated?: (channelId: string, ownerId: string, opts?: { secret?: boolean }) => Promise<void>,
   ) {}
+
+  /** 🤫 パネルからシクレ部屋を作る */
+  async openSecret(hubId: string, userId: string, displayName: string) {
+    if (!this.ctx) return { status: 'failed' as const };
+    this.ctx.cfg = this.cfg();
+    return createSecretRoom(this.ctx, { hubId, userId, displayName });
+  }
 
   /** 部屋を閉じる（中の人は通話から抜ける） */
   async close(channelId: string): Promise<void> {
@@ -103,6 +112,10 @@ export class TempVoiceApp {
         const r = await onVoiceJoin(this.ctx, { userId: after.id, displayName: after.member.displayName, channelId: after.channelId });
         if (r.status === 'moved' || r.status === 'created') movedInto = r.channelId;
         if (r.status === 'created') await this.onCreated?.(r.channelId, after.id).catch((err) => logger.warn({ err }, 'room created hook failed'));
+        // 🤫 パネルで作ったシクレ部屋に、作った人がはじめて入った: ここで部屋代を取って、部屋の設定を出す
+        if (r.status === 'ignored' && (await claimSecretRoom(this.db, after.channelId, after.id))) {
+          await this.onCreated?.(after.channelId, after.id, { secret: true }).catch((err) => logger.warn({ err }, 'secret room created hook failed'));
+        }
       }
       // 自分の部屋から入口に入って、また自分の部屋に戻された: その部屋は空ではない
       if (before.channelId && before.channelId !== movedInto) await onVoiceLeave(this.ctx, before.channelId);
@@ -110,4 +123,56 @@ export class TempVoiceApp {
       logger.warn({ err }, 'temp voice failed');
     }
   }
+}
+
+const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
+/** シクレ部屋を作れる入口（宿坊・宵宮。💎 極・入口方式のシクレは除く） */
+export const secretRoomHubs = (cfg: GuildConfig) =>
+  cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId && ['once', 'hourly'].includes(planOf(cfg, h.channelId)));
+
+/** 🤫 シクレ部屋のパネル（みんなに見える。押した人にだけ確かめを返す） */
+export function secretRoomPanel(cfg: GuildConfig, names: ReadonlyMap<string, string> = new Map()): MessageBody {
+  const hubs = secretRoomHubs(cfg).slice(0, 5);
+  const coin = cfg.economy.currencyName;
+  return {
+    embeds: [{
+      title: '🤫 シクレ部屋をつくる',
+      description: [
+        '下のボタンを押すと、**あなたにしか見えない部屋**を BOT が作ります。どの通話も通らないので、だれにも見られません。',
+        ...hubs.map((h) => { const plan = planOf(cfg, h.channelId) as 'once' | 'hourly'; return `- ${names.get(h.channelId) ?? h.name.replace('{name}', '○○')}: ${cfg.rooms[plan].secret.toLocaleString('ja-JP')} ${coin}${plan === 'hourly' ? '（1 時間ごと）' : '（ひらくときに 1 回）'}`; }),
+        `-# 部屋代は、できた部屋に入ったときに払います。${SECRET_PENDING_MS / 60_000} 分たっても入らなければ部屋は消えます（銭は減りません）。`,
+      ].join('\n'),
+      color: 0x8e6bbf,
+    }],
+    components: hubs.length ? [{ type: 1, components: hubs.map((h) => ({ type: 2, style: ButtonStyle.Secondary, label: `🤫 ${(names.get(h.channelId) ?? h.name.replace('{name}', '')).replace(/^[➕\s]+/, '').slice(0, 70)}`, custom_id: `secretroom:${h.channelId}` })) }] : [],
+    allowed_mentions: { parse: [] },
+  };
+}
+
+/** パネルのボタン・/パネル シクレ部屋 */
+export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => GuildConfig, i: Interaction): Promise<void> {
+  if (!i.inCachedGuild() || i.guildId !== cfg().guildId) return;
+  if (i.isChatInputCommand() && i.commandName === 'panel' && i.options.getSubcommand(false) === 'secretroom') {
+    if (!adminLevelOf(cfg(), [...i.member.roles.cache.keys()])) return void (await i.reply({ content: '神職・宮司のみ置けます。', ...EPHEMERAL }));
+    if (!i.channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', ...EPHEMERAL }));
+    const names = new Map(secretRoomHubs(cfg()).map((h) => [h.channelId, i.guild.channels.cache.get(h.channelId)?.name ?? h.name]));
+    await i.channel.send(secretRoomPanel(cfg(), names) as never);
+    return void (await i.reply({ content: '🤫 シクレ部屋のパネルを置きました。', ...EPHEMERAL }));
+  }
+  if (!i.isButton() || !i.customId.startsWith('secretroom:')) return;
+  const hubId = i.customId.slice('secretroom:'.length);
+  if (!secretRoomHubs(cfg()).some((h) => h.channelId === hubId)) return void (await i.reply({ content: 'この入口は、いまは使えません。', ...EPHEMERAL }));
+  // 入口が見えない人（宵宮は宵参りの人だけ など）には作らない
+  const hub = i.guild.channels.cache.get(hubId);
+  if (!hub || !hub.permissionsFor(i.member).has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect)) return void (await i.reply({ content: 'この部屋は、あなたは作れません（入れる人が決まっている入口です）。', ...EPHEMERAL }));
+  await i.deferReply(EPHEMERAL);
+  const r = await app.openSecret(hubId, i.user.id, i.member.displayName);
+  if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : '部屋を作れませんでした。神職に知らせてください。'));
+  const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
+  await i.editReply({
+    content: r.status === 'exists'
+      ? `🤫 あなたの部屋はもうあります。<#${r.channelId}>`
+      : `🤫 あなたにしか見えない部屋を作りました。<#${r.channelId}>\n-# 入ったときに部屋代を払います。${SECRET_PENDING_MS / 60_000} 分たっても入らなければ消えます。`,
+    components: [{ type: 1, components: [{ type: 2, style: ButtonStyle.Link, label: '部屋に入る', url }] }],
+  });
 }

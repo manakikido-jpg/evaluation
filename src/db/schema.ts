@@ -583,6 +583,8 @@ export const tempVoice = pgTable('temp_voice', {
   payerId: text('payer_id'),
   /** 部屋代無料券を使った（1 回払いの部屋: この部屋では種類を変えても払わない） */
   freeTicket: boolean('free_ticket').notNull().default(false),
+  /** 🤫 パネルで作ったシクレ部屋: 作った人が入るのを待つ期限（入るまで部屋代を取らない・この時刻まで消さない） */
+  pendingUntil: timestamp('pending_until', { withTimezone: true }),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */

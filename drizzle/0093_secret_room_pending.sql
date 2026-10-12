@@ -1,0 +1,1 @@
+ALTER TABLE "temp_voice" ADD COLUMN "pending_until" timestamp with time zone;

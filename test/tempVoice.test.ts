@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
-import { cleanupRooms, onVoiceJoin, onVoiceLeave, roomName, type VoiceOps } from '../src/services/tempVoice.js';
+import { claimSecretRoom, cleanupRooms, createSecretRoom, onVoiceJoin, onVoiceLeave, roomName, type VoiceOps } from '../src/services/tempVoice.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
 const HUB = '920000000000000001';
@@ -59,6 +59,43 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await close();
+});
+
+describe('🤫 パネルで作るシクレ部屋', () => {
+  it('どの通話も通らずに見えない部屋を作り、作った人が入るまで 5 分待つ。入ったら 1 回だけ部屋代の合図。入らなければ消す', async () => {
+    const v = fakeVoice();
+    const created: unknown[] = [];
+    const ops = { ...v.ops, create: async (input: Parameters<VoiceOps['create']>[0]) => { created.push(input); return v.ops.create(input); } };
+    const ctx = { db, cfg, ops };
+    const now = new Date();
+    const r = await createSecretRoom(ctx, { hubId: HUB, userId: 'u1', displayName: 'さくら' }, now);
+    if (r.status !== 'created') throw new Error(r.status);
+    expect(created[0]).toMatchObject({ secret: true, ownerId: 'u1' });
+    expect(v.where('u1')).toBeUndefined();
+    // もう一度押しても、同じ部屋を返す
+    expect(await createSecretRoom(ctx, { hubId: HUB, userId: 'u1', displayName: 'さくら' }, now)).toEqual({ status: 'exists', channelId: r.channelId });
+    // 4 分たっても消さない
+    expect(await cleanupRooms(ctx, new Date(now.getTime() + 4 * 60_000))).toBe(0);
+    // 入ったら 1 回だけ（ほかの人では外れない）
+    expect(await claimSecretRoom(db, r.channelId, 'u2')).toBe(false);
+    expect(await claimSecretRoom(db, r.channelId, 'u1')).toBe(true);
+    expect(await claimSecretRoom(db, r.channelId, 'u1')).toBe(false);
+    // 入らないまま 5 分たった別の部屋は消える
+    const r2 = await createSecretRoom(ctx, { hubId: HUB, userId: 'u3', displayName: 'もも' }, now);
+    if (r2.status !== 'created') throw new Error(r2.status);
+    expect(await cleanupRooms(ctx, new Date(now.getTime() + 5 * 60_000 + 1))).toBeGreaterThanOrEqual(1);
+    expect(v.rooms.has(r2.channelId)).toBe(false);
+  });
+
+  it('パネル: 入口ごとのボタンと値段（入ってから払う・5 分で消える）', async () => {
+    const { secretRoomPanel } = await import('../src/discord/tempVoice.js');
+    const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] } } as GuildConfig;
+    const p = JSON.stringify(secretRoomPanel(c));
+    expect(p).toContain(`secretroom:${HUB}`);
+    expect(p).toContain('5 分');
+    // 払い方のない入口（縁側）はボタンにしない
+    expect(JSON.stringify(secretRoomPanel(cfg))).not.toContain('secretroom:');
+  });
 });
 
 describe('自分の通話部屋', () => {

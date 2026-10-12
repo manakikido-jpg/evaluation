@@ -6,7 +6,7 @@ import { connectDb } from './db/client.js';
 import { ShuinApp } from './discord/app.js';
 import { StaffApp } from './discord/staff.js';
 import { AdmissionApp } from './discord/admission.js';
-import { TempVoiceApp } from './discord/tempVoice.js';
+import { onSecretRoomInteraction, TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
   const admission = new AdmissionApp(client, db, cfg, actions);
   // 宿坊・宵宮の部屋の設定（種類・人数・招待・花びら）
   let rooms: RoomApp | undefined;
-  const tempVoice = new TempVoiceApp(db, cfg, (channelId, ownerId) => rooms?.onCreated(channelId, ownerId) ?? Promise.resolve());
+  const tempVoice = new TempVoiceApp(db, cfg, (channelId, ownerId, opts) => rooms?.onCreated(channelId, ownerId, opts) ?? Promise.resolve());
   rooms = new RoomApp(db, cfg, (channelId) => tempVoice.close(channelId));
   const omikuji = new OmikujiApp(db, cfg);
   const gacha = new GachaApp(db, cfg);
@@ -346,6 +346,8 @@ async function main(): Promise<void> {
     void recruit.onInteraction(i);
     void shop.onInteraction(i);
     void rooms.onInteraction(i);
+    // 🤫 シクレ部屋のパネル
+    void onSecretRoomInteraction(tempVoice, cfg, i).catch((err) => logger.warn({ err }, 'secret room panel failed'));
     void market.onInteraction(i);
     void board.onInteraction(i);
     void cast.onInteraction(i);

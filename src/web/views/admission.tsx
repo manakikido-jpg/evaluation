@@ -1238,19 +1238,27 @@ export function SettingsPage(props: {
               <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
             </label>
           </div>
-          <h3>🤫 シクレ専用の入口</h3>
-          <p class="note">入口のすぐ下に「➕ 🤫 シクレ部屋をつくる」の通話を作ります。ここに入ると、できた瞬間から作った人にしか見えない部屋ができ、シークレットの部屋代を払います（一瞬も公開になりません）。値段・名前はもとの入口と同じです。</p>
-          <ul class="plain">
-            {cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId).map((h) => {
-              const sh = cfg.rooms.secretHubs.find((s) => s.baseHubId === h.channelId);
-              const nameOf = (id: string) => props.voiceChannels?.find((v) => v.id === id)?.name ?? id;
-              return (
-                <li>
-                  🔊 {nameOf(h.channelId)} → {sh ? <>🤫 {nameOf(sh.hubId)} <button type="submit" form={`secret-hub-del-${sh.hubId}`} class="danger small">外す</button></> : <button type="submit" form={`secret-hub-${h.channelId}`} class="small">🤫 シクレの入口を作る</button>}
-                </li>
-              );
-            })}
-          </ul>
+          <h3>🤫 シクレ部屋のパネル</h3>
+          <p class="note">パネルのボタンを押すと、BOT が押した人にしか見えない部屋を作り、「部屋に入る」のリンクを本人にだけ返します。どの通話も通らないので、だれにも見られません。部屋代は入ったときに払い、5 分入らなければ部屋は消えます（銭は減りません）。宿坊・宵宮ごとにボタンが出ます（値段は上の表のシークレット）。Discord の <code>/パネル シクレ部屋</code> でも置けます。</p>
+          <div class="fields">
+            <label class="field">
+              <span>パネルを出すチャンネル</span>
+              <select name="secretPanelChannel" form="secret-panel">
+                {(props.textChannels ?? []).map((c) => <option value={c.id}>#{c.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <button type="submit" form="secret-panel" class="small">🤫 パネルを出す</button>
+          {cfg.rooms.secretHubs.length > 0 && (
+            <>
+              <p class="note">前の「➕ 🤫 シクレ部屋をつくる」の入口（入ると一瞬だけ入口にいる姿が見えるので、パネルに置きかえ）:</p>
+              <ul class="plain">
+                {cfg.rooms.secretHubs.map((sh) => (
+                  <li>🤫 {props.voiceChannels?.find((v) => v.id === sh.hubId)?.name ?? sh.hubId} <button type="submit" form={`secret-hub-del-${sh.hubId}`} class="danger small">外す</button></li>
+                ))}
+              </ul>
+            </>
+          )}
           <Save at="rooms" />
         </section>
         <section class="card anchor" id="sec-voicegroups">
@@ -1592,12 +1600,9 @@ export function SettingsPage(props: {
           <Save at="join" />
         </section>
       </form>
-      {cfg.tempVoice.hubs.map((h) => (
-        <form method="post" action="/settings/secret-hub" id={`secret-hub-${h.channelId}`} hidden>
-          <Csrf session={props.session} />
-          <input type="hidden" name="baseHubId" value={h.channelId} />
-        </form>
-      ))}
+      <form method="post" action="/settings/secret-panel" id="secret-panel" hidden>
+        <Csrf session={props.session} />
+      </form>
       {cfg.rooms.secretHubs.map((s) => (
         <form method="post" action="/settings/secret-hub/delete" id={`secret-hub-del-${s.hubId}`} hidden>
           <Csrf session={props.session} />
