@@ -126,9 +126,9 @@ export class TempVoiceApp {
 }
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
-/** シクレ部屋を作れる入口（宿坊・宵宮。💎 極・入口方式のシクレは除く） */
+/** シクレ部屋を作れる入口（宿坊だけ。宵宮・💎 極・入口方式のシクレは除く） */
 export const secretRoomHubs = (cfg: GuildConfig) =>
-  cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId && ['once', 'hourly'].includes(planOf(cfg, h.channelId)));
+  cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId && planOf(cfg, h.channelId) === 'once');
 
 /** 🤫 シクレ部屋のパネル（みんなに見える。押した人にだけ確かめを返す） */
 export function secretRoomPanel(cfg: GuildConfig, _names: ReadonlyMap<string, string> = new Map()): MessageBody {

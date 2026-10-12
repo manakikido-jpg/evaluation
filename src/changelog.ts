@@ -19,7 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
-  { id: '2026-10-12-secret-room-one-click', date: '2026-10-12', kind: 'improve', where: ['Discord'], title: 'シクレ部屋は 1 回押すだけで', items: ['「🤫 シクレ部屋を開く」を押すと、選ぶ画面なしで自分だけの部屋ができ、入るリンクと部屋代が自分にだけ届きます。'] },
+  { id: '2026-10-12-secret-room-one-click', date: '2026-10-12', kind: 'improve', where: ['Discord'], title: 'シクレ部屋は 1 回押すだけで', items: ['「🤫 シクレ部屋を開く」を押すと、選ぶ画面なしで自分だけの部屋ができ、入るリンクと部屋代が自分にだけ届きます。', 'シクレ部屋は宿坊だけにしました（宵宮では作りません）。'] },
   { id: '2026-10-12-secret-room-entry', date: '2026-10-12', kind: 'improve', where: ['Discord'], title: 'シクレ部屋の入口をすっきり', items: ['公開パネルは「シクレ部屋を開く」ボタン1つにしました。種類と料金は押した本人だけに表示します。'] },
   {
     id: '2026-10-12-diary-subscription', date: '2026-10-12', kind: 'improve', where: ['Discord', '社務所Web'],

@@ -105,6 +105,8 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     expect(JSON.stringify(editReply.mock.calls)).toContain('930000000000000001');
     expect(JSON.stringify(editReply.mock.calls)).toContain('5 分');
+    // 宵宮（1 時間ごと）だけの設定では、シクレ部屋は出さない
+    expect(JSON.stringify(secretRoomPanel({ ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🍶 {name}の部屋', plan: 'hourly' }] } } as GuildConfig))).not.toContain('secretroom:');
     // 払い方のない入口（縁側）はボタンにしない
     expect(JSON.stringify(secretRoomPanel(cfg))).not.toContain('secretroom:');
   });
