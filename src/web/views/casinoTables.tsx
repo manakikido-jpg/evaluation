@@ -1356,6 +1356,10 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
   return <>
     <section class="life-intro"><span>🎲</span><div><h2>人生ゲーム</h2><p>仕事を選び、暮らしを育てて、みんなでゴールへ。</p><small>Gはゲーム内だけの資金。賞金は参加費を分けます。</small></div></section>
     {s.phase==='lobby' && <><PartyLobby t={t} s={s} me={me} min={2}/><p class="c-muted">BOTとの練習は参加費0銭で遊べます。</p><SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length>=5} join={s.entry>0?<span>参加費 {fmt(s.entry)} {me.coin.name}</span>:undefined}/></>}
+    <div data-life-presentation data-life-view="flat">
+      <div class="life-view-tools"><button type="button" class="c-btn c-btn-small" data-life-toggle aria-pressed="false">立体で見る</button><button type="button" class="c-btn c-btn-small c-btn-ghost" data-life-reset>向きを戻す</button></div>
+      <div class="life-scene" data-life3d={JSON.stringify({table:t.id,phase:s.phase,roll:s.lastRoll,tiles:LIFE_BOARD.map(([icon,label,kind])=>({icon,label,kind})),pawns:s.seats.map(x=>({id:x.id,name:x.name,position:s.people[x.id]?.position??0,family:s.people[x.id]?.family??0}))})} role="img" aria-label="立体の人生の盤面"></div>
+      <p class="c-muted life-scene-note" data-life-note role="status">盤面はドラッグで回転、ピンチやホイールで拡大できます。マスを押すと内容を確認できます。</p>
     <section class="life-board" aria-label="人生の道">
       {Array.from({length:6},(_,row)=><div class="life-row">{LIFE_BOARD.slice(row*6,row*6+6).map(([icon,name,kind],col)=>{
         const at=row*6+col;
@@ -1363,6 +1367,7 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
         return <div class={`life-tile life-${kind}${visitors.length?' occupied':''}`}><small>{at===0?'START':at===LIFE_GOAL?'GOAL':at}</small><span class="life-icon">{icon}</span><b>{name}</b><div class="life-tokens">{visitors.map(x=><span class={`life-token p${s.seats.indexOf(x)}`} title={x.name}>{x.name.slice(0,1)}</span>)}</div></div>;
       })}</div>)}
     </section>
+    </div>
     {s.phase==='playing' && <section class="c-panel life-turn"><h3>{turn?'あなたの番です':`${current?.name??''}の番です`}</h3><Countdown at={s.deadline} now={now}/>
       {s.lastRoll && <p>🎲 {s.seats.find(x=>x.id===s.lastRoll!.id)?.name}：<b>{s.lastRoll.die}</b> の目 → {s.lastRoll.to}マス</p>}
       {turn && <ActForm id={t.id} csrf={csrf} action={pending?'choose':'roll'}><input type="hidden" name="nonce" value={String(s.nonce)}/>

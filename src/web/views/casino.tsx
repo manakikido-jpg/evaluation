@@ -42,6 +42,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         {props.lobby && <link rel="stylesheet" href={assetUrl('casino-lobby.css')} />}
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino.js')} defer></script>
+        <script type="module" src={assetUrl('life3d.js')}></script>
       </head>
       <body class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})} data-base-room-name={styleItem(me?.baseStyles?.background ?? '')?.name ?? 'あなたの遊技場'}>
         <div class="c-sky" aria-hidden="true">

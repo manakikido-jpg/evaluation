@@ -1003,8 +1003,12 @@ describe('カジノの人生ゲーム画面', () => {
     expect((await post(`/casino/t/${id}/act`,a,{action:'add_bot'})).headers.get('location')).toContain('life_paid_bot');
     await post(`/casino/t/${id}/act`,a,{action:'start'});
     const html=await (await get(location,a)).text();
-    expect(html).toContain('life-board');expect(html).toContain('学んで就職');expect(html).toContain('Gはゲーム内だけ');
+    expect(html).toContain('life-board');expect(html).toContain('data-life3d=');expect(html).toContain('立体で見る');expect(html).toMatch(/type="module" src="\/static\/life3d.js\?v=/);expect(html).toContain('学んで就職');expect(html).toContain('Gはゲーム内だけ');
     expect(html).not.toMatch(/<script>|style="|onclick=/);
+    const renderer=await get('/static/life3d.js',a);expect(renderer.status).toBe(200);
+    const three=await get('/static/three.module.js',a);expect(three.status).toBe(200);
+    const core=/three\.core\.js\?v=([a-f0-9]+)/.exec(await three.text());expect(core).not.toBeNull();
+    expect((await get(`/static/three.core.js?v=${core![1]}`,a)).status).toBe(200);
     expect((await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'work',nonce:'0'},'invalid-csrf')).status).toBe(403);
     await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'study',nonce:'0'});
     const chosen=(await tableById(db,id))!.state as LifeState;
