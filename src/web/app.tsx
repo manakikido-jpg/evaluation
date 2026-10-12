@@ -31,7 +31,7 @@ import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, u
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
-import { allRoleTemplates, deleteRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
+import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
@@ -228,7 +228,7 @@ import { NoticeDeletePage, NoticeEditPage, NoticePreview, NoticesPage, type Noti
 import { ShopPage } from './views/shop.js';
 import { isTri, overwriteRows, permKeysFor, planOverwrites, sameOverwrites, whoCanView, type WantedOverwrite } from '../services/channelPerms.js';
 import { ChannelEditPage, type ChannelPermView, ChannelNewPage, ChannelsPage, type ChannelInfo } from './views/channels.js';
-import { RolePage, RolesPage } from './views/roles.js';
+import { RolePage, RolesPage, RoleTemplateEditPage } from './views/roles.js';
 import { MarketPage } from './views/market.js';
 import { closeListing, closeRequest, recentListings, recentOrders, recentRequests, refundOrder, releaseOrder } from '../services/market.js';
 import { listingCard, requestCard } from '../discord/market.js';
@@ -4190,6 +4190,25 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: c.get('session').userId, action: 'role.template_save', detail: { name: body.name, from: role.name }, via: 'web' });
     return back('template_saved');
   });
+  // 📋 テンプレートの中身を直す・新しく作る（key: b:はじめから / c:自分の / new）
+  app.get('/roles/templates/:key/edit', async (c) => {
+    const key = c.req.param('key');
+    const t = key === 'new' ? undefined : await findRoleTemplate(db, key);
+    if (key !== 'new' && !t) return c.redirect('/roles?msg=template_not_found#role-templates');
+    return c.html(<RoleTemplateEditPage session={c.get('session')} {...(t ? { template: t } : {})} flash={c.req.query('msg')} />);
+  });
+  app.post('/roles/templates/:key/edit', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.parseBody({ all: true });
+    const by = c.get('session').userId;
+    const bits = [body.perm ?? []].flat().reduce((m: bigint, v) => (typeof v === 'string' && /^\d{1,2}$/.test(v) ? m | (1n << BigInt(v)) : m), 0n);
+    const name = typeof body.name === 'string' ? body.name : '';
+    const r = key === 'new' ? await saveRoleTemplate(db, name, bits, by) : await editRoleTemplate(db, key, { name, bits, reset: body.reset === 'yes' }, by);
+    if (r !== 'ok') return c.redirect(`/roles/templates/${encodeURIComponent(key)}/edit?msg=template_${r}`);
+    await audit(db, { actorId: by, action: key === 'new' ? 'role.template_save' : 'role.template_edit', detail: { key, name: name || undefined, reset: body.reset === 'yes' || undefined }, via: 'web' });
+    return c.redirect(`/roles?msg=${body.reset === 'yes' ? 'template_reset' : key === 'new' ? 'template_saved' : 'template_edited'}#role-templates`);
+  });
+
   app.post('/roles/templates/:id/delete', async (c) => {
     const id = Number(c.req.param('id'));
     if (Number.isSafeInteger(id) && (await deleteRoleTemplate(db, id))) {

@@ -1,4 +1,5 @@
 import { asc, eq, sql } from 'drizzle-orm';
+import { settings } from '../db/schema.js';
 import type { Db } from '../db/client.js';
 import { roleTemplates } from '../db/schema.js';
 import { ADMINISTRATOR, ALL_PERMS } from './roles.js';
@@ -41,12 +42,52 @@ export async function customRoleTemplates(db: Db): Promise<RoleTemplate[]> {
   return rows.map((r) => ({ key: `c:${r.id}`, name: r.name, note: '', bits: BigInt(r.bits) & KNOWN, builtin: false }));
 }
 
+/** はじめからあるテンプレートを運営が直した中身（key → ビット。なければはじめのまま） */
+const OVERRIDE_KEY = 'roles.templateOverrides';
+async function builtinOverrides(db: Db): Promise<Record<string, string>> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, OVERRIDE_KEY));
+  const v = row?.value;
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, string>) : {};
+}
+/** はじめからあるテンプレート（直したものは、その中身で） */
+export async function builtinRoleTemplates(db: Db): Promise<(RoleTemplate & { edited: boolean })[]> {
+  const o = await builtinOverrides(db);
+  return BUILTIN_ROLE_TEMPLATES.map((t) => (o[t.key] !== undefined && /^\d+$/.test(o[t.key]!) ? { ...t, bits: BigInt(o[t.key]!) & KNOWN, edited: true } : { ...t, edited: false }));
+}
+
 export async function allRoleTemplates(db: Db): Promise<RoleTemplate[]> {
-  return [...BUILTIN_ROLE_TEMPLATES, ...(await customRoleTemplates(db))];
+  return [...(await builtinRoleTemplates(db)), ...(await customRoleTemplates(db))];
+}
+
+/**
+ * テンプレートの中身（付く権限）を直す。はじめからあるもの（b:）は直した中身を別に覚える（reset で元に戻す）。
+ * 自分のもの（c:）は名前も変えられる。管理者は入れない
+ */
+export async function editRoleTemplate(db: Db, key: string, input: { name?: string; bits: bigint; reset?: boolean }, by: string): Promise<'ok' | 'invalid' | 'admin' | 'not_found'> {
+  if ((input.bits & ADMINISTRATOR) !== 0n) return 'admin';
+  const bits = input.bits & KNOWN;
+  if (BUILTIN_ROLE_TEMPLATES.some((t) => t.key === key)) {
+    const o = { ...(await builtinOverrides(db)) };
+    if (input.reset) delete o[key];
+    else o[key] = bits.toString();
+    await db.insert(settings).values({ key: OVERRIDE_KEY, value: o, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value: o, updatedBy: by, updatedAt: new Date() } });
+    return 'ok';
+  }
+  const m = /^c:(\d{1,12})$/.exec(key);
+  if (!m) return 'not_found';
+  const name = (input.name ?? '').trim();
+  if (!name || name.length > 40 || BUILTIN_ROLE_TEMPLATES.some((t) => t.name === name)) return 'invalid';
+  try {
+    const r = await db.update(roleTemplates).set({ name, bits: bits.toString(), createdBy: by }).where(eq(roleTemplates.id, Number(m[1]))).returning({ id: roleTemplates.id });
+    return r.length ? 'ok' : 'not_found';
+  } catch {
+    // 同じ名前のテンプレートがほかにある
+    return 'invalid';
+  }
 }
 
 export async function findRoleTemplate(db: Db, key: string): Promise<RoleTemplate | undefined> {
-  const b = BUILTIN_ROLE_TEMPLATES.find((t) => t.key === key);
+  const b = (await builtinRoleTemplates(db)).find((t) => t.key === key);
   if (b) return b;
   const m = /^c:(\d{1,12})$/.exec(key);
   if (!m) return undefined;

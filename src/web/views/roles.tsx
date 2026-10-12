@@ -32,6 +32,9 @@ export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   template_invalid: { text: 'テンプレートの名前を 1〜40 文字で入れてください（はじめからあるものと同じ名前はつけられません）。', kind: 'warn' },
   template_too_many: { text: `テンプレートは ${TEMPLATE_MAX} 個までです。使わないものを消してください。`, kind: 'warn' },
   template_admin: { text: '「管理者」の入った権限はテンプレートにできません（作るときに付けると危ないため）。', kind: 'warn' },
+  template_edited: { text: '📋 テンプレートの中身を保存しました（もう作ったロールの権限は変わりません）。', kind: 'ok' },
+  template_reset: { text: '📋 テンプレートをはじめの中身に戻しました。', kind: 'ok' },
+  template_not_found: { text: 'そのテンプレートは見つかりませんでした。', kind: 'warn' },
 };
 
 /** テンプレートを選ぶ欄（option の value は key。data-bits に付く権限） */
@@ -68,8 +71,9 @@ function TemplateList(p: { templates: RoleTemplate[]; csrf: string }) {
     <section class="card anchor" id="role-templates">
       <h2>📋 権限のテンプレート</h2>
       <p class="note">
-        ロールを作るとき・ロールのページで選ぶと、その権限にまとめてチェックが付きます。自分のテンプレートは、ロールのページの「今の権限をテンプレートにする」で作れます（{TEMPLATE_MAX} 個まで）。
+        ロールを作るとき・ロールのページで選ぶと、その権限にまとめてチェックが付きます。「直す」で中身（付く権限）を変えられます（はじめからあるものも。「はじめに戻す」で元どおり）。自分のテンプレートは「➕ 新しく作る」か、ロールのページの「今の権限をテンプレートにする」で作れます（{TEMPLATE_MAX} 個まで）。
       </p>
+      <p><a href="/roles/templates/new/edit" class="btn">➕ 新しく作る</a></p>
       <ul class="tpl-list">
         {p.templates.map((t) => {
           const labels = bitLabels(t.bits);
@@ -77,12 +81,14 @@ function TemplateList(p: { templates: RoleTemplate[]; csrf: string }) {
             <li>
               <div>
                 <strong>{t.builtin ? t.name : `📋 ${t.name}`}</strong>
+                {(t as { edited?: boolean }).edited && <span class="tag">直した</span>}
                 {t.note && <span class="note"> {t.note}</span>}
                 <details>
                   <summary class="note">付く権限（{labels.length}）</summary>
                   <p class="note">{labels.length ? labels.join('・') : 'なし'}</p>
                 </details>
               </div>
+              <a href={`/roles/templates/${encodeURIComponent(t.key)}/edit`} class="btn small">直す</a>
               {!t.builtin && (
                 <form method="post" action={`/roles/templates/${t.key.slice(2)}/delete`} class="inline-form">
                   <input type="hidden" name="_csrf" value={p.csrf} />
@@ -506,6 +512,51 @@ export function RolePage(props: {
           )}
         </section>
       )}
+    </Layout>
+  );
+}
+
+/** 📋 テンプレートの中身を直す・新しく作る（チェックで付く権限を選ぶ。保存しても、もう作ったロールは変わらない） */
+export function RoleTemplateEditPage(props: { session: AdminSession; template?: RoleTemplate & { edited?: boolean }; flash?: string }) {
+  const t = props.template;
+  const bits = t?.bits ?? 0n;
+  return (
+    <Layout title="権限のテンプレート" session={props.session} nav="roles">
+      <div class="page-head">
+        <h1>📋 {t ? `テンプレートを直す: ${t.name}` : '新しいテンプレート'}</h1>
+        <a href="/roles#role-templates">← ロールの一覧へ</a>
+      </div>
+      <Flash code={props.flash} />
+      <form method="post" action={`/roles/templates/${encodeURIComponent(t?.key ?? 'new')}/edit`} class="card">
+        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+        {t?.builtin ? (
+          <p class="note">はじめからあるテンプレートです。名前は変えられませんが、付く権限は直せます。{t.note}</p>
+        ) : (
+          <label class="field">
+            <span>名前（40 文字まで）</span>
+            <input type="text" name="name" value={t?.name ?? ''} maxlength={40} required />
+          </label>
+        )}
+        <p class="note">「管理者」は、危ないのでテンプレートには入れられません。保存しても、もう作ったロールの権限は変わりません（ロールのページで当てはめ直してください）。</p>
+        {PERMISSION_GROUPS.map((g) => (
+          <fieldset class="perms">
+            <legend>{g.title}</legend>
+            {g.perms.filter((p) => p.bit !== 3).map((p) => (
+              <label class="field check">
+                <input type="checkbox" name="perm" value={String(p.bit)} checked={hasPerm(bits, p.bit)} />
+                <span>
+                  {p.label}
+                  {p.danger && <span class="tag red">注意</span>}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        ))}
+        <button type="submit" class="ok">保存</button>
+        {t?.builtin && t.edited && (
+          <button type="submit" name="reset" value="yes" class="small">はじめに戻す</button>
+        )}
+      </form>
     </Layout>
   );
 }

@@ -2918,6 +2918,21 @@ describe('ロール（管理画面）', () => {
     const ADMIN = '980000000000000070';
     roleList.push({ id: ADMIN, name: '管理', position: 3, managed: false, color: 0, permissions: String(1n << 3n) });
     expect((await form(g, '/roles/templates', [['roleId', ADMIN], ['name', '管理のまね']])).headers.get('location')).toBe(`/roles/${ADMIN}?msg=template_admin#role-template`);
+    // 📋 中身を直す: はじめからあるもの（見るだけ）に「メッセージを送る」(11) を足す → はじめに戻す
+    expect(await (await get(`/roles/templates/${encodeURIComponent('b:readonly')}/edit`, g)).text()).toContain('name="perm"');
+    const ed = await form(g, `/roles/templates/${encodeURIComponent('b:readonly')}/edit`, [['perm', '10'], ['perm', '16'], ['perm', '6'], ['perm', '11']]);
+    expect(ed.headers.get('location')).toBe('/roles?msg=template_edited#role-templates');
+    expect((await allRoleTemplates(db)).find((t) => t.key === 'b:readonly')!.bits).toBe(ro.bits | (1n << 11n));
+    expect(await (await get('/roles', g)).text()).toContain('直した');
+    await form(g, `/roles/templates/${encodeURIComponent('b:readonly')}/edit`, [['reset', 'yes']]);
+    expect((await allRoleTemplates(db)).find((t) => t.key === 'b:readonly')!.bits).toBe(ro.bits);
+    // 自分のもの: 名前と中身を直す。管理者は入れられない
+    expect((await form(g, `/roles/templates/${encodeURIComponent(mine.key)}/edit`, [['name', '参拝者のまね'], ['perm', '3']])).headers.get('location')).toContain('msg=template_admin');
+    await form(g, `/roles/templates/${encodeURIComponent(mine.key)}/edit`, [['name', '参拝者のまね'], ['perm', '10']]);
+    expect((await allRoleTemplates(db)).find((t) => t.key === mine.key)!.bits).toBe(1n << 10n);
+    // 新しく作る（チェックから）
+    expect((await form(g, '/roles/templates/new/edit', [['name', 'まっさら'], ['perm', '10'], ['perm', '11']])).headers.get('location')).toBe('/roles?msg=template_saved#role-templates');
+    expect((await allRoleTemplates(db)).find((t) => t.name === 'まっさら')!.bits).toBe((1n << 10n) | (1n << 11n));
     // 消す
     const del = await form(g, `/roles/templates/${mine.key.slice(2)}/delete`, []);
     expect(del.headers.get('location')).toBe('/roles?msg=template_deleted#role-templates');
