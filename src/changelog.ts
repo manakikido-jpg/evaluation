@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-12-diaries', date: '2026-10-12', kind: 'new', where: ['Discord'], title: '自分の日記を作れるように', items: ['授与所と日記の受付から500銭で期限なしの権利を購入できます。', '公開・本人だけ投稿／公開・みんな投稿OKを選べます。購入後も本人が変更できます。'] },
   { id: '2026-10-11-gacha-panel-images', date: '2026-10-11', kind: 'fix', where: ['Discord'], title: '祈願所の入口画像を復旧', items: ['画像のURLとボタンが残っていても、画像の添付が欠けているときはBOT起動時に送り直します。既存の入口画像も更新します。'] },
   { id: '2026-10-11-keiba-outfits', date: '2026-10-11', kind: 'new', where: ['Discord'], title: '自分の馬を着せ替えられるように', items: ['カジノの馬主の部屋で、馬ごとに布・手綱の色・カバー・飾りを選べます。', '保存前に見本を確認でき、次の出走からパドックとレースに反映します。馬の能力は変わりません。'] },
   {

@@ -1969,3 +1969,11 @@ export const employeePayroll = pgTable('employee_payroll', {
   amount: integer('amount').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex('employee_payroll_source_idx').on(t.job, t.sourceId), uniqueIndex('employee_payroll_visitor_day_idx').on(t.job, t.visitorId, t.date), check('employee_payroll_amount_check', sql`${t.amount} > 0`)]);
+
+/** 日記の権利は期限なし。1人1つの公開スレッドを使う。 */
+export const diaries = pgTable('diaries', {
+  memberId: text('member_id').primaryKey(),
+  threadId: text('thread_id').unique(),
+  mode: text('mode').$type<'owner' | 'everyone'>().notNull().default('owner'),
+  boughtAt: timestamp('bought_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [check('diaries_mode_check', sql`${t.mode} in ('owner', 'everyone')`)]);

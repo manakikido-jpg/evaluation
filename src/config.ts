@@ -683,6 +683,7 @@ export const guildConfigSchema = z
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     bell: bellSchema.default(bellSchema.parse({})),
+    diary: z.object({ channelId: snowflake.default('1559096148814336113') }).default({ channelId: '1559096148814336113' }),
     gacha: gachaSchema.default(gachaSchema.parse({})),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
