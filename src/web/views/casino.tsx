@@ -286,6 +286,7 @@ const MSG: Record<string, string> = {
   too_many: '1 回に賭けられる数を超えました。',
   host_only: 'レースを開いた人だけができます。',
   horse_bought: '🐴 馬を買いました。次の新馬戦から走ります（卓に座っていると優先して出走）。',
+  life_paid_bot: '参加費のある人生ゲームにはBOTを入れられません。参加費0銭で練習できます。',
   horse_named: '名前を変えました。',
   horse_retired: '引退させました。おつかれさまでした。',
   horse_retired_bonus: '引退させました。おつかれさまでした。🎖 勝った数に応じた功労金を受け取りました。',

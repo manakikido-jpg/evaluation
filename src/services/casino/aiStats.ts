@@ -9,7 +9,7 @@ import { DAIFUGO_RULES, type DaifugoRule } from './tables/daifugo.js';
  * 順位は「0 = 1 位・1 = 最下位」にそろえて（人数がちがっても比べられるように）、人と AI の平均をくらべる
  */
 
-export const AI_GAME_LABEL: Record<string, string> = { daifugo: '👑 大富豪', babanuki: '🃏 ババ抜き', poker: '♠ ポーカー（1 手ごと）', mahjong: '🀄 麻雀' };
+export const AI_GAME_LABEL: Record<string, string> = { life: '🎲 人生ゲーム', daifugo: '👑 大富豪', babanuki: '🃏 ババ抜き', poker: '♠ ポーカー（1 手ごと）', mahjong: '🀄 麻雀' };
 
 /** 判定（人と AI の順位の差がこれより大きければ「強すぎ・弱すぎ」） */
 export const AI_GAP = 0.12;

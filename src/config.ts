@@ -471,11 +471,11 @@ export const opsWatchSchema = z.object({
 export type OpsWatchConfig = z.infer<typeof opsWatchSchema>;
 
 /** カジノ（社務所Web の /casino。メンバーが Discord でログインして銭で遊ぶ） */
-export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'atslot', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba'] as const;
+export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'atslot', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba', 'life'] as const;
 /** ゲームの一覧を保存したとき（knownGames がない）にあったゲーム。あとから足したゲームは、保存した一覧になくても遊べる */
 export const CASINO_GAMES_V1: readonly string[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'poker', 'daifugo', 'babanuki'];
 /** みんなで座る卓（ゲームの種類） */
-export const TABLE_KINDS = ['bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba'] as const;
+export const TABLE_KINDS = ['bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba', 'life'] as const;
 export type TableKind = (typeof TABLE_KINDS)[number];
 export type CasinoGame = (typeof CASINO_GAMES)[number];
 export const casinoSchema = z.object({

@@ -1,3 +1,5 @@
+import { tableById } from '../src/services/casino/tables/service.js';
+import type { LifeState } from '../src/services/casino/tables/life.js';
 import { eq } from 'drizzle-orm';
 import { casinoStyles, members } from '../src/db/schema.js';
 import { playSlots } from '../src/services/casino/casino.js';
@@ -986,5 +988,31 @@ describe('夜桜の新しいカジノロビー', () => {
     expect(resumed).toContain('/casino/highlow?g=');
     expect(resumed).not.toContain('hidden-game-state');
     expect(await (await get('/casino/hall', a)).text()).not.toContain('続きを遊ぶ');
+  });
+});
+
+
+describe('カジノの人生ゲーム画面', () => {
+  it('ホールから卓を作り、2人で仕事を選んで進める。本人の番とCSRFを確認する', async () => {
+    const a=(await casinoLogin(A)).cookie!, b=(await casinoLogin(B)).cookie!;
+    expect(await (await get('/casino/hall',a)).text()).toContain('/casino/tables/life');
+    const created=await post('/casino/tables/life',a,{entry:'100'});
+    const location=created.headers.get('location')!, id=Number(/\/casino\/t\/(\d+)/.exec(location)![1]);
+    await post(`/casino/t/${id}/join`,b,{});
+    expect(await balance(A)).toBe(4900);expect(await balance(B)).toBe(4900);
+    expect((await post(`/casino/t/${id}/act`,a,{action:'add_bot'})).headers.get('location')).toContain('life_paid_bot');
+    await post(`/casino/t/${id}/act`,a,{action:'start'});
+    const html=await (await get(location,a)).text();
+    expect(html).toContain('life-board');expect(html).toContain('学んで就職');expect(html).toContain('Gはゲーム内だけ');
+    expect(html).not.toMatch(/<script>|style="|onclick=/);
+    expect((await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'work',nonce:'0'},'invalid-csrf')).status).toBe(403);
+    await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'study',nonce:'0'});
+    const chosen=(await tableById(db,id))!.state as LifeState;
+    expect(chosen.people[A]!.money).toBe(700);
+    await post(`/casino/t/${id}/act`,a,{action:'roll',nonce:String(chosen.nonce)});
+    expect((await tableById(db,id))!.version).toBeGreaterThan(1);
+    expect(await balance(A)).toBe(4900);
+    current={...current,casino:{...current.casino,games:current.casino.games.filter(g=>g!=='life')}};
+    expect((await get('/casino/tables/life',a)).headers.get('location')).toBe('/casino?e=game_off');
   });
 });

@@ -4,7 +4,7 @@ import type { Db } from '../../db/client.js';
 import { casinoGames, type CasinoTable } from '../../db/schema.js';
 import { ENGINES } from './tables/engines.js';
 
-export const LOBBY_TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus', 'mahjong', 'keiba'];
+export const LOBBY_TABLE_GAMES: CasinoGame[] = ['poker', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'daifugo', 'babanuki', 'versus', 'mahjong', 'keiba', 'life'];
 export const visibleLobbyGames = (c: CasinoConfig) => c.games.filter((g) => g !== 'atslot' || c.atOpen);
 export const lobbyGameHref = (g: CasinoGame) =>
   g === 'versus' ? '/casino/versus' : g === 'mahjong' ? '/casino/jansou' : LOBBY_TABLE_GAMES.includes(g) ? `/casino/tables/${g}` : `/casino/${g}`;
@@ -21,7 +21,7 @@ export function lobbyTable(t: CasinoTable, memberId: string): LobbyTable | undef
   const players = seats.filter(Boolean).length;
   const capacity = kind === 'mahjong' && s.n === 3 ? 3 : engine.maxSeats;
   const seated = t.seatIds.includes(memberId);
-  const phaseAllowsJoin = !['mahjong', 'daifugo', 'babanuki'].includes(kind) || s.phase === 'lobby';
+  const phaseAllowsJoin = !['mahjong', 'daifugo', 'babanuki', 'life'].includes(kind) || s.phase === 'lobby';
   const canJoin = !seated && players < capacity && phaseAllowsJoin;
   const turnId = typeof s.turn === 'number' ? seats[s.turn]?.id : s.turn;
   // 麻雀は鳴きの待ちもあるため、ここでは「あなたの番」と決めつけない

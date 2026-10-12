@@ -114,5 +114,6 @@ export const TABLE_LABEL: Record<TableKind, { emoji: string; name: string; note:
   daifugo: { emoji: '👑', name: '大富豪', note: '早く上がった順に賞金', players: '3〜5 人' },
   babanuki: { emoji: '🤡', name: 'ババ抜き', note: '最後にババを持っていた人の負け', players: '2〜5 人' },
   mahjong: { emoji: '🀄', name: '麻雀', note: '4 人打ち・3 人打ち（サンマ）のリーチ麻雀。足りない席は BOT', players: '1〜4 人（残りは BOT）' },
+  life: { emoji: '🎲', name: '人生ゲーム', note: '仕事・家・できごとを選び、資産を育ててゴールへ', players: '2〜5 人' },
   keiba: { emoji: '🏇', name: 'みんなでダービー', note: '8 頭のレースにみんなで賭けて、同じレースを見る', players: '1〜30 人（見るだけもできる）' },
 };
