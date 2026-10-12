@@ -1,5 +1,7 @@
+import type { Interaction } from 'discord.js';
+import type { DiscordActions } from '../src/lib/discordRest.js';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { members } from '../src/db/schema.js';
@@ -38,7 +40,7 @@ import {
   setStandby,
   standbyListings,
 } from '../src/services/market.js';
-import { listingCard, toAmount } from '../src/discord/market.js';
+import { MarketApp, listingCard, toAmount } from '../src/discord/market.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
 const MERCHANT = '100000000000000077';
@@ -84,6 +86,27 @@ describe('出品', () => {
     expect((await createListing(db, cfg, { id: SELLER, roleIds: [] }, item)).status).toBe('no_license');
     expect((await createListing(db, { ...cfg, roles: baseCfg.roles }, seller, item)).status).toBe('disabled');
     expect((await createListing(db, cfg, seller, item)).status).toBe('ok');
+  });
+
+  it('授与所と市場のロールが違っても、購入時の開業ロールで入口・出品・引き受けるを通す',async()=>{
+    const license='100000000000000088',c:GuildConfig={...cfg,shop:{...cfg.shop,license:{roleId:license}}};
+    const owner={id:SELLER,roleIds:[license]};
+    expect((await createListing(db,c,owner,item)).status).toBe('ok');
+    expect((await createListing(db,c,{id:SELLER,roleIds:['100000000000000099']},item)).status).toBe('no_license');
+    const request=await createRequest(db,BUYER,{category:'illust',title:'描いてほしい',description:'',budget:1000});
+    if(request.status!=='ok')throw Error(request.status);
+    expect((await bidRequest(db,c,request.request.id,owner,1000,'')).status).toBe('ok');
+    const reply=vi.fn().mockResolvedValue(undefined);
+    const interaction={inCachedGuild:()=>true,guildId:c.guildId,isButton:()=>true,isModalSubmit:()=>false,customId:'market:new',member:{roles:{cache:new Map([[license,{}]])}},user:{id:SELLER},reply} as unknown as Interaction;
+    await new MarketApp(db,()=>c,{} as DiscordActions).onInteraction(interaction);
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({content:expect.stringContaining('何を出品しますか'),components:expect.any(Array)}));
+  });
+  it('授与所側だけ設定されていても出品でき、権利なしは拒否する。通話の年齢条件も守る',async()=>{
+    const license='100000000000000088',c:GuildConfig={...cfg,roles:{...cfg.roles,merchant:undefined},shop:{...cfg.shop,license:{roleId:license}}};
+    expect((await createListing(db,c,{id:SELLER,roleIds:[license]},item)).status).toBe('ok');
+    expect((await createListing(db,c,{id:SELLER,roleIds:[]},item)).status).toBe('no_license');
+    await db.update(members).set({ageGroup:'minor'}).where(eq(members.id,SELLER));
+    expect((await createListing(db,c,{id:SELLER,roleIds:[license]},{...item,category:'call'})).status).toBe('adult_only');
   });
 
   it('おかしな内容は断る（種類・題名・値段）', async () => {
