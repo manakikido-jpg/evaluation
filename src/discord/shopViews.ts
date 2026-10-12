@@ -98,6 +98,7 @@ export function shopList(
       description: [
         ...sale,
         ...thanks,
+        '📖 日記の権利：500銭・期限なし（日記の受付からも購入できます）',
         `👛 いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`,
         ...(mine.length ? ['', '**受けているもの**', ...mine] : []),
         ...(items.length ? [] : ['', 'いまは授与品がありません。']),
@@ -124,14 +125,14 @@ export function shopList(
     description: `${owned.has(i.id) ? '✅ 受けている・' : ''}${priceText(i, e, booster)}${durationText(i) ? `・${durationText(i)}` : ''}`.slice(0, 100),
     ...(i.emoji ? { emoji: { name: i.emoji } } : {}),
   });
-  // 種類ごとに選ぶメニュー（Discord の決まりで 5 つまで。多ければ 1 つにまとめる）
+  // 種類ごとに選ぶメニュー（最大5つ。日記のボタンは空きがあるときに出す）
   const menus =
     groups.length <= 5
       ? groups.map((g) => ({ custom_id: `shop:pick:${g.c}`, placeholder: SHOP_CATEGORIES[g.c].pick, options: g.items.slice(0, 25).map(option) }))
       : [{ custom_id: 'shop:pick', placeholder: '授与品を選ぶ', options: groups.flatMap((g) => g.items).slice(0, 25).map(option) }];
   return {
     embeds,
-    components: menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })),
+    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記の権利（500銭・期限なし）', custom_id: 'diary:open' }] }] : [])],
   };
 }
 
