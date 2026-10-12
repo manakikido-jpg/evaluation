@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -10,6 +11,12 @@ import { isArtKey } from '../services/casino/slotArt.js';
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const readText = (p: string) => readFileSync(p, 'utf8');
+const lifeRoute = readText(path.join(here, 'public/life-route.js'));
+const lifeRouteHash = createHash('sha256').update(lifeRoute).digest('hex').slice(0, 10);
+const threeDir = path.dirname(createRequire(import.meta.url).resolve('three'));
+const threeCore = readText(path.join(threeDir, 'three.core.js'));
+const threeCoreHash = createHash('sha256').update(threeCore).digest('hex').slice(0, 10);
+const threeModule = readText(path.join(threeDir, 'three.module.js')).replaceAll("'./three.core.js'", `'./three.core.js?v=${threeCoreHash}'`);
 /** 絵を差し替えたときも、着せ替えのCSSから新しい絵を読む。 */
 const premiumCss = () => readText(path.join(here, 'public/casino-premium.css')).replace(/\/static\/(casino-(scene|table|ornament|trim)-([a-z]+)\.(webp|svg))/g, (_url, name: string, kind: string, key: string, ext: string) => {
   const folder = { scene: 'casino-scenes', table: 'casino-tables', ornament: 'casino-ornaments' }[kind as 'scene' | 'table' | 'ornament'];
@@ -51,6 +58,10 @@ const sceneFiles = readdirSync(SCENE_DIR).filter((f) => /^[a-z]+\.(svg|webp)$/.t
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
+    'three.core.js': { body: threeCore, type: 'text/javascript; charset=utf-8' },
+    'three.module.js': { body: threeModule, type: 'text/javascript; charset=utf-8' },
+    'life-route.js': { body: lifeRoute, type: 'text/javascript; charset=utf-8' },
+    'life3d.js': { body: readText(path.join(here, 'public/life3d.js')).replace('./life-route.js?v=1', `./life-route.js?v=${lifeRouteHash}`), type: 'text/javascript; charset=utf-8' },
     ...Object.fromEntries(sceneFiles.map((f) => [`casino-scene-${f}`, { body: new Uint8Array(readFileSync(path.join(SCENE_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(slotFiles.map((f) => [`slots-${f}`, { body: new Uint8Array(readFileSync(path.join(SLOT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),
     ...Object.fromEntries(atFiles.map((f) => [`atart-${f}`, { body: new Uint8Array(readFileSync(path.join(AT_DIR, f))), type: IMAGE_TYPES[f.split('.').pop()!]! }])),

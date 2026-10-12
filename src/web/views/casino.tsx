@@ -42,6 +42,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         {props.lobby && <link rel="stylesheet" href={assetUrl('casino-lobby.css')} />}
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino.js')} defer></script>
+        <script type="module" src={assetUrl('life3d.js')}></script>
       </head>
       <body class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})} data-base-room-name={styleItem(me?.baseStyles?.background ?? '')?.name ?? 'あなたの遊技場'}>
         <div class="c-sky" aria-hidden="true">
@@ -286,6 +287,7 @@ const MSG: Record<string, string> = {
   too_many: '1 回に賭けられる数を超えました。',
   host_only: 'レースを開いた人だけができます。',
   horse_bought: '🐴 馬を買いました。次の新馬戦から走ります（卓に座っていると優先して出走）。',
+  life_paid_bot: '参加費のある人生ゲームにはBOTを入れられません。参加費0銭で練習できます。',
   horse_named: '名前を変えました。',
   horse_retired: '引退させました。おつかれさまでした。',
   horse_retired_bonus: '引退させました。おつかれさまでした。🎖 勝った数に応じた功労金を受け取りました。',

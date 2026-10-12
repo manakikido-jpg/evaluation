@@ -1,3 +1,5 @@
+import { tableById } from '../src/services/casino/tables/service.js';
+import type { LifeState } from '../src/services/casino/tables/life.js';
 import { eq } from 'drizzle-orm';
 import { casinoStyles, members } from '../src/db/schema.js';
 import { playSlots } from '../src/services/casino/casino.js';
@@ -986,5 +988,67 @@ describe('夜桜の新しいカジノロビー', () => {
     expect(resumed).toContain('/casino/highlow?g=');
     expect(resumed).not.toContain('hidden-game-state');
     expect(await (await get('/casino/hall', a)).text()).not.toContain('続きを遊ぶ');
+  });
+});
+
+
+describe('カジノの人生ゲーム画面', () => {
+  it('切り札と分かれ道のフォームから操作し、選択と残り札を表示する',async()=>{
+    const a=(await casinoLogin(A)).cookie!,b=(await casinoLogin(B)).cookie!;
+    const created=await post('/casino/tables/life',a,{entry:'0'}),path=created.headers.get('location')!,id=Number(/\/casino\/t\/(\d+)/.exec(path)![1]);
+    await post(`/casino/t/${id}/join`,b,{});await post(`/casino/t/${id}/act`,a,{action:'start'});
+    await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'work',nonce:'0'});
+    let html=await(await get(path,a)).text();expect(html).toContain('出目指定の札を1枚使って進む');
+    const card={action:'card',card:'move',die:'6',nonce:'1'};
+    await post(`/casino/t/${id}/act`,a,card);
+    let s=(await tableById(db,id))!.state as LifeState;expect(s.people[A]!.position).toBe(4);expect(s.pending?.kind).toBe('fork');
+    html=await(await get(path,a)).text();expect(html).toContain('堅実の道');expect(html).toContain('挑戦の道');expect(html).toContain('50％');
+    await post(`/casino/t/${id}/act`,a,card);expect((await tableById(db,id))!.state).toEqual(s);
+    await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'venture',nonce:String(s.nonce)});
+    s=(await tableById(db,id))!.state as LifeState;expect(s.people[A]!.route).toBe('venture');expect(s.people[A]!.cards).not.toContain('move');
+    html=await(await get(path,a)).text();expect(html).toContain('🔥 挑戦の道');expect(html).not.toMatch(/onclick=|style="/);
+    await post(`/casino/t/${id}/act`,b,{action:'choose',choice:'work',nonce:String(s.nonce)});
+    s=(await tableById(db,id))!.state as LifeState;
+    await post(`/casino/t/${id}/act`,b,{action:'card',card:'move',die:'3',nonce:String(s.nonce)});
+    html=await(await get(path,b)).text();expect(html).toContain('必ず＋100G');expect(html).toContain('50％で＋500G');
+  });
+  it('20・40・60分版を作れて、一覧と盤面に選んだ版を表示する',async()=>{
+    const a=(await casinoLogin(A)).cookie!;
+    const menu=await (await get('/casino/tables/life',a)).text();
+    for(const minutes of [20,40,60])expect(menu).toContain(`value="${minutes}"`);
+    for(const minutes of [20,40,60]){
+      const made=await post('/casino/tables/life',a,{entry:'0',minutes:String(minutes)});
+      const path=made.headers.get('location')!,id=Number(/\/casino\/t\/(\d+)/.exec(path)![1]);
+      expect((await tableById(db,id))!.state).toMatchObject({minutes,endsAt:null});
+      const html=await (await get(path,a)).text();expect(html).toContain(`${minutes}分版`);
+      expect((html.match(/class="life-tile /g)??[]).length).toBe(minutes/20*36);
+      await post(`/casino/t/${id}/leave`,a,{});
+    }
+  });
+  it('ホールから卓を作り、2人で仕事を選んで進める。本人の番とCSRFを確認する', async () => {
+    const a=(await casinoLogin(A)).cookie!, b=(await casinoLogin(B)).cookie!;
+    expect(await (await get('/casino/hall',a)).text()).toContain('/casino/tables/life');
+    const created=await post('/casino/tables/life',a,{entry:'100'});
+    const location=created.headers.get('location')!, id=Number(/\/casino\/t\/(\d+)/.exec(location)![1]);
+    await post(`/casino/t/${id}/join`,b,{});
+    expect(await balance(A)).toBe(4900);expect(await balance(B)).toBe(4900);
+    expect((await post(`/casino/t/${id}/act`,a,{action:'add_bot'})).headers.get('location')).toContain('life_paid_bot');
+    await post(`/casino/t/${id}/act`,a,{action:'start'});
+    const html=await (await get(location,a)).text();
+    expect(html).toContain('life-board');expect(html).toContain('data-life3d=');expect(html).toContain('立体で見る');expect(html).toMatch(/type="module" src="\/static\/life3d.js\?v=/);expect(html).toContain('学んで就職');expect(html).toContain('Gはゲーム内だけ');
+    expect(html).not.toMatch(/<script>|style="|onclick=/);
+    const renderer=await get('/static/life3d.js',a);expect(renderer.status).toBe(200);
+    const three=await get('/static/three.module.js',a);expect(three.status).toBe(200);
+    const core=/three\.core\.js\?v=([a-f0-9]+)/.exec(await three.text());expect(core).not.toBeNull();
+    expect((await get(`/static/three.core.js?v=${core![1]}`,a)).status).toBe(200);
+    expect((await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'work',nonce:'0'},'invalid-csrf')).status).toBe(403);
+    await post(`/casino/t/${id}/act`,a,{action:'choose',choice:'study',nonce:'0'});
+    const chosen=(await tableById(db,id))!.state as LifeState;
+    expect(chosen.people[A]!.money).toBe(700);
+    await post(`/casino/t/${id}/act`,a,{action:'roll',nonce:String(chosen.nonce)});
+    expect((await tableById(db,id))!.version).toBeGreaterThan(1);
+    expect(await balance(A)).toBe(4900);
+    current={...current,casino:{...current.casino,games:current.casino.games.filter(g=>g!=='life')}};
+    expect((await get('/casino/tables/life',a)).headers.get('location')).toBe('/casino?e=game_off');
   });
 });

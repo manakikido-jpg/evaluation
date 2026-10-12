@@ -465,7 +465,7 @@ const tickCountdowns = () => {
     if (n.classList.contains('c-timer')) return;
     const left = Math.max(0, Math.ceil((Number(n.getAttribute('data-deadline')) - (Date.now() + skew)) / 1000));
     const b = n.querySelector('b');
-    if (b) b.textContent = String(left);
+    if (b) b.textContent = n.dataset.timeFormat === 'minutes' ? `${Math.floor(left / 60)}分${left % 60}秒` : String(left);
     n.classList.toggle('soon', left <= 5);
   });
 };

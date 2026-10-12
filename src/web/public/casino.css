@@ -2245,3 +2245,44 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .kb-outfit-fields label { display: grid; gap: 6px; }
 .kb-outfit-fields select { width: 100%; min-width: 0; min-height: 44px; }
 @media (max-width: 400px) { .kb-outfit-fields { grid-template-columns: 1fr; } }
+
+.life-intro { display: flex; gap: 16px; align-items: center; padding: 22px; margin-bottom: 18px; border: 1px solid #b59050; border-radius: 18px; background: linear-gradient(135deg,#253e39,#293041); }
+.life-intro > span { font-size: 3rem; }
+.life-intro h2 { margin: 0 0 6px; }
+.life-intro p { margin: 0 0 8px; }
+.life-intro small { color: #e2cb98; }
+.life-board { padding: 14px; border: 1px solid #8a7655; border-radius: 20px; background: linear-gradient(145deg,#202f2b,#202637); margin: 16px 0; }
+.life-row { display: flex; gap: 7px; margin-bottom: 7px; }
+.life-row:nth-child(even) { flex-direction: row-reverse; }
+.life-tile { position: relative; flex: 1; min-width: 0; min-height: 108px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 1px solid #557268; border-radius: 12px; background: #304c43; padding: 6px 2px; text-align: center; }
+.life-tile small { position: absolute; top: 4px; left: 6px; font-size: .6rem; color: #d5d6bd; }
+.life-tile b { font-size: .65rem; }
+.life-icon { font-size: 1.7rem; }
+.life-pay,.life-gift,.life-festival { background: #4c4631; border-color: #a88c4d; }
+.life-house,.life-insurance { background: #354958; }
+.life-accident,.life-luck { background: #493943; }
+.life-goal { background: #684b2d; border-color: #d3b96d; }
+.life-tile.occupied { box-shadow: inset 0 0 0 2px #dfc17c; }
+.life-tokens { display: flex; flex-wrap: wrap; justify-content: center; min-height: 20px; gap: 2px; }
+.life-token { display: inline-flex; align-items: center; justify-content: center; height: 20px; width: 20px; border-radius: 50%; font-size: .65rem; font-weight: 800; color: #15222c; background: #f0b2b2; }
+.life-token.p1 { background: #a8cbee; }.life-token.p2 { background: #d5c18c; }.life-token.p3 { background: #a4d3ac; }.life-token.p4 { background: #d2ade6; }
+.life-people { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 12px; margin: 16px 0; }
+.life-person { padding: 14px; border: 1px solid #52645e; border-radius: 14px; background: #25332e; }
+.life-person.me { border-color: #d1b26f; }
+.life-person h3 { margin: 0 0 12px; }.life-person p { font-size: .8rem; }.life-person strong { color: #e3c580; }
+.life-turn h3 { margin-top: 0; }
+@media(max-width:600px) { .life-board { padding: 7px; }.life-row { gap: 3px; margin-bottom: 3px; }.life-tile { min-height: 86px; border-radius: 7px; }.life-tile b { font-size: .52rem; }.life-icon { font-size: 1.15rem; }.life-tile small { left: 3px; font-size: .5rem; }.life-token { width: 15px; height: 15px; font-size: .5rem; }.life-intro { padding: 15px; }.life-intro > span { font-size: 2rem; } }
+
+.life-view-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.life-scene { display: none; width: 100%; height: 560px; overflow: hidden; border: 1px solid #a7906b; border-radius: 20px; background: #e2e9e7; }
+.life-scene canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.life-scene canvas:active { cursor: grabbing; }
+.life-scene canvas:focus-visible { outline: 3px solid #d7a74e; outline-offset: -4px; }
+[data-life-view="3d"] .life-scene { display: block; }
+[data-life-view="3d"] .life-board { display: none; }
+.life-scene-note { font-size: .8rem; }
+@media(max-width:600px) { .life-scene { height: 370px; border-radius: 14px; } }
+
+.life-card-list { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }.life-card { flex:1 1 160px; padding:12px; border:1px solid #9a8057; border-radius:12px; background:#24372e; }.life-card small { display:block; margin-top:6px; color:#ccd8ce; }.life-hand form { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }.life-hand form p { flex-basis:100%; }.life-fork { border-color:#77bbad; background:#354b43; }
+
+.life-turn button { white-space:normal; max-width:100%; }.life-turn h4 { margin:14px 0 8px; }
