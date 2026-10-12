@@ -8,7 +8,7 @@ import { useTicket } from '../tickets.js';
 /**
  * 🎰 大勝負の札: 使うと、その日（日本時間の 0 時まで。設定 boostHours で「○ 時間」にもできる）だけ、カジノの上限が上がる。
  * 上がるのは「1 回の最高」（ルーレットの 1 か所の最高も）と「1 日の合計」（倍率は設定の boostMult。上限ごとに別の倍率にもできる）。
- * 1 日に使える枚数（boostPerDay）が 2 以上なら、効いている間に重ねて使うと倍率が足される（5 倍 → 10 倍 → 15 倍。効く長さは延びない）。
+ * 1 日（日本時間）に使えるのは 1 枚だけ（重ねて使えない。設定 boostPerDay は前の名残で、見ない）。
  * 卓の参加費・ブラインド（みんなが同じだけ払うもの）は上げない（札のない人も同じだけ払うため）
  */
 
@@ -78,7 +78,9 @@ export type BoostUse =
  * 効く長さは、boostHours が 0 なら日本時間の 0 時まで、ほかは使ったときから ○ 時間（重ねても延びない）
  */
 export async function useCasinoBoost(db: Db, memberId: string, now = new Date(), c: Partial<Pick<CasinoConfig, 'boostHours' | 'boostPerDay'>> = {}): Promise<BoostUse> {
-  const perDay = c.boostPerDay ?? 1;
+  // 1 日 1 枚だけ（運営の決まり。boostPerDay の設定があっても見ない）
+  const perDay = 1;
+  void c.boostPerDay;
   const hours = c.boostHours ?? 0;
   return db.transaction(async (tx) => {
     // 同時に押しても、札は 1 枚だけ使う

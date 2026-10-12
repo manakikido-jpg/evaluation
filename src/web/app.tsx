@@ -1798,7 +1798,7 @@ export function createWebApp(deps: WebDeps) {
       profitSharePercent: typeof body.profitSharePercent === 'string' ? int('profitSharePercent') : cfg.casino.profitSharePercent,
       // 🎰 大勝負の札の倍率（欄がない古い画面から送られたら、今のまま）
       boostMult: typeof body.boostMult === 'string' ? int('boostMult') : cfg.casino.boostMult,
-      ...(['boostHours', 'boostMaxBetMult', 'boostRouletteMult', 'boostDailyMult', 'boostPerDay'] as const).reduce<Record<string, number>>((o, k) => {
+      ...(['boostHours', 'boostMaxBetMult', 'boostRouletteMult', 'boostDailyMult'] as const).reduce<Record<string, number>>((o, k) => {
         o[k] = typeof body[k] === 'string' ? int(k) : cfg.casino[k];
         return o;
       }, {}),

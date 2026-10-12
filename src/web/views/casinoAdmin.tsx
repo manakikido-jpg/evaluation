@@ -245,10 +245,7 @@ export function CasinoAdminPage(p: {
                 <span>1 日の合計を何倍に（0 なら上の倍率・1 なら上げない）</span>
                 <input type="number" name="boostDailyMult" min={0} max={20} value={String(c.boostDailyMult)} required />
               </label>
-              <label class="field">
-                <span>1 日に使える枚数（2 以上なら、効いている間に重ねると倍率が足される。5 倍 → 10 倍。効く長さは延びない）</span>
-                <input type="number" name="boostPerDay" min={1} max={10} value={String(c.boostPerDay)} required />
-              </label>
+              <p class="note">1 日（日本時間）に使えるのは 1 人 1 枚までです（重ねて使えません）。</p>
               <p class="note">
                 いま 1 枚で: 1 回 {fmt(boostCasino(c).maxBet)}・ルーレット 1 か所 {fmt(boostCasino(c).rouletteMaxBet)}・1 日 {c.dailyBetLimit > 0 ? fmt(boostCasino(c).dailyBetLimit) : '上限なし'}。値段・名前・販売は「ショップ」の「大勝負の札」で変えます。
               </p>
