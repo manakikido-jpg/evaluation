@@ -12,7 +12,7 @@ class LifeScene {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
     this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.9;
-    this.world=new T.Scene();this.world.background=new T.Color(0xb9dded);this.route=createLifeRoute(T);
+    this.world=new T.Scene();this.world.background=new T.Color(0xb9dded);this.goal=data.tiles.length-1;this.route=createLifeRoute(T,data.tiles.length);
     this.camera=new T.PerspectiveCamera(40,1,.1,100);this.yaw=.72;this.elevation=.95;this.distance=innerWidth<600?65:54;
     this.world.add(new T.HemisphereLight(0xffffff,0x83986f,1.2));
     const sun=new T.DirectionalLight(0xfff5dd,2.5);sun.position.set(9,25,13);sun.castShadow=true;
@@ -52,11 +52,11 @@ class LifeScene {
   makeTile(n,tile) {
     const T=this.T,group=new T.Group();group.userData.cell=n;this.world.add(group);this.tiles.push(group);
     const palette={pay:0xffd445,gift:0xffdd68,house:0x77d5ec,insurance:0x77d5ec,luck:0xccb7ee,accident:0xf78982,family:0xf89fbe,goal:0xffb639};
-    const start=Math.max(0,n-.5),end=Math.min(35,n+.5);
+    const start=Math.max(0,n-.5),end=Math.min(this.goal,n+.5);
     this.ribbon(start,end,3.05,.23,0xfaf5da,group);
     this.ribbon(start+.025,end-.025,2.72,.25,palette[tile.kind]??0xf9e962,group);
     const point=this.route.point(n),direction=this.route.tangent(n);
-    const label=new T.Mesh(new T.PlaneGeometry(2.15,2.15),this.label(tile.label,n===0?'START':n===35?'GOAL':String(n),tile.icon));
+    const label=new T.Mesh(new T.PlaneGeometry(2.15,2.15*35/this.goal),this.label(tile.label,n===0?'START':n===this.goal?'GOAL':String(n),tile.icon));
     label.rotation.set(-Math.PI/2,0,-Math.atan2(direction.x,direction.z));label.position.set(point.x,.27,point.z);group.add(label);
   }
   decorate() {
@@ -64,7 +64,7 @@ class LifeScene {
     // 川と橋。道とは別の風景として、見通しを残して置く。
     this.mesh(new T.BoxGeometry(3.4,.04,31),0x50bbdc,-7,.16,0);
     const crossings=[];
-    for(let n=1;n<=350;n++){const a=this.route.point((n-1)/10),b=this.route.point(n/10);if((a.x+7)*(b.x+7)<0)crossings.push(a.z+(b.z-a.z)*(-7-a.x)/(b.x-a.x));}
+    for(let n=1;n<=this.goal*10;n++){const a=this.route.point((n-1)/10),b=this.route.point(n/10);if((a.x+7)*(b.x+7)<0)crossings.push(a.z+(b.z-a.z)*(-7-a.x)/(b.x-a.x));}
     for(const z of crossings){
       this.mesh(new T.BoxGeometry(4.4,.13,2.9),0xd3a968,-7,.10,z);
       for(const side of [-1,1])this.mesh(new T.BoxGeometry(4.4,.2,.12),0xf0d49c,-7,.47,z+side*1.45);
@@ -98,7 +98,7 @@ class LifeScene {
       if(i%3===0){this.mesh(new T.ConeGeometry(.6,1.3,8),0x319450,x,1.05,z);this.mesh(new T.ConeGeometry(.45,1,8),0x4daa59,x,1.65,z);}
       else this.mesh(new T.SphereGeometry(.55,12,8),i%7===0?0xf0afbf:0x64af42,x,1.18,z);
     }
-    const goal=this.route.point(35);
+    const goal=this.route.point(this.goal);
     for(const off of [-1.45,1.45])this.mesh(new T.CylinderGeometry(.12,.12,2.5,12),0xd85b55,goal.x+off,1.45,goal.z);
     this.mesh(new T.BoxGeometry(3.4,.24,.3),0xf8db6d,goal.x,2.7,goal.z);
   }
@@ -157,7 +157,7 @@ class LifeScene {
     }
     root.dataset.lifeActors=String(this.cars.size);root.dataset.lifeRenderer='webgl';this.resize();
   }
-  point(actor,cell) { const p=this.route.point(cell),v=this.route.tangent(cell),off=lanes[actor.index%5];return new this.T.Vector3(p.x+v.z*off[0]+v.x*off[1],.25,p.z-v.x*off[0]+v.z*off[1]); }
+  point(actor,cell) { const p=this.route.point(cell),v=this.route.tangent(cell),lane=lanes[actor.index%5],off=[lane[0],lane[1]*35/this.goal];return new this.T.Vector3(p.x+v.z*off[0]+v.x*off[1],.25,p.z-v.x*off[0]+v.z*off[1]); }
   place(actor,cell) {actor.mesh.position.copy(this.point(actor,cell));}
   resize() {
     const width=this.root.clientWidth||this.root.parentElement.clientWidth||800,height=this.root.clientHeight||420;

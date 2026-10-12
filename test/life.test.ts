@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { casinoTables, casinoGames } from '../src/db/schema.js';
-import { life, lifeAssets, LIFE_GOAL, type LifeState } from '../src/services/casino/tables/life.js';
+import { life, lifeAssets, lifeBoard, lifeGoal, LIFE_GOAL, type LifeState } from '../src/services/casino/tables/life.js';
 import { createTable, joinTable, actTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import type { Ctx, Step } from '../src/services/casino/tables/types.js';
@@ -20,8 +20,9 @@ describe('人生ゲームの流れと賞金',()=>{
   for(let n=2;n<=5;n++){
    let s=started(n,101),paid=0,records=0,clock=ctx.now;
    for(let k=0;s.phase==='playing' && k<500;k++){
-    clock=s.deadline!+1;
-    const step=life.tick(s,{...ctx,now:clock})!;
+    clock+=1000;
+    const id=s.seats[s.turn!]!.id,kind=s.pending?.kind??(s.people[id]!.job==='これから選ぶ'?'career':undefined);
+    const step=life.act(s,id,{action:kind?'choose':'roll',nonce:String(s.nonce),choice:kind==='career'?'work':'skip'},{...ctx,now:clock});
     if(step.ok){paid+=(step.fx?.credits??[]).reduce((a,b)=>a+b.amount,0);records+=step.fx?.records?.length??0;}
     s=state(step);
    }
@@ -33,6 +34,47 @@ describe('人生ゲームの流れと賞金',()=>{
    const closed=life.tick(s,{...ctx,now:s.deadline!+1})!;
    expect(closed.ok && closed.fx?.credits).toBeUndefined();
   }
+ });
+ it.each([20,40,60] as const)('%i分版のマスと時間を保存し、時間切れの賞金は一度だけ',minutes=>{
+   let s=state(life.create(P(0),{entry:'101',minutes:String(minutes),pace:'relaxed'},ctx));
+   expect(s.endsAt).toBeNull();expect(lifeBoard(s)).toHaveLength(minutes/20*36);
+   expect(lifeBoard(s).filter(x=>x[2]==='goal')).toHaveLength(1);
+   lifeBoard(s).forEach((tile,i)=>{if(i>0 && i<lifeGoal(s))expect(tile[2]==='pay').toBe(i%6===0);});
+   s=state(life.join(s,P(1),{},ctx));
+   const start=ctx.now+30_000;s=state(life.act(s,P(0).id,{action:'start'},{...ctx,now:start}));
+   expect(s.endsAt).toBe(start+minutes*60_000);
+   s.people[P(0).id]!.money=2000;s.people[P(1).id]!.money=1000;
+   s.deadline=s.endsAt!+100_000;
+   expect(life.due(s)).toBe(s.endsAt);
+   expect(life.tick(s,{...ctx,now:s.endsAt!-1})).toBeNull();
+   const end=life.tick(s,{...ctx,now:s.endsAt!})!;s=state(end);
+   expect(s.phase).toBe('done');expect(s.pending).toBeNull();expect(s.payouts.map(x=>x.amount)).toEqual([202,0]);
+   expect(end.ok && end.fx?.records).toHaveLength(2);
+   const replay=life.tick(s,{...ctx,now:s.deadline!+1})!;
+   expect(replay.ok && replay.fx?.credits).toBeUndefined();
+ });
+ it('長い版は35マスを通過し、107マスまで進める。早いゴールと古い卓にも対応する',()=>{
+   let s=state(life.create(P(0),{entry:'0',minutes:'60'},ctx));s=state(life.join(s,P(1),{},ctx));s=state(life.act(s,P(0).id,{action:'start'},ctx));
+   s.pending=null;s.people[P(0).id]!.job='仕事';s.people[P(0).id]!.position=35;
+   s=state(life.act(s,P(0).id,{action:'roll',nonce:String(s.nonce)},ctx));
+   expect(s.people[P(0).id]!.position).toBe(36);expect(s.phase).toBe('playing');
+   expect(s.people[P(0).id]!.money).toBe(1160);
+   for(const p of Object.values(s.people)){p.position=lifeGoal(s)-1;p.job='仕事';}s.turn=0;s.pending=null;
+   s=state(life.act(s,P(0).id,{action:'roll',nonce:String(s.nonce)},ctx));
+   expect(s.phase).toBe('playing');s=state(life.act(s,P(1).id,{action:'roll',nonce:String(s.nonce)},ctx));
+   expect(s.phase).toBe('done');expect(Object.values(s.people).every(p=>p.position===107)).toBe(true);
+   const legacy=started(2);delete legacy.minutes;delete legacy.endsAt;
+   expect(lifeGoal(legacy)).toBe(35);
+   expect(state(life.tick(legacy,{...ctx,now:ctx.now+100*60_000})!).phase).toBe('playing');
+   expect(life.create(P(0),{entry:'0',minutes:'30'},ctx).ok).toBe(false);
+ });
+ it('終了直前の持ち時間は全体の期限を越えず、操作と退出でも時間切れを清算する',()=>{
+   const s=started(2),at=s.endsAt!;
+   const chosen=state(life.act(s,P(0).id,{action:'choose',choice:'work',nonce:'0'},{...ctx,now:at-1}));
+   expect(chosen.deadline).toBe(at);
+   for(const step of [life.act(s,P(0).id,{action:'roll',nonce:'0'},{...ctx,now:at}),life.leave(s,P(0).id,{...ctx,now:at})]){
+     const done=state(step);expect(done.phase).toBe('done');expect(done.payouts.reduce((a,p)=>a+p.amount,0)).toBe(200);
+   }
  });
  it('古い操作番号・他人の番・残高不足の購入を拒否し、開始後の退出は返金しない',()=>{
   let s=started(2);
@@ -73,6 +115,17 @@ let db:Db,close:()=>Promise<void>;
 beforeEach(async()=>{({db,close}=await makeDb());for(let i=0;i<2;i++)await addCoins(db,P(i).id,1000,'adjust');});
 afterEach(async()=>close());
 describe('人生ゲームの銭とロック',()=>{
+ it('時間切れを同時に確かめても賞金と戦績は一度だけ',async()=>{
+   const made=await createTable(db,ctx.cfg,'life',P(0),{entry:'100',minutes:'40'},new Date(ctx.now),ctx.rng);
+   if(made.status!=='ok'||!('table' in made))throw Error(made.status);
+   const id=made.table.id;await joinTable(db,ctx.cfg,id,P(1),{},new Date(ctx.now),ctx.rng);
+   await actTable(db,ctx.cfg,id,P(0).id,{action:'start'},new Date(ctx.now),ctx.rng);
+   const s=(await tableById(db,id))!.state as LifeState;
+   await Promise.all([0,1,2].map(()=>pollTable(db,ctx.cfg,id,new Date(s.endsAt!),ctx.rng)));
+   expect(((await tableById(db,id))!.state as LifeState).phase).toBe('done');
+   expect((await walletOf(db,P(0).id)).balance+(await walletOf(db,P(1).id)).balance).toBe(2000);
+   expect(await db.select().from(casinoGames).where(eq(casinoGames.game,'life'))).toHaveLength(2);
+ });
  it('参加費を預かり、同時の操作を1回だけ進め、賞金も1回だけ渡す',async()=>{
   const t=await createTable(db,ctx.cfg,'life',P(0),{entry:'100'},new Date(ctx.now),ctx.rng);
   if(t.status!=='ok' || !('table' in t))throw new Error(t.status);

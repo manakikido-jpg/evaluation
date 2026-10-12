@@ -1,4 +1,4 @@
-import { LIFE_BOARD, LIFE_GOAL, LIFE_TURN_SECONDS, lifeAssets, type LifeState } from '../../services/casino/tables/life.js';
+import { LIFE_VERSIONS, lifeBoard, lifeGoal, lifeMinutes, LIFE_TURN_SECONDS, lifeAssets, type LifeState } from '../../services/casino/tables/life.js';
 import { StyleOrnament } from './casinoStyleParts.js';
 import { styleItem } from '../../services/casino/styles.js';
 import type { Child } from 'hono/jsx';
@@ -145,7 +145,7 @@ const RULES: Record<TableKind, string> = {
   daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
   mahjong: MJ_RULES,
-  life: '2〜5人。最初に仕事を選び、サイコロで36マスの人生を進みます。給料日を通るとゲーム内の資金が増え、家や保険を選べます。全員のゴール後に資産で順位を決めます。Gはゲーム内だけのお金で銭には交換できません。賞金は参加費だけを分けます（2人100:0、3人70:30:0、4人60:30:10:0、5人50:30:20:0:0。同点は該当順位の賞金を分けます）。時間切れ・途中退出は自動で進めます。BOTは参加費0銭の練習だけ。',
+  life: '2〜5人。最初に仕事を選び、20分（36マス）・40分（72マス）・60分（108マス）を選んで人生を進みます。選んだ時間が経つか全員がゴールすると、資産で順位を決めます。給料日を通るとゲーム内の資金が増え、家や保険を選べます。全員のゴール後に資産で順位を決めます。Gはゲーム内だけのお金で銭には交換できません。賞金は参加費だけを分けます（2人100:0、3人70:30:0、4人60:30:10:0、5人50:30:20:0:0。同点は該当順位の賞金を分けます）。時間切れ・途中退出は自動で進めます。BOTは参加費0銭の練習だけ。',
   keiba: KB_RULES,
 };
 
@@ -228,7 +228,12 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
       </>
     );
   }
-  if (p.kind === 'babanuki' || p.kind === 'life') {
+  if (p.kind === 'life') return <>
+    <label>遊ぶ時間<select name="minutes">{([20,40,60] as const).map(minutes=><option value={String(minutes)}>{LIFE_VERSIONS[minutes].label}版（{LIFE_VERSIONS[minutes].cells}マス）</option>)}</select></label>
+    <p class="c-muted">開始から選んだ時間が経つか、全員がゴールしたら終了。今の資産で順位を決めます。</p>
+    <label>参加費<input type="number" name="entry" min={0} max={sharedMaxBet(p.casino)} value={String(Math.min(100,sharedMaxBet(p.casino)))} inputmode="numeric"/>{p.coin.name}（0で賭けない）</label>
+  </>;
+  if (p.kind === 'babanuki') {
     return (
       <label>
         参加費
@@ -262,8 +267,9 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
   }
   if (t.kind === 'daifugo' || t.kind === 'babanuki' || t.kind === 'life') {
     const ps = t.state as DaifugoState;
+    const version = t.kind==='life' ? `${lifeMinutes(t.state as LifeState)}分版・` : '';
     const rules = t.kind === 'daifugo' ? `・${rulesOf(ps).map((k) => DAIFUGO_RULES[k].label.replace(/^\S+ /, '')).join('・') || 'ルールなし'}` : '';
-    return `参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}`;
+    return `${version}参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}`;
   }
   return `${seats.length} 人（${who}）`;
 }
@@ -1352,19 +1358,20 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
   const current=s.turn===null?undefined:s.seats[s.turn];
   const pending=s.pending?.kind ?? (current && s.people[current.id]?.job==='これから選ぶ'?'career':undefined);
   const p=my?s.people[my.id]:undefined;
-  const csrf=me.session.csrfToken;
+  const csrf=me.session.csrfToken, board=lifeBoard(s), goal=lifeGoal(s);
   return <>
-    <section class="life-intro"><span>🎲</span><div><h2>人生ゲーム</h2><p>仕事を選び、暮らしを育てて、みんなでゴールへ。</p><small>Gはゲーム内だけの資金。賞金は参加費を分けます。</small></div></section>
+    <section class="life-intro"><span>🎲</span><div><h2>人生ゲーム・{lifeMinutes(s)}分版</h2><p>{board.length}マス。仕事を選び、暮らしを育てて、みんなでゴールへ。</p><small>Gはゲーム内だけの資金。賞金は参加費を分けます。</small></div></section>
     {s.phase==='lobby' && <><PartyLobby t={t} s={s} me={me} min={2}/><p class="c-muted">BOTとの練習は参加費0銭で遊べます。</p><SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length>=5} join={s.entry>0?<span>参加費 {fmt(s.entry)} {me.coin.name}</span>:undefined}/></>}
+    {s.phase==='playing' && s.endsAt && <p class="c-muted">⌛ 全体の残り <span class="c-count" data-deadline={String(s.endsAt)} data-time-format="minutes"><b>{Math.floor(Math.max(0,s.endsAt-now)/60_000)}分{Math.ceil(Math.max(0,s.endsAt-now)/1000)%60}秒</b></span> ／ 時間が来たら今の資産で順位を決めます。</p>}
     <div data-life-presentation data-life-view="flat">
       <div class="life-view-tools"><button type="button" class="c-btn c-btn-small" data-life-toggle aria-pressed="false">立体で見る</button><button type="button" class="c-btn c-btn-small c-btn-ghost" data-life-reset>向きを戻す</button></div>
-      <div class="life-scene" data-life3d={JSON.stringify({table:t.id,phase:s.phase,roll:s.lastRoll,tiles:LIFE_BOARD.map(([icon,label,kind])=>({icon,label,kind})),pawns:s.seats.map(x=>({id:x.id,name:x.name,position:s.people[x.id]?.position??0,family:s.people[x.id]?.family??0}))})} role="img" aria-label="立体の人生の盤面"></div>
+      <div class="life-scene" data-life3d={JSON.stringify({table:t.id,phase:s.phase,roll:s.lastRoll,tiles:board.map(([icon,label,kind])=>({icon,label,kind})),pawns:s.seats.map(x=>({id:x.id,name:x.name,position:s.people[x.id]?.position??0,family:s.people[x.id]?.family??0}))})} role="img" aria-label="立体の人生の盤面"></div>
       <p class="c-muted life-scene-note" data-life-note role="status">盤面はドラッグで回転、ピンチやホイールで拡大できます。マスを押すと内容を確認できます。</p>
     <section class="life-board" aria-label="人生の道">
-      {Array.from({length:6},(_,row)=><div class="life-row">{LIFE_BOARD.slice(row*6,row*6+6).map(([icon,name,kind],col)=>{
+      {Array.from({length:Math.ceil(board.length/6)},(_,row)=><div class="life-row">{board.slice(row*6,row*6+6).map(([icon,name,kind],col)=>{
         const at=row*6+col;
         const visitors=s.seats.filter(x=>s.people[x.id]?.position===at);
-        return <div class={`life-tile life-${kind}${visitors.length?' occupied':''}`}><small>{at===0?'START':at===LIFE_GOAL?'GOAL':at}</small><span class="life-icon">{icon}</span><b>{name}</b><div class="life-tokens">{visitors.map(x=><span class={`life-token p${s.seats.indexOf(x)}`} title={x.name}>{x.name.slice(0,1)}</span>)}</div></div>;
+        return <div class={`life-tile life-${kind}${visitors.length?' occupied':''}`}><small>{at===0?'START':at===goal?'GOAL':at}</small><span class="life-icon">{icon}</span><b>{name}</b><div class="life-tokens">{visitors.map(x=><span class={`life-token p${s.seats.indexOf(x)}`} title={x.name}>{x.name.slice(0,1)}</span>)}</div></div>;
       })}</div>)}
     </section>
     </div>
@@ -1374,7 +1381,7 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
         {pending==='career'?<><p>仕事を選びましょう。</p><button class="c-btn" name="choice" value="work">💼 すぐ就職（給料160G）</button><button class="c-btn" name="choice" value="study">📚 学んで就職（費用300G・給料240G）</button></>:pending?<><p>{pending==='house'?'家は600G。ゴール時の資産に750Gを加えます。':'保険は120G。修理代が220Gから40Gになります。'}</p><button class="c-btn" name="choice" value="buy" disabled={!p || p.money<(pending==='house'?600:120)}>購入する</button><button class="c-btn c-btn-ghost" name="choice" value="skip">今回は見送る</button></>:<button class="c-btn c-btn-gold">🎲 サイコロを振る</button>}
       </ActForm>}
     </section>}
-    {Object.keys(s.people).length>0 && <section class="life-people" aria-label="みんなの暮らし">{s.seats.map((x,index)=>{const person=s.people[x.id]!;return <article class={`life-person${x.id===me.session.userId?' me':''}`}><h3><span class={`life-token p${index}`}>{index+1}</span> {x.name}{person.position===LIFE_GOAL?' 🏁':''}{x.gone?'（自動）':''}</h3><p>{person.job}・給料{fmt(person.salary)}G</p><strong>資産 {fmt(lifeAssets(person))}G</strong><p>手持ち{fmt(person.money)}G ／ {person.position}/{LIFE_GOAL}マス</p><small>{person.house?'🏠 家あり':'🏠 家なし'}・{person.insured?'🛡 保険あり':'🛡 保険なし'}・👪 家族{person.family}</small></article>;})}</section>}
+    {Object.keys(s.people).length>0 && <section class="life-people" aria-label="みんなの暮らし">{s.seats.map((x,index)=>{const person=s.people[x.id]!;return <article class={`life-person${x.id===me.session.userId?' me':''}`}><h3><span class={`life-token p${index}`}>{index+1}</span> {x.name}{person.position===goal?' 🏁':''}{x.gone?'（自動）':''}</h3><p>{person.job}・給料{fmt(person.salary)}G</p><strong>資産 {fmt(lifeAssets(person))}G</strong><p>手持ち{fmt(person.money)}G ／ {person.position}/{goal}マス</p><small>{person.house?'🏠 家あり':'🏠 家なし'}・{person.insured?'🛡 保険あり':'🛡 保険なし'}・👪 家族{person.family}</small></article>;})}</section>}
     {s.phase==='done' && <section class="c-result even"><h3>🏁 人生の結果</h3><ol class="c-rank">{s.order.map(id=>{
       const assets=lifeAssets(s.people[id]!),rank=s.order.findIndex(other=>lifeAssets(s.people[other]!)===assets)+1;
       return <li class={id===me.session.userId?'me':''}><b>{rank}位</b> {s.seats.find(x=>x.id===id)?.name} ／ 資産{fmt(assets)}G{s.entry>0 && <span> ／ 賞金{fmt(s.payouts.find(x=>x.id===id)?.amount??0)}{me.coin.name}</span>}</li>;

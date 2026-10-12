@@ -993,6 +993,19 @@ describe('夜桜の新しいカジノロビー', () => {
 
 
 describe('カジノの人生ゲーム画面', () => {
+  it('20・40・60分版を作れて、一覧と盤面に選んだ版を表示する',async()=>{
+    const a=(await casinoLogin(A)).cookie!;
+    const menu=await (await get('/casino/tables/life',a)).text();
+    for(const minutes of [20,40,60])expect(menu).toContain(`value="${minutes}"`);
+    for(const minutes of [20,40,60]){
+      const made=await post('/casino/tables/life',a,{entry:'0',minutes:String(minutes)});
+      const path=made.headers.get('location')!,id=Number(/\/casino\/t\/(\d+)/.exec(path)![1]);
+      expect((await tableById(db,id))!.state).toMatchObject({minutes,endsAt:null});
+      const html=await (await get(path,a)).text();expect(html).toContain(`${minutes}分版`);
+      expect((html.match(/class="life-tile /g)??[]).length).toBe(minutes/20*36);
+      await post(`/casino/t/${id}/leave`,a,{});
+    }
+  });
   it('ホールから卓を作り、2人で仕事を選んで進める。本人の番とCSRFを確認する', async () => {
     const a=(await casinoLogin(A)).cookie!, b=(await casinoLogin(B)).cookie!;
     expect(await (await get('/casino/hall',a)).text()).toContain('/casino/tables/life');
