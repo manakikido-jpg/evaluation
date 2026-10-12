@@ -1,8 +1,8 @@
 /** 立体の盤面。結果・料金・サイコロの値はサーバーの状態だけを使う。 */
+import { createLifeRoute } from './life-route.js?v=1';
 let scene = null, generation = 0, library;
 const colors = [0xef7f89, 0x78bce4, 0xf3c869, 0x78c9a2, 0xb594de];
-const gap = 3.15, lanes = [[-.64,-.4],[.64,-.4],[-.64,.65],[.64,.65],[0,-.9]];
-const cellPoint = cell => { const row=Math.floor(cell/6), col=row%2?5-cell%6:cell%6; return {x:(col-2.5)*gap,z:(row-2.5)*gap}; };
+const lanes = [[-.64,-.4],[.64,-.4],[-.64,.65],[.64,.65],[0,-.9]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 class LifeScene {
   constructor(T, root, data) {
@@ -11,22 +11,17 @@ class LifeScene {
     this.renderer=new T.WebGLRenderer({antialias:true,powerPreference:'low-power'});
     this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
-    this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.25;
-    this.world=new T.Scene();this.world.background=new T.Color(0xe2e9e7);
-    this.camera=new T.PerspectiveCamera(40,1,.1,100);this.yaw=.72;this.elevation=1.0;this.distance=innerWidth<600?47:39;
-    this.world.add(new T.HemisphereLight(0xffffff,0x83986f,2.2));
-    const sun=new T.DirectionalLight(0xfff5dd,3.4);sun.position.set(9,25,13);sun.castShadow=true;
+    this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=.9;
+    this.world=new T.Scene();this.world.background=new T.Color(0xb9dded);this.route=createLifeRoute(T);
+    this.camera=new T.PerspectiveCamera(40,1,.1,100);this.yaw=.72;this.elevation=.95;this.distance=innerWidth<600?65:54;
+    this.world.add(new T.HemisphereLight(0xffffff,0x83986f,1.2));
+    const sun=new T.DirectionalLight(0xfff5dd,2.5);sun.position.set(9,25,13);sun.castShadow=true;
     Object.assign(sun.shadow.camera,{left:-22,right:22,top:22,bottom:-22,near:1,far:65});sun.shadow.mapSize.set(1024,1024);sun.shadow.normalBias=.035;
     this.world.add(sun);
-    this.floor=this.mesh(new T.CylinderGeometry(20,20,.6,64),0xd8c7b0,0,-.7,0);this.floor.receiveShadow=true;
-    const frame=this.mesh(new T.BoxGeometry(21.4,.8,21.4),0x92745a,0,0,0);frame.receiveShadow=true;
-    const mat=this.mesh(new T.BoxGeometry(20.9,.1,20.9),0xf4eedb,0,.45,0);mat.receiveShadow=true;
+    this.floor=this.mesh(new T.CylinderGeometry(22,22,1,80),0xb2d772,0,-.55,0);this.floor.receiveShadow=true;
+    const land=this.mesh(new T.CylinderGeometry(21.6,21.6,.18,80),0x79bd50,0,.04,0);land.receiveShadow=true;
     this.tiles=[];
     for(let n=0;n<data.tiles.length;n++)this.makeTile(n,data.tiles[n]);
-    for(let n=0;n<data.tiles.length-1;n++){
-      const a=cellPoint(n),b=cellPoint(n+1),road=this.mesh(new T.BoxGeometry(.5,.06,gap),0xfff8e7,(a.x+b.x)/2,.56,(a.z+b.z)/2);
-      road.rotation.y=Math.atan2(b.x-a.x,b.z-a.z);
-    }
     this.decorate();this.makeDice();
     this.renderer.domElement.tabIndex=0;this.renderer.domElement.setAttribute('aria-label','立体の人生の盤面。ドラッグや矢印キーで回転、ピンチやプラス・マイナスで拡大縮小できます。');
     this.listeners=[];this.controls();
@@ -44,32 +39,68 @@ class LifeScene {
     const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());
     return new T.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false});
   }
+  ribbon(start,end,width,height,color,parent=this.world) {
+    const T=this.T,positions=[],indices=[],steps=12;
+    for(let i=0;i<=steps;i++){
+      const t=start+(end-start)*i/steps,p=this.route.point(t),v=this.route.tangent(t);
+      for(const side of [-1,1])positions.push(p.x+v.z*width/2*side,height,p.z-v.x*width/2*side);
+      if(i<steps){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}
+    }
+    const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();
+    const mesh=this.mesh(geometry,color,0,0,0,parent);mesh.material.side=T.DoubleSide;mesh.castShadow=false;return mesh;
+  }
   makeTile(n,tile) {
-    const T=this.T,point=cellPoint(n),group=new T.Group();group.position.set(point.x,0,point.z);group.userData.cell=n;this.world.add(group);this.tiles.push(group);
-    const palette={pay:0xf2d996,gift:0xf1dcad,house:0xb9d8e0,insurance:0xb9d8e0,luck:0xd3c4e2,accident:0xeabec3,family:0xeebfcf,goal:0xe2ba72};
-    const tileColor=palette[tile.kind]??0xc4ddbe;
-    this.mesh(new T.BoxGeometry(2.82,.22,2.82),tileColor,0,.6,0,group);
-    const label=new T.Mesh(new T.PlaneGeometry(2.5,2.5),this.label(tile.label,n===0?'START':n===35?'GOAL':String(n),tile.icon));label.rotation.x=-Math.PI/2;label.position.y=.718;group.add(label);
-    if(tile.kind==='house'||tile.kind==='promotion'){
-      const x=-.91,z=-.93;
-      this.mesh(new T.BoxGeometry(.55,.52,.55),tile.kind==='house'?0xf7e9d6:0xb6cedd,x,1,z,group);
-      const roof=this.mesh(new T.ConeGeometry(.47,.4,4),0xd97772,x,1.44,z,group);roof.rotation.y=Math.PI/4;
-      this.mesh(new T.BoxGeometry(.14,.24,.03),0x7c5644,x,1,z+.285,group);
-    }
-    if(tile.kind==='pay'||tile.kind==='gift')for(let k=0;k<3;k++)this.mesh(new T.CylinderGeometry(.22,.22,.1,20),0xe9b743,.92,.81+k*.105,-.94,group);
-    if(tile.kind==='festival'){
-      for(const x of [-.48,.48])this.mesh(new T.CylinderGeometry(.065,.065,.65,10),0xcd6761,x,1,-1,group);
-      this.mesh(new T.BoxGeometry(1.2,.12,.14),0xcd6761,0,1.4,-1,group);
-    }
+    const T=this.T,group=new T.Group();group.userData.cell=n;this.world.add(group);this.tiles.push(group);
+    const palette={pay:0xffd445,gift:0xffdd68,house:0x77d5ec,insurance:0x77d5ec,luck:0xccb7ee,accident:0xf78982,family:0xf89fbe,goal:0xffb639};
+    const start=Math.max(0,n-.5),end=Math.min(35,n+.5);
+    this.ribbon(start,end,3.05,.23,0xfaf5da,group);
+    this.ribbon(start+.025,end-.025,2.72,.25,palette[tile.kind]??0xf9e962,group);
+    const point=this.route.point(n),direction=this.route.tangent(n);
+    const label=new T.Mesh(new T.PlaneGeometry(2.15,2.15),this.label(tile.label,n===0?'START':n===35?'GOAL':String(n),tile.icon));
+    label.rotation.set(-Math.PI/2,0,-Math.atan2(direction.x,direction.z));label.position.set(point.x,.27,point.z);group.add(label);
   }
   decorate() {
     const T=this.T;
-    for(let i=0;i<10;i++){
-      const x=i<5?-11.7:11.7,z=(i%5-2)*4;
-      this.mesh(new T.CylinderGeometry(.1,.14,.65,8),0x967358,x,.75,z);
-      this.mesh(new T.IcosahedronGeometry(.65,1),i%3===0?0xf1b8ca:0x87b9a4,x,1.5,z);
+    // 川と橋。道とは別の風景として、見通しを残して置く。
+    this.mesh(new T.BoxGeometry(3.4,.04,31),0x50bbdc,-7,.16,0);
+    const crossings=[];
+    for(let n=1;n<=350;n++){const a=this.route.point((n-1)/10),b=this.route.point(n/10);if((a.x+7)*(b.x+7)<0)crossings.push(a.z+(b.z-a.z)*(-7-a.x)/(b.x-a.x));}
+    for(const z of crossings){
+      this.mesh(new T.BoxGeometry(4.4,.13,2.9),0xd3a968,-7,.10,z);
+      for(const side of [-1,1])this.mesh(new T.BoxGeometry(4.4,.2,.12),0xf0d49c,-7,.47,z+side*1.45);
     }
-    for(let i=0;i<5;i++)this.mesh(new T.BoxGeometry(1.9,.18,.16),0xd6b275,11.5,.65,-9+i*.42);
+    // 道にかぶらない場所を選んで、山・街・木を並べる。
+    const clear=(x,z,r=2.3)=>this.route.centers.every(p=>Math.hypot(x-p.x,z-p.z)>r);
+    for(const [x,z,r,h] of [[-15,-7,3.6,5],[-13,-14,3.8,6],[12,-14,3.8,6.2],[16,-8,3.1,4.8]]){
+      this.mesh(new T.ConeGeometry(r,h,7),0x858d77,x,h/2+.15,z);
+      this.mesh(new T.ConeGeometry(r*.42,h*.35,7),0xdbe3d2,x,h*.83+.15,z);
+    }
+    for(let row=0;row<6;row++)for(let col=0;col<7;col++){
+      const x=-9+col*3,z=-8+row*3.2;
+      if(!clear(x,z,2.75)||Math.abs(x+7)<2.3)continue;
+      const tall=(row+col)%3===0,h=tall?2.1:1.1,color=[0xf1e3b8,0xa4d7ea,0xf0a69c,0xbbcde5][(row+col)%4];
+      this.mesh(new T.BoxGeometry(1.15,h,1.15),color,x,h/2+.15,z);
+      if(!tall){const roof=this.mesh(new T.ConeGeometry(1,.65,4),0xc96755,x,h+.48,z);roof.rotation.y=Math.PI/4;}
+      else this.mesh(new T.BoxGeometry(1.3,.18,1.3),0x688ba1,x,h+.23,z);
+      for(let level=0;level<(tall?3:1);level++)for(const off of [-.27,.27])this.mesh(new T.BoxGeometry(.2,.23,.03),0x6c9eae,x+off,.55+level*.5,z+.585);
+    }
+    for(let row=0;row<2;row++)for(let col=0;col<6;col++){
+      const x=-4+col*1.8,z=-16+row*1.8,h=1.4+((row+col)%4)*.55;
+      if(!clear(x,z,2.4))continue;
+      this.mesh(new T.BoxGeometry(1.15,h,1.15),[0x83bad9,0xe8c783,0xa8bfdc][col%3],x,h/2+.15,z);
+      this.mesh(new T.BoxGeometry(1.24,.15,1.24),0x638fa9,x,h+.22,z);
+      for(let level=0;level<3;level++)for(const side of [-.26,.26])this.mesh(new T.BoxGeometry(.22,.22,.03),0x476c90,x+side,.5+level*.65,z+.585);
+    }
+    for(let i=0;i<65;i++){
+      const angle=i*2.39996,r=6+Math.sqrt(i/65)*13,x=Math.cos(angle)*r,z=Math.sin(angle)*r;
+      if(!clear(x,z,2.7)||Math.abs(x+7)<2.4)continue;
+      this.mesh(new T.CylinderGeometry(.08,.12,.65,7),0x976442,x,.47,z);
+      if(i%3===0){this.mesh(new T.ConeGeometry(.6,1.3,8),0x319450,x,1.05,z);this.mesh(new T.ConeGeometry(.45,1,8),0x4daa59,x,1.65,z);}
+      else this.mesh(new T.SphereGeometry(.55,12,8),i%7===0?0xf0afbf:0x64af42,x,1.18,z);
+    }
+    const goal=this.route.point(35);
+    for(const off of [-1.45,1.45])this.mesh(new T.CylinderGeometry(.12,.12,2.5,12),0xd85b55,goal.x+off,1.45,goal.z);
+    this.mesh(new T.BoxGeometry(3.4,.24,.3),0xf8db6d,goal.x,2.7,goal.z);
   }
   car(id,index,family) {
     const T=this.T,g=new T.Group();this.world.add(g);
@@ -98,8 +129,8 @@ class LifeScene {
     const map=new T.CanvasTexture(c);map.colorSpace=T.SRGBColorSpace;return new T.MeshStandardMaterial({map,roughness:.35});
   }
   makeDice() {
-    const T=this.T;this.mesh(new T.BoxGeometry(3.2,.22,3.2),0x8eaa9a,-11.2,.35,9.7);
-    this.dice=new T.Mesh(new T.BoxGeometry(1.05,1.05,1.05),[3,4,1,6,2,5].map(n=>this.diceTexture(n)));this.dice.position.set(-11.2,1.05,9.7);this.dice.castShadow=true;this.world.add(this.dice);this.rollAt=0;this.die=1;this.setDice(1);
+    const T=this.T;this.mesh(new T.BoxGeometry(3.2,.22,3.2),0x8eaa9a,-15,.35,9.7);
+    this.dice=new T.Mesh(new T.BoxGeometry(1.05,1.05,1.05),[3,4,1,6,2,5].map(n=>this.diceTexture(n)));this.dice.position.set(-15,1.05,9.7);this.dice.castShadow=true;this.world.add(this.dice);this.rollAt=0;this.die=1;this.setDice(1);
   }
   setDice(value) {
     const T=this.T, rotations={1:[0,0,0],2:[-Math.PI/2,0,0],3:[0,0,Math.PI/2],4:[0,0,-Math.PI/2],5:[Math.PI/2,0,0],6:[Math.PI,0,0]};
@@ -126,7 +157,7 @@ class LifeScene {
     }
     root.dataset.lifeActors=String(this.cars.size);root.dataset.lifeRenderer='webgl';this.resize();
   }
-  point(actor,cell) { const p=cellPoint(cell),off=lanes[actor.index%5];return new this.T.Vector3(p.x+off[0],.67,p.z+off[1]); }
+  point(actor,cell) { const p=this.route.point(cell),v=this.route.tangent(cell),off=lanes[actor.index%5];return new this.T.Vector3(p.x+v.z*off[0]+v.x*off[1],.25,p.z-v.x*off[0]+v.z*off[1]); }
   place(actor,cell) {actor.mesh.position.copy(this.point(actor,cell));}
   resize() {
     const width=this.root.clientWidth||this.root.parentElement.clientWidth||800,height=this.root.clientHeight||420;
@@ -139,8 +170,8 @@ class LifeScene {
       if(!actor.hop&&actor.queue.length&&now>=actor.wait)actor.hop={from:actor.cell,to:actor.queue.shift(),at:now};
       if(actor.hop){
         moving++;const hop=actor.hop,t=clamp((now-hop.at)/250,0,1),smooth=t*t*(3-2*t),from=this.point(actor,hop.from),to=this.point(actor,hop.to);
-        actor.mesh.position.lerpVectors(from,to,smooth);actor.mesh.position.y+=Math.sin(t*Math.PI)*.18;
-        actor.mesh.rotation.y=Math.atan2(to.x-from.x,to.z-from.z);
+        actor.mesh.position.copy(this.point(actor,hop.from+(hop.to-hop.from)*smooth));actor.mesh.position.y+=Math.sin(t*Math.PI)*.18;
+        const direction=this.route.tangent(hop.from+(hop.to-hop.from)*smooth);actor.mesh.rotation.y=Math.atan2(direction.x,direction.z);
         if(t===1){actor.cell=hop.to;actor.hop=null;}
       }else if(actor.queue.length)moving++;
     }
@@ -170,7 +201,7 @@ class LifeScene {
     if(!object)return;const at=object.userData.cell,tile=this.data.tiles[at],names=this.data.pawns.filter(p=>p.position===at).map(p=>p.name);
     this.root.closest('[data-life-presentation]').querySelector('[data-life-note]').textContent=`${at}マス：${tile.icon} ${tile.label}${names.length?' ／ '+names.join('・'):''}`;
   }
-  reset() {this.yaw=.72;this.elevation=1;this.distance=innerWidth<600?47:39;}
+  reset() {this.yaw=.72;this.elevation=.95;this.distance=innerWidth<600?65:54;}
   toggle() {this.flat=!this.flat;this.attach(this.root,this.data);}
   dispose() {
     this.disposed=true;cancelAnimationFrame(this.raf);this.observer.disconnect();
