@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-12-casino-boost-one-a-day', date: '2026-10-12', kind: 'improve', where: ['Discord', '社務所Web'], title: '大勝負の札は 1 日 1 枚まで', items: ['大勝負の札は 1 人 1 日（日本時間）1 枚までにしました。重ねて使うことはできません。'] },
   { id: '2026-10-12-role-template-edit', date: '2026-10-12', kind: 'improve', where: ['社務所Web'], title: '権限のテンプレートの中身を直せるように', items: ['ロールの一覧の「📋 権限のテンプレート」で、「直す」から付く権限をチェックで選び直せます（はじめからあるものも。「はじめに戻す」で元どおり）。', '「➕ 新しく作る」で、チェックから新しいテンプレートを作れます。'] },
   { id: '2026-10-12-secret-room-one-click', date: '2026-10-12', kind: 'improve', where: ['Discord'], title: 'シクレ部屋は 1 回押すだけで', items: ['「🤫 シクレ部屋を開く」を押すと、選ぶ画面なしで自分だけの部屋ができ、入るリンクと部屋代が自分にだけ届きます。', 'シクレ部屋は宿坊だけにしました（宵宮では作りません）。'] },
   { id: '2026-10-12-secret-room-entry', date: '2026-10-12', kind: 'improve', where: ['Discord'], title: 'シクレ部屋の入口をすっきり', items: ['公開パネルは「シクレ部屋を開く」ボタン1つにしました。種類と料金は押した本人だけに表示します。'] },
