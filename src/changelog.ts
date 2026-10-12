@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-12-secret-room-entry', date: '2026-10-12', kind: 'improve', where: ['Discord'], title: 'シクレ部屋の入口をすっきり', items: ['公開パネルは「シクレ部屋を開く」ボタン1つにしました。種類と料金は押した本人だけに表示します。'] },
   {
     id: '2026-10-12-diary-subscription', date: '2026-10-12', kind: 'improve', where: ['Discord', '社務所Web'],
     title: '日記を 2 週間 500 銭のサブスクに',
