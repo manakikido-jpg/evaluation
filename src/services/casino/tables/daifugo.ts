@@ -478,33 +478,20 @@ function handWeight(v: BotView, hand: number[], rev: boolean): number {
   return w;
 }
 
-/** 強い BOT の手 */
-export function dBotStrong(s: DaifugoState, i: number): Step<DaifugoState> {
+/** BOT が試すための軽いコピー（出す・パスで書きかえるところだけ。手札の配列は入れかえるだけなので、そのまま使える） */
+const lite = (s: DaifugoState): DaifugoState => ({ ...s, seats: s.seats.map((x) => ({ ...x })), order: [...s.order], passes: [...s.passes] });
+
+type BotOption = { cost: number; step: Step<DaifugoState>; cards: number[]; pass?: boolean };
+
+/** 強い BOT が考える手の候補（点が小さいほどよい）。場があるときはパスも入る。並びは考えた順 */
+function strongOptions(s: DaifugoState, i: number): BotOption[] {
   const x = s.seats[i]!;
   const v = botView(s, i);
   const rev = reversed(s);
-  if (s.pending) {
-    // 7 渡し・10 捨て: 手札がいちばん軽くなるものを 1 枚ずつ（渡すときは強い札を相手にあげない）
-    const step = s.pending.steps[0]!;
-    const n = Math.min(step.n, x.hand.length);
-    let hand = [...x.hand];
-    const picked: number[] = [];
-    for (let k = 0; k < n; k++) {
-      let best: { c: number; cost: number } | undefined;
-      for (const c of hand) {
-        const rest = hand.filter((y) => y !== c);
-        const cost = handWeight(v, rest, rev) + (step.kind === 'give' ? dirPower(rev, c) * 0.8 : 0);
-        if (!best || cost < best.cost) best = { c, cost };
-      }
-      picked.push(best!.c);
-      hand = hand.filter((y) => y !== best!.c);
-    }
-    return dChoose(s, i, picked);
-  }
   const danger = v.oppMin <= 2;
-  let best: { cost: number; step: Step<DaifugoState> } | undefined;
+  const out: BotOption[] = [];
   for (const cards of botCandidates(s, x.hand)) {
-    const step = dPlay(structuredClone(s), i, cards);
+    const step = dPlay(lite(s), i, cards);
     if (!step.ok) continue;
     const after = step.state;
     const rest = after.seats[i]!.hand;
@@ -530,13 +517,145 @@ export function dBotStrong(s: DaifugoState, i: number): Step<DaifugoState> {
       // 同じくらいなら弱い札から
       cost += Math.max(...cards.map((c) => dirPower(rev, c))) * 0.15;
     }
-    if (!best || cost < best.cost) best = { cost, step };
+    out.push({ cost, step, cards });
   }
-  if (!s.field) return best ? best.step : dPlay(s, i, [sortHand(x.hand, rev)[0]!]);
   // 場があるとき: パスとくらべる（だれかが上がりそうなら止めにいく）
-  const passCost = handWeight(v, x.hand, rev) + (danger ? 12 : 0);
-  if (!best || best.cost > passCost) return dPass(s, i);
+  if (s.field) out.push({ cost: handWeight(v, x.hand, rev) + (danger ? 12 : 0), step: dPass(lite(s), i), cards: [], pass: true });
+  return out;
+}
+
+/** 7 渡し・10 捨て: 手札がいちばん軽くなるものを 1 枚ずつ（渡すときは強い札を相手にあげない） */
+function strongChoose(s: DaifugoState, i: number): Step<DaifugoState> {
+  const x = s.seats[i]!;
+  const v = botView(s, i);
+  const rev = reversed(s);
+  const step = s.pending!.steps[0]!;
+  const n = Math.min(step.n, x.hand.length);
+  let hand = [...x.hand];
+  const picked: number[] = [];
+  for (let k = 0; k < n; k++) {
+    let best: { c: number; cost: number } | undefined;
+    for (const c of hand) {
+      const rest = hand.filter((y) => y !== c);
+      const cost = handWeight(v, rest, rev) + (step.kind === 'give' ? dirPower(rev, c) * 0.8 : 0);
+      if (!best || cost < best.cost) best = { c, cost };
+    }
+    picked.push(best!.c);
+    hand = hand.filter((y) => y !== best!.c);
+  }
+  return dChoose(s, i, picked);
+}
+
+/** 強い BOT の手（1 手だけ見る。先読みの BOT が、試しに打つときにも使う） */
+export function dBotStrong(s: DaifugoState, i: number): Step<DaifugoState> {
+  if (s.pending) return strongChoose(s, i);
+  const opts = strongOptions(s, i);
+  const plays = opts.filter((o) => !o.pass);
+  let best = plays[0];
+  for (const o of plays) if (o.cost < best!.cost) best = o;
+  if (!s.field) return best ? best.step : dPlay(s, i, [sortHand(s.seats[i]!.hand, reversed(s))[0]!]);
+  const pass = opts.find((o) => o.pass)!;
+  if (!best || best.cost > pass.cost) return pass.step;
   return best.step;
+}
+
+// ───────── 🤖 先読みの BOT（見えていないカードを配りなおして、最後まで試しに打つ） ─────────
+//
+// 1. 強い BOT の点で、よさそうな手を少しだけ選ぶ（パスも入れる）
+// 2. 相手の手札はのぞかない。相手みんなの手札をまぜて（見えていないカード）、枚数どおりに配りなおす
+// 3. 候補の手を打ってから、みんな強い BOT のつもりで最後まで打ち、自分が何番で上がるかを見る
+// 4. 配りなおしを何回もして、平均の順位がいちばんよい手を選ぶ（同じ配りなおしで全部の手をくらべる）
+// 乱数は場のようす（みんなに見えること）と自分の手札から決める。だから相手の手札が何でも、同じ場面なら同じ手
+
+/** 先読みで試す候補の数・配りなおしの回数（多くて）・1 回に打つ手の上限・1 手で試しに打つ手の合計の上限（重くしない） */
+export const LOOKAHEAD = { candidates: 4, samples: 16, maxSteps: 400, budget: 3000 };
+
+function seedOf(s: DaifugoState, i: number): number {
+  const pub = [i, s.played, s.revolution ? 1 : 0, s.jback ? 1 : 0, s.turn ?? -1, ...(s.field?.cards ?? []), -1, ...(s.seen ?? []), -2, ...s.seats[i]!.hand, -3, ...s.seats.map((x) => x.hand.length), ...s.passes];
+  let h = 2166136261;
+  for (const n of pub) h = Math.imul(h ^ (n + 7), 16777619) >>> 0;
+  return h;
+}
+
+function mulberry(seed: number) {
+  let t = seed >>> 0;
+  return (n: number) => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return Math.floor((((r ^ (r >>> 14)) >>> 0) / 4294967296) * n);
+  };
+}
+
+/** 自分の順位（0 が 1 番。反則上がり・最後まで残ると下） */
+function placeOf(s: DaifugoState, id: string): number {
+  const k = s.order.indexOf(id);
+  if (k >= 0) return k;
+  if (s.fouls?.includes(id)) return s.seats.length;
+  return s.seats.length - 1;
+}
+
+/** 相手みんなの手札をまぜて、枚数どおりに配りなおす（自分の手札はそのまま） */
+function redeal(s: DaifugoState, i: number, rand: (n: number) => number): DaifugoState {
+  // 試しに打つだけなので、記録は持たない（コピーが軽くなる）
+  const b = lite({ ...s, log: [] });
+  const others = b.seats.map((_, j) => j).filter((j) => j !== i && !b.seats[j]!.out);
+  const pool = sortHand(others.flatMap((j) => b.seats[j]!.hand));
+  for (let k = pool.length - 1; k > 0; k--) {
+    const r = rand(k + 1);
+    [pool[k], pool[r]] = [pool[r]!, pool[k]!];
+  }
+  for (const j of others) b.seats[j]!.hand = sortHand(pool.splice(0, s.seats[j]!.hand.length));
+  return b;
+}
+
+/** 最後まで（自分が上がるか、1 人だけになるまで）みんな強い BOT で打つ */
+function playout(s: DaifugoState, id: string, used: { n: number }): number {
+  let st = s;
+  for (let k = 0; k < LOOKAHEAD.maxSteps; k++, used.n++) {
+    if (active(st).length <= 1 || st.order.includes(id) || st.fouls?.includes(id)) break;
+    const t = st.turn;
+    if (t === null) break;
+    const r = dBotStrong(st, t);
+    if (!r.ok) break;
+    st = r.state;
+  }
+  return placeOf(st, id);
+}
+
+/** 先読みの BOT の手 */
+export function dBotLookahead(s: DaifugoState, i: number): Step<DaifugoState> {
+  if (s.pending) return strongChoose(s, i);
+  const x = s.seats[i]!;
+  const opts = strongOptions(s, i);
+  if (opts.length <= 1) return dBotStrong(s, i);
+  // 上がれるなら（反則でなければ）すぐ上がる
+  const win = opts.find((o) => o.cost <= -1000);
+  if (win) return win.step;
+  const pass = opts.find((o) => o.pass);
+  const top = opts
+    .filter((o) => !o.pass && o.cost < 1000)
+    .sort((a, b) => a.cost - b.cost)
+    .slice(0, LOOKAHEAD.candidates);
+  const cands = [...top, ...(pass ? [pass] : [])];
+  if (cands.length <= 1) return dBotStrong(s, i);
+  const rand = mulberry(seedOf(s, i));
+  const score = cands.map(() => 0);
+  // 試しに打った手の数で止める（時間ではなく数で止めるので、同じ場面ならいつも同じ手）
+  const used = { n: 0 };
+  for (let n = 0; n < LOOKAHEAD.samples && used.n < LOOKAHEAD.budget; n++) {
+    const world = redeal(s, i, rand);
+    cands.forEach((o, k) => {
+      // 同じ配りなおしで、その手を打ったところから
+      const w = lite(world);
+      const r = o.pass ? dPass(w, i) : dPlay(w, i, o.cards);
+      score[k]! += r.ok ? playout(r.state, x.id, used) : 99;
+    });
+  }
+  // 平均の順位がいちばんよい手（同じなら強い BOT の点がよいほう）
+  let best = 0;
+  for (let k = 1; k < cands.length; k++) if (score[k]! < score[best]! - 1e-9 || (Math.abs(score[k]! - score[best]!) < 1e-9 && cands[k]!.cost < cands[best]!.cost)) best = k;
+  return cands[best]!.step;
 }
 
 export const daifugo = partyEngine<DaifugoState>({
@@ -562,9 +681,9 @@ export const daifugo = partyEngine<DaifugoState>({
     if (str(f, 'action') === 'pass') return dPass(s, i);
     return dPlay(s, i, cards);
   },
-  bot: (s, i) => dBotStrong(s, i),
-  // 強い BOT（カードを数える）にしたので 2。ルールの組み合わせごとに分けて記録する
-  aiVersion: '2',
+  bot: (s, i) => dBotLookahead(s, i),
+  // 先読みの BOT（見えていないカードを配りなおして試しに打つ）にしたので 3。ルールの組み合わせごとに分けて記録する
+  aiVersion: '3',
   aiVariant: (s) => [...rulesOf(s)].sort().join(','),
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから

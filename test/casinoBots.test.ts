@@ -3,7 +3,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import type { Rng } from '../src/services/casino/cards.js';
 import { isBot } from '../src/services/casino/tables/bots.js';
-import { active, babanuki, daifugo, dBotSimple, dBotStrong, type BabaState, type DaifugoState } from '../src/services/casino/tables/party.js';
+import { active, babanuki, daifugo, dBotLookahead, dBotSimple, dBotStrong, type BabaState, type DaifugoState } from '../src/services/casino/tables/party.js';
 import { poker, type PokerState } from '../src/services/casino/tables/poker.js';
 import { chen, equity, handClass, parseRange, pokerBotMove, positionOf } from '../src/services/casino/tables/pokerBot.js';
 import { actTable, createTable, leaveTable, pollTable, tableById } from '../src/services/casino/tables/service.js';
@@ -232,6 +232,38 @@ describe('🤖 大富豪・ババ抜きの BOT', () => {
     expect(fouls).toBe(0);
   });
 
+  it('大富豪の先読みの BOT は、強い BOT より上に上がる。相手の手札はのぞかない', () => {
+    let look = 0;
+    const games = 16;
+    for (let g = 0; g < games; g++) {
+      const t = sim(daifugo, 300 + g);
+      let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '0' }, t.ctx()));
+      for (let k = 0; k < 3; k++) s = t.run(daifugo.act(s, P(1).id, { action: 'add_bot' }, t.ctx()));
+      s = t.run(daifugo.act(s, P(1).id, { action: 'start' }, t.ctx()));
+      const me = g % 4;
+      for (let k = 0; k < 1000 && active(s).length > 1; k++) {
+        const i = s.turn!;
+        if (i === me && g === 0 && k < 30) {
+          // ほかの人の手札をまぜて配りなおしても、同じ手を選ぶ
+          const b = structuredClone(s);
+          const others = b.seats.map((_, j) => j).filter((j) => j !== i);
+          const pool = others.flatMap((j) => b.seats[j]!.hand).reverse();
+          for (const j of others) b.seats[j]!.hand = pool.splice(0, s.seats[j]!.hand.length);
+          const a = dBotLookahead(structuredClone(s), i);
+          const c = dBotLookahead(b, i);
+          expect(a.ok && c.ok && c.state.seats[i]!.hand).toEqual(a.ok && a.state.seats[i]!.hand);
+        }
+        const r = (i === me ? dBotLookahead : dBotStrong)(structuredClone(s), i);
+        if (!r.ok) throw new Error(r.error);
+        s = r.state;
+      }
+      const order = [...s.order, ...s.seats.filter((x) => !x.out).map((x) => x.id), ...[...(s.fouls ?? [])].reverse()];
+      look += order.indexOf(s.seats[me]!.id);
+    }
+    // 4 人なので、同じ強さなら平均 1.5（0 が 1 位）
+    expect(look / games).toBeLessThan(1.5);
+  }, 120_000);
+
   it('ババ抜き: BOT と最後まで', () => {
     const t = sim(babanuki, 2);
     let s: BabaState = t.run(babanuki.create(P(1), { entry: '50' }, t.ctx()));
@@ -285,7 +317,7 @@ describe('🤖 BOT の銭（DB）', () => {
     const { aiMatches } = await import('../src/db/schema.js');
     const rows = await db.select().from(aiMatches);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ game: 'daifugo', aiVersion: '2', variant: 'eight,joker,revolution', players: 3, bots: 2, tableId: id });
+    expect(rows[0]).toMatchObject({ game: 'daifugo', aiVersion: '3', variant: 'eight,joker,revolution', players: 3, bots: 2, tableId: id });
     const me = rows[0]!.seats.find((x) => x.id === A.id)!;
     expect(me).toMatchObject({ bot: false, place: st.order.indexOf(A.id) + 1, net: won - 100 });
     const { aiStats } = await import('../src/services/casino/aiStats.js');
