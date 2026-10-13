@@ -315,7 +315,7 @@ describe('🤖 BOT の銭（DB）', () => {
     expect(d.botPlace).toBeCloseTo(1 / 3, 2);
     expect(ai.totals.find((r) => r.game === 'poker')).toMatchObject({ humanTop: 100, botTop: 0, verdict: 'few' });
     expect(ai.players[0]).toMatchObject({ id: A.id, matches: 21 });
-    expect(ai.othello).toEqual([{ level: 'hard', games: 25, win: 3, draw: 0, lose: 22, resign: 0, humanNet: 3 * 120 - 22 * 100, mult: 2.2, verdict: 'strong' }]);
+    expect(ai.othello).toEqual([{ level: 'hard', games: 25, win: 3, draw: 0, lose: 22, resign: 0, humanNet: 3 * 120 - 22 * 100, mult: 1.6, verdict: 'strong' }]);
     expect(verdictOf(0.2, 0.6, 30)).toBe('weak');
     expect(verdictOf(0.5, 0.5, 30)).toBe('fair');
   });

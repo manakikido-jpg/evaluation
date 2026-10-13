@@ -9,9 +9,9 @@ export type Stone = 'B' | 'W';
 export type OthelloLevel = 'easy' | 'normal' | 'hard';
 
 export const OTHELLO_LEVELS: Record<OthelloLevel, { label: string; mult: number }> = {
-  easy: { label: 'やさしい', mult: 1.2 },
-  normal: { label: 'ふつう', mult: 1.6 },
-  hard: { label: 'つよい', mult: 2.2 },
+  easy: { label: 'やさしい', mult: 1.1 },
+  normal: { label: 'ふつう', mult: 1.3 },
+  hard: { label: 'つよい', mult: 1.6 },
 };
 
 export const isOthelloLevel = (v: unknown): v is OthelloLevel => typeof v === 'string' && Object.hasOwn(OTHELLO_LEVELS, v);
@@ -135,6 +135,8 @@ function search(board: string, toMove: Stone, me: Stone, depth: number, alpha: n
   if (depth <= 0 && !exact) return evaluate(board, me);
   const maximizing = toMove === me;
   let best = maximizing ? -Infinity : Infinity;
+  // 強そうなマス（角など）から先に読むと、早く打ち切れる
+  moves.sort((a, b) => WEIGHTS[b]! - WEIGHTS[a]!);
   for (const m of moves) {
     const v = search(applyMove(board, toMove, m)!, other(toMove), me, depth - 1, alpha, beta, exact);
     if (maximizing) {
@@ -161,14 +163,23 @@ export function cpuMove(board: string, color: Stone, level: OthelloLevel, rng: R
     return pick(moves.filter((m) => flipsFor(board, color, m).length === most));
   }
   const empties = [...board].filter((c) => c === '.').length;
-  const exact = level === 'hard' && empties <= 8;
-  const depth = level === 'hard' ? 4 : 1;
+  // つよい: 先を 4 手まで読む。残り 10 マスからは、最後まで正しく読む
+  const exact = level === 'hard' && empties <= HARD_EXACT_EMPTIES;
+  const depth = level === 'hard' ? HARD_DEPTH : 1;
   const scored = moves.map((m) => ({ m, v: search(applyMove(board, color, m)!, other(color), color, depth - 1, -Infinity, Infinity, exact) }));
   const best = Math.max(...scored.map((s) => s.v));
-  // ふつうは少し迷う（いちばんより少し下の手も選ぶ）
-  const slack = level === 'normal' ? 12 : 0;
+  // 序盤は、いい手の中から毎回ちがう手を選ぶ（同じ手順をなぞっても、同じ形にならない）。ふつうはいつも少し迷う
+  const opening = empties > 64 - 4 - OPENING_MOVES;
+  const slack = level === 'normal' ? 12 : opening ? OPENING_SLACK : 0;
   return pick(scored.filter((s) => s.v >= best - slack).map((s) => s.m));
 }
+
+/** つよい CPU の読み: 先を読む手の数・最後まで読みはじめる空きマスの数 */
+export const HARD_DEPTH = 4;
+export const HARD_EXACT_EMPTIES = 10;
+/** 序盤（はじめの何手）は、いちばんよりこの点まで下の手からも選ぶ */
+export const OPENING_MOVES = 12;
+export const OPENING_SLACK = 10;
 
 export type OthelloState = {
   board: string;

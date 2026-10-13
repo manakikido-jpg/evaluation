@@ -24,7 +24,7 @@ import {
   todayBets,
 } from '../src/services/casino/casino.js';
 import type { BjState } from '../src/services/casino/blackjack.js';
-import { legalMoves } from '../src/services/casino/othello.js';
+import { applyMove, cpuMove, initialBoard, legalMoves, OTHELLO_LEVELS } from '../src/services/casino/othello.js';
 import { REELS, SLIP } from '../src/services/casino/slots.js';
 import { dayPicks, machineSetting, slotFloorData } from '../src/services/casino/slotFloor.js';
 import { casinoDaily, casinoDailyGames, casinoWinners, slotSettingStats } from '../src/services/casino/report.js';
@@ -275,6 +275,34 @@ describe('⚫ オセロ CPU（DB）', () => {
     expect(board.board.split('').filter((c) => c !== '.')).toHaveLength(6);
     const r = await actOthello(db, row.id, A, 'resign', seq([0]), NOW);
     expect(r.status === 'ok' && r.row).toMatchObject({ status: 'done', payout: 0 });
+  });
+
+  it('オセロだけの 1 日の上限。ほかのゲームの賭けは数えない', async () => {
+    const now = new Date();
+    const lim = ccfg({ othelloDailyBetLimit: 150 });
+    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), now);
+    expect(await checkBet(db, lim, A, 'othello', 150, now)).toBe('ok');
+    const s = await startOthello(db, lim, A, 100, 'easy', 'B', seq([0]), now);
+    expect(s.status).toBe('ok');
+    expect(await todayBets(db, A, now, 'othello')).toBe(100);
+    expect(await checkBet(db, lim, A, 'othello', 100, now)).toBe('othello_limit');
+    expect(await checkBet(db, lim, A, 'othello', 50, now)).toBe('ok');
+    expect(await checkBet(db, lim, A, 'slots', 100, now)).toBe('ok');
+    expect(await checkBet(db, ccfg({ othelloDailyBetLimit: 0 }), A, 'othello', 1000, now)).toBe('ok');
+  });
+
+  it('倍率はつよいでも 1.6 倍まで', () => {
+    expect(OTHELLO_LEVELS.hard.mult).toBe(1.6);
+    expect(OTHELLO_LEVELS.normal.mult).toBe(1.3);
+    expect(OTHELLO_LEVELS.easy.mult).toBe(1.1);
+  });
+
+  it('つよい CPU は序盤で毎回同じ手にならない', () => {
+    // 同じ手順で打っても、乱数で CPU の返しが変わる
+    const b = applyMove(initialBoard(), 'B', 19)!;
+    const picks = new Set(Array.from({ length: 6 }, (_, i) => cpuMove(b, 'W', 'hard', () => i % 3)));
+    expect(picks.size).toBeGreaterThan(1);
+    for (const p of picks) expect(legalMoves(b, 'W')).toContain(p);
   });
 
   it('白を選ぶと CPU が先に打つ', async () => {

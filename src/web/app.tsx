@@ -1796,6 +1796,7 @@ export function createWebApp(deps: WebDeps) {
       maxBet: int('maxBet'),
       rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
+      othelloDailyBetLimit: typeof body.othelloDailyBetLimit === 'string' ? int('othelloDailyBetLimit') : cfg.casino.othelloDailyBetLimit,
       // 💰 収益の分け前の %（欄がない古い画面から送られたら、今のまま）
       profitSharePercent: typeof body.profitSharePercent === 'string' ? int('profitSharePercent') : cfg.casino.profitSharePercent,
       // 🎰 大勝負の札の倍率（欄がない古い画面から送られたら、今のまま）

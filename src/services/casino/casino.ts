@@ -29,7 +29,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   atslot: { emoji: '🦊', name: 'AT 機（鬼斬り白狐）', note: 'レア役で AT。押し順ナビで増やし、上乗せ・継続バトル・天井つき' },
   roulette: { emoji: '🎡', name: 'ルーレット', note: '赤黒は 2 倍・数字 1 つは 36 倍' },
   chinchiro: { emoji: '🎲', name: 'ちんちろりん', note: '親とサイコロ勝負。ピンゾロは 5 倍' },
-  othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.2〜2.2 倍' },
+  othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.1〜1.6 倍' },
   versus: { emoji: '⚔\uFE0F', name: 'メンバー対戦（オセロ）', note: 'メンバー同士で賭けて対戦。勝った人が総取り' },
   bj_table: { emoji: '🃏', name: 'ブラックジャック卓', note: 'みんなで同じディーラーと勝負' },
   baccarat_table: { emoji: '🎴', name: 'バカラ卓', note: 'みんなで同じ勝負に賭ける' },
@@ -43,15 +43,16 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   keiba: { emoji: '🏇', name: 'みんなでダービー（競馬）', note: '8 頭のレースにみんなで賭けて、同じレースを見る。オッズはみんなの賭けで変わる' },
 };
 
-export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor' | 'reserve';
+export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'othello_limit' | 'poor' | 'reserve';
 
 /** 今日（日本時間）カジノで賭けた合計 */
-export async function todayBets(db: Db, memberId: string, now = new Date()): Promise<number> {
+/** 今日（日本時間）賭けた合計。game を決めると、そのゲームの分だけ */
+export async function todayBets(db: Db, memberId: string, now = new Date(), game?: CasinoGame): Promise<number> {
   const since = new Date(`${jstDate(now)}T00:00:00+09:00`);
   const [row] = await db
     .select({ n: sql<number>`coalesce(-sum(${coinTx.amount}), 0)::int` })
     .from(coinTx)
-    .where(and(eq(coinTx.memberId, memberId), eq(coinTx.reason, 'casino_bet'), gte(coinTx.at, since)));
+    .where(and(eq(coinTx.memberId, memberId), eq(coinTx.reason, 'casino_bet'), gte(coinTx.at, since), game ? sql`${coinTx.detail}->>'game' = ${game}` : undefined));
   return row?.n ?? 0;
 }
 
@@ -62,6 +63,7 @@ export async function checkBet(db: Db, cfg: GuildConfig, memberId: string, game:
   if (!c.games.includes(game)) return 'game_off';
   if (!Number.isInteger(bet) || bet < c.minBet || bet > c.maxBet) return 'bad_bet';
   if (c.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + bet > c.dailyBetLimit) return 'limit';
+  if (game === 'othello' && c.othelloDailyBetLimit > 0 && (await todayBets(db, memberId, now, 'othello')) + bet > c.othelloDailyBetLimit) return 'othello_limit';
   if ((await walletOf(db, memberId)).balance < bet) return 'poor';
   return 'ok';
 }
@@ -71,6 +73,7 @@ export const BET_ERROR: Record<Exclude<BetCheck, 'ok'>, string> = {
   game_off: 'このゲームはいま遊べません。',
   bad_bet: '賭ける銭の量を確かめてください。',
   limit: '今日賭けられる上限に届きました。また明日遊んでください。',
+  othello_limit: '今日のオセロで賭けられる上限に届きました。また明日遊んでください。',
   poor: '銭が足りません。',
   reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
 };

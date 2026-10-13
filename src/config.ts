@@ -511,6 +511,8 @@ export const casinoSchema = z.object({
   keibaG1RoleId: z.string().regex(/^\d{5,25}$/).optional(),
   /** 1 日（日本時間）に賭けられる合計（0 で上限なし） */
   dailyBetLimit: z.number().int().min(0).max(100_000_000).default(20000),
+  /** ⚫ オセロ（CPU）だけで 1 日（日本時間）に賭けられる合計（0 で上限なし）。腕で勝てるゲームなので、別に上限をつける */
+  othelloDailyBetLimit: z.number().int().min(0).max(100_000_000).default(3000),
   /** 遊べるゲーム */
   games: z.array(z.enum(CASINO_GAMES)).default([...CASINO_GAMES]),
   /** games を保存したときにあったゲーム（これにないゲームは、あとから足したものなので遊べるようにする） */

@@ -223,6 +223,10 @@ export function CasinoAdminPage(p: {
               <input type="number" name="dailyBetLimit" min={0} max={100000000} value={String(c.dailyBetLimit)} required />
             </label>
             <label class="field">
+              <span>⚫ オセロ（CPU）だけで 1 日に賭けられる合計（0 で上限なし。腕で勝てるゲームなので、別に上限をつけます）</span>
+              <input type="number" name="othelloDailyBetLimit" min={0} max={100000000} value={String(c.othelloDailyBetLimit)} required />
+            </label>
+            <label class="field">
               <span>💰 収益の分け前（%）: 前の日の胴元の収支が黒字なら、宮司のロールの人それぞれにこの % を渡す（0〜50。0 で止める。合計が収支を超えるときは山分け）</span>
               <input type="number" name="profitSharePercent" min={0} max={50} value={String(c.profitSharePercent)} required />
             </label>
