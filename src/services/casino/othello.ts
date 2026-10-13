@@ -1,4 +1,5 @@
 import type { Rng } from './cards.js';
+import { strongScores } from './othelloAi.js';
 
 /**
  * オセロ（8×8）。盤は 64 文字（. = 空き / B = 黒 / W = 白）、マスは y * 8 + x。黒が先。
@@ -169,20 +170,19 @@ export function cpuMove(board: string, color: Stone, level: OthelloLevel, rng: R
     return pick(moves.filter((m) => flipsFor(board, color, m).length === most));
   }
   const empties = [...board].filter((c) => c === '.').length;
-  // つよい: 先を 4 手まで読む。残り 10 マスからは、最後まで正しく読む
-  const exact = level === 'hard' && empties <= HARD_EXACT_EMPTIES;
-  const depth = level === 'hard' ? HARD_DEPTH : 1;
-  const scored = moves.map((m) => ({ m, v: search(applyMove(board, color, m)!, other(color), color, depth - 1, -Infinity, Infinity, exact) }));
-  const best = Math.max(...scored.map((s) => s.v));
-  // 序盤は、いい手の中から毎回ちがう手を選ぶ（同じ手順をなぞっても、同じ形にならない）。ふつうはいつも少し迷う
   const opening = empties > 64 - 4 - OPENING_MOVES;
-  const slack = level === 'normal' ? 12 : opening ? OPENING_SLACK : 0;
-  return pick(scored.filter((s) => s.v >= best - slack).map((s) => s.m));
+  if (level === 'hard') {
+    // つよい: 速い盤で深く読む（othelloAi.ts）。序盤だけ、いい手の中から毎回ちがう手を選ぶ
+    const scored = strongScores(board, color, opening ? OPENING_SLACK + 1 : 1);
+    const best = Math.max(...scored.map((s) => s.v));
+    return pick(scored.filter((s) => s.v >= best - (opening ? OPENING_SLACK : 0)).map((s) => s.m));
+  }
+  const scored = moves.map((m) => ({ m, v: search(applyMove(board, color, m)!, other(color), color, 0, -Infinity, Infinity, false) }));
+  const best = Math.max(...scored.map((s) => s.v));
+  // ふつうは少し迷う（いちばんより少し下の手も選ぶ）
+  return pick(scored.filter((s) => s.v >= best - 12).map((s) => s.m));
 }
 
-/** つよい CPU の読み: 先を読む手の数・最後まで読みはじめる空きマスの数 */
-export const HARD_DEPTH = 4;
-export const HARD_EXACT_EMPTIES = 10;
 /** 序盤（はじめの何手）は、いちばんよりこの点まで下の手からも選ぶ */
 export const OPENING_MOVES = 12;
 export const OPENING_SLACK = 10;

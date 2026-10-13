@@ -24,7 +24,8 @@ import {
   todayBets,
 } from '../src/services/casino/casino.js';
 import type { BjState } from '../src/services/casino/blackjack.js';
-import { applyMove, cpuMove, initialBoard, legalMoves, OTHELLO_LEVELS, othelloMultOf } from '../src/services/casino/othello.js';
+import { applyMove, countStones, cpuMove, initialBoard, legalMoves, nextTurn, OTHELLO_LEVELS, othelloMultOf, type Stone } from '../src/services/casino/othello.js';
+import { strongScores } from '../src/services/casino/othelloAi.js';
 import { REELS, SLIP } from '../src/services/casino/slots.js';
 import { dayPicks, machineSetting, slotFloorData } from '../src/services/casino/slotFloor.js';
 import { casinoDaily, casinoDailyGames, casinoWinners, slotSettingStats } from '../src/services/casino/report.js';
@@ -307,9 +308,32 @@ describe('⚫ オセロ CPU（DB）', () => {
   it('つよい CPU は序盤で毎回同じ手にならない', () => {
     // 同じ手順で打っても、乱数で CPU の返しが変わる
     const b = applyMove(initialBoard(), 'B', 19)!;
-    const picks = new Set(Array.from({ length: 6 }, (_, i) => cpuMove(b, 'W', 'hard', () => i % 3)));
+    const picks = new Set(Array.from({ length: 6 }, (_, i) => cpuMove(b, 'W', 'hard', (n) => i % n)));
     expect(picks.size).toBeGreaterThan(1);
     for (const p of picks) expect(legalMoves(b, 'W')).toContain(p);
+  });
+
+  it('つよい CPU は、ふつうの CPU に黒でも白でも勝つ', () => {
+    for (const hard of ['B', 'W'] as Stone[]) {
+      let b = initialBoard();
+      let t: Stone | null = 'B';
+      while (t) {
+        const m = cpuMove(b, t, t === hard ? 'hard' : 'normal', seq([1, 2, 0, 3]))!;
+        b = applyMove(b, t, m)!;
+        t = nextTurn(b, t);
+      }
+      const c = countStones(b);
+      expect(c[hard]).toBeGreaterThan(c[hard === 'B' ? 'W' : 'B']);
+    }
+  }, 60_000);
+
+  it('つよい CPU は終盤を最後まで読む（角を取って勝つ手を選ぶ）', () => {
+    // 白の番。a1（0）に置けば、左の辺と斜めが全部白になる
+    const rows = ['.BBBBBBW', 'BBWWWWWW', 'BWBWWWWW', 'BWWBWWWW', 'BWWWBWWW', 'BWWWWBWW', 'BWWWWWBW', 'WWWWWWWW'];
+    const board = rows.join('');
+    expect(legalMoves(board, 'W')).toContain(0);
+    const best = strongScores(board, 'W').reduce((a, x) => (x.v > a.v ? x : a));
+    expect(best.m).toBe(0);
   });
 
   it('白を選ぶと CPU が先に打つ', async () => {
