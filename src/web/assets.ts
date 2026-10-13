@@ -56,6 +56,15 @@ const slotFiles = existsSync(SLOT_DIR) ? readdirSync(SLOT_DIR).filter((f) => /^[
 const SCENE_DIR = path.join(here, 'public/casino-scenes');
 const sceneFiles = readdirSync(SCENE_DIR).filter((f) => /^[a-z]+\.(svg|webp)$/.test(f));
 
+/** 神符合戦の生成画像。カードの数字や名前はHTMLで重ねる。 */
+const SHINPU_DIR = path.join(here, 'public/shinpu');
+const shinpuFiles = readdirSync(SHINPU_DIR).filter(f => /^[a-z][a-z0-9-]*\.webp$/.test(f));
+const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/\/static\/(shinpu-([a-z][a-z0-9-]*)\.webp)/g, (_url, name: string, key: string) => {
+  const file = path.join(SHINPU_DIR, `${key}.webp`);
+  const version = createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 10);
+  return `/static/${name}?v=${version}`;
+});
+
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     'three.core.js': { body: threeCore, type: 'text/javascript; charset=utf-8' },
@@ -69,7 +78,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'maikura-pop.png': { body: new Uint8Array(readFileSync(path.join(here, 'public/maikura-pop.png'))), type: 'image/png' },
     'cast-office.css': { body: readText(path.join(here, 'public/cast-office.css')), type: 'text/css; charset=utf-8' },
     'cast-office.js': { body: readText(path.join(here, 'public/cast-office.js')), type: 'text/javascript; charset=utf-8' },
-    'shinpu.css': { body: readText(path.join(here, 'public/shinpu.css')), type: 'text/css; charset=utf-8' },
+    ...Object.fromEntries(shinpuFiles.map(f => [`shinpu-${f}`, { body: new Uint8Array(readFileSync(path.join(SHINPU_DIR, f))), type: 'image/webp' }])),
+    'shinpu.css': { body: shinpuCss(), type: 'text/css; charset=utf-8' },
     'shinpu.js': { body: readText(path.join(here, 'public/shinpu.js')), type: 'text/javascript; charset=utf-8' },
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
