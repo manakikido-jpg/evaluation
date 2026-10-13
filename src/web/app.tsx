@@ -32,6 +32,7 @@ import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
+import { mountShinpu } from './shinpu.js';
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
@@ -493,6 +494,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // ───────── 🎰 カジノ（メンバーが Discord でログイン。秘密の入口は要らない） ─────────
+  mountShinpu(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ここから先はログイン必須 ─────────

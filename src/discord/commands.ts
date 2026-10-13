@@ -80,6 +80,15 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('shinpu')
+      .setNameLocalizations({ ja: '神符合戦' })
+      .setDescription('Open the staff-only Shinpu playtest')
+      .setDescriptionLocalizations({ ja: '神符合戦の運営専用テストを開く（本人にだけ表示）' })
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('casino')
       .setNameLocalizations({ ja: 'カジノ' })
       .setDescription('Open the casino on the web')
