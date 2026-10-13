@@ -14,6 +14,12 @@ export const OTHELLO_LEVELS: Record<OthelloLevel, { label: string; mult: number 
   hard: { label: 'つよい', mult: 1.6 },
 };
 
+/** 社務所Web で決めた倍率（% で持つ）。なければ上のはじめの倍率 */
+export const othelloMultOf = (c: { othelloMult?: Partial<Record<OthelloLevel, number>> } | undefined, level: OthelloLevel): number => {
+  const pct = c?.othelloMult?.[level];
+  return pct ? pct / 100 : OTHELLO_LEVELS[level].mult;
+};
+
 export const isOthelloLevel = (v: unknown): v is OthelloLevel => typeof v === 'string' && Object.hasOwn(OTHELLO_LEVELS, v);
 
 export const other = (s: Stone): Stone => (s === 'B' ? 'W' : 'B');
@@ -189,6 +195,8 @@ export type OthelloState = {
   /** CPU 相手のとき: 人の色・強さ */
   you?: Stone;
   level?: OthelloLevel;
+  /** 始めたときの倍率（あとで社務所Web で変えても、この対局はこの倍率で払う） */
+  mult?: number;
 };
 
 /** 人が置く（CPU 相手なら、CPU の番が続くかぎり CPU も置く）。置けない手なら undefined */

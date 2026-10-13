@@ -153,9 +153,11 @@ async function othelloStats(db: Db, since: Date): Promise<OthelloRow[]> {
     .where(and(eq(casinoGames.game, 'othello'), eq(casinoGames.status, 'done'), gte(casinoGames.createdAt, since)));
   const by = new Map<OthelloLevel, OthelloRow>();
   for (const r of rows) {
-    const st = r.state as { level?: OthelloLevel; result?: 'win' | 'lose' | 'draw' | 'resign' };
+    const st = r.state as { level?: OthelloLevel; result?: 'win' | 'lose' | 'draw' | 'resign'; mult?: number };
     const level = st.level && Object.hasOwn(OTHELLO_LEVELS, st.level) ? st.level : 'easy';
     const o = by.get(level) ?? { level, games: 0, win: 0, draw: 0, lose: 0, resign: 0, humanNet: 0, mult: OTHELLO_LEVELS[level].mult, verdict: 'few' as AiVerdict };
+    // 倍率は対局ごとに残っている（社務所Web で変えたあとは新しい倍率）。新しい対局の倍率でくらべる
+    if (st.mult) o.mult = st.mult;
     o.games++;
     if (st.result) o[st.result]++;
     o.humanNet += r.payout - r.bet;

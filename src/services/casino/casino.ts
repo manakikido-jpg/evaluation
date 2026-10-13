@@ -9,7 +9,7 @@ import { bjDouble, bjHit, bjPayout, bjStand, bjStart, canDouble, type BjState } 
 import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { CHIN_MAX_LOSS, chinMoney, chinSettle, parentDecides, rollTurn, turnHand, type ChinRoll } from './chinchiro.js';
-import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
+import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloMultOf, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_MAX_SPOTS, rouletteMaxOf, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
@@ -29,7 +29,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   atslot: { emoji: '🦊', name: 'AT 機（鬼斬り白狐）', note: 'レア役で AT。押し順ナビで増やし、上乗せ・継続バトル・天井つき' },
   roulette: { emoji: '🎡', name: 'ルーレット', note: '赤黒は 2 倍・数字 1 つは 36 倍' },
   chinchiro: { emoji: '🎲', name: 'ちんちろりん', note: '親とサイコロ勝負。ピンゾロは 5 倍' },
-  othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせて 1.1〜1.6 倍' },
+  othello: { emoji: '⚫\uFE0F', name: 'オセロ（CPU）', note: 'CPU に勝てば、強さに合わせた倍率（社務所Web で決める）' },
   versus: { emoji: '⚔\uFE0F', name: 'メンバー対戦（オセロ）', note: 'メンバー同士で賭けて対戦。勝った人が総取り' },
   bj_table: { emoji: '🃏', name: 'ブラックジャック卓', note: 'みんなで同じディーラーと勝負' },
   baccarat_table: { emoji: '🎴', name: 'バカラ卓', note: 'みんなで同じ勝負に賭ける' },
@@ -305,7 +305,7 @@ export async function playChinchiro(db: Db, cfg: GuildConfig, memberId: string, 
 export type OthelloCpuState = OthelloState & { result?: 'win' | 'lose' | 'draw' | 'resign' };
 
 const othelloPayout = (s: OthelloCpuState, bet: number) =>
-  s.result === 'win' ? Math.floor(bet * OTHELLO_LEVELS[s.level ?? 'easy'].mult) : s.result === 'draw' ? bet : 0;
+  s.result === 'win' ? Math.floor(bet * (s.mult ?? OTHELLO_LEVELS[s.level ?? 'easy'].mult)) : s.result === 'draw' ? bet : 0;
 
 function othelloFinish(s: OthelloState): OthelloCpuState {
   if (s.turn) return s;
@@ -316,7 +316,7 @@ function othelloFinish(s: OthelloState): OthelloCpuState {
 /** you: 人の色（黒は先手）。白を選んだら CPU が先に置く */
 export function startOthello(db: Db, cfg: GuildConfig, memberId: string, bet: number, level: OthelloLevel, you: 'B' | 'W' = 'B', rng: Rng = cryptoRng, now = new Date()) {
   return start(db, cfg, memberId, 'othello', bet, () => {
-    let s: OthelloState = { board: initialBoard(), turn: 'B', you, level };
+    let s: OthelloState = { board: initialBoard(), turn: 'B', you, level, mult: othelloMultOf(cfg.casino, level) };
     if (you === 'W') {
       const m = cpuMove(s.board, 'B', level, rng)!;
       const b = applyMove(s.board, 'B', m)!;

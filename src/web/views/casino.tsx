@@ -12,7 +12,7 @@ import { bjView, type BjResult, type BjState } from '../../services/casino/black
 import { cardText, isRed, rankText, SUITS, suitOf } from '../../services/casino/cards.js';
 import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState } from '../../services/casino/casino.js';
 import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
-import { countStones, legalMoves, OTHELLO_LEVELS, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
+import { countStones, legalMoves, OTHELLO_LEVELS, othelloMultOf, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteColor, rouletteMaxOf, ROULETTE_MAX_SPOTS } from '../../services/casino/roulette.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
@@ -812,7 +812,7 @@ export function OthelloPage(p: GamePage) {
                   <label class="c-pick">
                     <input type="radio" name="level" value={l} checked={s ? s.level === l : i === 0} />
                     <span>
-                      {OTHELLO_LEVELS[l].label}（勝てば ×{OTHELLO_LEVELS[l].mult}）
+                      {OTHELLO_LEVELS[l].label}（勝てば ×{othelloMultOf(p.casino, l)}）
                     </span>
                   </label>
                 ))}
@@ -831,7 +831,7 @@ export function OthelloPage(p: GamePage) {
           }
         />
       )}
-      <Rules>CPU に勝つと、強さに合わせて賭けの 1.1 倍・1.3 倍・1.6 倍が戻ります。オセロだけで 1 日に賭けられる合計には上限があります。引き分けは戻り、負け・投了は 0 です。途中でロビーに戻っても、あとから続きを打てます。</Rules>
+      <Rules>CPU に勝つと、強さに合わせて賭けの {othelloMultOf(p.casino, 'easy')} 倍・{othelloMultOf(p.casino, 'normal')} 倍・{othelloMultOf(p.casino, 'hard')} 倍が戻ります。オセロだけで 1 日に賭けられる合計には上限があります。引き分けは戻り、負け・投了は 0 です。途中でロビーに戻っても、あとから続きを打てます。</Rules>
     </CasinoLayout>
   );
 }

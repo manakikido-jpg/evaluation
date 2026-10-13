@@ -24,7 +24,7 @@ import {
   todayBets,
 } from '../src/services/casino/casino.js';
 import type { BjState } from '../src/services/casino/blackjack.js';
-import { applyMove, cpuMove, initialBoard, legalMoves, OTHELLO_LEVELS } from '../src/services/casino/othello.js';
+import { applyMove, cpuMove, initialBoard, legalMoves, OTHELLO_LEVELS, othelloMultOf } from '../src/services/casino/othello.js';
 import { REELS, SLIP } from '../src/services/casino/slots.js';
 import { dayPicks, machineSetting, slotFloorData } from '../src/services/casino/slotFloor.js';
 import { casinoDaily, casinoDailyGames, casinoWinners, slotSettingStats } from '../src/services/casino/report.js';
@@ -291,7 +291,14 @@ describe('⚫ オセロ CPU（DB）', () => {
     expect(await checkBet(db, ccfg({ othelloDailyBetLimit: 0 }), A, 'othello', 1000, now)).toBe('ok');
   });
 
-  it('倍率はつよいでも 1.6 倍まで', () => {
+  it('倍率は社務所Web の設定で決まり、始めたときの倍率を対局に残す', async () => {
+    const s = await startOthello(db, ccfg({ othelloMult: { easy: 110, normal: 130, hard: 200 } }), A, 100, 'hard', 'B', seq([0]), NOW);
+    expect(s.status === 'ok' && (s.row.state as { mult: number }).mult).toBe(2);
+    expect(othelloMultOf(ccfg().casino, 'normal')).toBe(1.3);
+    expect(othelloMultOf(undefined, 'hard')).toBe(1.6);
+  });
+
+  it('倍率のはじめの値はつよいでも 1.6 倍まで', () => {
     expect(OTHELLO_LEVELS.hard.mult).toBe(1.6);
     expect(OTHELLO_LEVELS.normal.mult).toBe(1.3);
     expect(OTHELLO_LEVELS.easy.mult).toBe(1.1);

@@ -227,6 +227,14 @@ export function CasinoAdminPage(p: {
               <input type="number" name="othelloDailyBetLimit" min={0} max={100000000} value={String(c.othelloDailyBetLimit)} required />
             </label>
             <label class="field">
+              <span>⚫ オセロ（CPU）に勝ったときの倍率（1.0〜10 倍。0.1 きざみ）: やさしい・ふつう・つよい。変えたあとに始めた対局から効きます</span>
+              <span class="inline-fields">
+                <input type="number" name="othelloMult_easy" min={1} max={10} step={0.1} value={String(c.othelloMult.easy / 100)} required aria-label="やさしい" />
+                <input type="number" name="othelloMult_normal" min={1} max={10} step={0.1} value={String(c.othelloMult.normal / 100)} required aria-label="ふつう" />
+                <input type="number" name="othelloMult_hard" min={1} max={10} step={0.1} value={String(c.othelloMult.hard / 100)} required aria-label="つよい" />
+              </span>
+            </label>
+            <label class="field">
               <span>💰 収益の分け前（%）: 前の日の胴元の収支が黒字なら、宮司のロールの人それぞれにこの % を渡す（0〜50。0 で止める。合計が収支を超えるときは山分け）</span>
               <input type="number" name="profitSharePercent" min={0} max={50} value={String(c.profitSharePercent)} required />
             </label>

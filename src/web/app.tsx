@@ -1796,6 +1796,15 @@ export function createWebApp(deps: WebDeps) {
       maxBet: int('maxBet'),
       rouletteMaxBet: typeof body.rouletteMaxBet === 'string' ? int('rouletteMaxBet') : cfg.casino.rouletteMaxBet,
       dailyBetLimit: int('dailyBetLimit'),
+      // ⚫ オセロの倍率（% で受け取る。欄がない古い画面から送られたら、今のまま）
+      othelloMult: (['easy', 'normal', 'hard'] as const).reduce<Record<'easy' | 'normal' | 'hard', number>>(
+        (o, k) => {
+          const v = body[`othelloMult_${k}`];
+          o[k] = typeof v === 'string' && v !== '' ? Math.round(Number(v) * 100) : cfg.casino.othelloMult[k];
+          return o;
+        },
+        { ...cfg.casino.othelloMult },
+      ),
       othelloDailyBetLimit: typeof body.othelloDailyBetLimit === 'string' ? int('othelloDailyBetLimit') : cfg.casino.othelloDailyBetLimit,
       // 💰 収益の分け前の %（欄がない古い画面から送られたら、今のまま）
       profitSharePercent: typeof body.profitSharePercent === 'string' ? int('profitSharePercent') : cfg.casino.profitSharePercent,
