@@ -315,6 +315,11 @@ const MSG: Record<string, string> = {
   horse_no_sire: '父に選んだ馬は、もう種牡馬ではありません。選び直してください。',
   horse_gelding: 'セン馬は繁殖に入れません。',
   horse_fee: '🧬 種付け料を決めました。',
+  shares_offered: '🤝 一口の募集をはじめました。',
+  shares_stopped: '🤝 一口の募集をやめました。',
+  share_bought: '🤝 1 口買いました。賞金は口の数で分けて入ります。',
+  share_self: '自分の馬の口は買えません。',
+  share_sold_out: 'この馬の口は、もう売り切れました。',
 };
 export const casinoMsg = (k: string | undefined) => (k && MSG[k] ? k : undefined);
 export const Msg = (p: { msg: string }) => <p class="c-alert">{MSG[p.msg] ?? p.msg}</p>;

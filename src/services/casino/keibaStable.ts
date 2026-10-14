@@ -1,3 +1,4 @@
+import { hasCoOwners, payByShares, sharesOf } from './keibaShares.js';
 import { rivalPairsAmong } from './keibaHonors.js';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { isOutfit, type KbOutfit } from './keibaOutfit.js';
@@ -152,7 +153,8 @@ export async function retireBonusOf(db: Db, horseId: number, wins: number, perWi
 }
 async function payRetireBonus(tx: Db, memberId: string, h: { id: number; wins: number; name: string }, perWin: number): Promise<number> {
   const bonus = await retireBonusOf(tx, h.id, h.wins, perWin);
-  if (bonus > 0) await addCoins(tx, memberId, bonus, 'keiba_prize', { retire: h.id, name: h.name });
+  // 🤝 共同所有なら口の数で分ける
+  if (bonus > 0) await payByShares(tx, h.id, memberId, bonus, 'keiba_prize', { retire: h.id, name: h.name });
   return bonus;
 }
 
@@ -185,8 +187,9 @@ export async function loadRoster(db: Db, now = new Date()): Promise<KbStable[]> 
     rivals.set(a, [...(rivals.get(a) ?? []), b]);
     rivals.set(b, [...(rivals.get(b) ?? []), a]);
   }
+  const shares = await sharesOf(db, rows.map((r) => r.h.id));
   return rows
-    .map((r) => ({ ...toStable({ ...r.h, ownerName: r.ownerName, sire: r.h.parentId ? (parents.get(r.h.parentId) ?? null) : null }, now), ...(rivals.has(r.h.id) ? { rivals: rivals.get(r.h.id) } : {}) }))
+    .map((r) => ({ ...(shares.has(r.h.id) ? { shares: shares.get(r.h.id) } : {}), ...toStable({ ...r.h, ownerName: r.ownerName, sire: r.h.parentId ? (parents.get(r.h.parentId) ?? null) : null }, now), ...(rivals.has(r.h.id) ? { rivals: rivals.get(r.h.id) } : {}) }))
     .filter((h, i) => !(rows[i]!.h.restUntil && rows[i]!.h.restUntil! > now) && (h.fatigue ?? 0) < KB_FATIGUE_REST);
 }
 
@@ -235,7 +238,7 @@ export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], no
       const share = Math.floor(royalty / parents.length);
       for (const pid of parents) {
         const [parent] = await tx.select({ ownerId: keibaHorses.ownerId, name: keibaHorses.name }).from(keibaHorses).where(eq(keibaHorses.id, pid));
-        if (parent?.ownerId && share > 0) await addCoins(tx, parent.ownerId, share, 'keiba_prize', { royalty: h.id, foal: h.name, parent: parent.name });
+        if (parent?.ownerId && share > 0) await payByShares(tx, pid, parent.ownerId, share, 'keiba_prize', { royalty: h.id, foal: h.name, parent: parent.name });
       }
     }
     if (r.ownerId) await tx.insert(keibaRuns).values({ horseId: h.id, horseName: r.name ?? h.name, ownerId: r.ownerId, pos: r.pos, prize: r.prize ?? 0, cls: r.cls ?? 0, race: r.race, at: now });
@@ -343,6 +346,8 @@ export const KB_SALE_FEE = 5;
 /** 売りに出す（price）・取り下げる（null） */
 export async function setSale(db: Db, memberId: string, id: number, price: number | null): Promise<boolean> {
   if (price !== null && !(Number.isInteger(price) && price >= 100 && price <= 10_000_000)) return false;
+  // 🤝 口をほかの人も持っている馬は売れない（一口の募集中も）
+  if (price !== null && (await hasCoOwners(db, id))) return false;
   const r = await db
     .update(keibaHorses)
     .set({ salePrice: price })

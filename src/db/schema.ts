@@ -912,12 +912,26 @@ export const keibaHorses = pgTable('keiba_horses', {
   /** 🧬 母（配合で生まれた馬）・種付け料（繁殖入りした牡馬。ほかの馬主が払う） */
   damId: bigint('dam_id', { mode: 'number' }),
   studFee: integer('stud_fee').notNull().default(0),
+  /** 🤝 一口の値段（売りに出しているとき。null は出していない） */
+  sharePrice: integer('share_price'),
   breeding: boolean('breeding').notNull().default(false),
   /** 引退した日時（走らない） */
   retiredAt: timestamp('retired_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export type KeibaHorseRow = typeof keibaHorses.$inferSelect;
+
+/** 🤝 共同所有（一口馬主）: 馬ごとに 10 口。だれが何口持っているか。行がなければ馬主が 1 人で持つ */
+export const keibaShares = pgTable(
+  'keiba_shares',
+  {
+    horseId: bigint('horse_id', { mode: 'number' }).notNull(),
+    memberId: text('member_id').notNull(),
+    units: integer('units').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.horseId, t.memberId] }), index('keiba_shares_member_idx').on(t.memberId)],
+);
+export type KeibaShareRow = typeof keibaShares.$inferSelect;
 
 /** 🏇 馬主ごとの設定（勝負服） */
 export const keibaOwners = pgTable('keiba_owners', {

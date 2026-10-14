@@ -1224,6 +1224,10 @@ export function KbStablePage(p: {
   horses: StableHorse[];
   /** 🧬 種牡馬（配合の父に選べる） */
   studs?: StudRow[];
+  /** 🤝 一口の募集・自分が口を持つ馬・1 口の値段の幅 */
+  shareOffers?: (KeibaHorseRow & { ownerName: string | null; left: number })[];
+  myShares?: { id: number; name: string; units: number; ownerName: string | null; starts: number; wins: number; retired: boolean }[];
+  shareRange?: [number, number];
   price: number;
   max: number;
   trainPrice: number;
@@ -1424,6 +1428,30 @@ export function KbStablePage(p: {
                           </>
                         )}
                       </form>
+                      <form method="post" action={`/casino/keiba/stable/${h.id}/shares`} class="c-bet-custom">
+                        <Hidden />
+                        {h.sharePrice !== null ? (
+                          <button type="submit" name="cancel" value="1" class="c-btn c-btn-small c-btn-ghost">
+                            🤝 一口を募集中（1 口 {coin.emoji}
+                            {fmt(h.sharePrice)}）→ やめる
+                          </button>
+                        ) : (
+                          <>
+                            <input
+                              type="number"
+                              name="price"
+                              min={p.shareRange?.[0] ?? 1}
+                              max={p.shareRange?.[1] ?? 1}
+                              placeholder={`1 口 ${fmt(p.shareRange?.[0] ?? 0)}〜${fmt(p.shareRange?.[1] ?? 0)}`}
+                              required
+                              aria-label="1 口の値段"
+                            />
+                            <button type="submit" class="c-btn c-btn-small c-confirm" data-confirm="一口（10 口のうち 1 口ずつ）を募集しますか？ 賞金は口の数で分けます。口を持つ人がいると、馬は売れません。">
+                              🤝 一口を募集する
+                            </button>
+                          </>
+                        )}
+                      </form>
                       {h.wins > 0 && (
                         <form
                           method="post"
@@ -1592,6 +1620,52 @@ export function KbStablePage(p: {
           売れると、値段から手数料 {KB_SALE_FEE}%
           を引いた銭が売った人に入ります。
         </p>
+      </section>
+      <section class="c-panel">
+        <h2>🤝 一口を募集している馬</h2>
+        {(p.shareOffers ?? []).length === 0 ? (
+          <p class="c-muted">いまはありません。</p>
+        ) : (
+          <ul class="kb-market">
+            {(p.shareOffers ?? []).map((h) => (
+              <li>
+                <span>
+                  <b>{h.name}</b>
+                  <span class="c-muted">
+                    {" "}
+                    {classLabel(h)}・{h.starts} 戦 {h.wins} 勝・賞金 {fmt(h.prize)}・馬主 {h.ownerName ?? ""}・のこり {h.left} 口
+                  </span>
+                </span>
+                {h.ownerId === p.me.session.userId ? (
+                  <span class="c-muted">あなたの馬</span>
+                ) : (
+                  <form method="post" action={`/casino/keiba/shares/${h.id}/buy`}>
+                    <Hidden />
+                    <button type="submit" class="c-btn c-btn-small c-btn-gold c-confirm" data-confirm={`${h.name} の 1 口を ${fmt(h.sharePrice ?? 0)} ${coin.name}で買いますか？（買った口は売れません）`}>
+                      {coin.emoji}
+                      {fmt(h.sharePrice ?? 0)} で 1 口買う
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p class="c-muted">
+          馬は 10 口。1 口ずつ買えます。賞金・功労金・ロイヤリティは口の数で分けます。調教・出走・引退を決めるのは、いちばん多く口を持つ人です。買った口は売れません。
+        </p>
+        {(p.myShares ?? []).length > 0 && (
+          <>
+            <h3>あなたが口を持っている馬</h3>
+            <ul>
+              {(p.myShares ?? []).map((x) => (
+                <li>
+                  <a href={`/casino/keiba/horse/${x.id}`}>{x.name}</a>・{x.units} 口・馬主 {x.ownerName ?? ""}・{x.starts} 戦 {x.wins} 勝{x.retired ? "（引退）" : ""}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
       <Leading rows={p.leading} coin={coin} me={p.me.session.userId} />
       <section class="c-panel">

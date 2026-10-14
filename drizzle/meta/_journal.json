@@ -680,6 +680,13 @@
       "when": 1791996202993,
       "tag": "0096_happy_rocket_racer",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1791997208712,
+      "tag": "0097_quick_kang",
+      "breakpoints": true
     }
   ]
 }

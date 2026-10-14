@@ -32,6 +32,7 @@ import {
   classOf,
 } from '../keiba.js';
 import { isBot } from './bots.js';
+import { splitByShares } from '../keibaShares.js';
 import { fail, intOf, list, ok, str, type Credit, type Ctx, type Form, type KeibaBet, type KeibaResult, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
@@ -221,8 +222,10 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     }
     prizes[i] = (base[i] ?? 0) + top;
     const rest = (base[i] ?? 0) + fee + fanMoney(s.tickets, no, owner, conf) + (capped ? 0 : top);
-    if (rest > 0) credits.push({ memberId: owner, amount: rest, reason: 'keiba_prize' });
-    if (capped && top > 0) credits.push({ memberId: owner, amount: top, reason: 'keiba_prize', cap: 'keiba_purse' });
+    // 🤝 共同所有なら口の数で分ける
+    const holders = s.horses[no - 1]!.shares ?? [{ memberId: owner, units: 1 }];
+    for (const x of splitByShares(holders, rest, owner)) credits.push({ memberId: x.memberId, amount: x.amount, reason: 'keiba_prize' });
+    if (capped) for (const x of splitByShares(holders, top, owner)) credits.push({ memberId: x.memberId, amount: x.amount, reason: 'keiba_prize', cap: 'keiba_purse' });
     return rest + top;
   });
   s.prizes = prizes;

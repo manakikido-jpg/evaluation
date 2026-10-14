@@ -74,6 +74,7 @@ import { MjRecords } from './views/mahjong.js';
 import { KbLobbyExtra, KbStablePage } from './views/keiba.js';
 import { KbDirectoryPage, KbHallPage, KbHorsePage, KbMyBetsPage } from './views/keibaRecords.js';
 import { hallOfFame, rivalPairsAmong } from '../services/casino/keibaHonors.js';
+import { buyShare, mySharedHorses, offerShares, shareOffers, sharePriceRange } from '../services/casino/keibaShares.js';
 import { horseDirectory, horseProfile, myBetStats } from '../services/casino/keibaRecords.js';
 import {
   breedFoal,
@@ -844,6 +845,9 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
           trainPrice={cfg.keibaTrainPrice}
           silk={await ownerSilk(db, me.session.userId)}
           studs={await studList(db)}
+          shareOffers={await shareOffers(db)}
+          myShares={await mySharedHorses(db, me.session.userId)}
+          shareRange={sharePriceRange(cfg.keibaHorsePrice)}
           forSale={await horsesForSale(db)}
           leading={await leadingOwners(db, monthStartJst(now), 10)}
           msg={casinoMsg(c.req.query('e'))}
@@ -946,6 +950,25 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         ? await breedFoal(db, me.session.userId, id, Number(f.sire), typeof f.name === 'string' ? f.name : '', Math.floor(cfg.keibaHorsePrice / 2), cfg.keibaMaxOwned)
         : { status: 'not_found' as const };
       return stableBack(c, r.status === 'ok' ? 'horse_foal' : r.status === 'poor' || r.status === 'not_found' ? r.status : `horse_${r.status}`);
+    }, { post: true }),
+  );
+  // 🤝 一口の募集・買う
+  app.post(
+    '/casino/keiba/stable/:id/shares',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const f = await formOf(c);
+      const price = f.cancel ? null : Number(f.price);
+      const r = Number.isSafeInteger(id) ? await offerShares(db, me.session.userId, id, price, d.cfg().casino.keibaHorsePrice) : 'not_found';
+      return stableBack(c, r === 'ok' ? (price === null ? 'shares_stopped' : 'shares_offered') : r);
+    }, { post: true }),
+  );
+  app.post(
+    '/casino/keiba/shares/:id/buy',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const r = Number.isSafeInteger(id) ? await buyShare(db, me.session.userId, id) : 'not_found';
+      return stableBack(c, r === 'ok' ? 'share_bought' : r === 'poor' || r === 'not_found' ? r : `share_${r}`);
     }, { post: true }),
   );
   // 🧬 種牡馬の種付け料

@@ -99,6 +99,8 @@ export type KbStable = {
   sire?: string | null;
   /** ⚔ 宿敵（名簿の番号） */
   rivals?: number[];
+  /** 🤝 共同所有（口を持つ人。2 人以上のときだけ） */
+  shares?: { memberId: string; units: number }[];
 };
 
 // ───────── 疲れと調教 ─────────
@@ -202,6 +204,8 @@ export type KbHorse = {
   p3: number;
   /** ⚔ 宿敵（名簿の番号） */
   rivals?: number[];
+  /** 🤝 共同所有（口を持つ人。2 人以上のときだけ） */
+  shares?: { memberId: string; units: number }[];
 };
 
 /** cls: クラス（KB_CLASSES の番号） */
@@ -345,6 +349,7 @@ export function makeRace(
     ownerName: h.ownerName ?? null,
     sire: h.sire ?? null,
     ...(h.rivals?.length ? { rivals: h.rivals } : {}),
+    ...(h.shares?.length ? { shares: h.shares } : {}),
     fatigue: h.fatigue ?? 0,
     prize: h.prize,
     cls: classOf(h),
