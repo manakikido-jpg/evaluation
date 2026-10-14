@@ -41,7 +41,7 @@ describe('🛡 ロールの見張り: Discord', () => {
   });
 
   function setup(mode: 'off' | 'alert' | 'revert', executorId: string | null, executorRoles: string[] = [], manageRoles = true) {
-    const c: GuildConfig = { ...cfg, channels: { ...cfg.channels, log: '790000000000000900' }, security: { roleGuard: mode, trustedBotIds: [KPRO] } };
+    const c: GuildConfig = { ...cfg, channels: { ...cfg.channels, log: '790000000000000900' }, security: { ...cfg.security, roleGuard: mode, trustedBotIds: [KPRO] } };
     const sent: string[] = [];
     const discord = { sendMessage: vi.fn(async (_ch: string, b: { content?: string }) => (sent.push(b.content ?? ''), { id: '1' })) };
     const roles = { add: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) };

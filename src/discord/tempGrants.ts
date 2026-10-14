@@ -1,4 +1,4 @@
-import { MessageFlags, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction } from 'discord.js';
+import { MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions, GuildChannel, GuildRole } from '../lib/discordRest.js';
@@ -18,6 +18,8 @@ import {
   ROLE_CHANGE_MESSAGES,
   type GrantResult,
 } from '../services/tempGrants.js';
+
+import { createRoleRequest, decideRoleRequest, finishRoleRequest, needsApproval, type RoleRequestKind } from '../services/roleRequests.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
@@ -55,6 +57,16 @@ export class TempGrantApp {
 
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+    // 🛡 ロールの承認待ちのボタン
+    if (interaction.isButton() && interaction.customId.startsWith('rolereq:')) {
+      try {
+        await this.decide(interaction);
+      } catch (err) {
+        logger.error({ err }, 'role request decide failed');
+        if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL }).catch(() => undefined);
+      }
+      return;
+    }
     if (!interaction.isChatInputCommand() || !['temprole', 'tempperm', 'role'].includes(interaction.commandName)) return;
     try {
       await this.handle(interaction);
@@ -62,6 +74,63 @@ export class TempGrantApp {
       logger.error({ err }, 'temp grant command failed');
       if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL }).catch(() => undefined);
     }
+  }
+
+  /** 承認待ちにして、ログのチャンネルに承認・却下のボタンを出す */
+  private async ask(i: ChatInputCommandInteraction<'cached'>, r: { kind: RoleRequestKind; memberId: string; roleId: string; minutes?: number; reason: string }): Promise<void> {
+    const ch = this.cfg().channels.log;
+    if (!ch) return void (await i.editReply('承認を頼むログのチャンネルが決まっていません。宮司に頼んでください。'));
+    const req = await createRoleRequest(this.db, { ...r, requestedBy: i.user.id });
+    const what = r.kind === 'remove' ? 'から外す' : r.kind === 'temp' ? `に一時的に付ける（${r.minutes} 分）` : 'に付ける';
+    await this.discord.sendMessage(ch, {
+      content: `🛡 **ロールの承認待ち #${req.id}**: <@${i.user.id}> が <@${r.memberId}> ${what}: <@&${r.roleId}>${r.reason ? `\n理由: ${r.reason}` : ''}\n頼んだ人とは別の神職・宮司が決めてください。`,
+      allowed_mentions: { parse: [] },
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 3, label: '承認する', custom_id: `rolereq:approve:${req.id}` },
+            { type: 2, style: 4, label: '却下する', custom_id: `rolereq:reject:${req.id}` },
+          ],
+        },
+      ],
+    });
+    await i.editReply(`🛡 このロールは承認がいるので、承認待ち #${req.id} にしました。別の神職・宮司が承認すると付け外しされます。`);
+  }
+
+  /** 承認・却下（頼んだ本人以外の神職・宮司） */
+  private async decide(i: ButtonInteraction<'cached'>): Promise<void> {
+    const [, action, idText] = i.customId.split(':');
+    const level = adminLevelOf(this.cfg(), [...i.member.roles.cache.keys()]);
+    if (!level) return void (await i.reply({ content: '神職・宮司だけが決められます。', ...EPHEMERAL }));
+    await i.deferReply(EPHEMERAL);
+    const d = await decideRoleRequest(this.db, Number(idText), i.user.id, action === 'approve');
+    if (d.status === 'self') return void (await i.editReply('自分で頼んだものは決められません。ほかの神職・宮司に頼んでください。'));
+    if (d.status !== 'ok') return void (await i.editReply('この頼みは、もう決まっています。'));
+    const req = d.request;
+    const done = async (text: string) => {
+      await i.message.edit({ content: `${i.message.content}\n${text}`, components: [] }).catch(() => undefined);
+      await i.editReply(text);
+    };
+    if (action !== 'approve') return done(`❌ <@${i.user.id}> が却下しました。`);
+    const target = await i.guild.members.fetch(req.memberId).catch(() => null);
+    const ctx = { db: this.db, cfg: this.cfg(), discord: this.discord };
+    const common = { memberId: req.memberId, roleId: req.roleId, reason: `${req.reason}（#${req.id} 承認: ${i.user.id}）`, by: i.user.id, byLevel: level, roles: rolesOf(i.guild), memberRoleIds: target ? [...target.roles.cache.keys()] : [], botId: i.client.user.id, via: 'discord' as const };
+    let text: string;
+    let okDone = false;
+    if (req.kind === 'temp') {
+      const r = await grantRole(ctx, { ...common, minutes: req.minutes ?? 60 });
+      okDone = r.status === 'granted' || r.status === 'extended';
+      text = this.resultText(r, `<@${req.memberId}> に <@&${req.roleId}>`);
+    } else if (!target) {
+      text = 'その人はもうこのサーバーにいません。';
+    } else {
+      const r = await changeRole(ctx, { ...common, action: req.kind === 'remove' ? 'remove' : 'give' });
+      okDone = r.status === 'given' || r.status === 'removed';
+      text = r.status === 'given' ? `🏷 <@${req.memberId}> に <@&${req.roleId}> を付けました。` : r.status === 'removed' ? `🏷 <@${req.memberId}> の <@&${req.roleId}> を外しました。` : ROLE_CHANGE_MESSAGES[r.status];
+    }
+    await finishRoleRequest(this.db, req.id, okDone, text);
+    return done(`✅ <@${i.user.id}> が承認しました。${text}`);
   }
 
   private async handle(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
@@ -77,6 +146,8 @@ export class TempGrantApp {
     if (i.commandName === 'role') {
       const role = i.options.getRole('role', true);
       if (!target) return void (await i.editReply(`${user} はこのサーバーにいません。`));
+      // 🛡 許可リストにないロールは、別の神職・宮司の承認を待つ
+      if (needsApproval(cfg, level, role.id)) return this.ask(i, { kind: sub === 'remove' ? 'remove' : 'give', memberId: user.id, roleId: role.id, reason: i.options.getString('reason') ?? '' });
       const r = await changeRole(ctx, {
         action: sub === 'remove' ? 'remove' : 'give',
         memberId: user.id,
@@ -103,6 +174,7 @@ export class TempGrantApp {
       }
       const minutes = durationMinutes(i.options.getString('for', true));
       if (!minutes) return void (await i.editReply('期間を選んでください。'));
+      if (needsApproval(cfg, level, role.id)) return this.ask(i, { kind: 'temp', memberId: user.id, roleId: role.id, minutes, reason: i.options.getString('reason') ?? '' });
       const r = await grantRole(ctx, {
         memberId: user.id,
         roleId: role.id,

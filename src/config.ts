@@ -723,8 +723,11 @@ export const guildConfigSchema = z
       .object({
         roleGuard: z.enum(['off', 'alert', 'revert']).default('alert'),
         trustedBotIds: z.array(snowflake).max(20).default([]),
+        /** 神職が /ロール・/一時ロールで付け外しするとき、freeRoleIds 以外は別の神職・宮司の承認がいる（宮司はいらない） */
+        roleApproval: z.boolean().default(true),
+        freeRoleIds: z.array(snowflake).max(50).default([]),
       })
-      .default({ roleGuard: 'alert', trustedBotIds: [] }),
+      .default({ roleGuard: 'alert', trustedBotIds: [], roleApproval: true, freeRoleIds: [] }),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
     casinoGacha: casinoGachaSchema.default(casinoGachaSchema.parse({})),

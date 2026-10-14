@@ -91,7 +91,7 @@ export const overridesSchema = z.object({
   /** 呼び鈴（channelId を空にすると #記録 へ） */
   bell: bellSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   /** 📖 日記（チャンネル・値段・日数） */
-  security: z.object({ roleGuard: z.enum(['off', 'alert', 'revert']), trustedBotIds: z.array(z.string().regex(/^\d{17,20}$/)).max(20) }).partial().default({}),
+  security: z.object({ roleGuard: z.enum(['off', 'alert', 'revert']), trustedBotIds: z.array(z.string().regex(/^\d{17,20}$/)).max(20), roleApproval: z.boolean(), freeRoleIds: z.array(z.string().regex(/^\d{17,20}$/)).max(50) }).partial().default({}),
   diary: z.object({ channelId: z.string().regex(/^\d{17,20}$/), price: z.number().int().min(1).max(1_000_000), days: z.number().int().min(1).max(365) }).partial().default({}),
   /** 物御籤（送られたときは全部置きかえる） */
   gacha: gachaSchema.optional(),

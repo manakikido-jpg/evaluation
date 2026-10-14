@@ -338,6 +338,10 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/security/settings', g, { _csrf: gcsrf, roleGuard: 'revert', trustedBotIds: '790000000000000004\n790000000000000004' })).headers.get('location')).toBe('/security?msg=guard_saved');
     const { loadOverrides } = await import('../src/services/settings.js');
     expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'] });
+    // 承認制の設定（許可リスト）。見張りの設定は消えない
+    expect((await post('/security/approval', s, { _csrf: csrf, roleApproval: 'yes' })).status).toBe(403);
+    expect((await post('/security/approval', g, { _csrf: gcsrf, freeRoleIds: '790000000000000200' })).headers.get('location')).toBe('/security?msg=guard_saved');
+    expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'], roleApproval: false, freeRoleIds: ['790000000000000200'] });
   });
 
   it('CSRF トークンがない操作は拒否', async () => {
