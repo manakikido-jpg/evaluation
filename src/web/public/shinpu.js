@@ -12,7 +12,16 @@ let view = null,
 const ART = JSON.parse(document.body.dataset.art || '{}');
 const cardName = (c) => c.name + (c.stackable === true ? ' ＋' : '');
 const canStack = (a) => a.every((c) => c.type === 'guard') || a.filter((c) => c.stackable !== true).length <= 1;
-const label = { attack: '攻撃', guard: '防御', heal: '回復', mana: 'MP回復', cleanse: '解除・回復', money: '霊銭', draw: '手札補充' };
+const label = {
+  attack: '攻撃',
+  guard: '防御',
+  heal: '回復',
+  mana: 'MP回復',
+  cleanse: '解除・回復',
+  money: '霊銭',
+  draw: '手札補充',
+  summon: '召喚・回復',
+};
 function humanAction() {
   return state && state.phase === 'action' && state.turn === myIndex && state.players[myIndex].hp > 0;
 }
@@ -291,6 +300,7 @@ function render() {
     });
     $('hand').append(b);
   });
+  renderSummon();
   updateExchange();
   for (const id of ['log', 'history-log']) {
     $(id).replaceChildren(
@@ -398,3 +408,38 @@ $('clear-selection').addEventListener('click', () => {
   render();
 });
 setInterval(updateDeadline, 1000);
+
+let lastSummon = '';
+function renderSummon() {
+  const panel = $('summon-effect'),
+    event = state.summon;
+  panel.hidden = !event;
+  if (!event) {
+    panel.replaceChildren();
+    lastSummon = '';
+    return;
+  }
+  const key = view.roomId + ':' + event.id;
+  if (lastSummon === key) return;
+  lastSummon = key;
+  const portrait = el('img', 'summon-portrait');
+  portrait.src = event.avatarUrl || ART.summon;
+  portrait.alt = event.name + 'の肖像';
+  portrait.addEventListener(
+    'error',
+    () => {
+      if (portrait.src !== new URL(ART.summon, location.href).href) portrait.src = ART.summon;
+    },
+    { once: true },
+  );
+  const copy = el('div');
+  copy.append(
+    el('span', 'small', '式神を呼ぶ'),
+    el('strong', '', event.name + 'が助けに来た！'),
+    el('p', '', event.recipient + '：HP＋' + event.healed + (event.cleared ? ' ・ 継続ダメージ解除' : '')),
+  );
+  panel.replaceChildren(portrait, copy);
+  panel.classList.remove('appearing');
+  void panel.offsetWidth;
+  panel.classList.add('appearing');
+}

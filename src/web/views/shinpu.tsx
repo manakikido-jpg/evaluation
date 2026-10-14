@@ -63,6 +63,7 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
                 <h1 id="phase"></h1>
                 <span id="deadline" class="deadline" aria-live="off"></span>
               </div>
+              <div id="summon-effect" class="summon-effect" role="status" aria-live="polite" hidden></div>
               <div class="selection-stage">
                 <div id="selected-cards" class="selected-cards" aria-label="選んだ札"></div>
                 <div class="calculation">
@@ -104,7 +105,10 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
             <p class="hint">
               この版はオリジナルの試作ルールです。両替は霊銭4→MP4、霊銭4→HP8、MP3→霊銭4。属性は表示用で、相性判定は未実装です。光の祈りは防御3無視、燐火は3手番の継続ダメージ、水鏡は貫通したダメージの半分を反射します。
             </p>
-            <p>実装済み：14種類の札、複数枚攻撃・防御、回復、MP消費、反射、吸収、継続ダメージ、両替、CPU対戦、勝敗。</p>
+            <p>実装済み：15種類の札、複数枚攻撃・防御、回復、MP消費、反射、吸収、継続ダメージ、両替、CPU対戦、勝敗。</p>
+            <p>
+              「式神を呼ぶ」はMP3でHP10回復・継続ダメージ解除。aisか小林の式神が登場します。本人が同じ名前で参加していればDiscordアイコン、それ以外は仮の狐の肖像を表示します。
+            </p>
             <p>未実装：237種類の全効果、属性相性、守護神、病気、チーム戦、9人対戦。</p>
           </div>
         </dialog>

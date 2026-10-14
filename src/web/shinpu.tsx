@@ -162,7 +162,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     }
     if (!body.success) return c.json({ error: '送る内容を確認してください。' }, 400);
     const b = body.data,
-      user = { id: auth.session.userId, name: auth.session.displayName };
+      user = { id: auth.session.userId, name: auth.session.displayName, avatarUrl: auth.session.avatarUrl };
     try {
       if (b.operation === 'create') {
         if (!b.capacity) throw Error('人数を選んでください。');
