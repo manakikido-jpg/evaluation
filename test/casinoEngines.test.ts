@@ -5,7 +5,7 @@ import { cardText, cryptoRng, rankOf, shuffledShoe, type Rng } from '../src/serv
 import { HL_MAX_STEPS, hlCashout, hlGuess, hlNextMult, hlPayout, hlStart, hlWays } from '../src/services/casino/highlow.js';
 import { applyMove, countStones, cpuMove, flipsFor, initialBoard, legalMoves, nextTurn, othelloPlay, winnerOf } from '../src/services/casino/othello.js';
 import { chinEdge, chinMoney, chinSettle, handOf, rollTurn, turnHand } from '../src/services/casino/chinchiro.js';
-import { isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
+import { ROULETTE_INSIDE, ROULETTE_BETS, isRouletteBet, parseStakes, rouletteMultiplier, stakePayout } from '../src/services/casino/roulette.js';
 import { randomSetting, RANDOM_SETTING_ODDS, SETTING_KEYS, aimStops, bonusStops, drawRole, gridOf, judge, lineOf, PAYLINES, REEL_LEN, REELS, roleOfLine, SLIP, slotPayout, slotRtp, stopsFor, type SlotRole } from '../src/services/casino/slots.js';
 
 /** 決めた数を順に返す乱数 */
@@ -321,7 +321,7 @@ describe('🎡 ルーレット', () => {
 });
 
 describe('🎡 ルーレット（いくつもの所）', () => {
-  it('「red:100,n7:50」を読む。同じ所はまとめる。おかしい・多すぎるものは断る', () => {
+  it('「red:100,n7:50」を読む。同じ所はまとめる。おかしいものは断り、10か所を超えても読める', () => {
     expect(parseStakes('red:100,n7:50,red:20')).toEqual([
       { on: 'red', amount: 120 },
       { on: 'n7', amount: 50 },
@@ -329,7 +329,7 @@ describe('🎡 ルーレット（いくつもの所）', () => {
     expect(parseStakes('')).toBeNull();
     expect(parseStakes('purple:100')).toBeNull();
     expect(parseStakes('red:-1')).toBeNull();
-    expect(parseStakes(Array.from({ length: 11 }, (_, i) => `n${i}:10`).join(','))).toBeNull();
+    expect(parseStakes(Array.from({ length: 37 }, (_, i) => `n${i}:10`).join(','))).toHaveLength(37);
     expect(stakePayout({ on: 'n7', amount: 50 }, 7)).toBe(1800);
     expect(stakePayout({ on: 'red', amount: 100 }, 7)).toBe(200);
   });
@@ -386,4 +386,31 @@ describe('⚫ オセロ', () => {
     }
     expect(wins).toBeGreaterThanOrEqual(5);
   }, 60_000);
+});
+
+
+describe('ヨーロピアンの内側の賭け', () => {
+  it('全108組は重複なく、対象数字だけに36/数字数の払戻をする', () => {
+    expect(ROULETTE_INSIDE).toHaveLength(108);
+    expect(new Set(ROULETTE_INSIDE.map((b) => b.on)).size).toBe(108);
+    expect(ROULETTE_INSIDE.filter((b) => b.numbers.length === 2)).toHaveLength(60); // 盤57組＋0との3組
+    expect(ROULETTE_INSIDE.filter((b) => b.numbers.length === 3)).toHaveLength(14); // ストリート12＋トリオ2
+    expect(ROULETTE_INSIDE.filter((b) => b.numbers.length === 4)).toHaveLength(23); // コーナー22＋ファーストフォー
+    expect(ROULETTE_INSIDE.filter((b) => b.numbers.length === 6)).toHaveLength(11);
+    for (const b of ROULETTE_INSIDE) {
+      expect(isRouletteBet(b.on)).toBe(true);
+      let total = 0;
+      for (let n = 0; n <= 36; n++) {
+        const mult = rouletteMultiplier(b.on, n); total += mult;
+        expect(mult).toBe(b.numbers.includes(n) ? 36 / b.numbers.length : 0);
+      }
+      expect(total).toBe(36);
+    }
+    expect(rouletteMultiplier('i3-6', 3)).toBe(18);
+    expect(rouletteMultiplier('i3-6', 6)).toBe(18);
+    for (const key of ['i1-3', 'i3-4', 'i1-2-4', 'i0-1-3', 'i6-3', 'n00']) expect(isRouletteBet(key)).toBe(false);
+    for (const key of Object.keys(ROULETTE_BETS)) expect(rouletteMultiplier(key as keyof typeof ROULETTE_BETS, 0)).toBe(0);
+    const all = [...Array.from({ length: 37 }, (_, i) => `n${i}`), ...Object.keys(ROULETTE_BETS), ...ROULETTE_INSIDE.map((b) => b.on)];
+    expect(parseStakes(all.map((key) => `${key}:10`).join(','))).toHaveLength(157);
+  });
 });
