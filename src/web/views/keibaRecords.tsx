@@ -1,3 +1,4 @@
+import type { hallOfFame } from '../../services/casino/keibaHonors.js';
 import { classOf, fmtOdds, KB_APT, KB_BET_LABEL, KB_CLASSES, KB_COATS, KB_GOINGS, KB_SEXES, KB_STYLES, KB_SURFACES, isKbBetType } from '../../services/casino/keiba.js';
 import type { DirectoryRow, HorseProfile, KeibaBetRow, MyBetStats, Tally } from '../../services/casino/keibaRecords.js';
 import { CasinoLayout, type CasinoMe } from './casino.js';
@@ -82,6 +83,26 @@ export function KbHorsePage(p: { me: CasinoMe; profile: HorseProfile }) {
         )}
         {p.profile.ownerName ? `・馬主 ${p.profile.ownerName}` : '・馬主なし'}
       </p>
+      {p.profile.titles.length > 0 && (
+        <p class="kb-titles">
+          {p.profile.titles.map((t) => (
+            <span class="c-tag">{t}</span>
+          ))}
+        </p>
+      )}
+      {p.profile.rivals.length > 0 && (
+        <section class="c-panel">
+          <h2>⚔ 宿敵</h2>
+          <p class="c-muted">1・2 着を何度も争った馬です。同じレースに出ると「因縁の対決」になります。</p>
+          <ul>
+            {p.profile.rivals.map((r) => (
+              <li>
+                <HorseLink id={r.id} name={r.name} />・{r.meets} 回の争いで {r.ahead} 勝 {r.behind} 敗
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section class="c-panel">
         <h2>📊 通算成績</h2>
         <div class="kb-tiles">
@@ -210,12 +231,60 @@ export function KbHorsePage(p: { me: CasinoMe; profile: HorseProfile }) {
 }
 
 /** 📖 馬名鑑（走っている馬） */
+export function KbHallPage(p: { me: CasinoMe; horses: Awaited<ReturnType<typeof hallOfFame>> }) {
+  return (
+    <CasinoLayout title="殿堂" me={p.me}>
+      <Back />
+      <h1 class="c-h1">🏛 殿堂</h1>
+      <p class="c-muted">G1 を 2 勝した馬（引退した馬は 1 勝でも）が、ずっと残ります。</p>
+      <section class="c-panel">
+        {p.horses.length === 0 ? (
+          <p class="c-muted">まだ殿堂入りの馬はいません。最初の 1 頭をめざしましょう。</p>
+        ) : (
+          <div class="kb-card-wrap">
+            <table class="kb-rec-table">
+              <thead>
+                <tr>
+                  <th>馬</th>
+                  <th>G1</th>
+                  <th>成績</th>
+                  <th>獲得賞金</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.horses.map((h) => (
+                  <tr>
+                    <td>
+                      <HorseLink id={h.id} name={h.name} />
+                      {h.retired && <span class="c-tag">引退</span>}
+                    </td>
+                    <td>{h.g1} 勝</td>
+                    <td>
+                      {h.starts} 戦 {h.wins} 勝
+                    </td>
+                    <td>
+                      {p.me.coin.emoji}
+                      {fmt(h.prize)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </CasinoLayout>
+  );
+}
+
 export function KbDirectoryPage(p: { me: CasinoMe; horses: DirectoryRow[] }) {
   return (
     <CasinoLayout title="馬名鑑" me={p.me}>
       <Back />
       <h1 class="c-h1">📖 馬名鑑</h1>
-      <p class="c-muted">いま走っている馬です（獲得賞金の多い順）。馬名を押すと、その馬の成績が見られます。</p>
+      <p class="c-muted">
+        いま走っている馬です（獲得賞金の多い順）。馬名を押すと、その馬の成績が見られます。<a href="/casino/keiba/hall">🏛 殿堂を見る</a>
+      </p>
       <section class="c-panel">
         {p.horses.length === 0 ? (
           <p class="c-muted">まだ馬がいません。</p>

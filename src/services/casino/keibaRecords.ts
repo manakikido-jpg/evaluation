@@ -1,3 +1,4 @@
+import { horseTitles, rivalsOf, type Rival } from './keibaHonors.js';
 import { and, asc, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { keibaBets, keibaEntries, keibaHorses, members, type KeibaHorseRow } from '../../db/schema.js';
@@ -33,6 +34,9 @@ export type HorseProfile = {
   best: { dist: number; time: string }[];
   avgPop: number | null;
   avgPos: number | null;
+  /** 🏆 称号・⚔ 宿敵 */
+  titles: string[];
+  rivals: Rival[];
 };
 
 export async function horseProfile(db: Db, id: number, limit = 50): Promise<HorseProfile | null> {
@@ -67,6 +71,8 @@ export async function horseProfile(db: Db, id: number, limit = 50): Promise<Hors
     best: group((r) => r.dist).map(([dist, rows]) => ({ dist, time: [...rows].sort((a, b) => toSec(a.time) - toSec(b.time))[0]!.time })),
     avgPop: avg(all.map((r) => r.pop).filter((x) => x > 0)),
     avgPos: avg(all.map((r) => r.pos)),
+    titles: horseTitles(all, h.retiredAt !== null),
+    rivals: await rivalsOf(db, id),
   };
 }
 

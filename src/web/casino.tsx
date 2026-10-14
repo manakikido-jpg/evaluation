@@ -72,7 +72,8 @@ import { changeSlotSeat, slotSeatViews } from '../services/casino/slotSeats.js';
 import { ChinchiroPage } from './views/chinchiro.js';
 import { MjRecords } from './views/mahjong.js';
 import { KbLobbyExtra, KbStablePage } from './views/keiba.js';
-import { KbDirectoryPage, KbHorsePage, KbMyBetsPage } from './views/keibaRecords.js';
+import { KbDirectoryPage, KbHallPage, KbHorsePage, KbMyBetsPage } from './views/keibaRecords.js';
+import { hallOfFame, rivalPairsAmong } from '../services/casino/keibaHonors.js';
 import { horseDirectory, horseProfile, myBetStats } from '../services/casino/keibaRecords.js';
 import {
   breedFoal,
@@ -797,6 +798,13 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const profile = Number.isSafeInteger(id) && id > 0 ? await horseProfile(db, id) : null;
       if (!profile) return c.redirect('/casino/keiba/horses');
       return c.html(<KbHorsePage me={me} profile={profile} />);
+    }),
+  );
+  app.get(
+    '/casino/keiba/hall',
+    page(async (c, me) => {
+      if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+      return c.html(<KbHallPage me={me} horses={await hallOfFame(db)} />);
     }),
   );
   app.get(

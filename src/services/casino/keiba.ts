@@ -97,6 +97,8 @@ export type KbStable = {
   fatigue?: number;
   trainBoost?: number;
   sire?: string | null;
+  /** ⚔ 宿敵（名簿の番号） */
+  rivals?: number[];
 };
 
 // ───────── 疲れと調教 ─────────
@@ -198,6 +200,8 @@ export type KbHorse = {
   /** 勝つ見込み・3 着以内の見込み（BOT のお客さんの賭けと予想の印に使う） */
   p: number;
   p3: number;
+  /** ⚔ 宿敵（名簿の番号） */
+  rivals?: number[];
 };
 
 /** cls: クラス（KB_CLASSES の番号） */
@@ -338,6 +342,7 @@ export function makeRace(
     ownerId: h.ownerId,
     ownerName: h.ownerName ?? null,
     sire: h.sire ?? null,
+    ...(h.rivals?.length ? { rivals: h.rivals } : {}),
     fatigue: h.fatigue ?? 0,
     prize: h.prize,
     cls: classOf(h),
