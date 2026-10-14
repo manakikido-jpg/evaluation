@@ -2161,7 +2161,9 @@ const initKeiba = () => {
   const g = canvas?.getContext('2d');
   if (!g) return;
   const call = el.querySelector('.kb-call');
-  const rankBox = el.querySelector('.kb-rank');
+  const ranking = el.closest('.kb-broadcast')?.querySelector('.kb-ranking');
+  const rankBox = ranking?.querySelector('.kb-rank');
+  const rankLabel = ranking?.querySelector('.kb-ranking-label');
   const remainBox = el.querySelector('.kb-remain');
   const mineBox = el.querySelector('.kb-mine');
   const paddockBox = el.querySelector('.kb-paddock');
@@ -2190,6 +2192,7 @@ const initKeiba = () => {
   let ppm = null;
   let shown = -1;
   let rankAt = 0;
+  let rankSignature = null;
   let started = false;
   let goal = false;
   const state = { el, raf: 0 };
@@ -2198,7 +2201,9 @@ const initKeiba = () => {
     if (kbAnim !== state || !document.body.contains(el)) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const W = el.clientWidth;
-    const H = Math.round(W * (W < 560 ? 0.62 : 0.5));
+    const naturalHeight = W * (W < 560 ? 0.62 : 0.5);
+    const heightLimit = window.innerWidth >= 1180 ? Math.max(280, window.innerHeight * 0.62) : window.innerWidth > window.innerHeight ? Math.max(160, window.innerHeight * 0.48) : naturalHeight;
+    const H = Math.round(Math.min(naturalHeight, heightLimit));
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
@@ -2387,14 +2392,40 @@ const initKeiba = () => {
     // いまの順位（0.3 秒ごと）
     if (rankBox && racing && Date.now() - rankAt > 300) {
       rankAt = Date.now();
-      const top8 = data.phase === 'result' ? data.order : sorted.map((p) => p.no);
-      rankBox.innerHTML = '';
-      top8.forEach((no) => {
-        const li = document.createElement('li');
-        li.className = `kb-g${no}${mine.has(no) ? ' kb-mine-rank' : ''}`;
-        li.textContent = String(no);
-        rankBox.appendChild(li);
-      });
+      const top8 = data.phase === 'result' ? data.order : t < 0 ? horses.map((h) => h.no) : sorted.map((p) => p.no);
+      const confirmed = data.phase === 'result' && data.resultAt && Date.now() + skew() - data.resultAt >= 6000;
+      const label = data.phase === 'result' ? confirmed ? '確定着順' : '到達順位' : t < 0 ? '発走前' : '途中順位';
+      const signature = label + ':' + top8.join(',');
+      if (signature !== rankSignature) {
+        rankSignature = signature;
+        if (rankLabel) rankLabel.textContent = label;
+        rankBox.setAttribute('aria-label', label);
+        rankBox.replaceChildren(...top8.map((no, i) => {
+          const horse = horses.find((h) => h.no === no);
+          const li = document.createElement('li');
+          li.className = mine.has(no) ? 'kb-mine-rank' : '';
+          const position = document.createElement('span');
+          position.className = 'kb-rank-position';
+          position.textContent = label === '発走前' ? '馬番' : `${i + 1}位`;
+          const number = document.createElement('span');
+          number.className = `kb-no kb-g${no} small`;
+          number.textContent = String(no);
+          const name = document.createElement('span');
+          name.className = 'kb-rank-name';
+          name.textContent = horse?.name || '';
+          name.title = horse?.name || '';
+          li.setAttribute('aria-label', `${label === '発走前' ? '' : `${i + 1}位、`}馬番${no}、${horse?.name || ''}${mine.has(no) ? '、購入した馬' : ''}`);
+          li.append(position, number, name);
+          if (mine.has(no)) {
+            const mark = document.createElement('span');
+            mark.className = 'kb-rank-mark';
+            mark.textContent = '✿';
+            mark.setAttribute('aria-hidden', 'true');
+            li.append(mark);
+          }
+          return li;
+        }));
+      }
       if (mineBox) {
         const mineRanks = top8.map((no, r) => [no, r + 1]).filter(([no]) => mine.has(no)).slice(0, 3);
         mineBox.textContent = mineRanks.length && t >= 0 ? `あなたの ${mineRanks.map(([no, r]) => `${KB_NO_MARK[no - 1]} ${r} 番手`).join('・')}` : '';

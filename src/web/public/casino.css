@@ -1532,10 +1532,7 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .kb-call { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: min(92%, 720px); text-align: center; z-index: 2; color: #fff; font-weight: 800; font-size: clamp(0.72rem, 2vw, 1rem); line-height: 1.45; background: linear-gradient(180deg, rgba(10, 20, 40, 0.82), rgba(0, 0, 0, 0.82)); border-left: 4px solid var(--c-gold); border-radius: 6px; padding: 6px 12px; pointer-events: none; }
 .kb-call.pop { animation: kbpop 0.45s ease-out; }
 @keyframes kbpop { 0% { transform: translateX(-50%) translateY(6px); opacity: 0.3; } 100% { transform: translateX(-50%) translateY(0); opacity: 1; } }
-.kb-rank { position: absolute; left: 10px; top: 62px; display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 4px; list-style: none; z-index: 2; background: rgba(0, 0, 0, 0.4); border-radius: 8px; }
-.kb-rank:empty { display: none; }
-.kb-rank li { width: 20px; height: 20px; border-radius: 4px; font-size: 11px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 0 0 1px #000; }
-.kb-rank li:first-child { box-shadow: 0 0 0 2px var(--c-gold); }
+
 .kb-silk { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
 .kb-run { display: inline-grid; place-items: center; min-width: 15px; height: 15px; border-radius: 3px; font-size: 0.68rem; margin-right: 2px; background: rgba(255, 255, 255, 0.1); color: var(--c-muted); }
 .kb-run.p1 { background: #c9a227; color: #111; }
@@ -1609,9 +1606,7 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
   .kb-title { font-size: 1.1rem; }
   .kb-canvas { aspect-ratio: 100 / 62; }
   .kb-call { bottom: 6px; padding: 4px 8px; }
-  .kb-rank { top: 58px; gap: 2px; flex-direction: row; }
   .kb-tv-tag, .kb-remain { font-size: 0.7rem; }
-  .kb-rank li { width: 15px; height: 15px; font-size: 9px; }
   .kb-card { font-size: 0.82rem; }
   .kb-card td { padding: 5px 3px; }
 }
@@ -1669,7 +1664,6 @@ button.mj-t.sel { transform: translateY(-10px); box-shadow: 0 0 0 2px var(--c-sa
 .kb-mine:empty { display: none; }
 .kb-mine.top { background: rgba(200, 140, 0, 0.85); color: #fff; animation: kbpulse 1s ease-in-out infinite; }
 @keyframes kbpulse { 50% { box-shadow: 0 0 0 6px rgba(255, 211, 77, 0.25); } }
-.kb-rank li.kb-mine-rank { box-shadow: 0 0 0 2px #ffd34d, 0 0 8px #ffd34d; }
 /* 📸 写真判定・🎉 的中 */
 .kb-photo { position: absolute; inset: 0; display: grid; place-items: center; z-index: 4; font-size: clamp(1.4rem, 6vw, 3rem); font-weight: 900; color: #fff; text-shadow: 0 3px 0 #000; background: rgba(255, 255, 255, 0.35); animation: kbflash 2.6s ease-out forwards; pointer-events: none; }
 @keyframes kbflash { 0% { background: rgba(255, 255, 255, 0.95); } 20% { background: rgba(255, 255, 255, 0.25); } 100% { background: transparent; opacity: 0; } }
@@ -2289,3 +2283,53 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .kb-titles { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 .kb-titles .c-tag { margin-left: 0; }
 .kb-rival { color: #ff8a65; font-weight: 700; font-size: 0.8rem; margin-left: 4px; }
+
+/* 咲楽ノ宮の競馬：順位は映像の外、上部で追う。 */
+.kb-stage { background: linear-gradient(160deg, #12283e, #192c41); border-color: #8494a5; }
+.kb-kicker { color: #edbacb; }
+.kb-title { font-family: serif; }
+.kb-ranking { color: #263449; background: #f7f2e8; border: 1px solid #c9c2b8; border-radius: 10px; padding: 9px; margin-bottom: 10px; }
+.kb-ranking-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; font-size: .8rem; }
+.kb-ranking-head b { font-size: .95rem; }
+.kb-ranking-head > span { color: #81435b; }
+.kb-rank { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 5px; list-style: none; padding: 0; margin: 0; }
+.kb-rank li { position: relative; min-width: 0; display: grid; grid-template-columns: auto auto; justify-content: start; align-items: center; gap: 4px; padding: 7px 5px; border: 1px solid #cdc8bf; border-radius: 6px; background: #fffcf5; }
+.kb-rank-position { color: #35455b; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.kb-rank .kb-no { width: 24px; height: 24px; font-size: .9rem; }
+.kb-rank-name { grid-column: 1 / -1; font-size: .7rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.kb-rank li.kb-mine-rank { background: #f8e9ee; border-color: #b54b70; box-shadow: inset 0 0 0 1px #b54b70; }
+.kb-rank-mark { position: absolute; top: -6px; right: -2px; color: #aa335c; font-size: .85rem; background: #f8e9ee; border-radius: 50%; line-height: 1; }
+@media (max-width: 700px) {
+  .kb-ranking { padding: 7px; }
+  .kb-rank { gap: 3px; }
+  .kb-rank li { padding: 5px 2px; gap: 2px; }
+  .kb-rank-position { font-size: .65rem; }
+  .kb-rank .kb-no { width: 20px; height: 20px; font-size: .8rem; }
+  .kb-rank-name { font-size: .6rem; }
+}
+@media (max-width: 480px) and (orientation: portrait) {
+  .kb-rank { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* PCの競馬だけ幅制限を外し、観戦領域へ横幅を配る。 */
+@media (min-width: 1180px) {
+  .c-main.wide:has(.kb-layout), .c-main:has(.kb-layout) { max-width: none; padding-left: 18px; padding-right: 18px; }
+  .kb-layout { grid-template-columns: minmax(0, 1fr) clamp(340px, 25vw, 440px); }
+  .kb-main, .kb-side { min-width: 0; }
+}
+
+.kb-prize summary { cursor: pointer; }
+.kb-prize[open] small { display: block; max-width: 75ch; padding-top: 5px; }
+@media (orientation: landscape) and (max-height: 600px) {
+  .c-main:has(.kb-layout) { padding: 6px 10px; }
+  .kb-stage { padding: 7px; }
+  .kb-head { margin-bottom: 5px; gap: 3px 10px; }
+  .kb-title { font-size: 1rem; }
+  .kb-kicker, .kb-cond, .kb-prize { font-size: .7rem; }
+  .kb-prize { margin: 2px 0; }
+  .kb-ranking { padding: 5px; margin-bottom: 5px; }
+  .kb-ranking-head { margin-bottom: 3px; font-size: .65rem; }
+  .kb-ranking-head b { font-size: .75rem; }
+  .kb-rank li { padding: 4px; }
+  .kb-rank-name { font-size: .6rem; }
+  .kb-head .c-phase { font-size: .75rem; }
+}

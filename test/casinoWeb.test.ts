@@ -726,6 +726,9 @@ describe('🏇 みんなでダービー（画面）', () => {
     const id = loc.split('/').pop()!;
     const page = await (await get(loc, a)).text();
     expect(page).toContain('class="kb-tv"');
+    // 順位欄は映像より前に置き、canvasの上に重ねない。
+    expect(page.indexOf('class="kb-ranking"')).toBeLessThan(page.indexOf('class="kb-tv"'));
+    expect(page).toContain('class="kb-ranking-label">出走馬');
     expect(page).toContain('咲楽ノ宮ダービー');
     expect(page).toContain('出馬表');
     expect(page).toContain('初出走');
