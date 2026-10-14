@@ -726,8 +726,14 @@ export const guildConfigSchema = z
         /** 神職が /ロール・/一時ロールで付け外しするとき、freeRoleIds 以外は別の神職・宮司の承認がいる（宮司はいらない） */
         roleApproval: z.boolean().default(true),
         freeRoleIds: z.array(snowflake).max(50).default([]),
+        /** レイド検知: raidMinutes 分に raidJoins 人以上入ったら警戒モード（raidHoldMinutes 分。0 人で見ない） */
+        raidJoins: z.number().int().min(0).max(1000).default(10),
+        raidMinutes: z.number().int().min(1).max(60).default(5),
+        raidHoldMinutes: z.number().int().min(5).max(1440).default(60),
+        /** 作って何日以内のアカウントが入ったら知らせる（0 で知らせない） */
+        newAccountDays: z.number().int().min(0).max(365).default(7),
       })
-      .default({ roleGuard: 'alert', trustedBotIds: [], roleApproval: true, freeRoleIds: [] }),
+      .default({ roleGuard: 'alert', trustedBotIds: [], roleApproval: true, freeRoleIds: [], raidJoins: 10, raidMinutes: 5, raidHoldMinutes: 60, newAccountDays: 7 }),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
     casinoGacha: casinoGachaSchema.default(casinoGachaSchema.parse({})),

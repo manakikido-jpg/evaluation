@@ -130,6 +130,12 @@ describe('入鯖申請', () => {
     const { addWatch } = await import('../src/services/securityWatch.js');
     expect(await addWatch(db, watched, '他鯖で荒らし', '840000000000000099')).toBe(true);
     expect((await submitJoin(ctx, { id: watched, roleIds: [], accountCreatedAt: new Date('2025-01-01T00:00:00Z') }, answers, now)).status).toBe('pending');
+    // 🚨 警戒モードの間も自動で承認しない
+    const another = '840000000000000013';
+    await recordJoin(db, snap(another, []));
+    const { startRaid } = await import('../src/services/raid.js');
+    await startRaid(db, 'system', 60, now);
+    expect((await submitJoin(ctx, { id: another, roleIds: [], accountCreatedAt: new Date('2025-01-01T00:00:00Z') }, answers, now)).status).toBe('pending');
   });
 });
 

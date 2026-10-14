@@ -1,4 +1,5 @@
 import { watchOf } from '../services/securityWatch.js';
+import { isNewAccount, raidState } from '../services/raid.js';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ChannelType, MessageFlags, type Guild, type GuildMember, type Interaction, type Message, type VoiceState } from 'discord.js';
 import type { Db } from '../db/client.js';
@@ -72,6 +73,11 @@ export class GuideReceptionApp {
       const ids = { addedRoleId: first.roleId, removedRoleId: c.pendingRoleId! };
       if (visitor.roles.cache.has(first.roleId) && !visitor.roles.cache.has(c.pendingRoleId!)) return { reception: r, changed: false, ...ids };
       if (!visitor.roles.cache.has(c.pendingRoleId!)) return { error: '案内待ちロールの人だけに参拝者ロールを付与できます。' };
+      // 🚨 警戒モードの間は、案内人ではロールを付けられない
+      if (await raidState(tx as Db)) {
+        await audit(tx as Db, { actorId, targetId: r.visitorId, action: 'guide.role_blocked', detail: { receptionId: id, reason: 'raid' }, via: 'discord' });
+        return { error: 'いまは警戒モード（レイドのおそれ）なので、案内人はロールを付与できません。神職・宮司に知らせてください。' };
+      }
       // 🛡 要注意リストの人は、案内人ではロールを付けられない（神職・宮司が決める）
       if (await watchOf(tx as Db, r.visitorId)) {
         await audit(tx as Db, { actorId, targetId: r.visitorId, action: 'guide.role_blocked', detail: { receptionId: id, reason: 'watch' }, via: 'discord' });
@@ -160,7 +166,9 @@ export class GuideReceptionApp {
           }
           if (!r.notifiedAt && c.staffChannelId && c.roleId) {
             const watched = await watchOf(this.db, r.visitorId);
-            await this.discord.sendMessage(c.staffChannelId, { content: `<@&${c.roleId}>\n<@${r.visitorId}> さんが <#${r.channelId}> に来ました。${watched ? '\n🛡 **要注意リストの人です。** 案内人はロールを付けられません。神職・宮司に知らせてください。' : ''}\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`, allowed_mentions: { parse: [], roles: [c.roleId] } });
+            const visitorUser = guild.members?.cache?.get(r.visitorId)?.user;
+            const fresh = visitorUser?.createdAt instanceof Date ? isNewAccount(visitorUser.createdAt, this.cfg().security?.newAccountDays ?? 0) : false;
+            await this.discord.sendMessage(c.staffChannelId, { content: `<@&${c.roleId}>\n<@${r.visitorId}> さんが <#${r.channelId}> に来ました。${watched ? '\n🛡 **要注意リストの人です。** 案内人はロールを付けられません。神職・宮司に知らせてください。' : ''}${fresh ? '\n🐣 作ったばかりのアカウントです。サブアカウントや荒らしでないか気をつけてください。' : ''}\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`, allowed_mentions: { parse: [], roles: [c.roleId] } });
             await this.db.update(guideReceptions).set({ notifiedAt: new Date() }).where(eq(guideReceptions.id, r.id));
             const employees = await this.db.select().from(guideEmployees).where(and(eq(guideEmployees.status, 'active'), eq(guideEmployees.waiting, true)));
             for (const e of employees) {

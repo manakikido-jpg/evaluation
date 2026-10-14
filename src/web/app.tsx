@@ -1,3 +1,4 @@
+import { endRaid, raidState, startRaid } from '../services/raid.js';
 import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
 import { SecurityPage } from './views/security.js';
@@ -3435,7 +3436,7 @@ export function createWebApp(deps: WebDeps) {
     const ids = [...new Set([...rows.flatMap((r) => [r.memberId, r.addedBy]), ...requests.flatMap((q) => [q.memberId, q.requestedBy, q.decidedBy ?? ''])].filter(Boolean))];
     const names = await watchNames(db, ids);
     const roles = ((await loadRoles()) ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }));
-    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} guard={cfg.security} roles={roles} requests={requests} />);
+    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} guard={cfg.security} roles={roles} requests={requests} raid={await raidState(db)} />);
   });
   app.post('/security/watch', async (c) => {
     const body = await c.req.parseBody();
@@ -3463,6 +3464,38 @@ export function createWebApp(deps: WebDeps) {
     await saveOverrides(db, overrides, c.get('session').userId);
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'security.settings', detail: overrides.security, via: 'web' });
+    return c.redirect('/security?msg=guard_saved');
+  });
+  // 🚨 警戒モード: 始める・終えるは神職・宮司、基準の数字は宮司
+  app.post('/security/raid/start', async (c) => {
+    const actor = c.get('session').userId;
+    await startRaid(db, actor, cfg.security.raidHoldMinutes);
+    await audit(db, { actorId: actor, action: 'security.raid_start', detail: { manual: true }, via: 'web' });
+    if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `🚨 <@${actor}> が警戒モードにしました（${cfg.security.raidHoldMinutes} 分）。案内人のロール付与と入鯖申請の自動承認を止めます。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+    return c.redirect('/security?msg=raid_started');
+  });
+  app.post('/security/raid/end', async (c) => {
+    const actor = c.get('session').userId;
+    await endRaid(db, actor);
+    await audit(db, { actorId: actor, action: 'security.raid_end', via: 'web' });
+    if (cfg.channels.log) await deps.discord.sendMessage(cfg.channels.log, { content: `✅ <@${actor}> が警戒モードを終えました。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+    return c.redirect('/security?msg=raid_ended');
+  });
+  app.post('/security/raid/settings', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const num = (k: string) => (typeof body[k] === 'string' && /^\d{1,5}$/.test(body[k] as string) ? Number(body[k]) : NaN);
+    const current = await loadOverrides(db);
+    let overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, security: { ...current.security, raidJoins: num('raidJoins'), raidMinutes: num('raidMinutes'), raidHoldMinutes: num('raidHoldMinutes'), newAccountDays: num('newAccountDays') } });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/security?msg=raid_invalid');
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'security.raid_settings', detail: overrides.security, via: 'web' });
     return c.redirect('/security?msg=guard_saved');
   });
   app.post('/security/approval', async (c) => {
