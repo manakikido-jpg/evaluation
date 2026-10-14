@@ -1,7 +1,9 @@
 import { html } from 'hono/html';
+import { cards } from '../../services/shinpu/engine.js';
 import { assetUrl } from '../assets.js';
 
 export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
+  const art = JSON.stringify(Object.fromEntries(cards.map((c) => [c.id, assetUrl(`shinpu-card-${c.id}.webp`)])));
   return html`<!doctype html>
     <html lang="ja">
       <head>
@@ -10,12 +12,10 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
         <title>神符合戦 | 咲楽ノ宮・遊べる試作版</title>
         <link rel="stylesheet" href="${assetUrl('shinpu.css')}" />
       </head>
-      <body data-csrf="${csrf}">
+      <body data-csrf="${csrf}" data-art="${art}">
         <header>
-          <div class="brand">神符合戦<small>咲楽ノ宮 ― SHINPU BATTLE</small></div>
-          <nav>
-            <span class="tag">運営だけのテスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button>
-          </nav>
+          <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
+          <nav><span class="tag">運営テスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
         <main class="wrap" id="lobby">
           <section class="arena">
@@ -55,31 +55,40 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
           <section class="players" id="players" aria-label="参加者・攻撃対象"></section>
           <div class="board">
             <aside class="logbox">
-              <h3>対戦の記録</h3>
+              <h3>✿ 戦いの記録</h3>
               <div class="log" id="log"></div>
             </aside>
-            <section class="arena">
-              <div class="torii">⛩</div>
-              <div class="eyebrow" id="phase"></div>
-              <h1 id="message"></h1>
-              <div class="summary" id="summary"></div>
+            <section class="arena battle-arena">
+              <div class="battle-heading">
+                <h1 id="phase"></h1>
+                <span id="deadline" class="deadline" aria-live="off"></span>
+              </div>
+              <div class="selection-stage">
+                <div id="selected-cards" class="selected-cards" aria-label="選んだ札"></div>
+                <div class="calculation">
+                  <h2 id="message"></h2>
+                  <div class="summary" id="summary"></div>
+                </div>
+                <div id="target-preview" class="target-preview"></div>
+              </div>
               <div class="actions">
-                <button class="primary" id="main-action"></button><button id="exchange-open">両替</button
-                ><button id="pass">様子を見る</button><button class="log-toggle" data-dialog="history">記録</button>
+                <button class="primary" id="main-action"></button><button id="clear-selection">↶ 選択を戻す</button
+                ><button id="exchange-open">両替</button><button id="pass">様子を見る</button
+                ><button class="log-toggle" data-dialog="history">記録</button>
               </div>
               <p class="muted" id="hint"></p>
             </section>
+            <section class="handarea">
+              <div class="handheading">
+                <span id="hand-title">あなたの神器</span><span class="small">札を押して選択・もう一度押すと解除</span>
+              </div>
+              <div class="hand" id="hand" aria-label="あなたの手札"></div>
+            </section>
           </div>
-          <section class="handarea">
-            <div class="handheading">
-              <span id="hand-title">あなたの手札</span><span class="small">札を押して選択・もう一度押すと解除</span>
-            </div>
-            <div class="hand" id="hand" aria-label="あなたの手札"></div>
-          </section>
         </main>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
         <footer>
-          遊べる試作版 v0.1 · 運営同士＋CPU / テスト専用<br />対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
+          神符合戦・運営テスト · 運営同士＋CPU / テスト専用<br />対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
         </footer>
         <dialog id="rules">
           <button class="close" data-close>閉じる</button>

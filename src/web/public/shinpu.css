@@ -1,19 +1,28 @@
 :root {
   color-scheme: light;
-  --ink: #332b29;
-  --red: #b34235;
-  --gold: #be9560;
-  --paper: #faf6eb;
-  --blue: #477896;
+  --ink: #282019;
+  --red: #cc3625;
+  --gold: #b59162;
+  --paper: #fffaf0;
+  --blue: #286eaa;
+  --serif: 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', serif;
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
-  background: #e9e1d4;
+  background: #f0e5d2;
   color: var(--ink);
   font-family: 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif;
+}
+body:before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url('/static/shinpu-background.webp') center/cover;
+  opacity: 0.18;
+  z-index: -1;
 }
 button,
 input,
@@ -22,353 +31,629 @@ select {
 }
 button {
   cursor: pointer;
-  border: 1px solid #d4bda0;
-  background: #fffaf1;
+  border: 1px solid #aa8962;
+  background: linear-gradient(#fffdf6, #f5eada);
   color: var(--ink);
-  border-radius: 8px;
-  padding: 10px 14px;
+  border-radius: 6px;
+  padding: 10px 16px;
   font-weight: 700;
+  box-shadow: 0 2px 2px #88683d18;
 }
 button:hover {
-  background: #f4e4ce;
+  background: #f5e7d1;
 }
 button:disabled {
-  opacity: 0.45;
+  opacity: 0.62;
   cursor: not-allowed;
 }
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
-  outline: 3px solid #487e9c;
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid #286eaa;
   outline-offset: 3px;
 }
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 17px 26px;
-  border-bottom: 1px solid #c8ae85;
-  background: var(--paper);
+  padding: 9px 22px;
+  border-bottom: 2px solid #d3b88d;
+  background: #fffcf3e8;
   gap: 16px;
 }
 .brand {
-  font-family: serif;
-  font-size: 25px;
-  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-family: var(--serif);
+  font-weight: bold;
+  font-size: clamp(19px, 2vw, 32px);
+  letter-spacing: 0.04em;
 }
-.brand small {
-  font-size: 12px;
-  display: block;
-  letter-spacing: 0.15em;
-  color: #856747;
+.crest {
+  color: #d9462d;
+  font-size: 49px;
+  line-height: 1;
 }
 .tag {
-  background: #eee5d5;
-  border: 1px solid #dac5a6;
+  background: #efe3cd;
+  border: 1px solid #dbc2a0;
   border-radius: 20px;
   padding: 5px 10px;
   font-size: 12px;
 }
 header nav {
   display: flex;
-  gap: 8px;
+  gap: 9px;
   align-items: center;
 }
+header nav button {
+  font-family: var(--serif);
+  font-size: 17px;
+}
 .wrap {
-  max-width: 1400px;
+  max-width: 1820px;
   margin: auto;
-  padding: 18px 24px;
+  padding: 12px 14px;
 }
 .intro {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  gap: 12px;
+  justify-content: flex-end;
+  margin: 0 0 7px;
 }
+.intro h2,
 .intro p {
-  font-size: 13px;
-  color: #776856;
-  margin: 5px 0;
+  display: none;
+}
+.statuspill {
+  font-size: 11px;
+  color: #776042;
 }
 .players {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 9px;
+}
+.players.six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 .player {
-  background: var(--paper);
-  padding: 13px;
-  border: 1px solid #d4b99a;
-  border-radius: 12px;
   position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  background: #fffaf0e8;
+  padding: 6px;
+  border: 1px solid #d0b38c;
+  border-radius: 7px;
+  min-height: 113px;
+  text-align: left;
+  min-width: 0;
+}
+.player:disabled {
+  opacity: 1;
+  cursor: default;
 }
 .player.target {
-  border: 2px solid var(--red);
-  background: #fff0e8;
+  border: 3px solid #ef513b;
+  box-shadow: 0 0 0 3px #f9ae8c66;
+  background: #fff0e9;
 }
 .player.self {
-  box-shadow: inset 0 3px var(--blue);
+  border: 3px solid #51a2d6;
+  box-shadow: 0 0 0 3px #c2e0f177;
+  background: #eff7fc;
 }
-.player.active:after {
-  content: '手番';
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  color: #fff;
-  background: var(--red);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 10px;
-}
-.player.dead {
+.player.dead:disabled {
   opacity: 0.5;
 }
-.player .name {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  margin-bottom: 10px;
-  font-weight: bold;
-}
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
-  border-radius: 50%;
-  background: #edd5b7;
-  color: #8b452b;
-  font-family: serif;
-  font-size: 22px;
-}
-.statline {
-  display: flex;
-  gap: 8px;
+.player.target:after,
+.player.self:after {
+  position: absolute;
+  right: -1px;
+  top: -8px;
+  border-radius: 16px;
+  padding: 2px 13px;
   font-size: 12px;
-  align-items: center;
+  color: #fff;
+  line-height: 1.5;
 }
-.statline strong {
-  font-size: 17px;
+.player.target:after {
+  content: '対象';
+  background: var(--red);
 }
-.bar {
-  height: 5px;
+.player.self:after {
+  content: 'あなた';
+  background: var(--blue);
+}
+.player.active:before {
+  content: '手番';
+  position: absolute;
+  left: 8px;
+  bottom: 5px;
+  background: #fff8e4dd;
+  color: #873a24;
+  padding: 1px 5px;
   border-radius: 4px;
-  background: #dfd9c9;
-  margin: 6px 0;
+  font-size: 10px;
 }
-.bar span {
+.portrait {
+  display: block;
+  flex-shrink: 0;
+  width: 78px;
+  --portrait-size: 96px;
+  height: var(--portrait-size);
+  border: 1px solid #c2a17d;
+  border-radius: 4px;
+  background-image: url('/static/shinpu-avatars.webp');
+  background-size: calc(var(--portrait-size) * 3) calc(var(--portrait-size) * 2);
+  background-repeat: no-repeat;
+}
+.portrait-0 {
+  background-position: calc(50% + var(--portrait-size)) 0;
+}
+.portrait-1 {
+  background-position: 50% 0;
+}
+.portrait-2 {
+  background-position: calc(50% - var(--portrait-size)) 0;
+}
+.portrait-3 {
+  background-position: calc(50% + var(--portrait-size)) 100%;
+}
+.portrait-4 {
+  background-position: 50% 100%;
+}
+.portrait-5 {
+  background-position: calc(50% - var(--portrait-size)) 100%;
+}
+.player-info {
+  flex: 1;
+  min-width: 0;
+  padding-top: 3px;
+}
+.name {
+  font-family: var(--serif);
+  font-weight: bold;
+  font-size: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0 0 9px;
+}
+.resource-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  position: relative;
+  z-index: 0;
+  margin: 4px 0;
+  padding: 1px 3px;
+}
+.resource-line strong {
+  font-size: 16px;
+}
+.resource-max {
+  font-size: 11px;
+}
+.resource-bar {
+  position: absolute;
+  inset: 0;
+  background: #d8d3c8;
+  z-index: -1;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.resource-bar > span {
   display: block;
   height: 100%;
-  border-radius: 4px;
-  background: #748e67;
+  background: #7da57180;
+}
+.mp .resource-bar > span {
+  background: #6cb0e680;
 }
 .small {
   font-size: 11px;
-  color: #806d56;
+  color: #755e3f;
+}
+.player .small {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
 }
 .board {
   display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 16px;
-  margin-top: 17px;
+  grid-template-columns: minmax(235px, 22%) minmax(0, 1fr);
+  grid-template-areas: 'log arena' 'log hand';
+  gap: 10px;
+  margin-top: 15px;
+  align-items: stretch;
 }
 .logbox,
 .arena,
 .handarea {
-  background: var(--paper);
   border: 1px solid #ccb18e;
-  border-radius: 12px;
+  border-radius: 8px;
+  overflow: hidden;
 }
 .logbox {
-  padding: 15px;
-  max-height: 350px;
+  grid-area: log;
+  background: #fffbf3e8;
+  max-height: 720px;
   overflow: auto;
 }
 .logbox h3 {
-  margin: 0 0 12px;
-  font-size: 14px;
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 10px 15px;
+  background: #38332d;
+  color: #fff9e8;
+  font-family: var(--serif);
+  font-size: 21px;
+  z-index: 1;
 }
 .log {
+  padding: 11px 13px;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 .log p {
-  margin: 0 0 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e5dbcb;
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid #ded0ba;
 }
 .arena {
-  min-height: 330px;
   position: relative;
-  overflow: hidden;
   text-align: center;
+  background: #fffaf0e8;
   padding: 28px 20px;
-  background: radial-gradient(ellipse at 50% 60%, #fff9eacc, #f4ecd9), linear-gradient(160deg, #e6d4b1, #fffcf4);
 }
-.torii {
-  position: absolute;
-  inset: 40px 0 auto;
-  opacity: 0.055;
-  font-family: serif;
-  font-size: 180px;
-  pointer-events: none;
+.battle-arena {
+  grid-area: arena;
+  padding: 15px 18px 10px;
+  min-height: 350px;
+  background:
+    linear-gradient(#fffaf2bb, #fff8eeaa),
+    url('/static/shinpu-background.webp') center 50% / cover;
 }
-.arena > *:not(.torii) {
+.battle-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   position: relative;
+  min-height: 34px;
 }
-.eyebrow {
-  font-size: 12px;
-  color: #8c7351;
-  letter-spacing: 0.15em;
+.battle-heading h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(19px, 1.8vw, 29px);
 }
-.arena h1 {
-  font-family: serif;
-  margin: 13px 0;
-  font-size: 29px;
+.deadline {
+  position: absolute;
+  right: 0;
+  top: 0;
+  border: 2px solid #d94430;
+  border-radius: 9px;
+  background: #fffaf1dd;
+  color: #a62c1e;
+  font-family: var(--serif);
+  font-weight: bold;
+  font-size: 16px;
+  padding: 5px 10px;
+}
+.deadline.urgent {
+  background: #fff0ed;
+  box-shadow: 0 0 0 3px #f16a4b44;
+}
+.selection-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 21px;
+  min-height: 200px;
+  margin: 10px 0;
+}
+.selected-cards {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+.selected-cards .card {
+  width: 140px;
+  flex: 0 0 140px;
+  min-height: 0;
+  border: 3px solid #e24a31;
+  box-shadow: 0 0 0 3px #ffd4b477;
+}
+.selected-cards .card + .card:before {
+  content: '＋';
+  position: absolute;
+  left: -13px;
+  top: 45%;
+  font-size: 22px;
+  color: #713d29;
+  z-index: 1;
+}
+.selected-cards .card-art {
+  height: 130px;
+  aspect-ratio: auto;
+}
+.selected-cards .carddesc {
+  display: none;
+}
+.calculation {
+  background: #fffaf1e8;
+  border: 1px solid #bea37f;
+  border-radius: 10px;
+  padding: 15px 18px;
+  max-width: 360px;
+  min-width: 195px;
+}
+.calculation h2 {
+  font-family: var(--serif);
+  font-size: 20px;
+  margin: 0 0 9px;
+  line-height: 1.5;
 }
 .summary {
+  font-family: var(--serif);
   font-size: 14px;
-  line-height: 1.9;
-  min-height: 48px;
+  line-height: 1.7;
 }
-.summary b {
-  color: var(--red);
-  font-size: 23px;
+.metric {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 17px;
+  border-top: 1px solid #deceb5;
+  padding: 3px 0;
+}
+.metric strong {
+  font-size: 34px;
+  line-height: 1.3;
+}
+.damage strong {
+  color: #bf2a1e;
+}
+.guard strong {
+  color: #456333;
+}
+.metric.mp strong {
+  color: #246eaa;
+}
+.selection-empty {
+  font-family: 'Yu Gothic', sans-serif;
+  white-space: pre-line;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.target-preview {
+  position: relative;
+  padding: 5px;
+  border: 2px solid #df4936;
+  background: #fff6ec;
+  border-radius: 8px;
+  min-width: 94px;
+  max-width: 120px;
+}
+.target-preview .portrait {
+  width: 85px;
+  --portrait-size: 103px;
+  height: var(--portrait-size);
+  margin: auto;
+}
+.target-preview strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 17px;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.target-arrow {
+  position: absolute;
+  left: -24px;
+  top: 40%;
+  color: #d9432c;
+  font-size: 25px;
 }
 .actions {
   display: flex;
   justify-content: center;
-  gap: 9px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-top: 15px;
+}
+.battle-arena .actions button {
+  font-family: var(--serif);
+  font-size: 18px;
+  padding: 12px 18px;
+  min-width: 100px;
 }
 .primary {
-  background: var(--red);
+  background: linear-gradient(#e65135, #bd271c);
   color: #fff;
-  border-color: var(--red);
+  border: 2px solid #b82d20;
+  box-shadow:
+    inset 0 0 0 2px #f7b98b55,
+    0 2px 5px #91351833;
 }
 .primary:hover {
-  background: #913127;
+  background: linear-gradient(#c8422c, #a42117);
 }
 .muted {
-  font-size: 12px;
-  color: #796954;
-  margin: 12px 0 0;
+  font-size: 11px;
+  color: #70573a;
+  margin: 9px 0 0;
 }
 .handarea {
-  padding: 16px;
-  margin-top: 16px;
+  grid-area: hand;
+  padding: 11px;
+  background: #fffaf1e8;
+  min-width: 0;
 }
 .handheading {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 9px;
+  gap: 10px;
+}
+.handheading > span:first-child {
+  font-family: var(--serif);
+  font-size: 22px;
   font-weight: bold;
 }
 .hand {
   display: flex;
-  gap: 10px;
+  gap: 9px;
   overflow-x: auto;
-  padding: 4px 3px 12px;
+  padding: 8px 5px 6px;
   scroll-snap-type: x proximity;
 }
 .card {
-  flex: 1 0 125px;
-  max-width: 185px;
-  min-height: 210px;
-  padding: 0;
-  border-radius: 9px;
-  overflow: hidden;
-  background: #fffaf0;
-  border: 1px solid #ccb28d;
-  text-align: left;
+  --card: #a54230;
   position: relative;
+  flex: 1 0 125px;
+  max-width: 180px;
+  min-width: 0;
+  border: 2px solid #c9b58e;
+  border-radius: 7px;
+  padding: 3px;
+  background: var(--paper);
+  overflow: visible;
+  text-align: center;
   scroll-snap-align: start;
-  font-weight: normal;
-  transition: transform 0.15s;
+  font-family: var(--serif);
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+  box-shadow: 0 2px 3px #59422515;
+}
+.card[data-element='雷'] {
+  --card: #7346a0;
+}
+.card[data-element='水'],
+.card[data-element='月'] {
+  --card: #327bb7;
+}
+.card[data-element='土'] {
+  --card: #566c35;
+}
+.card[data-element='風'] {
+  --card: #ba6c83;
+}
+.card[data-element='光'],
+.card[data-element='福'],
+.card[data-element='縁'] {
+  --card: #ae7f29;
+}
+.card[data-element='闇'] {
+  --card: #514165;
 }
 .card.selected {
-  border: 3px solid var(--red);
+  border: 3px solid #ec3e2a;
+  box-shadow: 0 0 0 3px #ffa08866;
   transform: translateY(-4px);
-  background: #fff0dc;
 }
 .card.selected:after {
   content: '✓';
   position: absolute;
-  right: 6px;
-  top: 6px;
-  background: var(--red);
-  color: white;
+  left: -10px;
+  top: -10px;
+  border: 2px solid #fff;
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
+  background: #c72b1f;
+  color: #fff;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-}
-.art {
-  height: 90px;
-  display: grid;
-  place-items: center;
-  font-size: 44px;
-  background: radial-gradient(circle at 50% 65%, #fff7cf77, transparent 65%), linear-gradient(140deg, #562f2b, #bb6748);
-  color: #fff5d4;
-  text-shadow: 0 3px 14px #302218;
-}
-.guard .art {
-  background: linear-gradient(135deg, #344c53, #75a69d);
-}
-.heal .art,
-.mana .art,
-.cleanse .art {
-  background: linear-gradient(135deg, #5d6675, #9cbad0);
-}
-.draw .art,
-.money .art {
-  background: linear-gradient(135deg, #7c613c, #cfad63);
-}
-.cardbody {
-  padding: 10px;
+  font: 700 20px sans-serif;
+  z-index: 1;
 }
 .cardtitle {
-  font-family: serif;
+  font-size: 16px;
+  line-height: 1.4;
+  padding: 5px 3px;
   font-weight: bold;
-  font-size: 15px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #fffaf1;
+  border: 1px solid var(--card);
+  border-radius: 3px 3px 0 0;
 }
-.cardtype {
-  font-size: 10px;
-  color: #8d7654;
-  margin: 4px 0;
+.card-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1.15;
+  object-fit: cover;
+  border-left: 1px solid var(--card);
+  border-right: 1px solid var(--card);
 }
 .cardpower {
-  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  white-space: nowrap;
   font-weight: bold;
-  margin: 8px 0;
+  padding: 3px 1px;
+  border: 1px solid var(--card);
+  background: #fff9ef;
+}
+.cardpower strong {
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--card);
+}
+.cardpower small {
+  font-size: 10px;
 }
 .carddesc {
+  padding: 6px 3px 3px;
   font-size: 11px;
   line-height: 1.5;
-  color: #766652;
+  color: #3c3126;
+  font-weight: normal;
+}
+.card:disabled {
+  opacity: 0.76;
+}
+.card:disabled .cardtitle,
+.card:disabled .carddesc {
+  opacity: 1;
 }
 .toast {
-  color: var(--red);
+  color: #b32f22;
   min-height: 20px;
   font-size: 13px;
   text-align: center;
-  margin-top: 9px;
+  margin: 8px 12px;
+}
+.toast:empty {
+  display: none;
 }
 footer {
   font-size: 11px;
-  color: #7c6b58;
+  color: #725b3c;
   text-align: center;
-  padding: 15px;
+  padding: 10px;
   line-height: 1.7;
 }
 dialog {
   border: 1px solid #bda07b;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--paper);
   color: var(--ink);
   max-width: 640px;
@@ -382,7 +667,7 @@ dialog::backdrop {
   backdrop-filter: blur(3px);
 }
 dialog h2 {
-  font-family: serif;
+  font-family: var(--serif);
   margin-top: 0;
 }
 .close {
@@ -415,295 +700,14 @@ select {
   text-align: left;
   padding: 15px;
 }
-.catalog-item {
-  border-bottom: 1px solid #ddcfb8;
-  padding: 12px 0;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.catalog-item strong {
-  display: block;
-}
-#catalog-list {
-  max-height: 45vh;
-  overflow: auto;
-}
 .hint {
   border-left: 3px solid var(--gold);
   padding-left: 12px;
   font-size: 13px;
   line-height: 1.8;
 }
-.statuspill {
-  padding: 4px 8px;
-  background: #eee3cc;
-  border-radius: 20px;
-  font-size: 11px;
-}
 .log-toggle {
   display: none;
-}
-@media (min-width: 1150px) {
-  .players.six {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-}
-@media (max-width: 800px) {
-  header {
-    padding: 12px 16px;
-  }
-  .brand {
-    font-size: 20px;
-  }
-  .tag {
-    display: none;
-  }
-  .wrap {
-    padding: 14px;
-  }
-  .players {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .board {
-    grid-template-columns: 1fr;
-  }
-  .logbox {
-    display: none;
-  }
-  .log-toggle {
-    display: inline-block;
-  }
-  .arena {
-    min-height: 260px;
-    padding: 22px 14px;
-  }
-  .card {
-    flex: 0 0 140px;
-  }
-  .intro {
-    align-items: flex-start;
-  }
-  .intro h2 {
-    font-size: 17px;
-    margin: 4px 0;
-  }
-  .intro p {
-    font-size: 11px;
-  }
-  .player {
-    padding: 10px;
-  }
-  .statline {
-    font-size: 10px;
-    gap: 5px;
-  }
-  .statline strong {
-    font-size: 15px;
-  }
-  .player .name {
-    font-size: 13px;
-    gap: 6px;
-  }
-  .avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 18px;
-  }
-  .arena h1 {
-    font-size: 23px;
-  }
-  .handarea {
-    padding: 12px;
-  }
-  .small {
-    font-size: 10px;
-  }
-  header nav button {
-    font-size: 12px;
-    padding: 8px;
-  }
-  #round {
-    font-size: 11px;
-  }
-}
-@media (max-width: 480px) {
-  .player .name {
-    font-size: 11px;
-  }
-  .avatar {
-    display: none;
-  }
-  .player.active:after {
-    font-size: 9px;
-    right: 5px;
-    top: 7px;
-    padding: 2px 4px;
-  }
-  .statline {
-    flex-wrap: wrap;
-  }
-  .statline strong {
-    font-size: 14px;
-  }
-  .arena {
-    min-height: 240px;
-  }
-  .hand {
-    gap: 8px;
-  }
-  .card {
-    flex-basis: 133px;
-  }
-  .intro .statuspill {
-    max-width: 120px;
-    text-align: center;
-  }
-  .actions button {
-    padding: 12px 14px;
-  }
-  .handheading {
-    font-size: 14px;
-  }
-}
-@media (max-height: 520px) and (min-width: 600px) {
-  header {
-    padding: 7px 16px;
-  }
-  .brand small {
-    display: none;
-  }
-  .wrap {
-    padding: 10px 16px;
-  }
-  .intro {
-    margin-bottom: 8px;
-  }
-  .intro p {
-    display: none;
-  }
-  .players {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 6px;
-  }
-  .player {
-    padding: 7px;
-  }
-  .player .name {
-    margin-bottom: 4px;
-  }
-  .avatar {
-    display: none;
-  }
-  .board {
-    margin-top: 9px;
-  }
-  .arena {
-    min-height: 145px;
-    padding: 10px;
-  }
-  .arena h1 {
-    margin: 6px;
-    font-size: 20px;
-  }
-  .summary {
-    min-height: 20px;
-    font-size: 12px;
-  }
-  .actions {
-    margin-top: 7px;
-  }
-  .handarea {
-    margin-top: 9px;
-    padding: 10px;
-  }
-  .art {
-    height: 50px;
-    font-size: 30px;
-  }
-  .card {
-    min-height: 160px;
-    flex-basis: 125px;
-  }
-  .carddesc {
-    display: none;
-  }
-  .handheading {
-    margin-bottom: 5px;
-  }
-  .cardpower {
-    margin: 5px 0;
-  }
-  footer {
-    padding: 5px;
-  }
-}
-.player:disabled {
-  opacity: 1;
-  cursor: default;
-}
-.player.dead:disabled {
-  opacity: 0.5;
-}
-@media (max-width: 480px) {
-  header {
-    padding: 10px 14px;
-  }
-  .brand {
-    font-size: 18px;
-  }
-  .brand small {
-    font-size: 10px;
-  }
-  .intro {
-    margin-bottom: 10px;
-  }
-  .intro h2 {
-    font-size: 16px;
-  }
-  .intro p {
-    line-height: 1.5;
-  }
-  .arena {
-    padding: 15px 12px;
-    min-height: 220px;
-  }
-  .arena h1 {
-    font-size: 21px;
-    margin: 10px 0;
-  }
-  .summary {
-    font-size: 12px;
-    line-height: 1.6;
-    min-height: 40px;
-  }
-  .actions {
-    gap: 6px;
-    margin-top: 12px;
-  }
-  .actions button {
-    font-size: 12px;
-    padding: 10px 11px;
-  }
-  .muted {
-    font-size: 11px;
-    margin-top: 10px;
-  }
-  .toast:empty {
-    display: none;
-  }
-  .handheading {
-    display: block;
-    font-size: 12px;
-    line-height: 1.7;
-  }
-  .handheading .small {
-    display: block;
-    font-size: 10px;
-  }
-}
-
-[hidden] {
-  display: none !important;
 }
 #room-list {
   display: grid;
@@ -713,12 +717,496 @@ select {
 #room-list button {
   text-align: left;
 }
-.wrap .intro h2 {
-  margin: 0;
-}
 #invite {
   font-size: 12px;
 }
 a {
   color: #9a382e;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 1300px) {
+  .portrait {
+    width: 61px;
+    --portrait-size: 86px;
+    height: var(--portrait-size);
+  }
+  .name {
+    font-size: 18px;
+  }
+  .player {
+    gap: 6px;
+    min-height: 106px;
+  }
+  .resource-line {
+    font-size: 11px;
+  }
+  .resource-line strong {
+    font-size: 14px;
+  }
+  .player .small {
+    font-size: 10px;
+  }
+  .selection-stage {
+    gap: 17px;
+  }
+  .selected-cards .card {
+    width: 118px;
+    flex-basis: 118px;
+  }
+  .selected-cards .card-art {
+    height: 125px;
+  }
+  .calculation {
+    min-width: 173px;
+    padding: 12px;
+  }
+  .calculation h2 {
+    font-size: 17px;
+  }
+  .metric {
+    font-size: 15px;
+  }
+  .target-preview .portrait {
+    width: 65px;
+    --portrait-size: 85px;
+    height: var(--portrait-size);
+  }
+  .target-preview {
+    min-width: 75px;
+  }
+  .battle-heading {
+    justify-content: flex-start;
+  }
+  .deadline {
+    font-size: 13px;
+  }
+  .board {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .cardtitle {
+    font-size: 14px;
+  }
+  .battle-arena .actions button {
+    font-size: 16px;
+    padding: 10px 13px;
+  }
+}
+@media (max-width: 950px) {
+  .players,
+  .players.six {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .board {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'arena' 'hand';
+  }
+  .logbox {
+    display: none;
+  }
+  .log-toggle {
+    display: inline-block;
+  }
+  .tag {
+    display: none;
+  }
+  .handheading > span:first-child {
+    font-size: 18px;
+  }
+  .card {
+    flex: 0 0 145px;
+  }
+  .deadline {
+    position: static;
+  }
+  .battle-heading {
+    justify-content: space-between;
+  }
+  .selected-cards .card {
+    flex-basis: 115px;
+  }
+  .selection-stage {
+    gap: 17px;
+  }
+  .calculation {
+    min-width: 170px;
+  }
+  .target-preview .portrait {
+    width: 60px;
+    --portrait-size: 76px;
+    height: var(--portrait-size);
+  }
+  .target-preview strong {
+    font-size: 13px;
+  }
+}
+@media (max-width: 560px) {
+  header {
+    padding: 9px 10px;
+    gap: 5px;
+  }
+  .brand {
+    font-size: 17px;
+    gap: 5px;
+  }
+  .crest {
+    font-size: 29px;
+  }
+  header nav {
+    gap: 5px;
+  }
+  header nav button {
+    font-size: 11px;
+    padding: 7px 6px;
+  }
+  .wrap {
+    padding: 9px;
+  }
+  .intro {
+    margin-bottom: 6px;
+  }
+  .players {
+    gap: 6px;
+  }
+  .player {
+    padding: 4px;
+    gap: 4px;
+    min-height: 92px;
+  }
+  .portrait {
+    width: 29px;
+    --portrait-size: 78px;
+    height: var(--portrait-size);
+    border-radius: 3px;
+  }
+  .name {
+    font-size: 12px;
+    margin: 1px 0 5px;
+  }
+  .resource-line {
+    font-size: 9px;
+    padding: 1px;
+    gap: 2px;
+    margin: 4px 0;
+  }
+  .resource-line strong {
+    font-size: 12px;
+  }
+  .resource-max {
+    font-size: 8px;
+  }
+  .player .small {
+    font-size: 9px;
+  }
+  .player.target:after,
+  .player.self:after {
+    font-size: 9px;
+    padding: 1px 5px;
+    top: -5px;
+  }
+  .player.active:before {
+    left: 2px;
+    bottom: 2px;
+    font-size: 8px;
+  }
+  .board {
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .battle-arena {
+    padding: 12px 10px;
+    min-height: 260px;
+  }
+  .battle-heading h1 {
+    font-size: 16px;
+  }
+  .deadline {
+    font-size: 11px;
+    padding: 4px;
+  }
+  .selection-stage {
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 100px;
+    margin: 10px 0;
+  }
+  .selected-cards {
+    width: 100%;
+    gap: 9px;
+  }
+  .selected-cards .card {
+    width: 96px;
+    flex-basis: 96px;
+  }
+  .selected-cards .card-art {
+    height: 98px;
+  }
+  .selected-cards .cardtitle {
+    font-size: 12px;
+    padding: 3px 1px;
+  }
+  .selected-cards .cardpower {
+    font-size: 12px;
+  }
+  .selected-cards .cardpower strong {
+    font-size: 21px;
+  }
+  .calculation {
+    flex: 1;
+    padding: 8px 10px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .calculation h2 {
+    font-size: 15px;
+    margin-bottom: 5px;
+  }
+  .metric {
+    display: inline-flex;
+    width: 50%;
+    font-size: 12px;
+    gap: 5px;
+    padding: 2px 6px;
+  }
+  .metric strong {
+    font-size: 26px;
+  }
+  .target-preview {
+    min-width: 57px;
+    padding: 3px;
+    max-width: 70px;
+  }
+  .target-preview .portrait {
+    width: 48px;
+    --portrait-size: 60px;
+    height: var(--portrait-size);
+  }
+  .target-preview strong {
+    font-size: 11px;
+    margin-top: 3px;
+  }
+  .target-arrow {
+    display: none;
+  }
+  .battle-arena .actions {
+    gap: 6px;
+  }
+  .battle-arena .actions button {
+    font-size: 12px;
+    padding: 9px 10px;
+    min-width: 0;
+  }
+  .muted {
+    font-size: 10px;
+  }
+  .handarea {
+    padding: 8px;
+  }
+  .handheading {
+    display: block;
+    margin-bottom: 3px;
+  }
+  .handheading > span:first-child {
+    font-size: 17px;
+  }
+  .handheading .small {
+    display: block;
+    font-size: 10px;
+    margin-top: 3px;
+  }
+  .card {
+    flex-basis: 136px;
+  }
+  .cardtitle {
+    font-size: 14px;
+  }
+  .carddesc {
+    font-size: 10px;
+  }
+  .cardpower {
+    font-size: 14px;
+  }
+  .cardpower strong {
+    font-size: 24px;
+  }
+  .selection-empty {
+    font-size: 12px;
+  }
+  .log {
+    font-size: 12px;
+  }
+  footer {
+    font-size: 10px;
+  }
+  .statuspill {
+    font-size: 10px;
+  }
+}
+@media (max-height: 550px) and (min-width: 600px) {
+  header {
+    padding: 5px 12px;
+  }
+  .brand {
+    font-size: 19px;
+  }
+  .crest {
+    font-size: 31px;
+  }
+  header nav button {
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+  .wrap {
+    padding: 7px 12px;
+  }
+  .intro {
+    margin-bottom: 3px;
+  }
+  .players,
+  .players.six {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .player {
+    min-height: 74px;
+    padding: 4px;
+  }
+  .portrait {
+    width: 35px;
+    --portrait-size: 61px;
+    height: var(--portrait-size);
+  }
+  .name {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .resource-line {
+    font-size: 9px;
+    gap: 2px;
+    margin: 3px 0;
+  }
+  .resource-line strong {
+    font-size: 11px;
+  }
+  .resource-max {
+    font-size: 8px;
+  }
+  .player .small {
+    font-size: 9px;
+    margin-top: 3px;
+  }
+  .player.target:after,
+  .player.self:after {
+    font-size: 8px;
+    padding: 1px 5px;
+    top: -5px;
+  }
+  .board {
+    margin-top: 8px;
+  }
+  .battle-arena {
+    min-height: 190px;
+    padding: 8px 12px;
+  }
+  .battle-heading h1 {
+    font-size: 18px;
+  }
+  .deadline {
+    font-size: 12px;
+    padding: 3px 7px;
+  }
+  .selection-stage {
+    min-height: 90px;
+    gap: 18px;
+    margin: 4px 0;
+  }
+  .selected-cards .card {
+    width: 85px;
+    flex-basis: 85px;
+  }
+  .selected-cards .card-art {
+    height: 64px;
+  }
+  .selected-cards .cardtitle {
+    font-size: 10px;
+    padding: 2px;
+  }
+  .selected-cards .cardpower {
+    font-size: 10px;
+  }
+  .selected-cards .cardpower strong {
+    font-size: 17px;
+  }
+  .calculation {
+    padding: 5px 10px;
+    min-width: 160px;
+  }
+  .calculation h2 {
+    font-size: 14px;
+    margin-bottom: 3px;
+  }
+  .metric {
+    font-size: 12px;
+    padding: 1px 0;
+  }
+  .metric strong {
+    font-size: 24px;
+  }
+  .target-preview .portrait {
+    width: 45px;
+    --portrait-size: 51px;
+    height: var(--portrait-size);
+  }
+  .target-preview {
+    min-width: 59px;
+  }
+  .target-preview strong {
+    font-size: 10px;
+    margin-top: 3px;
+  }
+  .battle-arena .actions button {
+    font-size: 12px;
+    padding: 8px 14px;
+    min-width: 0;
+  }
+  .muted {
+    font-size: 10px;
+    margin-top: 5px;
+  }
+  .handarea {
+    padding: 7px;
+  }
+  .handheading > span:first-child {
+    font-size: 16px;
+  }
+  .handheading {
+    margin-bottom: 3px;
+  }
+  .card {
+    flex: 0 0 117px;
+  }
+  .card-art {
+    aspect-ratio: 1.3;
+  }
+  .cardtitle {
+    font-size: 12px;
+  }
+  .cardpower {
+    font-size: 12px;
+  }
+  .cardpower strong {
+    font-size: 19px;
+  }
+  .carddesc {
+    display: none;
+  }
+  footer {
+    padding: 5px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
 }
