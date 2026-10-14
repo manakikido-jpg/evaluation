@@ -1,5 +1,6 @@
 import type { AdminSession, RoleRequestRow, SecurityWatchRow } from '../../db/schema.js';
 import { WATCH_REASON_MAX } from '../../services/securityWatch.js';
+import type { RaidState } from '../../services/raid.js';
 import { Layout } from './layout.js';
 
 const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
@@ -9,6 +10,9 @@ const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   not_found: { text: 'リストにいない人です。', kind: 'warn' },
   guard_saved: { text: '🛡 ロールの見張りの設定を保存しました。', kind: 'ok' },
   guard_invalid: { text: 'BOT のID（数字）を 1 行に 1 つずつ入れてください。', kind: 'warn' },
+  raid_started: { text: '🚨 警戒モードにしました。', kind: 'ok' },
+  raid_ended: { text: '警戒モードを終えました。', kind: 'ok' },
+  raid_invalid: { text: '数字を確かめてください。', kind: 'warn' },
 };
 
 const fmtDate = (d: Date) => d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' });
@@ -19,7 +23,8 @@ export function SecurityPage(props: {
   rows: SecurityWatchRow[];
   names: Map<string, string>;
   flash?: string;
-  guard: { roleGuard: 'off' | 'alert' | 'revert'; trustedBotIds: string[]; roleApproval: boolean; freeRoleIds: string[] };
+  guard: { roleGuard: 'off' | 'alert' | 'revert'; trustedBotIds: string[]; roleApproval: boolean; freeRoleIds: string[]; raidJoins: number; raidMinutes: number; raidHoldMinutes: number; newAccountDays: number };
+  raid: RaidState | null;
   roles: { id: string; name: string }[];
   requests: RoleRequestRow[];
 }) {
@@ -31,6 +36,47 @@ export function SecurityPage(props: {
     <Layout title="荒らし対策" session={session} nav="security">
       <h1>🛡 荒らし対策</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
+      <section class="card">
+        <h2>🚨 警戒モード（レイド検知）</h2>
+        <p class="note">
+          {props.guard.raidJoins > 0
+            ? `${props.guard.raidMinutes} 分で ${props.guard.raidJoins} 人以上入ると、自動で ${props.guard.raidHoldMinutes} 分の警戒モードになり、ログに知らせます。`
+            : '自動の検知はオフです。'}
+          警戒モードの間は、案内人のロール付与と入鯖申請の自動承認を止めます（荒らしのタイムアウトは K-PRO に任せます）。作って {props.guard.newAccountDays} 日以内のアカウントが入ったら、ログと案内の通知に「🐣 新しいアカウント」と出します（0 日で出さない）。
+        </p>
+        <p>
+          いま:{' '}
+          <b>{props.raid ? `🚨 警戒モード中（${fmtDate(new Date(props.raid.until))} まで）` : 'ふだんどおり'}</b>
+        </p>
+        <form method="post" action={props.raid ? '/security/raid/end' : '/security/raid/start'}>
+          {csrf}
+          <button type="submit" class={props.raid ? 'ok' : 'danger'}>
+            {props.raid ? '警戒モードを終える' : `いますぐ警戒モードにする（${props.guard.raidHoldMinutes} 分）`}
+          </button>
+        </form>
+        {guji && (
+          <form method="post" action="/security/raid/settings">
+            {csrf}
+            <label class="field">
+              <span>何分で</span>
+              <input type="number" name="raidMinutes" min={1} max={60} value={String(props.guard.raidMinutes)} required />
+            </label>
+            <label class="field">
+              <span>何人入ったら（0 で自動の検知をしない）</span>
+              <input type="number" name="raidJoins" min={0} max={1000} value={String(props.guard.raidJoins)} required />
+            </label>
+            <label class="field">
+              <span>警戒モードの長さ（分）</span>
+              <input type="number" name="raidHoldMinutes" min={5} max={1440} value={String(props.guard.raidHoldMinutes)} required />
+            </label>
+            <label class="field">
+              <span>新しいアカウントとして知らせる日数（0 で知らせない）</span>
+              <input type="number" name="newAccountDays" min={0} max={365} value={String(props.guard.newAccountDays)} required />
+            </label>
+            <button type="submit" class="ok">保存する</button>
+          </form>
+        )}
+      </section>
       <section class="card">
         <h2>BOT を通さないロールの変更</h2>
         <p class="note">

@@ -1,3 +1,4 @@
+import { raidState } from './raid.js';
 import { watchOf } from './securityWatch.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import { autoRanks, currentAutoRank } from '../domain/ranks.js';
@@ -167,8 +168,8 @@ export async function submitJoin(
   if (r.status === 'duplicate') return r;
 
   const days = ctx.cfg.applications.autoApproveAccountDays;
-  // 🛡 要注意リストの人は自動で承認しない
-  if (days > 0 && now.getTime() - applicant.accountCreatedAt.getTime() >= days * DAY && !(await watchOf(ctx.db, applicant.id))) {
+  // 🛡 要注意リストの人・🚨 警戒モードの間は、自動で承認しない
+  if (days > 0 && now.getTime() - applicant.accountCreatedAt.getTime() >= days * DAY && !(await watchOf(ctx.db, applicant.id)) && !(await raidState(ctx.db, now))) {
     await decide(ctx, SYSTEM, r.id, true, '半自動承認（アカウント作成から十分な日数）', now);
     return { status: 'auto_approved', id: r.id };
   }

@@ -338,10 +338,21 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect((await post('/security/settings', g, { _csrf: gcsrf, roleGuard: 'revert', trustedBotIds: '790000000000000004\n790000000000000004' })).headers.get('location')).toBe('/security?msg=guard_saved');
     const { loadOverrides } = await import('../src/services/settings.js');
     expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'] });
+    // 🚨 警戒モード: 神職も始める・終えられる。基準の数字は宮司だけ
+    const { raidState } = await import('../src/services/raid.js');
+    expect((await post('/security/raid/start', s, { _csrf: csrf })).headers.get('location')).toBe('/security?msg=raid_started');
+    expect(await raidState(db)).not.toBeNull();
+    expect(await (await get('/security', s)).text()).toContain('警戒モード中');
+    expect((await post('/security/raid/end', s, { _csrf: csrf })).headers.get('location')).toBe('/security?msg=raid_ended');
+    expect(await raidState(db)).toBeNull();
+    expect((await post('/security/raid/settings', s, { _csrf: csrf, raidJoins: '5', raidMinutes: '3', raidHoldMinutes: '30', newAccountDays: '14' })).status).toBe(403);
+    expect((await post('/security/raid/settings', g, { _csrf: gcsrf, raidJoins: 'x', raidMinutes: '3', raidHoldMinutes: '30', newAccountDays: '14' })).headers.get('location')).toBe('/security?msg=raid_invalid');
+    expect((await post('/security/raid/settings', g, { _csrf: gcsrf, raidJoins: '5', raidMinutes: '3', raidHoldMinutes: '30', newAccountDays: '14' })).headers.get('location')).toBe('/security?msg=guard_saved');
+    expect((await loadOverrides(db)).security).toMatchObject({ raidJoins: 5, raidMinutes: 3, raidHoldMinutes: 30, newAccountDays: 14, roleGuard: 'revert' });
     // 承認制の設定（許可リスト）。見張りの設定は消えない
     expect((await post('/security/approval', s, { _csrf: csrf, roleApproval: 'yes' })).status).toBe(403);
     expect((await post('/security/approval', g, { _csrf: gcsrf, freeRoleIds: '790000000000000200' })).headers.get('location')).toBe('/security?msg=guard_saved');
-    expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'], roleApproval: false, freeRoleIds: ['790000000000000200'] });
+    expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'], roleApproval: false, freeRoleIds: ['790000000000000200'], raidJoins: 5, raidMinutes: 3, raidHoldMinutes: 30, newAccountDays: 14 });
   });
 
   it('CSRF トークンがない操作は拒否', async () => {

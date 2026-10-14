@@ -348,6 +348,17 @@ describe('案内から参拝者ロールを付与', () => {
     expect(m.visitor.roles.cache.has(PENDING)).toBe(true);
     expect(await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.role_blocked'))).toHaveLength(1);
   });
+  it('🚨 警戒モードの間は、案内人はロールを付与できない', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception();
+    await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    const { startRaid } = await import('../src/services/raid.js');
+    await startRaid(db, 'system', 60);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    expect(m.discord.addRole).not.toHaveBeenCalled();
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(true);
+  });
   it('開始前・別の案内人・案内人ロールなし・退出後は付与しない', async () => {
     await configure();
     const m = mockGuild();
