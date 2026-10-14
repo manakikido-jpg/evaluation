@@ -10,6 +10,8 @@ let view = null,
   busy = false,
   stopped = false;
 const ART = JSON.parse(document.body.dataset.art || '{}');
+const cardName = (c) => c.name + (c.stackable === true ? ' ＋' : '');
+const canStack = (a) => a.every((c) => c.type === 'guard') || a.filter((c) => c.stackable !== true).length <= 1;
 const label = { attack: '攻撃', guard: '防御', heal: '回復', mana: 'MP回復', cleanse: '解除・回復', money: '霊銭', draw: '手札補充' };
 function humanAction() {
   return state && state.phase === 'action' && state.turn === myIndex && state.players[myIndex].hp > 0;
@@ -248,31 +250,38 @@ function render() {
   if (humanAction())
     button.disabled =
       !a.length ||
+      !canStack(a) ||
       a.some((c) => c.type === 'guard') ||
       cost > me.mp ||
       (a.some((c) => c.type === 'attack') && !a.every((c) => c.type === 'attack')) ||
       (!a.every((c) => c.type === 'attack') && a.length !== 1);
+  if (humanDefense()) button.disabled = cost > me.mp || !canStack(a);
   $('exchange-open').disabled = !humanAction();
   $('pass').disabled = !humanAction();
   $('hint').textContent = humanDefense()
-    ? '防御札を最大3枚選べます。MPが足りない札は使えません。'
+    ? '防御札は＋なしでも重ねられます。MPが足りない札は使えません。'
     : humanAction()
-      ? '攻撃・道具・両替で手番が進みます。'
+      ? '通常の攻撃札は1枚まで。＋付きは追加でき、＋付きだけでも攻撃できます。'
       : '相手の返事を待っています。CPUは自動で行動します。';
   $('hand-title').textContent = `あなたの神器　${me.hand.length}枚 / 10枚`;
   $('hand').replaceChildren();
   me.hand.forEach((c) => {
     const b = el('button', 'card ' + c.type + (selected.includes(c.uid) ? ' selected' : ''));
     b.setAttribute('aria-pressed', String(selected.includes(c.uid)));
-    b.setAttribute('aria-label', `${c.name}、${label[c.type]} ${c.power}、MP ${c.cost}。${c.text}`);
+    b.setAttribute('aria-label', `${cardName(c)}、${label[c.type]} ${c.power}、MP ${c.cost}。${c.text}`);
     b.disabled = !(humanAction() || humanDefense()) || (humanDefense() && c.type !== 'guard');
     b.dataset.element = c.element;
     b.append(...cardContent(c));
     b.addEventListener('click', () => {
       if (selected.includes(c.uid)) selected = selected.filter((id) => id !== c.uid);
       else {
-        if (selected.length >= 3) {
-          toast('一度に選べる札は3枚までです。');
+        const next = [...chosen(), c];
+        if (!canStack(next)) {
+          toast('＋なしの攻撃札は1枚までです。＋付きの札を追加してください。');
+          return;
+        }
+        if (next.length > 1 && !next.every((x) => x.type === next[0].type && ['attack', 'guard'].includes(x.type))) {
+          toast('同じ種類の攻撃札か防御札だけを重ねられます。');
           return;
         }
         selected.push(c.uid);
@@ -365,9 +374,9 @@ function cardContent(c) {
   image.height = 480;
   image.loading = 'eager';
   const power = el('div', 'cardpower');
-  power.append(el('span', '', `${label[c.type]} `), el('strong', '', c.power));
+  power.append(el('span', '', `${label[c.type]} `), el('strong', '', (c.stackable === true ? '+' : '') + c.power));
   if (c.cost) power.append(el('small', '', ` / MP ${c.cost}`));
-  return [el('div', 'cardtitle', c.name), image, power, el('div', 'carddesc', c.text)];
+  return [el('div', 'cardtitle', cardName(c)), image, power, el('div', 'carddesc', c.text)];
 }
 function card(c, interactive) {
   const e = el(interactive ? 'button' : 'article', 'card ' + c.type + (selected.includes(c.uid) ? ' selected' : ''));

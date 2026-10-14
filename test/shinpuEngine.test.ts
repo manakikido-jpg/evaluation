@@ -10,7 +10,12 @@ function hand(s: E.State, i: number, ids: string[]) {
 }
 test('multi-card attacks spend MP, remove cards and wait for defense', () => {
   const s = game(),
-    a = hand(s, 0, ['arrow', 'sun']);
+    a = hand(s, 0, ['blade', 'blade']);
+  s.players[0]!.hand[0]!.cost = 1;
+  s.players[0]!.hand[1]!.cost = 3;
+  s.players[0]!.hand[0]!.power = 5;
+  s.players[0]!.hand[1]!.power = 9;
+  s.players[0]!.hand[1]!.pierce = 3;
   E.act(s, 'attack', a, 1);
   assert.equal(s.phase, 'defense');
   assert.equal(s.players[0]!.mp, 8);
@@ -128,5 +133,59 @@ test('100 seeded CPU games finish, with valid resource ranges', () => {
       }
     }
     assert.equal(s.phase, 'over');
+  }
+});
+
+test('only blade is currently marked plus', () => {
+  assert.deepEqual(E.cards.filter((c) => c.stackable).map((c) => c.id), ['blade']);
+});
+test('one ordinary attack combines with plus attacks in either order', () => {
+  for (const ids of [['blade', 'arrow'], ['arrow', 'blade'], ['blade', 'arrow', 'blade']]) {
+    const s = game(); const selected = hand(s, 0, ids);
+    E.act(s, 'attack', selected, 1);
+    assert.equal(s.pending!.power, ids.length === 3 ? 11 : 8);
+    assert.equal(s.players[0]!.hand.length, 0);
+  }
+});
+test('two ordinary attacks are rejected without changing any resources', () => {
+  for (const ids of [['arrow', 'sun'], ['arrow', 'arrow'], ['blade', 'arrow', 'blade', 'sun']]) {
+    const s = game(); const selected = hand(s, 0, ids); const before = JSON.stringify(s);
+    assert.throws(() => E.act(s, 'attack', selected, 1), /1枚まで/);
+    assert.equal(JSON.stringify(s), before);
+  }
+});
+test('plus-only and mixed attacks can use more than three cards', () => {
+  for (const ids of [Array(10).fill('blade'), ['arrow', ...Array(9).fill('blade')]]) {
+    const s = game(); E.act(s, 'attack', hand(s, 0, ids), 1);
+    assert.equal(s.pending!.power, ids[0] === 'arrow' ? 32 : 30);
+  }
+});
+test('combined attack MP costs are validated before mutation', () => {
+  const s = game(); const ids = hand(s, 0, ['sun', 'blade', 'blade']);
+  s.players[0]!.hand[1]!.cost = 5; s.players[0]!.hand[2]!.cost = 5;
+  const before = JSON.stringify(s); assert.throws(() => E.act(s, 'attack', ids, 1), /MP/);
+  assert.equal(JSON.stringify(s), before);
+  s.players[0]!.mp = 20; E.act(s, 'attack', ids, 1); assert.equal(s.players[0]!.mp, 6);
+});
+test('ordinary defenses can combine more than three cards', () => {
+  const s = game(); E.act(s, 'attack', hand(s, 0, ['sun']), 1);
+  E.defend(s, hand(s, 1, ['veil', 'veil', 'veil', 'veil']));
+  assert.equal(s.players[1]!.hp, 60); assert.equal(s.turn, 1);
+});
+test('defense MP costs are paid once and insufficient MP preserves state', () => {
+  const s = game(); E.act(s, 'attack', hand(s, 0, ['sun']), 1);
+  const ids = hand(s, 1, ['mirror', 'mirror', 'veil', 'veil']);
+  s.players[1]!.mp = 5; const before = JSON.stringify(s);
+  assert.throws(() => E.defend(s, ids), /MP/); assert.equal(JSON.stringify(s), before);
+  s.players[1]!.mp = 12; E.defend(s, ids); assert.equal(s.players[1]!.mp, 6);
+});
+test('CPU combines at most one ordinary attack and can use all defenses', () => {
+  for (const ids of [['arrow', 'blade', 'sun', 'blade', 'blade'], ['blade', 'sun', 'arrow', 'blade', 'blade']]) {
+    const s = game(); hand(s, 0, ids); E.cpu(s);
+    assert.equal(s.pending!.cards.filter((c) => !c.stackable).length, 1);
+    assert.equal(s.pending!.cards.length, 4);
+    hand(s, 1, ['shield', 'veil', 'veil', 'veil']); E.cpu(s);
+    // 光の祈りを含む場合は防御3無視で1ダメージ。
+    assert.equal(s.players[1]!.hp, ids[0] === 'blade' ? 59 : 60);
   }
 });
