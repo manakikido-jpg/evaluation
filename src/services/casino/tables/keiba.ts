@@ -185,22 +185,37 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     records.push({ memberId, game: 'keiba', bet: m.bet, payout: m.payout });
   }
   // 1〜5 着の賞金（メンバーが賭けた合計の数 % に倍率・最低保証）と出走手当・応援金（馬主のいる馬はみんな）。馬主に払う
-  // 最低保証で足す分は、だれかが馬券を買ったレースだけ（だれも買わずに走らせて集められないように）。1 人 1 日の上限もある
-  const conf = kbPayConf(ctx.cfg.casino);
+  // 最低保証で足す分は、馬主がそのレースに賭けたかで変わる:
+  // ・賭けた: クラスの最低保証まで。ただし足す分は、そのレースで賭けた額の keibaBetPurseMult 倍まで（1 日の上限なし）
+  // ・賭けていない: 1 着 keibaNoBetPurse（2〜5 着はその割合）まで。足す分は 1 人 1 日 keibaNoBetDailyCap まで
+  const c = ctx.cfg.casino;
+  const conf = kbPayConf(c);
   const base = racePrizes(s.race.cls, s.real, { ...conf, purse: [] });
-  const bettors = new Set(s.tickets.map((t) => t.memberId)).size;
-  const prizes = bettors >= 1 ? racePrizes(s.race.cls, s.real, conf) : base;
+  const full = racePrizes(s.race.cls, s.real, conf);
+  const lite = racePrizes(s.race.cls, s.real, { ...conf, purse: conf.purse.map(() => c.keibaNoBetPurse) });
   const fee = raceAppearance(s.real, conf);
+  const betOf = (id: string) => s.tickets.filter((t) => t.memberId === id).reduce((n, t) => n + t.amount, 0);
+  const budget = new Map<string, number>();
+  const prizes = run.order.map((_, i) => full[i] ?? 0);
   const earned = run.order.map((no, i) => {
     const owner = s.horses[no - 1]!.ownerId;
-    return (prizes[i] ?? 0) + (owner ? fee + fanMoney(s.tickets, no, owner, conf) : 0);
-  });
-  run.order.forEach((no, i) => {
-    const h = s.horses[no - 1]!;
-    if (!h.ownerId) return;
-    const top = (prizes[i] ?? 0) - (base[i] ?? 0);
-    if (earned[i]! - top > 0) credits.push({ memberId: h.ownerId, amount: earned[i]! - top, reason: 'keiba_prize' });
-    if (top > 0) credits.push({ memberId: h.ownerId, amount: top, reason: 'keiba_prize', cap: 'keiba_purse' });
+    if (!owner) return prizes[i]!;
+    const bet = betOf(owner);
+    let top: number;
+    let capped = false;
+    if (bet > 0) {
+      const left = budget.get(owner) ?? bet * c.keibaBetPurseMult;
+      top = Math.min(Math.max(0, (full[i] ?? 0) - (base[i] ?? 0)), left);
+      budget.set(owner, left - top);
+    } else {
+      top = Math.max(0, (lite[i] ?? 0) - (base[i] ?? 0));
+      capped = true;
+    }
+    prizes[i] = (base[i] ?? 0) + top;
+    const rest = (base[i] ?? 0) + fee + fanMoney(s.tickets, no, owner, conf) + (capped ? 0 : top);
+    if (rest > 0) credits.push({ memberId: owner, amount: rest, reason: 'keiba_prize' });
+    if (capped && top > 0) credits.push({ memberId: owner, amount: top, reason: 'keiba_prize', cap: 'keiba_purse' });
+    return rest + top;
   });
   s.prizes = prizes;
   // 名簿の馬の成績（1 走ずつ残して馬の成績ページに。馬主の馬はリーディングとお祝いにも使う）

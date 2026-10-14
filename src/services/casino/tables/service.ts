@@ -27,14 +27,14 @@ export type TableResult = { status: 'ok'; table: CasinoTable } | { status: strin
 
 const engineOf = (kind: string) => (ENGINES as Record<string, TableEngine<unknown> | undefined>)[kind];
 
-/** 銭を渡す（🏇 最低保証で足す分は 1 人 1 日の上限まで。渡した額を返す） */
+/** 銭を渡す（🏇 馬主が賭けていないレースの最低保証で足す分は、1 人 1 日の上限まで。渡した額を返す） */
 export async function payCredit(tx: Db, cfg: GuildConfig, c: Credit, now: Date, kind: string, tableId: number): Promise<number> {
   if (c.amount <= 0) return 0;
   if (c.cap !== 'keiba_purse') {
     await addCoins(tx, c.memberId, c.amount, c.reason, { game: kind, table: tableId });
     return c.amount;
   }
-  const limit = cfg.casino.keibaPurseDailyCap;
+  const limit = cfg.casino.keibaNoBetDailyCap;
   const since = new Date(`${jstDate(now)}T00:00:00+09:00`);
   const [got] = await tx
     .select({ n: sql<number>`coalesce(sum(${coinTx.amount}), 0)::int` })

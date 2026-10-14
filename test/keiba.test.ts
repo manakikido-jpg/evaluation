@@ -245,34 +245,31 @@ describe('🏇 クラスと重賞・賞金', () => {
     expect(fin.fx?.keiba?.find((r) => r.horseId === 1)?.prize).toBe(prize);
   });
 
-  it('最低保証は、1 人でも馬券を買えば付く。だれも買わなければ付かない', () => {
+  it('最低保証: 馬主が賭けたら賭けた額の 10 倍まで足す（上限なし）。賭けていなければ 1 着 50（1 日の上限つき）', () => {
     const t0 = new Date('2026-10-02T12:00:00Z').getTime();
     const roster = Array.from({ length: 8 }, (_, i) => horse(i + 1, 0, 0, B.id));
-    const run = (bet: boolean) => {
+    const run = (ownerBet: number) => {
       let s = (keiba.create(A, { cls: '0' }, { ...ctx(t0), roster }) as { state: KbState }).state;
-      if (bet) s = (keiba.act(s, A.id, { action: 'bet', type: 'win', a: '1', bet: '10' }, ctx(t0)) as { state: KbState }).state;
+      s = (keiba.join(s, B, {}, ctx(t0)) as { state: KbState }).state;
+      if (ownerBet) s = (keiba.act(s, B.id, { action: 'bet', type: 'win', a: '1', bet: String(ownerBet) }, ctx(t0)) as { state: KbState }).state;
       s = (keiba.act(s, A.id, { action: 'start' }, ctx(t0, 5)) as { state: KbState }).state;
       const fin = keiba.tick(s, ctx(s.deadline));
       if (!fin || !fin.ok) throw new Error('no finish');
-      return (fin.fx?.credits ?? []).filter((c) => c.cap === 'keiba_purse').map((c) => c.amount);
+      const mine = (fin.fx?.credits ?? []).filter((c) => c.memberId === B.id && c.reason === 'keiba_prize');
+      return { capped: mine.filter((c) => c.cap).map((c) => c.amount), prizes: fin.state.prizes!, total: mine.reduce((n, c) => n + c.amount, 0) };
     };
-    expect(run(true).sort((a, b) => b - a)).toEqual([300, 120, 78, 60, 42]);
-    expect(run(false)).toEqual([]);
-  });
-
-  it('最低保証で足す分は別に渡す（1 日の上限のため）', () => {
-    const t0 = new Date('2026-10-02T12:00:00Z').getTime();
-    const roster = Array.from({ length: 8 }, (_, i) => horse(i + 1, 0, 0, B.id));
-    let s = (keiba.create(A, { cls: '0' }, { ...ctx(t0), roster }) as { state: KbState }).state;
-    s = (keiba.join(s, C, {}, ctx(t0)) as { state: KbState }).state;
-    s = (keiba.act(s, A.id, { action: 'bet', type: 'win', a: '1', bet: '10' }, ctx(t0)) as { state: KbState }).state;
-    s = (keiba.act(s, C.id, { action: 'bet', type: 'win', a: '2', bet: '10' }, ctx(t0)) as { state: KbState }).state;
-    s = (keiba.act(s, A.id, { action: 'start' }, ctx(t0, 5)) as { state: KbState }).state;
-    const fin = keiba.tick(s, ctx(s.deadline));
-    if (!fin || !fin.ok) throw new Error('no finish');
-    const topped = fin.fx!.credits!.filter((c) => c.cap === 'keiba_purse');
-    expect(topped.map((c) => c.amount).sort((a, b) => b - a)).toEqual([300, 120, 78, 60, 42]);
-    expect(topped.every((c) => c.memberId === B.id)).toBe(true);
+    // 賭けていない: 1 着 50（2〜5 着はその割合）。足す分は 1 日の上限つき
+    const none = run(0);
+    expect(none.capped.sort((x, y) => y - x)).toEqual([50, 20, 13, 10, 7]);
+    // 100 賭けた: 足す分は 1,000 まで → クラスの最低保証が全部（上限なしで渡す）
+    const big = run(100);
+    expect(big.capped).toEqual([]);
+    expect(big.prizes.slice(0, 5)).toEqual([300, 120, 78, 60, 42]);
+    // 10 賭けた: 足す分は 100 まで（1 着の馬から順に使う）
+    const small = run(10);
+    expect(small.capped).toEqual([]);
+    expect(small.prizes.slice(0, 5).reduce((n, p) => n + p, 0)).toBeLessThanOrEqual(100 + 5);
+    expect(big.total).toBeGreaterThan(small.total);
   });
 
   it('馬主への還元: 賞金の倍率・最低保証（2〜5 着はその割合）・応援金は馬主の分を数えない', () => {
@@ -491,9 +488,9 @@ describe('🏇 名簿と卓のサービス', () => {
     expect(await retireOwnHorse(db, B.id, other.horse.id, t0, 300)).toBe(0);
   });
 
-  it('最低保証で足す分は、1 人 1 日の上限まで（日本時間の 0 時に戻る）', async () => {
+  it('賭けていないレースの最低保証で足す分は、1 人 1 日の上限まで（日本時間の 0 時に戻る）', async () => {
     const { payCredit } = await import('../src/services/casino/tables/service.js');
-    const cfg2: GuildConfig = { ...tcfg, casino: { ...tcfg.casino, keibaPurseDailyCap: 500 } };
+    const cfg2: GuildConfig = { ...tcfg, casino: { ...tcfg.casino, keibaNoBetDailyCap: 500 } };
     const now = new Date();
     const c = { memberId: A.id, amount: 300, reason: 'keiba_prize' as const, cap: 'keiba_purse' as const };
     const before = (await walletOf(db, A.id)).balance;

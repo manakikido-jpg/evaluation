@@ -319,8 +319,16 @@ export function CasinoAdminPage(p: {
                 </div>
               </div>
               <label class="field">
-                <span>最低保証で足す分を、1 人が 1 日に受け取れる上限（0 で上限なし）。最低保証は 2 人以上が賭けたレースだけ</span>
-                <input type="number" name="keibaPurseDailyCap" min={0} max={100000000} value={String(c.keibaPurseDailyCap)} required />
+                <span>馬主がそのレースに賭けたとき: 最低保証で足す分は、賭けた額の何倍まで（1 日の上限なし。0 で足さない）</span>
+                <input type="number" name="keibaBetPurseMult" min={0} max={1000} value={String(c.keibaBetPurseMult)} required />
+              </label>
+              <label class="field">
+                <span>馬主がそのレースに賭けていないとき: 最低保証の 1 着賞金（2〜5 着はその割合。クラスに関係なく）</span>
+                <input type="number" name="keibaNoBetPurse" min={0} max={1000000} value={String(c.keibaNoBetPurse)} required />
+              </label>
+              <label class="field">
+                <span>賭けていないレースの最低保証で足す分を、1 人が 1 日に受け取れる上限（0 で上限なし）</span>
+                <input type="number" name="keibaNoBetDailyCap" min={0} max={100000000} value={String(c.keibaNoBetDailyCap)} required />
               </label>
               <label class="field">
                 <span>応援金（その馬の単勝・複勝に、馬主でない人が賭けた額の何 %。着順に関係なく馬主へ）</span>

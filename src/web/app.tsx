@@ -1821,7 +1821,7 @@ export function createWebApp(deps: WebDeps) {
       keibaMaxOwned: typeof body.keibaMaxOwned === 'string' ? int('keibaMaxOwned') : cfg.casino.keibaMaxOwned,
       keibaTrainPrice: typeof body.keibaTrainPrice === 'string' ? int('keibaTrainPrice') : cfg.casino.keibaTrainPrice,
       // 🏇 馬主への還元（欄がない古い画面から送られたら、今のまま）
-      ...(['keibaPrizeMult', 'keibaFanPct', 'keibaRoyaltyPct', 'keibaRetirePerWin', 'keibaPurseDailyCap'] as const).reduce<Record<string, number>>((o, k) => {
+      ...(['keibaPrizeMult', 'keibaFanPct', 'keibaRoyaltyPct', 'keibaRetirePerWin', 'keibaPurseDailyCap', 'keibaBetPurseMult', 'keibaNoBetPurse', 'keibaNoBetDailyCap'] as const).reduce<Record<string, number>>((o, k) => {
         o[k] = typeof body[k] === 'string' ? int(k) : cfg.casino[k];
         return o;
       }, {}),
