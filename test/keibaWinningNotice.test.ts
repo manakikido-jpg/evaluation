@@ -27,8 +27,8 @@ it('並行実行と同じレースの登録を重ねても1回だけ投稿する
   await Promise.all([winningNoticeTick(ctx, now), winningNoticeTick(ctx, now)]); await winningNoticeTick(ctx, now);
   expect(sendMessage).toHaveBeenCalledTimes(1);
   const [row] = await db.select().from(keibaWinningNotices); expect(row!.status).toBe('sent'); expect(row!.messageId).toBe('m1');
-  const body = sendMessage.mock.calls[0] as unknown as [string, { content: string; allowed_mentions: unknown; files: { data: Buffer }[] }];
-  expect(body[1].allowed_mentions).toEqual({ parse: [] }); expect(body[1].content).toContain('購入 600銭'); expect(body[1].content).toContain('+11,400銭'); expect(body[1].files[0]!.data.length).toBeGreaterThan(1000);
+  const body = sendMessage.mock.calls[0] as unknown as [string, { content: string; allowed_mentions: unknown; nonce: string; enforce_nonce: boolean; files: { data: Buffer }[] }];
+  expect(body[1].allowed_mentions).toEqual({ parse: [] }); expect(body[1].nonce).toBe(`kbn:${row!.id}`); expect(body[1].enforce_nonce).toBe(true); expect(body[1].content).toContain('購入 600銭'); expect(body[1].content).toContain('+11,400銭'); expect(body[1].files[0]!.data.length).toBeGreaterThan(1000);
 });
 it('演出前と通知停止中は送らない', async () => {
   await add(slip, new Date(now.getTime() + 6800)); const sendMessage = vi.fn(async () => ({ id: 'm' }));

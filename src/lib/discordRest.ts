@@ -97,6 +97,9 @@ export type MessageBody = {
   allowed_mentions?: { parse?: ('everyone' | 'roles' | 'users')[]; roles?: string[]; users?: string[] };
   /** 書き換えのとき: 残す添付（[] で全部外す。書かなければそのまま） */
   attachments?: { id: string | number; filename?: string }[];
+  /** Discord側でも短時間の再送を同じ投稿として扱う。 */
+  nonce?: string;
+  enforce_nonce?: boolean;
   /** いっしょに送るファイル（写真など） */
   files?: MessageFile[];
 };

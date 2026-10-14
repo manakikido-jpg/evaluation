@@ -20,6 +20,8 @@ export async function winningNoticeTick(ctx: { db: Db; cfg: GuildConfig; discord
       const result = await ctx.discord.sendMessage(item.channelId, {
         content: `🌸 <@${item.memberId}> さん、競馬的中！\n${slip.race} 第${slip.raceNo}レース\n購入 ${fmt(slip.bet)}${item.coinName}／払戻 ${fmt(slip.payout)}${item.coinName}／レース収支 +${fmt(slip.payout - slip.bet)}${item.coinName}`,
         allowed_mentions: { parse: [] },
+        nonce: `kbn:${item.id}`,
+        enforce_nonce: true,
         files: [{ name: `keiba-winning-${item.id}.png`, contentType: 'image/png', data: png }],
       });
       await ctx.db.update(keibaWinningNotices).set({ status: 'sent', messageId: result.id, updatedAt: now }).where(eq(keibaWinningNotices.id, item.id));
