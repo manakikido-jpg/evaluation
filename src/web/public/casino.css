@@ -2286,3 +2286,6 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .life-card-list { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }.life-card { flex:1 1 160px; padding:12px; border:1px solid #9a8057; border-radius:12px; background:#24372e; }.life-card small { display:block; margin-top:6px; color:#ccd8ce; }.life-hand form { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }.life-hand form p { flex-basis:100%; }.life-fork { border-color:#77bbad; background:#354b43; }
 
 .life-turn button { white-space:normal; max-width:100%; }.life-turn h4 { margin:14px 0 8px; }
+.kb-titles { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.kb-titles .c-tag { margin-left: 0; }
+.kb-rival { color: #ff8a65; font-weight: 700; font-size: 0.8rem; margin-left: 4px; }

@@ -1,3 +1,4 @@
+import { rivalPairsAmong } from './keibaHonors.js';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { isOutfit, type KbOutfit } from './keibaOutfit.js';
 import type { Db } from '../../db/client.js';
@@ -178,8 +179,14 @@ export async function loadRoster(db: Db, now = new Date()): Promise<KbStable[]> 
   const rows = await activeWithOwners(db);
   const parentIds = [...new Set(rows.map((r) => r.h.parentId).filter((x): x is number => x !== null))];
   const parents = parentIds.length ? new Map((await db.select({ id: keibaHorses.id, name: keibaHorses.name }).from(keibaHorses).where(inArray(keibaHorses.id, parentIds))).map((p) => [p.id, p.name])) : new Map<number, string>();
+  // ⚔ 宿敵（出馬表に「因縁の対決」を出す）
+  const rivals = new Map<number, number[]>();
+  for (const [a, b] of await rivalPairsAmong(db, rows.map((r) => r.h.id))) {
+    rivals.set(a, [...(rivals.get(a) ?? []), b]);
+    rivals.set(b, [...(rivals.get(b) ?? []), a]);
+  }
   return rows
-    .map((r) => toStable({ ...r.h, ownerName: r.ownerName, sire: r.h.parentId ? (parents.get(r.h.parentId) ?? null) : null }, now))
+    .map((r) => ({ ...toStable({ ...r.h, ownerName: r.ownerName, sire: r.h.parentId ? (parents.get(r.h.parentId) ?? null) : null }, now), ...(rivals.has(r.h.id) ? { rivals: rivals.get(r.h.id) } : {}) }))
     .filter((h, i) => !(rows[i]!.h.restUntil && rows[i]!.h.restUntil! > now) && (h.fatigue ?? 0) < KB_FATIGUE_REST);
 }
 

@@ -823,6 +823,14 @@ function Payouts(p: { s: KbState }) {
   );
 }
 
+/** ⚔ このレースに出ている宿敵の組 */
+const feuds = (s: KbState) =>
+  s.horses.flatMap((a) =>
+    s.horses
+      .filter((b) => a.id > 0 && b.id > a.id && (a.rivals ?? []).includes(b.id))
+      .map((b) => [a, b] as const),
+  );
+
 export function KeibaView(p: {
   t: CasinoTable;
   s: KbState;
@@ -870,6 +878,11 @@ export function KeibaView(p: {
                 {s.race.name}
               </h2>
               <p class="kb-cond">{raceLine(s)}</p>
+              {feuds(s).map(([a, b]) => (
+                <p class="kb-rival">
+                  ⚔ 因縁の対決！ {a.name} vs {b.name}
+                </p>
+              ))}
               <p class="kb-prize">
                 🏆 1 着賞金 {me.coin.emoji}
                 {fmt(
