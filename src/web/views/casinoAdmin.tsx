@@ -1,3 +1,4 @@
+import { formatBigRaces } from '../../services/casino/keibaBig.js';
 import type { GuildConfig } from '../../config.js';
 import type { CasinoConfig, CasinoGame } from '../../config.js';
 import type { AiStats } from '../../services/casino/aiStats.js';
@@ -318,6 +319,12 @@ export function CasinoAdminPage(p: {
                   ))}
                 </div>
               </div>
+              <label class="field">
+                <span>
+                  🏆 決まった時刻の大レース（1 行に「曜日 時刻 クラス 名前」。曜日は 毎日・日〜土、クラスは G1・G2。例: 毎日 21:00 G2 咲楽ノ宮記念）。30 分前に知らせ、10 分前に受付、時刻に発走。出られるのは馬主のいるオープンの馬だけ（4 頭そろわなければ中止）。知らせはお祝いのチャンネルに流れます。空にすると大レースなし
+                </span>
+                <textarea name="keibaBigRaces" rows={3}>{formatBigRaces(c.keibaBigRaces)}</textarea>
+              </label>
               <label class="field">
                 <span>馬主がそのレースに賭けたとき: 最低保証で足す分は、賭けた額の何倍まで（1 日の上限なし。0 で足さない）</span>
                 <input type="number" name="keibaBetPurseMult" min={0} max={1000} value={String(c.keibaBetPurseMult)} required />

@@ -37,6 +37,7 @@ import { expireTick } from './services/tempGrants.js';
 import { announceEvents, voiceTicketDm, voiceTicketTick } from './services/economyEvents.js';
 import { sweepTables } from './services/casino/tables/service.js';
 import { keibaTick } from './services/casino/keibaNotify.js';
+import { keibaBigTick } from './services/casino/keibaBig.js';
 import { sweepMatches } from './services/casino/versus.js';
 import { interviewTick, loadInterview } from './services/interview.js';
 import { checkAlerts, weeklyTick } from './services/economyWatch.js';
@@ -221,6 +222,8 @@ async function main(): Promise<void> {
       void announceEvents({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'economy event announce failed'));
       // 🏇 馬主の馬が勝ったらお祝い・馬主ロール
       void keibaTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'keiba tick failed'));
+      // 🏆 決まった時刻の大レース（予告・受付・中止の知らせ）
+      void keibaBigTick({ db, cfg: cfg(), discord: actions, baseUrl: env.WEB_BASE_URL }).catch((err) => logger.warn({ err }, 'keiba big race tick failed'));
       // 🎰 カジノ: だれも見ていない卓・対戦も、時間が来たら進める（持ち時間切れ・返金）
       void sweepTables(db, cfg())
         .then(() => sweepMatches(db))

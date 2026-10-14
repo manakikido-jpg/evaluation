@@ -266,7 +266,8 @@ function chooseClass(r: () => number, roster: readonly KbStable[], want?: number
     // 新馬は未勝利にも出られる
     if (c === 0) count[1]!++;
   }
-  if (count[5]! >= 5 && r() < 0.3) return 6 + Math.floor(r() * 3);
+  // 重賞は G3 だけ（G2・G1 は決まった時刻の大レースだけ）
+  if (count[5]! >= 5 && r() < 0.3) return 6;
   const options = count.map((n, c) => ({ c, w: n >= 4 ? n : 0 })).filter((x) => x.w > 0);
   if (!options.length) return 1;
   let x = r() * options.reduce((a, b) => a + b.w, 0);
@@ -292,7 +293,7 @@ function raceName(r: () => number, cls: number, title?: string): string {
 export function makeRace(
   rng: Rng,
   n: number,
-  opts: { name?: string; dist?: number; cls?: number; priority?: ReadonlySet<string> } = {},
+  opts: { name?: string; dist?: number; cls?: number; priority?: ReadonlySet<string>; field?: readonly KbStable[] } = {},
   roster: readonly KbStable[] = [],
 ): { race: KbRaceInfo; horses: KbHorse[] } {
   const r = seeded(rng(2 ** 31));
@@ -301,8 +302,8 @@ export function makeRace(
   const going = weather === 2 ? (r() < 0.5 ? 1 : 2) : weather === 1 ? (r() < 0.3 ? 1 : 0) : 0;
   const cls = chooseClass(r, roster, opts.cls);
   const race: KbRaceInfo = { n, name: raceName(r, cls, opts.name), dist, surface: r() < 0.65 ? 0 : 1, going, weather, cls };
-  let pool: KbStable[] = [...roster];
-  if (pool.length < KB_HORSES) {
+  let pool: KbStable[] = [...(opts.field ?? roster)];
+  if (!opts.field && pool.length < KB_HORSES) {
     const taken = new Set(pool.map((h) => h.name));
     while (pool.length < KB_HORSES) {
       const h = newStable(r, taken);
@@ -314,7 +315,8 @@ export function makeRace(
   const order = pool
     .map((h) => ({ h, k: (fits(h, cls) ? 0 : 10 + gap(h, cls)) - (h.ownerId && opts.priority?.has(h.ownerId) && (fits(h, cls) || gap(h, cls) <= 1) ? 5 : 0) + r() }))
     .sort((a, b) => a.k - b.k);
-  pool = order.slice(0, KB_HORSES).map((x) => x.h);
+  // 🏆 大レース: 決まった出走馬だけ（8 頭より少なくても）
+  pool = opts.field ? pool.slice(0, KB_HORSES) : order.slice(0, KB_HORSES).map((x) => x.h);
   // 馬番はくじ
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(r() * (i + 1));
@@ -700,7 +702,7 @@ export function seedPools(est: ReturnType<typeof estimate>, seed = KB_SEED): KbP
     const sum = w.reduce((a, b) => a + b, 0) || 1;
     return w.map((x) => Math.max(1, Math.round((seed * x) / sum)));
   };
-  const keys = allPairs();
+  const keys = allPairs(est.p.length);
   const q = split(keys.map((k) => est.pairs2.get(k) ?? 0.0005));
   const w = split(keys.map((k) => est.pairs3.get(k) ?? 0.0005));
   // 馬単・3 連複・3 連単は、1 着の見込みからハービルで（組が多いので、走らせた回数では足りない）

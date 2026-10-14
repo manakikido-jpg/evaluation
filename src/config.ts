@@ -510,6 +510,17 @@ export const casinoSchema = z.object({
   keibaRoyaltyPct: z.number().int().min(0).max(50).default(10),
   /** 🏇 功労金: 引退するとき 1 勝につき（重賞の勝ちは 3 倍）。胴元が出す */
   keibaRetirePerWin: z.number().int().min(0).max(1_000_000).default(300),
+  /**
+   * 🏆 決まった時刻の大レース（BOT が開く）。day: -1 = 毎日、0〜6 = 日〜土（日本時間）。time: HH:MM。cls: 7 = G2・8 = G1。
+   * 30 分前に知らせ、10 分前に受付を始め、時刻に発走。出られるのは馬主のいるオープンの馬だけ（4 頭そろわなければ中止）
+   */
+  keibaBigRaces: z
+    .array(z.object({ name: z.string().min(1).max(20), day: z.number().int().min(-1).max(6), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), cls: z.union([z.literal(7), z.literal(8)]) }))
+    .max(10)
+    .default([
+      { name: '咲楽ノ宮記念', day: -1, time: '21:00', cls: 7 },
+      { name: '咲楽ノ宮大賞典', day: 0, time: '22:00', cls: 8 },
+    ]),
   /** 🏇 馬主の馬が勝ったときにお祝いを流すチャンネル（なければ流さない） */
   keibaAnnounceChannelId: z.string().regex(/^\d{5,25}$/).optional(),
   /** 🐴 馬主ロール（走れる馬を持っている人）・🏆 G1 馬主ロール（G1 を勝ったことがある人）。なければ付けない */

@@ -94,9 +94,9 @@ export function KbCreateFields() {
         クラス
         <select name="cls">
           <option value="">
-            おまかせ（出られる馬の多いクラス。ときどき重賞）
+            おまかせ（出られる馬の多いクラス。ときどき G3）
           </option>
-          {KB_CLASSES.map((c, i) => (
+          {KB_CLASSES.slice(0, 7).map((c, i) => (
             <option value={String(i)}>{c}</option>
           ))}
         </select>
@@ -1587,7 +1587,7 @@ export function KbStablePage(p: {
         <ul class="c-muted kb-owner-rules">
           <li>
             買った馬はまず「新馬」戦から。勝つと 未勝利 → 1 勝クラス → 2 勝 → 3
-            勝 → オープン と上がり、オープンの馬は重賞（G3・G2・G1）にも出ます。
+            勝 → オープン と上がり、オープンの馬は重賞の G3 にも出ます。G2・G1 は決まった時刻の大レースだけで、馬主のいるオープンの馬だけが出られます（最低保証は満額）。
           </li>
           <li>
             強さ（速さ・スタミナ・脚質・得意な距離と馬場）は生まれつき。走ってみるまで分かりません。

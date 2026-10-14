@@ -28,8 +28,11 @@ import {
   type KbHorse,
   type KbPools,
   type KbRaceInfo,
+  type KbStable,
+  classOf,
 } from '../keiba.js';
-import { fail, intOf, list, ok, str, type Credit, type Ctx, type KeibaBet, type KeibaResult, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
+import { isBot } from './bots.js';
+import { fail, intOf, list, ok, str, type Credit, type Ctx, type Form, type KeibaBet, type KeibaResult, type PlayRecord, type Step, type TableEngine, type Who } from './types.js';
 
 /**
  * 🏇 みんなでダービー（競馬の卓）。だれかがレースを開くと受付が始まり、締め切ったら全員が同じレースを見る。
@@ -97,6 +100,8 @@ export type KbState = {
   final?: KbFinal;
   /** 1〜5 着の賞金（結果を出したとき） */
   prizes?: number[];
+  /** 🏆 決まった時刻の大レース（1 レースだけで閉じる。馬主のいるオープン馬だけ・最低保証は満額） */
+  big?: { key: string };
   /** これまでのレース（新しい順・10 回まで） */
   history: { n: number; name: string; order: number[]; win: number; names: string[] }[];
 };
@@ -104,13 +109,13 @@ export type KbState = {
 const seat = (w: Who, now: number): KbSeat => ({ id: w.id, name: w.name, lastActive: now });
 
 /** 次のレースを作る（馬・見込み・BOT のお客さんの賭け） */
-function newRace(s: Pick<KbState, 'title' | 'dist' | 'cls'> & { seats?: KbSeat[] }, n: number, ctx: Ctx): Pick<KbState, 'race' | 'horses' | 'pools' | 'real' | 'tickets'> {
+function newRace(s: Pick<KbState, 'title' | 'dist' | 'cls'> & { seats?: KbSeat[]; field?: readonly KbStable[] }, n: number, ctx: Ctx): Pick<KbState, 'race' | 'horses' | 'pools' | 'real' | 'tickets'> {
   // 座っている馬主の馬を先に出す
   const priority = new Set((s.seats ?? []).map((x) => x.id));
   const { race, horses } = makeRace(
     ctx.rng,
     n,
-    { ...(s.title ? { name: s.title } : {}), ...(s.dist ? { dist: s.dist } : {}), ...(s.cls !== null && s.cls !== undefined ? { cls: s.cls } : {}), priority },
+    { ...(s.title ? { name: s.title } : {}), ...(s.dist ? { dist: s.dist } : {}), ...(s.cls !== null && s.cls !== undefined ? { cls: s.cls } : {}), priority, ...(s.field ? { field: s.field } : {}) },
     ctx.roster ?? [],
   );
   const est = estimate(race, horses, ctx.rng(2 ** 31));
@@ -203,7 +208,10 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     const bet = betOf(owner);
     let top: number;
     let capped = false;
-    if (bet > 0) {
+    if (s.big) {
+      // 🏆 大レース: 最低保証は満額（1 日に数回だけなので、賭けた額に関係なく）
+      top = Math.max(0, (full[i] ?? 0) - (base[i] ?? 0));
+    } else if (bet > 0) {
       const left = budget.get(owner) ?? bet * c.keibaBetPurseMult;
       top = Math.min(Math.max(0, (full[i] ?? 0) - (base[i] ?? 0)), left);
       budget.set(owner, left - top);
@@ -298,6 +306,35 @@ export function boxKeys(t: KbBetType, picks: number[]): (string | undefined)[] {
   return [...out];
 }
 
+/** 大レースに出られる馬: 馬主のいるオープンの馬（勝ち数 → 賞金の多い順に 8 頭まで） */
+export const bigField = (roster: readonly KbStable[]) =>
+  roster
+    .filter((h) => h.ownerId && h.id > 0 && classOf(h) === 5)
+    .sort((a, b) => b.wins - a.wins || b.prize - a.prize || a.id - b.id)
+    .slice(0, KB_HORSES);
+export const BIG_MIN = 4;
+
+function createBig(host: Who, f: Form, ctx: Ctx): Step<KbState> {
+  const field = bigField(ctx.roster ?? []);
+  if (field.length < BIG_MIN) return fail('too_few');
+  const at = Number(str(f, 'at'));
+  const c = Number(str(f, 'cls'));
+  const cls = c === 7 || c === 8 ? c : 8;
+  const title = (str(f, 'title') ?? '').trim().slice(0, 20) || null;
+  const base = { title, dist: null, cls, seats: [seat(host, ctx.now)] };
+  return ok({
+    kind: 'keiba',
+    hostId: host.id,
+    phase: 'betting',
+    deadline: Number.isFinite(at) && at > ctx.now ? at : ctx.now + 10 * 60_000,
+    window: 10,
+    ...base,
+    ...newRace({ ...base, field }, 1, ctx),
+    big: { key: str(f, 'key') ?? '' },
+    history: [],
+  });
+}
+
 export const keiba: TableEngine<KbState> = {
   kind: 'keiba',
   maxSeats: KB_SEATS,
@@ -307,8 +344,11 @@ export const keiba: TableEngine<KbState> = {
     const title = (str(f, 'title') ?? '').replace(/\s+/g, ' ').trim().slice(0, 20) || null;
     const d = Number(str(f, 'dist'));
     const dist = (KB_DISTANCES as readonly number[]).includes(d) ? d : null;
+    // 🏆 決まった時刻の大レース（BOT が開く）: 馬主のいるオープン馬だけ。4 頭そろわなければ開かない
+    if (str(f, 'big') && isBot(host.id)) return createBig(host, f, ctx);
     const c = str(f, 'cls');
-    const cls = c && /^[0-8]$/.test(c) ? Number(c) : null;
+    // G2・G1 は大レースだけ
+    const cls = c && /^[0-6]$/.test(c) ? Number(c) : null;
     const base = { title, dist, cls, seats: [seat(host, ctx.now)] };
     return ok({
       kind: 'keiba',
@@ -359,7 +399,7 @@ export const keiba: TableEngine<KbState> = {
           : order
             ? [((seq) => (seq.length === picksOf(t) ? ticketKey(t, ...seq) : undefined))((str(f, 'seq') ?? '').split(',').filter(Boolean).map(Number))]
             : boxKeys(t, list(f, 'h').map(Number));
-      if (!keys.length || keys.some((k) => !k)) return fail('invalid');
+      if (!keys.length || keys.some((k) => !k || keyNos(k).some((no) => no > s.horses.length))) return fail('invalid');
       const amount = intOf(f, 'bet');
       const c = ctx.cfg.casino;
       if (!Number.isInteger(amount) || amount < c.minBet || amount > c.maxBet) return fail('bad_bet');
@@ -400,6 +440,8 @@ export const keiba: TableEngine<KbState> = {
     if (s.deadline > ctx.now) return null;
     if (s.phase === 'betting') return startRace(s, ctx);
     if (s.phase === 'racing') return finish(s, ctx);
+    // 🏆 大レースは 1 回で閉じる（受付中に座った人も立たせる）
+    if (s.big) return ok({ ...s, seats: [] });
     return ok(nextRace(s, ctx));
   },
   due: (s) => s.deadline,

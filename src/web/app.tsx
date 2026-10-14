@@ -1,3 +1,4 @@
+import { parseBigRaces } from '../services/casino/keibaBig.js';
 import { secretRoomHubs, secretRoomPanel } from '../discord/tempVoice.js';
 import { mountCastOffice } from './castOffice.js';
 import { desc, eq } from 'drizzle-orm';
@@ -1818,6 +1819,8 @@ export function createWebApp(deps: WebDeps) {
       }, {}),
       mahjongBets: typeof body.mahjongBets === 'string' ? body.mahjongBets === 'yes' : cfg.casino.mahjongBets,
       keibaHorsePrice: typeof body.keibaHorsePrice === 'string' ? int('keibaHorsePrice') : cfg.casino.keibaHorsePrice,
+      // 🏆 大レースの日程（欄がない古い画面から送られたら、今のまま）
+      keibaBigRaces: typeof body.keibaBigRaces === 'string' ? (parseBigRaces(body.keibaBigRaces) ?? null) : cfg.casino.keibaBigRaces,
       keibaMaxOwned: typeof body.keibaMaxOwned === 'string' ? int('keibaMaxOwned') : cfg.casino.keibaMaxOwned,
       keibaTrainPrice: typeof body.keibaTrainPrice === 'string' ? int('keibaTrainPrice') : cfg.casino.keibaTrainPrice,
       // 🏇 馬主への還元（欄がない古い画面から送られたら、今のまま）
