@@ -43,6 +43,9 @@ it('送信失敗を記録し、結果が不明な送信を自動再送しない'
 it('設定上書きと別の設定の保存で通知設定を保持する', () => {
   const overrides = overridesSchema.parse({ casino: { keibaWinningChannelId: config.casino.keibaWinningChannelId, keibaWinningMinPayout: 5000 } });
   const result = applyOverrides(cfg, overrides); expect(result.casino.keibaWinningMinPayout).toBe(5000); expect(result.casino.keibaWinningChannelId).toBe(config.casino.keibaWinningChannelId);
+  const old = applyOverrides(config, overridesSchema.parse({ casino: { maxBet: 2000 } }));
+  expect(old.casino.keibaWinningChannelId).toBe(config.casino.keibaWinningChannelId);
+  expect(old.casino.keibaWinningMinPayout).toBe(5000);
 });
 
 it('払戻5000以上の境界と黒字を、はずれ券も含む全体収支で判定する', async () => {
