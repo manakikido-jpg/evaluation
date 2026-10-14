@@ -11,7 +11,7 @@ let view = null,
   stopped = false;
 const ART = JSON.parse(document.body.dataset.art || '{}');
 const cardName = (c) => c.name + (c.stackable === true ? ' ＋' : '');
-const canStack = (a) => a.length < 2 || a.every((c) => c.stackable === true);
+const canStack = (a) => a.every((c) => c.type === 'guard') || a.filter((c) => c.stackable !== true).length <= 1;
 const label = { attack: '攻撃', guard: '防御', heal: '回復', mana: 'MP回復', cleanse: '解除・回復', money: '霊銭', draw: '手札補充' };
 function humanAction() {
   return state && state.phase === 'action' && state.turn === myIndex && state.players[myIndex].hp > 0;
@@ -259,9 +259,9 @@ function render() {
   $('exchange-open').disabled = !humanAction();
   $('pass').disabled = !humanAction();
   $('hint').textContent = humanDefense()
-    ? '防御札は1枚、＋付き同士なら最大3枚。MPが足りない札は使えません。'
+    ? '防御札は＋なしでも重ねられます。MPが足りない札は使えません。'
     : humanAction()
-      ? '攻撃札は1枚、＋付き同士なら最大3枚。道具・両替でも手番が進みます。'
+      ? '通常の攻撃札は1枚まで。＋付きは追加でき、＋付きだけでも攻撃できます。'
       : '相手の返事を待っています。CPUは自動で行動します。';
   $('hand-title').textContent = `あなたの神器　${me.hand.length}枚 / 10枚`;
   $('hand').replaceChildren();
@@ -277,15 +277,11 @@ function render() {
       else {
         const next = [...chosen(), c];
         if (!canStack(next)) {
-          toast('重ねて使えるのは＋付きの札だけです。先に選択を戻してください。');
+          toast('＋なしの攻撃札は1枚までです。＋付きの札を追加してください。');
           return;
         }
         if (next.length > 1 && !next.every((x) => x.type === next[0].type && ['attack', 'guard'].includes(x.type))) {
           toast('同じ種類の攻撃札か防御札だけを重ねられます。');
-          return;
-        }
-        if (selected.length >= 3) {
-          toast('一度に選べる札は3枚までです。');
           return;
         }
         selected.push(c.uid);

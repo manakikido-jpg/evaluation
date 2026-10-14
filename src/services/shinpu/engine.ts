@@ -7,7 +7,7 @@ export type CardDefinition = {
   power: number;
   cost: number;
   icon: string;
-  /** ＋付きの札だけを、同じ種類で重ねて使える。 */
+  /** 攻撃に追加できる＋付きの札。 */
   stackable?: boolean;
   text: string;
   pierce?: number;
@@ -58,7 +58,7 @@ export const cards: CardDefinition[] = [
     power: 3,
     cost: 0,
     icon: '⚔',
-    text: '相手1人に3ダメージ。＋付きの攻撃札とだけ重ねて使える。',
+    text: '相手1人に3ダメージ。通常の攻撃札1枚や、ほかの＋付き攻撃札に追加できる。',
   },
   {
     id: 'sun',
@@ -172,7 +172,7 @@ function selection(p: Player, ids: number[]): Card[] {
   return a as Card[];
 }
 function checkStack(a: Card[]) {
-  if (a.length > 1 && a.some((c) => c.stackable !== true)) throw Error('重ねて使えるのは＋付きの札だけです。');
+  if (a.filter((c) => c.stackable !== true).length > 1) throw Error('＋なしの攻撃札は1枚までです。＋付きの札は追加できます。');
 }
 function remove(p: Player, a: Card[]) {
   p.hand = p.hand.filter((c) => !a.some((x) => x.uid === c.uid));
@@ -244,7 +244,7 @@ export function act(s: State, action: string, ids: number[] = [], target?: numbe
   const cost = a.reduce((v, c) => v + c.cost, 0);
   if (p.mp < cost) throw Error('MPが足りません。');
   if (action === 'attack') {
-    if (a.length > 3 || a.some((c) => c.type !== 'attack')) throw Error('攻撃札を1〜3枚選んでください。');
+    if (a.some((c) => c.type !== 'attack')) throw Error('攻撃札を選んでください。');
     checkStack(a);
     if (typeof target !== 'number' || !Number.isInteger(target) || target === s.turn || !s.players[target] || s.players[target]!.hp <= 0)
       throw Error('生きている相手を選んでください。');
@@ -284,8 +284,7 @@ export function defend(s: State, ids: number[] = []) {
   const q = s.pending!,
     p = s.players[q.to]!,
     a = selection(p, ids);
-  if (a.some((c) => c.type !== 'guard') || a.length > 3) throw Error('防御札を0〜3枚選んでください。');
-  checkStack(a);
+  if (a.some((c) => c.type !== 'guard')) throw Error('防御札を選んでください。');
   const cost = a.reduce((v, c) => v + c.cost, 0);
   if (p.mp < cost) throw Error('MPが足りません。');
   const guard = Math.max(0, a.reduce((v, c) => v + c.power, 0) - q.pierce),
@@ -310,10 +309,10 @@ function cpuSelection(p: Player, type: Card['type'], limit: number): Card[] {
   let mp = p.mp;
   for (const c of p.hand) {
     if (c.type !== type || c.cost > mp) continue;
-    if (chosen.length && (c.stackable !== true || chosen[0]!.stackable !== true)) continue;
+    if (type === 'attack' && c.stackable !== true && chosen.some((x) => x.stackable !== true)) continue;
     chosen.push(c);
     mp -= c.cost;
-    if (chosen.length === limit || c.stackable !== true) break;
+    if (chosen.length === limit) break;
   }
   return chosen;
 }
@@ -321,7 +320,7 @@ export function cpu(s: State) {
   valid(s);
   if (s.phase === 'defense') {
     const p = s.players[s.pending!.to]!;
-    const ids = cpuSelection(p, 'guard', 3).map((c) => c.uid);
+    const ids = cpuSelection(p, 'guard', p.hand.length).map((c) => c.uid);
     defend(s, ids);
     return;
   }
@@ -331,7 +330,7 @@ export function cpu(s: State) {
     act(s, 'use', [heal.uid]);
     return;
   }
-  const a = cpuSelection(p, 'attack', 2);
+  const a = cpuSelection(p, 'attack', p.hand.length);
   if (a.length) {
     const targets = s.players.map((x, i) => (x.hp > 0 && i !== s.turn ? i : -1)).filter((i) => i >= 0);
     act(
