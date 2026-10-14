@@ -18,22 +18,9 @@
 - 完了時は「何を・なぜ・どう確かめたか」とテスト結果、作業ブランチ・PRを短く伝えます。
 - 分からないことはユーザーに確認します。すでに許可された範囲の作業は進めます。
 
-## Claudeが作業中の競馬
+## 競馬（みんなでダービー）
 
-Claudeが「みんなでダービー」を改修中です。終了が明示されるまで、以下を直接編集しません。今後の予定は血統と配合、共同所有（一口馬主）です。
-
-- `src/services/casino/keiba.ts`
-- `src/services/casino/keibaStable.ts`
-- `src/services/casino/keibaRecords.ts`
-- `src/services/casino/keibaHonors.ts`
-- `src/services/casino/keibaBig.ts`
-- `src/services/casino/keibaNotify.ts`
-- `src/services/casino/tables/keiba.ts`
-- `src/web/views/keiba.tsx`
-- `src/web/views/keibaRecords.tsx`
-- `src/db/schema.ts` の `keiba_` で始まる表
-
-最新本番の変更を取り込むことと、自分で競馬を改修することは別です。取り込みの際もClaudeの変更を保持します。共有する更新履歴・管理資料では双方の内容を残します。
+Claudeによる競馬の改修（称号・殿堂・宿敵、決まった時刻の大レース、血統と配合、共同所有）は2026年10月14日に一区切りしました。編集禁止は解除しています。競馬を変えるときは、`docs/admin.md` の競馬の説明と、`test/keiba*.test.ts` を読んでから作業してください。銭の流れ（最低保証・種付け料・一口の売買）を変えるときは、依頼した人に確かめてください。
 
 ## 話し合いと進捗
 
