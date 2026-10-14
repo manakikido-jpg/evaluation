@@ -353,7 +353,7 @@ export const keiba: TableEngine<KbState> = {
       if (mine.length + fresh.length > KB_MAX_TICKETS) return fail('too_many');
       for (const key of keys as string[]) {
         const same = s.tickets.find((x) => x.memberId === id && x.t === t && x.key === key);
-        if ((same?.amount ?? 0) + amount > c.maxBet) return fail('bad_bet');
+        if ((same?.amount ?? 0) + amount > c.maxBet) return fail('ticket_max');
         if (same) same.amount += amount;
         else s.tickets.push({ memberId: id, name: me.name, t, key, amount });
         addToPool(s.pools, t, key, amount);

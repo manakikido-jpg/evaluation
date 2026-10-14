@@ -547,6 +547,14 @@ function BetPanel(p: {
         data-fav={String(fav)}
         data-coin={p.me.coin.name}
         data-max={String(KB_MAX_TICKETS)}
+        data-maxbet={String(casino.maxBet)}
+        data-mine={JSON.stringify(
+          Object.fromEntries(
+            s.tickets
+              .filter((x) => x.memberId === p.me.session.userId)
+              .map((x) => [`${x.t}:${x.key}`, x.amount]),
+          ),
+        )}
       >
         <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />
         <input type="hidden" name="action" value="bets" />

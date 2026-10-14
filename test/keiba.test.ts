@@ -143,6 +143,9 @@ describe('🏇 レースとオッズ', () => {
     expect(KB_MAX_TICKETS).toBe(30);
     expect(keiba.act(s, A.id, { action: 'bets', type: 'trifecta', h: ['1', '2', '3', '4', '5'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'too_many' });
     expect(keiba.act(s, A.id, { action: 'bets', type: 'quinella', h: ['1'], bet: '10' }, ctx(t0))).toEqual({ ok: false, error: 'invalid' });
+    // 同じ馬券は、もう買った分と合わせて 1 回の最高まで（理由がわかるように別のエラー）
+    expect(keiba.act(s, A.id, { action: 'bets', type: 'wide', h: ['1', '2'], bet: String(tcfg.casino.maxBet) }, ctx(t0))).toEqual({ ok: false, error: 'ticket_max' });
+    expect(keiba.act(s, A.id, { action: 'bets', type: 'wide', h: ['1', '2'], bet: String(tcfg.casino.maxBet - 100) }, ctx(t0)).ok).toBe(true);
   });
 
   it('馬券の書き方', () => {

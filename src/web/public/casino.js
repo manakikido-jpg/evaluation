@@ -1408,7 +1408,18 @@ const paintSlip = (f) => {
   const out = f.querySelector('.kb-preview');
   const buy = f.querySelector('.kb-buy');
   const coin = f.dataset.coin || '';
-  const max = Number(f.dataset.max) || 30;
+  const limit = Number(f.dataset.max) || 30;
+  const maxBet = Number(f.dataset.maxbet) || Infinity;
+  let mine = {};
+  try {
+    mine = JSON.parse(f.dataset.mine || '{}');
+  } catch {
+    mine = {};
+  }
+  // もう買った馬券と合わせて数える（サーバーと同じ決まり）
+  const held = Object.keys(mine).length;
+  const fresh = keys.filter((k) => !(`${type}:${k}` in mine)).length;
+  const over = keys.find((k) => (mine[`${type}:${k}`] || 0) + amount > maxBet);
   let ok = keys.length > 0 && amount > 0;
   if (!keys.length)
     out.textContent = order
@@ -1419,16 +1430,24 @@ const paintSlip = (f) => {
   else if (!(amount > 0)) out.textContent = '量を選んでください';
   else {
     const min = Math.min(...lo) * amount / 10;
-    const max = Math.max(...hi) * amount / 10;
+    const most = Math.max(...hi) * amount / 10;
     out.innerHTML = '';
     const a = document.createElement('b');
     a.textContent = `${keys.length} 点 × ${kbFmt(amount)} = 合計 ${kbFmt(keys.length * amount)} ${coin}`;
     const b = document.createElement('span');
-    b.textContent = `当たると 約 ${kbFmt(min)}${max > min ? `〜${kbFmt(max)}` : ''} ${coin}`;
+    b.textContent = `当たると 約 ${kbFmt(min)}${most > min ? `〜${kbFmt(most)}` : ''} ${coin}`;
     out.append(a, b);
-    if (keys.length > max) {
+    if (held + fresh > limit) {
       ok = false;
-      b.textContent = `1 レースに ${max} 枚までです。馬を減らしてください`;
+      b.textContent = held
+        ? `1 レースに ${limit} 枚までです（もう ${held} 枚買っています）。馬を減らしてください`
+        : `1 レースに ${limit} 枚までです。馬を減らしてください`;
+    } else if (amount > maxBet) {
+      ok = false;
+      b.textContent = `1 点は ${kbFmt(maxBet)} ${coin} までです`;
+    } else if (over) {
+      ok = false;
+      b.textContent = `同じ馬券は合計 ${kbFmt(maxBet)} ${coin} までです（もう ${kbFmt(mine[`${type}:${over}`])} ${coin} 買っています）。量を減らしてください`;
     }
   }
   if (buy) {
