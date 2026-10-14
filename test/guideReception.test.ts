@@ -335,6 +335,19 @@ describe('案内から参拝者ロールを付与', () => {
     await m.app.onInteraction(m.interaction(r.id, GUIDE, 'done') as never);
     expect((await economy.walletOf(db, GUIDE)).balance).toBe(150);
   });
+  it('🛡 要注意リストの人には、案内人はロールを付与できない（記録に残る）', async () => {
+    await configure();
+    const m = mockGuild();
+    const r = await reception();
+    await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    const { addWatch } = await import('../src/services/securityWatch.js');
+    await addWatch(db, VISITOR, '他鯖で荒らし', GUIDE);
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    expect(m.discord.addRole).not.toHaveBeenCalled();
+    expect(m.discord.removeRole).not.toHaveBeenCalled();
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(true);
+    expect(await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.role_blocked'))).toHaveLength(1);
+  });
   it('開始前・別の案内人・案内人ロールなし・退出後は付与しない', async () => {
     await configure();
     const m = mockGuild();

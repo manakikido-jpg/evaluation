@@ -1,3 +1,5 @@
+import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
+import { SecurityPage } from './views/security.js';
 import { parseBigRaces } from '../services/casino/keibaBig.js';
 import { secretRoomHubs, secretRoomPanel } from '../discord/tempVoice.js';
 import { mountCastOffice } from './castOffice.js';
@@ -584,6 +586,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/yaku', requireAdmin);
+  app.use('/security', requireAdmin);
+  app.use('/security/*', requireAdmin, requireCsrf);
   app.use('/stats', requireAdmin);
   app.use('/economy', requireAdmin);
   app.use('/economy/*', requireAdmin);
@@ -836,7 +840,7 @@ export function createWebApp(deps: WebDeps) {
   // ───────── 📓 議事録（神職・宮司。消すのは宮司だけ） ─────────
 
   const nameFn = async (ids: string[]) => {
-    const names = await namesOf(db, ids);
+    const names = await watchNames(db, ids);
     return (id: string) => names.get(id) ?? id;
   };
   /** 通話チャンネル（カテゴリの順・カテゴリ名つき） */
@@ -3423,6 +3427,30 @@ export function createWebApp(deps: WebDeps) {
 
   // ───────── 用語集（見るのは神職も・直すのは宮司） ─────────
 
+  // ───────── 🛡 荒らし対策（要注意リスト）─────────
+  app.get('/security', async (c) => {
+    const rows = await listWatch(db);
+    const ids = [...new Set(rows.flatMap((r) => [r.memberId, r.addedBy]))];
+    const names = await watchNames(db, ids);
+    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} />);
+  });
+  app.post('/security/watch', async (c) => {
+    const body = await c.req.parseBody();
+    const memberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
+    const reason = typeof body.reason === 'string' ? body.reason : '';
+    const actor = c.get('session').userId;
+    if (!(await addWatch(db, memberId, reason, actor))) return c.redirect('/security?msg=invalid');
+    await audit(db, { actorId: actor, targetId: memberId, action: 'security.watch_add', detail: { reason: reason.trim().slice(0, 200) }, via: 'web' });
+    return c.redirect('/security?msg=added');
+  });
+  app.post('/security/watch/:id/delete', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = c.req.param('id');
+    if (!(await removeWatch(db, id))) return c.redirect('/security?msg=not_found');
+    await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'security.watch_remove', via: 'web' });
+    return c.redirect('/security?msg=removed');
+  });
+
   app.use('/glossary/*', requireAdmin, requireCsrf);
   // 見るのは神職も（'/glossary/*' は '/glossary' にも当たるので、変える操作だけ宮司に）
   app.use('/glossary/*', async (c, next) => (c.req.method !== 'POST' || gujiOnly(c) ? next() : c.text('宮司のみできる操作です。', 403)));
@@ -4167,7 +4195,7 @@ export function createWebApp(deps: WebDeps) {
     if (!ids.length) return back('pick_members');
     if (ids.length > 50) return back('too_many_members');
     if (add && dangerLabels(permsOf(role)).length && body.confirmDanger !== 'yes') return back('need_confirm_danger');
-    const names = await namesOf(db, ids);
+    const names = await watchNames(db, ids);
     const done: string[] = [];
     for (const memberId of ids) {
       try {

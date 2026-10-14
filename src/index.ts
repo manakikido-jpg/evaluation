@@ -25,6 +25,7 @@ import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
 import { MaikuraApp } from './discord/maikura.js';
 import { GuideReceptionApp } from './discord/guideReception.js';
+import { SecurityApp } from './discord/security.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { SokinApp } from './discord/sokin.js';
@@ -105,6 +106,7 @@ async function main(): Promise<void> {
   const maikura = new MaikuraApp(db, cfg);
   const guideReception = new GuideReceptionApp(db, cfg, actions);
   const guidePending = new GuidePendingApp(cfg);
+  const security = new SecurityApp(db, cfg, actions);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
   const gifts = new GiftApp(db, cfg, actions);
@@ -299,6 +301,8 @@ async function main(): Promise<void> {
     void guidePending.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide pending add failed'));
     // 入った人に、はじめの流れを DM で案内
     void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
+    // 🛡 要注意リストの人が入ったら運営に知らせる
+    void security.onMemberAdd(m).catch((err) => logger.warn({ err }, 'security join check failed'));
   });
   client.on(Events.GuildMemberRemove, (m) => {
     void app.onMemberRemove(m.guild.id, m.id);

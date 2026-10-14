@@ -124,6 +124,12 @@ describe('入鯖申請', () => {
     const other = '840000000000000011';
     await recordJoin(db, snap(other, []));
     expect((await submitJoin(ctx, { id: other, roleIds: [], accountCreatedAt: recentAccount }, answers, now)).status).toBe('pending');
+    // 🛡 要注意リストの人は、アカウントが古くても自動で承認しない
+    const watched = '840000000000000012';
+    await recordJoin(db, snap(watched, []));
+    const { addWatch } = await import('../src/services/securityWatch.js');
+    expect(await addWatch(db, watched, '他鯖で荒らし', '840000000000000099')).toBe(true);
+    expect((await submitJoin(ctx, { id: watched, roleIds: [], accountCreatedAt: new Date('2025-01-01T00:00:00Z') }, answers, now)).status).toBe('pending');
   });
 });
 
