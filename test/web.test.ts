@@ -313,6 +313,27 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
       body: new URLSearchParams(form).toString(),
     });
 
+  it('🛡 要注意リスト: 神職が入れる・宮司だけが外す・記録に残る', async () => {
+    const { watchOf, addWatch } = await import('../src/services/securityWatch.js');
+    expect(await addWatch(db, 'abc', 'x', STAFF)).toBe(false);
+    const s = await login(STAFF);
+    const csrf = await csrfOf(s);
+    expect((await post('/security/watch', s, { memberId: USER, reason: '' })).status).toBe(403);
+    expect((await post('/security/watch', s, { _csrf: csrf, memberId: 'abc', reason: 'x' })).headers.get('location')).toBe('/security?msg=invalid');
+    expect((await post('/security/watch', s, { _csrf: csrf, memberId: USER, reason: '他鯖で荒らし' })).headers.get('location')).toBe('/security?msg=added');
+    expect(await watchOf(db, USER)).toMatchObject({ reason: '他鯖で荒らし', addedBy: STAFF });
+    const page = await (await get('/security', s)).text();
+    expect(page).toContain('他鯖で荒らし');
+    expect(page).not.toContain(`/security/watch/${USER}/delete`);
+    expect((await post(`/security/watch/${USER}/delete`, s, { _csrf: csrf })).status).toBe(403);
+    const g = await login(GUJI);
+    const gcsrf = await csrfOf(g);
+    expect((await post(`/security/watch/${USER}/delete`, g, { _csrf: gcsrf })).headers.get('location')).toBe('/security?msg=removed');
+    expect(await watchOf(db, USER)).toBeUndefined();
+    expect((await listAudit(db, { action: 'security.watch_add' })).length).toBe(1);
+    expect((await listAudit(db, { action: 'security.watch_remove' })).length).toBe(1);
+  });
+
   it('CSRF トークンがない操作は拒否', async () => {
     const s = await login(STAFF);
     const res = await post(`/members/${USER}/yaku`, s, { reason: '誹謗中傷' });

@@ -687,6 +687,13 @@
       "when": 1791997208712,
       "tag": "0097_quick_kang",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1791998814358,
+      "tag": "0098_equal_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }

@@ -921,6 +921,15 @@ export const keibaHorses = pgTable('keiba_horses', {
 });
 export type KeibaHorseRow = typeof keibaHorses.$inferSelect;
 
+/** 🛡 要注意リスト（他鯖で荒らしをしている人など）。入ったら知らせ、案内人のロール付与を止める */
+export const securityWatch = pgTable('security_watch', {
+  memberId: text('member_id').primaryKey(),
+  reason: text('reason').notNull(),
+  addedBy: text('added_by').notNull(),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type SecurityWatchRow = typeof securityWatch.$inferSelect;
+
 /** 🤝 共同所有（一口馬主）: 馬ごとに 10 口。だれが何口持っているか。行がなければ馬主が 1 人で持つ */
 export const keibaShares = pgTable(
   'keiba_shares',

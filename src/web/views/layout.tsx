@@ -9,6 +9,7 @@ type Nav =
   | 'economy'
   | 'casino'
   | 'glossary'
+  | 'security'
   | 'voice'
   | 'updates'
   | 'roles'
@@ -60,6 +61,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'members', href: '/members', icon: '👥', label: 'メンバー' },
       { key: 'applications', href: '/applications', icon: '📝', label: '申請' },
       { key: 'yaku', href: '/yaku', icon: '👹', label: '厄' },
+      { key: 'security', href: '/security', icon: '🛡', label: '荒らし対策' },
       { key: 'soudan', href: '/soudan', icon: '💌', label: '相談' },
       { key: 'tickets', href: '/tickets', icon: '🎫', label: 'チケット' },
       { key: 'temp', href: '/temp', icon: '⏳', label: '一時的な権限' },
