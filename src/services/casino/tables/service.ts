@@ -1,7 +1,7 @@
 import { and, arrayContains, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { GuildConfig, TableKind } from '../../../config.js';
 import type { Db } from '../../../db/client.js';
-import { aiMatches, casinoGames, casinoTables, coinTx, keibaBets, mahjongResults, type CasinoTable } from '../../../db/schema.js';
+import { aiMatches, casinoGames, casinoTables, coinTx, keibaWinningNotices, keibaBets, mahjongResults, type CasinoTable } from '../../../db/schema.js';
 import { jstDate } from '../../activity.js';
 import { addCoins, spendWithin } from '../../economy.js';
 import { todayBets } from '../casino.js';
@@ -76,6 +76,9 @@ async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: D
   }
   if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba, now, cfg.casino.keibaRoyaltyPct);
   if (fx.keibaBets?.length) await tx.insert(keibaBets).values(fx.keibaBets.map((b) => ({ ...b, at: now })));
+  for (const slip of fx.keibaWinningSlips ?? []) {
+    await tx.insert(keibaWinningNotices).values({ tableId, raceNo: slip.raceNo, memberId: slip.memberId, channelId: cfg.casino.keibaWinningChannelId, payload: slip, coinName: cfg.economy.currencyName, availableAt: new Date(now.getTime() + 6800) }).onConflictDoNothing();
+  }
   for (const r of fx.records ?? []) {
     await tx.insert(casinoGames).values({ memberId: r.memberId, game: r.game, bet: r.bet, payout: r.payout, state: { table: tableId }, status: 'done', createdAt: now, finishedAt: now });
   }

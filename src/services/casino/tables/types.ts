@@ -52,7 +52,9 @@ export type KeibaBet = { memberId: string; race: string; cls: number; type: stri
  */
 export type AiMatch = { game: string; variant: string; aiVersion: string; seats: { id: string; name: string; bot: boolean; place: number; net: number; left?: boolean }[] };
 
-export type Effects = { debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[]; aiMatch?: AiMatch[] };
+export type KeibaWinningSlip = { raceNo: number; race: string; dist: number; surface: string; memberId: string; name: string; bet: number; payout: number; hits: KeibaBet[] };
+
+export type Effects = { keibaWinningSlips?: KeibaWinningSlip[]; debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[]; aiMatch?: AiMatch[] };
 
 export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
 export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });

@@ -522,6 +522,9 @@ export const casinoSchema = z.object({
       { name: '咲楽ノ宮大賞典', day: 0, time: '22:00', cls: 8 },
     ]),
   /** 🏇 馬主の馬が勝ったときにお祝いを流すチャンネル（なければ流さない） */
+  /** 的中記念馬券の投稿先（空で停止） */
+  keibaWinningChannelId: z.string().regex(/^(?:\d{5,25})?$/).default(''),
+  keibaWinningMinPayout: z.number().int().min(1).max(100_000_000).default(5000),
   keibaAnnounceChannelId: z.string().regex(/^\d{5,25}$/).optional(),
   /** 🐴 馬主ロール（走れる馬を持っている人）・🏆 G1 馬主ロール（G1 を勝ったことがある人）。なければ付けない */
   keibaOwnerRoleId: z.string().regex(/^\d{5,25}$/).optional(),

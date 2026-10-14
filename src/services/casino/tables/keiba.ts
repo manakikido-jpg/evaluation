@@ -9,6 +9,7 @@ import {
   isOrderedType,
   keyNos,
   liveOdds,
+  KB_SURFACES,
   KB_DISTANCES,
   KB_HORSES,
   KB_MAX_TICKETS,
@@ -261,7 +262,8 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
   s.phase = 'result';
   s.resultAt = ctx.now;
   s.deadline = ctx.now + KB_RESULT_SECONDS * 1000;
-  return ok(s, { credits, records, keiba, ...(keibaBets.length ? { keibaBets } : {}) });
+  const keibaWinningSlips = winningSlipsForRace(s, keibaBets, ctx.cfg.casino);
+  return ok(s, { credits, records, keiba, keibaWinningSlips, ...(keibaBets.length ? { keibaBets } : {}) });
 }
 
 /** 次のレースの受付 */
@@ -284,6 +286,20 @@ function nextRace(state: KbState, ctx: Ctx): KbState {
 const okNo = (n: number) => Number.isInteger(n) && n >= 1 && n <= KB_HORSES;
 
 /** 賭けた馬・組の書き方（"3" / "2-5" / 馬単 "5>2" / 3 連複 "1-2-5" / 3 連単 "5>1>2"）。nos は着順の順 */
+/** 払戻はレース合計で判定し、はずれ券の購入額も収支に含める。 */
+export function winningSlipsForRace(s: Pick<KbState, 'race' | 'seats'>, bets: KeibaBet[], c: Ctx['cfg']['casino']) {
+  const per = new Map<string, { bet: number; payout: number }>();
+  for (const t of bets) {
+    const totals = per.get(t.memberId) ?? { bet: 0, payout: 0 };
+    totals.bet += t.amount; totals.payout += t.payout; per.set(t.memberId, totals);
+  }
+  return [...per].filter(([id, m]) => !isBot(id) && m.payout >= c.keibaWinningMinPayout && m.payout > m.bet && c.keibaWinningChannelId).map(([memberId, m]) => ({
+    raceNo: s.race.n, race: s.race.name, dist: s.race.dist, surface: KB_SURFACES[s.race.surface] ?? '芝',
+    memberId, name: s.seats.find((x) => x.id === memberId)?.name ?? '参拝者', bet: m.bet, payout: m.payout,
+    hits: bets.filter((t) => t.memberId === memberId && t.payout > 0).sort((a, b) => b.payout - a.payout),
+  }));
+}
+
 export function ticketKey(t: KbBetType, ...nos: number[]): string | undefined {
   const use = nos.slice(0, picksOf(t));
   if (use.length < picksOf(t) || !use.every(okNo) || new Set(use).size !== use.length) return undefined;
