@@ -290,6 +290,15 @@ export function CasinoAdminPage(p: {
               <p class="note">賭けなしにしても、もう賭けて始まっている卓はそのまま最後まで進みます。</p>
             </fieldset>
             <fieldset class="perms">
+              <legend>🌸 的中記念馬券のお知らせ</legend>
+              <label class="field"><span>投稿するチャンネル（雑談など）</span><select name="keibaWinningChannelId">
+                <option value="">投稿しない</option>
+                {(p.channels ?? []).map((ch) => <option value={ch.id} selected={ch.id === c.keibaWinningChannelId}>{ch.name}</option>)}
+              </select></label>
+              <label class="field"><span>払戻合計が何銭以上なら投稿するか</span><input type="number" name="keibaWinningMinPayout" min={1} max={100000000} value={String(c.keibaWinningMinPayout)} required /></label>
+              <p class="note">レース全体の収支が黒字の人だけ。1人・1レースにつき記念馬券を1枚投稿します。銭は追加しません。</p>
+            </fieldset>
+            <fieldset class="perms">
               <legend>🏇 みんなでダービーの馬主</legend>
               <label class="field">
                 <span>馬 1 頭の値段（0 で買えない。払った銭は胴元へ）</span>

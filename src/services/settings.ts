@@ -117,7 +117,11 @@ export const overridesSchema = z.object({
   /** 運営の見守り（channelId を空にすると #記録 へ） */
   opsWatch: opsWatchSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   /** カジノ */
-  casino: casinoSchema.partial().default({}),
+  casino: casinoSchema.partial().extend({
+    // 古い保存データにない通知設定で、ファイル側の設定を消さない。
+    keibaWinningChannelId: casinoSchema.shape.keibaWinningChannelId.removeDefault().optional(),
+    keibaWinningMinPayout: casinoSchema.shape.keibaWinningMinPayout.removeDefault().optional(),
+  }).default({}),
 });
 
 export type Overrides = z.infer<typeof overridesSchema>;

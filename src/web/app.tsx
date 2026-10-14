@@ -1834,6 +1834,8 @@ export function createWebApp(deps: WebDeps) {
         o[k] = typeof body[k] === 'string' ? int(k) : cfg.casino[k];
         return o;
       }, {}),
+      keibaWinningChannelId: typeof body.keibaWinningChannelId === 'string' ? body.keibaWinningChannelId : cfg.casino.keibaWinningChannelId,
+      keibaWinningMinPayout: typeof body.keibaWinningMinPayout === 'string' ? int('keibaWinningMinPayout') : cfg.casino.keibaWinningMinPayout,
       keibaPurse: cfg.casino.keibaPurse.map((v, i) => (typeof body[`keibaPurse_${i}`] === 'string' ? int(`keibaPurse_${i}`) : v)),
       ...(['keibaAnnounceChannelId', 'keibaOwnerRoleId', 'keibaG1RoleId'] as const).reduce<Record<string, string>>((o, k) => {
         const v = body[k];

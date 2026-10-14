@@ -2032,3 +2032,18 @@ export const diaries = pgTable('diaries', {
   /** 期限が切れて、日記に鍵をかけた */
   lockedAt: timestamp('locked_at', { withTimezone: true }),
 }, t => [check('diaries_mode_check', sql`${t.mode} in ('owner', 'everyone')`)]);
+
+/** 的中記念馬券の通知待ち。同じ卓・レース・人は1件だけ。 */
+export const keibaWinningNotices = pgTable('keiba_winning_notices', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  tableId: bigint('table_id', { mode: 'number' }).notNull(),
+  raceNo: integer('race_no').notNull(),
+  memberId: text('member_id').notNull(),
+  channelId: text('channel_id').notNull(),
+  payload: jsonb('payload').$type<import('../services/casino/tables/types.js').KeibaWinningSlip>().notNull(),
+  coinName: text('coin_name').notNull(),
+  status: text('status').notNull().default('pending'),
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull(),
+  messageId: text('message_id'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('keiba_winning_notice_once').on(t.tableId, t.raceNo, t.memberId), index('keiba_winning_notice_pending').on(t.status, t.availableAt)]);
