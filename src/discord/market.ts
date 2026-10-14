@@ -45,8 +45,7 @@ import {
   getOffer,
   getOrder,
   getRequest,
-  hasMarketLicense,
-  marketLicenseRoles,
+  marketLicenseAccess,
   isCallKind,
   isMarketCategory,
   isStandby,
@@ -347,8 +346,8 @@ export class MarketApp {
     return Boolean(adminLevelOf(this.cfg(), [...m.roles.cache.keys()]));
   }
 
-  private isMerchant(m: GuildMember): boolean {
-    return hasMarketLicense(this.cfg(),[...m.roles.cache.keys()]);
+  private licenseOf(m: GuildMember) {
+    return marketLicenseAccess(this.db, this.cfg(), { id: m.id, roleIds: [...m.roles.cache.keys()] });
   }
 
   private get coin() {
@@ -398,8 +397,9 @@ export class MarketApp {
   // ───────── 出品・依頼の種類 ─────────
 
   private async pickCategory(i: ButtonInteraction<'cached'>, mode: 'listing' | 'request'): Promise<void> {
-    if (mode === 'listing' && !this.isMerchant(i.member)) {
-      return void (await i.reply({ content: marketLicenseRoles(this.cfg()).length ? '🏪 出品するには「開業権利」が要ります（#授与所 の授与品から受けられます）。' : '市場の開業ロールがまだ設定されていません。運営に知らせてください。', ...EPHEMERAL }));
+    const license = mode === 'listing' ? await this.licenseOf(i.member) : undefined;
+    if (license && !license.allowed) {
+      return void (await i.reply({ content: license.configured ? '🏪 出品するには「開業権利」が要ります（#授与所 の授与品から受けられます）。' : '市場の開業ロールがまだ設定されていません。運営に知らせてください。', ...EPHEMERAL }));
     }
     await i.reply({
       content:
@@ -939,7 +939,7 @@ export class MarketApp {
     const r = await getRequest(this.db, id);
     if (!r || r.status !== 'open') return void (await i.reply({ content: 'この依頼はもう決まったか、締め切られています。', ...EPHEMERAL }));
     if (r.requesterId === i.user.id) return void (await i.reply({ content: '自分の依頼は引き受けられません。', ...EPHEMERAL }));
-    if (!this.isMerchant(i.member)) return void (await i.reply({ content: '🏪 引き受けるには「開業権利」が要ります（#授与所 の授与品から受けられます）。', ...EPHEMERAL }));
+    if (!(await this.licenseOf(i.member)).allowed) return void (await i.reply({ content: '🏪 引き受けるには「開業権利」が要ります（#授与所 の授与品から受けられます）。', ...EPHEMERAL }));
     await i.showModal(
       new ModalBuilder()
         .setCustomId(`market:bidmodal:${id}`)
