@@ -25,6 +25,7 @@ import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
 import { MaikuraApp } from './discord/maikura.js';
 import { GuideReceptionApp } from './discord/guideReception.js';
+import { RoleGuardApp } from './discord/roleGuard.js';
 import { SecurityApp } from './discord/security.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
@@ -107,6 +108,7 @@ async function main(): Promise<void> {
   const guideReception = new GuideReceptionApp(db, cfg, actions);
   const guidePending = new GuidePendingApp(cfg);
   const security = new SecurityApp(db, cfg, actions);
+  const roleGuard = new RoleGuardApp(db, cfg, actions);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
   const gifts = new GiftApp(db, cfg, actions);
@@ -314,6 +316,8 @@ async function main(): Promise<void> {
       await app.onMemberUpdate(m, old);
       // 承認されて絵馬待ち・役職になったら 🧭案内待ちを外す
       await guidePending.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'guide pending update failed'));
+      // 🛡 BOT を通さないロールの変更を見張る（待つので後ろで）
+      void roleGuard.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'role guard failed'));
       // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
       if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);
     })();

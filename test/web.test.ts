@@ -332,6 +332,12 @@ describe('厄・BAN・キック・メモ（管理画面）', () => {
     expect(await watchOf(db, USER)).toBeUndefined();
     expect((await listAudit(db, { action: 'security.watch_add' })).length).toBe(1);
     expect((await listAudit(db, { action: 'security.watch_remove' })).length).toBe(1);
+    // ロールの見張りの設定は宮司だけ
+    expect((await post('/security/settings', s, { _csrf: csrf, roleGuard: 'revert', trustedBotIds: '' })).status).toBe(403);
+    expect((await post('/security/settings', g, { _csrf: gcsrf, roleGuard: 'revert', trustedBotIds: 'abc' })).headers.get('location')).toBe('/security?msg=guard_invalid');
+    expect((await post('/security/settings', g, { _csrf: gcsrf, roleGuard: 'revert', trustedBotIds: '790000000000000004\n790000000000000004' })).headers.get('location')).toBe('/security?msg=guard_saved');
+    const { loadOverrides } = await import('../src/services/settings.js');
+    expect((await loadOverrides(db)).security).toEqual({ roleGuard: 'revert', trustedBotIds: ['790000000000000004'] });
   });
 
   it('CSRF トークンがない操作は拒否', async () => {

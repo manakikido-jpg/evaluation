@@ -715,6 +715,16 @@ export const guildConfigSchema = z
       })
       .default({ channelId: '1559096148814336113', price: 500, days: 14 }),
     gacha: gachaSchema.default(gachaSchema.parse({})),
+    /**
+     * 🛡 荒らし対策。roleGuard: BOT（このBOT・信用するBOT）と宮司以外がロールを変えたら、off = 何もしない / alert = 運営に知らせる / revert = 元に戻して知らせる。
+     * trustedBotIds: ロールを変えてよいほかの BOT（K-PRO の認証など）
+     */
+    security: z
+      .object({
+        roleGuard: z.enum(['off', 'alert', 'revert']).default('alert'),
+        trustedBotIds: z.array(snowflake).max(20).default([]),
+      })
+      .default({ roleGuard: 'alert', trustedBotIds: [] }),
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
     casinoGacha: casinoGachaSchema.default(casinoGachaSchema.parse({})),

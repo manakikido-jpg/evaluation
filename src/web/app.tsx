@@ -3432,7 +3432,7 @@ export function createWebApp(deps: WebDeps) {
     const rows = await listWatch(db);
     const ids = [...new Set(rows.flatMap((r) => [r.memberId, r.addedBy]))];
     const names = await watchNames(db, ids);
-    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} />);
+    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} guard={cfg.security} />);
   });
   app.post('/security/watch', async (c) => {
     const body = await c.req.parseBody();
@@ -3442,6 +3442,25 @@ export function createWebApp(deps: WebDeps) {
     if (!(await addWatch(db, memberId, reason, actor))) return c.redirect('/security?msg=invalid');
     await audit(db, { actorId: actor, targetId: memberId, action: 'security.watch_add', detail: { reason: reason.trim().slice(0, 200) }, via: 'web' });
     return c.redirect('/security?msg=added');
+  });
+  app.post('/security/settings', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const mode = body.roleGuard === 'off' || body.roleGuard === 'alert' || body.roleGuard === 'revert' ? body.roleGuard : undefined;
+    const ids = (typeof body.trustedBotIds === 'string' ? body.trustedBotIds : '').split(/[\s,]+/).filter(Boolean);
+    if (!mode || ids.some((id) => !/^\d{17,20}$/.test(id)) || ids.length > 20) return c.redirect('/security?msg=guard_invalid');
+    const current = await loadOverrides(db);
+    let overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, security: { roleGuard: mode, trustedBotIds: [...new Set(ids)] } });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/security?msg=guard_invalid');
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'security.settings', detail: overrides.security, via: 'web' });
+    return c.redirect('/security?msg=guard_saved');
   });
   app.post('/security/watch/:id/delete', async (c) => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
