@@ -605,6 +605,7 @@ const paintBoard = (form) => {
     }
     cell.classList.toggle('placed', Boolean(amount));
   });
+  positionRouletteInside(form);
   const total = [...st.bets.values()].reduce((a, b) => a + b, 0);
   form.querySelector('[data-rb-total]').textContent = fmt(total);
   form.querySelector('[data-rb-count]').textContent = String(st.bets.size);
@@ -612,6 +613,28 @@ const paintBoard = (form) => {
   const submit = form.querySelector('[data-rb-submit]');
   if (submit) submit.disabled = total === 0;
 };
+// 数字セルの実寸から境界を置く。PCと縦長のスマホで同じ賭け先を使う。
+function positionRouletteInside(form) {
+  const board = form.querySelector('.c-rb-board'); if (!board) return;
+  const base = board.getBoundingClientRect();
+  const vertical = window.matchMedia('(max-width: 640px)').matches;
+  form.querySelectorAll('[data-rb-inside]').forEach((point) => {
+    const ns = point.dataset.rbInside.split(',').map(Number);
+    const cells = ns.filter((n) => n !== 0).map((n) => board.querySelector(`[data-bet="n${n}"]`).getBoundingClientRect());
+    let x = cells.reduce((v, r) => v + r.left + r.width / 2, 0) / cells.length;
+    let y = cells.reduce((v, r) => v + r.top + r.height / 2, 0) / cells.length;
+    if (point.dataset.rbEdge === 'true') {
+      if (vertical) x = Math.min(...cells.map((r) => r.left)) - 2;
+      else y = Math.max(...cells.map((r) => r.bottom)) + 2;
+    }
+    if (ns.includes(0)) {
+      if (vertical) y = Math.min(...cells.map((r) => r.top)) - 2;
+      else x = Math.min(...cells.map((r) => r.left)) - 2;
+    }
+    point.style.left = `${x - base.left}px`; point.style.top = `${y - base.top}px`;
+  });
+}
+window.addEventListener('resize', () => document.querySelectorAll('form[data-rb]').forEach(positionRouletteInside));
 const rbSay = (form, text) => {
   const m = form.querySelector('[data-rb-msg]');
   if (m) m.textContent = text;
@@ -627,18 +650,17 @@ document.addEventListener('click', (e) => {
   if (!form) return;
   const st = rbState(form);
   const max = Number(form.dataset.max);
-  const spots = Number(form.dataset.spots);
   const chip = t.closest('[data-chip]');
   if (chip) {
     st.chip = Number(chip.getAttribute('data-chip'));
     paintBoard(form);
     return;
   }
-  const cell = t.closest('.c-rb-cell');
+  const selected = form.querySelector('[data-rb-inside-select]');
+  const cell = t.closest('[data-rb-inside-add]') ? form.querySelector(`[data-bet="${selected.value}"]`) : t.closest('.c-rb-cell');
   if (cell && !cell.disabled) {
     const bet = cell.getAttribute('data-bet');
     const cur = st.bets.get(bet) || 0;
-    if (!cur && st.bets.size >= spots) return rbSay(form, `置けるのは ${spots} か所までです`);
     const next = Math.min(max, cur + st.chip);
     if (next === cur) return rbSay(form, `1 か所に置けるのは ${fmt(max)} までです`);
     st.history.push([bet, cur]);

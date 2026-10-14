@@ -622,7 +622,7 @@ body.casino { background: #070d0b; }
 .c-rb-hint { width: 100%; text-align: center; font-size: 0.85rem; }
 .c-rb-chips .c-chip { width: 54px; height: 54px; font-size: 0.8rem; }
 .c-rb-chips .c-chip.on { transform: translateY(-4px) scale(1.08); box-shadow: 0 0 0 3px #fff, 0 0 18px rgba(255, 255, 255, 0.6), 0 6px 12px rgba(0, 0, 0, 0.5); }
-.c-rb-board { display: grid; grid-template-columns: 52px repeat(12, minmax(0, 1fr)) 52px; grid-template-rows: repeat(3, 48px) 42px 42px; gap: 4px; }
+.c-rb-board { position: relative; display: grid; grid-template-columns: 52px repeat(12, minmax(0, 1fr)) 52px; grid-template-rows: repeat(3, 48px) 42px 42px; gap: 4px; }
 .c-rb-cell { position: relative; appearance: none; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px; color: #fff; font: inherit; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; background: transparent; padding: 0; transition: transform 0.08s, box-shadow 0.15s, filter 0.15s; min-width: 0; }
 .c-rb-cell:hover:not(:disabled) { filter: brightness(1.2); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6); }
 .c-rb-cell:active:not(:disabled) { transform: scale(0.96); }
@@ -2289,3 +2289,13 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .kb-titles { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 .kb-titles .c-tag { margin-left: 0; }
 .kb-rival { color: #ff8a65; font-weight: 700; font-size: 0.8rem; margin-left: 4px; }
+
+/* 数字の境界に置くチップ。選択欄からも同じ場所へ置ける。 */
+.c-rb-cell.c-rb-boundary { position: absolute; z-index: 3; width: 16px; height: 16px; border-radius: 50%; background: #d9b966; border: 2px solid #493b1f; transform: translate(-50%, -50%); }
+.c-rb-boundary:focus-visible { outline: 3px solid white; outline-offset: 2px; z-index: 5; }
+.c-rb-boundary .c-rb-chip { pointer-events: none; }
+.c-rb-inside-picker { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 16px; }
+.c-rb-inside-picker label { display: grid; gap: 6px; }
+.c-rb-inside-picker select { max-width: 100%; color: #fff; background: #183f30; padding: 10px; border: 1px solid #a88d51; border-radius: 6px; }
+
+.c-rb-cell.c-rb-boundary:active:not(:disabled) { transform: translate(-50%, -50%) scale(.96); }

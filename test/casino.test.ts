@@ -190,7 +190,7 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     expect(r.status === 'ok' && r.row).toMatchObject({ bet: 250, payout: 50 * 36 + 200 });
     expect(await bal(A)).toBe(5000 - 250 + 2000);
     expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 5 }], seq([7]), NOW)).status).toBe('bad_bet');
-    // 1 か所は最高まで、合計は最高 × 10 まで
+    // 1 か所は最高まで、賭け先の数に制限なし
     expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 1000 }, { on: 'black', amount: 1000 }], seq([0]), NOW)).status).toBe('ok');
     // ルーレットだけ 1 か所の最高を別に決められる（ふつうの最高 1000 のまま 5000 まで）
     await addCoins(db, B, 50_000, 'admin_grant');
@@ -201,6 +201,14 @@ describe('🎰 カジノ: 1 回で終わるゲーム', () => {
     const { rouletteMaxOf } = await import('../src/services/casino/roulette.js');
     expect(rouletteMaxOf({ minBet: 10, maxBet: 1000, rouletteMaxBet: 0 })).toBe(1000);
     expect(rouletteMaxOf({ minBet: 10, maxBet: 1000, rouletteMaxBet: 20000 })).toBe(20000);
+  });
+
+  it('ルーレット: 37か所とスプリットの精算、同じ場所の合算上限', async () => {
+    const r = await playRoulette(db, ccfg(), A, Array.from({ length: 37 }, (_, n) => ({ on: `n${n}` as const, amount: 10 })), seq([0]), NOW);
+    expect(r.status === 'ok' && r.row).toMatchObject({ bet: 370, payout: 360 });
+    const split = await playRoulette(db, ccfg(), A, [{ on: 'i3-6', amount: 100 }], seq([6]), NOW);
+    expect(split.status === 'ok' && split.row).toMatchObject({ bet: 100, payout: 1800 });
+    expect((await playRoulette(db, ccfg(), A, [{ on: 'red', amount: 1000 }, { on: 'red', amount: 10 }], seq([0]), NOW)).status).toBe('bad_bet');
   });
 
   it('ルーレット・バカラ', async () => {

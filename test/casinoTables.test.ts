@@ -245,6 +245,19 @@ describe('🎡 ルーレット卓（盤からまとめて）', () => {
   });
 });
 
+it('ルーレット卓: 37か所を精算し、追加チップも1か所の上限を守る', () => {
+  const t = sim(rouletteTable, 8);
+  let s = t.run(rouletteTable.create(P(1), {}, t.ctx()));
+  const bets = Array.from({ length: 37 }, (_, n) => `n${n}:10`).join(',') + ',i3-6:10';
+  s = t.run(rouletteTable.act(s, P(1).id, { action: 'bets', bets }, t.ctx()));
+  expect(s.phase).toBe('result'); expect(s.seats[0]!.bets).toHaveLength(38);
+  expect(s.seats[0]!.payout).toBe(360 + ([3, 6].includes(s.number!) ? 180 : 0));
+  s = t.run(rouletteTable.create(P(1), {}, t.ctx()));
+  s = t.run(rouletteTable.act(s, P(1).id, { action: 'bet', on: 'red', bet: '1000' }, t.ctx()));
+  expect(rouletteTable.act(s, P(1).id, { action: 'bet', on: 'red', bet: '10' }, t.ctx())).toEqual({ ok: false, error: 'bad_bet' });
+  expect(rouletteTable.act(s, P(1).id, { action: 'bets', bets: 'red:10' }, t.ctx())).toEqual({ ok: false, error: 'bad_bet' });
+});
+
 describe('👑 大富豪', () => {
   it('出せる組・勝てるか（革命・ジョーカー）', () => {
     expect(dSet([C(5), C(5, 1)])).toMatchObject({ n: 2, rank: 5 });

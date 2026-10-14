@@ -1,5 +1,5 @@
 import type { CasinoConfig } from '../../config.js';
-import { rouletteBetLabel, rouletteColor, rouletteMaxOf, rouletteMultiplier, ROULETTE_BETS, ROULETTE_MAX_SPOTS, ROULETTE_ORDER, type RouletteBet } from '../../services/casino/roulette.js';
+import { rouletteBetLabel, rouletteColor, rouletteMaxOf, rouletteMultiplier, ROULETTE_BETS, ROULETTE_INSIDE, ROULETTE_ORDER, type RouletteBet } from '../../services/casino/roulette.js';
 import type { Coin } from './casino.js';
 
 /**
@@ -39,7 +39,7 @@ export function RouletteBoard(p: {
     </button>
   );
   return (
-    <form method="post" action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(max)} data-spots={String(ROULETTE_MAX_SPOTS)}>
+    <form method="post" action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(max)}>
       <input type="hidden" name="_csrf" value={p.csrf} />
       {Object.entries(p.hidden ?? {}).map(([k, v]) => (
         <input type="hidden" name={k} value={v} />
@@ -67,11 +67,19 @@ export function RouletteBoard(p: {
         {EVENS.map((k) => (
           <Cell bet={k} cls={`out ${k}${k === 'red' ? ' red' : k === 'black' ? ' black' : ''}`} label={k === 'red' ? '◆ 赤' : k === 'black' ? '◆ 黒' : SHORT[k]!} title={`${ROULETTE_BETS[k].label}（2 倍）`} />
         ))}
+        {ROULETTE_INSIDE.map((b) => <button type="button" class={`c-rb-cell c-rb-boundary${hit(b.on)}`} data-bet={b.on} data-rb-inside={b.numbers.join(',')} data-rb-edge={b.edge ? 'true' : 'false'} title={`${b.label}（${b.mult}倍）`} aria-label={`${b.label}（${b.mult}倍）`} disabled={p.disabled} />)}
       </div>
+      <div class="c-rb-inside-picker">
+        <label>数字の間・交点への賭け <select data-rb-inside-select disabled={p.disabled}>
+          {ROULETTE_INSIDE.map((b) => <option value={b.on}>{b.label}（{b.mult}倍）</option>)}
+        </select></label>
+        <button type="button" class="c-btn c-btn-small" data-rb-inside-add disabled={p.disabled}>選んだ所にチップを置く</button>
+      </div>
+      <p class="c-muted">盤の金色の点でも賭けられます。点にカーソルを合わせると数字と払戻倍率を確認できます。</p>
       <div class="c-rb-foot">
       <div class="c-rb-slip">
         <span>
-          賭け <b data-rb-total>0</b> {p.coin.name}・<span data-rb-count>0</span> / {ROULETTE_MAX_SPOTS} か所
+          賭け <b data-rb-total>0</b> {p.coin.name}・<span data-rb-count>0</span> か所（数の制限なし）
         </span>
         <span class="c-rb-tools">
           <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-undo>

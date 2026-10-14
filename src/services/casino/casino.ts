@@ -10,7 +10,7 @@ import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { CHIN_MAX_LOSS, chinMoney, chinSettle, parentDecides, rollTurn, turnHand, type ChinRoll } from './chinchiro.js';
 import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloMultOf, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
-import { ROULETTE_MAX_SPOTS, rouletteMaxOf, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
+import { ROULETTE_SPOT_COUNT, isRouletteBet, parseStakes, rouletteMaxOf, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
 import { casinoCfgFor } from './boost.js';
@@ -254,15 +254,18 @@ export function aimSlots(db: Db, id: number, memberId: string, pressed: number[]
 /** stakes: 賭けた所ごとの結果（前の形は bet・multiplier だけ） */
 export type RouletteState = { number: number; stakes?: (RouletteStake & { payout: number })[]; bet?: RouletteBet; multiplier?: number };
 
-/** ルーレット（いくつもの所に賭けられる。1 か所ごとに最低〜最高、合計は最高の ROULETTE_MAX_SPOTS 倍まで） */
+/** ルーレット（いくつもの所に賭けられる。1 か所ごとに最低〜最高、合計は最高の ROULETTE_SPOT_COUNT 倍まで） */
 export async function playRoulette(db: Db, cfg: GuildConfig, memberId: string, stakes: RouletteStake[], rng: Rng = cryptoRng, now = new Date()): Promise<Played> {
   cfg = await casinoCfgFor(db, cfg, memberId, now);
+  const normalized = parseStakes(stakes.map((x) => `${x.on}:${x.amount}`).join(','));
+  if (!normalized) return { status: 'bad_bet' };
+  stakes = normalized;
   const c = cfg.casino;
   const max = rouletteMaxOf(c);
-  if (!stakes.length || stakes.length > ROULETTE_MAX_SPOTS || stakes.some((x) => !Number.isInteger(x.amount) || x.amount < c.minBet || x.amount > max)) return { status: 'bad_bet' };
+  if (!stakes.length || stakes.some((x) => !isRouletteBet(x.on) || !Number.isSafeInteger(x.amount) || x.amount < c.minBet || x.amount > max)) return { status: 'bad_bet' };
   const total = stakesTotal(stakes);
   // 合計の上限は「1 か所の最高 × 所の数」（1 日の上限・残高はそのまま確かめる）
-  const wide = { ...cfg, casino: { ...c, maxBet: max * ROULETTE_MAX_SPOTS } };
+  const wide = { ...cfg, casino: { ...c, maxBet: max * ROULETTE_SPOT_COUNT } };
   return start(db, wide, memberId, 'roulette', total, () => {
     const n = rouletteSpin(rng);
     const results = stakes.map((x) => ({ ...x, payout: stakePayout(x, n) }));

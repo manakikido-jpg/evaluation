@@ -288,7 +288,6 @@ export const baccaratTable: TableEngine<BacTableState> = {
 
 // ───────── 🎡 ルーレット卓 ─────────
 
-export const ROULETTE_MAX_BETS = 10;
 export type RlBet = { on: RouletteBet; amount: number };
 export type RlSeat = Base & { bets: RlBet[]; ready: boolean; payout?: number };
 export type RlTableState = {
@@ -352,9 +351,9 @@ export const rouletteTable: TableEngine<RlTableState> = {
       const amount = intOf(f, 'bet');
       if (!isRouletteBet(on)) return fail('invalid');
       if (!rlBet(ctx.cfg, amount)) return fail('bad_bet');
-      if (seat.bets.length >= ROULETTE_MAX_BETS) return fail('too_many');
-      if (rlTotal(seat) + amount > rouletteMaxOf(ctx.cfg.casino) * ROULETTE_MAX_BETS) return fail('bad_bet');
-      seat.bets.push({ on, amount });
+      const existing = seat.bets.find((b) => b.on === on);
+      if (!rlBet(ctx.cfg, (existing?.amount ?? 0) + amount)) return fail('bad_bet');
+      if (existing) existing.amount += amount; else seat.bets.push({ on, amount });
       seat.ready = false;
       if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);
       return ok(s, { debits: [{ memberId: id, amount, reason: 'casino_bet', limited: true }] });
@@ -366,9 +365,8 @@ export const rouletteTable: TableEngine<RlTableState> = {
       if (stakes.some((x) => !rlBet(ctx.cfg, x.amount))) return fail('bad_bet');
       const merged = new Map(seat.bets.map((b) => [b.on as string, b.amount]));
       for (const x of stakes) merged.set(x.on, (merged.get(x.on) ?? 0) + x.amount);
-      if (merged.size > ROULETTE_MAX_BETS) return fail('too_many');
+      if ([...merged.values()].some((amount) => !rlBet(ctx.cfg, amount))) return fail('bad_bet');
       const add = stakesTotal(stakes);
-      if (rlTotal(seat) + add > rouletteMaxOf(ctx.cfg.casino) * ROULETTE_MAX_BETS) return fail('bad_bet');
       seat.bets = [...merged].map(([on, amount]) => ({ on: on as RouletteBet, amount }));
       seat.ready = true;
       if (s.deadline === null) s.deadline = ctx.now + (BET_SECONDS + 10) * 1000 * paceMult(s);
