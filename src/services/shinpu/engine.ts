@@ -2,7 +2,7 @@
 export type CardDefinition = {
   id: string;
   name: string;
-  type: 'attack' | 'guard' | 'heal' | 'mana' | 'cleanse' | 'money' | 'draw';
+  type: 'attack' | 'guard' | 'heal' | 'mana' | 'cleanse' | 'money' | 'draw' | 'summon';
   element: string;
   power: number;
   cost: number;
@@ -34,6 +34,9 @@ export type Pending = {
   burn: number;
   drain: boolean;
 };
+export type Summoner = { name: string; avatarUrl: string | null };
+export const SUMMONER_NAMES = ['ais', '小林'] as const;
+export type SummonEvent = Summoner & { id: number; recipient: string; healed: number; cleared: boolean };
 export type State = {
   players: Player[];
   turn: number;
@@ -44,6 +47,8 @@ export type State = {
   winner: number | null;
   rng: () => number;
   seq: number;
+  summoners: Summoner[];
+  summon: SummonEvent | null;
 };
 export const cards: CardDefinition[] = [
   { id: 'arrow', name: '狐火の矢', type: 'attack', element: '火', power: 5, cost: 0, icon: '🏹', text: '相手1人に5ダメージ。' },
@@ -135,17 +140,44 @@ export const cards: CardDefinition[] = [
     icon: '🪙',
     text: 'この対戦の中だけで使う霊銭を8得る。',
   },
+  {
+    id: 'summon',
+    name: '式神を呼ぶ',
+    type: 'summon',
+    element: '縁',
+    power: 10,
+    cost: 3,
+    icon: '🦊',
+    text: '運営の式神が登場。HPを10回復し、継続ダメージを解除。',
+  },
   { id: 'draw', name: '縁結びの文', type: 'draw', element: '縁', power: 2, cost: 1, icon: '✉', text: '札を2枚引く。手札は最大10枚。' },
 ];
-export function create(count = 4, rng: () => number = Math.random, name = 'ais'): State {
+export function create(
+  count = 4,
+  rng: () => number = Math.random,
+  name = 'ais',
+  summoners: Summoner[] = SUMMONER_NAMES.map((name) => ({ name, avatarUrl: null })),
+): State {
   if (!Number.isInteger(count) || count < 2 || count > 6) throw Error('人数は2〜6人です。');
-  const s: State = { players: [], turn: 0, turns: 1, phase: 'action', pending: null, log: [], winner: null, rng, seq: 0 };
+  const s: State = {
+    players: [],
+    turn: 0,
+    turns: 1,
+    phase: 'action',
+    pending: null,
+    log: [],
+    winner: null,
+    rng,
+    seq: 0,
+    summoners: summoners.length ? summoners.map((p) => ({ ...p })) : SUMMONER_NAMES.map((name) => ({ name, avatarUrl: null })),
+    summon: null,
+  };
   const names = [name, 'あおい', 'こはく', 'すずね', 'みこと', 'つばき'];
   for (let i = 0; i < count; i++)
     s.players.push({ name: names[i]!, hp: 60, mp: 12, money: 20, burn: 0, hand: [], avatar: ['狐', '花', '月', '鈴', '鳥', '葉'][i]! });
   s.players.forEach((p) => refill(s, p));
   // 初回の操作を試しやすい札を配る。その後の補充はランダム。
-  s.players[0]!.hand = ['arrow', 'blade', 'shield', 'veil', 'water', 'mana', 'mirror'].map((id) => make(s, id));
+  s.players[0]!.hand = ['arrow', 'blade', 'shield', 'veil', 'water', 'mana', 'summon'].map((id) => make(s, id));
   note(s, '鳥居の下で対戦開始。まずは攻撃札を選び、相手を選んでください。');
   return s;
 }
@@ -268,6 +300,15 @@ export function act(s: State, action: string, ids: number[] = [], target?: numbe
     p.hp = Math.min(60, p.hp + c.power);
   }
   if (c.type === 'draw') draw(s, p, c.power);
+  if (c.type === 'summon') {
+    const helper = s.summoners[Math.min(s.summoners.length - 1, Math.floor(s.rng() * s.summoners.length))]!;
+    const healed = Math.min(c.power, 60 - p.hp),
+      cleared = p.burn > 0;
+    p.hp += healed;
+    p.burn = 0;
+    s.summon = { ...helper, id: s.turns, recipient: p.name, healed, cleared };
+    note(s, `${helper.name}の式神が${p.name}を助けた。HP＋${healed}、継続ダメージ解除。`);
+  }
   note(s, `${p.name}が${c.name}を使った。`);
   advance(s);
 }
@@ -315,7 +356,7 @@ export function cpu(s: State) {
     return;
   }
   const p = s.players[s.turn]!;
-  const heal = p.hand.find((c) => c.type === 'heal' || c.type === 'cleanse');
+  const heal = p.hand.find((c) => c.type === 'heal' || c.type === 'cleanse' || c.type === 'summon');
   if (heal && p.hp <= 42 && p.mp >= heal.cost) {
     act(s, 'use', [heal.uid]);
     return;

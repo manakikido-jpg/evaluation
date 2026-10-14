@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { act, cpu, create, defend, type State } from './engine.js';
+import { act, cpu, create, defend, SUMMONER_NAMES, type State } from './engine.js';
 export type Tester = {
   id: string;
   name: string;
+  avatarUrl?: string | null;
 };
 type Room = {
   id: string;
@@ -99,7 +100,12 @@ export class ShinpuRooms {
     const r = this.room(id);
     this.check(r, revision);
     if (r.owner !== user || r.state) throw Error('部屋を作った人だけが開始できます。');
-    r.state = create(r.capacity, this.rng, r.seats[0]!.name);
+    r.state = create(
+      r.capacity,
+      this.rng,
+      r.seats[0]!.name,
+      SUMMONER_NAMES.map((name) => ({ name, avatarUrl: r.seats.find((p) => p?.name === name)?.avatarUrl ?? null })),
+    );
     while (r.seats.length < r.capacity) r.seats.push(null);
     r.state.players.forEach((p, i) => (p.name = r.seats[i]?.name ?? `式神CPU ${i + 1}`));
     this.changed(r);
@@ -173,6 +179,7 @@ export class ShinpuRooms {
             winner: s.winner,
             pending: s.pending,
             log: [...s.log],
+            summon: s.summon ? { ...s.summon } : null,
             players: s.players.map((p, i) => ({ ...p, handCount: p.hand.length, hand: i === index ? p.hand.map((c) => ({ ...c })) : [] })),
           }
         : null,

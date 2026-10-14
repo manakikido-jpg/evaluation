@@ -130,3 +130,60 @@ test('100 seeded CPU games finish, with valid resource ranges', () => {
     assert.equal(s.phase, 'over');
   }
 });
+
+test('召喚は運営の名前と肖像を記録し、MP3でHP10回復と燐火解除を一度行う', () => {
+  const s = E.create(2, () => 0.99, '利用者', [
+    { name: 'ais', avatarUrl: 'https://cdn.discordapp.com/avatars/1/a.png' },
+    { name: '小林', avatarUrl: 'https://cdn.discordapp.com/avatars/2/b.png' },
+  ]);
+  s.players[0]!.hp = 41;
+  s.players[0]!.burn = 2;
+  const ids = hand(s, 0, ['summon']);
+  E.act(s, 'use', ids);
+  assert.equal(s.players[0]!.hp, 51);
+  assert.equal(s.players[0]!.mp, 9);
+  assert.equal(s.players[0]!.burn, 0);
+  assert.equal(s.players[0]!.hand.length, 0);
+  assert.deepEqual(s.summon, {
+    name: '小林',
+    avatarUrl: 'https://cdn.discordapp.com/avatars/2/b.png',
+    id: 1,
+    recipient: '利用者',
+    healed: 10,
+    cleared: true,
+  });
+  assert.equal(s.turn, 1);
+  assert.ok(s.log.some((t) => t.includes('小林の式神が利用者を助けた')));
+});
+test('召喚のHPは上限60で、MP不足・防御中・他の札との併用は状態を変えない', () => {
+  const s = game();
+  s.players[0]!.hp = 57;
+  const ids = hand(s, 0, ['summon', 'water']);
+  assert.throws(() => E.act(s, 'use', ids));
+  s.players[0]!.mp = 2;
+  assert.throws(() => E.act(s, 'use', [ids[0]!]));
+  assert.equal(s.players[0]!.hp, 57);
+  assert.equal(s.players[0]!.hand.length, 2);
+  assert.equal(s.summon, null);
+  s.players[0]!.mp = 3;
+  E.act(s, 'use', [ids[0]!]);
+  assert.equal(s.players[0]!.hp, 60);
+  assert.equal(s.players[0]!.mp, 0);
+  assert.equal(s.summon!.healed, 3);
+  const d = game();
+  E.act(d, 'attack', hand(d, 0, ['arrow']), 1);
+  assert.throws(() => E.defend(d, hand(d, 1, ['summon'])));
+  assert.equal(d.summon, null);
+  assert.equal(d.phase, 'defense');
+});
+test('既定の召喚はaisと小林で、次の召喚には新しい演出番号が付く', () => {
+  const s = E.create(2, () => 0);
+  assert.deepEqual(
+    s.summoners.map((p) => p.name),
+    ['ais', '小林'],
+  );
+  E.act(s, 'use', hand(s, 0, ['summon']));
+  const first = s.summon!.id;
+  E.act(s, 'use', hand(s, 1, ['summon']));
+  assert.ok(s.summon!.id > first);
+});

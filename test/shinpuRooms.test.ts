@@ -99,3 +99,18 @@ it('一覧から自分の対戦中の部屋を再開できる', () => {
   expect(rooms.list(b.id)[0]!.mine).toBe(false);
   expect(rooms.join(r.roomId, a).roomId).toBe(r.roomId);
 });
+
+it('召喚はais・小林だけで、ログイン由来の肖像を全参加者に表示し二重使用を拒否する', () => {
+  const ais = { id: 'ais-id', name: 'ais', avatarUrl: 'https://cdn.discordapp.com/avatars/1/a.png' };
+  let r = rooms.create(ais, 2);
+  r = rooms.join(r.roomId, b);
+  r = rooms.start(r.roomId, ais.id, r.revision);
+  const card = r.state!.players[0]!.hand.find((c) => c.id === 'summon')!;
+  const move = { revision: r.revision, action: 'use', ids: [card.uid] };
+  const next = rooms.move(r.roomId, ais.id, move);
+  expect(next.state!.summon).toMatchObject({ name: 'ais', avatarUrl: ais.avatarUrl, recipient: 'ais' });
+  expect(rooms.view(r.roomId, b.id).state!.summon).toEqual(next.state!.summon);
+  expect(next.state).not.toHaveProperty('summoners');
+  expect(() => rooms.move(r.roomId, ais.id, move)).toThrow('更新');
+  expect(rooms.view(r.roomId, ais.id).state!.players[0]!.mp).toBe(9);
+});

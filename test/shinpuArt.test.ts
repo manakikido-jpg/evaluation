@@ -14,7 +14,7 @@ it('すべての実装札に表示できる別々のWebP画像がある', () => 
     expect(bytes.length).toBeGreaterThan(1000);
     versions.add(asset!.version);
   }
-  expect(versions.size).toBe(14);
+  expect(versions.size).toBe(cards.length);
 });
 it('背景と肖像の更新がCSSの画像URLにも反映される', () => {
   const css = String(STATIC['shinpu.css']!.body);
