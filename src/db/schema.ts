@@ -921,6 +921,25 @@ export const keibaHorses = pgTable('keiba_horses', {
 });
 export type KeibaHorseRow = typeof keibaHorses.$inferSelect;
 
+/** 🛡 ロールの承認待ち（神職が許可リストにないロールを付け外ししたいとき。別の神職・宮司が承認する） */
+export const roleRequests = pgTable('role_requests', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** give / remove / temp（一時ロール） */
+  kind: text('kind').notNull(),
+  memberId: text('member_id').notNull(),
+  roleId: text('role_id').notNull(),
+  minutes: integer('minutes'),
+  reason: text('reason').notNull().default(''),
+  requestedBy: text('requested_by').notNull(),
+  /** pending / approved / rejected / failed */
+  status: text('status').notNull().default('pending'),
+  decidedBy: text('decided_by'),
+  result: text('result'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+});
+export type RoleRequestRow = typeof roleRequests.$inferSelect;
+
 /** 🛡 要注意リスト（他鯖で荒らしをしている人など）。入ったら知らせ、案内人のロール付与を止める */
 export const securityWatch = pgTable('security_watch', {
   memberId: text('member_id').primaryKey(),

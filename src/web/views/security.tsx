@@ -1,4 +1,4 @@
-import type { AdminSession, SecurityWatchRow } from '../../db/schema.js';
+import type { AdminSession, RoleRequestRow, SecurityWatchRow } from '../../db/schema.js';
 import { WATCH_REASON_MAX } from '../../services/securityWatch.js';
 import { Layout } from './layout.js';
 
@@ -14,7 +14,15 @@ const FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
 const fmtDate = (d: Date) => d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' });
 
 /** 🛡 荒らし対策: 要注意リスト */
-export function SecurityPage(props: { session: AdminSession; rows: SecurityWatchRow[]; names: Map<string, string>; flash?: string; guard: { roleGuard: 'off' | 'alert' | 'revert'; trustedBotIds: string[] } }) {
+export function SecurityPage(props: {
+  session: AdminSession;
+  rows: SecurityWatchRow[];
+  names: Map<string, string>;
+  flash?: string;
+  guard: { roleGuard: 'off' | 'alert' | 'revert'; trustedBotIds: string[]; roleApproval: boolean; freeRoleIds: string[] };
+  roles: { id: string; name: string }[];
+  requests: RoleRequestRow[];
+}) {
   const { session } = props;
   const guji = session.level === 'guji';
   const f = props.flash && Object.hasOwn(FLASH, props.flash) ? FLASH[props.flash] : undefined;
@@ -47,6 +55,59 @@ export function SecurityPage(props: { session: AdminSession; rows: SecurityWatch
             </label>
             <button type="submit" class="ok">保存する</button>
           </form>
+        )}
+      </section>
+      <section class="card">
+        <h2>ロールの承認制</h2>
+        <p class="note">
+          神職が <code>/ロール</code>・<code>/一時ロール</code> で、下で選んだ「承認なしで付けてよいロール」以外を付け外ししようとすると、承認待ちになります。ログのチャンネルに出る「承認する」を、頼んだ人とは別の神職・宮司が押すと、BOT
+          が付け外しします。宮司は承認なしでできます。いまの設定: <b>{props.guard.roleApproval ? '承認制（オン）' : 'オフ'}</b>
+        </p>
+        {guji && (
+          <form method="post" action="/security/approval">
+            {csrf}
+            <label class="field">
+              <span>
+                <input type="checkbox" name="roleApproval" value="yes" checked={props.guard.roleApproval} /> 承認制にする
+              </span>
+            </label>
+            <fieldset class="field">
+              <legend>承認なしで付けてよいロール</legend>
+              {props.roles.map((r) => (
+                <label class="check">
+                  <input type="checkbox" name="freeRoleIds" value={r.id} checked={props.guard.freeRoleIds.includes(r.id)} /> {r.name}
+                </label>
+              ))}
+            </fieldset>
+            <button type="submit" class="ok">保存する</button>
+          </form>
+        )}
+        {props.requests.length > 0 && (
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>中身</th>
+                <th>頼んだ人</th>
+                <th>結果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {props.requests.map((q) => (
+                <tr>
+                  <td>{q.id}</td>
+                  <td>
+                    {props.names.get(q.memberId) ?? q.memberId} に {props.roles.find((r) => r.id === q.roleId)?.name ?? q.roleId}（{q.kind === 'remove' ? '外す' : q.kind === 'temp' ? `一時 ${q.minutes} 分` : '付ける'}）
+                  </td>
+                  <td>{props.names.get(q.requestedBy) ?? q.requestedBy}</td>
+                  <td>
+                    {{ pending: '⏳ 承認待ち', approved: '✅ 承認', rejected: '❌ 却下', failed: '⚠ 承認したが失敗' }[q.status] ?? q.status}
+                    {q.decidedBy && `（${props.names.get(q.decidedBy) ?? q.decidedBy}）`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </section>
       <section class="card">

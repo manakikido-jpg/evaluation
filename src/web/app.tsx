@@ -1,3 +1,4 @@
+import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
 import { SecurityPage } from './views/security.js';
 import { parseBigRaces } from '../services/casino/keibaBig.js';
@@ -3432,9 +3433,11 @@ export function createWebApp(deps: WebDeps) {
   // ───────── 🛡 荒らし対策（要注意リスト）─────────
   app.get('/security', async (c) => {
     const rows = await listWatch(db);
-    const ids = [...new Set(rows.flatMap((r) => [r.memberId, r.addedBy]))];
+    const requests = await recentRoleRequests(db);
+    const ids = [...new Set([...rows.flatMap((r) => [r.memberId, r.addedBy]), ...requests.flatMap((q) => [q.memberId, q.requestedBy, q.decidedBy ?? ''])].filter(Boolean))];
     const names = await watchNames(db, ids);
-    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} guard={cfg.security} />);
+    const roles = ((await loadRoles()) ?? []).filter((r) => r.id !== cfg.guildId && !r.managed).map((r) => ({ id: r.id, name: r.name }));
+    return c.html(<SecurityPage session={c.get('session')} rows={rows} names={names} flash={c.req.query('msg')} guard={cfg.security} roles={roles} requests={requests} />);
   });
   app.post('/security/watch', async (c) => {
     const body = await c.req.parseBody();
@@ -3454,7 +3457,7 @@ export function createWebApp(deps: WebDeps) {
     const current = await loadOverrides(db);
     let overrides;
     try {
-      overrides = overridesSchema.parse({ ...current, security: { roleGuard: mode, trustedBotIds: [...new Set(ids)] } });
+      overrides = overridesSchema.parse({ ...current, security: { ...current.security, roleGuard: mode, trustedBotIds: [...new Set(ids)] } });
       applyOverrides(fileCfg(), overrides);
     } catch {
       return c.redirect('/security?msg=guard_invalid');
@@ -3462,6 +3465,24 @@ export function createWebApp(deps: WebDeps) {
     await saveOverrides(db, overrides, c.get('session').userId);
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'security.settings', detail: overrides.security, via: 'web' });
+    return c.redirect('/security?msg=guard_saved');
+  });
+  app.post('/security/approval', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody({ all: true });
+    const raw = body.freeRoleIds;
+    const ids = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((x): x is string => typeof x === 'string' && /^\d{17,20}$/.test(x));
+    const current = await loadOverrides(db);
+    let overrides;
+    try {
+      overrides = overridesSchema.parse({ ...current, security: { ...current.security, roleApproval: body.roleApproval === 'yes', freeRoleIds: [...new Set(ids)].slice(0, 50) } });
+      applyOverrides(fileCfg(), overrides);
+    } catch {
+      return c.redirect('/security?msg=guard_invalid');
+    }
+    await saveOverrides(db, overrides, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'security.approval_settings', detail: overrides.security, via: 'web' });
     return c.redirect('/security?msg=guard_saved');
   });
   app.post('/security/watch/:id/delete', async (c) => {
