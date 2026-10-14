@@ -137,6 +137,30 @@ export function kbSummary(s: KbState): string {
   return `第 ${s.race.n} レース ${s.race.name}（${KB_CLASSES[s.race.cls] ?? ""}・${KB_SURFACES[s.race.surface]} ${fmt(s.race.dist)}m）・${phase}・受付 ${s.window} 分・${s.seats.length} 人`;
 }
 
+/** 映像の上に出す順位。発走前は馬番順で、順位と取り違えない。 */
+export function KeibaRanking(p: { s: Pick<KbState, 'phase' | 'horses'> & { run?: Pick<NonNullable<KbState['run']>, 'order'> }; mine: number[] }) {
+  const { s } = p;
+  const label = s.phase === 'betting' ? '出走馬' : s.phase === 'result' ? '到達順位' : '発走前';
+  const order = s.phase === 'result' && s.run ? s.run.order : s.horses.map((h) => h.no);
+  return (
+    <section class="kb-ranking" aria-label="レースの順位と出走馬">
+      <div class="kb-ranking-head"><b class="kb-ranking-label">{label}</b><span>桜の目印は購入した馬</span></div>
+      <ol class="kb-rank" aria-label={label}>
+        {order.map((no, i) => {
+          const horse = s.horses.find((h) => h.no === no)!;
+          const mine = p.mine.includes(no);
+          return <li class={mine ? 'kb-mine-rank' : ''} aria-label={`${s.phase === 'result' ? `${i + 1}位、` : ''}馬番${no}、${horse.name}${mine ? '、購入した馬' : ''}`}>
+            <span class="kb-rank-position">{s.phase === 'result' ? `${i + 1}位` : '馬番'}</span>
+            <span class={`kb-no kb-g${no} small`}>{no}</span>
+            <span class="kb-rank-name" title={horse.name}>{horse.name}</span>
+            {mine && <span class="kb-rank-mark" aria-hidden="true">✿</span>}
+          </li>;
+        })}
+      </ol>
+    </section>
+  );
+}
+
 /** テレビ中継の映像（casino.js が canvas に描く。みんな同じ時刻に同じ動き） */
 function Tv(p: {
   s: KbState;
@@ -180,13 +204,14 @@ function Tv(p: {
           resultAt: s.resultAt ?? null,
         };
   return (
+    <div class="kb-broadcast">
+      <KeibaRanking s={s} mine={p.mine} />
     <div class="kb-tv" data-kb={JSON.stringify(data)}>
       <canvas class="kb-canvas" role="img" aria-label="レースの映像"></canvas>
       <div class="kb-tv-tag">
         <b>LIVE</b> 咲楽ノ宮競馬場 {s.race.n}R
       </div>
       <div class="kb-remain"></div>
-      <ol class="kb-rank" aria-label="いまの順位"></ol>
       <div class="kb-mine" aria-live="polite"></div>
       <div class="kb-paddock" aria-live="polite"></div>
       {s.phase === "betting" && <div class="kb-hurry">⏰ 締め切り間近！</div>}
@@ -217,6 +242,7 @@ function Tv(p: {
             ? s.run?.calls.at(-1)?.text
             : "ゲートイン完了。まもなくスタートです…"}
       </div>
+    </div>
     </div>
   );
 }
@@ -885,13 +911,15 @@ export function KeibaView(p: {
                   ⚔ 因縁の対決！ {a.name} vs {b.name}
                 </p>
               ))}
-              <p class="kb-prize">
+              <details class="kb-prize">
+                <summary>
                 🏆 1 着賞金 {me.coin.emoji}
                 {fmt(
                   (s.prizes ??
                     racePrizes(s.race.cls, s.real, kbPayConf(p.casino)))[0] ??
                     0,
                 )}
+                </summary>
                 <small>
                   （賭けが増えるほど上がる。最低{" "}
                   {fmt(p.casino.keibaPurse[s.race.cls] ?? 0)}
@@ -903,7 +931,7 @@ export function KeibaView(p: {
                     : ""}
                   。馬主の馬が 1〜5 着なら馬主に）
                 </small>
-              </p>
+              </details>
             </div>
             <div class="c-phase">
               {phaseText}
