@@ -1,7 +1,7 @@
-import { and, avg, count, desc, eq, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { and, avg, count, desc, eq, inArray, isNotNull, isNull, gt, or, lte, ne, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { marketBids, marketListings, marketOffers, marketOrders, marketRequests, type MarketBid, type MarketListing, type MarketOffer, type MarketOrder, type MarketRequest } from '../db/schema.js';
+import { shopItems, shopPurchases, marketBids, marketListings, marketOffers, marketOrders, marketRequests, type MarketBid, type MarketListing, type MarketOffer, type MarketOrder, type MarketRequest } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { useTicket } from './tickets.js';
 import { getMember } from './members.js';
@@ -61,6 +61,24 @@ const isAdult = async (db: Db, id: string) => (await getMember(db, id))?.ageGrou
 export const marketLicenseRoles = (cfg: GuildConfig): string[] => [...new Set([cfg.roles.merchant,cfg.shop.license?.roleId].filter((id):id is string=>Boolean(id)))];
 export const hasMarketLicense = (cfg: GuildConfig, roleIds: readonly string[]): boolean => marketLicenseRoles(cfg).some(id=>roleIds.includes(id));
 
+/** 授与品の登録と、失効していない購入記録も合わせて開業権利を確かめる。 */
+export async function marketLicenseAccess(db: Db, cfg: GuildConfig, member: { id: string; roleIds: readonly string[] }, now = new Date()): Promise<{ allowed: boolean; configured: boolean }> {
+  if (hasMarketLicense(cfg, member.roleIds)) return { allowed: true, configured: true };
+  // 授与品の「開業」「開業権利」はDBに登録される。販売停止は購入済みの権利を取り消さない。
+  const items = await db.select({ id: shopItems.id, roleId: shopItems.roleId }).from(shopItems)
+    .where(and(eq(shopItems.kind, 'role'), inArray(shopItems.name, ['開業', '開業権利']), isNull(shopItems.roleGroup)));
+  const roles = [...new Set([...marketLicenseRoles(cfg), ...items.map(i => i.roleId).filter((id): id is string => Boolean(id))])];
+  const configured = Boolean(roles.length || items.length);
+  if (roles.some(id => member.roleIds.includes(id))) return { allowed: true, configured };
+  if (!configured) return { allowed: false, configured: false };
+  const match = or(...(roles.length ? [inArray(shopPurchases.roleId, roles)] : []), ...(items.length ? [inArray(shopPurchases.itemId, items.map(i => i.id))] : []));
+  const [purchase] = await db.select({ id: shopPurchases.id }).from(shopPurchases).where(and(
+    eq(shopPurchases.memberId, member.id), eq(shopPurchases.kind, 'role'), isNull(shopPurchases.endedAt),
+    or(isNull(shopPurchases.expiresAt), gt(shopPurchases.expiresAt, now)), match,
+  )).limit(1);
+  return { allowed: Boolean(purchase), configured };
+}
+
 // ───────── 出品 ─────────
 
 export type ListingResult =
@@ -73,8 +91,9 @@ export async function createListing(
   seller: { id: string; roleIds: readonly string[] },
   input: { category: string; title: string; description: string; price: number; pricing?: 'fixed' | 'offer'; subcategory?: string | null; capacity?: number; imageUrl?: string | null },
 ): Promise<ListingResult> {
-  if (!marketLicenseRoles(cfg).length) return { status: 'disabled' };
-  if (!hasMarketLicense(cfg,seller.roleIds)) return { status: 'no_license' };
+  const license = await marketLicenseAccess(db, cfg, seller);
+  if (!license.configured) return { status: 'disabled' };
+  if (!license.allowed) return { status: 'no_license' };
   const title = input.title.trim();
   if (!isMarketCategory(input.category) || !title || title.length > 60 || input.description.length > 1000) return { status: 'invalid' };
   if (!Number.isInteger(input.price) || input.price < 1 || input.price > MARKET_PRICE_MAX) return { status: 'invalid' };
@@ -550,7 +569,7 @@ export async function bidRequest(
   const r = await getRequest(db, requestId);
   if (!r || r.status !== 'open') return { status: 'not_open' };
   if (r.requesterId === seller.id) return { status: 'self' };
-  if (!hasMarketLicense(cfg,seller.roleIds)) return { status: 'no_license' };
+  if (!(await marketLicenseAccess(db, cfg, seller)).allowed) return { status: 'no_license' };
   if (!Number.isInteger(amount) || amount < 1 || amount > MARKET_PRICE_MAX || note.length > 300) return { status: 'invalid' };
   if (!(await adultPair(db, r.category, r.requesterId, seller.id))) return { status: 'adult_only' };
   const [before] = await db.select().from(marketBids).where(and(eq(marketBids.requestId, requestId), eq(marketBids.sellerId, seller.id)));
