@@ -907,8 +907,11 @@ export const keibaHorses = pgTable('keiba_horses', {
   restUntil: timestamp('rest_until', { withTimezone: true }),
   /** 売りに出している値段（null は売っていない） */
   salePrice: integer('sale_price'),
-  /** 親（産駒のとき）・繁殖入りした馬か */
+  /** 親（産駒のとき。配合で生まれた馬は父）・繁殖入りした馬か */
   parentId: bigint('parent_id', { mode: 'number' }),
+  /** 🧬 母（配合で生まれた馬）・種付け料（繁殖入りした牡馬。ほかの馬主が払う） */
+  damId: bigint('dam_id', { mode: 'number' }),
+  studFee: integer('stud_fee').notNull().default(0),
   breeding: boolean('breeding').notNull().default(false),
   /** 引退した日時（走らない） */
   retiredAt: timestamp('retired_at', { withTimezone: true }),

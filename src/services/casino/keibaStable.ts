@@ -1,5 +1,5 @@
 import { rivalPairsAmong } from './keibaHonors.js';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { isOutfit, type KbOutfit } from './keibaOutfit.js';
 import type { Db } from '../../db/client.js';
 import { keibaEntries, keibaHorses, keibaOwners, keibaRuns, members, type KeibaHorseRow } from '../../db/schema.js';
@@ -228,10 +228,15 @@ export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], no
     const [h] = await tx.select().from(keibaHorses).where(eq(keibaHorses.id, r.horseId)).for('update');
     if (!h) continue;
     // 🧬 血統ロイヤリティ: 産駒が稼いだら、親の馬主にも（胴元が出す）
+    // 配合で生まれた馬は、父と母の馬主で半分ずつ
     const royalty = h.parentId && r.ownerId ? Math.floor(((r.prize ?? 0) * royaltyPct) / 100) : 0;
     if (royalty > 0) {
-      const [parent] = await tx.select({ ownerId: keibaHorses.ownerId, name: keibaHorses.name }).from(keibaHorses).where(eq(keibaHorses.id, h.parentId!));
-      if (parent?.ownerId) await addCoins(tx, parent.ownerId, royalty, 'keiba_prize', { royalty: h.id, foal: h.name, parent: parent.name });
+      const parents = h.damId ? [h.parentId!, h.damId] : [h.parentId!];
+      const share = Math.floor(royalty / parents.length);
+      for (const pid of parents) {
+        const [parent] = await tx.select({ ownerId: keibaHorses.ownerId, name: keibaHorses.name }).from(keibaHorses).where(eq(keibaHorses.id, pid));
+        if (parent?.ownerId && share > 0) await addCoins(tx, parent.ownerId, share, 'keiba_prize', { royalty: h.id, foal: h.name, parent: parent.name });
+      }
     }
     if (r.ownerId) await tx.insert(keibaRuns).values({ horseId: h.id, horseName: r.name ?? h.name, ownerId: r.ownerId, pos: r.pos, prize: r.prize ?? 0, cls: r.cls ?? 0, race: r.race, at: now });
     if (r.time !== undefined)
@@ -385,66 +390,121 @@ export async function buyFromOwner(db: Db, buyerId: string, id: number, max: num
 export const KB_FOALS_MAX = 3;
 
 /** 引退させる。1 勝以上していれば繁殖入り（breed）もできる */
-export async function retireToBreed(db: Db, memberId: string, id: number, now = new Date(), perWin = 0): Promise<'ok' | 'not_found' | 'no_wins'> {
+export async function retireToBreed(db: Db, memberId: string, id: number, now = new Date(), perWin = 0): Promise<'ok' | 'not_found' | 'no_wins' | 'gelding'> {
   return db.transaction(async (tx) => {
     const [h] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt))).for('update');
     if (!h) return 'not_found' as const;
     if (h.wins < 1) return 'no_wins' as const;
+    // セン馬は繁殖に入れない
+    if (h.sex === 2) return 'gelding' as const;
     await tx.update(keibaHorses).set({ retiredAt: now, breeding: true, salePrice: null }).where(eq(keibaHorses.id, id));
     await payRetireBonus(tx, memberId, h, perWin);
     return 'ok' as const;
   });
 }
 
+/** 産駒の数（配合で生まれた馬は母・父の両方で数える。前の仕組みの親も） */
 export async function foalsOf(db: Db, parentId: number): Promise<number> {
-  const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(keibaHorses).where(eq(keibaHorses.parentId, parentId));
+  const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(keibaHorses).where(or(eq(keibaHorses.parentId, parentId), eq(keibaHorses.damId, parentId)));
   return n;
 }
 
+/** 母 1 頭から迎えられる産駒の数 */
+async function foalsOfDam(db: Db, damId: number): Promise<number> {
+  const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(keibaHorses).where(or(eq(keibaHorses.damId, damId), and(eq(keibaHorses.parentId, damId), isNull(keibaHorses.damId))));
+  return n;
+}
+
+/** 種付け料の上限 */
+export const KB_STUD_FEE_MAX = 5000;
+/** 子の速さ・スタミナの当たり外れ（親の平均から ±） */
+export const KB_FOAL_SPD_SWING = 8;
+export const KB_FOAL_STA_SWING = 50;
+
+/** 種牡馬の種付け料を決める（自分の繁殖入りした牡馬） */
+export async function setStudFee(db: Db, memberId: string, id: number, fee: number): Promise<boolean> {
+  if (!Number.isInteger(fee) || fee < 0 || fee > KB_STUD_FEE_MAX) return false;
+  const rows = await db
+    .update(keibaHorses)
+    .set({ studFee: fee })
+    .where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)))
+    .returning({ id: keibaHorses.id });
+  return rows.length > 0;
+}
+
+export type StudRow = { id: number; name: string; ownerId: string | null; ownerName: string | null; fee: number; wins: number; starts: number; foals: number; foalWins: number };
+
+/** 種牡馬の一覧（繁殖入りした牡馬。産駒の勝ちが多い順） */
+export async function studList(db: Db): Promise<StudRow[]> {
+  const rows = await db
+    .select({ h: keibaHorses, ownerName: members.displayName })
+    .from(keibaHorses)
+    .leftJoin(members, eq(members.id, keibaHorses.ownerId))
+    .where(and(eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)));
+  if (!rows.length) return [];
+  const kids = await db
+    .select({ parentId: keibaHorses.parentId, wins: keibaHorses.wins })
+    .from(keibaHorses)
+    .where(inArray(keibaHorses.parentId, rows.map((r) => r.h.id)));
+  return rows
+    .map((r) => {
+      const mine = kids.filter((k) => k.parentId === r.h.id);
+      return { id: r.h.id, name: r.h.name, ownerId: r.h.ownerId, ownerName: r.ownerName, fee: r.h.studFee, wins: r.h.wins, starts: r.h.starts, foals: mine.length, foalWins: mine.reduce((n, k) => n + k.wins, 0) };
+    })
+    .sort((a, b) => b.foalWins - a.foalWins || b.wins - a.wins || a.id - b.id);
+}
+
 /**
- * 産駒を迎える（繁殖入りした自分の馬から）。親の速さ・スタミナを 6 割受け継ぎ、脚質・得意も似やすい
+ * 🧬 配合して産駒を迎える。母は自分の繁殖牝馬、父は繁殖入りした牡馬（だれの馬でも。ほかの人の馬なら種付け料をその馬主へ）。
+ * 速さ・スタミナは父母の平均に当たり外れ、脚質・得意な距離・馬場・毛色はどちらかの親から（ときどき新しく）
  */
 export async function breedFoal(
   db: Db,
   memberId: string,
-  parentId: number,
+  damId: number,
+  sireId: number,
   rawName: string,
   price: number,
   max: number,
   rand: () => number = seeded(cryptoRng(2 ** 31)),
-): Promise<BuyResult | { status: 'not_found' | 'no_foals' }> {
+): Promise<BuyResult | { status: 'not_found' | 'no_foals' | 'no_sire' }> {
   const name = cleanName(rawName);
   if (!name) return { status: 'invalid' };
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'keiba_owner:' + memberId}))`);
-    const [p] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, parentId), eq(keibaHorses.ownerId, memberId), eq(keibaHorses.breeding, true)));
-    if (!p) return { status: 'not_found' as const };
-    if ((await foalsOf(tx, parentId)) >= KB_FOALS_MAX) return { status: 'no_foals' as const };
+    const [dam] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, damId), eq(keibaHorses.ownerId, memberId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 1)));
+    if (!dam) return { status: 'not_found' as const };
+    const [sire] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, sireId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)));
+    if (!sire) return { status: 'no_sire' as const };
+    if ((await foalsOfDam(tx, damId)) >= KB_FOALS_MAX) return { status: 'no_foals' as const };
     const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(keibaHorses).where(and(eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)));
     if (n >= max) return { status: 'too_many' as const };
     const [same] = await tx.select({ id: keibaHorses.id }).from(keibaHorses).where(and(eq(keibaHorses.name, name), isNull(keibaHorses.retiredAt)));
     if (same) return { status: 'taken' as const };
-    if (price > 0 && !(await spendWithin(tx, memberId, price, 'keiba_buy', { name, parent: parentId }))) return { status: 'poor' as const };
-    const taken = new Set<string>([name]);
-    const kid = newStable(rand, taken);
-    const mix = (a: number, b: number) => Math.round(a * 0.6 + b * 0.4);
-    const silk = (await ownerSilk(tx, memberId)) ?? p.silk;
+    const fee = sire.ownerId && sire.ownerId !== memberId ? sire.studFee : 0;
+    if (price + fee > 0 && !(await spendWithin(tx, memberId, price + fee, 'keiba_buy', { name, sire: sireId, dam: damId, fee }))) return { status: 'poor' as const };
+    if (fee > 0) await addCoins(tx, sire.ownerId!, fee, 'keiba_stud', { sire: sire.name, foal: name, by: memberId });
+    const kid = newStable(rand, new Set<string>([name]));
+    const swing = (w: number) => Math.round((rand() * 2 - 1) * w);
+    const either = <T>(a: T, b: T, fresh: T) => (rand() < 0.1 ? fresh : rand() < 0.5 ? a : b);
+    const silk = (await ownerSilk(tx, memberId)) ?? dam.silk;
     const [row] = await tx
       .insert(keibaHorses)
       .values({
         name,
-        style: rand() < 0.6 ? p.style : kid.style,
-        spd: Math.min(SPD_CAP, mix(p.spd, Math.round(kid.spd * 1000))),
-        sta: mix(p.sta, Math.round(kid.sta * 1000)),
-        apt: rand() < 0.6 ? p.apt : kid.apt,
-        surf: rand() < 0.6 ? p.surf : kid.surf,
-        coat: rand() < 0.5 ? p.coat : kid.coat,
+        style: either(sire.style, dam.style, kid.style),
+        spd: Math.min(SPD_CAP, Math.max(970, Math.round((sire.spd + dam.spd) / 2) + swing(KB_FOAL_SPD_SWING))),
+        sta: Math.min(1200, Math.max(850, Math.round((sire.sta + dam.sta) / 2) + swing(KB_FOAL_STA_SWING))),
+        apt: either(sire.apt, dam.apt, kid.apt),
+        surf: either(sire.surf, dam.surf, kid.surf),
+        coat: either(sire.coat, dam.coat, kid.coat),
         silk,
         sex: kid.sex,
         age: 2,
-        weight: mix(p.weight, kid.weight),
+        weight: Math.round((sire.weight + dam.weight) / 2),
         ownerId: memberId,
-        parentId,
+        parentId: sireId,
+        damId,
       })
       .returning();
     return { status: 'ok' as const, horse: row! };

@@ -61,6 +61,7 @@ export type CoinReason =
   | 'keiba_prize'
   | 'keiba_train'
   | 'keiba_trade'
+  | 'keiba_stud'
   | 'casino_share'
   | 'casino_gacha'
   | 'adjust';
@@ -301,5 +302,6 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   casino_gacha: '🎰 勝負の御籤（カジノの景品）',
   keiba_train: '🏇 調教',
   keiba_trade: '🏇 馬の売り買い',
+  keiba_stud: '🧬 種付け料',
   adjust: '調整',
 };

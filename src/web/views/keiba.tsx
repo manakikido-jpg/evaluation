@@ -44,6 +44,8 @@ import { CasinoLayout, Msg, type CasinoMe, type Coin } from "./casino.js";
 import type { KeibaHorseRow } from "../../db/schema.js";
 import {
   KB_FOALS_MAX,
+  KB_STUD_FEE_MAX,
+  type StudRow,
   KB_SALE_FEE,
 } from "../../services/casino/keibaStable.js";
 
@@ -1220,6 +1222,8 @@ export function KbStablePage(p: {
   >;
   me: CasinoMe;
   horses: StableHorse[];
+  /** 🧬 種牡馬（配合の父に選べる） */
+  studs?: StudRow[];
   price: number;
   max: number;
   trainPrice: number;
@@ -1450,43 +1454,51 @@ export function KbStablePage(p: {
                       </form>
                     </div>
                   ) : (
-                    h.breeding && (
+                    h.breeding &&
+                    (h.sex === 0 ? (
                       <div class="kb-stable-actions">
-                        {(h.foals ?? 0) < KB_FOALS_MAX &&
-                        active.length < p.max ? (
-                          <form
-                            method="post"
-                            action={`/casino/keiba/stable/${h.id}/foal`}
-                            class="c-bet-custom"
-                          >
-                            <Hidden />
-                            <input
-                              type="text"
-                              name="name"
-                              maxlength={18}
-                              required
-                              placeholder="産駒の名前"
-                              aria-label="産駒の名前"
-                            />
-                            <button
-                              type="submit"
-                              class="c-btn c-btn-small c-btn-gold c-confirm"
-                              data-confirm={`${fmt(foalPrice)} ${coin.name}で産駒を迎えますか？`}
-                            >
-                              🐣 産駒を迎える（{coin.emoji}
-                              {fmt(foalPrice)}・あと{" "}
-                              {KB_FOALS_MAX - (h.foals ?? 0)} 頭）
-                            </button>
-                          </form>
+                        <form method="post" action={`/casino/keiba/stable/${h.id}/fee`} class="c-bet-custom">
+                          <Hidden />
+                          <label>
+                            🧬 種付け料（0〜{fmt(KB_STUD_FEE_MAX)}。ほかの馬主が払い、あなたに入ります）
+                            <input type="number" name="fee" min={0} max={KB_STUD_FEE_MAX} value={String(h.studFee ?? 0)} required />
+                          </label>
+                          <button type="submit" class="c-btn c-btn-small">決める</button>
+                        </form>
+                        <p class="c-muted">産駒 {h.foals ?? 0} 頭。牝馬の馬主が、この馬を父に選べます。</p>
+                      </div>
+                    ) : h.sex === 1 ? (
+                      <div class="kb-stable-actions">
+                        {(h.foals ?? 0) < KB_FOALS_MAX && active.length < p.max ? (
+                          (p.studs ?? []).length === 0 ? (
+                            <p class="c-muted">まだ種牡馬（繁殖入りした牡馬）がいません。</p>
+                          ) : (
+                            <form method="post" action={`/casino/keiba/stable/${h.id}/foal`} class="c-bet-custom">
+                              <Hidden />
+                              <select name="sire" aria-label="父（種牡馬）" required>
+                                {(p.studs ?? []).map((st) => (
+                                  <option value={String(st.id)}>
+                                    {st.name}（{st.ownerName ?? "馬主なし"}・産駒 {st.foals} 頭 {st.foalWins} 勝・
+                                    {st.ownerId === p.me.session.userId || !st.ownerId || st.fee === 0 ? "種付け料なし" : `種付け料 ${fmt(st.fee)}`}）
+                                  </option>
+                                ))}
+                              </select>
+                              <input type="text" name="name" maxlength={18} required placeholder="産駒の名前" aria-label="産駒の名前" />
+                              <button
+                                type="submit"
+                                class="c-btn c-btn-small c-btn-gold c-confirm"
+                                data-confirm={`${fmt(foalPrice)} ${coin.name}＋種付け料で産駒を迎えますか？`}
+                              >
+                                🐣 配合して産駒を迎える（{coin.emoji}
+                                {fmt(foalPrice)}＋種付け料・あと {KB_FOALS_MAX - (h.foals ?? 0)} 頭）
+                              </button>
+                            </form>
+                          )
                         ) : (
-                          <p class="c-muted">
-                            {(h.foals ?? 0) >= KB_FOALS_MAX
-                              ? "産駒はもう迎えきりました"
-                              : "持てる頭数に届いています"}
-                          </p>
+                          <p class="c-muted">{(h.foals ?? 0) >= KB_FOALS_MAX ? "産駒はもう迎えきりました" : "持てる頭数に届いています"}</p>
                         )}
                       </div>
-                    )
+                    ) : null)
                   )}
                 </div>
               );

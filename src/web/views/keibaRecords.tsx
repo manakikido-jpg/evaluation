@@ -83,6 +83,33 @@ export function KbHorsePage(p: { me: CasinoMe; profile: HorseProfile }) {
         )}
         {p.profile.ownerName ? `・馬主 ${p.profile.ownerName}` : '・馬主なし'}
       </p>
+      {(p.profile.sire || p.profile.dam) && (
+        <section class="c-panel">
+          <h2>🧬 血統</h2>
+          <table class="kb-rec-table kb-pedigree">
+            <tbody>
+              {[
+                ['父', p.profile.sire, p.profile.grand[0], p.profile.grand[1]],
+                ['母', p.profile.dam, p.profile.grand[2], p.profile.grand[3]],
+              ].map(([label, parent, gs, gd]) => {
+                const cell = (x: unknown) => {
+                  const v = x as { id: number; name: string } | null;
+                  return v ? <HorseLink id={v.id} name={v.name} /> : '—';
+                };
+                return (
+                  <tr>
+                    <th>{label as string}</th>
+                    <td>{cell(parent)}</td>
+                    <td>
+                      父 {cell(gs)}・母 {cell(gd)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
       {p.profile.titles.length > 0 && (
         <p class="kb-titles">
           {p.profile.titles.map((t) => (

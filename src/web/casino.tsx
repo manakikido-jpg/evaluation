@@ -90,6 +90,8 @@ import {
   restHorse,
   retireOwnHorse,
   retireToBreed,
+  setStudFee,
+  studList,
   setOwnerSilk,
   setSale,
   trainHorse,
@@ -841,6 +843,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
           max={cfg.keibaMaxOwned}
           trainPrice={cfg.keibaTrainPrice}
           silk={await ownerSilk(db, me.session.userId)}
+          studs={await studList(db)}
           forSale={await horsesForSale(db)}
           leading={await leadingOwners(db, monthStartJst(now), 10)}
           msg={casinoMsg(c.req.query('e'))}
@@ -940,9 +943,19 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const f = await formOf(c);
       const cfg = d.cfg().casino;
       const r = Number.isSafeInteger(id)
-        ? await breedFoal(db, me.session.userId, id, typeof f.name === 'string' ? f.name : '', Math.floor(cfg.keibaHorsePrice / 2), cfg.keibaMaxOwned)
+        ? await breedFoal(db, me.session.userId, id, Number(f.sire), typeof f.name === 'string' ? f.name : '', Math.floor(cfg.keibaHorsePrice / 2), cfg.keibaMaxOwned)
         : { status: 'not_found' as const };
       return stableBack(c, r.status === 'ok' ? 'horse_foal' : r.status === 'poor' || r.status === 'not_found' ? r.status : `horse_${r.status}`);
+    }, { post: true }),
+  );
+  // 🧬 種牡馬の種付け料
+  app.post(
+    '/casino/keiba/stable/:id/fee',
+    page(async (c, me) => {
+      const id = Number(c.req.param('id'));
+      const f = await formOf(c);
+      const ok = Number.isSafeInteger(id) && (await setStudFee(db, me.session.userId, id, Number(f.fee)));
+      return stableBack(c, ok ? 'horse_fee' : 'invalid');
     }, { post: true }),
   );
   app.post(

@@ -1,5 +1,5 @@
 import { horseTitles, rivalsOf, type Rival } from './keibaHonors.js';
-import { and, asc, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { keibaBets, keibaEntries, keibaHorses, members, type KeibaHorseRow } from '../../db/schema.js';
 import { KB_BET_TYPES, type KbBetType } from './keiba.js';
@@ -25,6 +25,9 @@ export type HorseProfile = {
   horse: KeibaHorseRow;
   ownerName: string | null;
   sire: { id: number; name: string } | null;
+  /** 🧬 母・祖父母（父の父・父の母・母の父・母の母） */
+  dam: { id: number; name: string } | null;
+  grand: ({ id: number; name: string } | null)[];
   foals: { id: number; name: string; starts: number; wins: number; retired: boolean }[];
   entries: KeibaEntryRow[];
   /** 距離ごと・馬場ごと（記録のあるレースから） */
@@ -43,11 +46,15 @@ export async function horseProfile(db: Db, id: number, limit = 50): Promise<Hors
   const [row] = await db.select({ h: keibaHorses, ownerName: members.displayName }).from(keibaHorses).leftJoin(members, eq(members.id, keibaHorses.ownerId)).where(eq(keibaHorses.id, id));
   if (!row) return null;
   const h = row.h;
-  const [sire] = h.parentId ? await db.select({ id: keibaHorses.id, name: keibaHorses.name }).from(keibaHorses).where(eq(keibaHorses.id, h.parentId)) : [];
+  const one = async (id: number | null) => (id ? ((await db.select({ id: keibaHorses.id, name: keibaHorses.name, parentId: keibaHorses.parentId, damId: keibaHorses.damId }).from(keibaHorses).where(eq(keibaHorses.id, id)))[0] ?? null) : null);
+  const sire = await one(h.parentId);
+  const dam = await one(h.damId);
+  const pick = (x: { id: number; name: string } | null) => (x ? { id: x.id, name: x.name } : null);
+  const grand = [await one(sire?.parentId ?? null), await one(sire?.damId ?? null), await one(dam?.parentId ?? null), await one(dam?.damId ?? null)].map(pick);
   const foals = await db
     .select({ id: keibaHorses.id, name: keibaHorses.name, starts: keibaHorses.starts, wins: keibaHorses.wins, retiredAt: keibaHorses.retiredAt })
     .from(keibaHorses)
-    .where(eq(keibaHorses.parentId, id))
+    .where(or(eq(keibaHorses.parentId, id), eq(keibaHorses.damId, id)))
     .orderBy(asc(keibaHorses.id));
   const all = await db.select().from(keibaEntries).where(eq(keibaEntries.horseId, id)).orderBy(desc(keibaEntries.at), desc(keibaEntries.id));
   const group = <K extends number>(key: (r: KeibaEntryRow) => K) => {
@@ -63,7 +70,9 @@ export async function horseProfile(db: Db, id: number, limit = 50): Promise<Hors
   return {
     horse: h,
     ownerName: row.ownerName ?? null,
-    sire: sire ?? null,
+    sire: pick(sire),
+    dam: pick(dam),
+    grand,
     foals: foals.map((f) => ({ id: f.id, name: f.name, starts: f.starts, wins: f.wins, retired: f.retiredAt !== null })),
     entries: all.slice(0, limit),
     byDist: group((r) => r.dist).map(([dist, rows]) => ({ dist, t: tally(rows) })),

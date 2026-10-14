@@ -37,6 +37,8 @@ import {
   dressOwnHorse,
   applyKeibaResults,
   breedFoal,
+  setStudFee,
+  studList,
   buyFromOwner,
   buyHorse,
   horsesForSale,
@@ -473,16 +475,36 @@ describe('🏇 名簿と卓のサービス', () => {
     const beforeBreed = (await walletOf(db, B.id)).balance;
     expect(await retireToBreed(db, B.id, id, t0, 300)).toBe('ok');
     expect((await walletOf(db, B.id)).balance).toBe(beforeBreed + 300);
-    const foal = await breedFoal(db, B.id, id, 'サクラノコ', 1500, 3);
-    expect(foal).toMatchObject({ status: 'ok', horse: { name: 'サクラノコ', parentId: id, ownerId: B.id, age: 2 } });
-    expect((await loadRoster(db, new Date(t0.getTime() + 10 * 3_600_000))).find((h) => h.name === 'サクラノコ')?.sire).toBe('サクラノヒメ');
-    expect((await breedFoal(db, A.id, id, 'ちがう人の', 1500, 3)).status).toBe('not_found');
-    // 🧬 産駒が稼ぐと、親の馬主にロイヤリティ 10%（産駒を A に売っても B に入る）
+    // 🧬 配合: 母は自分の繁殖牝馬、父は繁殖入りした牡馬（ほかの人の馬なら種付け料をその馬主へ）
+    await db.update(keibaHorses).set({ sex: 1 }).where(eq(keibaHorses.id, id));
+    await addCoins(db, A.id, 1000, 'admin_grant');
+    const stud = await buyHorse(db, A.id, 'タネウマ', 1000, 9);
+    if (stud.status !== 'ok') throw new Error(stud.status);
+    await db.update(keibaHorses).set({ sex: 0, wins: 3, starts: 5 }).where(eq(keibaHorses.id, stud.horse.id));
+    expect(await setStudFee(db, A.id, stud.horse.id, 500)).toBe(false);
+    expect(await retireToBreed(db, A.id, stud.horse.id, t0)).toBe('ok');
+    expect(await setStudFee(db, A.id, stud.horse.id, 6000)).toBe(false);
+    expect(await setStudFee(db, B.id, stud.horse.id, 500)).toBe(false);
+    expect(await setStudFee(db, A.id, stud.horse.id, 500)).toBe(true);
+    expect((await studList(db)).map((x) => [x.name, x.fee])).toEqual([['タネウマ', 500]]);
+    const aBefore = (await walletOf(db, A.id)).balance;
+    const bBefore = (await walletOf(db, B.id)).balance;
+    // 父に牝馬は選べない・ほかの人の母は使えない
+    expect((await breedFoal(db, B.id, id, id, 'ダメ', 1500, 3)).status).toBe('no_sire');
+    expect((await breedFoal(db, A.id, id, stud.horse.id, 'ちがう人の', 1500, 3)).status).toBe('not_found');
+    const foal = await breedFoal(db, B.id, id, stud.horse.id, 'サクラノコ', 1500, 3);
+    expect(foal).toMatchObject({ status: 'ok', horse: { name: 'サクラノコ', parentId: stud.horse.id, damId: id, ownerId: B.id, age: 2 } });
+    expect((await walletOf(db, B.id)).balance).toBe(bBefore - 2000);
+    expect((await walletOf(db, A.id)).balance).toBe(aBefore + 500);
+    expect((await loadRoster(db, new Date(t0.getTime() + 10 * 3_600_000))).find((h) => h.name === 'サクラノコ')?.sire).toBe('タネウマ');
+    // 🧬 産駒が稼ぐと、ロイヤリティ 10% を父と母の馬主で半分ずつ
     if (foal.status !== 'ok') throw new Error(foal.status);
+    const a2 = (await walletOf(db, A.id)).balance;
+    const b2 = (await walletOf(db, B.id)).balance;
+    await applyKeibaResults(db, [{ horseId: foal.horse.id, pos: 1, race: '新馬', dist: 1600, surface: 0, prize: 900, ownerId: B.id, name: 'サクラノコ', cls: 0 }], t0, 10);
+    expect((await walletOf(db, A.id)).balance).toBe(a2 + 45);
+    expect((await walletOf(db, B.id)).balance).toBe(b2 + 45);
     await db.update(keibaHorses).set({ ownerId: A.id }).where(eq(keibaHorses.id, foal.horse.id));
-    const beforeRoyalty = (await walletOf(db, B.id)).balance;
-    await applyKeibaResults(db, [{ horseId: foal.horse.id, pos: 1, race: '新馬', dist: 1600, surface: 0, prize: 900, ownerId: A.id, name: 'サクラノコ', cls: 0 }], t0, 10);
-    expect((await walletOf(db, B.id)).balance).toBe(beforeRoyalty + 90);
     // 引退の功労金: 1 勝 × 300（勝っていなければ 0）
     expect(await retireOwnHorse(db, A.id, foal.horse.id, t0, 300)).toBe(300);
     expect(await retireOwnHorse(db, B.id, other.horse.id, t0, 300)).toBe(0);
