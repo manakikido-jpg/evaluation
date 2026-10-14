@@ -185,11 +185,11 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     records.push({ memberId, game: 'keiba', bet: m.bet, payout: m.payout });
   }
   // 1〜5 着の賞金（メンバーが賭けた合計の数 % に倍率・最低保証）と出走手当・応援金（馬主のいる馬はみんな）。馬主に払う
-  // 最低保証で足す分は、2 人以上が賭けたレースだけ（ひとりで何度も走らせて集められないように。1 人 1 日の上限もある）
+  // 最低保証で足す分は、だれかが馬券を買ったレースだけ（だれも買わずに走らせて集められないように）。1 人 1 日の上限もある
   const conf = kbPayConf(ctx.cfg.casino);
   const base = racePrizes(s.race.cls, s.real, { ...conf, purse: [] });
   const bettors = new Set(s.tickets.map((t) => t.memberId)).size;
-  const prizes = bettors >= 2 ? racePrizes(s.race.cls, s.real, conf) : base;
+  const prizes = bettors >= 1 ? racePrizes(s.race.cls, s.real, conf) : base;
   const fee = raceAppearance(s.real, conf);
   const earned = run.order.map((no, i) => {
     const owner = s.horses[no - 1]!.ownerId;

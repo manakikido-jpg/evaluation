@@ -879,8 +879,12 @@ export function KeibaView(p: {
                 )}
                 <small>
                   （賭けが増えるほど上がる。最低{" "}
-                  {fmt(p.casino.keibaPurse[s.race.cls] ?? 0)}。馬主の馬が 1〜5
-                  着なら馬主に）
+                  {fmt(p.casino.keibaPurse[s.race.cls] ?? 0)}
+                  は、だれかが馬券を買ったレースだけ
+                  {p.casino.keibaPurseDailyCap > 0
+                    ? `。最低保証で足す分は 1 人 1 日 ${fmt(p.casino.keibaPurseDailyCap)} まで（こえると、賭けた合計の数 % だけ）`
+                    : ""}
+                  。馬主の馬が 1〜5 着なら馬主に）
                 </small>
               </p>
             </div>
@@ -1195,6 +1199,7 @@ export function KbStablePage(p: {
     | "keibaFanPct"
     | "keibaRoyaltyPct"
     | "keibaRetirePerWin"
+    | "keibaPurseDailyCap"
   >;
   me: CasinoMe;
   horses: StableHorse[];
@@ -1578,7 +1583,7 @@ export function KbStablePage(p: {
             1〜5 着に入ると賞金（メンバーが賭けた合計の数
             %・クラスが上ほど多い）。
             {p.pay && p.pay.keibaPurse.some((v) => v > 0)
-              ? `賭けが少なくても、1 着なら最低 ${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜 ${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）は出ます。`
+              ? `賭けが少なくても、1 着なら最低 ${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜 ${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）は出ます（だれかが馬券を買ったレースだけ。1 人でも OK${p.pay.keibaPurseDailyCap > 0 ? `。最低保証で足す分は 1 人 1 日 ${fmt(p.pay.keibaPurseDailyCap)} まで。こえると、賭けた合計の数 % だけになります` : ''}）。`
               : ""}
             着外でも出走手当が入ります。
           </li>
