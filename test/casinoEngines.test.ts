@@ -385,7 +385,7 @@ describe('⚫ オセロ', () => {
       if (winnerOf(s.board) === 'W') wins++;
     }
     expect(wins).toBeGreaterThanOrEqual(5);
-  }, 60_000);
+  }, 180_000); // つよい CPU は深く読むので、遅い機械では 1 分をこえる
 });
 
 
