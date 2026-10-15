@@ -8,7 +8,7 @@ import { STAGE_HINT, startupReason, type StartupStage } from './diagnose.js';
 
 /** どこで失敗したか（何番目の BOT か）。秘密は入れない */
 class StartupError extends Error {
-  constructor(readonly stage: StartupStage, readonly bot: number | undefined, readonly reason: string) { super(stage); }
+  constructor(readonly stage: StartupStage, readonly bot: number | undefined, readonly reason: string, readonly failed: { bot: number; reason: string }[] = []) { super(stage); }
 }
 
 async function main(): Promise<void> {
@@ -35,12 +35,13 @@ async function main(): Promise<void> {
     });
   }
   try {
-    await Promise.all(clients.map(async (client, index) => {
-      try {
-        await client.login(cfg.tokens[index]);
-        if (!client.isReady()) await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
-      } catch (err) { throw new StartupError('login', index + 1, startupReason(err)); }
+    // 全部の BOT を試してから、失敗した BOT をまとめて知らせる（1 体ずつ直さなくてよいように）
+    const results = await Promise.allSettled(clients.map(async (client, index) => {
+      await client.login(cfg.tokens[index]);
+      if (!client.isReady()) await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
     }));
+    const failed = results.flatMap((r, i) => (r.status === 'rejected' ? [{ bot: i + 1, reason: startupReason(r.reason) }] : []));
+    if (failed.length) throw new StartupError('login', failed[0]!.bot, failed[0]!.reason, failed);
     const ids = clients.map((c) => c.user!.id);
     const dup = ids.findIndex((id, i) => ids.indexOf(id) !== i);
     if (dup >= 0) throw new StartupError('duplicate', dup + 1, 'same_bot');
@@ -55,6 +56,6 @@ async function main(): Promise<void> {
 void main().catch((err) => {
   // 何番目の BOT が、どこで、なぜ失敗したかだけを出す（トークンや本文は出さない）
   const e = err instanceof StartupError ? err : new StartupError('login', undefined, 'unknown');
-  logger.error({ stage: e.stage, bot: e.bot, reason: e.reason, hint: STAGE_HINT[e.stage] }, 'read aloud startup failed');
+  logger.error({ stage: e.stage, bot: e.bot, reason: e.reason, ...(e.failed.length > 1 ? { failed: e.failed } : {}), hint: STAGE_HINT[e.stage] }, 'read aloud startup failed');
   process.exitCode = 1;
 });
