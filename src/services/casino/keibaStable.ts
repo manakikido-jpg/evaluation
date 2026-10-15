@@ -414,6 +414,12 @@ export async function foalsOf(db: Db, parentId: number): Promise<number> {
   return n;
 }
 
+/** 母なしで迎えた産駒の数（前の仕組みの産駒・種牡馬だけで迎えた産駒。ほかの馬主の母との配合は数えない） */
+export async function soloFoalsOf(db: Db, sireId: number): Promise<number> {
+  const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(keibaHorses).where(and(eq(keibaHorses.parentId, sireId), isNull(keibaHorses.damId)));
+  return n;
+}
+
 /** 母 1 頭から迎えられる産駒の数 */
 async function foalsOfDam(db: Db, damId: number): Promise<number> {
   const [{ n } = { n: 0 }] = await db.select({ n: count() }).from(keibaHorses).where(or(eq(keibaHorses.damId, damId), and(eq(keibaHorses.parentId, damId), isNull(keibaHorses.damId))));
@@ -477,14 +483,17 @@ export async function breedFoal(
   if (!name) return { status: 'invalid' };
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'keiba_owner:' + memberId}))`);
-    const [dam] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, damId), eq(keibaHorses.ownerId, memberId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 1)));
+    // 父と母に同じ馬: 自分の種牡馬だけで迎える（母なし。前の仕組みの産駒も数えて 3 頭まで）
+    const solo = sireId === damId;
+    const [dam] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, damId), eq(keibaHorses.ownerId, memberId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, solo ? 0 : 1)));
     if (!dam) return { status: 'not_found' as const };
+    if (solo && (await soloFoalsOf(tx, damId)) >= KB_FOALS_MAX) return { status: 'no_foals' as const };
     // sireId 0: 種牡馬が 1 頭もいないときだけ、母だけで迎える（前の仕組み）
     const studs = await tx.select({ id: keibaHorses.id }).from(keibaHorses).where(and(eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0))).limit(1);
-    const [found] = sireId === 0 ? [] : await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, sireId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)));
-    if (!found && (sireId !== 0 || studs.length)) return { status: 'no_sire' as const };
+    const [found] = sireId === 0 || solo ? [] : await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, sireId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)));
+    if (!solo && !found && (sireId !== 0 || studs.length)) return { status: 'no_sire' as const };
     const sire = found ?? { ...dam, ownerId: null, studFee: 0 };
-    if ((await foalsOfDam(tx, damId)) >= KB_FOALS_MAX) return { status: 'no_foals' as const };
+    if (!solo && (await foalsOfDam(tx, damId)) >= KB_FOALS_MAX) return { status: 'no_foals' as const };
     const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(keibaHorses).where(and(eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)));
     if (n >= max) return { status: 'too_many' as const };
     const [same] = await tx.select({ id: keibaHorses.id }).from(keibaHorses).where(and(eq(keibaHorses.name, name), isNull(keibaHorses.retiredAt)));
@@ -511,8 +520,8 @@ export async function breedFoal(
         age: 2,
         weight: Math.round((sire.weight + dam.weight) / 2),
         ownerId: memberId,
-        parentId: found ? sireId : null,
-        damId,
+        parentId: found || solo ? sireId : null,
+        damId: solo ? null : damId,
       })
       .returning();
     return { status: 'ok' as const, horse: row! };

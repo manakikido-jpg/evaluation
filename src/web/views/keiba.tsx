@@ -1050,6 +1050,8 @@ const classLabel = (h: { starts: number; wins: number }) =>
 export type StableHorse = KeibaHorseRow & {
   fatigueNow: number;
   foals?: number;
+  /** 種牡馬だけで迎えた産駒（前の仕組みの産駒も） */
+  soloFoals?: number;
 };
 export type LeadingView = {
   ownerId: string;
@@ -1306,7 +1308,7 @@ export function KbStablePage(p: {
                     </b>
                     <span class="c-tag">
                       {h.retiredAt
-                        ? h.breeding
+                        ? h.breeding && h.sex !== 2
                           ? "繁殖"
                           : "引退"
                         : classLabel(h)}
@@ -1522,6 +1524,19 @@ export function KbStablePage(p: {
                           <button type="submit" class="c-btn c-btn-small">決める</button>
                         </form>
                         <p class="c-muted">産駒 {h.foals ?? 0} 頭。牝馬の馬主が、この馬を父に選べます。</p>
+                        {(h.soloFoals ?? 0) < KB_FOALS_MAX && active.length < p.max ? (
+                          <form method="post" action={`/casino/keiba/stable/${h.id}/foal`} class="c-bet-custom">
+                            <Hidden />
+                            <input type="hidden" name="sire" value={String(h.id)} />
+                            <input type="text" name="name" maxlength={18} required placeholder="産駒の名前" aria-label="産駒の名前" />
+                            <button type="submit" class="c-btn c-btn-small c-btn-gold c-confirm" data-confirm={`${fmt(foalPrice)} ${coin.name}で、${h.name} の産駒を迎えますか？`}>
+                              🐣 この馬だけで産駒を迎える（{coin.emoji}
+                              {fmt(foalPrice)}・あと {KB_FOALS_MAX - (h.soloFoals ?? 0)} 頭）
+                            </button>
+                          </form>
+                        ) : (
+                          <p class="c-muted">{(h.soloFoals ?? 0) >= KB_FOALS_MAX ? "この馬だけで迎えられる産駒は、もう迎えきりました（父に選ばれるのは続きます）" : "持てる頭数に届いています"}</p>
+                        )}
                       </div>
                     ) : h.sex === 1 ? (
                       <div class="kb-stable-actions">

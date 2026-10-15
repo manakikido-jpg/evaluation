@@ -80,7 +80,7 @@ import {
   breedFoal,
   buyFromOwner,
   buyHorse,
-  foalsOf,
+  foalsOf, soloFoalsOf,
   horsesForSale,
   isSilk,
   leadingOwners,
@@ -833,7 +833,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       const cfg = d.cfg().casino;
       const now = d.now();
       const horses = await Promise.all(
-        (await myHorses(db, me.session.userId)).map(async (h) => ({ ...h, fatigueNow: fatigueNow(h.fatigue, h.fatigueAt, now), ...(h.breeding ? { foals: await foalsOf(db, h.id) } : {}) })),
+        (await myHorses(db, me.session.userId)).map(async (h) => ({ ...h, fatigueNow: fatigueNow(h.fatigue, h.fatigueAt, now), ...(h.breeding ? { foals: await foalsOf(db, h.id), soloFoals: h.sex === 0 ? await soloFoalsOf(db, h.id) : 0 } : {}) })),
       );
       return c.html(
         <KbStablePage

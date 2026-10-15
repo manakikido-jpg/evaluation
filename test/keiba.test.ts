@@ -493,8 +493,8 @@ describe('🏇 名簿と卓のサービス', () => {
     expect((await studList(db)).map((x) => [x.name, x.fee])).toEqual([['タネウマ', 500]]);
     const aBefore = (await walletOf(db, A.id)).balance;
     const bBefore = (await walletOf(db, B.id)).balance;
-    // 父に牝馬は選べない・ほかの人の母は使えない
-    expect((await breedFoal(db, B.id, id, id, 'ダメ', 1500, 3)).status).toBe('no_sire');
+    // 父に牝馬は選べない（父と母に同じ牝馬を選んでも、種牡馬だけで迎えるのにはならない）・ほかの人の母は使えない
+    expect((await breedFoal(db, B.id, id, id, 'ダメ', 1500, 3)).status).toBe('not_found');
     // 種牡馬がいるときは、父なしでは迎えられない
     expect((await breedFoal(db, B.id, id, 0, 'チチナシ', 1500, 9)).status).toBe('no_sire');
     expect((await breedFoal(db, A.id, id, stud.horse.id, 'ちがう人の', 1500, 3)).status).toBe('not_found');
@@ -514,6 +514,15 @@ describe('🏇 名簿と卓のサービス', () => {
     // 引退の功労金: 1 勝 × 300（勝っていなければ 0）
     expect(await retireOwnHorse(db, A.id, foal.horse.id, t0, 300)).toBe(300);
     expect(await retireOwnHorse(db, B.id, other.horse.id, t0, 300)).toBe(0);
+    // 🐣 種牡馬の馬主は、自分の種牡馬だけでも迎えられる（母との配合の産駒は数えない。3 頭まで）
+    await addCoins(db, A.id, 10000, 'admin_grant');
+    const { soloFoalsOf } = await import('../src/services/casino/keibaStable.js');
+    expect(await soloFoalsOf(db, stud.horse.id)).toBe(0);
+    expect((await breedFoal(db, B.id, stud.horse.id, stud.horse.id, 'ヒトノ', 1500, 9)).status).toBe('not_found');
+    for (const n of ['チチノコイチ', 'チチノコニ', 'チチノコサン']) {
+      expect(await breedFoal(db, A.id, stud.horse.id, stud.horse.id, n, 1500, 9)).toMatchObject({ status: 'ok', horse: { parentId: stud.horse.id, damId: null, ownerId: A.id } });
+    }
+    expect((await breedFoal(db, A.id, stud.horse.id, stud.horse.id, 'チチノコヨン', 1500, 9)).status).toBe('no_foals');
   });
 
   it('賭けていないレースの最低保証で足す分は、1 人 1 日の上限まで（日本時間の 0 時に戻る）', async () => {
