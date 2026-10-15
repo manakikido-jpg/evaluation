@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-15-othello-limit-message', date: '2026-10-15', kind: 'fix', where: ['社務所Web'], title: 'オセロ（CPU）の 1 日の上限に届いたとき、知らせが出るように', items: ['上限に届くと、押しても何も起きないように見えていました。画面に「今日のオセロで賭けられる上限に届きました」と出します。'] },
   { id: '2026-10-15-roulette-inside-unlimited', date: '2026-10-15', kind: 'improve', where: ['Discord', '社務所Web'], title: 'ルーレットの数字の間にも賭けられる', items: ['10か所の制限をなくし、2・3・4・6数字と0の組み合わせへの賭けを追加しました。配当はヨーロピアン式の通常ルールです。'] },
   { id: '2026-10-15-keiba-winning-ticket', date: '2026-10-15', kind: 'new', where: ['Discord', '社務所Web'], title: '大きく的中したら記念馬券でお知らせ', items: ['払戻合計5,000銭以上でレース収支が黒字なら、桜紋と的中の朱印入りの馬券画像を投稿できます。', '社務所Webで投稿先と払戻の基準を選びます。1人・1レースにつき1投稿で、銭の追加はありません。'] },
   { id: '2026-10-15-keiba-top-ranking', date: '2026-10-15', kind: 'improve', where: ['社務所Web'], title: '競馬の順位を映像の上へ、PCは画面幅を広く使う', items: ['順位・馬番・馬名を映像の上に並べ、買った馬には桜の目印を付けました。発走前・途中順位・到達順位・確定着順を区別します。', 'PCは競馬画面の幅制限を外し、右の馬券欄を保ちながら映像を広げます。映像の高さも画面に合わせます。'] },
