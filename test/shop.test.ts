@@ -140,7 +140,7 @@ describe('贈り物', () => {
 
   it('贈った分が相手に届く（送り手が20%の手数料を追加で払う）', async () => {
     await addCoins(db, 'A', 3000, 'adjust');
-    expect(await giveGift(db, cfg, ujiko, 'B', 150, now)).toEqual({ status: 'ok', balance: 2820 });
+    expect(await giveGift(db, cfg, ujiko, 'B', 150, now)).toEqual({ status: 'ok', balance: 2820, fee: 30 });
     expect((await walletOf(db, 'B')).balance).toBe(150);
   });
 
@@ -170,6 +170,17 @@ describe('贈り物', () => {
     expect(rs.map((r) => r.status).sort()).toEqual(['daily_limit', 'ok']);
     const tomorrow = new Date(now.getTime() + DAY);
     expect((await giveGift(db, cfg, higher, 'B', 1000, tomorrow)).status).toBe('ok');
+  });
+
+  it('運営（神職・宮司）は手数料・1 回の最高・1 日の上限なし', async () => {
+    const now = new Date();
+    const staff = { id: 'A', roleIds: [ROLE.shinshoku] };
+    await addCoins(db, 'A', 10000, 'adjust');
+    expect(await giveGift(db, cfg, staff, 'B', 3000, now)).toEqual({ status: 'ok', balance: 7000, fee: 0 });
+    expect(await giveGift(db, cfg, staff, 'C', 3000, now)).toEqual({ status: 'ok', balance: 4000, fee: 0 });
+    expect((await walletOf(db, 'B')).balance).toBe(3000);
+    expect(await giveGift(db, cfg, staff, 'B', 5, now)).toEqual({ status: 'bad_amount', min: 10, max: 1000 });
+    expect(await giveGift(db, cfg, staff, 'B', 5000, now)).toEqual({ status: 'insufficient', balance: 4000 });
   });
 
   it('花びらが足りなければ贈れない', async () => {
@@ -242,7 +253,7 @@ it('送金の手数料は切り上げ、元本だけを1日上限に数える。
   expect((await walletOf(db, 'B')).balance).toBe(0);
   expect(await giftSentToday(db, 'A', now)).toBe(0);
   await addCoins(db, 'A', 25, 'adjust');
-  expect(await giveGift(db, cfg, sender, 'B', 125, now)).toEqual({ status: 'ok', balance: 0 });
+  expect(await giveGift(db, cfg, sender, 'B', 125, now)).toEqual({ status: 'ok', balance: 0, fee: 25 });
   expect((await walletOf(db, 'B')).balance).toBe(125);
   expect(await giftSentToday(db, 'A', now)).toBe(125);
   expect((await recentCoinTx(db, 'A')).filter(r => r.reason === 'gift_fee')).toMatchObject([{ amount: -25 }]);

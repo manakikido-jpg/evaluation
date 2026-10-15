@@ -17,7 +17,10 @@ import { giftBlockedRank } from '../domain/ranks.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
 import { walletOf } from '../services/economy.js';
-import { giftCost, giftFee, giftDailyLimitOf, giftSentToday, giveGift, type GiftResult } from '../services/shop.js';
+import { giftCost, giftFee, giftDailyLimitOf, giftIsStaff, giftSentToday, giveGift, type GiftResult } from '../services/shop.js';
+
+/** 送れる量（staff: 運営は手数料・1 回の最高・1 日の上限なし） */
+export type SokinInfo = { balance: number; left: number; staff?: boolean };
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** パネルを開いたままにできる時間（さわるたびに延びる） */
@@ -41,21 +44,21 @@ export function parseAmount(s: string): number {
 }
 
 /** 送れないわけ（なければ undefined）。パネルの「送る」を押せるかどうか */
-export function sokinBlocker(e: EconomyConfig, d: SokinDraft, info: { balance: number; left: number }): string | undefined {
+export function sokinBlocker(e: EconomyConfig, d: SokinDraft, info: SokinInfo): string | undefined {
   if (!d.toId) return '相手を選んでください';
   if (!d.amount) return '枚数を選んでください';
-  if (d.amount < e.giftMin || d.amount > e.giftMax) return `${fmt(e.giftMin)}〜${fmt(e.giftMax)} 枚の間で選んでください`;
-  if (d.amount > info.left) return `今日送れるのは、あと ${fmt(info.left)} 枚までです`;
-  if (giftCost(d.amount) > info.balance) return `${e.currencyName}が足りません（いま ${fmt(info.balance)} 枚）`;
+  if (d.amount < e.giftMin || (!info.staff && d.amount > e.giftMax)) return `${fmt(e.giftMin)}〜${fmt(e.giftMax)} 枚の間で選んでください`;
+  if (!info.staff && d.amount > info.left) return `今日送れるのは、あと ${fmt(info.left)} 枚までです`;
+  if (giftCost(d.amount, info.staff) > info.balance) return `${e.currencyName}が足りません（いま ${fmt(info.balance)} 枚）`;
   return undefined;
 }
 
 /** 💸 送金のパネル（本人にだけ）。相手・枚数・ひとことを選んで「送る」 */
-export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: number; left: number }, nonce: string, note = '') {
+export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: SokinInfo, nonce: string, note = '') {
   const coin = `${e.currencyEmoji}${e.currencyName}`;
   const blocker = sokinBlocker(e, d, info);
-  const presets = SOKIN_PRESETS.filter((n) => n >= e.giftMin && n <= e.giftMax);
-  const can = info.left;
+  const presets = SOKIN_PRESETS.filter((n) => n >= e.giftMin && (info.staff || n <= e.giftMax));
+  const can = info.staff ? Infinity : info.left;
   return {
     content: note,
     embeds: [
@@ -64,11 +67,17 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
         description: [
           `相手: ${d.toName ? `**${d.toName}** さん` : '（下で選ぶ）'}`,
           `枚数: ${d.amount ? `${coin} **${fmt(d.amount)} 枚**` : '（下で選ぶ）'}`,
-          ...(d.amount ? [`手数料（20%）: ${fmt(giftFee(d.amount))} 枚・合計支払い: **${fmt(giftCost(d.amount))} 枚**`] : ['手数料20%は送る人が追加で払います']),
+          ...(info.staff
+            ? ['運営なので、手数料はかかりません']
+            : d.amount
+              ? [`手数料（20%）: ${fmt(giftFee(d.amount))} 枚・合計支払い: **${fmt(giftCost(d.amount))} 枚**`]
+              : ['手数料20%は送る人が追加で払います']),
           `ひとこと: ${d.note ? d.note.replace(/\n/g, ' ') : 'なし'}`,
           '',
           ...(d.toId && d.amount && blocker ? [`⚠ ${blocker}`, ''] : []),
-          `-# いま ${fmt(info.balance)} 枚・今日あと ${fmt(info.left)} 枚送れます（1 回 ${fmt(e.giftMin)}〜${fmt(e.giftMax)} 枚）`,
+          info.staff
+            ? `-# いま ${fmt(info.balance)} 枚（運営は 1 回・1 日の上限なし）`
+            : `-# いま ${fmt(info.balance)} 枚・今日あと ${fmt(info.left)} 枚送れます（1 回 ${fmt(e.giftMin)}〜${fmt(e.giftMax)} 枚）`,
           '-# 送ったら取り消せません。相手には DM で知らせます',
         ].join('\n'),
         color: COLOR,
@@ -76,7 +85,7 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
     ],
     components: [
       row({ type: 5, custom_id: `sokin:to:${nonce}`, placeholder: '送る相手を選ぶ', ...(d.toId ? { default_values: [{ id: d.toId, type: 'user' }] } : {}) }),
-      ...(presets.length ? [row(...presets.map((n) => btn(`sokin:amt:${nonce}:${n}`, `${fmt(n)} 枚`, d.amount === n ? 1 : 2, n > can || giftCost(n) > info.balance)))] : []),
+      ...(presets.length ? [row(...presets.map((n) => btn(`sokin:amt:${nonce}:${n}`, `${fmt(n)} 枚`, d.amount === n ? 1 : 2, n > can || giftCost(n, info.staff) > info.balance)))] : []),
       row(btn(`sokin:amtm:${nonce}`, '✏ 枚数を入れる'), btn(`sokin:notem:${nonce}`, d.note ? '💬 ひとことを直す' : '💬 ひとことを添える')),
       row(
         btn(`sokin:send:${nonce}`, blocker ? '💸 送る' : `💸 ${d.toName} さんに ${fmt(d.amount!)} 枚送る`.slice(0, 80), 3, Boolean(blocker)),
@@ -90,7 +99,7 @@ export function sokinPanel(e: EconomyConfig, d: SokinDraft, info: { balance: num
 export function sokinResultText(e: EconomyConfig, r: GiftResult, toId: string, amount: number): string {
   switch (r.status) {
     case 'ok':
-      return `💸 <@${toId}> さんに ${e.currencyEmoji}${e.currencyName} ${fmt(amount)} 枚を送りました。手数料 ${fmt(giftFee(amount))} 枚（合計 ${fmt(giftCost(amount))} 枚）。残り ${fmt(r.balance)} 枚。`;
+      return `💸 <@${toId}> さんに ${e.currencyEmoji}${e.currencyName} ${fmt(amount)} 枚を送りました。手数料 ${fmt(r.fee)} 枚（合計 ${fmt(amount + r.fee)} 枚）。残り ${fmt(r.balance)} 枚。`;
     case 'self':
       return '自分には送れません。';
     case 'rank_too_low':
@@ -183,7 +192,7 @@ export class SokinApp {
   private async info(userId: string, roleIds: readonly string[]) {
     const cfg = this.cfg();
     const [w, sent] = await Promise.all([walletOf(this.db, userId), giftSentToday(this.db, userId)]);
-    return { balance: w.balance, left: Math.max(0, giftDailyLimitOf(cfg, roleIds) - sent) };
+    return { balance: w.balance, left: Math.max(0, giftDailyLimitOf(cfg, roleIds) - sent), staff: giftIsStaff(cfg, roleIds) };
   }
 
   /** パネルを開く（/送金・「続けて送る」） */
@@ -249,7 +258,7 @@ export class SokinApp {
     const e = this.cfg().economy;
     const input = new TextInputBuilder()
       .setCustomId('amount')
-      .setLabel(`枚数（${fmt(e.giftMin)}〜${fmt(e.giftMax)}）`)
+      .setLabel(`枚数（${fmt(e.giftMin)}〜${fmt(e.giftMax)}。運営は上限なし）`)
       .setPlaceholder('例: 300')
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
@@ -286,7 +295,7 @@ export class SokinApp {
       this.pending.set(nonce, { ...d, at: Date.now() });
       return await this.show(i, nonce, d, text);
     }
-    await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'coins.send', detail: { amount, fee: giftFee(amount), total: giftCost(amount), note: note || undefined }, via: 'discord' });
+    await audit(this.db, { actorId: i.user.id, targetId: toId, action: 'coins.send', detail: { amount, fee: r.fee, total: amount + r.fee, note: note || undefined }, via: 'discord' });
     const dm = await i.client.users
       .send(toId, sokinDm(cfg.economy, i.member.displayName, amount, note))
       .then(() => true)

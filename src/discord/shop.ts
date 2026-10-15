@@ -465,7 +465,7 @@ export class ShopApp {
     switch (r.status) {
       case 'ok':
         await this.discord.sendDm(targetId, `🎁 ${i.member.displayName} さんから ${e.currencyEmoji}${e.currencyName} ${amount} 枚の贈り物が届きました（咲楽ノ宮）。`).catch(() => false);
-        return `🎁 <@${targetId}> さんに ${amount} 枚贈りました。手数料 ${giftFee(amount)} 枚（合計 ${giftCost(amount)} 枚）。残り ${r.balance} 枚。`;
+        return `🎁 <@${targetId}> さんに ${amount} 枚贈りました。手数料 ${r.fee} 枚（合計 ${amount + r.fee} 枚）。残り ${r.balance} 枚。`;
       case 'self':
         return '自分には贈れません。';
       case 'rank_too_low':

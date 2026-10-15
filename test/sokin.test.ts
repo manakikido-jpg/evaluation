@@ -71,7 +71,7 @@ describe('💸 /送金', () => {
   });
 
   it('結果の文: 送れた・送れなかったわけ', () => {
-    expect(sokinResultText(e, { status: 'ok', balance: 2500 }, '123', 500)).toBe(`💸 <@123> さんに ${e.currencyEmoji}${e.currencyName} 500 枚を送りました。手数料 100 枚（合計 600 枚）。残り 2,500 枚。`);
+    expect(sokinResultText(e, { status: 'ok', balance: 2500, fee: 100 }, '123', 500)).toBe(`💸 <@123> さんに ${e.currencyEmoji}${e.currencyName} 500 枚を送りました。手数料 100 枚（合計 600 枚）。残り 2,500 枚。`);
     expect(sokinResultText(e, { status: 'self' }, '1', 10)).toBe('自分には送れません。');
     expect(sokinResultText(e, { status: 'rank_too_low', rankName: '参拝者' }, '1', 10)).toContain('「参拝者」以上');
     expect(sokinResultText(e, { status: 'bad_amount', min: 10, max: 1000 }, '1', 5)).toBe('10〜1,000 枚の間で送ってください。');

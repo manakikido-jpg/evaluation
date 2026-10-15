@@ -19,8 +19,11 @@ export type ShopKind = ShopItem['kind'];
 const DAY = 86_400_000;
 /** 送金・贈り物・購入するプレゼントの手数料。端数は切り上げる。 */
 export const GIFT_FEE_PERCENT = 20;
-export const giftFee = (amount: number) => Math.ceil(amount / 5);
-export const giftCost = (amount: number) => amount + giftFee(amount);
+/** free: 運営（神職・宮司）の送金は手数料なし */
+export const giftFee = (amount: number, free = false) => (free ? 0 : Math.ceil(amount / 5));
+export const giftCost = (amount: number, free = false) => amount + giftFee(amount, free);
+/** 運営（自動でつかない役職: 神職・宮司）か。運営の送金は、手数料・1 回の最高・1 日の上限なし */
+export const giftIsStaff = (cfg: { ranks: readonly { auto: boolean; roleId: string }[] }, roleIds: readonly string[]) => cfg.ranks.some((r) => !r.auto && roleIds.includes(r.roleId));
 
 /** 1 人ずつ順番に（二重に押しても二重に払わない） */
 async function lock(tx: Db, memberId: string): Promise<void> {
@@ -437,7 +440,7 @@ export async function refund(db: Db, purchase: ShopPurchase, now = new Date()): 
 // ───────── 贈り物 ─────────
 
 export type GiftResult =
-  | { status: 'ok'; balance: number }
+  | { status: 'ok'; balance: number; fee: number }
   | { status: 'self' }
   | { status: 'rank_too_low'; rankName: string }
   | { status: 'bad_amount'; min: number; max: number }
@@ -462,19 +465,22 @@ export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; rol
   if (from.id === toId) return { status: 'self' };
   const need = giftBlockedRank(cfg.ranks, from.roleIds);
   if (need) return { status: 'rank_too_low', rankName: need.name };
-  if (!Number.isInteger(amount) || amount < e.giftMin || amount > e.giftMax) return { status: 'bad_amount', min: e.giftMin, max: e.giftMax };
+  const staff = giftIsStaff(cfg, from.roleIds);
+  if (!Number.isSafeInteger(amount) || amount < e.giftMin || (!staff && amount > e.giftMax)) return { status: 'bad_amount', min: e.giftMin, max: e.giftMax };
   return db.transaction(async (tx) => {
     for (const id of [from.id, toId].sort()) await lock(tx, id);
-    const left = giftDailyLimitOf(cfg, from.roleIds) - (await giftSentToday(tx, from.id, now));
-    if (amount > left) return { status: 'daily_limit', left: Math.max(0, left) };
-    const fee = giftFee(amount);
+    if (!staff) {
+      const left = giftDailyLimitOf(cfg, from.roleIds) - (await giftSentToday(tx, from.id, now));
+      if (amount > left) return { status: 'daily_limit', left: Math.max(0, left) };
+    }
+    const fee = giftFee(amount, staff);
     // 手数料込みの残高を行ロックで確かめ、途中だけ払うことを防ぐ。
     const [wallet] = await tx.select({ balance: wallets.balance }).from(wallets).where(eq(wallets.memberId, from.id)).for('update');
     if (!wallet || wallet.balance < amount + fee) return { status: 'insufficient', balance: wallet?.balance ?? 0 };
     if (!(await spendWithin(tx, from.id, amount, 'gift_send', { to: toId }))) throw new Error('gift payment failed');
-    if (!(await spendWithin(tx, from.id, fee, 'gift_fee', { to: toId, amount, percent: GIFT_FEE_PERCENT }))) throw new Error('gift fee payment failed');
+    if (fee > 0 && !(await spendWithin(tx, from.id, fee, 'gift_fee', { to: toId, amount, percent: GIFT_FEE_PERCENT }))) throw new Error('gift fee payment failed');
     await addCoins(tx, toId, amount, 'gift_receive', { from: from.id });
-    return { status: 'ok', balance: (await walletOf(tx, from.id)).balance };
+    return { status: 'ok', balance: (await walletOf(tx, from.id)).balance, fee };
   });
 }
 
