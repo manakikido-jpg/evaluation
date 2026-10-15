@@ -4,6 +4,11 @@ import { AudioPlayerStatus, NoSubscriberBehavior, StreamType, VoiceConnectionSta
 import type { ReadAloudConfig } from '../config.js';
 import { synthesize } from './engine.js';
 import type { SpeechWorker } from './pool.js';
+import { logger } from '../lib/logger.js';
+
+const NEED = { ViewChannel: PermissionFlagsBits.ViewChannel, Connect: PermissionFlagsBits.Connect, Speak: PermissionFlagsBits.Speak, SendMessages: PermissionFlagsBits.SendMessages } as const;
+/** どこで接続に失敗したかをログに出す（本文・トークンは出さない） */
+const fail = (bot: string | undefined, stage: string, extra: Record<string, unknown> = {}) => logger.warn({ bot, stage, ...extra }, 'read aloud connect failed');
 
 export class DiscordSpeechWorker implements SpeechWorker {
   private connection?: VoiceConnection;
@@ -14,18 +19,26 @@ export class DiscordSpeechWorker implements SpeechWorker {
     const guild = this.client.guilds.cache.get(this.cfg.READ_ALOUD_GUILD_ID);
     const channel = await guild?.channels.fetch(channelId);
     const me = guild?.members.me;
-    if (!guild || channel?.type !== ChannelType.GuildVoice || !me || !channel.permissionsFor(me).has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.SendMessages]) || signal.aborted) throw Error('接続できません。');
+    const bot = this.client.user?.username;
+    if (!guild || channel?.type !== ChannelType.GuildVoice || !me) { fail(bot, 'channel'); throw Error('接続できません。'); }
+    const perms = channel.permissionsFor(me);
+    const missing = Object.entries(NEED).filter(([, f]) => !perms.has(f)).map(([k]) => k);
+    if (missing.length) { fail(bot, 'permission', { missing }); throw Error('接続できません。'); }
+    if (signal.aborted) throw Error('接続できません。');
     const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
     player.on('error', () => {}); // 待機していないときのエラーでも本文を出力しない。
     const connection = joinVoiceChannel({ guildId: guild.id, channelId, adapterCreator: guild.voiceAdapterCreator, group: this.client.user!.id, selfDeaf: true, selfMute: false });
     this.player = player; this.connection = connection;
-    connection.on('error', () => { if (this.connection === connection) this.lost(channelId); });
+    let lastStatus: string = connection.state.status;
+    connection.on('error', (err) => { fail(bot, 'voice_error', { code: (err as { code?: unknown }).code ?? err.name }); if (this.connection === connection) this.lost(channelId); });
     connection.on('stateChange', (_before, after) => {
+      lastStatus = after.status;
       if (after.status === VoiceConnectionStatus.Disconnected && this.connection === connection) this.lost(channelId);
     });
     connection.subscribe(player);
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, AbortSignal.any([signal, AbortSignal.timeout(15_000)]));
+      try { await entersState(connection, VoiceConnectionStatus.Ready, AbortSignal.any([signal, AbortSignal.timeout(15_000)])); }
+      catch (err) { if (!signal.aborted) fail(bot, 'voice_timeout', { lastStatus }); throw err; }
       if (signal.aborted || this.connection !== connection) throw Error();
       await channel.send({ content: `🔊 読み上げを開始しました。このVCに参加している人の、このVCのチャットを読みます。\n停止・スキップは「/読み上げ」から。録音はしません。音声：${this.cfg.READ_ALOUD_VOICE_CREDIT}`, allowedMentions: { parse: [] } });
       if (signal.aborted) throw Error();
