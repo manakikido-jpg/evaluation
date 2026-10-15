@@ -295,8 +295,8 @@ describe('🎰 カジノ: 遊ぶ', () => {
     expect(moved.headers.get('location')).toMatch(/\?g=\d+/);
     const resign = await post(`/casino/othello/${id}`, cookie!, { idx: 'resign', v: String(Number(v) + 1) });
     expect(await (await get(resign.headers.get('location')!, cookie!)).text()).toContain('投了しました');
-    // オセロの 1 日の上限に届いたら、画面に知らせる
-    expect(await (await get('/casino/othello?e=othello_limit', cookie!)).text()).toContain('今日のオセロで賭けられる上限');
+    // 1 日の上限に届いたら、画面に知らせる
+    expect(await (await get('/casino/othello?e=limit', cookie!)).text()).toContain('今日賭けられる上限');
   });
 
   it('お休み・止めたゲーム', async () => {

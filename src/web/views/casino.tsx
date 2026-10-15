@@ -258,7 +258,6 @@ const MSG: Record<string, string> = {
   game_off: 'このゲームはいま遊べません。',
   bad_bet: '賭ける銭の量を確かめてください。',
   limit: '今日賭けられる上限に届きました。また明日どうぞ。',
-  othello_limit: '今日のオセロで賭けられる上限に届きました。また明日どうぞ（賭けを小さくすると、残りの分で遊べることがあります）。',
   poor: '銭が足りません。',
   reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
   invalid: 'その操作はいまできません。',
@@ -841,7 +840,7 @@ export function OthelloPage(p: GamePage) {
           }
         />
       )}
-      <Rules>CPU に勝つと、強さに合わせて賭けの {othelloMultOf(p.casino, 'easy')} 倍・{othelloMultOf(p.casino, 'normal')} 倍・{othelloMultOf(p.casino, 'hard')} 倍が戻ります。オセロだけで 1 日に賭けられる合計には上限があります。引き分けは戻り、負け・投了は 0 です。途中でロビーに戻っても、あとから続きを打てます。</Rules>
+      <Rules>CPU に勝つと、強さに合わせて賭けの {othelloMultOf(p.casino, 'easy')} 倍・{othelloMultOf(p.casino, 'normal')} 倍・{othelloMultOf(p.casino, 'hard')} 倍が戻ります。オセロの賭けも、ほかのゲームと同じ 1 日の上限に数えます。引き分けは戻り、負け・投了は 0 です。途中でロビーに戻っても、あとから続きを打てます。</Rules>
     </CasinoLayout>
   );
 }

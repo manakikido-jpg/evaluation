@@ -224,10 +224,6 @@ export function CasinoAdminPage(p: {
               <input type="number" name="dailyBetLimit" min={0} max={100000000} value={String(c.dailyBetLimit)} required />
             </label>
             <label class="field">
-              <span>⚫ オセロ（CPU）だけで 1 日に賭けられる合計（0 で上限なし。腕で勝てるゲームなので、別に上限をつけます）</span>
-              <input type="number" name="othelloDailyBetLimit" min={0} max={100000000} value={String(c.othelloDailyBetLimit)} required />
-            </label>
-            <label class="field">
               <span>⚫ オセロ（CPU）に勝ったときの倍率（1.0〜10 倍。0.1 きざみ）: やさしい・ふつう・つよい。変えたあとに始めた対局から効きます</span>
               <span class="inline-fields">
                 <input type="number" name="othelloMult_easy" min={1} max={10} step={0.1} value={String(c.othelloMult.easy / 100)} required aria-label="やさしい" />

@@ -43,7 +43,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   keiba: { emoji: '🏇', name: 'みんなでダービー（競馬）', note: '8 頭のレースにみんなで賭けて、同じレースを見る。オッズはみんなの賭けで変わる' },
 };
 
-export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'othello_limit' | 'poor' | 'reserve';
+export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor' | 'reserve';
 
 /** 今日（日本時間）カジノで賭けた合計 */
 /** 今日（日本時間）賭けた合計。game を決めると、そのゲームの分だけ */
@@ -63,7 +63,6 @@ export async function checkBet(db: Db, cfg: GuildConfig, memberId: string, game:
   if (!c.games.includes(game)) return 'game_off';
   if (!Number.isInteger(bet) || bet < c.minBet || bet > c.maxBet) return 'bad_bet';
   if (c.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + bet > c.dailyBetLimit) return 'limit';
-  if (game === 'othello' && c.othelloDailyBetLimit > 0 && (await todayBets(db, memberId, now, 'othello')) + bet > c.othelloDailyBetLimit) return 'othello_limit';
   if ((await walletOf(db, memberId)).balance < bet) return 'poor';
   return 'ok';
 }
@@ -73,7 +72,6 @@ export const BET_ERROR: Record<Exclude<BetCheck, 'ok'>, string> = {
   game_off: 'このゲームはいま遊べません。',
   bad_bet: '賭ける銭の量を確かめてください。',
   limit: '今日賭けられる上限に届きました。また明日遊んでください。',
-  othello_limit: '今日のオセロで賭けられる上限に届きました。また明日遊んでください。',
   poor: '銭が足りません。',
   reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
 };

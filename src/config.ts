@@ -532,7 +532,8 @@ export const casinoSchema = z.object({
   /** 1 日（日本時間）に賭けられる合計（0 で上限なし） */
   dailyBetLimit: z.number().int().min(0).max(100_000_000).default(20000),
   /** ⚫ オセロ（CPU）だけで 1 日（日本時間）に賭けられる合計（0 で上限なし）。腕で勝てるゲームなので、別に上限をつける */
-  othelloDailyBetLimit: z.number().int().min(0).max(100_000_000).default(3000),
+  /** 使わない（オセロもほかと同じ 1 日の上限に数える）。前に保存した設定を読めるように残す */
+  othelloDailyBetLimit: z.number().int().min(0).max(100_000_000).default(0),
   /** ⚫ オセロ（CPU）に勝ったときの倍率（%。110 で 1.1 倍）。強さごと。始めたときの倍率で払う */
   othelloMult: z
     .object({ easy: z.number().int().min(100).max(1000), normal: z.number().int().min(100).max(1000), hard: z.number().int().min(100).max(1000) })

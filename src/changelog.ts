@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-15-othello-limit-unify', date: '2026-10-15', kind: 'improve', where: ['社務所Web'], title: 'オセロ（CPU）だけの 1 日の上限をなくす', items: ['オセロの賭けも、ほかのゲームと同じ「1 日に賭けられる合計」に数えます。オセロだけの上限（3,000）と、その設定欄はなくしました。'] },
   { id: '2026-10-15-othello-limit-message', date: '2026-10-15', kind: 'fix', where: ['社務所Web'], title: 'オセロ（CPU）の 1 日の上限に届いたとき、知らせが出るように', items: ['上限に届くと、押しても何も起きないように見えていました。画面に「今日のオセロで賭けられる上限に届きました」と出します。'] },
   { id: '2026-10-15-roulette-inside-unlimited', date: '2026-10-15', kind: 'improve', where: ['Discord', '社務所Web'], title: 'ルーレットの数字の間にも賭けられる', items: ['10か所の制限をなくし、2・3・4・6数字と0の組み合わせへの賭けを追加しました。配当はヨーロピアン式の通常ルールです。'] },
   { id: '2026-10-15-keiba-winning-ticket', date: '2026-10-15', kind: 'new', where: ['Discord', '社務所Web'], title: '大きく的中したら記念馬券でお知らせ', items: ['払戻合計5,000銭以上でレース収支が黒字なら、桜紋と的中の朱印入りの馬券画像を投稿できます。', '社務所Webで投稿先と払戻の基準を選びます。1人・1レースにつき1投稿で、銭の追加はありません。'] },

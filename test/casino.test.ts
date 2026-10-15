@@ -286,18 +286,13 @@ describe('⚫ オセロ CPU（DB）', () => {
     expect(r.status === 'ok' && r.row).toMatchObject({ status: 'done', payout: 0 });
   });
 
-  it('オセロだけの 1 日の上限。ほかのゲームの賭けは数えない', async () => {
+  it('オセロだけの上限はない（古い設定が残っていても効かない）。ほかと同じ 1 日の上限に数える', async () => {
     const now = new Date();
-    const lim = ccfg({ othelloDailyBetLimit: 150 });
-    await playSlots(db, lim, A, 100, seq([65000, 7, 20]), now);
-    expect(await checkBet(db, lim, A, 'othello', 150, now)).toBe('ok');
-    const s = await startOthello(db, lim, A, 100, 'easy', 'B', seq([0]), now);
+    const old = ccfg({ othelloDailyBetLimit: 150, dailyBetLimit: 300 });
+    const s = await startOthello(db, old, A, 200, 'easy', 'B', seq([0]), now);
     expect(s.status).toBe('ok');
-    expect(await todayBets(db, A, now, 'othello')).toBe(100);
-    expect(await checkBet(db, lim, A, 'othello', 100, now)).toBe('othello_limit');
-    expect(await checkBet(db, lim, A, 'othello', 50, now)).toBe('ok');
-    expect(await checkBet(db, lim, A, 'slots', 100, now)).toBe('ok');
-    expect(await checkBet(db, ccfg({ othelloDailyBetLimit: 0 }), A, 'othello', 1000, now)).toBe('ok');
+    expect(await checkBet(db, old, A, 'othello', 100, now)).toBe('ok');
+    expect(await checkBet(db, old, A, 'othello', 101, now)).toBe('limit');
   });
 
   it('倍率は社務所Web の設定で決まり、始めたときの倍率を対局に残す', async () => {
