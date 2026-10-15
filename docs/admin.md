@@ -1574,6 +1574,6 @@ PC（幅1180px以上）は競馬画面だけ横幅の上限を外し、ブラウ
 - `READ_ALOUD_QUEUE_LIMIT`：1〜50、初期20。
 - `READ_ALOUD_DICTIONARY`：読みの辞書をJSONオブジェクトで指定（最大100語）。省略時は初期辞書。直接Nodeで起動する場合に渡せます。
 
-`npm run build` の後、`npm run start:read-aloud` で起動します。専用のDocker構成は `docker compose -f docker-compose.read-aloud.yml up -d --build`。専用設定ファイルを使う場合は運用者が `--env-file` で指定します（値を表示する `config` コマンドなどは実行しない）。読み上げ構成は既存のDB・BOT・Webを起動せず、VOICEVOXのポートも外へ公開しません。既存構成と同じComposeプロジェクト名を使わず、`-p sakura-read-aloud` などで分けてください。実行環境はNode.js 22.12以降です。VOICEVOX CPU版を動かせるメモリ・CPUと、Discordの音声通信に必要な外向きUDP通信を用意します。
+秘密の設定ファイルは `sudo bash scripts/read-aloud-env.sh` で作れます（サーバーIDと読上 壱〜拾 のトークンを順に聞き、画面にも履歴にも出さずに、リポジトリの外の `/etc/sakura/read-aloud.env` へ root だけが読める形で保存。`READ_ALOUD_ENABLED=on` も入れる）。起動は `sudo docker compose -p sakura-read-aloud -f docker-compose.read-aloud.yml --env-file /etc/sakura/read-aloud.env up -d --build`。`npm run build` の後、`npm run start:read-aloud` で起動します。専用のDocker構成は `docker compose -f docker-compose.read-aloud.yml up -d --build`。専用設定ファイルを使う場合は運用者が `--env-file` で指定します（値を表示する `config` コマンドなどは実行しない）。読み上げ構成は既存のDB・BOT・Webを起動せず、VOICEVOXのポートも外へ公開しません。既存構成と同じComposeプロジェクト名を使わず、`-p sakura-read-aloud` などで分けてください。実行環境はNode.js 22.12以降です。VOICEVOX CPU版を動かせるメモリ・CPUと、Discordの音声通信に必要な外向きUDP通信を用意します。
 
 初回は2つのVCで開始して、専用BOTが別々に入り、別室の投稿を読まず、スキップ・停止・無人退出が動くことを実サーバーで確認します。空きがない場合はメッセージで案内し、使用中の部屋からBOTを奪いません。音声合成や接続が失敗しても銭は動きません。DB変更もありません。設定は読み上げ専用プロセスの環境変数で、社務所WebのPOST /settingsでは変更しません。
