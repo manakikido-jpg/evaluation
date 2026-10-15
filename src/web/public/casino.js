@@ -424,6 +424,8 @@ const swapPage = (html, url) => {
   // 同じ卓の画面なら、前からあるカードは動かさない
   const end = samePath ? markCards(main, before) : 0;
   pageInit(main, samePath ? end : undefined);
+  // 差し替えた中身の htmx（対戦の盤の 2 秒ごとの読み直しなど）を動かす
+  window.htmx?.process(main);
   document.dispatchEvent(new Event('c-page-swapped'));
 };
 document.addEventListener('submit', async (e) => {
