@@ -10,7 +10,8 @@ services:
     # 50021をホストに公開しない。読み上げサービスからだけ使う。
     expose: ["50021"]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:50021/version', timeout=5)"]
+      # この画像には python3 がないので、bash で 50021 番が開いているかだけを見る
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/50021"]
       interval: 15s
       timeout: 10s
       start_period: 120s

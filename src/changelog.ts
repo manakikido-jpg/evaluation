@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-16-voicevox-healthcheck', date: '2026-10-16', kind: 'fix', where: ['運用'], title: '読み上げのVOICEVOXが起動しない問題を直す', items: ['VOICEVOXが動いているかの確かめに、画像に入っていない python3 を使っていたため、いつまでも「動いていない」と判定されていました。bash で確かめるようにしました。'] },
   { id: '2026-10-16-read-aloud-env-script', date: '2026-10-16', kind: 'improve', where: ['運用'], title: '読み上げ専用BOTの秘密の設定を作るスクリプト', items: ['サーバーIDと読上 壱〜拾 のトークンを順に聞き、画面にも履歴にも出さずに、リポジトリの外へ root だけが読める形で保存します。'] },
   { id: '2026-10-16-multi-vc-read-aloud', date: '2026-10-16', kind: 'new', where: ['Discord', '運用'], title: '複数の通話で使える読み上げBOT', items: ['読み上げ専用BOTを空いている通話へ割り当て、同じVCのチャットを読みます。開始・停止・スキップ、無人退出、長文・連投制限に対応。導入して有効にするまで動きません。'] },
   { id: '2026-10-15-mahjong-tile-art-fix', date: '2026-10-15', kind: 'fix', where: ['社務所Web'], title: '麻雀の七筒と赤五索の絵を直す', items: ['七筒の絵が五筒になっていたのを、七つの丸の絵に直しました。', '赤五索の絵に「五」が入っていなかったので、ほかの索子と同じく「五」入りの赤い絵にしました。'] },
