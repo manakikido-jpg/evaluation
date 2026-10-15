@@ -1,0 +1,36 @@
+# 読み上げだけの構成。既存BOT・DB・Webには接続しない。
+# 実行前の準備は docs/admin.md の「読み上げ専用BOT」を参照。
+services:
+  voicevox:
+    image: voicevox/voicevox_engine:cpu-ubuntu20.04-latest@sha256:eaf829d9e1d7c85121cba6220292b42e1fbadc22b7552820f8b4fe5df5c819aa
+    restart: unless-stopped
+    # 音声合成APIのURLには本文が入るため、アクセスログを保存しない。
+    logging:
+      driver: none
+    # 50021をホストに公開しない。読み上げサービスからだけ使う。
+    expose: ["50021"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:50021/version', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+  read-aloud:
+    build: .
+    command: ["node", "dist/readAloud/index.js"]
+    restart: unless-stopped
+    depends_on:
+      voicevox:
+        condition: service_healthy
+    environment:
+      READ_ALOUD_ENABLED: ${READ_ALOUD_ENABLED:-off}
+      READ_ALOUD_GUILD_ID: ${READ_ALOUD_GUILD_ID:-00000000000000000}
+      READ_ALOUD_BOT_TOKENS: ${READ_ALOUD_BOT_TOKENS:-}
+      READ_ALOUD_ENGINE_URL: http://voicevox:50021
+      READ_ALOUD_SPEAKER: ${READ_ALOUD_SPEAKER:-3}
+      READ_ALOUD_VOICE_CREDIT: ${READ_ALOUD_VOICE_CREDIT:-VOICEVOX:ずんだもん}
+      READ_ALOUD_MAX_CHARS: ${READ_ALOUD_MAX_CHARS:-120}
+      READ_ALOUD_QUEUE_LIMIT: ${READ_ALOUD_QUEUE_LIMIT:-20}
+    # 既存イメージの社務所BOT用HTTPヘルスチェックは使わない。
+    healthcheck:
+      disable: true

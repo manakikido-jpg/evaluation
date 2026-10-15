@@ -972,3 +972,28 @@ export function loadGuildConfig(file: string): GuildConfig {
 export function emaChannelIds(cfg: GuildConfig): string[] {
   return [cfg.channels.ema, cfg.channels.emaFemale, cfg.channels.staffIntro].filter((id): id is string => Boolean(id));
 }
+
+/** 読み上げ専用プロセスの設定。既存BOTや社務所Webの設定とは分ける。 */
+const readAloudEnvSchema = z.object({
+  READ_ALOUD_ENABLED: z.enum(['on', 'off']).default('off'),
+  READ_ALOUD_GUILD_ID: z.string().regex(/^\d{17,20}$/).default('00000000000000000'),
+  READ_ALOUD_BOT_TOKENS: z.string().default(''),
+  READ_ALOUD_ENGINE_URL: z.url().refine((s) => { const u = new URL(s); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password && !u.search && !u.hash; }).default('http://voicevox:50021'),
+  READ_ALOUD_SPEAKER: z.coerce.number().int().min(0).default(3),
+  READ_ALOUD_VOICE_CREDIT: z.string().min(1).max(100).default('VOICEVOX:ずんだもん'),
+  READ_ALOUD_MAX_CHARS: z.coerce.number().int().min(20).max(300).default(120),
+  READ_ALOUD_QUEUE_LIMIT: z.coerce.number().int().min(1).max(50).default(20),
+  READ_ALOUD_DICTIONARY: z.string().default('{"咲楽ノ宮":"さくらのみや","御朱印":"ごしゅいん","氏子":"うじこ","御神籤":"おみくじ","物御籤":"ものみくじ"}'),
+});
+export type ReadAloudConfig = Omit<z.infer<typeof readAloudEnvSchema>, 'READ_ALOUD_BOT_TOKENS' | 'READ_ALOUD_DICTIONARY'> & { tokens: string[]; dictionary: Record<string, string> };
+export function loadReadAloudEnv(env: NodeJS.ProcessEnv = process.env): ReadAloudConfig {
+  // Zodのエラーに秘密の入力値を残さず、呼び出し側にも固定文だけを返す。
+  try {
+    const { READ_ALOUD_BOT_TOKENS, READ_ALOUD_DICTIONARY, ...config } = readAloudEnvSchema.parse(env);
+    const tokens = READ_ALOUD_BOT_TOKENS.split(/[\s,]+/).filter(Boolean);
+    if (tokens.length > 10 || new Set(tokens).size !== tokens.length || (config.READ_ALOUD_ENABLED === 'on' && (!tokens.length || /^0+$/.test(config.READ_ALOUD_GUILD_ID)))) throw Error();
+    const dictionary: unknown = JSON.parse(READ_ALOUD_DICTIONARY);
+    if (!dictionary || Array.isArray(dictionary) || typeof dictionary !== 'object' || Object.keys(dictionary).length > 100 || Object.entries(dictionary).some(([k, v]) => !k.length || k.length > 40 || typeof v !== 'string' || !v.length || v.length > 80)) throw Error();
+    return { ...config, tokens, dictionary: dictionary as Record<string, string> };
+  } catch { throw new Error('読み上げの環境設定を確認してください（値は表示しません）。'); }
+}
