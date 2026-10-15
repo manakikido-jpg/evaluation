@@ -4,9 +4,16 @@ import { logger } from '../lib/logger.js';
 import { ReadAloudApp, readAloudCommand } from './app.js';
 import { DiscordSpeechWorker } from './discordWorker.js';
 import { SpeechPool } from './pool.js';
+import { STAGE_HINT, startupReason, type StartupStage } from './diagnose.js';
+
+/** どこで失敗したか（何番目の BOT か）。秘密は入れない */
+class StartupError extends Error {
+  constructor(readonly stage: StartupStage, readonly bot: number | undefined, readonly reason: string) { super(stage); }
+}
 
 async function main(): Promise<void> {
-  const cfg = loadReadAloudEnv();
+  let cfg;
+  try { cfg = loadReadAloudEnv(); } catch { throw new StartupError('env', undefined, 'invalid'); }
   if (cfg.READ_ALOUD_ENABLED !== 'on') { logger.info('read aloud is disabled'); return; }
   const clients = cfg.tokens.map(() => new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] }));
   let pool: SpeechPool;
@@ -29,15 +36,25 @@ async function main(): Promise<void> {
   }
   try {
     await Promise.all(clients.map(async (client, index) => {
-      await client.login(cfg.tokens[index]);
-      if (!client.isReady()) await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
+      try {
+        await client.login(cfg.tokens[index]);
+        if (!client.isReady()) await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
+      } catch (err) { throw new StartupError('login', index + 1, startupReason(err)); }
     }));
-    if (new Set(clients.map((c) => c.user!.id)).size !== clients.length) throw Error();
-    const guild = leader.guilds.cache.get(cfg.READ_ALOUD_GUILD_ID);
-    if (!guild || clients.some((c) => !c.guilds.cache.has(guild.id))) throw Error();
+    const ids = clients.map((c) => c.user!.id);
+    const dup = ids.findIndex((id, i) => ids.indexOf(id) !== i);
+    if (dup >= 0) throw new StartupError('duplicate', dup + 1, 'same_bot');
+    const missing = clients.findIndex((c) => !c.guilds.cache.has(cfg.READ_ALOUD_GUILD_ID));
+    if (missing >= 0) throw new StartupError('guild', missing + 1, 'not_in_guild');
+    const guild = leader.guilds.cache.get(cfg.READ_ALOUD_GUILD_ID)!;
     // このアプリ専用のBOTにだけ登録する。社務所BOTのコマンドは変更しない。
-    await guild.commands.create(readAloudCommand.toJSON());
+    try { await guild.commands.create(readAloudCommand.toJSON()); } catch (err) { throw new StartupError('command', 1, startupReason(err)); }
     logger.info({ workers: clients.length }, 'read aloud ready');
-  } catch { stop(); throw new Error('読み上げを起動できません。専用BOTの設定・招待・Intentを確認してください。'); }
+  } catch (err) { stop(); throw err; }
 }
-void main().catch(() => { logger.error('read aloud startup failed; check dedicated bot configuration and intents'); process.exitCode = 1; });
+void main().catch((err) => {
+  // 何番目の BOT が、どこで、なぜ失敗したかだけを出す（トークンや本文は出さない）
+  const e = err instanceof StartupError ? err : new StartupError('login', undefined, 'unknown');
+  logger.error({ stage: e.stage, bot: e.bot, reason: e.reason, hint: STAGE_HINT[e.stage] }, 'read aloud startup failed');
+  process.exitCode = 1;
+});
