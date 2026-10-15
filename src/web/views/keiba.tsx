@@ -1314,7 +1314,7 @@ export function KbStablePage(p: {
                   </div>
                   <details class="kb-outfit-editor"><summary>👘 この馬を着せ替える</summary>
                     <form method="post" action={`/casino/keiba/stable/${h.id}/outfit`} class="kb-outfit-form">
-                      {csrf}
+                      <Hidden />
                       <canvas class="kb-outfit-preview" width="480" height="220" data-horse={JSON.stringify({ no: h.id, coat: h.coat, silk: h.silk, outfit: h.outfit ?? KB_DEFAULT_OUTFIT })} aria-label={`${h.name}の装備の見本`}>馬の装備の見本</canvas>
                       <div class="kb-outfit-fields">
                         {(['cloth', 'bridle'] as const).map(key => <label>{key === 'cloth' ? '鞍の下の布' : '手綱・カバーの色'}<select name={key}>{Object.entries(KB_OUTFIT_COLORS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT)[key] === value}>{label}</option>)}</select></label>)}
@@ -1527,7 +1527,16 @@ export function KbStablePage(p: {
                       <div class="kb-stable-actions">
                         {(h.foals ?? 0) < KB_FOALS_MAX && active.length < p.max ? (
                           (p.studs ?? []).length === 0 ? (
-                            <p class="c-muted">まだ種牡馬（繁殖入りした牡馬）がいません。</p>
+                            <form method="post" action={`/casino/keiba/stable/${h.id}/foal`} class="c-bet-custom">
+                              <Hidden />
+                              <input type="hidden" name="sire" value="0" />
+                              <p class="c-muted">まだ種牡馬（繁殖入りした牡馬）がいないので、母だけで迎えます。</p>
+                              <input type="text" name="name" maxlength={18} required placeholder="産駒の名前" aria-label="産駒の名前" />
+                              <button type="submit" class="c-btn c-btn-small c-btn-gold c-confirm" data-confirm={`${fmt(foalPrice)} ${coin.name}で産駒を迎えますか？`}>
+                                🐣 産駒を迎える（{coin.emoji}
+                                {fmt(foalPrice)}・あと {KB_FOALS_MAX - (h.foals ?? 0)} 頭）
+                              </button>
+                            </form>
                           ) : (
                             <form method="post" action={`/casino/keiba/stable/${h.id}/foal`} class="c-bet-custom">
                               <Hidden />

@@ -479,8 +479,11 @@ export async function breedFoal(
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'keiba_owner:' + memberId}))`);
     const [dam] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, damId), eq(keibaHorses.ownerId, memberId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 1)));
     if (!dam) return { status: 'not_found' as const };
-    const [sire] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, sireId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)));
-    if (!sire) return { status: 'no_sire' as const };
+    // sireId 0: 種牡馬が 1 頭もいないときだけ、母だけで迎える（前の仕組み）
+    const studs = await tx.select({ id: keibaHorses.id }).from(keibaHorses).where(and(eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0))).limit(1);
+    const [found] = sireId === 0 ? [] : await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, sireId), eq(keibaHorses.breeding, true), eq(keibaHorses.sex, 0)));
+    if (!found && (sireId !== 0 || studs.length)) return { status: 'no_sire' as const };
+    const sire = found ?? { ...dam, ownerId: null, studFee: 0 };
     if ((await foalsOfDam(tx, damId)) >= KB_FOALS_MAX) return { status: 'no_foals' as const };
     const [{ n } = { n: 0 }] = await tx.select({ n: count() }).from(keibaHorses).where(and(eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)));
     if (n >= max) return { status: 'too_many' as const };
@@ -508,7 +511,7 @@ export async function breedFoal(
         age: 2,
         weight: Math.round((sire.weight + dam.weight) / 2),
         ownerId: memberId,
-        parentId: sireId,
+        parentId: found ? sireId : null,
         damId,
       })
       .returning();

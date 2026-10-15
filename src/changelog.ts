@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-15-keiba-foal-no-sire', date: '2026-10-15', kind: 'fix', where: ['社務所Web'], title: '種牡馬がいなくても産駒を迎えられるように', items: ['種牡馬（繁殖入りした牡馬）が 1 頭もいないと、繁殖牝馬から産駒を迎えられませんでした。そのときは母だけで迎えられます。種牡馬が出てきたら、父を選んで配合します。', '馬の着せ替えが保存できないことがあったのを直しました。'] },
   { id: '2026-10-15-othello-limit-unify', date: '2026-10-15', kind: 'improve', where: ['社務所Web'], title: 'オセロ（CPU）だけの 1 日の上限をなくす', items: ['オセロの賭けも、ほかのゲームと同じ「1 日に賭けられる合計」に数えます。オセロだけの上限（3,000）と、その設定欄はなくしました。'] },
   { id: '2026-10-15-othello-limit-message', date: '2026-10-15', kind: 'fix', where: ['社務所Web'], title: 'オセロ（CPU）の 1 日の上限に届いたとき、知らせが出るように', items: ['上限に届くと、押しても何も起きないように見えていました。画面に「今日のオセロで賭けられる上限に届きました」と出します。'] },
   { id: '2026-10-15-roulette-inside-unlimited', date: '2026-10-15', kind: 'improve', where: ['Discord', '社務所Web'], title: 'ルーレットの数字の間にも賭けられる', items: ['10か所の制限をなくし、2・3・4・6数字と0の組み合わせへの賭けを追加しました。配当はヨーロピアン式の通常ルールです。'] },

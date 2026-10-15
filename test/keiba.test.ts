@@ -477,6 +477,10 @@ describe('🏇 名簿と卓のサービス', () => {
     expect((await walletOf(db, B.id)).balance).toBe(beforeBreed + 300);
     // 🧬 配合: 母は自分の繁殖牝馬、父は繁殖入りした牡馬（ほかの人の馬なら種付け料をその馬主へ）
     await db.update(keibaHorses).set({ sex: 1 }).where(eq(keibaHorses.id, id));
+    // 種牡馬が 1 頭もいないときは、母だけで迎えられる（父なし）
+    const solo = await breedFoal(db, B.id, id, 0, 'ハハノコ', 1500, 9);
+    expect(solo).toMatchObject({ status: 'ok', horse: { name: 'ハハノコ', parentId: null, damId: id, ownerId: B.id } });
+    await addCoins(db, B.id, 1500, 'admin_grant');
     await addCoins(db, A.id, 1000, 'admin_grant');
     const stud = await buyHorse(db, A.id, 'タネウマ', 1000, 9);
     if (stud.status !== 'ok') throw new Error(stud.status);
@@ -491,6 +495,8 @@ describe('🏇 名簿と卓のサービス', () => {
     const bBefore = (await walletOf(db, B.id)).balance;
     // 父に牝馬は選べない・ほかの人の母は使えない
     expect((await breedFoal(db, B.id, id, id, 'ダメ', 1500, 3)).status).toBe('no_sire');
+    // 種牡馬がいるときは、父なしでは迎えられない
+    expect((await breedFoal(db, B.id, id, 0, 'チチナシ', 1500, 9)).status).toBe('no_sire');
     expect((await breedFoal(db, A.id, id, stud.horse.id, 'ちがう人の', 1500, 3)).status).toBe('not_found');
     const foal = await breedFoal(db, B.id, id, stud.horse.id, 'サクラノコ', 1500, 3);
     expect(foal).toMatchObject({ status: 'ok', horse: { name: 'サクラノコ', parentId: stud.horse.id, damId: id, ownerId: B.id, age: 2 } });
