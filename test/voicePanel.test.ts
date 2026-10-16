@@ -115,6 +115,14 @@ describe('通話に入ったとき', () => {
     expect(v.messages.map((m) => m.id)).toEqual(['u2', 'm3']);
   });
 
+  it('宿坊の部屋には出さない', async () => {
+    const app = new VoicePanelApp(() => cfg, undefined, async (id) => id === VC);
+    const v = fakeVoice();
+    app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
+    await settle();
+    expect(v.messages).toHaveLength(0);
+  });
+
   const message = (channel: unknown, author = A, bot = false, components: unknown[] = []) =>
     ({
       inGuild: () => true,

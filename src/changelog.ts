@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-16-shukubo-no-vc-profile', date: '2026-10-16', kind: 'improve', where: ['Discord'], title: '宿坊の部屋に「この通話の人のプロフィールを見る」を出さない', items: ['宿坊の部屋のチャットには、プロフィールを見るカードを出さないようにしました。ほかの通話はこれまでどおりです。'] },
   { id: '2026-10-16-read-aloud-connect-reason', date: '2026-10-16', kind: 'improve', where: ['運用'], title: '読み上げBOTがVCに入れないわけをログに出す', items: ['「接続できませんでした」のとき、足りない権限・音声接続の失敗などをログに出します。'] },
   { id: '2026-10-16-read-aloud-all-failures', date: '2026-10-16', kind: 'improve', where: ['運用'], title: '読み上げBOTのログイン失敗を一度に全部知らせる', items: ['ログインに失敗した専用BOTが何体かあるとき、前は 1 体だけ出していました。全部を一度にログに出します。'] },
   { id: '2026-10-16-read-aloud-short-commands', date: '2026-10-16', kind: 'improve', where: ['運用'], title: '読み上げBOTを短いコマンドで動かせるように', items: ['bash scripts/read-aloud.sh up・logs・ps・down で、起動・ログ・様子・停止ができます。長いコマンドを打たなくてよくなりました。'] },

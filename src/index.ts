@@ -1,3 +1,4 @@
+import { planOf, roomOf } from './services/rooms.js';
 import { opsWeeklyTick, pruneOpsNotices, staleTick } from './services/opsWatch.js';
 import { createServer } from 'node:http';
 import { Client, Events, GatewayIntentBits } from 'discord.js';
@@ -126,7 +127,11 @@ async function main(): Promise<void> {
   const board = new BoardApp(db, cfg, actions);
   const cast = new CastApp(db, cfg, actions, env.WEB_BASE_URL, env.DISCORD_MESSAGE_CONTENT === 'on');
   const supportTickets = new TicketApp(db, cfg, actions);
-  const voicePanel = new VoicePanelApp(cfg);
+  // 宿坊の部屋には「この通話の人のプロフィールを見る」を出さない
+  const voicePanel = new VoicePanelApp(cfg, undefined, async (channelId) => {
+    const room = await roomOf(db, channelId);
+    return Boolean(room && planOf(cfg(), room.hubId) === 'once');
+  });
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 

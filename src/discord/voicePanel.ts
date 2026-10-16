@@ -12,6 +12,7 @@ export const VC_PANEL_RESTICK_MS = 15_000;
  * - 通話に入った人がいたら、すぐ（いちばん下になければ）
  * - チャットに書き込みがあったら（BOT の書き込みも）、15 秒に 1 回まで出し直す（このカード自身はのぞく）
  * 前に出したものは消すので、チャットに何枚もたまらない。
+ * 宿坊の部屋には出さない（hidden）。
  */
 export class VoicePanelApp {
   /** 通話ごとに 1 つずつ */
@@ -22,6 +23,8 @@ export class VoicePanelApp {
   constructor(
     private readonly cfg: () => GuildConfig,
     private readonly restickMs = VC_PANEL_RESTICK_MS,
+    /** 出さない部屋（宿坊）か。DB を見るので、出す直前に確かめる */
+    private readonly hidden: (channelId: string) => Promise<boolean> = async () => false,
   ) {}
 
   /** 出さない通話（AFK・「➕ ○○をひらく」・数えない通話） */
@@ -65,6 +68,7 @@ export class VoicePanelApp {
 
   private async post(channel: VoiceBasedChannel): Promise<void> {
     if (!channel.isTextBased() || !channel.isSendable()) return;
+    if (await this.hidden(channel.id).catch(() => false)) return;
     const me = channel.client.user.id;
     const panelId = shuinId('vc', channel.id);
     type Msg = { author: { id: string }; components: { components: { customId?: string | null }[] }[] };
