@@ -41,6 +41,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         <link rel="stylesheet" href={assetUrl('casino-premium.css')} />
         {props.lobby && <link rel="stylesheet" href={assetUrl('casino-lobby.css')} />}
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
+        <script src={assetUrl('casino-request.js')} defer></script>
         <script src={assetUrl('casino.js')} defer></script>
         <script type="module" src={assetUrl('life3d.js')}></script>
       </head>

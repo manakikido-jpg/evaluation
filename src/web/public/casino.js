@@ -37,6 +37,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('submit', (e) => {
   if (e.defaultPrevented) return;
   const form = e.target;
+  if (window.CasinoRequests?.blocked()) { e.preventDefault(); return; }
   if (!(form instanceof HTMLFormElement) || form.dataset.sent === '1') {
     if (form instanceof HTMLFormElement) e.preventDefault();
     return;
@@ -411,10 +412,8 @@ const swapPage = (html, url) => {
   const main = doc.querySelector('.c-main');
   // htmx が要るページ（オセロ対戦）に、今のページに htmx がなければ、ふつうに開く
   const needsHtmx = doc.querySelector('script[src*="htmx"]') && !document.querySelector('script[src*="htmx"]');
-  if (!main || needsHtmx) {
-    location.href = url;
-    return;
-  }
+  if (!main) throw new Error('カジノの画面を確認できませんでした');
+  if (needsHtmx) { location.href = url; return; }
   const before = cardKeys(document.querySelector('.c-main'));
   const samePath = new URL(url, location.href).pathname === location.pathname;
   document.querySelector('.c-main')?.replaceWith(main);
@@ -444,23 +443,16 @@ document.addEventListener('submit', async (e) => {
   const action = new URL(form.getAttribute('action') || location.href, location.href);
   if (action.origin !== location.origin || !action.pathname.startsWith('/casino') || action.pathname === '/casino/logout') return;
   e.preventDefault();
-  const fd = new FormData(form);
-  const by = e.submitter;
-  if (by && by.name && !fd.has(by.name)) fd.append(by.name, by.value);
-  try {
-    const res = await fetch(action.href, { method: 'POST', body: new URLSearchParams(fd), credentials: 'same-origin' });
-    const type = res.headers.get('content-type') || '';
-    if (!res.ok || !type.includes('text/html')) {
-      location.href = res.url || action.href;
-      return;
-    }
-    swapPage(await res.text(), res.url);
-  } catch {
-    // うまくいかなければ、ふつうに送る
-    form.submit();
-  }
+  if (!window.CasinoRequests) { location.reload(); return; }
+  await window.CasinoRequests.submit(form, e.submitter, swapPage);
 });
 window.addEventListener('popstate', () => location.reload());
+document.addEventListener('c-request-recovered', () => {
+  document.querySelectorAll('form[data-sent]').forEach(form => {
+    delete form.dataset.sent;
+    form.querySelectorAll('button').forEach(button => { button.disabled = false; });
+  });
+});
 
 // ───── みんなで座る卓: 1.5 秒ごとに変わったか確かめて、変わっていたら中身だけ差し替える ─────
 let liveTimer = null;
