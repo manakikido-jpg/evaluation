@@ -15,6 +15,7 @@ COPY package.json ./
 COPY drizzle ./drizzle
 # おみくじの紙を描く字（明朝体）
 COPY assets ./assets
+RUN mkdir -p /data/recordings && chown node:node /data/recordings && chmod 700 /data/recordings
 USER node
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
   CMD node -e "const p=process.env.HEALTH_PORT||'8080';if(p==='0')process.exit(0);fetch('http://localhost:'+p).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

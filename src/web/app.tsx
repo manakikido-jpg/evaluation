@@ -1,3 +1,4 @@
+import { mountRecordings } from './recordings.js';
 import { GIFT_TARGET_MAX, giveToMembers, recentPresenceGifts, requestPresenceGift, resolveGiftTargets, revokePresenceGift } from '../services/presenceGifts.js';
 import { endRaid, raidState, startRaid } from '../services/raid.js';
 import { recentRoleRequests } from '../services/roleRequests.js';
@@ -333,6 +334,7 @@ export function createWebApp(deps: WebDeps) {
         defaultSrc: ["'self'"],
         // blob: 掲示の写真を選んだとき、送る前にプレビューに出す
         imgSrc: ["'self'", 'blob:', 'https://cdn.discordapp.com'],
+        mediaSrc: ["'self'", 'blob:'],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
         formAction: ["'self'", 'https://discord.com'],
@@ -352,7 +354,9 @@ export function createWebApp(deps: WebDeps) {
   // 💡 アイデア・共有の写真・ファイル（1 つ 10MB・1 回 10 個まで）
   const ideaBody = bodyLimit({ maxSize: 105 * 1024 * 1024, onError: (c) => c.text('一度に送るファイルが大きすぎます（1 つ 10MB・全部で 100MB まで）。', 413) });
   app.use((c, next) =>
-    c.req.method !== 'POST'
+    /^\/recordings\/[^/]+\/chunk$/.test(c.req.path) && c.req.method === 'POST'
+      ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
+      : c.req.method !== 'POST'
       ? smallBody(c, next)
       : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
@@ -584,6 +588,10 @@ export function createWebApp(deps: WebDeps) {
     if (c.req.header('hx-request')) return c.body(null, 401, { 'hx-redirect': url });
     return c.redirect(url);
   };
+
+  app.use('/recordings', requireAdmin);
+  app.use('/recordings/*', requireAdmin, requireCsrf);
+  mountRecordings(app, db, () => cfg, undefined, deps.onSettingsSaved);
 
   app.use('/', requireAdmin);
   app.use('/members/*', requireAdmin);
@@ -2814,6 +2822,7 @@ export function createWebApp(deps: WebDeps) {
     const opsNum = (k: string, key: 'applicationHours' | 'soudanHours' | 'omairiHours' | 'bellMinutes' | 'quietStart' | 'quietEnd' | 'reportWeekday' | 'reportHour') =>
       Number.isFinite(num(k)) && typeof body[k] === 'string' && body[k] !== '' ? num(k) : opsNow[key];
     const raw = {
+      ...(prev.recording ? { recording: prev.recording } : {}),
       economy: {
         currencyName: field(body, 'currencyName', 20),
         currencyEmoji: field(body, 'currencyEmoji', 10),

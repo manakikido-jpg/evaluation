@@ -21,6 +21,10 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   // 神職用: 「メンバーをタイムアウト」の権限がある人にだけ表示（使えるかどうかは BOT がロールで確認する）
   const staff = PermissionFlagsBits.ModerateMembers;
   return [
+    new SlashCommandBuilder().setName('recording').setNameLocalizations({ ja: '録音' })
+      .setDescription('Prepare a voice recording with everyone’s consent')
+      .setDescriptionLocalizations({ ja: '全員の同意を確認して、通話の録音を準備する（神職・宮司）' })
+      .setDefaultMemberPermissions(staff).setContexts(InteractionContextType.Guild).toJSON(),
     // 右クリック（スマホは長押し）→ アプリ
     new ContextMenuCommandBuilder()
       .setName(COMMAND.profileMenu)

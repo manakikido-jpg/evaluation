@@ -1,3 +1,4 @@
+import { recordingSchema } from '../config.js';
 import { z } from 'zod';
 import { setStyleCatalog } from './casino/styles.js';
 import { emaCounterSchema, casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, voiceCounterSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
@@ -11,6 +12,7 @@ import { activeEvents, applyEvents } from './economyEvents.js';
  * ID（チャンネル・ロール）は変えられない（間違えると BOT が動かなくなるため、ファイルで管理する）。
  */
 export const overridesSchema = z.object({
+  recording: recordingSchema.optional(),
   economy: z
     .object({
       currencyName: z.string().min(1).max(20),
@@ -148,6 +150,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
   const vip = o.rooms.vip ?? base.rooms.vip;
   return guildConfigSchema.parse({
     ...base,
+    recording: o.recording ?? base.recording,
     // 💎 極の入口（社務所Web で作ったもの）を、通話部屋の入口に足す
     tempVoice: {
       ...base.tempVoice,

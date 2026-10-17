@@ -765,6 +765,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await saveOverrides(
       db,
       os.parse({
+        recording: { enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] },
         gacha: { price: 777, enabled: false },
         casino: { slotMachines: [3, 'random'] },
         omikujiStreak: { rewards: [{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }] },
@@ -775,6 +776,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const res = await post('/settings', g, form);
     expect(res.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.economy.menzaifuPrice).toBe(800);
+    expect(store.current.recording).toMatchObject({ enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] });
     expect(store.current.gacha).toMatchObject({ price: 777, enabled: false });
     expect(store.current.casino.slotMachines).toEqual([3, 'random']);
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
@@ -3963,4 +3965,32 @@ it('キャスト専用のDiscord認証で本人だけ編集でき、運営の画
   expect((await app.request('/cast-office', { headers: { cookie } })).headers.get('location')).toBe('/cast-office/login?e=denied');
   const forged = await createMemberSession(db, { id: OTHER, username: 'other', displayName: 'other', avatarUrl: null }, clock);
   expect((await app.request('/cast-office', { headers: { cookie: `sakura_cast_office=${forged}` } })).headers.get('location')).toBe('/cast-office/login?e=denied');
+});
+
+
+describe('録音・録画のログインとCSRF', () => {
+  it('一覧と実体の読み出しをログインで守り、POSTはCSRFも確認する', async () => {
+    const id = '00000000-0000-0000-0000-000000000000';
+    expect((await app.request('/recordings')).status).toBe(302);
+    expect((await app.request(`/recordings/${id}/media`)).status).toBe(302);
+    const s = await login(STAFF);
+    const page = await get('/recordings', s);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('現在は無効');
+    const { findSession } = await import('../src/web/sessions.js');
+    const csrf = (await findSession(db, s, clock))!.csrfToken;
+    for (const route of ['/recordings/create', '/recordings/settings', `/recordings/${id}/chunk`, `/recordings/${id}/finish`, `/recordings/${id}/delete`]) {
+      expect((await app.request(route, { method: 'POST', headers: { cookie: `shamusho_session=${s}` } })).status).toBe(403);
+    }
+    // 生の分割データでも、ヘッダーのCSRFは通る（対象の記録はないので404）。
+    expect((await app.request(`/recordings/${id}/chunk`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'x-csrf-token': csrf, 'content-type': 'application/octet-stream', 'x-chunk-seq': '0' }, body: new Uint8Array([1]) })).status).toBe(404);
+    const limited = await app.request(`/recordings/${id}/chunk`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'x-csrf-token': csrf, 'content-type': 'application/octet-stream' }, body: new Uint8Array(1024 * 1024 + 1) });
+    expect(limited.status).toBe(413);
+  });
+  it('録音・録画のページ権限がない人は、APIにも入れない', async () => {
+    const { createSession } = await import('../src/web/sessions.js');
+    const s = await createSession(db, { id: STAFF, username: 'staff', displayName: 'staff', avatarUrl: null }, { level: 'shinshoku', pages: ['home'] }, clock);
+    expect((await get('/recordings', s)).status).toBe(403);
+    expect((await app.request('/recordings/create', { method: 'POST', headers: { cookie: `shamusho_session=${s}` } })).status).toBe(403);
+  });
 });

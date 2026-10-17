@@ -1282,3 +1282,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .guide-voice-option[hidden], .guide-voice-group[hidden] { display:none; }
 .guide-table { overflow-x:auto; max-width:100%; margin:16px 0; }
 .guide-table input { min-width:220px; width:100%; }
+
+/* 録画のプレビュー・再生は画面の中に収める。 */
+#recorder video, .recording-entry video { display: block; width: 100%; max-width: 960px; max-height: 65vh; background: #101522; border-radius: 12px; }
+#recorder label { display: block; margin-block: 1rem; }

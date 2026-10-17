@@ -23,6 +23,7 @@ services:
         condition: service_healthy
     volumes:
       - ./config/guild.json:/app/config/guild.json:ro
+      - recording_data:/data/recordings
 
   # 管理画面（社務所 Web）
   web:
@@ -35,6 +36,7 @@ services:
         condition: service_healthy
     volumes:
       - ./config/guild.json:/app/config/guild.json:ro
+      - recording_data:/data/recordings
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:'+(process.env.WEB_PORT||3000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -69,3 +71,4 @@ services:
 volumes:
   pgdata:
   caddy_data:
+  recording_data:
