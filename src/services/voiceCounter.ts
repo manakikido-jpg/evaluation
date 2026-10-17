@@ -19,5 +19,14 @@ export function countInGroups(channels: GroupChannel[], groups: readonly VoiceGr
   return n;
 }
 
-/** チャンネル名（{n} を人数に。Discord の名前の長さ 100 文字まで） */
-export const counterName = (vc: Pick<VoiceCounter, 'name'>, n: number) => vc.name.replaceAll('{n}', String(n)).slice(0, 100);
+/** 混み具合の印（0 人 💤・少ない 🟢・ふつう 🟡・多い 🔴） */
+export function crowdIcon(vc: Pick<VoiceCounter, 'midAt' | 'highAt'>, n: number): string {
+  if (n <= 0) return '💤';
+  if (n >= vc.highAt) return '🔴';
+  if (n >= vc.midAt) return '🟡';
+  return '🟢';
+}
+
+/** チャンネル名（{n} を人数、{icon} を混み具合の印に。Discord の名前の長さ 100 文字まで） */
+export const counterName = (vc: Pick<VoiceCounter, 'name' | 'midAt' | 'highAt'>, n: number) =>
+  vc.name.replaceAll('{n}', String(n)).replaceAll('{icon}', crowdIcon(vc, n)).slice(0, 100);

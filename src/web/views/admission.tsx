@@ -1303,8 +1303,16 @@ export function SettingsPage(props: {
               <input type="text" name="vcCounterChannel" value={cfg.voiceCounter.channelId ?? ''} inputmode="numeric" pattern="\d{17,20}" placeholder="例: 1234567890123456789" />
             </label>
             <label class="field">
-              <span>チャンネル名（{'{n}'} が人数になる）</span>
+              <span>チャンネル名（{'{n}'} が人数、{'{icon}'} が混み具合の印。0 人 💤・少ない 🟢・ふつう 🟡・多い 🔴）</span>
               <input type="text" name="vcCounterName" value={cfg.voiceCounter.name} maxlength={90} required />
+            </label>
+            <label class="field">
+              <span>この人数から 🟡</span>
+              <input type="number" name="vcCounterMid" value={String(cfg.voiceCounter.midAt)} min={1} max={500} required />
+            </label>
+            <label class="field">
+              <span>この人数から 🔴</span>
+              <input type="number" name="vcCounterHigh" value={String(cfg.voiceCounter.highAt)} min={1} max={500} required />
             </label>
             <label class="field">
               <span>数える通話の名前にある言葉</span>

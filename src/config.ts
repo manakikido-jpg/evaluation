@@ -186,8 +186,12 @@ export type VoiceGroup = z.infer<typeof voiceGroupSchema>;
 export const voiceCounterSchema = z.object({
   /** 名前を書きかえるチャンネル（なければ出さない） */
   channelId: snowflake.optional(),
-  /** チャンネル名。{n} が人数になる */
-  name: z.string().min(1).max(90).default('👥 縁側 いま {n} 人'),
+  /** チャンネル名。{n} が人数、{icon} が混み具合の印（💤 0 人・🟢・🟡・🔴）になる */
+  name: z.string().min(1).max(90).default('{icon} {n}人｜縁側'),
+  /** この人数から 🟡 */
+  midAt: z.number().int().min(1).max(500).default(5),
+  /** この人数から 🔴 */
+  highAt: z.number().int().min(1).max(500).default(10),
   /** 自動で増える通話のうち、名前にこの言葉がある仲間を数える */
   match: z.string().min(1).max(30).default('縁側'),
 });

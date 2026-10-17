@@ -2958,6 +2958,8 @@ export function createWebApp(deps: WebDeps) {
               channelId: /^\d{17,20}$/.test(String(body.vcCounterChannel ?? '').trim()) ? String(body.vcCounterChannel).trim() : null,
               ...(field(body, 'vcCounterName', 90) ? { name: field(body, 'vcCounterName', 90) } : {}),
               ...(field(body, 'vcCounterMatch', 30) ? { match: field(body, 'vcCounterMatch', 30) } : {}),
+              ...(num('vcCounterMid') > 0 ? { midAt: num('vcCounterMid') } : {}),
+              ...(num('vcCounterHigh') > 0 ? { highAt: num('vcCounterHigh') } : {}),
             }
           : prev.voiceCounter,
       coreTime: {
