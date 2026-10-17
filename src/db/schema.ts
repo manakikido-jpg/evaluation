@@ -2071,3 +2071,23 @@ export const presenceGifts = pgTable('presence_gifts', {
   revokedBy: text('revoked_by'),
 }, (t) => [index('presence_gifts_status').on(t.status)]);
 export type PresenceGift = typeof presenceGifts.$inferSelect;
+
+/** 録音・録画の情報だけ。実体は公開しない専用フォルダに保存する。 */
+export const recordings = pgTable('recordings', {
+  id: text('id').primaryKey(),
+  ownerId: text('owner_id').notNull(),
+  title: text('title').notNull(),
+  kind: text('kind').$type<'voice' | 'screen' | 'camera'>().notNull(),
+  mime: text('mime').notNull(),
+  status: text('status').$type<'writing' | 'ready' | 'failed' | 'deleted'>().notNull(),
+  bytes: integer('bytes').notNull().default(0),
+  nextSeq: integer('next_seq').notNull().default(0),
+  lastHash: text('last_hash'),
+  maxBytes: integer('max_bytes').notNull(),
+  channelId: text('channel_id'),
+  participantIds: jsonb('participant_ids').$type<string[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, t => [index('recordings_expiry_idx').on(t.expiresAt)]);
+export type Recording = typeof recordings.$inferSelect;

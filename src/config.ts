@@ -11,6 +11,7 @@ const snowflake = z.string().regex(/^\d{17,20}$/, 'Discord の ID（17〜20 桁�
 export const WEB_PAGES = [
   { key: 'home', label: 'ホーム', href: '/', prefixes: [''] },
   { key: 'stats', label: '推移', href: '/stats', prefixes: ['stats'] },
+  { key: 'recordings', label: '録音・録画', href: '/recordings', prefixes: ['recordings'] },
   { key: 'voice', label: '通話の記録', href: '/voice', prefixes: ['voice'] },
   { key: 'audit', label: '記録', href: '/audit', prefixes: ['audit'] },
   { key: 'commands', label: 'コマンド', href: '/commands', prefixes: ['commands'] },
@@ -630,9 +631,19 @@ export const casinoGachaSchema = z.object({
 }).refine((g) => g.cosmeticPercent + g.boostPercent <= 100, '出る割合の合計は100％までです');
 export type CasinoGachaConfig = z.infer<typeof casinoGachaSchema>;
 
+export const recordingSchema = z.object({
+  enabled: z.boolean().default(false),
+  voiceChannelIds: z.array(snowflake).max(50).default([]),
+  retentionDays: z.number().int().min(1).max(30).default(7),
+  maxMinutes: z.number().int().min(1).max(60).default(20),
+  maxFileMB: z.number().int().min(10).max(512).default(256),
+  maxTotalMB: z.number().int().min(512).max(10240).default(2048),
+});
+
 export const guildConfigSchema = z
   .object({
     guildId: snowflake,
+    recording: recordingSchema.default(() => recordingSchema.parse({})),
     channels: z.object({
       /** #慶事: 昇格の発表 */
       keiji: snowflake,

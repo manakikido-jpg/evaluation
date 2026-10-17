@@ -82,6 +82,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'shinpu.css': { body: shinpuCss(), type: 'text/css; charset=utf-8' },
     'shinpu.js': { body: readText(path.join(here, 'public/shinpu.js')), type: 'text/javascript; charset=utf-8' },
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
+    'recordings.js': { body: readText(path.join(here, 'public/recordings.js')), type: 'text/javascript; charset=utf-8' },
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'guide.js': { body: readText(path.join(here, 'public/guide.js')), type: 'text/javascript; charset=utf-8' },
     'theme.js': { body: readText(path.join(here, 'public/theme.js')), type: 'text/javascript; charset=utf-8' },
