@@ -708,6 +708,13 @@
       "when": 1792002273786,
       "tag": "0100_tough_greymalkin",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1792243403763,
+      "tag": "0101_tan_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

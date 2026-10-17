@@ -2047,3 +2047,22 @@ export const keibaWinningNotices = pgTable('keiba_winning_notices', {
   messageId: text('message_id'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('keiba_winning_notice_once').on(t.tableId, t.raceNo, t.memberId), index('keiba_winning_notice_pending').on(t.status, t.availableAt)]);
+
+/** 🎁 浮上している人へのプレゼント。社務所Web で受け付け、BOT がオンラインの人に配る（1 件 1 回） */
+export const presenceGifts = pgTable('presence_gifts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  /** coins: 銭 / ticket: 券 */
+  kind: text('kind').$type<'coins' | 'ticket'>().notNull(),
+  ticketKind: text('ticket_kind'),
+  /** 1 人あたりの量（銭の枚数・券の枚数） */
+  amount: integer('amount').notNull(),
+  note: text('note').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** pending: 配る前 / done: 配った / failed: 配れなかった（reason） */
+  status: text('status').$type<'pending' | 'done' | 'failed'>().notNull().default('pending'),
+  reason: text('reason'),
+  count: integer('count').notNull().default(0),
+  doneAt: timestamp('done_at', { withTimezone: true }),
+}, (t) => [index('presence_gifts_status').on(t.status)]);
+export type PresenceGift = typeof presenceGifts.$inferSelect;

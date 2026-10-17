@@ -1,6 +1,7 @@
 import { OMIKUJI_SPECIAL_MAX, WEB_PAGES, webAccessEntries, type GachaTier, type GuildConfig, type WebAccessEntry } from '../../config.js';
 import { contactSummary } from '../../services/contact.js';
-import type { AdminSession, Application, Omairi, Soudan, SoudanMessage, WebAccount } from '../../db/schema.js';
+import type { AdminSession, Application, Omairi, PresenceGift, Soudan, SoudanMessage, WebAccount } from '../../db/schema.js';
+import { PRESENCE_TICKET_MAX } from '../../services/presenceGifts.js';
 import { AGE_LABEL, fmtAgo, fmtDate, fmtDateTime, memberRankLabel } from '../format.js';
 import { GENDER_LABEL, isGender } from '../../services/admission.js';
 import { recruitWaits } from '../../services/recruit.js';
@@ -35,6 +36,8 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   saved: { text: '設定を保存しました。BOT には 1 分以内に反映されます。', kind: 'ok' },
   bonus_given: { text: 'まだもらっていない人に初期配布を配りました。', kind: 'ok' },
   coins_all_given: { text: '今いる人みんなに送りました。', kind: 'ok' },
+  gift_queued: { text: '🎁 受け付けました。1 分以内に、いまオンラインの人へ配ります（下の「最近のプレゼント」で人数が見られます）。', kind: 'ok' },
+  gift_invalid: { text: '配るもの・量・理由を確かめてください（券は 1 人 10 枚まで）。', kind: 'warn' },
   coins_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回送られないようにしています）。', kind: 'warn' },
   coins_invalid: { text: '枚数（1〜100,000）と理由を入れて、「送る」にチェックしてください。', kind: 'warn' },
   saved_notices: { text: '設定を保存しました。BOT には 1 分以内に反映されます。投稿済みの掲示の数字も書き換えました。', kind: 'ok' },
@@ -1043,6 +1046,8 @@ export function SettingsPage(props: {
   flash?: string;
   error?: string;
   coinsNonce?: string;
+  /** 🎁 浮上している人へのプレゼント（最近のもの） */
+  presenceGifts?: PresenceGift[];
   at?: string;
   /** テキストチャンネル（呼び鈴の知らせ先を選ぶ。category はカテゴリ名） */
   textChannels?: { id: string; name: string; category?: string }[];
@@ -1786,6 +1791,67 @@ export function SettingsPage(props: {
           </button>
         </form>
       )}
+      <form method="post" action="/settings/presence-gift" class="give-form">
+        <Csrf session={props.session} />
+        <h3>🎁 浮上している人にプレゼント</h3>
+        <p class="note">
+          いまオンライン（🟢・🌙 退席中・⛔ 取り込み中。オフラインはのぞく）の、役職のある人（BOT はのぞく）全員に、同じものを配ります。押してから 1 分以内に BOT が配り、#記録 に何人に配ったか出します。DM は送らないので、{'#御触書'} などで知らせてください。オンラインかどうかを見るには、BOT の PRESENCE INTENT と {'.env'} の DISCORD_PRESENCE=on が要ります（オフのときは配らずに「配れなかった」になります）。
+        </p>
+        <div class="fields">
+          <label class="field">
+            <span>配るもの</span>
+            <select name="what" required>
+              <option value="coins">{e.currencyEmoji} {e.currencyName}</option>
+              {TICKET_GROUPS.map((g) => (
+                <optgroup label={g.label}>
+                  {g.kinds.map((k) => (
+                    <option value={`ticket:${k}`}>
+                      {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <label class="field">
+            <span>1 人あたりの量（{e.currencyName}は枚数。券は {PRESENCE_TICKET_MAX} 枚まで）</span>
+            <input type="number" name="amount" min={1} max={100000} required />
+          </label>
+          <label class="field">
+            <span>理由（記録に残る）</span>
+            <input type="text" name="note" maxlength={200} required />
+          </label>
+        </div>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>浮上している人に配る</span>
+        </label>
+        <button type="submit" class="ok">
+          配る
+        </button>
+        {(props.presenceGifts ?? []).length > 0 && (
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>受け付けた日時</th>
+                <th>中身</th>
+                <th>結果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(props.presenceGifts ?? []).map((g) => (
+                <tr>
+                  <td>{fmtDateTime(g.createdAt)}</td>
+                  <td>
+                    {g.kind === 'coins' ? `${e.currencyEmoji} ${g.amount} 枚` : `${TICKET_LABEL[g.ticketKind as keyof typeof TICKET_LABEL]?.emoji ?? ''} ${TICKET_LABEL[g.ticketKind as keyof typeof TICKET_LABEL]?.name ?? g.ticketKind} ${g.amount} 枚`}（{g.note}）
+                  </td>
+                  <td>{g.status === 'pending' ? '⏳ 配る前' : g.status === 'done' ? `✅ ${g.count} 人に配った` : `⚠ 配れなかった（${g.reason === 'presence_off' ? 'オンラインを見る設定がオフ' : g.reason}）`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </form>
       </section>
         </div>
       </div>

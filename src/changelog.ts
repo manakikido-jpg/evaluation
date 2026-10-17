@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-17-presence-gift', date: '2026-10-17', kind: 'new', where: ['社務所Web', 'Discord'], title: '浮上している人にプレゼント', items: ['社務所Web の設定「🎁 今いる人に配る」から、いまオンラインの人全員に銭か券を配れます（宮司だけ）。', '押してから 1 分以内に BOT が配り、#記録 に何人に配ったか出します。'] },
   { id: '2026-10-17-guide-who-online', date: '2026-10-17', kind: 'improve', where: ['Discord'], title: '「待機中の人」は、運営はいつも・ほかの人はオンラインのときだけ', items: ['案内人の「👀 待機中の人」で、運営（神職・宮司）の案内人はいつも出します。ほかの人は、待機中でオンラインのときだけ出します。', 'オンラインかどうかを見るには、Developer Portal で PRESENCE INTENT をオンにして、.env の DISCORD_PRESENCE を on にします（それまでは待機中なら出します）。'] },
   { id: '2026-10-17-guide-who-waiting', date: '2026-10-17', kind: 'new', where: ['Discord'], title: '案内人のパネルで、待機中の人を見られるように', items: ['案内人の受付パネルに「👀 待機中の人」ボタンを足しました。押した人にだけ、いま待機中の案内人の一覧が出ます（通知は飛びません）。'] },
   { id: '2026-10-17-engawa-counter-icon', date: '2026-10-17', kind: 'improve', where: ['Discord', '社務所Web'], title: '縁側の人数を、混み具合の色で見やすく', items: ['チャンネル名を「🟢 3人｜縁側」のように、色の丸と人数を先に出す形にしました。0 人は 💤、5 人から 🟡、10 人から 🔴 です（社務所Web で変えられます）。'] },

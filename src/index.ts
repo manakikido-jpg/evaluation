@@ -19,6 +19,7 @@ import { CastApp } from './discord/cast.js';
 import { TicketApp } from './discord/supportTickets.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceCounterApp } from './discord/voiceCounter.js';
+import { PresenceGiftApp } from './discord/presenceGifts.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { DiaryApp } from './discord/diary.js';
@@ -120,6 +121,7 @@ async function main(): Promise<void> {
   const otoshidama = new OtoshidamaApp(db, cfg, actions);
   const voiceGroups = new VoiceGroupApp(cfg);
   const voiceCounter = new VoiceCounterApp(cfg);
+  const presenceGifts = new PresenceGiftApp(db, cfg, actions, env.DISCORD_PRESENCE === 'on');
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
@@ -215,6 +217,8 @@ async function main(): Promise<void> {
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
       void voiceCounter.tick();
+      // 🎁 浮上している人へのプレゼント（社務所Web で受け付けたもの）
+      void presenceGifts.tick(guild);
       // 市場: 期限が来た取引を渡す・返事のない提案を取り下げる・📞 待機の時間切れ
       void market.tick().catch((err) => logger.warn({ err }, 'market tick failed'));
       // 1 時間ごとの部屋（宵宮）の支払い

@@ -1,3 +1,4 @@
+import { recentPresenceGifts, requestPresenceGift, PRESENCE_TICKET_MAX } from '../services/presenceGifts.js';
 import { endRaid, raidState, startRaid } from '../services/raid.js';
 import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
@@ -2447,6 +2448,7 @@ export function createWebApp(deps: WebDeps) {
         flash={c.req.query('msg')}
         at={c.req.query('at')}
         coinsNonce={randomUUID()}
+        presenceGifts={await recentPresenceGifts(db, 5)}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         voiceChannels={voiceChannelsOf(channels)}
         forumChannels={channels.filter((ch) => ch.type === 15).map((ch) => ({ id: ch.id, name: ch.name }))}
@@ -3037,6 +3039,22 @@ export function createWebApp(deps: WebDeps) {
     if (r.status === 'duplicate') return c.redirect('/settings?msg=coins_dup');
     await audit(db, { actorId: by, action: 'coins.grant_all', detail: { amount, note, count: r.count }, via: 'web' });
     return c.redirect('/settings?msg=coins_all_given');
+  });
+
+  // 🎁 浮上している人へのプレゼント（BOT が 1 分以内にオンラインの人へ配る）
+  app.post('/settings/presence-gift', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const what = typeof body.what === 'string' ? body.what : '';
+    const input = what === 'coins' ? ({ kind: 'coins' } as const) : what.startsWith('ticket:') ? ({ kind: 'ticket', ticketKind: what.slice(7) } as const) : undefined;
+    const amount = Number(body.amount);
+    const note = field(body, 'note', 200);
+    if (body.confirm !== 'yes' || !input || !note) return c.redirect('/settings?msg=gift_invalid#sec-give');
+    const by = c.get('session').userId;
+    const row = await requestPresenceGift(db, input, amount, note, by);
+    if (!row) return c.redirect('/settings?msg=gift_invalid#sec-give');
+    await audit(db, { actorId: by, action: 'gift.presence_request', detail: { id: row.id, kind: row.kind, ticketKind: row.ticketKind, amount, note }, via: 'web' });
+    return c.redirect('/settings?msg=gift_queued#sec-give');
   });
 
   // 社務所Web に入れる人（ロール・人ごとに、見られるページを選ぶ）
