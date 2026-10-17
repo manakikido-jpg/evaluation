@@ -19,6 +19,9 @@ import { boostCasino } from '../../services/casino/boost.js';
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 
 export const CASINO_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  at_refund_done: { text: '🦊 AT 機の補填を渡しました（銭の出入りは「運営から」）。', kind: 'ok' },
+  at_refund_none: { text: '補填する回はありません（もう渡したか、ありません）。', kind: 'warn' },
+  at_refund_invalid: { text: '1 回あたりの量（1〜1,000,000）を入れて、確認にチェックを入れてください。', kind: 'warn' },
   saved: { text: '🎰 カジノの設定を保存しました（1 分以内に反映されます）。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（最低の賭けは最高以下に）。', kind: 'warn' },
   no_role_picked: { text: '「決めたロールがある人だけ」にするときは、ロールを選んでください。', kind: 'warn' },
@@ -39,6 +42,8 @@ export const CASINO_RANGES = { '1d': { label: '今日から 24 時間', days: 1 
 export type CasinoRange = keyof typeof CASINO_RANGES;
 
 export function CasinoAdminPage(p: {
+  /** 🦊 AT 機の補填（7 がそろったのに当たらなかった回） */
+  atRefund?: { rows: { memberId: string; games: number }[]; names: Map<string, string>; avg: number; avgCount: number; paid: number };
   session: SessionView;
   casino: CasinoConfig;
   casinoGacha?: GuildConfig['casinoGacha'];
@@ -473,6 +478,7 @@ export function CasinoAdminPage(p: {
         </section>
       )}
       {p.horses && <HorseRoster horses={p.horses} csrf={p.session.csrfToken} />}
+      {p.guji && p.atRefund && <AtRefund r={p.atRefund} csrf={p.session.csrfToken} coinName={p.coinName} />}
       {p.guji && p.art && <AtArt art={p.art} fileArt={p.fileArt ?? {}} csrf={p.session.csrfToken} demoUrl={`${p.url}/atslot/demo`} />}
     </Layout>
   );
@@ -858,6 +864,58 @@ const ART_GROUPS: { group: ArtSlot['group']; title: string }[] = [
   { group: 'cab', title: '台の飾り' },
   { group: 'sym', title: 'リールの絵柄' },
 ];
+
+/** 🦊 AT 機の補填: 7 がそろって見えたのに白狐目にならなかった回（2026-10-18 に直した不具合）の人へ渡す */
+function AtRefund(p: { r: NonNullable<Parameters<typeof CasinoAdminPage>[0]['atRefund']>; csrf: string; coinName: string }) {
+  const games = p.r.rows.reduce((a, x) => a + x.games, 0);
+  return (
+    <section class="card anchor" id="casino-at-refund">
+      <h2>🦊 AT 機の補填（7 がそろったのに当たらなかった回）</h2>
+      <p class="note">
+        前は、鬼7 や白狐7・鬼7 のまぜで 7 がそろっても白狐目（AT 確定）になりませんでした。記録に残った止まった目からその回をさがし、1 回につき AT 1 回の平均の獲得を渡します。渡した回は覚えるので、2 回は渡りません（もう渡した回: {fmt(p.r.paid)}）。
+      </p>
+      <p>
+        AT 1 回の平均の獲得: <b>{fmt(p.r.avg)}</b> {p.coinName}（終わった AT {fmt(p.r.avgCount)} 回から）
+      </p>
+      {p.r.rows.length === 0 ? (
+        <p class="muted">補填する回はありません。</p>
+      ) : (
+        <>
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>人</th>
+                <th>回数</th>
+                <th>渡す量</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.r.rows.map((x) => (
+                <tr>
+                  <td>{p.r.names.get(x.memberId) ?? x.memberId}</td>
+                  <td>{x.games}</td>
+                  <td>{fmt(x.games * p.r.avg)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <form method="post" action="/economy/casino/at-refund">
+            <input type="hidden" name="_csrf" value={p.csrf} />
+            <label class="field">
+              <span>1 回あたりの量（はじめは平均。変えてもよい）</span>
+              <input type="number" name="perGame" value={String(Math.max(1, p.r.avg))} min={1} max={1000000} required />
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="confirm" value="yes" required />
+              <span>{p.r.rows.length} 人・{games} 回分を渡す</span>
+            </label>
+            <button type="submit" class="ok">補填を渡す</button>
+          </form>
+        </>
+      )}
+    </section>
+  );
+}
 
 /** 🦊 AT 機の絵（入れた絵は液晶・リールにすぐ出る。入れていないところは仮の絵） */
 function AtArt(p: { art: Record<string, string>; fileArt: Record<string, string>; csrf: string; demoUrl: string }) {

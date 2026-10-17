@@ -1,3 +1,4 @@
+import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
 import { mountRecordings } from './recordings.js';
 import { GIFT_TARGET_MAX, giveToMembers, recentPresenceGifts, requestPresenceGift, resolveGiftTargets, revokePresenceGift } from '../services/presenceGifts.js';
 import { endRaid, raidState, startRaid } from '../services/raid.js';
@@ -1709,8 +1710,24 @@ export function createWebApp(deps: WebDeps) {
         flash={c.req.query('msg')}
         guji={c.get('session').level === 'guji'}
         ai={await aiStats(db, since)}
+        atRefund={c.get('session').level === 'guji' ? await (async () => {
+          const [{ rows, paid }, avg] = await Promise.all([findAtSevenMisses(db), avgAtWin(db)]);
+          return { rows: rows.map((r) => ({ memberId: r.memberId, games: r.games.length })), names: await namesOf(db, rows.map((r) => r.memberId)), avg: avg.avg, avgCount: avg.count, paid: paid.length };
+        })() : undefined}
       />,
     );
+  });
+
+  // 🦊 AT 機の補填（7 がそろったのに当たらなかった回。宮司だけ・/economy/* で CSRF と宮司を確かめる）
+  app.post('/economy/casino/at-refund', async (c) => {
+    const body = await c.req.parseBody();
+    const perGame = Number(body.perGame);
+    if (body.confirm !== 'yes' || !Number.isSafeInteger(perGame) || perGame < 1 || perGame > 1_000_000) return c.redirect('/economy/casino?msg=at_refund_invalid#casino-at-refund');
+    const by = c.get('session').userId;
+    const r = await payAtSevenRefund(db, perGame, by);
+    if (!r.games) return c.redirect('/economy/casino?msg=at_refund_none#casino-at-refund');
+    await audit(db, { actorId: by, action: 'casino.at_refund', detail: { perGame, ...r }, via: 'web' });
+    return c.redirect('/economy/casino?msg=at_refund_done#casino-at-refund');
   });
 
   // 🦊 AT 機の絵: 選んだ絵をまとめて保存（欄ごとに img_<名前>）
