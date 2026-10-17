@@ -3,7 +3,7 @@ import { parseGuildConfig, type GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { slotAtMachines } from '../src/db/schema.js';
 import type { Rng } from '../src/services/casino/cards.js';
-import { AT_CEILING, AT_CZ_GAMES, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, atWinLine, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
+import { AT_PAYLINES, AT_REELS, atGrid, AT_CEILING, AT_CZ_GAMES, AT_IDLE_STOPS, AT_SET_GAMES, atLookOf, atMult, atStopsFor, atWinLine, newAtMachine, simulateAt, stepAt, type AtMachine } from '../src/services/casino/slotAt.js';
 import { atFloorData, leaveAt, orderAt, playAt, type AtGameState } from '../src/services/casino/slotAtPlay.js';
 import { atBattle, atShow } from '../src/services/casino/slotAtShow.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -29,6 +29,16 @@ describe('🦊 AT 機の中身', () => {
       for (const seed of [1, 2, 3]) expect(atLookOf(atStopsFor(look, seeded(seed)))).toBe(look);
     }
     expect(atLookOf(AT_IDLE_STOPS)).toBe('none');
+  });
+
+  it('7 が 1 本のラインにそろって見えるのは白狐目だけ（鬼7・まぜても）', () => {
+    const sevens = (st: number[]) => AT_PAYLINES.some((l) => l.rows.every((row, r) => ['w7', 'r7'].includes(atGrid(st)[r]![row]!)));
+    for (const look of ['bell', 'replay', 'suika', 'chance', 'scherry', 'wcherry', 'none'] as const) {
+      for (let seed = 1; seed <= 40; seed++) expect(sevens(atStopsFor(look, seeded(seed)))).toBe(false);
+    }
+    // 鬼7 だけのそろいも白狐目
+    const oni = [0, 1, 2].map((r) => AT_REELS[r]!.indexOf('r7'));
+    expect(atLookOf(oni)).toBe('byakko');
   });
 
   it('ラインは 5 本: ベル・リプレイ・スイカ・チャンス目・白狐目は、上段・中段・下段・斜めのどれか 1 本にそろう', () => {

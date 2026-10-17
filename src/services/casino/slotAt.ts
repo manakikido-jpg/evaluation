@@ -63,7 +63,7 @@ export const atGrid = (stops: number[]) => stops.map((s, r) => [symAt(r, s - 1),
 /** ライン（SAKURA 777 と同じ 5 本）: 上段・中段・下段・右下がり・右上がり。rows はリールごとの段（0 上・1 中・2 下） */
 export const AT_PAYLINES = PAYLINES;
 
-/** 見た目の役: ベル・リプレイ・スイカ・チャンス目（BAR・リプレイ・BAR）・白狐目（白狐 7 そろい）はどれか 1 本のラインに。チェリーは左リール（中段なら強） */
+/** 見た目の役: ベル・リプレイ・スイカ・チャンス目（BAR・リプレイ・BAR）・白狐目（7 そろい。白狐7・鬼7・まぜても）はどれか 1 本のラインに。チェリーは左リール（中段なら強） */
 type Look = Exclude<AtRole, 'oshijun' | 'none'>;
 type LineLook = 'bell' | 'replay' | 'suika' | 'chance' | 'byakko';
 const LINE_LOOKS: Record<LineLook, (l: AtSym[]) => boolean> = {
@@ -71,7 +71,8 @@ const LINE_LOOKS: Record<LineLook, (l: AtSym[]) => boolean> = {
   replay: (l) => l.every((x) => x === 'replay'),
   suika: (l) => l.every((x) => x === 'suika'),
   chance: (l) => l[0] === 'bar' && l[1] === 'replay' && l[2] === 'bar',
-  byakko: (l) => l.every((x) => x === 'w7'),
+  // 7 が 3 つそろえば（白狐7・鬼7・まぜても）白狐目。はずれの目に 7 のそろいを見せない
+  byakko: (l) => l.every((x) => x === 'w7' || x === 'r7'),
 };
 const LINE_KEYS = Object.keys(LINE_LOOKS) as LineLook[];
 /** その目で見えている役（ラインの役はラインごと・チェリーは 1 つ） */
