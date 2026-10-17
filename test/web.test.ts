@@ -855,6 +855,15 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const vg = await post('/settings', g, { ...form, _csrf: await csrfOf(g), 'vg.0.name': '大きな縁側', 'vg.0.min': '3', 'vg.0.max': '10', 'vg.1.name': '', 'vg.1.min': '3', 'vg.1.max': '20', at: 'voicegroups' });
     expect(vg.headers.get('location')).toBe('/settings?msg=saved&at=voicegroups#sec-voicegroups');
     expect(store.current.voiceGroups).toEqual([{ name: '大きな縁側', min: 3, max: 10 }]);
+    const ema = await post('/settings', g, { ...form, _csrf: await csrfOf(g), emaCounterPresent: '1', 'emaCounter.sanpaishaMale': '100000000000000061', 'emaCounterName.sanpaishaMale': '🌸参拝者♂｜{n}人' });
+    expect(ema.headers.get('location')).toBe('/settings?msg=saved');
+    expect(store.current.emaCounter).toMatchObject({ sanpaishaMale: '100000000000000061', names: { sanpaishaMale: '🌸参拝者♂｜{n}人' } });
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g) });
+    expect(store.current.emaCounter.sanpaishaMale).toBe('100000000000000061');
+    expect(store.current.emaCounter.names.sanpaishaMale).toBe('🌸参拝者♂｜{n}人');
+    const emaHtml = await (await get('/settings', g)).text(); expect(emaHtml).toContain('name="emaCounterName.sanpaishaMale"');
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g), emaCounterPresent: '1', 'emaCounter.sanpaishaMale': '' });
+    expect(store.current.emaCounter.sanpaishaMale).toBe('');
     const back = await (await get('/settings?msg=saved&at=rooms', g)).text();
     expect(back).toContain('id="sec-rooms"');
     expect(back.match(/設定を保存しました/g)?.length).toBe(2);

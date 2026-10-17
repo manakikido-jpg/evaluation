@@ -1,3 +1,4 @@
+import { EmaCounterApp } from './discord/emaCounter.js';
 import { planOf, roomOf } from './services/rooms.js';
 import { opsWeeklyTick, pruneOpsNotices, staleTick } from './services/opsWatch.js';
 import { createServer } from 'node:http';
@@ -120,6 +121,7 @@ async function main(): Promise<void> {
   const gifts = new GiftApp(db, cfg, actions);
   const otoshidama = new OtoshidamaApp(db, cfg, actions);
   const voiceGroups = new VoiceGroupApp(cfg);
+  const emaCounter = new EmaCounterApp(cfg);
   const voiceCounter = new VoiceCounterApp(cfg);
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg);
@@ -160,10 +162,13 @@ async function main(): Promise<void> {
       .then((channels) => announceUpdates({ db, discord: actions, channels }))
       .catch((err) => logger.warn({ err }, 'update news failed'));
     // 管理画面用に全員を同期（BOT が止まっていた間の参加・退出も反映）
+    let memberListReady = false;
     await guild.members
       .fetch()
-      .then((all) => app.syncAll(all.values()))
+      .then((all) => { memberListReady = true; return app.syncAll(all.values()); })
       .catch((err) => logger.error({ err }, 'member sync failed'));
+    emaCounter.attach(guild, memberListReady);
+    void emaCounter.tick();
     // 🧭 案内待ち: 止まっていた間に参加時の質問を終えた人・承認された人も合わせる
     await guidePending.attach(guild).catch((err) => logger.warn({ err }, 'guide pending attach failed'));
     // #面談日程: 止まっていた間に案内待ちが外れた人・抜けた人の書き込みを消す
@@ -217,6 +222,7 @@ async function main(): Promise<void> {
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
       void voiceCounter.tick();
+      void emaCounter.tick();
       // 🎁 浮上している人へのプレゼント（社務所Web で受け付けたもの）
       void presenceGifts.tick(guild);
       // 市場: 期限が来た取引を渡す・返事のない提案を取り下げる・📞 待機の時間切れ
@@ -314,7 +320,11 @@ async function main(): Promise<void> {
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
   });
+  client.on(Events.GuildUnavailable, (g) => { if (g.id === cfg().guildId) emaCounter.invalidate(); });
+  client.on(Events.GuildAvailable, (g) => emaCounter.schedule(g.id));
+  client.on(Events.ShardResume, () => { emaCounter.invalidate(); emaCounter.schedule(cfg().guildId); });
   client.on(Events.GuildMemberAdd, (m) => {
+    emaCounter.memberChanged(m.guild.id, m.id, true);
     void app.onMemberAdd(m);
     // だれの招待リンクで入ったか
     void inviteLinks.onMemberAdd(m);
@@ -326,11 +336,13 @@ async function main(): Promise<void> {
     void security.onMemberAdd(m).catch((err) => logger.warn({ err }, 'security join check failed'));
   });
   client.on(Events.GuildMemberRemove, (m) => {
+    emaCounter.memberChanged(m.guild.id, m.id, false);
     void app.onMemberRemove(m.guild.id, m.id);
     // 抜けた人の #面談日程 の書き込みを消す
     void guidePending.onMemberRemove(m.guild, m.id).catch((err) => logger.warn({ err }, 'interview schedule clear failed'));
   });
   client.on(Events.GuildMemberUpdate, (old, m) => {
+    if (!old.roles.cache.equals(m.roles.cache)) emaCounter.schedule(m.guild.id);
     void (async () => {
       await app.onMemberUpdate(m, old);
       // 承認されて絵馬待ち・役職になったら 🧭案内待ちを外す
@@ -429,6 +441,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'shutting down');
     health?.close();
+    emaCounter.close();
     if (ticker) clearInterval(ticker);
     if (omairiTicker) clearInterval(omairiTicker);
     store.stop();
