@@ -86,6 +86,8 @@ async function main(): Promise<void> {
       GatewayIntentBits.GuildVoiceStates,
       // 消されたメッセージの中身を記録するため（Developer Portal でオンにしたときだけ）
       ...(env.DISCORD_MESSAGE_CONTENT === 'on' ? [GatewayIntentBits.MessageContent] : []),
+      // オンラインかどうか（案内人の待機の一覧）。Developer Portal でオンにしたときだけ
+      ...(env.DISCORD_PRESENCE === 'on' ? [GatewayIntentBits.GuildPresences] : []),
     ],
   });
   const app = new ShuinApp(client, db, cfg);
@@ -108,7 +110,7 @@ async function main(): Promise<void> {
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
   const help = new HelpApp(cfg);
   const maikura = new MaikuraApp(db, cfg);
-  const guideReception = new GuideReceptionApp(db, cfg, actions);
+  const guideReception = new GuideReceptionApp(db, cfg, actions, env.DISCORD_PRESENCE === 'on');
   const guidePending = new GuidePendingApp(cfg);
   const security = new SecurityApp(db, cfg, actions);
   const roleGuard = new RoleGuardApp(db, cfg, actions);

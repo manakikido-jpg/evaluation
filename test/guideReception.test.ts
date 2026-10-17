@@ -3,7 +3,7 @@ import { Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { auditLogs, employeePayroll, guideEmployees, guideReceptions } from '../src/db/schema.js';
-import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides } from '../src/services/guideReception.js';
+import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides, listedGuides } from '../src/services/guideReception.js';
 import { GuideReceptionApp, guideVisitorPanel } from '../src/discord/guideReception.js';
 import * as economy from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
@@ -431,5 +431,20 @@ describe('案内完了で案内リンクのメッセージを消す', () => {
     await app.onInteraction(i as never);
     expect(del).toHaveBeenCalledWith(VOICE, '870000000000000555');
     expect((await db.select().from(guideReceptions))[0]?.status).toBe('done');
+  });
+});
+
+describe('👀 待機中の人', () => {
+  it('運営はいつも出す。ほかの人は待機中で、オンラインの人だけ（分からないときは待機中なら出す）', () => {
+    const guides = [
+      { id: 'staff', waiting: false },
+      { id: 'on', waiting: true },
+      { id: 'off', waiting: true },
+      { id: 'notWaiting', waiting: false },
+    ];
+    const info = (id: string) => ({ staff: id === 'staff', online: id === 'off' ? false : id === 'on' ? true : undefined });
+    expect(listedGuides(guides, info)).toEqual({ staff: ['staff'], others: ['on'] });
+    // オンラインかどうかを見ない設定
+    expect(listedGuides(guides, (id) => ({ staff: id === 'staff' }))).toEqual({ staff: ['staff'], others: ['on', 'off'] });
   });
 });

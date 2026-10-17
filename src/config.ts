@@ -889,6 +889,8 @@ const envSchema = z.object({
    * Developer Portal の Bot →「MESSAGE CONTENT INTENT」をオンにしてから on にする（オンにしないまま on だと BOT が起きない）
    */
   DISCORD_MESSAGE_CONTENT: z.enum(['on', 'off']).default('off'),
+  /** オンラインかどうかを見る（Developer Portal で PRESENCE INTENT をオンにしてから on にする） */
+  DISCORD_PRESENCE: z.enum(['on', 'off']).default('off'),
 });
 
 export type Env = z.infer<typeof envSchema>;

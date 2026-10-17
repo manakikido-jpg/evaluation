@@ -1,3 +1,4 @@
+import { adminLevelOf } from '../config.js';
 import { watchOf } from '../services/securityWatch.js';
 import { isNewAccount, raidState } from '../services/raid.js';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -6,7 +7,7 @@ import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, waitingGuides, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, type GuideConfig } from '../services/guideReception.js';
 import { guideRoleOf } from './guidePending.js';
 import { autoRanks } from '../domain/ranks.js';
 import { audit } from '../services/audit.js';
@@ -41,7 +42,7 @@ export class GuideReceptionApp {
   private panelLoadedAt = 0;
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly queue = new Map<string, Promise<void>>();
-  constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions) {}
+  constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions, private presence = false) {}
   private async options(guild: Guild) {
     const c = await loadGuideConfig(this.db);
     const matches = guild.roles.cache.filter(r => r.name.includes('案内人'));
@@ -227,11 +228,26 @@ export class GuideReceptionApp {
       }
       // 👀 いま待機中の案内人（パネルを見られる人ならだれでも。通知は飛ばさない）
       if (action === 'who') {
-        const ids = await waitingGuides(this.db);
-        return void await i.editReply({
-          content: ids.length ? `👀 いま待機中の案内人（${ids.length} 人）\n${ids.map((id) => `・<@${id}>`).join('\n')}` : 'いま待機中の案内人はいません。',
-          allowedMentions: { parse: [] },
+        const cfgNow = this.cfg();
+        const guides = await activeGuides(this.db);
+        // ロールを確かめるため、まだ手元にない人も読みこむ（読めなくても続ける）
+        if (guides.length) await i.guild.members.fetch({ user: guides.map((g) => g.id) }).catch(() => undefined);
+        const { staff, others } = listedGuides(guides, (id) => {
+          const m = i.guild.members.cache.get(id);
+          const status = m?.presence?.status;
+          return {
+            staff: Boolean(m && adminLevelOf(cfgNow, [...m.roles.cache.keys()])),
+            // オンラインかどうかを見ない設定なら、待機を押しているかだけで決める
+            online: this.presence ? Boolean(status && status !== 'offline') : undefined,
+          };
         });
+        const lines = [
+          `👀 いま対応できる案内人（${staff.length + others.length} 人）`,
+          ...(staff.length ? ['🛡 運営（いつも）', ...staff.map((id) => `・<@${id}>`)] : []),
+          ...(others.length ? [this.presence ? '🟢 オンラインで待機中' : '🟢 待機中', ...others.map((id) => `・<@${id}>`)] : []),
+          ...(staff.length + others.length ? [] : ['いま対応できる案内人はいません。']),
+        ];
+        return void await i.editReply({ content: lines.join('\n'), allowedMentions: { parse: [] } });
       }
       if (member.user.bot || !c.roleId || !member.roles.cache.has(c.roleId)) return void await i.editReply('案内人ロールが必要です。運営に確認してください。');
       if (action === 'wait' || action === 'off') {

@@ -83,6 +83,26 @@ export async function setGuideStatus(db: Db, memberId: string, status: 'active' 
 export async function setGuideWaiting(db: Db, memberId: string, waiting: boolean) {
   return (await db.update(guideEmployees).set({ waiting }).where(and(eq(guideEmployees.memberId, memberId), eq(guideEmployees.status, 'active'))).returning()).length > 0;
 }
+/** 承認ずみの案内人と、待機を押しているか */
+export async function activeGuides(db: Db): Promise<{ id: string; waiting: boolean }[]> {
+  return db.select({ id: guideEmployees.memberId, waiting: guideEmployees.waiting }).from(guideEmployees).where(eq(guideEmployees.status, 'active'));
+}
+
+/**
+ * 「待機中の人」に出す人。運営（神職・宮司）はいつも出す（固定）。
+ * ほかの人は、待機を押していて、オンライン（online が分からないときは見ない）の人だけ。
+ */
+export function listedGuides(guides: readonly { id: string; waiting: boolean }[], info: (id: string) => { staff: boolean; online?: boolean }): { staff: string[]; others: string[] } {
+  const staff: string[] = [];
+  const others: string[] = [];
+  for (const g of guides) {
+    const m = info(g.id);
+    if (m.staff) staff.push(g.id);
+    else if (g.waiting && m.online !== false) others.push(g.id);
+  }
+  return { staff, others };
+}
+
 /** いま待機中の案内人（承認ずみで、待機を押している人） */
 export async function waitingGuides(db: Db): Promise<string[]> {
   const rows = await db.select({ id: guideEmployees.memberId }).from(guideEmployees).where(and(eq(guideEmployees.status, 'active'), eq(guideEmployees.waiting, true)));
