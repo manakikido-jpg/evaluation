@@ -3,7 +3,7 @@
   "complete": 100,
   "percent": 42.2,
   "updated": "2026-10-18",
-  "scope": "画像制作の保存。ゲームへの実装済みカード数ではありません。既存のイラスト単体も含みます。",
+  "scope": "保存済み100点すべてを名前・数値・効果入りカード化。ゲーム効果の実装とは別です。originalsは修正前の比較用原画。",
   "cards": [
     {
       "id": "SK-001",
@@ -14,7 +14,15 @@
       "mp_cost": 0,
       "file": "originals/SK-001.png",
       "bytes": 2750193,
-      "sha256": "c28d18c9094c2541f0c7a6d7d686dcc4176923f72f14c53906b18c6c59e13018"
+      "sha256": "c28d18c9094c2541f0c7a6d7d686dcc4176923f72f14c53906b18c6c59e13018",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-001.png",
+      "cardBytes": 2603387,
+      "cardSha256": "e958bc249d8604e59f8135c7cde844606969f691b734d0709e3947d62509d9a8",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-002",
@@ -25,7 +33,15 @@
       "mp_cost": 0,
       "file": "originals/SK-002.png",
       "bytes": 2903340,
-      "sha256": "c07eac413199213f7e1650de78e1f273f4015282ce9a81eea73f47b86b32a536"
+      "sha256": "c07eac413199213f7e1650de78e1f273f4015282ce9a81eea73f47b86b32a536",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の3ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-002.png",
+      "cardBytes": 2735005,
+      "cardSha256": "afbb813d7cf0008110439ac6b1f0494ead8873fd27d6b6bd3bb23da9d0c66d32",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-003",
@@ -36,7 +52,15 @@
       "mp_cost": 0,
       "file": "originals/SK-003.png",
       "bytes": 2943872,
-      "sha256": "c6987718a988e7d0fac0fb002dc0f2f0908778f879cbeeb9d340e1a62e6418e9"
+      "sha256": "c6987718a988e7d0fac0fb002dc0f2f0908778f879cbeeb9d340e1a62e6418e9",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-003.png",
+      "cardBytes": 2818678,
+      "cardSha256": "cd584921ef42db1d2321f4a91931914c7317f192bffab68dda6c6708720619ab",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-004",
@@ -47,7 +71,15 @@
       "mp_cost": 0,
       "file": "originals/SK-004.png",
       "bytes": 2775819,
-      "sha256": "c69b688e2a23c0a0a6c97e80c15bc212fc487301d01a6a3af6d8f80b29ec696f"
+      "sha256": "c69b688e2a23c0a0a6c97e80c15bc212fc487301d01a6a3af6d8f80b29ec696f",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-004.png",
+      "cardBytes": 2716044,
+      "cardSha256": "5d50ec34294c4d5c5774429446b6b63f2525b71334193f9d1ef30bb6bf98fa24",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-005",
@@ -58,7 +90,15 @@
       "mp_cost": 0,
       "file": "originals/SK-005.png",
       "bytes": 2810549,
-      "sha256": "8ae8b9d93860603ac70c0a7f3c5191060738b2360f3e320c52614579d255bb19"
+      "sha256": "8ae8b9d93860603ac70c0a7f3c5191060738b2360f3e320c52614579d255bb19",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-005.png",
+      "cardBytes": 2715013,
+      "cardSha256": "ba3d1c1ffbe250dc8ffff5d13634f5dadd1df242a75f222ea1d6ed24cf74d4cc",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-006",
@@ -69,7 +109,15 @@
       "mp_cost": 0,
       "file": "originals/SK-006.png",
       "bytes": 2897240,
-      "sha256": "c84faef9c362ab8f918122e92b1b0f06753eccf0386da27e692845ac7d5ece8f"
+      "sha256": "c84faef9c362ab8f918122e92b1b0f06753eccf0386da27e692845ac7d5ece8f",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-006.png",
+      "cardBytes": 2678584,
+      "cardSha256": "f48dea79c2e0e28a8aa6f9ab0db2fc45f622c9a93ddc78937b8c9f9cfb67fa33",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-007",
@@ -80,7 +128,15 @@
       "mp_cost": 0,
       "file": "originals/SK-007.png",
       "bytes": 3093435,
-      "sha256": "008df2e35cda0790c7d2e7543d75fd98c125c56ab7707b59b4887c420792d16c"
+      "sha256": "008df2e35cda0790c7d2e7543d75fd98c125c56ab7707b59b4887c420792d16c",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-007.png",
+      "cardBytes": 2783551,
+      "cardSha256": "e2f4e9d02ed4c030da47725b468a56cf000985bc0e3091ebe661fe6522ddf20a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-008",
@@ -91,7 +147,15 @@
       "mp_cost": 0,
       "file": "originals/SK-008.png",
       "bytes": 2744731,
-      "sha256": "7fa74cc037399a19f9954b5383f22173d840ac3fd858b2decb118ce52cd02141"
+      "sha256": "7fa74cc037399a19f9954b5383f22173d840ac3fd858b2decb118ce52cd02141",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-008.png",
+      "cardBytes": 2628177,
+      "cardSha256": "aaf228515fe730af7e42f3f90ace37953cfa14ee1c4568b423cdf20b771efd2f",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-009",
@@ -102,7 +166,15 @@
       "mp_cost": 0,
       "file": "originals/SK-009.png",
       "bytes": 2805874,
-      "sha256": "20b0011bf892a45ae0d7357b1093eb2ef6523de8be4bf52b0c865bd8507e0c17"
+      "sha256": "20b0011bf892a45ae0d7357b1093eb2ef6523de8be4bf52b0c865bd8507e0c17",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-009.png",
+      "cardBytes": 2785610,
+      "cardSha256": "612427bbbeb4efc050c3c47d66299a5c8c040232f35e757d1a74fa97bb635c81",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-010",
@@ -113,7 +185,15 @@
       "mp_cost": 0,
       "file": "originals/SK-010.png",
       "bytes": 2779439,
-      "sha256": "8e9107a6088a630c3524bdb9632e52e1adfb8c312d2ee78cc285c901964639bc"
+      "sha256": "8e9107a6088a630c3524bdb9632e52e1adfb8c312d2ee78cc285c901964639bc",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-010.png",
+      "cardBytes": 2723493,
+      "cardSha256": "7f70dcc9ce72adc9bd1112beb44ca2ca5bb97637b6c658bb4bc76ec6bcf71cf7",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-011",
@@ -124,7 +204,15 @@
       "mp_cost": 0,
       "file": "originals/SK-011.png",
       "bytes": 2838562,
-      "sha256": "ec5881306d65be6d15752bb25c3e6d0b080b2f6c07dcea5743a1b9b7a3ed98fa"
+      "sha256": "ec5881306d65be6d15752bb25c3e6d0b080b2f6c07dcea5743a1b9b7a3ed98fa",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-011.png",
+      "cardBytes": 2849239,
+      "cardSha256": "b6aa7b4e4051dc12ee50b257ae378ad5763f745c6c7a649eba14dba8d0fab891",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-012",
@@ -135,7 +223,15 @@
       "mp_cost": 0,
       "file": "originals/SK-012.png",
       "bytes": 2912443,
-      "sha256": "7e429ffc4b831d5d729d7278c12e2dec418317ce08a2887b7a207f5c7f05af97"
+      "sha256": "7e429ffc4b831d5d729d7278c12e2dec418317ce08a2887b7a207f5c7f05af97",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-012.png",
+      "cardBytes": 2725962,
+      "cardSha256": "a8bad16687ff3fbbd3fefce89dcc47cb0730520e54e1a1fcbd0ce709b4d9844a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-013",
@@ -146,7 +242,15 @@
       "mp_cost": 0,
       "file": "originals/SK-013.png",
       "bytes": 3177970,
-      "sha256": "abe55cf16b18710a85e3b5311ef38346ae047c13f99c33fd7e40fba5a35901da"
+      "sha256": "abe55cf16b18710a85e3b5311ef38346ae047c13f99c33fd7e40fba5a35901da",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-013.png",
+      "cardBytes": 2800961,
+      "cardSha256": "82c09a28a05b36a033cb10460b8a9aff6ec1b24adcba682e901df183d328e17f",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-014",
@@ -157,7 +261,15 @@
       "mp_cost": 0,
       "file": "originals/SK-014.png",
       "bytes": 3109948,
-      "sha256": "12bc9b029823b293b5075f65055d9adca2ecba0a8eecc993d8ba5da26067969e"
+      "sha256": "12bc9b029823b293b5075f65055d9adca2ecba0a8eecc993d8ba5da26067969e",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の3ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-014.png",
+      "cardBytes": 2868032,
+      "cardSha256": "367db83b55d14f656835f10af23d33586d7f141d082a96dc997dc862398e60ad",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-015",
@@ -168,7 +280,15 @@
       "mp_cost": 0,
       "file": "originals/SK-015.png",
       "bytes": 3501300,
-      "sha256": "073262722cd9b4ac59f622e26d8110d6ebe4e231033bf7cdea244bc29c6b08b9"
+      "sha256": "073262722cd9b4ac59f622e26d8110d6ebe4e231033bf7cdea244bc29c6b08b9",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-015.png",
+      "cardBytes": 3120057,
+      "cardSha256": "6fc60e4f4f7c0539cb1dcc1decff54ab701c86cda4661657558e9d7973f7d8db",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-016",
@@ -179,7 +299,15 @@
       "mp_cost": 0,
       "file": "originals/SK-016.png",
       "bytes": 3044349,
-      "sha256": "93d3d826f0c1c3404e14bf910eb225b3f681c403960d229ff91a4708c40138e7"
+      "sha256": "93d3d826f0c1c3404e14bf910eb225b3f681c403960d229ff91a4708c40138e7",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-016.png",
+      "cardBytes": 2839753,
+      "cardSha256": "54c54478fa6bb9ba856b32926266d6557b7ce7e5f169938089ae983bb217c344",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-017",
@@ -190,7 +318,15 @@
       "mp_cost": 0,
       "file": "originals/SK-017.png",
       "bytes": 3222581,
-      "sha256": "80167381e90b10dbae3a66743b0433e9e9e1864a5f1965e8f819c07d636224e5"
+      "sha256": "80167381e90b10dbae3a66743b0433e9e9e1864a5f1965e8f819c07d636224e5",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-017.png",
+      "cardBytes": 2811163,
+      "cardSha256": "90f134fc646647b479d438d2eacfa7bc0fb361c86c74674302e7042c8661c7e8",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-018",
@@ -201,7 +337,15 @@
       "mp_cost": 0,
       "file": "originals/SK-018.png",
       "bytes": 3248988,
-      "sha256": "92381a060e0dc6cff0d1bd95b498526b526242eb1376d08df40c6073e0df138d"
+      "sha256": "92381a060e0dc6cff0d1bd95b498526b526242eb1376d08df40c6073e0df138d",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-018.png",
+      "cardBytes": 2877548,
+      "cardSha256": "7b5b9e1a53db5243c9b030a6b86263a3bf775d8cc9b007661706bf6660f6ddaa",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-019",
@@ -212,7 +356,15 @@
       "mp_cost": 0,
       "file": "originals/SK-019.png",
       "bytes": 3408771,
-      "sha256": "3e32c3b561c960f86469a66e84794d4e8543fe1bdf49eed6264d50ff4ee399cf"
+      "sha256": "3e32c3b561c960f86469a66e84794d4e8543fe1bdf49eed6264d50ff4ee399cf",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-019.png",
+      "cardBytes": 3126416,
+      "cardSha256": "7f0d6838b94d313cb70749800a75f5d724c2c9902358ec78cf10b96025b21800",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-020",
@@ -223,7 +375,15 @@
       "mp_cost": 0,
       "file": "originals/SK-020.png",
       "bytes": 3125200,
-      "sha256": "5b8da71925223292ee00adf8e3b1728e4a4025fdffa1e38a501815d9de2392cf"
+      "sha256": "5b8da71925223292ee00adf8e3b1728e4a4025fdffa1e38a501815d9de2392cf",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-020.png",
+      "cardBytes": 2870877,
+      "cardSha256": "5d74fb713b5fd3cc91fc57f05dcfaf0b25f1d261a1283116654d9687243b9341",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-021",
@@ -234,7 +394,15 @@
       "mp_cost": 0,
       "file": "originals/SK-021.png",
       "bytes": 3373956,
-      "sha256": "4b2422af3d8bb1f82e2ed86324ea3d4967ac898d97797f51f642c7d75ca04f36"
+      "sha256": "4b2422af3d8bb1f82e2ed86324ea3d4967ac898d97797f51f642c7d75ca04f36",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-021.png",
+      "cardBytes": 2821434,
+      "cardSha256": "a9dc5c1178487a944ed88fd51adb7398ae63aef3f6fc6585144fc336d9ca226b",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-022",
@@ -245,7 +413,15 @@
       "mp_cost": 0,
       "file": "originals/SK-022.png",
       "bytes": 3307667,
-      "sha256": "8c97c65b543bae0a04133405032747d87db4a93f6bedf923b14e9a744986aa38"
+      "sha256": "8c97c65b543bae0a04133405032747d87db4a93f6bedf923b14e9a744986aa38",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-022.png",
+      "cardBytes": 2745044,
+      "cardSha256": "9c3bfd2809ca595357cd6c4e76ccb0d490131ec9dfd862e065e40b284d739926",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-023",
@@ -256,7 +432,15 @@
       "mp_cost": 0,
       "file": "originals/SK-023.png",
       "bytes": 3443892,
-      "sha256": "d7733e96618deed4201682718f3a2e35c80679818aa6b5f41d1cd570ec7f0e5a"
+      "sha256": "d7733e96618deed4201682718f3a2e35c80679818aa6b5f41d1cd570ec7f0e5a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-023.png",
+      "cardBytes": 2882796,
+      "cardSha256": "38291c4bcf8c0b56c17dc8bf1e456fbd34b07b071edfad7a2ee16b51478f1f2d",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-024",
@@ -267,7 +451,15 @@
       "mp_cost": 0,
       "file": "originals/SK-024.png",
       "bytes": 2688448,
-      "sha256": "46fd3545402ed2a0ab898667cf4896574b24c800cca81cba4f7e597aab5e88a1"
+      "sha256": "46fd3545402ed2a0ab898667cf4896574b24c800cca81cba4f7e597aab5e88a1",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ水属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-024.png",
+      "cardBytes": 2688448,
+      "cardSha256": "46fd3545402ed2a0ab898667cf4896574b24c800cca81cba4f7e597aab5e88a1",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-025",
@@ -278,7 +470,15 @@
       "mp_cost": 0,
       "file": "originals/SK-025.png",
       "bytes": 2387882,
-      "sha256": "33070644be3694da3e02792e88f4d8ce8f5a07a5aaaba16569b7ea8cc129deaf"
+      "sha256": "33070644be3694da3e02792e88f4d8ce8f5a07a5aaaba16569b7ea8cc129deaf",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-025.png",
+      "cardBytes": 2387882,
+      "cardSha256": "33070644be3694da3e02792e88f4d8ce8f5a07a5aaaba16569b7ea8cc129deaf",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-026",
@@ -289,7 +489,15 @@
       "mp_cost": 0,
       "file": "originals/SK-026.png",
       "bytes": 2461922,
-      "sha256": "26521349245bb69392c86bb7eb8c9f8d5c28d489a384bf250291c0d7fe90d7d7"
+      "sha256": "26521349245bb69392c86bb7eb8c9f8d5c28d489a384bf250291c0d7fe90d7d7",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の3ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-026.png",
+      "cardBytes": 2461922,
+      "cardSha256": "26521349245bb69392c86bb7eb8c9f8d5c28d489a384bf250291c0d7fe90d7d7",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-027",
@@ -300,7 +508,15 @@
       "mp_cost": 0,
       "file": "originals/SK-027.png",
       "bytes": 2753005,
-      "sha256": "3cda53044a8b0d0f5eb266857a490ece0eddded2a149c62835d0137fbfe83b1c"
+      "sha256": "3cda53044a8b0d0f5eb266857a490ece0eddded2a149c62835d0137fbfe83b1c",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-027.png",
+      "cardBytes": 2753005,
+      "cardSha256": "3cda53044a8b0d0f5eb266857a490ece0eddded2a149c62835d0137fbfe83b1c",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-028",
@@ -311,7 +527,15 @@
       "mp_cost": 0,
       "file": "originals/SK-028.png",
       "bytes": 2319151,
-      "sha256": "43d63391d4a1a6ebb8558e0b75c1e6626f0b4a016343ab1e5db3f0909343db62"
+      "sha256": "43d63391d4a1a6ebb8558e0b75c1e6626f0b4a016343ab1e5db3f0909343db62",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-028.png",
+      "cardBytes": 2319151,
+      "cardSha256": "43d63391d4a1a6ebb8558e0b75c1e6626f0b4a016343ab1e5db3f0909343db62",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-029",
@@ -322,7 +546,15 @@
       "mp_cost": 0,
       "file": "originals/SK-029.png",
       "bytes": 2397513,
-      "sha256": "b0ef85e7fcb18d215a917d508b7644f184cdd6c68b8cf3a0dc83561bc79342b9"
+      "sha256": "b0ef85e7fcb18d215a917d508b7644f184cdd6c68b8cf3a0dc83561bc79342b9",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-029.png",
+      "cardBytes": 2397513,
+      "cardSha256": "b0ef85e7fcb18d215a917d508b7644f184cdd6c68b8cf3a0dc83561bc79342b9",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-030",
@@ -333,7 +565,15 @@
       "mp_cost": 0,
       "file": "originals/SK-030.png",
       "bytes": 2466121,
-      "sha256": "01e55d3fe64dd42935f38ec4e3f0d24477c9de7f3c2680abb812897236ce965d"
+      "sha256": "01e55d3fe64dd42935f38ec4e3f0d24477c9de7f3c2680abb812897236ce965d",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-030.png",
+      "cardBytes": 2466121,
+      "cardSha256": "01e55d3fe64dd42935f38ec4e3f0d24477c9de7f3c2680abb812897236ce965d",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-031",
@@ -344,7 +584,15 @@
       "mp_cost": 0,
       "file": "originals/SK-031.png",
       "bytes": 2509247,
-      "sha256": "eb8335e7f5c9ad9bc47ba2d21fa9ad17741abed33b97cd13a6860d1c781cea8d"
+      "sha256": "eb8335e7f5c9ad9bc47ba2d21fa9ad17741abed33b97cd13a6860d1c781cea8d",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-031.png",
+      "cardBytes": 2509247,
+      "cardSha256": "eb8335e7f5c9ad9bc47ba2d21fa9ad17741abed33b97cd13a6860d1c781cea8d",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-032",
@@ -355,7 +603,15 @@
       "mp_cost": 0,
       "file": "originals/SK-032.png",
       "bytes": 2453959,
-      "sha256": "d258936033da41dc5965073dbad875467a64dbeed641b2ea9d91f03a7cd34dae"
+      "sha256": "d258936033da41dc5965073dbad875467a64dbeed641b2ea9d91f03a7cd34dae",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-032.png",
+      "cardBytes": 2453959,
+      "cardSha256": "d258936033da41dc5965073dbad875467a64dbeed641b2ea9d91f03a7cd34dae",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-033",
@@ -366,7 +622,15 @@
       "mp_cost": 0,
       "file": "originals/SK-033.png",
       "bytes": 2409187,
-      "sha256": "5272f5aa3a567a5932400b2e1ff8c7c68250683b82c29def77b061e98473504b"
+      "sha256": "5272f5aa3a567a5932400b2e1ff8c7c68250683b82c29def77b061e98473504b",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-033.png",
+      "cardBytes": 2409187,
+      "cardSha256": "5272f5aa3a567a5932400b2e1ff8c7c68250683b82c29def77b061e98473504b",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-034",
@@ -377,7 +641,15 @@
       "mp_cost": 0,
       "file": "originals/SK-034.png",
       "bytes": 2478789,
-      "sha256": "8065adb28fb7db9eb8fcdcc435e9cef1490e024c44ccd062edb194ec4e2ded64"
+      "sha256": "8065adb28fb7db9eb8fcdcc435e9cef1490e024c44ccd062edb194ec4e2ded64",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-034.png",
+      "cardBytes": 2478789,
+      "cardSha256": "8065adb28fb7db9eb8fcdcc435e9cef1490e024c44ccd062edb194ec4e2ded64",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-035",
@@ -388,7 +660,15 @@
       "mp_cost": 0,
       "file": "originals/SK-035.png",
       "bytes": 2588194,
-      "sha256": "cf8bb376ec3598afc0ef22ba6a5fa6e13b7f1dd91d2b72900f7f681b620ae870"
+      "sha256": "cf8bb376ec3598afc0ef22ba6a5fa6e13b7f1dd91d2b72900f7f681b620ae870",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-035.png",
+      "cardBytes": 2588194,
+      "cardSha256": "cf8bb376ec3598afc0ef22ba6a5fa6e13b7f1dd91d2b72900f7f681b620ae870",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-036",
@@ -399,7 +679,15 @@
       "mp_cost": 0,
       "file": "originals/SK-036.png",
       "bytes": 2479027,
-      "sha256": "8590473845d62b62e0b43d3914ed8da0c71c1f16ada85fa7a6a17b157d158800"
+      "sha256": "8590473845d62b62e0b43d3914ed8da0c71c1f16ada85fa7a6a17b157d158800",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ風属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-036.png",
+      "cardBytes": 2479027,
+      "cardSha256": "8590473845d62b62e0b43d3914ed8da0c71c1f16ada85fa7a6a17b157d158800",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-037",
@@ -410,7 +698,15 @@
       "mp_cost": 0,
       "file": "originals/SK-037.png",
       "bytes": 2421442,
-      "sha256": "dbf48d573a6f5b935f55cc7de4fcf82876b96182a23971f755cba048441d272a"
+      "sha256": "dbf48d573a6f5b935f55cc7de4fcf82876b96182a23971f755cba048441d272a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-037.png",
+      "cardBytes": 2421442,
+      "cardSha256": "dbf48d573a6f5b935f55cc7de4fcf82876b96182a23971f755cba048441d272a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-038",
@@ -421,7 +717,15 @@
       "mp_cost": 0,
       "file": "originals/SK-038.png",
       "bytes": 2825433,
-      "sha256": "62d7ac3018122b099461f48a0b89f7574554b7ad4ebeddaad03c9ad02ac2b458"
+      "sha256": "62d7ac3018122b099461f48a0b89f7574554b7ad4ebeddaad03c9ad02ac2b458",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の3ダメージ。通常の攻撃札1枚や、ほかの＋付き攻撃札に追加できる。防御に使う札を相手が選ぶ。",
+      "stackable": true,
+      "cardFile": "cards/SK-038.png",
+      "cardBytes": 2622225,
+      "cardSha256": "c48a9bdf1b198219d17443b9923598327e46b555a787cce314dbe9c4b09b91d9",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-039",
@@ -432,7 +736,15 @@
       "mp_cost": 0,
       "file": "originals/SK-039.png",
       "bytes": 2862510,
-      "sha256": "01f7c8df6ace7451de4ea7d25ac2cbd180dad93a57bfaf771bc8b0dd61753c59"
+      "sha256": "01f7c8df6ace7451de4ea7d25ac2cbd180dad93a57bfaf771bc8b0dd61753c59",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-039.png",
+      "cardBytes": 2862510,
+      "cardSha256": "01f7c8df6ace7451de4ea7d25ac2cbd180dad93a57bfaf771bc8b0dd61753c59",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-040",
@@ -443,7 +755,15 @@
       "mp_cost": 0,
       "file": "originals/SK-040.png",
       "bytes": 2455566,
-      "sha256": "5451fbd411ce60bf5086d861449ddbb04ffa84bd46085c2a4e652c6c31eda41a"
+      "sha256": "5451fbd411ce60bf5086d861449ddbb04ffa84bd46085c2a4e652c6c31eda41a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-040.png",
+      "cardBytes": 2455566,
+      "cardSha256": "5451fbd411ce60bf5086d861449ddbb04ffa84bd46085c2a4e652c6c31eda41a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-041",
@@ -454,7 +774,15 @@
       "mp_cost": 0,
       "file": "originals/SK-041.png",
       "bytes": 2460278,
-      "sha256": "18d8c5ec852e018615ae786af41611b4891a9374021f0266c3f3d1894803e2df"
+      "sha256": "18d8c5ec852e018615ae786af41611b4891a9374021f0266c3f3d1894803e2df",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-041.png",
+      "cardBytes": 2460278,
+      "cardSha256": "18d8c5ec852e018615ae786af41611b4891a9374021f0266c3f3d1894803e2df",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-042",
@@ -465,7 +793,15 @@
       "mp_cost": 0,
       "file": "originals/SK-042.png",
       "bytes": 2481241,
-      "sha256": "64277b8feddd2fb81541834aaefb344a7db7ae39e68f79f5b30ba3430795da7a"
+      "sha256": "64277b8feddd2fb81541834aaefb344a7db7ae39e68f79f5b30ba3430795da7a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-042.png",
+      "cardBytes": 2481241,
+      "cardSha256": "64277b8feddd2fb81541834aaefb344a7db7ae39e68f79f5b30ba3430795da7a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-043",
@@ -476,7 +812,15 @@
       "mp_cost": 0,
       "file": "originals/SK-043.png",
       "bytes": 2587871,
-      "sha256": "d9499f7f0ff64163abcfd1240378c406db6cb6fade6ade840877e40229e3a61b"
+      "sha256": "d9499f7f0ff64163abcfd1240378c406db6cb6fade6ade840877e40229e3a61b",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-043.png",
+      "cardBytes": 2587871,
+      "cardSha256": "d9499f7f0ff64163abcfd1240378c406db6cb6fade6ade840877e40229e3a61b",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-044",
@@ -487,7 +831,15 @@
       "mp_cost": 0,
       "file": "originals/SK-044.png",
       "bytes": 2432142,
-      "sha256": "1a6e310886288b29079c61b01dfb66dff4f4139c31b83ad457cd84c4124eba87"
+      "sha256": "1a6e310886288b29079c61b01dfb66dff4f4139c31b83ad457cd84c4124eba87",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-044.png",
+      "cardBytes": 2432142,
+      "cardSha256": "1a6e310886288b29079c61b01dfb66dff4f4139c31b83ad457cd84c4124eba87",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-045",
@@ -498,7 +850,15 @@
       "mp_cost": 0,
       "file": "originals/SK-045.png",
       "bytes": 2480507,
-      "sha256": "d02e31b0ffb13464dcbcd15a7573fb2df03cfd75eb7ed31e77e7ca77a0af1f38"
+      "sha256": "d02e31b0ffb13464dcbcd15a7573fb2df03cfd75eb7ed31e77e7ca77a0af1f38",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-045.png",
+      "cardBytes": 2480507,
+      "cardSha256": "d02e31b0ffb13464dcbcd15a7573fb2df03cfd75eb7ed31e77e7ca77a0af1f38",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-046",
@@ -509,7 +869,15 @@
       "mp_cost": 0,
       "file": "originals/SK-046.png",
       "bytes": 2554504,
-      "sha256": "a9c45008e942fd127302922d84a1db1dc9ca365dbebd369e88ed4e436c67ce5b"
+      "sha256": "a9c45008e942fd127302922d84a1db1dc9ca365dbebd369e88ed4e436c67ce5b",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-046.png",
+      "cardBytes": 2554504,
+      "cardSha256": "a9c45008e942fd127302922d84a1db1dc9ca365dbebd369e88ed4e436c67ce5b",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-047",
@@ -520,7 +888,15 @@
       "mp_cost": 0,
       "file": "originals/SK-047.png",
       "bytes": 2640705,
-      "sha256": "59916cbf9a371419be40e83494d05173133f3c037852eee3c7c15c5decc3a85e"
+      "sha256": "59916cbf9a371419be40e83494d05173133f3c037852eee3c7c15c5decc3a85e",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-047.png",
+      "cardBytes": 2640705,
+      "cardSha256": "59916cbf9a371419be40e83494d05173133f3c037852eee3c7c15c5decc3a85e",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-048",
@@ -531,7 +907,15 @@
       "mp_cost": 0,
       "file": "originals/SK-048.png",
       "bytes": 2517576,
-      "sha256": "fe1fb8ff5adf524358fe1115c586975a0ff5b5960470f569aaf5f7a2362c4af6"
+      "sha256": "fe1fb8ff5adf524358fe1115c586975a0ff5b5960470f569aaf5f7a2362c4af6",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ雷属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-048.png",
+      "cardBytes": 2517576,
+      "cardSha256": "fe1fb8ff5adf524358fe1115c586975a0ff5b5960470f569aaf5f7a2362c4af6",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-049",
@@ -542,7 +926,15 @@
       "mp_cost": 0,
       "file": "originals/SK-049.png",
       "bytes": 2510651,
-      "sha256": "cd0f2c032053aef87064611906b4020ac0ba9cf39cfb474bf66c872532e04cfb"
+      "sha256": "cd0f2c032053aef87064611906b4020ac0ba9cf39cfb474bf66c872532e04cfb",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-049.png",
+      "cardBytes": 2510651,
+      "cardSha256": "cd0f2c032053aef87064611906b4020ac0ba9cf39cfb474bf66c872532e04cfb",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-050",
@@ -553,7 +945,15 @@
       "mp_cost": 0,
       "file": "originals/SK-050.png",
       "bytes": 2591863,
-      "sha256": "01ba6ed89bd2fc88de08732ac7ff5baec861a5cda2545f5aacf74ae29aa230a1"
+      "sha256": "01ba6ed89bd2fc88de08732ac7ff5baec861a5cda2545f5aacf74ae29aa230a1",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の3ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-050.png",
+      "cardBytes": 2591863,
+      "cardSha256": "01ba6ed89bd2fc88de08732ac7ff5baec861a5cda2545f5aacf74ae29aa230a1",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-051",
@@ -564,7 +964,15 @@
       "mp_cost": 0,
       "file": "originals/SK-051.png",
       "bytes": 2813286,
-      "sha256": "5141435dbd2fd92baa8bf089a9201d412814910e28d9c5deece569ef5570f465"
+      "sha256": "5141435dbd2fd92baa8bf089a9201d412814910e28d9c5deece569ef5570f465",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-051.png",
+      "cardBytes": 2813286,
+      "cardSha256": "5141435dbd2fd92baa8bf089a9201d412814910e28d9c5deece569ef5570f465",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-052",
@@ -575,7 +983,15 @@
       "mp_cost": 0,
       "file": "originals/SK-052.png",
       "bytes": 2523880,
-      "sha256": "aa7705481d43a7efeea2d5ce4e22759da2da8398cb69b795a24928e51c700e05"
+      "sha256": "aa7705481d43a7efeea2d5ce4e22759da2da8398cb69b795a24928e51c700e05",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-052.png",
+      "cardBytes": 2523880,
+      "cardSha256": "aa7705481d43a7efeea2d5ce4e22759da2da8398cb69b795a24928e51c700e05",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-053",
@@ -586,7 +1002,15 @@
       "mp_cost": 0,
       "file": "originals/SK-053.png",
       "bytes": 2511774,
-      "sha256": "e189b49aff760540d4e82b65ea908b06697f57c0ed9828794162d36fe42f56fb"
+      "sha256": "e189b49aff760540d4e82b65ea908b06697f57c0ed9828794162d36fe42f56fb",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-053.png",
+      "cardBytes": 2511774,
+      "cardSha256": "e189b49aff760540d4e82b65ea908b06697f57c0ed9828794162d36fe42f56fb",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-054",
@@ -597,7 +1021,15 @@
       "mp_cost": 0,
       "file": "originals/SK-054.png",
       "bytes": 2590752,
-      "sha256": "c94da4e4b20d5f7a76ea2942f09e638fc99f8cae9167d8673444070ec323e38b"
+      "sha256": "c94da4e4b20d5f7a76ea2942f09e638fc99f8cae9167d8673444070ec323e38b",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-054.png",
+      "cardBytes": 2590752,
+      "cardSha256": "c94da4e4b20d5f7a76ea2942f09e638fc99f8cae9167d8673444070ec323e38b",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-055",
@@ -608,7 +1040,15 @@
       "mp_cost": 0,
       "file": "originals/SK-055.png",
       "bytes": 2687685,
-      "sha256": "991e77b45efff551f19a6d717f99d276aee9b6200dd3cfdc3a6f5076881a4db8"
+      "sha256": "991e77b45efff551f19a6d717f99d276aee9b6200dd3cfdc3a6f5076881a4db8",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-055.png",
+      "cardBytes": 2687685,
+      "cardSha256": "991e77b45efff551f19a6d717f99d276aee9b6200dd3cfdc3a6f5076881a4db8",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-056",
@@ -619,7 +1059,15 @@
       "mp_cost": 0,
       "file": "originals/SK-056.png",
       "bytes": 2474242,
-      "sha256": "3328268325b3085fc25535f0212b7e4baacbe03f1a907b1468f72236d67cb225"
+      "sha256": "3328268325b3085fc25535f0212b7e4baacbe03f1a907b1468f72236d67cb225",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-056.png",
+      "cardBytes": 2474242,
+      "cardSha256": "3328268325b3085fc25535f0212b7e4baacbe03f1a907b1468f72236d67cb225",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-057",
@@ -630,7 +1078,15 @@
       "mp_cost": 0,
       "file": "originals/SK-057.png",
       "bytes": 2484421,
-      "sha256": "b50df8ebe600c9d2688495620950515f4cc842426663827d8c3fe7a1a35afe50"
+      "sha256": "b50df8ebe600c9d2688495620950515f4cc842426663827d8c3fe7a1a35afe50",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-057.png",
+      "cardBytes": 2484421,
+      "cardSha256": "b50df8ebe600c9d2688495620950515f4cc842426663827d8c3fe7a1a35afe50",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-058",
@@ -641,7 +1097,15 @@
       "mp_cost": 0,
       "file": "originals/SK-058.png",
       "bytes": 2616166,
-      "sha256": "8fa8e4f60b2a81d1bcd434b24f5d98b742a915586c60f8ada281b5ea753057e5"
+      "sha256": "8fa8e4f60b2a81d1bcd434b24f5d98b742a915586c60f8ada281b5ea753057e5",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-058.png",
+      "cardBytes": 2616166,
+      "cardSha256": "8fa8e4f60b2a81d1bcd434b24f5d98b742a915586c60f8ada281b5ea753057e5",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-059",
@@ -652,7 +1116,15 @@
       "mp_cost": 0,
       "file": "originals/SK-059.png",
       "bytes": 2668535,
-      "sha256": "8da02dafd79dc9106f53bcedd03e7639a9eab0200318925d575b2acebd858b6f"
+      "sha256": "8da02dafd79dc9106f53bcedd03e7639a9eab0200318925d575b2acebd858b6f",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-059.png",
+      "cardBytes": 2668535,
+      "cardSha256": "8da02dafd79dc9106f53bcedd03e7639a9eab0200318925d575b2acebd858b6f",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-060",
@@ -663,7 +1135,15 @@
       "mp_cost": 0,
       "file": "originals/SK-060.png",
       "bytes": 2535051,
-      "sha256": "abfc388ff258d1e0651c03525f7c135777351c945016292e313e84acf27c0ff4"
+      "sha256": "abfc388ff258d1e0651c03525f7c135777351c945016292e313e84acf27c0ff4",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ土属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-060.png",
+      "cardBytes": 2535051,
+      "cardSha256": "abfc388ff258d1e0651c03525f7c135777351c945016292e313e84acf27c0ff4",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-061",
@@ -674,7 +1154,15 @@
       "mp_cost": 0,
       "file": "originals/SK-061.png",
       "bytes": 2364481,
-      "sha256": "65d6f01846cd93d5dfebc0ba48979694b5c7f85a21284ef5ed313da8ff94c5a9"
+      "sha256": "65d6f01846cd93d5dfebc0ba48979694b5c7f85a21284ef5ed313da8ff94c5a9",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-061.png",
+      "cardBytes": 2364481,
+      "cardSha256": "65d6f01846cd93d5dfebc0ba48979694b5c7f85a21284ef5ed313da8ff94c5a9",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-062",
@@ -685,7 +1173,15 @@
       "mp_cost": 0,
       "file": "originals/SK-062.png",
       "bytes": 2486397,
-      "sha256": "94d8e521e2289d5400f612dbe9a400c660056fca718cf64d746d2815e5828777"
+      "sha256": "94d8e521e2289d5400f612dbe9a400c660056fca718cf64d746d2815e5828777",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の3ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-062.png",
+      "cardBytes": 2486397,
+      "cardSha256": "94d8e521e2289d5400f612dbe9a400c660056fca718cf64d746d2815e5828777",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-063",
@@ -696,7 +1192,15 @@
       "mp_cost": 0,
       "file": "originals/SK-063.png",
       "bytes": 2750186,
-      "sha256": "0e9403f966fe013d0f325fbc741d6229901da73709ab116fe43872db0176a177"
+      "sha256": "0e9403f966fe013d0f325fbc741d6229901da73709ab116fe43872db0176a177",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-063.png",
+      "cardBytes": 2750186,
+      "cardSha256": "0e9403f966fe013d0f325fbc741d6229901da73709ab116fe43872db0176a177",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-064",
@@ -707,7 +1211,15 @@
       "mp_cost": 0,
       "file": "originals/SK-064.png",
       "bytes": 2417188,
-      "sha256": "c1a8fa74c932ce12edbee9176bb7b92848d56eee1d321b62a440143fea90e76c"
+      "sha256": "c1a8fa74c932ce12edbee9176bb7b92848d56eee1d321b62a440143fea90e76c",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-064.png",
+      "cardBytes": 2417188,
+      "cardSha256": "c1a8fa74c932ce12edbee9176bb7b92848d56eee1d321b62a440143fea90e76c",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-065",
@@ -718,7 +1230,15 @@
       "mp_cost": 0,
       "file": "originals/SK-065.png",
       "bytes": 2454052,
-      "sha256": "5d3ce2b3d32e8794b89d5b8d047ccb9bc649337b723349eb19f520afcc702bc4"
+      "sha256": "5d3ce2b3d32e8794b89d5b8d047ccb9bc649337b723349eb19f520afcc702bc4",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-065.png",
+      "cardBytes": 2454052,
+      "cardSha256": "5d3ce2b3d32e8794b89d5b8d047ccb9bc649337b723349eb19f520afcc702bc4",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-066",
@@ -729,7 +1249,15 @@
       "mp_cost": 0,
       "file": "originals/SK-066.png",
       "bytes": 2491003,
-      "sha256": "a4f44af675c624e00df4b4fddcf8d026e250a05554bba80322c48877a7269b61"
+      "sha256": "a4f44af675c624e00df4b4fddcf8d026e250a05554bba80322c48877a7269b61",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-066.png",
+      "cardBytes": 2491003,
+      "cardSha256": "a4f44af675c624e00df4b4fddcf8d026e250a05554bba80322c48877a7269b61",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-067",
@@ -740,7 +1268,15 @@
       "mp_cost": 0,
       "file": "originals/SK-067.png",
       "bytes": 2485959,
-      "sha256": "eee11002229db4a96908273fef994aafaef98e755b56b191286dafdbe2455167"
+      "sha256": "eee11002229db4a96908273fef994aafaef98e755b56b191286dafdbe2455167",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-067.png",
+      "cardBytes": 2485959,
+      "cardSha256": "eee11002229db4a96908273fef994aafaef98e755b56b191286dafdbe2455167",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-068",
@@ -751,7 +1287,15 @@
       "mp_cost": 0,
       "file": "originals/SK-068.png",
       "bytes": 2410830,
-      "sha256": "f015d2d9032c386fdac7c3d5e7d05e34a137c7fdc7445d6611380a78139d3a2a"
+      "sha256": "f015d2d9032c386fdac7c3d5e7d05e34a137c7fdc7445d6611380a78139d3a2a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-068.png",
+      "cardBytes": 2410830,
+      "cardSha256": "f015d2d9032c386fdac7c3d5e7d05e34a137c7fdc7445d6611380a78139d3a2a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-069",
@@ -762,7 +1306,15 @@
       "mp_cost": 0,
       "file": "originals/SK-069.png",
       "bytes": 2387802,
-      "sha256": "9c733b7922929e433831893f32348c5a6e96f7795c7f0d429fe98c2cfec8780d"
+      "sha256": "9c733b7922929e433831893f32348c5a6e96f7795c7f0d429fe98c2cfec8780d",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-069.png",
+      "cardBytes": 2387802,
+      "cardSha256": "9c733b7922929e433831893f32348c5a6e96f7795c7f0d429fe98c2cfec8780d",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-070",
@@ -773,7 +1325,15 @@
       "mp_cost": 0,
       "file": "originals/SK-070.png",
       "bytes": 2466380,
-      "sha256": "9e015fcc25f1bd5dde90ceb65c0b4f602a32a54cbd90474f13ab6715be430050"
+      "sha256": "9e015fcc25f1bd5dde90ceb65c0b4f602a32a54cbd90474f13ab6715be430050",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-070.png",
+      "cardBytes": 2466380,
+      "cardSha256": "9e015fcc25f1bd5dde90ceb65c0b4f602a32a54cbd90474f13ab6715be430050",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-071",
@@ -784,7 +1344,15 @@
       "mp_cost": 0,
       "file": "originals/SK-071.png",
       "bytes": 2573129,
-      "sha256": "3f4565c1e95bbf059ba1b3108e5c279063594a06143c1c4bca2fa349d7ab32ba"
+      "sha256": "3f4565c1e95bbf059ba1b3108e5c279063594a06143c1c4bca2fa349d7ab32ba",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-071.png",
+      "cardBytes": 2573129,
+      "cardSha256": "3f4565c1e95bbf059ba1b3108e5c279063594a06143c1c4bca2fa349d7ab32ba",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-072",
@@ -795,7 +1363,15 @@
       "mp_cost": 0,
       "file": "originals/SK-072.png",
       "bytes": 2465619,
-      "sha256": "a5ae563174854bf4c61e94e4a26059ab582b1bedbcb108a77e49297b8667223d"
+      "sha256": "a5ae563174854bf4c61e94e4a26059ab582b1bedbcb108a77e49297b8667223d",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ光属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-072.png",
+      "cardBytes": 2465619,
+      "cardSha256": "a5ae563174854bf4c61e94e4a26059ab582b1bedbcb108a77e49297b8667223d",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-073",
@@ -806,7 +1382,15 @@
       "mp_cost": 0,
       "file": "originals/SK-073.png",
       "bytes": 2388537,
-      "sha256": "31f35be9fecb926f3276b108de2583ec43bcf9531c20fd6d54401faff9cc62fd"
+      "sha256": "31f35be9fecb926f3276b108de2583ec43bcf9531c20fd6d54401faff9cc62fd",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の2ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-073.png",
+      "cardBytes": 2388537,
+      "cardSha256": "31f35be9fecb926f3276b108de2583ec43bcf9531c20fd6d54401faff9cc62fd",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-074",
@@ -817,7 +1401,15 @@
       "mp_cost": 0,
       "file": "originals/SK-074.png",
       "bytes": 2484311,
-      "sha256": "c5c7f1dc29a6824d7051ea8ff48870636c1f9b14422e488d2bf96c8feecb0104"
+      "sha256": "c5c7f1dc29a6824d7051ea8ff48870636c1f9b14422e488d2bf96c8feecb0104",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の3ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-074.png",
+      "cardBytes": 2484311,
+      "cardSha256": "c5c7f1dc29a6824d7051ea8ff48870636c1f9b14422e488d2bf96c8feecb0104",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-075",
@@ -828,7 +1420,15 @@
       "mp_cost": 0,
       "file": "originals/SK-075.png",
       "bytes": 2728610,
-      "sha256": "587a3276050257c222a8d1354fa4419c3f5642ba2d7b1a8717ae618fe036ada2"
+      "sha256": "587a3276050257c222a8d1354fa4419c3f5642ba2d7b1a8717ae618fe036ada2",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の4ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-075.png",
+      "cardBytes": 2728610,
+      "cardSha256": "587a3276050257c222a8d1354fa4419c3f5642ba2d7b1a8717ae618fe036ada2",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-076",
@@ -839,7 +1439,15 @@
       "mp_cost": 0,
       "file": "originals/SK-076.png",
       "bytes": 2398141,
-      "sha256": "61ed3037f4c44ad3e2706b46d2b01edf8afbd0ae54f5ff9a127845b485324f9a"
+      "sha256": "61ed3037f4c44ad3e2706b46d2b01edf8afbd0ae54f5ff9a127845b485324f9a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の5ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-076.png",
+      "cardBytes": 2398141,
+      "cardSha256": "61ed3037f4c44ad3e2706b46d2b01edf8afbd0ae54f5ff9a127845b485324f9a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-077",
@@ -850,7 +1458,15 @@
       "mp_cost": 0,
       "file": "originals/SK-077.png",
       "bytes": 2365712,
-      "sha256": "252025a3a4e715e3c09aec648fc3d0e11946b822edd6ad9819daa6e052c2e409"
+      "sha256": "252025a3a4e715e3c09aec648fc3d0e11946b822edd6ad9819daa6e052c2e409",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の6ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-077.png",
+      "cardBytes": 2365712,
+      "cardSha256": "252025a3a4e715e3c09aec648fc3d0e11946b822edd6ad9819daa6e052c2e409",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-078",
@@ -861,7 +1477,15 @@
       "mp_cost": 0,
       "file": "originals/SK-078.png",
       "bytes": 2497283,
-      "sha256": "09e3b07b6e616e7d3263cb308b876916cc917bf273aab4814148d07671707ae4"
+      "sha256": "09e3b07b6e616e7d3263cb308b876916cc917bf273aab4814148d07671707ae4",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の7ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-078.png",
+      "cardBytes": 2497283,
+      "cardSha256": "09e3b07b6e616e7d3263cb308b876916cc917bf273aab4814148d07671707ae4",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-079",
@@ -872,7 +1496,15 @@
       "mp_cost": 0,
       "file": "originals/SK-079.png",
       "bytes": 2439504,
-      "sha256": "92a8cd80b8379566d9d1246360ac5af157396ed418c85baaaae0321d2a2ea2c0"
+      "sha256": "92a8cd80b8379566d9d1246360ac5af157396ed418c85baaaae0321d2a2ea2c0",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の8ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-079.png",
+      "cardBytes": 2439504,
+      "cardSha256": "92a8cd80b8379566d9d1246360ac5af157396ed418c85baaaae0321d2a2ea2c0",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-080",
@@ -883,7 +1515,15 @@
       "mp_cost": 0,
       "file": "originals/SK-080.png",
       "bytes": 2418516,
-      "sha256": "535132ab03d8ec89a53f591b68041679079dcebd06edc8a31218830d32fd441a"
+      "sha256": "535132ab03d8ec89a53f591b68041679079dcebd06edc8a31218830d32fd441a",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の9ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-080.png",
+      "cardBytes": 2418516,
+      "cardSha256": "535132ab03d8ec89a53f591b68041679079dcebd06edc8a31218830d32fd441a",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-081",
@@ -894,7 +1534,15 @@
       "mp_cost": 0,
       "file": "originals/SK-081.png",
       "bytes": 2381187,
-      "sha256": "ea5f97646d1f28d5ae6321abd5bb6a3b75454e6fb973f570e96d3c0bdb4a3659"
+      "sha256": "ea5f97646d1f28d5ae6321abd5bb6a3b75454e6fb973f570e96d3c0bdb4a3659",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の10ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-081.png",
+      "cardBytes": 2381187,
+      "cardSha256": "ea5f97646d1f28d5ae6321abd5bb6a3b75454e6fb973f570e96d3c0bdb4a3659",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-082",
@@ -905,7 +1553,15 @@
       "mp_cost": 0,
       "file": "originals/SK-082.png",
       "bytes": 2482200,
-      "sha256": "9b573c984f49b5c649fcda0d0b77ff5d420da6ee59675f22202a01ee03b7b9a5"
+      "sha256": "9b573c984f49b5c649fcda0d0b77ff5d420da6ee59675f22202a01ee03b7b9a5",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の11ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-082.png",
+      "cardBytes": 2482200,
+      "cardSha256": "9b573c984f49b5c649fcda0d0b77ff5d420da6ee59675f22202a01ee03b7b9a5",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-083",
@@ -916,7 +1572,15 @@
       "mp_cost": 0,
       "file": "originals/SK-083.png",
       "bytes": 2556081,
-      "sha256": "46295ef359fa48524b4598c4bb909e1b7d2f0912397be86f25711e9f3754ca26"
+      "sha256": "46295ef359fa48524b4598c4bb909e1b7d2f0912397be86f25711e9f3754ca26",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の12ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-083.png",
+      "cardBytes": 2556081,
+      "cardSha256": "46295ef359fa48524b4598c4bb909e1b7d2f0912397be86f25711e9f3754ca26",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-084",
@@ -927,7 +1591,15 @@
       "mp_cost": 0,
       "file": "originals/SK-084.png",
       "bytes": 2519577,
-      "sha256": "d053abb16969abbb42c3852aa7d7a5a6bb8e7dc7ae8529ac6a8eec728f4fce92"
+      "sha256": "d053abb16969abbb42c3852aa7d7a5a6bb8e7dc7ae8529ac6a8eec728f4fce92",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ闇属性の14ダメージ。防御に使う札を相手が選ぶ。",
+      "stackable": false,
+      "cardFile": "cards/SK-084.png",
+      "cardBytes": 2519577,
+      "cardSha256": "d053abb16969abbb42c3852aa7d7a5a6bb8e7dc7ae8529ac6a8eec728f4fce92",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-085",
@@ -938,7 +1610,15 @@
       "mp_cost": 0,
       "file": "originals/SK-085.png",
       "bytes": 2396644,
-      "sha256": "fe8ff2fb3fa76b012c5f70e21a67fad41b46bd57f9093c37061e64e77dc4fe19"
+      "sha256": "fe8ff2fb3fa76b012c5f70e21a67fad41b46bd57f9093c37061e64e77dc4fe19",
+      "defense": 0,
+      "heal": 0,
+      "effect": "対象のHPが満タンなら攻撃＋3。",
+      "stackable": false,
+      "cardFile": "cards/SK-085.png",
+      "cardBytes": 2396644,
+      "cardSha256": "fe8ff2fb3fa76b012c5f70e21a67fad41b46bd57f9093c37061e64e77dc4fe19",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-086",
@@ -949,7 +1629,15 @@
       "mp_cost": 0,
       "file": "originals/SK-086.png",
       "bytes": 2432533,
-      "sha256": "325907d04d0aca0d72109b9f63698190bbbe034774f5d03b5bd5bc2de4f7d44f"
+      "sha256": "325907d04d0aca0d72109b9f63698190bbbe034774f5d03b5bd5bc2de4f7d44f",
+      "defense": 0,
+      "heal": 0,
+      "effect": "この攻撃が通ったら、自分の次の攻撃＋2（1回）。",
+      "stackable": false,
+      "cardFile": "cards/SK-086.png",
+      "cardBytes": 2432533,
+      "cardSha256": "325907d04d0aca0d72109b9f63698190bbbe034774f5d03b5bd5bc2de4f7d44f",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-087",
@@ -960,7 +1648,15 @@
       "mp_cost": 0,
       "file": "originals/SK-087.png",
       "bytes": 2385910,
-      "sha256": "e45a97497bdf4b5037d46d71c54d2ae630e9745c402f3c7399a4d2b2bd3cdfab"
+      "sha256": "e45a97497bdf4b5037d46d71c54d2ae630e9745c402f3c7399a4d2b2bd3cdfab",
+      "defense": 0,
+      "heal": 0,
+      "effect": "自分のHPが20以下なら攻撃＋4。",
+      "stackable": false,
+      "cardFile": "cards/SK-087.png",
+      "cardBytes": 2385910,
+      "cardSha256": "e45a97497bdf4b5037d46d71c54d2ae630e9745c402f3c7399a4d2b2bd3cdfab",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-088",
@@ -971,7 +1667,15 @@
       "mp_cost": 0,
       "file": "originals/SK-088.png",
       "bytes": 2439172,
-      "sha256": "af57e48db4ebf2eef14b1a5f6363018bdba9c865e0197eb02c2c44e1d98cf1e7"
+      "sha256": "af57e48db4ebf2eef14b1a5f6363018bdba9c865e0197eb02c2c44e1d98cf1e7",
+      "defense": 0,
+      "heal": 0,
+      "effect": "自分よりHPが高い相手への攻撃＋3。",
+      "stackable": false,
+      "cardFile": "cards/SK-088.png",
+      "cardBytes": 2439172,
+      "cardSha256": "af57e48db4ebf2eef14b1a5f6363018bdba9c865e0197eb02c2c44e1d98cf1e7",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-089",
@@ -982,7 +1686,15 @@
       "mp_cost": 0,
       "file": "originals/SK-089.png",
       "bytes": 2437929,
-      "sha256": "328e1dc38467c503d7ff1d8be33f8fdaf68f22e473eb47a20a6dd1a7efc6ce01"
+      "sha256": "328e1dc38467c503d7ff1d8be33f8fdaf68f22e473eb47a20a6dd1a7efc6ce01",
+      "defense": 0,
+      "heal": 0,
+      "effect": "同じ相手へ2回攻撃。防御は1枚を選び、合計ダメージから引く。",
+      "stackable": false,
+      "cardFile": "cards/SK-089.png",
+      "cardBytes": 2437929,
+      "cardSha256": "328e1dc38467c503d7ff1d8be33f8fdaf68f22e473eb47a20a6dd1a7efc6ce01",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-090",
@@ -993,7 +1705,15 @@
       "mp_cost": 0,
       "file": "originals/SK-090.png",
       "bytes": 2456377,
-      "sha256": "8c9166120bd68b6b6c8c6acf3b8f0b4cb9582d414dc00e0da6412925580a709b"
+      "sha256": "8c9166120bd68b6b6c8c6acf3b8f0b4cb9582d414dc00e0da6412925580a709b",
+      "defense": 0,
+      "heal": 0,
+      "effect": "攻撃が通れば、相手の霊力を2減らし、自分は2回復。",
+      "stackable": false,
+      "cardFile": "cards/SK-090.png",
+      "cardBytes": 2456377,
+      "cardSha256": "8c9166120bd68b6b6c8c6acf3b8f0b4cb9582d414dc00e0da6412925580a709b",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-091",
@@ -1004,7 +1724,15 @@
       "mp_cost": 0,
       "file": "originals/SK-091.png",
       "bytes": 2390418,
-      "sha256": "24f4d7bdb75e405ac9c19c50398100b537936ec67ca287555371fd6743eed61d"
+      "sha256": "24f4d7bdb75e405ac9c19c50398100b537936ec67ca287555371fd6743eed61d",
+      "defense": 0,
+      "heal": 0,
+      "effect": "攻撃が通れば、自分のHPを3回復。",
+      "stackable": false,
+      "cardFile": "cards/SK-091.png",
+      "cardBytes": 2390418,
+      "cardSha256": "24f4d7bdb75e405ac9c19c50398100b537936ec67ca287555371fd6743eed61d",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-092",
@@ -1015,7 +1743,15 @@
       "mp_cost": 0,
       "file": "originals/SK-092.png",
       "bytes": 2579090,
-      "sha256": "0380f49cb4f55d17f385dd509d3ab993eb9e66791f2b14ff2a953b988629fea9"
+      "sha256": "0380f49cb4f55d17f385dd509d3ab993eb9e66791f2b14ff2a953b988629fea9",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手が選んだ防御札の防御を2下げる（最低0）。",
+      "stackable": false,
+      "cardFile": "cards/SK-092.png",
+      "cardBytes": 2579090,
+      "cardSha256": "0380f49cb4f55d17f385dd509d3ab993eb9e66791f2b14ff2a953b988629fea9",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-093",
@@ -1026,7 +1762,15 @@
       "mp_cost": 0,
       "file": "originals/SK-093.png",
       "bytes": 2775849,
-      "sha256": "fbcdd2ee6bd8b6873429d24841b3d652fa5d01420f9fe7f87c3a57b3ad53aeb8"
+      "sha256": "fbcdd2ee6bd8b6873429d24841b3d652fa5d01420f9fe7f87c3a57b3ad53aeb8",
+      "defense": 0,
+      "heal": 0,
+      "effect": "攻撃が通れば、ゲーム内の霊銭を3得る。",
+      "stackable": false,
+      "cardFile": "cards/SK-093.png",
+      "cardBytes": 2775849,
+      "cardSha256": "fbcdd2ee6bd8b6873429d24841b3d652fa5d01420f9fe7f87c3a57b3ad53aeb8",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-115",
@@ -1037,7 +1781,15 @@
       "mp_cost": 0,
       "file": "originals/SK-115.png",
       "bytes": 3197652,
-      "sha256": "dfc457ed68f2c4f81a41d443d52bc44095f11a9620316bf605943929aa417ad1"
+      "sha256": "dfc457ed68f2c4f81a41d443d52bc44095f11a9620316bf605943929aa417ad1",
+      "defense": 9,
+      "heal": 0,
+      "effect": "受ける攻撃を9防ぐ。攻撃が火属性なら、さらに2防ぐ。",
+      "stackable": false,
+      "cardFile": "cards/SK-115.png",
+      "cardBytes": 2829530,
+      "cardSha256": "2ff9ddd6bf69ff13fbd022214d73d7d73f0559da9b525018640a10be9d4423c8",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-156",
@@ -1048,7 +1800,15 @@
       "mp_cost": 0,
       "file": "originals/SK-156.png",
       "bytes": 3332232,
-      "sha256": "c889971f1dc745055193a56bb8f79870c70f65947c7eca22c6f327c419761de3"
+      "sha256": "c889971f1dc745055193a56bb8f79870c70f65947c7eca22c6f327c419761de3",
+      "defense": 10,
+      "heal": 0,
+      "effect": "受ける攻撃を10防ぐ。攻撃が土属性なら、さらに2防ぐ。",
+      "stackable": false,
+      "cardFile": "cards/SK-156.png",
+      "cardBytes": 2817882,
+      "cardSha256": "a5ab85637cb7084d9c702592e47cbc6e0450041e47a34ee87e490fbd44f934f5",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-186",
@@ -1059,7 +1819,15 @@
       "mp_cost": 2,
       "file": "originals/SK-186.png",
       "bytes": 2860361,
-      "sha256": "8ab72937c7c237e80a83a9ac10af6d482db413919313fb30f9adccc6e9d1b558"
+      "sha256": "8ab72937c7c237e80a83a9ac10af6d482db413919313fb30f9adccc6e9d1b558",
+      "defense": 0,
+      "heal": 0,
+      "effect": "相手1人へ火属性の4ダメージ。攻撃が通れば火傷（次の番の開始に2ダメージ、1回）。",
+      "stackable": false,
+      "cardFile": "cards/SK-186.png",
+      "cardBytes": 2793737,
+      "cardSha256": "36a740afb6516720e51b0db809dbca07dbcdef2951ed535a99a551e821f863ec",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-217",
@@ -1070,7 +1838,15 @@
       "mp_cost": 0,
       "file": "originals/SK-217.png",
       "bytes": 3084427,
-      "sha256": "4ddaf41b05c434b79dea5e3dce65f2f9ce0589c970a8ba8c500eca1f4ec92307"
+      "sha256": "4ddaf41b05c434b79dea5e3dce65f2f9ce0589c970a8ba8c500eca1f4ec92307",
+      "defense": 0,
+      "heal": 12,
+      "effect": "自分か他の1人のHPを12回復。",
+      "stackable": false,
+      "cardFile": "cards/SK-217.png",
+      "cardBytes": 2952408,
+      "cardSha256": "894f7d07ef2073a8d4b35cf84ebd86e532ac582a8ecf117bcf78154fa9d561c3",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-218",
@@ -1081,7 +1857,15 @@
       "mp_cost": 0,
       "file": "originals/SK-218.png",
       "bytes": 2913028,
-      "sha256": "93fbed4c84c51c70690962efef5dce12fe81dd4f5b158a135fdbb93af6051944"
+      "sha256": "93fbed4c84c51c70690962efef5dce12fe81dd4f5b158a135fdbb93af6051944",
+      "defense": 0,
+      "heal": 18,
+      "effect": "自分か他の1人のHPを18回復。",
+      "stackable": false,
+      "cardFile": "cards/SK-218.png",
+      "cardBytes": 2688130,
+      "cardSha256": "fcce55879cb383141ba8fae20d590bf2ceda75af1816c5dd3afda28fd0535300",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-220",
@@ -1092,7 +1876,15 @@
       "mp_cost": 0,
       "file": "originals/SK-220.png",
       "bytes": 2737455,
-      "sha256": "739c1b43b9a5c989b9ddbb082d29204960120d4e4ca0f11a1fa86c74db519c62"
+      "sha256": "739c1b43b9a5c989b9ddbb082d29204960120d4e4ca0f11a1fa86c74db519c62",
+      "defense": 0,
+      "heal": 4,
+      "effect": "HPを4回復し、手札を1枚引く。",
+      "stackable": false,
+      "cardFile": "cards/SK-220.png",
+      "cardBytes": 2670301,
+      "cardSha256": "87d3db31b95a2f71698a5c588a29f9efb568899ef8da451cdb1b3c1dbecab3f4",
+      "layoutStatus": "complete"
     },
     {
       "id": "SK-223",
@@ -1103,7 +1895,17 @@
       "mp_cost": 0,
       "file": "originals/SK-223.png",
       "bytes": 3241982,
-      "sha256": "f8762e764a3a811b0a1859fea9e08f0d2ab290b5f56495177f9e73938f1a27d0"
+      "sha256": "f8762e764a3a811b0a1859fea9e08f0d2ab290b5f56495177f9e73938f1a27d0",
+      "defense": 0,
+      "heal": 0,
+      "effect": "霊力を9回復。",
+      "stackable": false,
+      "cardFile": "cards/SK-223.png",
+      "cardBytes": 2878524,
+      "cardSha256": "09c5fe86af9c9e63ff55e2a7ed681b29c203e81b9bdaf1cdae917243a8678c03",
+      "layoutStatus": "complete"
     }
-  ]
+  ],
+  "cardComplete": 100,
+  "cardPercent": 42.2
 }

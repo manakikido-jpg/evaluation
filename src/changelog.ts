@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-18-shinpu-cardify-existing', date: '2026-10-18', kind: 'improve', where: ['運用'], title: '手元の素材100点すべてをカード化', items: ['枠なしだった31点に名前・数値・効果を入れ、完成カード100枚を別フォルダに保存しました。元の絵は比較用に残しています。ゲームへの効果実装とは別です。'] },
   { id: '2026-10-18-shinpu-art-100-archive', date: '2026-10-18', kind: 'improve', where: ['運用'], title: '神符合戦の制作画像100枚を保存', items: ['制作した原画100枚と一覧をリポジトリに保存しました（100／237枚・42.2％）。ゲームへの追加は別の作業です。'] },
 
   { id: '2026-10-18-casino-network-recovery', date: '2026-10-18', kind: 'fix', where: ['社務所Web'], title: 'スロットの通信失敗で画面が消えるのを防ぐ', items: ['通信や画面更新に失敗しても、操作用URLへ移動したり、同じ賭けを自動で送り直したりしません。', '遊技画面を残して「結果を確認して復帰」を表示します。スロット・ATスロットは、本人の途中の回か最新の結果を確認できます。'] },
