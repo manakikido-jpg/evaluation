@@ -89,6 +89,14 @@ export async function activeGame(db: Db, memberId: string, game: CasinoGame): Pr
   return row;
 }
 
+/** 通信失敗後の確認。本人・ゲーム種別をDB側で絞り、最新の結果だけを返す。 */
+export async function latestGame(db: Db, memberId: string, game: CasinoGame): Promise<CasinoGameRow | undefined> {
+  const [row] = await db.select().from(casinoGames)
+    .where(and(eq(casinoGames.memberId, memberId), eq(casinoGames.game, game)))
+    .orderBy(desc(casinoGames.id)).limit(1);
+  return row;
+}
+
 export async function gameById(db: Db, id: number): Promise<CasinoGameRow | undefined> {
   const [row] = await db.select().from(casinoGames).where(eq(casinoGames.id, id));
   return row;

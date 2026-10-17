@@ -1069,3 +1069,52 @@ describe('カジノの人生ゲーム画面', () => {
     expect((await get('/casino/tables/life',a)).headers.get('location')).toBe('/casino?e=game_off');
   });
 });
+
+
+describe('スロットの通信失敗後の確認', () => {
+  it('本人・同じ種類の最新結果を表示し、確認を繰り返しても残高と回数は変わらない', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const state = { v: 2, role: 'none', stops: [0, 0, 0], lamp: null, phase: 'done', mult: 0, machine: 2, setting: 1 };
+    await db.insert(casinoGames).values([
+      { memberId: A, game: 'slots', bet: 100, status: 'done', payout: 0, state, createdAt: clock, finishedAt: clock },
+      { memberId: A, game: 'slots', bet: 200, status: 'done', payout: 0, state, createdAt: clock, finishedAt: clock },
+      { memberId: B, game: 'slots', bet: 300, status: 'done', payout: 0, state, createdAt: clock, finishedAt: clock },
+      { memberId: A, game: 'baccarat', bet: 400, status: 'done', payout: 0, state: {}, createdAt: clock, finishedAt: clock },
+    ]);
+    const before = await balance(A);
+    const rows = await db.select().from(casinoGames);
+    for (let i = 0; i < 2; i++) {
+      const res = await get('/casino/slots?recover=1&m=1', a);
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toMatch(/賭け 200 → 戻り 0/);
+      expect(html).not.toMatch(/賭け (100|300|400) →/);
+      expect(html).toMatch(/casino-request.js\?v=/);
+      expect(html).not.toMatch(/onclick=|style=|<script(?![^>]*src=)/);
+    }
+    expect(await balance(A)).toBe(before);
+    expect(await db.select().from(casinoGames)).toEqual(rows);
+  });
+  it('最新の終了結果があっても、本人の途中の回を先に表示する', async () => {
+    const a = (await casinoLogin(A)).cookie!;
+    const [active] = await db.insert(casinoGames).values({ memberId: A, game: 'slots', bet: 100, status: 'playing', payout: 0, createdAt: clock, state: { v: 2, role: 'big', stops: [5,5,5], lamp: 'post', phase: 'aim', mult: 0, tries: 0 } }).returning();
+    await db.insert(casinoGames).values({ memberId: A, game: 'slots', bet: 200, status: 'done', payout: 0, createdAt: clock, finishedAt: clock, state: { v: 2, role: 'none', stops: [0,0,0], phase: 'done', mult: 0 } });
+    const html = await (await get('/casino/slots?recover=1', a)).text();
+    expect(html).toContain(`action="/casino/slots/${active!.id}"`);
+    expect(html).toContain('data-aim');
+  });
+  it('ATの確認も読み取りだけで、本人の最新の回へ戻せる', async () => {
+    current = { ...cfg, casino: { ...cfg.casino, atOpen: true } };
+    const a = (await casinoLogin(A)).cookie!;
+    const played = await post('/casino/atslot', a, { m: '1' });
+    expect(played.headers.get('location')).toMatch(/\?g=\d+$/);
+    const before = await balance(A);
+    const rows = await db.select().from(casinoGames);
+    const expected = await (await get(played.headers.get('location')!, a)).text();
+    const recovered = await (await get('/casino/atslot?recover=1&m=1', a)).text();
+    // 同じ回を表示するので、演出と次の操作も同じ。
+    expect(recovered).toBe(expected);
+    expect(await balance(A)).toBe(before);
+    expect(await db.select().from(casinoGames)).toEqual(rows);
+  });
+});
