@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-17-engawa-counter', date: '2026-10-17', kind: 'new', where: ['Discord', '社務所Web'], title: '縁側にいる人数をチャンネル名に出す', items: ['大きな縁側・小さな縁側にいる人の合計を、決めたチャンネルの名前に「👥 縁側 いま 12 人」のように出します。Discord の決まりで、5 分ごとに書きかえます。', '社務所Web の「設定 → 🔊 自動で増える通話」で、チャンネルと名前を決められます。'] },
   { id: '2026-10-16-shukubo-no-vc-profile', date: '2026-10-16', kind: 'improve', where: ['Discord'], title: '宿坊の部屋に「この通話の人のプロフィールを見る」を出さない', items: ['宿坊の部屋のチャットには、プロフィールを見るカードを出さないようにしました。ほかの通話はこれまでどおりです。'] },
   { id: '2026-10-16-read-aloud-connect-reason', date: '2026-10-16', kind: 'improve', where: ['運用'], title: '読み上げBOTがVCに入れないわけをログに出す', items: ['「接続できませんでした」のとき、足りない権限・音声接続の失敗などをログに出します。'] },
   { id: '2026-10-16-read-aloud-all-failures', date: '2026-10-16', kind: 'improve', where: ['運用'], title: '読み上げBOTのログイン失敗を一度に全部知らせる', items: ['ログインに失敗した専用BOTが何体かあるとき、前は 1 体だけ出していました。全部を一度にログに出します。'] },

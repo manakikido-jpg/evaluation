@@ -2951,6 +2951,15 @@ export function createWebApp(deps: WebDeps) {
             }),
           }
         : {}),
+      // 👥 縁側の人数（フォームにあるときだけ。チャンネルを空にすると止める。ほかの欄の保存では前のまま）
+      voiceCounter:
+        typeof body.vcCounterName === 'string'
+          ? {
+              channelId: /^\d{17,20}$/.test(String(body.vcCounterChannel ?? '').trim()) ? String(body.vcCounterChannel).trim() : null,
+              ...(field(body, 'vcCounterName', 90) ? { name: field(body, 'vcCounterName', 90) } : {}),
+              ...(field(body, 'vcCounterMatch', 30) ? { match: field(body, 'vcCounterMatch', 30) } : {}),
+            }
+          : prev.voiceCounter,
       coreTime: {
         slots: [0, 1, 2, 3, 4, 5, 6].flatMap((day) => {
           const start = field(body, `ct.${day}.start`, 5);

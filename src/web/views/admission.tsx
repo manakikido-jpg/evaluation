@@ -1293,6 +1293,24 @@ export function SettingsPage(props: {
               ))}
             </tbody>
           </table>
+          <h3>👥 縁側の人数をチャンネル名に出す</h3>
+          <p class="note">
+            上の「自動で増える通話」のうち、名前に下の言葉がある通話（例: 大きな縁側・小さな縁側）に、いまいる人の合計を、決めたチャンネルの名前に出します（BOT は数えません）。Discord の決まりで、チャンネル名は 10 分に 2 回までしか変えられないので、5 分ごとに書きかえます。人が入れない通話を 1 つ作って（@everyone の「接続」をオフ）、その ID を入れてください。空にすると止めます。
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>名前を書きかえるチャンネルの ID</span>
+              <input type="text" name="vcCounterChannel" value={cfg.voiceCounter.channelId ?? ''} inputmode="numeric" pattern="\d{17,20}" placeholder="例: 1234567890123456789" />
+            </label>
+            <label class="field">
+              <span>チャンネル名（{'{n}'} が人数になる）</span>
+              <input type="text" name="vcCounterName" value={cfg.voiceCounter.name} maxlength={90} required />
+            </label>
+            <label class="field">
+              <span>数える通話の名前にある言葉</span>
+              <input type="text" name="vcCounterMatch" value={cfg.voiceCounter.match} maxlength={30} required />
+            </label>
+          </div>
           <Save at="voicegroups" />
         </section>
         <section class="card anchor" id="sec-diary">

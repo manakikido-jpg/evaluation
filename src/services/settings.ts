@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { setStyleCatalog } from './casino/styles.js';
-import { casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
+import { casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, voiceCounterSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
@@ -85,6 +85,8 @@ export const overridesSchema = z.object({
   market: marketSchema.partial().default({}),
   /** 自動で増える通話（送られたときは全部置きかえる） */
   voiceGroups: z.array(voiceGroupSchema).max(10).optional(),
+  /** 👥 縁側の人数（channelId を null にすると止める） */
+  voiceCounter: voiceCounterSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   /** 社務所Web に入れる人（shinshokuRoleIds: 前の形・全部のページ / entries: ロール・人ごとに見られるページ） */
   webAccess: z.object({ shinshokuRoleIds: z.array(z.string().regex(/^\d{17,20}$/)).max(20), entries: z.array(webAccessEntrySchema).max(50) }).partial().default({}),
   voiceChat: voiceChatSchema.partial().default({}),
@@ -166,6 +168,13 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     rooms: { ...base.rooms, ...o.rooms },
     market: { ...base.market, ...o.market },
     voiceGroups: o.voiceGroups ?? base.voiceGroups,
+    voiceCounter: (() => {
+      const { channelId, ...rest } = o.voiceCounter;
+      const merged = { ...base.voiceCounter, ...rest };
+      if (channelId === null) delete (merged as { channelId?: string }).channelId;
+      else if (channelId) merged.channelId = channelId;
+      return merged;
+    })(),
     webAccess: { ...base.webAccess, ...o.webAccess },
     voiceChat: { ...base.voiceChat, ...o.voiceChat },
     bell: (() => {

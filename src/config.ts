@@ -182,6 +182,17 @@ export const voiceGroupSchema = z.object({
 });
 export type VoiceGroup = z.infer<typeof voiceGroupSchema>;
 
+/** 👥 縁側の人数をチャンネル名に出す（Discord の決まりで、名前は 5 分に 1 回まで書きかえる） */
+export const voiceCounterSchema = z.object({
+  /** 名前を書きかえるチャンネル（なければ出さない） */
+  channelId: snowflake.optional(),
+  /** チャンネル名。{n} が人数になる */
+  name: z.string().min(1).max(90).default('👥 縁側 いま {n} 人'),
+  /** 自動で増える通話のうち、名前にこの言葉がある仲間を数える */
+  match: z.string().min(1).max(30).default('縁側'),
+});
+export type VoiceCounter = z.infer<typeof voiceCounterSchema>;
+
 /** 通話のチャット（通話チャンネルの中のテキスト） */
 export const voiceChatSchema = z.object({
   /** 人がいなくなった通話のチャットを消す（ピン留めは残す） */
@@ -708,6 +719,7 @@ export const guildConfigSchema = z
     rooms: roomsSchema.default(roomsSchema.parse({})),
     market: marketSchema.default(marketSchema.parse({})),
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
+    voiceCounter: voiceCounterSchema.default(voiceCounterSchema.parse({})),
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     bell: bellSchema.default(bellSchema.parse({})),
     diary: z

@@ -18,6 +18,7 @@ import { MessageLogApp } from './discord/messageLog.js';
 import { CastApp } from './discord/cast.js';
 import { TicketApp } from './discord/supportTickets.js';
 import { VoiceGroupApp } from './discord/voiceGroups.js';
+import { VoiceCounterApp } from './discord/voiceCounter.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { DiaryApp } from './discord/diary.js';
@@ -116,6 +117,7 @@ async function main(): Promise<void> {
   const gifts = new GiftApp(db, cfg, actions);
   const otoshidama = new OtoshidamaApp(db, cfg, actions);
   const voiceGroups = new VoiceGroupApp(cfg);
+  const voiceCounter = new VoiceCounterApp(cfg);
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
@@ -171,6 +173,9 @@ async function main(): Promise<void> {
     rooms.attach(guild);
     // 自動で増える通話（大きな縁側 1〜3 など）
     await voiceGroups.attach(guild).catch((err) => logger.warn({ err }, 'voice groups attach failed'));
+    // 👥 縁側の人数をチャンネル名に
+    voiceCounter.attach(guild);
+    void voiceCounter.tick();
     // 人がいなくなった通話のチャットを消す（止まっていた間に空になったものも）
     voiceChatClear.attach(guild);
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
@@ -207,6 +212,7 @@ async function main(): Promise<void> {
       void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
+      void voiceCounter.tick();
       // 市場: 期限が来た取引を渡す・返事のない提案を取り下げる・📞 待機の時間切れ
       void market.tick().catch((err) => logger.warn({ err }, 'market tick failed'));
       // 1 時間ごとの部屋（宵宮）の支払い
