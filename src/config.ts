@@ -182,6 +182,21 @@ export const voiceGroupSchema = z.object({
 });
 export type VoiceGroup = z.infer<typeof voiceGroupSchema>;
 
+/** 絵馬殿の人数。空のチャンネル欄は変更しない。 */
+const emaCounterNameSchema = z.string().trim().min(1).max(90).refine((v) => v.includes('{n}'), '人数の場所に{n}を入れてください');
+export const emaCounterSchema = z.object({
+  sanpaishaMale: z.string().regex(/^(?:\d{17,20})?$/).default(''),
+  sanpaishaFemale: z.string().regex(/^(?:\d{17,20})?$/).default(''),
+  ujikoMale: z.string().regex(/^(?:\d{17,20})?$/).default(''),
+  ujikoFemale: z.string().regex(/^(?:\d{17,20})?$/).default(''),
+  names: z.object({
+    sanpaishaMale: emaCounterNameSchema.default('参拝者♂｜{n}人'),
+    sanpaishaFemale: emaCounterNameSchema.default('参拝者♀｜{n}人'),
+    ujikoMale: emaCounterNameSchema.default('氏子♂｜{n}人'),
+    ujikoFemale: emaCounterNameSchema.default('氏子♀｜{n}人'),
+  }).default({ sanpaishaMale: '参拝者♂｜{n}人', sanpaishaFemale: '参拝者♀｜{n}人', ujikoMale: '氏子♂｜{n}人', ujikoFemale: '氏子♀｜{n}人' }),
+}).refine((v) => { const ids = [v.sanpaishaMale, v.sanpaishaFemale, v.ujikoMale, v.ujikoFemale].filter(Boolean); return ids.length === new Set(ids).size; }, '絵馬殿の人数には別々のチャンネルを指定してください');
+
 /** 👥 縁側の人数をチャンネル名に出す（Discord の決まりで、名前は 5 分に 1 回まで書きかえる） */
 export const voiceCounterSchema = z.object({
   /** 名前を書きかえるチャンネル（なければ出さない） */
@@ -724,6 +739,7 @@ export const guildConfigSchema = z
     market: marketSchema.default(marketSchema.parse({})),
     voiceGroups: z.array(voiceGroupSchema).max(10).default([]),
     voiceCounter: voiceCounterSchema.default(voiceCounterSchema.parse({})),
+    emaCounter: emaCounterSchema.default(emaCounterSchema.parse({})),
     voiceChat: voiceChatSchema.default(voiceChatSchema.parse({})),
     bell: bellSchema.default(bellSchema.parse({})),
     diary: z

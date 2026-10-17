@@ -472,11 +472,12 @@ describe('🏇 名簿と卓のサービス', () => {
     if (other.status !== 'ok') throw new Error(other.status);
     expect(await retireToBreed(db, B.id, other.horse.id)).toBe('no_wins');
     // 繁殖入りでも功労金（1 勝 × 300）
+    // このケースは母として繁殖する。購入時のランダムな性別に依存しない。
+    await db.update(keibaHorses).set({ sex: 1 }).where(eq(keibaHorses.id, id));
     const beforeBreed = (await walletOf(db, B.id)).balance;
     expect(await retireToBreed(db, B.id, id, t0, 300)).toBe('ok');
     expect((await walletOf(db, B.id)).balance).toBe(beforeBreed + 300);
     // 🧬 配合: 母は自分の繁殖牝馬、父は繁殖入りした牡馬（ほかの人の馬なら種付け料をその馬主へ）
-    await db.update(keibaHorses).set({ sex: 1 }).where(eq(keibaHorses.id, id));
     // 種牡馬が 1 頭もいないときは、母だけで迎えられる（父なし）
     const solo = await breedFoal(db, B.id, id, 0, 'ハハノコ', 1500, 9);
     expect(solo).toMatchObject({ status: 'ok', horse: { name: 'ハハノコ', parentId: null, damId: id, ownerId: B.id } });
