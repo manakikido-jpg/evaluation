@@ -722,6 +722,13 @@
       "when": 1792244716254,
       "tag": "0102_open_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1792259343760,
+      "tag": "0103_common_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

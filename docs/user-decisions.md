@@ -68,3 +68,10 @@ Claudeによる競馬の改修（称号・殿堂・宿敵、決まった時刻�
 - カード仕様と進捗はクラウド作業場所 `/workspace/artifacts/shinpu-cards/` にあります。`237-card-draft.md/json/csv`、`all-237/progress.json`、`stacking-rule.json` を確認します。
 - 採用見本は `/workspace/artifacts/shinpu-card-layout/navy-silver/spear-concept.png`。ローカル引き継ぎメモは `/workspace/artifacts/evaluation-handoff-2026-10-14.md`。
 - これらクラウドの絶対パスは場所の記録であり、GitHubに画像や進捗ファイル本体が保存済みという意味ではありません。別の環境では存在を確認してください。
+
+
+## 録音・録画（2026年10月18日）
+
+- ユーザーはVC音声・画面共有やカメラ・自作Web画面を記録する機能を希望し、段階的に作る方針を承認しました。
+- VCは参加者全員の同意後に録音。画面・カメラは、本人がWebで共有対象を選ぶ方式です。Discordの映像をBOTが直接取得する方式ではありません。
+- 社務所で一覧・再生・削除し、初期状態は無効。まず1つのVC、保存7日・20分を初期値として実装しています。これらは運用開始済みではなく、PRの確認と実機確認が必要です。

@@ -24,10 +24,10 @@ describe('customId', () => {
 describe('コマンド定義', () => {
   it('右クリックメニュー・全員用・神職用', () => {
     const defs = commandDefinitions(cfg);
-    expect(defs.map((d) => d.name)).toEqual(['プロフィール', 'goshuin', 'zandaka', 'sokin', 'cast', 'shinpu', 'casino', 'items', 'present', 'yougo', 'menzaifu', 'omikuji', 'gacha', 'bell', 'invite', 'sharedinvite', 'hajimete', 'soudan', 'help', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member']);
+    expect(defs.map((d) => d.name)).toEqual(['recording', 'プロフィール', 'goshuin', 'zandaka', 'sokin', 'cast', 'shinpu', 'casino', 'items', 'present', 'yougo', 'menzaifu', 'omikuji', 'gacha', 'bell', 'invite', 'sharedinvite', 'hajimete', 'soudan', 'help', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member']);
     // 神職用は「メンバーをタイムアウト」権限がある人にだけ表示
-    const staff = defs.filter((d) => ['shinpu', 'sharedinvite', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member'].includes(d.name));
-    expect(staff.length).toBe(14);
+    const staff = defs.filter((d) => ['recording', 'shinpu', 'sharedinvite', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member'].includes(d.name));
+    expect(staff.length).toBe(15);
     expect(staff.every((d) => d.default_member_permissions === '1099511627776')).toBe(true);
     const yaku = defs.find((d) => d.name === 'yaku') as { options: { options?: { name: string; choices?: { value: string }[] }[] }[] };
     expect(yaku.options[0]!.options!.find((o) => o.name === 'reason')!.choices!.map((c) => c.value)).toContain('その他');

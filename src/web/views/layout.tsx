@@ -4,6 +4,7 @@ import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
 
 type Nav =
+  | 'recordings'
   | 'home'
   | 'stats'
   | 'economy'
@@ -50,6 +51,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: 'home', href: '/', icon: '🏠', label: 'ホーム' },
       { key: 'stats', href: '/stats', icon: '📈', label: '推移' },
+      { key: 'recordings', href: '/recordings', icon: '🎥', label: '録音・録画' },
       { key: 'voice', href: '/voice', icon: '🎙', label: '通話の記録' },
       { key: 'audit', href: '/audit', icon: '📜', label: '記録' },
       { key: 'commands', href: '/commands', icon: '⌨', label: 'コマンド' },
@@ -105,7 +107,7 @@ function ThemeChoice() {
   </label>;
 }
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'recordings.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
   return (

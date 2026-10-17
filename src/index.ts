@@ -1,3 +1,4 @@
+import { RecordingApp } from './discord/recording.js';
 import { planOf, roomOf } from './services/rooms.js';
 import { opsWeeklyTick, pruneOpsNotices, staleTick } from './services/opsWatch.js';
 import { createServer } from 'node:http';
@@ -91,6 +92,7 @@ async function main(): Promise<void> {
       ...(env.DISCORD_PRESENCE === 'on' ? [GatewayIntentBits.GuildPresences] : []),
     ],
   });
+  const recording = new RecordingApp(db, cfg);
   const app = new ShuinApp(client, db, cfg);
   const actions = createDiscordActions(env.DISCORD_TOKEN);
   const staff = new StaffApp(client, db, cfg, actions, env.WEB_BASE_URL);
@@ -217,6 +219,7 @@ async function main(): Promise<void> {
       void tempVoice.cleanup();
       void voiceGroups.checkAll().catch((err) => logger.warn({ err }, 'voice groups check failed'));
       void voiceCounter.tick();
+      void recording.tick().catch(err => logger.warn({ err }, 'recording cleanup failed'));
       // 🎁 浮上している人へのプレゼント（社務所Web で受け付けたもの）
       void presenceGifts.tick(guild);
       // 📣 社務所Web で足した・外した募集ボタン
@@ -344,6 +347,7 @@ async function main(): Promise<void> {
     })();
   });
   client.on(Events.VoiceStateUpdate, (before, after) => {
+    recording.onVoiceStateUpdate(before, after);
     // 通話に入った・移動したとき
     if (after.channelId && after.channelId !== before.channelId && after.member) {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
@@ -360,6 +364,7 @@ async function main(): Promise<void> {
     void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
+    void recording.onInteraction(i);
     void maikura.onInteraction(i);
     void guideReception.onInteraction(i);
     void app.onInteraction(i);
@@ -434,6 +439,7 @@ async function main(): Promise<void> {
     if (ticker) clearInterval(ticker);
     if (omairiTicker) clearInterval(omairiTicker);
     store.stop();
+    await recording.stop();
     await client.destroy();
     await close();
     process.exit(0);
