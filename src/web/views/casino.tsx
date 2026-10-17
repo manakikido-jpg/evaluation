@@ -11,7 +11,7 @@ import { BAC_BETS, type BacBet } from '../../services/casino/baccarat.js';
 import { bjView, type BjResult, type BjState } from '../../services/casino/blackjack.js';
 import { cardText, isRed, rankText, SUITS, suitOf } from '../../services/casino/cards.js';
 import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState } from '../../services/casino/casino.js';
-import { HL_MAX_STEPS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
+import { HL_MAX_STEPS, HL_RESOLVED_RANKS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
 import { countStones, legalMoves, OTHELLO_LEVELS, othelloMultOf, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteColor, rouletteMaxOf } from '../../services/casino/roulette.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
@@ -569,7 +569,7 @@ export function HighLowPage(p: GamePage) {
                 <div class="c-hl-mult">
                   いまの倍率 <b>{mult(s.mult)}</b>
                   <span class="c-muted">
-                    （{s.steps} / {HL_MAX_STEPS} 回）
+                    （成功 {s.steps} / {HL_MAX_STEPS} 回）
                   </span>
                 </div>
               </Later>
@@ -579,10 +579,11 @@ export function HighLowPage(p: GamePage) {
                 <form method="post" action={`/casino/highlow/${p.row!.id}`} class="c-actions">
                   <input type="hidden" name="_csrf" value={csrf} />
                   <input type="hidden" name="v" value={String(p.row!.version)} />
+                  {s.lastDraw && <p class="c-muted" role="status">🤝 ドロー！連勝・倍率・受取予定額はそのまま。もう一度、上か下を選べます。</p>}
                   {(['high', 'low'] as const).map((g) =>
                     hlWays(s.current, g) > 0 ? (
                       <button type="submit" name="action" value={g} class="c-btn">
-                        {g === 'high' ? '▲ 上' : '▼ 下'}（{mult(hlNextMult(s.mult, s.current, g))}・{Math.round((hlWays(s.current, g) / 13) * 100)}%）
+                        {g === 'high' ? '▲ 上' : '▼ 下'}（{mult(hlNextMult(s.mult, s.current, g))}・{Math.round((hlWays(s.current, g) / HL_RESOLVED_RANKS) * 100)}%・決着時）
                       </button>
                     ) : null,
                   )}
@@ -600,7 +601,7 @@ export function HighLowPage(p: GamePage) {
             )}
           </>
         ) : (
-          <p class="c-muted c-center">次のカードが「上」か「下」かを当てます。同じ数字ははずれ。当てるほど倍率が上がり、好きなときに降りられます。</p>
+          <p class="c-muted c-center">次のカードが「上」か「下」かを当てます。同じ数字はドロー。連勝・倍率・受取予定額を保って、もう一度選べます。1回以上成功したら降りて受け取れます。</p>
         )}
       </section>
       {(!s || s.phase === 'done') && (
@@ -608,7 +609,7 @@ export function HighLowPage(p: GamePage) {
           <BetForm action="/casino/highlow" csrf={csrf} casino={p.casino} coin={p.me.coin} label="始める" last={p.row?.bet} />
         </Later>
       )}
-      <Rules>当たるたびに倍率が「0.95 ÷ 当たる確率」倍になります（A から上なら小さく、K から上は選べません）。{HL_MAX_STEPS} 回当てるか ×100 に届いたら自動で受け取ります。</Rules>
+      <Rules>同じ数字（1/13）はドローで、追加の賭けや成功回数の加算はありません。成功時の倍率は「0.95 ÷ 引き分けを除いた成功確率」倍です。ボタンの確率は勝敗が決まる場合の値です。高確率の選択では成功しても倍率が下がる場合があります。Kから上・Aから下は選べません。{HL_MAX_STEPS} 回当てるか ×100 に届いたら自動で受け取ります。</Rules>
     </CasinoLayout>
   );
 }

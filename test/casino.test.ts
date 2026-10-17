@@ -263,13 +263,31 @@ describe('🔼 ハイ＆ロー（DB）', () => {
     const g = await actHighLow(db, row.id, A, 'high', seq([card(10)]), NOW);
     expect(g.status === 'ok' && g.row.status).toBe('playing');
     const out = await actHighLow(db, row.id, A, 'cashout', seq([0]), NOW);
-    expect(out.status === 'ok' && out.row.payout).toBe(Math.floor((100 * Math.floor((1000 * 0.95 * 13) / 8)) / 1000));
+    expect(out.status === 'ok' && out.row.payout).toBe(Math.floor((100 * Math.floor((1000 * 0.95 * 12) / 8)) / 1000));
     const s2 = await startHighLow(db, ccfg(), A, 100, seq([card(5)]), NOW);
     const r2 = s2.status === 'ok' ? s2.row : undefined!;
-    const lost = await actHighLow(db, r2.id, A, 'high', seq([card(5, 1)]), NOW);
+    const lost = await actHighLow(db, r2.id, A, 'high', seq([card(4, 1)]), NOW);
     expect(lost.status === 'ok' && lost.row).toMatchObject({ status: 'done', payout: 0 });
     expect((await actHighLow(db, r2.id, A, 'cashout', seq([0]), NOW)).status).toBe('done');
   });
+});
+
+it('ハイローのドローは追加課金・払戻なしで続行し、その後の受け取りも二重払いしない', async () => {
+  const started = await startHighLow(db, ccfg(), A, 100, seq([card(7)]), NOW);
+  if (started.status !== 'ok') throw Error('start failed');
+  const id = started.row.id, afterBet = await bal(A);
+  const first = await actHighLow(db, id, A, 'high', seq([card(7, 1)]), NOW);
+  expect(first.status === 'ok' && first.row).toMatchObject({ status: 'playing', payout: 0, state: { steps: 0, mult: 1000, lastDraw: true } });
+  expect(await bal(A)).toBe(afterBet);
+  const won = await actHighLow(db, id, A, 'high', seq([card(10)]), NOW);
+  if (won.status !== 'ok') throw Error('guess failed');
+  const drawn = await actHighLow(db, id, A, 'low', seq([card(10, 2)]), NOW);
+  expect(drawn.status === 'ok' && drawn.row).toMatchObject({ status: 'playing', payout: 0, state: { steps: 1, mult: (won.row.state as { mult: number }).mult, lastDraw: true } });
+  expect(await bal(A)).toBe(afterBet);
+  const results = await Promise.all([actHighLow(db, id, A, 'cashout', seq([0]), NOW), actHighLow(db, id, A, 'cashout', seq([0]), NOW)]);
+  expect(results.filter((r) => r.status === 'ok')).toHaveLength(1);
+  const payout = Math.floor(100 * (won.row.state as { mult: number }).mult / 1000);
+  expect(await bal(A)).toBe(afterBet + payout);
 });
 
 describe('⚫ オセロ CPU（DB）', () => {

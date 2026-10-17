@@ -81,28 +81,43 @@ describe('🃏 ブラックジャック', () => {
 });
 
 describe('🔼 ハイ＆ロー', () => {
-  it('当たる確率に合わせて倍率が上がる（期待値は 0.95）', () => {
+  it('引き分けを除いた成功確率で配当を計算する（決着時の期待値は0.95以下）', () => {
     expect(hlWays(C(1), 'low')).toBe(0);
     expect(hlWays(C(7), 'high')).toBe(6);
-    expect(hlNextMult(1000, C(7), 'high')).toBe(Math.floor((1000 * 0.95 * 13) / 6));
+    expect(hlNextMult(1000, C(7), 'high')).toBe(Math.floor((1000 * 0.95 * 12) / 6));
     for (let r = 1; r <= 13; r++) {
       for (const g of ['high', 'low'] as const) {
         const w = hlWays(C(r), g);
-        if (w) expect(((w / 13) * hlNextMult(1000, C(r), g)) / 1000).toBeLessThanOrEqual(0.95);
+        if (w) expect(((w / 12) * hlNextMult(1000, C(r), g)) / 1000).toBeLessThanOrEqual(0.95);
       }
     }
   });
 
-  it('当てたら続けられる・降りたら受け取れる。外れたら 0。同じ数字は負け', () => {
+  it('当てたら続けられる・降りたら受け取れる。外れたら 0。同じ数字は続行', () => {
     const s = { ...hlStart(seq([0])), current: C(5) };
     const won = hlGuess(s, 'high', seq([C(9)]));
     expect(won).toMatchObject({ steps: 1, phase: 'playing', current: C(9) });
     const out = hlCashout(won);
     expect(hlPayout(out, 100)).toBe(Math.floor((100 * won.mult) / 1000));
-    expect(hlGuess(won, 'high', seq([C(9, 2)]))).toMatchObject({ phase: 'done', result: 'lose' });
+    expect(hlGuess(won, 'high', seq([C(9, 2)]))).toMatchObject({ phase: 'playing', lastDraw: true, mult: won.mult, steps: won.steps });
+    expect(hlGuess(won, 'high', seq([C(8)]))).toMatchObject({ phase: 'done', result: 'lose', mult: 0 });
     expect(hlCashout(s)).toBe(s);
     // 置けない予想は何もしない
     expect(hlGuess({ ...s, current: C(1) }, 'low', seq([0]))).toMatchObject({ current: C(1), steps: 0 });
+  });
+
+  it('ドローが続いても成功回数・倍率・受取予定額を保ち、履歴だけを更新する', () => {
+    const start = hlStart(seq([C(7)]));
+    const won = hlGuess(start, 'high', seq([C(10)]));
+    let s = won;
+    for (let n = 0; n < 100; n++) s = hlGuess(s, n % 2 ? 'high' : 'low', seq([C(10, n % 4)]));
+    expect(s).toMatchObject({ phase: 'playing', steps: 1, mult: won.mult, lastDraw: true });
+    expect(s.history).toHaveLength(HL_MAX_STEPS);
+    expect(hlPayout(hlCashout(s), 100)).toBe(hlPayout(hlCashout(won), 100));
+    const next = hlGuess(s, 'low', seq([C(5)])); expect(next.steps).toBe(2); expect(next.lastDraw).toBe(false);
+    const firstDraw = hlGuess(start, 'high', seq([C(7, 1)]));
+    expect(firstDraw).toMatchObject({ steps: 0, mult: 1000, phase: 'playing', lastDraw: true });
+    expect(hlCashout(firstDraw)).toBe(firstDraw);
   });
 
   it('回数の上限で自動で受け取る', () => {
