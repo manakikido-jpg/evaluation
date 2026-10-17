@@ -6,7 +6,7 @@ import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, waitingGuides, type GuideConfig } from '../services/guideReception.js';
 import { guideRoleOf } from './guidePending.js';
 import { autoRanks } from '../domain/ranks.js';
 import { audit } from '../services/audit.js';
@@ -16,7 +16,7 @@ const btn = (id: string, label: string, disabled = false) => ({ type: 2, custom_
 export const guideEmployeePanel = (): MessageBody => ({
   content: '**案内人の受付**\n登録申請は運営が承認します。承認後に待機を切り替えてください。',
   allowed_mentions: { parse: [] },
-  components: [{ type: 1, components: [btn('guide:register', '登録を申請'), btn('guide:wait', '待機する'), btn('guide:off', '受付停止'), btn('guide:salary', '給与を確認')] }],
+  components: [{ type: 1, components: [btn('guide:register', '登録を申請'), btn('guide:wait', '待機する'), btn('guide:off', '受付停止'), btn('guide:salary', '給与を確認'), btn('guide:who', '👀 待機中の人')] }],
 });
 export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config: GuideConfig, roleGranted = false): MessageBody {
   const label = r.status === 'assigned' ? `対応中：<@${r.guideId}>` : r.status === 'done' ? '案内完了' : r.status === 'left' ? '退出済み' : '案内人の対応待ち';
@@ -224,6 +224,14 @@ export class GuideReceptionApp {
       if (action === 'register') {
         await registerGuide(this.db, i.user.id);
         return void await i.editReply('案内人の登録申請を受け付けました。運営の承認をお待ちください。');
+      }
+      // 👀 いま待機中の案内人（パネルを見られる人ならだれでも。通知は飛ばさない）
+      if (action === 'who') {
+        const ids = await waitingGuides(this.db);
+        return void await i.editReply({
+          content: ids.length ? `👀 いま待機中の案内人（${ids.length} 人）\n${ids.map((id) => `・<@${id}>`).join('\n')}` : 'いま待機中の案内人はいません。',
+          allowedMentions: { parse: [] },
+        });
       }
       if (member.user.bot || !c.roleId || !member.roles.cache.has(c.roleId)) return void await i.editReply('案内人ロールが必要です。運営に確認してください。');
       if (action === 'wait' || action === 'off') {

@@ -3,7 +3,7 @@ import { Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { auditLogs, employeePayroll, guideEmployees, guideReceptions } from '../src/db/schema.js';
-import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting } from '../src/services/guideReception.js';
+import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides } from '../src/services/guideReception.js';
 import { GuideReceptionApp, guideVisitorPanel } from '../src/discord/guideReception.js';
 import * as economy from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
@@ -69,6 +69,11 @@ describe('案内の受付と給与', () => {
     await setGuideStatus(db, GUIDE, 'active', 'staff');
     await registerGuide(db, GUIDE);
     expect(await setGuideWaiting(db, GUIDE, true)).toBe(true);
+    // 👀 待機中の案内人（承認ずみで待機を押した人だけ）
+    expect(await waitingGuides(db)).toEqual([GUIDE]);
+    await setGuideWaiting(db, GUIDE, false);
+    expect(await waitingGuides(db)).toEqual([]);
+    await setGuideWaiting(db, GUIDE, true);
     await setGuideStatus(db, GUIDE, 'paused', 'staff');
     expect(await setGuideWaiting(db, GUIDE, true)).toBe(false);
     expect((await db.select().from(guideEmployees))[0]?.waiting).toBe(false);

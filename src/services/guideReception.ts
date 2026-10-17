@@ -83,6 +83,11 @@ export async function setGuideStatus(db: Db, memberId: string, status: 'active' 
 export async function setGuideWaiting(db: Db, memberId: string, waiting: boolean) {
   return (await db.update(guideEmployees).set({ waiting }).where(and(eq(guideEmployees.memberId, memberId), eq(guideEmployees.status, 'active'))).returning()).length > 0;
 }
+/** いま待機中の案内人（承認ずみで、待機を押している人） */
+export async function waitingGuides(db: Db): Promise<string[]> {
+  const rows = await db.select({ id: guideEmployees.memberId }).from(guideEmployees).where(and(eq(guideEmployees.status, 'active'), eq(guideEmployees.waiting, true)));
+  return rows.map((r) => r.id);
+}
 export async function openGuideReception(db: Db, visitorId: string, channelId: string, now = new Date()) {
   return db.transaction(async tx => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`guide:${visitorId}`}))`);
