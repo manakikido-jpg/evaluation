@@ -39,6 +39,10 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   gift_queued: { text: '🎁 受け付けました。1 分以内に、いまオンラインの人へ配ります（下の「最近のプレゼント」で人数が見られます）。', kind: 'ok' },
   gift_revoked: { text: '↩ 回収しました。', kind: 'ok' },
   gift_revoked_short: { text: '↩ 回収しました。もう使っていた人からは、残っている分だけ回収しました。', kind: 'warn' },
+  recruit_panel_added: { text: '募集ボタンを足しました。1 分以内に BOT がチャンネルに置きます。', kind: 'ok' },
+  recruit_panel_removed: { text: '募集ボタンを外しました。1 分以内に BOT がチャンネルから消します。', kind: 'ok' },
+  recruit_panel_dup: { text: 'そのチャンネルには、もう募集ボタンがあります。', kind: 'warn' },
+  recruit_panel_invalid: { text: 'チャンネルと「何の募集か」を入れてください（20 こまで）。', kind: 'warn' },
   gift_members_given: { text: '指定した人に配りました。', kind: 'ok' },
   gift_members_bad: { text: '見つからない人・同じ名前が何人もいる人・退出した人がいたので、だれにも配っていません。ID で入れると確実です。', kind: 'warn' },
   gift_members_count: { text: '配る人を 1〜50 人で入れてください。', kind: 'warn' },
@@ -1046,6 +1050,8 @@ function BoosterList(props: { boosters: { id: string; name: string; since: Date;
 }
 
 export function SettingsPage(props: {
+  /** 社務所Web で足した募集ボタンのチャンネル（外せる） */
+  webRecruitPanels?: string[];
   session: AdminSession;
   cfg: GuildConfig;
   fileCfg: GuildConfig;
@@ -1523,6 +1529,69 @@ export function SettingsPage(props: {
             </p>
           )}
           <Save at="recruit" />
+        </section>
+        <section class="card anchor" id="sec-recruit-panels">
+          <h3>📣 募集ボタンを置くチャンネル</h3>
+          <p class="note">
+            チャンネルのいちばん下に「○○を募集する」ボタンを置きます。押した人が一言を書くと、役職のある人みんなに通知が届き、通話にいればその通話へのボタンも付きます。作業通話の仲間さがし（🛠 作業）などに。足す・外すと、BOT が 1 分以内にボタンを置く・消します。上の待ち時間の決まりも同じです。
+          </p>
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>チャンネル</th>
+                <th>ボタン</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {cfg.recruit.panels.map((p) => (
+                <tr>
+                  <td>#{(props.textChannels ?? []).find((c) => c.id === p.channelId)?.name ?? p.channelId}</td>
+                  <td>
+                    {p.emoji} {p.label}を募集する{p.adultOnly ? '（宵参りの人だけ）' : ''}
+                  </td>
+                  <td>
+                    {(props.webRecruitPanels ?? []).includes(p.channelId) ? (
+                      <button type="submit" formaction="/settings/recruit-panel/remove" formnovalidate name="recruitPanelRemove" value={p.channelId} class="danger small">
+                        外す
+                      </button>
+                    ) : (
+                      <span class="muted">設定ファイル</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div class="fields">
+            <label class="field">
+              <span>足すチャンネル</span>
+              <select name="recruitPanelChannel">
+                <option value="">（選ぶ）</option>
+                {(props.textChannels ?? []).map((c) => (
+                  <option value={c.id}>#{c.name}{c.category ? `（${c.category}）` : ''}</option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>何の募集か（ボタンは「○○を募集する」）</span>
+              <input type="text" name="recruitPanelLabel" maxlength={40} value="作業" />
+            </label>
+            <label class="field">
+              <span>絵文字</span>
+              <input type="text" name="recruitPanelEmoji" maxlength={10} value="🛠" />
+            </label>
+            <label class="field check">
+              <input type="checkbox" name="recruitPanelAdult" value="yes" />
+              <span>宵参り（18 歳以上）の人だけ募集できる</span>
+            </label>
+          </div>
+          <div class="inline-actions">
+            {props.at === 'recruit' && props.flash?.startsWith('recruit_panel') && <Flash code={props.flash} />}
+            <button type="submit" formaction="/settings/recruit-panel" formnovalidate class="ok">
+              ボタンを足す
+            </button>
+          </div>
         </section>
         <section class="card anchor" id="sec-voicechat">
           <h2>💬 通話のチャット</h2>

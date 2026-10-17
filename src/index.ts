@@ -219,6 +219,8 @@ async function main(): Promise<void> {
       void voiceCounter.tick();
       // 🎁 浮上している人へのプレゼント（社務所Web で受け付けたもの）
       void presenceGifts.tick(guild);
+      // 📣 社務所Web で足した・外した募集ボタン
+      void recruit.sync().catch((err) => logger.warn({ err }, 'recruit sync failed'));
       // 市場: 期限が来た取引を渡す・返事のない提案を取り下げる・📞 待機の時間切れ
       void market.tick().catch((err) => logger.warn({ err }, 'market tick failed'));
       // 1 時間ごとの部屋（宵宮）の支払い

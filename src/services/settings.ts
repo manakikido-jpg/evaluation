@@ -114,6 +114,18 @@ export const overridesSchema = z.object({
     })
     .partial()
     .default({}),
+  /** 社務所Web で足した「○○を募集する」ボタン（作業通話など。ファイルの recruit.panels に足す） */
+  recruitPanels: z
+    .array(
+      z.object({
+        channelId: z.string().regex(/^\d{17,20}$/),
+        label: z.string().min(1).max(40),
+        emoji: z.string().max(10).default(''),
+        adultOnly: z.boolean().default(false),
+      }),
+    )
+    .max(20)
+    .default([]),
   /** 経済の見守り（channelId を空にすると #記録 へ） */
   economyOps: economyOpsSchema.extend({ channelId: z.string().regex(/^\d{17,20}$/).nullable() }).partial().default({}),
   /** 運営の見守り（channelId を空にすると #記録 へ） */
@@ -188,7 +200,12 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
     gacha: o.gacha ?? base.gacha,
     diary: { ...base.diary, ...o.diary },
     security: { ...base.security, ...o.security },
-    recruit: { ...base.recruit, ...o.recruit },
+    recruit: {
+      ...base.recruit,
+      ...o.recruit,
+      // ファイルのボタンはそのまま。同じチャンネルのものは足さない
+      panels: [...base.recruit.panels, ...o.recruitPanels.filter((p) => !base.recruit.panels.some((b) => b.channelId === p.channelId))],
+    },
     economyOps: (() => {
       const { channelId, ...rest } = o.economyOps;
       const merged = { ...base.economyOps, ...rest };

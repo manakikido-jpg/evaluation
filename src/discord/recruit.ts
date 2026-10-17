@@ -10,7 +10,7 @@ import {
   type Message,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
@@ -68,6 +68,27 @@ export class RecruitApp {
     for (const p of this.cfg().recruit.panels) {
       await this.restick(p.channelId);
       await this.refreshText(p.channelId);
+    }
+  }
+
+  /**
+   * 1 分ごと: 社務所Web で足したボタンを置く・外したボタンを消す。
+   * まだ置いていないチャンネルだけ置く（置いてあれば何もしない）。
+   */
+  async sync(): Promise<void> {
+    if (!this.guild) return;
+    const panels = this.cfg().recruit.panels;
+    for (const p of panels) {
+      if (!(await this.loadPanelId(p.channelId))) await this.restick(p.channelId);
+    }
+    const rows = await this.db.select().from(settings).where(like(settings.key, `${STATE_KEY}:%`));
+    for (const row of rows) {
+      const channelId = row.key.slice(STATE_KEY.length + 1);
+      if (panels.some((p) => p.channelId === channelId)) continue;
+      const messageId = (row.value as { messageId?: string }).messageId;
+      const channel = this.guild.channels.cache.get(channelId);
+      if (messageId && channel?.isTextBased()) await channel.messages.delete(messageId).catch(() => undefined);
+      await this.db.delete(settings).where(eq(settings.key, row.key));
     }
   }
 

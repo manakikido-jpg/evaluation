@@ -1591,6 +1591,34 @@ describe('運営から花びらを送る（管理画面）', () => {
   });
 });
 
+describe('📣 募集ボタンを社務所Web で足す・外す', () => {
+  const post = async (session: string, path: string, form: Record<string, string>) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf, ...form }).toString(),
+    });
+  };
+  it('チャンネルを選んで足す・同じチャンネルは 2 つ置けない・外す', async () => {
+    const { loadOverrides, applyOverrides } = await import('../src/services/settings.js');
+    const s = await login(GUJI);
+    const page = await (await get('/settings', s)).text();
+    expect(page).toContain('募集ボタンを置くチャンネル');
+    const add = (form: Record<string, string>) => post(s, '/settings/recruit-panel', form);
+    expect((await add({ recruitPanelChannel: '910000000000000099', recruitPanelLabel: '作業' })).headers.get('location')).toBe('/settings?msg=recruit_panel_invalid&at=recruit#sec-recruit');
+    expect((await add({ recruitPanelChannel: '910000000000000003', recruitPanelLabel: '' })).headers.get('location')).toBe('/settings?msg=recruit_panel_invalid&at=recruit#sec-recruit');
+    expect((await add({ recruitPanelChannel: '910000000000000003', recruitPanelLabel: '作業', recruitPanelEmoji: '🛠' })).headers.get('location')).toBe('/settings?msg=recruit_panel_added&at=recruit#sec-recruit');
+    expect((await add({ recruitPanelChannel: '910000000000000003', recruitPanelLabel: '作業' })).headers.get('location')).toBe('/settings?msg=recruit_panel_dup&at=recruit#sec-recruit');
+    const o = await loadOverrides(db);
+    expect(o.recruitPanels).toEqual([{ channelId: '910000000000000003', label: '作業', emoji: '🛠', adultOnly: false }]);
+    expect(applyOverrides(cfg, o).recruit.panels.at(-1)).toMatchObject({ channelId: '910000000000000003', label: '作業' });
+    expect((await listAudit(db, { action: 'recruit.panel_add' })).length).toBe(1);
+    expect((await post(s, '/settings/recruit-panel/remove', { recruitPanelRemove: '910000000000000003' })).headers.get('location')).toBe('/settings?msg=recruit_panel_removed&at=recruit#sec-recruit');
+    expect((await loadOverrides(db)).recruitPanels).toEqual([]);
+  });
+});
+
 describe('✨ 特別ご縁（管理画面）', () => {
   const post = async (session: string, path: string, form: Record<string, string>) => {
     const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;

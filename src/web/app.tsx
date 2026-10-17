@@ -2449,6 +2449,7 @@ export function createWebApp(deps: WebDeps) {
         at={c.req.query('at')}
         coinsNonce={randomUUID()}
         presenceGifts={await recentPresenceGifts(db, 5)}
+        webRecruitPanels={(await loadOverrides(db)).recruitPanels.map((p) => p.channelId)}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         voiceChannels={voiceChannelsOf(channels)}
         forumChannels={channels.filter((ch) => ch.type === 15).map((ch) => ({ id: ch.id, name: ch.name }))}
@@ -3039,6 +3040,36 @@ export function createWebApp(deps: WebDeps) {
     if (r.status === 'duplicate') return c.redirect('/settings?msg=coins_dup');
     await audit(db, { actorId: by, action: 'coins.grant_all', detail: { amount, note, count: r.count }, via: 'web' });
     return c.redirect('/settings?msg=coins_all_given');
+  });
+
+  // 📣 募集ボタンを足す・外す（作業通話の募集など。BOT が 1 分以内に置く・消す）
+  app.post('/settings/recruit-panel', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = field(body, 'recruitPanelChannel', 20) ?? '';
+    const label = field(body, 'recruitPanelLabel', 40) ?? '';
+    const emoji = field(body, 'recruitPanelEmoji', 10) ?? '';
+    const back = (msg: string) => c.redirect(`/settings?msg=${msg}&at=recruit#sec-recruit`);
+    if (!/^\d{17,20}$/.test(channelId) || !label) return back('recruit_panel_invalid');
+    const channels = await loadChannels().catch(() => [] as GuildChannel[]);
+    if (!channels.some((ch) => ch.id === channelId)) return back('recruit_panel_invalid');
+    const prev = await loadOverrides(db);
+    if ([...cfg.recruit.panels, ...prev.recruitPanels].some((p) => p.channelId === channelId)) return back('recruit_panel_dup');
+    if (prev.recruitPanels.length >= 20) return back('recruit_panel_invalid');
+    const panel = { channelId, label, emoji, adultOnly: body.recruitPanelAdult === 'yes' };
+    await saveOverrides(db, { ...prev, recruitPanels: [...prev.recruitPanels, panel] }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'recruit.panel_add', detail: panel, via: 'web' });
+    return back('recruit_panel_added');
+  });
+  app.post('/settings/recruit-panel/remove', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = field(body, 'recruitPanelRemove', 20) ?? '';
+    const prev = await loadOverrides(db);
+    if (!prev.recruitPanels.some((p) => p.channelId === channelId)) return c.redirect('/settings?msg=recruit_panel_invalid&at=recruit#sec-recruit');
+    await saveOverrides(db, { ...prev, recruitPanels: prev.recruitPanels.filter((p) => p.channelId !== channelId) }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'recruit.panel_remove', detail: { channelId }, via: 'web' });
+    return c.redirect('/settings?msg=recruit_panel_removed&at=recruit#sec-recruit');
   });
 
   // 🎁 浮上している人へのプレゼント（BOT が 1 分以内にオンラインの人へ配る）
