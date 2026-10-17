@@ -121,7 +121,7 @@ async function main(): Promise<void> {
   const otoshidama = new OtoshidamaApp(db, cfg, actions);
   const voiceGroups = new VoiceGroupApp(cfg);
   const voiceCounter = new VoiceCounterApp(cfg);
-  const presenceGifts = new PresenceGiftApp(db, cfg, actions, env.DISCORD_PRESENCE === 'on');
+  const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);

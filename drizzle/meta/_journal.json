@@ -715,6 +715,13 @@
       "when": 1792243403763,
       "tag": "0101_tan_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1792244716254,
+      "tag": "0102_open_joseph",
+      "breakpoints": true
     }
   ]
 }

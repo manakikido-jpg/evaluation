@@ -2064,5 +2064,10 @@ export const presenceGifts = pgTable('presence_gifts', {
   reason: text('reason'),
   count: integer('count').notNull().default(0),
   doneAt: timestamp('done_at', { withTimezone: true }),
+  /** 配った人（回収するときに使う） */
+  memberIds: text('member_ids').array().notNull().default(sql`'{}'::text[]`),
+  /** 回収した（1 件 1 回） */
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedBy: text('revoked_by'),
 }, (t) => [index('presence_gifts_status').on(t.status)]);
 export type PresenceGift = typeof presenceGifts.$inferSelect;

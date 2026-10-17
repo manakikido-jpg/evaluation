@@ -1,4 +1,4 @@
-import { recentPresenceGifts, requestPresenceGift, PRESENCE_TICKET_MAX } from '../services/presenceGifts.js';
+import { recentPresenceGifts, requestPresenceGift, revokePresenceGift } from '../services/presenceGifts.js';
 import { endRaid, raidState, startRaid } from '../services/raid.js';
 import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
@@ -3055,6 +3055,19 @@ export function createWebApp(deps: WebDeps) {
     if (!row) return c.redirect('/settings?msg=gift_invalid#sec-give');
     await audit(db, { actorId: by, action: 'gift.presence_request', detail: { id: row.id, kind: row.kind, ticketKind: row.ticketKind, amount, note }, via: 'web' });
     return c.redirect('/settings?msg=gift_queued#sec-give');
+  });
+
+  // ↩ 浮上プレゼントを回収する（まちがって配ったとき）
+  app.post('/settings/presence-gift/:id/revoke', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const id = Number(c.req.param('id'));
+    if (body.confirm !== 'yes' || !Number.isSafeInteger(id)) return c.redirect('/settings?msg=gift_invalid#sec-give');
+    const by = c.get('session').userId;
+    const r = await revokePresenceGift(db, id, by);
+    if (r.status !== 'ok') return c.redirect('/settings?msg=gift_revoke_none#sec-give');
+    await audit(db, { actorId: by, action: 'gift.presence_revoke', detail: { id, ...r }, via: 'web' });
+    return c.redirect(`/settings?msg=${r.short ? 'gift_revoked_short' : 'gift_revoked'}#sec-give`);
   });
 
   // 社務所Web に入れる人（ロール・人ごとに、見られるページを選ぶ）
