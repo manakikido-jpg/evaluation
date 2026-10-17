@@ -2954,6 +2954,10 @@ export function createWebApp(deps: WebDeps) {
             }),
           }
         : {}),
+      emaCounter: body.emaCounterPresent === '1'
+        ? { sanpaishaMale: field(body, 'emaCounter.sanpaishaMale', 20), sanpaishaFemale: field(body, 'emaCounter.sanpaishaFemale', 20), ujikoMale: field(body, 'emaCounter.ujikoMale', 20), ujikoFemale: field(body, 'emaCounter.ujikoFemale', 20),
+            names: { sanpaishaMale: field(body, 'emaCounterName.sanpaishaMale', 90) || cfg.emaCounter.names.sanpaishaMale, sanpaishaFemale: field(body, 'emaCounterName.sanpaishaFemale', 90) || cfg.emaCounter.names.sanpaishaFemale, ujikoMale: field(body, 'emaCounterName.ujikoMale', 90) || cfg.emaCounter.names.ujikoMale, ujikoFemale: field(body, 'emaCounterName.ujikoFemale', 90) || cfg.emaCounter.names.ujikoFemale } }
+        : prev.emaCounter,
       // 👥 縁側の人数（フォームにあるときだけ。チャンネルを空にすると止める。ほかの欄の保存では前のまま）
       voiceCounter:
         typeof body.vcCounterName === 'string'

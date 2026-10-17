@@ -1310,6 +1310,17 @@ export function SettingsPage(props: {
               ))}
             </tbody>
           </table>
+          <h3>🌸 絵馬殿のチャンネル名に在籍人数を出す</h3>
+          <p class="note">役職と性別のロールを両方持つ在籍メンバーを数え、「参拝者♂｜12人」のように表示します。BOTは除外し、オフラインの人も含めます。男性・女性ロールの設定が必要です。対象のテキストチャンネルIDを指定してください。空にすると、そのチャンネルの更新を止めます。毎分と参加・退出・ロール変更後に確認し、名前の変更は各チャンネル5分以上あけます。表示名も変更できます。人数の場所に{'{n}'}を入れてください。Discordで直接名前を変えると次の更新で設定名に戻るため、名前の変更はこの欄で行ってください。自己紹介の投稿は変更しません。</p>
+          <input type="hidden" name="emaCounterPresent" value="1" />
+          <div class="fields">
+            {([['sanpaishaMale', '参拝者♂'], ['sanpaishaFemale', '参拝者♀'], ['ujikoMale', '氏子♂'], ['ujikoFemale', '氏子♀']] as const).map(([key, label]) => (
+              <fieldset><legend>{label}</legend>
+                <label class="field"><span>チャンネルID</span><input type="text" name={`emaCounter.${key}`} value={cfg.emaCounter[key]} inputmode="numeric" pattern="\d{17,20}" maxlength={20} /></label>
+                <label class="field"><span>表示名（{'{n}'}が人数）</span><input type="text" name={`emaCounterName.${key}`} value={cfg.emaCounter.names[key]} maxlength={90} required /></label>
+              </fieldset>
+            ))}
+          </div>
           <h3>👥 縁側の人数をチャンネル名に出す</h3>
           <p class="note">
             上の「自動で増える通話」のうち、名前に下の言葉がある通話（例: 大きな縁側・小さな縁側）に、いまいる人の合計を、決めたチャンネルの名前に出します（BOT は数えません）。Discord の決まりで、チャンネル名は 10 分に 2 回までしか変えられないので、5 分ごとに書きかえます。人が入れない通話を 1 つ作って（@everyone の「接続」をオフ）、その ID を入れてください。空にすると止めます。
