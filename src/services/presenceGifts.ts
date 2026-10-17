@@ -3,6 +3,7 @@ import { TICKET_KINDS, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coinTx, presenceGifts, type PresenceGift } from '../db/schema.js';
 import { addCoins, deductUpTo, validAdminAmount } from './economy.js';
+import { findMemberByNameOrId } from './members.js';
 import { addTickets, takeTickets } from './tickets.js';
 
 /**
@@ -46,6 +47,37 @@ export async function deliverPresenceGift(db: Db, id: number, memberIds: readonl
     await tx.update(presenceGifts).set({ status: 'done', count: ids.length, doneAt: now, memberIds: ids }).where(eq(presenceGifts.id, id));
     return { status: 'ok' as const, count: ids.length };
   });
+}
+
+/** 1 回に指定できる人の数 */
+export const GIFT_TARGET_MAX = 50;
+
+/**
+ * 「人を指定して配る」の相手を読む。改行・カンマで区切った ID・<@ID>・ユーザー名・表示名。
+ * 見つからない・同じ名前が何人もいる・退出した人は bad に入れる（1 人でもあれば配らない）。
+ */
+export async function resolveGiftTargets(db: Db, raw: string): Promise<{ ids: string[]; bad: string[] }> {
+  const words = raw
+    .split(/[\n,、]+/)
+    .map((w) => w.trim().replace(/^<@!?(\d+)>$/, '$1'))
+    .filter(Boolean);
+  const ids: string[] = [];
+  const bad: string[] = [];
+  for (const w of [...new Set(words)]) {
+    const m = await findMemberByNameOrId(db, w);
+    if (!m || m === 'ambiguous' || m.leftAt) bad.push(w);
+    else if (!ids.includes(m.id)) ids.push(m.id);
+  }
+  return { ids, bad };
+}
+
+/** 人を指定して、すぐに配る（BOT を待たない）。履歴・回収は浮上プレゼントと同じ */
+export async function giveToMembers(db: Db, input: PresenceGiftInput, amount: number, note: string, by: string, memberIds: readonly string[]) {
+  if (!memberIds.length || memberIds.length > GIFT_TARGET_MAX) return undefined;
+  const row = await requestPresenceGift(db, input, amount, note, by);
+  if (!row) return undefined;
+  const r = await deliverPresenceGift(db, row.id, memberIds);
+  return { row, count: r.status === 'ok' ? r.count : 0 };
 }
 
 /** 配れなかった（オンラインを見る設定がオフなど） */

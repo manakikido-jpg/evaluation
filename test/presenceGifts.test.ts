@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { deliverPresenceGift, failPresenceGift, pendingPresenceGifts, recentPresenceGifts, requestPresenceGift } from '../src/services/presenceGifts.js';
+import { members } from '../src/db/schema.js';
+import { deliverPresenceGift, failPresenceGift, giveToMembers, resolveGiftTargets, revokePresenceGift as revokeGift, pendingPresenceGifts, recentPresenceGifts, requestPresenceGift } from '../src/services/presenceGifts.js';
 import { walletOf } from '../src/services/economy.js';
 import { ticketsOf } from '../src/services/tickets.js';
 import { makeDb } from './helpers.js';
@@ -18,6 +19,22 @@ afterEach(async () => {
 });
 
 describe('🎁 浮上している人へのプレゼント', () => {
+  it('人を指定して配る: ID・<@ID>・名前で探し、すぐ配る。見つからない人・退出した人は bad', async () => {
+    await db.insert(members).values([
+      { id: A, username: 'aoi', displayName: 'あおい' },
+      { id: B, username: 'beni', displayName: 'べに' },
+      { id: '780000000000000003', username: 'gone', displayName: 'さった', leftAt: new Date() },
+    ]);
+    expect(await resolveGiftTargets(db, `<@${A}>\nべに, aoi`)).toEqual({ ids: [A, B], bad: [] });
+    expect((await resolveGiftTargets(db, 'gone\nだれ')).bad).toEqual(['gone', 'だれ']);
+    const r = (await giveToMembers(db, { kind: 'coins' }, 50, 'お礼', STAFF, [A, B]))!;
+    expect(r.count).toBe(2);
+    expect((await walletOf(db, A)).balance).toBe(50);
+    expect(await giveToMembers(db, { kind: 'coins' }, 50, 'お礼', STAFF, [])).toBeUndefined();
+    expect((await revokeGift(db, r.row.id, STAFF)).status).toBe('ok');
+    expect((await walletOf(db, B)).balance).toBe(0);
+  });
+
   it('おかしな受付は断る（量・券の種類・理由）', async () => {
     expect(await requestPresenceGift(db, { kind: 'coins' }, 0, 'お礼', STAFF)).toBeUndefined();
     expect(await requestPresenceGift(db, { kind: 'ticket', ticketKind: 'nai' }, 1, 'お礼', STAFF)).toBeUndefined();

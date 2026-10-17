@@ -39,6 +39,9 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   gift_queued: { text: '🎁 受け付けました。1 分以内に、いまオンラインの人へ配ります（下の「最近のプレゼント」で人数が見られます）。', kind: 'ok' },
   gift_revoked: { text: '↩ 回収しました。', kind: 'ok' },
   gift_revoked_short: { text: '↩ 回収しました。もう使っていた人からは、残っている分だけ回収しました。', kind: 'warn' },
+  gift_members_given: { text: '指定した人に配りました。', kind: 'ok' },
+  gift_members_bad: { text: '見つからない人・同じ名前が何人もいる人・退出した人がいたので、だれにも配っていません。ID で入れると確実です。', kind: 'warn' },
+  gift_members_count: { text: '配る人を 1〜50 人で入れてください。', kind: 'warn' },
   gift_revoke_none: { text: '回収できるものがありません（もう回収したか、まだ配っていません）。', kind: 'warn' },
   gift_invalid: { text: '配るもの・量・理由を確かめてください（券は 1 人 10 枚まで）。', kind: 'warn' },
   coins_dup: { text: 'この操作はもう済んでいます（二度押しなどで 2 回送られないようにしています）。', kind: 'warn' },
@@ -1798,8 +1801,19 @@ export function SettingsPage(props: {
         <Csrf session={props.session} />
         <h3>🎁 浮上している人にプレゼント</h3>
         <p class="note">
-          いま通話（VC）に入っている（オンラインかどうかは見ません。AFK の通話はのぞく）、役職のある人（BOT はのぞく）全員に、同じものを配ります。まちがえたときは、下の表の「↩ 回収」で配った人全員から取りもどせます（もう使っていた人からは、残っている分だけ）。押してから 1 分以内に BOT が配り、#記録 に何人に配ったか出します。DM は送らないので、{'#御触書'} などで知らせてください。</p>
+          いま通話（VC）に入っている（オンラインかどうかは見ません。AFK の通話はのぞく）、役職のある人（BOT はのぞく）全員に、同じものを配ります。まちがえたときは、下の表の「↩ 回収」で配った人全員から取りもどせます（もう使っていた人からは、残っている分だけ）。押してから 1 分以内に BOT が配り、#記録 に何人に配ったか出します。DM は送らないので、{'#御触書'} などで知らせてください。「指定した人」を選ぶと、入れた人だけにすぐ配ります（1 人でも見つからなければ、だれにも配りません）。</p>
         <div class="fields">
+          <label class="field">
+            <span>配る相手</span>
+            <select name="to">
+              <option value="vc">🔊 いま通話に入っている人（BOT が 1 分以内に配る）</option>
+              <option value="list">👤 下で指定した人（すぐ配る）</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>指定する人（「指定した人」のとき。1 行に 1 人・カンマ区切りでも。ID・ユーザー名・表示名。50 人まで）</span>
+            <textarea name="members" rows={3} maxlength={5000} placeholder={'123456789012345678\nsakura_taro'}></textarea>
+          </label>
           <label class="field">
             <span>配るもの</span>
             <select name="what" required>
@@ -1826,7 +1840,7 @@ export function SettingsPage(props: {
         </div>
         <label class="field check">
           <input type="checkbox" name="confirm" value="yes" required />
-          <span>浮上している人に配る</span>
+          <span>選んだ相手に配る</span>
         </label>
         <button type="submit" class="ok">
           配る

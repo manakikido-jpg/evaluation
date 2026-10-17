@@ -1,4 +1,4 @@
-import { recentPresenceGifts, requestPresenceGift, revokePresenceGift } from '../services/presenceGifts.js';
+import { GIFT_TARGET_MAX, giveToMembers, recentPresenceGifts, requestPresenceGift, resolveGiftTargets, revokePresenceGift } from '../services/presenceGifts.js';
 import { endRaid, raidState, startRaid } from '../services/raid.js';
 import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
@@ -3051,6 +3051,16 @@ export function createWebApp(deps: WebDeps) {
     const note = field(body, 'note', 200);
     if (body.confirm !== 'yes' || !input || !note) return c.redirect('/settings?msg=gift_invalid#sec-give');
     const by = c.get('session').userId;
+    if (body.to === 'list') {
+      // 人を指定して、すぐに配る
+      const t = await resolveGiftTargets(db, typeof body.members === 'string' ? body.members.slice(0, 5000) : '');
+      if (t.bad.length) return c.redirect('/settings?msg=gift_members_bad#sec-give');
+      if (!t.ids.length || t.ids.length > GIFT_TARGET_MAX) return c.redirect('/settings?msg=gift_members_count#sec-give');
+      const r = await giveToMembers(db, input, amount, note, by, t.ids);
+      if (!r) return c.redirect('/settings?msg=gift_invalid#sec-give');
+      await audit(db, { actorId: by, action: 'gift.members', detail: { id: r.row.id, kind: r.row.kind, ticketKind: r.row.ticketKind, amount, note, memberIds: t.ids }, via: 'web' });
+      return c.redirect('/settings?msg=gift_members_given#sec-give');
+    }
     const row = await requestPresenceGift(db, input, amount, note, by);
     if (!row) return c.redirect('/settings?msg=gift_invalid#sec-give');
     await audit(db, { actorId: by, action: 'gift.presence_request', detail: { id: row.id, kind: row.kind, ticketKind: row.ticketKind, amount, note }, via: 'web' });
