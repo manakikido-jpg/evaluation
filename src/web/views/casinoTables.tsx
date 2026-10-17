@@ -430,12 +430,12 @@ function BjView({ t, s, me, casino, now }: ViewProps<BjTableState>) {
       </section>
       {my && s.phase === 'betting' && my.bet === 0 && <BetForm action={`/casino/t/${t.id}/act`} csrf={csrf} casino={casino} coin={me.coin} label="賭ける" extra={<Hidden v={{ action: 'bet' }} />} />}
       {my && s.phase === 'playing' && s.turn === my.id && (
-        <ActForm id={t.id} csrf={csrf}>
+        <ActForm id={t.id} csrf={csrf} class="c-actions c-bj-acts">
           <button type="submit" name="action" value="hit" class="c-btn">
-            もう 1 枚（ヒット）
+            もう 1 枚<small>（ヒット）</small>
           </button>
           <button type="submit" name="action" value="stand" class="c-btn c-btn-gold">
-            これで勝負（スタンド）
+            これで勝負<small>（スタンド）</small>
           </button>
           {my.hand.length === 2 && !my.doubled && (
             <button type="submit" name="action" value="double" class="c-btn c-btn-ghost">

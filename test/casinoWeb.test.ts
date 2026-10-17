@@ -274,6 +274,8 @@ describe('🎰 カジノ: 遊ぶ', () => {
     const bjPage = await (await get(bj.headers.get('location')!, cookie!)).text();
     expect(bjPage).toContain('ディーラー');
     if (bjPage.includes('value="stand"')) {
+      // スマホで押しまちがえないよう、ヒットとスタンドは横に並べる
+      expect(bjPage).toContain('c-actions c-bj-acts');
       const id = /\/casino\/blackjack\/(\d+)/.exec(bjPage)![1];
       const v = /name="v" value="(\d+)"/.exec(bjPage)![1]!;
       const done = await post(`/casino/blackjack/${id}`, cookie!, { action: 'stand', v });

@@ -495,14 +495,14 @@ export function BlackjackPage(p: GamePage) {
             </div>
             {v.phase === 'player' ? (
               <Later d={v.player.length === 2 && !v.doubled ? 8 : 2}>
-                <form method="post" action={`/casino/blackjack/${p.row!.id}`} class="c-actions">
+                <form method="post" action={`/casino/blackjack/${p.row!.id}`} class="c-actions c-bj-acts">
                   <input type="hidden" name="_csrf" value={csrf} />
                   <input type="hidden" name="v" value={String(p.row!.version)} />
                   <button type="submit" name="action" value="hit" class="c-btn">
-                    もう 1 枚（ヒット）
+                    もう 1 枚<small>（ヒット）</small>
                   </button>
                   <button type="submit" name="action" value="stand" class="c-btn c-btn-gold">
-                    これで勝負（スタンド）
+                    これで勝負<small>（スタンド）</small>
                   </button>
                   {v.canDouble && (
                     <button type="submit" name="action" value="double" class="c-btn c-btn-ghost">

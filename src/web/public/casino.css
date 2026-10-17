@@ -101,6 +101,11 @@ h2 { font-size: 1.05rem; margin: 0 0 0.6rem; color: var(--c-gold); }
 .c-hand-label b { background: rgba(0, 0, 0, 0.35); padding: 1px 10px; border-radius: 999px; margin-left: 6px; color: var(--c-gold); }
 .c-cards { display: flex; flex-wrap: wrap; gap: 8px; }
 .c-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin-top: 10px; }
+/* ブラックジャック: ヒットとスタンドを横に並べる（スマホで上下に並ぶと、画面が少し動いたときに押しまちがえる） */
+.c-actions.c-bj-acts { display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 440px; margin-inline: auto; }
+.c-bj-acts .c-btn { width: 100%; min-height: 52px; padding-inline: 6px; white-space: normal; }
+.c-bj-acts .c-btn-ghost { grid-column: 1 / -1; }
+.c-bj-acts .c-btn small { display: block; font-size: 0.75em; opacity: 0.85; }
 
 /* トランプ */
 .pc { position: relative; width: 64px; height: 90px; border-radius: 8px; background: linear-gradient(180deg, #ffffff, #f1ede4); color: #1b1b1b; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; animation: deal 0.35s ease-out both; flex: none; }

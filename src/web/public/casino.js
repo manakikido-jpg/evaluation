@@ -45,6 +45,14 @@ document.addEventListener('submit', (e) => {
   // 押したボタンの値を送ってから、押せなくする
   setTimeout(() => form.querySelectorAll('button').forEach((x) => { x.disabled = true; }), 0);
 });
+// ブラックジャックのボタン: 画面が差し替わった直後・まだ見えきっていないときの押し（押しまちがい）は受け付けない
+let layoutAt = 0;
+['c-page-swapped', 'c-live-updated'].forEach((n) => document.addEventListener(n, () => { layoutAt = Date.now(); }));
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  if (!(form instanceof HTMLFormElement) || !form.matches('.c-bj-acts')) return;
+  if (Date.now() - layoutAt < 450 || Number(getComputedStyle(form.closest('.c-later') || form).opacity) < 0.9) e.preventDefault();
+}, true);
 window.addEventListener('pageshow', () => {
   document.querySelectorAll('form[data-sent]').forEach((f) => {
     delete f.dataset.sent;
