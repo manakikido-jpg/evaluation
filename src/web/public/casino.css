@@ -2347,3 +2347,8 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .c-rb-inside-picker select { max-width: 100%; color: #fff; background: #183f30; padding: 10px; border: 1px solid #a88d51; border-radius: 6px; }
 
 .c-rb-cell.c-rb-boundary:active:not(:disabled) { transform: translate(-50%, -50%) scale(.96); }
+
+/* 通信失敗時も遊技画面を残し、確認する操作を上に出す。 */
+.c-network-warning { position: relative; z-index: 30; max-width: 960px; margin: 1rem auto; padding: 1rem; border: 2px solid #e3b963; border-radius: 12px; background: #251d2c; color: #fff4dc; }
+.c-network-warning button, .c-network-warning a { display: inline-block; margin: .4rem .7rem .4rem 0; }
+.c-network-warning a { color: #ffe1a4; text-decoration: underline; }

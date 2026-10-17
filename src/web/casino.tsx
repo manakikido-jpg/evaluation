@@ -21,6 +21,7 @@ import {
   activeGame,
   bigWins,
   gameById,
+  latestGame,
   playBaccarat,
   playRoulette,
   aimSlots,
@@ -400,6 +401,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   async function shown(c: Context, me: Me, game: CasinoGame): Promise<CasinoGameRow | undefined> {
     const active = await activeGame(db, me.session.userId, game);
     if (active) return active;
+    if ((game === 'slots' || game === 'atslot') && c.req.query('recover') === '1') return latestGame(db, me.session.userId, game);
     const g = Number(c.req.query('g'));
     if (!Number.isInteger(g) || g <= 0) return undefined;
     const row = await gameById(db, g);

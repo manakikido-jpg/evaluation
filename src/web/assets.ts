@@ -100,6 +100,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'casino-lobby-art.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-art.webp'))), type: 'image/webp' },
     'casino.css': { body: readText(path.join(here, 'public/casino.css')), type: 'text/css; charset=utf-8' },
     'casino-bg.svg': { body: readText(path.join(here, 'public/casino-bg.svg')), type: 'image/svg+xml' },
+    'casino-request.js': { body: readText(path.join(here, 'public/casino-request.js')), type: 'text/javascript; charset=utf-8' },
     'casino.js': { body: readText(path.join(here, 'public/casino.js')), type: 'text/javascript; charset=utf-8' },
     'atslot.js': { body: readText(path.join(here, 'public/atslot.js')), type: 'text/javascript; charset=utf-8' },
     'popup.js': { body: readText(path.join(here, 'public/popup.js')), type: 'text/javascript; charset=utf-8' },

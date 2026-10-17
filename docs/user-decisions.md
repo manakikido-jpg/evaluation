@@ -68,3 +68,9 @@ Claudeによる競馬の改修（称号・殿堂・宿敵、決まった時刻�
 - カード仕様と進捗はクラウド作業場所 `/workspace/artifacts/shinpu-cards/` にあります。`237-card-draft.md/json/csv`、`all-237/progress.json`、`stacking-rule.json` を確認します。
 - 採用見本は `/workspace/artifacts/shinpu-card-layout/navy-silver/spear-concept.png`。ローカル引き継ぎメモは `/workspace/artifacts/evaluation-handoff-2026-10-14.md`。
 - これらクラウドの絶対パスは場所の記録であり、GitHubに画像や進捗ファイル本体が保存済みという意味ではありません。別の環境では存在を確認してください。
+
+
+## スロットの画面消失・通信失敗（2026年10月18日）
+
+- ユーザーから、遊技中に白画面や「見つかりません」へ移動する報告を受けました。発生URLは不明です。コード上の通信失敗時の遷移・自動再送を修正することを承認しています。
+- エラー時も画面を残し、同じ賭けを自動再送せず、読み取りだけで結果を確認して復帰する方針です。スロット・ATは本人の途中の回、または最新結果を表示します。実端末で全原因が特定・再現できたとは扱いません。
