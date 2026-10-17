@@ -23,7 +23,7 @@ import { claimSlotSeat, SlotOccupied } from './slotSeats.js';
 
 export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; note: string }> = {
   blackjack: { emoji: '🃏', name: 'ブラックジャック', note: '21 に近いほうが勝ち。ブラックジャックは 2.5 倍' },
-  highlow: { emoji: '🔼', name: 'ハイ＆ロー', note: '次のカードが上か下か。当てるほど倍率が上がる' },
+  highlow: { emoji: '🔼', name: 'ハイ＆ロー', note: '次のカードが上か下か。同じ数字はドローで続行' },
   baccarat: { emoji: '🎴', name: 'バカラ', note: 'プレイヤー・バンカー・タイ、どれが勝つか' },
   slots: { emoji: '🎰', name: 'スロット', note: 'ジャグラー風。ペカったら 7 を狙って BIG' },
   atslot: { emoji: '🦊', name: 'AT 機（鬼斬り白狐）', note: 'レア役で AT。押し順ナビで増やし、上乗せ・継続バトル・天井つき' },

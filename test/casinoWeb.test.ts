@@ -268,6 +268,16 @@ describe('🎰 カジノ: 遊ぶ', () => {
     expect(page).toContain('今日賭けられる上限');
   });
 
+  it('ハイローのドロー後に続行と受け取りを表示し、勝率は決着時と明記する', async () => {
+    const { cookie } = await casinoLogin(A);
+    const [row] = await db.insert(casinoGames).values({ memberId: A, game: 'highlow', bet: 100, status: 'playing', state: { current: 6, history: [0, 19], mult: 1900, steps: 1, phase: 'playing', lastDraw: true } }).returning();
+    const html = await (await get(`/casino/highlow?g=${row!.id}`, cookie!)).text();
+    expect(html).toContain('ドロー！連勝・倍率・受取予定額はそのまま');
+    expect(html).toContain('50%・決着時');
+    expect(html).toContain('value="high"'); expect(html).toContain('value="low"'); expect(html).toContain('value="cashout"');
+    expect(html).toContain('190'); expect(html).not.toContain('同じ数字ははずれ');
+  });
+
   it('ブラックジャック・ハイ＆ロー・バカラ・オセロの画面が動く', async () => {
     const { cookie } = await casinoLogin(A);
     const bj = await post('/casino/blackjack', cookie!, { bet: '100' });
