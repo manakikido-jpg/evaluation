@@ -1758,6 +1758,11 @@ export const casts = pgTable('casts', {
   waitingUntil: timestamp('waiting_until', { withTimezone: true }),
   /** 指名できない人（キャストがブロックした） */
   blocked: text('blocked').array().notNull().default(sql`'{}'::text[]`),
+  /**
+   * 🗓 出勤予定（日本時間・毎週）。day 0 = 日曜。start・end は 0:00 からの分（end は 30:00 = 1800 まで。日をまたげる）。
+   * 空なら、いつでも予約できる（前のまま）
+   */
+  schedule: jsonb('schedule').$type<{ day: number; start: number; end: number }[]>().notNull().default(sql`'[]'::jsonb`),
   appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
   approvedAt: timestamp('approved_at', { withTimezone: true }),
   approvedBy: text('approved_by'),
@@ -1784,10 +1789,11 @@ export const castSessions = pgTable(
     /**
      * reserved 予約（キャストの返事待ち）/ accepted 予約を受けた（始まる時刻待ち）/ requested 今すぐ（返事待ち）/ active 通話中 /
      * ordered 📦 納品の注文（キャストの納品待ち）/ delivered 納品した（お客の受け取り待ち）/
-     * done 終わった（渡した）/ declined 断られた・返事がなかった / canceled 取り消し / disputed 通報（運営が決める）/ refunded 運営が戻した
+     * done 終わった（渡した）/ declined 断られた・返事がなかった / canceled 取り消し / disputed 通報（運営が決める）/ refunded 運営が戻した /
+     * noshow_cast キャストが来なかった（全額戻した）/ noshow_customer お客が来なかった（決めた分をキャストへ）
      */
     status: text('status')
-      .$type<'reserved' | 'accepted' | 'requested' | 'active' | 'ordered' | 'delivered' | 'done' | 'declined' | 'canceled' | 'disputed' | 'refunded'>()
+      .$type<'reserved' | 'accepted' | 'requested' | 'active' | 'ordered' | 'delivered' | 'done' | 'declined' | 'canceled' | 'disputed' | 'refunded' | 'noshow_cast' | 'noshow_customer'>()
       .notNull(),
     /** 公開の部屋（未成年の人の雑談）。2 人だけの部屋は 18 歳以上どうしだけ */
     isPublic: boolean('is_public').notNull().default(false),

@@ -46,8 +46,14 @@ export type CastConfig = {
   acceptMinutes: number;
   /** メニューのテンプレ（登録のときやボタン 1 つでキャストに入れる）。なければ DEFAULT_MENU_TEMPLATE */
   menuTemplate?: CastMenuItem[];
+  /** ⏳ 直前の取り消し: 受けた予約を、始まるこの分より後にお客が取り消すと、lateCancelPercent をキャストへ（0 でなし） */
+  lateCancelMinutes: number;
+  lateCancelPercent: number;
+  /** 🚫 来なかったとき: 始まってからこの分たつと「相手が来ない」を押せる。お客が来ないときは noShowPercent をキャストへ */
+  noShowMinutes: number;
+  noShowPercent: number;
 };
-export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10 };
+export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50 };
 const KEY = 'cast';
 const sf = (x: unknown) => (typeof x === 'string' && /^\d{17,20}$/.test(x) ? x : undefined);
 const int = (x: unknown, d: number, lo: number, hi: number) => (typeof x === 'number' && Number.isInteger(x) && x >= lo && x <= hi ? x : d);
@@ -70,6 +76,10 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     priceMax: Math.max(priceMin, int(v.priceMax, d.priceMax, 1, 1_000_000)),
     feePercent: int(v.feePercent, d.feePercent, 0, 90),
     acceptMinutes: int(v.acceptMinutes, d.acceptMinutes, 1, 60),
+    lateCancelMinutes: int(v.lateCancelMinutes, d.lateCancelMinutes, 0, 24 * 60),
+    lateCancelPercent: int(v.lateCancelPercent, d.lateCancelPercent, 0, 100),
+    noShowMinutes: int(v.noShowMinutes, d.noShowMinutes, 5, 120),
+    noShowPercent: int(v.noShowPercent, d.noShowPercent, 0, 100),
     ...(Array.isArray(v.menuTemplate) ? { menuTemplate: (v.menuTemplate as unknown[]).filter(isMenuItem).slice(0, MENU_MAX) } : {}),
   };
 }
@@ -499,6 +509,79 @@ export async function setBlocked(db: Db, castId: string, customerId: string, on:
 
 const OPEN: CastSession['status'][] = ['reserved', 'accepted', 'requested', 'active'];
 
+// ───────── 🗓 出勤予定 ─────────
+
+export type ShiftSlot = Cast['schedule'][number];
+const DAY_CHARS = ['日', '月', '火', '水', '木', '金', '土'];
+export const SCHEDULE_MAX = 21;
+const hm = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+
+/**
+ * 「月水金 21:00-24:00」「土 20:00-26:00」のような行（1 行に 1 つ・曜日はいくつでも）を読む。
+ * 26:00 は次の日の 2 時（30:00 まで）。読めない行があれば undefined。空なら []（いつでも）
+ */
+export function parseSchedule(raw: string): ShiftSlot[] | undefined {
+  const out: ShiftSlot[] = [];
+  for (const line of raw.replace(/[：]/g, ':').replace(/[〜～ー−‐]/g, '-').split(/\n|、|,/).map((l) => l.trim()).filter(Boolean)) {
+    const m = /^([日月火水木金土毎]+)(?:曜日?)?\s*(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?$/.exec(line);
+    if (!m) return undefined;
+    const start = Number(m[2]) * 60 + Number(m[3] ?? 0);
+    const end = Number(m[4]) * 60 + Number(m[5] ?? 0);
+    if (start >= 24 * 60 || end <= start || end > 30 * 60 || end - start < 30) return undefined;
+    const days = m[1]!.includes('毎') ? [0, 1, 2, 3, 4, 5, 6] : [...new Set([...m[1]!].map((ch) => DAY_CHARS.indexOf(ch)))];
+    for (const day of days) out.push({ day, start, end });
+  }
+  return out.length > SCHEDULE_MAX ? undefined : out.sort((a, b) => a.day - b.day || a.start - b.start);
+}
+
+/** 「月 21:00〜24:00 / 金 20:00〜26:00」（空なら「いつでも」） */
+export function scheduleText(list: readonly ShiftSlot[], sep = ' / '): string {
+  if (!list.length) return 'いつでも';
+  return list.map((x) => `${DAY_CHARS[x.day]} ${hm(x.start)}〜${hm(x.end)}`).join(sep);
+}
+
+/** 入力欄に戻す形（1 行に 1 つ） */
+export const scheduleInput = (list: readonly ShiftSlot[]) => list.map((x) => `${DAY_CHARS[x.day]} ${hm(x.start)}-${hm(x.end)}`).join('\n');
+
+/**
+ * 予約 [start, end) が出勤の時間に入るか（日本時間）。寝落ちは始まりだけ見る。出勤予定が空ならいつでも
+ */
+export function inSchedule(list: readonly ShiftSlot[], start: Date, end: Date, night = false): boolean {
+  if (!list.length) return true;
+  const dayStart = Math.floor((start.getTime() + JST) / 86_400_000) * 86_400_000 - JST;
+  for (const back of [1, 0]) {
+    const base = dayStart - back * 86_400_000;
+    const weekday = new Date(base + JST).getUTCDay();
+    for (const x of list) {
+      if (x.day !== weekday) continue;
+      const from = base + x.start * MIN;
+      const until = base + x.end * MIN;
+      if (from <= start.getTime() && (night ? start.getTime() < until : end.getTime() <= until)) return true;
+    }
+  }
+  return false;
+}
+
+/** 出勤予定を決める（キャスト本人か運営） */
+export async function setSchedule(db: Db, castId: string, list: ShiftSlot[]): Promise<Cast | undefined> {
+  const [row] = await db.update(casts).set({ schedule: list.slice(0, SCHEDULE_MAX) }).where(eq(casts.memberId, castId)).returning();
+  return row;
+}
+
+/** これからの埋まっている時間（予約を受けた・返事待ち・通話中）。紹介パネルに出す */
+export async function busySlots(db: Db, castId: string, now = new Date(), days = 7): Promise<{ from: Date; until: Date }[]> {
+  const rows = await db.select().from(castSessions).where(and(eq(castSessions.castId, castId), inArray(castSessions.status, OPEN)));
+  const limit = now.getTime() + days * 86_400_000;
+  return rows
+    .map((s) => {
+      const from = s.startedAt ?? s.startAt ?? s.createdAt;
+      const until = s.endsAt ?? (s.plan === 'night' ? nightEnd(from) : new Date(from.getTime() + s.minutes * MIN));
+      return { from, until };
+    })
+    .filter((x) => x.until.getTime() > now.getTime() && x.from.getTime() < limit)
+    .sort((a, b) => a.from.getTime() - b.from.getTime());
+}
+
 /** そのキャストが今通話中・返事待ちか */
 export async function busyCast(db: Db, castId: string): Promise<CastSession | undefined> {
   const [row] = await db
@@ -511,7 +594,7 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 export type RequestResult =
   | { status: 'ok'; session: CastSession; balance: number; /** ガチャで出たもの */ drawn?: string }
   | { status: 'insufficient'; price: number; balance: number }
-  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' };
+  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' | 'off_hours' };
 
 /** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
 /** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数 */
@@ -565,6 +648,8 @@ export async function requestSession(
   const start = input.startAt ?? now;
   if (input.startAt && (input.startAt.getTime() < now.getTime() + 10 * MIN || input.startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN)) return { status: 'bad_time' };
   const minutes = item.night ? planMinutes('night', start) : free ? FREE_MINUTES : item.minutes;
+  // 🗓 出勤予定の外は予約できない（予定がなければいつでも）
+  if (input.startAt && !inSchedule(cast.schedule, start, item.night ? nightEnd(start) : new Date(start.getTime() + minutes * MIN), item.night)) return { status: 'off_hours' };
   if (!input.customerAdult) {
     // 18 歳未満の人も予約できる（公開の部屋・60 分まで・22 時までに終わる）
     if (!minorMenuOk(item)) return { status: 'minor_plan' };
@@ -696,20 +781,82 @@ export async function acceptSession(db: Db, id: number, castId: string, now = ne
   });
 }
 
-/** 断る（キャスト）・取り消す（お客。始まる前だけ）・返事がない: 全額戻す */
-export async function cancelSession(db: Db, id: number, by: string, reason: 'declined' | 'canceled', now = new Date()): Promise<CastSession | undefined> {
+/**
+ * 断る（キャスト）・取り消す（お客。始まる前だけ）・返事がない: 全額戻す。
+ * ⏳ 受けた予約をお客が直前（c.lateCancelMinutes より後）に取り消すと、c.lateCancelPercent をキャストへ（手数料を引く）。残りを戻す
+ */
+export async function cancelSession(db: Db, id: number, by: string, reason: 'declined' | 'canceled', now = new Date(), c?: CastConfig): Promise<CastSession | undefined> {
   return db.transaction(async (tx) => {
     const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
     if (!s) return undefined;
     if (by !== 'system' && by !== (reason === 'declined' ? s.castId : s.customerId)) return undefined;
     // 納品の注文は、お客からは取り消せない（キャストが作り始めているかもしれない）
     if (s.status === 'ordered' && reason === 'canceled' && by !== 'system') return undefined;
-    const row = await move(tx, id, ['reserved', 'accepted', 'requested', 'ordered'], { status: reason, closedAt: now, decidedBy: by, deleteAt: now });
+    const late = c && by === s.customerId ? lateCancelShare(c, s, now) : 0;
+    const pay = late - (late > 0 && c ? castFee(c, late) : 0);
+    const row = await move(tx, id, ['reserved', 'accepted', 'requested', 'ordered'], { status: reason, closedAt: now, decidedBy: by, deleteAt: now, paid: pay });
     if (!row) return undefined;
-    if (s.price > 0) await addCoins(tx, s.customerId, s.price, 'cast_refund', { sessionId: id, reason });
+    if (pay > 0) await addCoins(tx, s.castId, pay, 'cast_reward', { sessionId: id, from: s.customerId, fee: late - pay, lateCancel: true });
+    if (s.price - late > 0) await addCoins(tx, s.customerId, s.price - late, 'cast_refund', { sessionId: id, reason, ...(late ? { lateCancel: late } : {}) });
     return row;
   });
 }
+
+/** ⏳ 直前の取り消しでキャストへ行く量（手数料を引く前）。受けた予約で、始まるまで c.lateCancelMinutes 分より短いときだけ */
+export function lateCancelShare(c: Pick<CastConfig, 'lateCancelMinutes' | 'lateCancelPercent'>, s: Pick<CastSession, 'status' | 'startAt' | 'price'>, now = new Date()): number {
+  if (s.status !== 'accepted' || !s.startAt || c.lateCancelMinutes <= 0 || c.lateCancelPercent <= 0) return 0;
+  if (s.startAt.getTime() - now.getTime() >= c.lateCancelMinutes * MIN) return 0;
+  return Math.floor((s.price * c.lateCancelPercent) / 100);
+}
+
+/**
+ * 🚫 来なかった: 始まってから c.noShowMinutes 分たっても相手が来ない。押せるのは来ている側（来たかは呼び出し側が確かめる）。
+ * お客が押す（キャストが来ない）→ 全額戻す / キャストが押す（お客が来ない）→ c.noShowPercent をキャストへ（手数料を引く）、残りを戻す
+ */
+export type NoShowResult = { status: 'ok'; session: CastSession; pay: number; refund: number } | { status: 'not_found' | 'not_member' | 'too_early' };
+export async function reportNoShow(db: Db, c: CastConfig, id: number, by: string, now = new Date()): Promise<NoShowResult> {
+  return db.transaction(async (tx) => {
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s || s.status !== 'active') return { status: 'not_found' as const };
+    if (by !== s.castId && by !== s.customerId) return { status: 'not_member' as const };
+    const started = s.startedAt ?? s.startAt;
+    if (!started || now.getTime() < started.getTime() + c.noShowMinutes * MIN) return { status: 'too_early' as const };
+    const castAbsent = by === s.customerId;
+    const share = castAbsent ? 0 : Math.floor((s.price * c.noShowPercent) / 100);
+    const pay = share - castFee(c, share);
+    const row = await move(tx, id, ['active'], { status: castAbsent ? 'noshow_cast' : 'noshow_customer', closedAt: now, endsAt: now, decidedBy: by, deleteAt: now, paid: pay });
+    if (!row) return { status: 'not_found' as const };
+    if (pay > 0) await addCoins(tx, s.castId, pay, 'cast_reward', { sessionId: id, from: s.customerId, fee: share - pay, noShow: true });
+    if (s.price - share > 0) await addCoins(tx, s.customerId, s.price - share, 'cast_refund', { sessionId: id, reason: castAbsent ? 'noshow_cast' : 'noshow_customer' });
+    return { status: 'ok' as const, session: row, pay, refund: s.price - share };
+  });
+}
+
+/** 🚫 来なかった回数（キャストが来ない・お客が来ない）。社務所Web に出す */
+export async function noShowCounts(db: Db, since: Date): Promise<{ cast: Map<string, number>; customer: Map<string, number> }> {
+  const rows = await db
+    .select({ castId: castSessions.castId, customerId: castSessions.customerId, status: castSessions.status })
+    .from(castSessions)
+    .where(and(inArray(castSessions.status, ['noshow_cast', 'noshow_customer']), gte(castSessions.closedAt, since)));
+  const cast = new Map<string, number>();
+  const customer = new Map<string, number>();
+  for (const r of rows) {
+    const m = r.status === 'noshow_cast' ? cast : customer;
+    const k = r.status === 'noshow_cast' ? r.castId : r.customerId;
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return { cast, customer };
+}
+
+/** 📅 予約カレンダー: その間に始まる（始まる予定の）指名。納品はのぞく */
+export async function sessionsBetween(db: Db, from: Date, to: Date): Promise<CastSession[]> {
+  const rows = await db
+    .select()
+    .from(castSessions)
+    .where(and(sql`coalesce(${castSessions.startAt}, ${castSessions.startedAt}, ${castSessions.createdAt}) >= ${from}`, sql`coalesce(${castSessions.startAt}, ${castSessions.startedAt}, ${castSessions.createdAt}) < ${to}`));
+  return rows.filter((s) => !isDeliverySession(s)).sort((a, b) => sessionStart(a).getTime() - sessionStart(b).getTime());
+}
+export const sessionStart = (s: Pick<CastSession, 'startAt' | 'startedAt' | 'createdAt'>) => s.startAt ?? s.startedAt ?? s.createdAt;
 
 export type RescheduleResult = { status: 'ok'; session: CastSession } | { status: 'not_found' | 'not_customer' | 'bad_time' | 'minor_hours' | 'overlap' | 'self_overlap' };
 

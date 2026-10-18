@@ -249,7 +249,7 @@ import { postCastIntro, refreshCastIntros, refreshCastPanel } from '../discord/c
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -5744,7 +5744,9 @@ export function createWebApp(deps: WebDeps) {
       loadMenuImage(db),
       loadMenuImage(db, 'female'),
     ]);
-    const names = await namesOf(db, [...list.map((x) => x.memberId), ...sessions.flatMap((x) => [x.castId, x.customerId])]);
+    const t = now();
+    const [calendar, noShows] = await Promise.all([sessionsBetween(db, new Date(t.getTime() - 86_400_000), new Date(t.getTime() + 8 * 86_400_000)), noShowCounts(db, new Date(t.getTime() - 30 * 86_400_000))]);
+    const names = await namesOf(db, [...list.map((x) => x.memberId), ...[...sessions, ...calendar].flatMap((x) => [x.castId, x.customerId]), ...noShows.customer.keys()]);
     const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch.name]));
     return c.html(
       <CastPage
@@ -5761,6 +5763,8 @@ export function createWebApp(deps: WebDeps) {
         template={templateOf(conf)}
         stats={stats}
         sessions={sessions}
+        calendar={calendar}
+        noShows={noShows}
         name={(id) => names.get(id) ?? id}
         coin={`${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`}
         flash={c.req.query('msg')}
@@ -5792,9 +5796,15 @@ export function createWebApp(deps: WebDeps) {
       priceMax: n('priceMax'),
       feePercent: n('feePercent'),
       acceptMinutes: n('acceptMinutes'),
+      // 前の画面（欄がない）から保存しても、今の値を残す
+      lateCancelMinutes: body.lateCancelMinutes === undefined ? prev.lateCancelMinutes : n('lateCancelMinutes'),
+      lateCancelPercent: body.lateCancelPercent === undefined ? prev.lateCancelPercent : n('lateCancelPercent'),
+      noShowMinutes: body.noShowMinutes === undefined ? prev.noShowMinutes : n('noShowMinutes'),
+      noShowPercent: body.noShowPercent === undefined ? prev.noShowPercent : n('noShowPercent'),
     };
     const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
     if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.priceMax, next.priceMin, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
+    if (!ok(next.lateCancelMinutes, 0, 1440) || !ok(next.lateCancelPercent, 0, 100) || !ok(next.noShowMinutes, 5, 120) || !ok(next.noShowPercent, 0, 100)) return c.redirect('/cast?msg=invalid');
     // チャンネルを変えたら、前のメニューはそのままにして、新しいチャンネルに出し直す
     if (next.channelId !== prev.channelId) delete next.panelMessageId;
     if (next.femaleChannelId !== prev.femaleChannelId) delete next.femalePanelMessageId;
@@ -6024,6 +6034,19 @@ export function createWebApp(deps: WebDeps) {
     }
   });
 
+  // 🗓 出勤予定（運営がキャストの代わりに決める）
+  app.post('/cast/casts/:id/schedule', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.parseBody();
+    const list = parseSchedule(typeof body.schedule === 'string' ? body.schedule.slice(0, 500) : '');
+    if (!validId(id) || !list) return c.redirect('/cast?msg=schedule_invalid');
+    const cast = await setSchedule(db, id, list);
+    if (!cast) return c.redirect('/cast?msg=invalid');
+    await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.schedule', detail: { schedule: list }, via: 'web' });
+    await refreshCastIntros(db, deps.discord).catch((err: unknown) => logger.warn({ err }, 'cast intros refresh failed'));
+    return c.redirect(`/cast?msg=schedule_saved#cast-${id}`);
+  });
+
   app.post('/cast/casts/:id/:status', async (c) => {
     const id = c.req.param('id');
     const status = c.req.param('status');
@@ -6040,6 +6063,23 @@ export function createWebApp(deps: WebDeps) {
     if (status === 'active') await deps.discord.sendDm(id, '🎀 キャストに承認されました。#キャスト一覧 の「⚙ キャストの方」から待機できます。').catch(() => false);
     await castPanelNow();
     return c.redirect(`/cast?msg=${status === 'active' && row.approvedBy === by ? 'approved' : 'status'}`);
+  });
+
+  // 📅 運営が始まる前の予約を取り消す（全額戻す）
+  app.post('/cast/sessions/:id/cancel', async (c) => {
+    const id = Number(c.req.param('id'));
+    const body = await c.req.parseBody();
+    if (!Number.isSafeInteger(id) || body.confirm !== 'yes') return c.redirect('/cast#cast-calendar');
+    const by = c.get('session').userId;
+    const before = await getSession(db, id);
+    if (!before || (before.status !== 'reserved' && before.status !== 'accepted')) return c.redirect('/cast?msg=done_already#cast-calendar');
+    const s = await cancelSession(db, id, 'system', 'canceled', now());
+    if (!s) return c.redirect('/cast?msg=done_already#cast-calendar');
+    await audit(db, { actorId: by, targetId: s.customerId, action: 'cast.cancel', detail: { sessionId: id, castId: s.castId, price: s.price }, via: 'web' });
+    const e = cfg.economy;
+    await deps.discord.sendDm(s.customerId, `🎀 予約 #${id} は運営の判断で取り消し、${e.currencyEmoji} ${s.price} 枚をお戻ししました。`).catch(() => false);
+    await deps.discord.sendDm(s.castId, `🎀 予約 #${id} は運営の判断で取り消しました。`).catch(() => false);
+    return c.redirect('/cast?msg=canceled#cast-calendar');
   });
 
   app.post('/cast/sessions/:id/:action', async (c) => {
