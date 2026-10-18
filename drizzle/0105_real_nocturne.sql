@@ -1,0 +1,1 @@
+ALTER TABLE "casts" ADD COLUMN "schedule" jsonb DEFAULT '[]'::jsonb NOT NULL;

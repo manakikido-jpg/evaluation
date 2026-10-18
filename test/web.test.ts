@@ -3283,6 +3283,32 @@ describe('キャスト（管理画面）', () => {
     expect((await get('/cast/image', s)).status).toBe(200);
   });
 
+  it('🗓 出勤予定を社務所Web で決める・📅 カレンダーから予約を取り消す（全額戻す）', async () => {
+    const cs = await import('../src/services/cast.js');
+    const { addCoins: add, walletOf: wallet } = await import('../src/services/economy.js');
+    const CASTX = '880000000000000041';
+    const GUESTX = '880000000000000042';
+    await cs.applyCast(db, cs.CAST_DEFAULTS, { id: CASTX, adult: true }, { bio: 'よろしく', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: true });
+    await cs.setCastStatus(db, CASTX, 'active', 'staff');
+    await cs.setWaiting(db, CASTX, 1);
+    const s = await login(STAFF);
+    expect((await form(s, `/cast/casts/${CASTX}/schedule`, { schedule: 'きょう 1-2' })).headers.get('location')).toBe('/cast?msg=schedule_invalid');
+    expect((await form(s, `/cast/casts/${CASTX}/schedule`, { schedule: '毎日 0:00-30:00' })).headers.get('location')).toBe(`/cast?msg=schedule_saved#cast-${CASTX}`);
+    expect((await cs.getCast(db, CASTX))?.schedule).toHaveLength(7);
+    const page = await (await get('/cast', s)).text();
+    expect(page).toContain('予約カレンダー');
+    expect(page).toContain('日 0:00〜30:00');
+    await add(db, GUESTX, 1000, 'adjust');
+    const r = await cs.requestSession(db, await cs.loadCastConfig(db), { castId: CASTX, customerId: GUESTX, customerAdult: true, plan: '30', startAt: new Date(clock.getTime() + 60 * 60_000) }, clock);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(await (await get('/cast', s)).text()).toContain(`/cast/sessions/${r.session.id}/cancel`);
+    expect((await form(s, `/cast/sessions/${r.session.id}/cancel`, {})).headers.get('location')).toBe('/cast#cast-calendar');
+    expect((await form(s, `/cast/sessions/${r.session.id}/cancel`, { confirm: 'yes' })).headers.get('location')).toBe('/cast?msg=canceled#cast-calendar');
+    expect((await wallet(db, GUESTX)).balance).toBe(1000);
+    expect((await form(s, `/cast/sessions/${r.session.id}/cancel`, { confirm: 'yes' })).headers.get('location')).toBe('/cast?msg=done_already#cast-calendar');
+    expect((await listAudit(db, { action: 'cast.cancel' })).length).toBe(1);
+  });
+
   it('➕ キャストを社務所Web で登録する（18 歳以上だけ・すぐ承認・ロールと DM）', async () => {
     const { getCast } = await import('../src/services/cast.js');
     const { members: mt } = await import('../src/db/schema.js');

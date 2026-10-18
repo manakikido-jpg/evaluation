@@ -31,6 +31,13 @@ import { audit } from '../services/audit.js';
 import {
   acceptSession,
   cancelSession,
+  busySlots,
+  lateCancelShare,
+  parseSchedule,
+  reportNoShow,
+  scheduleInput,
+  scheduleText,
+  setSchedule,
   castFee,
   castStates,
   castStats,
@@ -210,6 +217,13 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
   return posted;
 }
 
+/** 🗓 出勤予定と、これから 7 日の埋まっている時間（紹介パネル・予約の画面に出す） */
+export function shiftText(schedule: Cast['schedule'], busy: { from: Date; until: Date }[]): string {
+  const lines = [`🗓 **出勤予定**: ${scheduleText(schedule)}`];
+  if (busy.length) lines.push(`-# 埋まっている時間: ${busy.slice(0, 6).map((b) => `<t:${unix(b.from)}:f>〜<t:${unix(b.until)}:t>`).join('、')}${busy.length > 6 ? ' ほか' : ''}`);
+  return lines.join('\n');
+}
+
 /**
  * 🎀 キャストごとの紹介パネル（みんなに見える。社務所Web から出す）: 名前・紹介・メニュー・写真の全体と、指名の選ぶ欄・予約。
  * 選んだあとのやり取りは、押した人にだけ見える形で返す（パネルは書き換えない）
@@ -217,7 +231,7 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
 async function castIntroBody(db: Db, castId: string) {
   const cast = await getCast(db, castId);
   if (!cast) return undefined;
-  const [name, photo, stats] = await Promise.all([namesOf(db, [castId]).then((m) => m.get(castId) ?? castId), loadCastPhoto(db, castId), castStats(db, monthStart())]);
+  const [name, photo, stats, busy] = await Promise.all([namesOf(db, [castId]).then((m) => m.get(castId) ?? castId), loadCastPhoto(db, castId), castStats(db, monthStart()), busySlots(db, castId)]);
   const st = stats.find((x) => x.castId === castId);
   const menu = menuOf(cast).filter((m) => m.price > 0 || m.consult);
   const header = [`## ${name}`, cast.tags.length ? cast.tags.map((t) => `#${t}`).join(' ') : '', cast.bio].filter(Boolean).join('\n');
@@ -232,6 +246,7 @@ async function castIntroBody(db: Db, castId: string) {
       ...(photo ? [{ type: 12, items: [{ media: { url: 'attachment://cast-profile.png' }, description: `${name}のメニュー画像` }] }] : []),
       { type: 10, content: castMenuText(menu) },
       ...(activeOptions(cast).length ? [{ type: 10, content: castOptionsText(cast) }] : []),
+      { type: 10, content: shiftText(cast.schedule, busy) },
       ...(st ? [{ type: 10, content: `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` }] : []),
       ...(cast.status === 'active' && cast.available === 'waiting' && menu.length ? [menuSelect(`cast:plansel:${castId}`, 'メニュー・時間を選ぶ', menu), row(button(`cast:rsv:${castId}`, '日時を指定して予約', 2, '📅'))] : []),
       { type: 10, content: cast.status === 'active' && cast.available === 'waiting' ? '-# 選択後、あなただけに確認画面が表示されます。' : '-# 現在は受付を停止しています。' },
@@ -301,7 +316,8 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
     title = '📞 通話中';
     lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。時間が来たら終わって、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。` : '');
     if (s.isPublic) lines.push(`-# 公開の部屋です（18 歳未満の方との雑談。${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`);
-    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
+    lines.push(`-# 始まってから ${c.noShowMinutes} 分たっても相手が来ないときは「🚫 相手が来ない」（来ている人だけ押せます）。`);
+    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
   } else if (s.status === 'done') {
     title = '🎉 おつかれさまでした';
     lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、よければ評価をお願いします（この部屋は少しあとに消えます）。`);
@@ -311,7 +327,13 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
     lines.push('預かっていた銭は全部戻しました。');
   } else if (s.status === 'canceled') {
     title = '取り消しました';
+    lines.push(s.paid > 0 ? `直前の取り消しのため、キャストに ${fmt(s.paid)} 枚（手数料を引いたあと）を渡し、残りを戻しました。` : '預かっていた銭は全部戻しました。');
+  } else if (s.status === 'noshow_cast') {
+    title = '🚫 キャストが来ませんでした';
     lines.push('預かっていた銭は全部戻しました。');
+  } else if (s.status === 'noshow_customer') {
+    title = '🚫 お客が来ませんでした';
+    lines.push(`決まりにより、キャストに ${fmt(s.paid)} 枚（手数料を引いたあと）を渡し、残りを戻しました。`);
   } else if (s.status === 'disputed') {
     title = '🚨 通報がありました';
     lines.push('運営が確認します。銭は、運営が決めるまで預かったままにします。');
@@ -335,7 +357,7 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
     allowedMentions: { parse: [] as never[] },
     components: [
       row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄')),
-      row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅'), button('cast:sales:0', '売上の明細', 2, '💰')),
+      row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅'), button('cast:sales:0', '売上の明細', 2, '💰'), button('cast:shift', '出勤予定', 2, '🗓')),
       row(button('cast:edit', '紹介を変える', 1, '✏️'), ...(officeUrl ? [{ type: 2 as const, style: 5 as const, label: '🖊 メニュー・写真を編集', url: officeUrl }] : []), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
     ],
   };
@@ -454,6 +476,7 @@ export class CastApp {
       if (interaction.isModalSubmit()) {
         if (action === 'applymodal') return void (await interaction.reply({ content: '🎀 キャストは、運営が登録します。キャストになりたい方は、運営に声をかけてください。', ...EPHEMERAL }));
         if (action === 'editmodal') return await this.profileSubmit(interaction);
+        if (action === 'shiftmodal') return await this.shiftSubmit(interaction);
         if (action === 'pmodal') return await this.proposeSubmit(interaction, Number(a));
         if (action === 'rmodal') return await this.reserveSubmit(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
         if (action === 'qrmodal') {
@@ -475,6 +498,7 @@ export class CastApp {
       if (action === 'schedule') return await this.schedule(interaction, Number(a ?? 0));
       if (action === 'sales') return await this.sales(interaction, Number(a ?? 0));
       if (action === 'edit') return await this.editModal(interaction);
+      if (action === 'shift') return await this.shiftModal(interaction);
       if (action === 'wait') return await this.wait(interaction, Number(a));
       if (action === 'minor') return await this.toggleMinor(interaction);
       if (action === 'blockui' || action === 'unblockui') return await this.blockPicker(interaction, action === 'blockui');
@@ -494,6 +518,8 @@ export class CastApp {
       if (action === 'rcv') return await this.receive(interaction, id);
       if (action === 'pok') return await this.proposeAccept(interaction, id, Number(b));
       if (action === 'decline' || action === 'cancel') return await this.cancel(interaction, id, action === 'decline' ? 'declined' : 'canceled');
+      if (action === 'cancelok') return await this.cancel(interaction, id, 'canceled', true);
+      if (action === 'noshow') return await this.noShow(interaction, id);
       if (action === 'extconfirm') return await this.confirmExtend(interaction, id, b === undefined ? 0 : Number(b), rest[0]);
       if (action === 'ext') return await this.extend(interaction, id, b === undefined ? 0 : Number(b));
       if (action === 'end') return await this.end(interaction, id);
@@ -891,6 +917,7 @@ export class CastApp {
       self_overlap: 'あなたのほかの指名・予約と時間が重なっています。ちがう時間にしてください。',
       overlap: 'その時間は、ほかの指名か予約と重なっています。時間を変えてください。',
       bad_time: '予約は 10 分後〜7 日後の時刻にしてください。',
+      off_hours: 'その時間は、このキャストの出勤予定の外です。紹介パネルの「🗓 出勤予定」の時間にしてください。',
     };
     return r.status === 'insufficient' ? `${this.cfg().economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。` : (map[r.status] ?? 'いまは指名できません。');
   }
@@ -958,12 +985,89 @@ export class CastApp {
     this.refresh();
   }
 
-  private async cancel(i: ButtonInteraction<'cached'>, id: number, reason: 'declined' | 'canceled'): Promise<void> {
-    const s = await cancelSession(this.db, id, i.user.id, reason);
-    if (!s) return void (await i.reply({ content: reason === 'declined' ? '断れるのは、指名されたキャストだけです。' : '取り消せるのは、指名した人だけです（始まる前まで。納品の注文は取り消せません）。', ...(i.guildId ? EPHEMERAL : {}) }));
+  private async cancel(i: ButtonInteraction<'cached'>, id: number, reason: 'declined' | 'canceled', confirmed = false): Promise<void> {
     const c = await loadCastConfig(this.db);
-    await this.afterCast(i, s, s.threadId ? this.reserveMessage(s) : sessionMessage(s, c, this.coin()));
-    await this.discord.sendDm(reason === 'declined' ? s.customerId : s.castId, reason === 'declined' ? `🙇 今回の指名は受けられませんでした。${fmt(s.price)} 枚を戻しました。` : '🎀 指名が取り消されました。').catch(() => false);
+    // ⏳ 直前の取り消し: 先にいくら戻るかを見せて、もう一度押してもらう
+    if (reason === 'canceled' && !confirmed) {
+      const before = await getSession(this.db, id);
+      const late = before && before.customerId === i.user.id ? lateCancelShare(c, before) : 0;
+      if (before && late > 0) {
+        return void (await i.reply({
+          content: `⏳ 始まる ${c.lateCancelMinutes} 分前を過ぎているので、取り消すと **${fmt(late)} 枚** がキャストに渡り、戻るのは **${fmt(before.price - late)} 枚** です。それでも取り消しますか？`,
+          components: [row(button(`cast:cancelok:${id}`, '取り消す', 4))],
+          ...EPHEMERAL,
+        }));
+      }
+    }
+    const s = await cancelSession(this.db, id, i.user.id, reason, new Date(), c);
+    if (!s) return void (await i.reply({ content: reason === 'declined' ? '断れるのは、指名されたキャストだけです。' : '取り消せるのは、指名した人だけです（始まる前まで。納品の注文は取り消せません）。', ...(i.guildId ? EPHEMERAL : {}) }));
+    if (confirmed) {
+      // 確かめの画面（本人にだけ見える）から押したときは、スレッドのメッセージを書き換えて、確かめの画面を閉じる
+      await this.editThreadMessage(s);
+      await i.update({ content: s.paid > 0 ? `取り消しました。キャストに ${fmt(s.paid)} 枚を渡し、残りを戻しました。` : '取り消しました。', components: [] });
+    } else await this.afterCast(i, s, s.threadId ? this.reserveMessage(s) : sessionMessage(s, c, this.coin()));
+    await this.discord.sendDm(reason === 'declined' ? s.customerId : s.castId, reason === 'declined' ? `🙇 今回の指名は受けられませんでした。${fmt(s.price)} 枚を戻しました。` : s.paid > 0 ? `🎀 予約が直前に取り消されました。決まりにより ${fmt(s.paid)} 枚を渡しました。` : '🎀 指名が取り消されました。').catch(() => false);
+    this.refresh();
+  }
+
+  /** スレッドの予約のメッセージを、いまの状態に書き換える（見つからなければ何もしない） */
+  private async editThreadMessage(s: CastSession): Promise<void> {
+    const th = s.threadId ? this.guild?.channels.cache.get(s.threadId) ?? (await this.guild?.channels.fetch(s.threadId).catch(() => null)) : undefined;
+    if (!th?.isTextBased()) return;
+    const msgs = await th.messages.fetch({ limit: 20 }).catch(() => undefined);
+    const mine = msgs?.find((m) => m.author.id === th.client.user.id && m.components.some((r) => 'components' in r && r.components.some((x) => 'customId' in x && x.customId?.endsWith(`:${s.id}`))));
+    await mine?.edit({ ...this.reserveMessage(s), allowedMentions: { parse: [] } } as Parameters<typeof mine.edit>[0]).catch(() => undefined);
+  }
+
+  /** 🚫 相手が来ない（来ている人が押す。押した人が部屋にいて、相手がいないときだけ） */
+  private async noShow(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
+    const c = await loadCastConfig(this.db);
+    const before = await getSession(this.db, id);
+    if (!before || before.status !== 'active') return void (await i.reply({ content: 'この指名は、もう終わっています。', ...EPHEMERAL }));
+    if (i.user.id !== before.castId && i.user.id !== before.customerId) return void (await i.reply({ content: '押せるのは、この指名の 2 人だけです。', ...EPHEMERAL }));
+    const room = this.voice(before.channelId);
+    const other = i.user.id === before.castId ? before.customerId : before.castId;
+    if (!room?.members.has(i.user.id)) return void (await i.reply({ content: 'この部屋（通話）に入ってから押してください。', ...EPHEMERAL }));
+    if (room.members.has(other)) return void (await i.reply({ content: '相手は部屋にいます。', ...EPHEMERAL }));
+    const r = await reportNoShow(this.db, c, id, i.user.id);
+    if (r.status === 'too_early') return void (await i.reply({ content: `始まってから ${c.noShowMinutes} 分たつまで待ってください。`, ...EPHEMERAL }));
+    if (r.status !== 'ok') return void (await i.reply({ content: 'この指名は、もう終わっています。', ...EPHEMERAL }));
+    await i.update({ ...sessionMessage(r.session, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
+    const castAbsent = r.session.status === 'noshow_cast';
+    await this.discord.sendDm(r.session.customerId, castAbsent ? `🚫 キャストが来なかったので、${fmt(r.refund)} 枚を全部戻しました。` : `🚫 予約の時間に来られなかったので、決まりにより ${fmt(r.session.price - r.refund)} 枚をキャストに渡し、${fmt(r.refund)} 枚を戻しました。`).catch(() => false);
+    await this.discord.sendDm(r.session.castId, castAbsent ? '🚫 予約の時間に来られなかったので、お客に全額戻しました。続くときは、運営から連絡することがあります。' : `🚫 お客が来なかったので、${fmt(r.pay)} 枚を渡しました。`).catch(() => false);
+    this.refresh();
+  }
+
+  /** 🗓 出勤予定を決める（キャスト本人） */
+  private async shiftModal(i: ButtonInteraction<'cached'>): Promise<void> {
+    const cast = await getCast(this.db, i.user.id);
+    if (!cast || cast.status === 'removed') return void (await i.reply({ content: 'キャストの方だけ使えます。', ...EPHEMERAL }));
+    await i.showModal(
+      new ModalBuilder()
+        .setCustomId('cast:shiftmodal')
+        .setTitle('🗓 出勤予定（毎週）')
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId('shift')
+              .setLabel('1 行に 1 つ。例: 月水金 21:00-24:00 ／ 土 20:00-26:00')
+              .setStyle(TextInputStyle.Paragraph)
+              .setRequired(false)
+              .setMaxLength(500)
+              .setValue(scheduleInput(cast.schedule))
+              .setPlaceholder('空にすると、いつでも予約できます'),
+          ),
+        ),
+    );
+  }
+
+  private async shiftSubmit(i: ModalSubmitInteraction<'cached'>): Promise<void> {
+    const list = parseSchedule(i.fields.getTextInputValue('shift'));
+    if (!list) return void (await i.reply({ content: '読めない行がありました。「月水金 21:00-24:00」のように、曜日と時間（30 分以上・次の日の 6:00 = 30:00 まで）で書いてください。', ...EPHEMERAL }));
+    const cast = await setSchedule(this.db, i.user.id, list);
+    if (!cast) return void (await i.reply({ content: 'キャストの方だけ使えます。', ...EPHEMERAL }));
+    await i.reply({ content: `🗓 出勤予定を ${scheduleText(cast.schedule)} にしました。この時間の外は予約できません（もう入っている予約はそのまま）。`, ...EPHEMERAL });
     this.refresh();
   }
 
@@ -1082,7 +1186,7 @@ export class CastApp {
       },
       accepted: { title: '📅 予約を受けました', line: `${when} から ${sessionLabel(s)}。時刻になったら部屋ができて、ここで知らせます。当日なら「部屋を立てる」で先に 2 人だけの部屋を作れます。`, buttons: [button(`cast:early:${s.id}`, '部屋を立てる（当日）', 3, '🚪'), button(`cast:cancel:${s.id}`, '取り消す（お客）'), button(`cast:report:${s.id}`, '通報', 4, '🚨')] },
       declined: { title: '🙇 予約は受けられませんでした', line: '預かっていた銭は全部戻しました。', buttons: [] },
-      canceled: { title: '予約を取り消しました', line: '預かっていた銭は全部戻しました。', buttons: [] },
+      canceled: { title: '予約を取り消しました', line: s.paid > 0 ? `直前の取り消しのため、キャストに ${fmt(s.paid)} 枚（手数料を引いたあと）を渡し、残りを戻しました。` : '預かっていた銭は全部戻しました。', buttons: [] },
     };
     const m = map[s.status] ?? { title: '📅 予約', line: when, buttons: [] };
     return { embeds: [{ title: m.title, description: [`<@${s.customerId}> さん → <@${s.castId}> さん ・ ${this.coin()} ${fmt(s.price)} 枚（社務所が預かり中）`, m.line, RULES].join('\n'), color: PINK }], components: m.buttons.length ? [row(...m.buttons)] : [] };

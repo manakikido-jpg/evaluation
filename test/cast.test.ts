@@ -31,6 +31,14 @@ import {
   setBlocked,
   setCastStatus,
   setWaiting,
+  inSchedule,
+  lateCancelShare,
+  noShowCounts,
+  parseSchedule,
+  reportNoShow,
+  scheduleText,
+  sessionsBetween,
+  setSchedule,
 } from '../src/services/cast.js';
 import { upsertMember } from '../src/services/members.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -735,5 +743,102 @@ describe('本人のオプション編集・予約時の料金', () => {
     expect(await extendSession(db, r.session.id, ADULT, T20, 0)).toMatchObject({ status: 'ok', session: { price: 800, extensionPrice: 300 } });
     expect(await extendSession(db, r.session.id, ADULT, T20, 1)).toMatchObject({ status: 'ok', session: { price: 1100, extensions: 2, minutes: 120 } });
     expect(await extendSession(db, r.session.id, ADULT, T20, 1)).toMatchObject({ status: 'already_extended' });
+  });
+});
+
+describe('🎀 予約をもっと: 出勤予定・直前の取り消し・来なかった・カレンダー', () => {
+  /** T20 の曜日（日本時間） */
+  const DAY = '日月火水木金土'[new Date(T20.getTime() + 9 * 3_600_000).getUTCDay()]!;
+  const NEXT = '日月火水木金土'[(new Date(T20.getTime() + 9 * 3_600_000).getUTCDay() + 1) % 7]!;
+  const accept = async (startAt: Date, plan = '60') => {
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan, startAt }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    return r.session;
+  };
+
+  it('出勤予定を読む・書く', () => {
+    expect(parseSchedule('')).toEqual([]);
+    expect(parseSchedule('月水 21:00-24:00\n土 20:00〜26:00')).toEqual([
+      { day: 1, start: 1260, end: 1440 },
+      { day: 3, start: 1260, end: 1440 },
+      { day: 6, start: 1200, end: 1560 },
+    ]);
+    expect(parseSchedule('毎日 9-10')?.length).toBe(7);
+    expect(parseSchedule('月 21:00-21:10')).toBeUndefined(); // 30 分より短い
+    expect(parseSchedule('月 21:00-31:00')).toBeUndefined(); // 30:00 をこえる
+    expect(parseSchedule('きょう 21:00-23:00')).toBeUndefined();
+    expect(scheduleText([])).toBe('いつでも');
+    expect(scheduleText(parseSchedule('土 20:00-26:00')!)).toBe('土 20:00〜26:00');
+  });
+
+  it('出勤予定の外は予約できない（日をまたぐ予定・寝落ちは始まりだけ見る）', async () => {
+    await setWaiting(db, CAST, 1, T20);
+    // その日の 21:00〜26:00（次の日の 2 時）
+    await setSchedule(db, CAST, parseSchedule(`${DAY} 21:00-26:00`)!);
+    const at = (h: number) => new Date(T20.getTime() + (h - 20) * 60 * MIN);
+    const req = (startAt: Date, plan = '60') => requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan, startAt }, T20);
+    expect((await req(at(20.5))).status).toBe('off_hours');
+    expect((await req(at(25.5))).status).toBe('off_hours'); // 26 時をこえて終わる
+    expect(inSchedule((await getCast(db, CAST))!.schedule, at(25), at(26))).toBe(true);
+    expect((await req(at(25))).status).toBe('ok');
+    // 寝落ちは始まりだけ見る（朝までかかっても、始まりが出勤の中ならよい）
+    const sch = (await getCast(db, CAST))!.schedule;
+    expect(inSchedule(sch, at(23), at(31), true)).toBe(true);
+    expect(inSchedule(sch, at(26.5), at(31), true)).toBe(false);
+    // 次の日の昼は予定がない
+    expect(inSchedule(parseSchedule(`${NEXT} 21:00-23:00`)!, at(36), at(37))).toBe(false);
+    // 予定を空にすると、いつでも
+    await setSchedule(db, CAST, []);
+    expect((await req(at(22.5), '30')).status).toBe('ok');
+  });
+
+  it('直前の取り消しは決めた % をキャストへ。それより前・キャストの断りは全額戻す', async () => {
+    await setWaiting(db, CAST, 1, T20);
+    const at = new Date(T20.getTime() + 120 * MIN);
+    const s1 = await accept(at);
+    // 2 時間前: 全額
+    expect(lateCancelShare(c, { ...s1, status: 'accepted' }, T20)).toBe(0);
+    // 30 分前: 50%（手数料 10% を引いてキャストへ）
+    const late = new Date(at.getTime() - 30 * MIN);
+    expect(lateCancelShare(c, { ...s1, status: 'accepted' }, late)).toBe(250);
+    const done = await cancelSession(db, s1.id, ADULT, 'canceled', late, c);
+    expect(done?.paid).toBe(225);
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000 - 250);
+    expect((await walletOf(db, CAST)).balance).toBe(225);
+    // キャストが断る（直前でも）: 全額
+    const s2 = await accept(new Date(T20.getTime() + 300 * MIN));
+    expect((await cancelSession(db, s2.id, CAST, 'declined', new Date(T20.getTime() + 290 * MIN), c))?.paid).toBe(0);
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000 - 250);
+  });
+
+  it('来なかった: 始まって決めた分のあと。キャストが来ない→全額、お客が来ない→決めた % をキャストへ。回数が残る', async () => {
+    await setWaiting(db, CAST, 1, T20);
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const s1 = await accept(at);
+    await castTick(db, c, at);
+    expect((await reportNoShow(db, c, s1.id, ADULT, new Date(at.getTime() + 5 * MIN))).status).toBe('too_early');
+    expect((await reportNoShow(db, c, s1.id, MINOR, new Date(at.getTime() + 20 * MIN))).status).toBe('not_member');
+    const r1 = await reportNoShow(db, c, s1.id, ADULT, new Date(at.getTime() + 20 * MIN));
+    expect(r1).toMatchObject({ status: 'ok', pay: 0, refund: 500 });
+    expect((await walletOf(db, ADULT)).balance).toBe(10_000);
+    // 2 回目は押せない
+    expect((await reportNoShow(db, c, s1.id, ADULT, new Date(at.getTime() + 21 * MIN))).status).toBe('not_found');
+
+    const at2 = new Date(T20.getTime() + 180 * MIN);
+    const s2 = await accept(at2);
+    await castTick(db, c, at2);
+    const r2 = await reportNoShow(db, c, s2.id, CAST, new Date(at2.getTime() + 15 * MIN));
+    expect(r2).toMatchObject({ status: 'ok', pay: 225, refund: 250 });
+    expect((await walletOf(db, CAST)).balance).toBe(225);
+    expect((await getSession(db, s2.id))?.status).toBe('noshow_customer');
+    // 来なかった回は、時間が来ても二重に渡さない
+    expect((await castTick(db, c, new Date(at2.getTime() + 120 * MIN))).finished).toEqual([]);
+    const n = await noShowCounts(db, T20);
+    expect(n.cast.get(CAST)).toBe(1);
+    expect(n.customer.get(ADULT)).toBe(1);
+    // カレンダー: 始まる時刻の順
+    const cal = await sessionsBetween(db, T20, new Date(T20.getTime() + 86_400_000));
+    expect(cal.map((x) => x.id)).toEqual([s1.id, s2.id]);
   });
 });

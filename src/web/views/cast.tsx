@@ -1,9 +1,12 @@
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, sessionLabel, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
 export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  schedule_saved: { text: '🗓 出勤予定を保存しました（紹介パネルも書き換えます）。', kind: 'ok' },
+  schedule_invalid: { text: '出勤予定を読めませんでした。「月水金 21:00-24:00」のように、1 行に 1 つ書いてください（30 分以上・30:00 まで）。', kind: 'warn' },
+  canceled: { text: '予約を取り消して、お客に全額戻しました。', kind: 'ok' },
   saved: { text: '設定を保存しました。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（値段は 1 以上・下限は上限以下・手数料は 0〜90%）。', kind: 'warn' },
   image_saved: { text: 'メニューの画像を入れかえました（メニューも書き換えました）。', kind: 'ok' },
@@ -47,6 +50,8 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
 };
 
 const SESSION_STATUS: Record<CastSession['status'], string> = {
+  noshow_cast: '🚫 キャストが来なかった（全額戻した）',
+  noshow_customer: '🚫 お客が来なかった',
   reserved: '📅 予約（返事待ち）',
   accepted: '📅 予約済み',
   requested: '⏳ 返事待ち',
@@ -222,6 +227,10 @@ export function CastPage(props: {
   template: CastMenuItem[];
   stats: CastStat[];
   sessions: CastSession[];
+  /** 📅 予約カレンダー（きのう〜7 日後に始まるもの） */
+  calendar?: CastSession[];
+  /** 🚫 来なかった回数（30 日） */
+  noShows?: { cast: ReadonlyMap<string, number>; customer: ReadonlyMap<string, number> };
   name: (id: string) => string;
   coin: string;
   flash?: string;
@@ -417,6 +426,21 @@ export function CastPage(props: {
                       <Select name="channelId" options={props.channels} empty="その人のメニューのチャンネル" label="紹介パネルを出すチャンネル" />
                       <button type="submit">紹介パネルを出す・更新</button>
                     </form>
+                    <div class="ch-topic">
+                      🗓 出勤予定: {scheduleText(x.schedule)}
+                      {(props.noShows?.cast.get(x.memberId) ?? 0) > 0 && <span class="tag warn">🚫 来なかった {props.noShows!.cast.get(x.memberId)} 回（30 日）</span>}
+                    </div>
+                    <details>
+                      <summary>🗓 出勤予定を変える</summary>
+                      <form method="post" action={`/cast/casts/${x.memberId}/schedule`} class="inline-actions">
+                        <Csrf session={session} />
+                        <label class="field">
+                          <span>1 行に 1 つ（例: 月水金 21:00-24:00 ／ 土 20:00-26:00）。空にすると、いつでも予約できます</span>
+                          <textarea name="schedule" rows={3} maxlength={500}>{scheduleInput(x.schedule)}</textarea>
+                        </label>
+                        <button type="submit">保存</button>
+                      </form>
+                    </details>
                     <details class="anchor" id={`cast-${x.memberId}`}>
                       <summary>🎀 メニュー（{menuOf(x).length}）</summary>
                       <form method="post" action={`/cast/casts/${x.memberId}/menu/template`} class="row-actions">
@@ -534,6 +558,22 @@ export function CastPage(props: {
             <span>今すぐの指名の返事を待つ分</span>
             <input type="number" name="acceptMinutes" min={1} max={60} value={String(c.acceptMinutes)} required />
           </label>
+          <label class="field">
+            <span>⏳ 直前の取り消し: 始まる何分前より後なら（0 でなし）</span>
+            <input type="number" name="lateCancelMinutes" min={0} max={1440} value={String(c.lateCancelMinutes)} required />
+          </label>
+          <label class="field">
+            <span>⏳ 直前の取り消しで、キャストに渡す %（残りはお客に戻す）</span>
+            <input type="number" name="lateCancelPercent" min={0} max={100} value={String(c.lateCancelPercent)} required />
+          </label>
+          <label class="field">
+            <span>🚫 始まってから何分で「相手が来ない」を押せるか</span>
+            <input type="number" name="noShowMinutes" min={5} max={120} value={String(c.noShowMinutes)} required />
+          </label>
+          <label class="field">
+            <span>🚫 お客が来なかったとき、キャストに渡す %（キャストが来なかったときは全額お客に戻す）</span>
+            <input type="number" name="noShowPercent" min={0} max={100} value={String(c.noShowPercent)} required />
+          </label>
           <button type="submit" class="ok">
             保存
           </button>
@@ -545,6 +585,8 @@ export function CastPage(props: {
           </form>
         )}
       </section>
+
+      {props.calendar && <Calendar sessions={props.calendar} name={name} session={session} noShows={props.noShows} />}
 
       <section class="card">
         <h2>最近の指名</h2>
@@ -585,5 +627,77 @@ export function CastPage(props: {
         )}
       </section>
     </Layout>
+  );
+}
+
+const JST_MS = 9 * 3_600_000;
+const dayKey = (d: Date) => new Date(d.getTime() + JST_MS).toISOString().slice(0, 10);
+const timeOf = (d: Date) => new Date(d.getTime() + JST_MS).toISOString().slice(11, 16);
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+const CANCELABLE: CastSession['status'][] = ['reserved', 'accepted'];
+
+/** 📅 予約カレンダー（日ごと。運営は始まる前の予約を取り消せる＝全額戻す） */
+function Calendar(props: { sessions: CastSession[]; name: (id: string) => string; session: AdminSession; noShows?: { cast: ReadonlyMap<string, number>; customer: ReadonlyMap<string, number> } }) {
+  const days = new Map<string, CastSession[]>();
+  for (const s of props.sessions) {
+    const k = dayKey(sessionStart(s));
+    days.set(k, [...(days.get(k) ?? []), s]);
+  }
+  const customers = [...(props.noShows?.customer ?? new Map<string, number>())].filter(([, n]) => n > 0);
+  return (
+    <section class="card anchor" id="cast-calendar">
+      <h2>📅 予約カレンダー（きのう〜7 日後）</h2>
+      <p class="note">始まる時刻の順です（日本時間）。「取り消す」は、始まる前の予約を運営が取り消して、お客に全額戻します（キャストとお客に DM）。</p>
+      {days.size === 0 && <p class="empty">この間の予約はありません。</p>}
+      {[...days].map(([day, list]) => (
+        <details open>
+          <summary>
+            {day.slice(5).replace('-', '/')}（{WEEK[new Date(`${day}T12:00:00Z`).getUTCDay()]}） ・ {list.length} 件
+          </summary>
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>時刻</th>
+                <th>キャスト ← お客</th>
+                <th>内容</th>
+                <th>状態</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((s) => (
+                <tr>
+                  <td>
+                    {timeOf(sessionStart(s))}
+                    {s.endsAt ? `〜${timeOf(s.endsAt)}` : ''}
+                  </td>
+                  <td>
+                    {props.name(s.castId)} ← {props.name(s.customerId)}
+                  </td>
+                  <td>{sessionLabel(s)}</td>
+                  <td>{SESSION_STATUS[s.status]}</td>
+                  <td>
+                    {CANCELABLE.includes(s.status) && (
+                      <form method="post" action={`/cast/sessions/${s.id}/cancel`} class="row-actions">
+                        <Csrf session={props.session} />
+                        <label class="check">
+                          <input type="checkbox" name="confirm" value="yes" required /> 取り消す
+                        </label>
+                        <button type="submit" class="danger small">取り消す</button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      ))}
+      {customers.length > 0 && (
+        <p class="note">
+          🚫 来なかったお客（30 日）: {customers.map(([id, n]) => `${props.name(id)} ${n} 回`).join('、')}
+        </p>
+      )}
+    </section>
   );
 }
