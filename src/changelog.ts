@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-18-shinpu-art-237-complete', date: '2026-10-18', kind: 'improve', where: ['運用'], title: '神符合戦の全237枚と軽量版が完成', items: ['残り73枚を仕上げ、名前・数値・効果入りのカード237枚を保管しました。全カードに通常表示用・一覧用のWebPを用意し、元のPNGも残しています。画像制作は237／237枚（100％）です。'] },
   { id: '2026-10-18-shinpu-art-164-light', date: '2026-10-18', kind: 'improve', where: ['運用'], title: '神符合戦のカード164枚と軽量版を保管', items: ['追加50枚と直前の14枚を保管用フォルダへまとめました。全164枚に通常表示用と一覧用のWebPを用意し、PNG原画も残しています。ゲームへの効果実装とは別です。'] },
   { id: '2026-10-18-shinpu-cardify-existing', date: '2026-10-18', kind: 'improve', where: ['運用'], title: '手元の素材100点すべてをカード化', items: ['枠なしだった31点に名前・数値・効果を入れ、完成カード100枚を別フォルダに保存しました。元の絵は比較用に残しています。ゲームへの効果実装とは別です。'] },
   { id: '2026-10-18-shinpu-art-100-archive', date: '2026-10-18', kind: 'improve', where: ['運用'], title: '神符合戦の制作画像100枚を保存', items: ['制作した原画100枚と一覧をリポジトリに保存しました（100／237枚・42.2％）。ゲームへの追加は別の作業です。'] },

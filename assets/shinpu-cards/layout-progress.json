@@ -1,9 +1,9 @@
 {
   "total": 237,
-  "illustrations": 164,
-  "card_complete": 164,
-  "card_percent": 69.2,
-  "status": "164枚検品・保存。今回50枚追加、直前14枚もGitHub保存に統合。残り73枚、次はSK-160。",
+  "illustrations": 237,
+  "card_complete": 237,
+  "card_percent": 100.0,
+  "status": "全237枚検品・保存。今回73枚追加。未完成0枚。",
   "cards": [
     {
       "id": "SK-001",
@@ -1439,158 +1439,236 @@
     {
       "id": "SK-160",
       "name": "暁光の籠手",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-160.png",
+      "web": "cards-web/SK-160.webp",
+      "thumbnail": "thumbnails/SK-160.webp",
+      "reviewed": true
     },
     {
       "id": "SK-161",
       "name": "暁光の面頬",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-161.png",
+      "web": "cards-web/SK-161.webp",
+      "thumbnail": "thumbnails/SK-161.webp",
+      "reviewed": true
     },
     {
       "id": "SK-162",
       "name": "暁光の笠",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-162.png",
+      "web": "cards-web/SK-162.webp",
+      "thumbnail": "thumbnails/SK-162.webp",
+      "reviewed": true
     },
     {
       "id": "SK-163",
       "name": "暁光の胴衣",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-163.png",
+      "web": "cards-web/SK-163.webp",
+      "thumbnail": "thumbnails/SK-163.webp",
+      "reviewed": true
     },
     {
       "id": "SK-164",
       "name": "暁光の羽織",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-164.png",
+      "web": "cards-web/SK-164.webp",
+      "thumbnail": "thumbnails/SK-164.webp",
+      "reviewed": true
     },
     {
       "id": "SK-165",
       "name": "暁光の鎧",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-165.png",
+      "web": "cards-web/SK-165.webp",
+      "thumbnail": "thumbnails/SK-165.webp",
+      "reviewed": true
     },
     {
       "id": "SK-166",
       "name": "暁光の大盾",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-166.png",
+      "web": "cards-web/SK-166.webp",
+      "thumbnail": "thumbnails/SK-166.webp",
+      "reviewed": true
     },
     {
       "id": "SK-167",
       "name": "暁光の守護幕",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-167.png",
+      "web": "cards-web/SK-167.webp",
+      "thumbnail": "thumbnails/SK-167.webp",
+      "reviewed": true
     },
     {
       "id": "SK-168",
       "name": "宵影の布守り",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-168.png",
+      "web": "cards-web/SK-168.webp",
+      "thumbnail": "thumbnails/SK-168.webp",
+      "reviewed": true
     },
     {
       "id": "SK-169",
       "name": "宵影の袖守り",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-169.png",
+      "web": "cards-web/SK-169.webp",
+      "thumbnail": "thumbnails/SK-169.webp",
+      "reviewed": true
     },
     {
       "id": "SK-170",
       "name": "宵影の籠手",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-170.png",
+      "web": "cards-web/SK-170.webp",
+      "thumbnail": "thumbnails/SK-170.webp",
+      "reviewed": true
     },
     {
       "id": "SK-171",
       "name": "宵影の面頬",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-171.png",
+      "web": "cards-web/SK-171.webp",
+      "thumbnail": "thumbnails/SK-171.webp",
+      "reviewed": true
     },
     {
       "id": "SK-172",
       "name": "宵影の笠",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-172.png",
+      "web": "cards-web/SK-172.webp",
+      "thumbnail": "thumbnails/SK-172.webp",
+      "reviewed": true
     },
     {
       "id": "SK-173",
       "name": "宵影の胴衣",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-173.png",
+      "web": "cards-web/SK-173.webp",
+      "thumbnail": "thumbnails/SK-173.webp",
+      "reviewed": true
     },
     {
       "id": "SK-174",
       "name": "宵影の羽織",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-174.png",
+      "web": "cards-web/SK-174.webp",
+      "thumbnail": "thumbnails/SK-174.webp",
+      "reviewed": true
     },
     {
       "id": "SK-175",
       "name": "宵影の鎧",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-175.png",
+      "web": "cards-web/SK-175.webp",
+      "thumbnail": "thumbnails/SK-175.webp",
+      "reviewed": true
     },
     {
       "id": "SK-176",
       "name": "宵影の大盾",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-176.png",
+      "web": "cards-web/SK-176.webp",
+      "thumbnail": "thumbnails/SK-176.webp",
+      "reviewed": true
     },
     {
       "id": "SK-177",
       "name": "宵影の守護幕",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-177.png",
+      "web": "cards-web/SK-177.webp",
+      "thumbnail": "thumbnails/SK-177.webp",
+      "reviewed": true
     },
     {
       "id": "SK-178",
       "name": "八重の結界",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-178.png",
+      "web": "cards-web/SK-178.webp",
+      "thumbnail": "thumbnails/SK-178.webp",
+      "reviewed": true
     },
     {
       "id": "SK-179",
       "name": "返照の水鏡",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-179.png",
+      "web": "cards-web/SK-179.webp",
+      "thumbnail": "thumbnails/SK-179.webp",
+      "reviewed": true
     },
     {
       "id": "SK-180",
       "name": "身代わりの小狐",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-180.png",
+      "web": "cards-web/SK-180.webp",
+      "thumbnail": "thumbnails/SK-180.webp",
+      "reviewed": true
     },
     {
       "id": "SK-181",
       "name": "祈りの袖幕",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-181.png",
+      "web": "cards-web/SK-181.webp",
+      "thumbnail": "thumbnails/SK-181.webp",
+      "reviewed": true
     },
     {
       "id": "SK-182",
       "name": "霞隠れの羽衣",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-182.png",
+      "web": "cards-web/SK-182.webp",
+      "thumbnail": "thumbnails/SK-182.webp",
+      "reviewed": true
     },
     {
       "id": "SK-183",
       "name": "霊脈の守盾",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-183.png",
+      "web": "cards-web/SK-183.webp",
+      "thumbnail": "thumbnails/SK-183.webp",
+      "reviewed": true
     },
     {
       "id": "SK-184",
       "name": "窮地の守護笠",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-184.png",
+      "web": "cards-web/SK-184.webp",
+      "thumbnail": "thumbnails/SK-184.webp",
+      "reviewed": true
     },
     {
       "id": "SK-185",
       "name": "商人の護り札",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-185.png",
+      "web": "cards-web/SK-185.webp",
+      "thumbnail": "thumbnails/SK-185.webp",
+      "reviewed": true
     },
     {
       "id": "SK-186",
@@ -1604,182 +1682,272 @@
     {
       "id": "SK-187",
       "name": "狐火の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-187.png",
+      "web": "cards-web/SK-187.webp",
+      "thumbnail": "thumbnails/SK-187.webp",
+      "reviewed": true
     },
     {
       "id": "SK-188",
       "name": "狐火の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-188.png",
+      "web": "cards-web/SK-188.webp",
+      "thumbnail": "thumbnails/SK-188.webp",
+      "reviewed": true
     },
     {
       "id": "SK-189",
       "name": "狐火の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-189.png",
+      "web": "cards-web/SK-189.webp",
+      "thumbnail": "thumbnails/SK-189.webp",
+      "reviewed": true
     },
     {
       "id": "SK-190",
       "name": "潮音の一祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-190.png",
+      "web": "cards-web/SK-190.webp",
+      "thumbnail": "thumbnails/SK-190.webp",
+      "reviewed": true
     },
     {
       "id": "SK-191",
       "name": "潮音の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-191.png",
+      "web": "cards-web/SK-191.webp",
+      "thumbnail": "thumbnails/SK-191.webp",
+      "reviewed": true
     },
     {
       "id": "SK-192",
       "name": "潮音の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-192.png",
+      "web": "cards-web/SK-192.webp",
+      "thumbnail": "thumbnails/SK-192.webp",
+      "reviewed": true
     },
     {
       "id": "SK-193",
       "name": "潮音の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-193.png",
+      "web": "cards-web/SK-193.webp",
+      "thumbnail": "thumbnails/SK-193.webp",
+      "reviewed": true
     },
     {
       "id": "SK-194",
       "name": "桜風の一祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-194.png",
+      "web": "cards-web/SK-194.webp",
+      "thumbnail": "thumbnails/SK-194.webp",
+      "reviewed": true
     },
     {
       "id": "SK-195",
       "name": "桜風の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-195.png",
+      "web": "cards-web/SK-195.webp",
+      "thumbnail": "thumbnails/SK-195.webp",
+      "reviewed": true
     },
     {
       "id": "SK-196",
       "name": "桜風の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-196.png",
+      "web": "cards-web/SK-196.webp",
+      "thumbnail": "thumbnails/SK-196.webp",
+      "reviewed": true
     },
     {
       "id": "SK-197",
       "name": "桜風の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-197.png",
+      "web": "cards-web/SK-197.webp",
+      "thumbnail": "thumbnails/SK-197.webp",
+      "reviewed": true
     },
     {
       "id": "SK-198",
       "name": "紫電の一祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-198.png",
+      "web": "cards-web/SK-198.webp",
+      "thumbnail": "thumbnails/SK-198.webp",
+      "reviewed": true
     },
     {
       "id": "SK-199",
       "name": "紫電の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-199.png",
+      "web": "cards-web/SK-199.webp",
+      "thumbnail": "thumbnails/SK-199.webp",
+      "reviewed": true
     },
     {
       "id": "SK-200",
       "name": "紫電の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-200.png",
+      "web": "cards-web/SK-200.webp",
+      "thumbnail": "thumbnails/SK-200.webp",
+      "reviewed": true
     },
     {
       "id": "SK-201",
       "name": "紫電の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-201.png",
+      "web": "cards-web/SK-201.webp",
+      "thumbnail": "thumbnails/SK-201.webp",
+      "reviewed": true
     },
     {
       "id": "SK-202",
       "name": "山祇の一祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-202.png",
+      "web": "cards-web/SK-202.webp",
+      "thumbnail": "thumbnails/SK-202.webp",
+      "reviewed": true
     },
     {
       "id": "SK-203",
       "name": "山祇の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-203.png",
+      "web": "cards-web/SK-203.webp",
+      "thumbnail": "thumbnails/SK-203.webp",
+      "reviewed": true
     },
     {
       "id": "SK-204",
       "name": "山祇の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-204.png",
+      "web": "cards-web/SK-204.webp",
+      "thumbnail": "thumbnails/SK-204.webp",
+      "reviewed": true
     },
     {
       "id": "SK-205",
       "name": "山祇の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-205.png",
+      "web": "cards-web/SK-205.webp",
+      "thumbnail": "thumbnails/SK-205.webp",
+      "reviewed": true
     },
     {
       "id": "SK-206",
       "name": "暁光の一祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-206.png",
+      "web": "cards-web/SK-206.webp",
+      "thumbnail": "thumbnails/SK-206.webp",
+      "reviewed": true
     },
     {
       "id": "SK-207",
       "name": "暁光の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-207.png",
+      "web": "cards-web/SK-207.webp",
+      "thumbnail": "thumbnails/SK-207.webp",
+      "reviewed": true
     },
     {
       "id": "SK-208",
       "name": "暁光の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-208.png",
+      "web": "cards-web/SK-208.webp",
+      "thumbnail": "thumbnails/SK-208.webp",
+      "reviewed": true
     },
     {
       "id": "SK-209",
       "name": "暁光の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-209.png",
+      "web": "cards-web/SK-209.webp",
+      "thumbnail": "thumbnails/SK-209.webp",
+      "reviewed": true
     },
     {
       "id": "SK-210",
       "name": "宵影の一祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-210.png",
+      "web": "cards-web/SK-210.webp",
+      "thumbnail": "thumbnails/SK-210.webp",
+      "reviewed": true
     },
     {
       "id": "SK-211",
       "name": "宵影の二祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-211.png",
+      "web": "cards-web/SK-211.webp",
+      "thumbnail": "thumbnails/SK-211.webp",
+      "reviewed": true
     },
     {
       "id": "SK-212",
       "name": "宵影の三祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-212.png",
+      "web": "cards-web/SK-212.webp",
+      "thumbnail": "thumbnails/SK-212.webp",
+      "reviewed": true
     },
     {
       "id": "SK-213",
       "name": "宵影の四祈",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-213.png",
+      "web": "cards-web/SK-213.webp",
+      "thumbnail": "thumbnails/SK-213.webp",
+      "reviewed": true
     },
     {
       "id": "SK-214",
       "name": "天照の大祈願",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-214.png",
+      "web": "cards-web/SK-214.webp",
+      "thumbnail": "thumbnails/SK-214.webp",
+      "reviewed": true
     },
     {
       "id": "SK-215",
       "name": "宵宮の総祓い",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-215.png",
+      "web": "cards-web/SK-215.webp",
+      "thumbnail": "thumbnails/SK-215.webp",
+      "reviewed": true
     },
     {
       "id": "SK-216",
       "name": "御神水の小瓶",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-216.png",
+      "web": "cards-web/SK-216.webp",
+      "thumbnail": "thumbnails/SK-216.webp",
+      "reviewed": true
     },
     {
       "id": "SK-217",
@@ -1802,8 +1970,11 @@
     {
       "id": "SK-219",
       "name": "旅人の塩むすび",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-219.png",
+      "web": "cards-web/SK-219.webp",
+      "thumbnail": "thumbnails/SK-219.webp",
+      "reviewed": true
     },
     {
       "id": "SK-220",
@@ -1817,14 +1988,20 @@
     {
       "id": "SK-221",
       "name": "小さな霊香",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-221.png",
+      "web": "cards-web/SK-221.webp",
+      "thumbnail": "thumbnails/SK-221.webp",
+      "reviewed": true
     },
     {
       "id": "SK-222",
       "name": "深山の霊香",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-222.png",
+      "web": "cards-web/SK-222.webp",
+      "thumbnail": "thumbnails/SK-222.webp",
+      "reviewed": true
     },
     {
       "id": "SK-223",
@@ -1838,86 +2015,128 @@
     {
       "id": "SK-224",
       "name": "浄めの塩袋",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-224.png",
+      "web": "cards-web/SK-224.webp",
+      "thumbnail": "thumbnails/SK-224.webp",
+      "reviewed": true
     },
     {
       "id": "SK-225",
       "name": "厄除けの鈴",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-225.png",
+      "web": "cards-web/SK-225.webp",
+      "thumbnail": "thumbnails/SK-225.webp",
+      "reviewed": true
     },
     {
       "id": "SK-226",
       "name": "招福の銅鈴",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-226.png",
+      "web": "cards-web/SK-226.webp",
+      "thumbnail": "thumbnails/SK-226.webp",
+      "reviewed": true
     },
     {
       "id": "SK-227",
       "name": "旅帳のしおり",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-227.png",
+      "web": "cards-web/SK-227.webp",
+      "thumbnail": "thumbnails/SK-227.webp",
+      "reviewed": true
     },
     {
       "id": "SK-228",
       "name": "形代の封筒",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-228.png",
+      "web": "cards-web/SK-228.webp",
+      "thumbnail": "thumbnails/SK-228.webp",
+      "reviewed": true
     },
     {
       "id": "SK-229",
       "name": "回想の巻物",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-229.png",
+      "web": "cards-web/SK-229.webp",
+      "thumbnail": "thumbnails/SK-229.webp",
+      "reviewed": true
     },
     {
       "id": "SK-230",
       "name": "灯籠の油",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-230.png",
+      "web": "cards-web/SK-230.webp",
+      "thumbnail": "thumbnails/SK-230.webp",
+      "reviewed": true
     },
     {
       "id": "SK-231",
       "name": "結び守りの糸",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-231.png",
+      "web": "cards-web/SK-231.webp",
+      "thumbnail": "thumbnails/SK-231.webp",
+      "reviewed": true
     },
     {
       "id": "SK-232",
       "name": "七色の染め札",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-232.png",
+      "web": "cards-web/SK-232.webp",
+      "thumbnail": "thumbnails/SK-232.webp",
+      "reviewed": true
     },
     {
       "id": "SK-233",
       "name": "商いの福袋",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-233.png",
+      "web": "cards-web/SK-233.webp",
+      "thumbnail": "thumbnails/SK-233.webp",
+      "reviewed": true
     },
     {
       "id": "SK-234",
       "name": "身を清める祝詞",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-234.png",
+      "web": "cards-web/SK-234.webp",
+      "thumbnail": "thumbnails/SK-234.webp",
+      "reviewed": true
     },
     {
       "id": "SK-235",
       "name": "市守りの買札",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-235.png",
+      "web": "cards-web/SK-235.webp",
+      "thumbnail": "thumbnails/SK-235.webp",
+      "reviewed": true
     },
     {
       "id": "SK-236",
       "name": "蔵渡しの売札",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-236.png",
+      "web": "cards-web/SK-236.webp",
+      "thumbnail": "thumbnails/SK-236.webp",
+      "reviewed": true
     },
     {
       "id": "SK-237",
       "name": "縁結びの換札",
-      "layout_status": "pending",
-      "card": null
+      "layout_status": "complete",
+      "card": "cards/SK-237.png",
+      "web": "cards-web/SK-237.webp",
+      "thumbnail": "thumbnails/SK-237.webp",
+      "reviewed": true
     }
   ]
 }

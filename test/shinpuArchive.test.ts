@@ -3,14 +3,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import sharp from 'sharp';
 
-it('保管した164枚が一覧と一致し、原画に欠落や破損がない', () => {
+it('保管した237枚が一覧と一致し、原画に欠落や破損がない', () => {
   const base = new URL('../assets/shinpu-cards/', import.meta.url);
   const manifest = JSON.parse(readFileSync(new URL('manifest.json', base), 'utf8'));
   expect(manifest.totalPlanned).toBe(237);
-  expect(manifest.complete).toBe(164);
-  expect(manifest.percent).toBe(69.2);
+  expect(manifest.complete).toBe(237);
+  expect(manifest.percent).toBe(100);
   expect(manifest.cards).toHaveLength(manifest.complete);
-  expect(new Set(manifest.cards.map((c: { id: string }) => c.id)).size).toBe(164);
+  expect(manifest.cards.map((c: { id: string }) => c.id).sort()).toEqual(Array.from({ length: 237 }, (_, i) => `SK-${String(i + 1).padStart(3, '0')}`));
+  expect(new Set(manifest.cards.map((c: { id: string }) => c.id)).size).toBe(237);
   const listed: string[] = [];
   for (const card of manifest.cards) {
     expect(card.id).toMatch(/^SK-\d{3}$/);
@@ -24,13 +25,13 @@ it('保管した164枚が一覧と一致し、原画に欠落や破損がない'
   expect(readdirSync(new URL('originals/', base)).sort()).toEqual(listed.sort());
 });
 
-it('保存素材164点すべてに完成カードがあり、比較用原画と区別できる', () => {
+it('保存素材237点すべてに完成カードがあり、比較用原画と区別できる', () => {
   const base = new URL('../assets/shinpu-cards/', import.meta.url);
   const manifest = JSON.parse(readFileSync(new URL('manifest.json', base), 'utf8'));
   const layout = JSON.parse(readFileSync(new URL('layout-progress.json', base), 'utf8'));
-  expect(manifest.cardComplete).toBe(164);
-  expect(manifest.cardPercent).toBe(69.2);
-  expect(layout.cards.filter((c: { layout_status: string }) => c.layout_status === 'complete')).toHaveLength(164);
+  expect(manifest.cardComplete).toBe(237);
+  expect(manifest.cardPercent).toBe(100);
+  expect(layout.cards.filter((c: { layout_status: string }) => c.layout_status === 'complete')).toHaveLength(237);
   expect(layout.cards.filter((c: { layout_status: string }) => c.layout_status === 'illustration_only')).toHaveLength(0);
   const listed: string[] = [];
   for (const card of manifest.cards) {
