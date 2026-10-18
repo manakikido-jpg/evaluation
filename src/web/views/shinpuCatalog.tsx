@@ -17,7 +17,7 @@ export function ShinpuCatalogPage({ query = '', category = '', element = '', pag
     <h1>{card ? card.name : '神器図鑑'}</h1>
     <p>画像完成 {catalog.length}／237枚（100.0％）。対戦への追加は準備中です。現在の対戦は試作15種類で遊べます。</p>
     {card ? <article class="detail">
-      <img src={image(card, 'cards')} width="600" height="900" alt={`${card.id} ${card.name}の完成カード`} />
+      <img src={image(card, 'cards')} width="900" height="1200" alt={`${card.id} ${card.name}の完成カード`} />
       <section><h2>{card.id} {card.name}</h2><p>{card.category} / {card.element} / {card.rarity}</p>
         <p>{card.stackable ? '＋付き攻撃札 / ' : ''}攻撃 {card.attack} / 防御 {card.defense} / 回復 {card.heal} / 消費MP {card.mpCost}</p>
         <p>{card.effect}</p><p>制作時の仕様です。試作の同名札とは数値や効果が異なる場合があります。</p>
@@ -31,7 +31,7 @@ export function ShinpuCatalogPage({ query = '', category = '', element = '', pag
       </form>
       <p role="status">{found.length}枚 / {current}ページ目（全{pages}ページ）</p>
       <div class="grid">{found.slice((current - 1) * 24, current * 24).map(c => <article>
-        <a href={`${ROOT}/${c.id}`}><img src={image(c, 'thumbnails')} width="240" height="360" loading="lazy" decoding="async" alt={`${c.name}の完成カード`} />
+        <a href={`${ROOT}/${c.id}`}><img src={image(c, 'thumbnails')} width="360" height="480" loading="lazy" decoding="async" alt={`${c.name}の完成カード`} />
           <h2>{c.stackable ? '＋ ' : ''}{c.name}</h2></a><p>{c.id} / {c.category} / {c.element}</p>
         <p>攻撃 {c.attack} / 防御 {c.defense} / MP {c.mpCost}</p>
       </article>)}</div>
