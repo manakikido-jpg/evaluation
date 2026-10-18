@@ -18,7 +18,7 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
       <body data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
         <header>
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
-          <nav><span class="tag">運営テスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
+          <nav><a href="/economy/shinpu">社務所へ</a><span class="tag">運営テスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
         <main class="wrap" id="lobby">
           <section class="arena">

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createWebApp } from '../src/web/app.js';
 import type { DiscordApi } from '../src/web/discordApi.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
+import { createSession } from '../src/web/sessions.js';
 import { createMemberSession } from '../src/web/memberSessions.js';
 import { createLoginLink } from '../src/services/casino/loginLinks.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
@@ -148,4 +149,48 @@ it('厳しいCSPで外部JSだけを使い、表示名をHTMLとして実行し�
   expect(res.headers.get('content-security-policy')).not.toContain("'unsafe-inline'");
   expect((await app.request('/static/shinpu.js')).status).toBe(200);
   expect((await app.request('/static/shinpu.css')).status).toBe(200);
+});
+
+async function officeLogin(pages: ('economy' | 'members')[] | null = null) {
+  return createSession(db, { id: A, username: 'ais', displayName: 'ais', avatarUrl: null }, { level: 'guji', pages });
+}
+it('社務所の入口からCSRFつきで運営専用の対戦へ入り、操作できる', async () => {
+  const admin = await officeLogin();
+  const officeCookie = 'shamusho_session=' + admin;
+  const page = await app.request('/economy/shinpu', { headers: { cookie: officeCookie } });
+  expect(page.status).toBe(200);
+  const html = await page.text();
+  expect(html).toContain('神符合戦（管理者テスト）');
+  const officeCsrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+  const enter = await app.request('/economy/shinpu/enter', { method: 'POST', headers: { cookie: officeCookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: officeCsrf }) });
+  expect(enter.status).toBe(302);
+  expect(enter.headers.get('location')).toBe(ROOT);
+  const playCookie = token(enter, 'sakura_shinpu_test')!;
+  expect(playCookie).toBeTruthy();
+  const play = await app.request(ROOT, { headers: { cookie: 'sakura_shinpu_test=' + playCookie } });
+  expect(play.status).toBe(200);
+  expect(await play.text()).toContain('社務所へ');
+  roles = [ROLE.sanpaisha];
+  expect((await app.request(ROOT + '/api', { headers: { cookie: 'sakura_shinpu_test=' + playCookie } })).status).toBe(403);
+});
+it('社務所の入口は一般Cookie・CSRF不足・ロール失効・Discord障害を許可しない', async () => {
+  expect((await get('/economy/shinpu')).status).not.toBe(200);
+  const admin = await officeLogin();
+  const h = { cookie: 'shamusho_session=' + admin, 'content-type': 'application/x-www-form-urlencoded' };
+  expect((await app.request('/economy/shinpu/enter', { method: 'POST', headers: h })).status).toBe(403);
+  const page = await app.request('/economy/shinpu', { headers: h });
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
+  const enter = () => app.request('/economy/shinpu/enter', { method: 'POST', headers: h, body: new URLSearchParams({ _csrf: csrf }) });
+  roles = [ROLE.sanpaisha];
+  expect((await enter()).status).toBe(403);
+  roles = [ROLE.shinshoku]; fail = true;
+  expect((await enter()).status).toBe(503);
+  fail = false;
+  expect((await enter()).status).toBe(302);
+});
+it('社務所の経済ページ権限がない人は直URLでも入場できない', async () => {
+  const admin = await officeLogin(['members']);
+  const headers = { cookie: 'shamusho_session=' + admin };
+  expect((await app.request('/economy/shinpu', { headers })).status).toBe(403);
+  expect((await app.request('/economy/shinpu/enter', { method: 'POST', headers })).status).toBe(403);
 });
