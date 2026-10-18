@@ -1652,6 +1652,8 @@ export const otoshidamaBags = pgTable(
     endedAt: timestamp('ended_at', { withTimezone: true }),
     /** 期限で持ち主に戻した量 */
     refunded: integer('refunded').notNull().default(0),
+    /** 社務所Web から運営が置いた袋（銭は運営から。残りは運営に戻る＝消える） */
+    fromStaff: boolean('from_staff').notNull().default(false),
   },
   (t) => [index('otoshidama_bags_open_idx').on(t.endedAt, t.expiresAt)],
 );

@@ -1600,6 +1600,20 @@ describe('運営から花びらを送る（管理画面）', () => {
     expect((await walletOf(db, USER)).balance).toBe(100);
     expect((await listAudit(db, { action: 'coins.grant_all' }))[0]?.detail).toMatchObject({ amount: 100, count: 1 });
   });
+
+  it('🧧 運営のお年玉袋（宮司のみ・チャンネルに出す・財布は減らない）', async () => {
+    const { walletOf } = await import('../src/services/economy.js');
+    const s = await login(STAFF);
+    expect((await post(s, '/settings/otoshidama', { otoshiChannel: '910000000000000002', otoshiTotal: '1000', otoshiCount: '5', confirm: 'yes' })).status).toBe(403);
+    const g = await login(GUJI);
+    const bad = await post(g, '/settings/otoshidama', { otoshiChannel: '910000000000000099', otoshiTotal: '1000', otoshiCount: '5', confirm: 'yes' });
+    expect(bad.headers.get('location')).toBe('/settings?msg=otoshi_invalid#sec-give');
+    const ok = await post(g, '/settings/otoshidama', { otoshiChannel: '910000000000000002', otoshiTotal: '1000', otoshiCount: '5', otoshiNote: 'おめでとう', confirm: 'yes' });
+    expect(ok.headers.get('location')).toBe('/settings?msg=otoshi_put#sec-give');
+    expect(actions.some((a) => a.startsWith('send 910000000000000002') && a.includes('運営からのお年玉'))).toBe(true);
+    expect((await walletOf(db, GUJI)).balance).toBe(0);
+    expect((await listAudit(db, { action: 'otoshidama.staff_put' })).length).toBe(1);
+  });
 });
 
 describe('📣 募集ボタンを社務所Web で足す・外す', () => {

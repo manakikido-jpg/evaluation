@@ -1,0 +1,1 @@
+ALTER TABLE "otoshidama_bags" ADD COLUMN "from_staff" boolean DEFAULT false NOT NULL;

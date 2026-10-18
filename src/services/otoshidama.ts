@@ -90,12 +90,52 @@ export async function putBag(
   });
 }
 
+/**
+ * 運営の袋（社務所Web から。宮司だけ）。銭は運営から出す（運営が配った量に数える）。置いた人の財布は減らない。
+ * 残りは運営に戻る（だれの財布にも入らない）。投稿は呼び出し側
+ */
+export async function putStaffBag(
+  db: Db,
+  input: { by: string; channelId: string; total: number; count: number; note: string },
+  now = new Date(),
+  rand: Rand = Math.random,
+): Promise<{ status: 'ok'; bag: OtoshidamaBag } | { status: 'bad_amount' }> {
+  const { total, count } = input;
+  const o = OTOSHIDAMA;
+  if (!Number.isInteger(total) || !Number.isInteger(count) || total < o.minTotal || total > STAFF_BAG_MAX || count < o.minCount || count > STAFF_BAG_COUNT_MAX || total < count) return { status: 'bad_amount' };
+  return db.transaction(async (tx) => {
+    // 運営から出して、そのまま袋に入れる（記録上は「運営から」→「お年玉袋を置いた」。財布は差し引き 0）
+    await addCoins(tx, input.by, total, 'admin_grant', { note: '🧧 運営のお年玉袋', by: input.by });
+    await spendWithin(tx, input.by, total, 'otoshidama_put', { channelId: input.channelId, count, staff: true });
+    const [bag] = await tx
+      .insert(otoshidamaBags)
+      .values({
+        ownerId: input.by,
+        channelId: input.channelId,
+        total,
+        count,
+        shares: splitShares(total, count, rand),
+        note: input.note.replace(/\s+/g, ' ').trim().slice(0, 60),
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + o.hours * 3_600_000),
+        fromStaff: true,
+      })
+      .returning();
+    return { status: 'ok' as const, bag: bag! };
+  });
+}
+
+/** 運営の袋の上限（ふつうの袋より多く入れられる） */
+export const STAFF_BAG_MAX = 100_000;
+export const STAFF_BAG_COUNT_MAX = 50;
+
 /** 投稿できなかったとき: 袋を消して、入れた量と手数料を戻す */
 export async function undoBag(db: Db, bag: OtoshidamaBag, fee: number): Promise<void> {
   await db.transaction(async (tx) => {
     const gone = await tx.delete(otoshidamaBags).where(eq(otoshidamaBags.id, bag.id)).returning({ id: otoshidamaBags.id });
     if (!gone.length) return;
     await addCoins(tx, bag.ownerId, bag.total, 'otoshidama_refund', { bag: bag.id });
+    if (bag.fromStaff) await spendWithin(tx, bag.ownerId, bag.total, 'admin_take', { note: '🧧 運営のお年玉袋（出せなかった）', by: bag.ownerId });
     if (fee > 0) await addCoins(tx, bag.ownerId, fee, 'shop_refund', { bag: bag.id });
   });
 }
@@ -152,7 +192,11 @@ export async function expireBags(db: Db, now = new Date()): Promise<OtoshidamaBa
       if (!bag || bag.endedAt) return undefined;
       const [row] = await tx.select({ sum: sql<number>`coalesce(sum(${otoshidamaClaims.amount}), 0)::int` }).from(otoshidamaClaims).where(eq(otoshidamaClaims.bagId, b.id));
       const left = bag.total - Number(row?.sum ?? 0);
-      if (left > 0) await addCoins(tx, bag.ownerId, left, 'otoshidama_refund', { bag: bag.id });
+      if (left > 0) {
+        await addCoins(tx, bag.ownerId, left, 'otoshidama_refund', { bag: bag.id });
+        // 運営の袋の残りは運営に戻す（置いた人の財布には残さない）
+        if (bag.fromStaff) await spendWithin(tx, bag.ownerId, left, 'admin_take', { note: '🧧 運営のお年玉袋の残り', by: bag.ownerId, bag: bag.id });
+      }
       const [u] = await tx.update(otoshidamaBags).set({ endedAt: now, refunded: Math.max(0, left) }).where(eq(otoshidamaBags.id, bag.id)).returning();
       return u;
     });
@@ -171,19 +215,20 @@ export function bagMessage(bag: OtoshidamaBag, claims: OtoshidamaClaim[], coin: 
   const full = claims.length >= bag.count;
   const expired = !full && (bag.endedAt !== null || bag.expiresAt <= now);
   const best = claims.length ? claims.reduce((a, b) => (b.amount > a.amount ? b : a)) : undefined;
+  const from = bag.fromStaff ? '⛩ 運営' : `<@${bag.ownerId}> さん`;
   const lines = [
-    `<@${bag.ownerId}> さんからのお年玉！`,
+    bag.fromStaff ? '⛩ 運営からのお年玉！' : `<@${bag.ownerId}> さんからのお年玉！`,
     `${coin.emoji}**${bag.total.toLocaleString('ja-JP')} 枚** を、先着 **${bag.count} 人** で分けます（1 人ずつの量は運しだい）`,
     ...(bag.note ? [`> ${bag.note}`] : []),
     '',
     full
       ? `🈵 **空になりました！** いちばん多かったのは <@${best!.memberId}> さん（${best!.amount.toLocaleString('ja-JP')} 枚）🎉`
       : expired
-        ? `⌛ 期限が来ました。残り ${bag.refunded.toLocaleString('ja-JP')} 枚は <@${bag.ownerId}> さんに戻りました`
+        ? `⌛ 期限が来ました。残り ${bag.refunded.toLocaleString('ja-JP')} 枚は ${from}に戻りました`
         : `🧧 残り **${left}** 袋`,
     ...(claims.length ? ['', '**受け取った人**', ...claims.slice(0, 20).map((c, i) => `${i + 1}. <@${c.memberId}> … ${c.amount.toLocaleString('ja-JP')} 枚`)] : []),
     ...(claims.length > 20 ? [`-# ほか ${claims.length - 20} 人`] : []),
-    ...(!full && !expired ? [`-# 1 人 1 回・入鯖が承認された人だけ。<t:${Math.floor(bag.expiresAt.getTime() / 1000)}:R> に締め切り（残りは置いた人に戻ります）`] : []),
+    ...(!full && !expired ? [`-# 1 人 1 回・入鯖が承認された人だけ。<t:${Math.floor(bag.expiresAt.getTime() / 1000)}:R> に締め切り（残りは${bag.fromStaff ? '運営' : '置いた人'}に戻ります）`] : []),
   ];
   const open = !full && !expired;
   return {

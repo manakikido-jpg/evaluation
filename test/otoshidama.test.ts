@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { bagMessage, bagState, claimBag, expireBags, parseCount, putBag, splitShares, undoBag } from '../src/services/otoshidama.js';
+import { bagMessage, bagState, claimBag, expireBags, parseCount, putBag, putStaffBag, splitShares, undoBag } from '../src/services/otoshidama.js';
 import { activeMyColor, buyMyColor, createItem, parseHexColor, setPurchaseRole, undoMyColor } from '../src/services/shop.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -25,6 +25,27 @@ afterEach(async () => {
 const base = { ownerId: OWNER, roleIds: [ROLE.ujiko], channelId: CH, note: 'あけおめ', fee: 50, itemId: 1, itemName: 'お年玉袋' };
 
 describe('🧧 お年玉袋', () => {
+  it('運営の袋: 置いた人の財布は減らない・受け取れる・残りは運営に戻る（置いた人に入らない）・出せなければ元どおり', async () => {
+    const who = (id: string) => ({ id, roleIds: [ROLE.sanpaisha] });
+    expect((await putStaffBag(db, { by: OWNER, channelId: CH, total: 50, count: 2, note: '' }, T0)).status).toBe('bad_amount');
+    const r = await putStaffBag(db, { by: OWNER, channelId: CH, total: 1000, count: 3, note: 'おめでとう' }, T0);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r.bag.fromStaff).toBe(true);
+    expect((await walletOf(db, OWNER)).balance).toBe(0);
+    expect(bagMessage(r.bag, [], coin, T0).embeds[0]!.description).toContain('⛩ 運営からのお年玉！');
+    const got = await claimBag(db, cfg, r.bag.id, who(A), T0);
+    if (got.status !== 'ok') throw new Error(got.status);
+    expect((await walletOf(db, A)).balance).toBe(got.amount);
+    const [closed] = await expireBags(db, new Date(T0.getTime() + 25 * 3_600_000));
+    expect(closed!.refunded).toBe(1000 - got.amount);
+    expect((await walletOf(db, OWNER)).balance).toBe(0);
+    expect(bagMessage(closed!, [], coin, T0).embeds[0]!.description).toContain('⛩ 運営に戻りました');
+    const u = await putStaffBag(db, { by: OWNER, channelId: CH, total: 500, count: 2, note: '' }, T0);
+    if (u.status !== 'ok') throw new Error(u.status);
+    await undoBag(db, u.bag, 0);
+    expect((await walletOf(db, OWNER)).balance).toBe(0);
+  });
+
   it('分け方: 合わせると入れた量ちょうど・1 人 1 枚以上', () => {
     for (const [total, count] of [
       [100, 2],
