@@ -385,8 +385,9 @@ export function otoshidamaPickChannel(item: ShopItem, e: EconomyConfig, balance:
           {
             type: 8,
             custom_id: `shop:otoshi:ch:${item.id}`,
-            placeholder: '袋を置くチャンネル',
-            channel_types: [0],
+            placeholder: '袋を置くチャンネル・スレッド（日記など）',
+            // テキスト・お知らせ・通話のチャット・スレッド（公開・非公開・お知らせ）
+            channel_types: [0, 5, 2, 11, 12, 10],
           },
         ],
       },
