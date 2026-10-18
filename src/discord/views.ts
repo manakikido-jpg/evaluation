@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   EmbedBuilder,
   type APIEmbed,
+  type MessageCreateOptions,
   type MessageActionRowComponentBuilder,
 } from 'discord.js';
 import type { Rank } from '../config.js';
@@ -170,8 +171,19 @@ export function giversReply(ownerId: string, givers: { giverId: string }[], tota
 }
 
 /** #慶事 での昇格の発表 */
-export function promotionAnnouncement(userId: string, promotion: Promotion, goen: number): string {
-  return `🌸 ${mention(userId)} さまのご縁が花ひらき、**${rankLabel(promotion.to)}** になられました。（ご縁 ${goen}）`;
+export function promotionAnnouncement(userId: string, promotion: Promotion, goen: number, roleIds: readonly string[], avatarUrl?: string): MessageCreateOptions {
+  const embed = new EmbedBuilder()
+    .setColor(SAKURA)
+    .setTitle('🌸 ご昇格おめでとうございます')
+    .setDescription(`${mention(userId)} さまのご縁が花ひらき、**${rankLabel(promotion.to)}** になられました。`)
+    .addFields({ name: '新しい位', value: rankLabel(promotion.to), inline: true }, { name: 'ご縁', value: String(goen), inline: true })
+    .setFooter({ text: '咲楽ノ宮・慶事' });
+  if (avatarUrl) embed.setThumbnail(avatarUrl);
+  return {
+    content: `${roleIds.map((id) => `<@&${id}>`).join(' ')} 新しい仲間をお迎えください。`.trim(),
+    embeds: [embed.toJSON()],
+    allowedMentions: { parse: [], users: [], roles: [...roleIds] },
+  };
 }
 
 /** #記録 用のログ */

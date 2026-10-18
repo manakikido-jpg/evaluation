@@ -9,7 +9,7 @@ import { cfg, makeDb, ROLE } from './helpers.js';
 
 /* Discord のオブジェクトを最小限まねた偽物で、ShuinApp の動きを確かめる */
 
-type Sent = { channelId: string; content: string; allowedMentions?: unknown };
+type Sent = { channelId: string; content: string; embeds?: unknown[]; allowedMentions?: unknown };
 
 function fakeMember(id: string, roleIds: string[], bot = false) {
   const cache = new Map(roleIds.map((r) => [r, {}]));
@@ -187,8 +187,24 @@ describe('ShuinApp', () => {
     expect(receiver.roles.remove).toHaveBeenCalledWith([ROLE.sanpaisha], expect.any(String));
     const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
     expect(keiji).toHaveLength(1);
-    expect(keiji[0]?.content).toContain('**🍃 氏子** になられました。（ご縁 20）');
-    expect(keiji[0]?.allowedMentions).toEqual({ parse: [], users: [R] });
+    expect(keiji[0]?.content).toBe(cfg.ranks.map((r) => `<@&${r.roleId}>`).join(' ') + ' 新しい仲間をお迎えください。');
+    expect(keiji[0]?.embeds).toEqual([expect.objectContaining({ description: expect.stringContaining('**🍃 氏子** になられました。'), fields: expect.arrayContaining([{ name: 'ご縁', value: '20', inline: true }]) })]);
+    expect(keiji[0]?.allowedMentions).toEqual({ parse: [], users: [], roles: cfg.ranks.map((r) => r.roleId) });
+  });
+
+  it('役職全体への昇格通知も通知OKだけに届け、通知NGの設定を守る', async () => {
+    const original = cfg.notify;
+    cfg.notify = { okRoleId: '100000000000000080', ngRoleId: '100000000000000081' };
+    try {
+      add(R, ROLE.sanpaisha);
+      const giver = add(G, ROLE.guji);
+      await giveShuin(db, { giverId: G2, receiverId: R, weight: 10, giverRank: 'guji' });
+      await app.onInteraction(interaction('button', giver, { customId: shuinId('give', R) }).i as never);
+      const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
+      expect(keiji).toHaveLength(1);
+      expect(keiji[0]?.content).toBe('<@&100000000000000080> 新しい仲間をお迎えください。');
+      expect(keiji[0]?.allowedMentions).toEqual({ parse: [], users: [], roles: ['100000000000000080'] });
+    } finally { cfg.notify = original; }
   });
 
   it('同じ相手に同時に押されても、昇格の発表は 1 回だけ', async () => {
