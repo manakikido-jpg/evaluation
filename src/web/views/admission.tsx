@@ -39,6 +39,9 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   gift_queued: { text: '🎁 受け付けました。1 分以内に、いまオンラインの人へ配ります（下の「最近のプレゼント」で人数が見られます）。', kind: 'ok' },
   gift_revoked: { text: '↩ 回収しました。', kind: 'ok' },
   gift_revoked_short: { text: '↩ 回収しました。もう使っていた人からは、残っている分だけ回収しました。', kind: 'warn' },
+  otoshi_put: { text: '🧧 運営のお年玉袋を出しました。', kind: 'ok' },
+  otoshi_invalid: { text: 'チャンネル・入れる量（100〜100,000）・人数（2〜50。量より少なく）を入れて、確認にチェックを入れてください。', kind: 'warn' },
+  otoshi_post_failed: { text: 'チャンネルに出せませんでした（BOT の権限を見てください）。銭は動いていません。', kind: 'warn' },
   recruit_panel_added: { text: '募集ボタンを足しました。1 分以内に BOT がチャンネルに置きます。', kind: 'ok' },
   recruit_panel_removed: { text: '募集ボタンを外しました。1 分以内に BOT がチャンネルから消します。', kind: 'ok' },
   recruit_panel_dup: { text: 'そのチャンネルには、もう募集ボタンがあります。', kind: 'warn' },
@@ -1877,6 +1880,43 @@ export function SettingsPage(props: {
           </button>
         </form>
       )}
+      <form method="post" action="/settings/otoshidama" class="give-form">
+        <Csrf session={props.session} />
+        <h3>🧧 運営のお年玉袋</h3>
+        <p class="note">
+          えらんだチャンネルに「⛩ 運営からのお年玉！」の袋を出します。先着の人が「🧧 もらう」を押すと、1 人分を受け取ります（量は運しだい・合わせると入れた量ちょうど）。銭は運営から出すので、あなたの財布は減りません。24 時間で締め切り、残りは運営に戻ります（だれの財布にも入りません）。受け取れるのは入鯖が承認された人だけ・1 人 1 回です。
+        </p>
+        <div class="fields">
+          <label class="field">
+            <span>出すチャンネル</span>
+            <select name="otoshiChannel" required>
+              <option value="">（選ぶ）</option>
+              {(props.textChannels ?? []).map((c) => (
+                <option value={c.id}>#{c.name}{c.category ? `（${c.category}）` : ''}</option>
+              ))}
+            </select>
+          </label>
+          <label class="field">
+            <span>入れる{e.currencyName}（100〜100,000）</span>
+            <input type="number" name="otoshiTotal" min={100} max={100000} required />
+          </label>
+          <label class="field">
+            <span>人数（2〜50）</span>
+            <input type="number" name="otoshiCount" min={2} max={50} value="10" required />
+          </label>
+          <label class="field">
+            <span>一言（60 字まで・なくてもよい）</span>
+            <input type="text" name="otoshiNote" maxlength={60} placeholder="例: あけましておめでとう！" />
+          </label>
+        </div>
+        <label class="field check">
+          <input type="checkbox" name="confirm" value="yes" required />
+          <span>お年玉袋を出す</span>
+        </label>
+        <button type="submit" class="ok">
+          出す
+        </button>
+      </form>
       <form method="post" action="/settings/presence-gift" class="give-form">
         <Csrf session={props.session} />
         <h3>🎁 浮上している人にプレゼント</h3>

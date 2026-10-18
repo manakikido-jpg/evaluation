@@ -1,3 +1,4 @@
+import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
 import { mountRecordings } from './recordings.js';
 import { GIFT_TARGET_MAX, giveToMembers, recentPresenceGifts, requestPresenceGift, resolveGiftTargets, revokePresenceGift } from '../services/presenceGifts.js';
@@ -112,7 +113,7 @@ import { jstDate, recentActivity } from '../services/activity.js';
 import { adminGrant, adminTake, currentMemberIds, grantJoinBonusToAll, recentCoinTx, validAdminAmount, walletOf } from '../services/economy.js';
 import { checkTarget, clearYaku, giveYaku, instantBan, isBannedByEvents, kickMember, unbanMember, writeMemo, type Actor, type Denied, type ModCtx } from '../services/moderation.js';
 import { activeYakuCount, memosOf, membersWithYaku, menzaifuUsed, yakuHistory } from '../services/yaku.js';
-import type { DiscordActions } from '../lib/discordRest.js';
+import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { DiscordHttpError } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
@@ -3100,6 +3101,33 @@ export function createWebApp(deps: WebDeps) {
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'recruit.panel_remove', detail: { channelId }, via: 'web' });
     return c.redirect('/settings?msg=recruit_panel_removed&at=recruit#sec-recruit');
+  });
+
+  // 🧧 運営のお年玉袋（社務所Web から。宮司だけ。銭は運営から、残りは運営に戻る）
+  app.post('/settings/otoshidama', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const back = (msg: string) => c.redirect(`/settings?msg=${msg}#sec-give`);
+    const channelId = field(body, 'otoshiChannel', 20);
+    const total = Number(body.otoshiTotal);
+    const count = Number(body.otoshiCount);
+    const note = field(body, 'otoshiNote', 60);
+    if (body.confirm !== 'yes' || !validId(channelId)) return back('otoshi_invalid');
+    const channels = await loadChannels().catch(() => [] as GuildChannel[]);
+    if (!textChannelsOf(channels).some((ch) => ch.id === channelId)) return back('otoshi_invalid');
+    const by = c.get('session').userId;
+    const r = await putStaffBag(db, { by, channelId, total, count, note }, now());
+    if (r.status !== 'ok') return back('otoshi_invalid');
+    try {
+      const sent = await deps.discord.sendMessage(channelId, { ...(bagMessage(r.bag, [], { name: cfg.economy.currencyName, emoji: cfg.economy.currencyEmoji }, now()) as MessageBody), allowed_mentions: { parse: [] } });
+      await setBagMessage(db, r.bag.id, sent.id);
+    } catch (err) {
+      logger.warn({ err, channelId }, 'staff otoshidama post failed');
+      await undoBag(db, r.bag, 0);
+      return back('otoshi_post_failed');
+    }
+    await audit(db, { actorId: by, action: 'otoshidama.staff_put', detail: { bag: r.bag.id, channelId, total, count, note }, via: 'web' });
+    return back('otoshi_put');
   });
 
   // 🎁 浮上している人へのプレゼント（BOT が 1 分以内にオンラインの人へ配る）
