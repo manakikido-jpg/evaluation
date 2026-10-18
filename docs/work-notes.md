@@ -183,3 +183,4 @@
 - 最終確認：本番c9b128bを通常mergeで取り込み、更新履歴の競合は両方を維持して解消。取り込み後に型チェック・ビルド成功、全133ファイル1,706テスト成功（277.58秒）。テストの削除・skipなし。push前fetchで本番の追加変更なし。
 - 完了：昇格通知をカード表示＋役職のある人みんなへの通知に変更。共通の通知OK／NG設定を維持。作業ブランチcodex/promotion-role-card、実装6f74f37・取り込み43213cd。本番への直接pushや実通知はしていない。PRを作成して担当Claudeによるレビュー・合流へ引き継ぐ。
 - 検証ログ：/workspace/artifacts/promotion-role-card/（最終の型チェック・ビルド・全テスト）。前件のチケット502は別件で、本番ログ待ち・原因未確定のまま。
+- GitHub保存済み：[PR #57](https://github.com/manakikido-jpg/evaluation/pull/57)。最終実装・検証の保存は59c588b。OPEN・未合流、本番担当Claudeのレビュー待ち。本番未反映。
