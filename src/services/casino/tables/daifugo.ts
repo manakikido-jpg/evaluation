@@ -568,7 +568,7 @@ export function dBotStrong(s: DaifugoState, i: number): Step<DaifugoState> {
 // 乱数は場のようす（みんなに見えること）と自分の手札から決める。だから相手の手札が何でも、同じ場面なら同じ手
 
 /** 先読みで試す候補の数・配りなおしの回数（多くて）・1 回に打つ手の上限・1 手で試しに打つ手の合計の上限（重くしない） */
-export const LOOKAHEAD = { candidates: 4, samples: 16, maxSteps: 400, budget: 3000 };
+export const LOOKAHEAD = { candidates: 6, samples: 24, maxSteps: 400, budget: 5500 };
 
 function seedOf(s: DaifugoState, i: number): number {
   const pub = [i, s.played, s.revolution ? 1 : 0, s.jback ? 1 : 0, s.turn ?? -1, ...(s.field?.cards ?? []), -1, ...(s.seen ?? []), -2, ...s.seats[i]!.hand, -3, ...s.seats.map((x) => x.hand.length), ...s.passes];
@@ -682,8 +682,8 @@ export const daifugo = partyEngine<DaifugoState>({
     return dPlay(s, i, cards);
   },
   bot: (s, i) => dBotLookahead(s, i),
-  // 先読みの BOT（見えていないカードを配りなおして試しに打つ）にしたので 3。ルールの組み合わせごとに分けて記録する
-  aiVersion: '3',
+  // 先読みの BOT（見えていないカードを配りなおして試しに打つ）にしたので 3。候補と配りなおしを増やして 4。ルールの組み合わせごとに分けて記録する
+  aiVersion: '4',
   aiVariant: (s) => [...rulesOf(s)].sort().join(','),
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから
