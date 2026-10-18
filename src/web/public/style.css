@@ -1312,3 +1312,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .health-facts div { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--gray); min-width: 0; }
 .health-facts span { color: var(--muted); font-size: .8rem; }
 .health-facts b { font-size: 1.1rem; }
+
+/* 🎙 ホームの「いま通話にいる人」 */
+.home-voice .voice-total { color: var(--accent-text); }
+.voice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.voice-ch { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card); }
+.voice-ch h3 { margin: 0 0 6px; font-size: .95rem; overflow-wrap: anywhere; }
+.voice-ch h3 small { color: var(--muted); font-weight: normal; }
+.voice-ch ul { margin: 0; padding-left: 1.1em; }
+.voice-ch li { overflow-wrap: anywhere; }
