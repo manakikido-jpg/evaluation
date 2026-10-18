@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { act, cpu, create, defend, SUMMONER_NAMES, type State } from './engine.js';
+import { act, cpu, create, defend, autoChoose, SUMMONER_NAMES, type ActionOptions, type State } from './engine.js';
 export type Tester = {
   id: string;
   name: string;
@@ -21,6 +21,7 @@ export type Move = {
   action: string;
   ids: number[];
   target?: string | number;
+  options?: ActionOptions;
 };
 const LIFE_MS = 2 * 60 * 60000;
 const MOVE_MS = 120000;
@@ -117,14 +118,17 @@ export class ShinpuRooms {
     this.check(r, move.revision);
     const s = r.state;
     if (!s || s.phase === 'over') throw Error('対戦中ではありません。');
-    const who = s.phase === 'defense' ? s.pending!.to : s.turn;
+    const who = s.phase === 'choice' ? s.choice!.player : s.phase === 'defense' ? s.pending!.to : s.turn;
     if (who !== i) throw Error('いまはあなたの番ではありません。');
-    if (s.phase === 'defense') {
+    if (s.phase === 'choice') {
+      if (move.action !== 'choose') throw Error('札の選択を終えてください。');
+      act(s, 'choose', move.ids);
+    } else if (s.phase === 'defense') {
       if (move.action !== 'defend') throw Error('防御の返事をしてください。');
-      defend(s, move.ids);
+      defend(s, move.ids, move.options);
     } else {
       if (!['attack', 'use', 'exchange', 'pass'].includes(move.action)) throw Error('操作を選んでください。');
-      act(s, move.action, move.ids, move.target);
+      act(s, move.action, move.ids, move.target, move.options);
     }
     this.changed(r);
     return this.view(id, user);
@@ -145,10 +149,11 @@ export class ShinpuRooms {
   private tick(r: Room) {
     const s = r.state;
     if (!s || s.phase === 'over') return;
-    const who = s.phase === 'defense' ? s.pending!.to : s.turn;
+    const who = s.phase === 'choice' ? s.choice!.player : s.phase === 'defense' ? s.pending!.to : s.turn;
     if (r.seats[who]) {
       if (this.clock() < r.deadline) return;
-      if (s.phase === 'defense') defend(s, []);
+      if (s.phase === 'choice') autoChoose(s);
+      else if (s.phase === 'defense') defend(s, []);
       else act(s, 'pass');
       s.log.push('返事の時間が過ぎたので、手番を進めました。');
     } else {
@@ -180,6 +185,9 @@ export class ShinpuRooms {
             pending: s.pending,
             log: [...s.log],
             summon: s.summon ? { ...s.summon } : null,
+            choice: s.choice ? { ...s.choice, cards: s.choice.player === index ? s.choice.cards.map(c => ({ ...c })) : [] } : null,
+            deckCount: s.deck.length,
+            discardCount: s.discard.length,
             players: s.players.map((p, i) => ({ ...p, handCount: p.hand.length, hand: i === index ? p.hand.map((c) => ({ ...c })) : [] })),
           }
         : null,

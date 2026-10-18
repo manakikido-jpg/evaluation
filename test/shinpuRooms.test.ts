@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
 import { ShinpuRooms } from '../src/services/shinpu/rooms.js';
+import { playableCards, type State } from '../src/services/shinpu/engine.js';
 const a = { id: 'a', name: 'あいす' },
   b = { id: 'b', name: 'あおい' };
 let clock: number, rooms: ShinpuRooms;
@@ -113,4 +114,33 @@ it('召喚はais・小林だけで、ログイン由来の肖像を全参加者�
   expect(next.state).not.toHaveProperty('summoners');
   expect(() => rooms.move(r.roomId, ais.id, move)).toThrow('更新');
   expect(rooms.view(r.roomId, ais.id).state!.players[0]!.mp).toBe(9);
+});
+
+function prepareChoice(id: string) {
+  let r=rooms.create(a,2);r=rooms.join(r.roomId,b);r=rooms.start(r.roomId,a.id,r.revision);
+  // 状態を作るためのテスト用フィクスチャ。操作・公開範囲は通常のRoom APIで確かめる。
+  const stored=(rooms as unknown as {rooms:Map<string,{state:State}>}).rooms.get(r.roomId)!.state;
+  const card={...playableCards.find(c=>c.id===id)!,uid:++stored.seq};
+  stored.players[0]!.hand=[card];stored.deck=['SK-186','SK-187','SK-188','SK-001'];
+  const next=rooms.move(r.roomId,a.id,{revision:r.revision,action:'use',ids:[card.uid]});
+  return {r:next,stored};
+}
+it('山札の選択候補は本人にだけ返し、他人の選択・二重確定を拒否する', () => {
+  const {r}=prepareChoice('SK-227');
+  expect(r.state!.choice!.cards.map(c=>c.id)).toEqual(['SK-186','SK-187','SK-188']);
+  const other=rooms.view(r.roomId,b.id);
+  expect(other.state!.choice!.cards).toEqual([]);expect(other.state).not.toHaveProperty('deck');
+  expect(other.state!.players[0]!.hand).toEqual([]);
+  const move={revision:r.revision,action:'choose',ids:[r.state!.choice!.cards[0]!.uid]};
+  expect(()=>rooms.move(r.roomId,b.id,move)).toThrow('あなたの番');
+  const chosen=rooms.move(r.roomId,a.id,move);
+  expect(chosen.state!.choice).toBeNull();expect(()=>rooms.move(r.roomId,a.id,move)).toThrow('更新');
+});
+it('選択の時間切れ・選択中の退出でもCPUが有効な札を選んで進める', () => {
+  const {r}=prepareChoice('SK-227');clock+=120001;
+  const next=rooms.view(r.roomId,a.id);expect(next.state!.choice).toBeNull();expect(next.state!.turn).toBe(1);
+  expect(next.state!.players[0]!.hand.some(c=>c.id==='SK-188')).toBe(true);
+  rooms.leave(r.roomId,a.id);rooms.leave(r.roomId,b.id);
+  const q=prepareChoice('SK-235');rooms.leave(q.r.roomId,a.id);clock+=900;
+  expect(rooms.view(q.r.roomId,b.id).state!.choice).toBeNull();
 });

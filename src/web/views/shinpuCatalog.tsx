@@ -15,12 +15,12 @@ export function ShinpuCatalogPage({ query = '', category = '', element = '', pag
     <link rel="stylesheet" href={assetUrl('shinpu-catalog.css')} /></head><body><main>
     <nav><a href="/casino/shinpu">対戦の部屋へ</a> / <a href={ROOT}>神器図鑑</a></nav>
     <h1>{card ? card.name : '神器図鑑'}</h1>
-    <p>画像完成 {catalog.length}／237枚（100.0％）。対戦への追加は準備中です。現在の対戦は試作15種類で遊べます。</p>
+    <p>画像・対戦効果 {catalog.length}／237枚（100.0％）。全237種類と特別札「式神を呼ぶ」で対戦できます。</p>
     {card ? <article class="detail">
       <img src={image(card, 'cards')} width="900" height="1200" alt={`${card.id} ${card.name}の完成カード`} />
       <section><h2>{card.id} {card.name}</h2><p>{card.category} / {card.element} / {card.rarity}</p>
         <p>{card.stackable ? '＋付き攻撃札 / ' : ''}攻撃 {card.attack} / 防御 {card.defense} / 回復 {card.heal} / 消費MP {card.mpCost}</p>
-        <p>{card.effect}</p><p>制作時の仕様です。試作の同名札とは数値や効果が異なる場合があります。</p>
+        <p>{card.effect}</p><p>この数値・効果で対戦します。詳しい条件や選択は、札を使う画面で確認できます。</p>
         <a href={ROOT}>一覧へ戻る</a></section>
     </article> : <>
       <form method="get" action={ROOT}>

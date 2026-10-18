@@ -14,7 +14,10 @@
       "effect": "相手1人へ火属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "048b332aaf0baccb3ec244d0d1b577e9aa48a79f47858ec50d1e208a41edc271",
-      "thumbnailSha256": "89739dcafd37c6a870f7f85f6c0179579ab359c15e96a21c206f4053ce40fb13"
+      "thumbnailSha256": "89739dcafd37c6a870f7f85f6c0179579ab359c15e96a21c206f4053ce40fb13",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-002",
@@ -29,7 +32,10 @@
       "effect": "相手1人へ火属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "833b858961b6357bc3800e243bb542029945414782cb5d58de990498b8d71fba",
-      "thumbnailSha256": "f74136e8e6b5c9a6d61dd167ba161ec7a7725569debef23722de2cc8ae4f2a6f"
+      "thumbnailSha256": "f74136e8e6b5c9a6d61dd167ba161ec7a7725569debef23722de2cc8ae4f2a6f",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-003",
@@ -44,7 +50,10 @@
       "effect": "相手1人へ火属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "82cbf187ca0787b748c0e1f8967de2259ed6d9bbe5b1f042a9020425e7547815",
-      "thumbnailSha256": "cccc939f8d14084d2073881bd66eb3cd2592c5f7350ad08d78e4e77e7a87475e"
+      "thumbnailSha256": "cccc939f8d14084d2073881bd66eb3cd2592c5f7350ad08d78e4e77e7a87475e",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-004",
@@ -59,7 +68,10 @@
       "effect": "相手1人へ火属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d80c945b27278b6858799eeade0bc744234dac70ebb8d9452f86a717a858504a",
-      "thumbnailSha256": "60e4878cf1c839ed097f28faaa368ddbcd56827613d5e5fa0f3e898f7c2184f9"
+      "thumbnailSha256": "60e4878cf1c839ed097f28faaa368ddbcd56827613d5e5fa0f3e898f7c2184f9",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-005",
@@ -74,7 +86,10 @@
       "effect": "相手1人へ火属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "08707e83008a1c3c8e1ce2474094a464985e35363dd05891f6ad3478b4f6898d",
-      "thumbnailSha256": "470403de9e6d976bcff0c1ca4f6b4757373b6084b5ba98b422d91f3d22c1a1d8"
+      "thumbnailSha256": "470403de9e6d976bcff0c1ca4f6b4757373b6084b5ba98b422d91f3d22c1a1d8",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-006",
@@ -89,7 +104,10 @@
       "effect": "相手1人へ火属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "eac055f57fd44ea893e7b8127ee1a6ac00cd83a0ea6ddff41ba68a4c625ea929",
-      "thumbnailSha256": "bacf17f5be21401f0b3e6ec6090967d67570a5c4c4cf1dbb33fa3e51fc6f2806"
+      "thumbnailSha256": "bacf17f5be21401f0b3e6ec6090967d67570a5c4c4cf1dbb33fa3e51fc6f2806",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-007",
@@ -104,7 +122,10 @@
       "effect": "相手1人へ火属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "646e2ee5e64e986d04ab7c2a19580bd07f4b75b724c05c56ed858b965eefccba",
-      "thumbnailSha256": "96fef21dd5858ce5a00eb1d09ec97f4ca63fa4602fcc03397a8fa0121bf123c4"
+      "thumbnailSha256": "96fef21dd5858ce5a00eb1d09ec97f4ca63fa4602fcc03397a8fa0121bf123c4",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-008",
@@ -119,7 +140,10 @@
       "effect": "相手1人へ火属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d0b27e336b61ed2cdd4eb8728534c717c82d854fafa36d1d8b33e808b8d2a03c",
-      "thumbnailSha256": "911ecbcd0261abb87c786d0ded360209be1eca5846ba20cfe2d0a20f8707b6f9"
+      "thumbnailSha256": "911ecbcd0261abb87c786d0ded360209be1eca5846ba20cfe2d0a20f8707b6f9",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-009",
@@ -134,7 +158,10 @@
       "effect": "相手1人へ火属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "4762356e6af16e8bff4dfe4f6aea0ebe854b14969dbc601b076493ba480e62fb",
-      "thumbnailSha256": "0acd1a871562cc1ea5aab6c0a451c0a25f162b04c6b1ee25a6cf9b12dd1b9224"
+      "thumbnailSha256": "0acd1a871562cc1ea5aab6c0a451c0a25f162b04c6b1ee25a6cf9b12dd1b9224",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-010",
@@ -149,7 +176,10 @@
       "effect": "相手1人へ火属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "4763ea0324fbbb52beb6d7e3432297ec41f13906ec5795437e26cb382b5c0155",
-      "thumbnailSha256": "ac4d3a544cc94520d2327679bf73286080b3985ae368af800d08104da1358360"
+      "thumbnailSha256": "ac4d3a544cc94520d2327679bf73286080b3985ae368af800d08104da1358360",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-011",
@@ -164,7 +194,10 @@
       "effect": "相手1人へ火属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "adf1b048b710977d107fcf1e0508f165e680230c308a9c0bc07cc7ba64779921",
-      "thumbnailSha256": "e0a038f315eef8f4d68eda23927b5c28239aaead876514857f3f7bc1bf881967"
+      "thumbnailSha256": "e0a038f315eef8f4d68eda23927b5c28239aaead876514857f3f7bc1bf881967",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-012",
@@ -179,7 +212,10 @@
       "effect": "相手1人へ火属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "2a5e9f1e234ddf3716bcdc5ff46267e6faa47877e7a2fc61c45be3f4fba5b182",
-      "thumbnailSha256": "cfc7cbae57b78822887ba9e435b6e49effb3caa670ee8c97d5e4d1d681917b36"
+      "thumbnailSha256": "cfc7cbae57b78822887ba9e435b6e49effb3caa670ee8c97d5e4d1d681917b36",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-013",
@@ -194,7 +230,10 @@
       "effect": "相手1人へ水属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "c5a4bd658b21109ce8ce8b4cb7fae59f071edf52008435ffcd5c5b8364205248",
-      "thumbnailSha256": "b3ca5f48a92a2c4cb64922433aabfb0a5b3280cd3f7fbd91083371b05976a15f"
+      "thumbnailSha256": "b3ca5f48a92a2c4cb64922433aabfb0a5b3280cd3f7fbd91083371b05976a15f",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-014",
@@ -209,7 +248,10 @@
       "effect": "相手1人へ水属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "cb36c3147d8faa2604e665024c6e126cd40fa3e1855695ea60b5911ece8c21b3",
-      "thumbnailSha256": "6180c1ea1321cedf81474e415b4926dfd9571d3edabe2050743fdc8be5f724d9"
+      "thumbnailSha256": "6180c1ea1321cedf81474e415b4926dfd9571d3edabe2050743fdc8be5f724d9",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-015",
@@ -224,7 +266,10 @@
       "effect": "相手1人へ水属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "c10ab1a5cc7866f87cf6c9f47d7521ec1ce30345e953707d424440fededed8b4",
-      "thumbnailSha256": "937b82b21c8de05111e113abd8038bc46374107dafc262878579a5cda5c6c405"
+      "thumbnailSha256": "937b82b21c8de05111e113abd8038bc46374107dafc262878579a5cda5c6c405",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-016",
@@ -239,7 +284,10 @@
       "effect": "相手1人へ水属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "bada6e312161db561e1fa07c6c8ea9f71cc9d97afcb7b2343998c6ce071dada5",
-      "thumbnailSha256": "2544d044dd94985e85bcb01418bb00e7e0439d0169737a22b5190cd084dca345"
+      "thumbnailSha256": "2544d044dd94985e85bcb01418bb00e7e0439d0169737a22b5190cd084dca345",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-017",
@@ -254,7 +302,10 @@
       "effect": "相手1人へ水属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d747120ef399758d67ae875f2ee0e21c5bd799f5202ca5e6a3913ca7fa93bbf9",
-      "thumbnailSha256": "80a869197638195ebe8ca12b19dbce00c986778b79232abc24effd1151c18c5f"
+      "thumbnailSha256": "80a869197638195ebe8ca12b19dbce00c986778b79232abc24effd1151c18c5f",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-018",
@@ -269,7 +320,10 @@
       "effect": "相手1人へ水属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "b291e5bb5c85cb7a01878b1a2aaee2832bdbbc022f319986ddd9bb18a651f589",
-      "thumbnailSha256": "b3396a4e977a866d75ff79e36e13a4aef67678f6628a0c4566df112fb1be6609"
+      "thumbnailSha256": "b3396a4e977a866d75ff79e36e13a4aef67678f6628a0c4566df112fb1be6609",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-019",
@@ -284,7 +338,10 @@
       "effect": "相手1人へ水属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "1f8a5c249da641edbb389cf3fdf6ee68576d0ebf211ff0bc7955cb072b4aa668",
-      "thumbnailSha256": "201207375b0750a83695982a0a01916dc61b41f88e2462786be1fc3c14c06c4e"
+      "thumbnailSha256": "201207375b0750a83695982a0a01916dc61b41f88e2462786be1fc3c14c06c4e",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-020",
@@ -299,7 +356,10 @@
       "effect": "相手1人へ水属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d1f481516afdc89d7b8d3827761ccfd3a5f06e2088d9aaf90b93e9622344bd95",
-      "thumbnailSha256": "580521cee502388af9444a989abe6cbd10fc8bda901ff5cfb2e430ae84e2a6b6"
+      "thumbnailSha256": "580521cee502388af9444a989abe6cbd10fc8bda901ff5cfb2e430ae84e2a6b6",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-021",
@@ -314,7 +374,10 @@
       "effect": "相手1人へ水属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "adfcf16c12343e6530ac65ee8eef40a5ec58f0ad97e827a0f9e13c02ef6e64fc",
-      "thumbnailSha256": "339c1935fce12d14f8de9c1de1fcdfda88e2f98f2f1cbdd6eeeb9682ac651341"
+      "thumbnailSha256": "339c1935fce12d14f8de9c1de1fcdfda88e2f98f2f1cbdd6eeeb9682ac651341",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-022",
@@ -329,7 +392,10 @@
       "effect": "相手1人へ水属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "261a93015ff5d585c1e308546a7ad171f1773e609e8e4125acd419c6b534e963",
-      "thumbnailSha256": "205f3db2a1a0e6f4ba913873eced082f501d99d74e11682681ed3cd0f3d04abb"
+      "thumbnailSha256": "205f3db2a1a0e6f4ba913873eced082f501d99d74e11682681ed3cd0f3d04abb",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-023",
@@ -344,7 +410,10 @@
       "effect": "相手1人へ水属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "dd04d2f85763683bf1de26497d627255d05d4af61babc90556dc9f02291b6922",
-      "thumbnailSha256": "3ff79e93e0aec2623dbdb4f7070ca552e676a788a0db038a6809f6afb4e7d1a6"
+      "thumbnailSha256": "3ff79e93e0aec2623dbdb4f7070ca552e676a788a0db038a6809f6afb4e7d1a6",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-024",
@@ -359,7 +428,10 @@
       "effect": "相手1人へ水属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "2d1c257ac44376b39ca882180af41101bde60ca13ea11ee4f7bc4bcd3e33d27d",
-      "thumbnailSha256": "bc311252745141325622e71007ad4c4ef43d42dac7ff8015e1f8ee41974faaa7"
+      "thumbnailSha256": "bc311252745141325622e71007ad4c4ef43d42dac7ff8015e1f8ee41974faaa7",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-025",
@@ -374,7 +446,10 @@
       "effect": "相手1人へ風属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "4d6b27b82c312fc21f5b7e98885d022d994796685a05676bb48b97ed5fc5fa9a",
-      "thumbnailSha256": "20f3e635252244b472b311ba98e9d6b2fbc852494cdbda38270d7e33eb976a09"
+      "thumbnailSha256": "20f3e635252244b472b311ba98e9d6b2fbc852494cdbda38270d7e33eb976a09",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-026",
@@ -389,7 +464,10 @@
       "effect": "相手1人へ風属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "95d0694aa71d7dc4147e2cf9ea6e0f4af4378542c88744d242d768f719313329",
-      "thumbnailSha256": "c819d4f6ef5c8e64e02bdedc0707074c24c0496c44194e2c175f8cc2eac49950"
+      "thumbnailSha256": "c819d4f6ef5c8e64e02bdedc0707074c24c0496c44194e2c175f8cc2eac49950",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-027",
@@ -404,7 +482,10 @@
       "effect": "相手1人へ風属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d877b3d42c7c5d9b23dd52eea902a687d3a194b34098264828779036815462b7",
-      "thumbnailSha256": "1be4d7ccc6166001d58d5caa8d3987f780a65e4956b87756c523008fdb775c48"
+      "thumbnailSha256": "1be4d7ccc6166001d58d5caa8d3987f780a65e4956b87756c523008fdb775c48",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-028",
@@ -419,7 +500,10 @@
       "effect": "相手1人へ風属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "a0adc185dc6bc305e19e4755e36acf7ab9cdd48b3688f0feae7bcd901102d968",
-      "thumbnailSha256": "85de421a9212e3c5446ba867e7ac1c6277b6de251743ff5613240cafb62daf02"
+      "thumbnailSha256": "85de421a9212e3c5446ba867e7ac1c6277b6de251743ff5613240cafb62daf02",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-029",
@@ -434,7 +518,10 @@
       "effect": "相手1人へ風属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "27042baf987874a24d518101dbd0ff9846299af3c3bf93b54ba95c8c3626156d",
-      "thumbnailSha256": "cfab47b53f35ee0d33e43c8ee416907c23ac845800f96c42efd0e5dbcd4f5805"
+      "thumbnailSha256": "cfab47b53f35ee0d33e43c8ee416907c23ac845800f96c42efd0e5dbcd4f5805",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-030",
@@ -449,7 +536,10 @@
       "effect": "相手1人へ風属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "197d96418d7a17f02c4dc3a7268205788a249dac267a43c6ec019c280f18cdf7",
-      "thumbnailSha256": "7a7bdd30376d5407ff6b0a9225609265c85259344a1961b9b59254111b42b804"
+      "thumbnailSha256": "7a7bdd30376d5407ff6b0a9225609265c85259344a1961b9b59254111b42b804",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-031",
@@ -464,7 +554,10 @@
       "effect": "相手1人へ風属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "f11a29fc87d37a68302f7349d26a2b442d92f5ddefc67a105d87956a2711aa4c",
-      "thumbnailSha256": "9840038bb06f215270b99fbfe5cbb504cdbb2f974a2d5d1df9b058dcbe46d7c8"
+      "thumbnailSha256": "9840038bb06f215270b99fbfe5cbb504cdbb2f974a2d5d1df9b058dcbe46d7c8",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-032",
@@ -479,7 +572,10 @@
       "effect": "相手1人へ風属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "eafb98f667940e6a2b9a9933df95904013476e58ee54fc5fac4c37598efbab5b",
-      "thumbnailSha256": "70b704bdb89d9eb791b33437c9110a7ec8b0052a07acd3947cf64ad375ade270"
+      "thumbnailSha256": "70b704bdb89d9eb791b33437c9110a7ec8b0052a07acd3947cf64ad375ade270",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-033",
@@ -494,7 +590,10 @@
       "effect": "相手1人へ風属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "1dd37ca998701df41c18920c0f30e3e655f637531d09258dca9a414aa96ffc47",
-      "thumbnailSha256": "c6d51464ce4c296193d2f682056e9c0a6dfb2726a2027035698b02ace773aaac"
+      "thumbnailSha256": "c6d51464ce4c296193d2f682056e9c0a6dfb2726a2027035698b02ace773aaac",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-034",
@@ -509,7 +608,10 @@
       "effect": "相手1人へ風属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "1894bd5fd0bb68ba7b2d4bd1b6707877fc1eb3d356e2d302f5f874bbbfeacd15",
-      "thumbnailSha256": "aedf3df27481934f99f82c7dd2f5cf2f087b0ed535ce52b5dab306e18d8347af"
+      "thumbnailSha256": "aedf3df27481934f99f82c7dd2f5cf2f087b0ed535ce52b5dab306e18d8347af",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-035",
@@ -524,7 +626,10 @@
       "effect": "相手1人へ風属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "66a61392a95361663973aced26c8d74979062f2d3b34bc9ef1c8912435d90d25",
-      "thumbnailSha256": "fc11fc41c837a1276ceaadf33b2ab81d776561f61c32a9400ebada0cba0b7d65"
+      "thumbnailSha256": "fc11fc41c837a1276ceaadf33b2ab81d776561f61c32a9400ebada0cba0b7d65",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-036",
@@ -539,7 +644,10 @@
       "effect": "相手1人へ風属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "02e6e01d36cd65c1bff77e4f0b66c475821f68f1d6a09a7fb1c65a3673839928",
-      "thumbnailSha256": "77b173e218b3a6d736d4e34d5002c2a142a99706edf96f1de605508f95ceee20"
+      "thumbnailSha256": "77b173e218b3a6d736d4e34d5002c2a142a99706edf96f1de605508f95ceee20",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-037",
@@ -554,7 +662,10 @@
       "effect": "相手1人へ雷属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "66a1a5d66d31dd177b56eabdd9eac79acf5eaa5693a09902d0bc51335620b203",
-      "thumbnailSha256": "b86ea24ebbf6d70a4205c65eb7c0aa05838d6506d935491105fc1844c69bc6ee"
+      "thumbnailSha256": "b86ea24ebbf6d70a4205c65eb7c0aa05838d6506d935491105fc1844c69bc6ee",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-038",
@@ -569,7 +680,10 @@
       "effect": "相手1人へ雷属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": true,
       "webSha256": "72cbca4cfb604f1514aeda38ca1861868e74488e52b218337b6c209efc4b4ab4",
-      "thumbnailSha256": "f523bae6e09dd720ea824122a7fc336c0f92ef3c502cfc8b85e718c9e91b3375"
+      "thumbnailSha256": "f523bae6e09dd720ea824122a7fc336c0f92ef3c502cfc8b85e718c9e91b3375",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-039",
@@ -584,7 +698,10 @@
       "effect": "相手1人へ雷属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "aefa75bffeb4742778125388ecbb22280d331cf0e00a9aeef4aef664c194476d",
-      "thumbnailSha256": "65beb00035859db07b95a4b9157955325b6489967437bc78cca39489da000b7a"
+      "thumbnailSha256": "65beb00035859db07b95a4b9157955325b6489967437bc78cca39489da000b7a",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-040",
@@ -599,7 +716,10 @@
       "effect": "相手1人へ雷属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "552e183e4ada61baf03bb78363ddbb6fe8d18f5d17e746c75ce07044a3f32847",
-      "thumbnailSha256": "f38afbafcee1d1bd056e9b5b0ce1103e1e335f1527b0aba45fac6c1cf5bd76d9"
+      "thumbnailSha256": "f38afbafcee1d1bd056e9b5b0ce1103e1e335f1527b0aba45fac6c1cf5bd76d9",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-041",
@@ -614,7 +734,10 @@
       "effect": "相手1人へ雷属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "ac42358bc229191c8fbd1268f9159b9f892eaeb228ed50f63d9f6d9c1a7ac991",
-      "thumbnailSha256": "225c1fd0c63fda0276015899ea11628ac53d21c4884bf0384037c6a883d4cfa7"
+      "thumbnailSha256": "225c1fd0c63fda0276015899ea11628ac53d21c4884bf0384037c6a883d4cfa7",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-042",
@@ -629,7 +752,10 @@
       "effect": "相手1人へ雷属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "6001dc612d1825a7233d10deeaca11f1b0a7441d5cba99dc941511f95d0c4aea",
-      "thumbnailSha256": "dba5037227c5fb61d45a7e63f8865fc525da5e89a90df144d59096ec1f43a5d6"
+      "thumbnailSha256": "dba5037227c5fb61d45a7e63f8865fc525da5e89a90df144d59096ec1f43a5d6",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-043",
@@ -644,7 +770,10 @@
       "effect": "相手1人へ雷属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "f2d1a24cde8f005b5c61d7d42e50b78926d4c0977f99f6f8d68a98714cf4d4d8",
-      "thumbnailSha256": "a5d22adf159acb7746b17fb46a34ac2f8f2fc6c88ac9064a9c1433a384bf15aa"
+      "thumbnailSha256": "a5d22adf159acb7746b17fb46a34ac2f8f2fc6c88ac9064a9c1433a384bf15aa",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-044",
@@ -659,7 +788,10 @@
       "effect": "相手1人へ雷属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "5f9402333de58b39aabb928fb3108f8a536a60437cd57908fa0ccced5a259cdd",
-      "thumbnailSha256": "10d25d3decb1a8e44eee1f351d3cdc694af4252af8c36a7f837d46cb8fcacd66"
+      "thumbnailSha256": "10d25d3decb1a8e44eee1f351d3cdc694af4252af8c36a7f837d46cb8fcacd66",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-045",
@@ -674,7 +806,10 @@
       "effect": "相手1人へ雷属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "eb355c97234b24d83625fb5da67b711bb8b2e66dbd91292015f7c58a3d11523f",
-      "thumbnailSha256": "142e3027455efecf01a08cabb18ad9d0246065f9509db02dbcd9a4b7ab01f3f9"
+      "thumbnailSha256": "142e3027455efecf01a08cabb18ad9d0246065f9509db02dbcd9a4b7ab01f3f9",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-046",
@@ -689,7 +824,10 @@
       "effect": "相手1人へ雷属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "60ab74ca46cb17004c45697dabec729baf8c0870b39a3d209096a51987a6b616",
-      "thumbnailSha256": "e1327ae25f188177eeff7ce06dddafd7a8cc6aadf91ff6c2cf54ef02f10b0edc"
+      "thumbnailSha256": "e1327ae25f188177eeff7ce06dddafd7a8cc6aadf91ff6c2cf54ef02f10b0edc",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-047",
@@ -704,7 +842,10 @@
       "effect": "相手1人へ雷属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "eb7b4a0551841342b72bfb7e4db45fe64fad9cfd26863926eaefef3f85f69b82",
-      "thumbnailSha256": "d4b133f7d3900e3e2b685219eeea41c692cdef7c0390d9d58041a565238ef406"
+      "thumbnailSha256": "d4b133f7d3900e3e2b685219eeea41c692cdef7c0390d9d58041a565238ef406",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-048",
@@ -719,7 +860,10 @@
       "effect": "相手1人へ雷属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "ca749ed9c52e7b40ade9f3b821dc5e70d297882457cecf01941242c8e3666117",
-      "thumbnailSha256": "03de8612baa7cdf23f471f5c747c02032852bc53ebf54ebbb5e555503f06004a"
+      "thumbnailSha256": "03de8612baa7cdf23f471f5c747c02032852bc53ebf54ebbb5e555503f06004a",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-049",
@@ -734,7 +878,10 @@
       "effect": "相手1人へ土属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "26716f27f31348ec048fc92d2e061427697ef64031dab9931f624812305be14a",
-      "thumbnailSha256": "95153c42c3eca86d06b80909a0005f6480327fbb373cf47d216ed559c12ff4b7"
+      "thumbnailSha256": "95153c42c3eca86d06b80909a0005f6480327fbb373cf47d216ed559c12ff4b7",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-050",
@@ -749,7 +896,10 @@
       "effect": "相手1人へ土属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "39e225583c5a5e1cecaec88d3ec8c19ed80f5351facd5573e1d8dc095dcbed31",
-      "thumbnailSha256": "f371290e57b1457eebcc00b2799ba19c3d2a185504accc6325d3ae35fe47598e"
+      "thumbnailSha256": "f371290e57b1457eebcc00b2799ba19c3d2a185504accc6325d3ae35fe47598e",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-051",
@@ -764,7 +914,10 @@
       "effect": "相手1人へ土属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "02e0005656e9470c6af8e546581d711e7d6705d94616c1e71ee01754d0f2da31",
-      "thumbnailSha256": "42095175fc003d233b397f143bc4e2d812285554cd5e80adbdfc8d624a62eeaa"
+      "thumbnailSha256": "42095175fc003d233b397f143bc4e2d812285554cd5e80adbdfc8d624a62eeaa",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-052",
@@ -779,7 +932,10 @@
       "effect": "相手1人へ土属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "1592d2f7e985bdc2992eefff75d165790318a85ced3f2b674b9d592cce073217",
-      "thumbnailSha256": "a67a1d1dceed4a3b7d6aa8048295f90db71e3569b591660d67a07ccdad83413d"
+      "thumbnailSha256": "a67a1d1dceed4a3b7d6aa8048295f90db71e3569b591660d67a07ccdad83413d",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-053",
@@ -794,7 +950,10 @@
       "effect": "相手1人へ土属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "3786a1c04b4ff15f540b7e53e0cac4a528d107cea692b55dcb542e0c31615e94",
-      "thumbnailSha256": "06e70566df08df74f86dba68d4884b7cf813e2edea587289d448485b34ebb580"
+      "thumbnailSha256": "06e70566df08df74f86dba68d4884b7cf813e2edea587289d448485b34ebb580",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-054",
@@ -809,7 +968,10 @@
       "effect": "相手1人へ土属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d0fdc11c33598bf64c27acd1525634699291d8dfa20b3d1b152774bd8e60bfad",
-      "thumbnailSha256": "f904e89135360d76d4d28221a396e4125f2879d95988de8ad9b3ec3941b9df1f"
+      "thumbnailSha256": "f904e89135360d76d4d28221a396e4125f2879d95988de8ad9b3ec3941b9df1f",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-055",
@@ -824,7 +986,10 @@
       "effect": "相手1人へ土属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "4fea3f7e78cde4738a147a84d04b03a975a71ec4956a8f849f56c8d0f3a157cc",
-      "thumbnailSha256": "73e0d50cc816416f397a4afcfe5891fee09154080f950ab8863d584043334405"
+      "thumbnailSha256": "73e0d50cc816416f397a4afcfe5891fee09154080f950ab8863d584043334405",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-056",
@@ -839,7 +1004,10 @@
       "effect": "相手1人へ土属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "3e3978dc5b1246c1cc38c70dca77436ca93eadbff297802ee50f51990fdd0c40",
-      "thumbnailSha256": "e3c3479dde1a9aad29f80f1b2e7fd3ff8c2c0666033ef8791f6deccf295330b8"
+      "thumbnailSha256": "e3c3479dde1a9aad29f80f1b2e7fd3ff8c2c0666033ef8791f6deccf295330b8",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-057",
@@ -854,7 +1022,10 @@
       "effect": "相手1人へ土属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "b3ca9ae0e52c861b6a23a07412348baecbe9bcf89e1e004e1ce90b2e29ffc482",
-      "thumbnailSha256": "15943f27833a85a1af0bc73afaad7a2d28555bee072e3fbf2fa4851f15c33fcd"
+      "thumbnailSha256": "15943f27833a85a1af0bc73afaad7a2d28555bee072e3fbf2fa4851f15c33fcd",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-058",
@@ -869,7 +1040,10 @@
       "effect": "相手1人へ土属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "18e2e1998a465eb2476779cd6dffaabc769a3c20c0990ce5ebe65aa9019c281a",
-      "thumbnailSha256": "4532e650dc2aa58f90bb900a1d4eb8cfddb37684d3a8463b671fe94ec2121fb3"
+      "thumbnailSha256": "4532e650dc2aa58f90bb900a1d4eb8cfddb37684d3a8463b671fe94ec2121fb3",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-059",
@@ -884,7 +1058,10 @@
       "effect": "相手1人へ土属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "b4814e2daaf266c56eb2f052f87a1effacdad220ce213be9d40c83314658b6d6",
-      "thumbnailSha256": "5e2f9188c62f9c4aff831f4d431d1ecb2e6a64b6ef6604e13405aaf71f75d960"
+      "thumbnailSha256": "5e2f9188c62f9c4aff831f4d431d1ecb2e6a64b6ef6604e13405aaf71f75d960",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-060",
@@ -899,7 +1076,10 @@
       "effect": "相手1人へ土属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "bccf71e02dc5dcac727c36fef798bd19a975ca44d61dded5d321f5ad0210af5c",
-      "thumbnailSha256": "4be2122ef4604569a4b839c35f456a5e438701feb454ab937a1c88e81d5e2fa5"
+      "thumbnailSha256": "4be2122ef4604569a4b839c35f456a5e438701feb454ab937a1c88e81d5e2fa5",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-061",
@@ -914,7 +1094,10 @@
       "effect": "相手1人へ光属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "a46f8f5923fa2ba0b2e7ae774f8b566352a0a442dbca573fb244e3d0fc83d4f5",
-      "thumbnailSha256": "2ac9cb94a5c08fc4f2ca2e10d216062a24a9bebb57a1b497ce9866b66c6419f8"
+      "thumbnailSha256": "2ac9cb94a5c08fc4f2ca2e10d216062a24a9bebb57a1b497ce9866b66c6419f8",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-062",
@@ -929,7 +1112,10 @@
       "effect": "相手1人へ光属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "4800bfb966a47584fc1ed052afc33c9a0bae213650fc4126d2285cc72c6170f1",
-      "thumbnailSha256": "74b9a7e541024a2faad649fa40c9a6b77d8f018ad7de80890957570faef47341"
+      "thumbnailSha256": "74b9a7e541024a2faad649fa40c9a6b77d8f018ad7de80890957570faef47341",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-063",
@@ -944,7 +1130,10 @@
       "effect": "相手1人へ光属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "cf4d6eef646446366e8420cf78044b3a1029cc8d8f8bae1c8950c5a51f2bd8a3",
-      "thumbnailSha256": "48e6179f40a7ab09b87f1d5d7f62252408440543414f3976e0cb0ba090f426af"
+      "thumbnailSha256": "48e6179f40a7ab09b87f1d5d7f62252408440543414f3976e0cb0ba090f426af",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-064",
@@ -959,7 +1148,10 @@
       "effect": "相手1人へ光属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "9bbf8b8f2a141061c2c964dba8b8d7b9146885e96810bc31b51f6369fe0eeaf8",
-      "thumbnailSha256": "9176c48f2d29f9f5a72a03f0c2dd24ce01ded6085c6b15ab3972909f58fd659a"
+      "thumbnailSha256": "9176c48f2d29f9f5a72a03f0c2dd24ce01ded6085c6b15ab3972909f58fd659a",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-065",
@@ -974,7 +1166,10 @@
       "effect": "相手1人へ光属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "fa6a4e2d5dc996614a727835dba9e86ef13e929db01fb9c2dc97c8215d1d5cbe",
-      "thumbnailSha256": "13e5c016a2e67886d415354a631060dd3427bfee4bf45805b9f5910e4815ac38"
+      "thumbnailSha256": "13e5c016a2e67886d415354a631060dd3427bfee4bf45805b9f5910e4815ac38",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-066",
@@ -989,7 +1184,10 @@
       "effect": "相手1人へ光属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "f4dc5bff82442e548b940dc78dc61215f88718f76074a277ec0cee8b293ddf90",
-      "thumbnailSha256": "7a079c70d1e79f29eb9deebe2351f099390ceb67bdc0d53127ff09f6a9c4d406"
+      "thumbnailSha256": "7a079c70d1e79f29eb9deebe2351f099390ceb67bdc0d53127ff09f6a9c4d406",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-067",
@@ -1004,7 +1202,10 @@
       "effect": "相手1人へ光属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "593edfdf9bbd4c9fffd516c63c3f9bc0a4280e8b4834a29b831afe045490a3ee",
-      "thumbnailSha256": "874f343cf3c3227c5d7e7b858ff0422162fb94bd197bc9803bcb16a28b32fe6f"
+      "thumbnailSha256": "874f343cf3c3227c5d7e7b858ff0422162fb94bd197bc9803bcb16a28b32fe6f",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-068",
@@ -1019,7 +1220,10 @@
       "effect": "相手1人へ光属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "2f17226e3a9d58823ad604d04fc2cdbf16aef3496e05cc1c150601dafc65f49e",
-      "thumbnailSha256": "3e25fd6919eb63f6f133bf0d3cae977459adfaf217d5d45fac71914e96dc74f0"
+      "thumbnailSha256": "3e25fd6919eb63f6f133bf0d3cae977459adfaf217d5d45fac71914e96dc74f0",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-069",
@@ -1034,7 +1238,10 @@
       "effect": "相手1人へ光属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "86c825ae35f6a10ebc2cfd1a90a5fb48b1295a8387512881a6180beca5370ae2",
-      "thumbnailSha256": "888f3bbfbe2b65d391c3313e990a10d272777c1c65ceb47c60825d7283e7c311"
+      "thumbnailSha256": "888f3bbfbe2b65d391c3313e990a10d272777c1c65ceb47c60825d7283e7c311",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-070",
@@ -1049,7 +1256,10 @@
       "effect": "相手1人へ光属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "c7d77a55df40171df2f6d79eb7855659968e0d6547bfd485f195c8a550673bae",
-      "thumbnailSha256": "ccaca38d38af858ac15856a2231f5f0ef79c255b228a295cd5bc75d863f6c644"
+      "thumbnailSha256": "ccaca38d38af858ac15856a2231f5f0ef79c255b228a295cd5bc75d863f6c644",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-071",
@@ -1064,7 +1274,10 @@
       "effect": "相手1人へ光属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "0aa1bfd4869b9c3ece9e1822d63daa711d29f44a37490b848d4ec8b18aa36bcf",
-      "thumbnailSha256": "ead7d4517a898942804a0bc42f190c004d78b8ea5e0c35d43968002a4b910fad"
+      "thumbnailSha256": "ead7d4517a898942804a0bc42f190c004d78b8ea5e0c35d43968002a4b910fad",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-072",
@@ -1079,7 +1292,10 @@
       "effect": "相手1人へ光属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "ecb2474558a54d7911e634f0481b707c5a77367c2886a2d09a4d83d0900c4c31",
-      "thumbnailSha256": "5baa59b83e1b5cb775f8ed2d0ac7611e255668607d8113d35eb5e2d0fbb4a6a1"
+      "thumbnailSha256": "5baa59b83e1b5cb775f8ed2d0ac7611e255668607d8113d35eb5e2d0fbb4a6a1",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-073",
@@ -1094,7 +1310,10 @@
       "effect": "相手1人へ闇属性の2ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "deba79aebf8682e662f016fb76c4e89eca58638f9270ffb2f038de4777bafc35",
-      "thumbnailSha256": "7690a2c062ccd42f26b5a044807bdfff1c0baf2134de74df690942b374891844"
+      "thumbnailSha256": "7690a2c062ccd42f26b5a044807bdfff1c0baf2134de74df690942b374891844",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-074",
@@ -1109,7 +1328,10 @@
       "effect": "相手1人へ闇属性の3ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "8d70aee6cf8951a41e0386518d45a7f6850fe9c3db777b2c50afa424ae242e9f",
-      "thumbnailSha256": "d2f7819bc32d320c2c5923174680052837d482c174c9dfbee811406997e4ded7"
+      "thumbnailSha256": "d2f7819bc32d320c2c5923174680052837d482c174c9dfbee811406997e4ded7",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-075",
@@ -1124,7 +1346,10 @@
       "effect": "相手1人へ闇属性の4ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "9540f8a814436763664a9d6aa09ba0ba55e282a6e6db02d2438612ef1456f7aa",
-      "thumbnailSha256": "25bbf08d5ae1c232f225ff2238f6e9565c9d04a3087bafe907677a4f7947d419"
+      "thumbnailSha256": "25bbf08d5ae1c232f225ff2238f6e9565c9d04a3087bafe907677a4f7947d419",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-076",
@@ -1139,7 +1364,10 @@
       "effect": "相手1人へ闇属性の5ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "5b325978485948403d8f1b925d84da2ba1c40338761677330d994d5fbca7383e",
-      "thumbnailSha256": "6e549805f6d775c2fbfc12088c4b66bc17957d8a93fd466c11340a6d94f905d1"
+      "thumbnailSha256": "6e549805f6d775c2fbfc12088c4b66bc17957d8a93fd466c11340a6d94f905d1",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-077",
@@ -1154,7 +1382,10 @@
       "effect": "相手1人へ闇属性の6ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "8bb5f8feadc920fd25db44351c380e0f4fb232431f0ac04ae818e65d0d229939",
-      "thumbnailSha256": "b9dfb80ec11abb8be0930a1afbc2b8f3455f94d3af836f708dbbad64aecee129"
+      "thumbnailSha256": "b9dfb80ec11abb8be0930a1afbc2b8f3455f94d3af836f708dbbad64aecee129",
+      "effectKey": "attack",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-078",
@@ -1169,7 +1400,10 @@
       "effect": "相手1人へ闇属性の7ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "a5961760ec9167b1ae3678893a53b96a7e1444f906d676cbce7e158fec01baf4",
-      "thumbnailSha256": "23fedd1ab84722e301a4615f4ae5e8216654a2be611bae295c8afcae69803670"
+      "thumbnailSha256": "23fedd1ab84722e301a4615f4ae5e8216654a2be611bae295c8afcae69803670",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-079",
@@ -1184,7 +1418,10 @@
       "effect": "相手1人へ闇属性の8ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "673b4cbd431936a5d32fd7786a09e7c64a0913b517f268503f5b9b335011b0cd",
-      "thumbnailSha256": "dda41c7caaea69845cd01c15e4649c7634b9f3854bbd1c8f132e6594f0909f42"
+      "thumbnailSha256": "dda41c7caaea69845cd01c15e4649c7634b9f3854bbd1c8f132e6594f0909f42",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-080",
@@ -1199,7 +1436,10 @@
       "effect": "相手1人へ闇属性の9ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "1cd7acb41fb37eab91eebdcfba16eb07a17cabdea1797d20484cf1206f28e342",
-      "thumbnailSha256": "3069d807979eae5a091e71ff57393e14286f6858acbfbd165a612a088b525f7e"
+      "thumbnailSha256": "3069d807979eae5a091e71ff57393e14286f6858acbfbd165a612a088b525f7e",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-081",
@@ -1214,7 +1454,10 @@
       "effect": "相手1人へ闇属性の10ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "a54cc8fcc176330eee117a7458a74a1388cf77461450db1ea9a0c053c384cc5f",
-      "thumbnailSha256": "132d4358fc11c1346c263c2d2f42f7eb1e41805639febc8a584d831dcd7bdf33"
+      "thumbnailSha256": "132d4358fc11c1346c263c2d2f42f7eb1e41805639febc8a584d831dcd7bdf33",
+      "effectKey": "attack",
+      "drawWeight": 4,
+      "tradeValue": 12
     },
     {
       "id": "SK-082",
@@ -1229,7 +1472,10 @@
       "effect": "相手1人へ闇属性の11ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "11132efbd918329391f81002e4549d5f3ed6f1a2062d4ca7555a55633895dfa8",
-      "thumbnailSha256": "e7bb17ad44c583895104a8a7d15b697d94dfee089b8e31f713d16bbb7ee9c8bf"
+      "thumbnailSha256": "e7bb17ad44c583895104a8a7d15b697d94dfee089b8e31f713d16bbb7ee9c8bf",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 13
     },
     {
       "id": "SK-083",
@@ -1244,7 +1490,10 @@
       "effect": "相手1人へ闇属性の12ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "d56d507b12c1ae8d5d6c9c9952cdf33f2ce745ea87c99bb19cc65e74b6125c68",
-      "thumbnailSha256": "e85cd2910b2ecec5cc5b9bf6063e1b6edfe65c7c2151d524eb8f2e7ce83ce776"
+      "thumbnailSha256": "e85cd2910b2ecec5cc5b9bf6063e1b6edfe65c7c2151d524eb8f2e7ce83ce776",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-084",
@@ -1259,7 +1508,10 @@
       "effect": "相手1人へ闇属性の14ダメージ。防御に使う札を相手が選ぶ。",
       "stackable": false,
       "webSha256": "9ce52e7dc19a4e1f970d86b6333ee90d384993a9703531166200d098fb04f9fc",
-      "thumbnailSha256": "4c55039cae30f6b399f99e239bfb75cf4db9d60594f92d2113841d32384b7983"
+      "thumbnailSha256": "4c55039cae30f6b399f99e239bfb75cf4db9d60594f92d2113841d32384b7983",
+      "effectKey": "attack",
+      "drawWeight": 1,
+      "tradeValue": 16
     },
     {
       "id": "SK-085",
@@ -1274,7 +1526,10 @@
       "effect": "対象のHPが満タンなら攻撃＋3。",
       "stackable": false,
       "webSha256": "f4ba4852cbe168b8446eeb498db4c52a9d06a70bbdbd70c6abad899daa01b6e7",
-      "thumbnailSha256": "b7e41aa66e3445ef12f2ffeea10c4af64353dc02f1a4be89743834684e72d5f8"
+      "thumbnailSha256": "b7e41aa66e3445ef12f2ffeea10c4af64353dc02f1a4be89743834684e72d5f8",
+      "effectKey": "opening_strike",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-086",
@@ -1289,7 +1544,10 @@
       "effect": "この攻撃が通ったら、自分の次の攻撃＋2（1回）。",
       "stackable": false,
       "webSha256": "f09f962fa2b1261ab535e5eb45feba9c5fbb7580bc340cd41491c4ca19390f73",
-      "thumbnailSha256": "2b9406bfce961eb8ecdebcb7962f3e2d641b168d6431577d73c92a0221e7c51d"
+      "thumbnailSha256": "2b9406bfce961eb8ecdebcb7962f3e2d641b168d6431577d73c92a0221e7c51d",
+      "effectKey": "next_attack_boost",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-087",
@@ -1304,7 +1562,10 @@
       "effect": "自分のHPが20以下なら攻撃＋4。",
       "stackable": false,
       "webSha256": "3d0b16a78eaac9f873f0b23540c57762c1bea32ce6a49a3eb86b08ddf66d4e45",
-      "thumbnailSha256": "e304c5f50b4b8952e0a70d1aa88d37014bec2737a567b6ebce0ad5f1cae7c87d"
+      "thumbnailSha256": "e304c5f50b4b8952e0a70d1aa88d37014bec2737a567b6ebce0ad5f1cae7c87d",
+      "effectKey": "low_hp_attack",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-088",
@@ -1319,7 +1580,10 @@
       "effect": "自分よりHPが高い相手への攻撃＋3。",
       "stackable": false,
       "webSha256": "b358d8b43bd8252ac5057310637208f198e903cf62ddbacf3e0c30879cdf4639",
-      "thumbnailSha256": "28ef9a858a64bb3b3ae7b6e6af39e3ed9087d67881cfcf7d2781010df12d0419"
+      "thumbnailSha256": "28ef9a858a64bb3b3ae7b6e6af39e3ed9087d67881cfcf7d2781010df12d0419",
+      "effectKey": "underdog_attack",
+      "drawWeight": 2,
+      "tradeValue": 9
     },
     {
       "id": "SK-089",
@@ -1334,7 +1598,10 @@
       "effect": "同じ相手へ2回攻撃。防御は1枚を選び、合計ダメージから引く。",
       "stackable": false,
       "webSha256": "f38c2400da25fc6805b9f2db2d370a2a507bf144e5bf235e6c8cb36d57f3e83f",
-      "thumbnailSha256": "7ec3c23e2ceb521174cec3b7c1331809af1b3789834e6b82cf2954e85de592e6"
+      "thumbnailSha256": "7ec3c23e2ceb521174cec3b7c1331809af1b3789834e6b82cf2954e85de592e6",
+      "effectKey": "double_hit",
+      "drawWeight": 2,
+      "tradeValue": 5
     },
     {
       "id": "SK-090",
@@ -1349,7 +1616,10 @@
       "effect": "攻撃が通れば、相手の霊力を2減らし、自分は2回復。",
       "stackable": false,
       "webSha256": "90d65ab00d81b0617487196202633f5c7dc4e55c5d1a512b1591847ed86963d0",
-      "thumbnailSha256": "4afa61353a28fa741390e674a195029613e932ec8fcf377871103690e6a1adef"
+      "thumbnailSha256": "4afa61353a28fa741390e674a195029613e932ec8fcf377871103690e6a1adef",
+      "effectKey": "drain_mp",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-091",
@@ -1364,7 +1634,10 @@
       "effect": "攻撃が通れば、自分のHPを3回復。",
       "stackable": false,
       "webSha256": "0773523f3812281b26b697154a1bd7056afba5f5918f9e6ff24e653d5744bb32",
-      "thumbnailSha256": "74b96b83c3d6128e227282f81d99dc07cb50e8aa44d61a12825a0694b3dd8201"
+      "thumbnailSha256": "74b96b83c3d6128e227282f81d99dc07cb50e8aa44d61a12825a0694b3dd8201",
+      "effectKey": "drain_hp",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-092",
@@ -1379,7 +1652,10 @@
       "effect": "相手が選んだ防御札の防御を2下げる（最低0）。",
       "stackable": false,
       "webSha256": "5d309ef693c50a9ddf0c9eca1a5471c96cc02bb8279f4563177137d1d2aa3719",
-      "thumbnailSha256": "aa502c6e305c69260ba7f9b7eadc4fd23f80971c154ca84203d829d893896032"
+      "thumbnailSha256": "aa502c6e305c69260ba7f9b7eadc4fd23f80971c154ca84203d829d893896032",
+      "effectKey": "pierce_guard",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-093",
@@ -1394,7 +1670,10 @@
       "effect": "攻撃が通れば、ゲーム内の霊銭を3得る。",
       "stackable": false,
       "webSha256": "044db91eccdfa0497ccd8cd892b2994ced03efa3acc8b5af2cf15e37a3084a2d",
-      "thumbnailSha256": "ec931456059c322a9867356cb5f76e1dd3cc9ee1c6f6c694f956799ab42e4438"
+      "thumbnailSha256": "ec931456059c322a9867356cb5f76e1dd3cc9ee1c6f6c694f956799ab42e4438",
+      "effectKey": "earn_trade_money",
+      "drawWeight": 2,
+      "tradeValue": 6
     },
     {
       "id": "SK-094",
@@ -1409,7 +1688,10 @@
       "effect": "攻撃が通れば、火傷を付ける（次の番の開始に2ダメージ、1回）。",
       "stackable": false,
       "webSha256": "cbbd835438b0c65c63d2bbe1e2d83e7c5f313a06a2071449ead7ba29b52625da",
-      "thumbnailSha256": "8c3abd2a8142ad7fd6f09e80174e62e09d5148842d21ce53eae50429e32328b2"
+      "thumbnailSha256": "8c3abd2a8142ad7fd6f09e80174e62e09d5148842d21ce53eae50429e32328b2",
+      "effectKey": "burn",
+      "drawWeight": 2,
+      "tradeValue": 6
     },
     {
       "id": "SK-095",
@@ -1424,7 +1706,10 @@
       "effect": "攻撃が通れば、相手の次の攻撃を2下げる（1回）。",
       "stackable": false,
       "webSha256": "b17092230ddf8d8db5a2f678f1dc96e7d8a4ca2a4f57d76d4c03909d6963d0ca",
-      "thumbnailSha256": "614b5f0f08e8cfa9ce1306383bafa0db4e449fde4a4d567ca3944da156005d9b"
+      "thumbnailSha256": "614b5f0f08e8cfa9ce1306383bafa0db4e449fde4a4d567ca3944da156005d9b",
+      "effectKey": "weaken_attack",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-096",
@@ -1439,7 +1724,10 @@
       "effect": "攻撃が通れば、相手の霊力を3減らす。",
       "stackable": false,
       "webSha256": "37c4fb05649baef91e247b0b8e59911787dd93455ed58911986333b06ff27c8d",
-      "thumbnailSha256": "f4a4cd7dc162434a202cd3a454aa1b86584cd770d5943c1fcd10ea8309f12c0f"
+      "thumbnailSha256": "f4a4cd7dc162434a202cd3a454aa1b86584cd770d5943c1fcd10ea8309f12c0f",
+      "effectKey": "reduce_mp",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-097",
@@ -1454,7 +1742,10 @@
       "effect": "攻撃後に手札を1枚引く。",
       "stackable": false,
       "webSha256": "2e22ba4305b4599ee887c74cf6702ab9988aca01d2e0e858dd5b085e658652ce",
-      "thumbnailSha256": "564b075b02c1307fcdf2e44fc2729a91d6ac7a7452d96b4226ed772902409148"
+      "thumbnailSha256": "564b075b02c1307fcdf2e44fc2729a91d6ac7a7452d96b4226ed772902409148",
+      "effectKey": "draw_after_attack",
+      "drawWeight": 2,
+      "tradeValue": 6
     },
     {
       "id": "SK-098",
@@ -1469,7 +1760,10 @@
       "effect": "攻撃後、自分の次の被弾に防御＋2（1回）。",
       "stackable": false,
       "webSha256": "a3ee265ac7b531c64f58f1ee208d73455248e8e4d0e9194ca3b3a484ac6cc9a4",
-      "thumbnailSha256": "af64602a9b8b941d8bf89891d82b36c4cea06c889efe34f86133202ce3851cca"
+      "thumbnailSha256": "af64602a9b8b941d8bf89891d82b36c4cea06c889efe34f86133202ce3851cca",
+      "effectKey": "guard_after_attack",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-099",
@@ -1484,7 +1778,10 @@
       "effect": "手札が3枚以下なら攻撃＋3。",
       "stackable": false,
       "webSha256": "9883079bca22d4b7831a41fd30a0f7067f56599e55a210129e459aa2fbe8675e",
-      "thumbnailSha256": "918bfb854459cde0b322c42689f15ebc87db7a9d52cff2f1624f7e79f7e3d019"
+      "thumbnailSha256": "918bfb854459cde0b322c42689f15ebc87db7a9d52cff2f1624f7e79f7e3d019",
+      "effectKey": "small_hand_attack",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-100",
@@ -1499,7 +1796,10 @@
       "effect": "ゲーム内の霊銭を4払うと攻撃＋4。払わない場合は通常攻撃。",
       "stackable": false,
       "webSha256": "0fba0d0ceac748b57cdc0552d5dafb8ac68a482eb6f52f49d22aa3539e13bff2",
-      "thumbnailSha256": "3fc0ddb75a08b05642d795a53e3555116e00e3b2d15fd9c1bf3b45cb8f4b590b"
+      "thumbnailSha256": "3fc0ddb75a08b05642d795a53e3555116e00e3b2d15fd9c1bf3b45cb8f4b590b",
+      "effectKey": "optional_money_attack",
+      "drawWeight": 2,
+      "tradeValue": 10
     },
     {
       "id": "SK-101",
@@ -1514,7 +1814,10 @@
       "effect": "使うと自分のHPが3減る。HP3以下では使えない。",
       "stackable": false,
       "webSha256": "924c36178efa4bb1bf5bdf81256d820178b9021a27bfa003cc67a3d443790c39",
-      "thumbnailSha256": "0558a26f59bd0a9e2b9aab86e8202d0bd26ee656769ae314f33e10fc7ae0d0df"
+      "thumbnailSha256": "0558a26f59bd0a9e2b9aab86e8202d0bd26ee656769ae314f33e10fc7ae0d0df",
+      "effectKey": "hp_cost_attack",
+      "drawWeight": 2,
+      "tradeValue": 12
     },
     {
       "id": "SK-102",
@@ -1529,7 +1832,10 @@
       "effect": "霊力を2払うと、この攻撃が通ったときのダメージ＋3。",
       "stackable": false,
       "webSha256": "7151ea8624c409cfcdbd60e144beb9e455ed6b3fe9298b090b79fc8fff9ec20a",
-      "thumbnailSha256": "770ba76edc6557d595eb4eccb7c64815c54980217a578d131df29b3d7d1f821a"
+      "thumbnailSha256": "770ba76edc6557d595eb4eccb7c64815c54980217a578d131df29b3d7d1f821a",
+      "effectKey": "optional_mp_attack",
+      "drawWeight": 2,
+      "tradeValue": 10
     },
     {
       "id": "SK-103",
@@ -1544,7 +1850,10 @@
       "effect": "攻撃が通れば、相手の次の攻撃・防御への加算を消す。",
       "stackable": false,
       "webSha256": "3746d7d9d190f5986ee975ec3ac8baf232559341c1934bbfe870fd5056994839",
-      "thumbnailSha256": "4395d799507a7ec681e4ccc0caf02f28f6877b30143b7220821299c7e4a3cf80"
+      "thumbnailSha256": "4395d799507a7ec681e4ccc0caf02f28f6877b30143b7220821299c7e4a3cf80",
+      "effectKey": "remove_boosts",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-104",
@@ -1559,7 +1868,10 @@
       "effect": "攻撃時に火・水・風・雷・土・光・闇から属性を選ぶ。",
       "stackable": false,
       "webSha256": "b92dfd458dba7c713be35a9a9076a01fa6f7e4dce5481a913142175e522421fa",
-      "thumbnailSha256": "41aa86678845fa5f2834ec5f45e20be4442a59276aaf138e83a09f2e6652a58e"
+      "thumbnailSha256": "41aa86678845fa5f2834ec5f45e20be4442a59276aaf138e83a09f2e6652a58e",
+      "effectKey": "choose_element",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-105",
@@ -1574,7 +1886,10 @@
       "effect": "相手を2人まで選ぶ。それぞれへ4ダメージ。各人が防御を選ぶ。",
       "stackable": false,
       "webSha256": "590767443d6821696ec3951728e09ab085ff3fd7b77ac56d3bf73a484182ec29",
-      "thumbnailSha256": "6efe73db39d1178982d66209d43bde1b08e758dd636dd23e9f322bc5b2a006a1"
+      "thumbnailSha256": "6efe73db39d1178982d66209d43bde1b08e758dd636dd23e9f322bc5b2a006a1",
+      "effectKey": "two_targets",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-106",
@@ -1589,7 +1904,10 @@
       "effect": "自分のHPが30以下なら、攻撃後にHPを2回復。",
       "stackable": false,
       "webSha256": "9bfe55d7e016ae93b8ab2a08a994de77de83bf794e5abbc24f3edd30b5e36c41",
-      "thumbnailSha256": "d162827dd4ab72bb619a9df083bcfa962ff3ed72d533a17bff5b155f15b08052"
+      "thumbnailSha256": "d162827dd4ab72bb619a9df083bcfa962ff3ed72d533a17bff5b155f15b08052",
+      "effectKey": "conditional_heal",
+      "drawWeight": 2,
+      "tradeValue": 7
     },
     {
       "id": "SK-107",
@@ -1604,7 +1922,10 @@
       "effect": "相手が2人以下なら攻撃＋3。",
       "stackable": false,
       "webSha256": "955760319ec31e3d5796ab8d94554947fb9f3bff66c4253116a13c348985b6e5",
-      "thumbnailSha256": "21242e77b6cde2050d61cce8c6c1c8ef3c592850fe6e4b3a5d0cfa447dc40f7f"
+      "thumbnailSha256": "21242e77b6cde2050d61cce8c6c1c8ef3c592850fe6e4b3a5d0cfa447dc40f7f",
+      "effectKey": "endgame_attack",
+      "drawWeight": 2,
+      "tradeValue": 14
     },
     {
       "id": "SK-108",
@@ -1619,7 +1940,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "803d612524559912c7e9d57e12d9f0dd049979523c5b4f1155c847acce5401a3",
-      "thumbnailSha256": "82d76e68b1a0e41d563179a16f7f994df1b6f04fb0cc7478e6ac0f40ac45ca93"
+      "thumbnailSha256": "82d76e68b1a0e41d563179a16f7f994df1b6f04fb0cc7478e6ac0f40ac45ca93",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-109",
@@ -1634,7 +1958,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "a5a9b0f34d09e78447caaf7a83d9d4ab7c657533814fba1f0643205ad0db707f",
-      "thumbnailSha256": "f5c2cfe2c363bad99954ae19996440ad52ec19e8e78c67fb717e094d1ccaef4f"
+      "thumbnailSha256": "f5c2cfe2c363bad99954ae19996440ad52ec19e8e78c67fb717e094d1ccaef4f",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-110",
@@ -1649,7 +1976,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "c5cfe2ee23033da90e2e5710e3b3fcc80effdd71d8131efad0e7170b34f5a42a",
-      "thumbnailSha256": "f555d71d386a56e6d8e47ee5b80301f863b67c5e1471a1b5a899cb05ff318eb3"
+      "thumbnailSha256": "f555d71d386a56e6d8e47ee5b80301f863b67c5e1471a1b5a899cb05ff318eb3",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-111",
@@ -1664,7 +1994,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "0cbc1cf440bbdc9990ebc19e08083a5d8a2e676cd89de1ae792ece7df31e9382",
-      "thumbnailSha256": "82af2bd2d2213f2d22ad18a34c79343b9a77e7a4b3ecdbec5917f9eb476c9013"
+      "thumbnailSha256": "82af2bd2d2213f2d22ad18a34c79343b9a77e7a4b3ecdbec5917f9eb476c9013",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-112",
@@ -1679,7 +2012,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "4b73de5f933f194ef294a1f6e18f15e85ddb3fffbbf8e45a8ab6959ee801fc66",
-      "thumbnailSha256": "438c16da034a6f97ee017e06cd9eacfe034f2b3854d9fd1dd7582c196d1cba21"
+      "thumbnailSha256": "438c16da034a6f97ee017e06cd9eacfe034f2b3854d9fd1dd7582c196d1cba21",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-113",
@@ -1694,7 +2030,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "23246172379ed725c3a5d3aad0f724c3fd9816739277b4bc8117706de21c0ba9",
-      "thumbnailSha256": "32393891798c064b66e7bb9beb548d8fdc1ce7dc30b79811883d2389490e19cb"
+      "thumbnailSha256": "32393891798c064b66e7bb9beb548d8fdc1ce7dc30b79811883d2389490e19cb",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-114",
@@ -1709,7 +2048,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "cc42a7d1ea29983f9b4ddd72f75f14d858a8403d06874ab67e8f4db42528c126",
-      "thumbnailSha256": "88f84091413da3457b82c7ea5db3a532e42b1ebd5effb1b9d5cdcaed032ac4dd"
+      "thumbnailSha256": "88f84091413da3457b82c7ea5db3a532e42b1ebd5effb1b9d5cdcaed032ac4dd",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-115",
@@ -1724,7 +2066,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "a9ff1602953c0506387df0ba941c5c6ec46f8b5cc2e092c3b8498aaea56b7bd6",
-      "thumbnailSha256": "ac508451266fb446e4fdfd418c1576014b499c1213215909d7987935c0221fe7"
+      "thumbnailSha256": "ac508451266fb446e4fdfd418c1576014b499c1213215909d7987935c0221fe7",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-116",
@@ -1739,7 +2084,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "d182955a5715dc441c9f15a47bcf626eb55a7343920c365eadc95151020083d4",
-      "thumbnailSha256": "9caa355babdde408c09d33fb4a025af04dfd19b6155e041f162b31664f130220"
+      "thumbnailSha256": "9caa355babdde408c09d33fb4a025af04dfd19b6155e041f162b31664f130220",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-117",
@@ -1754,7 +2102,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が火属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "25b9afb7e528d884cc9a1ed426b8504f83d27cf08a29f021650adf2e4240a079",
-      "thumbnailSha256": "855d8e33e8f9b9a59a925f975aef7a2b3f54cdee4957db9950bde4d688f05776"
+      "thumbnailSha256": "855d8e33e8f9b9a59a925f975aef7a2b3f54cdee4957db9950bde4d688f05776",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-118",
@@ -1769,7 +2120,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "e2c442d872250642825330904d70928219948f114fbf797b177e8b47a1cf7826",
-      "thumbnailSha256": "24bcdc3fc9fc5334c3d741b989eebbcc4059c330e421fb45e44b292ee7ae48a8"
+      "thumbnailSha256": "24bcdc3fc9fc5334c3d741b989eebbcc4059c330e421fb45e44b292ee7ae48a8",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-119",
@@ -1784,7 +2138,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "7d6e411b8de98259db97e0c6ade65e4db9e76068f2fb7af9d7fb174594a8cb6e",
-      "thumbnailSha256": "747a091442f26e84922f316145e8d89abaff8385b8dda5638aa5b043592ca126"
+      "thumbnailSha256": "747a091442f26e84922f316145e8d89abaff8385b8dda5638aa5b043592ca126",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-120",
@@ -1799,7 +2156,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "ba6bb3bf3ab7d1b000f0e2a8f8fa603369afef4291c0cc1714fb0638f892f789",
-      "thumbnailSha256": "b185abf41f2c35cc54c4056ae056136170dc6af8d162b2d5c88d9fe2b2333700"
+      "thumbnailSha256": "b185abf41f2c35cc54c4056ae056136170dc6af8d162b2d5c88d9fe2b2333700",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-121",
@@ -1814,7 +2174,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "8d8ae77828a64e41b45de50db7d6d5e42aa178690f07a997c6c371965971e8a3",
-      "thumbnailSha256": "9549b5f4dc0ef6652e94d7ad7da41ceb54a561f88390bf2ff6ff2c360db6f765"
+      "thumbnailSha256": "9549b5f4dc0ef6652e94d7ad7da41ceb54a561f88390bf2ff6ff2c360db6f765",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-122",
@@ -1829,7 +2192,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "42f235e77973144afcb32eaf02f889d79ff1b826aa9b8fb78626b5b6ca3d8c51",
-      "thumbnailSha256": "e75123087defda162a55de716c8c2526168b73c0d9f102b30ef78235f7b3d5fd"
+      "thumbnailSha256": "e75123087defda162a55de716c8c2526168b73c0d9f102b30ef78235f7b3d5fd",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-123",
@@ -1844,7 +2210,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "988c034b6dcfd0d4c4ee8014da7c1dff016031104d322468fbc42088a41123ff",
-      "thumbnailSha256": "fd9cce39717532e0dbcfb42964a1eca0d56469e015ff41199e2c28fc6f254799"
+      "thumbnailSha256": "fd9cce39717532e0dbcfb42964a1eca0d56469e015ff41199e2c28fc6f254799",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-124",
@@ -1859,7 +2228,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "1c6b7ff488b2a22bbb624ab5205038e290c4aff44db4638eb3d769c9d1d145c5",
-      "thumbnailSha256": "b05841dc64a80a966ddb197262f606575e5cebe9e07a1be86bff25235ddc914d"
+      "thumbnailSha256": "b05841dc64a80a966ddb197262f606575e5cebe9e07a1be86bff25235ddc914d",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-125",
@@ -1874,7 +2246,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "14fdc39bfc148460016a83069a43fba51113dcde4c2e2d0a94aeec68dde99728",
-      "thumbnailSha256": "aec61c9437c8a493daec918497cf7d9dee2d2ad6d8c4f6eee535ae5afdf49b90"
+      "thumbnailSha256": "aec61c9437c8a493daec918497cf7d9dee2d2ad6d8c4f6eee535ae5afdf49b90",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-126",
@@ -1889,7 +2264,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "fe8d36e08cc750224ee6c484bbb5004a7ce06481eddf37007435aeda17c30046",
-      "thumbnailSha256": "95002e46d43887e63195490f5f6a0195004ca321724401eadc2e32fb30badacd"
+      "thumbnailSha256": "95002e46d43887e63195490f5f6a0195004ca321724401eadc2e32fb30badacd",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-127",
@@ -1904,7 +2282,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が水属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "d436798cc70619b27f90d3500434e32c35e73f456a2ab160b159d2d6d07a9a22",
-      "thumbnailSha256": "9517b736288a76546e35333eea0de343a20efda5e52fd6e5e514e120504006f9"
+      "thumbnailSha256": "9517b736288a76546e35333eea0de343a20efda5e52fd6e5e514e120504006f9",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-128",
@@ -1919,7 +2300,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "1c33e1af789603cdbcc83093abfee87a86c412e66bc1d57aea4c93280d6702d9",
-      "thumbnailSha256": "b154d67314dff118293cffebb0b0f43a23c009e9512c66d7b7726879fd20c0e0"
+      "thumbnailSha256": "b154d67314dff118293cffebb0b0f43a23c009e9512c66d7b7726879fd20c0e0",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-129",
@@ -1934,7 +2318,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "2ed6f48c984cdb266dc19090cb581b05c9a77cc1eb819550fdd386c92598ce4c",
-      "thumbnailSha256": "6ec9a3e3d6abb99b338e3242f0dc482709eb5eccd5f8e0109dd8cf201de0331d"
+      "thumbnailSha256": "6ec9a3e3d6abb99b338e3242f0dc482709eb5eccd5f8e0109dd8cf201de0331d",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-130",
@@ -1949,7 +2336,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "c644f4912456b03853620255aeb7f5c520a98cc37d303f4f76bd7c8b9c1a8360",
-      "thumbnailSha256": "72109dee8b58a30e94a41a5bb7fee455a4494fa79f3257b8e58a1e53053d1de6"
+      "thumbnailSha256": "72109dee8b58a30e94a41a5bb7fee455a4494fa79f3257b8e58a1e53053d1de6",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-131",
@@ -1964,7 +2354,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "53ce00f20f4ad0f6605790ce8573b070098b01fb256b79396184fd193a1c8ac3",
-      "thumbnailSha256": "67788c7bdf3214598ebde6d778619029000d6dba96c03be3257806f91801a368"
+      "thumbnailSha256": "67788c7bdf3214598ebde6d778619029000d6dba96c03be3257806f91801a368",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-132",
@@ -1979,7 +2372,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "6e15db08a452d363d8fa990b0b1cdb40f37d21788aaeb624b13bba600aa215ae",
-      "thumbnailSha256": "b1fde0787957165ceb7dd82831934dc4627f466f937ce314ed41da5e43b70e97"
+      "thumbnailSha256": "b1fde0787957165ceb7dd82831934dc4627f466f937ce314ed41da5e43b70e97",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-133",
@@ -1994,7 +2390,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "3ec78259661519a0fa89a556117442d577b9c304d68ad1486cea3234efb975f2",
-      "thumbnailSha256": "e233858d515f8a6e6228dc2104a8af710ebeb5a5a211ec125392d33840ae53a1"
+      "thumbnailSha256": "e233858d515f8a6e6228dc2104a8af710ebeb5a5a211ec125392d33840ae53a1",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-134",
@@ -2009,7 +2408,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "386b0cc20f690c0f90163b1c1cb83039f08adc1bc5c263d8705404e3f6fcd039",
-      "thumbnailSha256": "e18f821caef9fb635d64eb04d0951462ea0a1bc3db09687fad0e56cb64b8553f"
+      "thumbnailSha256": "e18f821caef9fb635d64eb04d0951462ea0a1bc3db09687fad0e56cb64b8553f",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-135",
@@ -2024,7 +2426,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "f8529114b6012b2887a45c953a036933d2095da90418ca17e300a0a7d4fcdf0a",
-      "thumbnailSha256": "b489320cfeb1f0c1edd81f9cdc5cee9096a85b641a9f16a4670fd8dc8e9a5480"
+      "thumbnailSha256": "b489320cfeb1f0c1edd81f9cdc5cee9096a85b641a9f16a4670fd8dc8e9a5480",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-136",
@@ -2039,7 +2444,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "c3d58f1d56f0ca6b91bfad4a8216de79f0181a62fe3804627e5346d8ec1919ca",
-      "thumbnailSha256": "0fe13fe5062c116e2bae40a323e5fffef78df54b5163d0a36c16695c6d2df618"
+      "thumbnailSha256": "0fe13fe5062c116e2bae40a323e5fffef78df54b5163d0a36c16695c6d2df618",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-137",
@@ -2054,7 +2462,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が風属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "10199903bc87b440b9eaaf9a5a010f2df879e5cc678aa4bdba74919069af87ee",
-      "thumbnailSha256": "82ee7321cad3edd87a91c85e566e9c09742bff895001960569d147e605d36d92"
+      "thumbnailSha256": "82ee7321cad3edd87a91c85e566e9c09742bff895001960569d147e605d36d92",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-138",
@@ -2069,7 +2480,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "87a8da6463057ed48391122f2159924bd8ca4fe39423321d52fe64597d14ef08",
-      "thumbnailSha256": "85711024f0e319c54f7c48559b06d756e72d81e072d9543546cac909e9600e07"
+      "thumbnailSha256": "85711024f0e319c54f7c48559b06d756e72d81e072d9543546cac909e9600e07",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-139",
@@ -2084,7 +2498,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "78986e2c5343d3993091c33ab0e58e5e00556ab0d8276546b5dc27f8c2f8add3",
-      "thumbnailSha256": "3765c773011a45d057840b045bd61c0a1edbc2ed52e5d6f401e966db6763d216"
+      "thumbnailSha256": "3765c773011a45d057840b045bd61c0a1edbc2ed52e5d6f401e966db6763d216",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-140",
@@ -2099,7 +2516,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "23015155e4b87e0dc0e1da1e6f644e05206a06c31eb7a63df7cd51eacb08ed8e",
-      "thumbnailSha256": "fb0d81c7dbfcdd61d5a28a988876ffb92e4241eb252b1eb113d57a4ad01da284"
+      "thumbnailSha256": "fb0d81c7dbfcdd61d5a28a988876ffb92e4241eb252b1eb113d57a4ad01da284",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-141",
@@ -2114,7 +2534,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "d625874b22b634b8559efe69215f7fc903581aa9f475e03be72f81ad1476df04",
-      "thumbnailSha256": "0764f040f7e1e26aea38958983d91b5238ce6a3edb327afd75fa2cd8aecc5927"
+      "thumbnailSha256": "0764f040f7e1e26aea38958983d91b5238ce6a3edb327afd75fa2cd8aecc5927",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-142",
@@ -2129,7 +2552,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "60fcf877272c077461c7e9c1024e583693666cbb9276c04aa52c0ee1c5568d80",
-      "thumbnailSha256": "54e8545c633df2c77f96db47d1f7d4ff6017b656c9e8684fbdf8d32bcdd57a41"
+      "thumbnailSha256": "54e8545c633df2c77f96db47d1f7d4ff6017b656c9e8684fbdf8d32bcdd57a41",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-143",
@@ -2144,7 +2570,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "9f4745cb3bbef09f99e98ad43c0a24b0abdf516dd24664c4b293c43de5ce8ec5",
-      "thumbnailSha256": "2dbae1f9e95f605415f99e6545d4b51dd62906c2f20f14a2144395df408c50aa"
+      "thumbnailSha256": "2dbae1f9e95f605415f99e6545d4b51dd62906c2f20f14a2144395df408c50aa",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-144",
@@ -2159,7 +2588,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "b5c209329298196e3b4ff4b36bf75c4d88a530b17efb0002be3765ace7995fce",
-      "thumbnailSha256": "200df3a182d374af206b2644fc8832d59c3bb52b95db692b0aa413f1592b1cdc"
+      "thumbnailSha256": "200df3a182d374af206b2644fc8832d59c3bb52b95db692b0aa413f1592b1cdc",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-145",
@@ -2174,7 +2606,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "2a8374a726d7be2572320a73baef8dd07fe2a37f05d8d4122977e805f86c7edd",
-      "thumbnailSha256": "6ce7d664a744fabb1554de112e75a1756dbc688964ec7c8ebb3422cd2872a55c"
+      "thumbnailSha256": "6ce7d664a744fabb1554de112e75a1756dbc688964ec7c8ebb3422cd2872a55c",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-146",
@@ -2189,7 +2624,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "f2c4f70c8be031e983a05aa9272ad59a306a4455d95e5828930136b538e02b01",
-      "thumbnailSha256": "570c214b1d78e9e9877ae314aa72b946c199f22bc2b64406974c8bd11b121779"
+      "thumbnailSha256": "570c214b1d78e9e9877ae314aa72b946c199f22bc2b64406974c8bd11b121779",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-147",
@@ -2204,7 +2642,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が雷属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "3418fb4174ad17c60a8a6f0981ae1e6581ceb8b80f90922557a19c3acf5ac1b2",
-      "thumbnailSha256": "9ca330ab52bb7cd911cb54601896dd485d3813c0ea4175e9c248da386c539071"
+      "thumbnailSha256": "9ca330ab52bb7cd911cb54601896dd485d3813c0ea4175e9c248da386c539071",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-148",
@@ -2219,7 +2660,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "c3c59db5d94d93087760dadf12b4a1537ec8b344e64f612b29f4fcdd053c68fc",
-      "thumbnailSha256": "5d09d8f79105e84b746def7461d36079fb5743b03dfa03bbbcdb530d73d8697e"
+      "thumbnailSha256": "5d09d8f79105e84b746def7461d36079fb5743b03dfa03bbbcdb530d73d8697e",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-149",
@@ -2234,7 +2678,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "14eac4a342cd6eb01d81ceb739f3386b8e754dedee0d729b9e62976221471a12",
-      "thumbnailSha256": "6163006b9a5871157d71dfd63cf525df334fc9391b99b16ea6c8a2b6c430ffb3"
+      "thumbnailSha256": "6163006b9a5871157d71dfd63cf525df334fc9391b99b16ea6c8a2b6c430ffb3",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-150",
@@ -2249,7 +2696,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "e65f3e4da42214f3ca91d8521f6a3e69f1c10791dacd0cc57eb632b44afd1645",
-      "thumbnailSha256": "ad5e9426da71e6809aaffd05500619904648a494d7352e643031269acf125724"
+      "thumbnailSha256": "ad5e9426da71e6809aaffd05500619904648a494d7352e643031269acf125724",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-151",
@@ -2264,7 +2714,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "bd05d248363d183158b6d6f9b3f8d63e160cc50053cc6fcd7eb41f7e5aaa2694",
-      "thumbnailSha256": "0ed53ef1f1d1c76b6c143ecb900b5cec59641bec4b279fc006ef4bdf01781ad0"
+      "thumbnailSha256": "0ed53ef1f1d1c76b6c143ecb900b5cec59641bec4b279fc006ef4bdf01781ad0",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-152",
@@ -2279,7 +2732,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "c917ddc936d17df05cb308d44639ad6f9785d9584357f8495d84bb3a057a512a",
-      "thumbnailSha256": "3840e1b33ecb02489990de91e273f01b7304c97e7b36373c80aa23a40020e2aa"
+      "thumbnailSha256": "3840e1b33ecb02489990de91e273f01b7304c97e7b36373c80aa23a40020e2aa",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-153",
@@ -2294,7 +2750,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "3743ee4f9134cbae9074e98be4574b6129609227035ec21bc8f4a74a9a2bd1e5",
-      "thumbnailSha256": "2645b28737034ec369277defd3abcebdf0b65aa52a9d2ad6fe3e8cff807d60ea"
+      "thumbnailSha256": "2645b28737034ec369277defd3abcebdf0b65aa52a9d2ad6fe3e8cff807d60ea",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-154",
@@ -2309,7 +2768,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "0add0f99dff5d62621b02e6a308af5fa146769adcef06701b4a743373a7a2d31",
-      "thumbnailSha256": "e797d6b268d694226c28da7c3adfa2462ed11665e5135bc371e71bcbf5a32f5c"
+      "thumbnailSha256": "e797d6b268d694226c28da7c3adfa2462ed11665e5135bc371e71bcbf5a32f5c",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-155",
@@ -2324,7 +2786,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "2ee95e8516d2ed2c02f163d39d865c8787fc2c4c11b041b0a6644482a0fe0950",
-      "thumbnailSha256": "8f45850eaaea1bf366ef23d05a2e58e7faf930f825885f535fabe60fd374a0c8"
+      "thumbnailSha256": "8f45850eaaea1bf366ef23d05a2e58e7faf930f825885f535fabe60fd374a0c8",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-156",
@@ -2339,7 +2804,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "3288715e0e4472fa999e65b7a59b2aa91e4a468cb071ea360c33a401ba5f14bf",
-      "thumbnailSha256": "085dc767d69f15b6f9cb5fbb5674cee84954e4d86cfdcb51bc196d20640bb3f8"
+      "thumbnailSha256": "085dc767d69f15b6f9cb5fbb5674cee84954e4d86cfdcb51bc196d20640bb3f8",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-157",
@@ -2354,7 +2822,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が土属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "da0c7c9503986f92d05a795976f513751a83fbfaac7e9b6cf0d55623baf00111",
-      "thumbnailSha256": "084fc2449a243f6b854da8dd58dce7c78bf4433fe231cd1d9fe19a60661d6b2f"
+      "thumbnailSha256": "084fc2449a243f6b854da8dd58dce7c78bf4433fe231cd1d9fe19a60661d6b2f",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-158",
@@ -2369,7 +2840,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "dce98c9c3535a67b0ec723ac82fa5ba9780613b14bdf62a27464ac0bbb815fc2",
-      "thumbnailSha256": "11f6f6eaf30ac36a370634563b6e432d1ff5ec74ee9850fb009a6ab189082d29"
+      "thumbnailSha256": "11f6f6eaf30ac36a370634563b6e432d1ff5ec74ee9850fb009a6ab189082d29",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-159",
@@ -2384,7 +2858,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "ed7526221f038d513bc2106c9d4f2a1f1db59fd336eac9cdd2a49428f1d33cf2",
-      "thumbnailSha256": "1d0f60134369b8a441efc500a93ef3e48be77a2f3a1292df9d81c16199a11fbd"
+      "thumbnailSha256": "1d0f60134369b8a441efc500a93ef3e48be77a2f3a1292df9d81c16199a11fbd",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-160",
@@ -2399,7 +2876,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "b706a33bf711323775aa5328be57c62c7092729bb067af3e7c370f426176624e",
-      "thumbnailSha256": "9b84398104d93084f7b37a838a791a68e24e2f1de8f419707dee80179a393fdd"
+      "thumbnailSha256": "9b84398104d93084f7b37a838a791a68e24e2f1de8f419707dee80179a393fdd",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-161",
@@ -2414,7 +2894,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "aca2dd20080dd49d28502b995b5fffc4adabbcc7347727c5117bad85b8aef86e",
-      "thumbnailSha256": "282de97da027dd8b716282763719f9694f289d2ab4474b067a8eab4ae2c9500a"
+      "thumbnailSha256": "282de97da027dd8b716282763719f9694f289d2ab4474b067a8eab4ae2c9500a",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-162",
@@ -2429,7 +2912,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "1bcbf2b52c7e28eea1c5df2db35560e26cb0bdc6ab11289224e4590d3207b9f7",
-      "thumbnailSha256": "f86e74cf7042747a845c4dd943a53cefec3277ed68c92377306d16d5eaad1c22"
+      "thumbnailSha256": "f86e74cf7042747a845c4dd943a53cefec3277ed68c92377306d16d5eaad1c22",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-163",
@@ -2444,7 +2930,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "937990a5c42e4bf1b98f6671154b376fc2c45c63c12a3b7d8da415b815c1bbe9",
-      "thumbnailSha256": "4b62cdeb1dc44b7d560fc4f74512e5c55507809d24ce98c08c21c94456355894"
+      "thumbnailSha256": "4b62cdeb1dc44b7d560fc4f74512e5c55507809d24ce98c08c21c94456355894",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-164",
@@ -2459,7 +2948,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "05c4ad82dcc7cb108efce7cb50c25c0e731b9b60fe41a7e63d728c4d0b73bcc7",
-      "thumbnailSha256": "60c2c7eab367dd9edcb8da68e0e8e32c913e9f1563c90e11578ffb709d6a6018"
+      "thumbnailSha256": "60c2c7eab367dd9edcb8da68e0e8e32c913e9f1563c90e11578ffb709d6a6018",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-165",
@@ -2474,7 +2966,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "817e05cdfaaccad43c8c25a340d6dafd1087bd2ba147a118c5ee7f7a53d17095",
-      "thumbnailSha256": "36254cfcba451c3d97513ac6eb2f313d198780e65d4065b20c5c8aed86d69f63"
+      "thumbnailSha256": "36254cfcba451c3d97513ac6eb2f313d198780e65d4065b20c5c8aed86d69f63",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-166",
@@ -2489,7 +2984,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "9334ec48cd87b9688aca9ce20a3b4db3a6e804a8ea7b68f74db850d9661b6112",
-      "thumbnailSha256": "7144bd59d8c0d2f45f7aeb7a55a6317c7dc5584da1d36f959d16edaf34c8ef84"
+      "thumbnailSha256": "7144bd59d8c0d2f45f7aeb7a55a6317c7dc5584da1d36f959d16edaf34c8ef84",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-167",
@@ -2504,7 +3002,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が光属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "321ff635490727624b399d7e63e52fe556890a2e70a7cd78916fad89cdd2a858",
-      "thumbnailSha256": "8c2aff95a205d43fa195824c087789a187b0f4c63ce3e2a0496932dc76664d31"
+      "thumbnailSha256": "8c2aff95a205d43fa195824c087789a187b0f4c63ce3e2a0496932dc76664d31",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-168",
@@ -2519,7 +3020,10 @@
       "effect": "受ける攻撃を2防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "b16fe94df0a35033301ff7c144474144f5980929fcf0b9bc65358968d1301931",
-      "thumbnailSha256": "11faf7bb7c8d429f0527f55e076e5b919e75affcc3c1b516f68d6e1ee5fe6ab8"
+      "thumbnailSha256": "11faf7bb7c8d429f0527f55e076e5b919e75affcc3c1b516f68d6e1ee5fe6ab8",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 4
     },
     {
       "id": "SK-169",
@@ -2534,7 +3038,10 @@
       "effect": "受ける攻撃を3防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "959245a05f5e2443fec8e107c05380228a29c7eb9cd8f5d3399af723cd3cebed",
-      "thumbnailSha256": "86fc636cabbb1a8f1c6d4eecca024315503b2124058c3e7511a96825b000b450"
+      "thumbnailSha256": "86fc636cabbb1a8f1c6d4eecca024315503b2124058c3e7511a96825b000b450",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 5
     },
     {
       "id": "SK-170",
@@ -2549,7 +3056,10 @@
       "effect": "受ける攻撃を4防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "945d2966643d2259234286993cbe99f76fcbecdf572857db78b17ef96f4f14a8",
-      "thumbnailSha256": "2b201d14caf7bba73429fb1a4d04d7b0842fdb1eb4643c3f0a179cb3ec02229e"
+      "thumbnailSha256": "2b201d14caf7bba73429fb1a4d04d7b0842fdb1eb4643c3f0a179cb3ec02229e",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 6
     },
     {
       "id": "SK-171",
@@ -2564,7 +3074,10 @@
       "effect": "受ける攻撃を5防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "74bd8689fd5f5b852d62e1f9bda5b2b447b41bb9e73df9a41374a16c8ebec7eb",
-      "thumbnailSha256": "aa0b2475fffb81b6c749c810cb2356fd5d0a37c7ecb8d244b6da910398cad2d5"
+      "thumbnailSha256": "aa0b2475fffb81b6c749c810cb2356fd5d0a37c7ecb8d244b6da910398cad2d5",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 7
     },
     {
       "id": "SK-172",
@@ -2579,7 +3092,10 @@
       "effect": "受ける攻撃を6防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "04642f56ddd0ce28319f4e7a8ec87ddceccd40dec99fe85de76ca23273cb814b",
-      "thumbnailSha256": "0f34a7d366e9c9dff8d576542fb1b6cf423209ed844046c24daa7c110f264e7c"
+      "thumbnailSha256": "0f34a7d366e9c9dff8d576542fb1b6cf423209ed844046c24daa7c110f264e7c",
+      "effectKey": "element_guard",
+      "drawWeight": 8,
+      "tradeValue": 8
     },
     {
       "id": "SK-173",
@@ -2594,7 +3110,10 @@
       "effect": "受ける攻撃を7防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "a28bd0ea639b6b185db9a84e26954ee682a89f7848e26aea2fb32d77250a71c8",
-      "thumbnailSha256": "361965c7df02b1426604b5f8c6f78f5be943b8de51b49595ade2695d7c55092e"
+      "thumbnailSha256": "361965c7df02b1426604b5f8c6f78f5be943b8de51b49595ade2695d7c55092e",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 9
     },
     {
       "id": "SK-174",
@@ -2609,7 +3128,10 @@
       "effect": "受ける攻撃を8防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "08207d56d5bec2ec679d3d7537e658d3fcd03e074d6a8e7fbc48f686d70aa202",
-      "thumbnailSha256": "a2c9356004a31c4765a29566e5bd44c77af7c4bbaa9760ef37d407a8520823ea"
+      "thumbnailSha256": "a2c9356004a31c4765a29566e5bd44c77af7c4bbaa9760ef37d407a8520823ea",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 10
     },
     {
       "id": "SK-175",
@@ -2624,7 +3146,10 @@
       "effect": "受ける攻撃を9防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "699e27d9b9a780137d55c9fbf9f18ec784cbcac5f2df6de5c249cc2b0b32bd71",
-      "thumbnailSha256": "4ce2eaf807431c15e16591a1486e6c99ea309a7810e4478fa3852012b4cc7871"
+      "thumbnailSha256": "4ce2eaf807431c15e16591a1486e6c99ea309a7810e4478fa3852012b4cc7871",
+      "effectKey": "element_guard",
+      "drawWeight": 4,
+      "tradeValue": 11
     },
     {
       "id": "SK-176",
@@ -2639,7 +3164,10 @@
       "effect": "受ける攻撃を10防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "64e343f06c222fc0873b4b82975b68ab90e2d989c9da5cd425a3def6bbdb52ed",
-      "thumbnailSha256": "64faf5cbe1a6575911e253385dfd659d43edf40e6f6f840c73027aa72a44ef8d"
+      "thumbnailSha256": "64faf5cbe1a6575911e253385dfd659d43edf40e6f6f840c73027aa72a44ef8d",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 12
     },
     {
       "id": "SK-177",
@@ -2654,7 +3182,10 @@
       "effect": "受ける攻撃を12防ぐ。攻撃が闇属性なら、さらに2防ぐ。",
       "stackable": false,
       "webSha256": "8e783d417f6f3e757acf8e5078255ce0e6ce30c902535cfb6d77b9cbd946da33",
-      "thumbnailSha256": "284ef36b24e3fa7bf50f067f7571a6db623305b65387e99d318d91d5d3da77f0"
+      "thumbnailSha256": "284ef36b24e3fa7bf50f067f7571a6db623305b65387e99d318d91d5d3da77f0",
+      "effectKey": "element_guard",
+      "drawWeight": 1,
+      "tradeValue": 14
     },
     {
       "id": "SK-178",
@@ -2669,7 +3200,10 @@
       "effect": "属性を問わず14防ぐ。",
       "stackable": false,
       "webSha256": "0f9dd8d4c452196e1e243f72951f6b9a21253d458af5750239ef83d37c695d81",
-      "thumbnailSha256": "b97fc5bbbde881e8105e61b6b078110d367cd1e13bb41af9ff0e46498ed52c79"
+      "thumbnailSha256": "b97fc5bbbde881e8105e61b6b078110d367cd1e13bb41af9ff0e46498ed52c79",
+      "effectKey": "plain_guard",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-179",
@@ -2684,7 +3218,10 @@
       "effect": "6防ぎ、残ったダメージの半分を切り捨てて攻撃者へ返す。反射は再反射できない。",
       "stackable": false,
       "webSha256": "012abc5c80679948da32f17e0ad0371d4706b64171b33b6e7ff6a8a8d252d459",
-      "thumbnailSha256": "2f5de256a56255bbe8b29fc0053b1353e89a07dcc488b7109a09d3b873b3608f"
+      "thumbnailSha256": "2f5de256a56255bbe8b29fc0053b1353e89a07dcc488b7109a09d3b873b3608f",
+      "effectKey": "reflect_half",
+      "drawWeight": 1,
+      "tradeValue": 10
     },
     {
       "id": "SK-180",
@@ -2699,7 +3236,10 @@
       "effect": "1回の攻撃のダメージと、通ったときの追加効果を無効にする。",
       "stackable": false,
       "webSha256": "895c9646ccc3c9333a72f2d573630746c3b28dc1c240ecc0e32a7d3073920566",
-      "thumbnailSha256": "d93d8bf8482f1e59c0e15f1873125924cb1cabe26f666af019679cfc4296d987"
+      "thumbnailSha256": "d93d8bf8482f1e59c0e15f1873125924cb1cabe26f666af019679cfc4296d987",
+      "effectKey": "cancel_attack",
+      "drawWeight": 1,
+      "tradeValue": 7
     },
     {
       "id": "SK-181",
@@ -2714,7 +3254,10 @@
       "effect": "5防ぎ、その後にHPを3回復。",
       "stackable": false,
       "webSha256": "6d3da29b6d1ab1f636edb61c6f5d8e09deabdc7f4e393ec1166cf16176a122da",
-      "thumbnailSha256": "844dcbbff12e397b032260ee1cc3b2c2e26c1def15eaae48df18239735d38d4f"
+      "thumbnailSha256": "844dcbbff12e397b032260ee1cc3b2c2e26c1def15eaae48df18239735d38d4f",
+      "effectKey": "guard_heal",
+      "drawWeight": 1,
+      "tradeValue": 7
     },
     {
       "id": "SK-182",
@@ -2729,7 +3272,10 @@
       "effect": "4防ぎ、その後に手札を1枚引く。",
       "stackable": false,
       "webSha256": "508e558f2f5710631b6e78e91d44981f95dbaf2da631a2c6615e911f841ddc43",
-      "thumbnailSha256": "f897c08868b98cbe17a1a90697260c10c5bd18e58b23c1067b618893d8b396b8"
+      "thumbnailSha256": "f897c08868b98cbe17a1a90697260c10c5bd18e58b23c1067b618893d8b396b8",
+      "effectKey": "guard_draw",
+      "drawWeight": 1,
+      "tradeValue": 6
     },
     {
       "id": "SK-183",
@@ -2744,7 +3290,10 @@
       "effect": "6防ぎ、その後に霊力を2回復。",
       "stackable": false,
       "webSha256": "b357f6063ab14133f8b165b27a9ea7959b2ee9b2fa48580212debc10fbad3966",
-      "thumbnailSha256": "9931db90bd15327ffabccba109f025f78b5b7d1fbeec23d67a31accf9a28e2e6"
+      "thumbnailSha256": "9931db90bd15327ffabccba109f025f78b5b7d1fbeec23d67a31accf9a28e2e6",
+      "effectKey": "guard_mp",
+      "drawWeight": 1,
+      "tradeValue": 8
     },
     {
       "id": "SK-184",
@@ -2759,7 +3308,10 @@
       "effect": "HPが20以下なら、さらに5防ぐ。",
       "stackable": false,
       "webSha256": "0a58e6f42ad562733358dc59de04f873ead72fdd2e113b8c866a53c71d11d388",
-      "thumbnailSha256": "cb532df20bbb942c29cd906452fd544cc307fc4e3168efb872dbef3af7124ed2"
+      "thumbnailSha256": "cb532df20bbb942c29cd906452fd544cc307fc4e3168efb872dbef3af7124ed2",
+      "effectKey": "low_hp_guard",
+      "drawWeight": 1,
+      "tradeValue": 7
     },
     {
       "id": "SK-185",
@@ -2774,7 +3326,10 @@
       "effect": "ゲーム内の霊銭を4払うと、さらに5防ぐ。払わない場合は通常防御。",
       "stackable": false,
       "webSha256": "0f2f17df3ea1d99e2f7bb534d60b7f6e9a8e20252b93d899a77b18e3eb288332",
-      "thumbnailSha256": "f9d7aa807181e7b0f96230120b84d390c776e1e2a8c9ddc1b3af3bc76898cc5c"
+      "thumbnailSha256": "f9d7aa807181e7b0f96230120b84d390c776e1e2a8c9ddc1b3af3bc76898cc5c",
+      "effectKey": "optional_money_guard",
+      "drawWeight": 1,
+      "tradeValue": 7
     },
     {
       "id": "SK-186",
@@ -2789,7 +3344,10 @@
       "effect": "相手1人へ火属性の4ダメージ。攻撃が通れば火傷（次の番の開始に2ダメージ、1回）。",
       "stackable": false,
       "webSha256": "ed8a820fcb0b8a7ae9b6df0e8024b12151fdb4e4dc09276d00f0ff8a827c0318",
-      "thumbnailSha256": "9c180583c7f97b07a52acf825b81c1c4222fe302421149ab2f11e8bf73b6a24b"
+      "thumbnailSha256": "9c180583c7f97b07a52acf825b81c1c4222fe302421149ab2f11e8bf73b6a24b",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-187",
@@ -2804,7 +3362,10 @@
       "effect": "相手1人へ火属性の7ダメージ。攻撃が通れば火傷（次の番の開始に2ダメージ、1回）。",
       "stackable": false,
       "webSha256": "0e445b1f9f2f3f32f7c3fa719237f5266b1421c418884fa7bb6bb83c97182291",
-      "thumbnailSha256": "6b6d28583ec15ca67a3822ccd1d157f590f70a538558d3107156b5d4b8aa92fc"
+      "thumbnailSha256": "6b6d28583ec15ca67a3822ccd1d157f590f70a538558d3107156b5d4b8aa92fc",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-188",
@@ -2819,7 +3380,10 @@
       "effect": "相手1人へ火属性の11ダメージ。攻撃が通れば火傷（次の番の開始に2ダメージ、1回）。",
       "stackable": false,
       "webSha256": "18a36c49df8609b1f8e8dc74e3309503d564cae6bdcf58342796fd083d9a5478",
-      "thumbnailSha256": "29b5e80aa55c52027794fac9705c6efb723a5cdc8bf504a3d41410cd9497ac46"
+      "thumbnailSha256": "29b5e80aa55c52027794fac9705c6efb723a5cdc8bf504a3d41410cd9497ac46",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-189",
@@ -2834,7 +3398,10 @@
       "effect": "相手1人へ火属性の16ダメージ。攻撃が通れば火傷（次の番の開始に2ダメージ、1回）。",
       "stackable": false,
       "webSha256": "82c80989cd886f4d03651893d3cb4635f71b0a0613d339a4914fac1590bd5781",
-      "thumbnailSha256": "9772471b4f92061cd40a89176f186caf36cad45509d28e76f508bdb54718f0dd"
+      "thumbnailSha256": "9772471b4f92061cd40a89176f186caf36cad45509d28e76f508bdb54718f0dd",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-190",
@@ -2849,7 +3416,10 @@
       "effect": "相手1人へ水属性の4ダメージ。攻撃が通れば相手の霊力−1。",
       "stackable": false,
       "webSha256": "05ece04ab0dcfe0819fb50b8c7f64d0540d87461346e19ca4035420b6b98ae0d",
-      "thumbnailSha256": "7cc08b18473426a10b6dc56c44074bb1a2fbf592b4f6c59f2a137f81478b001a"
+      "thumbnailSha256": "7cc08b18473426a10b6dc56c44074bb1a2fbf592b4f6c59f2a137f81478b001a",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-191",
@@ -2864,7 +3434,10 @@
       "effect": "相手1人へ水属性の7ダメージ。攻撃が通れば相手の霊力−1。",
       "stackable": false,
       "webSha256": "86e5fcc3db60910547055816f1200a2c44d39d714384918319623c6d5dc85076",
-      "thumbnailSha256": "a776026d6f143933a822e47e2007dab0f6062d0e0e6b43b62cea70084b640e96"
+      "thumbnailSha256": "a776026d6f143933a822e47e2007dab0f6062d0e0e6b43b62cea70084b640e96",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-192",
@@ -2879,7 +3452,10 @@
       "effect": "相手1人へ水属性の11ダメージ。攻撃が通れば相手の霊力−1。",
       "stackable": false,
       "webSha256": "9b5b0382d61e757a29f3fda1e772b77ebbe90d1ebf42c198ed0d129970254a85",
-      "thumbnailSha256": "ef68577e80313ed31c63916c8656a74e5a9658bc1e6499d5af9ab5f3a6a38203"
+      "thumbnailSha256": "ef68577e80313ed31c63916c8656a74e5a9658bc1e6499d5af9ab5f3a6a38203",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-193",
@@ -2894,7 +3470,10 @@
       "effect": "相手1人へ水属性の16ダメージ。攻撃が通れば相手の霊力−1。",
       "stackable": false,
       "webSha256": "e2eb761ed9e0aedc6538adec0d8c271ed587cf3750af68d5e6c809d7a38c95fd",
-      "thumbnailSha256": "aae7fa1e8390379567cb945462dc4dd53f7b41927e9b36f137c690d7e0c5b1d7"
+      "thumbnailSha256": "aae7fa1e8390379567cb945462dc4dd53f7b41927e9b36f137c690d7e0c5b1d7",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-194",
@@ -2909,7 +3488,10 @@
       "effect": "相手1人へ風属性の4ダメージ。自分の次の防御＋1（1回）。",
       "stackable": false,
       "webSha256": "eb15d6ac285aca6d5840851d21a00d3396ccf3640f33721a299d22676ed1d4da",
-      "thumbnailSha256": "eef82e55f7f64c9d06fbf0bfee397ac9355c0342b08f9c22435c0b5825ed2d9e"
+      "thumbnailSha256": "eef82e55f7f64c9d06fbf0bfee397ac9355c0342b08f9c22435c0b5825ed2d9e",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-195",
@@ -2924,7 +3506,10 @@
       "effect": "相手1人へ風属性の7ダメージ。自分の次の防御＋1（1回）。",
       "stackable": false,
       "webSha256": "c0c2ca4994c3cd463786c3a3171acb425b4aa59d8dec363ec43953e60347ee0e",
-      "thumbnailSha256": "1ed15d6f68d08e531a8c39cc03437c6eb3a5f78dff58c7e1db7ec2d888574b70"
+      "thumbnailSha256": "1ed15d6f68d08e531a8c39cc03437c6eb3a5f78dff58c7e1db7ec2d888574b70",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-196",
@@ -2939,7 +3524,10 @@
       "effect": "相手1人へ風属性の11ダメージ。自分の次の防御＋1（1回）。",
       "stackable": false,
       "webSha256": "6a5efee9a50a3ea5b2adabb2128e491964766d53b2d19760d5554281a7565cd4",
-      "thumbnailSha256": "c050fac838808c01d09c681f9034f5c40a37edc203b8ff6d66b7badfe588b0fd"
+      "thumbnailSha256": "c050fac838808c01d09c681f9034f5c40a37edc203b8ff6d66b7badfe588b0fd",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-197",
@@ -2954,7 +3542,10 @@
       "effect": "相手1人へ風属性の16ダメージ。自分の次の防御＋1（1回）。",
       "stackable": false,
       "webSha256": "c0dbf7da996bf3c697160cba52784c24ef520b1980b093bc93818e89521e09ad",
-      "thumbnailSha256": "ebc8efd33d04ff63278be8f0bc7f826547e6f88d2d81efef73eb763145538167"
+      "thumbnailSha256": "ebc8efd33d04ff63278be8f0bc7f826547e6f88d2d81efef73eb763145538167",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-198",
@@ -2969,7 +3560,10 @@
       "effect": "相手1人へ雷属性の4ダメージ。攻撃が通れば相手の次の攻撃−1（1回）。",
       "stackable": false,
       "webSha256": "73096d1e394ebff79bb7fc07c953a26dc63defb9369f3f783e8d348e532d768d",
-      "thumbnailSha256": "14a9f86d752a7e0e3ae4cd763deb3866bf12075e4504d514f700a0a3618aa3d9"
+      "thumbnailSha256": "14a9f86d752a7e0e3ae4cd763deb3866bf12075e4504d514f700a0a3618aa3d9",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-199",
@@ -2984,7 +3578,10 @@
       "effect": "相手1人へ雷属性の7ダメージ。攻撃が通れば相手の次の攻撃−1（1回）。",
       "stackable": false,
       "webSha256": "a8df7f77de1283cbd33747c2c899ae9e7c986470548b74ada0aeb6598f070a7d",
-      "thumbnailSha256": "857b12227eeb84239aabfb973a031e2868bf8b84b72106747e3cea8a9ca65df1"
+      "thumbnailSha256": "857b12227eeb84239aabfb973a031e2868bf8b84b72106747e3cea8a9ca65df1",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-200",
@@ -2999,7 +3596,10 @@
       "effect": "相手1人へ雷属性の11ダメージ。攻撃が通れば相手の次の攻撃−1（1回）。",
       "stackable": false,
       "webSha256": "e3447db268afe23041084f14161bd5438017eeb857282513ecd010ea8703dbc7",
-      "thumbnailSha256": "cbffcfc72df29157e3c367272e367b9c39472a57ae42c7a70aa4a2ddae5ed734"
+      "thumbnailSha256": "cbffcfc72df29157e3c367272e367b9c39472a57ae42c7a70aa4a2ddae5ed734",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-201",
@@ -3014,7 +3614,10 @@
       "effect": "相手1人へ雷属性の16ダメージ。攻撃が通れば相手の次の攻撃−1（1回）。",
       "stackable": false,
       "webSha256": "fc4fd3aa24bf64b10a0c25bd542742199ce08d09032da2e896f283362a2b1f5d",
-      "thumbnailSha256": "b035a5d8e82a87a066f29a29c07a066673acc63d96ab0ea62f5b02cecf9364fb"
+      "thumbnailSha256": "b035a5d8e82a87a066f29a29c07a066673acc63d96ab0ea62f5b02cecf9364fb",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-202",
@@ -3029,7 +3632,10 @@
       "effect": "相手1人へ土属性の4ダメージ。自分の次の防御＋2（1回）。",
       "stackable": false,
       "webSha256": "5765c0a5106ae4ff03581473ce237281815292cdbe023972d6968323be0a2e9c",
-      "thumbnailSha256": "972bc47aea062474ddc51da7f6a26da33315d105b81a9a75ce721f09805d5ef7"
+      "thumbnailSha256": "972bc47aea062474ddc51da7f6a26da33315d105b81a9a75ce721f09805d5ef7",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-203",
@@ -3044,7 +3650,10 @@
       "effect": "相手1人へ土属性の7ダメージ。自分の次の防御＋2（1回）。",
       "stackable": false,
       "webSha256": "7c7b9eb7d3c365503603a94dcb4fc4a3be97369849e9bb18200cf4e632101585",
-      "thumbnailSha256": "9c550ef2d3bd56f3a13f8b79c5c4279603bb22a22897ef704c63c3a3d34e5228"
+      "thumbnailSha256": "9c550ef2d3bd56f3a13f8b79c5c4279603bb22a22897ef704c63c3a3d34e5228",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-204",
@@ -3059,7 +3668,10 @@
       "effect": "相手1人へ土属性の11ダメージ。自分の次の防御＋2（1回）。",
       "stackable": false,
       "webSha256": "f92ccf6d08a74fcb4b953043963b3cea0f5428053c83e0eb5dc342c7f8641fe6",
-      "thumbnailSha256": "31f943cccbea6e161ec7f664692cfa1e2ef0a5bceca111d71c5bd92e777766cb"
+      "thumbnailSha256": "31f943cccbea6e161ec7f664692cfa1e2ef0a5bceca111d71c5bd92e777766cb",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-205",
@@ -3074,7 +3686,10 @@
       "effect": "相手1人へ土属性の16ダメージ。自分の次の防御＋2（1回）。",
       "stackable": false,
       "webSha256": "f863919166f2479aadbdb9446853c96dd13038917eae7edf0fcaa60d99b09019",
-      "thumbnailSha256": "4198eb7923f1eb77c5539c9b470c33395ce676d6b5a4204f6c0088672ea87809"
+      "thumbnailSha256": "4198eb7923f1eb77c5539c9b470c33395ce676d6b5a4204f6c0088672ea87809",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-206",
@@ -3089,7 +3704,10 @@
       "effect": "相手1人へ光属性の4ダメージ。使用後、自分のHP＋2。",
       "stackable": false,
       "webSha256": "9dd1d58278ddf3e375ba7621f4700b94d22a23d41983816e252eedada8767195",
-      "thumbnailSha256": "0ae09a7b6169603fa6536ab14d4e6defaccc1d3f3b355d25d499c4bb74edc50e"
+      "thumbnailSha256": "0ae09a7b6169603fa6536ab14d4e6defaccc1d3f3b355d25d499c4bb74edc50e",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-207",
@@ -3104,7 +3722,10 @@
       "effect": "相手1人へ光属性の7ダメージ。使用後、自分のHP＋2。",
       "stackable": false,
       "webSha256": "9d3b623b38829796566ca662ffb2564182b2ebd9f53bc7a1c34134c22f2887b6",
-      "thumbnailSha256": "bbe4a8166765e4c845ebb12950afc641e7c7d568240188076a3e3c242a15b88f"
+      "thumbnailSha256": "bbe4a8166765e4c845ebb12950afc641e7c7d568240188076a3e3c242a15b88f",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-208",
@@ -3119,7 +3740,10 @@
       "effect": "相手1人へ光属性の11ダメージ。使用後、自分のHP＋2。",
       "stackable": false,
       "webSha256": "3072c267bcc8b0aa9ceb4a1bc861ce2db3b2424488f5282efdf6cd30113a9a0b",
-      "thumbnailSha256": "ee0cf371c96f358eb018dce5e2593b1405fefe3be4cf13961e7f5c7ea267bb27"
+      "thumbnailSha256": "ee0cf371c96f358eb018dce5e2593b1405fefe3be4cf13961e7f5c7ea267bb27",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-209",
@@ -3134,7 +3758,10 @@
       "effect": "相手1人へ光属性の16ダメージ。使用後、自分のHP＋2。",
       "stackable": false,
       "webSha256": "38319be511b9999c011467309cf15ce83ce5aae73d43d8c7af6c0f3d34dc353d",
-      "thumbnailSha256": "1cb1fc744d0ba131cc253698353bd23509c15aa3a544c361352219aa6d92dc30"
+      "thumbnailSha256": "1cb1fc744d0ba131cc253698353bd23509c15aa3a544c361352219aa6d92dc30",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-210",
@@ -3149,7 +3776,10 @@
       "effect": "相手1人へ闇属性の4ダメージ。攻撃が通れば相手の霊力−2。",
       "stackable": false,
       "webSha256": "2dbd68e1ec79392c614c05bd699d564086709fd3eb4f880b1d9d4557252d3de4",
-      "thumbnailSha256": "47a9dab906dd125d8bc3b714fa58d9c12df66d59a715aa2f46cbede4942044fc"
+      "thumbnailSha256": "47a9dab906dd125d8bc3b714fa58d9c12df66d59a715aa2f46cbede4942044fc",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 8
     },
     {
       "id": "SK-211",
@@ -3164,7 +3794,10 @@
       "effect": "相手1人へ闇属性の7ダメージ。攻撃が通れば相手の霊力−2。",
       "stackable": false,
       "webSha256": "39e8db69517674fd43cb7b09d125e85f253453b8f9b2976de7060734e93efd37",
-      "thumbnailSha256": "3b73912ea92d4097ccdd5e7d21a6e51bf7d3802eb287f7cc879f4598f0049935"
+      "thumbnailSha256": "3b73912ea92d4097ccdd5e7d21a6e51bf7d3802eb287f7cc879f4598f0049935",
+      "effectKey": "element_miracle",
+      "drawWeight": 3,
+      "tradeValue": 13
     },
     {
       "id": "SK-212",
@@ -3179,7 +3812,10 @@
       "effect": "相手1人へ闇属性の11ダメージ。攻撃が通れば相手の霊力−2。",
       "stackable": false,
       "webSha256": "922adf9db5f10202f81dd1529a5efd8c968905942ced03c489d14b4a4ce93ccd",
-      "thumbnailSha256": "163451bc98c0ff5f435850789b3bea764a4afb3e4da51cd4ca546903f9f65a3b"
+      "thumbnailSha256": "163451bc98c0ff5f435850789b3bea764a4afb3e4da51cd4ca546903f9f65a3b",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 19
     },
     {
       "id": "SK-213",
@@ -3194,7 +3830,10 @@
       "effect": "相手1人へ闇属性の16ダメージ。攻撃が通れば相手の霊力−2。",
       "stackable": false,
       "webSha256": "003120ae842b9026f21e92f4f90313c79482aab68f31c407a343c5d47d9db019",
-      "thumbnailSha256": "e35d78fb81946b8d25183728be5ff356f9828601e11bcc2b160d95731c38d430"
+      "thumbnailSha256": "e35d78fb81946b8d25183728be5ff356f9828601e11bcc2b160d95731c38d430",
+      "effectKey": "element_miracle",
+      "drawWeight": 1,
+      "tradeValue": 27
     },
     {
       "id": "SK-214",
@@ -3209,7 +3848,10 @@
       "effect": "自分か他の1人のHPを16回復し、火傷・攻撃の減算を消す。",
       "stackable": false,
       "webSha256": "0ac262e106e3c2d5eca05b49dec2636230f492034b7f84b019a0885518504460",
-      "thumbnailSha256": "3ae7bdd358fdcee796202b92f5ff305386b8b16eb8d290a0ee9b0a6b7621a464"
+      "thumbnailSha256": "3ae7bdd358fdcee796202b92f5ff305386b8b16eb8d290a0ee9b0a6b7621a464",
+      "effectKey": "great_heal_cleanse",
+      "drawWeight": 1,
+      "tradeValue": 18
     },
     {
       "id": "SK-215",
@@ -3224,7 +3866,10 @@
       "effect": "全員の攻撃・防御への一時的な加算を消す。自分は手札を2枚引く。",
       "stackable": false,
       "webSha256": "e2964d2934290d1273cab632d1c67f995f94480346aa786d5416dd99bd5306df",
-      "thumbnailSha256": "6ec00323b3718773647dacdd32df1e8aa087ccf210ef08d59e5def784ce4b6d2"
+      "thumbnailSha256": "6ec00323b3718773647dacdd32df1e8aa087ccf210ef08d59e5def784ce4b6d2",
+      "effectKey": "clear_boosts_draw",
+      "drawWeight": 1,
+      "tradeValue": 10
     },
     {
       "id": "SK-216",
@@ -3239,7 +3884,10 @@
       "effect": "自分か他の1人のHPを6回復。",
       "stackable": false,
       "webSha256": "64035350bdfe2c5014b1c7d28aeb7dc8983a57cc9978ee5882bdc8eb796da246",
-      "thumbnailSha256": "a0ad11f5aaa294a8e909a9bbf2b74b83627cd6f77666c541002ce752652a7c77"
+      "thumbnailSha256": "a0ad11f5aaa294a8e909a9bbf2b74b83627cd6f77666c541002ce752652a7c77",
+      "effectKey": "heal_small",
+      "drawWeight": 5,
+      "tradeValue": 5
     },
     {
       "id": "SK-217",
@@ -3254,7 +3902,10 @@
       "effect": "自分か他の1人のHPを12回復。",
       "stackable": false,
       "webSha256": "52d635f78dde469e428f532fade632008dba959d3db098eeab8fbf83854c2092",
-      "thumbnailSha256": "8ca0ec5e9c1834433b2a948875e37b9af1cee13487f4b2bb830dcbbc8189b2b5"
+      "thumbnailSha256": "8ca0ec5e9c1834433b2a948875e37b9af1cee13487f4b2bb830dcbbc8189b2b5",
+      "effectKey": "heal_medium",
+      "drawWeight": 2,
+      "tradeValue": 8
     },
     {
       "id": "SK-218",
@@ -3269,7 +3920,10 @@
       "effect": "自分か他の1人のHPを18回復。",
       "stackable": false,
       "webSha256": "a1bc0ba32d42434229037f572033b105b8e037b45e28b35c216dbb27bc7b3e21",
-      "thumbnailSha256": "20b10125762058f543e5cf6b63bda493bbe33bc98708729922713102993ec659"
+      "thumbnailSha256": "20b10125762058f543e5cf6b63bda493bbe33bc98708729922713102993ec659",
+      "effectKey": "heal_large",
+      "drawWeight": 2,
+      "tradeValue": 11
     },
     {
       "id": "SK-219",
@@ -3284,7 +3938,10 @@
       "effect": "自分のHPを5、霊力を2回復。",
       "stackable": false,
       "webSha256": "0625528f0b244177cd6b3f84150a21bc5e0643b72399e60ee82c4023fa91d851",
-      "thumbnailSha256": "1c793b304d1abec06fcee871fc9dd74b36f2c0ced2838029917b910fbe20d603"
+      "thumbnailSha256": "1c793b304d1abec06fcee871fc9dd74b36f2c0ced2838029917b910fbe20d603",
+      "effectKey": "heal_and_mp",
+      "drawWeight": 2,
+      "tradeValue": 4
     },
     {
       "id": "SK-220",
@@ -3299,7 +3956,10 @@
       "effect": "HPを4回復し、手札を1枚引く。",
       "stackable": false,
       "webSha256": "606785c7884b8b1d6447691df20ecebfa48d47cd64bba201198553aaad0fbcd2",
-      "thumbnailSha256": "38d88ada972e4abf89a9b86d9807636b5a2bc538c5e3a9c0ed2fb22696583631"
+      "thumbnailSha256": "38d88ada972e4abf89a9b86d9807636b5a2bc538c5e3a9c0ed2fb22696583631",
+      "effectKey": "heal_and_draw",
+      "drawWeight": 2,
+      "tradeValue": 4
     },
     {
       "id": "SK-221",
@@ -3314,7 +3974,10 @@
       "effect": "霊力を3回復。",
       "stackable": false,
       "webSha256": "cc16e88e12231163647e2e00953bce63b9b399f276d1d7d97be3fc2c90f911ce",
-      "thumbnailSha256": "1f02b7c811f8e613a6542a1e3f72309645b6a37b89bfaa3b362aa4268cee8bf7"
+      "thumbnailSha256": "1f02b7c811f8e613a6542a1e3f72309645b6a37b89bfaa3b362aa4268cee8bf7",
+      "effectKey": "mp_small",
+      "drawWeight": 5,
+      "tradeValue": 2
     },
     {
       "id": "SK-222",
@@ -3329,7 +3992,10 @@
       "effect": "霊力を6回復。",
       "stackable": false,
       "webSha256": "3e7b09e0772089198fa87ead7045f24a2831f5b7cafba9b123142a6c2ef5e92a",
-      "thumbnailSha256": "4bdf01917d690e9df50d99cdb5352a938afe3bf23723335ca7e047af7f36784f"
+      "thumbnailSha256": "4bdf01917d690e9df50d99cdb5352a938afe3bf23723335ca7e047af7f36784f",
+      "effectKey": "mp_medium",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-223",
@@ -3344,7 +4010,10 @@
       "effect": "霊力を9回復。",
       "stackable": false,
       "webSha256": "e9b99cb762e6ab567801bb7a543a8b0e0347a0165fbbbecd8a25e633f9b57482",
-      "thumbnailSha256": "b7e8eace87d86e18d81a119d92ca0c122454af78efd2da47f6141b04ab3f603b"
+      "thumbnailSha256": "b7e8eace87d86e18d81a119d92ca0c122454af78efd2da47f6141b04ab3f603b",
+      "effectKey": "mp_large",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-224",
@@ -3359,7 +4028,10 @@
       "effect": "自分か他の1人の火傷と攻撃の減算を消す。",
       "stackable": false,
       "webSha256": "a8d0ed40bb7e16e8d1b290b7098b239fe80f89e8dab5bae3cf85b20c5acaea2c",
-      "thumbnailSha256": "3ea4ccbefb1c0eb2bd5e1f57785a160b428e67fa25013d26feacedc042cdb02a"
+      "thumbnailSha256": "3ea4ccbefb1c0eb2bd5e1f57785a160b428e67fa25013d26feacedc042cdb02a",
+      "effectKey": "cleanse",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-225",
@@ -3374,7 +4046,10 @@
       "effect": "自分の次の追加効果による火傷・霊力減少を1回防ぐ。ダメージは防がない。",
       "stackable": false,
       "webSha256": "a498fe313c6f6eb7ef9f0141890a087cbd8646bcb28e4731a6dfb7ebc5391b6a",
-      "thumbnailSha256": "8e0196fc00c5406472ab649be4cfc21a75a0d5483dc57f83b25ac5f96111f76b"
+      "thumbnailSha256": "8e0196fc00c5406472ab649be4cfc21a75a0d5483dc57f83b25ac5f96111f76b",
+      "effectKey": "status_guard",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-226",
@@ -3389,7 +4064,10 @@
       "effect": "手札を2枚引く。手札上限を越えると捨てる札を選ぶ。",
       "stackable": false,
       "webSha256": "42624a26aa4f589843772fe07e4dd3a6e8cacbc6b89396f5291345ab95a3fff6",
-      "thumbnailSha256": "2edd7d68839a41443957c593af997ce7ddb0d340ff67f6f055de079f08501d43"
+      "thumbnailSha256": "2edd7d68839a41443957c593af997ce7ddb0d340ff67f6f055de079f08501d43",
+      "effectKey": "draw_two",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-227",
@@ -3404,7 +4082,10 @@
       "effect": "山札の上3枚を見て1枚を手札へ。残りは山札の下へ戻す。",
       "stackable": false,
       "webSha256": "ce3ce1728718701c7d0cb443c0294d696b7e5489c4259b48db99ba56c558f0ca",
-      "thumbnailSha256": "ecd127fcf9eb11a2bf922decb9fc1b68f9fa9096fd7c78c69e80ecf76e681d2d"
+      "thumbnailSha256": "ecd127fcf9eb11a2bf922decb9fc1b68f9fa9096fd7c78c69e80ecf76e681d2d",
+      "effectKey": "select_draw",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-228",
@@ -3419,7 +4100,10 @@
       "effect": "手札1枚を選んで捨て、2枚引く。",
       "stackable": false,
       "webSha256": "65707dcc52b645f4c9069fc7bb0f2b43f64c8872bc0d3c75f9a43d242f9b031b",
-      "thumbnailSha256": "ebd797a02888546ae0e4bf049b6c7020ad72857486dbe1bee3e76475e7a76410"
+      "thumbnailSha256": "ebd797a02888546ae0e4bf049b6c7020ad72857486dbe1bee3e76475e7a76410",
+      "effectKey": "discard_draw",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-229",
@@ -3434,7 +4118,10 @@
       "effect": "自分が最後に使った並の武器か防具を1枚回収する。この巻物は回収できない。",
       "stackable": false,
       "webSha256": "3ad6c255a1df3f7316c306eb806c03750d27ce589ba61b03ad044acf2812dd50",
-      "thumbnailSha256": "e7e6df8d0b97eee6fbadd646b024e335aed1656bba9f6cd990a2b6001c7451dc"
+      "thumbnailSha256": "e7e6df8d0b97eee6fbadd646b024e335aed1656bba9f6cd990a2b6001c7451dc",
+      "effectKey": "recover_basic",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-230",
@@ -3449,7 +4136,10 @@
       "effect": "次の自分の攻撃＋3（1回）。",
       "stackable": false,
       "webSha256": "9853e58b6538f50dd026119a9debddd7cfe5b579c0181a31ee7a0422ade148c2",
-      "thumbnailSha256": "8bec34e3316cddf62c9ff723ae157940f59d0eaac793910ddaea9e840729b235"
+      "thumbnailSha256": "8bec34e3316cddf62c9ff723ae157940f59d0eaac793910ddaea9e840729b235",
+      "effectKey": "boost_attack",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-231",
@@ -3464,7 +4154,10 @@
       "effect": "次の自分の防御＋4（1回）。",
       "stackable": false,
       "webSha256": "01eaaf02f5d0907ec8b1c343a7fd261ba104ce6695ae2bced8a74b0fd96f122b",
-      "thumbnailSha256": "5070515c51231a0b4b21a6835a636a6375f349dc6c2db0e56d94bbb4e6ea2dd8"
+      "thumbnailSha256": "5070515c51231a0b4b21a6835a636a6375f349dc6c2db0e56d94bbb4e6ea2dd8",
+      "effectKey": "boost_guard",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-232",
@@ -3479,7 +4172,10 @@
       "effect": "次の自分の武器の属性を7属性から選び直せる（1回）。",
       "stackable": false,
       "webSha256": "47c09f5b6f22b0df14fdea00834ee44b292a1699196871a14af0a872d20a8bf6",
-      "thumbnailSha256": "f6bd5f37944a4b192772277130e69bfd6878eb344a923c9c0638ef1460ccfd42"
+      "thumbnailSha256": "f6bd5f37944a4b192772277130e69bfd6878eb344a923c9c0638ef1460ccfd42",
+      "effectKey": "change_element",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-233",
@@ -3494,7 +4190,10 @@
       "effect": "ゲーム内の霊銭を8得る。",
       "stackable": false,
       "webSha256": "6074d3e97a4af5a0488e8fadb6c8e0689d2aeb9880165e2e6b2b063a3d180e96",
-      "thumbnailSha256": "afae0eb51e67fbf964971db90fe0e15e3d71d87609373d75a3d91c2585ac277d"
+      "thumbnailSha256": "afae0eb51e67fbf964971db90fe0e15e3d71d87609373d75a3d91c2585ac277d",
+      "effectKey": "earn_money",
+      "drawWeight": 2,
+      "tradeValue": 2
     },
     {
       "id": "SK-234",
@@ -3509,7 +4208,10 @@
       "effect": "自分の霊力を3払い、HPを8回復して火傷を消す。",
       "stackable": false,
       "webSha256": "7fca6f9fca3f62030b29d2900498d7ca39f03cfb3bcfb3b310d75f9015c101e1",
-      "thumbnailSha256": "74d4d10192d4bdf6c5542b5b3d6d4a69b8194eca41e19bb100834ab7449b4c17"
+      "thumbnailSha256": "74d4d10192d4bdf6c5542b5b3d6d4a69b8194eca41e19bb100834ab7449b4c17",
+      "effectKey": "mp_heal_cleanse",
+      "drawWeight": 2,
+      "tradeValue": 9
     },
     {
       "id": "SK-235",
@@ -3524,7 +4226,10 @@
       "effect": "提示された3枚から1枚を選び、表示価格のゲーム内霊銭を払って手札へ。",
       "stackable": false,
       "webSha256": "6b534967d53a34b2cdaea1e58aeb89452387fb1aec421087d734e814ad295f72",
-      "thumbnailSha256": "968891cd0e888a21cbb8648645efe58fe5a776dce3fe04cdb467dc4c1b9decb4"
+      "thumbnailSha256": "968891cd0e888a21cbb8648645efe58fe5a776dce3fe04cdb467dc4c1b9decb4",
+      "effectKey": "buy_card",
+      "drawWeight": 6,
+      "tradeValue": 2
     },
     {
       "id": "SK-236",
@@ -3539,7 +4244,10 @@
       "effect": "自分の手札1枚を選び、表示価格の半額を切り捨てたゲーム内霊銭を得る。最低1。",
       "stackable": false,
       "webSha256": "8f44808f3d3238d633f50a7de919b672fa935265facf34bb1519fa23e218f477",
-      "thumbnailSha256": "a6d297fe7f64e2037dd4d1358abfedd3cedf2c21e88858db48ef0eaf99c8975c"
+      "thumbnailSha256": "a6d297fe7f64e2037dd4d1358abfedd3cedf2c21e88858db48ef0eaf99c8975c",
+      "effectKey": "sell_card",
+      "drawWeight": 6,
+      "tradeValue": 2
     },
     {
       "id": "SK-237",
@@ -3554,7 +4262,10 @@
       "effect": "自分の手札2枚までを選んで捨て、同じ枚数を引く。この札自身は枚数に含めない。",
       "stackable": false,
       "webSha256": "b3810b870b2058a3ac12286a10ce1866cf6310ed64e586a19acb70c6029dbcc6",
-      "thumbnailSha256": "246e03c744925e6199176f1f97ac11e860c2d6151826fd5887c6db8dfdb906c7"
+      "thumbnailSha256": "246e03c744925e6199176f1f97ac11e860c2d6151826fd5887c6db8dfdb906c7",
+      "effectKey": "exchange_cards",
+      "drawWeight": 6,
+      "tradeValue": 2
     }
   ]
 }

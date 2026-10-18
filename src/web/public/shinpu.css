@@ -7,6 +7,18 @@
   --blue: #286eaa;
   --serif: 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', serif;
 }
+#card-options { margin: 12px auto; max-width: 650px; border: 1px solid #b6a68e; border-radius: 8px; }
+#card-options label { margin: 8px; }
+#card-options select { max-width: 100%; padding: 6px; }
+.choice-cards { display: flex; gap: 10px; overflow-x: auto; padding: 10px 4px; max-width: 100%; }
+.choice-card { flex: 0 0 150px; min-width: 0; display: grid; gap: 6px; }
+.choice-card img { width: 100%; height: auto; }
+.choice-card.selected { outline: 3px solid #b6291d; outline-offset: -3px; }
+.choice-description { font-size: 12px; font-weight: normal; line-height: 1.5; overflow-wrap: anywhere; }
+#card-detail-image { width: 100%; height: auto; display: block; }
+.card-zoom { font-size: 12px; padding: 5px 8px; margin: 4px; }
+.selection-effect { font-size: 13px; line-height: 1.6; }
+#card-options [hidden], #card-options[hidden], #card-choice[hidden] { display: none; }
 * {
   box-sizing: border-box;
 }

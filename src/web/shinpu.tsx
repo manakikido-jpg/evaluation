@@ -33,6 +33,11 @@ const input = z.object({
   action: z.string().max(20).optional(),
   ids: z.array(z.number().int().positive()).max(10).default([]),
   target: z.union([z.number().int().min(0).max(5), z.enum(['mp', 'hp', 'coin'])]).optional(),
+  options: z.object({
+    targets: z.array(z.number().int().min(0).max(5)).min(1).max(2).optional(),
+    element: z.enum(['火', '水', '風', '雷', '土', '光', '闇']).optional(),
+    pay: z.boolean().optional(),
+  }).strict().optional(),
 });
 function Entry({ action, name, room }: { action?: string; name?: string; room?: string }) {
   return (
@@ -199,7 +204,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
       }
       if (b.revision === undefined) throw Error('画面を開き直してください。');
       if (b.operation === 'start') return c.json(rooms.start(b.roomId, user.id, b.revision));
-      return c.json(rooms.move(b.roomId, user.id, { revision: b.revision, action: b.action ?? '', ids: b.ids, target: b.target }));
+      return c.json(rooms.move(b.roomId, user.id, { revision: b.revision, action: b.action ?? '', ids: b.ids, target: b.target, options: b.options }));
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);
     }

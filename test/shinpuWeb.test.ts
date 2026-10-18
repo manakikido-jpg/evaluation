@@ -87,6 +87,12 @@ it('OriginとCSRFを両方確認し、不正な入力を拒否する', async () 
   expect((await post({ operation: 'create', capacity: 2 }, { ...headers(), 'x-csrf-token': 'bad' })).status).toBe(403);
   expect((await post({ operation: 'create', capacity: 99 })).status).toBe(400);
 });
+it('属性・対象数・価格を偽装した追加オプションを受け付けない', async () => {
+  for(const options of [{element:'月'},{targets:[0,1,2]},{pay:'true'},{price:0},{targets:[-1]}]){
+    const res=await post({operation:'create',capacity:2,options});expect(res.status).toBe(400);
+  }
+  expect((await (await get()).json() as {rooms:unknown[]}).rooms).toEqual([]);
+});
 it('部屋作成・人間の参加・開始・両替を通して実際の残高は動かない', async () => {
   await recordJoin(db, { id: A, username: 'ais', displayName: 'ais', avatarUrl: null, roleIds: roles, isBot: false, joinedAt: new Date() });
   await addCoins(db, A, 500, 'admin_grant');
