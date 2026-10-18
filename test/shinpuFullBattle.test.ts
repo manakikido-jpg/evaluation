@@ -97,6 +97,25 @@ it('結界裂きは各防御札を2下げ、次の防御の加算は一度だけ
   E.defend(s,hand(s,1,'SK-108','SK-109'));
   expect(s.players[1]!.hp).toBe(36); expect(s.players[1]!.guardBoost).toBe(0);
 });
+it('商人の護り札の追加支払いは任意で、不足時は状態を変えない', () => {
+  for(const [pay,hp,money] of [[false,31,50],[true,36,46]] as const){
+    const s=game();attack(s,'SK-012');E.defend(s,hand(s,1,'SK-185'),{pay});
+    expect(s.players[1]!.hp).toBe(hp);expect(s.players[1]!.money).toBe(money);
+  }
+  const t=game();attack(t,'SK-012');const ids=hand(t,1,'SK-185');t.players[1]!.money=3;const before=snapshot(t);
+  expect(()=>E.defend(t,ids,{pay:true})).toThrow('霊銭');expect(snapshot(t)).toBe(before);
+});
+it('防御札の回復・ドロー・MP回復と低HPでの追加防御が働く', () => {
+  const s=game();attack(s,'SK-007');E.defend(s,hand(s,1,'SK-181'));expect(s.players[1]!.hp).toBe(40);
+  const t=game();attack(t,'SK-007');const guards=hand(t,1,'SK-182',...Array(8).fill('SK-001'));E.defend(t,[guards[0]!]);expect(t.players[1]!.hand).toHaveLength(9);
+  const u=game();attack(u,'SK-007');u.players[1]!.mp=5;E.defend(u,hand(u,1,'SK-183'));expect(u.players[1]!.mp).toBe(7);
+  const v=game();attack(v,'SK-012');v.players[1]!.hp=20;E.defend(v,hand(v,1,'SK-184'));expect(v.players[1]!.hp).toBe(16);
+});
+it('回復道具の固定値と、自分専用の複合回復を守る', () => {
+  for(const [id,mp] of [['SK-221',5],['SK-222',8],['SK-223',11]] as const){const s=game();s.players[0]!.mp=2;use(s,id);expect(s.players[0]!.mp).toBe(mp);}
+  const t=game();t.players[0]!.mp=5;use(t,'SK-219');expect(t.players[0]!.hp).toBe(45);expect(t.players[0]!.mp).toBe(7);
+  const u=game();u.players[0]!.mp=5;u.players[0]!.burn=1;use(u,'SK-234');expect(u.players[0]!.hp).toBe(48);expect(u.players[0]!.mp).toBe(2);expect(u.players[0]!.burn).toBe(0);
+});
 it('任意の霊銭・MP払いは明示した場合だけ行い、不足時は札も状態も変えない', () => {
   const s=game(); attack(s,'SK-100'); expect(s.pending!.power).toBe(8); expect(s.players[0]!.money).toBe(50);
   const t=game(); attack(t,'SK-100',{pay:true}); expect(t.pending!.power).toBe(12); expect(t.players[0]!.money).toBe(46);

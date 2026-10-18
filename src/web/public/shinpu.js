@@ -216,7 +216,7 @@ function render() {
     $('message').textContent = humanChoice() ? state.choice.label : state.players[state.choice.player].name + 'が札を選んでいます';
     $('summary').textContent = humanChoice() ? '下の候補を押して、選択を確定してください。' : '他の人の候補や手札は表示しません。';
   } else if (humanDefense()) {
-    $('message').textContent = state.players[state.pending.from].name + 'からの攻撃';
+    $('message').textContent = state.players[state.pending.from].name + 'からの攻撃（属性：' + (state.pending.elements || state.pending.cards.map(c=>c.element)).join('・') + '）';
     const guard = a.filter((c) => c.type === 'guard').reduce((n, c) => n + Math.max(0, c.power
       + (c.effect === 'element_guard' && state.pending.elements?.includes(c.element) ? 2 : 0)
       + (c.effect === 'low_hp_guard' && me.hp <= 20 ? 5 : 0)
@@ -253,7 +253,7 @@ function render() {
   } else {
     $('message').textContent =
       state.phase === 'defense'
-        ? state.players[state.pending.to].name + 'が防御を選んでいます'
+        ? state.players[state.pending.to].name + 'が防御を選んでいます（属性：' + (state.pending.elements || state.pending.cards.map(c=>c.element)).join('・') + '）'
         : state.players[state.turn].name + 'が札を選んでいます';
     $('summary').textContent = me.hp === 0 ? '退場しました。残りの対戦を観戦できます。' : '相手の返事を待っています。';
   }
