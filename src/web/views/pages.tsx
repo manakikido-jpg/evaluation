@@ -86,6 +86,8 @@ export function HomePage(props: {
   trend?: TrendBucket[];
   inviteRows?: InviteRewardRow[];
   cfg?: GuildConfig;
+  /** 🎙 いま通話にいる人（チャンネルごと） */
+  voiceNow?: { id: string; name: string; members: { id: string; name: string }[] }[];
 }) {
   const { stats, trend } = props;
   const canSee = (page: string) => !props.session.pages || props.session.pages.includes(page as never);
@@ -100,9 +102,10 @@ export function HomePage(props: {
   ].filter(task => task.count !== undefined && canSee(task.key) && (task.key !== 'channels' || props.session.level === 'guji'));
 
   return (
-    <Layout title="ホーム" session={props.session} nav="home" scripts={['charts.js']}>
+    <Layout title="ホーム" session={props.session} nav="home" scripts={['charts.js', 'home-voice.js']}>
       <div class="home-welcome"><div><p class="eyebrow">咲楽ノ宮 / 社務所Web</p><h1>おつかれさまです</h1><p class="note">今日の社務所 — 対応と鯖の状況をまとめて確認できます。</p></div><time datetime={props.now.toISOString()}>{new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'long' }).format(props.now)}</time></div>
       <section class="card home-attention"><div class="section-head"><h2>今やること</h2><span class="note">対応待ち</span></div><ul class="task-list">{tasks.map(task => <li class={task.count ? 'pending' : 'clear'}><span class="task-icon" aria-hidden="true">{task.icon}</span><div class="task-copy"><strong>{task.label}</strong><span>{task.hint}</span></div><span class="task-count">{task.count === null ? '未取得' : <>{task.count}<small>{task.unit}</small></>}</span>{task.href ? <a class="task-action" href={task.href}>確認する<span aria-hidden="true"> →</span></a> : <span class="task-action note">Discordで確認</span>}</li>)}</ul></section>
+      {props.voiceNow && <VoiceNowCard channels={props.voiceNow} links={canSee('members')} />}
       {canSee('stats') && trend && trend.length > 0 && (
         <section class="card">
           <h2>メンバーの推移（30 日）</h2>
@@ -685,5 +688,37 @@ export function NotFoundPage(props: { session?: AdminSession }) {
         <a href="/">ホームへ戻る</a>
       </p>
     </Layout>
+  );
+}
+
+/** 🎙 いま通話にいる人（home-voice.js が 10 秒ごとに読み直して書きかえる） */
+function VoiceNowCard(props: { channels: { id: string; name: string; members: { id: string; name: string }[] }[]; links: boolean }) {
+  const total = props.channels.reduce((n, ch) => n + ch.members.length, 0);
+  return (
+    <section class="card home-voice" id="home-voice" data-src="/voice-now.json" data-links={props.links ? '1' : '0'}>
+      <div class="section-head">
+        <h2>
+          🎙 いま通話にいる人 <span class="voice-total" data-voice-total>{total}</span> 人
+        </h2>
+        <span class="note" data-voice-updated>
+          自動で更新します
+        </span>
+      </div>
+      <div class="voice-list" data-voice-list>
+        {props.channels.length === 0 && <p class="note">いまはだれも通話にいません（AFK はのぞく）。</p>}
+        {props.channels.map((ch) => (
+          <article class="voice-ch">
+            <h3>
+              🔊 {ch.name} <small>{ch.members.length} 人</small>
+            </h3>
+            <ul>
+              {ch.members.map((m) => (
+                <li>{props.links ? <a href={`/members/${m.id}`}>{m.name}</a> : m.name}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

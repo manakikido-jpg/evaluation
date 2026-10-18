@@ -360,6 +360,8 @@ async function main(): Promise<void> {
   });
   client.on(Events.VoiceStateUpdate, (before, after) => {
     recording.onVoiceStateUpdate(before, after);
+    // 社務所Web のホームの「いま通話にいる人」を、すぐ書きかえる
+    if (before.channelId !== after.channelId) app.voiceChanged(after.guild);
     // 通話に入った・移動したとき
     if (after.channelId && after.channelId !== before.channelId && after.member) {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);

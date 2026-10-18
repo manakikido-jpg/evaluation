@@ -695,8 +695,17 @@ export function createWebApp(deps: WebDeps) {
     const stats = { ...base, yaku: yakuRows.length };
     const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db), bells: await openBells(db), invites: unknownInvites, permissions: permissionCount };
     const names = await namesOf(db, [...recent.flatMap((a) => [a.actorId, a.targetId ?? '']), ...(inviteRows ?? []).flatMap(r => [r.memberId, r.inviterId ?? ''])].filter(Boolean));
-    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} inviteRows={inviteRows} cfg={cfg} />);
+    return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} inviteRows={inviteRows} cfg={cfg} voiceNow={await voiceNowView()} />);
   });
+
+  /** 🎙 いま通話にいる人（BOT が出入りのたびと 1 分ごとに残す）。ホームが 10 秒ごとに読みに来る */
+  const voiceNowView = async () => {
+    const list = await loadVoiceNow(db, now());
+    const names = await namesOf(db, list.flatMap((ch) => ch.memberIds));
+    return list.map((ch) => ({ id: ch.id, name: ch.name, members: ch.memberIds.map((id) => ({ id, name: names.get(id) ?? id })) }));
+  };
+  app.use('/voice-now.json', requireAdmin);
+  app.get('/voice-now.json', async (c) => c.json({ channels: await voiceNowView() }, 200, { 'cache-control': 'no-store' }));
 
   app.get('/members', async (c) => {
     const q = c.req.query();

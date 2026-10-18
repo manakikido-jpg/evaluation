@@ -1616,6 +1616,25 @@ describe('運営から花びらを送る（管理画面）', () => {
   });
 });
 
+describe('🎙 ホームの「いま通話にいる人」', () => {
+  it('BOT が残した通話の人を、ホームと JSON で出す（ログインしていないと読めない）', async () => {
+    const { saveVoiceNow } = await import('../src/services/meetings.js');
+    await saveVoiceNow(db, [{ id: '910000000000000004', name: '拝殿', memberIds: [USER] }, { id: '910000000000000005', name: 'からっぽ', memberIds: [] }], clock);
+    const s = await login(STAFF);
+    const home = await (await get('/', s)).text();
+    expect(home).toContain('いま通話にいる人');
+    expect(home).toContain('拝殿');
+    expect(home).toContain(`/members/${USER}`);
+    expect(home).not.toContain('からっぽ');
+    const json = (await (await get('/voice-now.json', s)).json()) as { channels: { name: string; members: { id: string; name: string }[] }[] };
+    expect(json.channels).toEqual([{ id: '910000000000000004', name: '拝殿', members: [{ id: USER, name: 'さくら<script>' }] }]);
+    expect((await app.request('/voice-now.json')).status).not.toBe(200);
+    // BOT が 3 分より前から残していなければ空
+    clock = new Date(clock.getTime() + 4 * 60_000);
+    expect(((await (await get('/voice-now.json', s)).json()) as { channels: unknown[] }).channels).toEqual([]);
+  });
+});
+
 describe('📣 募集ボタンを社務所Web で足す・外す', () => {
   const post = async (session: string, path: string, form: Record<string, string>) => {
     const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;

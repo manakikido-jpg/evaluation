@@ -228,6 +228,19 @@ export class ShuinApp {
   }
 
   /** 1 分ごと: 発言数を書き込み、通話している人に通話時間と花びらを足す */
+  private voiceNowTimer?: NodeJS.Timeout;
+  /** 通話に出入りしたら、少し待って（まとめて）「いま通話にいる人」を残す。社務所Web のホームにすぐ出す */
+  voiceChanged(guild: Guild): void {
+    if (guild.id !== this.cfg.guildId) return;
+    clearTimeout(this.voiceNowTimer);
+    this.voiceNowTimer = setTimeout(() => {
+      const channels = [...guild.channels.cache.values()]
+        .filter((c) => c.isVoiceBased() && c.id !== guild.afkChannelId)
+        .map((c) => ({ id: c.id, name: c.name, memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [] }));
+      void saveVoiceNow(this.db, channels).catch((err) => logger.warn({ err }, 'voice now save failed'));
+    }, 3000);
+  }
+
   async everyMinute(guild: Guild, now = new Date()): Promise<void> {
     const counts = this.messageCounts;
     this.messageCounts = new Map();

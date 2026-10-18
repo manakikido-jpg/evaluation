@@ -97,6 +97,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'invite-selection.js': { body: readText(path.join(here, 'public/invite-selection.js')), type: 'text/javascript; charset=utf-8' },
     'perms.js': { body: readText(path.join(here, 'public/perms.js')), type: 'text/javascript; charset=utf-8' },
     'charts.js': { body: readText(path.join(here, 'public/charts.js')), type: 'text/javascript; charset=utf-8' },
+    'home-voice.js': { body: readText(path.join(here, 'public/home-voice.js')), type: 'text/javascript; charset=utf-8' },
     'casino-lobby.css': { body: readText(path.join(here, 'public/casino-lobby.css')), type: 'text/css; charset=utf-8' },
     'casino-lobby-night.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-night.webp'))), type: 'image/webp' },
     ...Object.fromEntries(['fox', 'fan'].map(key => [`casino-ornament-${key}.webp`, { body: new Uint8Array(readFileSync(path.join(here, `public/casino-ornaments/${key}.webp`))), type: 'image/webp' }])),
