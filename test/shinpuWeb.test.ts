@@ -50,6 +50,30 @@ it('未認証・通常のカジノCookie・一般ロールでは部屋を操作�
   roles = [ROLE.sanpaisha];
   expect((await post({ operation: 'create', capacity: 2 })).status).toBe(403);
 });
+it('神器図鑑と個別の札でも認証と運営ロールを毎回確かめる', async () => {
+  for (const path of [ROOT + '/cards', ROOT + '/cards/SK-038']) {
+    expect((await app.request(path)).status).toBe(401);
+    expect((await get(path)).status).toBe(200);
+    fail = true;
+    expect((await get(path)).status).toBe(503);
+    fail = false;
+  }
+  expect((await get(ROOT + '/cards/unknown')).status).toBe(404);
+  const search = await get(ROOT + '/cards?q=SK-038');
+  expect(await search.text()).toContain('紫電の短刀');
+  roles = [ROLE.sanpaisha];
+  expect((await get(ROOT + '/cards')).status).toBe(403);
+});
+it('4〜10枚の選択を対戦処理へ渡し、11枚以上は受付で拒否する', async () => {
+  const created = (await (await post({ operation: 'create', capacity: 2 })).json()) as RoomView;
+  const started = (await (await post({ operation: 'start', roomId: created.roomId, revision: created.revision })).json()) as RoomView;
+  for (const count of [4, 10, 11]) {
+    const res = await post({ operation: 'move', roomId: created.roomId, revision: started.revision, action: 'attack', target: 1,
+      ids: Array.from({ length: count }, (_, i) => 10000 + i) });
+    expect(res.status).toBe(400);
+    expect((await res.json() as { error: string }).error).toBe(count <= 10 ? '手札にない札です。' : '送る内容を確認してください。');
+  }
+});
 it('Web操作で運営ロールを再確認し、接続失敗時も許可しない', async () => {
   fail = true;
   expect((await get()).status).toBe(503);

@@ -58,6 +58,11 @@ const sceneFiles = readdirSync(SCENE_DIR).filter((f) => /^[a-z]+\.(svg|webp)$/.t
 
 /** 神符合戦の生成画像。カードの数字や名前はHTMLで重ねる。 */
 const SHINPU_DIR = path.join(here, 'public/shinpu');
+const SHINPU_CATALOG_DIR = path.join(here, 'public/shinpu-catalog');
+const catalogImages = ['cards', 'thumbnails'].flatMap(size =>
+  readdirSync(path.join(SHINPU_CATALOG_DIR, size)).filter(f => /^SK-\d{3}\.webp$/.test(f)).map(file => [
+    `shinpu-catalog-${size}-${file}`, { body: new Uint8Array(readFileSync(path.join(SHINPU_CATALOG_DIR, size, file))), type: 'image/webp' },
+  ] as const));
 const shinpuFiles = readdirSync(SHINPU_DIR).filter(f => /^[a-z][a-z0-9-]*\.webp$/.test(f));
 const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/\/static\/(shinpu-([a-z][a-z0-9-]*)\.webp)/g, (_url, name: string, key: string) => {
   const file = path.join(SHINPU_DIR, `${key}.webp`);
@@ -79,6 +84,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'cast-office.css': { body: readText(path.join(here, 'public/cast-office.css')), type: 'text/css; charset=utf-8' },
     'cast-office.js': { body: readText(path.join(here, 'public/cast-office.js')), type: 'text/javascript; charset=utf-8' },
     ...Object.fromEntries(shinpuFiles.map(f => [`shinpu-${f}`, { body: new Uint8Array(readFileSync(path.join(SHINPU_DIR, f))), type: 'image/webp' }])),
+    ...Object.fromEntries(catalogImages),
+    'shinpu-catalog.css': { body: readText(path.join(here, 'public/shinpu-catalog.css')), type: 'text/css; charset=utf-8' },
     'shinpu.css': { body: shinpuCss(), type: 'text/css; charset=utf-8' },
     'shinpu.js': { body: readText(path.join(here, 'public/shinpu.js')), type: 'text/javascript; charset=utf-8' },
     'style.css': { body: readText(path.join(here, 'public/style.css')), type: 'text/css; charset=utf-8' },
