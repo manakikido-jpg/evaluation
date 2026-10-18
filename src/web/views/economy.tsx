@@ -11,6 +11,7 @@ import { TicketSelect } from './gacha.js';
 import { PRICE_LEVEL, type GachaLedger, type MemberLedger, type PriceGuide, type SuspectPair } from '../../services/economyWatch.js';
 import { ColumnChart, LineChart } from './charts.js';
 import { Layout } from './layout.js';
+import { currencyHealth, type HealthLevel } from '../../services/currencyHealth.js';
 
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const signed = (n: number) => (n > 0 ? `+${fmt(n)}` : n < 0 ? `−${fmt(-n)}` : '±0');
@@ -67,7 +68,10 @@ export function EconomyPage(props: {
           : ''}
       </p>
 
+      <Health h={currencyHealth(o, props.dist, props.cfg)} />
+
       <nav class="jump card" aria-label="このページの項目">
+        <a href="#economy-health">🩺 健康診断</a>
         <a href="#economy-supply">📊 出回っている量</a>
         <a href="#economy-flow">🔁 配った・収入</a>
         <a href="#economy-spread">👛 かたより</a>
@@ -259,6 +263,40 @@ export function EconomyPage(props: {
       </section>
       {props.watch && <WatchSections watch={props.watch} cfg={cfg} guji={guji} who={who} csrf={props.session.csrfToken} />}
     </Layout>
+  );
+}
+
+const HEALTH_MARK: Record<HealthLevel, string> = { ok: '🟢', warn: '🟡', bad: '🔴' };
+/** 🩺 通貨の健康診断（いまの期間の数字から） */
+function Health(props: { h: ReturnType<typeof currencyHealth> }) {
+  const { h } = props;
+  return (
+    <section class="card anchor" id="economy-health">
+      <h2>
+        🩺 通貨の健康診断 {HEALTH_MARK[h.level]} {h.summary}
+      </h2>
+      <p class="note">上で選んだ期間の数字で見ます。目安なので、人がふえた・イベントをした、などのときは、ずれることがあります。</p>
+      <table class="compact">
+        <thead>
+          <tr>
+            <th></th>
+            <th>見るところ</th>
+            <th>いま</th>
+            <th>どうするか</th>
+          </tr>
+        </thead>
+        <tbody>
+          {h.checks.map((c) => (
+            <tr>
+              <td>{HEALTH_MARK[c.level]}</td>
+              <td>{c.label}</td>
+              <td>{c.value}</td>
+              <td>{c.advice}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

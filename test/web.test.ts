@@ -2068,7 +2068,7 @@ describe('物御籤（管理画面）', () => {
     await addCoins(db, USER, 3000, 'join_bonus');
     const s = await login(STAFF);
     const view = await (await get('/economy', s)).text();
-    for (const t of ['期間限定イベント', '物御籤の収支', '値段の目安', 'サブアカウントの疑い', '最近の警告', '見守りの設定']) expect(view).toContain(t);
+    for (const t of ['通貨の健康診断', '期間限定イベント', '物御籤の収支', '値段の目安', 'サブアカウントの疑い', '最近の警告', '見守りの設定']) expect(view).toContain(t);
     expect(view).not.toContain('action="/economy/events"');
     expect((await post(s, '/economy/events', { kind: 'voice', value: '200', title: 'x', startsAt: '2026-10-01T00:00', endsAt: '2026-10-08T00:00' })).status).toBe(403);
     const ledger = await (await get(`/economy/members/${USER}`, s)).text();
