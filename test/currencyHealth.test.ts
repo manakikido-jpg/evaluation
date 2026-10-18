@@ -29,8 +29,12 @@ describe('🩺 通貨の健康診断', () => {
     expect(level(currencyHealth(ov({ income: 15_000 }), dist({}), cfg), 'return')).toBe('warn');
   });
 
-  it('数字が足りないときは、その項目を出さない', () => {
+  it('数字が足りない項目は「—」（none）で出し、全体の判定に入れない', () => {
     const h = currencyHealth(ov({ issued: 0, supply: 0, net: 0 }), dist({ holders: 3 }), cfg);
-    expect(h.checks.map((c) => c.key)).toEqual(['casino']);
+    expect(h.checks.map((c) => [c.key, c.level])).toEqual([['return', 'none'], ['growth', 'none'], ['spread', 'none'], ['casino', 'ok']]);
+    expect(h.level).toBe('ok');
+    // 目盛りは範囲の中に収める
+    const g = currencyHealth(ov({ income: 50_000 }), dist({}), cfg).checks.find((c) => c.key === 'return')!;
+    expect(g.meter!.value).toBe(2);
   });
 });

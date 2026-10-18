@@ -68,7 +68,7 @@ export function EconomyPage(props: {
           : ''}
       </p>
 
-      <Health h={currencyHealth(o, props.dist, props.cfg)} />
+      <Health h={currencyHealth(o, props.dist, props.cfg)} o={o} d={props.dist} coin={e.currencyName} />
 
       <nav class="jump card" aria-label="このページの項目">
         <a href="#economy-health">🩺 健康診断</a>
@@ -266,36 +266,49 @@ export function EconomyPage(props: {
   );
 }
 
-const HEALTH_MARK: Record<HealthLevel, string> = { ok: '🟢', warn: '🟡', bad: '🔴' };
-/** 🩺 通貨の健康診断（いまの期間の数字から） */
-function Health(props: { h: ReturnType<typeof currencyHealth> }) {
-  const { h } = props;
+const HEALTH_MARK: Record<HealthLevel, string> = { ok: '🟢', warn: '🟡', bad: '🔴', none: '⚪' };
+const HEALTH_WORD: Record<HealthLevel, string> = { ok: 'よい', warn: '注意', bad: '見直し', none: '—' };
+/** 🩺 通貨の健康診断（いまの期間の数字から）。スマホでもはみ出さないよう、表ではなくカードで出す */
+function Health(props: { h: ReturnType<typeof currencyHealth>; o: EconomyOverview; d: Distribution; coin: string }) {
+  const { h, o, d } = props;
+  const per = d.holders ? Math.round(o.issued / d.holders) : 0;
   return (
-    <section class="card anchor" id="economy-health">
-      <h2>
-        🩺 通貨の健康診断 {HEALTH_MARK[h.level]} {h.summary}
-      </h2>
+    <section class={`card anchor health health-${h.level}`} id="economy-health">
+      <div class="health-head">
+        <h2>🩺 通貨の健康診断</h2>
+        <p class="health-summary">
+          <span class="health-badge">{HEALTH_MARK[h.level]} {HEALTH_WORD[h.level]}</span> {h.summary}
+        </p>
+      </div>
       <p class="note">上で選んだ期間の数字で見ます。目安なので、人がふえた・イベントをした、などのときは、ずれることがあります。</p>
-      <table class="compact">
-        <thead>
-          <tr>
-            <th></th>
-            <th>見るところ</th>
-            <th>いま</th>
-            <th>どうするか</th>
-          </tr>
-        </thead>
-        <tbody>
-          {h.checks.map((c) => (
-            <tr>
-              <td>{HEALTH_MARK[c.level]}</td>
-              <td>{c.label}</td>
-              <td>{c.value}</td>
-              <td>{c.advice}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div class="health-grid">
+        {h.checks.map((c) => (
+          <article class={`health-item health-${c.level}`}>
+            <div class="health-top">
+              <span class="health-label">{c.label}</span>
+              <span class="health-badge">{HEALTH_MARK[c.level]} {HEALTH_WORD[c.level]}</span>
+            </div>
+            <div class="health-value">{c.value}</div>
+            {c.meter && (
+              <meter value={c.meter.value} min={c.meter.min} max={c.meter.max} low={c.meter.low} high={c.meter.high} optimum={c.meter.optimum} title={c.meter.scale}>
+                {c.value}
+              </meter>
+            )}
+            <div class="health-goal">めやす: {c.goal}</div>
+            <p class="health-advice">{c.advice}</p>
+          </article>
+        ))}
+      </div>
+      <h3>参考の数字</h3>
+      <div class="health-facts">
+        <div><span>持っている人</span><b>{fmt(d.holders)} 人</b></div>
+        <div><span>1 人あたり（平均）</span><b>{fmt(d.average)} 枚</b></div>
+        <div><span>まん中の人（中央値）</span><b>{fmt(d.median)} 枚</b></div>
+        <div><span>かたより（ジニ係数）</span><b>{d.gini.toFixed(2)}</b></div>
+        <div><span>この期間に配った（1 人あたり）</span><b>{fmt(per)} 枚</b></div>
+        <div><span>この期間に戻った（鯖の収入）</span><b>{fmt(o.income)} 枚</b></div>
+      </div>
+      <p class="note">平均より中央値がずっと小さいときは、一部の人がたくさん持っています。ジニ係数は 0（みんな同じ）〜 1（1 人が全部）で、0.5 をこえると、かたよりが大きいめやすです。</p>
     </section>
   );
 }
