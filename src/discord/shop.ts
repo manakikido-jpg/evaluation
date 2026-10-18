@@ -8,6 +8,7 @@ import {
   type ButtonInteraction,
   type ChannelSelectMenuInteraction,
   type Guild,
+  type GuildMember,
   type Interaction,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
@@ -568,9 +569,9 @@ export class ShopApp {
     const item = await getItem(this.db, itemId);
     if (!item?.enabled || item.kind !== 'otoshidama') return void (await i.update(done('この授与品は、今は受けられません。')));
     if (!canPutBag(this.cfg(), [...i.member.roles.cache.keys()])) return void (await i.update(done('お年玉袋を置けるのは、氏子以上になってからです。')));
-    const ch = i.guild.channels.cache.get(channelId);
+    const ch = await bagChannel(i.guild, channelId);
     const me = i.guild.members.me;
-    if (!ch?.isTextBased() || !ch.permissionsFor(i.member).has(['ViewChannel', 'SendMessages']) || !me || !ch.permissionsFor(me).has(['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
+    if (!ch || !canPostBag(ch, i.member) || !me || !canPostBag(ch, me) || !ch.permissionsFor(me).has('EmbedLinks')) {
       return void (await i.update(done('そのチャンネルには置けません（あなたか BOT が書き込めないチャンネル）。もう一度「授与品を見る」から選んでください。')));
     }
     const o = OTOSHIDAMA;
@@ -593,8 +594,8 @@ export class ShopApp {
     const cfg = this.cfg();
     const e = cfg.economy;
     const item = await getItem(this.db, itemId);
-    const ch = i.guild.channels.cache.get(channelId);
-    if (!item?.enabled || item.kind !== 'otoshidama' || !ch?.isSendable() || !ch.permissionsFor(i.member)?.has(['ViewChannel', 'SendMessages'])) {
+    const ch = await bagChannel(i.guild, channelId);
+    if (!item?.enabled || item.kind !== 'otoshidama' || !ch?.isSendable() || !canPostBag(ch, i.member)) {
       return void (await i.editReply(done('この授与品は、今は受けられません。')));
     }
     const total = parseCount(i.fields.getTextInputValue('total'));
@@ -649,4 +650,19 @@ export class ShopApp {
       }
     }
   }
+}
+
+/** 袋を置く場所（テキスト・お知らせ・通話のチャット・スレッド（日記など）。スレッドはキャッシュになければ取りに行く） */
+async function bagChannel(guild: Guild, id: string) {
+  const ch = guild.channels.cache.get(id) ?? (await guild.channels.fetch(id).catch(() => null));
+  return ch?.isTextBased() ? ch : null;
+}
+
+/** その人（か BOT）が袋を置けるか。スレッドはスレッドに書ける権限で、鍵のかかったスレッドは置けない */
+function canPostBag(ch: NonNullable<Awaited<ReturnType<typeof bagChannel>>>, who: GuildMember): boolean {
+  if (ch.isThread()) {
+    if (ch.locked && !ch.permissionsFor(who)?.has('ManageThreads')) return false;
+    return Boolean(ch.permissionsFor(who)?.has(['ViewChannel', 'SendMessagesInThreads']));
+  }
+  return Boolean(ch.permissionsFor(who)?.has(['ViewChannel', 'SendMessages']));
 }

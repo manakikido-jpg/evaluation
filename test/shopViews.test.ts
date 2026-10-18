@@ -141,6 +141,8 @@ describe('新しい授与品の見た目', () => {
     const v = JSON.stringify(otoshidamaPickChannel(bag, cfg.economy, 1000, '910000000000000001', '境内'));
     for (const t of ['shop:otoshi:ch:21', '"type":8', 'shop:otoshi:here:21:910000000000000001', '#境内 に置く', '手数料 50 枚']) expect(v).toContain(t);
     expect(JSON.stringify(otoshidamaPickChannel(bag, cfg.economy, 1000))).not.toContain('shop:otoshi:here');
+    // 日記などのスレッド（公開・非公開）や通話のチャットにも置ける
+    expect(v).toContain('"channel_types":[0,5,2,11,12,10]');
   });
 });
 
