@@ -11,6 +11,8 @@ import { randomToken, safeEqual } from './sessions.js';
 import type { DiscordApi, DiscordUser } from './discordApi.js';
 import { assetUrl } from './assets.js';
 import { ShinpuTestPage } from './views/shinpu.js';
+import { ShinpuCatalogPage } from './views/shinpuCatalog.js';
+import { catalog } from '../services/shinpu/catalog.js';
 const ROOT = '/casino/shinpu';
 const COOKIE = 'sakura_shinpu_test',
   STATE = 'sakura_shinpu_state',
@@ -29,8 +31,13 @@ const input = z.object({
   capacity: z.number().int().min(2).max(6).optional(),
   revision: z.number().int().nonnegative().optional(),
   action: z.string().max(20).optional(),
-  ids: z.array(z.number().int().positive()).max(3).default([]),
+  ids: z.array(z.number().int().positive()).max(10).default([]),
   target: z.union([z.number().int().min(0).max(5), z.enum(['mp', 'hp', 'coin'])]).optional(),
+  options: z.object({
+    targets: z.array(z.number().int().min(0).max(5)).min(1).max(2).optional(),
+    element: z.enum(['火', '水', '風', '雷', '土', '光', '闇']).optional(),
+    pay: z.boolean().optional(),
+  }).strict().optional(),
 });
 function Entry({ action, name, room }: { action?: string; name?: string; room?: string }) {
   return (
@@ -139,6 +146,20 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
     if (auth.response) return auth.response;
     return c.html(<ShinpuTestPage csrf={auth.session.csrfToken} name={auth.session.displayName} />);
   });
+  app.get(`${ROOT}/cards`, async (c) => {
+    const auth = await requireAdmin(c);
+    if (auth.response) return auth.response;
+    const page = z.coerce.number().int().min(1).max(10000).safeParse(c.req.query('page') ?? '1');
+    return c.html(<ShinpuCatalogPage query={(c.req.query('q') ?? '').slice(0, 100)} category={c.req.query('category') ?? ''}
+      element={c.req.query('element') ?? ''} page={page.success ? page.data : 1} />);
+  });
+  app.get(`${ROOT}/cards/:id`, async (c) => {
+    const auth = await requireAdmin(c);
+    if (auth.response) return auth.response;
+    const card = catalog.find(card => card.id === c.req.param('id'));
+    if (!card) return c.text('この札は見つかりません。', 404);
+    return c.html(<ShinpuCatalogPage card={card} />);
+  });
   app.get(`${ROOT}/api`, async (c) => {
     const auth = await requireAdmin(c);
     if (auth.response) return auth.response;
@@ -183,7 +204,7 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
       }
       if (b.revision === undefined) throw Error('画面を開き直してください。');
       if (b.operation === 'start') return c.json(rooms.start(b.roomId, user.id, b.revision));
-      return c.json(rooms.move(b.roomId, user.id, { revision: b.revision, action: b.action ?? '', ids: b.ids, target: b.target }));
+      return c.json(rooms.move(b.roomId, user.id, { revision: b.revision, action: b.action ?? '', ids: b.ids, target: b.target, options: b.options }));
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);
     }

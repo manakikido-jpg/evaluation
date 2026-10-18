@@ -124,7 +124,8 @@ import { createSession, deleteSession, findSession, markChecked, randomToken, re
 const RECHECK_GRACE_MS = 30 * 60_000;
 import { isStatsView, StatsPage } from './views/stats.js';
 import { RecentUpdates, UpdatesPage } from './views/updates.js';
-import type { SessionView } from './views/layout.js';
+import { Layout, type SessionView } from './views/layout.js';
+import { createMemberSession } from './memberSessions.js';
 import { CHANGELOG, LATEST_CHANGE_ID, unseenChanges } from '../changelog.js';
 import { markChangesSeen, seenChangeId } from '../services/updates.js';
 import { inScope, loadUpdateNews, newsChannelOf, postNews, saveUpdateNews } from '../services/updateNews.js';
@@ -636,6 +637,35 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: s.userId, action: 'auth.logout', via: 'web' });
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     return c.redirect('/login');
+  });
+
+  // 社務所のログインから、運営限定の対戦へ入る。発行前にもDiscordロールを確認する。
+  app.get('/economy/shinpu', async (c) => {
+    const session = c.get('session');
+    return c.html(<Layout title="神符合戦・管理者テスト" session={session} nav="shinpu">
+      <h1>神符合戦・管理者テスト</h1>
+      <p>宮司・神職だけが参加できます。全237種類の札で、運営同士やCPUと対戦できます。</p>
+      <p>対戦の霊銭はテスト用です。サーバーの銭や本番の対戦記録には影響しません。</p>
+      <form method="post" action="/economy/shinpu/enter">
+        <input type="hidden" name="_csrf" value={session.csrfToken} />
+        <button type="submit">テストプレイに入る</button>
+      </form>
+    </Layout>);
+  });
+  app.post('/economy/shinpu/enter', requireCsrf, async (c) => {
+    const session = c.get('session');
+    try {
+      const roles = await api.memberRoles(cfg.guildId, session.userId);
+      if (!roles || !adminLevelOf(cfg, roles)) return c.text('宮司・神職のロールが必要です。', 403);
+    } catch {
+      return c.text('Discordで権限を確認できません。少し待ってください。', 503);
+    }
+    const token = await createMemberSession(db, {
+      id: session.userId, username: session.username, displayName: session.username, avatarUrl: session.avatarUrl,
+    }, now());
+    setCookie(c, 'sakura_shinpu_test', token, { httpOnly: true, secure, sameSite: 'Lax', path: '/casino/shinpu', maxAge: 7 * 86400 });
+    await audit(db, { actorId: session.userId, action: 'shinpu.test.login', via: 'web', detail: { entry: 'shamusho' } });
+    return c.redirect('/casino/shinpu');
   });
 
   app.get('/', async (c) => {

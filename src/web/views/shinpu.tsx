@@ -1,9 +1,12 @@
 import { html } from 'hono/html';
-import { cards } from '../../services/shinpu/engine.js';
+import { cards, playableCards } from '../../services/shinpu/engine.js';
 import { assetUrl } from '../assets.js';
 
 export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
-  const art = JSON.stringify(Object.fromEntries(cards.map((c) => [c.id, assetUrl(`shinpu-card-${c.id}.webp`)])));
+  const art = JSON.stringify(Object.fromEntries([...cards, ...playableCards].map((c) => [c.id,
+    assetUrl(c.id.startsWith('SK-') ? `shinpu-catalog-thumbnails-${c.id}.webp` : `shinpu-card-${c.id}.webp`)])));
+  const fullArt = JSON.stringify(Object.fromEntries([...cards, ...playableCards].map((c) => [c.id,
+    assetUrl(c.id.startsWith('SK-') ? `shinpu-catalog-cards-${c.id}.webp` : `shinpu-card-${c.id}.webp`)])));
   return html`<!doctype html>
     <html lang="ja">
       <head>
@@ -12,15 +15,16 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
         <title>神符合戦 | 咲楽ノ宮・遊べる試作版</title>
         <link rel="stylesheet" href="${assetUrl('shinpu.css')}" />
       </head>
-      <body data-csrf="${csrf}" data-art="${art}">
+      <body data-csrf="${csrf}" data-art="${art}" data-art-full="${fullArt}">
         <header>
           <div class="brand"><span class="crest" aria-hidden="true">✿</span><span>咲楽ノ宮 / 神符合戦</span></div>
-          <nav><span class="tag">運営テスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
+          <nav><a href="/economy/shinpu">社務所へ</a><span class="tag">運営テスト</span><button data-dialog="rules">遊び方</button><button id="leave">部屋を退出</button></nav>
         </header>
         <main class="wrap" id="lobby">
           <section class="arena">
             <h1>運営テストの部屋</h1>
             <p>${name}さん、運営同士で対戦できます。足りない席は式神CPUに任せられます。</p>
+            <p><a href="/casino/shinpu/cards">神器図鑑（237枚）を見る</a></p>
             <label for="count">対戦人数</label
             ><select id="count">
               <option value="2">2人</option>
@@ -78,6 +82,13 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
                 ><button class="log-toggle" data-dialog="history">記録</button>
               </div>
               <p class="muted" id="hint"></p>
+              <fieldset id="card-options" hidden><legend>札の使い方</legend>
+                <label id="heal-target-label" hidden>回復する人<select id="heal-target"></select></label>
+                <label id="second-target-label" hidden>2人目の攻撃対象<select id="second-target"></select></label>
+                <label id="element-label" hidden>選ぶ属性<select id="chosen-element"><option>火</option><option>水</option><option>風</option><option>雷</option><option>土</option><option>光</option><option>闇</option></select></label>
+                <label id="optional-pay-label" hidden><input type="checkbox" id="optional-pay" /><span id="optional-pay-description">追加の霊銭・MPを払う</span></label>
+              </fieldset>
+              <section id="card-choice" hidden><h2 id="choice-label"></h2><div id="choice-cards" class="choice-cards"></div><p id="choice-count"></p></section>
             </section>
             <section class="handarea">
               <div class="handheading">
@@ -103,14 +114,17 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
               <li>自分の次の手番に手札が7枚まで補充されます。HP上限60、MP上限20、手札上限10。</li>
             </ol>
             <p class="hint">
-              この版はオリジナルの試作ルールです。両替は霊銭4→MP4、霊銭4→HP8、MP3→霊銭4。属性は表示用で、相性判定は未実装です。光の祈りは防御3無視、燐火は3手番の継続ダメージ、水鏡は貫通したダメージの半分を反射します。
+              両替は霊銭4→MP4、霊銭4→HP8、MP3→霊銭4。火傷は次の自分の番の開始に2ダメージ・1回です。山札は札ごとの出現重みで用意し、なくなったら捨て札を混ぜます。札の選択も2分で時間切れとなり、サーバーが有効な候補を選んで進めます。
             </p>
-            <p>実装済み：15種類の札、複数枚攻撃・防御、回復、MP消費、反射、吸収、継続ダメージ、両替、CPU対戦、勝敗。</p>
+            <p>実装済み：全237種類の札と特別札「式神を呼ぶ」。属性防御、条件付き攻撃、複数対象、反射、火傷、強化、回復、山札からの選択、霊銭での売買、手札交換、CPU対戦。</p>
             <p>
               「式神を呼ぶ」はMP3でHP10回復・継続ダメージ解除。aisか小林の式神が登場します。本人が同じ名前で参加していればDiscordアイコン、それ以外は仮の狐の肖像を表示します。
             </p>
-            <p>未実装：237種類の全効果、属性相性、守護神、病気、チーム戦、9人対戦。</p>
+            <p>同じ属性の防具はさらに2防ぎます。属性間の有利・不利、守護神、病気、チーム戦、9人対戦はこの237枚仕様には含みません。鈴音の連矢への防御は1枚までです。</p>
           </div>
+        </dialog>
+        <dialog id="card-detail"><button class="close" data-close>閉じる</button><h2 id="card-detail-title"></h2>
+          <img id="card-detail-image" width="900" height="1200" alt="" /><p id="card-detail-text"></p>
         </dialog>
         <dialog id="exchange">
           <button class="close" data-close>閉じる</button>
