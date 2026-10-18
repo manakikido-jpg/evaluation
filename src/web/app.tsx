@@ -507,7 +507,13 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // ───────── 🎰 カジノ（メンバーが Discord でログイン。秘密の入口は要らない） ─────────
-  mountShinpu(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
+  mountShinpu(app, {
+    db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now,
+    staffOf: async (c, userId) => {
+      const s = await findSession(db, getCookie(c, SESSION_COOKIE) ?? '', now());
+      return Boolean(s && s.userId === userId && (s.level === 'guji' || s.level === 'shinshoku'));
+    },
+  });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ここから先はログイン必須 ─────────
@@ -654,12 +660,8 @@ export function createWebApp(deps: WebDeps) {
   });
   app.post('/economy/shinpu/enter', requireCsrf, async (c) => {
     const session = c.get('session');
-    try {
-      const roles = await api.memberRoles(cfg.guildId, session.userId);
-      if (!roles || !adminLevelOf(cfg, roles)) return c.text('宮司・神職のロールが必要です。', 403);
-    } catch {
-      return c.text('Discordで権限を確認できません。少し待ってください。', 503);
-    }
+    // 社務所Web に入れた時点で運営か確かめてある（ID とパスワードの人は Discord に聞けないので、ここでは聞かない）
+    if (session.level !== 'guji' && session.level !== 'shinshoku') return c.text('宮司・神職だけが入れます。', 403);
     const token = await createMemberSession(db, {
       id: session.userId, username: session.username, displayName: session.username, avatarUrl: session.avatarUrl,
     }, now());

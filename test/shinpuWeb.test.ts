@@ -173,7 +173,7 @@ it('社務所の入口からCSRFつきで運営専用の対戦へ入り、操作
   roles = [ROLE.sanpaisha];
   expect((await app.request(ROOT + '/api', { headers: { cookie: 'sakura_shinpu_test=' + playCookie } })).status).toBe(403);
 });
-it('社務所の入口は一般Cookie・CSRF不足・ロール失効・Discord障害を許可しない', async () => {
+it('社務所の入口は一般Cookie・CSRF不足を許可しない。Discord が混んでいても、社務所に運営として入っていれば入れる', async () => {
   expect((await get('/economy/shinpu')).status).not.toBe(200);
   const admin = await officeLogin();
   const h = { cookie: 'shamusho_session=' + admin, 'content-type': 'application/x-www-form-urlencoded' };
@@ -181,12 +181,18 @@ it('社務所の入口は一般Cookie・CSRF不足・ロール失効・Discord�
   const page = await app.request('/economy/shinpu', { headers: h });
   const csrf = /name="_csrf" value="([^"]+)"/.exec(await page.text())![1]!;
   const enter = () => app.request('/economy/shinpu/enter', { method: 'POST', headers: h, body: new URLSearchParams({ _csrf: csrf }) });
-  roles = [ROLE.sanpaisha];
-  expect((await enter()).status).toBe(403);
-  roles = [ROLE.shinshoku]; fail = true;
-  expect((await enter()).status).toBe(503);
+  // 社務所のログインで運営か確かめてあるので、Discord に聞けなくても入れる（ID とパスワードの人も）
+  fail = true;
+  const r = await enter();
+  expect(r.status).toBe(302);
+  const playCookie = token(r, 'sakura_shinpu_test')!;
+  // 対戦の画面も、社務所の Cookie があれば Discord に聞かずに開ける
+  expect((await app.request(ROOT + '/api', { headers: { cookie: `sakura_shinpu_test=${playCookie}; ${h.cookie}` } })).status).toBe(200);
+  // 社務所の Cookie がないときは、これまでどおり Discord で確かめる（混んでいれば入れない）
+  expect((await app.request(ROOT + '/api', { headers: { cookie: 'sakura_shinpu_test=' + playCookie } })).status).toBe(503);
   fail = false;
-  expect((await enter()).status).toBe(302);
+  roles = [ROLE.sanpaisha];
+  expect((await app.request(ROOT + '/api', { headers: { cookie: 'sakura_shinpu_test=' + playCookie } })).status).toBe(403);
 });
 it('社務所の経済ページ権限がない人は直URLでも入場できない', async () => {
   const admin = await officeLogin(['members']);

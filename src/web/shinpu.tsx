@@ -24,6 +24,8 @@ type Deps = {
   baseUrl: string;
   secure: boolean;
   now: () => Date;
+  /** 社務所Web に運営としてログインしている、その人か（Discord に聞かずに入れる。ID とパスワードの人も） */
+  staffOf?: (c: Context, userId: string) => Promise<boolean>;
 };
 const input = z.object({
   operation: z.enum(['create', 'join', 'start', 'move', 'leave']),
@@ -80,6 +82,8 @@ export function mountShinpu(app: Hono<any>, d: Deps) {
   const requireAdmin = async (c: Context) => {
     const s = await findMemberSession(d.db, getCookie(c, COOKIE) ?? '', d.now());
     if (!s) return { response: c.json({ error: 'Discordで認証して入り直してください。' }, 401) };
+    // 社務所Web に運営として入っていれば、それで確かめる（Discord が混んでいても・ID とパスワードの人も入れる）
+    if (d.staffOf && (await d.staffOf(c, s.userId))) return { session: s };
     try {
       if (!(await allowed(s.userId))) {
         await deleteMemberSession(d.db, s.id);
