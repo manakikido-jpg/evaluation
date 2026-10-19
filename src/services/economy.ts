@@ -51,6 +51,10 @@ export type CoinReason =
   | 'admin_grant'
   | 'admin_take'
   | 'saisen'
+  | 'scratch_buy'
+  | 'scratch_prize'
+  | 'lottery_buy'
+  | 'lottery_prize'
   | 'casino_bet'
   | 'casino_win'
   | 'casino_refund'
@@ -247,6 +251,7 @@ export async function adminTake(
 
 /** 銭の出入りの理由（社務所Web・/残高 で表示） */
 export const COIN_REASON_LABEL: Record<string, string> = {
+  scratch_buy: 'スクラッチを買った', scratch_prize: 'スクラッチの払戻', lottery_buy: '宝くじを買った', lottery_prize: '宝くじの当選賞金',
   voice: '通話',
   long_voice_bonus: '7時間の浮上ボーナス',
   shuin_give: '朱印を押した',

@@ -765,6 +765,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await saveOverrides(
       db,
       os.parse({
+        fortuneGames: { enabled: true, lotteryBonus: 1234 },
         recording: { enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] },
         gacha: { price: 777, enabled: false },
         casino: { slotMachines: [3, 'random'] },
@@ -777,6 +778,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(res.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.economy.menzaifuPrice).toBe(800);
     expect(store.current.recording).toMatchObject({ enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] });
+    expect(store.current.fortuneGames).toMatchObject({ enabled: true, lotteryBonus: 1234 });
     expect(store.current.gacha).toMatchObject({ price: 777, enabled: false });
     expect(store.current.casino.slotMachines).toEqual([3, 'random']);
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);

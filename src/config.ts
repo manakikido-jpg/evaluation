@@ -509,6 +509,18 @@ export const CASINO_GAMES_V1: readonly string[] = ['blackjack', 'highlow', 'bacc
 export const TABLE_KINDS = ['bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba', 'life'] as const;
 export type TableKind = (typeof TABLE_KINDS)[number];
 export type CasinoGame = (typeof CASINO_GAMES)[number];
+/** 普段のスクラッチと日曜21時の宝くじ。開始は社務所で切り替える。 */
+export const fortuneGamesSchema = z.object({
+  enabled: z.boolean().default(false),
+  scratchPrice: z.number().int().min(10).max(10000).default(100),
+  scratchDailyLimit: z.number().int().min(1).max(20).default(5),
+  lotteryPrice: z.number().int().min(10).max(10000).default(100),
+  lotteryLimit: z.number().int().min(1).max(100).default(10),
+  lotteryReturnPct: z.number().int().min(10).max(100).default(70),
+  lotteryBonus: z.number().int().min(0).max(1000000).default(1000),
+});
+export type FortuneGamesConfig = z.infer<typeof fortuneGamesSchema>;
+
 export const casinoSchema = z.object({
   enabled: z.boolean().default(true),
   /** 1 回に賭けられる銭 */
@@ -784,6 +796,7 @@ export const guildConfigSchema = z
     economyOps: economyOpsSchema.default(economyOpsSchema.parse({})),
     opsWatch: opsWatchSchema.default(opsWatchSchema.parse({})),
     casinoGacha: casinoGachaSchema.default(casinoGachaSchema.parse({})),
+    fortuneGames: fortuneGamesSchema.default(fortuneGamesSchema.parse({})),
     casino: casinoSchema.default(casinoSchema.parse({})),
     /** 募集: チャンネルのいちばん下に「募集する」ボタンを置き、押した人の募集を役職のある人みんなに知らせる */
     recruit: z

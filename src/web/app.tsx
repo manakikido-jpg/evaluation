@@ -1,3 +1,6 @@
+import { fortuneGamesSchema } from '../config.js';
+import { ensureLotteryRound } from '../services/casino/fortune.js';
+import { FortuneAdminPage } from './views/fortune.js';
 import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
 import { mountRecordings } from './recordings.js';
@@ -646,6 +649,19 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 社務所のログインから、運営限定の対戦へ入る。発行前にもDiscordロールを確認する。
+  app.get('/economy/fortune', async (c) => c.html(<FortuneAdminPage session={c.get('session')} cfg={cfg.fortuneGames} round={await ensureLotteryRound(db, cfg.fortuneGames, now())} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : undefined} />));
+  app.post('/economy/fortune', requireCsrf, async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);
+    const body = await c.req.parseBody();
+    const parsed = fortuneGamesSchema.safeParse({ enabled: body.enabled === 'yes', ...Object.fromEntries(['scratchPrice', 'scratchDailyLimit', 'lotteryPrice', 'lotteryLimit', 'lotteryReturnPct', 'lotteryBonus'].map(key => [key, typeof body[key] === 'string' && body[key] !== '' ? Number(body[key]) : NaN])) });
+    if (!parsed.success) return c.redirect('/economy/fortune?msg=invalid', 303);
+    const prev = await loadOverrides(db);
+    await saveOverrides(db, { ...prev, fortuneGames: parsed.data }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'fortune.settings', detail: parsed.data, via: 'web' });
+    return c.redirect('/economy/fortune?msg=saved', 303);
+  });
+
   app.get('/economy/shinpu', async (c) => {
     const session = c.get('session');
     return c.html(<Layout title="神符合戦・管理者テスト" session={session} nav="shinpu">
@@ -2881,6 +2897,7 @@ export function createWebApp(deps: WebDeps) {
     const opsNum = (k: string, key: 'applicationHours' | 'soudanHours' | 'omairiHours' | 'bellMinutes' | 'quietStart' | 'quietEnd' | 'reportWeekday' | 'reportHour') =>
       Number.isFinite(num(k)) && typeof body[k] === 'string' && body[k] !== '' ? num(k) : opsNow[key];
     const raw = {
+      ...(prev.fortuneGames ? { fortuneGames: prev.fortuneGames } : {}),
       ...(prev.recording ? { recording: prev.recording } : {}),
       economy: {
         currencyName: field(body, 'currencyName', 20),
