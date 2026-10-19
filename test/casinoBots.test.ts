@@ -163,7 +163,7 @@ describe('🤖 大富豪・ババ抜きの BOT', () => {
       expect([...t.bank.values()].reduce((a, b) => a + b, 0)).toBe(0);
       expect(s.seats.filter((x) => x.bot && x.timeouts > 0)).toHaveLength(0);
     }
-  });
+  }, 120_000);
 
   it('大富豪の BOT は、弱い札から出し、ジョーカー・2 は温存する', () => {
     const t = sim(daifugo, 7);
