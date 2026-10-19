@@ -3,6 +3,7 @@ import { ChannelType, type Guild, type Interaction } from 'discord.js';
 import { CastApp } from '../src/discord/cast.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
 import type { Db } from '../src/db/client.js';
+import { castSessions } from '../src/db/schema.js';
 import {
   acceptSession,
   applyCast,
@@ -481,6 +482,21 @@ describe('🎀 キャストのDiscord操作', () => {
     const showModal = vi.fn(async () => undefined);
     await f.app.onInteraction({ ...f.interaction, showModal, message: { flags: { has: () => true } }, update: vi.fn() } as unknown as Interaction);
     expect(JSON.stringify(showModal.mock.calls[0])).toContain(`cast:rmodal:${CAST}:30`);
+  });
+
+  it('非公開スレッドの作成に失敗した予約は公開せず全額返す', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
+    const f = fixture();const CH = '990000000000000777';
+    const { saveCastConfig, getSession } = await import('../src/services/cast.js');
+    await saveCastConfig(db, { ...c, channelId: CH }, 'staff');
+    const create = vi.fn(async () => { throw Error('Missing Permissions'); });
+    f.app.attach({ channels: { cache: new Map([[CH, { type: ChannelType.GuildText, threads: { create } }]]) } } as unknown as Guild);
+    await f.app.onInteraction({ ...f.interaction, customId: `cast:rmodal:${CAST}:30`, isModalSubmit: () => true, isFromMessage: () => true, fields: { getTextInputValue: () => '21:00' } } as unknown as Interaction);
+    expect(create).toHaveBeenCalledOnce();expect(create).toHaveBeenCalledWith(expect.objectContaining({ type: ChannelType.PrivateThread }));
+    expect((await walletOf(db, ADULT)).balance).toBe(10000);
+    const sessions = await db.select().from(castSessions);
+    expect(sessions).toHaveLength(1);expect(await getSession(db,sessions[0]!.id)).toMatchObject({ status: 'declined', threadId: null });
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('銭を戻しました');
   });
 
   it('📦 納品のファイル: 中身が見えるときはキャストのファイルかリンクが要る。見えないときはキャストの書き込みがあればよい', async () => {

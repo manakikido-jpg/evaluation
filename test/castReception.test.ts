@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MessageFlags, type Interaction } from 'discord.js';
+import { ChannelType, MessageFlags, type Interaction } from 'discord.js';
 import sharp from 'sharp';
 import type { Db } from '../src/db/client.js';
 import { castSessions } from '../src/db/schema.js';
@@ -382,3 +382,32 @@ describe('紹介の料金表示', () => {
     expect(d.sendMessage).not.toHaveBeenCalled();
   });
  });
+
+
+describe('キャスト予約内容の公開範囲', () => {
+  const CH = '990000000000000123', THREAD = '990000000000000124';
+  async function setup(create: ReturnType<typeof vi.fn>) {
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), channelId: CH }, 'staff');
+    const app = new CastApp(db, () => cfg, {} as DiscordActions);
+    app.attach({ channels: { cache: new Map([[CH, { type: ChannelType.GuildText, threads: { create } }]]) } } as never);
+    return app as unknown as { openThread(s: typeof castSessions.$inferSelect, name: string): Promise<{ id: string } | undefined> };
+  }
+  it.each([false, true])('公開通話の条件が%sでも、予約スレッドは非公開で招待不可にする', async isPublic => {
+    const add = vi.fn(async (_id: string) => undefined);
+    const create = vi.fn(async () => ({ id: THREAD, members: { add } }));
+    const app = await setup(create);
+    const session = await booking({ isPublic });
+    expect(await app.openThread(session, '📅 予約 #' + session.id)).toMatchObject({ id: THREAD });
+    expect(create).toHaveBeenCalledExactlyOnceWith({ name: '📅 予約 #' + session.id, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' });
+    expect(add.mock.calls).toEqual([[CAST], [CUSTOMER]]);
+    const { getSession } = await import('../src/services/cast.js');
+    expect(await getSession(db, session.id)).toMatchObject({ threadId: THREAD, isPublic });
+  });
+  it('非公開を作れなければ公開へ切り替えず、場所も登録しない', async () => {
+    const create = vi.fn(async () => { throw Error('Missing Permissions'); });
+    const app = await setup(create);const session = await booking({ isPublic: true });
+    expect(await app.openThread(session, '予約')).toBeUndefined();expect(create).toHaveBeenCalledOnce();
+    const { getSession } = await import('../src/services/cast.js');expect((await getSession(db,session.id))?.threadId).toBeNull();
+  });
+});

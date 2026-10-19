@@ -1290,14 +1290,9 @@ export class CastApp {
     const home = castRow ? castHomeChannel(c, castRow) : c.channelId;
     const panel = home ? this.guild?.channels.cache.get(home) : undefined;
     if (panel?.type !== ChannelType.GuildText) return undefined;
-    const thread = await panel.threads
-      .create(
-        // 18 歳未満の人の予約は、2 人だけにしない（みんなに見えるスレッド。部屋も公開）
-        s.isPublic
-          ? { name, type: ChannelType.PublicThread, reason: 'キャストの予約（公開）' }
-          : { name, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品' },
-      )
-      .catch(() => undefined);
+    // 予約内容は年齢にかかわらず非公開。isPublicは通話部屋だけの条件。
+    // 非公開を作れない場合も、公開スレッドへ切り替えない。
+    const thread = await panel.threads.create({ name, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' }).catch(() => undefined);
     if (!thread) return undefined;
     await thread.members.add(s.castId).catch(() => undefined);
     await thread.members.add(s.customerId).catch(() => undefined);
