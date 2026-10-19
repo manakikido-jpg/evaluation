@@ -10,7 +10,7 @@ it('購入後の部分更新で削る操作を初期化し、同じ画面には�
     const form = { addEventListener: vi.fn() };
     return { dataset: { opened: 'no' }, ctx, canvas, form, querySelector: (selector: string) => selector === 'canvas' ? canvas : selector === '[data-scratch-form]' ? form : {} };
   }
-  runInNewContext(readFileSync(new URL('../src/web/public/fortune.js', import.meta.url), 'utf8'), { document: { querySelector: () => current, addEventListener: (name: string, fn: () => void) => events.set(name, fn) } });
+  runInNewContext(readFileSync(new URL('../src/web/public/fortune.js', import.meta.url), 'utf8'), { document: { querySelectorAll: () => [], querySelector: () => current, addEventListener: (name: string, fn: () => void) => events.set(name, fn) } });
   expect(events.has('c-page-swapped')).toBe(true);
   current = ticket();events.get('c-page-swapped')!();
   expect(current.ctx.fillRect).toHaveBeenCalledOnce();

@@ -26,7 +26,7 @@ const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 export type CasinoMe = { styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date; /** 重ねた枚数 */ boostLevel?: number };
 
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
-export function CasinoLayout(props: { title: string; fortune?: boolean; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean }) {
+export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean }) {
   const me = props.me;
   return (
     <html lang="ja">
@@ -43,7 +43,6 @@ export function CasinoLayout(props: { title: string; fortune?: boolean; me?: Cas
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino-request.js')} defer></script>
         <script src={assetUrl('casino.js')} defer></script>
-        {props.fortune && <><link rel="stylesheet" href={assetUrl('fortune.css')} /><script src={assetUrl('fortune.js')} defer></script></>}
         <script type="module" src={assetUrl('life3d.js')}></script>
       </head>
       <body class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})} data-base-room-name={styleItem(me?.baseStyles?.background ?? '')?.name ?? 'あなたの遊技場'}>

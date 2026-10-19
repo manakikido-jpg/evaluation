@@ -45,6 +45,7 @@ import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, invite
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountShinpu } from './shinpu.js';
+import { mountLottery } from './lottery.js';
 import { mountCasino } from './casino.js';
 import { CasinoAdminPage, CASINO_RANGES, type CasinoRange } from './views/casinoAdmin.js';
 import { casinoPlayers, casinoStats } from '../services/casino/casino.js';
@@ -517,6 +518,7 @@ export function createWebApp(deps: WebDeps) {
       return Boolean(s && s.userId === userId && (s.level === 'guji' || s.level === 'shinshoku'));
     },
   });
+  mountLottery(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ここから先はログイン必須 ─────────

@@ -2,3 +2,5 @@
 
 .fortune-title{font-size:clamp(1.5rem,4vw,2rem);line-height:1.4}
 .scratch-ticket [hidden]{display:none!important}
+
+.fortune-shop .c-logo{flex-wrap:wrap;white-space:normal}.fortune-shop .c-top{gap:1rem;flex-wrap:wrap}.fortune-shop .c-me{flex-wrap:wrap}.fortune-shop .c-main{max-width:1200px}

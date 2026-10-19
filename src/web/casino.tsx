@@ -1,5 +1,3 @@
-import { buyLottery, buyScratch, fortuneState, revealScratch, fortuneErrorMessage, FortuneError } from '../services/casino/fortune.js';
-import { FortunePage } from './views/fortune.js';
 import { lobbyTable, lobbyResumes, visibleLobbyGames, prayerHref } from '../services/casino/lobby.js';
 import { activeStyles, stylesOf, equipStyle, tableStyles } from '../services/casino/styles.js';
 import { StyleGachaPage, Wardrobe } from './views/casinoStyles.js';
@@ -174,7 +172,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   /** ログインが要るページ。お休み中はお休みの画面 */
   const page =
-    (handler: (c: Context, me: Me) => Response | Promise<Response>, opts: { post?: boolean; allowClosed?: boolean } = {}) =>
+    (handler: (c: Context, me: Me) => Response | Promise<Response>, opts: { post?: boolean } = {}) =>
     async (c: Context) => {
       const r = await current(c);
       if (!r || 'error' in r) {
@@ -186,36 +184,11 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         if (!safeEqual(typeof body._csrf === 'string' ? body._csrf : '', r.session.csrfToken)) return c.text('不正なリクエストです（CSRF）。', 403);
       }
       const me = await meOf(r.session);
-      if (!d.cfg().casino.enabled && !opts.allowClosed) return c.html(<CasinoClosed me={me} />);
+      if (!d.cfg().casino.enabled) return c.html(<CasinoClosed me={me} />);
       return handler(c, me);
     };
 
-  app.get('/casino/fortune', page(async (c, me) => c.html(<FortunePage me={me} cfg={{ ...d.cfg().fortuneGames, enabled: d.cfg().fortuneGames.enabled && d.cfg().casino.enabled }} state={await fortuneState(db, me.session.userId, d.cfg().fortuneGames, d.now())} selected={c.req.query('ticket')} error={c.req.query('error')?.slice(0, 160)} />), { allowClosed: true }));
-  app.post('/casino/fortune/scratch', page(async (c, me) => {
-    const body = await c.req.parseBody();
-    try {
-      if (typeof body.quote !== 'string' || Number(body.quote) !== d.cfg().fortuneGames.scratchPrice) throw new FortuneError('値段が変わりました。画面を開き直してから購入してください。');
-      const id = await buyScratch(db, me.session.userId, String(body.nonce ?? ''), d.cfg().fortuneGames, d.now);
-      return c.redirect('/casino/fortune?ticket=' + id, 303);
-    } catch (err) { return c.redirect('/casino/fortune?error=' + encodeURIComponent(fortuneErrorMessage(err)), 303); }
-  }, { post: true }));
-  app.post('/casino/fortune/scratch/:id/open', page(async (c, me) => {
-    try {
-      const result = await revealScratch(db, me.session.userId, c.req.param('id')!, d.now);
-      if (c.req.header('accept') === 'application/json') return c.json(result);
-      return c.redirect('/casino/fortune?ticket=' + c.req.param('id'), 303);
-    } catch (err) {
-      if (c.req.header('accept') === 'application/json') return c.json({ error: fortuneErrorMessage(err) }, 400);
-      return c.redirect('/casino/fortune?error=' + encodeURIComponent(fortuneErrorMessage(err)), 303);
-    }
-  }, { post: true, allowClosed: true }));
-  app.post('/casino/fortune/lottery', page(async (c, me) => {
-    const body = await c.req.parseBody();
-    try {
-      await buyLottery(db, me.session.userId, String(body.nonce ?? ''), String(body.roundId ?? ''), d.cfg().fortuneGames, d.now);
-      return c.redirect('/casino/fortune', 303);
-    } catch (err) { return c.redirect('/casino/fortune?error=' + encodeURIComponent(fortuneErrorMessage(err)), 303); }
-  }, { post: true }));
+  app.get('/casino/fortune', c => c.redirect('/lottery', 302));
 
   app.get('/casino/wardrobe', page(async (c, me) => c.html(<Wardrobe me={me} state={await stylesOf(db, me.session.userId)} preview={c.req.query('preview')} now={d.now()} message={c.req.query('msg')} />)));
   app.post('/casino/wardrobe/equip', page(async (c, me) => {

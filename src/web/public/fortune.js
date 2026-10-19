@@ -1,5 +1,25 @@
 'use strict';
 (() => {
+ // 購入POSTは一度だけ送る。応答不明時はGETで券と残高を確認する。
+ document.querySelectorAll('[data-fortune-buy]').forEach(form => {
+  let busy=false;
+  form.addEventListener('submit',async event=>{
+   event.preventDefault();if(busy)return;busy=true;
+   const button=form.querySelector('button'), body=new FormData(form);
+   button.disabled=true;
+   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),20000);
+   try {
+    const res=await fetch(form.action,{method:'POST',body,signal:controller.signal});
+    const url=new URL(res.url);
+    if(!res.ok || url.origin!==location.origin || url.pathname!=='/lottery') throw Error('結果を確認してください。');
+    location.assign(url.href);
+   } catch {
+    const message=document.createElement('p');message.setAttribute('role','alert');
+    message.textContent='通信が途切れました。購入を送り直す前に、券と残高を確認してください。 ';
+    const link=document.createElement('a');link.href='/lottery';link.textContent='結果を確認して復帰';message.append(link);form.append(message);
+   } finally {clearTimeout(timer);}
+  });
+ });
  function init() {
   const ticket = document.querySelector('[data-scratch]');
   if (!ticket || ticket.dataset.opened === 'yes' || ticket.dataset.scratchBound) return;

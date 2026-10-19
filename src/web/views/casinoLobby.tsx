@@ -102,7 +102,6 @@ export function CasinoLobbyContent(p: LobbyProps) {
             {p.msg}
           </p>
         )}
-        <section class="cl-panel"><h2>✨ 毎日の運だめしと週末のお楽しみ</h2><p>控えめなスクラッチと、日曜21時（日本時間）の宝くじ。</p><a class="c-btn" href="/casino/fortune">スクラッチ・宝くじへ</a></section>
         {(p.mine || p.resumes.length > 0) && (
           <section class="cl-panel cl-resume" aria-labelledby="cl-resume-title">
             <h2 id="cl-resume-title">◷ 続きから遊ぶ</h2>
