@@ -20,6 +20,7 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   { id: '2026-10-18-daifugo-bot-stronger', date: '2026-10-18', kind: 'improve', where: ['Discord'], title: '大富豪の BOT を強くした', items: ['BOT が先読みで試す手と、配りなおしの回数を増やしました。前の BOT とくらべて、平均の順位がはっきり上がります（AI の版 4）。'] },
+  { id: '2026-10-19-promotion-role-card', date: '2026-10-19', kind: 'improve', where: ['Discord'], title: '昇格のお祝いをカード表示と役職へのお知らせに', items: ['慶事の昇格通知を桜色のカードにし、本人・新しい位・ご縁を表示します。', '既存の「すべての役職」と同じ通知先へメンションします。通知OK／NGを用意済みなら通知OKだけ、未設定なら設定されている役職全体に知らせます。everyoneには通知しません。'] },
   { id: '2026-10-18-home-voice-now', date: '2026-10-18', kind: 'new', where: ['社務所Web'], title: 'ホームに「いま通話にいる人」', items: ['社務所Web のホームで、いま通話にいる人を通話ごとに見られます。だれかが出入りすると数秒で変わり、開いている間は 10 秒ごとに自動で書きかわります。'] },
   { id: '2026-10-18-shinpu-entry-fix', date: '2026-10-18', kind: 'fix', where: ['社務所Web'], title: '社務所から神符合戦のテストに入れないのを直した', items: ['「Discordで権限を確認できません」と出て入れませんでした。社務所Web に宮司・神職として入っていれば、そのまま入れるようにしました（ID とパスワードでログインした人も）。'] },
   { id: '2026-10-18-shinpu-office-entry', date: '2026-10-18', kind: 'new', where: ['社務所Web'], title: '社務所から管理者専用の神符合戦テストへ', items: ['社務所メニューに「神符合戦（管理者テスト）」を追加しました。テストプレイに入るボタンから対戦できます。', '社務所のページ権限とCSRF、Discordの宮司・神職ロールを確認します。対戦中もロールを確認し、サーバーの銭には影響しません。'] },

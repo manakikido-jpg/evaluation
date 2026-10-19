@@ -1,3 +1,4 @@
+import { pingRoleIds } from '../services/notify.js';
 import { saveVoiceNow } from '../services/meetings.js';
 import {
   ActionRowBuilder,
@@ -13,6 +14,7 @@ import {
   type PartialGuildMember,
   type Interaction,
   type Message,
+  type MessageCreateOptions,
   type UserContextMenuCommandInteraction,
   type StringSelectMenuInteraction,
 } from 'discord.js';
@@ -555,7 +557,7 @@ export class ShuinApp {
         await this.log(`⚠️ ${member} さまの前の役職ロールを外せませんでした。手で外してください。`);
       });
     }
-    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen), [member.id]);
+    await this.send(this.cfg.channels.keiji, promotionAnnouncement(member.id, promotion, goen, pingRoleIds(this.cfg), member.displayAvatarURL()));
     await this.log(promotionLog(member.id, promotion, goen));
     await recordPromotion(this.db, member.id, promotion.from.key, promotion.to.key, goen).catch((err) =>
       logger.warn({ err }, 'recordPromotion failed'),
@@ -569,11 +571,11 @@ export class ShuinApp {
     if (id) await this.send(id, content);
   }
 
-  private async send(channelId: string, content: string, pingUserIds: string[] = []): Promise<void> {
+  private async send(channelId: string, message: string | MessageCreateOptions): Promise<void> {
     try {
       const channel = await this.client.channels.fetch(channelId);
       if (channel?.isSendable()) {
-        await channel.send({ content, allowedMentions: { parse: [], users: pingUserIds } });
+        await channel.send(typeof message === 'string' ? { content: message, allowedMentions: { parse: [], users: [] } } : message);
       } else {
         logger.warn({ channelId }, 'channel is not sendable');
       }

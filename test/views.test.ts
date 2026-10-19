@@ -120,7 +120,15 @@ describe('表示', () => {
 
   it('昇格の発表', () => {
     const p = decidePromotion(cfg.ranks, [ROLE.ujiko], 100)!;
-    expect(promotionAnnouncement(B, p, 100)).toBe(`🌸 <@${B}> さまのご縁が花ひらき、**🎋 世話役** になられました。（ご縁 100）`);
+    const result = promotionAnnouncement(B, p, 100, [ROLE.sanpaisha, ROLE.ujiko], 'https://example.com/avatar.png');
+    expect(result.content).toBe(`<@&${ROLE.sanpaisha}> <@&${ROLE.ujiko}> 新しい仲間をお迎えください。`);
+    expect(result.allowedMentions).toEqual({ parse: [], users: [], roles: [ROLE.sanpaisha, ROLE.ujiko] });
+    expect(result.embeds).toEqual([expect.objectContaining({
+      title: '🌸 ご昇格おめでとうございます',
+      description: `<@${B}> さまのご縁が花ひらき、**🎋 世話役** になられました。`,
+      fields: [{ name: '新しい位', value: '🎋 世話役', inline: true }, { name: 'ご縁', value: '100', inline: true }],
+      thumbnail: { url: 'https://example.com/avatar.png' },
+    })]);
   });
 });
 
