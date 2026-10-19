@@ -2099,3 +2099,36 @@ export const recordings = pgTable('recordings', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 }, t => [index('recordings_expiry_idx').on(t.expiresAt)]);
 export type Recording = typeof recordings.$inferSelect;
+
+/** スクラッチ。購入と開封を別々に記録し、同じ券への支払いは1回だけ。 */
+export const fortuneScratch = pgTable('fortune_scratch', {
+  id: text('id').primaryKey(),
+  memberId: text('member_id').notNull(),
+  day: text('day').notNull(),
+  price: integer('price').notNull(),
+  payout: integer('payout').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  openedAt: timestamp('opened_at', { withTimezone: true }),
+}, (t) => [index('fortune_scratch_member_day').on(t.memberId, t.day)]);
+
+/** 開催時の条件を固定。再起動後や休止後も、販売済みの抽選を回収できる。 */
+export const fortuneRounds = pgTable('fortune_rounds', {
+  id: text('id').primaryKey(),
+  drawAt: timestamp('draw_at', { withTimezone: true }).notNull(),
+  price: integer('price').notNull(),
+  perMember: integer('per_member').notNull(),
+  returnPct: integer('return_pct').notNull(),
+  bonus: integer('bonus').notNull(),
+  sold: integer('sold').notNull().default(0),
+  settledAt: timestamp('settled_at', { withTimezone: true }),
+  winnerId: text('winner_id'),
+  winningNumber: integer('winning_number'),
+  payout: integer('payout').notNull().default(0),
+}, (t) => [index('fortune_rounds_due').on(t.drawAt, t.settledAt)]);
+export const fortuneTickets = pgTable('fortune_tickets', {
+  id: text('id').primaryKey(),
+  roundId: text('round_id').notNull().references(() => fortuneRounds.id),
+  memberId: text('member_id').notNull(),
+  number: integer('number').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('fortune_ticket_number').on(t.roundId, t.number), index('fortune_ticket_member').on(t.roundId, t.memberId)]);

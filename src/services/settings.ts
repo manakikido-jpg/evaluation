@@ -1,4 +1,4 @@
-import { recordingSchema } from '../config.js';
+import { fortuneGamesSchema, recordingSchema } from '../config.js';
 import { z } from 'zod';
 import { setStyleCatalog } from './casino/styles.js';
 import { emaCounterSchema, casinoGachaSchema, CASINO_GAMES, CASINO_GAMES_V1, casinoSchema, omikujiSpecialSchema, omikujiTextsSchema, notifySchema, streakRewardSchema, coreTimeSchema, economyOpsSchema, opsWatchSchema, guildConfigSchema, rankSchema, marketSchema, roomsSchema, bellSchema, gachaSchema, voiceChatSchema, voiceGroupSchema, voiceCounterSchema, webAccessEntrySchema, type GuildConfig } from '../config.js';
@@ -13,6 +13,7 @@ import { activeEvents, applyEvents } from './economyEvents.js';
  */
 export const overridesSchema = z.object({
   recording: recordingSchema.optional(),
+  fortuneGames: fortuneGamesSchema.optional(),
   economy: z
     .object({
       currencyName: z.string().min(1).max(20),
@@ -151,6 +152,7 @@ export function applyOverrides(base: GuildConfig, o: Overrides): GuildConfig {
   return guildConfigSchema.parse({
     ...base,
     recording: o.recording ?? base.recording,
+    fortuneGames: o.fortuneGames ?? base.fortuneGames,
     // 💎 極の入口（社務所Web で作ったもの）を、通話部屋の入口に足す
     tempVoice: {
       ...base.tempVoice,

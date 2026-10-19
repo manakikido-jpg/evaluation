@@ -188,6 +188,8 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return handler(c, me);
     };
 
+  app.get('/casino/fortune', c => c.redirect('/lottery', 302));
+
   app.get('/casino/wardrobe', page(async (c, me) => c.html(<Wardrobe me={me} state={await stylesOf(db, me.session.userId)} preview={c.req.query('preview')} now={d.now()} message={c.req.query('msg')} />)));
   app.post('/casino/wardrobe/equip', page(async (c, me) => {
     const b = await c.req.parseBody();

@@ -4,6 +4,7 @@ import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
 
 type Nav =
+  | 'fortune'
   | 'shinpu'
   | 'recordings'
   | 'home'
@@ -79,6 +80,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: 'economy', href: '/economy', icon: '🪙', label: '経済' },
       { key: 'shinpu', href: '/economy/shinpu', icon: '⚔', label: '神符合戦（管理者テスト）', page: 'economy' },
+      { key: 'fortune', href: '/economy/fortune', icon: '🎟', label: 'スクラッチ・宝くじ', page: 'economy' },
       { key: 'casino', href: '/economy/casino', icon: '🎰', label: 'カジノ', page: 'economy' },
       { key: 'gift', href: '/gacha#gacha-gift', icon: '🎁', label: 'みんなに配る', gujiOnly: true },
       { key: 'gacha', href: '/gacha', icon: '🎲', label: '物御籤' },

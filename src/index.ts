@@ -1,3 +1,4 @@
+import { settleLotteries } from './services/casino/fortune.js';
 import { EmaCounterApp } from './discord/emaCounter.js';
 import { RecordingApp } from './discord/recording.js';
 import { planOf, roomOf } from './services/rooms.js';
@@ -216,7 +217,9 @@ async function main(): Promise<void> {
     // 募集ボタン: なければ置く
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
+    void settleLotteries(db).catch(err => logger.warn({ err }, 'lottery settlement failed'));
     ticker = setInterval(() => {
+      void settleLotteries(db).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
