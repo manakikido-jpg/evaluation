@@ -1,4 +1,4 @@
-import { buyLottery, buyScratch, fortuneState, revealScratch, fortuneErrorMessage } from '../services/casino/fortune.js';
+import { buyLottery, buyScratch, fortuneState, revealScratch, fortuneErrorMessage, FortuneError } from '../services/casino/fortune.js';
 import { FortunePage } from './views/fortune.js';
 import { lobbyTable, lobbyResumes, visibleLobbyGames, prayerHref } from '../services/casino/lobby.js';
 import { activeStyles, stylesOf, equipStyle, tableStyles } from '../services/casino/styles.js';
@@ -194,6 +194,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   app.post('/casino/fortune/scratch', page(async (c, me) => {
     const body = await c.req.parseBody();
     try {
+      if (typeof body.quote !== 'string' || Number(body.quote) !== d.cfg().fortuneGames.scratchPrice) throw new FortuneError('値段が変わりました。画面を開き直してから購入してください。');
       const id = await buyScratch(db, me.session.userId, String(body.nonce ?? ''), d.cfg().fortuneGames, d.now);
       return c.redirect('/casino/fortune?ticket=' + id, 303);
     } catch (err) { return c.redirect('/casino/fortune?error=' + encodeURIComponent(fortuneErrorMessage(err)), 303); }

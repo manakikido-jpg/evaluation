@@ -19,7 +19,7 @@ export function FortunePage({ me, cfg, state, selected, error }: { me: CasinoMe;
     <div class="fortune-grid">
       <section class="fortune-panel"><h2>✨ 毎日のスクラッチ</h2>
         <p>1枚 {cfg.scratchPrice} {me.coin.name} · 今日 {state.dailyUsed} / {cfg.scratchDailyLimit} 枚。上限は日本時間0時に戻ります。</p>
-        <form method="post" action="/casino/fortune/scratch"><Hidden me={me} /><input type="hidden" name="nonce" value={randomUUID()} />
+        <form method="post" action="/casino/fortune/scratch"><Hidden me={me} /><input type="hidden" name="quote" value={cfg.scratchPrice} /><input type="hidden" name="nonce" value={randomUUID()} />
           <button class="c-btn" disabled={!cfg.enabled || state.dailyUsed >= cfg.scratchDailyLimit || !!state.scratches.find(t => !t.openedAt)}>1枚買う（{cfg.scratchPrice} {me.coin.name}）</button>
         </form>
         {ticket && <article class="scratch-ticket" data-coin={me.coin.name} data-emoji={me.coin.emoji} data-scratch={ticket.id} data-csrf={me.session.csrfToken} data-opened={ticket.openedAt ? 'yes' : 'no'}>

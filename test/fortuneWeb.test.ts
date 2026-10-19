@@ -25,7 +25,7 @@ beforeEach(async()=>{
 });
 afterEach(async()=>close());
 const get=(path='/casino/fortune')=>app.request(path,{headers:{cookie:'sakura_casino='+cookie}});
-const post=(path:string,body:Record<string,string>,extra:Record<string,string>={})=>app.request(path,{method:'POST',headers:{cookie:'sakura_casino='+cookie,'content-type':'application/x-www-form-urlencoded',...extra},body:new URLSearchParams({_csrf:csrf,...body})});
+const post=(path:string,body:Record<string,string>,extra:Record<string,string>={})=>app.request(path,{method:'POST',headers:{cookie:'sakura_casino='+cookie,'content-type':'application/x-www-form-urlencoded',...extra},body:new URLSearchParams({_csrf:csrf,quote:String(current.fortuneGames.scratchPrice),...body})});
 it('会員だけ購入でき、CSRF不足・価格偽装を許可しない',async()=>{
  expect((await app.request('/casino/fortune')).status).toBe(302);
  const id=randomUUID();
@@ -81,4 +81,14 @@ it('会員画面は内容をエスケープし、CSPと静的アセットを保�
  const page=await get();const html=await page.text();expect(html).toContain('あや&lt;b&gt;');expect(html).not.toContain('onclick=');expect(html).not.toContain('<script>');
  expect(page.headers.get('content-security-policy')).toContain("script-src 'self'");
  expect((await app.request('/static/fortune.js')).status).toBe(200);expect((await app.request('/static/fortune.css')).status).toBe(200);
+});
+
+it('価格変更前の画面からは引き落とさず、新しい価格を表示してから買う',async()=>{
+ current={...current,fortuneGames:{...current.fortuneGames,scratchPrice:200}};
+ const old=await post('/casino/fortune/scratch',{nonce:randomUUID(),quote:'100'});
+ expect(decodeURIComponent(old.headers.get('location')!)).toContain('値段が変わりました');
+ expect((await walletOf(db,A)).balance).toBe(5000);
+ expect(await(await get()).text()).toContain('1枚買う（200');
+ expect((await post('/casino/fortune/scratch',{nonce:randomUUID(),quote:'200'})).status).toBe(303);
+ expect((await walletOf(db,A)).balance).toBe(4800);
 });
