@@ -1706,17 +1706,31 @@ export function KbStablePage(p: {
         <p class="c-muted">
           馬は 10 口。1 口ずつ買えます。賞金・功労金・ロイヤリティは口の数で分けます。調教・出走・引退を決めるのは、いちばん多く口を持つ人です。買った口は売れません。
         </p>
-        {(p.myShares ?? []).length > 0 && (
+        {(p.myShares ?? []).some((x) => !x.retired) && (
           <>
             <h3>あなたが口を持っている馬</h3>
             <ul>
-              {(p.myShares ?? []).map((x) => (
+              {(p.myShares ?? []).filter((x) => !x.retired).map((x) => (
                 <li>
-                  <a href={`/casino/keiba/horse/${x.id}`}>{x.name}</a>・{x.units} 口・馬主 {x.ownerName ?? ""}・{x.starts} 戦 {x.wins} 勝{x.retired ? "（引退）" : ""}
+                  <a href={`/casino/keiba/horse/${x.id}`}>{x.name}</a>・{x.units} 口・馬主 {x.ownerName ?? ""}・{x.starts} 戦 {x.wins} 勝
                 </li>
               ))}
             </ul>
           </>
+        )}
+        {/* 引退した馬は一覧に出さず、たたんでおく（子の馬のロイヤリティは口の数で分けるので、口は残す） */}
+        {(p.myShares ?? []).some((x) => x.retired) && (
+          <details class="kb-retired-shares">
+            <summary>引退した馬（{(p.myShares ?? []).filter((x) => x.retired).length} 頭）</summary>
+            <ul>
+              {(p.myShares ?? []).filter((x) => x.retired).map((x) => (
+                <li>
+                  <a href={`/casino/keiba/horse/${x.id}`}>{x.name}</a>・{x.units} 口・{x.starts} 戦 {x.wins} 勝（引退）
+                </li>
+              ))}
+            </ul>
+            <p class="c-muted">子の馬が勝つと、口の数でロイヤリティが入ります。</p>
+          </details>
         )}
       </section>
       <Leading rows={p.leading} coin={coin} me={p.me.session.userId} />

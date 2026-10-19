@@ -1,7 +1,7 @@
 import { tableById } from '../src/services/casino/tables/service.js';
 import type { LifeState } from '../src/services/casino/tables/life.js';
 import { eq } from 'drizzle-orm';
-import { casinoStyles, members } from '../src/db/schema.js';
+import { casinoStyles, keibaHorses, keibaShares, members } from '../src/db/schema.js';
 import { playSlots } from '../src/services/casino/casino.js';
 import { playAt } from '../src/services/casino/slotAtPlay.js';
 import { stylesOf } from '../src/services/casino/styles.js';
@@ -768,6 +768,17 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(after).toContain('サクラノヒメ');
     expect(after).toContain('新馬');
     expect((await post('/casino/keiba/stable/buy', a, { name: 'ツキノヒメ' })).headers.get('location')).toBe('/casino/keiba/stable?e=poor');
+    // 🤝 口を持つ馬: 引退した馬は一覧に出さず、たたんだ欄へ（口は残す）
+    const run = (await addHorse(db, 'ハシルウマ', undefined, B))!;
+    const old = (await addHorse(db, 'ヤスムウマ', undefined, B))!;
+    await db.update(keibaHorses).set({ retiredAt: new Date() }).where(eq(keibaHorses.id, old.id));
+    await db.insert(keibaShares).values([{ horseId: run.id, memberId: A, units: 1 }, { horseId: run.id, memberId: B, units: 9 }, { horseId: old.id, memberId: A, units: 1 }, { horseId: old.id, memberId: B, units: 9 }]);
+    const shared = await (await get('/casino/keiba/stable', a)).text();
+    const list = shared.slice(shared.indexOf('あなたが口を持っている馬'), shared.indexOf('kb-retired-shares'));
+    expect(list).toContain('ハシルウマ');
+    expect(list).not.toContain('ヤスムウマ');
+    expect(shared).toContain('引退した馬（1 頭）');
+    expect(shared.slice(shared.indexOf('kb-retired-shares'))).toContain('ヤスムウマ');
     expect(frag).toContain('みんなの馬券（1 人');
     // 3 連単（着順どおり）: 押した順の 1 点
     await post(`/casino/t/${id}/act`, a, { action: 'bets', type: 'trifecta', mode: 'order', seq: '3,1,2', h: ['1', '2', '3'], bet: '10' });
