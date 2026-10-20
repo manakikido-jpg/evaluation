@@ -716,6 +716,38 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect(r.status === 'ok' && r.balance).toBe(19300);
   });
 
+  it('✏️ メニューの種類を書きかえで変えられる（通話→納品→ガチャ→相談→寝落ち→通話）。ガチャは中身が要る', async () => {
+    const { updateMenuItem, menuKindOf } = await import('../src/services/cast.js');
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, c, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    expect(await addMenuItem(db, c, CAST, [{ name: 'ボイス', note: '', minutes: 30, price: 300, night: false }])).toBe('ok');
+    const id = (await getCast(db, CAST))!.menu.find((m) => m.name === 'ボイス')!.id;
+    const item = async () => (await getCast(db, CAST))!.menu.find((m) => m.id === id)!;
+    const edit = (kind: 'call' | 'night' | 'consult' | 'delivery' | 'gacha', patch: Partial<{ minutes: number; price: number; gacha: string[] }> = {}) =>
+      updateMenuItem(db, c, CAST, id, { name: 'ボイス', note: '', minutes: 30, price: 500, night: false, kind, ...patch });
+    expect(await edit('delivery')).toBe('ok');
+    expect(await item()).toMatchObject({ delivery: true, minutes: 0, price: 500 });
+    expect(menuKindOf(await item())).toBe('delivery');
+    // ガチャは中身がないとだめ
+    expect(await edit('gacha', { gacha: [] })).toBe('invalid');
+    expect(await edit('gacha', { gacha: ['おはよう', 'おやすみ'] })).toBe('ok');
+    expect(await item()).toMatchObject({ delivery: true, gacha: ['おはよう', 'おやすみ'] });
+    expect(menuKindOf(await item())).toBe('gacha');
+    expect(await edit('consult')).toBe('ok');
+    expect(await item()).toMatchObject({ consult: true, price: 0, minutes: 0 });
+    expect((await item()).delivery).toBeFalsy();
+    expect(await edit('night', { price: 2000 })).toBe('ok');
+    expect(menuKindOf(await item())).toBe('night');
+    expect(await edit('call', { minutes: 60, price: 700 })).toBe('ok');
+    expect(await item()).toMatchObject({ minutes: 60, price: 700, night: false });
+    expect(menuKindOf(await item())).toBe('call');
+    // 種類を入れなければ前のまま（前の画面から保存しても）
+    expect(await updateMenuItem(db, c, CAST, id, { name: 'ボイス2', note: '', minutes: 90, price: 900, night: false })).toBe('ok');
+    expect(await item()).toMatchObject({ name: 'ボイス2', minutes: 90 });
+    expect(menuKindOf(await item())).toBe('call');
+  });
+
   it('💬📦 納品の相談: キャストが出した値段で、納品の注文になる（同じスレッドで 2 回は注文しない）', async () => {
     await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
     await applyCast(db, c, { id: CAST, adult: true }, profile);

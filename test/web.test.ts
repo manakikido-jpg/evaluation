@@ -4119,6 +4119,13 @@ it('キャスト専用のDiscord認証で本人だけ編集でき、運営の画
   const item = menuOf((await getCast(db, USER))!).find(m => m.name === 'ゲーム')!;
   expect((await send(`/cast-office/menu/${item.id}`, { name: 'ゲーム', note: '', minutes: '60', price: '700' })).headers.get('location')).toBe('/cast-office?msg=saved');
   expect(menuOf((await getCast(db, USER))!).find(m => m.id === item.id)!.price).toBe(700);
+  // ✏️ 種類を変える: 通話 → 納品 → ガチャ（中身つき）
+  expect((await send(`/cast-office/menu/${item.id}`, { name: 'ゲーム', note: '', minutes: '0', price: '800', kind: 'delivery', gacha: '' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect(menuOf((await getCast(db, USER))!).find(m => m.id === item.id)).toMatchObject({ delivery: true, price: 800, minutes: 0 });
+  expect((await send(`/cast-office/menu/${item.id}`, { name: 'ゲーム', note: '', minutes: '0', price: '800', kind: 'gacha', gacha: '' })).headers.get('location')).toBe('/cast-office?msg=invalid');
+  expect((await send(`/cast-office/menu/${item.id}`, { name: 'ゲーム', note: '', minutes: '0', price: '800', kind: 'gacha', gacha: 'A\nB' })).headers.get('location')).toBe('/cast-office?msg=saved');
+  expect(menuOf((await getCast(db, USER))!).find(m => m.id === item.id)).toMatchObject({ delivery: true, gacha: ['A', 'B'] });
+  expect(await (await app.request('/cast-office', { headers: { cookie } })).text()).toContain('🎰 ガチャ（納品）');
   expect((await send('/cast-office/menu', { name: '不正', minutes: '30', price: '-1' })).headers.get('location')).toBe('/cast-office?msg=invalid');
   expect(actions.some(x => x.startsWith('edit '))).toBe(true);
   const sharp = (await import('sharp')).default;
