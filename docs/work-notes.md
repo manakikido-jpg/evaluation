@@ -267,3 +267,6 @@
 - 完了範囲：人だけの募集導線、共有文コピー、条件別の大富豪BOT診断、同条件の比較ツールまで。実際のBOT調整はユーザーの合意どおり反映後の成績確認から行う。codex/daifugo-balance-investigation、[PR #60](https://github.com/manakikido-jpg/evaluation/pull/60)へ追加を保存する。本番未反映。利益500銭上限も同じPR内に維持し、日次利益上限や参加費上限は追加していない。
 - シャンパンの継続：購入・配分・通知再試行・売上明細と5種類のPNG/GIFを実装済み。型チェックと関連3ファイル77テスト成功。画像見本を/workspace/artifacts/cast-champagneへ保存し、桜のしずくの文字・ボトル・金額・余白を目視確認。開栓GIFは8フレーム、全5種類のサイズ・生成をテスト済み。
 - 本番61b8140を通常mergeで取り込み（959967b）、大富豪の履歴・説明・作業記録を両方維持して競合解消。シャンパン実装97aaea9。まだ未push。御神籤の券自動使用は別worktree /workspace/omikuji-auto、codex/omikuji-auto-ticketで検証中。
+- シャンパン最終検証：本番7f4e828を取り込んだ48736b9で型チェック・ビルド成功。全139ファイル1,766テスト成功（401.54秒、2並列）。テスト削除・skip・時間制限変更なし。push前の本番ブランチ明示fetchでも追加変更なし。ログは/workspace/artifacts/cast-champagne-{typecheck-final,build-final,all-tests-final}.log。
+- 完了範囲：通話中のお客による5種類の選択・確認・支払・即時配分・開栓GIF・表示再試行・売上集計を実装。新DB表は0107。購入は一度だけ、表示の厳密な一度限りにはDiscord nonceの期間による制約がある。codex/cast-champagneから本番担当Claude向けPRへ保存する。本番の送金・通知・合流は実行していない。
+- 別件の御神籤自動使用はcodex/omikuji-auto-ticket、d1fb2e1、PR #61（https://github.com/manakikido-jpg/evaluation/pull/61）に保存済み。通常分無料、引き済みの日に所持券で追加1回。型チェック・ビルド・全139ファイル1,761テスト成功。本番未反映。
