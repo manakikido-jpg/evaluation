@@ -1,3 +1,4 @@
+import { processCoreTimeBonus } from './services/coreTimeAttendance.js';
 import { settleLotteries } from './services/casino/fortune.js';
 import { EmaCounterApp } from './discord/emaCounter.js';
 import { RecordingApp } from './discord/recording.js';
@@ -239,6 +240,8 @@ async function main(): Promise<void> {
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
+      // 🎁 終わったコアタイムのボーナス
+      void processCoreTimeBonus({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time bonus failed'));
       // 🎀 キャスト: 返事待ちの期限・予約の始まり・通話の終わり・部屋の片付け
       void cast.syncIntros().catch(err => logger.warn({ err }, 'cast intros sync failed'));
       void cast.tick().catch((err) => logger.warn({ err }, 'cast tick failed'));

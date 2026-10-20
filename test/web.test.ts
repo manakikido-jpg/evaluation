@@ -787,6 +787,11 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), longVoiceBonusAmount: '600', longVoiceBonusChannel: '910000000000000003' });
     expect(store.current.economy.longVoiceBonusAmount).toBe(600);
     expect(store.current.economy.longVoiceBonusChannelId).toBe('910000000000000003');
+    // 🎁 コアタイムのボーナス: 入れると保存し、欄のない保存では残す
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g), ctBonusCoins: '200', ctBonusMinMinutes: '45' });
+    expect(store.current.coreTime).toMatchObject({ bonusCoins: 200, bonusMinMinutes: 45 });
+    await post('/settings', g, { ...form, _csrf: await csrfOf(g) });
+    expect(store.current.coreTime).toMatchObject({ bonusCoins: 200, bonusMinMinutes: 45 });
     // 古いフォームや他の項目を保存しても、追加した値は消さない。
     await post('/settings', g, { ...form, _csrf: await csrfOf(g) });
     expect(store.current.economy.longVoiceBonusAmount).toBe(600);

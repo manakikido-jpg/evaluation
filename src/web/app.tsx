@@ -3085,6 +3085,9 @@ export function createWebApp(deps: WebDeps) {
         }),
         noticeDayBefore: field(body, 'ctNoticeDayBefore', 5),
         noticeMinutesBefore: num('ctNoticeMinutesBefore'),
+        // 🎁 ボーナス（前の画面から保存しても、今の値を残す）
+        bonusCoins: body.ctBonusCoins === undefined ? cfg.coreTime.bonusCoins : num('ctBonusCoins'),
+        bonusMinMinutes: body.ctBonusMinMinutes === undefined ? cfg.coreTime.bonusMinMinutes : num('ctBonusMinMinutes'),
       },
       boost: {
         // 通知を止めた文面は、ほかの設定の保存で消さない

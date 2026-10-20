@@ -146,6 +146,9 @@ export const coreTimeSchema = z.object({
   noticeDayBefore: hhmm.or(z.literal('')).default('21:00'),
   /** 始まる何分前に予告（0 なら予告しない） */
   noticeMinutesBefore: z.number().int().min(0).max(720).default(60),
+  /** 🎁 コアタイムが終わったら、bonusMinMinutes 分以上いた人にわたす銭（0 でなし） */
+  bonusCoins: z.number().int().min(0).max(1_000_000).default(0),
+  bonusMinMinutes: z.number().int().min(1).max(1440).default(30),
 });
 export type CoreTimeConfig = z.infer<typeof coreTimeSchema>;
 

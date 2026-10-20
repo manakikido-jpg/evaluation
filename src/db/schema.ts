@@ -2164,6 +2164,9 @@ export const coreTimeAttendance = pgTable(
     minutes: integer('minutes').notNull().default(0),
     firstAt: timestamp('first_at', { withTimezone: true }).notNull(),
     lastAt: timestamp('last_at', { withTimezone: true }).notNull(),
+    /** 🎁 わたしたボーナス（銭）と、わたした時刻（null はまだ） */
+    bonus: integer('bonus').notNull().default(0),
+    bonusAt: timestamp('bonus_at', { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.day, t.slot, t.memberId] }), index('core_time_attendance_member_idx').on(t.memberId, t.day)],
 );

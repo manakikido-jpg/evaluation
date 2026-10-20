@@ -80,6 +80,7 @@ export function CoreTimePage(props: {
                   <th class="num">いた時間</th>
                   <th>来た</th>
                   <th>最後にいた</th>
+                  <th class="num">ボーナス</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,6 +92,7 @@ export function CoreTimePage(props: {
                     <td class="num">{fmtMinutes(m.minutes)}</td>
                     <td>{hm(m.firstAt)}</td>
                     <td>{hm(m.lastAt)}</td>
+                    <td class="num">{m.bonusAt ? `🎁 ${m.bonus.toLocaleString('ja-JP')}` : '―'}</td>
                   </tr>
                 ))}
               </tbody>

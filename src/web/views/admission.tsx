@@ -1687,7 +1687,16 @@ export function SettingsPage(props: {
               <span>始まる何分前に予告（0 で出さない）</span>
               <input type="number" name="ctNoticeMinutesBefore" value={String(cfg.coreTime.noticeMinutesBefore)} min={0} max={720} required />
             </label>
+            <label class="field">
+              <span>🎁 コアタイムが終わったら、決めた分以上いた人にわたす{e.currencyName}（0 でなし）</span>
+              <input type="number" name="ctBonusCoins" value={String(cfg.coreTime.bonusCoins)} min={0} max={1000000} required />
+            </label>
+            <label class="field">
+              <span>🎁 ボーナスをもらえるのは、コアタイムに何分以上いた人か</span>
+              <input type="number" name="ctBonusMinMinutes" value={String(cfg.coreTime.bonusMinMinutes)} min={1} max={1440} required />
+            </label>
           </div>
+          <p class="note">ボーナスは、コアタイムが終わってすぐ（BOT が止まっていたら 6 時間以内に）わたし、#境内 で知らせます（通知は飛ばしません）。1 回のコアタイムに 1 人 1 回だけ。いた時間は「🎙 通話の記録」→「⏰ コアタイムに上がった人」で見られます。</p>
           <Save at="coretime" />
         </section>
         <section class="card anchor" id="sec-boost">

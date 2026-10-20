@@ -35,6 +35,7 @@ export type CoinReason =
   | 'champagne_reward'
   | 'cast_pay'
   | 'employee_salary'
+  | 'core_time_bonus'
   | 'cast_reward'
   | 'cast_refund'
   | 'cast_rank_bonus'
@@ -276,6 +277,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   champagne_reward: 'シャンパンの受取',
   cast_pay: 'キャストを指名した',
   employee_salary: '案内の給与',
+  core_time_bonus: 'コアタイムのボーナス',
   cast_reward: 'キャストの売り上げ',
   cast_refund: 'キャストの指名の払い戻し',
   cast_rank_bonus: 'キャストの月の 1 位のごほうび',
