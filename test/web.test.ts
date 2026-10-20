@@ -3457,6 +3457,7 @@ describe('キャスト（管理画面）', () => {
     expect((await form(s, '/cast/settings', { channelId: '910000000000000003', priceMax: '30000', feePercent: '10', acceptMinutes: '10', rankBonus: '-1' })).headers.get('location')).toBe('/cast?msg=invalid');
     const rankPage = await (await get('/cast?rank=2026-09', s)).text();
     expect(rankPage).toContain('🏆 ランキング（2026 年 9 月）');
+    expect(rankPage).toMatch(/value="910000000000000005" selected/);
     expect(rankPage).toContain('/cast?rank=2026-08#cast-ranking');
     expect(rankPage).toContain('name="rankBonus"');
     // 画像
