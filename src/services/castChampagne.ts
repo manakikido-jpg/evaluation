@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { castChampagnes, castSessions, type CastSession, type CastChampagne } from '../db/schema.js';
-import { castFee, loadCastConfig } from './cast.js';
+import { castFee } from './cast.js';
 import { audit } from './audit.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 
+/** シャンパンは通話料金とは別に、運営30％・キャスト70％。 */
+export const CHAMPAGNE_FEE_PERCENT = 30;
 export const CHAMPAGNES = [
  { id:'sakura', name:'桜のしずく', emoji:'🌸', price:500, color:'#eaa3b9', tier:1 },
  { id:'moon', name:'月夜の泡', emoji:'🌙', price:1000, color:'#b4b9e8', tier:2 },
@@ -32,8 +34,7 @@ export async function prepareChampagne(db:Db,sessionId:number,bottleId:string,pa
   const now=clock();assertChampagneActive(s,party,here,now);
   const [pending]=await tx.select().from(castChampagnes).where(and(eq(castChampagnes.sessionId,sessionId),eq(castChampagnes.bottle,bottle.id),isNull(castChampagnes.paidAt),gt(castChampagnes.expiresAt,now)));
   if(pending)return pending;
-  const cfg=await loadCastConfig(tx);
-  const [quote]=await tx.insert(castChampagnes).values({id:randomUUID(),sessionId,customerId:s.customerId,castId:s.castId,channelId:party.channelId,bottle:bottle.id,bottleName:bottle.name,price:bottle.price,fee:castFee(cfg,bottle.price),createdAt:now,expiresAt:new Date(now.getTime()+5*60000)}).returning();
+  const [quote]=await tx.insert(castChampagnes).values({id:randomUUID(),sessionId,customerId:s.customerId,castId:s.castId,channelId:party.channelId,bottle:bottle.id,bottleName:bottle.name,price:bottle.price,fee:castFee({feePercent:CHAMPAGNE_FEE_PERCENT},bottle.price),createdAt:now,expiresAt:new Date(now.getTime()+5*60000)}).returning();
   return quote!;
  });
 }
