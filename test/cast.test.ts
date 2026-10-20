@@ -570,6 +570,26 @@ describe('🎀 キャストのDiscord操作', () => {
     expect((await walletOf(db, CAST)).balance).toBe(0);
   });
 
+  it('🏆 毎月 1 日に先月の上位を発表し、1 位に称号のロールと銭をわたす（前の 1 位から外す）', async () => {
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    const { settings } = await import('../src/db/schema.js');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), rankChannelId: '990000000000000010', rankRoleId: '990000000000000011', rankBonus: 800 }, 'staff');
+    await db.insert(settings).values({ key: 'cast.rank:2026-08', value: { winnerId: ADULT }, updatedBy: 'system' });
+    const at = new Date('2026-09-15T03:00:00Z');
+    await db.insert(castSessions).values({ castId: CAST, customerId: ADULT, plan: '30', minutes: 30, price: 300, paid: 270, status: 'done', createdAt: at, closedAt: at });
+    const f = fixture();
+    const roles: string[] = [];
+    Object.assign(f.discord, { addRole: vi.fn(async (_g: string, u: string, r: string) => void roles.push(`+${u}/${r}`)), removeRole: vi.fn(async (_g: string, u: string, r: string) => void roles.push(`-${u}/${r}`)) });
+    const day1 = new Date('2026-09-30T15:30:00Z');
+    await f.app.tick(day1);
+    await f.app.tick(day1);
+    const posts = f.discord.sendMessage.mock.calls.filter((x) => (x as unknown[])[0] === '990000000000000010');
+    expect(posts).toHaveLength(1);
+    expect(String((posts[0] as unknown as [string, { content: string }])[1].content)).toContain('2026 年 9 月のキャストランキング');
+    expect(roles).toEqual([`-${ADULT}/990000000000000011`, `+${CAST}/990000000000000011`]);
+    expect((await walletOf(db, CAST)).balance).toBe(800);
+  });
+
   it('予約開始では部屋を1つ作り、スレッドに入室ボタンを出す', async () => {
     const at = new Date(T20.getTime() + 60 * MIN);
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);

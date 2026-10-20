@@ -97,6 +97,7 @@ import {
   type CastReception,
   type ProfileInput,
 } from '../services/cast.js';
+import { awardCastRank, pastRankWinners } from '../services/castRank.js';
 import { staffRoleIds } from '../services/meetings.js';
 import { namesOf } from '../services/members.js';
 import { loadReceptionAvatar, renderCastReception } from '../services/castReceptionImage.js';
@@ -160,9 +161,10 @@ const RULES = '-# 本物のお金のやり取り・性的な内容・連絡先�
 // ───────── メニュー（画像の下に、指名するメニュー） ─────────
 
 /** #キャスト一覧 のメニュー: 上げた画像と、ランキング・キャストの方のボタン（予約・注文は 1 人ずつの紹介パネルから） */
-export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'waiting' | 'off' }[], image?: { data: Uint8Array; contentType: string }, group?: CastGroup): MessageBody {
+export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'waiting' | 'off' }[], image?: { data: Uint8Array; contentType: string }, group?: CastGroup, /** 🏆 今月の上位（指名の多い順） */ top: { name: string; count: number }[] = []): MessageBody {
   const ext = image?.contentType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png';
   const open = list.filter((x) => x.state !== 'off').length;
+  const medal = ['🥇', '🥈', '🥉'];
   return {
     embeds: [
       {
@@ -170,6 +172,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
         description: [
           '下の紹介から、メニューを選んで予約・注文できます。',
           `🟢 予約受付中 **${open}** 人 ・ 在籍 ${list.length} 人`,
+          ...(top.length ? [`🏆 今月の上位: ${top.slice(0, 3).map((t, k) => `${medal[k]} ${t.name}（${t.count} 回）`).join('　')}`] : []),
           '-# 銭は社務所が預かり、受けてもらえなければ全額戻ります',
           '-# 2 人だけの部屋・寝落ち・納品は 18 歳以上だけ。18 歳未満の方は、公開の部屋での雑談（1 時間まで・22 時まで）を予約できます',
         ].join('\n'),
@@ -186,7 +189,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
 export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'sendMessage' | 'editMessage'>, opts: { repost?: boolean; by?: string } = {}): Promise<boolean> {
   let c = await loadCastConfig(db);
   if (!c.channelId && !c.femaleChannelId) return false;
-  const [list, states] = await Promise.all([listCasts(db), castStates(db)]);
+  const [list, states, stats] = await Promise.all([listCasts(db), castStates(db), castStats(db, monthStart())]);
   const names = await namesOf(db, list.map((x) => x.memberId));
   // 男性・女性のチャンネルが両方あれば分けて出す。片方だけなら、そこに全員を出す
   const split = Boolean(c.channelId && c.femaleChannelId);
@@ -195,10 +198,14 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
     const place = groupPlace(c, g);
     if (!place.channelId) continue;
     const image = (await loadMenuImage(db, g)) ?? (g === 'female' ? await loadMenuImage(db, 'male') : undefined);
+    const shown = list.filter((cast) => !split || inGroup(cast, g));
+    const ids = new Set(shown.map((x) => x.memberId));
+    const top = stats.filter((x) => x.count > 0 && ids.has(x.castId)).slice(0, 3).map((x) => ({ name: names.get(x.castId) ?? x.castId, count: x.count }));
     const body = castPanel(
-      list.filter((cast) => !split || inGroup(cast, g)).map((cast) => ({ cast, name: names.get(cast.memberId) ?? cast.memberId, state: states.get(cast.memberId) ?? 'off' })),
+      shown.map((cast) => ({ cast, name: names.get(cast.memberId) ?? cast.memberId, state: states.get(cast.memberId) ?? 'off' })),
       image,
       split ? g : undefined,
+      top,
     );
     if (place.messageId && !opts.repost) {
       try {
@@ -1505,6 +1512,33 @@ export class CastApp {
       await roomDeleted(this.db, s.id);
     }
     if (changed) this.refresh();
+    await this.rankTick(c, now).catch((err: unknown) => logger.warn({ err }, 'cast rank failed'));
+  }
+
+  /** 🏆 毎月 1 日: 先月の上位 3 人を発表し、1 位にごほうび（銭は awardCastRank が 1 回だけわたす） */
+  private async rankTick(c: CastConfig, now: Date): Promise<void> {
+    const r = await awardCastRank(this.db, c, now);
+    if (!r || !this.guild) return;
+    const names = await namesOf(this.db, r.top.map((x) => x.castId));
+    const medal = ['🥇', '🥈', '🥉'];
+    const [y, m] = r.month.split('-');
+    const lines = [
+      `🏆 **${Number(y)} 年 ${Number(m)} 月のキャストランキング**（指名の多い順）`,
+      ...r.top.map((x, k) => `${medal[k]} <@${x.castId}>（${names.get(x.castId) ?? x.castId}）… ${x.count} 回${x.ratingAvg !== null ? ` ・ ⭐ ${x.ratingAvg}` : ''}`),
+      r.winnerId && (r.bonus > 0 || c.rankRoleId) ? `🎁 1 位の <@${r.winnerId}> さんに${[c.rankRoleId ? `<@&${c.rankRoleId}>` : '', r.bonus > 0 ? `${this.coin()} ${fmt(r.bonus)} 枚` : ''].filter(Boolean).join(' と ')}をおくります。` : '',
+      'ご指名くださったみなさま、ありがとうございました。',
+    ].filter(Boolean);
+    const channel = c.rankChannelId ?? c.channelId ?? c.femaleChannelId;
+    if (channel) await this.discord.sendMessage(channel, { content: lines.join('\n'), allowed_mentions: { users: r.top.map((x) => x.castId), roles: [] } }).catch((err: unknown) => logger.warn({ err }, 'cast rank post failed'));
+    // 称号のロール: 前の 1 位から外して、新しい 1 位へ
+    if (c.rankRoleId && r.winnerId) {
+      for (const id of await pastRankWinners(this.db)) {
+        if (id !== r.winnerId) await this.discord.removeRole(this.guild.id, id, c.rankRoleId, 'キャストの月の 1 位が変わった').catch(() => undefined);
+      }
+      await this.discord.addRole(this.guild.id, r.winnerId, c.rankRoleId, `キャストの月の 1 位（${r.month}）`).catch((err: unknown) => logger.warn({ err }, 'cast rank role failed'));
+    }
+    if (r.winnerId && r.bonus > 0) await this.discord.sendDm(r.winnerId, `🏆 ${Number(m)} 月のキャストランキングで 1 位になりました！ ごほうびに ${this.coin()} ${fmt(r.bonus)} 枚をおくりました。`).catch(() => false);
+    this.refresh();
   }
 
 }

@@ -251,6 +251,7 @@ import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
 import { postCastIntro, refreshCastIntros, refreshCastPanel, refreshCastViews } from '../discord/cast.js';
+import { castRanking, monthKey, monthOf, parseMonth } from '../services/castRank.js';
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
@@ -5805,8 +5806,10 @@ export function createWebApp(deps: WebDeps) {
       loadMenuImage(db, 'female'),
     ]);
     const t = now();
-    const [calendar, noShows] = await Promise.all([sessionsBetween(db, new Date(t.getTime() - 86_400_000), new Date(t.getTime() + 8 * 86_400_000)), noShowCounts(db, new Date(t.getTime() - 30 * 86_400_000))]);
-    const names = await namesOf(db, [...list.map((x) => x.memberId), ...[...sessions, ...calendar].flatMap((x) => [x.castId, x.customerId]), ...noShows.customer.keys()]);
+    // 🏆 ランキング（?rank=YYYY-MM。なければ今月）
+    const rankStart = parseMonth(c.req.query('rank')) ?? monthOf(t);
+    const [calendar, noShows, ranking] = await Promise.all([sessionsBetween(db, new Date(t.getTime() - 86_400_000), new Date(t.getTime() + 8 * 86_400_000)), noShowCounts(db, new Date(t.getTime() - 30 * 86_400_000)), castRanking(db, rankStart)]);
+    const names = await namesOf(db, [...list.map((x) => x.memberId), ...[...sessions, ...calendar].flatMap((x) => [x.castId, x.customerId]), ...noShows.customer.keys(), ...ranking.map((x) => x.castId)]);
     const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch.name]));
     return c.html(
       <CastPage
@@ -5825,6 +5828,7 @@ export function createWebApp(deps: WebDeps) {
         sessions={sessions}
         calendar={calendar}
         noShows={noShows}
+        ranking={{ month: monthKey(rankStart), prev: monthKey(monthOf(rankStart, -1)), next: rankStart < monthOf(t) ? monthKey(monthOf(rankStart, 1)) : undefined, rows: ranking }}
         name={(id) => names.get(id) ?? id}
         coin={`${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`}
         flash={c.req.query('msg')}
@@ -5861,10 +5865,14 @@ export function createWebApp(deps: WebDeps) {
       lateCancelPercent: body.lateCancelPercent === undefined ? prev.lateCancelPercent : n('lateCancelPercent'),
       noShowMinutes: body.noShowMinutes === undefined ? prev.noShowMinutes : n('noShowMinutes'),
       noShowPercent: body.noShowPercent === undefined ? prev.noShowPercent : n('noShowPercent'),
+      // 🏆 ランキング（前の画面から保存しても、今の値を残す）
+      rankChannelId: body.rankChannelId === undefined ? prev.rankChannelId : id('rankChannelId'),
+      rankRoleId: body.rankRoleId === undefined ? prev.rankRoleId : id('rankRoleId'),
+      rankBonus: body.rankBonus === undefined ? prev.rankBonus : n('rankBonus'),
     };
     const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
     if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.priceMax, next.priceMin, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
-    if (!ok(next.lateCancelMinutes, 0, 1440) || !ok(next.lateCancelPercent, 0, 100) || !ok(next.noShowMinutes, 5, 120) || !ok(next.noShowPercent, 0, 100)) return c.redirect('/cast?msg=invalid');
+    if (!ok(next.lateCancelMinutes, 0, 1440) || !ok(next.lateCancelPercent, 0, 100) || !ok(next.noShowMinutes, 5, 120) || !ok(next.noShowPercent, 0, 100) || !ok(next.rankBonus, 0, 1_000_000)) return c.redirect('/cast?msg=invalid');
     // チャンネルを変えたら、前のメニューはそのままにして、新しいチャンネルに出し直す
     if (next.channelId !== prev.channelId) delete next.panelMessageId;
     if (next.femaleChannelId !== prev.femaleChannelId) delete next.femalePanelMessageId;

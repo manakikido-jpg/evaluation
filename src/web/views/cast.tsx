@@ -1,3 +1,4 @@
+import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
 import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
@@ -226,6 +227,8 @@ export function CastPage(props: {
   members: { id: string; name: string }[];
   template: CastMenuItem[];
   stats: CastStat[];
+  /** 🏆 くわしいランキング（月ごと） */
+  ranking?: { month: string; prev: string; next?: string; rows: CastRankRow[] };
   sessions: CastSession[];
   /** 📅 予約カレンダー（きのう〜7 日後に始まるもの） */
   calendar?: CastSession[];
@@ -574,6 +577,14 @@ export function CastPage(props: {
             <span>🚫 お客が来なかったとき、キャストに渡す %（キャストが来なかったときは全額お客に戻す）</span>
             <input type="number" name="noShowPercent" min={0} max={100} value={String(c.noShowPercent)} required />
           </label>
+          <h3>🏆 ランキング</h3>
+          <p class="muted">毎月 1 日に、先月の指名の多い上位 3 人を発表します（1 日に BOT が止まっていたら 7 日までに）。今月の上位 3 人は、メニューにもいつも出ます。</p>
+          <Select name="rankChannelId" label="先月の上位 3 人を発表するチャンネル" value={c.rankChannelId} options={props.channels} empty="メニューのチャンネル" />
+          <Select name="rankRoleId" label="月の 1 位にわたす称号のロール（次の 1 位が決まると外す）" value={c.rankRoleId} options={props.roles} empty="わたさない" />
+          <label class="field">
+            <span>月の 1 位にわたす銭（0 でなし）</span>
+            <input type="number" name="rankBonus" min={0} max={1000000} value={String(c.rankBonus)} required />
+          </label>
           <button type="submit" class="ok">
             保存
           </button>
@@ -585,6 +596,8 @@ export function CastPage(props: {
           </form>
         )}
       </section>
+
+      {props.ranking && <Ranking {...props.ranking} name={name} coin={props.coin} />}
 
       {props.calendar && <Calendar sessions={props.calendar} name={name} session={session} noShows={props.noShows} />}
 
@@ -697,6 +710,58 @@ function Calendar(props: { sessions: CastSession[]; name: (id: string) => string
         <p class="note">
           🚫 来なかったお客（30 日）: {customers.map(([id, n]) => `${props.name(id)} ${n} 回`).join('、')}
         </p>
+      )}
+    </section>
+  );
+}
+
+/** 🏆 くわしいランキング（運営だけ。月ごと・指名の多い順） */
+function Ranking(p: { month: string; prev: string; next?: string; rows: CastRankRow[]; name: (id: string) => string; coin: string }) {
+  const [y, m] = p.month.split('-');
+  const medal = ['🥇', '🥈', '🥉'];
+  return (
+    <section class="card" id="cast-ranking">
+      <h2>🏆 ランキング（{Number(y)} 年 {Number(m)} 月）</h2>
+      <div class="inline-actions">
+        <a href={`/cast?rank=${p.prev}#cast-ranking`}>← 前の月</a>
+        {p.next && <a href={`/cast?rank=${p.next}#cast-ranking`}>次の月 →</a>}
+      </div>
+      <p class="muted">終わった指名の回数の多い順（同じなら売り上げの多い順）。売り上げはキャストにわたした銭（手数料を引いたあと）。断った・取り消し・来なかったは、その月に入った指名で数えます。</p>
+      {p.rows.length ? (
+        <table class="compact">
+          <thead>
+            <tr>
+              <th>順位</th>
+              <th>キャスト</th>
+              <th class="num">指名</th>
+              <th class="num">売り上げ（{p.coin}）</th>
+              <th class="num">評価</th>
+              <th class="num">お客（2 回以上）</th>
+              <th class="num">断った</th>
+              <th class="num">取り消し</th>
+              <th class="num">来なかった</th>
+              <th class="num">通報</th>
+            </tr>
+          </thead>
+          <tbody>
+            {p.rows.map((r, k) => (
+              <tr>
+                <td>{r.count > 0 ? (medal[k] ?? `${k + 1}`) : '―'}</td>
+                <td>{p.name(r.castId)}</td>
+                <td class="num">{r.count}</td>
+                <td class="num">{r.earned.toLocaleString('ja-JP')}</td>
+                <td class="num">{r.ratingAvg !== null ? `⭐ ${r.ratingAvg}（${r.ratings}）` : '―'}</td>
+                <td class="num">{r.customers}（{r.repeaters}）</td>
+                <td class="num">{r.declined}</td>
+                <td class="num">{r.canceled}</td>
+                <td class="num">{r.noShow}</td>
+                <td class="num">{r.disputed}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p class="muted">この月の指名はありません。</p>
       )}
     </section>
   );

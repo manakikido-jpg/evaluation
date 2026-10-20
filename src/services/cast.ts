@@ -52,8 +52,14 @@ export type CastConfig = {
   /** 🚫 来なかったとき: 始まってからこの分たつと「相手が来ない」を押せる。お客が来ないときは noShowPercent をキャストへ */
   noShowMinutes: number;
   noShowPercent: number;
+  /** 🏆 毎月 1 日に先月の上位 3 人を発表するチャンネル（なければメニューのチャンネル） */
+  rankChannelId?: string;
+  /** 🏆 月の 1 位にわたす称号のロール（次の 1 位が決まると外す。なければわたさない） */
+  rankRoleId?: string;
+  /** 🏆 月の 1 位にわたす銭（0 でなし） */
+  rankBonus: number;
 };
-export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50 };
+export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0 };
 const KEY = 'cast';
 const sf = (x: unknown) => (typeof x === 'string' && /^\d{17,20}$/.test(x) ? x : undefined);
 const int = (x: unknown, d: number, lo: number, hi: number) => (typeof x === 'number' && Number.isInteger(x) && x >= lo && x <= hi ? x : d);
@@ -80,6 +86,9 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     lateCancelPercent: int(v.lateCancelPercent, d.lateCancelPercent, 0, 100),
     noShowMinutes: int(v.noShowMinutes, d.noShowMinutes, 5, 120),
     noShowPercent: int(v.noShowPercent, d.noShowPercent, 0, 100),
+    rankChannelId: sf(v.rankChannelId),
+    rankRoleId: sf(v.rankRoleId),
+    rankBonus: int(v.rankBonus, d.rankBonus, 0, 1_000_000),
     ...(Array.isArray(v.menuTemplate) ? { menuTemplate: (v.menuTemplate as unknown[]).filter(isMenuItem).slice(0, MENU_MAX) } : {}),
   };
 }
