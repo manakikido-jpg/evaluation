@@ -296,3 +296,4 @@
 - 最初の全件検証：666d18a基準の変更で型チェック・ビルド成功、全142ファイル1,787テスト成功（419.53秒、2並列）。保存前fetchで本番9858883（コアタイムのタブ・CSV・プレゼント）を検出。最新を通常mergeし、取り込み後の最終状態で検証する。
 - 最終検証：本番9858883を取り込んだ1fe7e20で型チェック・ビルド成功。全142ファイル1,787テスト成功（417.72秒、2並列）。削除・skip・時間制限変更なし。push前の本番明示fetchでも追加変更なし。ログは/workspace/artifacts/champagne-fee-30-{typecheck-final,build-final,all-tests-final}.log。
 - 完了範囲：シャンパン専用30％、キャスト70％、提示済み条件の維持、通常の指名・納品の既存10％と分離。通常分への追加10％徴収はしない。codex/champagne-fee-30、実装9f2bfd2・取り込み1fe7e20。本番への直接push・DB設定の確認変更・実購入・入金・通知はしていない。本番担当Claude向けPRへ保存する。反映時は既存の通常手数料設定10％も確認する。
+- GitHub保存済み：[PR #63](https://github.com/manakikido-jpg/evaluation/pull/63)。最終実装・検証記録a95fefe、codex/champagne-fee-30。OPEN・未合流、今回の30％変更は本番未反映。担当Claudeによるレビュー・合流と通常設定10％の確認待ち。
