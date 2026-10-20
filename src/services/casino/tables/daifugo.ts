@@ -684,7 +684,7 @@ export const daifugo = partyEngine<DaifugoState>({
   min: 3,
   max: 5,
   turnSeconds: 40,
-  init: (f) => ({ kind: 'daifugo', botProfitCap: DAIFUGO_BOT_PROFIT_CAP, field: null, passes: [], lastBy: null, revolution: false, played: 0, rules: daifugoRulesOf(f), jback: false, lock: null, fouls: [], dir: 1, pending: null }) as never,
+  init: (f) => ({ kind: 'daifugo', humansOnly: f.opponents === 'humans', botProfitCap: DAIFUGO_BOT_PROFIT_CAP, field: null, passes: [], lastBy: null, revolution: false, played: 0, rules: daifugoRulesOf(f), jback: false, lock: null, fouls: [], dir: 1, pending: null }) as never,
   deal(s, rng) {
     const deck = shuffle([...shuffledShoe(1, rng), ...(has(s, 'joker') ? [JOKER] : [])], rng);
     deck.forEach((c, k) => s.seats[k % s.seats.length]!.hand.push(c));
@@ -705,7 +705,7 @@ export const daifugo = partyEngine<DaifugoState>({
   bot: (s, i) => dBotLookahead(s, i),
   // 先読みの BOT（見えていないカードを配りなおして試しに打つ）にしたので 3。候補と配りなおしを増やして 4。ルールの組み合わせごとに分けて記録する
   aiVersion: '4',
-  aiVariant: (s) => [...rulesOf(s)].sort().join(','),
+  aiVariant: (s) => [...rulesOf(s)].sort().join(',') + `|cap:${s.botProfitCap ?? 'legacy'}|stake:${s.entry > 0 ? 'paid' : 'free'}`,
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから
     if (s.pending) {

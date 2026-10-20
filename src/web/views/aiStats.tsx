@@ -70,6 +70,7 @@ export function AiStatsSection(p: { ai: AiStats; coinName: string; rangeLabel: s
         人と AI（BOT・CPU）が同じ卓にいた勝負だけを数えます（人だけ・AI だけの卓は入りません）。「順位」は 0 = いつも 1 位・100 = いつも最下位にそろえた平均で、人と AI が同じくらいの強さなら近い数字になります。人の順位が AI より
         {Math.round(AI_GAP * 100)} 以上悪ければ「AI が強め」、良ければ「AI が弱め」（人の席が {AI_MIN_SEATS} より少ないうちは判定しません）。ポーカーは 1 手ごと（勝った人が 1 位）・増減はチップ、ほかは{p.coinName}です。
       </p>
+      {!!ai.daifugo?.length && <section><h3>👑 大富豪：改善を確認するルール</h3><p class="note">運営の赤字が大きい順です。同じルール・人数・BOT数・AI版・配当条件で分けます。20対戦未満は様子見、参加者3人未満は特定の人に偏った成績として扱います。賭け額・参加者の腕前でも収支は変わるため、赤字だけでBOTが弱いとは判断しません。</p><div class="table-wrap"><table class="compact ai-table"><thead><tr><th>ルール・条件</th><th>対戦 / 人数</th><th>人の1位</th><th>運営収支 / 1対戦</th><th>次の確認</th></tr></thead><tbody>{ai.daifugo.map(r=><tr><td>{r.rules ? variantLabel('daifugo',r.rules) : '追加ルールなし'}<small class="note"> {r.players}席 / BOT{r.bots}席 / AI v{r.aiVersion} / {r.policy}</small></td><td>{fmt(r.matches)}対戦 / {r.humans}人</td><td>{r.humanTop}%</td><td>{signed(r.houseNet)} / {signed(r.housePer)} {p.coinName}</td><td>{({few:'まだ少ない：記録を増やす',concentrated:'参加者が偏っている：対戦相手も確認',weak:'改善候補：このルールでBOTの判断を検証',loss:'赤字：賭け額・参加者・配当条件を確認',strong:'BOTが強め：強化は慎重に',fair:'偏りは小さめ：経過を見る'} as const)[r.status]}</td></tr>)}</tbody></table></div></section>}
       {empty ? (
         <p class="empty">まだ記録がありません（この機能を入れてから遊ばれた分から数えます）。</p>
       ) : (

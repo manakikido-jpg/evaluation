@@ -67,6 +67,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
   const csrf = p.me.session.csrfToken;
   const coin = p.me.coin;
   const jansou = p.kind === 'mahjong';
+  const tables = p.kind === 'daifugo' ? [...p.tables].sort((a,b) => Number(Boolean((b.state as DaifugoState).humansOnly && (b.state as DaifugoState).phase === 'lobby')) - Number(Boolean((a.state as DaifugoState).humansOnly && (a.state as DaifugoState).phase === 'lobby'))) : p.tables;
   return (
     <CasinoLayout title={jansou ? '咲楽ノ宮雀荘' : L.name} me={p.me} back={jansou ? 'gate' : true} jansou={jansou}>
       {jansou ? (
@@ -99,7 +100,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
           <p class="c-muted">いまはありません。卓を立てて待ってみましょう。</p>
         ) : (
           <ul class="c-list">
-            {p.tables.map((t) => (
+            {tables.map((t) => (
               <li>
                 <span>
                   #{t.id} {tableSummary(t, coin)}
@@ -207,6 +208,7 @@ function CreateFields(p: { kind: TableKind; casino: CasinoConfig; coin: Coin }) 
   if (p.kind === 'daifugo') {
     return (
       <>
+        <label>対戦相手<select name="opponents"><option value="humans">人だけで集まる（BOTなし）</option><option value="bots">BOTも入れられる</option></select></label><p class="c-muted">人だけの卓は通常配当です。卓を立てたら募集文をコピーして友達を誘えます。</p>
         <label>
           参加費
           <input type="number" name="entry" min={0} max={sharedMaxBet(p.casino)} value={String(Math.min(100, sharedMaxBet(p.casino)))} inputmode="numeric" />
@@ -269,7 +271,7 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
     const ps = t.state as DaifugoState;
     const version = t.kind==='life' ? `${lifeMinutes(t.state as LifeState)}分版・` : '';
     const rules = t.kind === 'daifugo' ? `・${rulesOf(ps).map((k) => DAIFUGO_RULES[k].label.replace(/^\S+ /, '')).join('・') || 'ルールなし'}` : '';
-    return `${version}参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}${t.kind === 'daifugo' ? ((ps as DaifugoState).botProfitCap !== undefined ? `・BOT戦の利益上限 ${fmt((ps as DaifugoState).botProfitCap!)} ${coin.name}` : '・旧条件（BOT戦の利益上限なし）') : ''}`;
+    return `${t.kind === 'daifugo' && ps.humansOnly ? '👥 人だけ・' : ''}${version}参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}${t.kind === 'daifugo' && !ps.humansOnly ? ((ps as DaifugoState).botProfitCap !== undefined ? `・BOT戦の利益上限 ${fmt((ps as DaifugoState).botProfitCap!)} ${coin.name}` : '・旧条件（BOT戦の利益上限なし）') : ''}`;
   }
   return `${seats.length} 人（${who}）`;
 }
@@ -1068,7 +1070,7 @@ function PartyLobby({ t, s, me, min }: { t: CasinoTable; s: PartyState; me: Casi
           </div>
         ))}
       </div>
-      {host && (s.kind !== 'life' || s.entry === 0) && (
+      {host && (s.kind !== 'life' || s.entry === 0) && !(s.kind === 'daifugo' && s.humansOnly) && (
         <BotButtons
           id={t.id}
           csrf={me.session.csrfToken}
@@ -1077,6 +1079,9 @@ function PartyLobby({ t, s, me, min }: { t: CasinoTable; s: PartyState; me: Casi
           note={s.entry > 0 ? 'BOT の参加費は胴元が出します（BOT が勝った分は鯖に戻ります）' : 'BOT は少し考えてから動きます'}
         />
       )}
+      {s.kind === 'daifugo' && s.humansOnly && <p>👥 人だけの卓です。BOTは入りません。</p>}
+      {s.kind === 'daifugo' && <div class="c-invite"><p>友達を誘う（リンクを開くだけでは参加費はかかりません）</p><a href={`/casino/t/${t.id}`}>この卓のリンク（共有用）</a><textarea rows={4} readonly aria-label="募集文" data-invite-text data-invite-path={`/casino/t/${t.id}`} data-invite-intro={`👑 大富豪の参加者を募集中！ 卓 #${t.id} / ${s.humansOnly ? '人だけ・BOTなし' : 'BOTも参加可'} / 参加費 ${fmt(s.entry)} ${me.coin.name} / ${s.seats.length}/5人（3人から開始）
+ルール：${rulesOf(s).map(k => DAIFUGO_RULES[k].label).join('・') || 'なし'}`} /> <button type="button" class="c-btn c-btn-small" data-copy-table-invite>募集文とリンクをコピー</button><p data-invite-status role="status">参加する人もDiscordでの本人認証が必要です。相手待ちは30分で終了します。</p></div>}
       {host ? (
         <ActForm id={t.id} csrf={me.session.csrfToken} action="start">
           <button type="submit" class="c-btn c-btn-gold" disabled={s.seats.length < min}>
@@ -1144,7 +1149,7 @@ function DaifugoRules({ s }: { s: DaifugoState }) {
 }
 
 function DaifugoCap({ s, coin }: { s: DaifugoState; coin: Coin }) {
-  return <p class="c-muted">{s.botProfitCap !== undefined ? `BOTが参加する対戦は、各人の利益が1回最大${fmt(s.botProfitCap)} ${coin.name}。受取額は参加費＋${fmt(s.botProfitCap)} ${coin.name}まで（この卓では最大${fmt(s.entry + s.botProfitCap)} ${coin.name}）。通常配当が上限未満なら通常どおり。超過分は胴元へ戻ります。人だけの対戦は通常配当です。` : 'この卓は以前の配当条件です。BOT戦の利益上限はありません。'}</p>;
+  return s.humansOnly ? <p class="c-muted">👥 人だけの卓です。参加費を通常の順位配当で分けます。</p> : <p class="c-muted">{s.botProfitCap !== undefined ? `BOTが参加する対戦は、各人の利益が1回最大${fmt(s.botProfitCap)} ${coin.name}。受取額は参加費＋${fmt(s.botProfitCap)} ${coin.name}まで（この卓では最大${fmt(s.entry + s.botProfitCap)} ${coin.name}）。通常配当が上限未満なら通常どおり。超過分は胴元へ戻ります。人だけの対戦は通常配当です。` : 'この卓は以前の配当条件です。BOT戦の利益上限はありません。'}</p>;
 }
 function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
   const i = s.seats.findIndex((x) => x.id === me.session.userId);

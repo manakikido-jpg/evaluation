@@ -3003,3 +3003,17 @@ document.addEventListener('change', event => {
   const form = event.target.closest?.('.kb-outfit-form');
   if (form) paintHorseOutfit(form);
 });
+
+// 募集文は本人が共有する。自動投稿・メンションはしない。
+const initTableInvites = () => document.querySelectorAll('[data-invite-text]').forEach(el => {
+  el.value = el.dataset.inviteIntro + '\n' + new URL(el.dataset.invitePath, location.origin).href;
+});
+initTableInvites();
+['c-page-swapped','c-live-updated'].forEach(name => document.addEventListener(name, initTableInvites));
+document.addEventListener('click', async event => {
+  const button = event.target.closest?.('[data-copy-table-invite]');if(!button)return;
+  const wrap=button.closest('.c-invite'),text=wrap.querySelector('[data-invite-text]'),status=wrap.querySelector('[data-invite-status]');
+  initTableInvites();
+  try {await navigator.clipboard.writeText(text.value);status.textContent='コピーしました。誘いたい相手に貼り付けてください。';}
+  catch {text.focus();text.select();status.textContent='募集文を選択しました。コピーして相手に渡してください。';}
+});
