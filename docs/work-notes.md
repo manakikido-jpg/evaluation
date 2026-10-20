@@ -270,3 +270,4 @@
 - シャンパン最終検証：本番7f4e828を取り込んだ48736b9で型チェック・ビルド成功。全139ファイル1,766テスト成功（401.54秒、2並列）。テスト削除・skip・時間制限変更なし。push前の本番ブランチ明示fetchでも追加変更なし。ログは/workspace/artifacts/cast-champagne-{typecheck-final,build-final,all-tests-final}.log。
 - 完了範囲：通話中のお客による5種類の選択・確認・支払・即時配分・開栓GIF・表示再試行・売上集計を実装。新DB表は0107。購入は一度だけ、表示の厳密な一度限りにはDiscord nonceの期間による制約がある。codex/cast-champagneから本番担当Claude向けPRへ保存する。本番の送金・通知・合流は実行していない。
 - 別件の御神籤自動使用はcodex/omikuji-auto-ticket、d1fb2e1、PR #61（https://github.com/manakikido-jpg/evaluation/pull/61）に保存済み。通常分無料、引き済みの日に所持券で追加1回。型チェック・ビルド・全139ファイル1,761テスト成功。本番未反映。
+- GitHub保存先：[PR #62](https://github.com/manakikido-jpg/evaluation/pull/62)。実装・最終検証ae4411a、codex/cast-champagne、OPEN・未合流。本番担当Claudeのレビューと0107適用を含む合流待ち。このURLも引き継ぎメモへ保存する。
