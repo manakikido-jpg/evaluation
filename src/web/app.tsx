@@ -41,6 +41,9 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
+import { CoreTimePage } from './views/coreTime.js';
+import { describeCoreTime } from '../services/coreTime.js';
+import { coreTimeMembers, coreTimeRegulars, coreTimeSessions } from '../services/coreTimeAttendance.js';
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
@@ -629,6 +632,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/cast', requireAdmin);
   app.use('/tickets', requireAdmin);
   app.use('/voice', requireAdmin);
+  app.use('/voice/core', requireAdmin);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
   app.use('/ranks', requireAdmin);
@@ -1463,6 +1467,21 @@ export function createWebApp(deps: WebDeps) {
   // ───────── 推移（グラフ） ─────────
 
   // 通話の記録（浮上時間）: 人ごと・カテゴリごと・よくいっしょにいる 2 人・自分の通話部屋
+  // ⏰ コアタイムに上がった人
+  app.get('/voice/core', async (c) => {
+    const d = Number(c.req.query('days'));
+    const days = d === 7 || d === 90 ? d : 30;
+    const t = now();
+    const since = jstDate(new Date(t.getTime() - (days - 1) * 86_400_000));
+    const [sessions, regulars] = await Promise.all([coreTimeSessions(db, since), coreTimeRegulars(db, since)]);
+    const qd = c.req.query('day'), qs = c.req.query('slot');
+    // 選んだ回（なければいちばん新しい回）
+    const selected = qd && qs && /^\d{4}-\d{2}-\d{2}$/.test(qd) && /^\d{2}:\d{2}$/.test(qs) ? { day: qd, slot: qs } : sessions[0] ? { day: sessions[0].day, slot: sessions[0].slot } : undefined;
+    const members = selected ? await coreTimeMembers(db, selected.day, selected.slot) : [];
+    const names = await namesOf(db, [...members.map((m) => m.memberId), ...regulars.map((r) => r.memberId)]);
+    return c.html(<CoreTimePage session={c.get('session')} coreTime={describeCoreTime(cfg.coreTime)} days={days} sessions={sessions} selected={selected} members={members} regulars={regulars} name={(id) => names.get(id) ?? id} />);
+  });
+
   app.get('/voice', async (c) => {
     const d = Number(c.req.query('days'));
     const days: VoiceRange = d === 7 || d === 90 ? d : 30;

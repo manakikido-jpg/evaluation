@@ -2151,3 +2151,20 @@ export const fortuneTickets = pgTable('fortune_tickets', {
   number: integer('number').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('fortune_ticket_number').on(t.roundId, t.number), index('fortune_ticket_member').on(t.roundId, t.memberId)]);
+
+/** ⏰ コアタイムに通話に上がった人（コアタイムの枠ごと・1 人 1 行）。毎分、通話にいる人の分を 1 ずつ足す */
+export const coreTimeAttendance = pgTable(
+  'core_time_attendance',
+  {
+    /** 日本時間の日付（YYYY-MM-DD） */
+    day: text('day').notNull(),
+    /** 枠の始まり（HH:MM） */
+    slot: text('slot').notNull(),
+    memberId: text('member_id').notNull(),
+    minutes: integer('minutes').notNull().default(0),
+    firstAt: timestamp('first_at', { withTimezone: true }).notNull(),
+    lastAt: timestamp('last_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.slot, t.memberId] }), index('core_time_attendance_member_idx').on(t.memberId, t.day)],
+);
+export type CoreTimeAttendance = typeof coreTimeAttendance.$inferSelect;

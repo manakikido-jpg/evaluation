@@ -1716,6 +1716,27 @@ describe('✨ 特別ご縁（管理画面）', () => {
 });
 
 describe('通話の記録（管理画面）', () => {
+  it('⏰ コアタイムに上がった人: 回ごとの人数・来た人・よく来る人。ログインしないと見られない', async () => {
+    const { coreTimeAttendance } = await import('../src/db/schema.js');
+    const { jstDate } = await import('../src/services/activity.js');
+    const day = jstDate(clock);
+    await db.insert(coreTimeAttendance).values([
+      { day, slot: '21:00', memberId: USER, minutes: 95, firstAt: clock, lastAt: clock },
+      { day, slot: '21:00', memberId: STAFF, minutes: 10, firstAt: clock, lastAt: clock },
+    ]);
+    expect((await app.request('/voice/core')).status).toBe(302);
+    const s = await login(STAFF);
+    expect(await (await get('/voice', s)).text()).toContain('href="/voice/core"');
+    const page = await (await get('/voice/core', s)).text();
+    expect(page).toContain('⏰ コアタイムに上がった人');
+    expect(page).toContain('2 人');
+    expect(page).toContain('21:00 からのコアタイム（2 人）');
+    expect(page).toContain('1時間35分');
+    expect(page).toContain('よく来る人（30 日）');
+    expect(page).not.toMatch(/onclick=|style=|<script>/);
+    expect((await get(`/voice/core?day=${day}&slot=22:00`, s)).status).toBe(200);
+  });
+
   it('運営が見られる。カテゴリで絞ると、その場所が多い順。メンバーのページにも出る', async () => {
     const { recordPresence } = await import('../src/services/voiceUsage.js');
     await recordPresence(db, [{ id: '990000000000000001', name: '宵宮', categoryId: '990000000000000010', categoryName: '🔞 宵宮', memberIds: [USER, STAFF] }], clock);

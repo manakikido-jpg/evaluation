@@ -757,6 +757,13 @@
       "when": 1792499082201,
       "tag": "0107_volatile_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1792503234850,
+      "tag": "0108_useful_mac_gargan",
+      "breakpoints": true
     }
   ]
 }

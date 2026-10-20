@@ -42,6 +42,7 @@ export function VoicePage(props: {
       <h1>🎙 通話の記録（浮上時間）</h1>
       <p class="note">
         BOT が 1 分ごとに、だれがどの通話に何分いたか・だれといっしょだったかを記録しています（AFK はのぞく。1 人でいた時間も入ります）。運営を任せる人・イベントを計画してもらう人を選ぶときや、部屋の使われ方を見るときに使ってください。
+        <a href="/voice/core">⏰ コアタイムに上がった人を見る</a>
       </p>
       <nav class="tabs" aria-label="期間">
         {(Object.keys(VOICE_RANGES).map(Number) as VoiceRange[]).map((d) => (
