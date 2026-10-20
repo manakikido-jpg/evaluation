@@ -20,6 +20,8 @@ export type PartySeat = Who & { hand: number[]; out: boolean; gone: boolean; tim
 export type PartyBase = {
   seats: PartySeat[];
   entry: number;
+  /** 人だけで集まる大富豪の卓。旧卓はBOT可のまま。 */
+  humansOnly?: boolean;
   phase: 'lobby' | 'playing' | 'done' | 'closed';
   deadline: number | null;
   createdAt: number;
@@ -135,6 +137,7 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
       if (a === 'start') {
         if (state.phase !== 'lobby' || i !== 0) return fail('invalid');
         if (state.seats.length < r.min) return fail('need_players');
+        if (r.kind === 'daifugo' && state.humansOnly && state.seats.some(x => x.bot)) return fail('invalid');
         const s = r.deal(structuredClone(state), ctx.rng, ctx.now);
         s.phase = 'playing';
         s.deadline = turnDeadline(s, ctx.now);
@@ -142,6 +145,7 @@ export function partyEngine<S extends PartyBase>(r: PartyRules<S>): TableEngine<
       }
       // 🤖 BOT を入れる・外す（作った人・相手待ちのあいだ）
       if (a === 'add_bot') {
+        if (r.kind === 'daifugo' && state.humansOnly) return fail('invalid');
         if (state.phase !== 'lobby' || i !== 0) return fail('invalid');
         if (state.seats.length >= r.max) return fail('full');
         const b = nextBot(state.seats.map((x) => x.id));

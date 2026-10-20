@@ -44,17 +44,20 @@ export type AiPlayer = { id: string; name: string; matches: number; place: numbe
 
 export type OthelloRow = { level: OthelloLevel; games: number; win: number; draw: number; lose: number; resign: number; humanNet: number; mult: number; verdict: AiVerdict };
 
-export type AiStats = { rows: AiRow[]; totals: AiRow[]; players: AiPlayer[]; othello: OthelloRow[] };
+export type DaifugoReview = { rules: string; aiVersion: string; players: number; bots: number; policy: string; matches: number; humans: number; humanTop: number; humanPlace: number; botPlace: number; houseNet: number; housePer: number; status: 'few' | 'concentrated' | 'weak' | 'loss' | 'strong' | 'fair' };
+export type AiStats = { daifugo?: DaifugoReview[]; rows: AiRow[]; totals: AiRow[]; players: AiPlayer[]; othello: OthelloRow[] };
 
 /** 大富豪のルールの組み合わせを短く（「⚡ 革命・✂ 8 切り…」） */
 export function variantLabel(game: string, variant: string): string {
   if (!variant) return 'すべて';
   if (game === 'daifugo') {
-    return variant
-      .split(',')
+    const [rules, ...conditions] = variant.split('|');
+    const cap = conditions.find(s => s.startsWith('cap:'))?.slice(4);
+    const stake = conditions.includes('stake:free') ? '・無料練習' : '';
+    return (rules ?? '').split(',')
       .filter(Boolean)
       .map((k) => DAIFUGO_RULES[k as DaifugoRule]?.label ?? k)
-      .join('・');
+      .join('・') + (cap ? (cap === 'legacy' ? '・利益上限なし' : `・利益上限${cap}銭`) : '') + stake;
   }
   return variant;
 }
@@ -90,6 +93,28 @@ function rowOf(game: string, variant: string, aiVersion: string, a: Acc): AiRow 
     humanLeft: a.hl,
     verdict: verdictOf(humanPlace, botPlace, a.hs),
   };
+}
+
+/** 同じルール・人数・BOT数・AI版・配当条件で比較する。赤字だけでAIの弱さと決めない。 */
+export function daifugoReview(rows: Pick<typeof aiMatches.$inferSelect, 'game' | 'variant' | 'aiVersion' | 'players' | 'bots' | 'seats'>[]): DaifugoReview[] {
+ const groups = new Map<string, { rules: string; aiVersion: string; players: number; bots: number; policy: string; matches: number; ids: Set<string>; hs: number; bs: number; top: number; hp: number; bp: number; net: number }>();
+ for (const r of rows) {
+  if(r.game !== 'daifugo' || r.bots < 1 || r.bots >= r.players) continue;
+  const [raw,...parts]=r.variant.split('|');const rules=[...new Set((raw ?? '').split(',').filter(Boolean))].sort().join(',');
+  const cap=parts.find(x=>x.startsWith('cap:'))?.slice(4);
+  const policy=parts.includes('stake:free') ? '無料練習' : cap === 'legacy' ? '利益上限なし' : cap ? `利益上限${cap}銭` : '旧記録・配当条件未保存';
+  const key=JSON.stringify([rules,r.aiVersion,r.players,r.bots,policy]);
+  const g=groups.get(key) ?? { rules,aiVersion:r.aiVersion,players:r.players,bots:r.bots,policy,matches:0,ids:new Set<string>(),hs:0,bs:0,top:0,hp:0,bp:0,net:0 };
+  g.matches++;
+  for(const seat of r.seats){if(seat.bot){g.bs++;g.bp+=norm(seat.place,r.players);}else{g.hs++;g.hp+=norm(seat.place,r.players);g.ids.add(seat.id);g.top+=Number(seat.place===1);g.net+=seat.net;}}
+  groups.set(key,g);
+ }
+ return [...groups.values()].map(g=>{
+  const humanPlace=g.hs?g.hp/g.hs:0,botPlace=g.bs?g.bp/g.bs:0;
+  const verdict=verdictOf(humanPlace,botPlace,g.hs);
+  const status:DaifugoReview['status']=g.matches<20?'few':g.ids.size<3?'concentrated':g.net>0?(verdict==='weak'?'weak':'loss'):verdict==='strong'?'strong':'fair';
+  return {rules:g.rules,aiVersion:g.aiVersion,players:g.players,bots:g.bots,policy:g.policy,matches:g.matches,humans:g.ids.size,humanTop:g.hs?round(g.top/g.hs*100):0,humanPlace:round(humanPlace,3),botPlace:round(botPlace,3),houseNet:-g.net || 0,housePer:Math.round(-g.net/g.matches) || 0,status};
+ }).sort((a,b)=>a.houseNet-b.houseNet || b.matches-a.matches);
 }
 
 export async function aiStats(db: Db, since: Date): Promise<AiStats> {
@@ -135,6 +160,7 @@ export async function aiStats(db: Db, since: Date): Promise<AiStats> {
   const order = Object.keys(AI_GAME_LABEL);
   const byGame = (a: { game: string }, b: { game: string }) => order.indexOf(a.game) - order.indexOf(b.game);
   return {
+    daifugo: daifugoReview(rows),
     rows: [...groups.values()].map((g) => rowOf(g.game, g.variant, g.aiVersion, g.a)).sort((a, b) => byGame(a, b) || b.matches - a.matches),
     totals: [...totals].map(([game, a]) => rowOf(game, '', '', a)).sort(byGame),
     players: [...players]

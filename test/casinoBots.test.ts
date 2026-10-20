@@ -318,7 +318,7 @@ describe('🤖 BOT の銭（DB）', () => {
     const { aiMatches } = await import('../src/db/schema.js');
     const rows = await db.select().from(aiMatches);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ game: 'daifugo', aiVersion: '4', variant: 'eight,joker,revolution', players: 3, bots: 2, tableId: id });
+    expect(rows[0]).toMatchObject({ game: 'daifugo', aiVersion: '4', variant: 'eight,joker,revolution|cap:500|stake:paid', players: 3, bots: 2, tableId: id });
     const me = rows[0]!.seats.find((x) => x.id === A.id)!;
     expect(me).toMatchObject({ bot: false, place: st.order.indexOf(A.id) + 1, net: won - 100 });
     const { aiStats } = await import('../src/services/casino/aiStats.js');
