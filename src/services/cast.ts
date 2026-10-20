@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { castImages, castSessions, casts, members, settings, type Cast, type CastSession } from '../db/schema.js';
+import { castChampagnes, castImages, castSessions, casts, members, settings, type Cast, type CastSession } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { detectImage } from './notices.js';
 
@@ -1096,6 +1096,8 @@ export async function castStats(db: Db, since: Date, castId?: string, until?: Da
     .from(castSessions)
     .where(and(eq(castSessions.status, 'done'), gte(castSessions.closedAt, since), castId ? eq(castSessions.castId, castId) : undefined, until ? lt(castSessions.closedAt, until) : undefined))
     .groupBy(castSessions.castId);
+  const champagne = await db.select({castId:castChampagnes.castId,earned:sql<number>`coalesce(sum(${castChampagnes.price} - ${castChampagnes.fee}),0)::int`}).from(castChampagnes).where(and(gte(castChampagnes.paidAt,since),castId?eq(castChampagnes.castId,castId):undefined,until?lt(castChampagnes.paidAt,until):undefined)).groupBy(castChampagnes.castId);
+  for(const gift of champagne){const row=rows.find(r=>r.castId===gift.castId);if(row)row.earned+=gift.earned;else rows.push({castId:gift.castId,count:0,earned:gift.earned,ratingAvg:null,ratings:0});}
   return rows.map((r) => ({ ...r, ratingAvg: r.ratingAvg === null ? null : Math.round(r.ratingAvg * 10) / 10 })).sort((a, b) => b.count - a.count || b.earned - a.earned);
 }
 
@@ -1165,7 +1167,7 @@ export function monthRange(back: number, now = new Date()): { from: Date; to: Da
   return { from, to, label: `${f.getUTCFullYear()}年${f.getUTCMonth() + 1}月` };
 }
 
-export type CastStatementRow = { id: number; closedAt: Date; customerId: string; label: string; price: number; paid: number; delivery: boolean };
+export type CastStatementRow = { id: number | string; closedAt: Date; customerId: string; label: string; price: number; paid: number; delivery: boolean };
 
 /** 💰 キャスト本人の売上の明細（その月に精算した指名・納品。受け取った額は手数料を引いたあと） */
 export async function castStatement(db: Db, castId: string, from: Date, to: Date): Promise<{ rows: CastStatementRow[]; total: number; count: number }> {
@@ -1174,6 +1176,9 @@ export async function castStatement(db: Db, castId: string, from: Date, to: Date
     .from(castSessions)
     .where(and(eq(castSessions.castId, castId), eq(castSessions.status, 'done'), gte(castSessions.closedAt, from), lt(castSessions.closedAt, to)))
     .orderBy(desc(castSessions.closedAt));
-  const rows = list.map((s) => ({ id: s.id, closedAt: s.closedAt!, customerId: s.customerId, label: sessionLabel(s), price: s.price, paid: s.paid, delivery: isDeliverySession(s) }));
+  const rows:CastStatementRow[] = list.map((s) => ({ id: s.id, closedAt: s.closedAt!, customerId: s.customerId, label: sessionLabel(s), price: s.price, paid: s.paid, delivery: isDeliverySession(s) }));
+  const gifts=await db.select().from(castChampagnes).where(and(eq(castChampagnes.castId,castId),gte(castChampagnes.paidAt,from),lt(castChampagnes.paidAt,to)));
+  rows.push(...gifts.map(g=>({id:g.id,closedAt:g.paidAt!,customerId:g.customerId,label:'🍾 '+g.bottleName,price:g.price,paid:g.price-g.fee,delivery:false})));
+  rows.sort((a,b)=>b.closedAt.getTime()-a.closedAt.getTime());
   return { rows, total: rows.reduce((n, r) => n + r.paid, 0), count: rows.length };
 }

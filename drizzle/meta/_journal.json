@@ -750,6 +750,13 @@
       "when": 1792407157349,
       "tag": "0106_ordinary_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1792499082201,
+      "tag": "0107_volatile_warbound",
+      "breakpoints": true
     }
   ]
 }

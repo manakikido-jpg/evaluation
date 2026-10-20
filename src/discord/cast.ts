@@ -1,3 +1,5 @@
+import { CHAMPAGNES, champagneOf, prepareChampagne, buyChampagne, announceChampagne, assertChampagneActive, ChampagneError, champagneError } from '../services/castChampagne.js';
+import { champagneAnimation, champagnePreview } from '../services/castChampagneImage.js';
 import { createHash } from 'node:crypto';
 import { createLoginLink } from '../services/casino/loginLinks.js';
 import { castIntroId, castIntroPosts, forgetCastIntroPost, saveCastIntroPost, withCastIntroLock } from '../services/castIntroPosts.js';
@@ -331,7 +333,7 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
     lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。時間が来たら終わって、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。` : '');
     if (s.isPublic) lines.push(`-# 公開の部屋です（18 歳未満の方との雑談。${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`);
     lines.push(`-# 始まってから ${c.noShowMinutes} 分たっても相手が来ないときは「🚫 相手が来ない」（来ている人だけ押せます）。`);
-    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨')];
+    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨'), button(`cast:champagne:${s.id}`, 'シャンパンを贈る（お客）', 1, '🍾')];
   } else if (s.status === 'done') {
     title = '🎉 おつかれさまでした';
     lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、よければ評価をお願いします（この部屋は少しあとに消えます）。`);
@@ -477,6 +479,7 @@ export class CastApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     try {
       if (interaction.isStringSelectMenu()) {
+        if (action === 'champagnesel') return await this.champagneSelect(interaction, Number(a), interaction.values[0] ?? '');
         if (action === 'pick') return await this.pick(interaction, interaction.values[0] ?? '');
         if (action === 'plansel') return await this.confirm(interaction, a ?? '', interaction.values[0] ?? '');
         if (action === 'opts') return await this.confirm(interaction, a ?? '', b ?? '', interaction.values);
@@ -523,8 +526,10 @@ export class CastApp {
       if (action === 'qgo') return await this.quoteGo(interaction, a ?? '', b ?? '', rest);
       if (action === 'rsv') return await this.reservePlans(interaction, a ?? '');
       if (action === 'rplan') return await this.reserveModal(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
+      if (action === 'champagnebuy') return await this.champagneBuy(interaction, a ?? '');
       const id = Number(a);
       if (!Number.isSafeInteger(id)) return;
+      if (action === 'champagne') return await this.champagneMenu(interaction, id);
       if (action === 'accept') return await this.accept(interaction, id);
       if (action === 'propose') return await this.proposeModal(interaction, id);
       if (action === 'early') return await this.earlyRoom(interaction, id);
@@ -718,7 +723,7 @@ export class CastApp {
         title: `💰 売上の明細（${range.label}）`,
         description: [
           `受け取った合計 **${fmt(st.total)} ${coin}** ・ ${st.count} 件`,
-          '-# 左が預かった額、右が受け取った額（手数料を引いたあと・途中で終えたときは話した分）',
+          '-# 左が支払額、右が受取額（手数料を引いたあと）。🍾は通話中のシャンパン。指名は途中で終えたときは話した分',
           '',
           ...(lines.length ? lines : ['この月の精算はありません。']),
           ...(st.rows.length > 20 ? [`-# ほか ${st.rows.length - 20} 件`] : []),
@@ -1083,6 +1088,50 @@ export class CastApp {
     if (!cast) return void (await i.reply({ content: 'キャストの方だけ使えます。', ...EPHEMERAL }));
     await i.reply({ content: `🗓 出勤予定を ${scheduleText(cast.schedule)} にしました。この時間の外は予約できません（もう入っている予約はそのまま）。`, ...EPHEMERAL });
     this.refresh();
+  }
+
+  private champagneHere(s: CastSession): boolean {
+    const states = this.guild?.voiceStates.cache;
+    return !!s.channelId && states?.get(s.customerId)?.channelId === s.channelId && states?.get(s.castId)?.channelId === s.channelId;
+  }
+
+  private async champagneMenu(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
+    await i.deferReply(EPHEMERAL);
+    try {
+      const s = await getSession(this.db,id);
+      assertChampagneActive(s,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s),new Date());
+      await i.editReply({content:'🍾 キャストとの時間に、ありがとうを。ボトルを選ぶと金額と配分を確認できます。確定するまで銭は使いません。通話時間は延びません。',components:[{type:1,components:[{type:3,custom_id:`cast:champagnesel:${id}`,placeholder:'シャンパンを選ぶ',options:CHAMPAGNES.map(b=>({label:`${b.name} · ${fmt(b.price)} ${this.cfg().economy.currencyName}`,value:b.id,emoji:{name:b.emoji}}))}]}],allowedMentions:{parse:[]}});
+    } catch(err) { await i.editReply({content:champagneError(err),components:[]}); }
+  }
+
+  private async champagneSelect(i: StringSelectMenuInteraction<'cached'>, id: number, bottleId: string): Promise<void> {
+    await i.deferUpdate();
+    try {
+      const q=await prepareChampagne(this.db,id,bottleId,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s));
+      const image=champagnePreview(q.bottle);
+      await i.editReply({content:`${q.bottleName}：${fmt(q.price)} ${this.coin()}\nキャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。今すぐキャストへ入金します。通話時間は延びません。\nこの確認は5分間有効です。`,embeds:[{image:{url:'attachment://champagne.png'}}],files:[new AttachmentBuilder(image,{name:'champagne.png'})],attachments:[],components:[row(button(`cast:champagnebuy:${q.id}`,'料金を確認して贈る',3,'🍾'))],allowedMentions:{parse:[]}});
+    } catch(err) { await i.editReply({content:champagneError(err),components:[],embeds:[],attachments:[]}); }
+  }
+
+  private async champagneBuy(i: ButtonInteraction<'cached'>, id: string): Promise<void> {
+    await i.deferUpdate();
+    let result;
+    try { result=await buyChampagne(this.db,id,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s)); }
+    catch(err){await i.editReply({content:champagneError(err),components:err instanceof ChampagneError?[]:[row(button(`cast:champagnebuy:${id}`,'購入結果を確認・再試行',1))],embeds:[],attachments:[]});return;}
+    const q=result.purchase;
+    let shown=true;
+    try {
+      await announceChampagne(this.db,q.id,i.user.id,async purchase=>{
+        if(!this.voice(purchase.channelId))throw new ChampagneError('表示する部屋がありません。');
+        let file;
+        try {file={name:'champagne.gif',contentType:'image/gif',data:await champagneAnimation(purchase.bottle)};}
+        catch(err){logger.warn({err},'champagne image failed');}
+        const b=champagneOf(purchase.bottle);
+        const message=await this.discord.sendMessage(purchase.channelId,{embeds:[{title:`${b?.emoji ?? '🍾'} ${purchase.bottleName}で乾杯！`,description:`<@${purchase.customerId}> さんから <@${purchase.castId}> さんへ。\n${fmt(purchase.price)} ${this.coin()}のシャンパンを贈りました。\nキャスト受取 ${fmt(purchase.price-purchase.fee)}／手数料 ${fmt(purchase.fee)}。通話時間は延びません。`,color:parseInt((b?.color ?? '#eac38c').slice(1),16),...(file?{image:{url:'attachment://champagne.gif'}}:{})}],...(file?{files:[file]}:{}),allowed_mentions:{parse:[]},nonce:purchase.id.replaceAll('-','').slice(0,24),enforce_nonce:true});
+        return message.id;
+      });
+    } catch(err){shown=false;logger.warn({err,purchaseId:q.id},'champagne announcement failed');}
+    await i.editReply({content:`${result.fresh?'贈りました':'この購入は精算済みです（追加の支払いはありません）'}：${q.bottleName}\n支払 ${fmt(q.price)} ${this.coin()}／キャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。\n残高 ${fmt(result.balance)}。購入番号 ${q.id}。${shown?'':'\n購入と入金は完了しましたが、開栓表示が届いたか確認できません。「開栓表示を確認・再試行」は追加購入になりません。'}`,embeds:[],attachments:[],components:shown?[]:[row(button(`cast:champagnebuy:${q.id}`,'開栓表示を確認・再試行',1))],allowedMentions:{parse:[]}});
   }
 
   private async extend(i: ButtonInteraction<'cached'>, id: number, expected: number): Promise<void> {

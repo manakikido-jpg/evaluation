@@ -1826,6 +1826,25 @@ export const castSessions = pgTable(
 );
 export type CastSession = typeof castSessions.$inferSelect;
 
+/** 通話中のシャンパン。確認条件と購入・表示を分けて保存する。 */
+export const castChampagnes = pgTable('cast_champagnes', {
+  id: text('id').primaryKey(),
+  sessionId: bigint('session_id', { mode: 'number' }).notNull().references(() => castSessions.id),
+  customerId: text('customer_id').notNull(),
+  castId: text('cast_id').notNull(),
+  channelId: text('channel_id').notNull(),
+  bottle: text('bottle').notNull(),
+  bottleName: text('bottle_name').notNull(),
+  price: integer('price').notNull(),
+  fee: integer('fee').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  noticeId: text('notice_id'),
+}, t => [index('cast_champagnes_session_idx').on(t.sessionId, t.createdAt), index('cast_champagnes_cast_idx').on(t.castId, t.paidAt)]);
+export type CastChampagne = typeof castChampagnes.$inferSelect;
+
+
 /** 🎀 キャストのメニューの画像（社務所Web で上げる） */
 export const castImages = pgTable('cast_images', {
   key: text('key').primaryKey(),
