@@ -142,7 +142,7 @@ const RULES: Record<TableKind, string> = {
   roulette_table: 'みんなで同じ回転に賭けます。チップを選んで盤のマスを押すと置けます（10 か所まで）。座っている全員が「賭けて回す」を押すか、だれかが賭けてから 25 秒たつと回ります。',
   chinchiro_table: `みんなで同じ親（胴元）にサイコロで挑みます。だれかが賭けてから 15 秒で親が振ります（全員賭けたらすぐ）。親が目なら、子が 1 人ずつ「振る」（3 回まで・持ち時間 20 秒）。負けは最大で賭けの ${CHIN_MAX_LOSS} 倍なので、賭けるときに ${CHIN_MAX_LOSS} 倍を預かり、残りは終わったら返します。`,
   poker: `テキサスホールデム。座るときに銭を持ち込み（ビッグブラインドの ${BUYIN_MIN_BB}〜${BUYIN_MAX_BB} 倍）、立つとチップが銭に戻ります。持ち時間はふつう 30 秒（ゆっくり 1 分・のんびり 2 分も選べます）。胴元の取り分はありません。`,
-  daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。',
+  daifugo: '3〜5 人。同じ数字 1〜4 枚を出し、場より強いものを出していきます。卓を立てる人がルール（革命・8 切り・ジョーカー・♠3 返し・11 バック・しばり・階段・5 飛ばし・反則上がり）を選べます（ほかに 7 渡し・10 捨て・9 リバース・砂嵐も）。上がった順に参加費をまとめて配ります（3 人: 7:3、4 人: 6:3:1、5 人: 5:3:2）。新しい卓でBOTと遊ぶ場合、各人の1回の利益は最大500銭（受取額は参加費＋500銭まで）。通常配当が上限より少なければ通常どおり。超過分は胴元へ戻ります。',
   babanuki: '2〜5 人。となりの人から 1 枚ずつ引いて、そろったら捨てます。最後にババを持っていた人の参加費を、ほかの人で分けます。',
   mahjong: MJ_RULES,
   life: '2〜5人。最初に仕事を選び、20分（36マス）・40分（72マス）・60分（108マス）を選んで人生を進みます。選んだ時間が経つか全員がゴールすると、資産で順位を決めます。給料日を通るとゲーム内の資金が増え、家や保険を選べます。分かれ道では堅実／挑戦を選び、イベントでも受け取り方を選べます。切り札は出目指定・修理代の回避・失敗後の再挑戦の3種類です。Gはゲーム内だけのお金で銭には交換できません。賞金は参加費だけを分けます（2人100:0、3人70:30:0、4人60:30:10:0、5人50:30:20:0:0。同点は該当順位の賞金を分けます）。時間切れ・途中退出は自動で進めます。BOTは参加費0銭の練習だけ。',
@@ -269,7 +269,7 @@ function summaryBody(t: CasinoTable, coin: Coin): string {
     const ps = t.state as DaifugoState;
     const version = t.kind==='life' ? `${lifeMinutes(t.state as LifeState)}分版・` : '';
     const rules = t.kind === 'daifugo' ? `・${rulesOf(ps).map((k) => DAIFUGO_RULES[k].label.replace(/^\S+ /, '')).join('・') || 'ルールなし'}` : '';
-    return `${version}参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}`;
+    return `${version}参加費 ${ps.entry > 0 ? `${coin.emoji}${fmt(ps.entry)}` : 'なし'}・${ps.phase === 'lobby' ? '相手待ち' : ps.phase === 'playing' ? '対戦中' : '終わり'}・${seats.length} 人（${who}）${rules}${t.kind === 'daifugo' ? ((ps as DaifugoState).botProfitCap !== undefined ? `・BOT戦の利益上限 ${fmt((ps as DaifugoState).botProfitCap!)} ${coin.name}` : '・旧条件（BOT戦の利益上限なし）') : ''}`;
   }
   return `${seats.length} 人（${who}）`;
 }
@@ -1143,6 +1143,9 @@ function DaifugoRules({ s }: { s: DaifugoState }) {
   );
 }
 
+function DaifugoCap({ s, coin }: { s: DaifugoState; coin: Coin }) {
+  return <p class="c-muted">{s.botProfitCap !== undefined ? `BOTが参加する対戦は、各人の利益が1回最大${fmt(s.botProfitCap)} ${coin.name}。受取額は参加費＋${fmt(s.botProfitCap)} ${coin.name}まで（この卓では最大${fmt(s.entry + s.botProfitCap)} ${coin.name}）。通常配当が上限未満なら通常どおり。超過分は胴元へ戻ります。人だけの対戦は通常配当です。` : 'この卓は以前の配当条件です。BOT戦の利益上限はありません。'}</p>;
+}
 function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
   const i = s.seats.findIndex((x) => x.id === me.session.userId);
   const my = i >= 0 ? s.seats[i]! : undefined;
@@ -1151,7 +1154,7 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
   if (s.phase === 'lobby')
     return (
       <>
-        <DaifugoRules s={s} />
+        <DaifugoRules s={s} /><DaifugoCap s={s} coin={me.coin} />
         <PartyLobby t={t} s={s} me={me} min={3} />
         <SeatControls t={t} me={me} seated={Boolean(my)} full={s.seats.length >= 5} join={s.entry > 0 ? <span>参加費 {fmt(s.entry)} {me.coin.name}</span> : undefined} />
       </>
@@ -1173,7 +1176,7 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
           {reversed(s) && <span class="c-tag">いまは 3 が強い</span>}
           <Countdown at={s.phase === 'playing' ? s.deadline : null} now={now} />
         </div>
-        <DaifugoRules s={s} />
+        <DaifugoRules s={s} /><DaifugoCap s={s} coin={me.coin} />
         <div class="c-field">
           {s.field ? (
             <div class="c-cards c-cards-center">

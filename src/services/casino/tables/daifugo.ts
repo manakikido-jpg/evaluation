@@ -44,6 +44,8 @@ const SPADE3 = 0 * 13 + 2;
 export type DField = { cards: number[]; n: number; strength: number; joker: boolean; by: number; type?: 'same' | 'seq'; suits?: number[] } | null;
 export type DaifugoState = PartyBase & {
   kind: 'daifugo';
+  /** 作成時のBOT戦の利益上限。ない旧卓は元の配当を維持する。 */
+  botProfitCap?: number;
   field: DField;
   passes: number[];
   lastBy: number | null;
@@ -658,12 +660,31 @@ export function dBotLookahead(s: DaifugoState, i: number): Step<DaifugoState> {
   return cands[best]!.step;
 }
 
+/** 新しいBOT入り卓は、人の純利益を1回500銭までにする。 */
+export const DAIFUGO_BOT_PROFIT_CAP = 500;
+export function daifugoPayouts(s: DaifugoState) {
+  payoutByShares(s, SHARES[s.seats.length] ?? SHARES[5]!);
+  const bot = s.payouts.find(p => s.seats.some(x => x.id === p.id && x.bot));
+  if (bot && s.botProfitCap !== undefined) {
+    let returned = 0;
+    for (const payout of s.payouts) {
+      if (s.seats.find(x => x.id === payout.id)?.bot) continue;
+      const amount = Math.min(payout.amount, s.entry + s.botProfitCap);
+      returned += payout.amount - amount;
+      payout.amount = amount;
+    }
+    // 超過分はBOT側（運営）へ戻す。分配総額と収支・AI記録を一致させる。
+    bot.amount += returned;
+  }
+  return s.payouts.filter(p => p.amount > 0).map(p => ({ memberId: p.id, amount: p.amount, reason: 'casino_win' as const }));
+}
+
 export const daifugo = partyEngine<DaifugoState>({
   kind: 'daifugo',
   min: 3,
   max: 5,
   turnSeconds: 40,
-  init: (f) => ({ kind: 'daifugo', field: null, passes: [], lastBy: null, revolution: false, played: 0, rules: daifugoRulesOf(f), jback: false, lock: null, fouls: [], dir: 1, pending: null }) as never,
+  init: (f) => ({ kind: 'daifugo', botProfitCap: DAIFUGO_BOT_PROFIT_CAP, field: null, passes: [], lastBy: null, revolution: false, played: 0, rules: daifugoRulesOf(f), jback: false, lock: null, fouls: [], dir: 1, pending: null }) as never,
   deal(s, rng) {
     const deck = shuffle([...shuffledShoe(1, rng), ...(has(s, 'joker') ? [JOKER] : [])], rng);
     deck.forEach((c, k) => s.seats[k % s.seats.length]!.hand.push(c));
@@ -699,6 +720,6 @@ export const daifugo = partyEngine<DaifugoState>({
   finish(s) {
     // 反則上がりの人は最下位（先に反則した人ほど下）
     s.order = [...s.order, ...[...(s.fouls ?? [])].reverse()];
-    return payoutByShares(s, SHARES[s.seats.length] ?? SHARES[5]!);
+    return daifugoPayouts(s);
   },
 });
