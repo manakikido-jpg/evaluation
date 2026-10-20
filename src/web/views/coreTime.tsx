@@ -1,5 +1,6 @@
 import type { AdminSession, CoreTimeAttendance } from '../../db/schema.js';
 import { fmtMinutes } from '../../services/voiceUsage.js';
+import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
 import { Layout } from './layout.js';
 
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
@@ -17,15 +18,30 @@ export function CoreTimePage(props: {
   members: CoreTimeAttendance[];
   regulars: { memberId: string; times: number; minutes: number; lastDay: string }[];
   name: (id: string) => string;
+  /** 銭・券の名前（プレゼントの欄） */
+  coin: { emoji: string; name: string };
+  /** 宮司だけ、参加者へプレゼントできる */
+  canGift: boolean;
+  msg?: string;
 }) {
   const sel = props.selected;
+  const csrf = <input type="hidden" name="_csrf" value={props.session.csrfToken} />;
+  const MSG: Record<string, string> = {
+    gift_given: '🎁 プレゼントしました。社務所Web の「⚙ 設定」→「今いる人に配る」の履歴から回収もできます。',
+    gift_invalid: '入力を確かめてください（量・ひとこと・確認のチェック）。',
+    gift_none: 'その条件に合う人がいません。',
+  };
   const link = (day: string, slot: string) => `/voice/core?days=${props.days}&day=${day}&slot=${encodeURIComponent(slot)}`;
   return (
-    <Layout title="コアタイムの記録" session={props.session} nav="voice">
-      <h1>⏰ コアタイムに上がった人</h1>
+    <Layout title="コアタイム" session={props.session} nav="coretime">
+      <h1>⏰ コアタイム</h1>
+      {props.msg && MSG[props.msg] && <p class="flash">{MSG[props.msg]}</p>}
       <p class="note">
         コアタイム（{props.coreTime}）の間、BOT が 1 分ごとに、通話にいる人を記録しています（花びらがもらえる人と同じ: AFK・BOT はのぞく）。1 分でもいれば「上がった」に数えます。
         <a href="/voice">← 通話の記録へ</a>
+      </p>
+      <p class="inline-actions">
+        <a href={`/voice/core.csv?days=${props.days}`} download>📥 この期間の記録を CSV で書き出す</a>
       </p>
       <nav class="tabs" aria-label="期間">
         {[7, 30, 90].map((d) => (
@@ -99,6 +115,52 @@ export function CoreTimePage(props: {
             </table>
           ) : (
             <p class="empty">このコアタイムに来た人はいません。</p>
+          )}
+          <p class="inline-actions">
+            <a href={`/voice/core.csv?day=${sel.day}&slot=${encodeURIComponent(sel.slot)}`} download>📥 この回を CSV で書き出す</a>
+          </p>
+          {props.canGift && props.members.length > 0 && (
+            <form method="post" action="/voice/core/gift" class="fields">
+              {csrf}
+              <h3>🎁 この回の参加者へプレゼント</h3>
+              <input type="hidden" name="day" value={sel.day} />
+              <input type="hidden" name="slot" value={sel.slot} />
+              <label class="field">
+                <span>何分以上いた人に（1 で、来た人みんな）</span>
+                <input type="number" name="minMinutes" min={1} max={1440} value="1" required />
+              </label>
+              <label class="field">
+                <span>配るもの</span>
+                <select name="what" required>
+                  <option value="coins">
+                    {props.coin.emoji} {props.coin.name}
+                  </option>
+                  {TICKET_GROUPS.map((g) => (
+                    <optgroup label={g.label}>
+                      {g.kinds.map((k) => (
+                        <option value={`ticket:${k}`}>
+                          {TICKET_LABEL[k].emoji} {TICKET_LABEL[k].name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+              <label class="field">
+                <span>1 人あたりの量（券は 10 枚まで）</span>
+                <input type="number" name="amount" min={1} required />
+              </label>
+              <label class="field">
+                <span>ひとこと（記録に残す）</span>
+                <input type="text" name="note" maxlength={200} required value={`コアタイム ${dayText(sel.day)} ${sel.slot} のお礼`} />
+              </label>
+              <label class="check">
+                <input type="checkbox" name="confirm" value="yes" required /> この回の参加者に配る（押すとすぐに配ります）
+              </label>
+              <button type="submit" class="ok">
+                🎁 プレゼントする
+              </button>
+            </form>
           )}
         </section>
       )}

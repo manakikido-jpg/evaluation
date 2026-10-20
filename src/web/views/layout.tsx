@@ -14,6 +14,7 @@ type Nav =
   | 'glossary'
   | 'security'
   | 'voice'
+  | 'coretime'
   | 'updates'
   | 'roles'
   | 'ranks'
@@ -55,6 +56,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'stats', href: '/stats', icon: '📈', label: '推移' },
       { key: 'recordings', href: '/recordings', icon: '🎥', label: '録音・録画' },
       { key: 'voice', href: '/voice', icon: '🎙', label: '通話の記録' },
+      { key: 'coretime', href: '/voice/core', icon: '⏰', label: 'コアタイム', page: 'voice' },
       { key: 'audit', href: '/audit', icon: '📜', label: '記録' },
       { key: 'commands', href: '/commands', icon: '⌨', label: 'コマンド' },
     ],
