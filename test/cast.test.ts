@@ -590,6 +590,21 @@ describe('🎀 キャストのDiscord操作', () => {
     expect((await walletOf(db, CAST)).balance).toBe(800);
   });
 
+  it('💬 相談: 通話を選ぶと時間の選択、時間を選ぶとお願いの欄（種類・時間つき）。納品は時間なしでお願いの欄', async () => {
+    const f = fixture();
+    const base = { guildId: cfg.guildId, user: { id: ADULT }, member: { roles: { cache: new Map() } }, inCachedGuild: () => true, isUserSelectMenu: () => false, isModalSubmit: () => false };
+    const update = vi.fn(async () => undefined);
+    const showModal = vi.fn(async () => undefined);
+    await f.app.onInteraction({ ...base, customId: `cast:ckind:${CAST}:m1:call`, isStringSelectMenu: () => false, isButton: () => true, update, showModal } as unknown as Interaction);
+    const sel = (update.mock.calls[0] as unknown as [{ components: { components: { custom_id: string; options: { value: string }[] }[] }[] }])[0].components[0]!.components[0]!;
+    expect(sel.custom_id).toBe(`cast:cmin:${CAST}:m1`);
+    expect(sel.options.map((o) => o.value)).toEqual(['30', '60', '90', '120', '180', '240']);
+    await f.app.onInteraction({ ...base, customId: `cast:cmin:${CAST}:m1`, values: ['90'], isStringSelectMenu: () => true, isButton: () => false, showModal } as unknown as Interaction);
+    expect((showModal.mock.calls[0] as unknown as [{ data: { custom_id: string } }])[0].data.custom_id).toBe(`cast:cmodal:${CAST}:m1:call:90`);
+    await f.app.onInteraction({ ...base, customId: `cast:ckind:${CAST}:m1:dlv`, isStringSelectMenu: () => false, isButton: () => true, update, showModal } as unknown as Interaction);
+    expect((showModal.mock.calls[1] as unknown as [{ data: { custom_id: string } }])[0].data.custom_id).toBe(`cast:cmodal:${CAST}:m1:dlv:0`);
+  });
+
   it('予約開始では部屋を1つ作り、スレッドに入室ボタンを出す', async () => {
     const at = new Date(T20.getTime() + 60 * MIN);
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
@@ -685,6 +700,27 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 45, price: 700 } }, T20);
     expect(r).toMatchObject({ status: 'ok', session: { menuName: 'おねがい（相談）', minutes: 45, price: 700 } });
     expect(r.status === 'ok' && r.balance).toBe(19300);
+  });
+
+  it('💬📦 納品の相談: キャストが出した値段で、納品の注文になる（同じスレッドで 2 回は注文しない）', async () => {
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, c, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    expect(await addMenuItem(db, c, CAST, [{ name: 'おねがい', note: '', minutes: 0, price: 0, night: false, consult: true }])).toBe('ok');
+    const item = (await getCast(db, CAST))!.menu.find((m) => m.consult)!;
+    await addCoins(db, ADULT, 10000, 'adjust');
+    const THREAD = '990000000000000123';
+    // 時間つき・範囲の外・相談でないメニューはだめ
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 30, price: 800, delivery: true } }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 0, price: 0, delivery: true } }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', quote: { minutes: 0, price: 800, delivery: true } }, T20)).status).toBe('no_plan');
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 0, price: 800, delivery: true } }, T20)).status).toBe('minor_plan');
+    const [a, b] = await Promise.all([0, 1].map(() => requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 0, price: 800, delivery: true }, threadId: THREAD }, T20)));
+    const ok = [a, b].find((x) => x!.status === 'ok')!;
+    expect([a, b].map((x) => x!.status).sort()).toEqual(['already_ordered', 'ok']);
+    expect(ok).toMatchObject({ status: 'ok', session: { menuName: 'おねがい（相談）', minutes: 0, price: 800, status: 'ordered', threadId: THREAD } });
+    expect(ok.status === 'ok' && ok.session.plan).toBe(`dlv:${item.id}`);
+    expect((await walletOf(db, ADULT)).balance).toBe(19200);
   });
 });
 

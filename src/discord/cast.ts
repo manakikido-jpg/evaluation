@@ -379,6 +379,11 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
   };
 }
 
+/** 💬 相談の種類と、通話で選べる時間（分） */
+type ConsultKind = 'call' | 'dlv' | 'other';
+const CONSULT_LABEL: Record<ConsultKind, string> = { call: '📞 通話', dlv: '📦 納品', other: '✏️ そのほか' };
+export const CONSULT_MINUTES = [30, 60, 90, 120, 180, 240];
+
 /** 社務所からキャストへの DM で押せるボタン・フォーム */
 const DM_ACTIONS = new Set(['accept', 'decline', 'propose', 'pmodal', 'dlv']);
 
@@ -484,6 +489,7 @@ export class CastApp {
         if (action === 'plansel') return await this.confirm(interaction, a ?? '', interaction.values[0] ?? '');
         if (action === 'opts') return await this.confirm(interaction, a ?? '', b ?? '', interaction.values);
         if (action === 'rplansel') return await this.reserveModal(interaction, a ?? '', interaction.values[0] ?? '');
+        if (action === 'cmin') return void (await interaction.showModal(this.consultModal(a ?? '', b ?? '', 'call', CONSULT_MINUTES.includes(Number(interaction.values[0])) ? Number(interaction.values[0]) : 60)));
         return;
       }
       if (interaction.isUserSelectMenu()) {
@@ -502,8 +508,8 @@ export class CastApp {
           return await this.reserveSubmit(interaction, a ?? '', b ?? '', undefined, { minutes: Number(minutes), price: Number(price) });
         }
         if (action === 'omodal') return await this.orderSubmit(interaction, a ?? '', b ?? '');
-        if (action === 'cmodal') return await this.consultSubmit(interaction, a ?? '', b ?? '');
-        if (action === 'qmodal') return await this.quoteSubmit(interaction, a ?? '', b ?? '', rest[0] ?? '');
+        if (action === 'cmodal') return await this.consultSubmit(interaction, a ?? '', b ?? '', rest[0], rest[1]);
+        if (action === 'qmodal') return await this.quoteSubmit(interaction, a ?? '', b ?? '', rest[0] ?? '', rest[1]);
         return;
       }
       if (!interaction.isButton()) return;
@@ -522,7 +528,9 @@ export class CastApp {
       if (action === 'plan') return await this.confirm(interaction, a ?? '', b ?? '');
       // キャストは予約だけ（前のメッセージに残った「指名する」も、日時を入れる予約にする）
       if (action === 'go') return await this.reserveModal(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
-      if (action === 'quote') return await this.quoteModal(interaction, a ?? '', b ?? '', rest[0] ?? '');
+      if (action === 'quote') return await this.quoteModal(interaction, a ?? '', b ?? '', rest[0] ?? '', rest[1], rest[2]);
+      if (action === 'ckind') return await this.consultKind(interaction, a ?? '', b ?? '', rest[0] ?? '');
+      if (action === 'qdlv') return await this.quoteDelivery(interaction, a ?? '', b ?? '', rest);
       if (action === 'qgo') return await this.quoteGo(interaction, a ?? '', b ?? '', rest);
       if (action === 'rsv') return await this.reservePlans(interaction, a ?? '');
       if (action === 'rplan') return await this.reserveModal(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
@@ -784,16 +792,18 @@ export class CastApp {
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     if (item.consult) {
       if (!adult) return void (await this.answer(i, { content: '相談のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
-      return void (await i.showModal(
-        new ModalBuilder()
-          .setCustomId(`cast:cmodal:${castId}:${item.id}`)
-          .setTitle(`💬 ${item.name}（内容により相談）`.slice(0, 45))
-          .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder().setCustomId('wish').setLabel('お願いしたいこと（キャストが時間と値段を出します）').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500),
-            ),
-          ),
-      ));
+      // まず、どんな相談か（通話・納品・そのほか）を選ぶ
+      return void (await this.answer(i, {
+        content: [`💬 <@${castId}> さんの **${item.name}**（内容により相談）`, 'どんなことを頼みたいですか？ 選ぶと、お願いを書く欄が出ます（まだ銭は払いません。キャストが値段を出します）。'].join('\n'),
+        embeds: [],
+        components: [row(
+          button(`cast:ckind:${castId}:${item.id}:call`, '通話で頼む', 1, '📞'),
+          button(`cast:ckind:${castId}:${item.id}:dlv`, '納品（ボイス・イラストなど）', 1, '📦'),
+          button(`cast:ckind:${castId}:${item.id}:other`, 'そのほか', 2, '✏️'),
+        )],
+        attachments: [],
+        allowedMentions: { parse: [] },
+      }));
     }
     if (item.delivery) {
       if (!adult) return void (await this.answer(i, { content: '📦 納品のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
@@ -843,9 +853,44 @@ export class CastApp {
     });
   }
 
-  // ───────── 💬 相談のメニュー: お客がお願いを書く → キャストが時間と値段を出す → お客がその値段で指名する ─────────
+  // ───────── 💬 相談のメニュー: お客が種類（通話・納品・そのほか）と時間を選んでお願いを書く → キャストが値段を出す → お客がその値段で予約・注文する ─────────
 
-  private async consultSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string): Promise<void> {
+  /** 種類を選んだ: 通話なら時間を選ぶ。納品・そのほかは、そのままお願いを書く */
+  private async consultKind(i: ButtonInteraction<'cached'>, castId: string, itemId: string, kind: string): Promise<void> {
+    if (kind === 'call') {
+      return void (await i.update({
+        content: '📞 何分くらい話したいですか？（キャストが値段を出すときの目安になります）',
+        components: [{
+          type: 1 as const,
+          components: [{
+            type: 3 as const,
+            custom_id: `cast:cmin:${castId}:${itemId}`,
+            placeholder: '時間を選ぶ',
+            options: CONSULT_MINUTES.map((m) => ({ label: m >= 60 ? `${m / 60} 時間${m % 60 ? ` ${m % 60} 分` : ''}` : `${m} 分`, value: String(m) })),
+          }],
+        }],
+        allowedMentions: { parse: [] },
+      } as never));
+    }
+    await i.showModal(this.consultModal(castId, itemId, kind === 'dlv' ? 'dlv' : 'other'));
+  }
+
+  private consultModal(castId: string, itemId: string, kind: ConsultKind, minutes = 0) {
+    const label = { call: '話したいこと（話題・雰囲気など）', dlv: '納品してほしいもの（内容・呼んでほしい名前など）', other: 'お願いしたいこと' }[kind];
+    const when = { call: '希望の日時（例: 10/25 21時ごろ・なくてもよい）', dlv: '希望の期限（例: 今週中・なくてもよい）', other: '希望の日時・期限（なくてもよい）' }[kind];
+    const title = { call: `📞 通話の相談（${minutes} 分）`, dlv: '📦 納品の相談', other: '✏️ 相談' }[kind];
+    return new ModalBuilder()
+      .setCustomId(`cast:cmodal:${castId}:${itemId}:${kind}:${minutes}`)
+      .setTitle(title.slice(0, 45))
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('wish').setLabel(label).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('when').setLabel(when).setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(100)),
+      );
+  }
+
+  private async consultSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string, kindRaw = 'other', minutesRaw = '0'): Promise<void> {
+    const kind: ConsultKind = kindRaw === 'call' || kindRaw === 'dlv' ? kindRaw : 'other';
+    const minutes = kind === 'call' && CONSULT_MINUTES.includes(Number(minutesRaw)) ? Number(minutesRaw) : 0;
     await i.deferReply(EPHEMERAL);
     const cast = await getCast(this.db, castId);
     const item = cast && menuOf(cast).find((m) => m.id === itemId && m.consult);
@@ -853,6 +898,8 @@ export class CastApp {
     if (cast.blocked.includes(i.user.id) || castId === i.user.id) return void (await i.editReply('このキャストには相談できません。'));
     if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.editReply('相談のメニューは 18 歳以上の方だけです。'));
     const wish = i.fields.getTextInputValue('wish').trim().slice(0, 500);
+    // 前のボタンから開いた欄には「希望」がない
+    const when = (() => { try { return i.fields.getTextInputValue('when').trim().slice(0, 100); } catch { return ''; } })();
     const c = await loadCastConfig(this.db);
     const home = castHomeChannel(c, cast);
     const panel = home ? this.guild?.channels.cache.get(home) : undefined;
@@ -862,30 +909,48 @@ export class CastApp {
     await thread.members.add(castId).catch(() => undefined);
     await thread.members.add(i.user.id).catch(() => undefined);
     await thread.send({
-      content: [`<@${castId}> さん、<@${i.user.id}> さんから **${item.name}** の相談です。`, `> ${wish.replace(/\n/g, '\n> ')}`, '時間と値段を決めたら「値段を出す」を押してください（お客がその値段で指名すると、いつもの指名と同じように始まります）。', RULES].join('\n'),
-      components: [row(button(`cast:quote:${castId}:${item.id}:${i.user.id}`, '値段を出す（キャスト）', 1, '💬'))],
+      content: [
+        `<@${castId}> さん、<@${i.user.id}> さんから **${item.name}** の相談です。`,
+        `種類: ${CONSULT_LABEL[kind]}${minutes ? ` ・ 時間: ${minutes} 分` : ''}${when ? ` ・ 希望: ${when}` : ''}`,
+        `> ${wish.replace(/\n/g, '\n> ')}`,
+        kind === 'dlv'
+          ? '値段を決めたら「値段を出す」を押してください（お客がその値段で注文すると、いつもの納品と同じように、このスレッドに届けます）。'
+          : '時間と値段を決めたら「値段を出す」を押してください（お客がその値段で予約すると、いつもの指名と同じように始まります）。',
+        RULES,
+      ].join('\n'),
+      components: [row(button(`cast:quote:${castId}:${item.id}:${i.user.id}:${kind}:${minutes}`, '値段を出す（キャスト）', 1, '💬'))],
       allowedMentions: { users: [castId] },
     });
     await this.discord.sendDm(castId, `💬 ${item.name} の相談が届きました。<#${thread.id}> で値段を出してください。`).catch(() => false);
     await i.editReply(`💬 相談をお願いしました。キャストの返事は <#${thread.id}> に届きます（まだ銭は払っていません）。`);
   }
 
-  private async quoteModal(i: ButtonInteraction<'cached'>, castId: string, itemId: string, customerId: string): Promise<void> {
+  private async quoteModal(i: ButtonInteraction<'cached'>, castId: string, itemId: string, customerId: string, kind = 'other', minutes = '0'): Promise<void> {
     if (i.user.id !== castId) return void (await i.reply({ content: '値段を出せるのはキャストだけです。', ...EPHEMERAL }));
-    await i.showModal(
-      new ModalBuilder()
-        .setCustomId(`cast:qmodal:${castId}:${itemId}:${customerId}`)
-        .setTitle('💬 時間と値段を出す')
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('minutes').setLabel('時間（分）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(4).setPlaceholder('30')),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('price').setLabel('値段（銭）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(9).setPlaceholder('500')),
-        ),
-    );
+    const dlv = kind === 'dlv';
+    const time = new TextInputBuilder().setCustomId('minutes').setLabel('時間（分）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(4).setPlaceholder('30');
+    // お客が選んだ時間を、はじめから入れておく
+    if (Number(minutes) > 0) time.setValue(String(Number(minutes)));
+    const modal = new ModalBuilder()
+      .setCustomId(`cast:qmodal:${castId}:${itemId}:${customerId}:${dlv ? 'dlv' : 'call'}`)
+      .setTitle(dlv ? '📦 納品の値段を出す' : '💬 時間と値段を出す');
+    if (!dlv) modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(time));
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('price').setLabel('値段（銭）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(9).setPlaceholder('500')));
+    await i.showModal(modal);
   }
 
-  private async quoteSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string, customerId: string): Promise<void> {
+  private async quoteSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string, customerId: string, kind = 'call'): Promise<void> {
     if (i.user.id !== castId) return void (await i.reply({ content: '値段を出せるのはキャストだけです。', ...EPHEMERAL }));
     const c = await loadCastConfig(this.db);
+    if (kind === 'dlv') {
+      const price = parsePrice(i.fields.getTextInputValue('price'));
+      if (!Number.isInteger(price) || price < c.priceMin || price > c.priceMax) return void (await i.reply({ content: `値段は ${fmt(c.priceMin)}〜${fmt(c.priceMax)} 枚で入れてください。`, ...EPHEMERAL }));
+      return void (await i.reply({
+        content: `📦 <@${customerId}> さん、<@${castId}> さんから **納品 ・ ${this.coin()} ${fmt(price)} 枚** の提案です。よければ「この値段で注文する」を押してください（銭は社務所が預かり、届いて受け取ったらキャストへ渡します）。`,
+        components: [row(button(`cast:qdlv:${castId}:${itemId}:${customerId}:${price}`, `${fmt(price)} 枚で注文する（お客）`, 3, '📦'))],
+        allowedMentions: { users: [customerId] },
+      }));
+    }
     const minutes = parsePrice(i.fields.getTextInputValue('minutes'));
     const price = parsePrice(i.fields.getTextInputValue('price'));
     if (!validQuote(c, minutes, price)) return void (await i.reply({ content: `時間は ${MENU_MINUTES.min}〜${MENU_MINUTES.max} 分、値段は ${fmt(c.priceMin)}〜${fmt(c.priceMax)} 枚で入れてください。`, ...EPHEMERAL }));
@@ -900,6 +965,24 @@ export class CastApp {
     const [customerId, minutes, price] = rest;
     if (i.user.id !== customerId) return void (await i.reply({ content: 'この提案で予約できるのは、相談した人だけです。', ...EPHEMERAL }));
     await this.reserveModal(i, castId, itemId, undefined, { customerId: customerId!, minutes: Number(minutes), price: Number(price) });
+  }
+
+  /** 📦 納品の相談の提案で注文する（このスレッドに届けてもらう） */
+  private async quoteDelivery(i: ButtonInteraction<'cached'>, castId: string, itemId: string, rest: string[]): Promise<void> {
+    const [customerId, price] = rest;
+    if (i.user.id !== customerId) return void (await i.reply({ content: 'この提案で注文できるのは、相談した人だけです。', ...EPHEMERAL }));
+    await i.deferReply(EPHEMERAL);
+    const c = await loadCastConfig(this.db);
+    const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
+    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan: itemId, quote: { minutes: 0, price: Number(price), delivery: true }, threadId: i.channelId });
+    if (r.status !== 'ok') return void (await i.editReply(r.status === 'has_open' ? `納品待ちの注文は ${CUSTOMER_OPEN_MAX} 件までです。届いてから次を注文してください。` : this.requestError(r)));
+    const s = r.session;
+    const dm = await this.dmCast(s);
+    await i.channel?.send({ ...(dm ? {} : { content: `<@${castId}>` }), ...this.reserveMessage(s, !dm), allowedMentions: { users: dm ? [] : [castId] } } as never).catch(() => undefined);
+    // 押したボタンは消す（二重に注文しない。押しても 2 回目は「注文はもう…」になる）
+    await i.message.edit({ components: [] }).catch(() => undefined);
+    this.refresh();
+    await i.editReply(`📦 注文しました。キャストが ${DELIVERY.deadlineHours} 時間以内に、このスレッドへ届けます（残り ${fmt(r.balance)} 枚）。`);
   }
 
   private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }, options?: string[]): Promise<void> {
@@ -933,6 +1016,7 @@ export class CastApp {
       minor_off: 'このキャストは、18 歳未満の方の指名を受けていません。',
       minor_hours: `18 歳未満の方の雑談は ${MINOR.startHour} 時〜${MINOR.endHour} 時に終わる時間だけです。`,
       has_open: `指名（返事待ち・通話中・予約）は 1 人 ${CUSTOMER_OPEN_MAX} 件までです。終わってからどうぞ。`,
+      already_ordered: 'この相談では、もう注文しています。',
       self_overlap: 'あなたのほかの指名・予約と時間が重なっています。ちがう時間にしてください。',
       overlap: 'その時間は、ほかの指名か予約と重なっています。時間を変えてください。',
       bad_time: '予約は 10 分後〜7 日後の時刻にしてください。',

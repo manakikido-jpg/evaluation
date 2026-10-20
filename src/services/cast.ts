@@ -606,7 +606,7 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 export type RequestResult =
   | { status: 'ok'; session: CastSession; balance: number; /** ガチャで出たもの */ drawn?: string }
   | { status: 'insufficient'; price: number; balance: number }
-  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' | 'off_hours' };
+  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' | 'off_hours' | 'already_ordered' };
 
 /** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
 /** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数 */
@@ -636,7 +636,7 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段 */ quote?: { minutes: number; price: number }; /** 付けるオプションの番号 */ options?: string[] },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段（delivery: 📦 納品として出した値段。時間は 0） */ quote?: { minutes: number; price: number; delivery?: boolean }; /** 付けるオプションの番号 */ options?: string[]; /** 📦 納品の相談: やり取りのスレッド（同じ相談で 2 回注文しない） */ threadId?: string },
   now = new Date(),
   rand: () => number = Math.random,
 ): Promise<RequestResult> {
@@ -648,9 +648,12 @@ export async function requestSession(
   if (cast.available !== 'waiting') return { status: 'closed' };
   const found = menuOf(cast).find((m) => m.id === input.plan);
   // 相談のメニューは、キャストが出した時間と値段で（ほかのメニューに値段は付けられない）
-  const item = found?.consult ? (input.quote && validQuote(c, input.quote.minutes, input.quote.price) ? { ...found, ...input.quote } : undefined) : input.quote ? undefined : found;
+  // 📦 納品の相談: 時間はなく、値段だけ（注文と同じように、キャストの納品を待つ）
+  const q = input.quote;
+  const quoteOk = q && (q.delivery ? q.minutes === 0 && validPrice(c, q.price) : validQuote(c, q.minutes, q.price));
+  const item = found?.consult ? (q && quoteOk ? { ...found, minutes: q.minutes, price: q.price, ...(q.delivery ? { delivery: true } : {}) } : undefined) : q ? undefined : found;
   if (!item || item.price <= 0) return { status: 'no_plan' };
-  if (item.delivery) return input.startAt || input.quote || input.options?.length ? { status: 'no_plan' } : orderDelivery(db, cast.memberId, item, input, now, rand);
+  if (item.delivery) return input.startAt || (q && !found?.consult) || input.options?.length ? { status: 'no_plan' } : orderDelivery(db, cast.memberId, item, input, now, rand);
   const opts = pickOptions(cast, input.options);
   if (input.options && opts.length !== new Set(input.options).size) return { status: 'no_plan' };
   const optionPrice = opts.reduce((n, o) => n + o.price, 0);
@@ -715,13 +718,18 @@ export async function requestSession(
 }
 
 /** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 24 時間）。18 歳以上だけ。通話の時間とは重ならない */
-async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean }, now: Date, rand: () => number): Promise<RequestResult> {
+async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean; threadId?: string }, now: Date, rand: () => number): Promise<RequestResult> {
   if (!input.customerAdult) return { status: 'minor_plan' };
   const drawn = item.gacha?.length ? item.gacha[Math.min(item.gacha.length - 1, Math.floor(rand() * item.gacha.length))] : undefined;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);
     const mine = await tx.select({ id: castSessions.id }).from(castSessions).where(and(eq(castSessions.customerId, input.customerId), inArray(castSessions.status, ['ordered', 'delivered'])));
     if (mine.length >= CUSTOMER_OPEN_MAX) return { status: 'has_open' as const };
+    // 📦 納品の相談: 同じスレッドでもう注文していれば、もう一度は注文しない（ボタンを 2 回押しても）
+    if (input.threadId) {
+      const [dup] = await tx.select({ id: castSessions.id }).from(castSessions).where(and(eq(castSessions.threadId, input.threadId), eq(castSessions.customerId, input.customerId), inArray(castSessions.status, ['ordered', 'delivered', 'done'])));
+      if (dup) return { status: 'already_ordered' as const };
+    }
     if (!(await spendWithin(tx, input.customerId, item.price, 'cast_pay', { castId, plan: `dlv:${item.id}`, menu: item.name, ...(drawn ? { drawn } : {}) }))) {
       return { status: 'insufficient' as const, price: item.price, balance: (await walletOf(tx, input.customerId)).balance };
     }
@@ -729,8 +737,8 @@ async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: 
       .insert(castSessions)
       .values({
         castId, customerId: input.customerId, plan: `dlv:${item.id}`,
-        menuName: drawn ? `${item.name}：${drawn}` : item.name,
-        minutes: 0, price: item.price, status: 'ordered',
+        menuName: drawn ? `${item.name}：${drawn}` : item.consult ? `${item.name}（相談）` : item.name,
+        minutes: 0, price: item.price, status: 'ordered', ...(input.threadId ? { threadId: input.threadId } : {}),
         acceptBy: new Date(now.getTime() + DELIVERY.deadlineHours * 60 * MIN), createdAt: now,
       })
       .returning();
