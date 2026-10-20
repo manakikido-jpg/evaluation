@@ -3451,7 +3451,7 @@ describe('キャスト（管理画面）', () => {
     // 下限はいつも 1 銭（送っても使わない）
     expect((await import('../src/services/cast.js').then((m) => m.loadCastConfig(db))).priceMin).toBe(1);
     // 🏆 ランキングの設定（ほかの欄の保存で消えない）・くわしいランキング
-    expect((await form(s, '/cast/settings', { channelId: '910000000000000003', roleId: '980000000000000001', priceMax: '30000', feePercent: '10', acceptMinutes: '10', rankChannelId: '910000000000000004', rankRoleId: '980000000000000002', rankBonus: '700' })).headers.get('location')).toBe('/cast?msg=saved');
+    expect((await form(s, '/cast/settings', { channelId: '910000000000000003', roleId: '980000000000000001', priceMax: '30000', feePercent: '10', acceptMinutes: '10', rankChannelId: '910000000000000004', rankRoleId: '980000000000000002', rankBonus: '700', reservationChannelId: '910000000000000005' })).headers.get('location')).toBe('/cast?msg=saved');
     expect((await form(s, '/cast/settings', { channelId: '910000000000000003', roleId: '980000000000000001', priceMax: '30000', feePercent: '10', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=saved');
     expect(await import('../src/services/cast.js').then((m) => m.loadCastConfig(db))).toMatchObject({ rankChannelId: '910000000000000004', rankRoleId: '980000000000000002', rankBonus: 700, customerOpenMax: 10 });
     // 1 人の予約の上限
@@ -3459,9 +3459,11 @@ describe('キャスト（管理画面）', () => {
     expect((await form(s, '/cast/settings', { channelId: '910000000000000003', roleId: '980000000000000001', priceMax: '30000', feePercent: '10', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=saved');
     expect((await import('../src/services/cast.js').then((m) => m.loadCastConfig(db))).customerOpenMax).toBe(20);
     expect((await form(s, '/cast/settings', { channelId: '910000000000000003', priceMax: '30000', feePercent: '10', acceptMinutes: '10', customerOpenMax: '51' })).headers.get('location')).toBe('/cast?msg=invalid');
+    expect(await import('../src/services/cast.js').then((m) => m.loadCastConfig(db))).toMatchObject({ rankChannelId: '910000000000000004', rankRoleId: '980000000000000002', rankBonus: 700, reservationChannelId: '910000000000000005' });
     expect((await form(s, '/cast/settings', { channelId: '910000000000000003', priceMax: '30000', feePercent: '10', acceptMinutes: '10', rankBonus: '-1' })).headers.get('location')).toBe('/cast?msg=invalid');
     const rankPage = await (await get('/cast?rank=2026-09', s)).text();
     expect(rankPage).toContain('🏆 ランキング（2026 年 9 月）');
+    expect(rankPage).toMatch(/value="910000000000000005" selected/);
     expect(rankPage).toContain('/cast?rank=2026-08#cast-ranking');
     expect(rankPage).toContain('name="rankBonus"');
     // 画像

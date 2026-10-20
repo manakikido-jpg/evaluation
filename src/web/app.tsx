@@ -5929,6 +5929,7 @@ export function createWebApp(deps: WebDeps) {
       ...prev,
       channelId: id('channelId'),
       femaleChannelId: id('femaleChannelId'),
+      reservationChannelId: body.reservationChannelId === undefined ? prev.reservationChannelId : id('reservationChannelId'),
       privateCategoryId: id('privateCategoryId'),
       publicCategoryId: id('publicCategoryId'),
       roleId: id('roleId'),

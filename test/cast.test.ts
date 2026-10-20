@@ -518,11 +518,25 @@ describe('🎀 キャストのDiscord操作', () => {
     expect(JSON.stringify(showModal.mock.calls[0])).toContain(`cast:rmodal:${CAST}:30`);
   });
 
+  it('専用窓口へ予約を作り、本人向けに移動ボタンを返す', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
+    const f = fixture(), HUB = '990000000000000777', THREAD = '990000000000000778';
+    const { saveCastConfig } = await import('../src/services/cast.js');
+    await saveCastConfig(db, { ...c, reservationChannelId: HUB }, 'staff');
+    const create = vi.fn(async () => ({ id: THREAD, members: { add: vi.fn(async () => undefined) }, send: vi.fn(async () => ({})) }));
+    f.app.attach({ channels: { cache: new Map([[HUB, { type: ChannelType.GuildText, threads: { create } }]]) } } as unknown as Guild);
+    await f.app.onInteraction({ ...f.interaction, customId: `cast:rmodal:${CAST}:30`, isModalSubmit: () => true, isFromMessage: () => true, fields: { getTextInputValue: () => '21:00' } } as unknown as Interaction);
+    expect(create).toHaveBeenCalledOnce();
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('予約のお部屋はこちら');
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain(`https://discord.com/channels/${cfg.guildId}/${THREAD}`);
+    expect((await walletOf(db, ADULT)).balance).toBe(9700);
+  });
+
   it('非公開スレッドの作成に失敗した予約は公開せず全額返す', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
     const f = fixture();const CH = '990000000000000777';
     const { saveCastConfig, getSession } = await import('../src/services/cast.js');
-    await saveCastConfig(db, { ...c, channelId: CH }, 'staff');
+    await saveCastConfig(db, { ...c, channelId: CH, reservationChannelId: CH }, 'staff');
     const create = vi.fn(async () => { throw Error('Missing Permissions'); });
     f.app.attach({ channels: { cache: new Map([[CH, { type: ChannelType.GuildText, threads: { create } }]]) } } as unknown as Guild);
     await f.app.onInteraction({ ...f.interaction, customId: `cast:rmodal:${CAST}:30`, isModalSubmit: () => true, isFromMessage: () => true, fields: { getTextInputValue: () => '21:00' } } as unknown as Interaction);

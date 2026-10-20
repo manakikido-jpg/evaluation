@@ -23,6 +23,7 @@ import {
   type StringSelectMenuInteraction,
   type UserSelectMenuInteraction,
   type VoiceChannel,
+  type TextChannel,
 } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -93,6 +94,7 @@ import {
   saveCastConfig,
   setBlocked,
   setSessionPlace,
+  saveReservationHub,
   setWaiting,
   updateProfile,
   type CastConfig,
@@ -392,6 +394,7 @@ export class CastApp {
   private ticking = false;
   private introsDiscovered = false;
   private syncingIntros = false;
+  private creatingReservationHub?: Promise<TextChannel | undefined>;
 
   constructor(
     private readonly db: Db,
@@ -1427,24 +1430,83 @@ export class CastApp {
     await thread.send({ content: [r.drawn ? `🎰 ガチャの結果: **${r.drawn}**` : '', wish ? `📝 お願い:\n> ${wish.replace(/\n/g, '\n> ')}` : ''].filter(Boolean).join('\n') || '📦 注文', allowedMentions: { parse: [] } }).catch(() => undefined);
     const dm = await this.dmCast(s);
     await thread.send({ ...(dm ? {} : { content: `<@${castId}>` }), ...this.reserveMessage(s, !dm), allowedMentions: { users: dm ? [] : [castId] } } as never).catch(() => undefined);
-    await i.editReply({ content: `${r.drawn ? `🎰 ガチャの結果は **${r.drawn}** でした！ ` : '📦 '}注文しました。キャストが ${DELIVERY.deadlineHours} 時間以内に <#${thread.id}> へ届けます（残り ${fmt(r.balance)} 枚）。`, components: [] });
+    await i.editReply({ content: `${r.drawn ? `🎰 ガチャの結果は **${r.drawn}** でした！ ` : '📦 '}注文しました。キャストが ${DELIVERY.deadlineHours} 時間以内に <#${thread.id}> へ届けます（残り ${fmt(r.balance)} 枚）。`, components: [row({ type: 2, style: 5, label: '納品のお部屋はこちら', url: `https://discord.com/channels/${i.guildId}/${thread.id}` })] });
   }
 
-  /** 予約・納品のやり取りのスレッド（キャストのメニューのチャンネルの中） */
-  private async openThread(s: CastSession, name: string) {
+  /** 男女共通の予約窓口。作成中は同じPromiseを使い、連続予約で増やさない。 */
+  private async reservationHub(): Promise<TextChannel | undefined> {
     const c = await loadCastConfig(this.db);
-    const castRow = await getCast(this.db, s.castId);
-    const home = castRow ? castHomeChannel(c, castRow) : c.channelId;
-    const panel = home ? this.guild?.channels.cache.get(home) : undefined;
-    if (panel?.type !== ChannelType.GuildText) return undefined;
-    // 予約内容は年齢にかかわらず非公開。isPublicは通話部屋だけの条件。
-    // 非公開を作れない場合も、公開スレッドへ切り替えない。
-    const thread = await panel.threads.create({ name, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' }).catch(() => undefined);
+    if (c.reservationChannelId) {
+      const ch = this.guild?.channels.cache.get(c.reservationChannelId)
+        ?? await this.guild?.channels.fetch(c.reservationChannelId).catch(() => null);
+      return ch?.type === ChannelType.GuildText ? ch : undefined;
+    }
+    if (!this.creatingReservationHub) this.creatingReservationHub = this.createReservationHub().finally(() => { this.creatingReservationHub = undefined; });
+    return this.creatingReservationHub;
+  }
+
+  private async createReservationHub(): Promise<TextChannel | undefined> {
+    const g = this.guild;
+    if (!g) return undefined;
+    let made: TextChannel | undefined;
+    try {
+      const c = await loadCastConfig(this.db);
+      if (c.reservationChannelId) return this.reservationHub();
+      const menu = g.channels.cache.get(c.channelId ?? c.femaleChannelId ?? '');
+      const READ = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.ReadMessageHistory | PermissionFlagsBits.SendMessagesInThreads;
+      const MANAGE = READ | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.CreatePrivateThreads;
+      const me = g.members.me ?? await g.members.fetchMe();
+      made = await g.channels.create({ name: '📅 キャスト予約', type: ChannelType.GuildText, parent: menu?.parentId ?? null,
+        topic: '男女共通の予約・納品窓口。キャスト一覧から予約すると、本人・キャスト・運営だけのお部屋へ案内します。',
+        permissionOverwrites: [
+          { id: g.id, type: OverwriteType.Role, allow: READ, deny: PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads },
+          ...[...staffRoleIds(this.cfg())].map(id => ({ id, type: OverwriteType.Role, allow: MANAGE })),
+          { id: me.id, type: OverwriteType.Member, allow: MANAGE | PermissionFlagsBits.ManageChannels },
+        ], reason: '男女共通のキャスト予約窓口',
+      });
+      let saved: string;
+      try { saved = await saveReservationHub(this.db, made.id); }
+      catch (err) { await made.delete('予約窓口を保存できなかったため').catch(() => undefined); throw err; }
+      if (saved !== made.id) { await made.delete('設定済みの予約窓口を優先').catch(() => undefined); return this.reservationHub(); }
+      await audit(this.db, { actorId: 'system', action: 'cast.reservation_hub', detail: { channelId: made.id }, via: 'system' }).catch(err => logger.warn({ err }, 'cast reservation hub audit failed'));
+      return made;
+    } catch (err) {
+      logger.warn({ err }, 'cast reservation hub failed');
+      return undefined;
+    }
+  }
+
+  private async reservationName(s: CastSession, name: string): Promise<string> {
+    const names = await namesOf(this.db, [s.castId]);
+    const who = (names.get(s.castId) ?? 'キャスト').replace(/[@#`<>\r\n]/g, '').trim().slice(0, 24) || 'キャスト';
+    const at = s.startAt ? new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(s.startAt) : '受付';
+    return `${name.startsWith('📦') ? '📦 納品' : '📅 予約'}｜${who}｜${at}｜#${s.id}`;
+  }
+
+  /** 予約・納品のやり取りは、男女共通の窓口に非公開で作る。 */
+  private async openThread(s: CastSession, name: string) {
+    const panel = await this.reservationHub();
+    if (!panel) return undefined;
+    // 親が見えないと、スレッドへ追加しても参加者は開けない。
+    if (panel.permissionsFor) {
+      for (const id of [s.castId, s.customerId]) {
+        const member = await this.guild?.members.fetch(id).catch(() => null);
+        if (!member || !panel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.ReadMessageHistory | PermissionFlagsBits.SendMessagesInThreads)) return undefined;
+      }
+    }
+    const title = await this.reservationName(s, name);
+    const thread = await panel.threads.create({ name: title, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' }).catch(() => undefined);
     if (!thread) return undefined;
-    await thread.members.add(s.castId).catch(() => undefined);
-    await thread.members.add(s.customerId).catch(() => undefined);
-    await setSessionPlace(this.db, s.id, { threadId: thread.id });
-    return thread;
+    try {
+      await thread.members.add(s.castId);
+      await thread.members.add(s.customerId);
+      await setSessionPlace(this.db, s.id, { threadId: thread.id });
+      return thread;
+    } catch (err) {
+      await thread.delete('予約のお部屋に参加できなかったため').catch(() => undefined);
+      logger.warn({ err, sessionId: s.id }, 'cast reservation join failed');
+      return undefined;
+    }
   }
 
   /**
@@ -1528,6 +1590,12 @@ export class CastApp {
       self_overlap: 'あなたのほかの予約と重なっています。',
     };
     if (r.status !== 'ok') return void (await i.editReply(msg[r.status] ?? 'うまくいきませんでした。'));
+    if (r.session.threadId) {
+      try {
+        const thread = this.guild?.channels.cache.get(r.session.threadId) ?? await this.guild?.channels.fetch(r.session.threadId);
+        if (thread?.isThread()) await thread.setName(await this.reservationName(r.session, '予約'));
+      } catch (err) { logger.warn({ err, sessionId: id }, 'cast reservation rename failed'); }
+    }
     await i.editReply('✅ 予約の日時を変えました。');
     const ch = i.channel;
     if (ch?.isSendable()) await ch.send({ ...this.reserveMessage(r.session), allowedMentions: { parse: [] } } as never).catch(() => undefined);
@@ -1575,7 +1643,7 @@ export class CastApp {
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, ...(options ? { options } : {}), ...(quote ? { quote } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
-    // やり取りは、そのキャストのメニューのチャンネルの中の、2 人だけのスレッドで。キャストの返事は社務所からの DM で
+    // やり取りは男女共通の予約窓口の非公開スレッドで。キャストへの返事の案内はDMで。
     const thread = await this.openThread(r.session, `📅 予約 #${r.session.id}`);
     const threadId = thread?.id;
     if (thread) {
@@ -1587,7 +1655,7 @@ export class CastApp {
       await cancelSession(this.db, r.session.id, 'system', 'declined');
       return void (await i.editReply({ content: '予約のやり取りの場所を作れなかったので、取り消して銭を戻しました。神職に知らせてください。', components: [] }));
     }
-    await i.editReply({ content: `📅 予約をお願いしました（<t:${unix(at)}:f>）。返事は <#${threadId}> に届きます（残り ${fmt(r.balance)} 枚）。`, components: [] });
+    await i.editReply({ content: `📅 予約をお願いしました（<t:${unix(at)}:f>）。返事は <#${threadId}> に届きます（残り ${fmt(r.balance)} 枚）。`, components: [row({ type: 2, style: 5, label: '予約のお部屋はこちら', url: `https://discord.com/channels/${i.guildId}/${threadId}` })] });
   }
 
   // ───────── 1 分ごと ─────────

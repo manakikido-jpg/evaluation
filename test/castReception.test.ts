@@ -388,7 +388,7 @@ describe('キャスト予約内容の公開範囲', () => {
   const CH = '990000000000000123', THREAD = '990000000000000124';
   async function setup(create: ReturnType<typeof vi.fn>) {
     const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
-    await saveCastConfig(db, { ...(await loadCastConfig(db)), channelId: CH }, 'staff');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), channelId: CH, reservationChannelId: CH }, 'staff');
     const app = new CastApp(db, () => cfg, {} as DiscordActions);
     app.attach({ channels: { cache: new Map([[CH, { type: ChannelType.GuildText, threads: { create } }]]) } } as never);
     return app as unknown as { openThread(s: typeof castSessions.$inferSelect, name: string): Promise<{ id: string } | undefined> };
@@ -399,7 +399,7 @@ describe('キャスト予約内容の公開範囲', () => {
     const app = await setup(create);
     const session = await booking({ isPublic });
     expect(await app.openThread(session, '📅 予約 #' + session.id)).toMatchObject({ id: THREAD });
-    expect(create).toHaveBeenCalledExactlyOnceWith({ name: '📅 予約 #' + session.id, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' });
+    expect(create).toHaveBeenCalledExactlyOnceWith({ name: `📅 予約｜キャスト｜10/02 00:00｜#${session.id}`, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' });
     expect(add.mock.calls).toEqual([[CAST], [CUSTOMER]]);
     const { getSession } = await import('../src/services/cast.js');
     expect(await getSession(db, session.id)).toMatchObject({ threadId: THREAD, isPublic });
