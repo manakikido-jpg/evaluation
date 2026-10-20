@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import type { CastSession } from '../db/schema.js';
-import { menuOf, sessionLabel, type CastReception } from './cast.js';
+import { menuOf, sessionLabel, sessionTime, type CastReception } from './cast.js';
 
 const FONT_DIR = fileURLToPath(new URL('../../assets/fonts/', import.meta.url));
 const FONT_FILES = ['ShipporiMinchoB1-500.ttf', 'ShipporiMinchoB1-800.ttf'].map((f) => FONT_DIR + f);
@@ -15,7 +15,8 @@ const shorten = (s: string, max: number) => [...s.replace(/[\r\n\t]/g, ' ')].len
 const clock = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(11, 16);
 const day = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(0, 10).replaceAll('-', '/');
 const fmt = (n: number) => n.toLocaleString('ja-JP');
-const plan = (s: CastSession) => (s.menuName || (s.plan === 'night' ? '寝落ち' : s.plan === '60' ? '1時間' : s.plan === '30' ? '30分' : sessionLabel(s))) + (s.extensions ? ' ＋' + s.extensions * 30 + '分' : '');
+// 名前のうしろに、時間（延長もふくむ）を付ける。納品は時間がないので付けない
+const plan = (s: CastSession) => (s.menuName || (s.plan === 'night' ? '寝落ち' : s.plan === '60' ? '1時間' : s.plan === '30' ? '30分' : sessionLabel(s))) + (s.plan.startsWith('dlv:') ? '' : ' ' + sessionTime(s).replace(/^⏱ |^🌙 /, '').replace(/ /g, ''));
 const STATUS: Record<CastSession['status'], string> = { reserved: '返事待ち', accepted: '予約確定', requested: '返事待ち', active: '通話中', ordered: '納品待ち', delivered: '受取待ち', done: '終了', declined: '受付終了', canceled: '取消', disputed: '運営確認中', refunded: '返金済み', noshow_cast: 'キャスト不在', noshow_customer: 'お客不在' };
 const STATES = { waiting: ['予約受付中', '#8cc4a6'], busy: ['対応中', '#efd39a'], off: ['受付停止', '#d4c6d1'], pending: ['運営の確認待ち', '#d4c6d1'], paused: ['運営による休止', '#d4c6d1'] } as const;
 

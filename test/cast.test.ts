@@ -202,7 +202,9 @@ describe('🎀 キャスト', () => {
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 60 * MIN) }, T20)).status).toBe('ok');
   });
 
-  it('1 人で何件も予約できる（5 件まで・自分の予約と時間が重ならないこと）', async () => {
+  it('1 人で何件も予約できる（設定の件数まで・はじめは 10 件・自分の予約と時間が重ならないこと）', async () => {
+    expect(c.customerOpenMax).toBe(10);
+    const five = { ...c, customerOpenMax: 5 };
     const CAST2 = '880000000000000009';
     await applyCast(db, c, { id: CAST2, adult: true }, profile, T20);
     await setCastStatus(db, CAST2, 'active', 'staff', T20);
@@ -210,8 +212,21 @@ describe('🎀 キャスト', () => {
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('ok');
     // べつのキャストでも、自分の予約と重なる時間はだめ
     expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('self_overlap');
-    for (const h of [2, 3, 4, 5]) expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(h) }, T20)).status).toBe('ok');
-    expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(6) }, T20)).status).toBe('has_open');
+    for (const h of [2, 3, 4, 5]) expect((await requestSession(db, five, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(h) }, T20)).status).toBe('ok');
+    expect((await requestSession(db, five, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(6) }, T20)).status).toBe('has_open');
+    // はじめの 10 件なら、まだ入る
+    expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(6) }, T20)).status).toBe('ok');
+  });
+
+  it('⏱ 予約の時間を見やすく: 時間と、始まり〜終わり（延長もふくむ）', async () => {
+    const { sessionTime } = await import('../src/services/cast.js');
+    const start = new Date('2026-10-20T12:00:00Z'); // 21:00（日本時間）
+    expect(sessionTime({ plan: 'm1', minutes: 60, extensions: 0, startAt: start, endsAt: null })).toBe('⏱ 1 時間（21:00〜22:00）');
+    expect(sessionTime({ plan: 'm1', minutes: 30, extensions: 1, startAt: start, endsAt: null })).toBe('⏱ 1 時間（21:00〜22:00）');
+    expect(sessionTime({ plan: 'm1', minutes: 90, extensions: 0, startAt: null, endsAt: null })).toBe('⏱ 1 時間 30 分');
+    expect(sessionTime({ plan: 'night', minutes: 0, extensions: 0, startAt: start, endsAt: null })).toBe('🌙 寝落ち（21:00〜朝 7 時まで）');
+    expect(sessionTime({ plan: 'free:x', minutes: 0, extensions: 0, startAt: start, endsAt: null })).toBe('⏱ 時間フリー（21:00〜）');
+    expect(sessionTime({ plan: 'dlv:x', minutes: 0, extensions: 0, startAt: null, endsAt: null })).toBe('📦 納品');
   });
 
   it('別の日時の提案: お客が受けると、その時刻で受けた予約になる', async () => {

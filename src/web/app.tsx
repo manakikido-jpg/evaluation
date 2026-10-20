@@ -5945,10 +5945,11 @@ export function createWebApp(deps: WebDeps) {
       rankChannelId: body.rankChannelId === undefined ? prev.rankChannelId : id('rankChannelId'),
       rankRoleId: body.rankRoleId === undefined ? prev.rankRoleId : id('rankRoleId'),
       rankBonus: body.rankBonus === undefined ? prev.rankBonus : n('rankBonus'),
+      customerOpenMax: body.customerOpenMax === undefined ? prev.customerOpenMax : n('customerOpenMax'),
     };
     const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
     if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.priceMax, next.priceMin, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
-    if (!ok(next.lateCancelMinutes, 0, 1440) || !ok(next.lateCancelPercent, 0, 100) || !ok(next.noShowMinutes, 5, 120) || !ok(next.noShowPercent, 0, 100) || !ok(next.rankBonus, 0, 1_000_000)) return c.redirect('/cast?msg=invalid');
+    if (!ok(next.lateCancelMinutes, 0, 1440) || !ok(next.lateCancelPercent, 0, 100) || !ok(next.noShowMinutes, 5, 120) || !ok(next.noShowPercent, 0, 100) || !ok(next.rankBonus, 0, 1_000_000) || !ok(next.customerOpenMax, 1, 50)) return c.redirect('/cast?msg=invalid');
     // チャンネルを変えたら、前のメニューはそのままにして、新しいチャンネルに出し直す
     if (next.channelId !== prev.channelId) delete next.panelMessageId;
     if (next.femaleChannelId !== prev.femaleChannelId) delete next.femalePanelMessageId;

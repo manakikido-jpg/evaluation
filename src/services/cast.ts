@@ -58,8 +58,11 @@ export type CastConfig = {
   rankRoleId?: string;
   /** 🏆 月の 1 位にわたす銭（0 でなし） */
   rankBonus: number;
+  /** 1 人のお客が同時に持てる予約・指名の数（返事待ち・確定・通話中）。納品の注文も同じ数まで */
+  customerOpenMax: number;
 };
-export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0 };
+const CAST_DEFAULTS_OPEN_MAX = 10;
+export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0, customerOpenMax: 10 };
 const KEY = 'cast';
 const sf = (x: unknown) => (typeof x === 'string' && /^\d{17,20}$/.test(x) ? x : undefined);
 const int = (x: unknown, d: number, lo: number, hi: number) => (typeof x === 'number' && Number.isInteger(x) && x >= lo && x <= hi ? x : d);
@@ -89,6 +92,7 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     rankChannelId: sf(v.rankChannelId),
     rankRoleId: sf(v.rankRoleId),
     rankBonus: int(v.rankBonus, d.rankBonus, 0, 1_000_000),
+    customerOpenMax: int(v.customerOpenMax, d.customerOpenMax, 1, 50),
     ...(Array.isArray(v.menuTemplate) ? { menuTemplate: (v.menuTemplate as unknown[]).filter(isMenuItem).slice(0, MENU_MAX) } : {}),
   };
 }
@@ -241,6 +245,17 @@ export const menuPriceText = (m: Pick<CastMenuItem, 'price' | 'consult'>) => (m.
 /** 指名の名前（前の指名はプランの名前） */
 export const sessionLabel = (s: Pick<CastSession, 'plan' | 'menuName'> & { optionNames?: string[] }) =>
   (s.menuName || PLAN_LABEL[s.plan as CastPlan] || s.plan) + (s.optionNames?.length ? `＋${s.optionNames.join('・')}` : '');
+/** ⏱ 予約・指名の時間を見やすく: 「⏱ 1 時間（21:00〜22:00）」「🌙 寝落ち（21:00〜朝 7 時）」「📦 納品」。延長も足す */
+export function sessionTime(s: Pick<CastSession, 'plan' | 'minutes' | 'extensions' | 'startAt' | 'endsAt'>): string {
+  if (s.plan.startsWith('dlv:')) return '📦 納品';
+  const hm = (d: Date) => new Date(d.getTime() + JST).toISOString().slice(11, 16);
+  const start = s.startAt;
+  if (s.plan === 'night') return `🌙 寝落ち（${start ? `${hm(start)}〜` : ''}朝 7 時まで）`;
+  const total = s.minutes + (s.extensions ?? 0) * 30;
+  if (s.plan.startsWith('free:') || total <= 0) return `⏱ 時間フリー${start ? `（${hm(start)}〜）` : ''}`;
+  const end = s.endsAt ?? (start ? new Date(start.getTime() + total * 60_000) : undefined);
+  return `⏱ ${durationText(total)}${start && end ? `（${hm(start)}〜${hm(end)}）` : ''}`;
+}
 /** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
 export const minorMenuOk = (m: CastMenuItem) => !m.delivery && !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes;
 /** メニューを 1 行で（紹介・一覧） */
@@ -633,8 +648,8 @@ export type RequestResult =
   | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' | 'off_hours' | 'already_ordered' };
 
 /** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
-/** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数 */
-export const CUSTOMER_OPEN_MAX = 5;
+/** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数（はじめの値。社務所Web の設定 customerOpenMax で変えられる） */
+export const CUSTOMER_OPEN_MAX = CAST_DEFAULTS_OPEN_MAX;
 
 async function overlaps(tx: Db, castId: string, start: Date, end: Date, now: Date, except?: number, by: 'cast' | 'customer' = 'cast'): Promise<boolean> {
   const who = by === 'cast' ? eq(castSessions.castId, castId) : eq(castSessions.customerId, castId);
@@ -677,7 +692,7 @@ export async function requestSession(
   const quoteOk = q && (q.delivery ? q.minutes === 0 && validPrice(c, q.price) : validQuote(c, q.minutes, q.price));
   const item = found?.consult ? (q && quoteOk ? { ...found, minutes: q.minutes, price: q.price, ...(q.delivery ? { delivery: true } : {}) } : undefined) : q ? undefined : found;
   if (!item || item.price <= 0) return { status: 'no_plan' };
-  if (item.delivery) return input.startAt || (q && !found?.consult) || input.options?.length ? { status: 'no_plan' } : orderDelivery(db, cast.memberId, item, input, now, rand);
+  if (item.delivery) return input.startAt || (q && !found?.consult) || input.options?.length ? { status: 'no_plan' } : orderDelivery(db, cast.memberId, item, input, now, rand, c.customerOpenMax);
   const opts = pickOptions(cast, input.options);
   if (input.options && opts.length !== new Set(input.options).size) return { status: 'no_plan' };
   const optionPrice = opts.reduce((n, o) => n + o.price, 0);
@@ -702,8 +717,8 @@ export async function requestSession(
       .select({ id: castSessions.id })
       .from(castSessions)
       .where(and(eq(castSessions.customerId, input.customerId), inArray(castSessions.status, OPEN)));
-    // 時間が重ならなければ何件でも（5 件まで）。重なるかは下で確かめる
-    if (mine.length >= CUSTOMER_OPEN_MAX) return { status: 'has_open' as const };
+    // 時間が重ならなければ何件でも（設定の件数まで）。重なるかは下で確かめる
+    if (mine.length >= c.customerOpenMax) return { status: 'has_open' as const };
     if (!input.startAt) {
       const [busy] = await tx
         .select({ id: castSessions.id })
@@ -742,13 +757,13 @@ export async function requestSession(
 }
 
 /** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 24 時間）。18 歳以上だけ。通話の時間とは重ならない */
-async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean; threadId?: string }, now: Date, rand: () => number): Promise<RequestResult> {
+async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean; threadId?: string }, now: Date, rand: () => number, openMax: number): Promise<RequestResult> {
   if (!input.customerAdult) return { status: 'minor_plan' };
   const drawn = item.gacha?.length ? item.gacha[Math.min(item.gacha.length - 1, Math.floor(rand() * item.gacha.length))] : undefined;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);
     const mine = await tx.select({ id: castSessions.id }).from(castSessions).where(and(eq(castSessions.customerId, input.customerId), inArray(castSessions.status, ['ordered', 'delivered'])));
-    if (mine.length >= CUSTOMER_OPEN_MAX) return { status: 'has_open' as const };
+    if (mine.length >= openMax) return { status: 'has_open' as const };
     // 📦 納品の相談: 同じスレッドでもう注文していれば、もう一度は注文しない（ボタンを 2 回押しても）
     if (input.threadId) {
       const [dup] = await tx.select({ id: castSessions.id }).from(castSessions).where(and(eq(castSessions.threadId, input.threadId), eq(castSessions.customerId, input.customerId), inArray(castSessions.status, ['ordered', 'delivered', 'done'])));

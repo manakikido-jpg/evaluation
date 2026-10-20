@@ -1,6 +1,6 @@
 import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -281,7 +281,7 @@ export function CastPage(props: {
                     </span>
                   </div>
                   <div class="ch-topic">
-                    {sessionLabel(s)} ・ {s.isPublic ? '公開の部屋' : '2 人だけの部屋'} ・ {fmtDateTime(s.createdAt)}
+                    {sessionLabel(s)} ・ {sessionTime(s)} ・ {s.isPublic ? '公開の部屋' : '2 人だけの部屋'} ・ {fmtDateTime(s.createdAt)}
                   </div>
                 </div>
                 <span class="ch-actions">
@@ -581,6 +581,10 @@ export function CastPage(props: {
             <span>🚫 お客が来なかったとき、キャストに渡す %（キャストが来なかったときは全額お客に戻す）</span>
             <input type="number" name="noShowPercent" min={0} max={100} value={String(c.noShowPercent)} required />
           </label>
+          <label class="field">
+            <span>1 人のお客が同時に持てる予約・指名（返事待ち・確定・通話中）の数。納品の注文も同じ数まで（1〜50）</span>
+            <input type="number" name="customerOpenMax" min={1} max={50} value={String(c.customerOpenMax)} required />
+          </label>
           <h3>🏆 ランキング</h3>
           <p class="muted">毎月 1 日に、先月の指名の多い上位 3 人を発表します（1 日に BOT が止まっていたら 7 日までに）。今月の上位 3 人は、メニューにもいつも出ます。</p>
           <Select name="rankChannelId" label="先月の上位 3 人を発表するチャンネル" value={c.rankChannelId} options={props.channels} empty="メニューのチャンネル" />
@@ -628,7 +632,9 @@ export function CastPage(props: {
                   </td>
                   <td>
                     {sessionLabel(s)}
-                    {s.extensions ? `＋${s.extensions * 30} 分` : ''}
+                    <br />
+                    <strong>{sessionTime(s)}</strong>
+                    {s.extensions ? `（延長 ${s.extensions * 30} 分ふくむ）` : ''}
                   </td>
                   <td class="num">{s.price.toLocaleString('ja-JP')}</td>
                   <td>
@@ -691,7 +697,9 @@ function Calendar(props: { sessions: CastSession[]; name: (id: string) => string
                   <td>
                     {props.name(s.castId)} ← {props.name(s.customerId)}
                   </td>
-                  <td>{sessionLabel(s)}</td>
+                  <td>
+                    {sessionLabel(s)} ・ {sessionTime(s)}
+                  </td>
                   <td>{SESSION_STATUS[s.status]}</td>
                   <td>
                     {CANCELABLE.includes(s.status) && (
