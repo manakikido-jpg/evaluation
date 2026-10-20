@@ -49,6 +49,15 @@ export async function coreTimeMembers(db: Db, day: string, slot: string) {
     .orderBy(desc(coreTimeAttendance.minutes), coreTimeAttendance.firstAt);
 }
 
+/** その日からの記録ぜんぶ（CSV の書き出し）。新しい回から、長くいた順 */
+export async function coreTimeRows(db: Db, sinceDay: string) {
+  return db
+    .select()
+    .from(coreTimeAttendance)
+    .where(gte(coreTimeAttendance.day, sinceDay))
+    .orderBy(desc(coreTimeAttendance.day), desc(coreTimeAttendance.slot), desc(coreTimeAttendance.minutes));
+}
+
 /** よく来る人（その日から）: 来た回数・合計の分・最後に来た日。minMinutes 分より短い回は数えない */
 export async function coreTimeRegulars(db: Db, sinceDay: string, minMinutes = 1) {
   return db

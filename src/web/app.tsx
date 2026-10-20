@@ -4,7 +4,7 @@ import { FortuneAdminPage } from './views/fortune.js';
 import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
 import { mountRecordings } from './recordings.js';
-import { GIFT_TARGET_MAX, giveToMembers, recentPresenceGifts, requestPresenceGift, resolveGiftTargets, revokePresenceGift } from '../services/presenceGifts.js';
+import { deliverPresenceGift, GIFT_TARGET_MAX, giveToMembers, recentPresenceGifts, requestPresenceGift, resolveGiftTargets, revokePresenceGift } from '../services/presenceGifts.js';
 import { endRaid, raidState, startRaid } from '../services/raid.js';
 import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
@@ -44,7 +44,7 @@ import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, u
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
 import { CoreTimePage } from './views/coreTime.js';
 import { describeCoreTime } from '../services/coreTime.js';
-import { coreTimeMembers, coreTimeRegulars, coreTimeSessions } from '../services/coreTimeAttendance.js';
+import { coreTimeMembers, coreTimeRegulars, coreTimeRows, coreTimeSessions } from '../services/coreTimeAttendance.js';
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
@@ -635,6 +635,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/tickets', requireAdmin);
   app.use('/voice', requireAdmin);
   app.use('/voice/core', requireAdmin);
+  app.use('/voice/core.csv', requireAdmin);
+  app.use('/voice/core/*', requireAdmin, requireCsrf);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
   app.use('/ranks', requireAdmin);
@@ -1481,7 +1483,57 @@ export function createWebApp(deps: WebDeps) {
     const selected = qd && qs && /^\d{4}-\d{2}-\d{2}$/.test(qd) && /^\d{2}:\d{2}$/.test(qs) ? { day: qd, slot: qs } : sessions[0] ? { day: sessions[0].day, slot: sessions[0].slot } : undefined;
     const members = selected ? await coreTimeMembers(db, selected.day, selected.slot) : [];
     const names = await namesOf(db, [...members.map((m) => m.memberId), ...regulars.map((r) => r.memberId)]);
-    return c.html(<CoreTimePage session={c.get('session')} coreTime={describeCoreTime(cfg.coreTime)} days={days} sessions={sessions} selected={selected} members={members} regulars={regulars} name={(id) => names.get(id) ?? id} />);
+    return c.html(<CoreTimePage session={c.get('session')} coreTime={describeCoreTime(cfg.coreTime)} days={days} sessions={sessions} selected={selected} members={members} regulars={regulars} name={(id) => names.get(id) ?? id} coin={{ emoji: cfg.economy.currencyEmoji, name: cfg.economy.currencyName }} canGift={c.get('session').level === 'guji'} msg={c.req.query('msg')} />);
+  });
+
+  // 📥 コアタイムの記録を CSV で（?day=&slot= で 1 回分。なければ ?days= の期間ぜんぶ）
+  app.get('/voice/core.csv', async (c) => {
+    const qd = c.req.query('day'), qs = c.req.query('slot');
+    const one = qd && qs && /^\d{4}-\d{2}-\d{2}$/.test(qd) && /^\d{2}:\d{2}$/.test(qs);
+    const d = Number(c.req.query('days'));
+    const days = d === 7 || d === 90 ? d : 30;
+    const since = jstDate(new Date(now().getTime() - (days - 1) * 86_400_000));
+    const rows = one ? await coreTimeMembers(db, qd!, qs!) : await coreTimeRows(db, since);
+    const names = await namesOf(db, rows.map((r) => r.memberId));
+    const cell = (v: string | number) => {
+      const t = String(v);
+      // 表計算ソフトで式として読まれないように、先頭の = + - @ を文字にする
+      const safe = /^[=+\-@]/.test(t) ? `'${t}` : t;
+      return /[",\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+    };
+    const hm = (x: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }).format(x);
+    const lines = [
+      ['日', '始まり', 'メンバーID', '名前', 'いた分', '来た', '最後にいた', 'ボーナス'].join(','),
+      ...rows.map((r) => [r.day, r.slot, r.memberId, names.get(r.memberId) ?? '', r.minutes, hm(r.firstAt), hm(r.lastAt), r.bonus].map(cell).join(',')),
+    ];
+    await audit(db, { actorId: c.get('session').userId, action: 'coretime.export', detail: one ? { day: qd, slot: qs } : { days }, via: 'web' });
+    const file = one ? `coretime-${qd}-${qs!.replace(':', '')}.csv` : `coretime-${days}d.csv`;
+    return c.body(`\uFEFF${lines.join('\r\n')}\r\n`, 200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${file}"` });
+  });
+
+  // 🎁 コアタイムの参加者へプレゼント（宮司だけ。押すとすぐに配る）
+  app.post('/voice/core/gift', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const body = await c.req.parseBody();
+    const day = typeof body.day === 'string' ? body.day : '';
+    const slot = typeof body.slot === 'string' ? body.slot : '';
+    const back = (msg: string) => c.redirect(`/voice/core?day=${encodeURIComponent(day)}&slot=${encodeURIComponent(slot)}&msg=${msg}#core-members`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{2}:\d{2}$/.test(slot)) return c.redirect('/voice/core?msg=gift_invalid');
+    const what = typeof body.what === 'string' ? body.what : '';
+    const input = what === 'coins' ? ({ kind: 'coins' } as const) : what.startsWith('ticket:') ? ({ kind: 'ticket', ticketKind: what.slice(7) } as const) : undefined;
+    const amount = Number(body.amount);
+    const minMinutes = Number(body.minMinutes);
+    const note = field(body, 'note', 200);
+    if (body.confirm !== 'yes' || !input || !note || !Number.isInteger(minMinutes) || minMinutes < 1) return back('gift_invalid');
+    const ids = (await coreTimeMembers(db, day, slot)).filter((m) => m.minutes >= minMinutes).map((m) => m.memberId);
+    if (!ids.length) return back('gift_none');
+    const by = c.get('session').userId;
+    const row = await requestPresenceGift(db, input, amount, note, by);
+    if (!row) return back('gift_invalid');
+    // 1 件を 1 回だけ配る（配った人の記録が残るので、設定の「今いる人に配る」の履歴から回収もできる）
+    const r = await deliverPresenceGift(db, row.id, ids);
+    await audit(db, { actorId: by, action: 'coretime.gift', detail: { id: row.id, day, slot, minMinutes, kind: row.kind, ticketKind: row.ticketKind, amount, note, count: r.status === 'ok' ? r.count : 0 }, via: 'web' });
+    return back('gift_given');
   });
 
   app.get('/voice', async (c) => {

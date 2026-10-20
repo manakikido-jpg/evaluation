@@ -1733,13 +1733,42 @@ describe('通話の記録（管理画面）', () => {
     const s = await login(STAFF);
     expect(await (await get('/voice', s)).text()).toContain('href="/voice/core"');
     const page = await (await get('/voice/core', s)).text();
-    expect(page).toContain('⏰ コアタイムに上がった人');
+    expect(page).toContain('<h1>⏰ コアタイム</h1>');
     expect(page).toContain('2 人');
     expect(page).toContain('21:00 からのコアタイム（2 人）');
     expect(page).toContain('1時間35分');
     expect(page).toContain('よく来る人（30 日）');
     expect(page).not.toMatch(/onclick=|style=|<script>/);
     expect((await get(`/voice/core?day=${day}&slot=22:00`, s)).status).toBe(200);
+    // 左のメニューに「コアタイム」のタブ
+    expect(page).toContain('href="/voice/core"');
+    // 📥 CSV（1 回分・期間）
+    const csv = await get(`/voice/core.csv?day=${day}&slot=21:00`, s);
+    expect(csv.headers.get('content-type')).toContain('text/csv');
+    const text = await csv.text();
+    expect(text).toContain('日,始まり,メンバーID,名前,いた分');
+    expect(text).toContain(`${day},21:00,${USER}`);
+    expect(await (await get('/voice/core.csv?days=7', s)).text()).toContain(STAFF);
+    expect((await app.request('/voice/core.csv')).status).toBe(302);
+    // 🎁 参加者へプレゼント: 宮司だけ。決めた分以上いた人にだけ
+    const post = async (session: string, path: string, data: Record<string, string>) => {
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+      return app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
+    };
+    expect(page).not.toContain('この回の参加者へプレゼント');
+    const giftForm = { day, slot: '21:00', minMinutes: '30', what: 'coins', amount: '250', note: 'コアタイムのお礼', confirm: 'yes' };
+    expect((await post(s, '/voice/core/gift', giftForm)).status).toBe(403);
+    const g = await login(GUJI);
+    expect(await (await get('/voice/core', g)).text()).toContain('この回の参加者へプレゼント');
+    const { walletOf } = await import('../src/services/economy.js');
+    const before = { u: (await walletOf(db, USER)).balance, s: (await walletOf(db, STAFF)).balance };
+    expect((await post(g, '/voice/core/gift', giftForm)).headers.get('location')).toBe(`/voice/core?day=${day}&slot=21%3A00&msg=gift_given#core-members`);
+    expect((await walletOf(db, USER)).balance).toBe(before.u + 250);
+    expect((await walletOf(db, STAFF)).balance).toBe(before.s);
+    expect((await post(g, '/voice/core/gift', { ...giftForm, minMinutes: '999' })).headers.get('location')).toContain('msg=gift_none');
+    expect((await post(g, '/voice/core/gift', { ...giftForm, confirm: '' })).headers.get('location')).toContain('msg=gift_invalid');
+    expect((await walletOf(db, USER)).balance).toBe(before.u + 250);
+    expect((await listAudit(db, { action: 'coretime.gift' })).length).toBe(1);
   });
 
   it('運営が見られる。カテゴリで絞ると、その場所が多い順。メンバーのページにも出る', async () => {
