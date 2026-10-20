@@ -295,3 +295,4 @@
 - 最終検証：本番8c52c85を取り込んだdcc051fで型チェック・ビルド成功。全143ファイル1,799テスト成功（397.69秒、2並列）。テスト削除・skip・時間制限変更なし。Webでの予約先保存・旧フォームでの維持・選択肢キャッシュ未反映時の現在値保持も成功。push前の本番明示fetchで追加変更なし。
 - 完了範囲：新規予約と納品の男女共通窓口、自動作成と設定指定、非公開・権限確認・参加失敗の掃除と返金、名前の日時更新、予約・納品の移動ボタン。既存の予約は元のスレッドで継続する。本番のチャンネル作成・通知・既存データ操作は未実行。新しいDBマイグレーション不要。codex/cast-reservation-hub、実装494fc25・取り込みfee5ec8・設定保持dcc051fから本番担当Claude向けPRへ保存する。
 - 検証ログ：/workspace/artifacts/cast-reservation-hub-{typecheck-final,build,all-tests}.log、関連テストはcast-reservation-hub-related-final.log。実Discordでの権限・表示の確認は本番担当による反映後の確認事項。
+- GitHub保存済み：[PR #64](https://github.com/manakikido-jpg/evaluation/pull/64)。最終実装・検証c189451、codex/cast-reservation-hub。OPEN・未合流、本番未反映。担当Claudeのレビュー・合流後、新しい予約から専用窓口を使う。既存予約は元の場所のまま。
