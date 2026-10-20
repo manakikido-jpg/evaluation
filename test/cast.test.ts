@@ -717,6 +717,19 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect(r.status === 'ok' && r.balance).toBe(19300);
   });
 
+  it('💰 メニュー・オプション・相談の値段に上限はない（1 億枚までは入る。前に保存した上限は使わない）', async () => {
+    const { saveCastConfig, loadCastConfig, PRICE_HARD_MAX, validQuote } = await import('../src/services/cast.js');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), priceMax: 30_000 }, 'staff');
+    const conf = await loadCastConfig(db);
+    expect(conf.priceMax).toBe(PRICE_HARD_MAX);
+    await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await applyCast(db, conf, { id: CAST, adult: true }, profile);
+    await setCastStatus(db, CAST, 'active', 'staff');
+    expect(await addMenuItem(db, conf, CAST, [{ name: 'とくべつ', note: '', minutes: 60, price: 1_000_000, night: false }])).toBe('ok');
+    expect(await addMenuItem(db, conf, CAST, [{ name: 'おおきすぎ', note: '', minutes: 60, price: PRICE_HARD_MAX + 1, night: false }])).toBe('invalid');
+    expect(validQuote(conf, 60, 5_000_000)).toBe(true);
+  });
+
   it('✏️ メニューの種類を書きかえで変えられる（通話→納品→ガチャ→相談→寝落ち→通話）。ガチャは中身が要る', async () => {
     const { updateMenuItem, menuKindOf } = await import('../src/services/cast.js');
     await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });

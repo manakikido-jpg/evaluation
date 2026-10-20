@@ -3446,7 +3446,7 @@ describe('キャスト（管理画面）', () => {
     const { walletOf } = await import('../src/services/economy.js');
     const s = await login(STAFF);
     expect(await (await get('/cast', s)).text()).toContain('申し込みはありません');
-    expect((await form(s, '/cast/settings', { channelId: '910000000000000003', priceMin: '100', priceMax: '0', feePercent: '10', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=invalid');
+    expect((await form(s, '/cast/settings', { channelId: '910000000000000003', priceMin: '100', priceMax: '0', feePercent: '99', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=invalid');
     expect((await form(s, '/cast/settings', { channelId: '910000000000000003', roleId: '980000000000000001', priceMin: '100', priceMax: '30000', feePercent: '10', acceptMinutes: '10' })).headers.get('location')).toBe('/cast?msg=saved');
     // 下限はいつも 1 銭（送っても使わない）
     expect((await import('../src/services/cast.js').then((m) => m.loadCastConfig(db))).priceMin).toBe(1);

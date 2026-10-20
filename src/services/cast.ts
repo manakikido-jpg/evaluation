@@ -62,7 +62,9 @@ export type CastConfig = {
   customerOpenMax: number;
 };
 const CAST_DEFAULTS_OPEN_MAX = 10;
-export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: 30_000, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0, customerOpenMax: 10 };
+/** 値段の上限はなし（DB の数に入るように、1 億枚だけは超えられない） */
+export const PRICE_HARD_MAX = 100_000_000;
+export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: PRICE_HARD_MAX, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0, customerOpenMax: 10 };
 const KEY = 'cast';
 const sf = (x: unknown) => (typeof x === 'string' && /^\d{17,20}$/.test(x) ? x : undefined);
 const int = (x: unknown, d: number, lo: number, hi: number) => (typeof x === 'number' && Number.isInteger(x) && x >= lo && x <= hi ? x : d);
@@ -82,7 +84,8 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     privateCategoryId: sf(v.privateCategoryId),
     publicCategoryId: sf(v.publicCategoryId),
     priceMin,
-    priceMax: Math.max(priceMin, int(v.priceMax, d.priceMax, 1, 1_000_000)),
+    // 値段の上限はなし（前に保存した上限は使わない）
+    priceMax: PRICE_HARD_MAX,
     feePercent: int(v.feePercent, d.feePercent, 0, 90),
     acceptMinutes: int(v.acceptMinutes, d.acceptMinutes, 1, 60),
     lateCancelMinutes: int(v.lateCancelMinutes, d.lateCancelMinutes, 0, 24 * 60),

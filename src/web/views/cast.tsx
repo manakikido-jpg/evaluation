@@ -179,7 +179,7 @@ function MenuFields(props: { c: CastConfig; optional?: boolean }) {
         <input type="number" name={`menuMinutes${n}`} min={0} max={MENU_MINUTES.max} step={5} placeholder={first ? '30' : n === '2' ? '60' : ''} />
       </label>
       <label class="field">
-        <span>値段{n ? ` ${n}` : ''}（{props.c.priceMin.toLocaleString('ja-JP')}〜{props.c.priceMax.toLocaleString('ja-JP')} 枚）</span>
+        <span>値段{n ? ` ${n}` : ''}（{props.c.priceMin.toLocaleString('ja-JP')} 枚から・上限なし）</span>
         <input type="number" name={`menuPrice${n}`} min={props.c.priceMin} max={props.c.priceMax} />
       </label>
     </>
@@ -477,7 +477,7 @@ export function CastPage(props: {
                           <input type="text" name="optionName" maxlength={30} required placeholder="カメラあり・歌 など" />
                         </label>
                         <label class="field">
-                          <span>値段（1〜{c.priceMax.toLocaleString('ja-JP')} 枚）</span>
+                          <span>値段（1 枚から・上限なし）</span>
                           <input type="number" name="optionPrice" min={1} max={c.priceMax} required />
                         </label>
                         <button type="submit" class="ok">オプションを足す</button>
@@ -553,10 +553,7 @@ export function CastPage(props: {
           <Select name="privateCategoryId" label="2 人だけの部屋を作るカテゴリ（遊郭など）" value={c.privateCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="publicCategoryId" label="公開の部屋（18 歳未満の方の雑談）を作るカテゴリ" value={c.publicCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="roleId" label="キャストのロール" value={c.roleId} options={props.roles} empty="なし（付けない）" />
-          <label class="field">
-            <span>値段の上限（銭）</span>
-            <input type="number" name="priceMax" min={1} value={String(c.priceMax)} required />
-          </label>
+          <p class="note">メニュー・オプション・相談の値段に上限はありません（1 枚から）。</p>
           <label class="field">
             <span>手数料（%。キャストに渡すときに引いて消す）</span>
             <input type="number" name="feePercent" min={0} max={90} value={String(c.feePercent)} required />

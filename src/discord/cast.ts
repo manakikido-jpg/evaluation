@@ -944,7 +944,7 @@ export class CastApp {
     const c = await loadCastConfig(this.db);
     if (kind === 'dlv') {
       const price = parsePrice(i.fields.getTextInputValue('price'));
-      if (!Number.isInteger(price) || price < c.priceMin || price > c.priceMax) return void (await i.reply({ content: `値段は ${fmt(c.priceMin)}〜${fmt(c.priceMax)} 枚で入れてください。`, ...EPHEMERAL }));
+      if (!Number.isInteger(price) || price < c.priceMin || price > c.priceMax) return void (await i.reply({ content: `値段は ${fmt(c.priceMin)} 枚から（上限なし）、数字で入れてください。`, ...EPHEMERAL }));
       return void (await i.reply({
         content: `📦 <@${customerId}> さん、<@${castId}> さんから **納品 ・ ${this.coin()} ${fmt(price)} 枚** の提案です。よければ「この値段で注文する」を押してください（銭は社務所が預かり、届いて受け取ったらキャストへ渡します）。`,
         components: [row(button(`cast:qdlv:${castId}:${itemId}:${customerId}:${price}`, `${fmt(price)} 枚で注文する（お客）`, 3, '📦'))],
@@ -953,7 +953,7 @@ export class CastApp {
     }
     const minutes = parsePrice(i.fields.getTextInputValue('minutes'));
     const price = parsePrice(i.fields.getTextInputValue('price'));
-    if (!validQuote(c, minutes, price)) return void (await i.reply({ content: `時間は ${MENU_MINUTES.min}〜${MENU_MINUTES.max} 分、値段は ${fmt(c.priceMin)}〜${fmt(c.priceMax)} 枚で入れてください。`, ...EPHEMERAL }));
+    if (!validQuote(c, minutes, price)) return void (await i.reply({ content: `時間は ${MENU_MINUTES.min}〜${MENU_MINUTES.max} 分、値段は ${fmt(c.priceMin)} 枚から（上限なし）で入れてください。`, ...EPHEMERAL }));
     await i.reply({
       content: `💬 <@${customerId}> さん、<@${castId}> さんから **${minutes} 分 ・ ${this.coin()} ${fmt(price)} 枚** の提案です。よければ「この値段で指名する」を押してください。`,
       components: [row(button(`cast:qgo:${castId}:${itemId}:${customerId}:${minutes}:${price}`, `${fmt(price)} 枚で予約する（お客）`, 3, '📅'))],

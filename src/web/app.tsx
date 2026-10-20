@@ -5933,7 +5933,8 @@ export function createWebApp(deps: WebDeps) {
       publicCategoryId: id('publicCategoryId'),
       roleId: id('roleId'),
       priceMin: 1,
-      priceMax: n('priceMax'),
+      // 値段の上限はなし
+      priceMax: prev.priceMax,
       feePercent: n('feePercent'),
       acceptMinutes: n('acceptMinutes'),
       // 前の画面（欄がない）から保存しても、今の値を残す
@@ -5948,7 +5949,7 @@ export function createWebApp(deps: WebDeps) {
       customerOpenMax: body.customerOpenMax === undefined ? prev.customerOpenMax : n('customerOpenMax'),
     };
     const ok = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
-    if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.priceMax, next.priceMin, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
+    if (!ok(next.priceMin, 1, 1_000_000) || !ok(next.feePercent, 0, 90) || !ok(next.acceptMinutes, 1, 60)) return c.redirect('/cast?msg=invalid');
     if (!ok(next.lateCancelMinutes, 0, 1440) || !ok(next.lateCancelPercent, 0, 100) || !ok(next.noShowMinutes, 5, 120) || !ok(next.noShowPercent, 0, 100) || !ok(next.rankBonus, 0, 1_000_000) || !ok(next.customerOpenMax, 1, 50)) return c.redirect('/cast?msg=invalid');
     // チャンネルを変えたら、前のメニューはそのままにして、新しいチャンネルに出し直す
     if (next.channelId !== prev.channelId) delete next.panelMessageId;
