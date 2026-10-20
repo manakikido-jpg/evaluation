@@ -5,7 +5,7 @@ import type { Db } from '../db/client.js';
 import { omikuji } from '../db/schema.js';
 import { jstDate } from './activity.js';
 import { addCoins, walletOf } from './economy.js';
-import { addTickets, TICKET_LABEL } from './tickets.js';
+import { addTickets, useTicket, TICKET_LABEL } from './tickets.js';
 
 /**
  * おみくじ（1 日 1 回のログボ）。運勢に応じて花びらがもらえる。ご縁には影響しない。
@@ -171,6 +171,7 @@ export async function omikujiStreak(db: Db, memberId: string, now: Date): Promis
 export type OmikujiResult =
   | {
       status: 'drawn';
+      ticketUsed?: true;
       fortune: Fortune;
       amount: number;
       balance: number;
@@ -262,4 +263,18 @@ export async function drawOmikuji(
   }
   const sayings = omikujiSayings(texts, fortune.key, rand);
   return { status: 'drawn', fortune, amount, balance: done.balance, message: chosen.message, ...(chosen.number ? { number: chosen.number } : {}), sayings, streak: done.streak, bonus: done.bonus };
+}
+
+/** 通常分を先に引き、引き済みの日だけ所持券で追加する。 */
+export async function drawOmikujiAuto(db: Db, economy: EconomyConfig, memberId: string, now: Date, rand: Rand = Math.random, opts: Omit<Parameters<typeof drawOmikuji>[5], 'extra'> = {}): Promise<OmikujiResult> {
+  const today = await omikujiToday(db, memberId, now);
+  // 初回の同時操作で、通常分に続けて券まで使わない。
+  if (!today.drawn) return drawOmikuji(db, economy, memberId, now, rand, opts);
+  return db.transaction(async (tx) => {
+    const used = !today.extraUsed && await useTicket(tx, memberId, 'omikuji_extra');
+    if (!used) return drawOmikuji(tx, economy, memberId, now, rand, opts);
+    const r = await drawOmikuji(tx, economy, memberId, now, rand, { ...opts, extra: true });
+    if (used && r.status !== 'drawn') await addTickets(tx, memberId, 'omikuji_extra', 1);
+    return used && r.status === 'drawn' ? { ...r, ticketUsed: true as const } : r;
+  });
 }

@@ -3,7 +3,7 @@ import { adminLevelOf, type EconomyConfig, type GuildConfig, type OmikujiStreakC
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { toneOf } from '../omikujiTexts.js';
-import { drawOmikuji, nextStreakReward, specialIndex, streakRewardText, type Fortune, type OmikujiResult } from '../services/omikuji.js';
+import { drawOmikujiAuto, nextStreakReward, specialIndex, streakRewardText, type Fortune, type OmikujiResult } from '../services/omikuji.js';
 import { loadOmikujiArt, loadSlipBg } from '../services/omikujiArt.js';
 import { joinSideBySide } from '../services/imageJoin.js';
 import { renderSlip } from '../services/omikujiSlip.js';
@@ -195,7 +195,7 @@ export async function announceSpecial(db: Db, guild: Guild, cfg: GuildConfig, me
 /** ⛩ 「御神籤を引く」ボタン（ボタンだけ。/パネル おみくじ で置く） */
 export function omikujiPanelBody(e: Pick<EconomyConfig, 'omikujiVoiceOnly'>) {
   return {
-    content: `-# 1 日 1 回（日本時間の 0 時から）${e.omikujiVoiceOnly ? '・通話に入っているときだけ' : ''}`,
+    content: `-# 1 日 1 回（日本時間の 0 時から）${e.omikujiVoiceOnly ? '・通話に入っているときだけ' : ''}。引き済みなら、もう1回券を自動で1枚使います（追加は1日1回まで）`,
     components: [{ type: 1 as const, components: [{ type: 2 as const, style: 3 as const, label: '御神籤を引く', custom_id: 'omikuji:draw', emoji: { name: '⛩' } }] }],
   };
 }
@@ -320,13 +320,13 @@ export class OmikujiApp {
       await i.reply({ content: blocked, ...EPHEMERAL });
       return;
     }
-    const r = await drawOmikuji(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak, special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
+    const r = await drawOmikujiAuto(this.db, cfg.economy, i.user.id, new Date(), Math.random, { streak: cfg.omikujiStreak, special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
     if (r.status === 'already') {
       const streak = r.streak ? `（🔥 連続 ${r.streak} 日目）` : '';
       await i.reply({ content: `今日はもう引きました（${r.fortune.name}）${streak}。日本時間の 0 時にまた引けます。`, ...EPHEMERAL });
       return;
     }
-    await revealOmikuji(this.db, cfg, r, i.member.displayName, (p) => i.reply(p), { memberId: i.user.id, streak: true });
+    await revealOmikuji(this.db, cfg, r, i.member.displayName, (p) => i.reply(p), { memberId: i.user.id, streak: !r.ticketUsed, ...(r.ticketUsed ? { suffix: '（もう1回券を1枚使用）' } : {}) });
     await announceSpecial(this.db, i.guild, cfg, i.user.id, r.fortune);
     // おまけの称号ロール（もう持っていれば何もしない）
     for (const b of r.bonus) {

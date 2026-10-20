@@ -32,7 +32,7 @@ export const TICKET_LABEL = {
   market_nofee: { emoji: '🏪', name: '市場の手数料なし券', note: '市場で売れたとき、手数料を引かずに受け取れる（自動で使う）', use: 'auto' },
   fuku: { emoji: '🧧', name: '福の札', note: '使うと 24 時間、通話でもらえる銭が 2 倍', use: 'manual' },
   luck: { emoji: '🍀', name: '運気アップの札', note: '使うと、次の 10 回は物御籤の大吉が出やすくなる（2 倍）', use: 'manual' },
-  omikuji_extra: { emoji: '🎴', name: 'おみくじもう 1 回券', note: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', use: 'manual' },
+  omikuji_extra: { emoji: '🎴', name: 'おみくじもう 1 回券', note: '御神籤を引き済みの日に、もう一度引くと自動で1枚使う（追加は1日1回まで・券を使うからも使用可）', use: 'manual' },
   gacha_free: { emoji: '🎁', name: '物御籤の無料券', note: '物御籤を 1 回タダで引ける', use: 'manual' },
   gacha_gold10: { emoji: '🌟', name: '金の10連券', note: '物御籤を 10 連タダで引ける（10 回のうち 1 回は大吉以上が確定）', use: 'manual' },
   gacha_gift: { emoji: '💝', name: '物御籤の贈り券', note: 'ほかの人に「物御籤の無料券」を贈れる', use: 'manual' },
