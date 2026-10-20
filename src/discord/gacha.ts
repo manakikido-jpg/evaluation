@@ -57,7 +57,7 @@ import {
   type Buffs,
 } from '../services/buffs.js';
 import { customHoldingsOf, customName, listCustomTickets, useCustom } from '../services/customTickets.js';
-import { drawOmikuji, omikujiToday } from '../services/omikuji.js';
+import { drawOmikujiAuto, omikujiToday } from '../services/omikuji.js';
 import { boostCasino, useCasinoBoost, type BoostUse } from '../services/casino/boost.js';
 import { addTickets, MANUAL_TICKETS, TICKET_LABEL, ticketLine, ticketsOf, useTicket, cleanNick, useNameChange, refundNameChange } from '../services/tickets.js';
 import { audit } from '../services/audit.js';
@@ -757,12 +757,8 @@ export class GachaApp {
     if (today.extraUsed) return '今日の「もう 1 回」はもう使いました（券は使っていません）。また明日どうぞ。';
     const blocked = omikujiVoiceBlock(cfg.economy, i.member);
     if (blocked) return `${blocked}（券は使っていません）`;
-    if (!(await useTicket(this.db, i.user.id, 'omikuji_extra'))) return '🎴 おみくじもう 1 回券がありません。';
-    const d = await drawOmikuji(this.db, cfg.economy, i.user.id, now, Math.random, { extra: true, special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
-    if (d.status !== 'drawn') {
-      await addTickets(this.db, i.user.id, 'omikuji_extra', 1);
-      return '今日の「もう 1 回」はもう使いました（券は戻しました）。';
-    }
+    const d = await drawOmikujiAuto(this.db, cfg.economy, i.user.id, now, Math.random, { special: cfg.omikujiSpecial, texts: cfg.omikujiTexts });
+    if (d.status !== 'drawn') return '🎴 券がないか、今日の「もう1回」は使いました（券は使っていません）。';
     const channel = this.omikujiChannel(i.guild);
     // 演出は待たずに先へ（券を使った人への返事を遅らせない）。#慶事 は演出のあとで
     if (channel)
