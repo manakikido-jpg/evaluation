@@ -455,7 +455,10 @@ export async function applyCast(db: Db, c: CastConfig, who: { id: string; adult:
 }
 
 export async function updateProfile(db: Db, c: CastConfig, id: string, p: ProfileInput): Promise<Cast | undefined> {
-  if (!validProfile(c, p)) return undefined;
+  // 前の値段（今はメニューで決める）がいまの幅の外でも、紹介だけは変えられるようにする（値段は入れたものを確かめ、前のままなら確かめない）
+  const cur = await getCast(db, id);
+  const keep = (k: 'price30' | 'price60' | 'priceNight') => (cur && cur[k] === p[k] ? 0 : p[k]);
+  if (!validProfile(c, { ...p, price30: keep('price30'), price60: keep('price60'), priceNight: keep('priceNight') })) return undefined;
   const [row] = await db.update(casts).set(p).where(eq(casts.memberId, id)).returning();
   return row;
 }
