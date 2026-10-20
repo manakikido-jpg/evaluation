@@ -250,7 +250,7 @@ import { listingCard, requestCard } from '../discord/market.js';
 import { entryMessage, postBoardPanel, postCard } from '../discord/board.js';
 import { BoardPage } from './views/board.js';
 import { CastPage } from './views/cast.js';
-import { postCastIntro, refreshCastIntros, refreshCastPanel } from '../discord/cast.js';
+import { postCastIntro, refreshCastIntros, refreshCastPanel, refreshCastViews } from '../discord/cast.js';
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
@@ -5667,7 +5667,7 @@ export function createWebApp(deps: WebDeps) {
     const msg = new URL(location, 'https://local.invalid').searchParams.get('msg');
     const saved = ['photo_saved', 'photo_removed', 'menu_ok', 'menu_saved', 'menu_removed', 'option_ok', 'option_removed', 'template_applied', 'gender_saved', 'status', 'approved'];
     if (!msg || !saved.includes(msg)) return;
-    const ok = await refreshCastIntros(db, deps.discord, id).catch(err => { logger.warn({ err }, 'cast saved intro sync failed'); return false; });
+    const ok = await refreshCastViews(db, deps.discord, id).catch(err => { logger.warn({ err }, 'cast saved intro sync failed'); return false; });
     if (!ok) c.res = c.redirect(`/cast?msg=sync_pending#cast-${id}`);
   });
 
@@ -6103,7 +6103,7 @@ export function createWebApp(deps: WebDeps) {
     const cast = await setSchedule(db, id, list);
     if (!cast) return c.redirect('/cast?msg=invalid');
     await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.schedule', detail: { schedule: list }, via: 'web' });
-    await refreshCastIntros(db, deps.discord).catch((err: unknown) => logger.warn({ err }, 'cast intros refresh failed'));
+    await refreshCastViews(db, deps.discord, id).catch((err: unknown) => logger.warn({ err }, 'cast views refresh failed'));
     return c.redirect(`/cast?msg=schedule_saved#cast-${id}`);
   });
 
