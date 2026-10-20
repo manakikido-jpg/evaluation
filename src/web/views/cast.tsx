@@ -1,6 +1,6 @@
 import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
-import { GROUP_LABEL, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -126,24 +126,28 @@ function MenuList(props: { items: CastMenuItem[]; base: string; session: AdminSe
                     <span>説明</span>
                     <input type="text" name="menuNote" maxlength={100} value={m.note} />
                   </label>
-                  {m.delivery && (
-                    <label class="field">
-                      <span>🎰 ガチャの中身（1 行に 1 つ。空ならふつうの納品）</span>
-                      <textarea name="menuGacha" rows={3}>{(m.gacha ?? []).join('\n')}</textarea>
-                    </label>
-                  )}
-                  {!m.night && !m.consult && !m.delivery && (
-                    <label class="field">
-                      <span>時間（分。0 で時間フリー）</span>
-                      <input type="number" name="menuMinutes" min={0} max={MENU_MINUTES.max} step={5} required value={String(m.minutes)} />
-                    </label>
-                  )}
-                  {!m.consult && (
-                    <label class="field">
-                      <span>値段（枚）</span>
-                      <input type="number" name="menuPrice" min={props.c.priceMin} max={props.c.priceMax} required value={String(m.price)} />
-                    </label>
-                  )}
+                  <label class="field">
+                    <span>種類（変えると、次の予約・注文から）</span>
+                    <select name="menuKind">
+                      {MENU_KINDS.map((k) => (
+                        <option value={k} selected={menuKindOf(m) === k}>
+                          {MENU_KIND_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>時間（分。📞 通話だけ。0 で時間フリー）</span>
+                    <input type="number" name="menuMinutes" min={0} max={MENU_MINUTES.max} step={5} value={String(m.minutes)} />
+                  </label>
+                  <label class="field">
+                    <span>値段（枚。💬 相談は入れない）</span>
+                    <input type="number" name="menuPrice" min={0} max={props.c.priceMax} value={m.consult ? '' : String(m.price)} />
+                  </label>
+                  <label class="field">
+                    <span>🎰 ガチャの中身（1 行に 1 つ。🎰 ガチャのときだけ・1 つ以上）</span>
+                    <textarea name="menuGacha" rows={3}>{(m.gacha ?? []).join('\n')}</textarea>
+                  </label>
                   <button type="submit" class="ok">保存</button>
                 </form>
               </details>

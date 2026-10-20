@@ -259,7 +259,7 @@ import { castRanking, monthKey, monthOf, parseMonth } from '../services/castRank
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -6026,7 +6026,7 @@ export function createWebApp(deps: WebDeps) {
   /** 書きかえの欄（内容・説明・時間・値段。寝落ち・相談は前のまま） */
   const castEditInput = (body: Record<string, unknown>): MenuInput => {
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
-    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: false, ...(typeof body.menuGacha === 'string' ? { gacha: castGachaInput(body.menuGacha) } : {}) };
+    return { name: str('menuName').trim(), note: str('menuNote').trim(), minutes: parsePrice(str('menuMinutes')), price: parsePrice(str('menuPrice')), night: false, ...(typeof body.menuGacha === 'string' ? { gacha: castGachaInput(body.menuGacha) } : {}), ...(isMenuKind(body.menuKind) ? { kind: body.menuKind } : {}) };
   };
 
   // 🎀 キャストのメニューを足す・外す（内容・時間・値段）

@@ -247,7 +247,31 @@ export const minorMenuOk = (m: CastMenuItem) => !m.delivery && !m.night && !m.co
 export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) =>
   menuOf(c).map((m) => (m.consult ? `${m.name} 相談` : `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`)).join('・');
 
-export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; /** 📦 納品 */ delivery?: boolean; /** 納品のガチャの中身 */ gacha?: string[] };
+export type MenuInput = { name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; /** 📦 納品 */ delivery?: boolean; /** 納品のガチャの中身 */ gacha?: string[]; /** 書きかえで種類を変える（なければ前の種類のまま） */ kind?: MenuKind };
+
+/** メニューの種類: 通話（時間）・寝落ち・相談・納品・ガチャ（納品） */
+export type MenuKind = 'call' | 'night' | 'consult' | 'delivery' | 'gacha';
+export const MENU_KINDS: MenuKind[] = ['call', 'night', 'consult', 'delivery', 'gacha'];
+export const MENU_KIND_LABEL: Record<MenuKind, string> = { call: '📞 通話（時間）', night: '🌙 寝落ち', consult: '💬 内容により相談', delivery: '📦 納品', gacha: '🎰 ガチャ（納品）' };
+export const isMenuKind = (x: unknown): x is MenuKind => typeof x === 'string' && (MENU_KINDS as string[]).includes(x);
+export function menuKindOf(m: Pick<CastMenuItem, 'night' | 'consult' | 'delivery' | 'gacha'>): MenuKind {
+  if (m.consult) return 'consult';
+  if (m.delivery) return m.gacha?.length ? 'gacha' : 'delivery';
+  return m.night ? 'night' : 'call';
+}
+
+/** 書きかえの入力に種類を当てはめる（種類がなければ前の種類のまま。ガチャの中身は、入れなければ前のもの） */
+function withKind(input: MenuInput, old: CastMenuItem): MenuInput {
+  const kind = input.kind ?? menuKindOf(old);
+  const gacha = input.gacha ?? old.gacha ?? [];
+  const { kind: _k, ...rest } = input;
+  if (kind === 'consult') return { ...rest, minutes: 0, price: 0, night: false, consult: true, delivery: false, gacha: [] };
+  if (kind === 'delivery') return { ...rest, minutes: 0, night: false, consult: false, delivery: true, gacha: [] };
+  // ガチャは中身が 1 つ以上いる
+  if (kind === 'gacha') return { ...rest, minutes: 0, night: false, consult: false, delivery: true, gacha };
+  if (kind === 'night') return { ...rest, minutes: 0, night: true, consult: false, delivery: false, gacha: [] };
+  return { ...rest, night: false, consult: false, delivery: false, gacha: [] };
+}
 
 const validMinutes = (n: number) => Number.isInteger(n) && n >= MENU_MINUTES.min && n <= MENU_MINUTES.max;
 const validPrice = (c: CastConfig, n: number) => Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax;
@@ -386,15 +410,15 @@ export async function editTemplate(db: Db, c: CastConfig, by: string, op: { add:
   } else {
     const old = cur.find((m) => m.id === op.update);
     if (!old) return 'none';
-    const input = { ...op.input, night: old.night, consult: old.consult, delivery: old.delivery, gacha: op.input.gacha ?? old.gacha };
-    if (!validMenuItem(c, input)) return 'invalid';
+    const input = withKind(op.input, old);
+    if (!validMenuItem(c, input) || ((op.input.kind ?? menuKindOf(old)) === 'gacha' && !input.gacha?.length)) return 'invalid';
     next = cur.map((m) => (m.id === op.update ? { ...asItem(input), id: m.id } : m));
   }
   await saveCastConfig(db, { ...c, menuTemplate: next }, by);
   return 'ok';
 }
 
-/** キャストのメニューを 1 つ書きかえる（内容・説明・時間・値段。寝落ち・相談はそのまま）。もう入っている指名はそのまま */
+/** キャストのメニューを 1 つ書きかえる（内容・説明・時間・値段・種類。種類を入れなければ前のまま）。もう入っている指名・注文はそのまま */
 export async function updateMenuItem(db: Db, c: CastConfig, castId: string, itemId: string, input: MenuInput): Promise<'ok' | 'invalid' | 'none'> {
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
@@ -402,8 +426,8 @@ export async function updateMenuItem(db: Db, c: CastConfig, castId: string, item
     const menu = menuOf(cast);
     const old = menu.find((m) => m.id === itemId);
     if (!old) return 'none' as const;
-    const fixed = { ...input, night: old.night, consult: old.consult, delivery: old.delivery, gacha: input.gacha ?? old.gacha };
-    if (!validMenuItem(c, fixed)) return 'invalid' as const;
+    const fixed = withKind(input, old);
+    if (!validMenuItem(c, fixed) || ((input.kind ?? menuKindOf(old)) === 'gacha' && !fixed.gacha?.length)) return 'invalid' as const;
     await tx.update(casts).set({ menu: menu.map((m) => (m.id === itemId ? { ...asItem(fixed), id: m.id } : m)), price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
     return 'ok' as const;
   });
