@@ -170,7 +170,7 @@ export function ShopPage(props: {
                   {i.kind === 'role' && (
                     <p class="note">
                       ロール: {roleName(i.roleId)}
-                      {i.roleGroup === 'color' ? '（色守り: 買い替えると前の色は外れる）' : ''}
+                      {i.roleGroup === 'color' ? '（色守り: ほかの色を持っていても全部つく。どれをつけるかは本人がマイページで選ぶ）' : ''}
                     </p>
                   )}
                   <div class="inline-actions">

@@ -33,7 +33,7 @@ export type ShopEmbed = { title: string; description?: string; color: number; fi
 export type ShopCategory = 'color' | 'title' | 'vip' | 'gift' | 'fun' | 'menzaifu' | 'other';
 
 export const SHOP_CATEGORIES: Record<ShopCategory, { title: string; note: string; color: number; pick: string }> = {
-  color: { title: '🎨 色守り', note: '名前の色が変わります（1 人 1 色。買い替えると前の色は外れます）', color: 0xe86a92, pick: '🎨 色守りを選ぶ' },
+  color: { title: '🎨 色守り', note: '名前の色が変わります（買った色は全部持てます。どれをつけるかは /マイページ で選べます）', color: 0xe86a92, pick: '🎨 色守りを選ぶ' },
   title: { title: '🏷 称号', note: 'プロフィール（御朱印帳）に称号が付きます', color: 0xd4a017, pick: '🏷 称号を選ぶ' },
   vip: { title: '💎 極（遊郭の VIP）', note: '宵参りの方だけ。遊郭の「💎 極の部屋」をひらける・入れる', color: 0xe6b422, pick: '💎 極の VIP を選ぶ' },
   gift: { title: '🎁 贈る', note: 'ほかの人に贈ります', color: 0xf4a7b9, pick: '🎁 贈るものを選ぶ' },

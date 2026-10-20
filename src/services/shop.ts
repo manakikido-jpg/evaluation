@@ -93,7 +93,7 @@ export async function seedDefaultItems(
       await add({ kind: 'role', name: `色守り（${c.name}）`, emoji: c.emoji, description: `名前がこの色になる。${BOOSTER_NOTE}`, price: 0, roleId: c.roleId, roleGroup: 'color', durationDays: null, boosterOnly: true });
       continue;
     }
-    await add({ kind: 'role', name: `色守り（${c.name}）`, emoji: c.emoji, description: '30 日間、名前がこの色になる（買い替えると前の色は外れる）', price: 1500, roleId: c.roleId, roleGroup: 'color', durationDays: 30 });
+    await add({ kind: 'role', name: `色守り（${c.name}）`, emoji: c.emoji, description: '30 日間、名前がこの色になる（ほかの色を持っていても外れない。どれをつけるかは /マイページ で選ぶ）', price: 1500, roleId: c.roleId, roleGroup: 'color', durationDays: 30 });
   }
   for (const t of roles.titles) {
     if (existing.some((i) => i.roleId === t.roleId)) continue;
@@ -166,7 +166,7 @@ async function withDiscount(discount: DiscountTicket | undefined, run: () => Pro
 
 /**
  * ロール（色守り・称号）を買う。期限つきのものを同じものでもう一度買うと、期限が延びる。
- * 同じ組（色）の別のものを持っていたら、その記録を終わりにして、外すロールを返す。
+ * 色守り・称号は、ほかのものを持っていても外さない（全部つく）。VIP の段だけは、前の段の記録を終わりにして、外すロールを返す。
  */
 export async function buyRole(db: Db, item: ShopItem, memberId: string, now = new Date(), price = item.price, discount?: DiscountTicket): Promise<BuyResult> {
   if (!item.enabled || item.kind !== 'role' || !item.roleId) return { status: 'disabled' };
@@ -190,7 +190,7 @@ export async function buyRole(db: Db, item: ShopItem, memberId: string, now = ne
 
 type ActivePurchase = typeof shopPurchases.$inferSelect;
 
-/** ロールの品を記録する（期限を足す・同じ組の別のロールを終わりにする）。払うのは呼び出し側 */
+/** ロールの品を記録する（期限を足す・VIP の前の段を終わりにする）。払うのは呼び出し側 */
 async function recordRoleItem(
   tx: Db,
   item: ShopItem,
@@ -205,8 +205,8 @@ async function recordRoleItem(
   const base = same?.expiresAt && same.expiresAt > now ? same.expiresAt : now;
   const expiresAt = item.durationDays ? new Date(base.getTime() + item.durationDays * DAY) : null;
   if (same) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, same.id));
-  // 同じ組の別のロール（色の買い替え）は外す
-  const groupItems = item.roleGroup ? await tx.select().from(shopItems).where(eq(shopItems.roleGroup, item.roleGroup)) : [];
+  // 色守り・称号は、買ったものを全部持てる（どれをつけるかはマイページで選ぶ）。VIP の段だけは 1 つ（上の段に買い替えると前の段は外す）
+  const groupItems = item.roleGroup === 'vip' ? await tx.select().from(shopItems).where(eq(shopItems.roleGroup, item.roleGroup)) : [];
   const groupRoles = new Set(groupItems.map((i) => i.roleId).filter((r): r is string => Boolean(r) && r !== item.roleId));
   const replaced = active.filter((p) => p.roleId && groupRoles.has(p.roleId));
   for (const p of replaced) await tx.update(shopPurchases).set({ endedAt: now }).where(eq(shopPurchases.id, p.id));

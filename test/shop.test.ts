@@ -69,7 +69,7 @@ describe('色守り・称号', () => {
     expect(r.purchase.expiresAt?.getTime()).toBe(now.getTime() + 30 * DAY);
   });
 
-  it('色を買い替えると、前の色は外す。同じ色は期限が延びる', async () => {
+  it('ほかの色を買っても、前の色は外さない（全部持てる）。同じ色は期限が延びる', async () => {
     await addCoins(db, 'A', 10000, 'adjust');
     const sakura = await item((i) => i.roleId === SAKURA);
     const fuji = await item((i) => i.roleId === FUJI);
@@ -77,7 +77,19 @@ describe('色守り・称号', () => {
     const again = await buyRole(db, sakura, 'A', new Date(now.getTime() + DAY));
     expect(again.status === 'ok' && again.purchase.expiresAt?.getTime()).toBe(now.getTime() + 60 * DAY);
     const swap = await buyRole(db, fuji, 'A', now);
-    expect(swap).toMatchObject({ status: 'ok', removeRoleIds: [SAKURA] });
+    expect(swap).toMatchObject({ status: 'ok', removeRoleIds: [] });
+    // どちらも持ったまま・つけたまま
+    const { wearables } = await import('../src/services/myPage.js');
+    expect((await wearables(db, 'A')).map((w) => [w.roleId, w.worn]).sort()).toEqual([[FUJI, true], [SAKURA, true]].sort());
+  });
+
+  it('💎 VIP の段だけは 1 つ（上の段を受けると前の段は外す）', async () => {
+    const { createItem } = await import('../src/services/shop.js');
+    await addCoins(db, 'A', 10000, 'adjust');
+    const v1 = await createItem(db, { kind: 'role', name: 'VIP 1', price: 100, roleId: '100000000000000071', roleGroup: 'vip', durationDays: 30 });
+    const v2 = await createItem(db, { kind: 'role', name: 'VIP 2', price: 100, roleId: '100000000000000072', roleGroup: 'vip', durationDays: 30 });
+    await buyRole(db, v1, 'A', now);
+    expect(await buyRole(db, v2, 'A', now)).toMatchObject({ status: 'ok', removeRoleIds: ['100000000000000071'] });
   });
 
   it('称号はずっと。持っていたらもう買えない（花びらも減らない）', async () => {

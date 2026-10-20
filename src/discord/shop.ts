@@ -183,7 +183,7 @@ export class ShopApp {
       return void (await i.update(otoshidamaPickChannel(item, e, balance, home, homeName)));
     }
     let note: string | undefined;
-    if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていたら、その色は外れます。同じ色なら期間が延びます';
+    if (item.kind === 'role' && item.roleGroup === 'color') note = '-# ほかの色守りを持っていても外れません（全部つきます。名前の色は、いちばん上の色）。どれをつけるかは /マイページ で選べます。同じ色なら期間が延びます';
     if (item.kind === 'role' && item.roleGroup === 'vip') {
       note = canBuyVip(this.cfg(), [...i.member.roles.cache.keys()])
         ? '-# 遊郭の「➕ 💎 極の部屋をひらく」が見えるようになり、VIP だけの部屋をひらける・入れる（部屋代なし）。もう一度受けると期間が延びます'
@@ -271,7 +271,7 @@ export class ShopApp {
           ? `-# ${target.displayName} さんはもう持っているので、期間が ${item.durationDays} 日延びます`
           : undefined
         : item.roleGroup === 'color'
-          ? '-# 相手がほかの色守りを持っていたら、その色は外れます'
+          ? '-# 相手がほかの色守りを持っていても外れません（どれをつけるかは /マイページ で選べます）'
           : undefined;
     await i.update(presentConfirm(item, this.cfg().economy, await this.balance(i.user.id), { id: targetId, name: target.displayName }, isBooster(i), note));
   }

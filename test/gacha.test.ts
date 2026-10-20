@@ -233,7 +233,7 @@ describe('中身（社務所Web で変える）', () => {
     expect(await drawGacha(db, g, U, 1, [R1, R2])).toEqual({ status: 'empty' });
   });
 
-  it('ショップの品: 色守りは期限つきで記録し、前の色を外す。ずっと持つ称号は、持っていれば出ない', async () => {
+  it('ショップの品: 色守りは期限つきで記録し、前の色も持ったまま。ずっと持つ称号は、持っていれば出ない', async () => {
     const SAKURA = '100000000000000081';
     const FUJI = '100000000000000082';
     const TITLE = '100000000000000083';
@@ -256,13 +256,13 @@ describe('中身（社務所Web で変える）', () => {
     if (a.status !== 'ok') throw new Error(a.status);
     expect(a.pulls[0]).toMatchObject({ kind: 'shop', roleId: SAKURA, shopItemId: sakura.id, removeRoleIds: [] });
     expect(a.pulls[0]?.expiresAt?.getTime()).toBe(T0.getTime() + 30 * 86_400_000);
-    // 藤に替えると、桜の記録は終わって外す
+    // 藤が出ても、桜は持ったまま（外さない）
     await updatePrize(db, ps.id, { enabled: false });
     await createPrize(db, { tier: 'kichi', kind: 'shop', shopItemId: fuji.id, amount: 1, weight: 1, fallback: false });
     const b = await drawGacha(db, g, U, 1, [SAKURA], () => 0.5, T0);
-    expect(b).toMatchObject({ status: 'ok', pulls: [{ roleId: FUJI, removeRoleIds: [SAKURA] }] });
+    expect(b).toMatchObject({ status: 'ok', pulls: [{ roleId: FUJI, removeRoleIds: [] }] });
     expect((await db.select().from(shopPurchases)).map((p) => [p.roleId, p.price, Boolean(p.endedAt)])).toEqual([
-      [SAKURA, 0, true],
+      [SAKURA, 0, false],
       [FUJI, 0, false],
     ]);
     // 称号（ずっと）を持っていれば出ない

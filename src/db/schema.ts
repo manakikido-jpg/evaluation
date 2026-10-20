@@ -622,7 +622,7 @@ export const shopItems = pgTable(
     price: integer('price').notNull().default(0),
     /** kind = role のとき付けるロール */
     roleId: text('role_id'),
-    /** 同じ組のロールは 1 つだけ（色守りを買い替えると前の色は外れる）。例: color / title */
+    /** 組（color / title / vip）。VIP の段だけは 1 つ（色守り・称号は全部持てて、どれをつけるかはマイページで選ぶ） */
     roleGroup: text('role_group'),
     /** 何日で外れるか（なし = ずっと） */
     durationDays: integer('duration_days'),
@@ -658,6 +658,8 @@ export const shopPurchases = pgTable(
     ticket: text('ticket').$type<TicketKind>(),
     /** 🎁 プレゼントで買った人（memberId は受け取った人。払い戻しはこの人へ） */
     giftFrom: text('gift_from'),
+    /** 👘 いまつけているか（マイページで外せる。外しても持ったまま・期限はそのまま進む） */
+    worn: boolean('worn').notNull().default(true),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     /** 期限切れで外した・買い替えた・払い戻した日時 */
     endedAt: timestamp('ended_at', { withTimezone: true }),

@@ -1,0 +1,1 @@
+ALTER TABLE "shop_purchases" ADD COLUMN "worn" boolean DEFAULT true NOT NULL;

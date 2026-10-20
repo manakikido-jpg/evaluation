@@ -3993,6 +3993,56 @@ it('キャスト用 社務所: /キャスト の 1 回きりのリンクで入�
   expect((await app.request(`/cast-office/link/${other}`, { method: 'POST' })).headers.get('location')).toBe('/cast-office/login?e=denied');
 });
 
+it('👘 マイページ: /マイページ の 1 回きりのリンクで入り、持っている色守り・称号をつける・外す（本人のものだけ）', async () => {
+  const { createLoginLink } = await import('../src/services/casino/loginLinks.js');
+  const { seedDefaultItems, listItems, buyRole } = await import('../src/services/shop.js');
+  const { addCoins } = await import('../src/services/economy.js');
+  const SAKURA = '100000000000000091', FUJI = '100000000000000092';
+  await seedDefaultItems(db, { colors: [{ roleId: SAKURA, name: '桜', emoji: '🌸' }, { roleId: FUJI, name: '藤', emoji: '💜' }], titles: [] });
+  const items = await listItems(db);
+  await addCoins(db, USER, 10000, 'adjust');
+  await addCoins(db, STAFF, 10000, 'adjust');
+  const a = await buyRole(db, items.find((i) => i.roleId === SAKURA)!, USER);
+  await buyRole(db, items.find((i) => i.roleId === FUJI)!, USER);
+  const theirs = await buyRole(db, items.find((i) => i.roleId === SAKURA)!, STAFF);
+  expect((await app.request('/mypage')).headers.get('location')).toBe('/mypage/login');
+  const link = await createLoginLink(db, { id: USER, displayName: 'さくら', avatarUrl: null });
+  expect((await app.request(`/mypage/link/${link}`, { method: 'POST', headers: { origin: 'https://evil.example' } })).status).toBe(403);
+  const ok = await app.request(`/mypage/link/${link}`, { method: 'POST' });
+  expect(ok.headers.get('location')).toBe('/mypage');
+  expect(ok.headers.get('set-cookie')).not.toContain('shamusho_session=');
+  const cookie = `sakura_mypage=${/sakura_mypage=([^;]+)/.exec(ok.headers.get('set-cookie')!)![1]!}`;
+  const html = await (await app.request('/mypage', { headers: { cookie } })).text();
+  expect(html).toContain('さくら さんのマイページ');
+  expect(html).toContain('色守り（桜）');
+  expect(html).toContain('色守り（藤）');
+  expect(html).not.toMatch(/onclick=|style=|<script>/);
+  expect((await app.request('/members', { headers: { cookie } })).status).toBe(302);
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(html)![1]!;
+  const send = (path: string, body: Record<string, string>, security = csrf) => app.request(path, { method: 'POST', headers: { cookie }, body: new URLSearchParams({ _csrf: security, ...body }) });
+  if (a.status !== 'ok' || theirs.status !== 'ok') throw new Error('buy failed');
+  actions = [];
+  expect((await send(`/mypage/wear/${a.purchase.id}`, { worn: '0' })).headers.get('location')).toBe('/mypage?msg=off#wear');
+  expect(actions).toContain(`removeRole ${USER} ${SAKURA}`);
+  expect(await (await app.request('/mypage', { headers: { cookie } })).text()).toContain('⬜ 外している');
+  expect((await send(`/mypage/wear/${a.purchase.id}`, { worn: '1' })).headers.get('location')).toBe('/mypage?msg=worn#wear');
+  expect(actions).toContain(`addRole ${USER} ${SAKURA}`);
+  // ほかの人の品・CSRF なしは変えられない
+  actions = [];
+  expect((await send(`/mypage/wear/${theirs.purchase.id}`, { worn: '0' })).headers.get('location')).toBe('/mypage?msg=invalid');
+  expect((await send(`/mypage/wear/${a.purchase.id}`, { worn: '0' }, 'bad')).status).toBe(403);
+  expect(actions).toEqual([]);
+  // Discord で変えられなければ、記録も変えない
+  const remove = fakeActions.removeRole;
+  try {
+    fakeActions.removeRole = async () => { throw new Error('Missing Permissions'); };
+    expect((await send(`/mypage/wear/${a.purchase.id}`, { worn: '0' })).headers.get('location')).toBe('/mypage?msg=failed');
+  } finally { fakeActions.removeRole = remove; }
+  const { wearables } = await import('../src/services/myPage.js');
+  expect((await wearables(db, USER)).find((w) => w.roleId === SAKURA)?.worn).toBe(true);
+  expect((await listAudit(db, { action: 'mypage.unwear' })).length).toBe(1);
+});
+
 it('キャスト専用のDiscord認証で本人だけ編集でき、運営の画面には入れない', async () => {
   const { applyCast, CAST_DEFAULTS, setCastStatus, getCast, menuOf, loadCastPhoto } = await import('../src/services/cast.js');
   const { postCastIntro } = await import('../src/discord/cast.js');

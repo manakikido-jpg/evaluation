@@ -12,6 +12,7 @@ import { SecurityPage } from './views/security.js';
 import { parseBigRaces } from '../services/casino/keibaBig.js';
 import { secretRoomHubs, secretRoomPanel } from '../discord/tempVoice.js';
 import { mountCastOffice } from './castOffice.js';
+import { mountMyPage } from './myPage.js';
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
@@ -415,6 +416,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   mountCastOffice(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now, enabled: deps.discordLogin ?? true });
+  mountMyPage(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ログイン ─────────
 

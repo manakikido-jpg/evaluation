@@ -42,8 +42,22 @@ export class CasinoApp {
   ) {}
 
   async onInteraction(interaction: Interaction): Promise<void> {
-    if (!interaction.isChatInputCommand() || !['casino', 'shinpu'].includes(interaction.commandName)) return;
+    if (!interaction.isChatInputCommand() || !['casino', 'shinpu', 'mypage'].includes(interaction.commandName)) return;
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+    // 👘 /マイページ: 本人だけのページへの 1 回きりのリンク
+    if (interaction.commandName === 'mypage') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      let link: string | undefined;
+      if (this.db && this.baseUrl) {
+        const m = interaction.member;
+        link = await createLoginLink(this.db, { id: m.id, displayName: m.displayName, avatarUrl: m.displayAvatarURL({ size: 128 }) }).catch((err: unknown) => {
+          logger.warn({ err }, 'mypage link create failed');
+          return undefined;
+        });
+      }
+      await interaction.editReply(myPageReply(this.baseUrl, link)).catch((err: unknown) => logger.warn({ err }, 'mypage reply failed'));
+      return;
+    }
     if (interaction.commandName === 'shinpu') {
       if (!adminLevelOf(this.cfg(), [...interaction.member.roles.cache.keys()])) {
         await interaction.reply({ content: '神符合戦のテストは、宮司・神職だけが遊べます。', flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
@@ -74,4 +88,14 @@ export class CasinoApp {
 export function shinpuTestReply(baseUrl: string | undefined, token?: string) {
   if (!baseUrl) return { content: 'Webの場所がまだ決まっていません。', allowedMentions: { parse: [] as const } };
   return { content: '神符合戦・運営テスト\n運営同士で対戦し、空いている席は式神CPUで埋められます。サーバーの銭は使いません。\n' + (token ? 'リンクは10分・1回きりです。人に渡さないでください。' : 'ボタンから開いて、Discordで認証してください。'), allowedMentions: { parse: [] as const }, components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('テストプレイに入る').setURL(`${baseUrl}/casino/shinpu${token ? `/link/${token}` : ''}`))] };
+}
+
+/** 👘 /マイページ: 本人だけに出す、マイページへの 1 回きりのリンク */
+export function myPageReply(baseUrl: string | undefined, token?: string) {
+  if (!baseUrl || !token) return { content: 'マイページを開けませんでした。少し待ってから、もう一度お試しください。', allowedMentions: { parse: [] as const } };
+  return {
+    content: `👘 **マイページ**\n持っている色守り・称号を、つける・外すを自分で選べます。\n-# このボタンはあなたにだけ見えます（${LINK_MINUTES} 分・1 回きり。人に渡さないでください）`,
+    allowedMentions: { parse: [] as const },
+    components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('マイページを開く').setEmoji('👘').setURL(`${baseUrl}/mypage/link/${token}`))],
+  };
 }
