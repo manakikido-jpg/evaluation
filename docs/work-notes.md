@@ -265,3 +265,4 @@
 - 保存前fetchで本番7f4e828（キャスト紹介の保存とメニュー同期）を検出。旧コードの全件検証は途中で止め、通常mergeで取り込む。更新履歴は両方維持。型チェック・ビルド・全テストは取り込み後の最終コードでやり直す。
 - 最終検証：本番7f4e828を取り込んだ026005bで型チェック・ビルド成功。全139ファイル1,761テスト成功（386.67秒、2並列）。削除・skip・時間制限変更なし。push前fetchで本番の追加変更なし。ログは/workspace/artifacts/omikuji-auto-{typecheck-final,build,all-tests}.log。
 - 完了範囲：通常の御神籤ボタンとコマンドで所持券を自動使用。初回無料・追加1日1回・表示・二重消費防止・失敗時のロールバックを実装。コード128a5f0、最新取り込み026005b、codex/omikuji-auto-ticketから本番向けPRを作成する。本番の抽選・通知・合流は未実行。
+- GitHub保存済み：[PR #61](https://github.com/manakikido-jpg/evaluation/pull/61)。head96e432d、OPEN・未合流、本番未反映。実装・全件検証記録とともにGitHubへ保存する。
