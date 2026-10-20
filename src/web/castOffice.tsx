@@ -12,7 +12,7 @@ import { assetUrl } from './assets.js';
 import { audit } from '../services/audit.js';
 import { logger } from '../lib/logger.js';
 import { getCast, menuOf, loadCastConfig, loadCastPhoto, saveCastPhoto, deleteCastPhoto, updateProfile, updateMenuItem, addMenuItem, removeMenuItem, parsePrice, parseTags, addOption, updateOption, removeOption, moveOption } from '../services/cast.js';
-import { refreshCastIntros } from '../discord/cast.js';
+import { refreshCastViews } from '../discord/cast.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 
 const COOKIE = 'sakura_cast_office';
@@ -116,7 +116,7 @@ export function mountCastOffice(app: Hono<any>, d: { db: Db; api: DiscordApi; di
   };
   const saved = async (c: Context, s: MemberSession, action: string) => {
     await audit(db, { actorId: s.userId, targetId: s.userId, action, via: 'web' });
-    const ok = await refreshCastIntros(db, d.discord, s.userId).catch(err => { logger.warn({ err }, 'cast office sync failed'); return false; });
+    const ok = await refreshCastViews(db, d.discord, s.userId).catch(err => { logger.warn({ err }, 'cast office sync failed'); return false; });
     return c.redirect(`${ROOT}?msg=${ok ? 'saved' : 'pending'}`);
   };
   const input = (b: Record<string, unknown>) => ({ name: String(b.name ?? '').trim(), note: String(b.note ?? '').trim(), minutes: parsePrice(String(b.minutes ?? '')), price: parsePrice(String(b.price ?? '')), night: false, ...(typeof b.gacha === 'string' ? { gacha: [...new Set(b.gacha.split(/\r?\n/).map(x => x.trim()).filter(Boolean))] } : {}) });

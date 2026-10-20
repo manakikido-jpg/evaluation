@@ -131,6 +131,25 @@ describe('🎀 キャスト', () => {
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '30' }, T20)).status).toBe('minor_off');
   });
 
+  it('前の値段がいまの幅の外になっていても、紹介は変えられる（新しく入れた値段は確かめる）', async () => {
+    const { updateProfile, getCast } = await import('../src/services/cast.js');
+    const narrow = { ...c, priceMin: 1000, priceMax: 5000 };
+    expect(await updateProfile(db, narrow, CAST, { ...profile, bio: '新しい紹介', tags: ['ゲーム'] })).toBeDefined();
+    expect((await getCast(db, CAST))!).toMatchObject({ bio: '新しい紹介', tags: ['ゲーム'], price30: 300 });
+    expect(await updateProfile(db, narrow, CAST, { ...profile, price30: 200 })).toBeUndefined();
+    expect(await updateProfile(db, narrow, CAST, { ...profile, bio: 'あ'.repeat(301) })).toBeUndefined();
+  });
+
+  it('内容を変えたら、メニュー（パネル）も書きかえる', async () => {
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    const { refreshCastViews } = await import('../src/discord/cast.js');
+    await saveCastConfig(db, { ...(await loadCastConfig(db)), channelId: '910000000000000009', panelMessageId: '920000000000000009' }, 'staff');
+    const edits: string[] = [];
+    const discord = { editMessage: async (ch: string, id: string) => void edits.push(`${ch}/${id}`), sendMessage: async () => ({ id: 'x' }) } as never;
+    expect(await refreshCastViews(db, discord, CAST)).toBe(true);
+    expect(edits).toContain('910000000000000009/920000000000000009');
+  });
+
   it('断る・返事がない・取り消し・ブロック: 全額戻す。キャストが途中で終えると話した分だけ', async () => {
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30' }, T20);
     if (r.status !== 'ok') throw new Error(r.status);

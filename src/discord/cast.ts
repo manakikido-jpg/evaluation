@@ -279,6 +279,13 @@ export async function postCastIntro(db: Db, discord: Pick<DiscordActions, 'sendM
 }
 
 /** 写真やメニューを変えたときに更新する。失敗した投稿は毎分の確認で再試行する */
+/** キャストの内容を変えたら、紹介とメニュー（パネル）を両方書きかえる */
+export async function refreshCastViews(db: Db, discord: Pick<DiscordActions, 'sendMessage' | 'editMessage'>, castId?: string): Promise<boolean> {
+  const intros = await refreshCastIntros(db, discord, castId).catch((err: unknown) => (logger.warn({ err }, 'cast intros refresh failed'), false));
+  const panel = await refreshCastPanel(db, discord).then(() => true, (err: unknown) => (logger.warn({ err }, 'cast panel refresh failed'), false));
+  return intros && panel;
+}
+
 export async function refreshCastIntros(db: Db, discord: Pick<DiscordActions, 'editMessage'>, castId?: string): Promise<boolean> {
   let ok = true;
   const ids = [...new Set((await castIntroPosts(db, castId)).map(p => p.castId))];
