@@ -546,6 +546,8 @@ export function CastPage(props: {
           <Csrf session={session} />
           <Select name="channelId" label="👨 男性キャストのメニューを出すチャンネル" value={c.channelId} options={props.channels} empty="選ぶ" />
           <Select name="femaleChannelId" label="👩 女性キャストのメニューを出すチャンネル（なければ、男性のチャンネルに全員を出す）" value={c.femaleChannelId} options={props.channels} empty="分けない" />
+          <Select name="reservationChannelId" label="📅 予約・納品のお部屋をまとめるチャンネル（男女共通）" value={c.reservationChannelId} options={props.channels} empty="自動で作成（📅 キャスト予約）" />
+          <p class="note">一覧は紹介と予約ボタン、やり取りは専用窓口の非公開のお部屋へ分けます。既存の予約は元の場所を使います。指定する場合は参加者がチャンネルを見られ、運営以外がスレッドを管理できない権限にしてください。</p>
           <Select name="privateCategoryId" label="2 人だけの部屋を作るカテゴリ（遊郭など）" value={c.privateCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="publicCategoryId" label="公開の部屋（18 歳未満の方の雑談）を作るカテゴリ" value={c.publicCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="roleId" label="キャストのロール" value={c.roleId} options={props.roles} empty="なし（付けない）" />

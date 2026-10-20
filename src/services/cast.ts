@@ -34,6 +34,8 @@ export type CastConfig = {
   /** 女性キャストのメニューを出すチャンネル */
   femaleChannelId?: string;
   femalePanelMessageId?: string;
+  /** 男女共通の予約・納品の非公開スレッドを作るチャンネル。未設定ならBOTが作る */
+  reservationChannelId?: string;
   roleId?: string;
   /** 2 人だけの部屋を作るカテゴリ（遊郭など） */
   privateCategoryId?: string;
@@ -75,6 +77,7 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     panelMessageId: sf(v.panelMessageId),
     femaleChannelId: sf(v.femaleChannelId),
     femalePanelMessageId: sf(v.femalePanelMessageId),
+    reservationChannelId: sf(v.reservationChannelId),
     roleId: sf(v.roleId),
     privateCategoryId: sf(v.privateCategoryId),
     publicCategoryId: sf(v.publicCategoryId),
@@ -99,6 +102,17 @@ export async function saveCastConfig(db: Db, c: CastConfig, by: string): Promise
     .insert(settings)
     .values({ key: KEY, value, updatedBy: by })
     .onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+}
+
+/** 自動作成した窓口だけを保存し、同時に変えたほかの設定を消さない。 */
+export async function saveReservationHub(db: Db, channelId: string): Promise<string> {
+  if (!sf(channelId)) throw new Error('予約先のチャンネルが正しくありません');
+  await db.insert(settings).values({ key: KEY, value: { reservationChannelId: channelId }, updatedBy: 'system' })
+    .onConflictDoUpdate({ target: settings.key, set: {
+      value: sql`${settings.value} || ${JSON.stringify({ reservationChannelId: channelId })}::jsonb`,
+      updatedAt: new Date(), updatedBy: 'system',
+    }, setWhere: sql`coalesce(${settings.value}->>'reservationChannelId', '') !~ '^[0-9]{17,20}$'` });
+  return (await loadCastConfig(db)).reservationChannelId ?? channelId;
 }
 
 export const castFee = (c: Pick<CastConfig, 'feePercent'>, price: number) => Math.floor((price * c.feePercent) / 100);
