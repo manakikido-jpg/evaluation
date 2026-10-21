@@ -3436,8 +3436,18 @@ describe('キャスト（管理画面）', () => {
     expect((await form(s, '/cast/template/t1/delete', {})).headers.get('location')).toBe('/cast?msg=menu_removed#cast-template');
     expect((await form(s, `/cast/casts/${adult}/menu/template`, {})).headers.get('location')).toBe(`/cast?msg=template_applied#cast-${adult}`);
     const applied = (await getCast(db, adult))!.menu;
-    expect(applied.map((m) => [m.name, m.minutes, m.price])).toEqual([['ツーショット', 60, 350], ['寝かしつけ', 45, 320], ['メンケア', 30, 250], ['メンケア', 60, 450], ['おねがい', 0, 0], ['作業通話', 120, 500]]);
-    expect(new Set(applied.map((m) => m.id)).size).toBe(6);
+    expect(applied.map((m) => [m.name, m.minutes, m.price])).toEqual([['ツーショット', 60, 350], ['メンケア', 30, 250], ['メンケア', 60, 450], ['寝落ち', 30, 250], ['寝落ち', 60, 400], ['寝かしつけ', 45, 320], ['寝かしつけ', 60, 500], ['おねがい', 0, 0], ['作業通話', 120, 500]]);
+    expect(new Set(applied.map((m) => m.id)).size).toBe(9);
+    // ☑ チェックした品だけ。入れかえ
+    expect(page).toContain('name="tpl" value="t7"');
+    await form(s, `/cast/casts/${adult}/menu/template`, { tplPicked: 'yes', tpl: 't7', replace: 'yes' });
+    expect((await getCast(db, adult))!.menu.map((m) => [m.name, m.minutes])).toEqual([['寝落ち', 30]]);
+    // ☑ 足す（入れかえない）: 同じ品は足さない
+    await form(s, `/cast/casts/${adult}/menu/template`, { tplPicked: 'yes', tpl: 't7' });
+    await form(s, `/cast/casts/${adult}/menu/template`, { tplPicked: 'yes', tpl: 't8' });
+    expect((await getCast(db, adult))!.menu.map((m) => [m.name, m.minutes])).toEqual([['寝落ち', 30], ['寝落ち', 60]]);
+    // 何もチェックしないと入れない
+    expect((await form(s, `/cast/casts/${adult}/menu/template`, { tplPicked: 'yes' })).headers.get('location')).toBe(`/cast?msg=template_failed#cast-${adult}`);
     expect(applied.some((m) => ['t1', 't2', 't3', 't4', 't5', 't6'].includes(m.id))).toBe(false);
   });
 

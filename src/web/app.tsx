@@ -259,7 +259,7 @@ import { castRanking, monthKey, monthOf, parseMonth } from '../services/castRank
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -6011,6 +6011,8 @@ export function createWebApp(deps: WebDeps) {
   const castGachaInput = (raw: string) => [...new Set(raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))];
 
   /** フォームのメニュー（内容・説明・時間・値段・寝落ち） */
+  /** 📋 チェックしたテンプレの品の番号（チェックの欄がない古いフォームは undefined = 全部） */
+  const tplIds = (body: Record<string, unknown>): string[] | undefined => (body.tplPicked === 'yes' ? [body.tpl ?? []].flat().filter((v): v is string => typeof v === 'string') : undefined);
   const castMenuInput = (body: Record<string, unknown>): MenuInput[] => {
     const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
     const base = { name: str('menuName').trim(), note: str('menuNote').trim() };
@@ -6067,7 +6069,8 @@ export function createWebApp(deps: WebDeps) {
   app.post('/cast/casts/:id/menu/template', async (c) => {
     const id = c.req.param('id');
     if (!validId(id)) return c.redirect('/cast');
-    const ok = await applyTemplate(db, await loadCastConfig(db), id);
+    const body = await c.req.parseBody({ all: true });
+    const ok = await applyTemplate(db, await loadCastConfig(db), id, { ids: tplIds(body), replace: body.replace === 'yes' || body.tplPicked !== 'yes' });
     if (ok) {
       await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.menu_template', via: 'web' });
       await castPanelNow();
@@ -6150,7 +6153,7 @@ export function createWebApp(deps: WebDeps) {
 
   // ➕ キャストを登録する（運営だけ。Discord からの申し込みはない）
   app.post('/cast/register', async (c) => {
-    const body = await c.req.parseBody();
+    const body = await c.req.parseBody({ all: true });
     const by = c.get('session').userId;
     const id = typeof body.member === 'string' ? await findActiveMember(db, body.member) : undefined;
     if (!id) return c.redirect('/cast?msg=no_member#cast-register');
@@ -6159,7 +6162,7 @@ export function createWebApp(deps: WebDeps) {
     const p = { bio: str('bio').trim(), tags: parseTags(str('tags')), minorOk: body.minorOk === 'yes', gender: (body.gender === 'male' || body.gender === 'female' ? body.gender : '') as 'male' | 'female' | '' };
     const adult = await isAdult(db, cfg, id, await memberRoleIdsOf(db, id));
     // テンプレで登録するときは、テンプレの中身をそのまま入れる
-    const first = body.useTemplate === 'yes' ? templateOf(conf) : castMenuInput(body);
+    const first = body.useTemplate === 'yes' ? pickTemplate(conf, tplIds(body)) : castMenuInput(body);
     const r = await registerCast(db, conf, { id, adult }, p, first, by, now());
     if (r.status !== 'ok') return c.redirect(`/cast?msg=reg_${r.status}#cast-register`);
     if (conf.roleId) await deps.discord.addRole(cfg.guildId, id, conf.roleId, 'キャストの登録').catch((err: unknown) => logger.warn({ err }, 'cast role add failed'));

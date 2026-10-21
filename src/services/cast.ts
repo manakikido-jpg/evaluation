@@ -409,9 +409,12 @@ const tpl = (id: string, name: string, minutes: number, price: number, extra: Pa
 export const DEFAULT_MENU_TEMPLATE: CastMenuItem[] = [
   tpl('t1', 'ツーショット', 30, 200),
   tpl('t2', 'ツーショット', 60, 350),
-  tpl('t3', '寝かしつけ', 30, 300),
   tpl('t4', 'メンケア', 30, 250),
   tpl('t5', 'メンケア', 60, 450),
+  tpl('t7', '寝落ち', 30, 250),
+  tpl('t8', '寝落ち', 60, 400),
+  tpl('t3', '寝かしつけ', 30, 300),
+  tpl('t9', '寝かしつけ', 60, 500),
   tpl('t6', 'おねがい', 0, 0, { consult: true }),
 ];
 export const templateOf = (c: CastConfig) => c.menuTemplate ?? DEFAULT_MENU_TEMPLATE;
@@ -421,12 +424,26 @@ function isMenuItem(x: unknown): x is CastMenuItem {
   return !!m && typeof m.id === 'string' && typeof m.name === 'string' && typeof m.note === 'string' && Number.isInteger(m.minutes) && Number.isInteger(m.price) && typeof m.night === 'boolean';
 }
 
-/** テンプレをそのキャストのメニューに入れる（今のメニューは入れかえる） */
-export async function applyTemplate(db: Db, c: CastConfig, castId: string): Promise<boolean> {
-  const menu = templateOf(c).map((m) => ({ ...m, id: newMenuId() }));
-  if (!menu.length) return false;
-  const [row] = await db.update(casts).set({ menu, price30: 0, price60: 0, priceNight: 0 }).where(and(eq(casts.memberId, castId), inArray(casts.status, ['pending', 'active', 'paused']))).returning();
-  return Boolean(row);
+/** テンプレから選んだ品（ids がなければ全部。知らない番号は除く） */
+export const pickTemplate = (c: CastConfig, ids?: readonly string[]) => templateOf(c).filter((m) => !ids || ids.includes(m.id));
+
+/**
+ * テンプレをそのキャストのメニューに入れる。
+ * - ids: チェックで選んだテンプレの品（なければ全部）
+ * - replace: true なら今のメニューと入れかえ。false なら今のメニューに足す（同じ名前・同じ分の品は足さない。MENU_MAX まで）
+ */
+export async function applyTemplate(db: Db, c: CastConfig, castId: string, opts: { ids?: readonly string[]; replace?: boolean } = {}): Promise<boolean> {
+  const picked = pickTemplate(c, opts.ids);
+  if (!picked.length) return false;
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(and(eq(casts.memberId, castId), inArray(casts.status, ['pending', 'active', 'paused']))).for('update');
+    if (!cast) return false;
+    const base = opts.replace === false ? menuOf(cast) : [];
+    const fresh = picked.filter((m) => !base.some((b) => b.name === m.name && b.minutes === m.minutes)).map((m) => ({ ...m, id: newMenuId() }));
+    const menu = [...base, ...fresh].slice(0, MENU_MAX);
+    await tx.update(casts).set({ menu, price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
+    return true;
+  });
 }
 
 /** テンプレに足す・外す・書きかえる（設定に保存する） */

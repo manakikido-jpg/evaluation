@@ -379,6 +379,7 @@ export function CastPage(props: {
             <input type="checkbox" name="useTemplate" value="yes" checked />
             <span>📋 テンプレのメニューで登録する（外すと、下で入れたメニューで登録）</span>
           </label>
+          <TemplatePicks items={props.template} />
           <p class="note">テンプレを使わないときの、はじめのメニュー（あとから一覧でいくつでも足せます）</p>
           <MenuFields c={c} optional />
           <label class="field check">
@@ -452,7 +453,12 @@ export function CastPage(props: {
                       <summary>🎀 メニュー（{menuOf(x).length}）</summary>
                       <form method="post" action={`/cast/casts/${x.memberId}/menu/template`} class="row-actions">
                         <Csrf session={session} />
-                        <button type="submit">📋 テンプレのメニューを入れる（今のメニューと入れかえ）</button>
+                        <TemplatePicks items={props.template} />
+                        <label class="field check">
+                          <input type="checkbox" name="replace" value="yes" />
+                          <span>今のメニューと入れかえる（外すと、今のメニューに足す。同じ名前・同じ分の品は足さない）</span>
+                        </label>
+                        <button type="submit">📋 チェックしたテンプレのメニューを入れる</button>
                       </form>
                       <MenuList items={menuOf(x)} base={`/cast/casts/${x.memberId}/menu`} session={session} c={c} empty="メニューがありません（指名できません）。テンプレを入れるか、下から足してください。" />
                       <h3>➕ オプション（{x.options.length}／{OPTION_MAX}）</h3>
@@ -775,5 +781,22 @@ function Ranking(p: { month: string; prev: string; next?: string; rows: CastRank
         <p class="muted">この月の指名はありません。</p>
       )}
     </section>
+  );
+}
+
+/** 📋 テンプレの品のチェック（はじめは全部チェック）。name="tpl" に品の番号 */
+function TemplatePicks(props: { items: CastMenuItem[] }) {
+  if (!props.items.length) return <></>;
+  return (
+    <fieldset class="field">
+      <legend>入れるテンプレの品（チェックしたものだけ）</legend>
+      <input type="hidden" name="tplPicked" value="yes" />
+      {props.items.map((m) => (
+        <label class="check">
+          <input type="checkbox" name="tpl" value={m.id} checked /> {m.name}
+          {m.minutes > 0 ? `（${m.minutes} 分）` : ''} {m.price > 0 ? `${m.price.toLocaleString('ja-JP')} 枚` : ''}
+        </label>
+      ))}
+    </fieldset>
   );
 }
