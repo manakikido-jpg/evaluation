@@ -140,3 +140,18 @@ it('🎫 売り場のボタンのリンクで、ログインなしで入れる�
  expect(await (await app.request('/lottery',{headers:{cookie:'sakura_lottery='+c}})).text()).toContain('いまの残高');
  expect((await app.request(`/lottery/link/${token}`,{method:'POST',headers:{origin:BASE}})).headers.get('location')).toContain('/lottery?error=');
 });
+it('社務所の宝くじタブにスクラッチ収支と払戻額を出し、一般の売り場には出さない',async()=>{
+ const {fortuneScratch}=await import('../src/db/schema.js');
+ await db.insert(fortuneScratch).values({id:randomUUID(),memberId:A,day:'2026-10-17',price:100,payout:1000,createdAt:now,openedAt:now});
+ const token=await createSession(db,{id:A,username:'a',displayName:'運営',avatarUrl:null},{level:'guji',pages:null},now);
+ const res=await app.request('/economy/fortune?period=today',{headers:{cookie:'shamusho_session='+token}});
+ expect(res.status).toBe(200);const html=await res.text();
+ expect(html).toContain('差引回収額');expect(html).toContain('-900 銭');expect(html).toContain('1,000 銭');
+ expect(html).toContain('確定利益ではありません');expect(html).toContain('今の価格での払戻例');
+ expect(html).toContain('period=today#scratch-finances');expect(html).toContain('aria-current="page"');
+ expect(html).not.toMatch(/onclick=|style=|<script>/);
+ expect((await app.request('/economy/fortune')).status).toBe(302);
+ expect(await(await get()).text()).not.toContain('差引回収額');
+ const limited=await createSession(db,{id:B,username:'b',displayName:'限定',avatarUrl:null},{level:'shinshoku',pages:['members']},now);
+ expect((await app.request('/economy/fortune',{headers:{cookie:'shamusho_session='+limited}})).status).toBe(403);
+});

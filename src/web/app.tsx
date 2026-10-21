@@ -1,5 +1,6 @@
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
+import { scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
 import { FortuneAdminPage } from './views/fortune.js';
 import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
@@ -665,7 +666,11 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 社務所のログインから、運営限定の対戦へ入る。発行前にもDiscordロールを確認する。
-  app.get('/economy/fortune', async (c) => c.html(<FortuneAdminPage session={c.get('session')} cfg={cfg.fortuneGames} round={await ensureLotteryRound(db, cfg.fortuneGames, now())} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : undefined} />));
+  app.get('/economy/fortune', async (c) => {
+    const at = now();
+    const [round, finances] = await Promise.all([ensureLotteryRound(db, cfg.fortuneGames, at), scratchFinances(db, scratchPeriod(c.req.query('period')), at)]);
+    return c.html(<FortuneAdminPage session={c.get('session')} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} finances={finances} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : undefined} />);
+  });
   app.post('/economy/fortune', requireCsrf, async (c) => {
     if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);
     const body = await c.req.parseBody();

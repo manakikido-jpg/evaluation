@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { SCRATCH_PERIODS, type ScratchFinances } from '../../services/casino/fortuneStats.js';
 import { SCRATCH_PRIZES, projectedPrize, type fortuneState } from '../../services/casino/fortune.js';
 import type { FortuneGamesConfig } from '../../config.js';
 import type { Child } from 'hono/jsx';
@@ -64,11 +65,37 @@ export function FortunePage({ me, cfg, state, selected, error }: { me: FortuneMe
     <details class="fortune-panel"><summary>スクラッチの履歴（最近20枚）</summary><ul>{state.scratches.map(t => <li><a href={'/lottery?ticket=' + t.id}>{date(t.createdAt)}</a>：購入 {t.price} {me.coin.name} / {t.openedAt ? `払戻 ${t.payout} ${me.coin.name}` : '未開封'}</li>)}</ul></details>
   </FortuneLayout>;
 }
-export function FortuneAdminPage({ session, cfg, round, message }: { session: SessionView; cfg: FortuneGamesConfig; round: State['round']; message?: string }) {
+function ScratchFinancePanel({ data: d, price, coin }: { data: ScratchFinances; price: number; coin: string }) {
+  const money = (value: number) => `${value.toLocaleString('ja-JP')} ${coin}`;
+  const signed = (value: number) => `${value > 0 ? '+' : ''}${money(value)}`;
+  const multipliers = [...new Set([...SCRATCH_PRIZES.map(p => p.multiplier), ...d.prizes.map(p => p.multiplier)])].sort((a,b) => a-b);
+  return <section class="card" id="scratch-finances">
+    <h2>スクラッチの売上・払戻・回収</h2>
+    <nav class="tabs" aria-label="スクラッチ収支の期間">{Object.entries(SCRATCH_PERIODS).map(([key,label]) => <a href={`/economy/fortune?period=${key}#scratch-finances`} class={d.period === key ? 'on' : ''} aria-current={d.period === key ? 'page' : undefined}>{label}</a>)}</nav>
+    <p class="note">{d.start ? `${date(d.start)} 〜 ${date(d.end)}` : `記録の開始 〜 ${date(d.end)}`}（日本時間）。直近7日・30日は今日を含みます。</p>
+    <div class="health-grid">
+      <div class="health-item"><span class="health-label">売上（購入額）</span><div class="health-value">{money(d.revenue)}</div><span class="note">期間内に販売 {d.sold.toLocaleString('ja-JP')} 枚</span></div>
+      <div class="health-item"><span class="health-label">当せん払戻額</span><div class="health-value">{money(d.payout)}</div><span class="note">期間内に開封 {d.opened.toLocaleString('ja-JP')} 枚・払戻あり {d.wins.toLocaleString('ja-JP')} 枚</span></div>
+      <div class={`health-item ${d.cashNet < 0 ? 'health-bad' : 'health-ok'}`}><span class="health-label">差引回収額（売上 − 払戻）</span><div class="health-value">{signed(d.cashNet)}</div><span class="note">マイナスは運営の持ち出し</span></div>
+      <div class={`health-item ${d.settledNet < 0 ? 'health-bad' : 'health-ok'}`}><span class="health-label">開封済みの券だけの収支</span><div class="health-value">{signed(d.settledNet)}</div><span class="note">開封した券の購入額 {money(d.settledSales)} − 払戻</span></div>
+    </div>
+    <p class="note">売上は購入日、払戻は開封日で数えます。以前買った券の払戻も含みます。差引回収額には未開封券の売上も含むため、確定利益ではありません。未開封は全期間で {d.pending.toLocaleString('ja-JP')} 枚。未開封の当たり結果は表示しません。</p>
+    <p>開封済みの実績還元率：<strong>{d.returnPct === null ? '—（開封なし）' : `${d.returnPct.toFixed(1)}％`}</strong><span class="note">（払戻額 ÷ 開封した券の購入額。理論値は71.5％、短期間の実績は変動します）</span></p>
+    <h3>当たったときの金額と、期間内の開封結果</h3>
+    <div class="table-wrap" tabindex={0} role="region" aria-label="倍率ごとの払戻額と開封実績"><table class="compact"><thead><tr><th>結果</th><th class="num">今の価格での払戻例</th><th class="num">出た枚数</th><th class="num">実際の1枚あたり払戻</th><th class="num">実際の払戻合計</th></tr></thead><tbody>
+      {multipliers.map(mult => { const row = d.prizes.find(p => p.multiplier === mult); return <tr><td>{mult === 0 ? 'はずれ（0倍）' : `${mult}倍${mult === 1 ? '（購入額が戻る）' : ''}`}</td><td class="num">{money(price * mult)}</td><td class="num">{row?.count ?? 0} 枚</td><td class="num">{row ? row.min === row.max ? money(row.min) : `${money(row.min)} 〜 ${money(row.max)}` : '—'}</td><td class="num">{money(row?.amount ?? 0)}</td></tr>; })}
+    </tbody></table></div>
+    <p class="note">払戻例は今の1枚 {money(price)} で計算。実績は購入当時の価格で集計します。払戻には購入額を含み、1倍は利用者の利益0です。</p>
+    <h3>最近の当せん（選んだ期間の新しい順・20件）</h3>
+    {d.recent.length ? <div class="table-wrap" tabindex={0} role="region" aria-label="最近の当せん金額"><table class="compact"><thead><tr><th>開封日時（日本時間）</th><th class="num">購入額</th><th class="num">払戻額</th><th class="num">利用者の差引</th></tr></thead><tbody>{d.recent.map(r => <tr><td>{date(r.openedAt!)}</td><td class="num">{money(r.price)}</td><td class="num">{money(r.payout)}</td><td class="num">{signed(r.payout-r.price)}</td></tr>)}</tbody></table></div> : <p class="note">この期間の当せんはありません。</p>}
+  </section>;
+}
+export function FortuneAdminPage({ session, cfg, round, finances, coinName, message }: { session: SessionView; cfg: FortuneGamesConfig; round: State['round']; finances: ScratchFinances; coinName: string; message?: string }) {
   return <Layout title="スクラッチ・宝くじ" nav="fortune" session={session}><h1>✨ スクラッチ・週末宝くじ</h1>
     {message && <p role="status">{message}</p>}<p><a href="/lottery">宝くじ売り場へ（Discordで本人認証）</a></p>
     <p>日曜21時（日本時間）に抽選。売れた券から1枚に、売上の一部＋運営の上乗せを自動入金します。販売0枚なら賞金を出しません。</p>
     <p>スクラッチは即時、宝くじの金額・上限は次の開催から適用します。休止しても購入済みの券は精算します。</p>
+    <ScratchFinancePanel data={finances} price={cfg.scratchPrice} coin={coinName} />
     {round && <section class="card"><h2>販売中の回の固定条件</h2><p>{date(round.drawAt)}（日本時間） / 1枚{round.price} / 1人{round.perMember}枚 / 売上{round.returnPct}％＋{round.bonus} / 販売{round.sold}枚</p></section>}
     <form method="post" action="/economy/fortune"><input type="hidden" name="_csrf" value={session.csrfToken} />
       <fieldset class="fields" disabled={session.level !== 'guji'}><legend>宮司だけ変更できます</legend>
