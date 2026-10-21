@@ -386,3 +386,4 @@
 - 最終確認で、返金を指名ごとに参照すると記録増加時に毎分集計が重くなるため、返金をまとめて集計して結合する方式へ変更。旧コードの全件検証は途中停止し、型・ビルド・全テストを最終コードでやり直す。
 - 最終検証：返金の一括集計を含むdcac69aで型チェック・ビルド成功。全150ファイル1,846テスト成功（439.03秒、2並列）。テスト削除・skipなし。push前fetchで本番68dc8edから追加変更なし。ログ/workspace/artifacts/cast-live-ranking/{typecheck-final,build,all-tests-final}.log。
 - 完了範囲：月間の指名本数・シャンパン込み手数料前売上、同順位と上位10人、コマンド・社務所の配置、毎分と実績時更新、再起動・削除復旧・一時障害対策、運営限定の手動更新。既存表彰・報酬は維持。DBマイグレーション不要。codex/cast-live-ranking、実装7293d5b・集計改善dcac69aから担当Claude向けPRへ保存。本番投稿・実通知は未実行。
+- GitHub保存済み：[PR #69](https://github.com/manakikido-jpg/evaluation/pull/69)。codex/cast-live-ranking、最終検証c886b44。OPEN・未合流、本番未反映。担当Claudeの確認・合流後、「/パネル キャストランキング」か社務所で投稿先を指定する。
