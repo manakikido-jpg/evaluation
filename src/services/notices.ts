@@ -662,7 +662,7 @@ export async function placeShuinButton(ctx: NoticeCtx, channelId: string, by: st
 const isEmaGuide = (n: Notice) => n.sticky && n.body.includes('# 🪧 自己紹介の書き方');
 
 /**
- * /パネル 絵馬: このチャンネルのいちばん下に、絵馬（自己紹介）のひな形を出し続ける。「🌸 朱印を押す」ボタンつき。
+ * /パネル 絵馬: このチャンネルのいちばん下に、絵馬（自己紹介）のひな形を出し続ける（「🌸 朱印を押す」ボタンは付けない）。
  * - このチャンネルにもうあれば、出し直すだけ（増やさない）
  * - 文面は、ほかのチャンネルで直したひな形があればそれを写す。なければ標準の文面
  */
@@ -671,7 +671,7 @@ export async function placeEmaGuide(ctx: NoticeCtx, channelId: string, by: strin
   const here = all.find((n) => n.channelId === channelId && isEmaGuide(n));
   const n =
     here ??
-    (await createNotice(ctx.db, { channelId, title: '使い方', body: all.find(isEmaGuide)?.body ?? EMA_GUIDE, sticky: true, shuinButton: true, by }));
+    (await createNotice(ctx.db, { channelId, title: '使い方', body: all.find(isEmaGuide)?.body ?? EMA_GUIDE, sticky: true, by }));
   const result = await publishNotice(ctx, n.id, by);
   await audit(ctx.db, { actorId: by, action: 'notice.ema_guide', detail: { channelId, noticeId: n.id, created: !here }, via: 'discord' });
   return { result, created: !here };

@@ -743,7 +743,7 @@ describe('/パネル 朱印', () => {
     const ctx = { db, cfg, discord: f.discord };
     expect(await placeEmaGuide(ctx, CH.ema, GUJI)).toEqual({ result: 'posted', created: true });
     const first = (await listNotices(db)).find((n) => n.channelId === CH.ema)!;
-    expect(first).toMatchObject({ sticky: true, shuinButton: true, body: EMA_GUIDE });
+    expect(first).toMatchObject({ sticky: true, shuinButton: false, body: EMA_GUIDE });
     expect((await placeEmaGuide(ctx, CH.ema, GUJI)).created).toBe(false);
     expect((await listNotices(db)).filter((n) => n.channelId === CH.ema)).toHaveLength(1);
     // 直した文面は、ほかのチャンネルにも写す
