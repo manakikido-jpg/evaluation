@@ -62,7 +62,9 @@ import {
   parseTags,
   MENU_MINUTES,
   menuLabel,
-  rescheduleSession,
+  changeableReservations,
+  proposeSessionTime,
+  acceptSessionTime,
   castStatement,
   monthRange,
   deliverSession,
@@ -185,7 +187,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
       },
     ],
     ...(image ? { files: [{ name: `cast-menu.${ext}`, contentType: image.contentType, data: image.data }], attachments: [] } : {}),
-    components: [row(button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙'))],
+    components: [row(button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙'), button('cast:changes:0', '予約を確認・日時変更', 2, '📅'))],
   };
 }
 
@@ -374,7 +376,7 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
     attachments: [],
     allowedMentions: { parse: [] as never[] },
     components: [
-      row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄')),
+      row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄'), button('cast:changes:0', '予約日時の変更', 2, '📅')),
       row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅'), button('cast:sales:0', '売上の明細', 2, '💰'), button('cast:shift', '出勤予定', 2, '🗓')),
       row(button('cast:edit', '紹介を変える', 1, '✏️'), ...(officeUrl ? [{ type: 2 as const, style: 5 as const, label: '🖊 メニュー・写真を編集', url: officeUrl }] : []), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
     ],
@@ -487,6 +489,7 @@ export class CastApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     try {
       if (interaction.isStringSelectMenu()) {
+        if (action === 'changesel') return await this.proposeModal(interaction, Number(interaction.values[0]));
         if (action === 'champagnesel') return await this.champagneSelect(interaction, Number(a), interaction.values[0] ?? '');
         if (action === 'pick') return await this.pick(interaction, interaction.values[0] ?? '');
         if (action === 'plansel') return await this.confirm(interaction, a ?? '', interaction.values[0] ?? '');
@@ -522,6 +525,8 @@ export class CastApp {
       if (action === 'me') return await this.mine(interaction);
       if (action === 'refresh') return await this.mine(interaction, true);
       if (action === 'schedule') return await this.schedule(interaction, Number(a ?? 0));
+      if (action === 'changes') return await this.changePicker(interaction, Number(a ?? 0));
+      if (action === 'timeok') return await this.proposeAccept(interaction, a ?? '');
       if (action === 'sales') return await this.sales(interaction, Number(a ?? 0));
       if (action === 'edit') return await this.editModal(interaction);
       if (action === 'shift') return await this.shiftModal(interaction);
@@ -546,7 +551,7 @@ export class CastApp {
       if (action === 'early') return await this.earlyRoom(interaction, id);
       if (action === 'dlv') return await this.deliver(interaction, id);
       if (action === 'rcv') return await this.receive(interaction, id);
-      if (action === 'pok') return await this.proposeAccept(interaction, id, Number(b));
+      if (action === 'pok') return void (await interaction.reply({ content: 'この古い提案は使えません。「日時変更を提案」からもう一度提案してください。', ...EPHEMERAL }));
       if (action === 'decline' || action === 'cancel') return await this.cancel(interaction, id, action === 'decline' ? 'declined' : 'canceled');
       if (action === 'cancelok') return await this.cancel(interaction, id, 'canceled', true);
       if (action === 'noshow') return await this.noShow(interaction, id);
@@ -1332,9 +1337,9 @@ export class CastApp {
         title: '📅 予約のお願い',
         line: castButtons ? `<@${s.castId}> さん、${when} から ${sessionLabel(s)}（${sessionTime(s)}）の予約です。受けますか？（始まる時刻までに返事がなければ取り消します）` : `${when} から ${sessionLabel(s)}（${sessionTime(s)}）の予約です。キャストの返事を待っています（始まる時刻までに返事がなければ取り消して戻します）。`,
         // キャストの返事は社務所からの DM で（DM が届かないときだけ、ここにもボタンを出す）
-        buttons: [...(castButtons ? [button(`cast:accept:${s.id}`, '受ける', 3, '✅'), button(`cast:propose:${s.id}`, '別の日時を提案', 1, '🗓'), button(`cast:decline:${s.id}`, '断る', 4)] : []), button(`cast:cancel:${s.id}`, '取り消す（お客）')],
+        buttons: [...(castButtons ? [button(`cast:accept:${s.id}`, '受ける', 3, '✅'), button(`cast:decline:${s.id}`, '断る', 4)] : []), button(`cast:propose:${s.id}`, '日時変更を提案', 1, '🗓'), button(`cast:cancel:${s.id}`, '取り消す（お客）')],
       },
-      accepted: { title: '📅 予約を受けました', line: `${when} から ${sessionLabel(s)}（${sessionTime(s)}）。時刻になったら部屋ができて、ここで知らせます。当日なら「部屋を立てる」で先に 2 人だけの部屋を作れます。`, buttons: [button(`cast:early:${s.id}`, '部屋を立てる（当日）', 3, '🚪'), button(`cast:cancel:${s.id}`, '取り消す（お客）'), button(`cast:report:${s.id}`, '通報', 4, '🚨')] },
+      accepted: { title: '📅 予約を受けました', line: `${when} から ${sessionLabel(s)}（${sessionTime(s)}）。時刻になったら部屋ができて、ここで知らせます。当日なら「部屋を立てる」で先に 2 人だけの部屋を作れます。`, buttons: [button(`cast:propose:${s.id}`, '日時変更を提案', 1, '🗓'), button(`cast:early:${s.id}`, '部屋を立てる（当日）', 3, '🚪'), button(`cast:cancel:${s.id}`, '取り消す（お客）'), button(`cast:report:${s.id}`, '通報', 4, '🚨')] },
       declined: { title: '🙇 予約は受けられませんでした', line: '預かっていた銭は全部戻しました。', buttons: [] },
       canceled: { title: '予約を取り消しました', line: s.paid > 0 ? `直前の取り消しのため、キャストに ${fmt(s.paid)} 枚（手数料を引いたあと）を渡し、残りを戻しました。` : '預かっていた銭は全部戻しました。', buttons: [] },
     };
@@ -1374,7 +1379,7 @@ export class CastApp {
     const head = isDeliverySession(s) ? `📦 <@${s.customerId}> さんから **${sessionLabel(s)}** の注文（${fmt(s.price)} 枚）` : `📅 <@${s.customerId}> さんから **${when}** に **${sessionLabel(s)}**（**${sessionTime(s)}**）の予約（${fmt(s.price)} 枚）`;
     const map: Partial<Record<CastSession['status'], { line: string; buttons: Btn[] }>> = {
       reserved: { line: '受けますか？ 都合が悪ければ「別の日時を提案」もできます（始まる時刻までに返事がなければ取り消します）。', buttons: [button(`cast:accept:${s.id}`, '受ける', 3, '✅'), button(`cast:propose:${s.id}`, '別の日時を提案', 1, '🗓'), button(`cast:decline:${s.id}`, '断る', 4)] },
-      accepted: { line: '✅ 受けました。時刻になったら部屋ができます（当日ならスレッドの「部屋を立てる」で先に作れます）。', buttons: [] },
+      accepted: { line: '✅ 受けました。時刻になったら部屋ができます（当日ならスレッドの「部屋を立てる」で先に作れます）。日時の変更は提案して、お客の承認で決まります。', buttons: [button(`cast:propose:${s.id}`, '日時変更を提案', 1, '🗓')] },
       ordered: { line: `${s.acceptBy ? `<t:${unix(s.acceptBy)}:f>` : '期限'} までに、スレッドに出して「納品した」を押してください。`, buttons: [button(`cast:dlv:${s.id}`, '納品した', 3, '📦'), button(`cast:decline:${s.id}`, '断る', 4)] },
       delivered: { line: '📦 納品しました。お客が受け取ると渡します（受け取らなくても 3 日で自動で渡します）。', buttons: [] },
       done: { line: `🎉 終わりました（${fmt(s.paid)} 枚をお渡ししました）。`, buttons: [] },
@@ -1542,64 +1547,63 @@ export class CastApp {
     await this.discord.sendDm(s.castId, `🎉 ${sessionLabel(s)} を受け取ってもらえました。${this.coin()} ${fmt(s.paid)} 枚をお渡ししました。`).catch(() => false);
   }
 
-  // ───────── 🗓 別の日時を提案（断るかわりに） ─────────
+  /** お客・キャスト共通。自分の予約だけを本人向けに選ぶ。 */
+  private async changePicker(i: ButtonInteraction<'cached'>, page: number): Promise<void> {
+    await i.deferReply(EPHEMERAL);
+    const list = await changeableReservations(this.db, i.user.id);
+    const pages = Math.max(1, Math.ceil(list.length/25));
+    const p = Number.isSafeInteger(page) ? Math.max(0, Math.min(page,pages-1)) : 0;
+    const selected = list.slice(p*25,(p+1)*25);
+    const names = await namesOf(this.db,selected.flatMap(s=>[s.castId,s.customerId]));
+    await i.editReply({ content: selected.length ? `変更したい予約を選んでください（日本時間・${p+1}/${pages}）。相手が承認するまで、元の予約日時のままです。` : '変更できる、開始前の予約はありません。', embeds:[], attachments:[], components: [
+      ...(selected.length ? [{type:1 as const,components:[{type:3 as const,custom_id:'cast:changesel',placeholder:'予約を選ぶ',options:selected.map(s=>({label:`${jstDay(s.startAt!)} ${jstTime(s.startAt!)}｜${names.get(s.castId===i.user.id?s.customerId:s.castId)??'予約相手'}｜#${s.id}`.slice(0,100),value:String(s.id),description:sessionLabel(s).slice(0,100)}))}]}] : []),
+      ...(pages>1 ? [row(button(`cast:changes:${p-1}`,'前へ',2,undefined,p===0),button(`cast:changes:${p+1}`,'次へ',2,undefined,p===pages-1))] : []),
+    ],allowedMentions:{parse:[]} });
+  }
 
-  private async proposeModal(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
-    const s = await getSession(this.db, id);
-    if (!s || (s.status !== 'reserved' && s.status !== 'accepted')) return void (await i.reply({ content: 'この予約は、もう変えられません。', ...(i.guildId ? EPHEMERAL : {}) }));
-    if (i.user.id !== s.castId) return void (await i.reply({ content: '別の日時を出せるのはキャストだけです。', ...(i.guildId ? EPHEMERAL : {}) }));
-    await i.showModal(
-      new ModalBuilder()
-        .setCustomId(`cast:pmodal:${id}`)
-        .setTitle('🗓 別の日時を提案')
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('when').setLabel('日時（例: 21:00 ／ 10/5 21:00）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20)),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('note').setLabel('ひとこと（なくてもよい）').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(100)),
-        ),
-    );
+  private async proposeModal(i: ButtonInteraction | StringSelectMenuInteraction, id: number): Promise<void> {
+    const s = await getSession(this.db,id);
+    if (!s || !['reserved','accepted'].includes(s.status) || !s.startAt || s.startAt<=new Date()) return void(await i.reply({content:'開始前の予約だけ変更できます。',...(i.guildId?EPHEMERAL:{})}));
+    if (![s.castId,s.customerId].includes(i.user.id)) return void(await i.reply({content:'この予約のお客とキャストだけが提案できます。',...(i.guildId?EPHEMERAL:{})}));
+    await i.showModal(new ModalBuilder().setCustomId(`cast:pmodal:${id}`).setTitle('予約の日時変更を提案').addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('when').setLabel('新しい日時（日本時間・例: 10/25 21:00）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('note').setLabel('ひとこと（なくてもよい）').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(100)),
+    ));
+  }
+
+  private timeChangeError(status: string): string {
+    return ({not_found:'開始前の予約だけ変更できます。',not_member:'この予約のお客とキャストだけが提案できます。',not_receiver:'承認できるのは提案された相手だけです。自分の提案は承認できません。',already:'この提案はすでに確定済みです。日時を再変更していません。',expired:'提案の期限が切れました。もう一度提案してください。',stale:'予約日時がすでに変わっています。最新の予約から提案し直してください。',bad_time:'日時は10分後〜7日後で、今の予約と異なる時刻を選んでください。',minor_hours:'18歳未満の方は、22時までに終わる時間だけです。',overlap:'キャストのほかの予約と重なっています。別の日時を選んでください。',self_overlap:'お客のほかの予約と重なっています。別の日時を選んでください。'} as Record<string,string>)[status]??'変更できませんでした。';
   }
 
   private async proposeSubmit(i: ModalSubmitInteraction, id: number): Promise<void> {
-    const s = await getSession(this.db, id);
-    if (!s || i.user.id !== s.castId) return void (await i.reply({ content: '別の日時を出せるのはキャストだけです。', ...EPHEMERAL }));
+    await i.deferReply(i.guildId?EPHEMERAL:{});
+    const s = await getSession(this.db,id);
+    if (!s || ![s.castId,s.customerId].includes(i.user.id)) return void(await i.editReply(this.timeChangeError('not_member')));
+    if (!s.threadId) return void(await i.editReply('予約のお部屋が見つかりません。運営に知らせてください。日時は変更していません。'));
     const at = this.parseWhen(i.fields.getTextInputValue('when'));
-    if (!at) return void (await i.reply({ content: '日時が読めませんでした（例: 21:00 ／ 10/5 21:00）。', ...EPHEMERAL }));
-    const note = i.fields.getTextInputValue('note').trim();
-    const body = {
-      content: [`🗓 <@${s.customerId}> さん、<@${s.castId}> さんから **<t:${unix(at)}:f>（<t:${unix(at)}:R>）** の提案です。よければ「この日時にする」を押してください（今の予約の時刻が変わります）。`, ...(note ? [`> ${note}`] : [])].join('\n'),
-      components: [row(button(`cast:pok:${id}:${unix(at)}`, 'この日時にする（お客）', 3, '✅'))],
-    };
-    // DM から出したときは、スレッドにお客向けを出す
-    if (!i.guildId) {
-      if (!s.threadId) return void (await i.reply({ content: 'やり取りのスレッドが見つかりませんでした。' }));
-      await this.discord.sendMessage(s.threadId, { ...body, allowed_mentions: { users: [s.customerId] } } as MessageBody);
-      return void (await i.reply({ content: `🗓 <t:${unix(at)}:f> を提案しました。お客が選ぶと決まります（<#${s.threadId}>）。` }));
-    }
-    await i.reply({ ...body, allowedMentions: { users: [s.customerId] } });
+    if (!at) return void(await i.editReply('日時が読めませんでした（例: 10/25 21:00）。'));
+    const r = await proposeSessionTime(this.db,id,i.user.id,at,i.fields.getTextInputValue('note').trim());
+    if (r.status!=='ok') return void(await i.editReply(this.timeChangeError(r.status)));
+    const p=r.proposal;
+    try {
+      await this.discord.sendMessage(s.threadId,{content:`🗓 <@${p.approveBy}> さん、<@${p.proposedBy}> さんから予約日時の変更提案です。\n現在：<t:${unix(p.originalStartAt)}:f> → 候補：<t:${unix(p.startAt)}:f>\n相手が承認するまで元の日時のままです。期限：<t:${unix(p.expiresAt)}:f>${p.note?'\n> '+p.note:''}`,components:[row(button(`cast:timeok:${p.id}`,'この日時に変更する（提案された相手）',3,'✅'))],allowed_mentions:{parse:[],users:[p.approveBy]}});
+    } catch(err) { logger.warn({err,sessionId:id},'cast time proposal notice failed'); return void(await i.editReply('提案を届けられませんでした。予約日時は変更していません。もう一度提案してください。')); }
+    await this.discord.sendDm(p.approveBy,`🗓 予約 #${id} の日時変更の提案です。<t:${unix(p.startAt)}:f>。予約のお部屋 <#${s.threadId}> で確認してください。`).catch(()=>false);
+    await i.editReply(`🗓 変更を提案しました。相手が承認すると決まります。予約のお部屋：<#${s.threadId}>`);
   }
 
-  private async proposeAccept(i: ButtonInteraction<'cached'>, id: number, at: number): Promise<void> {
-    await i.deferReply(EPHEMERAL);
-    const r = await rescheduleSession(this.db, id, i.user.id, new Date(at * 1000));
-    const msg: Record<string, string> = {
-      not_found: 'この予約は、もう変えられません。',
-      not_customer: 'この提案を受けられるのは、予約した人だけです。',
-      bad_time: 'この日時は、もう選べません（10 分後〜7 日後まで）。キャストにもう一度提案してもらってください。',
-      minor_hours: '18 歳未満の方は、22 時までに終わる時間だけです。',
-      overlap: 'キャストのほかの予約と重なりました。キャストにもう一度提案してもらってください。',
-      self_overlap: 'あなたのほかの予約と重なっています。',
-    };
-    if (r.status !== 'ok') return void (await i.editReply(msg[r.status] ?? 'うまくいきませんでした。'));
-    if (r.session.threadId) {
-      try {
-        const thread = this.guild?.channels.cache.get(r.session.threadId) ?? await this.guild?.channels.fetch(r.session.threadId);
-        if (thread?.isThread()) await thread.setName(await this.reservationName(r.session, '予約'));
-      } catch (err) { logger.warn({ err, sessionId: id }, 'cast reservation rename failed'); }
+  private async proposeAccept(i: ButtonInteraction, proposalId: string): Promise<void> {
+    await i.deferReply(i.guildId?EPHEMERAL:{});
+    const r = await acceptSessionTime(this.db,proposalId,i.user.id);
+    if (r.status!=='ok') return void(await i.editReply(this.timeChangeError(r.status)));
+    const s=r.session;
+    if (s.threadId) {
+      try { const thread = this.guild?.channels.cache.get(s.threadId)??await this.guild?.channels.fetch(s.threadId);if(thread?.isThread())await thread.setName(await this.reservationName(s,'予約')); }
+      catch(err){logger.warn({err,sessionId:s.id},'cast reservation rename failed');}
+      await this.discord.sendMessage(s.threadId,{...this.reserveMessage(s),allowed_mentions:{parse:[]}} as MessageBody).catch(()=>undefined);
     }
-    await i.editReply('✅ 予約の日時を変えました。');
-    const ch = i.channel;
-    if (ch?.isSendable()) await ch.send({ ...this.reserveMessage(r.session), allowedMentions: { parse: [] } } as never).catch(() => undefined);
-    await this.discord.sendDm(r.session.castId, `📅 予約 #${id} は、提案した <t:${at}:f> に決まりました。`).catch(() => false);
+    await i.editReply('✅ 相手の提案を承認し、予約日時を変更しました。');
+    for(const member of [s.castId,s.customerId])await this.discord.sendDm(member,`📅 予約 #${s.id} の日時を <t:${unix(s.startAt!)}:f> に変更しました。${s.threadId?`予約のお部屋：<#${s.threadId}>`:''}`).catch(()=>false);
   }
 
   /** 当日に、2 人だけの部屋を先に立てる（話す時間・お金は予約の時刻から） */

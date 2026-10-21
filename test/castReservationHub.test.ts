@@ -20,8 +20,8 @@ function fixture(allowed=true){
  const cache=new Map<string,unknown>([[MALE,{id:MALE,type:ChannelType.GuildText,parentId:'990000000000000009',threads:{create:vi.fn()}}],[FEMALE,{id:FEMALE,type:ChannelType.GuildText,threads:{create:vi.fn()}}]]);
  const create=vi.fn(async()=>{cache.set(HUB,hub);return hub;});
  const guild={id:cfg.guildId,channels:{cache,fetch:vi.fn(async(id:string)=>cache.get(id)??null),create},members:{me:{id:BOT},fetch:vi.fn(async(id:string)=>({id}))}};
- const app=new CastApp(db,()=>cfg,{sendDm:vi.fn(async()=>true)} as never);app.attach(guild as never);
- return {hub,cache,create,threadCreate,add,remove,guild,app:app as unknown as {openThread(s:typeof castSessions.$inferSelect,name:string):Promise<{id:string}|undefined>;proposeAccept(i:unknown,id:number,at:number):Promise<void>}};
+ const app=new CastApp(db,()=>cfg,{sendDm:vi.fn(async()=>true),sendMessage:vi.fn(async()=>({id:'notice'}))} as never);app.attach(guild as never);
+ return {hub,cache,create,threadCreate,add,remove,guild,app:app as unknown as {openThread(s:typeof castSessions.$inferSelect,name:string):Promise<{id:string}|undefined>;proposeAccept(i:unknown,proposalId:string):Promise<void>}};
 }
 it('初回に男女共通のテキスト窓口を1つ作り、同時予約にも共有する',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,femaleChannelId:FEMALE},'staff');
@@ -73,7 +73,10 @@ it('日時の変更が確定すると、スレッド名も新しい日本時間�
  const setName=vi.fn(async()=>undefined);const id='990000000000000004';
  f.cache.set(id,{id,isThread:()=>true,setName});
  await db.update(castSessions).set({threadId:id}).where(eq(castSessions.id,s.id));
- await f.app.proposeAccept({user:{id:CUSTOMER},deferReply:vi.fn(),editReply:vi.fn()},s.id,new Date('2026-10-21T14:00:00Z').getTime()/1000);
+ const { proposeSessionTime } = await import('../src/services/cast.js');
+ const proposal = await proposeSessionTime(db,s.id,CAST,new Date('2026-10-21T14:00:00Z'));
+ if(proposal.status !== 'ok') throw Error(proposal.status);
+ await f.app.proposeAccept({user:{id:CUSTOMER},deferReply:vi.fn(),editReply:vi.fn()},proposal.proposal.id);
  expect(setName).toHaveBeenCalledWith(`📅 予約｜キャスト｜10/21 23:00｜#${s.id}`);
 });
 it('窓口の作成権限がなければ公開や一覧へ切り替えない',async()=>{

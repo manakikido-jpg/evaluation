@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { castChampagnes, castImages, castSessions, casts, members, settings, type Cast, type CastSession } from '../db/schema.js';
+import { castTimeChanges, castChampagnes, castImages, castSessions, casts, members, settings, type CastTimeChange, type Cast, type CastSession } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
+import { audit } from './audit.js';
 import { detectImage } from './notices.js';
 
 /**
@@ -1245,4 +1246,55 @@ export async function castStatement(db: Db, castId: string, from: Date, to: Date
   rows.push(...gifts.map(g=>({id:g.id,closedAt:g.paidAt!,customerId:g.customerId,label:'🍾 '+g.bottleName,price:g.price,paid:g.price-g.fee,delivery:false})));
   rows.sort((a,b)=>b.closedAt.getTime()-a.closedAt.getTime());
   return { rows, total: rows.reduce((n, r) => n + r.paid, 0), count: rows.length };
+}
+
+/** 自分が当事者の、まだ始まっていない予約だけを返す。 */
+export async function changeableReservations(db: Db, memberId: string, now = new Date()) {
+  return db.select().from(castSessions).where(and(or(eq(castSessions.castId, memberId), eq(castSessions.customerId, memberId)), inArray(castSessions.status, ['reserved', 'accepted']), sql`${castSessions.startAt} > ${now}`)).orderBy(asc(castSessions.startAt));
+}
+type TimeChangeResult = { status: 'ok'; proposal: CastTimeChange; session: CastSession } | { status: 'not_found' | 'not_member' | 'not_receiver' | 'already' | 'expired' | 'stale' | 'bad_time' | 'minor_hours' | 'overlap' | 'self_overlap' };
+function timeChangeOpen(s: CastSession | undefined, now: Date): s is CastSession {
+  return !!s && (s.status === 'reserved' || s.status === 'accepted') && !!s.startAt && s.startAt > now;
+}
+/** 候補だけを保存する。提案した時点では予約・銭・利用時間を変えない。 */
+export async function proposeSessionTime(db: Db, id: number, by: string, startAt: Date, note = '', now = new Date()): Promise<TimeChangeResult> {
+  const before = await getSession(db, id); if (!before) return { status: 'not_found' };
+  return db.transaction(async tx => {
+    await lockCast(tx, before.castId);
+    const [s] = await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update');
+    if (!timeChangeOpen(s, now)) return { status: 'not_found' };
+    if (by !== s.castId && by !== s.customerId) return { status: 'not_member' };
+    if (!Number.isFinite(startAt.getTime()) || startAt < new Date(now.getTime()+10*MIN) || startAt > new Date(now.getTime()+7*24*60*MIN) || startAt.getTime() === s.startAt!.getTime()) return { status: 'bad_time' };
+    const minutes = s.plan === 'night' ? planMinutes('night', startAt) : s.minutes;
+    if (s.isPublic && !minorWindowOk(startAt, minutes)) return { status: 'minor_hours' };
+    const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime()+minutes*MIN);
+    if (await overlaps(tx,s.castId,startAt,end,now,id)) return { status: 'overlap' };
+    if (await overlaps(tx,s.customerId,startAt,end,now,id,'customer')) return { status: 'self_overlap' };
+    const [proposal] = await tx.insert(castTimeChanges).values({ id: randomUUID(), sessionId: id, proposedBy: by, approveBy: by === s.castId ? s.customerId : s.castId, originalStartAt: s.startAt!, startAt, note: note.slice(0,100), createdAt: now, expiresAt: new Date(Math.min(s.startAt!.getTime(),now.getTime()+24*60*MIN)) }).returning();
+    await audit(tx,{actorId:by,action:'cast.time.propose',targetId:proposal!.approveBy,detail:{sessionId:id,proposalId:proposal!.id,startAt:startAt.toISOString()},via:'discord'});
+    return { status: 'ok', proposal: proposal!, session: s };
+  });
+}
+/** 提案された相手だけが承認できる。同時確定・古い提案による再変更を止める。 */
+export async function acceptSessionTime(db: Db, proposalId: string, by: string, now = new Date()): Promise<TimeChangeResult> {
+  const [before] = await db.select().from(castTimeChanges).where(eq(castTimeChanges.id,proposalId));
+  if (!before) return { status: 'not_found' };
+  const original = await getSession(db,before.sessionId); if (!original) return { status: 'not_found' };
+  return db.transaction(async tx => {
+    await lockCast(tx,original.castId);
+    const [s] = await tx.select().from(castSessions).where(eq(castSessions.id,before.sessionId)).for('update');
+    const [p] = await tx.select().from(castTimeChanges).where(eq(castTimeChanges.id,proposalId)).for('update');
+    if (!p || !s) return { status: 'not_found' };
+    if (p.approveBy !== by || p.proposedBy === by || ![s.castId,s.customerId].includes(by) || ![s.castId,s.customerId].includes(p.proposedBy)) return { status: 'not_receiver' };
+    if (p.acceptedAt) return { status: 'already' };
+    if (p.expiresAt <= now) return { status: 'expired' };
+    if (!timeChangeOpen(s,now)) return { status: 'not_found' };
+    if (s.startAt!.getTime() !== p.originalStartAt.getTime()) return { status: 'stale' };
+    const changed = await rescheduleSession(tx,s.id,s.customerId,p.startAt,now);
+    if (changed.status !== 'ok') return { status: changed.status === 'not_customer' ? 'not_receiver' : changed.status };
+    const [proposal] = await tx.update(castTimeChanges).set({acceptedAt:now}).where(eq(castTimeChanges.id,p.id)).returning();
+    await tx.update(castTimeChanges).set({expiresAt:now}).where(and(eq(castTimeChanges.sessionId,s.id), sql`${castTimeChanges.id} <> ${p.id}`, sql`${castTimeChanges.acceptedAt} is null`));
+    await audit(tx,{actorId:by,action:'cast.time.accept',targetId:p.proposedBy,detail:{sessionId:s.id,proposalId:p.id,startAt:p.startAt.toISOString()},via:'discord'});
+    return { status:'ok', proposal:proposal!, session:changed.session };
+  });
 }

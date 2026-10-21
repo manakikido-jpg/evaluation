@@ -2173,3 +2173,18 @@ export const coreTimeAttendance = pgTable(
   (t) => [primaryKey({ columns: [t.day, t.slot, t.memberId] }), index('core_time_attendance_member_idx').on(t.memberId, t.day)],
 );
 export type CoreTimeAttendance = typeof coreTimeAttendance.$inferSelect;
+
+/** 予約日時の変更提案。相手の承認でだけ確定する。 */
+export const castTimeChanges = pgTable('cast_time_changes', {
+  id: text('id').primaryKey(),
+  sessionId: bigint('session_id', { mode: 'number' }).notNull().references(() => castSessions.id),
+  proposedBy: text('proposed_by').notNull(),
+  approveBy: text('approve_by').notNull(),
+  originalStartAt: timestamp('original_start_at', { withTimezone: true }).notNull(),
+  startAt: timestamp('start_at', { withTimezone: true }).notNull(),
+  note: text('note').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+}, t => [index('cast_time_changes_session_idx').on(t.sessionId)]);
+export type CastTimeChange = typeof castTimeChanges.$inferSelect;
