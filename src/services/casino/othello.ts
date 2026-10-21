@@ -15,6 +15,9 @@ export const OTHELLO_LEVELS: Record<OthelloLevel, { label: string; mult: number 
   hard: { label: 'つよい', mult: 1.6 },
 };
 
+/** CPU 戦で、1 回に増える銭の上限（大富豪の BOT 戦と同じ）。新しく始めた対局から */
+export const OTHELLO_PROFIT_CAP = 500;
+
 /** 社務所Web で決めた倍率（% で持つ）。なければ上のはじめの倍率 */
 export const othelloMultOf = (c: { othelloMult?: Partial<Record<OthelloLevel, number>> } | undefined, level: OthelloLevel): number => {
   const pct = c?.othelloMult?.[level];
@@ -197,6 +200,8 @@ export type OthelloState = {
   level?: OthelloLevel;
   /** 始めたときの倍率（あとで社務所Web で変えても、この対局はこの倍率で払う） */
   mult?: number;
+  /** CPU 戦の 1 回の利益の上限（銭。始めたときに決める。ない対局は前の条件＝上限なし） */
+  profitCap?: number;
 };
 
 /** 人が置く（CPU 相手なら、CPU の番が続くかぎり CPU も置く）。置けない手なら undefined */

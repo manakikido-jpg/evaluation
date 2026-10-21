@@ -9,7 +9,7 @@ import { bjDouble, bjHit, bjPayout, bjStand, bjStart, canDouble, type BjState } 
 import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { CHIN_MAX_LOSS, chinMoney, chinSettle, parentDecides, rollTurn, turnHand, type ChinRoll } from './chinchiro.js';
-import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, othelloMultOf, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
+import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, OTHELLO_PROFIT_CAP, othelloMultOf, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_SPOT_COUNT, isRouletteBet, parseStakes, rouletteMaxOf, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
@@ -313,8 +313,13 @@ export async function playChinchiro(db: Db, cfg: GuildConfig, memberId: string, 
 
 export type OthelloCpuState = OthelloState & { result?: 'win' | 'lose' | 'draw' | 'resign' };
 
-const othelloPayout = (s: OthelloCpuState, bet: number) =>
-  s.result === 'win' ? Math.floor(bet * (s.mult ?? OTHELLO_LEVELS[s.level ?? 'easy'].mult)) : s.result === 'draw' ? bet : 0;
+/** 勝ちは賭け × 倍率。利益の上限がある対局は、賭け＋上限まで（超えた分は胴元へ） */
+export const othelloPayout = (s: OthelloCpuState, bet: number) => {
+  if (s.result === 'draw') return bet;
+  if (s.result !== 'win') return 0;
+  const full = Math.floor(bet * (s.mult ?? OTHELLO_LEVELS[s.level ?? 'easy'].mult));
+  return s.profitCap === undefined ? full : Math.min(full, bet + s.profitCap);
+};
 
 function othelloFinish(s: OthelloState): OthelloCpuState {
   if (s.turn) return s;
@@ -325,7 +330,7 @@ function othelloFinish(s: OthelloState): OthelloCpuState {
 /** you: 人の色（黒は先手）。白を選んだら CPU が先に置く */
 export function startOthello(db: Db, cfg: GuildConfig, memberId: string, bet: number, level: OthelloLevel, you: 'B' | 'W' = 'B', rng: Rng = cryptoRng, now = new Date()) {
   return start(db, cfg, memberId, 'othello', bet, () => {
-    let s: OthelloState = { board: initialBoard(), turn: 'B', you, level, mult: othelloMultOf(cfg.casino, level) };
+    let s: OthelloState = { board: initialBoard(), turn: 'B', you, level, mult: othelloMultOf(cfg.casino, level), profitCap: OTHELLO_PROFIT_CAP };
     if (you === 'W') {
       const m = cpuMove(s.board, 'B', level, rng)!;
       const b = applyMove(s.board, 'B', m)!;

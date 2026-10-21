@@ -320,6 +320,18 @@ describe('⚫ オセロ CPU（DB）', () => {
     expect(othelloMultOf(undefined, 'hard')).toBe(1.6);
   });
 
+  it('CPU 戦の利益は 1 回 500 枚まで（新しい対局から。前からの対局は上限なし）', async () => {
+    const { othelloPayout } = await import('../src/services/casino/casino.js');
+    const s = await startOthello(db, ccfg(), A, 100, 'hard', 'B', seq([0]), NOW);
+    expect(s.status === 'ok' && (s.row.state as { profitCap?: number }).profitCap).toBe(500);
+    const win = { board: '', turn: null, result: 'win' as const, mult: 1.6, profitCap: 500 };
+    expect(othelloPayout(win, 100)).toBe(160);
+    expect(othelloPayout(win, 2000)).toBe(2500);
+    expect(othelloPayout({ ...win, profitCap: undefined }, 2000)).toBe(3200);
+    expect(othelloPayout({ ...win, result: 'draw' }, 2000)).toBe(2000);
+    expect(othelloPayout({ ...win, result: 'lose' }, 2000)).toBe(0);
+  });
+
   it('倍率のはじめの値はつよいでも 1.6 倍まで', () => {
     expect(OTHELLO_LEVELS.hard.mult).toBe(1.6);
     expect(OTHELLO_LEVELS.normal.mult).toBe(1.3);
