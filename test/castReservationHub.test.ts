@@ -45,20 +45,23 @@ it('設定した予約先を使い、男女の一覧や既存の予約は変更�
  expect(f.threadCreate).toHaveBeenCalledWith(expect.objectContaining({name:expect.stringContaining('📦 納品｜')}));
  expect((await loadCastConfig(db)).channelId).toBe(MALE);
 });
-it('親を参加者が見られなければ作らず、一覧への代替作成もしない',async()=>{
+const menuCreate=(f:ReturnType<typeof fixture>)=>(f.cache.get(MALE) as {threads:{create:ReturnType<typeof vi.fn>}}).threads.create;
+it('親を参加者が見られなければ窓口には作らず、前と同じ一覧のチャンネルに非公開で作る（公開にはしない）',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,reservationChannelId:HUB},'staff');
  const f=fixture(false);f.cache.set(HUB,f.hub);
- expect(await f.app.openThread(await session(),'予約')).toBeUndefined();expect(f.threadCreate).not.toHaveBeenCalled();expect(f.create).not.toHaveBeenCalled();
+ await f.app.openThread(await session(),'予約');expect(f.threadCreate).not.toHaveBeenCalled();expect(f.create).not.toHaveBeenCalled();
+ expect(menuCreate(f)).toHaveBeenCalledWith(expect.objectContaining({type:ChannelType.PrivateThread,invitable:false}));
 });
 it('参加者の追加に失敗したお部屋は削除し、予約先を記録しない',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,reservationChannelId:HUB},'staff');
  const f=fixture();f.cache.set(HUB,f.hub);f.add.mockRejectedValueOnce(Error('join failed'));
  const s=await session();expect(await f.app.openThread(s,'予約')).toBeUndefined();expect(f.remove).toHaveBeenCalledOnce();expect((await getSession(db,s.id))?.threadId).toBeNull();
 });
-it('設定先が消えた場合やテキスト以外の場合は一覧へ戻さない',async()=>{
+it('設定先が消えた場合やテキスト以外の場合は、前と同じ一覧のチャンネルに非公開で作る（窓口は勝手に作り直さない）',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,reservationChannelId:HUB},'staff');
- const f=fixture(),s=await session();expect(await f.app.openThread(s,'予約')).toBeUndefined();
- f.cache.set(HUB,{id:HUB,type:ChannelType.GuildForum});expect(await f.app.openThread(s,'予約')).toBeUndefined();expect(f.create).not.toHaveBeenCalled();
+ const f=fixture(),s=await session();await f.app.openThread(s,'予約');
+ f.cache.set(HUB,{id:HUB,type:ChannelType.GuildForum});await f.app.openThread(s,'予約');expect(f.create).not.toHaveBeenCalled();
+ expect(menuCreate(f)).toHaveBeenCalledTimes(2);expect(menuCreate(f)).toHaveBeenCalledWith(expect.objectContaining({type:ChannelType.PrivateThread,invitable:false}));
 });
 it('自動保存は同時に変更した料金設定や運営の指定先を上書きしない',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,feePercent:20,channelId:MALE},'staff');
@@ -79,9 +82,15 @@ it('日時の変更が確定すると、スレッド名も新しい日本時間�
  await f.app.proposeAccept({user:{id:CUSTOMER},deferReply:vi.fn(),editReply:vi.fn()},proposal.proposal.id);
  expect(setName).toHaveBeenCalledWith(`📅 予約｜キャスト｜10/21 23:00｜#${s.id}`);
 });
-it('窓口の作成権限がなければ公開や一覧へ切り替えない',async()=>{
+it('窓口の作成権限がなければ、公開にはせず、前と同じ一覧のチャンネルに非公開で作って運営の記録に理由を知らせる',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE},'staff');
  const f=fixture();f.create.mockRejectedValueOnce(Error('Missing Permissions'));
- const s=await session();expect(await f.app.openThread(s,'予約')).toBeUndefined();
- expect(f.threadCreate).not.toHaveBeenCalled();expect((await loadCastConfig(db)).reservationChannelId).toBeUndefined();expect((await getSession(db,s.id))?.threadId).toBeNull();
+ const madeThread={id:'990000000000000005',members:{add:vi.fn(async()=>undefined)},delete:vi.fn()};
+ menuCreate(f).mockResolvedValueOnce(madeThread);
+ const s=await session();expect(await f.app.openThread(s,'予約')).toBe(madeThread);
+ expect(f.threadCreate).not.toHaveBeenCalled();expect((await loadCastConfig(db)).reservationChannelId).toBeUndefined();
+ expect(menuCreate(f)).toHaveBeenCalledWith(expect.objectContaining({type:ChannelType.PrivateThread,invitable:false}));
+ expect((await getSession(db,s.id))?.threadId).toBe('990000000000000005');
+ const sent=(f.app as unknown as {discord:{sendMessage:ReturnType<typeof vi.fn>}}).discord.sendMessage;
+ if(cfg.channels.log) expect(JSON.stringify(sent.mock.calls)).toContain('理由');
 });

@@ -1491,19 +1491,49 @@ export class CastApp {
     return `${name.startsWith('📦') ? '📦 納品' : '📅 予約'}｜${who}｜${at}｜#${s.id}`;
   }
 
-  /** 予約・納品のやり取りは、男女共通の窓口に非公開で作る。 */
+  /**
+   * 予約・納品のやり取りは、男女共通の窓口に非公開で作る。
+   * 窓口を使えないとき（作れない・本人やキャストが窓口を見られない・スレッドに入れられない）は、
+   * 予約を止めないように、前と同じキャストのメニューのチャンネルに非公開で作り、運営の #記録 に理由を知らせる
+   */
   private async openThread(s: CastSession, name: string) {
+    let why = '';
     const panel = await this.reservationHub();
-    if (!panel) return undefined;
-    // 親が見えないと、スレッドへ追加しても参加者は開けない。
-    if (panel.permissionsFor) {
-      for (const id of [s.castId, s.customerId]) {
-        const member = await this.guild?.members.fetch(id).catch(() => null);
-        if (!member || !panel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.ReadMessageHistory | PermissionFlagsBits.SendMessagesInThreads)) return undefined;
+    if (!panel) why = '📅 キャスト予約 のチャンネルを作れない・見つからない（BOT に「チャンネルの管理」「ロールの管理」「スレッドの管理」「プライベートスレッドの作成」の権限が要ります）';
+    else {
+      // 親が見えないと、スレッドへ追加しても参加者は開けない。
+      if (panel.permissionsFor) {
+        for (const id of [s.castId, s.customerId]) {
+          const member = await this.guild?.members.fetch(id).catch(() => null);
+          if (!member || !panel.permissionsFor(member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.ReadMessageHistory | PermissionFlagsBits.SendMessagesInThreads)) {
+            why = `<@${id}> さんが <#${panel.id}> を見られない（チャンネルの権限で、見る・履歴を読む・スレッドで送信 を許してください）`;
+            break;
+          }
+        }
+      }
+      if (!why) {
+        const thread = await this.privateThread(panel, s, await this.reservationName(s, name));
+        if (thread) return thread;
+        why = `<#${panel.id}> にスレッドを作れない・人を入れられない（BOT に「プライベートスレッドの作成」「スレッドでメッセージを送信」の権限が要ります）`;
       }
     }
-    const title = await this.reservationName(s, name);
-    const thread = await panel.threads.create({ name: title, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' }).catch(() => undefined);
+    // 前と同じ場所（キャストのメニューのチャンネル）に作る
+    const c = await loadCastConfig(this.db);
+    const castRow = await getCast(this.db, s.castId);
+    const home = castRow ? castHomeChannel(c, castRow) : c.channelId;
+    const old = home ? this.guild?.channels.cache.get(home) : undefined;
+    // 窓口と同じチャンネルなら、もう試したのでやり直さない
+    const thread = old?.type === ChannelType.GuildText && old.id !== panel?.id ? await this.privateThread(old, s, await this.reservationName(s, name)) : undefined;
+    logger.warn({ sessionId: s.id, why, fallback: Boolean(thread) }, 'cast reservation hub unavailable');
+    await this.warnHub(`${thread ? '⚠️ 予約 #' + s.id + ' のやり取りの場所を、キャスト予約の窓口に作れなかったので、キャストのメニューのチャンネルに作りました。' : '❌ 予約 #' + s.id + ' のやり取りの場所を作れず、予約を取り消しました。'}\n理由: ${why}`);
+    return thread;
+  }
+
+  /** 非公開スレッドを作り、キャストとお客を入れる（入れられなければ消す） */
+  private async privateThread(parent: TextChannel, s: CastSession, title: string) {
+    const thread = await Promise.resolve()
+      .then(() => parent.threads.create({ name: title, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' }))
+      .catch((err: unknown) => (logger.warn({ err, sessionId: s.id }, 'cast reservation thread create failed'), undefined));
     if (!thread) return undefined;
     try {
       await thread.members.add(s.castId);
@@ -1515,6 +1545,19 @@ export class CastApp {
       logger.warn({ err, sessionId: s.id }, 'cast reservation join failed');
       return undefined;
     }
+  }
+
+  /** 窓口が使えないことを、運営の #記録 に知らせる（同じ理由は 1 時間に 1 回まで） */
+  private hubWarnedAt = new Map<string, number>();
+  private async warnHub(text: string): Promise<void> {
+    const log = this.cfg().channels.log;
+    const key = text.split('\n')[1] ?? text;
+    const last = this.hubWarnedAt.get(key) ?? 0;
+    if (!log || Date.now() - last < 3_600_000) return;
+    this.hubWarnedAt.set(key, Date.now());
+    await Promise.resolve()
+      .then(() => this.discord.sendMessage(log, { content: text, allowed_mentions: { parse: [] } }))
+      .catch((err: unknown) => logger.warn({ err }, 'cast hub warning failed'));
   }
 
   /**
