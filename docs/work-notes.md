@@ -401,3 +401,4 @@
 - 最終検証：実装df9a455で型チェック・ビルド成功、全151ファイル1,850テスト成功（400.09秒、2並列）。テスト削除・skipなし。最終ログ/workspace/artifacts/office-inplace/{typecheck-final,build-final,all-tests-final}.log。旧途中停止分はall-tests-before-input-check.log。
 - 最終ブラウザ：360/1440pxで操作イベントを出さない値変更の保持と保存後の焦点も確認。ローカル試遊サーバー停止済み。push前fetchで本番a09467dから追加なし。
 - 完了範囲：通常フォームのその場保存と結果表示、連打防止・入力と位置保持、通常の複数選択のチェック・検索・決定・取消。専用画面やファイルは従来の操作。メンバーへの新たな一括処理や他人の更新の自動配信は今回未追加。DB変更なし。本番担当Claude向けPRへ保存する。本番操作なし。
+- GitHub保存済み：[PR #71](https://github.com/manakikido-jpg/evaluation/pull/71)。codex/office-inplace-actions、実装df9a455・最終検証b40a028。OPEN・未合流、本番未反映。担当Claudeの確認と合流待ち。前件の数える場所の折りたたみはPR #70に別保存。
