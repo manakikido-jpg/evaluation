@@ -385,3 +385,4 @@
 - 最終検証：実装3dd897eで型チェック・ビルド成功。全150ファイル1,840テスト成功（420.38秒、2並列）。テスト削除・skipなし。ログ/workspace/artifacts/boost-location-collapse/{typecheck,build,all-tests}.log。
 - push前fetch：本番がa09467d（前件ランキングPR #69合流）へ進んだことを確認。数える場所とCSSへの変更はなし。共通説明・記録・更新履歴の追記は担当Claudeが合流時に両方残す。
 - 完了範囲：作成・編集の一覧折りたたみ、JSなしの開閉、選択と送信値の維持、スマホの横幅。DB・集計・保存条件は変更なし。codex/boost-location-collapseから担当Claude向けPRへ保存。本番操作なし。
+- GitHub保存済み：[PR #70](https://github.com/manakikido-jpg/evaluation/pull/70)。実装3dd897e・最終検証235dce2、OPEN・未合流。本番未反映、担当Claudeの確認・合流待ち。
