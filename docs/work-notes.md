@@ -322,3 +322,4 @@
 - 追加確認：変更前に通知済みでも、承認時に通知状態を戻し、新しい日時の1時間前・10分前に再通知できるよう修正。旧コードの全件検証は途中停止し、この回帰テストを含む最終コードで型チェック・ビルド・全テストをやり直す。
 - 最終検証：実装0fe8af3で型チェック・ビルド成功、全144ファイル1,813テスト成功（375.84秒、2並列）。変更後の通知、権限・二重承認・ロールバックも成功。テスト削除・skipなし。push前fetchで本番87050fbから追加変更なし。ログは/workspace/artifacts/cast-reschedule-{typecheck-final,build,all-tests}.log。
 - 完了範囲：双方の日時提案と相手の承認、既存予約の非公開一覧、古い提案の失効、日時重複の再確認、予約名と通知の更新。新DBマイグレーション0111が必要。codex/cast-reschedule-buttonから本番担当Claude向けPRへ保存する。本番の予約変更・DB適用・通知・合流は未実行。
+- GitHub保存済み：[PR #65](https://github.com/manakikido-jpg/evaluation/pull/65)。実装0fe8af3・最終検証記録9751b5c、codex/cast-reschedule-button。OPEN・未合流、本番未反映。担当Claudeによるレビュー・0111適用を含む合流待ち。
