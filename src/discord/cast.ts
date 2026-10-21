@@ -1,3 +1,5 @@
+import { refreshCastLeaderboard, castLeaderboardBody } from './castLeaderboard.js';
+import { castLeaderboard } from '../services/castLeaderboard.js';
 import { CHAMPAGNES, champagneOf, prepareChampagne, buyChampagne, announceChampagne, assertChampagneActive, ChampagneError, champagneError } from '../services/castChampagne.js';
 import { champagneAnimation, champagnePreview } from '../services/castChampagneImage.js';
 import { createHash } from 'node:crypto';
@@ -409,6 +411,7 @@ const DM_ACTIONS = new Set(['accept', 'decline', 'propose', 'pmodal', 'dlv']);
 export class CastApp {
   private guild?: Guild;
   private ticking = false;
+  private leaderboardChecked = false;
   private introsDiscovered = false;
   private syncingIntros = false;
   /** 起動して 1 回だけ、進行中の予約のスレッドのメッセージを、いまの形（ボタン・時間の表示）に書き換えた */
@@ -473,6 +476,7 @@ export class CastApp {
   }
 
   private refresh(): void {
+    void refreshCastLeaderboard(this.db, this.discord, this.cfg().economy.currencyName).catch((err: unknown) => logger.warn({ err }, 'cast leaderboard refresh failed'));
     void refreshCastIntros(this.db, this.discord).catch(err => logger.warn({ err }, 'cast intros refresh failed'));
     void refreshCastPanel(this.db, this.discord).catch((err: unknown) => logger.warn({ err }, 'cast panel refresh failed'));
   }
@@ -488,6 +492,17 @@ export class CastApp {
         logger.warn({ err }, 'cast command failed');
         await interaction.editReply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。' }).catch(() => undefined);
       }
+      return;
+    }
+    if ('commandName' in interaction && interaction.commandName === 'panel' && interaction.isChatInputCommand() && interaction.options.getSubcommand(false) === 'cast-ranking') {
+      if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+      await interaction.deferReply(EPHEMERAL);
+      try {
+        if (!adminLevelOf(this.cfg(), this.roles(interaction))) return void(await interaction.editReply('神職・宮司のみ置けます。'));
+        if (!interaction.channel?.isSendable()) return void(await interaction.editReply('このチャンネルには置けません。'));
+        await refreshCastLeaderboard(this.db,this.discord,this.cfg().economy.currencyName,{channelId:interaction.channelId,by:interaction.user.id,force:true,via:'discord'});
+        await interaction.editReply('🏆 今月の指名本数・売上ランキングを置きました。変更があると自動で更新します。');
+      } catch(err) { logger.warn({err},'cast leaderboard place failed'); await interaction.editReply('ランキングを出せませんでした。BOTの書き込み権限を確かめてください。').catch(()=>undefined); }
       return;
     }
     if ('commandName' in interaction && interaction.commandName === 'panel' && interaction.isChatInputCommand() && interaction.options.getSubcommand(false) === 'cast') {
@@ -553,6 +568,12 @@ export class CastApp {
       }
       if (!interaction.isButton()) return;
       if (action === 'now') return await this.waitingList(interaction, isCastGroup(a) ? a : undefined);
+      if (action === 'live-rank-update') {
+        await interaction.deferReply(EPHEMERAL);
+        if (!adminLevelOf(this.cfg(), this.roles(interaction))) return void(await interaction.editReply('運営のみ更新できます。ランキングは自動で更新されます。'));
+        const ok=await refreshCastLeaderboard(this.db,this.discord,this.cfg().economy.currencyName,{force:true,by:interaction.user.id});
+        return void(await interaction.editReply(ok?'ランキングを最新に更新しました。':'先にランキングパネルを置いてください。'));
+      }
       if (action === 'rank') return await this.ranking(interaction, isCastGroup(a) ? a : undefined);
       if (action === 'apply') return await this.applyModal(interaction);
       if (action === 'me') return await this.mine(interaction);
@@ -656,17 +677,13 @@ export class CastApp {
   }
 
   private async ranking(i: ButtonInteraction<'cached'>, group?: CastGroup): Promise<void> {
-    const all = await castStats(this.db, monthStart());
-    const members = group ? new Map((await listCasts(this.db, ['active', 'paused'])).map((x) => [x.memberId, x])) : undefined;
-    const stats = all.filter((x) => !members || (members.get(x.castId) && inGroup(members.get(x.castId)!, group!))).slice(0, 10);
-    const names = await namesOf(this.db, stats.map((x) => x.castId));
-    const medal = ['🥇', '🥈', '🥉'];
-    await i.reply({
-      content: stats.length
-        ? [`🏆 **今月の${group ? GROUP_LABEL[group].slice(3) : 'キャスト'}**（指名の多い順）`, ...stats.map((x, n) => `${medal[n] ?? `${n + 1}.`} ${names.get(x.castId) ?? x.castId} … ${x.count} 回${x.ratingAvg !== null ? ` ・ ⭐ ${x.ratingAvg}` : ''}`)].join('\n')
-        : '今月はまだ指名がありません。',
-      ...EPHEMERAL,
-    });
+    await i.deferReply(EPHEMERAL);
+    const data=await castLeaderboard(this.db);
+    const members=group?new Map((await listCasts(this.db,['active','paused'])).map(x=>[x.memberId,x])):undefined;
+    const stats=data.rows.filter(x=>!members||(members.get(x.castId)&&inGroup(members.get(x.castId)!,group!)));
+    const names=await namesOf(this.db,stats.map(x=>x.castId));
+    const body=castLeaderboardBody(data.month,stats,names,this.cfg().economy.currencyName);
+    await i.editReply({...body,components:[],allowedMentions:{parse:[]}} as never);
   }
 
   // ───────── キャストになる・設定 ─────────
@@ -1244,6 +1261,7 @@ export class CastApp {
     try { result=await buyChampagne(this.db,id,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s)); }
     catch(err){await i.editReply({content:champagneError(err),components:err instanceof ChampagneError?[]:[row(button(`cast:champagnebuy:${id}`,'購入結果を確認・再試行',1))],embeds:[],attachments:[]});return;}
     const q=result.purchase;
+    void refreshCastLeaderboard(this.db,this.discord,this.cfg().economy.currencyName).catch((err:unknown)=>logger.warn({err},'cast leaderboard refresh failed'));
     let shown=true;
     try {
       await announceChampagne(this.db,q.id,i.user.id,async purchase=>{
@@ -1771,6 +1789,7 @@ export class CastApp {
   }
 
   private async runTick(now: Date): Promise<void> {
+
     // 更新の前に出した予約のメッセージにも「日時変更を提案」などの新しいボタンを出す（起動して 1 回だけ）
     if (!this.threadsRefreshed) {
       this.threadsRefreshed = true;
@@ -1822,6 +1841,7 @@ export class CastApp {
     }
     if (changed) this.refresh();
     await this.rankTick(c, now).catch((err: unknown) => logger.warn({ err }, 'cast rank failed'));
+    await refreshCastLeaderboard(this.db,this.discord,this.cfg().economy.currencyName,{now,force:!this.leaderboardChecked}).then(()=>{this.leaderboardChecked=true;}).catch((err:unknown)=>logger.warn({err},'cast leaderboard tick failed'));
   }
 
   /** 🏆 毎月 1 日: 先月の上位 3 人を発表し、1 位にごほうび（銭は awardCastRank が 1 回だけわたす） */

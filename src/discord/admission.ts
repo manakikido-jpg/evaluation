@@ -286,7 +286,7 @@ export class AdmissionApp {
 
   private async panel(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     // おみくじ・舞倉・キャスト一覧・宝くじのパネルは、それぞれの担当が置く
-    if (['omikuji', 'maikura', 'cast', 'lottery'].includes(i.options.getSubcommand())) return;
+    if (['omikuji', 'maikura', 'cast', 'cast-ranking', 'lottery'].includes(i.options.getSubcommand())) return;
     if (!this.staffOf(i)) return void (await i.reply({ content: '神職・宮司のみ使えます。', ...EPHEMERAL }));
     const kind = i.options.getSubcommand();
     const channel = i.channel;
