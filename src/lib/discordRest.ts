@@ -91,6 +91,7 @@ export type MessageBody = {
     author?: { name: string };
     /** カードのいちばん下の小さい文字 */
     footer?: { text: string };
+    fields?: { name: string; value: string; inline?: boolean }[];
   }[];
   components?: unknown[];
   /** 通知を飛ばす相手（なければだれにも飛ばさない） */

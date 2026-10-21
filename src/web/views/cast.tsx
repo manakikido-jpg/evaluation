@@ -18,6 +18,8 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   image_bad: { text: '画像（PNG・JPEG・GIF・WebP、8MB まで）を選んでください。', kind: 'warn' },
   image_removed: { text: 'メニューの画像を外しました。', kind: 'ok' },
   posted: { text: 'メニューを出しました。', kind: 'ok' },
+  ranking_posted: { text: '今月のランキングパネルを出しました。これからは自動で更新します。', kind: 'ok' },
+  ranking_failed: { text: 'ランキングを出せませんでした。投稿先とBOTの書き込み権限を確かめてください。', kind: 'warn' },
   post_failed: { text: 'メニューを出せませんでした。チャンネルを選んで保存してから、BOT がそこに書き込めるか確かめてください。', kind: 'warn' },
   approved: { text: '承認しました（キャストのロールを付けて、メニューに並べました）。', kind: 'ok' },
   status: { text: 'キャストの状態を変えました。', kind: 'ok' },
@@ -604,6 +606,15 @@ export function CastPage(props: {
             保存
           </button>
         </form>
+        <section class="card">
+          <h3>🏆 今月のランキングパネル</h3>
+          <p class="note">指名本数と、シャンパン込みの売上（手数料前）を上位10人まで表示。毎分確認し、変更があると同じ投稿を更新します。先月の表彰・ごほうびとは別です。</p>
+          <form method="post" action="/cast/ranking-panel" class="inline-actions">
+            <input type="hidden" name="_csrf" value={session.csrfToken} />
+            <Select name="channelId" label="ランキングを出すチャンネル" options={props.channels} empty="選ぶ" />
+            <button type="submit">ランキングを出す・更新</button>
+          </form>
+        </section>
         {!c.roleId && (
           <form method="post" action="/cast/role" class="inline-actions">
             <Csrf session={session} />

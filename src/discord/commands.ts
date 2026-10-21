@@ -314,6 +314,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addSubcommand((s) =>
         s.setName('notify').setNameLocalizations({ ja: '通知' }).setDescription('Notification on/off').setDescriptionLocalizations({ ja: '募集・お知らせの 🔔通知OK／🔕通知NG を選ぶボタン（#授与所 用）' }),
       )
+      .addSubcommand((s) => s.setName('cast-ranking').setNameLocalizations({ ja: 'キャストランキング' }).setDescription('Live cast rankings').setDescriptionLocalizations({ ja: '🏆 今月の指名本数・売上（シャンパン込み）を自動更新するパネル' }))
       .addSubcommand((s) =>
         s
           .setName('cast')

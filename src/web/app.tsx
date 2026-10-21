@@ -1,3 +1,4 @@
+import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
 import { scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
@@ -6038,6 +6039,16 @@ export function createWebApp(deps: WebDeps) {
     const img = await loadMenuImage(db, c.req.query('g') === 'female' ? 'female' : 'male');
     if (!img) return c.notFound();
     return c.body(Buffer.from(img.data), 200, { 'content-type': img.contentType, 'x-content-type-options': 'nosniff' });
+  });
+
+  app.post('/cast/ranking-panel', async (c) => {
+    const body=await c.req.parseBody();
+    const channel=typeof body.channelId==='string'?body.channelId:'';
+    if(!validId(channel)||!textChannelsOf(await loadChannels()).some(ch=>ch.id===channel))return c.redirect('/cast?msg=ranking_failed');
+    try {
+      await refreshCastLeaderboard(db,deps.discord,cfg.economy.currencyName,{channelId:channel,force:true,by:c.get('session').userId,via:'web'});
+      return c.redirect('/cast?msg=ranking_posted');
+    } catch(err) { logger.warn({err},'cast leaderboard place failed');return c.redirect('/cast?msg=ranking_failed'); }
   });
 
   const castPanelNow = () => refreshCastPanel(db, deps.discord).catch((err: unknown) => (logger.warn({ err }, 'cast panel failed'), false));
