@@ -305,6 +305,21 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
         s.setName('notify').setNameLocalizations({ ja: '通知' }).setDescription('Notification on/off').setDescriptionLocalizations({ ja: '募集・お知らせの 🔔通知OK／🔕通知NG を選ぶボタン（#授与所 用）' }),
       )
       .addSubcommand((s) =>
+        s
+          .setName('cast')
+          .setNameLocalizations({ ja: 'キャスト一覧' })
+          .setDescription('Cast list panel')
+          .setDescriptionLocalizations({ ja: '🎀 キャスト一覧のパネルを、このチャンネルに出し直す（前の場所のパネルは消す）' })
+          .addStringOption((o) =>
+            o
+              .setName('group')
+              .setNameLocalizations({ ja: '分け' })
+              .setDescription('group')
+              .setDescriptionLocalizations({ ja: '男性・共通か女性か（省略すると、女性のチャンネルなら女性、ほかは男性・共通）' })
+              .addChoices({ name: 'male', name_localizations: { ja: '男性・共通' }, value: 'male' }, { name: 'female', name_localizations: { ja: '女性' }, value: 'female' }),
+          ),
+      )
+      .addSubcommand((s) =>
         s.setName('contact').setNameLocalizations({ ja: 'dmとフレンド' }).setDescription('DM / friend requests').setDescriptionLocalizations({ ja: 'DM・フレンド追加の OK／要相談／NG を選ぶボタン（#授与所 用）' }),
       )
       .toJSON(),

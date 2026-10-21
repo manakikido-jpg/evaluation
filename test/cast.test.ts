@@ -854,6 +854,24 @@ describe('👨👩 男性・女性のメニューを分ける', () => {
   });
 });
 
+describe('📋 /パネル キャスト一覧', () => {
+  it('このチャンネルに出し直す。前の場所のパネルは消す。女性のチャンネルなら女性の分', async () => {
+    const { placeCastPanel } = await import('../src/discord/cast.js');
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    const OLD = '990000000000000111', HERE = '990000000000000112', F = '990000000000000113';
+    await saveCastConfig(db, { ...c, channelId: OLD, panelMessageId: '990000000000000211', femaleChannelId: F }, 'staff');
+    const send = vi.fn(async (ch: string, _b: unknown) => ({ id: ch === HERE ? '990000000000000212' : '990000000000000213' }));
+    const del = vi.fn(async () => undefined);
+    const discord = { sendMessage: send, editMessage: vi.fn(async () => undefined), deleteMessage: del };
+    expect(await placeCastPanel(db, discord as never, HERE, undefined, 'staff')).toBe('male');
+    expect(del).toHaveBeenCalledWith(OLD, '990000000000000211');
+    expect(send.mock.calls.map(([ch]) => ch)).toContain(HERE);
+    expect(await loadCastConfig(db)).toMatchObject({ channelId: HERE, panelMessageId: '990000000000000212' });
+    expect(await placeCastPanel(db, discord as never, F, undefined, 'staff')).toBe('female');
+    expect((await loadCastConfig(db)).femalePanelMessageId).toBe('990000000000000213');
+  });
+});
+
 describe('➕ キャストのオプション', () => {
   it('メニューにオプションを足して払う・知らない番号はだめ・のばす値段にはオプションを入れない', async () => {
     await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });

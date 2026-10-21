@@ -25,7 +25,7 @@ import {
   type VoiceChannel,
   type TextChannel,
 } from 'discord.js';
-import type { GuildConfig } from '../config.js';
+import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { Cast, CastSession } from '../db/schema.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
@@ -229,6 +229,20 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
     posted = true;
   }
   return posted;
+}
+
+/**
+ * 📋 /パネル キャスト一覧: キャスト一覧のパネルを、このチャンネルに出し直す（神職）。
+ * group を決めなければ、ここが女性のチャンネルなら女性、ほかは男性（共通）。前の場所のパネルは消す
+ */
+export async function placeCastPanel(db: Db, discord: Pick<DiscordActions, 'sendMessage' | 'editMessage' | 'deleteMessage'>, channelId: string, group: CastGroup | undefined, by: string): Promise<CastGroup> {
+  const c = await loadCastConfig(db);
+  const g: CastGroup = group ?? (c.femaleChannelId === channelId ? 'female' : 'male');
+  const old = groupPlace(c, g);
+  if (old.channelId && old.messageId) await discord.deleteMessage(old.channelId, old.messageId).catch((err: unknown) => logger.warn({ err }, 'old cast panel delete failed'));
+  await saveCastConfig(db, { ...c, ...(g === 'female' ? { femaleChannelId: channelId, femalePanelMessageId: undefined } : { channelId, panelMessageId: undefined }) }, by);
+  await refreshCastPanel(db, discord, { by });
+  return g;
 }
 
 /** 🗓 出勤予定と、これから 7 日の埋まっている時間（紹介パネル・予約の画面に出す） */
@@ -473,6 +487,22 @@ export class CastApp {
       } catch (err) {
         logger.warn({ err }, 'cast command failed');
         await interaction.editReply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。' }).catch(() => undefined);
+      }
+      return;
+    }
+    if ('commandName' in interaction && interaction.commandName === 'panel' && interaction.isChatInputCommand() && interaction.options.getSubcommand(false) === 'cast') {
+      if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+      await interaction.deferReply(EPHEMERAL);
+      try {
+        if (!adminLevelOf(this.cfg(), this.roles(interaction))) return void (await interaction.editReply('神職・宮司のみ置けます。'));
+        if (!interaction.channel?.isSendable()) return void (await interaction.editReply('このチャンネルには置けません。'));
+        const pick = interaction.options.getString('group');
+        const g = await placeCastPanel(this.db, this.discord, interaction.channelId, pick === 'male' || pick === 'female' ? pick : undefined, interaction.user.id);
+        await audit(this.db, { actorId: interaction.user.id, action: 'cast.panel_place', detail: { channelId: interaction.channelId, group: g }, via: 'discord' });
+        await interaction.editReply(`🎀 キャスト一覧（${g === 'female' ? '女性' : '男性・共通'}）のパネルを、このチャンネルに出しました。これからはここが書きかわります。`);
+      } catch (err) {
+        logger.warn({ err }, 'cast panel command failed');
+        await interaction.editReply('パネルを出せませんでした。BOT がこのチャンネルに書けるか確かめてください。').catch(() => undefined);
       }
       return;
     }
