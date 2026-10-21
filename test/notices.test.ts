@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { notices } from '../src/db/schema.js';
 import type { Db } from '../src/db/client.js';
 import { DiscordHttpError, type DiscordActions, type GuildChannel, type MessageBody } from '../src/lib/discordRest.js';
 import {
@@ -732,5 +734,22 @@ describe('/パネル 朱印', () => {
     await publishNotice(ctx, tpl.id, GUJI);
     expect(await placeShuinButton(ctx, CH.ema, GUJI)).toEqual(['edited']);
     expect((await getNotice(db, tpl.id))!.postedShuinButton).toBe(true);
+  });
+
+  it('🪧 /パネル 絵馬: ひな形をいちばん下に出し続ける。同じチャンネルでは増えない。直した文面を写す', async () => {
+    const { placeEmaGuide } = await import('../src/services/notices.js');
+    const { EMA_GUIDE } = await import('../src/services/noticeDefaults.js');
+    const f = fakeDiscord();
+    const ctx = { db, cfg, discord: f.discord };
+    expect(await placeEmaGuide(ctx, CH.ema, GUJI)).toEqual({ result: 'posted', created: true });
+    const first = (await listNotices(db)).find((n) => n.channelId === CH.ema)!;
+    expect(first).toMatchObject({ sticky: true, shuinButton: true, body: EMA_GUIDE });
+    expect((await placeEmaGuide(ctx, CH.ema, GUJI)).created).toBe(false);
+    expect((await listNotices(db)).filter((n) => n.channelId === CH.ema)).toHaveLength(1);
+    // 直した文面は、ほかのチャンネルにも写す
+    const edited = `${EMA_GUIDE}\n【趣味】`;
+    await db.update(notices).set({ body: edited }).where(eq(notices.id, first.id));
+    await placeEmaGuide(ctx, CH.keiji, GUJI);
+    expect((await listNotices(db)).find((n) => n.channelId === CH.keiji)!.body).toBe(edited);
   });
 });

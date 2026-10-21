@@ -1,4 +1,4 @@
-import { placeShuinButton } from '../services/notices.js';
+import { placeShuinButton, placeEmaGuide } from '../services/notices.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -296,6 +296,13 @@ export class AdmissionApp {
     }
     if (kind === 'notify' && !notifyReady(this.cfg)) {
       return void (await i.reply({ content: '通知 OK／NG のロールがまだありません。社務所Web の「設定 → 🔔 通知 OK／NG」で用意してください。', ...EPHEMERAL }));
+    }
+    if (kind === 'ema') {
+      await i.deferReply(EPHEMERAL);
+      const r = await placeEmaGuide(this.ctx, channel.id, i.user.id);
+      return void (await i.editReply(
+        r.result === 'too_long' ? '置けませんでした（ひな形の文字数が多すぎます）。' : `🪧 このチャンネルのいちばん下に、絵馬のひな形を${r.created ? '置きました' : '出し直しました'}（書き込みがあると、下に出し直します。文面は社務所Web の「掲示」で直せます）。`,
+      ));
     }
     if (kind === 'shuin') {
       // いちばん下に出し続ける（掲示として覚えるので、社務所Web の「掲示」から外したり直したりもできる）

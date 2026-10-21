@@ -167,7 +167,7 @@ const guide = (channelName: string, body: string, opts: { sticky?: boolean; shui
 });
 
 /** #絵馬-男性・#絵馬-女性 の使い方（ひな形。いちばん下に表示し続ける） */
-const EMA_GUIDE = `# 🪧 自己紹介の書き方
+export const EMA_GUIDE = `# 🪧 自己紹介の書き方
 男性は {#絵馬-男性}、女性は {#絵馬-女性} に書いてください。
 
 **下のひな形をコピーして書いてください**（スマホは長押しでコピー）

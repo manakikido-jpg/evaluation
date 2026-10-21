@@ -302,6 +302,13 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
           .setDescriptionLocalizations({ ja: '「🌸 朱印を押す」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）' }),
       )
       .addSubcommand((s) =>
+        s
+          .setName('ema')
+          .setNameLocalizations({ ja: '絵馬' })
+          .setDescription('Ema template')
+          .setDescriptionLocalizations({ ja: '🪧 絵馬（自己紹介）のひな形を、このチャンネルのいちばん下に出し続ける（#絵馬 用）' }),
+      )
+      .addSubcommand((s) =>
         s.setName('notify').setNameLocalizations({ ja: '通知' }).setDescription('Notification on/off').setDescriptionLocalizations({ ja: '募集・お知らせの 🔔通知OK／🔕通知NG を選ぶボタン（#授与所 用）' }),
       )
       .addSubcommand((s) =>
