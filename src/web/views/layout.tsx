@@ -161,6 +161,11 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
               )}
             </header>
             <aside class="side" id="main-navigation">
+              <div class="nav-tools">
+                <div class="nav-tools-head"><span>運営メニュー</span><button type="button" data-nav-close aria-label="メニューを閉じる">✕</button></div>
+                <label class="nav-find"><span class="sr-only">ページを探す</span><input type="search" data-nav-search placeholder="ページを探す" autocomplete="off" disabled /></label>
+                <p class="nav-find-status" data-nav-status role="status" aria-live="polite"></p>
+              </div>
               <nav class="side-nav" aria-label="メニュー">
                 {NAV_GROUPS.map((g) => {
                   // 宮司だけのページ・見られるページを選ばれている人の、ほかのページは出さない
@@ -215,7 +220,8 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
           </>
         )}
-        <main id="main-content" class={props.wide ? 'wide' : undefined}>{props.children}</main>
+        <main id="main-content" tabindex={-1} class={props.wide ? 'wide' : undefined}>{props.children}</main>
+        {session && <script src={assetUrl('office-ui.js')} defer></script>}
         {session && <nav class="mobile-nav" aria-label="よく使うページ">
           {[
             { key: 'home', href: '/', icon: '⌂', label: 'ホーム' },

@@ -1325,3 +1325,81 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 /* ⏱ 浮上の記録: 数える場所のチェック（カテゴリごと） */
 .check-group { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; padding: 0.4rem 0; border-bottom: 1px solid var(--line, #e5e5e5); }
 .check-group > strong, .check-group > label:first-child { flex-basis: 100%; }
+
+/* 社務所の共通レイアウト。桜色は現在地と操作の手がかりに使う。 */
+body.with-side { --office-focus: var(--accent-text); background: var(--bg); }
+body.with-side :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 3px solid var(--office-focus); outline-offset: 3px; }
+body.with-side > main > h1 { padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 24px; line-height: 1.5; }
+body.with-side .card { border-radius: 18px; border-color: var(--line); }
+body.with-side .card > h2:first-child { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+body.with-side .topbar { box-shadow: 0 2px 12px rgba(23,36,61,.035); }
+body.with-side .brand .torii { display: inline-grid; place-items: center; background: var(--sakura); border-radius: 10px; width: 30px; height: 30px; margin-right: 4px; }
+body.with-side .topbar-search:focus-within { border-color: var(--accent-text); }
+body.with-side .topbar-search input { font: inherit; font-size: .88rem; }
+.nav-tools { position: sticky; top: 0; z-index: 2; background: var(--card); padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
+.nav-tools-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: var(--muted); font-size: .76rem; font-weight: 650; }
+.nav-tools-head button { display: none; }
+.nav-find input { display: block; width: 100%; min-width: 0; padding: 10px 12px; font: inherit; font-size: .88rem; border-radius: 10px; border: 1px solid var(--line); color: var(--ink); background: var(--bg); }
+.nav-find-status { color: var(--muted); font-size: .76rem; line-height: 1.6; margin: 8px 0 0; }
+.nav-find-status:empty { display: none; }
+.side-nav { gap: 14px; padding-top: 14px; }
+.side-nav a { position: relative; }
+.side-nav a.on { box-shadow: inset 3px 0 var(--shu); background: var(--sakura); }
+.side-nav .nav-title { min-height: 36px; }
+body.with-side main :where(.fields, .settings-layout, .settings-body, .settings-index, fieldset) { min-width: 0; max-width: 100%; }
+body.with-side main .fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
+body.with-side main .fields > * { min-width: 0; }
+body.with-side main :where(input, select, textarea) { max-width: 100%; }
+body.with-side main :where(input:not([type=checkbox], [type=radio], [type=hidden], [type=color], [type=range]), select:not([multiple]), button:not(.link)) { min-height: 42px; }
+body.with-side main :where(.field.check, label.check) { min-height: 36px; }
+body.with-side main :where(input[type=checkbox], input[type=radio]) { accent-color: var(--shu); }
+body.with-side main :where(.row-actions, .section-head, .page-head, .health-top) { flex-wrap: wrap; }
+body.with-side main :where(.tabs a, .pager a) { display: inline-flex; align-items: center; min-height: 42px; }
+body.with-side main :where(.card, .note, .flash) { overflow-wrap: anywhere; }
+body.with-side main .save-bar { bottom: 12px; }
+.admin-table-scroll { max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.admin-table-scroll table { margin: 0; border: 0; }
+.admin-table-scroll th { font-weight: 600; background: var(--gray); }
+.admin-table-scroll tbody tr:hover { background: var(--bg); }
+.table-scroll-hint { color: var(--muted); font-size: .76rem; margin: 8px 0; }
+body.with-side .home-welcome { border: 1px solid var(--line); border-left: 4px solid var(--shu); border-radius: 16px; padding: 22px; background: var(--card); }
+body.with-side .task-list li.pending { border-color: var(--sakura-2); background: var(--sakura); }
+body.with-side .task-list li.pending .task-icon { background: var(--card); }
+body.with-side .task-action { background: var(--card); }
+@media (min-width: 1600px) { body.with-side > main:not(.wide) { max-width: 1440px; } }
+@media (max-width: 900px) {
+  body.with-side.nav-is-open { overflow: hidden; }
+  body.with-side .side { width: min(330px, 90vw); max-height: calc(100dvh - 62px); padding-bottom: env(safe-area-inset-bottom); overscroll-behavior-y: contain; }
+  .nav-tools-head button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--bg); font: inherit; }
+  .nav-tools { padding: 12px 16px; }
+  .nav-find input { min-height: 44px; font-size: 16px; }
+  .side-nav a { min-height: 44px; }
+  body.with-side main { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+  body.with-side main .save-bar { bottom: calc(76px + env(safe-area-inset-bottom)); }
+  body.with-side .mobile-nav :where(a,button) { min-height: 44px; border-radius: 10px; }
+  body.with-side .mobile-nav .on { background: var(--sakura); }
+  body.with-side main :where(input:not([type=checkbox], [type=radio], [type=hidden], [type=color], [type=range]), select, textarea) { font-size: 16px; }
+  body.with-side main :where(button:not(.link), .tabs a, .pager a) { min-height: 44px; }
+  body.with-side .settings-index { gap: 6px; padding: 12px; }
+  body.with-side .settings-index a { min-height: 40px; display: inline-flex; align-items: center; background: var(--bg); }
+}
+@media (max-width: 480px) {
+  body.with-side .topbar { padding-inline: 8px; gap: 5px; }
+  body.with-side .topbar .brand { font-size: .84rem; }
+  body.with-side .brand .torii { width: 25px; height: 25px; margin-right: 1px; }
+  body.with-side .theme-choice > span[aria-hidden] { display: none; }
+  body.with-side .theme-choice select { max-width: 122px; }
+  body.with-side > main { padding-inline: 12px; }
+  body.with-side .card { padding: 16px; margin-bottom: 16px; }
+  body.with-side .home-welcome { padding: 18px 16px; }
+  body.with-side .home-welcome h1 { font-size: 1.5rem; }
+  body.with-side .filters > :where(input,select,button) { min-width: 0; max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { body.with-side *, body.with-side *::before, body.with-side *::after { scroll-behavior: auto; } }
+body.with-side .task-action { display: inline-flex; align-items: center; min-height: 42px; }
+@media (max-width: 900px) {
+  body.with-side .hamburger { width: 44px; height: 44px; }
+  body.with-side .topbar-updates { display: inline-flex; align-items: center; min-height: 44px; }
+  body.with-side .theme-choice select { min-height: 40px; }
+  body.with-side .task-action { min-height: 44px; }
+}
