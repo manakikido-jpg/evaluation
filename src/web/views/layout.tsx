@@ -69,7 +69,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'yaku', href: '/yaku', icon: '👹', label: '厄' },
       { key: 'security', href: '/security', icon: '🛡', label: '荒らし対策' },
       { key: 'soudan', href: '/soudan', icon: '💌', label: '相談' },
-      { key: 'tickets', href: '/tickets', icon: '🎫', label: 'チケット' },
+      { key: 'tickets', href: '/tickets', icon: '🎫', label: 'お問い合わせ' },
       { key: 'temp', href: '/temp', icon: '⏳', label: '一時的な権限' },
       { key: 'invites', href: '/invites', icon: '🔗', label: '招待・報酬' },
       { key: 'interview', href: '/interview', icon: '🍵', label: '面談告知' },

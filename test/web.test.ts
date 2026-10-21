@@ -3264,6 +3264,81 @@ describe('キャスト（管理画面）', () => {
     });
   };
 
+  it('お問い合わせに未設定の希望役職と管理への入口を出し、宮司だけが役職を作れる', async () => {
+    const { loadTicketConfig } = await import('../src/services/supportTickets.js');
+    const g = await login(GUJI), staff = await login(STAFF);
+    const initial = await loadTicketConfig(db);
+    const type = initial.types.find(t => t.kind === 'role')!;
+    const page = await (await get('/tickets', g)).text();
+    expect(page).toContain('<h1>📨 お問い合わせ</h1>');
+    expect(page).toContain('希望できる役職が未設定');
+    expect(page).toContain('href="#inquiry-settings"');
+    expect(page).toContain('action="/tickets/roles"');
+    expect(await (await get('/tickets', staff)).text()).not.toContain('action="/tickets/roles"');
+    const fields = {typeKey:type.key, name:'イベント係', color:'#123456', permissions:'8', mentionable:'yes'};
+    expect((await form(staff, '/tickets/roles', fields)).headers.get('location')).toBe('/tickets?msg=guji');
+    expect(actions.filter(x=>x.startsWith('createRole'))).toEqual([]);
+    expect((await form(g, '/tickets/roles', fields)).headers.get('location')).toContain('role_created');
+    expect(actions.find(x=>x.startsWith('createRole'))).toContain('"permissions":"0"');
+    expect(actions.find(x=>x.startsWith('createRole'))).toContain('"mentionable":false');
+    const after = await loadTicketConfig(db);
+    expect(after.types.find(t=>t.key===type.key)?.roleChoices).toEqual(['980000000000000099']);
+    expect(after.types.filter(t=>t.key!==type.key)).toEqual(initial.types.filter(t=>t.key!==type.key));
+    expect(actions.some(x=>x.startsWith('addRole'))).toBe(false);
+    expect((await listAudit(db, {action:'ticket.roles'}))).toHaveLength(1);
+  });
+
+  it('希望先だけの保存で質問・担当ロールを残し、不正な役職とCSRFなしを拒む', async () => {
+    const { loadTicketConfig, saveTicketConfig } = await import('../src/services/supportTickets.js');
+    const g = await login(GUJI), staff = await login(STAFF);
+    const conf = await loadTicketConfig(db), type = conf.types.find(t=>t.kind==='role')!;
+    const oldRoles = roleList;
+    roleList = [{id:ROLE.ujiko,name:'氏子',position:1,managed:false,color:0},{id:ROLE.guji,name:'bot',position:2,managed:true,color:0}];
+    try {
+      const before = {...type, questions:[{label:'理由',long:true,required:true}],roleIds:[ROLE.shinshoku]};
+      await saveTicketConfig(db,{...conf,types:conf.types.map(t=>t.key===type.key?before:t)},GUJI);
+      const path = `/tickets/types/${type.key}/roles`;
+      expect((await form(staff,path,{roleChoices:ROLE.ujiko})).headers.get('location')).toBe('/tickets?msg=guji');
+      expect((await app.request(path,{method:'POST',headers:{cookie:`shamusho_session=${g}`,'content-type':'application/x-www-form-urlencoded'},body:`roleChoices=${ROLE.ujiko}`})).status).toBe(403);
+      for(const id of ['missing',ROLE.guji])expect((await form(g,path,{roleChoices:id})).headers.get('location')).toContain('invalid');
+      expect((await form(g,path,{roleChoices:ROLE.ujiko})).headers.get('location')).toContain('choices_saved');
+      expect((await loadTicketConfig(db)).types.find(t=>t.key===type.key)).toEqual({...before,roleChoices:[ROLE.ujiko]});
+      expect((await form(g,path,{})).headers.get('location')).toContain('choices_saved');
+      expect((await loadTicketConfig(db)).types.find(t=>t.key===type.key)?.roleChoices).toEqual([]);
+    } finally {roleList=oldRoles;}
+  });
+
+  it('役職作成中に受付が外されても設定を戻さず、作成済みの役職を案内する',async()=>{
+    const {loadTicketConfig,saveTicketConfig}=await import('../src/services/supportTickets.js');
+    const g=await login(GUJI),initial=await loadTicketConfig(db),type=initial.types.find(t=>t.kind==='role')!;
+    const old=fakeActions.createRole;
+    try {
+      fakeActions.createRole=async(guild,body,reason)=>{
+        const role=await old(guild,body,reason);
+        await saveTicketConfig(db,{...initial,types:initial.types.filter(t=>t.key!==type.key)},GUJI);
+        return role;
+      };
+      const res=await form(g,'/tickets/roles',{typeKey:type.key,name:'係',color:'#123456'});
+      expect(res.headers.get('location')).toContain('role_unlinked');
+      expect((await loadTicketConfig(db)).types.some(t=>t.key===type.key)).toBe(false);
+      expect(actions.filter(x=>x.startsWith('createRole'))).toHaveLength(1);
+      expect(actions.some(x=>x.startsWith('deleteRole'))).toBe(false);
+    } finally {fakeActions.createRole=old;}
+  });
+
+  it('希望役職の入力不備では作成せず、Discord作成失敗を案内する',async()=>{
+    const {loadTicketConfig}=await import('../src/services/supportTickets.js');
+    const g=await login(GUJI),type=(await loadTicketConfig(db)).types.find(t=>t.kind==='role')!;
+    for(const fields of [{typeKey:type.key,name:'',color:'#123456'},{typeKey:type.key,name:'係',color:'bad'},{typeKey:'inquiry',name:'係',color:'#123456'}])expect((await form(g,'/tickets/roles',fields)).headers.get('location')).toContain('invalid');
+    expect(actions.filter(x=>x.startsWith('createRole'))).toEqual([]);
+    const old=fakeActions.createRole;
+    try {
+      fakeActions.createRole=async()=>{throw Error('Missing Permissions');};
+      expect((await form(g,'/tickets/roles',{typeKey:type.key,name:'係',color:'#123456'})).headers.get('location')).toContain('role_failed');
+      expect((await loadTicketConfig(db)).types.find(t=>t.key===type.key)?.roleChoices).toEqual([]);
+    } finally {fakeActions.createRole=old;}
+  });
+
   it('🎫 チケット: ページ・設定・種類を足す／書きかえる／外す・やりとりの記録（宮司だけが変えられる）', async () => {
     const { openTicket, closeTicket, loadTicketConfig } = await import('../src/services/supportTickets.js');
     const g = await login(GUJI);
