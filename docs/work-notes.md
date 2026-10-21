@@ -346,3 +346,4 @@
 - 画面確認：Chromiumの360/390/1440pxで収支の金額・期間切替・横はみ出し0・JS例外0を確認。サンプル売上2100銭／払戻1500銭／差引600銭／開封済み500銭。/workspace/artifacts/scratch-finances/へ画面と記録を保存。実収支は本番未取得。
 - 最終検証：実装123282cで型チェック・ビルド成功、全148ファイル1,831テスト成功（405.18秒、2並列）。最後に追加した実購入・二度開封の回帰も成功。テスト削除・skipなし。push前fetchで本番7ff49cfから追加変更なし。ログ/workspace/artifacts/scratch-finances/{typecheck-final,build,all-tests}.log。
 - 完了範囲：スクラッチの期間別売上・払戻・回収・精算済み収支、倍率別の金額と最近の当せん、未開封の秘匿。DBマイグレーション不要。ローカル試遊サーバー停止済み。codex/fortune-scratch-financesから本番担当Claude向けPRへ保存。本番の購入・入金・設定変更は未実行。
+- GitHub保存済み：[PR #68](https://github.com/manakikido-jpg/evaluation/pull/68)。codex/fortune-scratch-finances、実装123282c・最終検証b10b278。OPEN・未合流、本番未反映。担当Claudeによる確認と合流待ち。
