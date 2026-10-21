@@ -1407,3 +1407,12 @@ body.with-side .task-action { display: inline-flex; align-items: center; min-hei
   body.with-side .brand .torii { display: none; }
   body.with-side .theme-choice select { max-width: 116px; }
 }
+
+.office-action-status { position: fixed; bottom: 80px; right: 16px; z-index: 100; max-width: min(420px, calc(100vw - 32px)); padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); box-shadow: 0 4px 24px #0002; }
+.office-multi { min-width: 0; }
+.office-multi summary { cursor: pointer; padding: 12px; background: var(--sakura); border-radius: 8px; overflow-wrap: anywhere; }
+.office-multi-options { max-height: 280px; overflow-y: auto; margin: 10px 0; }
+.office-multi-options .check { display: flex; gap: 8px; padding: 8px; overflow-wrap: anywhere; }
+.office-multi-options .check[hidden] { display: none; }
+
+.office-multi-source[hidden] { display: none; }

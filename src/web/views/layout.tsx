@@ -220,8 +220,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             <label for="nav-toggle" class="backdrop" aria-hidden="true"></label>
           </>
         )}
-        <main id="main-content" tabindex={-1} class={props.wide ? 'wide' : undefined}>{props.children}</main>
+        <main id="main-content" tabindex={-1} data-office-inplace={session && !props.scripts?.length ? "" : undefined} class={props.wide ? 'wide' : undefined}>{props.children}</main>
         {session && <script src={assetUrl('office-ui.js')} defer></script>}
+        {session && <script src={assetUrl('office-actions.js')} defer></script>}
         {session && <nav class="mobile-nav" aria-label="よく使うページ">
           {[
             { key: 'home', href: '/', icon: '⌂', label: 'ホーム' },

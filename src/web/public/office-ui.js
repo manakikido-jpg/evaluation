@@ -105,4 +105,5 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   tables();
   document.addEventListener('htmx:afterSwap', tables);
+  document.addEventListener('office:updated', tables);
 });
