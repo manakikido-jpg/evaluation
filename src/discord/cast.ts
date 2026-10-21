@@ -27,7 +27,7 @@ import {
 } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import type { Cast, CastSession } from '../db/schema.js';
+import type { Cast, CastChampagne, CastSession } from '../db/schema.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
@@ -1256,7 +1256,29 @@ export class CastApp {
         return message.id;
       });
     } catch(err){shown=false;logger.warn({err,purchaseId:q.id},'champagne announcement failed');}
+    // 🍾 キャスト本人に DM（開栓のムービーつき）。初めて精算したときだけ（再試行で二度送らない）
+    if(result.fresh) await this.champagneDm(q).catch((err:unknown)=>logger.warn({err,purchaseId:q.id},'champagne dm failed'));
     await i.editReply({content:`${result.fresh?'贈りました':'この購入は精算済みです（追加の支払いはありません）'}：${q.bottleName}\n支払 ${fmt(q.price)} ${this.coin()}／キャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。\n残高 ${fmt(result.balance)}。購入番号 ${q.id}。${shown?'':'\n購入と入金は完了しましたが、開栓表示が届いたか確認できません。「開栓表示を確認・再試行」は追加購入になりません。'}`,embeds:[],attachments:[],components:shown?[]:[row(button(`cast:champagnebuy:${q.id}`,'開栓表示を確認・再試行',1))],allowedMentions:{parse:[]}});
+  }
+
+  /** 🍾 シャンパンが届いたことを、キャスト本人に DM で知らせる（開栓のムービーつき。作れなければ文だけ） */
+  private async champagneDm(q: CastChampagne): Promise<void> {
+    const user = await this.guild?.client.users.fetch(q.castId).catch(() => undefined);
+    if (!user) return;
+    const b = champagneOf(q.bottle);
+    let gif: Buffer | undefined;
+    try { gif = await champagneAnimation(q.bottle); } catch (err) { logger.warn({ err }, 'champagne image failed'); }
+    const name = (await namesOf(this.db, [q.customerId])).get(q.customerId) ?? 'お客';
+    await user.send({
+      embeds: [{
+        title: `${b?.emoji ?? '🍾'} シャンパンが届きました！`,
+        description: `${name} さんから **${q.bottleName}** を贈られました。\n${this.coin()} ${fmt(q.price - q.fee)} 枚を受け取りました（値段 ${fmt(q.price)}・手数料 ${fmt(q.fee)}）。`,
+        color: parseInt((b?.color ?? '#eac38c').slice(1), 16),
+        ...(gif ? { image: { url: 'attachment://champagne.gif' } } : {}),
+      }],
+      ...(gif ? { files: [new AttachmentBuilder(gif, { name: 'champagne.gif' })] } : {}),
+      allowedMentions: { parse: [] },
+    });
   }
 
   private async extend(i: ButtonInteraction<'cached'>, id: number, expected: number): Promise<void> {

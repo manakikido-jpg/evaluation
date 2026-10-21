@@ -93,7 +93,8 @@ it('通話の5つ目の操作から選択・確認・乾杯し、同時確定で
  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(NOW);
  expect(JSON.stringify(sessionMessage(session,CAST_DEFAULTS,'銭'))).toContain(`cast:champagne:${session.id}`);
  const sendMessage=vi.fn(async()=>({id:'notice-1'}));const states=new Map([[CUSTOMER,{channelId:ROOM}],[CAST,{channelId:ROOM}]]);
- const app=new CastApp(db,()=>cfg,{sendMessage} as never);app.attach({id:cfg.guildId,voiceStates:{cache:states},channels:{cache:new Map([[ROOM,{id:ROOM,type:ChannelType.GuildVoice}]])}} as never);
+ const app=new CastApp(db,()=>cfg,{sendMessage} as never);const dm=vi.fn(async(_b:unknown)=>({}));const fetchUser=vi.fn(async(_id:string)=>({send:dm}));
+ app.attach({id:cfg.guildId,client:{users:{fetch:fetchUser}},voiceStates:{cache:states},channels:{cache:new Map([[ROOM,{id:ROOM,type:ChannelType.GuildVoice}]])}} as never);
  function interaction(customId:string,select=false){return {customId,guildId:cfg.guildId,channelId:ROOM,user:{id:CUSTOMER},inCachedGuild:()=>true,isStringSelectMenu:()=>select,isUserSelectMenu:()=>false,isModalSubmit:()=>false,isButton:()=>!select,isRepliable:()=>true,values:['sakura'],deferReply:vi.fn(),deferUpdate:vi.fn(),editReply:vi.fn(),followUp:vi.fn()};}
  const menu=interaction(`cast:champagne:${session.id}`);await app.onInteraction(menu as unknown as Interaction);expect(JSON.stringify(menu.editReply.mock.calls)).toContain('桜のしずく');
  const select=interaction(`cast:champagnesel:${session.id}`,true);await app.onInteraction(select as unknown as Interaction);expect(JSON.stringify(select.editReply.mock.calls)).toContain('キャスト受取 350');
@@ -107,6 +108,10 @@ it('通話の5つ目の操作から選択・確認・乾杯し、同時確定で
  const failed=interaction(`cast:champagnebuy:${q2.id}`);await app.onInteraction(failed as unknown as Interaction);expect(JSON.stringify(failed.editReply.mock.calls)).toContain('開栓表示を確認・再試行');
  const retry=interaction(`cast:champagnebuy:${q2.id}`);await app.onInteraction(retry as unknown as Interaction);expect(JSON.stringify(retry.editReply.mock.calls)).toContain('追加の支払いはありません');
  expect((await walletOf(db,CUSTOMER)).balance).toBe(48500);expect((await walletOf(db,CAST)).balance).toBe(1050);expect(sendMessage).toHaveBeenCalledTimes(3);
+ // 🍾 キャスト本人に DM（ムービーつき）。同時に押しても・再試行しても、1 回の購入に 1 回だけ
+ expect(dm).toHaveBeenCalledTimes(2);expect(fetchUser).toHaveBeenCalledWith(CAST);
+ const body=dm.mock.calls[0]![0] as {embeds:{title:string;description:string;image?:{url:string}}[];files?:unknown[];allowedMentions:unknown};
+ expect(body.embeds[0]!.title).toContain('シャンパンが届きました');expect(body.embeds[0]!.description).toContain('350 枚を受け取りました');expect(body.embeds[0]!.image?.url).toBe('attachment://champagne.gif');expect(body.files).toHaveLength(1);expect(body.allowedMentions).toEqual({parse:[]});
  states.delete(CAST);const absent=interaction(`cast:champagne:${session.id}`);await app.onInteraction(absent as unknown as Interaction);expect(JSON.stringify(absent.editReply.mock.calls)).toContain('両方');
 
 });

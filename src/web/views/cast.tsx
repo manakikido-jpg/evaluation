@@ -1,5 +1,5 @@
 import type { CastRankRow } from '../../services/castRank.js';
-import type { AdminSession, Cast, CastSession } from '../../db/schema.js';
+import type { AdminSession, Cast, CastChampagne, CastSession } from '../../db/schema.js';
 import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
@@ -238,6 +238,8 @@ export function CastPage(props: {
   calendar?: CastSession[];
   /** 🚫 来なかった回数（30 日） */
   noShows?: { cast: ReadonlyMap<string, number>; customer: ReadonlyMap<string, number> };
+  /** 🍾 買われたシャンパン（新しい順） */
+  champagnes?: CastChampagne[];
   name: (id: string) => string;
   coin: string;
   flash?: string;
@@ -613,6 +615,7 @@ export function CastPage(props: {
       {props.ranking && <Ranking {...props.ranking} name={name} coin={props.coin} />}
 
       {props.calendar && <Calendar sessions={props.calendar} name={name} session={session} noShows={props.noShows} />}
+      {props.champagnes && <ChampagneList rows={props.champagnes} name={name} coin={props.coin} />}
 
       <section class="card">
         <h2>最近の指名</h2>
@@ -798,5 +801,59 @@ function TemplatePicks(props: { items: CastMenuItem[] }) {
         </label>
       ))}
     </fieldset>
+  );
+}
+
+/** 🍾 シャンパンの購入一覧（日本時間・新しい順） */
+function ChampagneList(props: { rows: CastChampagne[]; name: (id: string) => string; coin: string }) {
+  const when = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
+  const sum = (f: (r: CastChampagne) => number) => props.rows.reduce((n, r) => n + f(r), 0).toLocaleString('ja-JP');
+  return (
+    <section class="card anchor" id="cast-champagne">
+      <h2>🍾 シャンパンの購入（新しい 100 件）</h2>
+      <p class="note">買えたものだけです（確認画面を出しただけのものは出ません）。お客の銭から値段を引き、キャストに受取を入れるのは同時です。</p>
+      {props.rows.length ? (
+        <table class="compact">
+          <thead>
+            <tr>
+              <th>日時</th>
+              <th>買った人</th>
+              <th>キャスト</th>
+              <th>ボトル</th>
+              <th class="num">値段</th>
+              <th class="num">キャストの受取</th>
+              <th class="num">手数料</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.rows.map((r) => (
+              <tr>
+                <td>{when(r.paidAt!)}</td>
+                <td>
+                  <a href={`/members/${r.customerId}`}>{props.name(r.customerId)}</a>
+                </td>
+                <td>
+                  <a href={`/members/${r.castId}`}>{props.name(r.castId)}</a>
+                </td>
+                <td>{r.bottleName}</td>
+                <td class="num">{r.price.toLocaleString('ja-JP')}</td>
+                <td class="num">{(r.price - r.fee).toLocaleString('ja-JP')}</td>
+                <td class="num">{r.fee.toLocaleString('ja-JP')}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan={4}>合計（{props.coin}）</th>
+              <td class="num">{sum((r) => r.price)}</td>
+              <td class="num">{sum((r) => r.price - r.fee)}</td>
+              <td class="num">{sum((r) => r.fee)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      ) : (
+        <p class="empty">まだ買われていません。</p>
+      )}
+    </section>
   );
 }

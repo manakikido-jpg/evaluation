@@ -42,6 +42,7 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
+import { paidChampagnes } from '../services/castChampagne.js';
 import { BoostTimePage } from './views/boostTime.js';
 import { CoreTimePage } from './views/coreTime.js';
 import { describeCoreTime } from '../services/coreTime.js';
@@ -5950,8 +5951,8 @@ export function createWebApp(deps: WebDeps) {
     const t = now();
     // 🏆 ランキング（?rank=YYYY-MM。なければ今月）
     const rankStart = parseMonth(c.req.query('rank')) ?? monthOf(t);
-    const [calendar, noShows, ranking] = await Promise.all([sessionsBetween(db, new Date(t.getTime() - 86_400_000), new Date(t.getTime() + 8 * 86_400_000)), noShowCounts(db, new Date(t.getTime() - 30 * 86_400_000)), castRanking(db, rankStart)]);
-    const names = await namesOf(db, [...list.map((x) => x.memberId), ...[...sessions, ...calendar].flatMap((x) => [x.castId, x.customerId]), ...noShows.customer.keys(), ...ranking.map((x) => x.castId)]);
+    const [calendar, noShows, ranking, champagnes] = await Promise.all([sessionsBetween(db, new Date(t.getTime() - 86_400_000), new Date(t.getTime() + 8 * 86_400_000)), noShowCounts(db, new Date(t.getTime() - 30 * 86_400_000)), castRanking(db, rankStart), paidChampagnes(db)]);
+    const names = await namesOf(db, [...list.map((x) => x.memberId), ...[...sessions, ...calendar, ...champagnes].flatMap((x) => [x.castId, x.customerId]), ...noShows.customer.keys(), ...ranking.map((x) => x.castId)]);
     const cats = new Map(channels.filter((ch) => ch.type === 4).map((ch) => [ch.id, ch.name]));
     return c.html(
       <CastPage
@@ -5970,6 +5971,7 @@ export function createWebApp(deps: WebDeps) {
         sessions={sessions}
         calendar={calendar}
         noShows={noShows}
+        champagnes={champagnes}
         ranking={{ month: monthKey(rankStart), prev: monthKey(monthOf(rankStart, -1)), next: rankStart < monthOf(t) ? monthKey(monthOf(rankStart, 1)) : undefined, rows: ranking }}
         name={(id) => names.get(id) ?? id}
         coin={`${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`}

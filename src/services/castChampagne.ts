@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { castChampagnes, castSessions, type CastSession, type CastChampagne } from '../db/schema.js';
 import { castFee } from './cast.js';
@@ -66,3 +66,6 @@ export async function announceChampagne(db:Db,id:string,customerId:string,send:(
   return noticeId;
  });
 }
+
+/** 🍾 買われたシャンパン（新しい順。社務所Web の一覧） */
+export const paidChampagnes = (db:Db,limit=100) => db.select().from(castChampagnes).where(isNotNull(castChampagnes.paidAt)).orderBy(desc(castChampagnes.paidAt)).limit(limit);
