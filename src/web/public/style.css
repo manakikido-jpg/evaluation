@@ -1403,3 +1403,7 @@ body.with-side .task-action { display: inline-flex; align-items: center; min-hei
   body.with-side .theme-choice select { min-height: 40px; }
   body.with-side .task-action { min-height: 44px; }
 }
+@media (max-width: 350px) {
+  body.with-side .brand .torii { display: none; }
+  body.with-side .theme-choice select { max-width: 116px; }
+}
