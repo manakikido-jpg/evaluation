@@ -955,7 +955,7 @@ export async function rescheduleSession(db: Db, id: number, customerId: string, 
     const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime() + minutes * MIN);
     if (await overlaps(tx, s.castId, startAt, end, now, id)) return { status: 'overlap' as const };
     if (await overlaps(tx, s.customerId, startAt, end, now, id, 'customer')) return { status: 'self_overlap' as const };
-    const row = await move(tx, id, ['reserved', 'accepted'], { status: 'accepted', startAt, acceptBy: null, minutes });
+    const row = await move(tx, id, ['reserved', 'accepted'], { status: 'accepted', startAt, acceptBy: null, minutes, reminded: 0 });
     return row ? { status: 'ok' as const, session: row } : { status: 'not_found' as const };
   });
 }

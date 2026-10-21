@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { castSessions, castTimeChanges } from '../src/db/schema.js';
-import { proposeSessionTime, acceptSessionTime, changeableReservations, CAST_DEFAULTS } from '../src/services/cast.js';
+import { proposeSessionTime, acceptSessionTime, changeableReservations, castTick, CAST_DEFAULTS } from '../src/services/cast.js';
 import { walletOf } from '../src/services/economy.js';
 import { CastApp } from '../src/discord/cast.js';
 import { cfg, makeDb } from './helpers.js';
@@ -21,6 +21,17 @@ it.each([CAST,CUSTOMER])('どちらも提案でき、相手の承認前は日時
  const r=await acceptSessionTime(db,p.id,p.approveBy,NOW);expect(r.status).toBe('ok');
  expect((await db.select().from(castSessions))[0]).toMatchObject({startAt:NEXT,minutes:30,price:300,status:'accepted'});
  expect((await walletOf(db,CUSTOMER)).balance).toBe(0);expect((await walletOf(db,CAST)).balance).toBe(0);
+});
+it('変更前の通知済み状態を戻し、新しい日時の1時間前と10分前に知らせる',async()=>{
+ await db.update(castSessions).set({reminded:2}).where(eq(castSessions.id,s.id));
+ const p=await quote();expect((await acceptSessionTime(db,p.id,CUSTOMER,NOW)).status).toBe('ok');
+ expect((await castTick(db,CAST_DEFAULTS,new Date(NEXT.getTime()-61*60000))).remind).toEqual([]);
+ const hour=await castTick(db,CAST_DEFAULTS,new Date(NEXT.getTime()-60*60000));
+ expect(hour.remind).toEqual([expect.objectContaining({session:expect.objectContaining({id:s.id}),stage:'hour'})]);
+ expect(hour.started).toEqual([]);
+ const soon=await castTick(db,CAST_DEFAULTS,new Date(NEXT.getTime()-10*60000));
+ expect(soon.remind).toEqual([expect.objectContaining({session:expect.objectContaining({id:s.id}),stage:'soon'})]);
+ expect((await castTick(db,CAST_DEFAULTS,new Date(NEXT.getTime()-9*60000))).remind).toEqual([]);
 });
 it('第三者・開始後・終了済み・同じ時刻・期限切れを拒否する',async()=>{
  expect((await propose(OTHER)).status).toBe('not_member');expect((await propose(CAST,OLD)).status).toBe('bad_time');
