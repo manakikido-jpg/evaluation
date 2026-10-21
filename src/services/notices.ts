@@ -8,7 +8,7 @@ import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { memberCommandsText } from './commandList.js';
 import { coreName } from '../lib/names.js';
-import { DEFAULT_GUIDES, DEFAULT_NOTICES, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
+import { DEFAULT_GUIDES, DEFAULT_NOTICES, EMA_GUIDE, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
 import { notifyReady, pingRoleIds } from './notify.js';
 import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
@@ -656,6 +656,25 @@ export async function placeShuinButton(ctx: NoticeCtx, channelId: string, by: st
   for (const id of r.ids) results.push(await publishNotice(ctx, id, by));
   await audit(ctx.db, { actorId: by, action: 'notice.shuin_button', detail: { channelId, created: Boolean(r.created), updated: r.updated }, via: 'discord' });
   return results;
+}
+
+/** 絵馬のひな形の掲示か（標準の見出しで見分ける） */
+const isEmaGuide = (n: Notice) => n.sticky && n.body.includes('# 🪧 自己紹介の書き方');
+
+/**
+ * /パネル 絵馬: このチャンネルのいちばん下に、絵馬（自己紹介）のひな形を出し続ける。「🌸 朱印を押す」ボタンつき。
+ * - このチャンネルにもうあれば、出し直すだけ（増やさない）
+ * - 文面は、ほかのチャンネルで直したひな形があればそれを写す。なければ標準の文面
+ */
+export async function placeEmaGuide(ctx: NoticeCtx, channelId: string, by: string): Promise<{ result: PublishResult; created: boolean }> {
+  const all = await listNotices(ctx.db);
+  const here = all.find((n) => n.channelId === channelId && isEmaGuide(n));
+  const n =
+    here ??
+    (await createNotice(ctx.db, { channelId, title: '使い方', body: all.find(isEmaGuide)?.body ?? EMA_GUIDE, sticky: true, shuinButton: true, by }));
+  const result = await publishNotice(ctx, n.id, by);
+  await audit(ctx.db, { actorId: by, action: 'notice.ema_guide', detail: { channelId, noticeId: n.id, created: !here }, via: 'discord' });
+  return { result, created: !here };
 }
 
 /**
