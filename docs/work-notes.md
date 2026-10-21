@@ -374,3 +374,11 @@
 - 最終検証：実装123282cで型チェック・ビルド成功、全148ファイル1,831テスト成功（405.18秒、2並列）。最後に追加した実購入・二度開封の回帰も成功。テスト削除・skipなし。push前fetchで本番7ff49cfから追加変更なし。ログ/workspace/artifacts/scratch-finances/{typecheck-final,build,all-tests}.log。
 - 完了範囲：スクラッチの期間別売上・払戻・回収・精算済み収支、倍率別の金額と最近の当せん、未開封の秘匿。DBマイグレーション不要。ローカル試遊サーバー停止済み。codex/fortune-scratch-financesから本番担当Claude向けPRへ保存。本番の購入・入金・設定変更は未実行。
 - GitHub保存済み：[PR #68](https://github.com/manakikido-jpg/evaluation/pull/68)。codex/fortune-scratch-finances、実装123282c・最終検証b10b278。OPEN・未合流、本番未反映。担当Claudeによる確認と合流待ち。
+
+## 2026年10月22日：数える場所の折りたたみ
+- 依頼：浮上の記録の「数える場所」の長い一覧を折りたたみたい。
+- 開始：本番68dc8edからcodex/boost-location-collapse。作成・編集の共通PlacePickerが常に全件表示になっている。
+- 方針：最初は閉じて、必要なときだけ開く。カテゴリ・通話のチェックと送信値は維持。JavaScriptなしでも操作できる標準の開閉を使い、スマホの幅に収める。
+- 次：共通部品・見た目・回帰検証・説明を変更し、型と全テスト後に担当Claude向けPRへ保存。本番は直接変更しない。
+- 実装：共通の数える場所を標準details/summaryで最初は閉じ、説明は開いた内側へ移動。作成・編集に同時適用。JavaScriptを追加せず、フォームの項目・チェック・保存処理は維持。
+- 実ブラウザ：360pxと1440px、JavaScript無効で開閉・Enter操作・閉じた状態のFormDataに選択が残ること・横はみ出しなしを確認。初回型検証のテスト用カテゴリのparent_id不足を修正し、最終の型・ビルド・全テストを実行中。
