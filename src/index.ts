@@ -1,5 +1,6 @@
 import { processCoreTimeBonus } from './services/coreTimeAttendance.js';
 import { settleLotteries } from './services/casino/fortune.js';
+import { LotteryApp } from './discord/lottery.js';
 import { EmaCounterApp } from './discord/emaCounter.js';
 import { RecordingApp } from './discord/recording.js';
 import { planOf, roomOf } from './services/rooms.js';
@@ -111,6 +112,7 @@ async function main(): Promise<void> {
   const wallet = new WalletApp(db, cfg);
   const sokin = new SokinApp(db, cfg);
   const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
+  const lottery = new LotteryApp(db, cfg, actions, env.WEB_BASE_URL);
   const glossary = new GlossaryApp(db, cfg);
   const tempGrants = new TempGrantApp(db, cfg, actions);
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
@@ -220,7 +222,8 @@ async function main(): Promise<void> {
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
     void settleLotteries(db).catch(err => logger.warn({ err }, 'lottery settlement failed'));
     ticker = setInterval(() => {
-      void settleLotteries(db).catch(err => logger.warn({ err }, 'lottery settlement failed'));
+      // 🎫 週末宝くじ: 抽選して、結果を DM と売り場に知らせる
+      void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
@@ -396,6 +399,7 @@ async function main(): Promise<void> {
     void wallet.onInteraction(i);
     void sokin.onInteraction(i);
     void casino.onInteraction(i);
+    void lottery.onInteraction(i);
     void glossary.onInteraction(i);
     void tempGrants.onInteraction(i);
     void meetingApp.onInteraction(i);

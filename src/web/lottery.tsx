@@ -6,9 +6,10 @@ import type { DiscordApi } from './discordApi.js';
 import { casinoAllowed } from './casino.js';
 import { buyLottery, buyScratch, fortuneState, revealScratch, fortuneErrorMessage, FortuneError } from '../services/casino/fortune.js';
 import { walletOf } from '../services/economy.js';
-import { FortunePage, FortuneEntry, type FortuneMe } from './views/fortune.js';
+import { FortunePage, FortuneEntry, FortuneLink, type FortuneMe } from './views/fortune.js';
 import { createMemberSession, findMemberSession, deleteMemberSession, markMemberChecked, MEMBER_RECHECK_MS } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
+import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 const COOKIE = 'sakura_lottery', STATE = 'sakura_lottery_state';
 type Deps = { db: Db; api: DiscordApi; cfg: () => GuildConfig; baseUrl: string; secure: boolean; now: () => Date };
 export function mountLottery(app: Hono<any>, d: Deps) {
@@ -54,6 +55,25 @@ export function mountLottery(app: Hono<any>, d: Deps) {
    setCookie(c,COOKIE,await createMemberSession(db,user,d.now()),opts);
    return c.redirect('/lottery');
   } catch { return c.redirect('/lottery?error='+encodeURIComponent('Discord認証に失敗しました。少し待ってからやり直してください。')); }
+ });
+ // ── ログインなしで入るリンク（売り場のボタンで本人にだけ渡す。カジノの /カジノ と同じ） ──
+ app.get('/lottery/link/:token', async c => {
+  const user = await peekLoginLink(db, c.req.param('token') ?? '', d.now());
+  if (!user) return c.redirect('/lottery?error=' + encodeURIComponent('リンクの期限が切れたか、もう使われています。売り場のボタンをもう一度押してください。'));
+  return c.html(<FortuneLink name={user.displayName} action={`/lottery/link/${c.req.param('token')}`} />);
+ });
+ app.post('/lottery/link/:token', async c => {
+  // ほかのサイトから送らせて、別の人として入らせることはさせない
+  const origin = c.req.header('origin');
+  if (origin && origin !== new URL(d.baseUrl).origin) return c.text('不正なリクエストです。', 403);
+  const user = await useLoginLink(db, c.req.param('token') ?? '', d.now());
+  if (!user) return c.redirect('/lottery?error=' + encodeURIComponent('リンクの期限が切れたか、もう使われています。売り場のボタンをもう一度押してください。'), 303);
+  let roles;
+  try { roles = await api.memberRoles(d.cfg().guildId, user.id); }
+  catch { return c.redirect('/lottery?error=' + encodeURIComponent('Discordで入場条件を確認できません。少し待ってからやり直してください。'), 303); }
+  if (!roles || !casinoAllowed(d.cfg(), roles)) return c.redirect('/lottery?error=' + encodeURIComponent('入場ロールが必要です。運営に確認してください。'), 303);
+  setCookie(c, COOKIE, await createMemberSession(db, { id: user.id, username: user.displayName, displayName: user.displayName, avatarUrl: user.avatarUrl }, d.now()), opts);
+  return c.redirect('/lottery', 303);
  });
  app.post('/lottery/logout',page(async(c,me)=>{
   await deleteMemberSession(db,me.session.id);deleteCookie(c,COOKIE,{path:'/lottery'});return c.redirect('/lottery',303);

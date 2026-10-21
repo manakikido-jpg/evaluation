@@ -302,6 +302,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
           .setDescriptionLocalizations({ ja: '「🌸 朱印を押す」ボタンを、このチャンネルのいちばん下に出し続ける（#絵馬 など）' }),
       )
       .addSubcommand((s) =>
+        s.setName('lottery').setNameLocalizations({ ja: '宝くじ' }).setDescription('Lottery shop').setDescriptionLocalizations({ ja: '🎫 宝くじ売り場に入るボタンを置く（当選の知らせもここに出す）' }),
+      )
+      .addSubcommand((s) =>
         s
           .setName('ema')
           .setNameLocalizations({ ja: '絵馬' })

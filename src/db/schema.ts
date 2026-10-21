@@ -2145,7 +2145,10 @@ export const fortuneRounds = pgTable('fortune_rounds', {
   winnerId: text('winner_id'),
   winningNumber: integer('winning_number'),
   payout: integer('payout').notNull().default(0),
+  /** 📮 結果を DM と売り場に知らせた時刻（二度送らない目印。null はまだ） */
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
 }, (t) => [index('fortune_rounds_due').on(t.drawAt, t.settledAt)]);
+export type FortuneRound = typeof fortuneRounds.$inferSelect;
 export const fortuneTickets = pgTable('fortune_tickets', {
   id: text('id').primaryKey(),
   roundId: text('round_id').notNull().references(() => fortuneRounds.id),

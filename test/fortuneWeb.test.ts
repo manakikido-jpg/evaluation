@@ -128,3 +128,15 @@ it('入場条件の失効とDiscord確認失敗では購入させない',async()
  const denied=await app.request('/casino/auth/callback?state='+state+'&code=test',{headers:{cookie:'sakura_lottery_state='+state}});
  expect(denied.headers.get('set-cookie') ?? '').not.toContain('sakura_lottery=');
 });
+it('🎫 売り場のボタンのリンクで、ログインなしで入れる（1 回だけ・ほかのサイトからは入れない）',async()=>{
+ const { createLoginLink } = await import('../src/services/casino/loginLinks.js');
+ const token=await createLoginLink(db,{id:B,displayName:'びー',avatarUrl:null});
+ expect(await (await app.request(`/lottery/link/${token}`)).text()).toContain('びー さんとして入ります');
+ expect((await app.request(`/lottery/link/${token}`,{method:'POST',headers:{origin:'https://evil.example'}})).status).toBe(403);
+ const ok=await app.request(`/lottery/link/${token}`,{method:'POST',headers:{origin:BASE}});
+ expect(ok.status).toBe(303);expect(ok.headers.get('location')).toBe('/lottery');
+ const set=ok.headers.get('set-cookie')!;expect(set).toContain('sakura_lottery=');
+ const c=/sakura_lottery=([^;]+)/.exec(set)![1]!;
+ expect(await (await app.request('/lottery',{headers:{cookie:'sakura_lottery='+c}})).text()).toContain('いまの残高');
+ expect((await app.request(`/lottery/link/${token}`,{method:'POST',headers:{origin:BASE}})).headers.get('location')).toContain('/lottery?error=');
+});
