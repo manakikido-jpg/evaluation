@@ -1,3 +1,4 @@
+import { PermissionFlagsBits } from 'discord.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { ticketIntro, ticketPanel } from '../src/discord/supportTickets.js';
@@ -121,6 +122,12 @@ describe('🎫 チケット', () => {
     const role = ticketTypeOf(c2, 'role')!;
     expect(isTicketStaff(role, [ROLE], [])).toBe(true);
     expect(isTicketStaff(role, ['870000000000000777'], ['870000000000000777'])).toBe(true);
+    // サーバーの持ち主・「管理者」の権限がある人も運営として扱う
+    const { isGuildBoss } = await import('../src/discord/supportTickets.js');
+    const perms = (admin: boolean) => ({ has: (p: bigint) => admin && p === PermissionFlagsBits.Administrator });
+    expect(isGuildBoss({ id: 'a', guild: { ownerId: 'a' }, permissions: perms(false) })).toBe(true);
+    expect(isGuildBoss({ id: 'b', guild: { ownerId: 'a' }, permissions: perms(true) })).toBe(true);
+    expect(isGuildBoss({ id: 'b', guild: { ownerId: 'a' }, permissions: perms(false) })).toBe(false);
     expect(isTicketStaff(role, [], [])).toBe(false);
     const panel = JSON.stringify(ticketPanel(c2));
     expect(panel).toContain('tk:open');

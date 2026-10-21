@@ -125,6 +125,10 @@ export function ticketIntro(t: SupportTicket, type: TicketType, coin: string): M
   };
 }
 
+/** サーバーの持ち主と、Discord の「管理者」の権限がある人も、お問い合わせの運営として扱う（宮司・神職のロールがなくても） */
+export const isGuildBoss = (member: Pick<GuildMember, 'id'> & { guild?: { ownerId?: string } | null; permissions?: { has(p: bigint): boolean } | null }): boolean =>
+  member.guild?.ownerId === member.id || Boolean(member.permissions?.has(PermissionFlagsBits.Administrator));
+
 export class TicketApp {
   private guild?: Guild;
   private ticking = false;
@@ -145,7 +149,7 @@ export class TicketApp {
   }
 
   private isStaff(type: TicketType | undefined, member: GuildMember | null | undefined): boolean {
-    return !!member && isTicketStaff(type, [...member.roles.cache.keys()], adminRoleIdsOf(this.cfg()));
+    return !!member && (isGuildBoss(member) || isTicketStaff(type, [...member.roles.cache.keys()], adminRoleIdsOf(this.cfg())));
   }
 
   private async logChannel(c: TicketConfig): Promise<string | undefined> {
