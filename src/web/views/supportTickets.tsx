@@ -8,6 +8,10 @@ import { Layout } from './layout.js';
  */
 
 export const TICKET_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  role_created: { text: '役職を作り、希望できる役職に追加しました。', kind: 'ok' },
+  role_failed: { text: '役職を作れませんでした。BOTの「ロールの管理」権限を確かめてください。', kind: 'warn' },
+  role_unlinked: { text: '役職は作成しましたが、希望先の保存に失敗しました。「既存の役職を選ぶ」から追加してください。役職を作り直す必要はありません。', kind: 'warn' },
+  choices_saved: { text: '希望できる役職を保存しました。', kind: 'ok' },
   saved: { text: '設定を保存しました。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（名前・英字の名札・時間）。', kind: 'warn' },
   type_saved: { text: '種類を保存しました（パネルも書き換えました）。', kind: 'ok' },
@@ -151,11 +155,15 @@ export function TicketsPage(props: {
   const rated = props.closed.filter((t) => t.rating);
   const avg = rated.length ? (rated.reduce((n, t) => n + (t.rating ?? 0), 0) / rated.length).toFixed(1) : '—';
   return (
-    <Layout title="チケット" session={session} nav="tickets">
-      <h1>🎫 チケット</h1>
+    <Layout title="お問い合わせ" session={session} nav="tickets">
+      <h1>📨 お問い合わせ</h1>
+      <p class="note">お問い合わせ・相談・役職の希望・個人スタンプ依頼の受付をまとめて管理します。</p>
+      <nav class="inline-actions" aria-label="お問い合わせのメニュー">
+        <a href="#inquiry-open">受付中</a><a href="#inquiry-roles">希望できる役職</a><a href="#inquiry-settings">受付設定・パネル</a><a href="#inquiry-types">受付の種類・質問</a><a href="#inquiry-closed">対応済み</a>
+      </nav>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
 
-      <section class="card">
+      <section class="card" id="inquiry-open">
         <h2>📬 開いているチケット（{props.open.length}）</h2>
         {props.open.length ? (
           <table class="compact">
@@ -195,7 +203,37 @@ export function TicketsPage(props: {
         )}
       </section>
 
-      <section class="card">
+      <section class="card" id="inquiry-roles">
+        <h2>🎐 希望できる役職</h2>
+        <p class="note">「希望できる役職が、まだ決まっていません」と出るときは、ここで役職を追加してください。「係として見えるロール」と「希望する役職」は別の設定です。</p>
+        {!props.guji && <p class="note">設定の変更と役職の作成は宮司だけができます。</p>}
+        {c.types.filter(t => t.kind === 'role').map(t => {
+          const available = t.roleChoices.filter(id => props.roles.some(r => r.id === id));
+          return <details open={available.length === 0}>
+            <summary>{t.emoji} {t.label}：{available.length ? `${available.length}個の役職` : '⚠ 希望できる役職が未設定'}{!t.enabled ? '（受付停止中）' : ''}</summary>
+            {t.roleChoices.some(id => !props.roles.some(r => r.id === id)) && <p class="flash warn">見つからない役職があります。Discordの役職を確認し、選び直してください。</p>}
+            <form method="post" action={`/tickets/types/${t.key}/roles`}>
+              <Csrf session={session} />
+              <fieldset><legend>既存の役職を選ぶ（25個まで）</legend>
+                {props.roles.map(r => <label class="field check"><input type="checkbox" name="roleChoices" value={r.id} checked={t.roleChoices.includes(r.id)} /><span>{r.name}</span></label>)}
+                {!props.roles.length && <p class="note">役職を取得できませんでした。ページを開き直してください。</p>}
+              </fieldset>
+              {props.guji && <button type="submit" class="ok">希望できる役職を保存</button>}
+            </form>
+            {props.guji && <form method="post" action="/tickets/roles" class="fields">
+              <Csrf session={session} /><input type="hidden" name="typeKey" value={t.key} />
+              <h3>新しい役職を作って追加</h3>
+              <label class="field"><span>役職名</span><input name="name" required maxlength={100} placeholder="例：イベント係" /></label>
+              <label class="field"><span>色</span><input type="color" name="color" value="#99aab5" /></label>
+              <p class="note">追加権限なし・メンション不可で作成します。作成しただけでは誰にも付与しません。採用時に付与します。</p>
+              <button type="submit">役職を作って希望先に追加</button>
+            </form>}
+          </details>;
+        })}
+        {!c.types.some(t => t.kind === 'role') && <p class="note">「受付の種類・質問」で、種類が「役職の希望」の受付を作ってください。</p>}
+      </section>
+
+      <section class="card" id="inquiry-closed">
         <h2>🗂 閉じたチケット（新しい順・50 件）</h2>
         <p class="note">評価の平均 ⭐ {avg}（{rated.length} 件）。「記録」で、閉じたときのやりとりを読めます。</p>
         {props.closed.length ? (
@@ -238,7 +276,7 @@ export function TicketsPage(props: {
         )}
       </section>
 
-      <section class="card">
+      <section class="card" id="inquiry-settings">
         <h2>⚙ 設定</h2>
         {!props.guji && <p class="note">変えられるのは宮司だけです。</p>}
         <form method="post" action="/tickets/settings" class="fields">
@@ -268,7 +306,7 @@ export function TicketsPage(props: {
         )}
       </section>
 
-      <section class="card">
+      <section class="card" id="inquiry-types">
         <h2>🏷 種類</h2>
         <p class="note">パネルで選べるチケットの種類です。開くと、開いた人と「見えるロール」の人（と神職・宮司）だけが見えるチャンネルができます。質問は開くときに聞きます（5 つまで）。</p>
         {c.types.map((t) => (

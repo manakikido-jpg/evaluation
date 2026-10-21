@@ -5851,6 +5851,52 @@ export function createWebApp(deps: WebDeps) {
 
   const ticketPanelNow = () => refreshTicketPanel(db, deps.discord).catch((err: unknown) => (logger.warn({ err }, 'ticket panel failed'), false));
 
+  // 既存の種類や担当ロールを変えず、希望先だけを管理する。
+  app.post('/tickets/types/:key/roles', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const key = c.req.param('key');
+    const body = await c.req.parseBody({ all: true });
+    const raw = body.roleChoices;
+    const ids = [...new Set((Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((x): x is string => typeof x === 'string'))];
+    const conf = await loadTicketConfig(db);
+    const roles = await loadRoles();
+    if (!conf.types.some(t => t.key === key && t.kind === 'role') || !roles || ids.length > 25 || ids.some(id => !validId(id) || !roles.some(r => r.id === id && id !== cfg.guildId && !r.managed))) return c.redirect('/tickets?msg=invalid#inquiry-roles');
+    await saveTicketConfig(db, { ...conf, types: conf.types.map(t => t.key === key ? { ...t, roleChoices: ids } : t) }, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'ticket.roles', detail: { key, roleIds: ids }, via: 'web' });
+    return c.redirect('/tickets?msg=choices_saved#inquiry-roles');
+  });
+
+  app.post('/tickets/roles', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
+    const body = await c.req.parseBody();
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const color = typeof body.color === 'string' ? body.color : '';
+    const key = typeof body.typeKey === 'string' ? body.typeKey : '';
+    const conf = await loadTicketConfig(db);
+    const type = conf.types.find(t => t.key === key && t.kind === 'role');
+    if (!name || name.length > 100 || !/^#[0-9a-f]{6}$/i.test(color) || !type || type.roleChoices.length >= 25) return c.redirect('/tickets?msg=invalid#inquiry-roles');
+    let role: GuildRole;
+    try {
+      role = await deps.discord.createRole(cfg.guildId, { name, color: parseInt(color.slice(1), 16), permissions: '0', hoist: false, mentionable: false }, 'お問い合わせ（希望できる役職を作る）');
+    } catch (err) {
+      logger.warn({ err }, 'ticket role create failed');
+      return c.redirect('/tickets?msg=role_failed#inquiry-roles');
+    }
+    // Discord作成後に保存が失敗しても、作成済みであることを知らせて作り直しを防ぐ。
+    try {
+      await audit(db, { actorId: c.get('session').userId, action: 'role.create', detail: { roleId: role.id, name, ticketType: key }, via: 'web' });
+      const current = await loadTicketConfig(db);
+      const target = current.types.find(t => t.key === key && t.kind === 'role');
+      if (!target || target.roleChoices.length >= 25) return c.redirect('/tickets?msg=role_unlinked#inquiry-roles');
+      await saveTicketConfig(db, { ...current, types: current.types.map(t => t.key === key ? { ...t, roleChoices: [...new Set([...t.roleChoices, role.id])] } : t) }, c.get('session').userId);
+      await audit(db, { actorId: c.get('session').userId, action: 'ticket.roles', detail: { key, added: role.id }, via: 'web' });
+    } catch (err) {
+      logger.warn({ err, roleId: role.id }, 'ticket role link failed');
+      return c.redirect('/tickets?msg=role_unlinked#inquiry-roles');
+    }
+    return c.redirect('/tickets?msg=role_created#inquiry-roles');
+  });
+
   app.post('/tickets/settings', async (c) => {
     if (!gujiOnly(c)) return c.redirect('/tickets?msg=guji');
     const body = await c.req.parseBody();
