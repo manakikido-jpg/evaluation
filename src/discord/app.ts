@@ -284,7 +284,8 @@ export class ShuinApp {
     // ⏰ コアタイムに通話に上がった人を記録（花びらがもらえる人と同じ人）
     await recordCoreTime(this.db, this.cfg.coreTime, ids, now).catch((err) => logger.warn({ err }, 'core time attendance failed'));
     // ⏱ 浮上の記録の時間（社務所Web で作ったもの）にいた分
-    await recordBoostTime(this.db, ids, now).catch((err) => logger.warn({ err }, 'boost time attendance failed'));
+    const rooms = channels.map((ch) => ({ channelId: ch.id, parentId: guild.channels.cache.get(ch.id)?.parentId ?? null, memberIds: eligibleVoiceMembers([ch], excluded) }));
+    await recordBoostTime(this.db, rooms, now).catch((err) => logger.warn({ err }, 'boost time attendance failed'));
     // コアタイム中は、10 分ごとの花びらが増える
     const coreBonus = activeCoreTime(this.cfg.coreTime, now) ? coreTimeBonus(this.cfg.economy) : 0;
     // 役職ごとの倍率（いちばん格の高い役職の %）

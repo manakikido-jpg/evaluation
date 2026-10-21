@@ -11,7 +11,14 @@ import { deliverPresenceGift, requestPresenceGift, type PresenceGiftInput } from
 
 export const BOOST_MAX_HOURS = 24;
 
-export type BoostInput = { title: string; startAt: Date; endAt: Date; minMinutes: number };
+export type BoostInput = { title: string; startAt: Date; endAt: Date; minMinutes: number; channelIds?: string[]; categoryIds?: string[] };
+
+/** 1 分ごとに渡す、通話チャンネルごとの数える人（花びらがもらえる人と同じ） */
+export type BoostRoom = { channelId: string; parentId: string | null; memberIds: readonly string[] };
+
+/** その時間で数えるチャンネルか（チャンネルもカテゴリも選んでいなければ全部） */
+export const boostCovers = (b: Pick<BoostTime, 'channelIds' | 'categoryIds'>, room: Pick<BoostRoom, 'channelId' | 'parentId'>) =>
+  (!b.channelIds.length && !b.categoryIds.length) || b.channelIds.includes(room.channelId) || (room.parentId !== null && b.categoryIds.includes(room.parentId));
 
 export function validBoost(i: BoostInput): boolean {
   const len = i.endAt.getTime() - i.startAt.getTime();
@@ -44,17 +51,21 @@ export const getBoost = async (db: Db, id: number) => (await db.select().from(bo
 export const activeBoosts = (db: Db, now: Date) =>
   db.select().from(boostTimes).where(and(isNull(boostTimes.canceledAt), lte(boostTimes.startAt, now), gt(boostTimes.endAt, now)));
 
-/** 1 分ごと: いまの時間があれば、ids の人に 1 分ずつ足す。足した時間の数を返す */
-export async function recordBoostTime(db: Db, ids: readonly string[], now: Date): Promise<number> {
-  if (!ids.length) return 0;
+/** 1 分ごと: いまの時間があれば、選んだチャンネル（カテゴリ）にいる人に 1 分ずつ足す。足した時間の数を返す */
+export async function recordBoostTime(db: Db, rooms: readonly BoostRoom[], now: Date): Promise<number> {
+  if (!rooms.some((r) => r.memberIds.length)) return 0;
   const list = await activeBoosts(db, now);
+  let n = 0;
   for (const b of list) {
+    const ids = [...new Set(rooms.filter((r) => boostCovers(b, r)).flatMap((r) => r.memberIds))];
+    if (!ids.length) continue;
+    n++;
     await db
       .insert(boostTimeAttendance)
-      .values([...new Set(ids)].map((memberId) => ({ boostId: b.id, memberId, minutes: 1, firstAt: now, lastAt: now })))
+      .values(ids.map((memberId) => ({ boostId: b.id, memberId, minutes: 1, firstAt: now, lastAt: now })))
       .onConflictDoUpdate({ target: [boostTimeAttendance.boostId, boostTimeAttendance.memberId], set: { minutes: sql`${boostTimeAttendance.minutes} + 1`, lastAt: now } });
   }
-  return list.length;
+  return n;
 }
 
 /** その時間にいた人（長くいた順） */

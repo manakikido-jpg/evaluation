@@ -1,6 +1,7 @@
 import type { AdminSession, BoostTime, BoostTimeAttendance } from '../../db/schema.js';
 import { fmtMinutes } from '../../services/voiceUsage.js';
 import { TICKET_GROUPS, TICKET_LABEL } from '../../services/tickets.js';
+import type { GuildChannel } from '../../lib/discordRest.js';
 import { Layout } from './layout.js';
 
 /** 日本時間の datetime-local の値 */
@@ -22,6 +23,8 @@ export function BoostTimePage(props: {
   members: BoostTimeAttendance[];
   name: (id: string) => string;
   coin: { emoji: string; name: string };
+  /** 通話チャンネルとカテゴリ（数える場所のチェック） */
+  channels: GuildChannel[];
   canEdit: boolean;
   /** 宮司だけ、プレゼントできる */
   canGift: boolean;
@@ -70,6 +73,7 @@ export function BoostTimePage(props: {
             <span>何分以上いた人を数えるか</span>
             <input type="number" name="minMinutes" min={1} max={1440} value="30" required />
           </label>
+          <PlacePicker channels={props.channels} />
           <button type="submit" class="ok">作る</button>
         </form>
       )}
@@ -83,6 +87,7 @@ export function BoostTimePage(props: {
                 <th>名前</th>
                 <th>時間</th>
                 <th class="num">何分以上</th>
+                <th>場所</th>
                 <th class="num">達成 / 来た人</th>
                 <th>状態</th>
                 <th></th>
@@ -98,6 +103,7 @@ export function BoostTimePage(props: {
                       {jstText(b.startAt)}〜{hm(b.endAt)}
                     </td>
                     <td class="num">{b.minMinutes} 分</td>
+                    <td>{placeText(b, props.channels)}</td>
                     <td class="num">
                       {n.ok} / {n.all} 人
                     </td>
@@ -121,7 +127,7 @@ export function BoostTimePage(props: {
       {sel && (
         <section class="card" id="boost-detail">
           <h2>
-            {sel.title}（{jstText(sel.startAt)}〜{hm(sel.endAt)}・{sel.minMinutes} 分以上）
+            {sel.title}（{jstText(sel.startAt)}〜{hm(sel.endAt)}・{sel.minMinutes} 分以上・{placeText(sel, props.channels)}）
           </h2>
           {props.canEdit && ['upcoming', 'active'].includes(boostState(sel, props.now)) && (
             <details>
@@ -144,6 +150,7 @@ export function BoostTimePage(props: {
                   <span>何分以上</span>
                   <input type="number" name="minMinutes" min={1} max={1440} value={String(sel.minMinutes)} required />
                 </label>
+                <PlacePicker channels={props.channels} channelIds={sel.channelIds} categoryIds={sel.categoryIds} />
                 <button type="submit">保存</button>
               </form>
               <form method="post" action={`/voice/boost/${sel.id}/cancel`} class="row-actions">
@@ -221,4 +228,42 @@ export function BoostTimePage(props: {
       )}
     </Layout>
   );
+}
+
+const isVoice = (c: GuildChannel) => c.type === 2 || c.type === 13;
+
+/** 数える場所: カテゴリごとに、カテゴリ全体と通話チャンネルのチェック（何も選ばなければ全部） */
+function PlacePicker(props: { channels: GuildChannel[]; channelIds?: string[]; categoryIds?: string[] }) {
+  const voice = props.channels.filter(isVoice).sort((a, b) => a.position - b.position);
+  const cats = props.channels.filter((c) => c.type === 4 && voice.some((v) => v.parent_id === c.id)).sort((a, b) => a.position - b.position);
+  const groups: { cat?: GuildChannel; list: GuildChannel[] }[] = [...cats.map((cat) => ({ cat, list: voice.filter((v) => v.parent_id === cat.id) })), { list: voice.filter((v) => !v.parent_id) }].filter((g) => g.list.length);
+  return (
+    <fieldset class="field">
+      <legend>数える場所（何も選ばなければ、AFK などを除いた全部の通話）</legend>
+      {groups.map((g) => (
+        <div class="check-group">
+          {g.cat ? (
+            <label class="check">
+              <input type="checkbox" name="categoryIds" value={g.cat.id} checked={props.categoryIds?.includes(g.cat.id)} /> <strong>📁 {g.cat.name}</strong>（カテゴリ全部。あとで足した通話も）
+            </label>
+          ) : (
+            <strong>カテゴリなし</strong>
+          )}
+          {g.list.map((v) => (
+            <label class="check">
+              <input type="checkbox" name="channelIds" value={v.id} checked={props.channelIds?.includes(v.id)} /> 🔊 {v.name}
+            </label>
+          ))}
+        </div>
+      ))}
+      {!groups.length && <p class="empty">通話チャンネルを読みこめませんでした（全部の通話で数えます）。</p>}
+    </fieldset>
+  );
+}
+
+/** 一覧に出す、数える場所の名前 */
+export function placeText(b: Pick<BoostTime, 'channelIds' | 'categoryIds'>, channels: GuildChannel[]): string {
+  if (!b.channelIds.length && !b.categoryIds.length) return 'すべての通話';
+  const name = (id: string) => channels.find((c) => c.id === id)?.name ?? '（消えたチャンネル）';
+  return [...b.categoryIds.map((id) => `📁${name(id)}`), ...b.channelIds.map((id) => `🔊${name(id)}`)].join('・');
 }

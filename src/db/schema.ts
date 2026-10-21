@@ -2186,6 +2186,9 @@ export const boostTimes = pgTable(
     startAt: timestamp('start_at', { withTimezone: true }).notNull(),
     endAt: timestamp('end_at', { withTimezone: true }).notNull(),
     minMinutes: integer('min_minutes').notNull(),
+    /** 数える通話チャンネル・カテゴリ（どちらも空なら、AFK などを除いた全部） */
+    channelIds: text('channel_ids').array().notNull().default(sql`'{}'::text[]`),
+    categoryIds: text('category_ids').array().notNull().default(sql`'{}'::text[]`),
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     canceledAt: timestamp('canceled_at', { withTimezone: true }),

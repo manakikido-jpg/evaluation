@@ -1,0 +1,2 @@
+ALTER TABLE "boost_times" ADD COLUMN "channel_ids" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "boost_times" ADD COLUMN "category_ids" text[] DEFAULT '{}'::text[] NOT NULL;

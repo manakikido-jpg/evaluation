@@ -1321,3 +1321,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .voice-ch h3 small { color: var(--muted); font-weight: normal; }
 .voice-ch ul { margin: 0; padding-left: 1.1em; }
 .voice-ch li { overflow-wrap: anywhere; }
+
+/* ⏱ 浮上の記録: 数える場所のチェック（カテゴリごと） */
+.check-group { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; padding: 0.4rem 0; border-bottom: 1px solid var(--line, #e5e5e5); }
+.check-group > strong, .check-group > label:first-child { flex-basis: 100%; }

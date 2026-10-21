@@ -1554,29 +1554,32 @@ export function createWebApp(deps: WebDeps) {
       counts.set(b.id, { all: rows.length, ok: rows.filter((r) => r.minutes >= b.minMinutes).length });
     }
     const names = await namesOf(db, members.map((m) => m.memberId));
-    return c.html(<BoostTimePage session={c.get('session')} now={t} list={list} counts={counts} selected={selected} members={members} name={(x) => names.get(x) ?? x} coin={{ emoji: cfg.economy.currencyEmoji, name: cfg.economy.currencyName }} canEdit canGift={c.get('session').level === 'guji'} msg={c.req.query('msg')} />);
+    const channels = await loadChannels().catch(() => [] as GuildChannel[]);
+    return c.html(<BoostTimePage session={c.get('session')} now={t} channels={channels} list={list} counts={counts} selected={selected} members={members} name={(x) => names.get(x) ?? x} coin={{ emoji: cfg.economy.currencyEmoji, name: cfg.economy.currencyName }} canEdit canGift={c.get('session').level === 'guji'} msg={c.req.query('msg')} />);
   });
   const boostInput = (body: Record<string, unknown>) => {
     const startAt = typeof body.startAt === 'string' ? parseJstLocal(body.startAt) : undefined;
     const endAt = typeof body.endAt === 'string' ? parseJstLocal(body.endAt) : undefined;
     const title = field(body, 'title', 60);
     const minMinutes = Number(body.minMinutes);
-    return startAt && endAt && title ? { title, startAt, endAt, minMinutes } : undefined;
+    // チェックした場所（数字の ID だけ。100 まで）
+    const ids = (k: string) => [...new Set([body[k] ?? []].flat().filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v)))].slice(0, 100);
+    return startAt && endAt && title ? { title, startAt, endAt, minMinutes, channelIds: ids('channelIds'), categoryIds: ids('categoryIds') } : undefined;
   };
   app.post('/voice/boost', async (c) => {
-    const input = boostInput(await c.req.parseBody());
+    const input = boostInput(await c.req.parseBody({ all: true }));
     const row = input && input.endAt > now() ? await createBoost(db, input, c.get('session').userId) : undefined;
     if (!row) return c.redirect('/voice/boost?msg=invalid');
-    await audit(db, { actorId: c.get('session').userId, action: 'boost.create', detail: { id: row.id, title: row.title, startAt: row.startAt, endAt: row.endAt, minMinutes: row.minMinutes }, via: 'web' });
+    await audit(db, { actorId: c.get('session').userId, action: 'boost.create', detail: { id: row.id, title: row.title, startAt: row.startAt, endAt: row.endAt, minMinutes: row.minMinutes, channelIds: row.channelIds, categoryIds: row.categoryIds }, via: 'web' });
     return c.redirect(`/voice/boost?id=${row.id}&msg=created#boost-detail`);
   });
   app.post('/voice/boost/:id', async (c) => {
     const id = Number(c.req.param('id'));
-    const input = boostInput(await c.req.parseBody());
+    const input = boostInput(await c.req.parseBody({ all: true }));
     if (!Number.isSafeInteger(id) || !input) return c.redirect(`/voice/boost?id=${id}&msg=invalid#boost-detail`);
     const row = await updateBoost(db, id, input, now());
     if (!row) return c.redirect(`/voice/boost?id=${id}&msg=not_editable#boost-detail`);
-    await audit(db, { actorId: c.get('session').userId, action: 'boost.edit', detail: { id, title: row.title, startAt: row.startAt, endAt: row.endAt, minMinutes: row.minMinutes }, via: 'web' });
+    await audit(db, { actorId: c.get('session').userId, action: 'boost.edit', detail: { id, title: row.title, startAt: row.startAt, endAt: row.endAt, minMinutes: row.minMinutes, channelIds: row.channelIds, categoryIds: row.categoryIds }, via: 'web' });
     return c.redirect(`/voice/boost?id=${id}&msg=saved#boost-detail`);
   });
   app.post('/voice/boost/:id/cancel', async (c) => {

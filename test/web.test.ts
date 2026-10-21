@@ -1793,10 +1793,11 @@ describe('通話の記録（管理画面）', () => {
     expect(created.headers.get('location')).toBe(`/voice/boost?id=${id}&msg=created#boost-detail`);
     expect((await post(s, `/voice/boost/${id}`, { title: '平日お昼', startAt: jst(at(1)), endAt: jst(at(2)), minMinutes: '20' })).headers.get('location')).toContain('msg=saved');
     // 時間の中だけ記録する
-    expect(await recordBoostTime(db, [USER, STAFF], at(0.5))).toBe(0);
-    for (let m = 0; m < 25; m++) await recordBoostTime(db, [USER], new Date(at(1).getTime() + m * 60_000));
-    await recordBoostTime(db, [STAFF], at(1.5));
-    expect(await recordBoostTime(db, [USER], at(2))).toBe(0);
+    const room = (ids: string[], channelId = '990000000000000501', parentId: string | null = null) => [{ channelId, parentId, memberIds: ids }];
+    expect(await recordBoostTime(db, room([USER, STAFF]), at(0.5))).toBe(0);
+    for (let m = 0; m < 25; m++) await recordBoostTime(db, room([USER]), new Date(at(1).getTime() + m * 60_000));
+    await recordBoostTime(db, room([STAFF]), at(1.5));
+    expect(await recordBoostTime(db, room([USER]), at(2))).toBe(0);
     const page = await (await get(`/voice/boost?id=${id}`, s)).text();
     expect(page).toContain('<h1>⏱ 浮上の記録の時間</h1>');
     expect(page).toContain('1 / 2 人');
