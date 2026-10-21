@@ -63,6 +63,7 @@ import {
   MENU_MINUTES,
   menuLabel,
   changeableReservations,
+  openReservationsWithThread,
   proposeSessionTime,
   acceptSessionTime,
   castStatement,
@@ -396,6 +397,8 @@ export class CastApp {
   private ticking = false;
   private introsDiscovered = false;
   private syncingIntros = false;
+  /** 起動して 1 回だけ、進行中の予約のスレッドのメッセージを、いまの形（ボタン・時間の表示）に書き換えた */
+  private threadsRefreshed = false;
   private creatingReservationHub?: Promise<TextChannel | undefined>;
 
   constructor(
@@ -1672,6 +1675,11 @@ export class CastApp {
   }
 
   private async runTick(now: Date): Promise<void> {
+    // 更新の前に出した予約のメッセージにも「日時変更を提案」などの新しいボタンを出す（起動して 1 回だけ）
+    if (!this.threadsRefreshed) {
+      this.threadsRefreshed = true;
+      for (const s of await openReservationsWithThread(this.db, now).catch(() => [])) await this.editThreadMessage(s).catch((err: unknown) => logger.warn({ err, sessionId: s.id }, 'cast thread refresh failed'));
+    }
     const c = await loadCastConfig(this.db);
     const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;

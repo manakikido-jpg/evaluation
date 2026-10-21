@@ -1248,6 +1248,11 @@ export async function castStatement(db: Db, castId: string, from: Date, to: Date
   return { rows, total: rows.reduce((n, r) => n + r.paid, 0), count: rows.length };
 }
 
+/** まだ始まっていない予約（返事待ち・確定）で、やり取りのスレッドがあるもの（スレッドのメッセージを新しい形に書き換えるため） */
+export async function openReservationsWithThread(db: Db, now = new Date()) {
+  return db.select().from(castSessions).where(and(inArray(castSessions.status, ['reserved', 'accepted']), sql`${castSessions.threadId} is not null`, sql`${castSessions.startAt} > ${now}`)).orderBy(asc(castSessions.startAt));
+}
+
 /** 自分が当事者の、まだ始まっていない予約だけを返す。 */
 export async function changeableReservations(db: Db, memberId: string, now = new Date()) {
   return db.select().from(castSessions).where(and(or(eq(castSessions.castId, memberId), eq(castSessions.customerId, memberId)), inArray(castSessions.status, ['reserved', 'accepted']), sql`${castSessions.startAt} > ${now}`)).orderBy(asc(castSessions.startAt));

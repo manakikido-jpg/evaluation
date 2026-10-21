@@ -634,6 +634,26 @@ describe('🎀 キャストのDiscord操作', () => {
     expect((showModal.mock.calls[1] as unknown as [{ data: { custom_id: string } }])[0].data.custom_id).toBe(`cast:cmodal:${CAST}:m1:dlv:0`);
   });
 
+  it('起動して 1 回だけ、進行中の予約のスレッドのメッセージを新しい形（日時変更の提案ボタンつき）に書き換える', async () => {
+    const at = new Date(T20.getTime() + 24 * 60 * MIN);
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const TH = '990000000000000777';
+    await setSessionPlace(db, r.session.id, { threadId: TH });
+    const f = fixture();
+    const edit = vi.fn(async () => undefined);
+    const old = { author: { id: 'bot' }, components: [{ components: [{ customId: `cast:cancel:${r.session.id}` }] }], edit };
+    const thread = { isTextBased: () => true, client: { user: { id: 'bot' } }, messages: { fetch: vi.fn(async () => ({ find: (fn: (m: unknown) => boolean) => [old].find(fn) })) } };
+    (f.app as unknown as { guild: { channels: { cache: Map<string, unknown> } } }).guild.channels.cache.set(TH, thread);
+    await f.app.tick(T20);
+    await f.app.tick(T20);
+    expect(edit).toHaveBeenCalledOnce();
+    const body = JSON.stringify((edit.mock.calls[0] as unknown[])[0]);
+    expect(body).toContain(`cast:propose:${r.session.id}`);
+    expect(body).toContain('日時変更を提案');
+  });
+
   it('予約開始では部屋を1つ作り、スレッドに入室ボタンを出す', async () => {
     const at = new Date(T20.getTime() + 60 * MIN);
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
