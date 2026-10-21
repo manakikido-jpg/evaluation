@@ -9,8 +9,12 @@ export async function castLeaderboard(db:Db, now=new Date()) {
  const result=await db.execute(sql`
  select cast_id, sum(calls)::int as calls, sum(revenue)::text as revenue from (
    select ${s.castId} as cast_id, count(*) filter (where ${s.plan} not like 'dlv:%') as calls,
-   sum(greatest(0, ${s.price} - coalesce((select sum(${t.amount}) from ${t} where ${t.reason}='cast_refund' and ${t.detail}->>'sessionId'=${s.id}::text and ${t.memberId}=${s.customerId}),0))) as revenue
-   from ${s} where ${s.status}='done' and ${s.closedAt}>=${start} and ${s.closedAt}<${end} and ${s.closedAt}<=${now} group by ${s.castId}
+   sum(greatest(0, ${s.price} - coalesce(refunds.amount,0))) as revenue
+   from ${s} left join (
+     select ${t.detail}->>'sessionId' as session_id, ${t.memberId} as customer_id, sum(${t.amount}) as amount
+     from ${t} where ${t.reason}='cast_refund' group by ${t.detail}->>'sessionId', ${t.memberId}
+   ) refunds on refunds.session_id=${s.id}::text and refunds.customer_id=${s.customerId}
+   where ${s.status}='done' and ${s.closedAt}>=${start} and ${s.closedAt}<${end} and ${s.closedAt}<=${now} group by ${s.castId}
    union all
    select ${c.castId} as cast_id, 0 as calls, sum(${c.price}) as revenue from ${c}
    where ${c.paidAt}>=${start} and ${c.paidAt}<${end} and ${c.paidAt}<=${now} group by ${c.castId}
