@@ -361,3 +361,16 @@
 - 最終検証：実装3372767・極小幅修正97c372bで型チェック成功、最終CSSを含むビルド成功、全148ファイル1,827テスト成功（398.40秒、2並列）。削除・skip・時間制限変更なし。push前fetchで本番74e6e60から追加変更なし。ログは/workspace/artifacts/office-ux/{typecheck-final,build-final,all-tests}.log。
 - 完了範囲：共通レイアウト・桜色の情報階層・メニュー検索とスマホの焦点操作・表のスクロール補助・入力と保存バー・320px幅への対応。認証や閲覧権限、保存API、Discord、本番DBの変更はなし。codex/office-responsive-uxから担当Claude向けPRへ保存。本番未反映。問い合わせ専用の作成管理は別PR #66に保持し、今回へ混ぜていない。
 - GitHub保存済み：[PR #67](https://github.com/manakikido-jpg/evaluation/pull/67)。codex/office-responsive-ux、全件検証記録e2e5986。OPEN・未合流、本番未反映。作成直前のfetchでは追加なしだったが、PR作成時に本番7ff49cf（別件のCPUオセロ利益上限）が入ったことを確認。UIの検証コードは74e6e60基準のまま、合流時に担当Claudeが両方の更新履歴・決定・説明を保持して確認する。
+
+## 2026年10月22日：宝くじタブのスクラッチ収支
+- 依頼：スクラッチの収益・当たったときの金額・回収できた金額を社務所の宝くじタブで確認したい。
+- 開始：最新本番7ff49cfからcodex/fortune-scratch-finances。UI PR #67の反映承認はPR本文へ保存済み、ローカル追記は/workspace/artifacts/office-ux/reflection-approval.patchへ保管。
+- 方針：購入時の実売上・開封時の実払戻・差引回収額を期間別に表示し、未開封と確定利益を区別する。当選倍率ごとの実績・現行価格の払戻例も示す。未開封の当たり結果は表示しない。集計の追加のみで購入・確率・配当・残高は変えない。
+- 守ること：既存/economy/fortuneの管理者認証を維持。本番DBやDiscordを操作せず、架空データとテストで確認。
+- 次：記録・集計境界を確認し、表示・テスト・説明を実装、型と全テスト後に担当Claude向けPRへ保存。
+- 実装：今日・7日・30日・全期間の売上／実払戻／差引回収／開封済み収支、未開封枚数、実績還元率、倍率ごとの現行払戻例と過去の実払戻、最近の当せん20件を追加。購入日と開封日を別に扱い、価格変更前の券も実額で集計。読み取り専用・repeatable readで表示全体の整合性を保つ。
+- 関連検証：3ファイル35件成功（13.27秒）。JST境界、空期間、旧価格、購入と開封の別日、未開封の当たり非表示、赤字、20件制限、管理者限定・一般売り場へ非表示を確認。実際の購入・二度開封でも収支が一度だけの追加テストを含め全件検証中。
+- 画面確認：Chromiumの360/390/1440pxで収支の金額・期間切替・横はみ出し0・JS例外0を確認。サンプル売上2100銭／払戻1500銭／差引600銭／開封済み500銭。/workspace/artifacts/scratch-finances/へ画面と記録を保存。実収支は本番未取得。
+- 最終検証：実装123282cで型チェック・ビルド成功、全148ファイル1,831テスト成功（405.18秒、2並列）。最後に追加した実購入・二度開封の回帰も成功。テスト削除・skipなし。push前fetchで本番7ff49cfから追加変更なし。ログ/workspace/artifacts/scratch-finances/{typecheck-final,build,all-tests}.log。
+- 完了範囲：スクラッチの期間別売上・払戻・回収・精算済み収支、倍率別の金額と最近の当せん、未開封の秘匿。DBマイグレーション不要。ローカル試遊サーバー停止済み。codex/fortune-scratch-financesから本番担当Claude向けPRへ保存。本番の購入・入金・設定変更は未実行。
+- GitHub保存済み：[PR #68](https://github.com/manakikido-jpg/evaluation/pull/68)。codex/fortune-scratch-finances、実装123282c・最終検証b10b278。OPEN・未合流、本番未反映。担当Claudeによる確認と合流待ち。
