@@ -1267,7 +1267,8 @@ export async function castStatement(db: Db, castId: string, from: Date, to: Date
 
 /** まだ始まっていない予約（返事待ち・確定）で、やり取りのスレッドがあるもの（スレッドのメッセージを新しい形に書き換えるため） */
 export async function openReservationsWithThread(db: Db, now = new Date()) {
-  return db.select().from(castSessions).where(and(inArray(castSessions.status, ['reserved', 'accepted']), sql`${castSessions.threadId} is not null`, sql`${castSessions.startAt} > ${now}`)).orderBy(asc(castSessions.startAt));
+  // 📦 納品の注文（まだ納品していないもの）も、スレッドのボタンを新しくする
+  return db.select().from(castSessions).where(and(sql`${castSessions.threadId} is not null`, or(and(inArray(castSessions.status, ['reserved', 'accepted']), sql`${castSessions.startAt} > ${now}`), eq(castSessions.status, 'ordered')))).orderBy(asc(castSessions.createdAt));
 }
 
 /** 自分が当事者の、まだ始まっていない予約だけを返す。 */

@@ -1388,7 +1388,8 @@ export class CastApp {
       ordered: {
         title: '📦 納品の注文',
         line: `${sessionLabel(s)} の注文です。キャストが ${due} までに、このスレッドに出して「納品した」を押します。間に合わなければ全額戻します。`,
-        buttons: [...(castButtons ? [button(`cast:dlv:${s.id}`, '納品した（キャスト）', 3, '📦'), button(`cast:decline:${s.id}`, '断る（キャスト）', 4)] : []), button(`cast:report:${s.id}`, '通報', 4, '🚨')],
+        // 「納品した」は、いつもスレッドにも出す（DM を見落としても、スレッドに出したその場で押せる。押せるのは注文を受けたキャストだけ）
+        buttons: [button(`cast:dlv:${s.id}`, '納品した（キャスト）', 3, '📦'), ...(castButtons ? [button(`cast:decline:${s.id}`, '断る（キャスト）', 4)] : []), button(`cast:report:${s.id}`, '通報', 4, '🚨')],
       },
       delivered: {
         title: '📦 納品されました',

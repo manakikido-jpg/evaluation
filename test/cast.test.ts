@@ -254,6 +254,15 @@ describe('🎀 キャスト', () => {
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: voice!.id }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
     expect(r.session).toMatchObject({ status: 'ordered', plan: `dlv:${voice!.id}` });
+    // スレッドのある納品の注文は、BOT が起きたときにスレッドのボタン（納品した）を新しくする
+    {
+      const { openReservationsWithThread } = await import('../src/services/cast.js');
+      const { castSessions } = await import('../src/db/schema.js');
+      const { eq } = await import('drizzle-orm');
+      expect((await openReservationsWithThread(db, T20)).map((x) => x.id)).not.toContain(r.session.id);
+      await db.update(castSessions).set({ threadId: '990000000000000301' }).where(eq(castSessions.id, r.session.id));
+      expect((await openReservationsWithThread(db, T20)).map((x) => x.id)).toContain(r.session.id);
+    }
     // 通話の予約とは重ならない・お客からは取り消せない
     const call = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: new Date(T20.getTime() + 60 * MIN) }, T20);
     if (call.status !== 'ok') throw new Error(call.status);
