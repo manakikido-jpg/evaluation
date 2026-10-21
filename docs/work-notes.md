@@ -335,3 +335,4 @@
 - 最終検証：本番a04ea6aを取り込んだd3c9d22で型チェック・ビルド成功。全144ファイル1,820テスト成功（437.67秒、2並列）、削除・skipなし。新規4件は全件にも含む。ログ/workspace/artifacts/inquiry-{typecheck-final,build,all-tests}.log。
 - push前fetch：本番の追加0fa207d（絵馬のひな形から朱印ボタンを外す、noticesとテストと既存説明のみ）を確認。問い合わせの検証コードは変更せず本番a04ea6a基準のPRとする。合流時に担当Claudeが最新と組み合わせて確認する。
 - 完了範囲：お問い合わせのタブと移動案内、受付一覧・記録・設定・質問・希望役職の集約、希望先の選択と権限0の役職作成、未設定警告、宮司・CSRF・監査・失敗案内。DBマイグレーション不要。codex/inquiry-management、実装8a20086・取り込みd3c9d22。本番の役職作成・投稿・設定変更は未実行。担当Claude向けPRへ保存する。
+- GitHub保存済み：[PR #66](https://github.com/manakikido-jpg/evaluation/pull/66)。codex/inquiry-management、最終検証記録13bc885。OPEN・未合流、本番未反映。希望する役職の具体的な名前は設定画面で運営が入力し、今回は本番へ作成していない。担当Claudeの確認と合流待ち。
