@@ -785,6 +785,13 @@
       "when": 1792565993691,
       "tag": "0111_tricky_saracen",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1792594610279,
+      "tag": "0112_fearless_the_professor",
+      "breakpoints": true
     }
   ]
 }

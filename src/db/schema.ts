@@ -2174,6 +2174,42 @@ export const coreTimeAttendance = pgTable(
 );
 export type CoreTimeAttendance = typeof coreTimeAttendance.$inferSelect;
 
+/**
+ * ⏱ 浮上の記録の時間（社務所Web で、日時と「何分以上」を決めて作る）。人が少ない時間帯の浮上をふやすため。
+ * その間、通話にいた分を 1 分ずつ数える。終わったら、min_minutes 分以上いた人へ銭・券をプレゼントできる
+ */
+export const boostTimes = pgTable(
+  'boost_times',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    title: text('title').notNull(),
+    startAt: timestamp('start_at', { withTimezone: true }).notNull(),
+    endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+    minMinutes: integer('min_minutes').notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    /** 🎁 プレゼントした時刻（同じ時間に二度配らない目印。null はまだ） */
+    giftedAt: timestamp('gifted_at', { withTimezone: true }),
+  },
+  (t) => [index('boost_times_end_idx').on(t.endAt), check('boost_times_range', sql`${t.endAt} > ${t.startAt}`)],
+);
+export type BoostTime = typeof boostTimes.$inferSelect;
+
+/** ⏱ 浮上の記録の時間に、通話にいた分（1 人 1 行） */
+export const boostTimeAttendance = pgTable(
+  'boost_time_attendance',
+  {
+    boostId: bigint('boost_id', { mode: 'number' }).notNull().references(() => boostTimes.id),
+    memberId: text('member_id').notNull(),
+    minutes: integer('minutes').notNull().default(0),
+    firstAt: timestamp('first_at', { withTimezone: true }).notNull(),
+    lastAt: timestamp('last_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.boostId, t.memberId] })],
+);
+export type BoostTimeAttendance = typeof boostTimeAttendance.$inferSelect;
+
 /** 予約日時の変更提案。相手の承認でだけ確定する。 */
 export const castTimeChanges = pgTable('cast_time_changes', {
   id: text('id').primaryKey(),

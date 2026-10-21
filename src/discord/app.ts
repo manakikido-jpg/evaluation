@@ -1,6 +1,7 @@
 import { pingRoleIds } from '../services/notify.js';
 import { saveVoiceNow } from '../services/meetings.js';
 import { recordCoreTime } from '../services/coreTimeAttendance.js';
+import { recordBoostTime } from '../services/boostTimes.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -282,6 +283,8 @@ export class ShuinApp {
     if (!ids.length) return;
     // ⏰ コアタイムに通話に上がった人を記録（花びらがもらえる人と同じ人）
     await recordCoreTime(this.db, this.cfg.coreTime, ids, now).catch((err) => logger.warn({ err }, 'core time attendance failed'));
+    // ⏱ 浮上の記録の時間（社務所Web で作ったもの）にいた分
+    await recordBoostTime(this.db, ids, now).catch((err) => logger.warn({ err }, 'boost time attendance failed'));
     // コアタイム中は、10 分ごとの花びらが増える
     const coreBonus = activeCoreTime(this.cfg.coreTime, now) ? coreTimeBonus(this.cfg.economy) : 0;
     // 役職ごとの倍率（いちばん格の高い役職の %）

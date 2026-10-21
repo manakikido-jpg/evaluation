@@ -1771,6 +1771,57 @@ describe('通話の記録（管理画面）', () => {
     expect((await listAudit(db, { action: 'coretime.gift' })).length).toBe(1);
   });
 
+  it('⏱ 浮上の記録の時間: 作る・直す・やめる。終わったら決めた分以上いた人へ宮司がプレゼント（1 回だけ）', async () => {
+    const { boostTimes } = await import('../src/db/schema.js');
+    const { recordBoostTime, listBoosts } = await import('../src/services/boostTimes.js');
+    const { eq } = await import('drizzle-orm');
+    const { walletOf } = await import('../src/services/economy.js');
+    const post = async (session: string, path: string, data: Record<string, string>) => {
+      const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+      return app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
+    };
+    const jst = (d: Date) => new Date(d.getTime() + 9 * 3_600_000).toISOString().slice(0, 16);
+    const at = (h: number) => new Date(clock.getTime() + h * 3_600_000);
+    expect((await app.request('/voice/boost')).status).toBe(302);
+    const s = await login(STAFF);
+    expect(await (await get('/voice', s)).text()).toContain('href="/voice/boost"');
+    // 入力のまちがい（終わりが始まりより前・何分以上が長さより長い）
+    expect((await post(s, '/voice/boost', { title: 'x', startAt: jst(at(2)), endAt: jst(at(1)), minMinutes: '10' })).headers.get('location')).toBe('/voice/boost?msg=invalid');
+    expect((await post(s, '/voice/boost', { title: 'x', startAt: jst(at(1)), endAt: jst(at(2)), minMinutes: '61' })).headers.get('location')).toBe('/voice/boost?msg=invalid');
+    const created = await post(s, '/voice/boost', { title: '平日お昼', startAt: jst(at(1)), endAt: jst(at(3)), minMinutes: '30' });
+    const id = (await listBoosts(db))[0]!.id;
+    expect(created.headers.get('location')).toBe(`/voice/boost?id=${id}&msg=created#boost-detail`);
+    expect((await post(s, `/voice/boost/${id}`, { title: '平日お昼', startAt: jst(at(1)), endAt: jst(at(2)), minMinutes: '20' })).headers.get('location')).toContain('msg=saved');
+    // 時間の中だけ記録する
+    expect(await recordBoostTime(db, [USER, STAFF], at(0.5))).toBe(0);
+    for (let m = 0; m < 25; m++) await recordBoostTime(db, [USER], new Date(at(1).getTime() + m * 60_000));
+    await recordBoostTime(db, [STAFF], at(1.5));
+    expect(await recordBoostTime(db, [USER], at(2))).toBe(0);
+    const page = await (await get(`/voice/boost?id=${id}`, s)).text();
+    expect(page).toContain('<h1>⏱ 浮上の記録の時間</h1>');
+    expect(page).toContain('1 / 2 人');
+    expect(page).toContain('25分');
+    expect(page).not.toMatch(/onclick=|style=|<script>/);
+    expect(page).not.toContain('人へプレゼント（1 回だけ）');
+    // 終わる前は配れない。宮司だけ
+    const giftForm = { what: 'coins', amount: '300', note: 'お昼のお礼', confirm: 'yes' };
+    const g = await login(GUJI);
+    expect((await post(s, `/voice/boost/${id}/gift`, giftForm)).status).toBe(403);
+    expect((await post(g, `/voice/boost/${id}/gift`, giftForm)).headers.get('location')).toContain('msg=gift_not_ended');
+    // 終わったことにする
+    await db.update(boostTimes).set({ startAt: at(-3), endAt: at(-1) }).where(eq(boostTimes.id, id));
+    expect(await (await get(`/voice/boost?id=${id}`, g)).text()).toContain('20 分以上いた人へプレゼント（1 回だけ）');
+    const before = { u: (await walletOf(db, USER)).balance, s: (await walletOf(db, STAFF)).balance };
+    expect((await post(g, `/voice/boost/${id}/gift`, { ...giftForm, confirm: '' })).headers.get('location')).toContain('msg=gift_invalid');
+    expect((await post(g, `/voice/boost/${id}/gift`, giftForm)).headers.get('location')).toBe(`/voice/boost?id=${id}&msg=gift_given#boost-detail`);
+    expect((await post(g, `/voice/boost/${id}/gift`, giftForm)).headers.get('location')).toContain('msg=gift_already');
+    expect((await walletOf(db, USER)).balance).toBe(before.u + 300);
+    expect((await walletOf(db, STAFF)).balance).toBe(before.s);
+    // 終わったものは直せない・やめられない
+    expect((await post(s, `/voice/boost/${id}/cancel`, {})).headers.get('location')).toContain('msg=not_editable');
+    expect((await listAudit(db, { action: 'boost.gift' })).length).toBe(1);
+  });
+
   it('運営が見られる。カテゴリで絞ると、その場所が多い順。メンバーのページにも出る', async () => {
     const { recordPresence } = await import('../src/services/voiceUsage.js');
     await recordPresence(db, [{ id: '990000000000000001', name: '宵宮', categoryId: '990000000000000010', categoryName: '🔞 宵宮', memberIds: [USER, STAFF] }], clock);

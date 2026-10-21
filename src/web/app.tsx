@@ -42,9 +42,11 @@ import { openBells } from '../services/opsWatch.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { channelsOf, dailyUsage, partnersOf, roomHistory, sinceDate, topPairs, usageByCategory, usageByMember } from '../services/voiceUsage.js';
 import { MemberVoiceSection, VoicePage, type VoiceRange } from './views/voice.js';
+import { BoostTimePage } from './views/boostTime.js';
 import { CoreTimePage } from './views/coreTime.js';
 import { describeCoreTime } from '../services/coreTime.js';
 import { coreTimeMembers, coreTimeRegulars, coreTimeRows, coreTimeSessions } from '../services/coreTimeAttendance.js';
+import { boostMembers, cancelBoost, createBoost, giftBoost, listBoosts, updateBoost } from '../services/boostTimes.js';
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
@@ -637,6 +639,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/voice/core', requireAdmin);
   app.use('/voice/core.csv', requireAdmin);
   app.use('/voice/core/*', requireAdmin, requireCsrf);
+  app.use('/voice/boost', requireAdmin);
+  app.use('/voice/boost/*', requireAdmin, requireCsrf);
   app.use('/updates', requireAdmin);
   app.use('/roles', requireAdmin);
   app.use('/ranks', requireAdmin);
@@ -1533,6 +1537,68 @@ export function createWebApp(deps: WebDeps) {
     // 1 件を 1 回だけ配る（配った人の記録が残るので、設定の「今いる人に配る」の履歴から回収もできる）
     const r = await deliverPresenceGift(db, row.id, ids);
     await audit(db, { actorId: by, action: 'coretime.gift', detail: { id: row.id, day, slot, minMinutes, kind: row.kind, ticketKind: row.ticketKind, amount, note, count: r.status === 'ok' ? r.count : 0 }, via: 'web' });
+    return back('gift_given');
+  });
+
+  // ⏱ 浮上の記録の時間（日時を決めて、その間に通話にいた分を数える。終わったら宮司がプレゼント）
+  app.get('/voice/boost', async (c) => {
+    const t = now();
+    const list = await listBoosts(db);
+    const id = Number(c.req.query('id'));
+    const selected = list.find((b) => b.id === id) ?? list[0];
+    const members = selected ? await boostMembers(db, selected.id) : [];
+    const counts = new Map<number, { all: number; ok: number }>();
+    for (const b of list) {
+      const rows = b.id === selected?.id ? members : await boostMembers(db, b.id);
+      counts.set(b.id, { all: rows.length, ok: rows.filter((r) => r.minutes >= b.minMinutes).length });
+    }
+    const names = await namesOf(db, members.map((m) => m.memberId));
+    return c.html(<BoostTimePage session={c.get('session')} now={t} list={list} counts={counts} selected={selected} members={members} name={(x) => names.get(x) ?? x} coin={{ emoji: cfg.economy.currencyEmoji, name: cfg.economy.currencyName }} canEdit canGift={c.get('session').level === 'guji'} msg={c.req.query('msg')} />);
+  });
+  const boostInput = (body: Record<string, unknown>) => {
+    const startAt = typeof body.startAt === 'string' ? parseJstLocal(body.startAt) : undefined;
+    const endAt = typeof body.endAt === 'string' ? parseJstLocal(body.endAt) : undefined;
+    const title = field(body, 'title', 60);
+    const minMinutes = Number(body.minMinutes);
+    return startAt && endAt && title ? { title, startAt, endAt, minMinutes } : undefined;
+  };
+  app.post('/voice/boost', async (c) => {
+    const input = boostInput(await c.req.parseBody());
+    const row = input && input.endAt > now() ? await createBoost(db, input, c.get('session').userId) : undefined;
+    if (!row) return c.redirect('/voice/boost?msg=invalid');
+    await audit(db, { actorId: c.get('session').userId, action: 'boost.create', detail: { id: row.id, title: row.title, startAt: row.startAt, endAt: row.endAt, minMinutes: row.minMinutes }, via: 'web' });
+    return c.redirect(`/voice/boost?id=${row.id}&msg=created#boost-detail`);
+  });
+  app.post('/voice/boost/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const input = boostInput(await c.req.parseBody());
+    if (!Number.isSafeInteger(id) || !input) return c.redirect(`/voice/boost?id=${id}&msg=invalid#boost-detail`);
+    const row = await updateBoost(db, id, input, now());
+    if (!row) return c.redirect(`/voice/boost?id=${id}&msg=not_editable#boost-detail`);
+    await audit(db, { actorId: c.get('session').userId, action: 'boost.edit', detail: { id, title: row.title, startAt: row.startAt, endAt: row.endAt, minMinutes: row.minMinutes }, via: 'web' });
+    return c.redirect(`/voice/boost?id=${id}&msg=saved#boost-detail`);
+  });
+  app.post('/voice/boost/:id/cancel', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id) || !(await cancelBoost(db, id, now()))) return c.redirect(`/voice/boost?id=${id}&msg=not_editable#boost-detail`);
+    await audit(db, { actorId: c.get('session').userId, action: 'boost.cancel', detail: { id }, via: 'web' });
+    return c.redirect(`/voice/boost?id=${id}&msg=canceled#boost-detail`);
+  });
+  // 🎁 終わった時間の、決めた分以上いた人へプレゼント（宮司だけ。1 回だけ）
+  app.post('/voice/boost/:id/gift', async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const id = Number(c.req.param('id'));
+    const body = await c.req.parseBody();
+    const back = (msg: string) => c.redirect(`/voice/boost?id=${id}&msg=${msg}#boost-detail`);
+    const what = typeof body.what === 'string' ? body.what : '';
+    const input = what === 'coins' ? ({ kind: 'coins' } as const) : what.startsWith('ticket:') ? ({ kind: 'ticket', ticketKind: what.slice(7) } as const) : undefined;
+    const amount = Number(body.amount);
+    const note = field(body, 'note', 200);
+    if (!Number.isSafeInteger(id) || body.confirm !== 'yes' || !input || !note) return back('gift_invalid');
+    const by = c.get('session').userId;
+    const r = await giftBoost(db, id, input, amount, note, by, now());
+    if (r.status !== 'ok') return back(r.status === 'invalid' ? 'gift_invalid' : `gift_${r.status}`);
+    await audit(db, { actorId: by, action: 'boost.gift', detail: { id, kind: input.kind, ticketKind: input.kind === 'ticket' ? input.ticketKind : null, amount, note, count: r.count }, via: 'web' });
     return back('gift_given');
   });
 
