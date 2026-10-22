@@ -3034,7 +3034,16 @@ const paintHorseAura = form => {
   form.querySelector('[data-aura-price]').textContent = `今回の支払い：${price.toLocaleString('ja-JP')}銭${select.value === 'custom' ? '（色を変えるたびに7,000銭）' : ''}`;
   form.querySelectorAll('input[type=color]').forEach(input => { input.disabled = select.value !== 'custom'; });
 };
-const initHorseAuras = () => document.querySelectorAll('.kb-aura-form').forEach(paintHorseAura);
+const syncHorseAuraTarget = () => {
+  const select=document.querySelector('.kb-aura-target select');
+  const panel=document.querySelector('[data-aura-horse-id]');
+  const note=document.querySelector('[data-aura-switch-note]');
+  if (!select || !panel) return;
+  const changed=select.value !== panel.dataset.auraHorseId;
+  panel.hidden=changed; if (note) note.hidden=!changed;
+};
+const initHorseAuras = () => { document.querySelectorAll('.kb-aura-form').forEach(paintHorseAura); syncHorseAuraTarget(); };
+document.addEventListener('change', event => { if(event.target.matches?.('.kb-aura-target select')) syncHorseAuraTarget(); });
 initHorseAuras(); document.addEventListener('c-page-swapped', initHorseAuras);
 document.addEventListener('input', event => { const form=event.target.closest?.('.kb-aura-form'); if(form && event.target.name !== 'confirm') { form.elements.namedItem('confirm').checked=false; paintHorseAura(form); } });
 document.addEventListener('change', event => { const form=event.target.closest?.('.kb-aura-form'); if(form && event.target.name !== 'confirm') { form.elements.namedItem('confirm').checked=false; paintHorseAura(form); } });
