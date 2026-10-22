@@ -375,6 +375,17 @@
 - 完了範囲：スクラッチの期間別売上・払戻・回収・精算済み収支、倍率別の金額と最近の当せん、未開封の秘匿。DBマイグレーション不要。ローカル試遊サーバー停止済み。codex/fortune-scratch-financesから本番担当Claude向けPRへ保存。本番の購入・入金・設定変更は未実行。
 - GitHub保存済み：[PR #68](https://github.com/manakikido-jpg/evaluation/pull/68)。codex/fortune-scratch-finances、実装123282c・最終検証b10b278。OPEN・未合流、本番未反映。担当Claudeによる確認と合流待ち。
 
+## 2026年10月22日：数える場所の折りたたみ
+- 依頼：浮上の記録の「数える場所」の長い一覧を折りたたみたい。
+- 開始：本番68dc8edからcodex/boost-location-collapse。作成・編集の共通PlacePickerが常に全件表示になっている。
+- 方針：最初は閉じて、必要なときだけ開く。カテゴリ・通話のチェックと送信値は維持。JavaScriptなしでも操作できる標準の開閉を使い、スマホの幅に収める。
+- 次：共通部品・見た目・回帰検証・説明を変更し、型と全テスト後に担当Claude向けPRへ保存。本番は直接変更しない。
+- 実装：共通の数える場所を標準details/summaryで最初は閉じ、説明は開いた内側へ移動。作成・編集に同時適用。JavaScriptを追加せず、フォームの項目・チェック・保存処理は維持。
+- 実ブラウザ：360pxと1440px、JavaScript無効で開閉・Enter操作・閉じた状態のFormDataに選択が残ること・横はみ出しなしを確認。初回型検証のテスト用カテゴリのparent_id不足を修正し、最終の型・ビルド・全テストを実行中。
+- 最終検証：実装3dd897eで型チェック・ビルド成功。全150ファイル1,840テスト成功（420.38秒、2並列）。テスト削除・skipなし。ログ/workspace/artifacts/boost-location-collapse/{typecheck,build,all-tests}.log。
+- push前fetch：本番がa09467d（前件ランキングPR #69合流）へ進んだことを確認。数える場所とCSSへの変更はなし。共通説明・記録・更新履歴の追記は担当Claudeが合流時に両方残す。
+- 完了範囲：作成・編集の一覧折りたたみ、JSなしの開閉、選択と送信値の維持、スマホの横幅。DB・集計・保存条件は変更なし。codex/boost-location-collapseから担当Claude向けPRへ保存。本番操作なし。
+- GitHub保存済み：[PR #70](https://github.com/manakikido-jpg/evaluation/pull/70)。実装3dd897e・最終検証235dce2、OPEN・未合流。本番未反映、担当Claudeの確認・合流待ち。
 ## 2026年10月22日：キャストの月間ランキングパネル
 - 依頼：指名本数と売上のランキングをDiscordのパネルで出し、随時更新したい。確認回答は「今月の指名本数・売上（シャンパン込み）」。
 - 開始：最新本番68dc8edからcodex/cast-live-ranking。スクラッチ収支PR #68は本番履歴へ合流済み。

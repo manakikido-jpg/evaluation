@@ -233,30 +233,34 @@ export function BoostTimePage(props: {
 const isVoice = (c: GuildChannel) => c.type === 2 || c.type === 13;
 
 /** 数える場所: カテゴリごとに、カテゴリ全体と通話チャンネルのチェック（何も選ばなければ全部） */
-function PlacePicker(props: { channels: GuildChannel[]; channelIds?: string[]; categoryIds?: string[] }) {
+export function PlacePicker(props: { channels: GuildChannel[]; channelIds?: string[]; categoryIds?: string[] }) {
   const voice = props.channels.filter(isVoice).sort((a, b) => a.position - b.position);
   const cats = props.channels.filter((c) => c.type === 4 && voice.some((v) => v.parent_id === c.id)).sort((a, b) => a.position - b.position);
   const groups: { cat?: GuildChannel; list: GuildChannel[] }[] = [...cats.map((cat) => ({ cat, list: voice.filter((v) => v.parent_id === cat.id) })), { list: voice.filter((v) => !v.parent_id) }].filter((g) => g.list.length);
   return (
     <fieldset class="field">
-      <legend>数える場所（何も選ばなければ、AFK などを除いた全部の通話）</legend>
-      {groups.map((g) => (
-        <div class="check-group">
-          {g.cat ? (
-            <label class="check">
-              <input type="checkbox" name="categoryIds" value={g.cat.id} checked={props.categoryIds?.includes(g.cat.id)} /> <strong>📁 {g.cat.name}</strong>（カテゴリ全部。あとで足した通話も）
-            </label>
-          ) : (
-            <strong>カテゴリなし</strong>
-          )}
-          {g.list.map((v) => (
-            <label class="check">
-              <input type="checkbox" name="channelIds" value={v.id} checked={props.channelIds?.includes(v.id)} /> 🔊 {v.name}
-            </label>
-          ))}
-        </div>
-      ))}
-      {!groups.length && <p class="empty">通話チャンネルを読みこめませんでした（全部の通話で数えます）。</p>}
+      <legend>数える場所</legend>
+      <details class="place-picker">
+        <summary>通話・カテゴリを確認／変更</summary>
+        <p class="muted">何も選ばなければ、AFK などを除いた全部の通話を数えます。カテゴリを選ぶと、あとで足した通話も含みます。</p>
+        {groups.map((g) => (
+          <div class="check-group">
+            {g.cat ? (
+              <label class="check">
+                <input type="checkbox" name="categoryIds" value={g.cat.id} checked={props.categoryIds?.includes(g.cat.id)} /> <strong>📁 {g.cat.name}</strong>（カテゴリ全部。あとで足した通話も）
+              </label>
+            ) : (
+              <strong>カテゴリなし</strong>
+            )}
+            {g.list.map((v) => (
+              <label class="check">
+                <input type="checkbox" name="channelIds" value={v.id} checked={props.channelIds?.includes(v.id)} /> 🔊 {v.name}
+              </label>
+            ))}
+          </div>
+        ))}
+        {!groups.length && <p class="empty">通話チャンネルを読みこめませんでした（全部の通話で数えます）。</p>}
+      </details>
     </fieldset>
   );
 }

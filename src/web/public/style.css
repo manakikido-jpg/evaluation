@@ -1408,6 +1408,10 @@ body.with-side .task-action { display: inline-flex; align-items: center; min-hei
   body.with-side .theme-choice select { max-width: 116px; }
 }
 
+/* 数える場所は必要なときだけ開く。長いカテゴリ名もスマホの幅へ収める。 */
+.place-picker { min-width: 0; }
+.place-picker > summary { cursor: pointer; min-height: 44px; padding: 10px 12px; border-radius: 8px; background: var(--sakura); overflow-wrap: anywhere; }
+.place-picker .check { min-width: 0; overflow-wrap: anywhere; }
 /* 折りたたみのカード（押すと開く）。見出しを押せる形に */
 details.fold > summary { cursor: pointer; list-style: none; }
 details.fold > summary::-webkit-details-marker { display: none; }
