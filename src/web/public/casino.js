@@ -1608,7 +1608,11 @@ const kbSilk = (g, silk, x, y, w, h) => {
  * 横から見た、走っている馬と騎手。(x, y) は蹄の高さの真ん中、s は大きさ、ph は脚の動き（0〜1）、run は走っているか
  */
 const kbHorse = (g, x, y, s, ph, h, run) => {
-  const [body, dark] = KB_COAT[h.coat] || KB_COAT[0];
+  const aura = h.outfit?.aura;
+  const auraColor = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+  const glowing = aura && auraColor(aura.body) && auraColor(aura.glow);
+  const body = glowing ? aura.body : (KB_COAT[h.coat] || KB_COAT[0])[0];
+  const dark = glowing ? '#' + body.slice(1).match(/../g).map(n => Math.round(parseInt(n, 16) * 0.58).toString(16).padStart(2, '0')).join('') : (KB_COAT[h.coat] || KB_COAT[0])[1];
   const TAU = Math.PI * 2;
   g.save();
   g.translate(x, y);
@@ -1619,6 +1623,18 @@ const kbHorse = (g, x, y, s, ph, h, run) => {
   const gallop = run === true;
   const bob = gallop ? Math.sin(ph * TAU * 2) * 1.6 : walk ? Math.sin(ph * TAU * 2) * 0.5 : 0;
   g.translate(0, -44 + bob);
+  // 馬の後ろに柔らかな光と小さなきらめき。大きさ・当たり判定・走り方は変えない。
+  if (glowing) {
+    g.save();
+    const halo = g.createRadialGradient(3, -8, 8, 3, -8, 80);
+    halo.addColorStop(0, aura.glow + '75'); halo.addColorStop(0.6, aura.glow + '28'); halo.addColorStop(1, aura.glow + '00');
+    g.fillStyle = halo; g.beginPath(); g.ellipse(3, -8, 88, 58, 0, 0, TAU); g.fill();
+    g.strokeStyle = aura.glow; g.lineWidth = 1.2; g.globalAlpha = 0.75;
+    for (const [sx, sy] of [[-52,-25],[-29,-46],[24,-57],[67,-14],[-58,10],[45,25]]) {
+      g.beginPath(); g.moveTo(sx-3,sy); g.lineTo(sx+3,sy); g.moveTo(sx,sy-3); g.lineTo(sx,sy+3); g.stroke();
+    }
+    g.restore();
+  }
   // 影
   g.save();
   g.translate(0, 44 - bob);
@@ -2992,9 +3008,9 @@ const paintHorseOutfit = form => {
   const g = canvas.getContext('2d');
   if (!g) return;
   const horse = JSON.parse(canvas.dataset.horse);
-  horse.outfit = Object.fromEntries(['cloth', 'bridle', 'hood', 'ornament'].map(key => [key, form.elements.namedItem(key).value]));
+  horse.outfit = { ...horse.outfit, ...Object.fromEntries(['cloth', 'bridle', 'hood', 'ornament'].map(key => [key, form.elements.namedItem(key).value])) };
   g.clearRect(0, 0, canvas.width, canvas.height);
-  kbHorse(g, 210, 155, 2, 0, horse, false);
+  kbHorse(g, 210, 180, 1.4, 0, horse, false);
 };
 const initHorseOutfits = () => document.querySelectorAll('.kb-outfit-form').forEach(paintHorseOutfit);
 initHorseOutfits();
@@ -3003,6 +3019,34 @@ document.addEventListener('change', event => {
   const form = event.target.closest?.('.kb-outfit-form');
   if (form) paintHorseOutfit(form);
 });
+
+// オーラショップ。選ぶ間は見本だけ、銭の支払いはサーバーで確定する。
+const paintHorseAura = form => {
+  const canvas = form.querySelector('canvas');
+  const g = canvas?.getContext('2d'); if (!g) return;
+  const horse = JSON.parse(canvas.dataset.horse);
+  const select = form.elements.namedItem('aura'), option = select.selectedOptions[0];
+  const aura = select.value === 'none' ? null : { key: select.value, body: select.value === 'custom' ? form.elements.namedItem('body').value : option.dataset.body, glow: select.value === 'custom' ? form.elements.namedItem('glow').value : option.dataset.glow };
+  const same = (horse.outfit.aura?.key ?? 'none') === select.value && (!aura || (horse.outfit.aura.body === aura.body && horse.outfit.aura.glow === aura.glow));
+  horse.outfit = {...horse.outfit, aura};
+  g.clearRect(0,0,canvas.width,canvas.height); kbHorse(g,210,180,1.4,0,horse,false);
+  const price = same ? 0 : Number(option.dataset.price);
+  form.querySelector('[data-aura-price]').textContent = `今回の支払い：${price.toLocaleString('ja-JP')}銭${select.value === 'custom' ? '（色を変えるたびに7,000銭）' : ''}`;
+  form.querySelectorAll('input[type=color]').forEach(input => { input.disabled = select.value !== 'custom'; });
+};
+const syncHorseAuraTarget = () => {
+  const select=document.querySelector('.kb-aura-target select');
+  const panel=document.querySelector('[data-aura-horse-id]');
+  const note=document.querySelector('[data-aura-switch-note]');
+  if (!select || !panel) return;
+  const changed=select.value !== panel.dataset.auraHorseId;
+  panel.hidden=changed; if (note) note.hidden=!changed;
+};
+const initHorseAuras = () => { document.querySelectorAll('.kb-aura-form').forEach(paintHorseAura); syncHorseAuraTarget(); };
+document.addEventListener('change', event => { if(event.target.matches?.('.kb-aura-target select')) syncHorseAuraTarget(); });
+initHorseAuras(); document.addEventListener('c-page-swapped', initHorseAuras);
+document.addEventListener('input', event => { const form=event.target.closest?.('.kb-aura-form'); if(form && event.target.name !== 'confirm') { form.elements.namedItem('confirm').checked=false; paintHorseAura(form); } });
+document.addEventListener('change', event => { const form=event.target.closest?.('.kb-aura-form'); if(form && event.target.name !== 'confirm') { form.elements.namedItem('confirm').checked=false; paintHorseAura(form); } });
 
 // 募集文は本人が共有する。自動投稿・メンションはしない。
 const initTableInvites = () => document.querySelectorAll('[data-invite-text]').forEach(el => {

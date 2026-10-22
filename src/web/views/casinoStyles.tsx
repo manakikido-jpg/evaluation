@@ -11,6 +11,7 @@ export function Wardrobe(p: { me: CasinoMe; state: StyleState; preview?: string;
   return (
     <CasinoLayout title="カジノの着せ替え" me={me} back>
       <h1 class="c-h1">🪭 カジノの着せ替え</h1>
+      <p class="c-note"><a href="/casino/keiba/aura-shop">✨ 馬のオーラショップへ</a> — 固定色3,500銭・カスタムの色変更7,000銭</p>
       <p class="c-muted">背景・チップ・カード・動き・音は自分の画面。卓のふち・席の飾り・称号は同じ卓のみんなにも見えます。</p>
       {p.message && <p role="status">{p.message}</p>}
       <p class="cs-equipped-summary">装備中：{equipped.length ? equipped.join(' ／ ') : 'すべて標準'}</p>

@@ -1279,7 +1279,8 @@ export function KbStablePage(p: {
       </p>
       <h1 class="c-h1">🐴 馬主の部屋</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-panel">
+      <p class="c-note"><a href="/casino/keiba/aura-shop">✨ 馬のオーラショップへ</a> — 付ける馬を選んでから購入できます。</p>
+      <section class="c-panel" id="aura-shop">
         <h2>
           🏠 あなたの馬（{active.length} / {p.max} 頭）
         </h2>
@@ -1314,6 +1315,7 @@ export function KbStablePage(p: {
                         : classLabel(h)}
                     </span>
                   </div>
+                  <p><a class="c-btn c-btn-small" href={`/casino/keiba/aura-shop?horseId=${h.id}`}>✨ この馬のオーラを選ぶ</a></p>
                   <details class="kb-outfit-editor"><summary>👘 この馬を着せ替える</summary>
                     <form method="post" action={`/casino/keiba/stable/${h.id}/outfit`} class="kb-outfit-form">
                       <Hidden />
@@ -1322,7 +1324,7 @@ export function KbStablePage(p: {
                         {(['cloth', 'bridle'] as const).map(key => <label>{key === 'cloth' ? '鞍の下の布' : '手綱・カバーの色'}<select name={key}>{Object.entries(KB_OUTFIT_COLORS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT)[key] === value}>{label}</option>)}</select></label>)}
                         <label>カバー<select name="hood">{Object.entries(KB_HOODS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT).hood === value}>{label}</option>)}</select></label>
                         <label>飾り<select name="ornament">{Object.entries(KB_ORNAMENTS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT).ornament === value}>{label}</option>)}</select></label>
-                      </div><p class="c-muted">選ぶと見本が変わります。着せ替えは無料で、馬の能力は変わりません。保存すると次の出走から反映します。</p><button class="c-btn">着せ替えを保存</button>
+                      </div><p class="c-muted">選ぶと見本が変わります。この欄の装備は無料です。馬全体の色とオーラはオーラショップで変更できます。馬の能力は変わりません。保存すると次の出走から反映します。</p><button class="c-btn">着せ替えを保存</button>
                     </form>
                   </details>
                   <p class="c-muted">

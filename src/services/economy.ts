@@ -65,6 +65,7 @@ export type CoinReason =
   | 'casino_buyin'
   | 'casino_cashout'
   | 'casino_hold'
+  | 'keiba_aura'
   | 'keiba_buy'
   | 'keiba_prize'
   | 'keiba_train'
@@ -309,6 +310,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   casino_buyin: 'ポーカーの卓に持ち込んだ',
   casino_cashout: 'ポーカーの卓から引き上げた',
   casino_hold: 'ちんちろ卓で預けた（負けの備え・残りは返る）',
+  keiba_aura: '✨ 馬のオーラを購入・色変更',
   keiba_buy: '🏇 馬を買った（馬主）',
   keiba_prize: '🏇 馬主の賞金・出走手当',
   casino_share: '💰 カジノの収益の分け前（宮司）',

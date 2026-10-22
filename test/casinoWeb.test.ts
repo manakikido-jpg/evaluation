@@ -727,6 +727,50 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(await (await get('/casino/keiba/stable', a)).text()).toContain('value="ribbon" selected');
   });
 
+  it('オーラショップは本人・CSRF・確認を守り、価格をフォームで改ざんできない', async () => {
+    const a=(await casinoLogin(A)).cookie!, b=(await casinoLogin(B)).cookie!;
+    const h=(await addHorse(db,'オーラ売り場',undefined,A))!;
+    const path=`/casino/keiba/stable/${h.id}/aura`;
+    const input={aura:'silver',revision:'0',confirm:'yes',price:'1'};
+    expect((await post(path,a,{...input,aura:'gold'})).headers.get('location')).toContain('invalid');
+    expect(await balance(A)).toBe(5000);
+    expect((await post(path,a,input,'wrong')).status).toBe(403);
+    expect((await post(path,b,input)).headers.get('location')).toContain('not_found');
+    expect((await post(path,a,{...input,confirm:''})).headers.get('location')).toContain('invalid');
+    expect((await post(path,a,input)).headers.get('location')).toContain('aura_saved');
+    expect(await balance(A)).toBe(1500);
+    await post(path,a,input);expect(await balance(A)).toBe(1500);
+    const html=await (await get(`/casino/keiba/aura-shop?horseId=${h.id}`,a)).text();
+    expect(html).toContain('オーラショップ'); expect(html).toContain('購入済み・装備無料');
+    expect(html).not.toContain('option value="gold"');
+  });
+
+  it('専用ショップは自分の馬を選んでから購入し、選択だけでは課金しない', async () => {
+    const a=(await casinoLogin(A)).cookie!;
+    const empty=await (await get('/casino/keiba/aura-shop',a)).text();
+    expect(empty).toContain('まず馬を迎えましょう'); expect(empty).not.toContain('class="kb-aura-form"');
+    const first=(await addHorse(db,'最初の馬',undefined,A))!;
+    const second=(await addHorse(db,'選ぶ馬',undefined,A))!;
+    const other=(await addHorse(db,'他人の非表示馬',undefined,B))!;
+    const start=await (await get('/casino/keiba/aura-shop',a)).text();
+    expect(start).toContain('最初の馬'); expect(start).toContain('選ぶ馬');
+    expect(start).not.toContain('他人の非表示馬'); expect(start).not.toContain('class="kb-aura-form"');
+    const target=await (await get(`/casino/keiba/aura-shop?horseId=${second.id}`,a)).text();
+    expect(target).toContain(`action="/casino/keiba/stable/${second.id}/aura"`);
+    expect(target).not.toContain(`action="/casino/keiba/stable/${first.id}/aura"`);
+    expect(target).toContain('購入したオーラ1個'); expect(await balance(A)).toBe(5000);
+    const foreign=await (await get(`/casino/keiba/aura-shop?horseId=${other.id}`,a)).text();
+    expect(foreign).toContain('選んだ馬が見つかりません'); expect(foreign).not.toContain('class="kb-aura-form"');
+    expect(foreign).not.toContain('他人の非表示馬');
+    const result=await post(`/casino/keiba/stable/${second.id}/aura`,a,{aura:'ruby',revision:'0',confirm:'yes'});
+    expect(result.headers.get('location')).toBe(`/casino/keiba/aura-shop?horseId=${second.id}&e=aura_saved`);
+    const mine=await myHorses(db,A);
+    expect(mine.find(h=>h.id===first.id)!.outfit.aura).toBeUndefined();
+    expect(mine.find(h=>h.id===second.id)!.outfit.aura?.key).toBe('ruby');
+    expect(await balance(A)).toBe(1500);
+    expect(await (await get('/casino/wardrobe',a)).text()).toContain('href="/casino/keiba/aura-shop"');
+  });
+
   it('レースを開いて馬券を買う。テレビの映像・出馬表・みんなの馬券が出る', async () => {
     const a = (await casinoLogin(A)).cookie!;
     const hall = await (await get('/casino/hall', a)).text();
