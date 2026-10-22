@@ -2354,3 +2354,10 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .c-network-warning a { color: #ffe1a4; text-decoration: underline; }
 
 .c-invite{margin:1rem 0;text-align:left}.c-invite textarea{display:block;width:100%;max-width:100%;box-sizing:border-box;resize:vertical;margin:.5rem 0;min-height:6rem}
+
+.kb-aura-shop { border: 1px solid #b68d40; border-radius: 12px; padding: 12px; margin: 12px 0; }
+.kb-aura-form { display: grid; gap: 14px; min-width: 0; }
+.kb-aura-form select { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; font: inherit; color: var(--c-text); background: var(--c-bg2); border: 1px solid var(--c-line); border-radius: 8px; }
+.kb-aura-colors { display: flex; flex-wrap: wrap; gap: 16px; }
+.kb-aura-colors label { display: grid; gap: 6px; }
+.kb-aura-colors input { width: 100px; height: 44px; }

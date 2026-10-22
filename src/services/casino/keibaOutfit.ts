@@ -5,7 +5,7 @@ export const KB_OUTFIT_COLORS = {
 } as const;
 export const KB_HOODS = { none: 'なし', ears: '耳カバー', full: '顔・耳カバー' } as const;
 export const KB_ORNAMENTS = { none: 'なし', sakura: '桜の飾り', ribbon: 'リボン' } as const;
-export type KbOutfit = { cloth: string; bridle: string; hood: keyof typeof KB_HOODS; ornament: keyof typeof KB_ORNAMENTS };
+export type KbOutfit = { cloth: string; bridle: string; hood: keyof typeof KB_HOODS; ornament: keyof typeof KB_ORNAMENTS; aura?: KbAura | null; auraOwned?: KbAuraKey[]; auraRevision?: number };
 export const KB_DEFAULT_OUTFIT: KbOutfit = { cloth: '#f7f7f2', bridle: '#232936', hood: 'none', ornament: 'none' };
 export function isOutfit(value: unknown): value is KbOutfit {
   if (!value || typeof value !== 'object') return false;
@@ -15,3 +15,17 @@ export function isOutfit(value: unknown): value is KbOutfit {
     && typeof o.hood === 'string' && Object.hasOwn(KB_HOODS, o.hood)
     && typeof o.ornament === 'string' && Object.hasOwn(KB_ORNAMENTS, o.ornament);
 }
+
+export const KB_AURAS = {
+  gold: { name: '黄金', body: '#e4bd48', glow: '#ffd76a' },
+  silver: { name: '白銀', body: '#d9e3ef', glow: '#bbddff' },
+  ruby: { name: '紅玉', body: '#c83550', glow: '#ff6980' },
+  sapphire: { name: '蒼天', body: '#3978dc', glow: '#70caff' },
+  sakura: { name: '桜花', body: '#e9a1c1', glow: '#ffb5dc' },
+  violet: { name: '藤霞', body: '#a37ad2', glow: '#caa0ff' },
+} as const;
+export type KbAuraKey = keyof typeof KB_AURAS;
+export type KbAura = { key: KbAuraKey | 'custom'; body: string; glow: string };
+export const KB_AURA_PRICE = 3500;
+export const KB_CUSTOM_AURA_PRICE = 7000;
+export const isAuraColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);

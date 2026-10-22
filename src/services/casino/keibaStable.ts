@@ -1,7 +1,7 @@
 import { hasCoOwners, payByShares, sharesOf } from './keibaShares.js';
 import { rivalPairsAmong } from './keibaHonors.js';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
-import { isOutfit, type KbOutfit } from './keibaOutfit.js';
+import { isOutfit, KB_AURAS, KB_AURA_PRICE, KB_CUSTOM_AURA_PRICE, isAuraColor, KB_DEFAULT_OUTFIT, type KbAura, type KbAuraKey, type KbOutfit } from './keibaOutfit.js';
 import type { Db } from '../../db/client.js';
 import { keibaEntries, keibaHorses, keibaOwners, keibaRuns, members, type KeibaHorseRow } from '../../db/schema.js';
 import { addCoins, spendWithin } from '../economy.js';
@@ -101,8 +101,10 @@ export async function dressOwnHorse(db: Db, memberId: string, id: number, input:
   if (!isOutfit(input)) return 'invalid';
   const outfit: KbOutfit = { cloth: input.cloth, bridle: input.bridle, hood: input.hood, ornament: input.ornament };
   return db.transaction(async tx => {
-    const [horse] = await tx.update(keibaHorses).set({ outfit }).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId))).returning({ id: keibaHorses.id });
+    const [horse] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId))).for('update');
     if (!horse) return 'not_found';
+    // 有料の色・購入済み情報はフォームから受け取らず、保存済みの値を引き継ぐ。
+    await tx.update(keibaHorses).set({ outfit: { ...horse.outfit, ...outfit } }).where(eq(keibaHorses.id, id));
     return 'ok';
   });
 }
@@ -570,4 +572,29 @@ export async function ownerRoleTargets(db: Db): Promise<{ owners: Set<string>; g
   const owners = await db.selectDistinct({ id: keibaHorses.ownerId }).from(keibaHorses).where(and(isNotNull(keibaHorses.ownerId), isNull(keibaHorses.retiredAt)));
   const g1 = await db.selectDistinct({ id: keibaRuns.ownerId }).from(keibaRuns).where(and(eq(keibaRuns.pos, 1), eq(keibaRuns.cls, 8)));
   return { owners: new Set(owners.map((r) => r.id!)), g1: new Set(g1.map((r) => r.id)) };
+}
+
+
+/** オーラの購入・装備。馬ごとに固定色を所持し、カスタムは変更ごとに支払う。 */
+export async function buyHorseAura(db: Db, memberId: string, id: number, input: { key: string; body?: string; glow?: string; revision: number }): Promise<'ok' | 'invalid' | 'not_found' | 'poor' | 'aura_stale'> {
+  if (!Number.isSafeInteger(input.revision) || input.revision < 0) return 'invalid';
+  if (input.key !== 'none' && input.key !== 'custom' && !Object.hasOwn(KB_AURAS, input.key)) return 'invalid';
+  if (input.key === 'custom' && (!isAuraColor(input.body) || !isAuraColor(input.glow))) return 'invalid';
+  return db.transaction(async tx => {
+    const [horse] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId))).for('update');
+    if (!horse) return 'not_found';
+    const outfit = horse.outfit ?? KB_DEFAULT_OUTFIT;
+    if ((outfit.auraRevision ?? 0) !== input.revision) return 'aura_stale';
+    const owned = outfit.auraOwned ?? [];
+    const fixed = Object.hasOwn(KB_AURAS, input.key) ? input.key as KbAuraKey : undefined;
+    const aura: KbAura | null = input.key === 'none' ? null : fixed
+      ? { key: fixed, body: KB_AURAS[fixed].body, glow: KB_AURAS[fixed].glow }
+      : { key: 'custom', body: input.body!.toLowerCase(), glow: input.glow!.toLowerCase() };
+    // 同じ色のまま押し直しても課金しない。
+    if ((!outfit.aura && !aura) || (outfit.aura && aura && outfit.aura.key === aura.key && outfit.aura.body === aura.body && outfit.aura.glow === aura.glow)) return 'ok';
+    const price = !aura ? 0 : fixed ? owned.includes(fixed) ? 0 : KB_AURA_PRICE : KB_CUSTOM_AURA_PRICE;
+    if (price && !await spendWithin(tx, memberId, price, 'keiba_aura', { horseId: id, aura })) return 'poor';
+    await tx.update(keibaHorses).set({ outfit: { ...outfit, aura, auraOwned: fixed ? [...new Set([...owned, fixed])] : owned, auraRevision: input.revision + 1 } }).where(eq(keibaHorses.id, id));
+    return 'ok';
+  });
 }

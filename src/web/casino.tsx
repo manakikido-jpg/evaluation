@@ -87,6 +87,7 @@ import {
   leadingOwners,
   myHorses,
   dressOwnHorse,
+  buyHorseAura,
   nameOwnHorse,
   ownerSilk,
   restHorse,
@@ -879,6 +880,17 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return stableBack(c, r === 'ok' ? 'horse_named' : r === 'not_found' ? 'not_found' : `horse_${r}`);
     }, { post: true }),
   );
+  app.post('/casino/keiba/stable/:id/aura', page(async (c, me) => {
+    if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+    const f = await c.req.parseBody();
+    const id = Number(c.req.param('id'));
+    if (f.confirm !== 'yes') return stableBack(c, 'invalid');
+    const input = { key: typeof f.aura === 'string' ? f.aura : '', body: typeof f.body === 'string' ? f.body : '', glow: typeof f.glow === 'string' ? f.glow : '', revision: Number(f.revision) };
+    const result = Number.isSafeInteger(id) && id > 0 ? await buyHorseAura(db, me.session.userId, id, input) : 'not_found';
+    if (result === 'ok') await audit(db, { actorId: me.session.userId, action: 'keiba.aura', detail: { horseId: id, ...input }, via: 'web' });
+    return stableBack(c, result === 'ok' ? 'aura_saved' : result);
+  }, { post: true }));
+
   app.post('/casino/keiba/stable/:id/outfit', page(async (c, me) => {
     if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
     const id = Number(c.req.param('id'));

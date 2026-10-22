@@ -727,6 +727,21 @@ describe('🏇 みんなでダービー（画面）', () => {
     expect(await (await get('/casino/keiba/stable', a)).text()).toContain('value="ribbon" selected');
   });
 
+  it('オーラショップは本人・CSRF・確認を守り、価格をフォームで改ざんできない', async () => {
+    const a=(await casinoLogin(A)).cookie!, b=(await casinoLogin(B)).cookie!;
+    const h=(await addHorse(db,'オーラ売り場',undefined,A))!;
+    const path=`/casino/keiba/stable/${h.id}/aura`;
+    const input={aura:'gold',revision:'0',confirm:'yes',price:'1'};
+    expect((await post(path,a,input,'wrong')).status).toBe(403);
+    expect((await post(path,b,input)).headers.get('location')).toContain('not_found');
+    expect((await post(path,a,{...input,confirm:''})).headers.get('location')).toContain('invalid');
+    expect((await post(path,a,input)).headers.get('location')).toContain('aura_saved');
+    expect(await balance(A)).toBe(1500);
+    await post(path,a,input);expect(await balance(A)).toBe(1500);
+    const html=await (await get('/casino/keiba/stable',a)).text();
+    expect(html).toContain('オーラショップ'); expect(html).toContain('購入済み・装備無料');
+  });
+
   it('レースを開いて馬券を買う。テレビの映像・出馬表・みんなの馬券が出る', async () => {
     const a = (await casinoLogin(A)).cookie!;
     const hall = await (await get('/casino/hall', a)).text();

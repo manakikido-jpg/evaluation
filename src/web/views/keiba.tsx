@@ -1,4 +1,4 @@
-import { KB_DEFAULT_OUTFIT, KB_OUTFIT_COLORS, KB_HOODS, KB_ORNAMENTS } from '../../services/casino/keibaOutfit.js';
+import { KB_AURAS, KB_AURA_PRICE, KB_CUSTOM_AURA_PRICE, KB_DEFAULT_OUTFIT, KB_OUTFIT_COLORS, KB_HOODS, KB_ORNAMENTS } from '../../services/casino/keibaOutfit.js';
 import type { Child } from "hono/jsx";
 import type { CasinoConfig } from "../../config.js";
 import type { CasinoTable } from "../../db/schema.js";
@@ -1279,7 +1279,7 @@ export function KbStablePage(p: {
       </p>
       <h1 class="c-h1">🐴 馬主の部屋</h1>
       {p.msg && <Msg msg={p.msg} />}
-      <section class="c-panel">
+      <section class="c-panel" id="aura-shop">
         <h2>
           🏠 あなたの馬（{active.length} / {p.max} 頭）
         </h2>
@@ -1314,6 +1314,29 @@ export function KbStablePage(p: {
                         : classLabel(h)}
                     </span>
                   </div>
+                  <details class="kb-outfit-editor kb-aura-shop" id={`aura-shop-${h.id}`}><summary>✨ オーラショップ・この馬の色を変える</summary>
+                    <p class="c-muted">この馬専用の着せ替えです。固定色は1色3,500銭で購入後、この馬で何度でも装備できます。カスタムは色を変更するたび7,000銭。馬の能力は変わりません。馬を譲ると購入済みの固定色も引き継がれます。</p>
+                    <form method="post" action={`/casino/keiba/stable/${h.id}/aura`} class="kb-aura-form">
+                      <Hidden />
+                      <input type="hidden" name="revision" value={h.outfit?.auraRevision ?? 0} />
+                      <canvas class="kb-outfit-preview" width="480" height="220" data-horse={JSON.stringify({ no: h.id, coat: h.coat, silk: h.silk, outfit: h.outfit ?? KB_DEFAULT_OUTFIT })} aria-label={`${h.name}のオーラの購入前見本`}>オーラの見本</canvas>
+                      <label class="field">オーラ<select name="aura">
+                        <option value="none" selected={!h.outfit?.aura} data-price="0">なし・外す（無料）</option>
+                        {Object.entries(KB_AURAS).map(([key, aura]) => {
+                          const owned = h.outfit?.auraOwned?.includes(key as keyof typeof KB_AURAS);
+                          return <option value={key} selected={h.outfit?.aura?.key === key} data-body={aura.body} data-glow={aura.glow} data-price={owned ? 0 : KB_AURA_PRICE}>{aura.name}（{owned ? '購入済み・装備無料' : '3,500銭'}）</option>;
+                        })}
+                        <option value="custom" selected={h.outfit?.aura?.key === 'custom'} data-price={KB_CUSTOM_AURA_PRICE}>カスタム（色変更ごと7,000銭）</option>
+                      </select></label>
+                      <div class="kb-aura-colors">
+                        <label>カスタム・馬の色<input type="color" name="body" value={h.outfit?.aura?.body ?? KB_AURAS.gold.body} /></label>
+                        <label>カスタム・光の色<input type="color" name="glow" value={h.outfit?.aura?.glow ?? KB_AURAS.gold.glow} /></label>
+                      </div>
+                      <p class="c-note" data-aura-price aria-live="polite">固定色3,500銭・カスタムの色変更7,000銭。購入済み固定色の装備と取り外しは無料です。</p>
+                      <label class="c-check"><input type="checkbox" name="confirm" value="yes" required /> 見本と支払額を確認しました</label>
+                      <button class="c-btn c-btn-gold">この内容で購入・装備する</button>
+                    </form>
+                  </details>
                   <details class="kb-outfit-editor"><summary>👘 この馬を着せ替える</summary>
                     <form method="post" action={`/casino/keiba/stable/${h.id}/outfit`} class="kb-outfit-form">
                       <Hidden />
@@ -1322,7 +1345,7 @@ export function KbStablePage(p: {
                         {(['cloth', 'bridle'] as const).map(key => <label>{key === 'cloth' ? '鞍の下の布' : '手綱・カバーの色'}<select name={key}>{Object.entries(KB_OUTFIT_COLORS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT)[key] === value}>{label}</option>)}</select></label>)}
                         <label>カバー<select name="hood">{Object.entries(KB_HOODS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT).hood === value}>{label}</option>)}</select></label>
                         <label>飾り<select name="ornament">{Object.entries(KB_ORNAMENTS).map(([value, label]) => <option value={value} selected={(h.outfit ?? KB_DEFAULT_OUTFIT).ornament === value}>{label}</option>)}</select></label>
-                      </div><p class="c-muted">選ぶと見本が変わります。着せ替えは無料で、馬の能力は変わりません。保存すると次の出走から反映します。</p><button class="c-btn">着せ替えを保存</button>
+                      </div><p class="c-muted">選ぶと見本が変わります。この欄の装備は無料です。馬全体の色とオーラはオーラショップで変更できます。馬の能力は変わりません。保存すると次の出走から反映します。</p><button class="c-btn">着せ替えを保存</button>
                     </form>
                   </details>
                   <p class="c-muted">
