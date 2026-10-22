@@ -7,7 +7,7 @@ import { addCoins, spendWithin, walletOf } from './economy.js';
 
 /**
  * 🧧 お年玉袋（授与品）: 買った人が銭を入れた袋をチャンネルに置き、先着の人がボタンで受け取る。
- * 1 人ずつの量は置いたときに運で決める（合わせると入れた量ちょうど）。受け取れるのは 1 人 1 回・入鯖が承認された人だけ。
+ * 1 人ずつの量は置いたときに運で決める（合わせると入れた量ちょうど）。受け取れるのは 1 人 1 回・入鯖が承認され、今このサーバーの通話にいる人だけ。
  * 期限（24 時間）が来たら、残りは置いた人に戻す。
  */
 
@@ -146,11 +146,12 @@ export async function setBagMessage(db: Db, id: number, messageId: string): Prom
 
 export type ClaimResult =
   | { status: 'ok'; amount: number; order: number; left: number; bag: OtoshidamaBag }
-  | { status: 'gone' | 'ended' | 'own' | 'already' | 'not_member' };
+  | { status: 'gone' | 'ended' | 'own' | 'already' | 'not_member' | 'not_in_voice' };
 
 /** ボタンを押した: 次の 1 人分を受け取る */
-export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: { id: string; roleIds: readonly string[]; bot?: boolean }, now = new Date()): Promise<ClaimResult> {
+export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: { id: string; roleIds: readonly string[]; bot?: boolean; voiceChannelId: string | null }, now = new Date()): Promise<ClaimResult> {
   if (member.bot || !cfg.ranks.some((r) => member.roleIds.includes(r.roleId))) return { status: 'not_member' };
+  if (!member.voiceChannelId) return { status: 'not_in_voice' };
   return db.transaction(async (tx) => {
     await lock(tx, `otoshidama:${bagId}`);
     const [bag] = await tx.select().from(otoshidamaBags).where(eq(otoshidamaBags.id, bagId));
@@ -228,7 +229,7 @@ export function bagMessage(bag: OtoshidamaBag, claims: OtoshidamaClaim[], coin: 
         : `🧧 残り **${left}** 袋`,
     ...(claims.length ? ['', '**受け取った人**', ...claims.slice(0, 20).map((c, i) => `${i + 1}. <@${c.memberId}> … ${c.amount.toLocaleString('ja-JP')} 枚`)] : []),
     ...(claims.length > 20 ? [`-# ほか ${claims.length - 20} 人`] : []),
-    ...(!full && !expired ? [`-# 1 人 1 回・入鯖が承認された人だけ。<t:${Math.floor(bag.expiresAt.getTime() / 1000)}:R> に締め切り（残りは${bag.fromStaff ? '運営' : '置いた人'}に戻ります）`] : []),
+    ...(!full && !expired ? [`-# 1 人 1 回・入鯖が承認され、今このサーバーの通話にいる人だけ。<t:${Math.floor(bag.expiresAt.getTime() / 1000)}:R> に締め切り（残りは${bag.fromStaff ? '運営' : '置いた人'}に戻ります）`] : []),
   ];
   const open = !full && !expired;
   return {
@@ -245,6 +246,7 @@ export function bagMessage(bag: OtoshidamaBag, claims: OtoshidamaClaim[], coin: 
 }
 
 export const CLAIM_MESSAGES: Record<Exclude<ClaimResult['status'], 'ok'>, string> = {
+  not_in_voice: 'お年玉を受け取れるのは、今このサーバーの通話にいる人だけです。通話に入ってから、もう一度押してください。',
   gone: 'このお年玉袋は見つかりませんでした。',
   ended: 'このお年玉袋は、もう空か締め切りです。',
   own: '自分で置いたお年玉袋は受け取れません。',

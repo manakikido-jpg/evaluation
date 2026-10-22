@@ -115,7 +115,7 @@ export async function seedDefaultItems(
     { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
   ];
   singles.push(
-    { kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', description: '銭を入れた袋をチャンネルに置くと、先着の人がボタンで受け取れる（量は運しだい）', price: 0 },
+    { kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', description: '銭を入れた袋をチャンネルに置くと、通話中の人が先着でボタンから受け取れる（量は運しだい）', price: 0 },
     { kind: 'mycolor', name: '自分だけの色', emoji: '🎨', description: '好きな色の、自分専用の色ロールを BOT が作る（色守りより上に出る）', price: 5000, durationDays: 30 },
     { kind: 'casino_boost', name: '大勝負の札', emoji: '🎰', description: '使った日（日本時間の 0 時まで）だけ、カジノで賭けられる上限（1 回・1 日の合計）が上がる。/持ち物 から使う', price: 1000 },
     { kind: 'name_change', name: '名前変更の札', emoji: '✏️', description: 'このサーバーでの自分の名前（ニックネーム）を 1 回変えられる。/持ち物 から使う', price: 1000 },

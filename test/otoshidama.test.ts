@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { OtoshidamaApp } from '../src/discord/otoshidama.js';
+import type { Interaction } from 'discord.js';
+import type { DiscordActions } from '../src/lib/discordRest.js';
 import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { bagMessage, bagState, claimBag, expireBags, parseCount, putBag, putStaffBag, splitShares, undoBag } from '../src/services/otoshidama.js';
@@ -26,7 +29,7 @@ const base = { ownerId: OWNER, roleIds: [ROLE.ujiko], channelId: CH, note: 'あ�
 
 describe('🧧 お年玉袋', () => {
   it('運営の袋: 置いた人の財布は減らない・受け取れる・残りは運営に戻る（置いた人に入らない）・出せなければ元どおり', async () => {
-    const who = (id: string) => ({ id, roleIds: [ROLE.sanpaisha] });
+    const who = (id: string) => ({ id, roleIds: [ROLE.sanpaisha], voiceChannelId: CH });
     expect((await putStaffBag(db, { by: OWNER, channelId: CH, total: 50, count: 2, note: '' }, T0)).status).toBe('bad_amount');
     const r = await putStaffBag(db, { by: OWNER, channelId: CH, total: 1000, count: 3, note: 'おめでとう' }, T0);
     if (r.status !== 'ok') throw new Error(r.status);
@@ -82,7 +85,7 @@ describe('🧧 お年玉袋', () => {
     const r = await putBag(db, cfg, { ...base, fee: 0, total: 300, count: 2 }, T0);
     if (r.status !== 'ok') throw new Error(r.status);
     const id = r.bag.id;
-    const who = (memberId: string, roleIds: string[] = [ROLE.sanpaisha]) => ({ id: memberId, roleIds });
+    const who = (memberId: string, roleIds: string[] = [ROLE.sanpaisha]) => ({ id: memberId, roleIds, voiceChannelId: CH });
     expect((await claimBag(db, cfg, id, who(OWNER, [ROLE.ujiko]), T0)).status).toBe('own');
     expect((await claimBag(db, cfg, id, who(NEWBIE, []), T0)).status).toBe('not_member');
     const a = await claimBag(db, cfg, id, who(A), T0);
@@ -103,7 +106,7 @@ describe('🧧 お年玉袋', () => {
     await addCoins(db, OWNER, 1000, 'adjust');
     const r = await putBag(db, cfg, { ...base, fee: 0, total: 500, count: 5 }, T0);
     if (r.status !== 'ok') throw new Error(r.status);
-    await claimBag(db, cfg, r.bag.id, { id: A, roleIds: [ROLE.sanpaisha] }, T0);
+    await claimBag(db, cfg, r.bag.id, { id: A, roleIds: [ROLE.sanpaisha], voiceChannelId: CH }, T0);
     const open = bagMessage(r.bag, [], coin, T0);
     expect(open.embeds[0]!.description).toContain('残り **5** 袋');
     expect(await expireBags(db, new Date(T0.getTime() + 60_000))).toEqual([]);
@@ -113,7 +116,7 @@ describe('🧧 お年玉袋', () => {
     const got = (await walletOf(db, A)).balance;
     expect(closed[0]!.refunded).toBe(500 - got);
     expect((await walletOf(db, OWNER)).balance).toBe(1000 - got);
-    expect((await claimBag(db, cfg, r.bag.id, { id: B, roleIds: [ROLE.sanpaisha] }, later)).status).toBe('ended');
+    expect((await claimBag(db, cfg, r.bag.id, { id: B, roleIds: [ROLE.sanpaisha], voiceChannelId: CH }, later)).status).toBe('ended');
     const st = (await bagState(db, r.bag.id))!;
     expect(bagMessage(st.bag, st.claims, coin, later).embeds[0]!.description).toContain('期限が来ました');
     // 2 回目は何もしない
@@ -172,4 +175,52 @@ it('参拝者・未承認では置けず、銭や袋の記録も動かさない�
   const { otoshidamaBags } = await import('../src/db/schema.js');
   expect(await db.select().from(otoshidamaBags)).toHaveLength(0);
   expect((await putBag(db, cfg, { ...base, roleIds: [ROLE.sewayaku], total: 100, count: 2 }, T0)).status).toBe('ok');
+});
+
+
+describe('お年玉は受取時に通話中だけ', () => {
+  it.each([false, true])('運営袋=%s: 通話にいない間は銭も残り袋も変わらず、参加後は受け取れる', async (staff) => {
+    await addCoins(db, OWNER, 1000, 'adjust');
+    const made = staff
+      ? await putStaffBag(db, { by: OWNER, channelId: CH, total: 300, count: 2, note: '' }, T0)
+      : await putBag(db, cfg, { ...base, fee: 0, total: 300, count: 2 }, T0);
+    if (made.status !== 'ok') throw Error(made.status);
+    const who = { id: A, roleIds: [ROLE.sanpaisha], voiceChannelId: null };
+    expect((await claimBag(db, cfg, made.bag.id, who, T0)).status).toBe('not_in_voice');
+    expect((await walletOf(db, A)).balance).toBe(0);
+    expect((await bagState(db, made.bag.id))!.claims).toHaveLength(0);
+    const joined = { ...who, voiceChannelId: '910000000000000088' };
+    const results = await Promise.all([claimBag(db, cfg, made.bag.id, joined, T0), claimBag(db, cfg, made.bag.id, joined, T0)]);
+    expect(results.map(r => r.status).sort()).toEqual(['already', 'ok']);
+    expect((await bagState(db, made.bag.id))!.claims).toHaveLength(1);
+    expect((await walletOf(db, A)).balance).toBe(made.bag.shares[0]);
+    expect(bagMessage(made.bag, [], coin, T0).embeds[0]!.description).toContain('今このサーバーの通話にいる人だけ');
+  });
+
+  it('ボタンはサーバーの現在の通話状態を見る。参加・退出が次の操作に反映される', async () => {
+    const made = await putStaffBag(db, { by: OWNER, channelId: CH, total: 300, count: 2, note: '' });
+    if (made.status !== 'ok') throw Error(made.status);
+    const states = new Map<string, {channelId: string}>();
+    const app = new OtoshidamaApp(db, () => cfg, {} as DiscordActions);
+    const interaction = () => ({
+      isButton: () => true, inCachedGuild: () => true, guildId: cfg.guildId,
+      customId: `otoshi:claim:${made.bag.id}`, user: {id: A, bot: false},
+      member: {roles: {cache: new Map([[ROLE.sanpaisha, {}]])}, voice: {channelId: CH}},
+      guild: {voiceStates: {cache: states}}, reply: vi.fn(), update: vi.fn(), followUp: vi.fn(),
+    });
+    const offline = interaction();
+    await app.onInteraction(offline as unknown as Interaction);
+    expect(offline.reply).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('通話に入ってから')}));
+    expect((await bagState(db, made.bag.id))!.claims).toHaveLength(0);
+    states.set(A, {channelId: CH});
+    const online = interaction();
+    await app.onInteraction(online as unknown as Interaction);
+    expect(online.update).toHaveBeenCalledTimes(1);
+    expect(online.followUp).toHaveBeenCalledTimes(1);
+    states.delete(A);
+    const left = interaction();
+    await app.onInteraction(left as unknown as Interaction);
+    expect(left.reply).toHaveBeenCalledWith(expect.objectContaining({content: expect.stringContaining('通話に入ってから')}));
+    expect((await bagState(db, made.bag.id))!.claims).toHaveLength(1);
+  });
 });
