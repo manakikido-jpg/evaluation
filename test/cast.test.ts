@@ -926,7 +926,7 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
 });
 
 describe('👨👩 男性・女性のメニューを分ける', () => {
-  it('チャンネルが両方あれば分けて出す（決めていない人は両方）。片方だけなら全員を 1 つに', async () => {
+  it('チャンネルが両方あっても、どちらのパネルにも全員を出す。片方だけならそこに全員', async () => {
     const { refreshCastPanel } = await import('../src/discord/cast.js');
     const { getCast, saveCastConfig, loadCastConfig, setCastGender, castHomeChannel } = await import('../src/services/cast.js');
     for (const [id, name] of [[CAST, 'おとこ'], [ADULT, 'おんな'], [MINOR, 'まだ']] as const) {
@@ -948,11 +948,11 @@ describe('👨👩 男性・女性のメニューを分ける', () => {
     send.mockClear();
     expect(await refreshCastPanel(db, discord as never, { repost: true })).toBe(true);
     const byCh = new Map(send.mock.calls.map(([ch, b]) => [ch, JSON.stringify(b)]));
-    // 男性 + まだ決めていない人 / 女性 + まだ決めていない人
-    expect(byCh.get(M)).toContain('在籍 2 人');
-    expect(byCh.get(M)).toContain('cast:rank:male');
-    expect(byCh.get(F)).toContain('在籍 2 人');
-    expect(byCh.get(F)).toContain('cast:rank:female');
+    // 男性・女性のどちらのチャンネルのパネルにも、キャスト全員を出す
+    expect(byCh.get(M)).toContain('在籍 3 人');
+    expect(byCh.get(F)).toContain('在籍 3 人');
+    expect(byCh.get(M)).not.toContain('cast:rank:male');
+    expect(byCh.get(F)).toContain('"cast:rank"');
     expect(await loadCastConfig(db)).toMatchObject({ panelMessageId: '990000000000000201', femalePanelMessageId: '990000000000000202' });
     // 相談・予約のスレッドは、その人のメニューのチャンネルに
     const conf = await loadCastConfig(db);

@@ -203,20 +203,19 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
   if (!c.channelId && !c.femaleChannelId) return false;
   const [list, states, stats] = await Promise.all([listCasts(db), castStates(db), castStats(db, monthStart())]);
   const names = await namesOf(db, list.map((x) => x.memberId));
-  // 男性・女性のチャンネルが両方あれば分けて出す。片方だけなら、そこに全員を出す
-  const split = Boolean(c.channelId && c.femaleChannelId);
   let posted = false;
   for (const g of CAST_GROUPS) {
     const place = groupPlace(c, g);
     if (!place.channelId) continue;
     const image = (await loadMenuImage(db, g)) ?? (g === 'female' ? await loadMenuImage(db, 'male') : undefined);
-    const shown = list.filter((cast) => !split || inGroup(cast, g));
+    // 男性・女性のどちらのチャンネルのパネルにも、キャスト全員を出す（チャンネルが 2 つあっても分けない。画像だけチャンネルごと）
+    const shown = list;
     const ids = new Set(shown.map((x) => x.memberId));
     const top = stats.filter((x) => x.count > 0 && ids.has(x.castId)).slice(0, 3).map((x) => ({ name: names.get(x.castId) ?? x.castId, count: x.count }));
     const body = castPanel(
       shown.map((cast) => ({ cast, name: names.get(cast.memberId) ?? cast.memberId, state: states.get(cast.memberId) ?? 'off' })),
       image,
-      split ? g : undefined,
+      undefined,
       top,
     );
     if (place.messageId && !opts.repost) {
