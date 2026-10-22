@@ -402,3 +402,4 @@
 - 最終検証：実装94b77dfの購入・描画コードで型チェック・ビルド成功、全152ファイル1,859テスト成功（420.84秒、2並列）。最終CSSでビルドと実ブラウザも再確認。テスト削除・skipなし。ログ/workspace/artifacts/horse-aura-shop/{typecheck-final,build-final,all-tests}.log。ローカル試遊サーバー停止済み。
 - push前fetch：本番c4990e3（案内担当の公開範囲）への更新を確認。馬の装備・販売・描画とは別の変更。合流は担当Claudeが最新と合わせて確認する。
 - 完了範囲：馬ごとの固定6色3,500銭の購入・再装備、色変更ごと7,000銭のカスタム、オーラなしへの無料変更、見本と金額と確認、本人認可・CSRF・価格改ざん防止・二重課金防止・残高不足時の全戻し、無料装備からの注入防止、既存レースの見た目維持。黄金は販売のみ。DB変更・本番の購入や投稿なし。codex/horse-aura-shopからPRへ保存する。
+- GitHub保存済み：[PR #73](https://github.com/manakikido-jpg/evaluation/pull/73)。codex/horse-aura-shop、実装94b77df・最終検証f94e058。OPEN・未合流、本番未反映。担当Claudeの確認・合流後、カジノの着せ替え→馬のオーラショップ、または馬主の部屋の各馬から購入できる。
