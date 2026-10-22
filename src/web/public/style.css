@@ -1407,3 +1407,11 @@ body.with-side .task-action { display: inline-flex; align-items: center; min-hei
   body.with-side .brand .torii { display: none; }
   body.with-side .theme-choice select { max-width: 116px; }
 }
+
+/* 折りたたみのカード（押すと開く）。見出しを押せる形に */
+details.fold > summary { cursor: pointer; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary h2 { display: inline; }
+details.fold > summary::before { content: '▸ '; }
+details.fold[open] > summary::before { content: '▾ '; }
+.jump-nav { flex-wrap: wrap; gap: .25rem .75rem; }

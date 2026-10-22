@@ -1,6 +1,6 @@
 import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastChampagne, CastSession } from '../../db/schema.js';
-import type { CastProfit } from '../../services/castProfit.js';
+import type { CastBreakdown, CastProfit } from '../../services/castProfit.js';
 import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
@@ -244,7 +244,7 @@ export function CastPage(props: {
   /** 🍾 買われたシャンパン（新しい順） */
   champagnes?: CastChampagne[];
   /** 💹 運営の収支（月ごと） */
-  profit?: { month: string; prev: string; next?: string; data: CastProfit };
+  profit?: { month: string; prev: string; next?: string; data: CastProfit; casts: CastBreakdown[] };
   name: (id: string) => string;
   coin: string;
   flash?: string;
@@ -262,6 +262,20 @@ export function CastPage(props: {
         <a href="/cast-office/login" class="btn">キャスト本人の編集用ログイン</a>
       </div>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
+      {/* 見たい項目へとぶ（とんだ先は開く。ふだんは閉じている） */}
+      <nav class="inline-actions jump-nav" aria-label="キャストのページの中">
+        <a href="#cast-list">🎀 キャスト一覧</a>
+        <a href="#cast-register">➕ 登録</a>
+        <a href="#cast-calendar">📅 予約カレンダー</a>
+        <a href="#cast-breakdown">👤 キャストごと</a>
+        <a href="#cast-profit">💹 運営の収支</a>
+        <a href="#cast-champagne">🍾 シャンパン</a>
+        <a href="#cast-ranking">🏆 ランキング</a>
+        <a href="#cast-recent">最近の指名</a>
+        <a href="#cast-template">📋 テンプレ</a>
+        <a href="#cast-image">🖼 画像</a>
+        <a href="#cast-settings">⚙ 設定</a>
+      </nav>
       <p class="note">
         寝落ち・雑談などの通話を銭で受けるキャスト（18 歳以上・運営が承認）。お客が指名すると銭を社務所が預かり、キャストが受けると部屋ができ、時間が来たら手数料を引いてキャストに渡します。2 人だけの部屋・寝落ち・予約は 18 歳以上どうしだけ。18 歳未満（と年齢の分からない）人は、公開の部屋での雑談だけ（{MINOR.maxMinutes} 分まで・{MINOR.startHour}〜{MINOR.endHour} 時）。2 人だけの部屋も運営は見守りのために見られます。
       </p>
@@ -397,7 +411,7 @@ export function CastPage(props: {
         <button type="submit" class="ok">登録する</button>
       </form>
 
-      <section class="card ch-group">
+      <section class="card ch-group anchor" id="cast-list">
         <div class="ch-cat">
           <span class="ch-cat-name">🎀 キャスト</span>
           <span class="ch-count">{members.length}</span>
@@ -518,14 +532,14 @@ export function CastPage(props: {
         )}
       </section>
 
-      <section class="card anchor" id="cast-template">
-        <h2>📋 メニューのテンプレ</h2>
+      <details class="card anchor fold" id="cast-template">
+        <summary><h2>📋 メニューのテンプレ</h2></summary>
         <p class="note">キャストを登録するときや、一覧の「テンプレのメニューを入れる」で、この中身をそのまま入れます。入れたあとは、キャストごとに書きかえられます（テンプレを変えても、もう入れたキャストのメニューは変わりません）。</p>
         <MenuList items={props.template} base="/cast/template" session={session} c={c} empty="テンプレが空です。下から足してください。" />
-      </section>
+      </details>
 
-      <section class="card">
-        <h2>🖼 メニューの画像</h2>
+      <details class="card anchor fold" id="cast-image">
+        <summary><h2>🖼 メニューの画像</h2></summary>
         <p class="note">各キャストの写真は上の一覧から登録できます。名前はDiscordの名前を使い、IDで本人を区別します。全体のメニュー画像はPNG・JPEG・GIF・WebP、8MBまでです。作ったメニューの画像を上げると、#キャスト一覧 のメニュー（画像の下に「指名するキャストを選ぶ」）に出ます。キャストの状態（🟢 待機中・📞 通話中・💤 お休み）はメニューの名前の横に出ます。</p>
         {(['male', 'female'] as const).map((g) => {
           const has = g === 'female' ? props.hasFemaleImage : props.hasImage;
@@ -555,10 +569,10 @@ export function CastPage(props: {
             <button type="submit">メニューを出す（出し直す）</button>
           </form>
         </div>
-      </section>
+      </details>
 
-      <section class="card">
-        <h2>⚙ 設定</h2>
+      <details class="card anchor fold" id="cast-settings">
+        <summary><h2>⚙ 設定</h2></summary>
         <form method="post" action="/cast/settings" class="fields">
           <Csrf session={session} />
           <Select name="channelId" label="👨 男性キャストのメニューを出すチャンネル" value={c.channelId} options={props.channels} empty="選ぶ" />
@@ -624,16 +638,17 @@ export function CastPage(props: {
             <button type="submit">「🎀 キャスト」のロールを作る</button>
           </form>
         )}
-      </section>
+      </details>
 
       {props.ranking && <Ranking {...props.ranking} name={name} coin={props.coin} />}
 
       {props.calendar && <Calendar sessions={props.calendar} name={name} session={session} noShows={props.noShows} />}
       {props.profit && <ProfitSection {...props.profit} coin={props.coin} />}
+      {props.profit && <CastBreakdownSection month={props.profit.month} rows={props.profit.casts} name={name} coin={props.coin} />}
       {props.champagnes && <ChampagneList rows={props.champagnes} name={name} coin={props.coin} />}
 
-      <section class="card">
-        <h2>最近の指名</h2>
+      <details class="card anchor fold" id="cast-recent">
+        <summary><h2>最近の指名</h2></summary>
         {props.sessions.length ? (
           <table class="compact">
             <thead>
@@ -671,7 +686,7 @@ export function CastPage(props: {
         ) : (
           <p class="empty">まだありません。</p>
         )}
-      </section>
+      </details>
     </Layout>
   );
 }
@@ -691,8 +706,8 @@ function Calendar(props: { sessions: CastSession[]; name: (id: string) => string
   }
   const customers = [...(props.noShows?.customer ?? new Map<string, number>())].filter(([, n]) => n > 0);
   return (
-    <section class="card anchor" id="cast-calendar">
-      <h2>📅 予約カレンダー（きのう〜7 日後）</h2>
+    <details class="card anchor fold" id="cast-calendar">
+      <summary><h2>📅 予約カレンダー（きのう〜7 日後）</h2></summary>
       <p class="note">始まる時刻の順です（日本時間）。「取り消す」は、始まる前の予約を運営が取り消して、お客に全額戻します（キャストとお客に DM）。</p>
       {days.size === 0 && <p class="empty">この間の予約はありません。</p>}
       {[...days].map(([day, list]) => (
@@ -746,7 +761,7 @@ function Calendar(props: { sessions: CastSession[]; name: (id: string) => string
           🚫 来なかったお客（30 日）: {customers.map(([id, n]) => `${props.name(id)} ${n} 回`).join('、')}
         </p>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -755,8 +770,8 @@ function Ranking(p: { month: string; prev: string; next?: string; rows: CastRank
   const [y, m] = p.month.split('-');
   const medal = ['🥇', '🥈', '🥉'];
   return (
-    <section class="card" id="cast-ranking">
-      <h2>🏆 ランキング（{Number(y)} 年 {Number(m)} 月）</h2>
+    <details class="card anchor fold" id="cast-ranking">
+      <summary><h2>🏆 ランキング（{Number(y)} 年 {Number(m)} 月）</h2></summary>
       <div class="inline-actions">
         <a href={`/cast?rank=${p.prev}#cast-ranking`}>← 前の月</a>
         {p.next && <a href={`/cast?rank=${p.next}#cast-ranking`}>次の月 →</a>}
@@ -798,7 +813,7 @@ function Ranking(p: { month: string; prev: string; next?: string; rows: CastRank
       ) : (
         <p class="muted">この月の指名はありません。</p>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -824,8 +839,8 @@ function ChampagneList(props: { rows: CastChampagne[]; name: (id: string) => str
   const when = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
   const sum = (f: (r: CastChampagne) => number) => props.rows.reduce((n, r) => n + f(r), 0).toLocaleString('ja-JP');
   return (
-    <section class="card anchor" id="cast-champagne">
-      <h2>🍾 シャンパンの購入（新しい 100 件）</h2>
+    <details class="card anchor fold" id="cast-champagne">
+      <summary><h2>🍾 シャンパンの購入（新しい 100 件）</h2></summary>
       <p class="note">買えたものだけです（確認画面を出しただけのものは出ません）。お客の銭から値段を引き、キャストに受取を入れるのは同時です。</p>
       {props.rows.length ? (
         <table class="compact">
@@ -869,7 +884,7 @@ function ChampagneList(props: { rows: CastChampagne[]; name: (id: string) => str
       ) : (
         <p class="empty">まだ買われていません。</p>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -878,8 +893,8 @@ function ProfitSection(p: { month: string; prev: string; next?: string; data: Ca
   const y = (v: number) => `${v.toLocaleString('ja-JP')}`;
   const { sessions: s, champagne: c } = p.data;
   return (
-    <section class="card anchor" id="cast-profit">
-      <h2>💹 運営の収支（{p.month}）</h2>
+    <details class="card anchor fold" id="cast-profit">
+      <summary><h2>💹 運営の収支（{p.month}）</h2></summary>
       <p class="inline-actions">
         <a href={`/cast?profit=${p.prev}#cast-profit`}>← {p.prev}</a>
         {p.next && <a href={`/cast?profit=${p.next}#cast-profit`}>{p.next} →</a>}
@@ -914,6 +929,52 @@ function ProfitSection(p: { month: string; prev: string; next?: string; data: Ca
         </tbody>
       </table>
       <p class="note">いま預かり中（返事待ち・予約・通話中・納品待ち・通報で止めている分）: {y(p.data.escrow)} {p.coin}（終わるまで、上の数には入りません）。</p>
-    </section>
+    </details>
+  );
+}
+
+/** 👤 キャストごとの売上・本数・お客（ふだんは閉じていて、開くとお客ごとに出る） */
+function CastBreakdownSection(p: { month: string; rows: CastBreakdown[]; name: (id: string) => string; coin: string }) {
+  const y = (v: number) => v.toLocaleString('ja-JP');
+  return (
+    <details class="card anchor fold" id="cast-breakdown">
+      <summary><h2>👤 キャストごと（{p.month}）</h2></summary>
+      <p class="note">売上はその月に終わった指名・納品と、払われたシャンパン（手数料を引く前）。「予約中」は今入っている予約・返事待ち・通話中・納品待ち（月とは関係なく今）。名前を押すと、お客ごとに開きます。</p>
+      {p.rows.length ? (
+        p.rows.map((b) => (
+          <details>
+            <summary>
+              <strong>{p.name(b.castId)}</strong> ・ 売上 {y(b.sales)} {p.coin}（うちシャンパン {y(b.champagne)}）・ 終わった {b.done} 本 ・ 予約中 {b.open} 本 ・ お客 {b.customers.length} 人
+            </summary>
+            <table class="compact">
+              <thead>
+                <tr>
+                  <th>お客</th>
+                  <th class="num">終わった</th>
+                  <th class="num">予約中</th>
+                  <th class="num">払った額</th>
+                </tr>
+              </thead>
+              <tbody>
+                {b.customers.map((k) => (
+                  <tr>
+                    <td>
+                      <a href={`/members/${k.customerId}`}>{p.name(k.customerId)}</a>
+                    </td>
+                    <td class="num">{k.done} 本</td>
+                    <td class="num">{k.open} 本</td>
+                    <td class="num">
+                      {y(k.sales)} {p.coin}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        ))
+      ) : (
+        <p class="empty">この月の売上・予約はまだありません。</p>
+      )}
+    </details>
   );
 }

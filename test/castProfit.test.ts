@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { castChampagnes, castSessions } from '../src/db/schema.js';
-import { castProfit } from '../src/services/castProfit.js';
+import { castBreakdown, castProfit } from '../src/services/castProfit.js';
 import { addCoins } from '../src/services/economy.js';
 import { makeDb } from './helpers.js';
 
@@ -34,6 +34,10 @@ describe('💹 キャストの運営の収支', () => {
     expect(p.sessions).toEqual({ count: 2, sales: 1500, refunds: 500, toCasts: 900, fees: 100 });
     expect(p.champagne).toEqual({ count: 1, sales: 500, toCasts: 350, fees: 150 });
     expect(p.escrow).toBe(300);
+    // 👤 キャストごと: 売上（終わった指名＋シャンパン）・本数・予約中・お客ごと
+    const [b] = await castBreakdown(db, START, END);
+    expect(b).toMatchObject({ castId: CAST, done: 1, sales: 1500, champagne: 500, open: 1 });
+    expect(b!.customers).toEqual([{ customerId: CUSTOMER, done: 1, open: 1, sales: 1500 }]);
     // ごほうびは今の時刻で記録されるので、今月をふくむ範囲で数える
     const now = await castProfit(db, START, new Date(Date.now() + 86_400_000));
     expect(now.net).toBe(100 + 150 - now.rankBonus);

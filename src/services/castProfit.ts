@@ -50,3 +50,49 @@ export async function castProfit(db: Db, start: Date, end: Date): Promise<CastPr
     .where(inArray(s.status, ['requested', 'reserved', 'accepted', 'active', 'ordered', 'delivered', 'disputed']));
   return { sessions, champagne, rankBonus, escrow: n(held?.v), net: sessions.fees + champagne.fees - rankBonus };
 }
+
+/** 👤 キャストごとの中身（月ごと）。お客ごとの回数・金額も */
+export type CastBreakdown = {
+  castId: string;
+  /** その月に終わった指名・納品（done） */
+  done: number;
+  /** その月の売上（終わった指名・納品＋払われたシャンパン。手数料を引く前） */
+  sales: number;
+  champagne: number;
+  /** いま入っている予約・返事待ち・通話中・納品待ち（月とは関係なく今） */
+  open: number;
+  customers: { customerId: string; done: number; open: number; sales: number }[];
+};
+
+const OPEN_STATUSES = ['requested', 'reserved', 'accepted', 'active', 'ordered', 'delivered'] as const;
+
+export async function castBreakdown(db: Db, start: Date, end: Date): Promise<CastBreakdown[]> {
+  const s = castSessions, c = castChampagnes;
+  const done = await db.select().from(s).where(and(sql`${s.status} = 'done'`, gte(s.closedAt, start), lt(s.closedAt, end)));
+  const open = await db.select().from(s).where(inArray(s.status, [...OPEN_STATUSES]));
+  const champ = await db.select().from(c).where(and(isNotNull(c.paidAt), gte(c.paidAt, start), lt(c.paidAt, end)));
+  const map = new Map<string, CastBreakdown>();
+  const cast = (id: string) => map.get(id) ?? (map.set(id, { castId: id, done: 0, sales: 0, champagne: 0, open: 0, customers: [] }), map.get(id)!);
+  const cust = (b: CastBreakdown, id: string) => b.customers.find((x) => x.customerId === id) ?? (b.customers.push({ customerId: id, done: 0, open: 0, sales: 0 }), b.customers.at(-1)!);
+  for (const x of done) {
+    const b = cast(x.castId);
+    b.done++;
+    b.sales += x.price;
+    const k = cust(b, x.customerId);
+    k.done++;
+    k.sales += x.price;
+  }
+  for (const x of open) {
+    const b = cast(x.castId);
+    b.open++;
+    cust(b, x.customerId).open++;
+  }
+  for (const x of champ) {
+    const b = cast(x.castId);
+    b.sales += x.price;
+    b.champagne += x.price;
+    cust(b, x.customerId).sales += x.price;
+  }
+  for (const b of map.values()) b.customers.sort((a, z) => z.sales - a.sales || z.done + z.open - (a.done + a.open));
+  return [...map.values()].sort((a, z) => z.sales - a.sales || z.done - a.done);
+}

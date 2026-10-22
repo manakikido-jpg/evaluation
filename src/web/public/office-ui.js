@@ -106,3 +106,15 @@ document.addEventListener('DOMContentLoaded', () => {
   tables();
   document.addEventListener('htmx:afterSwap', tables);
 });
+
+// とび先（#…）が閉じた項目（details）なら開く。ページ内のリンクを押したときも
+const openHashTarget = () => {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const el = id ? document.getElementById(id) : null;
+  if (!el) return;
+  let d = el.closest('details');
+  while (d) { d.open = true; d = d.parentElement?.closest('details') ?? null; }
+  el.scrollIntoView();
+};
+window.addEventListener('hashchange', openHashTarget);
+document.addEventListener('DOMContentLoaded', openHashTarget);

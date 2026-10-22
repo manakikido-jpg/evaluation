@@ -3560,6 +3560,10 @@ describe('キャスト（管理画面）', () => {
     expect(page).toContain('🍾 シャンパンの購入');
     expect(page).toContain('💹 運営の収支');
     expect(page).toContain('🍾 シャンパン（別枠）');
+    expect(page).toContain('👤 キャストごと');
+    // 上のとび先と、ふだん閉じている項目
+    expect(page).toContain('href="#cast-profit"');
+    expect(page).toContain('<details class="card anchor fold" id="cast-profit">');
     expect(page).toContain('まだ買われていません。');
     expect(page).toContain('寝かしつけ（30 分）');
     expect((await form(s, '/cast/template/t3', { menuName: '寝かしつけ', menuNote: '', menuMinutes: '45', menuPrice: '320' })).headers.get('location')).toBe('/cast?msg=menu_saved#cast-template');
