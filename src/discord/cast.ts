@@ -338,8 +338,11 @@ export async function refreshCastIntros(db: Db, discord: Pick<DiscordActions, 'e
   return ok;
 }
 
+/** ⭐ 評価のボタン（1〜5） */
+const rateButtons = (id: number) => [1, 2, 3, 4, 5].map((n) => button(`cast:rate:${id}:${n}`, '⭐'.repeat(n), n === 5 ? 1 : 2));
+
 /** 部屋のチャットに出す、指名の知らせ・通話中の操作・終わり */
-export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
+export function sessionMessage(s: CastSession, c: CastConfig, coin: string, opts: { rateInRoom?: boolean } = {}) {
   const who = `<@${s.customerId}> さん → <@${s.castId}> さん`;
   const plan = `${sessionLabel(s)}${s.extensions ? `＋延長 ${s.extensions * 30} 分` : ''}`;
   const lines: string[] = [`${who} ・ ${plan} ・ ${coin} ${fmt(s.price)} 枚（社務所が預かり中）`];
@@ -357,8 +360,13 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string) {
     buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨'), button(`cast:champagne:${s.id}`, 'シャンパンを贈る（お客）', 1, '🍾')];
   } else if (s.status === 'done') {
     title = '🎉 おつかれさまでした';
-    lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、よければ評価をお願いします（この部屋は少しあとに消えます）。`);
-    buttons = [1, 2, 3, 4, 5].map((n) => button(`cast:rate:${s.id}:${n}`, '⭐'.repeat(n), n === 5 ? 1 : 2));
+    if (opts.rateInRoom === false) {
+      // ⭐ 評価のお願いは、お客に DM で送った（部屋は少しあとに消えるので）
+      lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、評価のお願いを DM で送りました（この部屋は少しあとに消えます）。`);
+    } else {
+      lines.push(`キャストに ${coin} ${fmt(s.paid)} 枚を渡しました。<@${s.customerId}> さん、よければ評価をお願いします（この部屋は少しあとに消えます）。`);
+      buttons = rateButtons(s.id);
+    }
   } else if (s.status === 'declined') {
     title = '🙇 今回は受けられませんでした';
     lines.push('預かっていた銭は全部戻しました。');
@@ -406,7 +414,7 @@ const CONSULT_LABEL: Record<ConsultKind, string> = { call: '📞 通話', dlv: '
 export const CONSULT_MINUTES = [30, 60, 90, 120, 180, 240];
 
 /** 社務所からキャストへの DM で押せるボタン・フォーム */
-const DM_ACTIONS = new Set(['accept', 'decline', 'propose', 'pmodal', 'dlv']);
+const DM_ACTIONS = new Set(['accept', 'decline', 'propose', 'pmodal', 'dlv', 'rate']);
 
 export class CastApp {
   private guild?: Guild;
@@ -527,7 +535,7 @@ export class CastApp {
     if (!interaction.guildId) {
       if (!DM_ACTIONS.has(action ?? '')) return;
       try {
-        return await this.onDm(interaction, action ?? '', Number(a));
+        return await this.onDm(interaction, action ?? '', Number(a), Number(b));
       } catch (err) {
         logger.warn({ err, id: interaction.customId }, 'cast dm failed');
         if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) await interaction.reply({ content: 'うまくいきませんでした。時間をおいてもう一度お試しください。' }).catch(() => undefined);
@@ -1342,7 +1350,9 @@ export class CastApp {
     const c = await loadCastConfig(this.db);
     const s = await finishSession(this.db, c, id, i.user.id);
     if (!s) return void (await i.reply({ content: '終えられるのは、キャストと指名した人だけです（もう終わっているかもしれません）。', ...EPHEMERAL }));
-    await i.update({ ...sessionMessage(s, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
+    await i.deferUpdate();
+    const dm = await this.askRating(s);
+    await i.editReply({ ...sessionMessage(s, c, this.coin(), { rateInRoom: !dm }), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
     await audit(this.db, { actorId: i.user.id, action: 'cast.end', detail: { sessionId: id, paid: s.paid }, via: 'discord' });
     this.refresh();
   }
@@ -1361,10 +1371,30 @@ export class CastApp {
     await i.followUp({ content: '🚨 運営に知らせました。つらいときは、部屋から抜けて大丈夫です。', ...EPHEMERAL });
   }
 
-  private async rate(i: ButtonInteraction<'cached'>, id: number, stars: number): Promise<void> {
+  private async rate(i: ButtonInteraction, id: number, stars: number): Promise<void> {
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return;
     const s = await rateSession(this.db, id, i.user.id, stars);
-    if (!s) return void (await i.reply({ content: '評価できるのは、指名した人が 1 回だけです。', ...EPHEMERAL }));
-    await i.reply({ content: `⭐ ${'⭐'.repeat(stars - 1)} ありがとうございました。`, ...EPHEMERAL });
+    if (!s) return void (await i.reply({ content: '評価できるのは、指名した人が 1 回だけです。', ...(i.guildId ? EPHEMERAL : {}) }));
+    const thanks = `${'⭐'.repeat(stars)} ありがとうございました。`;
+    // DM なら、押したお願いのボタンを外して、お礼に書きかえる
+    if (!i.guildId) return void (await i.update({ content: thanks, embeds: [], components: [] }));
+    await i.reply({ content: thanks, ...EPHEMERAL });
+  }
+
+  /** ⭐ 通話が終わったら、お客に DM で評価をお願いする。送れたら true（部屋にはボタンを出さない） */
+  private async askRating(s: CastSession): Promise<boolean> {
+    if (s.status !== 'done' || isDeliverySession(s)) return false;
+    const user = await this.guild?.client.users.fetch(s.customerId).catch(() => undefined);
+    if (!user) return false;
+    const name = (await namesOf(this.db, [s.castId])).get(s.castId) ?? 'キャスト';
+    return user
+      .send({
+        embeds: [{ title: '⭐ 評価をお願いします', description: `${name} さんとの ${sessionLabel(s)}、おつかれさまでした。\nよければ星を選んでください（1 回だけ・キャストの評価に入ります）。`, color: PINK }],
+        components: [row(...rateButtons(s.id))],
+        allowedMentions: { parse: [] },
+      })
+      .then(() => true)
+      .catch(() => false);
   }
 
   // ───────── 予約 ─────────
@@ -1482,7 +1512,7 @@ export class CastApp {
     if (i.isButton()) await i.update({ ...(guildBody ?? this.reserveMessage(s)), allowedMentions: { parse: [] } } as never);
   }
 
-  private async onDm(i: Interaction, action: string, id: number): Promise<void> {
+  private async onDm(i: Interaction, action: string, id: number, extra?: number): Promise<void> {
     if (!Number.isSafeInteger(id)) return;
     if (i.isModalSubmit() && action === 'pmodal') return this.proposeSubmit(i as never, id);
     if (!i.isButton()) return;
@@ -1490,6 +1520,7 @@ export class CastApp {
     if (action === 'decline') return this.cancel(i as never, id, 'declined');
     if (action === 'propose') return this.proposeModal(i as never, id);
     if (action === 'dlv') return this.deliver(i, id);
+    if (action === 'rate') return this.rate(i, id, extra ?? 0);
   }
 
   /** 📦 注文する（お客） */
@@ -1827,7 +1858,8 @@ export class CastApp {
     for (const s of r.finished) {
       changed = true;
       const room = this.voice(s.channelId);
-      await room?.send({ ...sessionMessage(s, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof room.send>[0]).catch(() => undefined);
+      const dm = await this.askRating(s);
+      await room?.send({ ...sessionMessage(s, c, this.coin(), { rateInRoom: !dm }), allowedMentions: { parse: [] } } as Parameters<typeof room.send>[0]).catch(() => undefined);
       if (isDeliverySession(s) && s.threadId) await this.discord.sendMessage(s.threadId, { ...this.reserveMessage(s), allowed_mentions: { parse: [] } } as MessageBody).catch(() => undefined);
       if (s.paid > 0) await this.discord.sendDm(s.castId, `🎀 指名 #${s.id} が終わりました。${this.coin()} ${fmt(s.paid)} 枚をお渡ししました。`).catch(() => false);
     }

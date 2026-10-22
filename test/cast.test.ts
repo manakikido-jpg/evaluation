@@ -471,6 +471,21 @@ describe('🎀 キャストの見た目', () => {
     expect(active).toContain('公開の部屋です');
     expect(active).toContain(`cast:ext:${r.session.id}:0`);
     expect(active).toContain(`cast:report:${r.session.id}`);
+    // ⭐ 終わったら: DM で評価をお願いできたときは、部屋には評価のボタンを出さない
+    const done = (await finishSession(db, c, r.session.id, CAST, new Date(T20.getTime() + 31 * 60_000)))!;
+    expect(JSON.stringify(sessionMessage(done, c, '🪙銭'))).toContain(`cast:rate:${r.session.id}:5`);
+    const viaDm = JSON.stringify(sessionMessage(done, c, '🪙銭', { rateInRoom: false }));
+    expect(viaDm).not.toContain('cast:rate:');
+    expect(viaDm).toContain('評価のお願いを DM で送りました');
+    // DM の評価ボタン: 押すとボタンを外してお礼に書きかえる（1 回だけ）
+    const app = new CastApp(db, () => cfg, {} as never);
+    const press = (stars: number) => ({ customId: `cast:rate:${r.session.id}:${stars}`, guildId: null, user: { id: MINOR }, isButton: () => true, isModalSubmit: () => false, update: vi.fn(async () => undefined), reply: vi.fn(async () => undefined) });
+    const first = press(4);
+    await app.onInteraction(first as never);
+    expect(first.update).toHaveBeenCalledWith({ content: '⭐⭐⭐⭐ ありがとうございました。', embeds: [], components: [] });
+    const again = press(5);
+    await app.onInteraction(again as never);
+    expect(JSON.stringify(again.reply.mock.calls)).toContain('1 回だけ');
   });
 });
 
