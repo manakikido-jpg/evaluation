@@ -7,7 +7,7 @@ import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutyChannelName, type GuideConfig } from '../services/guideReception.js';
 import { guideRoleOf } from './guidePending.js';
 import { autoRanks } from '../domain/ranks.js';
 import { audit } from '../services/audit.js';
@@ -17,7 +17,11 @@ const btn = (id: string, label: string, disabled = false) => ({ type: 2, custom_
 export const guideEmployeePanel = (): MessageBody => ({
   content: '**案内人の受付**\n登録申請は運営が承認します。承認後に待機を切り替えてください。',
   allowed_mentions: { parse: [] },
-  components: [{ type: 1, components: [btn('guide:register', '登録を申請'), btn('guide:wait', '待機する'), btn('guide:off', '受付停止'), btn('guide:salary', '給与を確認'), btn('guide:who', '👀 待機中の人')] }],
+  components: [
+    { type: 1, components: [btn('guide:register', '登録を申請'), btn('guide:wait', '待機する'), btn('guide:off', '受付停止'), btn('guide:salary', '給与を確認'), btn('guide:who', '👀 待機中の人')] },
+    // 🙋 案内担当（押すと、チャンネル名と、ほかの案内人への知らせが変わる）
+    { type: 1, components: [{ ...btn('guide:duty', '🙋 案内を担当する'), style: 3 }, { ...btn('guide:dutyoff', '🔚 案内担当を終了する'), style: 4 }] },
+  ],
 });
 export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config: GuideConfig, roleGranted = false): MessageBody {
   const label = r.status === 'assigned' ? `対応中：<@${r.guideId}>` : r.status === 'done' ? '案内完了' : r.status === 'left' ? '退出済み' : '案内人の対応待ち';
@@ -241,7 +245,9 @@ export class GuideReceptionApp {
             online: this.presence ? Boolean(status && status !== 'offline') : undefined,
           };
         });
+        const duty = await guideDuty(this.db);
         const lines = [
+          duty.length ? `🙋 案内担当: ${duty.map((id) => `<@${id}>`).join('・')}` : '🙋 案内担当: なし',
           `👀 いま対応できる案内人（${staff.length + others.length} 人）`,
           ...(staff.length ? ['🛡 運営（いつも）', ...staff.map((id) => `・<@${id}>`)] : []),
           ...(others.length ? [this.presence ? '🟢 オンラインで待機中' : '🟢 待機中', ...others.map((id) => `・<@${id}>`)] : []),
@@ -250,6 +256,25 @@ export class GuideReceptionApp {
         return void await i.editReply({ content: lines.join('\n'), allowedMentions: { parse: [] } });
       }
       if (member.user.bot || !c.roleId || !member.roles.cache.has(c.roleId)) return void await i.editReply('案内人ロールが必要です。運営に確認してください。');
+      // 🙋 案内担当を始める・終える（チャンネル名を変えて、案内人に知らせる）
+      if (action === 'duty' || action === 'dutyoff') {
+        const on = action === 'duty';
+        const r = await setGuideDuty(this.db, i.user.id, on, i.user.id);
+        if (!r.changed) return void await i.editReply(on ? 'もう案内担当になっています。' : '案内担当ではありません。');
+        await i.guild.members.fetch({ user: r.after }).catch(() => undefined);
+        const nameOf = (id: string) => i.guild.members.cache.get(id)?.displayName ?? '案内人';
+        const channel = i.channel;
+        // チャンネル名は Discord の決まりで 10 分に 2 回までしか変えられない（こえた分は少し待ってから変わる）
+        if (channel && 'setName' in channel) void channel.setName(guideDutyChannelName(r.after.map(nameOf)), '案内担当が変わった').catch((err: unknown) => logger.warn({ err }, 'guide duty rename failed'));
+        const ping = c.roleId ? `<@&${c.roleId}> ` : '';
+        const content = on
+          ? `${ping}🙋 ${nameOf(i.user.id)} **が案内担当をはじめました。**`
+          : r.after.length
+            ? `🔚 ${nameOf(i.user.id)} が案内担当を終了しました（いまの担当: ${r.after.map(nameOf).join('・')}）。`
+            : `${ping}⚠️ **案内担当が不在です。案内できるかたは「🙋 案内を担当する」を押してください。**`;
+        if (channel?.isSendable()) await channel.send({ content, allowedMentions: { parse: [], roles: c.roleId && (on || !r.after.length) ? [c.roleId] : [] } }).catch((err: unknown) => logger.warn({ err }, 'guide duty notice failed'));
+        return void await i.editReply(on ? '案内担当をはじめました。終わるときは「🔚 案内担当を終了する」を押してください。' : '案内担当を終了しました。');
+      }
       if (action === 'wait' || action === 'off') {
         const ok = await setGuideWaiting(this.db, i.user.id, action === 'wait');
         return void await i.editReply(ok ? (action === 'wait' ? '待機中にしました。入室があるとDMで知らせます。' : '受付を停止しました。') : '案内人の登録と承認が必要です。');

@@ -448,3 +448,28 @@ describe('👀 待機中の人', () => {
     expect(listedGuides(guides, (id) => ({ staff: id === 'staff' }))).toEqual({ staff: ['staff'], others: ['on', 'off'] });
   });
 });
+
+describe('🙋 案内担当', () => {
+  it('始める・終える。同時に押しても二重にならない。チャンネル名', async () => {
+    const { setGuideDuty, guideDuty, guideDutyChannelName } = await import('../src/services/guideReception.js');
+    const { db, close } = await makeDb();
+    try {
+      const A = '760000000000000101', B = '760000000000000102';
+      const [x, y] = await Promise.all([setGuideDuty(db, A, true, A), setGuideDuty(db, A, true, A)]);
+      expect([x.changed, y.changed].filter(Boolean)).toHaveLength(1);
+      await setGuideDuty(db, B, true, B);
+      expect(await guideDuty(db)).toEqual([A, B]);
+      expect((await setGuideDuty(db, A, false, A)).after).toEqual([B]);
+      expect((await setGuideDuty(db, A, false, A)).changed).toBe(false);
+      expect((await setGuideDuty(db, B, false, B)).after).toEqual([]);
+      expect(guideDutyChannelName(['あや', 'もみじ'])).toBe('案内担当：あや・もみじ');
+      expect(guideDutyChannelName([])).toBe('案内担当なし');
+      const { guideEmployeePanel } = await import('../src/discord/guideReception.js');
+      const panel = JSON.stringify(guideEmployeePanel());
+      expect(panel).toContain('guide:duty');
+      expect(panel).toContain('guide:dutyoff');
+    } finally {
+      await close();
+    }
+  });
+});

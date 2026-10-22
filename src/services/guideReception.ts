@@ -176,3 +176,34 @@ export async function completeGuide(db: Db, id: number, memberId: string, now = 
     return { reception: r, amount };
   });
 }
+
+// ───────── 🙋 案内担当（いま担当している案内人。案内人どうしで見える） ─────────
+
+const DUTY_KEY = 'guide.duty';
+
+/** いま案内を担当している人（担当を始めた順） */
+export async function guideDuty(db: Db): Promise<string[]> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, DUTY_KEY));
+  const v = row?.value as { ids?: unknown } | undefined;
+  return Array.isArray(v?.ids) ? v.ids.filter((x): x is string => typeof x === 'string') : [];
+}
+
+/** 担当を始める・終える。同時に押しても順に入れる。前と後の担当を返す（変わらなければ changed: false） */
+export async function setGuideDuty(db: Db, memberId: string, on: boolean, by: string): Promise<{ before: string[]; after: string[]; changed: boolean }> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${DUTY_KEY}))`);
+    const [row] = await tx.select().from(settings).where(eq(settings.key, DUTY_KEY)).for('update');
+    const v = row?.value as { ids?: unknown } | undefined;
+    const before = Array.isArray(v?.ids) ? v.ids.filter((x): x is string => typeof x === 'string') : [];
+    const after = on ? (before.includes(memberId) ? before : [...before, memberId]) : before.filter((x) => x !== memberId);
+    const changed = after.length !== before.length;
+    if (changed) {
+      await tx.insert(settings).values({ key: DUTY_KEY, value: { ids: after }, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value: { ids: after }, updatedBy: by, updatedAt: new Date() } });
+      await audit(tx as Db, { actorId: by, targetId: memberId, action: on ? 'guide.duty_on' : 'guide.duty_off', detail: { ids: after }, via: 'discord' });
+    }
+    return { before, after, changed };
+  });
+}
+
+/** チャンネル名（「案内担当：あや・もみじ」／「案内担当なし」）。Discord の名前の長さに合わせて切る */
+export const guideDutyChannelName = (names: string[]) => (names.length ? `案内担当：${names.join('・')}` : '案内担当なし').slice(0, 100);
