@@ -1,5 +1,6 @@
 import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastChampagne, CastSession } from '../../db/schema.js';
+import type { CastProfit } from '../../services/castProfit.js';
 import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
@@ -242,6 +243,8 @@ export function CastPage(props: {
   noShows?: { cast: ReadonlyMap<string, number>; customer: ReadonlyMap<string, number> };
   /** 🍾 買われたシャンパン（新しい順） */
   champagnes?: CastChampagne[];
+  /** 💹 運営の収支（月ごと） */
+  profit?: { month: string; prev: string; next?: string; data: CastProfit };
   name: (id: string) => string;
   coin: string;
   flash?: string;
@@ -626,6 +629,7 @@ export function CastPage(props: {
       {props.ranking && <Ranking {...props.ranking} name={name} coin={props.coin} />}
 
       {props.calendar && <Calendar sessions={props.calendar} name={name} session={session} noShows={props.noShows} />}
+      {props.profit && <ProfitSection {...props.profit} coin={props.coin} />}
       {props.champagnes && <ChampagneList rows={props.champagnes} name={name} coin={props.coin} />}
 
       <section class="card">
@@ -865,6 +869,51 @@ function ChampagneList(props: { rows: CastChampagne[]; name: (id: string) => str
       ) : (
         <p class="empty">まだ買われていません。</p>
       )}
+    </section>
+  );
+}
+
+/** 💹 運営の収支（月ごと）。指名・納品と、シャンパンを分けて出す */
+function ProfitSection(p: { month: string; prev: string; next?: string; data: CastProfit; coin: string }) {
+  const y = (v: number) => `${v.toLocaleString('ja-JP')}`;
+  const { sessions: s, champagne: c } = p.data;
+  return (
+    <section class="card anchor" id="cast-profit">
+      <h2>💹 運営の収支（{p.month}）</h2>
+      <p class="inline-actions">
+        <a href={`/cast?profit=${p.prev}#cast-profit`}>← {p.prev}</a>
+        {p.next && <a href={`/cast?profit=${p.next}#cast-profit`}>{p.next} →</a>}
+      </p>
+      <p class="note">日本時間の月ごと。指名・納品はその月に終わった（精算した）もの、シャンパンはその月に払われたもの。単位は {p.coin}。</p>
+      <h3>🎀 指名・納品</h3>
+      <table class="compact">
+        <tbody>
+          <tr><th>終わった件数</th><td class="num">{s.count} 件</td></tr>
+          <tr><th>お客が払った（取り消し・断りで戻した分もふくむ）</th><td class="num">{y(s.sales)}</td></tr>
+          <tr><th>お客に戻した</th><td class="num">− {y(s.refunds)}</td></tr>
+          <tr><th>キャストに渡した</th><td class="num">− {y(s.toCasts)}</td></tr>
+          <tr><th>運営の取り分（手数料）</th><td class="num"><strong>{y(s.fees)}</strong></td></tr>
+        </tbody>
+      </table>
+      <h3>🍾 シャンパン（別枠）</h3>
+      <table class="compact">
+        <tbody>
+          <tr><th>本数</th><td class="num">{c.count} 本</td></tr>
+          <tr><th>売上</th><td class="num">{y(c.sales)}</td></tr>
+          <tr><th>キャストに渡した</th><td class="num">− {y(c.toCasts)}</td></tr>
+          <tr><th>運営の取り分（手数料）</th><td class="num"><strong>{y(c.fees)}</strong></td></tr>
+        </tbody>
+      </table>
+      <h3>まとめ</h3>
+      <table class="compact">
+        <tbody>
+          <tr><th>指名・納品の取り分</th><td class="num">{y(s.fees)}</td></tr>
+          <tr><th>シャンパンの取り分</th><td class="num">{y(c.fees)}</td></tr>
+          <tr><th>月のごほうび（ランキングの銭）</th><td class="num">− {y(p.data.rankBonus)}</td></tr>
+          <tr><th>運営の利益</th><td class="num"><strong>{y(p.data.net)}</strong></td></tr>
+        </tbody>
+      </table>
+      <p class="note">いま預かり中（返事待ち・予約・通話中・納品待ち・通報で止めている分）: {y(p.data.escrow)} {p.coin}（終わるまで、上の数には入りません）。</p>
     </section>
   );
 }

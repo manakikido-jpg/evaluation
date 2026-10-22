@@ -3558,6 +3558,8 @@ describe('キャスト（管理画面）', () => {
     const page = await (await get('/cast', s)).text();
     expect(page).toContain('メニューのテンプレ');
     expect(page).toContain('🍾 シャンパンの購入');
+    expect(page).toContain('💹 運営の収支');
+    expect(page).toContain('🍾 シャンパン（別枠）');
     expect(page).toContain('まだ買われていません。');
     expect(page).toContain('寝かしつけ（30 分）');
     expect((await form(s, '/cast/template/t3', { menuName: '寝かしつけ', menuNote: '', menuMinutes: '45', menuPrice: '320' })).headers.get('location')).toBe('/cast?msg=menu_saved#cast-template');
