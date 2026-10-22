@@ -264,8 +264,9 @@ export class GuideReceptionApp {
         await i.guild.members.fetch({ user: r.after }).catch(() => undefined);
         const nameOf = (id: string) => i.guild.members.cache.get(id)?.displayName ?? '案内人';
         const channel = i.channel;
-        // チャンネル名は Discord の決まりで 10 分に 2 回までしか変えられない（こえた分は少し待ってから変わる）
-        if (channel && 'setName' in channel) void channel.setName(guideDutyChannelName(r.after.map(nameOf)), '案内担当が変わった').catch((err: unknown) => logger.warn({ err }, 'guide duty rename failed'));
+        // 社務所Web で決めたチャンネルの名前を変える（Discord の決まりで 10 分に 2 回まで。こえた分は少し待ってから変わる）
+        const named = c.dutyChannelId ? i.guild.channels.cache.get(c.dutyChannelId) : undefined;
+        if (named && 'setName' in named) void named.setName(guideDutyChannelName(r.after.map(nameOf)), '案内担当が変わった').catch((err: unknown) => logger.warn({ err }, 'guide duty rename failed'));
         const ping = c.roleId ? `<@&${c.roleId}> ` : '';
         const content = on
           ? `${ping}🙋 ${nameOf(i.user.id)} **が案内担当をはじめました。**`

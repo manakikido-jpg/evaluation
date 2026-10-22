@@ -1745,10 +1745,10 @@ export function createWebApp(deps: WebDeps) {
     const b = await c.req.parseBody({ all: true });
     try {
       const voiceChannelIds = (Array.isArray(b.voiceChannelIds) ? b.voiceChannelIds : b.voiceChannelIds ? [b.voiceChannelIds] : []);
-      const config = guideConfigSchema.parse({ voiceChannelIds, staffChannelId: b.staffChannelId || undefined, roleId: b.roleId || undefined, salary: Number(b.salary), links: parseGuideLinks(b) });
+      const config = guideConfigSchema.parse({ voiceChannelIds, staffChannelId: b.staffChannelId || undefined, roleId: b.roleId || undefined, salary: Number(b.salary), dutyChannelId: typeof b.dutyChannelId === 'string' ? b.dutyChannelId || undefined : (await loadGuideConfig(db)).dutyChannelId, links: parseGuideLinks(b) });
       const channels = await loadChannels(true);
       const roles = await loadRoles() ?? [];
-      if (config.voiceChannelIds.some(id => !channels.some(ch => ch.id === id && ch.type === 2)) || (config.staffChannelId && !channels.some(ch => ch.id === config.staffChannelId && ch.type === 0)) || (config.roleId && !roles.some(r => r.id === config.roleId && !r.managed && r.id !== cfg.guildId))) return c.redirect('/guide?msg=invalid');
+      if (config.voiceChannelIds.some(id => !channels.some(ch => ch.id === id && ch.type === 2)) || (config.staffChannelId && !channels.some(ch => ch.id === config.staffChannelId && ch.type === 0)) || (config.dutyChannelId && !channels.some(ch => ch.id === config.dutyChannelId && ch.type !== 4)) || (config.roleId && !roles.some(r => r.id === config.roleId && !r.managed && r.id !== cfg.guildId))) return c.redirect('/guide?msg=invalid');
       await saveGuideConfig(db, config, c.get('session').userId);
       return c.redirect('/guide?msg=saved');
     } catch { return c.redirect('/guide?msg=invalid'); }

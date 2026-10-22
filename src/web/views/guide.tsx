@@ -30,6 +30,7 @@ export function GuidePage(p: { session: AdminSession; config: GuideConfig; emplo
           <p>チェックしたあと、下の「設定を保存」で確定します。選べる部屋は20個までです。</p>
         </details>
       </fieldset>
+      <label>🙋 名前を「案内担当：○○」に変えるチャンネル<select name="dutyChannelId"><option value="">変えない</option>{p.channels.filter(c => c.type !== 4).map(c => <option value={c.id} selected={p.config.dutyChannelId === c.id}>{c.type === 2 ? '🔊' : '#'}{c.name}</option>)}</select></label>
       <label>通知先<select name="staffChannelId"><option value="">設定済みの「記録」</option>{p.config.staffChannelId && !p.channels.some(c => c.type === 0 && c.id === p.config.staffChannelId) && <option value={p.config.staffChannelId} selected>現在の通知先（{p.config.staffChannelId}・取得できませんでした）</option>}{p.channels.filter(c => c.type === 0).map(c => <option value={c.id} selected={p.config.staffChannelId === c.id}>{c.name}</option>)}</select></label>
       <label>案内人ロール<select name="roleId"><option value="">名前に「案内人」を含むロール（1つだけのとき）</option>{p.config.roleId && !p.roles.some(r => !r.managed && r.id === p.config.roleId) && <option value={p.config.roleId} selected>現在のロール（{p.config.roleId}・取得できませんでした）</option>}{p.roles.filter(r => !r.managed).map(r => <option value={r.id} selected={p.config.roleId === r.id}>{r.name}</option>)}</select></label>
       <label>完了1件の給与（銭。0で支払い停止）<input type="number" name="salary" min={0} max={1000000} value={p.config.salary} required /></label>

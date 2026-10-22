@@ -464,6 +464,10 @@ describe('🙋 案内担当', () => {
       expect((await setGuideDuty(db, B, false, B)).after).toEqual([]);
       expect(guideDutyChannelName(['あや', 'もみじ'])).toBe('案内担当：あや・もみじ');
       expect(guideDutyChannelName([])).toBe('案内担当なし');
+      // 名前を変えるチャンネルは設定で決める（なければ変えない）
+      const { guideConfigSchema } = await import('../src/services/guideReception.js');
+      expect(guideConfigSchema.parse({}).dutyChannelId).toBeUndefined();
+      expect(guideConfigSchema.parse({ dutyChannelId: '990000000000000123' }).dutyChannelId).toBe('990000000000000123');
       const { guideEmployeePanel } = await import('../src/discord/guideReception.js');
       const panel = JSON.stringify(guideEmployeePanel());
       expect(panel).toContain('guide:duty');

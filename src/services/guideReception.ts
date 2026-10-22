@@ -17,6 +17,8 @@ export const GUIDE_LINKS = [
 export const guideConfigSchema = z.object({
   voiceChannelIds: z.array(snowflake).max(20).default([]), staffChannelId: snowflake.optional(), roleId: snowflake.optional(),
   salary: z.number().int().min(0).max(1_000_000).default(150),
+  /** 🙋 名前を「案内担当：○○」／「案内担当なし」に変えるチャンネル（なければ変えない） */
+  dutyChannelId: snowflake.optional(),
   links: z.array(z.object({ emojiId: snowflake, emojiName: z.string().regex(/^\w{1,32}$/), channelIds: z.array(snowflake).min(1).max(3) })).max(10).default(GUIDE_LINKS),
 });
 /** 絵文字とDiscordのチャンネルリンクを、そのまま設定欄に貼れる */
