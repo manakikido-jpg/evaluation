@@ -4,3 +4,7 @@
 .scratch-ticket [hidden]{display:none!important}
 
 .fortune-shop .c-logo{flex-wrap:wrap;white-space:normal}.fortune-shop .c-top{gap:1rem;flex-wrap:wrap}.fortune-shop .c-me{flex-wrap:wrap}.fortune-shop .c-main{max-width:1200px}
+
+/* 🏆 週末宝くじの等と、1本あたりの賞金 */
+.fortune-tiers { width: 100%; border-collapse: collapse; margin: .5rem 0; }
+.fortune-tiers th, .fortune-tiers td { padding: .35rem .5rem; border-bottom: 1px solid rgba(255,255,255,.12); text-align: left; }

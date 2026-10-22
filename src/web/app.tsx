@@ -671,7 +671,7 @@ export function createWebApp(deps: WebDeps) {
     const at = now();
     const tab = c.req.query('tab') === 'lottery' ? 'lottery' : 'scratch';
     const [round, finances, rounds] = await Promise.all([ensureLotteryRound(db, cfg.fortuneGames, at), scratchFinances(db, scratchPeriod(c.req.query('period')), at), recentLotteryRounds(db, at)]);
-    return c.html(<FortuneAdminPage session={c.get('session')} tab={tab} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} rounds={rounds} finances={finances} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : undefined} />);
+    return c.html(<FortuneAdminPage session={c.get('session')} tab={tab} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} rounds={rounds} finances={finances} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : c.req.query('msg') === 'tiers_invalid' ? '等の入力を確かめてください（名前・本数 1〜100・割合 1〜100％、割合の合計は 100％ まで、5 つまで）。' : undefined} />);
   });
   app.post('/economy/fortune', requireCsrf, async (c) => {
     if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);
@@ -679,13 +679,29 @@ export function createWebApp(deps: WebDeps) {
     // スクラッチ・宝くじのタブごとに送るので、送られてこない欄は今の値のまま（ほかのタブの値を消さない）
     const tab = body.tab === 'lottery' ? 'lottery' : 'scratch';
     const cur = cfg.fortuneGames as Record<string, unknown>;
-    const parsed = fortuneGamesSchema.safeParse({ enabled: body.enabled === 'yes', ...Object.fromEntries(['scratchPrice', 'scratchDailyLimit', 'lotteryPrice', 'lotteryLimit', 'lotteryReturnPct', 'lotteryBonus'].map(key => [key, body[key] === undefined ? cur[key] : typeof body[key] === 'string' && body[key] !== '' ? Number(body[key]) : NaN])) });
+    const parsed = fortuneGamesSchema.safeParse({ enabled: body.enabled === 'yes', lotteryTiers: cur.lotteryTiers, ...Object.fromEntries(['scratchPrice', 'scratchDailyLimit', 'lotteryPrice', 'lotteryLimit', 'lotteryReturnPct', 'lotteryBonus'].map(key => [key, body[key] === undefined ? cur[key] : typeof body[key] === 'string' && body[key] !== '' ? Number(body[key]) : NaN])) });
     if (!parsed.success) return c.redirect(`/economy/fortune?tab=${tab}&msg=invalid`, 303);
     const prev = await loadOverrides(db);
     await saveOverrides(db, { ...prev, fortuneGames: parsed.data }, c.get('session').userId);
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'fortune.settings', detail: parsed.data, via: 'web' });
     return c.redirect(`/economy/fortune?tab=${tab}&msg=saved`, 303);
+  });
+
+  // 🎫 週末宝くじの等（1等・2等…）。賞金を等ごとの割合で分ける。次の回から効く
+  app.post('/economy/fortune/tiers', requireCsrf, async (c) => {
+    if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);
+    const body = await c.req.parseBody();
+    const tiers = [0, 1, 2, 3, 4]
+      .map((k) => ({ name: typeof body[`tierName${k}`] === 'string' ? (body[`tierName${k}`] as string).trim() : '', count: Number(body[`tierCount${k}`]), pct: Number(body[`tierPct${k}`]) }))
+      .filter((t) => t.name);
+    const parsed = fortuneGamesSchema.safeParse({ ...cfg.fortuneGames, lotteryTiers: tiers });
+    if (!parsed.success) return c.redirect('/economy/fortune?tab=lottery&msg=tiers_invalid', 303);
+    const prev = await loadOverrides(db);
+    await saveOverrides(db, { ...prev, fortuneGames: parsed.data }, c.get('session').userId);
+    await deps.onSettingsSaved?.();
+    await audit(db, { actorId: c.get('session').userId, action: 'fortune.tiers', detail: { tiers: parsed.data.lotteryTiers }, via: 'web' });
+    return c.redirect('/economy/fortune?tab=lottery&msg=saved', 303);
   });
 
   app.get('/economy/shinpu', async (c) => {

@@ -34,6 +34,14 @@ export class FortuneError extends Error {}
 export const fortuneErrorMessage = (err: unknown) => err instanceof FortuneError ? err.message : '処理の結果を確認できませんでした。履歴を確認して、同じ券からやり直してください。';
 const fail = (message: string): never => { throw new FortuneError(message); };
 const validNonce = (id: string) => nonce.safeParse(id).success || fail('購入番号を確認してください。画面を開き直してください。');
+export type LotteryTier = { name: string; count: number; pct: number };
+/** その回の等（前の回は 1 等 1 本に全額） */
+export const roundTiers = (r: { tiers?: LotteryTier[] | null }): LotteryTier[] => r.tiers?.length ? r.tiers : [{ name: '1等', count: 1, pct: 100 }];
+/** 等ごとの、1 本あたりの賞金（今の売上で計算。端数は切り捨て） */
+export const tierPrizes = (r: Parameters<typeof projectedPrize>[0] & { tiers?: LotteryTier[] | null }) => {
+  const pool = projectedPrize(r);
+  return roundTiers(r).map((t) => ({ ...t, each: Math.floor((pool * t.pct) / 100 / t.count) }));
+};
 export const projectedPrize = (r: { price: number; sold: number; returnPct: number; bonus: number }) => r.sold ? Math.floor(r.price * r.sold * r.returnPct / 100) + r.bonus : 0;
 
 export async function buyScratch(db: Db, memberId: string, id: string, raw: FortuneGamesConfig, clock = () => new Date(), pick = randomInt) {
@@ -74,7 +82,7 @@ export async function revealScratch(db: Db, memberId: string, id: string, clock 
 export async function ensureLotteryRound(db: Db, raw: FortuneGamesConfig, now = new Date()) {
   const cfg = fortuneGamesSchema.parse(raw), drawAt = nextLotteryDraw(now), id = drawAt.toISOString();
   if (!cfg.enabled) return (await db.select().from(fortuneRounds).where(eq(fortuneRounds.id, id)))[0];
-  await db.insert(fortuneRounds).values({ id, drawAt, price: cfg.lotteryPrice, perMember: cfg.lotteryLimit, returnPct: cfg.lotteryReturnPct, bonus: cfg.lotteryBonus }).onConflictDoNothing();
+  await db.insert(fortuneRounds).values({ id, drawAt, price: cfg.lotteryPrice, perMember: cfg.lotteryLimit, returnPct: cfg.lotteryReturnPct, bonus: cfg.lotteryBonus, tiers: cfg.lotteryTiers }).onConflictDoNothing();
   return (await db.select().from(fortuneRounds).where(eq(fortuneRounds.id, id)))[0]!;
 }
 export async function buyLottery(db: Db, memberId: string, id: string, roundId: string, raw: FortuneGamesConfig, clock = () => new Date()) {
@@ -104,14 +112,23 @@ export async function settleLotteries(db: Db, now = new Date(), pick = randomInt
     const [r] = await tx.select().from(fortuneRounds).where(eq(fortuneRounds.id, id));
     if (!r || r.settledAt || r.drawAt > now) return;
     let winnerId: string | null = null, winningNumber: number | null = null, payout = 0;
+    const winners: { tier: string; number: number; memberId: string; payout: number }[] = [];
     if (r.sold) {
-      winningNumber = choose(r.sold, pick) + 1;
-      const [ticket] = await tx.select().from(fortuneTickets).where(and(eq(fortuneTickets.roundId, id), eq(fortuneTickets.number, winningNumber)));
-      if (!ticket) throw Error('宝くじの券と販売枚数が一致しません。');
-      winnerId = ticket.memberId; payout = projectedPrize(r);
-      await addCoins(tx, winnerId, payout, 'lottery_prize', { roundId: id, winningNumber });
+      // 等の順に、まだ当たっていない券から引く（1 枚の券は 1 回だけ当たる。券が足りなければ、残りの等は出ない）
+      const left = Array.from({ length: r.sold }, (_, k) => k + 1);
+      for (const t of tierPrizes(r)) {
+        for (let k = 0; k < t.count && left.length; k++) {
+          const number = left.splice(choose(left.length, pick), 1)[0]!;
+          const [ticket] = await tx.select().from(fortuneTickets).where(and(eq(fortuneTickets.roundId, id), eq(fortuneTickets.number, number)));
+          if (!ticket) throw Error('宝くじの券と販売枚数が一致しません。');
+          if (t.each > 0) await addCoins(tx, ticket.memberId, t.each, 'lottery_prize', { roundId: id, winningNumber: number, tier: t.name });
+          winners.push({ tier: t.name, number, memberId: ticket.memberId, payout: t.each });
+          payout += t.each;
+        }
+      }
+      winnerId = winners[0]?.memberId ?? null; winningNumber = winners[0]?.number ?? null;
     }
-    await tx.update(fortuneRounds).set({ winnerId, winningNumber, payout, settledAt: now }).where(eq(fortuneRounds.id, id));
+    await tx.update(fortuneRounds).set({ winnerId, winningNumber, payout, winners, settledAt: now }).where(eq(fortuneRounds.id, id));
   });
 }
 export async function fortuneState(db: Db, memberId: string, cfg: FortuneGamesConfig, now = new Date()) {

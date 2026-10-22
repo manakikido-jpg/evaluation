@@ -4,7 +4,7 @@ import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
-import { claimLotteryResults, lotteryChannel, lotteryDm, lotteryWinnerPost, setLotteryChannel } from '../services/casino/lotteryNotice.js';
+import { claimLotteryResults, lotteryChannel, lotteryDm, lotteryWinnerPost, roundWinners, setLotteryChannel } from '../services/casino/lotteryNotice.js';
 import { createLoginLink, LINK_MINUTES } from '../services/casino/loginLinks.js';
 
 /**
@@ -80,7 +80,7 @@ export class LotteryApp {
       for (const h of r.holders) if (await this.discord.sendDm(h.memberId, lotteryDm(r.round, h, coin))) sent++;
       // 当たった人にだけ通知が届く（ほかの人には飛ばさない）
       const post = lotteryWinnerPost(r.round, coin);
-      if (post && channelId) await this.discord.sendMessage(channelId, { content: post, allowed_mentions: { parse: [], users: r.round.winnerId ? [r.round.winnerId] : [] } }).catch((err: unknown) => logger.warn({ err }, 'lottery winner post failed'));
+      if (post && channelId) await this.discord.sendMessage(channelId, { content: post, allowed_mentions: { parse: [], users: [...new Set(roundWinners(r.round).map((w) => w.memberId))].slice(0, 100) } }).catch((err: unknown) => logger.warn({ err }, 'lottery winner post failed'));
     }
     return sent;
   }

@@ -521,6 +521,16 @@ export const fortuneGamesSchema = z.object({
   lotteryLimit: z.number().int().min(1).max(100).default(10),
   lotteryReturnPct: z.number().int().min(10).max(100).default(70),
   lotteryBonus: z.number().int().min(0).max(1000000).default(1000),
+  /**
+   * 🎫 週末宝くじの等（1等・2等…）。賞金（売上の lotteryReturnPct％＋上乗せ）を、等ごとに pct％ ずつ分け、その等の本数で割る。
+   * 合計は 100％ まで（残りは運営に残る）。はじめは 1等 1 本に 100％（前と同じ）。変えると次の回から効く
+   */
+  lotteryTiers: z
+    .array(z.object({ name: z.string().min(1).max(20), count: z.number().int().min(1).max(100), pct: z.number().int().min(1).max(100) }))
+    .min(1)
+    .max(5)
+    .refine((t) => t.reduce((n, x) => n + x.pct, 0) <= 100, '等の割合の合計は 100％ までです')
+    .default([{ name: '1等', count: 1, pct: 100 }]),
 });
 export type FortuneGamesConfig = z.infer<typeof fortuneGamesSchema>;
 

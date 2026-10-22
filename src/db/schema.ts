@@ -2145,6 +2145,10 @@ export const fortuneRounds = pgTable('fortune_rounds', {
   winnerId: text('winner_id'),
   winningNumber: integer('winning_number'),
   payout: integer('payout').notNull().default(0),
+  /** 🎫 この回の等（始めたときの設定を残す）。null は前の回（1 本だけ・全額） */
+  tiers: jsonb('tiers').$type<{ name: string; count: number; pct: number }[]>(),
+  /** 当たった券（等ごと）。null は前の回（winner_id だけ） */
+  winners: jsonb('winners').$type<{ tier: string; number: number; memberId: string; payout: number }[]>(),
   /** 📮 結果を DM と売り場に知らせた時刻（二度送らない目印。null はまだ） */
   notifiedAt: timestamp('notified_at', { withTimezone: true }),
 }, (t) => [index('fortune_rounds_due').on(t.drawAt, t.settledAt)]);
