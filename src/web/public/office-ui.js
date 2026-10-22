@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   tables();
   document.addEventListener('htmx:afterSwap', tables);
+  document.addEventListener('office:updated', tables);
 });
 
 // とび先（#…）が閉じた項目（details）なら開く。ページ内のリンクを押したときも
