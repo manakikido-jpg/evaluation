@@ -17,6 +17,8 @@ export const OTHELLO_LEVELS: Record<OthelloLevel, { label: string; mult: number 
 
 /** CPU 戦で、1 回に増える銭の上限（大富豪の BOT 戦と同じ）。新しく始めた対局から */
 export const OTHELLO_PROFIT_CAP = 500;
+/** CPU 戦で、1 回に賭けられる銭の上限 */
+export const OTHELLO_MAX_BET = 1000;
 
 /** 社務所Web で決めた倍率（% で持つ）。なければ上のはじめの倍率 */
 export const othelloMultOf = (c: { othelloMult?: Partial<Record<OthelloLevel, number>> } | undefined, level: OthelloLevel): number => {

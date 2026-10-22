@@ -320,6 +320,13 @@ describe('⚫ オセロ CPU（DB）', () => {
     expect(othelloMultOf(undefined, 'hard')).toBe(1.6);
   });
 
+  it('オセロ（CPU）に賭けられるのは 1 回 1000 枚まで（ほかのゲームの上限が高くても）', async () => {
+    const big = ccfg({ maxBet: 5000 });
+    await addCoins(db, A, 10_000, 'admin_grant');
+    expect((await startOthello(db, big, A, 1001, 'hard', 'B', seq([0]), NOW)).status).toBe('othello_max');
+    expect((await startOthello(db, big, A, 1000, 'hard', 'B', seq([0]), NOW)).status).toBe('ok');
+  });
+
   it('CPU 戦の利益は 1 回 500 枚まで（新しい対局から。前からの対局は上限なし）', async () => {
     const { othelloPayout } = await import('../src/services/casino/casino.js');
     const s = await startOthello(db, ccfg(), A, 100, 'hard', 'B', seq([0]), NOW);

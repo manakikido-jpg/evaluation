@@ -12,7 +12,7 @@ import { bjView, type BjResult, type BjState } from '../../services/casino/black
 import { cardText, isRed, rankText, SUITS, suitOf } from '../../services/casino/cards.js';
 import { CASINO_LABEL, type BaccaratState, type OthelloCpuState, type RouletteState } from '../../services/casino/casino.js';
 import { HL_MAX_STEPS, HL_RESOLVED_RANKS, hlNextMult, hlWays, type HlState } from '../../services/casino/highlow.js';
-import { countStones, legalMoves, OTHELLO_LEVELS, OTHELLO_PROFIT_CAP, othelloMultOf, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
+import { countStones, legalMoves, OTHELLO_LEVELS, OTHELLO_MAX_BET, OTHELLO_PROFIT_CAP, othelloMultOf, type OthelloLevel, type Stone } from '../../services/casino/othello.js';
 import { rouletteColor, rouletteMaxOf } from '../../services/casino/roulette.js';
 import { RouletteBoard, RouletteStakes, RouletteWheel } from './rouletteBoard.js';
 import { MOVE_CHOICES, moveSecondsOf, type VersusState } from '../../services/casino/versus.js';
@@ -812,7 +812,7 @@ export function OthelloPage(p: GamePage) {
         <BetForm
           action="/casino/othello"
           csrf={csrf}
-          casino={p.casino}
+          casino={{ ...p.casino, maxBet: Math.min(p.casino.maxBet, OTHELLO_MAX_BET) }}
           coin={p.me.coin}
           label="対局する"
           last={p.row?.bet}
@@ -842,7 +842,7 @@ export function OthelloPage(p: GamePage) {
           }
         />
       )}
-      <Rules>CPU に勝つと、強さに合わせて賭けの {othelloMultOf(p.casino, 'easy')} 倍・{othelloMultOf(p.casino, 'normal')} 倍・{othelloMultOf(p.casino, 'hard')} 倍が戻ります。ただし 1 回に増えるのは {OTHELLO_PROFIT_CAP.toLocaleString('ja-JP')} 枚までです（戻るのは賭け＋{OTHELLO_PROFIT_CAP.toLocaleString('ja-JP')} 枚まで。超えた分は胴元へ）。オセロの賭けも、ほかのゲームと同じ 1 日の上限に数えます。引き分けは戻り、負け・投了は 0 です。途中でロビーに戻っても、あとから続きを打てます。</Rules>
+      <Rules>CPU に勝つと、強さに合わせて賭けの {othelloMultOf(p.casino, 'easy')} 倍・{othelloMultOf(p.casino, 'normal')} 倍・{othelloMultOf(p.casino, 'hard')} 倍が戻ります。賭けられるのは 1 回 {OTHELLO_MAX_BET.toLocaleString('ja-JP')} 枚までです。1 回に増えるのは {OTHELLO_PROFIT_CAP.toLocaleString('ja-JP')} 枚までです（戻るのは賭け＋{OTHELLO_PROFIT_CAP.toLocaleString('ja-JP')} 枚まで。超えた分は胴元へ）。オセロの賭けも、ほかのゲームと同じ 1 日の上限に数えます。引き分けは戻り、負け・投了は 0 です。途中でロビーに戻っても、あとから続きを打てます。</Rules>
     </CasinoLayout>
   );
 }

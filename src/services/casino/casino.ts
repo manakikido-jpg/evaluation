@@ -9,7 +9,7 @@ import { bjDouble, bjHit, bjPayout, bjStand, bjStart, canDouble, type BjState } 
 import { cryptoRng, type Rng } from './cards.js';
 import { hlCashout, hlGuess, hlPayout, hlStart, type HlGuess, type HlState } from './highlow.js';
 import { CHIN_MAX_LOSS, chinMoney, chinSettle, parentDecides, rollTurn, turnHand, type ChinRoll } from './chinchiro.js';
-import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, OTHELLO_PROFIT_CAP, othelloMultOf, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
+import { cpuMove, applyMove, initialBoard, nextTurn, OTHELLO_LEVELS, OTHELLO_MAX_BET, OTHELLO_PROFIT_CAP, othelloMultOf, othelloPlay, winnerOf, type OthelloLevel, type OthelloState } from './othello.js';
 import { ROULETTE_SPOT_COUNT, isRouletteBet, parseStakes, rouletteMaxOf, rouletteSpin, stakePayout, stakesTotal, type RouletteBet, type RouletteStake } from './roulette.js';
 import { machineSetting, validMachine } from './slotFloor.js';
 import { aimStops, bonusStops, drawRole, isBonus, judge, REEL_LEN, roleMult, slotLamp, slotPayout, stopsFor, type SlotKey, type SlotRole } from './slots.js';
@@ -43,7 +43,7 @@ export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; not
   keiba: { emoji: '🏇', name: 'みんなでダービー（競馬）', note: '8 頭のレースにみんなで賭けて、同じレースを見る。オッズはみんなの賭けで変わる' },
 };
 
-export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'limit' | 'poor' | 'reserve';
+export type BetCheck = 'ok' | 'closed' | 'game_off' | 'bad_bet' | 'othello_max' | 'limit' | 'poor' | 'reserve';
 
 /** 今日（日本時間）カジノで賭けた合計 */
 /** 今日（日本時間）賭けた合計。game を決めると、そのゲームの分だけ */
@@ -62,6 +62,8 @@ export async function checkBet(db: Db, cfg: GuildConfig, memberId: string, game:
   if (!c.enabled) return 'closed';
   if (!c.games.includes(game)) return 'game_off';
   if (!Number.isInteger(bet) || bet < c.minBet || bet > c.maxBet) return 'bad_bet';
+  // ⚫ オセロ（CPU）は 1 回 OTHELLO_MAX_BET 枚まで（利益の上限があるので、それより大きく賭けても得をしない）
+  if (game === 'othello' && bet > OTHELLO_MAX_BET) return 'othello_max';
   if (c.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + bet > c.dailyBetLimit) return 'limit';
   if ((await walletOf(db, memberId)).balance < bet) return 'poor';
   return 'ok';
@@ -71,6 +73,7 @@ export const BET_ERROR: Record<Exclude<BetCheck, 'ok'>, string> = {
   closed: 'いまカジノはお休みです。',
   game_off: 'このゲームはいま遊べません。',
   bad_bet: '賭ける銭の量を確かめてください。',
+  othello_max: `オセロ（CPU）に賭けられるのは、1 回 ${OTHELLO_MAX_BET.toLocaleString('ja-JP')} 枚までです。`,
   limit: '今日賭けられる上限に届きました。また明日遊んでください。',
   poor: '銭が足りません。',
   reserve: '負けると最大で賭けの 5 倍になるので、賭けの 5 倍の銭が要ります。',
