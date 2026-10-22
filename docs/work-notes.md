@@ -399,3 +399,4 @@
 - 関連検証：お年玉・授与所表示の2ファイル24件成功（15.03秒）。通常/運営の拒否で銭と袋が減らない、参加後の受取、同時押しの1回限定、退出後の拒否、配布先と別の通話でも受取可能を確認。型・ビルド・全テストへ進む。
 - 最終検証：実装9b716b9で型チェック・ビルド成功、全151ファイル1,856テスト成功（438.09秒、2並列）。テスト削除・skipなし。ログ/workspace/artifacts/otoshidama-active-only/{typecheck,build,all-tests}.log。push前fetchで本番05e4474から追加なし。
 - 完了範囲：受取時のこのサーバーの通話参加を共通処理で必須化、本人向け案内と各説明の更新、通常/運営の拒否・参加・退出・同時受取の検証。DBマイグレーション不要。codex/otoshidama-active-onlyから担当Claude向けPRへ保存。本番の投稿・配布・設定変更は未実行。
+- GitHub保存済み：[PR #72](https://github.com/manakikido-jpg/evaluation/pull/72)。codex/otoshidama-active-only、実装9b716b9・最終検証ce4692e。OPEN・未合流、本番未反映。担当Claudeの確認・合流後に通話中限定が有効になる。
