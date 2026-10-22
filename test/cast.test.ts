@@ -202,7 +202,7 @@ describe('🎀 キャスト', () => {
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: true, plan: '30', startAt: new Date(at.getTime() + 60 * MIN) }, T20)).status).toBe('ok');
   });
 
-  it('1 人で何件も予約できる（設定の件数まで・はじめは 10 件・自分の予約と時間が重ならないこと）', async () => {
+  it('1 人で何件も予約できる（設定の件数まで・はじめは 10 件・同じ時間は別のキャスト 3 人まで）', async () => {
     expect(c.customerOpenMax).toBe(10);
     const five = { ...c, customerOpenMax: 5 };
     const CAST2 = '880000000000000009';
@@ -210,12 +210,27 @@ describe('🎀 キャスト', () => {
     await setCastStatus(db, CAST2, 'active', 'staff', T20);
     const at = (h: number) => new Date(T20.getTime() + h * 60 * MIN);
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('ok');
-    // べつのキャストでも、自分の予約と重なる時間はだめ
-    expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('self_overlap');
-    for (const h of [2, 3, 4, 5]) expect((await requestSession(db, five, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(h) }, T20)).status).toBe('ok');
+    // 👥 べつのキャストなら、同じ時間にも予約できる（いっしょの部屋になる）
+    expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('ok');
+    for (const h of [2, 3, 4]) expect((await requestSession(db, five, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(h) }, T20)).status).toBe('ok');
     expect((await requestSession(db, five, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(6) }, T20)).status).toBe('has_open');
     // はじめの 10 件なら、まだ入る
     expect((await requestSession(db, c, { castId: CAST2, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(6) }, T20)).status).toBe('ok');
+    // 同じ時間は 3 人まで
+    const CAST3 = '880000000000000010', CAST4 = '880000000000000011';
+    for (const id of [CAST3, CAST4]) {
+      await applyCast(db, c, { id, adult: true }, profile, T20);
+      await setCastStatus(db, id, 'active', 'staff', T20);
+    }
+    expect((await requestSession(db, c, { castId: CAST3, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('ok');
+    expect((await requestSession(db, c, { castId: CAST4, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('self_overlap');
+    // 👥 部屋をまとめる相手: 同じお客・同じ始まり・受けた予約だけ
+    const { roomMates } = await import('../src/services/cast.js');
+    const mine = (await db.select().from(castSessions)).filter((x) => x.customerId === ADULT && x.startAt?.getTime() === at(1).getTime());
+    expect(mine).toHaveLength(3);
+    expect(await roomMates(db, mine[0]!)).toHaveLength(0);
+    await acceptSession(db, mine[1]!.id, mine[1]!.castId, T20);
+    expect((await roomMates(db, mine[0]!)).map((x) => x.id)).toEqual([mine[1]!.id]);
   });
 
   it('⏱ 予約の時間を見やすく: 時間と、始まり〜終わり（延長もふくむ）', async () => {
@@ -676,6 +691,30 @@ describe('🎀 キャストのDiscord操作', () => {
     const body = JSON.stringify((edit.mock.calls[0] as unknown[])[0]);
     expect(body).toContain(`cast:propose:${r.session.id}`);
     expect(body).toContain('日時変更を提案');
+  });
+
+  it('👥 同じお客・同じ始まりの別キャストの予約は、1 つの部屋にまとめる', async () => {
+    const CAST2 = '880000000000000009';
+    await applyCast(db, c, { id: CAST2, adult: true }, profile, T20);
+    await setCastStatus(db, CAST2, 'active', 'staff', T20);
+    const at = new Date(T20.getTime() + 60 * MIN);
+    const ids: number[] = [];
+    for (const castId of [CAST, CAST2]) {
+      const r = await requestSession(db, c, { castId, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+      if (r.status !== 'ok') throw new Error(r.status);
+      await acceptSession(db, r.session.id, castId, T20);
+      ids.push(r.session.id);
+    }
+    const f = fixture();
+    const edit = vi.fn(async () => undefined);
+    Object.assign(f.room, { userLimit: 2, permissionOverwrites: { edit }, setUserLimit: vi.fn(async () => undefined) });
+    await f.app.tick(at);
+    expect(f.create).toHaveBeenCalledOnce();
+    expect(edit).toHaveBeenCalledOnce();
+    for (const id of ids) expect((await getSession(db, id))?.channelId).toBe(roomId);
+    // 片方が終わって片付けの時間になっても、もう片方が通話中なら部屋は消さない
+    const { roomInUse } = await import('../src/services/cast.js');
+    expect(await roomInUse(db, roomId, ids[0]!)).toBe(true);
   });
 
   it('予約開始では部屋を1つ作り、スレッドに入室ボタンを出す', async () => {

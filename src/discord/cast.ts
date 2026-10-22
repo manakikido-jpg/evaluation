@@ -66,6 +66,9 @@ import {
   menuLabel,
   changeableReservations,
   openReservationsWithThread,
+  roomMates,
+  roomInUse,
+  CUSTOMER_TOGETHER_MAX,
   proposeSessionTime,
   acceptSessionTime,
   castStatement,
@@ -1083,7 +1086,7 @@ export class CastApp {
       minor_hours: `18 歳未満の方の雑談は ${MINOR.startHour} 時〜${MINOR.endHour} 時に終わる時間だけです。`,
       has_open: '指名（返事待ち・確定・通話中の予約）が、1 人が同時に持てる数の上限です。終わってからどうぞ。',
       already_ordered: 'この相談では、もう注文しています。',
-      self_overlap: 'あなたのほかの指名・予約と時間が重なっています。ちがう時間にしてください。',
+      self_overlap: `同じ時間に指名・予約できるのは、キャスト ${CUSTOMER_TOGETHER_MAX} 人までです。ちがう時間にしてください。`,
       overlap: 'その時間は、ほかの指名か予約と重なっています。時間を変えてください。',
       bad_time: '予約は 10 分後〜7 日後の時刻にしてください。',
       off_hours: 'その時間は、このキャストの出勤予定の外です。紹介パネルの「🗓 出勤予定」の時間にしてください。',
@@ -1096,6 +1099,19 @@ export class CastApp {
     const g = this.guild;
     if (!g) return undefined;
     if (s.channelId) return this.voice(s.channelId);
+    // 👥 同じお客・同じ始まりの、ほかのキャストの予約があれば、その部屋にこのキャストも入れる
+    for (const mate of await roomMates(this.db, s)) {
+      const shared = this.voice(mate.channelId);
+      if (!shared) continue;
+      try {
+        await shared.permissionOverwrites.edit(s.castId, { ViewChannel: true, Connect: true, Speak: true, SendMessages: true }, { reason: `キャストの指名 #${s.id}（いっしょの部屋）` });
+        if (shared.userLimit) await shared.setUserLimit(Math.min(99, shared.userLimit + 1), 'キャストがふえた');
+        await setSessionPlace(this.db, s.id, { channelId: shared.id });
+        return shared;
+      } catch (err) {
+        logger.warn({ err, sessionId: s.id }, 'cast shared room join failed');
+      }
+    }
     const c = await loadCastConfig(this.db);
     const homeId = c.channelId ?? c.femaleChannelId;
     const panel = homeId ? g.channels.cache.get(homeId) : undefined;
@@ -1720,7 +1736,7 @@ export class CastApp {
   }
 
   private timeChangeError(status: string): string {
-    return ({not_found:'開始前の予約だけ変更できます。',not_member:'この予約のお客とキャストだけが提案できます。',not_receiver:'承認できるのは提案された相手だけです。自分の提案は承認できません。',already:'この提案はすでに確定済みです。日時を再変更していません。',expired:'提案の期限が切れました。もう一度提案してください。',stale:'予約日時がすでに変わっています。最新の予約から提案し直してください。',bad_time:'日時は10分後〜7日後で、今の予約と異なる時刻を選んでください。',minor_hours:'18歳未満の方は、22時までに終わる時間だけです。',overlap:'キャストのほかの予約と重なっています。別の日時を選んでください。',self_overlap:'お客のほかの予約と重なっています。別の日時を選んでください。'} as Record<string,string>)[status]??'変更できませんでした。';
+    return ({not_found:'開始前の予約だけ変更できます。',not_member:'この予約のお客とキャストだけが提案できます。',not_receiver:'承認できるのは提案された相手だけです。自分の提案は承認できません。',already:'この提案はすでに確定済みです。日時を再変更していません。',expired:'提案の期限が切れました。もう一度提案してください。',stale:'予約日時がすでに変わっています。最新の予約から提案し直してください。',bad_time:'日時は10分後〜7日後で、今の予約と異なる時刻を選んでください。',minor_hours:'18歳未満の方は、22時までに終わる時間だけです。',overlap:'キャストのほかの予約と重なっています。別の日時を選んでください。',self_overlap:`お客の同じ時間の予約が、キャスト ${CUSTOMER_TOGETHER_MAX} 人分うまっています。別の日時を選んでください。`} as Record<string,string>)[status]??'変更できませんでした。';
   }
 
   private async proposeSubmit(i: ModalSubmitInteraction, id: number): Promise<void> {
@@ -1864,6 +1880,11 @@ export class CastApp {
       if (s.paid > 0) await this.discord.sendDm(s.castId, `🎀 指名 #${s.id} が終わりました。${this.coin()} ${fmt(s.paid)} 枚をお渡ししました。`).catch(() => false);
     }
     for (const s of r.cleanup) {
+      // 👥 いっしょの部屋で、まだほかのキャストの指名が続いていれば、部屋は消さない
+      if (s.channelId && (await roomInUse(this.db, s.channelId, s.id))) {
+        await roomDeleted(this.db, s.id);
+        continue;
+      }
       const room = s.channelId ? this.guild?.channels.cache.get(s.channelId) : undefined;
       if (room) {
         try { await room.delete('キャストの指名が終わった'); }

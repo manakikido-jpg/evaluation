@@ -686,17 +686,29 @@ export type RequestResult =
 /** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数（はじめの値。社務所Web の設定 customerOpenMax で変えられる） */
 export const CUSTOMER_OPEN_MAX = CAST_DEFAULTS_OPEN_MAX;
 
+/** 👥 お客 1 人が同じ時間に指名・予約できるキャストの数（別々のキャストなら重なってよい。同じ始まりの予約は 1 つの部屋にまとめる） */
+export const CUSTOMER_TOGETHER_MAX = 3;
+
+/** お客のほかの指名・予約で、時間が重なるのが CUSTOMER_TOGETHER_MAX 件をこえる（このあと 1 件足すとこえる） */
+async function customerFull(tx: Db, customerId: string, start: Date, end: Date, now: Date, except?: number): Promise<boolean> {
+  return (await overlapCount(tx, customerId, start, end, now, except, 'customer')) >= CUSTOMER_TOGETHER_MAX;
+}
+
 async function overlaps(tx: Db, castId: string, start: Date, end: Date, now: Date, except?: number, by: 'cast' | 'customer' = 'cast'): Promise<boolean> {
+  return (await overlapCount(tx, castId, start, end, now, except, by)) > 0;
+}
+
+async function overlapCount(tx: Db, castId: string, start: Date, end: Date, now: Date, except?: number, by: 'cast' | 'customer' = 'cast'): Promise<number> {
   const who = by === 'cast' ? eq(castSessions.castId, castId) : eq(castSessions.customerId, castId);
   const sessions = await tx.select().from(castSessions).where(and(who, inArray(castSessions.status, OPEN)));
-  return sessions.some((s) => {
+  return sessions.filter((s) => {
     if (s.id === except) return false;
     const from = s.startedAt ?? s.startAt ?? s.createdAt;
     const until = s.endsAt ?? (s.plan === 'night' ? nightEnd(s.startAt ?? s.acceptBy ?? from) : new Date((s.startAt ?? s.acceptBy ?? from).getTime() + s.minutes * MIN));
     // 返事の期限が切れた指名は、すぐに払い戻されるので数えない
     if ((s.status === 'requested' || s.status === 'reserved') && s.acceptBy && s.acceptBy <= now) return false;
     return from < end && start < until;
-  });
+  }).length;
 }
 
 async function lockCast(tx: Db, castId: string): Promise<void> {
@@ -764,8 +776,8 @@ export async function requestSession(
     const latestStart = input.startAt ?? new Date(now.getTime() + c.acceptMinutes * MIN);
     const end = item.night ? nightEnd(latestStart) : new Date(latestStart.getTime() + minutes * MIN);
     if (await overlaps(tx, input.castId, start, end, now)) return { status: 'overlap' as const };
-    // 同じお客の、ほかの指名と時間が重なる
-    if (await overlaps(tx, input.customerId, start, end, now, undefined, 'customer')) return { status: 'self_overlap' as const };
+    // 同じお客の、ほかの指名と時間が重なる（別のキャストなら 3 人まで重なってよい）
+    if (await customerFull(tx, input.customerId, start, end, now)) return { status: 'self_overlap' as const };
     if (!(await spendWithin(tx, input.customerId, price, 'cast_pay', { castId: input.castId, plan, menu: item.name, ...(opts.length ? { options: opts.map((o) => o.name) } : {}) }))) {
       return { status: 'insufficient' as const, price, balance: (await walletOf(tx, input.customerId)).balance };
     }
@@ -971,7 +983,7 @@ export async function rescheduleSession(db: Db, id: number, customerId: string, 
     if (s.isPublic && !minorWindowOk(startAt, minutes)) return { status: 'minor_hours' as const };
     const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime() + minutes * MIN);
     if (await overlaps(tx, s.castId, startAt, end, now, id)) return { status: 'overlap' as const };
-    if (await overlaps(tx, s.customerId, startAt, end, now, id, 'customer')) return { status: 'self_overlap' as const };
+    if (await customerFull(tx, s.customerId, startAt, end, now, id)) return { status: 'self_overlap' as const };
     const row = await move(tx, id, ['reserved', 'accepted'], { status: 'accepted', startAt, acceptBy: null, minutes, reminded: 0 });
     return row ? { status: 'ok' as const, session: row } : { status: 'not_found' as const };
   });
@@ -1156,6 +1168,24 @@ export async function castTick(db: Db, c: CastConfig, now = new Date(), prepareR
   return out;
 }
 
+/** 👥 同じお客・同じ始まりの、ほかのキャストの予約（部屋をまとめる相手）。部屋がある・始まっているものだけ */
+export async function roomMates(db: Db, s: Pick<CastSession, 'id' | 'customerId' | 'startAt' | 'isPublic'>): Promise<CastSession[]> {
+  if (!s.startAt || s.isPublic) return [];
+  return db
+    .select()
+    .from(castSessions)
+    .where(and(eq(castSessions.customerId, s.customerId), eq(castSessions.startAt, s.startAt), eq(castSessions.isPublic, false), inArray(castSessions.status, ['accepted', 'active']), sql`${castSessions.id} <> ${s.id}`));
+}
+
+/** 部屋を、まだ使っているほかの指名があるか（あれば消さない） */
+export async function roomInUse(db: Db, channelId: string, except: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: castSessions.id })
+    .from(castSessions)
+    .where(and(eq(castSessions.channelId, channelId), sql`${castSessions.id} <> ${except}`, inArray(castSessions.status, ['requested', 'accepted', 'active'])));
+  return Boolean(row);
+}
+
 /** 部屋を消したら印を外す */
 export async function roomDeleted(db: Db, id: number): Promise<void> {
   await db.update(castSessions).set({ channelId: null, deleteAt: null }).where(eq(castSessions.id, id));
@@ -1292,7 +1322,7 @@ export async function proposeSessionTime(db: Db, id: number, by: string, startAt
     if (s.isPublic && !minorWindowOk(startAt, minutes)) return { status: 'minor_hours' };
     const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime()+minutes*MIN);
     if (await overlaps(tx,s.castId,startAt,end,now,id)) return { status: 'overlap' };
-    if (await overlaps(tx,s.customerId,startAt,end,now,id,'customer')) return { status: 'self_overlap' };
+    if (await customerFull(tx,s.customerId,startAt,end,now,id)) return { status: 'self_overlap' };
     const [proposal] = await tx.insert(castTimeChanges).values({ id: randomUUID(), sessionId: id, proposedBy: by, approveBy: by === s.castId ? s.customerId : s.castId, originalStartAt: s.startAt!, startAt, note: note.slice(0,100), createdAt: now, expiresAt: new Date(Math.min(s.startAt!.getTime(),now.getTime()+24*60*MIN)) }).returning();
     await audit(tx,{actorId:by,action:'cast.time.propose',targetId:proposal!.approveBy,detail:{sessionId:id,proposalId:proposal!.id,startAt:startAt.toISOString()},via:'discord'});
     return { status: 'ok', proposal: proposal!, session: s };
