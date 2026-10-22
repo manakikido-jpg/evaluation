@@ -1,7 +1,7 @@
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
-import { scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
+import { recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
 import { FortuneAdminPage } from './views/fortune.js';
 import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
@@ -669,19 +669,23 @@ export function createWebApp(deps: WebDeps) {
   // 社務所のログインから、運営限定の対戦へ入る。発行前にもDiscordロールを確認する。
   app.get('/economy/fortune', async (c) => {
     const at = now();
-    const [round, finances] = await Promise.all([ensureLotteryRound(db, cfg.fortuneGames, at), scratchFinances(db, scratchPeriod(c.req.query('period')), at)]);
-    return c.html(<FortuneAdminPage session={c.get('session')} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} finances={finances} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : undefined} />);
+    const tab = c.req.query('tab') === 'lottery' ? 'lottery' : 'scratch';
+    const [round, finances, rounds] = await Promise.all([ensureLotteryRound(db, cfg.fortuneGames, at), scratchFinances(db, scratchPeriod(c.req.query('period')), at), recentLotteryRounds(db, at)]);
+    return c.html(<FortuneAdminPage session={c.get('session')} tab={tab} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} rounds={rounds} finances={finances} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : undefined} />);
   });
   app.post('/economy/fortune', requireCsrf, async (c) => {
     if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);
     const body = await c.req.parseBody();
-    const parsed = fortuneGamesSchema.safeParse({ enabled: body.enabled === 'yes', ...Object.fromEntries(['scratchPrice', 'scratchDailyLimit', 'lotteryPrice', 'lotteryLimit', 'lotteryReturnPct', 'lotteryBonus'].map(key => [key, typeof body[key] === 'string' && body[key] !== '' ? Number(body[key]) : NaN])) });
-    if (!parsed.success) return c.redirect('/economy/fortune?msg=invalid', 303);
+    // スクラッチ・宝くじのタブごとに送るので、送られてこない欄は今の値のまま（ほかのタブの値を消さない）
+    const tab = body.tab === 'lottery' ? 'lottery' : 'scratch';
+    const cur = cfg.fortuneGames as Record<string, unknown>;
+    const parsed = fortuneGamesSchema.safeParse({ enabled: body.enabled === 'yes', ...Object.fromEntries(['scratchPrice', 'scratchDailyLimit', 'lotteryPrice', 'lotteryLimit', 'lotteryReturnPct', 'lotteryBonus'].map(key => [key, body[key] === undefined ? cur[key] : typeof body[key] === 'string' && body[key] !== '' ? Number(body[key]) : NaN])) });
+    if (!parsed.success) return c.redirect(`/economy/fortune?tab=${tab}&msg=invalid`, 303);
     const prev = await loadOverrides(db);
     await saveOverrides(db, { ...prev, fortuneGames: parsed.data }, c.get('session').userId);
     await deps.onSettingsSaved?.();
     await audit(db, { actorId: c.get('session').userId, action: 'fortune.settings', detail: parsed.data, via: 'web' });
-    return c.redirect('/economy/fortune?msg=saved', 303);
+    return c.redirect(`/economy/fortune?tab=${tab}&msg=saved`, 303);
   });
 
   app.get('/economy/shinpu', async (c) => {

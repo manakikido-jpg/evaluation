@@ -3,7 +3,7 @@ import { SCRATCH_PERIODS, type ScratchFinances } from '../../services/casino/for
 import { SCRATCH_PRIZES, projectedPrize, type fortuneState } from '../../services/casino/fortune.js';
 import type { FortuneGamesConfig } from '../../config.js';
 import type { Child } from 'hono/jsx';
-import type { MemberSession } from '../../db/schema.js';
+import type { FortuneRound, MemberSession } from '../../db/schema.js';
 import { assetUrl } from '../assets.js';
 export type FortuneMe = { session: MemberSession; balance: number; coin: { name: string; emoji: string } };
 function FortuneLayout({ me, children }: { me?: FortuneMe; children: Child }) {
@@ -90,18 +90,35 @@ function ScratchFinancePanel({ data: d, price, coin }: { data: ScratchFinances; 
     {d.recent.length ? <div class="table-wrap" tabindex={0} role="region" aria-label="最近の当せん金額"><table class="compact"><thead><tr><th>開封日時（日本時間）</th><th class="num">購入額</th><th class="num">払戻額</th><th class="num">利用者の差引</th></tr></thead><tbody>{d.recent.map(r => <tr><td>{date(r.openedAt!)}</td><td class="num">{money(r.price)}</td><td class="num">{money(r.payout)}</td><td class="num">{signed(r.payout-r.price)}</td></tr>)}</tbody></table></div> : <p class="note">この期間の当せんはありません。</p>}
   </section>;
 }
-export function FortuneAdminPage({ session, cfg, round, finances, coinName, message }: { session: SessionView; cfg: FortuneGamesConfig; round: State['round']; finances: ScratchFinances; coinName: string; message?: string }) {
+export function FortuneAdminPage({ session, tab, cfg, round, rounds, finances, coinName, message }: { session: SessionView; tab: 'scratch' | 'lottery'; cfg: FortuneGamesConfig; round: State['round']; rounds: FortuneRound[]; finances: ScratchFinances; coinName: string; message?: string }) {
+  const field = ([key, label, min, max]: readonly [keyof FortuneGamesConfig, string, number, number]) => <label>{label}<input type="number" name={key} value={cfg[key] as number} min={min} max={max} required /></label>;
+  // タブごとに、そのタブの設定だけを保存する（ほかのタブの値はサーバーで今のまま残す）
+  const form = (fields: readonly (readonly [keyof FortuneGamesConfig, string, number, number])[]) => <form method="post" action="/economy/fortune"><input type="hidden" name="_csrf" value={session.csrfToken} /><input type="hidden" name="tab" value={tab} />
+    <fieldset class="fields" disabled={session.level !== 'guji'}><legend>宮司だけ変更できます</legend>
+    <label><input type="checkbox" name="enabled" value="yes" checked={cfg.enabled} />購入を有効にする（スクラッチ・宝くじ共通）</label>
+    {fields.map(field)}
+    <button type="submit">保存する</button></fieldset>
+  </form>;
   return <Layout title="スクラッチ・宝くじ" nav="fortune" session={session}><h1>✨ スクラッチ・週末宝くじ</h1>
-    {message && <p role="status">{message}</p>}<p><a href="/lottery">宝くじ売り場へ（Discordで本人認証）</a></p>
-    <p>日曜21時（日本時間）に抽選。売れた券から1枚に、売上の一部＋運営の上乗せを自動入金します。販売0枚なら賞金を出しません。</p>
-    <p>スクラッチは即時、宝くじの金額・上限は次の開催から適用します。休止しても購入済みの券は精算します。</p>
-    <ScratchFinancePanel data={finances} price={cfg.scratchPrice} coin={coinName} />
-    {round && <section class="card"><h2>販売中の回の固定条件</h2><p>{date(round.drawAt)}（日本時間） / 1枚{round.price} / 1人{round.perMember}枚 / 売上{round.returnPct}％＋{round.bonus} / 販売{round.sold}枚</p></section>}
-    <form method="post" action="/economy/fortune"><input type="hidden" name="_csrf" value={session.csrfToken} />
-      <fieldset class="fields" disabled={session.level !== 'guji'}><legend>宮司だけ変更できます</legend>
-      <label><input type="checkbox" name="enabled" value="yes" checked={cfg.enabled} />購入を有効にする</label>
-      {([['scratchPrice','スクラッチ1枚の銭',10,10000],['scratchDailyLimit','スクラッチ1人1日の上限',1,20],['lotteryPrice','宝くじ1枚の銭',10,10000],['lotteryLimit','宝くじ1人1回の上限',1,100],['lotteryReturnPct','宝くじ売上から賞金に戻す割合（％）',10,100],['lotteryBonus','宝くじに運営が上乗せする銭',0,1000000]] as const).map(([key,label,min,max]) => <label>{label}<input type="number" name={key} value={cfg[key]} min={min} max={max} required /></label>)}
-      <button type="submit">保存する</button></fieldset>
-    </form><p>スクラッチの払戻：0倍55％・1倍30％・2倍12％・5倍2.5％・10倍0.5％。平均還元率71.5％。当選確率は固定です。</p>
+    {message && <p role="status">{message}</p>}<p><a href="/lottery">宝くじ売り場へ</a></p>
+    <nav class="tabs" aria-label="スクラッチと宝くじ">
+      <a href="/economy/fortune?tab=scratch" class={tab === 'scratch' ? 'on' : ''} aria-current={tab === 'scratch' ? 'page' : undefined}>✨ スクラッチ</a>
+      <a href="/economy/fortune?tab=lottery" class={tab === 'lottery' ? 'on' : ''} aria-current={tab === 'lottery' ? 'page' : undefined}>🎫 週末宝くじ</a>
+    </nav>
+    {tab === 'scratch' ? <>
+      <p>スクラッチはその場で結果が出ます。設定はすぐに効きます。休止しても、買ってある券は開けられます。</p>
+      <ScratchFinancePanel data={finances} price={cfg.scratchPrice} coin={coinName} />
+      {form([['scratchPrice','スクラッチ1枚の銭',10,10000],['scratchDailyLimit','スクラッチ1人1日の上限',1,20]] as const)}
+      <p>スクラッチの払戻：0倍55％・1倍30％・2倍12％・5倍2.5％・10倍0.5％。平均還元率71.5％。当選確率は固定です。</p>
+    </> : <>
+      <p>日曜21時（日本時間）に抽選。売れた券から1枚に、売上の一部＋運営の上乗せを自動入金します。販売0枚なら賞金を出しません。金額・上限は次の開催から変わります。休止しても購入済みの券は精算します。</p>
+      {round && <section class="card"><h2>販売中の回の固定条件</h2><p>{date(round.drawAt)}（日本時間） / 1枚{round.price} / 1人{round.perMember}枚 / 売上{round.returnPct}％＋{round.bonus} / 販売{round.sold}枚</p></section>}
+      <section class="card"><h2>これまでの抽選（新しい順）</h2>
+        {rounds.length ? <div class="table-wrap"><table class="compact"><thead><tr><th>抽選日時（日本時間）</th><th class="num">販売</th><th class="num">売上</th><th class="num">当選番号</th><th class="num">賞金</th><th class="num">運営の収支</th></tr></thead><tbody>
+          {rounds.map(r => { const sales = r.price * r.sold; return <tr><td>{date(r.drawAt)}</td><td class="num">{r.sold} 枚</td><td class="num">{sales.toLocaleString('ja-JP')} {coinName}</td><td class="num">{r.winningNumber === null ? '―' : `${r.winningNumber} 番`}</td><td class="num">{r.payout.toLocaleString('ja-JP')} {coinName}</td><td class="num">{(sales - r.payout).toLocaleString('ja-JP')} {coinName}</td></tr>; })}
+        </tbody></table></div> : <p class="note">まだ抽選はありません。</p>}
+      </section>
+      {form([['lotteryPrice','宝くじ1枚の銭',10,10000],['lotteryLimit','宝くじ1人1回の上限',1,100],['lotteryReturnPct','宝くじ売上から賞金に戻す割合（％）',10,100],['lotteryBonus','宝くじに運営が上乗せする銭',0,1000000]] as const)}
+    </>}
   </Layout>;
 }

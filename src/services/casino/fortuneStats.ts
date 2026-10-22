@@ -1,6 +1,6 @@
 import { and, count, desc, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
-import { fortuneScratch } from '../../db/schema.js';
+import { fortuneRounds, fortuneScratch } from '../../db/schema.js';
 import { jstDay } from './fortune.js';
 
 export const SCRATCH_PERIODS = { today: '今日', '7d': '直近7日', '30d': '直近30日', all: '全期間' } as const;
@@ -30,3 +30,7 @@ export async function scratchFinances(db: Db, period: ScratchPeriod, now = new D
   }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
 }
 export type ScratchFinances = Awaited<ReturnType<typeof scratchFinances>>;
+
+/** 🎫 週末宝くじの、抽選が終わった回（新しい順。社務所の宝くじタブ） */
+export const recentLotteryRounds = (db: Db, now = new Date(), limit = 12) =>
+  db.select().from(fortuneRounds).where(and(isNotNull(fortuneRounds.settledAt), lte(fortuneRounds.drawAt, now))).orderBy(desc(fortuneRounds.drawAt)).limit(limit);

@@ -73,6 +73,14 @@ it('社務所の設定は宮司とページ権限・CSRFを確認し、他の設
  const form={_csrf:s.csrfToken,enabled:'yes',scratchPrice:'120',scratchDailyLimit:'3',lotteryPrice:'150',lotteryLimit:'7',lotteryReturnPct:'60',lotteryBonus:'1500'};
  expect((await app.request('/economy/fortune',{method:'POST',headers,body:new URLSearchParams(form)})).status).toBe(303);
  expect(current.fortuneGames.lotteryBonus).toBe(1500);expect(current.casino.enabled).toBe(true);
+ // タブごとに保存: 宝くじのタブから送っても、スクラッチの値は消えない
+ const tabbed=await app.request('/economy/fortune',{method:'POST',headers,body:new URLSearchParams({_csrf:s.csrfToken,tab:'lottery',enabled:'yes',lotteryPrice:'200',lotteryLimit:'5',lotteryReturnPct:'70',lotteryBonus:'2000'})});
+ expect(tabbed.headers.get('location')).toBe('/economy/fortune?tab=lottery&msg=saved');
+ expect(current.fortuneGames).toMatchObject({scratchPrice:120,scratchDailyLimit:3,lotteryPrice:200,lotteryBonus:2000});
+ const scratchTab=await(await app.request('/economy/fortune?tab=scratch',{headers})).text();
+ expect(scratchTab).toContain('スクラッチの売上・払戻・回収');expect(scratchTab).not.toContain('これまでの抽選');
+ const lotteryTab=await(await app.request('/economy/fortune?tab=lottery',{headers})).text();
+ expect(lotteryTab).toContain('これまでの抽選');expect(lotteryTab).not.toContain('スクラッチの売上・払戻・回収');expect(lotteryTab).toContain('name="lotteryBonus"');expect(lotteryTab).not.toContain('name="scratchPrice"');
  expect((await app.request('/economy/fortune',{method:'POST',headers,body:new URLSearchParams({...form,lotteryBonus:'-1'})})).headers.get('location')).toContain('invalid');
  for(const access of [{level:'shinshoku' as const,pages:null},{level:'guji' as const,pages:['members' as const]}]){
   const t=await createSession(db,{id:A,username:'a',displayName:'運営',avatarUrl:null},access,now);const session=(await findSession(db,t,now))!;
