@@ -430,6 +430,8 @@ async function main(): Promise<void> {
     recruit.onMessage(m);
     void boost.onMessage(m);
     void sticky.onMessage(m);
+    // 🎀 #キャスト一覧 のメニューを、いつもいちばん下に
+    cast.onMessage(m);
     // 通話のチャット: 「この通話の人のプロフィールを見る」をいちばん下へ（15 秒に 1 回まで）
     voicePanel.onMessage(m);
     // 呼び鈴のボタン: 話が落ち着いたらいちばん下へ

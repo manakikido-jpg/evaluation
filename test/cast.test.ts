@@ -979,6 +979,29 @@ describe('📋 /パネル キャスト一覧', () => {
   });
 });
 
+describe('📌 キャスト一覧のメニューを、いつもいちばん下に', () => {
+  it('ほかの書き込みがいちばん下にあれば、出し直して前のメニューを消す。いちばん下なら何もしない', async () => {
+    const { CastApp } = await import('../src/discord/cast.js');
+    const { saveCastConfig, loadCastConfig } = await import('../src/services/cast.js');
+    const CH = '990000000000000901', OLD = '990000000000000902', NEW = '990000000000000903';
+    await saveCastConfig(db, { ...c, channelId: CH, panelMessageId: OLD }, 'staff');
+    const send = vi.fn(async () => ({ id: NEW }));
+    const del = vi.fn(async () => undefined);
+    const app = new CastApp(db, () => cfg, { sendMessage: send, editMessage: vi.fn(async () => undefined), deleteMessage: del } as never);
+    const channel = { id: CH, lastMessageId: OLD };
+    app.attach({ id: cfg.guildId, channels: { cache: new Map([[CH, channel]]) } } as never);
+    // いちばん下なら何もしない
+    await app.keepPanelAtBottom();
+    expect(send).not.toHaveBeenCalled();
+    // ほかの書き込み（紹介パネルなど）が下にある → 出し直す
+    channel.lastMessageId = '990000000000000999';
+    await app.keepPanelAtBottom();
+    expect(send).toHaveBeenCalledOnce();
+    expect(del).toHaveBeenCalledWith(CH, OLD);
+    expect((await loadCastConfig(db)).panelMessageId).toBe(NEW);
+  });
+});
+
 describe('➕ キャストのオプション', () => {
   it('メニューにオプションを足して払う・知らない番号はだめ・のばす値段にはオプションを入れない', async () => {
     await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });

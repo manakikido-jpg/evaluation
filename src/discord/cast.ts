@@ -21,6 +21,7 @@ import {
   type Guild,
   type GuildMember,
   type Interaction,
+  type Message,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
   type UserSelectMenuInteraction,
@@ -130,6 +131,9 @@ const button = (custom_id: string, label: string, style: Btn['style'] = 2, emoji
   ...(disabled ? { disabled } : {}),
 });
 type LinkBtn = { type: 2; style: 5; label: string; url: string };
+/** 書き込みがあってから、メニューをいちばん下へ出し直すまで（続けて書き込まれている間は待つ） */
+export const PANEL_BOTTOM_AFTER_MS = 5_000;
+
 export const castRoomName = (name: string) => `🌸 ${name.slice(0, 90)}の間`;
 export const roomEntry = (guildId: string, channelId: string): LinkBtn => ({ type: 2, style: 5, label: '部屋へ入る', url: `https://discord.com/channels/${guildId}/${channelId}` });
 const row = (...b: (Btn | LinkBtn)[]) => ({ type: 1 as const, components: b });
@@ -198,7 +202,12 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
 }
 
 /** メニューを出す・書き換える（社務所Web・BOT の両方から）。出せたら true */
-export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'sendMessage' | 'editMessage'>, opts: { repost?: boolean; by?: string } = {}): Promise<boolean> {
+export async function refreshCastPanel(
+  db: Db,
+  discord: Pick<DiscordActions, 'sendMessage' | 'editMessage'> & Partial<Pick<DiscordActions, 'deleteMessage'>>,
+  /** bottom: このチャンネルのメニューだけ、いちばん下に出し直す（前のものは消す） */
+  opts: { repost?: boolean; by?: string; bottom?: ReadonlySet<string> } = {},
+): Promise<boolean> {
   let c = await loadCastConfig(db);
   if (!c.channelId && !c.femaleChannelId) return false;
   const [list, states, stats] = await Promise.all([listCasts(db), castStates(db), castStats(db, monthStart())]);
@@ -219,7 +228,9 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
       split ? g : undefined,
       top,
     );
-    if (place.messageId && !opts.repost) {
+    const toBottom = opts.bottom?.has(place.channelId) ?? false;
+    if (opts.bottom && !toBottom) continue;
+    if (place.messageId && !opts.repost && !toBottom) {
       try {
         await discord.editMessage(place.channelId, place.messageId, body);
         posted = true;
@@ -231,6 +242,8 @@ export async function refreshCastPanel(db: Db, discord: Pick<DiscordActions, 'se
     const { id } = await discord.sendMessage(place.channelId, body);
     c = { ...(await loadCastConfig(db)), ...(g === 'female' ? { femalePanelMessageId: id } : { panelMessageId: id }) };
     await saveCastConfig(db, c, opts.by ?? 'system');
+    // いちばん下に出し直したときは、前のメニューを消す（チャットに何枚もたまらないように）
+    if (toBottom && place.messageId && place.messageId !== id) await discord.deleteMessage?.(place.channelId, place.messageId).catch(() => undefined);
     posted = true;
   }
   return posted;
@@ -480,6 +493,42 @@ export class CastApp {
   private coin(): string {
     const e = this.cfg().economy;
     return `${e.currencyEmoji}${e.currencyName}`;
+  }
+
+  /** 📌 メニューをいちばん下へ出し直すのを待っているチャンネル（書き込みが続く間は待つ） */
+  private readonly bottomTimers = new Map<string, NodeJS.Timeout>();
+  private bottomQueue: Promise<unknown> = Promise.resolve();
+
+  /** #キャスト一覧 に書き込み（BOT の紹介パネルもふくむ）があったら、少しあとにメニューをいちばん下へ */
+  onMessage(m: Message): void {
+    if (!m.inGuild() || m.guildId !== this.cfg().guildId) return;
+    const channelId = m.channelId;
+    void loadCastConfig(this.db).then((c) => {
+      const place = CAST_GROUPS.map((g) => groupPlace(c, g)).find((p) => p.channelId === channelId);
+      if (!place || place.messageId === m.id) return;
+      clearTimeout(this.bottomTimers.get(channelId));
+      this.bottomTimers.set(channelId, setTimeout(() => {
+        this.bottomTimers.delete(channelId);
+        void this.keepPanelAtBottom([channelId]);
+      }, PANEL_BOTTOM_AFTER_MS));
+    }).catch(() => undefined);
+  }
+
+  /** メニューがいちばん下になければ、出し直す（channelIds を省くと全部のメニューを確かめる） */
+  keepPanelAtBottom(channelIds?: string[]): Promise<unknown> {
+    this.bottomQueue = this.bottomQueue.then(async () => {
+      const c = await loadCastConfig(this.db);
+      const need = new Set<string>();
+      for (const g of CAST_GROUPS) {
+        const p = groupPlace(c, g);
+        if (!p.channelId || !p.messageId || (channelIds && !channelIds.includes(p.channelId))) continue;
+        const ch = this.guild?.channels.cache.get(p.channelId);
+        const last = ch && 'lastMessageId' in ch ? ch.lastMessageId : undefined;
+        if (last && last !== p.messageId) need.add(p.channelId);
+      }
+      if (need.size) await refreshCastPanel(this.db, this.discord, { bottom: need });
+    }).catch((err: unknown) => logger.warn({ err }, 'cast panel bottom failed'));
+    return this.bottomQueue;
   }
 
   private roles(i: { member: GuildMember }): string[] {
@@ -1935,6 +1984,8 @@ export class CastApp {
       this.threadsRefreshed = true;
       for (const s of await openReservationsWithThread(this.db, now).catch(() => [])) await this.editThreadMessage(s).catch((err: unknown) => logger.warn({ err, sessionId: s.id }, 'cast thread refresh failed'));
     }
+    // 📌 メニューがいちばん下になければ出し直す（BOT が止まっていた間の書き込みなど）
+    await this.keepPanelAtBottom();
     const c = await loadCastConfig(this.db);
     const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;
