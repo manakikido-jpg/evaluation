@@ -963,7 +963,7 @@ export function createWebApp(deps: WebDeps) {
     return channels
       .filter((ch) => ch.type === 2 || ch.type === 13)
       .sort((a, b) => catPos(a) - catPos(b) || a.position - b.position)
-      .map((ch) => ({ id: ch.id, name: ch.name, category: ch.parent_id ? (cats.get(ch.parent_id)?.name ?? null) : null }));
+      .map((ch) => ({ id: ch.id, name: ch.name, category: ch.parent_id ? (cats.get(ch.parent_id)?.name ?? null) : null, categoryId: ch.parent_id ?? null }));
   };
   const textChannelsOf = (channels: GuildChannel[]) => postableChannels(channels).filter((ch) => ch.type === 0 || ch.type === 5);
 
@@ -3082,6 +3082,8 @@ export function createWebApp(deps: WebDeps) {
         longVoiceBonusAmount: typeof body.longVoiceBonusAmount === 'string' ? num('longVoiceBonusAmount') : prev.economy.longVoiceBonusAmount,
         longVoiceBonusChannelId: typeof body.longVoiceBonusChannel === 'string' ? field(body, 'longVoiceBonusChannel', 20) || null : prev.economy.longVoiceBonusChannelId,
         // 数える通話チャンネル（この欄があるフォームから送ったときだけ変える。ほかの欄の保存では消さない）
+        // 📕 プロフィールのカードを出さない通話・カテゴリ（この欄があるフォームから送ったときだけ変える）
+        vcPanelHiddenIds: body.vcPanelHiddenForm === 'yes' ? [body.vcPanelHidden ?? []].flat().filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v)).slice(0, 200) : prev.economy?.vcPanelHiddenIds,
         longVoiceBonusVoiceChannelIds: body.longVoiceBonusVoiceForm === 'yes' ? [body.longVoiceBonusVoice ?? []].flat().filter((v): v is string => typeof v === 'string' && /^\d{17,20}$/.test(v)).slice(0, 200) : prev.economy?.longVoiceBonusVoiceChannelIds,
         shuinGive: num('shuinGive'),
         shuinReceive: num('shuinReceive'),

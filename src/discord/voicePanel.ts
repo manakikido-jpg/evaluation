@@ -27,13 +27,16 @@ export class VoicePanelApp {
     private readonly hidden: (channelId: string) => Promise<boolean> = async () => false,
   ) {}
 
-  /** 出さない通話（AFK・「➕ ○○をひらく」・数えない通話） */
+  /** 出さない通話（AFK・「➕ ○○をひらく」・数えない通話・社務所Web で選んだ通話とカテゴリ） */
   private skip(channel: VoiceBasedChannel, guild: Guild): boolean {
     const cfg = this.cfg();
     return (
       channel.id === guild.afkChannelId ||
       cfg.tempVoice.hubs.some((h) => h.channelId === channel.id) ||
-      cfg.economy.excludedVoiceChannelIds.includes(channel.id)
+      cfg.economy.excludedVoiceChannelIds.includes(channel.id) ||
+      // 社務所Web で「出さない」にした通話・カテゴリ
+      cfg.economy.vcPanelHiddenIds.includes(channel.id) ||
+      (channel.parentId !== null && cfg.economy.vcPanelHiddenIds.includes(channel.parentId))
     );
   }
 

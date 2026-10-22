@@ -1066,7 +1066,7 @@ export function SettingsPage(props: {
   at?: string;
   /** テキストチャンネル（呼び鈴の知らせ先を選ぶ。category はカテゴリ名） */
   textChannels?: { id: string; name: string; category?: string }[];
-  voiceChannels?: { id: string; name: string; category: string | null }[];
+  voiceChannels?: { id: string; name: string; category: string | null; categoryId?: string | null }[];
   forumChannels?: { id: string; name: string }[];
   /** ロール（呼び鈴で呼べるロールを選ぶ） */
   roles?: { id: string; name: string }[];
@@ -1177,6 +1177,13 @@ export function SettingsPage(props: {
               <summary>7時間に数える通話チャンネル（{e.longVoiceBonusVoiceChannelIds.length ? `${e.longVoiceBonusVoiceChannelIds.length} こ選択中` : 'すべて（AFK 以外）'}）</summary>
               <p class="note">チェックしたチャンネルにいた時間だけを足して 7 時間を数えます。1 つもチェックしなければ、AFK 以外のすべての通話を数えます。ふつうの通話報酬には関係しません。</p>
               {(props.voiceChannels ?? []).map(v => <label class="field check"><input type="checkbox" name="longVoiceBonusVoice" value={v.id} checked={e.longVoiceBonusVoiceChannelIds.includes(v.id)} /><span>🔊 {v.category ? `${v.category} / ` : ''}{v.name}</span></label>)}
+            </details>
+            <input type="hidden" name="vcPanelHiddenForm" value="yes" />
+            <details class="field">
+              <summary>📕「この通話の人のプロフィールを見る」を出さない通話（{e.vcPanelHiddenIds.length ? `${e.vcPanelHiddenIds.length} こ選択中` : 'なし（全部の通話に出す）'}）</summary>
+              <p class="note">チェックした通話・カテゴリのチャットには、プロフィールを見るカードを出しません。カテゴリにチェックすると、その中の通話全部（あとで作った通話も）。AFK・「➕ ○○をひらく」・数えない通話・宿坊の部屋は、前から出しません。</p>
+              {[...new Map((props.voiceChannels ?? []).filter(v => v.categoryId).map(v => [v.categoryId!, v.category ?? ''])).entries()].map(([id, name]) => <label class="field check"><input type="checkbox" name="vcPanelHidden" value={id} checked={e.vcPanelHiddenIds.includes(id)} /><span>📁 {name}（カテゴリ全部）</span></label>)}
+              {(props.voiceChannels ?? []).map(v => <label class="field check"><input type="checkbox" name="vcPanelHidden" value={v.id} checked={e.vcPanelHiddenIds.includes(v.id)} /><span>🔊 {v.category ? `${v.category} / ` : ''}{v.name}</span></label>)}
             </details>
             <Num name="voiceDailyCap" label="通話でもらえる 1 日の上限" value={e.voiceDailyCap} file={f.voiceDailyCap} />
             <Num name="shuinGive" label="朱印を押すともらえる量" value={e.shuinGive} file={f.shuinGive} />

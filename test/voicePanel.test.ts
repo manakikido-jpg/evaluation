@@ -115,6 +115,24 @@ describe('通話に入ったとき', () => {
     expect(v.messages.map((m) => m.id)).toEqual(['u2', 'm3']);
   });
 
+  it('社務所Web で選んだ通話・カテゴリには出さない', async () => {
+    const CAT = '950000000000000100';
+    const app = new VoicePanelApp(() => ({ ...cfg, economy: { ...cfg.economy, vcPanelHiddenIds: [VC, CAT] } }));
+    const v = fakeVoice();
+    const inCat = fakeVoice('950000000000000002');
+    Object.assign(inCat.channel, { parentId: CAT });
+    const other = fakeVoice('950000000000000003');
+    Object.assign(other.channel, { parentId: null });
+    Object.assign(v.channel, { parentId: null });
+    app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
+    app.onVoiceStateUpdate(state(null, null), state(inCat.channel, '950000000000000002'));
+    app.onVoiceStateUpdate(state(null, null), state(other.channel, '950000000000000003'));
+    await settle();
+    expect(v.messages).toHaveLength(0);
+    expect(inCat.messages).toHaveLength(0);
+    expect(other.messages).toHaveLength(1);
+  });
+
   it('宿坊の部屋には出さない', async () => {
     const app = new VoicePanelApp(() => cfg, undefined, async (id) => id === VC);
     const v = fakeVoice();
