@@ -442,3 +442,4 @@
 - 最終検証：実装77b7531で型チェック・ビルド成功、全152ファイル1,861テスト成功（396.89秒、2並列）。テスト削除・skipなし。ログ/workspace/artifacts/horse-aura-flow/{typecheck-final,build-final,all-tests-final}.log。停止した旧コードの途中結果はall-tests-before-target-guard.logで成功には数えない。
 - push前fetch：本番4848d5cから追加なし。PR #73はOPEN・未合流を確認。ローカル試遊サーバー停止済み。購入・投稿など本番操作なし。
 - 完了範囲：専用売り場、本人の馬の選択、未選択/他人/馬なしの案内、選択後の見本と購入先、選び直し中の誤購入防止、購入後の同じ馬の表示、着せ替え・各馬からの入口。購入価格と課金条件・黄金の景品専用は維持。既存PR #73を更新する。
+- GitHub更新済み：[PR #73](https://github.com/manakikido-jpg/evaluation/pull/73)。専用売り場77b7531・最終検証a7a8e5cをpushし、タイトルと本文も最終の購入手順へ更新。OPEN・未合流、本番未反映。担当Claudeの確認・合流待ち。
