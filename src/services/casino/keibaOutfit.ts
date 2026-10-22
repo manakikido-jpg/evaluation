@@ -17,7 +17,6 @@ export function isOutfit(value: unknown): value is KbOutfit {
 }
 
 export const KB_AURAS = {
-  gold: { name: '黄金', body: '#e4bd48', glow: '#ffd76a' },
   silver: { name: '白銀', body: '#d9e3ef', glow: '#bbddff' },
   ruby: { name: '紅玉', body: '#c83550', glow: '#ff6980' },
   sapphire: { name: '蒼天', body: '#3978dc', glow: '#70caff' },
@@ -25,7 +24,7 @@ export const KB_AURAS = {
   violet: { name: '藤霞', body: '#a37ad2', glow: '#caa0ff' },
 } as const;
 export type KbAuraKey = keyof typeof KB_AURAS;
-export type KbAura = { key: KbAuraKey | 'custom'; body: string; glow: string };
+export type KbAura = { key: KbAuraKey | 'gold' | 'custom'; body: string; glow: string };
 export const KB_AURA_PRICE = 3500;
 export const KB_CUSTOM_AURA_PRICE = 7000;
 export const isAuraColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);

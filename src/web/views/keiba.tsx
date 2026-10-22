@@ -1315,7 +1315,7 @@ export function KbStablePage(p: {
                     </span>
                   </div>
                   <details class="kb-outfit-editor kb-aura-shop" id={`aura-shop-${h.id}`}><summary>✨ オーラショップ・この馬の色を変える</summary>
-                    <p class="c-muted">この馬専用の着せ替えです。固定色は1色3,500銭で購入後、この馬で何度でも装備できます。カスタムは色を変更するたび7,000銭。馬の能力は変わりません。馬を譲ると購入済みの固定色も引き継がれます。</p>
+                    <p class="c-muted">この馬専用の着せ替えです。固定色は1色3,500銭で購入後、この馬で何度でも装備できます。カスタムは色を変更するたび7,000銭。黄金は景品専用のため販売しません。馬の能力は変わりません。馬を譲ると購入済みの固定色も引き継がれます。</p>
                     <form method="post" action={`/casino/keiba/stable/${h.id}/aura`} class="kb-aura-form">
                       <Hidden />
                       <input type="hidden" name="revision" value={h.outfit?.auraRevision ?? 0} />
@@ -1329,8 +1329,8 @@ export function KbStablePage(p: {
                         <option value="custom" selected={h.outfit?.aura?.key === 'custom'} data-price={KB_CUSTOM_AURA_PRICE}>カスタム（色変更ごと7,000銭）</option>
                       </select></label>
                       <div class="kb-aura-colors">
-                        <label>カスタム・馬の色<input type="color" name="body" value={h.outfit?.aura?.body ?? KB_AURAS.gold.body} /></label>
-                        <label>カスタム・光の色<input type="color" name="glow" value={h.outfit?.aura?.glow ?? KB_AURAS.gold.glow} /></label>
+                        <label>カスタム・馬の色<input type="color" name="body" value={h.outfit?.aura?.body ?? KB_AURAS.violet.body} /></label>
+                        <label>カスタム・光の色<input type="color" name="glow" value={h.outfit?.aura?.glow ?? KB_AURAS.violet.glow} /></label>
                       </div>
                       <p class="c-note" data-aura-price aria-live="polite">固定色3,500銭・カスタムの色変更7,000銭。購入済み固定色の装備と取り外しは無料です。</p>
                       <label class="c-check"><input type="checkbox" name="confirm" value="yes" required /> 見本と支払額を確認しました</label>

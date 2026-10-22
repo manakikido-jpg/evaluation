@@ -731,7 +731,9 @@ describe('🏇 みんなでダービー（画面）', () => {
     const a=(await casinoLogin(A)).cookie!, b=(await casinoLogin(B)).cookie!;
     const h=(await addHorse(db,'オーラ売り場',undefined,A))!;
     const path=`/casino/keiba/stable/${h.id}/aura`;
-    const input={aura:'gold',revision:'0',confirm:'yes',price:'1'};
+    const input={aura:'silver',revision:'0',confirm:'yes',price:'1'};
+    expect((await post(path,a,{...input,aura:'gold'})).headers.get('location')).toContain('invalid');
+    expect(await balance(A)).toBe(5000);
     expect((await post(path,a,input,'wrong')).status).toBe(403);
     expect((await post(path,b,input)).headers.get('location')).toContain('not_found');
     expect((await post(path,a,{...input,confirm:''})).headers.get('location')).toContain('invalid');
@@ -740,6 +742,7 @@ describe('🏇 みんなでダービー（画面）', () => {
     await post(path,a,input);expect(await balance(A)).toBe(1500);
     const html=await (await get('/casino/keiba/stable',a)).text();
     expect(html).toContain('オーラショップ'); expect(html).toContain('購入済み・装備無料');
+    expect(html).not.toContain('option value="gold"');
   });
 
   it('レースを開いて馬券を買う。テレビの映像・出馬表・みんなの馬券が出る', async () => {
