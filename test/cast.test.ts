@@ -586,6 +586,35 @@ describe('🎀 キャストのDiscord操作', () => {
     expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('銭を戻しました');
   });
 
+  it('👥 まとめて予約: 全員ぶん入れて合計を払う。1 人でもだめなら全部取り消して戻す', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
+    const CAST2 = '880000000000000009';
+    await applyCast(db, c, { id: CAST2, adult: true }, profile, T20);
+    await setCastStatus(db, CAST2, 'active', 'staff', T20);
+    const f = fixture(), HUB = '990000000000000777';
+    const { saveCastConfig } = await import('../src/services/cast.js');
+    await saveCastConfig(db, { ...c, reservationChannelId: HUB }, 'staff');
+    let n = 0;
+    const create = vi.fn(async () => ({ id: `99000000000000080${n++}`, members: { add: vi.fn(async () => undefined) }, send: vi.fn(async () => ({})) }));
+    f.app.attach({ channels: { cache: new Map([[HUB, { type: ChannelType.GuildText, threads: { create } }]]) } } as unknown as Guild);
+    const submit = (pairs: string) => ({ ...f.interaction, editReply: vi.fn(async () => undefined), customId: `cast:gmodal:${pairs}`, isModalSubmit: () => true, isFromMessage: () => true, fields: { getTextInputValue: () => '21:00' } });
+    // 1 人分のメニューがない → 全部取り消し・銭は戻る
+    const bad = submit(`${CAST}~30,${CAST2}~nope`);
+    await f.app.onInteraction(bad as unknown as Interaction);
+    expect(JSON.stringify(bad.editReply.mock.calls)).toContain('ほかの人の分も入れていません');
+    expect((await walletOf(db, ADULT)).balance).toBe(10000);
+    expect((await db.select().from(castSessions)).every((x) => x.status === 'declined')).toBe(true);
+    // 2 人そろう → 2 件・同じ始まり・合計を払う
+    const ok = submit(`${CAST}~30,${CAST2}~30`);
+    await f.app.onInteraction(ok as unknown as Interaction);
+    expect(JSON.stringify(ok.editReply.mock.calls)).toContain('2 人まとめて予約');
+    const live = (await db.select().from(castSessions)).filter((x) => x.status === 'reserved');
+    expect(live.map((x) => x.castId).sort()).toEqual([CAST, CAST2].sort());
+    expect(live[0]!.startAt!.getTime()).toBe(live[1]!.startAt!.getTime());
+    expect((await walletOf(db, ADULT)).balance).toBe(10000 - live[0]!.price - live[1]!.price);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
   it('📦 納品のファイル: 中身が見えるときはキャストのファイルかリンクが要る。見えないときはキャストの書き込みがあればよい', async () => {
     const created = new Date('2026-10-01T00:00:00Z');
     const msg = (author: string, extra: { files?: number; content?: string } = {}) => ({ author: { id: author }, createdAt: new Date(created.getTime() + 1000), attachments: { size: extra.files ?? 0 }, content: extra.content ?? '' });

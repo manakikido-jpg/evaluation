@@ -193,7 +193,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
       },
     ],
     ...(image ? { files: [{ name: `cast-menu.${ext}`, contentType: image.contentType, data: image.data }], attachments: [] } : {}),
-    components: [row(button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙'), button('cast:changes:0', '予約を確認・日時変更', 2, '📅'))],
+    components: [row(button(group ? `cast:rank:${group}` : 'cast:rank', '今月のランキング', 2, '🏆'), button('cast:me', 'キャストの方', 2, '⚙'), button('cast:changes:0', '予約を確認・日時変更', 2, '📅'), button(group ? `cast:group:${group}` : 'cast:group', '2〜3 人まとめて予約', 1, '👥'))],
   };
 }
 
@@ -554,6 +554,8 @@ export class CastApp {
         if (action === 'plansel') return await this.confirm(interaction, a ?? '', interaction.values[0] ?? '');
         if (action === 'opts') return await this.confirm(interaction, a ?? '', b ?? '', interaction.values);
         if (action === 'rplansel') return await this.reserveModal(interaction, a ?? '', interaction.values[0] ?? '');
+        if (action === 'gcasts') return await this.groupMenus(interaction, interaction.values);
+        if (action === 'gplans') return await this.groupModal(interaction, interaction.values);
         if (action === 'cmin') return void (await interaction.showModal(this.consultModal(a ?? '', b ?? '', 'call', CONSULT_MINUTES.includes(Number(interaction.values[0])) ? Number(interaction.values[0]) : 60)));
         return;
       }
@@ -566,6 +568,7 @@ export class CastApp {
         if (action === 'editmodal') return await this.profileSubmit(interaction);
         if (action === 'shiftmodal') return await this.shiftSubmit(interaction);
         if (action === 'pmodal') return await this.proposeSubmit(interaction, Number(a));
+        if (action === 'gmodal') return await this.groupSubmit(interaction, a ?? '');
         if (action === 'rmodal') return await this.reserveSubmit(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
         if (action === 'qrmodal') {
           const [customerId, minutes, price] = rest;
@@ -586,6 +589,7 @@ export class CastApp {
         return void(await interaction.editReply(ok?'ランキングを最新に更新しました。':'先にランキングパネルを置いてください。'));
       }
       if (action === 'rank') return await this.ranking(interaction, isCastGroup(a) ? a : undefined);
+      if (action === 'group') return await this.groupCasts(interaction, isCastGroup(a) ? a : undefined);
       if (action === 'apply') return await this.applyModal(interaction);
       if (action === 'me') return await this.mine(interaction);
       if (action === 'refresh') return await this.mine(interaction, true);
@@ -1800,6 +1804,92 @@ export class CastApp {
     if (!mo && at <= now) at = new Date(at.getTime() + 24 * 3_600_000);
     if (mo && at <= now) at = new Date(Date.UTC(j.getUTCFullYear() + 1, Number(mo) - 1, Number(d), Number(h), Number(mi)) - 9 * 3_600_000);
     return at;
+  }
+
+  // ───────── 👥 まとめて予約（2〜3 人のキャストを、同じ時間・同じ部屋で） ─────────
+
+  /** ① 呼びたいキャストを 2〜3 人選ぶ */
+  private async groupCasts(i: ButtonInteraction<'cached'>, group?: CastGroup): Promise<void> {
+    await i.deferReply(EPHEMERAL);
+    const list = (await listCasts(this.db, ['active'])).filter((x) => !group || inGroup(x, group)).filter((x) => x.memberId !== i.user.id && menuOf(x).some((m) => m.price > 0 && !m.consult && !m.delivery));
+    if (list.length < 2) return void (await i.editReply({ content: 'いま、まとめて予約できるキャストが 2 人いません。' }));
+    const names = await namesOf(this.db, list.map((x) => x.memberId));
+    await i.editReply({
+      content: '👥 **まとめて予約** ― 同じ時間に、1 つの部屋で話すキャストを 2〜3 人選んでください。料金はキャストごとのメニューの値段の合計です。',
+      components: [{ type: 1, components: [{ type: 3, custom_id: 'cast:gcasts', placeholder: 'キャストを 2〜3 人選ぶ', min_values: 2, max_values: Math.min(CUSTOMER_TOGETHER_MAX, list.length), options: list.slice(0, 25).map((x) => ({ label: (names.get(x.memberId) ?? 'キャスト').slice(0, 100), value: x.memberId })) }] }],
+    } as never);
+  }
+
+  /** ② キャストごとのメニューを選ぶ（1 つの選ぶ欄に、キャストごとに並べる） */
+  private async groupMenus(i: StringSelectMenuInteraction<'cached'>, castIds: string[]): Promise<void> {
+    const ids = [...new Set(castIds)].slice(0, CUSTOMER_TOGETHER_MAX);
+    const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
+    const names = await namesOf(this.db, ids);
+    const options: { label: string; value: string; description?: string }[] = [];
+    for (const id of ids) {
+      const cast = await getCast(this.db, id);
+      if (!cast || cast.status !== 'active') continue;
+      for (const m of menuOf(cast).filter((m) => m.price > 0 && !m.consult && !m.delivery && (adult || (minorMenuOk(m) && cast.minorOk)))) {
+        options.push({ label: `${names.get(id) ?? 'キャスト'} ・ ${menuLabel(m)}`.slice(0, 100), value: `${id}~${m.id}`, description: `${fmt(m.price)} 枚`.slice(0, 100) });
+      }
+    }
+    const casts = new Set(options.map((o) => o.value.split('~')[0]));
+    if (casts.size < 2) return void (await this.answer(i, { content: '選んだキャストのうち、予約できるメニューがあるのが 2 人そろいませんでした。', components: [] }));
+    await this.answer(i, {
+      content: `👥 キャストごとに、メニューを 1 つずつ選んでください（${casts.size} 人分）。`,
+      components: [{ type: 1, components: [{ type: 3, custom_id: 'cast:gplans', placeholder: 'キャストごとにメニューを選ぶ', min_values: casts.size, max_values: casts.size, options: options.slice(0, 25) }] }],
+    });
+  }
+
+  /** ③ 日時を入れる */
+  private async groupModal(i: StringSelectMenuInteraction<'cached'>, picks: string[]): Promise<void> {
+    const pairs = picks.map((v) => v.split('~')).filter((p): p is [string, string] => p.length === 2 && /^\d{17,20}$/.test(p[0]!) && /^[\w-]{1,20}$/.test(p[1]!));
+    if (pairs.length < 2 || new Set(pairs.map((p) => p[0])).size !== pairs.length) return void (await this.answer(i, { content: 'キャスト 1 人につきメニューを 1 つずつ選んでください（同じキャストを 2 つ選ばない）。', components: [] }));
+    const id = `cast:gmodal:${pairs.map((p) => p.join('~')).join(',')}`;
+    if (id.length > 100) return void (await this.answer(i, { content: '選んだものが多すぎます。キャストを減らしてください。', components: [] }));
+    await i.showModal(
+      new ModalBuilder()
+        .setCustomId(id)
+        .setTitle(`👥 まとめて予約（${pairs.length} 人）`)
+        .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('when').setLabel('日時（例: 21:00 ／ 10/5 21:00）').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(20))),
+    );
+  }
+
+  /** ④ まとめて予約する。1 人でもだめなら、入れた分も取り消して全部戻す（全員そろうか、何もしないか） */
+  private async groupSubmit(i: ModalSubmitInteraction<'cached'>, raw: string): Promise<void> {
+    if (i.isFromMessage()) await i.deferUpdate();
+    else await i.deferReply(EPHEMERAL);
+    const pairs = raw.split(',').map((p) => p.split('~')).filter((p): p is [string, string] => p.length === 2);
+    if (pairs.length < 2) return void (await i.editReply({ content: '選んだものが読めませんでした。はじめからやり直してください。', components: [] }));
+    const at = this.parseWhen(i.fields.getTextInputValue('when'));
+    if (!at) return void (await i.editReply({ content: '日時が読めませんでした（例: 21:00 ／ 10/5 21:00）。', components: [] }));
+    const c = await loadCastConfig(this.db);
+    const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
+    const made: CastSession[] = [];
+    for (const [castId, plan] of pairs) {
+      const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at });
+      if (r.status !== 'ok') {
+        for (const s of made) await cancelSession(this.db, s.id, 'system', 'declined');
+        const who = (await namesOf(this.db, [castId])).get(castId) ?? 'キャスト';
+        return void (await i.editReply({ content: `${who} さんの予約ができませんでした: ${this.requestError(r)}\nまとめて予約なので、ほかの人の分も入れていません（銭は戻しました）。`, components: [] }));
+      }
+      made.push(r.session);
+    }
+    const links: string[] = [];
+    for (const s0 of made) {
+      const thread = await this.openThread(s0, `📅 予約 #${s0.id}`);
+      if (!thread) {
+        for (const s of made) await cancelSession(this.db, s.id, 'system', 'declined');
+        return void (await i.editReply({ content: '予約のやり取りの場所を作れなかったので、全部取り消して銭を戻しました。神職に知らせてください。', components: [] }));
+      }
+      const s = (await getSession(this.db, s0.id)) ?? s0;
+      const dm = await this.dmCast(s);
+      await thread.send({ ...(dm ? {} : { content: `<@${s.castId}>` }), ...this.reserveMessage(s, !dm), allowedMentions: { users: dm ? [] : [s.castId] } } as Parameters<typeof thread.send>[0]);
+      links.push(`<#${thread.id}>`);
+    }
+    const total = made.reduce((n, s) => n + s.price, 0);
+    await audit(this.db, { actorId: i.user.id, action: 'cast.group_reserve', detail: { sessions: made.map((s) => s.id), at }, via: 'discord' });
+    await i.editReply({ content: `👥 ${made.length} 人まとめて予約をお願いしました（<t:${unix(at)}:f>・合計 ${fmt(total)} 枚）。全員が受けると、時刻に 1 つの部屋でいっしょに話せます。\n返事はそれぞれの予約のお部屋に届きます: ${links.join(' ')}`, components: [] });
   }
 
   private async reserveSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, plan: string, options?: string[], quote?: { minutes: number; price: number }): Promise<void> {
