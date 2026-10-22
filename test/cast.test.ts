@@ -224,13 +224,16 @@ describe('🎀 キャスト', () => {
     }
     expect((await requestSession(db, c, { castId: CAST3, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('ok');
     expect((await requestSession(db, c, { castId: CAST4, customerId: ADULT, customerAdult: true, plan: '30', startAt: at(1) }, T20)).status).toBe('self_overlap');
-    // 👥 部屋をまとめる相手: 同じお客・同じ始まり・受けた予約だけ
+    // 👥 部屋をまとめる相手: 「まとめて予約」の印があるものだけ（ふつうの予約は、同じ時刻でもまとめない）
     const { roomMates } = await import('../src/services/cast.js');
     const mine = (await db.select().from(castSessions)).filter((x) => x.customerId === ADULT && x.startAt?.getTime() === at(1).getTime());
     expect(mine).toHaveLength(3);
-    expect(await roomMates(db, mine[0]!)).toHaveLength(0);
     await acceptSession(db, mine[1]!.id, mine[1]!.castId, T20);
-    expect((await roomMates(db, mine[0]!)).map((x) => x.id)).toEqual([mine[1]!.id]);
+    expect(await roomMates(db, mine[0]!)).toHaveLength(0);
+    expect(await roomMates(db, { ...mine[0]!, groupKey: 'g1' })).toHaveLength(0);
+    await db.update(castSessions).set({ groupKey: 'g1' });
+    const [m0, m1] = [(await getSession(db, mine[0]!.id))!, mine[1]!];
+    expect((await roomMates(db, m0)).map((x) => x.id)).toEqual([m1.id]);
   });
 
   it('⏱ 予約の時間を見やすく: 時間と、始まり〜終わり（延長もふくむ）', async () => {
@@ -611,6 +614,7 @@ describe('🎀 キャストのDiscord操作', () => {
     const live = (await db.select().from(castSessions)).filter((x) => x.status === 'reserved');
     expect(live.map((x) => x.castId).sort()).toEqual([CAST, CAST2].sort());
     expect(live[0]!.startAt!.getTime()).toBe(live[1]!.startAt!.getTime());
+    expect(live[0]!.groupKey).toBeTruthy();expect(live[0]!.groupKey).toBe(live[1]!.groupKey);
     expect((await walletOf(db, ADULT)).balance).toBe(10000 - live[0]!.price - live[1]!.price);
     expect(create).toHaveBeenCalledTimes(2);
   });
@@ -722,14 +726,14 @@ describe('🎀 キャストのDiscord操作', () => {
     expect(body).toContain('日時変更を提案');
   });
 
-  it('👥 同じお客・同じ始まりの別キャストの予約は、1 つの部屋にまとめる', async () => {
+  it('👥 「まとめて予約」の予約は 1 つの部屋にまとめる。ふつうの予約は同じ時刻でも別の部屋（つながっていたら作り直す）', async () => {
     const CAST2 = '880000000000000009';
     await applyCast(db, c, { id: CAST2, adult: true }, profile, T20);
     await setCastStatus(db, CAST2, 'active', 'staff', T20);
     const at = new Date(T20.getTime() + 60 * MIN);
     const ids: number[] = [];
     for (const castId of [CAST, CAST2]) {
-      const r = await requestSession(db, c, { castId, customerId: ADULT, customerAdult: true, plan: '60', startAt: at }, T20);
+      const r = await requestSession(db, c, { castId, customerId: ADULT, customerAdult: true, plan: '60', startAt: at, groupKey: 'g1' }, T20);
       if (r.status !== 'ok') throw new Error(r.status);
       await acceptSession(db, r.session.id, castId, T20);
       ids.push(r.session.id);
@@ -744,6 +748,17 @@ describe('🎀 キャストのDiscord操作', () => {
     // 片方が終わって片付けの時間になっても、もう片方が通話中なら部屋は消さない
     const { roomInUse } = await import('../src/services/cast.js');
     expect(await roomInUse(db, roomId, ids[0]!)).toBe(true);
+    // ふつうの予約が、ほかの指名の部屋につながっていたら、自分の部屋を作り直す
+    const CAST3 = '880000000000000010';
+    await applyCast(db, c, { id: CAST3, adult: true }, profile, T20);
+    await setCastStatus(db, CAST3, 'active', 'staff', T20);
+    const r3 = await requestSession(db, c, { castId: CAST3, customerId: ADULT, customerAdult: true, plan: '60', startAt: new Date(at.getTime() + 120 * MIN) }, T20);
+    if (r3.status !== 'ok') throw new Error(r3.status);
+    const s3 = (await acceptSession(db, r3.session.id, CAST3, T20))!;
+    await setSessionPlace(db, s3.id, { channelId: roomId });
+    f.create.mockClear();
+    await (f.app as unknown as { openRoom: (s: unknown) => Promise<unknown> }).openRoom((await getSession(db, s3.id))!);
+    expect(f.create).toHaveBeenCalledOnce();
   });
 
   it('予約開始では部屋を1つ作り、スレッドに入室ボタンを出す', async () => {

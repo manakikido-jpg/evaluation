@@ -1811,6 +1811,8 @@ export const castSessions = pgTable(
     closedAt: timestamp('closed_at', { withTimezone: true }),
     /** 部屋を消す時刻（終わってから少し残して評価してもらう） */
     deleteAt: timestamp('delete_at', { withTimezone: true }),
+    /** 👥 まとめて予約の印（同じ印の予約だけ、1 つの部屋にまとめる。null はふつうの予約） */
+    groupKey: text('group_key'),
     /** 終わりの 5 分前の知らせを出した */
     warned: boolean('warned').notNull().default(false),
     /** 予約の前の知らせ（0 まだ / 1 1 時間前を出した / 2 10 分前も出した） */

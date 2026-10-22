@@ -2,7 +2,7 @@ import { refreshCastLeaderboard, castLeaderboardBody } from './castLeaderboard.j
 import { castLeaderboard } from '../services/castLeaderboard.js';
 import { CHAMPAGNES, champagneOf, prepareChampagne, buyChampagne, announceChampagne, assertChampagneActive, ChampagneError, champagneError } from '../services/castChampagne.js';
 import { champagneAnimation, champagnePreview } from '../services/castChampagneImage.js';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createLoginLink } from '../services/casino/loginLinks.js';
 import { castIntroId, castIntroPosts, forgetCastIntroPost, saveCastIntroPost, withCastIntroLock } from '../services/castIntroPosts.js';
 import { DiscordHttpError } from '../lib/discordRest.js';
@@ -1102,8 +1102,10 @@ export class CastApp {
   private async openRoom(s: CastSession): Promise<VoiceChannel | undefined> {
     const g = this.guild;
     if (!g) return undefined;
-    if (s.channelId) return this.voice(s.channelId);
-    // 👥 同じお客・同じ始まりの、ほかのキャストの予約があれば、その部屋にこのキャストも入れる
+    // ふつうの予約が、ほかの指名の部屋につながっていたら（前の版で同じ時刻の予約をまとめていた分）、自分の部屋を作り直す
+    const wrong = Boolean(s.channelId && !s.groupKey && (await roomInUse(this.db, s.channelId, s.id)));
+    if (s.channelId && !wrong) return this.voice(s.channelId);
+    // 👥 「まとめて予約」の、ほかのキャストの予約があれば、その部屋にこのキャストも入れる
     for (const mate of await roomMates(this.db, s)) {
       const shared = this.voice(mate.channelId);
       if (!shared) continue;
@@ -1866,8 +1868,9 @@ export class CastApp {
     const c = await loadCastConfig(this.db);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     const made: CastSession[] = [];
+    const groupKey = randomUUID();
     for (const [castId, plan] of pairs) {
-      const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at });
+      const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, groupKey });
       if (r.status !== 'ok') {
         for (const s of made) await cancelSession(this.db, s.id, 'system', 'declined');
         const who = (await namesOf(this.db, [castId])).get(castId) ?? 'キャスト';

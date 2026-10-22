@@ -1,0 +1,1 @@
+ALTER TABLE "cast_sessions" ADD COLUMN "group_key" text;

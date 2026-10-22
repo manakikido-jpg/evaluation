@@ -722,7 +722,7 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段（delivery: 📦 納品として出した値段。時間は 0） */ quote?: { minutes: number; price: number; delivery?: boolean }; /** 付けるオプションの番号 */ options?: string[]; /** 📦 納品の相談: やり取りのスレッド（同じ相談で 2 回注文しない） */ threadId?: string },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段（delivery: 📦 納品として出した値段。時間は 0） */ quote?: { minutes: number; price: number; delivery?: boolean }; /** 付けるオプションの番号 */ options?: string[]; /** 📦 納品の相談: やり取りのスレッド（同じ相談で 2 回注文しない） */ threadId?: string; /** 👥 まとめて予約の印 */ groupKey?: string },
   now = new Date(),
   rand: () => number = Math.random,
 ): Promise<RequestResult> {
@@ -787,6 +787,7 @@ export async function requestSession(
         castId: input.castId,
         customerId: input.customerId,
         plan,
+        ...(input.groupKey ? { groupKey: input.groupKey } : {}),
         menuName: cast.menu.length ? (item.consult ? `${item.name}（相談）` : item.name) : '',
         optionNames: opts.map((o) => o.name),
         optionPrice,
@@ -1168,13 +1169,13 @@ export async function castTick(db: Db, c: CastConfig, now = new Date(), prepareR
   return out;
 }
 
-/** 👥 同じお客・同じ始まりの、ほかのキャストの予約（部屋をまとめる相手）。部屋がある・始まっているものだけ */
-export async function roomMates(db: Db, s: Pick<CastSession, 'id' | 'customerId' | 'startAt' | 'isPublic'>): Promise<CastSession[]> {
-  if (!s.startAt || s.isPublic) return [];
+/** 👥 「まとめて予約」で同じ印の、ほかのキャストの予約（部屋をまとめる相手）。ふつうの予約は、同じ時刻でもまとめない */
+export async function roomMates(db: Db, s: Pick<CastSession, 'id' | 'customerId' | 'startAt' | 'isPublic' | 'groupKey'>): Promise<CastSession[]> {
+  if (!s.groupKey || !s.startAt || s.isPublic) return [];
   return db
     .select()
     .from(castSessions)
-    .where(and(eq(castSessions.customerId, s.customerId), eq(castSessions.startAt, s.startAt), eq(castSessions.isPublic, false), inArray(castSessions.status, ['accepted', 'active']), sql`${castSessions.id} <> ${s.id}`));
+    .where(and(eq(castSessions.groupKey, s.groupKey), eq(castSessions.customerId, s.customerId), eq(castSessions.startAt, s.startAt), eq(castSessions.isPublic, false), inArray(castSessions.status, ['accepted', 'active']), sql`${castSessions.id} <> ${s.id}`));
 }
 
 /** 部屋を、まだ使っているほかの指名があるか（あれば消さない） */
