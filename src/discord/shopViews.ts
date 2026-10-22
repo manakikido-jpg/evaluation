@@ -371,7 +371,7 @@ export function otoshidamaPickChannel(item: ShopItem, e: EconomyConfig, balance:
           item.description,
           `入れられるのは ${coin(e)} ${o.minTotal.toLocaleString('ja-JP')}〜${o.maxTotal.toLocaleString('ja-JP')} 枚、${o.minCount}〜${o.maxCount} 人分${item.price > 0 ? `（ほかに手数料 ${item.price.toLocaleString('ja-JP')} 枚）` : ''}`,
           `いま ${balance.toLocaleString('ja-JP')} 枚`,
-          `-# 受け取れるのは 1 人 1 回・入鯖が承認された人だけ。${o.hours} 時間で締め切り、残りはあなたに戻ります`,
+          `-# 受け取れるのは 1 人 1 回・入鯖が承認され、受取時にこのサーバーの通話にいる人だけ。${o.hours} 時間で締め切り、残りはあなたに戻ります`,
           '',
           '氏子以上の人が袋を置けます。袋を置くチャンネルを選んでください。',
         ].join('\n'),

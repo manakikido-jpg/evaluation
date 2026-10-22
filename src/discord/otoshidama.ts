@@ -25,7 +25,7 @@ export class OtoshidamaApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     const bagId = Number(interaction.customId.split(':')[2]);
     try {
-      const r = await claimBag(this.db, this.cfg(), bagId, { id: interaction.user.id, roleIds: [...interaction.member.roles.cache.keys()], bot: interaction.user.bot });
+      const r = await claimBag(this.db, this.cfg(), bagId, { id: interaction.user.id, roleIds: [...interaction.member.roles.cache.keys()], bot: interaction.user.bot, voiceChannelId: interaction.guild.voiceStates.cache.get(interaction.user.id)?.channelId ?? null });
       if (r.status !== 'ok') return void (await interaction.reply({ content: CLAIM_MESSAGES[r.status], ...EPHEMERAL }));
       const state = await bagState(this.db, bagId);
       if (state) await interaction.update({ ...bagMessage(state.bag, state.claims, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof interaction.update>[0]);
