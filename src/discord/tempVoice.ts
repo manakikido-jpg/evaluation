@@ -199,7 +199,7 @@ export function stayRoomPanel(cfg: GuildConfig): MessageBody {
   return {
     embeds: [{
       title: '🏨 24時間の宿',
-      description: `銭を払って、24 時間残る宿を立てられます（${cfg.rooms.stayPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}）。\n全員が抜けても、24 時間は部屋が残ります。24 時間たったあとは、いつもの宿と同じく、全員が抜けたら消えます。\n-# いつもの「抜けたらなくなる宿」は、これまでどおり入口の通話から立てられます。`,
+      description: `**${cfg.rooms.stayPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}**\n24時間残る宿です。設定は変更可能です。`,
       color: 0xc08a3e,
     }],
     components: secretRoomHubs(cfg).length ? [{ type: 1, components: [{ type: 2, style: ButtonStyle.Primary, label: `🏨 24時間の宿を立てる（${cfg.rooms.stayPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}）`, custom_id: 'stayroom:open' }] }] : [],

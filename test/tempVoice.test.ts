@@ -106,6 +106,12 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     // もう一度押しても、二重には買わない
     expect(await createStayRoom(ctx, { hubId: HUB, userId: 'u1', displayName: 'さくら' }, now)).toMatchObject({ status: 'exists', channelId: r.channelId });
     expect((await walletOf(db, 'u1')).balance).toBe(3000);
+    // 種類は何度でも、追加の部屋代なしで変えられる
+    const { changeRoomKind } = await import('../src/services/rooms.js');
+    expect(await changeRoomKind(db, c, r.channelId, 'secret', now)).toEqual({ status: 'ok', charged: 0 });
+    expect(await changeRoomKind(db, c, r.channelId, 'invite', now)).toEqual({ status: 'ok', charged: 0 });
+    expect(await changeRoomKind(db, c, r.channelId, 'public', now)).toEqual({ status: 'ok', charged: 0 });
+    expect((await walletOf(db, 'u1')).balance).toBe(3000);
     // だれもいなくても 24 時間は残る
     expect(await cleanupRooms(ctx, new Date(now.getTime() + STAY_MS - 1))).toBe(0);
     // 24 時間たって、人がいれば残る
@@ -123,6 +129,7 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     const p = JSON.stringify(stayRoomPanel(c));
     expect(p).toContain('stayroom:open');
     expect(p).toContain('2,500');
+    expect(p).toContain('24時間残る宿です。設定は変更可能です。');
   });
 
   it('公開パネルは開くボタン1つ。押したら 1 回で部屋ができ、料金とリンクは本人にだけ', async () => {

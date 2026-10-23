@@ -55,7 +55,7 @@ export function roomChannelName(name: string, kind: RoomKind): string {
   return head + base.slice(0, 100 - head.length);
 }
 
-type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'> & { payerId?: string | null };
+type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'> & { payerId?: string | null; keepUntil?: Date | null };
 type Btn = { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; emoji?: { name: string }; disabled?: boolean };
 const button = (custom_id: string, label: string, emoji: string, style: Btn['style'] = 2, disabled = false): Btn => ({
   type: 2,
@@ -75,10 +75,18 @@ export function ticketUsedText(r: { ticketKind?: TicketKind; pass?: boolean; cha
   return r.ticket ? `${ticketName(r.ticketKind)}を 1 枚使いました（部屋代は無料です）` : `${ticketName(r.ticketKind)}を 1 枚使いました（${r.charged} 枚を払いました）`;
 }
 
-export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'>) {
+export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'> & { keepUntil?: Date | null }) {
   const plan = planOf(cfg, row.hubId);
   const lines = [`<@${row.ownerId}> さんの部屋です。設定は、部屋を作った人（と運営）が「⚙ 部屋の設定」から変えられます。`];
-  if (plan === 'free') {
+  if (row.keepUntil) {
+    // 🏨 買った 24 時間の宿: 種類は何度でも、追加の部屋代なしで変えられる
+    lines.push(
+      '',
+      `🏨 **24時間残る宿**です（${row.keepUntil.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで、だれもいなくても残ります）。`,
+      ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label}（${ROOM_KINDS[key].description}）`),
+      '-# 部屋の種類（オープン・招待のみ・シクレなど）は、何度でも変えられます。追加の部屋代はかかりません',
+    );
+  } else if (plan === 'free') {
     lines.push(
       '',
       '💎 **極の部屋**です（極の VIP の人だけが見える・入れる）。部屋代はかかりません。',
@@ -123,7 +131,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
     ...(v.staff ? [`🛡 運営として開いています（<@${row.ownerId}> さんの部屋）`, ''] : []),
     ...(note ? [`✅ ${note}`, ''] : []),
     `・チャンネル名: **${ch.name}**`,
-    ...(plan !== 'none' ? [`・部屋の種類: ${k.emoji} ${k.label}${row.kindLocked ? '（決定済み）' : '（まだ 1 回選べます）'}`] : []),
+    ...(plan !== 'none' ? [`・部屋の種類: ${k.emoji} ${k.label}${row.keepUntil && !row.kindLocked ? '（🏨 何度でも変えられます）' : row.kindLocked ? '（決定済み）' : '（まだ 1 回選べます）'}`] : []),
     `・人数制限: ${ch.userLimit ? `${ch.userLimit} 人まで` : 'なし'}`,
     `・入室許可者: ${row.invited.length ? row.invited.map((id) => `<@${id}>`).join(' ') : 'なし'}`,
     ...(plan !== 'none' && row.payerId && row.payerId !== row.ownerId ? [`・部屋主の分の部屋代: <@${row.payerId}> さんが持っています`] : []),
@@ -431,7 +439,7 @@ export class RoomApp {
     const k = ROOM_KINDS[kind];
     const paid = r.ticketKind ? `（${ticketUsedText(r)}）` : r.charged ? `（${this.cfg().economy.currencyName} ${r.charged} 枚を払いました）` : '';
     const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
-    await this.done(i, { ...row, kind, kindLocked: true }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`, v);
+    await this.done(i, { ...row, kind, kindLocked: !row.keepUntil }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`, v);
   }
 
   /** 譲渡できる人（今この部屋にいる人。BOT と自分はのぞく） */

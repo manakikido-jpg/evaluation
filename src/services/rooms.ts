@@ -181,6 +181,11 @@ export async function changeRoomKind(
     const [row] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
     if (!row) return { status: 'not_found' as const };
     if (row.kindLocked) return { status: 'locked' as const };
+    // 🏨 買った 24 時間の宿: 種類は何度でも、無料で変えられる（宿代にふくむ）
+    if (row.keepUntil) {
+      await tx.update(tempVoice).set({ kind }).where(eq(tempVoice.channelId, channelId));
+      return { status: 'ok' as const, charged: 0 };
+    }
     const plan = planOf(cfg, row.hubId);
     const payer = payerOf(row, row.ownerId);
     const price = await priceFor(tx, cfg, plan, kind, payer);
@@ -200,7 +205,8 @@ export async function changeRoomKind(
 export async function staffSetRoomKind(db: Db, channelId: string, kind: RoomKind): Promise<RoomRow | undefined> {
   return db.transaction(async (tx) => {
     await lockRoom(tx, channelId);
-    const [row] = await tx.update(tempVoice).set({ kind, kindLocked: true }).where(eq(tempVoice.channelId, channelId)).returning();
+    // 🏨 24 時間の宿は、運営が変えたあとも部屋主が何度でも変えられる
+    const [row] = await tx.update(tempVoice).set({ kind, kindLocked: sql`${tempVoice.keepUntil} is null` }).where(eq(tempVoice.channelId, channelId)).returning();
     return row;
   });
 }
