@@ -493,3 +493,4 @@
 - 最終検証：全156ファイル1,883テスト成功（797.91秒、2並列）、型チェック・ビルド成功。関連33件成功。テスト削除・skipなし。ログ/tmp/guide-nickname-{related-final,all-tests,typecheck-final}.log。
 - 最後のfetchで本番8b0ba3d（別件の投稿先・メンション選択）を確認。検証基準92854bfを維持。担当Claudeが最新投稿文の変更と双方の記録・説明・更新履歴を残して確認・合流する。
 - 完了範囲：案内人専用の利用者表示名変更、同じ案内VC・対象ロールの再確認、入力・Discord権限・監査対応。DBマイグレーション不要。本番未反映。
+- GitHub保存済み：PR #75 https://github.com/manakikido-jpg/evaluation/pull/75 、実装877f3df。OPEN・未合流。担当Claudeの確認・合流待ち。実装・最終検証・引き継ぎをこのブランチへ保存。
