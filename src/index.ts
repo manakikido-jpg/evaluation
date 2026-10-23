@@ -26,6 +26,7 @@ import { VoiceGroupApp } from './discord/voiceGroups.js';
 import { VoiceCounterApp } from './discord/voiceCounter.js';
 import { PresenceGiftApp } from './discord/presenceGifts.js';
 import { VoiceChatClearApp } from './discord/voiceChatClear.js';
+import { AfkMuteApp } from './discord/afkMute.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { DiaryApp } from './discord/diary.js';
 import { GachaApp } from './discord/gacha.js';
@@ -131,6 +132,7 @@ async function main(): Promise<void> {
   const voiceCounter = new VoiceCounterApp(cfg);
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg);
+  const afkMute = new AfkMuteApp(db, cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
   const recruit = new RecruitApp(db, cfg, actions);
@@ -193,6 +195,8 @@ async function main(): Promise<void> {
     void voiceCounter.tick();
     // 人がいなくなった通話のチャットを消す（止まっていた間に空になったものも）
     voiceChatClear.attach(guild);
+    // 奥の院で BOT がミュートした人が、止まっていた間に出ていたら外す
+    void afkMute.attach(guild).catch((err) => logger.warn({ err }, 'afk mute attach failed'));
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
     bellSticky.attach(guild);
     // ⛩ 「御神籤を引く」ボタンを #おみくじ のいちばん下に
@@ -381,6 +385,8 @@ async function main(): Promise<void> {
     voiceGroups.onVoiceStateUpdate(before, after);
     // 人がいなくなった通話のチャットを消す
     voiceChatClear.onVoiceStateUpdate(before, after);
+    // 奥の院（寝落ち）に入ったらミュート、出たら外す
+    void afkMute.onVoiceStateUpdate(before, after);
     // 通話のチャットに「この通話の人に朱印を押す」
     voicePanel.onVoiceStateUpdate(before, after);
     // 宵宮の部屋: 入った人がそれぞれ払う
