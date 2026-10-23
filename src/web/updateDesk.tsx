@@ -40,6 +40,14 @@ function Shell(p: { children: Child }) {
 
 const Head = (p: { session: MemberSession }) => <div class="page-head"><div><p class="note">咲楽ノ宮 ／ まとめ係</p><h1>サーバーの更新の投稿文</h1></div><form action={`${ROOT}/logout`} method="post"><input type="hidden" name="_csrf" value={p.session.csrfToken} /><button>ログアウト</button></form></div>;
 
+/** 💻 PC と 📱 スマホの幅を切りかえて見る（JS なし。選んだほうの幅で中身を囲む） */
+export function DeviceFrame(p: { name: string; children: Child }) {
+  return <div class="preview-device"><div class="preview-switch" role="radiogroup" aria-label="見る画面">
+    <label class="check"><input type="radio" name={p.name} value="pc" checked /><span>💻 PC</span></label>
+    <label class="check"><input type="radio" name={p.name} value="phone" /><span>📱 スマホ</span></label>
+  </div><div class="preview-frame">{p.children}</div></div>;
+}
+
 /** Discord での見た目（掲示と同じ形） */
 export function UpdatePostPreview(p: { post: Pick<UpdatePost, 'title' | 'body' | 'style' | 'imagePosition'>; imageUrl?: string; slot?: boolean }) {
   const text = updatePostText(p.post);
@@ -68,7 +76,7 @@ export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow
   return <Shell><Head session={p.session} /><p class="crumbs"><a href={ROOT}>← 投稿文の一覧</a></p>
     {p.message && <p role="status" class="flash">{messages[p.message] || '入力を確認してください。'}</p>}
     {post?.status === 'rejected' && post.note && <p class="flash warn">運営から：{post.note}</p>}
-    {!editable ? <section class="card"><h2>{STATUS_LABEL[post!.status]}</h2><UpdatePostPreview post={view} imageUrl={imageUrl} />
+    {!editable ? <section class="card"><h2>{STATUS_LABEL[post!.status]}</h2><DeviceFrame name="device"><UpdatePostPreview post={view} imageUrl={imageUrl} /></DeviceFrame>
       {post!.status === 'pending' && <form action={`${ROOT}/posts/${post!.id}/withdraw`} method="post"><input type="hidden" name="_csrf" value={p.session.csrfToken} /><button>申請を取り消して直す</button></form>}</section>
     : <div class="notice-edit">
       {/* プレビューのたびに写真を送らないよう、htmx には写真を入れない */}
@@ -93,7 +101,7 @@ export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow
         </fieldset></section>
         <div class="save-bar"><button type="submit" name="next" value="save">下書きを保存</button><button type="submit" name="next" value="submit">保存して申請する</button></div>
       </form>
-      <aside class="notice-side card"><h2>Discord での見た目</h2><div id="post-preview"><UpdatePostPreview post={view} imageUrl={imageUrl} slot /></div></aside>
+      <aside class="notice-side card"><h2>Discord での見た目</h2><DeviceFrame name="device"><div id="post-preview"><UpdatePostPreview post={view} imageUrl={imageUrl} slot /></div></DeviceFrame></aside>
       {post && <form action={`${ROOT}/posts/${post.id}/delete`} method="post" data-confirm="この下書きを消しますか？"><input type="hidden" name="_csrf" value={p.session.csrfToken} /><button class="danger">この下書きを消す</button></form>}
     </div>}
   </Shell>;
