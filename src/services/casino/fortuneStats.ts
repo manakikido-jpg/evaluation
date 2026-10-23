@@ -34,3 +34,17 @@ export type ScratchFinances = Awaited<ReturnType<typeof scratchFinances>>;
 /** 🎫 週末宝くじの、抽選が終わった回（新しい順。社務所の宝くじタブ） */
 export const recentLotteryRounds = (db: Db, now = new Date(), limit = 12) =>
   db.select().from(fortuneRounds).where(and(isNotNull(fortuneRounds.settledAt), lte(fortuneRounds.drawAt, now))).orderBy(desc(fortuneRounds.drawAt)).limit(limit);
+
+/** 🎫 週末宝くじだけの売上・賞金・運営の収支（スクラッチは入れない）。抽選が終わった回の合計 */
+export async function lotteryFinances(db: Db, now = new Date()) {
+  const r = fortuneRounds;
+  const [row] = await db.select({
+    rounds: count(),
+    sold: sql<string>`coalesce(sum(${r.sold}), 0)`,
+    revenue: sql<string>`coalesce(sum(${r.price} * ${r.sold}), 0)`,
+    payout: sql<string>`coalesce(sum(${r.payout}), 0)`,
+  }).from(r).where(and(isNotNull(r.settledAt), lte(r.drawAt, now)));
+  const revenue = Number(row!.revenue), payout = Number(row!.payout);
+  return { rounds: row!.rounds, sold: Number(row!.sold), revenue, payout, net: revenue - payout };
+}
+export type LotteryFinances = Awaited<ReturnType<typeof lotteryFinances>>;

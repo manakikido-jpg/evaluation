@@ -1,7 +1,7 @@
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
-import { recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
+import { lotteryFinances, recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
 import { FortuneAdminPage } from './views/fortune.js';
 import { bagMessage, putStaffBag, setBagMessage, undoBag } from '../services/otoshidama.js';
 import { avgAtWin, findAtSevenMisses, payAtSevenRefund } from '../services/casino/atRefund.js';
@@ -671,8 +671,8 @@ export function createWebApp(deps: WebDeps) {
   app.get('/economy/fortune', async (c) => {
     const at = now();
     const tab = c.req.query('tab') === 'lottery' ? 'lottery' : 'scratch';
-    const [round, finances, rounds] = await Promise.all([ensureLotteryRound(db, cfg.fortuneGames, at), scratchFinances(db, scratchPeriod(c.req.query('period')), at), recentLotteryRounds(db, at)]);
-    return c.html(<FortuneAdminPage session={c.get('session')} tab={tab} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} rounds={rounds} finances={finances} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : c.req.query('msg') === 'tiers_invalid' ? '等の入力を確かめてください（名前・本数 1〜100・割合 1〜100％、割合の合計は 100％ まで、5 つまで）。' : undefined} />);
+    const [round, finances, rounds, lottery] = await Promise.all([ensureLotteryRound(db, cfg.fortuneGames, at), scratchFinances(db, scratchPeriod(c.req.query('period')), at), recentLotteryRounds(db, at), lotteryFinances(db, at)]);
+    return c.html(<FortuneAdminPage session={c.get('session')} tab={tab} cfg={cfg.fortuneGames} coinName={cfg.economy.currencyName} round={round} rounds={rounds} finances={finances} lottery={lottery} message={c.req.query('msg') === 'saved' ? '保存しました。宝くじの条件は次の開催から変わります。' : c.req.query('msg') === 'invalid' ? '数値の範囲を確認してください。' : c.req.query('msg') === 'tiers_invalid' ? '等の入力を確かめてください（名前・本数 1〜100・割合 1〜100％、割合の合計は 100％ まで、5 つまで）。' : undefined} />);
   });
   app.post('/economy/fortune', requireCsrf, async (c) => {
     if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { SCRATCH_PERIODS, type ScratchFinances } from '../../services/casino/fortuneStats.js';
+import { SCRATCH_PERIODS, type ScratchFinances, type LotteryFinances } from '../../services/casino/fortuneStats.js';
 import { SCRATCH_PRIZES, projectedPrize, roundTiers, tierPrizes, type fortuneState } from '../../services/casino/fortune.js';
 import { roundWinners } from '../../services/casino/lotteryNotice.js';
 import type { FortuneGamesConfig } from '../../config.js';
@@ -94,7 +94,7 @@ function ScratchFinancePanel({ data: d, price, coin }: { data: ScratchFinances; 
     {d.recent.length ? <div class="table-wrap" tabindex={0} role="region" aria-label="最近の当せん金額"><table class="compact"><thead><tr><th>開封日時（日本時間）</th><th class="num">購入額</th><th class="num">払戻額</th><th class="num">利用者の差引</th></tr></thead><tbody>{d.recent.map(r => <tr><td>{date(r.openedAt!)}</td><td class="num">{money(r.price)}</td><td class="num">{money(r.payout)}</td><td class="num">{signed(r.payout-r.price)}</td></tr>)}</tbody></table></div> : <p class="note">この期間の当せんはありません。</p>}
   </section>;
 }
-export function FortuneAdminPage({ session, tab, cfg, round, rounds, finances, coinName, message }: { session: SessionView; tab: 'scratch' | 'lottery'; cfg: FortuneGamesConfig; round: State['round']; rounds: FortuneRound[]; finances: ScratchFinances; coinName: string; message?: string }) {
+export function FortuneAdminPage({ session, tab, cfg, round, rounds, finances, lottery, coinName, message }: { session: SessionView; tab: 'scratch' | 'lottery'; cfg: FortuneGamesConfig; round: State['round']; rounds: FortuneRound[]; finances: ScratchFinances; lottery: LotteryFinances; coinName: string; message?: string }) {
   const field = ([key, label, min, max]: readonly [keyof FortuneGamesConfig, string, number, number]) => <label>{label}<input type="number" name={key} value={cfg[key] as number} min={min} max={max} required /></label>;
   // タブごとに、そのタブの設定だけを保存する（ほかのタブの値はサーバーで今のまま残す）
   const form = (fields: readonly (readonly [keyof FortuneGamesConfig, string, number, number])[]) => <form method="post" action="/economy/fortune"><input type="hidden" name="_csrf" value={session.csrfToken} /><input type="hidden" name="tab" value={tab} />
@@ -116,6 +116,14 @@ export function FortuneAdminPage({ session, tab, cfg, round, rounds, finances, c
       <p>スクラッチの払戻：0倍55％・1倍30％・2倍12％・5倍2.5％・10倍0.5％。平均還元率71.5％。当選確率は固定です。</p>
     </> : <>
       <p>日曜21時（日本時間）に抽選。売れた券から1枚に、売上の一部＋運営の上乗せを自動入金します。販売0枚なら賞金を出しません。金額・上限は次の開催から変わります。休止しても購入済みの券は精算します。</p>
+      <section class="card" id="lottery-finances"><h2>🎫 宝くじだけの売上（スクラッチは入れない）</h2>
+        <div class="health-grid">
+          <div class="health-item"><span class="health-label">これまでの売上</span><div class="health-value">{lottery.revenue.toLocaleString('ja-JP')} {coinName}</div><span class="note">抽選が終わった {lottery.rounds} 回・{lottery.sold.toLocaleString('ja-JP')} 枚</span></div>
+          <div class="health-item"><span class="health-label">これまでの賞金</span><div class="health-value">{lottery.payout.toLocaleString('ja-JP')} {coinName}</div><span class="note">運営の上乗せもふくむ</span></div>
+          <div class={`health-item ${lottery.net < 0 ? 'health-bad' : 'health-ok'}`}><span class="health-label">運営の収支（売上 − 賞金）</span><div class="health-value">{lottery.net > 0 ? '+' : ''}{lottery.net.toLocaleString('ja-JP')} {coinName}</div><span class="note">マイナスは運営の持ち出し</span></div>
+          {round && <div class="health-item"><span class="health-label">販売中の回の売上</span><div class="health-value">{(round.price * round.sold).toLocaleString('ja-JP')} {coinName}</div><span class="note">{round.sold} 枚（抽選前なので上の合計には入れない）</span></div>}
+        </div>
+      </section>
       {round && <section class="card"><h2>販売中の回の固定条件</h2><p>{date(round.drawAt)}（日本時間） / 1枚{round.price} / 1人{round.perMember}枚 / 売上{round.returnPct}％＋{round.bonus} / 販売{round.sold}枚</p></section>}
       <section class="card"><h2>これまでの抽選（新しい順）</h2>
         {rounds.length ? <div class="table-wrap"><table class="compact"><thead><tr><th>抽選日時（日本時間）</th><th class="num">販売</th><th class="num">売上</th><th class="num">当選番号</th><th class="num">賞金</th><th class="num">運営の収支</th></tr></thead><tbody>
