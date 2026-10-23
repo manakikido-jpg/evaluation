@@ -59,4 +59,15 @@ describe('奥の院に入ったら自動でミュート', () => {
     expect(calls).toEqual([false]);
     expect(await afkMutedIds(db)).toEqual([]);
   });
+
+  it('起動したとき、いま奥の院にいる人もミュートする', async () => {
+    const { db } = await makeDb();
+    const app = new AfkMuteApp(db, () => cfg);
+    const g = fakeGuild();
+    const calls: boolean[] = [];
+    g.voiceStates.cache.set(USER, state(g, AFK, false, calls));
+    await app.attach(g);
+    expect(calls).toEqual([true]);
+    expect(await afkMutedIds(db)).toEqual([USER]);
+  });
 });

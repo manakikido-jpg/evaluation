@@ -16,9 +16,16 @@ export class AfkMuteApp {
     private readonly cfg: () => GuildConfig,
   ) {}
 
-  /** 起動したとき: 止まっていた間に奥の院から出た人のミュートを外す */
+  /** 起動したとき: いま奥の院にいる人をミュートし、止まっていた間に出た人のミュートを外す */
   async attach(guild: Guild): Promise<void> {
     if (guild.id !== this.cfg().guildId) return;
+    if (guild.afkChannelId) {
+      for (const v of guild.voiceStates.cache.values()) {
+        if (v.channelId !== guild.afkChannelId || v.serverMute || v.member?.user.bot) continue;
+        await markAfkMuted(this.db, v.id, true);
+        await v.setMute(true, '奥の院（寝落ち）にいるため').catch((err: unknown) => logger.warn({ err }, 'afk mute failed'));
+      }
+    }
     for (const id of await afkMutedIds(this.db)) {
       const v = guild.voiceStates.cache.get(id);
       if (v?.channelId && v.channelId !== guild.afkChannelId) await this.unmute(v);
