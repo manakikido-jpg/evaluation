@@ -310,7 +310,7 @@ describe('案内から参拝者ロールを付与', () => {
     expect(m.discord.editMessage).toHaveBeenCalledOnce();
     const body = m.discord.editMessage.mock.calls[0]?.[2];
     expect(JSON.stringify(body)).toContain('ロールを付与する');
-    expect(body).toMatchObject({ components: [{ type: 1 }, { components: [{ disabled: true }] }] });
+    expect(body).toMatchObject({ components: [{ type: 1 }, { components: [{ disabled: true }, { custom_id: expect.stringMatching(/^guide:nickname:/) }] }] });
   });
   it('開始の下にロール付与を置き、開始前・完了後・付与済みでは押せない表示にする', async () => {
     const r = await reception();
@@ -496,6 +496,22 @@ describe('案内人による利用者の名前変更', () => {
     expect(picker.showModal).toHaveBeenCalledOnce();
     const modal = picker.showModal.mock.calls[0] as unknown as [{ toJSON(): { custom_id: string; components: { components: { value: string; max_length: number }[] }[] } }];
     expect(modal[0].toJSON()).toMatchObject({ custom_id: `guide:nickname:save:${VISITOR}`, components: [{ components: [{ value: '参拝者の名前', max_length: 32 }] }] });
+  });
+  it('案内のパネル（ロールを付与するの横）のボタンから、その人の入力フォームへ進める', async () => {
+    await configure();
+    const f = mockGuild();
+    Object.assign(f.visitor, { displayName: '参拝者の名前' });
+    const [r] = await db.insert(guideReceptions).values({ visitorId: VISITOR, channelId: '900000000000000099', status: 'assigned', guideId: GUIDE }).returning();
+    expect(JSON.stringify(guideVisitorPanel(r!, await loadGuideConfig(db)).components)).toContain(`guide:nickname:${r!.id}`);
+    const button = { ...nicknameForm(f), customId: `guide:nickname:${r!.id}`, isButton: () => true, isModalSubmit: () => false, showModal: vi.fn(async () => {}) };
+    await f.app.onInteraction(button as never);
+    expect(button.showModal).toHaveBeenCalledOnce();
+    const modal = button.showModal.mock.calls[0] as unknown as [{ toJSON(): { custom_id: string } }];
+    expect(modal[0].toJSON()).toMatchObject({ custom_id: `guide:nickname:save:${VISITOR}` });
+    await db.update(guideReceptions).set({ status: 'done' }).where(eq(guideReceptions.id, r!.id));
+    const after = { ...button, showModal: vi.fn(async () => {}), reply: vi.fn(async () => {}) };
+    await f.app.onInteraction(after as never);
+    expect(after.showModal).not.toHaveBeenCalled();
   });
   it('案内待ち・参拝者の名前を案内人が変更し、監査を残す', async () => {
     await configure();

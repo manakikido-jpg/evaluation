@@ -20,7 +20,7 @@ export const guideEmployeePanel = (): MessageBody => ({
   components: [
     { type: 1, components: [btn('guide:register', '登録を申請'), btn('guide:wait', '待機する'), btn('guide:off', '受付停止'), btn('guide:salary', '給与を確認'), btn('guide:who', '👀 待機中の人')] },
     // 🙋 案内担当（押すと、チャンネル名と、ほかの案内人への知らせが変わる）
-    { type: 1, components: [{ ...btn('guide:duty', '🙋 案内を担当する'), style: 3 }, { ...btn('guide:dutyoff', '🔚 案内担当を終了する'), style: 4 }, btn('guide:nickname', '📝 利用者の名前を変更')] },
+    { type: 1, components: [{ ...btn('guide:duty', '🙋 案内を担当する'), style: 3 }, { ...btn('guide:dutyoff', '🔚 案内担当を終了する'), style: 4 }] },
   ],
 });
 export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config: GuideConfig, roleGranted = false): MessageBody {
@@ -28,7 +28,7 @@ export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config
   return {
     content: [`**🌸 咲楽ノ宮へようこそ**`, `<@${r.visitorId}> さん、案内人が来るまでに、こちらをご確認ください。`, ...config.links.map(l => `<:${l.emojiName}:${l.emojiId}> ${l.channelIds.map(id => `<#${id}>`).join(' ・ ')}`), `**案内状況：${label}**`, ...(roleGranted ? ['参拝者ロールを付与し、案内待ちを外しました。'] : [])].join('\n\n'),
     allowed_mentions: { parse: [], users: r.status === 'waiting' ? [r.visitorId] : [] },
-    components: [{ type: 1, components: [btn(`guide:claim:${r.id}`, '案内を開始する', r.status !== 'waiting'), btn(`guide:done:${r.id}`, '案内完了', r.status !== 'assigned')] }, { type: 1, components: [btn(`guide:role:${r.id}`, 'ロールを付与する', r.status !== 'assigned' || roleGranted)] }],
+    components: [{ type: 1, components: [btn(`guide:claim:${r.id}`, '案内を開始する', r.status !== 'waiting'), btn(`guide:done:${r.id}`, '案内完了', r.status !== 'assigned')] }, { type: 1, components: [btn(`guide:role:${r.id}`, 'ロールを付与する', r.status !== 'assigned' || roleGranted), btn(`guide:nickname:${r.id}`, '📝 名前を変更', r.status === 'done' || r.status === 'left')] }],
   };
 }
 /** 案内人の受付のパネルか（自分の BOT のメッセージで「登録を申請」のボタンがある） */
@@ -224,12 +224,22 @@ export class GuideReceptionApp {
         await i.reply({ content: '案内人ロールの人だけが使えます。', flags: MessageFlags.Ephemeral });
         return;
       }
-      if (i.isButton()) {
+      // 案内のパネルのボタンは、その案内を受けている人の名前を変える
+      const fromPanel = i.isButton() ? /^guide:nickname:(\d+)$/.exec(i.customId) : null;
+      let panelTarget: string | undefined;
+      if (fromPanel) {
+        const [r] = await this.db.select().from(guideReceptions).where(eq(guideReceptions.id, Number(fromPanel[1])));
+        if (!r || r.status === 'done' || r.status === 'left') {
+          await i.reply({ content: 'この案内はもう終わっています。', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        panelTarget = r.visitorId;
+      } else if (i.isButton()) {
         await i.reply({ content: '同じ案内VCにいる案内待ち・参拝者を選んでください。', flags: MessageFlags.Ephemeral,
           components: [{ type: 1, components: [{ type: 5, custom_id: 'guide:nickname:pick', placeholder: '名前を変更する利用者', min_values: 1, max_values: 1 }] }] });
         return;
       }
-      const targetId = i.isUserSelectMenu() ? i.values[0] : i.customId.slice('guide:nickname:save:'.length);
+      const targetId = panelTarget ?? (i.isUserSelectMenu() ? i.values[0] : i.customId.slice('guide:nickname:save:'.length));
       const target = targetId ? await i.guild.members.fetch({ user: targetId, force: true }) : undefined;
       const first = autoRanks(this.cfg().ranks)[0];
       const ids = target ? [...target.roles.cache.keys()] : [];
@@ -241,7 +251,7 @@ export class GuideReceptionApp {
         await i.reply({ content: '同じ案内VCにいる案内待ち・参拝者だけを選んでください。案内人・上位の役職・BOTの名前は変えられません。', flags: MessageFlags.Ephemeral });
         return;
       }
-      if (i.isUserSelectMenu()) {
+      if (i.isUserSelectMenu() || i.isButton()) {
         const input = new TextInputBuilder().setCustomId('nickname').setLabel('新しいサーバー内の名前').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(32).setValue(target.displayName.slice(0, 32));
         await i.showModal(new ModalBuilder().setCustomId(`guide:nickname:save:${target.id}`).setTitle('利用者の名前を変更').addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)));
         return;
@@ -279,7 +289,7 @@ export class GuideReceptionApp {
   }
 
   async onInteraction(i: Interaction) {
-    if ('customId' in i && typeof i.customId === 'string' && (i.customId === 'guide:nickname' || i.customId === 'guide:nickname:pick' || i.customId.startsWith('guide:nickname:save:'))) {
+    if ('customId' in i && typeof i.customId === 'string' && (i.customId === 'guide:nickname' || i.customId.startsWith('guide:nickname:'))) {
       if (i.guildId === this.cfg().guildId) await this.nicknameInteraction(i);
       return;
     }
