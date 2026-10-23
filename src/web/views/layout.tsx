@@ -17,6 +17,7 @@ type Nav =
   | 'coretime'
   | 'boosttime'
   | 'updates'
+  | 'posts'
   | 'roles'
   | 'ranks'
   | 'market'
@@ -91,6 +92,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'market', href: '/market', icon: '🏮', label: '市場' },
       { key: 'board', href: '/board', icon: '📌', label: '掲示板' },
       { key: 'guide', href: '/guide', icon: '🌸', label: '案内・給与' },
+      { key: 'posts', href: '/posts', icon: '📝', label: '投稿文の許可' },
       { key: 'cast', href: '/cast', icon: '🎀', label: 'キャスト' },
       { key: 'shop', href: '/shop', icon: '🛍', label: 'ショップ', gujiOnly: true },
     ],

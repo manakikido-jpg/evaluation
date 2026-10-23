@@ -4328,3 +4328,51 @@ describe('録音・録画のログインとCSRF', () => {
     expect((await app.request('/recordings/create', { method: 'POST', headers: { cookie: `shamusho_session=${s}` } })).status).toBe(403);
   });
 });
+
+it('📝 投稿文: まとめ係が専用ページで下書き・申請し、神職が許可すると 1 回だけ投稿する。戻すと直せる', async () => {
+  const { createLoginLink } = await import('../src/services/casino/loginLinks.js');
+  const { saveUpdatePostConfig } = await import('../src/services/updatePosts.js');
+  const { updatePosts, adminSessions } = await import('../src/db/schema.js');
+  const WRITER_ROLE = '700000000000000777', CH = '900000000000000555';
+  await saveUpdatePostConfig(db, { roleId: WRITER_ROLE, channelId: CH }, GUJI);
+  // ロールのない人は入れない
+  const no = await createLoginLink(db, { id: USER, displayName: 'さくら', avatarUrl: null });
+  expect((await app.request(`/update-desk/link/${no}`, { method: 'POST' })).headers.get('location')).toBe('/update-desk/login?e=denied');
+  roles.set(USER, [WRITER_ROLE]);
+  const link = await createLoginLink(db, { id: USER, displayName: 'さくら', avatarUrl: null });
+  expect((await app.request(`/update-desk/link/${link}`, { method: 'POST', headers: { origin: 'https://evil.example' } })).status).toBe(403);
+  const ok = await app.request(`/update-desk/link/${link}`, { method: 'POST' });
+  expect(ok.headers.get('location')).toBe('/update-desk');
+  expect(ok.headers.get('set-cookie')).not.toContain('shamusho_session=');
+  const cookie = `sakura_update_desk=${/sakura_update_desk=([^;]+)/.exec(ok.headers.get('set-cookie')!)![1]!}`;
+  const page = await (await app.request('/update-desk', { headers: { cookie } })).text();
+  expect(page).not.toMatch(/onclick=|style=|<script>/);
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const send = (path: string, form: Record<string, string>) => app.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...form }).toString() });
+  expect((await send('/update-desk/posts', { title: '今週の更新', body: '' })).headers.get('location')).toBe('/update-desk?msg=invalid');
+  expect((await send('/update-desk/posts', { title: '今週の更新', body: '宝くじが変わりました @everyone', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
+  const [post] = await db.select().from(updatePosts);
+  expect(post!.status).toBe('pending');
+  expect(actions.some(a => a.includes('投稿文の申請がきました'))).toBe(true);
+  // 許可待ちは直せない
+  expect((await send(`/update-desk/posts/${post!.id}`, { body: 'かえる' })).headers.get('location')).toBe('/update-desk?msg=locked');
+  // 神職が戻す → まとめ係が直して出しなおす → 許可
+  const s = await login(STAFF);
+  const csrfOf = async (id: string) => (await db.select().from(adminSessions)).find(r => r.userId === id)!.csrfToken;
+  const adminPost = (path: string, form: Record<string, string>) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded', origin: BASE }, body: new URLSearchParams(form).toString() });
+  expect(await (await get('/posts', s)).text()).toContain('宝くじが変わりました');
+  expect((await adminPost(`/posts/${post!.id}/reject`, { _csrf: await csrfOf(STAFF), note: '日付を入れてね' })).headers.get('location')).toBe('/posts?msg=rejected');
+  expect(await (await app.request('/update-desk', { headers: { cookie } })).text()).toContain('日付を入れてね');
+  expect((await send(`/update-desk/posts/${post!.id}`, { title: '10/23 の更新', body: '宝くじが変わりました', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
+  // 神職は設定を変えられない
+  expect((await adminPost('/posts/settings', { _csrf: await csrfOf(STAFF), roleId: '', channelId: '' })).status).toBe(403);
+  actions.length = 0;
+  expect((await adminPost(`/posts/${post!.id}/approve`, { _csrf: await csrfOf(STAFF) })).headers.get('location')).toBe('/posts?msg=posted');
+  expect((await adminPost(`/posts/${post!.id}/approve`, { _csrf: await csrfOf(STAFF) })).headers.get('location')).toBe('/posts?msg=gone');
+  expect(actions.filter(a => a.startsWith(`send ${CH}`))).toEqual([`send ${CH} **10/23 の更新**\n\n宝くじが変わりました`]);
+  const [done] = await db.select().from(updatePosts);
+  expect(done).toMatchObject({ status: 'posted', decidedBy: STAFF, channelId: CH });
+  // ロールを外されたら入れない
+  roles.set(USER, []);
+  expect((await app.request('/update-desk', { headers: { cookie } })).headers.get('location')).toBe('/update-desk/login?e=denied');
+});

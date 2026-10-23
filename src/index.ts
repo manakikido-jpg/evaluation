@@ -38,6 +38,7 @@ import { RoleGuardApp } from './discord/roleGuard.js';
 import { SecurityApp } from './discord/security.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
+import { UpdateDeskApp } from './discord/updateDesk.js';
 import { SokinApp } from './discord/sokin.js';
 import { CasinoApp } from './discord/casino.js';
 import { GlossaryApp } from './discord/glossary.js';
@@ -111,6 +112,7 @@ async function main(): Promise<void> {
   const diary = new DiaryApp(db, cfg, actions);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
+  const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
   const sokin = new SokinApp(db, cfg);
   const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
   const lottery = new LotteryApp(db, cfg, actions, env.WEB_BASE_URL);
@@ -403,6 +405,7 @@ async function main(): Promise<void> {
     void gacha.onInteraction(i);
     void presents.onInteraction(i);
     void wallet.onInteraction(i);
+    void updateDesk.onInteraction(i);
     void sokin.onInteraction(i);
     void casino.onInteraction(i);
     void lottery.onInteraction(i);

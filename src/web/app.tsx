@@ -17,6 +17,9 @@ import { mountCastOffice } from './castOffice.js';
 import { mountMyPage } from './myPage.js';
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
+import { UpdatePostsPage } from './views/updatePosts.js';
+import { mountUpdateDesk } from './updateDesk.js';
+import { approveUpdatePost, listUpdatePosts, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
 import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
@@ -422,6 +425,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   mountCastOffice(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now, enabled: deps.discordLogin ?? true });
+  mountUpdateDesk(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountMyPage(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
   // ───────── ログイン ─────────
@@ -634,6 +638,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/temp', requireAdmin);
   app.use('/invites', requireAdmin);
   app.use('/board', requireAdmin);
+  app.use('/posts', requireAdmin);
+  app.use('/posts/*', requireAdmin, requireCsrf);
   app.use('/guide', requireAdmin);
   app.use('/guide/*', requireAdmin);
   app.use('/guide/*', requireCsrf);
@@ -1733,6 +1739,37 @@ export function createWebApp(deps: WebDeps) {
   });
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */
+  // 📝 まとめ係の投稿文を許可して投稿する（宮司・神職。設定は宮司だけ）
+  app.get('/posts', async c => {
+    const [config, pending, done, channels, roles] = await Promise.all([loadUpdatePostConfig(db), listUpdatePosts(db, ['pending']), listUpdatePosts(db, ['posted', 'rejected']), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
+    const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
+    return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
+  });
+  app.post('/posts/settings', async c => {
+    if (!gujiOnly(c)) return c.text('宮司だけが変更できます。', 403);
+    const b = await c.req.parseBody();
+    const parsed = updatePostConfigSchema.safeParse({ roleId: typeof b.roleId === 'string' && b.roleId ? b.roleId : undefined, channelId: typeof b.channelId === 'string' && b.channelId ? b.channelId : undefined });
+    if (!parsed.success) return c.redirect('/posts?msg=invalid');
+    const channels = await loadChannels(true).catch(() => []);
+    if (parsed.data.channelId && !channels.some(ch => ch.id === parsed.data.channelId && (ch.type === 0 || ch.type === 5))) return c.redirect('/posts?msg=invalid');
+    await saveUpdatePostConfig(db, parsed.data, c.get('session').userId);
+    return c.redirect('/posts?msg=saved');
+  });
+  app.post('/posts/:id/approve', async c => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/posts?msg=invalid');
+    const { channelId } = await loadUpdatePostConfig(db);
+    if (!channelId) return c.redirect('/posts?msg=nochannel');
+    const r = await approveUpdatePost(db, id, c.get('session').userId, channelId, async content => (await deps.discord.sendMessage(channelId, { content, allowed_mentions: { parse: [] } })).id, now());
+    return c.redirect(`/posts?msg=${r === 'ok' ? 'posted' : r}`);
+  });
+  app.post('/posts/:id/reject', async c => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/posts?msg=invalid');
+    const b = await c.req.parseBody();
+    const row = await rejectUpdatePost(db, id, c.get('session').userId, typeof b.note === 'string' ? b.note.trim() : '', now());
+    return c.redirect(`/posts?msg=${row ? 'rejected' : 'gone'}`);
+  });
   app.get('/guide', async c => {
     const [config, employees, receptions, payroll, channels, roles] = await Promise.all([
       loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).where(eq(employeePayroll.job, 'guide')).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),

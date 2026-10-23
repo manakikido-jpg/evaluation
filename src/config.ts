@@ -31,6 +31,7 @@ export const WEB_PAGES = [
   { key: 'board', label: '掲示板', href: '/board', prefixes: ['board'] },
   { key: 'guide', label: '案内・給与', href: '/guide', prefixes: ['guide'] },
   { key: 'cast', label: 'キャスト', href: '/cast', prefixes: ['cast'] },
+  { key: 'posts', label: '投稿文の許可', href: '/posts', prefixes: ['posts'] },
   { key: 'glossary', label: '用語集', href: '/glossary', prefixes: ['glossary'] },
 ] as const;
 

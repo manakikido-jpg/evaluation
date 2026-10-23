@@ -2236,3 +2236,24 @@ export const castTimeChanges = pgTable('cast_time_changes', {
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
 }, t => [index('cast_time_changes_session_idx').on(t.sessionId)]);
 export type CastTimeChange = typeof castTimeChanges.$inferSelect;
+
+/** 📝 サーバーの更新のお知らせの下書き。まとめ係が書いて申請し、運営が許可すると投稿する */
+export const updatePosts = pgTable('update_posts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  authorId: text('author_id').notNull(),
+  authorName: text('author_name').notNull().default(''),
+  title: text('title').notNull().default(''),
+  body: text('body').notNull(),
+  /** draft 下書き / pending 許可待ち / posted 投稿した / rejected 戻した */
+  status: text('status').$type<'draft' | 'pending' | 'posted' | 'rejected'>().notNull().default('draft'),
+  /** 戻したときの、運営からのひとこと */
+  note: text('note').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  decidedBy: text('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  channelId: text('channel_id'),
+  messageId: text('message_id'),
+}, t => [index('update_posts_status_idx').on(t.status), index('update_posts_author_idx').on(t.authorId)]);
+export type UpdatePost = typeof updatePosts.$inferSelect;

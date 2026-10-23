@@ -1427,3 +1427,6 @@ details.fold > summary h2 { display: inline; }
 details.fold > summary::before { content: '▸ '; }
 details.fold[open] > summary::before { content: '▾ '; }
 .jump-nav { flex-wrap: wrap; gap: .25rem .75rem; }
+
+/* 📝 投稿文の見本 */
+.post-preview { white-space: pre-wrap; word-break: break-word; background: var(--surface-2, rgba(127,127,127,.08)); padding: .75rem; border-radius: 8px; }

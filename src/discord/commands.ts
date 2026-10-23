@@ -63,6 +63,14 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .toJSON(),
 
     new SlashCommandBuilder()
+      .setName('toukoubun')
+      .setNameLocalizations({ ja: '投稿文' })
+      .setDescription('Write server update posts (for the update writers)')
+      .setDescriptionLocalizations({ ja: 'サーバーの更新の投稿文を書く（まとめ係だけ・リンクは自分にだけ出る）' })
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('sokin')
       .setNameLocalizations({ ja: '送金' })
       .setDescription('Send coins to someone')
