@@ -1,3 +1,4 @@
+import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
@@ -379,7 +380,7 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
-      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
+      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
@@ -425,6 +426,7 @@ export function createWebApp(deps: WebDeps) {
   });
 
   mountCastOffice(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now, enabled: deps.discordLogin ?? true });
+  mountStickerDesk(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountUpdateDesk(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountMyPage(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
@@ -638,6 +640,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/temp', requireAdmin);
   app.use('/invites', requireAdmin);
   app.use('/board', requireAdmin);
+  app.use('/stickers', requireAdmin);
+  app.use('/stickers/*', requireAdmin, requireCsrf);
   app.use('/posts', requireAdmin);
   app.use('/posts/*', requireAdmin, requireCsrf);
   app.use('/guide', requireAdmin);
@@ -1740,6 +1744,7 @@ export function createWebApp(deps: WebDeps) {
 
   /** 経済: 銭の流れ・鯖の収入・持っている量のかたより */
   // 📝 まとめ係の投稿文を許可して投稿する（宮司・神職。設定は宮司だけ）
+  mountStickerAdmin(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   app.get('/posts', async c => {
     const [config, pending, done, channels, roles] = await Promise.all([loadUpdatePostConfig(db), listUpdatePosts(db, ['pending']), listUpdatePosts(db, ['posted', 'rejected']), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));

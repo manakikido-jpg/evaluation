@@ -62,6 +62,8 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
+    new SlashCommandBuilder().setName('stickerdesk').setNameLocalizations({ ja: 'スタンプ製作' }).setDescription('Open the sticker creator desk').setDescriptionLocalizations({ ja: 'スタンプ製作者専用のページを開く（リンクは自分だけ）' }).setContexts(InteractionContextType.Guild).toJSON(),
+
     new SlashCommandBuilder()
       .setName('toukoubun')
       .setNameLocalizations({ ja: '投稿文' })

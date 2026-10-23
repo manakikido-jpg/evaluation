@@ -1,3 +1,4 @@
+import { StickerDeskApp } from './discord/stickerDesk.js';
 import { processCoreTimeBonus } from './services/coreTimeAttendance.js';
 import { settleLotteries } from './services/casino/fortune.js';
 import { LotteryApp } from './discord/lottery.js';
@@ -112,6 +113,7 @@ async function main(): Promise<void> {
   const diary = new DiaryApp(db, cfg, actions);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
+  const stickerDesk = new StickerDeskApp(db, cfg, env.WEB_BASE_URL);
   const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
   const sokin = new SokinApp(db, cfg);
   const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
@@ -405,6 +407,7 @@ async function main(): Promise<void> {
     void gacha.onInteraction(i);
     void presents.onInteraction(i);
     void wallet.onInteraction(i);
+    void stickerDesk.onInteraction(i);
     void updateDesk.onInteraction(i);
     void sokin.onInteraction(i);
     void casino.onInteraction(i);

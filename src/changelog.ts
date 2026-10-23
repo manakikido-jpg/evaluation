@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-24-sticker-desk', date: '2026-10-24', kind: 'new', where: ['Discord', '社務所Web'], title: 'スタンプ製作者の申請と運営による登録', items: ['スタンプ製作者が /スタンプ製作 から専用Webに入り、画像を保存・申請できます。運営が見本を確認してDiscordへ登録し、修正が必要なら戻せます。', '静止画のPNG・JPEG・WebPを320pxのPNGに整えます。登録結果が不明なら自動で再送せず照合します。管理一覧は上下ボタンで並び替えられます（Discord側の順番は変わりません）。'] },
   { id: '2026-10-24-cast-thread-close', date: '2026-10-24', kind: 'improve', where: ['Discord'], title: '予約のお部屋を終了15分後に自動クローズ', items: ['通話予約のスレッドを終了15分後にロック・アーカイブします。履歴は残ります。', '延長中・同じスレッドの指名が続いている間は閉じません。納品・相談は対象外です。'] },
   { id: '2026-10-24-guide-nickname-panel', date: '2026-10-24', kind: 'improve', where: ['Discord'], title: '名前の変更ボタンを「ロールを付与する」の横に', items: ['「📝 名前を変更」を、案内の投稿の「ロールを付与する」の横に移しました。押すと、その案内を受けている人の名前の入力にすぐ進みます。'] },
   { id: '2026-10-24-guide-nickname', date: '2026-10-24', kind: 'new', where: ['Discord'], title: '案内人パネルから利用者の名前を変更', items: ['案内人の受付に「利用者の名前を変更」を追加しました。利用者を選んで新しい名前を入力できます。', '案内人ロールだけが操作でき、同じ案内VCの案内待ち・参拝者だけが対象です。上位の役職やBOTは対象外です。'] },

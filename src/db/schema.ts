@@ -2270,3 +2270,22 @@ export const updatePosts = pgTable('update_posts', {
   targetChannelId: text('target_channel_id'),
 }, t => [index('update_posts_status_idx').on(t.status), index('update_posts_author_idx').on(t.authorId)]);
 export type UpdatePost = typeof updatePosts.$inferSelect;
+
+/** 製作者のスタンプ下書き。画像はDiscordへ登録できる静止PNGを保持する。 */
+export const stickerDrafts = pgTable('sticker_drafts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  authorId: text('author_id').notNull(),
+  authorName: text('author_name').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  tags: text('tags').notNull(),
+  imageData: bytea('image_data').notNull(),
+  imageHash: text('image_hash').notNull(),
+  status: text('status').$type<'draft' | 'pending' | 'rejected' | 'registering' | 'uncertain' | 'registered'>().notNull().default('draft'),
+  position: integer('position').notNull().default(0),
+  note: text('note').notNull().default(''),
+  stickerId: text('sticker_id'),
+  decidedBy: text('decided_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('sticker_drafts_author_idx').on(t.authorId), index('sticker_drafts_status_idx').on(t.status)]);
+export type StickerDraft = typeof stickerDrafts.$inferSelect;
