@@ -72,13 +72,19 @@ export function updatePostMessage(p: Pick<UpdatePost, 'id' | 'title' | 'body' | 
 
 export type UpdatePostInput = { title: string; body: string; style: 'embed' | 'text'; imagePosition: 'top' | 'bottom'; mention: string; targetChannelId: string | null };
 /** 選べる投稿先・ロールだけを受け取る（ほかは消す） */
-export function parseUpdatePost(b: Record<string, unknown>, allowed: { channelIds: Set<string>; roleIds: Set<string> } = { channelIds: new Set(), roleIds: new Set() }): UpdatePostInput | undefined {
+/** 選んだメンションを保存する形に（「🔔 通知あり」は通知OK のロール） */
+export function updatePostMention(b: Record<string, unknown>, allowed: { roleIds: Set<string>; notifyRoleId?: string }): string {
+  if (b.mentionKind === 'notify') return allowed.notifyRoleId ?? '';
+  const roles = [b.mentionRoles ?? []].flat().filter((v): v is string => typeof v === 'string');
+  return mentionValue(b.mentionKind, roles, allowed.roleIds);
+}
+/** notifyRoleId: 「🔔 通知あり」のロール（mentionKind が notify のとき、このロールに通知する） */
+export function parseUpdatePost(b: Record<string, unknown>, allowed: { channelIds: Set<string>; roleIds: Set<string>; notifyRoleId?: string } = { channelIds: new Set(), roleIds: new Set() }): UpdatePostInput | undefined {
   const title = String(b.title ?? '').trim();
   const body = String(b.body ?? '').replace(/\r\n/g, '\n').trim();
   if (!body || body.length > BODY_MAX || title.length > TITLE_MAX) return undefined;
-  const roles = [b.mentionRoles ?? []].flat().filter((v): v is string => typeof v === 'string');
   const target = typeof b.targetChannelId === 'string' && allowed.channelIds.has(b.targetChannelId) ? b.targetChannelId : null;
-  return { title, body, style: b.style === 'text' ? 'text' : 'embed', imagePosition: b.imagePosition === 'top' ? 'top' : 'bottom', mention: mentionValue(b.mentionKind, roles, allowed.roleIds), targetChannelId: target };
+  return { title, body, style: b.style === 'text' ? 'text' : 'embed', imagePosition: b.imagePosition === 'top' ? 'top' : 'bottom', mention: updatePostMention(b, allowed), targetChannelId: target };
 }
 
 /** 選んだ写真を確かめる（なければ undefined） */

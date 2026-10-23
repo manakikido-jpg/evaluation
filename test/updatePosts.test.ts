@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { postableUpdateChannels, updatePostMessage } from '../src/services/updatePosts.js';
+import { postableUpdateChannels, updatePostMention, updatePostMessage } from '../src/services/updatePosts.js';
 
 const ch = (id: string, name: string, type = 0) => ({ id, name, type });
 const base = { id: 1, title: '題', body: '本文', imageType: null, imageData: null, imagePosition: 'bottom' as const };
@@ -21,5 +21,13 @@ describe('📝 投稿文', () => {
     expect(text.allowed_mentions).toEqual({ parse: ['everyone'] });
     expect(updatePostMessage({ ...base, style: 'embed', mention: 'ranks' }, ['700000000000000009']).content).toBe('<@&700000000000000009>');
     expect(updatePostMessage({ ...base, style: 'embed', mention: '' }).allowed_mentions).toEqual({ parse: [] });
+  });
+
+  it('「🔔 通知あり」は通知OK のロールに通知する（用意していなければ通知なし）', () => {
+    const OK = '700000000000000050';
+    expect(updatePostMention({ mentionKind: 'notify' }, { roleIds: new Set(), notifyRoleId: OK })).toBe(OK);
+    expect(updatePostMention({ mentionKind: 'notify' }, { roleIds: new Set() })).toBe('');
+    expect(updatePostMention({ mentionKind: 'roles', mentionRoles: ['700000000000000001', '700000000000000099'] }, { roleIds: new Set(['700000000000000001']) })).toBe('700000000000000001');
+    expect(updatePostMessage({ ...base, style: 'embed', mention: OK }).allowed_mentions).toEqual({ parse: [], roles: [OK] });
   });
 });

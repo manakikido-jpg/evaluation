@@ -12,9 +12,9 @@ import { assetUrl } from './assets.js';
 import { audit } from '../services/audit.js';
 import { logger } from '../lib/logger.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
-import { BODY_MAX, TITLE_MAX, checkUpdateImage, deleteUpdateDraft, postableUpdateChannels, getUpdatePost, loadUpdatePostConfig, myUpdatePosts, parseUpdatePost, saveUpdateDraft, submitUpdatePost, updatePostText, withdrawUpdatePost, type UpdatePostRow } from '../services/updatePosts.js';
+import { BODY_MAX, TITLE_MAX, checkUpdateImage, deleteUpdateDraft, postableUpdateChannels, updatePostMention, getUpdatePost, loadUpdatePostConfig, myUpdatePosts, parseUpdatePost, saveUpdateDraft, submitUpdatePost, updatePostText, withdrawUpdatePost, type UpdatePostRow } from '../services/updatePosts.js';
 import { MD_HELP, MarkdownToolbar, Rendered } from './views/notices.js';
-import { guildChannelsCached, mentionLabel, mentionValue, parseMention } from '../services/notices.js';
+import { guildChannelsCached, mentionLabel, parseMention } from '../services/notices.js';
 import { fmtDateTime } from './format.js';
 
 const COOKIE = 'sakura_update_desk';
@@ -69,7 +69,7 @@ export function UpdateDeskPage(p: { session: MemberSession; posts: UpdatePostRow
     </section></Shell>;
 }
 
-export type DeskChoices = { channels: { id: string; name: string }[]; roles: { id: string; name: string }[] };
+export type DeskChoices = { channels: { id: string; name: string }[]; roles: { id: string; name: string }[]; notifyRoleId?: string };
 export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow; message?: string; choices: DeskChoices }) {
   const post = p.post;
   const editable = !post || post.status === 'draft' || post.status === 'rejected';
@@ -78,6 +78,9 @@ export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow
   const hx = { 'hx-post': `${ROOT}/preview`, 'hx-trigger': 'change', 'hx-target': '#post-preview', 'hx-include': '#post-form' };
   const view = { title: post?.title ?? '', body: post?.body ?? '', style: post?.style ?? 'embed', imagePosition: post?.imagePosition ?? 'bottom' } as const;
   const mention = parseMention(post?.mention);
+  // 通知OK のロールだけなら「🔔 通知あり」を選んだことに
+  const isNotify = !!p.choices.notifyRoleId && post?.mention === p.choices.notifyRoleId;
+  const kindNow = isNotify ? 'notify' : mention.kind;
   const picked = new Set(mention.kind === 'roles' ? mention.roleIds : []);
   const label = mentionLabel(post?.mention, id => p.choices.roles.find(r => r.id === id)?.name);
   return <Shell><Head session={p.session} /><p class="crumbs"><a href={ROOT}>← 投稿文の一覧</a></p>
@@ -97,8 +100,8 @@ export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow
         </div></section>
         <section class="card"><h2>🔔 メンション</h2><fieldset class="field mention-pick" {...hx}>
           <legend class="note">投稿したときに通知を届ける相手（カードのときは、カードの外の上に出ます）</legend>
-          <div class="inline-actions">{([['none', 'なし'], ['here', '@here（いまオンラインの人）'], ['everyone', '@everyone（全員）'], ['ranks', '⛩ すべての役職'], ['roles', 'ロール（下で選ぶ）']] as const).map(([v, text]) => <label class="check"><input type="radio" name="mentionKind" value={v} checked={mention.kind === v} /><span>{text}</span></label>)}</div>
-          {p.choices.roles.length > 0 ? <div class="role-checks">{p.choices.roles.map(r => <label class="check"><input type="checkbox" name="mentionRoles" value={r.id} checked={picked.has(r.id)} /><span>@{r.name}</span></label>)}</div> : <p class="note">ロールを読み込めませんでした。少しあとに開き直してください。</p>}
+          <div class="inline-actions">{([['none', 'なし'], ...(p.choices.notifyRoleId ? [['notify', '🔔 通知ありの人（通知OK）']] as const : []), ['here', '@here（いまオンラインの人）'], ['everyone', '@everyone（全員）'], ['ranks', '⛩ すべての役職'], ['roles', 'ロール（下で選ぶ）']] as const).map(([v, text]) => <label class="check"><input type="radio" name="mentionKind" value={v} checked={kindNow === v} /><span>{text}</span></label>)}</div>
+          {p.choices.roles.length > 0 ? <div class="role-checks">{p.choices.roles.map(r => <label class="check"><input type="checkbox" name="mentionRoles" value={r.id} checked={!isNotify && picked.has(r.id)} /><span>@{r.name}</span></label>)}</div> : <p class="note">ロールを読み込めませんでした。少しあとに開き直してください。</p>}
           <p class="note">ロールは 5 つまで。通知が届くのは、運営が許可して投稿したときです。</p>
         </fieldset></section>
         <section class="card"><h2>本文</h2>
@@ -195,9 +198,9 @@ export function mountUpdateDesk(app: Hono<any>, d: { db: Db; api: DiscordApi; di
       d.discord.guildRoles(d.cfg().guildId).catch(() => []),
     ]);
     const conf = await loadUpdatePostConfig(db);
-    return { channels: postableUpdateChannels(conf, channels), roles: roles.filter(r => r.id !== d.cfg().guildId && !r.managed).sort((a, b) => b.position - a.position) };
+    return { channels: postableUpdateChannels(conf, channels), roles: roles.filter(r => r.id !== d.cfg().guildId && !r.managed).sort((a, b) => b.position - a.position), notifyRoleId: d.cfg().notify.okRoleId ?? undefined };
   };
-  const allowedOf = (ch: DeskChoices) => ({ channelIds: new Set(ch.channels.map(c => c.id)), roleIds: new Set(ch.roles.map(r => r.id)) });
+  const allowedOf = (ch: DeskChoices) => ({ channelIds: new Set(ch.channels.map(c => c.id)), roleIds: new Set(ch.roles.map(r => r.id)), notifyRoleId: ch.notifyRoleId });
   const mine = async (s: MemberSession, id?: number) => { const post = id ? await getUpdatePost(db, id) : undefined; return post && post.authorId === s.userId ? post : undefined; };
   app.get(`${ROOT}/new`, page(async (c, s) => c.html(<UpdateDeskEdit session={s} message={c.req.query('msg')} choices={await choices()} />)));
   app.get(`${ROOT}/edit/:id`, page(async (c, s) => {
@@ -218,8 +221,7 @@ export function mountUpdateDesk(app: Hono<any>, d: { db: Db; api: DiscordApi; di
     const view = { title: String(b.title ?? '').trim(), body: String(b.body ?? '').replace(/\r\n/g, '\n'), style: b.style === 'text' ? 'text' as const : 'embed' as const, imagePosition: b.imagePosition === 'top' ? 'top' as const : 'bottom' as const };
     const imageUrl = post?.imageHash && b.removeImage !== 'yes' ? `${ROOT}/posts/${post.id}/image?v=${post.imageHash}` : undefined;
     const ch = await choices();
-    const roles = [b.mentionRoles ?? []].flat().filter((v): v is string => typeof v === 'string');
-    const mention = mentionLabel(mentionValue(b.mentionKind, roles, allowedOf(ch).roleIds), id => ch.roles.find(r => r.id === id)?.name);
+    const mention = mentionLabel(updatePostMention(b, allowedOf(ch)), id => ch.roles.find(r => r.id === id)?.name);
     return c.html(<UpdatePostPreview post={view} imageUrl={imageUrl} mention={mention} slot />);
   }));
   app.get(ROOT, page(async (c, s) => c.html(<UpdateDeskPage session={s} posts={await myUpdatePosts(db, s.userId)} message={c.req.query('msg')} />)));
