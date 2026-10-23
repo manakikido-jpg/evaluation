@@ -1,3 +1,4 @@
+import { onTalkTopicInteraction } from './discord/talkTopic.js';
 import { processCoreTimeBonus } from './services/coreTimeAttendance.js';
 import { settleLotteries } from './services/casino/fortune.js';
 import { LotteryApp } from './discord/lottery.js';
@@ -395,6 +396,7 @@ async function main(): Promise<void> {
     void rooms.onVoiceStateUpdate(before, after);
   });
   client.on(Events.InteractionCreate, (i) => {
+    void onTalkTopicInteraction(i, cfg().guildId);
     void recording.onInteraction(i);
     void maikura.onInteraction(i);
     void guideReception.onInteraction(i);
