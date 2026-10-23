@@ -1,7 +1,7 @@
-import type { AdminSession, UpdatePost } from '../../db/schema.js';
+import type { AdminSession } from '../../db/schema.js';
 import type { GuildChannel, GuildRole } from '../../lib/discordRest.js';
-import type { UpdatePostConfig } from '../../services/updatePosts.js';
-import { STATUS_LABEL } from '../updateDesk.js';
+import type { UpdatePostConfig, UpdatePostRow as UpdatePost } from '../../services/updatePosts.js';
+import { STATUS_LABEL, UpdatePostPreview } from '../updateDesk.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -16,7 +16,7 @@ export function UpdatePostsPage(p: { session: AdminSession; config: UpdatePostCo
   const guji = p.session.level === 'guji';
   const channel = p.channels.find(c => c.id === p.config.channelId);
   const name = (id: string | null) => (id && p.names.get(id)) || id || '';
-  const preview = (post: UpdatePost) => <pre class="post-preview">{post.title ? `**${post.title}**\n\n` : ''}{post.body}</pre>;
+  const preview = (post: UpdatePost) => <UpdatePostPreview post={post} imageUrl={post.imageHash ? `/posts/${post.id}/image?v=${post.imageHash}` : undefined} />;
   return <Layout title="投稿文の許可" nav="posts" session={p.session}>
     <h1>📝 投稿文の許可</h1>
     {p.flash && <p role="status">{FLASH[p.flash] ?? p.flash}</p>}

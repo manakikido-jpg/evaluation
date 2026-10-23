@@ -19,7 +19,7 @@ import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { UpdatePostsPage } from './views/updatePosts.js';
 import { mountUpdateDesk } from './updateDesk.js';
-import { approveUpdatePost, listUpdatePosts, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
+import { approveUpdatePost, getUpdatePost, listUpdatePosts, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
 import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
@@ -379,7 +379,7 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
-      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
+      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
@@ -1745,6 +1745,11 @@ export function createWebApp(deps: WebDeps) {
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
     return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
   });
+  app.get('/posts/:id/image', async c => {
+    const post = await getUpdatePost(db, Number(c.req.param('id')) || 0);
+    if (!post?.imageData || !post.imageType) return c.notFound();
+    return c.body(new Uint8Array(post.imageData), 200, { 'content-type': post.imageType, 'x-content-type-options': 'nosniff', 'cache-control': 'private, max-age=3600' });
+  });
   app.post('/posts/settings', async c => {
     if (!gujiOnly(c)) return c.text('宮司だけが変更できます。', 403);
     const b = await c.req.parseBody();
@@ -1760,7 +1765,7 @@ export function createWebApp(deps: WebDeps) {
     if (!Number.isSafeInteger(id)) return c.redirect('/posts?msg=invalid');
     const { channelId } = await loadUpdatePostConfig(db);
     if (!channelId) return c.redirect('/posts?msg=nochannel');
-    const r = await approveUpdatePost(db, id, c.get('session').userId, channelId, async content => (await deps.discord.sendMessage(channelId, { content, allowed_mentions: { parse: [] } })).id, now());
+    const r = await approveUpdatePost(db, id, c.get('session').userId, channelId, async body => (await deps.discord.sendMessage(channelId, body)).id, now());
     return c.redirect(`/posts?msg=${r === 'ok' ? 'posted' : r}`);
   });
   app.post('/posts/:id/reject', async c => {

@@ -827,6 +827,13 @@
       "when": 1792776438649,
       "tag": "0117_early_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1792778069397,
+      "tag": "0118_watery_power_pack",
+      "breakpoints": true
     }
   ]
 }

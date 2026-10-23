@@ -4349,11 +4349,25 @@ it('📝 投稿文: まとめ係が専用ページで下書き・申請し、神
   expect(page).not.toMatch(/onclick=|style=|<script>/);
   const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
   const send = (path: string, form: Record<string, string>) => app.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...form }).toString() });
-  expect((await send('/update-desk/posts', { title: '今週の更新', body: '' })).headers.get('location')).toBe('/update-desk?msg=invalid');
+  expect((await send('/update-desk/posts', { title: '今週の更新', body: '' })).headers.get('location')).toBe('/update-desk/new?msg=invalid');
+  // 掲示と同じ書き方: 飾りのボタンと、Discord での見た目
+  const editor = await (await app.request('/update-desk/new', { headers: { cookie } })).text();
+  expect(editor).toContain('md-toolbar');
+  expect(editor).not.toMatch(/onclick=|style=|<script>/);
+  const pv = await (await send('/update-desk/preview', { title: '題', body: '**太字**', style: 'embed' })).text();
+  expect(pv).toContain('<strong>太字</strong>');
   expect((await send('/update-desk/posts', { title: '今週の更新', body: '宝くじが変わりました @everyone', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
   const [post] = await db.select().from(updatePosts);
   expect(post!.status).toBe('pending');
   expect(actions.some(a => a.includes('投稿文の申請がきました'))).toBe(true);
+  // 写真を付ける（写真でないものは断る）
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82]);
+  const upload = (path: string, form: Record<string, string>, file: Uint8Array) => { const fd = new FormData(); for (const [k, v] of Object.entries({ _csrf: csrf, ...form })) fd.append(k, v); fd.append('image', new File([file], 'a.png')); return app.request(path, { method: 'POST', headers: { cookie }, body: fd }); };
+  expect((await upload('/update-desk/posts', { body: 'x' }, new Uint8Array([1, 2, 3]))).headers.get('location')).toBe('/update-desk/new?msg=image_bad_type');
+  const draft = await upload('/update-desk/posts', { title: '写真つき', body: '見てね', next: 'save' }, png);
+  const draftId = Number(/edit\/(\d+)/.exec(draft.headers.get('location')!)![1]);
+  expect((await app.request(`/update-desk/posts/${draftId}/image`, { headers: { cookie } })).headers.get('content-type')).toBe('image/png');
+  expect((await send(`/update-desk/posts/${draftId}/delete`, {})).headers.get('location')).toBe('/update-desk?msg=deleted');
   // 許可待ちは直せない
   expect((await send(`/update-desk/posts/${post!.id}`, { body: 'かえる' })).headers.get('location')).toBe('/update-desk?msg=locked');
   // 神職が戻す → まとめ係が直して出しなおす → 許可

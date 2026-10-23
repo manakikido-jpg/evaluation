@@ -542,7 +542,7 @@ export function NoticePreview(props: {
 }
 
 /** Discord での見た目（メンションはカードの上・普通のメッセージなら 1 行目。写真は上か下） */
-function Rendered(props: { text: string; style: string; mention?: string; image?: PreviewImage; slot?: boolean; button?: boolean }) {
+export function Rendered(props: { text: string; style: string; mention?: string; image?: PreviewImage; slot?: boolean; button?: boolean }) {
   const card = props.style !== 'text';
   // 普通のメッセージの写真は、いつも本文の下
   const top = card && props.image?.position === 'top';
@@ -595,7 +595,7 @@ const TOOLBAR: { label: string; title: string; attrs: Record<string, string> }[]
   ],
 ];
 
-function MarkdownToolbar(props: { target: string }) {
+export function MarkdownToolbar(props: { target: string }) {
   return (
     <div class="md-toolbar" role="toolbar" aria-label="本文の飾り">
       {TOOLBAR.map((group) => (
@@ -611,7 +611,7 @@ function MarkdownToolbar(props: { target: string }) {
   );
 }
 
-const MD_HELP: [string, string][] = [
+export const MD_HELP: [string, string][] = [
   ['**太字**', '太字'],
   ['*斜体*', '斜め（_斜体_ でも）'],
   ['__下線__', '下線'],

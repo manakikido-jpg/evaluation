@@ -2255,5 +2255,12 @@ export const updatePosts = pgTable('update_posts', {
   decidedAt: timestamp('decided_at', { withTimezone: true }),
   channelId: text('channel_id'),
   messageId: text('message_id'),
+  /** 見せ方（embed カード / text 普通のメッセージ）。掲示と同じ */
+  style: text('style').$type<'embed' | 'text'>().notNull().default('embed'),
+  /** 写真（1 枚）。上下は掲示と同じ */
+  imageType: text('image_type'),
+  imageData: bytea('image_data'),
+  imageHash: text('image_hash'),
+  imagePosition: text('image_position').$type<'top' | 'bottom'>().notNull().default('bottom'),
 }, t => [index('update_posts_status_idx').on(t.status), index('update_posts_author_idx').on(t.authorId)]);
 export type UpdatePost = typeof updatePosts.$inferSelect;
