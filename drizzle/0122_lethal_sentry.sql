@@ -1,0 +1,1 @@
+ALTER TABLE "temp_voice" ADD COLUMN "renew_hourly" boolean DEFAULT false NOT NULL;

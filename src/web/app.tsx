@@ -3187,6 +3187,7 @@ export function createWebApp(deps: WebDeps) {
         ),
         boosterDiscountPercent: num('roomBoosterDiscount'),
         stayPrice: typeof body.roomStayPrice === 'string' ? num('roomStayPrice') : prev.rooms.stayPrice ?? cfg.rooms.stayPrice,
+        stayHourlyPrice: typeof body.roomStayHourlyPrice === 'string' ? num('roomStayHourlyPrice') : prev.rooms.stayHourlyPrice ?? cfg.rooms.stayHourlyPrice,
         // 💎 極（VIP）はショップのページで作る（ここでは残す）
         ...(prev.rooms.vip ? { vip: prev.rooms.vip } : {}),
         // 🤫 シクレの入口は、下の「入口を作る・外す」で変える（ここでは残す）

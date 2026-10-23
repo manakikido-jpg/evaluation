@@ -170,6 +170,8 @@ export const roomsSchema = z.object({
   boosterDiscountPercent: z.number().int().min(0).max(100).default(100),
   /** 🏨 24 時間の宿の値段（パネルで買う。24 時間はだれもいなくても残る） */
   stayPrice: z.number().int().min(0).max(1_000_000).default(3000),
+  /** ⏱ 1 時間ごとの宿の値段（1 時間ごとに部屋主が自動で払う。払うときにだれもいなければ消す） */
+  stayHourlyPrice: z.number().int().min(0).max(1_000_000).default(300),
   /**
    * 💎 極（遊郭の VIP）: roleId の人だけが見える入口（hubId）から、VIP だけの部屋をひらける。部屋代はなし。
    * 社務所Web の「ショップ」の「💎 極の VIP を作る」で作る

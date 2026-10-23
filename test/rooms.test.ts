@@ -35,6 +35,7 @@ const cfg: GuildConfig = {
     hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 },
     boosterDiscountPercent: 100,
     stayPrice: 3000,
+    stayHourlyPrice: 300,
     secretHubs: [],
   },
 };

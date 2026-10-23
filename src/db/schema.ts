@@ -587,6 +587,8 @@ export const tempVoice = pgTable('temp_voice', {
   pendingUntil: timestamp('pending_until', { withTimezone: true }),
   /** 🏨 買った宿: この時刻までは、だれもいなくても消さない（過ぎたら、空いたときに消す） */
   keepUntil: timestamp('keep_until', { withTimezone: true }),
+  /** ⏱ 1 時間ごとの宿: keep_until が来たら、人がいれば部屋主が 1 時間分を払って延ばす（いなければ消す） */
+  renewHourly: boolean('renew_hourly').notNull().default(false),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */

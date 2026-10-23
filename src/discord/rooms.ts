@@ -75,14 +75,16 @@ export function ticketUsedText(r: { ticketKind?: TicketKind; pass?: boolean; cha
   return r.ticket ? `${ticketName(r.ticketKind)}を 1 枚使いました（部屋代は無料です）` : `${ticketName(r.ticketKind)}を 1 枚使いました（${r.charged} 枚を払いました）`;
 }
 
-export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'> & { keepUntil?: Date | null }) {
+export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'> & { keepUntil?: Date | null; renewHourly?: boolean }) {
   const plan = planOf(cfg, row.hubId);
   const lines = [`<@${row.ownerId}> さんの部屋です。設定は、部屋を作った人（と運営）が「⚙ 部屋の設定」から変えられます。`];
   if (row.keepUntil) {
     // 🏨 買った 24 時間の宿: 種類は何度でも、追加の部屋代なしで変えられる
     lines.push(
       '',
-      `🏨 **24時間残る宿**です（${row.keepUntil.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで、だれもいなくても残ります）。`,
+      row.renewHourly
+        ? `⏱ **1時間ごとの宿**です（1 時間ごとに <@${row.ownerId}> さんが ${cfg.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}を自動で払います。払う時刻にだれもいないか、${cfg.economy.currencyName}が足りなければ、宿は消えます）。`
+        : `🏨 **24時間残る宿**です（${row.keepUntil.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで、だれもいなくても残ります）。`,
       ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label}（${ROOM_KINDS[key].description}）`),
       '-# 部屋の種類（オープン・招待のみ・シクレなど）は、何度でも変えられます。追加の部屋代はかかりません',
     );

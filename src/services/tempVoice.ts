@@ -105,6 +105,12 @@ export async function onVoiceLeave(ctx: TempVoiceCtx, channelId: string, now = n
     await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
     return false;
   }
+  // ⏱ 1 時間ごとの宿: 払う時刻に人がいれば、部屋主が次の 1 時間を払う（足りなければ閉じる）
+  if (n > 0 && row.renewHourly && row.keepUntil) {
+    if (await renewHourlyStay(ctx, row.channelId, row.ownerId, row.keepUntil, now)) return false;
+    await removeRoom(ctx, channelId);
+    return true;
+  }
   if (n > 0) return false;
   await removeRoom(ctx, channelId);
   return true;
@@ -171,6 +177,25 @@ export async function claimSecretRoom(db: Db, channelId: string, userId: string)
 
 /** 🏨 買った宿が、だれもいなくても残る時間 */
 export const STAY_MS = 24 * 60 * 60_000;
+/** ⏱ 1 時間ごとの宿の、1 回分 */
+export const HOURLY_STAY_MS = 60 * 60_000;
+export type StayMode = 'day' | 'hourly';
+
+/** ⏱ 次の 1 時間を払って延ばす。同じ時刻の分は 1 回だけ（keep_until が変わっていれば払わない）。払えなければ false */
+async function renewHourlyStay(ctx: TempVoiceCtx, channelId: string, ownerId: string, due: Date, now: Date): Promise<boolean> {
+  const price = ctx.cfg.rooms.stayHourlyPrice;
+  return ctx.db.transaction(async (tx) => {
+    // 止まっていた間の分はさかのぼらず、今から 1 時間
+    const next = new Date(Math.max(due.getTime(), now.getTime()) + HOURLY_STAY_MS);
+    const [claimed] = await tx.update(tempVoice).set({ keepUntil: next }).where(and(eq(tempVoice.channelId, channelId), eq(tempVoice.keepUntil, due))).returning();
+    if (!claimed) return true;
+    if (price > 0 && !(await spendWithin(tx, ownerId, price, 'room', { channelId, stay: true, hourly: true }))) {
+      await tx.update(tempVoice).set({ keepUntil: due }).where(eq(tempVoice.channelId, channelId));
+      return false;
+    }
+    return true;
+  });
+}
 
 export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; keepUntil: Date } | { status: 'busy' | 'failed' } | { status: 'insufficient'; price: number };
 
@@ -178,7 +203,8 @@ export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; 
  * 🏨 パネルで銭を払って、24 時間残る宿を立てる。作れてから払う（足りなければ部屋を消す）。
  * 同じ入口の自分の宿がまだ残っていれば、それを返す（二重には買わない）
  */
-export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string }, now = new Date()): Promise<StayRoomResult> {
+export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string; mode?: StayMode }, now = new Date()): Promise<StayRoomResult> {
+  const hourly = input.mode === 'hourly';
   const hub = ctx.cfg.tempVoice.hubs.find((h) => h.channelId === input.hubId);
   if (!hub) return { status: 'failed' };
   if (busy.has(input.userId)) return { status: 'busy' };
@@ -193,17 +219,17 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
     }
     let channelId: string;
     try {
-      channelId = await ctx.ops.create({ hubId: hub.channelId, name: `🏨 ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId });
+      channelId = await ctx.ops.create({ hubId: hub.channelId, name: `${hourly ? '⏱' : '🏨'} ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId });
     } catch (err) {
       logger.warn({ err }, '宿を作れませんでした（BOT の「チャンネルの管理」権限）');
       return { status: 'failed' };
     }
-    const price = ctx.cfg.rooms.stayPrice;
-    const keepUntil = new Date(now.getTime() + STAY_MS);
+    const price = hourly ? ctx.cfg.rooms.stayHourlyPrice : ctx.cfg.rooms.stayPrice;
+    const keepUntil = new Date(now.getTime() + (hourly ? HOURLY_STAY_MS : STAY_MS));
     // 宿代で公開の部屋代もふくむ（種類を変えたときは、公開との差額だけ払う）
     const ok = await ctx.db.transaction(async (tx) => {
-      if (price > 0 && !(await spendWithin(tx, input.userId, price, 'room', { channelId, stay: true, hours: STAY_MS / 3_600_000 }))) return false;
-      await tx.insert(tempVoice).values({ channelId, ownerId: input.userId, hubId: hub.channelId, createdAt: now, keepUntil, paid: ctx.cfg.rooms.once.public });
+      if (price > 0 && !(await spendWithin(tx, input.userId, price, 'room', { channelId, stay: true, ...(hourly ? { hourly: true } : { hours: STAY_MS / 3_600_000 }) }))) return false;
+      await tx.insert(tempVoice).values({ channelId, ownerId: input.userId, hubId: hub.channelId, createdAt: now, keepUntil, renewHourly: hourly, paid: ctx.cfg.rooms.once.public });
       return true;
     });
     if (!ok) {

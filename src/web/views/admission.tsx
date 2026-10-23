@@ -1267,12 +1267,16 @@ export function SettingsPage(props: {
               <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
             </label>
           </div>
-          <h3>🏨 24時間の宿</h3>
+          <h3>🏨 24時間の宿・⏱ 1時間ごとの宿</h3>
           <p class="note">パネルのボタンを押すと、銭を払って宿を立てます。全員が抜けても 24 時間は残り、そのあとは、いつもの宿と同じく全員が抜けたら消えます（人がいれば残ります）。宿代には公開の部屋代もふくみ、招待・シークレットなどに変えるときは、いつもどおり差額を払います。いつもの「抜けたらなくなる宿」は、これまでどおり入口の通話から立てられます。Discord の <code>/パネル 宿24時間</code> でも置けます。</p>
           <div class="fields">
             <label class="field">
               <span>🏨 24時間の宿の値段（{cfg.economy.currencyName}）</span>
               <input type="number" name="roomStayPrice" value={String(cfg.rooms.stayPrice)} min={0} max={1000000} required />
+            </label>
+            <label class="field">
+              <span>⏱ 1時間ごとの宿の値段（{cfg.economy.currencyName}／1時間。部屋主が 1 時間ごとに自動で払い、払う時刻にだれもいなければ消える）</span>
+              <input type="number" name="roomStayHourlyPrice" value={String(cfg.rooms.stayHourlyPrice)} min={0} max={1000000} required />
             </label>
             <label class="field">
               <span>パネルを出すチャンネル</span>
