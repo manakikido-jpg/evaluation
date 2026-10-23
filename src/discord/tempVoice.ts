@@ -1,4 +1,4 @@
-import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type Interaction, type VoiceState } from 'discord.js';
+import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type GuildMember, type Interaction, type VoiceState } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
@@ -139,6 +139,32 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 export const secretRoomHubs = (cfg: GuildConfig) =>
   cfg.tempVoice.hubs.filter((h) => h.kind !== 'secret' && h.channelId !== cfg.rooms.vip?.hubId && planOf(cfg, h.channelId) === 'once');
 
+/**
+ * パネルから部屋を作れる入口を選ぶ。部屋は入口のカテゴリと同じ見える範囲で作るので、入口そのものではなく
+ * カテゴリが見える・入れるかで決める（入口だけ鍵をかけていても作れる）。
+ * 入口のチャンネルが消えていたら 'missing'、カテゴリに入れない人は 'denied'
+ */
+export function pickPanelHub(cfg: GuildConfig, guild: Guild, member: GuildMember): { hubId: string } | { reason: 'none' | 'missing' | 'denied' } {
+  const hubs = secretRoomHubs(cfg);
+  if (!hubs.length) return { reason: 'none' };
+  const live = hubs.map((h) => ({ h, ch: guild.channels.cache.get(h.channelId) })).filter((x) => x.ch);
+  if (!live.length) {
+    logger.warn({ hubs: hubs.map((h) => h.channelId) }, '宿坊の入口のチャンネルが見つかりません（消したときは、社務所Web の通話部屋の設定から外してください）');
+    return { reason: 'missing' };
+  }
+  const need = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect;
+  const ok = live.find(({ ch }) => {
+    const place = ch && 'parent' in ch && ch.parent ? ch.parent : ch;
+    return place?.permissionsFor(member)?.has(need);
+  });
+  return ok ? { hubId: ok.h.channelId } : { reason: 'denied' };
+}
+const PICK_ERROR: Record<'none' | 'missing' | 'denied', string> = {
+  none: 'いま開ける入口がありません（宿坊の入口が決まっていません）。神職に知らせてください。',
+  missing: '宿坊の入口のチャンネルが見つかりませんでした。神職に知らせてください。',
+  denied: 'あなたが入れる宿坊がありません（入れる人が決まっている場所です）。',
+};
+
 /** 🤫 シクレ部屋のパネル（みんなに見える。押した人にだけ確かめを返す） */
 export function secretRoomPanel(cfg: GuildConfig, _names: ReadonlyMap<string, string> = new Map()): MessageBody {
   return {
@@ -169,15 +195,15 @@ export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => Guil
   let hubId = i.customId.slice('secretroom:'.length);
   if (hubId === 'open') {
     const current = cfg();
-    const permitted = secretRoomHubs(current).filter((h) => i.guild.channels.cache.get(h.channelId)?.permissionsFor(i.member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect));
-    const pick = permitted.find((h) => planOf(current, h.channelId) === 'once') ?? permitted[0];
-    if (!pick) return void (await i.reply({ content: 'いま開けるシクレ部屋はありません。', ...EPHEMERAL }));
-    hubId = pick.channelId;
+    const pick = pickPanelHub(current, i.guild, i.member);
+    if (!('hubId' in pick)) return void (await i.reply({ content: PICK_ERROR[pick.reason], ...EPHEMERAL }));
+    hubId = pick.hubId;
   }
   if (!secretRoomHubs(cfg()).some((h) => h.channelId === hubId)) return void (await i.reply({ content: 'この入口は、いまは使えません。', ...EPHEMERAL }));
   // 入口が見えない人（宵宮は宵参りの人だけ など）には作らない
   const hub = i.guild.channels.cache.get(hubId);
-  if (!hub || !hub.permissionsFor(i.member).has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect)) return void (await i.reply({ content: 'この部屋は、あなたは作れません（入れる人が決まっている入口です）。', ...EPHEMERAL }));
+  const place = hub && 'parent' in hub && hub.parent ? hub.parent : hub;
+  if (!place || !place.permissionsFor(i.member).has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect)) return void (await i.reply({ content: 'この部屋は、あなたは作れません（入れる人が決まっている入口です）。', ...EPHEMERAL }));
   await i.deferReply(EPHEMERAL);
   // 古い公開パネルから押した場合も、入口は1ボタンの表示に直す。
   if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {
@@ -229,8 +255,9 @@ export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildC
   const hourly = i.customId === 'stayroom:hourly';
   const current = cfg();
   // 押した人が入れる宿坊の入口から選ぶ（シクレのパネルと同じ）
-  const pick = secretRoomHubs(current).find((h) => i.guild.channels.cache.get(h.channelId)?.permissionsFor(i.member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect));
-  if (!pick) return void (await i.reply({ content: 'いま立てられる宿はありません。', ...EPHEMERAL }));
+  const picked = pickPanelHub(current, i.guild, i.member);
+  if (!('hubId' in picked)) return void (await i.reply({ content: PICK_ERROR[picked.reason], ...EPHEMERAL }));
+  const pick = { channelId: picked.hubId };
   await i.deferReply(EPHEMERAL);
   // 古いパネルの値段を、今の値段に直す
   if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {

@@ -155,6 +155,17 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect((await walletOf(db, 'u3')).balance).toBe(700);
   });
 
+  it('パネルの入口選び: 入口に鍵があってもカテゴリに入れれば作れる。入口が消えていれば知らせる', async () => {
+    const { pickPanelHub } = await import('../src/discord/tempVoice.js');
+    const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] } } as GuildConfig;
+    const perm = (ok: boolean) => () => ({ has: () => ok });
+    const guild = (ch: unknown) => ({ channels: { cache: new Map(ch ? [[HUB, ch]] : []) } }) as never;
+    expect(pickPanelHub(c, guild({ parent: { permissionsFor: perm(true) }, permissionsFor: perm(false) }), {} as never)).toEqual({ hubId: HUB });
+    expect(pickPanelHub(c, guild({ parent: { permissionsFor: perm(false) }, permissionsFor: perm(true) }), {} as never)).toEqual({ reason: 'denied' });
+    expect(pickPanelHub(c, guild(undefined), {} as never)).toEqual({ reason: 'missing' });
+    expect(pickPanelHub(cfg, guild(undefined), {} as never)).toEqual({ reason: 'none' });
+  });
+
   it('🏨 宿のパネルは値段入りのボタン1つ', async () => {
     const { stayRoomPanel } = await import('../src/discord/tempVoice.js');
     const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] }, rooms: { ...cfg.rooms, stayPrice: 2500 } } as GuildConfig;
