@@ -133,7 +133,7 @@ export async function cleanupRooms(ctx: TempVoiceCtx, now = new Date()): Promise
 /** 🤫 パネルで作ったシクレ部屋を、作った人が入るまで待つ時間 */
 export const SECRET_PENDING_MS = 5 * 60_000;
 
-export type SecretRoomResult = { status: 'created' | 'exists'; channelId: string } | { status: 'busy' | 'failed' };
+export type SecretRoomResult = { status: 'created' | 'exists'; channelId: string } | { status: 'busy' } | { status: 'failed'; reason?: string };
 
 /**
  * 🤫 パネルのボタンでシクレ部屋を作る（どの通話も通らないので、だれにも見えない）。
@@ -157,7 +157,7 @@ export async function createSecretRoom(ctx: TempVoiceCtx, input: { hubId: string
       channelId = await ctx.ops.create({ hubId: hub.channelId, name: roomName(hub.name, input.displayName), ownerId: input.userId, secret: true, ...(input.parentId ? { parentId: input.parentId } : {}) });
     } catch (err) {
       logger.warn({ err }, 'シクレ部屋を作れませんでした（BOT の「チャンネルの管理」権限）');
-      return { status: 'failed' };
+      return { status: 'failed', reason: err instanceof Error ? err.message : String(err) };
     }
     await ctx.db.insert(tempVoice).values({ channelId, ownerId: input.userId, hubId: hub.channelId, createdAt: now, pendingUntil: new Date(now.getTime() + SECRET_PENDING_MS) });
     return { status: 'created', channelId };
@@ -199,7 +199,7 @@ async function renewHourlyStay(ctx: TempVoiceCtx, channelId: string, ownerId: st
   });
 }
 
-export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; keepUntil: Date; charged?: number } | { status: 'busy' | 'failed' } | { status: 'insufficient'; price: number };
+export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; keepUntil: Date; charged?: number } | { status: 'busy' } | { status: 'failed'; reason?: string } | { status: 'insufficient'; price: number };
 
 /**
  * 🏨 パネルで銭を払って、24 時間残る宿を立てる。作れてから払う（足りなければ部屋を消す）。
@@ -224,7 +224,7 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
       channelId = await ctx.ops.create({ hubId: hub.channelId, name: `${hourly ? '⏱' : '🏨'} ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId, ...(input.parentId ? { parentId: input.parentId } : {}) });
     } catch (err) {
       logger.warn({ err }, '宿を作れませんでした（BOT の「チャンネルの管理」権限）');
-      return { status: 'failed' };
+      return { status: 'failed', reason: err instanceof Error ? err.message : String(err) };
     }
     // 🏮 奉納（ブースト）している人は、宿代が無料
     const price = (await isBoosting(ctx.db, input.userId)) ? 0 : hourly ? ctx.cfg.rooms.stayHourlyPrice : ctx.cfg.rooms.stayPrice;

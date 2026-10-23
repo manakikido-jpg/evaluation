@@ -75,10 +75,13 @@ export function ticketUsedText(r: { ticketKind?: TicketKind; pass?: boolean; cha
   return r.ticket ? `${ticketName(r.ticketKind)}を 1 枚使いました（部屋代は無料です）` : `${ticketName(r.ticketKind)}を 1 枚使いました（${r.charged} 枚を払いました）`;
 }
 
-export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'> & { keepUntil?: Date | null; renewHourly?: boolean }) {
+export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hubId'> & { keepUntil?: Date | null; renewHourly?: boolean }, opts: { secret?: boolean } = {}) {
   const plan = planOf(cfg, row.hubId);
   const lines = [`<@${row.ownerId}> さんの部屋です。設定は、部屋を作った人（と運営）が「⚙ 部屋の設定」から変えられます。`];
-  if (row.keepUntil) {
+  if (opts.secret) {
+    // 🤫 シクレ部屋: はじめからシクレ。種類は変えない（名前・人数・入室許可者は変えられる）
+    lines.push('', '🤫 **シクレ部屋**です（自分と、入室許可した人にだけ見えます）。種類は変えられません。', '-# 全員が抜けたら消えます');
+  } else if (row.keepUntil) {
     // 🏨 買った 24 時間の宿: 種類は何度でも、追加の部屋代なしで変えられる
     lines.push(
       '',
@@ -219,7 +222,7 @@ export class RoomApp {
       await this.close(channelId);
       return;
     }
-    await ch?.send(roomNotice(cfg, row));
+    await ch?.send(roomNotice(cfg, row, { secret: secretHub }));
     if (r.ticketKind) await ch?.send({ content: `<@${ownerId}> さん: ${ticketUsedText(r)}。`, allowedMentions: { parse: [] } }).catch(() => undefined);
   }
 

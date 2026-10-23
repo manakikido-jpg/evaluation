@@ -196,6 +196,9 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(p).toContain('2,500');
     expect(p).toContain('24時間残る宿です。設定は変更可能です。');
     expect(p).toContain('stayroom:hourly');
+    // シクレ部屋も同じパネルから立てる（はじめからシクレ・種類は変えない）
+    expect(p).toContain('secretroom:open');
+    expect(p).toContain('種類は変えられません');
   });
 
   it('公開パネルは開くボタン1つ。押したら 1 回で部屋ができ、料金とリンクは本人にだけ', async () => {
