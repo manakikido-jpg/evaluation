@@ -1,0 +1,1 @@
+ALTER TABLE "cast_sessions" ADD COLUMN "thread_closed_at" timestamp with time zone;
