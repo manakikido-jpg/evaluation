@@ -86,7 +86,7 @@ export function roomOverwrites(
 // ───────── 支払い ─────────
 
 /** 奉納（ブースト）している人か */
-async function isBoosting(db: Db, memberId: string): Promise<boolean> {
+export async function isBoosting(db: Db, memberId: string): Promise<boolean> {
   const [m] = await db.select({ since: members.boostingSince, left: members.leftAt }).from(members).where(eq(members.id, memberId));
   return Boolean(m?.since && !m.left);
 }

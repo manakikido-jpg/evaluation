@@ -172,6 +172,22 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(pickPanelHub(cfg, guild(undefined), {} as never)).toEqual({ reason: 'none' });
   });
 
+  it('🏮 奉納（ブースト）している人は、24時間・1時間ごとの宿が無料（延ばすときも）', async () => {
+    const { members } = await import('../src/db/schema.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    await db.insert(members).values({ id: 'u9', username: 'u9', displayName: 'ぶーすと', joinedAt: new Date(), boostingSince: new Date() } as never);
+    const v = fakeVoice();
+    const ctx = { db, cfg, ops: v.ops };
+    const now = new Date();
+    const r = await createStayRoom(ctx, { hubId: HUB, userId: 'u9', displayName: 'ぶーすと', mode: 'hourly' }, now);
+    expect(r).toMatchObject({ status: 'created', charged: 0 });
+    if (r.status !== 'created') throw new Error(r.status);
+    v.rooms.get(r.channelId)!.members.add('u2');
+    expect(await cleanupRooms(ctx, new Date(now.getTime() + HOURLY_STAY_MS + 1000))).toBe(0);
+    expect(v.rooms.has(r.channelId)).toBe(true);
+    expect((await walletOf(db, 'u9')).balance).toBe(0);
+  });
+
   it('🏨 宿のパネルは値段入りのボタン1つ', async () => {
     const { stayRoomPanel } = await import('../src/discord/tempVoice.js');
     const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] }, rooms: { ...cfg.rooms, stayPrice: 2500 } } as GuildConfig;

@@ -4,6 +4,7 @@ import type { Db } from '../db/client.js';
 import { tempVoice } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import { spendWithin } from './economy.js';
+import { isBoosting } from './rooms.js';
 
 /**
  * 自分の通話部屋。
@@ -183,7 +184,8 @@ export type StayMode = 'day' | 'hourly';
 
 /** ⏱ 次の 1 時間を払って延ばす。同じ時刻の分は 1 回だけ（keep_until が変わっていれば払わない）。払えなければ false */
 async function renewHourlyStay(ctx: TempVoiceCtx, channelId: string, ownerId: string, due: Date, now: Date): Promise<boolean> {
-  const price = ctx.cfg.rooms.stayHourlyPrice;
+  // 🏮 奉納（ブースト）している人は、宿代が無料
+  const price = (await isBoosting(ctx.db, ownerId)) ? 0 : ctx.cfg.rooms.stayHourlyPrice;
   return ctx.db.transaction(async (tx) => {
     // 止まっていた間の分はさかのぼらず、今から 1 時間
     const next = new Date(Math.max(due.getTime(), now.getTime()) + HOURLY_STAY_MS);
@@ -197,7 +199,7 @@ async function renewHourlyStay(ctx: TempVoiceCtx, channelId: string, ownerId: st
   });
 }
 
-export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; keepUntil: Date } | { status: 'busy' | 'failed' } | { status: 'insufficient'; price: number };
+export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; keepUntil: Date; charged?: number } | { status: 'busy' | 'failed' } | { status: 'insufficient'; price: number };
 
 /**
  * 🏨 パネルで銭を払って、24 時間残る宿を立てる。作れてから払う（足りなければ部屋を消す）。
@@ -224,7 +226,8 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
       logger.warn({ err }, '宿を作れませんでした（BOT の「チャンネルの管理」権限）');
       return { status: 'failed' };
     }
-    const price = hourly ? ctx.cfg.rooms.stayHourlyPrice : ctx.cfg.rooms.stayPrice;
+    // 🏮 奉納（ブースト）している人は、宿代が無料
+    const price = (await isBoosting(ctx.db, input.userId)) ? 0 : hourly ? ctx.cfg.rooms.stayHourlyPrice : ctx.cfg.rooms.stayPrice;
     const keepUntil = new Date(now.getTime() + (hourly ? HOURLY_STAY_MS : STAY_MS));
     // 宿代で公開の部屋代もふくむ（種類を変えたときは、公開との差額だけ払う）
     const ok = await ctx.db.transaction(async (tx) => {
@@ -236,7 +239,7 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
       await ctx.ops.remove(channelId).catch((err) => logger.warn({ err, channelId }, 'stay room cleanup failed'));
       return { status: 'insufficient', price };
     }
-    return { status: 'created', channelId, keepUntil };
+    return { status: 'created', channelId, keepUntil, charged: price };
   } finally {
     busy.delete(input.userId);
   }

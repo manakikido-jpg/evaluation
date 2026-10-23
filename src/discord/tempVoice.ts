@@ -236,7 +236,7 @@ export function stayRoomPanel(cfg: GuildConfig): MessageBody {
       color: 0xc08a3e,
     }, {
       title: '⏱ 1時間ごとの宿',
-      description: `**${cfg.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}／1時間**\n1時間ごとに自動で払う宿です。払う時刻にだれもいなければ、宿は消えます。設定は変更可能です。`,
+      description: `**${cfg.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}／1時間**\n1時間ごとに自動で払う宿です。払う時刻にだれもいなければ、宿は消えます。設定は変更可能です。\n-# 🏮 奉納（ブースト）している人は、どちらの宿も無料です。`,
       color: 0x5b8fb9,
     }],
     components: secretRoomHubs(cfg).length ? [{ type: 1, components: [
@@ -278,8 +278,8 @@ export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildC
     content: r.status === 'exists'
       ? `🏨 あなたの宿はもうあります（${jst(r.keepUntil)} まで残ります）。<#${r.channelId}>`
       : hourly
-        ? `⏱ 1時間ごとの宿を立てました（${current.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}を払いました）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} に次の 1 時間分を自動で払います。そのときだれもいなければ、宿は消えます（${current.economy.currencyName}が足りなくても消えます）。`
-        : `🏨 宿を立てました（${current.rooms.stayPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} までは、だれもいなくても残ります。そのあとは、全員が抜けたら消えます。`,
+        ? `⏱ 1時間ごとの宿を立てました（${r.charged === 0 ? '🏮 奉納しているので無料' : `${current.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}を払いました`}）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} に次の 1 時間分を自動で払います。そのときだれもいなければ、宿は消えます（${current.economy.currencyName}が足りなくても消えます）。`
+        : `🏨 宿を立てました（${r.charged === 0 ? '🏮 奉納しているので無料' : `${current.rooms.stayPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}`}）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} までは、だれもいなくても残ります。そのあとは、全員が抜けたら消えます。`,
     components: [{ type: 1, components: [{ type: 2, style: ButtonStyle.Link, label: '宿に入る', url }] }],
   });
 }
