@@ -12,8 +12,9 @@ import { assetUrl } from './assets.js';
 import { audit } from '../services/audit.js';
 import { logger } from '../lib/logger.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
-import { BODY_MAX, TITLE_MAX, checkUpdateImage, deleteUpdateDraft, getUpdatePost, loadUpdatePostConfig, myUpdatePosts, parseUpdatePost, saveUpdateDraft, submitUpdatePost, updatePostText, withdrawUpdatePost, type UpdatePostRow } from '../services/updatePosts.js';
+import { BODY_MAX, TITLE_MAX, checkUpdateImage, deleteUpdateDraft, postableUpdateChannels, getUpdatePost, loadUpdatePostConfig, myUpdatePosts, parseUpdatePost, saveUpdateDraft, submitUpdatePost, updatePostText, withdrawUpdatePost, type UpdatePostRow } from '../services/updatePosts.js';
 import { MD_HELP, MarkdownToolbar, Rendered } from './views/notices.js';
+import { guildChannelsCached, mentionLabel, mentionValue, parseMention } from '../services/notices.js';
 import { fmtDateTime } from './format.js';
 
 const COOKIE = 'sakura_update_desk';
@@ -26,6 +27,7 @@ const messages: Record<string, string> = {
   deleted: '下書きを消しました。',
   invalid: `本文を入れてください（題は${TITLE_MAX}字まで・本文は${BODY_MAX}字まで）。`,
   image_too_big: '写真が大きすぎます（8MB まで）。',
+  nochannel: '下書きは保存しました。申請するには、投稿先のチャンネルを選んでください。',
   image_bad_type: 'PNG・JPEG・GIF・WebP の写真を選んでください。',
   locked: 'この投稿文は、いまは直せません（許可待ち・投稿ずみ）。',
   denied: 'まとめ係のロールの人だけが使えます。',
@@ -49,9 +51,10 @@ export function DeviceFrame(p: { name: string; children: Child }) {
 }
 
 /** Discord での見た目（掲示と同じ形） */
-export function UpdatePostPreview(p: { post: Pick<UpdatePost, 'title' | 'body' | 'style' | 'imagePosition'>; imageUrl?: string; slot?: boolean }) {
+export function UpdatePostPreview(p: { post: Pick<UpdatePost, 'title' | 'body' | 'style' | 'imagePosition'>; imageUrl?: string; slot?: boolean; mention?: string }) {
   const text = updatePostText(p.post);
-  return <><p class={text.length > BODY_MAX + TITLE_MAX + 4 ? 'flash warn' : 'note'}>{text.length} 文字</p><Rendered text={text} style={p.post.style} image={{ url: p.imageUrl, position: p.post.imagePosition }} slot={p.slot} /></>;
+  // メンションは、カードならカードの外（上）、普通のメッセージなら 1 行目
+  return <><p class={text.length > BODY_MAX + TITLE_MAX + 4 ? 'flash warn' : 'note'}>{text.length} 文字</p><Rendered text={text} style={p.post.style} mention={p.mention || undefined} image={{ url: p.imageUrl, position: p.post.imagePosition }} slot={p.slot} /></>;
 }
 
 export function UpdateDeskPage(p: { session: MemberSession; posts: UpdatePostRow[]; message?: string }) {
@@ -66,27 +69,38 @@ export function UpdateDeskPage(p: { session: MemberSession; posts: UpdatePostRow
     </section></Shell>;
 }
 
-export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow; message?: string }) {
+export type DeskChoices = { channels: { id: string; name: string }[]; roles: { id: string; name: string }[] };
+export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow; message?: string; choices: DeskChoices }) {
   const post = p.post;
   const editable = !post || post.status === 'draft' || post.status === 'rejected';
   const action = post ? `${ROOT}/posts/${post.id}` : `${ROOT}/posts`;
   const imageUrl = post?.imageHash ? `${ROOT}/posts/${post.id}/image?v=${post.imageHash}` : undefined;
   const hx = { 'hx-post': `${ROOT}/preview`, 'hx-trigger': 'change', 'hx-target': '#post-preview', 'hx-include': '#post-form' };
   const view = { title: post?.title ?? '', body: post?.body ?? '', style: post?.style ?? 'embed', imagePosition: post?.imagePosition ?? 'bottom' } as const;
+  const mention = parseMention(post?.mention);
+  const picked = new Set(mention.kind === 'roles' ? mention.roleIds : []);
+  const label = mentionLabel(post?.mention, id => p.choices.roles.find(r => r.id === id)?.name);
   return <Shell><Head session={p.session} /><p class="crumbs"><a href={ROOT}>← 投稿文の一覧</a></p>
     {p.message && <p role="status" class="flash">{messages[p.message] || '入力を確認してください。'}</p>}
     {post?.status === 'rejected' && post.note && <p class="flash warn">運営から：{post.note}</p>}
-    {!editable ? <section class="card"><h2>{STATUS_LABEL[post!.status]}</h2><DeviceFrame name="device"><UpdatePostPreview post={view} imageUrl={imageUrl} /></DeviceFrame>
+    {!editable ? <section class="card"><h2>{STATUS_LABEL[post!.status]}</h2><DeviceFrame name="device"><UpdatePostPreview post={view} imageUrl={imageUrl} mention={label} /></DeviceFrame>
       {post!.status === 'pending' && <form action={`${ROOT}/posts/${post!.id}/withdraw`} method="post"><input type="hidden" name="_csrf" value={p.session.csrfToken} /><button>申請を取り消して直す</button></form>}</section>
     : <div class="notice-edit">
       {/* プレビューのたびに写真を送らないよう、htmx には写真を入れない */}
       <form method="post" action={action} class="notice-form" id="post-form" enctype="multipart/form-data" hx-params="not image">
         <input type="hidden" name="_csrf" value={p.session.csrfToken} />
         {post && <input type="hidden" name="postId" value={String(post.id)} />}
-        <section class="card"><h2>どう出す</h2><div class="fields">
+        <section class="card"><h2>どこに・どう出す</h2><div class="fields">
+          <label class="field"><span>投稿先のチャンネル</span><select name="targetChannelId" required><option value="">選んでください</option>{p.choices.channels.map(ch => <option value={ch.id} selected={ch.id === post?.targetChannelId}>#{ch.name}</option>)}</select></label>
           <label class="field"><span>見せ方</span><select name="style" {...hx}><option value="embed" selected={view.style === 'embed'}>カード（左に色の線）</option><option value="text" selected={view.style === 'text'}>普通のメッセージ</option></select></label>
           <label class="field"><span>題（なくてもよい・{TITLE_MAX}字まで。太字で 1 行目に出ます）</span><input name="title" maxlength={TITLE_MAX} value={view.title} hx-post={`${ROOT}/preview`} hx-trigger="input changed delay:500ms" hx-target="#post-preview" hx-include="#post-form" /></label>
         </div></section>
+        <section class="card"><h2>🔔 メンション</h2><fieldset class="field mention-pick" {...hx}>
+          <legend class="note">投稿したときに通知を届ける相手（カードのときは、カードの外の上に出ます）</legend>
+          <div class="inline-actions">{([['none', 'なし'], ['here', '@here（いまオンラインの人）'], ['everyone', '@everyone（全員）'], ['ranks', '⛩ すべての役職'], ['roles', 'ロール（下で選ぶ）']] as const).map(([v, text]) => <label class="check"><input type="radio" name="mentionKind" value={v} checked={mention.kind === v} /><span>{text}</span></label>)}</div>
+          {p.choices.roles.length > 0 ? <div class="role-checks">{p.choices.roles.map(r => <label class="check"><input type="checkbox" name="mentionRoles" value={r.id} checked={picked.has(r.id)} /><span>@{r.name}</span></label>)}</div> : <p class="note">ロールを読み込めませんでした。少しあとに開き直してください。</p>}
+          <p class="note">ロールは 5 つまで。通知が届くのは、運営が許可して投稿したときです。</p>
+        </fieldset></section>
         <section class="card"><h2>本文</h2>
           <label class="field" for="post-body"><span class="note">Discord の書き方で飾れます。下のボタンか、Ctrl+B 太字・Ctrl+I 斜体・Ctrl+U 下線</span></label>
           <MarkdownToolbar target="post-body" />
@@ -101,7 +115,7 @@ export function UpdateDeskEdit(p: { session: MemberSession; post?: UpdatePostRow
         </fieldset></section>
         <div class="save-bar"><button type="submit" name="next" value="save">下書きを保存</button><button type="submit" name="next" value="submit">保存して申請する</button></div>
       </form>
-      <aside class="notice-side card"><h2>Discord での見た目</h2><DeviceFrame name="device"><div id="post-preview"><UpdatePostPreview post={view} imageUrl={imageUrl} slot /></div></DeviceFrame></aside>
+      <aside class="notice-side card"><h2>Discord での見た目</h2><DeviceFrame name="device"><div id="post-preview"><UpdatePostPreview post={view} imageUrl={imageUrl} mention={label} slot /></div></DeviceFrame></aside>
       {post && <form action={`${ROOT}/posts/${post.id}/delete`} method="post" data-confirm="この下書きを消しますか？"><input type="hidden" name="_csrf" value={p.session.csrfToken} /><button class="danger">この下書きを消す</button></form>}
     </div>}
   </Shell>;
@@ -144,7 +158,7 @@ export function mountUpdateDesk(app: Hono<any>, d: { db: Db; api: DiscordApi; di
     catch { return c.text('Discordに接続できません。時間をおいて再試行してください。', 503); }
     // ロールを外された人は、すぐ入れなくする
     if (!ok) { await deleteMemberSession(db, session.id); deleteCookie(c, COOKIE, { path: ROOT }); return c.redirect(`${ROOT}/login?e=denied`); }
-    const body = c.req.method === 'POST' ? await c.req.parseBody() : {};
+    const body = c.req.method === 'POST' ? await c.req.parseBody({ all: true }) : {};
     if (c.req.method === 'POST' && !safeEqual(typeof body._csrf === 'string' ? body._csrf : '', session.csrfToken)) return c.text('不正なリクエストです（CSRF）。', 403);
     return fn(c, session, body);
   };
@@ -157,7 +171,7 @@ export function mountUpdateDesk(app: Hono<any>, d: { db: Db; api: DiscordApi; di
   };
   const save = async (c: Context, s: MemberSession, b: Record<string, unknown>, id?: number) => {
     const back = id ? `${ROOT}/edit/${id}` : `${ROOT}/new`;
-    const input = parseUpdatePost(b);
+    const input = parseUpdatePost(b, allowedOf(await choices()));
     if (!input) return c.redirect(`${back}?msg=invalid`);
     const f = Array.isArray(b.image) ? b.image[0] : b.image;
     let image: Parameters<typeof saveUpdateDraft>[5];
@@ -169,17 +183,28 @@ export function mountUpdateDesk(app: Hono<any>, d: { db: Db; api: DiscordApi; di
     const row = await saveUpdateDraft(db, { id: s.userId, name: s.displayName }, input, id, d.now(), image);
     if (!row) return c.redirect(`${ROOT}?msg=locked`);
     if (b.next !== 'submit') return c.redirect(`${ROOT}/edit/${row.id}?msg=saved`);
+    if (!row.targetChannelId) return c.redirect(`${ROOT}/edit/${row.id}?msg=nochannel`);
     const sent = await submitUpdatePost(db, s.userId, row.id, d.now());
     if (sent) await notify(sent);
     return c.redirect(`${ROOT}?msg=${sent ? 'submitted' : 'locked'}`);
   };
+  // 選べる投稿先とロール（読めなければ空）
+  const choices = async (): Promise<DeskChoices> => {
+    const [channels, roles] = await Promise.all([
+      guildChannelsCached(d.discord, d.cfg().guildId).catch(() => []),
+      d.discord.guildRoles(d.cfg().guildId).catch(() => []),
+    ]);
+    const conf = await loadUpdatePostConfig(db);
+    return { channels: postableUpdateChannels(conf, channels), roles: roles.filter(r => r.id !== d.cfg().guildId && !r.managed).sort((a, b) => b.position - a.position) };
+  };
+  const allowedOf = (ch: DeskChoices) => ({ channelIds: new Set(ch.channels.map(c => c.id)), roleIds: new Set(ch.roles.map(r => r.id)) });
   const mine = async (s: MemberSession, id?: number) => { const post = id ? await getUpdatePost(db, id) : undefined; return post && post.authorId === s.userId ? post : undefined; };
-  app.get(`${ROOT}/new`, page(async (c, s) => c.html(<UpdateDeskEdit session={s} message={c.req.query('msg')} />)));
+  app.get(`${ROOT}/new`, page(async (c, s) => c.html(<UpdateDeskEdit session={s} message={c.req.query('msg')} choices={await choices()} />)));
   app.get(`${ROOT}/edit/:id`, page(async (c, s) => {
     const post = await mine(s, idOf(c));
     if (!post) return c.redirect(ROOT);
     const { imageData: _d, ...row } = post;
-    return c.html(<UpdateDeskEdit session={s} post={row} message={c.req.query('msg')} />);
+    return c.html(<UpdateDeskEdit session={s} post={row} message={c.req.query('msg')} choices={await choices()} />);
   }));
   app.get(`${ROOT}/posts/:id/image`, page(async (c, s) => {
     const post = await mine(s, idOf(c));
@@ -192,7 +217,10 @@ export function mountUpdateDesk(app: Hono<any>, d: { db: Db; api: DiscordApi; di
     const post = Number.isSafeInteger(id) && id > 0 ? await mine(s, id) : undefined;
     const view = { title: String(b.title ?? '').trim(), body: String(b.body ?? '').replace(/\r\n/g, '\n'), style: b.style === 'text' ? 'text' as const : 'embed' as const, imagePosition: b.imagePosition === 'top' ? 'top' as const : 'bottom' as const };
     const imageUrl = post?.imageHash && b.removeImage !== 'yes' ? `${ROOT}/posts/${post.id}/image?v=${post.imageHash}` : undefined;
-    return c.html(<UpdatePostPreview post={view} imageUrl={imageUrl} slot />);
+    const ch = await choices();
+    const roles = [b.mentionRoles ?? []].flat().filter((v): v is string => typeof v === 'string');
+    const mention = mentionLabel(mentionValue(b.mentionKind, roles, allowedOf(ch).roleIds), id => ch.roles.find(r => r.id === id)?.name);
+    return c.html(<UpdatePostPreview post={view} imageUrl={imageUrl} mention={mention} slot />);
   }));
   app.get(ROOT, page(async (c, s) => c.html(<UpdateDeskPage session={s} posts={await myUpdatePosts(db, s.userId)} message={c.req.query('msg')} />)));
   app.post(`${ROOT}/posts`, page(async (c, s, b) => save(c, s, b)));

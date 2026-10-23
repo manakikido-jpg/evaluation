@@ -4333,8 +4333,8 @@ it('📝 投稿文: まとめ係が専用ページで下書き・申請し、神
   const { createLoginLink } = await import('../src/services/casino/loginLinks.js');
   const { saveUpdatePostConfig } = await import('../src/services/updatePosts.js');
   const { updatePosts, adminSessions } = await import('../src/db/schema.js');
-  const WRITER_ROLE = '700000000000000777', CH = '900000000000000555';
-  await saveUpdatePostConfig(db, { roleId: WRITER_ROLE, channelId: CH }, GUJI);
+  const WRITER_ROLE = '700000000000000777', CH = '910000000000000002';
+  await saveUpdatePostConfig(db, { roleId: WRITER_ROLE, channelIds: [CH] }, GUJI);
   // ロールのない人は入れない
   const no = await createLoginLink(db, { id: USER, displayName: 'さくら', avatarUrl: null });
   expect((await app.request(`/update-desk/link/${no}`, { method: 'POST' })).headers.get('location')).toBe('/update-desk/login?e=denied');
@@ -4356,7 +4356,12 @@ it('📝 投稿文: まとめ係が専用ページで下書き・申請し、神
   expect(editor).not.toMatch(/onclick=|style=|<script>/);
   const pv = await (await send('/update-desk/preview', { title: '題', body: '**太字**', style: 'embed' })).text();
   expect(pv).toContain('<strong>太字</strong>');
-  expect((await send('/update-desk/posts', { title: '今週の更新', body: '宝くじが変わりました @everyone', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
+  // 投稿先を選ばないと申請できない（候補にないチャンネルは選べない）
+  const noCh = await send('/update-desk/posts', { title: '今週の更新', body: 'x', targetChannelId: '910000000000000003', next: 'submit' });
+  expect(noCh.headers.get('location')).toMatch(/\/update-desk\/edit\/\d+\?msg=nochannel$/);
+  await send(`/update-desk/posts/${/edit\/(\d+)/.exec(noCh.headers.get('location')!)![1]}/delete`, {});
+  expect(editor).toContain('#鳥居');
+  expect((await send('/update-desk/posts', { title: '今週の更新', body: '宝くじが変わりました @everyone', targetChannelId: CH, mentionKind: 'here', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
   const [post] = await db.select().from(updatePosts);
   expect(post!.status).toBe('pending');
   expect(actions.some(a => a.includes('投稿文の申請がきました'))).toBe(true);
@@ -4377,13 +4382,14 @@ it('📝 投稿文: まとめ係が専用ページで下書き・申請し、神
   expect(await (await get('/posts', s)).text()).toContain('宝くじが変わりました');
   expect((await adminPost(`/posts/${post!.id}/reject`, { _csrf: await csrfOf(STAFF), note: '日付を入れてね' })).headers.get('location')).toBe('/posts?msg=rejected');
   expect(await (await app.request('/update-desk', { headers: { cookie } })).text()).toContain('日付を入れてね');
-  expect((await send(`/update-desk/posts/${post!.id}`, { title: '10/23 の更新', body: '宝くじが変わりました', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
+  expect((await send(`/update-desk/posts/${post!.id}`, { title: '10/23 の更新', body: '宝くじが変わりました', targetChannelId: CH, mentionKind: 'here', next: 'submit' })).headers.get('location')).toBe('/update-desk?msg=submitted');
   // 神職は設定を変えられない
   expect((await adminPost('/posts/settings', { _csrf: await csrfOf(STAFF), roleId: '', channelId: '' })).status).toBe(403);
   actions.length = 0;
   expect((await adminPost(`/posts/${post!.id}/approve`, { _csrf: await csrfOf(STAFF) })).headers.get('location')).toBe('/posts?msg=posted');
   expect((await adminPost(`/posts/${post!.id}/approve`, { _csrf: await csrfOf(STAFF) })).headers.get('location')).toBe('/posts?msg=gone');
-  expect(actions.filter(a => a.startsWith(`send ${CH}`))).toEqual([`send ${CH} **10/23 の更新**\n\n宝くじが変わりました`]);
+  // メンションはカードの外（content）
+  expect(actions.filter(a => a.startsWith(`send ${CH}`))).toEqual([`send ${CH} @here`]);
   const [done] = await db.select().from(updatePosts);
   expect(done).toMatchObject({ status: 'posted', decidedBy: STAFF, channelId: CH });
   // ロールを外されたら入れない

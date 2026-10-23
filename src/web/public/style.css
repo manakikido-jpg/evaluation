@@ -1439,3 +1439,6 @@ details.fold[open] > summary::before { content: '▾ '; }
   border: 8px solid var(--ink, #333); border-radius: 24px; font-size: .93em;
 }
 .preview-device:has(input[value="phone"]:checked) .notice-img { max-width: 100%; }
+.plain-list { list-style: none; padding: 0; margin: 0 0 .75rem; }
+.plain-list li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .35rem 0; border-bottom: 1px solid var(--line, #e5e5e5); }
+form.inline { display: inline; margin: 0; }

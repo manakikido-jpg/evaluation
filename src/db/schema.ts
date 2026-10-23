@@ -2262,5 +2262,9 @@ export const updatePosts = pgTable('update_posts', {
   imageData: bytea('image_data'),
   imageHash: text('image_hash'),
   imagePosition: text('image_position').$type<'top' | 'bottom'>().notNull().default('bottom'),
+  /** 通知を届ける相手（掲示と同じ形: '' / here / everyone / ranks / ロール ID のカンマ区切り） */
+  mention: text('mention').notNull().default(''),
+  /** まとめ係が選んだ投稿先（運営が決めた候補の中から） */
+  targetChannelId: text('target_channel_id'),
 }, t => [index('update_posts_status_idx').on(t.status), index('update_posts_author_idx').on(t.authorId)]);
 export type UpdatePost = typeof updatePosts.$inferSelect;

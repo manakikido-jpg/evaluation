@@ -5,7 +5,7 @@ import type { Db } from '../db/client.js';
 import { settings, updatePosts, type UpdatePost } from '../db/schema.js';
 import type { MessageBody } from '../lib/discordRest.js';
 import { audit } from './audit.js';
-import { detectImage, NOTICE_IMAGE_MAX } from './notices.js';
+import { detectImage, mentionAllowed, mentionValue, mentionHead, NOTICE_IMAGE_MAX, resolveMention } from './notices.js';
 
 /**
  * 📝 サーバーの更新のお知らせ。まとめ係（決めたロールの人）が専用ページで下書きして申請し、
@@ -15,11 +15,26 @@ const snowflake = z.string().regex(/^\d{17,20}$/);
 export const updatePostConfigSchema = z.object({
   /** まとめ係のロール */
   roleId: snowflake.optional(),
-  /** 許可したら投稿するチャンネル */
+  /** 前の形: 投稿先を選んでいない投稿文の行き先 */
   channelId: snowflake.optional(),
+  /** まとめ係が選べる投稿先。まだ決めていなければ、名前で DEFAULT_CHANNEL_NAMES を探す */
+  channelIds: z.array(snowflake).max(50).optional(),
 });
 export type UpdatePostConfig = z.infer<typeof updatePostConfigSchema>;
 const KEY = 'update_posts';
+
+/** はじめに選べる投稿先（チャンネルの名前に、この文字が入っているもの） */
+export const DEFAULT_CHANNEL_NAMES = ['お触書', '境内‐雑談', '授与所のしきたり', '本殿のしきたり', '宿坊のしきたり', '縁日のしきたり', '院のしきたり', '遊郭のしきたり', 'イベント告知'];
+// ‐ - ー － などのちがいは気にしない
+const norm = (s: string) => s.replace(/[‐\-－–—ー‑]/g, '-').toLowerCase();
+type Ch = { id: string; name: string; type: number };
+/** まとめ係が選べる投稿先（テキスト・お知らせのチャンネルだけ。並びはサーバーの順） */
+export function postableUpdateChannels<T extends Ch>(conf: UpdatePostConfig, channels: T[]): T[] {
+  const text = channels.filter((c) => c.type === 0 || c.type === 5);
+  if (conf.channelIds) return text.filter((c) => conf.channelIds!.includes(c.id));
+  // 「院のしきたり」が「本殿のしきたり」などにまちがって当たらないよう、名前の終わりで合わせる
+  return text.filter((c) => DEFAULT_CHANNEL_NAMES.some((n) => norm(c.name).endsWith(norm(n)) && (n !== '院のしきたり' || !/[殿坊]のしきたり$/.test(c.name))));
+}
 
 export const TITLE_MAX = 80;
 export const BODY_MAX = 1800;
@@ -39,24 +54,31 @@ const SHU = 0xd7003a;
 /** Discord に出す本文（題があれば太字で 1 行目に） */
 export const updatePostText = (p: Pick<UpdatePost, 'title' | 'body'>) => (p.title ? `**${p.title}**\n\n${p.body}` : p.body).slice(0, 2000);
 /** Discord に送る形（掲示と同じ: カードか普通のメッセージ。写真は上か下） */
-export function updatePostMessage(p: Pick<UpdatePost, 'id' | 'title' | 'body' | 'style' | 'imageType' | 'imageData' | 'imagePosition'>): MessageBody {
+/** メンションはカードの外（メッセージの上）。普通のメッセージなら 1 行目。「すべての役職」は rankRoleIds に置きかえる */
+export function updatePostMessage(p: Pick<UpdatePost, 'id' | 'title' | 'body' | 'style' | 'imageType' | 'imageData' | 'imagePosition' | 'mention'>, rankRoleIds: readonly string[] = []): MessageBody {
   const text = updatePostText(p);
+  const mention = resolveMention(p.mention, rankRoleIds);
+  const head = mentionHead(mention);
+  const allowed_mentions = mentionAllowed(mention);
   const ext = p.imageData ? detectImage(p.imageData)?.ext : undefined;
   const file = p.imageData && p.imageType && ext ? { name: `update-${p.id}.${ext}`, contentType: p.imageType, data: p.imageData } : undefined;
   const files = file ? { files: [file] } : {};
-  if (p.style === 'text') return { content: text, embeds: [], allowed_mentions: { parse: [] }, ...files };
-  if (!file) return { embeds: [{ description: text, color: SHU }], allowed_mentions: { parse: [] } };
+  if (p.style === 'text') return { content: head ? `${head}\n${text}`.slice(0, 2000) : text, embeds: [], allowed_mentions, ...files };
+  if (!file) return { content: head, embeds: [{ description: text, color: SHU }], allowed_mentions };
   const picture = { url: `attachment://${file.name}` };
   const embeds = p.imagePosition === 'top' ? [{ color: SHU, image: picture }, { description: text, color: SHU }] : [{ description: text, color: SHU, image: picture }];
-  return { embeds, allowed_mentions: { parse: [] }, ...files };
+  return { content: head, embeds, allowed_mentions, ...files };
 }
 
-export type UpdatePostInput = { title: string; body: string; style: 'embed' | 'text'; imagePosition: 'top' | 'bottom' };
-export function parseUpdatePost(b: Record<string, unknown>): UpdatePostInput | undefined {
+export type UpdatePostInput = { title: string; body: string; style: 'embed' | 'text'; imagePosition: 'top' | 'bottom'; mention: string; targetChannelId: string | null };
+/** 選べる投稿先・ロールだけを受け取る（ほかは消す） */
+export function parseUpdatePost(b: Record<string, unknown>, allowed: { channelIds: Set<string>; roleIds: Set<string> } = { channelIds: new Set(), roleIds: new Set() }): UpdatePostInput | undefined {
   const title = String(b.title ?? '').trim();
   const body = String(b.body ?? '').replace(/\r\n/g, '\n').trim();
   if (!body || body.length > BODY_MAX || title.length > TITLE_MAX) return undefined;
-  return { title, body, style: b.style === 'text' ? 'text' : 'embed', imagePosition: b.imagePosition === 'top' ? 'top' : 'bottom' };
+  const roles = [b.mentionRoles ?? []].flat().filter((v): v is string => typeof v === 'string');
+  const target = typeof b.targetChannelId === 'string' && allowed.channelIds.has(b.targetChannelId) ? b.targetChannelId : null;
+  return { title, body, style: b.style === 'text' ? 'text' : 'embed', imagePosition: b.imagePosition === 'top' ? 'top' : 'bottom', mention: mentionValue(b.mentionKind, roles, allowed.roleIds), targetChannelId: target };
 }
 
 /** 選んだ写真を確かめる（なければ undefined） */
@@ -120,12 +142,16 @@ export async function deleteUpdateDraft(db: Db, authorId: string, id: number) {
  * 許可して投稿する。同時に押されても 1 回だけ（許可待ち → 投稿した、を先に取る）。
  * 送れなかったら許可待ちに戻す。
  */
-export async function approveUpdatePost(db: Db, id: number, by: string, channelId: string, send: (body: MessageBody) => Promise<string | undefined>, now = new Date()): Promise<'ok' | 'gone' | 'failed'> {
+export async function approveUpdatePost(db: Db, id: number, by: string, channelOf: (post: UpdatePost) => string | undefined, send: (channelId: string, body: MessageBody) => Promise<string | undefined>, rankRoleIds: readonly string[] = [], now = new Date()): Promise<'ok' | 'gone' | 'failed' | 'nochannel'> {
+  const current = await getUpdatePost(db, id);
+  if (!current || current.status !== 'pending') return 'gone';
+  const channelId = channelOf(current);
+  if (!channelId) return 'nochannel';
   const [row] = await db.update(updatePosts).set({ status: 'posted', decidedBy: by, decidedAt: now, channelId, updatedAt: now })
     .where(and(eq(updatePosts.id, id), eq(updatePosts.status, 'pending'))).returning();
   if (!row) return 'gone';
   let messageId: string | undefined;
-  try { messageId = await send(updatePostMessage(row)); }
+  try { messageId = await send(channelId, updatePostMessage(row, rankRoleIds)); }
   catch {
     await db.update(updatePosts).set({ status: 'pending', decidedBy: null, decidedAt: null, channelId: null }).where(eq(updatePosts.id, id));
     return 'failed';

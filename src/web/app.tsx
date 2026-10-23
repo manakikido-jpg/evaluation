@@ -19,7 +19,7 @@ import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { UpdatePostsPage } from './views/updatePosts.js';
 import { mountUpdateDesk } from './updateDesk.js';
-import { approveUpdatePost, getUpdatePost, listUpdatePosts, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
+import { approveUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
 import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
@@ -1753,7 +1753,8 @@ export function createWebApp(deps: WebDeps) {
   app.post('/posts/settings', async c => {
     if (!gujiOnly(c)) return c.text('宮司だけが変更できます。', 403);
     const b = await c.req.parseBody();
-    const parsed = updatePostConfigSchema.safeParse({ roleId: typeof b.roleId === 'string' && b.roleId ? b.roleId : undefined, channelId: typeof b.channelId === 'string' && b.channelId ? b.channelId : undefined });
+    const prev = await loadUpdatePostConfig(db);
+    const parsed = updatePostConfigSchema.safeParse({ ...prev, roleId: typeof b.roleId === 'string' && b.roleId ? b.roleId : undefined, channelId: typeof b.channelId === 'string' && b.channelId ? b.channelId : undefined });
     if (!parsed.success) return c.redirect('/posts?msg=invalid');
     const channels = await loadChannels(true).catch(() => []);
     if (parsed.data.channelId && !channels.some(ch => ch.id === parsed.data.channelId && (ch.type === 0 || ch.type === 5))) return c.redirect('/posts?msg=invalid');
@@ -1763,10 +1764,28 @@ export function createWebApp(deps: WebDeps) {
   app.post('/posts/:id/approve', async c => {
     const id = Number(c.req.param('id'));
     if (!Number.isSafeInteger(id)) return c.redirect('/posts?msg=invalid');
-    const { channelId } = await loadUpdatePostConfig(db);
-    if (!channelId) return c.redirect('/posts?msg=nochannel');
-    const r = await approveUpdatePost(db, id, c.get('session').userId, channelId, async body => (await deps.discord.sendMessage(channelId, body)).id, now());
+    const conf = await loadUpdatePostConfig(db);
+    const allowed = new Set(postableUpdateChannels(conf, await loadChannels()).map(ch => ch.id));
+    // まとめ係が選んだ投稿先（いまも候補にあるときだけ）。選んでいない前の投稿文は、前の設定のチャンネル
+    const channelOf = (post: { targetChannelId: string | null }) => post.targetChannelId ? (allowed.has(post.targetChannelId) ? post.targetChannelId : undefined) : conf.channelId;
+    const r = await approveUpdatePost(db, id, c.get('session').userId, channelOf, async (channelId, body) => (await deps.discord.sendMessage(channelId, body)).id, pingRoleIds(cfg), now());
     return c.redirect(`/posts?msg=${r === 'ok' ? 'posted' : r}`);
+  });
+  // 🗂 まとめ係が選べる投稿先を足す・外す（宮司）。まだ決めていなければ、はじめの候補から始める
+  app.post('/posts/channels', async c => {
+    if (!gujiOnly(c)) return c.text('宮司だけが変更できます。', 403);
+    const b = await c.req.parseBody();
+    const conf = await loadUpdatePostConfig(db);
+    const channels = await loadChannels(true);
+    const cur = postableUpdateChannels(conf, channels).map(ch => ch.id);
+    const id = typeof b.channelId === 'string' ? b.channelId : '';
+    let next: string[];
+    if (b.op === 'add') {
+      if (!channels.some(ch => ch.id === id && (ch.type === 0 || ch.type === 5))) return c.redirect('/posts?msg=invalid#post-channels');
+      next = cur.includes(id) ? cur : [...cur, id];
+    } else next = cur.filter(x => x !== id);
+    await saveUpdatePostConfig(db, { ...conf, channelIds: next.slice(0, 50) }, c.get('session').userId);
+    return c.redirect('/posts?msg=saved#post-channels');
   });
   app.post('/posts/:id/reject', async c => {
     const id = Number(c.req.param('id'));
