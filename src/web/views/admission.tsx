@@ -1267,6 +1267,21 @@ export function SettingsPage(props: {
               <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
             </label>
           </div>
+          <h3>🏨 24時間の宿</h3>
+          <p class="note">パネルのボタンを押すと、銭を払って宿を立てます。全員が抜けても 24 時間は残り、そのあとは、いつもの宿と同じく全員が抜けたら消えます（人がいれば残ります）。宿代には公開の部屋代もふくみ、招待・シークレットなどに変えるときは、いつもどおり差額を払います。いつもの「抜けたらなくなる宿」は、これまでどおり入口の通話から立てられます。Discord の <code>/パネル 宿24時間</code> でも置けます。</p>
+          <div class="fields">
+            <label class="field">
+              <span>🏨 24時間の宿の値段（{cfg.economy.currencyName}）</span>
+              <input type="number" name="roomStayPrice" value={String(cfg.rooms.stayPrice)} min={0} max={1000000} required />
+            </label>
+            <label class="field">
+              <span>パネルを出すチャンネル</span>
+              <select name="stayPanelChannel" form="stay-panel">
+                {(props.textChannels ?? []).map((c) => <option value={c.id}>#{c.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <button type="submit" form="stay-panel" class="small">🏨 パネルを出す</button>
           <h3>🤫 シクレ部屋のパネル</h3>
           <p class="note">パネルのボタンを押すと、BOT が押した人にしか見えない部屋を作り、「部屋に入る」のリンクを本人にだけ返します。どの通話も通らないので、だれにも見られません。部屋代は入ったときに払い、5 分入らなければ部屋は消えます（銭は減りません）。宿坊・宵宮ごとにボタンが出ます（値段は上の表のシークレット）。Discord の <code>/パネル シクレ部屋</code> でも置けます。</p>
           <div class="fields">
@@ -1760,6 +1775,9 @@ export function SettingsPage(props: {
           </div>
           <Save at="join" />
         </section>
+      </form>
+      <form method="post" action="/settings/stay-panel" id="stay-panel" hidden>
+        <Csrf session={props.session} />
       </form>
       <form method="post" action="/settings/secret-panel" id="secret-panel" hidden>
         <Csrf session={props.session} />

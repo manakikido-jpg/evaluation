@@ -2,7 +2,7 @@ import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType,
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { claimSecretRoom, cleanupRooms, createSecretRoom, onVoiceJoin, onVoiceLeave, removeRoom, SECRET_PENDING_MS, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
+import { claimSecretRoom, cleanupRooms, createSecretRoom, createStayRoom, onVoiceJoin, onVoiceLeave, removeRoom, SECRET_PENDING_MS, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
 import { planOf, roomOverwrites } from '../services/rooms.js';
 import { adminLevelOf } from '../config.js';
 import type { MessageBody } from '../lib/discordRest.js';
@@ -68,7 +68,7 @@ export class TempVoiceApp {
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
     /** 部屋ができたとき（宿坊・宵宮の部屋の設定を出す）。secret: パネルで作ったシクレ部屋（シークレットの部屋代を取る） */
-    private readonly onCreated?: (channelId: string, ownerId: string, opts?: { secret?: boolean }) => Promise<void>,
+    private readonly onCreated?: (channelId: string, ownerId: string, opts?: { secret?: boolean; stay?: boolean }) => Promise<void>,
   ) {}
 
   /** 🤫 パネルからシクレ部屋を作る */
@@ -76,6 +76,15 @@ export class TempVoiceApp {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
     return createSecretRoom(this.ctx, { hubId, userId, displayName });
+  }
+
+  /** 🏨 パネルから 24 時間の宿を買って立てる */
+  async openStay(hubId: string, userId: string, displayName: string) {
+    if (!this.ctx) return { status: 'failed' as const };
+    this.ctx.cfg = this.cfg();
+    const r = await createStayRoom(this.ctx, { hubId, userId, displayName });
+    if (r.status === 'created') await this.onCreated?.(r.channelId, userId, { stay: true }).catch((err) => logger.warn({ err }, 'stay room created hook failed'));
+    return r;
   }
 
   /** 部屋を閉じる（中の人は通話から抜ける） */
@@ -182,5 +191,51 @@ export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => Guil
       ? `🤫 あなたの部屋はもうあります。<#${r.channelId}>`
       : `🤫 あなたにしか見えない部屋を作りました。<#${r.channelId}>\n-# 入ったときに部屋代（${priceText(cfg(), hubId)}）を払います。${SECRET_PENDING_MS / 60_000} 分たっても入らなければ消えます。`,
     components: [{ type: 1, components: [{ type: 2, style: ButtonStyle.Link, label: '部屋に入る', url }] }],
+  });
+}
+
+/** 🏨 24 時間の宿のパネル（みんなに見える。押した人にだけ結果を返す） */
+export function stayRoomPanel(cfg: GuildConfig): MessageBody {
+  return {
+    embeds: [{
+      title: '🏨 24時間の宿',
+      description: `銭を払って、24 時間残る宿を立てられます（${cfg.rooms.stayPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}）。\n全員が抜けても、24 時間は部屋が残ります。24 時間たったあとは、いつもの宿と同じく、全員が抜けたら消えます。\n-# いつもの「抜けたらなくなる宿」は、これまでどおり入口の通話から立てられます。`,
+      color: 0xc08a3e,
+    }],
+    components: secretRoomHubs(cfg).length ? [{ type: 1, components: [{ type: 2, style: ButtonStyle.Primary, label: `🏨 24時間の宿を立てる（${cfg.rooms.stayPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}）`, custom_id: 'stayroom:open' }] }] : [],
+    allowed_mentions: { parse: [] },
+  };
+}
+
+const jst = (d: Date) => d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+/** パネルのボタン・/パネル 宿24時間 */
+export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildConfig, i: Interaction): Promise<void> {
+  if (!i.inCachedGuild() || i.guildId !== cfg().guildId) return;
+  if (i.isChatInputCommand() && i.commandName === 'panel' && i.options.getSubcommand(false) === 'stayroom') {
+    if (!adminLevelOf(cfg(), [...i.member.roles.cache.keys()])) return void (await i.reply({ content: '神職・宮司のみ置けます。', ...EPHEMERAL }));
+    if (!i.channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', ...EPHEMERAL }));
+    await i.channel.send(stayRoomPanel(cfg()) as never);
+    return void (await i.reply({ content: '🏨 24時間の宿のパネルを置きました。', ...EPHEMERAL }));
+  }
+  if (!i.isButton() || i.customId !== 'stayroom:open') return;
+  const current = cfg();
+  // 押した人が入れる宿坊の入口から選ぶ（シクレのパネルと同じ）
+  const pick = secretRoomHubs(current).find((h) => i.guild.channels.cache.get(h.channelId)?.permissionsFor(i.member)?.has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect));
+  if (!pick) return void (await i.reply({ content: 'いま立てられる宿はありません。', ...EPHEMERAL }));
+  await i.deferReply(EPHEMERAL);
+  // 古いパネルの値段を、今の値段に直す
+  if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {
+    await i.message.edit({ ...stayRoomPanel(current), content: null, allowedMentions: { parse: [] } } as never).catch((err) => logger.warn({ err }, 'stay room panel update failed'));
+  }
+  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName);
+  if (r.status === 'insufficient') return void (await i.editReply(`${current.economy.currencyName}が足りません（${r.price.toLocaleString('ja-JP')} 枚必要）。`));
+  if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : '宿を作れませんでした。神職に知らせてください。'));
+  const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
+  await i.editReply({
+    content: r.status === 'exists'
+      ? `🏨 あなたの宿はもうあります（${jst(r.keepUntil)} まで残ります）。<#${r.channelId}>`
+      : `🏨 宿を立てました（${current.rooms.stayPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} までは、だれもいなくても残ります。そのあとは、全員が抜けたら消えます。`,
+    components: [{ type: 1, components: [{ type: 2, style: ButtonStyle.Link, label: '宿に入る', url }] }],
   });
 }

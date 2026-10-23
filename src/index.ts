@@ -12,7 +12,7 @@ import { connectDb } from './db/client.js';
 import { ShuinApp } from './discord/app.js';
 import { StaffApp } from './discord/staff.js';
 import { AdmissionApp } from './discord/admission.js';
-import { onSecretRoomInteraction, TempVoiceApp } from './discord/tempVoice.js';
+import { onSecretRoomInteraction, onStayRoomInteraction, TempVoiceApp } from './discord/tempVoice.js';
 import { OmikujiApp } from './discord/omikuji.js';
 import { OnboardingApp } from './discord/onboarding.js';
 import { InviteLinkApp } from './discord/inviteLinks.js';
@@ -424,6 +424,7 @@ async function main(): Promise<void> {
     void rooms.onInteraction(i);
     // 🤫 シクレ部屋のパネル
     void onSecretRoomInteraction(tempVoice, cfg, i).catch((err) => logger.warn({ err }, 'secret room panel failed'));
+    void onStayRoomInteraction(tempVoice, cfg, i).catch((err) => logger.warn({ err }, 'stay room panel failed'));
     void market.onInteraction(i);
     void board.onInteraction(i);
     void cast.onInteraction(i);

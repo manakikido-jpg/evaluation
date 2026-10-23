@@ -3,6 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { tempVoice } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
+import { spendWithin } from './economy.js';
 
 /**
  * 自分の通話部屋。
@@ -97,6 +98,8 @@ export async function onVoiceLeave(ctx: TempVoiceCtx, channelId: string, now = n
   if (now.getTime() - row.createdAt.getTime() < GRACE_MS) return false;
   // パネルで作ったシクレ部屋は、作った人が入るのを待つ（期限が来ても入らなければ消す）
   if (row.pendingUntil && row.pendingUntil > now) return false;
+  // 🏨 買った宿は、期限まではだれもいなくても残す
+  if (row.keepUntil && row.keepUntil > now) return false;
   const n = ctx.ops.occupancy(channelId);
   if (n === undefined) {
     await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
@@ -164,6 +167,53 @@ export async function claimSecretRoom(db: Db, channelId: string, userId: string)
     .where(and(eq(tempVoice.channelId, channelId), eq(tempVoice.ownerId, userId), isNotNull(tempVoice.pendingUntil)))
     .returning();
   return Boolean(row);
+}
+
+/** 🏨 買った宿が、だれもいなくても残る時間 */
+export const STAY_MS = 24 * 60 * 60_000;
+
+export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; keepUntil: Date } | { status: 'busy' | 'failed' } | { status: 'insufficient'; price: number };
+
+/**
+ * 🏨 パネルで銭を払って、24 時間残る宿を立てる。作れてから払う（足りなければ部屋を消す）。
+ * 同じ入口の自分の宿がまだ残っていれば、それを返す（二重には買わない）
+ */
+export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string }, now = new Date()): Promise<StayRoomResult> {
+  const hub = ctx.cfg.tempVoice.hubs.find((h) => h.channelId === input.hubId);
+  if (!hub) return { status: 'failed' };
+  if (busy.has(input.userId)) return { status: 'busy' };
+  busy.add(input.userId);
+  try {
+    for (const row of await ctx.db.select().from(tempVoice).where(and(eq(tempVoice.ownerId, input.userId), eq(tempVoice.hubId, hub.channelId)))) {
+      if (ctx.ops.occupancy(row.channelId) === undefined) {
+        await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, row.channelId));
+        continue;
+      }
+      if (row.keepUntil && row.keepUntil > now) return { status: 'exists', channelId: row.channelId, keepUntil: row.keepUntil };
+    }
+    let channelId: string;
+    try {
+      channelId = await ctx.ops.create({ hubId: hub.channelId, name: `🏨 ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId });
+    } catch (err) {
+      logger.warn({ err }, '宿を作れませんでした（BOT の「チャンネルの管理」権限）');
+      return { status: 'failed' };
+    }
+    const price = ctx.cfg.rooms.stayPrice;
+    const keepUntil = new Date(now.getTime() + STAY_MS);
+    // 宿代で公開の部屋代もふくむ（種類を変えたときは、公開との差額だけ払う）
+    const ok = await ctx.db.transaction(async (tx) => {
+      if (price > 0 && !(await spendWithin(tx, input.userId, price, 'room', { channelId, stay: true, hours: STAY_MS / 3_600_000 }))) return false;
+      await tx.insert(tempVoice).values({ channelId, ownerId: input.userId, hubId: hub.channelId, createdAt: now, keepUntil, paid: ctx.cfg.rooms.once.public });
+      return true;
+    });
+    if (!ok) {
+      await ctx.ops.remove(channelId).catch((err) => logger.warn({ err, channelId }, 'stay room cleanup failed'));
+      return { status: 'insufficient', price };
+    }
+    return { status: 'created', channelId, keepUntil };
+  } finally {
+    busy.delete(input.userId);
+  }
 }
 
 export async function removeRoom(ctx: TempVoiceCtx, channelId: string): Promise<void> {

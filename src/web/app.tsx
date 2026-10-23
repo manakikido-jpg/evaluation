@@ -12,7 +12,7 @@ import { recentRoleRequests } from '../services/roleRequests.js';
 import { addWatch, listWatch, namesOf as watchNames, removeWatch } from '../services/securityWatch.js';
 import { SecurityPage } from './views/security.js';
 import { parseBigRaces } from '../services/casino/keibaBig.js';
-import { secretRoomHubs, secretRoomPanel } from '../discord/tempVoice.js';
+import { secretRoomHubs, secretRoomPanel, stayRoomPanel } from '../discord/tempVoice.js';
 import { mountCastOffice } from './castOffice.js';
 import { mountMyPage } from './myPage.js';
 import { desc, eq } from 'drizzle-orm';
@@ -2790,6 +2790,16 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 🎴 運営吉: 名前・ひとこと・確率・倍率と絵をまとめて保存（絵は選んだ枠だけ入れ替える）
+  // 🏨 24 時間の宿のパネルを出す
+  app.post('/settings/stay-panel', async (c) => {
+    const body = await c.req.parseBody();
+    const channelId = typeof body.stayPanelChannel === 'string' && /^\d{17,20}$/.test(body.stayPanelChannel) ? body.stayPanelChannel : '';
+    const to = (msg: string) => c.redirect(`/settings?msg=${msg}&at=rooms#sec-rooms`);
+    if (!channelId || !secretRoomHubs(cfg).length) return to('invalid');
+    const ok = await deps.discord.sendMessage(channelId, stayRoomPanel(cfg)).then(() => true, (err: unknown) => (logger.warn({ err }, 'stay panel post failed'), false));
+    if (ok) await audit(db, { actorId: c.get('session').userId, action: 'rooms.stay_panel', detail: { channelId }, via: 'web' });
+    return to(ok ? 'saved' : 'invalid');
+  });
   // 🤫 シクレ部屋のパネルを出す
   app.post('/settings/secret-panel', async (c) => {
     const body = await c.req.parseBody();
@@ -3176,6 +3186,7 @@ export function createWebApp(deps: WebDeps) {
           ]),
         ),
         boosterDiscountPercent: num('roomBoosterDiscount'),
+        stayPrice: typeof body.roomStayPrice === 'string' ? num('roomStayPrice') : prev.rooms.stayPrice ?? cfg.rooms.stayPrice,
         // 💎 極（VIP）はショップのページで作る（ここでは残す）
         ...(prev.rooms.vip ? { vip: prev.rooms.vip } : {}),
         // 🤫 シクレの入口は、下の「入口を作る・外す」で変える（ここでは残す）

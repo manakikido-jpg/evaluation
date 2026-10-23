@@ -585,6 +585,8 @@ export const tempVoice = pgTable('temp_voice', {
   freeTicket: boolean('free_ticket').notNull().default(false),
   /** 🤫 パネルで作ったシクレ部屋: 作った人が入るのを待つ期限（入るまで部屋代を取らない・この時刻まで消さない） */
   pendingUntil: timestamp('pending_until', { withTimezone: true }),
+  /** 🏨 買った宿: この時刻までは、だれもいなくても消さない（過ぎたら、空いたときに消す） */
+  keepUntil: timestamp('keep_until', { withTimezone: true }),
 });
 
 /** おみくじ（1 日 1 回。(member_id, date) を主キーにして 2 回引けないようにする） */

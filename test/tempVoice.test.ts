@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { tempVoice } from '../src/db/schema.js';
-import { claimSecretRoom, cleanupRooms, createSecretRoom, onVoiceJoin, onVoiceLeave, roomName, type VoiceOps } from '../src/services/tempVoice.js';
+import { claimSecretRoom, cleanupRooms, createSecretRoom, createStayRoom, STAY_MS, onVoiceJoin, onVoiceLeave, roomName, type VoiceOps } from '../src/services/tempVoice.js';
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
 const HUB = '920000000000000001';
@@ -85,6 +85,44 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     if (r2.status !== 'created') throw new Error(r2.status);
     expect(await cleanupRooms(ctx, new Date(now.getTime() + 5 * 60_000 + 1))).toBeGreaterThanOrEqual(1);
     expect(v.rooms.has(r2.channelId)).toBe(false);
+  });
+
+  it('🏨 24 時間の宿: 銭を払って立て、24 時間はだれもいなくても残り、そのあとは空いたら消える。足りなければ部屋を残さない', async () => {
+    const { addCoins, walletOf } = await import('../src/services/economy.js');
+    const v = fakeVoice();
+    const c = { ...cfg, rooms: { ...cfg.rooms, stayPrice: 3000 } } as GuildConfig;
+    const ctx = { db, cfg: c, ops: v.ops };
+    const now = new Date();
+    // 足りない: 部屋は消して、銭は減らない
+    await addCoins(db, 'u1', 1000, 'adjust');
+    expect(await createStayRoom(ctx, { hubId: HUB, userId: 'u1', displayName: 'さくら' }, now)).toEqual({ status: 'insufficient', price: 3000 });
+    expect([...v.rooms.keys()]).toEqual([HUB]);
+    expect((await walletOf(db, 'u1')).balance).toBe(1000);
+    await addCoins(db, 'u1', 5000, 'adjust');
+    const r = await createStayRoom(ctx, { hubId: HUB, userId: 'u1', displayName: 'さくら' }, now);
+    if (r.status !== 'created') throw new Error(r.status);
+    expect((await walletOf(db, 'u1')).balance).toBe(3000);
+    expect(r.keepUntil.getTime()).toBe(now.getTime() + STAY_MS);
+    // もう一度押しても、二重には買わない
+    expect(await createStayRoom(ctx, { hubId: HUB, userId: 'u1', displayName: 'さくら' }, now)).toMatchObject({ status: 'exists', channelId: r.channelId });
+    expect((await walletOf(db, 'u1')).balance).toBe(3000);
+    // だれもいなくても 24 時間は残る
+    expect(await cleanupRooms(ctx, new Date(now.getTime() + STAY_MS - 1))).toBe(0);
+    // 24 時間たって、人がいれば残る
+    v.rooms.get(r.channelId)!.members.add('u2');
+    expect(await cleanupRooms(ctx, new Date(now.getTime() + STAY_MS + 1))).toBe(0);
+    // 空いたら消える
+    v.rooms.get(r.channelId)!.members.delete('u2');
+    expect(await cleanupRooms(ctx, new Date(now.getTime() + STAY_MS + 1))).toBe(1);
+    expect(v.rooms.has(r.channelId)).toBe(false);
+  });
+
+  it('🏨 宿のパネルは値段入りのボタン1つ', async () => {
+    const { stayRoomPanel } = await import('../src/discord/tempVoice.js');
+    const c = { ...cfg, tempVoice: { hubs: [{ channelId: HUB, name: '🌙 {name}の宿坊' }] }, rooms: { ...cfg.rooms, stayPrice: 2500 } } as GuildConfig;
+    const p = JSON.stringify(stayRoomPanel(c));
+    expect(p).toContain('stayroom:open');
+    expect(p).toContain('2,500');
   });
 
   it('公開パネルは開くボタン1つ。押したら 1 回で部屋ができ、料金とリンクは本人にだけ', async () => {

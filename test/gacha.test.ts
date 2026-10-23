@@ -49,7 +49,7 @@ const cfg: GuildConfig = {
       { channelId: YOIMIYA, name: '🍶 {name}の部屋' },
     ],
   },
-  rooms: { once: { public: 50, invite: 200, secret: 300, twoshot: 400 }, hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 }, boosterDiscountPercent: 0, secretHubs: [] },
+  rooms: { once: { public: 50, invite: 200, secret: 300, twoshot: 400 }, hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 }, boosterDiscountPercent: 0, stayPrice: 3000, secretHubs: [] },
 };
 
 /** 決まった順に数を返す（運勢 → ロール選び、の順に使う） */
