@@ -477,3 +477,72 @@ describe('🙋 案内担当', () => {
     }
   });
 });
+
+describe('案内人による利用者の名前変更', () => {
+  function nicknameForm(f: ReturnType<typeof mockGuild>, actor = GUIDE, name = 'さくら', target = VISITOR) {
+    return { inCachedGuild: () => true, isButton: () => false, isUserSelectMenu: () => false, isModalSubmit: () => true,
+      customId: `guide:nickname:save:${target}`, guildId: f.guild.id, guild: f.guild, user: { id: actor },
+      fields: { getTextInputValue: () => name }, reply: vi.fn(async () => {}), deferReply: vi.fn(async () => {}), editReply: vi.fn(async () => {}), followUp: vi.fn(async () => {}) };
+  }
+  it('パネルから対象者選択・現在の表示名入りの入力フォームへ進める', async () => {
+    await configure();
+    const f = mockGuild();
+    Object.assign(f.visitor, { displayName: '参拝者の名前' });
+    const button = { ...nicknameForm(f), customId: 'guide:nickname', isButton: () => true, isModalSubmit: () => false };
+    await f.app.onInteraction(button as never);
+    expect(button.reply).toHaveBeenCalledWith(expect.objectContaining({ components: expect.any(Array) }));
+    const picker = { ...nicknameForm(f), customId: 'guide:nickname:pick', isUserSelectMenu: () => true, isModalSubmit: () => false, values: [VISITOR], showModal: vi.fn(async () => {}) };
+    await f.app.onInteraction(picker as never);
+    expect(picker.showModal).toHaveBeenCalledOnce();
+    const modal = picker.showModal.mock.calls[0] as unknown as [{ toJSON(): { custom_id: string; components: { components: { value: string; max_length: number }[] }[] } }];
+    expect(modal[0].toJSON()).toMatchObject({ custom_id: `guide:nickname:save:${VISITOR}`, components: [{ components: [{ value: '参拝者の名前', max_length: 32 }] }] });
+  });
+  it('案内待ち・参拝者の名前を案内人が変更し、監査を残す', async () => {
+    await configure();
+    for (const roles of [[PENDING], [RANK_ROLE.sanpaisha]]) {
+      const f = mockGuild(roles as string[]);
+      Object.assign(f.visitor, { manageable: true, setNickname: vi.fn(async () => {}) });
+      const i = nicknameForm(f);
+      await f.app.onInteraction(i as never);
+      expect((f.visitor as unknown as {setNickname: ReturnType<typeof vi.fn>}).setNickname).toHaveBeenCalledWith('さくら', expect.any(String));
+      expect(i.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: '利用者の名前を変更しました。' }));
+    }
+    expect((await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.nickname')))).toHaveLength(2);
+  });
+  it('入力確定時に案内人を外された人・一般利用者は変更できない', async () => {
+    await configure();
+    const f = mockGuild([PENDING], []), setNickname = vi.fn();
+    Object.assign(f.visitor, { manageable: true, setNickname });
+    const i = nicknameForm(f);
+    await f.app.onInteraction(i as never);
+    expect(setNickname).not.toHaveBeenCalled();
+    expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('案内人ロール') }));
+  });
+  it('VCを離れた利用者・上位の役職・案内人・本人・BOTを拒否する', async () => {
+    await configure();
+    for (const kind of ['left', 'higher', 'guide', 'self', 'bot']) {
+      const f = mockGuild(), setNickname = vi.fn();
+      Object.assign(f.visitor, { manageable: true, setNickname });
+      if (kind === 'left') f.visitor.voice.channelId = null;
+      if (kind === 'higher') f.visitor.roles.cache.set(RANK_ROLE.ujiko, { id: RANK_ROLE.ujiko });
+      if (kind === 'guide') f.visitor.roles.cache.set(ROLE, { id: ROLE });
+      if (kind === 'bot') f.visitor.user.bot = true;
+      const i = nicknameForm(f, GUIDE, '桜', kind === 'self' ? GUIDE : VISITOR);
+      await f.app.onInteraction(i as never);
+      expect(setNickname).not.toHaveBeenCalled();
+      expect(i.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('同じ案内VC') }));
+    }
+  });
+  it('空白名とDiscordの権限不足・API失敗を案内し、成功監査を残さない', async () => {
+    await configure();
+    for (const kind of ['blank', 'permission', 'api']) {
+      const f = mockGuild(), setNickname = vi.fn(async () => { throw Error('403'); });
+      Object.assign(f.visitor, { manageable: kind !== 'permission', setNickname });
+      const i = nicknameForm(f, GUIDE, kind === 'blank' ? '  ' : '桜');
+      await f.app.onInteraction(i as never);
+      expect(i.reply.mock.calls.length + i.editReply.mock.calls.length).toBeGreaterThan(0);
+      if (kind !== 'api') expect(setNickname).not.toHaveBeenCalled();
+    }
+    expect((await db.select().from(auditLogs).where(eq(auditLogs.action, 'guide.nickname')))).toHaveLength(0);
+  });
+});
