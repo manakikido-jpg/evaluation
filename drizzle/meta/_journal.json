@@ -834,6 +834,13 @@
       "when": 1792778069397,
       "tag": "0118_watery_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1792779281212,
+      "tag": "0119_fast_cobalt_man",
+      "breakpoints": true
     }
   ]
 }

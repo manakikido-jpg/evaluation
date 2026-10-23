@@ -1,3 +1,4 @@
+import { closeFinishedReservationThreads } from '../services/castThreadClose.js';
 import { refreshCastLeaderboard, castLeaderboardBody } from './castLeaderboard.js';
 import { castLeaderboard } from '../services/castLeaderboard.js';
 import { CHAMPAGNES, champagneOf, prepareChampagne, buyChampagne, announceChampagne, assertChampagneActive, ChampagneError, champagneError } from '../services/castChampagne.js';
@@ -2036,6 +2037,19 @@ export class CastApp {
       }
       await roomDeleted(this.db, s.id);
     }
+    await closeFinishedReservationThreads(this.db, async id => {
+      let thread;
+      try { thread = await this.guild!.channels.fetch(id); }
+      catch (err) {
+        // 削除済みだけ完了扱い。権限・通信エラーは次回再試行する。
+        if ((err as { code?: number }).code === 10003) return;
+        throw err;
+      }
+      if (!thread) return;
+      if (!thread.isThread()) throw new Error('予約のスレッドではありません');
+      if (!thread.locked) await thread.setLocked(true, '予約終了から15分が経過');
+      if (!thread.archived) await thread.setArchived(true, '予約終了から15分が経過');
+    }, now).catch((err: unknown) => logger.warn({ err }, 'cast reservation thread close failed'));
     if (changed) this.refresh();
     await this.rankTick(c, now).catch((err: unknown) => logger.warn({ err }, 'cast rank failed'));
     await refreshCastLeaderboard(this.db,this.discord,this.cfg().economy.currencyName,{now,force:!this.leaderboardChecked}).then(()=>{this.leaderboardChecked=true;}).catch((err:unknown)=>logger.warn({err},'cast leaderboard tick failed'));

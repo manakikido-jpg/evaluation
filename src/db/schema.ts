@@ -1802,6 +1802,8 @@ export const castSessions = pgTable(
     channelId: text('channel_id'),
     /** 予約のやり取りのスレッド */
     threadId: text('thread_id'),
+    /** 予約スレッドを自動クローズした日時 */
+    threadClosedAt: timestamp('thread_closed_at', { withTimezone: true }),
     /** 予約の始まる時刻 */
     startAt: timestamp('start_at', { withTimezone: true }),
     /** この時刻までに返事がなければ断ったことにする */
