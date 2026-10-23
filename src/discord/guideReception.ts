@@ -2,7 +2,7 @@ import { adminLevelOf } from '../config.js';
 import { watchOf } from '../services/securityWatch.js';
 import { isNewAccount, raidState } from '../services/raid.js';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { ChannelType, MessageFlags, type Guild, type GuildMember, type Interaction, type Message, type VoiceState } from 'discord.js';
+import { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType, MessageFlags, type Guild, type GuildMember, type Interaction, type Message, type VoiceState } from 'discord.js';
 import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
@@ -20,7 +20,7 @@ export const guideEmployeePanel = (): MessageBody => ({
   components: [
     { type: 1, components: [btn('guide:register', '登録を申請'), btn('guide:wait', '待機する'), btn('guide:off', '受付停止'), btn('guide:salary', '給与を確認'), btn('guide:who', '👀 待機中の人')] },
     // 🙋 案内担当（押すと、チャンネル名と、ほかの案内人への知らせが変わる）
-    { type: 1, components: [{ ...btn('guide:duty', '🙋 案内を担当する'), style: 3 }, { ...btn('guide:dutyoff', '🔚 案内担当を終了する'), style: 4 }] },
+    { type: 1, components: [{ ...btn('guide:duty', '🙋 案内を担当する'), style: 3 }, { ...btn('guide:dutyoff', '🔚 案内担当を終了する'), style: 4 }, btn('guide:nickname', '📝 利用者の名前を変更')] },
   ],
 });
 export function guideVisitorPanel(r: typeof guideReceptions.$inferSelect, config: GuideConfig, roleGranted = false): MessageBody {
@@ -214,7 +214,75 @@ export class GuideReceptionApp {
     for (const m of recent?.values() ?? []) if (mine(m)) await m.delete().catch(() => undefined);
   }
 
+  /** 名前の変更は案内人だけ。同じ案内VCの案内待ち・参拝者に限定する。 */
+  private async nicknameInteraction(i: Interaction): Promise<void> {
+    if (!i.inCachedGuild() || !(i.isButton() || i.isUserSelectMenu() || i.isModalSubmit())) return;
+    try {
+      const c = await this.options(i.guild);
+      const actor = await i.guild.members.fetch({ user: i.user.id, force: true });
+      if (actor.user.bot || !c.roleId || !actor.roles.cache.has(c.roleId)) {
+        await i.reply({ content: '案内人ロールの人だけが使えます。', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (i.isButton()) {
+        await i.reply({ content: '同じ案内VCにいる案内待ち・参拝者を選んでください。', flags: MessageFlags.Ephemeral,
+          components: [{ type: 1, components: [{ type: 5, custom_id: 'guide:nickname:pick', placeholder: '名前を変更する利用者', min_values: 1, max_values: 1 }] }] });
+        return;
+      }
+      const targetId = i.isUserSelectMenu() ? i.values[0] : i.customId.slice('guide:nickname:save:'.length);
+      const target = targetId ? await i.guild.members.fetch({ user: targetId, force: true }) : undefined;
+      const first = autoRanks(this.cfg().ranks)[0];
+      const ids = target ? [...target.roles.cache.keys()] : [];
+      const eligible = target && target.id !== actor.id && !target.user.bot &&
+        !adminLevelOf(this.cfg(), ids) && !target.roles.cache.has(c.roleId) &&
+        !this.cfg().ranks.some(r => r.roleId !== first?.roleId && target.roles.cache.has(r.roleId)) &&
+        ((c.pendingRoleId && target.roles.cache.has(c.pendingRoleId)) || (first && target.roles.cache.has(first.roleId)));
+      if (!eligible || !actor.voice.channelId || !c.voiceChannelIds.includes(actor.voice.channelId) || target.voice.channelId !== actor.voice.channelId) {
+        await i.reply({ content: '同じ案内VCにいる案内待ち・参拝者だけを選んでください。案内人・上位の役職・BOTの名前は変えられません。', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (i.isUserSelectMenu()) {
+        const input = new TextInputBuilder().setCustomId('nickname').setLabel('新しいサーバー内の名前').setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(32).setValue(target.displayName.slice(0, 32));
+        await i.showModal(new ModalBuilder().setCustomId(`guide:nickname:save:${target.id}`).setTitle('利用者の名前を変更').addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)));
+        return;
+      }
+      if (!i.isModalSubmit()) return;
+      const nickname = i.fields.getTextInputValue('nickname').trim();
+      if (!nickname || nickname.length > 32 || /[\r\n\x00-\x1f\x7f]/.test(nickname)) {
+        await i.reply({ content: '名前は1〜32文字で、改行を入れずに入力してください。', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      await i.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!target.manageable) {
+        await i.editReply('BOTからこの人の名前を変更できません。BOTの役職の位置と「ニックネームの管理」権限を運営に確認してください。');
+        return;
+      }
+      try { await target.setNickname(nickname, `案内人による名前変更（操作した人: ${actor.id}）`); }
+      catch (err) {
+        logger.warn({ err, actorId: actor.id, targetId: target.id }, 'guide nickname change failed');
+        await i.editReply('名前を変更できませんでした。BOTの「ニックネームの管理」権限と役職の位置を運営に確認してください。');
+        return;
+      }
+      try { await audit(this.db, { actorId: actor.id, targetId: target.id, action: 'guide.nickname', detail: { channelId: actor.voice.channelId }, via: 'discord' }); }
+      catch (err) {
+        logger.warn({ err, actorId: actor.id, targetId: target.id }, 'guide nickname audit failed');
+        await i.editReply('名前は変更しましたが、操作の記録を保存できませんでした。運営に知らせてください。');
+        return;
+      }
+      await i.editReply({ content: '利用者の名前を変更しました。', allowedMentions: { parse: [] } });
+    } catch (err) {
+      logger.warn({ err }, 'guide nickname interaction failed');
+      const content = '利用者・権限を確認できませんでした。時間をおいてもう一度操作してください。';
+      if (i.deferred || i.replied) await i.followUp({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+      else await i.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+    }
+  }
+
   async onInteraction(i: Interaction) {
+    if ('customId' in i && typeof i.customId === 'string' && (i.customId === 'guide:nickname' || i.customId === 'guide:nickname:pick' || i.customId.startsWith('guide:nickname:save:'))) {
+      if (i.guildId === this.cfg().guildId) await this.nicknameInteraction(i);
+      return;
+    }
     if (!i.isButton() || !i.customId.startsWith('guide:') || !i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     // 前に出したパネルも、押されたらそのチャンネルを覚えて、いちばん下に置き直す
     if (i.message && isGuidePanel(i.message) && !this.panelChannels.has(i.channelId)) {

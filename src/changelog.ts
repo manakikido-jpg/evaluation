@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-24-guide-nickname', date: '2026-10-24', kind: 'new', where: ['Discord'], title: '案内人パネルから利用者の名前を変更', items: ['案内人の受付に「利用者の名前を変更」を追加しました。利用者を選んで新しい名前を入力できます。', '案内人ロールだけが操作でき、同じ案内VCの案内待ち・参拝者だけが対象です。上位の役職やBOTは対象外です。'] },
   { id: '2026-10-23-update-posts-notify', date: '2026-10-23', kind: 'improve', where: ['社務所Web'], title: '投稿文のメンションに「🔔 通知あり」', items: ['投稿文のメンションで「🔔 通知ありの人（通知OK）」を選べるようにしました。通知OK のロールの人にだけ通知します。'] },
   { id: '2026-10-23-update-posts-mention', date: '2026-10-23', kind: 'improve', where: ['社務所Web'], title: '投稿文に投稿先とメンションを選べるように', items: ['まとめ係が投稿先のチャンネルを選べます。はじめはお触書・境内‐雑談・各しきたり・イベント告知。宮司は「📝 投稿文の許可」で投稿先を足す・外すができます。', 'メンション（@here・@everyone・すべての役職・ロール）を選べます。カードのときはカードの外の上に出し、選んだ相手にだけ通知します。'] },
   { id: '2026-10-23-update-posts-device', date: '2026-10-23', kind: 'improve', where: ['社務所Web'], title: '投稿文の見た目を PC とスマホで切りかえて確かめられる', items: ['「Discord での見た目」に 💻 PC／📱 スマホ の切りかえを付けました。スマホはスマホの幅で表示します。まとめ係の画面と、運営の「投稿文の許可」の両方で使えます。'] },
