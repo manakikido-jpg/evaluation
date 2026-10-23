@@ -17,7 +17,7 @@ export interface VoiceOps {
    * hub と同じカテゴリ・同じ見える範囲で通話を作り、作った人に名前などの変更を許す。作った通話の ID を返す。
    * fromHub: カテゴリではなく入口の見える範囲に合わせる（💎 極の部屋: VIP だけ）
    */
-  create(input: { hubId: string; name: string; ownerId: string; fromHub?: boolean; /** 最初から見えない部屋（🤫 シクレの入口） */ secret?: boolean }): Promise<string>;
+  create(input: { hubId: string; name: string; ownerId: string; fromHub?: boolean; /** 最初から見えない部屋（🤫 シクレの入口） */ secret?: boolean; /** 入口の通話がないときに作るカテゴリ */ parentId?: string }): Promise<string>;
   /** 通話に移動させる（その人が通話にいなければ失敗する） */
   move(userId: string, channelId: string): Promise<void>;
   /** 通話を消す（すでになければ何もしない） */
@@ -138,7 +138,7 @@ export type SecretRoomResult = { status: 'created' | 'exists'; channelId: string
  * 🤫 パネルのボタンでシクレ部屋を作る（どの通話も通らないので、だれにも見えない）。
  * 部屋代はまだ取らない（作った人が入ったときに取る）。5 分入らなければ消す。同じ入口の自分の部屋がまだあれば、それを返す
  */
-export async function createSecretRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string }, now = new Date()): Promise<SecretRoomResult> {
+export async function createSecretRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string; parentId?: string }, now = new Date()): Promise<SecretRoomResult> {
   const hub = ctx.cfg.tempVoice.hubs.find((h) => h.channelId === input.hubId);
   if (!hub) return { status: 'failed' };
   if (busy.has(input.userId)) return { status: 'busy' };
@@ -153,7 +153,7 @@ export async function createSecretRoom(ctx: TempVoiceCtx, input: { hubId: string
     }
     let channelId: string;
     try {
-      channelId = await ctx.ops.create({ hubId: hub.channelId, name: roomName(hub.name, input.displayName), ownerId: input.userId, secret: true });
+      channelId = await ctx.ops.create({ hubId: hub.channelId, name: roomName(hub.name, input.displayName), ownerId: input.userId, secret: true, ...(input.parentId ? { parentId: input.parentId } : {}) });
     } catch (err) {
       logger.warn({ err }, 'シクレ部屋を作れませんでした（BOT の「チャンネルの管理」権限）');
       return { status: 'failed' };
@@ -203,7 +203,7 @@ export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; 
  * 🏨 パネルで銭を払って、24 時間残る宿を立てる。作れてから払う（足りなければ部屋を消す）。
  * 同じ入口の自分の宿がまだ残っていれば、それを返す（二重には買わない）
  */
-export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string; mode?: StayMode }, now = new Date()): Promise<StayRoomResult> {
+export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string; mode?: StayMode; parentId?: string }, now = new Date()): Promise<StayRoomResult> {
   const hourly = input.mode === 'hourly';
   const hub = ctx.cfg.tempVoice.hubs.find((h) => h.channelId === input.hubId);
   if (!hub) return { status: 'failed' };
@@ -219,7 +219,7 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
     }
     let channelId: string;
     try {
-      channelId = await ctx.ops.create({ hubId: hub.channelId, name: `${hourly ? '⏱' : '🏨'} ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId });
+      channelId = await ctx.ops.create({ hubId: hub.channelId, name: `${hourly ? '⏱' : '🏨'} ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId, ...(input.parentId ? { parentId: input.parentId } : {}) });
     } catch (err) {
       logger.warn({ err }, '宿を作れませんでした（BOT の「チャンネルの管理」権限）');
       return { status: 'failed' };

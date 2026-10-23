@@ -163,6 +163,12 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(pickPanelHub(c, guild({ parent: { permissionsFor: perm(true) }, permissionsFor: perm(false) }), {} as never)).toEqual({ hubId: HUB });
     expect(pickPanelHub(c, guild({ parent: { permissionsFor: perm(false) }, permissionsFor: perm(true) }), {} as never)).toEqual({ reason: 'denied' });
     expect(pickPanelHub(c, guild(undefined), {} as never)).toEqual({ reason: 'missing' });
+    // 入口の通話を消していても、「宿坊」のカテゴリがあれば、そこに作る
+    const { ChannelType } = await import('discord.js');
+    const CAT = '920000000000000099';
+    const withCat = (ok: boolean) => ({ channels: { cache: new Map([[CAT, { id: CAT, type: ChannelType.GuildCategory, name: '🌙 宿坊', permissionsFor: perm(ok) }]]) } }) as never;
+    expect(pickPanelHub(c, withCat(true), {} as never)).toEqual({ hubId: HUB, parentId: CAT });
+    expect(pickPanelHub(c, withCat(false), {} as never)).toEqual({ reason: 'denied' });
     expect(pickPanelHub(cfg, guild(undefined), {} as never)).toEqual({ reason: 'none' });
   });
 
@@ -190,7 +196,7 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     const deferReply = vi.fn(), editReply = vi.fn(), openSecret = vi.fn(async () => ({ status: 'created', channelId: '930000000000000001' }));
     const interaction = { inCachedGuild: () => true, guildId: c.guildId, isChatInputCommand: () => false, isButton: () => true, customId: 'secretroom:open', user: { id: 'u1' }, guild: {channels: {cache: new Map([[HUB, {name:'宿坊をひらく',permissionsFor:() => ({has:()=>true})}]])}}, member: { displayName: 'さくら' }, message: { flags: { has: () => true } }, deferReply, editReply };
     await onSecretRoomInteraction({ openSecret } as never, () => c, interaction as never);
-    expect(openSecret).toHaveBeenCalledWith(HUB, 'u1', 'さくら');
+    expect(openSecret).toHaveBeenCalledWith(HUB, 'u1', 'さくら', undefined);
     expect(deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     expect(JSON.stringify(editReply.mock.calls)).toContain('930000000000000001');
     expect(JSON.stringify(editReply.mock.calls)).toContain('5 分');

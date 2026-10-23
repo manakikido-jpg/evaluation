@@ -12,9 +12,11 @@ export const OWNER_ALLOW = PermissionFlagsBits.ViewChannel | PermissionFlagsBits
 
 export function discordVoiceOps(guild: Guild): VoiceOps {
   return {
-    async create({ hubId, name, ownerId, fromHub, secret }) {
+    async create({ hubId, name, ownerId, fromHub, secret, parentId }) {
       const hub = guild.channels.cache.get(hubId);
-      const parent = hub && 'parent' in hub ? hub.parent : null;
+      // 入口の通話がないとき（パネルから）は、決めたカテゴリに作る
+      const fallback = parentId ? guild.channels.cache.get(parentId) : undefined;
+      const parent = hub && 'parent' in hub ? hub.parent : fallback?.type === ChannelType.GuildCategory ? fallback : null;
       // カテゴリと同じ見える範囲（宵宮なら宵参りの人だけ）にして、作った人の権限を足す。💎 極は入口と同じ（VIP だけ）
       const source = fromHub && hub && 'permissionOverwrites' in hub ? hub : parent;
       const overwrites = source
@@ -72,17 +74,17 @@ export class TempVoiceApp {
   ) {}
 
   /** 🤫 パネルからシクレ部屋を作る */
-  async openSecret(hubId: string, userId: string, displayName: string) {
+  async openSecret(hubId: string, userId: string, displayName: string, parentId?: string) {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
-    return createSecretRoom(this.ctx, { hubId, userId, displayName });
+    return createSecretRoom(this.ctx, { hubId, userId, displayName, parentId });
   }
 
   /** 🏨 パネルから 24 時間の宿（⏱ 1 時間ごとの宿）を買って立てる */
-  async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day') {
+  async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day', parentId?: string) {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
-    const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode });
+    const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId });
     if (r.status === 'created') await this.onCreated?.(r.channelId, userId, { stay: true }).catch((err) => logger.warn({ err }, 'stay room created hook failed'));
     return r;
   }
@@ -144,15 +146,18 @@ export const secretRoomHubs = (cfg: GuildConfig) =>
  * カテゴリが見える・入れるかで決める（入口だけ鍵をかけていても作れる）。
  * 入口のチャンネルが消えていたら 'missing'、カテゴリに入れない人は 'denied'
  */
-export function pickPanelHub(cfg: GuildConfig, guild: Guild, member: GuildMember): { hubId: string } | { reason: 'none' | 'missing' | 'denied' } {
+export function pickPanelHub(cfg: GuildConfig, guild: Guild, member: GuildMember): { hubId: string; parentId?: string } | { reason: 'none' | 'missing' | 'denied' } {
   const hubs = secretRoomHubs(cfg);
   if (!hubs.length) return { reason: 'none' };
+  const need = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect;
   const live = hubs.map((h) => ({ h, ch: guild.channels.cache.get(h.channelId) })).filter((x) => x.ch);
   if (!live.length) {
-    logger.warn({ hubs: hubs.map((h) => h.channelId) }, '宿坊の入口のチャンネルが見つかりません（消したときは、社務所Web の通話部屋の設定から外してください）');
-    return { reason: 'missing' };
+    // 入口の通話を消していても、「宿坊」のカテゴリがあれば、そこに作る（値段は入口の設定のまま）
+    const cat = [...guild.channels.cache.values()].find((c) => c.type === ChannelType.GuildCategory && c.name.includes('宿坊') && !c.name.includes('宵宮'));
+    logger.warn({ hubs: hubs.map((h) => h.channelId), category: cat?.id }, '宿坊の入口のチャンネルが見つかりません（パネルの部屋は「宿坊」のカテゴリに作ります）');
+    if (!cat || cat.type !== ChannelType.GuildCategory) return { reason: 'missing' };
+    return cat.permissionsFor(member).has(need) ? { hubId: hubs[0]!.channelId, parentId: cat.id } : { reason: 'denied' };
   }
-  const need = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect;
   const ok = live.find(({ ch }) => {
     const place = ch && 'parent' in ch && ch.parent ? ch.parent : ch;
     return place?.permissionsFor(member)?.has(need);
@@ -193,23 +198,25 @@ export async function onSecretRoomInteraction(app: TempVoiceApp, cfg: () => Guil
   if (!i.isButton() || !i.customId.startsWith('secretroom:')) return;
   // 「🤫 シクレ部屋を開く」: 押した人が開ける入口のうち、1 回払い（宿坊）を先に選んで、すぐ作る（選ぶ画面は出さない）
   let hubId = i.customId.slice('secretroom:'.length);
+  let parentId: string | undefined;
   if (hubId === 'open') {
     const current = cfg();
     const pick = pickPanelHub(current, i.guild, i.member);
     if (!('hubId' in pick)) return void (await i.reply({ content: PICK_ERROR[pick.reason], ...EPHEMERAL }));
     hubId = pick.hubId;
+    parentId = pick.parentId;
   }
   if (!secretRoomHubs(cfg()).some((h) => h.channelId === hubId)) return void (await i.reply({ content: 'この入口は、いまは使えません。', ...EPHEMERAL }));
   // 入口が見えない人（宵宮は宵参りの人だけ など）には作らない
-  const hub = i.guild.channels.cache.get(hubId);
-  const place = hub && 'parent' in hub && hub.parent ? hub.parent : hub;
+  const hub = parentId ? undefined : i.guild.channels.cache.get(hubId);
+  const place = parentId ? i.guild.channels.cache.get(parentId) : hub && 'parent' in hub && hub.parent ? hub.parent : hub;
   if (!place || !place.permissionsFor(i.member).has(PermissionFlagsBits.ViewChannel | PermissionFlagsBits.Connect)) return void (await i.reply({ content: 'この部屋は、あなたは作れません（入れる人が決まっている入口です）。', ...EPHEMERAL }));
   await i.deferReply(EPHEMERAL);
   // 古い公開パネルから押した場合も、入口は1ボタンの表示に直す。
   if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {
     await i.message.edit({ ...secretRoomPanel(cfg()), content: null, allowedMentions: { parse: [] } } as never).catch(err => logger.warn({ err }, 'secret room panel update failed'));
   }
-  const r = await app.openSecret(hubId, i.user.id, i.member.displayName);
+  const r = await app.openSecret(hubId, i.user.id, i.member.displayName, parentId);
   if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : '部屋を作れませんでした。神職に知らせてください。'));
   const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
   await i.editReply({
@@ -263,7 +270,7 @@ export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildC
   if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {
     await i.message.edit({ ...stayRoomPanel(current), content: null, allowedMentions: { parse: [] } } as never).catch((err) => logger.warn({ err }, 'stay room panel update failed'));
   }
-  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day');
+  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day', picked.parentId);
   if (r.status === 'insufficient') return void (await i.editReply(`${current.economy.currencyName}が足りません（${r.price.toLocaleString('ja-JP')} 枚必要）。`));
   if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : '宿を作れませんでした。神職に知らせてください。'));
   const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
