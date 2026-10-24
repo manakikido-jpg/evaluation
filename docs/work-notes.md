@@ -546,3 +546,5 @@
 - 指摘「ダウンロードできない」：/workspaceのローカルリンクではユーザーが取得できないため訂正。完成した5本・ZIP・軽量WebPのPOPをdocs/previews/champagneへ保存し、GitHubの作業ブランチのHTTPS rawリンクで渡す。READMEに各リンクと値段・時間を記録。既存Dockerfileはdocsをコピーせず、本番イメージへの容量追加はない。push後にダウンロードURLの応答と元ファイル一致を確認する。
 - 最終の価格別アニメ版の検証：全158ファイル1,897テスト成功（346.42秒、4並列）。型チェック・ビルド成功。関連12件も成功（52.80秒）。ログ/tmp/champagne-tier-{all-tests,typecheck,build,related}.log。テスト削除・skipなし。旧実写風の失敗と旧一律版の停止は最終結果に含めない。
 - 完了範囲：5種の専用アニメボトル、価格別の演出・長さ・コマ数、最上位の花火とタワー、確認用PNGと通話・DM共通GIF、同梱素材と由来、ダウンロード用の動画・ZIP・POPと説明。価格・手数料30％・課金/入金/再送は変更なし。codex/champagne-luxuryから本番ブランチ向けPRへ保存する。本番操作なし、実Discord確認は合流後に担当Claudeが行う。最新本番c48eaeeとの更新履歴・説明・記録を両方保持して確認・合流する。
+- GitHub保存済み：PR #79 https://github.com/manakikido-jpg/evaluation/pull/79 、実装76266ff、codex/champagne-luxury。OPEN・未合流。最新本番との更新履歴・説明・記録の調整は担当Claudeへ引き継ぐ。本番未反映。
+- ダウンロード検証：raw.githubusercontent.com の作業ブランチ上で、ZIP・5GIF・POP WebPの全7URLがHTTP200。取得した全ファイルのSHA-256がローカル原本と一致。ZIPは1,785,813バイト、5GIF入り。リンク集はdocs/previews/champagne/README.md。ユーザーへは環境内リンクではなく、このHTTPSリンクを渡す。
