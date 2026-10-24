@@ -11,7 +11,7 @@ beforeEach(async()=>{({db,close}=await makeDb());});afterEach(async()=>{await cl
 const CAST='600000000000000081', CUSTOMER='600000000000000082';
 const DAY=86_400_000, CREATED=new Date('2026-10-01T12:34:56.789Z');
 const at=(days:number)=>new Date(CREATED.getTime()+days*DAY);
-const migration=readFileSync(new URL('../drizzle/0125_cast_delivery_week.sql',import.meta.url),'utf8');
+const migration=readFileSync(new URL('../drizzle/0126_cast_delivery_week.sql',import.meta.url),'utf8');
 const apply=()=>db.execute(sql.raw(migration));
 async function order(values:Partial<typeof castSessions.$inferInsert>={}) {
  return (await db.insert(castSessions).values({castId:CAST,customerId:CUSTOMER,plan:'dlv:voice',menuName:'ボイス',
