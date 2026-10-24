@@ -31,3 +31,19 @@ describe('📝 投稿文', () => {
     expect(updatePostMessage({ ...base, style: 'embed', mention: OK }).allowed_mentions).toEqual({ parse: [], roles: [OK] });
   });
 });
+
+describe('📝 許可する側で直す', () => {
+  it('許可待ちの題と本文だけ直せる', async () => {
+    const { makeDb } = await import('./helpers.js');
+    const { editPendingUpdatePost, saveUpdateDraft, submitUpdatePost } = await import('../src/services/updatePosts.js');
+    const { db, close } = await makeDb();
+    const author = { id: '810000000000000001', name: 'さくら' };
+    const draft = (await saveUpdateDraft(db, author, { title: 'まえ', body: 'まえの本文', style: 'text', imagePosition: 'bottom', mention: '', targetChannelId: null }))!;
+    expect(await editPendingUpdatePost(db, draft.id, 'admin', { title: 'x', body: 'y' })).toBeUndefined();
+    await submitUpdatePost(db, author.id, draft.id);
+    expect(await editPendingUpdatePost(db, draft.id, 'admin', { title: 'x', body: '  ' })).toBeUndefined();
+    const row = (await editPendingUpdatePost(db, draft.id, 'admin', { title: ' あと ', body: 'あとの本文' }))!;
+    expect([row.title, row.body, row.status]).toEqual(['あと', 'あとの本文', 'pending']);
+    await close();
+  });
+});

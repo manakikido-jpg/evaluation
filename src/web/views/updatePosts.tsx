@@ -1,13 +1,13 @@
 import type { AdminSession } from '../../db/schema.js';
 import type { GuildChannel, GuildRole } from '../../lib/discordRest.js';
-import { postableUpdateChannels, type UpdatePostConfig, type UpdatePostRow as UpdatePost } from '../../services/updatePosts.js';
+import { BODY_MAX, TITLE_MAX, postableUpdateChannels, type UpdatePostConfig, type UpdatePostRow as UpdatePost } from '../../services/updatePosts.js';
 import { mentionLabel } from '../../services/notices.js';
 import { DeviceFrame, STATUS_LABEL, UpdatePostPreview } from '../updateDesk.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
 const FLASH: Record<string, string> = {
-  saved: '保存しました。', posted: '許可して投稿しました。', rejected: 'まとめ係に戻しました。', gone: 'もう処理された投稿文です。',
+  saved: '保存しました。', edited: '直しました。プレビューを見てから許可してください。', posted: '許可して投稿しました。', rejected: 'まとめ係に戻しました。', gone: 'もう処理された投稿文です。',
   failed: 'Discord に投稿できませんでした。許可待ちに戻したので、もう一度お試しください。', nochannel: '先に「投稿するチャンネル」を決めてください。', invalid: '入力を確かめてください。',
 };
 
@@ -32,6 +32,7 @@ export function UpdatePostsPage(p: { session: AdminSession; config: UpdatePostCo
         <p><strong>{post.title || '（題なし）'}</strong> ・ {post.authorName || name(post.authorId)} さん ・ 申請 {post.submittedAt ? fmtDateTime(post.submittedAt) : ''}</p>
         {preview(post)}
         {(() => { const ch = targetOf(post); return <form method="post" action={`/posts/${post.id}/approve`}>{csrf}{!ch && <p class="flash warn">投稿先が候補にありません（外されたか、選ばれていません）。戻して選びなおしてもらってください。</p>}<button type="submit" disabled={!ch}>許可して {ch ? `#${ch.name}` : ''} に投稿{post.mention ? `（${mentionLabel(post.mention, roleName)} に通知）` : ''}</button></form>; })()}
+        <details class="fold"><summary>✏️ ここで直す</summary><form method="post" action={`/posts/${post.id}/edit`}>{csrf}<label>題<input name="title" value={post.title} maxlength={TITLE_MAX} /></label><label>本文<textarea name="body" rows={10} maxlength={BODY_MAX} required>{post.body}</textarea></label><button type="submit">直して保存</button><p class="note">直したことは記録に残ります。保存したあと、上のプレビューで確かめてから許可してください。</p></form></details>
         <form method="post" action={`/posts/${post.id}/reject`}>{csrf}<label>戻すときのひとこと（まとめ係に見えます）<input name="note" maxlength={300} /></label><button type="submit">戻す</button></form>
       </article>)}
     </section>

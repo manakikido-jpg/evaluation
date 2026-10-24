@@ -167,6 +167,17 @@ export async function approveUpdatePost(db: Db, id: number, by: string, channelO
   return 'ok';
 }
 
+/** 許可する人が、許可待ちの題と本文をその場で直す（許可待ちのときだけ） */
+export async function editPendingUpdatePost(db: Db, id: number, by: string, input: { title: string; body: string }, now = new Date()) {
+  const title = input.title.trim().slice(0, TITLE_MAX);
+  const body = input.body.trim().slice(0, BODY_MAX);
+  if (!body) return undefined;
+  const [row] = await db.update(updatePosts).set({ title, body, updatedAt: now })
+    .where(and(eq(updatePosts.id, id), eq(updatePosts.status, 'pending'))).returning();
+  if (row) await audit(db, { actorId: by, targetId: row.authorId, action: 'update_post.edit', detail: { id }, via: 'web' });
+  return row;
+}
+
 /** 戻す（ひとことを付けて、まとめ係が直せるように） */
 export async function rejectUpdatePost(db: Db, id: number, by: string, note: string, now = new Date()) {
   const [row] = await db.update(updatePosts).set({ status: 'rejected', note: note.slice(0, 300), decidedBy: by, decidedAt: now, updatedAt: now })

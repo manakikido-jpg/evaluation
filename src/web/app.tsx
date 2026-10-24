@@ -25,7 +25,7 @@ import { UpdatePostsPage } from './views/updatePosts.js';
 import { MessageArchivePage } from './views/messageArchive.js';
 import { archiveFile, searchArchive } from '../services/messageArchive.js';
 import { mountUpdateDesk } from './updateDesk.js';
-import { approveUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
+import { approveUpdatePost, editPendingUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
 import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
@@ -1846,6 +1846,13 @@ export function createWebApp(deps: WebDeps) {
     } else next = cur.filter(x => x !== id);
     await saveUpdatePostConfig(db, { ...conf, channelIds: next.slice(0, 50) }, c.get('session').userId);
     return c.redirect('/posts?msg=saved#post-channels');
+  });
+  app.post('/posts/:id/edit', async c => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id)) return c.redirect('/posts?msg=invalid');
+    const b = await c.req.parseBody();
+    const row = await editPendingUpdatePost(db, id, c.get('session').userId, { title: typeof b.title === 'string' ? b.title : '', body: typeof b.body === 'string' ? b.body : '' }, now());
+    return c.redirect(`/posts?msg=${row ? 'edited' : 'invalid'}`);
   });
   app.post('/posts/:id/reject', async c => {
     const id = Number(c.req.param('id'));
