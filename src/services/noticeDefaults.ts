@@ -1317,3 +1317,16 @@ export const PREVIOUS_GUIDE_BODIES: Record<string, string[]> = {
   '御神酒処\n使い方': [OMIKI_V1, OMIKI_V2, OMIKI_V3, OMIKI_V4, OMIKI_V5],
   'おみくじ\n使い方': [OMIKUJI_V1, OMIKUJI_V2, OMIKUJI_V3, OMIKUJI_V4],
 };
+
+/** 修正・要望窓口の下に出す、コピー用の記入欄。 */
+export const REQUEST_WINDOW_TEMPLATE = [
+  '# 📝 修正・要望のテンプレート',
+  '下のテンプレートをコピーしてお使いください。',
+  '',
+  '```',
+  '修正・要望内容：',
+  '問い合わせした理由：',
+  '```',
+  '',
+  '※画像は、お問い合わせの際に作成するスレッド内にお願いします。',
+].join('\n');

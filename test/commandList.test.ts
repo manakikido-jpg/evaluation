@@ -13,6 +13,7 @@ describe('⌨ コマンドのまとめ', () => {
     expect(panel.staff).toBe(true);
     expect(panel.subcommands.map((s) => s.name)).toContain('朱印');
     expect(panel.subcommands.map((s) => s.name)).toContain('舞倉');
+    expect(panel.subcommands.map((s) => s.name)).toContain('修正要望');
     const yaku = byName.get('厄')!;
     expect(yaku.subcommands.find((s) => s.name === '付ける')?.options).toContainEqual({ name: '相手', description: '', required: true });
     // 【神職】の印は外す

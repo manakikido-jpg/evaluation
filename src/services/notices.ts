@@ -8,7 +8,7 @@ import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { memberCommandsText } from './commandList.js';
 import { coreName } from '../lib/names.js';
-import { DEFAULT_GUIDES, DEFAULT_NOTICES, EMA_GUIDE, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
+import { DEFAULT_GUIDES, DEFAULT_NOTICES, EMA_GUIDE, REQUEST_WINDOW_TEMPLATE, PREVIOUS_GUIDE_BODIES, type NoticeTemplate } from './noticeDefaults.js';
 import { notifyReady, pingRoleIds } from './notify.js';
 import { describeStreakRewards, omikujiRange } from './omikuji.js';
 import { coreTimeRate, describeCoreTime } from './coreTime.js';
@@ -766,3 +766,17 @@ async function deleteMessageQuietly(discord: DiscordActions, channelId: string, 
   }
 }
 
+
+/** /パネル 修正要望: 既存の案内は触らず、同じ窓口のテンプレートだけを下へ置く。 */
+export async function placeRequestWindowTemplate(ctx: NoticeCtx, channelId: string, by: string): Promise<{ result: PublishResult; created: boolean }> {
+  const title = '修正・要望のテンプレート';
+  const here = (await listNotices(ctx.db)).find(n => n.channelId === channelId && n.title === title);
+  const n = here ?? await createNotice(ctx.db, { channelId, title, body: REQUEST_WINDOW_TEMPLATE, style: 'text', sticky: true, by });
+  if (here && (!here.sticky || here.pinned)) {
+    await updateNotice(ctx.db, here.id, { title: here.title, body: here.body, sticky: true, pinned: false, by });
+  }
+  const result = await publishNotice(ctx, n.id, by);
+  if (here && result !== 'too_long') await restickNotice(ctx, n.id);
+  await audit(ctx.db, { actorId: by, action: 'notice.request_template', detail: { channelId, noticeId: n.id, created: !here }, via: 'discord' });
+  return { result, created: !here };
+}
