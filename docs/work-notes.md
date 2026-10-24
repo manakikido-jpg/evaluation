@@ -604,3 +604,4 @@
 - 最終検証：全164ファイル1,950テスト成功（354.11秒、4並列）。最終型チェック・ビルド成功、関連19件成功。ログ/tmp/server-mute-{all-tests-final,typecheck-complete-final,build-complete-final,related-complete-final}.log。テスト削除・skipなし。途中で停止した旧コードの全件結果は使用していない。
 - 完了：サーバーミュートの目印付与、退出中の保持、通常VC再入室の解除、奥の院のミュート継続、手動解除時のロール除去、起動/1分ごとの復旧、失敗時の記録保持、退会済みの記録除去。既存settingsを使い新規マイグレーションなし。ミュート中ロールは既存名を使用、なければ権限なしの目印を自動作成。衛士の権限付与や専用パネルは追加していない。
 - 保存先：codex/server-mute-roleから担当Claude向けPR。基準b19ef53、最新fetch5be0bed（番付・奉納板停止）とは別変更。本番操作は未実施。合流後はBOTのミュート/ロール管理権限と役職順、奥の院の設定を確認し、通常VCのミュート→退出→再入室解除、奥の院の継続、DM等に通知せずロールだけ変わることを実機確認する。
+- GitHub保存済み：PR #83 https://github.com/manakikido-jpg/evaluation/pull/83 、実装499259e、codex/server-mute-role。OPEN・未合流、担当Claudeの確認・合流待ち。基準b19ef53、最新本番5be0bedの番付・奉納板停止を維持して合流する。実Discordでの操作は未実施。
