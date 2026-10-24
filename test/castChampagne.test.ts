@@ -5,7 +5,7 @@ import { ChannelType, type Interaction } from 'discord.js';
 import type { Db } from '../src/db/client.js';
 import { castChampagnes, castSessions, coinTx } from '../src/db/schema.js';
 import { CHAMPAGNES, prepareChampagne, buyChampagne, announceChampagne } from '../src/services/castChampagne.js';
-import { champagnePreview, champagneAnimation } from '../src/services/castChampagneImage.js';
+import { champagnePreview, champagneAnimation, champagneSvg, champagneMotion } from '../src/services/castChampagneImage.js';
 import { castStats, castStatement, saveCastConfig, CAST_DEFAULTS, finishSession } from '../src/services/cast.js';
 import { addCoins, spendWithin, walletOf } from '../src/services/economy.js';
 import { CastApp, sessionMessage } from '../src/discord/cast.js';
@@ -86,9 +86,21 @@ it('通話終了との競合は購入済みか拒否のどちらかにそろい�
  const q=await quote();const result=await Promise.allSettled([buyChampagne(db,q.id,party,here,clock),finishSession(db,CAST_DEFAULTS,session.id,'system',new Date(NOW.getTime()+31*60000))]);
  const paid=result[0]!.status==='fulfilled';expect((await walletOf(db,CUSTOMER)).balance).toBe(50000-(paid?500:0));expect((await walletOf(db,CAST)).balance).toBe(270+(paid?350:0));
 });
-it('5種類のプレビューと8フレームの開栓GIFを描く',async()=>{
- for(const b of CHAMPAGNES){expect(await sharp(champagnePreview(b.id)).metadata()).toMatchObject({width:720,height:420,format:'png'});const gif=await champagneAnimation(b.id);expect(gif.length).toBeLessThan(2*1024*1024);expect(await sharp(gif,{animated:true}).metadata()).toMatchObject({width:720,pageHeight:420,pages:8,format:'gif'});}
-},30000);
+it('価格が上がるほどコマ数・余韻・演出が豪華になる専用GIFを描く',async()=>{
+ for(const b of CHAMPAGNES){expect(await sharp(champagnePreview(b.id)).metadata()).toMatchObject({width:720,height:420,format:'png'});const gif=await champagneAnimation(b.id);expect(gif.length).toBeLessThan(2*1024*1024);expect(await sharp(gif,{animated:true}).metadata()).toMatchObject({width:720,pageHeight:420,pages:champagneMotion(b.id).frames,format:'gif'});}
+ const motions=CHAMPAGNES.map(b=>champagneMotion(b.id));
+ expect(motions.map(m=>m.frames)).toEqual([24,28,32,36,40]);
+ expect(motions.map(m=>(m.frames-1)*m.frameMs+m.holdMs)).toEqual([4360,5040,5720,6400,7080]);
+ const meta=await sharp(await champagneAnimation('yozakura'),{animated:true}).metadata();
+ expect(meta.delay!.reduce((sum,n)=>sum+n,0)).toBe(7080);
+ expect(meta.delay!.at(-1)).toBe(2400);
+ expect(champagneSvg('sakura',0)).not.toBe(champagneSvg('sakura',1));
+ expect(champagneSvg('sakura',1)).toContain('乾杯！');
+ expect(champagneSvg('sakura',Number.NaN)).toBe(champagneSvg('sakura',0));
+ expect(()=>champagnePreview('unknown')).toThrow('unknown champagne');
+ expect(await champagneAnimation('moon')).toBe(await champagneAnimation('moon'));
+ await expect(champagneAnimation('unknown')).rejects.toThrow('unknown champagne');
+},120000);
 it('通話の5つ目の操作から選択・確認・乾杯し、同時確定でも投稿と入金は1回だけ',async()=>{
  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(NOW);
  expect(JSON.stringify(sessionMessage(session,CAST_DEFAULTS,'銭'))).toContain(`cast:champagne:${session.id}`);
