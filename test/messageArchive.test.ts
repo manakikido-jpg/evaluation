@@ -33,6 +33,9 @@ describe('📚 書き込みの記録', () => {
     await archiveMessage(db, msg('m2', { authorId: '800000000000000002', content: '100%_ok', createdAt: new Date('2026-06-01T00:00:00Z') }), async () => undefined);
     expect((await searchArchive(db, { author: '800000000000000002' })).map((r) => r.messageId)).toEqual(['m2']);
     expect((await searchArchive(db, { text: '%_' })).map((r) => r.messageId)).toEqual(['m2']);
+    const byName = await searchArchive(db, { authorName: '%' });
+    expect(byName).toEqual([]);
+    expect((await searchArchive(db, { authorName: 'さく' })).length).toBeGreaterThan(0);
     expect(await pruneArchive(db, at)).toBe(1);
     expect((await searchArchive(db, {})).map((r) => r.messageId)).toEqual(['m1']);
   });

@@ -55,12 +55,16 @@ export async function pruneArchive(db: Db, now = new Date()): Promise<number> {
   return old.length;
 }
 
-export type ArchiveQuery = { author?: string; channel?: string; text?: string; from?: Date; to?: Date; deleted?: boolean; limit?: number };
+/** ilike の % _ \\ をふつうの字にする */
+const like = (s: string) => s.replace(/[%_\\]/g, (c) => `\\${c}`);
+
+export type ArchiveQuery = { author?: string; authorName?: string; channel?: string; text?: string; from?: Date; to?: Date; deleted?: boolean; limit?: number };
 export async function searchArchive(db: Db, q: ArchiveQuery): Promise<ArchivedMessage[]> {
   const where: SQL[] = [];
   if (q.author) where.push(eq(messageArchive.authorId, q.author));
+  if (q.authorName) where.push(ilike(messageArchive.authorName, `%${like(q.authorName)}%`));
   if (q.channel) where.push(eq(messageArchive.channelId, q.channel));
-  if (q.text) where.push(ilike(messageArchive.content, `%${q.text.replace(/[%_\\]/g, (c) => `\\${c}`)}%`));
+  if (q.text) where.push(ilike(messageArchive.content, `%${like(q.text)}%`));
   if (q.from) where.push(gte(messageArchive.createdAt, q.from));
   if (q.to) where.push(lte(messageArchive.createdAt, q.to));
   if (q.deleted) where.push(isNotNull(messageArchive.deletedAt));

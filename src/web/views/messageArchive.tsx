@@ -11,7 +11,7 @@ export function MessageArchivePage(p: { session: AdminSession; rows: ArchivedMes
     <h1>📚 書き込みの記録</h1>
     <p class="note">サーバーの書き込み（文・写真）を、書いた人・時刻・書きかえ・消した時刻と消した人つきで残しています。写真は 8MB まで中身も残し、動画などは名前と大きさだけです。{ARCHIVE_DAYS} 日たったものは自動で消えます。消した人は、本人が消したときは Discord が教えないので「本人か不明」になります。宮司だけが見られます。</p>
     <form method="get" action="/message-archive" class="card"><div class="fields">
-      <label class="field"><span>書いた人（ユーザー ID）</span><input name="author" value={p.q.author ?? ''} pattern="\d{17,20}" /></label>
+      <label class="field"><span>書いた人（名前か ユーザー ID）</span><input name="author" value={p.q.author ?? ''} maxlength={100} /></label>
       <label class="field"><span>チャンネル</span><select name="channel"><option value="">すべて</option>{p.channels.filter((c) => c.type !== 4).map((c) => <option value={c.id} selected={c.id === p.q.channel}>#{c.name}</option>)}</select></label>
       <label class="field"><span>文にふくむ言葉</span><input name="text" value={p.q.text ?? ''} maxlength={100} /></label>
       <label class="field"><span>日付（から）</span><input type="date" name="from" value={p.q.from ?? ''} /></label>
