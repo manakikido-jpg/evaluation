@@ -70,3 +70,23 @@ it('上下2枚の写真とボタンの旗を、multipartでも保持する', asy
   expect(body.attachments.map((a: {filename: string}) => a.filename)).toEqual(['gacha-prayer.png', 'casino-gacha-banner.png']);
   expect(form.get('files[1]')).toBeInstanceOf(File);
 });
+
+it('スタンプはfile・name・tagsのmultipartで1回だけ送信し、画像投稿用の形式を使わない', async () => {
+  const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+    const body = init!.body as FormData;
+    expect(body.get('name')).toBe('おはよう');
+    expect(body.get('tags')).toBe('😊');
+    expect(body.get('file')).toBeInstanceOf(Blob);
+    expect(body.has('payload_json')).toBe(false);
+    return new Response(JSON.stringify({ id: '700000000000000009', name: 'おはよう' }), { status: 201 });
+  });
+  vi.stubGlobal('fetch', fetch);
+  await createDiscordActions('test').createGuildSticker!('guild', { name: 'おはよう', description: '', tags: '😊', data: new Uint8Array([1]) }, '許可');
+  expect(fetch).toHaveBeenCalledOnce();
+});
+it('スタンプのタイムアウト・5xxでは自動で作成を繰り返さない', async () => {
+  const fetch = vi.fn(async () => new Response('failed', { status: 503 }));
+  vi.stubGlobal('fetch', fetch);
+  await expect(createDiscordActions('test').createGuildSticker!('guild', { name: 'おはよう', description: '', tags: '😊', data: new Uint8Array([1]) }, '許可')).rejects.toBeInstanceOf(DiscordHttpError);
+  expect(fetch).toHaveBeenCalledOnce();
+});

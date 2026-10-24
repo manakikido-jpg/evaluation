@@ -862,6 +862,13 @@
       "when": 1792787878578,
       "tag": "0122_lethal_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1792800515910,
+      "tag": "0123_stormy_living_mummy",
+      "breakpoints": true
     }
   ]
 }

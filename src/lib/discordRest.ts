@@ -2,7 +2,10 @@
  * BOT のトークンで Discord を操作する（ロール・DM・BAN・キック）。
  * BOT 本体と管理画面の両方から同じ処理で使う。テストでは偽物に差し替える。
  */
+export type GuildSticker = { id: string; name: string; description?: string | null; tags?: string };
 export interface DiscordActions {
+  createGuildSticker?(guildId: string, input: { name: string; description: string; tags: string; data: Uint8Array }, reason: string): Promise<GuildSticker>;
+  guildStickers?(guildId: string): Promise<GuildSticker[]>;
   addRole(guildId: string, userId: string, roleId: string, reason: string): Promise<void>;
   removeRole(guildId: string, userId: string, roleId: string, reason: string): Promise<void>;
   /** DM を送る。DM を受け取らない設定の人などには届かないので false */
@@ -177,6 +180,16 @@ export function createDiscordActions(botToken: string): DiscordActions {
   };
 
   return {
+    guildStickers: async g => (await call('GET', `/guilds/${g}/stickers`)) as GuildSticker[],
+    async createGuildSticker(g, input, reason) {
+      const form = new FormData();
+      form.append('name', input.name); form.append('description', input.description); form.append('tags', input.tags);
+      form.append('file', new Blob([input.data], { type: 'image/png' }), 'sticker.png');
+      // タイムアウト・5xxでは作成済みの可能性があるので自動再送しない。
+      const res = await fetch(`${API}/guilds/${g}/stickers`, { method: 'POST', headers: { authorization: `Bot ${botToken}`, 'x-audit-log-reason': encodeURIComponent(reason) }, body: form, signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new DiscordHttpError(`sticker create failed: ${res.status}`, res.status);
+      return await res.json() as GuildSticker;
+    },
     addRole: async (g, u, r, reason) => void (await call('PUT', `/guilds/${g}/members/${u}/roles/${r}`, { reason })),
     removeRole: async (g, u, r, reason) => void (await call('DELETE', `/guilds/${g}/members/${u}/roles/${r}`, { reason })),
     async sendDm(userId, content) {
