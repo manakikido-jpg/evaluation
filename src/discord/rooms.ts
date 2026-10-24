@@ -41,6 +41,7 @@ import {
   type RoomRow,
 } from '../services/rooms.js';
 import { OWNER_ALLOW } from './tempVoice.js';
+import { KeyedLock } from '../lib/lock.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 名前の変更は Discord が 10 分に 2 回までにしているので、待ちすぎないように */
@@ -181,6 +182,9 @@ type RoomInteraction =
 
 export class RoomApp {
   private guild?: Guild;
+  private readonly noticeIds = new Map<string, string>();
+  private readonly noticeLock = new KeyedLock();
+  private restoringNotices = false;
 
   constructor(
     private readonly db: Db,
@@ -189,8 +193,63 @@ export class RoomApp {
     private readonly close: (channelId: string) => Promise<void>,
   ) {}
 
-  attach(guild: Guild): void {
+  async attach(guild: Guild): Promise<void> {
     this.guild = guild;
+    await this.restoreRoomNotices();
+  }
+
+  /** 宿は名前を変えても、部屋の記録と入口の設定で保護する。 */
+  async preservesMessages(channelId: string): Promise<boolean> {
+    const cfg = this.cfg();
+    const row = await roomOf(this.db, channelId);
+    if (row && (row.keepUntil || planOf(cfg, row.hubId) !== 'none')) return true;
+    if (planOf(cfg, channelId) !== 'none') return true;
+    return this.voice(channelId)?.parent?.name.includes('宿坊') ?? false;
+  }
+
+  /** 一度送ったパネルのIDを覚える。元の投稿は消さない。 */
+  private async sendNotice(ch: VoiceChannel, row: RoomRow, opts: { secret?: boolean } = {}): Promise<void> {
+    await this.noticeLock.run(ch.id, async () => {
+      if (this.noticeIds.has(ch.id)) return;
+      const sent = await ch.send(roomNotice(this.cfg(), row, opts));
+      this.noticeIds.set(ch.id, sent.id);
+    });
+  }
+
+  /** 消えていた設定入口だけを復旧する。購入や設定の変更はしない。 */
+  async restoreRoomNotices(): Promise<void> {
+    if (!this.guild || this.restoringNotices) return;
+    this.restoringNotices = true;
+    try {
+      const rows = await listRooms(this.db);
+      const alive = new Set(rows.map(row => row.channelId));
+      for (const id of this.noticeIds.keys()) if (!alive.has(id)) this.noticeIds.delete(id);
+      for (const row of rows) {
+        if (!row.keepUntil && planOf(this.cfg(), row.hubId) === 'none') continue;
+        const ch = this.voice(row.channelId);
+        if (!ch) continue;
+        await this.noticeLock.run(ch.id, async () => {
+          const known = this.noticeIds.get(ch.id);
+          if (known) {
+            try { await ch.messages.fetch({ message: known, force: true }); return; }
+            catch (err) {
+              if (!(err && typeof err === 'object' && 'code' in err && err.code === 10008)) throw err;
+              this.noticeIds.delete(ch.id);
+            }
+          }
+          const recent = await ch.messages.fetch({ limit: 100 });
+          const existing = recent.find(message => message.author.id === this.guild!.client.user.id &&
+            message.components.some(group => 'components' in group && group.components.some(component =>
+              'customId' in component && component.customId === 'room:open')));
+          if (existing) { this.noticeIds.set(ch.id, existing.id); return; }
+          const current = await roomOf(this.db, ch.id);
+          if (!current) return;
+          const secret = this.cfg().tempVoice.hubs.find(h => h.channelId === current.hubId)?.kind === 'secret';
+          const sent = await ch.send(roomNotice(this.cfg(), current, { secret }));
+          this.noticeIds.set(ch.id, sent.id);
+        }).catch(err => logger.warn({ err, channelId: row.channelId }, 'room control panel restore failed'));
+      }
+    } finally { this.restoringNotices = false; }
   }
 
   private voice(channelId: string): VoiceChannel | undefined {
@@ -206,7 +265,7 @@ export class RoomApp {
     const ch = this.voice(channelId);
     // 🏨 24 時間の宿: 宿代はパネルで払った。案内だけ出す
     if (opts.stay) {
-      await ch?.send(roomNotice(cfg, row));
+      if (ch) await this.sendNotice(ch, row);
       return;
     }
     // 🤫 シクレの入口: はじめからシークレットの部屋代を払い、種類を決める（部屋は作ったときから見えない）
@@ -222,7 +281,7 @@ export class RoomApp {
       await this.close(channelId);
       return;
     }
-    await ch?.send(roomNotice(cfg, row, { secret: secretHub }));
+    if (ch) await this.sendNotice(ch, row, { secret: secretHub });
     if (r.ticketKind) await ch?.send({ content: `<@${ownerId}> さん: ${ticketUsedText(r)}。`, allowedMentions: { parse: [] } }).catch(() => undefined);
   }
 

@@ -138,7 +138,7 @@ async function main(): Promise<void> {
   const emaCounter = new EmaCounterApp(cfg);
   const voiceCounter = new VoiceCounterApp(cfg);
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
-  const voiceChatClear = new VoiceChatClearApp(cfg);
+  const voiceChatClear = new VoiceChatClearApp(cfg, () => Date.now(), channelId => rooms.preservesMessages(channelId));
   const afkMute = new AfkMuteApp(db, cfg);
   const serverMuteRoles = new ServerMuteRolesApp(db, cfg);
   const bell = new BellApp(client, db, cfg, actions);
@@ -197,7 +197,7 @@ async function main(): Promise<void> {
     await admission.catchUpIntros(guild).catch((err) => logger.warn({ err }, 'intro catch-up failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
-    rooms.attach(guild);
+    await rooms.attach(guild).catch(err => logger.warn({ err }, 'room control panel restore failed'));
     // 自動で増える通話（大きな縁側 1〜3 など）
     await voiceGroups.attach(guild).catch((err) => logger.warn({ err }, 'voice groups attach failed'));
     // 👥 縁側の人数をチャンネル名に
@@ -312,6 +312,7 @@ async function main(): Promise<void> {
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));
     const every10 = () => {
+      void rooms.restoreRoomNotices().catch(err => logger.warn({ err }, 'room control panel restore failed'));
       // 招待: 昇格の通知を逃した未払いを拾う（支払済みは重ねて渡さない）
       void app.reconcileInviteRewards(guild).catch((err) => logger.warn({ err }, 'invite reward reconciliation failed'));
       omairi();
