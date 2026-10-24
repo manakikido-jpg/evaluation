@@ -4,14 +4,12 @@ import type { Db } from '../db/client.js';
 import { boostMessages, boostThanks, members, settings, shopItems, shopPurchases } from '../db/schema.js';
 import { DiscordHttpError, type DiscordActions, type MessageBody } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
-import { banzukeChannelId } from './banzuke.js';
 
 /**
  * サーバーブースト（奉納）のお礼。お金（花びら）は渡さない（2026-09 にやめた）。
  * - ブースト 1 回ごとに: 本人に DM（チャンネルへのお知らせは出さない）
  *   Discord がシステムメッセージチャンネルに出す「ブーストしました」のメッセージで数える（1 人が何回ブーストしているかは BOT に分からないため）。
  *   そのメッセージが出ない設定のときは、1 人が始めたときに 1 回。
- * - #番付 に「奉納板」（今奉納してくれている人の一覧・回数）を貼って書き換える
  * - 奉納している間の特典: 授与品の割引（shop.ts の priceOf）など
  * BOT は 10 分ごとと、ブーストが始まったときに processBoosters を呼ぶ。止まっていた間の分もここで拾う。
  */
@@ -125,7 +123,7 @@ export async function processBoosters(
 
 /**
  * ブースト 1 回ごとの DM（Discord の「ブーストしました」のメッセージ 1 件につき 1 回）。
- * 同じメッセージでは 2 回出さない。BOT が止まっていた間のものは、起動したときに読み直して拾う。回数は奉納板に使う。
+ * 同じメッセージでは 2 回出さない。BOT が止まっていた間のものは、起動したときに読み直して拾う。
  */
 export async function thankBoostMessage(
   ctx: BoostCtx,
@@ -140,68 +138,6 @@ export async function thankBoostMessage(
   if (!inserted.length) return { status: 'duplicate' };
   await ctx.discord.sendDm(input.memberId, boostDm(input.memberId, ctx.cfg, { kind: 'new', count: input.count }));
   return { status: 'ok' };
-}
-
-// ───────── 奉納板（#番付） ─────────
-
-const fmtMonth = (d: Date) => {
-  const j = new Date(d.getTime() + 9 * 3_600_000);
-  return `${j.getUTCFullYear()}年${j.getUTCMonth() + 1}月`;
-};
-
-export function renderBoard(boosters: { id: string; since: Date; boosts?: number }[]): MessageBody {
-  const list = boosters.length
-    ? boosters.map((b) => `- <@${b.id}> … ${fmtMonth(b.since)}から・ブースト ${b.boosts ?? 1} 回`).join('\n')
-    : '-# いまはいません。サーバーブーストで奉納してくださると、ここにお名前が載ります';
-  return {
-    content: '',
-    embeds: [
-      {
-        title: '🏮 奉納板',
-        description: ['サーバーブーストで奉納してくださっている方々です。いつもありがとうございます。', '', list].join('\n'),
-        color: SHU,
-      },
-    ],
-  };
-}
-
-type BoardState = { channelId: string; messageId: string; text: string };
-const BOARD_KEY = 'hounou_board';
-
-async function loadBoard(db: Db): Promise<BoardState | undefined> {
-  const [row] = await db.select().from(settings).where(eq(settings.key, BOARD_KEY));
-  const v = row?.value as Partial<BoardState> | undefined;
-  return v?.channelId && v.messageId ? (v as BoardState) : undefined;
-}
-
-async function saveBoard(db: Db, value: BoardState): Promise<void> {
-  await db
-    .insert(settings)
-    .values({ key: BOARD_KEY, value, updatedBy: 'system' })
-    .onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: 'system', updatedAt: new Date() } });
-}
-
-/** 奉納板を貼る・書き換える（変わっていなければ何もしない。消されていたら貼り直す） */
-export async function updateBoard(ctx: BoostCtx): Promise<'posted' | 'edited' | 'unchanged' | 'no_channel'> {
-  const channelId = await banzukeChannelId(ctx.cfg, ctx.discord);
-  if (!channelId) return 'no_channel';
-  let state = await loadBoard(ctx.db);
-  if (state && state.channelId !== channelId) state = undefined;
-  const body = renderBoard(await currentBoosters(ctx.db));
-  const text = body.embeds![0]!.description!;
-  if (state?.text === text) return 'unchanged';
-  if (state) {
-    try {
-      await ctx.discord.editMessage(channelId, state.messageId, body);
-      await saveBoard(ctx.db, { ...state, text });
-      return 'edited';
-    } catch (err) {
-      if (!(err instanceof DiscordHttpError && err.status === 404)) throw err;
-    }
-  }
-  const { id } = await ctx.discord.sendMessage(channelId, body);
-  await saveBoard(ctx.db, { channelId, messageId: id, text });
-  return 'posted';
 }
 
 /** BOT から呼ぶ（失敗してもほかの処理を止めない） */

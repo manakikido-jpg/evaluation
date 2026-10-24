@@ -381,7 +381,7 @@ async function main(): Promise<void> {
       await guidePending.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'guide pending update failed'));
       // 🛡 BOT を通さないロールの変更を見張る（待つので後ろで）
       void roleGuard.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'role guard failed'));
-      // ブースト（奉納）を始めた・やめたら、すぐお礼と奉納板を
+      // ブースト（奉納）を始めた・やめたら、すぐお礼を
       if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);
     })();
   });

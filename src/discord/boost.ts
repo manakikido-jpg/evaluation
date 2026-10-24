@@ -56,7 +56,7 @@ export class BoostApp {
     }
   }
 
-  /** 10 分ごと・ブーストを始めた／やめたとき: 30 日ごとのお礼と奉納板 */
+  /** 10 分ごと・ブーストを始めた／やめたとき: 30 日ごとのお礼 */
   tick(only?: string): Promise<void> {
     return boostTick(this.ctx(), new Date(), only, { byMessage: this.byMessage() });
   }

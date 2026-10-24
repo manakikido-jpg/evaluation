@@ -3,7 +3,7 @@ import type { GuildConfig } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import type { ShopItem } from '../src/db/schema.js';
 import { DiscordHttpError, type DiscordActions } from '../src/lib/discordRest.js';
-import { boostCatchupSince, boostCountOf, boostDm, currentBoosters, endBoosterOnlyRoles, processBoosters, thankBoostMessage, thankBooster, updateBoard } from '../src/services/boost.js';
+import { boostCatchupSince, boostCountOf, boostDm, currentBoosters, endBoosterOnlyRoles, processBoosters, thankBoostMessage, thankBooster } from '../src/services/boost.js';
 import { addCoins, recentCoinTx, walletOf } from '../src/services/economy.js';
 import { getMember, recordJoin, upsertMember, type MemberSnapshot } from '../src/services/members.js';
 import { priceOf } from '../src/services/shop.js';
@@ -113,28 +113,6 @@ describe('お知らせ・DM・奉納板', () => {
     const text = boostDm(A, c, { kind: 'new' });
     expect(text.startsWith(`<@${A}> さん、ありがとう！`)).toBe(true);
     expect(text).not.toContain('引き');
-  });
-
-  it('奉納板: 今奉納している人を載せる。変わらなければ書き換えず、やめたら外す。消されたら貼り直す', async () => {
-    const ctx = { db, cfg: withBanzuke, discord };
-    expect(await updateBoard(ctx)).toBe('posted');
-    expect(messages.get('m1')).toContain('いまはいません');
-    await recordJoin(db, snap(A, at(0)));
-    expect(await updateBoard(ctx)).toBe('edited');
-    expect(messages.get('m1')).toContain(`<@${A}> … 2026年9月から・ブースト 1 回`);
-    // 「ブーストしました」で数えた回数（今の奉納の分だけ）
-    await thankBoostMessage({ db, cfg, discord }, { messageId: 'old', memberId: A, count: 5 }, at(-30));
-    await thankBoostMessage({ db, cfg, discord }, { messageId: 'b1', memberId: A, count: 1 }, at(0));
-    await thankBoostMessage({ db, cfg, discord }, { messageId: 'b2', memberId: A, count: 2 }, at(1));
-    expect(await updateBoard(ctx)).toBe('edited');
-    expect(messages.get('m1')).toContain(`<@${A}> … 2026年9月から・ブースト 3 回`);
-    expect(await updateBoard(ctx)).toBe('unchanged');
-    await upsertMember(db, snap(A, null));
-    expect(await updateBoard(ctx)).toBe('edited');
-    expect(messages.get('m1')).not.toContain(A);
-    messages.clear();
-    await recordJoin(db, snap(B, at(3)));
-    expect(await updateBoard(ctx)).toBe('posted');
   });
 
   it('奉納の日時は Discord から来たときだけ変える（来なければそのまま）', async () => {

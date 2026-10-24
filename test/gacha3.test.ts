@@ -6,7 +6,6 @@ import type { Db } from '../src/db/client.js';
 import { members } from '../src/db/schema.js';
 import { GachaApp, gachaFeatured, gachaMenu, gachaRatesView, pullLine } from '../src/discord/gacha.js';
 import { panelMessage } from '../src/discord/panels.js';
-import { banzukeData, jstMonth, renderBanzuke } from '../src/services/banzuke.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import {
   collectionOf,
@@ -88,27 +87,6 @@ describe('🍶 おすそ分け・番付・おすすめ', () => {
     expect((await walletOf(db, U)).balance).toBe(0);
     expect(await shareFortune(db, U, [B], 0)).toEqual([]);
     expect(g.share).toBe(50);
-  });
-
-  it('番付: 今月よく引いた人・大吉を多く引いた人', async () => {
-    await db.insert(members).values([
-      { id: U, username: 'u', displayName: 'さくら', ageGroup: 'adult' },
-      { id: B, username: 'b', displayName: 'もみじ', ageGroup: 'adult' },
-    ]);
-    await createPrize(db, { tier: 'daikichi', kind: 'coins', amount: 1, weight: 1, fallback: false });
-    await createPrize(db, { tier: 'kichi', kind: 'coins', amount: 1, weight: 1, fallback: false });
-    await addCoins(db, U, 1500, 'adjust');
-    await addCoins(db, B, 500, 'adjust');
-    await drawGacha(db, g, U, 1, [], () => 0.0005, T0);
-    await drawGacha(db, g, U, 2, [], () => 0.9, T0);
-    await drawGacha(db, g, B, 1, [], () => 0.9, T0);
-    const d = await banzukeData(db, jstMonth(T0));
-    expect(d.gachaDraws?.map((e) => [e.name, e.value])).toEqual([
-      ['さくら', 3],
-      ['もみじ', 1],
-    ]);
-    expect(d.gachaTops?.map((e) => [e.name, e.value])).toEqual([['さくら', 1]]);
-    expect(JSON.stringify(renderBanzuke(d))).toContain('物御籤をよく引いた人');
   });
 
   it('おすすめの中身: まとめて足し、2 回押しても増えない', async () => {
