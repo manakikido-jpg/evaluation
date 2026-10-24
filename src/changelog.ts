@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-24-vc-help-buttons', date: '2026-10-24', kind: 'new', where: ['Discord'], title: '💤 寝落ちの報告・🛡 運営を呼ぶボタン', items: ['本殿・作業の通話のチャットのカードに「寝落ちを報告する」「運営を呼ぶ」を足しました。', '押すと衛士のロールに知らせます（同じ通話の同じ知らせは 2 分に 1 回）。'] },
   { id: '2026-10-24-archive-name-search', date: '2026-10-24', kind: 'improve', where: ['社務所Web'], title: '📚 書き込みの記録を、名前でもさがせるように', items: ['「書いた人」の欄に、表示名の一部を入れてもさがせます（ユーザー ID でもさがせます）。'] },
   { id: '2026-10-24-cast-delivery-week', date: '2026-10-24', kind: 'improve', where: ['Discord', '社務所Web'], title: 'キャストの納品期限を1週間に', items: ['新規・納品待ちの既存注文の期限を、注文から1週間（7日）にしました。納品ガチャ・相談から確定した注文も同じです。', '注文案内と社務所Webの説明も1週間にそろえました。'] },
   { id: '2026-10-24-keep-stay-messages', date: '2026-10-24', kind: 'fix', where: ['Discord'], title: '宿のメッセージと設定パネルを残す', items: ['宿のチャットを空室時の自動削除から外し、会話と部屋の設定パネルを残します。', '設定パネルが消えていた場合は、起動時と10分ごとの確認で出し直します。'] },

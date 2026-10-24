@@ -67,6 +67,7 @@ import { BoostApp } from './discord/boost.js';
 import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
+import { VcHelpApp } from './discord/vcHelp.js';
 import { RoomApp } from './discord/rooms.js';
 import { MarketApp } from './discord/market.js';
 import { ConfigStore } from './services/settings.js';
@@ -156,6 +157,7 @@ async function main(): Promise<void> {
     const room = await roomOf(db, channelId);
     return Boolean(room && planOf(cfg(), room.hubId) === 'once');
   });
+  const vcHelp = new VcHelpApp(cfg);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -446,6 +448,7 @@ async function main(): Promise<void> {
     void board.onInteraction(i);
     void cast.onInteraction(i);
     void supportTickets.onInteraction(i);
+    void vcHelp.onInteraction(i);
   });
   client.on(Events.ThreadDelete, thread => { void diary.onThreadDelete(thread).catch(err => logger.warn({ err }, 'diary thread deletion failed')); });
   client.on(Events.MessageCreate, (m) => {

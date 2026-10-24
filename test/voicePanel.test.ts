@@ -3,6 +3,7 @@ import type { Db } from '../src/db/client.js';
 import { parseShuinId, shuinId } from '../src/discord/ids.js';
 import { vcList, vcPanel, VC_LIST_MAX } from '../src/discord/views.js';
 import { VoicePanelApp } from '../src/discord/voicePanel.js';
+import { isVcHelpChannel, vcHelpId, vcHelpNotice } from '../src/discord/vcHelp.js';
 import { giveShuin, revokeShuin, stampedBy } from '../src/services/shuin.js';
 import { cfg, makeDb } from './helpers.js';
 
@@ -198,5 +199,23 @@ describe('通話に入ったとき', () => {
     await settle();
     expect(v.messages).toHaveLength(0);
     expect(h.messages).toHaveLength(0);
+  });
+});
+
+describe('💤 寝落ちの報告・🛡 運営を呼ぶ', () => {
+  it('本殿・作業の通話だけに出す', () => {
+    expect(isVcHelpChannel({ name: '本殿 1' })).toBe(true);
+    expect(isVcHelpChannel({ name: 'もくもく', parent: { name: '作業部屋' } })).toBe(true);
+    expect(isVcHelpChannel({ name: '雑談', parent: { name: '境内' } })).toBe(false);
+    expect(JSON.stringify(vcPanel(VC, true))).toContain(vcHelpId('sleep', VC));
+    expect(JSON.stringify(vcPanel(VC, true))).toContain(vcHelpId('call', VC));
+    expect(JSON.stringify(vcPanel(VC))).not.toContain('vchelp:');
+  });
+
+  it('衛士に送る文', () => {
+    const t = vcHelpNotice({ kind: 'sleep', roleId: '700000000000000001', channelId: VC, reporterId: A, targetId: B });
+    expect(t).toContain('<@&700000000000000001>');
+    expect(t).toContain(`<@${B}>`);
+    expect(vcHelpNotice({ kind: 'call', channelId: VC, reporterId: A, reason: 'さわがしい' })).toContain('ようす: さわがしい');
   });
 });
