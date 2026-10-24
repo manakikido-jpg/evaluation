@@ -53,6 +53,12 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       )
       .toJSON(),
 
+    new SlashCommandBuilder()
+      .setName('talktopic').setNameLocalizations({ ja: 'トークテーマ' })
+      .setDescription('Draw a free conversation topic for this channel')
+      .setDescriptionLocalizations({ ja: '無料のトークテーマガチャ。ジャンルを選んでみんなで話そう' })
+      .setContexts(InteractionContextType.Guild).toJSON(),
+
     // ───── 全員用 ─────
     new SlashCommandBuilder()
       .setName('zandaka')
