@@ -46,9 +46,16 @@ export class MessageLogApp {
     return c.deletedLog ?? c.log;
   }
 
+  /** BOT が自分で片付けた書き込み（🧹 抜けた人の分）は、1 件ずつ記録に出さない */
+  private readonly quietIds = new Set<string>();
+  quiet(ids: string[]): void {
+    for (const id of ids) this.quietIds.add(id);
+    setTimeout(() => { for (const id of ids) this.quietIds.delete(id); }, 10 * 60_000).unref?.();
+  }
+
   private skip(m: Deleted): boolean {
     const target = this.target();
-    return !target || m.guildId !== this.cfg().guildId || m.channelId === target || m.channelId === this.cfg().channels.log || Boolean(m.author?.bot);
+    return this.quietIds.has(m.id) || !target || m.guildId !== this.cfg().guildId || m.channelId === target || m.channelId === this.cfg().channels.log || Boolean(m.author?.bot);
   }
 
   async onDelete(m: Deleted): Promise<void> {
