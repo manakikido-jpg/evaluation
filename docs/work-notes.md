@@ -548,3 +548,8 @@
 - 完了範囲：5種の専用アニメボトル、価格別の演出・長さ・コマ数、最上位の花火とタワー、確認用PNGと通話・DM共通GIF、同梱素材と由来、ダウンロード用の動画・ZIP・POPと説明。価格・手数料30％・課金/入金/再送は変更なし。codex/champagne-luxuryから本番ブランチ向けPRへ保存する。本番操作なし、実Discord確認は合流後に担当Claudeが行う。最新本番c48eaeeとの更新履歴・説明・記録を両方保持して確認・合流する。
 - GitHub保存済み：PR #79 https://github.com/manakikido-jpg/evaluation/pull/79 、実装76266ff、codex/champagne-luxury。OPEN・未合流。最新本番との更新履歴・説明・記録の調整は担当Claudeへ引き継ぐ。本番未反映。
 - ダウンロード検証：raw.githubusercontent.com の作業ブランチ上で、ZIP・5GIF・POP WebPの全7URLがHTTP200。取得した全ファイルのSHA-256がローカル原本と一致。ZIPは1,785,813バイト、5GIF入り。リンク集はdocs/previews/champagne/README.md。ユーザーへは環境内リンクではなく、このHTTPSリンクを渡す。
+
+## 2026年10月24日：シャンパンの写真を新デザインに差し替える
+- 依頼：「じゃあシャンパンの写真は差し替えて」。完成したPOPの5種類の専用ボトルを採用する。
+- 確認：PR #79の実装76266ffで、購入前のchampagnePreviewも購入後のchampagneAnimationもassets/champagneの専用PNGを使用している。src/discord/cast.tsの確認画面・通話投稿・キャストDMがこの共通描画を呼ぶため、今回の差し替えは実装済み。実写風の写真は最終実装には含まれない。
+- 本番反映はPR #79の担当Claudeによる確認・合流待ち。新しいソース変更は不要。直近の価格別アニメコードの型・ビルド・全158ファイル1,897件成功を維持し、今回は採用の記録だけを追加する。既存の投稿を実Discordで書き換える操作は行わない。
