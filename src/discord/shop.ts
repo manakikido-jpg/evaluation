@@ -1,3 +1,5 @@
+import { kobanBuyConfirm } from './koban.js';
+import { kobanValue } from '../domain/koban.js';
 import { giftCost, giftFee } from '../services/shop.js';
 import {
   ActionRowBuilder,
@@ -42,7 +44,6 @@ import {
   duePurchases,
   endPurchase,
   getItem,
-  giveGift,
   listItems,
   presentable,
   priceOf,
@@ -173,7 +174,9 @@ export class ShopApp {
     if (!item?.enabled) return void (await i.update(done('この授与品は、今は受けられません。')));
     const balance = await this.balance(i.user.id);
     const e = this.cfg().economy;
-    if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
+    if (kobanValue(item.kind) !== undefined) return void (await i.update(kobanBuyConfirm(item, balance) as never));
+    if (item.kind === 'gift') return void (await i.update(done('銭の贈り物は小判になりました。SHOPの小判か /持ち物 から贈ってください。')));
+    if (item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     if (item.kind === 'mycolor') return this.myColorPick(i, item.id);
     if (item.kind === 'otoshidama') {
       if (!canPutBag(this.cfg(), [...i.member.roles.cache.keys()])) return void (await i.update(done('お年玉袋を置けるのは、氏子以上になってからです。')));
@@ -214,39 +217,32 @@ export class ShopApp {
     await i.editReply(done(text));
   }
 
-  /** 花吹雪・贈り物: 相手を選んだら、一言・量の入力欄を出す */
+  /** 花吹雪: 相手を選んだら一言の入力欄を出す。旧自由額送金は案内だけ。 */
   private async target(i: UserSelectMenuInteraction<'cached'>, itemId: number): Promise<void> {
     const item = await getItem(this.db, itemId);
+    if (item?.kind === 'gift') return void (await i.reply({ ...done('銭の贈り物は小判になりました。/持ち物 の小判から贈ってください。'), ...EPHEMERAL }));
     const targetId = i.values[0];
     if (!item?.enabled || !targetId) return void (await i.update(done('この授与品は、今は受けられません。')));
     const target = i.members.get(targetId);
     if (targetId === i.user.id) return void (await i.update(done('自分には贈れません。')));
     if (!target || i.users.get(targetId)?.bot) return void (await i.update(done('その方には贈れません（BOT や、サーバーにいない方）。')));
-    const e = this.cfg().economy;
-    const input =
-      item.kind === 'gift'
-        ? new TextInputBuilder()
-            .setCustomId('amount')
-            .setLabel(`贈る量（${e.giftMin}〜${e.giftMax}・手数料20%別）`)
-            .setPlaceholder('100枚なら120枚を払います')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setMaxLength(7)
-        : new TextInputBuilder().setCustomId('message').setLabel('一言（なくても大丈夫）').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(60);
+    if (item.kind !== 'hanafubuki') return void (await i.update(done('この授与品は、ここから贈れません。')));
+    const input = new TextInputBuilder().setCustomId('message').setLabel('一言（なくても大丈夫）').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(60);
     await i.showModal(
       new ModalBuilder()
-        .setCustomId(`shop:${item.kind === 'gift' ? 'gift' : 'hana'}:${item.id}:${targetId}`)
+        .setCustomId(`shop:hana:${item.id}:${targetId}`)
         .setTitle(`${item.name}（${target.displayName.slice(0, 20)} さんへ）`.slice(0, 45))
         .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)),
     );
   }
 
   private async submitWithTarget(i: ModalSubmitInteraction<'cached'>, kind: 'hana' | 'gift', itemId: number, targetId: string): Promise<void> {
+    if (kind === 'gift') return void (await i.reply({ ...done('銭の贈り物は小判になりました。/持ち物 の小判から贈ってください。'), ...EPHEMERAL }));
     if (i.isFromMessage()) await i.deferUpdate();
     else await i.deferReply(EPHEMERAL);
     const item = await getItem(this.db, itemId);
     if (!item?.enabled || !/^\d{17,20}$/.test(targetId)) return void (await i.editReply(done('この授与品は、今は受けられません。')));
-    const text = kind === 'gift' ? await this.gift(i, targetId) : await this.execute(i, item, { targetId, message: i.fields.getTextInputValue('message') });
+    const text = await this.execute(i, item, { targetId, message: i.fields.getTextInputValue('message') });
     await i.editReply(done(text));
   }
 
@@ -456,28 +452,6 @@ export class ShopApp {
       return `花吹雪を出せなかったので、${this.coinName}を戻しました。`;
     }
     return `🌸 <#${channel.id}> に花吹雪を出しました。残り ${r.balance} 枚。`;
-  }
-
-  private async gift(i: ModalSubmitInteraction<'cached'>, targetId: string): Promise<string> {
-    const cfg = this.cfg();
-    const e = cfg.economy;
-    const amount = Number(i.fields.getTextInputValue('amount').replace(/[,，\s枚]/g, '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)));
-    const r = await giveGift(this.db, cfg, { id: i.user.id, roleIds: [...i.member.roles.cache.keys()] }, targetId, amount);
-    switch (r.status) {
-      case 'ok':
-        await this.discord.sendDm(targetId, `🎁 ${i.member.displayName} さんから ${e.currencyEmoji}${e.currencyName} ${amount} 枚の贈り物が届きました（咲楽ノ宮）。`).catch(() => false);
-        return `🎁 <@${targetId}> さんに ${amount} 枚贈りました。手数料 ${r.fee} 枚（合計 ${amount + r.fee} 枚）。残り ${r.balance} 枚。`;
-      case 'self':
-        return '自分には贈れません。';
-      case 'rank_too_low':
-        return `贈り物は ${r.rankName} 以上になるとできます。`;
-      case 'bad_amount':
-        return `${r.min}〜${r.max} 枚の間で入れてください。`;
-      case 'daily_limit':
-        return `今日贈れるのは、あと ${r.left} 枚までです（日本時間の 0 時に戻ります）。`;
-      case 'insufficient':
-        return `${this.coinName}が足りません（いま ${r.balance} 枚）。`;
-    }
   }
 
   // ───────── 🎨 自分だけの色 ─────────

@@ -34,7 +34,7 @@ export function itemsView(list: Holding[], note?: string) {
     return {
       content: note ?? '',
       embeds: [{ title: '🎒 持ち物', description: '持っている券はありません。\n-# 券は物御籤・授与所・運営からのプレゼントでもらえます', color: COLOR }],
-      components: [],
+      components: [row(btn('koban:inventory', '🪙 小判（買う・贈る）'))],
     };
   }
   const lines = list.map((h) => `${h.label} ×**${h.count}**${h.manual ? '' : '（使う場面で自動）'}`);
@@ -48,6 +48,7 @@ export function itemsView(list: Holding[], note?: string) {
         placeholder: '使う・贈るものを選ぶ',
         options: list.slice(0, 25).map((h) => ({ label: `${h.label}（${h.count} 枚）`.slice(0, 100), value: h.value, description: h.note.slice(0, 100) || undefined })),
       }),
+      row(btn('koban:inventory', '🪙 小判（買う・贈る）')),
     ],
   };
 }

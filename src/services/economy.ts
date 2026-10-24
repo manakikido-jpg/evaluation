@@ -74,6 +74,9 @@ export type CoinReason =
   | 'casino_share'
   | 'casino_gacha'
   | 'gallery_reward'
+  | 'koban_buy'
+  | 'koban_fee'
+  | 'koban_redeem'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -320,5 +323,8 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   keiba_trade: '🏇 馬の売り買い',
   keiba_stud: '🧬 種付け料',
   gallery_reward: '写真館・動画館の報酬',
+  koban_buy: '小判の購入（額面分）',
+  koban_fee: '小判の販売手数料',
+  koban_redeem: '贈られた小判の換金',
   adjust: '調整',
 };

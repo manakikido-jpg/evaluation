@@ -1,3 +1,4 @@
+import { kobanStats } from '../services/koban.js';
 import { GalleryRewardsPage } from './views/galleryRewards.js';
 import { GalleryError, GALLERY_KINDS, cancelGalleryPost, galleryPricesSchema, loadGalleryPrices, recentGalleryPosts, registerGalleryPost, saveGalleryPrices, type GalleryKind } from '../services/galleryRewards.js';
 import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
@@ -6604,6 +6605,7 @@ export function createWebApp(deps: WebDeps) {
         items={items}
         roles={roles}
         purchases={purchases}
+        koban={await kobanStats(db)}
         names={names}
         economy={cfg.economy}
         flash={c.req.query('msg')}

@@ -35,6 +35,9 @@ export const REASON_FLOW: Record<string, Flow> = {
   keiba_prize: 'issue',
   casino_share: 'issue',
   casino_gacha: 'income',
+  koban_buy: 'income',
+  koban_fee: 'income',
+  koban_redeem: 'income',
   shop: 'income',
   shop_refund: 'income',
   room: 'income',
@@ -83,6 +86,9 @@ export const flowOf = (reason: string): Flow => REASON_FLOW[reason] ?? 'admin';
 /** 収入の表で 1 行にまとめる理由（払い戻しは元の行から引く・市場は手数料だけ） */
 const INCOME_GROUP: Record<string, string> = {
   gift_fee: 'gift_fee',
+  koban_buy: 'koban',
+  koban_redeem: 'koban',
+  koban_fee: 'koban_fee',
   shop: 'shop',
   shop_refund: 'shop',
   gacha: 'gacha',
@@ -108,6 +114,8 @@ const INCOME_GROUP: Record<string, string> = {
   ticket_refund: 'board',
 };
 export const INCOME_LABEL: Record<string, string> = {
+  koban: '小判（額面の販売・換金差引）',
+  koban_fee: '小判の販売手数料',
   gift_fee: '送金・贈り物の手数料',
   shop: '授与品（ショップ）',
   gacha: '物御籤',
