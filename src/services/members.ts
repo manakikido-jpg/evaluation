@@ -18,11 +18,25 @@ export type MemberSnapshot = {
 
 /** 参加（初参加なら join、戻ってきたなら rejoin を記録） */
 export async function recordJoin(db: Db, m: MemberSnapshot): Promise<'join' | 'rejoin'> {
-  const [before] = await db.select({ leftAt: members.leftAt }).from(members).where(eq(members.id, m.id));
-  const kind = before ? 'rejoin' : 'join';
+  const [before] = await db.select({ leftAt: members.leftAt, joinedAt: members.joinedAt }).from(members).where(eq(members.id, m.id));
+  // 入鯖のイベントより先にロール更新で行ができても、初参加を出戻りにしない。
+  const [past] = await db.select({ id: memberEvents.id }).from(memberEvents).where(and(
+    eq(memberEvents.memberId, m.id), inArray(memberEvents.kind, ['join', 'rejoin', 'leave']),
+    m.joinedAt ? lt(memberEvents.at, m.joinedAt) : undefined,
+  )).limit(1);
+  const returned = Boolean(before?.leftAt) || Boolean(before?.joinedAt && m.joinedAt && before.joinedAt < m.joinedAt) || Boolean(past);
+  const kind = returned ? 'rejoin' : 'join';
   await upsertMember(db, m, { leftAt: null });
   await db.insert(memberEvents).values({ memberId: m.id, kind });
   return kind;
+}
+
+/** 確認済みの再参加履歴。ロール付与の失敗やBOT停止後の復旧にも使う。 */
+export async function returningMemberIds(db: Db, ids?: string[]): Promise<Set<string>> {
+  if (ids?.length === 0) return new Set();
+  const rows = await db.selectDistinct({ id: memberEvents.memberId }).from(memberEvents)
+    .where(and(eq(memberEvents.kind, 'rejoin'), ids ? inArray(memberEvents.memberId, ids) : undefined));
+  return new Set(rows.map(r => r.id));
 }
 
 /** 退出 */
@@ -130,13 +144,14 @@ export async function upsertMember(db: Db, m: MemberSnapshot, extra: { leftAt?: 
  * 返り値: 新しく参加扱いにした人数・退出扱いにした人数
  */
 export async function syncAllMembers(db: Db, current: MemberSnapshot[]): Promise<{ joined: number; left: number }> {
-  const inDb = await db.select({ id: members.id, leftAt: members.leftAt }).from(members);
-  const known = new Map(inDb.map((r) => [r.id, r.leftAt]));
+  const inDb = await db.select({ id: members.id, leftAt: members.leftAt, joinedAt: members.joinedAt }).from(members);
+  const known = new Map(inDb.map((r) => [r.id, r]));
   const currentIds = new Set(current.map((m) => m.id));
 
   let joined = 0;
   for (const m of current) {
-    if (!known.has(m.id) || known.get(m.id) !== null) {
+    const before = known.get(m.id);
+    if (!before || before.leftAt !== null || (before.joinedAt && m.joinedAt && before.joinedAt < m.joinedAt)) {
       await recordJoin(db, m);
       joined++;
     } else {
@@ -144,8 +159,8 @@ export async function syncAllMembers(db: Db, current: MemberSnapshot[]): Promise
     }
   }
   let left = 0;
-  for (const [id, leftAt] of known) {
-    if (leftAt === null && !currentIds.has(id)) {
+  for (const [id, before] of known) {
+    if (before.leftAt === null && !currentIds.has(id)) {
       await recordLeave(db, id);
       left++;
     }
