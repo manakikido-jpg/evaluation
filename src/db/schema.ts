@@ -2293,3 +2293,11 @@ export const stickerDrafts = pgTable('sticker_drafts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('sticker_drafts_author_idx').on(t.authorId), index('sticker_drafts_status_idx').on(t.status)]);
 export type StickerDraft = typeof stickerDrafts.$inferSelect;
+
+/** 🧹 メンバーの書き込みの番号（中身は残さない）。サーバーを抜けたら、これを見て消す */
+export const memberMessages = pgTable('member_messages', {
+  messageId: text('message_id').primaryKey(),
+  channelId: text('channel_id').notNull(),
+  authorId: text('author_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('member_messages_author_idx').on(t.authorId)]);

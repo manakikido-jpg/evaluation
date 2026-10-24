@@ -41,6 +41,7 @@ import { SecurityApp } from './discord/security.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { UpdateDeskApp } from './discord/updateDesk.js';
+import { LeaverCleanupApp } from './discord/leaverCleanup.js';
 import { SokinApp } from './discord/sokin.js';
 import { CasinoApp } from './discord/casino.js';
 import { GlossaryApp } from './discord/glossary.js';
@@ -462,6 +463,12 @@ async function main(): Promise<void> {
   client.on(Events.MessageDelete, (m) => void board.onMessageDelete(m).catch((err) => logger.warn({ err }, 'board message delete failed')));
   // 🗑 消されたメッセージを #記録 に残す
   const messageLog = new MessageLogApp(cfg, actions, env.DISCORD_MESSAGE_CONTENT === 'on');
+  // 🧹 抜けた人の書き込みを消す（書き込みの番号だけ覚えておく）
+  const leaverCleanup = new LeaverCleanupApp(db, cfg, actions, (ids) => messageLog.quiet(ids));
+  client.on(Events.MessageCreate, (m) => leaverCleanup.onMessage(m));
+  client.on(Events.MessageDelete, (m) => leaverCleanup.onDelete([m.id]));
+  client.on(Events.MessageBulkDelete, (list) => leaverCleanup.onDelete([...list.keys()]));
+  client.on(Events.GuildMemberRemove, (m) => void leaverCleanup.onMemberRemove(m.guild, m.id).catch((err) => logger.warn({ err }, 'leaver cleanup failed')));
   client.on(Events.MessageDelete, (m) => void messageLog.onDelete(m).catch((err) => logger.warn({ err }, 'deleted message log failed')));
   client.on(Events.MessageBulkDelete, (list) => void messageLog.onBulkDelete([...list.values()]).catch((err) => logger.warn({ err }, 'bulk deleted message log failed')));
   client.on(Events.MessageDelete, (m) => void omikuji.onMessageDelete(m).catch((err) => logger.warn({ err }, 'omikuji panel delete failed')));
