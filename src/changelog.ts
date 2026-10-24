@@ -19,6 +19,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-24-cast-delivery-week', date: '2026-10-24', kind: 'improve', where: ['Discord', '社務所Web'], title: 'キャストの納品期限を1週間に', items: ['新規・納品待ちの既存注文の期限を、注文から1週間（7日）にしました。納品ガチャ・相談から確定した注文も同じです。', '注文案内と社務所Webの説明も1週間にそろえました。'] },
   { id: '2026-10-24-champagne-luxury', date: '2026-10-24', kind: 'improve', where: ['Discord'], title: 'シャンパンの開栓ムービーを華やかに', items: ['アニメ調POPと同じ5種の専用ボトルに。桜・月・クリスタル・薔薇・黒金の夜桜を、開栓や乾杯の演出に使います。', '高いボトルほど演出と余韻が豪華に。最上位には金の花火とシャンパンタワーも加わります。'] },
   { id: '2026-10-24-sticker-desk', date: '2026-10-24', kind: 'new', where: ['Discord', '社務所Web'], title: 'スタンプ製作者の申請と運営による登録', items: ['スタンプ製作者が /スタンプ製作 から専用Webに入り、画像を保存・申請できます。運営が見本を確認してDiscordへ登録し、修正が必要なら戻せます。', '静止画のPNG・JPEG・WebPを320pxのPNGに整えます。登録結果が不明なら自動で再送せず照合します。管理一覧は上下ボタンで並び替えられます（Discord側の順番は変わりません）。'] },
   { id: '2026-10-24-talk-topic-categories', date: '2026-10-24', kind: 'improve', where: ['Discord'], title: 'トークテーマを5ジャンル・400題に', items: ['恋愛・おもしろ・エンタメ・生活・大人の恋バナを各80題用意。ジャンルを選んで無料で回せます。', '同じ投稿・ジャンルでは一巡まで重複せず、途中でジャンルも変えられます。Hなテーマは縁側では選べません。'] },

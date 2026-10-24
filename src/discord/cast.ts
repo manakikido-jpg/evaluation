@@ -1105,7 +1105,7 @@ export class CastApp {
     // 押したボタンは消す（二重に注文しない。押しても 2 回目は「注文はもう…」になる）
     await i.message.edit({ components: [] }).catch(() => undefined);
     this.refresh();
-    await i.editReply(`📦 注文しました。キャストが ${DELIVERY.deadlineHours} 時間以内に、このスレッドへ届けます（残り ${fmt(r.balance)} 枚）。`);
+    await i.editReply(`📦 注文しました。キャストが ${DELIVERY.deadlineLabel}以内に、このスレッドへ届けます（残り ${fmt(r.balance)} 枚）。`);
   }
 
   private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }, options?: string[]): Promise<void> {
@@ -1612,7 +1612,7 @@ export class CastApp {
     await thread.send({ content: [r.drawn ? `🎰 ガチャの結果: **${r.drawn}**` : '', wish ? `📝 お願い:\n> ${wish.replace(/\n/g, '\n> ')}` : ''].filter(Boolean).join('\n') || '📦 注文', allowedMentions: { parse: [] } }).catch(() => undefined);
     const dm = await this.dmCast(s);
     await thread.send({ ...(dm ? {} : { content: `<@${castId}>` }), ...this.reserveMessage(s, !dm), allowedMentions: { users: dm ? [] : [castId] } } as never).catch(() => undefined);
-    await i.editReply({ content: `${r.drawn ? `🎰 ガチャの結果は **${r.drawn}** でした！ ` : '📦 '}注文しました。キャストが ${DELIVERY.deadlineHours} 時間以内に <#${thread.id}> へ届けます（残り ${fmt(r.balance)} 枚）。`, components: [row({ type: 2, style: 5, label: '納品のお部屋はこちら', url: `https://discord.com/channels/${i.guildId}/${thread.id}` })] });
+    await i.editReply({ content: `${r.drawn ? `🎰 ガチャの結果は **${r.drawn}** でした！ ` : '📦 '}注文しました。キャストが ${DELIVERY.deadlineLabel}以内に <#${thread.id}> へ届けます（残り ${fmt(r.balance)} 枚）。`, components: [row({ type: 2, style: 5, label: '納品のお部屋はこちら', url: `https://discord.com/channels/${i.guildId}/${thread.id}` })] });
   }
 
   /** 男女共通の予約窓口。作成中は同じPromiseを使い、連続予約で増やさない。 */
