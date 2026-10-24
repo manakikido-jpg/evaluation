@@ -271,7 +271,7 @@ describe('🎀 キャスト', () => {
     expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: voice!.id }, T20)).status).toBe('minor_plan');
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: voice!.id }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
-    expect(r.session).toMatchObject({ status: 'ordered', plan: `dlv:${voice!.id}` });
+    expect(r.session).toMatchObject({ status: 'ordered', plan: `dlv:${voice!.id}`, acceptBy: new Date(T20.getTime() + 7 * 24 * 60 * MIN) });
     // スレッドのある納品の注文は、BOT が起きたときにスレッドのボタン（納品した）を新しくする
     {
       const { openReservationsWithThread } = await import('../src/services/cast.js');
@@ -294,9 +294,12 @@ describe('🎀 キャスト', () => {
     // ガチャ: 中身のどれかが出る
     const g = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: gacha!.id }, T20, () => 0.99);
     expect(g.status === 'ok' ? [g.drawn, g.session.menuName] : g.status).toEqual(['おやすみ', 'ボイスガチャ：おやすみ']);
-    // 24 時間で納品がなければ戻す
+    // 1 日では失効せず、7 日の境界で納品がなければ戻す
     const before = (await walletOf(db, ADULT)).balance;
-    expect((await castTick(db, c, new Date(T20.getTime() + 24 * 60 * MIN))).expired.map((s) => s.status)).toContain('declined');
+    expect((await castTick(db, c, new Date(T20.getTime() + 24 * 60 * MIN))).expired.map(s=>s.id)).not.toContain(g.status === 'ok' ? g.session.id : -1);
+    expect((await walletOf(db, ADULT)).balance).toBe(before);
+    expect((await castTick(db, c, new Date(T20.getTime() + 7 * 24 * 60 * MIN - 1))).expired).toEqual([]);
+    expect((await castTick(db, c, new Date(T20.getTime() + 7 * 24 * 60 * MIN))).expired.map((s) => s.status)).toContain('declined');
     expect((await walletOf(db, ADULT)).balance).toBe(before + 300);
     // 納品して受け取らないまま 72 時間 → 自動で渡す
     const r2 = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: voice!.id }, T20);

@@ -211,7 +211,7 @@ function MenuFields(props: { c: CastConfig; optional?: boolean }) {
       </label>
       <label class="field check">
         <input type="checkbox" name="menuDelivery" value="yes" />
-        <span>📦 納品（シチュエーションボイスなど。通話しない。時間は入れず、値段は 1 つめだけ・18 歳以上だけ。キャストが 24 時間以内に納品し、お客の「受け取った」で渡す）</span>
+        <span>📦 納品（シチュエーションボイスなど。通話しない。時間は入れず、値段は 1 つめだけ・18 歳以上だけ。キャストが1週間（7日）以内に納品し、お客の「受け取った」で渡す）</span>
       </label>
       <label class="field">
         <span>🎰 ガチャの中身（納品のときだけ。1 行に 1 つ・{DELIVERY.gachaMax} こまで。空ならふつうの納品。どれか 1 つが同じ確率で出る）</span>

@@ -251,7 +251,7 @@ export const isFreeMenu = (m: Pick<CastMenuItem, 'minutes' | 'night' | 'consult'
 /** 📦 納品の指名か（番号が dlv: で始まる） */
 export const isDeliverySession = (s: Pick<CastSession, 'plan'>) => s.plan.startsWith('dlv:');
 /** 納品の期限（注文から）と、納品してからお客が受け取らないときに自動で渡すまで */
-export const DELIVERY = { deadlineHours: 24, autoReceiveHours: 72, gachaMax: 20 } as const;
+export const DELIVERY = { deadlineHours: 7 * 24, deadlineLabel: '1週間（7日）', autoReceiveHours: 72, gachaMax: 20 } as const;
 /** 時間フリーの指名か（番号が free: で始まる） */
 export const isFreeSession = (s: Pick<CastSession, 'plan'>) => s.plan.startsWith('free:');
 const durationText = (m: number) => (m % 60 === 0 ? `${m / 60} 時間` : m > 60 ? `${Math.floor(m / 60)} 時間 ${m % 60} 分` : `${m} 分`);
@@ -804,7 +804,7 @@ export async function requestSession(
   });
 }
 
-/** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 24 時間）。18 歳以上だけ。通話の時間とは重ならない */
+/** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 1 週間）。18 歳以上だけ。通話の時間とは重ならない */
 async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean; threadId?: string }, now: Date, rand: () => number, openMax: number): Promise<RequestResult> {
   if (!input.customerAdult) return { status: 'minor_plan' };
   const drawn = item.gacha?.length ? item.gacha[Math.min(item.gacha.length - 1, Math.floor(rand() * item.gacha.length))] : undefined;
