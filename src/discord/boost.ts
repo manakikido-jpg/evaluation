@@ -3,7 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
-import { BOOST_MESSAGE_TYPES, boostCatchupSince, boostCountOf, boostTick, thankBoostMessage, updateBoard } from '../services/boost.js';
+import { BOOST_MESSAGE_TYPES, boostCatchupSince, boostCountOf, boostTick, thankBoostMessage } from '../services/boost.js';
 
 /** 起動したときに読み直す日数（BOT が止まっていた間のブーストを拾う） */
 const CATCHUP_MS = 24 * 3_600_000;
@@ -51,7 +51,6 @@ export class BoostApp {
     try {
       const r = await thankBoostMessage(this.ctx(), { messageId: m.id, memberId: m.author.id, count: boostCountOf(m.content) });
       if (r.status === 'ok') logger.info({ memberId: m.author.id }, 'boost thanked');
-      await updateBoard(this.ctx());
     } catch (err) {
       logger.warn({ err }, 'boost message thanks failed');
     }

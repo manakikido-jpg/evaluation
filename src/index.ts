@@ -62,7 +62,6 @@ import { onboardingTick } from './services/onboarding.js';
 import { inviteActiveTick } from './services/invites.js';
 import { RecruitApp } from './discord/recruit.js';
 import { ShopApp } from './discord/shop.js';
-import { updateBanzukeQuietly } from './services/banzuke.js';
 import { BoostApp } from './discord/boost.js';
 import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
@@ -305,18 +304,15 @@ async function main(): Promise<void> {
     }, 60_000);
     // 10 分ごと: お参り期間の判定
     const omairi = () => void admission.checkOmairi().catch((err) => logger.warn({ err }, 'omairi check failed'));
-    // 10 分ごと: 番付の書き換え
-    const banzuke = () => void updateBanzukeQuietly({ db, cfg: cfg(), discord: actions });
     const every10 = () => {
       // 招待: 昇格の通知を逃した未払いを拾う（支払済みは重ねて渡さない）
       void app.reconcileInviteRewards(guild).catch((err) => logger.warn({ err }, 'invite reward reconciliation failed'));
       omairi();
-      banzuke();
       // 期限が来た授与品（色守り・絵馬のピン留め）を外す
       void shop.expire().catch((err) => logger.warn({ err }, 'shop expire failed'));
       // 期限が来た名前の飾りを外す
       void gacha.tick().catch((err) => logger.warn({ err }, 'gacha tick failed'));
-      // ブースト（奉納）のお礼と奉納板（止まっていた間の分もここで拾う）
+      // ブースト（奉納）のお礼（止まっていた間の分もここで拾う）。番付・奉納板は 2026年10月24日にやめた
       void boost.tick();
       // 📌 掲示板: 期限が来た募集を締め切り、期限が来た採用に報酬を渡す（消されたカードも出し直す）
       void board.tick().catch((err) => logger.warn({ err }, 'board tick failed'));

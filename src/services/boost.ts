@@ -212,11 +212,6 @@ export async function boostTick(ctx: BoostCtx, now = new Date(), only?: string, 
     logger.warn({ err }, 'boost thanks failed');
   }
   try {
-    await updateBoard(ctx);
-  } catch (err) {
-    logger.warn({ err }, 'hounou board update failed');
-  }
-  try {
     const n = await endBoosterOnlyRoles(ctx, now);
     if (n) logger.info({ ended: n }, 'booster-only roles removed');
   } catch (err) {
