@@ -1,3 +1,4 @@
+import { ServerMuteRolesApp } from './discord/serverMuteRoles.js';
 import { StickerDeskApp } from './discord/stickerDesk.js';
 import { onTalkTopicInteraction } from './discord/talkTopic.js';
 import { processCoreTimeBonus } from './services/coreTimeAttendance.js';
@@ -140,6 +141,7 @@ async function main(): Promise<void> {
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg);
   const afkMute = new AfkMuteApp(db, cfg);
+  const serverMuteRoles = new ServerMuteRolesApp(db, cfg);
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
   const recruit = new RecruitApp(db, cfg, actions);
@@ -205,7 +207,8 @@ async function main(): Promise<void> {
     // 人がいなくなった通話のチャットを消す（止まっていた間に空になったものも）
     voiceChatClear.attach(guild);
     // 奥の院で BOT がミュートした人が、止まっていた間に出ていたら外す
-    void afkMute.attach(guild).catch((err) => logger.warn({ err }, 'afk mute attach failed'));
+    await afkMute.attach(guild).catch((err) => logger.warn({ err }, 'afk mute attach failed'));
+    await serverMuteRoles.attach(guild).catch(err => logger.warn({ err }, 'server mute role attach failed'));
     // 呼び鈴のボタンを、決めたチャンネルのいちばん下に
     bellSticky.attach(guild);
     // ⛩ 「御神籤を引く」ボタンを #おみくじ のいちばん下に
@@ -255,6 +258,10 @@ async function main(): Promise<void> {
       void market.tick().catch((err) => logger.warn({ err }, 'market tick failed'));
       // 1 時間ごとの部屋（宵宮）の支払い
       void rooms.tick().catch((err) => logger.warn({ err }, 'room billing failed'));
+      void (async () => {
+        await afkMute.attach(guild);
+        await serverMuteRoles.reconcile(guild);
+      })().catch(err => logger.warn({ err }, 'server mute role recovery failed'));
       // コアタイムの予告（前日・始まる前に #境内 へ）
       void processCoreTimeNotices({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'core time notice failed'));
       // 🎁 終わったコアタイムのボーナス
@@ -396,7 +403,10 @@ async function main(): Promise<void> {
     // 人がいなくなった通話のチャットを消す
     voiceChatClear.onVoiceStateUpdate(before, after);
     // 奥の院（寝落ち）に入ったらミュート、出たら外す
-    void afkMute.onVoiceStateUpdate(before, after);
+    void (async () => {
+      await afkMute.onVoiceStateUpdate(before, after);
+      await serverMuteRoles.onVoiceStateUpdate(before, after);
+    })().catch(err => logger.warn({ err }, 'voice mute sync failed'));
     // 通話のチャットに「この通話の人に朱印を押す」
     voicePanel.onVoiceStateUpdate(before, after);
     // 宵宮の部屋: 入った人がそれぞれ払う
