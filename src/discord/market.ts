@@ -1,3 +1,5 @@
+import { createLoginLink } from '../services/casino/loginLinks.js';
+import { pendingMarketWebActions, claimMarketWebAction, finishMarketWebAction } from '../services/marketWeb.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -256,11 +258,13 @@ const imageName = (base: string, a: Attachment) => {
 
 export class MarketApp {
   private guild?: Guild;
+  private webSyncing = false;
 
   constructor(
     private readonly db: Db,
     private readonly cfg: () => GuildConfig,
     private readonly discord: DiscordActions,
+    private readonly webBaseUrl = '',
   ) {}
 
   attach(guild: Guild): void {
@@ -294,6 +298,12 @@ export class MarketApp {
     if (!(interaction.isButton() || interaction.isModalSubmit()) || !interaction.customId.startsWith('market:')) return;
     const [, action, a, b, c] = interaction.customId.split(':');
     try {
+      if (interaction.isButton() && action === 'web') {
+        if (!this.webBaseUrl) return void await interaction.reply({ content: 'Webの入口がまだ設定されていません。', ...EPHEMERAL });
+        await interaction.deferReply(EPHEMERAL);
+        const token = await createLoginLink(this.db, { id: interaction.user.id, displayName: interaction.member.displayName, avatarUrl: interaction.user.displayAvatarURL() });
+        return void await interaction.editReply({ content: '市場Webへのリンクです。10分以内・1回だけ使えます。', components: [{ type: 1, components: [{ type: 2, style: 5, label: '🌐 市場Webに入る', url: this.webBaseUrl + '/marketplace/link/' + token }] }] });
+      }
       if (interaction.isButton()) {
         const i = interaction;
         // 出品の流れ: 種類 → （通話の種類）→ 値段の決め方 → 入力
@@ -573,16 +583,19 @@ export class MarketApp {
     if (!channel || channel.type !== ChannelType.GuildText) return undefined;
     try {
       const info = await orderInfo(this.db, o);
-      const thread = await channel.threads.create({
-        name: `取引 #${o.id} ${info.title}`.slice(0, 90),
-        type: ChannelType.PrivateThread,
-        invitable: false,
-        reason: '市場の取引',
-      });
+      const name = ('取引 #' + o.id + ' ' + info.title).slice(0, 90);
+      let thread = o.threadId ? await this.guild?.channels.fetch(o.threadId) : undefined;
+      if (!thread) {
+        const active = channel.threads.fetchActive ? await channel.threads.fetchActive() : undefined;
+        thread = active?.threads.find(t => t.name === name && t.ownerId === this.guild?.client.user.id && t.type === ChannelType.PrivateThread);
+      }
+      if (!thread) thread = await channel.threads.create({ name, type: ChannelType.PrivateThread, invitable: false, reason: '市場の取引' });
+      if (thread.type !== ChannelType.PrivateThread) throw new Error('market order thread is not private');
+      // メンバー追加が失敗しても、作った番号を先に残して同じスレッドで再試行する。
+      await setOrderThread(this.db, o.id, thread.id);
       await thread.members.add(o.buyerId);
       await thread.members.add(o.sellerId);
       await thread.send({ ...orderMessage(o, info, cfg), allowedMentions: { users: [o.buyerId, o.sellerId] } });
-      await setOrderThread(this.db, o.id, thread.id);
       return thread.id;
     } catch (err) {
       logger.warn({ err }, 'market thread failed');
@@ -1046,8 +1059,76 @@ export class MarketApp {
     for (const b of others) await this.discord.sendDm(b.sellerId, `📝 依頼「${r.title}」は締め切られました。手を挙げてくださってありがとうございました。`);
   }
 
+  /** Webで確定した操作をDiscordへ反映。銭の処理はここでは繰り返さない。 */
+  async syncWebUpdates(now = new Date()): Promise<void> {
+    if (!this.guild || this.webSyncing) return;
+    this.webSyncing = true;
+    try {
+      for (const candidate of await pendingMarketWebActions(this.db, now)) {
+        const job = await claimMarketWebAction(this.db, candidate.id, now);
+        if (!job) continue;
+        try {
+          const id = job.targetId;
+          if (!id) throw new Error('market web job has no target');
+          const nonce = job.id.replaceAll('-', '').slice(0, 25);
+          if (job.targetKind === 'listing' || job.targetKind === 'request') {
+            const listing = job.targetKind === 'listing' ? await getListing(this.db, id) : undefined;
+            const request = job.targetKind === 'request' ? await getRequest(this.db, id) : undefined;
+            const record = listing ?? request;
+            if (!record) throw new Error('market web card missing');
+            const channel = this.marketChannel();
+            if (!channel || !('messages' in channel)) throw new Error('market channel unavailable');
+            const body = listing ? await this.card(listing) : requestCard(request!, this.cfg(), await bidCount(this.db, id));
+            if (record.messageId && record.channelId) {
+              const target = await this.guild.channels.fetch(record.channelId);
+              if (!target?.isTextBased() || !('messages' in target)) throw new Error('market card channel unavailable');
+              await target.messages.edit(record.messageId, { ...body, allowedMentions: { parse: [] } });
+            } else if (record.status === 'open') {
+              const message = await channel.send({ ...body, nonce, enforceNonce: true, allowedMentions: { parse: [] } } as never);
+              if (listing) await setListingMessage(this.db, id, channel.id, message.id);
+              else await setRequestMessage(this.db, id, channel.id, message.id);
+            }
+          } else if (job.targetKind === 'order') {
+            let order = await getOrder(this.db, id);
+            if (!order) throw new Error('market web order missing');
+            if (!order.threadId) {
+              if (!await this.openThread(order)) throw new Error('market web thread pending');
+              order = (await getOrder(this.db, id))!;
+            } else {
+              const thread = await this.guild.channels.fetch(order.threadId);
+              if (!thread?.isSendable() || thread.type !== ChannelType.PrivateThread) throw new Error('market order thread unavailable');
+              if (thread.isThread()) { await thread.members.add(order.buyerId); await thread.members.add(order.sellerId); }
+              await thread.send({ ...orderMessage(order, await orderInfo(this.db, order), this.cfg()), nonce, enforceNonce: true, allowedMentions: { parse: [] } } as never);
+            }
+            if (order.listingId) await this.refreshListing(await getListing(this.db, order.listingId));
+            if (order.requestId) await this.refreshRequest(await getRequest(this.db, order.requestId));
+            if (order.status === 'disputed') await this.staffLog('⚠️ 市場Webから取引 #' + order.id + ' に問題の報告がありました。社務所Webの市場で確認してください。');
+            for (const user of [order.buyerId, order.sellerId].filter(user => user !== job.memberId)) {
+              await this.discord.sendDm(user, '🏪 市場の取引 #' + order.id + ' が更新されました。やり取りは <#' + order.threadId + '> で。' + (this.webBaseUrl ? '\n' + this.webBaseUrl + '/marketplace/orders/' + order.id : '')).catch(() => false);
+            }
+          } else if (job.targetKind === 'offer') {
+            const offer = await getOffer(this.db, id);
+            if (offer) await this.discord.sendDm(job.memberId === offer.buyerId ? offer.sellerId : offer.buyerId, '💬 市場の価格提案が更新されました。' + (this.webBaseUrl ? '\n' + this.webBaseUrl + '/marketplace/listings/' + offer.listingId : '')).catch(() => false);
+          } else if (job.targetKind === 'bid') {
+            const bid = await getBid(this.db, id);
+            const request = bid ? await getRequest(this.db, bid.requestId) : undefined;
+            if (request) {
+              await this.refreshRequest(request);
+              await this.discord.sendDm(request.requesterId, '📝 市場の依頼に提案が届きました。' + (this.webBaseUrl ? '\n' + this.webBaseUrl + '/marketplace/requests/' + request.id : '')).catch(() => false);
+            }
+          }
+          await finishMarketWebAction(this.db, job.id, true);
+        } catch (err) {
+          logger.warn({ err, action: job.action }, 'market web sync deferred');
+          await finishMarketWebAction(this.db, job.id, false);
+        }
+      }
+    } finally { this.webSyncing = false; }
+  }
+
   /** 毎分: 期限が来た取引を渡す・返事のない提案を取り下げる・待機の時間が切れたカードを直す */
   async tick(now = new Date()): Promise<void> {
+    await this.syncWebUpdates(now);
     for (const o of await autoReleaseOrders(this.db, now)) {
       await this.discord.sendDm(o.sellerId, `🏪 取引 #${o.id} は期限が来たので完了にしました。${this.cfg().economy.currencyEmoji} ${fmt(o.price - o.fee)} 枚をお渡ししました。`);
       await this.postOrder(o);

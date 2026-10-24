@@ -2368,3 +2368,18 @@ export const kobanPurchases = pgTable('koban_purchases', {
   check('koban_sent_check', sql`(${t.sentAt} is null and ${t.targetId} is null) or (${t.sentAt} is not null and ${t.targetId} is not null and ${t.targetId} <> ${t.memberId})`),
 ]);
 export type KobanPurchase = typeof kobanPurchases.$inferSelect;
+
+/** メンバー市場Webの一度きりの操作と、Discordへの同期待ち。 */
+export const marketWebActions = pgTable('market_web_actions', {
+  id: text('id').primaryKey(),
+  memberId: text('member_id').notNull(),
+  action: text('action').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  resultPath: text('result_path'),
+  targetKind: text('target_kind').$type<'listing' | 'request' | 'order' | 'offer' | 'bid'>(),
+  targetId: bigint('target_id', { mode: 'number' }),
+  syncStatus: text('sync_status').notNull().default('pending'),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('market_web_sync_idx').on(t.syncStatus, t.createdAt)]);
+export type MarketWebAction = typeof marketWebActions.$inferSelect;

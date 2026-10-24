@@ -1,3 +1,4 @@
+import { mountMarketplace } from './marketplace.js';
 import { kobanStats } from '../services/koban.js';
 import { GalleryRewardsPage } from './views/galleryRewards.js';
 import { GalleryError, GALLERY_KINDS, cancelGalleryPost, galleryPricesSchema, loadGalleryPrices, recentGalleryPosts, registerGalleryPost, saveGalleryPrices, type GalleryKind } from '../services/galleryRewards.js';
@@ -541,6 +542,7 @@ export function createWebApp(deps: WebDeps) {
       return Boolean(s && s.userId === userId && (s.level === 'guji' || s.level === 'shinshoku'));
     },
   });
+  mountMarketplace(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountLottery(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 

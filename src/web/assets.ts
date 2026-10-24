@@ -109,6 +109,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'casino-lobby-cards.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-cards.webp'))), type: 'image/webp' },
     'casino-lobby-more.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-more.webp'))), type: 'image/webp' },
     'casino-lobby-art.webp': { body: new Uint8Array(readFileSync(path.join(here, 'public/casino-lobby-art.webp'))), type: 'image/webp' },
+    'marketplace.css': { body: readText(path.join(here, 'public/marketplace.css')), type: 'text/css; charset=utf-8' },
     'casino.css': { body: readText(path.join(here, 'public/casino.css')), type: 'text/css; charset=utf-8' },
     'casino-bg.svg': { body: readText(path.join(here, 'public/casino-bg.svg')), type: 'image/svg+xml' },
     'casino-request.js': { body: readText(path.join(here, 'public/casino-request.js')), type: 'text/javascript; charset=utf-8' },
