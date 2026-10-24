@@ -1,3 +1,4 @@
+import { ReturnerRoles } from './returnerRoles.js';
 import { pingRoleIds } from '../services/notify.js';
 import { saveVoiceNow } from '../services/meetings.js';
 import { recordCoreTime } from '../services/coreTimeAttendance.js';
@@ -125,6 +126,7 @@ export function toSnapshot(m: GuildMember): MemberSnapshot {
 export class ShuinApp {
   private readonly lock = new KeyedLock();
   private readonly activity: ActivityTracker;
+  private readonly returnerRoles: ReturnerRoles;
   /** 発言数（1 分ごとにまとめて DB へ） */
   private messageCounts = new Map<string, number>();
 
@@ -134,6 +136,7 @@ export class ShuinApp {
     cfg: GuildConfig | (() => GuildConfig),
   ) {
     this.activity = new ActivityTracker(db);
+    this.returnerRoles = new ReturnerRoles(db);
     this.getCfg = typeof cfg === 'function' ? cfg : () => cfg;
   }
 
@@ -149,13 +152,17 @@ export class ShuinApp {
     const all = [...guildMembers];
     const result = await syncAllMembers(this.db, all.map(toSnapshot));
     logger.info(result, 'members synced');
+    await this.returnerRoles.sync(all.filter(m => m.guild.id === this.cfg.guildId)).catch(err => logger.warn({ err }, 'returner roles sync failed'));
     const guild = all[0]?.guild;
     if (guild) await this.reconcileInviteRewards(guild);
   }
 
   async onMemberAdd(m: GuildMember): Promise<void> {
     if (m.guild.id !== this.cfg.guildId) return;
-    await recordJoin(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'recordJoin failed'));
+    try {
+      const kind = await recordJoin(this.db, toSnapshot(m));
+      if (kind === 'rejoin') await this.returnerRoles.onDetected(m);
+    } catch (err) { logger.error({ err }, 'recordJoin failed'); }
   }
 
   async onMemberRemove(guildId: string, userId: string): Promise<void> {
@@ -177,6 +184,7 @@ export class ShuinApp {
   async onMemberUpdate(m: GuildMember, old?: GuildMember | PartialGuildMember): Promise<void> {
     if (m.guild.id !== this.cfg.guildId) return;
     await upsertMember(this.db, toSnapshot(m)).catch((err) => logger.error({ err }, 'upsertMember failed'));
+    await this.returnerRoles.onMemberUpdate(m).catch(err => logger.warn({ err }, 'returner role retry failed'));
     const cfg = this.cfg;
     const visitor = autoRanks(cfg.ranks)[0];
     if (!m.user.bot && visitor && m.roles.cache.has(visitor.roleId) && (!old || !old.roles.cache.has(visitor.roleId))) {
