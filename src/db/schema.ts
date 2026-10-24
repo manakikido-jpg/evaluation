@@ -618,7 +618,7 @@ export const shopItems = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
     /** casino_style: 🎴 勝負の御籤の品（見た目の品・お試し券。style_key で決める） */
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_style' | 'name_change'>().notNull(),
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_style' | 'name_change' | 'koban_1000' | 'koban_3000' | 'koban_5000' | 'koban_10000'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -2349,3 +2349,22 @@ export const galleryRewards = pgTable('gallery_rewards', {
   settledAt: timestamp('settled_at', { withTimezone: true }),
 }, t => [index('gallery_rewards_due_idx').on(t.status, t.dueAt), index('gallery_rewards_member_week_idx').on(t.memberId, t.week)]);
 export type GalleryReward = typeof galleryRewards.$inferSelect;
+
+
+/** 小判の購入単位の記録。idは購入確認画面ごとの一度きりの番号。 */
+export const kobanPurchases = pgTable('koban_purchases', {
+  id: text('id').primaryKey(),
+  purchaseId: bigint('purchase_id', { mode: 'number' }).notNull().references(() => shopPurchases.id),
+  memberId: text('member_id').notNull(),
+  faceValue: integer('face_value').notNull(),
+  price: integer('price').notNull(),
+  fee: integer('fee').notNull(),
+  targetId: text('target_id'),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('koban_owner_idx').on(t.memberId, t.sentAt), uniqueIndex('koban_shop_purchase_idx').on(t.purchaseId),
+  check('koban_value_check', sql`${t.faceValue} in (1000, 3000, 5000, 10000)`),
+  check('koban_price_check', sql`${t.price} = ${t.faceValue} * 3 / 2 and ${t.fee} = ${t.price} - ${t.faceValue}`),
+  check('koban_sent_check', sql`(${t.sentAt} is null and ${t.targetId} is null) or (${t.sentAt} is not null and ${t.targetId} is not null and ${t.targetId} <> ${t.memberId})`),
+]);
+export type KobanPurchase = typeof kobanPurchases.$inferSelect;

@@ -1,3 +1,4 @@
+import { KOBAN_VALUES, kobanValue, kobanPrice, type KobanKind } from '../domain/koban.js';
 import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { salePrice } from './economyEvents.js';
 import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
@@ -43,10 +44,12 @@ export async function getItem(db: Db, id: number): Promise<ShopItem | undefined>
 }
 
 /** 奉納（ブースト）割引が効く品物（免罪符・贈り物・お年玉袋の手数料はのぞく） */
-export const discountable = (item: ShopItem) => item.kind !== 'menzaifu' && item.kind !== 'gift' && item.kind !== 'otoshidama';
+export const discountable = (item: ShopItem) => kobanValue(item.kind) === undefined && item.kind !== 'menzaifu' && item.kind !== 'gift' && item.kind !== 'otoshidama';
 
 /** 払う値段（免罪符は設定の値段。奉納している人は割引、絵馬の奉納は無料。1 枚未満は切り上げ） */
 export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false) => {
+  const value = kobanValue(item.kind);
+  if (value !== undefined) return kobanPrice(value);
   const base = item.kind === 'menzaifu' ? economy.menzaifuPrice : item.price;
   if (booster && item.kind === 'ema_pin') return 0;
   // 期間限定の授与品セール（免罪符・贈り物はのぞく）
@@ -58,6 +61,9 @@ export const priceOf = (item: ShopItem, economy: EconomyConfig, booster = false)
 export type ItemPatch = Partial<Pick<ShopItem, 'name' | 'emoji' | 'description' | 'price' | 'durationDays' | 'enabled' | 'position' | 'roleId' | 'roleGroup' | 'boosterOnly'>>;
 
 export async function updateItem(db: Db, id: number, patch: ItemPatch): Promise<void> {
+  const item = await getItem(db, id);
+  const value = item && kobanValue(item.kind);
+  if (value !== undefined) patch = { ...patch, price: kobanPrice(value), durationDays: null, boosterOnly: false };
   await db.update(shopItems).set({ ...patch, updatedAt: new Date() }).where(eq(shopItems.id, id));
 }
 
@@ -120,6 +126,7 @@ export async function seedDefaultItems(
     { kind: 'casino_boost', name: '大勝負の札', emoji: '🎰', description: '使った日（日本時間の 0 時まで）だけ、カジノで賭けられる上限（1 回・1 日の合計）が上がる。/持ち物 から使う', price: 1000 },
     { kind: 'name_change', name: '名前変更の札', emoji: '✏️', description: 'このサーバーでの自分の名前（ニックネーム）を 1 回変えられる。/持ち物 から使う', price: 1000 },
   );
+  for (const value of KOBAN_VALUES) singles.push({ kind: `koban_${value}` as KobanKind, name: `小判 ${value.toLocaleString('ja-JP')}銭`, emoji: '🪙', description: `贈ると相手に${value.toLocaleString('ja-JP')}銭が入る小判。購入後は /持ち物 の「小判」から贈れます`, price: kobanPrice(value) });
   for (const s of singles) if (!existing.some((i) => i.kind === s.kind)) await add(s);
   return created;
 }

@@ -1,3 +1,4 @@
+import { KobanApp } from './discord/koban.js';
 import { GalleryRewardsApp } from './discord/galleryRewards.js';
 import { invalidateGalleryPosts } from './services/galleryRewards.js';
 import { ServerMuteRolesApp } from './discord/serverMuteRoles.js';
@@ -148,6 +149,7 @@ async function main(): Promise<void> {
   const bell = new BellApp(client, db, cfg, actions);
   const bellSticky = new BellStickyApp(cfg);
   const recruit = new RecruitApp(db, cfg, actions);
+  const koban = new KobanApp(db, cfg, actions);
   const shop = new ShopApp(db, cfg, actions);
   const boost = new BoostApp(db, cfg, actions);
   const sticky = new StickyApp(db, cfg, actions);
@@ -442,6 +444,7 @@ async function main(): Promise<void> {
     void otoshidama.onInteraction(i);
     void bell.onInteraction(i);
     void recruit.onInteraction(i);
+    void koban.onInteraction(i);
     void shop.onInteraction(i);
     void diary.onInteraction(i).catch(err => logger.warn({ err }, 'diary interaction failed'));
     void rooms.onInteraction(i);

@@ -1,3 +1,5 @@
+import { kobanBuyConfirm } from './koban.js';
+import { kobanValue } from '../domain/koban.js';
 import { giftCost, giftFee } from '../services/shop.js';
 import {
   ActionRowBuilder,
@@ -173,6 +175,7 @@ export class ShopApp {
     if (!item?.enabled) return void (await i.update(done('この授与品は、今は受けられません。')));
     const balance = await this.balance(i.user.id);
     const e = this.cfg().economy;
+    if (kobanValue(item.kind) !== undefined) return void (await i.update(kobanBuyConfirm(item, balance) as never));
     if (item.kind === 'gift' || item.kind === 'hanafubuki') return void (await i.update(shopPickTarget(item, e, balance, isBooster(i))));
     if (item.kind === 'mycolor') return this.myColorPick(i, item.id);
     if (item.kind === 'otoshidama') {

@@ -1,3 +1,4 @@
+import { kobanValue } from '../domain/koban.js';
 import { giftCost, giftFee } from '../services/shop.js';
 import type { EconomyConfig } from '../config.js';
 import type { ShopItem } from '../db/schema.js';
@@ -46,7 +47,7 @@ const ORDER: ShopCategory[] = ['color', 'title', 'vip', 'gift', 'fun', 'menzaifu
 export function categoryOf(i: Pick<ShopItem, 'kind' | 'roleGroup'>): ShopCategory {
   if (i.kind === 'role') return i.roleGroup === 'color' ? 'color' : i.roleGroup === 'title' ? 'title' : i.roleGroup === 'vip' ? 'vip' : 'other';
   if (i.kind === 'mycolor') return 'color';
-  if (i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
+  if (kobanValue(i.kind) !== undefined || i.kind === 'gift' || i.kind === 'hanafubuki' || i.kind === 'otoshidama') return 'gift';
   if (i.kind === 'omikuji_extra' || i.kind === 'ema_pin' || i.kind === 'casino_boost' || i.kind === 'casino_style' || i.kind === 'name_change') return 'fun';
   if (i.kind === 'menzaifu') return 'menzaifu';
   return 'other';
@@ -65,8 +66,8 @@ export function shopList(
   /** 受けている（ロールの）授与品: 品物の ID → 期限（ずっとなら null） */
   owned: Map<number, Date | null> = new Map(),
 ) {
-  const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（免罪符・贈り物をのぞく）`] : [];
-  const sale = e.shopSalePercent > 0 ? [`🎉 **期間限定セール中！** 授与品が **${e.shopSalePercent}% 引き** です（免罪符・贈り物をのぞく）`] : [];
+  const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（免罪符・贈り物・小判をのぞく）`] : [];
+  const sale = e.shopSalePercent > 0 ? [`🎉 **期間限定セール中！** 授与品が **${e.shopSalePercent}% 引き** です（免罪符・贈り物・小判をのぞく）`] : [];
   const mine = items
     .filter((i) => owned.has(i.id))
     .map((i) => {
@@ -99,6 +100,7 @@ export function shopList(
         ...sale,
         ...thanks,
         '📖 日記：2 週間ごと・自動更新（下のボタンか日記の受付から）',
+        '🪙 小判：下の「小判を買う」か `/持ち物` →「小判」から購入・送付できます。',
         `👛 いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`,
         ...(mine.length ? ['', '**受けているもの**', ...mine] : []),
         ...(items.length ? [] : ['', 'いまは授与品がありません。']),
@@ -132,7 +134,7 @@ export function shopList(
       : [{ custom_id: 'shop:pick', placeholder: '授与品を選ぶ', options: groups.flatMap((g) => g.items).slice(0, 25).map(option) }];
   return {
     embeds,
-    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }] }] : [])],
+    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }, { type: 2, style: 2, label: '🪙 小判を買う', custom_id: 'koban:shop' }] }] : [])],
   };
 }
 

@@ -1,3 +1,5 @@
+import { kobanValue, kobanPrice } from '../../domain/koban.js';
+import type { KobanStats } from '../../services/koban.js';
 import type { EconomyConfig } from '../../config.js';
 import type { AdminSession, ShopItem, ShopPurchase } from '../../db/schema.js';
 import type { GuildRole } from '../../lib/discordRest.js';
@@ -21,6 +23,7 @@ export const SHOP_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
 };
 
 const KIND_LABEL: Record<ShopItem['kind'], string> = {
+  koban_1000: '🪙 小判（1,000銭）', koban_3000: '🪙 小判（3,000銭）', koban_5000: '🪙 小判（5,000銭）', koban_10000: '🪙 小判（10,000銭）',
   role: 'ロール',
   hanafubuki: '花吹雪',
   gift: '贈り物',
@@ -48,6 +51,7 @@ export function ShopPage(props: {
   items: ShopItem[];
   roles: GuildRole[];
   purchases: ShopPurchase[];
+  koban?: KobanStats;
   names: Map<string, string>;
   economy: EconomyConfig;
   flash?: string;
@@ -72,6 +76,12 @@ export function ShopPage(props: {
         </a>
       </div>
       <Flash code={props.flash} />
+      {props.koban && <section class="card" id="shop-koban"><h2>🪙 小判の販売・手数料（累計）</h2><p>小判は額面の150％で販売。手数料は購入時に受け取る差額です。未送付の額面は手数料収益に含めません。</p>
+        <div class="table-wrap"><table><thead><tr><th>額面</th><th>販売数</th><th>販売額</th><th>手数料収益</th><th>換金済み</th><th>未送付</th><th>未送付の額面</th></tr></thead><tbody>
+          {props.koban.map(k => <tr><td>{k.value.toLocaleString('ja-JP')}銭</td><td>{k.count}枚</td><td>{k.sales.toLocaleString('ja-JP')}銭</td><td>{k.fee.toLocaleString('ja-JP')}銭</td><td>{k.sent}枚</td><td>{k.pending}枚</td><td>{(k.pending*k.value).toLocaleString('ja-JP')}銭</td></tr>)}
+          <tr><th>合計</th><td>{props.koban.reduce((n,k)=>n+k.count,0)}枚</td><td>{props.koban.reduce((n,k)=>n+k.sales,0).toLocaleString('ja-JP')}銭</td><td>{props.koban.reduce((n,k)=>n+k.fee,0).toLocaleString('ja-JP')}銭</td><td>{props.koban.reduce((n,k)=>n+k.sent,0)}枚</td><td>{props.koban.reduce((n,k)=>n+k.pending,0)}枚</td><td>{props.koban.reduce((n,k)=>n+k.pending*k.value,0).toLocaleString('ja-JP')}銭</td></tr>
+        </tbody></table></div></section>}
+
       <p class="note">
         #授与所 の「授与品を見る」に並ぶ品物です。行を押すと、値段・名前・説明・日数・販売のオン／オフを変えられます。免罪符の値段と、贈り物の量の上限は
         <a href="/settings#sec-coins">設定</a>で変えます。
@@ -139,7 +149,7 @@ export function ShopPage(props: {
                       ) : i.kind === 'gift' ? (
                         <input type="text" value={`${e.giftMin}〜${e.giftMax}（設定で変える）`} disabled />
                       ) : (
-                        <input type="number" name="price" value={String(i.price)} min={0} required />
+                        <input type="number" name="price" value={String(kobanValue(i.kind) === undefined ? i.price : kobanPrice(kobanValue(i.kind)!))} min={0} required readonly={kobanValue(i.kind) !== undefined} />
                       )}
                     </label>
                     {(i.kind === 'role' || i.kind === 'ema_pin' || i.kind === 'mycolor') && (
