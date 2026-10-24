@@ -602,3 +602,4 @@
 - 補強：既知のパネルIDの確認をfetch({message:id,force:true})とし、Discord.jsのキャッシュだけで消失を見落とさないようにした。対応テストも最新取得を確認。旧全件テストはSIGINTで停止し、最終コードで検証をやり直す。停止結果を成功に数えない。
 - 最終検証：最終コードで全162ファイル1,937テスト成功（348.46秒、4並列）、型チェック・ビルド成功。関連34件も再実行成功（23.86秒）。ログ/tmp/keep-stay-{all-tests-complete,typecheck-complete,build-complete,related-complete}.log。テスト削除・skipなし。停止した旧全件結果は使用しない。
 - 完了：宿の空室チャット自動削除の除外、名前変更後の保護、起動・直接削除・取得中の再判定と取得失敗時の保護、部屋設定入口の起動/10分ごとの復旧、既存投稿の利用と増殖防止。DBマイグレーション・設定変更なし。codex/keep-stay-messagesから担当Claude向けPRへ保存。本番操作は未実施。合流後のBOT起動で残っている宿のパネルを復旧し、実Discordで空室後のメッセージ保持を確認する。宿の期限・部屋自体の終了条件は既存のまま。
+- GitHub保存済み：PR #81 https://github.com/manakikido-jpg/evaluation/pull/81 、実装5907908、codex/keep-stay-messages。OPEN・未合流。最終fetchで本番24c744fから更新なし。担当Claudeの確認・合流待ち。本番での復旧やメッセージ保持の実機確認は未実施。
