@@ -7,14 +7,10 @@ const e = cfg.economy;
 const ids = (v: ReturnType<typeof sokinPanel>) => v.components.flatMap((r) => r.components as { custom_id: string; disabled?: boolean; style?: number; label?: string }[]);
 
 describe('💸 /送金', () => {
-  it('コマンド: 相手・枚数・ひとこと（どれも入れなくてよい。パネルで選ぶ）', () => {
+  it('コマンドは小判への案内になり、自由額送金の入力を受け付けない', () => {
     const def = commandDefinitions(cfg).find((d) => d.name === 'sokin') as { name_localizations?: Record<string, string>; options?: { name: string; required?: boolean }[] };
     expect(def.name_localizations?.ja).toBe('送金');
-    expect(def.options?.map((o) => [o.name, Boolean(o.required)])).toEqual([
-      ['user', false],
-      ['amount', false],
-      ['message', false],
-    ]);
+    expect(def.options ?? []).toEqual([]);
   });
 
   const g = { ...e, giftMin: 10, giftMax: 1000, giftDailyLimit: 1000 };

@@ -35,7 +35,7 @@ async function lock(tx: Db, memberId: string): Promise<void> {
 
 export async function listItems(db: Db, opts: { enabledOnly?: boolean } = {}): Promise<ShopItem[]> {
   const rows = await db.select().from(shopItems).orderBy(asc(shopItems.position), asc(shopItems.id));
-  return opts.enabledOnly ? rows.filter((r) => r.enabled) : rows;
+  return opts.enabledOnly ? rows.filter((r) => r.enabled && r.kind !== 'gift') : rows;
 }
 
 export async function getItem(db: Db, id: number): Promise<ShopItem | undefined> {
@@ -63,6 +63,7 @@ export type ItemPatch = Partial<Pick<ShopItem, 'name' | 'emoji' | 'description' 
 export async function updateItem(db: Db, id: number, patch: ItemPatch): Promise<void> {
   const item = await getItem(db, id);
   const value = item && kobanValue(item.kind);
+  if (item?.kind === 'gift') patch = { ...patch, enabled: false };
   if (value !== undefined) patch = { ...patch, price: kobanPrice(value), durationDays: null, boosterOnly: false };
   await db.update(shopItems).set({ ...patch, updatedAt: new Date() }).where(eq(shopItems.id, id));
 }
@@ -85,6 +86,7 @@ export async function seedDefaultItems(
     license?: { roleId: string };
   },
 ): Promise<number> {
+  await db.update(shopItems).set({ enabled: false }).where(eq(shopItems.kind, 'gift'));
   const existing = await listItems(db);
   let pos = existing.reduce((n, i) => Math.max(n, i.position), 0);
   let created = 0;
@@ -115,7 +117,7 @@ export async function seedDefaultItems(
   }
   const singles: Omit<typeof shopItems.$inferInsert, 'id' | 'updatedAt' | 'position'>[] = [
     { kind: 'hanafubuki', name: '花吹雪', emoji: '🌸', description: '選んだ人へ、#境内 にお祝いのメッセージを出す', price: 300 },
-    { kind: 'gift', name: '贈り物', emoji: '🎁', description: '銭をほかの人に贈る（手数料20%を追加で払う）', price: 0 },
+    { kind: 'gift', name: '旧・自由額送金', emoji: '🎁', description: '銭の贈り物は小判に移行しました', price: 0, enabled: false },
     { kind: 'ema_pin', name: '絵馬の奉納', emoji: '📌', description: '自分の自己紹介（#絵馬-男性・#絵馬-女性）を 7 日間ピン留め', price: 800, durationDays: 7 },
     { kind: 'omikuji_extra', name: 'おみくじ もう 1 回', emoji: '🎟', description: 'その日のおみくじを、もう 1 回引ける（1 日 1 回まで）', price: 100 },
     { kind: 'menzaifu', name: '免罪符', emoji: '🧾', description: '厄を 1 つ祓う（1 人 1 回まで。値段は設定の値）', price: 0 },
@@ -467,6 +469,7 @@ export function giftDailyLimitOf(cfg: GuildConfig, roleIds: readonly string[]): 
  * 花びらを贈る（送り手が手数料 20% を追加で払う）。贈れるのは役職（参拝者から）のある人か運営。
  * 1 日に贈れる合計に上限がある（サブアカウントで集めにくいように）。
  */
+/** @deprecated 旧送金の互換用。現行Discordの窓口は小判へ移行し、この関数を呼ばない。 */
 export async function giveGift(db: Db, cfg: GuildConfig, from: { id: string; roleIds: readonly string[] }, toId: string, amount: number, now = new Date()): Promise<GiftResult> {
   const e = cfg.economy;
   if (from.id === toId) return { status: 'self' };

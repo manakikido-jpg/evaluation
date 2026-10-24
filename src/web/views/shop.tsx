@@ -26,7 +26,7 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   koban_1000: '🪙 小判（1,000銭）', koban_3000: '🪙 小判（3,000銭）', koban_5000: '🪙 小判（5,000銭）', koban_10000: '🪙 小判（10,000銭）',
   role: 'ロール',
   hanafubuki: '花吹雪',
-  gift: '贈り物',
+  gift: '旧・自由額送金（小判へ移行）',
   ema_pin: '絵馬の奉納',
   omikuji_extra: 'おみくじもう 1 回',
   menzaifu: '免罪符',
@@ -147,7 +147,7 @@ export function ShopPage(props: {
                       {i.kind === 'menzaifu' ? (
                         <input type="text" value={`${e.menzaifuPrice}（設定で変える）`} disabled />
                       ) : i.kind === 'gift' ? (
-                        <input type="text" value={`${e.giftMin}〜${e.giftMax}（設定で変える）`} disabled />
+                        <input type="text" value="終了（小判へ移行）" disabled />
                       ) : (
                         <input type="number" name="price" value={String(kobanValue(i.kind) === undefined ? i.price : kobanPrice(kobanValue(i.kind)!))} min={0} required readonly={kobanValue(i.kind) !== undefined} />
                       )}

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { members } from '../src/db/schema.js';
+import { members, shopItems } from '../src/db/schema.js';
 import type { DiscordActions } from '../src/lib/discordRest.js';
 import { KobanApp, kobanBuyConfirm } from '../src/discord/koban.js';
 import { ShopApp } from '../src/discord/shop.js';
@@ -22,7 +22,7 @@ afterEach(async()=>close());
 function interaction(id:string,kind='button',value?:string,userId=A){
  const views:any[]=[];
  const i={customId:id,guildId:cfg.guildId,user:{id:userId},member:{displayName:'送り主'},guild:{members:{fetch:fetchMember}},values:value?[value]:[],deferred:false,replied:false,
- inCachedGuild:()=>true,isButton:()=>kind==='button',isStringSelectMenu:()=>kind==='select',isUserSelectMenu:()=>kind==='user',
+ inCachedGuild:()=>true,isChatInputCommand:()=>false,isModalSubmit:()=>kind==='modal',isChannelSelectMenu:()=>false,isRepliable:()=>true,isButton:()=>kind==='button',isStringSelectMenu:()=>kind==='select',isUserSelectMenu:()=>kind==='user',
  async deferUpdate(){i.deferred=true;},async editReply(view:any){views.push(view);},async update(view:any){views.push(view);},async reply(view:any){views.push(view);}};
  return {i,views};
 }
@@ -63,4 +63,25 @@ it('専用の小判売り場から全4種類を選べ、持ち物が空でも購
  expect(options).toHaveLength(4);expect(JSON.stringify(options)).toContain('15,000');
  const pick=interaction('koban:shop-pick','select',options[3].value);await app.onInteraction(pick.i as never);expect(JSON.stringify(pick.views)).toContain('koban:buy:');
  expect((await walletOf(db,A)).balance).toBe(10000);
+});
+
+it('旧送金コマンド・確定ボタン・モーダルは小判への案内だけで、銭を動かさない',async()=>{
+ const { SokinApp }=await import('../src/discord/sokin.js');const old=new SokinApp(db,()=>cfg);
+ const command=interaction('');Object.assign(command.i,{isChatInputCommand:()=>true,commandName:'sokin'});
+ await old.onInteraction(command.i as never);expect(JSON.stringify(command.views)).toContain('koban:shop');
+ for(const kind of ['button','modal','user']){const req=interaction('sokin:send:old',kind,B);await old.onInteraction(req.i as never);expect(JSON.stringify(req.views)).toContain('小判');}
+ expect((await walletOf(db,A)).balance).toBe(10000);expect((await walletOf(db,B)).balance).toBe(0);
+ const { commandList }=await import('../src/services/commandList.js');expect(commandList().find(c=>c.name==='送金')?.options).toEqual([]);
+});
+it('旧SHOPの銭の贈り物は表示せず、古い選択や入力画面も支払いを拒否する。券や品物の機能は残す',async()=>{
+ const gift=(await listItems(db)).find(i=>i.kind==='gift')!;
+ await db.update(shopItems).set({enabled:true}).where((await import('drizzle-orm')).eq(shopItems.id,gift.id));
+ expect((await listItems(db,{enabledOnly:true})).some(i=>i.kind==='gift')).toBe(false);
+ const shop=new ShopApp(db,()=>cfg,{} as DiscordActions);
+ const pick=interaction('shop:pick','select',String(gift.id));await shop.onInteraction(pick.i as never);expect(JSON.stringify(pick.views)).toContain('小判');
+ const modal=interaction(`shop:gift:${gift.id}:${B}`,'modal');await shop.onInteraction(modal.i as never);expect(JSON.stringify(modal.views)).toContain('小判');
+ expect((await walletOf(db,A)).balance).toBe(10000);expect((await walletOf(db,B)).balance).toBe(0);
+ expect(JSON.stringify(itemsView([]))).toContain('小判');
+ const { presentable }=await import('../src/services/shop.js');expect(presentable({kind:'role',roleId:'123',roleGroup:'title',boosterOnly:false} as never)).toBe(true);
+ await seedDefaultItems(db,{colors:[],titles:[]});expect((await listItems(db)).find(i=>i.kind==='gift')?.enabled).toBe(false);
 });
