@@ -87,6 +87,14 @@ describe('#面談日程 の片付け', () => {
     expect(scheduleChannelOf(cfg, list)).toBe('3');
     expect(scheduleChannelOf({ ...cfg, channels: { ...cfg.channels, interviewSchedule: '900000000000000009' } }, list)).toBe('900000000000000009');
     expect(scheduleChannelOf(cfg, [])).toBeUndefined();
+    // 「案内希望日程」の名前でも見つける
+    expect(scheduleChannelOf(cfg, [{ id: '4', name: '📅案内希望日程', type: 0 }])).toBe('4');
+  });
+
+  it('🪧 絵馬殿: 抜けた人の自己紹介を消すのは #絵馬-男性・#絵馬-女性（運営紹介は消さない）', async () => {
+    const { emaIntroChannelIds } = await import('../src/discord/guidePending.js');
+    const c = { ...cfg, channels: { ...cfg.channels, ema: '900000000000000011', emaFemale: '900000000000000012', staffIntro: '900000000000000013' } };
+    expect(emaIntroChannelIds(c)).toEqual(['900000000000000011', '900000000000000012']);
   });
 
   it('消すのは案内待ちでなくなった人・抜けた人の書き込み。ピン留め・BOT・運営・まだ案内待ちの人は残す', async () => {

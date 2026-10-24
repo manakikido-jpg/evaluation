@@ -25,12 +25,15 @@ export function guideRoleOf(cfg: GuildConfig, roles: Iterable<{ id: string; name
   return undefined;
 }
 
-/** #面談日程（設定になければ、名前に「面談日程」を含むテキストチャンネル） */
+/** #面談日程（設定になければ、名前に「面談日程」か「案内希望」を含むテキストチャンネル） */
 export function scheduleChannelOf(cfg: GuildConfig, channels: Iterable<{ id: string; name: string; type: number }>): string | undefined {
   if (cfg.channels.interviewSchedule) return cfg.channels.interviewSchedule;
-  for (const c of channels) if (c.type === ChannelType.GuildText && c.name.replace(/\s/g, '').includes('面談日程')) return c.id;
+  for (const c of channels) if (c.type === ChannelType.GuildText && /面談日程|案内希望/.test(c.name.replace(/\s/g, ''))) return c.id;
   return undefined;
 }
+
+/** 🪧 絵馬殿の自己紹介のチャンネル（#絵馬-男性・#絵馬-女性。運営紹介は消さない） */
+export const emaIntroChannelIds = (cfg: GuildConfig) => [cfg.channels.ema, cfg.channels.emaFemale].filter((id): id is string => Boolean(id));
 
 /** 書いた人のようす（left: サーバーにいない / pending: 案内待ち / staff: 運営） */
 export type ScheduleAuthor = { left: boolean; pending: boolean; staff: boolean };
@@ -82,10 +85,52 @@ export class GuidePendingApp {
     if (!old.partial && old.roles.cache.has(roleId) && !m.roles.cache.has(roleId)) await this.clearSchedule(m.guild, m.id);
   }
 
-  /** 抜けた人の #面談日程 の書き込みも消す */
+  /** 抜けた人の #面談日程 の書き込みと、🪧 絵馬殿の自己紹介も消す */
   async onMemberRemove(guild: Guild, memberId: string): Promise<void> {
     if (guild.id !== this.cfg().guildId) return;
     await this.clearSchedule(guild, memberId);
+    await this.clearEma(guild, memberId);
+  }
+
+  /** 抜けた人の 🪧 絵馬殿（#絵馬-男性・#絵馬-女性）の書き込みを消す（ピン留めは残す） */
+  async clearEma(guild: Guild, memberId: string): Promise<number> {
+    let n = 0;
+    for (const id of emaIntroChannelIds(this.cfg())) {
+      const ch = guild.channels.cache.get(id);
+      if (ch?.type !== ChannelType.GuildText) continue;
+      try {
+        const mine = (await this.recent(ch)).filter((m) => m.author.id === memberId && !m.pinned);
+        if (mine.length) n += await this.remove(ch, mine);
+      } catch (err) {
+        logger.warn({ err, memberId, channelId: id }, 'ema clear failed（BOT に「メッセージの管理」があるか）');
+      }
+    }
+    if (n) logger.info({ memberId, n }, 'ema intro cleared (member left)');
+    return n;
+  }
+
+  /** 起動したとき: 止まっていた間に抜けた人の 🪧 絵馬殿の書き込みを消す（取りこぼし用） */
+  async sweepEma(guild: Guild): Promise<number> {
+    if (guild.id !== this.cfg().guildId) return 0;
+    let n = 0;
+    for (const id of emaIntroChannelIds(this.cfg())) {
+      const ch = guild.channels.cache.get(id);
+      if (ch?.type !== ChannelType.GuildText) continue;
+      try {
+        const msgs = (await this.recent(ch)).filter((m) => !m.author.bot && !m.pinned);
+        const gone = new Set<string>();
+        for (const author of new Set(msgs.map((m) => m.author.id))) {
+          if (guild.members.cache.has(author)) continue;
+          if (!(await guild.members.fetch(author).catch(() => undefined))) gone.add(author);
+        }
+        const left = msgs.filter((m) => gone.has(m.author.id));
+        if (left.length) n += await this.remove(ch, left);
+      } catch (err) {
+        logger.warn({ err, channelId: id }, 'ema sweep failed（BOT に「メッセージの管理」があるか）');
+      }
+    }
+    if (n) logger.info({ n }, 'ema intro swept');
+    return n;
   }
 
   private scheduleChannel(guild: Guild): TextChannel | undefined {

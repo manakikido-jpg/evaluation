@@ -186,6 +186,8 @@ async function main(): Promise<void> {
     await guidePending.attach(guild).catch((err) => logger.warn({ err }, 'guide pending attach failed'));
     // #面談日程: 止まっていた間に案内待ちが外れた人・抜けた人の書き込みを消す
     void guidePending.sweepSchedule(guild);
+    // 止まっていた間に抜けた人の 🪧 絵馬殿の書き込みも消す
+    void guidePending.sweepEma(guild).catch((err) => logger.warn({ err }, 'ema sweep failed'));
     // 招待リンク: 使われた回数を覚え直す
     await inviteLinks.attach(guild).catch((err) => logger.warn({ err }, 'invite links attach failed'));
     // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
@@ -361,7 +363,7 @@ async function main(): Promise<void> {
   client.on(Events.GuildMemberRemove, (m) => {
     emaCounter.memberChanged(m.guild.id, m.id, false);
     void app.onMemberRemove(m.guild.id, m.id);
-    // 抜けた人の #面談日程 の書き込みを消す
+    // 抜けた人の #面談日程 の書き込みと 🪧 絵馬殿の自己紹介を消す
     void guidePending.onMemberRemove(m.guild, m.id).catch((err) => logger.warn({ err }, 'interview schedule clear failed'));
   });
   client.on(Events.GuildMemberUpdate, (old, m) => {
