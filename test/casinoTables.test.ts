@@ -347,8 +347,13 @@ describe('👑 大富豪', () => {
       if (r.ok) s = t.run(r);
       return r;
     };
+    const bomb = (n: number, ranks: number[]) => {
+      const r = daifugo.act(s, P(n).id, { action: 'choose', ranks: ranks.map(String) }, t.ctx());
+      if (r.ok) s = t.run(r);
+      return r;
+    };
     const wait = (ms: number) => (s = t.advance(s, ms));
-    return { t, get s() { return s; }, play, pass, choose, wait };
+    return { t, get s() { return s; }, play, pass, choose, bomb, wait };
   }
 
   it('8 切りなし・革命なしなら、ふつうのカードと同じ', () => {
@@ -431,6 +436,25 @@ describe('👑 大富豪', () => {
     auto.wait(41_000);
     expect(auto.s.seats[1]!.hand).toContain(C(4));
     expect(auto.s.turn).toBe(1);
+  });
+
+  it('💣 12 ボンバー: Q の枚数だけ数字を言い、その数字をみんなの手札から捨てる（なくなった人は上がり）', () => {
+    const g = ruled(['bomb12'], [[C(12), C(4), C(6), C(9)], [C(4, 1), C(5)], [C(4, 2)]]);
+    g.play(1, [C(12)]);
+    expect(g.s.pending?.steps).toEqual([{ kind: 'bomb', n: 1 }]);
+    expect(g.bomb(1, [4, 5])).toEqual({ ok: false, error: 'pick_count' });
+    g.bomb(1, [4]);
+    expect(g.s.seats[0]!.hand).toEqual([C(6), C(9)]);
+    expect(g.s.seats[1]!.hand).toEqual([C(5)]);
+    // 手札がなくなった人は上がり
+    expect(g.s.seats[2]!.out).toBe(true);
+    expect(g.s.log.join('\n')).toContain('12 ボンバー');
+    // 時間切れなら、自分が持っていない数字を BOT が選ぶ
+    const auto = ruled(['bomb12'], [[C(12), C(6), C(9)], [C(4, 1), C(5)], [C(4, 2), C(10)]]);
+    auto.play(1, [C(12)]);
+    auto.wait(41_000);
+    expect(auto.s.pending).toBeNull();
+    expect(auto.s.seats[0]!.hand).toEqual([C(6), C(9)]);
   });
 
   it('10 捨て・9 リバース・砂嵐', () => {

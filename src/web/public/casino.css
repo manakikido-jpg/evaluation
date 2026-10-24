@@ -2368,3 +2368,9 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .kb-aura-target select { width: 100%; min-width: 0; min-height: 44px; padding: 8px; font: inherit; color: var(--c-text); background: var(--c-bg2); border: 1px solid var(--c-line); border-radius: 8px; }
 
 .kb-aura-shop[hidden] { display: none; }
+
+/* 💣 12 ボンバー: 言う数字を選ぶ */
+.c-bomb-ranks { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .5rem; }
+.c-bomb-ranks .c-tag { display: inline-block; min-width: 2.2rem; text-align: center; padding: .35rem .5rem; font-size: 1rem; }
+.c-bomb-ranks input:checked + .c-tag { outline: 3px solid #e2b04a; background: rgba(226, 176, 74, .25); }
+.c-bomb-ranks input:focus-visible + .c-tag { outline: 2px dashed #e2b04a; }

@@ -19,6 +19,7 @@ export const DAIFUGO_RULES = {
   give7: { label: '🎁 7 渡し', note: '7 を出すと、出した枚数だけ好きなカードを次の人に渡せる', on: false },
   drop10: { label: '🗑 10 捨て', note: '10 を出すと、出した枚数だけ好きなカードを捨てられる', on: false },
   reverse9: { label: '🔄 9 リバース', note: '9 を出すと、順番が逆回りになる', on: false },
+  bomb12: { label: '💣 12 ボンバー', note: 'Q を出すと、出した枚数だけ数字を言い、その数字のカードをみんなの手札から捨てる', on: false },
   sandstorm: { label: '🌪 砂嵐', note: '3 を 3 枚出すと、3 枚出しなら何にでも勝って場が流れる', on: false },
   foul: { label: '🚫 反則上がり', note: 'ジョーカー・2（革命中は 3）・8 切りの 8・♠3 返しの ♠3 で上がると最下位', on: false },
 } as const;
@@ -61,7 +62,7 @@ export type DaifugoState = PartyBase & {
   /** 順番の向き（9 リバースで -1） */
   dir?: 1 | -1;
   /** 出したあとに選ぶもの（7 渡し・10 捨て）。終わったら then のとおりに番を回す */
-  pending?: { by: number; steps: { kind: 'give' | 'drop'; n: number }[]; then: { cut: boolean; skips: number } } | null;
+  pending?: { by: number; steps: { kind: 'give' | 'drop' | 'bomb'; n: number }[]; then: { cut: boolean; skips: number } } | null;
   /** みんなに見えて、もう使われないカード（出した・10 捨てで捨てた）。BOT がカードを数えるのに使う */
   seen?: number[];
 };
@@ -204,11 +205,13 @@ function dPlay(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> 
   }
   if (active(s).length <= 1) return ok(s);
   // 7 渡し・10 捨て: 手札が残っていれば、選んでもらってから番を回す
-  const steps: { kind: 'give' | 'drop'; n: number }[] = [];
+  const steps: { kind: 'give' | 'drop' | 'bomb'; n: number }[] = [];
   const sevens = has(s, 'give7') ? set.ranks.filter((r) => r === 7).length : 0;
   const tens = has(s, 'drop10') ? set.ranks.filter((r) => r === 10).length : 0;
+  const queens = has(s, 'bomb12') ? set.ranks.filter((r) => r === 12).length : 0;
   if (sevens) steps.push({ kind: 'give', n: sevens });
   if (tens) steps.push({ kind: 'drop', n: tens });
+  if (queens) steps.push({ kind: 'bomb', n: queens });
   if (steps.length && x.hand.length) {
     s.pending = { by: i, steps, then: { cut, skips } };
     s.turn = i;
@@ -235,11 +238,62 @@ function passTurn(s: DaifugoState, i: number, cut: boolean, skips: number): void
   s.turn = t;
 }
 
+/** 12 ボンバーで言える数字（1=A … 13=K） */
+export const BOMB_RANKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const;
+export const rankLabel = (r: number) => ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'][r] ?? '?';
+
+/** 💣 12 ボンバー: 言った数字のカードを、みんなの手札から捨てる（自分の手札もふくむ） */
+function dBomb(s: DaifugoState, i: number, ranks: number[]): Step<DaifugoState> {
+  const p = s.pending;
+  if (!p || p.by !== i || p.steps[0]?.kind !== 'bomb') return fail('invalid');
+  const n = p.steps[0].n;
+  const picked = [...new Set(ranks)];
+  if (picked.length !== n || !picked.every((r) => (BOMB_RANKS as readonly number[]).includes(r))) return fail('pick_count');
+  let removed = 0;
+  for (const seat of s.seats) {
+    if (seat.out) continue;
+    const gone = seat.hand.filter((c) => c !== JOKER && picked.includes(rankOf(c)));
+    if (!gone.length) continue;
+    seat.hand = seat.hand.filter((c) => !gone.includes(c));
+    s.seen = [...(s.seen ?? []), ...gone];
+    removed += gone.length;
+  }
+  addLog(s, `💣 ${s.seats[i]!.name}: 12 ボンバー！ ${picked.map(rankLabel).join('・')} を全員の手札から捨てました（${removed} 枚）`);
+  // 手札がなくなった人は上がり（出した人から順に）
+  for (let k = 0; k < s.seats.length; k++) {
+    const seat = s.seats[(i + k) % s.seats.length]!;
+    if (!seat.out && !seat.hand.length) {
+      seat.out = true;
+      s.order.push(seat.id);
+      addLog(s, `🎉 ${seat.name} が ${s.order.length} 番目に上がりました`);
+    }
+  }
+  const rest = p.steps.slice(1);
+  if (rest.length && s.seats[i]!.hand.length) {
+    s.pending = { ...p, steps: rest };
+    return ok(s);
+  }
+  s.pending = null;
+  if (active(s).length <= 1) return ok(s);
+  passTurn(s, i, p.then.cut, p.then.skips);
+  return ok(s);
+}
+
+/** 💣 BOT・時間切れのとき言う数字: 自分が持っていなくて、まだ出ていない枚数が多いもの */
+export function bombPick(s: DaifugoState, i: number): number[] {
+  const n = s.pending?.steps[0]?.n ?? 1;
+  const mine = s.seats[i]!.hand.filter((c) => c !== JOKER).map(rankOf);
+  const seen = (s.seen ?? []).filter((c) => c !== JOKER).map(rankOf);
+  const score = (r: number) => 4 - mine.filter((x) => x === r).length * 5 - seen.filter((x) => x === r).length;
+  return [...BOMB_RANKS].sort((a, b) => score(b) - score(a) || a - b).slice(0, n);
+}
+
 /** 7 渡し・10 捨てのカードを選んだ */
 function dChoose(s: DaifugoState, i: number, cards: number[]): Step<DaifugoState> {
   const p = s.pending;
   const x = s.seats[i]!;
   if (!p || p.by !== i) return fail('invalid');
+  if (p.steps[0]?.kind === 'bomb') return dBomb(s, i, bombPick(s, i));
   const step = p.steps[0]!;
   const n = Math.min(step.n, x.hand.length);
   if (cards.length !== n || new Set(cards).size !== n || !cards.every((c) => x.hand.includes(c))) return fail('pick_count');
@@ -698,7 +752,11 @@ export const daifugo = partyEngine<DaifugoState>({
   play(s, i, f) {
     const cards = list(f, 'cards').map(Number).filter((n) => Number.isInteger(n));
     // 7 渡し・10 捨ての途中は、選ぶことしかできない
-    if (s.pending) return str(f, 'action') === 'choose' ? dChoose(s, i, cards) : fail('pending');
+    if (s.pending) {
+      if (str(f, 'action') !== 'choose') return fail('pending');
+      if (s.pending.steps[0]?.kind === 'bomb') return dBomb(s, i, list(f, 'ranks').map(Number).filter((n) => Number.isInteger(n)));
+      return dChoose(s, i, cards);
+    }
     if (str(f, 'action') === 'pass') return dPass(s, i);
     return dPlay(s, i, cards);
   },
@@ -708,6 +766,7 @@ export const daifugo = partyEngine<DaifugoState>({
   aiVariant: (s) => [...rulesOf(s)].sort().join(',') + `|cap:${s.botProfitCap ?? 'legacy'}|stake:${s.entry > 0 ? 'paid' : 'free'}`,
   auto(s, i) {
     // 選ばないうちに時間切れなら、弱いカードから
+    if (s.pending?.steps[0]?.kind === 'bomb') return dBomb(s, i, bombPick(s, i));
     if (s.pending) {
       const n = Math.min(s.pending.steps[0]!.n, s.seats[i]!.hand.length);
       return dChoose(s, i, sortHand(s.seats[i]!.hand, reversed(s)).filter((c) => c !== JOKER).concat(JOKER).filter((c) => s.seats[i]!.hand.includes(c)).slice(0, n));

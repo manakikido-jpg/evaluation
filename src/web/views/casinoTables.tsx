@@ -8,6 +8,7 @@ import { BAC_BETS, type BacBet } from '../../services/casino/baccarat.js';
 import { handValue } from '../../services/casino/blackjack.js';
 import { rouletteBetLabel, rouletteColor } from '../../services/casino/roulette.js';
 import type { BacTableState, BjTableState, RlTableState } from '../../services/casino/tables/dealer.js';
+import { BOMB_RANKS, rankLabel } from '../../services/casino/tables/daifugo.js';
 import { cardLabel, DAIFUGO_RULE_KEYS, DAIFUGO_RULES, JOKER, reversed, rulesOf, type BabaState, type DaifugoState } from '../../services/casino/tables/party.js';
 import { ACT_SECONDS, blindOptions, BUYIN_MAX_BB, BUYIN_MIN_BB, POKER_SEATS, pokerView, type PokerState } from '../../services/casino/tables/poker.js';
 import { pokerAdvice, type Tone } from '../../services/casino/tables/pokerHints.js';
@@ -1171,7 +1172,9 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
         <div class="c-phase">
           {s.phase === 'playing'
             ? s.pending
-              ? `${s.seats[s.pending.by]?.name} さんが${s.pending.steps[0]!.kind === 'give' ? '🎁 渡す' : '🗑 捨てる'}カードを選んでいます`
+              ? s.pending.steps[0]!.kind === 'bomb'
+                ? `${s.seats[s.pending.by]?.name} さんが 💣 12 ボンバーの数字を選んでいます`
+                : `${s.seats[s.pending.by]?.name} さんが${s.pending.steps[0]!.kind === 'give' ? '🎁 渡す' : '🗑 捨てる'}カードを選んでいます`
               : `${s.seats[s.turn ?? 0]?.name} さんの番`
             : '終わり'}
           {s.dir === -1 && <span class="c-tag">🔄 逆回り</span>}
@@ -1217,7 +1220,23 @@ function DaifugoView({ t, s, me, now }: ViewProps<DaifugoState>) {
               </label>
             ))}
           </div>
-          {myTurn && s.pending && (
+          {myTurn && s.pending?.steps[0]!.kind === 'bomb' && (
+            <div class="c-actions">
+              <div class="c-bomb-ranks">
+                {BOMB_RANKS.map((r) => (
+                  <label class="c-pickcard">
+                    <input type="checkbox" name="ranks" value={String(r)} />
+                    <span class="c-tag">{rankLabel(r)}</span>
+                  </label>
+                ))}
+              </div>
+              <button type="submit" name="action" value="choose" class="c-btn c-btn-gold">
+                💣 選んだ {s.pending.steps[0]!.n} つの数字を、みんなの手札から捨てる
+              </button>
+              <span class="c-muted">💣 12 ボンバー: 数字を {s.pending.steps[0]!.n} つ選んでください（自分の手札からも捨てます。時間切れなら BOT が選びます）</span>
+            </div>
+          )}
+          {myTurn && s.pending && s.pending.steps[0]!.kind !== 'bomb' && (
             <div class="c-actions">
               <button type="submit" name="action" value="choose" class="c-btn c-btn-gold">
                 選んだ {Math.min(s.pending.steps[0]!.n, my.hand.length)} 枚を{s.pending.steps[0]!.kind === 'give' ? '次の人に渡す' : '捨てる'}

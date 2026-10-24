@@ -150,7 +150,7 @@ describe('🤖 大富豪・ババ抜きの BOT', () => {
   it('大富豪: 人 1 人と BOT 3 人で最後まで（BOT は自分で動く）。銭は合う', () => {
     for (const seed of [3, 4, 5]) {
       const t = sim(daifugo, seed);
-      let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '100', rules_set: '1', rules: ['revolution', 'eight', 'joker', 'give7', 'drop10', 'stairs'] }, t.ctx()));
+      let s: DaifugoState = t.run(daifugo.create(P(1), { entry: '100', rules_set: '1', rules: ['revolution', 'eight', 'joker', 'give7', 'drop10', 'stairs', 'bomb12'] }, t.ctx()));
       for (let k = 0; k < 3; k++) s = t.run(daifugo.act(s, P(1).id, { action: 'add_bot' }, t.ctx()));
       s = t.run(daifugo.act(s, P(1).id, { action: 'start' }, t.ctx()));
       for (let k = 0; k < 600 && s.phase === 'playing'; k++) {
