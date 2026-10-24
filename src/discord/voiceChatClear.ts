@@ -25,6 +25,8 @@ export class VoiceChatClearApp {
   constructor(
     private readonly cfg: () => GuildConfig,
     private readonly now = () => Date.now(),
+    /** 宿など、投稿を残す場所。判定失敗時は削除を始めない。 */
+    private readonly preserve = async (_channelId: string): Promise<boolean> => false,
   ) {}
 
   /** 起動したとき: 止まっていた間に空になった通話も片付ける */
@@ -67,21 +69,26 @@ export class VoiceChatClearApp {
 
   /** ピン留め以外を消す。14 日以内はまとめて、それより古いものは 1 件ずつ（50 件まで） */
   async purge(channel: Purgeable): Promise<number> {
+    if (await this.preserve(channel.id)) return 0;
     let removed = 0;
     let single = 0;
     for (let round = 0; round < MAX_ROUNDS; round++) {
       // 途中でだれか入ったらやめる
-      if (humans(channel) > 0) break;
+      if (humans(channel) > 0 || await this.preserve(channel.id)) break;
       const batch = await channel.messages.fetch({ limit: 100 });
+      if (humans(channel) > 0 || await this.preserve(channel.id)) break;
       const targets = [...batch.values()].filter((m) => !m.pinned);
       if (!targets.length) break;
       const recent = targets.filter((m) => this.now() - m.createdTimestamp < BULK_MAX_AGE_MS);
       const old = targets.filter((m) => this.now() - m.createdTimestamp >= BULK_MAX_AGE_MS);
       if (recent.length >= 2) await channel.bulkDelete(recent.map((m) => m.id), true);
-      else for (const m of recent) await m.delete();
+      else for (const m of recent) {
+        if (humans(channel) > 0 || await this.preserve(channel.id)) return removed;
+        await m.delete();
+      }
       removed += recent.length;
       for (const m of old) {
-        if (single >= MAX_SINGLE) break;
+        if (single >= MAX_SINGLE || humans(channel) > 0 || await this.preserve(channel.id)) break;
         await m.delete().catch(() => undefined);
         single++;
         removed++;

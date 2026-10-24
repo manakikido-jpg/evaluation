@@ -72,3 +72,29 @@ describe('人がいなくなった通話のチャットを消す', () => {
     expect(off.alive()).toHaveLength(2);
   });
 });
+
+describe('宿の投稿を保護する', () => {
+  it('空室でも、直接の削除処理でも宿の投稿とパネルを消さない', async () => {
+    const v = fakeVoice([{ id: 'chat', age: 1000 }, { id: 'panel', age: 20 * DAY }]);
+    const app = new VoiceChatClearApp(() => cfg, () => NOW, async () => true);
+    expect(await app.purge(v.channel as never)).toBe(0);
+    expect(v.alive()).toHaveLength(2); expect(v.bulk).toEqual([]); expect(v.single).toEqual([]);
+    const state = (channelId: string | null, channel: unknown = null) => ({ channelId, channel, guild: { id: cfg.guildId } }) as never;
+    app.onVoiceStateUpdate(state(VC, v.channel), state(null));
+    await new Promise(r => setTimeout(r, 20)); expect(v.alive()).toHaveLength(2);
+    app.attach({ channels: { cache: new Map([[VC, { ...v.channel, type: 2, lastMessageId: 'panel' }]]) } } as never);
+    await new Promise(r => setTimeout(r, 20)); expect(v.alive()).toHaveLength(2);
+  });
+  it('削除予約後や読み込み中に宿と分かっても削除しない', async () => {
+    const v = fakeVoice([{ id: 'a', age: 1000 }, { id: 'b', age: 1000 }]);
+    let calls = 0;
+    const app = new VoiceChatClearApp(() => cfg, () => NOW, async () => ++calls >= 3);
+    expect(await app.purge(v.channel as never)).toBe(0); expect(v.alive()).toHaveLength(2);
+  });
+  it('宿の判定に失敗した場合も削除しない', async () => {
+    const v = fakeVoice([{ id: 'a', age: 1000 }]);
+    const app = new VoiceChatClearApp(() => cfg, () => NOW, async () => { throw Error('DB unavailable'); });
+    await expect(app.purge(v.channel as never)).rejects.toThrow('DB unavailable');
+    expect(v.alive()).toHaveLength(1);
+  });
+});
