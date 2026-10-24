@@ -604,3 +604,4 @@
 - 最新本番合流後の最終関連テスト：2ファイル58件成功（62.40秒、全件と並行）、最終型チェック・ビルド成功。ログ/tmp/cast-delivery-week-{related-final,typecheck-final,build-final}.log。停止した旧全件結果は最終成功として使用しない。0125はPGliteで適用して確認済み、本番へはまだ適用していない。
 - 最終検証：最新本番6b67c5bを取り込んだ最終コードで全163ファイル1,935テスト成功（384.15秒、4並列）、型チェック・ビルド成功。最終関連58件成功。ログ/tmp/cast-delivery-week-{all-tests-final,typecheck-final,build-final,related-final}.log。テスト削除・skipなし。停止した旧結果は数えない。push前fetchでも最新本番6b67c5bで、0125の番号重複なし。
 - 完了：新規注文は168時間後の期限を保存。既存の納品待ちの短い期限は0125データ移行で注文+168時間へ延長。長い期限・完了/納品/返金済み・通話予約は維持。Discord/Web説明も1週間に統一。納品後の自動受取72時間は維持。本番へのデータ更新は未実施。codex/cast-delivery-one-weekから担当Claude向けPRへ保存し、合流後は0125の適用と既存注文のスレッド期限表示を確認する。
+- GitHub保存済み：PR #82 https://github.com/manakikido-jpg/evaluation/pull/82 、実装63dbb9a、codex/cast-delivery-one-week。最新本番6b67c5bをmerge済み。OPEN・未合流、担当Claudeの確認・合流待ち。0125の本番適用と実Discordでの既存/新規の期限確認は未実施。
