@@ -225,11 +225,18 @@ export class ShuinApp {
     if (guild.id !== this.cfg.guildId || this.checkingInviteRewards) return;
     this.checkingInviteRewards = true;
     try {
+      // もうサーバーにいない人（Unknown Member）は、抜けた扱いにして飛ばす（毎回エラーにしない）
+      const fetchOrLeft = async (userId: string) => {
+        try { return await guild.members.fetch({ user: userId, force: true }); }
+        catch (err) {
+          if ((err as { code?: number }).code !== 10007) throw err;
+          await recordLeave(this.db, userId);
+          return undefined;
+        }
+      };
       await reconcileInviteRewards(this.inviteRewardContext(), async (id, inviterId) => {
-        const [member, inviter] = await Promise.all([
-          guild.members.fetch({ user: id, force: true }),
-          guild.members.fetch({ user: inviterId, force: true }),
-        ]);
+        const [member, inviter] = await Promise.all([fetchOrLeft(id), fetchOrLeft(inviterId)]);
+        if (!member || !inviter) return undefined;
         await upsertMember(this.db, toSnapshot(member), { leftAt: null });
         await upsertMember(this.db, toSnapshot(inviter), { leftAt: null });
         return [...member.roles.cache.keys()];
