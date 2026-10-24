@@ -517,3 +517,19 @@ describe('お参り期間（Discord）', () => {
     expect(calls.some((c) => c.startsWith('kick'))).toBe(false);
   });
 });
+
+
+it('修正要望テンプレートは神職・宮司だけ設置でき、窓口のチャンネルに出す', async () => {
+  const denied = command(USER, [], 'panel', { sub: 'request-template' });
+  await app.onInteraction(denied.i as never);
+  expect(denied.replies[0]?.content).toContain('神職・宮司');
+  const { listNotices } = await import('../src/services/notices.js');
+  expect(await listNotices(db)).toHaveLength(0);
+  const ok = command(STAFF, [ROLE.shinshoku], 'panel', { sub: 'request-template' });
+  Object.assign(ok.i, { channel: { id: '900000000000000099', isSendable: () => true } });
+  await app.onInteraction(ok.i as never);
+  expect(ok.i.deferred).toBe(true);
+  expect(ok.replies.at(-1)?.content).toContain('置きました');
+  expect((await listNotices(db))[0]).toMatchObject({ channelId: '900000000000000099', sticky: true });
+  expect(calls.some(c => c.includes('修正・要望内容：'))).toBe(true);
+});

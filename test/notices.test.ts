@@ -753,3 +753,37 @@ describe('/パネル 朱印', () => {
     expect((await listNotices(db)).find((n) => n.channelId === CH.keiji)!.body).toBe(edited);
   });
 });
+
+
+describe('修正・要望窓口のテンプレート', () => {
+  it('案内を残して下にコピー用の欄を置き、画像はスレッドへ案内する。出し直しでも増えない', async () => {
+    const { placeRequestWindowTemplate } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const ctx = { db, cfg, discord: f.discord };
+    const original = await f.discord.sendMessage(CH.keiji, { content: '既存の窓口の案内' });
+    expect(await placeRequestWindowTemplate(ctx, CH.keiji, GUJI)).toEqual({ result: 'posted', created: true });
+    const first = (await listNotices(db))[0]!;
+    expect(first).toMatchObject({ sticky: true, style: 'text', shuinButton: false, channelId: CH.keiji });
+    expect(first.body).toContain('```\n修正・要望内容：\n問い合わせした理由：\n```');
+    expect(first.body).toContain('※画像は、お問い合わせの際に作成するスレッド内にお願いします。');
+    await f.discord.sendMessage(CH.keiji, { content: '利用者の投稿' });
+    expect((await placeRequestWindowTemplate(ctx, CH.keiji, GUJI)).created).toBe(false);
+    expect(await listNotices(db)).toHaveLength(1);
+    const posted = f.inChannel(CH.keiji);
+    expect(posted.map(m => m.content)).toEqual(['既存の窓口の案内', '利用者の投稿', first.body]);
+    expect(f.messages.has(original.id)).toBe(true);
+  });
+  it('掲示の編集済み文面を保持して下固定を復帰し、別の窓口の掲示は変更しない', async () => {
+    const { placeRequestWindowTemplate } = await import('../src/services/notices.js');
+    const f = fakeDiscord();
+    const ctx = { db, cfg, discord: f.discord };
+    await placeRequestWindowTemplate(ctx, CH.keiji, GUJI);
+    const n = (await listNotices(db))[0]!;
+    await updateNotice(db, n.id, { title: n.title, body: '窓口専用に直した文面', sticky: false, pinned: true, by: GUJI });
+    await placeRequestWindowTemplate(ctx, CH.keiji, GUJI);
+    expect(await getNotice(db, n.id)).toMatchObject({ body: '窓口専用に直した文面', sticky: true, pinned: false });
+    await placeRequestWindowTemplate(ctx, CH.shamusho, GUJI);
+    expect((await listNotices(db)).find(x => x.channelId === CH.shamusho)?.body).toContain('修正・要望内容：');
+    expect(await getNotice(db, n.id)).toMatchObject({ body: '窓口専用に直した文面' });
+  });
+});

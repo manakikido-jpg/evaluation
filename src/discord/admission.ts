@@ -1,4 +1,4 @@
-import { placeShuinButton, placeEmaGuide } from '../services/notices.js';
+import { placeShuinButton, placeEmaGuide, placeRequestWindowTemplate } from '../services/notices.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -296,6 +296,13 @@ export class AdmissionApp {
     }
     if (kind === 'notify' && !notifyReady(this.cfg)) {
       return void (await i.reply({ content: '通知 OK／NG のロールがまだありません。社務所Web の「設定 → 🔔 通知 OK／NG」で用意してください。', ...EPHEMERAL }));
+    }
+    if (kind === 'request-template') {
+      await i.deferReply(EPHEMERAL);
+      const r = await placeRequestWindowTemplate(this.ctx, channel.id, i.user.id);
+      return void (await i.editReply(r.result === 'too_long'
+        ? '置けませんでした（テンプレートの文字数が多すぎます）。'
+        : `📝 修正・要望のテンプレートを${r.created ? '置きました' : '下に出し直しました'}。書き込みがあると、一番下に表示します。文面は社務所Webの「掲示」で変更できます。`));
     }
     if (kind === 'ema') {
       await i.deferReply(EPHEMERAL);
