@@ -600,3 +600,5 @@
 - 関連3ファイル43件成功（14.32秒）、型チェック成功。作業環境の接続が一時切れたが復旧し変更保持を確認。全件検証・ビルドに進む。本番操作なし。
 - 最終検証：全162ファイル1,935テスト成功（348.51秒、4並列）、型チェック・ビルド成功。関連3ファイル43件成功。ログ/tmp/returner-{all-tests,typecheck,build,related}.log。テスト削除・skipなし。push前fetchで本番3fed919から更新なし。
 - 完了：入鯖時の確定直後に既存の出戻りロールを付与、初参加誤判定の防止、停止中再参加の同期、付与漏れ再試行、監査と説明・テスト。DBマイグレーション・設定変更なし。本番のロール操作は未実施。codex/returner-role-immediateから担当Claude向けPRへ保存する。合流後は出戻りロールの用意・BOTの役職順とロール管理権限を確認し、実Discordの再参加で確認する。
+- 最終fetchの補足：push直前に本番が24c744f（退出時の自己紹介削除・日程チャンネルの発見）へ進んだ。上の「更新なし」はその前のfetch時点。今回のapp.ts/members.ts/returnerRoles.tsとはコード重複なし。更新履歴・説明は双方を維持して担当Claudeが確認・合流する。
+- GitHub保存済み：PR #80 https://github.com/manakikido-jpg/evaluation/pull/80 、実装3f4a663、codex/returner-role-immediate。OPEN・未合流。全件検証済みの実装を保存し、本番未反映。残りは担当Claudeによる最新本番との確認・合流と実Discordでの再参加確認。
