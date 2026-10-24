@@ -4396,3 +4396,14 @@ it('📝 投稿文: まとめ係が専用ページで下書き・申請し、神
   roles.set(USER, []);
   expect((await app.request('/update-desk', { headers: { cookie } })).headers.get('location')).toBe('/update-desk/login?e=denied');
 });
+
+it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）', async () => {
+  const { archiveMessage } = await import('../src/services/messageArchive.js');
+  await archiveMessage(db, { id: 'm1', channelId: '910000000000000002', authorId: USER, authorName: 'さくら', content: '秘密の話', createdAt: new Date(), attachments: [] }, async () => undefined);
+  const g = await login(GUJI);
+  const html = await (await get('/message-archive', g)).text();
+  expect(html).toContain('秘密の話');
+  expect(html).not.toMatch(/onclick=|style=|<script>/);
+  const s = await login(STAFF);
+  expect((await get('/message-archive', s)).status).toBe(403);
+});

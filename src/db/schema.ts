@@ -2301,3 +2301,30 @@ export const memberMessages = pgTable('member_messages', {
   authorId: text('author_id').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('member_messages_author_idx').on(t.authorId)]);
+
+/** 📚 書き込みの記録（宮司だけが社務所Web で見る）。90 日で消す */
+export const messageArchive = pgTable('message_archive', {
+  messageId: text('message_id').primaryKey(),
+  channelId: text('channel_id').notNull(),
+  authorId: text('author_id').notNull(),
+  authorName: text('author_name').notNull().default(''),
+  content: text('content').notNull().default(''),
+  /** 書きかえる前の文（古い順） */
+  edits: jsonb('edits').$type<{ content: string; at: string }[]>().notNull().default(sql`'[]'::jsonb`),
+  /** 添付（写真は message_archive_files に中身も残す） */
+  attachments: jsonb('attachments').$type<{ name: string; size: number; contentType: string | null; fileId?: number }[]>().notNull().default(sql`'[]'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  /** 消した人（本人が消したときは Discord が教えないので空） */
+  deletedBy: text('deleted_by'),
+}, t => [index('message_archive_author_idx').on(t.authorId), index('message_archive_created_idx').on(t.createdAt), index('message_archive_channel_idx').on(t.channelId)]);
+export type ArchivedMessage = typeof messageArchive.$inferSelect;
+
+/** 📚 書き込みの写真の中身（8MB まで） */
+export const messageArchiveFiles = pgTable('message_archive_files', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  messageId: text('message_id').notNull(),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('message_archive_files_msg_idx').on(t.messageId)]);

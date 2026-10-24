@@ -19,6 +19,8 @@ import { mountMyPage } from './myPage.js';
 import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { UpdatePostsPage } from './views/updatePosts.js';
+import { MessageArchivePage } from './views/messageArchive.js';
+import { archiveFile, searchArchive } from '../services/messageArchive.js';
 import { mountUpdateDesk } from './updateDesk.js';
 import { approveUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
@@ -628,6 +630,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/', requireAdmin);
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
+  app.use('/message-archive', requireAdmin);
+  app.use('/message-archive/*', requireAdmin);
   app.use('/yaku', requireAdmin);
   app.use('/security', requireAdmin);
   app.use('/security/*', requireAdmin, requireCsrf);
@@ -1749,6 +1753,27 @@ export function createWebApp(deps: WebDeps) {
     const [config, pending, done, channels, roles] = await Promise.all([loadUpdatePostConfig(db), listUpdatePosts(db, ['pending']), listUpdatePosts(db, ['posted', 'rejected']), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
     return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
+  });
+  // 📚 書き込みの記録（宮司だけ）
+  app.get('/message-archive', async c => {
+    if (!gujiOnly(c)) return c.text('宮司だけが見られます。', 403);
+    const q = c.req.query();
+    const day = (v: string | undefined, end = false) => v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T${end ? '23:59:59' : '00:00:00'}+09:00`) : undefined;
+    const rows = await searchArchive(db, {
+      author: /^\d{17,20}$/.test(q.author ?? '') ? q.author : undefined,
+      channel: /^\d{17,20}$/.test(q.channel ?? '') ? q.channel : undefined,
+      text: (q.text ?? '').trim().slice(0, 100) || undefined,
+      from: day(q.from), to: day(q.to, true), deleted: q.deleted === 'yes',
+    });
+    const names = await namesOf(db, rows.flatMap(r => [r.authorId, r.deletedBy ?? '']).filter(Boolean));
+    await audit(db, { actorId: c.get('session').userId, action: 'message_archive.view', detail: { author: q.author ?? null, channel: q.channel ?? null }, via: 'web' });
+    return c.html(<MessageArchivePage session={c.get('session')} rows={rows} channels={await loadChannels().catch(() => [])} names={names} q={q} />);
+  });
+  app.get('/message-archive/file/:id', async c => {
+    if (!gujiOnly(c)) return c.text('宮司だけが見られます。', 403);
+    const f = await archiveFile(db, Number(c.req.param('id')) || 0);
+    if (!f) return c.notFound();
+    return c.body(new Uint8Array(f.data), 200, { 'content-type': f.contentType, 'x-content-type-options': 'nosniff', 'cache-control': 'private, max-age=3600' });
   });
   app.get('/posts/:id/image', async c => {
     const post = await getUpdatePost(db, Number(c.req.param('id')) || 0);

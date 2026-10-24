@@ -42,6 +42,7 @@ import { GuidePendingApp } from './discord/guidePending.js';
 import { WalletApp } from './discord/wallet.js';
 import { UpdateDeskApp } from './discord/updateDesk.js';
 import { LeaverCleanupApp } from './discord/leaverCleanup.js';
+import { MessageArchiveApp } from './discord/messageArchive.js';
 import { SokinApp } from './discord/sokin.js';
 import { CasinoApp } from './discord/casino.js';
 import { GlossaryApp } from './discord/glossary.js';
@@ -238,6 +239,7 @@ async function main(): Promise<void> {
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
+      void messageArchive.tick().catch((err) => logger.warn({ err }, 'message archive prune failed'));
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
       void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
       void tempVoice.cleanup();
@@ -464,7 +466,13 @@ async function main(): Promise<void> {
   // 🗑 消されたメッセージを #記録 に残す
   const messageLog = new MessageLogApp(cfg, actions, env.DISCORD_MESSAGE_CONTENT === 'on');
   // 🧹 抜けた人の書き込みを消す（書き込みの番号だけ覚えておく）
-  const leaverCleanup = new LeaverCleanupApp(db, cfg, actions, (ids) => messageLog.quiet(ids));
+  // 📚 書き込みの記録（宮司だけが社務所Web で見る。90 日）
+  const messageArchive = new MessageArchiveApp(db, cfg);
+  client.on(Events.MessageCreate, (m) => messageArchive.onMessage(m));
+  client.on(Events.MessageUpdate, (_old, m) => messageArchive.onUpdate(m));
+  client.on(Events.MessageDelete, (m) => void messageArchive.onDelete(m).catch((err) => logger.warn({ err }, 'message archive delete failed')));
+  client.on(Events.MessageBulkDelete, (list, ch) => void messageArchive.onBulkDelete([...list.keys()], 'guild' in ch ? ch.guild : null).catch((err) => logger.warn({ err }, 'message archive bulk delete failed')));
+  const leaverCleanup = new LeaverCleanupApp(db, cfg, actions, (ids) => { messageLog.quiet(ids); if (client.user) messageArchive.markDeleted(ids, client.user.id); });
   client.on(Events.MessageCreate, (m) => leaverCleanup.onMessage(m));
   client.on(Events.MessageDelete, (m) => leaverCleanup.onDelete([m.id]));
   client.on(Events.MessageBulkDelete, (list) => leaverCleanup.onDelete([...list.keys()]));

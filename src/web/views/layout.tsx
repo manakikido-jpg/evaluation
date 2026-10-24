@@ -19,6 +19,7 @@ type Nav =
   | 'updates'
   | 'stickers'
   | 'posts'
+  | 'msgarchive'
   | 'roles'
   | 'ranks'
   | 'market'
@@ -62,6 +63,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'coretime', href: '/voice/core', icon: '⏰', label: 'コアタイム', page: 'voice' },
       { key: 'boosttime', href: '/voice/boost', icon: '⏱', label: '浮上の記録', page: 'voice' },
       { key: 'audit', href: '/audit', icon: '📜', label: '記録' },
+      { key: 'msgarchive', href: '/message-archive', icon: '📚', label: '書き込みの記録', gujiOnly: true, page: 'audit' },
       { key: 'commands', href: '/commands', icon: '⌨', label: 'コマンド' },
     ],
   },

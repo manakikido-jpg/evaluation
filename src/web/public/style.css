@@ -1442,3 +1442,8 @@ details.fold[open] > summary::before { content: '▾ '; }
 .plain-list { list-style: none; padding: 0; margin: 0 0 .75rem; }
 .plain-list li { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .35rem 0; border-bottom: 1px solid var(--line, #e5e5e5); }
 form.inline { display: inline; margin: 0; }
+
+/* 📚 書き込みの記録 */
+.row-deleted { background: rgba(215, 0, 58, .06); }
+.archive-text { white-space: pre-wrap; word-break: break-word; max-width: 40rem; }
+.archive-img { max-width: 160px; max-height: 160px; display: block; margin-top: .25rem; border-radius: 6px; }
