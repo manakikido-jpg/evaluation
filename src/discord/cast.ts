@@ -2047,8 +2047,12 @@ export class CastApp {
       }
       if (!thread) return;
       if (!thread.isThread()) throw new Error('予約のスレッドではありません');
-      if (!thread.locked) await thread.setLocked(true, '予約終了から15分が経過');
-      if (!thread.archived) await thread.setArchived(true, '予約終了から15分が経過');
+      // アーカイブ済みのスレッドには鍵をかけられない（Thread is archived）ので、いったん開いてから鍵をかけて閉じる
+      if (!thread.locked) {
+        if (thread.archived) await thread.setArchived(false, '予約終了から15分が経過（鍵をかけるため）');
+        await thread.setLocked(true, '予約終了から15分が経過');
+      }
+      if (!thread.archived || !thread.locked) await thread.setArchived(true, '予約終了から15分が経過');
     }, now).catch((err: unknown) => logger.warn({ err }, 'cast reservation thread close failed'));
     if (changed) this.refresh();
     await this.rankTick(c, now).catch((err: unknown) => logger.warn({ err }, 'cast rank failed'));
