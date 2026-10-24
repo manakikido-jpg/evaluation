@@ -6,7 +6,6 @@ import { Layout } from './layout.js';
 
 /** 📚 書き込みの記録（宮司だけ） */
 export function MessageArchivePage(p: { session: AdminSession; rows: ArchivedMessage[]; channels: GuildChannel[]; names: Map<string, string>; q: Record<string, string> }) {
-  const channel = (id: string) => p.channels.find((c) => c.id === id)?.name ?? id;
   const name = (id: string | null) => (id && p.names.get(id)) || id || '';
   return <Layout title="書き込みの記録" nav="msgarchive" session={p.session}>
     <h1>📚 書き込みの記録</h1>
@@ -24,7 +23,7 @@ export function MessageArchivePage(p: { session: AdminSession; rows: ArchivedMes
         {p.rows.map((r) => <tr class={r.deletedAt ? 'row-deleted' : ''}>
           <td>{fmtDateTime(r.createdAt)}</td>
           <td>{r.authorName || name(r.authorId)}<div class="note">{r.authorId}</div></td>
-          <td>#{channel(r.channelId)}</td>
+          <td>#{p.channels.find((c) => c.id === r.channelId)?.name ?? (r.channelName || r.channelId)}</td>
           <td class="wrap"><div class="archive-text">{r.content || <span class="note">（文なし）</span>}</div>
             {r.edits.length > 0 && <details><summary>書きかえ前（{r.edits.length}）</summary>{r.edits.map((e) => <div class="note">{fmtDateTime(new Date(e.at))} まで: {e.content}</div>)}</details>}
             {r.attachments.map((a) => a.fileId ? <a href={`/message-archive/file/${a.fileId}`} target="_blank" rel="noopener"><img class="archive-img" src={`/message-archive/file/${a.fileId}`} alt={a.name} loading="lazy" /></a> : <div class="note">📎 {a.name}（{Math.ceil(a.size / 1024).toLocaleString('ja-JP')} KB）</div>)}

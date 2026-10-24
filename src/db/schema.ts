@@ -2306,6 +2306,8 @@ export const memberMessages = pgTable('member_messages', {
 export const messageArchive = pgTable('message_archive', {
   messageId: text('message_id').primaryKey(),
   channelId: text('channel_id').notNull(),
+  /** 書いたときのチャンネルの名前（宿・スレッドなど、あとで消えても分かるように） */
+  channelName: text('channel_name').notNull().default(''),
   authorId: text('author_id').notNull(),
   authorName: text('author_name').notNull().default(''),
   content: text('content').notNull().default(''),

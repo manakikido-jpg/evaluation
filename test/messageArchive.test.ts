@@ -12,7 +12,7 @@ const msg = (id: string, over: Partial<Parameters<typeof archiveMessage>[1]> = {
 
 describe('📚 書き込みの記録', () => {
   it('文と写真（中身）を残し、動画は名前だけ。書きかえ前の文と、消した時刻・消した人も残す', async () => {
-    await archiveMessage(db, msg('m1', { attachments: [
+    await archiveMessage(db, msg('m1', { channelName: '宿の部屋', attachments: [
       { name: 'a.png', size: png.length, contentType: 'image/png', url: 'https://cdn/a.png' },
       { name: 'b.mp4', size: 9_000_000, contentType: 'video/mp4', url: 'https://cdn/b.mp4' },
     ] }), async () => png);
@@ -21,6 +21,7 @@ describe('📚 書き込みの記録', () => {
     await archiveDeleted(db, ['m1'], '800000000000000099', new Date('2026-10-24T05:00:00Z'));
     await archiveDeleted(db, ['m1'], undefined, new Date('2026-10-24T06:00:00Z'));
     const [r] = await searchArchive(db, { deleted: true });
+    expect(r!.channelName).toBe('宿の部屋');
     expect(r).toMatchObject({ content: 'こんばんは', edits: [{ content: 'こんにちは' }], deletedBy: '800000000000000099', deletedAt: new Date('2026-10-24T05:00:00Z') });
     expect(r!.attachments.map((a) => a.name)).toEqual(['a.png', 'b.mp4']);
     expect(r!.attachments[1]!.fileId).toBeUndefined();

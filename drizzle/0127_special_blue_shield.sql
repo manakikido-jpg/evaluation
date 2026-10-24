@@ -1,0 +1,1 @@
+ALTER TABLE "message_archive" ADD COLUMN "channel_name" text DEFAULT '' NOT NULL;

@@ -11,7 +11,7 @@ export const ARCHIVE_DAYS = 90;
 export const ARCHIVE_IMAGE_MAX = 8 * 1024 * 1024;
 
 export type ArchiveInput = {
-  id: string; channelId: string; authorId: string; authorName: string; content: string; createdAt: Date;
+  id: string; channelId: string; channelName?: string; authorId: string; authorName: string; content: string; createdAt: Date;
   attachments: { name: string; size: number; contentType: string | null; url: string }[];
 };
 
@@ -30,7 +30,7 @@ export async function archiveMessage(db: Db, m: ArchiveInput, fetchFile: (url: s
     }
     attachments.push(entry);
   }
-  await db.insert(messageArchive).values({ messageId: m.id, channelId: m.channelId, authorId: m.authorId, authorName: m.authorName.slice(0, 100), content: m.content, attachments, createdAt: m.createdAt }).onConflictDoNothing();
+  await db.insert(messageArchive).values({ messageId: m.id, channelId: m.channelId, channelName: (m.channelName ?? '').slice(0, 100), authorId: m.authorId, authorName: m.authorName.slice(0, 100), content: m.content, attachments, createdAt: m.createdAt }).onConflictDoNothing();
 }
 
 /** 書きかえられた: 前の文を edits に足して、今の文にする */

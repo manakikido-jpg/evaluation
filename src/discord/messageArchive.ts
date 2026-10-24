@@ -28,7 +28,7 @@ export class MessageArchiveApp {
   onMessage(m: Message): void {
     if (!m.inGuild() || m.guildId !== this.cfg().guildId || m.author.bot || m.system || m.webhookId) return;
     void archiveMessage(this.db, {
-      id: m.id, channelId: m.channelId, authorId: m.author.id, authorName: m.member?.displayName ?? m.author.username,
+      id: m.id, channelId: m.channelId, channelName: 'name' in m.channel ? m.channel.name : '', authorId: m.author.id, authorName: m.member?.displayName ?? m.author.username,
       content: m.content, createdAt: m.createdAt,
       attachments: [...m.attachments.values()].map((a) => ({ name: a.name, size: a.size, contentType: a.contentType, url: a.url })),
     }, this.fetchFile).catch((err) => logger.warn({ err }, 'message archive failed'));
