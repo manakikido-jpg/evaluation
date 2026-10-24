@@ -2328,3 +2328,22 @@ export const messageArchiveFiles = pgTable('message_archive_files', {
   data: bytea('data').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('message_archive_files_msg_idx').on(t.messageId)]);
+
+/** 写真館・動画館。内容や添付本体は保存せず、運営が確認した投稿の番号だけを残す。 */
+export const galleryRewards = pgTable('gallery_rewards', {
+  messageId: text('message_id').primaryKey(),
+  channelId: text('channel_id').notNull(),
+  memberId: text('member_id').notNull(),
+  kind: text('kind').notNull(),
+  amount: integer('amount').notNull(),
+  postedAt: timestamp('posted_at', { withTimezone: true }).notNull(),
+  day: text('day').notNull(),
+  week: text('week').notNull(),
+  dueAt: timestamp('due_at', { withTimezone: true }).notNull(),
+  attachmentIds: jsonb('attachment_ids').$type<string[]>().notNull(),
+  status: text('status').notNull().default('pending'),
+  checkedBy: text('checked_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  settledAt: timestamp('settled_at', { withTimezone: true }),
+}, t => [index('gallery_rewards_due_idx').on(t.status, t.dueAt), index('gallery_rewards_member_week_idx').on(t.memberId, t.week)]);
+export type GalleryReward = typeof galleryRewards.$inferSelect;

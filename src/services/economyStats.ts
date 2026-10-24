@@ -52,6 +52,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   champagne_reward: 'income',
   cast_pay: 'income',
   employee_salary: 'issue',
+  gallery_reward: 'issue',
   core_time_bonus: 'issue',
   cast_reward: 'income',
   cast_refund: 'income',

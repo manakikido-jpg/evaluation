@@ -1,3 +1,5 @@
+import { GalleryRewardsPage } from './views/galleryRewards.js';
+import { GalleryError, GALLERY_KINDS, cancelGalleryPost, galleryPricesSchema, loadGalleryPrices, recentGalleryPosts, registerGalleryPost, saveGalleryPrices, type GalleryKind } from '../services/galleryRewards.js';
 import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { fortuneGamesSchema } from '../config.js';
@@ -679,6 +681,32 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: s.userId, action: 'auth.logout', via: 'web' });
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     return c.redirect('/login');
+  });
+
+  app.use('/economy/gallery/*', requireCsrf);
+  app.get('/economy/gallery', async c => c.html(<GalleryRewardsPage session={c.get('session')} prices={await loadGalleryPrices(db)} rows={await recentGalleryPosts(db)} guildId={cfg.guildId} coin={cfg.economy.currencyName} message={c.req.query('msg')?.slice(0, 180)} />));
+  app.post('/economy/gallery/prices', async c => {
+    if (c.get('session').level !== 'guji') return c.text('宮司だけが変更できます。', 403);
+    const body = await c.req.parseBody();
+    const parsed = galleryPricesSchema.safeParse(Object.fromEntries(GALLERY_KINDS.map(k => [k, typeof body[k] === 'string' && body[k] !== '' ? Number(body[k]) : NaN])));
+    if (!parsed.success) return c.text('金額は0〜10,000の整数を入れてください。', 400);
+    await saveGalleryPrices(db, parsed.data, c.get('session').userId);
+    return c.redirect('/economy/gallery?msg=' + encodeURIComponent('金額を保存しました。次の登録から有効です。'), 303);
+  });
+  app.post('/economy/gallery/register', async c => {
+    const body = await c.req.parseBody();
+    try {
+      await registerGalleryPost(db, deps.discord, cfg.guildId, await loadChannels(true), String(body.link ?? ''), String(body.kind ?? '') as GalleryKind, c.get('session').userId, now());
+      return c.redirect('/economy/gallery?msg=' + encodeURIComponent('登録しました。土日の終了後に確認して支払います。'), 303);
+    } catch (err) {
+      if (err instanceof GalleryError) return c.text(err.message, 400);
+      throw err;
+    }
+  });
+  app.post('/economy/gallery/cancel', async c => {
+    const body = await c.req.parseBody();
+    await cancelGalleryPost(db, String(body.messageId ?? ''), c.get('session').userId, now());
+    return c.redirect('/economy/gallery?msg=' + encodeURIComponent('未払いの登録を取り消しました。'), 303);
   });
 
   // 社務所のログインから、運営限定の対戦へ入る。発行前にもDiscordロールを確認する。

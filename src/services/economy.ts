@@ -73,6 +73,7 @@ export type CoinReason =
   | 'keiba_stud'
   | 'casino_share'
   | 'casino_gacha'
+  | 'gallery_reward'
   | 'adjust';
 
 /** 増やす（amount > 0） */
@@ -318,5 +319,6 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   keiba_train: '🏇 調教',
   keiba_trade: '🏇 馬の売り買い',
   keiba_stud: '🧬 種付け料',
+  gallery_reward: '写真館・動画館の報酬',
   adjust: '調整',
 };

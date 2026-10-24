@@ -3,7 +3,15 @@
  * BOT 本体と管理画面の両方から同じ処理で使う。テストでは偽物に差し替える。
  */
 export type GuildSticker = { id: string; name: string; description?: string | null; tags?: string };
+export type GalleryMessage = {
+  id: string; channel_id: string; timestamp: string;
+  author: { id: string; bot?: boolean };
+  attachments: { id: string; content_type?: string }[];
+};
 export interface DiscordActions {
+  /** 写真館報酬の確認用。画像・動画本体は取得しない。 */
+  galleryMessage?(channelId: string, messageId: string): Promise<GalleryMessage>;
+
   createGuildSticker?(guildId: string, input: { name: string; description: string; tags: string; data: Uint8Array }, reason: string): Promise<GuildSticker>;
   guildStickers?(guildId: string): Promise<GuildSticker[]>;
   addRole(guildId: string, userId: string, roleId: string, reason: string): Promise<void>;
@@ -180,6 +188,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
   };
 
   return {
+    galleryMessage: async (c, m) => (await call('GET', `/channels/${c}/messages/${m}`)) as GalleryMessage,
     guildStickers: async g => (await call('GET', `/guilds/${g}/stickers`)) as GuildSticker[],
     async createGuildSticker(g, input, reason) {
       const form = new FormData();
