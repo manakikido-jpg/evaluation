@@ -1,3 +1,5 @@
+import { GalleryRewardsApp } from './discord/galleryRewards.js';
+import { invalidateGalleryPosts } from './services/galleryRewards.js';
 import { ServerMuteRolesApp } from './discord/serverMuteRoles.js';
 import { StickerDeskApp } from './discord/stickerDesk.js';
 import { onTalkTopicInteraction } from './discord/talkTopic.js';
@@ -138,6 +140,7 @@ async function main(): Promise<void> {
   const voiceGroups = new VoiceGroupApp(cfg);
   const emaCounter = new EmaCounterApp(cfg);
   const voiceCounter = new VoiceCounterApp(cfg);
+  const galleryRewardsApp = new GalleryRewardsApp(db, actions);
   const presenceGifts = new PresenceGiftApp(db, cfg, actions);
   const voiceChatClear = new VoiceChatClearApp(cfg, () => Date.now(), channelId => rooms.preservesMessages(channelId));
   const afkMute = new AfkMuteApp(db, cfg);
@@ -243,6 +246,7 @@ async function main(): Promise<void> {
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
+      void galleryRewardsApp.tick().catch(err => logger.warn({ err }, 'gallery settlement failed'));
       void messageArchive.tick().catch((err) => logger.warn({ err }, 'message archive prune failed'));
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
       void app.checkSpecialGoen(guild).catch((err) => logger.warn({ err }, 'special goen check failed'));
@@ -473,6 +477,9 @@ async function main(): Promise<void> {
   });
   // 📌 掲示板: 募集のカードが消されたら出し直す
   client.on(Events.MessageDelete, (m) => void board.onMessageDelete(m).catch((err) => logger.warn({ err }, 'board message delete failed')));
+  client.on(Events.MessageDelete, m => { if (m.guildId === cfg().guildId) void invalidateGalleryPosts(db, [m.id]).catch(err => logger.warn({ err }, 'gallery deletion check failed')); });
+  client.on(Events.MessageBulkDelete, (list, ch) => { if (ch.guildId === cfg().guildId) void invalidateGalleryPosts(db, [...list.keys()]).catch(err => logger.warn({ err }, 'gallery bulk deletion check failed')); });
+  client.on(Events.MessageUpdate, (_old, m) => { if (m.guildId === cfg().guildId) void galleryRewardsApp.onUpdate(m.id).catch(err => logger.warn({ err }, 'gallery update check failed')); });
   // 🗑 消されたメッセージを #記録 に残す
   const messageLog = new MessageLogApp(cfg, actions, env.DISCORD_MESSAGE_CONTENT === 'on');
   // 🧹 抜けた人の書き込みを消す（書き込みの番号だけ覚えておく）

@@ -897,6 +897,13 @@
       "when": 1792854411393,
       "tag": "0127_special_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1792865727075,
+      "tag": "0128_exotic_nuke",
+      "breakpoints": true
     }
   ]
 }
