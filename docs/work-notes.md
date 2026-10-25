@@ -792,3 +792,4 @@
 - 最終検証成功：179ファイル/2,079テスト、351.19秒・4並列。型チェック・ビルド・diffチェック成功。関連29件も成功。ログ/tmp/visit-public-final-{tests,typecheck,build}.log、/tmp/visit-public-related.log。テスト削除/skipなし。実装dec9bc5、本番e286f0a。push前fetchで追加更新なし。
 - 合流時にDB番号を変更する場合：0134_quiet_cableの既存public_stats=falseをtrueへ変える追加UPDATEを再生成SQLにも必ず保持し、test/visitProfile.test.tsのSQL参照名も合わせて変更する。移行を毎起動の処理へ移さない。PR90との合流順にかかわらず、後から合流する未適用分のみを次の番号へ調整する。
 - 実装完了：全員の初期公開（既存プロフィールの一度限りの移行を含む）、省略時のチャンネル公開、自分だけのプレビュー、以後の非公開設定の尊重と本人専用着せ替えリンク。カードのデザイン/資産/料金/集計条件は維持。本番DB操作・Discordへの実投稿なし。次は担当Claude向けPRの確認/合流。
+- GitHub保存済み：PR #91 https://github.com/manakikido-jpg/evaluation/pull/91 、codex/visit-profile-public、実装dec9bc5/検証記録0cd1f18。OPEN・現本番と競合なし・未合流・本番未反映。全2,079件・型・ビルド成功。PR90とPR91双方の説明へDB0134の並行追加/後から合流する未適用分の再生成/データUPDATE保持の注意を記載済み。担当Claudeの確認・合流後にコマンドと本人の非公開再設定を実環境で確認。この追記は所在のみでソース変更なし。
