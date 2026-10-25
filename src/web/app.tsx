@@ -32,7 +32,7 @@ import { archiveFile, searchArchive } from '../services/messageArchive.js';
 import { mountUpdateDesk } from './updateDesk.js';
 import { approveUpdatePost, editPendingUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
-import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide } from '../services/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide, guideDuty, guideDutySince, guideDutyChannelName, setGuideDuty } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
@@ -1924,8 +1924,23 @@ export function createWebApp(deps: WebDeps) {
     const [config, employees, receptions, payroll, channels, roles] = await Promise.all([
       loadGuideConfig(db), db.select().from(guideEmployees), db.select().from(guideReceptions).orderBy(desc(guideReceptions.id)).limit(100), db.select().from(employeePayroll).where(eq(employeePayroll.job, 'guide')).orderBy(desc(employeePayroll.id)).limit(100), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => []),
     ]);
-    const names = await namesOf(db, [...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.flatMap(r => [r.memberId, r.visitorId])].filter(Boolean));
-    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} />);
+    const [duty, dutySince] = await Promise.all([guideDuty(db), guideDutySince(db)]);
+    const names = await namesOf(db, [...duty, ...employees.map(e => e.memberId), ...receptions.flatMap(r => [r.visitorId, r.guideId ?? '']), ...payroll.flatMap(r => [r.memberId, r.visitorId])].filter(Boolean));
+    return c.html(<GuidePage session={c.get('session')} config={config} employees={employees} receptions={receptions} payroll={payroll} names={names} channels={channels} roles={roles} flash={c.req.query('msg')} duty={duty.map(id => ({ id, since: dutySince.get(id) }))} now={now()} />);
+  });
+  // 🙋 案内担当を外す（「終了」を押し忘れた人など。宮司・神職）
+  app.post('/guide/duty/:id/off', async c => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/guide?msg=invalid#guide-duty');
+    const r = await setGuideDuty(db, id, false, c.get('session').userId, 'web', now());
+    if (!r.changed) return c.redirect('/guide?msg=duty_gone#guide-duty');
+    const conf = await loadGuideConfig(db);
+    if (conf.dutyChannelId) {
+      const names = await namesOf(db, r.after);
+      await deps.discord.editChannel(conf.dutyChannelId, { name: guideDutyChannelName(r.after.map(x => names.get(x) ?? '案内人')) }).catch(err => logger.warn({ err }, 'guide duty rename failed'));
+    }
+    await deps.discord.sendDm(id, '🔚 案内担当を、運営が終了にしました（終了の押し忘れなど）。また案内するときは「🙋 案内を担当する」を押してください。').catch(() => false);
+    return c.redirect('/guide?msg=duty_off#guide-duty');
   });
   app.post('/guide/settings', async c => {
     if (c.get('session').level !== 'guji') return c.text('宮司だけが変更できます。', 403);

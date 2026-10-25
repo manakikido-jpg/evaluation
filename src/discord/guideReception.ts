@@ -7,7 +7,7 @@ import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutyChannelName, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutySince, guideDutyChannelName, type GuideConfig } from '../services/guideReception.js';
 import { guideRoleOf } from './guidePending.js';
 import { autoRanks } from '../domain/ranks.js';
 import { audit } from '../services/audit.js';
@@ -324,8 +324,9 @@ export class GuideReceptionApp {
           };
         });
         const duty = await guideDuty(this.db);
+        const since = await guideDutySince(this.db);
         const lines = [
-          duty.length ? `🙋 案内担当: ${duty.map((id) => `<@${id}>`).join('・')}` : '🙋 案内担当: なし',
+          duty.length ? `🙋 案内担当: ${duty.map((id) => `<@${id}>${since.get(id) ? `（<t:${Math.floor(since.get(id)!.getTime() / 1000)}:R>から）` : ''}`).join('・')}` : '🙋 案内担当: なし',
           `👀 いま対応できる案内人（${staff.length + others.length} 人）`,
           ...(staff.length ? ['🛡 運営（いつも）', ...staff.map((id) => `・<@${id}>`)] : []),
           ...(others.length ? [this.presence ? '🟢 オンラインで待機中' : '🟢 待機中', ...others.map((id) => `・<@${id}>`)] : []),
