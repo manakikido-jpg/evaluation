@@ -288,6 +288,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setNameLocalizations({ ja: 'パネル' })
       .setDescription('Post an application panel here')
       .setDescriptionLocalizations({ ja: '申請ボタンをこのチャンネルに置く【神職】' })
+      .addSubcommand(s => s.setName('invite').setNameLocalizations({ ja: '招待リンク' }).setDescription('Personal invite link panel').setDescriptionLocalizations({ ja: '本人用の招待リンクを発行するボタンを置く' }))
       .addSubcommand(s => s.setName('request-template').setNameLocalizations({ ja: '修正要望' }).setDescription('Correction and request template').setDescriptionLocalizations({ ja: '修正・要望窓口の記入テンプレートを、このチャンネルのいちばん下に表示する' }))
       .addSubcommand((s) => s.setName('stayroom').setNameLocalizations({ ja: '宿24時間' }).setDescription('24h lodging panel').setDescriptionLocalizations({ ja: '🏨 銭を払って立てる宿（24 時間・1 時間ごと）のボタンを置く' }))
       .addSubcommand((s) => s.setName('secretroom').setNameLocalizations({ ja: 'シクレ部屋' }).setDescription('Secret room panel').setDescriptionLocalizations({ ja: '🤫 だれにも見られずにシクレ部屋を作るボタンを置く' }))
