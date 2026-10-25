@@ -2,7 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { reactionRolePanels, type ReactionRolePanel } from '../db/schema.js';
-import type { DiscordActions, GuildRole, MessageBody } from '../lib/discordRest.js';
+import type { DiscordActions, GuildEmoji, GuildRole, MessageBody } from '../lib/discordRest.js';
 import { audit } from './audit.js';
 import { staffRoleIds } from './meetings.js';
 import { botTopPosition, dangerLabels, permsOf } from './roles.js';
@@ -23,8 +23,12 @@ export type PanelEntry = ReactionRolePanel['entries'][number];
  * - Discord の絵文字（サーバーのスタンプ）: `<:name:id>` / `<a:name:id>` → そのまま（見分けは id）
  * - ふつうの絵文字: 異体字セレクタ（FE0F）を除いた文字
  */
-export function normalizeEmoji(raw: string): string | undefined {
+export function normalizeEmoji(raw: string, emojis: readonly GuildEmoji[] = []): string | undefined {
   const s = raw.trim();
+  if (/^\d{17,20}$/.test(s)) {
+    const emoji = emojis.find(e => e.id === s && e.available !== false && e.name);
+    return emoji ? normalizeEmoji('<' + (emoji.animated ? 'a' : '') + ':' + emoji.name + ':' + emoji.id + '>') : undefined;
+  }
   const custom = /^<(a?):([\w~]{1,32}):(\d{17,20})>$/.exec(s);
   if (custom) return `<${custom[1]}:${custom[2]}:${custom[3]}>`;
   const plain = s.replace(/️/g, '');
@@ -58,7 +62,7 @@ export function roleProblem(cfg: GuildConfig, roles: GuildRole[], roleId: string
 export type PanelInput = { channelId: string; title: string; body: string; entries: PanelEntry[] };
 
 /** フォームの入力を確かめる（スタンプの重なり・ロールの安全） */
-export function parsePanel(cfg: GuildConfig, roles: GuildRole[], b: Record<string, unknown>, botId?: string): { ok: PanelInput } | { error: string } {
+export function parsePanel(cfg: GuildConfig, roles: GuildRole[], b: Record<string, unknown>, botId?: string, catalog: readonly GuildEmoji[] = []): { ok: PanelInput } | { error: string } {
   const str = (k: string) => (typeof b[k] === 'string' ? (b[k] as string) : '');
   const list = (k: string) => {
     const v = b[k];
@@ -72,8 +76,9 @@ export function parsePanel(cfg: GuildConfig, roles: GuildRole[], b: Record<strin
   for (let i = 0; i < emojis.length; i++) {
     const rawEmoji = emojis[i]!.trim(), roleId = (roleIds[i] ?? '').trim();
     if (!rawEmoji && !roleId) continue;
-    const emoji = normalizeEmoji(rawEmoji);
-    if (!emoji) return { error: `${i + 1} 行目のスタンプが読めません（絵文字 1 つか、<:名前:ID> の形で入れてください）。` };
+    const emoji = normalizeEmoji(rawEmoji, catalog);
+    if (!emoji && /^\d{17,20}$/.test(rawEmoji)) return { error: (i + 1) + ' 行目のIDは、このサーバーで使えるカスタム絵文字に見つかりません。画像スタンプのIDは使えません。' };
+    if (!emoji) return { error: `${i + 1} 行目のスタンプが読めません（絵文字1つ、カスタム絵文字ID、または <:名前:ID> の形で入れてください）。` };
     if (seen.has(emojiKey(emoji))) return { error: `${i + 1} 行目のスタンプが、ほかの行と同じです。` };
     seen.add(emojiKey(emoji));
     const problem = roleProblem(cfg, roles, roleId, botId);
@@ -83,6 +88,24 @@ export function parsePanel(cfg: GuildConfig, roles: GuildRole[], b: Record<strin
   if (!entries.length) return { error: 'スタンプとロールを 1 つ以上入れてください。' };
   if (entries.length > PANEL_ENTRIES_MAX) return { error: `スタンプは ${PANEL_ENTRIES_MAX} 個までです。` };
   return { ok: { channelId, title: str('title').trim().slice(0, PANEL_TITLE_MAX), body: str('body').trim().slice(0, PANEL_BODY_MAX), entries } };
+}
+
+/** 数字だけのIDは実サーバーの絵文字で照合する。見つからないIDを推測して投稿しない。 */
+export async function panelEmojiCatalog(discord: Pick<DiscordActions, 'guildEmojis' | 'guildStickers'>, guildId: string, values: Record<string, unknown>): Promise<{ emojis: GuildEmoji[] } | { error: string }> {
+  const raw = values.emoji;
+  const ids = (Array.isArray(raw) ? raw : raw === undefined ? [] : [raw]).filter((x): x is string => typeof x === 'string').map(x => x.trim()).filter(x => /^\d{17,20}$/.test(x));
+  if (!ids.length) return { emojis: [] };
+  let emojis: GuildEmoji[];
+  try {
+    if (!discord.guildEmojis) throw new Error('emoji lookup unavailable');
+    emojis = await discord.guildEmojis(guildId);
+  } catch { return { error: 'カスタム絵文字の一覧を取得できませんでした。入力は残しています。少し待ってから確認してください。' }; }
+  const missing = ids.filter(id => !emojis.some(e => e.id === id));
+  if (missing.length && discord.guildStickers) {
+    const stickers = await discord.guildStickers(guildId).catch(() => []);
+    if (stickers.some(s => missing.includes(s.id))) return { error: '入力されたIDは画像スタンプです。画像スタンプはリアクションに使えません。カスタム絵文字のIDか、通常の絵文字を指定してください。' };
+  }
+  return { emojis };
 }
 
 /** Discord に出すパネルの見た目 */

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { ReactionRoleApp } from '../src/discord/reactionRoles.js';
 import type { DiscordActions, GuildRole } from '../src/lib/discordRest.js';
-import { deletePanel, emojiKey, emojiPath, getPanel, normalizeEmoji, panelByMessage, parsePanel, roleFor, savePanel } from '../src/services/reactionRoles.js';
+import { deletePanel, emojiKey, emojiPath, getPanel, normalizeEmoji, panelByMessage, parsePanel, panelEmojiCatalog, roleFor, savePanel } from '../src/services/reactionRoles.js';
 import { cfg, makeDb } from './helpers.js';
 
 const CH = '920000000000000001', CH2 = '920000000000000002', GAME = '930000000000000001', BOT_ROLE = '930000000000000009', HIGH = '930000000000000010', ADMIN = '930000000000000011', BOT = '940000000000000001', USER = '950000000000000001';
@@ -28,6 +28,24 @@ describe('🎭 スタンプの読み方', () => {
     expect(emojiPath('🎮')).toBe(encodeURIComponent('🎮'));
   });
 
+  it('ID単体は照合済みのサーバー絵文字だけ受け付け、アニメと重複も正規化する',()=>{
+    const id='970000000000000001',list=[{id,name:'notice',animated:true}];
+    expect(normalizeEmoji(id)).toBeUndefined();expect(normalizeEmoji(id,list)).toBe('<a:notice:'+id+'>');
+    expect(normalizeEmoji(id,[{id,name:'notice',available:false}])).toBeUndefined();
+    expect(normalizeEmoji(id,[{id,name:null}])).toBeUndefined();
+    const valid=parsePanel(cfg,roles,form([[id,GAME]]),BOT,list);
+    expect(valid).toMatchObject({ok:{entries:[{emoji:'<a:notice:'+id+'>',roleId:GAME}]}});
+    expect('error' in parsePanel(cfg,roles,form([[id,GAME],['<a:notice:'+id+'>',GAME]]),BOT,list)).toBe(true);
+    expect('error' in parsePanel(cfg,roles,form([[id,ADMIN]]),BOT,list)).toBe(true);
+  });
+  it('ID入力だけを照合し、画像スタンプや取得失敗を投稿せず説明する',async()=>{
+    const id='970000000000000001';const guildEmojis=vi.fn(async()=>[{id,name:'notice'}]);
+    expect(await panelEmojiCatalog({guildEmojis},cfg.guildId,form([['🎮',GAME]]))).toEqual({emojis:[]});expect(guildEmojis).not.toHaveBeenCalled();
+    expect(await panelEmojiCatalog({guildEmojis},cfg.guildId,form([[id,GAME]]))).toEqual({emojis:[{id,name:'notice'}]});expect(guildEmojis).toHaveBeenCalledWith(cfg.guildId);
+    const sticker=await panelEmojiCatalog({guildEmojis:async()=>[],guildStickers:async()=>[{id,name:'picture'}]},cfg.guildId,form([[id,GAME]]));expect(sticker).toHaveProperty('error',expect.stringContaining('画像スタンプ'));
+    const failed=await panelEmojiCatalog({guildEmojis:async()=>{throw Error('429');}},cfg.guildId,form([[id,GAME]]));expect(failed).toHaveProperty('error',expect.stringContaining('取得できません'));
+    expect(await panelEmojiCatalog({},cfg.guildId,form([[id,GAME]]))).toHaveProperty('error');
+  });
   it('付けてよいロールだけ。同じスタンプは 2 回使えない', () => {
     expect('ok' in parsePanel(cfg, roles, form([['🎮', GAME]]), BOT)).toBe(true);
     for (const bad of [ADMIN, HIGH, BOT_ROLE, cfg.guildId]) expect('error' in parsePanel(cfg, roles, form([['🎮', bad]]), BOT)).toBe(true);
