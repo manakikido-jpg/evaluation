@@ -916,3 +916,4 @@
 - 次：型/ビルド/全件検証後に専用PR。本番a948fb9から追加変更なし。実サーバーの操作なし。
 - 最終検証成功：型チェック・ビルド・全183ファイル/2,131テスト、421.68秒、4並列。ログ/tmp/visit-medals-final-{types,build,tests}.log。関連50件、実ブラウザ、一般用/運営用の実描画目視、diffチェックも成功。テスト削除/skip追加なし。
 - 実装8888f3c。提出前fetchで本番a948fb9から追加変更なし。素材9点と表示用8実績の反映は完了、専用PRを作成して担当Claudeのレビュー・合流待ちとする。DB/設定/本番データの変更や実Discord操作なし。
+- GitHub保存済み：PR #97 https://github.com/manakikido-jpg/evaluation/pull/97 、codex/visit-medals、実装8888f3c・検証記録994b921。OPEN・競合なし・本番反映待ち。全2,131件/型/ビルド/関連50件/ブラウザ成功。完成見本はdocs/previews/visit-medals-moon.png と visit-medals-staff.png。次は担当Claudeのレビュー・合流。本追記は所在のみでソース変更なし、同じ最終検証結果を使用する。
