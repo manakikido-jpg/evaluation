@@ -32,6 +32,9 @@ export function scheduleChannelOf(cfg: GuildConfig, channels: Iterable<{ id: str
   return undefined;
 }
 
+/** @案内人 のロール（名前に「案内人」が入るロール）。この人たちの書き込みは #面談日程 から消さない */
+export const guideRoleIdsOf = (roles: Iterable<{ id: string; name: string }>) => new Set([...roles].filter((r) => r.name.includes('案内人')).map((r) => r.id));
+
 /** 🪧 絵馬殿の自己紹介のチャンネル（#絵馬-男性・#絵馬-女性。運営紹介は消さない） */
 export const emaIntroChannelIds = (cfg: GuildConfig) => [cfg.channels.ema, cfg.channels.emaFemale].filter((id): id is string => Boolean(id));
 
@@ -82,7 +85,7 @@ export class GuidePendingApp {
     const roleId = guideRoleOf(this.cfg(), m.guild.roles.cache.values());
     if (!roleId) return;
     await this.reconcile(m, roleId);
-    if (!old.partial && old.roles.cache.has(roleId) && !m.roles.cache.has(roleId)) await this.clearSchedule(m.guild, m.id);
+    if (!old.partial && old.roles.cache.has(roleId) && !m.roles.cache.has(roleId) && ![...m.roles.cache.keys()].some((r) => guideRoleIdsOf(m.guild.roles.cache.values()).has(r))) await this.clearSchedule(m.guild, m.id);
   }
 
   /** 抜けた人の #面談日程 の書き込みと、🪧 絵馬殿の自己紹介も消す */
@@ -185,15 +188,20 @@ export class GuidePendingApp {
     try {
       const msgs = await this.recent(ch);
       const authors = new Map<string, ScheduleAuthor>();
+      const guides = guideRoleIdsOf(guild.roles.cache.values());
       for (const id of new Set(msgs.filter((m) => !m.author.bot).map((m) => m.author.id))) {
-        const member = guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch(() => undefined));
+        // 「いない」と決めるのは Discord が「そのメンバーはいない」と答えたときだけ（通信の失敗では消さない）
+        let gone = false;
+        const member = guild.members.cache.get(id) ?? (await guild.members.fetch(id).catch((err: { code?: number }) => { gone = err?.code === 10007; return undefined; }));
+        if (!member && !gone) continue;
         const roles = member ? [...member.roles.cache.keys()] : [];
-        authors.set(id, { left: !member, pending: roles.includes(roleId), staff: Boolean(adminLevelOf(this.cfg(), roles)) });
+        // 運営と @案内人 の書き込みは残す
+        authors.set(id, { left: !member, pending: roles.includes(roleId), staff: Boolean(adminLevelOf(this.cfg(), roles)) || roles.some((r) => guides.has(r)) });
       }
       const ids = new Set(
         leftoverIds(
           msgs.map((m) => ({ id: m.id, authorId: m.author.id, bot: m.author.bot, pinned: m.pinned })),
-          (id) => authors.get(id) ?? { left: false, pending: true, staff: false },
+          (id) => authors.get(id) ?? { left: false, pending: true, staff: true },
         ),
       );
       const n = ids.size ? await this.remove(ch, msgs.filter((m) => ids.has(m.id))) : 0;

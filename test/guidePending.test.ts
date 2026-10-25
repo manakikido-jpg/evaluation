@@ -115,4 +115,25 @@ describe('#面談日程 の片付け', () => {
     ];
     expect(leftoverIds(msgs, (id) => who[id]!)).toEqual(['b', 'd']);
   });
+
+  it('10 分ごとの見直しで、@案内人 の書き込みと、読めなかった人の書き込みは残す', async () => {
+    const { ChannelType } = await import('discord.js');
+    const PENDING = '880000000000000001', GUIDE = '880000000000000002', CH = '880000000000000010';
+    const c = { ...baseCfg, roles: { ...baseCfg.roles, guidePending: PENDING }, channels: { ...baseCfg.channels, interviewSchedule: CH } } as GuildConfig;
+    const deleted: string[] = [];
+    const msg = (id: string, author: string) => ({ id, author: { id: author, bot: false }, pinned: false, createdTimestamp: Date.now(), delete: async () => void deleted.push(id) });
+    const msgs = [msg('m1', 'guide'), msg('m2', 'approved'), msg('m3', 'unknown'), msg('m4', 'gone')];
+    const page = new Map(msgs.map((m) => [m.id, m])) as Map<string, unknown> & { last?: () => unknown };
+    const ch = { type: ChannelType.GuildText, messages: { fetch: async () => Object.assign(page, { last: () => msgs.at(-1) }) }, bulkDelete: async (ids: string[]) => { deleted.push(...ids); return new Map(ids.map((i) => [i, i])); } };
+    const roles = (ids: string[]) => ({ cache: { keys: () => ids[Symbol.iterator](), has: (r: string) => ids.includes(r) } });
+    const members = new Map<string, unknown>([['guide', { roles: roles([GUIDE]) }], ['approved', { roles: roles([]) }]]);
+    const guild = {
+      id: c.guildId,
+      roles: { cache: new Map([[PENDING, { id: PENDING, name: '案内待ち' }], [GUIDE, { id: GUIDE, name: '案内人' }]]) },
+      channels: { cache: new Map([[CH, ch]]) },
+      members: { cache: members, fetch: async (id: string) => { throw Object.assign(new Error('x'), { code: id === 'gone' ? 10007 : 500 }); } },
+    };
+    await new GuidePendingApp(() => c).sweepSchedule(guild as never);
+    expect(deleted.sort()).toEqual(['m2', 'm4']);
+  });
 });
