@@ -4505,6 +4505,44 @@ it('🙋 案内担当を社務所Web で外せる。いつから担当かも出�
   expect((await off()).headers.get('location')).toBe('/guide?msg=duty_gone#guide-duty');
 });
 
+describe('参拝帳の制作と収益の管理',()=>{
+ const post=(path:string,session:string,data:Record<string,string>)=>app.request(path,{method:'POST',headers:{cookie:'shamusho_session='+session,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(data)});
+ const form=async(session:string,path:string,data:Record<string,string>)=>{const csrf=/name="_csrf" value="([^"]+)"/.exec(await (await get('/',session)).text())![1]!;return post(path,session,{_csrf:csrf,...data});};
+it('参拝帳の収益と制作審査は宮司だけが見られ、CSRFを検証して販売を開始する',async()=>{
+ const s=await login(STAFF),g=await login(GUJI);
+ expect((await get('/shop/visit',s)).status).toBe(403);
+ expect((await form(s,'/shop/visit/settings',{enabled:'yes',licensePrice:'5000'})).status).toBe(403);
+ const page=await (await get('/shop',g)).text();expect(page).toContain('参拝帳の着せ替え収益');expect(page).toContain('/shop/visit');
+ const details=await (await get('/shop/visit?month=2026-10',g)).text();expect(details).toContain('月別の収益');expect(details).toContain('運営収益');expect(details).toContain('制作者70％');
+ expect((await post('/shop/visit/settings',g,{enabled:'yes',licensePrice:'5000',_csrf:'wrong'})).status).toBe(403);
+ expect((await form(g,'/shop/visit/settings',{enabled:'yes',licensePrice:'0'})).status).toBe(400);
+ expect((await form(g,'/shop/visit/settings',{enabled:'yes',licensePrice:'5000'})).status).toBe(303);
+ const {loadWorkshopSettings}=await import('../src/services/visitWorkshop.js');expect(await loadWorkshopSettings(db)).toEqual({enabled:true,licensePrice:5000});
+});
+it('制作審査は宮司だけが画像を確認して承認でき、購入実額を商品別収益へ表示する',async()=>{
+ const {members,visitPurchases}=await import('../src/db/schema.js');
+ const {addCoins}=await import('../src/services/economy.js');
+ const {saveWorkshopSettings,buyCreatorLicense,createDesign}=await import('../src/services/visitWorkshop.js');
+ const {buyVisitItem}=await import('../src/services/visitProfile.js');
+ const sharp=(await import('sharp')).default;
+ const artist='798000000000000001',buyer='798000000000000002';
+ await db.insert(members).values([artist,buyer].map(id=>({id,username:id,displayName:'制作者'})));for(const id of [artist,buyer])await addCoins(db,id,10000,'admin_grant');
+ await saveWorkshopSettings(db,{enabled:true,licensePrice:5000},GUJI);await buyCreatorLicense(db,artist,5000,true);
+ const image=new Uint8Array(await sharp({create:{width:1080,height:640,channels:3,background:'#115599'}}).png().toBuffer());
+ const design=await createDesign(db,artist,{kind:'background',name:'海の参拝帳',description:'青い景色',price:1000,sell:true,rights:true,bytes:image});
+ const g=await login(GUJI),s=await login(STAFF),asset='/shop/visit/designs/'+design.id+'.png',review='/shop/visit/designs/'+design.id+'/review';
+ expect((await get(asset,s)).status).toBe(403);expect((await get(asset,g)).headers.get('content-type')).toBe('image/png');
+ const personal=await createDesign(db,artist,{kind:'background',name:'未申請の私物',description:'',price:0,sell:false,rights:true,bytes:image});expect((await get('/shop/visit/designs/'+personal.id+'.png',g)).status).toBe(404);expect(await (await get('/shop/visit',g)).text()).not.toContain('未申請の私物');
+ expect((await form(s,review,{decision:'approve'})).status).toBe(403);
+ expect((await form(g,review,{decision:'approve'})).status).toBe(303);
+ await buyVisitItem(db,buyer,design.id,1000,true);expect((await db.select().from(visitPurchases))[0]).toMatchObject({creatorPaid:700});
+ const ninety=await createDesign(db,artist,{kind:'background',name:'90銭の作品',description:'',price:90,sell:true,rights:true,bytes:image});
+ const page=await (await get('/shop/visit',g)).text();expect(page).toContain('制作者の受取：63');expect(page).toContain('海の参拝帳');expect(page).toContain('700');expect(page).toContain('5,300');
+ expect((await form(g,review,{decision:'withdraw'})).status).toBe(303);
+});
+
+});
+
 it('👥 メンバー検索: 役職に案内待ちをえらべる。ロールのチェックで絞り込める', async () => {
   const PENDING = '980000000000000071', GAME = '980000000000000072';
   roleList = [

@@ -1,6 +1,9 @@
+import { VisitError } from './visitErrors.js';
+export { VisitError } from './visitErrors.js';
+import { customCatalog, buyCustomDesign } from './visitWorkshop.js';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { activityDaily, members, visitDaily, visitProfiles, visitPurchases, visitBadges } from '../db/schema.js';
+import { activityDaily, members, visitDaily, visitProfiles, visitPurchases, visitBadges, visitDesigns } from '../db/schema.js';
 import { jstDate } from './activity.js';
 import { spendWithin } from './economy.js';
 import { audit } from './audit.js';
@@ -33,7 +36,6 @@ export const VISIT_BADGES = [
   { id: 'days30', name: '三十日のご縁', detail: '10分以上の活動を30日', minutes: 0, days: 30 },
   { id: 'anniversary', name: '参拝一周年', detail: '参加から1年・対象通話1分以上', minutes: 1, days: 0 },
 ] as const;
-export class VisitError extends Error {}
 export type VisitChannel = { id:string; name:string; categoryName?:string|null; members:{id:string;bot:boolean;serverMute:boolean;deaf:boolean}[] };
 export function eligibleVisitMembers(channels:VisitChannel[],excluded:ReadonlySet<string>):string[]{
   const ids=new Set<string>();
@@ -60,7 +62,7 @@ export function visitRank(minutes:number){
   const i=VISIT_RANKS.reduce((n,r,index)=>minutes>=r.minutes?index:n,0);
   return {level:i+1,...VISIT_RANKS[i]!,next:VISIT_RANKS[i+1]??null};
 }
-export async function visitData(db:Db,id:string,now=new Date()){
+export async function visitData(db:Db,id:string,now=new Date(),preview?:{background?:string;frame?:string}){
   const [member]=await db.select().from(members).where(eq(members.id,id));
   if(!member||member.leftAt||member.isBot)throw new VisitError('在籍中のメンバーだけが利用できます。');
   await db.insert(visitProfiles).values({memberId:id}).onConflictDoNothing();
@@ -77,10 +79,17 @@ export async function visitData(db:Db,id:string,now=new Date()){
   const badges=await db.select().from(visitBadges).where(eq(visitBadges.memberId,id));
   const purchases=await db.select().from(visitPurchases).where(eq(visitPurchases.memberId,id));
   const owned:string[]=VISIT_ITEMS.filter(item=>item.badge?badges.some(b=>b.badgeId===item.badge):item.price===0||purchases.some(p=>p.itemId===item.id)).map(i=>i.id);
-  return {member,profile:profile!,minutes,monthMinutes,activeDays,rank:visitRank(minutes),badges,purchases,owned};
+  const custom=await customCatalog(db,id,purchases.map(p=>p.itemId));
+  const catalog=[...VISIT_ITEMS,...custom];
+  owned.push(...custom.filter(i=>i.creatorId===id||purchases.some(p=>p.itemId===i.id)).map(i=>i.id));
+  const selected=[...new Set([profile!.background,profile!.frame,preview?.background,preview?.frame].filter((v):v is string=>!!v&&custom.some(i=>i.id===v)))];
+  const images=selected.length?await db.select({id:visitDesigns.id,data:visitDesigns.data}).from(visitDesigns).where(inArray(visitDesigns.id,selected)):[];
+  const art:Record<string,string>=Object.fromEntries(images.map(i=>[i.id,Buffer.from(i.data).toString('base64')]));
+  return {member,profile:profile!,minutes,monthMinutes,activeDays,rank:visitRank(minutes),badges,purchases,owned,catalog,art};
 }
 export type VisitData=Awaited<ReturnType<typeof visitData>>;
 export async function buyVisitItem(db:Db,id:string,itemId:string,quote:number,confirmed:boolean,now=new Date()){
+  if(itemId.startsWith('design_'))return buyCustomDesign(db,id,itemId,quote,confirmed,now);
   const item=VISIT_ITEMS.find(i=>i.id===itemId);
   if(!item||item.price<=0||item.badge||quote!==item.price||!confirmed)throw new VisitError('商品・金額を確認してから購入してください。');
   return db.transaction(async tx=>{
@@ -99,7 +108,7 @@ export async function saveVisitProfile(db:Db,id:string,input:{background:string;
     const [m]=await tx.select().from(members).where(eq(members.id,id)).for('update');
     if(!m||m.leftAt||m.isBot)throw new VisitError('在籍を確認できません。');
     const data=await visitData(tx,id,now);
-    for(const kind of ['background','frame'] as const)if(!VISIT_ITEMS.some(i=>i.id===input[kind]&&i.kind===kind&&data.owned.includes(i.id)))throw new VisitError('持っている背景・フレームを選んでください。');
+    for(const kind of ['background','frame'] as const)if(!data.catalog.some(i=>i.id===input[kind]&&i.kind===kind&&data.owned.includes(i.id)))throw new VisitError('持っている背景・フレームを選んでください。');
     if(input.title!=='rank'&&input.title!==''&&!data.badges.some(b=>b.badgeId===input.title))throw new VisitError('獲得した称号を選んでください。');
     if(input.badges.length>5||new Set(input.badges).size!==input.badges.length||input.badges.some(id=>!data.badges.some(b=>b.badgeId===id)))throw new VisitError('獲得したバッジから5個まで選んでください。');
     await tx.update(visitProfiles).set(input).where(eq(visitProfiles.memberId,id));
