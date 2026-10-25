@@ -175,3 +175,19 @@ it('全実績の金細工は透過PNGで、未獲得/非公開のカードに勲
   d.profile.publicStats=false;expect(visitCardSvg(d)).not.toContain(pearl);expect(visitCardSvg(d,{privateView:true})).toContain(pearl);d.profile.publicStats=true;
  }
 });
+
+it('運営の青銀を独立して保存し、一般用の装い・公開設定・実績を保つ',async()=>{
+ const {saveVisitStaffStyle}=await import('../src/services/visitProfile.js');
+ const initial=await visitData(db,A,now);expect(initial.profile.staffStyle).toBe('crimson');
+ await saveVisitProfile(db,A,{background:'paper',frame:'plain',title:'',badges:[],publicStats:false},now);
+ await expect(saveVisitStaffStyle(db,A,'blue-lantern',false,now)).rejects.toThrow();await expect(saveVisitStaffStyle(db,A,'../../unknown',true,now)).rejects.toThrow();
+ await saveVisitStaffStyle(db,A,'blue-lantern',true,now);const d=await visitData(db,A,now);expect(d.profile).toMatchObject({staffStyle:'blue-lantern',background:'paper',frame:'plain',publicStats:false,title:'',badges:[]});
+ d.staffTheme=true;const blue=renderVisitCard(d);expect(blue.equals(renderVisitCard(d,{staffStyle:'crimson'}))).toBe(false);expect(visitCardSvg(d)).toContain('活動記録は非公開');expect(visitCardSvg(d)).not.toContain('累計通話');expect(visitCardSvg(d,{privateView:true})).toContain('累計通話');
+ d.staffTheme=false;expect(renderVisitCard(d).equals(renderVisitCard(d,{staffStyle:'blue-lantern'}))).toBe(true);expect(d.catalog.some(i=>i.id.includes('blue-lantern'))).toBe(false);
+ await saveVisitProfile(db,A,{background:'paper',frame:'plain',title:'rank',badges:[],publicStats:true},now);expect((await visitData(db,A,now)).profile.staffStyle).toBe('blue-lantern');
+});
+
+it('青銀フレームは中央が透過し、背景は中央も不透明な画像として描画できる',async()=>{
+ const frame=await sharp(fileURLToPath(new URL('../assets/visit/frame-staff-blue-lantern.png',import.meta.url))).ensureAlpha().resize(1080,640).raw().toBuffer();expect(frame[(320*1080+540)*4+3]).toBe(0);
+ const d=await visitData(db,A,now);d.staffTheme=true;const png=renderVisitCard(d,{staffStyle:'blue-lantern'});expect(await sharp(png).metadata()).toMatchObject({width:1080,height:640});const center=await sharp(png).ensureAlpha().extract({left:540,top:320,width:1,height:1}).raw().toBuffer();expect(center[3]).toBe(255);expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);
+});

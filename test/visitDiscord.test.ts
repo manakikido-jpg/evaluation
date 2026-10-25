@@ -63,3 +63,11 @@ it('対象者の現在の宮司/神職ロールで判定し、実行者の権限
  await app.onInteraction(i as any);const data=await visitData(db,B);data.staffTheme=true;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
  targetRoles=[];i.editReply.mockClear();await app.onInteraction(i as any);data.staffTheme=false;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
 });
+
+it('保存した青銀は対象の運営カードに使い、ロール解除後は一般の装いに戻る',async()=>{
+ const {saveVisitStaffStyle}=await import('../src/services/visitProfile.js');await saveVisitStaffStyle(db,B,'blue-lantern',true);
+ const role='780000000000000099',localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};app=new VisitApp(db,()=>localCfg,'https://visit.test');let roles=[role];const i=interaction(B);
+ i.guild.members.fetch=async(input:{user:string;force:boolean})=>({user:who(input.user),displayAvatarURL:()=> 'https://example.invalid/avatar.png',roles:{cache:new Map(roles.map(r=>[r,{}]))}} as any);
+ await app.onInteraction(i as any);const data=await visitData(db,B);data.staffTheme=true;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
+ roles=[];i.editReply.mockClear();await app.onInteraction(i as any);data.staffTheme=false;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
+});
