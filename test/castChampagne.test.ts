@@ -127,3 +127,9 @@ it('通話の5つ目の操作から選択・確認・乾杯し、同時確定で
  states.delete(CAST);const absent=interaction(`cast:champagne:${session.id}`);await app.onInteraction(absent as unknown as Interaction);expect(JSON.stringify(absent.editReply.mock.calls)).toContain('両方');
 
 });
+it('コアタイムは全ボトルを3倍。確認済みの額は時間帯や倍率を変えても維持',async()=>{
+ const pricing={...CAST_DEFAULTS,coreTime:{...cfg.coreTime,slots:[{day:new Date(NOW.getTime()+9*3600000).getUTCDay(),start:'00:00',end:'23:59'}]}};
+ for(const b of CHAMPAGNES){const q=await prepareChampagne(db,session.id,b.id,party,here,clock,pricing);expect(q.price).toBe(b.price*3);expect(q.fee).toBe(Math.floor(q.price*0.3));}
+ const frozen=await prepareChampagne(db,session.id,'sakura',party,here,clock,{...pricing,coreTimeMultiplier:5});expect(frozen.price).toBe(1500);
+ await buyChampagne(db,frozen.id,party,here,clock);expect((await walletOf(db,CUSTOMER)).balance).toBe(48500);
+});

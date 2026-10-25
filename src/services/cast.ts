@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { and, asc, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm';
-import type { GuildConfig } from '../config.js';
+import { activeCoreTime } from './coreTime.js';
+import type { CoreTimeConfig, GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { castTimeChanges, castChampagnes, castImages, castSessions, casts, members, settings, type CastTimeChange, type Cast, type CastSession } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
@@ -45,6 +46,9 @@ export type CastConfig = {
   priceMin: number;
   priceMax: number;
   feePercent: number;
+  coreTimeMultiplier?: number;
+  /** 実行時のコアタイム枠。設定保存時は除く。 */
+  coreTime?: CoreTimeConfig;
   /** 今すぐの指名の返事を待つ分 */
   acceptMinutes: number;
   /** メニューのテンプレ（登録のときやボタン 1 つでキャストに入れる）。なければ DEFAULT_MENU_TEMPLATE */
@@ -67,12 +71,13 @@ export type CastConfig = {
 const CAST_DEFAULTS_OPEN_MAX = 10;
 /** 値段の上限はなし（DB の数に入るように、1 億枚だけは超えられない） */
 export const PRICE_HARD_MAX = 100_000_000;
-export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: PRICE_HARD_MAX, feePercent: 10, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0, customerOpenMax: 10 };
+export const CAST_CHARGE_MAX = 2_000_000_000;
+export const CAST_DEFAULTS: CastConfig = { priceMin: 1, priceMax: PRICE_HARD_MAX, feePercent: 10, coreTimeMultiplier: 3, acceptMinutes: 10, lateCancelMinutes: 60, lateCancelPercent: 50, noShowMinutes: 15, noShowPercent: 50, rankBonus: 0, customerOpenMax: 10 };
 const KEY = 'cast';
 const sf = (x: unknown) => (typeof x === 'string' && /^\d{17,20}$/.test(x) ? x : undefined);
 const int = (x: unknown, d: number, lo: number, hi: number) => (typeof x === 'number' && Number.isInteger(x) && x >= lo && x <= hi ? x : d);
 
-export async function loadCastConfig(db: Db): Promise<CastConfig> {
+export async function loadCastConfig(db: Db, coreTime?: CoreTimeConfig): Promise<CastConfig> {
   const [row] = await db.select().from(settings).where(eq(settings.key, KEY));
   const v = (row?.value ?? {}) as Record<string, unknown>;
   const d = CAST_DEFAULTS;
@@ -91,6 +96,8 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
     // 値段の上限はなし（前に保存した上限は使わない）
     priceMax: PRICE_HARD_MAX,
     feePercent: int(v.feePercent, d.feePercent, 0, 90),
+    coreTimeMultiplier: validCastMultiplier(v.coreTimeMultiplier) ? v.coreTimeMultiplier : 3,
+    ...(coreTime ? { coreTime } : {}),
     acceptMinutes: int(v.acceptMinutes, d.acceptMinutes, 1, 60),
     lateCancelMinutes: int(v.lateCancelMinutes, d.lateCancelMinutes, 0, 24 * 60),
     lateCancelPercent: int(v.lateCancelPercent, d.lateCancelPercent, 0, 100),
@@ -105,7 +112,7 @@ export async function loadCastConfig(db: Db): Promise<CastConfig> {
 }
 
 export async function saveCastConfig(db: Db, c: CastConfig, by: string): Promise<void> {
-  const value = { ...c };
+  const { coreTime: _runtimeOnly, ...value } = c;
   await db
     .insert(settings)
     .values({ key: KEY, value, updatedBy: by })
@@ -121,6 +128,15 @@ export async function saveReservationHub(db: Db, channelId: string): Promise<str
       updatedAt: new Date(), updatedBy: 'system',
     }, setWhere: sql`coalesce(${settings.value}->>'reservationChannelId', '') !~ '^[0-9]{17,20}$'` });
   return (await loadCastConfig(db)).reservationChannelId ?? channelId;
+}
+
+export const validCastMultiplier = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 1 && x <= 10 && Math.abs(x*100-Math.round(x*100)) < 0.000001;
+export const castMultiplierAt = (c: CastConfig, at: Date) => c.coreTime && activeCoreTime(c.coreTime, at) ? (c.coreTimeMultiplier ?? 3) : 1;
+export type CastPriceLock = { base: number; price: number; multiplier: number; extensionBase: number; extensionPrice: number; at: string };
+export function castPriceLock(c: CastConfig, base: number, extensionBase: number, at: Date): CastPriceLock {
+  const multiplier = castMultiplierAt(c,at), price = Math.ceil(base*multiplier), extensionPrice = Math.ceil(extensionBase*multiplier);
+  if (!Number.isSafeInteger(price) || price < 1 || price > CAST_CHARGE_MAX || !Number.isSafeInteger(extensionPrice) || extensionPrice < 0 || extensionPrice > CAST_CHARGE_MAX) throw new Error('倍率適用後の料金が上限を超えています。運営に確認してください。');
+  return { base, price, multiplier, extensionBase, extensionPrice, at: at.toISOString() };
 }
 
 export const castFee = (c: Pick<CastConfig, 'feePercent'>, price: number) => Math.floor((price * c.feePercent) / 100);
@@ -307,7 +323,7 @@ function withKind(input: MenuInput, old: CastMenuItem): MenuInput {
 }
 
 const validMinutes = (n: number) => Number.isInteger(n) && n >= MENU_MINUTES.min && n <= MENU_MINUTES.max;
-const validPrice = (c: CastConfig, n: number) => Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax;
+export const validPrice = (c: CastConfig, n: number) => Number.isInteger(n) && n >= c.priceMin && n <= c.priceMax;
 
 export function validMenuItem(c: CastConfig, m: MenuInput): boolean {
   if (m.name.length < 1 || m.name.length > 30 || m.note.length > 100) return false;
@@ -722,7 +738,7 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 export async function requestSession(
   db: Db,
   c: CastConfig,
-  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段（delivery: 📦 納品として出した値段。時間は 0） */ quote?: { minutes: number; price: number; delivery?: boolean }; /** 付けるオプションの番号 */ options?: string[]; /** 📦 納品の相談: やり取りのスレッド（同じ相談で 2 回注文しない） */ threadId?: string; /** 👥 まとめて予約の印 */ groupKey?: string },
+  input: { castId: string; customerId: string; customerAdult: boolean; /** メニューの番号 */ plan: string; startAt?: Date; /** 📦 納品の注文のお願い */ request?: string; /** 相談のメニュー: キャストが出した時間と値段（delivery: 📦 納品として出した値段。時間は 0） */ quote?: { minutes: number; price: number; delivery?: boolean }; /** 付けるオプションの番号 */ options?: string[]; /** 📦 納品の相談: やり取りのスレッド（同じ相談で 2 回注文しない） */ threadId?: string; /** 👥 まとめて予約の印 */ groupKey?: string; /** DBで確認済みの料金だけ内部から渡す */ priceLock?: CastPriceLock },
   now = new Date(),
   rand: () => number = Math.random,
 ): Promise<RequestResult> {
@@ -739,11 +755,23 @@ export async function requestSession(
   const quoteOk = q && (q.delivery ? q.minutes === 0 && validPrice(c, q.price) : validQuote(c, q.minutes, q.price));
   const item = found?.consult ? (q && quoteOk ? { ...found, minutes: q.minutes, price: q.price, ...(q.delivery ? { delivery: true } : {}) } : undefined) : q ? undefined : found;
   if (!item || item.price <= 0) return { status: 'no_plan' };
-  if (item.delivery) return input.startAt || (q && !found?.consult) || input.options?.length ? { status: 'no_plan' } : orderDelivery(db, cast.memberId, item, input, now, rand, c.customerOpenMax);
+  if (item.delivery) {
+    if (input.startAt || (q && !found?.consult) || input.options?.length) return { status: 'no_plan' };
+    const locked = input.priceLock ?? castPriceLock(c,item.price,0,now);
+    if (locked.base !== item.price) return { status: 'no_plan' };
+    return orderDelivery(db, cast.memberId, { ...item, price: locked.price }, input, now, rand, c.customerOpenMax);
+  }
   const opts = pickOptions(cast, input.options);
   if (input.options && opts.length !== new Set(input.options).size) return { status: 'no_plan' };
   const optionPrice = opts.reduce((n, o) => n + o.price, 0);
-  const price = item.price + optionPrice;
+  const base = item.price + optionPrice;
+  const pricingAt = input.startAt ?? now;
+  if (!Number.isFinite(pricingAt.getTime())) return { status: 'bad_time' };
+  const baseMinutes = item.night ? planMinutes('night', pricingAt) : isFreeMenu(item) ? FREE_MINUTES : item.minutes;
+  const extensionBase = !isFreeMenu(item) && baseMinutes > 0 ? (cast.menu.length ? Math.ceil(item.price*30/baseMinutes) : cast.price30 || Math.ceil(item.price*30/baseMinutes)) : 0;
+  const locked = input.priceLock ?? castPriceLock(c, base, extensionBase, pricingAt);
+  if (locked.base !== base || locked.extensionBase !== extensionBase) return { status: 'no_plan' };
+  const price = locked.price;
   const free = isFreeMenu(item);
   const plan = item.night ? 'night' : free ? `free:${item.id}` : item.id;
   const start = input.startAt ?? now;
@@ -790,8 +818,9 @@ export async function requestSession(
         ...(input.groupKey ? { groupKey: input.groupKey } : {}),
         menuName: cast.menu.length ? (item.consult ? `${item.name}（相談）` : item.name) : '',
         optionNames: opts.map((o) => o.name),
-        optionPrice,
-        extensionPrice: minutes > 0 ? (cast.menu.length ? Math.ceil(((price - optionPrice) * 30) / minutes) : cast.price30 || Math.ceil(((price - optionPrice) * 30) / minutes)) : null,
+        optionPrice: Math.ceil(optionPrice * locked.multiplier),
+        extensionPrice: locked.extensionPrice || null,
+        baseExtensionPrice: locked.extensionBase || null,
         minutes,
         price,
         status: input.startAt ? 'reserved' : 'requested',
@@ -1009,7 +1038,7 @@ export const extensionPriceOf = (s: Pick<CastSession, 'extensionPrice' | 'price'
 export type ExtendResult = { status: 'ok'; session: CastSession; balance: number } | { status: 'insufficient'; price: number; balance: number } | { status: 'not_active' | 'minor_limit' | 'not_customer' | 'already_extended' | 'overlap' };
 
 /** 30 分のばす（お客）。未成年の人は合わせて 60 分・22 時まで */
-export async function extendSession(db: Db, id: number, customerId: string, now = new Date(), expectedExtensions?: number): Promise<ExtendResult> {
+export async function extendSession(db: Db, id: number, customerId: string, now = new Date(), expectedExtensions?: number, priceLock?: CastPriceLock): Promise<ExtendResult> {
   const before = await getSession(db, id);
   if (!before) return { status: 'not_active' };
   const expected = expectedExtensions ?? before.extensions;
@@ -1024,14 +1053,16 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
     const cast = await getCast(tx, s.castId);
     // 30 分のばす値段: 前のプランは 30 分の値段。メニューの指名は、その指名と同じ割合（1 分あたり）
     // オプションの分は、のばす値段に入れない
-    const add = extensionPriceOf(s);
+    const base = s.baseExtensionPrice ?? extensionPriceOf(s);
+    if (priceLock && (priceLock.base !== base || priceLock.at !== s.endsAt.toISOString())) return { status: 'already_extended' as const };
+    const add = priceLock?.price ?? extensionPriceOf(s);
     if (!cast || add <= 0) return { status: 'not_active' as const };
     if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' as const };
     const endsAt = new Date(s.endsAt.getTime() + 30 * MIN);
     if (await overlaps(tx, s.castId, now, endsAt, now, id)) return { status: 'overlap' as const };
     if (!(await spendWithin(tx, customerId, add, 'cast_pay', { sessionId: id, extend: true }))) return { status: 'insufficient' as const, price: add, balance: (await walletOf(tx, customerId)).balance };
     const row = await move(tx, id, ['active'], {
-      minutes: s.minutes + 30, price: s.price + add, extensionPrice: add, extensions: s.extensions + 1, endsAt, warned: false,
+      minutes: s.minutes + 30, price: s.price + add, extensionPrice: add, baseExtensionPrice: base, extensions: s.extensions + 1, endsAt, warned: false,
     });
     if (!row) throw new Error('session ended while extending');
     return { status: 'ok' as const, session: row, balance: (await walletOf(tx, customerId)).balance };

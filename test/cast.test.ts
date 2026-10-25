@@ -513,7 +513,7 @@ describe('🎀 キャストの見た目', () => {
 
 describe('🎀 キャストのDiscord操作', () => {
   const roomId = '990000000000000001';
-  function fixture(fail = false) {
+  function fixture(fail = false, core = false) {
     const room = { id: roomId, type: ChannelType.GuildVoice, send: vi.fn(async () => ({})), delete: vi.fn(async () => undefined) };
     const cache = new Map<string, unknown>();
     const create = vi.fn(async () => {
@@ -523,7 +523,7 @@ describe('🎀 キャストのDiscord操作', () => {
     });
     const guild = { id: cfg.guildId, channels: { cache, create }, members: { me: null } } as unknown as Guild;
     const discord = { sendDm: vi.fn(async () => true), sendMessage: vi.fn(async () => ({ id: '990000000000000002' })), editMessage: vi.fn(async () => undefined) };
-    const tcfg = { ...cfg, roles: { ...cfg.roles, yoimairi: '990000000000000003' } };
+    const tcfg = { ...cfg, coreTime: core ? {...cfg.coreTime,slots:[{day:4,start:'21:00',end:'23:00'}]} : cfg.coreTime, roles: { ...cfg.roles, yoimairi: '990000000000000003' } };
     const app = new CastApp(db, () => tcfg, discord as unknown as DiscordActions);
     app.attach(guild);
     const interaction = {
@@ -536,6 +536,16 @@ describe('🎀 キャストのDiscord操作', () => {
     return { app, room, create, discord, interaction };
   }
 
+  it('予約日時がコアタイムなら、通常の3倍を表示して確定前は課金・スレッド作成しない', async () => {
+    vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(T20);
+    const f=fixture(false,true),before=(await walletOf(db,ADULT)).balance;
+    const modal={...f.interaction,id:'quote-test',customId:'cast:rmodal:'+CAST+':30',isModalSubmit:()=>true,isButton:()=>false,isFromMessage:()=>true,fields:{getTextInputValue:()=> '21:00'}};
+    await f.app.onInteraction(modal as unknown as Interaction);
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('900');
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('cast:priceconfirm:');
+    expect((await walletOf(db,ADULT)).balance).toBe(before);expect(f.create).not.toHaveBeenCalled();
+  });
+
   it('延長の料金確認では課金せず、確定ボタンの再処理も1回だけ課金する', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
     const f = fixture();
@@ -543,13 +553,15 @@ describe('🎀 キャストのDiscord操作', () => {
     if(r.status !== 'ok') throw Error(r.status);
     await acceptSession(db, r.session.id, CAST, T20);
     const reply = vi.fn(async () => undefined), followUp = vi.fn(async () => undefined);
-    const preview = { ...f.interaction, customId: `cast:ext:${r.session.id}:0`, reply, followUp, message: { id: '990000000000000010' } };
+    const preview = { ...f.interaction, customId: `cast:ext:${r.session.id}:0`, reply, followUp, deferReply:vi.fn(async()=>undefined), message: { id: '990000000000000010' } };
     const before = (await walletOf(db, ADULT)).balance;
     await f.app.onInteraction(preview as unknown as Interaction);
-    expect(JSON.stringify(reply.mock.calls)).toContain('300');
-    expect(JSON.stringify(reply.mock.calls)).toContain(`cast:extconfirm:${r.session.id}:0`);
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('300');
+    expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('cast:priceconfirm:');
     expect((await walletOf(db, ADULT)).balance).toBe(before);
-    const confirm = { ...preview, customId: `cast:extconfirm:${r.session.id}:0` };
+    const text=JSON.stringify(f.interaction.editReply.mock.calls);
+    const quoteId=/cast:priceconfirm:([a-f0-9-]+)/.exec(text)![1];
+    const confirm = { ...preview, customId: 'cast:priceconfirm:'+quoteId };
     await f.app.onInteraction(confirm as unknown as Interaction);
     expect((await walletOf(db, ADULT)).balance).toBe(before - 300);
     await f.app.onInteraction(confirm as unknown as Interaction);

@@ -1826,6 +1826,7 @@ export const castSessions = pgTable(
     extensions: integer('extensions').notNull().default(0),
     /** 予約時に確定した30分の延長料金。旧データは初回延長で固定する */
     extensionPrice: integer('extension_price'),
+    baseExtensionPrice: integer('base_extension_price'),
     /** キャストに渡した銭（手数料を引いたあと） */
     paid: integer('paid').notNull().default(0),
     rating: integer('rating'),
@@ -2429,3 +2430,19 @@ export const reactionRolePanels = pgTable('reaction_role_panels', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex('reaction_role_panels_message_idx').on(t.messageId)]);
 export type ReactionRolePanel = typeof reactionRolePanels.$inferSelect;
+
+
+/** キャスト料金の確認と一度きりの支払い結果。 */
+export const castChargeQuotes = pgTable('cast_charge_quotes', {
+  id: text('id').primaryKey(),
+  actorId: text('actor_id').notNull(),
+  actionKey: text('action_key').unique(),
+  kind: text('kind').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  prices: jsonb('prices').$type<{ base:number;price:number;multiplier:number;extensionBase:number;extensionPrice:number;at:string }[]>().notNull(),
+  sessionIds: jsonb('session_ids').$type<number[]>().notNull().default([]),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, t => [index('cast_charge_quote_expiry_idx').on(t.expiresAt)]);
+export type CastChargeQuote = typeof castChargeQuotes.$inferSelect;
