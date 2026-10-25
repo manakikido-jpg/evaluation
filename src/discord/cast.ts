@@ -1,4 +1,4 @@
-import { prepareCastCharge, confirmCastCharge, requestPrice, pruneCastChargeQuotes, CastPricingError, type ChargePayload, type PaidCastCharge } from '../services/castPricing.js';
+import { prepareCastCharge, confirmCastCharge, pruneCastChargeQuotes, CastPricingError, type ChargePayload, type PaidCastCharge } from '../services/castPricing.js';
 import { closeFinishedReservationThreads } from '../services/castThreadClose.js';
 import { refreshCastLeaderboard, castLeaderboardBody } from './castLeaderboard.js';
 import { castLeaderboard } from '../services/castLeaderboard.js';
@@ -58,6 +58,7 @@ import {
   isAdult,
   listCasts,
   loadCastConfig,
+  castMultiplierAt,
   loadCastReception,
   loadCastPhoto,
   loadMenuImage,
@@ -1096,11 +1097,11 @@ export class CastApp {
   private async quoteDelivery(i: ButtonInteraction<'cached'>, castId: string, itemId: string, rest: string[], paid?: PaidCastCharge): Promise<void> {
     const [customerId, price] = rest;
     if (i.user.id !== customerId) return void (await i.reply({ content: 'この提案で注文できるのは、相談した人だけです。', ...EPHEMERAL }));
-    await this.deferCharge(i);
+    if (!i.deferred && !i.replied) await i.deferReply(EPHEMERAL);
     if (!paid && await this.peakConfirmation(i, {route:'consult-delivery',requests:[{castId,plan:itemId,quote:{minutes:0,price:Number(price),delivery:true},threadId:i.channelId}]})) return;
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = paid ? this.paidResult(paid) : await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan: itemId, quote: { minutes: 0, price: Number(price), delivery: true }, threadId: i.channelId });
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan: itemId, quote: { minutes: 0, price: Number(price), delivery: true }, threadId: i.channelId });
     if (r.status !== 'ok') return void (await i.editReply(r.status === 'has_open' ? '納品待ちの注文が、1 人が同時に持てる数の上限です。届いてから次を注文してください。' : this.requestError(r)));
     const s = r.session;
     const dm = await this.dmCast(s);
@@ -1119,9 +1120,12 @@ export class CastApp {
   private async peakConfirmation(i: ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>, payload: ChargePayload): Promise<boolean> {
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
     // 通常料金の既存の確認手順は維持。日時入力後に割増になる場合だけ、実額をもう一度見せる。
-    const prices = await Promise.all(payload.requests.map(r => requestPrice(this.db, c, r, new Date()).catch(() => undefined)));
-    if (!prices.some(p => p && p.multiplier > 1)) return false;
-    const q = await prepareCastCharge(this.db, c, i.user.id, payload, new Date(), i.id);
+    const at = new Date();
+    const multipliers = payload.requests.map(r => castMultiplierAt(c, r.startAt ? new Date(r.startAt) : at));
+    // 通常料金で先へ進んだ後に境界をまたいでも、未確認の割増を請求しない。
+    // この分岐の直接確定ではcoreTimeを外し、ここで確認した通常額を使う。
+    if (!multipliers.some(m => m > 1)) return false;
+    const q = await prepareCastCharge(this.db, c, i.user.id, payload, at, i.id);
     await i.editReply({ content: q.prices.map((p,n) => '料金' + (q.prices.length > 1 ? ' ' + (n+1) : '') + ': 通常 ' + fmt(p.base) + ' × ' + p.multiplier + '倍 = **' + fmt(p.price) + ' ' + this.coin() + '**').join('\n') + '\n合計 **' + fmt(q.prices.reduce((n,p) => n+p.price,0)) + ' ' + this.coin() + '**。コアタイム料金です。まだ銭は使っていません。この料金は5分間有効です。', components: [row(button('cast:priceconfirm:' + q.id, 'この料金で確定する', 1))], allowedMentions: {parse:[]} });
     return true;
   }
@@ -1151,7 +1155,7 @@ export class CastApp {
     if (!paid && await this.peakConfirmation(i, {route:'go',requests:[{castId,plan,quote,options}]})) return;
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = paid ? this.paidResult(paid) : await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}), ...(options ? { options } : {}) });
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}), ...(options ? { options } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
     const room = await this.openRoom(r.session).then(async (room) => {
       if (room) await room.send({ content: `<@${castId}>`, ...sessionMessage(r.session, c, this.coin()), allowedMentions: { users: [castId] } } as Parameters<typeof room.send>[0]);
@@ -1370,7 +1374,7 @@ export class CastApp {
     try {
       const q=await prepareChampagne(this.db,id,bottleId,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s),undefined,await loadCastConfig(this.db, this.cfg().coreTime));
       const image=champagnePreview(q.bottle);
-      await i.editReply({content:`${q.bottleName}：${fmt(q.price)} ${this.coin()}\nキャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。今すぐキャストへ入金します。通話時間は延びません。\nこの確認は5分間有効です。`,embeds:[{image:{url:'attachment://champagne.png'}}],files:[new AttachmentBuilder(image,{name:'champagne.png'})],attachments:[],components:[row(button(`cast:champagnebuy:${q.id}`,'料金を確認して贈る',3,'🍾'))],allowedMentions:{parse:[]}});
+      await i.editReply({content:`${q.bottleName}：${fmt(q.price)} ${this.coin()}\nキャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。今すぐキャストへ入金します。通話時間は延びません。\nこの確認は5分間有効です。画像内の金額は通常料金です。`,embeds:[{image:{url:'attachment://champagne.png'}}],files:[new AttachmentBuilder(image,{name:'champagne.png'})],attachments:[],components:[row(button(`cast:champagnebuy:${q.id}`,'料金を確認して贈る',3,'🍾'))],allowedMentions:{parse:[]}});
     } catch(err) { await i.editReply({content:champagneError(err),components:[],embeds:[],attachments:[]}); }
   }
 
@@ -1624,12 +1628,12 @@ export class CastApp {
 
   /** 📦 注文する（お客） */
   private async orderSubmit(i: ModalSubmitInteraction<'cached'> | ButtonInteraction<'cached'>, castId: string, plan: string, paid?: PaidCastCharge): Promise<void> {
-    await this.deferCharge(i);
+    if (!i.deferred && !i.replied) await i.deferReply(EPHEMERAL);
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     const wish = paid?.payload.wish ?? (i.isModalSubmit() ? i.fields.getTextInputValue('wish').trim() : '');
     if (!paid && await this.peakConfirmation(i,{route:'delivery',requests:[{castId,plan}],wish})) return;
-    const r = paid ? this.paidResult(paid) : await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan });
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan });
     if (r.status !== 'ok') return void (await i.editReply({ content: r.status === 'has_open' ? '納品待ちの注文が、1 人が同時に持てる数の上限です。届いてから次を注文してください。' : this.requestError(r), components: [] }));
     const thread = await this.openThread(r.session, `📦 ${r.drawn ? 'ガチャ' : '納品'} #${r.session.id}`);
     if (!thread) {
@@ -1948,7 +1952,7 @@ export class CastApp {
     const groupKey = randomUUID();
     if (!paid && await this.peakConfirmation(i,{route:'group',requests:pairs.map(([castId,plan])=>({castId,plan,startAt:at.toISOString(),groupKey}))})) return;
     for (const [castId, plan] of paid ? [] : pairs) {
-      const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, groupKey });
+      const r = await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, groupKey });
       if (r.status !== 'ok') {
         for (const s of made) await cancelSession(this.db, s.id, 'system', 'declined');
         const who = (await namesOf(this.db, [castId])).get(castId) ?? 'キャスト';
@@ -1980,7 +1984,7 @@ export class CastApp {
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     if (!paid && await this.peakConfirmation(i,{route:'reserve',requests:[{castId,plan,options,quote,startAt:at.toISOString()}]})) return;
-    const r = paid ? this.paidResult(paid) : await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, ...(options ? { options } : {}), ...(quote ? { quote } : {}) });
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, ...(options ? { options } : {}), ...(quote ? { quote } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
     // やり取りは男女共通の予約窓口の非公開スレッドで。キャストへの返事の案内はDMで。
     const thread = await this.openThread(r.session, `📅 予約 #${r.session.id}`);
