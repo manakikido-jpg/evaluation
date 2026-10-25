@@ -778,3 +778,4 @@
 - 実ブラウザでテスト用ID単体→アニメ絵文字形式への解決→投稿1回/DB1件を確認。失敗時の入力保持・通信断/403/Discord失敗の区別も成功。ログ/tmp/reaction-id-browser2.log。実際に入力されたIDの種類やサーバー登録は本番API未照会のため未確認。
 - 最終検証：全178ファイル2,067テスト成功（392.88秒、4並列）、型チェック・ビルド成功。JS/サービス/REST関連19件と対象実ルート1件成功。テスト削除/skipなし。最終ログ/tmp/reaction-id-{all-tests,typecheck-final,build-final,related2,http-final,browser2}.log。途中の未完了全件と型修正前の失敗は成功扱いにしない。
 - 完了：同サーバーのカスタム絵文字ID単体の照合/正規化、アニメ/利用不可/画像スタンプ/取得失敗/重複とロール安全の検証、具体的エラーと通常/JS両方の入力保持、HTTP/通信断/受信後表示失敗の区別、通知のクリック妨害解消。POSTの自動再送なし。DB/設定変更なし、実Discordの投稿/削除/付与操作なし。実ユーザーの入力IDが登録済みかは本番API未照会で未確認。担当Claude向けPRへ保存する。
+- GitHub保存済み：PR #89 https://github.com/manakikido-jpg/evaluation/pull/89 、codex/reaction-role-form-errors、実装bb7d645。OPEN・未合流・本番未反映。全2,067件・型・ビルド成功、IDのみでの作成と失敗時の入力保持をブラウザ検証済み。担当Claudeの確認/合流後に実環境を確認。この追記は所在のみでソース変更なし。
