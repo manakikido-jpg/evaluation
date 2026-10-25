@@ -1,4 +1,5 @@
 import { mountVisit } from './visit.js';
+import { mountMarketplace } from './marketplace.js';
 import { kobanStats } from '../services/koban.js';
 import { GalleryRewardsPage } from './views/galleryRewards.js';
 import { GalleryError, GALLERY_KINDS, cancelGalleryPost, galleryPricesSchema, loadGalleryPrices, recentGalleryPosts, registerGalleryPost, saveGalleryPrices, type GalleryKind } from '../services/galleryRewards.js';
@@ -543,6 +544,7 @@ export function createWebApp(deps: WebDeps) {
     },
   });
   mountVisit(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
+  mountMarketplace(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountLottery(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
 
