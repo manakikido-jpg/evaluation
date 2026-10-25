@@ -1,6 +1,6 @@
 import { MessageFlags, type Interaction } from 'discord.js';
 import type { Db } from '../db/client.js';
-import type { GuildConfig } from '../config.js';
+import { adminLevelOf, type GuildConfig } from '../config.js';
 import { visitData, VisitError } from '../services/visitProfile.js';
 import { renderVisitCard } from '../services/visitCard.js';
 import { loadReceptionAvatar } from '../services/castReceptionImage.js';
@@ -24,9 +24,10 @@ export class VisitApp{
     const target=i.options.getUser('user')??i.user;
     const isPublic=i.options.getBoolean('public')??true;
     await i.deferReply(isPublic?{}:{flags:MessageFlags.Ephemeral});
-    const member=await i.guild.members.fetch(target.id).catch(()=>undefined);
+    const member=await i.guild.members.fetch({user:target.id,force:true}).catch(()=>undefined);
     if(!member||member.user.bot){await i.editReply({content:'在籍中のメンバーを選んでください。',allowedMentions:{parse:[]}});return;}
     const data=await visitData(this.db,target.id);
+    data.staffTheme=!!adminLevelOf(this.cfg(),[...(member.roles?.cache.keys()??[])]);
     const privateView=target.id===i.user.id&&!isPublic;
     const png=renderVisitCard(data,{privateView,avatar:await loadReceptionAvatar(member.displayAvatarURL({size:128}))});
     await i.editReply({content:privateView?'自分用の参拝プロフィールです。/参拝プロフィール だけでチャンネルに表示できます。活動記録の公開設定はWebで変更できます。':data.profile.publicStats?'参拝プロフィールです。':'活動記録は本人の設定で非公開です。',files:[{attachment:png,name:'sakura-profile.png'}],components:[{type:1,components:[{type:2,style:2,label:'背景・フレームと着せ替え',custom_id:'visit:open'}]}],allowedMentions:{parse:[]}});

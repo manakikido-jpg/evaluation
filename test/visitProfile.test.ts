@@ -137,3 +137,23 @@ it('初期設定は公開で、既存プロフィールの移行後に本人が�
  for(let n=0;n<2;n++)expect((await visitData(db,A,now)).profile.publicStats).toBe(false);
  expect(visitCardSvg(await visitData(db,A,now))).not.toContain('累計通話');
 });
+
+it('運営カードは専用の装いで統一し、実数と獲得済みバッジだけを左側に表示する',async()=>{
+ await recordVisitMinute(db,[A],now);const d=await visitData(db,A,now);d.staffTheme=true;d.profile.badges=['first','vc500'];
+ const svg=visitCardSvg(d); // 名前や順位を捏造しない
+ expect(svg).toContain('咲楽ノ宮 参拝帳');expect(svg).toContain('1分');expect(svg).toContain('はじめの一歩');expect(svg).not.toContain('夜桜の語り手');expect(svg).not.toContain('参拝順位');expect(svg).toContain('&lt;script&gt;');
+ const normal=renderVisitCard(d);expect(normal.equals(renderVisitCard(d,{background:'snow',frame:'plain'}))).toBe(true);
+ expect(await sharp(normal).metadata()).toMatchObject({width:1080,height:640,format:'png'});
+ d.profile.publicStats=false;expect(visitCardSvg(d)).toContain('活動記録は非公開');expect(visitCardSvg(d)).not.toContain('累計通話');expect(visitCardSvg(d)).not.toContain('はじめの一歩');expect(visitCardSvg(d,{privateView:true})).toContain('累計通話');
+});
+
+it('明るいユーザー背景でも記録/バッジ/名前の領域が十分なコントラストを保つ',async()=>{
+ const d=await visitData(db,A,now);d.art.paper=(await sharp({create:{width:1080,height:640,channels:3,background:'#ffffff'}}).png().toBuffer()).toString('base64');
+ const png=renderVisitCard(d,{background:'paper',frame:'plain'});
+ const luminance=(rgb:number[])=>rgb.reduce((sum,c,i)=>{const s=c/255;return sum+([.2126,.7152,.0722][i]!)*(s<=.04045?s/12.92:((s+.055)/1.055)**2.4);},0);
+ for(const [left,top] of [[110,330],[970,380],[780,60]]){
+  const rgb=await sharp(png).removeAlpha().extract({left:left!,top:top!,width:1,height:1}).raw().toBuffer();const bg=luminance([...rgb]);
+  expect((1.05)/(bg+.05)).toBeGreaterThan(7);expect((luminance([246,223,160])+.05)/(bg+.05)).toBeGreaterThan(4.5);
+ }
+ expect((await visitData(db,A,now)).profile.background).toBe('paper');
+});

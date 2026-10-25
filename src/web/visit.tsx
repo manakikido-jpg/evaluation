@@ -2,7 +2,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { buyCreatorLicense, createDesign, submitDesign, deletePrivateDesign, accessibleDesign, workshopData, DESIGN_INPUT_MAX } from '../services/visitWorkshop.js';
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import type { GuildConfig } from '../config.js';
+import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { members, type MemberSession } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -25,15 +25,18 @@ export function mountVisit(app:Hono<any>,d:Deps){
   const roles=await d.api.memberRoles(d.cfg().guildId,id);
   if(!roles)return false;
   const [m]=await d.db.select().from(members).where(eq(members.id,id));
-  return !!m&&!m.isBot&&!m.leftAt;
+  return m&&!m.isBot&&!m.leftAt ? {staffTheme:!!adminLevelOf(d.cfg(),roles)} : false;
  };
  const protect=(handler:(c:Context,s:MemberSession,data:VisitData)=>Response|Promise<Response>)=>async(c:Context)=>{
   c.header('Cache-Control','private, no-store');
   const session=await findMemberSession(d.db,getCookie(c,COOKIE)??'',d.now());
   if(!session)return c.req.method==='GET'&&!c.req.path.endsWith('.png')?c.html(<VisitGate/>):c.text('ログインが必要です。',401);
-  try{if(!await access(session.userId)){await deleteMemberSession(d.db,session.id);deleteCookie(c,COOKIE,{path:'/visit'});return c.text('在籍中のメンバーだけが利用できます。',403);}}catch{return c.text('Discordの在籍を確認できません。少し待ってから開き直してください。',503);}
+  let membership: false | {staffTheme:boolean};
+  try{membership=await access(session.userId);if(!membership){await deleteMemberSession(d.db,session.id);deleteCookie(c,COOKIE,{path:'/visit'});return c.text('在籍中のメンバーだけが利用できます。',403);}}catch{return c.text('Discordの在籍を確認できません。少し待ってから開き直してください。',503);}
   if(c.req.method==='POST'){const b=await c.req.parseBody({all:true});if(!safeEqual(typeof b._csrf==='string'?b._csrf:'',session.csrfToken))return c.text('不正なリクエストです（CSRF）。',403);}
-  return handler(c,session,await visitData(d.db,session.userId,d.now(),{background:c.req.query('background'),frame:c.req.query('frame')}));
+  const data=await visitData(d.db,session.userId,d.now(),{background:c.req.query('background'),frame:c.req.query('frame')});
+  data.staffTheme=membership.staffTheme;
+  return handler(c,session,data);
  };
  app.get('/visit/auth',c=>{const state=randomToken();setCookie(c,STATE,state,{...opts,path:'/casino/auth',maxAge:600});return c.redirect(d.api.authorizeUrl(state,redirect));});
  app.get('/casino/auth/callback',async(c,next)=>{

@@ -85,7 +85,7 @@ export async function visitData(db:Db,id:string,now=new Date(),preview?:{backgro
   const selected=[...new Set([profile!.background,profile!.frame,preview?.background,preview?.frame].filter((v):v is string=>!!v&&custom.some(i=>i.id===v)))];
   const images=selected.length?await db.select({id:visitDesigns.id,data:visitDesigns.data}).from(visitDesigns).where(inArray(visitDesigns.id,selected)):[];
   const art:Record<string,string>=Object.fromEntries(images.map(i=>[i.id,Buffer.from(i.data).toString('base64')]));
-  return {member,profile:profile!,minutes,monthMinutes,activeDays,rank:visitRank(minutes),badges,purchases,owned,catalog,art};
+  return {staffTheme:false,member,profile:profile!,minutes,monthMinutes,activeDays,rank:visitRank(minutes),badges,purchases,owned,catalog,art};
 }
 export type VisitData=Awaited<ReturnType<typeof visitData>>;
 export async function buyVisitItem(db:Db,id:string,itemId:string,quote:number,confirmed:boolean,now=new Date()){

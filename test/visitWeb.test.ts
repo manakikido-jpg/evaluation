@@ -108,3 +108,13 @@ it('制作権利は初期停止、購入後だけアップロードでき、販�
  expect((await visitData(db,B,now)).profile.background).toBe(id);
  expect((await asB('/visit/card.png')).headers.get('content-type')).toBe('image/png');
 });
+
+it('最新の運営ロールだけで専用表示し、URL偽装や剥奪後に適用せず保存済み装いを保持する',async()=>{
+ const {visitData}=await import('../src/services/visitProfile.js');const {renderVisitCard}=await import('../src/services/visitCard.js');
+ const role='770000000000000099';const localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};let roles=[role];
+ api.memberRoles=async()=>roles;app=new Hono();mountVisit(app,{db,api,cfg:()=>localCfg,baseUrl,secure:true,now:()=>now});
+ const html=await (await req('/visit')).text();expect(html).toContain('運営専用の「紅眼の金紋」');
+ const d=await visitData(db,A,now);d.staffTheme=true;const actual=Buffer.from(await (await req('/visit/card.png?preview=1&background=snow&frame=plain')).arrayBuffer());expect(actual.equals(renderVisitCard(d,{privateView:true,preview:true}))).toBe(true);
+ roles=[];const ordinary=Buffer.from(await (await req('/visit/card.png?staffTheme=1')).arrayBuffer());d.staffTheme=false;expect(ordinary.equals(renderVisitCard(d,{privateView:true}))).toBe(true);expect((await visitData(db,A,now)).profile.background).toBe('paper');expect(await (await req('/visit')).text()).not.toContain('運営専用の「紅眼の金紋」');
+ roles=[role];api.memberRoles=async()=>{throw Error('offline');};expect((await req('/visit/card.png')).status).toBe(503);
+});
