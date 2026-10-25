@@ -47,7 +47,7 @@ function medal(id: string, x: number, y: number): string {
 export function visitCardSvg(data: VisitData, options: {
   privateView?: boolean; staffStyle?: string; background?: string; frame?: string; avatar?: Uint8Array; preview?: boolean;
 } = {}) {
-  if (data.staffTheme) return portraitCardSvg(data, options);
+  if (data.staffTheme && visitStaffStyle(options.staffStyle??data.profile.staffStyle).id!=='general') return portraitCardSvg(data, options);
   const catalog=data.catalog ?? VISIT_ITEMS;
   const image=(id:string,edge=false)=>data.art?.[id] ? '<image href="data:image/png;base64,'+data.art[id]+'" width="1080" height="640"/>' : art(id,edge);
   const bg = catalog.find(i => i.kind === 'background' && i.id === (options.background ?? data.profile.background)) ?? VISIT_ITEMS[0];
@@ -105,7 +105,7 @@ function portraitCardSvg(data: VisitData, options: {privateView?:boolean; staffS
   const nameSize=Math.min(48,Math.floor(440/Math.max(1,[...name].length)));
   const blue=!general&&visitStaffStyle(options.staffStyle??data.profile.staffStyle).id==='blue-lantern';
   const gold=general?'#eeeeee':blue?'#e0e5ff':'#f6dfa0';
-  const subtitle=data.staffTheme?'運営':visible?(data.profile.title==='rank'?data.rank.name:VISIT_BADGES.find(b=>b.id===data.profile.title)?.name??''):'';
+  const subtitle=general?visible?(data.profile.title==='rank'?data.rank.name:VISIT_BADGES.find(b=>b.id===data.profile.title)?.name??''):'':'運営';
   const veil=general?'#060606':'#100306';
   const avatarX=blue?145:107;
   let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="640" viewBox="0 0 1080 640"><defs>'+

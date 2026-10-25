@@ -153,3 +153,10 @@ it('一般メンバーが白黒の背景/枠を選んで保存し、購入なし
  const before=(await walletOf(db,A)).balance;const saved=await post('/visit/equip',{background:'silver-shadow',frame:'shadow-silver',title:'rank',publicStats:'yes'});expect(saved.status).toBe(303);const data=await visitData(db,A,now);expect(data.staffTheme).toBe(false);expect(data.profile.background).toBe('silver-shadow');expect((await walletOf(db,A)).balance).toBe(before);
  expect(Buffer.from(await (await req('/visit/card.png?download=1')).arrayBuffer()).equals(renderVisitCard(data,{privateView:true}))).toBe(true);expect((await db.select().from(visitPurchases)).length).toBe(0);
 });
+
+it('運営も一般用へ切り替えると白黒背景を使え、専用デザインを強制しない',async()=>{
+ const {visitData}=await import('../src/services/visitProfile.js');const {renderVisitCard}=await import('../src/services/visitCard.js');
+ const role='770000000000000099',localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};api.memberRoles=async()=>[role];app=new Hono();mountVisit(app,{db,api,cfg:()=>localCfg,baseUrl,secure:true,now:()=>now});
+ expect((await post('/visit/staff-style',{staffStyle:'general',intent:'save'})).status).toBe(303);expect((await post('/visit/equip',{background:'silver-shadow',frame:'shadow-silver',title:'rank',publicStats:'yes'})).status).toBe(303);
+ const data=await visitData(db,A,now);expect(data.profile.staffStyle).toBe('general');const normal=renderVisitCard(data,{privateView:true});data.staffTheme=true;expect(renderVisitCard(data,{privateView:true}).equals(normal)).toBe(true);expect(Buffer.from(await (await req('/visit/card.png?download=1')).arrayBuffer()).equals(normal)).toBe(true);expect(await (await req('/visit')).text()).toContain('一般用の着せ替えで表示しています。');
+});
