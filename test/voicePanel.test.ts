@@ -134,6 +134,19 @@ describe('通話に入ったとき', () => {
     expect(other.messages).toHaveLength(1);
   });
 
+  it('「プロフィールを見る」を出さない通話でも、ほかのボタン（院・寝落ち）は出す', async () => {
+    const app = new VoicePanelApp(() => ({ ...cfg, economy: { ...cfg.economy, vcPanelHiddenIds: [VC] } }));
+    const v = fakeVoice();
+    Object.assign(v.channel, { parentId: null, name: '院の間', parent: { name: '🏯 院' } });
+    app.onVoiceStateUpdate(state(null, null), state(v.channel, VC));
+    await settle();
+    expect(v.messages).toHaveLength(1);
+    const json = JSON.stringify(v.messages[0]);
+    expect(json).toContain(`inn:invite:${VC}`);
+    expect(json).not.toContain(shuinId('vc', VC));
+    expect(JSON.stringify(vcPanel(VC, true, false, false))).not.toContain('プロフィールを見る');
+  });
+
   it('宿坊の部屋には出さない', async () => {
     const app = new VoicePanelApp(() => cfg, undefined, async (id) => id === VC);
     const v = fakeVoice();

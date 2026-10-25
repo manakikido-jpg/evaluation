@@ -207,17 +207,24 @@ export function promotionLog(userId: string, promotion: Promotion, goen: number)
 export const VC_LIST_MAX = 20;
 
 /** 通話に入った人がいたら、その通話のチャットのいちばん下に出すカード */
-export function vcPanel(channelId: string, help = false, inn = false): Reply {
+export function vcPanel(channelId: string, help = false, inn = false, profile = true): Reply {
+  const lines = [
+    ...(profile ? ['📕 **この通話の人のプロフィールを見る**', '-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから朱印も押せます（あなたにだけ見えます）'] : []),
+    ...(help ? ['💤 寝落ちの人がいたら・🛡 困ったときは、下のボタンで衛士に知らせられます。'] : []),
+    ...(inn ? ['👤 役職の方は、人を呼んで一時的にこの通話に入れられます。'] : []),
+  ];
   return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(SAKURA)
-        .setDescription('📕 **この通話の人のプロフィールを見る**\n-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから朱印も押せます（あなたにだけ見えます）' + (help ? '\n💤 寝落ちの人がいたら・🛡 困ったときは、下のボタンで衛士に知らせられます。' : ''))
-        .toJSON(),
+    embeds: [new EmbedBuilder().setColor(SAKURA).setDescription(lines.join('\n') || '　').toJSON()],
+    components: [
+      ...(profile ? [row(new ButtonBuilder().setCustomId(shuinId('vc', channelId)).setLabel('この通話の人のプロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Primary))] : []),
+      ...(help ? [vcHelpRow(channelId)] : []),
+      ...(inn ? [innRow(channelId)] : []),
     ],
-    components: [row(new ButtonBuilder().setCustomId(shuinId('vc', channelId)).setLabel('この通話の人のプロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Primary)), ...(help ? [vcHelpRow(channelId)] : []), ...(inn ? [innRow(channelId)] : [])],
   };
 }
+
+/** 通話のチャットのカードか見分ける ID（どのボタンが出ていても見分けられるように） */
+export const vcPanelIds = (channelId: string) => [shuinId('vc', channelId), `vchelp:sleep:${channelId}`, `inn:invite:${channelId}`];
 
 /** 通話にいる人のボタン。押すとその人のプロフィール（そこから朱印を押せる）。今の格で朱印を押した人は ✅。昇格前の朱印は差額を付けられるので 📕 */
 export function vcList(people: { id: string; name: string; stamped: boolean }[], total: number): Reply {

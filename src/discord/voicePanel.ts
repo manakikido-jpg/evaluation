@@ -1,10 +1,9 @@
 import type { Guild, Message, VoiceBasedChannel, VoiceState } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { shuinId } from './ids.js';
 import { isVcHelpChannel } from './vcHelp.js';
 import { isInnChannel } from './innGuest.js';
-import { vcPanel } from './views.js';
+import { vcPanel, vcPanelIds } from './views.js';
 
 /** 話が流れたときに、いちばん下へ出し直す間隔（15 秒に 1 回） */
 export const VC_PANEL_RESTICK_MS = 15_000;
@@ -35,11 +34,14 @@ export class VoicePanelApp {
     return (
       channel.id === guild.afkChannelId ||
       cfg.tempVoice.hubs.some((h) => h.channelId === channel.id) ||
-      cfg.economy.excludedVoiceChannelIds.includes(channel.id) ||
-      // 社務所Web で「出さない」にした通話・カテゴリ
-      cfg.economy.vcPanelHiddenIds.includes(channel.id) ||
-      (channel.parentId !== null && cfg.economy.vcPanelHiddenIds.includes(channel.parentId))
+      cfg.economy.excludedVoiceChannelIds.includes(channel.id)
     );
+  }
+
+  /** 社務所Web で「📕 プロフィールを見る」を出さないにした通話・カテゴリか（ほかのボタンは出す） */
+  private profileHidden(channel: VoiceBasedChannel): boolean {
+    const ids = this.cfg().economy.vcPanelHiddenIds;
+    return ids.includes(channel.id) || (channel.parentId !== null && ids.includes(channel.parentId));
   }
 
   onVoiceStateUpdate(before: VoiceState, after: VoiceState): void {
@@ -53,7 +55,8 @@ export class VoicePanelApp {
   onMessage(msg: Message): void {
     if (!msg.inGuild() || msg.guildId !== this.cfg().guildId) return;
     // このカード自身の書き込みでは出し直さない（くり返しにならないように）
-    if (msg.author.id === msg.client.user?.id && msg.components.some((r) => 'components' in r && r.components.some((c) => 'customId' in c && c.customId === shuinId('vc', msg.channelId)))) return;
+    const ids = vcPanelIds(msg.channelId);
+    if (msg.author.id === msg.client.user?.id && msg.components.some((r) => 'components' in r && r.components.some((c) => 'customId' in c && ids.includes(c.customId ?? '')))) return;
     const channel = msg.channel;
     if (!channel.isVoiceBased() || this.skip(channel, msg.guild) || this.timers.has(channel.id)) return;
     this.timers.set(
@@ -75,14 +78,20 @@ export class VoicePanelApp {
     if (!channel.isTextBased() || !channel.isSendable()) return;
     if (await this.hidden(channel.id).catch(() => false)) return;
     const me = channel.client.user.id;
-    const panelId = shuinId('vc', channel.id);
+    const panelIds = vcPanelIds(channel.id);
     type Msg = { author: { id: string }; components: { components: { customId?: string | null }[] }[] };
-    const isPanel = (m: Msg) => m.author.id === me && m.components.some((r) => r.components.some((c) => 'customId' in c && c.customId === panelId));
+    const isPanel = (m: Msg) => m.author.id === me && m.components.some((r) => r.components.some((c) => 'customId' in c && panelIds.includes(c.customId ?? '')));
+    const profile = !this.profileHidden(channel), help = isVcHelpChannel(channel), inn = isInnChannel(channel);
     // すでにいちばん下にあれば何もしない（BOT の書き込みも数える）
     const recent = await channel.messages.fetch({ limit: 20 }).catch(() => undefined);
     const last = recent?.first();
+    // 出すボタンがひとつもなければ、カードを出さない（前のものは消す）
+    if (!profile && !help && !inn) {
+      for (const m of recent?.values() ?? []) if (isPanel(m as never)) await m.delete().catch(() => undefined);
+      return;
+    }
     if (last && isPanel(last as never)) return;
-    await channel.send({ ...vcPanel(channel.id, isVcHelpChannel(channel), isInnChannel(channel)), allowedMentions: { parse: [] } });
+    await channel.send({ ...vcPanel(channel.id, help, inn, profile), allowedMentions: { parse: [] } });
     // 前に出したものは消す
     for (const m of recent?.values() ?? []) if (isPanel(m as never)) await m.delete().catch(() => undefined);
   }

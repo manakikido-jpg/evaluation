@@ -1180,8 +1180,8 @@ export function SettingsPage(props: {
             </details>
             <input type="hidden" name="vcPanelHiddenForm" value="yes" />
             <details class="field">
-              <summary>📕「この通話の人のプロフィールを見る」を出さない通話（{e.vcPanelHiddenIds.length ? `${e.vcPanelHiddenIds.length} こ選択中` : 'なし（全部の通話に出す）'}）</summary>
-              <p class="note">チェックした通話・カテゴリのチャットには、プロフィールを見るカードを出しません。カテゴリにチェックすると、その中の通話全部（あとで作った通話も）。AFK・「➕ ○○をひらく」・数えない通話・宿坊の部屋は、前から出しません。</p>
+              <summary>📕「この通話の人のプロフィールを見る」のボタンだけを出さない通話（{e.vcPanelHiddenIds.length ? `${e.vcPanelHiddenIds.length} こ選択中` : 'なし（全部の通話に出す）'}）</summary>
+              <p class="note">チェックした通話・カテゴリのチャットには、「📕 プロフィールを見る」のボタンだけを出しません（寝落ちの報告・院に人を呼ぶなどのボタンは出ます。ほかのボタンもなければカードは出しません）。カテゴリにチェックすると、その中の通話全部（あとで作った通話も）。AFK・「➕ ○○をひらく」・数えない通話・宿坊の部屋は、前から出しません。</p>
               {[...new Map((props.voiceChannels ?? []).filter(v => v.categoryId).map(v => [v.categoryId!, v.category ?? ''])).entries()].map(([id, name]) => <label class="field check"><input type="checkbox" name="vcPanelHidden" value={id} checked={e.vcPanelHiddenIds.includes(id)} /><span>📁 {name}（カテゴリ全部）</span></label>)}
               {(props.voiceChannels ?? []).map(v => <label class="field check"><input type="checkbox" name="vcPanelHidden" value={v.id} checked={e.vcPanelHiddenIds.includes(v.id)} /><span>🔊 {v.category ? `${v.category} / ` : ''}{v.name}</span></label>)}
             </details>
