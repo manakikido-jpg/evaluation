@@ -4541,3 +4541,26 @@ it('制作審査は宮司だけが画像を確認して承認でき、購入実�
 });
 
 });
+
+it('👥 メンバー検索: 役職に案内待ちをえらべる。ロールのチェックで絞り込める', async () => {
+  const PENDING = '980000000000000071', GAME = '980000000000000072';
+  roleList = [
+    { id: PENDING, name: '案内待ち', position: 2, managed: false, color: 0 },
+    { id: GAME, name: 'ゲーム好き', position: 1, managed: false, color: 0 },
+  ];
+  await recordJoin(db, { id: '980000000000000081', username: 'machi', displayName: 'まちびと', avatarUrl: null, roleIds: [PENDING], isBot: false, joinedAt: new Date('2026-09-01T00:00:00Z') });
+  await recordJoin(db, { id: '980000000000000082', username: 'game', displayName: 'あそびびと', avatarUrl: null, roleIds: [GAME], isBot: false, joinedAt: new Date('2026-09-01T00:00:00Z') });
+  const s = await login(STAFF);
+  const page = await (await get('/members', s)).text();
+  expect(page).toContain('🧭 案内待ち');
+  expect(page).toContain('ロールで絞り込む');
+  const pending = await (await get('/members?rank=pending', s)).text();
+  expect(pending).toContain('まちびと');
+  expect(pending).not.toContain('あそびびと');
+  const both = await (await get(`/members?roles=${PENDING}&roles=${GAME}`, s)).text();
+  expect(both).toContain('まちびと');
+  expect(both).toContain('あそびびと');
+  const game = await (await get(`/members?roles=${GAME}`, s)).text();
+  expect(game).not.toContain('まちびと');
+  expect(game).toContain(`roles=${GAME}`);
+});

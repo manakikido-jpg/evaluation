@@ -1,3 +1,4 @@
+import type { GuildRole } from '../../lib/discordRest.js';
 import type { InviteRewardRow } from '../../services/invites.js';
 import { STAFF_NO_INVITER, UNKNOWN_INVITER } from '../../services/invites.js';
 import type { GuildConfig } from '../../config.js';
@@ -311,9 +312,13 @@ export function MembersPage(props: {
   query: MemberListQuery & { rank?: string };
   result: { rows: MemberRow[]; total: number; page: number; pages: number };
   now: Date;
+  /** チェックボックスで絞り込むロール */
+  roles?: GuildRole[];
+  pendingRoleId?: string;
 }) {
   const { query } = props;
   const sel = (a: unknown, b: unknown) => (a === b ? { selected: true } : {});
+  const checked = new Set(query.roleIds ?? []);
   return (
     <Layout title="メンバー" session={props.session} nav="members">
       <h1>👥 メンバー</h1>
@@ -337,7 +342,19 @@ export function MembersPage(props: {
                 {r.emoji} {r.name}
               </option>
             ))}
+          {props.pendingRoleId && <option value="pending" {...sel(query.rank, 'pending')}>🧭 案内待ち</option>}
         </select>
+        {props.roles?.length ? (
+          <details class="office-multi member-role-filter" open={checked.size > 0}>
+            <summary>ロールで絞り込む（{checked.size ? `${checked.size} こ選択中` : 'すべて'}）</summary>
+            <p class="note">チェックしたロールの、どれかを持つ人だけを出します。</p>
+            <div class="office-multi-options">
+              {props.roles.map((r) => (
+                <label class="field check"><input type="checkbox" name="roles" value={r.id} checked={checked.has(r.id)} /><span>{r.name}</span></label>
+              ))}
+            </div>
+          </details>
+        ) : null}
         <select name="age" aria-label="年齢区分">
           <option value="">すべての年齢区分</option>
           {Object.entries(AGE_LABEL).map(([k, v]) => (
@@ -404,6 +421,7 @@ export function MemberResults(props: {
     const q = new URLSearchParams();
     if (query.q) q.set('q', query.q);
     if (query.rank) q.set('rank', query.rank);
+    for (const id of query.roleIds ?? []) q.append('roles', id);
     if (query.ageGroup) q.set('age', query.ageGroup);
     if (query.inactiveDays) q.set('inactive', String(query.inactiveDays));
     if (query.status && query.status !== 'active') q.set('status', query.status);

@@ -196,6 +196,8 @@ export type MemberListQuery = {
   q?: string;
   /** このロールを持つ人 */
   roleId?: string;
+  /** チェックしたロールの、どれかを持つ人 */
+  roleIds?: string[];
   ageGroup?: 'minor' | 'adult' | 'unknown';
   /** 在籍中 / 退出済み / 全員 */
   status?: 'active' | 'left' | 'all';
@@ -249,6 +251,7 @@ export async function listMembers(
     conds.push(or(ilike(members.displayName, like), ilike(members.username, like), eq(members.id, q))!);
   }
   if (query.roleId) conds.push(sql`${query.roleId} = any(${members.roleIds})`);
+  if (query.roleIds?.length) conds.push(or(...query.roleIds.map((id) => sql`${id} = any(${members.roleIds})`))!);
   if (query.ageGroup) conds.push(eq(members.ageGroup, query.ageGroup));
   if (query.inactiveDays && query.inactiveDays > 0) {
     const border = new Date(now.getTime() - query.inactiveDays * 86_400_000);
