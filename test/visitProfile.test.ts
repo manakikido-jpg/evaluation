@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { makeDb } from './helpers.js';
@@ -80,7 +81,9 @@ describe('購入・装備・公開',()=>{
   await expect(saveVisitProfile(db,A,{...input,frame:'sakura'},now)).rejects.toThrow('持って');
  });
  it('公開用の非公開カードはランク・通話・実績を隠し、名前をエスケープする',async()=>{
-  await recordVisitMinute(db,[A],now);const d=await visitData(db,A,now);
+  await recordVisitMinute(db,[A],now);
+  await visitData(db,A,now);await saveVisitProfile(db,A,{background:'paper',frame:'plain',title:'rank',badges:[],publicStats:false},now);
+  const d=await visitData(db,A,now);
   const pub=visitCardSvg(d);expect(pub).toContain('活動記録は非公開');expect(pub).not.toContain('累計通話');expect(pub).not.toContain('Lv.');expect(pub).not.toContain('<script>');expect(pub).toContain('&lt;script&gt;');
   expect(visitCardSvg(d,{privateView:true})).toContain('累計通話');
   await saveVisitProfile(db,A,{background:'paper',frame:'plain',title:'rank',badges:['first'],publicStats:true},now);
@@ -114,4 +117,16 @@ describe('購入・装備・公開',()=>{
   const d=await visitData(db,A,now);const png=renderVisitCard(d,{privateView:true,background:'goldnight',frame:'gold',preview:true});const meta=await sharp(png).metadata();expect(meta).toMatchObject({format:'png',width:1080,height:640});
   expect((await visitData(db,A,now)).profile.background).toBe('paper');expect((await walletOf(db,A)).balance).toBe(10000);
  });
+});
+
+it('初期設定は公開で、既存プロフィールの移行後に本人が非公開へ戻しても再公開しない',async()=>{
+ const data=await visitData(db,A,now);expect(data.profile.publicStats).toBe(true);expect(visitCardSvg(data)).toContain('累計通話');
+ await db.update(visitProfiles).set({publicStats:false}).where(eq(visitProfiles.memberId,A));
+ const migration=await readFile(new URL('../drizzle/0134_quiet_cable.sql',import.meta.url),'utf8');
+ for(const statement of migration.split('--> statement-breakpoint'))if(statement.trim())await db.execute(sql.raw(statement));
+ expect((await visitData(db,A,now)).profile.publicStats).toBe(true);
+ expect((await visitData(db,B,now)).profile.publicStats).toBe(true);
+ await saveVisitProfile(db,A,{background:'paper',frame:'plain',title:'rank',badges:[],publicStats:false},now);
+ for(let n=0;n<2;n++)expect((await visitData(db,A,now)).profile.publicStats).toBe(false);
+ expect(visitCardSvg(await visitData(db,A,now))).not.toContain('累計通話');
 });

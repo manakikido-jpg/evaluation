@@ -22,14 +22,14 @@ export class VisitApp{
     await i.editReply({content:'背景・フレームのお店と着せ替えです。このリンクはあなた専用で10分・1回限りです。',components:[{type:1,components:[{type:2,style:5,label:'参拝プロフィールを開く',url:this.baseUrl+'/visit/link/'+token}]}],allowedMentions:{parse:[]}});
    }else if(command&&i.isChatInputCommand()){
     const target=i.options.getUser('user')??i.user;
-    const isPublic=i.options.getBoolean('public')??false;
+    const isPublic=i.options.getBoolean('public')??true;
     await i.deferReply(isPublic?{}:{flags:MessageFlags.Ephemeral});
     const member=await i.guild.members.fetch(target.id).catch(()=>undefined);
     if(!member||member.user.bot){await i.editReply({content:'在籍中のメンバーを選んでください。',allowedMentions:{parse:[]}});return;}
     const data=await visitData(this.db,target.id);
     const privateView=target.id===i.user.id&&!isPublic;
     const png=renderVisitCard(data,{privateView,avatar:await loadReceptionAvatar(member.displayAvatarURL({size:128}))});
-    await i.editReply({content:privateView?'自分用の参拝プロフィールです。活動記録の公開設定はWebで変更できます。':data.profile.publicStats?'参拝プロフィールです。':'活動記録は本人の設定で非公開です。',files:[{attachment:png,name:'sakura-profile.png'}],components:[{type:1,components:[{type:2,style:2,label:'背景・フレームと着せ替え',custom_id:'visit:open'}]}],allowedMentions:{parse:[]}});
+    await i.editReply({content:privateView?'自分用の参拝プロフィールです。/参拝プロフィール だけでチャンネルに表示できます。活動記録の公開設定はWebで変更できます。':data.profile.publicStats?'参拝プロフィールです。':'活動記録は本人の設定で非公開です。',files:[{attachment:png,name:'sakura-profile.png'}],components:[{type:1,components:[{type:2,style:2,label:'背景・フレームと着せ替え',custom_id:'visit:open'}]}],allowedMentions:{parse:[]}});
    }
   }catch(e){
    logger.warn({err:e},'visit interaction failed');

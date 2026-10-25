@@ -26,7 +26,7 @@ describe('参拝Web',()=>{
  it('実アプリからメンバー入口を開け、社務所ログインとは別で認証する',async()=>{
   const actual=createWebApp({db,cfg,api,baseUrl,now:()=>now,discord:{} as any});
   const anon=await actual.request(baseUrl+'/visit');expect(anon.status).toBe(200);expect(await anon.text()).toContain('Discordでログイン');
-  const page=await actual.request(baseUrl+'/visit',{headers:{cookie:'sakura_visit='+token}});expect(page.status).toBe(200);const html=await page.text();expect(html).toContain('背景とフレームのお店');expect(html).toContain('桜 &lt;script&gt;');expect(html).not.toContain('<script>');
+  const page=await actual.request(baseUrl+'/visit',{headers:{cookie:'sakura_visit='+token}});expect(page.status).toBe(200);const html=await page.text();expect(html).toContain('背景とフレームのお店');expect(html).toContain('初期設定は公開です');expect(html).toContain('/参拝プロフィール だけでカードをチャンネルへ表示できます');expect(html).toContain('桜 &lt;script&gt;');expect(html).not.toContain('<script>');
   const image=await actual.request(baseUrl+'/visit/card.png',{headers:{cookie:'sakura_visit='+token}});expect(image.headers.get('content-type')).toBe('image/png');expect(image.headers.get('cache-control')).toContain('no-store');
  });
  it('未認証や運営Cookieだけでは画像・購入を利用できない',async()=>{
