@@ -4536,7 +4536,8 @@ it('制作審査は宮司だけが画像を確認して承認でき、購入実�
  expect((await form(s,review,{decision:'approve'})).status).toBe(403);
  expect((await form(g,review,{decision:'approve'})).status).toBe(303);
  await buyVisitItem(db,buyer,design.id,1000,true);expect((await db.select().from(visitPurchases))[0]).toMatchObject({creatorPaid:700});
- const page=await (await get('/shop/visit',g)).text();expect(page).toContain('海の参拝帳');expect(page).toContain('700');expect(page).toContain('5,300');
+ const ninety=await createDesign(db,artist,{kind:'background',name:'90銭の作品',description:'',price:90,sell:true,rights:true,bytes:image});
+ const page=await (await get('/shop/visit',g)).text();expect(page).toContain('制作者の受取：63');expect(page).toContain('海の参拝帳');expect(page).toContain('700');expect(page).toContain('5,300');
  expect((await form(g,review,{decision:'withdraw'})).status).toBe(303);
 });
 
