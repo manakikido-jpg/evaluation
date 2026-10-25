@@ -1,4 +1,5 @@
-import { ChannelType, MessageFlags, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type TextChannel } from 'discord.js';
+import { ChannelType, MessageFlags, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type Invite, type TextChannel } from 'discord.js';
+import { isInviteBlocked } from '../services/inviteBlock.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coreName } from '../lib/names.js';
@@ -103,12 +104,25 @@ export class InviteLinkApp {
     }
   }
 
+  /** 🚫 招待を作れない人が Discord で招待を作ったら、すぐ消して運営に知らせる */
+  async onInviteCreate(invite: Pick<Invite, 'code' | 'guild' | 'inviterId' | 'delete'>): Promise<boolean> {
+    if (invite.guild?.id !== this.cfg().guildId || !invite.inviterId) return false;
+    if (!(await isInviteBlocked(this.db, invite.inviterId))) return false;
+    await invite.delete('招待を作れない人が作った招待（社務所Web で登録）');
+    const logId = this.cfg().channels.log;
+    const ch = logId && this.guild ? this.guild.channels.cache.get(logId) : undefined;
+    if (ch?.isSendable()) await ch.send({ content: `🚫 招待を作れない <@${invite.inviterId}> さんが招待リンク（${invite.code}）を作ったので、消しました。`, allowedMentions: { parse: [] } }).catch(() => undefined);
+    return true;
+  }
+
   private async link(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     const cfg = this.cfg();
     const roleIds = [...i.member.roles.cache.keys()];
     if (!cfg.ranks.some((r) => roleIds.includes(r.roleId)) && !adminLevelOf(cfg, roleIds)) {
       return void (await i.reply({ content: '招待リンクは、🔰参拝者 になってから使えます。', ...EPHEMERAL }));
     }
+    // 🚫 招待を作れない人（社務所Web の「招待」で登録）
+    if (await isInviteBlocked(this.db, i.user.id)) return void (await i.reply({ content: '今は招待リンクを使えません。運営にお問い合わせください。', ...EPHEMERAL }));
     this.guild ??= i.guild;
     const ch = this.entrance();
     if (!ch) return void (await i.reply({ content: '入口のチャンネル（#鳥居）が見つかりません。神職に知らせてください。', ...EPHEMERAL }));

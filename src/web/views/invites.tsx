@@ -7,12 +7,15 @@ import type { GuildInvite } from '../../lib/discordRest.js';
 import { SHARED_INVITER, STAFF_NO_INVITER, inviteRankLevel, UNKNOWN_INVITER, sharedLabelOf } from '../../services/invites.js';
 import { jstShort, remaining } from '../../services/tempGrants.js';
 import { Layout } from './layout.js';
+import type { InviteBlock } from '../../services/inviteBlock.js';
 
 function Csrf(props: { session: AdminSession }) {
   return <input type="hidden" name="_csrf" value={props.session.csrfToken} />;
 }
 
 export const INVITES_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  blocked: { text: '招待を作れない人に登録しました。今ある招待リンクも消しました。', kind: 'ok' },
+  unblocked: { text: '招待を作れない人から外しました。', kind: 'ok' },
   bulk_invalid: { text: '不明にする人を1〜200人選んでください。', kind: 'warn' },
   assign_unknown: { text: '招待元は不明として登録しました。招待報酬は保留です。後から招待した人を登録できます。', kind: 'ok' },
   assign_no_invite: { text: '招待なし（運営）として登録しました。招待報酬の対象外です。', kind: 'ok' },
@@ -61,6 +64,8 @@ export function InvitesPage(props: {
   flash?: string;
   bulkResult?: { added: number; skipped: number };
   now: Date;
+  /** 🚫 招待を作れない人 */
+  blocks?: InviteBlock[];
 }) {
   const { session, name } = props;
   const f = props.flash && Object.hasOwn(INVITES_FLASH, props.flash) ? INVITES_FLASH[props.flash] : undefined;
@@ -112,6 +117,15 @@ export function InvitesPage(props: {
       </div>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       {props.bulkResult && <p class="flash ok">不明として{props.bulkResult.added}人を登録しました。登録済み・退出などで対象外の{props.bulkResult.skipped}人は変更していません。</p>}
+      <section class="card" id="invite-block"><h2>🚫 招待を作れない人（{props.blocks?.length ?? 0}）</h2>
+        <p class="note">登録した人が Discord で招待リンクを作ると、BOT がすぐ消して #記録 に知らせます。<code>/招待リンク</code> も使えなくなります。登録したときに、その人の今ある招待リンクも消します（消すまでの数秒だけは使えることがあります）。</p>
+        {props.blocks?.length ? <ul class="plain-list">{props.blocks.map((b) => <li><span>{name(b.id)}（{b.id}）{b.note ? `　${b.note}` : ''}</span><form method="post" action={`/invites/block/${b.id}/delete`} class="inline"><Csrf session={session} /><button type="submit" class="danger-link">外す</button></form></li>)}</ul> : <p class="note">まだいません。</p>}
+        <form method="post" action="/invites/block"><Csrf session={session} />
+          <label>ユーザー ID<input name="memberId" required pattern="\d{17,20}" inputmode="numeric" /></label>
+          <label>メモ（なくても大丈夫）<input name="note" maxlength={200} /></label>
+          <button type="submit">登録する</button>
+        </form>
+      </section>
       <details class="invite-help"><summary>招待リンクの見方</summary>
       <p class="note">
         だれの招待リンクか・だれがだれを招待したかを見るページです。Discord の <b>サーバー設定 →「招待」</b> では、BOT が作ったリンク（<code>/招待リンク</code>・
