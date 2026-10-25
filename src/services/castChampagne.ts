@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gt, isNotNull, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { castChampagnes, castSessions, type CastSession, type CastChampagne } from '../db/schema.js';
-import { castFee } from './cast.js';
+import { castFee, castPriceLock, type CastConfig } from './cast.js';
 import { audit } from './audit.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 
@@ -27,14 +27,15 @@ export function assertChampagneActive(s:CastSession|undefined,party:Party,here:C
  if(!here(s))fail('お客とキャストが、両方その通話の部屋にいるときに贈れます。');
 }
 /** 確認時の価格と配分を5分間保存する。ブラウザやボタンの値段は受け取らない。 */
-export async function prepareChampagne(db:Db,sessionId:number,bottleId:string,party:Party,here:ChampagnePresence,clock=()=>new Date()) {
+export async function prepareChampagne(db:Db,sessionId:number,bottleId:string,party:Party,here:ChampagnePresence,clock=()=>new Date(),pricing?:CastConfig) {
  const bottle=champagneOf(bottleId);if(!bottle)fail('ボトルを選び直してください。');
  return db.transaction(async tx=>{
   const [s]=await tx.select().from(castSessions).where(eq(castSessions.id,sessionId)).for('update');
   const now=clock();assertChampagneActive(s,party,here,now);
   const [pending]=await tx.select().from(castChampagnes).where(and(eq(castChampagnes.sessionId,sessionId),eq(castChampagnes.bottle,bottle.id),isNull(castChampagnes.paidAt),gt(castChampagnes.expiresAt,now)));
   if(pending)return pending;
-  const [quote]=await tx.insert(castChampagnes).values({id:randomUUID(),sessionId,customerId:s.customerId,castId:s.castId,channelId:party.channelId,bottle:bottle.id,bottleName:bottle.name,price:bottle.price,fee:castFee({feePercent:CHAMPAGNE_FEE_PERCENT},bottle.price),createdAt:now,expiresAt:new Date(now.getTime()+5*60000)}).returning();
+  const price=pricing?castPriceLock(pricing,bottle.price,0,now).price:bottle.price;
+  const [quote]=await tx.insert(castChampagnes).values({id:randomUUID(),sessionId,customerId:s.customerId,castId:s.castId,channelId:party.channelId,bottle:bottle.id,bottleName:bottle.name,price,fee:castFee({feePercent:CHAMPAGNE_FEE_PERCENT},price),createdAt:now,expiresAt:new Date(now.getTime()+5*60000)}).returning();
   return quote!;
  });
 }

@@ -939,6 +939,20 @@
       "when": 1792893112293,
       "tag": "0133_omniscient_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1792906228506,
+      "tag": "0134_quiet_cable",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1792908752504,
+      "tag": "0135_heavy_sunspot",
+      "breakpoints": true
     }
   ]
 }

@@ -22,11 +22,11 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   const staff = PermissionFlagsBits.ModerateMembers;
   return [
     new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
-      .setDescription('Show your activity profile and wardrobe')
-      .setDescriptionLocalizations({ ja: '参拝ランク・通話時間・バッジと着せ替えを見る' })
+      .setDescription('Post your activity profile in this channel')
+      .setDescriptionLocalizations({ ja: 'このチャンネルへ参拝プロフィールを表示（省略で自分）' })
       .setContexts(InteractionContextType.Guild)
       .addUserOption(o => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('Whose profile (default: yourself)'))
-      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Show in this channel (respects privacy settings)'))
+      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: true; false: only you)').setDescriptionLocalizations({ ja: '省略はチャンネルへ表示。いいえにすると自分だけに表示' }))
       .toJSON(),
     new SlashCommandBuilder().setName('recording').setNameLocalizations({ ja: '録音' })
       .setDescription('Prepare a voice recording with everyone’s consent')
@@ -288,6 +288,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setNameLocalizations({ ja: 'パネル' })
       .setDescription('Post an application panel here')
       .setDescriptionLocalizations({ ja: '申請ボタンをこのチャンネルに置く【神職】' })
+      .addSubcommand(s => s.setName('invite').setNameLocalizations({ ja: '招待リンク' }).setDescription('Personal invite link panel').setDescriptionLocalizations({ ja: '本人用の招待リンクを発行するボタンを置く' }))
       .addSubcommand(s => s.setName('request-template').setNameLocalizations({ ja: '修正要望' }).setDescription('Correction and request template').setDescriptionLocalizations({ ja: '修正・要望窓口の記入テンプレートを、このチャンネルのいちばん下に表示する' }))
       .addSubcommand((s) => s.setName('stayroom').setNameLocalizations({ ja: '宿24時間' }).setDescription('24h lodging panel').setDescriptionLocalizations({ ja: '🏨 銭を払って立てる宿（24 時間・1 時間ごと）のボタンを置く' }))
       .addSubcommand((s) => s.setName('secretroom').setNameLocalizations({ ja: 'シクレ部屋' }).setDescription('Secret room panel').setDescriptionLocalizations({ ja: '🤫 だれにも見られずにシクレ部屋を作るボタンを置く' }))

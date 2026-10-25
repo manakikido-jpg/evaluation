@@ -1,3 +1,4 @@
+import { prepareCastCharge, confirmCastCharge, pruneCastChargeQuotes, CastPricingError, type ChargePayload, type PaidCastCharge } from '../services/castPricing.js';
 import { closeFinishedReservationThreads } from '../services/castThreadClose.js';
 import { refreshCastLeaderboard, castLeaderboardBody } from './castLeaderboard.js';
 import { castLeaderboard } from '../services/castLeaderboard.js';
@@ -57,6 +58,7 @@ import {
   isAdult,
   listCasts,
   loadCastConfig,
+  castMultiplierAt,
   loadCastReception,
   loadCastPhoto,
   loadMenuImage,
@@ -460,7 +462,7 @@ export class CastApp {
   /** 従来の紹介投稿も、キャスト用チャンネルの最新100件から引き継ぐ */
   private async discoverIntros(): Promise<void> {
     if (this.introsDiscovered || !this.guild) return;
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const ids = [...new Set([c.channelId, c.femaleChannelId].filter((id): id is string => !!id))];
     let ok = true;
     for (const channelId of ids) {
@@ -504,7 +506,7 @@ export class CastApp {
   onMessage(m: Message): void {
     if (!m.inGuild() || m.guildId !== this.cfg().guildId) return;
     const channelId = m.channelId;
-    void loadCastConfig(this.db).then((c) => {
+    void loadCastConfig(this.db, this.cfg().coreTime).then((c) => {
       const place = CAST_GROUPS.map((g) => groupPlace(c, g)).find((p) => p.channelId === channelId);
       if (!place || place.messageId === m.id) return;
       clearTimeout(this.bottomTimers.get(channelId));
@@ -518,7 +520,7 @@ export class CastApp {
   /** メニューがいちばん下になければ、出し直す（channelIds を省くと全部のメニューを確かめる） */
   keepPanelAtBottom(channelIds?: string[]): Promise<unknown> {
     this.bottomQueue = this.bottomQueue.then(async () => {
-      const c = await loadCastConfig(this.db);
+      const c = await loadCastConfig(this.db, this.cfg().coreTime);
       const need = new Set<string>();
       for (const g of CAST_GROUPS) {
         const p = groupPlace(c, g);
@@ -661,6 +663,7 @@ export class CastApp {
       if (action === 'qgo') return await this.quoteGo(interaction, a ?? '', b ?? '', rest);
       if (action === 'rsv') return await this.reservePlans(interaction, a ?? '');
       if (action === 'rplan') return await this.reserveModal(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
+      if (action === 'priceconfirm') return await this.priceConfirm(interaction, a ?? '');
       if (action === 'champagnebuy') return await this.champagneBuy(interaction, a ?? '');
       const id = Number(a);
       if (!Number.isSafeInteger(id)) return;
@@ -782,7 +785,7 @@ export class CastApp {
 
   private async profileSubmit(i: ModalSubmitInteraction<'cached'>): Promise<void> {
     await i.deferReply(EPHEMERAL);
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const cur = await getCast(this.db, i.user.id);
     const p: ProfileInput = {
       bio: i.fields.getTextInputValue('bio').trim(),
@@ -832,7 +835,7 @@ export class CastApp {
     await i.deferUpdate();
     const cur = await getCast(this.db, i.user.id);
     if (!cur || cur.status === 'removed') return void (await i.followUp({ content: 'キャストの方だけが使えます。', ...EPHEMERAL }));
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const r = await updateProfile(this.db, c, i.user.id, { bio: cur.bio, tags: cur.tags, price30: cur.price30, price60: cur.price60, priceNight: cur.priceNight, minorOk: !cur.minorOk });
     if (r) await i.editReply(await this.receptionView(i.member));
   }
@@ -933,7 +936,7 @@ export class CastApp {
       return void (await i.showModal(
         new ModalBuilder()
           .setCustomId(`cast:omodal:${castId}:${item.id}`)
-          .setTitle(`${item.gacha?.length ? '🎰' : '📦'} ${item.name}（${fmt(item.price)} 枚）`.slice(0, 45))
+          .setTitle(`${item.gacha?.length ? '🎰' : '📦'} ${item.name}（通常${fmt(item.price)} 枚）`.slice(0, 45))
           .addComponents(
             new ActionRowBuilder<TextInputBuilder>().addComponents(
               new TextInputBuilder()
@@ -964,13 +967,13 @@ export class CastApp {
     const goId = `cast:rplan:${castId}:${plan}${opts.length ? `:${opts.map((o) => o.id).join(',')}` : ''}`;
     await this.answer(i, {
       content: [
-        `🎀 <@${castId}> さんを **${menuLabel(item)}**${opts.length ? ` ＋ ${opts.map((o) => o.name).join('・')}` : ''} ・ ${this.coin()} **${fmt(price)} 枚** で予約しますか？（次に日時を入れます）`,
+        `🎀 <@${castId}> さんを **${menuLabel(item)}**${opts.length ? ` ＋ ${opts.map((o) => o.name).join('・')}` : ''} ・ 通常 ${this.coin()} **${fmt(price)} 枚** で予約しますか？（次に日時を入れます。コアタイムは割増料金を再確認）`,
         adult ? '-# 2 人だけの部屋ができます（運営は見守りのために見られます）' : `-# 公開の部屋での雑談になります（${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`,
         '-# キャストは予約だけです。銭は社務所が預かり、受けてもらえなければ全額戻ります。途中でのばすこともできます',
         RULES,
       ].join('\n'),
       embeds: [],
-      components: [...optionRow, row(button(goId, `📅 日時を決めて予約する（${fmt(price)} 枚）`, 3))],
+      components: [...optionRow, row(button(goId, `📅 日時を決める（通常${fmt(price)} 枚）`, 3))],
       attachments: [],
       allowedMentions: { parse: [] },
     });
@@ -1023,7 +1026,7 @@ export class CastApp {
     const wish = i.fields.getTextInputValue('wish').trim().slice(0, 500);
     // 前のボタンから開いた欄には「希望」がない
     const when = (() => { try { return i.fields.getTextInputValue('when').trim().slice(0, 100); } catch { return ''; } })();
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const home = castHomeChannel(c, cast);
     const panel = home ? this.guild?.channels.cache.get(home) : undefined;
     if (panel?.type !== ChannelType.GuildText) return void (await i.editReply('相談の場所を作れませんでした。神職に知らせてください。'));
@@ -1064,7 +1067,7 @@ export class CastApp {
 
   private async quoteSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, itemId: string, customerId: string, kind = 'call'): Promise<void> {
     if (i.user.id !== castId) return void (await i.reply({ content: '値段を出せるのはキャストだけです。', ...EPHEMERAL }));
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     if (kind === 'dlv') {
       const price = parsePrice(i.fields.getTextInputValue('price'));
       if (!Number.isInteger(price) || price < c.priceMin || price > c.priceMax) return void (await i.reply({ content: `値段は ${fmt(c.priceMin)} 枚から（上限なし）、数字で入れてください。`, ...EPHEMERAL }));
@@ -1091,13 +1094,14 @@ export class CastApp {
   }
 
   /** 📦 納品の相談の提案で注文する（このスレッドに届けてもらう） */
-  private async quoteDelivery(i: ButtonInteraction<'cached'>, castId: string, itemId: string, rest: string[]): Promise<void> {
+  private async quoteDelivery(i: ButtonInteraction<'cached'>, castId: string, itemId: string, rest: string[], paid?: PaidCastCharge): Promise<void> {
     const [customerId, price] = rest;
     if (i.user.id !== customerId) return void (await i.reply({ content: 'この提案で注文できるのは、相談した人だけです。', ...EPHEMERAL }));
-    await i.deferReply(EPHEMERAL);
-    const c = await loadCastConfig(this.db);
+    if (!i.deferred && !i.replied) await i.deferReply(EPHEMERAL);
+    if (!paid && await this.peakConfirmation(i, {route:'consult-delivery',requests:[{castId,plan:itemId,quote:{minutes:0,price:Number(price),delivery:true},threadId:i.channelId}]})) return;
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan: itemId, quote: { minutes: 0, price: Number(price), delivery: true }, threadId: i.channelId });
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan: itemId, quote: { minutes: 0, price: Number(price), delivery: true }, threadId: i.channelId });
     if (r.status !== 'ok') return void (await i.editReply(r.status === 'has_open' ? '納品待ちの注文が、1 人が同時に持てる数の上限です。届いてから次を注文してください。' : this.requestError(r)));
     const s = r.session;
     const dm = await this.dmCast(s);
@@ -1108,11 +1112,50 @@ export class CastApp {
     await i.editReply(`📦 注文しました。キャストが ${DELIVERY.deadlineLabel}以内に、このスレッドへ届けます（残り ${fmt(r.balance)} 枚）。`);
   }
 
-  private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }, options?: string[]): Promise<void> {
+  private async deferCharge(i: ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>): Promise<void> {
+    if (i.deferred || i.replied) return;
+    if (i.isButton() || i.isFromMessage()) await i.deferUpdate(); else await i.deferReply(EPHEMERAL);
+  }
+
+  private async peakConfirmation(i: ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>, payload: ChargePayload): Promise<boolean> {
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
+    // 通常料金の既存の確認手順は維持。日時入力後に割増になる場合だけ、実額をもう一度見せる。
+    const at = new Date();
+    const multipliers = payload.requests.map(r => castMultiplierAt(c, r.startAt ? new Date(r.startAt) : at));
+    // 通常料金で先へ進んだ後に境界をまたいでも、未確認の割増を請求しない。
+    // この分岐の直接確定ではcoreTimeを外し、ここで確認した通常額を使う。
+    if (!multipliers.some(m => m > 1)) return false;
+    const q = await prepareCastCharge(this.db, c, i.user.id, payload, at, i.id);
+    await i.editReply({ content: q.prices.map((p,n) => '料金' + (q.prices.length > 1 ? ' ' + (n+1) : '') + ': 通常 ' + fmt(p.base) + ' × ' + p.multiplier + '倍 = **' + fmt(p.price) + ' ' + this.coin() + '**').join('\n') + '\n合計 **' + fmt(q.prices.reduce((n,p) => n+p.price,0)) + ' ' + this.coin() + '**。コアタイム料金です。まだ銭は使っていません。この料金は5分間有効です。', components: [row(button('cast:priceconfirm:' + q.id, 'この料金で確定する', 1))], allowedMentions: {parse:[]} });
+    return true;
+  }
+
+  private async priceConfirm(i: ButtonInteraction<'cached'>, id: string): Promise<void> {
     await i.deferUpdate();
-    const c = await loadCastConfig(this.db);
+    let paid: PaidCastCharge;
+    try { paid = await confirmCastCharge(this.db, await loadCastConfig(this.db, this.cfg().coreTime), id, i.user.id, await isAdult(this.db, this.cfg(), i.user.id, this.roles(i))); }
+    catch (err) { await i.editReply({content: err instanceof CastPricingError ? err.message : '確定結果を確認できません。同じ確認ボタンでもう一度結果を確認してください。', ...(err instanceof CastPricingError ? {components:[]} : {}), allowedMentions:{parse:[]}}); return; }
+    if (!paid.fresh) { await i.editReply({content:'この料金の確定は処理済みです。追加の支払いはありません。予約・注文のお部屋を確認してください。',components:[]});return; }
+    const p=paid.payload,r=p.requests[0];
+    if(p.route==='extend') return this.confirmExtend(i,p.sessionId!,p.expectedExtensions!,p.originalId,paid);
+    if(p.route==='group') return this.groupSubmit(i,'',paid);
+    if(p.route==='reserve') return this.reserveSubmit(i,r!.castId,r!.plan,r!.options,r!.quote,paid);
+    if(p.route==='delivery') return this.orderSubmit(i,r!.castId,r!.plan,paid);
+    if(p.route==='consult-delivery') return this.quoteDelivery(i,r!.castId,r!.plan,[i.user.id,String(r!.quote!.price)],paid);
+    return this.go(i,r!.castId,r!.plan,r!.quote,r!.options,paid);
+  }
+
+  private paidResult(paid: PaidCastCharge) {
+    const session=paid.sessions[0]!;
+    return {status:'ok' as const,session,balance:paid.balance,drawn:paid.payload.drawn?.[session.id]};
+  }
+
+  private async go(i: ButtonInteraction<'cached'>, castId: string, plan: string, quote?: { minutes: number; price: number }, options?: string[], paid?: PaidCastCharge): Promise<void> {
+    await this.deferCharge(i);
+    if (!paid && await this.peakConfirmation(i, {route:'go',requests:[{castId,plan,quote,options}]})) return;
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}), ...(options ? { options } : {}) });
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan, ...(quote ? { quote } : {}), ...(options ? { options } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
     const room = await this.openRoom(r.session).then(async (room) => {
       if (room) await room.send({ content: `<@${castId}>`, ...sessionMessage(r.session, c, this.coin()), allowedMentions: { users: [castId] } } as Parameters<typeof room.send>[0]);
@@ -1168,7 +1211,7 @@ export class CastApp {
         logger.warn({ err, sessionId: s.id }, 'cast shared room join failed');
       }
     }
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const homeId = c.channelId ?? c.femaleChannelId;
     const panel = homeId ? g.channels.cache.get(homeId) : undefined;
     const fallback = panel && 'parentId' in panel ? panel.parentId : null;
@@ -1212,7 +1255,7 @@ export class CastApp {
   }
 
   private async accept(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const s = await acceptSession(this.db, id, i.user.id);
     if (!s) return void (await i.reply({ content: '受けられるのは、指名されたキャストだけです（もう終わっているかもしれません）。', ...(i.guildId ? EPHEMERAL : {}) }));
     if (s.status === 'accepted') {
@@ -1227,7 +1270,7 @@ export class CastApp {
   }
 
   private async cancel(i: ButtonInteraction<'cached'>, id: number, reason: 'declined' | 'canceled', confirmed = false): Promise<void> {
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     // ⏳ 直前の取り消し: 先にいくら戻るかを見せて、もう一度押してもらう
     if (reason === 'canceled' && !confirmed) {
       const before = await getSession(this.db, id);
@@ -1262,7 +1305,7 @@ export class CastApp {
 
   /** 🚫 相手が来ない（来ている人が押す。押した人が部屋にいて、相手がいないときだけ） */
   private async noShow(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const before = await getSession(this.db, id);
     if (!before || before.status !== 'active') return void (await i.reply({ content: 'この指名は、もう終わっています。', ...EPHEMERAL }));
     if (i.user.id !== before.castId && i.user.id !== before.customerId) return void (await i.reply({ content: '押せるのは、この指名の 2 人だけです。', ...EPHEMERAL }));
@@ -1322,16 +1365,16 @@ export class CastApp {
     try {
       const s = await getSession(this.db,id);
       assertChampagneActive(s,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s),new Date());
-      await i.editReply({content:'🍾 キャストとの時間に、ありがとうを。ボトルを選ぶと金額と配分を確認できます。確定するまで銭は使いません。通話時間は延びません。',components:[{type:1,components:[{type:3,custom_id:`cast:champagnesel:${id}`,placeholder:'シャンパンを選ぶ',options:CHAMPAGNES.map(b=>({label:`${b.name} · ${fmt(b.price)} ${this.cfg().economy.currencyName}`,value:b.id,emoji:{name:b.emoji}}))}]}],allowedMentions:{parse:[]}});
+      await i.editReply({content:'🍾 キャストとの時間に、ありがとうを。一覧は通常料金です。コアタイムは割増になります。ボトルを選ぶと今回の金額と配分を確認できます。確定するまで銭は使いません。通話時間は延びません。',components:[{type:1,components:[{type:3,custom_id:`cast:champagnesel:${id}`,placeholder:'シャンパンを選ぶ',options:CHAMPAGNES.map(b=>({label:`${b.name} · 通常${fmt(b.price)} ${this.cfg().economy.currencyName}`,value:b.id,emoji:{name:b.emoji}}))}]}],allowedMentions:{parse:[]}});
     } catch(err) { await i.editReply({content:champagneError(err),components:[]}); }
   }
 
   private async champagneSelect(i: StringSelectMenuInteraction<'cached'>, id: number, bottleId: string): Promise<void> {
     await i.deferUpdate();
     try {
-      const q=await prepareChampagne(this.db,id,bottleId,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s));
+      const q=await prepareChampagne(this.db,id,bottleId,{customerId:i.user.id,channelId:i.channelId},s=>this.champagneHere(s),undefined,await loadCastConfig(this.db, this.cfg().coreTime));
       const image=champagnePreview(q.bottle);
-      await i.editReply({content:`${q.bottleName}：${fmt(q.price)} ${this.coin()}\nキャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。今すぐキャストへ入金します。通話時間は延びません。\nこの確認は5分間有効です。`,embeds:[{image:{url:'attachment://champagne.png'}}],files:[new AttachmentBuilder(image,{name:'champagne.png'})],attachments:[],components:[row(button(`cast:champagnebuy:${q.id}`,'料金を確認して贈る',3,'🍾'))],allowedMentions:{parse:[]}});
+      await i.editReply({content:`${q.bottleName}：${fmt(q.price)} ${this.coin()}\nキャスト受取 ${fmt(q.price-q.fee)}／手数料 ${fmt(q.fee)}。今すぐキャストへ入金します。通話時間は延びません。\nこの確認は5分間有効です。画像内の金額は通常料金です。`,embeds:[{image:{url:'attachment://champagne.png'}}],files:[new AttachmentBuilder(image,{name:'champagne.png'})],attachments:[],components:[row(button(`cast:champagnebuy:${q.id}`,'料金を確認して贈る',3,'🍾'))],allowedMentions:{parse:[]}});
     } catch(err) { await i.editReply({content:champagneError(err),components:[],embeds:[],attachments:[]}); }
   }
 
@@ -1384,33 +1427,21 @@ export class CastApp {
     if (!s || s.customerId !== i.user.id || s.status !== 'active' || !s.endsAt || s.endsAt <= new Date() || s.extensions !== expected || isFreeSession(s)) {
       return void await i.reply({ content: 'この指名は延長できません。最新のボタンを確認してください。', ...EPHEMERAL });
     }
-    await i.reply({ content: `30分の延長に ${fmt(extensionPriceOf(s))} ${this.coin()}かかります。確定するまで銭は使いません。`, components: [{ type: 1, components: [button(`cast:extconfirm:${id}:${expected}:${i.message.id}`, '料金を確認して30分延長', 1)] }], allowedMentions: { parse: [] }, ...EPHEMERAL });
+    await i.deferReply(EPHEMERAL);
+    const q=await prepareCastCharge(this.db,await loadCastConfig(this.db,this.cfg().coreTime),i.user.id,{route:'extend',requests:[],sessionId:id,expectedExtensions:expected,originalId:i.message.id},new Date(),i.id);
+    const p=q.prices[0]!;
+    await i.editReply({content:'30分の延長: 通常 '+fmt(p.base)+' × '+p.multiplier+'倍 = **'+fmt(p.price)+' '+this.coin()+'**。延長開始時刻で判定します。まだ銭は使っていません。確認は5分間有効です。',components:[row(button('cast:priceconfirm:'+q.id,'料金を確認して30分延長',1))],allowedMentions:{parse:[]}});
   }
 
-  private async confirmExtend(i: ButtonInteraction<'cached'>, id: number, expected: number, originalId?: string): Promise<void> {
-    await i.deferUpdate();
-    const r = await extendSession(this.db, id, i.user.id, new Date(), expected);
-    if (r.status !== 'ok') {
-      if (r.status === 'already_extended') {
-        const current = await getSession(this.db, id);
-        if (current) await i.editReply({ ...sessionMessage(current, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
-      }
-      const text = r.status === 'insufficient'
-        ? `${this.cfg().economy.currencyName}が足りません（${fmt(r.price)} 枚必要・いま ${fmt(r.balance)} 枚）。`
-        : ({
-            already_extended: 'このボタンの延長は、もう済んでいます。新しいボタンを使ってください。',
-            overlap: '次の予約と重なるので、のばせません。銭は使っていません。',
-            minor_limit: `18 歳未満の方は ${MINOR.maxMinutes} 分・${MINOR.endHour} 時までです。`,
-            not_customer: 'のばせるのは、指名した人だけです。',
-            not_active: 'もう終わっています。',
-          })[r.status];
-      return void (await i.followUp({ content: text, ...EPHEMERAL }));
-    }
-    await i.editReply({ ...sessionMessage(r.session, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
+  private async confirmExtend(i: ButtonInteraction<'cached'>, id: number, expected: number, originalId?: string, paid?: PaidCastCharge): Promise<void> {
+    if (!paid) return void await i.reply({content:'料金確認の方式が変わりました。元の「延長」ボタンから料金を確認し直してください。',...EPHEMERAL});
+    await this.deferCharge(i);
+    const r = this.paidResult(paid);
+    await i.editReply({ ...sessionMessage(r.session, await loadCastConfig(this.db, this.cfg().coreTime), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
     if (originalId && /^\d{17,20}$/.test(originalId) && i.channel) {
       const original = await i.channel.messages.fetch(originalId).catch(() => undefined);
       if (original?.author.id === i.client.user.id && original.components.some(row => 'components' in row && row.components.some(component => 'customId' in component && component.customId === `cast:ext:${id}:${expected}`))) {
-        await original.edit({ ...sessionMessage(r.session, await loadCastConfig(this.db), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof original.edit>[0]).catch(() => undefined);
+        await original.edit({ ...sessionMessage(r.session, await loadCastConfig(this.db, this.cfg().coreTime), this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof original.edit>[0]).catch(() => undefined);
       }
     }
     await audit(this.db, { actorId: i.user.id, targetId: r.session.castId, action: 'cast.extend', detail: { sessionId: id, extensions: r.session.extensions, price: extensionPriceOf(r.session) }, via: 'discord' });
@@ -1419,7 +1450,7 @@ export class CastApp {
   }
 
   private async end(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const s = await finishSession(this.db, c, id, i.user.id);
     if (!s) return void (await i.reply({ content: '終えられるのは、キャストと指名した人だけです（もう終わっているかもしれません）。', ...EPHEMERAL }));
     await i.deferUpdate();
@@ -1432,7 +1463,7 @@ export class CastApp {
   private async report(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
     const s = await disputeSession(this.db, id, i.user.id);
     if (!s) return void (await i.reply({ content: '通報できるのは、キャストと指名した人だけです（通話中・予約中）。', ...EPHEMERAL }));
-    await i.update({ ...(isDeliverySession(s) ? this.reserveMessage(s) : sessionMessage(s, await loadCastConfig(this.db), this.coin())), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
+    await i.update({ ...(isDeliverySession(s) ? this.reserveMessage(s) : sessionMessage(s, await loadCastConfig(this.db, this.cfg().coreTime), this.coin())), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
     await audit(this.db, { actorId: i.user.id, action: 'cast.report', detail: { sessionId: id }, via: 'discord' });
     const log = this.cfg().channels.log;
     if (log) {
@@ -1596,12 +1627,13 @@ export class CastApp {
   }
 
   /** 📦 注文する（お客） */
-  private async orderSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, plan: string): Promise<void> {
-    await i.deferReply(EPHEMERAL);
-    const c = await loadCastConfig(this.db);
+  private async orderSubmit(i: ModalSubmitInteraction<'cached'> | ButtonInteraction<'cached'>, castId: string, plan: string, paid?: PaidCastCharge): Promise<void> {
+    if (!i.deferred && !i.replied) await i.deferReply(EPHEMERAL);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const wish = i.fields.getTextInputValue('wish').trim();
-    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan });
+    const wish = paid?.payload.wish ?? (i.isModalSubmit() ? i.fields.getTextInputValue('wish').trim() : '');
+    if (!paid && await this.peakConfirmation(i,{route:'delivery',requests:[{castId,plan}],wish})) return;
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan });
     if (r.status !== 'ok') return void (await i.editReply({ content: r.status === 'has_open' ? '納品待ちの注文が、1 人が同時に持てる数の上限です。届いてから次を注文してください。' : this.requestError(r), components: [] }));
     const thread = await this.openThread(r.session, `📦 ${r.drawn ? 'ガチャ' : '納品'} #${r.session.id}`);
     if (!thread) {
@@ -1617,7 +1649,7 @@ export class CastApp {
 
   /** 男女共通の予約窓口。作成中は同じPromiseを使い、連続予約で増やさない。 */
   private async reservationHub(): Promise<TextChannel | undefined> {
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     if (c.reservationChannelId) {
       const ch = this.guild?.channels.cache.get(c.reservationChannelId)
         ?? await this.guild?.channels.fetch(c.reservationChannelId).catch(() => null);
@@ -1632,7 +1664,7 @@ export class CastApp {
     if (!g) return undefined;
     let made: TextChannel | undefined;
     try {
-      const c = await loadCastConfig(this.db);
+      const c = await loadCastConfig(this.db, this.cfg().coreTime);
       if (c.reservationChannelId) return this.reservationHub();
       const menu = g.channels.cache.get(c.channelId ?? c.femaleChannelId ?? '');
       const READ = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.ReadMessageHistory | PermissionFlagsBits.SendMessagesInThreads;
@@ -1692,7 +1724,7 @@ export class CastApp {
       }
     }
     // 前と同じ場所（キャストのメニューのチャンネル）に作る
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const castRow = await getCast(this.db, s.castId);
     const home = castRow ? castHomeChannel(c, castRow) : c.channelId;
     const old = home ? this.guild?.channels.cache.get(home) : undefined;
@@ -1761,7 +1793,7 @@ export class CastApp {
 
   /** ✅ 受け取った（お客） */
   private async receive(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
-    const s = await receiveSession(this.db, await loadCastConfig(this.db), id, i.user.id);
+    const s = await receiveSession(this.db, await loadCastConfig(this.db, this.cfg().coreTime), id, i.user.id);
     if (!s) return void (await i.reply({ content: '受け取りを押せるのは、注文した人だけです（もう受け取りずみかもしれません）。', ...EPHEMERAL }));
     await i.update({ ...this.reserveMessage(s), allowedMentions: { parse: [] } } as never);
     await this.discord.sendDm(s.castId, `🎉 ${sessionLabel(s)} を受け取ってもらえました。${this.coin()} ${fmt(s.paid)} 枚をお渡ししました。`).catch(() => false);
@@ -1867,7 +1899,7 @@ export class CastApp {
     if (list.length < 2) return void (await i.editReply({ content: 'いま、まとめて予約できるキャストが 2 人いません。' }));
     const names = await namesOf(this.db, list.map((x) => x.memberId));
     await i.editReply({
-      content: '👥 **まとめて予約** ― 同じ時間に、1 つの部屋で話すキャストを 2〜3 人選んでください。料金はキャストごとのメニューの値段の合計です。',
+      content: '👥 **まとめて予約** ― 同じ時間に、1 つの部屋で話すキャストを 2〜3 人選んでください。表示は通常料金です。日時入力後にコアタイム料金を確認できます。',
       components: [{ type: 1, components: [{ type: 3, custom_id: 'cast:gcasts', placeholder: 'キャストを 2〜3 人選ぶ', min_values: 2, max_values: Math.min(CUSTOMER_TOGETHER_MAX, list.length), options: list.slice(0, 25).map((x) => ({ label: (names.get(x.memberId) ?? 'キャスト').slice(0, 100), value: x.memberId })) }] }],
     } as never);
   }
@@ -1908,19 +1940,19 @@ export class CastApp {
   }
 
   /** ④ まとめて予約する。1 人でもだめなら、入れた分も取り消して全部戻す（全員そろうか、何もしないか） */
-  private async groupSubmit(i: ModalSubmitInteraction<'cached'>, raw: string): Promise<void> {
-    if (i.isFromMessage()) await i.deferUpdate();
-    else await i.deferReply(EPHEMERAL);
-    const pairs = raw.split(',').map((p) => p.split('~')).filter((p): p is [string, string] => p.length === 2);
+  private async groupSubmit(i: ModalSubmitInteraction<'cached'> | ButtonInteraction<'cached'>, raw: string, paid?: PaidCastCharge): Promise<void> {
+    await this.deferCharge(i);
+    const pairs = (paid ? paid.payload.requests.map(r=>r.castId+'~'+r.plan).join(',') : raw).split(',').map((p) => p.split('~')).filter((p): p is [string, string] => p.length === 2);
     if (pairs.length < 2) return void (await i.editReply({ content: '選んだものが読めませんでした。はじめからやり直してください。', components: [] }));
-    const at = this.parseWhen(i.fields.getTextInputValue('when'));
+    const at = paid ? new Date(paid.payload.requests[0]!.startAt!) : i.isModalSubmit() ? this.parseWhen(i.fields.getTextInputValue('when')) : undefined;
     if (!at) return void (await i.editReply({ content: '日時が読めませんでした（例: 21:00 ／ 10/5 21:00）。', components: [] }));
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const made: CastSession[] = [];
+    const made: CastSession[] = paid ? [...paid.sessions] : [];
     const groupKey = randomUUID();
-    for (const [castId, plan] of pairs) {
-      const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, groupKey });
+    if (!paid && await this.peakConfirmation(i,{route:'group',requests:pairs.map(([castId,plan])=>({castId,plan,startAt:at.toISOString(),groupKey}))})) return;
+    for (const [castId, plan] of paid ? [] : pairs) {
+      const r = await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, groupKey });
       if (r.status !== 'ok') {
         for (const s of made) await cancelSession(this.db, s.id, 'system', 'declined');
         const who = (await namesOf(this.db, [castId])).get(castId) ?? 'キャスト';
@@ -1945,14 +1977,14 @@ export class CastApp {
     await i.editReply({ content: `👥 ${made.length} 人まとめて予約をお願いしました（<t:${unix(at)}:f>・合計 ${fmt(total)} 枚）。全員が受けると、時刻に 1 つの部屋でいっしょに話せます。\n返事はそれぞれの予約のお部屋に届きます: ${links.join(' ')}`, components: [] });
   }
 
-  private async reserveSubmit(i: ModalSubmitInteraction<'cached'>, castId: string, plan: string, options?: string[], quote?: { minutes: number; price: number }): Promise<void> {
-    if (i.isFromMessage()) await i.deferUpdate();
-    else await i.deferReply(EPHEMERAL);
-    const at = this.parseWhen(i.fields.getTextInputValue('when'));
+  private async reserveSubmit(i: ModalSubmitInteraction<'cached'> | ButtonInteraction<'cached'>, castId: string, plan: string, options?: string[], quote?: { minutes: number; price: number }, paid?: PaidCastCharge): Promise<void> {
+    await this.deferCharge(i);
+    const at = paid ? new Date(paid.payload.requests[0]!.startAt!) : i.isModalSubmit() ? this.parseWhen(i.fields.getTextInputValue('when')) : undefined;
     if (!at) return void (await i.editReply({ content: '日時が読めませんでした（例: 21:00 ／ 10/5 21:00）。', components: [] }));
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    const r = await requestSession(this.db, c, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, ...(options ? { options } : {}), ...(quote ? { quote } : {}) });
+    if (!paid && await this.peakConfirmation(i,{route:'reserve',requests:[{castId,plan,options,quote,startAt:at.toISOString()}]})) return;
+    const r = paid ? this.paidResult(paid) : await requestSession(this.db, { ...c, coreTime: undefined }, { castId, customerId: i.user.id, customerAdult: adult, plan, startAt: at, ...(options ? { options } : {}), ...(quote ? { quote } : {}) });
     if (r.status !== 'ok') return void (await i.editReply({ content: this.requestError(r), components: [] }));
     // やり取りは男女共通の予約窓口の非公開スレッドで。キャストへの返事の案内はDMで。
     const thread = await this.openThread(r.session, `📅 予約 #${r.session.id}`);
@@ -1980,6 +2012,7 @@ export class CastApp {
 
   private async runTick(now: Date): Promise<void> {
 
+    await pruneCastChargeQuotes(this.db, now);
     // 更新の前に出した予約のメッセージにも「日時変更を提案」などの新しいボタンを出す（起動して 1 回だけ）
     if (!this.threadsRefreshed) {
       this.threadsRefreshed = true;
@@ -1987,7 +2020,7 @@ export class CastApp {
     }
     // 📌 メニューがいちばん下になければ出し直す（BOT が止まっていた間の書き込みなど）
     await this.keepPanelAtBottom();
-    const c = await loadCastConfig(this.db);
+    const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;
     // ⏰ 予約の前の知らせ（キャストとお客に DM・スレッドにも）

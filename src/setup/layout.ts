@@ -61,7 +61,7 @@ export type ChannelSpec = {
    */
   formerly?: string[];
   /** 入鯖申請・宵参り申請などのボタンを置く */
-  panels?: ('apply' | 'yoimairi' | 'shop' | 'market' | 'contact')[];
+  panels?: ('apply' | 'yoimairi' | 'shop' | 'market' | 'contact' | 'invite')[];
   /** サーバーの AFK チャンネルにする */
   afk?: boolean;
   /** 自分の通話部屋の入口（ここに入ると、この名前の通話ができる。{name} は入った人の名前） */

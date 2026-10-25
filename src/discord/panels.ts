@@ -12,7 +12,7 @@ const GACHA_BANNER = fileURLToPath(new URL('../web/public/gacha/prayer-banner.pn
 
 /** Discord の年齢確認（2026-09〜）で、宵参りの人でも年齢制限チャンネルが見られないことがある */
 
-export type PanelKind = 'apply' | 'yoimairi' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha' | 'notify';
+export type PanelKind = 'apply' | 'yoimairi' | 'shop' | 'gender' | 'market' | 'contact' | 'bell' | 'gacha' | 'notify' | 'invite';
 
 export type PanelMessage = {
   embeds: APIEmbed[];
@@ -33,6 +33,10 @@ export function panelMessage(kind: Exclude<PanelKind, 'gacha'>, opts?: PanelOpti
 export function panelMessage(kind: PanelKind, opts?: PanelOptions): PanelMessage | GachaPanelMessage;
 export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMessage | GachaPanelMessage {
   const coin = opts.coinName ?? '銭';
+  if (kind === 'invite') return {
+    embeds: [{ title: '🔗 招待リンク', description: '下のボタンから、あなた専用の招待リンクを発行できます。リンクは本人だけに表示します。\n🔰参拝者以上の方が使えます。同じリンクを何度でも確認できます。', color: SHU }],
+    components: [{ type: 1, components: [{ type: 2, style: 1, label: '招待リンク発行', custom_id: 'invite:link', emoji: { name: '🔗' } }] }],
+  };
   if (kind === 'shop') return shopPanel(coin);
   if (kind === 'market') {
     return {

@@ -128,7 +128,7 @@ export function champagneSvg(id: string, progress = 0): string {
       <text x="510" y="200" text-anchor="middle" fill="#fff3dc" font-family="Shippori Mincho B1" font-size="23">${p<.2?'想いを込めて':'華やかに、開栓'}</text></g>
     ${tower}<g opacity="${toast}">${flute(466+toast*14,215,toast*16,b.color)}${flute(553-toast*15,215,-toast*16,gold)}${star(509,155,8,gold,finale)}</g>
     <text x="510" y="290" text-anchor="middle" fill="${b.color}" font-size="23">${b.price.toLocaleString('ja-JP')}</text>
-    <text x="510" y="309" text-anchor="middle" fill="#cbbbaf" font-size="9" letter-spacing="3">POINTS / BOTTLE</text>
+    <text x="510" y="309" text-anchor="middle" fill="#cbbbaf" font-size="9" letter-spacing="3">BASE POINTS / BOTTLE</text>
     <text x="510" y="347" text-anchor="middle" fill="url(#gold)" font-family="Shippori Mincho B1" font-size="33" opacity="${finale}">乾杯！</text>
     <path d="M158 375H322M398 375H562" stroke="url(#gold)" opacity=".6"/>${star(360,375,5,b.color,.9)}
     <text x="360" y="397" text-anchor="middle" fill="#f2e1d0" font-family="Shippori Mincho B1" font-size="15">キャストとの時間に、ありがとうを。</text>

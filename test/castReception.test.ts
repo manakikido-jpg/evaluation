@@ -216,7 +216,7 @@ describe('本人向けDiscord受付', () => {
     const shown = JSON.stringify(j.update.mock.calls[0]);
     expect(shown).toContain('カメラあり');
     expect(shown).toContain(`cast:rplan:${CAST}:${first.id}:${opt.id}`);
-    expect(shown).toContain(`予約する（${(first.price + 100).toLocaleString('ja-JP')} 枚）`);
+    expect(shown).toContain(`日時を決める（通常${(first.price + 100).toLocaleString('ja-JP')} 枚）`);
   });
 
   it('紹介カードには選んだキャストの写真を添付する', async () => {
