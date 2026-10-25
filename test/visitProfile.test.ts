@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { makeDb } from './helpers.js';
 import type { Db } from '../src/db/client.js';
-import { members, visitDaily, visitPurchases, visitProfiles, visitBadges, coinTx } from '../src/db/schema.js';
+import { activityDaily, members, visitDaily, visitPurchases, visitProfiles, visitBadges, coinTx } from '../src/db/schema.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { buyVisitItem, eligibleVisitMembers, recordVisitMinute, saveVisitProfile, visitData, visitRank } from '../src/services/visitProfile.js';
 import { renderVisitCard, visitCardSvg } from '../src/services/visitCard.js';
@@ -15,6 +15,13 @@ let db:Db,close:()=>Promise<void>;
 beforeEach(async()=>{({db,close}=await makeDb());await db.insert(members).values([A,B,C].map(id=>({id,username:id,displayName:id===A?'桜と月 <script>':'参拝者',joinedAt:new Date('2025-10-25T12:00:00+09:00')})));await addCoins(db,A,10000,'admin_grant');});
 afterEach(async()=>close());
 describe('参拝の記録',()=>{
+ it('今までの通話の時間（毎日の活動）も数える。同じ日は多いほうだけ',async()=>{
+  await db.insert(activityDaily).values([{memberId:A,date:'2026-09-01',vcMinutes:600},{memberId:A,date:'2026-10-25',vcMinutes:3}]);
+  await recordVisitMinute(db,[A,B],now);
+  const d=await visitData(db,A,now);
+  expect(d.minutes).toBe(603);expect(d.monthMinutes).toBe(3);expect(d.activeDays).toBe(1);
+  expect(d.rank.name).toBe('顔なじみ');
+ });
  it('2人条件、ミュート、BOT、離席、カテゴリ、除外VCを守る',()=>{
   const m=(id:string,extra={})=>({id,bot:false,serverMute:false,deaf:false,...extra});
   const ch=(name:string,people:ReturnType<typeof m>[],extra={})=>({id:name,name,members:people,...extra});

@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { members, visitDaily, visitProfiles, visitPurchases, visitBadges } from '../db/schema.js';
+import { activityDaily, members, visitDaily, visitProfiles, visitPurchases, visitBadges } from '../db/schema.js';
 import { jstDate } from './activity.js';
 import { spendWithin } from './economy.js';
 import { audit } from './audit.js';
@@ -65,7 +65,11 @@ export async function visitData(db:Db,id:string,now=new Date()){
   if(!member||member.leftAt||member.isBot)throw new VisitError('在籍中のメンバーだけが利用できます。');
   await db.insert(visitProfiles).values({memberId:id}).onConflictDoNothing();
   const [profile]=await db.select().from(visitProfiles).where(eq(visitProfiles.memberId,id));
-  const days=await db.select().from(visitDaily).where(eq(visitDaily.memberId,id));
+  // 参拝プロフィールを始める前の通話の時間（毎日の活動の記録）も数える。同じ日は多いほうだけ（二重に数えない）
+  const [visit,activity]=await Promise.all([db.select().from(visitDaily).where(eq(visitDaily.memberId,id)),db.select({date:activityDaily.date,minutes:activityDaily.vcMinutes}).from(activityDaily).where(eq(activityDaily.memberId,id))]);
+  const byDate=new Map<string,number>();
+  for(const r of [...visit,...activity])byDate.set(r.date,Math.max(byDate.get(r.date)??0,r.minutes));
+  const days=[...byDate].map(([date,minutes])=>({date,minutes}));
   const minutes=days.reduce((n,r)=>n+r.minutes,0),activeDays=days.filter(r=>r.minutes>=10).length;
   const month=jstDate(now).slice(0,7),monthMinutes=days.filter(r=>r.date.startsWith(month)).reduce((n,r)=>n+r.minutes,0);
   const earned=VISIT_BADGES.filter(b=>minutes>=b.minutes&&activeDays>=b.days&&(b.id!=='anniversary'||!!member.joinedAt&&now.getTime()-member.joinedAt.getTime()>=365*86400000));
