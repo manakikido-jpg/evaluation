@@ -819,13 +819,21 @@ export function createWebApp(deps: WebDeps) {
   app.use('/voice-now.json', requireAdmin);
   app.get('/voice-now.json', async (c) => c.json({ channels: await voiceNowView() }, 200, { 'cache-control': 'no-store' }));
 
+  let memberRolesCache: { at: number; roles: GuildRole[] } | undefined;
   app.get('/members', async (c) => {
     const q = c.req.query();
     const rank = cfg.ranks.find((r) => r.key === q.rank);
+    // 入力のたびに読むので、ロールの一覧は 1 分だけ覚えておく
+    if (!memberRolesCache || memberRolesCache.at < Date.now() - 60_000) memberRolesCache = { at: Date.now(), roles: (await loadRoles().catch(() => undefined)) ?? [] };
+    const roles = memberRolesCache.roles;
+    // 🧭 案内待ち（設定のロール。なければ名前に「案内待ち」が入るロール）
+    const pendingRoleId = cfg.roles.guidePending ?? roles.find((r) => r.name.replace(/\s/g, '').includes('案内待ち'))?.id;
+    const checked = c.req.queries('roles')?.filter((id) => /^\d{17,20}$/.test(id)).slice(0, 50) ?? [];
     const query: MemberListQuery & { rank?: string } = {
       q: q.q?.slice(0, 100),
-      rank: rank?.key,
-      roleId: rank?.roleId,
+      rank: q.rank === 'pending' && pendingRoleId ? 'pending' : rank?.key,
+      roleId: q.rank === 'pending' ? pendingRoleId : rank?.roleId,
+      roleIds: checked,
       ageGroup: q.age === 'minor' || q.age === 'adult' || q.age === 'unknown' ? q.age : undefined,
       status: q.status === 'left' || q.status === 'all' ? q.status : 'active',
       inactiveDays: Number(q.inactive) > 0 ? Math.min(Number(q.inactive), 3650) : undefined,
@@ -836,7 +844,7 @@ export function createWebApp(deps: WebDeps) {
     const t = now();
     const result = await listMembers(db, query, t, cfg.ranks);
     if (c.req.header('hx-request') && !c.req.header('hx-history-restore-request')) return c.html(<MemberResults cfg={cfg} query={query} result={result} now={t} />);
-    return c.html(<MembersPage session={c.get('session')} cfg={cfg} query={query} result={result} now={t} />);
+    return c.html(<MembersPage session={c.get('session')} cfg={cfg} query={query} result={result} now={t} roles={roles.filter((r) => r.id !== cfg.guildId && !r.managed).sort((a, b) => b.position - a.position)} pendingRoleId={pendingRoleId} />);
   });
 
   // 👥 人数の差（ある時点と今）。popup=1 ならポップアップの中身だけ
