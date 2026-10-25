@@ -3,6 +3,7 @@
  * BOT 本体と管理画面の両方から同じ処理で使う。テストでは偽物に差し替える。
  */
 export type GuildSticker = { id: string; name: string; description?: string | null; tags?: string };
+export type GuildEmoji = { id: string; name: string | null; animated?: boolean; available?: boolean };
 export type GalleryMessage = {
   id: string; channel_id: string; timestamp: string;
   author: { id: string; bot?: boolean };
@@ -14,6 +15,7 @@ export interface DiscordActions {
 
   createGuildSticker?(guildId: string, input: { name: string; description: string; tags: string; data: Uint8Array }, reason: string): Promise<GuildSticker>;
   guildStickers?(guildId: string): Promise<GuildSticker[]>;
+  guildEmojis?(guildId: string): Promise<GuildEmoji[]>;
   addRole(guildId: string, userId: string, roleId: string, reason: string): Promise<void>;
   removeRole(guildId: string, userId: string, roleId: string, reason: string): Promise<void>;
   /** DM を送る。DM を受け取らない設定の人などには届かないので false */
@@ -194,6 +196,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
   return {
     galleryMessage: async (c, m) => (await call('GET', `/channels/${c}/messages/${m}`)) as GalleryMessage,
     guildStickers: async g => (await call('GET', `/guilds/${g}/stickers`)) as GuildSticker[],
+    guildEmojis: async g => (await call('GET', `/guilds/${g}/emojis`)) as GuildEmoji[],
     async createGuildSticker(g, input, reason) {
       const form = new FormData();
       form.append('name', input.name); form.append('description', input.description); form.append('tags', input.tags);

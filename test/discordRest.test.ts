@@ -4,6 +4,13 @@ import { createDiscordActions, DiscordHttpError } from '../src/lib/discordRest.j
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Discord REST', () => {
+  it('サーバーのカスタム絵文字を読み取り、ID照合に使う',async()=>{
+    const emojis=[{id:'970000000000000001',name:'notice',animated:true,available:true}];
+    const fetch=vi.fn(async(..._args: unknown[])=>new Response(JSON.stringify(emojis),{status:200}));vi.stubGlobal('fetch',fetch);
+    expect(await createDiscordActions('test').guildEmojis!('guild')).toEqual(emojis);
+    expect(fetch.mock.calls[0]![0]).toBe('https://discord.com/api/v10/guilds/guild/emojis');
+    expect(fetch.mock.calls[0]![1]).toMatchObject({method:'GET'});
+  });
   it('「少し待って（429）」と言われたら、待ってからやり直す', async () => {
     const replies = [
       new Response(JSON.stringify({ retry_after: 0.01 }), { status: 429 }),

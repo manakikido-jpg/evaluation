@@ -4425,9 +4425,42 @@ it('🎭 スタンプでロールのパネルを作る・直す・消す（神�
   const send = (path: string, f: [string, string][]) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...f]) });
   const CH = '910000000000000002';
   expect((await send('/reaction-roles', [['channelId', CH], ['emoji', '🎮'], ['roleId', '930000000000000011'], ['label', '']])).status).toBe(400);
+  const originalEmojis=fakeActions.guildEmojis,originalStickers=fakeActions.guildStickers;
+  fakeActions.guildEmojis=async()=>[{id:'970000000000000001',name:'notice',animated:true}];
+  fakeActions.guildStickers=async()=>[{id:'970000000000000002',name:'picture'}];
+  try {
+    const numeric=await send('/reaction-roles',[['channelId',CH],['title','ID指定'],['emoji','970000000000000001'],['roleId','930000000000000001']]);
+    expect(numeric.headers.get('location')).toBe('/reaction-roles?msg=saved');
+    expect(actions.some(a=>a.startsWith('send ')&&a.includes('<a:notice:970000000000000001>'))).toBe(true);
+    const image=await send('/reaction-roles',[['channelId',CH],['emoji','970000000000000002'],['roleId','930000000000000001']]);
+    expect(image.status).toBe(400);expect(await image.text()).toContain('画像スタンプ');
+    fakeActions.guildEmojis=async()=>{throw Error('test: emoji lookup unavailable');};
+    const unavailable=await send('/reaction-roles',[['channelId',CH],['emoji','970000000000000001'],['roleId','930000000000000001']]);
+    expect(unavailable.status).toBe(400);expect(await unavailable.text()).toContain('一覧を取得できませんでした');
+  } finally { fakeActions.guildEmojis=originalEmojis;fakeActions.guildStickers=originalStickers; }
+  const beforeSend = actions.filter(a => a.startsWith('send ')).length;
+  const invalid = await send('/reaction-roles', [['channelId', CH], ['title', '入力した題 <script>'], ['body', '入力した説明'], ['emoji', 'not-emoji'], ['roleId', '930000000000000001'], ['label', '入力したひとこと']]);
+  expect(invalid.status).toBe(400);
+  const invalidHtml = await invalid.text();
+  expect(invalidHtml).toContain('スタンプが読めません');
+  expect(invalidHtml).toContain('value="入力した題 &lt;script&gt;"');
+  expect(invalidHtml).toContain('入力した説明');expect(invalidHtml).toContain('value="not-emoji"');
+  expect(invalidHtml).toContain('value="入力したひとこと"');
+  expect(invalidHtml).toContain('value="930000000000000001" selected');
+  expect(actions.filter(a => a.startsWith('send '))).toHaveLength(beforeSend);
   expect((await send('/reaction-roles', [['channelId', CH], ['title', 'あそび'], ['emoji', '🎮'], ['roleId', '930000000000000001'], ['label', 'ゲームの話'], ['emoji', ''], ['roleId', ''], ['label', '']])).headers.get('location')).toBe('/reaction-roles?msg=saved');
   expect(actions.some(a => a.startsWith(`send ${CH}`) && a.includes('ゲーム好き'))).toBe(true);
   const id = /edit=(\d+)/.exec(await (await get('/reaction-roles', s)).text())![1];
+  const editInvalid = await send('/reaction-roles/'+id, [['channelId', CH], ['title', '編集中の題'], ['emoji', 'not-emoji'], ['roleId', '930000000000000001'], ['label', '変更中']]);
+  expect(editInvalid.status).toBe(400);const editHtml=await editInvalid.text();
+  expect(editHtml).toContain('action="/reaction-roles/'+id+'"');expect(editHtml).toContain('value="編集中の題"');
+  const sendMessage = fakeActions.sendMessage;
+  fakeActions.sendMessage = async () => { throw new Error('test: Discord unavailable'); };
+  try {
+    const failed = await send('/reaction-roles', [['channelId', CH], ['title', '投稿失敗でも残す'], ['emoji', '🎮'], ['roleId', '930000000000000001'], ['label', 'ゲーム']]);
+    expect(failed.status).toBe(400);const failedHtml=await failed.text();
+    expect(failedHtml).toContain('Discord に出せませんでした');expect(failedHtml).toContain('value="投稿失敗でも残す"');
+  } finally { fakeActions.sendMessage = sendMessage; }
   expect((await send(`/reaction-roles/${id}`, [['channelId', CH], ['emoji', '🎲'], ['roleId', '930000000000000001'], ['label', '']])).headers.get('location')).toBe('/reaction-roles?msg=saved');
   expect(actions.some(a => a.startsWith('edit '))).toBe(true);
   expect((await send(`/reaction-roles/${id}/delete`, [])).headers.get('location')).toBe('/reaction-roles?msg=deleted');

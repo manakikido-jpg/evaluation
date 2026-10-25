@@ -45,12 +45,20 @@
     message('保存しています…');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 45000);
+    let received = false;
     try {
       const response = await fetch(action, { method: 'POST', body: data, credentials: 'same-origin', signal: controller.signal });
-      if (!response.ok) throw new Error('response');
+      received = true;
       const url = new URL(response.url);
       if (url.origin !== location.origin) throw new Error('origin');
       const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      if (!response.ok) {
+        const reason = doc.querySelector('.flash.warn, [role="alert"]')?.textContent.trim();
+        message(reason || (response.status === 403
+          ? '操作の権限やログインを確認できませんでした。入力は残しています。別タブでログイン状態を確認してください。'
+          : `サーバーからエラーが返りました（HTTP ${response.status}）。入力は残しています。再送する前に別タブで結果を確認してください。`), true);
+        return;
+      }
       const next = doc.getElementById('main-content');
       // ログイン切れや、別ページ・専用スクリプトへ移る処理はGETで開く。POSTは繰り返さない。
       if (url.pathname !== location.pathname || !next?.hasAttribute('data-office-inplace') || scripts(doc) !== scripts(document)) {
@@ -87,7 +95,9 @@
       const result = main.querySelector('.flash');
       message(result?.textContent.trim() || '送信が完了しました。画面の結果を確認してください。');
     } catch {
-      message('通信を確認できませんでした。入力は残しています。二重送信を避けるため、再送する前に別タブで結果を確認してください。', true);
+      message(received
+        ? '応答を受信しましたが、結果の表示に失敗しました。入力は残しています。二重送信を避けるため、再送する前に別タブで結果を確認してください。'
+        : '通信を確認できませんでした。入力は残しています。二重送信を避けるため、再送する前に別タブで結果を確認してください。', true);
     } finally {
       clearTimeout(timer); busy = false;
       buttons.forEach(el => { el.disabled = false; });
