@@ -102,6 +102,8 @@ async function main(): Promise<void> {
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.GuildVoiceStates,
+      // 🚫 招待を作れない人の招待をすぐ消す
+      GatewayIntentBits.GuildInvites,
       // 🎭 スタンプでロールを付ける
       GatewayIntentBits.GuildMessageReactions,
       // 消されたメッセージの中身を記録するため（Developer Portal でオンにしたときだけ）
@@ -423,6 +425,7 @@ async function main(): Promise<void> {
     // 宵宮の部屋: 入った人がそれぞれ払う
     void rooms.onVoiceStateUpdate(before, after);
   });
+  client.on(Events.InviteCreate, (inv) => void inviteLinks.onInviteCreate(inv).catch((err) => logger.warn({ err }, 'invite block failed')));
   client.on(Events.InteractionCreate, (i) => {
     void onTalkTopicInteraction(i, cfg().guildId);
     void recording.onInteraction(i);
