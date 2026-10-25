@@ -737,3 +737,4 @@
 - Chromiumで390/1440pxの画像正常・横はみ出し/JS例外なし、試着→2,500銭購入→装備/公開保存が成功。ログ/tmp/visit-premium-browser2.log、容量/透過検証/tmp/visit-art-check.log。素材9点と描画の変更であり、価格・通話条件・課金・公開設定は変更しない。次は最終型・ビルド・関連と全件検証後、既存PR #88へ保存する。
 - 最終検証：全177ファイル2,051テスト成功（357.52秒、4並列）、型チェック・ビルド成功、関連40件成功。ログ/tmp/visit-premium-{all-tests,typecheck-final,build-final,related}.log。テスト削除/skipなし。最終コードの生成で25組を確認し、PNG最大約1.74MB、透過フレーム中央は透明。
 - 完成した青紫のカードを会話へ提示済み。見本docs/previews/visit-moon-premium.png、全25組docs/previews/visit-collection.jpg。初版の静的見本ではなく、実際のrenderVisitCardで合成。担当Claude向け既存PR #88へ保存する。最新本番96c78fd、本番未操作・未反映。
+- GitHub保存完了：PR #88のまま更新、描画/素材5022fa6。OPEN・未合流・mergeable、本番未反映。全2,051件・型・ビルド成功、関連40件・25組の描画/容量/透過/ブラウザ確認済み。完成見本 https://raw.githubusercontent.com/manakikido-jpg/evaluation/5022fa6/docs/previews/visit-moon-premium.png 、一覧 https://raw.githubusercontent.com/manakikido-jpg/evaluation/5022fa6/docs/previews/visit-collection.jpg 。PR説明も最終の見た目・検証・見本へ更新。この追記は所在のみでソース変更なし。
