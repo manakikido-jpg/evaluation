@@ -1,6 +1,6 @@
 import type { Context, Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { and, desc, eq, ilike, inArray, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { marketBids, marketListings, marketOffers, marketOrders, marketRequests, members } from '../db/schema.js';
@@ -13,7 +13,7 @@ import { createMemberSession, deleteMemberSession, findMemberSession } from './m
 import { randomToken, safeEqual } from './sessions.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import type { DiscordApi } from './discordApi.js';
-import { MarketAuthPage, MarketCreatePage, MarketListingPage, MarketListPage, MarketOrderPage, MarketOrdersPage, MarketRequestPage, type MarketMe } from './views/marketplace.js';
+import { MarketAuthPage, MarketCreatePage, MarketListingPage, MarketListPage, MarketOrderPage, MarketOrdersPage, MarketRequestPage, MarketSellerPage, type MarketMe } from './views/marketplace.js';
 const COOKIE='sakura_market',STATE='sakura_market_state';
 type Deps={db:Db;cfg:()=>GuildConfig;discord:DiscordActions;api:DiscordApi;baseUrl:string;secure:boolean;now:()=>Date};
 export function mountMarketplace(app:Hono<any>,d:Deps){
@@ -39,6 +39,8 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   if(c.req.method==='POST'){const b=await c.req.parseBody();if(!safeEqual(typeof b._csrf==='string'?b._csrf:'',session.csrfToken))return c.text('不正なリクエストです（CSRF）。',403);}
   return handler(c,{session,roles:fresh.roles,member:fresh.member,balance:(await walletOf(db,session.userId)).balance,cfg:d.cfg()});
  };
+ /** ログインのあとに開くページ（市場の中だけ） */
+ const nextOf=(v:string|undefined)=>v==='/marketplace/seller'?v:'/marketplace';
  app.get('/marketplace/auth',c=>{const state=randomToken();setCookie(c,STATE,state,{...cookie,path:'/casino/auth',maxAge:600});return c.redirect(api.authorizeUrl(state,redirectUri));});
  app.get('/casino/auth/callback',async(c,next)=>{
   const state=getCookie(c,STATE);if(!state||!safeEqual(state,c.req.query('state')??''))return next();
@@ -46,12 +48,12 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   try{const code=c.req.query('code');if(!code)throw new Error('code missing');const user=await api.me(await api.exchangeCode(code,redirectUri));if(!await access(user.id))return c.html(<MarketAuthPage error="サーバーの市場を見られるメンバーだけが利用できます。"/> ,403);setCookie(c,COOKIE,await createMemberSession(db,user,d.now()),cookie);return c.redirect('/marketplace');}
   catch{return c.html(<MarketAuthPage error="Discord認証を確認できません。少し待ってからログインし直してください。"/>,503);}
  });
- app.get('/marketplace/link/:token',async c=>{const user=await peekLoginLink(db,c.req.param('token'),d.now());return c.html(<MarketAuthPage error={user?undefined:'リンクが期限切れか使用済みです。Discordの市場から開き直してください。'} link={user?{name:user.displayName,action:`/marketplace/link/${c.req.param('token')}`}:undefined}/>);});
+ app.get('/marketplace/link/:token',async c=>{const user=await peekLoginLink(db,c.req.param('token'),d.now());return c.html(<MarketAuthPage error={user?undefined:'リンクが期限切れか使用済みです。Discordの市場から開き直してください。'} link={user?{name:user.displayName,action:`/marketplace/link/${c.req.param('token')}${nextOf(c.req.query('next'))!=='/marketplace'?'?next='+encodeURIComponent(nextOf(c.req.query('next'))):''}`}:undefined}/>);});
  app.post('/marketplace/link/:token',async c=>{
   if(c.req.header('origin')&&c.req.header('origin')!==new URL(d.baseUrl).origin)return c.text('不正なリクエストです。',403);
   const user=await useLoginLink(db,c.req.param('token'),d.now());if(!user)return c.text('リンクが期限切れか使用済みです。',400);
   try{if(!await access(user.id))return c.text('市場の閲覧権限が必要です。',403);}catch{return c.text('Discordの確認に失敗しました。市場からリンクを開き直してください。',503);}
-  setCookie(c,COOKIE,await createMemberSession(db,{id:user.id,username:user.displayName,displayName:user.displayName,avatarUrl:user.avatarUrl},d.now()),cookie);return c.redirect('/marketplace',303);
+  setCookie(c,COOKIE,await createMemberSession(db,{id:user.id,username:user.displayName,displayName:user.displayName,avatarUrl:user.avatarUrl},d.now()),cookie);return c.redirect(nextOf(c.req.query('next')),303);
  });
  app.post('/marketplace/logout',protectedPage(async(c,me)=>{await deleteMemberSession(db,me.session.id);deleteCookie(c,COOKIE,{path:'/marketplace'});return c.redirect('/marketplace',303);}));
  const names=async(ids:string[])=>new Map((ids.length?await db.select({id:members.id,name:members.displayName}).from(members).where(inArray(members.id,[...new Set(ids)])):[]).map(m=>[m.id,m.name]));
@@ -82,6 +84,15 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
  }));
  app.get('/marketplace/orders',protectedPage(async(c,me)=>{const before=cursor(c);const all=await db.select().from(marketOrders).where(and(or(eq(marketOrders.buyerId,me.session.userId),eq(marketOrders.sellerId,me.session.userId)),before?lt(marketOrders.id,before):undefined)).orderBy(desc(marketOrders.id)).limit(41);const nextHref=all.length>40?'/marketplace/orders?before='+all[39]!.id:undefined;const orders=all.slice(0,40);const titles=new Map(await Promise.all(orders.map(async o=>[o.id,(await market.orderInfo(db,o)).title] as const)));return c.html(<MarketOrdersPage me={me} orders={orders} titles={titles} nextHref={nextHref}/>);}));
  app.get('/marketplace/orders/:id',protectedPage(async(c,me)=>{const order=await market.getOrder(db,resourceId(c));if(!order||(order.buyerId!==me.session.userId&&order.sellerId!==me.session.userId))return c.notFound();return c.html(<MarketOrderPage me={me} order={order} info={await market.orderInfo(db,order)} names={await names([order.buyerId,order.sellerId])} now={d.now()}/>);}));
+ app.get('/marketplace/seller',protectedPage(async(c,me)=>{
+  const id=me.session.userId;
+  const listings=await db.select().from(marketListings).where(and(eq(marketListings.sellerId,id),eq(marketListings.status,'open'))).orderBy(desc(marketListings.id)).limit(40);
+  const offers=await db.select().from(marketOffers).where(and(eq(marketOffers.sellerId,id),eq(marketOffers.status,'pending'))).orderBy(desc(marketOffers.id)).limit(40);
+  const orders=await db.select().from(marketOrders).where(and(eq(marketOrders.sellerId,id),inArray(marketOrders.status,['paid','disputed']))).orderBy(desc(marketOrders.id)).limit(40);
+  const [sum]=await db.select({v:sql<number>`coalesce(sum(${marketOrders.price}),0)::float8`}).from(marketOrders).where(and(eq(marketOrders.sellerId,id),eq(marketOrders.status,'completed')));
+  const titles=new Map(await Promise.all(orders.map(async o=>[o.id,(await market.orderInfo(db,o)).title] as const)));
+  return c.html(<MarketSellerPage me={me} listings={listings} offers={offers} orders={orders} titles={titles} names={await names([...offers.map(o=>o.buyerId),...orders.map(o=>o.buyerId)])} earned={sum?.v??0}/>);
+ }));
  app.post('/marketplace/actions/:action/:id',protectedPage(async(c,me)=>{
   const raw=await c.req.parseBody();const b=Object.fromEntries(Object.entries(raw).filter(([,v])=>typeof v==='string')) as Record<string,string>;
   const id=resourceId(c);if(!Number.isSafeInteger(id)||id<0)return c.text('対象を確認してください。',400);

@@ -86,6 +86,15 @@ it('一度きりのDiscordリンクはGETで消費せず、別Originと二度利
  const r=await app.request('/marketplace/link/'+token,{method:'POST',headers:{origin:BASE}});expect(r.status).toBe(303);expect(r.headers.get('set-cookie')).toContain('sakura_market=');
  expect((await app.request('/marketplace/link/'+token,{method:'POST',headers:{origin:BASE}})).status).toBe(400);
 });
+it('リンクの next は出品者のページだけ。ほかは市場の入口へ',async()=>{
+ const t1=await createLoginLink(db,{id:B,displayName:'買い手',avatarUrl:null},now);
+ expect(await (await app.request('/marketplace/link/'+t1+'?next=%2Fmarketplace%2Fseller')).text()).toContain('?next=%2Fmarketplace%2Fseller');
+ const r1=await app.request('/marketplace/link/'+t1+'?next=%2Fmarketplace%2Fseller',{method:'POST',headers:{origin:BASE}});expect(r1.headers.get('location')).toBe('/marketplace/seller');
+ const t2=await createLoginLink(db,{id:B,displayName:'買い手',avatarUrl:null},now);
+ const r2=await app.request('/marketplace/link/'+t2+'?next=https%3A%2F%2Fevil.example',{method:'POST',headers:{origin:BASE}});expect(r2.headers.get('location')).toBe('/marketplace');
+ const cookie=r1.headers.get('set-cookie')!.split(';')[0]!;
+ const page=await app.request('/marketplace/seller',{headers:{cookie}});expect(page.status).toBe(200);expect(await page.text()).toContain('出品者のページ');
+});
 it('市場OAuthは既存のカジノcallbackを共用し、stateと在籍を検証して市場へ戻す',async()=>{
  const r=await app.request('/marketplace/auth'),url=new URL(r.headers.get('location')!),cookie=r.headers.get('set-cookie')!.split(';')[0]!;
  expect(url.searchParams.get('redirect_uri')).toBe(BASE+'/casino/auth/callback');

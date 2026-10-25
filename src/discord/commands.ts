@@ -78,6 +78,18 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
     new SlashCommandBuilder().setName('stickerdesk').setNameLocalizations({ ja: 'スタンプ製作' }).setDescription('Open the sticker creator desk').setDescriptionLocalizations({ ja: 'スタンプ製作者専用のページを開く（リンクは自分だけ）' }).setContexts(InteractionContextType.Guild).toJSON(),
 
     new SlashCommandBuilder()
+      .setName('ichiba')
+      .setNameLocalizations({ ja: '市場' })
+      .setDescription('Open the member market on the web')
+      .setDescriptionLocalizations({ ja: '市場Web を開く（リンクは自分にだけ出る）' })
+      .addStringOption((o) =>
+        o.setName('page').setNameLocalizations({ ja: 'ページ' }).setDescription('Page').setDescriptionLocalizations({ ja: '開くページ（えらばなければ市場の入口）' })
+          .addChoices({ name: '市場の入口', name_localizations: { ja: '市場の入口' }, value: 'top' }, { name: 'Seller page', name_localizations: { ja: '出品者のページ' }, value: 'seller' }),
+      )
+      .setContexts(InteractionContextType.Guild)
+      .toJSON(),
+
+    new SlashCommandBuilder()
       .setName('toukoubun')
       .setNameLocalizations({ ja: '投稿文' })
       .setDescription('Write server update posts (for the update writers)')

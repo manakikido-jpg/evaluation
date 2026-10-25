@@ -52,8 +52,17 @@ it('メンバー追加が失敗してもスレッド番号を保持し、再試�
 });
 it('市場パネルのWebボタンは本人だけに一度きりの入口を発行する',async()=>{
  expect(JSON.stringify(panelMessage('market'))).toContain('market:web');
- const i={customId:'market:web',guildId:cfg.guildId,user:{id:B,displayAvatarURL:()=>null},member:{displayName:'買い手'},inCachedGuild:()=>true,isButton:()=>true,isModalSubmit:()=>false,deferReply:vi.fn(),editReply:vi.fn(),reply:vi.fn(),isRepliable:()=>true};
+ const i={customId:'market:web',guildId:cfg.guildId,user:{id:B,displayAvatarURL:()=>null},member:{displayName:'買い手'},inCachedGuild:()=>true,isChatInputCommand:()=>false,isButton:()=>true,isModalSubmit:()=>false,deferReply:vi.fn(),editReply:vi.fn(),reply:vi.fn(),isRepliable:()=>true};
  await app.onInteraction(i as never);expect(i.deferReply).toHaveBeenCalledWith({flags:MessageFlags.Ephemeral});
  const view=i.editReply.mock.calls[0]![0];const url=new URL(view.components[0].components[0].url);expect(url.pathname).toContain('/marketplace/link/');
  expect((await peekLoginLink(db,url.pathname.split('/').at(-1)!))?.id).toBe(B);
+});
+it('出品者のページのボタンと /市場 は、出品者のページへのリンクを出す',async()=>{
+ expect(JSON.stringify(panelMessage('market'))).toContain('market:seller');
+ const i={customId:'market:seller',guildId:cfg.guildId,user:{id:B,displayAvatarURL:()=>null},member:{displayName:'売り手'},inCachedGuild:()=>true,isChatInputCommand:()=>false,isButton:()=>true,isModalSubmit:()=>false,deferReply:vi.fn(),editReply:vi.fn(),reply:vi.fn(),isRepliable:()=>true};
+ await app.onInteraction(i as never);
+ const url=new URL(i.editReply.mock.calls[0]![0].components[0].components[0].url);expect(url.searchParams.get('next')).toBe('/marketplace/seller');
+ const cmd={commandName:'ichiba',guildId:cfg.guildId,user:{id:B,displayAvatarURL:()=>null},member:{displayName:'売り手'},options:{getString:()=>null},inCachedGuild:()=>true,isChatInputCommand:()=>true,isButton:()=>false,isModalSubmit:()=>false,deferReply:vi.fn(),editReply:vi.fn(),reply:vi.fn()};
+ await app.onInteraction(cmd as never);
+ const top=new URL(cmd.editReply.mock.calls[0]![0].components[0].components[0].url);expect(top.searchParams.get('next')).toBeNull();
 });

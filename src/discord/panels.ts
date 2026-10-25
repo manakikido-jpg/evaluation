@@ -60,6 +60,7 @@ export function panelMessage(kind: PanelKind, opts: PanelOptions = {}): PanelMes
           type: 1,
           components: [
             { type: 2, style: 1, label: '市場Webを開く', custom_id: 'market:web', emoji: { name: '🌐' } },
+            { type: 2, style: 2, label: '出品者のページ', custom_id: 'market:seller', emoji: { name: '🧑‍💼' } },
             { type: 2, style: 1, label: '出品する', custom_id: 'market:new', emoji: { name: '🏪' } },
             { type: 2, style: 1, label: '依頼を募集する', custom_id: 'market:req', emoji: { name: '📝' } },
             { type: 2, style: 3, label: '今すぐ通話できる人', custom_id: 'market:standby', emoji: { name: '📞' } },
