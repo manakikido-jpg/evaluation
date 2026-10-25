@@ -191,3 +191,11 @@ it('青銀フレームは中央が透過し、背景は中央も不透明な画�
  const frame=await sharp(fileURLToPath(new URL('../assets/visit/frame-staff-blue-lantern.png',import.meta.url))).ensureAlpha().resize(1080,640).raw().toBuffer();expect(frame[(320*1080+540)*4+3]).toBe(0);
  const d=await visitData(db,A,now);d.staffTheme=true;const png=renderVisitCard(d,{staffStyle:'blue-lantern'});expect(await sharp(png).metadata()).toMatchObject({width:1080,height:640});const center=await sharp(png).ensureAlpha().extract({left:540,top:320,width:1,height:1}).raw().toBuffer();expect(center[3]).toBe(255);expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);
 });
+
+it('白黒の装いは一般用の無料所持品として保存でき、人物に文字やバッジを重ねない',async()=>{
+ const d=await visitData(db,A,now);expect(d.staffTheme).toBe(false);expect(d.owned).toEqual(expect.arrayContaining(['silver-shadow','shadow-silver']));expect(d.catalog.find(i=>i.id==='silver-shadow')).toMatchObject({kind:'background',price:0});
+ const balance=(await walletOf(db,A)).balance;await saveVisitProfile(db,A,{background:'silver-shadow',frame:'shadow-silver',title:'rank',badges:[],publicStats:true},now);const saved=await visitData(db,A,now);expect(saved.profile).toMatchObject({background:'silver-shadow',frame:'shadow-silver'});expect((await walletOf(db,A)).balance).toBe(balance);
+ const svg=visitCardSvg(saved);expect(svg).not.toContain('運営');expect(svg).toContain('累計通話');expect(svg).toContain('獲得バッジ');
+ const png=renderVisitCard(saved);expect(await sharp(png).metadata()).toMatchObject({width:1080,height:640,format:'png'});expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);expect(png.equals(renderVisitCard(saved,{frame:'plain'}))).toBe(false);expect(png.equals(renderVisitCard(saved,{background:'moon'}))).toBe(false);
+ saved.profile.publicStats=false;expect(visitCardSvg(saved)).toContain('活動記録は非公開');expect(visitCardSvg(saved)).not.toContain('累計通話');expect(visitCardSvg(saved,{privateView:true})).toContain('累計通話');
+});

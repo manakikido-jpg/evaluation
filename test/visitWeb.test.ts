@@ -146,3 +146,10 @@ it('選択欄と保存ボタンを同じフォームで送り、試着を挟ま�
  expect((await post('/visit/staff-style',{staffStyle:'crimson',intent:'save'})).status).toBe(303);expect((await visitData(db,A,now)).profile).toMatchObject({staffStyle:'crimson',background:'paper',frame:'plain'});
  roles=[];expect((await post('/visit/staff-style',{staffStyle:'blue-lantern',intent:'preview'})).status).toBe(403);
 });
+
+it('一般メンバーが白黒の背景/枠を選んで保存し、購入なしでカードへ反映できる',async()=>{
+ const {visitData}=await import('../src/services/visitProfile.js');const {renderVisitCard}=await import('../src/services/visitCard.js');
+ const html=await (await req('/visit')).text();expect(html).toContain('value="silver-shadow"');expect(html).toContain('value="shadow-silver"');expect(html).not.toContain('<h2>運営専用の装い</h2>');
+ const before=(await walletOf(db,A)).balance;const saved=await post('/visit/equip',{background:'silver-shadow',frame:'shadow-silver',title:'rank',publicStats:'yes'});expect(saved.status).toBe(303);const data=await visitData(db,A,now);expect(data.staffTheme).toBe(false);expect(data.profile.background).toBe('silver-shadow');expect((await walletOf(db,A)).balance).toBe(before);
+ expect(Buffer.from(await (await req('/visit/card.png?download=1')).arrayBuffer()).equals(renderVisitCard(data,{privateView:true}))).toBe(true);expect((await db.select().from(visitPurchases)).length).toBe(0);
+});

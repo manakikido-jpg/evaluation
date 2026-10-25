@@ -31,6 +31,8 @@ export const VISIT_ITEMS = [
   { id: 'crescent', kind: 'frame', name: '月の輪', price: 2000, colors: ['#d7e3ff','#8ba9d8'], badge: null },
   { id: 'gold', kind: 'frame', name: '金糸の飾り縁', price: 3500, colors: ['#f8de9c','#bd8b38'], badge: null },
   { id: 'century', kind: 'frame', name: '百時間の縁', price: 0, colors: ['#a7dfd2','#e9d89a'], badge: 'vc100' },
+  { id: 'silver-shadow', kind: 'background', name: '銀月の妖影', price: 0, colors: ['#111111','#b8b8b8'], badge: null },
+  { id: 'shadow-silver', kind: 'frame', name: '黒銀の月桜', price: 0, colors: ['#dddddd','#555555'], badge: null },
 ] as const;
 export const VISIT_BADGES = [
   { id: 'first', name: 'はじめの一歩', detail: '対象の通話を1分', minutes: 1, days: 0 },

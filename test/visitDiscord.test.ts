@@ -71,3 +71,8 @@ it('保存した青銀は対象の運営カードに使い、ロール解除後�
  await app.onInteraction(i as any);const data=await visitData(db,B);data.staffTheme=true;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
  roles=[];i.editReply.mockClear();await app.onInteraction(i as any);data.staffTheme=false;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
 });
+
+it('一般メンバーが保存した白黒背景をコマンドのカードにも反映する',async()=>{
+ const {saveVisitProfile}=await import('../src/services/visitProfile.js');await saveVisitProfile(db,A,{background:'silver-shadow',frame:'shadow-silver',title:'rank',badges:[],publicStats:true});
+ const i=interaction();await app.onInteraction(i as any);const data=await visitData(db,A);expect(data.staffTheme).toBe(false);expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
+});
