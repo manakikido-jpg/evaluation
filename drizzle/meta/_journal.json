@@ -953,6 +953,13 @@
       "when": 1792908752504,
       "tag": "0135_heavy_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1792912689113,
+      "tag": "0136_glorious_ogun",
+      "breakpoints": true
     }
   ]
 }

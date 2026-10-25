@@ -1452,3 +1452,5 @@ form.inline { display: inline; margin: 0; }
 .news-brief { margin: 1rem 0; }
 .news-brief dt { font-weight: 700; margin-top: .75rem; }
 .news-brief dd { margin: .25rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.visit-review-image { max-width: 100%; height: auto; }
