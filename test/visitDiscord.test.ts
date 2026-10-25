@@ -17,7 +17,7 @@ afterEach(async()=>close());
 const interaction=(target?:string,publicPost:boolean|null=null)=>({
  inCachedGuild:()=>true,guildId:cfg.guildId,isChatInputCommand:()=>true,isButton:()=>false,isRepliable:()=>true,
  commandName:'visitprofile',user:who(A),options:{getUser:()=>target?who(target):null,getBoolean:()=>publicPost},
- guild:{members:{fetch:async(id:string)=>({user:who(id),displayAvatarURL:()=> 'https://example.invalid/avatar.png'})}},
+ guild:{members:{fetch:async(input:{user:string;force:boolean})=>({user:who(input.user),displayAvatarURL:()=> 'https://example.invalid/avatar.png'})}},
  deferReply:vi.fn(),editReply:vi.fn(),deferred:true,
 });
 it('コマンドだけで自分の記録入りカードをチャンネルへ表示し、Web設定は不要',async()=>{
@@ -55,4 +55,11 @@ it('公開カードの着せ替えボタンでも、リンクは押した本人�
  await app.onInteraction(i as any);expect(i.deferReply).toHaveBeenCalledWith({flags:MessageFlags.Ephemeral});
  const url=i.editReply.mock.calls[0]![0].components[0].components[0].url;
  const token=new URL(url).pathname.split('/').at(-1)!;expect((await peekLoginLink(db,token))!.id).toBe(A);
+});
+
+it('対象者の現在の宮司/神職ロールで判定し、実行者の権限を他人のカードへ適用しない',async()=>{
+ const role='780000000000000099';const localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};app=new VisitApp(db,()=>localCfg,'https://visit.test');
+ let targetRoles=[role];const i=interaction(B);i.guild.members.fetch=async(input:{user:string;force:boolean})=>({user:who(input.user),displayAvatarURL:()=> 'https://example.invalid/avatar.png',roles:{cache:new Map(targetRoles.map(r=>[r,{}]))}} as any);
+ await app.onInteraction(i as any);const data=await visitData(db,B);data.staffTheme=true;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
+ targetRoles=[];i.editReply.mockClear();await app.onInteraction(i as any);data.staffTheme=false;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
 });
