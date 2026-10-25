@@ -10,7 +10,7 @@ import type { DiscordApi } from './discordApi.js';
 import { createMemberSession, findMemberSession, deleteMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
-import { buyVisitItem, saveVisitStaffStyle, saveVisitProfile, visitData, VisitError, type VisitData } from '../services/visitProfile.js';
+import { VISIT_STAFF_STYLES, buyVisitItem, saveVisitStaffStyle, saveVisitProfile, visitData, VisitError, type VisitData } from '../services/visitProfile.js';
 import { renderVisitCard } from '../services/visitCard.js';
 import { loadReceptionAvatar } from '../services/castReceptionImage.js';
 import { walletOf } from '../services/economy.js';
@@ -74,6 +74,11 @@ export function mountVisit(app:Hono<any>,d:Deps){
  app.post('/visit/staff-style',protect(async(c,s,data)=>{
   if(!data.staffTheme)return c.text('宮司・神職だけが変更できます。',403);
   const body=await c.req.parseBody();
+  if(body.intent==='preview'){
+   const style=VISIT_STAFF_STYLES.find(s=>s.id===body.staffStyle);
+   if(!style)return c.html(<VisitGate error="運営専用の装いを選んでください。" back/>,400);
+   return c.redirect('/visit?'+new URLSearchParams({staffStyle:style.id,...(body.public==='1'?{public:'1'}:{})}).toString(),303);
+  }
   try{await saveVisitStaffStyle(d.db,s.userId,typeof body.staffStyle==='string'?body.staffStyle:'',data.staffTheme,d.now());return c.redirect('/visit?msg=staff-saved',303);}
   catch(e){if(e instanceof VisitError)return c.html(<VisitGate error={e.message} back/>,400);throw e;}
  }));

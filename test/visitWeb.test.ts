@@ -135,3 +135,14 @@ it('運営専用の装いは現在のロールとCSRFで保存し、試着/他�
  roles=[];expect((await post('/visit/staff-style',{staffStyle:'crimson'})).status).toBe(403);expect(await (await req('/visit')).text()).not.toContain('<h2>運営専用の装い</h2>');
  data.staffTheme=false;expect(Buffer.from(await (await req('/visit/card.png?preview=1&staffStyle=blue-lantern')).arrayBuffer()).equals(renderVisitCard(data,{privateView:true,preview:true}))).toBe(true);expect((await visitData(db,A,now)).profile.staffStyle).toBe('blue-lantern');
 });
+
+it('選択欄と保存ボタンを同じフォームで送り、試着を挟まず赤金/青銀を保存できる',async()=>{
+ const {visitData}=await import('../src/services/visitProfile.js');const role='770000000000000099',localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};let roles=[role];api.memberRoles=async()=>roles;app=new Hono();mountVisit(app,{db,api,cfg:()=>localCfg,baseUrl,secure:true,now:()=>now});
+ const html=await (await req('/visit')).text();const saveForm=[...html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/g)].find(m=>m[2]!.includes('運営の装いを保存'))!;
+ expect(saveForm).toBeDefined();expect(saveForm[1]).toContain('method="post"');expect(saveForm[1]).toContain('action="/visit/staff-style"');expect(saveForm[2]).toContain('<select name="staffStyle">');expect(saveForm[2]).not.toContain('type="hidden" name="staffStyle"');
+ expect((await post('/visit/staff-style',{staffStyle:'blue-lantern',intent:'save'})).status).toBe(303);expect((await visitData(db,A,now)).profile.staffStyle).toBe('blue-lantern');
+ const preview=await post('/visit/staff-style',{staffStyle:'crimson',intent:'preview',public:'1'});expect(preview.status).toBe(303);expect(preview.headers.get('location')).toBe('/visit?staffStyle=crimson&public=1');expect((await visitData(db,A,now)).profile.staffStyle).toBe('blue-lantern');
+ expect((await post('/visit/staff-style',{staffStyle:'crimson',intent:'preview',_csrf:'bad'})).status).toBe(403);expect((await post('/visit/staff-style',{staffStyle:'unknown',intent:'preview'})).status).toBe(400);
+ expect((await post('/visit/staff-style',{staffStyle:'crimson',intent:'save'})).status).toBe(303);expect((await visitData(db,A,now)).profile).toMatchObject({staffStyle:'crimson',background:'paper',frame:'plain'});
+ roles=[];expect((await post('/visit/staff-style',{staffStyle:'blue-lantern',intent:'preview'})).status).toBe(403);
+});
