@@ -14,6 +14,7 @@ import {
   TextInputStyle,
   type Attachment,
   type ButtonInteraction,
+  type ChatInputCommandInteraction,
   type Guild,
   type GuildMember,
   type Interaction,
@@ -293,17 +294,26 @@ export class MarketApp {
     return edited;
   }
 
+  /** 🌐 市場Webのリンク（10 分・1 回だけ）。seller なら出品者のページを開く */
+  private async webLink(interaction: ButtonInteraction<'cached'> | ChatInputCommandInteraction<'cached'>, seller: boolean): Promise<void> {
+    if (!this.webBaseUrl) return void await interaction.reply({ content: 'Webの入口がまだ設定されていません。', ...EPHEMERAL });
+    await interaction.deferReply(EPHEMERAL);
+    const token = await createLoginLink(this.db, { id: interaction.user.id, displayName: interaction.member.displayName, avatarUrl: interaction.user.displayAvatarURL() });
+    const url = this.webBaseUrl + '/marketplace/link/' + token + (seller ? '?next=' + encodeURIComponent('/marketplace/seller') : '');
+    await interaction.editReply({ content: (seller ? '🧑‍💼 出品者のページ' : '🌐 市場Web') + 'へのリンクです。10分以内・1回だけ使えます。人に渡さないでください。', components: [{ type: 1, components: [{ type: 2, style: 5, label: seller ? '🧑‍💼 出品者のページに入る' : '🌐 市場Webに入る', url }] }] });
+  }
+
   async onInteraction(interaction: Interaction): Promise<void> {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
+    // /市場（だれでも）: 市場Web・出品者のページのリンク
+    if ('commandName' in interaction && interaction.isChatInputCommand() && interaction.commandName === 'ichiba') {
+      try { return await this.webLink(interaction, interaction.options.getString('page') === 'seller'); }
+      catch (err) { logger.warn({ err }, 'market web link failed'); return; }
+    }
     if (!(interaction.isButton() || interaction.isModalSubmit()) || !interaction.customId.startsWith('market:')) return;
     const [, action, a, b, c] = interaction.customId.split(':');
     try {
-      if (interaction.isButton() && action === 'web') {
-        if (!this.webBaseUrl) return void await interaction.reply({ content: 'Webの入口がまだ設定されていません。', ...EPHEMERAL });
-        await interaction.deferReply(EPHEMERAL);
-        const token = await createLoginLink(this.db, { id: interaction.user.id, displayName: interaction.member.displayName, avatarUrl: interaction.user.displayAvatarURL() });
-        return void await interaction.editReply({ content: '市場Webへのリンクです。10分以内・1回だけ使えます。', components: [{ type: 1, components: [{ type: 2, style: 5, label: '🌐 市場Webに入る', url: this.webBaseUrl + '/marketplace/link/' + token }] }] });
-      }
+      if (interaction.isButton() && (action === 'web' || action === 'seller')) return await this.webLink(interaction, action === 'seller');
       if (interaction.isButton()) {
         const i = interaction;
         // 出品の流れ: 種類 → （通話の種類）→ 値段の決め方 → 入力
