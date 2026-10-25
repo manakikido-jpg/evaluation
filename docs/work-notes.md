@@ -885,3 +885,4 @@
 - 最終検証成功：型チェック・ビルド・全183ファイル/2,128テスト、377.92秒、4並列。ログ /tmp/visit-staff-final-{types,build,tests}.log。関連34件も最終コードで成功、diffチェック成功、テスト削除/skip追加なし。
 - 実Webブラウザ成功：1440px/390pxの画像読み込み、横はみ出しなし、JS例外0。ログ /tmp/visit-staff-browser.log、画像 /workspace/artifacts/visit-staff-theme。最初の検証用サーバーのポート取得はlisten完了前だったため待機を追加して再実行し成功。製品コードの問題ではない。
 - 実装92d2012。本番9e2e29eまで反映済みのコードから作成、提出前fetchで追加更新なし。専用画像と完成見本をGitHubに保存し、担当Claudeのレビュー・合流待ちとする。本番への直接push、DB/設定変更、実サーバーの操作なし。
+- GitHub保存先：PR #96 https://github.com/manakikido-jpg/evaluation/pull/96 、codex/visit-staff-theme、実装92d2012・検証記録2ad63a7。OPEN・本番未反映、担当Claudeの確認と合流待ち。完成見本は同ブランチdocs/previews/visit-staff-crimson.png。型/ビルド/全2,128件/ブラウザ成功。この追記はPR所在だけでソース変更なし、同じ検証結果を使用する。
