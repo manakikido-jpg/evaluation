@@ -871,3 +871,4 @@
 - 型チェック・ビルド・全183ファイル/2,125テスト成功（406.39秒、4並列）。ログ /tmp/member-floating-final-{types,build,tests}.log。対象のHTTPテストも成功。テスト削除・skip追加なし。
 - 実ブラウザ成功：検索1回、条件保持、履歴の戻る/進む、Esc/外側、固定表示、390×844/390×360、JS無効時のリセットリンク、ロール不変、JS例外0。ログ /tmp/member-floating-browser.log、画像 /workspace/artifacts/member-role-floating。履歴復元時に見つけた既存office-ui.jsの再宣言エラーはIIFEと重複初期化防止で修正。
 - 実装e9032eb、統合090bbcb、統合時の内容保持修正c655ca8。GitHubへ保存して担当Claudeのレビュー・合流待ちとする。本番はまだこの変更を含まない。
+- GitHub保存済み：PR #95 https://github.com/manakikido-jpg/evaluation/pull/95 、codex/member-role-floating、検証記録915d79a。OPEN・競合なし・本番反映待ち。担当Claudeがレビュー後に合流する。全2,125件・型・ビルド・ブラウザ確認成功。この追記は保存先の記録だけでソース変更なし、同じ最終検証結果を使用する。
