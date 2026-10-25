@@ -833,3 +833,5 @@
 - 最終検証成功：181ファイル/2,085テスト、354.11秒・4並列。型チェック・ビルド・diffチェック成功。関連67件も成功。ログ/tmp/invite-button-final-{tests,typecheck,build}.log、/tmp/invite-button-related2.log。実装22c4462、本番b0cd4e8、push前fetchで追加更新なし。DB追加/既存マイグレーション変更なし、実Discord操作なし。次は担当Claude向けPRの確認・合流後、運営が置きたい場所で/パネル 招待リンクを実行する。
 - GitHub保存済み：PR #92 https://github.com/manakikido-jpg/evaluation/pull/92 、codex/invite-link-button、実装22c4462/検証記録47b8b28。OPEN・未合流・本番未反映。全2,085件・型・ビルド成功。担当Claudeの確認/合流後に神職が/パネル 招待リンクで設置し、参拝者の本人用リンク発行を実環境確認する。この追記は所在のみでソース変更なし。
 - 統合：本番4f3c72fでPR90/91/92が合流済み。既存マイグレーション0134（参拝公開）/0135（キャスト料金）は本番のものをそのまま取り込み、新規DB変更なし。競合は更新履歴と引き継ぎの同時追記のみで両方を保持。統合後のコードで最終検証する。
+- 最終統合検証成功：182ファイル/2,107テスト、382.47秒・4並列。型チェック・ビルド・diffチェック成功。関連18件と更新速報の実ルート1件も成功。ログ/tmp/news-brief-integrated-{tests,typecheck,build}.log、/tmp/news-brief-related.log、/tmp/news-brief-web.log。統合前に開始した実行は停止し、成功扱いにしない。テスト削除/skipなし。
+- 実装3aa1d97、統合b43a96a、本番4f3c72fまで取り込み済み。push前fetchで追加更新なし。新規DB変更/本番DB操作/実Discord投稿/履歴の削除なし。周知文・画像指示は担当者用のたたき台で、自動画像生成や役職への自動メンションは追加しない。次は担当ClaudeによるPR確認/合流と、必要な過去更新の手動再投稿で新形式を確認。
