@@ -20,17 +20,40 @@ describe('🚫 招待を作れない人', () => {
     expect(await isInviteBlocked(db, BAD)).toBe(false);
   });
 
-  it('登録した人が作った招待だけ、すぐ消す', async () => {
+  it('🚨 10 分で 5 人・20 分で 10 人で警戒。警戒の人・見張る人の招待で入った人に案内停止を付ける', async () => {
+    const { invites, members } = await import('../src/db/schema.js');
+    const { checkInviteBurst, holdsGuide, inviteAlerts, clearInviteAlert } = await import('../src/services/inviteGuard.js');
+    const now = new Date('2026-10-25T12:00:00Z');
+    const id = (n: number) => `8200000000000000${String(n).padStart(2, '0')}`;
+    const add = async (n: number, minutesAgo: number, source = 'link', inviter = OK) => {
+      await db.insert(members).values({ id: id(n), username: 'u' + n, displayName: 'u' + n }).onConflictDoNothing();
+      await db.insert(invites).values({ memberId: id(n), inviterId: inviter, source, createdAt: new Date(now.getTime() - minutesAgo * 60_000) });
+    };
+    for (let n = 1; n <= 4; n++) await add(n, n);
+    await add(30, 1, 'answer');
+    expect(await checkInviteBurst(db, OK, now)).toBeUndefined();
+    await add(5, 2);
+    const warn = await checkInviteBurst(db, OK, now);
+    expect(warn?.level).toBe('warn');
+    expect(warn?.invitees).toHaveLength(5);
+    expect(await checkInviteBurst(db, OK, now)).toBeUndefined();
+    for (let n = 6; n <= 10; n++) await add(n, 15);
+    expect((await checkInviteBurst(db, OK, now))?.level).toBe('severe');
+    expect((await inviteAlerts(db))[0]?.level).toBe('severe');
+    expect(await holdsGuide(db, OK)).toBe('alert');
+    expect(await clearInviteAlert(db, OK, 'admin')).toBe(true);
+    expect(await holdsGuide(db, OK)).toBeUndefined();
+    await setInviteBlock(db, BAD, true, 'admin');
+    expect(await holdsGuide(db, BAD)).toBe('blocked');
+  });
+
+  it('見張る人の招待で入った人に、案内停止ロールを付ける', async () => {
     await setInviteBlock(db, BAD, true, 'admin');
     const app = new InviteLinkApp(db, () => cfg);
-    const inv = (inviterId: string | null, guildId = cfg.guildId) => ({ code: 'abc', guild: { id: guildId }, inviterId, delete: vi.fn(async () => undefined) });
-    const bad = inv(BAD);
-    expect(await app.onInviteCreate(bad as never)).toBe(true);
-    expect(bad.delete).toHaveBeenCalledOnce();
-    const ok = inv(OK);
-    expect(await app.onInviteCreate(ok as never)).toBe(false);
-    expect(ok.delete).not.toHaveBeenCalled();
-    expect(await app.onInviteCreate(inv(BAD, '100000000000000000') as never)).toBe(false);
-    expect(await app.onInviteCreate(inv(null) as never)).toBe(false);
+    const role = { id: '830000000000000001', name: '案内停止' };
+    const has = new Set<string>();
+    const member = { id: '820000000000000099', roles: { cache: { has: (r: string) => has.has(r) }, add: vi.fn(async () => void has.add(role.id)) }, guild: { roles: { cache: { find: () => role } }, members: { fetch: async () => undefined }, channels: { cache: new Map() } } };
+    expect(await app.guard(member as never, BAD)).toEqual([member.id]);
+    expect(await app.guard(member as never, OK)).toEqual([]);
   });
 });

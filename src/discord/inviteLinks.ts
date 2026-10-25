@@ -1,5 +1,5 @@
-import { ChannelType, MessageFlags, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type Invite, type TextChannel } from 'discord.js';
-import { isInviteBlocked } from '../services/inviteBlock.js';
+import { ChannelType, MessageFlags, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type TextChannel } from 'discord.js';
+import { alertLabel, checkInviteBurst, GUIDE_HOLD_ROLE_NAME, holdsGuide } from '../services/inviteGuard.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coreName } from '../lib/names.js';
@@ -73,7 +73,10 @@ export class InviteLinkApp {
         return void logger.info({ memberId: member.id, label: link.label }, 'joined by shared invite link');
       }
       if (link) {
-        if (link.inviterId !== member.id && (await recordInvite(this.db, member.id, link.inviterId, 'link'))) logger.info({ memberId: member.id, inviterId: link.inviterId }, 'joined by invite link');
+        if (link.inviterId !== member.id && (await recordInvite(this.db, member.id, link.inviterId, 'link'))) {
+          logger.info({ memberId: member.id, inviterId: link.inviterId }, 'joined by invite link');
+          await this.guard(member, link.inviterId).catch((err: unknown) => logger.warn({ err }, 'invite guard failed'));
+        }
         return;
       }
       // BOT が覚えていないリンク: メンバーが作ったリンクなら、その人の招待。DISBOARD などの BOT のリンクは共通リンクとしてまとめる
@@ -81,7 +84,10 @@ export class InviteLinkApp {
       const other = grewInvite(before, current, known);
       if (!other) return;
       if (other.inviterId && !other.inviterBot) {
-        if (other.inviterId !== member.id && (await recordInvite(this.db, member.id, other.inviterId, 'link'))) logger.info({ memberId: member.id, inviterId: other.inviterId, code: other.code }, 'joined by member-made invite');
+        if (other.inviterId !== member.id && (await recordInvite(this.db, member.id, other.inviterId, 'link'))) {
+          logger.info({ memberId: member.id, inviterId: other.inviterId, code: other.code }, 'joined by member-made invite');
+          await this.guard(member, other.inviterId).catch((err: unknown) => logger.warn({ err }, 'invite guard failed'));
+        }
         return;
       }
       await recordSharedJoin(this.db, member.id, other.inviterName ?? 'Discord の招待');
@@ -89,6 +95,41 @@ export class InviteLinkApp {
     });
     this.queue = run.catch((err: unknown) => logger.warn({ err }, 'invite link match failed'));
     return this.queue.then(() => undefined);
+  }
+
+  /** 「案内停止」ロール（なければ作る。権限なし・メンションなし） */
+  private async holdRole(guild: Guild) {
+    const found = guild.roles.cache.find((r) => r.name === GUIDE_HOLD_ROLE_NAME);
+    return found ?? (await guild.roles.create({ name: GUIDE_HOLD_ROLE_NAME, permissions: [], mentionable: false, reason: '🚨 招待の見張り（案内所に入れない目印）' }));
+  }
+
+  /**
+   * 🚨 招待の見張り（共通リンクはここに来ない）。
+   * 10 分で 5 人・20 分で 10 人をこえたら警戒にして、その間に入った人に「案内停止」を付ける。
+   * 警戒中の人・「招待を作れない人」の招待で入った人にも付ける。
+   */
+  async guard(member: GuildMember, inviterId: string, now = new Date()): Promise<string[]> {
+    const burst = await checkInviteBurst(this.db, inviterId, now);
+    const targets = new Set<string>(burst?.invitees ?? []);
+    const why = await holdsGuide(this.db, inviterId);
+    if (why) targets.add(member.id);
+    if (!targets.size) return [];
+    const role = await this.holdRole(member.guild);
+    const done: string[] = [];
+    for (const id of targets) {
+      const m = id === member.id ? member : await member.guild.members.fetch(id).catch(() => undefined);
+      if (!m || m.roles.cache.has(role.id)) continue;
+      await m.roles.add(role, why === 'blocked' ? '招待を作れない人のリンクで入った' : '警戒中の人の招待で入った').then(() => done.push(id), (err: unknown) => logger.warn({ err, id }, 'guide hold role failed'));
+    }
+    const logId = this.cfg().channels.log;
+    const ch = logId ? member.guild.channels.cache.get(logId) : undefined;
+    if (ch?.isSendable()) {
+      const lines = burst
+        ? [`${alertLabel(burst.level)}: <@${inviterId}> さんの招待で、短い間に ${burst.count} 人が入りました。`, `この人の招待で入った人に「${GUIDE_HOLD_ROLE_NAME}」を付けました（${done.length} 人）。社務所Web の「招待」で確かめて、問題なければ警戒を外してください。`]
+        : done.length ? [`🚫 <@${member.id}> さんは${why === 'blocked' ? '「招待を作れない人」' : '警戒中の人'}（<@${inviterId}>）の招待で入ったので、「${GUIDE_HOLD_ROLE_NAME}」を付けました。`] : [];
+      if (lines.length) await ch.send({ content: lines.join('\n'), allowedMentions: { parse: [] } }).catch(() => undefined);
+    }
+    return done;
   }
 
   async onInteraction(interaction: Interaction): Promise<void> {
@@ -104,25 +145,12 @@ export class InviteLinkApp {
     }
   }
 
-  /** 🚫 招待を作れない人が Discord で招待を作ったら、すぐ消して運営に知らせる */
-  async onInviteCreate(invite: Pick<Invite, 'code' | 'guild' | 'inviterId' | 'delete'>): Promise<boolean> {
-    if (invite.guild?.id !== this.cfg().guildId || !invite.inviterId) return false;
-    if (!(await isInviteBlocked(this.db, invite.inviterId))) return false;
-    await invite.delete('招待を作れない人が作った招待（社務所Web で登録）');
-    const logId = this.cfg().channels.log;
-    const ch = logId && this.guild ? this.guild.channels.cache.get(logId) : undefined;
-    if (ch?.isSendable()) await ch.send({ content: `🚫 招待を作れない <@${invite.inviterId}> さんが招待リンク（${invite.code}）を作ったので、消しました。`, allowedMentions: { parse: [] } }).catch(() => undefined);
-    return true;
-  }
-
   private async link(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     const cfg = this.cfg();
     const roleIds = [...i.member.roles.cache.keys()];
     if (!cfg.ranks.some((r) => roleIds.includes(r.roleId)) && !adminLevelOf(cfg, roleIds)) {
       return void (await i.reply({ content: '招待リンクは、🔰参拝者 になってから使えます。', ...EPHEMERAL }));
     }
-    // 🚫 招待を作れない人（社務所Web の「招待」で登録）
-    if (await isInviteBlocked(this.db, i.user.id)) return void (await i.reply({ content: '今は招待リンクを使えません。運営にお問い合わせください。', ...EPHEMERAL }));
     this.guild ??= i.guild;
     const ch = this.entrance();
     if (!ch) return void (await i.reply({ content: '入口のチャンネル（#鳥居）が見つかりません。神職に知らせてください。', ...EPHEMERAL }));

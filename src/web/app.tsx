@@ -1,3 +1,4 @@
+import { clearInviteAlert, inviteAlerts } from '../services/inviteGuard.js';
 import { inviteBlocks, setInviteBlock } from '../services/inviteBlock.js';
 import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
@@ -65,7 +66,7 @@ import { CoreTimePage } from './views/coreTime.js';
 import { describeCoreTime } from '../services/coreTime.js';
 import { coreTimeMembers, coreTimeRegulars, coreTimeRows, coreTimeSessions } from '../services/coreTimeAttendance.js';
 import { boostMembers, cancelBoost, createBoost, giftBoost, listBoosts, updateBoost } from '../services/boostTimes.js';
-import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, activeLinkOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountShinpu } from './shinpu.js';
@@ -1410,8 +1411,8 @@ export function createWebApp(deps: WebDeps) {
     const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
     // Discord で消されていた BOT のリンクは出さない（読めたときだけ）
     const alive = discordInvites ? links.filter((l) => uses.has(l.code)) : links;
-    const blocks = await inviteBlocks(db);
-    const names = await namesOf(db, [...blocks.map((b) => b.id), ...rewards.flatMap((r) => [r.memberId, r.inviterId ?? '']), ...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
+    const [blocks, alerts] = await Promise.all([inviteBlocks(db), inviteAlerts(db)]);
+    const names = await namesOf(db, [...blocks.map((b) => b.id), ...alerts.map((a) => a.id), ...rewards.flatMap((r) => [r.memberId, r.inviterId ?? '']), ...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
     return c.html(
       <InvitesPage
         session={c.get('session')}
@@ -1430,6 +1431,7 @@ export function createWebApp(deps: WebDeps) {
         flash={c.req.query('msg')}
         now={now()}
         blocks={blocks}
+        alerts={alerts}
       />,
     );
   });
@@ -1461,14 +1463,12 @@ export function createWebApp(deps: WebDeps) {
     if (!/^\d{17,20}$/.test(id)) return c.redirect('/invites?msg=invalid#invite-block');
     const s = c.get('session');
     await setInviteBlock(db, id, true, s.userId, typeof b.note === 'string' ? b.note.trim() : '', now());
-    const mine = await activeLinkOf(db, id);
-    const codes = new Set<string>(mine ? [mine.code] : []);
-    for (const inv of (deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => []) : [])) if (inv.inviter?.id === id) codes.add(inv.code);
-    for (const code of codes) {
-      await deps.discord.deleteInvite?.(code, `招待を作れない人に登録（${s.userId}）`).catch(() => undefined);
-      await revokeLink(db, code, now());
-    }
     return c.redirect('/invites?msg=blocked#invite-block');
+  });
+  // 🚨 招待の警戒を外す（確かめたあと）
+  app.post('/invites/alert/:id/clear', async (c) => {
+    await clearInviteAlert(db, c.req.param('id'), c.get('session').userId);
+    return c.redirect('/invites?msg=alert_cleared#invite-block');
   });
   app.post('/invites/block/:id/delete', async (c) => {
     await setInviteBlock(db, c.req.param('id'), false, c.get('session').userId);

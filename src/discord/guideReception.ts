@@ -1,3 +1,4 @@
+import { GUIDE_HOLD_ROLE_NAME } from '../services/inviteGuard.js';
 import { adminLevelOf } from '../config.js';
 import { watchOf } from '../services/securityWatch.js';
 import { isNewAccount, raidState } from '../services/raid.js';
@@ -38,6 +39,10 @@ export const isGuidePanel = (m: Pick<Message, 'components'>) =>
 const RESTICK_MS = 3_000;
 /** ロールを付けてから、戻されていないか確かめるまで */
 const RECHECK_MS = 15_000;
+
+/** 「案内停止」ロールが付いているか */
+const heldGuide = (m: { roles?: { cache?: { values?: () => Iterable<{ name?: string }> } } } | null | undefined) =>
+  typeof m?.roles?.cache?.values === 'function' && [...m.roles.cache.values()].some((r) => r?.name === GUIDE_HOLD_ROLE_NAME);
 
 export class GuideReceptionApp {
   private ticking = false;
@@ -129,6 +134,13 @@ export class GuideReceptionApp {
         for (const r of await leaveGuideReception(this.db, after.id)) await this.refresh(r, c).catch(err => logger.warn({ err }, 'guide exit display failed'));
       }
       if (after.channelId && c.voiceChannelIds.includes(after.channelId)) {
+        // 🚫「案内停止」ロールの人は案内所に入れない（通話から外して知らせる）
+        if (heldGuide(after.member)) {
+          await after.disconnect('案内停止ロールの人は案内所に入れない').catch((err: unknown) => logger.warn({ err }, 'guide hold disconnect failed'));
+          await after.member!.send('いまは案内所を使えません。運営の確認をお待ちください。').catch(() => undefined);
+          if (c.staffChannelId) await this.discord.sendMessage(c.staffChannelId, { content: `🚫 「${GUIDE_HOLD_ROLE_NAME}」の <@${after.id}> さんが案内所に入ろうとしたので、通話から外しました。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+          return;
+        }
         if (!this.isVisitor(after.member, c)) return;
         await openGuideReception(this.db, after.id, after.channelId);
         await this.tick(after.guild);
@@ -146,7 +158,7 @@ export class GuideReceptionApp {
         const ch = guild.channels.cache.get(channelId);
         if (ch?.type !== ChannelType.GuildVoice) continue;
         for (const member of ch.members.values()) {
-          if (this.isVisitor(member, c)) await openGuideReception(this.db, member.id, channelId);
+          if (this.isVisitor(member, c) && !heldGuide(member)) await openGuideReception(this.db, member.id, channelId);
         }
       }
       const rows = await this.db.select().from(guideReceptions).where(isNull(guideReceptions.departedAt));

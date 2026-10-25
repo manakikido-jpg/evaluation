@@ -220,6 +220,19 @@ describe('案内待ちだけの受付と案内人の開始', () => {
     await m.app.tick(m.guild as never);
     expect(await db.select().from(guideReceptions)).toHaveLength(1);
   });
+  it('🚫「案内停止」ロールの人は案内所に入れない（通話から外して、受付しない）', async () => {
+    await configure();
+    const m = mockGuild();
+    m.visitor.roles.cache.set('880000000000000077', { id: '880000000000000077', name: '案内停止' } as never);
+    const disconnect = vi.fn(async () => undefined);
+    const send = vi.fn(async () => undefined);
+    (m.visitor as Record<string, unknown>).send = send;
+    await m.app.onVoiceStateUpdate({ channelId: null } as never, { channelId: VOICE, guild: m.guild, member: m.visitor, id: m.visitor.id, disconnect } as never);
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledOnce();
+    await m.app.tick(m.guild as never);
+    expect(await db.select().from(guideReceptions)).toHaveLength(0);
+  });
   it('ロール名でも案内待ちを見つけ、見つからなければ全員を数えない', async () => {
     await configure();
     const m = mockGuild();

@@ -4469,17 +4469,17 @@ it('🎭 スタンプでロールのパネルを作る・直す・消す（神�
   expect((await app.request('/reaction-roles', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: 'channelId=1' })).status).toBe(403);
 });
 
-it('🚫 招待を作れない人を社務所Web で登録すると、今ある招待リンクも消す', async () => {
+it('🚫 招待を見張る人を社務所Web で登録できる（招待リンクは消さない）', async () => {
   const deleted: string[] = [];
   app = createWebApp({ db, cfg, api: fakeApi, discord: { ...fakeActions, guildInvites: async () => [{ code: 'bad1', inviter: { id: '815208713874584412', username: 'x' } }, { code: 'ok1', inviter: { id: '815208713874584499', username: 'y' } }], deleteInvite: async (code: string) => void deleted.push(code) }, baseUrl: BASE, now: () => clock });
   const s = await login(STAFF);
   const page = await (await get('/invites', s)).text();
-  expect(page).toContain('招待を作れない人');
+  expect(page).toContain('招待の見張り');
   const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
   const send = (path: string, f: Record<string, string>) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...f }) });
   expect((await send('/invites/block', { memberId: 'abc' })).headers.get('location')).toBe('/invites?msg=invalid#invite-block');
   expect((await send('/invites/block', { memberId: '815208713874584412', note: 'サブ垢の疑い' })).headers.get('location')).toBe('/invites?msg=blocked#invite-block');
-  expect(deleted).toEqual(['bad1']);
+  expect(deleted).toEqual([]);
   expect(await (await get('/invites', s)).text()).toContain('サブ垢の疑い');
   expect((await send('/invites/block/815208713874584412/delete', {})).headers.get('location')).toBe('/invites?msg=unblocked#invite-block');
 });
