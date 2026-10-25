@@ -2387,6 +2387,8 @@ export const visitProfiles = pgTable('visit_profiles', {
 export const visitPurchases = pgTable('visit_purchases', {
   memberId: text('member_id').notNull(), itemId: text('item_id').notNull(),
   price: integer('price').notNull(),
+  creatorId: text('creator_id'),
+  creatorPaid: integer('creator_paid').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.memberId, t.itemId] }), check('visit_purchase_price', sql`${t.price} > 0`)]);
 export const visitBadges = pgTable('visit_badges', {
@@ -2446,3 +2448,27 @@ export const castChargeQuotes = pgTable('cast_charge_quotes', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 }, t => [index('cast_charge_quote_expiry_idx').on(t.expiresAt)]);
 export type CastChargeQuote = typeof castChargeQuotes.$inferSelect;
+
+
+/** 参拝帳の制作権利（買い切り）。 */
+export const visitCreatorLicenses = pgTable('visit_creator_licenses', {
+  memberId: text('member_id').primaryKey(),
+  price: integer('price').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+/** 正規化した画像は変更しない。販売後の作品は取り下げても購入者のために残す。 */
+export const visitDesigns = pgTable('visit_designs', {
+  id: text('id').primaryKey(),
+  creatorId: text('creator_id').notNull(),
+  kind: text('kind').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  price: integer('price').notNull().default(0),
+  status: text('status').notNull().default('private'),
+  data: bytea('data').notNull(),
+  reviewNote: text('review_note').notNull().default(''),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('visit_design_creator_idx').on(t.creatorId), index('visit_design_status_idx').on(t.status)]);
+export type VisitDesign = typeof visitDesigns.$inferSelect;

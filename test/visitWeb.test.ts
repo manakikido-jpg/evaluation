@@ -79,3 +79,32 @@ describe('参拝Web',()=>{
   expect((await post('/visit/logout',{})).status).toBe(303);expect((await req('/visit/card.png')).status).toBe(401);
  });
 });
+
+it('制作権利は初期停止、購入後だけアップロードでき、販売は承認後に公開する',async()=>{
+ const {saveWorkshopSettings,reviewDesign}=await import('../src/services/visitWorkshop.js');
+ const {visitData}=await import('../src/services/visitProfile.js');
+ const sharp=(await import('sharp')).default;
+ expect(await (await req('/visit')).text()).toContain('現在販売停止中');
+ expect((await post('/visit/license',{quote:'0',confirm:'yes'})).status).toBe(400);
+ await saveWorkshopSettings(db,{enabled:true,licensePrice:5000},'admin');
+ expect((await post('/visit/license',{quote:'5000',confirm:'yes',_csrf:'wrong'})).status).toBe(403);
+ expect((await post('/visit/license',{quote:'5000',confirm:'yes'})).status).toBe(303);
+ const image=await sharp({create:{width:1080,height:640,channels:3,background:'#0066aa'}}).png().toBuffer();
+ const form=new FormData();for(const [k,v] of Object.entries({_csrf:csrf,kind:'background',name:'私の作品',description:'青い背景',mode:'personal',rights:'yes'}))form.append(k,v);form.append('image',new File([new Uint8Array(image)],'background.png',{type:'image/png'}));
+ const uploaded=await req('/visit/designs',{method:'POST',body:form});expect(uploaded.status).toBe(303);
+ const id=new URL(uploaded.headers.get('location')!,baseUrl).searchParams.get('background')!;
+ expect((await req('/visit/designs/'+id+'.png')).headers.get('content-type')).toBe('image/png');
+ const tokenB=await createMemberSession(db,{...user,id:B},now),sessionB=(await findMemberSession(db,tokenB,now))!;
+ const asB=(path:string,init:RequestInit={})=>app.request(baseUrl+path,{...init,headers:{cookie:'sakura_visit='+tokenB,...init.headers}});
+ expect((await asB('/visit/designs/'+id+'.png')).status).toBe(404);
+ expect((await asB('/visit/designs/'+id+'/delete',{method:'POST',body:new URLSearchParams({_csrf:sessionB.csrfToken})})).status).toBe(400);
+ expect((await post('/visit/designs/'+id+'/submit',{price:'1000',rights:'yes'})).status).toBe(303);
+ expect((await asB('/visit/designs/'+id+'.png')).status).toBe(404);
+ await reviewDesign(db,id,'admin','approve','',now);expect((await asB('/visit/designs/'+id+'.png')).status).toBe(200);
+ await addCoins(db,B,2000,'admin_grant');
+ const purchase=await asB('/visit/buy',{method:'POST',body:new URLSearchParams({_csrf:sessionB.csrfToken,item:id,quote:'1000',confirm:'yes'})});expect(purchase.status).toBe(303);
+ expect((await walletOf(db,A)).balance).toBe(5700);expect((await walletOf(db,B)).balance).toBe(1000);
+ const equipped=await asB('/visit/equip',{method:'POST',body:new URLSearchParams({_csrf:sessionB.csrfToken,background:id,frame:'plain',title:'rank',publicStats:'yes'})});expect(equipped.status).toBe(303);
+ expect((await visitData(db,B,now)).profile.background).toBe(id);
+ expect((await asB('/visit/card.png')).headers.get('content-type')).toBe('image/png');
+});

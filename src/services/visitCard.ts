@@ -55,8 +55,10 @@ function medal(id: string, x: number, y: number): string {
 export function visitCardSvg(data: VisitData, options: {
   privateView?: boolean; background?: string; frame?: string; avatar?: Uint8Array; preview?: boolean;
 } = {}) {
-  const bg = VISIT_ITEMS.find(i => i.kind === 'background' && i.id === (options.background ?? data.profile.background)) ?? VISIT_ITEMS[0];
-  const frame = VISIT_ITEMS.find(i => i.kind === 'frame' && i.id === (options.frame ?? data.profile.frame)) ?? VISIT_ITEMS[5];
+  const catalog=data.catalog ?? VISIT_ITEMS;
+  const image=(id:string,edge=false)=>data.art?.[id] ? '<image href="data:image/png;base64,'+data.art[id]+'" width="1080" height="640"/>' : art(id,edge);
+  const bg = catalog.find(i => i.kind === 'background' && i.id === (options.background ?? data.profile.background)) ?? VISIT_ITEMS[0];
+  const frame = catalog.find(i => i.kind === 'frame' && i.id === (options.frame ?? data.profile.frame)) ?? VISIT_ITEMS[5];
   const visible = options.privateView || data.profile.publicStats;
   const name = [...data.member.displayName].slice(0,22).join('');
   const title = visible ? (data.profile.title === 'rank' ? data.rank.name : VISIT_BADGES.find(b => b.id === data.profile.title)?.name ?? '') : '';
@@ -66,7 +68,7 @@ export function visitCardSvg(data: VisitData, options: {
     '<linearGradient id="metal"><stop stop-color="#e9c878"/><stop offset=".5" stop-color="#fff5cc"/><stop offset="1" stop-color="#aa8448"/></linearGradient>' +
     '<filter id="textShadow" x="-.2" y="-.5" width="1.4" height="2"><feDropShadow dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="1"/></filter>' +
     '<clipPath id="avatar"><circle cx="123" cy="83" r="27"/></clipPath><clipPath id="card"><rect width="1080" height="640"/></clipPath></defs><g clip-path="url(#card)">' +
-    art(bg.id) + '<rect width="1080" height="640" fill="url(#veil)"/>' +
+    image(bg.id) + '<rect width="1080" height="640" fill="url(#veil)"/>' +
     '<circle cx="123" cy="83" r="29" fill="#1b2644" stroke="' + frame.colors[0] + '" stroke-width="2"/>';
   svg += options.avatar ? '<image href="data:image/png;base64,' + Buffer.from(options.avatar).toString('base64') +
     '" x="96" y="56" width="54" height="54" clip-path="url(#avatar)"/>' : text(111,93,[...name][0]??'桜',28);
@@ -90,7 +92,7 @@ export function visitCardSvg(data: VisitData, options: {
     svg += text(125,240,'活動記録は非公開です',25) + text(125,278,'公開する内容は、本人がWebで選べます。',17,'#e1d8ea');
   }
   if (options.preview) svg += text(125,577,'着せ替えの見本 · 保存前のプレビュー',14,'#d8d0e3');
-  if (frame.id !== 'plain') svg += art(frame.id,true);
+  if (frame.id !== 'plain') svg += image(frame.id,true);
   // 細縁と装飾枠のどちらも四辺へ接続し、外側へ余白を作らない。
   svg += '<rect x="0" y="0" width="1080" height="640" fill="none" stroke="url(#metal)" stroke-width="2"/>';
   return svg + '</g></svg>';

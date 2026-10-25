@@ -1,3 +1,5 @@
+import type { VisitRevenue } from '../../services/visitRevenue.js';
+import { VisitRevenueSummary } from './visitManagement.js';
 import { kobanValue, kobanPrice } from '../../domain/koban.js';
 import type { KobanStats } from '../../services/koban.js';
 import type { EconomyConfig } from '../../config.js';
@@ -52,6 +54,7 @@ export function ShopPage(props: {
   roles: GuildRole[];
   purchases: ShopPurchase[];
   koban?: KobanStats;
+  visitRevenue?: VisitRevenue;
   names: Map<string, string>;
   economy: EconomyConfig;
   flash?: string;
@@ -76,6 +79,7 @@ export function ShopPage(props: {
         </a>
       </div>
       <Flash code={props.flash} />
+      {props.visitRevenue && <section class="card" id="shop-visit"><h2>🌸 参拝帳の着せ替え収益（累計）</h2><VisitRevenueSummary data={props.visitRevenue} currency={e.currencyName}/><a class="button-link" href="/shop/visit">月別・商品別の収益と制作審査を開く</a></section>}
       {props.koban && <section class="card" id="shop-koban"><h2>🪙 小判の販売・手数料（累計）</h2><p>小判は額面の150％で販売。手数料は購入時に受け取る差額です。未送付の額面は手数料収益に含めません。</p>
         <div class="table-wrap"><table><thead><tr><th>額面</th><th>販売数</th><th>販売額</th><th>手数料収益</th><th>換金済み</th><th>未送付</th><th>未送付の額面</th></tr></thead><tbody>
           {props.koban.map(k => <tr><td>{k.value.toLocaleString('ja-JP')}銭</td><td>{k.count}枚</td><td>{k.sales.toLocaleString('ja-JP')}銭</td><td>{k.fee.toLocaleString('ja-JP')}銭</td><td>{k.sent}枚</td><td>{k.pending}枚</td><td>{(k.pending*k.value).toLocaleString('ja-JP')}銭</td></tr>)}

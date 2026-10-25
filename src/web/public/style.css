@@ -1462,3 +1462,4 @@ form.inline { display: inline; margin: 0; }
 .member-role-floating .member-role-popover .note{margin:0;flex:none}
 .member-role-floating .member-role-popover .office-multi-options{min-height:0;max-height:320px;overflow-y:auto;margin:0;flex:1 1 auto}
 .member-role-floating .member-role-head,.member-role-floating .member-role-actions,.member-role-floating .member-role-search{flex:none;margin:0}
+.visit-review-image { max-width: 100%; height: auto; }

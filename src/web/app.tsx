@@ -1,3 +1,5 @@
+import { mountVisitManagement } from './visitManagement.js';
+import { visitRevenue } from '../services/visitRevenue.js';
 import { clearInviteAlert, inviteAlerts } from '../services/inviteGuard.js';
 import { inviteBlocks, setInviteBlock } from '../services/inviteBlock.js';
 import { mountVisit } from './visit.js';
@@ -391,7 +393,7 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
-      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
+      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/visit/designs' || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
@@ -6655,6 +6657,8 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/shop/*', async (c, next) => (gujiOnly(c) ? next() : c.html(<NotFoundPage session={c.get('session')} />, 403)));
 
+  mountVisitManagement(app, { db, now, currency: () => cfg.economy.currencyName });
+
   const shopRoles = async () => {
     try {
       return await deps.discord.guildRoles(cfg.guildId);
@@ -6697,6 +6701,7 @@ export function createWebApp(deps: WebDeps) {
         roles={roles}
         purchases={purchases}
         koban={await kobanStats(db)}
+        visitRevenue={await visitRevenue(db)}
         names={names}
         economy={cfg.economy}
         flash={c.req.query('msg')}

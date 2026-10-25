@@ -21,6 +21,7 @@ export type CoinReason =
   | 'invite'
   | 'invite_active'
   | 'shop'
+  | 'visit_design_reward'
   | 'shop_refund'
   | 'gift_send'
   | 'gift_receive'
@@ -302,6 +303,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   invite_active: '招待した人の浮上ボーナス',
   market_buy: '市場で買った',
   market_sell: '市場で売れた',
+  visit_design_reward: '参拝帳の作品の売上',
   market_refund: '市場の返金',
   admin_grant: '運営から',
   admin_take: '運営が減らした',

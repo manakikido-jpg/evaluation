@@ -39,6 +39,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   koban_fee: 'income',
   koban_redeem: 'income',
   shop: 'income',
+  visit_design_reward: 'income',
   shop_refund: 'income',
   room: 'income',
   gacha: 'income',
