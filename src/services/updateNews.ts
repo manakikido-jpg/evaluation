@@ -6,6 +6,7 @@ import type { DiscordActions, GuildChannel, MessageBody } from '../lib/discordRe
 import { logger } from '../lib/logger.js';
 import { audit } from './audit.js';
 import { findChannel } from './notices.js';
+import { UPDATE_ANNOUNCEMENTS } from '../updateAnnouncements.js';
 
 /**
  * 📰 更新速報: 更新履歴（src/changelog.ts）を Discord の #更新速報 にカードで出す。
@@ -69,14 +70,34 @@ export const NEWS_KIND: Record<ChangelogKind, { label: string; color: number }> 
 const WHERE_LABEL: Record<string, string> = { Discord: 'Discord', 社務所Web: '社務所Web（運営）', 運用: 'サーバーの裏側' };
 export const fmtNewsDay = (d: string) => `${Number(d.slice(5, 7))}月${Number(d.slice(8, 10))}日`;
 
+const clip = (s: string, max: number) => s.length > max ? s.slice(0, max - 1) + '…' : s;
+
+/** 周知担当が読む制作メモ。未確認の手順は作らず、元の変更点をたたき台にする。 */
+export function announcementFields(e: ChangelogEntry): NonNullable<NonNullable<MessageBody['embeds']>[number]['fields']> {
+  const a = e.announcement ?? UPDATE_ANNOUNCEMENTS[e.id];
+  const judgment = a ? ({ required: '🔴 周知をお願いします', optional: '🟡 必要に応じて周知', none: '⚪ メンバーへの周知は不要（運営内で確認）' })[a.priority] : '🔎 要確認：周知するか運営と相談';
+  const fields = [
+    { name: '周知の判断', value: judgment },
+    { name: '誰に伝える？', value: clip(a?.audience || (e.where.includes('Discord') ? 'サーバーのメンバー（詳しい対象は要確認）' : '運営・管理画面を使う人'), 160) },
+    { name: '案内する操作・手順', value: clip(a?.steps.length ? a.steps.map((s, i) => (i + 1) + '. ' + s).join('\n') : 'この速報には操作手順の記載がありません。周知前に運営へ確認してください。', 700) },
+  ];
+  if (a?.priority !== 'none') fields.push(
+    { name: '周知文のたたき台', value: clip(a?.postText || [e.title, ...e.items].join('\n'), 1000) },
+    { name: '画像制作の指示', value: clip(a?.imagePrompt || '画像が必要か運営と相談してください。作る場合は「' + clip(e.title, 100) + '」を見出しにし、この速報で確認できる変更点だけを短く載せます。未記載の操作や料金は追加しないでください。', 800) },
+  );
+  if (a?.notes) fields.push({ name: '周知前に確認すること', value: clip(a.notes, 350) });
+  return fields;
+}
+
 /** 1 つの更新のカード */
 export function newsEmbed(e: ChangelogEntry): NonNullable<MessageBody['embeds']>[number] {
   return {
     author: { name: NEWS_KIND[e.kind].label },
-    title: e.title.slice(0, 256),
-    description: e.items.map((t) => `- ${t}`).join('\n').slice(0, 4000),
+    title: clip(e.title, 256),
+    description: clip(e.items.map((t) => `- ${t}`).join('\n'), 1600),
+    fields: announcementFields(e),
     color: NEWS_KIND[e.kind].color,
-    footer: { text: `${fmtNewsDay(e.date)} ・ ${e.where.map((w) => WHERE_LABEL[w] ?? w).join('・')}` },
+    footer: { text: clip(`${fmtNewsDay(e.date)} ・ ${e.where.map((w) => WHERE_LABEL[w] ?? w).join('・')}`, 160) },
   };
 }
 
@@ -91,15 +112,16 @@ export function newsMessages(entries: ChangelogEntry[]): MessageBody[] {
     const first = out.length === 0;
     const days = [...new Set(sorted.map((e) => fmtNewsDay(e.date)))];
     out.push({
-      ...(first ? { content: `## 📰 更新速報\n-# ${days.join('・')}のアップデート（${sorted.length} 件）` } : {}),
+      ...(first ? { content: `## 📰 更新速報\n-# ${clip(days.join('・'), 1200)}のアップデート（${sorted.length} 件）\n周知担当の方へ：各カードの判断・対象・手順を確認し、案内文と画像制作の指示を使って準備してください。` } : {}),
       embeds,
+      allowed_mentions: { parse: [] },
     });
     embeds = [];
     size = 0;
   };
   for (const e of sorted) {
     const card = newsEmbed(e);
-    const len = (card.title?.length ?? 0) + (card.description?.length ?? 0) + (card.footer?.text.length ?? 0) + (card.author?.name.length ?? 0);
+    const len = (card.title?.length ?? 0) + (card.description?.length ?? 0) + (card.footer?.text.length ?? 0) + (card.author?.name.length ?? 0) + (card.fields ?? []).reduce((n, f) => n + f.name.length + f.value.length, 0);
     if (embeds.length >= 10 || size + len > 5500) flush();
     embeds.push(card);
     size += len;

@@ -1033,6 +1033,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const page = await (await get('/updates', g)).text();
     expect(page).toContain('action="/updates/news"');
     expect(page).toContain('news-card');
+    expect(page).toContain('周知の判断');expect(page).toContain('周知文のたたき台');expect(page).toContain('画像制作の指示');
     // 名前で探す（テストの偽の Discord には「更新速報」がないので #しきたり を選ぶ）
     expect((await post('/updates/news/post', g, { _csrf: await csrfOf(g), id: CHANGELOG[0]!.id })).headers.get('location')).toBe('/updates?msg=news_nochannel#update-news');
     const saved = await post('/updates/news', g, { _csrf: await csrfOf(g), enabled: 'yes', channelId: '910000000000000003', scope: 'all' });

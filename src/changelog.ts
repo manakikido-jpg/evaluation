@@ -8,6 +8,15 @@
 export type ChangelogKind = 'new' | 'improve' | 'fix';
 export type ChangelogWhere = 'Discord' | '社務所Web' | '運用';
 
+export type ChangelogAnnouncement = {
+  priority: 'required' | 'optional' | 'none';
+  audience: string;
+  steps: string[];
+  postText: string;
+  imagePrompt: string;
+  notes?: string;
+};
+
 export type ChangelogEntry = {
   id: string;
   /** 日本時間の日付 YYYY-MM-DD */
@@ -16,9 +25,12 @@ export type ChangelogEntry = {
   where: ChangelogWhere[];
   title: string;
   items: string[];
+  /** 周知担当向け。未記載の更新は要確認として表示する。 */
+  announcement?: ChangelogAnnouncement;
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-25-news-announcement-brief', date: '2026-10-25', kind: 'improve', where: ['Discord', '社務所Web'], title: '更新速報に周知担当向けの制作メモ', items: ['周知が必要か・対象者・操作手順・案内文のたたき台・画像制作の指示を表示します。手順が未記載の更新は要確認とします。', '記録へのメッセージ削除通知を全チャンネルで停止します。単件・一括削除・退会者の片づけ報告が対象です。Web保存と既存の記録はそのままです。'], announcement: { priority: 'required', audience: '新機能や使い方を文章・画像で周知する担当者と運営', steps: ['更新速報の「周知の判断」と対象者を確認する。', '案内する操作を確認し、周知文のたたき台と画像制作の指示で準備する。', '設定や操作が現在の内容と合っているか確認して、対象者へ案内する。'], postText: '【周知担当の方へ】更新速報に、周知の要否・対象者・操作手順・案内文・画像制作の指示を追加しました。要確認の更新は運営に確認してから制作してください。記録へのメッセージ削除通知は今後停止します。', imagePrompt: '周知担当向けの簡潔な案内図。「判断と対象を確認」→「文面と画像を準備」→「運営確認・周知」の3手順。更新速報の内容を元に制作することを示す。', notes: 'この変更の案内は周知担当・運営向けです。全メンバーへの画像制作は必須ではありません。' } },
   { id: '2026-10-25-vc-profile-hidden', date: '2026-10-25', kind: 'improve', where: ['Discord', '社務所Web'], title: '📕 プロフィールを見るボタンだけを出さない通話', items: ['社務所Web の設定の「📕 出さない通話」は、「この通話の人のプロフィールを見る」のボタンだけを消すようにしました。', '寝落ちの報告・院に人を呼ぶなどのボタンは、えらんだ通話でも出ます。ほかのボタンもない通話では、今までどおりカードを出しません。'] },
   { id: '2026-10-25-inn-guest', date: '2026-10-25', kind: 'new', where: ['Discord'], title: '🏯 院に人を呼ぶ', items: ['院の通話のチャットのカードに「👤 人を呼ぶ」「🚪 呼んだ人を帰す」を足しました。', '役職の人が人をえらぶと、その人は一時的にその通話に入って話す・その通話のチャットに文と画像を送れます。通話を抜けたら元に戻ります（呼ばれて 30 分入らなくても戻ります）。'] },
   { id: '2026-10-25-schedule-keep-guides', date: '2026-10-25', kind: 'fix', where: ['Discord'], title: '案内日程の @案内人 の書き込みを残す', items: ['案内日程のチャンネルの自動の片づけで、@案内人 の書き込みは消さないようにしました。', 'Discord からメンバーを読めなかったときに「抜けた人」と見て消してしまうことがあったので、本当に抜けた人のときだけ消すようにしました。'] },

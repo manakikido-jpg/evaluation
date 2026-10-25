@@ -19,6 +19,10 @@ export const NEWS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   news_failed: { text: 'Discord に出せませんでした（BOT がそのチャンネルに書き込めるか確かめてください）。', kind: 'warn' },
 };
 
+function NewsBrief(props: { fields: ReturnType<typeof newsEmbed>['fields'] }) {
+  return <dl class="news-brief">{props.fields?.map(f => <><dt>{f.name}</dt><dd>{f.value}</dd></>)}</dl>;
+}
+
 /** Discord でのカードの見た目（だいたい） */
 export function NewsCardPreview(props: { e: ChangelogEntry }) {
   const card = newsEmbed(props.e);
@@ -31,6 +35,7 @@ export function NewsCardPreview(props: { e: ChangelogEntry }) {
           <li>{t}</li>
         ))}
       </ul>
+      <NewsBrief fields={card.fields} />
       <div class="news-footer">{card.footer?.text}</div>
     </div>
   );
@@ -51,7 +56,7 @@ function NewsSettings(props: {
     <section class="card anchor" id="update-news">
       <h2>📰 Discord の #更新速報 に出す</h2>
       <p class="note">
-        更新の内容を、種類ごとに色分けしたカードで Discord に出します。自動にしておくと、アップデートが入るたびに BOT が新しい分を出します（前に出した分は出しません）。
+        更新の内容と、周知の判断・対象者・手順・案内文・画像制作の指示を、種類ごとに色分けしたカードで Discord に出します。自動にしておくと、アップデートが入るたびに BOT が新しい分を出します（前に出した分は出しません）。
         今の出す先: <strong>{props.currentChannel ? `#${props.currentChannel}` : '見つかりません'}</strong>
       </p>
       <form method="post" action="/updates/news">
@@ -138,6 +143,7 @@ function Entry(props: { e: ChangelogEntry; isNew: boolean; post?: { csrf: string
           <li>{t}</li>
         ))}
       </ul>
+      <details><summary>周知担当向け：案内文・画像制作の指示</summary><NewsBrief fields={newsEmbed(e).fields} /></details>
     </li>
   );
 }

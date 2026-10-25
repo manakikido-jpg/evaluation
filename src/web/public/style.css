@@ -1447,3 +1447,8 @@ form.inline { display: inline; margin: 0; }
 .row-deleted { background: rgba(215, 0, 58, .06); }
 .archive-text { white-space: pre-wrap; word-break: break-word; max-width: 40rem; }
 .archive-img { max-width: 160px; max-height: 160px; display: block; margin-top: .25rem; border-radius: 6px; }
+
+/* 周知担当向けの制作メモ（Discordのカードと共通の内容） */
+.news-brief { margin: 1rem 0; }
+.news-brief dt { font-weight: 700; margin-top: .75rem; }
+.news-brief dd { margin: .25rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }

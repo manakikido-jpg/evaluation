@@ -107,7 +107,7 @@ npm run db:generate    # DB の形を変えたら、マイグレーションを�
 - 長い処理で 3 秒以内に返事ができないときは、先に `deferReply` する。
 
 ### 変えたら必ずやること
-- `src/changelog.ts` のいちばん上に、更新履歴を 1 つ足す（id は一度決めたら変えない）。
+- `src/changelog.ts` のいちばん上に、更新履歴を 1 つ足す（id は一度決めたら変えない）。周知担当が文章・画像を準備できるよう、`announcement` に周知の要否（required/optional/none）・対象者・実際の手順・案内文・画像制作の指示を記載する。メンバー向け周知が不要な運営内の変更はnoneとし、未確認の手順や料金を作らない。既存分の補足は `src/updateAnnouncements.ts` にある。
 - `docs/admin.md` の説明を直す。
 - テストを足す・直す。
 

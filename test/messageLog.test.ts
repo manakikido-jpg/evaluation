@@ -20,19 +20,20 @@ describe('🗑 消されたメッセージの記録', () => {
     expect(deletedLogText({ ...m, content: null, author: null }, { content: true })).toContain('書いた人: 分かりません');
   });
 
-  it('記録のチャンネルへ送る。BOT の書き込み・記録のチャンネル・ほかのサーバーは残さない。まとめて消されたら 1 つに', async () => {
+  it('全チャンネルの単件・一括削除をDiscordへ通知しない。監査ログも取得しない', async () => {
     const sendMessage = vi.fn(async () => ({ id: 'm' }));
     const app = new MessageLogApp(() => ({ ...cfg, channels: { ...cfg.channels, log: LOG } }), { sendMessage }, true);
     const base = { id: '1', channelId: CH, guildId: cfg.guildId, createdTimestamp: Date.now(), author: { id: U, bot: false }, content: 'けした' };
-    await app.onDelete(base);
-    expect(sendMessage).toHaveBeenCalledWith(LOG, expect.objectContaining({ allowed_mentions: { parse: [] } }));
+    const fetchAuditLogs=vi.fn();
+    await app.onDelete({...base,guild:{fetchAuditLogs} as never});
+    expect(fetchAuditLogs).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
     sendMessage.mockClear();
     await app.onDelete({ ...base, author: { id: U, bot: true } });
     await app.onDelete({ ...base, channelId: LOG });
     await app.onDelete({ ...base, guildId: '990000000000000999' });
     expect(sendMessage).not.toHaveBeenCalled();
     await app.onBulkDelete([base, { ...base, id: '2', content: 'ふたつめ' }]);
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(sendMessage.mock.calls[0])).toContain('2 件のメッセージがまとめて消されました');
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });
