@@ -914,3 +914,5 @@
 - 関連50件・型チェック・diff成功。全8画像の透過、未知ID、未獲得/非公開で勲章を出さないこと、Web画像配信を検証。alpha検証は抽出後のraw画素を使い、生成ノイズ1%未満のみ許容する。
 - 実Web：1440/390pxで8種類を読み込み、横はみ出しなし・JS例外0。ログ/tmp/visit-medals-browser.log、画像/workspace/artifacts/visit-medals。カード見本docs/previews/visit-medals-{moon,staff}.pngを目視確認。見本の5実績はローカルの表示用データで、本番への付与ではない。
 - 次：型/ビルド/全件検証後に専用PR。本番a948fb9から追加変更なし。実サーバーの操作なし。
+- 最終検証成功：型チェック・ビルド・全183ファイル/2,131テスト、421.68秒、4並列。ログ/tmp/visit-medals-final-{types,build,tests}.log。関連50件、実ブラウザ、一般用/運営用の実描画目視、diffチェックも成功。テスト削除/skip追加なし。
+- 実装8888f3c。提出前fetchで本番a948fb9から追加変更なし。素材9点と表示用8実績の反映は完了、専用PRを作成して担当Claudeのレビュー・合流待ちとする。DB/設定/本番データの変更や実Discord操作なし。
