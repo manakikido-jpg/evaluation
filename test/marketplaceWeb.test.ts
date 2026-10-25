@@ -60,6 +60,18 @@ it('CSRF・価格・条件の偽装を拒否し、同じ購入フォームは1�
  const html=await(await get(s,path)).text();expect(html).toContain('取引スレッドを準備中');expect(html).toContain('受け取った');
  const id=Number(path.split('/').at(-1));await refundOrder(db,id,'staff',now);expect(await(await get(s,path)).text()).toContain('返金済み');expect((await walletOf(db,B)).balance).toBe(10000);
 });
+it('📷 写真の種類で、見本の写真を付けて出品できる。画像でないものは断る',async()=>{
+ const a=await login(A);
+ const png=new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,13,0x49,0x48,0x44,0x52,0,0,0,1]);
+ const form=(file:Uint8Array,type:string)=>{const f=new FormData();for(const [k,v] of Object.entries({_csrf:a.csrf,nonce:randomUUID(),category:'photo',title:'景色の写真',price:'500',capacity:'0',pricing:'fixed'}))f.set(k,v);f.set('image',new File([file],'x',{type}));return f;};
+ const bad=await app.request('/marketplace/actions/listing-new/0',{method:'POST',headers:{cookie:'sakura_market='+a.token},body:form(new TextEncoder().encode('not an image at all'),'image/png')});
+ expect(bad.status).toBe(400);expect(await db.select().from(marketListings)).toHaveLength(0);
+ const r=await app.request('/marketplace/actions/listing-new/0',{method:'POST',headers:{cookie:'sakura_market='+a.token},body:form(png,'image/png')});
+ expect(r.status).toBe(303);const [l]=await db.select().from(marketListings);expect(l?.category).toBe('photo');
+ const img=await get(a,'/marketplace/listings/'+l!.id+'/image');expect(img.status).toBe(200);expect(img.headers.get('content-type')).toBe('image/png');
+ expect(await(await get(a,'/marketplace/listings/'+l!.id)).text()).toContain('/marketplace/listings/'+l!.id+'/image');
+ expect(await(await get(a,'/marketplace/new')).text()).toContain('📷 写真');
+});
 it('出品は現在の開業権利を使い、投稿者を偽装できない。依頼は本人名で作る',async()=>{
  const b=await login(),data={category:'illust',title:'新しい出品',price:'1000',capacity:'0',sellerId:A,roleIds:ROLE};
  expect((await post(b,'listing-new',0,data)).status).toBe(400);

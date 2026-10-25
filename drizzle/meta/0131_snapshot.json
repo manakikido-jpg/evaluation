@@ -1,5 +1,5 @@
 {
-  "id": "346e415f-6dd4-46d9-be40-49e55cf09b8e",
+  "id": "bd43f181-ada9-4177-89ac-bd1770d733e6",
   "prevId": "25c313c3-1a52-4c5f-a79b-281814d06ada",
   "version": "7",
   "dialect": "postgresql",
@@ -6277,6 +6277,44 @@
       },
       "isRLSEnabled": false
     },
+    "public.market_listing_images": {
+      "name": "market_listing_images",
+      "schema": "",
+      "columns": {
+        "listing_id": {
+          "name": "listing_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.market_listings": {
       "name": "market_listings",
       "schema": "",
@@ -10591,202 +10629,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.visit_badges": {
-      "name": "visit_badges",
-      "schema": "",
-      "columns": {
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "badge_id": {
-          "name": "badge_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "earned_at": {
-          "name": "earned_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "visit_badges_member_id_badge_id_pk": {
-          "name": "visit_badges_member_id_badge_id_pk",
-          "columns": [
-            "member_id",
-            "badge_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.visit_daily": {
-      "name": "visit_daily",
-      "schema": "",
-      "columns": {
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "date": {
-          "name": "date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "minutes": {
-          "name": "minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "last_minute": {
-          "name": "last_minute",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "visit_daily_member_id_date_pk": {
-          "name": "visit_daily_member_id_date_pk",
-          "columns": [
-            "member_id",
-            "date"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "visit_minutes_range": {
-          "name": "visit_minutes_range",
-          "value": "\"visit_daily\".\"minutes\" >= 0 and \"visit_daily\".\"minutes\" <= 1440"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.visit_profiles": {
-      "name": "visit_profiles",
-      "schema": "",
-      "columns": {
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "background": {
-          "name": "background",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'paper'"
-        },
-        "frame": {
-          "name": "frame",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'plain'"
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'rank'"
-        },
-        "badges": {
-          "name": "badges",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "public_stats": {
-          "name": "public_stats",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.visit_purchases": {
-      "name": "visit_purchases",
-      "schema": "",
-      "columns": {
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "item_id": {
-          "name": "item_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "price": {
-          "name": "price",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "visit_purchases_member_id_item_id_pk": {
-          "name": "visit_purchases_member_id_item_id_pk",
-          "columns": [
-            "member_id",
-            "item_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "visit_purchase_price": {
-          "name": "visit_purchase_price",
-          "value": "\"visit_purchases\".\"price\" > 0"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.voice_channels": {

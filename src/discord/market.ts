@@ -22,7 +22,8 @@ import {
 } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import type { MarketListing, MarketOrder, MarketRequest } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
+import { marketListingImages, type MarketListing, type MarketOrder, type MarketRequest } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
@@ -426,7 +427,8 @@ export class MarketApp {
         mode === 'listing'
           ? '何を出品しますか？（性的なもの・本物のお金のやり取りは出品できません）'
           : `📝 どんな依頼を出しますか？ 開業権利を持つ方が手を挙げ、あなたが選ぶと取引になります（1 人 ${REQUESTS_PER_MEMBER} 件まで）。`,
-      components: [row(...CATS.map(([k, c]) => btn(`market:${mode === 'listing' ? 'cat' : 'rcat'}:${k}`, `${c.emoji} ${c.label}`)))],
+      // 1 行に 5 つまで（Discord の決まり）
+      components: [CATS.slice(0, 5), CATS.slice(5)].filter((g) => g.length).map((g) => row(...g.map(([k, c]) => btn(`market:${mode === 'listing' ? 'cat' : 'rcat'}:${k}`, `${c.emoji} ${c.label}`)))),
       ...EPHEMERAL,
     });
   }
@@ -1094,7 +1096,12 @@ export class MarketApp {
               if (!target?.isTextBased() || !('messages' in target)) throw new Error('market card channel unavailable');
               await target.messages.edit(record.messageId, { ...body, allowedMentions: { parse: [] } });
             } else if (record.status === 'open') {
-              const message = await channel.send({ ...body, nonce, enforceNonce: true, allowedMentions: { parse: [] } } as never);
+              // 📷 市場Web で付けた見本の写真も、カードに上げる
+              const [img] = listing ? await this.db.select().from(marketListingImages).where(eq(marketListingImages.listingId, id)) : [];
+              const imgName = img ? `listing-${id}.${img.contentType.split('/')[1] === 'jpeg' ? 'jpg' : img.contentType.split('/')[1]}` : undefined;
+              const sendBody = img && listing ? { ...(await this.card({ ...listing, imageUrl: `attachment://${imgName}` })), files: [{ attachment: Buffer.from(img.data), name: imgName! }] } : body;
+              const message = await channel.send({ ...sendBody, nonce, enforceNonce: true, allowedMentions: { parse: [] } } as never);
+              if (img) await setImage(this.db, 'listing', id, `attachment://${imgName}`);
               if (listing) await setListingMessage(this.db, id, channel.id, message.id);
               else await setRequestMessage(this.db, id, channel.id, message.id);
             }

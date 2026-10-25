@@ -2407,3 +2407,11 @@ export const marketWebActions = pgTable('market_web_actions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('market_web_sync_idx').on(t.syncStatus, t.createdAt)]);
 export type MarketWebAction = typeof marketWebActions.$inferSelect;
+
+/** 🏪 市場Web で出品に付けた見本の写真（Discord のカードにも上げる） */
+export const marketListingImages = pgTable('market_listing_images', {
+  listingId: bigint('listing_id', { mode: 'number' }).primaryKey(),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
