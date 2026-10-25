@@ -191,3 +191,4 @@ it('青銀フレームは中央が透過し、背景は中央も不透明な画�
  const frame=await sharp(fileURLToPath(new URL('../assets/visit/frame-staff-blue-lantern.png',import.meta.url))).ensureAlpha().resize(1080,640).raw().toBuffer();expect(frame[(320*1080+540)*4+3]).toBe(0);
  const d=await visitData(db,A,now);d.staffTheme=true;const png=renderVisitCard(d,{staffStyle:'blue-lantern'});expect(await sharp(png).metadata()).toMatchObject({width:1080,height:640});const center=await sharp(png).ensureAlpha().extract({left:540,top:320,width:1,height:1}).raw().toBuffer();expect(center[3]).toBe(255);expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);
 });
+

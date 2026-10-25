@@ -71,3 +71,4 @@ it('保存した青銀は対象の運営カードに使い、ロール解除後�
  await app.onInteraction(i as any);const data=await visitData(db,B);data.staffTheme=true;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
  roles=[];i.editReply.mockClear();await app.onInteraction(i as any);data.staffTheme=false;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
 });
+

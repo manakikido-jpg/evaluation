@@ -13,6 +13,7 @@ const text = (x: number, y: number, s: string, size = 22, color = '#fff8ed', end
   '" fill="' + color + '" filter="url(#textShadow)"' + (end ? ' text-anchor="end"' : '') + '>' + esc(s) + '</text>';
 const hours = (n: number) => Math.floor(n / 60) + '時間 ' + n % 60 + '分';
 const ART_FILES: Record<string, string> = {
+  'silver-shadow': 'background-silver-shadow.png', 'shadow-silver': 'frame-shadow-silver.png',
   'staff-blue-lantern': 'background-staff-blue-lantern.png', 'staff-blue-lantern-frame': 'frame-staff-blue-lantern.png',
   'staff-crimson': 'background-staff-crimson.png', 'staff-crimson-frame': 'frame-staff-crimson.png',
   paper: 'background-paper.jpg', sakura: 'background-sakura.jpg', moon: 'background-moon.jpg',
@@ -46,11 +47,12 @@ function medal(id: string, x: number, y: number): string {
 export function visitCardSvg(data: VisitData, options: {
   privateView?: boolean; staffStyle?: string; background?: string; frame?: string; avatar?: Uint8Array; preview?: boolean;
 } = {}) {
-  if (data.staffTheme) return staffCardSvg(data, options);
+  if (data.staffTheme && visitStaffStyle(options.staffStyle??data.profile.staffStyle).id!=='general') return portraitCardSvg(data, options);
   const catalog=data.catalog ?? VISIT_ITEMS;
   const image=(id:string,edge=false)=>data.art?.[id] ? '<image href="data:image/png;base64,'+data.art[id]+'" width="1080" height="640"/>' : art(id,edge);
   const bg = catalog.find(i => i.kind === 'background' && i.id === (options.background ?? data.profile.background)) ?? VISIT_ITEMS[0];
   const frame = catalog.find(i => i.kind === 'frame' && i.id === (options.frame ?? data.profile.frame)) ?? VISIT_ITEMS[5];
+  if(bg.id==='silver-shadow')return portraitCardSvg(data,options,{frameId:frame.id});
   const visible = options.privateView || data.profile.publicStats;
   const name = [...data.member.displayName].slice(0,22).join('');
   const title = visible ? (data.profile.title === 'rank' ? data.rank.name : VISIT_BADGES.find(b => b.id === data.profile.title)?.name ?? '') : '';
@@ -95,23 +97,25 @@ export function visitCardSvg(data: VisitData, options: {
   return svg + '</g></svg>';
 }
 
-/** 運営ロールを入口で確認したカードだけ。文字とバッジを左側にまとめる。 */
-function staffCardSvg(data: VisitData, options: {privateView?:boolean; staffStyle?:string; avatar?:Uint8Array; preview?:boolean}) {
+/** 人物入りの装いは文字とバッジを左側へ。運営画像は入口でロール確認した場合だけ。 */
+function portraitCardSvg(data: VisitData, options: {privateView?:boolean; staffStyle?:string; avatar?:Uint8Array; preview?:boolean}, general?:{frameId:string}) {
   const staffText=(...args:Parameters<typeof text>)=>text(...args).replace('Shippori Mincho B1 Medium','Shippori Mincho B1 ExtraBold');
   const visible=options.privateView||data.profile.publicStats;
   const name=[...data.member.displayName].slice(0,22).join('');
   const nameSize=Math.min(48,Math.floor(440/Math.max(1,[...name].length)));
-  const blue=visitStaffStyle(options.staffStyle??data.profile.staffStyle).id==='blue-lantern';
-  const gold=blue?'#e0e5ff':'#f6dfa0';
+  const blue=!general&&visitStaffStyle(options.staffStyle??data.profile.staffStyle).id==='blue-lantern';
+  const gold=general?'#eeeeee':blue?'#e0e5ff':'#f6dfa0';
+  const subtitle=general?visible?(data.profile.title==='rank'?data.rank.name:VISIT_BADGES.find(b=>b.id===data.profile.title)?.name??''):'':'運営';
+  const veil=general?'#060606':'#100306';
   const avatarX=blue?145:107;
   let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="640" viewBox="0 0 1080 640"><defs>'+
-    '<linearGradient id="staffVeil"><stop stop-color="#080204" stop-opacity=".94"/><stop offset=".49" stop-color="#100306" stop-opacity=".83"/><stop offset=".68" stop-color="#100306" stop-opacity=".12"/><stop offset="1" stop-opacity="0"/></linearGradient>'+
+    '<linearGradient id="staffVeil"><stop stop-color="'+(general?veil:'#080204')+'" stop-opacity=".94"/><stop offset=".49" stop-color="'+veil+'" stop-opacity=".83"/><stop offset=".68" stop-color="'+veil+'" stop-opacity=".12"/><stop offset="1" stop-opacity="0"/></linearGradient>'+
     '<linearGradient id="metal"><stop stop-color="#e9c878"/><stop offset=".5" stop-color="#fff5cc"/><stop offset="1" stop-color="#aa8448"/></linearGradient>'+
     '<filter id="textShadow" x="-.2" y="-.5" width="1.4" height="2"><feDropShadow dy="1" stdDeviation="1.5" flood-color="#000"/></filter>'+
-    '<clipPath id="avatar"><circle cx="'+avatarX+'" cy="82" r="22"/></clipPath></defs>'+art(blue?'staff-blue-lantern':'staff-crimson')+
+    '<clipPath id="avatar"><circle cx="'+avatarX+'" cy="82" r="22"/></clipPath></defs>'+art(general?'silver-shadow':blue?'staff-blue-lantern':'staff-crimson')+
     '<rect width="1080" height="640" fill="url(#staffVeil)"/>';
   if(options.avatar)svg+='<image href="data:image/png;base64,'+Buffer.from(options.avatar).toString('base64')+'" x="'+(avatarX-22)+'" y="60" width="44" height="44" clip-path="url(#avatar)"/>';
-  svg+=staffText(options.avatar?avatarX+38:blue?145:85,91,'咲楽ノ宮 参拝帳',28,gold)+staffText(85,158,name,nameSize,'#ffffff')+staffText(85,194,'運営',19,gold);
+  svg+=staffText(options.avatar?avatarX+38:blue?145:85,91,'咲楽ノ宮 参拝帳',28,gold)+staffText(85,158,name,nameSize,'#ffffff')+staffText(85,194,subtitle,19,gold);
   svg+='<path d="M85 212H510M85 466H510" stroke="'+gold+'" stroke-opacity=".65"/>';
   if(visible){
     svg+=staffText(85,253,'参拝の記録',25,gold);
@@ -123,7 +127,8 @@ function staffCardSvg(data: VisitData, options: {privateView?:boolean; staffStyl
     if(!selected.length)svg+=staffText(85,545,'獲得したバッジをWebで選べます',18,'#ffffff');
   }else svg+=staffText(85,284,'活動記録は非公開です',25,'#ffffff')+staffText(85,323,'公開する内容は、本人がWebで選べます。',17,'#ffffff');
   if(options.preview)svg+=staffText(85,590,'着せ替えの見本 · 保存前のプレビュー',14,gold);
-  return svg+art(blue?'staff-blue-lantern-frame':'staff-crimson-frame')+'</svg>';
+  const frame=general ? general.frameId==='plain'?'<rect width="1080" height="640" fill="none" stroke="#cccccc" stroke-width="2"/>':data.art?.[general.frameId]?'<image href="data:image/png;base64,'+data.art[general.frameId]+'" width="1080" height="640"/>':art(general.frameId,true) : art(blue?'staff-blue-lantern-frame':'staff-crimson-frame');
+  return svg+frame+'</svg>';
 }
 
 export function renderVisitCard(data: VisitData, options: Parameters<typeof visitCardSvg>[1] = {}): Buffer {
