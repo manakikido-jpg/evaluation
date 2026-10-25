@@ -1,3 +1,4 @@
+import { eligibleVisitMembers, recordVisitMinute } from '../services/visitProfile.js';
 import { ReturnerRoles } from './returnerRoles.js';
 import { pingRoleIds } from '../services/notify.js';
 import { saveVoiceNow } from '../services/meetings.js';
@@ -7,6 +8,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ChannelType,
   MessageFlags,
   StringSelectMenuBuilder,
   type ButtonInteraction,
@@ -294,6 +296,12 @@ export class ShuinApp {
     // 議事録の「参加した人」を、いま通話にいる人から入れられるように
     await saveVoiceNow(this.db, presence.map((c) => ({ id: c.id, name: c.name, memberIds: c.memberIds })), now).catch((err) => logger.warn({ err }, 'voice now save failed'));
 
+    // 参拝ランクは独立した条件・記録を使う。既存の通貨報酬は変えない。
+    const visitChannels = [...guild.channels.cache.values()].filter(c => c.type === ChannelType.GuildVoice).map(c => ({
+      id: c.id, name: c.name, categoryName: c.parent?.name,
+      members: [...c.members.values()].map(m => ({ id: m.id, bot: m.user.bot, serverMute: Boolean(m.voice.serverMute), deaf: Boolean(m.voice.deaf) })),
+    }));
+    await recordVisitMinute(this.db, eligibleVisitMembers(visitChannels, excluded), now).catch(err => logger.warn({ err }, 'visit rank record failed'));
     const ids = eligibleVoiceMembers(channels, excluded);
     if (!ids.length) return;
     // ⏰ コアタイムに通話に上がった人を記録（花びらがもらえる人と同じ人）

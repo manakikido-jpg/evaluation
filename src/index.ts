@@ -1,3 +1,4 @@
+import { VisitApp } from './discord/visit.js';
 import { KobanApp } from './discord/koban.js';
 import { GalleryRewardsApp } from './discord/galleryRewards.js';
 import { invalidateGalleryPosts } from './services/galleryRewards.js';
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
   const stickerDesk = new StickerDeskApp(db, cfg, env.WEB_BASE_URL);
   const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
   const sokin = new SokinApp(db, cfg);
+  const visitProfile = new VisitApp(db, cfg, env.WEB_BASE_URL);
   const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
   const lottery = new LotteryApp(db, cfg, actions, env.WEB_BASE_URL);
   const glossary = new GlossaryApp(db, cfg);
@@ -432,6 +434,7 @@ async function main(): Promise<void> {
     void stickerDesk.onInteraction(i);
     void updateDesk.onInteraction(i);
     void sokin.onInteraction(i);
+    void visitProfile.onInteraction(i);
     void casino.onInteraction(i);
     void lottery.onInteraction(i);
     void glossary.onInteraction(i);

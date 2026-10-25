@@ -21,6 +21,13 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   // 神職用: 「メンバーをタイムアウト」の権限がある人にだけ表示（使えるかどうかは BOT がロールで確認する）
   const staff = PermissionFlagsBits.ModerateMembers;
   return [
+    new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
+      .setDescription('Show your activity profile and wardrobe')
+      .setDescriptionLocalizations({ ja: '参拝ランク・通話時間・バッジと着せ替えを見る' })
+      .setContexts(InteractionContextType.Guild)
+      .addUserOption(o => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('Whose profile (default: yourself)'))
+      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Show in this channel (respects privacy settings)'))
+      .toJSON(),
     new SlashCommandBuilder().setName('recording').setNameLocalizations({ ja: '録音' })
       .setDescription('Prepare a voice recording with everyone’s consent')
       .setDescriptionLocalizations({ ja: '全員の同意を確認して、通話の録音を準備する（神職・宮司）' })
