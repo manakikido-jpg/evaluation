@@ -725,3 +725,15 @@
 - 完了範囲：個人ランク/通話/日数、8実績、5背景/5フレーム、7品の買い切り販売、無料付け替え、称号/5バッジ/公開設定、独自PNGカード、Discord/SHOP/Web入口。DB0131。全体番付・既存報酬/役職条件は変えない。季節イベント配布・プレゼント・自動お祝いは未追加。本番の設定/取引/投稿操作なし。
 - 次：担当Claude向けPRへ保存し、確認・合流後に0131適用・コマンド登録・対象通話の1分加算/除外・本人リンク・購入/装備・公開/非公開カードを実Discordで確認する。
 - GitHub保存済み：PR #88 https://github.com/manakikido-jpg/evaluation/pull/88 、codex/visit-profile、実装b838008/最新取り込み033a714/最終検証6555a00。OPEN・未合流、本番未反映。全2,049件・型・ビルド成功。見本は同ブランチのdocs/previews/visit-{paper,moon,goldnight}.png。担当Claudeの確認・合流と実Discord確認待ち。この追記は所在のみでソース変更なし。
+
+## 2026年10月25日：参拝カードの描き込みと豪華な装飾
+- 指摘：参考のOasis画像と比べて初版のカードが簡素。参考のようなクオリティへ改善したい。
+- 開始：PR #88はOPEN・未合流、codex/visit-profile 042d3a1、最新本番96c78fd。既存PRを更新する。
+- 方針：背景は描き込んだ独自の和風ファンタジーイラスト、フレームは宝石・金属細工・発光のある別レイヤー、実績は勲章型へ。実際のカード生成と試着へ反映し、合成済み完成見本を提示。参考のキャラクターやロゴは複製しない。ランク条件・価格・所持/公開/課金は変更しない。
+- 次：画像生成で素材を制作し、読める情報レイアウトへ合成、描画・Web・PNGサイズと権限の検証、全件確認後にPRを更新する。本番操作なし。
+
+- 素材制作完了：背景5種の独自イラストと4種の透過フレームをassets/visitへ同梱（JPG/PNG、1080×640、生成元は/workspace/generated_imagesに保持）。名前や数字は焼き込まず、カード生成で合成。フレームの中央アルファは全4種0。文字は内側へ寄せ、フレーム最前面・背景独立・8意匠の勲章・顔写真の合成を維持。
+- 実描画25組を検品し、PNG最大1,740,588バイト（桜/青紫）、Base64換算2,320,784バイト。カード単体は4MiB未満。合成済み見本docs/previews/visit-{paper,moon,goldnight}.pngとvisit-moon-premium.png、全組合せの確認画像/workspace/artifacts/visit-profile/all-combinations.jpg。
+- Chromiumで390/1440pxの画像正常・横はみ出し/JS例外なし、試着→2,500銭購入→装備/公開保存が成功。ログ/tmp/visit-premium-browser2.log、容量/透過検証/tmp/visit-art-check.log。素材9点と描画の変更であり、価格・通話条件・課金・公開設定は変更しない。次は最終型・ビルド・関連と全件検証後、既存PR #88へ保存する。
+- 最終検証：全177ファイル2,051テスト成功（357.52秒、4並列）、型チェック・ビルド成功、関連40件成功。ログ/tmp/visit-premium-{all-tests,typecheck-final,build-final,related}.log。テスト削除/skipなし。最終コードの生成で25組を確認し、PNG最大約1.74MB、透過フレーム中央は透明。
+- 完成した青紫のカードを会話へ提示済み。見本docs/previews/visit-moon-premium.png、全25組docs/previews/visit-collection.jpg。初版の静的見本ではなく、実際のrenderVisitCardで合成。担当Claude向け既存PR #88へ保存する。最新本番96c78fd、本番未操作・未反映。

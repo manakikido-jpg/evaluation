@@ -7,6 +7,7 @@ import { addCoins, walletOf } from '../src/services/economy.js';
 import { buyVisitItem, eligibleVisitMembers, recordVisitMinute, saveVisitProfile, visitData, visitRank } from '../src/services/visitProfile.js';
 import { renderVisitCard, visitCardSvg } from '../src/services/visitCard.js';
 import sharp from 'sharp';
+import { fileURLToPath } from 'node:url';
 const A='760000000000000001',B='760000000000000002',C='760000000000000003';
 const now=new Date('2026-10-25T12:00:00+09:00');
 let db:Db,close:()=>Promise<void>;
@@ -84,6 +85,23 @@ describe('購入・装備・公開',()=>{
   expect(visitCardSvg(d,{privateView:true})).toContain('累計通話');
   await saveVisitProfile(db,A,{background:'paper',frame:'plain',title:'rank',badges:['first'],publicStats:true},now);
   expect(visitCardSvg(await visitData(db,A,now))).toContain('はじめの一歩');
+ });
+ it('背景と透過フレームを別々に替えられ、PNGをBase64にしても4MiB以内に収める',async()=>{
+  const d=await visitData(db,A,now);
+  const original=renderVisitCard(d,{privateView:true,background:'moon',frame:'crescent'});
+  const bg=renderVisitCard(d,{privateView:true,background:'sakura',frame:'crescent'});
+  const frame=renderVisitCard(d,{privateView:true,background:'moon',frame:'gold'});
+  expect(original.equals(bg)).toBe(false);expect(original.equals(frame)).toBe(false);
+  for(const png of [original,bg,frame])expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);
+  expect(visitCardSvg(d,{background:'../../unknown',frame:'../../unknown'})).not.toContain('https://');
+ });
+ it('実配布する4フレームは透過PNGで、中央を覆わない',async()=>{
+  for(const id of ['petal','crescent','gold','century']){
+   const path=fileURLToPath(new URL('../assets/visit/frame-'+id+'.png',import.meta.url));
+   expect(await sharp(path).metadata()).toMatchObject({format:'png',width:1080,height:640,hasAlpha:true});
+   const center=await sharp(path).extract({left:540,top:320,width:1,height:1}).raw().toBuffer();
+   expect(center[3]).toBe(0);
+  }
  });
  it('どの試着もPNGとして描画でき、未所持の試着は保存・課金しない',async()=>{
   const d=await visitData(db,A,now);const png=renderVisitCard(d,{privateView:true,background:'goldnight',frame:'gold',preview:true});const meta=await sharp(png).metadata();expect(meta).toMatchObject({format:'png',width:1080,height:640});
