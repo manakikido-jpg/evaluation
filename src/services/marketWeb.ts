@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
-import { marketBids, marketListings, marketOffers, marketOrders, marketRequests, marketWebActions, members, type MarketWebAction } from '../db/schema.js';
+import { marketBids, marketListingImages, marketListings, marketOffers, marketOrders, marketRequests, marketWebActions, members, type MarketWebAction } from '../db/schema.js';
 import * as market from './market.js';
 import { audit } from './audit.js';
 export class MarketWebError extends Error {}
@@ -13,7 +13,7 @@ function requireRow<T>(value:T|undefined):T {if(!value)throw new MarketWebError(
 const num=(v:string|undefined)=>v!==undefined&&v!==''?Number(v):NaN;
 export type MarketActor={id:string;roleIds:readonly string[]};
 export type MarketPayload=Record<string,string>;
-export async function executeMarketWeb(db:Db,cfg:GuildConfig,actor:MarketActor,action:string,id:number,b:MarketPayload,now=new Date()):Promise<string>{
+export async function executeMarketWeb(db:Db,cfg:GuildConfig,actor:MarketActor,action:string,id:number,b:MarketPayload,now=new Date(),image?:{type:string;data:Uint8Array}):Promise<string>{
  if(!z.string().uuid().safeParse(b.nonce).success)throw new MarketWebError('画面を開き直してから操作してください。');
  const hash=createHash('sha256').update(JSON.stringify(Object.entries(b).filter(([k])=>k!=='_csrf'&&k!=='nonce').sort(([a],[c])=>a.localeCompare(c)))).digest('hex');
  const key=`${action}:${id}`;
@@ -28,6 +28,8 @@ export async function executeMarketWeb(db:Db,cfg:GuildConfig,actor:MarketActor,a
   const result=(kind:NonNullable<MarketWebAction['targetKind']>,value:number,href:string)=>{targetKind=kind;targetId=value;path=href;};
   if(action==='listing-new'){
    const r=ok(await market.createListing(tx,cfg,actor,{category:b.category??'',subcategory:b.subcategory,title:b.title??'',description:b.description??'',price:num(b.price),pricing:b.pricing==='offer'?'offer':'fixed',capacity:num(b.capacity??'0')}));
+   // 📷 見本の写真は出品と同じまとまりで残す（Discord のカードを出すときに一緒に上げる）
+   if(image)await tx.insert(marketListingImages).values({listingId:r.listing.id,contentType:image.type,data:image.data});
    result('listing',r.listing.id,`/marketplace/listings/${r.listing.id}`);
   }else if(action==='request-new'){
    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'market-request-create:' + actor.id}))`);

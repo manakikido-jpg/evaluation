@@ -13,10 +13,11 @@ import { getMember } from './members.js';
  * 「問題あり」を押すと運営が判断する（返す・渡す）。手数料の分はどこにも渡さない（花びらが増えすぎないように）。
  */
 
-export type MarketCategory = 'illust' | 'voice' | 'craft' | 'call' | 'other';
+export type MarketCategory = 'illust' | 'photo' | 'voice' | 'craft' | 'call' | 'other';
 
 export const MARKET_CATEGORIES: Record<MarketCategory, { label: string; emoji: string; adultOnly?: boolean }> = {
   illust: { label: 'イラスト', emoji: '🎨' },
+  photo: { label: '写真', emoji: '📷' },
   voice: { label: '歌・音声', emoji: '🎤' },
   craft: { label: '作成物（アイコン・動画など）', emoji: '🛠' },
   call: { label: '通話', emoji: '📞', adultOnly: true },

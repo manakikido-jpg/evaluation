@@ -3,7 +3,8 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { and, desc, eq, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { marketBids, marketListings, marketOffers, marketOrders, marketRequests, members } from '../db/schema.js';
+import { marketBids, marketListingImages, marketListings, marketOffers, marketOrders, marketRequests, members } from '../db/schema.js';
+import { detectImage } from '../services/notices.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { effectivePermissions } from '../services/permissionCheck.js';
 import * as market from '../services/market.js';
@@ -14,6 +15,8 @@ import { randomToken, safeEqual } from './sessions.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
 import type { DiscordApi } from './discordApi.js';
 import { MarketAuthPage, MarketCreatePage, MarketListingPage, MarketListPage, MarketOrderPage, MarketOrdersPage, MarketRequestPage, MarketSellerPage, type MarketMe } from './views/marketplace.js';
+/** 写真の大きさの上限 */
+export const MARKET_IMAGE_MAX=8*1024*1024;
 const COOKIE='sakura_market',STATE='sakura_market_state';
 type Deps={db:Db;cfg:()=>GuildConfig;discord:DiscordActions;api:DiscordApi;baseUrl:string;secure:boolean;now:()=>Date};
 export function mountMarketplace(app:Hono<any>,d:Deps){
@@ -60,6 +63,8 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
  const resourceId=(c:Context)=>{const n=Number(c.req.param('id'));return Number.isSafeInteger(n)&&n>0?n:0;};
  const cursor=(c:Context)=>{const n=Number(c.req.query('before'));return Number.isSafeInteger(n)&&n>0?n:undefined;};
  const escapeLike=(value:string)=>value.replace(/[\\%_]/g,c=>'\\'+c);
+ /** 市場Web で写真を付けた出品の番号 */
+ const imagesOf=async(ids:number[])=>new Set((ids.length?await db.select({id:marketListingImages.listingId}).from(marketListingImages).where(inArray(marketListingImages.listingId,ids)):[]).map(r=>r.id));
  const age=(category:string,me:MarketMe)=>category!=='call'||me.member.ageGroup==='adult';
  app.get('/marketplace',protectedPage(async(c,me)=>{
   const q=(c.req.query('q')??'').slice(0,60),category=c.req.query('category'),mine=c.req.query('mine')==='1',kind=c.req.query('kind')==='requests'?'requests':'listings';
@@ -69,13 +74,18 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   const rows=kind==='requests'?requests:listings;
   const nextHref=rows.length>40?'/marketplace?'+new URLSearchParams({kind,q,...(cat?{category:cat}:{}),...(mine?{mine:'1'}:{}),before:String(rows[39]!.row.id)}).toString():undefined;
   listings=listings.slice(0,40);requests=requests.slice(0,40);
-  return c.html(<MarketListPage me={me} listings={listings} requests={requests} kind={kind} q={q} category={cat} mine={mine} nextHref={nextHref}/>);
+  return c.html(<MarketListPage images={await imagesOf(listings.map(l=>l.row.id))} me={me} listings={listings} requests={requests} kind={kind} q={q} category={cat} mine={mine} nextHref={nextHref}/>);
  }));
  app.get('/marketplace/new',protectedPage(async(c,me)=>c.html(<MarketCreatePage me={me} request={c.req.query('kind')==='request'} license={(await market.marketLicenseAccess(db,me.cfg,{id:me.session.userId,roleIds:me.roles},d.now())).allowed}/>)));
  app.get('/marketplace/listings/:id',protectedPage(async(c,me)=>{
   const listing=await market.getListing(db,resourceId(c));if(!listing||!age(listing.category,me))return c.notFound();
   const offers=await db.select().from(marketOffers).where(and(eq(marketOffers.listingId,listing.id),listing.sellerId===me.session.userId?undefined:eq(marketOffers.buyerId,me.session.userId))).orderBy(desc(marketOffers.id)).limit(25);
-  return c.html(<MarketListingPage me={me} listing={listing} offers={offers} names={await names([listing.sellerId,...offers.map(o=>o.buyerId)])} rating={await market.sellerRating(db,listing.sellerId)} reviews={await market.recentReviews(db,listing.sellerId)} active={await market.activeOrders(db,listing.id)} message={c.req.query('msg')==='offer_insufficient'?'買い手の残高が足りないため、この価格提案は見送りになりました。':undefined}/>);
+  return c.html(<MarketListingPage images={await imagesOf([listing.id])} me={me} listing={listing} offers={offers} names={await names([listing.sellerId,...offers.map(o=>o.buyerId)])} rating={await market.sellerRating(db,listing.sellerId)} reviews={await market.recentReviews(db,listing.sellerId)} active={await market.activeOrders(db,listing.id)} message={c.req.query('msg')==='offer_insufficient'?'買い手の残高が足りないため、この価格提案は見送りになりました。':undefined}/>);
+ }));
+ app.get('/marketplace/listings/:id/image',protectedPage(async(c,me)=>{
+  const listing=await market.getListing(db,resourceId(c));if(!listing||!age(listing.category,me))return c.notFound();
+  const [img]=await db.select().from(marketListingImages).where(eq(marketListingImages.listingId,listing.id));if(!img)return c.notFound();
+  return c.body(new Uint8Array(img.data),200,{'content-type':img.contentType,'x-content-type-options':'nosniff','cache-control':'private, max-age=3600'});
  }));
  app.get('/marketplace/requests/:id',protectedPage(async(c,me)=>{
   const request=await market.getRequest(db,resourceId(c));if(!request||!age(request.category,me))return c.notFound();
@@ -96,7 +106,13 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
  app.post('/marketplace/actions/:action/:id',protectedPage(async(c,me)=>{
   const raw=await c.req.parseBody();const b=Object.fromEntries(Object.entries(raw).filter(([,v])=>typeof v==='string')) as Record<string,string>;
   const id=resourceId(c);if(!Number.isSafeInteger(id)||id<0)return c.text('対象を確認してください。',400);
-  try{return c.redirect(await executeMarketWeb(db,me.cfg,{id:me.session.userId,roleIds:me.roles},c.req.param('action')!,id,b,d.now()),303);}
+  // 📷 出品の見本の写真（出品するときだけ。8MB まで・画像だけ）
+  const file=c.req.param('action')==='listing-new'&&raw.image instanceof File&&raw.image.size>0?raw.image:undefined;
+  let image:{type:string;data:Uint8Array}|undefined;
+  if(file){if(file.size>MARKET_IMAGE_MAX)return c.html(<MarketAuthPage error="写真は8MBまでにしてください。" back="/marketplace/new"/>,400);const data=new Uint8Array(await file.arrayBuffer());const kind=detectImage(data);if(!kind)return c.html(<MarketAuthPage error="写真は png・jpg・gif・webp にしてください。" back="/marketplace/new"/>,400);image={type:kind.type,data};}
+  try{
+   return c.redirect(await executeMarketWeb(db,me.cfg,{id:me.session.userId,roleIds:me.roles},c.req.param('action')!,id,b,d.now(),image),303);
+  }
   catch(err){if(err instanceof MarketWebError)return c.html(<MarketAuthPage error={err.message} back="/marketplace"/>,400);throw err;}
  }));
 }

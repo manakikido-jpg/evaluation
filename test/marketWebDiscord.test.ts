@@ -35,6 +35,14 @@ it('Web出品を市場に1回だけ掲載し、投稿番号と同期済みを保
  expect((await db.select().from(marketWebActions))[0]?.syncStatus).toBe('done');
  await app.syncWebUpdates(now);expect(messages).toHaveLength(1);
 });
+it('📷 Web出品の見本の写真を、市場のカードに一緒に上げる',async()=>{
+ const png=new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,13,0x49,0x48,0x44,0x52]);
+ await executeMarketWeb(db,cfg,{id:A,roleIds:[ROLE]},'listing-new',0,{nonce:randomUUID(),category:'photo',title:'写真',price:'500',capacity:'0'},now,{type:'image/png',data:png});
+ await app.syncWebUpdates(now);expect(messages).toHaveLength(1);
+ expect(messages[0].body.files[0].name).toMatch(/^listing-\d+\.png$/);
+ expect(JSON.stringify(messages[0].body.embeds)).toContain('attachment://listing-');
+ expect((await db.select().from(marketListings))[0]?.imageUrl).toMatch(/^attachment:\/\/listing-/);
+});
 it('Web購入から非公開スレッドを作り、当事者だけを追加。同期を再実行しても再購入しない',async()=>{
  const id=await order();await app.syncWebUpdates(now);
  expect(created).toHaveBeenCalledOnce();expect(created.mock.calls[0]![0]).toMatchObject({type:ChannelType.PrivateThread,invitable:false});

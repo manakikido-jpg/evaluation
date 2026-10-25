@@ -918,6 +918,13 @@
       "when": 1792883411850,
       "tag": "0130_naive_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1792890646116,
+      "tag": "0131_strange_living_tribunal",
+      "breakpoints": true
     }
   ]
 }
