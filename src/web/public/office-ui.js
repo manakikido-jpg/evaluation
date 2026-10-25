@@ -1,3 +1,6 @@
+(() => {
+  if (window.officeUiReady) return;
+  window.officeUiReady = true;
 // 社務所の共通操作。表示するリンクはサーバー側で権限を確認したものだけ。
 document.addEventListener('DOMContentLoaded', () => {
   const toggle = document.getElementById('nav-toggle');
@@ -119,3 +122,5 @@ const openHashTarget = () => {
 };
 window.addEventListener('hashchange', openHashTarget);
 document.addEventListener('DOMContentLoaded', openHashTarget);
+
+})();
