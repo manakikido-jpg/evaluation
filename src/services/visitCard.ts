@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
+import { visitBadgeImage } from './visitBadgeArt.js';
 import { VISIT_BADGES, VISIT_ITEMS, type VisitData } from './visitProfile.js';
 
 const fonts = ['ShipporiMinchoB1-500.ttf', 'ShipporiMinchoB1-800.ttf'].map(f =>
@@ -30,26 +31,14 @@ function art(id: string, edge = false): string {
   }
   return '<image href="' + uri + '"' + (edge ? ' x="-4" y="-4" width="1088" height="648"' : ' width="1080" height="640"') + '/>';
 }
-const BADGE_ART: Record<string, { color: string; symbol: string }> = {
-  first: { color: '#f4a8cc', symbol: '<path d="M-16-9H16M-13-5H13M-10-5V17M10-5V17M-13 4H13"/>' },
-  vc1: { color: '#73dce5', symbol: '<path d="M5-17A18 18 0 1 0 16 8A15 15 0 0 1 5-17Z"/>' },
-  vc10: { color: '#92b7ff', symbol: '<path d="M0-19L5-6L19-6L8 3L12 17L0 9L-12 17L-8 3L-19-6L-5-6Z"/>' },
-  vc100: { color: '#d7a5ff', symbol: '<path d="M-19-7L-11 14H11L19-7L8 1L0-15L-8 1ZM-10 20H10"/>' },
-  vc500: { color: '#ffe07c', symbol: '<path d="M0-20L16 0L0 20L-16 0ZM-16 0H16M0-20L-7 0L0 20L7 0Z"/>' },
-  days7: { color: '#92e2bf', symbol: '<path d="M-15-12Q0-24 15-12V6Q9 19 0 23Q-9 19-15 6ZM-7 0L-1 7L10-7"/>' },
-  days30: { color: '#ffc29c', symbol: '<path d="M-17 14L-19-8L-7 0L0-18L7 0L19-8L17 14ZM-17 20H17"/>' },
-  anniversary: { color: '#fff0b0', symbol: '<path d="M-18-10H18V-2H-18ZM-15-2V18H15V-2M0-10V18M0-10Q-17-26-15-13Q-10-7 0-10Q17-26 15-13Q10-7 0-10"/>' },
-};
-
+/** 通常用・運営用とも同じ勲章を使う。透過余白を含めて80px。 */
 function medal(id: string, x: number, y: number): string {
-  const badge = BADGE_ART[id];
   const label = VISIT_BADGES.find(b => b.id === id)?.name;
-  if (!badge || !label) return '';
-  return '<g transform="translate(' + x + ' ' + y + ')"><title>' + esc(label) + '</title>' +
-    '<circle r="25" fill="#101729" fill-opacity=".6" stroke="url(#metal)" stroke-width="1.8"/>' +
-    '<circle r="21" fill="none" stroke="' + badge.color + '" stroke-opacity=".4"/>' +
-    '<g transform="scale(.65)" fill="none" stroke="' + badge.color +
-    '" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round">' + badge.symbol + '</g></g>';
+  if (!label) return '';
+  const image = visitBadgeImage(id);
+  if (!image) return '';
+  return '<g><title>' + esc(label) + '</title><image x="' + (x-40) + '" y="' + (y-40) +
+    '" width="80" height="80" href="data:image/png;base64,' + image.toString('base64') + '"/></g>';
 }
 
 /** 背景が主役の共通レイアウト。背景と細い枠だけを独立して替える。 */

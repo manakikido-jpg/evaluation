@@ -157,3 +157,21 @@ it('明るいユーザー背景でも記録/バッジ/名前の領域が十分�
  }
  expect((await visitData(db,A,now)).profile.background).toBe('paper');
 });
+
+it('全実績の金細工は透過PNGで、未獲得/非公開のカードに勲章を出さない',async()=>{
+ const {VISIT_BADGE_ART,visitBadgeImage}=await import('../src/services/visitBadgeArt.js');
+ expect(Object.keys(VISIT_BADGE_ART).sort()).toEqual(['first','vc1','vc10','vc100','vc500','days7','days30','anniversary'].sort());
+ for(const id of Object.keys(VISIT_BADGE_ART)){
+  const image=visitBadgeImage(id)!;const meta=await sharp(image).metadata();expect(meta.format).toBe('png');expect(meta.hasAlpha).toBe(true);expect(meta.width).toBeGreaterThanOrEqual(256);expect(meta.height).toBeGreaterThanOrEqual(256);
+  const stats=await sharp(image).stats();expect(stats.channels[3]!.min).toBe(0);expect(stats.channels[3]!.max).toBe(255);
+  const corners=await sharp(image).ensureAlpha().extract({left:0,top:0,width:8,height:8}).raw().toBuffer();// 金の縁のごく薄い生成ノイズは1%未満まで。背景の塗りつぶしは認めない。
+  expect(Math.max(...[...corners].filter((_,i)=>i%4===3))).toBeLessThanOrEqual(2);
+ }
+ expect(visitBadgeImage('../../unknown')).toBeUndefined();expect(visitBadgeImage('toString')).toBeUndefined();
+ await recordVisitMinute(db,[A],now);const d=await visitData(db,A,now);d.profile.badges=['first','vc500'];
+ const pearl=visitBadgeImage('first')!.toString('base64'),dragon=visitBadgeImage('vc500')!.toString('base64');
+ for(const staffTheme of [false,true]){
+  d.staffTheme=staffTheme;expect(visitCardSvg(d)).toContain(pearl);expect(visitCardSvg(d)).not.toContain(dragon);
+  d.profile.publicStats=false;expect(visitCardSvg(d)).not.toContain(pearl);expect(visitCardSvg(d,{privateView:true})).toContain(pearl);d.profile.publicStats=true;
+ }
+});

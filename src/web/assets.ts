@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { VISIT_BADGE_ART, visitBadgeImage } from '../services/visitBadgeArt.js';
 import { isArtKey } from '../services/casino/slotArt.js';
 
 /**
@@ -72,6 +73,7 @@ const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
+    ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
     'three.core.js': { body: threeCore, type: 'text/javascript; charset=utf-8' },
     'three.module.js': { body: threeModule, type: 'text/javascript; charset=utf-8' },
     'life-route.js': { body: lifeRoute, type: 'text/javascript; charset=utf-8' },
