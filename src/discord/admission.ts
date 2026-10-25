@@ -320,7 +320,7 @@ export class AdmissionApp {
         failed ? '置けませんでした（このチャンネルの掲示の文字数が多すぎます）。' : '🌸 このチャンネルのいちばん下に「朱印を押す」ボタンを置きました（書き込みがあると、下に出し直します）。',
       ));
     }
-    const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha', 'notify'] as const;
+    const kinds = ['apply', 'shop', 'gender', 'market', 'contact', 'bell', 'gacha', 'notify', 'invite'] as const;
     await channel.send({ ...panelMessage(kinds.find((k) => k === kind) ?? 'yoimairi', { coinName: this.cfg.economy.currencyName }), allowedMentions: { parse: [] } });
     await i.reply({ content: '置きました。', ...EPHEMERAL });
   }

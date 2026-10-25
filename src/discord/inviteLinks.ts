@@ -1,4 +1,4 @@
-import { ChannelType, MessageFlags, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type TextChannel } from 'discord.js';
+import { ChannelType, MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type TextChannel } from 'discord.js';
 import { alertLabel, checkInviteBurst, GUIDE_HOLD_ROLE_NAME, holdsGuide } from '../services/inviteGuard.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -14,6 +14,8 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
  */
 export class InviteLinkApp {
   private guild?: Guild;
+  /** 同じ人のボタン連打とコマンド併用を、1回の発行にまとめる。 */
+  private issuing = new Map<string, Promise<string>>();
   /** 入った人を 1 人ずつ調べる（回数の比べ合いがずれないように） */
   private queue: Promise<unknown> = Promise.resolve();
 
@@ -133,11 +135,13 @@ export class InviteLinkApp {
   }
 
   async onInteraction(interaction: Interaction): Promise<void> {
-    if (!interaction.isChatInputCommand() || (interaction.commandName !== 'invite' && interaction.commandName !== 'sharedinvite')) return;
+    const command = interaction.isChatInputCommand() && (interaction.commandName === 'invite' || interaction.commandName === 'sharedinvite');
+    const button = interaction.isButton() && interaction.customId === 'invite:link';
+    if (!command && !button) return;
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     try {
-      if (interaction.commandName === 'sharedinvite') return void (await this.shared(interaction));
-      await this.link(interaction);
+      if (interaction.isChatInputCommand() && interaction.commandName === 'sharedinvite') return void (await this.shared(interaction));
+      if (interaction.isChatInputCommand() || interaction.isButton()) await this.link(interaction);
     } catch (err) {
       logger.warn({ err }, 'invite link failed');
       const content = '招待リンクを作れませんでした。BOT に「招待を作成」「チャンネルの管理」の権限があるか、神職に確かめてもらってください。';
@@ -145,7 +149,7 @@ export class InviteLinkApp {
     }
   }
 
-  private async link(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  private async link(i: ChatInputCommandInteraction<'cached'> | ButtonInteraction<'cached'>): Promise<void> {
     const cfg = this.cfg();
     const roleIds = [...i.member.roles.cache.keys()];
     if (!cfg.ranks.some((r) => roleIds.includes(r.roleId)) && !adminLevelOf(cfg, roleIds)) {
@@ -155,18 +159,17 @@ export class InviteLinkApp {
     const ch = this.entrance();
     if (!ch) return void (await i.reply({ content: '入口のチャンネル（#鳥居）が見つかりません。神職に知らせてください。', ...EPHEMERAL }));
     await i.deferReply(EPHEMERAL);
-    const existing = await activeLinkOf(this.db, i.user.id);
-    const current = await this.current();
-    let code = existing && current?.some((c) => c.code === existing.code) ? existing.code : undefined;
-    if (!code) {
-      const inv = await ch.createInvite({ maxAge: 0, maxUses: 0, unique: true, reason: `招待リンク（${i.member.displayName}）` });
-      await saveLink(this.db, { code: inv.code, inviterId: i.user.id, channelId: ch.id, uses: inv.uses ?? 0 });
-      code = inv.code;
+    let pending = this.issuing.get(i.user.id);
+    if (!pending) {
+      pending = this.personalCode(i.user.id, i.member.displayName, ch).finally(() => this.issuing.delete(i.user.id));
+      this.issuing.set(i.user.id, pending);
     }
+    const code = await pending;
     const n = await inviteCountOf(this.db, i.user.id);
     const e = cfg.economy;
     const url = `https://discord.gg/${code}`;
     await i.editReply({
+      allowedMentions: { parse: [] },
       content: [
         '🔗 **あなた専用の招待リンク**',
         '```',
@@ -176,13 +179,22 @@ export class InviteLinkApp {
         'このリンクで入った人は、あなたの招待として記録されます（申請で選ばなくても分かります）。',
         (e.inviteSanpaishaReward > 0 || e.inviteUjikoReward > 0) ? `招待した人が 🔰参拝者 になると ${e.currencyEmoji}${e.inviteSanpaishaReward} 枚、🍃氏子になると追加で ${e.inviteUjikoReward} 枚のお礼${e.inviteActiveEnabled && e.inviteActiveReward > 0 ? `、その人が浮上した日ごとに ${e.inviteActiveReward} 枚` : ''}が届きます。` : '',
         `-# これまでに招待した人: 参拝者になった ${n.joined} 人${n.pending ? `・まだ ${n.pending} 人` : ''}`,
-        '-# 招待リンクは BOT だけが作ります。何度打っても同じリンクです',
+        '-# 招待リンクは BOT だけが作ります。何度押しても・打っても同じリンクです',
       ]
         .filter(Boolean)
         .join('\n'),
     });
     // コピーしやすいように、リンクだけのメッセージ（本人にだけ見える）
-    await i.followUp({ content: url, ...EPHEMERAL });
+    await i.followUp({ content: url, allowedMentions: { parse: [] }, ...EPHEMERAL });
+  }
+
+  private async personalCode(userId: string, name: string, ch: TextChannel): Promise<string> {
+    const existing = await activeLinkOf(this.db, userId);
+    const current = await this.current();
+    if (existing && current?.some(c => c.code === existing.code)) return existing.code;
+    const inv = await ch.createInvite({ maxAge: 0, maxUses: 0, unique: true, reason: '招待リンク（' + name + '）' });
+    await saveLink(this.db, { code: inv.code, inviterId: userId, channelId: ch.id, uses: inv.uses ?? 0 });
+    return inv.code;
   }
 
   /** 🔗 /共通招待リンク: 運営が作る、期限なし・回数なしの共通リンク（SNS・ポスター用。だれの招待にもならない） */

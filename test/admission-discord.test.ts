@@ -151,6 +151,13 @@ describe('入鯖申請（Discord）', () => {
     expect((sent[0]?.payload as unknown as { components: { components: { custom_id: string }[] }[] }).components[0]?.components[0]?.custom_id).toBe('apply:start');
   });
 
+  it('招待リンク発行パネルは神職だけが置け、本人用リンクのボタンを投稿する', async () => {
+    const denied=command(USER,[],'panel',{sub:'invite'});await app.onInteraction(denied.i as never);
+    expect(denied.replies[0]?.content).toBe('神職・宮司のみ使えます。');expect(sent).toHaveLength(0);
+    const ok=command(STAFF,[ROLE.shinshoku],'panel',{sub:'invite'});await app.onInteraction(ok.i as never);
+    expect(sent[0]?.payload).toMatchObject({components:[{components:[{custom_id:'invite:link',label:'招待リンク発行'}]}],allowedMentions:{parse:[]}});
+  });
+
   it('ボタン → 年齢区分 → フォーム → #申請受付 にカード → 承認', async () => {
     const start = button(USER, [], 'apply:start');
     await app.onInteraction(start.i as never);
