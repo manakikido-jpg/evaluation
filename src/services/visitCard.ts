@@ -64,34 +64,39 @@ export function visitCardSvg(data: VisitData, options: {
   const visible = options.privateView || data.profile.publicStats;
   const name = [...data.member.displayName].slice(0,22).join('');
   const title = visible ? (data.profile.title === 'rank' ? data.rank.name : VISIT_BADGES.find(b => b.id === data.profile.title)?.name ?? '') : '';
-  const accent = frame.id === 'gold' ? '#efdaa0' : frame.id === 'petal' || frame.id === 'plain' ? '#f0bfcf' : '#7cdbcf';
+  const accent = '#f6dfa0';
+  const clearText=(...args:Parameters<typeof text>)=>text(...args).replace('Shippori Mincho B1 Medium','Shippori Mincho B1 ExtraBold');
   let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="640" viewBox="0 0 1080 640"><defs>' +
-    '<linearGradient id="veil"><stop stop-color="#05091c" stop-opacity=".74"/><stop offset=".52" stop-color="#0c1024" stop-opacity=".4"/><stop offset="1" stop-color="#090d20" stop-opacity=".04"/></linearGradient>' +
+    '<linearGradient id="veil"><stop stop-color="#05091c" stop-opacity=".86"/><stop offset=".55" stop-color="#0c1024" stop-opacity=".65"/><stop offset="1" stop-color="#090d20" stop-opacity=".04"/></linearGradient>' +
     '<linearGradient id="metal"><stop stop-color="#e9c878"/><stop offset=".5" stop-color="#fff5cc"/><stop offset="1" stop-color="#aa8448"/></linearGradient>' +
     '<filter id="textShadow" x="-.2" y="-.5" width="1.4" height="2"><feDropShadow dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="1"/></filter>' +
     '<clipPath id="avatar"><circle cx="123" cy="83" r="27"/></clipPath><clipPath id="card"><rect width="1080" height="640"/></clipPath></defs><g clip-path="url(#card)">' +
     image(bg.id) + '<rect width="1080" height="640" fill="url(#veil)"/>' +
+    '<rect x="76" y="40" width="928" height="88" rx="16" fill="#05070e" fill-opacity=".64"/>' +
+    '<rect x="94" y="143" width="496" height="371" rx="16" fill="#05070e" fill-opacity=".7"/>' +
+    (visible ? '<rect x="622" y="143" width="382" height="261" rx="16" fill="#05070e" fill-opacity=".78"/>' : '') +
     '<circle cx="123" cy="83" r="29" fill="#1b2644" stroke="' + frame.colors[0] + '" stroke-width="2"/>';
   svg += options.avatar ? '<image href="data:image/png;base64,' + Buffer.from(options.avatar).toString('base64') +
     '" x="96" y="56" width="54" height="54" clip-path="url(#avatar)"/>' : text(111,93,[...name][0]??'桜',28);
-  svg += text(167,79,'咲楽ノ宮 浮上プロフィール',27) + text(169,105,name + (title ? ' / ' + title : ''),16,'#d8d0e3');
+  svg += clearText(167,75,'咲楽ノ宮 参拝帳',23,accent) + clearText(167,111,name,Math.min(30,Math.floor(440/Math.max(1,[...name].length))),'#ffffff');
+  if(title) svg += clearText(975,108,title,22,accent,true);
   const lines = (y: number, rows: [string,string][]) => rows.map(([label,value],i) =>
-    text(125,y+i*29,label,18,'#e0dce7') + text(330,y+i*29,value,19)).join('');
+    clearText(120,y+i*36,label,21,'#eee7d8') + clearText(328,y+i*36,value,24,'#ffffff')).join('');
   if (visible) {
-    svg += text(125,175,'参拝ランク',22,accent) + lines(211,[
+    svg += clearText(120,184,'参拝ランク',26,accent) + lines(226,[
       ['現在のランク','Lv.' + data.rank.level + ' ' + data.rank.name],
       ['次のランク',data.rank.next?.name ?? '最高ランクに到達'],
       ['次までの通話',data.rank.next ? hours(Math.max(0,data.rank.next.minutes-data.minutes)) : '達成済み'],
     ]);
-    svg += text(125,345,'通話の記録',22,accent) + lines(383,[
+    svg += clearText(120,365,'通話の記録',26,accent) + lines(407,[
       ['累計通話',hours(data.minutes)],['今月の通話',hours(data.monthMinutes)],['参拝した日数',data.activeDays+'日'],
     ]);
     const selected = data.profile.badges.filter(id => data.badges.some(b => b.badgeId === id)).slice(0,5);
-    svg += text(650,175,'参拝バッジ',22,accent) + text(650,201,'飾っているバッジ ' + selected.length + '個',15,'#e1d8ea');
-    if (!selected.length) svg += text(650,250,'獲得したバッジをWebで選べます',16,'#e1d8ea');
-    selected.forEach((id,i) => { svg += medal(id,691+i%3*93,i<3?250:340); });
+    svg += clearText(650,184,'参拝バッジ',26,accent) + clearText(650,216,'飾っているバッジ ' + selected.length + '個',19,'#ffffff');
+    if (!selected.length) svg += clearText(650,263,'獲得したバッジをWebで選べます',19,'#ffffff');
+    selected.forEach((id,i) => { svg += medal(id,691+i%3*93,i<3?270:350); });
   } else {
-    svg += text(125,240,'活動記録は非公開です',25) + text(125,278,'公開する内容は、本人がWebで選べます。',17,'#e1d8ea');
+    svg += clearText(120,245,'活動記録は非公開です',27,'#ffffff') + clearText(120,287,'公開する内容は、本人がWebで選べます。',20,'#ffffff');
   }
   if (options.preview) svg += text(125,577,'着せ替えの見本 · 保存前のプレビュー',14,'#d8d0e3');
   if (frame.id !== 'plain') svg += image(frame.id,true);
