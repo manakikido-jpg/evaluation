@@ -73,6 +73,7 @@ import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
 import { VcHelpApp } from './discord/vcHelp.js';
 import { ReactionRoleApp } from './discord/reactionRoles.js';
+import { InnGuestApp } from './discord/innGuest.js';
 import { RoomApp } from './discord/rooms.js';
 import { MarketApp } from './discord/market.js';
 import { ConfigStore } from './services/settings.js';
@@ -168,6 +169,7 @@ async function main(): Promise<void> {
     return Boolean(room && planOf(cfg(), room.hubId) === 'once');
   });
   const vcHelp = new VcHelpApp(cfg);
+  const innGuest = new InnGuestApp(db, cfg);
   new ReactionRoleApp(db, cfg).attach(client);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
@@ -254,6 +256,7 @@ async function main(): Promise<void> {
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
+      void innGuest.tick(guild).catch((err) => logger.warn({ err }, 'inn guest tick failed'));
       void galleryRewardsApp.tick().catch(err => logger.warn({ err }, 'gallery settlement failed'));
       void messageArchive.tick().catch((err) => logger.warn({ err }, 'message archive prune failed'));
       // ✨ 特別ご縁を振られた人の昇格（社務所Web から振ったもの）
@@ -420,6 +423,7 @@ async function main(): Promise<void> {
     })().catch(err => logger.warn({ err }, 'voice mute sync failed'));
     // 通話のチャットに「この通話の人に朱印を押す」
     voicePanel.onVoiceStateUpdate(before, after);
+    void innGuest.onVoiceStateUpdate(before, after).catch((err) => logger.warn({ err }, 'inn guest voice failed'));
     // 宵宮の部屋: 入った人がそれぞれ払う
     void rooms.onVoiceStateUpdate(before, after);
   });
@@ -463,6 +467,7 @@ async function main(): Promise<void> {
     void cast.onInteraction(i);
     void supportTickets.onInteraction(i);
     void vcHelp.onInteraction(i);
+    void innGuest.onInteraction(i);
   });
   client.on(Events.ThreadDelete, thread => { void diary.onThreadDelete(thread).catch(err => logger.warn({ err }, 'diary thread deletion failed')); });
   client.on(Events.MessageCreate, (m) => {

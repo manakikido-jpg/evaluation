@@ -3,6 +3,7 @@ import type { GuildConfig } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { shuinId } from './ids.js';
 import { isVcHelpChannel } from './vcHelp.js';
+import { isInnChannel } from './innGuest.js';
 import { vcPanel } from './views.js';
 
 /** 話が流れたときに、いちばん下へ出し直す間隔（15 秒に 1 回） */
@@ -81,7 +82,7 @@ export class VoicePanelApp {
     const recent = await channel.messages.fetch({ limit: 20 }).catch(() => undefined);
     const last = recent?.first();
     if (last && isPanel(last as never)) return;
-    await channel.send({ ...vcPanel(channel.id, isVcHelpChannel(channel)), allowedMentions: { parse: [] } });
+    await channel.send({ ...vcPanel(channel.id, isVcHelpChannel(channel), isInnChannel(channel)), allowedMentions: { parse: [] } });
     // 前に出したものは消す
     for (const m of recent?.values() ?? []) if (isPanel(m as never)) await m.delete().catch(() => undefined);
   }

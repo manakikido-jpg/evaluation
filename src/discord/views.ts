@@ -1,3 +1,4 @@
+import { innRow } from './innGuest.js';
 import { vcHelpRow } from './vcHelp.js';
 import {
   ActionRowBuilder,
@@ -206,7 +207,7 @@ export function promotionLog(userId: string, promotion: Promotion, goen: number)
 export const VC_LIST_MAX = 20;
 
 /** 通話に入った人がいたら、その通話のチャットのいちばん下に出すカード */
-export function vcPanel(channelId: string, help = false): Reply {
+export function vcPanel(channelId: string, help = false, inn = false): Reply {
   return {
     embeds: [
       new EmbedBuilder()
@@ -214,7 +215,7 @@ export function vcPanel(channelId: string, help = false): Reply {
         .setDescription('📕 **この通話の人のプロフィールを見る**\n-# 下のボタンを押すと、今この通話にいる人が出ます。プロフィールから朱印も押せます（あなたにだけ見えます）' + (help ? '\n💤 寝落ちの人がいたら・🛡 困ったときは、下のボタンで衛士に知らせられます。' : ''))
         .toJSON(),
     ],
-    components: [row(new ButtonBuilder().setCustomId(shuinId('vc', channelId)).setLabel('この通話の人のプロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Primary)), ...(help ? [vcHelpRow(channelId)] : [])],
+    components: [row(new ButtonBuilder().setCustomId(shuinId('vc', channelId)).setLabel('この通話の人のプロフィールを見る').setEmoji('📕').setStyle(ButtonStyle.Primary)), ...(help ? [vcHelpRow(channelId)] : []), ...(inn ? [innRow(channelId)] : [])],
   };
 }
 
