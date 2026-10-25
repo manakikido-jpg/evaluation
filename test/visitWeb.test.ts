@@ -118,3 +118,9 @@ it('最新の運営ロールだけで専用表示し、URL偽装や剥奪後に�
  roles=[];const ordinary=Buffer.from(await (await req('/visit/card.png?staffTheme=1')).arrayBuffer());d.staffTheme=false;expect(ordinary.equals(renderVisitCard(d,{privateView:true}))).toBe(true);expect((await visitData(db,A,now)).profile.background).toBe('paper');expect(await (await req('/visit')).text()).not.toContain('運営専用の「紅眼の金紋」');
  roles=[role];api.memberRoles=async()=>{throw Error('offline');};expect((await req('/visit/card.png')).status).toBe(503);
 });
+
+it('着せ替え画面の全実績に同じ勲章の見本を表示し、実アプリから画像を配信する',async()=>{
+ const html=await (await req('/visit')).text();for(const id of ['first','vc1','vc10','vc100','vc500','days7','days30','anniversary'])expect(html).toContain('/static/visit-badge-'+id+'.png?v=');
+ const actual=createWebApp({db,cfg,api,baseUrl,now:()=>now,discord:{} as any});const img=await actual.request(baseUrl+'/static/visit-badge-vc1.png');expect(img.status).toBe(200);expect(img.headers.get('content-type')).toContain('image/png');expect((await img.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+ expect((await actual.request(baseUrl+'/static/visit-badge-unknown.png')).status).toBe(404);
+});
