@@ -73,3 +73,47 @@ describe('📰 更新速報', () => {
     expect(sent).toEqual([]);
   });
 });
+
+it('周知担当が要否・対象・手順・文面・画像指示を同じカードで確認できる',()=>{
+ const e:ChangelogEntry={...entry('brief','new',['Discord']),announcement:{priority:'required',audience:'参拝者',steps:['ボタンを押す','表示額を確認する'],postText:'新しい機能をご利用ください。',imagePrompt:'桜の案内画像。見出しと2つの手順を大きく。',notes:'現在の設定を確認してください。'}};
+ const fields=newsEmbed(e).fields!;
+ expect(fields.find(f=>f.name==='周知の判断')!.value).toContain('周知をお願いします');
+ expect(fields.find(f=>f.name==='誰に伝える？')!.value).toBe('参拝者');
+ expect(fields.find(f=>f.name==='案内する操作・手順')!.value).toBe('1. ボタンを押す\n2. 表示額を確認する');
+ expect(fields.find(f=>f.name==='周知文のたたき台')!.value).toBe(e.announcement!.postText);
+ expect(fields.find(f=>f.name==='画像制作の指示')!.value).toBe(e.announcement!.imagePrompt);
+});
+it('周知不要は運営向けと明示し、一般向けの下書きや画像制作を依頼しない',()=>{
+ const e:ChangelogEntry={...entry('internal','fix',['社務所Web']),announcement:{priority:'none',audience:'運営',steps:['管理画面を確認する'],postText:'公開しない文',imagePrompt:'公開しない指示'}};
+ const card=newsEmbed(e);expect(card.fields![0]!.value).toContain('周知は不要');expect(JSON.stringify(card.fields)).not.toContain('公開しない');
+});
+it('未整理の過去分は要確認。既存の変更点を使い、操作や画像の必要性を推測しない',()=>{
+ const card=newsEmbed(entry('old-unknown','improve',['Discord']));
+ expect(card.fields![0]!.value).toContain('要確認');
+ expect(card.fields!.find(f=>f.name==='案内する操作・手順')!.value).toContain('記載がありません');
+ expect(card.fields!.find(f=>f.name==='周知文のたたき台')!.value).toBe('題 old-unknown\n一つ目\n二つ目');
+});
+it('既存機能の制作メモを使い、更新側の指定があればそちらを優先する',()=>{
+ const e={...entry('2026-10-24-talk-topic-categories','improve',['Discord'])};
+ expect(newsEmbed(e).fields!.find(f=>f.name==='案内する操作・手順')!.value).toContain('/トークテーマ');
+ const override:ChangelogEntry={...e,announcement:{priority:'optional',audience:'対象',steps:[],postText:'新しい案内',imagePrompt:'新しい指示'}};
+ expect(newsEmbed(override).fields![0]!.value).toContain('必要に応じて');
+ expect(JSON.stringify(newsMessages([entry('unrelated','new',['Discord'])]))).not.toContain('コアタイム');
+ expect(newsMessages([])).toEqual([]);
+});
+it('長い制作メモと多数の更新もDiscordの文字数上限内に分割し、順番と通知抑止を守る',()=>{
+ const long='長い文章'.repeat(3000);
+ const entries:ChangelogEntry[]=Array.from({length:12},(_,i)=>({...entry(String(i),'new',['Discord']),title:long,items:[long],announcement:{priority:'required',audience:long,steps:[long],postText:long,imagePrompt:long,notes:long}}));
+ const messages=newsMessages(entries);expect(messages.length).toBeGreaterThan(1);
+ expect(messages.flatMap(m=>m.embeds!)).toHaveLength(12);
+ for(const message of messages){
+  expect(message.allowed_mentions).toEqual({parse:[]});expect(message.content?.length??0).toBeLessThanOrEqual(2000);expect(message.embeds!.length).toBeLessThanOrEqual(10);
+  let total=0;
+  for(const card of message.embeds!){
+   expect(card.title!.length).toBeLessThanOrEqual(256);expect(card.description!.length).toBeLessThanOrEqual(4096);
+   total+=(card.title?.length??0)+(card.description?.length??0)+(card.author?.name.length??0)+(card.footer?.text.length??0);
+   for(const field of card.fields!){expect(field.value.length).toBeLessThanOrEqual(1024);expect(field.name.length).toBeLessThanOrEqual(256);total+=field.name.length+field.value.length;}
+  }
+  expect(total).toBeLessThanOrEqual(6000);
+ }
+});

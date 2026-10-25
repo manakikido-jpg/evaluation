@@ -39,3 +39,15 @@ describe('🧹 抜けた人の書き込み', () => {
     expect(staffOnly({ isThread: () => true, parent: ch([]) } as never, guild, ['rank1'])).toBe(true);
   });
 });
+
+it('退会者の片づけは続けるが、削除件数をDiscordの記録へ送信しない',async()=>{
+ const {LeaverCleanupApp}=await import('../src/discord/leaverCleanup.js');
+ const {cfg}=await import('./helpers.js');
+ const {vi}=await import('vitest');
+ const sendMessage=vi.fn(async()=>({id:'notice'})),quiet=vi.fn(),remove=vi.fn(async()=>undefined);
+ await recordMessage(db,{id:'deleted-message',channelId:'talk',authorId:'leaver',at:new Date()});
+ const channel={isThread:()=>false,isTextBased:()=>true,permissionsFor:()=>({has:()=>true}),messages:{fetchPinned:async()=>new Map(),delete:remove}};
+ const guild={id:cfg.guildId,roles:{everyone:{id:'everyone'}},channels:{cache:new Map([['talk',channel]])}};
+ const app=new LeaverCleanupApp(db,()=>cfg,{sendMessage},quiet);
+ expect(await app.onMemberRemove(guild as never,'leaver')).toBe(1);expect(remove).toHaveBeenCalledWith('deleted-message');expect(quiet).toHaveBeenCalledWith(['deleted-message']);expect(sendMessage).not.toHaveBeenCalled();
+});

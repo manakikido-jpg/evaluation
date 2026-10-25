@@ -495,7 +495,7 @@ async function main(): Promise<void> {
   client.on(Events.MessageDelete, m => { if (m.guildId === cfg().guildId) void invalidateGalleryPosts(db, [m.id]).catch(err => logger.warn({ err }, 'gallery deletion check failed')); });
   client.on(Events.MessageBulkDelete, (list, ch) => { if (ch.guildId === cfg().guildId) void invalidateGalleryPosts(db, [...list.keys()]).catch(err => logger.warn({ err }, 'gallery bulk deletion check failed')); });
   client.on(Events.MessageUpdate, (_old, m) => { if (m.guildId === cfg().guildId) void galleryRewardsApp.onUpdate(m.id).catch(err => logger.warn({ err }, 'gallery update check failed')); });
-  // 🗑 消されたメッセージを #記録 に残す
+  // 🗑 Discordへの削除通知は停止中。Webの保存・削除後の処理は続ける。
   const messageLog = new MessageLogApp(cfg, actions, env.DISCORD_MESSAGE_CONTENT === 'on');
   // 🧹 抜けた人の書き込みを消す（書き込みの番号だけ覚えておく）
   // 📚 書き込みの記録（宮司だけが社務所Web で見る。90 日）

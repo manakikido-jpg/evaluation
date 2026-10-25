@@ -3,7 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 
 /**
- * 🗑 消されたメッセージを #記録（channels.deletedLog か channels.log）に残す。
+ * 🗑 削除通知の従来の処理。現在は全チャンネルで通知停止中。
  * 中身は「MESSAGE CONTENT INTENT」をオンにしたときだけ分かる。BOT が起きる前のメッセージは中身が分からない。
  * BOT の書き込み・記録のチャンネル自身は残さない。だれが消したかは、本人以外が消したときだけ Discord の監査ログで分かる。
  */
@@ -14,6 +14,8 @@ type Deleted = Pick<Message | PartialMessage, 'id' | 'channelId' | 'guildId' | '
   guild?: Message['guild'];
 };
 
+/** 運営の指定で、全チャンネルの削除通知（単件・一括・片づけ報告）を停止。Webの保存は別処理。 */
+export const DISCORD_DELETION_NOTICES_ENABLED = false;
 const LIMIT = 1500;
 
 /** 記録に出す文（テストで確かめる） */
@@ -42,6 +44,7 @@ export class MessageLogApp {
   ) {}
 
   private target(): string | undefined {
+    if (!DISCORD_DELETION_NOTICES_ENABLED) return undefined;
     const c = this.cfg().channels;
     return c.deletedLog ?? c.log;
   }

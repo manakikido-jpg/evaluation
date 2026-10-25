@@ -3,6 +3,7 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
+import { DISCORD_DELETION_NOTICES_ENABLED } from './messageLog.js';
 import { forgetMessages, keptChannelIds, recordMessage, takeMessages } from '../services/leaverMessages.js';
 
 /** Discord がまとめて消せるのは 14 日以内（少し余裕を見る） */
@@ -73,7 +74,7 @@ export class LeaverCleanupApp {
     if (removed) {
       logger.info({ memberId, removed }, 'leaver messages removed');
       const log = this.cfg().channels.deletedLog ?? this.cfg().channels.log;
-      if (log) await this.discord.sendMessage(log, { content: `🧹 サーバーを抜けた <@${memberId}> さんの書き込みを ${removed} 件消しました（ピン留め・運営のチャンネル・予約スレッドは残しています）。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+      if (DISCORD_DELETION_NOTICES_ENABLED && log) await this.discord.sendMessage(log, { content: `🧹 サーバーを抜けた <@${memberId}> さんの書き込みを ${removed} 件消しました（ピン留め・運営のチャンネル・予約スレッドは残しています）。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
     }
     return removed;
   }
