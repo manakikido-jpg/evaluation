@@ -20,6 +20,7 @@ type Nav =
   | 'updates'
   | 'stickers'
   | 'posts'
+  | 'reactionroles'
   | 'msgarchive'
   | 'roles'
   | 'ranks'
@@ -99,6 +100,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'guide', href: '/guide', icon: '🌸', label: '案内・給与' },
       { key: 'stickers', href: '/stickers', icon: '🌸', label: 'スタンプ' },
       { key: 'posts', href: '/posts', icon: '📝', label: '投稿文の許可' },
+      { key: 'reactionroles', href: '/reaction-roles', icon: '🎭', label: 'スタンプでロール' },
       { key: 'cast', href: '/cast', icon: '🎀', label: 'キャスト' },
       { key: 'shop', href: '/shop', icon: '🛍', label: 'ショップ', gujiOnly: true },
     ],

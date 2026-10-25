@@ -4407,3 +4407,31 @@ it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）',
   const s = await login(STAFF);
   expect((await get('/message-archive', s)).status).toBe(403);
 });
+
+it('🎭 スタンプでロールのパネルを作る・直す・消す（神職）', async () => {
+  roleList = [
+    { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: '0' },
+    { id: '930000000000000001', name: 'ゲーム好き', position: 1, managed: false, color: 0, permissions: '0' },
+    { id: '930000000000000011', name: '強いロール', position: 2, managed: false, color: 0, permissions: '8' },
+    { id: '930000000000000009', name: 'BOT', position: 5, managed: true, color: 0, permissions: '8', tags: { bot_id: '940000000000000001' } },
+  ];
+  const s = await login(STAFF);
+  const page = await (await get('/reaction-roles', s)).text();
+  expect(page).toContain('スタンプでロール');
+  expect(page).toContain('ゲーム好き');
+  expect(page).not.toContain('>強いロール<');
+  expect(page).not.toMatch(/onclick=|style=/);
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const send = (path: string, f: [string, string][]) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...f]) });
+  const CH = '910000000000000002';
+  expect((await send('/reaction-roles', [['channelId', CH], ['emoji', '🎮'], ['roleId', '930000000000000011'], ['label', '']])).status).toBe(400);
+  expect((await send('/reaction-roles', [['channelId', CH], ['title', 'あそび'], ['emoji', '🎮'], ['roleId', '930000000000000001'], ['label', 'ゲームの話'], ['emoji', ''], ['roleId', ''], ['label', '']])).headers.get('location')).toBe('/reaction-roles?msg=saved');
+  expect(actions.some(a => a.startsWith(`send ${CH}`) && a.includes('ゲーム好き'))).toBe(true);
+  const id = /edit=(\d+)/.exec(await (await get('/reaction-roles', s)).text())![1];
+  expect((await send(`/reaction-roles/${id}`, [['channelId', CH], ['emoji', '🎲'], ['roleId', '930000000000000001'], ['label', '']])).headers.get('location')).toBe('/reaction-roles?msg=saved');
+  expect(actions.some(a => a.startsWith('edit '))).toBe(true);
+  expect((await send(`/reaction-roles/${id}/delete`, [])).headers.get('location')).toBe('/reaction-roles?msg=deleted');
+  expect(actions.some(a => a.startsWith('delete '))).toBe(true);
+  // CSRF がないと断る
+  expect((await app.request('/reaction-roles', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: 'channelId=1' })).status).toBe(403);
+});

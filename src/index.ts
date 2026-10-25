@@ -71,6 +71,7 @@ import { processCoreTimeNotices } from './services/coreTime.js';
 import { StickyApp } from './discord/sticky.js';
 import { VoicePanelApp } from './discord/voicePanel.js';
 import { VcHelpApp } from './discord/vcHelp.js';
+import { ReactionRoleApp } from './discord/reactionRoles.js';
 import { RoomApp } from './discord/rooms.js';
 import { MarketApp } from './discord/market.js';
 import { ConfigStore } from './services/settings.js';
@@ -100,6 +101,8 @@ async function main(): Promise<void> {
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.GuildVoiceStates,
+      // 🎭 スタンプでロールを付ける
+      GatewayIntentBits.GuildMessageReactions,
       // 消されたメッセージの中身を記録するため（Developer Portal でオンにしたときだけ）
       ...(env.DISCORD_MESSAGE_CONTENT === 'on' ? [GatewayIntentBits.MessageContent] : []),
       // オンラインかどうか（案内人の待機の一覧）。Developer Portal でオンにしたときだけ
@@ -163,6 +166,7 @@ async function main(): Promise<void> {
     return Boolean(room && planOf(cfg(), room.hubId) === 'once');
   });
   const vcHelp = new VcHelpApp(cfg);
+  new ReactionRoleApp(db, cfg).attach(client);
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 

@@ -2391,3 +2391,17 @@ export const marketListingImages = pgTable('market_listing_images', {
   data: bytea('data').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** 🎭 スタンプでロールを付けるパネル（社務所Web で作る）。entries はスタンプとロールの組み合わせ */
+export const reactionRolePanels = pgTable('reaction_role_panels', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  channelId: text('channel_id').notNull(),
+  messageId: text('message_id'),
+  title: text('title').notNull().default(''),
+  body: text('body').notNull().default(''),
+  entries: jsonb('entries').$type<{ emoji: string; roleId: string; label: string }[]>().notNull().default([]),
+  updatedBy: text('updated_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex('reaction_role_panels_message_idx').on(t.messageId)]);
+export type ReactionRolePanel = typeof reactionRolePanels.$inferSelect;

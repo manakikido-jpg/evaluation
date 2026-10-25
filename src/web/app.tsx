@@ -1,3 +1,5 @@
+import { ReactionRolesPage } from './views/reactionRoles.js';
+import { deletePanel, getPanel, listPanels, parsePanel, roleProblem, savePanel } from '../services/reactionRoles.js';
 import { mountMarketplace } from './marketplace.js';
 import { kobanStats } from '../services/koban.js';
 import { GalleryRewardsPage } from './views/galleryRewards.js';
@@ -651,6 +653,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/board', requireAdmin);
   app.use('/stickers', requireAdmin);
   app.use('/stickers/*', requireAdmin, requireCsrf);
+  app.use('/reaction-roles', requireAdmin);
+  app.use('/reaction-roles/*', requireAdmin, requireCsrf);
   app.use('/posts', requireAdmin);
   app.use('/posts/*', requireAdmin, requireCsrf);
   app.use('/guide', requireAdmin);
@@ -1785,6 +1789,32 @@ export function createWebApp(deps: WebDeps) {
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
     return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
   });
+  // 🎭 スタンプでロール（宮司・神職）
+  const reactionRoleView = async (c: Context<Env>, opts: { edit?: number; error?: string } = {}) => {
+    const [panels, channels, roles] = await Promise.all([listPanels(db), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
+    const assignable = roles.filter(r => !roleProblem(cfg, roles, r.id, deps.botId)).sort((a, b) => b.position - a.position);
+    const edit = opts.edit ? panels.find(x => x.id === opts.edit) : undefined;
+    return c.html(<ReactionRolesPage session={c.get('session')} panels={panels} channels={channels} roles={roles} assignable={assignable} edit={edit} flash={c.req.query('msg')} error={opts.error} />, opts.error ? 400 : 200);
+  };
+  app.get('/reaction-roles', c => reactionRoleView(c, { edit: Number(c.req.query('edit')) || undefined }));
+  const saveReactionRole = async (c: Context<Env>, id?: number) => {
+    const b = await c.req.parseBody({ all: true });
+    const roles = await loadRoles().then(r => r ?? []).catch(() => []);
+    const parsed = parsePanel(cfg, roles, b, deps.botId);
+    if ('error' in parsed) return reactionRoleView(c, { edit: id, error: parsed.error });
+    const channels = await loadChannels(true).catch(() => []);
+    if (!channels.some(ch => ch.id === parsed.ok.channelId && (ch.type === 0 || ch.type === 5))) return reactionRoleView(c, { edit: id, error: 'チャンネルが見つかりません。' });
+    try {
+      await savePanel(db, deps.discord, parsed.ok, rid => roles.find(r => r.id === rid)?.name, c.get('session').userId, id, now());
+    } catch (err) {
+      logger.warn({ err }, 'reaction role panel save failed');
+      return reactionRoleView(c, { edit: id, error: 'Discord に出せませんでした。BOT がそのチャンネルに書けるか（メッセージの送信・リアクションの追加）確かめてください。' });
+    }
+    return c.redirect('/reaction-roles?msg=saved');
+  };
+  app.post('/reaction-roles', c => saveReactionRole(c));
+  app.post('/reaction-roles/:id', async c => { const id = Number(c.req.param('id')); if (!Number.isSafeInteger(id) || !(await getPanel(db, id))) return c.redirect('/reaction-roles'); return saveReactionRole(c, id); });
+  app.post('/reaction-roles/:id/delete', async c => { await deletePanel(db, deps.discord, Number(c.req.param('id')) || 0, c.get('session').userId); return c.redirect('/reaction-roles?msg=deleted'); });
   // 📚 書き込みの記録（宮司だけ）
   app.get('/message-archive', async c => {
     if (!gujiOnly(c)) return c.text('宮司だけが見られます。', 403);

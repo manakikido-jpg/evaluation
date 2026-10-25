@@ -27,6 +27,10 @@ export interface DiscordActions {
   /** チャンネルにメッセージを投稿する（掲示など）。メンションで通知は飛ばさない */
   sendMessage(channelId: string, body: MessageBody): Promise<{ id: string }>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
+  /** BOT がスタンプを付ける（emoji は URL 用に書いたもの） */
+  addReaction?(channelId: string, messageId: string, emoji: string): Promise<void>;
+  /** そのスタンプをみんなの分まとめて外す */
+  removeReactionEmoji?(channelId: string, messageId: string, emoji: string): Promise<void>;
   /** ピン留めする（pin = false で外す）。「ピン留めしました」のお知らせは消す */
   pinMessage(channelId: string, messageId: string, pin: boolean): Promise<void>;
   /** サーバーのチャンネル一覧（掲示の投稿先・{#チャンネル名} の差し込み用） */
@@ -221,6 +225,8 @@ export function createDiscordActions(botToken: string): DiscordActions {
         files,
       })) as { id: string },
     deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
+    addReaction: async (c, m, e) => void (await call('PUT', `/channels/${c}/messages/${m}/reactions/${e}/@me`)),
+    removeReactionEmoji: async (c, m, e) => void (await call('DELETE', `/channels/${c}/messages/${m}/reactions/${e}`)),
     async pinMessage(c, m, pin) {
       await call(pin ? 'PUT' : 'DELETE', `/channels/${c}/messages/pins/${m}`, { reason: pin ? '掲示のピン留め' : '掲示のピン留めを外した' });
       if (!pin) return;
