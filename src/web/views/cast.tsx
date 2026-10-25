@@ -584,6 +584,11 @@ export function CastPage(props: {
           <Select name="roleId" label="キャストのロール" value={c.roleId} options={props.roles} empty="なし（付けない）" />
           <p class="note">メニュー・オプション・相談の値段に上限はありません（1 枚から）。</p>
           <label class="field">
+            <span>コアタイム中の料金の倍率（1〜10倍）</span>
+            <input type="number" name="coreTimeMultiplier" min={1} max={10} step="0.01" value={String(c.coreTimeMultiplier ?? 3)} required />
+          </label>
+          <p class="note">通話・寝落ち・オプション・納品・ガチャ・シャンパンすべてに適用します。時間帯は「設定」のコアタイムと共通（日本時間）。予約は利用開始予定時刻、延長は延長開始時刻、納品・シャンパンは料金確認時刻で判定します。端数は切り上げ。確定済みの料金は変更しません。</p>
+          <label class="field">
             <span>手数料（%。キャストに渡すときに引いて消す）</span>
             <input type="number" name="feePercent" min={0} max={90} value={String(c.feePercent)} required />
           </label>
