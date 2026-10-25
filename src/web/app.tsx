@@ -1,3 +1,4 @@
+import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
 import { deletePanel, getPanel, listPanels, parsePanel, roleProblem, savePanel } from '../services/reactionRoles.js';
 import { mountMarketplace } from './marketplace.js';
@@ -544,6 +545,7 @@ export function createWebApp(deps: WebDeps) {
       return Boolean(s && s.userId === userId && (s.level === 'guji' || s.level === 'shinshoku'));
     },
   });
+  mountVisit(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountMarketplace(app, { db, api, discord: deps.discord, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountLottery(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });
   mountCasino(app, { db, api, cfg: () => cfg, baseUrl: deps.baseUrl, secure, now });

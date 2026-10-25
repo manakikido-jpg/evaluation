@@ -100,6 +100,7 @@ export function shopList(
         ...sale,
         ...thanks,
         '📖 日記：2 週間ごと・自動更新（下のボタンか日記の受付から）',
+        '🌸 参拝プロフィール：背景・フレームのお店と着せ替えは下のボタンか /参拝プロフィール から。',
         '🪙 小判：下の「小判を買う」か `/持ち物` →「小判」から購入・送付できます。',
         `👛 いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`,
         ...(mine.length ? ['', '**受けているもの**', ...mine] : []),
@@ -134,7 +135,7 @@ export function shopList(
       : [{ custom_id: 'shop:pick', placeholder: '授与品を選ぶ', options: groups.flatMap((g) => g.items).slice(0, 25).map(option) }];
   return {
     embeds,
-    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }, { type: 2, style: 2, label: '🪙 小判を買う', custom_id: 'koban:shop' }] }] : [])],
+    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }, { type: 2, style: 2, label: '🪙 小判を買う', custom_id: 'koban:shop' }, { type: 2, style: 2, label: '🌸 背景・フレーム', custom_id: 'visit:open' }] }] : [])],
   };
 }
 

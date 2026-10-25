@@ -2369,6 +2369,30 @@ export const kobanPurchases = pgTable('koban_purchases', {
 ]);
 export type KobanPurchase = typeof kobanPurchases.$inferSelect;
 
+/** 参拝ランク専用の記録。既存の通貨報酬とは分ける。 */
+export const visitDaily = pgTable('visit_daily', {
+  memberId: text('member_id').notNull(), date: text('date').notNull(),
+  minutes: integer('minutes').notNull().default(0),
+  lastMinute: bigint('last_minute', { mode: 'number' }).notNull(),
+}, t => [primaryKey({ columns: [t.memberId, t.date] }), check('visit_minutes_range', sql`${t.minutes} >= 0 and ${t.minutes} <= 1440`)]);
+export const visitProfiles = pgTable('visit_profiles', {
+  memberId: text('member_id').primaryKey(),
+  background: text('background').notNull().default('paper'),
+  frame: text('frame').notNull().default('plain'),
+  title: text('title').notNull().default('rank'),
+  badges: jsonb('badges').$type<string[]>().notNull().default([]),
+  publicStats: boolean('public_stats').notNull().default(false),
+});
+export const visitPurchases = pgTable('visit_purchases', {
+  memberId: text('member_id').notNull(), itemId: text('item_id').notNull(),
+  price: integer('price').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.memberId, t.itemId] }), check('visit_purchase_price', sql`${t.price} > 0`)]);
+export const visitBadges = pgTable('visit_badges', {
+  memberId: text('member_id').notNull(), badgeId: text('badge_id').notNull(),
+  earnedAt: timestamp('earned_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.memberId, t.badgeId] })]);
+export type VisitProfile = typeof visitProfiles.$inferSelect;
 /** メンバー市場Webの一度きりの操作と、Discordへの同期待ち。 */
 export const marketWebActions = pgTable('market_web_actions', {
   id: text('id').primaryKey(),

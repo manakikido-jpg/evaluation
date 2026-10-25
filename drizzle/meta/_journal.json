@@ -932,6 +932,13 @@
       "when": 1792892185884,
       "tag": "0132_ancient_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1792893112293,
+      "tag": "0133_omniscient_william_stryker",
+      "breakpoints": true
     }
   ]
 }
