@@ -190,8 +190,15 @@ export async function guideDuty(db: Db): Promise<string[]> {
   return Array.isArray(v?.ids) ? v.ids.filter((x): x is string => typeof x === 'string') : [];
 }
 
+/** いつから担当しているか（担当を始めた時刻。前のしくみで始めた人は分からないので入らない） */
+export async function guideDutySince(db: Db): Promise<Map<string, Date>> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, DUTY_KEY));
+  const since = (row?.value as { since?: Record<string, unknown> } | undefined)?.since ?? {};
+  return new Map(Object.entries(since).flatMap(([id, at]) => (typeof at === 'string' && Number.isFinite(Date.parse(at)) ? [[id, new Date(at)] as const] : [])));
+}
+
 /** 担当を始める・終える。同時に押しても順に入れる。前と後の担当を返す（変わらなければ changed: false） */
-export async function setGuideDuty(db: Db, memberId: string, on: boolean, by: string): Promise<{ before: string[]; after: string[]; changed: boolean }> {
+export async function setGuideDuty(db: Db, memberId: string, on: boolean, by: string, via: 'discord' | 'web' = 'discord', now = new Date()): Promise<{ before: string[]; after: string[]; changed: boolean }> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${DUTY_KEY}))`);
     const [row] = await tx.select().from(settings).where(eq(settings.key, DUTY_KEY)).for('update');
@@ -200,8 +207,12 @@ export async function setGuideDuty(db: Db, memberId: string, on: boolean, by: st
     const after = on ? (before.includes(memberId) ? before : [...before, memberId]) : before.filter((x) => x !== memberId);
     const changed = after.length !== before.length;
     if (changed) {
-      await tx.insert(settings).values({ key: DUTY_KEY, value: { ids: after }, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value: { ids: after }, updatedBy: by, updatedAt: new Date() } });
-      await audit(tx as Db, { actorId: by, targetId: memberId, action: on ? 'guide.duty_on' : 'guide.duty_off', detail: { ids: after }, via: 'discord' });
+      // 担当を始めた時刻も覚える（担当でなくなった人の分は消す）
+      const prevSince = (v as { since?: Record<string, string> } | undefined)?.since ?? {};
+      const since = Object.fromEntries(after.flatMap((id) => (id === memberId && on ? [[id, now.toISOString()]] : prevSince[id] ? [[id, prevSince[id]]] : [])));
+      const value = { ids: after, since };
+      await tx.insert(settings).values({ key: DUTY_KEY, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: now } });
+      await audit(tx as Db, { actorId: by, targetId: memberId, action: on ? 'guide.duty_on' : 'guide.duty_off', detail: { ids: after }, via });
     }
     return { before, after, changed };
   });

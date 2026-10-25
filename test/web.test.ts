@@ -4488,3 +4488,18 @@ it('🚫 招待を作れない人を社務所Web で登録すると、今ある�
   expect(await (await get('/invites', s)).text()).toContain('サブ垢の疑い');
   expect((await send('/invites/block/815208713874584412/delete', {})).headers.get('location')).toBe('/invites?msg=unblocked#invite-block');
 });
+
+it('🙋 案内担当を社務所Web で外せる。いつから担当かも出る', async () => {
+  const { setGuideDuty } = await import('../src/services/guideReception.js');
+  await setGuideDuty(db, USER, true, USER, 'discord', new Date(clock.getTime() - 8 * 3_600_000));
+  const s = await login(STAFF);
+  const page = await (await get('/guide', s)).text();
+  expect(page).toContain('いまの案内担当');
+  expect(page).toContain('8 時間');
+  expect(page).toContain('押し忘れ');
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const off = () => app.request(`/guide/duty/${USER}/off`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf }) });
+  expect((await off()).headers.get('location')).toBe('/guide?msg=duty_off#guide-duty');
+  expect(actions).toContain(`dm ${USER}`);
+  expect((await off()).headers.get('location')).toBe('/guide?msg=duty_gone#guide-duty');
+});

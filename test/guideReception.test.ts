@@ -450,6 +450,24 @@ describe('👀 待機中の人', () => {
 });
 
 describe('🙋 案内担当', () => {
+  it('いつから担当しているかを覚える。外すと消える', async () => {
+    const { setGuideDuty, guideDutySince } = await import('../src/services/guideReception.js');
+    const { db, close } = await makeDb();
+    try {
+      const A = '760000000000000101', B = '760000000000000102';
+      const t1 = new Date('2026-10-25T01:00:00Z'), t2 = new Date('2026-10-25T03:00:00Z');
+      await setGuideDuty(db, A, true, A, 'discord', t1);
+      await setGuideDuty(db, B, true, B, 'discord', t2);
+      expect((await guideDutySince(db)).get(A)).toEqual(t1);
+      expect((await guideDutySince(db)).get(B)).toEqual(t2);
+      await setGuideDuty(db, A, false, 'admin', 'web', t2);
+      expect((await guideDutySince(db)).has(A)).toBe(false);
+      expect((await guideDutySince(db)).get(B)).toEqual(t2);
+    } finally {
+      await close();
+    }
+  });
+
   it('始める・終える。同時に押しても二重にならない。チャンネル名', async () => {
     const { setGuideDuty, guideDuty, guideDutyChannelName } = await import('../src/services/guideReception.js');
     const { db, close } = await makeDb();

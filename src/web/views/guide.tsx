@@ -4,7 +4,7 @@ import type { GuideConfig } from '../../services/guideReception.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 const STATE = { pending: '承認待ち', active: '在籍', paused: '休止', waiting: '対応待ち', assigned: '案内中', done: '完了', left: '退出済み' };
-export function GuidePage(p: { session: AdminSession; config: GuideConfig; employees: (typeof guideEmployees.$inferSelect)[]; receptions: (typeof guideReceptions.$inferSelect)[]; payroll: (typeof employeePayroll.$inferSelect)[]; names: Map<string, string>; channels: GuildChannel[]; roles: GuildRole[]; flash?: string }) {
+export function GuidePage(p: { session: AdminSession; config: GuideConfig; employees: (typeof guideEmployees.$inferSelect)[]; receptions: (typeof guideReceptions.$inferSelect)[]; payroll: (typeof employeePayroll.$inferSelect)[]; names: Map<string, string>; channels: GuildChannel[]; roles: GuildRole[]; flash?: string; duty?: { id: string; since?: Date }[]; now?: Date }) {
   const csrf = () => <input type="hidden" name="_csrf" value={p.session.csrfToken} />;
   const channelName = (id: string) => p.channels.find(c => c.id === id)?.name ?? `見つからない部屋（${id}）`;
   const voices = p.channels.filter(c => c.type === 2);
@@ -16,6 +16,16 @@ export function GuidePage(p: { session: AdminSession; config: GuideConfig; emplo
     <nav class="guide-nav" aria-label="案内管理の項目">{p.session.level === 'guji' && <><a href="#guide-setup">初期設定</a><a href="#guide-links">案内リンク</a></>}<a href="#guide-team">案内人</a><a href="#guide-history">対応履歴</a><a href="#guide-payroll">給与</a></nav>
     <div class="guide-overview"><span>監視する部屋 <strong>{p.config.voiceChannelIds.length}</strong></span><span>待機中の案内人 <strong>{p.employees.filter(e => e.status === 'active' && e.waiting).length}</strong></span><span>完了1件 <strong>{p.config.salary.toLocaleString('ja-JP')}銭</strong></span></div>
     {p.flash && <p role="status">{p.flash === 'saved' ? '保存しました。' : p.flash === 'posted' ? '受付パネルを出しました。' : p.flash === 'status' ? '登録を変更しました。' : p.flash === 'paid' ? '担当を直して、給与を払いました。' : p.flash === 'paid_none' ? '担当を直して完了にしました（給与は 0 銭か、同じ利用者の今日の分は払い済みです）。' : p.flash === 'invalid' ? '保存できませんでした。部屋・ロール・絵文字・リンクを確認してください。保存前の設定は残っています。' : '設定・権限・BOTの接続を確認してください。'}</p>}
+    {p.flash === 'duty_off' && <p role="status">案内担当を外しました（本人に DM で知らせました）。</p>}
+    {p.flash === 'duty_gone' && <p role="status">その人は、もう案内担当ではありません。</p>}
+    <section class="card guide-section" id="guide-duty"><h2>🙋 いまの案内担当（{p.duty?.length ?? 0}）</h2>
+      <p class="note">「🔚 案内担当を終了する」を押し忘れた人は、ここで外せます。外すと本人に DM で知らせ、案内担当のチャンネル名も直します。</p>
+      {!p.duty?.length ? <p class="note">いま案内担当の人はいません。</p> : <ul class="plain-list">{p.duty.map(d => {
+        const hours = d.since && p.now ? (p.now.getTime() - d.since.getTime()) / 3_600_000 : undefined;
+        return <li><span>{name(d.id)}　{d.since ? <>{fmtDateTime(d.since)} から（{hours! < 1 ? `${Math.max(0, Math.floor(hours! * 60))} 分` : `${Math.floor(hours!)} 時間`}）{hours! >= 6 && <strong>　⚠️ 長いです。終了の押し忘れかもしれません</strong>}</> : 'いつからかは分かりません（この機能を入れる前から担当）'}</span>
+          <form method="post" action={`/guide/duty/${d.id}/off`} class="inline">{csrf()}<button type="submit" class="danger-link">担当を外す</button></form></li>;
+      })}</ul>}
+    </section>
     <p>案内待ちロールの人が案内VCに入ると知らせ、各部屋にリンク案内を出します。音声接続は不要です。給与は完了時に支払います。同じ利用者は日本時間で1日1件まで給与対象です。</p>
     {p.session.level === 'guji' && <section class="card guide-section" id="guide-setup"><h2>1. 受付の設定</h2><form method="post" action="/guide/settings">{csrf()}
       <fieldset class="guide-voice"><legend>監視する案内VC（複数選べます）</legend>
