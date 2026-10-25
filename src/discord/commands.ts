@@ -22,11 +22,11 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   const staff = PermissionFlagsBits.ModerateMembers;
   return [
     new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
-      .setDescription('Show your activity profile and wardrobe')
-      .setDescriptionLocalizations({ ja: '参拝ランク・通話時間・バッジと着せ替えを見る' })
+      .setDescription('Post your activity profile in this channel')
+      .setDescriptionLocalizations({ ja: 'このチャンネルへ参拝プロフィールを表示（省略で自分）' })
       .setContexts(InteractionContextType.Guild)
       .addUserOption(o => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('Whose profile (default: yourself)'))
-      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Show in this channel (respects privacy settings)'))
+      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: true; false: only you)').setDescriptionLocalizations({ ja: '省略はチャンネルへ表示。いいえにすると自分だけに表示' }))
       .toJSON(),
     new SlashCommandBuilder().setName('recording').setNameLocalizations({ ja: '録音' })
       .setDescription('Prepare a voice recording with everyone’s consent')

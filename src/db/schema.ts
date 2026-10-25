@@ -2381,7 +2381,7 @@ export const visitProfiles = pgTable('visit_profiles', {
   frame: text('frame').notNull().default('plain'),
   title: text('title').notNull().default('rank'),
   badges: jsonb('badges').$type<string[]>().notNull().default([]),
-  publicStats: boolean('public_stats').notNull().default(false),
+  publicStats: boolean('public_stats').notNull().default(true),
 });
 export const visitPurchases = pgTable('visit_purchases', {
   memberId: text('member_id').notNull(), itemId: text('item_id').notNull(),
