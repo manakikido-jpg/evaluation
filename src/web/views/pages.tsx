@@ -1,3 +1,4 @@
+import { assetUrl } from '../assets.js';
 import type { GuildRole } from '../../lib/discordRest.js';
 import type { InviteRewardRow } from '../../services/invites.js';
 import { STAFF_NO_INVITER, UNKNOWN_INVITER } from '../../services/invites.js';
@@ -319,6 +320,15 @@ export function MembersPage(props: {
   const { query } = props;
   const sel = (a: unknown, b: unknown) => (a === b ? { selected: true } : {});
   const checked = new Set(query.roleIds ?? []);
+  const resetParams = new URLSearchParams();
+  if (query.q) resetParams.set('q', query.q);
+  if (query.rank) resetParams.set('rank', query.rank);
+  if (query.ageGroup) resetParams.set('age', query.ageGroup);
+  if (query.inactiveDays) resetParams.set('inactive', String(query.inactiveDays));
+  if (query.status) resetParams.set('status', query.status);
+  if (query.sort) resetParams.set('sort', query.sort);
+  if (query.dir) resetParams.set('dir', query.dir);
+  const resetHref = '/members' + (resetParams.size ? '?' + resetParams.toString() : '');
   return (
     <Layout title="メンバー" session={props.session} nav="members">
       <h1>👥 メンバー</h1>
@@ -346,12 +356,17 @@ export function MembersPage(props: {
         </select>
         {props.roles?.length ? (
           <details class="office-multi member-role-filter" open={checked.size > 0}>
-            <summary>ロールで絞り込む（{checked.size ? `${checked.size} こ選択中` : 'すべて'}）</summary>
+            <summary>ロールで絞り込む（<span data-member-role-summary>{checked.size ? `${checked.size} こ選択中` : 'すべて'}</span>）</summary>
+            <div class="member-role-popover" role="region" aria-label="ロールを選択">
+            <div class="member-role-head"><strong>ロール選択</strong><button type="button" data-member-role-close hidden aria-label="ロール選択を閉じる">閉じる</button></div>
             <p class="note">チェックしたロールの、どれかを持つ人だけを出します。</p>
+            <label class="member-role-search" hidden><span class="sr-only">絞り込むロールを検索</span><input type="search" data-member-role-search aria-label="絞り込むロールを検索" placeholder="ロール名で検索" autocomplete="off" /></label>
             <div class="office-multi-options">
               {props.roles.map((r) => (
                 <label class="field check"><input type="checkbox" name="roles" value={r.id} checked={checked.has(r.id)} /><span>{r.name}</span></label>
               ))}
+            </div>
+            <div class="member-role-actions"><span data-member-role-count aria-live="polite">{checked.size}こ選択中</span><a class="button-link" href={resetHref} data-member-role-reset aria-label="ロールの選択をリセット">リセット</a></div>
             </div>
           </details>
         ) : null}
@@ -405,6 +420,7 @@ export function MembersPage(props: {
         </noscript>
       </form>
       <MemberResults {...props} />
+      <script src={assetUrl('member-filters.js')} defer></script>
     </Layout>
   );
 }

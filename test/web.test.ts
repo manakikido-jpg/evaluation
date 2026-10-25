@@ -4516,7 +4516,7 @@ it('👥 メンバー検索: 役職に案内待ちをえらべる。ロールの
   const s = await login(STAFF);
   const page = await (await get('/members', s)).text();
   expect(page).toContain('🧭 案内待ち');
-  expect(page).toContain('ロールで絞り込む');
+  expect(page).toContain('ロールで絞り込む');expect(page).toContain('ロールの選択をリセット');expect(page).toContain('member-filters.js');expect(page).toContain('member-role-popover');
   const pending = await (await get('/members?rank=pending', s)).text();
   expect(pending).toContain('まちびと');
   expect(pending).not.toContain('あそびびと');
@@ -4526,4 +4526,7 @@ it('👥 メンバー検索: 役職に案内待ちをえらべる。ロールの
   const game = await (await get(`/members?roles=${GAME}`, s)).text();
   expect(game).not.toContain('まちびと');
   expect(game).toContain(`roles=${GAME}`);
+  const filtered=await (await get(`/members?roles=${GAME}&q=あそ&rank=pending&age=adult&status=all&inactive=7&sort=name&dir=asc`,s)).text();
+  const reset=/href="([^"]+)" data-member-role-reset/.exec(filtered)![1]!.replaceAll('&amp;','&');const params=new URL(reset,BASE).searchParams;
+  expect(params.has('roles')).toBe(false);expect(params.get('q')).toBe('あそ');expect(params.get('rank')).toBe('pending');expect(params.get('age')).toBe('adult');expect(params.get('status')).toBe('all');expect(params.get('inactive')).toBe('7');expect(params.get('sort')).toBe('name');expect(params.get('dir')).toBe('asc');
 });

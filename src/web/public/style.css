@@ -1452,3 +1452,13 @@ form.inline { display: inline; margin: 0; }
 .news-brief { margin: 1rem 0; }
 .news-brief dt { font-weight: 700; margin-top: .75rem; }
 .news-brief dd { margin: .25rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* メンバーのロール選択だけを一覧の手前へ浮かせる。JavaScriptなしでは通常のdetails。 */
+.member-role-head,.member-role-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.member-role-head button[hidden],.member-role-search[hidden]{display:none}
+.member-role-popover .member-role-search input[type=search]{width:100%;min-width:0;flex:none}
+.member-role-actions{padding-top:10px;border-top:1px solid var(--line)}
+.member-role-floating[open]>.member-role-popover{overflow:auto;overscroll-behavior:contain;position:fixed;z-index:90;display:flex;flex-direction:column;gap:8px;width:min(380px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:16px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px #0003}
+.member-role-floating .member-role-popover .note{margin:0;flex:none}
+.member-role-floating .member-role-popover .office-multi-options{min-height:0;max-height:320px;overflow-y:auto;margin:0;flex:1 1 auto}
+.member-role-floating .member-role-head,.member-role-floating .member-role-actions,.member-role-floating .member-role-search{flex:none;margin:0}
