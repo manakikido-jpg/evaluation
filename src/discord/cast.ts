@@ -967,7 +967,7 @@ export class CastApp {
     const goId = `cast:rplan:${castId}:${plan}${opts.length ? `:${opts.map((o) => o.id).join(',')}` : ''}`;
     await this.answer(i, {
       content: [
-        `🎀 <@${castId}> さんを **${menuLabel(item)}**${opts.length ? ` ＋ ${opts.map((o) => o.name).join('・')}` : ''} ・ 通常 ${this.coin()} **${fmt(price)} 枚**（次に日時を入れます。コアタイムは割増料金を再確認）`,
+        `🎀 <@${castId}> さんを **${menuLabel(item)}**${opts.length ? ` ＋ ${opts.map((o) => o.name).join('・')}` : ''} ・ 通常 ${this.coin()} **${fmt(price)} 枚** で予約しますか？（次に日時を入れます。コアタイムは割増料金を再確認）`,
         adult ? '-# 2 人だけの部屋ができます（運営は見守りのために見られます）' : `-# 公開の部屋での雑談になります（${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`,
         '-# キャストは予約だけです。銭は社務所が預かり、受けてもらえなければ全額戻ります。途中でのばすこともできます',
         RULES,
