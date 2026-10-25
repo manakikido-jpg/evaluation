@@ -10,7 +10,7 @@ import type { DiscordApi } from './discordApi.js';
 import { createMemberSession, findMemberSession, deleteMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
-import { buyVisitItem, saveVisitProfile, visitData, VisitError, type VisitData } from '../services/visitProfile.js';
+import { buyVisitItem, saveVisitStaffStyle, saveVisitProfile, visitData, VisitError, type VisitData } from '../services/visitProfile.js';
 import { renderVisitCard } from '../services/visitCard.js';
 import { loadReceptionAvatar } from '../services/castReceptionImage.js';
 import { walletOf } from '../services/economy.js';
@@ -58,17 +58,23 @@ export function mountVisit(app:Hono<any>,d:Deps){
   setCookie(c,COOKIE,await createMemberSession(d.db,{id:user.id,username:user.displayName,displayName:user.displayName,avatarUrl:user.avatarUrl},d.now()),opts);
   return c.redirect('/visit',303);
  });
- app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} workshop={await workshopData(d.db,s.userId)} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
+ app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} workshop={await workshopData(d.db,s.userId)} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} previewStaffStyle={c.req.query('staffStyle')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='staff-saved'?'運営専用の装いを保存しました。':c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
  app.get('/visit/card.png',protect(async(c,_s,data)=>{
   const preview=c.req.query('preview')==='1';
   const avatar=data.member.avatarUrl?await loadReceptionAvatar(data.member.avatarUrl):undefined;
-  const png=renderVisitCard(data,{privateView:c.req.query('public')!=='1',...(preview?{background:c.req.query('background'),frame:c.req.query('frame'),preview:true}:{}),avatar});
+  const png=renderVisitCard(data,{privateView:c.req.query('public')!=='1',...(preview?{background:c.req.query('background'),frame:c.req.query('frame'),staffStyle:c.req.query('staffStyle'),preview:true}:{}),avatar});
   c.header('Content-Type','image/png');if(c.req.query('download')==='1')c.header('Content-Disposition','attachment; filename="sakura-profile.png"');
   return c.body(new Uint8Array(png));
  }));
  app.post('/visit/buy',protect(async(c,s)=>{
   const b=await c.req.parseBody();
   try{await buyVisitItem(d.db,s.userId,typeof b.item==='string'?b.item:'',Number(b.quote),b.confirm==='yes',d.now());return c.redirect('/visit?msg=bought',303);}
+  catch(e){if(e instanceof VisitError)return c.html(<VisitGate error={e.message} back/>,400);throw e;}
+ }));
+ app.post('/visit/staff-style',protect(async(c,s,data)=>{
+  if(!data.staffTheme)return c.text('宮司・神職だけが変更できます。',403);
+  const body=await c.req.parseBody();
+  try{await saveVisitStaffStyle(d.db,s.userId,typeof body.staffStyle==='string'?body.staffStyle:'',data.staffTheme,d.now());return c.redirect('/visit?msg=staff-saved',303);}
   catch(e){if(e instanceof VisitError)return c.html(<VisitGate error={e.message} back/>,400);throw e;}
  }));
  app.post('/visit/equip',protect(async(c,s)=>{

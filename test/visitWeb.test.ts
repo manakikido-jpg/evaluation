@@ -124,3 +124,14 @@ it('着せ替え画面の全実績に同じ勲章の見本を表示し、実ア�
  const actual=createWebApp({db,cfg,api,baseUrl,now:()=>now,discord:{} as any});const img=await actual.request(baseUrl+'/static/visit-badge-vc1.png');expect(img.status).toBe(200);expect(img.headers.get('content-type')).toContain('image/png');expect((await img.arrayBuffer()).byteLength).toBeGreaterThan(1000);
  expect((await actual.request(baseUrl+'/static/visit-badge-unknown.png')).status).toBe(404);
 });
+
+it('運営専用の装いは現在のロールとCSRFで保存し、試着/他人指定/一般用設定とは分ける',async()=>{
+ const {visitData}=await import('../src/services/visitProfile.js');const {renderVisitCard}=await import('../src/services/visitCard.js');
+ const role='770000000000000099';const localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};let roles=[role];api.memberRoles=async()=>roles;app=new Hono();mountVisit(app,{db,api,cfg:()=>localCfg,baseUrl,secure:true,now:()=>now});
+ expect((await post('/visit/staff-style',{staffStyle:'blue-lantern',_csrf:'bad'})).status).toBe(403);expect((await post('/visit/staff-style',{staffStyle:'unknown'})).status).toBe(400);
+ const preview=await req('/visit?staffStyle=blue-lantern');expect(await preview.text()).toContain('青夜の花灯り');expect((await visitData(db,A,now)).profile.staffStyle).toBe('crimson');
+ const saved=await post('/visit/staff-style',{staffStyle:'blue-lantern',memberId:B});expect(saved.status).toBe(303);expect((await visitData(db,A,now)).profile.staffStyle).toBe('blue-lantern');expect((await visitData(db,B,now)).profile.staffStyle).toBe('crimson');
+ const data=await visitData(db,A,now);data.staffTheme=true;expect(Buffer.from(await (await req('/visit/card.png?download=1')).arrayBuffer()).equals(renderVisitCard(data,{privateView:true}))).toBe(true);
+ roles=[];expect((await post('/visit/staff-style',{staffStyle:'crimson'})).status).toBe(403);expect(await (await req('/visit')).text()).not.toContain('<h2>運営専用の装い</h2>');
+ data.staffTheme=false;expect(Buffer.from(await (await req('/visit/card.png?preview=1&staffStyle=blue-lantern')).arrayBuffer()).equals(renderVisitCard(data,{privateView:true,preview:true}))).toBe(true);expect((await visitData(db,A,now)).profile.staffStyle).toBe('blue-lantern');
+});

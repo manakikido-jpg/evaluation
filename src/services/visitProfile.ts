@@ -8,6 +8,12 @@ import { jstDate } from './activity.js';
 import { spendWithin } from './economy.js';
 import { audit } from './audit.js';
 
+export const VISIT_STAFF_STYLES = [
+  {id:'crimson',name:'紅眼の金紋'},
+  {id:'blue-lantern',name:'青夜の花灯り'},
+] as const;
+export const visitStaffStyle=(value:string|undefined)=>VISIT_STAFF_STYLES.find(s=>s.id===value)??VISIT_STAFF_STYLES[0];
+
 export const VISIT_RANKS = [
   { name: '旅人', minutes: 0 }, { name: '参拝者', minutes: 60 },
   { name: '顔なじみ', minutes: 600 }, { name: '常連', minutes: 3000 },
@@ -113,5 +119,16 @@ export async function saveVisitProfile(db:Db,id:string,input:{background:string;
     if(input.badges.length>5||new Set(input.badges).size!==input.badges.length||input.badges.some(id=>!data.badges.some(b=>b.badgeId===id)))throw new VisitError('獲得したバッジから5個まで選んでください。');
     await tx.update(visitProfiles).set(input).where(eq(visitProfiles.memberId,id));
     await audit(tx,{actorId:id,action:'visit.equip',detail:{...input},via:'web'});
+  });
+}
+
+/** 最新ロールを確認したWeb入口からのみ保存する。一般用の設定は触らない。 */
+export async function saveVisitStaffStyle(db:Db,id:string,style:string,verifiedStaff:boolean,now=new Date()) {
+  if(!verifiedStaff||!VISIT_STAFF_STYLES.some(s=>s.id===style))throw new VisitError('運営専用の装いを選んでください。');
+  await db.transaction(async tx=>{
+    const [m]=await tx.select().from(members).where(eq(members.id,id)).for('update');
+    if(!m||m.leftAt||m.isBot)throw new VisitError('在籍を確認できません。');
+    await tx.insert(visitProfiles).values({memberId:id,staffStyle:style}).onConflictDoUpdate({target:visitProfiles.memberId,set:{staffStyle:style}});
+    await audit(tx,{actorId:id,action:'visit.staffStyle',detail:{style},via:'web'});
   });
 }

@@ -2379,6 +2379,7 @@ export const visitDaily = pgTable('visit_daily', {
 export const visitProfiles = pgTable('visit_profiles', {
   memberId: text('member_id').primaryKey(),
   background: text('background').notNull().default('paper'),
+  staffStyle: text('staff_style').notNull().default('crimson'),
   frame: text('frame').notNull().default('plain'),
   title: text('title').notNull().default('rank'),
   badges: jsonb('badges').$type<string[]>().notNull().default([]),

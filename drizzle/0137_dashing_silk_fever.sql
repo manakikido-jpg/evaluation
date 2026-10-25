@@ -1,0 +1,1 @@
+ALTER TABLE "visit_profiles" ADD COLUMN "staff_style" text DEFAULT 'crimson' NOT NULL;
