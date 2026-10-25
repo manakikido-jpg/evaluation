@@ -738,3 +738,9 @@
 - 最終検証：全177ファイル2,051テスト成功（357.52秒、4並列）、型チェック・ビルド成功、関連40件成功。ログ/tmp/visit-premium-{all-tests,typecheck-final,build-final,related}.log。テスト削除/skipなし。最終コードの生成で25組を確認し、PNG最大約1.74MB、透過フレーム中央は透明。
 - 完成した青紫のカードを会話へ提示済み。見本docs/previews/visit-moon-premium.png、全25組docs/previews/visit-collection.jpg。初版の静的見本ではなく、実際のrenderVisitCardで合成。担当Claude向け既存PR #88へ保存する。最新本番96c78fd、本番未操作・未反映。
 - GitHub保存完了：PR #88のまま更新、描画/素材5022fa6。OPEN・未合流・mergeable、本番未反映。全2,051件・型・ビルド成功、関連40件・25組の描画/容量/透過/ブラウザ確認済み。完成見本 https://raw.githubusercontent.com/manakikido-jpg/evaluation/5022fa6/docs/previews/visit-moon-premium.png 、一覧 https://raw.githubusercontent.com/manakikido-jpg/evaluation/5022fa6/docs/previews/visit-collection.jpg 。PR説明も最終の見た目・検証・見本へ更新。この追記は所在のみでソース変更なし。
+
+## 2026年10月25日：フレームを画像の端へ付ける
+- 依頼：フレームをカードの端にくっつけたい。
+- 開始：codex/visit-profile 46a5e6f、PR #88はOPEN。最新本番85cade4は市場のコマンド/出品者ページの追加で、今回の描画とは別。
+- 方針：フレームの描画を四辺へ広げて外側余白をなくし、細縁も画像端に合わせる。背景と文字・バッジは動かさず、実合成で収まりを検品する。価格・所持・公開設定は変更しない。
+- 次：描画位置と端の処理を調整、全組合せ/PNG容量/型/全件検証、完成サンプルと既存PRを更新。本番操作なし。

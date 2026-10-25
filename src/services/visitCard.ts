@@ -18,7 +18,7 @@ const ART_FILES: Record<string, string> = {
 };
 const embedded = new Map<string, string>();
 /** ファイルは固定カタログだけ。画像の中に外部URLを残さず、オフラインで描画する。 */
-function art(id: string): string {
+function art(id: string, edge = false): string {
   const file = ART_FILES[id];
   if (!file) return '';
   let uri = embedded.get(file);
@@ -27,7 +27,7 @@ function art(id: string): string {
       readFileSync(new URL('../../assets/visit/' + file, import.meta.url)).toString('base64');
     embedded.set(file, uri);
   }
-  return '<image href="' + uri + '" width="1080" height="640"/>';
+  return '<image href="' + uri + '"' + (edge ? ' x="-20" y="-16" width="1120" height="672"' : ' width="1080" height="640"') + '/>';
 }
 const stars = (x: number, y: number, size: number, color: string) =>
   '<path d="M' + x + ' ' + (y-size) + 'L' + (x+size*.24) + ' ' + (y-size*.24) + 'L' +
@@ -81,7 +81,7 @@ export function visitCardSvg(data: VisitData, options: {
     '<linearGradient id="accent"><stop stop-color="' + accent + '"/><stop offset="1" stop-color="#fff1c7"/></linearGradient>' +
     '<radialGradient id="medalShine" cy="0"><stop stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>' +
     '<filter id="textShadow" x="-.2" y="-.5" width="1.4" height="2"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity=".95"/></filter>' +
-    '<clipPath id="avatar"><circle cx="234" cy="150" r="33"/></clipPath><clipPath id="card"><rect width="1080" height="640" rx="20"/></clipPath></defs><g clip-path="url(#card)">' +
+    '<clipPath id="avatar"><circle cx="234" cy="150" r="33"/></clipPath><clipPath id="card"><rect width="1080" height="640"/></clipPath></defs><g clip-path="url(#card)">' +
     art(bg.id) + '<rect x="42" y="67" width="996" height="504" rx="28" fill="url(#veil)"/>' +
     '<path d="M160 210H969M160 490H550" stroke="' + accent + '" stroke-opacity=".45"/>' +
     '<circle cx="234" cy="150" r="39" fill="#10182b" stroke="url(#metal)" stroke-width="4"/>';
@@ -116,7 +116,9 @@ export function visitCardSvg(data: VisitData, options: {
   }
   svg += text(160,513,options.preview ? '着せ替えの見本 · 保存前のプレビュー' : '一つひとつの語らいが、ご縁になる。',13,'#f6e2b9');
   // 最前面は独立した透過フレーム。背景を替えてもこの装飾は保つ。
-  svg += frame.id === 'plain' ? '<rect x="18" y="18" width="1044" height="604" rx="18" fill="none" stroke="url(#metal)" stroke-width="3"/>' : art(frame.id);
+  // 外周の縁を四辺へ接続し、装飾を少し外まで描いて外側の余白を出さない。
+  svg += '<rect x="0" y="0" width="1080" height="640" fill="none" stroke="url(#metal)" stroke-width="6"/>';
+  if (frame.id !== 'plain') svg += art(frame.id, true);
   return svg + '</g></svg>';
 }
 export function renderVisitCard(data: VisitData, options: Parameters<typeof visitCardSvg>[1] = {}): Buffer {

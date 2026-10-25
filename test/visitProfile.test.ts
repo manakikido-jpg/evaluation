@@ -95,6 +95,13 @@ describe('購入・装備・公開',()=>{
   for(const png of [original,bg,frame])expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);
   expect(visitCardSvg(d,{background:'../../unknown',frame:'../../unknown'})).not.toContain('https://');
  });
+ it('細縁は上下左右の画像端に接し、外周へ透明な余白を残さない',async()=>{
+  const png=renderVisitCard(await visitData(db,A,now),{privateView:true,background:'moon',frame:'plain'});
+  for(const [left,top] of [[540,0],[540,639],[0,320],[1079,320]]){
+   const pixel=await sharp(png).ensureAlpha().extract({left:left!,top:top!,width:1,height:1}).raw().toBuffer();
+   expect(pixel[3]).toBe(255);expect(pixel[0]).toBeGreaterThan(pixel[1]!);expect(pixel[1]).toBeGreaterThan(pixel[2]!);
+  }
+ });
  it('実配布する4フレームは透過PNGで、中央を覆わない',async()=>{
   for(const id of ['petal','crescent','gold','century']){
    const path=fileURLToPath(new URL('../assets/visit/frame-'+id+'.png',import.meta.url));
