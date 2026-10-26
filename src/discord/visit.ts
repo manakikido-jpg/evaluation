@@ -12,14 +12,15 @@ export class VisitApp{
  async onInteraction(i:Interaction):Promise<void>{
   if(!i.inCachedGuild()||i.guildId!==this.cfg().guildId)return;
   const command=i.isChatInputCommand()&&i.commandName==='visitprofile';
+  const bingo=i.isChatInputCommand()&&i.commandName==='bingo';
   const open=i.isButton()&&i.customId==='visit:open';
-  if(!command&&!open)return;
+  if(!command&&!open&&!bingo)return;
   try{
-   if(open&&i.isButton()){
+   if((open&&i.isButton())||bingo){
     await i.deferReply({flags:MessageFlags.Ephemeral});
     if(!this.baseUrl){await i.editReply({content:'プロフィールのWeb入口はまだ準備中です。'});return;}
     const token=await createLoginLink(this.db,{id:i.user.id,displayName:i.member.displayName,avatarUrl:i.user.displayAvatarURL({size:128})});
-    await i.editReply({content:'背景・フレームのお店と着せ替えです。このリンクはあなた専用で10分・1回限りです。',components:[{type:1,components:[{type:2,style:5,label:'参拝プロフィールを開く',url:this.baseUrl+'/visit/link/'+token}]}],allowedMentions:{parse:[]}});
+    await i.editReply({content:bingo?'イベントビンゴの本人用入口です。無料参加・1人1枚。リンクは10分・1回限りです。':'背景・フレームのお店と着せ替えです。このリンクはあなた専用で10分・1回限りです。',components:[{type:1,components:[{type:2,style:5,label:bingo?'イベントビンゴを開く':'参拝プロフィールを開く',url:this.baseUrl+'/visit/link/'+token+(bingo?'?next=bingo':'')}]}],allowedMentions:{parse:[]}});
    }else if(command&&i.isChatInputCommand()){
     const target=i.options.getUser('user')??i.user;
     const isPublic=i.options.getBoolean('public')??true;

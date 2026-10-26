@@ -1,3 +1,4 @@
+import { mountBingo } from './bingo.js';
 import { bodyLimit } from 'hono/body-limit';
 import { buyCreatorLicense, createDesign, submitDesign, deletePrivateDesign, accessibleDesign, workshopData, DESIGN_INPUT_MAX } from '../services/visitWorkshop.js';
 import type { Context, Hono } from 'hono';
@@ -18,6 +19,7 @@ import { VisitGate, VisitPage } from './views/visit.js';
 type Deps={db:Db;api:DiscordApi;cfg:()=>GuildConfig;baseUrl:string;secure:boolean;now:()=>Date};
 const COOKIE='sakura_visit',STATE='sakura_visit_state';
 export function mountVisit(app:Hono<any>,d:Deps){
+ mountBingo(app,d);
  app.use('/visit/designs',bodyLimit({maxSize:9*1024*1024,onError:c=>c.text('画像は8MBまでです。',413)}));
  const opts={path:'/visit',httpOnly:true,secure:d.secure,sameSite:'Lax' as const,maxAge:7*86400};
  const redirect=d.baseUrl+'/casino/auth/callback';
@@ -48,7 +50,7 @@ export function mountVisit(app:Hono<any>,d:Deps){
  app.get('/visit/link/:token',async c=>{
   c.header('Cache-Control','private, no-store');c.header('Referrer-Policy','no-referrer');
   const user=await peekLoginLink(d.db,c.req.param('token'),d.now());
-  return c.html(<VisitGate error={user?undefined:'リンクが期限切れか使用済みです。Discordから開き直してください。'} link={user?{name:user.displayName,action:'/visit/link/'+c.req.param('token')}:undefined}/>);
+  return c.html(<VisitGate error={user?undefined:'リンクが期限切れか使用済みです。Discordから開き直してください。'} link={user?{name:user.displayName,action:'/visit/link/'+c.req.param('token')+(c.req.query('next')==='bingo'?'?next=bingo':'')}:undefined}/>);
  });
  app.post('/visit/link/:token',async c=>{
   c.header('Cache-Control','private, no-store');
@@ -56,7 +58,7 @@ export function mountVisit(app:Hono<any>,d:Deps){
   const user=await useLoginLink(d.db,c.req.param('token'),d.now());if(!user)return c.text('リンクが期限切れか使用済みです。',400);
   try{if(!await access(user.id))return c.text('在籍中のメンバーだけが利用できます。',403);}catch{return c.text('在籍を確認できません。Discordから開き直してください。',503);}
   setCookie(c,COOKIE,await createMemberSession(d.db,{id:user.id,username:user.displayName,displayName:user.displayName,avatarUrl:user.avatarUrl},d.now()),opts);
-  return c.redirect('/visit',303);
+  return c.redirect(c.req.query('next')==='bingo'?'/visit/bingo':'/visit',303);
  });
  app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} workshop={await workshopData(d.db,s.userId)} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} previewStaffStyle={c.req.query('staffStyle')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='staff-saved'?'運営専用の装いを保存しました。':c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
  app.get('/visit/card.png',protect(async(c,_s,data)=>{

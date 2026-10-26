@@ -72,3 +72,9 @@ it('保存した青銀は対象の運営カードに使い、ロール解除後�
  roles=[];i.editReply.mockClear();await app.onInteraction(i as any);data.staffTheme=false;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(data))).toBe(true);
 });
 
+
+it('ビンゴコマンドは本人だけに10分1回限りの会員入口を返す',async()=>{
+ const definition=commandDefinitions(cfg).find(c=>c.name==='bingo')!;expect(definition.name_localizations?.ja).toBe('ビンゴ');
+ const i={...interaction(),commandName:'bingo',member:{displayName:'さくら'}};await app.onInteraction(i as any);expect(i.deferReply).toHaveBeenCalledWith({flags:MessageFlags.Ephemeral});
+ const reply=i.editReply.mock.calls[0]![0];expect(reply.components[0].components[0].url).toMatch(/^https:\/\/visit\.test\/visit\/link\/.+\?next=bingo$/);expect(reply.allowedMentions).toEqual({parse:[]});expect(reply.files).toBeUndefined();
+});

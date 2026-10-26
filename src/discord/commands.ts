@@ -21,6 +21,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   // 神職用: 「メンバーをタイムアウト」の権限がある人にだけ表示（使えるかどうかは BOT がロールで確認する）
   const staff = PermissionFlagsBits.ModerateMembers;
   return [
+    new SlashCommandBuilder().setName('bingo').setNameLocalizations({ ja: 'ビンゴ' }).setDescription('Open the event bingo').setDescriptionLocalizations({ ja: 'イベントビンゴの本人用入口を開く' }).setContexts(InteractionContextType.Guild).toJSON(),
     new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
       .setDescription('Post your activity profile in this channel')
       .setDescriptionLocalizations({ ja: 'このチャンネルへ参拝プロフィールを表示（省略で自分）' })

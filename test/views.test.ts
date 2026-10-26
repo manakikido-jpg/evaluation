@@ -24,7 +24,10 @@ describe('customId', () => {
 describe('コマンド定義', () => {
   it('右クリックメニュー・全員用・神職用', () => {
     const defs = commandDefinitions(cfg);
-    expect(defs.map((d) => d.name)).toEqual(['visitprofile', 'recording', 'プロフィール', 'goshuin', 'talktopic', 'zandaka', 'stickerdesk', 'ichiba', 'toukoubun', 'sokin', 'cast', 'shinpu', 'mypage', 'casino', 'items', 'present', 'yougo', 'menzaifu', 'omikuji', 'gacha', 'bell', 'invite', 'sharedinvite', 'hajimete', 'soudan', 'help', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member']);
+    expect(defs.map((d) => d.name)).toEqual(['bingo', 'visitprofile', 'recording', 'プロフィール', 'goshuin', 'talktopic', 'zandaka', 'stickerdesk', 'ichiba', 'toukoubun', 'sokin', 'cast', 'shinpu', 'mypage', 'casino', 'items', 'present', 'yougo', 'menzaifu', 'omikuji', 'gacha', 'bell', 'invite', 'sharedinvite', 'hajimete', 'soudan', 'help', 'panel', 'yaku', 'ban', 'kick', 'gift', 'roomadmin', 'role', 'temprole', 'tempperm', 'minutes', 'memo', 'member']);
+    const bingo = defs.find(d => d.name === 'bingo')!;
+    expect(bingo.default_member_permissions).toBeUndefined();
+    expect(bingo.name_localizations?.ja).toBe('ビンゴ');
     const visit = defs.find(d => d.name === 'visitprofile')!;
     expect(visit.default_member_permissions).toBeUndefined();
     expect(visit.name_localizations?.ja).toBe('参拝プロフィール');
