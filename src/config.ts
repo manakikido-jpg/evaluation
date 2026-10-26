@@ -34,6 +34,7 @@ export const WEB_PAGES = [
   { key: 'stickers', label: 'スタンプ', href: '/stickers', prefixes: ['stickers'] },
   { key: 'posts', label: '投稿文の許可', href: '/posts', prefixes: ['posts'] },
   { key: 'reactionroles', label: 'スタンプでロール', href: '/reaction-roles', prefixes: ['reaction-roles'] },
+  { key: 'roomknock', label: '宿のこんこん', href: '/room-knock', prefixes: ['room-knock'] },
   { key: 'glossary', label: '用語集', href: '/glossary', prefixes: ['glossary'] },
 ] as const;
 

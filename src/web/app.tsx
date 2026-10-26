@@ -6,6 +6,8 @@ import { clearInviteAlert, inviteAlerts, watchedMembers } from '../services/invi
 import { inviteBlocks, setInviteBlock } from '../services/inviteBlock.js';
 import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
+import { RoomKnockPage } from './views/roomKnock.js';
+import { knockConfigSchema, roomKnockConfig, roomKnockStates, saveRoomKnockConfig } from '../services/roomKnock.js';
 import { deletePanel, getPanel, listPanels, parsePanel, panelEmojiCatalog, roleProblem, savePanel } from '../services/reactionRoles.js';
 import { mountMarketplace } from './marketplace.js';
 import { kobanStats } from '../services/koban.js';
@@ -667,6 +669,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/stickers', requireAdmin);
   app.use('/stickers/*', requireAdmin, requireCsrf);
   app.use('/reaction-roles', requireAdmin);
+  app.use('/room-knock', requireAdmin, requireCsrf);
   app.use('/reaction-roles/*', requireAdmin, requireCsrf);
   app.use('/posts', requireAdmin);
   app.use('/posts/*', requireAdmin, requireCsrf);
@@ -1832,6 +1835,20 @@ export function createWebApp(deps: WebDeps) {
     const [config, pending, done, channels, roles] = await Promise.all([loadUpdatePostConfig(db), listUpdatePosts(db, ['pending']), listUpdatePosts(db, ['posted', 'rejected']), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
     return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
+  });
+  // 🚪 宿のこんこん（宮司・神職）
+  const roomKnockView = async (c: Context<Env>, error?: string) => {
+    const [config, channels, rooms] = await Promise.all([roomKnockConfig(db), loadChannels().catch(() => []), roomKnockStates(db)]);
+    return c.html(<RoomKnockPage session={c.get('session')} config={config} channels={channels} rooms={rooms} flash={c.req.query('msg')} error={error} />, error ? 400 : 200);
+  };
+  app.get('/room-knock', c => roomKnockView(c));
+  app.post('/room-knock', async c => {
+    const b = await c.req.parseBody();
+    const parsed = knockConfigSchema.safeParse({ enabled: b.enabled === 'yes', channelId: typeof b.channelId === 'string' ? b.channelId : '', cooldownSec: Number(b.cooldownSec), windowSec: Number(b.windowSec) });
+    if (!parsed.success) return roomKnockView(c, '時間は 30〜3600 秒の整数で入れてください。');
+    const value = await saveRoomKnockConfig(db, parsed.data, c.get('session').userId);
+    await audit(db, { actorId: c.get('session').userId, action: 'room_knock.config', detail: value, via: 'web' });
+    return c.redirect('/room-knock?msg=saved', 303);
   });
   // 🎭 スタンプでロール（宮司・神職）
   const reactionRoleView = async (c: Context<Env>, opts: { edit?: number; error?: string; values?: Record<string, unknown> } = {}) => {

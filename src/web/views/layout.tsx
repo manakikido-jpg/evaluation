@@ -21,6 +21,7 @@ type Nav =
   | 'stickers'
   | 'posts'
   | 'reactionroles'
+  | 'roomknock'
   | 'msgarchive'
   | 'roles'
   | 'ranks'
@@ -101,6 +102,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'stickers', href: '/stickers', icon: '🌸', label: 'スタンプ' },
       { key: 'posts', href: '/posts', icon: '📝', label: '投稿文の許可' },
       { key: 'reactionroles', href: '/reaction-roles', icon: '🎭', label: 'スタンプでロール' },
+      { key: 'roomknock', href: '/room-knock', icon: '🚪', label: '宿のこんこん' },
       { key: 'cast', href: '/cast', icon: '🎀', label: 'キャスト' },
       { key: 'shop', href: '/shop', icon: '🛍', label: 'ショップ', gujiOnly: true },
     ],

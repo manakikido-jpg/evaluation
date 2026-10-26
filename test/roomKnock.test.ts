@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
-import { answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode } from '../src/services/roomKnock.js';
+import { fmtSec, roomKnockConfig, saveRoomKnockConfig, answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode } from '../src/services/roomKnock.js';
 import { makeDb } from './helpers.js';
 let db: Db, close: () => Promise<void>;
 beforeEach(async () => { ({ db, close } = await makeDb()); });
@@ -62,5 +62,17 @@ describe('宿のこんこんの永続状態', () => {
     expect((await requestRoomKnock(db, R, '21', '21', 1)).status).toBe('full');
     const result = await requestRoomKnock(db, R, '21', 'new', 180000);
     expect(result.status === 'ok' && result.pending.users).toEqual(['21']);
+  });
+});
+
+describe('社務所Web の設定', () => {
+  it('初期は使う・自動・3分。時間を変えると間かくと受付時間に効く', async () => {
+    expect(await roomKnockConfig(db)).toEqual({ enabled: true, channelId: '', cooldownSec: 180, windowSec: 180 });
+    await saveRoomKnockConfig(db, { enabled: true, channelId: '', cooldownSec: 60, windowSec: 90 }, 'admin');
+    await setRoomKnockMode(db, R, 'knock');
+    const r = await requestRoomKnock(db, R, A, '1', 0, { cooldownMs: 60_000, windowMs: 90_000 });
+    expect(r.status === 'ok' && r.pending.expires).toBe(90_000);
+    expect(await requestRoomKnock(db, R, A, '2', 30_000, { cooldownMs: 60_000, windowMs: 90_000 })).toEqual({ status: 'cooldown', seconds: 30 });
+    expect(fmtSec(90)).toBe('1分30秒'); expect(fmtSec(180)).toBe('3分'); expect(fmtSec(45)).toBe('45秒');
   });
 });

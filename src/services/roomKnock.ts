@@ -10,6 +10,33 @@ const pendingSchema = z.object({ id: z.string(), users: z.array(z.string()).max(
 const stateSchema = z.object({ mode: z.enum(['open', 'knock', 'busy']).default('open'), last: z.record(z.string(), z.number()).default({}), pending: pendingSchema.optional(), controlId: z.string().optional() });
 export type KnockState = z.infer<typeof stateSchema>;
 const key = (room: string) => `room_knock:${room}`;
+
+/** 🚪 社務所Web で変えられる設定（止める・始める、パネルのチャンネル、時間） */
+const CONFIG_KEY = 'room_knock.config';
+export const knockConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  channelId: z.string().regex(/^(\d{17,20})?$/).default(''),
+  cooldownSec: z.number().int().min(30).max(3600).default(180),
+  windowSec: z.number().int().min(30).max(3600).default(180),
+});
+export type KnockConfig = z.infer<typeof knockConfigSchema>;
+export async function roomKnockConfig(db: Db): Promise<KnockConfig> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, CONFIG_KEY));
+  const r = knockConfigSchema.safeParse(row?.value ?? {});
+  return r.success ? r.data : knockConfigSchema.parse({});
+}
+export async function saveRoomKnockConfig(db: Db, input: KnockConfig, by: string) {
+  const value = knockConfigSchema.parse(input);
+  await db.insert(settings).values({ key: CONFIG_KEY, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+  return value;
+}
+/** 「3分」「90秒」のように時間を書く */
+export const fmtSec = (sec: number) => sec % 60 === 0 ? `${sec / 60}分` : sec > 60 ? `${Math.floor(sec / 60)}分${sec % 60}秒` : `${sec}秒`;
+/** いま受付の状態を持っている部屋（一覧用） */
+export async function roomKnockStates(db: Db): Promise<{ room: string; state: KnockState }[]> {
+  const rows = await db.select().from(settings).where(sql`${settings.key} like 'room\_knock:%'`);
+  return rows.flatMap(r => { const p = stateSchema.safeParse(r.value); return p.success ? [{ room: r.key.slice('room_knock:'.length), state: p.data }] : []; });
+}
 export async function roomKnockState(db: Db, room: string): Promise<KnockState> {
   const [row] = await db.select().from(settings).where(eq(settings.key, key(room)));
   return stateSchema.parse(row?.value ?? {});
@@ -32,12 +59,13 @@ export async function resetRoomKnock(db: Db, room: string) {
 export async function setKnockControl(db: Db, room: string, id: string) {
   return change(db, room, s => { s.controlId = id; });
 }
-export async function requestRoomKnock(db: Db, room: string, user: string, id: string, now = Date.now()) {
+export async function requestRoomKnock(db: Db, room: string, user: string, id: string, now = Date.now(), opts: { cooldownMs?: number; windowMs?: number } = {}) {
+  const cooldown = opts.cooldownMs ?? KNOCK_MS, windowMs = opts.windowMs ?? KNOCK_MS;
   return change(db, room, s => {
-    s.last = Object.fromEntries(Object.entries(s.last).filter(([, at]) => now - at < KNOCK_MS));
+    s.last = Object.fromEntries(Object.entries(s.last).filter(([, at]) => now - at < cooldown));
     if (s.mode !== 'knock') return { status: 'unavailable' as const };
-    if (s.last[user] !== undefined) return { status: 'cooldown' as const, seconds: Math.ceil((s.last[user]! + KNOCK_MS - now) / 1000) };
-    if (!s.pending || s.pending.expires <= now || s.pending.answered) s.pending = { id, users: [], expires: now + KNOCK_MS, answered: false };
+    if (s.last[user] !== undefined) return { status: 'cooldown' as const, seconds: Math.ceil((s.last[user]! + cooldown - now) / 1000) };
+    if (!s.pending || s.pending.expires <= now || s.pending.answered) s.pending = { id, users: [], expires: now + windowMs, answered: false };
     if (s.pending.users.length >= 20) return { status: 'full' as const };
     s.pending.users.push(user);
     s.last[user] = now;

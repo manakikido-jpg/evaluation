@@ -4415,6 +4415,22 @@ it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）',
   expect((await get('/message-archive', s)).status).toBe(403);
 });
 
+it('🚪 宿のこんこんの設定を保存し、受付中の部屋を一覧する（神職）', async () => {
+  const { roomKnockConfig, setRoomKnockMode } = await import('../src/services/roomKnock.js');
+  await setRoomKnockMode(db, '910000000000000777', 'busy');
+  const s = await login(STAFF);
+  const page = await (await get('/room-knock', s)).text();
+  expect(page).toContain('宿のこんこん');
+  expect(page).toContain('取り込み中');
+  expect(page).not.toMatch(/onclick=|style=/);
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const send = (f: [string, string][]) => app.request('/room-knock', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(f) });
+  expect((await send([['_csrf', 'x'], ['cooldownSec', '60'], ['windowSec', '120']])).status).toBe(403);
+  expect((await send([['_csrf', csrf], ['cooldownSec', '5'], ['windowSec', '120']])).status).toBe(400);
+  expect((await send([['_csrf', csrf], ['channelId', '910000000000000002'], ['cooldownSec', '60'], ['windowSec', '120']])).status).toBe(303);
+  expect(await roomKnockConfig(db)).toEqual({ enabled: false, channelId: '910000000000000002', cooldownSec: 60, windowSec: 120 });
+});
+
 it('🎭 スタンプでロールのパネルを作る・直す・消す（神職）', async () => {
   roleList = [
     { id: cfg.guildId, name: '@everyone', position: 0, managed: false, color: 0, permissions: '0' },

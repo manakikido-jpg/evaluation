@@ -5,7 +5,7 @@ import type { GuildConfig } from '../config.js';
 import { settings } from '../db/schema.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
-import { ROOM_MODES, answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode, type KnockState, type RoomMode } from '../services/roomKnock.js';
+import { fmtSec, roomKnockConfig, ROOM_MODES, answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode, type KnockState, type RoomMode } from '../services/roomKnock.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral } as const;
 const noPing = { parse: [] as never[] };
@@ -18,8 +18,8 @@ export const roomDirectoryPanel = () => ({ content: '**🌸 お部屋案内**\n�
 export function roomKnockControls(room: string, mode: RoomMode) {
   return { content: `**🌸 この部屋の受付：${ROOM_MODES[mode]}**\n在室している人が切り替えられます。全員退出すると「出入り自由」に戻ります。`, components: [row(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${room}:${m}`, ROOM_MODES[m], m === mode ? ButtonStyle.Primary : ButtonStyle.Secondary)))], allowedMentions: noPing };
 }
-function notice(room: string, p: NonNullable<KnockState['pending']>, result?: string) {
-  return { content: `🔔 **こんこん**\n${p.users.map(id => `<@${id}>`).join(' ')} さんが声をかけています。\n${result ?? '入っても大丈夫ですか？ 在室者だけが返事できます（3分以内）。'}`, components: result ? [] : [row(...(Object.keys(REPLIES) as (keyof typeof REPLIES)[]).map(k => button(`rkn:reply:${room}:${p.id}:${k}`, REPLIES[k])))], allowedMentions: noPing };
+function notice(room: string, p: NonNullable<KnockState['pending']>, result?: string, window = '3分') {
+  return { content: `🔔 **こんこん**\n${p.users.map(id => `<@${id}>`).join(' ')} さんが声をかけています。\n${result ?? '入っても大丈夫ですか？ 在室者だけが返事できます（${window}以内）。'}`, components: result ? [] : [row(...(Object.keys(REPLIES) as (keyof typeof REPLIES)[]).map(k => button(`rkn:reply:${room}:${p.id}:${k}`, REPLIES[k])))], allowedMentions: noPing };
 }
 /** 公開の入口から本人用の一覧を出し、部屋外の人だけがこんこんできる。 */
 export class RoomKnockApp {
@@ -43,7 +43,10 @@ export class RoomKnockApp {
     this.ticking = true;
     try {
       // 同名が複数あるときは誤投稿しない。
-      const targets = [...guild.channels.cache.values()].filter(ch => ch.type === ChannelType.GuildText && ch.name.replace(/[\s\u200b-\u200f\u2060\ufeff｜|・-]/g, '') === '🌸お部屋案内');
+      const conf = await roomKnockConfig(this.db);
+      if (!conf.enabled) return;
+      // 社務所Web でチャンネルを選んでいれば、そこに出す
+      const targets = conf.channelId ? [guild.channels.cache.get(conf.channelId)].filter(ch => ch?.type === ChannelType.GuildText) as import('discord.js').TextChannel[] : [...guild.channels.cache.values()].filter(ch => ch.type === ChannelType.GuildText && ch.name.replace(/[\s\u200b-\u200f\u2060\ufeff｜|・-]/g, '') === '🌸お部屋案内');
       if (targets.length !== 1) return;
       const target = targets[0]!;
       if (target.type !== ChannelType.GuildText) return;
@@ -96,7 +99,7 @@ export class RoomKnockApp {
       if (s.controlId) await left.messages.edit(s.controlId, roomKnockControls(left.id, 'open')).catch(() => undefined);
     });
     const joined = after.channel;
-    if (joined?.type === ChannelType.GuildVoice && await this.eligible(joined)) await this.lock.run(joined.id, () => this.control(joined));
+    if (joined?.type === ChannelType.GuildVoice && (await roomKnockConfig(this.db)).enabled && await this.eligible(joined)) await this.lock.run(joined.id, () => this.control(joined));
   }
   private async list(guild: Guild, member: GuildMember, page: number) {
     const rooms = await this.available(guild, member);
@@ -116,6 +119,8 @@ export class RoomKnockApp {
   async onInteraction(i: Interaction) {
     if (!(i.isButton() || i.isStringSelectMenu()) || !i.customId.startsWith('rkn:') || !i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     await i.deferReply(PRIVATE);
+    const conf = await roomKnockConfig(this.db);
+    if (!conf.enabled) return void await i.editReply('いま、こんこんとお部屋案内はお休みしています。');
     try {
       const actor = await i.guild.members.fetch({ user: i.user.id, force: true });
       const parts = i.customId.split(':');
@@ -143,21 +148,21 @@ export class RoomKnockApp {
           await i.editReply(`${ROOM_MODES[mode]}にしました。`);
         } else if (parts[1] === 'knock') {
           if (inside || !humans(ch).size) return void await i.editReply(inside ? 'この部屋にいる人はこんこんできません。' : '空室です。こんこんせずに利用できます。');
-          const r = await requestRoomKnock(this.db, ch.id, actor.id, i.id);
+          const r = await requestRoomKnock(this.db, ch.id, actor.id, i.id, Date.now(), { cooldownMs: conf.cooldownSec * 1000, windowMs: conf.windowSec * 1000 });
           if (r.status !== 'ok') return void await i.editReply(r.status === 'cooldown' ? `次のこんこんまで${r.seconds}秒お待ちください。` : r.status === 'full' ? '受付が混み合っています。少し待ってください。' : '今はこんこんを受け付けていません。部屋一覧を更新してください。');
           try {
-            const body = notice(ch.id, r.pending);
+            const body = notice(ch.id, r.pending, undefined, fmtSec(conf.windowSec));
             if (r.pending.messageId) await ch.messages.edit(r.pending.messageId, body);
             else {
               const recipients = [...humans(ch).keys()].slice(0, 50);
               const sent = await ch.send({ ...body, content: `${recipients.map(id => `<@${id}>`).join(' ')}\n${body.content}`, allowedMentions: { parse: [], users: recipients } });
               await recordKnockMessage(this.db, ch.id, r.pending.id, sent.id);
             }
-            await i.editReply('こんこんを送りました。返事はDMで届きます（受付は3分間）。DMを受け取れる設定にしてください。');
+            await i.editReply(`こんこんを送りました。返事はDMで届きます（受付は${fmtSec(conf.windowSec)}間）。DMを受け取れる設定にしてください。`);
           } catch (err) {
             await cancelKnock(this.db, ch.id, r.pending.id);
             logger.warn({ err, channelId: ch.id }, 'room knock notification failed');
-            await i.editReply('通知の送信を確認できませんでした。二重送信を避けるため、3分後にもう一度お試しください。');
+            await i.editReply(`通知の送信を確認できませんでした。二重送信を避けるため、${fmtSec(conf.cooldownSec)}後にもう一度お試しください。`);
           }
         } else if (parts[1] === 'reply') {
           const reply = parts[4] as keyof typeof REPLIES;
