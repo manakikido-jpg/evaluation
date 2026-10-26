@@ -1009,6 +1009,13 @@
       "when": 1793043713379,
       "tag": "0143_cooing_marten_broadcloak",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1793049195802,
+      "tag": "0144_flimsy_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "guide_threads" ADD COLUMN "schedule_message_id" text;

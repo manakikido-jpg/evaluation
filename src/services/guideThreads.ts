@@ -85,7 +85,7 @@ export async function threadById(db: Db, threadId: string): Promise<GuideThread 
 }
 /** 作ったスレッドを覚える（入りなおした人は、新しいスレッドに置きかえる） */
 export async function recordThread(db: Db, memberId: string, threadId: string, watched: boolean, now = new Date()) {
-  const values = { memberId, threadId, watched, slotAt: null, slotLabel: null, reminded: false, createdAt: now, closedAt: null };
+  const values = { memberId, threadId, watched, scheduleMessageId: null, slotAt: null, slotLabel: null, reminded: false, createdAt: now, closedAt: null };
   await db.insert(guideThreads).values(values).onConflictDoUpdate({ target: guideThreads.memberId, set: values });
 }
 export async function bookSlot(db: Db, memberId: string, date: string, time: string) {
@@ -97,6 +97,9 @@ export async function takeDueReminders(db: Db, now = new Date()): Promise<GuideT
   return db.update(guideThreads).set({ reminded: true })
     .where(and(isNull(guideThreads.closedAt), eq(guideThreads.reminded, false), lte(guideThreads.slotAt, new Date(now.getTime() + 10 * 60_000)), gte(guideThreads.slotAt, new Date(now.getTime() - 15 * 60_000))))
     .returning();
+}
+export async function setScheduleMessage(db: Db, memberId: string, messageId: string | null) {
+  await db.update(guideThreads).set({ scheduleMessageId: messageId }).where(eq(guideThreads.memberId, memberId));
 }
 export async function closeThread(db: Db, memberId: string, now = new Date()) {
   await db.update(guideThreads).set({ closedAt: now }).where(and(eq(guideThreads.memberId, memberId), isNull(guideThreads.closedAt)));

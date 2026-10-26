@@ -3,25 +3,25 @@ import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { loadGuideConfig } from '../services/guideReception.js';
-import { bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
+import { setScheduleMessage, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
 import { watchReason } from '../services/inviteGuard.js';
-import { guideRoleIdsOf, guideRoleOf } from './guidePending.js';
+import { guideRoleIdsOf, guideRoleOf, scheduleChannelOf } from './guidePending.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral } as const;
-const ADD_MAX = 50;
 
 /** スレッドに送る、あいさつと時間のボタン */
-export function guideThreadMessage(c: GuideThreadConfig, memberId: string, now = new Date()) {
+export function guideThreadMessage(c: GuideThreadConfig, memberId: string, now = new Date(), guideRoleId?: string) {
   const slots = openSlots(c, now);
   const timeRow = slots.length ? [new ActionRowBuilder<ButtonBuilder>().addComponents(slots.map(s => new ButtonBuilder().setCustomId(`gth:slot:${s.date}:${s.time}`).setLabel((s.tomorrow ? '明日 ' : '') + s.time).setStyle(ButtonStyle.Primary)))] : [];
   return {
-    content: `<@${memberId}> さん`,
+    // @案内人 を呼ぶと、そのロールの人がスレッドに入る（人数の上限なし・あとから案内人になった人も呼べば入る）
+    content: `<@${memberId}> さん${guideRoleId ? `\n<@&${guideRoleId}> 新しい方が来ました。` : ''}`,
     embeds: [{ description: c.message.slice(0, 4000), color: 0xf4a7b9 }],
     components: [...timeRow, new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('gth:now').setLabel('今から').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('gth:other').setLabel('時間外').setStyle(ButtonStyle.Secondary),
     )],
-    allowedMentions: { users: [memberId] },
+    allowedMentions: { users: [memberId], roles: guideRoleId ? [guideRoleId] : [] },
   };
 }
 
@@ -30,7 +30,10 @@ export class GuideThreadApp {
   private ticking = false;
   constructor(private db: Db, private cfg: () => GuildConfig) {}
 
-  private guideRole(guild: Guild): string | undefined {
+  /** @案内人 のロール（案内の設定のロール。なければ、名前に「案内人」が入るロールが 1 つだけのとき） */
+  private async guideRole(guild: Guild): Promise<string | undefined> {
+    const set = (await loadGuideConfig(this.db)).roleId;
+    if (set) return set;
     const ids = [...guideRoleIdsOf(guild.roles.cache.values())];
     return ids.length === 1 ? ids[0] : undefined;
   }
@@ -56,17 +59,12 @@ export class GuideThreadApp {
     const thread = await parent.threads.create({ name: `🌸 ${m.displayName} さんのご案内`.slice(0, 100), type: ChannelType.PrivateThread, invitable: false, autoArchiveDuration: 10080, reason: '入った人の案内スレッド' });
     await recordThread(this.db, m.id, thread.id, watched);
     await thread.members.add(m.id);
-    if (!watched) {
-      const roles = guideRoleIdsOf(m.guild.roles.cache.values());
-      const guides = m.guild.members.cache.filter(g => !g.user.bot && g.id !== m.id && g.roles.cache.some(r => roles.has(r.id))).first(ADD_MAX);
-      for (const g of guides) await thread.members.add(g.id).catch(err => logger.warn({ err, guideId: g.id }, 'guide thread add guide failed'));
-    }
-    await thread.send(guideThreadMessage(c, m.id));
+    await thread.send(guideThreadMessage(c, m.id, new Date(), watched ? undefined : await this.guideRole(m.guild)));
   }
 
   /** 案内人に知らせる（要注意の人は運営の記録へ） */
   private async notify(thread: ThreadChannel, watched: boolean, memberId: string, text: string) {
-    const role = this.guideRole(thread.guild);
+    const role = await this.guideRole(thread.guild);
     if (watched) {
       const log = this.cfg().channels.log;
       const ch = log ? thread.guild.channels.cache.get(log) : undefined;
@@ -106,12 +104,36 @@ export class GuideThreadApp {
       } else if (i.isModalSubmit() && parts[1] === 'otherform') {
         const when = i.fields.getTextInputValue('when').trim().slice(0, 200);
         await this.notify(thread, row.watched, row.memberId, `ほかの日時を希望しています：「${when}」`);
+        // 📅 #案内希望日程 にも、名前と希望の日時を出す（要注意の人は出さない）
+        if (!row.watched) await this.postSchedule(thread, row.memberId, row.scheduleMessageId, when).catch(err => logger.warn({ err }, 'guide schedule post failed'));
         await i.editReply('受け付けました。案内人からのお返事をお待ちください。');
       }
     } catch (err) {
       logger.warn({ err }, 'guide thread interaction failed');
       if (i.deferred) await i.editReply('うまく受け付けられませんでした。少し待ってからもう一度お試しください。').catch(() => undefined);
     }
+  }
+
+  /** #案内希望日程 に、名前と希望の日時を出す（前に出した分は書きかえる） */
+  private async postSchedule(thread: ThreadChannel, memberId: string, oldId: string | null, when: string) {
+    const id = scheduleChannelOf(this.cfg(), thread.guild.channels.cache.values());
+    const ch = id ? thread.guild.channels.cache.get(id) : undefined;
+    if (!ch || ch.type !== ChannelType.GuildText) return;
+    const member = thread.guild.members.cache.get(memberId);
+    const body = { content: `📅 **${member?.displayName ?? '参拝者'}**（<@${memberId}>）さん
+希望の日時：${when}
+案内スレッド：${thread.toString()}`, allowedMentions: { parse: [] as never[] } };
+    const old = oldId ? await ch.messages.fetch(oldId).catch(() => undefined) : undefined;
+    if (old) return void await old.edit(body);
+    const sent = await ch.send(body);
+    await setScheduleMessage(this.db, memberId, sent.id);
+  }
+  /** 閉じるときに、#案内希望日程 の BOT の書き込みを消す */
+  private async removeSchedule(guild: Guild, messageId: string | null) {
+    if (!messageId) return;
+    const id = scheduleChannelOf(this.cfg(), guild.channels.cache.values());
+    const ch = id ? guild.channels.cache.get(id) : undefined;
+    if (ch?.type === ChannelType.GuildText) await ch.messages.delete(messageId).catch(err => logger.warn({ err }, 'guide schedule delete failed'));
   }
 
   /** 毎分: 10 分前のお知らせと、案内が終わった人・抜けた人のスレッドを閉じる */
@@ -125,6 +147,7 @@ export class GuideThreadApp {
         if (m && pending && m.roles.cache.has(pending)) continue;
         if (!m && !(await guild.members.fetch(row.memberId).then(() => false).catch((err: { code?: number }) => err?.code === 10007))) continue;
         await closeThread(this.db, row.memberId, now);
+        await this.removeSchedule(guild, row.scheduleMessageId);
         const t = await guild.channels.fetch(row.threadId).catch(() => null);
         if (t?.isThread()) await t.edit({ locked: true, archived: true, reason: m ? '案内が終わった' : 'サーバーを抜けた' }).catch(err => logger.warn({ err }, 'guide thread close failed'));
       }
