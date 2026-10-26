@@ -938,6 +938,7 @@ export function KeibaView(p: {
               {s.phase !== "racing" && p.countdown}
             </div>
           </div>
+          {s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
           <Tv
             s={s}
             mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]}

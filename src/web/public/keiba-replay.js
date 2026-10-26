@@ -25,3 +25,7 @@ export function sampleReplay(data, elapsed) {
   const order = [...positions].sort((a, b) => a.finished && b.finished ? data.order.indexOf(a.no) - data.order.indexOf(b.no) : a.finished ? -1 : b.finished ? 1 : b.progress - a.progress).map(p => p.no);
   return { positions, order, remaining: Math.max(0, Math.ceil(data.race.dist * (1 - Math.max(...positions.map(p => p.progress))))), complete: ms >= Math.max(...data.finishMs) };
 }
+/** 観戦中はサーバーの現在時刻まで。確定後とサンプルは自由に見返せる。 */
+export function replayLimit(data, serverNow) {
+  return data.live && !data.live.confirmed ? clamp(serverNow - data.live.start, 0, data.durationMs) : data.durationMs;
+}

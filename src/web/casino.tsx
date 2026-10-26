@@ -1,4 +1,6 @@
 import { html } from 'hono/html';
+import { keibaBroadcast } from '../services/casino/keibaBroadcast.js';
+import type { KbState } from '../services/casino/tables/keiba.js';
 import { createKeibaPreview } from '../services/casino/keibaPreview.js';
 import { KeibaPreviewPage } from './views/keibaPreview.js';
 import { lobbyTable, lobbyResumes, visibleLobbyGames, prayerHref } from '../services/casino/lobby.js';
@@ -804,6 +806,31 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   app.get('/casino/keiba/preview', page((c, me) => {
     if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
     return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={createKeibaPreview()} />}`);
+  }));
+
+  // 同じレースの走行記録を観戦。次のレースへ進んでも別の走行へ置き換えない。
+  app.get('/casino/keiba/watch/:id', page(async (c, me) => {
+    if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+    const id = idOf(c), t = id ? await tableById(db, id) : undefined;
+    if (!t || t.kind !== 'keiba') return c.redirect('/casino?e=not_found');
+    const data = keibaBroadcast(t.state as KbState, t.id, d.now().getTime());
+    if (!data || c.req.query('race') && c.req.query('race') !== data.live.key) return c.redirect(`/casino/t/${t.id}`);
+    c.header('Cache-Control', 'no-store');
+    return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={data} tableId={t.id} />}`);
+  }));
+  app.get('/casino/keiba/watch/:id/state', page(async c => {
+    c.header('Cache-Control', 'no-store');
+    if (!kindOn('keiba')) return c.json({ error: 'game_off' }, 403);
+    const id = idOf(c), t = id ? await tableById(db, id) : undefined;
+    if (!t || t.kind !== 'keiba') return c.json({ error: 'not_found' }, 404);
+    const key = c.req.query('race');
+    const initial = keibaBroadcast(t.state as KbState, t.id, d.now().getTime());
+    if (!key || initial?.live.key !== key) return c.json({ error: 'race_changed' }, 409);
+    // 通常の卓と同じ時間進行・二重払い防止を共用する。
+    const current = await pollTable(db, d.cfg(), t.id, d.now());
+    const data = current?.kind === 'keiba' ? keibaBroadcast(current.state as KbState, t.id, d.now().getTime()) : undefined;
+    if (!data || data.live.key !== key) return c.json({ error: 'race_changed' }, 409);
+    return c.json({ live: data.live, results: data.results });
   }));
 
   // 🏇 成績: 馬の成績・馬名鑑・自分の馬券成績

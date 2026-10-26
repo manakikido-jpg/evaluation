@@ -5,3 +5,5 @@ body.casino:has(.kr-page){background-color:#101b26}.casino:has(.kr-page) .c-main
 @media (orientation: landscape) and (max-height: 550px){.casino:has(.kr-page) .c-top{position:static;height:34px;min-height:34px;padding:4px 10px;flex-wrap:nowrap}.casino:has(.kr-page) .c-top .c-me{display:none}.casino:has(.kr-page) .c-logo{font-size:14px}.casino:has(.kr-page) .c-main{padding:4px 8px}.kr-page{margin:0;padding:0}.kr-screen{height:calc(100dvh - 185px);min-height:120px}.kr-options output{display:none}}
 
 .kr-screen:after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 95px #13282328;background:linear-gradient(180deg,#edf4fb08,transparent 32%,transparent 75%,#10251d0c)}.kr-screen-caption{z-index:1}
+
+.kr-official:not([hidden]){grid-column:1/-1;background:#112a29;border:1px solid #bda266;border-radius:12px;padding:16px;color:#f5efe0}.kr-official h2{font-size:18px;margin:0 0 10px}.kr-official ol{padding-left:25px;line-height:1.9}.kr-official a{color:#f5d590}.kr-page>[data-kr-call]{grid-column:1/-1;color:#eed395;font-weight:700}

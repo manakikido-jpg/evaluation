@@ -1,4 +1,4 @@
-import { clamp, sampleReplay, trackPoint } from './keiba-replay.js?v=1';
+import { clamp, sampleReplay, trackPoint, replayLimit } from './keiba-replay.js?v=1';
 import { createHorse } from './keiba-horse.js?v=1';
 const root=document.querySelector('[data-keiba-preview]');
 if(root)void start(root);
@@ -7,12 +7,44 @@ async function start(root) {
   const status=root.querySelector('[data-kr-status]'), seek=root.querySelector('[data-kr-seek]'), play=root.querySelector('[data-kr-play]'), quality=root.querySelector('[data-kr-quality]');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let T,scene,elapsed=0,playing=false,last=performance.now(),raf=0,camera='wide',disposed=false,lastUI=-1,lastRender=0,measure=last,frames=0,loading=0,dirty=true;
+  let clockAt=performance.now(),serverAt=data.live?.now??0,pollTimer=0,polling=false;
+  const liveStatus=root.querySelector('[data-kr-live-status]');
+  const serverNow=()=>serverAt+performance.now()-clockAt;
+  const limit=()=>replayLimit(data,serverNow());
+  if(data.live&&!data.live.confirmed){elapsed=limit();playing=!reduced;play.textContent=playing?'停止':'再生';}
+  function showOfficial(){
+    if(!data.live?.confirmed)return;
+    root.querySelector('[data-kr-official]').hidden=false;
+    const list=root.querySelector('[data-kr-times]');list.replaceChildren();
+    for(const r of data.results){const li=document.createElement('li');li.textContent=`${r.no}番 ${data.horses.find(h=>h.no===r.no)?.name??''}　${r.time}${r.margin?`（${r.margin}）`:''}`;list.append(li);}
+  }
+  showOfficial();
+  async function pollLive(){
+    if(disposed||!data.live||data.live.confirmed)return;
+    if(document.hidden){pollTimer=setTimeout(pollLive,2000);return;}
+    polling=true;
+    try{
+      const response=await fetch(data.live.url,{cache:'no-store',headers:{Accept:'application/json'},signal:AbortSignal.timeout(10000)});
+      if(disposed)return;
+      if(response.status===409||response.status===404||response.status===403){
+        liveStatus.textContent='このレースの情報更新は終了しました。表示中の映像を保持しています。続きは競馬の卓で確認してください。';return;
+      }
+      if(!response.ok)throw new Error('state unavailable');
+      const next=await response.json();
+      if(next.live?.key!==data.live.key)throw new Error('race mismatch');
+      data.live=next.live;data.results=next.results;serverAt=next.live.now;clockAt=performance.now();dirty=true;
+      liveStatus.textContent=next.live.confirmed?'結果が確定しました。自由に見返せます。馬券・払戻は競馬の卓で確認してください。':'サーバーの時刻に合わせて観戦中です。';
+      showOfficial();
+    }catch{if(!disposed)liveStatus.textContent='レース情報を確認できません。再接続を試しています。';}
+    finally{polling=false;}
+    if(!disposed&&!data.live.confirmed)pollTimer=setTimeout(pollLive,2000);
+  }
   const names=new Map(data.horses.map(h=>[h.no,h.name])), rank=root.querySelector('[data-kr-ranking]');
   const rows=new Map();for(const h of data.horses){const li=document.createElement('li'),no=document.createElement('b'),name=document.createElement('span');no.textContent=h.no;no.className=`kr-no kr-no-${h.no}`;name.textContent=h.name;li.append(no,name);rank.append(li);rows.set(h.no,li);}
   class RaceScene {
     constructor() {
       this.renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.0;
-      this.world=new T.Scene();this.world.background=new T.Color(0xcbdce5);this.world.fog=new T.Fog(0xcbdce5,160,900);
+      this.world=new T.Scene();const sky=data.race.weather===0?0xcbdce5:data.race.weather===1?0xb3bec8:0x8a9ba9;this.world.background=new T.Color(sky);this.world.fog=new T.Fog(sky,160,900);
       this.view=new T.PerspectiveCamera(38,1,.1,2200);this.world.add(new T.HemisphereLight(0xe4edff,0x8e805e,2.1));
       this.sun=new T.DirectionalLight(0xffe8c6,2.5);this.sun.position.set(-40,70,40);this.sun.castShadow=true;this.sun.shadow.mapSize.set(2048,2048);Object.assign(this.sun.shadow.camera,{left:-55,right:55,top:55,bottom:-55,near:.1,far:180});this.sun.shadow.normalBias=.018;this.sun.shadow.radius=3;this.world.add(this.sun,this.sun.target);
       this.renderer.shadowMap.type=T.PCFSoftShadowMap;
@@ -38,7 +70,7 @@ async function start(root) {
     grass(striped=false) {
       const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;const g=canvas.getContext('2d');
       let seed=811;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-      for(let x=0;x<512;x++)for(let y=0;y<128;y++){const light=rand()*19+(striped&&x<256?9:0);g.fillStyle=`rgb(${45+light},${83+light},${31+light*.5})`;g.fillRect(x,y,1,1);}
+      for(let x=0;x<512;x++)for(let y=0;y<128;y++){const light=rand()*19+(striped&&x<256?9:0);g.fillStyle=striped&&data.race.surface===1?`rgb(${125+light},${105+light},${76+light})`:`rgb(${45+light},${83+light},${31+light*.5})`;g.fillRect(x,y,1,1);}
       const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.anisotropy=Math.min(4,this.renderer.capabilities.getMaxAnisotropy());this.textures.push(tex);return tex;
     }
     makeCourse() {
@@ -101,11 +133,12 @@ async function start(root) {
     const r=flat.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,r.width),h=Math.max(1,r.height);if(flat.width!==Math.round(w*ratio)||flat.height!==Math.round(h*ratio)){flat.width=w*ratio;flat.height=h*ratio;}const g=flat.getContext('2d');g.setTransform(ratio,0,0,ratio,0,0);g.fillStyle='#47663c';g.fillRect(0,0,w,h);const left=30,right=w-45,top=48,bottom=h-35;g.strokeStyle='#e9e4d2';g.lineWidth=2;g.strokeRect(left,top,right-left,bottom-top);g.font='13px sans-serif';g.fillStyle='#fff';g.fillText('軽量表示 · 同じ走行データを再生',left,25);for(const p of state.positions){const x=left+clamp(p.progress,0,1.08)/1.08*(right-left),y=top+(p.no-.5)/8*(bottom-top);g.fillStyle=['#eee','#252525','#bf4035','#3467a5','#ddbf4f','#527f4e','#cd773d','#c383a6'][p.no-1];g.beginPath();g.arc(x,y,9,0,Math.PI*2);g.fill();g.fillStyle=p.no===2?'#fff':'#17211d';g.textAlign='center';g.fillText(p.no,x,y+4);}g.textAlign='left';}
   async function build(){dirty=true;const token=++loading;scene?.dispose();scene=null;sceneRoot.hidden=quality.value==='flat';flat.hidden=quality.value!=='flat';if(quality.value==='flat'){status.textContent='軽量表示です。';return;}status.textContent='3Dを読み込んでいます…';try{T??=await import('/static/three.module.js?v=0.180.0');if(disposed||token!==loading)return;scene=new RaceScene();status.textContent='';}catch(error){if(disposed||token!==loading)return;quality.value='flat';sceneRoot.hidden=true;flat.hidden=false;status.textContent='3Dを利用できないため、軽量表示で再生します。';console.warn('keiba preview renderer unavailable',error);}}
   function onLost(e){e.preventDefault();quality.value='flat';void build();}
-  function updateUI(state){seek.value=String(Math.round(elapsed/data.durationMs*1000));root.querySelector('[data-kr-clock]').textContent=`${Math.floor(elapsed/60000).toString().padStart(2,'0')}:${Math.floor(elapsed/1000%60).toString().padStart(2,'0')}`;root.querySelector('[data-kr-distance]').textContent=state.complete?'全馬ゴール':`残り${state.remaining.toLocaleString('ja-JP')}m`;for(const no of state.order)rank.append(rows.get(no));root.querySelector('.kr-results h2').textContent=state.complete?'確定着順':'途中順位';root.querySelector('[data-kr-caption]').textContent={wide:'全景カメラ',track:'直線・追走カメラ',finish:'ゴールカメラ'}[camera];}
+  function updateUI(state){seek.max=String(Math.floor(limit()/data.durationMs*1000));seek.value=String(Math.round(elapsed/data.durationMs*1000));root.querySelector('[data-kr-clock]').textContent=`${Math.floor(elapsed/60000).toString().padStart(2,'0')}:${Math.floor(elapsed/1000%60).toString().padStart(2,'0')}`;root.querySelector('[data-kr-distance]').textContent=state.complete?'全馬ゴール':`残り${state.remaining.toLocaleString('ja-JP')}m`;for(const no of state.order)rank.append(rows.get(no));root.querySelector('.kr-results h2').textContent=state.complete?(data.live&&!data.live.confirmed?'到達順位（確定待ち）':'確定着順'):'途中順位';root.querySelector('[data-kr-caption]').textContent={wide:'全景カメラ',track:'直線・追走カメラ',finish:'ゴールカメラ'}[camera];if(data.live){const pending=data.live.start-serverNow();root.querySelector('[data-kr-mode]').textContent=data.live.confirmed?'REPLAY':pending>0?`発走まで${Math.ceil(pending/1000)}秒`:'LIVE';root.querySelector('[data-kr-goal]').textContent=data.live.confirmed?'ゴール前へ':'現在へ';root.querySelector('[data-kr-call]').textContent=[...(data.calls??[])].reverse().find(c=>c.t<=elapsed)?.text??'';}}
   function frame(now) {
     if(disposed)return;
     const dt=Math.max(0,now-last);last=now;
-    if(playing)elapsed=Math.min(data.durationMs,elapsed+dt);
+    if(playing)elapsed=data.live&&!data.live.confirmed?limit():Math.min(data.durationMs,elapsed+dt);
+    else elapsed=Math.min(elapsed,limit());
     if(playing&&elapsed>=data.durationMs){playing=false;play.textContent='もう一度';dirty=true;}
     const state=sampleReplay(data,elapsed);
     // 操作結果は描画処理の前に反映する。遅い端末でも値の更新を次のフレームへ持ち越さない。
@@ -121,14 +154,15 @@ async function start(root) {
     }
     raf=requestAnimationFrame(frame);
   }
-  play.addEventListener('click',()=>{if(elapsed>=data.durationMs)elapsed=0;playing=!playing;dirty=true;play.textContent=playing?'停止':'再生';});
-  root.querySelector('[data-kr-goal]').addEventListener('click',()=>{elapsed=Math.max(0,Math.min(...data.finishMs)-350);camera='finish';dirty=true;for(const b of root.querySelectorAll('[data-kr-camera]'))b.setAttribute('aria-pressed',String(b.dataset.krCamera==='finish'));});
-  seek.addEventListener('input',()=>{elapsed=Number(seek.value)/1000*data.durationMs;dirty=true;});
+  play.addEventListener('click',()=>{if(data.live&&!data.live.confirmed)elapsed=limit();else if(elapsed>=data.durationMs)elapsed=0;playing=!playing;dirty=true;play.textContent=playing?'停止':'再生';});
+  root.querySelector('[data-kr-goal]').addEventListener('click',()=>{elapsed=data.live&&!data.live.confirmed?limit():Math.max(0,Math.min(...data.finishMs)-350);camera='finish';dirty=true;for(const b of root.querySelectorAll('[data-kr-camera]'))b.setAttribute('aria-pressed',String(b.dataset.krCamera==='finish'));});
+  seek.addEventListener('input',()=>{elapsed=Math.min(limit(),Number(seek.value)/1000*data.durationMs);if(data.live&&!data.live.confirmed){playing=false;play.textContent='再生';}dirty=true;});
   for(const b of root.querySelectorAll('[data-kr-camera]'))b.addEventListener('click',()=>{camera=b.dataset.krCamera;dirty=true;for(const c of root.querySelectorAll('[data-kr-camera]'))c.setAttribute('aria-pressed',String(c===b));});
   quality.addEventListener('change',()=>void build());
   function visibility(){if(document.hidden){cancelAnimationFrame(raf);raf=0;}else if(!raf&&!disposed){last=performance.now();raf=requestAnimationFrame(frame);}}
   document.addEventListener('visibilitychange',visibility);
-  window.addEventListener('pagehide',()=>{disposed=true;loading++;cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);scene?.dispose();},{once:true});
+  window.addEventListener('pagehide',()=>{disposed=true;loading++;clearTimeout(pollTimer);cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);scene?.dispose();},{once:true});
   window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
+  if(data.live&&!data.live.confirmed&&!polling)pollTimer=setTimeout(pollLive,2000);
   await build();if(!disposed){last=performance.now();raf=requestAnimationFrame(frame);}
 }
