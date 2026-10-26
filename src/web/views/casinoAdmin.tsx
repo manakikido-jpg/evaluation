@@ -348,6 +348,22 @@ export function CasinoAdminPage(p: {
                 <input type="number" name="keibaNoBetDailyCap" min={0} max={100000000} value={String(c.keibaNoBetDailyCap)} required />
               </label>
               <label class="field">
+                <span>満額の最低保証をもらうのに、馬主がそのレースに賭ける最低の額（足りなければ「賭けていない」と同じ）</span>
+                <input type="number" name="keibaPurseMinBet" min={0} max={1000000} value={String(c.keibaPurseMinBet)} required />
+              </label>
+              <label class="field">
+                <span>満額の最低保証は、馬主以外のメンバーがそのレースで合計この額以上賭けたときだけ（0 で条件なし）</span>
+                <input type="number" name="keibaPurseOthersMin" min={0} max={10000000} value={String(c.keibaPurseOthersMin)} required />
+              </label>
+              <label class="field">
+                <span>満額の最低保証で足す分を、1 人が 1 日に受け取れる上限（0 で上限なし）</span>
+                <input type="number" name="keibaBetDailyCap" min={0} max={100000000} value={String(c.keibaBetDailyCap)} required />
+              </label>
+              <label class="field">
+                <span>出走料（馬主のいる馬が走るたび、その馬の賞金・手当から引く。もらう分より多くは引かない。大レースは引かない）</span>
+                <input type="number" name="keibaEntryFee" min={0} max={1000000} value={String(c.keibaEntryFee)} required />
+              </label>
+              <label class="field">
                 <span>応援金（その馬の単勝・複勝に、馬主でない人が賭けた額の何 %。着順に関係なく馬主へ）</span>
                 <input type="number" name="keibaFanPct" min={0} max={20} value={String(c.keibaFanPct)} required />
               </label>

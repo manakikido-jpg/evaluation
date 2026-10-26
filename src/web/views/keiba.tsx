@@ -1249,6 +1249,10 @@ export function KbStablePage(p: {
     | "keibaBetPurseMult"
     | "keibaNoBetPurse"
     | "keibaNoBetDailyCap"
+    | "keibaPurseMinBet"
+    | "keibaPurseOthersMin"
+    | "keibaBetDailyCap"
+    | "keibaEntryFee"
   >;
   me: CasinoMe;
   horses: StableHorse[];
@@ -1754,7 +1758,7 @@ export function KbStablePage(p: {
             1〜5 着に入ると賞金（メンバーが賭けた合計の数
             %・クラスが上ほど多い）。
             {p.pay && p.pay.keibaPurse.some((v) => v > 0)
-              ? `賭けが少なくても、1 着なら最低 ${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜 ${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）は出ます。ただし、あなたがそのレースに馬券を買ったときだけです（最低保証で足す分は、賭けた額の ${p.pay.keibaBetPurseMult} 倍まで）。買っていないレースは、1 着でも最低 ${fmt(p.pay.keibaNoBetPurse)}${p.pay.keibaNoBetDailyCap > 0 ? `（足す分は 1 日 ${fmt(p.pay.keibaNoBetDailyCap)} まで）` : ''}。勝ち鞍は、どちらでも馬の成績に残ります。`
+              ? `賭けが少なくても、1 着なら最低 ${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜 ${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）は出ます。ただし、あなたがそのレースに ${fmt(Math.max(1, p.pay.keibaPurseMinBet))} 以上の馬券を買い${p.pay.keibaPurseOthersMin > 0 ? `、ほかの人も合計 ${fmt(p.pay.keibaPurseOthersMin)} 以上賭けた` : ''}ときだけです（最低保証で足す分は、賭けた額の ${p.pay.keibaBetPurseMult} 倍まで${p.pay.keibaBetDailyCap > 0 ? `・1 日 ${fmt(p.pay.keibaBetDailyCap)} まで` : ''}）。${p.pay.keibaEntryFee > 0 ? `走るたびに出走料 ${fmt(p.pay.keibaEntryFee)} を、その馬がもらう分から引きます（大レースはなし）。` : ''}買っていないレースは、1 着でも最低 ${fmt(p.pay.keibaNoBetPurse)}${p.pay.keibaNoBetDailyCap > 0 ? `（足す分は 1 日 ${fmt(p.pay.keibaNoBetDailyCap)} まで）` : ''}。勝ち鞍は、どちらでも馬の成績に残ります。`
               : ""}
             着外でも出走手当が入ります。
           </li>

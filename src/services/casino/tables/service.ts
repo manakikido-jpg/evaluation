@@ -30,18 +30,21 @@ const engineOf = (kind: string) => (ENGINES as Record<string, TableEngine<unknow
 /** 銭を渡す（🏇 馬主が賭けていないレースの最低保証で足す分は、1 人 1 日の上限まで。渡した額を返す） */
 export async function payCredit(tx: Db, cfg: GuildConfig, c: Credit, now: Date, kind: string, tableId: number): Promise<number> {
   if (c.amount <= 0) return 0;
-  if (c.cap !== 'keiba_purse') {
+  if (!c.cap) {
     await addCoins(tx, c.memberId, c.amount, c.reason, { game: kind, table: tableId });
     return c.amount;
   }
-  const limit = cfg.casino.keibaNoBetDailyCap;
+  // 賭けていないレースの分（purse）と、賭けたレースの満額の分（purse_bet）は、別々の 1 日の上限
+  const bet = c.cap === 'keiba_purse_bet';
+  const flag = bet ? 'purse_bet' : 'purse';
+  const limit = bet ? cfg.casino.keibaBetDailyCap : cfg.casino.keibaNoBetDailyCap;
   const since = new Date(`${jstDate(now)}T00:00:00+09:00`);
   const [got] = await tx
     .select({ n: sql<number>`coalesce(sum(${coinTx.amount}), 0)::int` })
     .from(coinTx)
-    .where(and(eq(coinTx.memberId, c.memberId), eq(coinTx.reason, 'keiba_prize'), gte(coinTx.at, since), sql`${coinTx.detail}->>'purse' = 'true'`));
+    .where(and(eq(coinTx.memberId, c.memberId), eq(coinTx.reason, 'keiba_prize'), gte(coinTx.at, since), sql`${coinTx.detail}->>${flag} = 'true'`));
   const pay = limit > 0 ? Math.min(c.amount, Math.max(0, limit - Number(got?.n ?? 0))) : c.amount;
-  if (pay > 0) await addCoins(tx, c.memberId, pay, c.reason, { game: kind, table: tableId, purse: true });
+  if (pay > 0) await addCoins(tx, c.memberId, pay, c.reason, { game: kind, table: tableId, [flag]: true });
   return pay;
 }
 

@@ -73,7 +73,8 @@ const rngOf = (seed: number): Rng => {
     return Math.floor((x / 2147483648) * n);
   };
 };
-const tcfg: GuildConfig = { ...cfg, casino: { ...cfg.casino, dailyBetLimit: 0 } };
+// 前からの賞金の決まりを確かめるので、2026-10-26 に足した条件（最低の賭け・ほかの人の賭け・1 日の上限・出走料）は外しておく
+const tcfg: GuildConfig = { ...cfg, casino: { ...cfg.casino, keibaPurseMinBet: 0, keibaPurseOthersMin: 0, keibaBetDailyCap: 0, keibaEntryFee: 0, dailyBetLimit: 0 } };
 const A = { id: '760000000000000001', name: 'さくら' };
 const B = { id: '760000000000000002', name: 'もみじ' };
 const C = { id: '760000000000000003', name: 'かえで' };
@@ -272,6 +273,33 @@ describe('🏇 クラスと重賞・賞金', () => {
     expect(small.capped).toEqual([]);
     expect(small.prizes.slice(0, 5).reduce((n, p) => n + p, 0)).toBeLessThanOrEqual(100 + 5);
     expect(big.total).toBeGreaterThan(small.total);
+  });
+
+  it('最低保証の満額は、馬主が最低の額を賭け、ほかの人も賭けたレースだけ。出走料を引き、満額の分は 1 日の上限つき', () => {
+    const t0 = new Date('2026-10-02T12:00:00Z').getTime();
+    const roster = Array.from({ length: 8 }, (_, i) => horse(i + 1, 0, 0, B.id));
+    const cfg3: GuildConfig = { ...tcfg, casino: { ...tcfg.casino, keibaPurseMinBet: 100, keibaPurseOthersMin: 500, keibaBetDailyCap: 3000, keibaEntryFee: 50 } };
+    const c3 = (now: number, seed = 1): Ctx => ({ now, rng: rngOf(seed), cfg: cfg3 });
+    const run = (ownerBet: number, otherBet: number) => {
+      let s = (keiba.create(A, { cls: '0' }, { ...c3(t0), roster }) as { state: KbState }).state;
+      s = (keiba.join(s, B, {}, c3(t0)) as { state: KbState }).state;
+      if (ownerBet) s = (keiba.act(s, B.id, { action: 'bet', type: 'win', a: '1', bet: String(ownerBet) }, c3(t0)) as { state: KbState }).state;
+      if (otherBet) s = (keiba.act(s, A.id, { action: 'bet', type: 'win', a: '2', bet: String(otherBet) }, c3(t0)) as { state: KbState }).state;
+      s = (keiba.act(s, A.id, { action: 'start' }, c3(t0, 5)) as { state: KbState }).state;
+      const fin = keiba.tick(s, c3(s.deadline));
+      if (!fin || !fin.ok) throw new Error('no finish');
+      const mine = (fin.fx?.credits ?? []).filter((c) => c.memberId === B.id && c.reason === 'keiba_prize');
+      return { caps: mine.map((c) => c.cap), total: mine.reduce((n, c) => n + c.amount, 0) };
+    };
+    // ほかの人が賭けていない: 満額にならず「賭けていない」と同じ（1 日の上限つきの分）
+    const alone = run(100, 0);
+    expect(alone.caps.every((c) => c === 'keiba_purse')).toBe(true);
+    // 馬主の賭けが最低の額より少ない: 満額にならない
+    expect(run(50, 600).caps.includes('keiba_purse_bet')).toBe(false);
+    // 両方そろえば満額（1 日の上限つきの分として渡す）
+    const full = run(100, 600);
+    expect(full.caps.includes('keiba_purse_bet')).toBe(true);
+    expect(full.total).toBeGreaterThan(alone.total);
   });
 
   it('馬主への還元: 賞金の倍率・最低保証（2〜5 着はその割合）・応援金は馬主の分を数えない', () => {

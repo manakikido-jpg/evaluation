@@ -98,7 +98,7 @@ describe('🤝 レースの賞金を口の数で分ける', () => {
     const roster = Array.from({ length: 8 }, (_, i) => ({ ...newStable(seeded(i + 1)), id: i + 1, name: `S${i + 1}`, starts: 3, wins: 0, ownerId: A, shares: [{ memberId: A, units: 6 }, { memberId: B, units: 4 }] }));
     let n = 7;
     const rng = (k: number) => (n = (n * 1103515245 + 12345) % 2147483648) % k;
-    const ctx = (now: number) => ({ now, rng, cfg: { ...cfg, casino: { ...cfg.casino, dailyBetLimit: 0 } }, roster });
+    const ctx = (now: number) => ({ now, rng, cfg: { ...cfg, casino: { ...cfg.casino, keibaPurseMinBet: 0, keibaPurseOthersMin: 0, keibaBetDailyCap: 0, keibaEntryFee: 0, dailyBetLimit: 0 } }, roster });
     const t0 = Date.parse('2026-10-02T12:00:00Z');
     let s = (keiba.create({ id: A, name: 'あ' }, { cls: '1' }, ctx(t0)) as { ok: true; state: import('../src/services/casino/tables/keiba.js').KbState }).state;
     s = (keiba.act(s, A, { action: 'bet', type: 'win', a: '1', bet: '100' }, ctx(t0)) as { ok: true; state: typeof s }).state;
