@@ -12,10 +12,11 @@ export const eventSchema=z.object({
   name:z.string().trim().min(1).max(30),kind:z.enum(['season','league','rookie','condition','team']),
   startsAt:z.coerce.date(),endsAt:z.coerce.date(),
   rules:z.object({dist:z.number().refine(n=>(KB_DISTANCES as readonly number[]).includes(n)),surface:z.number().int().min(-1).max(1),maxStarts:z.number().int().min(0).max(100000),minWins:z.number().int().min(0).max(10000),maxWins:z.number().int().min(0).max(10000),points:z.array(z.number().int().min(0).max(100)).length(8),rewardTitle:z.string().trim().min(1).max(30),rewardColor:z.string().refine(v=>Object.hasOwn(KB_OUTFIT_COLORS,v)),rewardPlaces:z.number().int().min(1).max(100)}),
-}).refine(x=>x.endsAt>x.startsAt&&x.endsAt.getTime()-x.startsAt.getTime()<=366*86400000&&x.rules.maxWins>=x.rules.minWins);
+}).refine(x=>x.endsAt>x.startsAt&&x.endsAt.getTime()-x.startsAt.getTime()<=366*86400000&&x.rules.maxWins>=x.rules.minWins&&(x.kind!=='rookie'||x.rules.minWins===0)&&(['league','team'].includes(x.kind)||x.endsAt.getTime()-x.startsAt.getTime()>=300000));
 export type EventInput=z.infer<typeof eventSchema>;
 export const events=(db:Db)=>db.select().from(keibaEvents).orderBy(desc(keibaEvents.startsAt)).limit(100);
 export async function saveEvent(db:Db,raw:unknown,by:string,now:Date,id?:number){
+ if(id!==undefined&&(!Number.isSafeInteger(id)||id<=0))return false;
  const parsed=eventSchema.safeParse(raw);if(!parsed.success||parsed.data.startsAt<=now)return false;
  return db.transaction(async tx=>{
   if(id){const [old]=await tx.select().from(keibaEvents).where(eq(keibaEvents.id,id)).for('update');if(!old||old.startsAt<=now||old.tableId||old.cancelled)return false;await tx.update(keibaEvents).set(parsed.data).where(eq(keibaEvents.id,id));}
@@ -23,15 +24,19 @@ export async function saveEvent(db:Db,raw:unknown,by:string,now:Date,id?:number)
  });
 }
 export async function cancelEvent(db:Db,id:number,now:Date){
+ if(!Number.isSafeInteger(id)||id<=0)return false;
  const r=await db.update(keibaEvents).set({cancelled:true}).where(and(eq(keibaEvents.id,id),gte(keibaEvents.startsAt,now),isNull(keibaEvents.tableId))).returning();return !!r.length;
 }
 export async function enterEvent(db:Db,id:number,horseId:number,ownerId:string,team:string,now:Date){
+ if(!Number.isSafeInteger(id)||id<=0||!Number.isSafeInteger(horseId)||horseId<=0)return false;
  return db.transaction(async tx=>{
   const [e]=await tx.select().from(keibaEvents).where(eq(keibaEvents.id,id)).for('update');
   const [h]=await tx.select().from(keibaHorses).where(eq(keibaHorses.id,horseId)).for('update');
   if(!e||e.cancelled||e.tableId||e.startsAt<=now||!h||h.ownerId!==ownerId||h.retiredAt||h.breeding)return false;
   if(h.starts>e.rules.maxStarts||h.wins<e.rules.minWins||h.wins>e.rules.maxWins||e.kind==='rookie'&&h.starts!==0)return false;
   const label=team.trim().slice(0,20);if(e.kind==='team'&&!label)return false;
+  const [old]=await tx.select().from(keibaEventEntries).where(and(eq(keibaEventEntries.eventId,id),eq(keibaEventEntries.horseId,horseId)));
+  if(old)return old.ownerId===ownerId&&old.team===(e.kind==='team'?label:'');
   // 登録後のチーム変更・重複登録は行わない。
   await tx.insert(keibaEventEntries).values({eventId:id,horseId,ownerId,team:e.kind==='team'?label:''}).onConflictDoNothing();return true;
  });
@@ -66,8 +71,8 @@ export async function equipEventSilk(db:Db,id:number,memberId:string){const [r]=
 export async function eventTick(db:Db,cfg:GuildConfig,now:Date){
  if(!cfg.casino.enabled||!cfg.casino.games.includes('keiba'))return;
  const due=await db.select().from(keibaEvents).where(and(eq(keibaEvents.cancelled,false),lte(keibaEvents.startsAt,new Date(now.getTime()+10*60000)),gte(keibaEvents.endsAt,now)));
- for(const e of due){if(e.kind==='league'||e.kind==='team')continue;
-  await db.transaction(async tx=>{await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'keiba_event:'+e.id}))`);const [latest]=await tx.select().from(keibaEvents).where(eq(keibaEvents.id,e.id));if(latest?.tableId||!latest||latest.cancelled||now>=e.endsAt)return;
+ for(const candidate of due){if(candidate.kind==='league'||candidate.kind==='team')continue;
+  await db.transaction(async tx=>{await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'keiba_event:'+candidate.id}))`);const [latest]=await tx.select().from(keibaEvents).where(eq(keibaEvents.id,candidate.id)).for('update');if(!latest||latest.tableId||latest.cancelled||now>=latest.endsAt)return;const e=latest;if(e.kind==='league'||e.kind==='team'||e.startsAt.getTime()>now.getTime()+600000)return;
    const entry=await tx.select().from(keibaEventEntries).where(eq(keibaEventEntries.eventId,e.id));
    const roster=await loadRoster(tx,now),field=roster.filter(h=>entry.some(x=>x.horseId===h.id&&x.ownerId===h.ownerId)&&h.starts<=e.rules.maxStarts&&h.wins>=e.rules.minWins&&h.wins<=e.rules.maxWins&&(e.kind!=='rookie'||h.starts===0));
    // 少なくとも4頭。8頭を超えた場合は登録馬番の順（抽選条件を隠さない）。

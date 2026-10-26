@@ -1,5 +1,5 @@
 import { PublicOwnerPage,ClubPage,EventPage,ReplayList,TicketPage } from './views/keibaClub.js';
-import { clubHorse,equipSkills,matingPreview,ownerLedger,ownerProfile,racingRankings,replays } from '../services/casino/keibaClub.js';
+import { clubHorse,equipSkills,matingPreview,ownerLedger,ownerProfile,racingMonth,racingRankings,replays } from '../services/casino/keibaClub.js';
 import { claimEvent,enterEvent,equipEventSilk,eventScores,events } from '../services/casino/keibaEvents.js';
 import { formationKeys } from '../services/casino/keibaTickets.js';
 import { isKbBetType,picksOf,KB_MAX_TICKETS } from '../services/casino/keiba.js';
@@ -407,7 +407,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   const versionOf = (body: Record<string, unknown>) => (typeof body.v === 'string' && /^\d+$/.test(body.v) ? Number(body.v) : undefined);
   const idOf = (c: Context) => {
     const id = Number(c.req.param('id'));
-    return Number.isInteger(id) && id > 0 ? id : undefined;
+    return Number.isSafeInteger(id) && id > 0 ? id : undefined;
   };
 
   /** 始めた・進めたあとの行き先（PRG）。?g= で結果を出す */
@@ -831,7 +831,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     return c.redirect(`/casino/keiba/club/${id}?saved=${ok?1:0}`);
   },{post:true}));
   app.get('/casino/keiba/events',page(async(c,me)=>{
-    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const all=await events(db),start=monthStartJst(d.now()),end=new Date(start);end.setUTCMonth(end.getUTCMonth()+1);
+    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const all=await events(db),{start,end}=racingMonth(d.now());
     return c.html(<EventPage me={me} events={all} scores={new Map(await Promise.all(all.map(async e=>[e.id,await eventScores(db,e.id)] as const)))} horses={await myHorses(db,me.session.userId)} rankings={await racingRankings(db,start,end)} profile={await ownerProfile(db,me.session.userId)} message={c.req.query('saved')?clubMessage(c.req.query('saved')==='1'):undefined}/>);
   }));
   for(const action of ['enter','claim','silk'] as const)app.post('/casino/keiba/events/:id/'+action,page(async(c,me)=>{
@@ -846,7 +846,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     c.header('Content-Type','image/svg+xml');c.header('Content-Disposition','attachment; filename="sakura-racing-card.svg"');c.header('Cache-Control','private, no-store');
     return c.body(`<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600"><rect width="1000" height="600" fill="#122d2d"/><rect x="15" y="15" width="970" height="570" rx="25" fill="none" stroke="#d4af37" stroke-width="3"/><text x="500" y="130" text-anchor="middle" fill="#efd6a5" font-size="32">咲楽ノ宮 競馬記念</text><text x="500" y="280" text-anchor="middle" fill="#fff" font-size="48">${escape(r.title)}</text><text x="500" y="390" text-anchor="middle" fill="#efd6a5" font-size="40">${r.rank}位</text><text x="500" y="470" text-anchor="middle" fill="#fff" font-size="28">${escape(me.session.displayName)}</text></svg>`);
   }));
-  app.get('/casino/keiba/replays',page(async(c,me)=>{if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');return c.html(<ReplayList me={me} rows={await replays(db)}/>);}));
+  app.get('/casino/keiba/replays',page(async(c,me)=>{if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');return c.html(<ReplayList me={me} rows={await replays(db,Number(c.req.query('before'))||undefined)}/>);}));
   app.get('/casino/keiba/replays/:id',page(async(c,me)=>{if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c);if(!id)return c.notFound();const [r]=await db.select().from(keibaReplays).where(eq(keibaReplays.id,id));if(!r)return c.notFound();return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={r.data as unknown as NonNullable<ReturnType<typeof keibaBroadcast>>} tableId={r.tableId}/>}`);}));
   app.get('/casino/keiba/tickets/:id',page(async(c,me)=>{
     if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c),t=id?await pollTable(db,d.cfg(),id,d.now()):undefined;if(!t||t.kind!=='keiba')return c.redirect('/casino?e=not_found');const s=t.state as KbState;

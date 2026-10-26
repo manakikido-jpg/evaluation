@@ -41,4 +41,10 @@ describe('競馬の3D映像試作',()=>{
     expect(size.x).toBeGreaterThan(2);expect(size.x).toBeLessThan(4);expect(size.y).toBeGreaterThan(2);expect(size.y).toBeLessThan(3.5);
     let count=0;horse.root.traverse((o:any)=>{if(o.isMesh){count++;expect([...o.geometry.getAttribute('position').array].every(Number.isFinite)).toBe(true);}});expect(count).toBeGreaterThan(10);expect(count).toBeLessThan(60);
   });
+  it('保存されたオーラ・装具の色を3D材質へ反映し、更新後も形状が有限になる',()=>{
+    vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({fillRect(){},fillText(){}})})});
+    const model=createHorse(THREE,{...createKeibaPreview().horses[0],outfit:{cloth:'#efa9be',bridle:'#d4af37',hood:'full',ornament:'sakura',aura:{key:'ruby',body:'#c83550',glow:'#ff6980'}}});
+    model.update(2);let body=false,cloth=false,glow=false;model.root.traverse((o:any)=>{if(o.material?.color){const c=o.material.color.getHexString();if(o.material.isMeshPhysicalMaterial&&c==='c83550')body=true;if(c==='efa9be')cloth=true;if(c==='ff6980')glow=true;}if(o.geometry)expect([...o.geometry.attributes.position.array].every(Number.isFinite)).toBe(true);});expect(body&&cloth&&glow).toBe(true);
+  });
+
 });

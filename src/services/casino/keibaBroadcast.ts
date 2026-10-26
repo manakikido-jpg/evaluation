@@ -16,7 +16,7 @@ export function keibaBroadcast(s: KbState, tableId: number, now: number) {
     frames: run.frames, lanes: run.lanes, frameMs: run.frameMs, finishMs, order: run.order,
     durationMs: Math.max((run.frames[0]!.length - 1) * run.frameMs, ...finishMs) + 2000,
     calls: run.calls,
-    photoFinish: run.order.length>1 && Math.abs(finishMs[run.order[0]!-1]!-finishMs[run.order[1]!-1]!)*leader/run.showMs<.05,
+    photoFinish: run.photoFinish ?? (!!run.finishMs && run.order.length>1 && Math.abs(finishMs[run.order[0]!-1]!-finishMs[run.order[1]!-1]!)*leader/run.showMs<.05),
     live: { key, start: run.start, now, confirmed: s.phase === 'result', url: `/casino/keiba/watch/${tableId}/state?race=${encodeURIComponent(key)}` },
     results: s.phase === 'result' ? run.order.map((no, i) => ({ no, time: run.times[i]!, margin: run.margins[i]! })) : [],
   };

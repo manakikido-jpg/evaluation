@@ -65,6 +65,7 @@ export type KbRun = {
   frameMs: number;
   /** 馬番順の到達時刻。旧データでは未保存。 */
   finishMs?: number[];
+  photoFinish?: boolean;
   frames: number[][];
   /** 内ラチからの距離（10 倍した m） */
   lanes: number[][];
@@ -146,6 +147,7 @@ function startRace(state: KbState, ctx: Ctx): Step<KbState> {
     showMs,
     frameMs: Math.round(frameMs * 10) / 10,
     finishMs: sim.times.map(t => t / leader * showMs),
+    photoFinish: ordered.length>1&&ordered[1]!-ordered[0]!<.05,
     frames: sim.frames!,
     lanes: sim.lanes!,
     order: sim.order,

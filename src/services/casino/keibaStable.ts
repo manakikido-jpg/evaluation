@@ -291,7 +291,7 @@ export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], no
 // ───────── 🐴 馬主のうれしいこと ─────────
 
 /** 勝負服に使える色 */
-export const KB_SILK_COLORS = ['#e53935', '#1e63d6', '#f4c430', '#2e9e4f', '#ffffff', '#222222', '#8e44ad', '#f08a24', '#f48fb1', '#00a6a6', '#8b1a1a', '#0b3d91'] as const;
+export const KB_SILK_COLORS = ['#e53935', '#1e63d6', '#f4c430', '#2e9e4f', '#ffffff', '#222222', '#8e44ad', '#f08a24', '#f48fb1', '#00a6a6', '#8b1a1a', '#0b3d91', '#f7f7f2', '#c53046', '#d4af37', '#232936', '#728c69', '#b580c9', '#efa9be'] as const;
 export const isSilk = (v: { base?: unknown; accent?: unknown; pattern?: unknown }): v is KbSilk =>
   (KB_SILK_COLORS as readonly unknown[]).includes(v.base) && (KB_SILK_COLORS as readonly unknown[]).includes(v.accent) && Number.isInteger(v.pattern) && (v.pattern as number) >= 0 && (v.pattern as number) <= 5;
 
