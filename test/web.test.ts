@@ -8,6 +8,7 @@ import { addCoins } from '../src/services/economy.js';
 import { activeYakuCount, memosOf } from '../src/services/yaku.js';
 import { createWebApp } from '../src/web/app.js';
 import { listNotices } from '../src/services/notices.js';
+import { invites } from '../src/db/schema.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 const STAFF = '700000000000000001';
@@ -4487,6 +4488,11 @@ it('🚫 招待を見張る人を社務所Web で登録できる（招待リン�
   expect((await send('/invites/block', { memberId: '815208713874584412', note: 'サブ垢の疑い' })).headers.get('location')).toBe('/invites?msg=blocked#invite-block');
   expect(deleted).toEqual([]);
   expect(await (await get('/invites', s)).text()).toContain('サブ垢の疑い');
+  await recordJoin(db, { id: '815208713874584477', username: 'w', displayName: 'ようちゅうい', avatarUrl: null, roleIds: [], isBot: false, joinedAt: new Date('2026-09-01T00:00:00Z') });
+  await db.insert(invites).values({ memberId: '815208713874584477', inviterId: '815208713874584412', source: 'link' });
+  const watch = await (await get('/invites', s)).text();
+  expect(watch).toContain('要注意の人（1）');
+  expect(watch).toContain('ようちゅうい');
   expect((await send('/invites/block/815208713874584412/delete', {})).headers.get('location')).toBe('/invites?msg=unblocked#invite-block');
 });
 

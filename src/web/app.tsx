@@ -2,7 +2,7 @@ import { StaffAltSection } from './views/staffAlt.js';
 import { isStaffAlt, setStaffAlt, staffAlts } from '../services/staffAlts.js';
 import { mountVisitManagement } from './visitManagement.js';
 import { visitRevenue } from '../services/visitRevenue.js';
-import { clearInviteAlert, inviteAlerts } from '../services/inviteGuard.js';
+import { clearInviteAlert, inviteAlerts, watchedMembers } from '../services/inviteGuard.js';
 import { inviteBlocks, setInviteBlock } from '../services/inviteBlock.js';
 import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
@@ -1425,8 +1425,8 @@ export function createWebApp(deps: WebDeps) {
     const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
     // Discord で消されていた BOT のリンクは出さない（読めたときだけ）
     const alive = discordInvites ? links.filter((l) => uses.has(l.code)) : links;
-    const [blocks, alerts] = await Promise.all([inviteBlocks(db), inviteAlerts(db)]);
-    const names = await namesOf(db, [...blocks.map((b) => b.id), ...alerts.map((a) => a.id), ...rewards.flatMap((r) => [r.memberId, r.inviterId ?? '']), ...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
+    const [blocks, alerts, watched] = await Promise.all([inviteBlocks(db), inviteAlerts(db), watchedMembers(db)]);
+    const names = await namesOf(db, [...blocks.map((b) => b.id), ...alerts.map((a) => a.id), ...watched.map((w) => w.memberId), ...rewards.flatMap((r) => [r.memberId, r.inviterId ?? '']), ...joins.flatMap((j) => [j.memberId, j.inviterId]), ...alive.flatMap((l) => [l.inviterId, l.createdBy ?? ''])].filter(Boolean));
     return c.html(
       <InvitesPage
         session={c.get('session')}
@@ -1446,6 +1446,7 @@ export function createWebApp(deps: WebDeps) {
         now={now()}
         blocks={blocks}
         alerts={alerts}
+        watched={watched}
       />,
     );
   });

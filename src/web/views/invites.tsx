@@ -8,15 +8,15 @@ import { SHARED_INVITER, STAFF_NO_INVITER, inviteRankLevel, UNKNOWN_INVITER, sha
 import { jstShort, remaining } from '../../services/tempGrants.js';
 import { Layout } from './layout.js';
 import type { InviteBlock } from '../../services/inviteBlock.js';
-import { alertLabel, GUIDE_HOLD_ROLE_NAME, INVITE_ALERT_RULES, type InviteAlert } from '../../services/inviteGuard.js';
+import { alertLabel, INVITE_ALERT_RULES, type InviteAlert } from '../../services/inviteGuard.js';
 
 function Csrf(props: { session: AdminSession }) {
   return <input type="hidden" name="_csrf" value={props.session.csrfToken} />;
 }
 
 export const INVITES_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
-  blocked: { text: '登録しました。これから、この人の招待リンクで入った人には「案内停止」が付きます。', kind: 'ok' },
-  alert_cleared: { text: '警戒を外しました。もう付いた「案内停止」は、必要ならロールのページで外してください。', kind: 'ok' },
+  blocked: { text: '登録しました。この人に招待された人は 👁 要注意になります（本人には知らせません）。', kind: 'ok' },
+  alert_cleared: { text: '警戒を外しました。この人に招待された人は、要注意でなくなります。', kind: 'ok' },
   unblocked: { text: '招待を作れない人から外しました。', kind: 'ok' },
   bulk_invalid: { text: '不明にする人を1〜200人選んでください。', kind: 'warn' },
   assign_unknown: { text: '招待元は不明として登録しました。招待報酬は保留です。後から招待した人を登録できます。', kind: 'ok' },
@@ -70,6 +70,8 @@ export function InvitesPage(props: {
   blocks?: InviteBlock[];
   /** 🚨 招待の警戒中の人 */
   alerts?: InviteAlert[];
+  /** 👁 要注意の人（在籍中） */
+  watched?: { memberId: string; inviterId: string }[];
 }) {
   const { session, name } = props;
   const f = props.flash && Object.hasOwn(INVITES_FLASH, props.flash) ? INVITES_FLASH[props.flash] : undefined;
@@ -122,11 +124,13 @@ export function InvitesPage(props: {
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       {props.bulkResult && <p class="flash ok">不明として{props.bulkResult.added}人を登録しました。登録済み・退出などで対象外の{props.bulkResult.skipped}人は変更していません。</p>}
       <section class="card" id="invite-block"><h2>🚨 招待の見張り</h2>
-        <p class="note">共通リンクはのぞいて、メンバーの招待リンクで{INVITE_ALERT_RULES.map((r) => ` ${r.minutes} 分で ${r.count} 人以上入ると「${r.label}」`).join('、')}にします。警戒の人から招待された人（警戒になった間に入った人も）には「{GUIDE_HOLD_ROLE_NAME}」ロールを付け、#記録 に知らせます。「{GUIDE_HOLD_ROLE_NAME}」の人は案内所の通話に入れません。</p>
+        <p class="note">共通リンクはのぞいて、メンバーの招待リンクで{INVITE_ALERT_RULES.map((r) => ` ${r.minutes} 分で ${r.count} 人以上入ると「${r.label}」`).join('、')}にして、#記録 に知らせます。警戒の人・見張る人に招待された人は 👁 要注意になります。本人には知らせず、ロールも付けません（不安にさせないように）。要注意の人が案内所に入ると、案内人は呼ばず、#記録 で運営だけに知らせます。</p>
+        <h3>👁 要注意の人（{props.watched?.length ?? 0}）</h3>
+        {props.watched?.length ? <ul class="plain-list">{props.watched.map((w) => <li><span><a href={`/members/${w.memberId}`}>{name(w.memberId)}</a>（招待: {name(w.inviterId)}）</span></li>)}</ul> : <p class="note">いま要注意の人はいません。</p>}
         <h3>警戒中（{props.alerts?.length ?? 0}）</h3>
         {props.alerts?.length ? <ul class="plain-list">{props.alerts.map((a) => <li><span>{alertLabel(a.level)}　{name(a.id)}（{a.id}）　{jstShort(new Date(a.at))}・{a.count} 人</span><form method="post" action={`/invites/alert/${a.id}/clear`} class="inline"><Csrf session={session} /><button type="submit" class="danger-link">警戒を外す</button></form></li>)}</ul> : <p class="note">いま警戒中の人はいません。</p>}
         <h3>🚫 招待を見張る人（{props.blocks?.length ?? 0}）</h3>
-        <p class="note">登録した人も招待リンクは作れます。そのリンクで入った人には、最初から「{GUIDE_HOLD_ROLE_NAME}」ロールが付きます。</p>
+        <p class="note">登録した人も招待リンクは作れます。その人に招待された人（申請でえらんだ人もふくむ）は、最初から 👁 要注意になります。</p>
         {props.blocks?.length ? <ul class="plain-list">{props.blocks.map((b) => <li><span>{name(b.id)}（{b.id}）{b.note ? `　${b.note}` : ''}</span><form method="post" action={`/invites/block/${b.id}/delete`} class="inline"><Csrf session={session} /><button type="submit" class="danger-link">外す</button></form></li>)}</ul> : <p class="note">まだいません。</p>}
         <form method="post" action="/invites/block"><Csrf session={session} />
           <label>ユーザー ID<input name="memberId" required pattern="\d{17,20}" inputmode="numeric" /></label>

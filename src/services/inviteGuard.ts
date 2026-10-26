@@ -1,8 +1,8 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { invites, settings } from '../db/schema.js';
+import { invites, members, settings } from '../db/schema.js';
 import { audit } from './audit.js';
-import { isInviteBlocked } from './inviteBlock.js';
+import { inviteBlocks, isInviteBlocked } from './inviteBlock.js';
 
 /**
  * 🚨 招待の急増を見張る。共通リンクはのぞき、メンバーの招待リンクで短い間にたくさん入ったら「警戒」にする。
@@ -74,4 +74,24 @@ export async function holdsGuide(db: Db, inviterId: string): Promise<'alert' | '
   if ((await inviteAlerts(db)).some((a) => a.id === inviterId)) return 'alert';
   if (await isInviteBlocked(db, inviterId)) return 'blocked';
   return undefined;
+}
+
+/**
+ * 👁 要注意の人か（見張る人・警戒中の人に招待された人）。本人には知らせず、ロールも付けない。
+ * 案内所に入ったら、案内人ではなく運営だけに知らせる
+ */
+export async function watchReason(db: Db, memberId: string): Promise<{ inviterId: string; why: 'alert' | 'blocked' } | undefined> {
+  const [row] = await db.select({ inviterId: invites.inviterId }).from(invites).where(eq(invites.memberId, memberId));
+  if (!row) return undefined;
+  const why = await holdsGuide(db, row.inviterId);
+  return why ? { inviterId: row.inviterId, why } : undefined;
+}
+
+/** 👁 いまサーバーにいる要注意の人（社務所Web の一覧用） */
+export async function watchedMembers(db: Db): Promise<{ memberId: string; inviterId: string }[]> {
+  const ids = [...new Set([...(await inviteAlerts(db)).map((a) => a.id), ...(await inviteBlocks(db)).map((b) => b.id)])];
+  if (!ids.length) return [];
+  return db.select({ memberId: invites.memberId, inviterId: invites.inviterId }).from(invites)
+    .innerJoin(members, eq(members.id, invites.memberId))
+    .where(and(inArray(invites.inviterId, ids), isNull(members.leftAt))).limit(500);
 }
