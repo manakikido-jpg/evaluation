@@ -28,6 +28,9 @@ describe('案内スレッドの時間', () => {
     expect(validSlot(c2, '2026-10-27', '20:00', now)).toBe(false);
     const msg = JSON.stringify(guideThreadMessage(c2, M, now));
     expect(msg).toContain('gth:slot:2026-10-28:19:00'); expect(msg).toContain('明日 19:00'); expect(msg).toContain('gth:now'); expect(msg).toContain('gth:other');
+    expect(msg).not.toContain('<@&');
+    const withRole = guideThreadMessage(c2, M, now, '880000000000000077');
+    expect(withRole.content).toContain('<@&880000000000000077>'); expect(withRole.allowedMentions.roles).toEqual(['880000000000000077']);
   });
   it('保存すると過ぎた日を消す', async () => {
     const v = await saveGuideThreadConfig(db, guideThreadConfigSchema.parse({ enabled: true, channelId: '880000000000000009', days: { '2026-10-20': ['21:00'], '2026-10-27': [] } }), 'admin', now);
@@ -68,5 +71,34 @@ describe('Discord の案内スレッド', () => {
       await app.onInteraction({ ...base, customId: 'gth:slot:2026-10-27:20:00', user: { id: M } } as never);
       expect(JSON.stringify(replies.at(-1))).toContain('もう選べません');
     } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('時間外の希望を #案内希望日程 へ', () => {
+  it('名前と希望の日時を出し、出し直しは書きかえ、閉じたら消す。要注意の人は出さない', async () => {
+    await recordThread(db, M, 'thr', false, now);
+    const posts: { id: string; content: string }[] = [], deleted: string[] = [];
+    const sched = { id: 's1', type: 0, name: '案内希望日程', send: async (b: { content: string }) => { const m = { id: 'm' + (posts.length + 1), content: b.content, edit: async (x: { content: string }) => { m.content = x.content; } }; posts.push(m); return m; }, messages: { fetch: async (id: string) => posts.find(p => p.id === id), delete: async (id: string) => { deleted.push(id); } } };
+    const guild = { id: 'g', roles: { cache: new Map([['r1', { id: 'r1', name: '案内人' }], ['p1', { id: 'p1', name: '案内待ち' }]]) }, channels: { cache: new Map([['s1', sched]]), fetch: async () => null }, members: { cache: new Map([[M, { displayName: 'さくら', roles: { cache: new Map() } }]]), fetch: async () => { throw Object.assign(new Error('x'), { code: 10007 }); } } };
+    const sent: unknown[] = [];
+    const thread = { id: 'thr', isThread: () => true, guild, send: async (b: unknown) => { sent.push(b); }, toString: () => '<#thr>' };
+    const app = new GuideThreadApp(db, () => ({ guildId: 'g', channels: {}, roles: { guidePending: 'p1' } }) as never);
+    const modal = (when: string) => ({ isButton: () => false, isModalSubmit: () => true, inCachedGuild: () => true, guildId: 'g', channel: thread, customId: 'gth:otherform', user: { id: M }, fields: { getTextInputValue: () => when }, deferred: false, deferReply: async function (this: { deferred: boolean }) { this.deferred = true; }, editReply: async () => undefined, reply: async () => undefined });
+    await app.onInteraction(modal('10月28日 20時ごろ') as never);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.content).toContain('さくら'); expect(posts[0]!.content).toContain('10月28日 20時ごろ'); expect(posts[0]!.content).toContain('<#thr>');
+    expect((await threadById(db, 'thr'))!.scheduleMessageId).toBe('m1');
+    await app.onInteraction(modal('10月29日 21時') as never);
+    expect(posts).toHaveLength(1); expect(posts[0]!.content).toContain('10月29日 21時');
+    // 抜けたら閉じて、日程の書き込みを消す
+    guild.members.cache.delete(M);
+    await app.tick(guild as never, now);
+    expect(deleted).toEqual(['m1']);
+    expect(await openThreads(db)).toHaveLength(0);
+    // 要注意の人は出さない
+    await recordThread(db, '880000000000000002', 'thr2', true, now);
+    const t2 = { ...thread, id: 'thr2' };
+    await app.onInteraction({ ...modal('いつでも'), channel: t2, user: { id: '880000000000000002' } } as never);
+    expect(posts).toHaveLength(1);
   });
 });

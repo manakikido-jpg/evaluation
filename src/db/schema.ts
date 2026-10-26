@@ -2537,6 +2537,8 @@ export const guideThreads = pgTable('guide_threads', {
   slotLabel: text('slot_label'),
   reminded: boolean('reminded').notNull().default(false),
   watched: boolean('watched').notNull().default(false),
+  /** #案内希望日程 に BOT が出した「時間外」の希望（閉じるときに消す） */
+  scheduleMessageId: text('schedule_message_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   closedAt: timestamp('closed_at', { withTimezone: true }),
 }, t => [index('guide_threads_thread_idx').on(t.threadId)]);
