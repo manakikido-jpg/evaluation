@@ -8,6 +8,7 @@ import { logger } from '../lib/logger.js';
 
 const KEY = 'guide.waiting_channel_names';
 const SUFFIX = '（入室⭕）';
+const ABSENT_SUFFIX = '（案内人不在）';
 const stateSchema = z.record(z.string(), z.object({ base: z.string(), managed: z.string(), attempts: z.array(z.number()) }));
 /** 名前の元を永続化し、再起動・設定変更後も戻せるようにする。 */
 export class GuideWaitingNames {
@@ -38,9 +39,10 @@ export class GuideWaitingNames {
         if (id === config.dutyChannelId) continue;
         const ch = guild.channels.cache.get(id);
         if (ch?.type !== ChannelType.GuildVoice || typeof ch.setName !== 'function' || typeof ch.name !== 'string') continue;
-        const open = waiting && config.voiceChannelIds.includes(id);
+        const configured = config.voiceChannelIds.includes(id);
+        const open = waiting && configured;
         let entry = state[id];
-        if (!entry && !open) continue;
+        if (!entry && !configured) continue;
         if (!entry) entry = state[id] = { base: ch.name, managed: ch.name, attempts: [] };
         // 運営が手動で変えた名前を、新しい元の名前として尊重する。
         if (ch.name !== entry.managed && ch.name !== entry.base) {
@@ -48,7 +50,9 @@ export class GuideWaitingNames {
           entry.managed = ch.name;
           await save();
         }
-        const target = open && !entry.base.endsWith(SUFFIX) ? `${entry.base.slice(0, 100 - SUFFIX.length)}${SUFFIX}` : entry.base;
+        const suffix = open ? SUFFIX : ABSENT_SUFFIX;
+        const base = entry.base.replace(/（(?:入室⭕|案内人不在)）$/, '');
+        const target = configured ? `${base.slice(0, 100 - suffix.length)}${suffix}` : entry.base;
         if (ch.name === target) continue;
         entry.attempts = entry.attempts.filter(at => now - at < 10 * 60_000 + 1000);
         if (entry.attempts.length >= 2) continue;

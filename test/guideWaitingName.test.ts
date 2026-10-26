@@ -25,6 +25,22 @@ function fixture(name = '案内所') {
   return { ch, people, guild, names: new GuideWaitingNames(db) };
 }
 describe('案内所の待機表示', () => {
+  it('最初から不在でも表示し、再起動で連打せず対象解除で元へ戻す', async () => {
+    const { ch, guild, names } = fixture();
+    await names.sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（案内人不在）');
+    await new GuideWaitingNames(db).sync(guild, config, 2000);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+    await new GuideWaitingNames(db).sync(guild, { ...config, voiceChannelIds: [] }, 3000);
+    expect(ch.name).toBe('案内所');
+  });
+  it('既存の表示付き名でも待機と不在の表示を重ねない', async () => {
+    const { ch, guild, names } = fixture('案内所（案内人不在）');
+    await setGuideWaiting(db, A, true); await names.sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（入室⭕）');
+    await setGuideWaiting(db, A, false); await names.sync(guild, config, 2000);
+    expect(ch.name).toBe('案内所（案内人不在）');
+  });
   it('実際の待機ボタンで表示し、毎分処理で承認停止を反映する', async () => {
     const { ch, guild } = fixture();
     await saveGuideConfig(db, config, A);
@@ -34,12 +50,10 @@ describe('案内所の待機表示', () => {
     expect(ch.name).toBe('案内所（入室⭕）');
     await setGuideStatus(db, A, 'paused', 'staff');
     await app.tick(guild);
-    expect(ch.name).toBe('案内所');
+    expect(ch.name).toBe('案内所（案内人不在）');
   });
-  it('待機中だけ表示し、最後の案内人の停止で元へ戻す。毎分の同期では連打しない', async () => {
+  it('最後の案内人の停止で不在表示に変える。毎分の同期では連打しない', async () => {
     const { ch, guild, names } = fixture();
-    await names.sync(guild, config, 1000);
-    expect(ch.setName).not.toHaveBeenCalled();
     await setGuideWaiting(db, A, true);
     await names.sync(guild, config, 2000);
     expect(ch.name).toBe('案内所（入室⭕）');
@@ -49,7 +63,7 @@ describe('案内所の待機表示', () => {
     expect(ch.setName).toHaveBeenCalledTimes(1);
     await setGuideWaiting(db, B, false);
     await names.sync(guild, config, 4000);
-    expect(ch.name).toBe('案内所');
+    expect(ch.name).toBe('案内所（案内人不在）');
     expect(ch.setName).toHaveBeenCalledTimes(2);
   });
   it('再起動後も元名を覚え、設定から外したVCを復元する', async () => {
@@ -64,7 +78,7 @@ describe('案内所の待機表示', () => {
     await setGuideWaiting(db, A, true); await names.sync(guild, config, 1000);
     await setGuideWaiting(db, A, false); await names.sync(guild, config, 2000);
     await setGuideWaiting(db, A, true); await new GuideWaitingNames(db).sync(guild, config, 3000);
-    expect(ch.name).toBe('案内所');
+    expect(ch.name).toBe('案内所（案内人不在）');
     await new GuideWaitingNames(db).sync(guild, config, 602001);
     expect(ch.name).toBe('案内所（入室⭕）');
   });
@@ -77,23 +91,23 @@ describe('案内所の待機表示', () => {
     await setGuideWaiting(db, A, false); await names.sync(guild, config, 62000);
     expect(ch.setName).toHaveBeenCalledTimes(2);
     await names.sync(guild, config, 602001);
-    expect(ch.name).toBe('案内所');
+    expect(ch.name).toBe('案内所（案内人不在）');
   });
   it('承認停止・ロール剥奪・退会・BOTは待機に数えない', async () => {
     const { ch, guild, people, names } = fixture();
     await setGuideWaiting(db, A, true); people.get(A)!.roles.cache.clear();
-    await names.sync(guild, config, 1000); expect(ch.setName).not.toHaveBeenCalled();
+    await names.sync(guild, config, 1000); expect(ch.name).toBe('案内所（案内人不在）');
     await setGuideWaiting(db, B, true); people.get(B)!.user.bot = true;
-    await names.sync(guild, config, 2000); expect(ch.setName).not.toHaveBeenCalled();
+    await names.sync(guild, config, 2000); expect(ch.name).toBe('案内所（案内人不在）');
     people.delete(A); people.get(B)!.user.bot = false;
     await setGuideStatus(db, B, 'paused', 'staff');
-    await names.sync(guild, config, 3000); expect(ch.setName).not.toHaveBeenCalled();
+    await names.sync(guild, config, 3000); expect(ch.name).toBe('案内所（案内人不在）');
   });
   it('Presenceを使うときはオフラインで表示せず、使わないときは待機設定に従う', async () => {
     const { ch, guild, people } = fixture();
     await setGuideWaiting(db, A, true); people.get(A)!.presence.status = 'offline';
     await new GuideWaitingNames(db, true).sync(guild, config, 1000);
-    expect(ch.setName).not.toHaveBeenCalled();
+    expect(ch.name).toBe('案内所（案内人不在）');
     await new GuideWaitingNames(db, false).sync(guild, config, 2000);
     expect(ch.name).toBe('案内所（入室⭕）');
   });
@@ -102,9 +116,9 @@ describe('案内所の待機表示', () => {
     await setGuideWaiting(db, A, true); await names.sync(guild, config, 1000);
     ch.name = '新しい案内所';
     await setGuideWaiting(db, A, false); await names.sync(guild, config, 2000);
-    expect(ch.name).toBe('新しい案内所');
+    expect(ch.name).toBe('新しい案内所（案内人不在）');
     await setGuideWaiting(db, A, true); await names.sync(guild, { ...config, dutyChannelId: VC }, 3000);
-    expect(ch.setName).toHaveBeenCalledTimes(1);
+    expect(ch.setName).toHaveBeenCalledTimes(2);
   });
   it('同時同期でも送信は一度で、長い元名も復元できる', async () => {
     const original = 'あ'.repeat(100);
@@ -112,7 +126,7 @@ describe('案内所の待機表示', () => {
     await setGuideWaiting(db, A, true);
     await Promise.all([names.sync(guild, config, 1000), names.sync(guild, config, 1000)]);
     expect(ch.name.length).toBe(100); expect(ch.setName).toHaveBeenCalledTimes(1);
-    await setGuideWaiting(db, A, false); await names.sync(guild, config, 2000);
+    await names.sync(guild, { ...config, voiceChannelIds: [] }, 2000);
     expect(ch.name).toBe(original);
   });
 });
