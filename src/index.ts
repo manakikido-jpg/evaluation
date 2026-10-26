@@ -1,3 +1,4 @@
+import { RoomKnockApp } from './discord/roomKnock.js';
 import { VisitApp } from './discord/visit.js';
 import { KobanApp } from './discord/koban.js';
 import { GalleryRewardsApp } from './discord/galleryRewards.js';
@@ -136,6 +137,7 @@ async function main(): Promise<void> {
   const meetingApp = new MeetingApp(db, cfg, actions, env.WEB_BASE_URL);
   const help = new HelpApp(cfg);
   const maikura = new MaikuraApp(db, cfg);
+  const roomKnock = new RoomKnockApp(db, cfg, channelId => rooms.preservesMessages(channelId));
   const guideReception = new GuideReceptionApp(db, cfg, actions, env.DISCORD_PRESENCE === 'on');
   const guidePending = new GuidePendingApp(cfg);
   const security = new SecurityApp(db, cfg, actions);
@@ -213,6 +215,7 @@ async function main(): Promise<void> {
     // 自分の通話部屋: 止まっていた間に空になったものを消す
     await tempVoice.attach(guild).catch((err) => logger.warn({ err }, 'temp voice attach failed'));
     await rooms.attach(guild).catch(err => logger.warn({ err }, 'room control panel restore failed'));
+    await roomKnock.tick(guild).catch(err => logger.warn({ err }, 'room knock attach failed'));
     // 自動で増える通話（大きな縁側 1〜3 など）
     await voiceGroups.attach(guild).catch((err) => logger.warn({ err }, 'voice groups attach failed'));
     // 👥 縁側の人数をチャンネル名に
@@ -254,6 +257,7 @@ async function main(): Promise<void> {
     ticker = setInterval(() => {
       // 🎫 週末宝くじ: 抽選して、結果を DM と売り場に知らせる
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
+      void roomKnock.tick(guild).catch(err => logger.warn({ err }, 'room knock tick failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
       void innGuest.tick(guild).catch((err) => logger.warn({ err }, 'inn guest tick failed'));
@@ -410,6 +414,7 @@ async function main(): Promise<void> {
     if (after.channelId && after.channelId !== before.channelId && after.member) {
       void app.onActivity(after.guild.id, after.id, after.member.user.bot);
     }
+    void roomKnock.onVoiceStateUpdate(before, after).catch(err => logger.warn({ err }, 'room knock voice failed'));
     void guideReception.onVoiceStateUpdate(before, after);
     void tempVoice.onVoiceStateUpdate(before, after);
     // 自動で増える通話: 全部埋まったら増やし、空きが増えたら減らす
@@ -431,6 +436,7 @@ async function main(): Promise<void> {
     void onTalkTopicInteraction(i, cfg().guildId);
     void recording.onInteraction(i);
     void maikura.onInteraction(i);
+    void roomKnock.onInteraction(i).catch(err => logger.warn({ err }, 'room knock interaction failed'));
     void guideReception.onInteraction(i);
     void app.onInteraction(i);
     void staff.onInteraction(i);
