@@ -192,3 +192,11 @@ it('青銀フレームは中央が透過し、背景は中央も不透明な画�
  const d=await visitData(db,A,now);d.staffTheme=true;const png=renderVisitCard(d,{staffStyle:'blue-lantern'});expect(await sharp(png).metadata()).toMatchObject({width:1080,height:640});const center=await sharp(png).ensureAlpha().extract({left:540,top:320,width:1,height:1}).raw().toBuffer();expect(center[3]).toBe(255);expect(Math.ceil(png.length/3)*4).toBeLessThan(4194304);
 });
 
+
+it('紫苑の金桜を運営用へ保存でき、一般用に公開せず公開設定を維持する',async()=>{
+ const {saveVisitStaffStyle}=await import('../src/services/visitProfile.js');await visitData(db,A,now);
+ await expect(saveVisitStaffStyle(db,A,'purple-gold',false,now)).rejects.toThrow();await saveVisitStaffStyle(db,A,'purple-gold',true,now);const d=await visitData(db,A,now);expect(d.profile).toMatchObject({staffStyle:'purple-gold',background:'paper',frame:'plain'});expect(d.catalog.some(i=>i.id.includes('purple-gold'))).toBe(false);
+ d.staffTheme=true;const purple=renderVisitCard(d);expect(purple.equals(renderVisitCard(d,{staffStyle:'crimson'}))).toBe(false);expect(purple.equals(renderVisitCard(d,{staffStyle:'blue-lantern'}))).toBe(false);expect(await sharp(purple).metadata()).toMatchObject({width:1080,height:640});expect(Math.ceil(purple.length/3)*4).toBeLessThan(4194304);
+ d.profile.publicStats=false;expect(visitCardSvg(d)).toContain('活動記録は非公開');expect(visitCardSvg(d)).not.toContain('累計通話');expect(visitCardSvg(d,{privateView:true})).toContain('累計通話');
+ d.staffTheme=false;expect(renderVisitCard(d).equals(renderVisitCard(d,{staffStyle:'purple-gold'}))).toBe(true);
+});
