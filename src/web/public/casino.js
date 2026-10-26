@@ -2183,6 +2183,8 @@ const kbWinnerCircle = (g, W, H, h, data, sec) => {
 
 let kbAnim = null;
 const initKeiba = () => {
+  const broadcast=document.querySelector('[data-keiba-module]');
+  if(broadcast)void import(broadcast.dataset.keibaModule).then(m=>m.mountKeibaPreviews()).catch(()=>{const status=broadcast.querySelector('[data-kr-status]');if(status)status.textContent='映像を読み込めませんでした。画面を読み直してください。';});
   paintSilks();
   document.querySelectorAll('.kb-slip').forEach(paintSlip);
   paintPopBars();

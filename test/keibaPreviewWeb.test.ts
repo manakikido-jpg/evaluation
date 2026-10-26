@@ -66,3 +66,15 @@ describe('実レース観戦の入口と更新',()=>{
   expect((await app.request(url,{headers:{cookie}})).status).toBe(409);
  });
 });
+
+describe('通常の卓で新しい映像へ切り替える',()=>{
+ it('受付中は購入、発走後と断片更新は同じ卓に3Dを表示し、馬券・払戻を保つ',async()=>{
+  const {betting,racing}=broadcastFixture();const ticket={memberId:USER,name:'sample',t:'win' as const,key:'1',amount:10};betting.tickets=[ticket];racing.tickets=[ticket];betting.real=10;racing.real=10;now=new Date(racing.run!.start+1000);
+  const [t]=await db.insert(casinoTables).values({kind:'keiba',hostId:USER,state:betting,seatIds:[USER],dueAt:new Date(betting.deadline)}).returning();
+  const get=async(path:string)=>(await app.request(path,{headers:{cookie}})).text();
+  const before=await get(`/casino/t/${t!.id}`);expect(before).toContain('馬券を買う');expect(before).not.toContain('kr-embedded');
+  await db.update(casinoTables).set({state:racing,dueAt:new Date(racing.deadline)}).where(eq(casinoTables.id,t!.id));
+  for(const path of [`/casino/t/${t!.id}`,`/casino/t/${t!.id}/frag`]){const html=await get(path);expect(html).toContain('kr-embedded');expect(html).toContain('data-keiba-module');expect(html).not.toContain('class="kb-canvas"');expect(html).toContain('あなたの馬券');expect(html).toContain('data-kr-quality');}
+  now=new Date(racing.deadline+1);const result=await get(`/casino/t/${t!.id}`);expect(result).toContain('kr-embedded');expect(result).toContain('確定結果');expect(result).toContain('あなたの馬券');
+ });
+});
