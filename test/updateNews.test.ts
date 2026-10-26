@@ -80,8 +80,8 @@ it('周知担当が要否・対象・手順・文面・画像指示を同じカ�
  expect(fields.find(f=>f.name==='周知の判断')!.value).toContain('周知をお願いします');
  expect(fields.find(f=>f.name==='誰に伝える？')!.value).toBe('参拝者');
  expect(fields.find(f=>f.name==='案内する操作・手順')!.value).toBe('1. ボタンを押す\n2. 表示額を確認する');
- expect(fields.find(f=>f.name==='周知文のたたき台')!.value).toBe(e.announcement!.postText);
- expect(fields.find(f=>f.name==='画像制作の指示')!.value).toBe(e.announcement!.imagePrompt);
+ expect(fields.find(f=>f.name==='周知文のたたき台（コピー用）')!.value).toBe('```\n'+e.announcement!.postText+'\n```');
+ expect(fields.find(f=>f.name==='画像制作の指示（コピー用）')!.value).toBe('```\n'+e.announcement!.imagePrompt+'\n```');
 });
 it('周知不要は運営向けと明示し、一般向けの下書きや画像制作を依頼しない',()=>{
  const e:ChangelogEntry={...entry('internal','fix',['社務所Web']),announcement:{priority:'none',audience:'運営',steps:['管理画面を確認する'],postText:'公開しない文',imagePrompt:'公開しない指示'}};
@@ -91,7 +91,7 @@ it('未整理の過去分は要確認。既存の変更点を使い、操作や�
  const card=newsEmbed(entry('old-unknown','improve',['Discord']));
  expect(card.fields![0]!.value).toContain('要確認');
  expect(card.fields!.find(f=>f.name==='案内する操作・手順')!.value).toContain('記載がありません');
- expect(card.fields!.find(f=>f.name==='周知文のたたき台')!.value).toBe('題 old-unknown\n一つ目\n二つ目');
+ expect(card.fields!.find(f=>f.name==='周知文のたたき台（コピー用）')!.value).toBe('```\n題 old-unknown\n一つ目\n二つ目\n```');
 });
 it('既存機能の制作メモを使い、更新側の指定があればそちらを優先する',()=>{
  const e={...entry('2026-10-24-talk-topic-categories','improve',['Discord'])};
@@ -116,4 +116,8 @@ it('長い制作メモと多数の更新もDiscordの文字数上限内に分割
   }
   expect(total).toBeLessThanOrEqual(6000);
  }
+});
+it('コピー用の枠は、中の ``` で枠がこわれない',async()=>{
+ const {copyBlock,uncopyBlock}=await import('../src/services/updateNews.js');
+ const b=copyBlock('a```b');expect(b).toBe('```\naˋˋˋb\n```');expect(uncopyBlock(b)).toBe('aˋˋˋb');
 });

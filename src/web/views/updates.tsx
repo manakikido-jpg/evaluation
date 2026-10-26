@@ -1,5 +1,5 @@
 import { CHANGELOG, type ChangelogEntry, type ChangelogKind } from '../../changelog.js';
-import { fmtNewsDay, inScope, newsEmbed, type UpdateNewsSettings } from '../../services/updateNews.js';
+import { fmtNewsDay, inScope, newsEmbed, uncopyBlock, type UpdateNewsSettings } from '../../services/updateNews.js';
 import type { SessionView } from './layout.js';
 import { Layout } from './layout.js';
 
@@ -20,7 +20,10 @@ export const NEWS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
 };
 
 function NewsBrief(props: { fields: ReturnType<typeof newsEmbed>['fields'] }) {
-  return <dl class="news-brief">{props.fields?.map(f => <><dt>{f.name}</dt><dd>{f.value}</dd></>)}</dl>;
+  // 「コピー用」はボタンで写せるようにする（Discord ではコードの枠）
+  return <dl class="news-brief">{props.fields?.map(f => f.name.includes('コピー用')
+    ? <><dt>{f.name}</dt><dd><pre class="news-copy">{uncopyBlock(f.value)}</pre><button type="button" class="button-link" data-copy-text={uncopyBlock(f.value)}>📋 コピー</button></dd></>
+    : <><dt>{f.name}</dt><dd>{f.value}</dd></>)}</dl>;
 }
 
 /** Discord でのカードの見た目（だいたい） */
@@ -165,7 +168,7 @@ export function UpdatesPage(props: {
     else days.push({ date: e.date, entries: [e] });
   }
   return (
-    <Layout title="更新履歴" session={props.session} nav="updates">
+    <Layout title="更新履歴" session={props.session} nav="updates" scripts={['copy-text.js']}>
       <h1>📰 更新履歴</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">

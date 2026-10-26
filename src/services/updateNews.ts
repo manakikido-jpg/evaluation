@@ -72,6 +72,11 @@ export const fmtNewsDay = (d: string) => `${Number(d.slice(5, 7))}月${Number(d.
 
 const clip = (s: string, max: number) => s.length > max ? s.slice(0, max - 1) + '…' : s;
 
+/** コードの枠に入れる（中の ``` は枠がこわれないように変える） */
+export const copyBlock = (s: string) => '```\n' + s.replace(/```/g, 'ˋˋˋ') + '\n```';
+/** コードの枠を外す（社務所Web で見せるとき） */
+export const uncopyBlock = (s: string) => s.replace(/^```\n?/, '').replace(/\n?```$/, '');
+
 /** 周知担当が読む制作メモ。未確認の手順は作らず、元の変更点をたたき台にする。 */
 export function announcementFields(e: ChangelogEntry): NonNullable<NonNullable<MessageBody['embeds']>[number]['fields']> {
   const a = e.announcement ?? UPDATE_ANNOUNCEMENTS[e.id];
@@ -82,8 +87,9 @@ export function announcementFields(e: ChangelogEntry): NonNullable<NonNullable<M
     { name: '案内する操作・手順', value: clip(a?.steps.length ? a.steps.map((s, i) => (i + 1) + '. ' + s).join('\n') : 'この速報には操作手順の記載がありません。周知前に運営へ確認してください。', 700) },
   ];
   if (a?.priority !== 'none') fields.push(
-    { name: '周知文のたたき台', value: clip(a?.postText || [e.title, ...e.items].join('\n'), 1000) },
-    { name: '画像制作の指示', value: clip(a?.imagePrompt || '画像が必要か運営と相談してください。作る場合は「' + clip(e.title, 100) + '」を見出しにし、この速報で確認できる変更点だけを短く載せます。未記載の操作や料金は追加しないでください。', 800) },
+    // コピーしやすいように、Discord ではコードの枠に入れる（枠の右上にコピーのボタンが出る）
+    { name: '周知文のたたき台（コピー用）', value: copyBlock(clip(a?.postText || [e.title, ...e.items].join('\n'), 990)) },
+    { name: '画像制作の指示（コピー用）', value: copyBlock(clip(a?.imagePrompt || '画像が必要か運営と相談してください。作る場合は「' + clip(e.title, 100) + '」を見出しにし、この速報で確認できる変更点だけを短く載せます。未記載の操作や料金は追加しないでください。', 790)) },
   );
   if (a?.notes) fields.push({ name: '周知前に確認すること', value: clip(a.notes, 350) });
   return fields;
