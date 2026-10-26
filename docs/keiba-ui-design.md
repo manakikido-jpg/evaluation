@@ -72,7 +72,7 @@ PCは表示領域の幅を使い、映像の高さも調整します。賭け方
 
 - 映像確認：`/casino/keiba/preview`（通常のカジノの入場条件が必要）
 - [全景](previews/keiba-3d-wide.png)・[追走](previews/keiba-3d-track.png)・[ゴール](previews/keiba-3d-finish.png)・[横スマホ](previews/keiba-3d-mobile.png)
-- [ブラウザ録画の短い抜粋](previews/keiba-3d-trial.mp4)
+- [軽量3Dの動作確認動画（ブラウザ録画）](previews/keiba-3d-trial.mp4)
 
 実装は自作の形状による調整用モデルです。写実性の完成や実機30/60fpsの確認には至っていません。検証環境のソフトウェアGPUでは軽量3Dで3～4fpsを観測しました。実機の計測と馬体・走法の品質改善を次工程で継続します。公開用の画像は実際の試作画面を使用し、架空の完成映像と混同しないようにします。
 
