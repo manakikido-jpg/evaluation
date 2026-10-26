@@ -988,3 +988,4 @@
 - docs/previews/bingo-{desktop,landscape}.pngを新デザインで更新して目視確認。背景素材は既存の生成素材を無加工で共用し、外部配信画像を使わない。最終の型/ビルド/全件を実行し、PR100へ反映する。
 - 最終検証成功：型チェック・ビルド・全186ファイル/2,158テスト、441.00秒・4並列。ログ/tmp/bingo-sakura-final-{types,build,tests}.log。関連54件・最終ブラウザ・見本目視・diffも成功。テスト削除/skipなし。
 - デザイン実装574025c。本番9ce495aから追加変更なし、PR100はOPEN・未合流。新デザインの見本2点と説明を同PRへ更新する。抽選/DB/景品/権限/実サーバーの変更は行わない。
+- PR100のデザイン更新完了： https://github.com/manakikido-jpg/evaluation/pull/100 。codex/event-bingo、デザイン574025c/検証記録c1c5cdd。タイトル・説明を咲楽ノ宮の桜/和紙/朱印の最終内容へ更新済み。見本は同ブランチdocs/previews/bingo-desktop.png・bingo-landscape.png。OPEN・競合なし・本番反映待ち。全2,158件/型/ビルド/関連54件/ブラウザ成功。この追記は所在だけでソース変更なし、同じ検証結果を使用する。次は担当Claudeの確認/合流。
