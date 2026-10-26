@@ -1,3 +1,4 @@
+import { GuideWaitingNames } from './guideWaitingName.js';
 import { GUIDE_HOLD_ROLE_NAME, watchReason } from '../services/inviteGuard.js';
 import { adminLevelOf } from '../config.js';
 import { watchOf } from '../services/securityWatch.js';
@@ -46,12 +47,13 @@ const heldGuide = (m: { roles?: { cache?: { values?: () => Iterable<{ name?: str
 
 export class GuideReceptionApp {
   private ticking = false;
+  private readonly waitingNames: GuideWaitingNames;
   private visitorMessages = new Set<string>();
   private panelChannels = new Set<string>();
   private panelLoadedAt = 0;
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly queue = new Map<string, Promise<void>>();
-  constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions, private presence = false) {}
+  constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions, private presence = false) { this.waitingNames = new GuideWaitingNames(db, presence); }
   private async options(guild: Guild) {
     const c = await loadGuideConfig(this.db);
     const matches = guild.roles.cache.filter(r => r.name.includes('案内人'));
@@ -154,6 +156,7 @@ export class GuideReceptionApp {
     this.ticking = true;
     try {
       const c = await this.options(guild);
+      await this.waitingNames.sync(guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
       if (!c.voiceChannelIds.length) return;
       for (const channelId of c.voiceChannelIds) {
         const ch = guild.channels.cache.get(channelId);
@@ -370,7 +373,9 @@ export class GuideReceptionApp {
       }
       if (action === 'wait' || action === 'off') {
         const ok = await setGuideWaiting(this.db, i.user.id, action === 'wait');
-        return void await i.editReply(ok ? (action === 'wait' ? '待機中にしました。入室があるとDMで知らせます。' : '受付を停止しました。') : '案内人の登録と承認が必要です。');
+        await i.editReply(ok ? (action === 'wait' ? '待機中にしました。入室があるとDMで知らせます。' : '受付を停止しました。') : '案内人の登録と承認が必要です。');
+        if (ok) await this.waitingNames.sync(i.guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
+        return;
       }
       if (action === 'salary') {
         const { employeePayroll } = await import('../db/schema.js');
