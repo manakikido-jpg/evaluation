@@ -1152,3 +1152,5 @@
 
 - 最終検証成功：型/ビルド/全199ファイル・2,262テスト（464.45秒・4並列）、関連18件/diff/最終ブラウザ成功。ログ/tmp/keiba-default-final-{types,build,tests}.log。テスト削除/skipなし。ソース0ae661f。本番81071ceから追加なし。
 - 次：codex/keiba-default-viewをpushして新しいPRを提出。PR106は合流済みだが、この通常画面の切替は別修正。本番VPSの実稼働・配信状態のログにはアクセスしておらず、実サーバー操作はしていない。リポジトリの合流担当ルールに従い、本番へ直接pushせずレビュー可能な修正として提出する。
+
+- GitHub保存済み：PR #107 https://github.com/manakikido-jpg/evaluation/pull/107 、codex/keiba-default-view、実装0ae661f/検証記録6dc74e7。OPEN・競合なし、本番未反映。全2,262件/型/ビルド/関連18件/ブラウザ成功。PR106の合流済みと、今回の通常画面切替の未合流を区別する。次は合流担当の確認。Codexが本番へ合流する担当変更は未承認で、AGENTS.mdの担当Claudeルールに従い停止している。VPSの実稼働確認は未実施。この追記は所在のみで検証済みソースは変更なし。
