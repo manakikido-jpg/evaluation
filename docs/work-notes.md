@@ -976,3 +976,4 @@
 - 最終検証成功：型チェック・ビルド・全186ファイル/2,158テスト、426.48秒・4並列。ログ/tmp/bingo-complete-{types,build,tests}.log。関連54件、最終ブラウザ/tmp/event-bingo-browser3.log、見本目視、diffチェックも成功。初回の一覧更新漏れは修正済み。テスト削除/skipなし。
 - 実装56a8c46、統合be0bb5e、統合記録d232f29、コマンド全件検証更新ca51b15。本番9ce495aから追加変更なしを提出前fetchで確認。0138は新規のイベント/カード表のみ。賞/景品/銭の自動付与、実イベント作成、実Discord操作、本番DB/設定変更は行っていない。
 - 次：専用ブランチをpushしてPR作成、担当Claudeのレビュー・合流待ち。反映後に/ビンゴで本人用入口、運営がイベント作成→参加者確認→開始→抽選→終了を行う。景品と開催日時は運営が決める。
+- GitHub保存済み：PR #100 https://github.com/manakikido-jpg/evaluation/pull/100 、codex/event-bingo、実装56a8c46/統合be0bb5e/検証更新ca51b15/最終検証記録f88c289。OPEN・競合なし・本番未反映。全2,158件/型/ビルド/関連54件/複数ブラウザ成功。見本docs/previews/bingo-landscape.png・bingo-desktop.png。次は担当Claudeが0138と会員認証/運営抽選を確認して合流。反映後、実イベントの日時/賞/配布は運営が決めて案内する。本追記は所在のみでソース変更なし、同じ最終検証結果を使用する。
