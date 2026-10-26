@@ -14,6 +14,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const bingoShrine = new Uint8Array(readFileSync(path.join(here, '../../assets/visit/background-paper.jpg')));
 const bingoShrineVersion = createHash('sha256').update(bingoShrine).digest('hex').slice(0, 10);
 const readText = (p: string) => readFileSync(p, 'utf8');
+const keibaReplay = readText(path.join(here, 'public/keiba-replay.js'));
+const keibaHorse = readText(path.join(here, 'public/keiba-horse.js'));
+const keibaReplayHash = createHash('sha256').update(keibaReplay).digest('hex').slice(0, 10);
+const keibaHorseHash = createHash('sha256').update(keibaHorse).digest('hex').slice(0, 10);
 const lifeRoute = readText(path.join(here, 'public/life-route.js'));
 const lifeRouteHash = createHash('sha256').update(lifeRoute).digest('hex').slice(0, 10);
 const threeDir = path.dirname(createRequire(import.meta.url).resolve('three'));
@@ -76,6 +80,11 @@ const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
+    'keiba-club.css': { body: readText(path.join(here, 'public/keiba-club.css')), type: 'text/css; charset=utf-8' },
+    'keiba-preview.css': { body: readText(path.join(here, 'public/keiba-preview.css')), type: 'text/css; charset=utf-8' },
+    'keiba-replay.js': { body: keibaReplay, type: 'text/javascript; charset=utf-8' },
+    'keiba-horse.js': { body: keibaHorse, type: 'text/javascript; charset=utf-8' },
+    'keiba-preview.js': { body: readText(path.join(here, 'public/keiba-preview.js')).replace('./keiba-replay.js?v=1', `./keiba-replay.js?v=${keibaReplayHash}`).replace('./keiba-horse.js?v=1', `./keiba-horse.js?v=${keibaHorseHash}`), type: 'text/javascript; charset=utf-8' },
     'three.core.js': { body: threeCore, type: 'text/javascript; charset=utf-8' },
     'three.module.js': { body: threeModule, type: 'text/javascript; charset=utf-8' },
     'life-route.js': { body: lifeRoute, type: 'text/javascript; charset=utf-8' },

@@ -1,3 +1,4 @@
+import {mountKeibaAdmin} from './keibaAdmin.js';
 import { StaffAltSection } from './views/staffAlt.js';
 import { isStaffAlt, setStaffAlt, staffAlts } from '../services/staffAlts.js';
 import { mountVisitManagement } from './visitManagement.js';
@@ -647,6 +648,9 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(url);
   };
 
+  app.use('/keiba-events',requireAdmin,requireCsrf);
+  app.use('/keiba-events/*',requireAdmin,requireCsrf);
+  mountKeibaAdmin(app,{db,now,cfg:()=>cfg});
   app.use('/recordings', requireAdmin);
   app.use('/recordings/*', requireAdmin, requireCsrf);
   mountRecordings(app, db, () => cfg, undefined, deps.onSettingsSaved);

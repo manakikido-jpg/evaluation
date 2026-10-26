@@ -566,7 +566,7 @@ function BetPanel(p: {
   const first = chips.find((n) => n >= 100) ?? chips[0]!;
   return (
     <section class="c-panel kb-bet">
-      <h2>🎫 馬券を買う</h2>
+      <h2>🎫 馬券を買う</h2><p><a href={`/casino/keiba/tickets/${p.t.id}`}>着順別の選択・フォーメーションで買う（購入前に確認）</a></p>
       <form
         method="post"
         action={`/casino/t/${p.t.id}/act`}
@@ -938,6 +938,7 @@ export function KeibaView(p: {
               {s.phase !== "racing" && p.countdown}
             </div>
           </div>
+          {s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
           <Tv
             s={s}
             mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]}
@@ -1099,6 +1100,8 @@ export function KbLobbyExtra(p: {
   const active = p.horses.filter((h) => !h.retiredAt);
   return (
     <>
+      <nav class="c-panel"><a href="/casino/keiba/club">育成・スキル・馬主の収支</a> ／ <a href="/casino/keiba/events">大会・ランキング</a> ／ <a href="/casino/keiba/replays">レースを見返す</a></nav>
+      <section class="c-panel"><h2>🏇 新しい映像の試作</h2><p class="c-muted">8頭のサンプルレースで、全景・追走・ゴールの3D映像を確認できます。</p><a class="c-btn" href="/casino/keiba/preview">映像試作を見る（馬券なし）</a></section>
       <section class="c-panel kb-owner-cta">
         <h2>🐴 馬主になる</h2>
         <p class="c-muted">
@@ -1277,7 +1280,7 @@ export function KbStablePage(p: {
   const foalPrice = Math.floor(p.price / 2);
   const Hidden = () => <input type="hidden" name="_csrf" value={csrf} />;
   return (
-    <CasinoLayout title="馬主の部屋" me={p.me}>
+    <CasinoLayout title="馬主の部屋" me={p.me}><p><a href="/casino/keiba/club">育成・スキル・血統・共同所有・収支を見る</a></p>
       <p class="c-back">
         <a href="/casino/tables/keiba">← みんなでダービーへ</a>
       </p>

@@ -1,3 +1,4 @@
+import { EMPTY_DEVELOPMENT, type Development } from '../services/casino/keibaDevelopment.js';
 import { sql } from 'drizzle-orm';
 import { KB_DEFAULT_OUTFIT, type KbOutfit } from '../services/casino/keibaOutfit.js';
 import type { GachaTier, TicketKind } from '../config.js';
@@ -889,6 +890,7 @@ export const keibaHorses = pgTable('keiba_horses', {
   coat: integer('coat').notNull(),
   /** 馬ごとの装備（見た目だけ） */
   outfit: jsonb('outfit').$type<KbOutfit>().notNull().default(KB_DEFAULT_OUTFIT),
+  development: jsonb('development').$type<Development>().notNull().default(EMPTY_DEVELOPMENT),
   /** 勝負服 */
   silk: jsonb('silk').$type<{ base: string; accent: string; pattern: number }>().notNull(),
   starts: integer('starts').notNull().default(0),
@@ -979,6 +981,7 @@ export const keibaRuns = pgTable(
   'keiba_runs',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
+    tableId: bigint('table_id', { mode: 'number' }),
     horseId: bigint('horse_id', { mode: 'number' }).notNull(),
     horseName: text('horse_name').notNull(),
     ownerId: text('owner_id').notNull(),
@@ -1031,6 +1034,7 @@ export const opsNotices = pgTable('ops_notices', {
 export const keibaEntries = pgTable(
   'keiba_entries',
   {
+    tableId: bigint('table_id', { mode: 'number' }),
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     horseId: bigint('horse_id', { mode: 'number' }).notNull(),
     horseName: text('horse_name').notNull(),
@@ -2543,3 +2547,27 @@ export const guideThreads = pgTable('guide_threads', {
   closedAt: timestamp('closed_at', { withTimezone: true }),
 }, t => [index('guide_threads_thread_idx').on(t.threadId)]);
 export type GuideThread = typeof guideThreads.$inferSelect;
+
+/** 競馬の大会。日程/出走条件/得点/記念報酬を運営が設定する。 */
+export const keibaEvents = pgTable('keiba_events', {
+  id: bigserial('id',{mode:'number'}).primaryKey(),
+  name:text('name').notNull(),kind:text('kind').notNull(),
+  startsAt:timestamp('starts_at',{withTimezone:true}).notNull(),endsAt:timestamp('ends_at',{withTimezone:true}).notNull(),
+  rules:jsonb('rules').$type<{dist:number;surface:number;maxStarts:number;minWins:number;maxWins:number;points:number[];rewardTitle:string;rewardColor:string;rewardPlaces:number}>().notNull(),
+  cancelled:boolean('cancelled').notNull().default(false),
+  tableId:bigint('table_id',{mode:'number'}),createdBy:text('created_by').notNull(),
+});
+export const keibaEventEntries=pgTable('keiba_event_entries',{
+  eventId:bigint('event_id',{mode:'number'}).notNull().references(()=>keibaEvents.id),horseId:bigint('horse_id',{mode:'number'}).notNull().references(()=>keibaHorses.id),
+  ownerId:text('owner_id').notNull(),team:text('team').notNull().default(''),
+},t=>[primaryKey({columns:[t.eventId,t.horseId]})]);
+export const keibaEventRewards=pgTable('keiba_event_rewards',{
+  eventId:bigint('event_id',{mode:'number'}).notNull().references(()=>keibaEvents.id),memberId:text('member_id').notNull(),
+  rank:integer('rank').notNull(),title:text('title').notNull(),color:text('color').notNull(),
+  at:timestamp('at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[primaryKey({columns:[t.eventId,t.memberId]})]);
+/** 結果が確定した実走行の記録。レースごとの再生に使う。 */
+export const keibaReplays=pgTable('keiba_replays',{
+  id:bigserial('id',{mode:'number'}).primaryKey(),tableId:bigint('table_id',{mode:'number'}).notNull(),key:text('race_key').notNull(),
+  data:jsonb('data').$type<Record<string,unknown>>().notNull(),at:timestamp('at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[uniqueIndex('keiba_replays_table_key').on(t.tableId,t.key)]);

@@ -1,0 +1,1 @@
+ALTER TABLE "keiba_entries" ADD COLUMN "table_id" bigint;
