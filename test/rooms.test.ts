@@ -31,8 +31,8 @@ const cfg: GuildConfig = {
     ],
   },
   rooms: {
-    once: { public: 50, invite: 200, secret: 300, twoshot: 400 },
-    hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 },
+    once: { public: 50, invite: 200, secret: 300 },
+    hourly: { public: 100, invite: 200, secret: 300 },
     boosterDiscountPercent: 100,
     stayPrice: 3000,
     stayHourlyPrice: 300,
@@ -155,7 +155,7 @@ describe('支払い', () => {
     expect((await roomOf(db, ROOM))?.kindLocked).toBe(false);
     expect(await changeRoomKind(db, cfg, ROOM, 'secret')).toEqual({ status: 'ok', charged: 250 });
     expect(await changeRoomKind(db, cfg, ROOM, 'public')).toEqual({ status: 'locked' });
-    expect(await changeRoomKind(db, cfg, ROOM, 'twoshot')).toEqual({ status: 'locked' });
+    expect(await changeRoomKind(db, cfg, ROOM, 'invite')).toEqual({ status: 'locked' });
     expect((await walletOf(db, OWNER)).balance).toBe(700);
     expect(await roomOf(db, ROOM)).toMatchObject({ kind: 'secret', kindLocked: true });
   });
@@ -167,7 +167,7 @@ describe('支払い', () => {
     await startRoom(db, cfg, ROOM, T0);
     await changeRoomKind(db, cfg, ROOM, 'public');
     const before = (await walletOf(db, OWNER)).balance;
-    expect(await staffSetRoomKind(db, ROOM, 'twoshot')).toMatchObject({ kind: 'twoshot', kindLocked: true });
+    expect(await staffSetRoomKind(db, ROOM, 'invite')).toMatchObject({ kind: 'invite', kindLocked: true });
     expect(await staffSetRoomKind(db, ROOM, 'secret')).toMatchObject({ kind: 'secret' });
     expect((await walletOf(db, OWNER)).balance).toBe(before);
     expect(await staffSetRoomKind(db, '930000000000009999', 'secret')).toBeUndefined();
@@ -238,7 +238,7 @@ describe('支払い', () => {
   });
 
   it('無料（0 枚）なら払わない', async () => {
-    const free = applyOverrides(cfg, overridesSchema.parse({ rooms: { hourly: { public: 0, invite: 0, secret: 0, twoshot: 0 } } }));
+    const free = applyOverrides(cfg, overridesSchema.parse({ rooms: { hourly: { public: 0, invite: 0, secret: 0 } } }));
     await open(YOIMIYA);
     expect(await payEntry(db, free, ROOM, OWNER, T0)).toEqual({ status: 'free', charged: 0 });
     expect(await hourlyPerPerson(db, free, [{ channelId: ROOM, memberIds: [OWNER] }], min(60))).toEqual([]);

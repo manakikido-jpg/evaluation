@@ -567,8 +567,8 @@ export const tempVoice = pgTable('temp_voice', {
   ownerId: text('owner_id').notNull(),
   hubId: text('hub_id').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  /** 部屋の種類（宿坊・宵宮）: public 公開 / invite 招待限定 / secret シークレット / twoshot ツーショット */
-  kind: text('kind').$type<'public' | 'invite' | 'secret' | 'twoshot'>().notNull().default('public'),
+  /** 部屋の種類（宿坊・宵宮）: public 公開 / invite 招待限定 / secret シークレット */
+  kind: text('kind').$type<'public' | 'invite' | 'secret'>().notNull().default('public'),
   /** この部屋で払った花びら（1 回払いの部屋で、種類を変えたときの差額に使う） */
   paid: integer('paid').notNull().default(0),
   /** 1 時間ごとの部屋: ここまで払ってある */
@@ -1324,7 +1324,7 @@ export const roomPasses = pgTable(
   'room_passes',
   {
     memberId: text('member_id').notNull(),
-    kind: text('kind').$type<'public' | 'invite' | 'secret' | 'twoshot'>().notNull(),
+    kind: text('kind').$type<'public' | 'invite' | 'secret'>().notNull(),
     until: timestamp('until', { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.kind] })],

@@ -24,6 +24,15 @@ function fake() {
 }
 
 describe('宿のメッセージと設定パネル',()=>{
+ it('廃止前のBOT案内は同じ投稿を更新し、部屋や履歴を消さない',async()=>{
+  await row();const f=fake();
+  const old:any={id:'old',author:{id:BOT},components:[{components:[{customId:'room:open'}]}],embeds:[{description:'公開・招待限定・シークレット・ツーショット'}]};
+  old.edit=vi.fn(async(body:any)=>{old.embeds=body.embeds;return old;});f.messages.set('old',old);
+  await f.app.attach(f.guild as never);
+  expect(old.edit).toHaveBeenCalledOnce();expect(JSON.stringify(old.embeds)).not.toContain('ツーショット');
+  expect(f.send).not.toHaveBeenCalled();expect(f.messages.has('old')).toBe(true);expect(f.channel.userLimit).toBe(5);
+  await f.app.restoreRoomNotices();expect(old.edit).toHaveBeenCalledOnce();
+ });
  it('部屋データと入口で判定し、宿の名前変更でも保護する',async()=>{
   await row();const f=fake();await f.app.attach(f.guild as never);
   expect(await f.app.preservesMessages(ROOM)).toBe(true);expect(await f.app.preservesMessages(HUB)).toBe(true);

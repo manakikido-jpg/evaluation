@@ -10,6 +10,7 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Guild,
+  type Message,
   type ModalSubmitInteraction,
   type Interaction,
   type VoiceState,
@@ -111,7 +112,7 @@ export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hub
       ...(cfg.rooms.boosterDiscountPercent > 0
         ? [`-# 🏮 奉納（ブースト）している人は、部屋代が${cfg.rooms.boosterDiscountPercent >= 100 ? '無料' : ` ${cfg.rooms.boosterDiscountPercent}% 引き`}`]
         : []),
-      '-# 部屋の種類は 1 回だけ選べます（あとから公開・非公開は切り替えられません）。招待限定・シークレット・ツーショットの部屋には、運営も入れません',
+      '-# 部屋の種類は 1 回だけ選べます（あとから公開・非公開は切り替えられません）。招待限定・シークレットの部屋には、運営も入れません',
     );
   }
   return {
@@ -150,7 +151,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
       buttons(
         button(sid('room:name', v), 'チャンネル名', '📝'),
         button(sid('room:status', v), 'ステータス', '💬'),
-        button(sid('room:limit', v), '人数制限', '👥', 2, row.kind === 'twoshot'),
+        button(sid('room:limit', v), '人数制限', '👥', 2),
       ),
       buttons(
         button(sid('room:invite', v), '入室許可者を追加', '➕', 1),
@@ -216,6 +217,15 @@ export class RoomApp {
     });
   }
 
+  /** 古い案内に廃止した種類が残っていれば、同じ投稿を書きかえる。 */
+  private async refreshLegacyNotice(message: Message, row: RoomRow) {
+    if (!message.embeds?.some(e => e.description?.includes('ツーショット'))) return;
+    const current = await roomOf(this.db, row.channelId);
+    if (!current) return;
+    const secret = this.cfg().tempVoice.hubs.find(h => h.channelId === current.hubId)?.kind === 'secret';
+    await message.edit(roomNotice(this.cfg(), current, { secret }));
+  }
+
   /** 消えていた設定入口だけを復旧する。購入や設定の変更はしない。 */
   async restoreRoomNotices(): Promise<void> {
     if (!this.guild || this.restoringNotices) return;
@@ -231,7 +241,7 @@ export class RoomApp {
         await this.noticeLock.run(ch.id, async () => {
           const known = this.noticeIds.get(ch.id);
           if (known) {
-            try { await ch.messages.fetch({ message: known, force: true }); return; }
+            try { const message = await ch.messages.fetch({ message: known, force: true }); await this.refreshLegacyNotice(message, row); return; }
             catch (err) {
               if (!(err && typeof err === 'object' && 'code' in err && err.code === 10008)) throw err;
               this.noticeIds.delete(ch.id);
@@ -241,7 +251,7 @@ export class RoomApp {
           const existing = recent.find(message => message.author.id === this.guild!.client.user.id &&
             message.components.some(group => 'components' in group && group.components.some(component =>
               'customId' in component && component.customId === 'room:open')));
-          if (existing) { this.noticeIds.set(ch.id, existing.id); return; }
+          if (existing) { await this.refreshLegacyNotice(existing, row); this.noticeIds.set(ch.id, existing.id); return; }
           const current = await roomOf(this.db, ch.id);
           if (!current) return;
           const secret = this.cfg().tempVoice.hubs.find(h => h.channelId === current.hubId)?.kind === 'secret';
@@ -303,8 +313,6 @@ export class RoomApp {
       // 名前の制限待ちで、権限の変更や返事を止めない
       await withTimeout(ch.setName(name, '部屋の種類の目印')).catch((err) => logger.warn({ err, channelId: ch.id }, '部屋の目印を変更できませんでした'));
     }
-    if (kind === 'twoshot') await ch.setUserLimit(2);
-    else if (row.kind === 'twoshot') await ch.setUserLimit(0);
   }
 
   /** 運営（神職・宮司） */
@@ -422,7 +430,6 @@ export class RoomApp {
   }
 
   private async limit(i: ModalSubmitInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, value: string, v: PanelView = {}): Promise<void> {
-    if (row.kind === 'twoshot') return void (await i.reply({ content: 'ツーショットの部屋は 2 人までです。', ...EPHEMERAL }));
     const n = Number(value || '0');
     if (!Number.isInteger(n) || n < 0 || n > 99) return void (await i.reply({ content: '人数は 0〜99 で入れてください（0 でなし）。', ...EPHEMERAL }));
     await ch.setUserLimit(n, v.staff ? '部屋の人数（運営）' : '部屋の人数（作った人）');
@@ -431,7 +438,7 @@ export class RoomApp {
 
   private invitePicker(row: RoomRow, v: PanelView = {}) {
     return {
-      embeds: [{ title: '➕ 入室許可者を追加', description: `入ってよい人を選んでください（最大 10 人ずつ）。${row.kind === 'twoshot' ? '\nツーショットの部屋は 1 人だけです。' : ''}`, color: 0x6b5b95 }],
+      embeds: [{ title: '➕ 入室許可者を追加', description: `入ってよい人を選んでください（最大 10 人ずつ）。`, color: 0x6b5b95 }],
       components: [
         new ActionRowBuilder<UserSelectMenuBuilder>()
           .addComponents(new UserSelectMenuBuilder().setCustomId(sid('room:invitepick', v)).setPlaceholder('入室を許可する人を選ぶ').setMinValues(1).setMaxValues(10))
@@ -477,11 +484,8 @@ export class RoomApp {
 
   private async kind(i: StringSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
     const kind = i.values[0];
-    if (!isRoomKind(kind)) return;
+    if (!isRoomKind(kind)) return void (await i.reply({ content: 'その部屋の種類は使えません。設定を開き直してください。', ...EPHEMERAL }));
     if (row.kindLocked && !v.staff) return void (await i.reply({ content: '部屋の種類はもう決まっています（1 回だけ選べます）。', ...EPHEMERAL }));
-    if (kind === 'twoshot' && ch.members.filter((m) => !m.user.bot).size > 2) {
-      return void (await i.reply({ content: '今 3 人以上いるので、ツーショットにはできません。', ...EPHEMERAL }));
-    }
     if (v.staff) {
       // 運営: 決まっていても変えられ、差額は取らない
       const updated = await staffSetRoomKind(this.db, ch.id, kind);
@@ -489,7 +493,7 @@ export class RoomApp {
       await i.deferUpdate();
       if (kind !== row.kind) await this.apply(ch, row, kind);
       const k = ROOM_KINDS[kind];
-      const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
+      const limit = ch.userLimit;
       logger.info({ channelId: ch.id, by: i.user.id, kind }, 'room kind changed by staff');
       await ch.send({ content: `🛡 運営が部屋の種類を ${k.emoji} ${k.label}にしました。`, allowedMentions: { parse: [] } }).catch(() => undefined);
       return this.done(i, updated, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました（運営として・部屋代の差額はなし）`, v);
@@ -502,7 +506,7 @@ export class RoomApp {
     if (kind !== row.kind) await this.apply(ch, row, kind);
     const k = ROOM_KINDS[kind];
     const paid = r.ticketKind ? `（${ticketUsedText(r)}）` : r.charged ? `（${this.cfg().economy.currencyName} ${r.charged} 枚を払いました）` : '';
-    const limit = kind === 'twoshot' ? 2 : row.kind === 'twoshot' ? 0 : ch.userLimit;
+    const limit = ch.userLimit;
     await this.done(i, { ...row, kind, kindLocked: !row.keepUntil }, { name: ch.name, userLimit: limit }, `${k.emoji} ${k.label}にしました${paid}${kind === 'public' ? '' : '。入ってほしい人は「入室許可者を追加」から'}`, v);
   }
 
@@ -578,9 +582,6 @@ export class RoomApp {
   private async invite(i: UserSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
     const ids = i.values.filter((id) => id !== row.ownerId && !i.users.get(id)?.bot);
     if (!ids.length) return void (await i.reply({ content: '招待できる人がいません（自分・BOT は選べません）。', ...EPHEMERAL }));
-    if (row.kind === 'twoshot' && new Set([...row.invited, ...ids]).size > 1) {
-      return void (await i.reply({ content: 'ツーショットの部屋に招待できるのは 1 人だけです。', ...EPHEMERAL }));
-    }
     const updated = await addInvites(this.db, ch.id, ids);
     if (!updated) return;
     await this.apply(ch, updated, updated.kind);

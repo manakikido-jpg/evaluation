@@ -49,7 +49,7 @@ const cfg: GuildConfig = {
       { channelId: YOIMIYA, name: '🍶 {name}の部屋' },
     ],
   },
-  rooms: { once: { public: 50, invite: 200, secret: 300, twoshot: 400 }, hourly: { public: 100, invite: 200, secret: 300, twoshot: 400 }, boosterDiscountPercent: 0, stayPrice: 3000, stayHourlyPrice: 300, secretHubs: [] },
+  rooms: { once: { public: 50, invite: 200, secret: 300 }, hourly: { public: 100, invite: 200, secret: 300 }, boosterDiscountPercent: 0, stayPrice: 3000, stayHourlyPrice: 300, secretHubs: [] },
 };
 
 /** 決まった順に数を返す（運勢 → ロール選び、の順に使う） */
@@ -419,7 +419,7 @@ describe('券を使う', () => {
     const { TICKET_KINDS } = await import('../src/config.js');
     const { TICKET_LABEL, MANUAL_TICKETS } = await import('../src/services/tickets.js');
     for (const k of TICKET_KINDS) expect(TICKET_LABEL[k]?.name).toBeTruthy();
-    expect(TICKET_LABEL.room_half_twoshot.name).toBe('💞ツーショットの部屋代半額券');
+    expect(TICKET_LABEL.room_half_invite.name).toBe('🔒招待限定の部屋代半額券');
     expect(MANUAL_TICKETS).toEqual(['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco', 'casino_boost', 'name_change']);
   });
 

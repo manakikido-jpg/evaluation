@@ -6,13 +6,13 @@ import { spendWithin } from './economy.js';
 import { addTickets, useTicket } from './tickets.js';
 
 /**
- * 宿坊・宵宮の自分の通話部屋: 種類（公開・招待限定・シークレット・ツーショット）・人数・招待と、花びらの支払い。
+ * 宿坊・宵宮の自分の通話部屋: 種類（公開・招待限定・シークレット）・人数・招待と、花びらの支払い。
  * - once（宿坊）: ひらくたびに 1 回。種類を変えたら差額だけ払う
  * - hourly（宵宮）: 入っている人それぞれが 1 時間ごと。払えなければ注意して、5 分後に通話から抜けてもらう
  * 値段はすべて 0（無料）から。社務所Web の設定で決める。
  */
 
-export type RoomKind = 'public' | 'invite' | 'secret' | 'twoshot';
+export type RoomKind = 'public' | 'invite' | 'secret';
 /** free: 種類は選べて部屋代なし（💎 極の部屋） */
 export type RoomPlan = 'none' | 'once' | 'hourly' | 'free';
 export type RoomRow = typeof tempVoice.$inferSelect;
@@ -21,7 +21,6 @@ export const ROOM_KINDS: Record<RoomKind, { label: string; emoji: string; descri
   public: { label: '公開', emoji: '🔓', description: 'だれでも入れる' },
   invite: { label: '招待限定', emoji: '🔒', description: '見えるけど、招待した人だけ入れる' },
   secret: { label: 'シークレット', emoji: '🤫', description: 'ほかの人には見えない。招待した人だけ' },
-  twoshot: { label: 'ツーショット', emoji: '💞', description: '2 人だけ。招待した 1 人と' },
 };
 export const isRoomKind = (v: unknown): v is RoomKind => typeof v === 'string' && Object.hasOwn(ROOM_KINDS, v);
 
@@ -61,7 +60,7 @@ const MEMBER_IN = VIEW | CONNECT | SPEAK;
 
 /**
  * 種類に合わせた権限の上書き。base はカテゴリと同じもの（宵宮なら宵参りの人だけ見える）。
- * 招待限定・ツーショット: ロール（運営のロールも）は入れない。シークレット: ロールには見えない。
+ * 招待限定: ロール（運営のロールも）は入れない。シークレット: ロールには見えない。
  * 作った人・招待した人・BOT は、メンバーとして入れる。
  */
 export function roomOverwrites(

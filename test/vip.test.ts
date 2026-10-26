@@ -51,7 +51,7 @@ describe('💎 極（遊郭の VIP）', () => {
     const c = applyOverrides(parseGuildConfig({ ...cfg }), o);
     expect(c.tempVoice.hubs.find((h) => h.channelId === HUB)).toMatchObject({ plan: 'free', name: '💎 {name}の極の部屋' });
     expect(planOf(c, HUB)).toBe('free');
-    expect(roomPrice({ ...c, rooms: { ...c.rooms, once: { public: 50, invite: 100, secret: 300, twoshot: 400 } } }, 'free', 'secret')).toBe(0);
+    expect(roomPrice({ ...c, rooms: { ...c.rooms, once: { public: 50, invite: 100, secret: 300 } } }, 'free', 'secret')).toBe(0);
     // 物御籤・全員へのプレゼントでは渡さない。授与所では「極」の仲間
     const item = { kind: 'role', roleId: VIP, roleGroup: 'vip' } as Parameters<typeof giftableShopItem>[0];
     expect(giftableShopItem(item)).toBe(false);

@@ -3356,7 +3356,7 @@ export function createWebApp(deps: WebDeps) {
         ...Object.fromEntries(
           (['once', 'hourly'] as const).map((plan) => [
             plan,
-            Object.fromEntries((['public', 'invite', 'secret', 'twoshot'] as const).map((k) => [k, num(`room.${plan}.${k}`)])),
+            Object.fromEntries((['public', 'invite', 'secret'] as const).map((k) => [k, num(`room.${plan}.${k}`)])),
           ]),
         ),
         boosterDiscountPercent: num('roomBoosterDiscount'),
