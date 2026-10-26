@@ -1,5 +1,9 @@
 import { ChannelType, MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type TextChannel } from 'discord.js';
-import { alertLabel, checkInviteBurst, GUIDE_HOLD_ROLE_NAME, holdsGuide } from '../services/inviteGuard.js';
+import { alertLabel, checkInviteBurst, GUIDE_HOLD_ROLE_NAME, holdsGuide, inviteAlerts } from '../services/inviteGuard.js';
+import { inviteBlocks } from '../services/inviteBlock.js';
+import { guideRoleOf } from './guidePending.js';
+import { invites } from '../db/schema.js';
+import { inArray } from 'drizzle-orm';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coreName } from '../lib/names.js';
@@ -97,6 +101,30 @@ export class InviteLinkApp {
     });
     this.queue = run.catch((err: unknown) => logger.warn({ err }, 'invite link match failed'));
     return this.queue.then(() => undefined);
+  }
+
+  /**
+   * 🚨 見張りの見直し（起動時・10 分ごと）: 見張る人・警戒中の人に招待されて、まだ案内待ちの人に「案内停止」を付ける。
+   * 登録より前に入っていた人や、BOT が止まっていた間に入った人の付け忘れを直す
+   */
+  async sweepHolds(guild: Guild): Promise<number> {
+    if (guild.id !== this.cfg().guildId) return 0;
+    const pending = guideRoleOf(this.cfg(), guild.roles.cache.values());
+    if (!pending) return 0;
+    const inviters = new Set([...(await inviteAlerts(this.db)).map((a) => a.id), ...(await inviteBlocks(this.db)).map((b) => b.id)]);
+    if (!inviters.size) return 0;
+    const rows = await this.db.select({ memberId: invites.memberId }).from(invites).where(inArray(invites.inviterId, [...inviters]));
+    let role: Awaited<ReturnType<InviteLinkApp['holdRole']>> | undefined;
+    let n = 0;
+    for (const r of rows) {
+      const m = guild.members.cache.get(r.memberId);
+      if (!m || m.user.bot || !m.roles.cache.has(pending)) continue;
+      role ??= await this.holdRole(guild);
+      if (m.roles.cache.has(role.id)) continue;
+      await m.roles.add(role, '見張る人・警戒中の人の招待で入った（見直し）').then(() => n++, (err: unknown) => logger.warn({ err, id: m.id }, 'guide hold role failed'));
+    }
+    if (n) logger.info({ n }, 'guide hold swept');
+    return n;
   }
 
   /** 「案内停止」ロール（なければ作る。権限なし・メンションなし） */
