@@ -32,6 +32,10 @@ describe('競馬の3D映像試作',()=>{
   it('馬体と騎手を実際の3D形状で作り、走行姿勢を更新しても不正な頂点を作らない',()=>{
     vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({fillRect(){},fillText(){}})})});
     const horse=createHorse(THREE,createKeibaPreview().horses[0]);
+    horse.setQuality(true);let lightCoat=false;
+    horse.root.traverse((o:any)=>{if(o.material?.isMeshPhysicalMaterial){lightCoat=true;expect(o.material.clearcoat).toBe(0);expect(o.material.bumpMap).toBeNull();}});expect(lightCoat).toBe(true);
+    horse.setQuality(false);
+    horse.root.traverse((o:any)=>{if(o.material?.isMeshPhysicalMaterial){expect(o.material.clearcoat).toBeGreaterThan(0);expect(o.material.bumpMap).not.toBeNull();}});
     for(let t=0;t<3;t+=.1)horse.update(t,true);
     horse.root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(horse.root),size=box.getSize(new THREE.Vector3());
     expect(size.x).toBeGreaterThan(2);expect(size.x).toBeLessThan(4);expect(size.y).toBeGreaterThan(2);expect(size.y).toBeLessThan(3.5);

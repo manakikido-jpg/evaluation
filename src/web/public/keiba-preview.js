@@ -12,13 +12,25 @@ async function start(root) {
   class RaceScene {
     constructor() {
       this.renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.0;
-      this.world=new T.Scene();this.world.background=new T.Color(0xc5dce9);this.world.fog=new T.Fog(0xc5dce9,140,800);
-      this.view=new T.PerspectiveCamera(38,1,.1,2200);this.world.add(new T.HemisphereLight(0xd6eafa,0x697047,1.7));
-      this.sun=new T.DirectionalLight(0xffead0,2.2);this.sun.position.set(-40,70,40);this.sun.castShadow=true;this.sun.shadow.mapSize.set(2048,2048);Object.assign(this.sun.shadow.camera,{left:-55,right:55,top:55,bottom:-55,near:.1,far:180});this.sun.shadow.normalBias=.025;this.world.add(this.sun,this.sun.target);
+      this.world=new T.Scene();this.world.background=new T.Color(0xcbdce5);this.world.fog=new T.Fog(0xcbdce5,160,900);
+      this.view=new T.PerspectiveCamera(38,1,.1,2200);this.world.add(new T.HemisphereLight(0xe4edff,0x8e805e,2.1));
+      this.sun=new T.DirectionalLight(0xffe8c6,2.5);this.sun.position.set(-40,70,40);this.sun.castShadow=true;this.sun.shadow.mapSize.set(2048,2048);Object.assign(this.sun.shadow.camera,{left:-55,right:55,top:55,bottom:-55,near:.1,far:180});this.sun.shadow.normalBias=.018;this.sun.shadow.radius=3;this.world.add(this.sun,this.sun.target);
       this.renderer.shadowMap.type=T.PCFSoftShadowMap;
-      this.textures=[];this.makeCourse();this.horses=data.horses.map(h=>{const model=createHorse(T,h);this.world.add(model.root);return model;});
+      this.low=quality.value==='low'||quality.value==='auto'&&(matchMedia('(pointer: coarse)').matches||innerWidth<900);
+      this.textures=[];if(!this.low)this.environment();this.makeCourse();this.horses=data.horses.map(h=>{const model=createHorse(T,h);this.world.add(model.root);return model;});
       sceneRoot.append(this.renderer.domElement);this.renderer.domElement.addEventListener('webglcontextlost',onLost);
       this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(sceneRoot);this.resize();this.setQuality();
+    }
+    environment() {
+      const faces=[];
+      for(let i=0;i<6;i++){
+        const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),gradient=g.createLinearGradient(0,0,0,128);
+        gradient.addColorStop(0,'#e5edfa');gradient.addColorStop(.5,'#c1d0d7');gradient.addColorStop(1,'#78765b');g.fillStyle=gradient;g.fillRect(0,0,128,128);
+        const glow=g.createRadialGradient(30,32,1,30,32,75);glow.addColorStop(0,i===0?'#fff2d9aa':'#ffffff35');glow.addColorStop(1,'#ffffff00');g.fillStyle=glow;g.fillRect(0,0,128,128);faces.push(c);
+      }
+      const cube=new T.CubeTexture(faces);cube.colorSpace=T.SRGBColorSpace;cube.needsUpdate=true;
+      this.pmrem=new T.PMREMGenerator(this.renderer);this.environmentTarget=this.pmrem.fromCubemap(cube);cube.dispose();
+      this.world.environment=this.environmentTarget.texture;this.world.environmentIntensity=.45;
     }
     mesh(geometry,color,x=0,y=0,z=0,roughness=.9) {
       const m=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness}));m.position.set(x,y,z);m.receiveShadow=true;this.world.add(m);return m;
@@ -69,21 +81,21 @@ async function start(root) {
       const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.fillStyle=bg;g.fillRect(0,0,w,h);g.fillStyle=fg;g.font=`600 ${h*.64}px serif`;g.textAlign='center';g.textBaseline='middle';g.fillText(text,w/2,h/2,w*.93);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;this.textures.push(t);return t;
     }
     resize(){const r=sceneRoot.getBoundingClientRect();if(r.width<1||r.height<1)return;this.renderer.setSize(r.width,r.height,false);this.view.aspect=r.width/r.height;this.view.updateProjectionMatrix();dirty=true;}
-    setQuality(){const low=quality.value==='low'||quality.value==='auto'&&(matchMedia('(pointer: coarse)').matches||innerWidth<900);this.low=low;this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,low?1:1.6));this.renderer.shadowMap.enabled=!low;this.resize();}
+    setQuality(){const low=quality.value==='low'||quality.value==='auto'&&(matchMedia('(pointer: coarse)').matches||innerWidth<900);this.low=low;this.world.environment=low?null:this.environmentTarget?.texture??null;for(const horse of this.horses)horse.setQuality(low);this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,low?1:1.6));this.renderer.shadowMap.enabled=!low;this.resize();}
     render(state,time) {
       const positions=state.positions;
       for(let i=0;i<this.horses.length;i++){const h=this.horses[i],p=positions[i];h.root.position.set(p.x,0,p.z);h.root.rotation.y=p.heading;h.update(time/1000,time>0&&!reduced);}
       const leader=positions.find(p=>p.no===state.order[0]),tail=positions.find(p=>p.no===state.order.at(-1));
-      let focus=new T.Vector3(leader.x,1.25,leader.z),distance=12,height=2.8,forward=1;
+      let focus=new T.Vector3(leader.x,1.25,leader.z),distance=15,height=2.8,forward=1;
       if(camera==='wide'){const span=Math.hypot(leader.x-tail.x,leader.z-tail.z);focus=new T.Vector3((leader.x+tail.x)/2,1,(leader.z+tail.z)/2);distance=clamp(span*.9+28,35,120);height=clamp(distance*.45,17,48);forward=8;}
       const heading=new T.Vector3(Math.cos(-leader.heading),0,Math.sin(-leader.heading)),outside=new T.Vector3(-heading.z,0,heading.x);
       let eye=focus.clone().addScaledVector(outside,distance).addScaledVector(heading,forward).add(new T.Vector3(0,height,0));
       if(camera==='finish'){const p=trackPoint(0,8);focus=new T.Vector3(p.x,1,p.z);eye=new T.Vector3(p.x+12,4.8,p.z+22);}
-      this.view.position.copy(eye);this.view.lookAt(focus);
+      this.view.fov=camera==='wide'?38:32;this.view.updateProjectionMatrix();this.view.position.copy(eye);this.view.lookAt(focus);
       this.sun.position.copy(focus).add(new T.Vector3(-40,70,40));this.sun.target.position.copy(focus);
       this.renderer.render(this.world,this.view);
     }
-    dispose(){this.observer.disconnect();this.renderer.domElement.removeEventListener('webglcontextlost',onLost);const geometries=new Set(),materials=new Set(),textures=new Set(this.textures);this.world.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){materials.add(m);if(m.map)textures.add(m.map);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();for(const t of textures)t.dispose();this.renderer.dispose();this.renderer.forceContextLoss();this.renderer.domElement.remove();}
+    dispose(){this.observer.disconnect();this.renderer.domElement.removeEventListener('webglcontextlost',onLost);const geometries=new Set(),materials=new Set(),textures=new Set(this.textures);this.world.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){materials.add(m);if(m.map)textures.add(m.map);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();for(const t of textures)t.dispose();this.environmentTarget?.dispose();this.pmrem?.dispose();this.renderer.dispose();this.renderer.forceContextLoss();this.renderer.domElement.remove();}
   }
   function drawFlat(state){
     const r=flat.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,r.width),h=Math.max(1,r.height);if(flat.width!==Math.round(w*ratio)||flat.height!==Math.round(h*ratio)){flat.width=w*ratio;flat.height=h*ratio;}const g=flat.getContext('2d');g.setTransform(ratio,0,0,ratio,0,0);g.fillStyle='#47663c';g.fillRect(0,0,w,h);const left=30,right=w-45,top=48,bottom=h-35;g.strokeStyle='#e9e4d2';g.lineWidth=2;g.strokeRect(left,top,right-left,bottom-top);g.font='13px sans-serif';g.fillStyle='#fff';g.fillText('軽量表示 · 同じ走行データを再生',left,25);for(const p of state.positions){const x=left+clamp(p.progress,0,1.08)/1.08*(right-left),y=top+(p.no-.5)/8*(bottom-top);g.fillStyle=['#eee','#252525','#bf4035','#3467a5','#ddbf4f','#527f4e','#cd773d','#c383a6'][p.no-1];g.beginPath();g.arc(x,y,9,0,Math.PI*2);g.fill();g.fillStyle=p.no===2?'#fff':'#17211d';g.textAlign='center';g.fillText(p.no,x,y+4);}g.textAlign='left';}
