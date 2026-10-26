@@ -1,3 +1,4 @@
+import { isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { shuin } from '../db/schema.js';
@@ -27,6 +28,8 @@ export async function giveShuin(
   input: { giverId: string; receiverId: string; weight: number; giverRank: string },
 ): Promise<GiveResult> {
   if (input.giverId === input.receiverId) throw new Error('自分には朱印を押せません');
+  // 🕶 運営のサブアカウントは、朱印を押せない・押されない
+  if ((await isStaffAlt(db, input.giverId)) || (await isStaffAlt(db, input.receiverId))) throw new Error('このアカウントには朱印を押せません');
   return db.transaction(async (tx) => {
     const inserted = await tx.insert(shuin).values(input).onConflictDoNothing().returning({ weight: shuin.weight });
     if (inserted[0]) {

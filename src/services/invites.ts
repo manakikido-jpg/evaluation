@@ -1,3 +1,4 @@
+import { isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { autoRanks } from '../domain/ranks.js';
 import { adminLevelOf, type GuildConfig, type Rank } from '../config.js';
@@ -27,6 +28,8 @@ const isSnowflake = (v: unknown): v is string => typeof v === 'string' && /^\d{1
  */
 export async function recordInvite(db: Db, memberId: string, inviterId: unknown, source: 'answer' | 'link' = 'answer'): Promise<boolean> {
   if (!isSnowflake(inviterId) || inviterId === memberId) return false;
+  // 🕶 運営のサブアカウントは、招待の記録・お礼に入れない
+  if ((await isStaffAlt(db, memberId)) || (await isStaffAlt(db, inviterId))) return false;
   const rows = await db.insert(invites).values({ memberId, inviterId, source }).onConflictDoNothing().returning();
   return rows.length > 0;
 }

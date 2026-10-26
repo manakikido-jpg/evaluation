@@ -4568,3 +4568,18 @@ it('👥 メンバー検索: 役職に案内待ちをえらべる。ロールの
   const reset=/href="([^"]+)" data-member-role-reset/.exec(filtered)![1]!.replaceAll('&amp;','&');const params=new URL(reset,BASE).searchParams;
   expect(params.has('roles')).toBe(false);expect(params.get('q')).toBe('あそ');expect(params.get('rank')).toBe('pending');expect(params.get('age')).toBe('adult');expect(params.get('status')).toBe('all');expect(params.get('inactive')).toBe('7');expect(params.get('sort')).toBe('name');expect(params.get('dir')).toBe('asc');
 });
+
+it('🕶 運営のサブアカウントを宮司が登録すると、その人は社務所Web に入れない', async () => {
+  const g = await login(GUJI);
+  const page = await (await get(`/members/${USER}`, g)).text();
+  expect(page).toContain('運営のサブアカウント');
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const send = (f: Record<string, string>) => app.request(`/members/${USER}/staff-alt`, { method: 'POST', headers: { cookie: `shamusho_session=${g}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...f }) });
+  expect((await send({ on: 'yes', ownerId: 'x' })).headers.get('location')).toBe(`/members/${USER}?msg=alt_invalid`);
+  expect((await send({ on: 'yes', ownerId: STAFF, note: '見回り' })).headers.get('location')).toBe(`/members/${USER}?msg=alt_added`);
+  expect(await (await get(`/members/${USER}`, g)).text()).toContain('この人は運営のサブアカウントです');
+  // 神職のロールを持っていても、サブアカウントなら入れない
+  roles.set(USER, [ROLE.shinshoku]);
+  expect(await login(USER)).toBe('');
+  expect((await send({ on: 'no' })).headers.get('location')).toBe(`/members/${USER}?msg=alt_removed`);
+});

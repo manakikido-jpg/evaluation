@@ -1,3 +1,5 @@
+import { StaffAltSection } from './views/staffAlt.js';
+import { isStaffAlt, setStaffAlt, staffAlts } from '../services/staffAlts.js';
 import { mountVisitManagement } from './visitManagement.js';
 import { visitRevenue } from '../services/visitRevenue.js';
 import { clearInviteAlert, inviteAlerts } from '../services/inviteGuard.js';
@@ -523,7 +525,8 @@ export function createWebApp(deps: WebDeps) {
       return c.redirect('/login?e=failed');
     }
 
-    const access = roles ? webAccessOf(cfg, user.id, roles) : undefined;
+    // 🕶 運営のサブアカウントは社務所Web に入れない
+    const access = roles && !(await isStaffAlt(db, user.id)) ? webAccessOf(cfg, user.id, roles) : undefined;
     if (!access) {
       const [last] = await listAudit(db, { actorId: user.id, action: 'auth.denied', limit: 1 });
       if (!last || now().getTime() - last.at.getTime() > 3_600_000) await audit(db, { actorId: user.id, action: 'auth.denied', via: 'web' });
@@ -593,7 +596,7 @@ export function createWebApp(deps: WebDeps) {
         c.set('session', await withUpdates(session));
         return next();
       }
-      const access = roles ? webAccessOf(cfg, session.userId, roles) : undefined;
+      const access = roles && !(await isStaffAlt(db, session.userId)) ? webAccessOf(cfg, session.userId, roles) : undefined;
       if (!access) {
         await deleteSession(db, session.id);
         await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
@@ -998,6 +1001,7 @@ export function createWebApp(deps: WebDeps) {
             showUnban={session.level === 'guji' && isBannedByEvents(events)}
             coinsNonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
           />
+          <StaffAltSection memberId={id} csrf={session.csrfToken} alt={(await staffAlts(db)).find((a) => a.id === id)} guji={session.level === 'guji' && !member.isBot} />
           <CasinoStyleMemberSection memberId={id} csrf={session.csrfToken} state={await stylesOf(db, id)} guji={session.level === 'guji' && !member.isBot} />
           <SpecialGoenSection
             memberId={id}
@@ -2571,6 +2575,20 @@ export function createWebApp(deps: WebDeps) {
 
   const NONCE = /^[0-9a-f-]{36}$/;
 
+  // 🕶 運営のサブアカウントにする・外す（宮司）。登録すると銭を 0 にする
+  app.post('/members/:id/staff-alt', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.notFound();
+    if (!gujiOnly(c)) return back(c, id, 'alt_forbidden');
+    const body = await c.req.parseBody();
+    const on = body.on === 'yes';
+    const owner = typeof body.ownerId === 'string' ? body.ownerId.trim() : '';
+    if (on && (!validId(owner) || owner === id)) return back(c, id, 'alt_invalid');
+    const m = await getMember(db, id);
+    if (!m || m.isBot) return back(c, id, 'denied_not_found');
+    await setStaffAlt(db, id, on, c.get('session').userId, owner, field(body, 'note', 200) ?? '', now());
+    return back(c, id, on ? 'alt_added' : 'alt_removed');
+  });
   app.post('/members/:id/coins', async (c) => {
     const id = c.req.param('id');
     if (!validId(id)) return c.notFound();
