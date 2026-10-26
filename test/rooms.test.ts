@@ -318,7 +318,7 @@ describe('部屋主の権限を譲渡', () => {
 describe('部屋名のシクレ表示', () => {
   it('名前を変えても目印が残り、重複せず、公開に戻すと外れる', () => {
     const knock = JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }, undefined, {}, { room: ROOM, mode: 'knock' }));
-    expect(knock).toContain(`rkn:mode:${ROOM}:open`); expect(knock).toContain('☑ こんこん歓迎'); expect(knock).toContain('☐ 取り込み中'); expect(knock).toContain('受付（こんこん）');
+    expect(knock).toContain(`rkn:mode:${ROOM}:open`); expect(knock).toContain('"label":"こんこん歓迎"'); expect(knock).not.toContain('☑'); expect(knock).toContain('受付（こんこん）');
     expect(JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }))).not.toContain('rkn:mode');
     expect(roomChannelName('aisの部屋', 'secret')).toBe('🔒aisの部屋');
     expect(roomChannelName('🔒🔒aisの部屋', 'secret')).toBe('🔒aisの部屋');

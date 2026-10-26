@@ -165,8 +165,8 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
         button(sid('room:xfer', v), '権限を譲渡', '👑'),
         button(sid('room:close', v), '閉じる', '✖️'),
       ),
-      // 🚪 受付の状態（3 つから 1 つ。部屋にいる人が切り替える）
-      ...(knock ? [buttons(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${knock.room}:${m}`, `${m === knock.mode ? '☑' : '☐'} ${ROOM_MODES[m].replace(/^\S+ /, '')}`, ROOM_MODES[m].split(' ')[0]!, m === knock.mode ? 1 : 2)))] : []),
+      // 🚪 受付の状態（3 つから 1 つ。部屋にいる人が切り替える。今の状態は上の文に出すので、ボタンは同じ色）
+      ...(knock ? [buttons(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${knock.room}:${m}`, ROOM_MODES[m].replace(/^\S+ /, ''), ROOM_MODES[m].split(' ')[0]!)))] : []),
     ],
     allowedMentions: { parse: [] as const },
   };

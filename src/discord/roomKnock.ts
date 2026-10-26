@@ -16,7 +16,7 @@ const link = (ch: VoiceChannel) => new ButtonBuilder().setLabel('部屋を開く
 const REPLIES = { yes: '⭕ どうぞ', wait: '⏳ 少し待ってね', no: '🌙 今はごめんね' } as const;
 export const roomDirectoryPanel = () => ({ content: '**🌸 お部屋案内**\n宿のお部屋を選んでください。部屋一覧と操作は、押した本人だけに表示します。\n🟢 出入り自由　🔔 こんこん歓迎　🌙 取り込み中\nこんこんは入室前の声かけです。入室の権限は変わりません。', components: [row(button('rkn:list:0', '🌸 部屋一覧を見る', ButtonStyle.Primary))], allowedMentions: noPing });
 export function roomKnockControls(room: string, mode: RoomMode) {
-  return { content: `**🌸 この部屋の受付：${ROOM_MODES[mode]}**\n在室している人が切り替えられます。全員退出すると「出入り自由」に戻ります。`, components: [row(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${room}:${m}`, `${m === mode ? '☑' : '☐'} ${ROOM_MODES[m]}`, m === mode ? ButtonStyle.Primary : ButtonStyle.Secondary)))], allowedMentions: noPing };
+  return { content: `**🌸 この部屋の受付：${ROOM_MODES[mode]}**\n在室している人が切り替えられます。全員退出すると「出入り自由」に戻ります。`, components: [row(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${room}:${m}`, ROOM_MODES[m])))], allowedMentions: noPing };
 }
 function notice(room: string, p: NonNullable<KnockState['pending']>, result?: string, window = '3分') {
   return { content: `🔔 **こんこん**\n${p.users.map(id => `<@${id}>`).join(' ')} さんが声をかけています。\n${result ?? '入っても大丈夫ですか？ 在室者だけが返事できます（${window}以内）。'}`, components: result ? [] : [row(...(Object.keys(REPLIES) as (keyof typeof REPLIES)[]).map(k => button(`rkn:reply:${room}:${p.id}:${k}`, REPLIES[k])))], allowedMentions: noPing };
