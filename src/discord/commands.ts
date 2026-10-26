@@ -448,7 +448,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setName('roomadmin')
       .setNameLocalizations({ ja: '部屋の設定' })
       .setDescription('Open any room settings (staff)')
-      .setDescriptionLocalizations({ ja: 'だれの部屋でも設定を開く（シークレット・ツーショットなど見えない部屋も）【神職】' })
+      .setDescriptionLocalizations({ ja: 'だれの部屋でも設定を開く（シークレットなど見えない部屋も）【神職】' })
       .setContexts(InteractionContextType.Guild)
       .setDefaultMemberPermissions(staff)
       .addStringOption((o) =>

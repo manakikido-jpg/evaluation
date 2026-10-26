@@ -14,7 +14,7 @@ const points = (daily: { date: string }[]) => daily.map((d) => ({ label: md(d.da
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '—');
 const who = (names: Names, id: string) => <a href={`/members/${id}`}>{names.get(id) ?? id}</a>;
-const KIND: Record<string, string> = { public: '🔓 公開', invite: '🔒 招待限定', secret: '🤫 シークレット', twoshot: '💞 ツーショット' };
+const KIND: Record<string, string> = { public: '🔓 公開', invite: '🔒 招待限定', secret: '🤫 シークレット' };
 const jst = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
 
 /** 通話の記録（浮上時間）: 人ごと・カテゴリごと・よくいっしょにいる 2 人・自分の通話部屋 */

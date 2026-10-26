@@ -1240,7 +1240,6 @@ export function SettingsPage(props: {
                 <th>🔓 公開</th>
                 <th>🔒 招待限定</th>
                 <th>🤫 シークレット</th>
-                <th>💞 ツーショット</th>
               </tr>
             </thead>
             <tbody>
@@ -1252,7 +1251,7 @@ export function SettingsPage(props: {
               ).map(([plan, label]) => (
                 <tr>
                   <td>{label}</td>
-                  {(['public', 'invite', 'secret', 'twoshot'] as const).map((k) => (
+                  {(['public', 'invite', 'secret'] as const).map((k) => (
                     <td>
                       {plan === 'once' && k === 'secret' ? (
                         <span class="note">下の「🤫 シクレ部屋の値段」で決める</span>

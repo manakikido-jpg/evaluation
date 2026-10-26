@@ -162,7 +162,6 @@ const roomPrices = z.object({
   public: z.number().int().min(0).max(1_000_000).default(0),
   invite: z.number().int().min(0).max(1_000_000).default(0),
   secret: z.number().int().min(0).max(1_000_000).default(0),
-  twoshot: z.number().int().min(0).max(1_000_000).default(0),
 });
 /** 自分の通話部屋の値段: once = ひらくたびに 1 回、hourly = 1 時間ごと */
 export const roomsSchema = z.object({
@@ -258,15 +257,12 @@ export const TICKET_KINDS = [
   'room_free_public',
   'room_free_invite',
   'room_free_secret',
-  'room_free_twoshot',
   'room_half_public',
   'room_half_invite',
   'room_half_secret',
-  'room_half_twoshot',
   'room_day_public',
   'room_day_invite',
   'room_day_secret',
-  'room_day_twoshot',
   // ショップの割引
   'shop_10',
   'shop_30',
@@ -285,6 +281,14 @@ export const TICKET_KINDS = [
   'name_change',
 ] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
+/** 廃止前の設定ファイルも読み込めるよう、旧券IDだけを引き継ぐ。新規の選択肢には出さない。 */
+export function normalizeRoomTicket(value: unknown): unknown {
+  if (value === 'room_free_twoshot') return 'room_free_invite';
+  if (value === 'room_half_twoshot') return 'room_half_invite';
+  if (value === 'room_day_twoshot') return 'room_day_invite';
+  return value;
+}
+
 
 /** 🔔 通知 OK／🔕 通知 NG（社務所Web で用意する）。用意すると、募集と「すべての役職」のお知らせは通知 OK のロールだけを鳴らす */
 export const notifySchema = z.object({
@@ -298,7 +302,7 @@ export const streakRewardSchema = z.object({
   days: z.number().int().min(2).max(365),
   repeat: z.boolean().default(true),
   coins: z.number().int().min(0).max(1_000_000).default(0),
-  ticket: z.enum([...TICKET_KINDS, 'none']).default('none'),
+  ticket: z.preprocess(normalizeRoomTicket, z.enum([...TICKET_KINDS, 'none'])).default('none'),
   tickets: z.number().int().min(0).max(100).default(0),
   roleId: snowflake.optional(),
 });
@@ -380,7 +384,7 @@ const gachaPrizeSchema = z.object({
   /** 物御籤限定のロール（色守り・称号）を 1 つ（まだ持っていないもの）。全部持っていたら・なければ券 */
   role: z.boolean().default(false),
   /** 券の種類（none: 券なし） */
-  ticket: z.enum([...TICKET_KINDS, 'none']).default('none'),
+  ticket: z.preprocess(normalizeRoomTicket, z.enum([...TICKET_KINDS, 'none'])).default('none'),
   count: z.number().int().min(0).max(10).default(1),
   /** 花びら（おまけ。0 でなし） */
   coins: z.number().int().min(0).max(1_000_000).default(0),
@@ -889,7 +893,7 @@ export const guildConfigSchema = z
               /** できる通話の名前。{name} が入った人の表示名になる */
               name: z.string().min(1).max(90),
               /**
-               * 部屋の種類（公開・招待限定・シークレット・ツーショット）を選べて、花びらを払う入口。
+               * 部屋の種類（公開・招待限定・シークレット）を選べて、花びらを払う入口。
                * once: ひらくたびに 1 回（宿坊） / hourly: 1 時間ごと（宵宮） / free: 種類は選べて部屋代なし（💎 極） / none: 選べない・無料。
                * 省略時は名前から決める（宿坊 → once、🍶・宵宮 → hourly）
                */
