@@ -1,9 +1,5 @@
 import { ChannelType, MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction, type Guild, type GuildMember, type Interaction, type TextChannel } from 'discord.js';
-import { alertLabel, checkInviteBurst, GUIDE_HOLD_ROLE_NAME, holdsGuide, inviteAlerts } from '../services/inviteGuard.js';
-import { inviteBlocks } from '../services/inviteBlock.js';
-import { guideRoleOf } from './guidePending.js';
-import { invites } from '../db/schema.js';
-import { inArray } from 'drizzle-orm';
+import { alertLabel, checkInviteBurst, holdsGuide } from '../services/inviteGuard.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { coreName } from '../lib/names.js';
@@ -104,62 +100,24 @@ export class InviteLinkApp {
   }
 
   /**
-   * 🚨 見張りの見直し（起動時・10 分ごと）: 見張る人・警戒中の人に招待されて、まだ案内待ちの人に「案内停止」を付ける。
-   * 登録より前に入っていた人や、BOT が止まっていた間に入った人の付け忘れを直す
-   */
-  async sweepHolds(guild: Guild): Promise<number> {
-    if (guild.id !== this.cfg().guildId) return 0;
-    const pending = guideRoleOf(this.cfg(), guild.roles.cache.values());
-    if (!pending) return 0;
-    const inviters = new Set([...(await inviteAlerts(this.db)).map((a) => a.id), ...(await inviteBlocks(this.db)).map((b) => b.id)]);
-    if (!inviters.size) return 0;
-    const rows = await this.db.select({ memberId: invites.memberId }).from(invites).where(inArray(invites.inviterId, [...inviters]));
-    let role: Awaited<ReturnType<InviteLinkApp['holdRole']>> | undefined;
-    let n = 0;
-    for (const r of rows) {
-      const m = guild.members.cache.get(r.memberId);
-      if (!m || m.user.bot || !m.roles.cache.has(pending)) continue;
-      role ??= await this.holdRole(guild);
-      if (m.roles.cache.has(role.id)) continue;
-      await m.roles.add(role, '見張る人・警戒中の人の招待で入った（見直し）').then(() => n++, (err: unknown) => logger.warn({ err, id: m.id }, 'guide hold role failed'));
-    }
-    if (n) logger.info({ n }, 'guide hold swept');
-    return n;
-  }
-
-  /** 「案内停止」ロール（なければ作る。権限なし・メンションなし） */
-  private async holdRole(guild: Guild) {
-    const found = guild.roles.cache.find((r) => r.name === GUIDE_HOLD_ROLE_NAME);
-    return found ?? (await guild.roles.create({ name: GUIDE_HOLD_ROLE_NAME, permissions: [], mentionable: false, reason: '🚨 招待の見張り（案内所に入れない目印）' }));
-  }
-
-  /**
    * 🚨 招待の見張り（共通リンクはここに来ない）。
    * 10 分で 5 人・20 分で 10 人をこえたら警戒にして、その間に入った人に「案内停止」を付ける。
    * 警戒中の人・「招待を作れない人」の招待で入った人にも付ける。
    */
   async guard(member: GuildMember, inviterId: string, now = new Date()): Promise<string[]> {
+    // 本人には知らせず、ロールも付けない（不安にさせないように）。運営だけに知らせ、案内所に入ったら運営が対応する
     const burst = await checkInviteBurst(this.db, inviterId, now);
-    const targets = new Set<string>(burst?.invitees ?? []);
     const why = await holdsGuide(this.db, inviterId);
-    if (why) targets.add(member.id);
-    if (!targets.size) return [];
-    const role = await this.holdRole(member.guild);
-    const done: string[] = [];
-    for (const id of targets) {
-      const m = id === member.id ? member : await member.guild.members.fetch(id).catch(() => undefined);
-      if (!m || m.roles.cache.has(role.id)) continue;
-      await m.roles.add(role, why === 'blocked' ? '招待を作れない人のリンクで入った' : '警戒中の人の招待で入った').then(() => done.push(id), (err: unknown) => logger.warn({ err, id }, 'guide hold role failed'));
-    }
+    const watched = burst ? burst.invitees : why ? [member.id] : [];
     const logId = this.cfg().channels.log;
     const ch = logId ? member.guild.channels.cache.get(logId) : undefined;
-    if (ch?.isSendable()) {
+    if (watched.length && ch?.isSendable()) {
       const lines = burst
-        ? [`${alertLabel(burst.level)}: <@${inviterId}> さんの招待で、短い間に ${burst.count} 人が入りました。`, `この人の招待で入った人に「${GUIDE_HOLD_ROLE_NAME}」を付けました（${done.length} 人）。社務所Web の「招待」で確かめて、問題なければ警戒を外してください。`]
-        : done.length ? [`🚫 <@${member.id}> さんは${why === 'blocked' ? '「招待を作れない人」' : '警戒中の人'}（<@${inviterId}>）の招待で入ったので、「${GUIDE_HOLD_ROLE_NAME}」を付けました。`] : [];
-      if (lines.length) await ch.send({ content: lines.join('\n'), allowedMentions: { parse: [] } }).catch(() => undefined);
+        ? [`${alertLabel(burst.level)}: <@${inviterId}> さんの招待で、短い間に ${burst.count} 人が入りました。`, `この人の招待で入った人は👁 要注意として扱います（本人には知らせません。案内所に入ったら運営だけに知らせます）。社務所Web の「招待」で確かめて、問題なければ警戒を外してください。`]
+        : [`👁 <@${member.id}> さんは${why === 'blocked' ? '見張る人' : '警戒中の人'}（<@${inviterId}>）の招待で入ったので、要注意として扱います（本人には知らせません）。`];
+      await ch.send({ content: lines.join('\n'), allowedMentions: { parse: [] } }).catch(() => undefined);
     }
-    return done;
+    return watched;
   }
 
   async onInteraction(interaction: Interaction): Promise<void> {

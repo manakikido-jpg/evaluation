@@ -47,36 +47,20 @@ describe('🚫 招待を作れない人', () => {
     expect(await holdsGuide(db, BAD)).toBe('blocked');
   });
 
-  it('見張る人の招待で入った人に、案内停止ロールを付ける', async () => {
+  it('見張る人の招待で入った人は、ロールを付けずに要注意にして運営に知らせる', async () => {
     await setInviteBlock(db, BAD, true, 'admin');
     const app = new InviteLinkApp(db, () => cfg);
-    const role = { id: '830000000000000001', name: '案内停止' };
-    const has = new Set<string>();
-    const member = { id: '820000000000000099', roles: { cache: { has: (r: string) => has.has(r) }, add: vi.fn(async () => void has.add(role.id)) }, guild: { roles: { cache: { find: () => role } }, members: { fetch: async () => undefined }, channels: { cache: new Map() } } };
+    const add = vi.fn();
+    const member = { id: '820000000000000099', roles: { cache: { has: () => false }, add }, guild: { members: { fetch: async () => undefined }, channels: { cache: new Map() } } };
     expect(await app.guard(member as never, BAD)).toEqual([member.id]);
     expect(await app.guard(member as never, OK)).toEqual([]);
+    expect(add).not.toHaveBeenCalled();
+    const { invites } = await import('../src/db/schema.js');
+    const { watchReason } = await import('../src/services/inviteGuard.js');
+    await db.insert(invites).values({ memberId: member.id, inviterId: BAD, source: 'answer' });
+    expect(await watchReason(db, member.id)).toEqual({ inviterId: BAD, why: 'blocked' });
+    expect(await watchReason(db, '820000000000000098')).toBeUndefined();
   });
+
 });
 
-describe('🚨 見張りの見直し', () => {
-  it('見張る人に招待されて、まだ案内待ちの人に案内停止を付ける（案内待ちでない人には付けない）', async () => {
-    const { invites } = await import('../src/db/schema.js');
-    await setInviteBlock(db, BAD, true, 'admin');
-    await db.insert(invites).values([
-      { memberId: '820000000000000201', inviterId: BAD, source: 'link' },
-      { memberId: '820000000000000202', inviterId: BAD, source: 'answer' },
-      { memberId: '820000000000000203', inviterId: OK, source: 'link' },
-    ]);
-    const PENDING = '830000000000000010', HOLD = { id: '830000000000000011', name: '案内停止' };
-    const added: string[] = [];
-    const mem = (id: string, roles: string[]) => ({ id, user: { bot: false }, roles: { cache: new Set(roles), add: vi.fn(async () => void added.push(id)) } });
-    const guild = {
-      id: cfg.guildId,
-      roles: { cache: Object.assign(new Map([[PENDING, { id: PENDING, name: '案内待ち' }], [HOLD.id, HOLD]]), { find: (f: (r: { name: string }) => boolean) => [HOLD].find(f) }) },
-      members: { cache: new Map([['820000000000000201', mem('820000000000000201', [PENDING])], ['820000000000000202', mem('820000000000000202', [])], ['820000000000000203', mem('820000000000000203', [PENDING])]]) },
-    };
-    const app = new InviteLinkApp(db, () => cfg);
-    expect(await app.sweepHolds(guild as never)).toBe(1);
-    expect(added).toEqual(['820000000000000201']);
-  });
-});

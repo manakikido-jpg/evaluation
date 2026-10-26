@@ -208,7 +208,6 @@ async function main(): Promise<void> {
     void guidePending.sweepEma(guild).catch((err) => logger.warn({ err }, 'ema sweep failed'));
     // 招待リンク: 使われた回数を覚え直す
     await inviteLinks.attach(guild).catch((err) => logger.warn({ err }, 'invite links attach failed'));
-    void inviteLinks.sweepHolds(guild).catch((err) => logger.warn({ err }, 'guide hold sweep failed'));
     // 絵馬待ちの人: 止まっていた間に書かれた自己紹介を拾う
     await admission.catchUpIntros(guild).catch((err) => logger.warn({ err }, 'intro catch-up failed'));
     // 自分の通話部屋: 止まっていた間に空になったものを消す
@@ -344,8 +343,7 @@ async function main(): Promise<void> {
       void board.tick().catch((err) => logger.warn({ err }, 'board tick failed'));
       // #面談日程: 案内待ちが外れた人・抜けた人の書き込みの取りこぼしを消す
       void guidePending.sweepSchedule(guild);
-      void inviteLinks.sweepHolds(guild).catch((err) => logger.warn({ err }, 'guide hold sweep failed'));
-      // はじめての参拝: 全部できた人にお祝い
+        // はじめての参拝: 全部できた人にお祝い
       void onboardingTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'onboarding tick failed'));
       // 招待: 招待された人が浮上した日ごとに、招待した人へボーナス
       void inviteActiveTick(db, cfg()).catch((err) => logger.warn({ err }, 'invite active tick failed'));

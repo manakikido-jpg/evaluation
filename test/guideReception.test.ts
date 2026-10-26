@@ -220,16 +220,22 @@ describe('案内待ちだけの受付と案内人の開始', () => {
     await m.app.tick(m.guild as never);
     expect(await db.select().from(guideReceptions)).toHaveLength(1);
   });
-  it('🚫「案内停止」ロールの人は案内所に入れない（通話から外して、受付しない）', async () => {
+  it('👁 要注意の人（見張る人の招待）は本人に何もせず、案内人を呼ばず、運営だけに知らせる', async () => {
     await configure();
+    const { invites } = await import('../src/db/schema.js');
+    const { setInviteBlock } = await import('../src/services/inviteBlock.js');
+    await setInviteBlock(db, '870000000000000099', true, 'admin');
+    await db.insert(invites).values({ memberId: VISITOR, inviterId: '870000000000000099', source: 'link' });
     const m = mockGuild();
-    m.visitor.roles.cache.set('880000000000000077', { id: '880000000000000077', name: '案内停止' } as never);
     const disconnect = vi.fn(async () => undefined);
     const send = vi.fn(async () => undefined);
     (m.visitor as Record<string, unknown>).send = send;
     await m.app.onVoiceStateUpdate({ channelId: null } as never, { channelId: VOICE, guild: m.guild, member: m.visitor, id: m.visitor.id, disconnect } as never);
-    expect(disconnect).toHaveBeenCalledOnce();
-    expect(send).toHaveBeenCalledOnce();
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    const notes = m.discord.sendMessage.mock.calls.map(c => JSON.stringify(c[1]));
+    expect(notes.some(n => n.includes('要注意'))).toBe(guideCfg.channels.log !== undefined);
+    expect(m.discord.sendMessage.mock.calls.filter(c => c[0] === STAFF)).toHaveLength(0);
     await m.app.tick(m.guild as never);
     expect(await db.select().from(guideReceptions)).toHaveLength(0);
   });

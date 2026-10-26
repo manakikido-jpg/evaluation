@@ -1,4 +1,4 @@
-import { GUIDE_HOLD_ROLE_NAME } from '../services/inviteGuard.js';
+import { GUIDE_HOLD_ROLE_NAME, watchReason } from '../services/inviteGuard.js';
 import { adminLevelOf } from '../config.js';
 import { watchOf } from '../services/securityWatch.js';
 import { isNewAccount, raidState } from '../services/raid.js';
@@ -134,11 +134,12 @@ export class GuideReceptionApp {
         for (const r of await leaveGuideReception(this.db, after.id)) await this.refresh(r, c).catch(err => logger.warn({ err }, 'guide exit display failed'));
       }
       if (after.channelId && c.voiceChannelIds.includes(after.channelId)) {
-        // 🚫「案内停止」ロールの人は案内所に入れない（通話から外して知らせる）
-        if (heldGuide(after.member)) {
-          await after.disconnect('案内停止ロールの人は案内所に入れない').catch((err: unknown) => logger.warn({ err }, 'guide hold disconnect failed'));
-          await after.member!.send('いまは案内所を使えません。運営の確認をお待ちください。').catch(() => undefined);
-          if (c.staffChannelId) await this.discord.sendMessage(c.staffChannelId, { content: `🚫 「${GUIDE_HOLD_ROLE_NAME}」の <@${after.id}> さんが案内所に入ろうとしたので、通話から外しました。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
+        // 👁 要注意の人（見張る人・警戒中の人に招待された人）: 本人には何もしない。案内人は呼ばず、運営だけに知らせる
+        const watch = await watchReason(this.db, after.id);
+        if (watch || heldGuide(after.member)) {
+          const log = this.cfg().channels.log;
+          const why = watch ? `${watch.why === 'alert' ? '警戒中の人' : '見張る人'}（<@${watch.inviterId}>）の招待` : '「案内停止」ロール';
+          if (log) await this.discord.sendMessage(log, { content: `👁 要注意の <@${after.id}> さんが案内所（<#${after.channelId}>）に入りました（${why}）。案内人には知らせていません。運営で対応してください。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
           return;
         }
         if (!this.isVisitor(after.member, c)) return;
@@ -158,7 +159,7 @@ export class GuideReceptionApp {
         const ch = guild.channels.cache.get(channelId);
         if (ch?.type !== ChannelType.GuildVoice) continue;
         for (const member of ch.members.values()) {
-          if (this.isVisitor(member, c) && !heldGuide(member)) await openGuideReception(this.db, member.id, channelId);
+          if (this.isVisitor(member, c) && !heldGuide(member) && !(await watchReason(this.db, member.id))) await openGuideReception(this.db, member.id, channelId);
         }
       }
       const rows = await this.db.select().from(guideReceptions).where(isNull(guideReceptions.departedAt));
