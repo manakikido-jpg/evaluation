@@ -1,13 +1,14 @@
 /** 試作用の滑らかな馬体。外部モデルに依存せず、形状・走法を個別調整できる。 */
 export function createHorse(T, horse) {
+  const outfit=horse.outfit??{}, aura=outfit.aura;
   const root = new T.Group(), body = new T.Group(); root.add(body);
   const coats = [0x38281f, 0x66321c, 0x1f1d1a, 0x9b9b91, 0x131616, 0x452a1c];
-  const skin = new T.MeshPhysicalMaterial({ color: coats[horse.coat] ?? coats[0], roughness: .53, metalness: 0, clearcoat: .12, clearcoatRoughness: .6, envMapIntensity: .65 });
+  const skin = new T.MeshPhysicalMaterial({ color: aura?.body??coats[horse.coat]??coats[0], roughness: .53, metalness: 0, clearcoat: .12, clearcoatRoughness: .6, envMapIntensity: .65 });
   const coatCanvas=document.createElement('canvas');coatCanvas.width=256;coatCanvas.height=128;const cg=coatCanvas.getContext('2d');let grain=horse.no*55+9;
   for(let y=0;y<128;y++)for(let x=0;x<256;x++){grain=(Math.imul(grain,1664525)+1013904223)>>>0;const c=215+grain%35;cg.fillStyle=`rgb(${c},${c},${c})`;cg.fillRect(x,y,2,1);}
   const coatMap=new T.CanvasTexture(coatCanvas);coatMap.colorSpace=T.SRGBColorSpace;coatMap.wrapS=coatMap.wrapT=T.RepeatWrapping;coatMap.repeat.set(3,2);skin.map=coatMap;skin.bumpMap=coatMap;skin.bumpScale=.002;
   const dark = new T.MeshStandardMaterial({ color: 0x171412, roughness: .9 });
-  const leather = new T.MeshStandardMaterial({ color: 0x302119, roughness: .78 });
+  const leather = new T.MeshStandardMaterial({ color: outfit.bridle??0x302119, roughness: .78 });
   const hoof = new T.MeshStandardMaterial({ color: 0x292722, roughness: .65 });
   const silver = new T.MeshStandardMaterial({ color: 0xbdb7a7, roughness: .3, metalness: .55 });
   const silk = new T.MeshStandardMaterial({ color: horse.silk?.base ?? '#f1e8d6', roughness: .62 });
@@ -59,7 +60,7 @@ export function createHorse(T, horse) {
   loft(tail, dark, [[0,0,0,.06,.06],[-.2,-.12,0,.08,.055],[-.32,-.4,0,.055,.045],[-.43,-.72,0,.018,.018],[-.47,-.82,0,.002,.004]]);
   const saddle = sphere(body, leather, -.12,1.71,0,.37,.055,.28);
   sphere(body,white,-.13,1.665,0,.355,.038,.33);
-  const panelMat = new T.MeshStandardMaterial({color:0xf3e7c6,roughness:.9});
+  const panelMat = new T.MeshStandardMaterial({color:outfit.cloth??0xf3e7c6,roughness:.9});
   function saddleCloth() {
     const s=new T.Shape(),w=.315,h=.175,r=.045;
     s.moveTo(-w+r,-h);s.lineTo(w-r,-h);s.quadraticCurveTo(w,-h,w,-h+r);s.lineTo(w,h-r);s.quadraticCurveTo(w,h,w-r,h);s.lineTo(-w+r,h);s.quadraticCurveTo(-w,h,-w,h-r);s.lineTo(-w,-h+r);s.quadraticCurveTo(-w,-h,-w+r,-h);
@@ -67,7 +68,7 @@ export function createHorse(T, horse) {
   }
   for (const sign of [-1,1]) {
     const p = mesh(body,saddleCloth(),panelMat,-.14,1.48,sign*.337); p.rotation.x = sign*.1;
-    const canvas = document.createElement('canvas'); canvas.width=128; canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#f1e8d1';ctx.fillRect(0,0,128,128);ctx.fillStyle='#17221d';ctx.textAlign='center';ctx.font='bold 100px sans-serif';ctx.fillText(String(horse.no),64,102);
+    const canvas = document.createElement('canvas'); canvas.width=128; canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle=outfit.cloth??'#f1e8d1';ctx.fillRect(0,0,128,128);ctx.fillStyle=['#232936','#1e63d6','#c53046'].includes(outfit.cloth)?'#ffffff':'#17221d';ctx.textAlign='center';ctx.font='bold 100px sans-serif';ctx.fillText(String(horse.no),64,102);
     const tex=new T.CanvasTexture(canvas);tex.colorSpace=T.SRGBColorSpace;
     const n=mesh(body,new T.PlaneGeometry(.25,.27),new T.MeshStandardMaterial({map:tex,roughness:.95}),-.12,1.48,sign*.35);n.rotation.y=sign*Math.PI/2;
     const girth=mesh(body,new T.BoxGeometry(.075,.48,.018),leather,.12,1.43,sign*.344);girth.rotation.x=sign*.12;
@@ -104,6 +105,14 @@ export function createHorse(T, horse) {
     bar(rider,leather,[.62,.18,sign*.14],[1.58,.2,sign*.1],.006);
     const stripe=mesh(rider,new T.BoxGeometry(.12,.018,.16),accent,.13,.35,0);stripe.rotation.z=-.9;
   }
+  const hoodMat=new T.MeshStandardMaterial({color:outfit.cloth??'#232936',roughness:.7});
+  if(outfit.hood==='ears'||outfit.hood==='full')for(const sign of [-1,1]){const cover=sphere(head,hoodMat,-.04,.245,sign*.075,.05,.17,.06);cover.rotation.z=-.2;}
+  if(outfit.hood==='full'){loft(head,hoodMat,[[.01,.02,0,.13,.125],[.14,.07,0,.125,.118],[.3,-.005,0,.085,.095]]);for(const sign of [-1,1]){sphere(head,dark,.16,.065,sign*.128,.034,.027,.014);sphere(head,white,.168,.072,sign*.144,.009,.008,.004);}}
+  if(outfit.ornament==='sakura')for(let i=0;i<5;i++){const a=i/5*Math.PI*2;sphere(head,accent,-.02+Math.cos(a)*.035,.18+Math.sin(a)*.035,.14,.028,.028,.012);}
+  if(outfit.ornament==='ribbon')for(const sign of [-1,1]){const bow=sphere(head,accent,-.04,.18,sign*.135,.07,.025,.035);bow.rotation.z=sign*.5;}
+  // オーラは身体の色と足元の光輪。低画質でも購入した色を残す。
+  let halo;
+  if(aura){halo=mesh(root,new T.TorusGeometry(.7,.025,5,48),new T.MeshBasicMaterial({color:aura.glow,transparent:true,opacity:.7,depthWrite:false}),0,.04,0,[1.5,1,1]);halo.rotation.x=Math.PI/2;}
   // 静的な部品を材質ごとにまとめ、8頭での描画呼出しを抑える。
   function mergeChildren(parent) {
     const byMaterial=new Map();
@@ -127,6 +136,7 @@ export function createHorse(T, horse) {
   return { root, setQuality(low) {
     skin.clearcoat=low?0:.12;skin.bumpMap=low?null:coatMap;skin.bumpScale=low?0:.002;skin.needsUpdate=true;
   }, update(seconds, moving=true) {
+    if(halo){halo.material.opacity=.5+Math.sin(seconds*3)*.2;halo.rotation.z=seconds*.3;}
     const phase=seconds*2.4*Math.PI*2+horse.no*.67, amount=moving?1:0;
     body.position.y=Math.cos(phase*2)*.045*amount;
     body.rotation.z=Math.sin(phase)*.016*amount;

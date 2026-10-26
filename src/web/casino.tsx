@@ -1,3 +1,11 @@
+import { PublicOwnerPage,ClubPage,EventPage,ReplayList,TicketPage } from './views/keibaClub.js';
+import { clubHorse,equipSkills,matingPreview,ownerLedger,ownerProfile,racingRankings,replays } from '../services/casino/keibaClub.js';
+import { claimEvent,enterEvent,equipEventSilk,eventScores,events } from '../services/casino/keibaEvents.js';
+import { formationKeys } from '../services/casino/keibaTickets.js';
+import { isKbBetType,picksOf,KB_MAX_TICKETS } from '../services/casino/keiba.js';
+import { isTraining } from '../services/casino/keibaDevelopment.js';
+import { keibaEventRewards,keibaReplays } from '../db/schema.js';
+import { and } from 'drizzle-orm';
 import { html } from 'hono/html';
 import { keibaBroadcast } from '../services/casino/keibaBroadcast.js';
 import type { KbState } from '../services/casino/tables/keiba.js';
@@ -802,6 +810,55 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       );
     }),
   );
+
+  const clubMessage = (ok: boolean) => ok ? '保存しました。' : '操作できませんでした。権限・時刻・条件・残高を確認してください。';
+  const showClub = async (c: Context, me: Me) => {
+    if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+    const id=Number(c.req.param('id')), sire=Number(c.req.query('sire')), dam=Number(c.req.query('dam'));
+    const horses=await myHorses(db,me.session.userId);
+    return c.html(<ClubPage me={me} horses={horses} price={d.cfg().casino.keibaTrainPrice} ledger={await ownerLedger(db,me.session.userId)} profile={await ownerProfile(db,me.session.userId)} horse={Number.isSafeInteger(id)&&id>0?await clubHorse(db,id,me.session.userId,d.now()):undefined} mating={sire>0&&dam>0?await matingPreview(db,sire,dam):undefined} message={c.req.query('saved')?clubMessage(c.req.query('saved')==='1'):undefined}/>);
+  };
+  app.get('/casino/keiba/owners/:id',page(async(c,me)=>{if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=c.req.param('id')??'';if(!/^\d{17,20}$/.test(id))return c.notFound();return c.html(<PublicOwnerPage me={me} profile={await ownerProfile(db,id)} horses={await myHorses(db,id)}/>);}));
+  app.get('/casino/keiba/club',page(showClub));
+  app.get('/casino/keiba/club/:id',page(showClub));
+  for(const action of ['train','rest','skills'] as const)app.post('/casino/keiba/club/:id/'+action,page(async(c,me)=>{
+    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c);if(!id)return c.redirect('/casino/keiba/club');
+    const f=await formOf(c);let ok=false;
+    if(action==='train'&&isTraining(f.kind))ok=await trainHorse(db,me.session.userId,id,d.cfg().casino.keibaTrainPrice,d.now(),f.kind)==='ok';
+    if(action==='rest')ok=await restHorse(db,me.session.userId,id,d.now());
+    if(action==='skills')ok=await equipSkills(db,me.session.userId,id,Array.isArray(f.skills)?f.skills:typeof f.skills==='string'?[f.skills]:[]);
+    if(ok)await audit(db,{actorId:me.session.userId,action:'keiba.'+action,detail:{horseId:id,kind:f.kind},via:'web'});
+    return c.redirect(`/casino/keiba/club/${id}?saved=${ok?1:0}`);
+  },{post:true}));
+  app.get('/casino/keiba/events',page(async(c,me)=>{
+    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const all=await events(db),start=monthStartJst(d.now()),end=new Date(start);end.setUTCMonth(end.getUTCMonth()+1);
+    return c.html(<EventPage me={me} events={all} scores={new Map(await Promise.all(all.map(async e=>[e.id,await eventScores(db,e.id)] as const)))} horses={await myHorses(db,me.session.userId)} rankings={await racingRankings(db,start,end)} profile={await ownerProfile(db,me.session.userId)} message={c.req.query('saved')?clubMessage(c.req.query('saved')==='1'):undefined}/>);
+  }));
+  for(const action of ['enter','claim','silk'] as const)app.post('/casino/keiba/events/:id/'+action,page(async(c,me)=>{
+    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c),f=await formOf(c);let ok=false;
+    if(id){if(action==='enter')ok=await enterEvent(db,id,Number(f.horse),me.session.userId,String(f.team??''),d.now());if(action==='claim')ok=await claimEvent(db,id,me.session.userId,d.now());if(action==='silk')ok=await equipEventSilk(db,id,me.session.userId);}
+    if(ok)await audit(db,{actorId:me.session.userId,action:'keiba.event.'+action,detail:{eventId:id},via:'web'});
+    return c.redirect(`/casino/keiba/events?saved=${ok?1:0}`);
+  },{post:true}));
+  app.get('/casino/keiba/events/:id/card',page(async(c,me)=>{
+    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c);if(!id)return c.notFound();const [r]=await db.select().from(keibaEventRewards).where(and(eq(keibaEventRewards.eventId,id),eq(keibaEventRewards.memberId,me.session.userId)));if(!r)return c.notFound();
+    const escape=(v:string)=>v.replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[x]!));
+    c.header('Content-Type','image/svg+xml');c.header('Content-Disposition','attachment; filename="sakura-racing-card.svg"');c.header('Cache-Control','private, no-store');
+    return c.body(`<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600"><rect width="1000" height="600" fill="#122d2d"/><rect x="15" y="15" width="970" height="570" rx="25" fill="none" stroke="#d4af37" stroke-width="3"/><text x="500" y="130" text-anchor="middle" fill="#efd6a5" font-size="32">咲楽ノ宮 競馬記念</text><text x="500" y="280" text-anchor="middle" fill="#fff" font-size="48">${escape(r.title)}</text><text x="500" y="390" text-anchor="middle" fill="#efd6a5" font-size="40">${r.rank}位</text><text x="500" y="470" text-anchor="middle" fill="#fff" font-size="28">${escape(me.session.displayName)}</text></svg>`);
+  }));
+  app.get('/casino/keiba/replays',page(async(c,me)=>{if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');return c.html(<ReplayList me={me} rows={await replays(db)}/>);}));
+  app.get('/casino/keiba/replays/:id',page(async(c,me)=>{if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c);if(!id)return c.notFound();const [r]=await db.select().from(keibaReplays).where(eq(keibaReplays.id,id));if(!r)return c.notFound();return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={r.data as unknown as NonNullable<ReturnType<typeof keibaBroadcast>>} tableId={r.tableId}/>}`);}));
+  app.get('/casino/keiba/tickets/:id',page(async(c,me)=>{
+    if(!kindOn('keiba'))return c.redirect('/casino?e=game_off');const id=idOf(c),t=id?await pollTable(db,d.cfg(),id,d.now()):undefined;if(!t||t.kind!=='keiba')return c.redirect('/casino?e=not_found');const s=t.state as KbState;
+    const raw=c.req.query('type')??'win',type=isKbBetType(raw)?raw:'win',mode=c.req.query('mode')??'single',need=picksOf(type);
+    let slots=[1,2,3].map(i=>(c.req.queries('p'+i)??[]).map(Number));if(mode==='box')slots=Array.from({length:need},()=>slots[0]!);
+    const amount=Number(c.req.query('amount')??d.cfg().casino.minBet),keys=formationKeys(type,slots);
+    const clean=mode==='formation'||mode==='box'||mode==='single'&&slots.slice(0,need).every(x=>x.length===1);
+    const mine=s.tickets.filter(x=>x.memberId===me.session.userId);
+    const fits=mine.length+keys.filter(k=>!mine.some(x=>x.t===type&&x.key===k)).length<=KB_MAX_TICKETS&&keys.every(k=>(mine.find(x=>x.t===type&&x.key===k)?.amount??0)+amount<=d.cfg().casino.maxBet);
+    const valid=clean&&fits&&slots.flat().every(n=>s.horses.some(h=>h.no===n))&&keys.length*amount<=me.balance&&keys.length>0&&keys.length<=KB_MAX_TICKETS&&s.phase==='betting'&&s.deadline>d.now().getTime()&&Number.isSafeInteger(amount)&&amount>=d.cfg().casino.minBet&&amount<=d.cfg().casino.maxBet&&s.seats.some(x=>x.id===me.session.userId);
+    return c.html(<TicketPage me={me} id={t.id} version={t.version} s={s} type={type} mode={mode} slots={slots} amount={Number.isFinite(amount)&&amount>0?amount:0} keys={keys} valid={valid} reason={valid?'以下の内容を確認して購入してください。':'馬・金額・参加状態・受付時間を確認してください。通常は各欄1頭、ボックスは1欄目、フォーメーションは必要な欄で候補を選びます。'}/>);
+  }));
 
   app.get('/casino/keiba/preview', page((c, me) => {
     if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');

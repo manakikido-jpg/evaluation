@@ -24,6 +24,7 @@ export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payo
 export type MahjongResult = { memberId: string; name: string; rank: number; points: number; length: string; players: number; entry: number; payout: number; hands: number; wins: number; tsumo: number; dealins: number; riichi: number; bestPoints: number; bestName: string | null };
 /** 🏇 名簿の馬の 1 走（レースが終わったとき 1 頭 1 行） */
 export type KeibaResult = {
+  tableId?: number;
   horseId: number;
   pos: number;
   race: string;
@@ -54,7 +55,7 @@ export type AiMatch = { game: string; variant: string; aiVersion: string; seats:
 
 export type KeibaWinningSlip = { raceNo: number; race: string; dist: number; surface: string; memberId: string; name: string; bet: number; payout: number; hits: KeibaBet[] };
 
-export type Effects = { keibaWinningSlips?: KeibaWinningSlip[]; debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[]; aiMatch?: AiMatch[] };
+export type Effects = { keibaReplay?: unknown; keibaWinningSlips?: KeibaWinningSlip[]; debits?: Debit[]; credits?: Credit[]; records?: PlayRecord[]; mahjong?: MahjongResult[]; keiba?: KeibaResult[]; keibaBets?: KeibaBet[]; aiMatch?: AiMatch[] };
 
 export type Step<S> = { ok: true; state: S; fx?: Effects } | { ok: false; error: string };
 export const ok = <S>(state: S, fx?: Effects): Step<S> => ({ ok: true, state, fx });
@@ -76,7 +77,8 @@ export const intOf = (f: Form, k: string) => {
 };
 
 /** roster: 🏇 競馬の名簿の馬（競馬の卓のときだけ、卓のサービスが読み込んで渡す） */
-export type Ctx = { now: number; rng: Rng; cfg: GuildConfig; roster?: KbStable[] };
+export type Ctx = {
+  tableVersion?: number; now: number; rng: Rng; cfg: GuildConfig; roster?: KbStable[] };
 
 /** 持ち時間の長さ（卓を立てる人が選ぶ）。ふつうの何倍か */
 export const PACES = { normal: { label: 'ふつう', mult: 1 }, slow: { label: 'ゆっくり', mult: 2 }, relaxed: { label: 'のんびり', mult: 4 } } as const;

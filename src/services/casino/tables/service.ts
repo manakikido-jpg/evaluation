@@ -1,3 +1,6 @@
+import { keibaBroadcast } from '../keibaBroadcast.js';
+import type { KbState } from './keiba.js';
+import { keibaReplays } from '../../../db/schema.js';
 import { and, arrayContains, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { GuildConfig, TableKind } from '../../../config.js';
 import type { Db } from '../../../db/client.js';
@@ -50,6 +53,8 @@ export async function payCredit(tx: Db, cfg: GuildConfig, c: Credit, now: Date, 
 
 async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: Date, tableId: number, kind: string): Promise<void> {
   if (!fx) return;
+  if (fx.keibaReplay) {const data=keibaBroadcast(fx.keibaReplay as KbState,tableId,now.getTime());if(data)await tx.insert(keibaReplays).values({tableId,key:data.live.key,data:data as unknown as Record<string,unknown>,at:now}).onConflictDoNothing();}
+
   // 🤖 BOT の銭は胴元が出す（引かない・渡さない）。収支には鯖が出した分・戻った分として入れる
   const house: { bet: number; payout: number }[] = [];
   for (const d of fx.debits ?? []) if (isBot(d.memberId) && d.amount > 0) house.push({ bet: 0, payout: d.amount });
@@ -77,7 +82,7 @@ async function applyFx(tx: Db, cfg: GuildConfig, fx: Effects | undefined, now: D
     if (!bots || bots === m.seats.length) continue;
     await tx.insert(aiMatches).values({ game: m.game, variant: m.variant, aiVersion: m.aiVersion, tableId, players: m.seats.length, bots, seats: m.seats, at: now });
   }
-  if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba, now, cfg.casino.keibaRoyaltyPct);
+  if (fx.keiba?.length) await applyKeibaResults(tx, fx.keiba.map(r=>({...r,tableId})), now, cfg.casino.keibaRoyaltyPct);
   if (fx.keibaBets?.length) await tx.insert(keibaBets).values(fx.keibaBets.map((b) => ({ ...b, at: now })));
   for (const slip of fx.keibaWinningSlips ?? []) {
     await tx.insert(keibaWinningNotices).values({ tableId, raceNo: slip.raceNo, memberId: slip.memberId, channelId: cfg.casino.keibaWinningChannelId, payload: slip, coinName: cfg.economy.currencyName, availableAt: new Date(now.getTime() + 6800) }).onConflictDoNothing();
@@ -135,7 +140,7 @@ export async function onTable(
       const engine = engineOf(t.kind);
       if (!engine) throw new Stop('not_found');
       // 🏇 競馬は、次のレースの馬を名簿から選ぶ
-      const ctx: Ctx = { now: now.getTime(), rng, cfg, ...(t.kind === 'keiba' ? { roster: await loadRoster(tx, now) } : {}) };
+      const ctx: Ctx = { tableVersion:t.version, now: now.getTime(), rng, cfg, ...(t.kind === 'keiba' ? { roster: await loadRoster(tx, now) } : {}) };
       const fxs: Effects[] = [];
       let state = catchUp(engine, t.state, ctx, fxs);
       let error: string | undefined;

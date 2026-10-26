@@ -1,3 +1,4 @@
+import { eventTick } from './services/casino/keibaEvents.js';
 import { RoomKnockApp } from './discord/roomKnock.js';
 import { VisitApp } from './discord/visit.js';
 import { KobanApp } from './discord/koban.js';
@@ -311,6 +312,7 @@ async function main(): Promise<void> {
       void keibaTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'keiba tick failed'));
       void winningNoticeTick({ db, cfg: cfg(), discord: actions }).catch((err) => logger.warn({ err }, 'keiba winning notice tick failed'));
       // 🏆 決まった時刻の大レース（予告・受付・中止の知らせ）
+      void eventTick(db,cfg(),new Date()).catch(err=>logger.warn({err},'keiba event tick failed'));
       void keibaBigTick({ db, cfg: cfg(), discord: actions, baseUrl: env.WEB_BASE_URL }).catch((err) => logger.warn({ err }, 'keiba big race tick failed'));
       // 🎰 カジノ: だれも見ていない卓・対戦も、時間が来たら進める（持ち時間切れ・返金）
       void sweepTables(db, cfg())

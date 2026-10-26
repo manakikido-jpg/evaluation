@@ -1,3 +1,4 @@
+import { development, trained, inherited, isTraining, type TrainingKind } from './keibaDevelopment.js';
 import { hasCoOwners, payByShares, sharesOf } from './keibaShares.js';
 import { rivalPairsAmong } from './keibaHonors.js';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
@@ -29,6 +30,7 @@ const toStable = (r: KeibaHorseRow & { ownerName?: string | null; sire?: string 
   coat: r.coat,
   silk: r.silk,
   outfit: r.outfit,
+  development: r.development,
   starts: r.starts,
   wins: r.wins,
   seconds: r.seconds,
@@ -243,9 +245,10 @@ export async function applyKeibaResults(tx: Db, rows: readonly KeibaResult[], no
         if (parent?.ownerId && share > 0) await payByShares(tx, pid, parent.ownerId, share, 'keiba_prize', { royalty: h.id, foal: h.name, parent: parent.name });
       }
     }
-    if (r.ownerId) await tx.insert(keibaRuns).values({ horseId: h.id, horseName: r.name ?? h.name, ownerId: r.ownerId, pos: r.pos, prize: r.prize ?? 0, cls: r.cls ?? 0, race: r.race, at: now });
+    if (r.ownerId) await tx.insert(keibaRuns).values({ tableId:r.tableId, horseId: h.id, horseName: r.name ?? h.name, ownerId: r.ownerId, pos: r.pos, prize: r.prize ?? 0, cls: r.cls ?? 0, race: r.race, at: now });
     if (r.time !== undefined)
       await tx.insert(keibaEntries).values({
+        tableId: r.tableId,
         horseId: h.id,
         horseName: r.name ?? h.name,
         ownerId: r.ownerId ?? null,
@@ -308,20 +311,23 @@ export const KB_TRAIN_COOLDOWN_H = 6;
 export const KB_TRAIN_FATIGUE = 15;
 const SPD_CAP = 1020;
 
-export async function trainHorse(db: Db, memberId: string, id: number, price: number, now = new Date()): Promise<'ok' | 'not_found' | 'cooldown' | 'poor' | 'off' | 'resting'> {
+export async function trainHorse(db: Db, memberId: string, id: number, price: number, now = new Date(), kind: TrainingKind = 'speed'): Promise<'ok' | 'not_found' | 'cooldown' | 'poor' | 'off' | 'resting' | 'invalid'> {
+  if (!isTraining(kind)) return 'invalid';
   if (price <= 0) return 'off';
   return db.transaction(async (tx) => {
     const [h] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt))).for('update');
     if (!h) return 'not_found' as const;
     if (h.restUntil && h.restUntil > now) return 'resting' as const;
     if (h.trainedAt && now.getTime() - h.trainedAt.getTime() < KB_TRAIN_COOLDOWN_H * 3_600_000) return 'cooldown' as const;
-    if (!(await spendWithin(tx, memberId, price, 'keiba_train', { horse: id }))) return 'poor' as const;
+    if (!(await spendWithin(tx, memberId, price, 'keiba_train', { horse: id, kind }))) return 'poor' as const;
     await tx
       .update(keibaHorses)
       .set({
         trainBoost: 1,
         trainedAt: now,
-        spd: Math.min(SPD_CAP, h.spd + 2),
+        spd: kind === 'speed' ? Math.min(SPD_CAP, h.spd + 2) : h.spd,
+        sta: kind === 'stamina' ? Math.min(1200, h.sta + 2) : h.sta,
+        development: trained(development(h.development), kind, price, now),
         fatigue: Math.min(100, fatigueNow(h.fatigue, h.fatigueAt, now) + KB_TRAIN_FATIGUE),
         fatigueAt: now,
       })
@@ -332,12 +338,12 @@ export async function trainHorse(db: Db, memberId: string, id: number, price: nu
 
 /** 放牧: 1 時間走らない代わりに、疲れがすっかり抜ける */
 export async function restHorse(db: Db, memberId: string, id: number, now = new Date()): Promise<boolean> {
-  const r = await db
-    .update(keibaHorses)
-    .set({ restUntil: new Date(now.getTime() + 3_600_000), fatigue: 0, fatigueAt: now })
-    .where(and(eq(keibaHorses.id, id), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt)))
-    .returning({ id: keibaHorses.id });
-  return r.length > 0;
+  return db.transaction(async tx=>{
+    const [h]=await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id,id),eq(keibaHorses.ownerId,memberId),isNull(keibaHorses.retiredAt))).for('update');
+    if(!h)return false;
+    if(h.restUntil&&h.restUntil>now)return true;
+    await tx.update(keibaHorses).set({restUntil:new Date(now.getTime()+3_600_000),fatigue:0,fatigueAt:now,development:trained(development(h.development),'rest',0,now)}).where(eq(keibaHorses.id,id));return true;
+  });
 }
 
 // ───────── 売り買い ─────────
@@ -522,6 +528,7 @@ export async function breedFoal(
         age: 2,
         weight: Math.round((sire.weight + dam.weight) / 2),
         ownerId: memberId,
+        development: inherited(sire.development, solo ? undefined : dam.development),
         parentId: found || solo ? sireId : null,
         damId: solo ? null : damId,
       })

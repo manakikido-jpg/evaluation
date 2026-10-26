@@ -1,3 +1,4 @@
+import { growthMultiplier,SKILLS,isSkill,unlocked, type Development } from './keibaDevelopment.js';
 import type { KbOutfit } from './keibaOutfit.js';
 import type { Rng } from './cards.js';
 
@@ -78,6 +79,7 @@ export type KbStable = {
   coat: number;
   silk: KbSilk;
   outfit?: KbOutfit;
+  development?: Development;
   starts: number;
   wins: number;
   seconds: number;
@@ -179,6 +181,7 @@ export type KbHorse = {
   coat: number;
   silk: KbSilk;
   outfit?: KbOutfit;
+  development?: Development;
   /** 走る前の成績 */
   starts: number;
   wins: number;
@@ -339,6 +342,7 @@ export function makeRace(
     coat: h.coat,
     silk: h.silk,
     outfit: h.outfit,
+    development: h.development,
     starts: h.starts,
     wins: h.wins,
     seconds: h.seconds,
@@ -483,7 +487,7 @@ export function simulate(race: KbRaceInfo, horses: readonly KbHorse[], rand: () 
       const fade = 1 - Math.max(0, phase - tired[i]!) * 0.04;
       const accel = Math.min(1, ((t + dt) / 2.2) * gate[i]!);
       const kick = phase > 0.82 && phase < 1 ? (rand() - 0.5) * (h.style >= 2 ? 0.03 : 0.018) : 0;
-      return v0[i]! * day[i]! * styleMult(h.style, phase) * fade * (1 + noise[i]! + kick) * accel * (fin[i] !== undefined ? 0.55 : 1);
+      return growthMultiplier(h.development,race,phase) * v0[i]! * day[i]! * styleMult(h.style, phase) * fade * (1 + noise[i]! + kick) * accel * (fin[i] !== undefined ? 0.55 : 1);
     });
     // 2. 前の馬から順に、詰まり・外へ出す・内へ寄せる
     const byPos = [...Array(n).keys()].sort((a, b) => x[b]! - x[a]!);
@@ -656,6 +660,11 @@ export function commentary(race: KbRaceInfo, horses: readonly KbHorse[], sim: Kb
       ? `ほとんど並んでゴールイン！ 写真判定です！ …1 着は ${label(order[0]!)}！ 2 着 ${label(order[1]!)}、3 着 ${label(order[2]!)}`
       : `${label(order[0]!)}、1 着でゴールイン！ 2 着は ${label(order[1]!)}、3 着 ${label(order[2]!)}！`,
   );
+  for(const h of horses)for(const key of h.development?.skills??[]){
+    if(!isSkill(key)||!unlocked(h.development!,key)||key==='heavy'&&race.going===0)continue;
+    const phase={dash:.02,calm:.21,long:.71,heavy:.03,grit:.91}[key],row=sim.frames![h.no-1]!;
+    const at=row.findIndex(x=>x>=phase*1000);if(at>=0)say(at*sim.frameSec!,`${label(h.no)}「${SKILLS[key].name}」が発動！`);
+  }
   return out.sort((a, b) => a.t - b.t);
 }
 

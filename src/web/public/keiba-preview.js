@@ -6,7 +6,7 @@ async function start(root) {
   const data=JSON.parse(root.dataset.keibaPreview), sceneRoot=root.querySelector('[data-kr-scene]'), flat=root.querySelector('[data-kr-flat]');
   const status=root.querySelector('[data-kr-status]'), seek=root.querySelector('[data-kr-seek]'), play=root.querySelector('[data-kr-play]'), quality=root.querySelector('[data-kr-quality]');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let T,scene,elapsed=0,playing=false,last=performance.now(),raf=0,camera='wide',disposed=false,lastUI=-1,lastRender=0,measure=last,frames=0,loading=0,dirty=true;
+  let T,scene,elapsed=0,playing=false,last=performance.now(),raf=0,camera='wide',disposed=false,lastUI=-1,lastRender=0,measure=last,frames=0,loading=0,dirty=true,autoLow=false;
   let clockAt=performance.now(),serverAt=data.live?.now??0,pollTimer=0,polling=false;
   const liveStatus=root.querySelector('[data-kr-live-status]');
   const serverNow=()=>serverAt+performance.now()-clockAt;
@@ -39,6 +39,35 @@ async function start(root) {
     finally{polling=false;}
     if(!disposed&&!data.live.confirmed)pollTimer=setTimeout(pollLive,2000);
   }
+  const audio=root.querySelector('[data-kr-audio]'),effects=root.querySelector('[data-kr-effects]'),banner=root.querySelector('[data-kr-event]');
+  effects.checked=!reduced;
+  let audioContext,lastCall=-1,lastEvent='',previousElapsed=elapsed;
+  function silence(){if('speechSynthesis'in window)speechSynthesis.cancel();}
+  function tone(goal=false){
+    if(!audio.checked)return;
+    try{audioContext??=new (window.AudioContext||window.webkitAudioContext)();void audioContext.resume().catch(()=>{audio.checked=false;});
+      const notes=goal?[523,659,784,1047]:[392,523,659];for(let i=0;i<notes.length;i++){const o=audioContext.createOscillator(),g=audioContext.createGain(),at=audioContext.currentTime+i*.16;o.type='triangle';o.frequency.value=notes[i];g.gain.setValueAtTime(0,at);g.gain.linearRampToValueAtTime(.045,at+.02);g.gain.exponentialRampToValueAtTime(.001,at+.25);o.connect(g).connect(audioContext.destination);o.start(at);o.stop(at+.3);}
+    }catch{audio.checked=false;}
+  }
+  audio.addEventListener('change',()=>{silence();if(audio.checked){lastCall=elapsed;tone();}});
+  effects.addEventListener('change',()=>{dirty=true;});
+  function raceEvents(state){
+    if(elapsed<previousElapsed)silence();
+    const now=data.live?serverNow():elapsed;
+    let event='';
+    if(data.live&&!data.live.confirmed&&now<data.live.start)event=`発走まで ${Math.ceil((data.live.start-now)/1000)} 秒`;
+    else if(elapsed<1500)event='START · 各馬スタート';
+    else if(state.complete&&(!data.live||data.live.confirmed))event=`${data.photoFinish?'写真判定 · 接戦の決着':'GOAL'}　1着 ${names.get(data.order[0])}`;
+    else if(state.remaining<=200&&!state.complete)event=`最後の直線 · 残り${state.remaining}m`;
+    banner.hidden=!effects.checked||!event;banner.textContent=event;banner.classList.toggle('goal',state.complete);
+    if(playing&&event&&event!==lastEvent&&(event.startsWith('START')||state.complete))tone(state.complete);
+    const call=[...(data.calls??[])].reverse().find(c=>c.t<=elapsed);
+    if(playing&&audio.checked&&!document.hidden&&call&&call.t>lastCall&&elapsed-previousElapsed<2000){
+      lastCall=call.t;if('speechSynthesis'in window){silence();const u=new SpeechSynthesisUtterance(call.text);u.lang='ja-JP';u.rate=1.12;speechSynthesis.speak(u);}
+    }
+    if(elapsed<lastCall)lastCall=elapsed;
+    lastEvent=event;previousElapsed=elapsed;
+  }
   const names=new Map(data.horses.map(h=>[h.no,h.name])), rank=root.querySelector('[data-kr-ranking]');
   const rows=new Map();for(const h of data.horses){const li=document.createElement('li'),no=document.createElement('b'),name=document.createElement('span');no.textContent=h.no;no.className=`kr-no kr-no-${h.no}`;name.textContent=h.name;li.append(no,name);rank.append(li);rows.set(h.no,li);}
   class RaceScene {
@@ -48,8 +77,8 @@ async function start(root) {
       this.view=new T.PerspectiveCamera(38,1,.1,2200);this.world.add(new T.HemisphereLight(0xe4edff,0x8e805e,2.1));
       this.sun=new T.DirectionalLight(0xffe8c6,2.5);this.sun.position.set(-40,70,40);this.sun.castShadow=true;this.sun.shadow.mapSize.set(2048,2048);Object.assign(this.sun.shadow.camera,{left:-55,right:55,top:55,bottom:-55,near:.1,far:180});this.sun.shadow.normalBias=.018;this.sun.shadow.radius=3;this.world.add(this.sun,this.sun.target);
       this.renderer.shadowMap.type=T.PCFSoftShadowMap;
-      this.low=quality.value==='low'||quality.value==='auto'&&(matchMedia('(pointer: coarse)').matches||innerWidth<900);
-      this.textures=[];if(!this.low)this.environment();this.makeCourse();this.horses=data.horses.map(h=>{const model=createHorse(T,h);this.world.add(model.root);return model;});
+      this.low=quality.value==='low'||quality.value==='auto'&&(autoLow||matchMedia('(pointer: coarse)').matches||innerWidth<900);
+      this.textures=[];if(!this.low)this.environment();this.makeCourse();this.makeParticles();this.horses=data.horses.map(h=>{const model=createHorse(T,h);this.world.add(model.root);return model;});
       sceneRoot.append(this.renderer.domElement);this.renderer.domElement.addEventListener('webglcontextlost',onLost);
       this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(sceneRoot);this.resize();this.setQuality();
     }
@@ -113,7 +142,19 @@ async function start(root) {
       const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.fillStyle=bg;g.fillRect(0,0,w,h);g.fillStyle=fg;g.font=`600 ${h*.64}px serif`;g.textAlign='center';g.textBaseline='middle';g.fillText(text,w/2,h/2,w*.93);const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;this.textures.push(t);return t;
     }
     resize(){const r=sceneRoot.getBoundingClientRect();if(r.width<1||r.height<1)return;this.renderer.setSize(r.width,r.height,false);this.view.aspect=r.width/r.height;this.view.updateProjectionMatrix();dirty=true;}
-    setQuality(){const low=quality.value==='low'||quality.value==='auto'&&(matchMedia('(pointer: coarse)').matches||innerWidth<900);this.low=low;this.world.environment=low?null:this.environmentTarget?.texture??null;for(const horse of this.horses)horse.setQuality(low);this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,low?1:1.6));this.renderer.shadowMap.enabled=!low;this.resize();}
+    makeParticles(){
+      const rainGeo=new T.BufferGeometry();rainGeo.setAttribute('position',new T.BufferAttribute(new Float32Array(120*6),3));
+      this.rain=new T.LineSegments(rainGeo,new T.LineBasicMaterial({color:0xcbdcec,transparent:true,opacity:.45,depthWrite:false}));this.rain.frustumCulled=false;this.world.add(this.rain);
+      const dustGeo=new T.BufferGeometry();dustGeo.setAttribute('position',new T.BufferAttribute(new Float32Array(data.horses.length*6*3),3));
+      this.dust=new T.Points(dustGeo,new T.PointsMaterial({color:0xcbb288,size:.19,transparent:true,opacity:.38,depthWrite:false}));this.dust.frustumCulled=false;this.world.add(this.dust);
+    }
+    updateParticles(state,time,focus){
+      this.rain.visible=!this.low&&effects.checked&&data.race.weather===2&&!reduced;
+      if(this.rain.visible){const p=this.rain.geometry.attributes.position;for(let i=0;i<120;i++){const x=focus.x+(i*13%70)-35,z=focus.z+(i*19%60)-30,y=12-((time/1000*12+i*.73)%12);p.setXYZ(i*2,x,y,z);p.setXYZ(i*2+1,x+.1,y-.65,z);}p.needsUpdate=true;}
+      this.dust.visible=!this.low&&effects.checked&&data.race.surface===1&&time>0&&!reduced;
+      if(this.dust.visible){const p=this.dust.geometry.attributes.position;state.positions.forEach((h,i)=>{for(let j=0;j<6;j++){const age=(time/1000*2+j/6)%1;p.setXYZ(i*6+j,h.x-Math.cos(-h.heading)*age*2,.1+age*.5,h.z-Math.sin(-h.heading)*age*2+(j%3-1)*.15);}});p.needsUpdate=true;}
+    }
+    setQuality(){const low=quality.value==='low'||quality.value==='auto'&&(autoLow||matchMedia('(pointer: coarse)').matches||innerWidth<900);this.low=low;this.world.environment=low?null:this.environmentTarget?.texture??null;for(const horse of this.horses)horse.setQuality(low);this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,low?1:1.6));this.renderer.shadowMap.enabled=!low;this.resize();}
     render(state,time) {
       const positions=state.positions;
       for(let i=0;i<this.horses.length;i++){const h=this.horses[i],p=positions[i];h.root.position.set(p.x,0,p.z);h.root.rotation.y=p.heading;h.update(time/1000,time>0&&!reduced);}
@@ -125,6 +166,7 @@ async function start(root) {
       if(camera==='finish'){const p=trackPoint(0,8);focus=new T.Vector3(p.x,1,p.z);eye=new T.Vector3(p.x+12,4.8,p.z+22);}
       this.view.fov=camera==='wide'?38:32;this.view.updateProjectionMatrix();this.view.position.copy(eye);this.view.lookAt(focus);
       this.sun.position.copy(focus).add(new T.Vector3(-40,70,40));this.sun.target.position.copy(focus);
+      this.updateParticles(state,time,focus);
       this.renderer.render(this.world,this.view);
     }
     dispose(){this.observer.disconnect();this.renderer.domElement.removeEventListener('webglcontextlost',onLost);const geometries=new Set(),materials=new Set(),textures=new Set(this.textures);this.world.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[]){materials.add(m);if(m.map)textures.add(m.map);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();for(const t of textures)t.dispose();this.environmentTarget?.dispose();this.pmrem?.dispose();this.renderer.dispose();this.renderer.forceContextLoss();this.renderer.domElement.remove();}
@@ -133,7 +175,7 @@ async function start(root) {
     const r=flat.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,r.width),h=Math.max(1,r.height);if(flat.width!==Math.round(w*ratio)||flat.height!==Math.round(h*ratio)){flat.width=w*ratio;flat.height=h*ratio;}const g=flat.getContext('2d');g.setTransform(ratio,0,0,ratio,0,0);g.fillStyle='#47663c';g.fillRect(0,0,w,h);const left=30,right=w-45,top=48,bottom=h-35;g.strokeStyle='#e9e4d2';g.lineWidth=2;g.strokeRect(left,top,right-left,bottom-top);g.font='13px sans-serif';g.fillStyle='#fff';g.fillText('軽量表示 · 同じ走行データを再生',left,25);for(const p of state.positions){const x=left+clamp(p.progress,0,1.08)/1.08*(right-left),y=top+(p.no-.5)/8*(bottom-top);g.fillStyle=['#eee','#252525','#bf4035','#3467a5','#ddbf4f','#527f4e','#cd773d','#c383a6'][p.no-1];g.beginPath();g.arc(x,y,9,0,Math.PI*2);g.fill();g.fillStyle=p.no===2?'#fff':'#17211d';g.textAlign='center';g.fillText(p.no,x,y+4);}g.textAlign='left';}
   async function build(){dirty=true;const token=++loading;scene?.dispose();scene=null;sceneRoot.hidden=quality.value==='flat';flat.hidden=quality.value!=='flat';if(quality.value==='flat'){status.textContent='軽量表示です。';return;}status.textContent='3Dを読み込んでいます…';try{T??=await import('/static/three.module.js?v=0.180.0');if(disposed||token!==loading)return;scene=new RaceScene();status.textContent='';}catch(error){if(disposed||token!==loading)return;quality.value='flat';sceneRoot.hidden=true;flat.hidden=false;status.textContent='3Dを利用できないため、軽量表示で再生します。';console.warn('keiba preview renderer unavailable',error);}}
   function onLost(e){e.preventDefault();quality.value='flat';void build();}
-  function updateUI(state){seek.max=String(Math.floor(limit()/data.durationMs*1000));seek.value=String(Math.round(elapsed/data.durationMs*1000));root.querySelector('[data-kr-clock]').textContent=`${Math.floor(elapsed/60000).toString().padStart(2,'0')}:${Math.floor(elapsed/1000%60).toString().padStart(2,'0')}`;root.querySelector('[data-kr-distance]').textContent=state.complete?'全馬ゴール':`残り${state.remaining.toLocaleString('ja-JP')}m`;for(const no of state.order)rank.append(rows.get(no));root.querySelector('.kr-results h2').textContent=state.complete?(data.live&&!data.live.confirmed?'到達順位（確定待ち）':'確定着順'):'途中順位';root.querySelector('[data-kr-caption]').textContent={wide:'全景カメラ',track:'直線・追走カメラ',finish:'ゴールカメラ'}[camera];if(data.live){const pending=data.live.start-serverNow();root.querySelector('[data-kr-mode]').textContent=data.live.confirmed?'REPLAY':pending>0?`発走まで${Math.ceil(pending/1000)}秒`:'LIVE';root.querySelector('[data-kr-goal]').textContent=data.live.confirmed?'ゴール前へ':'現在へ';root.querySelector('[data-kr-call]').textContent=[...(data.calls??[])].reverse().find(c=>c.t<=elapsed)?.text??'';}}
+  function updateUI(state){raceEvents(state);seek.max=String(Math.floor(limit()/data.durationMs*1000));seek.value=String(Math.round(elapsed/data.durationMs*1000));root.querySelector('[data-kr-clock]').textContent=`${Math.floor(elapsed/60000).toString().padStart(2,'0')}:${Math.floor(elapsed/1000%60).toString().padStart(2,'0')}`;root.querySelector('[data-kr-distance]').textContent=state.complete?'全馬ゴール':`残り${state.remaining.toLocaleString('ja-JP')}m`;for(const no of state.order)rank.append(rows.get(no));root.querySelector('.kr-results h2').textContent=state.complete?(data.live&&!data.live.confirmed?'到達順位（確定待ち）':'確定着順'):'途中順位';root.querySelector('[data-kr-caption]').textContent={wide:'全景カメラ',track:'直線・追走カメラ',finish:'ゴールカメラ'}[camera];if(data.live){const pending=data.live.start-serverNow();root.querySelector('[data-kr-mode]').textContent=data.live.confirmed?'REPLAY':pending>0?`発走まで${Math.ceil(pending/1000)}秒`:'LIVE';root.querySelector('[data-kr-goal]').textContent=data.live.confirmed?'ゴール前へ':'現在へ';root.querySelector('[data-kr-call]').textContent=[...(data.calls??[])].reverse().find(c=>c.t<=elapsed)?.text??'';}}
   function frame(now) {
     if(disposed)return;
     const dt=Math.max(0,now-last);last=now;
@@ -150,18 +192,22 @@ async function start(root) {
     if(now-measure>2000){
       const fps=Math.round(frames*1000/(now-measure));
       root.querySelector('[data-kr-performance]').textContent=scene?playing?`${fps} fps · ${scene.renderer.info.render.calls}描画`:'停止中':'軽量表示';
+      if(playing&&quality.value==='auto'&&scene&&fps<18){
+        if(!scene.low){autoLow=true;void build();status.textContent='端末に合わせて軽量3Dへ切り替えました。';}
+        else{quality.value='flat';void build();status.textContent='端末に合わせて平面表示へ切り替えました。画質から手動で選ぶこともできます。';}
+      }
       frames=0;measure=now;
     }
     raf=requestAnimationFrame(frame);
   }
-  play.addEventListener('click',()=>{if(data.live&&!data.live.confirmed)elapsed=limit();else if(elapsed>=data.durationMs)elapsed=0;playing=!playing;dirty=true;play.textContent=playing?'停止':'再生';});
+  play.addEventListener('click',()=>{if(data.live&&!data.live.confirmed)elapsed=limit();else if(elapsed>=data.durationMs)elapsed=0;playing=!playing;if(!playing)silence();dirty=true;play.textContent=playing?'停止':'再生';});
   root.querySelector('[data-kr-goal]').addEventListener('click',()=>{elapsed=data.live&&!data.live.confirmed?limit():Math.max(0,Math.min(...data.finishMs)-350);camera='finish';dirty=true;for(const b of root.querySelectorAll('[data-kr-camera]'))b.setAttribute('aria-pressed',String(b.dataset.krCamera==='finish'));});
   seek.addEventListener('input',()=>{elapsed=Math.min(limit(),Number(seek.value)/1000*data.durationMs);if(data.live&&!data.live.confirmed){playing=false;play.textContent='再生';}dirty=true;});
   for(const b of root.querySelectorAll('[data-kr-camera]'))b.addEventListener('click',()=>{camera=b.dataset.krCamera;dirty=true;for(const c of root.querySelectorAll('[data-kr-camera]'))c.setAttribute('aria-pressed',String(c===b));});
   quality.addEventListener('change',()=>void build());
-  function visibility(){if(document.hidden){cancelAnimationFrame(raf);raf=0;}else if(!raf&&!disposed){last=performance.now();raf=requestAnimationFrame(frame);}}
+  function visibility(){if(document.hidden){silence();cancelAnimationFrame(raf);raf=0;}else if(!raf&&!disposed){last=performance.now();raf=requestAnimationFrame(frame);}}
   document.addEventListener('visibilitychange',visibility);
-  window.addEventListener('pagehide',()=>{disposed=true;loading++;clearTimeout(pollTimer);cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);scene?.dispose();},{once:true});
+  window.addEventListener('pagehide',()=>{disposed=true;silence();void audioContext?.close().catch(()=>{});loading++;clearTimeout(pollTimer);cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);scene?.dispose();},{once:true});
   window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
   if(data.live&&!data.live.confirmed&&!polling)pollTimer=setTimeout(pollLive,2000);
   await build();if(!disposed){last=performance.now();raf=requestAnimationFrame(frame);}

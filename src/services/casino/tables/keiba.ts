@@ -1,3 +1,4 @@
+import { formationKeys } from '../keibaTickets.js';
 import {
   addToPool,
   commentary,
@@ -113,7 +114,7 @@ export type KbState = {
 const seat = (w: Who, now: number): KbSeat => ({ id: w.id, name: w.name, lastActive: now });
 
 /** 次のレースを作る（馬・見込み・BOT のお客さんの賭け） */
-function newRace(s: Pick<KbState, 'title' | 'dist' | 'cls'> & { seats?: KbSeat[]; field?: readonly KbStable[] }, n: number, ctx: Ctx): Pick<KbState, 'race' | 'horses' | 'pools' | 'real' | 'tickets'> {
+function newRace(s: Pick<KbState, 'title' | 'dist' | 'cls'> & { seats?: KbSeat[]; field?: readonly KbStable[]; surface?: number }, n: number, ctx: Ctx): Pick<KbState, 'race' | 'horses' | 'pools' | 'real' | 'tickets'> {
   // 座っている馬主の馬を先に出す
   const priority = new Set((s.seats ?? []).map((x) => x.id));
   const { race, horses } = makeRace(
@@ -122,6 +123,7 @@ function newRace(s: Pick<KbState, 'title' | 'dist' | 'cls'> & { seats?: KbSeat[]
     { ...(s.title ? { name: s.title } : {}), ...(s.dist ? { dist: s.dist } : {}), ...(s.cls !== null && s.cls !== undefined ? { cls: s.cls } : {}), priority, ...(s.field ? { field: s.field } : {}) },
     ctx.roster ?? [],
   );
+  if(s.surface===0||s.surface===1)race.surface=s.surface;
   const est = estimate(race, horses, ctx.rng(2 ** 31));
   for (const h of horses) {
     h.p = Math.round(est.p[h.no - 1]! * 1000) / 1000;
@@ -217,7 +219,7 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     let betCapped = false;
     // 満額の最低保証は、馬主が最低の額以上賭け、ほかの人も合計で一定の額以上賭けたレースだけ（自作自演で増やさない）
     const enough = bet >= Math.max(1, c.keibaPurseMinBet) && totalBet - bet >= c.keibaPurseOthersMin;
-    if (s.big) {
+    if (s.big && !s.big.key.startsWith('event:')) {
       // 🏆 大レース: 最低保証は満額（1 日に数回だけなので、賭けた額に関係なく）
       top = Math.max(0, (full[i] ?? 0) - (base[i] ?? 0));
     } else if (enough) {
@@ -233,7 +235,7 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     // 🎫 出走料: その馬がもらう分から引く（もらう分より多くは引かない）。先に上限なしの分から、足りなければ最低保証の分から
     let rest = (base[i] ?? 0) + fee + fanMoney(s.tickets, no, owner, conf) + (capped || betCapped ? 0 : top);
     let topPaid = capped || betCapped ? top : 0;
-    const entry = s.big ? 0 : c.keibaEntryFee;
+    const entry = s.big && !s.big.key.startsWith('event:') ? 0 : c.keibaEntryFee;
     const fromRest = Math.min(rest, entry);
     rest -= fromRest;
     topPaid -= Math.min(topPaid, entry - fromRest);
@@ -277,7 +279,7 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
   s.resultAt = ctx.now;
   s.deadline = ctx.now + KB_RESULT_SECONDS * 1000;
   const keibaWinningSlips = winningSlipsForRace(s, keibaBets, ctx.cfg.casino);
-  return ok(s, { credits, records, keiba, keibaWinningSlips, ...(keibaBets.length ? { keibaBets } : {}) });
+  return ok(s, { keibaReplay: s, credits, records, keiba, keibaWinningSlips, ...(keibaBets.length ? { keibaBets } : {}) });
 }
 
 /** 次のレースの受付 */
@@ -348,21 +350,24 @@ export const bigField = (roster: readonly KbStable[]) =>
 export const BIG_MIN = 4;
 
 function createBig(host: Who, f: Form, ctx: Ctx): Step<KbState> {
-  const field = bigField(ctx.roster ?? []);
+  const event = str(f,'event') === '1';
+  const ids=(str(f,'field')??'').split(',').map(Number);
+  const field = event ? (ctx.roster??[]).filter(h=>ids.includes(h.id)).sort((a,b)=>a.id-b.id).slice(0,8) : bigField(ctx.roster ?? []);
   if (field.length < BIG_MIN) return fail('too_few');
   const at = Number(str(f, 'at'));
   const c = Number(str(f, 'cls'));
-  const cls = c === 7 || c === 8 ? c : 8;
+  const cls = event ? Number.isInteger(c)&&c>=0&&c<=6?c:6 : c === 7 || c === 8 ? c : 8;
   const title = (str(f, 'title') ?? '').trim().slice(0, 20) || null;
-  const base = { title, dist: null, cls, seats: [seat(host, ctx.now)] };
+  const dist=event&&KB_DISTANCES.includes(Number(str(f,'dist')) as typeof KB_DISTANCES[number])?Number(str(f,'dist')):null;
+  const base = { title, dist, cls, seats: [seat(host, ctx.now)] };
   return ok({
     kind: 'keiba',
     hostId: host.id,
     phase: 'betting',
-    deadline: Number.isFinite(at) && at > ctx.now ? at : ctx.now + 10 * 60_000,
+    deadline: event && Number.isFinite(at) ? Math.max(ctx.now,at) : Number.isFinite(at) && at > ctx.now ? at : ctx.now + 10 * 60_000,
     window: 10,
     ...base,
-    ...newRace({ ...base, field }, 1, ctx),
+    ...newRace({ ...base, field, ...(event?{surface:Number(str(f,'surface'))}:{}) }, 1, ctx),
     big: { key: str(f, 'key') ?? '' },
     history: [],
   });
@@ -416,6 +421,8 @@ export const keiba: TableEngine<KbState> = {
   act(state, id, f, ctx) {
     const me = state.seats.find((x) => x.id === id);
     if (!me) return fail('not_seated');
+    if(str(f,'v')!==undefined&&(!/^\d+$/.test(str(f,'v')!)||Number(str(f,'v'))!==ctx.tableVersion))return fail('stale');
+    if(str(f,'raceKey')!==undefined&&str(f,'raceKey')!==String(state.race.n))return fail('stale');
     const s: KbState = structuredClone(state);
     s.seats.find((x) => x.id === id)!.lastActive = ctx.now;
     const a = str(f, 'action');
@@ -429,7 +436,9 @@ export const keiba: TableEngine<KbState> = {
       const keys =
         a === 'bet'
           ? [ticketKey(t, Number(str(f, 'a')), Number(str(f, 'b')), Number(str(f, 'c')))]
-          : order
+          : str(f,'mode')==='formation'
+            ? formationKeys(t,[list(f,'p1').map(Number),list(f,'p2').map(Number),list(f,'p3').map(Number)])
+            : order
             ? [((seq) => (seq.length === picksOf(t) ? ticketKey(t, ...seq) : undefined))((str(f, 'seq') ?? '').split(',').filter(Boolean).map(Number))]
             : boxKeys(t, list(f, 'h').map(Number));
       if (!keys.length || keys.some((k) => !k || keyNos(k).some((no) => no > s.horses.length))) return fail('invalid');

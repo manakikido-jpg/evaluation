@@ -25,7 +25,7 @@ export const WEB_PAGES = [
   { key: 'interview', label: '面談告知', href: '/interview', prefixes: ['interview'] },
   { key: 'minutes', label: '議事録', href: '/minutes', prefixes: ['minutes'] },
   { key: 'ideas', label: 'アイデア・共有', href: '/ideas', prefixes: ['ideas'] },
-  { key: 'economy', label: '経済', href: '/economy', prefixes: ['economy'] },
+  { key: 'economy', label: '経済', href: '/economy', prefixes: ['economy', 'keiba-events'] },
   { key: 'gacha', label: '物御籤', href: '/gacha', prefixes: ['gacha'] },
   { key: 'market', label: '市場', href: '/market', prefixes: ['market'] },
   { key: 'board', label: '掲示板', href: '/board', prefixes: ['board'] },
