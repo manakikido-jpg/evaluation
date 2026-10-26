@@ -1,5 +1,5 @@
 import {CREATOR_PERCENT} from '../../services/visitWorkshop.js';
-import type {AdminSession} from '../../db/schema.js';
+import type {AdminSession,VisitOrder} from '../../db/schema.js';
 import type {VisitRevenue} from '../../services/visitRevenue.js';
 import type {WorkshopSettings,DesignMetadata,StaffDesign} from '../../services/visitWorkshop.js';
 import {Layout} from './layout.js';
@@ -7,13 +7,18 @@ const fmt=(n:number)=>n.toLocaleString('ja-JP');
 const LABEL:Record<string,string>={private:'自分用',pending:'審査待ち',approved:'販売中',rejected:'却下',withdrawn:'販売停止'};
 export function VisitRevenueTable({data,currency}:{data:VisitRevenue;currency:string}){return <div class="table-wrap"><table><thead><tr><th>作品</th><th>種類</th><th>販売数</th><th>販売額</th><th>制作者へ</th><th>運営収益</th></tr></thead><tbody>{data.items.length?data.items.map(i=><tr><td>{i.name}</td><td>{i.kind==='background'?'背景':i.kind==='frame'?'フレーム':'その他'}</td><td>{i.count}</td><td>{fmt(i.sales)} {currency}</td><td>{fmt(i.creatorPaid)} {currency}</td><td>{fmt(i.revenue)} {currency}</td></tr>):<tr><td colspan={6}>この期間の販売はありません。</td></tr>}</tbody></table></div>;}
 export function VisitRevenueSummary({data,currency}:{data:VisitRevenue;currency:string}){return <p>着せ替え販売 {fmt(data.count)}件 ／ 購入者 {fmt(data.buyers)}人 ／ 販売額 {fmt(data.sales)} {currency} ／ 制作者へ {fmt(data.creatorPaid)} {currency}<br/>制作権利 {fmt(data.licenseCount)}件・{fmt(data.licenseSales)} {currency} ／ <strong>運営収益 {fmt(data.revenue)} {currency}</strong></p>;}
-export function VisitManagementPage(p:{session:AdminSession;month:string;monthly:VisitRevenue;total:VisitRevenue;settings:WorkshopSettings;designs:DesignMetadata[];staff:StaffDesign[];names:Map<string,string>;currency:string;message?:string}){
+export function VisitManagementPage(p:{session:AdminSession;month:string;monthly:VisitRevenue;total:VisitRevenue;settings:WorkshopSettings;designs:DesignMetadata[];staff:StaffDesign[];orders:VisitOrder[];names:Map<string,string>;currency:string;message?:string}){
  const csrf=<input type="hidden" name="_csrf" value={p.session.csrfToken}/>;
  const reviews=p.designs.filter(d=>d.status!=='staff');
  return <Layout session={p.session} title="参拝帳の収益・制作審査" nav="shop"><h1>🌸 参拝帳の収益・制作審査</h1><p><a href="/shop">SHOPへ戻る</a></p>{p.message&&<p class="flash ok" role="status">{p.message}</p>}
  <section class="card"><h2>月別の収益（日本時間）</h2><form method="get"><label>対象月<input type="month" name="month" value={p.month} min="2020-01" max="2100-12"/></label><button>表示する</button></form><VisitRevenueSummary data={p.monthly} currency={p.currency}/><VisitRevenueTable data={p.monthly} currency={p.currency}/><p>購入時の実額で集計します。無料の初期装備・実績解放・装備の付け直しは販売に数えません。</p></section>
  <section class="card"><h2>累計の収益</h2><VisitRevenueSummary data={p.total} currency={p.currency}/><VisitRevenueTable data={p.total} currency={p.currency}/><p>運営収益＝着せ替え販売額－制作者への支払い＋制作権利の販売額。銭はサーバー内のポイントです。</p></section>
  
+ <section class="card" id="visit-orders"><h2>🖌 背景のオーダーメイド（{p.orders.filter(o=>o.status==='pending').length}件 受付中）</h2><p>メンバーが銭を払って注文した背景です。画像をのせて「作って渡す」を押すと、運営の作品になって注文した人に渡ります。断ると全額返します。</p>
+ {!p.orders.length&&<p>注文はまだありません。</p>}{p.orders.map(o=><details class="card" open={o.status==='pending'}><summary>{o.status==='pending'?'受付中':o.status==='done'?'お渡しずみ':'お断り'}：{p.names.get(o.memberId)??o.memberId} ／ {fmt(o.price)} {p.currency} ／ {o.createdAt.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</summary><p>{o.request}</p>{o.note&&<p>メモ：{o.note}</p>}
+  {o.status==='pending'&&<><form method="post" action={'/shop/visit/orders/'+o.id+'/done'} enctype="multipart/form-data" class="fields">{csrf}<label class="field"><span>背景の名前</span><input name="name" maxlength={60} required/></label><label class="field"><span>画像（8MBまで）</span><input type="file" name="image" accept="image/png,image/jpeg,image/webp" required/></label><button>作って渡す</button></form>
+  <form method="post" action={'/shop/visit/orders/'+o.id+'/refuse'}>{csrf}<label>断る理由（本人に見えます）<input name="note" maxlength={300}/></label><button class="danger-link">断って全額返す</button></form></>}
+ </details>)}</section>
  <section class="card" id="staff-designs"><h2>🎁 運営が作ってお渡しする背景・フレーム</h2><p>運営が作った背景・フレームを、メンバーにお渡しします。もらった人は参拝帳の着せ替えで選べます。メンバーが新しく作ることはできません。</p>
  <form method="post" action="/shop/visit/staff-designs" enctype="multipart/form-data" class="fields">{csrf}<label class="field"><span>種類</span><select name="kind"><option value="background">背景</option><option value="frame">フレーム</option></select></label><label class="field"><span>名前</span><input name="name" maxlength={60} required/></label><label class="field"><span>画像（8MBまで）</span><input type="file" name="image" accept="image/png,image/jpeg,image/webp" required/></label><button>作る</button></form>
  {!p.staff.length&&<p>まだありません。</p>}{p.staff.map(d=><details class="card"><summary>{d.kind==='frame'?'フレーム':'背景'}：{d.name} ／ {d.holders.length}人に渡しています</summary><img class="visit-review-image" src={'/shop/visit/designs/'+d.id+'.png'} alt={d.name} width={540} height={320} loading="lazy"/>

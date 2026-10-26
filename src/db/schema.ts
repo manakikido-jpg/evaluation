@@ -2504,3 +2504,18 @@ export const visitDesignGrants = pgTable('visit_design_grants', {
   grantedBy: text('granted_by').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [primaryKey({ columns: [t.memberId, t.designId] })]);
+
+/** 🖌 参拝帳の背景のオーダーメイド（メンバーが銭で注文し、運営が作って渡す） */
+export const visitOrders = pgTable('visit_orders', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  memberId: text('member_id').notNull(),
+  request: text('request').notNull(),
+  price: integer('price').notNull(),
+  status: text('status').notNull().default('pending'),
+  designId: text('design_id'),
+  note: text('note').notNull().default(''),
+  handledBy: text('handled_by'),
+  handledAt: timestamp('handled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('visit_orders_member_idx').on(t.memberId), uniqueIndex('visit_orders_one_open').on(t.memberId).where(sql`status = 'pending'`)]);
+export type VisitOrder = typeof visitOrders.$inferSelect;

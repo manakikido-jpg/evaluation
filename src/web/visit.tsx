@@ -1,4 +1,5 @@
 import { mountBingo } from './bingo.js';
+import { openOrder, ordersOf, placeOrder } from '../services/visitOrders.js';
 import { bodyLimit } from 'hono/body-limit';
 import { buyCreatorLicense, createDesign, submitDesign, deletePrivateDesign, accessibleDesign, workshopData, DESIGN_INPUT_MAX } from '../services/visitWorkshop.js';
 import type { Context, Hono } from 'hono';
@@ -60,7 +61,7 @@ export function mountVisit(app:Hono<any>,d:Deps){
   setCookie(c,COOKIE,await createMemberSession(d.db,{id:user.id,username:user.displayName,displayName:user.displayName,avatarUrl:user.avatarUrl},d.now()),opts);
   return c.redirect(c.req.query('next')==='bingo'?'/visit/bingo':'/visit',303);
  });
- app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} previewStaffStyle={c.req.query('staffStyle')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='staff-saved'?'運営専用の装いを保存しました。':c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
+ app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} order={{open:await openOrder(d.db,s.userId),recent:await ordersOf(d.db,s.userId)}} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} previewStaffStyle={c.req.query('staffStyle')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='ordered'?'背景を注文しました。運営が作ってお渡しします。':c.req.query('msg')==='staff-saved'?'運営専用の装いを保存しました。':c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
  app.get('/visit/card.png',protect(async(c,_s,data)=>{
   const preview=c.req.query('preview')==='1';
   const avatar=data.member.avatarUrl?await loadReceptionAvatar(data.member.avatarUrl):undefined;
@@ -92,6 +93,7 @@ export function mountVisit(app:Hono<any>,d:Deps){
  }));
  const STAFF_ONLY='背景とフレームは、運営が作ってお渡しする形になりました。メンバーが新しく作ることはできません。';
  const workshopError=(c:Context,e:unknown)=>{if(e instanceof VisitError)return c.html(<VisitGate error={e.message} back/>,400);throw e;};
+ app.post('/visit/order',protect(async(c,s)=>{const b=await c.req.parseBody();try{await placeOrder(d.db,s.userId,typeof b.request==='string'?b.request:'',Number(b.quote),b.confirm==='yes',d.now());return c.redirect('/visit?msg=ordered#visit-order',303);}catch(e){return workshopError(c,e);}}));
  app.post('/visit/license',protect(async c=>c.html(<VisitGate error={STAFF_ONLY} back/>,403)));
  app.post('/visit/designs',protect(async c=>c.html(<VisitGate error={STAFF_ONLY} back/>,403)));
  app.get('/visit/designs/:file',protect(async(c,s)=>{

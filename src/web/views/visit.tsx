@@ -1,12 +1,14 @@
 import type { WorkshopData } from '../../services/visitWorkshop.js';
 import { VisitWorkshop } from './visitWorkshop.js';
+import type { VisitOrder } from '../../db/schema.js';
+import { VISIT_ORDER_PRICE, VISIT_ORDER_REQUEST_MAX } from '../../services/visitOrders.js';
 import type { Child } from 'hono/jsx';
 import { VISIT_BADGES, VISIT_ITEMS, VISIT_RANKS, VISIT_STAFF_STYLES, visitStaffStyle, type VisitData } from '../../services/visitProfile.js';
 import { assetUrl } from '../assets.js';
 const fmt=(n:number)=>n.toLocaleString('ja-JP');
 function Shell({children}:{children:Child}){return <html lang="ja"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex,nofollow"/><title>参拝の記録と着せ替え | 咲楽ノ宮</title><link rel="stylesheet" href={assetUrl('visit.css')}/></head><body class="visit"><header><a href="/visit">咲楽ノ宮 <b>参拝の記録</b></a><a href="/visit/bingo">イベントビンゴ</a><span>SAKURA / PROFILE ATELIER</span></header><main>{children}</main><footer>一つひとつの語らいが、ご縁になる。<br/>ランクは活動で育ちます。着せ替えで通話の報酬や役職は変わりません。</footer></body></html>;}
 export function VisitGate({error,link,back}:{error?:string;link?:{name:string;action:string};back?:boolean}){return <Shell><section class="v-gate"><small>YOUR OWN STORY</small><h1>ご縁を重ねて、<br/>自分らしい一枚に。</h1><p>参拝ランク、語らいの時間、集めたしるし。<br/>背景とフレームを選んで、プロフィールを飾りましょう。</p>{error&&<p role="alert" class="v-notice">{error}</p>}{back?<a class="v-button" href="/visit">着せ替えへ戻る</a>:link?<form method="post" action={link.action}><p>{link.name} さんとして開きます。</p><button>プロフィールに入る</button></form>:<a class="v-button" href="/visit/auth">Discordでログイン</a>}</section></Shell>;}
-export function VisitPage({data:d,csrf,balance,currency,previewBackground,previewFrame,previewStaffStyle,publicPreview,message,workshop}:{data:VisitData;csrf:string;balance:number;currency:string;previewBackground?:string;previewFrame?:string;previewStaffStyle?:string;publicPreview:boolean;message?:string;workshop?:WorkshopData}){
+export function VisitPage({data:d,csrf,balance,currency,previewBackground,previewFrame,previewStaffStyle,publicPreview,message,workshop,order}:{order?:{open?:VisitOrder;recent:VisitOrder[]};data:VisitData;csrf:string;balance:number;currency:string;previewBackground?:string;previewFrame?:string;previewStaffStyle?:string;publicPreview:boolean;message?:string;workshop?:WorkshopData}){
  const items=d.catalog ?? VISIT_ITEMS;
  const bg=items.find(i=>i.kind==='background'&&i.id===previewBackground)?.id??d.profile.background;
  const frame=items.find(i=>i.kind==='frame'&&i.id===previewFrame)?.id??d.profile.frame;
@@ -24,6 +26,12 @@ export function VisitPage({data:d,csrf,balance,currency,previewBackground,previe
  <fieldset><legend>飾るバッジ（5個まで）</legend>{VISIT_BADGES.map(b=>{const earned=d.badges.some(v=>v.badgeId===b.id);return <label class={'v-badge '+(earned?'':'v-locked')}><input type="checkbox" name="badges" value={b.id} checked={d.profile.badges.includes(b.id)} disabled={!earned}/><img src={assetUrl('visit-badge-'+b.id+'.png')} width={56} height={56} alt="" loading="lazy"/><span><b>{b.name}</b><small>{b.detail}{earned?' ・獲得済み':''}</small></span></label>;})}</fieldset>
  <fieldset><legend>活動記録の公開</legend><label class="v-check"><input type="checkbox" name="publicStats" value="yes" checked={d.profile.publicStats}/>ほかの人にもランク・時間・日数・称号・バッジを見せる</label><p>初期設定は公開です。/参拝プロフィール だけでカードをチャンネルへ表示できます。非公開にする場合はチェックを外して保存してください。自分用の画面には表示します。公開済み画像のコピーや保存は、あとから取り消せません。</p></fieldset><button>着せ替えと公開設定を保存</button></form></section>
  <section class="v-shop"><div class="v-heading"><div><small>PROFILE SHOP</small><h2>背景とフレームのお店</h2><p>買い切り・期限なし。何度でも付け替えられます。</p></div></div><div class="v-products">{items.filter(i=>i.price>0&&(!('sellable' in i)||i.sellable)).map(i=><article class="v-panel"><small>{i.kind==='background'?'背景':'フレーム'}</small><h3>{i.name}</h3>{'creatorName' in i&&<p>制作者：{i.creatorName}</p>}<p class="v-price">{fmt(i.price)} {currency}</p><a href={'/visit?'+new URLSearchParams({background:i.kind==='background'?i.id:bg,frame:i.kind==='frame'?i.id:frame}).toString()}>この装いを試す ↗</a>{d.owned.includes(i.id)?<p class="v-owned">所持しています</p>:<form method="post" action="/visit/buy">{hidden}<input type="hidden" name="item" value={i.id}/><input type="hidden" name="quote" value={i.price}/><label class="v-check"><input type="checkbox" name="confirm" value="yes" required/>金額を確認しました</label><button disabled={balance<i.price}>{balance<i.price?'銭が足りません':'購入する'}</button></form>}</article>)}</div></section>
+
+ {order&&<section id="visit-order" class="v-panel"><h2>🖌 背景のオーダーメイド</h2><p>どんな背景がほしいかを書いて注文すると、運営があなただけの背景を作ってお渡しします。できあがったら、下の着せ替えで選べます。値段は {fmt(VISIT_ORDER_PRICE)} {currency} です。運営が作れないと判断したときは、全額お返しします。</p>
+  {order.open?<p>いま注文中です（{order.open.createdAt.toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'})}）。できあがるまでお待ちください。<br/>注文の内容：{order.open.request}</p>
+  :<form method="post" action="/visit/order">{hidden}<input type="hidden" name="quote" value={VISIT_ORDER_PRICE}/><label>ほしい背景（色・ふんいき・入れたいものなど）<textarea name="request" rows={4} maxlength={VISIT_ORDER_REQUEST_MAX} required></textarea></label><label class="v-check"><input type="checkbox" name="confirm" value="yes" required/>{fmt(VISIT_ORDER_PRICE)} {currency} を払って注文します</label><button disabled={balance<VISIT_ORDER_PRICE}>注文する</button>{balance<VISIT_ORDER_PRICE&&<p>銭が足りません。</p>}</form>}
+  {order.recent.filter(o=>o.status!=='pending').slice(0,3).map(o=><p class="v-note">{o.status==='done'?'✅ できあがりました（着せ替えで選べます）':'↩ 運営がお断りしました（銭はお返ししました）'}{o.note?'：'+o.note:''}</p>)}
+ </section>}
  {workshop&&<VisitWorkshop data={workshop} csrf={csrf} currency={currency} balance={balance}/>}
  <form method="post" action="/visit/logout">{hidden}<button class="v-secondary">ログアウト</button></form></Shell>;
 }
