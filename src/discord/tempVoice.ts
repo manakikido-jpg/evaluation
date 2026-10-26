@@ -32,7 +32,7 @@ export function discordVoiceOps(guild: Guild): VoiceOps {
         ? roomOverwrites(overwrites.map((o) => ({ ...o, type: o.type as 0 | 1 })), 'secret', { ownerId, botId: guild.client.user.id, invited: [], ownerAllow: OWNER_ALLOW })
         : overwrites;
       const ch = await guild.channels.create({
-        name: secret ? `🤫 シクレ｜${name}`.slice(0, 100) : name,
+        name: secret ? `🔒${name}`.slice(0, 100) : name,
         type: ChannelType.GuildVoice,
         parent: parent?.id ?? null,
         permissionOverwrites: list,

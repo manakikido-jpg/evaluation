@@ -105,7 +105,7 @@ describe('部屋の種類と見える範囲', () => {
     const cache = new Map<string, unknown>([[NEOCHI, { parent: { id: 'cat', permissionOverwrites: { cache: [{ id: MEMBER_ROLE, type: 0, allow: { bitfield: VIEW | CONNECT }, deny: { bitfield: 0n } }] } } }]]);
     const guild = { id: '960000000000000999', client: { user: { id: BOT } }, channels: { cache, create: async (o: typeof made) => { made = o; return { id: ROOM }; } } };
     await discordVoiceOps(guild as never).create({ hubId: NEOCHI, name: 'さくらの宿坊', ownerId: OWNER, secret: true });
-    expect(made!.name).toBe('🤫 シクレ｜さくらの宿坊');
+    expect(made!.name).toBe('🔒さくらの宿坊');
     const by = (id: string) => made!.permissionOverwrites.find((o) => o.id === id)!;
     expect(by(MEMBER_ROLE).deny & VIEW).toBe(VIEW);
     expect(by('960000000000000999').deny & VIEW).toBe(VIEW);
@@ -317,9 +317,14 @@ describe('部屋主の権限を譲渡', () => {
 
 describe('部屋名のシクレ表示', () => {
   it('名前を変えても目印が残り、重複せず、公開に戻すと外れる', () => {
-    expect(roomChannelName('aisの部屋', 'secret')).toBe('🤫 シクレ｜aisの部屋');
-    expect(roomChannelName('🤫 シクレ｜🤫 シクレ｜aisの部屋', 'secret')).toBe('🤫 シクレ｜aisの部屋');
-    expect(roomChannelName('新しい名前', 'secret')).toBe('🤫 シクレ｜新しい名前');
+    const knock = JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }, undefined, {}, { room: ROOM, mode: 'knock' }));
+    expect(knock).toContain(`rkn:mode:${ROOM}:open`); expect(knock).toContain('☑ こんこん歓迎'); expect(knock).toContain('☐ 取り込み中'); expect(knock).toContain('受付（こんこん）');
+    expect(JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }))).not.toContain('rkn:mode');
+    expect(roomChannelName('aisの部屋', 'secret')).toBe('🔒aisの部屋');
+    expect(roomChannelName('🔒🔒aisの部屋', 'secret')).toBe('🔒aisの部屋');
+    expect(roomChannelName('🤫 シクレ｜aisの部屋', 'secret')).toBe('🔒aisの部屋');
+    expect(roomChannelName('新しい名前', 'secret')).toBe('🔒新しい名前');
+    expect(roomChannelName('🔒aisの部屋', 'public')).toBe('aisの部屋');
     expect(roomChannelName('🤫 シクレ｜aisの部屋', 'public')).toBe('aisの部屋');
     expect(roomChannelName('招待の部屋', 'invite')).toBe('招待の部屋');
     expect(roomChannelName('あ'.repeat(100), 'secret')).toHaveLength(100);

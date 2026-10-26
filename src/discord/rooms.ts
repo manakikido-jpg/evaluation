@@ -43,6 +43,7 @@ import {
 } from '../services/rooms.js';
 import { OWNER_ALLOW } from './tempVoice.js';
 import { KeyedLock } from '../lib/lock.js';
+import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 名前の変更は Discord が 10 分に 2 回までにしているので、待ちすぎないように */
@@ -50,9 +51,13 @@ const EDIT_TIMEOUT_MS = 5000;
 
 /** シクレの目印は名前を変えても残す。運営が公開に戻したら外す */
 export function roomChannelName(name: string, kind: RoomKind): string {
-  const prefix = '🤫 シクレ｜';
+  const prefix = '🔒';
   let base = name;
-  while (base.startsWith(prefix)) base = base.slice(prefix.length);
+  // 前の目印（🤫 シクレ｜）も外して付け直す
+  for (let again = true; again;) {
+    again = false;
+    for (const p of [prefix, '🤫 シクレ｜']) while (base.startsWith(p)) { base = base.slice(p.length); again = true; }
+  }
   const head = kind === 'secret' ? prefix : '';
   return head + base.slice(0, 100 - head.length);
 }
@@ -130,7 +135,7 @@ export type PanelView = { staff?: boolean; at?: string };
 const sid = (id: string, v: PanelView) => (v.at ? `${id}|${v.at}` : id);
 
 /** 作った人（と運営）にだけ見える、部屋の設定（参考: チャンネル名・ステータス・人数制限・入室許可者・閉じる） */
-export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; userLimit: number }, note?: string, v: PanelView = {}) {
+export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; userLimit: number }, note?: string, v: PanelView = {}, knock?: { room: string; mode: RoomMode }) {
   const plan = planOf(cfg, row.hubId);
   const k = ROOM_KINDS[row.kind];
   const canChoose = plan !== 'none' && (!row.kindLocked || v.staff);
@@ -139,6 +144,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
     ...(note ? [`✅ ${note}`, ''] : []),
     `・チャンネル名: **${ch.name}**`,
     ...(plan !== 'none' ? [`・部屋の種類: ${k.emoji} ${k.label}${row.keepUntil && !row.kindLocked ? '（🏨 何度でも変えられます）' : row.kindLocked ? '（決定済み）' : '（まだ 1 回選べます）'}`] : []),
+    ...(knock ? [`・受付（こんこん）: ${ROOM_MODES[knock.mode]}`] : []),
     `・人数制限: ${ch.userLimit ? `${ch.userLimit} 人まで` : 'なし'}`,
     `・入室許可者: ${row.invited.length ? row.invited.map((id) => `<@${id}>`).join(' ') : 'なし'}`,
     ...(plan !== 'none' && row.payerId && row.payerId !== row.ownerId ? [`・部屋主の分の部屋代: <@${row.payerId}> さんが持っています`] : []),
@@ -159,6 +165,8 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
         button(sid('room:xfer', v), '権限を譲渡', '👑'),
         button(sid('room:close', v), '閉じる', '✖️'),
       ),
+      // 🚪 受付の状態（3 つから 1 つ。部屋にいる人が切り替える）
+      ...(knock ? [buttons(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${knock.room}:${m}`, `${m === knock.mode ? '☑' : '☐'} ${ROOM_MODES[m].replace(/^\S+ /, '')}`, ROOM_MODES[m].split(' ')[0]!, m === knock.mode ? 1 : 2)))] : []),
     ],
     allowedMentions: { parse: [] as const },
   };
@@ -340,8 +348,8 @@ export class RoomApp {
       if (i.user.id !== row.ownerId && !staff) return void (await i.reply({ content: '部屋の設定は、部屋を作った人と運営だけが使えます。', ...EPHEMERAL }));
       const v: PanelView = { staff, ...(at ? { at } : {}) };
       if (i.isButton()) {
-        if (id === 'room:open') return void (await i.reply({ ...roomPanel(this.cfg(), row, ch, undefined, v), ...EPHEMERAL }));
-        if (id === 'room:back') return void (await i.update(roomPanel(this.cfg(), row, ch, undefined, v)));
+        if (id === 'room:open') return void (await i.reply({ ...roomPanel(this.cfg(), row, ch, undefined, v, await this.knockOf(ch.id, v)), ...EPHEMERAL }));
+        if (id === 'room:back') return void (await i.update(roomPanel(this.cfg(), row, ch, undefined, v, await this.knockOf(ch.id, v))));
         if (id === 'room:close') return await this.closePanel(i);
         if (id === 'room:name') return await this.textModal(i, sid('room:namemodal', v), 'チャンネル名', ch.name, 100);
         if (id === 'room:status') return await this.textModal(i, sid('room:statusmodal', v), 'ステータス（通話の下に出る一言。空で消す）', '', 500, false);
@@ -385,6 +393,15 @@ export class RoomApp {
     await i.respond(list.filter((x) => !q || x.name.toLowerCase().includes(q)).slice(0, 25));
   }
 
+  /** こんこんの受付を選べる部屋なら、いまの状態（運営として開いたときは出さない） */
+  private async knockOf(room: string, v: PanelView = {}): Promise<{ room: string; mode: RoomMode } | undefined> {
+    if (v.staff) return undefined;
+    try {
+      if (!(await roomKnockConfig(this.db)).enabled || !(await this.preservesMessages(room))) return undefined;
+      return { room, mode: (await roomKnockState(this.db, room)).mode };
+    } catch { return undefined; }
+  }
+
   private async openAsStaff(i: ChatInputCommandInteraction<'cached'>): Promise<void> {
     if (!this.isStaff(i)) return void (await i.reply({ content: '神職・宮司だけが使えます。', ...EPHEMERAL }));
     const roomId = i.options.getString('room', true);
@@ -408,7 +425,7 @@ export class RoomApp {
 
   /** 変えたあと: パネルを書き換える（パネルから開いたフォームなら、そのパネルを） */
   private async done(i: RoomInteraction, row: RoomRow, ch: { name: string; userLimit: number }, note: string, v: PanelView = {}): Promise<void> {
-    const panel = roomPanel(this.cfg(), row, ch, note, v);
+    const panel = roomPanel(this.cfg(), row, ch, note, v, await this.knockOf(row.channelId, v));
     if (i.deferred) await i.editReply(panel);
     else if (i.isModalSubmit() && i.isFromMessage()) await i.update(panel);
     else if (i.isMessageComponent()) await i.update(panel);
@@ -421,7 +438,7 @@ export class RoomApp {
     name = roomChannelName(name, row.kind);
     const r = await withTimeout(ch.setName(name.slice(0, 100), v.staff ? '部屋の名前（運営）' : '部屋の名前（作った人）'));
     const note = r === 'timeout' ? 'チャンネル名を変えています（Discord が混んでいるので、反映まで少しかかります。名前は 10 分に 2 回まで変えられます）' : `チャンネル名を「${name}」にしました`;
-    await i.editReply(roomPanel(this.cfg(), row, { name: r === 'timeout' ? ch.name : name.slice(0, 100), userLimit: ch.userLimit }, note, v));
+    await i.editReply(roomPanel(this.cfg(), row, { name: r === 'timeout' ? ch.name : name.slice(0, 100), userLimit: ch.userLimit }, note, v, await this.knockOf(row.channelId, v)));
   }
 
   private async setStatus(i: ModalSubmitInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, status: string, v: PanelView = {}): Promise<void> {
