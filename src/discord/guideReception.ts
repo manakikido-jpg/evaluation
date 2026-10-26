@@ -355,7 +355,11 @@ export class GuideReceptionApp {
       if (action === 'duty' || action === 'dutyoff') {
         const on = action === 'duty';
         const r = await setGuideDuty(this.db, i.user.id, on, i.user.id);
-        if (!r.changed) return void await i.editReply(on ? 'もう案内担当になっています。' : '案内担当ではありません。');
+        if (!r.changed) {
+          await i.editReply(on ? 'もう案内担当になっています。' : '案内担当ではありません。');
+          await this.waitingNames.sync(i.guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
+          return;
+        }
         await i.guild.members.fetch({ user: r.after }).catch(() => undefined);
         const nameOf = (id: string) => i.guild.members.cache.get(id)?.displayName ?? '案内人';
         const channel = i.channel;
@@ -369,7 +373,9 @@ export class GuideReceptionApp {
             ? `🔚 ${nameOf(i.user.id)} が案内担当を終了しました（いまの担当: ${r.after.map(nameOf).join('・')}）。`
             : `${ping}⚠️ **案内担当が不在です。案内できるかたは「🙋 案内を担当する」を押してください。**`;
         if (channel?.isSendable()) await channel.send({ content, allowedMentions: { parse: [], roles: c.roleId && (on || !r.after.length) ? [c.roleId] : [] } }).catch((err: unknown) => logger.warn({ err }, 'guide duty notice failed'));
-        return void await i.editReply(on ? '案内担当をはじめました。終わるときは「🔚 案内担当を終了する」を押してください。' : '案内担当を終了しました。');
+        await i.editReply(on ? '案内担当をはじめました。終わるときは「🔚 案内担当を終了する」を押してください。' : '案内担当を終了しました。');
+        await this.waitingNames.sync(i.guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
+        return;
       }
       if (action === 'wait' || action === 'off') {
         const ok = await setGuideWaiting(this.db, i.user.id, action === 'wait');

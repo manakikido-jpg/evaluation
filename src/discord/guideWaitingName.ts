@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
-import { waitingGuides, type GuideConfig } from '../services/guideReception.js';
+import { guideDuty, waitingGuides, type GuideConfig } from '../services/guideReception.js';
 import { logger } from '../lib/logger.js';
 
 const KEY = 'guide.waiting_channel_names';
@@ -23,15 +23,31 @@ export class GuideWaitingNames {
       // 不正な記録で元の名前を上書きしない。
       if (!parsed.success) return;
       const state = parsed.data;
-      let waiting = false;
-      if (config.voiceChannelIds.length && config.roleId) {
-        for (const id of await waitingGuides(this.db)) {
-          const member = await guild.members.fetch({ user: id, force: true }).catch(() => undefined);
-          if (member && !member.user.bot && member.roles.cache.has(config.roleId) && (!this.presence || (member.presence?.status !== 'offline' && member.presence?.status !== undefined))) {
+      let waiting: boolean | undefined = false;
+      if (config.voiceChannelIds.length) {
+        const [standby, duty] = await Promise.all([waitingGuides(this.db), guideDuty(this.db)]);
+        const dutyIds = new Set(duty);
+        const candidates = new Set([...duty, ...standby]);
+        let uncertain = candidates.size > 0 && !config.roleId;
+        if (config.roleId) for (const id of candidates) {
+          const member = await guild.members.fetch({ user: id, force: true }).catch((err: unknown) => {
+            // 退会は確定している。不明な取得失敗は「不在」と決めつけない。
+            if (!(err && typeof err === 'object' && 'code' in err && err.code === 10007)) {
+              uncertain = true;
+              logger.warn({ err }, 'guide availability member fetch failed');
+            }
+            return undefined;
+          });
+          if (!member || member.user.bot || !member.roles.cache.has(config.roleId)) continue;
+          const status = member.presence?.status;
+          // 明示的な担当中は終了するまで有効。VC接続中ならオフライン表示でも在席。
+          if (dutyIds.has(id) || !this.presence || member.voice?.channelId || (status !== undefined && status !== 'offline')) {
             waiting = true;
             break;
           }
+          if (status === undefined) uncertain = true;
         }
+        if (!waiting && uncertain) waiting = undefined;
       }
       const save = () => this.db.insert(settings).values({ key: KEY, value: state, updatedBy: 'system' }).onConflictDoUpdate({ target: settings.key, set: { value: state, updatedBy: 'system', updatedAt: new Date(now) } });
       for (const id of new Set([...config.voiceChannelIds, ...Object.keys(state)])) {
@@ -40,7 +56,8 @@ export class GuideWaitingNames {
         const ch = guild.channels.cache.get(id);
         if (ch?.type !== ChannelType.GuildVoice || typeof ch.setName !== 'function' || typeof ch.name !== 'string') continue;
         const configured = config.voiceChannelIds.includes(id);
-        const open = waiting && configured;
+        if (configured && waiting === undefined) continue;
+        const open = waiting === true && configured;
         let entry = state[id];
         if (!entry && !configured) continue;
         if (!entry) entry = state[id] = { base: ch.name, managed: ch.name, attempts: [] };
