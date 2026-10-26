@@ -4,7 +4,7 @@ export function BingoPage({csrf,staff,createId}:{csrf:string;staff:boolean;creat
  const token=<input type="hidden" name="_csrf" value={csrf}/>;
  const fields=<><input type="hidden" name="id"/><input type="hidden" name="version"/>{token}</>;
  return <html lang="ja"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex,nofollow"/><title>イベントビンゴ | 咲楽ノ宮</title><link rel="stylesheet" href={assetUrl('bingo.css')}/><script defer src={assetUrl('bingo.js')}/></head>
- <body class="bingo"><main id="bingo-app" data-staff={staff?'yes':'no'}><header class="b-top"><div><small>SAKURA / EVENT</small><h1 id="event-title">イベントビンゴ</h1></div><nav><label><input type="checkbox" id="sound"/>音</label><label><input type="checkbox" id="motion" checked/>演出</label><a href="/visit">参拝帳</a></nav></header>
+ <body class="bingo"><main id="bingo-app" data-staff={staff?'yes':'no'}><header class="b-top"><div><small>咲楽ノ宮 · 桜のビンゴ会</small><h1 id="event-title">イベントビンゴ</h1></div><nav><label><input type="checkbox" id="sound"/>音</label><label><input type="checkbox" id="motion" checked/>演出</label><a href="/visit">参拝帳</a></nav></header>
  <p class="b-rotate">スマホは横向きにすると、左にカード・右に番号を並べて遊べます。</p><p id="connection" role="status" aria-live="polite">接続しています…</p><p id="b-error" role="alert" hidden/>
  <section id="no-event" hidden><h2>イベントの準備中です</h2><p>運営が受付を始めるまでお待ちください。</p></section>
  <form id="b-create" data-bingo-action="create" action="/visit/bingo/create" method="post" hidden>{token}<input type="hidden" name="id" value={createId}/><h2>イベントを作る</h2><label>イベント名<input name="title" maxlength={80} required placeholder="咲楽ノ宮 ビンゴ大会"/></label><button disabled>参加受付を始める</button></form>

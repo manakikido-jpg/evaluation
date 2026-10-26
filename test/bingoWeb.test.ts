@@ -41,8 +41,8 @@ it('本人用リンクはビンゴへ戻り、nextの任意URLへは転送しな
  const other=await createLoginLink(db,{id:A,displayName:'参加者',avatarUrl:null},now);const safe=await app.request(origin+'/visit/link/'+other+'?next=https://evil.test',{method:'POST',headers:{origin}});expect(safe.headers.get('location')).toBe('/visit');
 });
 it('実アプリの画面は外部JS/CSSと左右の領域を持ち、静的素材を配信する',async()=>{
- const actual=createWebApp({db,cfg,api,baseUrl:origin,discord:{} as any,now:()=>now});const page=await actual.request(origin+'/visit/bingo',{headers:{cookie:'sakura_visit='+tokens[A]}});expect(page.status).toBe(200);const html=await page.text();expect(html).toContain('id="b-card"');expect(html).toContain('id="b-numbers"');expect(html).toContain('/static/bingo.js?v=');expect(html).not.toContain('<script>');expect(html).not.toContain('onclick=');expect(html).not.toContain('style=');
- for(const file of ['bingo.js','bingo.css'])expect((await actual.request(origin+'/static/'+file)).status).toBe(200);
+ const actual=createWebApp({db,cfg,api,baseUrl:origin,discord:{} as any,now:()=>now});const page=await actual.request(origin+'/visit/bingo',{headers:{cookie:'sakura_visit='+tokens[A]}});expect(page.status).toBe(200);const html=await page.text();expect(html).toContain('咲楽ノ宮 · 桜のビンゴ会');expect(html).toContain('id="b-card"');expect(html).toContain('id="b-numbers"');expect(html).toContain('/static/bingo.js?v=');expect(html).not.toContain('<script>');expect(html).not.toContain('onclick=');expect(html).not.toContain('style=');
+ for(const file of ['bingo.js','bingo.css','bingo-shrine.jpg'])expect((await actual.request(origin+'/static/'+file)).status).toBe(200);
 });
 
 it('自動更新の在籍確認は短く共有し、操作時は必ずDiscordへ確認し直す',async()=>{

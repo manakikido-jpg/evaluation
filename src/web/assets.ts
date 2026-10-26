@@ -11,6 +11,8 @@ import { isArtKey } from '../services/casino/slotArt.js';
  * 更新したらブラウザが古いものを使い続けない（前の CSS のままだとグラフが真っ黒になる）。
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
+const bingoShrine = new Uint8Array(readFileSync(path.join(here, '../../assets/visit/background-paper.jpg')));
+const bingoShrineVersion = createHash('sha256').update(bingoShrine).digest('hex').slice(0, 10);
 const readText = (p: string) => readFileSync(p, 'utf8');
 const lifeRoute = readText(path.join(here, 'public/life-route.js'));
 const lifeRouteHash = createHash('sha256').update(lifeRoute).digest('hex').slice(0, 10);
@@ -97,7 +99,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'theme.js': { body: readText(path.join(here, 'public/theme.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
     'copy-text.js': { body: readText(path.join(here, 'public/copy-text.js')), type: 'text/javascript; charset=utf-8' },
-    'bingo.css': { body: readText(path.join(here, 'public/bingo.css')), type: 'text/css; charset=utf-8' },
+    'bingo-shrine.jpg': { body: bingoShrine, type: 'image/jpeg' },
+    'bingo.css': { body: readText(path.join(here, 'public/bingo.css')).replaceAll('/static/bingo-shrine.jpg', '/static/bingo-shrine.jpg?v=' + bingoShrineVersion), type: 'text/css; charset=utf-8' },
     'bingo.js': { body: readText(path.join(here, 'public/bingo.js')), type: 'text/javascript; charset=utf-8' },
     'member-filters.js': { body: readText(path.join(here, 'public/member-filters.js')), type: 'text/javascript; charset=utf-8' },
     'office-actions.js': { body: readText(path.join(here, 'public/office-actions.js')), type: 'text/javascript; charset=utf-8' },
