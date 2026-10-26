@@ -19,7 +19,7 @@ export type RoomRow = typeof tempVoice.$inferSelect;
 
 export const ROOM_KINDS: Record<RoomKind, { label: string; emoji: string; description: string }> = {
   public: { label: '公開', emoji: '🔓', description: 'だれでも入れる' },
-  invite: { label: '招待限定', emoji: '🔒', description: '見えるけど、招待した人だけ入れる' },
+  invite: { label: '招待限定', emoji: '🔑', description: '見えるけど、招待した人だけ入れる' },
   secret: { label: 'シークレット', emoji: '🤫', description: 'ほかの人には見えない。招待した人だけ' },
 };
 export const isRoomKind = (v: unknown): v is RoomKind => typeof v === 'string' && Object.hasOwn(ROOM_KINDS, v);

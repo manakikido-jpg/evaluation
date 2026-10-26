@@ -1238,7 +1238,7 @@ export function SettingsPage(props: {
               <tr>
                 <th></th>
                 <th>🔓 公開</th>
-                <th>🔒 招待限定</th>
+                <th>🔑 招待限定</th>
                 <th>🤫 シークレット</th>
               </tr>
             </thead>
