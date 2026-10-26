@@ -47,13 +47,20 @@ export class GuideThreadApp {
     if (m.guild.id !== this.cfg().guildId || m.user.bot) return;
     const c = await guideThreadConfig(this.db);
     if (!c.enabled || !c.channelId) return;
-    // もう役職がある人（入りなおした運営など）には作らない
-    const pending = guideRoleOf(this.cfg(), m.guild.roles.cache.values());
-    if (m.roles.cache.filter(r => r.id !== m.guild.id && r.id !== pending).size) return;
+    // もう承認された人（役職・絵馬待ちがある人）には作らない。Discord のオンボーディングで付くロールなどは気にしない
+    const cfg = this.cfg();
+    const roleIds = [...m.roles.cache.keys()];
+    if (cfg.ranks.some(r => roleIds.includes(r.roleId)) || (cfg.roles.emaPending && roleIds.includes(cfg.roles.emaPending))) return void logger.info({ memberId: m.id }, 'guide thread skipped: already approved');
     const parent = m.guild.channels.cache.get(c.channelId);
     if (parent?.type !== ChannelType.GuildText) return void logger.warn({ channelId: c.channelId }, 'guide thread parent is not a text channel');
+    // 入りなおした人: 前のスレッドが閉じる前でも、閉じて新しく作る
     const old = await threadOf(this.db, m.id);
-    if (old && !old.closedAt) return;
+    if (old && !old.closedAt) {
+      await closeThread(this.db, m.id);
+      await this.removeSchedule(m.guild, old.scheduleMessageId);
+      const t = await m.guild.channels.fetch(old.threadId).catch(() => null);
+      if (t?.isThread()) await t.edit({ locked: true, archived: true, reason: '入りなおした（新しいスレッドを作る）' }).catch(() => undefined);
+    }
     // 👁 要注意の人: 本人には同じように見せるが、案内人は入れず、知らせは運営の記録へ
     const watched = Boolean(await watchReason(this.db, m.id));
     const thread = await parent.threads.create({ name: `🌸 ${m.displayName} さんのご案内`.slice(0, 100), type: ChannelType.PrivateThread, invitable: false, autoArchiveDuration: 10080, reason: '入った人の案内スレッド' });
