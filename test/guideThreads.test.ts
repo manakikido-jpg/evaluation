@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { makeDb } from './helpers.js';
-import { bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, parseTimes, recordThread, saveGuideThreadConfig, slotDate, takeDueReminders, threadById, validSlot, guideThreadConfigSchema } from '../src/services/guideThreads.js';
+import { threadOf, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, parseTimes, recordThread, saveGuideThreadConfig, slotDate, takeDueReminders, threadById, validSlot, guideThreadConfigSchema } from '../src/services/guideThreads.js';
 import { GuideThreadApp, guideThreadMessage } from '../src/discord/guideThreads.js';
 
 let db: Db, close: () => Promise<void>;
@@ -100,5 +100,22 @@ describe('時間外の希望を #案内希望日程 へ', () => {
     const t2 = { ...thread, id: 'thr2' };
     await app.onInteraction({ ...modal('いつでも'), channel: t2, user: { id: '880000000000000002' } } as never);
     expect(posts).toHaveLength(1);
+  });
+});
+
+describe('入ったときにスレッドを作る', () => {
+  it('入りなおした人は前のスレッドを閉じて新しく作る。オンボーディングのロールがあっても作り、承認ずみの人には作らない', async () => {
+    await saveGuideThreadConfig(db, guideThreadConfigSchema.parse({ enabled: true, channelId: '880000000000000050' }), 'admin', now);
+    let n = 0; const edits: string[] = [];
+    const parent = { type: 0, threads: { create: async () => ({ id: 'new' + ++n, members: { add: async () => undefined }, send: async () => undefined }) } };
+    const guild = { id: 'g', roles: { cache: new Map([['r1', { id: 'r1', name: '案内人' }]]) }, channels: { cache: new Map([['880000000000000050', parent]]), fetch: async (id: string) => ({ isThread: () => true, edit: async () => { edits.push(id); } }) }, members: { cache: new Map() } };
+    const member = (roles: string[]) => ({ id: M, displayName: 'さくら', user: { bot: false }, guild, roles: { cache: new Map(roles.map(r => [r, { id: r }])) } });
+    const app = new GuideThreadApp(db, () => ({ guildId: 'g', channels: {}, roles: {}, ranks: [{ roleId: 'rank1' }] }) as never);
+    await recordThread(db, M, 'old', false, now);
+    await app.onMemberAdd(member(['onboard']) as never);
+    expect(edits).toEqual(['old']);
+    expect((await threadOf(db, M))!.threadId).toBe('new1');
+    await app.onMemberAdd(member(['rank1']) as never);
+    expect((await threadOf(db, M))!.threadId).toBe('new1');
   });
 });
