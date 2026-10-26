@@ -2528,3 +2528,16 @@ export const visitOrderImages = pgTable('visit_order_images', {
   data: bytea('data').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('visit_order_images_order_idx').on(t.orderId)]);
+
+/** 🧵 入った人の案内スレッド（本人と案内人だけのプライベートスレッド。希望の時間も覚える） */
+export const guideThreads = pgTable('guide_threads', {
+  memberId: text('member_id').primaryKey(),
+  threadId: text('thread_id').notNull(),
+  slotAt: timestamp('slot_at', { withTimezone: true }),
+  slotLabel: text('slot_label'),
+  reminded: boolean('reminded').notNull().default(false),
+  watched: boolean('watched').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+}, t => [index('guide_threads_thread_idx').on(t.threadId)]);
+export type GuideThread = typeof guideThreads.$inferSelect;

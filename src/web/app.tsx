@@ -7,6 +7,8 @@ import { inviteBlocks, setInviteBlock } from '../services/inviteBlock.js';
 import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
 import { RoomKnockPage } from './views/roomKnock.js';
+import { GuideThreadsPage } from './views/guideThreads.js';
+import { guideThreadConfig, guideThreadConfigSchema, openThreads, parseTimes, saveGuideThreadConfig } from '../services/guideThreads.js';
 import { knockConfigSchema, roomKnockConfig, roomKnockStates, saveRoomKnockConfig } from '../services/roomKnock.js';
 import { deletePanel, getPanel, listPanels, parsePanel, panelEmojiCatalog, roleProblem, savePanel } from '../services/reactionRoles.js';
 import { mountMarketplace } from './marketplace.js';
@@ -1835,6 +1837,34 @@ export function createWebApp(deps: WebDeps) {
     const [config, pending, done, channels, roles] = await Promise.all([loadUpdatePostConfig(db), listUpdatePosts(db, ['pending']), listUpdatePosts(db, ['posted', 'rejected']), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
     return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
+  });
+  // 🧵 入った人の案内スレッド（宮司・神職）
+  const guideThreadView = async (c: Context<Env>, error?: string) => {
+    const [config, channels, threads] = await Promise.all([guideThreadConfig(db), loadChannels().catch(() => []), openThreads(db)]);
+    const today = jstDate(now());
+    const days = Array.from({ length: 14 }, (_, n) => new Date(Date.parse(today + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10));
+    return c.html(<GuideThreadsPage session={c.get('session')} config={config} channels={channels} days={days} threads={threads} guildId={cfg.guildId} names={await namesOf(db, threads.map(t => t.memberId))} flash={c.req.query('msg')} error={error} />, error ? 400 : 200);
+  };
+  app.get('/guide/thread', c => guideThreadView(c));
+  app.post('/guide/thread', async c => {
+    const b = await c.req.parseBody();
+    const str = (k: string) => (typeof b[k] === 'string' ? (b[k] as string) : '');
+    const defaultTimes = parseTimes(str('defaultTimes'));
+    if (!defaultTimes) return guideThreadView(c, 'いつもの時間が読めません（例: 21:00 22:00 24:00）。');
+    const days: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(b)) {
+      const m = /^day_(\d{4}-\d{2}-\d{2})$/.exec(k);
+      if (!m || typeof v !== 'string' || !v.trim()) continue;
+      const t = parseTimes(v);
+      if (!t) return guideThreadView(c, `${m[1]} の時間が読めません（例: 21:00 22:00、または「なし」）。`);
+      days[m[1]!] = t;
+    }
+    const parsed = guideThreadConfigSchema.safeParse({ enabled: b.enabled === 'yes', channelId: str('channelId'), message: str('message').trim() || undefined, defaultTimes, days });
+    if (!parsed.success) return guideThreadView(c, '入力を確かめてください（あいさつは 1500 文字まで）。');
+    if (parsed.data.enabled && !parsed.data.channelId) return guideThreadView(c, '使うときは、スレッドを作るチャンネルを選んでください。');
+    const value = await saveGuideThreadConfig(db, parsed.data, c.get('session').userId, now());
+    await audit(db, { actorId: c.get('session').userId, action: 'guide.thread_config', detail: { enabled: value.enabled, channelId: value.channelId, defaultTimes: value.defaultTimes, days: value.days }, via: 'web' });
+    return c.redirect('/guide/thread?msg=saved', 303);
   });
   // 🚪 宿のこんこん（宮司・神職）
   const roomKnockView = async (c: Context<Env>, error?: string) => {

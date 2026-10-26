@@ -13,6 +13,7 @@ export function GuidePage(p: { session: AdminSession; config: GuideConfig; emplo
   const guji = p.session.level === 'guji';
   return <Layout title="案内・給与" nav="guide" session={p.session} scripts={['guide.js']}>
     <h1>案内・給与</h1>
+    <p><a href="/guide/thread">🧵 入った人の案内スレッド（時間のボタン）の設定</a></p>
     <nav class="guide-nav" aria-label="案内管理の項目">{p.session.level === 'guji' && <><a href="#guide-setup">初期設定</a><a href="#guide-links">案内リンク</a></>}<a href="#guide-team">案内人</a><a href="#guide-history">対応履歴</a><a href="#guide-payroll">給与</a></nav>
     <div class="guide-overview"><span>監視する部屋 <strong>{p.config.voiceChannelIds.length}</strong></span><span>待機中の案内人 <strong>{p.employees.filter(e => e.status === 'active' && e.waiting).length}</strong></span><span>完了1件 <strong>{p.config.salary.toLocaleString('ja-JP')}銭</strong></span></div>
     {p.flash && <p role="status">{p.flash === 'saved' ? '保存しました。' : p.flash === 'posted' ? '受付パネルを出しました。' : p.flash === 'status' ? '登録を変更しました。' : p.flash === 'paid' ? '担当を直して、給与を払いました。' : p.flash === 'paid_none' ? '担当を直して完了にしました（給与は 0 銭か、同じ利用者の今日の分は払い済みです）。' : p.flash === 'invalid' ? '保存できませんでした。部屋・ロール・絵文字・リンクを確認してください。保存前の設定は残っています。' : '設定・権限・BOTの接続を確認してください。'}</p>}

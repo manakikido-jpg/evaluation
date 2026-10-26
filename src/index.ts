@@ -45,6 +45,7 @@ import { GuideReceptionApp } from './discord/guideReception.js';
 import { RoleGuardApp } from './discord/roleGuard.js';
 import { SecurityApp } from './discord/security.js';
 import { GuidePendingApp } from './discord/guidePending.js';
+import { GuideThreadApp } from './discord/guideThreads.js';
 import { WalletApp } from './discord/wallet.js';
 import { UpdateDeskApp } from './discord/updateDesk.js';
 import { LeaverCleanupApp } from './discord/leaverCleanup.js';
@@ -140,6 +141,7 @@ async function main(): Promise<void> {
   const roomKnock = new RoomKnockApp(db, cfg, channelId => rooms.preservesMessages(channelId));
   const guideReception = new GuideReceptionApp(db, cfg, actions, env.DISCORD_PRESENCE === 'on');
   const guidePending = new GuidePendingApp(cfg);
+  const guideThreads = new GuideThreadApp(db, cfg);
   const security = new SecurityApp(db, cfg, actions);
   const roleGuard = new RoleGuardApp(db, cfg, actions);
   const onboarding = new OnboardingApp(db, cfg);
@@ -258,6 +260,8 @@ async function main(): Promise<void> {
       // 🎫 週末宝くじ: 抽選して、結果を DM と売り場に知らせる
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void roomKnock.tick(guild).catch(err => logger.warn({ err }, 'room knock tick failed'));
+      // 🧵 案内スレッド: 10 分前のお知らせ・案内が終わった人のスレッドを閉じる
+      void guideThreads.tick(guild).catch((err) => logger.warn({ err }, 'guide thread tick failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
       void app.everyMinute(guild);
       void innGuest.tick(guild).catch((err) => logger.warn({ err }, 'inn guest tick failed'));
@@ -383,6 +387,8 @@ async function main(): Promise<void> {
     void inviteLinks.onMemberAdd(m);
     // 入った瞬間に 🧭案内待ち
     void guidePending.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide pending add failed'));
+    // 🧵 本人と案内人だけの案内スレッド
+    void guideThreads.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide thread create failed'));
     // 入った人に、はじめの流れを DM で案内
     void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
     // 🛡 要注意リストの人が入ったら運営に知らせる
@@ -438,6 +444,7 @@ async function main(): Promise<void> {
     void maikura.onInteraction(i);
     void roomKnock.onInteraction(i).catch(err => logger.warn({ err }, 'room knock interaction failed'));
     void guideReception.onInteraction(i);
+    void guideThreads.onInteraction(i).catch((err) => logger.warn({ err }, 'guide thread interaction failed'));
     void app.onInteraction(i);
     void staff.onInteraction(i);
     void admission.onInteraction(i);

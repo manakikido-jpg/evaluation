@@ -4415,6 +4415,24 @@ it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）',
   expect((await get('/message-archive', s)).status).toBe(403);
 });
 
+it('🧵 案内スレッドの設定を保存する（日ごとの時間・読めない時間は 400）', async () => {
+  const { guideThreadConfig } = await import('../src/services/guideThreads.js');
+  const { jstDate } = await import('../src/services/activity.js');
+  const s = await login(STAFF);
+  const page = await (await get('/guide/thread', s)).text();
+  expect(page).toContain('案内スレッド');
+  expect(page).not.toMatch(/onclick=|style=/);
+  const csrf = /name="_csrf" value="([^"]+)"/.exec(page)![1]!;
+  const send = (f: [string, string][]) => app.request('/guide/thread', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...f]) });
+  expect((await send([['defaultTimes', '30:00']])).status).toBe(400);
+  expect((await send([['enabled', 'yes'], ['defaultTimes', '21:00']])).status).toBe(400);
+  const day = jstDate(new Date());
+  expect((await send([['enabled', 'yes'], ['channelId', '910000000000000002'], ['defaultTimes', '21:00 22:00'], ['message', 'ようこそ'], [`day_${day}`, 'なし']])).status).toBe(303);
+  const c = await guideThreadConfig(db);
+  expect(c).toMatchObject({ enabled: true, channelId: '910000000000000002', defaultTimes: ['21:00', '22:00'], message: 'ようこそ' });
+  expect(c.days[day]).toEqual([]);
+});
+
 it('🚪 宿のこんこんの設定を保存し、受付中の部屋を一覧する（神職）', async () => {
   const { roomKnockConfig, setRoomKnockMode } = await import('../src/services/roomKnock.js');
   await setRoomKnockMode(db, '910000000000000777', 'busy');
