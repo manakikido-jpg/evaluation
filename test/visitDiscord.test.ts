@@ -78,3 +78,9 @@ it('ビンゴコマンドは本人だけに10分1回限りの会員入口を返�
  const i={...interaction(),commandName:'bingo',member:{displayName:'さくら'}};await app.onInteraction(i as any);expect(i.deferReply).toHaveBeenCalledWith({flags:MessageFlags.Ephemeral});
  const reply=i.editReply.mock.calls[0]![0];expect(reply.components[0].components[0].url).toMatch(/^https:\/\/visit\.test\/visit\/link\/.+\?next=bingo$/);expect(reply.allowedMentions).toEqual({parse:[]});expect(reply.files).toBeUndefined();
 });
+
+it('紫苑の金桜は保存した運営のコマンドへ反映する',async()=>{
+ const {saveVisitStaffStyle}=await import('../src/services/visitProfile.js');await saveVisitStaffStyle(db,B,'purple-gold',true);
+ const role='780000000000000099',localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};app=new VisitApp(db,()=>localCfg,'https://visit.test');const i=interaction(B);i.guild.members.fetch=async(input:{user:string;force:boolean})=>({user:who(input.user),displayAvatarURL:()=> 'https://example.invalid/avatar.png',roles:{cache:new Map([[role,{}]])}} as any);
+ await app.onInteraction(i as any);const d=await visitData(db,B);d.staffTheme=true;expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(d))).toBe(true);
+});

@@ -154,3 +154,12 @@ it('運営も一般用へ切り替えると一般用の着せ替えを使え、�
  expect((await post('/visit/staff-style',{staffStyle:'general',intent:'save'})).status).toBe(303);expect((await post('/visit/equip',{background:'paper',frame:'plain',title:'rank',publicStats:'yes'})).status).toBe(303);
  const data=await visitData(db,A,now);expect(data.profile.staffStyle).toBe('general');const normal=renderVisitCard(data,{privateView:true});data.staffTheme=true;expect(renderVisitCard(data,{privateView:true}).equals(normal)).toBe(true);expect(Buffer.from(await (await req('/visit/card.png?download=1')).arrayBuffer()).equals(normal)).toBe(true);expect(await (await req('/visit')).text()).toContain('一般用の着せ替えで表示しています。');
 });
+
+it('紫苑の金桜は運営にだけ選択肢を出し、試着なし保存とカード反映ができる',async()=>{
+ const {visitData}=await import('../src/services/visitProfile.js');const {renderVisitCard}=await import('../src/services/visitCard.js');
+ expect(await (await req('/visit')).text()).not.toContain('紫苑の金桜');expect((await post('/visit/staff-style',{staffStyle:'purple-gold'})).status).toBe(403);
+ const role='770000000000000099',localCfg=structuredClone(cfg);localCfg.admin={...localCfg.admin,gujiRoleIds:[role],shinshokuRoleIds:[]};let roles=[role];api.memberRoles=async()=>roles;app=new Hono();mountVisit(app,{db,api,cfg:()=>localCfg,baseUrl,secure:true,now:()=>now});
+ expect(await (await req('/visit')).text()).toContain('紫苑の金桜');expect((await post('/visit/staff-style',{staffStyle:'purple-gold',_csrf:'bad'})).status).toBe(403);expect((await post('/visit/staff-style',{staffStyle:'purple-gold',intent:'save'})).status).toBe(303);
+ const d=await visitData(db,A,now);d.staffTheme=true;expect(d.profile.staffStyle).toBe('purple-gold');expect(Buffer.from(await (await req('/visit/card.png?download=1')).arrayBuffer()).equals(renderVisitCard(d,{privateView:true}))).toBe(true);
+ roles=[];expect((await post('/visit/staff-style',{staffStyle:'purple-gold'})).status).toBe(403);expect(await (await req('/visit')).text()).not.toContain('紫苑の金桜');d.staffTheme=false;expect(Buffer.from(await (await req('/visit/card.png')).arrayBuffer()).equals(renderVisitCard(d,{privateView:true}))).toBe(true);
+});

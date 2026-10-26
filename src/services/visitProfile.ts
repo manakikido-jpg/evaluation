@@ -11,6 +11,7 @@ import { audit } from './audit.js';
 export const VISIT_STAFF_STYLES = [
   {id:'crimson',name:'紅眼の金紋'},
   {id:'blue-lantern',name:'青夜の花灯り'},
+  {id:'purple-gold',name:'紫苑の金桜'},
   {id:'general',name:'一般用の着せ替えを使う'},
 ] as const;
 export const visitStaffStyle=(value:string|undefined)=>VISIT_STAFF_STYLES.find(s=>s.id===value)??VISIT_STAFF_STYLES[0];
