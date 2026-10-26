@@ -15,6 +15,11 @@ export function makeBingoCard(){
  }
  card[12]=0;return card;
 }
+/** すでにあるカード（数字を , でつないだもの）と同じにならないカード。50 回作っても重なれば失敗 */
+export function uniqueBingoCard(taken:ReadonlySet<string>,make:()=>number[]=makeBingoCard){
+ for(let i=0;i<50;i++){const card=make();if(!taken.has(card.join(',')))return card;}
+ throw new BingoError('カードを作れませんでした。もう一度お試しください。');
+}
 export function bingoProgress(card:readonly number[],draws:readonly number[]){
  const called=new Map(draws.map((n,i)=>[n,i+1]));
  const marked=card.map(n=>n===0||called.has(n));
@@ -54,7 +59,10 @@ export async function joinBingo(db:Db,id:string,memberId:string,now=new Date()){
   const event=await locked(tx,id);const [old]=await tx.select().from(bingoCards).where(and(eq(bingoCards.eventId,id),eq(bingoCards.memberId,memberId)));if(old)return old;
   if(event.status!=='waiting')throw new BingoError('参加受付は終了しました。');
   const [member]=await tx.select().from(members).where(eq(members.id,memberId));if(!member||member.leftAt||member.isBot)throw new BingoError('在籍中のメンバーだけが参加できます。');
-  const [card]=await tx.insert(bingoCards).values({eventId:id,memberId,name:member.displayName,numbers:makeBingoCard(),joinedAt:now}).returning();
+  // 同じイベントで、ほかの人とまったく同じカードにならないようにする（もともと重なることはほぼないが、念のため作りなおす）
+  const taken=new Set((await tx.select({numbers:bingoCards.numbers}).from(bingoCards).where(eq(bingoCards.eventId,id))).map(r=>r.numbers.join(',')));
+  const numbers=uniqueBingoCard(taken);
+  const [card]=await tx.insert(bingoCards).values({eventId:id,memberId,name:member.displayName,numbers,joinedAt:now}).returning();
   await tx.update(bingoEvents).set({version:event.version+1,summary:{...event.summary,participants:event.summary.participants+1}}).where(eq(bingoEvents.id,id));return card!;
  });
 }

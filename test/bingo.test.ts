@@ -4,7 +4,7 @@ import {eq} from 'drizzle-orm';
 import {makeDb} from './helpers.js';
 import type {Db} from '../src/db/client.js';
 import {members,bingoEvents,bingoCards,coinTx} from '../src/db/schema.js';
-import {makeBingoCard,bingoProgress,createBingo,joinBingo,controlBingo,bingoState,claimBingo} from '../src/services/bingo.js';
+import {uniqueBingoCard,makeBingoCard,bingoProgress,createBingo,joinBingo,controlBingo,bingoState,claimBingo} from '../src/services/bingo.js';
 const A='880000000000000001',B='880000000000000002',C='880000000000000003',base=new Date('2026-10-26T10:00:00Z');
 let db:Db,close:()=>Promise<void>;
 beforeEach(async()=>{({db,close}=await makeDb());await db.insert(members).values([A,B,C].map((id,i)=>({id,username:'bingo'+i,displayName:'参加者'+i})));});
@@ -53,4 +53,9 @@ it('抽選中の終了を防ぎ、確認して終了後もカードと結果を�
 });
 it('個人のカードだけを返し、他人のカード情報を含めない',async()=>{
  const e=await create();const a=await joinBingo(db,e.id,A,base),b=await joinBingo(db,e.id,B,base);const state=await bingoState(db,A,e.id,base);expect(state.card!.numbers).toEqual(a.numbers);expect(state.card!.numbers).not.toEqual(b.numbers);expect(state.event!.summary).toEqual({participants:2,reaches:0,winners:[]});expect(Object.keys(state.event!)).not.toContain('pendingNumber');
+});
+it('同じイベントで、ほかの人と同じカードにならないよう作りなおす',()=>{
+ const a=makeBingoCard(),b=makeBingoCard();const taken=new Set([a.join(',')]);
+ const seq=[a,a,b];let i=0;expect(uniqueBingoCard(taken,()=>seq[i++]!)).toEqual(b);
+ expect(()=>uniqueBingoCard(taken,()=>a)).toThrow();
 });
