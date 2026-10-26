@@ -1099,6 +1099,7 @@ export function KbLobbyExtra(p: {
   const active = p.horses.filter((h) => !h.retiredAt);
   return (
     <>
+      <section class="c-panel"><h2>🏇 新しい映像の試作</h2><p class="c-muted">8頭のサンプルレースで、全景・追走・ゴールの3D映像を確認できます。</p><a class="c-btn" href="/casino/keiba/preview">映像試作を見る（馬券なし）</a></section>
       <section class="c-panel kb-owner-cta">
         <h2>🐴 馬主になる</h2>
         <p class="c-muted">

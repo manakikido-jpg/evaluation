@@ -1,3 +1,6 @@
+import { html } from 'hono/html';
+import { createKeibaPreview } from '../services/casino/keibaPreview.js';
+import { KeibaPreviewPage } from './views/keibaPreview.js';
 import { lobbyTable, lobbyResumes, visibleLobbyGames, prayerHref } from '../services/casino/lobby.js';
 import { activeStyles, stylesOf, equipStyle, tableStyles } from '../services/casino/styles.js';
 import { StyleGachaPage, Wardrobe } from './views/casinoStyles.js';
@@ -797,6 +800,11 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       );
     }),
   );
+
+  app.get('/casino/keiba/preview', page((c, me) => {
+    if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
+    return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={createKeibaPreview()} />}`);
+  }));
 
   // 🏇 成績: 馬の成績・馬名鑑・自分の馬券成績
   app.get(
