@@ -1464,3 +1464,4 @@ form.inline { display: inline; margin: 0; }
 .member-role-floating .member-role-head,.member-role-floating .member-role-actions,.member-role-floating .member-role-search{flex:none;margin:0}
 .visit-review-image { max-width: 100%; height: auto; }
 .news-copy { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--sakura); border-radius: 8px; padding: .6rem .8rem; margin: .3rem 0; font-family: inherit; }
+.visit-order-image { width: 160px; height: 160px; object-fit: cover; margin: 0 6px 6px 0; border-radius: 6px; }

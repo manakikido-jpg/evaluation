@@ -390,11 +390,15 @@ export function createWebApp(deps: WebDeps) {
   const artsBody = bodyLimit({ maxSize: 100 * 1024 * 1024, onError: (c) => c.text('一度に送る絵が多すぎます（全部で 100MB まで）。何回かに分けて保存してください。', 413) });
   // 💡 アイデア・共有の写真・ファイル（1 つ 10MB・1 回 10 個まで）
   const ideaBody = bodyLimit({ maxSize: 105 * 1024 * 1024, onError: (c) => c.text('一度に送るファイルが大きすぎます（1 つ 10MB・全部で 100MB まで）。', 413) });
+  // 🖌 オーダーメイドの写真（1 枚 8MB・3 枚まで）
+  const orderBody = bodyLimit({ maxSize: 25 * 1024 * 1024, onError: (c) => c.text('写真が大きすぎます（1 枚 8MB・全部で 3 枚まで）。', 413) });
   app.use((c, next) =>
     /^\/recordings\/[^/]+\/chunk$/.test(c.req.path) && c.req.method === 'POST'
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
+      : c.req.path === '/visit/order'
+      ? orderBody(c, next)
       : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/visit/designs' || c.req.path === '/shop/visit/staff-designs' || /^\/shop\/visit\/orders\/\d+\/done$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'

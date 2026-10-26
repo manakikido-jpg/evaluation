@@ -3,3 +3,4 @@
 #visit-workshop input:not([type=checkbox]):not([type=hidden]),#visit-workshop textarea{display:block;width:100%;min-width:0;border:1px solid #d8cbd1;background:#fff;border-radius:8px;padding:11px;color:#3c2934;font:inherit;margin-top:6px}#visit-workshop textarea{min-height:100px;resize:vertical}#visit-workshop article{border-top:1px solid #eee2e7;padding:16px 0;margin-top:20px}#visit-workshop{scroll-margin-top:24px}
 
 .v-badge img{width:56px;height:56px;flex-shrink:0;object-fit:contain}.v-badge{align-items:center!important}
+.v-order-image{width:120px;height:120px;object-fit:cover;margin:0 6px 6px 0;border-radius:6px}

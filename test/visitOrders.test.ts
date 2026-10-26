@@ -5,7 +5,7 @@ import type {Db} from '../src/db/client.js';
 import {members} from '../src/db/schema.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
 import {visitData} from '../src/services/visitProfile.js';
-import {VISIT_ORDER_PRICE,fulfillOrder,openOrder,placeOrder,refuseOrder} from '../src/services/visitOrders.js';
+import {VISIT_ORDER_PRICE,orderImage,orderImageIds,fulfillOrder,openOrder,placeOrder,refuseOrder} from '../src/services/visitOrders.js';
 const A='790000000000000011',B='790000000000000012',now=new Date('2026-10-26T00:00:00Z');
 let db:Db,close:()=>Promise<void>,png:Uint8Array;
 beforeAll(async()=>{png=new Uint8Array(await sharp({create:{width:1080,height:640,channels:3,background:'#c04080'}}).png().toBuffer());});
@@ -36,4 +36,14 @@ it('運営が作って渡すと着せ替えで使え、断ると全額返す',as
  expect(refused.status).toBe('refused');
  expect((await walletOf(db,A)).balance).toBe(10000);
  expect(await openOrder(db,A)).toBeUndefined();
+});
+
+it('アイコン・素材の写真を3枚までそえられ、webpにそろえる。4枚・読めない写真は払わない',async()=>{
+ await expect(placeOrder(db,A,'夜桜',7000,true,now,[png,png,png,png])).rejects.toThrow('3 枚');
+ await expect(placeOrder(db,A,'夜桜',7000,true,now,[new Uint8Array([1,2,3])])).rejects.toThrow('読めません');
+ expect((await walletOf(db,A)).balance).toBe(10000);
+ const o=await placeOrder(db,A,'夜桜',7000,true,now,[png,png]);
+ const ids=(await orderImageIds(db,[o.id])).get(o.id)!;expect(ids).toHaveLength(2);
+ const img=await orderImage(db,ids[0]!);expect(img!.contentType).toBe('image/webp');expect(img!.memberId).toBe(A);
+ expect((await sharp(Buffer.from(img!.data)).metadata()).format).toBe('webp');
 });

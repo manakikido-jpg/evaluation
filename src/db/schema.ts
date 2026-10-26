@@ -2519,3 +2519,12 @@ export const visitOrders = pgTable('visit_orders', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('visit_orders_member_idx').on(t.memberId), uniqueIndex('visit_orders_one_open').on(t.memberId).where(sql`status = 'pending'`)]);
 export type VisitOrder = typeof visitOrders.$inferSelect;
+
+/** 🖌 オーダーメイドの注文にそえた写真（アイコン・素材など） */
+export const visitOrderImages = pgTable('visit_order_images', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  orderId: bigint('order_id', { mode: 'number' }).notNull(),
+  contentType: text('content_type').notNull(),
+  data: bytea('data').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('visit_order_images_order_idx').on(t.orderId)]);
