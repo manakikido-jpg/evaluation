@@ -2496,3 +2496,11 @@ export const bingoCards=pgTable('bingo_cards',{
  name:text('name').notNull(),numbers:jsonb('numbers').$type<number[]>().notNull(),
  joinedAt:timestamp('joined_at',{withTimezone:true}).notNull().defaultNow(),claimedAt:timestamp('claimed_at',{withTimezone:true}),
 },t=>[primaryKey({columns:[t.eventId,t.memberId]}),check('bingo_card_size',sql`jsonb_array_length(${t.numbers}) = 25`)]);
+
+/** 🎨 運営が作って渡した参拝帳の背景・フレーム（だれに渡したか） */
+export const visitDesignGrants = pgTable('visit_design_grants', {
+  memberId: text('member_id').notNull(),
+  designId: text('design_id').notNull(),
+  grantedBy: text('granted_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.memberId, t.designId] })]);

@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
 import {and,asc,desc,eq,inArray,or,sql} from 'drizzle-orm';
 import type {Db} from '../db/client.js';
-import {members,settings,visitCreatorLicenses,visitDesigns,visitPurchases,visitProfiles} from '../db/schema.js';
+import {members,settings,visitCreatorLicenses,visitDesignGrants,visitDesigns,visitPurchases,visitProfiles} from '../db/schema.js';
 import {spendWithin,addCoins} from './economy.js';
 import {audit} from './audit.js';
 import {VisitError} from './visitErrors.js';
@@ -98,12 +98,13 @@ export async function deletePrivateDesign(db:Db,id:string,creatorId:string){
 export async function accessibleDesign(db:Db,id:string,userId:string){
  const [row]=await db.select().from(visitDesigns).where(eq(visitDesigns.id,id));if(!row)return undefined;
  const [bought]=await db.select().from(visitPurchases).where(and(eq(visitPurchases.memberId,userId),eq(visitPurchases.itemId,id)));
- return row.creatorId===userId||row.status==='approved'||!!bought?row:undefined;
+ const [granted]=bought?[]:await db.select().from(visitDesignGrants).where(and(eq(visitDesignGrants.memberId,userId),eq(visitDesignGrants.designId,id)));
+ return row.creatorId===userId||row.status==='approved'||!!bought||!!granted?row:undefined;
 }
 export type CustomVisitItem={id:string;kind:'background'|'frame';name:string;price:number;colors:readonly string[];badge:null;creatorId:string;creatorName:string;status:string;sellable:boolean};
 export async function customCatalog(db:Db,id:string,ownedIds:string[]):Promise<CustomVisitItem[]>{
- const rows=await db.select({...metaColumns,creatorName:members.displayName,leftAt:members.leftAt}).from(visitDesigns).innerJoin(members,eq(members.id,visitDesigns.creatorId)).where(or(eq(visitDesigns.status,'approved'),eq(visitDesigns.creatorId,id),ownedIds.length?inArray(visitDesigns.id,ownedIds):sql`false`));
- return rows.filter(r=>r.kind==='background'||r.kind==='frame').map(r=>({id:r.id,kind:r.kind as 'background'|'frame',name:r.name,price:r.price,colors:['#c7aa7b','#c7aa7b'],badge:null,creatorId:r.creatorId,creatorName:r.creatorName,status:r.status,sellable:r.status==='approved'&&!r.leftAt}));
+ const rows=await db.select({...metaColumns,creatorName:members.displayName,leftAt:members.leftAt}).from(visitDesigns).leftJoin(members,eq(members.id,visitDesigns.creatorId)).where(or(eq(visitDesigns.status,'approved'),eq(visitDesigns.creatorId,id),ownedIds.length?inArray(visitDesigns.id,ownedIds):sql`false`));
+ return rows.filter(r=>r.kind==='background'||r.kind==='frame').map(r=>({id:r.id,kind:r.kind as 'background'|'frame',name:r.name,price:r.price,colors:['#c7aa7b','#c7aa7b'],badge:null,creatorId:r.creatorId,creatorName:r.status==='staff'?'運営':r.creatorName??'制作者',status:r.status,sellable:r.status==='approved'&&!r.leftAt}));
 }
 export async function buyCustomDesign(db:Db,buyerId:string,itemId:string,quote:number,confirmed:boolean,now=new Date()){
  const [before]=await db.select().from(visitDesigns).where(eq(visitDesigns.id,itemId));if(!before)throw new VisitError('作品が見つかりません。');
@@ -126,3 +127,46 @@ export async function workshopData(db:Db,id:string){
  return {config,license:licenses[0],designs,sales:{count:sales[0]!.count,gross:Number(sales[0]!.gross),received:Number(sales[0]!.received)}};
 }
 export type WorkshopData=Awaited<ReturnType<typeof workshopData>>;
+
+// ───────── 🎨 運営が作って渡す背景・フレーム（2026-10-26 から。メンバーの制作はやめた） ─────────
+/** 運営の作品を作る（status は staff。カタログには出さず、渡した人だけが使える） */
+export async function createStaffDesign(db:Db,by:string,input:{kind:string;name:string;bytes:Uint8Array},now=new Date()){
+ const name=input.name.trim();
+ if(!['background','frame'].includes(input.kind)||!name||name.length>60)throw new VisitError('種類と名前（60文字まで）を入れてください。');
+ const data=await normalizeDesign(input.bytes,input.kind as 'background'|'frame');
+ return db.transaction(async tx=>{
+  const [row]=await tx.insert(visitDesigns).values({id:'design_'+randomUUID(),creatorId:by,kind:input.kind,name,description:'',price:0,status:'staff',data,createdAt:now}).returning(metaColumns);
+  await audit(tx,{actorId:by,action:'visit.staff_design_create',detail:{id:row!.id,kind:input.kind,name},via:'web'});return row!;
+ });
+}
+/** 運営の作品の一覧（渡した人数つき） */
+export async function staffDesigns(db:Db){
+ const rows=await db.select(metaColumns).from(visitDesigns).where(eq(visitDesigns.status,'staff')).orderBy(desc(visitDesigns.createdAt));
+ const grants=rows.length?await db.select().from(visitDesignGrants).where(inArray(visitDesignGrants.designId,rows.map(r=>r.id))):[];
+ return rows.map(r=>({...r,holders:grants.filter(g=>g.designId===r.id).map(g=>g.memberId)}));
+}
+export type StaffDesign=Awaited<ReturnType<typeof staffDesigns>>[number];
+/** 渡す（同じ人に 2 回渡しても 1 回） */
+export async function grantDesign(db:Db,designId:string,memberId:string,by:string,now=new Date()){
+ return db.transaction(async tx=>{
+  const [d]=await tx.select({id:visitDesigns.id,status:visitDesigns.status}).from(visitDesigns).where(eq(visitDesigns.id,designId));if(!d||d.status!=='staff')throw new VisitError('運営の作品が見つかりません。');
+  const [m]=await tx.select().from(members).where(eq(members.id,memberId));if(!m||m.leftAt||m.isBot)throw new VisitError('在籍中のメンバーを選んでください。');
+  const rows=await tx.insert(visitDesignGrants).values({memberId,designId,grantedBy:by,createdAt:now}).onConflictDoNothing().returning();
+  if(rows.length)await audit(tx,{actorId:by,targetId:memberId,action:'visit.design_grant',detail:{designId},via:'web'});
+  return rows.length>0;
+ });
+}
+/** 取り上げる（付けていたら標準へ戻す） */
+export async function revokeDesign(db:Db,designId:string,memberId:string,by:string){
+ return db.transaction(async tx=>{
+  const rows=await tx.delete(visitDesignGrants).where(and(eq(visitDesignGrants.designId,designId),eq(visitDesignGrants.memberId,memberId))).returning();
+  if(!rows.length)return false;
+  await tx.update(visitProfiles).set({background:'paper'}).where(and(eq(visitProfiles.memberId,memberId),eq(visitProfiles.background,designId)));
+  await tx.update(visitProfiles).set({frame:'plain'}).where(and(eq(visitProfiles.memberId,memberId),eq(visitProfiles.frame,designId)));
+  await audit(tx,{actorId:by,targetId:memberId,action:'visit.design_revoke',detail:{designId},via:'web'});return true;
+ });
+}
+/** その人がもらった運営の作品の番号 */
+export async function grantedDesignIds(db:Db,memberId:string){
+ return (await db.select({id:visitDesignGrants.designId}).from(visitDesignGrants).where(eq(visitDesignGrants.memberId,memberId))).map(r=>r.id);
+}

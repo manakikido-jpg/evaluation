@@ -60,7 +60,7 @@ export function mountVisit(app:Hono<any>,d:Deps){
   setCookie(c,COOKIE,await createMemberSession(d.db,{id:user.id,username:user.displayName,displayName:user.displayName,avatarUrl:user.avatarUrl},d.now()),opts);
   return c.redirect(c.req.query('next')==='bingo'?'/visit/bingo':'/visit',303);
  });
- app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} workshop={await workshopData(d.db,s.userId)} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} previewStaffStyle={c.req.query('staffStyle')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='staff-saved'?'運営専用の装いを保存しました。':c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
+ app.get('/visit',protect(async(c,s,data)=>c.html(<VisitPage data={data} csrf={s.csrfToken} balance={(await walletOf(d.db,s.userId)).balance} currency={d.cfg().economy.currencyName} previewBackground={c.req.query('background')} previewFrame={c.req.query('frame')} previewStaffStyle={c.req.query('staffStyle')} publicPreview={c.req.query('public')==='1'} message={c.req.query('msg')==='staff-saved'?'運営専用の装いを保存しました。':c.req.query('msg')==='license'?'制作権利を購入しました。':c.req.query('msg')==='created'?'作品を保存しました。試着してから着せ替えを保存してください。':c.req.query('msg')==='submitted'?'運営へ販売申請しました。':c.req.query('msg')==='deleted'?'作品を削除しました。':c.req.query('msg')==='saved'?'着せ替えと公開設定を保存しました。':c.req.query('msg')==='bought'?'購入しました。装備するには「着せ替えを保存」を押してください。':undefined}/>)));
  app.get('/visit/card.png',protect(async(c,_s,data)=>{
   const preview=c.req.query('preview')==='1';
   const avatar=data.member.avatarUrl?await loadReceptionAvatar(data.member.avatarUrl):undefined;
@@ -90,17 +90,14 @@ export function mountVisit(app:Hono<any>,d:Deps){
   try{await saveVisitProfile(d.db,s.userId,{background:str('background'),frame:str('frame'),title:str('title'),badges,publicStats:b.publicStats==='yes'},d.now());return c.redirect('/visit?msg=saved',303);}
   catch(e){if(e instanceof VisitError)return c.html(<VisitGate error={e.message} back/>,400);throw e;}
  }));
+ const STAFF_ONLY='背景とフレームは、運営が作ってお渡しする形になりました。メンバーが新しく作ることはできません。';
  const workshopError=(c:Context,e:unknown)=>{if(e instanceof VisitError)return c.html(<VisitGate error={e.message} back/>,400);throw e;};
- app.post('/visit/license',protect(async(c,s)=>{const b=await c.req.parseBody();try{await buyCreatorLicense(d.db,s.userId,Number(b.quote),b.confirm==='yes',d.now());return c.redirect('/visit?msg=license#visit-workshop',303);}catch(e){return workshopError(c,e);}}));
- app.post('/visit/designs',protect(async(c,s)=>{
-  const b=await c.req.parseBody();const file=b.image;
-  if(!(file instanceof File)||!file.size||file.size>DESIGN_INPUT_MAX)return c.html(<VisitGate error="8MBまでの画像を選んでください。" back/>,400);
-  try{const row=await createDesign(d.db,s.userId,{kind:typeof b.kind==='string'?b.kind:'',name:typeof b.name==='string'?b.name:'',description:typeof b.description==='string'?b.description:'',price:Number(b.price),sell:b.mode==='sell',rights:b.rights==='yes',bytes:new Uint8Array(await file.arrayBuffer())},d.now());return c.redirect('/visit?msg=created&'+row.kind+'='+row.id+'#visit-workshop',303);}catch(e){return workshopError(c,e);}
- }));
+ app.post('/visit/license',protect(async c=>c.html(<VisitGate error={STAFF_ONLY} back/>,403)));
+ app.post('/visit/designs',protect(async c=>c.html(<VisitGate error={STAFF_ONLY} back/>,403)));
  app.get('/visit/designs/:file',protect(async(c,s)=>{
   const file=c.req.param('file')??'';if(!file.endsWith('.png'))return c.notFound();const row=await accessibleDesign(d.db,file.slice(0,-4),s.userId);if(!row)return c.notFound();c.header('X-Content-Type-Options','nosniff');return c.body(new Uint8Array(row.data),200,{'Content-Type':'image/png'});
  }));
- app.post('/visit/designs/:id/submit',protect(async(c,s)=>{const b=await c.req.parseBody();try{await submitDesign(d.db,c.req.param('id')??'',s.userId,Number(b.price),b.rights==='yes');return c.redirect('/visit?msg=submitted#visit-workshop',303);}catch(e){return workshopError(c,e);}}));
+ app.post('/visit/designs/:id/submit',protect(async c=>c.html(<VisitGate error={STAFF_ONLY} back/>,403)));
  app.post('/visit/designs/:id/delete',protect(async(c,s)=>{try{await deletePrivateDesign(d.db,c.req.param('id')??'',s.userId);return c.redirect('/visit?msg=deleted#visit-workshop',303);}catch(e){return workshopError(c,e);}}));
  app.post('/visit/logout',protect(async(c,s)=>{await deleteMemberSession(d.db,s.id);deleteCookie(c,COOKIE,{path:'/visit'});return c.redirect('/visit',303);}));
 }

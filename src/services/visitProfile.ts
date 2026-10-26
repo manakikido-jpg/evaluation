@@ -1,6 +1,6 @@
 import { VisitError } from './visitErrors.js';
 export { VisitError } from './visitErrors.js';
-import { customCatalog, buyCustomDesign } from './visitWorkshop.js';
+import { customCatalog, buyCustomDesign, grantedDesignIds } from './visitWorkshop.js';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { activityDaily, members, visitDaily, visitProfiles, visitPurchases, visitBadges, visitDesigns } from '../db/schema.js';
@@ -87,9 +87,10 @@ export async function visitData(db:Db,id:string,now=new Date(),preview?:{backgro
   const badges=await db.select().from(visitBadges).where(eq(visitBadges.memberId,id));
   const purchases=await db.select().from(visitPurchases).where(eq(visitPurchases.memberId,id));
   const owned:string[]=VISIT_ITEMS.filter(item=>item.badge?badges.some(b=>b.badgeId===item.badge):item.price===0||purchases.some(p=>p.itemId===item.id)).map(i=>i.id);
-  const custom=await customCatalog(db,id,purchases.map(p=>p.itemId));
+  const granted=await grantedDesignIds(db,id);
+  const custom=await customCatalog(db,id,[...purchases.map(p=>p.itemId),...granted]);
   const catalog=[...VISIT_ITEMS,...custom];
-  owned.push(...custom.filter(i=>i.creatorId===id||purchases.some(p=>p.itemId===i.id)).map(i=>i.id));
+  owned.push(...custom.filter(i=>i.creatorId===id||granted.includes(i.id)||purchases.some(p=>p.itemId===i.id)).map(i=>i.id));
   const selected=[...new Set([profile!.background,profile!.frame,preview?.background,preview?.frame].filter((v):v is string=>!!v&&custom.some(i=>i.id===v)))];
   const images=selected.length?await db.select({id:visitDesigns.id,data:visitDesigns.data}).from(visitDesigns).where(inArray(visitDesigns.id,selected)):[];
   const art:Record<string,string>=Object.fromEntries(images.map(i=>[i.id,Buffer.from(i.data).toString('base64')]));

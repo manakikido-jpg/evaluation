@@ -395,7 +395,7 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
-      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/visit/designs' || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
+      : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/visit/designs' || c.req.path === '/shop/visit/staff-designs' || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
         ? noticeBody(c, next)
         : c.req.path === '/economy/casino/art' || c.req.path === '/settings/omikuji-special' || c.req.path === '/settings/omikuji-texts'
           ? artsBody(c, next)
