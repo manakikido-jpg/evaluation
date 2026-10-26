@@ -3,7 +3,7 @@ import { Collection, type Guild } from 'discord.js';
 import type { Db } from '../src/db/client.js';
 import { GuideReceptionApp } from '../src/discord/guideReception.js';
 import { GuideWaitingNames } from '../src/discord/guideWaitingName.js';
-import { guideConfigSchema, saveGuideConfig, registerGuide, setGuideStatus, setGuideWaiting } from '../src/services/guideReception.js';
+import { guideConfigSchema, saveGuideConfig, registerGuide, setGuideDuty, setGuideStatus, setGuideWaiting } from '../src/services/guideReception.js';
 import { recordJoin } from '../src/services/members.js';
 import { cfg, makeDb } from './helpers.js';
 const A = '870000000000000001', B = '870000000000000002', VC = '870000000000000004', ROLE = '870000000000000006';
@@ -20,11 +20,98 @@ beforeEach(async () => {
 afterEach(async () => { vi.restoreAllMocks(); await close(); });
 function fixture(name = '案内所') {
   const ch = { type: 2, name, members: new Collection(), setName: vi.fn(async (next: string) => { ch.name = next; }) };
-  const people = new Map([A, B].map(id => [id, { user: { bot: false }, roles: { cache: new Collection([[ROLE, {}]]) }, presence: { status: 'online' } }]));
-  const guild = { id: cfg.guildId, roles: { cache: new Collection([[ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Map([[VC, ch]]) }, members: { fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } } as unknown as Guild;
+  const people = new Map([A, B].map(id => [id, { id, displayName: id, voice: { channelId: null as string | null }, user: { bot: false }, roles: { cache: new Collection([[ROLE, {}]]) }, presence: { status: 'online' } }]));
+  const guild = { id: cfg.guildId, roles: { cache: new Collection([[ROLE, { id: ROLE, name: '案内人' }]]) }, channels: { cache: new Map([[VC, ch]]) }, members: { cache: new Collection(people), fetch: vi.fn(async ({ user }: { user: string }) => people.get(user)) } } as unknown as Guild;
   return { ch, people, guild, names: new GuideWaitingNames(db) };
 }
 describe('案内所の待機表示', () => {
+  it('すでに担当中のボタンを再度押しても、待機とは独立して表示を同期する', async () => {
+    const { ch, guild } = fixture(); await saveGuideConfig(db, config, A); await setGuideDuty(db, A, true, A);
+    const app = new GuideReceptionApp(db, () => cfg, {} as never);
+    const i = { isButton: () => true, inCachedGuild: () => true, customId: 'guide:duty', guildId: cfg.guildId, guild, user: { id: A }, deferReply: vi.fn(), editReply: vi.fn() };
+    await app.onInteraction(i as never);
+    expect(i.editReply).toHaveBeenCalledWith('もう案内担当になっています。');
+    expect(ch.name).toBe('案内所（入室⭕）');
+  });
+  it('1人の取得に失敗しても、ほかに確認できた担当者がいれば入室可にする', async () => {
+    const { ch, guild, people, names } = fixture(); await setGuideDuty(db, A, true, A); await setGuideDuty(db, B, true, B); await setGuideWaiting(db, A, true);
+    const fetch = vi.spyOn(guild.members, 'fetch').mockImplementation(async ({ user }: any) => {
+      if (user === A) throw new Error('timeout');
+      return people.get(user) as never;
+    });
+    await names.sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（入室⭕）'); expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it('Presenceが不明なだけで待機者を不在と決めつけない', async () => {
+    const { ch, guild, people } = fixture('案内所（入室⭕）'); await setGuideWaiting(db, A, true);
+    Object.assign(people.get(A)!, { presence: undefined });
+    await new GuideWaitingNames(db, true).sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（入室⭕）'); expect(ch.setName).not.toHaveBeenCalled();
+  });
+
+  it('待機を押していない案内担当でも入室可とし、終了したら不在に戻す', async () => {
+    const { ch, guild, names } = fixture();
+    await setGuideDuty(db, A, true, A);
+    await names.sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（入室⭕）');
+    await setGuideDuty(db, A, false, A);
+    await names.sync(guild, config, 2000);
+    expect(ch.name).toBe('案内所（案内人不在）');
+  });
+  it('案内担当ボタンの開始/終了で同期する。DBの待機設定や承認とは分ける', async () => {
+    const { ch, guild } = fixture(); await saveGuideConfig(db, config, A);
+    await setGuideStatus(db, A, 'paused', A);
+    const app = new GuideReceptionApp(db, () => cfg, {} as never);
+    const interaction = (action: string) => ({ isButton: () => true, inCachedGuild: () => true, customId: `guide:${action}`, guildId: cfg.guildId, guild, user: { id: A }, deferReply: vi.fn(), editReply: vi.fn() });
+    await app.onInteraction(interaction('duty') as never);
+    expect(ch.name).toBe('案内所（入室⭕）');
+    await app.onInteraction(interaction('dutyoff') as never);
+    expect(ch.name).toBe('案内所（案内人不在）');
+  });
+  it('担当/待機が別の人でも、どちらか1人が残っていれば入室可を維持する', async () => {
+    const { ch, guild, names } = fixture();
+    await setGuideDuty(db, A, true, A); await setGuideWaiting(db, B, true);
+    await names.sync(guild, config, 1000);
+    await setGuideDuty(db, A, false, A); await names.sync(guild, config, 2000);
+    expect(ch.name).toBe('案内所（入室⭕）'); expect(ch.setName).toHaveBeenCalledTimes(1);
+    await setGuideWaiting(db, B, false); await names.sync(guild, config, 3000);
+    expect(ch.name).toBe('案内所（案内人不在）');
+  });
+  it('再起動後の担当中や、オフライン表示での明示的な担当を見失わない', async () => {
+    const { ch, guild, people } = fixture(); people.get(A)!.presence.status = 'offline';
+    await setGuideDuty(db, A, true, A);
+    await new GuideWaitingNames(db, true).sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（入室⭕）');
+    await new GuideWaitingNames(db, true).sync(guild, config, 2000);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+  });
+  it('VC接続中の待機者はオフライン表示でも在席と判定する', async () => {
+    const { ch, guild, people } = fixture();
+    await setGuideWaiting(db, A, true); people.get(A)!.presence.status = 'offline'; people.get(A)!.voice.channelId = VC;
+    await new GuideWaitingNames(db, true).sync(guild, config, 1000);
+    expect(ch.name).toBe('案内所（入室⭕）');
+  });
+  it('取得失敗で不在へ変えず、回復した後に最新状態を反映する', async () => {
+    const { ch, guild, names } = fixture(); await setGuideDuty(db, A, true, A);
+    await names.sync(guild, config, 1000);
+    vi.spyOn(guild.members, 'fetch').mockRejectedValueOnce(new Error('timeout'));
+    await names.sync(guild, config, 2000);
+    expect(ch.name).toBe('案内所（入室⭕）'); expect(ch.setName).toHaveBeenCalledTimes(1);
+    await setGuideDuty(db, A, false, A); await names.sync(guild, config, 3000);
+    expect(ch.name).toBe('案内所（案内人不在）');
+  });
+  it('担当がいても退会/ロール剥奪/BOTは除外し、確認できた不在を表示する', async () => {
+    const { ch, guild, people, names } = fixture(); await setGuideDuty(db, A, true, A); await setGuideDuty(db, B, true, B);
+    people.get(A)!.roles.cache.clear(); people.get(B)!.user.bot = true;
+    await names.sync(guild, config, 1000); expect(ch.name).toBe('案内所（案内人不在）');
+    people.get(B)!.user.bot = false; people.delete(B);
+    vi.spyOn(guild.members, 'fetch').mockImplementation(async ({ user }: any) => {
+      if (user === B) throw Object.assign(new Error('Unknown Member'), { code: 10007 });
+      return people.get(user) as never;
+    });
+    await names.sync(guild, config, 2000); expect(ch.setName).toHaveBeenCalledTimes(1);
+  });
+
   it('最初から不在でも表示し、再起動で連打せず対象解除で元へ戻す', async () => {
     const { ch, guild, names } = fixture();
     await names.sync(guild, config, 1000);
