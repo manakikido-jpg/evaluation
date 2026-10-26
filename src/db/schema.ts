@@ -2473,3 +2473,26 @@ export const visitDesigns = pgTable('visit_designs', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('visit_design_creator_idx').on(t.creatorId), index('visit_design_status_idx').on(t.status)]);
 export type VisitDesign = typeof visitDesigns.$inferSelect;
+
+/** イベント用ビンゴ。公開前の番号を分離し、同じ抽選を全員へ公開する。 */
+export type BingoSummary = {participants:number; reaches:number; winners:{memberId:string;name:string;rank:number;at:number;lines:number;doubleAt:number|null;claimed:boolean;claimedAt:number|null}[]};
+export const bingoEvents=pgTable('bingo_events',{
+ id:text('id').primaryKey(),title:text('title').notNull(),hostId:text('host_id').notNull(),
+ status:text('status').$type<'waiting'|'active'|'closed'>().notNull().default('waiting'),
+ draws:jsonb('draws').$type<number[]>().notNull().default([]),
+ pendingNumber:integer('pending_number'),revealAt:timestamp('reveal_at',{withTimezone:true}),
+ version:integer('version').notNull().default(0),
+ summary:jsonb('summary').$type<BingoSummary>().notNull().default({participants:0,reaches:0,winners:[]}),
+ createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),closedAt:timestamp('closed_at',{withTimezone:true}),
+},t=>[
+ uniqueIndex('bingo_one_live').on(sql`(true)`).where(sql`${t.status} <> 'closed'`),
+ check('bingo_status_valid',sql`${t.status} in ('waiting','active','closed')`),
+ check('bingo_draw_count',sql`jsonb_array_length(${t.draws}) <= 75`),
+ check('bingo_pending_valid',sql`${t.pendingNumber} is null or ${t.pendingNumber} between 1 and 75`),
+ check('bingo_pending_pair',sql`(${t.pendingNumber} is null) = (${t.revealAt} is null)`),
+]);
+export const bingoCards=pgTable('bingo_cards',{
+ eventId:text('event_id').notNull().references(()=>bingoEvents.id),memberId:text('member_id').notNull(),
+ name:text('name').notNull(),numbers:jsonb('numbers').$type<number[]>().notNull(),
+ joinedAt:timestamp('joined_at',{withTimezone:true}).notNull().defaultNow(),claimedAt:timestamp('claimed_at',{withTimezone:true}),
+},t=>[primaryKey({columns:[t.eventId,t.memberId]}),check('bingo_card_size',sql`jsonb_array_length(${t.numbers}) = 25`)]);

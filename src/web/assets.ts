@@ -97,6 +97,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'theme.js': { body: readText(path.join(here, 'public/theme.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
     'copy-text.js': { body: readText(path.join(here, 'public/copy-text.js')), type: 'text/javascript; charset=utf-8' },
+    'bingo.css': { body: readText(path.join(here, 'public/bingo.css')), type: 'text/css; charset=utf-8' },
+    'bingo.js': { body: readText(path.join(here, 'public/bingo.js')), type: 'text/javascript; charset=utf-8' },
     'member-filters.js': { body: readText(path.join(here, 'public/member-filters.js')), type: 'text/javascript; charset=utf-8' },
     'office-actions.js': { body: readText(path.join(here, 'public/office-actions.js')), type: 'text/javascript; charset=utf-8' },
     'office-ui.js': { body: readText(path.join(here, 'public/office-ui.js')), type: 'text/javascript; charset=utf-8' },
