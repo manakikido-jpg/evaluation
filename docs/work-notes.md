@@ -1012,3 +1012,4 @@
 - 関連テストは元の案内機能と新しい同期を検証。型/ビルド/全件を最終確認する。実Discord変更なし。
 - 最終検証：型チェック/ビルド/全件成功。関連45件も成功し、待機ボタン→名前変更と毎分tick→承認停止反映を実App経由で確認。ログ/tmp/guide-name-final-{types,build,tests}.log。全件の詳細は提出記録へ追記。テスト削除/skipなし。実装93fe706、未push/PR前。本番a13fa0eから追加変更なし。
 - 全187ファイル/2,171テスト成功、454.57秒・4並列。型/ビルド/関連45件/diffも成功。提出前fetchで本番a13fa0eから追加なし。新しいDB移行/設定項目/本番操作なし。専用PRへ提出する。
+- GitHub保存先：PR #102 https://github.com/manakikido-jpg/evaluation/pull/102 、codex/guide-waiting-name、実装93fe706・検証記録acc815b。全2,171件/型/ビルド/関連45件成功。OPEN・本番反映待ち。次は担当Claudeの確認/合流と、反映後のDiscord名/権限の実機確認。本追記は所在のみで検証済みソースに変更なし。
