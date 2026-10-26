@@ -1065,3 +1065,4 @@
 - 最終検証成功：型チェック/ビルド/全192ファイル・2,218テスト（474.39秒・4並列）、関連57件/diffも成功。ログ/tmp/guide-availability-final-{types,build,tests}.log。テスト削除/skipなし。実装3e5ba0f。
 - 提出前fetchで本番1b290c5（宿の受付ボタンの色変更）を確認。案内判定の変更はなく、このブランチは45e1652ベースの検証済みソースを維持して提出する。最新baseとの競合はPR上で確認する。DB移行/設定ファイル変更/実Discord操作なし。
 - 次：専用PRを提出し、担当Claudeの確認/合流後、既存の担当状態を次の同期で表示へ反映。Discord名変更の回数制限中は反映待ち。実DBの状態や実機の名前変更は未確認。
+- GitHub保存済み：PR #105 https://github.com/manakikido-jpg/evaluation/pull/105 、codex/guide-availability-fix、実装3e5ba0f/最終検証記録1636b1b。OPEN・本番反映待ち。全2,218件/型/ビルド/関連57件成功。次は担当Claudeのレビュー/合流と担当のみの状態での実機確認。現行の名前変更制限は維持。本追記は所在のみで検証済みソースに変更なし。
