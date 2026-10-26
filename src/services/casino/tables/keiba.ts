@@ -202,6 +202,7 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
   const lite = racePrizes(s.race.cls, s.real, { ...conf, purse: conf.purse.map(() => c.keibaNoBetPurse) });
   const fee = raceAppearance(s.real, conf);
   const betOf = (id: string) => s.tickets.filter((t) => t.memberId === id).reduce((n, t) => n + t.amount, 0);
+  const totalBet = s.tickets.reduce((n, t) => n + t.amount, 0);
   const budget = new Map<string, number>();
   const prizes = run.order.map((_, i) => full[i] ?? 0);
   const earned = run.order.map((no, i) => {
@@ -210,24 +211,34 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     const bet = betOf(owner);
     let top: number;
     let capped = false;
+    let betCapped = false;
+    // 満額の最低保証は、馬主が最低の額以上賭け、ほかの人も合計で一定の額以上賭けたレースだけ（自作自演で増やさない）
+    const enough = bet >= Math.max(1, c.keibaPurseMinBet) && totalBet - bet >= c.keibaPurseOthersMin;
     if (s.big) {
       // 🏆 大レース: 最低保証は満額（1 日に数回だけなので、賭けた額に関係なく）
       top = Math.max(0, (full[i] ?? 0) - (base[i] ?? 0));
-    } else if (bet > 0) {
+    } else if (enough) {
       const left = budget.get(owner) ?? bet * c.keibaBetPurseMult;
       top = Math.min(Math.max(0, (full[i] ?? 0) - (base[i] ?? 0)), left);
       budget.set(owner, left - top);
+      betCapped = c.keibaBetDailyCap > 0;
     } else {
       top = Math.max(0, (lite[i] ?? 0) - (base[i] ?? 0));
       capped = true;
     }
     prizes[i] = (base[i] ?? 0) + top;
-    const rest = (base[i] ?? 0) + fee + fanMoney(s.tickets, no, owner, conf) + (capped ? 0 : top);
+    // 🎫 出走料: その馬がもらう分から引く（もらう分より多くは引かない）。先に上限なしの分から、足りなければ最低保証の分から
+    let rest = (base[i] ?? 0) + fee + fanMoney(s.tickets, no, owner, conf) + (capped || betCapped ? 0 : top);
+    let topPaid = capped || betCapped ? top : 0;
+    const entry = s.big ? 0 : c.keibaEntryFee;
+    const fromRest = Math.min(rest, entry);
+    rest -= fromRest;
+    topPaid -= Math.min(topPaid, entry - fromRest);
     // 🤝 共同所有なら口の数で分ける
     const holders = s.horses[no - 1]!.shares ?? [{ memberId: owner, units: 1 }];
     for (const x of splitByShares(holders, rest, owner)) credits.push({ memberId: x.memberId, amount: x.amount, reason: 'keiba_prize' });
-    if (capped) for (const x of splitByShares(holders, top, owner)) credits.push({ memberId: x.memberId, amount: x.amount, reason: 'keiba_prize', cap: 'keiba_purse' });
-    return rest + top;
+    if (topPaid > 0) for (const x of splitByShares(holders, topPaid, owner)) credits.push({ memberId: x.memberId, amount: x.amount, reason: 'keiba_prize', cap: capped ? 'keiba_purse' : 'keiba_purse_bet' });
+    return rest + topPaid;
   });
   s.prizes = prizes;
   // 名簿の馬の成績（1 走ずつ残して馬の成績ページに。馬主の馬はリーディングとお祝いにも使う）

@@ -16,7 +16,7 @@ export type Credit = {
   amount: number;
   reason: 'casino_win' | 'casino_refund' | 'casino_cashout' | 'keiba_prize';
   /** 胴元が出す最低保証の賞金（1 人 1 日の上限まで） */
-  cap?: 'keiba_purse';
+  cap?: 'keiba_purse' | 'keiba_purse_bet';
 };
 /** カジノの収支（運営の画面）に入れる 1 回分 */
 export type PlayRecord = { memberId: string; game: CasinoGame; bet: number; payout: number };

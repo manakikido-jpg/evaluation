@@ -569,6 +569,14 @@ export const casinoSchema = z.object({
   keibaNoBetPurse: z.number().int().min(0).max(1_000_000).default(50),
   /** 🏇 賭けていないレースの最低保証で足す分を、1 人が 1 日（日本時間）に受け取れる上限（0 で上限なし） */
   keibaNoBetDailyCap: z.number().int().min(0).max(100_000_000).default(1000),
+  /** 🏇 最低保証（満額）をもらうのに、馬主がそのレースに賭ける最低の額（足りなければ「賭けていない」と同じ扱い） */
+  keibaPurseMinBet: z.number().int().min(0).max(1_000_000).default(100),
+  /** 🏇 最低保証（満額）は、馬主以外のメンバーがそのレースで合計この額以上賭けたときだけ（自作自演で増やさない） */
+  keibaPurseOthersMin: z.number().int().min(0).max(10_000_000).default(500),
+  /** 🏇 最低保証（満額）で足す分を、1 人が 1 日（日本時間）に受け取れる上限（0 で上限なし） */
+  keibaBetDailyCap: z.number().int().min(0).max(100_000_000).default(3000),
+  /** 🏇 出走料: 馬主のいる馬が走るたび、その馬の賞金・手当から引く額（もらう額より多くは引かない） */
+  keibaEntryFee: z.number().int().min(0).max(1_000_000).default(50),
   /** 🏇 応援金: その馬の単勝・複勝に、馬主でない人が賭けた額の何 % を馬主へ */
   keibaFanPct: z.number().int().min(0).max(20).default(3),
   /** 🏇 血統ロイヤリティ: 産駒が稼いだ賞金の何 % を親の馬主へ（胴元が出す） */
