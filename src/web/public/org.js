@@ -277,11 +277,11 @@
     if (!here.length && edit) list.append(el('li', 'org-empty', 'ここへ人をドロップ'));
     box.append(list);
     if (edit) {
-      const port = el('span', 'org-port'); port.title = 'ドラッグしてほかの四角とつなぐ';
-      port.addEventListener('pointerdown', (e) => drawLink(e, n));
+      // 線を出す「●」: 下・右・左・上
+      const ports = ['b', 'r', 'l', 't'].map(side => { const port = el('span', `org-port org-port-${side}`); port.title = 'ドラッグしてほかの四角とつなぐ'; port.addEventListener('pointerdown', (e) => drawLink(e, n)); return port; });
       const grip = el('span', 'org-resize'); grip.title = 'ドラッグで大きさを変える（Shift で形をそのまま）';
       grip.addEventListener('pointerdown', (e) => resizeBox(e, n, box));
-      box.append(port, grip);
+      box.append(...ports, grip);
       box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('org-over'); });
       box.addEventListener('dragleave', () => box.classList.remove('org-over'));
       box.addEventListener('drop', (e) => { e.preventDefault(); box.classList.remove('org-over'); try { const d = JSON.parse(e.dataTransfer.getData('text/plain')); if (/^\d{17,20}$/.test(d.memberId)) place(d.memberId, n.id, d.fromNode); } catch { /* ほかのもの */ } });
