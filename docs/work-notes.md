@@ -1217,3 +1217,7 @@
 
 - fe55526統合d3d05b9の検証も成功：型/ビルド/全203ファイル・2,278件（484.96秒・4並列）、diff成功。ログ/tmp/casino-rooms-merged-{types,build,tests}.log。
 - 保存前fetchで本番c312602（組織図の役職作成）の更新を検出。取り込んだ最新組み合わせを最後に検証して提出する。今回の3ゲーム自体には追加修正なし。継続中の他作業と今回の検証済み基点を区別して記録する。
+
+- 最終提出の検証基点は本番c312602、統合bd62789。今回のコードは固定済み。最新取得→統合→全件検証→専用ブランチへ保存の順で提出する。別作業の継続更新まで本作業の完成範囲と混同せず、PR合流時の最新本番確認/競合解消はAGENTS.mdの合流担当ルールに従う。
+
+- 最終提出版bd62789（本番c312602統合）の型チェック・ビルド・全203ファイル/2,279件が成功（486.75秒、4並列）。diff確認成功。ログ/tmp/casino-rooms-submit-{types,build,tests}.log。画面はdocs/previews/casino-immersive-{roulette,blackjack,highlow,mobile}.png。専用ブランチcodex/casino-immersive-previewをpushし、本番向けPRを提出する。公開切替/本番合流は未実施。以降は記録のみで、検証済みソースに変更なし。
