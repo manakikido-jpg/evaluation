@@ -22,6 +22,8 @@
   const btn = (label, title, fn, cls = 'org-btn') => { const b = el('button', cls, label); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); b.addEventListener('click', fn); return b; };
   const newId = (p) => (p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).slice(0, 40);
   const node = (id) => chart.nodes.find(n => n.id === id);
+  /** その四角で選べる役職（四角だけの役職があればそれ、なければ共通の段階） */
+  const ranksOf = (id) => { const n = node(id); return n?.ranks?.length ? n.ranks : chart.ranks; };
   const snap = (v, e) => (grid && !e?.altKey ? Math.round(v / 10) * 10 : Math.round(v));
   const snapshot = () => JSON.stringify(chart);
   function commit(before) { past.push(before ?? snapshot()); if (past.length > 100) past.shift(); future.length = 0; dirty = true; setStatus('まだ保存していません。'); }
@@ -236,7 +238,7 @@
     if (fromNode === nodeId) return;
     const before = snapshot();
     if (fromNode) chart.placements = chart.placements.filter(p => !(p.memberId === memberId && p.nodeId === fromNode));
-    if (!chart.placements.some(p => p.memberId === memberId && p.nodeId === nodeId)) chart.placements.push({ memberId, nodeId, rankId: chart.ranks[chart.ranks.length - 1].id });
+    if (!chart.placements.some(p => p.memberId === memberId && p.nodeId === nodeId)) chart.placements.push({ memberId, nodeId, rankId: ranksOf(nodeId)[ranksOf(nodeId).length - 1].id });
     commit(before); render();
   }
   const avatar = (id) => {
@@ -260,18 +262,19 @@
     if (edit) head.addEventListener('dblclick', () => rename(n));
     box.append(head);
     const list = el('ul', 'org-box-people');
-    const here = chart.placements.filter(p => p.nodeId === n.id).sort((a, b) => chart.ranks.findIndex(r => r.id === a.rankId) - chart.ranks.findIndex(r => r.id === b.rankId));
+    const rk = ranksOf(n.id);
+    const here = chart.placements.filter(p => p.nodeId === n.id).sort((a, b) => rk.findIndex(r => r.id === a.rankId) - rk.findIndex(r => r.id === b.rankId));
     for (const p of here) {
       const chip = el('li', 'org-chip');
       dragPerson(chip, p.memberId, n.id);
       chip.append(avatar(p.memberId), el('span', 'org-name', people[p.memberId]?.name ?? p.memberId));
       if (edit) {
         const s = el('select', 'org-rank'); s.setAttribute('aria-label', '段階');
-        for (const r of chart.ranks) { const o = el('option', '', r.name); o.value = r.id; o.selected = r.id === p.rankId; s.append(o); }
+        for (const r of rk) { const o = el('option', '', r.name); o.value = r.id; o.selected = r.id === p.rankId; s.append(o); }
         s.addEventListener('pointerdown', (e) => e.stopPropagation());
         s.addEventListener('change', () => { const before = snapshot(); p.rankId = s.value; commit(before); render(); });
         chip.append(s, btn('×', 'この四角から外す', () => { const before = snapshot(); chart.placements = chart.placements.filter(x => x !== p); commit(before); render(); }, 'org-x'));
-      } else chip.append(el('span', 'org-rank-label', chart.ranks.find(r => r.id === p.rankId)?.name ?? ''));
+      } else chip.append(el('span', 'org-rank-label', rk.find(r => r.id === p.rankId)?.name ?? ''));
       list.append(chip);
     }
     if (!here.length && edit) list.append(el('li', 'org-empty', 'ここへ人をドロップ'));
@@ -330,7 +333,7 @@
         cb.addEventListener('change', () => { const before = snapshot(); n.pages = cb.checked ? [...n.pages, pg.key] : n.pages.filter(k => k !== pg.key); commit(before); det.firstChild.textContent = `社務所Webで使えるページ（${n.pages.length}）`; });
         lab.append(cb, document.createTextNode(' ' + pg.label)); det.append(lab);
       }
-      sec.append(det); inspect.append(sec);
+      sec.append(nodeRanks(n), det); inspect.append(sec);
     } else if (sel?.type === 'edge' && edit) {
       const e = chart.edges.find(x => x.id === sel.id);
       if (e) {
@@ -345,32 +348,58 @@
         inspect.append(sec);
       }
     } else inspect.append(el('p', 'note', edit ? '四角か線を選ぶと、ここで変えられます。' : '四角を選ぶと、使えるページが出ます。'));
-    inspect.append(rankEditor());
+    inspect.append(rankEditor(chart.ranks, null));
     if (edit) inspect.append(rolePicker());
   }
-  function rankEditor() {
-    const sec = el('details', 'card org-ranks'); sec.append(el('summary', '', '段階（上から順に）'));
+  /** 役職の一覧を直す。scope: null は共通の段階（四角だけの役職がない四角の人）、四角の id はその四角の役職 */
+  function rankEditor(list, scope) {
+    const inScope = (p) => (scope ? p.nodeId === scope : !node(p.nodeId)?.ranks?.length);
+    const sec = el(scope ? 'div' : 'details', scope ? 'org-ranks' : 'card org-ranks');
+    if (!scope) sec.append(el('summary', '', '共通の段階（上から順に）'));
     const ol = el('ol');
-    chart.ranks.forEach((r, i) => {
+    list.forEach((r, i) => {
       const li = el('li');
       if (edit) {
-        const inp = el('input'); inp.value = r.name; inp.maxLength = 20; inp.setAttribute('aria-label', `段階 ${i + 1}`);
+        const inp = el('input'); inp.value = r.name; inp.maxLength = 20; inp.setAttribute('aria-label', `役職 ${i + 1}`);
         inp.addEventListener('change', () => { if (inp.value.trim()) { const before = snapshot(); r.name = inp.value.trim(); commit(before); render(); } });
         li.append(inp,
-          btn('↑', '上へ', () => { if (i > 0) { const before = snapshot(); [chart.ranks[i - 1], chart.ranks[i]] = [chart.ranks[i], chart.ranks[i - 1]]; commit(before); render(); } }),
-          btn('↓', '下へ', () => { if (i < chart.ranks.length - 1) { const before = snapshot(); [chart.ranks[i + 1], chart.ranks[i]] = [chart.ranks[i], chart.ranks[i + 1]]; commit(before); render(); } }),
+          btn('↑', '上へ', () => { if (i > 0) { const before = snapshot(); [list[i - 1], list[i]] = [list[i], list[i - 1]]; commit(before); render(); } }),
+          btn('↓', '下へ', () => { if (i < list.length - 1) { const before = snapshot(); [list[i + 1], list[i]] = [list[i], list[i + 1]]; commit(before); render(); } }),
           btn('🗑', '消す', () => {
-            if (chart.ranks.length <= 1) return alert('段階は 1 つ以上必要です。');
-            if (!confirm(`「${r.name}」を消しますか？（この段階の人は、いちばん下の段階になります）`)) return;
-            const before = snapshot(); chart.ranks.splice(i, 1); const last = chart.ranks[chart.ranks.length - 1].id;
-            for (const p of chart.placements) if (p.rankId === r.id) p.rankId = last;
+            if (list.length <= 1) return alert('役職は 1 つ以上必要です。');
+            if (!confirm(`「${r.name}」を消しますか？（この役職の人は、いちばん下の役職になります）`)) return;
+            const before = snapshot(); list.splice(i, 1); const last = list[list.length - 1].id;
+            for (const p of chart.placements) if (inScope(p) && p.rankId === r.id) p.rankId = last;
             commit(before); render();
           }));
       } else li.append(el('span', '', r.name));
       ol.append(li);
     });
     sec.append(ol);
-    if (edit) sec.append(btn('＋ 段階を足す', '段階を足す', () => { if (chart.ranks.length >= 12) return alert('段階は 12 個までです。'); const v = prompt('段階の名前', '補佐'); if (v?.trim()) { const before = snapshot(); chart.ranks.push({ id: newId('r'), name: v.trim().slice(0, 20) }); commit(before); render(); } }));
+    if (edit) sec.append(btn('＋ 役職を足す', '役職を足す', () => { if (list.length >= 12) return alert('役職は 12 個までです。'); const v = prompt('役職の名前', '主典'); if (v?.trim()) { const before = snapshot(); list.push({ id: newId('r'), name: v.trim().slice(0, 20) }); commit(before); render(); } }));
+    return sec;
+  }
+  /** 四角の右の欄: この四角だけの役職 */
+  function nodeRanks(n) {
+    const sec = el('details', 'org-node-ranks'); sec.open = true;
+    sec.append(el('summary', '', n.ranks?.length ? 'この四角の役職' : 'この四角の役職（共通の段階を使用中）'));
+    if (n.ranks?.length) {
+      sec.append(rankEditor(n.ranks, n.id));
+      if (edit) sec.append(btn('共通の段階に戻す', '共通の段階に戻す', () => {
+        if (!confirm('この四角だけの役職をやめて、共通の段階に戻しますか？（この四角の人は、共通の段階のいちばん下になります）')) return;
+        const before = snapshot(); delete n.ranks; const last = chart.ranks[chart.ranks.length - 1].id;
+        for (const p of chart.placements) if (p.nodeId === n.id) p.rankId = last;
+        commit(before); render();
+      }));
+    } else {
+      sec.append(el('p', 'note', chart.ranks.map(r => r.name).join('・')));
+      if (edit) sec.append(btn('この四角だけの役職を作る', 'この四角だけの役職を作る', () => {
+        const before = snapshot();
+        // 今の段階を写して始める（置いた人の役職はそのまま）
+        n.ranks = chart.ranks.map(r => ({ ...r }));
+        commit(before); render();
+      }));
+    }
     return sec;
   }
   function rolePicker() {
