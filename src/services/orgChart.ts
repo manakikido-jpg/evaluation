@@ -29,6 +29,8 @@ export const orgChartSchema = z.object({
     x: coord.optional(), y: coord.optional(),
     w: z.number().finite().min(120).max(1200).optional(), h: z.number().finite().min(60).max(1200).optional(),
     color: z.enum(ORG_COLORS).default('plain'),
+    /** この四角だけの役職（なければ共通の段階） */
+    ranks: z.array(z.object({ id, name: z.string().trim().min(1).max(20) })).max(12).optional(),
   })).max(80),
   edges: z.array(z.object({ id, from: id, to: id, bends: z.array(z.object({ x: coord, y: coord })).max(12).default([]), dashed: z.boolean().default(false) })).max(200).default([]),
   placements: z.array(z.object({ memberId: snowflake, nodeId: id, rankId: id })).max(500),
@@ -72,11 +74,13 @@ function layoutLegacy(c: OrgChart): OrgChart {
 export function tidyOrg(input: OrgChart): OrgChart {
   const c = layoutLegacy(input);
   const nodeIds = new Set(c.nodes.map(n => n.id)), rankIds = new Set(c.ranks.map(r => r.id));
-  const nodes = c.nodes.map(({ parentId: _old, ...n }) => ({ ...n, w: n.w ?? W, h: n.h ?? H, pages: [...new Set(n.pages)] }));
+  const nodes = c.nodes.map(({ parentId: _old, ranks, ...n }) => ({ ...n, w: n.w ?? W, h: n.h ?? H, pages: [...new Set(n.pages)], ...(ranks?.length ? { ranks } : {}) }));
   const seenEdge = new Set<string>();
   const edges = c.edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to && !seenEdge.has(e.id) && seenEdge.add(e.id));
   const seenPlace = new Set<string>();
-  const placements = c.placements.filter(p => nodeIds.has(p.nodeId) && rankIds.has(p.rankId) && !seenPlace.has(p.memberId + ':' + p.nodeId) && seenPlace.add(p.memberId + ':' + p.nodeId));
+  // 四角だけの役職がある四角は、その役職だけ選べる
+  const ranksOf = new Map(nodes.map(n => [n.id, n.ranks?.length ? new Set(n.ranks.map(r => r.id)) : rankIds]));
+  const placements = c.placements.filter(p => nodeIds.has(p.nodeId) && ranksOf.get(p.nodeId)!.has(p.rankId) && !seenPlace.has(p.memberId + ':' + p.nodeId) && seenPlace.add(p.memberId + ':' + p.nodeId));
   return { ranks: c.ranks, roles: [...new Set(c.roles)], nodes, edges, placements };
 }
 

@@ -32,6 +32,16 @@ describe('組織図', () => {
     expect(again.edges).toHaveLength(2); expect(again.edges[0]!.bends).toEqual([{ x: 1, y: 2 }]);
     await expect(saveOrg(db, { ranks: [], nodes: [], placements: [] }, 'admin')).rejects.toThrow();
   });
+  it('四角ごとに別の役職を作れ、その四角ではその役職だけ選べる', async () => {
+    const saved = await saveOrg(db, {
+      ranks: DEFAULT_ORG.ranks,
+      nodes: [{ id: 'f', name: 'フロント', pages: [], x: 0, y: 0, ranks: [{ id: 'chief', name: '統括' }, { id: 'clerk', name: '主典' }] }, { id: 'b', name: 'バック', pages: [], x: 300, y: 0, ranks: [] }],
+      placements: [{ memberId: A, nodeId: 'f', rankId: 'clerk' }, { memberId: '890000000000000002', nodeId: 'f', rankId: 'lead' }, { memberId: A, nodeId: 'b', rankId: 'sub' }],
+    }, 'admin');
+    expect(saved.nodes.find(n => n.id === 'f')!.ranks!.map(r => r.name)).toEqual(['統括', '主典']);
+    expect(saved.nodes.find(n => n.id === 'b')!.ranks).toBeUndefined();
+    expect(saved.placements).toEqual([{ memberId: A, nodeId: 'f', rankId: 'clerk' }, { memberId: A, nodeId: 'b', rankId: 'sub' }]);
+  });
   it('置いた部署のページだけ社務所Webで使える（全部見られる人はそのまま）', () => {
     const c = tidyOrg(orgChartSchema.parse({ ranks: DEFAULT_ORG.ranks, nodes: [{ id: 'g', name: '案内', pages: ['guide', 'members'], x: 0, y: 0 }], placements: [{ memberId: A, nodeId: 'g', rankId: 'member' }] }));
     expect(orgPagesOf(c, A)).toEqual(['members', 'guide']);
