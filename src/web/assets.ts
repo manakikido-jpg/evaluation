@@ -105,6 +105,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'recordings.js': { body: readText(path.join(here, 'public/recordings.js')), type: 'text/javascript; charset=utf-8' },
     'editor.js': { body: readText(path.join(here, 'public/editor.js')), type: 'text/javascript; charset=utf-8' },
     'guide.js': { body: readText(path.join(here, 'public/guide.js')), type: 'text/javascript; charset=utf-8' },
+    'nav-order.js': { body: readText(path.join(here, 'public/nav-order.js')), type: 'text/javascript; charset=utf-8' },
+    'org.js': { body: readText(path.join(here, 'public/org.js')), type: 'text/javascript; charset=utf-8' },
     'theme.js': { body: readText(path.join(here, 'public/theme.js')), type: 'text/javascript; charset=utf-8' },
     'menu.js': { body: readText(path.join(here, 'public/menu.js')), type: 'text/javascript; charset=utf-8' },
     'copy-text.js': { body: readText(path.join(here, 'public/copy-text.js')), type: 'text/javascript; charset=utf-8' },

@@ -1465,3 +1465,49 @@ form.inline { display: inline; margin: 0; }
 .visit-review-image { max-width: 100%; height: auto; }
 .news-copy { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--sakura); border-radius: 8px; padding: .6rem .8rem; margin: .3rem 0; font-family: inherit; }
 .visit-order-image { width: 160px; height: 160px; object-fit: cover; margin: 0 6px 6px 0; border-radius: 6px; }
+
+/* 🏯 組織図 */
+.org-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.org-status { margin: 0; color: var(--muted); }
+.org-main { display: flex; gap: 12px; align-items: flex-start; }
+.org-side { flex: 0 0 220px; max-height: 75vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--card); position: sticky; top: 8px; }
+.org-side h2 { font-size: 1rem; margin: 0 0 6px; }
+.org-search { width: 100%; margin-bottom: 6px; }
+.org-side-list { list-style: none; margin: 4px 0 8px; padding: 0; }
+.org-side-item { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; margin: 3px 0; cursor: grab; background: var(--card); }
+.org-side-item small { color: var(--muted); }
+.org-tree-wrap { flex: 1; overflow-x: auto; padding: 8px 0 16px; }
+.org-tree, .org-tree ul { list-style: none; margin: 0; padding: 18px 0 0; display: flex; justify-content: center; position: relative; }
+.org-tree { padding-top: 0; min-width: max-content; }
+.org-tree li { position: relative; padding: 18px 6px 0; display: flex; flex-direction: column; align-items: center; }
+.org-tree > li { padding-top: 0; }
+.org-tree li::before, .org-tree li::after { content: ''; position: absolute; top: 0; width: 50%; height: 18px; border-top: 2px solid var(--line); }
+.org-tree li::before { left: 0; }
+.org-tree li::after { right: 0; border-left: 2px solid var(--line); }
+.org-tree li:first-child::before, .org-tree li:last-child::after { border-top: 0; }
+.org-tree li:only-child::before { display: none; }
+.org-tree li:only-child::after { border-top: 0; }
+.org-tree > li::before, .org-tree > li::after { display: none; }
+.org-tree ul::before { content: ''; position: absolute; top: 0; left: 50%; height: 18px; border-left: 2px solid var(--line); }
+.org-node { min-width: 150px; max-width: 220px; border: 2px solid var(--accent-text); border-radius: 10px; background: var(--card); padding: 6px; }
+.org-node.org-over { outline: 3px dashed var(--accent-text); }
+.org-node-head { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: space-between; }
+.org-tools { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+.org-btn { padding: 2px 6px; font-size: .85rem; }
+.org-people { list-style: none; margin: 6px 0 0; padding: 0; }
+.org-chip { display: flex; gap: 4px; align-items: center; padding: 3px 4px; border: 1px solid var(--line); border-radius: 6px; margin: 3px 0; cursor: grab; }
+.org-chip .org-name { flex: 1; overflow-wrap: anywhere; }
+.org-rank { max-width: 6.5em; font-size: .85rem; }
+.org-rank-label { font-size: .8rem; padding: 0 4px; border-radius: 4px; border: 1px solid var(--accent-text); color: var(--accent-text); }
+.org-empty { color: var(--muted); font-size: .85rem; padding: 4px; }
+.org-pages { margin-top: 6px; font-size: .85rem; }
+.org-page { display: block; }
+.org-ranks ol li { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+@media (max-width: 720px) { .org-main { flex-direction: column; } .org-side { position: static; flex-basis: auto; width: 100%; max-height: 40vh; } }
+/* 🧭 メニューの並び方 */
+.nav-order-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.nav-order-col { min-height: 80px; }
+.nav-order-title { flex: 1; min-width: 0; font-weight: bold; }
+.nav-order-list { list-style: none; margin: 6px 0 0; padding: 0; min-height: 30px; }
+.nav-order-list .org-side-item { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.nav-order-list .org-over { outline: 2px dashed var(--accent-text); }
