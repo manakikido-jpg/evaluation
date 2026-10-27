@@ -1,3 +1,4 @@
+import {KeibaTheme, KeibaNav, KeibaHero} from './keibaTheme.js';
 import {KeibaPreviewContent} from './keibaPreview.js';
 import {keibaBroadcast} from '../../services/casino/keibaBroadcast.js';
 import { KB_DEFAULT_OUTFIT, KB_OUTFIT_COLORS, KB_HOODS, KB_ORNAMENTS } from '../../services/casino/keibaOutfit.js';
@@ -886,7 +887,7 @@ export function KeibaView(p: {
         ? "🏇 レース中"
         : `🏁 結果（${KB_RESULT_SECONDS} 秒で次のレースの受付）・次まで`;
   return (
-    <div class="kb-layout">
+    <div class="kb-layout"><KeibaTheme/><div class="kb-theme-top"><KeibaNav current="/casino/tables/keiba"/></div>
       <div class="kb-main">
         <section
           class="kb-stage"
@@ -1104,7 +1105,7 @@ export function KbLobbyExtra(p: {
   const active = p.horses.filter((h) => !h.retiredAt);
   return (
     <>
-      <nav class="c-panel"><a href="/casino/keiba/club">育成・スキル・馬主の収支</a> ／ <a href="/casino/keiba/events">大会・ランキング</a> ／ <a href="/casino/keiba/replays">レースを見返す</a></nav>
+      <KeibaTheme/><KeibaHero title="みんなでダービー" note="一枚の馬券から、一頭の物語まで。"/><KeibaNav current="/casino/tables/keiba"/>
       <section class="c-panel"><h2>🏇 競馬の3D映像</h2><p class="c-muted">発走すると、通常のレース画面に3D映像を表示します。カメラや画質を選べます。馬券なしで確認する場合は下の見本を開いてください。</p><a class="c-btn" href="/casino/keiba/preview">映像試作を見る（馬券なし）</a></section>
       <section class="c-panel kb-owner-cta">
         <h2>🐴 馬主になる</h2>
@@ -1284,11 +1285,11 @@ export function KbStablePage(p: {
   const foalPrice = Math.floor(p.price / 2);
   const Hidden = () => <input type="hidden" name="_csrf" value={csrf} />;
   return (
-    <CasinoLayout title="馬主の部屋" me={p.me}><p><a href="/casino/keiba/club">育成・スキル・血統・共同所有・収支を見る</a></p>
+    <CasinoLayout title="馬主の部屋" me={p.me}><KeibaTheme/><KeibaHero title="馬主の部屋" note="愛馬を迎えて、次の一走を楽しもう。"/><KeibaNav current="/casino/keiba/stable"/>
       <p class="c-back">
         <a href="/casino/tables/keiba">← みんなでダービーへ</a>
       </p>
-      <h1 class="c-h1">🐴 馬主の部屋</h1>
+
       {p.msg && <Msg msg={p.msg} />}
       <p class="c-note"><a href="/casino/keiba/aura-shop">✨ 馬のオーラショップへ</a> — 付ける馬を選んでから購入できます。</p>
       <section class="c-panel" id="aura-shop">

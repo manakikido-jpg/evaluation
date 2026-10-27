@@ -98,3 +98,8 @@ PCは表示領域の幅を使い、映像の高さも調整します。賭け方
 料金・賞金・手数料の設定値は維持。新しい銭の報酬は追加しない。大会の記念報酬は称号/カード/勝負服。導入前の未保存映像や不明な祖先/内訳を推測で作らない。機能実装とレビュー/本番反映/実機FPS確認は別の状態として報告する。
 
 全項目拡張の操作見本（仮の会員/レース/大会）：[育成と馬主](previews/keiba-expansion-club.png)・[馬券の確認](previews/keiba-expansion-tickets.png)・[大会](previews/keiba-expansion-events.png)・[運営設定](previews/keiba-expansion-admin.png)・[決着](previews/keiba-expansion-goal.png)・[オーラ/装具と雨天](previews/keiba-expansion-outfit.png)・[横スマホ](previews/keiba-expansion-mobile.png)。
+
+## 2026年10月27日：映像に合わせた共通UI
+新しい映像に合わせて通常の卓・入口・馬主の部屋・育成/収支・大会/ランキング・買い目確認・リプレイ一覧・公開プロフィールへ、濃紺と金、桜の共通テーマを追加します。共通メニューは折り返し表示し、現在の画面を文字と明るい背景で示します。通常の卓には大きな見出しを増やさず、映像の幅を維持します。馬券欄は和紙色、選択中は桜色とチェック、数値は濃色。ほかの遊技にはこの配色を適用しません。賭け方・金額・ゲーム処理は変更しません。
+
+表示見本：[馬券の確認](previews/keiba-ui-tickets.png)、[スマホ](previews/keiba-ui-mobile.png)、[育成](previews/keiba-ui-club.png)。ローカルの仮会員・仮レースの実ブラウザ画像で、本番の会員/収支ではありません。

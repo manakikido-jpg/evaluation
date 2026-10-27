@@ -80,6 +80,7 @@ const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
+    'keiba-theme.css': { body: readText(path.join(here, 'public/keiba-theme.css')), type: 'text/css; charset=utf-8' },
     'keiba-club.css': { body: readText(path.join(here, 'public/keiba-club.css')), type: 'text/css; charset=utf-8' },
     'keiba-preview.css': { body: readText(path.join(here, 'public/keiba-preview.css')), type: 'text/css; charset=utf-8' },
     'keiba-replay.js': { body: keibaReplay, type: 'text/javascript; charset=utf-8' },
