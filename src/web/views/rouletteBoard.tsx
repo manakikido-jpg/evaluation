@@ -29,27 +29,35 @@ export function RouletteBoard(p: {
   memoryKey: string;
   disabled?: boolean;
   preview?: boolean;
+  /** 運営試遊の確定したBETを表示する。操作は固定する。 */
+  settledStakes?: { on: RouletteBet; amount: number }[];
 }) {
   // 1 か所の最高（ルーレットだけ別に決められる）。大きい賭けのチップも出す
   const max = rouletteMaxOf(p.casino);
   const chips = [...new Set([p.casino.minBet, 50, 100, 500, 1000, 5000, 10000, 50000, 100000])].filter((n) => n >= p.casino.minBet && n <= max).sort((a, b) => a - b);
+  const settled = p.preview && p.settledStakes !== undefined;
+  const stakes = settled ? p.settledStakes! : [];
+  const amountOf = (bet: RouletteBet) => stakes.find(s => s.on === bet)?.amount ?? 0;
+  const covered = (bet: RouletteBet) => p.preview ? Array.from({length:37},(_,n)=>n).filter(n=>rouletteMultiplier(bet,n)>0).join(',') : undefined;
+  const mark = (bet: RouletteBet) => amountOf(bet) ? ` placed${rouletteMultiplier(bet,p.number!)>0?' ir-bet-won':' ir-bet-lost'}` : '';
+  const Badge = (q: {bet:RouletteBet}) => amountOf(q.bet) ? <span class="c-rb-chip">{fmt(amountOf(q.bet))}</span> : null;
   const hit = (bet: RouletteBet) => (p.number !== undefined && p.number !== null && rouletteMultiplier(bet, p.number) > 0 ? ' hit' : '');
   const Cell = (q: { bet: RouletteBet; cls: string; label: string; title: string }) => (
-    <button type="button" class={`c-rb-cell ${q.cls}${hit(q.bet)}`} data-bet={q.bet} title={q.title} disabled={p.disabled}>
-      <span class="c-rb-label">{q.label}</span>
+    <button type="button" class={`c-rb-cell ${q.cls}${hit(q.bet)}${mark(q.bet)}`} data-bet={q.bet} data-rb-covers={covered(q.bet)} aria-pressed={amountOf(q.bet)>0} title={q.title} disabled={p.disabled}>
+      <span class="c-rb-label">{q.label}</span><Badge bet={q.bet}/>
     </button>
   );
   return (
-    <form method={p.preview ? "get" : "post"} action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(max)}>
+    <form method={p.preview ? "get" : "post"} action={p.action} class="c-rb" data-rb={p.memoryKey} data-rb-settled={settled ? "true" : undefined} data-min={String(p.casino.minBet)} data-max={String(max)}>
       {!p.preview && <input type="hidden" name="_csrf" value={p.csrf} />}
       {Object.entries(p.hidden ?? {}).map(([k, v]) => (
         <input type="hidden" name={k} value={v} />
       ))}
-      <input type="hidden" name="bets" value="" data-rb-bets />
+      <input type="hidden" name="bets" value={stakes.map(s=>`${s.on}:${s.amount}`).join(',')} data-rb-bets />
       <div class="c-rb-chips" role="radiogroup" aria-label="置くチップ">
         <span class="c-muted c-rb-hint">① チップを選んで ② マスを押す</span>
         {chips.map((n, i) => (
-          <button type="button" class={`c-chip c-chip-${chipTone(n)}${i === Math.min(1, chips.length - 1) ? ' on' : ''}`} data-chip={String(n)} aria-pressed={i === Math.min(1, chips.length - 1) ? 'true' : 'false'}>
+          <button type="button" class={`c-chip c-chip-${chipTone(n)}${i === Math.min(1, chips.length - 1) ? ' on' : ''}`} data-chip={String(n)} aria-pressed={i === Math.min(1, chips.length - 1) ? 'true' : 'false'} disabled={p.disabled}>
             {fmt(n)}
           </button>
         ))}
@@ -68,7 +76,7 @@ export function RouletteBoard(p: {
         {EVENS.map((k) => (
           <Cell bet={k} cls={`out ${k}${k === 'red' ? ' red' : k === 'black' ? ' black' : ''}`} label={k === 'red' ? '◆ 赤' : k === 'black' ? '◆ 黒' : SHORT[k]!} title={`${ROULETTE_BETS[k].label}（2 倍）`} />
         ))}
-        {ROULETTE_INSIDE.map((b) => <button type="button" class={`c-rb-cell c-rb-boundary${hit(b.on)}`} data-bet={b.on} data-rb-inside={b.numbers.join(',')} data-rb-edge={b.edge ? 'true' : 'false'} title={`${b.label}（${b.mult}倍）`} aria-label={`${b.label}（${b.mult}倍）`} disabled={p.disabled} />)}
+        {ROULETTE_INSIDE.map((b) => <button type="button" class={`c-rb-cell c-rb-boundary${hit(b.on)}${mark(b.on)}`} data-bet={b.on} data-rb-covers={covered(b.on)} aria-pressed={amountOf(b.on)>0} data-rb-inside={b.numbers.join(',')} data-rb-edge={b.edge ? 'true' : 'false'} title={`${b.label}（${b.mult}倍）`} aria-label={`${b.label}（${b.mult}倍）`} disabled={p.disabled}><Badge bet={b.on}/></button>)}
       </div>
       <div class="c-rb-inside-picker">
         <label>数字の間・交点への賭け <select data-rb-inside-select disabled={p.disabled}>
@@ -80,19 +88,19 @@ export function RouletteBoard(p: {
       <div class="c-rb-foot">
       <div class="c-rb-slip">
         <span>
-          賭け <b data-rb-total>0</b> {p.coin.name}・<span data-rb-count>0</span> か所（数の制限なし）
+          賭け <b data-rb-total>{fmt(stakes.reduce((total,s)=>total+s.amount,0))}</b> {p.coin.name}・<span data-rb-count>{stakes.length}</span> か所（数の制限なし）
         </span>
         <span class="c-rb-tools">
-          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-undo>
+          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-undo disabled={p.disabled}>
             ↶ 1 つ戻す
           </button>
-          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-clear>
+          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-clear disabled={p.disabled}>
             クリア
           </button>
-          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-double>
+          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-double disabled={p.disabled}>
             ×2
           </button>
-          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-repeat>
+          <button type="button" class="c-btn c-btn-small c-btn-ghost" data-rb-repeat disabled={p.disabled}>
             前回と同じ
           </button>
         </span>
@@ -132,13 +140,13 @@ export function RouletteStakes(p: { stakes: { on: RouletteBet; amount: number; p
  * 回るルーレット。盤は勝った数字が上（▼）に来るように止まり、玉は逆に回って減速し、跳ねてそのポケットに落ちる。
  * 止まるまで（約 5 秒）当たりの数字・結果は見せない（CSS の遅れ）。回していないときはゆっくり回り続ける
  */
-export function RouletteWheel(p: { number: number | null | undefined }) {
+export function RouletteWheel(p: { number: number | null | undefined; previewStakes?: {on:RouletteBet;amount:number}[] }) {
   const spun = p.number !== null && p.number !== undefined;
   return (
     <div class={`c-wheel2${spun ? ' spun' : ' idle'}`} aria-label={spun ? `出た数字 ${p.number}` : 'ルーレット'}>
       <div class={`c-wheel c-wheel2-disc${spun ? ` land-${p.number}` : ''}`} aria-hidden="true">
         {ROULETTE_ORDER.map((n, i) => (
-          <span class={`pk pk-${i}`}>
+          <span class={`pk pk-${i}${p.previewStakes?.some(s=>rouletteMultiplier(s.on,n)>0)?' ir-pocket-bet':''}${p.previewStakes && p.number===n?' ir-pocket-result':''}`} data-ir-pocket={p.previewStakes ? n : undefined}>
             <b>{n}</b>
           </span>
         ))}

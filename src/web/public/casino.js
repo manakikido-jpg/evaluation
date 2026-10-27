@@ -585,6 +585,7 @@ const rbState = (form) => {
 };
 const fmt = (n) => n.toLocaleString('ja-JP');
 const paintBoard = (form) => {
+  if (form.dataset.rbSettled === 'true') { positionRouletteInside(form); return; }
   const st = rbState(form);
   if (!st.chip) {
     const on = form.querySelector('[data-chip].on');

@@ -28,3 +28,9 @@
 ## 実ブラウザの見本
 
 [ルーレット](previews/casino-immersive-roulette.png)・[ブラックジャック](previews/casino-immersive-blackjack.png)・[ハイロー](previews/casino-immersive-highlow.png)・[スマホ](previews/casino-immersive-mobile.png)。運営の仮会員で確認した固定サンプルの画面です。生成した完成イメージと、実際に動くこの画面を区別します。
+
+## ルーレットのBETから結果まで
+
+円盤の数字へBET対象の光を追加。対象の計算は盤面の`rouletteMultiplier`を共用し、赤黒や境界も一致させます。回転中も円盤と一緒に光が動き、停止後の出目は白、当たったBETは薄緑で区別します。確定済みの盤面はチップと合計を保持して固定します。
+
+新たな回転を操作したときだけ回転→結果→払戻の順で表示し、再読込・履歴から戻った結果は即表示。音とは別のタイマーで管理し、音OFFでも結果へ進みます。動き低減/即表示/結果スキップは数え上げを省略します。一般公開への接続は今回も含みません。

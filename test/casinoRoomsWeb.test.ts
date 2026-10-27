@@ -7,6 +7,8 @@ import {createSession,findSession} from '../src/web/sessions.js';
 import {createMemberSession} from '../src/web/memberSessions.js';
 import {recordJoin} from '../src/services/members.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
+import {roomPreview} from '../src/services/casino/roomPreview.js';
+import {rouletteMultiplier} from '../src/services/casino/roulette.js';
 import {casinoGames,casinoTables,memberSessions} from '../src/db/schema.js';
 const now=new Date('2026-10-28T03:00:00Z'),id='760000000000000001',user={id,username:'sample',displayName:'試遊の運営',avatarUrl:null},path='/economy/casino-test';
 let db:Db,close:()=>Promise<void>,app:ReturnType<typeof createWebApp>;
@@ -24,6 +26,25 @@ describe('運営だけのカジノ没入感試遊',()=>{
   const token=await createSession(db,user,{level:'guji',pages:null},now);const count=()=>Promise.all([casinoGames,casinoTables,memberSessions].map(async table=>(await db.select({n:sql<number>`count(*)::int`}).from(table))[0]!.n));const before=await count();
   for(const query of ['game=roulette&round=5&spin=1&bets=red:100','game=blackjack','game=highlow','game=roulette&round=5&spin=1&bets=red:100'])expect((await app.request(path+'?'+query,{headers:headers(token)})).status).toBe(200);
   const session=(await findSession(db,token,now))!;expect((await app.request(path,{method:'POST',headers:headers(token),body:new URLSearchParams({_csrf:session.csrfToken,action:'spin'})})).status).toBe(404);expect((await walletOf(db,id)).balance).toBe(3210);expect(await count()).toEqual(before);
+ });
+ it('回転後もBETと円盤の対象を残し、当たりと出目を区別して同じ回への再BETを固定する',async()=>{
+  const token=await createSession(db,user,{level:'guji',pages:null},now),query='game=roulette&round=17&spin=1&bets=n7:100,red:50';
+  const m=roomPreview(new URLSearchParams(query),cfg.casino);if(m.game!=='roulette')throw Error();
+  const text=await(await app.request(path+'?'+query,{headers:headers(token)})).text();
+  expect(text).toContain('data-rb-settled="true"');expect(text).toContain('この回は終了しました');
+  expect(text).toMatch(/data-rb-total="true">150<\/b>/);expect(text).toMatch(/data-rb-count="true">2<\/span>/);
+  const pockets=[...text.matchAll(/<span class="([^"]*pk pk-[^"]*)" data-ir-pocket="(\d+)"/g)];
+  expect(pockets).toHaveLength(37);
+  for(const [,cls,raw] of pockets){const n=Number(raw);expect(cls.includes('ir-pocket-bet')).toBe(n===7||rouletteMultiplier('red',n)>0);expect(cls.includes('ir-pocket-result')).toBe(n===m.number);}
+  expect(text).toContain('data-ir-payout="'+m.paid+'"');expect(text).toContain('data-ir-balance-before="4850"');
+  expect(text).toMatch(/<button[^>]*placed[^>]*data-bet="n7"[^>]*disabled/);
+ });
+ it('境界BETの円盤対象も既存の判定と一致し、通常のカジノ部品には試遊の固定を強制しない',async()=>{
+  const token=await createSession(db,user,{level:'guji',pages:null},now);
+  const text=await(await app.request(path,{headers:headers(token)})).text();
+  const cells=[...text.matchAll(/data-bet="([^"]+)" data-rb-covers="([^"]*)"/g)];expect(cells.length).toBeGreaterThan(100);
+  for(const [,bet,covered] of cells){const expected=Array.from({length:37},(_,n)=>n).filter(n=>rouletteMultiplier(bet as Parameters<typeof rouletteMultiplier>[0],n)>0);expect(covered.split(',').map(Number)).toEqual(expected);}
+  expect(text).not.toContain('data-rb-settled="true"');
  });
  it('不正な操作を400で返し、背景素材を軽量な版付き画像として配信する',async()=>{
   const token=await createSession(db,user,{level:'guji',pages:null},now);expect((await app.request(path+'?game=highlow&moves=cashout',{headers:headers(token)})).status).toBe(400);
