@@ -35,7 +35,7 @@ describe('運営だけのカジノ没入感試遊',()=>{
   expect(text).toMatch(/data-rb-total="true">150<\/b>/);expect(text).toMatch(/data-rb-count="true">2<\/span>/);
   const pockets=[...text.matchAll(/<span class="([^"]*pk pk-[^"]*)" data-ir-pocket="(\d+)"/g)];
   expect(pockets).toHaveLength(37);
-  for(const [,cls,raw] of pockets){const n=Number(raw);expect(cls.includes('ir-pocket-bet')).toBe(n===7||rouletteMultiplier('red',n)>0);expect(cls.includes('ir-pocket-result')).toBe(n===m.number);}
+  for(const match of pockets){const cls=match[1]!,n=Number(match[2]);expect(cls.includes('ir-pocket-bet')).toBe(n===7||rouletteMultiplier('red',n)>0);expect(cls.includes('ir-pocket-result')).toBe(n===m.number);}
   expect(text).toContain('data-ir-payout="'+m.paid+'"');expect(text).toContain('data-ir-balance-before="4850"');
   expect(text).toMatch(/<button[^>]*placed[^>]*data-bet="n7"[^>]*disabled/);
  });
@@ -43,7 +43,7 @@ describe('運営だけのカジノ没入感試遊',()=>{
   const token=await createSession(db,user,{level:'guji',pages:null},now);
   const text=await(await app.request(path,{headers:headers(token)})).text();
   const cells=[...text.matchAll(/data-bet="([^"]+)" data-rb-covers="([^"]*)"/g)];expect(cells.length).toBeGreaterThan(100);
-  for(const [,bet,covered] of cells){const expected=Array.from({length:37},(_,n)=>n).filter(n=>rouletteMultiplier(bet as Parameters<typeof rouletteMultiplier>[0],n)>0);expect(covered.split(',').map(Number)).toEqual(expected);}
+  for(const match of cells){const bet=match[1]!,covered=match[2]!;const expected=Array.from({length:37},(_,n)=>n).filter(n=>rouletteMultiplier(bet as Parameters<typeof rouletteMultiplier>[0],n)>0);expect(covered.split(',').map(Number)).toEqual(expected);}
   expect(text).not.toContain('data-rb-settled="true"');
  });
  it('不正な操作を400で返し、背景素材を軽量な版付き画像として配信する',async()=>{
