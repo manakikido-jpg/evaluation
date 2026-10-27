@@ -56,6 +56,7 @@ describe('実レース観戦の入口と更新',()=>{
   expect(response.headers.get('cache-control')).toContain('no-store');expect(body).toContain(s.horses[0]!.name);expect(body).toContain('馬券・払戻を確認する');expect(body).not.toContain('サンプルレース／馬券なし');
   // 🎥 馬券を買った馬を追うカメラ（自分の馬）がはじめから選ばれる
   expect(body).toContain('data-kr-camera="mine" aria-pressed="true"');
+  expect(body).toContain('自分の馬の後ろから');
   expect(body).toContain(`&quot;follow&quot;:[${s.run!.order[0]}]`);
   const url=path+'/state?race='+encodeURIComponent(key);
   const before=await walletOf(db,USER);
