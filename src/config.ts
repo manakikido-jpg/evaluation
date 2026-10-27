@@ -35,6 +35,7 @@ export const WEB_PAGES = [
   { key: 'posts', label: '投稿文の許可', href: '/posts', prefixes: ['posts'] },
   { key: 'reactionroles', label: 'スタンプでロール', href: '/reaction-roles', prefixes: ['reaction-roles'] },
   { key: 'roomknock', label: '宿のこんこん', href: '/room-knock', prefixes: ['room-knock'] },
+  { key: 'org', label: '組織図', href: '/org', prefixes: ['org'] },
   { key: 'glossary', label: '用語集', href: '/glossary', prefixes: ['glossary'] },
 ] as const;
 
@@ -1027,7 +1028,14 @@ export type WebAccess = { level: AdminLevel; pages: WebPage[] | null };
  * 宮司: 全部。人を指定した行があれば、神職でもその行のページだけ（1 つもなければ入れない）。
  * 神職: 全部。そのほか、ロールの行に当たる人は神職と同じで、当たった行のページを合わせたもの
  */
-export function webAccessOf(cfg: GuildConfig, userId: string, roleIds: readonly string[]): WebAccess | undefined {
+export function webAccessOf(cfg: GuildConfig, userId: string, roleIds: readonly string[], orgPages: readonly WebPage[] = []): WebAccess | undefined {
+  const base = webAccessBase(cfg, userId, roleIds);
+  // 🏯 組織図の部署で選ばれたページも使える（全部見られる人はそのまま）
+  if (!orgPages.length || base?.pages === null) return base;
+  const pages = WEB_PAGE_KEYS.filter((k) => orgPages.includes(k) || base?.pages?.includes(k));
+  return { level: base?.level ?? 'shinshoku', pages };
+}
+function webAccessBase(cfg: GuildConfig, userId: string, roleIds: readonly string[]): WebAccess | undefined {
   const admin = adminLevelOf(cfg, roleIds);
   if (admin === 'guji') return { level: 'guji', pages: null };
   const entries = webAccessEntries(cfg);

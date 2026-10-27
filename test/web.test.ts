@@ -4415,6 +4415,33 @@ it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）',
   expect((await get('/message-archive', s)).status).toBe(403);
 });
 
+it('🏯 組織図とメニューの並び方（見るのは運営・変えるのは宮司）', async () => {
+  const { loadOrg, DEFAULT_ORG } = await import('../src/services/orgChart.js');
+  const s = await login(STAFF);
+  const page = await (await get('/org', s)).text();
+  expect(page).toContain('組織図'); expect(page).toContain('data-org='); expect(page).toContain('org.js?v=');
+  expect(page).not.toMatch(/onclick=|style=/);
+  const csrf = /data-csrf="([^"]+)"/.exec(page)![1]!;
+  const data = JSON.stringify({ ranks: DEFAULT_ORG.ranks, nodes: [{ id: 'top', name: '宮司', parentId: null, pages: [] }, { id: 'g', name: '案内部', parentId: 'top', pages: ['guide'] }], placements: [{ memberId: STAFF, nodeId: 'g', rankId: 'lead' }] });
+  const post = (sess: string, token: string, path: string, d: string) => app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${sess}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: token, data: d }) });
+  expect((await post(s, csrf, '/org', data)).status).toBe(403);
+  const g = await login(GUJI);
+  const gp = await (await get('/org', g)).text();
+  const gcsrf = /data-csrf="([^"]+)"/.exec(gp)![1]!;
+  expect((await post(g, 'wrong', '/org', data)).status).toBe(403);
+  expect((await post(g, gcsrf, '/org', '{"ranks":[]}')).status).toBe(400);
+  const ok = await post(g, gcsrf, '/org', data);
+  expect(ok.status).toBe(200);
+  expect((await loadOrg(db)).placements).toEqual([{ memberId: STAFF, nodeId: 'g', rankId: 'lead' }]);
+  // メニューの並び方
+  expect((await get('/nav-order', s)).status).toBe(403);
+  const np = await (await get('/nav-order', g)).text();
+  expect(np).toContain('メニューの並び方'); expect(np).not.toMatch(/onclick=|style=/);
+  expect((await post(g, gcsrf, '/nav-order', JSON.stringify({ groups: [{ title: 'よく使う', keys: ['members'] }] }))).status).toBe(200);
+  const home = await (await get('/members', g)).text();
+  expect(home).toContain('data-group="よく使う"');
+});
+
 it('🧵 案内スレッドの設定を保存する（日ごとの時間・読めない時間は 400）', async () => {
   const { guideThreadConfig } = await import('../src/services/guideThreads.js');
   const { jstDate } = await import('../src/services/activity.js');

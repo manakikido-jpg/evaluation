@@ -2,6 +2,7 @@ import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
 import { assetUrl } from '../assets.js';
 import { LEVEL_LABEL } from '../format.js';
+import type { NavLayout } from '../../services/navLayout.js';
 
 type Nav =
   | 'gallery'
@@ -22,6 +23,8 @@ type Nav =
   | 'posts'
   | 'reactionroles'
   | 'roomknock'
+  | 'org'
+  | 'navorder'
   | 'msgarchive'
   | 'roles'
   | 'ranks'
@@ -49,7 +52,7 @@ type Nav =
   | 'settings';
 
 /** 画面に出すログイン中の人（updatesUnseen: まだ読んでいない更新の数） */
-export type SessionView = AdminSession & { updatesUnseen?: number };
+export type SessionView = AdminSession & { updatesUnseen?: number; /** 宮司が決めたメニューの並び（なければもとの並び） */ navLayout?: NavLayout };
 
 /** page: 見られるページを選ばれている人に出すかを決めるページ（なければ key） */
 type NavItem = { key: Nav; href: string; icon: string; label: string; gujiOnly?: boolean; page?: string };
@@ -114,11 +117,31 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'channels', href: '/channels', icon: '📁', label: 'チャンネル', gujiOnly: true },
       { key: 'roles', href: '/roles', icon: '🎭', label: 'ロール', gujiOnly: true },
       { key: 'ranks', href: '/ranks', icon: '⛩', label: '役職', gujiOnly: true },
+      { key: 'org', href: '/org', icon: '🏯', label: '組織図' },
+      { key: 'navorder', href: '/nav-order', icon: '🧭', label: 'メニューの並び方', gujiOnly: true, page: 'settings' },
       { key: 'glossary', href: '/glossary', icon: '📖', label: '用語集' },
       { key: 'settings', href: '/settings', icon: '⚙', label: '設定', gujiOnly: true },
     ],
   },
 ];
+
+/** 並べ替えの画面で使う、メニューのページの一覧（もとのカテゴリつき） */
+export const NAV_CATALOG = NAV_GROUPS.flatMap(g => g.items.map(i => ({ key: i.key as string, icon: i.icon, label: i.label, group: g.title, gujiOnly: !!i.gujiOnly })));
+export const NAV_DEFAULT_GROUPS = NAV_GROUPS.map(g => ({ title: g.title, keys: g.items.map(i => i.key as string) }));
+
+/** 宮司が決めた並びに組みかえる。並びにないページは、もとのカテゴリ（なければ最後のカテゴリ）の後ろへ */
+export function arrangeNav(layout?: NavLayout): { title: string; items: NavItem[] }[] {
+  if (!layout?.groups.length) return NAV_GROUPS;
+  const byKey = new Map(NAV_GROUPS.flatMap(g => g.items.map(i => [i.key as string, i] as const)));
+  const used = new Set<string>();
+  const groups = layout.groups.map(g => ({ title: g.title, items: g.keys.flatMap(k => { const i = byKey.get(k); if (!i || used.has(k)) return []; used.add(k); return [i]; }) }));
+  for (const g of NAV_GROUPS) for (const i of g.items) {
+    if (used.has(i.key)) continue;
+    const home = groups.find(x => x.title === g.title) ?? groups[groups.length - 1]!;
+    home.items.push(i);
+  }
+  return groups;
+}
 
 function ThemeChoice() {
   return <label class="theme-choice"><span aria-hidden="true">◐</span><span class="sr-only">表示モード</span>
@@ -127,7 +150,7 @@ function ThemeChoice() {
   </label>;
 }
 
-export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'recordings.js' | 'home-voice.js' | 'copy-text.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
+export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'org.js' | 'nav-order.js' | 'recordings.js' | 'home-voice.js' | 'copy-text.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
   return (
@@ -179,7 +202,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                 <p class="nav-find-status" data-nav-status role="status" aria-live="polite"></p>
               </div>
               <nav class="side-nav" aria-label="メニュー">
-                {NAV_GROUPS.map((g) => {
+                {arrangeNav(session.navLayout).map((g) => {
                   // 宮司だけのページ・見られるページを選ばれている人の、ほかのページは出さない
                   const items = g.items.filter((i) => (!i.gujiOnly || session.level === 'guji') && (!session.pages || session.pages.includes((i.page ?? i.key) as never)));
                   if (!items.length) return null;

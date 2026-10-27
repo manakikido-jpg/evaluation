@@ -8,6 +8,10 @@ import { inviteBlocks, setInviteBlock } from '../services/inviteBlock.js';
 import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
 import { RoomKnockPage } from './views/roomKnock.js';
+import { OrgChartPage } from './views/orgChart.js';
+import { loadOrg, orgPagesOf, orgSidebar, saveOrg } from '../services/orgChart.js';
+import { loadNavLayout, resetNavLayout, saveNavLayout } from '../services/navLayout.js';
+import { NavOrderPage } from './views/navOrder.js';
 import { GuideThreadsPage } from './views/guideThreads.js';
 import { guideThreadConfig, guideThreadConfigSchema, openThreads, parseTimes, saveGuideThreadConfig } from '../services/guideThreads.js';
 import { knockConfigSchema, roomKnockConfig, roomKnockStates, saveRoomKnockConfig } from '../services/roomKnock.js';
@@ -535,7 +539,7 @@ export function createWebApp(deps: WebDeps) {
     }
 
     // 🕶 運営のサブアカウントは社務所Web に入れない
-    const access = roles && !(await isStaffAlt(db, user.id)) ? webAccessOf(cfg, user.id, roles) : undefined;
+    const access = roles && !(await isStaffAlt(db, user.id)) ? webAccessOf(cfg, user.id, roles, orgPagesOf(await loadOrg(db), user.id)) : undefined;
     if (!access) {
       const [last] = await listAudit(db, { actorId: user.id, action: 'auth.denied', limit: 1 });
       if (!last || now().getTime() - last.at.getTime() > 3_600_000) await audit(db, { actorId: user.id, action: 'auth.denied', via: 'web' });
@@ -605,7 +609,7 @@ export function createWebApp(deps: WebDeps) {
         c.set('session', await withUpdates(session));
         return next();
       }
-      const access = roles && !(await isStaffAlt(db, session.userId)) ? webAccessOf(cfg, session.userId, roles) : undefined;
+      const access = roles && !(await isStaffAlt(db, session.userId)) ? webAccessOf(cfg, session.userId, roles, orgPagesOf(await loadOrg(db), session.userId)) : undefined;
       if (!access) {
         await deleteSession(db, session.id);
         await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
@@ -629,7 +633,7 @@ export function createWebApp(deps: WebDeps) {
   };
 
   /** メニューの「更新履歴」に、まだ読んでいない更新の数を出す */
-  const withUpdates = async (s: AdminSession): Promise<SessionView> => ({ ...s, updatesUnseen: unseenChanges(await seenChangeId(db, s.userId)).length });
+  const withUpdates = async (s: AdminSession): Promise<SessionView> => ({ ...s, updatesUnseen: unseenChanges(await seenChangeId(db, s.userId)).length, navLayout: await loadNavLayout(db) });
 
   const requireCsrf: MiddlewareHandler<Env> = async (c, next) => {
     if (c.req.method !== 'POST') return next();
@@ -676,6 +680,9 @@ export function createWebApp(deps: WebDeps) {
   app.use('/stickers/*', requireAdmin, requireCsrf);
   app.use('/reaction-roles', requireAdmin);
   app.use('/room-knock', requireAdmin, requireCsrf);
+  app.use('/org', requireAdmin, requireCsrf);
+  app.use('/nav-order', requireAdmin, requireCsrf);
+  app.use('/nav-order/*', requireAdmin, requireCsrf);
   app.use('/reaction-roles/*', requireAdmin, requireCsrf);
   app.use('/posts', requireAdmin);
   app.use('/posts/*', requireAdmin, requireCsrf);
@@ -1841,6 +1848,44 @@ export function createWebApp(deps: WebDeps) {
     const [config, pending, done, channels, roles] = await Promise.all([loadUpdatePostConfig(db), listUpdatePosts(db, ['pending']), listUpdatePosts(db, ['posted', 'rejected']), loadChannels().catch(() => []), loadRoles().then(r => r ?? []).catch(() => [])]);
     const names = await namesOf(db, [...pending, ...done].flatMap(p => [p.authorId, p.decidedBy ?? '']).filter(Boolean));
     return c.html(<UpdatePostsPage session={c.get('session')} config={config} pending={pending} done={done} channels={channels} roles={roles} names={names} flash={c.req.query('msg')} />);
+  });
+  // 🏯 運営の組織図（見るのは運営、変えるのは宮司）
+  app.get('/org', async c => {
+    const chart = await loadOrg(db);
+    // 左の一覧: 役職ごとのメンバー（上の役職から。抜けた人・BOT はのぞく）
+    const groups = await orgSidebar(db, cfg);
+    const placed = chart.placements.map(p => p.memberId);
+    const names = Object.fromEntries((await namesOf(db, placed)).entries());
+    return c.html(<OrgChartPage session={c.get('session')} chart={chart} groups={groups} names={names} canEdit={gujiOnly(c)} />);
+  });
+  app.post('/org', async c => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const b = await c.req.parseBody();
+    try {
+      const saved = await saveOrg(db, JSON.parse(typeof b.data === 'string' ? b.data : 'null'), c.get('session').userId);
+      return c.json(saved);
+    } catch {
+      return c.text('組織図の形がおかしいため保存できませんでした（名前が空・長すぎる、などを確かめてください）。', 400);
+    }
+  });
+  // 🧭 メニューの並び方（宮司）
+  app.get('/nav-order', async c => {
+    if (!gujiOnly(c)) return c.text('宮司のみ開けるページです。', 403);
+    return c.html(<NavOrderPage session={c.get('session')} layout={await loadNavLayout(db)} flash={c.req.query('msg')} />);
+  });
+  app.post('/nav-order', async c => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    const b = await c.req.parseBody();
+    try {
+      return c.json(await saveNavLayout(db, JSON.parse(typeof b.data === 'string' ? b.data : 'null'), c.get('session').userId));
+    } catch {
+      return c.text('並び方の形がおかしいため保存できませんでした（カテゴリの名前が空・長すぎる、などを確かめてください）。', 400);
+    }
+  });
+  app.post('/nav-order/reset', async c => {
+    if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
+    await resetNavLayout(db, c.get('session').userId);
+    return c.redirect('/nav-order?msg=reset', 303);
   });
   // 🧵 入った人の案内スレッド（宮司・神職）
   const guideThreadView = async (c: Context<Env>, error?: string) => {
