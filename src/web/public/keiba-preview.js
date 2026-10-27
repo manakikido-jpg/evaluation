@@ -9,7 +9,7 @@ async function start(root) {
   const data=JSON.parse(root.dataset.keibaPreview), sceneRoot=root.querySelector('[data-kr-scene]'), flat=root.querySelector('[data-kr-flat]');
   const status=root.querySelector('[data-kr-status]'), seek=root.querySelector('[data-kr-seek]'), play=root.querySelector('[data-kr-play]'), quality=root.querySelector('[data-kr-quality]');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let T,scene,elapsed=0,playing=false,last=performance.now(),raf=0,camera='wide',disposed=false,lastUI=-1,lastRender=0,measure=last,frames=0,loading=0,dirty=true,autoLow=false;
+  let T,scene,elapsed=0,playing=false,last=performance.now(),raf=0,camera=(data.follow??[]).length?'mine':'wide',disposed=false,lastUI=-1,lastRender=0,measure=last,frames=0,loading=0,dirty=true,autoLow=false;
   let clockAt=performance.now(),serverAt=data.live?.now??0,pollTimer=0,polling=false;
   const liveStatus=root.querySelector('[data-kr-live-status]');
   const serverNow=()=>serverAt+performance.now()-clockAt;
@@ -163,9 +163,12 @@ async function start(root) {
       const positions=state.positions;
       for(let i=0;i<this.horses.length;i++){const h=this.horses[i],p=positions[i];h.root.position.set(p.x,0,p.z);h.root.rotation.y=p.heading;h.update(time/1000,time>0&&!reduced);}
       const leader=positions.find(p=>p.no===state.order[0]),tail=positions.find(p=>p.no===state.order.at(-1));
-      let focus=new T.Vector3(leader.x,1.25,leader.z),distance=15,height=2.8,forward=1;
+      // 自分の馬: いちばん前にいる自分の馬を、追走と同じ近さで追う
+      const own=camera==='mine'?state.order.map(no=>positions.find(p=>p.no===no&&(data.follow??[]).includes(no))).find(Boolean):undefined;
+      const target=own??leader;
+      let focus=new T.Vector3(target.x,1.25,target.z),distance=15,height=2.8,forward=1;
       if(camera==='wide'){const span=Math.hypot(leader.x-tail.x,leader.z-tail.z);focus=new T.Vector3((leader.x+tail.x)/2,1,(leader.z+tail.z)/2);distance=clamp(span*.9+28,35,120);height=clamp(distance*.45,17,48);forward=8;}
-      const heading=new T.Vector3(Math.cos(-leader.heading),0,Math.sin(-leader.heading)),outside=new T.Vector3(-heading.z,0,heading.x);
+      const heading=new T.Vector3(Math.cos(-target.heading),0,Math.sin(-target.heading)),outside=new T.Vector3(-heading.z,0,heading.x);
       let eye=focus.clone().addScaledVector(outside,distance).addScaledVector(heading,forward).add(new T.Vector3(0,height,0));
       if(camera==='finish'){const p=trackPoint(0,8);focus=new T.Vector3(p.x,1,p.z);eye=new T.Vector3(p.x+12,4.8,p.z+22);}
       this.view.fov=camera==='wide'?38:32;this.view.updateProjectionMatrix();this.view.position.copy(eye);this.view.lookAt(focus);

@@ -2,7 +2,7 @@ import { PublicOwnerPage,ClubPage,EventPage,ReplayList,TicketPage } from './view
 import { clubHorse,equipSkills,matingPreview,ownerLedger,ownerProfile,racingMonth,racingRankings,replays } from '../services/casino/keibaClub.js';
 import { claimEvent,enterEvent,equipEventSilk,eventScores,events } from '../services/casino/keibaEvents.js';
 import { formationKeys } from '../services/casino/keibaTickets.js';
-import { isKbBetType,picksOf,KB_MAX_TICKETS } from '../services/casino/keiba.js';
+import { isKbBetType,picksOf,KB_MAX_TICKETS,keyNos } from '../services/casino/keiba.js';
 import { isTraining } from '../services/casino/keibaDevelopment.js';
 import { keibaEventRewards,keibaReplays } from '../db/schema.js';
 import { and } from 'drizzle-orm';
@@ -873,7 +873,11 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const data = keibaBroadcast(t.state as KbState, t.id, d.now().getTime());
     if (!data || c.req.query('race') && c.req.query('race') !== data.live.key) return c.redirect(`/casino/t/${t.id}`);
     c.header('Cache-Control', 'no-store');
-    return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={data} tableId={t.id} />}`);
+    // 🎥 自分の馬（馬券を買った馬・持ち馬）をカメラで追う
+    const ks = t.state as KbState, uid = me.session.userId;
+    const mine = [...new Set(ks.tickets.filter(x => x.memberId === uid).flatMap(x => keyNos(x.key)))];
+    const owned = ks.horses.filter(h => h.ownerId === uid).map(h => h.no);
+    return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={data} tableId={t.id} mine={mine} owned={owned} />}`);
   }));
   app.get('/casino/keiba/watch/:id/state', page(async c => {
     c.header('Cache-Control', 'no-store');

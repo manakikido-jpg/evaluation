@@ -26,7 +26,7 @@ describe('映像試作の入口',()=>{
   const snapshot=()=>Promise.all([db.select({n:count()}).from(coinTx),db.select({n:count()}).from(casinoTables),db.select({n:count()}).from(keibaHorses)]);
   const before=await snapshot();
   const response=await app.request('/casino/keiba/preview',{headers:{cookie}}),html=await response.text();expect(response.status).toBe(200);
-  expect(html).toContain('サンプルレース／馬券なし');expect(html).toContain('data-keiba-preview');expect(html).toContain('data-kr-goal');expect(html).toContain('keiba-preview.js?v=');expect(html).not.toMatch(/onclick=|<script>(?!<)/);
+  expect(html).toContain('サンプルレース／馬券なし');expect(html).toContain('data-keiba-preview');expect(html).toContain('data-kr-goal');expect(html).not.toContain('data-kr-camera="mine"');expect(html).toContain('keiba-preview.js?v=');expect(html).not.toMatch(/onclick=|<script>(?!<)/);
   const after=await snapshot();expect(after).toEqual(before);expect((await walletOf(db,USER)).balance).toBe(1000);
  });
  it('モジュールを同じ配信元から版付きで読み込める',async()=>{
@@ -52,6 +52,9 @@ describe('実レース観戦の入口と更新',()=>{
   const {t,s,key}=await raceTable();s.tickets=[{memberId:USER,name:'sample',t:'win',key:String(s.run!.order[0]),amount:100}];s.real=100;await db.update(casinoTables).set({state:s}).where(eq(casinoTables.id,t.id));const path=`/casino/keiba/watch/${t.id}`;
   const response=await app.request(path,{headers:{cookie}}),body=await response.text();
   expect(response.headers.get('cache-control')).toContain('no-store');expect(body).toContain(s.horses[0]!.name);expect(body).toContain('馬券・払戻を確認する');expect(body).not.toContain('サンプルレース／馬券なし');
+  // 🎥 馬券を買った馬を追うカメラ（自分の馬）がはじめから選ばれる
+  expect(body).toContain('data-kr-camera="mine" aria-pressed="true"');
+  expect(body).toContain(`&quot;follow&quot;:[${s.run!.order[0]}]`);
   const url=path+'/state?race='+encodeURIComponent(key);
   const before=await walletOf(db,USER);
   const early=await (await app.request(url,{headers:{cookie}})).json() as any;expect(early.live.confirmed).toBe(false);expect(early.results).toEqual([]);

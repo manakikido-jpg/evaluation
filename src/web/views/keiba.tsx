@@ -941,7 +941,7 @@ export function KeibaView(p: {
             </div>
           </div>
           {s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
-          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={keibaBroadcast(s,p.t.id,p.now)!} tableId={p.t.id} mine={[...new Set(mine.flatMap(x=>keyNos(x.key)))]} embedded/> : (
+          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={keibaBroadcast(s,p.t.id,p.now)!} tableId={p.t.id} mine={[...new Set(mine.flatMap(x=>keyNos(x.key)))]} owned={s.horses.filter(h=>h.ownerId===uid).map(h=>h.no)} embedded/> : (
           <Tv
             s={s}
             mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]}
