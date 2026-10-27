@@ -9,7 +9,7 @@ import { mountVisit } from './visit.js';
 import { ReactionRolesPage } from './views/reactionRoles.js';
 import { RoomKnockPage } from './views/roomKnock.js';
 import { OrgChartPage } from './views/orgChart.js';
-import { loadOrg, orgPagesOf, orgSidebar, saveOrg } from '../services/orgChart.js';
+import { loadOrg, orgPagesOf, orgPeople, orgSidebar, saveOrg } from '../services/orgChart.js';
 import { loadNavLayout, resetNavLayout, saveNavLayout } from '../services/navLayout.js';
 import { NavOrderPage } from './views/navOrder.js';
 import { GuideThreadsPage } from './views/guideThreads.js';
@@ -1851,12 +1851,12 @@ export function createWebApp(deps: WebDeps) {
   });
   // 🏯 運営の組織図（見るのは運営、変えるのは宮司）
   app.get('/org', async c => {
-    const chart = await loadOrg(db);
-    // 左の一覧: 役職ごとのメンバー（上の役職から。抜けた人・BOT はのぞく）
-    const groups = await orgSidebar(db, cfg);
-    const placed = chart.placements.map(p => p.memberId);
-    const names = Object.fromEntries((await namesOf(db, placed)).entries());
-    return c.html(<OrgChartPage session={c.get('session')} chart={chart} groups={groups} names={names} canEdit={gujiOnly(c)} />);
+    const [chart, roles] = await Promise.all([loadOrg(db), loadRoles().then(r => r ?? []).catch(() => [])]);
+    // 左の一覧: 選んだロールごとのメンバー（なければ役職を上から）
+    const groups = await orgSidebar(db, cfg, chart, id => roles.find(r => r.id === id)?.name);
+    const people = await orgPeople(db, chart.placements.map(p => p.memberId));
+    const allRoles = roles.filter(r => r.id !== cfg.guildId && !r.managed).sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name }));
+    return c.html(<OrgChartPage session={c.get('session')} chart={chart} groups={groups} people={people} roles={allRoles} canEdit={gujiOnly(c)} />);
   });
   app.post('/org', async c => {
     if (!gujiOnly(c)) return c.text('宮司のみできる操作です。', 403);
