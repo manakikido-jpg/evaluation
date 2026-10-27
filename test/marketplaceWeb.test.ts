@@ -124,3 +124,22 @@ it('40件ずつ次のページへ進め、検索文字の％や_をワイルド�
  await db.insert(marketListings).values({sellerId:A,category:'illust',title:'割引50%_記号',price:1000});
  expect(await(await get(s,'/marketplace?q=%25_')).text()).toContain('割引50%_記号');
 });
+it('🏪 開業権利を市場のWebで受けられる。値段の偽装・銭不足は払わず、ロールを付けられなければ銭を戻す',async()=>{
+ const { createItem } = await import('../src/services/shop.js');
+ const { shopPurchases } = await import('../src/db/schema.js');
+ await createItem(db,{kind:'role',name:'開業権利',emoji:'🏪',price:3000,roleId:ROLE,durationDays:null,enabled:true,description:'',sort:0} as never);
+ const added:string[]=[];let fail=false;
+ (app as any)=createWebApp({db,cfg:()=>current,api,discord:{guildChannels:async()=>channels,guildRoles:async()=>[{id:cfg.guildId,name:'@everyone',position:0,managed:false,color:0,permissions:'66560'},{id:ROLE,name:'開業',position:1,managed:false,color:0,permissions:'0'}],addRole:async(_g:string,u:string,r:string)=>{if(fail)throw new Error('no perm');added.push(u+':'+r);}} as unknown as DiscordActions,baseUrl:BASE,now:()=>now});
+ const s=await login();
+ const page=await(await get(s,'/marketplace/new')).text();expect(page).toContain('開業権利を受ける');expect(page).toContain('3,000');
+ const buy=(b:Record<string,string>)=>app.request('/marketplace/license',{method:'POST',headers:{cookie:'sakura_market='+s.token,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({_csrf:s.csrf,...b})});
+ expect((await buy({quote:'1',confirm:'yes'})).headers.get('location')).toContain('license=changed');
+ expect((await walletOf(db,B)).balance).toBe(10000);
+ fail=true;expect((await buy({quote:'3000',confirm:'yes'})).headers.get('location')).toContain('license=role_failed');
+ expect((await walletOf(db,B)).balance).toBe(10000);
+ fail=false;expect((await buy({quote:'3000',confirm:'yes'})).headers.get('location')).toContain('license=ok');
+ expect((await walletOf(db,B)).balance).toBe(7000);expect(added).toEqual([B+':'+ROLE]);
+ expect((await db.select().from(shopPurchases).where(eq(shopPurchases.memberId,B))).filter(p=>!p.endedAt)).toHaveLength(1);
+ // もう持っている（購入記録で分かる）ので 2 回目は払わない
+ expect((await buy({quote:'3000',confirm:'yes'})).headers.get('location')).toContain('license=owned');expect((await walletOf(db,B)).balance).toBe(7000);
+});
