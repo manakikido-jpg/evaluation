@@ -10,6 +10,7 @@ import { effectivePermissions } from '../services/permissionCheck.js';
 import * as market from '../services/market.js';
 import { executeMarketWeb, MarketWebError } from '../services/marketWeb.js';
 import { walletOf } from '../services/economy.js';
+import { buyRole, priceOf, refund } from '../services/shop.js';
 import { createMemberSession, deleteMemberSession, findMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
@@ -76,7 +77,13 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   listings=listings.slice(0,40);requests=requests.slice(0,40);
   return c.html(<MarketListPage images={await imagesOf(listings.map(l=>l.row.id))} me={me} listings={listings} requests={requests} kind={kind} q={q} category={cat} mine={mine} nextHref={nextHref}/>);
  }));
- app.get('/marketplace/new',protectedPage(async(c,me)=>c.html(<MarketCreatePage me={me} request={c.req.query('kind')==='request'} license={(await market.marketLicenseAccess(db,me.cfg,{id:me.session.userId,roleIds:me.roles},d.now())).allowed}/>)));
+ app.get('/marketplace/new',protectedPage(async(c,me)=>{
+  const license=(await market.marketLicenseAccess(db,me.cfg,{id:me.session.userId,roleIds:me.roles},d.now())).allowed;
+  const item=license?undefined:await market.marketLicenseItem(db);
+  const booster=me.member.boostingSince!==null;
+  const shop=item&&(!item.boosterOnly||booster)?{name:item.name,emoji:item.emoji,price:priceOf(item,me.cfg.economy,booster),days:item.durationDays}:undefined;
+  return c.html(<MarketCreatePage me={me} request={c.req.query('kind')==='request'} license={license} shop={shop} notice={c.req.query('license')}/>);
+ }));
  app.get('/marketplace/listings/:id',protectedPage(async(c,me)=>{
   const listing=await market.getListing(db,resourceId(c));if(!listing||!age(listing.category,me))return c.notFound();
   const offers=await db.select().from(marketOffers).where(and(eq(marketOffers.listingId,listing.id),listing.sellerId===me.session.userId?undefined:eq(marketOffers.buyerId,me.session.userId))).orderBy(desc(marketOffers.id)).limit(25);
@@ -102,6 +109,24 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   const [sum]=await db.select({v:sql<number>`coalesce(sum(${marketOrders.price}),0)::float8`}).from(marketOrders).where(and(eq(marketOrders.sellerId,id),eq(marketOrders.status,'completed')));
   const titles=new Map(await Promise.all(orders.map(async o=>[o.id,(await market.orderInfo(db,o)).title] as const)));
   return c.html(<MarketSellerPage me={me} listings={listings} offers={offers} orders={orders} titles={titles} names={await names([...offers.map(o=>o.buyerId),...orders.map(o=>o.buyerId)])} earned={sum?.v??0}/>);
+ }));
+ // 🏪 開業権利を市場の Web で受ける（授与所と同じ値段・同じ記録。ロールを付けられなければ銭を戻す）
+ app.post('/marketplace/license',protectedPage(async(c,me)=>{
+  const back=(msg:string)=>c.redirect('/marketplace/new?license='+msg,303);
+  if((await market.marketLicenseAccess(db,me.cfg,{id:me.session.userId,roleIds:me.roles},d.now())).allowed)return back('owned');
+  const item=await market.marketLicenseItem(db);
+  if(!item)return back('unavailable');
+  const booster=me.member.boostingSince!==null;
+  if(item.boosterOnly&&!booster)return back('booster');
+  const b=await c.req.parseBody();const price=priceOf(item,me.cfg.economy,booster);
+  if(Number(b.quote)!==price||b.confirm!=='yes')return back('changed');
+  const r=await buyRole(db,item,me.session.userId,d.now(),price);
+  if(r.status==='insufficient')return back('poor');
+  if(r.status==='owned')return back('owned');
+  if(r.status!=='ok')return back('unavailable');
+  try{await d.discord.addRole(me.cfg.guildId,me.session.userId,item.roleId!,`授与品: ${item.name}（市場のWeb）`);}
+  catch{await refund(db,r.purchase);return back('role_failed');}
+  return back('ok');
  }));
  app.post('/marketplace/actions/:action/:id',protectedPage(async(c,me)=>{
   const raw=await c.req.parseBody();const b=Object.fromEntries(Object.entries(raw).filter(([,v])=>typeof v==='string')) as Record<string,string>;

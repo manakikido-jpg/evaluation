@@ -80,6 +80,14 @@ export async function marketLicenseAccess(db: Db, cfg: GuildConfig, member: { id
   return { allowed: Boolean(purchase), configured };
 }
 
+/** 🏪 市場の Web で受けられる開業権利の授与品（受けられるものが無ければ undefined） */
+export async function marketLicenseItem(db: Db) {
+  const [item] = await db.select().from(shopItems)
+    .where(and(eq(shopItems.kind, 'role'), inArray(shopItems.name, ['開業', '開業権利']), isNull(shopItems.roleGroup), eq(shopItems.enabled, true)))
+    .orderBy(shopItems.id).limit(1);
+  return item?.roleId ? item : undefined;
+}
+
 // ───────── 出品 ─────────
 
 export type ListingResult =
