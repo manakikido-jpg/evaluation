@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { makeDb } from './helpers.js';
-import { DEFAULT_ORG, loadOrg, orgPagesOf, saveOrg, tidyOrg } from '../src/services/orgChart.js';
+import { DEFAULT_ORG, loadOrg, orgChartSchema, orgPagesOf, saveOrg, tidyOrg } from '../src/services/orgChart.js';
 import { loadNavLayout, resetNavLayout, saveNavLayout } from '../src/services/navLayout.js';
 import { arrangeNav, NAV_DEFAULT_GROUPS } from '../src/web/views/layout.js';
 import { webAccessOf, type GuildConfig } from '../src/config.js';
@@ -13,22 +13,27 @@ afterEach(async () => { await close(); });
 const A = '890000000000000001';
 
 describe('組織図', () => {
-  it('はじめは統括・副統括・一般。保存すると消えた部署の置き方や輪になった親を直す', async () => {
+  it('はじめは統括・副統括・一般。前の形（木）から場所と線を作り、消えた部署を指す置き方・線を外す', async () => {
     expect((await loadOrg(db)).ranks.map(r => r.name)).toEqual(['統括', '副統括', '一般']);
     const saved = await saveOrg(db, {
       ranks: DEFAULT_ORG.ranks,
-      nodes: [{ id: 'top', name: '宮司', parentId: null, pages: [] }, { id: 'a', name: '案内部', parentId: 'b', pages: ['guide', 'guide'] }, { id: 'b', name: '広報部', parentId: 'a', pages: [] }],
+      nodes: [{ id: 'top', name: '宮司', parentId: null, pages: [] }, { id: 'a', name: '案内部', parentId: 'top', pages: ['guide', 'guide'] }, { id: 'b', name: '広報部', parentId: 'top', pages: [] }],
       placements: [{ memberId: A, nodeId: 'a', rankId: 'lead' }, { memberId: A, nodeId: 'a', rankId: 'sub' }, { memberId: A, nodeId: 'gone', rankId: 'lead' }],
     }, 'admin');
     expect(saved.placements).toEqual([{ memberId: A, nodeId: 'a', rankId: 'lead' }]);
     expect(saved.nodes.find(n => n.id === 'a')!.pages).toEqual(['guide']);
-    // a→b→a の輪は、どちらかが一番上になる
-    expect(saved.nodes.filter(n => n.parentId === null).length).toBeGreaterThanOrEqual(2);
-    expect((await loadOrg(db)).nodes).toHaveLength(3);
+    expect(saved.nodes.every(n => typeof n.x === 'number' && typeof n.y === 'number' && n.w === 220 && n.h === 120)).toBe(true);
+    const top = saved.nodes.find(n => n.id === 'top')!, a = saved.nodes.find(n => n.id === 'a')!;
+    expect(a.y!).toBeGreaterThan(top.y!);
+    expect(saved.edges.map(e => [e.from, e.to]).sort()).toEqual([['top', 'a'], ['top', 'b']]);
+    // 線: 消えた部署へつながる線は外す。場所・大きさ・曲がり角はそのまま
+    const again = await saveOrg(db, { ...saved, nodes: saved.nodes.map(n => n.id === 'a' ? { ...n, x: 999, w: 400 } : n), edges: [...saved.edges.map(e => ({ ...e, bends: [{ x: 1, y: 2 }] })), { id: 'x1', from: 'a', to: 'nope', bends: [], dashed: true }] }, 'admin');
+    expect(again.nodes.find(n => n.id === 'a')).toMatchObject({ x: 999, w: 400 });
+    expect(again.edges).toHaveLength(2); expect(again.edges[0]!.bends).toEqual([{ x: 1, y: 2 }]);
     await expect(saveOrg(db, { ranks: [], nodes: [], placements: [] }, 'admin')).rejects.toThrow();
   });
   it('置いた部署のページだけ社務所Webで使える（全部見られる人はそのまま）', () => {
-    const c = tidyOrg({ ranks: DEFAULT_ORG.ranks, nodes: [{ id: 'g', name: '案内', parentId: null, pages: ['guide', 'members'] }], placements: [{ memberId: A, nodeId: 'g', rankId: 'member' }] });
+    const c = tidyOrg(orgChartSchema.parse({ ranks: DEFAULT_ORG.ranks, nodes: [{ id: 'g', name: '案内', pages: ['guide', 'members'], x: 0, y: 0 }], placements: [{ memberId: A, nodeId: 'g', rankId: 'member' }] }));
     expect(orgPagesOf(c, A)).toEqual(['members', 'guide']);
     const conf = { ...cfg, webAccess: { shinshokuRoleIds: [], entries: [] } } as GuildConfig;
     expect(webAccessOf(conf, A, [])).toBeUndefined();
