@@ -1169,3 +1169,6 @@
 - 全件成功：199ファイル/2,262テスト（568.72秒、4並列）、型/ビルド/関連10件/diff成功。全件ログ/tmp/keiba-theme-tests.log、最終型/tmp/keiba-theme-final-types.log、最終ビルド/tmp/keiba-theme-build-last.log。テスト削除/skipなし。
 - 見本docs/previews/keiba-ui-{tickets,mobile,club}.pngは最終の色の実ブラウザ画像。追加のレース撮影は仮時計が次受付へ進んだため修正、さらにソフトウェアGPUで横画面の操作待ちがタイムアウト。新UIの実機FPS達成とは扱わない。32表示/購入確認は別の成功ログとして区別する。WebGL不可時の平面で最終表示を追加確認中。
 - 提出前fetchで本番6eb3fadから追加なし。codex/keiba-ui-unifiedから別PRを作成し、本番への直接push/合流は行わない。
+
+- 最終の平面表示確認/tmp/keiba-theme-screens-flat.log成功：PC1440/横844のレース、馬券PC/縦390、育成の5見本でJS例外/失敗応答/横はみ出し0。3Dの実機性能とは別のUI確認。
+- GitHub保存：実装e0018f8、codex/keiba-ui-unified、PR #108 https://github.com/manakikido-jpg/evaluation/pull/108 。本番6eb3fad向けの別PR、未合流。全2,262件/型/ビルド/関連10件/32表示と購入確認成功。次は担当Claudeのレビュー/合流と実機の表示確認。PR107合流済みと今回UI未合流を区別する。見本docs/previews/keiba-ui-{tickets,mobile,club}.png。この追記は所在/完了結果のみでソース変更なし。
