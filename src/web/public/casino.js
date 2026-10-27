@@ -1475,8 +1475,8 @@ const paintSlip = (f) => {
     }
   }
   if (buy) {
-    buy.disabled = !ok;
-    buy.textContent = ok ? `🎫 ${keys.length} 点 買う（${kbFmt(keys.length * amount)} ${coin}）` : '🎫 馬券を買う';
+    buy.disabled = f.dataset.kbTest === 'true' || !ok;
+    buy.textContent = f.dataset.kbTest === 'true' ? 'テスト用（購入できません）' : ok ? `🎫 ${keys.length} 点 買う（${kbFmt(keys.length * amount)} ${coin}）` : '🎫 馬券を買う';
   }
 };
 document.addEventListener('change', (e) => {

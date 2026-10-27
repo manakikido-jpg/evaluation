@@ -1,0 +1,48 @@
+/* 咲楽ノ宮の競馬。ほかのカジノ画面へ配色を持ち出さない。 */
+body.casino:has(.kb-theme){--c-gold:#e7cd96;--c-muted:#b9c4d4;--c-line:#bfa16d55;--c-text:#f1eee6;color:#f1eee6;background:#0d1726;background-image:radial-gradient(ellipse at 95% 0,#81576c24,transparent 42%),radial-gradient(ellipse at 0 50%,#36506b20,transparent 50%)}
+.casino:has(.kb-theme) .c-main{min-width:0}
+.casino:has(.kb-theme) .c-panel{background:linear-gradient(135deg,#1a2a3c,#111e30);border:1px solid #c4a56c4d;border-radius:12px;box-shadow:0 8px 24px #0002;color:#f1eee6}
+.casino:has(.kb-theme) .c-panel h2{color:#ecd7aa;letter-spacing:.035em}
+.casino:has(.kb-theme) a{color:#ead4a9}
+.casino:has(.kb-theme) .c-muted{color:#bcc7d5}
+.kb-theme-hero{position:relative;isolation:isolate;overflow:hidden;border:1px solid #c2a36f66;border-radius:12px;padding:25px 28px;margin:12px 0 16px;background:radial-gradient(ellipse at 100% 0,#d095a62e,transparent 60%),linear-gradient(115deg,#20334b,#111e30 75%);box-shadow:inset 0 0 0 4px #0f1b2a,0 12px 35px #0002}
+.kb-theme-hero:after{content:'✿';position:absolute;z-index:-1;right:22px;top:-52px;font-size:210px;line-height:1;color:#c99daa14;transform:rotate(-20deg)}
+.kb-theme-hero p{font-size:12px;letter-spacing:.2em;color:#e8cc98;margin:0 0 9px}.kb-theme-hero p span{color:#e8b4c6;margin-left:10px}
+.kb-theme-hero h1{font-family:'Yu Mincho','Hiragino Mincho ProN',serif;font-size:clamp(24px,3vw,36px);line-height:1.4;letter-spacing:.08em;color:#fff3db;margin:0 0 7px;overflow-wrap:anywhere}
+.kb-theme-hero div{color:#c3ccda;font-size:13px;line-height:1.7}
+.kb-theme-nav{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 18px}.kb-theme-nav a{display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px 16px;border:1px solid #bda57655;background:#152338;border-radius:7px;text-decoration:none;font-size:13px;font-weight:600;box-sizing:border-box}
+.kb-theme-nav a:hover{background:#29384d;border-color:#dcc18a}.kb-theme-nav a[aria-current=page]{background:#ead9b5;color:#17263b;border-color:#e8cc98;box-shadow:0 2px 12px #d8b87b17}
+.kb-theme-top{grid-column:1/-1;min-width:0}.kb-theme-top .kb-theme-nav{margin:0 0 4px}
+.casino:has(.kb-theme) .kb-stage{background:linear-gradient(130deg,#20334a,#101d2f);border-color:#c2a36f80;border-radius:12px;padding:16px;box-shadow:0 10px 28px #0003}
+.casino:has(.kb-theme) .kb-title{font-family:'Yu Mincho','Hiragino Mincho ProN',serif;color:#fff1d3;letter-spacing:.05em}
+.casino:has(.kb-theme) .kb-cond{color:#c2ccda}.casino:has(.kb-theme) .kb-kicker{color:#e8cd98}
+.casino:has(.kb-theme) .kb-bet,.casino:has(.kb-theme) .kc-ticket-paper{--c-muted:#5d5960;--c-gold:#775523;--c-line:#a98e6755;background:repeating-linear-gradient(0deg,#977e5410 0 1px,transparent 1px 5px),#f3eddf;color:#292b34;border:1px solid #c3aa7a;border-top:4px solid #ae465c;box-shadow:0 8px 24px #0003}
+.casino:has(.kb-theme) :is(.kb-bet,.kc-ticket-paper) h2{color:#372f32}.casino:has(.kb-theme) :is(.kb-bet,.kc-ticket-paper) a{color:#744b27}
+.casino:has(.kb-theme) :is(.kb-bet,.kc-ticket-paper) .c-muted{color:#5d5960}
+.casino:has(.kb-theme) :is(.kb-bet,.kc-ticket-paper) :is(input,select){background:#fffdf6;color:#292b34;border:1px solid #a99576;border-radius:6px;min-height:40px;accent-color:#963e54}
+.casino:has(.kb-theme) :is(.kb-bet,.kc-ticket-paper) .c-btn{background:#23364e;color:#fff3df;border:1px solid #23364e;min-height:44px;text-shadow:none}
+.casino:has(.kb-theme) .kb-card th{color:#c9d2df;background:#0e1c2d;padding:10px 6px}.casino:has(.kb-theme) .kb-card td{border-color:#a8b5c126;padding-top:10px;padding-bottom:10px}
+.casino:has(.kb-theme) .kb-pick:hover td,.casino:has(.kb-theme) .kb-pick.sel td{background:#d4a0b526}
+.casino:has(.kb-theme) .kb-stable-card{background:#14253a;border-color:#a28b6155}
+.casino:has(.kb-theme) .kc-page .c-panel{padding:22px;line-height:1.8}.casino:has(.kb-theme) .kc-grid{gap:12px;min-width:0;width:100%}
+.casino:has(.kb-theme) .kc-grid>div{min-width:0;background:#0d19295c;border:1px solid #bd9e6c33;border-radius:9px;padding:14px}
+.casino:has(.kb-theme) .kc-page fieldset{border-color:#b39972;border-radius:8px;background:#fffaf14d}.casino:has(.kb-theme) .kc-page legend{font-weight:700;padding:0 8px}
+.casino:has(.kb-theme) .kc-ticket-paper{display:flex;align-items:end;gap:16px}.casino:has(.kb-theme) .kc-check{padding:7px 10px;border:1px solid #a08b6c66;border-radius:5px;min-height:42px;box-sizing:border-box;cursor:pointer;font-size:14px}
+.casino:has(.kb-theme) .kc-check:has(input:checked){background:#8a39512b;border-color:#ad5772}.casino:has(.kb-theme) .kc-check:has(input:disabled){opacity:.65;cursor:default}
+.casino:has(.kb-theme) .kc-check input[type=checkbox]{min-height:0;width:18px;height:18px;flex:0 0 18px;accent-color:#b66d8c}
+.casino:has(.kb-theme) .kc-ticket-confirm{border-top:3px solid #d5b77d}.casino:has(.kb-theme) .kc-keys li{padding:8px 12px;border:1px dashed #c2a36f99;border-radius:5px;background:#0c1929}
+.casino:has(.kb-theme) .kc-page summary{cursor:pointer;color:#e6cd9d;padding:10px 0}.casino:has(.kb-theme) .kc-page p{overflow-wrap:anywhere}
+.casino:has(.kb-theme) :is(button,a,input,select,summary):focus-visible{outline:3px solid #db9db9;outline-offset:3px}
+.casino:has(.kb-theme) .kr-broadcast{border-color:#c0a16e;border-radius:10px}.casino:has(.kb-theme) .kr-top{background:#14243a}.casino:has(.kb-theme) .kr-controls{background:#203249}.casino:has(.kb-theme) .kr-options{background:#101e31}.casino:has(.kb-theme) .kr-results{background:#17283c;border-color:#b99c6755}.casino:has(.kb-theme) .kr-official{background:#1a2b41}
+@media(max-width:700px){.kb-theme-hero{padding:20px;margin:8px 0 12px}.kb-theme-nav{gap:6px}.kb-theme-nav a{flex:1 1 100px;padding:8px 10px;font-size:12px}.casino:has(.kb-theme) .kc-page .c-panel{padding:14px}.casino:has(.kb-theme) .kb-stage{padding:10px}.casino:has(.kb-theme) .kc-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}}
+@media(orientation:landscape) and (max-height:550px){.kb-theme-hero{padding:14px 20px}.kb-theme-hero h1{font-size:24px}.kb-theme-nav{margin:6px 0 10px;gap:5px}.kb-theme-nav a{min-height:36px;flex:0 1 auto;padding:6px 12px;font-size:11px}.kb-theme-top .kb-theme-nav{margin:0 0 4px}.casino:has(.kb-theme) .kb-stage{padding:8px}}
+/* 和紙の上では淡いオッズや白文字も濃色へ切り替える。 */
+.casino:has(.kb-theme) .kb-bet :is(.kb-hbtn,.kb-type,.kb-mode label){background:#fffcf3;border-color:#aa987c88;color:#302f36}
+.casino:has(.kb-theme) .kb-bet :is(.kb-hbtn-odds,.kb-preview span){color:#775023}
+.casino:has(.kb-theme) .kb-bet .kb-preview{background:#e6dcc9;border-color:#a58d68;color:#524b45}.casino:has(.kb-theme) .kb-bet .kb-preview b{color:#302d32}
+.casino:has(.kb-theme) .kb-bet :is(.kb-hbtn,.kb-type,.kb-mode label):has(input:checked){background:#ead3d9;border-color:#963e54;box-shadow:none;color:#3a2630}
+.casino:has(.kb-theme) .kb-bet .kb-amt:has(input:checked){outline-color:#963e54}
+body.casino:has(.kb-theme){--c-bg:#0d1726;--c-bg2:#17283b;--cs-button:#304761;--cs-button-dark:#1b2d44}
+.casino:has(.kb-theme) .c-sky{background:radial-gradient(ellipse at 95% 0,#81576c30,transparent 55%),linear-gradient(180deg,#15243b,#0a1422 70%)}
+.casino:has(.kb-theme) :is(.kb-bet,.kc-ticket-paper){color-scheme:light;--cs-button:#304761;--cs-button-dark:#1b2d44}
+.casino:has(.kb-theme) .c-panel .c-btn:not(.c-btn-gold):not(.c-btn-ghost):not(.c-btn-discord){background:linear-gradient(180deg,#304761,#1b2d44);border-color:#c1a47188;color:#fff0d4}

@@ -1,3 +1,5 @@
+import type {KeibaPreviewData} from '../../services/casino/keibaPreview.js';
+import {KeibaTheme, KeibaNav, KeibaHero} from './keibaTheme.js';
 import {KeibaPreviewContent} from './keibaPreview.js';
 import {keibaBroadcast} from '../../services/casino/keibaBroadcast.js';
 import { KB_DEFAULT_OUTFIT, KB_OUTFIT_COLORS, KB_HOODS, KB_ORNAMENTS } from '../../services/casino/keibaOutfit.js';
@@ -555,6 +557,7 @@ function BetPanel(p: {
   s: KbState;
   me: CasinoMe;
   casino: CasinoConfig;
+  test?: boolean;
 }) {
   const { s, casino } = p;
   const mk = marks(s.horses);
@@ -568,11 +571,12 @@ function BetPanel(p: {
   const first = chips.find((n) => n >= 100) ?? chips[0]!;
   return (
     <section class="c-panel kb-bet">
-      <h2>🎫 馬券を買う</h2><p><a href={`/casino/keiba/tickets/${p.t.id}`}>着順別の選択・フォーメーションで買う（購入前に確認）</a></p>
+      <h2>🎫 馬券を買う</h2>{p.test ? <p>選択・点数・合計の確認用です。テストでは購入できません。</p> : <p><a href={`/casino/keiba/tickets/${p.t.id}`}>着順別の選択・フォーメーションで買う（購入前に確認）</a></p>}
       <form
-        method="post"
-        action={`/casino/t/${p.t.id}/act`}
+        method={p.test ? "get" : "post"}
+        action={p.test ? "/economy/keiba-test" : `/casino/t/${p.t.id}/act`}
         class="kb-slip"
+        data-kb-test={p.test ? "true" : undefined}
         data-odds={JSON.stringify(oddsData(s))}
         data-fav={String(fav)}
         data-coin={p.me.coin.name}
@@ -586,7 +590,7 @@ function BetPanel(p: {
           ),
         )}
       >
-        <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />
+        {!p.test && <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />}
         <input type="hidden" name="action" value="bets" />
         <input type="hidden" name="seq" value="" />
         <p class="kb-step">① 賭け方</p>
@@ -690,7 +694,7 @@ function BetPanel(p: {
         <p class="kb-preview" aria-live="polite">
           馬を選ぶと、何点・合計いくら・当たるといくらかがここに出ます。
         </p>
-        <button type="submit" class="c-btn c-btn-gold kb-buy">
+        <button type={p.test ? "button" : "submit"} disabled={p.test} class="c-btn c-btn-gold kb-buy">
           🎫 馬券を買う
         </button>
         <p class="c-muted kb-hint">
@@ -869,6 +873,8 @@ export function KeibaView(p: {
   now: number;
   seatControls: Child;
   countdown: Child;
+  testData?: KeibaPreviewData;
+  testFollow?: number;
 }) {
   const { s, me } = p;
   const uid = me.session.userId;
@@ -886,7 +892,7 @@ export function KeibaView(p: {
         ? "🏇 レース中"
         : `🏁 結果（${KB_RESULT_SECONDS} 秒で次のレースの受付）・次まで`;
   return (
-    <div class="kb-layout">
+    <div class="kb-layout"><KeibaTheme/><div class="kb-theme-top">{!p.testData && <KeibaNav current="/casino/tables/keiba"/>}</div>
       <div class="kb-main">
         <section
           class="kb-stage"
@@ -940,8 +946,8 @@ export function KeibaView(p: {
               {s.phase !== "racing" && p.countdown}
             </div>
           </div>
-          {s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
-          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={keibaBroadcast(s,p.t.id,p.now)!} tableId={p.t.id} mine={[...new Set(mine.flatMap(x=>keyNos(x.key)))]} owned={s.horses.filter(h=>h.ownerId===uid).map(h=>h.no)} embedded/> : (
+          {!p.testData && s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
+          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={p.testData ?? keibaBroadcast(s,p.t.id,p.now)!} demoPath={p.testData ? "/economy/keiba-test" : undefined} tableId={p.t.id} mine={p.testData ? p.testFollow ? [p.testFollow] : [] : [...new Set(mine.flatMap(x=>keyNos(x.key)))]} owned={s.horses.filter(h=>h.ownerId===uid).map(h=>h.no)} embedded/> : (
           <Tv
             s={s}
             mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]}
@@ -973,7 +979,7 @@ export function KeibaView(p: {
             </div>
           )}
         </section>
-        {s.phase === "betting" && seated && s.hostId === uid && (
+        {!p.testData && s.phase === "betting" && seated && s.hostId === uid && (
           <form
             method="post"
             action={`/casino/t/${p.t.id}/act`}
@@ -1025,7 +1031,7 @@ export function KeibaView(p: {
       {/* PC では右に並べる（レースを見ながら買える） */}
       <div class="kb-side">
         {seated && s.phase === "betting" && (
-          <BetPanel t={p.t} s={s} me={me} casino={p.casino} />
+          <BetPanel t={p.t} s={s} me={me} casino={p.casino} test={!!p.testData} />
         )}
         <MyTickets t={p.t} s={s} me={me} mine={mine} />
         <Everyone s={s} coin={me.coin} />
@@ -1104,7 +1110,7 @@ export function KbLobbyExtra(p: {
   const active = p.horses.filter((h) => !h.retiredAt);
   return (
     <>
-      <nav class="c-panel"><a href="/casino/keiba/club">育成・スキル・馬主の収支</a> ／ <a href="/casino/keiba/events">大会・ランキング</a> ／ <a href="/casino/keiba/replays">レースを見返す</a></nav>
+      <KeibaTheme/><KeibaHero title="みんなでダービー" note="一枚の馬券から、一頭の物語まで。"/><KeibaNav current="/casino/tables/keiba"/>
       <section class="c-panel"><h2>🏇 競馬の3D映像</h2><p class="c-muted">発走すると、通常のレース画面に3D映像を表示します。カメラや画質を選べます。馬券なしで確認する場合は下の見本を開いてください。</p><a class="c-btn" href="/casino/keiba/preview">映像試作を見る（馬券なし）</a></section>
       <section class="c-panel kb-owner-cta">
         <h2>🐴 馬主になる</h2>
@@ -1284,11 +1290,11 @@ export function KbStablePage(p: {
   const foalPrice = Math.floor(p.price / 2);
   const Hidden = () => <input type="hidden" name="_csrf" value={csrf} />;
   return (
-    <CasinoLayout title="馬主の部屋" me={p.me}><p><a href="/casino/keiba/club">育成・スキル・血統・共同所有・収支を見る</a></p>
+    <CasinoLayout title="馬主の部屋" me={p.me}><KeibaTheme/><KeibaHero title="馬主の部屋" note="愛馬を迎えて、次の一走を楽しもう。"/><KeibaNav current="/casino/keiba/stable"/>
       <p class="c-back">
         <a href="/casino/tables/keiba">← みんなでダービーへ</a>
       </p>
-      <h1 class="c-h1">🐴 馬主の部屋</h1>
+
       {p.msg && <Msg msg={p.msg} />}
       <p class="c-note"><a href="/casino/keiba/aura-shop">✨ 馬のオーラショップへ</a> — 付ける馬を選んでから購入できます。</p>
       <section class="c-panel" id="aura-shop">

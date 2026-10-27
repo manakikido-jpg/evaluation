@@ -1,3 +1,4 @@
+import {KeibaTestPage} from './keibaTest.js';
 import {balanceScenarios} from '../services/casino/keibaBalance.js';
 import type {GuildConfig} from '../config.js';
 import type {Hono,Context} from 'hono';
@@ -11,6 +12,12 @@ import {KB_OUTFIT_COLORS} from '../services/casino/keibaOutfit.js';
 import {audit} from '../services/audit.js';
 /** requireAdmin/requireCsrfを登録してから呼ぶ。大会の管理は宮司だけ。 */
 export function mountKeibaAdmin(app:Hono<any>,d:{db:Db;now:()=>Date;cfg:()=>GuildConfig}){
+ app.get('/economy/keiba-test', (c) => {
+   const session = c.get('session') as AdminSession | undefined;
+   if (!session || !['guji', 'shinshoku'].includes(session.level) || session.pages && !session.pages.includes('economy')) return c.text('経済のページ権限がある運営だけ確認できます。', 403);
+   c.header('Cache-Control', 'private, no-store');
+   return c.html(<KeibaTestPage session={session} cfg={d.cfg()} now={d.now()} phase={c.req.query('phase')} follow={c.req.query('follow')}/>);
+ });
  const guard=(fn:(c:Context,s:AdminSession)=>Response|Promise<Response>)=>async(c:Context)=>{const s=c.get('session') as AdminSession|undefined;if(s?.level!=='guji')return c.text('宮司だけ変更できます。',403);c.header('Cache-Control','private, no-store');return fn(c,s);};
  app.get('/keiba-events',guard(async(c,s)=>{
   const all=await events(d.db),old=all.find(e=>e.id===Number(c.req.query('edit')));
