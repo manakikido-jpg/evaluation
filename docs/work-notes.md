@@ -1221,3 +1221,8 @@
 - 最終提出の検証基点は本番c312602、統合bd62789。今回のコードは固定済み。最新取得→統合→全件検証→専用ブランチへ保存の順で提出する。別作業の継続更新まで本作業の完成範囲と混同せず、PR合流時の最新本番確認/競合解消はAGENTS.mdの合流担当ルールに従う。
 
 - 最終提出版bd62789（本番c312602統合）の型チェック・ビルド・全203ファイル/2,279件が成功（486.75秒、4並列）。diff確認成功。ログ/tmp/casino-rooms-submit-{types,build,tests}.log。画面はdocs/previews/casino-immersive-{roulette,blackjack,highlow,mobile}.png。専用ブランチcodex/casino-immersive-previewをpushし、本番向けPRを提出する。公開切替/本番合流は未実施。以降は記録のみで、検証済みソースに変更なし。
+
+## 2026年10月28日：ルーレットのBET位置を発光
+- 依頼：BETした所だけ光って分かるようにする。既存placed状態を使い、チップを置いた場所へ金色の縁と光を追加。境界BETも対象。解除/戻す/前回/倍増に追従する。料金・判定・送信処理は変更しない。現在PR109の専用ブランチ、最新本番c312602確認済み。ブラウザで選択/解除とスマホを検証後、型/全テストを通してPR109へ追加する。
+
+- 完了：placed状態へ金縁/内外の光、境界BETへ小さな光、aria-pressedを追加。運営試遊では未選択のhit演出を停止。PC1440/スマホ390でBET/境界/戻す/倍増/クリア/結果時の未選択発光なしを確認。JS例外/失敗応答/実カジノへの通信0。見本docs/previews/casino-immersive-roulette-bet-glow.png。型/ビルド/全203ファイル・2,279件成功（478.74秒）。ログ/tmp/roulette-glow-{types,build,tests,browser}.log。PR109へ追加保存、本番合流は未実施。

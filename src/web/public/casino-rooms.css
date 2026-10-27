@@ -16,3 +16,9 @@ body.casino:has(.ir-page){background:#0a1220;--c-gold:#e7ca90;--c-muted:#c0c7d3;
 .ir-page .c-rb-boundary.hit:after{background:#ffe39b}
 .ir-wheel-perspective .c-wheel2{transform:rotateX(42deg)}
 @media(max-width:640px){.ir-page .c-rb-board{grid-template-columns:repeat(3,minmax(0,1fr)) 48px;grid-template-rows:40px repeat(12,40px) 40px 40px 40px;gap:4px}.ir-page .c-rb-cell{font-size:14px}.ir-page .c-rb-cell.out{font-size:11px}.ir-page .c-rb-chips{background:#0d1929f2;position:static}.ir-page .c-rb-board .c-rb-boundary{font-size:10px}}
+
+/* BETを置いた場所だけを光らせる。結果の数字は玉と明細で確認する。 */
+.ir-page .c-rb-cell.hit:not(.placed){animation:none;box-shadow:none}
+.ir-page .c-rb-cell.placed{animation:none;outline:2px solid #ffe4a0;outline-offset:-2px;box-shadow:inset 0 0 16px #ffd47555,0 0 12px #ffc85c99;z-index:4}
+.ir-page .c-rb-boundary.hit:not(.placed):after{background:#e1c786aa}
+.ir-page .c-rb-boundary.placed:after{width:8px;height:8px;background:#fff0ae;box-shadow:0 0 8px #ffd475}

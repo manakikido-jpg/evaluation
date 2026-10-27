@@ -608,6 +608,7 @@ const paintBoard = (form) => {
       else badge.remove();
     }
     cell.classList.toggle('placed', Boolean(amount));
+    cell.setAttribute('aria-pressed', amount ? 'true' : 'false');
   });
   positionRouletteInside(form);
   const total = [...st.bets.values()].reduce((a, b) => a + b, 0);

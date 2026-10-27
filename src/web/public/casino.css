@@ -652,7 +652,7 @@ body.casino { background: #070d0b; }
 .c-rb-cell.odd { grid-column: 10 / 12; grid-row: 5; }
 .c-rb-cell.high { grid-column: 12 / 14; grid-row: 5; }
 .c-rb-cell.hit { box-shadow: 0 0 0 3px var(--c-gold), 0 0 18px rgba(226, 179, 64, 0.8); z-index: 1; }
-.c-rb-cell.placed { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5); }
+.c-rb-cell.placed { outline: 2px solid #ffe4a0; outline-offset: -2px; box-shadow: inset 0 0 16px #ffd47555, 0 0 12px #ffc85c99; }
 .c-rb-chip { position: absolute; right: -4px; top: -6px; min-width: 26px; height: 26px; padding: 0 5px; border-radius: 13px; background: radial-gradient(circle, #f7da8b 0 40%, #c8961e 41%); border: 2px dashed #fff; color: #2a1c00; font-size: 0.68rem; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 6px rgba(0, 0, 0, 0.6); z-index: 2; animation: pop 0.2s ease-out both; pointer-events: none; }
 .c-rb-slip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 8px; }
 .c-rb-slip b { color: var(--c-gold); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
