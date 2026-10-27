@@ -862,7 +862,10 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   app.get('/casino/keiba/preview', page((c, me) => {
     if (!kindOn('keiba')) return c.redirect('/casino?e=game_off');
-    return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={createKeibaPreview()} />}`);
+    // 🎥 試しに「自分の馬」を選んで、カメラが追うのを見られる（馬券なし）
+    const data = createKeibaPreview(), follow = Number(c.req.query('follow'));
+    const mine = data.horses.some(h => h.no === follow) ? [follow] : [];
+    return c.html(html`<!DOCTYPE html>${<KeibaPreviewPage me={me} data={data} mine={mine} />}`);
   }));
 
   // 同じレースの走行記録を観戦。次のレースへ進んでも別の走行へ置き換えない。

@@ -26,7 +26,9 @@ describe('映像試作の入口',()=>{
   const snapshot=()=>Promise.all([db.select({n:count()}).from(coinTx),db.select({n:count()}).from(casinoTables),db.select({n:count()}).from(keibaHorses)]);
   const before=await snapshot();
   const response=await app.request('/casino/keiba/preview',{headers:{cookie}}),html=await response.text();expect(response.status).toBe(200);
-  expect(html).toContain('サンプルレース／馬券なし');expect(html).toContain('data-keiba-preview');expect(html).toContain('data-kr-goal');expect(html).not.toContain('data-kr-camera="mine"');expect(html).toContain('keiba-preview.js?v=');expect(html).not.toMatch(/onclick=|<script>(?!<)/);
+  expect(html).toContain('サンプルレース／馬券なし');expect(html).toContain('data-keiba-preview');expect(html).toContain('data-kr-goal');expect(html).not.toContain('data-kr-camera="mine"');
+  const picked=await (await app.request('/casino/keiba/preview?follow=3',{headers:{cookie}})).text();expect(picked).toContain('data-kr-camera="mine" aria-pressed="true"');expect(picked).toContain('&quot;follow&quot;:[3]');
+  expect(await (await app.request('/casino/keiba/preview?follow=99',{headers:{cookie}})).text()).not.toContain('data-kr-camera="mine"');expect(html).toContain('keiba-preview.js?v=');expect(html).not.toMatch(/onclick=|<script>(?!<)/);
   const after=await snapshot();expect(after).toEqual(before);expect((await walletOf(db,USER)).balance).toBe(1000);
  });
  it('モジュールを同じ配信元から版付きで読み込める',async()=>{

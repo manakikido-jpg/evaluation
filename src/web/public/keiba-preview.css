@@ -14,3 +14,4 @@ body.casino:has(.kr-page:not(.kr-embedded)){background-color:#101b26}.casino:has
 
 .kr-results li.kr-mine{background:#d18fa32a;outline:1px solid #efb7cb;border-radius:5px}.kr-results li.kr-mine:after{content:'🌸';font-size:10px}
 .kr-embedded .kr-results{display:flex;align-items:center;gap:12px}.kr-embedded .kr-results ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex:1;min-width:0}.kr-embedded .kr-results li{font-size:11px;min-width:0}.kr-embedded .kr-official>a{display:none}@media(max-width:600px){.kr-embedded .kr-results{display:block}.kr-embedded .kr-results ol{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:8px}}
+.kr-test-follow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
