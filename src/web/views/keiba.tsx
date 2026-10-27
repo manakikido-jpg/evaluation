@@ -1,3 +1,5 @@
+import {KeibaPreviewContent} from './keibaPreview.js';
+import {keibaBroadcast} from '../../services/casino/keibaBroadcast.js';
 import { KB_DEFAULT_OUTFIT, KB_OUTFIT_COLORS, KB_HOODS, KB_ORNAMENTS } from '../../services/casino/keibaOutfit.js';
 import type { Child } from "hono/jsx";
 import type { CasinoConfig } from "../../config.js";
@@ -939,6 +941,7 @@ export function KeibaView(p: {
             </div>
           </div>
           {s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
+          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={keibaBroadcast(s,p.t.id,p.now)!} tableId={p.t.id} mine={[...new Set(mine.flatMap(x=>keyNos(x.key)))]} embedded/> : (
           <Tv
             s={s}
             mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]}
@@ -954,6 +957,7 @@ export function KeibaView(p: {
                 }
               : {})}
           />
+          )}
           {past.length > 0 && (
             <div class="kb-history">
               <span class="c-muted">これまで:</span>
@@ -1101,7 +1105,7 @@ export function KbLobbyExtra(p: {
   return (
     <>
       <nav class="c-panel"><a href="/casino/keiba/club">育成・スキル・馬主の収支</a> ／ <a href="/casino/keiba/events">大会・ランキング</a> ／ <a href="/casino/keiba/replays">レースを見返す</a></nav>
-      <section class="c-panel"><h2>🏇 新しい映像の試作</h2><p class="c-muted">8頭のサンプルレースで、全景・追走・ゴールの3D映像を確認できます。</p><a class="c-btn" href="/casino/keiba/preview">映像試作を見る（馬券なし）</a></section>
+      <section class="c-panel"><h2>🏇 競馬の3D映像</h2><p class="c-muted">発走すると、通常のレース画面に3D映像を表示します。カメラや画質を選べます。馬券なしで確認する場合は下の見本を開いてください。</p><a class="c-btn" href="/casino/keiba/preview">映像試作を見る（馬券なし）</a></section>
       <section class="c-panel kb-owner-cta">
         <h2>🐴 馬主になる</h2>
         <p class="c-muted">

@@ -1,7 +1,10 @@
 import { clamp, sampleReplay, trackPoint, replayLimit } from './keiba-replay.js?v=1';
 import { createHorse } from './keiba-horse.js?v=1';
-const root=document.querySelector('[data-keiba-preview]');
-if(root)void start(root);
+const mounted=new WeakSet();
+export function mountKeibaPreviews(scope=document){
+  for(const root of scope.querySelectorAll('[data-keiba-preview]'))if(!mounted.has(root)){mounted.add(root);void start(root);}
+}
+mountKeibaPreviews();
 async function start(root) {
   const data=JSON.parse(root.dataset.keibaPreview), sceneRoot=root.querySelector('[data-kr-scene]'), flat=root.querySelector('[data-kr-flat]');
   const status=root.querySelector('[data-kr-status]'), seek=root.querySelector('[data-kr-seek]'), play=root.querySelector('[data-kr-play]'), quality=root.querySelector('[data-kr-quality]');
@@ -12,6 +15,7 @@ async function start(root) {
   const serverNow=()=>serverAt+performance.now()-clockAt;
   const limit=()=>replayLimit(data,serverNow());
   if(data.live&&!data.live.confirmed){elapsed=limit();playing=!reduced;play.textContent=playing?'停止':'再生';}
+  if(data.embedded&&data.live?.confirmed)elapsed=data.durationMs;
   function showOfficial(){
     if(!data.live?.confirmed)return;
     root.querySelector('[data-kr-official]').hidden=false;
@@ -33,7 +37,7 @@ async function start(root) {
       const next=await response.json();
       if(next.live?.key!==data.live.key)throw new Error('race mismatch');
       data.live=next.live;data.results=next.results;serverAt=next.live.now;clockAt=performance.now();dirty=true;
-      liveStatus.textContent=next.live.confirmed?'結果が確定しました。自由に見返せます。馬券・払戻は競馬の卓で確認してください。':'サーバーの時刻に合わせて観戦中です。';
+      liveStatus.textContent=next.live.confirmed?(data.embedded?'結果が確定しました。馬券・払戻はこの画面の「あなたの馬券」で確認できます。':'結果が確定しました。自由に見返せます。馬券・払戻は競馬の卓で確認してください。'):'サーバーの時刻に合わせて観戦中です。';
       showOfficial();
     }catch{if(!disposed)liveStatus.textContent='レース情報を確認できません。再接続を試しています。';}
     finally{polling=false;}
@@ -69,7 +73,7 @@ async function start(root) {
     lastEvent=event;previousElapsed=elapsed;
   }
   const names=new Map(data.horses.map(h=>[h.no,h.name])), rank=root.querySelector('[data-kr-ranking]');
-  const rows=new Map();for(const h of data.horses){const li=document.createElement('li'),no=document.createElement('b'),name=document.createElement('span');no.textContent=h.no;no.className=`kr-no kr-no-${h.no}`;name.textContent=h.name;li.append(no,name);rank.append(li);rows.set(h.no,li);}
+  const rows=new Map();for(const h of data.horses){const li=document.createElement('li');li.classList.toggle('kr-mine',(data.mine??[]).includes(h.no));const no=document.createElement('b'),name=document.createElement('span');no.textContent=h.no;no.className=`kr-no kr-no-${h.no}`;name.textContent=h.name;li.append(no,name);rank.append(li);rows.set(h.no,li);}
   class RaceScene {
     constructor() {
       this.renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.0;
@@ -207,8 +211,11 @@ async function start(root) {
   quality.addEventListener('change',()=>void build());
   function visibility(){if(document.hidden){silence();cancelAnimationFrame(raf);raf=0;}else if(!raf&&!disposed){last=performance.now();raf=requestAnimationFrame(frame);}}
   document.addEventListener('visibilitychange',visibility);
-  window.addEventListener('pagehide',()=>{disposed=true;silence();void audioContext?.close().catch(()=>{});loading++;clearTimeout(pollTimer);cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);scene?.dispose();},{once:true});
-  window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
+  function restore(e){if(e.persisted)location.reload();}
+  function cleanup(){if(disposed)return;disposed=true;observer.disconnect();silence();void audioContext?.close().catch(()=>{});loading++;clearTimeout(pollTimer);cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',cleanup);window.removeEventListener('pageshow',restore);scene?.dispose();}
+  const observer=new MutationObserver(()=>{if(!root.isConnected)cleanup();});observer.observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('pagehide',cleanup,{once:true});
+  window.addEventListener('pageshow',restore);
   if(data.live&&!data.live.confirmed&&!polling)pollTimer=setTimeout(pollLive,2000);
   await build();if(!disposed){last=performance.now();raf=requestAnimationFrame(frame);}
 }
