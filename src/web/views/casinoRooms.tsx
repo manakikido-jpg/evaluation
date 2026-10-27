@@ -1,0 +1,39 @@
+import type { Child } from 'hono/jsx';
+import type { GuildConfig } from '../../config.js';
+import type { RoomPreview } from '../../services/casino/roomPreview.js';
+import { hlNextMult, hlWays, HL_MAX_STEPS } from '../../services/casino/highlow.js';
+import { rouletteColor } from '../../services/casino/roulette.js';
+import { CasinoLayout, PlayingCard } from './casino.js';
+import { RouletteWheel, RouletteBoard, RouletteStakes } from './rouletteBoard.js';
+import { assetUrl } from '../assets.js';
+const PATH = '/economy/casino-test';
+const LABEL = {roulette:'ルーレット',blackjack:'ブラックジャック',highlow:'ハイロー'};
+const ROOM = {roulette:'夜桜の迎賓館',blackjack:'花灯りの奥座敷',highlow:'狐面の勝負処'};
+const fmt = (n:number) => n.toLocaleString('ja-JP');
+const resultLabel = {blackjack:'ブラックジャック',win:'勝ち',push:'引き分け',lose:'はずれ',bust:'バースト',dealer_blackjack:'ディーラーのブラックジャック'};
+const mult = (n:number) => `×${(n/1000).toFixed(2)}`;
+function Move(p:{m:RoomPreview;action:string;children:Child;kind?:string}){
+ return <form method="get" action={PATH}><input type="hidden" name="game" value={p.m.game}/><input type="hidden" name="round" value={p.m.round}/><input type="hidden" name="bet" value={p.m.bet}/><input type="hidden" name="moves" value={[...p.m.moves,p.action].join(',')}/><button class={`ir-button ${p.kind??''}`} disabled={!p.m.canContinue}>{p.children}</button></form>;
+}
+export function CasinoRooms(p:{m:RoomPreview;cfg:GuildConfig}){
+ const m=p.m, coin={name:p.cfg.economy.currencyName,emoji:p.cfg.economy.currencyEmoji};
+ const next = `${PATH}?game=${m.game}&round=${Math.min(m.round+1,1000000)}&bet=${m.bet}`;
+ const finished=m.game==='roulette'?m.number!==null:m.game==='blackjack'?m.view.phase==='done':m.state.phase==='done';
+ const paid=m.paid, net=finished?paid-m.total:0;
+ return <CasinoLayout title="カジノ・没入感テスト" adminPreview="casino">
+ <link rel="stylesheet" href={assetUrl('casino-rooms.css')}/><script src={assetUrl('casino-rooms.js')} defer/>
+ <div class="ir-page" data-immersive-root data-ir-finished={finished?'true':'false'} data-ir-net={net}>
+  <header class="ir-header"><div><p>咲楽ノ宮 <span>運営専用テスト</span></p><h1>{LABEL[m.game]} <small>{ROOM[m.game]}</small></h1></div><div class="ir-tools"><span class="ir-balance">見本 {fmt(m.balance-m.total+(finished?m.paid:0))} {coin.name}</span><button type="button" class="ir-icon" data-ir-audio aria-pressed="false">音 OFF</button><label>演出<select data-ir-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">即表示</option></select></label><button type="button" class="ir-icon" data-ir-fullscreen>没入表示</button><details class="ir-menu"><summary>メニュー</summary><a href="/economy/casino">社務所へ戻る</a><a href="/economy/keiba-test">競馬テスト</a></details></div></header>
+  <nav class="ir-tabs" aria-label="試遊するゲーム">{Object.entries(LABEL).map(([game,label])=><a href={`${PATH}?game=${game}`} aria-current={game===m.game?'page':undefined}>{label}</a>)}</nav>
+  <p class="ir-notice">サンプル専用です。実際の銭・馬・戦績は変わりません。残高や払戻は見本です。</p>
+  <p class="ir-network" data-ir-network role="status" hidden/>
+  <section class={`ir-stage ir-${m.game}`} data-immersive-room={m.game} aria-label={ROOM[m.game]}>
+   {m.game==='roulette'?<div class="ir-roulette-grid"><div class="ir-wheel-seat"><p class="ir-table-name">咲楽ノ宮 · 迎賓館</p><div class="ir-wheel-perspective"><RouletteWheel number={m.number}/></div>{m.number!==null&&<div class="ir-result ir-reveal" role="status"><b>出目 {m.number}（{rouletteColor(m.number)==='red'?'赤':m.number===0?'緑':'黒'}）</b><span>見本の払戻 {fmt(m.paid)} {coin.name} ／ 差引 {fmt(net)} {coin.name}</span><RouletteStakes stakes={m.stakes} number={m.number} coin={coin}/></div>}<p class="ir-caption">回転後は同じ出目へ停止します。再読込で新しい賭けは作りません。</p></div><div class="ir-board-seat"><RouletteBoard action={PATH} csrf="" casino={p.cfg.casino} coin={coin} preview hidden={{game:'roulette',round:String(m.round),spin:'1'}} number={m.number} submitLabel="見本のチップで回す" memoryKey="immersive-preview"/>{m.number!==null&&<a class="ir-button ir-next" href={next}>次の回を試す</a>}</div></div>
+   : m.game==='blackjack'?<div class="ir-card-table"><div class="ir-hand ir-dealer"><p>ディーラー <b>{m.view.dealerTotal.total}{m.view.dealerHidden?' + ?':''}</b></p><div class="ir-cards">{m.view.dealer.map(c=><PlayingCard c={c}/>)}{m.view.dealerHidden&&<span class="pc back" aria-label="伏せたカード"/>}</div></div><p class="ir-table-mark">BLACKJACK · 咲楽ノ宮<br/><small>最初の2枚で21：元の賭けを含め2.5倍</small></p><div class="ir-hand ir-player"><p>あなた <b>{m.view.playerTotal.total}</b>{m.view.playerTotal.soft&&<small> Aを11で計算</small>}</p><div class="ir-cards">{m.view.player.map(c=><PlayingCard c={c}/>)}</div></div>{m.view.phase==='player'?<div class="ir-actions"><Move m={m} action="hit" kind="blue">ヒット<small>もう1枚</small></Move><Move m={m} action="stand" kind="red">スタンド<small>これで勝負</small></Move>{m.doubleAllowed&&<Move m={m} action="double">ダブル<small>倍にして1枚</small></Move>}</div>:<div class="ir-result" role="status"><b>{resultLabel[m.view.result!]}</b><span>見本の払戻 {fmt(m.paid)} {coin.name} ／ 差引 {fmt(net)} {coin.name}</span></div>}</div>
+   :<div class="ir-highlow-play"><div class="ir-highlow-card"><div class="ir-history">{m.state.history.slice(-4).map(c=><PlayingCard c={c} small/>)}</div><PlayingCard c={m.state.current}/></div><div class="ir-highlow-status"><h2>灯籠の連勝記録</h2><div class="ir-lanterns" aria-hidden="true">{Array.from({length:HL_MAX_STEPS},(_,i)=><span class={i<m.state.steps?'lit':''}>✿</span>)}</div><p>成功 {m.state.steps} / {HL_MAX_STEPS} 回　倍率 {mult(m.state.mult)}</p><p class="ir-return">受取予定 <strong>{fmt(m.state.steps>0?Math.floor(m.bet*m.state.mult/1000):0)}</strong> {coin.name}</p>{m.state.lastDraw&&<p role="status">ドロー。連勝・倍率・受取予定額はそのままです。</p>}{m.state.phase==='done'&&<div class="ir-result" role="status"><b>{m.state.result==='cashout'?'見本の受け取り完了':'はずれ'}</b><span>見本の払戻 {fmt(m.paid)} {coin.name}</span></div>}</div>{m.state.phase==='playing'&&<div class="ir-actions">{(['high','low']as const).map(g=>hlWays(m.state.current,g)>0&&<Move m={m} action={g} kind={g==='high'?'blue':'red'}>{g==='high'?'▲ HIGH':'▼ LOW'}<small>{mult(hlNextMult(m.state.mult,m.state.current,g))}・決着時{Math.round(hlWays(m.state.current,g)/12*100)}%</small></Move>)}{m.state.steps>0&&<Move m={m} action="cashout" kind="purple">受け取る<small>見本の銭で終了</small></Move>}</div>}</div>}
+  </section>
+  <footer class="ir-bottom"><form method="get" action={PATH} class="ir-bet"><input type="hidden" name="game" value={m.game}/><input type="hidden" name="round" value={m.round}/><label>見本の1回の金額<input type="number" name="bet" min={p.cfg.casino.minBet} max={Math.max(p.cfg.casino.minBet,Math.min(p.cfg.casino.maxBet,m.balance))} value={m.bet} required/></label><button class="ir-button">金額を変えて試す</button></form><span>第{m.round}回・実際の銭の消費なし</span><a class="ir-button ir-next" href={next}>新しい回を始める</a></footer>
+  {!m.canContinue&&<p class="ir-notice">この試遊の操作上限です。新しい回を始めてください。</p>}
+  <details class="ir-rules"><summary>遊び方・配当・試遊について</summary><p>ルーレットは0〜36の37マス。数字1つ36倍、赤黒など2倍、列・ダズン3倍。境界の賭けも選べます。ブラックジャックはディーラーが17以上で止まり、最初の21は2.5倍、通常勝ちは2倍、引き分けは戻ります。ハイローの同じ数字はドローで倍率・連勝を維持。成功倍率は「0.95÷引き分けを除く成功確率」で、高確率の選択では倍率が下がる場合もあります。表示は既存の判定処理に基づくサンプルで、実際の残高・戦績へ保存しません。</p></details>
+ </div></CasinoLayout>;
+}

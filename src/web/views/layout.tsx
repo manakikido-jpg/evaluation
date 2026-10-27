@@ -9,6 +9,7 @@ type Nav =
   | 'fortune'
   | 'shinpu'
   | 'keibatest'
+  | 'casinotest'
   | 'recordings'
   | 'home'
   | 'stats'
@@ -95,6 +96,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: 'gallery', href: '/economy/gallery', icon: '📷', label: '写真館・動画館の報酬', page: 'economy' },
       { key: 'economy', href: '/economy', icon: '🪙', label: '経済' },
+      { key: 'casinotest', href: '/economy/casino-test', icon: '🌸', label: 'カジノの没入感テスト', page: 'economy' },
       { key: 'keibatest', href: '/economy/keiba-test', icon: '🏇', label: '競馬（運営テスト）', page: 'economy' },
       { key: 'shinpu', href: '/economy/shinpu', icon: '⚔', label: '神符合戦（管理者テスト）', page: 'economy' },
       { key: 'fortune', href: '/economy/fortune', icon: '🎟', label: 'スクラッチ・宝くじ', page: 'economy' },

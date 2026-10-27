@@ -1,3 +1,5 @@
+import {CasinoRooms} from './views/casinoRooms.js';
+import {roomPreview} from '../services/casino/roomPreview.js';
 import {mountKeibaAdmin} from './keibaAdmin.js';
 import { StaffAltSection } from './views/staffAlt.js';
 import { isStaffAlt, setStaffAlt, staffAlts } from '../services/staffAlts.js';
@@ -654,6 +656,16 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/keiba-events',requireAdmin,requireCsrf);
   app.use('/keiba-events/*',requireAdmin,requireCsrf);
+  app.use('/economy/casino-test',requireAdmin);
+  app.get('/economy/casino-test', c => {
+    const session=c.get('session');
+    if(!session || !['guji','shinshoku'].includes(session.level) || session.pages && !session.pages.includes('economy')) return c.text('経済のページ権限がある運営だけ確認できます。',403);
+    c.header('Cache-Control','private, no-store');
+    let model;
+    try { model=roomPreview(new URL(c.req.url).searchParams,cfg.casino); }
+    catch { return c.html(<Layout title="カジノの試遊" session={session} nav="casino"><p>入力を確認して、新しい回を始めてください。</p><a href="/economy/casino-test">試遊へ戻る</a></Layout>,400); }
+    return c.html(<CasinoRooms m={model} cfg={cfg}/>);
+  });
   app.use('/economy/keiba-test',requireAdmin);
   mountKeibaAdmin(app,{db,now,cfg:()=>cfg});
   app.use('/recordings', requireAdmin);
