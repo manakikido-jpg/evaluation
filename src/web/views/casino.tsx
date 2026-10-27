@@ -26,7 +26,7 @@ const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 export type CasinoMe = { styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date; /** 重ねた枚数 */ boostLevel?: number };
 
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
-export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean }) {
+export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean | 'casino' }) {
   const me = props.me;
   return (
     <html lang="ja">
@@ -55,7 +55,7 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
           <a href={props.adminPreview ? '/economy/casino' : props.jansou ? '/casino/jansou' : props.lobby ? '/casino/hall' : '/casino'} class="c-logo">
             <span class="c-logo-mark">{props.jansou ? '🀄' : '🌸'}</span>
             <span>
-              咲楽ノ宮<b>{props.adminPreview ? '競馬テスト' : props.jansou ? '雀荘' : 'カジノ'}</b>
+              咲楽ノ宮<b>{props.adminPreview === 'casino' ? 'カジノテスト' : props.adminPreview ? '競馬テスト' : props.jansou ? '雀荘' : 'カジノ'}</b>
             </span>
           </a>
           {props.lobby && <nav class="cl-top-nav" aria-label="カジノの案内"><a href="/casino/hall" aria-current="page">ロビー</a><a href="/casino/hall?group=table#available-tables">みんなの卓</a><a href="/casino/wardrobe">着せ替え</a><a href="/casino/style-gacha">勝負の御籤</a><a href="/casino/stats">📊 記録</a></nav>}

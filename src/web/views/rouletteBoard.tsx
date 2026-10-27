@@ -28,6 +28,7 @@ export function RouletteBoard(p: {
   /** 「前回と同じ」の覚えておく名前 */
   memoryKey: string;
   disabled?: boolean;
+  preview?: boolean;
 }) {
   // 1 か所の最高（ルーレットだけ別に決められる）。大きい賭けのチップも出す
   const max = rouletteMaxOf(p.casino);
@@ -39,8 +40,8 @@ export function RouletteBoard(p: {
     </button>
   );
   return (
-    <form method="post" action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(max)}>
-      <input type="hidden" name="_csrf" value={p.csrf} />
+    <form method={p.preview ? "get" : "post"} action={p.action} class="c-rb" data-rb={p.memoryKey} data-min={String(p.casino.minBet)} data-max={String(max)}>
+      {!p.preview && <input type="hidden" name="_csrf" value={p.csrf} />}
       {Object.entries(p.hidden ?? {}).map(([k, v]) => (
         <input type="hidden" name={k} value={v} />
       ))}

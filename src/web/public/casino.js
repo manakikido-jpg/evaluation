@@ -303,6 +303,7 @@ const paintSoundButton = () => {
 document.addEventListener('click', (e) => {
   const t = e.target instanceof Element ? e.target : null;
   if (!t) return;
+  if (document.querySelector('[data-immersive-room]')) return;
   if (t.closest('[data-sound-toggle]')) {
     Sound.set(!Sound.on);
     paintSoundButton();
@@ -379,6 +380,7 @@ Sound.bigWin = (at = 0) => { originalBigWin(at); styleVictory(at); };
 
 /** 画面の中の動きに合わせて音を鳴らす */
 const playFx = (root, tableEnd) => {
+  if(document.querySelector('[data-immersive-room]')) return;
   root.querySelectorAll('.fc:not(.still)').forEach((el) => {
     const d = delayOf(el);
     Sound.deal(d);

@@ -89,7 +89,7 @@ export function CasinoAdminPage(p: {
   const name = (id: string | null) => (id ? (p.names.get(id) ?? id) : '—');
   return (
     <Layout title="カジノ" session={p.session} nav="casino" scripts={['charts.js']}>
-      <h1>🎰 カジノ</h1><p><a href="/economy/keiba-test">🏇 競馬の新UI・3D映像を運営だけでテストする</a>（実際の銭・馬は動きません）</p><p><a href="/keiba-events">🏆 競馬の大会・日程・ポイント・記念報酬を設定</a></p>
+      <h1>🎰 カジノ</h1><p><a href="/economy/casino-test">🌸 ルーレット・ブラックジャック・ハイローの没入感テスト</a>（運営専用・見本の銭で試遊）</p><p><a href="/economy/keiba-test">🏇 競馬の新UI・3D映像を運営だけでテストする</a>（実際の銭・馬は動きません）</p><p><a href="/keiba-events">🏆 競馬の大会・日程・ポイント・記念報酬を設定</a></p>
       <CasinoAdminTabs on="casino" />
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <section class="card">
