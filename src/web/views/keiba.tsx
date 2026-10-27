@@ -1,3 +1,4 @@
+import type {KeibaPreviewData} from '../../services/casino/keibaPreview.js';
 import {KeibaTheme, KeibaNav, KeibaHero} from './keibaTheme.js';
 import {KeibaPreviewContent} from './keibaPreview.js';
 import {keibaBroadcast} from '../../services/casino/keibaBroadcast.js';
@@ -556,6 +557,7 @@ function BetPanel(p: {
   s: KbState;
   me: CasinoMe;
   casino: CasinoConfig;
+  test?: boolean;
 }) {
   const { s, casino } = p;
   const mk = marks(s.horses);
@@ -569,11 +571,12 @@ function BetPanel(p: {
   const first = chips.find((n) => n >= 100) ?? chips[0]!;
   return (
     <section class="c-panel kb-bet">
-      <h2>🎫 馬券を買う</h2><p><a href={`/casino/keiba/tickets/${p.t.id}`}>着順別の選択・フォーメーションで買う（購入前に確認）</a></p>
+      <h2>🎫 馬券を買う</h2>{p.test ? <p>選択・点数・合計の確認用です。テストでは購入できません。</p> : <p><a href={`/casino/keiba/tickets/${p.t.id}`}>着順別の選択・フォーメーションで買う（購入前に確認）</a></p>}
       <form
-        method="post"
-        action={`/casino/t/${p.t.id}/act`}
+        method={p.test ? "get" : "post"}
+        action={p.test ? "/economy/keiba-test" : `/casino/t/${p.t.id}/act`}
         class="kb-slip"
+        data-kb-test={p.test ? "true" : undefined}
         data-odds={JSON.stringify(oddsData(s))}
         data-fav={String(fav)}
         data-coin={p.me.coin.name}
@@ -587,7 +590,7 @@ function BetPanel(p: {
           ),
         )}
       >
-        <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />
+        {!p.test && <input type="hidden" name="_csrf" value={p.me.session.csrfToken} />}
         <input type="hidden" name="action" value="bets" />
         <input type="hidden" name="seq" value="" />
         <p class="kb-step">① 賭け方</p>
@@ -691,7 +694,7 @@ function BetPanel(p: {
         <p class="kb-preview" aria-live="polite">
           馬を選ぶと、何点・合計いくら・当たるといくらかがここに出ます。
         </p>
-        <button type="submit" class="c-btn c-btn-gold kb-buy">
+        <button type={p.test ? "button" : "submit"} disabled={p.test} class="c-btn c-btn-gold kb-buy">
           🎫 馬券を買う
         </button>
         <p class="c-muted kb-hint">
@@ -870,6 +873,8 @@ export function KeibaView(p: {
   now: number;
   seatControls: Child;
   countdown: Child;
+  testData?: KeibaPreviewData;
+  testFollow?: number;
 }) {
   const { s, me } = p;
   const uid = me.session.userId;
@@ -887,7 +892,7 @@ export function KeibaView(p: {
         ? "🏇 レース中"
         : `🏁 結果（${KB_RESULT_SECONDS} 秒で次のレースの受付）・次まで`;
   return (
-    <div class="kb-layout"><KeibaTheme/><div class="kb-theme-top"><KeibaNav current="/casino/tables/keiba"/></div>
+    <div class="kb-layout"><KeibaTheme/><div class="kb-theme-top">{!p.testData && <KeibaNav current="/casino/tables/keiba"/>}</div>
       <div class="kb-main">
         <section
           class="kb-stage"
@@ -941,8 +946,8 @@ export function KeibaView(p: {
               {s.phase !== "racing" && p.countdown}
             </div>
           </div>
-          {s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
-          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={keibaBroadcast(s,p.t.id,p.now)!} tableId={p.t.id} mine={[...new Set(mine.flatMap(x=>keyNos(x.key)))]} owned={s.horses.filter(h=>h.ownerId===uid).map(h=>h.no)} embedded/> : (
+          {!p.testData && s.run && s.phase !== "betting" && <p class="c-note"><a href={`/casino/keiba/watch/${p.t.id}?race=${encodeURIComponent(`${s.race.n}:${s.run.start}`)}`}>🏇 このレースを3Dで観戦する</a>（結果確定後は見返せます）</p>}
+          {s.run && s.phase !== "betting" ? <KeibaPreviewContent me={me} data={p.testData ?? keibaBroadcast(s,p.t.id,p.now)!} demoPath={p.testData ? "/economy/keiba-test" : undefined} tableId={p.t.id} mine={p.testData ? p.testFollow ? [p.testFollow] : [] : [...new Set(mine.flatMap(x=>keyNos(x.key)))]} owned={s.horses.filter(h=>h.ownerId===uid).map(h=>h.no)} embedded/> : (
           <Tv
             s={s}
             mine={[...new Set(mine.flatMap((x) => keyNos(x.key)))]}
@@ -974,7 +979,7 @@ export function KeibaView(p: {
             </div>
           )}
         </section>
-        {s.phase === "betting" && seated && s.hostId === uid && (
+        {!p.testData && s.phase === "betting" && seated && s.hostId === uid && (
           <form
             method="post"
             action={`/casino/t/${p.t.id}/act`}
@@ -1026,7 +1031,7 @@ export function KeibaView(p: {
       {/* PC では右に並べる（レースを見ながら買える） */}
       <div class="kb-side">
         {seated && s.phase === "betting" && (
-          <BetPanel t={p.t} s={s} me={me} casino={p.casino} />
+          <BetPanel t={p.t} s={s} me={me} casino={p.casino} test={!!p.testData} />
         )}
         <MyTickets t={p.t} s={s} me={me} mine={mine} />
         <Everyone s={s} coin={me.coin} />

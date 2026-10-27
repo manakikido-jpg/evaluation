@@ -654,6 +654,7 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/keiba-events',requireAdmin,requireCsrf);
   app.use('/keiba-events/*',requireAdmin,requireCsrf);
+  app.use('/economy/keiba-test',requireAdmin);
   mountKeibaAdmin(app,{db,now,cfg:()=>cfg});
   app.use('/recordings', requireAdmin);
   app.use('/recordings/*', requireAdmin, requireCsrf);
