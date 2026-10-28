@@ -25,6 +25,7 @@ export function CasinoRooms(p:{m:RoomPreview;cfg:GuildConfig}){
  <div class="ir-page" data-immersive-root data-ir-finished={finished?'true':'false'} data-ir-net={net} data-ir-balance-before={m.balance-m.total} data-ir-balance-after={m.balance-m.total+(finished?m.paid:0)}>
   <header class="ir-header"><div><p>咲楽ノ宮 <span>運営専用テスト</span></p><h1>{LABEL[m.game]} <small>{ROOM[m.game]}</small></h1></div><div class="ir-tools"><span class="ir-balance">見本 <span data-ir-balance>{fmt(m.balance-m.total+(finished?m.paid:0))}</span> {coin.name}</span><button type="button" class="ir-icon" data-ir-audio aria-pressed="false">音 OFF</button><label>演出<select data-ir-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">即表示</option></select></label><button type="button" class="ir-icon" data-ir-fullscreen>没入表示</button><details class="ir-menu"><summary>メニュー</summary><a href="/economy/casino">社務所へ戻る</a><a href="/economy/keiba-test">競馬テスト</a></details></div></header>
   <nav class="ir-tabs" aria-label="試遊するゲーム">{Object.entries(LABEL).map(([game,label])=><a href={`${PATH}?game=${game}`} aria-current={game===m.game?'page':undefined}>{label}</a>)}</nav>
+  <p class="ir-notice"><a href="/economy/casino-scenes">全19ゲームの演出見本を開く →</a></p>
   <p class="ir-notice">サンプル専用です。実際の銭・馬・戦績は変わりません。残高や払戻は見本です。</p>
   <p class="ir-network" data-ir-network role="status" hidden/>
   <section class={`ir-stage ir-${m.game}`} data-immersive-room={m.game} aria-label={ROOM[m.game]}>

@@ -77,17 +77,19 @@ const shinpuCss = () => readText(path.join(here, 'public/shinpu.css')).replace(/
   return `/static/${name}?v=${version}`;
 });
 
-const roomArt = Object.fromEntries(['roulette','blackjack','highlow'].map(key => {
+const roomArt = Object.fromEntries(['roulette','blackjack','highlow','slots','salon','club'].map(key => {
   const body = new Uint8Array(readFileSync(path.join(here, `public/casino-rooms/${key}.webp`)));
   return [`casino-room-${key}.webp`, {body, type:'image/webp'}];
 }));
-const roomCss = () => readText(path.join(here,'public/casino-rooms.css')).replace(/\/static\/(casino-room-[a-z]+\.webp)/g, (_url,name:string) => `/static/${name}?v=${createHash('sha256').update(roomArt[name]!.body).digest('hex').slice(0,10)}`);
+const roomCss = (name='casino-rooms.css') => readText(path.join(here,'public',name)).replace(/\/static\/(casino-room-[a-z]+\.webp)/g, (_url,name:string) => `/static/${name}?v=${createHash('sha256').update(roomArt[name]!.body).digest('hex').slice(0,10)}`);
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
     ...roomArt,
     'casino-rooms.css': {body:roomCss(),type:'text/css; charset=utf-8'},
+    'casino-scenes.css': {body:roomCss('casino-scenes.css'),type:'text/css; charset=utf-8'},
+    'casino-scenes.js': {body:readText(path.join(here,'public/casino-scenes.js')),type:'text/javascript; charset=utf-8'},
     'casino-rooms.js': {body:readText(path.join(here,'public/casino-rooms.js')),type:'text/javascript; charset=utf-8'},
     'keiba-theme.css': { body: readText(path.join(here, 'public/keiba-theme.css')), type: 'text/css; charset=utf-8' },
     'keiba-club.css': { body: readText(path.join(here, 'public/keiba-club.css')), type: 'text/css; charset=utf-8' },

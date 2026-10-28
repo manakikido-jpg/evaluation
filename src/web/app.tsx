@@ -1,3 +1,5 @@
+import {CasinoScenes} from './views/casinoScenes.js';
+import {scenePreview} from '../services/casino/scenePreview.js';
 import {CasinoRooms} from './views/casinoRooms.js';
 import {roomPreview} from '../services/casino/roomPreview.js';
 import {mountKeibaAdmin} from './keibaAdmin.js';
@@ -656,6 +658,14 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/keiba-events',requireAdmin,requireCsrf);
   app.use('/keiba-events/*',requireAdmin,requireCsrf);
+  app.use('/economy/casino-scenes',requireAdmin);
+  app.get('/economy/casino-scenes', c => {
+    const session=c.get('session');
+    if(!session || !['guji','shinshoku'].includes(session.level) || session.pages && !session.pages.includes('economy')) return c.text('経済のページ権限がある運営だけ確認できます。',403);
+    c.header('Cache-Control','private, no-store');
+    try { return c.html(<CasinoScenes m={scenePreview(new URL(c.req.url).searchParams)}/>); }
+    catch { return c.html(<Layout title="全ゲームの演出見本" session={session} nav="casinotest"><p>ゲーム・見本・場面を選び直してください。</p><a href="/economy/casino-scenes">演出見本へ戻る</a></Layout>,400); }
+  });
   app.use('/economy/casino-test',requireAdmin);
   app.get('/economy/casino-test', c => {
     const session=c.get('session');
