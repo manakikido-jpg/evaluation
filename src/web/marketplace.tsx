@@ -10,7 +10,8 @@ import { effectivePermissions } from '../services/permissionCheck.js';
 import * as market from '../services/market.js';
 import { executeMarketWeb, MarketWebError } from '../services/marketWeb.js';
 import { walletOf } from '../services/economy.js';
-import { buyRole, priceOf, refund } from '../services/shop.js';
+import { buyRole, DISCOUNT_PERCENT, DISCOUNT_TICKETS, discountedPrice, priceOf, refund } from '../services/shop.js';
+import { ticketsOf } from '../services/tickets.js';
 import { createMemberSession, deleteMemberSession, findMemberSession } from './memberSessions.js';
 import { randomToken, safeEqual } from './sessions.js';
 import { peekLoginLink, useLoginLink } from '../services/casino/loginLinks.js';
@@ -81,7 +82,11 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   const license=(await market.marketLicenseAccess(db,me.cfg,{id:me.session.userId,roleIds:me.roles},d.now())).allowed;
   const item=license?undefined:await market.marketLicenseItem(db);
   const booster=me.member.boostingSince!==null;
-  const shop=item&&(!item.boosterOnly||booster)?{name:item.name,emoji:item.emoji,price:priceOf(item,me.cfg.economy,booster),days:item.durationDays}:undefined;
+  const price=item?priceOf(item,me.cfg.economy,booster):0;
+  // 🏷 持っている割引券（使うと、その分安くなる）
+  const owned=item?await ticketsOf(db,me.session.userId):undefined;
+  const discounts=owned?DISCOUNT_TICKETS.filter(t=>(owned[t]??0)>0).map(t=>({ticket:t,percent:DISCOUNT_PERCENT[t],count:owned[t]!,price:discountedPrice(price,t)})):[];
+  const shop=item&&(!item.boosterOnly||booster)?{name:item.name,emoji:item.emoji,price,days:item.durationDays,discounts}:undefined;
   return c.html(<MarketCreatePage me={me} request={c.req.query('kind')==='request'} license={license} shop={shop} notice={c.req.query('license')}/>);
  }));
  app.get('/marketplace/listings/:id',protectedPage(async(c,me)=>{
@@ -119,8 +124,10 @@ export function mountMarketplace(app:Hono<any>,d:Deps){
   const booster=me.member.boostingSince!==null;
   if(item.boosterOnly&&!booster)return back('booster');
   const b=await c.req.parseBody();const price=priceOf(item,me.cfg.economy,booster);
-  if(Number(b.quote)!==price||b.confirm!=='yes')return back('changed');
-  const r=await buyRole(db,item,me.session.userId,d.now(),price);
+  const discount=DISCOUNT_TICKETS.find(t=>t===b.ticket);
+  if(Number(b.quote)!==(discount?discountedPrice(price,discount):price)||b.confirm!=='yes')return back('changed');
+  const r=await buyRole(db,item,me.session.userId,d.now(),price,discount);
+  if(r.status==='no_ticket')return back('no_ticket');
   if(r.status==='insufficient')return back('poor');
   if(r.status==='owned')return back('owned');
   if(r.status!=='ok')return back('unavailable');

@@ -143,3 +143,18 @@ it('🏪 開業権利を市場のWebで受けられる。値段の偽装・銭�
  // もう持っている（購入記録で分かる）ので 2 回目は払わない
  expect((await buy({quote:'3000',confirm:'yes'})).headers.get('location')).toContain('license=owned');expect((await walletOf(db,B)).balance).toBe(7000);
 });
+it('🏷 開業権利は割引券（50%など）を使って市場のWebで受けられる。券がなければ払わない',async()=>{
+ const { createItem } = await import('../src/services/shop.js');
+ const { addTickets, ticketsOf } = await import('../src/services/tickets.js');
+ await createItem(db,{kind:'role',name:'開業権利',emoji:'🏪',price:3000,roleId:ROLE,durationDays:null,enabled:true,description:'',sort:0} as never);
+ (app as any)=createWebApp({db,cfg:()=>current,api,discord:{guildChannels:async()=>channels,guildRoles:async()=>[{id:cfg.guildId,name:'@everyone',position:0,managed:false,color:0,permissions:'66560'},{id:ROLE,name:'開業',position:1,managed:false,color:0,permissions:'0'}],addRole:async()=>undefined} as unknown as DiscordActions,baseUrl:BASE,now:()=>now});
+ const s=await login();
+ const buy=(b:Record<string,string>)=>app.request('/marketplace/license',{method:'POST',headers:{cookie:'sakura_market='+s.token,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({_csrf:s.csrf,...b})});
+ expect((await buy({quote:'1500',ticket:'shop_50',confirm:'yes'})).headers.get('location')).toContain('license=no_ticket');
+ expect((await walletOf(db,B)).balance).toBe(10000);
+ await addTickets(db,B,'shop_50',1);
+ const page=await(await get(s,'/marketplace/new')).text();expect(page).toContain('50% 割引券');expect(page).toContain('1,500');
+ expect((await buy({quote:'3000',ticket:'shop_50',confirm:'yes'})).headers.get('location')).toContain('license=changed');
+ expect((await buy({quote:'1500',ticket:'shop_50',confirm:'yes'})).headers.get('location')).toContain('license=ok');
+ expect((await walletOf(db,B)).balance).toBe(8500);expect((await ticketsOf(db,B)).shop_50??0).toBe(0);
+});
