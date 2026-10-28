@@ -3,6 +3,7 @@ import type {TrialView} from '../../services/casino/gaisen/trial.js';
 import {PHASE_NAMES,SCENARIOS,type Scenario} from '../../services/casino/gaisen/engine.js';
 import {Layout} from './layout.js';
 import {assetUrl} from '../assets.js';
+import {GaisenReels,reelPresentation} from './gaisenReels.js';
 const PATH='/economy/gaisen-trial';
 const fmt=(n:number)=>n.toLocaleString('ja-JP');
 const SCENE:Record<Scenario,string>={normal:'通常時',gg:'GG',god:'GOD降臨後',gstop:'G-STOP',sgg:'SGG',ceiling:'天井直前'};
@@ -19,11 +20,11 @@ export function GaisenTrial({m,session,error}:{m:TrialView;session:AdminSession;
  <div class="gt-controls"><b>試遊ポイント <strong>{fmt(m.points)}</strong></b><button type="button" data-gt-audio>音：OFF</button><label>演出<select data-gt-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">即表示</option></select></label><a href={PATH}>最新の状態を確認</a></div>
  {own?<section class="gt-machine" data-phase={own.phase}>
  <div class="gt-marquee"><span>SAKURA · DIVINE PALACE</span><b>第{own.id}神殿</b><small>{own.resumed?'本人の保存分を再開中':'無料試遊 · 独自の神殿デザイン'}</small></div>
- <div class="gt-lcd"><div class="gt-temple" aria-hidden="true"><i/><i/><i/><i/><i/></div><p>{PHASE_NAMES[own.phase]}</p><div class="gt-digits" aria-label="停止出目">{own.display.map((x,i)=><span class={own.spinning&&!own.stopped.includes(i)?'spinning':''}>{x??'✦'}</span>)}</div><strong class="gt-message" role="status">{own.message}</strong></div>
+ <div class="gt-lcd"><div class="gt-temple" aria-hidden="true"><i/><i/><i/><i/><i/></div><p>{PHASE_NAMES[own.phase]}</p><div class="gt-digits" aria-label="数字の演出画面">{reelPresentation(own).map(reel=><span class={reel.spinning?'gt-digit-spinning':''}>{reel.digit}</span>)}</div><strong class="gt-message" role="status">{own.message}</strong></div>
  <div class="gt-meters"><span>通常 <b>{own.normalGames}G</b></span><span>GG残り <b>{own.ggLeft}G</b></span><span>セット <b>{own.sets}</b></span><span>ストック <b>{own.stocks}</b></span><span>G-STOP <b>{own.gstopLeft}G</b></span><span>SGG <b>{own.sggLeft}G</b>{own.medusa>0?` · 時間停止${own.medusa}G`:''}{own.ex?' · EX':''}</span></div>
- <div class="gt-reels" aria-hidden="true">{own.display.map((x,i)=><div class={own.spinning&&!own.stopped.includes(i)?'spinning':''}><small>✦</small><b>{x??'7'}</b><small>✿</small></div>)}</div>
+ <GaisenReels own={own}/>
  {own.navi&&<p class="gt-navi">押し順ナビ：{own.navi.map(i=>['左','中','右'][i]).join(' → ')}</p>}
- <div class="gt-play"><form method="post" action={PATH}>{fields(own.id,'lever')}<button class="gt-lever" disabled={own.spinning||m.points<30}>レバー<small>30ポイント</small></button></form>{[0,1,2].map(i=><form method="post" action={PATH}>{fields(own.id,'stop')}<input type="hidden" name="index" value={i}/><button class="gt-stop" disabled={!own.spinning||own.stopped.includes(i)||own.phase==='gstop'&&i!==[0,1,2].find(n=>!own.stopped.includes(n))}>{['左','中','右'][i]}STOP</button></form>)}</div>
+ <div class="gt-play"><form class="gt-lever-form" method="post" action={PATH}>{fields(own.id,'lever')}<button class="gt-lever" disabled={own.spinning||m.points<30}>レバー<small>30ポイント</small></button></form><div class="gt-stop-row">{[0,1,2].map(i=><form method="post" action={PATH}>{fields(own.id,'stop')}<input type="hidden" name="index" value={i}/><button class="gt-stop" disabled={!own.spinning||own.stopped.includes(i)||own.phase==='gstop'&&i!==[0,1,2].find(n=>!own.stopped.includes(n))}>{['左','中','右'][i]}STOP</button></form>)}</div></div>
  <div class="gt-bottom"><span>今回の戻り <b>{fmt(own.lastPaid)}</b>ポイント · 特別区間の差引 {fmt(own.chainWon)}</span><form method="post" action={PATH}>{fields(own.id,'leave')}<button disabled={own.spinning&&own.phase==='normal'}>離席{own.phase!=='normal'?'して進捗を保存':''}</button></form><form method="post" action={PATH}>{fields(own.id,'refill')}<button disabled={own.spinning}>試遊10万ポイント補充</button></form></div>
  <p class="gt-caption">最後のゲーム操作から通常10分、GG・前兆・G-STOP・SGG・G-ZONEは1時間保護。閲覧・再読込では延長しません。</p>
  <details class="gt-scenes"><summary>場面を選んで動作確認（自然抽選の収支確認とは別）</summary><p>同じ台の試遊状態と当日グラフを入れ替えます。実際の当選ではありません。保存分の再開中は使えません。</p><div>{SCENARIOS.map(key=><form method="post" action={PATH}>{fields(own.id,'scenario')}<input type="hidden" name="scenario" value={key}/><button disabled={own.spinning||own.resumed}>{SCENE[key]}</button></form>)}</div></details>
