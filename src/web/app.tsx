@@ -1,3 +1,4 @@
+import {mountGaisenTrial} from './gaisenTrial.js';
 import {CASINO_PRESENTATION_COOKIE} from './casinoPresentation.js';
 import {CasinoScenes} from './views/casinoScenes.js';
 import {scenePreview} from '../services/casino/scenePreview.js';
@@ -682,6 +683,8 @@ export function createWebApp(deps: WebDeps) {
     try { return c.html(<CasinoScenes m={scenePreview(new URL(c.req.url).searchParams)}/>); }
     catch { return c.html(<Layout title="全ゲームの演出見本" session={session} nav="casinotest"><p>ゲーム・見本・場面を選び直してください。</p><a href="/economy/casino-scenes">演出見本へ戻る</a></Layout>,400); }
   });
+  app.use('/economy/gaisen-trial',requireAdmin,requireCsrf);
+  mountGaisenTrial(app,db,now);
   app.use('/economy/casino-test',requireAdmin);
   app.get('/economy/casino-test', c => {
     const session=c.get('session');

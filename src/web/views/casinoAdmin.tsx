@@ -89,7 +89,7 @@ export function CasinoAdminPage(p: {
   const name = (id: string | null) => (id ? (p.names.get(id) ?? id) : '—');
   return (
     <Layout title="カジノ" session={p.session} nav="casino" scripts={['charts.js']}>
-      <h1>🎰 カジノ</h1><p><a href="/economy/casino-live">全19ゲームの実画面で新デザインを確認する</a>（通常の銭と戦績を使用）</p><p><a href="/economy/casino-scenes">🌸 全19ゲームの演出見本</a>（運営専用・固定の進行見本）</p><p><a href="/economy/casino-test">ルーレット・ブラックジャック・ハイローを操作して試遊</a>（見本の銭を使用）</p><p><a href="/economy/keiba-test">🏇 競馬の新UI・3D映像を運営だけでテストする</a>（実際の銭・馬は動きません）</p><p><a href="/keiba-events">🏆 競馬の大会・日程・ポイント・記念報酬を設定</a></p>
+      <h1>🎰 カジノ</h1><p><a href="/economy/gaisen-trial">神殿スロットの無料試遊（凱旋を参考・暫定抽選）</a></p><p><a href="/economy/casino-live">全19ゲームの実画面で新デザインを確認する</a>（通常の銭と戦績を使用）</p><p><a href="/economy/casino-scenes">🌸 全19ゲームの演出見本</a>（運営専用・固定の進行見本）</p><p><a href="/economy/casino-test">ルーレット・ブラックジャック・ハイローを操作して試遊</a>（見本の銭を使用）</p><p><a href="/economy/keiba-test">🏇 競馬の新UI・3D映像を運営だけでテストする</a>（実際の銭・馬は動きません）</p><p><a href="/keiba-events">🏆 競馬の大会・日程・ポイント・記念報酬を設定</a></p>
       <CasinoAdminTabs on="casino" />
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <section class="card">

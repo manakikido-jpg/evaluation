@@ -1,0 +1,33 @@
+import {describe,it,expect} from 'vitest';
+import {BET,lever,stop,newGaisen,scenario,ORDERS,type GaisenState,type Role} from '../src/services/casino/gaisen/engine.js';
+import {actTrial,expireFloor,freshFloor,trialView,TrialError} from '../src/services/casino/gaisen/trial.js';
+const zero=()=>0,now=Date.parse('2026-10-28T01:00:00Z');
+const round=(s:GaisenState,role:Role='none',rng=zero)=>{lever(s,rng,role);for(const i of s.pending!.order.slice())stop(s,i,rng);};
+const action=(f:ReturnType<typeof freshFloor>,uid:string,action:string,machine=1,extra:Record<string,unknown>={})=>actTrial(f,uid,uid,{action,machine,revision:f.revision,...extra},now,zero);
+describe('神殿スロットの無料試遊エンジン',()=>{
+ it('レバーで1度だけ30を引き、3STOP後にだけ払い、二重STOP/二重レバーを拒否する',()=>{const s=newGaisen();lever(s,zero,'bell');expect(s.balance).toBe(100000-BET);expect(()=>lever(s,zero)).toThrow();stop(s,0,zero);expect(s.output).toBe(0);expect(()=>stop(s,0,zero)).toThrow();stop(s,1,zero);stop(s,2,zero);expect(s.output).toBe(150);expect(s.balance).toBe(100120);expect(()=>stop(s,2,zero)).toThrow();});
+ it('押し順不一致で黄7を払わず、リプレイは差引0になる',()=>{const s=newGaisen();lever(s,zero,'bell');for(const i of [2,1,0])stop(s,i,zero);expect(s.output).toBe(0);const b=s.balance;round(s,'replay');expect(s.balance).toBe(b);});
+ it('GODは5セット、GGは100G、G-ZONEの後に次セットへ進む',()=>{const s=newGaisen();round(s,'god');expect(s.gods).toBe(1);expect(s.ggLeft).toBe(100);expect(s.stocks).toBe(4);expect(s.firsts).toBe(1);for(let i=0;i<100;i++)round(s);expect(s.phase).toBe('gzone');for(let i=0;i<5;i++)round(s);expect(s.phase).toBe('gg');expect(s.ggLeft).toBe(100);expect(s.stocks).toBe(3);expect(s.sets).toBe(2);});
+ it('天井到達をGGへつなぎ、SGG赤7で残り16Gへ戻す',()=>{const s=scenario(1,'ceiling');round(s);expect(s.phase).toBe('gg');expect(s.normalGames).toBe(0);const t=scenario(2,'sgg');t.sggLeft=1;round(t,'red7');expect(t.sggLeft).toBe(16);expect(t.stocks).toBe(2);});
+ it('G-STOPは各STOPで抽選し、鏡を後続数字へ変換する',()=>{const s=scenario(1,'gstop');lever(s,zero,'none');expect(s.pending!.symbols).toEqual([null,null,null]);stop(s,0,zero);expect(s.pending!.symbols).toEqual(['鏡',null,null]);stop(s,1,()=>1);expect(s.pending!.symbols).toEqual(['3','3',null]);stop(s,2,zero);expect(s.phase).toBe('gg');expect(s.firsts).toBe(1);});
+ it('G-STOPのHOLDは中のみ次回抽選し、その回の残りGを減らさない',()=>{const s=scenario(1,'gstop');lever(s,()=>1,'none');s.pending!.group=['1','3','5','V','S'];stop(s,0,()=>3);stop(s,1,()=>4);stop(s,2,()=>3);expect(s.hold).toBe('V');expect(s.gstopLeft).toBe(4);lever(s,()=>1,'none');expect(s.pending!.stops).toEqual([0,2]);expect(()=>stop(s,0,zero)).toThrow();stop(s,1,()=>3);expect(s.phase).toBe('gg');expect(s.stocks).toBe(2);});
+ it('SGGの時間停止とEX上乗せを区別し、設定値/残高の不変条件を保つ',()=>{const s=scenario(6,'sgg');s.medusa=5;s.sggLeft=9;round(s,'none');expect(s.sggLeft).toBe(9);expect(s.medusa).toBe(4);round(s,'rare');expect(s.ex).toBe(true);expect(s.sggLeft).toBe(16);expect(s.balance).toBe(100000-s.input+s.output);});
+});
+describe('5台・本人保存・着席権',()=>{
+ it('初期設定1/1/2/2/4、他人の操作/二重着席/古い画面を拒否する',()=>{const f=freshFloor(now);expect(f.machines.map(m=>m.state.setting)).toEqual([1,1,2,2,4]);action(f,'a','seat');expect(()=>action(f,'b','lever')).toThrow(TrialError);expect(()=>action(f,'a','seat',2)).toThrow();expect(()=>actTrial(f,'a','a',{action:'lever',machine:1,revision:0},now,zero)).toThrow();});
+ it('通常10分、保護区間1時間の境界で解放し、閲覧は延長しない',()=>{const f=freshFloor(now);action(f,'a','seat');trialView(f,'a');expireFloor(f,now+599999);expect(f.machines[0]!.owner).toBe('a');expireFloor(f,now+600000);expect(f.machines[0]!.owner).toBeNull();action(f,'a','seat');action(f,'a','scenario',1,{scenario:'gstop'});expireFloor(f,now+3599999);expect(f.machines[0]!.owner).toBe('a');expireFloor(f,now+3600000);expect(f.machines[0]!.owner).toBeNull();expect(trialView(f,'a').saved).toBe(true);});
+ it('回転中の通常台も停止済み位置を本人へ保存し、次の人に役/払出を渡さない',()=>{const f=freshFloor(now);action(f,'a','seat');action(f,'a','lever');action(f,'a','stop',1,{index:0});const points=trialView(f,'a').points;expireFloor(f,now+600000);expect(f.machines[0]!.state.pending).toBeNull();expect(trialView(f,'a').saved).toBe(true);action(f,'b','seat');action(f,'a','seat',2);expect(trialView(f,'a').own!.stopped).toEqual([0]);expect(trialView(f,'a').points).toBe(points);expect(trialView(f,'b').own!.spinning).toBe(false);});
+ it('保存分を別台で再開、設定を維持し、終了時に受入台の通常状態を戻す',()=>{const f=freshFloor(now);action(f,'a','seat');action(f,'a','scenario',1,{scenario:'gg'});action(f,'a','leave');f.machines[1]!.state.normalGames=123;action(f,'a','seat',2);const m=f.machines[1]!;expect(m.base!.normalGames).toBe(123);expect(m.state.setting).toBe(1);m.state.phase='gzone';m.state.zoneLeft=1;m.state.stocks=0;action(f,'a','lever',2);for(const index of [0,1,2]){m.state.pending!.role='none';action(f,'a','stop',2,{index});}expect(m.base).toBeNull();expect(m.state.normalGames).toBe(123);expect(m.stat.resumed).toBe(true);});
+ it('設定予約は通常時に割り込まず離席で反映し、保存ボーナスは旧設定',()=>{const f=freshFloor(now);action(f,'a','seat');action(f,'a','setting',1,{setting:6});expect(f.machines[0]!.state.setting).toBe(1);action(f,'a','scenario',1,{scenario:'gg'});action(f,'a','leave');expect(f.machines[0]!.state.setting).toBe(6);action(f,'a','seat',2);expect(f.machines[1]!.state.setting).toBe(1);});
+ it('ナビ以外の未停止の役と内部モードは画面モデルへ漏らさない',()=>{const f=freshFloor(now);action(f,'a','seat');action(f,'a','lever');const v=JSON.stringify(trialView(f,'a'));expect(v).not.toContain('"role"');expect(v).not.toContain('"mode"');expect(v).not.toContain('"group"');expect(trialView(f,'b').own).toBeNull();});
+});
+
+describe('試遊の境界と試算',()=>{
+ it('日付が替わっても通常台の天井カウンタとポイントを初期化しない',()=>{const f=freshFloor(now);f.machines[0]!.state.normalGames=987;expireFloor(f,now+86400000);expect(f.machines[0]!.stat.spins).toBe(0);expect(f.machines[0]!.state.normalGames).toBe(987);});
+ it('保存分の再離席は受入台を復元して本人用に1つだけ戻す',()=>{const f=freshFloor(now);action(f,'a','seat');action(f,'a','scenario',1,{scenario:'sgg'});action(f,'a','leave');f.machines[1]!.state.normalGames=321;action(f,'a','seat',2);action(f,'a','leave',2);expect(f.machines[1]!.state.normalGames).toBe(321);expect(trialView(f,'a').saved).toBe(true);action(f,'a','seat',3);expect(trialView(f,'a').saved).toBe(false);expect(trialView(f,'a').own!.phase).toBe('sgg');expect(f.machines[2]!.stat.sample).toBe(true);});
+});
+
+import {simulateGaisen} from '../src/services/casino/gaisen/simulation.js';
+it('同じ条件の自然抽選試算を再現でき、収支が投入/払出の差と一致する',()=>{
+ const a=simulateGaisen(1,2000,2026),b=simulateGaisen(1,2000,2026);expect(a).toEqual(b);expect(a.input).toBe(60000);expect(a.net).toBe(a.output-a.input);expect(Object.values(a.phases).reduce((n,x)=>n+x,0)).toBe(2000);expect(a.provisional).toBe(true);
+});
