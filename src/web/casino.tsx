@@ -182,7 +182,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const boostUntil = boost?.until;
     const boostLevel = boost?.level ?? 1;
     if(getCookie(c,CASINO_PRESENTATION_COOKIE)==='1')c.header('Cache-Control','private, no-store');
-    return { session, presentationRequested:getCookie(c,CASINO_PRESENTATION_COOKIE)==='1', presentation:await casinoPresentation(db,c,session.userId,d.now(),d.cfg(),api), styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel } : {}) };
+    return { session, presentationRequested:getCookie(c,CASINO_PRESENTATION_COOKIE)==='0', presentation:casinoPresentation(c), styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel } : {}) };
   };
   /** その人の上限（🎰 大勝負の札が効いていれば上がる）。画面に出す用。賭けるときは、それぞれのゲームが確かめ直す */
   const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino, me.boostLevel ?? 1) : d.cfg().casino);
@@ -207,6 +207,13 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
 
   app.post('/casino/presentation/exit',page(async(c,me)=>{
     await audit(db,{actorId:me.session.userId,action:'casino.presentation.exit',via:'web'});
+    // 元の表示を選んだことを覚える（1 年）
+    setCookie(c,CASINO_PRESENTATION_COOKIE,'0',{httpOnly:true,secure:d.secure,sameSite:'Lax',path:'/casino',maxAge:365*86400});
+    return c.redirect('/casino/hall',303);
+  },{post:true}));
+  // 🎴 新しい表示に戻す
+  app.post('/casino/presentation/enter',page(async(c,me)=>{
+    await audit(db,{actorId:me.session.userId,action:'casino.presentation.enter',via:'web'});
     deleteCookie(c,CASINO_PRESENTATION_COOKIE,{path:'/casino'});
     return c.redirect('/casino/hall',303);
   },{post:true}));
@@ -1150,7 +1157,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     page(async (c, me) => {
       const id = idOf(c);
       const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
-      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime(), styles: me.styles, styleVersion: JSON.stringify(t ? await tableStyles(db, t.state, d.now()) : {}), ...(getCookie(c,CASINO_PRESENTATION_COOKIE)==='1'?{presentation:me.presentation==='immersive'}:{}) });
+      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime(), styles: me.styles, styleVersion: JSON.stringify(t ? await tableStyles(db, t.state, d.now()) : {}), presentation:me.presentation==='immersive' });
     }),
   );
 

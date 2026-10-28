@@ -51,7 +51,7 @@ import { archiveFile, searchArchive } from '../services/messageArchive.js';
 import { mountUpdateDesk } from './updateDesk.js';
 import { approveUpdatePost, editPendingUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
-import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide, guideDuty, guideDutySince, guideDutyChannelName, setGuideDuty } from '../services/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide, countUndecidedGuide, guideDuty, guideDutySince, guideDutyChannelName, setGuideDuty } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
@@ -850,7 +850,7 @@ export function createWebApp(deps: WebDeps) {
     const t = now();
     const session = c.get('session');
     const canSee = (page: string) => !session.pages || session.pages.includes(page as never);
-    const [base, recent, yakuRows, pending, review, soudanOpen, trend, unknownInvites, permissionCount, inviteRows] = await Promise.all([
+    const [base, recent, yakuRows, pending, review, soudanOpen, trend, unknownInvites, permissionCount, inviteRows, undecidedGuide] = await Promise.all([
       homeStats(db, startOfTodayJst(t)),
       listAudit(db, { limit: 10 }),
       membersWithYaku(db),
@@ -867,9 +867,10 @@ export function createWebApp(deps: WebDeps) {
         } catch { return null; }
       })() : undefined,
       canSee('invites') ? inviteRewardRows(db).then(rows => rows.slice(0, 4)) : undefined,
+      canSee('guide') ? countUndecidedGuide(db, t) : undefined,
     ]);
     const stats = { ...base, yaku: yakuRows.length };
-    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db), bells: await openBells(db), invites: unknownInvites, permissions: permissionCount };
+    const todo = { applications: pending.length, omairi: review.length, soudan: soudanOpen.length, meetingTodos: await countOpenTodos(db), bells: await openBells(db), invites: unknownInvites, permissions: permissionCount, guide: undecidedGuide };
     const names = await namesOf(db, [...recent.flatMap((a) => [a.actorId, a.targetId ?? '']), ...(inviteRows ?? []).flatMap(r => [r.memberId, r.inviterId ?? ''])].filter(Boolean));
     return c.html(<HomePage session={c.get('session')} stats={stats} todo={todo} recent={recent} names={names} now={t} trend={trend} inviteRows={inviteRows} cfg={cfg} voiceNow={await voiceNowView()} />);
   });

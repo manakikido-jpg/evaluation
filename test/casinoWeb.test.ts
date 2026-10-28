@@ -872,11 +872,11 @@ describe('カジノの着せ替えと景品ガチャ', () => {
     expect(wardrobe).toContain('cs-preview-scene');
     expect(wardrobe).toContain('黄金の社の見本');
     const preview = await (await get('/casino/wardrobe?preview=gold', cookie!)).text();
-    expect(preview).toMatch(/<body class="[^"]*cs-background-gold/);
+    expect(preview).toMatch(/<body [^>]*class="[^"]*cs-background-gold/);
     expect((await stylesOf(db, A)).equipped).toEqual({ background: 'yozakura' });
     await post('/casino/wardrobe/equip', cookie!, { slot: 'background', key: 'gold' });
     const lobby = await (await get('/casino/hall', cookie!)).text();
-    expect(lobby).toMatch(/<body class="[^"]*cs-background-gold/);
+    expect(lobby).toMatch(/<body [^>]*class="[^"]*cs-background-gold/);
     expect(lobby).toContain('装備中の背景：黄金の社');
     for (const key of ['yozakura', 'stars', 'gold', 'foxroom', 'festival']) {
       const image = await app.request(`/static/casino-scene-${key}.svg`);
@@ -920,7 +920,7 @@ describe('カジノの着せ替えと景品ガチャ', () => {
     expect(await balance(A)).toBe(5000);
     const game = await (await get('/casino/blackjack', cookie!)).text();
     expect(game).toContain('casino-premium.css?v=');
-    const bodyClass = /<body class="([^"]*)"/.exec(game)![1]!;
+    const bodyClass = /<body [^>]*class="([^"]*)"/.exec(game)![1]!;
     for (const cls of ['cs-background-yozakura', 'cs-table-dragon', 'cs-ornament-fox']) expect(bodyClass.split(' ')).toContain(cls);
     expect(game).toContain('alt="白狐の置物"');
   });

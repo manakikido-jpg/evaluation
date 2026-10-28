@@ -29,7 +29,8 @@ export type CasinoMe = { presentation?:'immersive'; presentationRequested?:boole
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean | 'casino'; game?:CasinoGame; roundKey?:string }) {
   const me = props.me;
-  const immersive=me?.presentation==='immersive';
+  // 🎰 スロット（通常・AT 機）は、運営の確認中でも、もとの見た目のまま
+  const immersive=me?.presentation==='immersive'&&props.game!=='slots'&&props.game!=='atslot';
   const scene=immersive&&props.game?GAME_SCENES[props.game]:undefined;
   return (
     <html lang="ja">
@@ -96,8 +97,8 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
             </p>
           )}
           {!props.lobby && (me?.styles?.background || me?.styles?.ornament) && <div class="cs-room-heading"><span data-style-room-name>{styleItem(me.styles?.background ?? '')?.name ?? 'あなたの遊技場'}</span><StyleOrnament itemKey={me.styles?.ornament} /></div>}
-          {!immersive&&me?.presentationRequested&&<p class="c-alert">確認用の新デザインは、社務所と同じDiscordアカウントでログインした運営だけが使えます。<a href="/economy/casino-live">社務所で確認する</a></p>}
-          {immersive&&<aside class="ci-toolbar"><span>運営向け確認中 · 通常の銭と戦績を使用</span><button type="button" data-sound-toggle aria-pressed="false" aria-label="音の切り替え">🔇</button><label>演出<select data-ci-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">演出を省略</option></select></label><button type="button" data-ci-fullscreen>全画面</button><form method="post" action="/casino/presentation/exit"><input type="hidden" name="_csrf" value={me!.session.csrfToken}/><button type="submit">元の表示へ</button></form><p data-ci-status role="status" hidden/></aside>}
+          {!immersive&&me?.presentationRequested&&props.game!=='slots'&&props.game!=='atslot'&&me.session&&<form method="post" action="/casino/presentation/enter" class="c-alert"><input type="hidden" name="_csrf" value={me.session.csrfToken}/>元の表示を使っています。<button type="submit">新しい表示にする</button></form>}
+          {immersive&&<aside class="ci-toolbar"><span>🌸 新しいカジノの表示</span><button type="button" data-sound-toggle aria-pressed="false" aria-label="音の切り替え">🔇</button><label>演出<select data-ci-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">演出を省略</option></select></label><button type="button" data-ci-fullscreen>全画面</button><form method="post" action="/casino/presentation/exit"><input type="hidden" name="_csrf" value={me!.session.csrfToken}/><button type="submit">元の表示へ</button></form><p data-ci-status role="status" hidden/></aside>}
           {scene?<section class={`ci-stage ci-family-${scene.family}`}><header class="ci-room"><p>咲楽ノ宮 · {scene.room}</p><h2>{scene.name}</h2><span data-ci-cue role="status">あなたの操作で進む、勝負の席。</span></header><div class="ci-game">{props.children}</div></section>:props.children}
         </main>
         <footer class="c-foot">銭はサーバーの中だけのものです。お金に換えることはできません。遊びすぎに気をつけて、楽しくどうぞ。</footer>
