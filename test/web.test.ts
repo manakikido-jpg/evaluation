@@ -4415,6 +4415,22 @@ it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）',
   expect((await get('/message-archive', s)).status).toBe(403);
 });
 
+it('💴 ホームの「今やること」に、案内の給与が未決定の件数と招待元不明を出す', async () => {
+  const { guideReceptions } = await import('../src/db/schema.js');
+  const recent = new Date(Date.now() - 86_400_000), old = new Date('2000-01-01T00:00:00Z');
+  await db.insert(guideReceptions).values([
+    { visitorId: '700000000000000081', channelId: '700000000000000090', status: 'left', createdAt: recent },
+    { visitorId: '700000000000000082', channelId: '700000000000000090', status: 'left', createdAt: recent },
+    { visitorId: '700000000000000083', channelId: '700000000000000090', status: 'done', createdAt: recent },
+    { visitorId: '700000000000000084', channelId: '700000000000000090', status: 'left', createdAt: old },
+  ]);
+  const g = await login(GUJI);
+  const html = await (await get('/', g)).text();
+  expect(html).toContain('案内の給与が未決定');
+  expect(html).toMatch(/案内の給与が未決定[\s\S]*?task-count">2<small>件/);
+  expect(html).toContain('招待元が不明');
+});
+
 it('🏯 組織図とメニューの並び方（見るのは運営・変えるのは宮司）', async () => {
   const { loadOrg, DEFAULT_ORG } = await import('../src/services/orgChart.js');
   const s = await login(STAFF);

@@ -80,7 +80,7 @@ export function LoginPage(props: { error?: string; /** Discord でログイン�
 export function HomePage(props: {
   session: SessionView;
   stats: { members: number; joined: number; left: number; promoted: number; shuin: number; yaku: number };
-  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number; bells?: number; invites?: number; permissions?: number | null };
+  todo: { applications: number; omairi: number; soudan: number; meetingTodos?: number; bells?: number; invites?: number; permissions?: number | null; guide?: number };
   recent: AuditLog[];
   names: Names;
   now: Date;
@@ -95,6 +95,7 @@ export function HomePage(props: {
   const canSee = (page: string) => !props.session.pages || props.session.pages.includes(page as never);
   const tasks = [
     { key: 'applications', label: '申請の確認', hint: '入鯖・宵参りの申請', count: props.todo.applications, unit: '件', href: '/applications', icon: '📝' },
+    { key: 'guide', label: '案内の給与が未決定', hint: '完了にならないまま退出した案内（30日以内）。担当を決めて完了にするか、消す', count: props.todo.guide, unit: '件', href: '/guide#guide-history', icon: '💴' },
     { key: 'invites', label: '招待元が不明', hint: '招待した人の確認・不明として登録', count: props.todo.invites, unit: '人', href: '/invites?filter=unknown#invite-rewards', icon: '🔗' },
     { key: 'channels', label: '権限の要確認', hint: props.todo.permissions === null ? '取得できませんでした。点検画面で読み直してください。' : 'カテゴリとの同期・見える範囲を点検', count: props.todo.permissions, unit: '件', href: '/channels/check', icon: '⚠' },
     { key: 'applications', label: 'お参り期間の判定待ち', hint: '次の役職へ案内する人', count: props.todo.omairi, unit: '人', href: '/omairi', icon: '⛩' },

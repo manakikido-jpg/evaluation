@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { employeePayroll, guideEmployees, guideReceptions, settings } from '../db/schema.js';
@@ -220,3 +220,10 @@ export async function setGuideDuty(db: Db, memberId: string, on: boolean, by: st
 
 /** チャンネル名（「案内担当：あや・もみじ」／「案内担当なし」）。Discord の名前の長さに合わせて切る */
 export const guideDutyChannelName = (names: string[]) => (names.length ? `案内担当：${names.join('・')}` : '案内担当なし').slice(0, 100);
+
+/** 💴 給与が決まっていない案内（完了にならないまま退出した受付。この日数以内） */
+export async function countUndecidedGuide(db: Db, now = new Date(), days = 30): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(guideReceptions)
+    .where(and(eq(guideReceptions.status, 'left'), gte(guideReceptions.createdAt, new Date(now.getTime() - days * 86_400_000))));
+  return row?.n ?? 0;
+}
