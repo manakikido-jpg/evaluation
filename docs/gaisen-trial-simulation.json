@@ -1,0 +1,528 @@
+{
+  "rules": "trial-1",
+  "note": "無料試遊用の暫定抽選。通常は左中右、ナビ時は従う。未終了の権利は出力に含めず、試行のばらつきがある。実機同等ではない。",
+  "samples": [
+    {
+      "setting": 1,
+      "games": 100000,
+      "seed": 71,
+      "input": 3000000,
+      "output": 3505230,
+      "returnPercent": 116.841,
+      "net": 505230,
+      "minNet": -2640,
+      "maxNet": 505440,
+      "refills": 0,
+      "phases": {
+        "normal": 62472,
+        "gstop": 887,
+        "sgg": 627,
+        "gg": 33910,
+        "gzone": 1695,
+        "omen": 409
+      },
+      "god": 12,
+      "ggFirsts": 159,
+      "sgg": 37,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 1,
+      "games": 100000,
+      "seed": 2026,
+      "input": 3000000,
+      "output": 3501060,
+      "returnPercent": 116.702,
+      "net": 501060,
+      "minNet": -810,
+      "maxNet": 504420,
+      "refills": 0,
+      "phases": {
+        "normal": 62389,
+        "sgg": 695,
+        "gg": 33813,
+        "gzone": 1689,
+        "gstop": 992,
+        "omen": 422
+      },
+      "god": 13,
+      "ggFirsts": 166,
+      "sgg": 42,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 1,
+      "games": 100000,
+      "seed": 449,
+      "input": 3000000,
+      "output": 3483990,
+      "returnPercent": 116.133,
+      "net": 483990,
+      "minNet": -9690,
+      "maxNet": 484440,
+      "refills": 0,
+      "phases": {
+        "normal": 62481,
+        "gstop": 839,
+        "gg": 34156,
+        "gzone": 1705,
+        "omen": 393,
+        "sgg": 426
+      },
+      "god": 16,
+      "ggFirsts": 155,
+      "sgg": 26,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 53,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 2,
+      "games": 100000,
+      "seed": 71,
+      "input": 3000000,
+      "output": 3557250,
+      "returnPercent": 118.575,
+      "net": 557250,
+      "minNet": -2640,
+      "maxNet": 557340,
+      "refills": 0,
+      "phases": {
+        "normal": 60243,
+        "gstop": 1035,
+        "sgg": 691,
+        "gg": 35810,
+        "gzone": 1790,
+        "omen": 431
+      },
+      "god": 12,
+      "ggFirsts": 178,
+      "sgg": 41,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 2,
+      "games": 100000,
+      "seed": 2026,
+      "input": 3000000,
+      "output": 3531450,
+      "returnPercent": 117.715,
+      "net": 531450,
+      "minNet": -810,
+      "maxNet": 533520,
+      "refills": 0,
+      "phases": {
+        "normal": 60991,
+        "sgg": 753,
+        "gg": 35012,
+        "gzone": 1749,
+        "gstop": 1089,
+        "omen": 406
+      },
+      "god": 14,
+      "ggFirsts": 173,
+      "sgg": 45,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 2,
+      "games": 100000,
+      "seed": 449,
+      "input": 3000000,
+      "output": 3546900,
+      "returnPercent": 118.23,
+      "net": 546900,
+      "minNet": -6510,
+      "maxNet": 554940,
+      "refills": 0,
+      "phases": {
+        "normal": 59917,
+        "gstop": 924,
+        "omen": 422,
+        "gg": 36411,
+        "gzone": 1820,
+        "sgg": 506
+      },
+      "god": 16,
+      "ggFirsts": 169,
+      "sgg": 31,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 3,
+      "games": 100000,
+      "seed": 71,
+      "input": 3000000,
+      "output": 3670500,
+      "returnPercent": 122.35,
+      "net": 670500,
+      "minNet": -390,
+      "maxNet": 670680,
+      "refills": 0,
+      "phases": {
+        "normal": 55963,
+        "gstop": 1108,
+        "sgg": 803,
+        "gg": 39713,
+        "gzone": 1986,
+        "omen": 427
+      },
+      "god": 13,
+      "ggFirsts": 183,
+      "sgg": 48,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 3,
+      "games": 100000,
+      "seed": 2026,
+      "input": 3000000,
+      "output": 3527280,
+      "returnPercent": 117.576,
+      "net": 527280,
+      "minNet": -810,
+      "maxNet": 529740,
+      "refills": 0,
+      "phases": {
+        "normal": 60799,
+        "sgg": 785,
+        "gg": 35012,
+        "gzone": 1750,
+        "gstop": 1221,
+        "omen": 433
+      },
+      "god": 12,
+      "ggFirsts": 181,
+      "sgg": 47,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 3,
+      "games": 100000,
+      "seed": 449,
+      "input": 3000000,
+      "output": 3626310,
+      "returnPercent": 120.877,
+      "net": 626310,
+      "minNet": -5220,
+      "maxNet": 633750,
+      "refills": 0,
+      "phases": {
+        "normal": 56812,
+        "gstop": 1070,
+        "omen": 405,
+        "gg": 39114,
+        "gzone": 1955,
+        "sgg": 644
+      },
+      "god": 17,
+      "ggFirsts": 176,
+      "sgg": 39,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 4,
+      "games": 100000,
+      "seed": 71,
+      "input": 3000000,
+      "output": 3754560,
+      "returnPercent": 125.152,
+      "net": 754560,
+      "minNet": -390,
+      "maxNet": 754560,
+      "refills": 0,
+      "phases": {
+        "normal": 52084,
+        "gstop": 1231,
+        "sgg": 826,
+        "gg": 43237,
+        "gzone": 2161,
+        "omen": 461
+      },
+      "god": 14,
+      "ggFirsts": 199,
+      "sgg": 51,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 76,
+        "stocks": 1
+      },
+      "provisional": true
+    },
+    {
+      "setting": 4,
+      "games": 100000,
+      "seed": 2026,
+      "input": 3000000,
+      "output": 3604050,
+      "returnPercent": 120.135,
+      "net": 604050,
+      "minNet": -810,
+      "maxNet": 608550,
+      "refills": 0,
+      "phases": {
+        "normal": 57614,
+        "sgg": 839,
+        "gg": 37820,
+        "gzone": 1890,
+        "gstop": 1306,
+        "omen": 531
+      },
+      "god": 9,
+      "ggFirsts": 210,
+      "sgg": 51,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 91,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 4,
+      "games": 100000,
+      "seed": 449,
+      "input": 3000000,
+      "output": 3718710,
+      "returnPercent": 123.957,
+      "net": 718710,
+      "minNet": -6420,
+      "maxNet": 724980,
+      "refills": 0,
+      "phases": {
+        "normal": 53344,
+        "gstop": 1215,
+        "omen": 475,
+        "gg": 42115,
+        "gzone": 2105,
+        "sgg": 746
+      },
+      "god": 15,
+      "ggFirsts": 198,
+      "sgg": 46,
+      "unfinished": {
+        "phase": "normal",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 5,
+      "games": 100000,
+      "seed": 71,
+      "input": 3000000,
+      "output": 3834360,
+      "returnPercent": 127.812,
+      "net": 834360,
+      "minNet": -450,
+      "maxNet": 834360,
+      "refills": 0,
+      "phases": {
+        "normal": 48821,
+        "gstop": 1418,
+        "omen": 530,
+        "gg": 46195,
+        "gzone": 2306,
+        "sgg": 730
+      },
+      "god": 17,
+      "ggFirsts": 216,
+      "sgg": 45,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 20,
+        "stocks": 8
+      },
+      "provisional": true
+    },
+    {
+      "setting": 5,
+      "games": 100000,
+      "seed": 2026,
+      "input": 3000000,
+      "output": 3772530,
+      "returnPercent": 125.751,
+      "net": 772530,
+      "minNet": -810,
+      "maxNet": 773520,
+      "refills": 0,
+      "phases": {
+        "normal": 51108,
+        "sgg": 987,
+        "gg": 43653,
+        "gzone": 2180,
+        "gstop": 1524,
+        "omen": 548
+      },
+      "god": 10,
+      "ggFirsts": 235,
+      "sgg": 59,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 62,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 5,
+      "games": 100000,
+      "seed": 449,
+      "input": 3000000,
+      "output": 3827730,
+      "returnPercent": 127.591,
+      "net": 827730,
+      "minNet": -5220,
+      "maxNet": 827730,
+      "refills": 0,
+      "phases": {
+        "normal": 49295,
+        "gstop": 1338,
+        "omen": 486,
+        "gg": 45817,
+        "gzone": 2286,
+        "sgg": 778
+      },
+      "god": 17,
+      "ggFirsts": 207,
+      "sgg": 48,
+      "unfinished": {
+        "phase": "gzone",
+        "ggLeft": 0,
+        "stocks": 0
+      },
+      "provisional": true
+    },
+    {
+      "setting": 6,
+      "games": 100000,
+      "seed": 71,
+      "input": 3000000,
+      "output": 4007790,
+      "returnPercent": 133.593,
+      "net": 1007790,
+      "minNet": -450,
+      "maxNet": 1007820,
+      "refills": 0,
+      "phases": {
+        "normal": 42480,
+        "gstop": 1665,
+        "omen": 582,
+        "gg": 51716,
+        "gzone": 2583,
+        "sgg": 974
+      },
+      "god": 15,
+      "ggFirsts": 254,
+      "sgg": 59,
+      "unfinished": {
+        "phase": "gzone",
+        "ggLeft": 0,
+        "stocks": 5
+      },
+      "provisional": true
+    },
+    {
+      "setting": 6,
+      "games": 100000,
+      "seed": 2026,
+      "input": 3000000,
+      "output": 3958890,
+      "returnPercent": 131.963,
+      "net": 958890,
+      "minNet": -810,
+      "maxNet": 961770,
+      "refills": 0,
+      "phases": {
+        "normal": 44025,
+        "sgg": 1160,
+        "gg": 49964,
+        "gzone": 2495,
+        "gstop": 1789,
+        "omen": 567
+      },
+      "god": 14,
+      "ggFirsts": 254,
+      "sgg": 69,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 54,
+        "stocks": 1
+      },
+      "provisional": true
+    },
+    {
+      "setting": 6,
+      "games": 100000,
+      "seed": 449,
+      "input": 3000000,
+      "output": 3957480,
+      "returnPercent": 131.916,
+      "net": 957480,
+      "minNet": -3390,
+      "maxNet": 957480,
+      "refills": 0,
+      "phases": {
+        "normal": 43903,
+        "gstop": 1710,
+        "omen": 467,
+        "gg": 50495,
+        "gzone": 2522,
+        "sgg": 903
+      },
+      "god": 17,
+      "ggFirsts": 235,
+      "sgg": 53,
+      "unfinished": {
+        "phase": "gg",
+        "ggLeft": 24,
+        "stocks": 0
+      },
+      "provisional": true
+    }
+  ]
+}
