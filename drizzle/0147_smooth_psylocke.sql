@@ -1,0 +1,2 @@
+ALTER TABLE "koban_purchases" DROP CONSTRAINT "koban_price_check";--> statement-breakpoint
+ALTER TABLE "koban_purchases" ADD CONSTRAINT "koban_price_check" CHECK (("koban_purchases"."price" = "koban_purchases"."face_value" * 3 / 2 or "koban_purchases"."price" = "koban_purchases"."face_value") and "koban_purchases"."fee" = "koban_purchases"."price" - "koban_purchases"."face_value");

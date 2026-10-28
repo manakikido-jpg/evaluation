@@ -2369,7 +2369,8 @@ export const kobanPurchases = pgTable('koban_purchases', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('koban_owner_idx').on(t.memberId, t.sentAt), uniqueIndex('koban_shop_purchase_idx').on(t.purchaseId),
   check('koban_value_check', sql`${t.faceValue} in (1000, 3000, 5000, 10000)`),
-  check('koban_price_check', sql`${t.price} = ${t.faceValue} * 3 / 2 and ${t.fee} = ${t.price} - ${t.faceValue}`),
+  // 値段は額面の150％（運営は手数料なしで額面どおり）
+  check('koban_price_check', sql`(${t.price} = ${t.faceValue} * 3 / 2 or ${t.price} = ${t.faceValue}) and ${t.fee} = ${t.price} - ${t.faceValue}`),
   check('koban_sent_check', sql`(${t.sentAt} is null and ${t.targetId} is null) or (${t.sentAt} is not null and ${t.targetId} is not null and ${t.targetId} <> ${t.memberId})`),
 ]);
 export type KobanPurchase = typeof kobanPurchases.$inferSelect;

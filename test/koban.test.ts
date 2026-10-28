@@ -109,3 +109,16 @@ it('購入確認に額面・販売額・手数料と追加料金なしを表示�
  const view=kobanBuyConfirm(await item(3000),10000);const text=JSON.stringify(view);
  expect(text).toContain('4,500');expect(text).toContain('3,000');expect(text).toContain('1,500');expect(text).toContain('追加料金はありません');expect(text).not.toContain('20%');
 });
+it('運営は小判の手数料なしで、額面だけ払う（受け取る人の額は同じ）',async()=>{
+ const i=await item(1000);
+ const r=await buyKoban(db,A,i.id,randomUUID(),new Date(),true);
+ expect(r.receipt).toMatchObject({faceValue:1000,price:1000,fee:0});
+ expect((await walletOf(db,A)).balance).toBe(99000);
+ expect((await db.select().from(coinTx).where(eq(coinTx.reason,'koban_fee')))).toHaveLength(0);
+ await sendKoban(db,A,r.receipt.id,B);expect((await walletOf(db,B)).balance).toBe(1000);
+});
+it('運営の購入確認は手数料なし・額面の値段で出す',async()=>{
+ const text=JSON.stringify(kobanBuyConfirm(await item(3000),10000,true));
+ expect(text).toContain('手数料：**なし**');expect(text).toContain('3,000銭で1枚買う');
+ expect(JSON.stringify(kobanBuyConfirm(await item(3000),10000))).toContain('4,500銭で1枚買う');
+});
