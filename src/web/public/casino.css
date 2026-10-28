@@ -2374,3 +2374,8 @@ body[class*="cs-background-"] .c-sky { background: transparent; }
 .c-bomb-ranks .c-tag { display: inline-block; min-width: 2.2rem; text-align: center; padding: .35rem .5rem; font-size: 1rem; }
 .c-bomb-ranks input:checked + .c-tag { outline: 3px solid #e2b04a; background: rgba(226, 176, 74, .25); }
 .c-bomb-ranks input:focus-visible + .c-tag { outline: 2px dashed #e2b04a; }
+.c-rl-outcome .c-rb-result { max-height: 320px; overflow-y: auto; overscroll-behavior: contain; }
+/* 🐴 馬主の部屋: 配合の選択欄・名前・ボタンがカードからはみ出さないように */
+.kb-stable-actions, .kb-stable-actions form { min-width: 0; max-width: 100%; }
+.kb-stable-actions select, .kb-stable-actions input[type="text"] { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.kb-stable-actions .c-btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
