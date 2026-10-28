@@ -16,6 +16,8 @@ export type GaisenState={
  gstopLeft:number;gstopReturn:Phase;hold:GSymbol|null;sggLeft:number;sggReturn:Phase;medusa:number;ex:boolean;yellow:number;blue:number;pending:Spin|null;
  balance:number;spins:number;input:number;output:number;lastPaid:number;lastRole:Role|null;display:string[];message:string;history:string[];
  gods:number;firsts:number;sggs:number;chainWon:number;
+ // 表示用。旧保存データでは未設定。抽選や払出の判定には使わない。
+ reelDisplay?:string[];reelPhase?:Phase;
 };
 export function newGaisen(setting:Setting=1):GaisenState{return {version:RULE_VERSION,sample:false,setting,phase:'normal',normalGames:0,mode:0,omen:0,ggLeft:0,stocks:0,sets:0,zoneLeft:0,gstopLeft:0,gstopReturn:'normal',hold:null,sggLeft:0,sggReturn:'normal',medusa:0,ex:false,yellow:0,blue:0,pending:null,balance:100000,spins:0,input:0,output:0,lastPaid:0,lastRole:null,display:['0','1','2'],message:'レバーで開始。実際の銭は使いません。',history:[],gods:0,firsts:0,sggs:0,chainWon:0};}
 export const isProtected=(s:GaisenState)=>s.phase!=='normal'||s.stocks>0;
@@ -43,12 +45,35 @@ function gstopStop(p:Spin,index:number,rng:Rng){
  const symbol=options[rng(options.length)]!;p.symbols[index]=symbol;
  if(symbol!=='鏡')for(let i=0;i<3;i++)if(p.symbols[i]==='鏡')p.symbols[i]=symbol;
 }
+/** 停止した帯だけを返す。押し順を外した時点以降は金7を止めない。 */
+export function reelStops(p:Spin):(string|null)[]{
+ return [0,1,2].map(index=>{
+  const at=p.stops.indexOf(index);if(at<0)return null;
+  // G-STOP/HOLDは上部の抽選。下部を数字や鏡に変換して当たりを装わない。
+  if(p.phase==='gstop')return ['青7','◆','桜'][index]!;
+  if(p.role==='bell')return p.stops.slice(0,at+1).every((v,i)=>v===p.order[i])?'黄7':['◆','桜','青7'][index]!;
+  return roleReels(p.role)[index]!;
+ });
+}
+function roleReels(role:Role|null):string[]{
+ return role==='god'?['G','O','D']:role==='red7'?['赤7','赤7','赤7']:role==='replay'?['青7','青7','青7']
+  :role==='bell'?['黄7','黄7','黄7']:role==='smallBell'?['◆','◆','◆']:role==='rare'?['黄7','青7','黄7']:['青7','◆','桜'];
+}
+/** 旧保存の読取りにも対応する。進行中は保存済みの停止順から同じ帯を復元。 */
+export function visibleReels(s:GaisenState):(string|null)[]{
+ if(s.pending)return reelStops(s.pending);
+ if(s.reelDisplay)return s.reelDisplay;
+ if(s.lastRole==='bell'&&s.lastPaid===0)return ['黄7','黄7','◆'];
+ if(s.lastRole===null&&s.display.join('')==='GOD')return roleReels('god');
+ return roleReels(s.lastRole);
+}
 export function stop(s:GaisenState,index:number,rng:Rng):boolean{
  const p=s.pending;if(!p||!Number.isInteger(index)||index<0||index>2||p.stops.includes(index))throw Error('このSTOPは押せません。');
  if(p.phase==='gstop'&&index!==[0,1,2].find(i=>!p.stops.includes(i)))throw Error('G-STOPは左から順に停止します。');
  if(p.phase==='gstop'&&p.role!=='god'&&p.role!=='red7')gstopStop(p,index,rng);
  else p.symbols[index]=p.role==='god'?['G','O','D'][index]!:p.role==='red7'?'赤7':p.role==='replay'?'青7':p.role==='bell'?'黄7':p.role==='smallBell'?'◆':p.role==='rare'?['黄7','青7','黄7'][index]!:['2','4','6'][index]!;
  p.stops.push(index);if(p.stops.length<3)return false;
+ s.reelDisplay=reelStops(p).map(x=>x!);s.reelPhase=p.phase;
  s.pending=null;s.lastRole=p.role;s.display=p.symbols.map(x=>x??'0');finish(s,p,rng);return true;
 }
 function finish(s:GaisenState,p:Spin,rng:Rng){
