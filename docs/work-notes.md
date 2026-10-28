@@ -1268,3 +1268,7 @@
 - 実装：全19系統の場面別の言葉/溜めの光/段階的オープン/結果色、連続再生・停止・スキップを追加。スロットは自動STOPの順と最後の1つの光。負けに祝福を出さず、neutral/demoを区別。音と進行のタイマーを分け、音OFFで停止しない。停止/非表示は音声コンテキストも閉じて音を持ち越さない。
 - 関連2ファイル9件と型確認成功。ブラウザ/tmp/casino-excitement-browser2.logで通常再生・自動STOP・音OFF継続・停止/スキップ時タイマー取消・負けの桜なし・低減/即表示・非表示イベントの取消が成功、例外/失敗応答/実ゲーム通信0。最初の試験は、結果へ進んだ後に初期化済みのSTOPを確認する試験側のタイミングが誤りだったため、STOP完了を進行中に確認する形へ修正して成功。
 - 実ブラウザ80フレーム/10fpsの8秒動画をdocs/previews/casino-excitement-slots.mp4に保存（247,981bytes、無音、固定見本）。原稿framesは/workspace/artifacts/casino-excitement-frames/に保持。全19種の表示回帰を確認中。
+
+- ソース80cae02で全19種の低減モード連続再生が結果まで成功、停止時の音声コンテキスト終了と動き停止も成功（/tmp/casino-excitement-auto-all.log）。全19種×3幅の表示/手動操作回帰も成功（/tmp/casino-excitement-all-browser.log）。ともに例外/失敗応答/実ゲーム通信0。非表示はイベントハンドラ試験であり実端末のバックグラウンド復帰保証とは区別。型/ビルドは成功し全件実行中。
+
+- 最終版80cae02で型/ビルド/全205ファイル・2,292件成功（515.79秒、4並列）。diff成功。ログ/tmp/casino-excitement-final-{types,build,tests}.log。実装ソースは固定し、最後はこの検証記録のみ。PR111 https://github.com/manakikido-jpg/evaluation/pull/111 へ追加保存する。一般公開/実ゲームへの適用は未実施。次は運営が連続演出と動画を確認し、担当Claudeが検証して合流する。
