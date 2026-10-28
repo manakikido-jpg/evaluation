@@ -45,6 +45,26 @@ it('設定した予約先を使い、男女の一覧や既存の予約は変更�
  expect(f.threadCreate).toHaveBeenCalledWith(expect.objectContaining({name:expect.stringContaining('📦 納品｜')}));
  expect((await loadCastConfig(db)).channelId).toBe(MALE);
 });
+it('前に作った窓口の「スレッドの管理」を、宮司・神職と BOT のほかから外す（1回だけ）',async()=>{
+ await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,reservationChannelId:HUB},'staff');
+ const c={...cfg,admin:{...cfg.admin,gujiRoleIds:['770000000000000001'],shinshokuRoleIds:['770000000000000002']}} as typeof cfg;
+ const edit=vi.fn(async()=>undefined);
+ const ow=(id:string,manage:boolean)=>({id,allow:{has:(b:bigint)=>manage&&b===PermissionFlagsBits.ManageThreads}});
+ const f=fixture();(f.hub as Record<string,unknown>).permissionOverwrites={edit,cache:new Map([['770000000000000001',ow('770000000000000001',true)],['770000000000000002',ow('770000000000000002',true)],['770000000000000003',ow('770000000000000003',true)],['770000000000000004',ow('770000000000000004',false)],[BOT,ow(BOT,true)]])};
+ f.cache.set(HUB,f.hub);
+ const app=new CastApp(db,()=>c,{sendDm:vi.fn(async()=>true),sendMessage:vi.fn(async()=>({id:'n'}))} as never);app.attach(f.guild as never);
+ const a=app as unknown as {openThread(s:unknown,n:string):Promise<unknown>};
+ await a.openThread(await session(),'予約');await a.openThread(await session(),'予約');
+ expect(edit).toHaveBeenCalledOnce();expect(edit).toHaveBeenCalledWith('770000000000000003',{ManageThreads:null},expect.anything());
+});
+it('新しく作る窓口では、役職のロールに「スレッドの管理」を付けない',async()=>{
+ await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE},'staff');
+ const f=fixture();await f.app.openThread(await session(),'予約');
+ const req=f.create.mock.calls[0] as unknown as [{permissionOverwrites:{id:string;allow:bigint}[]}];
+ const ranks=cfg.ranks.filter(r=>!r.auto).map(r=>r.roleId).filter(id=>!(cfg.admin?.gujiRoleIds??[]).includes(id)&&!(cfg.admin?.shinshokuRoleIds??[]).includes(id));
+ expect(ranks.length).toBeGreaterThan(0);
+ for(const id of ranks)expect(req[0].permissionOverwrites.find(p=>p.id===id)!.allow & PermissionFlagsBits.ManageThreads).toBe(0n);
+});
 const menuCreate=(f:ReturnType<typeof fixture>)=>(f.cache.get(MALE) as {threads:{create:ReturnType<typeof vi.fn>}}).threads.create;
 it('親を参加者が見られなければ窓口には作らず、前と同じ一覧のチャンネルに非公開で作る（公開にはしない）',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,reservationChannelId:HUB},'staff');

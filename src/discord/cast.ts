@@ -117,6 +117,8 @@ import { awardCastRank, pastRankWinners } from '../services/castRank.js';
 import { staffRoleIds } from '../services/meetings.js';
 import { namesOf } from '../services/members.js';
 import { loadReceptionAvatar, renderCastReception } from '../services/castReceptionImage.js';
+/** 予約の窓口で「スレッドの管理」を持てるロール（宮司・神職だけ） */
+export const hubManagerRoleIds = (cfg: GuildConfig) => new Set([...(cfg.admin?.shinshokuRoleIds ?? []), ...(cfg.admin?.gujiRoleIds ?? [])]);
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const PINK = 0xe86a92;
@@ -1653,10 +1655,27 @@ export class CastApp {
     if (c.reservationChannelId) {
       const ch = this.guild?.channels.cache.get(c.reservationChannelId)
         ?? await this.guild?.channels.fetch(c.reservationChannelId).catch(() => null);
-      return ch?.type === ChannelType.GuildText ? ch : undefined;
+      if (ch?.type !== ChannelType.GuildText) return undefined;
+      if (!this.hubPermsFixed.has(ch.id)) { this.hubPermsFixed.add(ch.id); await this.fixHubPerms(ch); }
+      return ch;
     }
     if (!this.creatingReservationHub) this.creatingReservationHub = this.createReservationHub().finally(() => { this.creatingReservationHub = undefined; });
     return this.creatingReservationHub;
+  }
+
+  /**
+   * 「スレッドの管理」がある人には、ぜんぶの非公開スレッドが見える。
+   * 予約の窓口では、宮司・神職と BOT だけに残し、ほかのロール・人からは外す（前に作った窓口も直す）
+   */
+  private hubPermsFixed = new Set<string>();
+  private async fixHubPerms(ch: TextChannel): Promise<void> {
+    const keep = hubManagerRoleIds(this.cfg());
+    const me = this.guild?.members?.me?.id;
+    for (const o of ch.permissionOverwrites?.cache.values() ?? []) {
+      if (o.id === me || keep.has(o.id) || !o.allow.has(PermissionFlagsBits.ManageThreads)) continue;
+      await ch.permissionOverwrites.edit(o.id, { ManageThreads: null }, { reason: '予約のスレッドを宮司・神職だけが見られるように' })
+        .catch(err => logger.warn({ err, id: o.id }, 'cast hub perm fix failed'));
+    }
   }
 
   private async createReservationHub(): Promise<TextChannel | undefined> {
@@ -1674,7 +1693,7 @@ export class CastApp {
         topic: '男女共通の予約・納品窓口。キャスト一覧から予約すると、本人・キャスト・運営だけのお部屋へ案内します。',
         permissionOverwrites: [
           { id: g.id, type: OverwriteType.Role, allow: READ, deny: PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads },
-          ...[...staffRoleIds(this.cfg())].map(id => ({ id, type: OverwriteType.Role, allow: MANAGE })),
+          ...[...staffRoleIds(this.cfg())].map(id => ({ id, type: OverwriteType.Role, allow: hubManagerRoleIds(this.cfg()).has(id) ? MANAGE : READ | PermissionFlagsBits.SendMessages })),
           { id: me.id, type: OverwriteType.Member, allow: MANAGE | PermissionFlagsBits.ManageChannels },
         ], reason: '男女共通のキャスト予約窓口',
       });
