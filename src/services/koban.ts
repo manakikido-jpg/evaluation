@@ -12,8 +12,8 @@ async function activeMember(db: Db, id: string) {
   if (!member || member.leftAt || member.isBot) throw new KobanError('在籍中のメンバーを確認できません。');
   return member;
 }
-/** 同じ購入確認番号は一度だけ。購入と額面分の預かり・手数料・持ち物を原子的に保存する。 */
-export async function buyKoban(db: Db, memberId: string, itemId: number, nonce: string, now = new Date()) {
+/** 同じ購入確認番号は一度だけ。購入と額面分の預かり・手数料・持ち物を原子的に保存する。staff: 運営は手数料なし（額面だけ払う） */
+export async function buyKoban(db: Db, memberId: string, itemId: number, nonce: string, now = new Date(), staff = false) {
   if (!validId(nonce)) throw new KobanError('購入画面を開き直してください。');
   return db.transaction(async tx => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'shop:' + memberId}))`);
@@ -27,14 +27,14 @@ export async function buyKoban(db: Db, memberId: string, itemId: number, nonce: 
     const [item] = await tx.select().from(shopItems).where(eq(shopItems.id, itemId)).for('update');
     const value = item && kobanValue(item.kind);
     if (!item?.enabled || value === undefined) throw new KobanError('この小判は販売していません。');
-    const price = kobanPrice(value), fee = price - value;
+    const price = staff ? value : kobanPrice(value), fee = price - value;
     const [wallet] = await tx.select().from(wallets).where(eq(wallets.memberId, memberId)).for('update');
     if (!wallet || wallet.balance < price) throw new KobanError(`銭が足りません（${price.toLocaleString('ja-JP')}銭必要）。`);
     if (!(await spendWithin(tx, memberId, value, 'koban_buy', { kobanId: nonce, itemId, faceValue: value }))) throw new Error('koban principal payment failed');
-    if (!(await spendWithin(tx, memberId, fee, 'koban_fee', { kobanId: nonce, itemId, faceValue: value }))) throw new Error('koban fee payment failed');
+    if (fee > 0 && !(await spendWithin(tx, memberId, fee, 'koban_fee', { kobanId: nonce, itemId, faceValue: value }))) throw new Error('koban fee payment failed');
     const [purchase] = await tx.insert(shopPurchases).values({ memberId, itemId, kind: item.kind, price, createdAt: now }).returning();
     const [receipt] = await tx.insert(kobanPurchases).values({ id: nonce, purchaseId: purchase!.id, memberId, faceValue: value, price, fee, createdAt: now }).returning();
-    await audit(tx, { actorId: memberId, action: 'koban.buy', detail: { kobanId: nonce, faceValue: value, price, fee }, via: 'discord' });
+    await audit(tx, { actorId: memberId, action: 'koban.buy', detail: { kobanId: nonce, faceValue: value, price, fee, ...(staff ? { staff: true } : {}) }, via: 'discord' });
     return { receipt: receipt!, balance: wallet.balance - price, repeated: false };
   });
 }

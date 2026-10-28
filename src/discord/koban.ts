@@ -6,22 +6,29 @@ import type { ShopItem } from '../db/schema.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { kobanValue, kobanPrice, KOBAN_VALUES } from '../domain/koban.js';
 import { buyKoban, heldKoban, KobanError, ownedKoban, sendKoban } from '../services/koban.js';
-import { getItem, listItems } from '../services/shop.js';
+import { getItem, giftIsStaff, listItems } from '../services/shop.js';
+import { adminLevelOf } from '../config.js';
 import { walletOf } from '../services/economy.js';
 import { logger } from '../lib/logger.js';
 const fmt = (n: number) => n.toLocaleString('ja-JP');
 const row = (...components: unknown[]) => ({ type: 1, components });
 const button = (custom_id: string, label: string, style = 2, disabled = false) => ({ type: 2, custom_id, label, style, disabled });
 const done = (content: string) => ({ content, embeds: [], components: [row(button('koban:inventory', '🪙 持っている小判'))] });
-export function kobanBuyConfirm(item: ShopItem, balance: number) {
+/** 運営（宮司・神職・任命制の役職）か。運営は小判の手数料なし */
+export const kobanStaff = (cfg: GuildConfig, roleIds: readonly string[]) => giftIsStaff(cfg, roleIds) || Boolean(adminLevelOf(cfg, roleIds));
+/** メンバーのロール（分からなければ空） */
+export const roleIdsOf = (m: unknown): string[] => { const c = (m as { roles?: { cache?: Map<string, unknown> } } | null)?.roles?.cache; return c && typeof c.keys === 'function' ? [...c.keys()] : []; };
+export function kobanBuyConfirm(item: ShopItem, balance: number, staff = false) {
   const value = kobanValue(item.kind)!;
-  const price = kobanPrice(value);
+  // 運営は手数料なし（額面だけ払う）
+  const price = staff ? value : kobanPrice(value);
   return { content: '', embeds: [{ title: `🪙 ${fmt(value)}銭小判`, color: 0xe6b422,
-    description: [`販売価格：**${fmt(price)}銭**`, `相手に入る額：**${fmt(value)}銭**`, `手数料：**${fmt(price - value)}銭**（販売価格に含む）`, '', '購入後は `/持ち物` の「小判」から相手を選んで贈れます。', '贈ると相手に自動で換金されます。送付時の追加料金はありません。', 'セール・割引券・奉納割引は対象外です。', `いま ${fmt(balance)}銭`].join('\n') }],
+    description: [`販売価格：**${fmt(price)}銭**`, `相手に入る額：**${fmt(value)}銭**`, staff ? '手数料：**なし**（運営は手数料がかかりません）' : `手数料：**${fmt(price - value)}銭**（販売価格に含む）`, '', '購入後は `/持ち物` の「小判」から相手を選んで贈れます。', '贈ると相手に自動で換金されます。送付時の追加料金はありません。', 'セール・割引券・奉納割引は対象外です。', `いま ${fmt(balance)}銭`].join('\n') }],
     components: [row(button(`koban:buy:${item.id}:${randomUUID()}`, `${fmt(price)}銭で1枚買う`, 3, balance < price), button('shop:cancel', 'やめる'))] };
 }
 export class KobanApp {
   constructor(private readonly db: Db, private readonly cfg: () => GuildConfig, private readonly discord: DiscordActions) {}
+  private staff(roleIds: string[]) { return kobanStaff(this.cfg(), roleIds); }
   async onInteraction(i: Interaction) {
     if (!i.inCachedGuild() || i.guildId !== this.cfg().guildId || !('customId' in i) || !i.customId.startsWith('koban:')) return;
     if (!i.isButton() && !i.isStringSelectMenu() && !i.isUserSelectMenu()) return;
@@ -30,13 +37,13 @@ export class KobanApp {
       if (step === 'shop' && i.isButton()) {
         await i.deferUpdate();
         const items = (await listItems(this.db, { enabledOnly: true })).filter(item => kobanValue(item.kind) !== undefined);
-        return void await i.editReply({ content: '🪙 小判売り場：贈る相手に入る額面を選んでください。販売価格は額面の150％です。', embeds: [], components: items.length ? [row({ type: 3, custom_id: 'koban:shop-pick', placeholder: '買う小判', options: items.slice(0, 25).map(item => ({ label: `${fmt(kobanValue(item.kind)!)}銭小判 ／ ${fmt(kobanPrice(kobanValue(item.kind)!))}銭`, value: String(item.id) })) })] as never : [] });
+        return void await i.editReply({ content: '🪙 小判売り場：贈る相手に入る額面を選んでください。販売価格は額面の150％です（運営は手数料なしで額面どおり）。', embeds: [], components: items.length ? [row({ type: 3, custom_id: 'koban:shop-pick', placeholder: '買う小判', options: items.slice(0, 25).map(item => ({ label: `${fmt(kobanValue(item.kind)!)}銭小判 ／ ${fmt(kobanPrice(kobanValue(item.kind)!))}銭`, value: String(item.id) })) })] as never : [] });
       }
       if (step === 'shop-pick' && i.isStringSelectMenu()) {
         await i.deferUpdate();
         const item = await getItem(this.db, Number(i.values[0]));
         if (!item?.enabled || kobanValue(item.kind) === undefined) throw new KobanError('この小判は販売していません。');
-        return void await i.editReply(kobanBuyConfirm(item, (await walletOf(this.db, i.user.id)).balance) as never);
+        return void await i.editReply(kobanBuyConfirm(item, (await walletOf(this.db, i.user.id)).balance, this.staff(roleIdsOf(i.member))) as never);
       }
       if (step === 'inventory' && i.isButton()) {
         await i.deferUpdate();
@@ -49,7 +56,7 @@ export class KobanApp {
       }
       if (step === 'buy' && i.isButton()) {
         await i.deferUpdate();
-        const r = await buyKoban(this.db, i.user.id, Number(id), extra ?? '');
+        const r = await buyKoban(this.db, i.user.id, Number(id), extra ?? '', new Date(), this.staff(roleIdsOf(i.member)));
         return void await i.editReply(done(`${r.repeated ? 'この確認で購入した' : '購入しました：'}${fmt(r.receipt.faceValue)}銭小判1枚。支払い${fmt(r.receipt.price)}銭（手数料${fmt(r.receipt.fee)}銭込み）。残り${fmt(r.balance)}銭。${r.repeated ? '\n同じ購入確認では追加購入していません。' : ''}`) as never);
       }
       if (step === 'pick' && i.isStringSelectMenu()) {
