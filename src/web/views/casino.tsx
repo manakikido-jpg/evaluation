@@ -1,3 +1,4 @@
+import {GAME_SCENES} from '../../services/casino/scenePreview.js';
 import { StyleOrnament } from './casinoStyleParts.js';
 import { CasinoLobbyContent } from './casinoLobby.js';
 import type { LobbyTable, LobbyResume } from '../../services/casino/lobby.js';
@@ -23,11 +24,13 @@ const fmt = (n: number) => n.toLocaleString('ja-JP');
 const money = (coin: Coin, n: number) => `${coin.emoji}${fmt(n)} ${coin.name}`;
 
 /** revealFrom: 結果を見せる前の残高（ルーレットが止まるまで、こちらを出しておく） */
-export type CasinoMe = { styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date; /** 重ねた枚数 */ boostLevel?: number };
+export type CasinoMe = { presentation?:'immersive'; presentationRequested?:boolean; styleUntil?: number; baseStyles?: Partial<Record<StyleSlot, string>>; styles?: Partial<Record<StyleSlot, string>>; sharedStyles?: Record<string, Partial<Record<StyleSlot, string>>>; session: MemberSession; balance: number; coin: Coin; revealFrom?: number; revealAt?: number; revealWait?: boolean; /** 🎰 大勝負の札が効いている間 */ boostUntil?: Date; /** 重ねた枚数 */ boostLevel?: number };
 
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
-export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean | 'casino' }) {
+export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean | 'casino'; game?:CasinoGame; roundKey?:string }) {
   const me = props.me;
+  const immersive=me?.presentation==='immersive';
+  const scene=immersive&&props.game?GAME_SCENES[props.game]:undefined;
   return (
     <html lang="ja">
       <head>
@@ -43,9 +46,10 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
         {props.htmx && <script src={assetUrl('htmx.min.js')} defer></script>}
         <script src={assetUrl('casino-request.js')} defer></script>
         <script src={assetUrl('casino.js')} defer></script>
+        {immersive&&<><link rel="stylesheet" href={assetUrl('casino-live.css')}/><script src={assetUrl('casino-live.js')} defer/></>}
         <script type="module" src={assetUrl('life3d.js')}></script>
       </head>
-      <body class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})} data-base-room-name={styleItem(me?.baseStyles?.background ?? '')?.name ?? 'あなたの遊技場'}>
+      <body data-casino-immersive={immersive?'true':undefined} data-ci-game={immersive?props.game:undefined} data-ci-family={scene?.family} data-ci-art={scene?.art} data-ci-round={immersive?props.roundKey:undefined} data-ci-viewer={immersive?me?.session.userId:undefined} class={`casino${props.jansou ? ' jansou' : ''}${props.lobby ? ' c-lobby-page' : ''} ${Object.entries(me?.styles ?? {}).map(([slot, key]) => `cs-${slot}-${key}`).join(' ')}`} data-style-sound={me?.styles?.sound ?? ''} data-style-effect={me?.styles?.effect ?? ''} data-style-until={me?.styleUntil} data-base-styles={JSON.stringify(me?.baseStyles ?? {})} data-base-room-name={styleItem(me?.baseStyles?.background ?? '')?.name ?? 'あなたの遊技場'}>
         <div class="c-sky" aria-hidden="true">
           {Array.from({ length: 14 }, () => (
             <span class="c-petal"></span>
@@ -59,8 +63,8 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
             </span>
           </a>
           {props.lobby && <nav class="cl-top-nav" aria-label="カジノの案内"><a href="/casino/hall" aria-current="page">ロビー</a><a href="/casino/hall?group=table#available-tables">みんなの卓</a><a href="/casino/wardrobe">着せ替え</a><a href="/casino/style-gacha">勝負の御籤</a><a href="/casino/stats">📊 記録</a></nav>}
-          <button type="button" class="c-sound" data-sound-toggle aria-pressed="true" title="音を消す">
-            🔊
+          <button type="button" class="c-sound" data-sound-toggle aria-pressed={immersive?'false':'true'} title={immersive?'音を出す':'音を消す'}>
+            {immersive?'🔇':'🔊'}
           </button>
           {me && (
             <div class="c-me">
@@ -92,7 +96,9 @@ export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Ch
             </p>
           )}
           {!props.lobby && (me?.styles?.background || me?.styles?.ornament) && <div class="cs-room-heading"><span data-style-room-name>{styleItem(me.styles?.background ?? '')?.name ?? 'あなたの遊技場'}</span><StyleOrnament itemKey={me.styles?.ornament} /></div>}
-          {props.children}
+          {!immersive&&me?.presentationRequested&&<p class="c-alert">確認用の新デザインは、社務所と同じDiscordアカウントでログインした運営だけが使えます。<a href="/economy/casino-live">社務所で確認する</a></p>}
+          {immersive&&<aside class="ci-toolbar"><span>運営向け確認中 · 通常の銭と戦績を使用</span><button type="button" data-sound-toggle aria-pressed="false" aria-label="音の切り替え">🔇</button><label>演出<select data-ci-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">演出を省略</option></select></label><button type="button" data-ci-fullscreen>全画面</button><form method="post" action="/casino/presentation/exit"><input type="hidden" name="_csrf" value={me!.session.csrfToken}/><button type="submit">元の表示へ</button></form><p data-ci-status role="status" hidden/></aside>}
+          {scene?<section class={`ci-stage ci-family-${scene.family}`}><header class="ci-room"><p>咲楽ノ宮 · {scene.room}</p><h2>{scene.name}</h2><span data-ci-cue role="status">あなたの操作で進む、勝負の席。</span></header><div class="ci-game">{props.children}</div></section>:props.children}
         </main>
         <footer class="c-foot">銭はサーバーの中だけのものです。お金に換えることはできません。遊びすぎに気をつけて、楽しくどうぞ。</footer>
       </body>
@@ -407,7 +413,7 @@ export const freshDone = (row: CasinoGameRow | undefined) => Boolean(row && row.
 export function Result(p: { bet: number; payout: number; coin: Coin; text: string }) {
   const net = p.payout - p.bet;
   return (
-    <div class={`c-result ${net > 0 ? 'win' : net < 0 ? 'lose' : 'even'}`}>
+    <div data-ci-result={net>0?'win':net<0?'lose':'draw'} class={`c-result ${net > 0 ? 'win' : net < 0 ? 'lose' : 'even'}`}>
       <div class="c-result-text">{p.text}</div>
       <div class="c-result-num">{net > 0 ? `+${fmt(net)}` : net < 0 ? fmt(net) : '±0'}</div>
       <div class="c-muted">
@@ -467,7 +473,7 @@ export function BlackjackPage(p: GamePage) {
   );
   const effect = v?.result === 'blackjack' ? ' c-fx-burst' : v?.result === 'bust' ? ' c-fx-shake' : '';
   return (
-    <CasinoLayout title="ブラックジャック" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="blackjack" title="ブラックジャック" me={me} back>
       <h1 class="c-h1">🃏 ブラックジャック</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-table c-felt">
@@ -554,7 +560,7 @@ export function HighLowPage(p: GamePage) {
   const at = flipped ? 4 : 0;
   const me = s?.phase === 'done' ? revealMe(p.me, p.row, at) : p.me;
   return (
-    <CasinoLayout title="ハイ＆ロー" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="highlow" title="ハイ＆ロー" me={me} back>
       <h1 class="c-h1">🔼 ハイ＆ロー</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-table c-felt">
@@ -571,6 +577,7 @@ export function HighLowPage(p: GamePage) {
               </span>
               <Later d={at}>
                 <div class="c-hl-mult">
+                  {me.presentation==='immersive'&&<div class="ci-lanterns" aria-hidden="true">{Array.from({length:HL_MAX_STEPS},(_,i)=><span class={i<s.steps?'lit':''}>✿</span>)}</div>}
                   いまの倍率 <b>{mult(s.mult)}</b>
                   <span class="c-muted">
                     （成功 {s.steps} / {HL_MAX_STEPS} 回）
@@ -647,7 +654,7 @@ export function BaccaratPage(p: GamePage) {
   const at = fresh && plan ? plan.result : 0;
   const me = s ? revealMe(p.me, p.row, at) : p.me;
   return (
-    <CasinoLayout title="バカラ" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="baccarat" title="バカラ" me={me} back>
       <h1 class="c-h1">🎴 バカラ</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-table c-felt">
@@ -714,12 +721,12 @@ export function RoulettePage(p: GamePage) {
   // 回したばかりなら、玉が止まるまで（約 5.2 秒）残高は戻りを足す前を出す
   const me = s ? revealMe(p.me, p.row, 26) : p.me;
   return (
-    <CasinoLayout title="ルーレット" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="roulette" title="ルーレット" me={me} back>
       <h1 class="c-h1">🎡 ルーレット</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-table c-rl-table">
         <div class="c-rl-top">
-          <RouletteWheel number={s?.number} />
+          <RouletteWheel number={s?.number} highlightStakes={p.me.presentation==='immersive'?stakes:undefined} />
           {s && (
             <div class="c-rl-outcome">
               <Result bet={p.row!.bet} payout={p.row!.payout} coin={p.me.coin} text={`${s.number}（${s.number === 0 ? '緑' : rouletteColor(s.number) === 'red' ? '赤' : '黒'}）`} />
@@ -728,7 +735,7 @@ export function RoulettePage(p: GamePage) {
           )}
         </div>
       </section>
-      <RouletteBoard action="/casino/roulette" csrf={csrf} casino={p.casino} coin={p.me.coin} number={s?.number} submitLabel="🎡 回す" memoryKey="solo" />
+      <RouletteBoard immersive={p.me.presentation==='immersive'} action="/casino/roulette" csrf={csrf} casino={p.casino} coin={p.me.coin} number={s?.number} submitLabel="🎡 回す" memoryKey="solo" />
       <Rules>
         0〜36 の 37 マス（ヨーロピアン）。チップを選んでマスを押すと置けます（賭け先の数に制限なし。1 か所 {rouletteMaxOf(p.casino).toLocaleString('ja-JP')} 枚まで）。数字 1 つは 36 倍、赤・黒・奇数・偶数・1〜18・19〜36 は 2 倍、1st 12 などのまとまりと「2:1」（その列）は 3 倍。数字の間・交点・端にも置けます。2数字は18倍、3数字は12倍、4数字は9倍、6数字は6倍（すべて元の賭けを含む払戻）。0は赤黒などの外側の賭けには入りません。
       </Rules>
@@ -790,7 +797,7 @@ export function OthelloPage(p: GamePage) {
   const you = s?.you ?? 'B';
   const playing = p.row?.status === 'playing' && s;
   return (
-    <CasinoLayout title="オセロ" me={p.me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="othello" title="オセロ" me={p.me} back>
       <h1 class="c-h1">⚫ オセロ（CPU）</h1>
       {p.msg && <Msg msg={p.msg} />}
       {s && (
@@ -860,7 +867,7 @@ export function VersusLobby(p: { me: CasinoMe; casino: CasinoConfig; matches: Ca
   const open = p.matches.filter((m) => m.status === 'open');
   const playing = p.matches.filter((m) => m.status === 'playing');
   return (
-    <CasinoLayout title="メンバー対戦" me={p.me} back htmx>
+    <CasinoLayout game="versus" title="メンバー対戦" me={p.me} back htmx>
       <h1 class="c-h1">⚔ メンバー対戦（オセロ）</h1>
       {p.msg && <Msg msg={p.msg} />}
       {p.mine ? (
@@ -1000,7 +1007,7 @@ export function VersusRoom(p: { me: CasinoMe; match: CasinoMatch; names: Names; 
   const csrf = p.me.session.csrfToken;
   const mine = m.hostId === p.me.session.userId || m.guestId === p.me.session.userId;
   return (
-    <CasinoLayout title="メンバー対戦" me={p.me} htmx>
+    <CasinoLayout game="versus" title="メンバー対戦" me={p.me} htmx>
       <p class="c-back">
         <a href="/casino/versus">← 対戦ロビーへ</a>
       </p>

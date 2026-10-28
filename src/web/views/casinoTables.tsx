@@ -70,7 +70,7 @@ export function TablesLobby(p: { me: CasinoMe; kind: TableKind; casino: CasinoCo
   const jansou = p.kind === 'mahjong';
   const tables = p.kind === 'daifugo' ? [...p.tables].sort((a,b) => Number(Boolean((b.state as DaifugoState).humansOnly && (b.state as DaifugoState).phase === 'lobby')) - Number(Boolean((a.state as DaifugoState).humansOnly && (a.state as DaifugoState).phase === 'lobby'))) : p.tables;
   return (
-    <CasinoLayout title={jansou ? '咲楽ノ宮雀荘' : L.name} me={p.me} back={jansou ? 'gate' : true} jansou={jansou}>
+    <CasinoLayout game={p.kind} title={jansou ? '咲楽ノ宮雀荘' : L.name} me={p.me} back={jansou ? 'gate' : true} jansou={jansou}>
       {jansou ? (
         <section class="mj-sign">
           <p class="mj-sign-kicker">SAKURANOMIYA JANSOU</p>
@@ -283,7 +283,7 @@ export function TablePage(p: { me: CasinoMe; table: CasinoTable; casino: CasinoC
   const L = TABLE_LABEL[p.table.kind as TableKind];
   const jansou = p.table.kind === 'mahjong';
   return (
-    <CasinoLayout title={jansou ? `雀荘 卓 #${p.table.id}` : L.name} me={p.me} jansou={jansou} wide={jansou || p.table.kind === 'keiba'}>
+    <CasinoLayout game={p.table.kind as TableKind} title={jansou ? `雀荘 卓 #${p.table.id}` : L.name} me={p.me} jansou={jansou} wide={jansou || p.table.kind === 'keiba'}>
       <p class="c-back">
         <a href={jansou ? '/casino/jansou' : `/casino/tables/${p.table.kind}`}>← {jansou ? '雀荘の入口' : `${L.name}の一覧`}へ</a>
       </p>
@@ -313,6 +313,8 @@ export function TablePage(p: { me: CasinoMe; table: CasinoTable; casino: CasinoC
 /** 卓の中身（casino.js が変わったときに差し替える） */
 export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoConfig; now: number }) {
   const t = p.table;
+  const state=t.state as {phase?:string;round?:number;hand?:number;history?:unknown[];race?:{n?:number};wind?:number;kyoku?:number;honba?:number;deadline?:number|null};
+  const roundKey=[t.id,state.round??state.hand??state.history?.length??state.race?.n??0,state.wind??'',state.kyoku??'',state.honba??'',state.phase==='result'?state.deadline??'':''].join(':');
   const body =
     t.status !== 'open' ? (
       <section class="c-table c-center">
@@ -343,7 +345,7 @@ export function TableFrag(p: { table: CasinoTable; me: CasinoMe; casino: CasinoC
       <BabaView t={t} s={t.state as BabaState} {...p} />
     );
   return (
-    <div id="c-live" data-style-v={JSON.stringify(p.me.sharedStyles ?? {})} data-table={String(t.id)} data-v={String(t.version)} data-now={String(p.now)} data-open={t.status === 'open' ? '1' : '0'}>
+    <div data-ci-round={roundKey} data-ci-enabled={p.me.presentation==='immersive'?'true':'false'} data-ci-phase={(t.state as {phase?:string}).phase} id="c-live" data-style-v={JSON.stringify(p.me.sharedStyles ?? {})} data-table={String(t.id)} data-v={String(t.version)} data-now={String(p.now)} data-open={t.status === 'open' ? '1' : '0'}>
       <div class="cs-seats" aria-label="席の飾り">{((t.state as { seats?: ({ id: string; name: string } | null)[] }).seats ?? []).filter((seat) => seat && p.me.sharedStyles?.[seat.id]).map((seat) => {
         if (!seat) return null;
         const st = p.me.sharedStyles![seat.id]!;
@@ -625,7 +627,7 @@ function RlView({ t, s, me, casino, now }: ViewProps<RlTableState>) {
           </div>
         )}
         <div class="c-rl-top">
-          <RouletteWheel number={s.phase === 'result' ? s.number : null} />
+          <RouletteWheel number={s.phase === 'result' ? s.number : null} highlightStakes={me.presentation==='immersive'?(s.seats.find(seat=>seat.id===me.session.userId)?.bets??[]):undefined} />
         </div>
         <div class="c-seats">
           {s.seats.map((x) => (
@@ -1098,7 +1100,7 @@ function PartyLobby({ t, s, me, min }: { t: CasinoTable; s: PartyState; me: Casi
 
 function PartyDone({ s, me }: { s: PartyState; me: CasinoMe }) {
   return (
-    <div class="c-result even">
+    <div data-ci-result={s.order.includes(me.session.userId)?(s.order[0]===me.session.userId?'win':'lose'):'neutral'} class="c-result even">
       <div class="c-result-text">結果</div>
       <ol class="c-rank">
         {s.order.map((id, i) => {
@@ -1427,11 +1429,19 @@ function LifeView({ t, s, me, now }: ViewProps<LifeState>) {
       {turn && !pending && p.cards.includes('move') && <ActForm id={t.id} csrf={csrf} action="card"><input type="hidden" name="nonce" value={String(s.nonce)}/><input type="hidden" name="card" value="move"/><label>出目指定<select name="die">{[1,2,3,4,5,6].map(n=><option value={String(n)}>{n}マス進む</option>)}</select></label><button class="c-btn">出目指定の札を1枚使って進む</button><p class="c-muted">分かれ道では指定した目より手前でも止まります。回避札と再挑戦は、使える場面でボタンが出ます。</p></ActForm>}
     </section>}
     {Object.keys(s.people).length>0 && <section class="life-people" aria-label="みんなの暮らし">{s.seats.map((x,index)=>{const person=s.people[x.id]!;return <article class={`life-person${x.id===me.session.userId?' me':''}`}><h3><span class={`life-token p${index}`}>{index+1}</span> {x.name}{person.position===goal?' 🏁':''}{x.gone?'（自動）':''}</h3><p>{person.job}・給料{fmt(person.salary)}G{person.route && person.fork!==undefined && person.position<person.fork+8 && <span> ／ {person.route==='steady'?'🌿 堅実の道':'🔥 挑戦の道'}</span>}</p><strong>資産 {fmt(lifeAssets(person))}G</strong><p>手持ち{fmt(person.money)}G ／ {person.position}/{goal}マス</p><small>{person.house?'🏠 家あり':'🏠 家なし'}・{person.insured?'🛡 保険あり':'🛡 保険なし'}・👪 家族{person.family}</small></article>;})}</section>}
-    {s.phase==='done' && <section class="c-result even"><h3>🏁 人生の結果</h3><ol class="c-rank">{s.order.map(id=>{
+    {s.phase==='done' && <section data-ci-result={lifePresentationResult(s,me.session.userId)} class="c-result even"><h3>🏁 人生の結果</h3><ol class="c-rank">{s.order.map(id=>{
       const assets=lifeAssets(s.people[id]!),rank=s.order.findIndex(other=>lifeAssets(s.people[other]!)===assets)+1;
       return <li class={id===me.session.userId?'me':''}><b>{rank}位</b> {s.seats.find(x=>x.id===id)?.name} ／ 資産{fmt(assets)}G{s.entry>0 && <span> ／ 賞金{fmt(s.payouts.find(x=>x.id===id)?.amount??0)}{me.coin.name}</span>}</li>;
     })}</ol>{s.entry===0 && <p>参加費0銭の練習です。</p>}</section>}
     <Log lines={s.log}/>
     {my && s.phase==='playing' && !my.gone && <SeatControls t={t} me={me} seated full leaveNote="途中で席を立つと自動で進みます。参加費は戻らず、ゴール後に順位の賞金を受け取ります。"/>}
   </>;
+}
+
+/** 同資産の同着は、演出でも引き分けとして扱う。 */
+export function lifePresentationResult(s:Pick<LifeState,'order'|'people'>,viewer:string):'win'|'lose'|'draw'|'neutral'{
+ if(!s.order.includes(viewer)||!s.people[viewer])return 'neutral';
+ const best=lifeAssets(s.people[s.order[0]!]!);
+ if(lifeAssets(s.people[viewer]!)!==best)return 'lose';
+ return s.order.filter(id=>lifeAssets(s.people[id]!)===best).length>1?'draw':'win';
 }

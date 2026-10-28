@@ -16,3 +16,29 @@ body.casino:has(.ir-page){background:#0a1220;--c-gold:#e7ca90;--c-muted:#c0c7d3;
 .ir-page .c-rb-boundary.hit:after{background:#ffe39b}
 .ir-wheel-perspective .c-wheel2{transform:rotateX(42deg)}
 @media(max-width:640px){.ir-page .c-rb-board{grid-template-columns:repeat(3,minmax(0,1fr)) 48px;grid-template-rows:40px repeat(12,40px) 40px 40px 40px;gap:4px}.ir-page .c-rb-cell{font-size:14px}.ir-page .c-rb-cell.out{font-size:11px}.ir-page .c-rb-chips{background:#0d1929f2;position:static}.ir-page .c-rb-board .c-rb-boundary{font-size:10px}}
+
+/* BETを置いた場所だけを光らせる。結果の数字は玉と明細で確認する。 */
+.ir-page .c-rb-cell.hit:not(.placed){animation:none;box-shadow:none}
+.ir-page .c-rb-cell.placed{animation:none;outline:2px solid #ffe4a0;outline-offset:-2px;box-shadow:inset 0 0 16px #ffd47555,0 0 12px #ffc85c99;z-index:4}
+.ir-page .c-rb-boundary.hit:not(.placed):after{background:#e1c786aa}
+.ir-page .c-rb-boundary.placed:after{width:8px;height:8px;background:#fff0ae;box-shadow:0 0 8px #ffd475}
+
+/* 円盤の発光はBETの数字について回り、停止後の出目とは色で区別する。 */
+.ir-page .c-wheel2 .ir-pocket-bet b{color:#fff4be;text-shadow:0 0 4px #fff1a3,0 0 9px #ffc44a,0 0 15px #ffb63a;background:#b4852588;border-radius:4px;box-shadow:0 0 0 2px #ffdb7b,0 0 12px 4px #ffcc4888;min-width:1.4em;text-align:center}
+.ir-page[data-ir-phase=settled] .c-wheel2 .ir-pocket-result b{color:#fff;background:#347f86;border-radius:4px;box-shadow:0 0 0 2px #edffff,0 0 16px 5px #b7faff;text-shadow:0 0 6px white;min-width:1.4em;text-align:center}
+.ir-round-status{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#0b1525ed;border:1px solid #b99b6166;border-radius:7px;padding:10px 14px;font-size:13px;color:#ecd7a9}
+.ir-round-status [data-ir-skip]{font-size:11px;padding:6px 10px}
+.ir-page .ir-reveal{animation:none}
+.ir-spinning [data-ir-roulette-result]{visibility:hidden}
+.ir-spinning .ir-next{opacity:.45;cursor:wait}
+.ir-page form[data-rb-settled=true] .c-rb-cell{opacity:1}
+.ir-page form[data-rb-settled=true] :is(.c-rb-chips,.c-rb-inside-picker,.c-rb-tools){display:none}
+.ir-page[data-ir-phase=settled] .c-rb-cell.ir-bet-won{outline-color:#c7fff1;box-shadow:inset 0 0 20px #75f6bd77,0 0 14px #7befd8bb}
+.ir-page[data-ir-phase=settled] .c-rb-boundary.ir-bet-won:after{background:#d2fff1;box-shadow:0 0 9px #7befd8}
+.ir-page[data-ir-phase=settled] .c-rb-cell.ir-bet-lost{outline-color:#c4ad79;box-shadow:inset 0 0 8px #c6a25333}
+.ir-result-heading{margin:0;color:#e0c592;font-size:13px;letter-spacing:.12em}
+.ir-win .ir-result-heading{color:#bdf7d8}.ir-win{border-color:#b0ebcb;box-shadow:0 0 20px #9fecc72b}
+.ir-payout{display:block;margin:4px 0;font-size:12px}.ir-payout strong{font:600 clamp(24px,3vw,38px) serif;color:#fff0c5;font-variant-numeric:tabular-nums}
+@media(max-width:640px){.ir-round-status{font-size:12px;padding:9px}.ir-page .c-wheel2 .ir-pocket-bet b{box-shadow:0 0 0 1px #ffdb7b,0 0 7px 2px #ffcc4888}}
+
+.ir-page .c-rb-cell:focus-visible{outline:3px solid #efb6cf;outline-offset:3px}

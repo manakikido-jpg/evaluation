@@ -1,3 +1,4 @@
+import {casinoPresentation,CASINO_PRESENTATION_COOKIE} from './casinoPresentation.js';
 import { PublicOwnerPage,ClubPage,EventPage,ReplayList,TicketPage } from './views/keibaClub.js';
 import { clubHorse,equipSkills,matingPreview,ownerLedger,ownerProfile,racingMonth,racingRankings,replays } from '../services/casino/keibaClub.js';
 import { claimEvent,enterEvent,equipEventSilk,eventScores,events } from '../services/casino/keibaEvents.js';
@@ -176,11 +177,12 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     return { session };
   }
 
-  const meOf = async (session: MemberSession): Promise<Me> => {
+  const meOf = async (session: MemberSession,c:Context): Promise<Me> => {
     const [w, boost, wardrobe] = await Promise.all([walletOf(db, session.userId), casinoBoostOf(db, session.userId, d.now()), stylesOf(db, session.userId)]);
     const boostUntil = boost?.until;
     const boostLevel = boost?.level ?? 1;
-    return { session, styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel } : {}) };
+    if(getCookie(c,CASINO_PRESENTATION_COOKIE)==='1')c.header('Cache-Control','private, no-store');
+    return { session, presentationRequested:getCookie(c,CASINO_PRESENTATION_COOKIE)==='1', presentation:await casinoPresentation(db,c,session.userId,d.now(),d.cfg(),api), styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel } : {}) };
   };
   /** その人の上限（🎰 大勝負の札が効いていれば上がる）。画面に出す用。賭けるときは、それぞれのゲームが確かめ直す */
   const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino, me.boostLevel ?? 1) : d.cfg().casino);
@@ -198,10 +200,16 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         const body = await c.req.parseBody();
         if (!safeEqual(typeof body._csrf === 'string' ? body._csrf : '', r.session.csrfToken)) return c.text('不正なリクエストです（CSRF）。', 403);
       }
-      const me = await meOf(r.session);
+      const me = await meOf(r.session,c);
       if (!d.cfg().casino.enabled) return c.html(<CasinoClosed me={me} />);
       return handler(c, me);
     };
+
+  app.post('/casino/presentation/exit',page(async(c,me)=>{
+    await audit(db,{actorId:me.session.userId,action:'casino.presentation.exit',via:'web'});
+    deleteCookie(c,CASINO_PRESENTATION_COOKIE,{path:'/casino'});
+    return c.redirect('/casino/hall',303);
+  },{post:true}));
 
   app.get('/casino/fortune', c => c.redirect('/lottery', 302));
 
@@ -222,7 +230,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   app.get('/casino', async (c) => {
     const r = await current(c);
     if (!r || 'error' in r) return c.html(<CasinoLanding error={r ? r.error : c.req.query('e')} roleName={d.cfg().casino.accessRoleName} />);
-    const me = await meOf(r.session);
+    const me = await meOf(r.session,c);
     const cfg = d.cfg();
     if (!cfg.casino.enabled) return c.html(<CasinoClosed me={me} />);
     await sweepTables(db, cfg, d.now());
@@ -298,7 +306,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
   app.get('/casino/hall', async (c) => {
     const r = await current(c);
     if (!r || 'error' in r) return c.redirect(`/casino${r ? `?e=${r.error}` : ''}`);
-    const me = await meOf(r.session);
+    const me = await meOf(r.session,c);
     const cfg = d.cfg();
     if (!cfg.casino.enabled) return c.html(<CasinoClosed me={me} />);
     await sweepMatches(db, d.now());
@@ -1142,7 +1150,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     page(async (c, me) => {
       const id = idOf(c);
       const t = id ? await pollTable(db, d.cfg(), id, d.now()) : undefined;
-      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime(), styles: me.styles, styleVersion: JSON.stringify(t ? await tableStyles(db, t.state, d.now()) : {}) });
+      return c.json({ v: t?.version ?? -1, open: t?.status === 'open', now: d.now().getTime(), styles: me.styles, styleVersion: JSON.stringify(t ? await tableStyles(db, t.state, d.now()) : {}), ...(getCookie(c,CASINO_PRESENTATION_COOKIE)==='1'?{presentation:me.presentation==='immersive'}:{}) });
     }),
   );
 

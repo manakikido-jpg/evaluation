@@ -1,3 +1,6 @@
+import {CASINO_PRESENTATION_COOKIE} from './casinoPresentation.js';
+import {CasinoScenes} from './views/casinoScenes.js';
+import {scenePreview} from '../services/casino/scenePreview.js';
 import {CasinoRooms} from './views/casinoRooms.js';
 import {roomPreview} from '../services/casino/roomPreview.js';
 import {mountKeibaAdmin} from './keibaAdmin.js';
@@ -656,6 +659,29 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/keiba-events',requireAdmin,requireCsrf);
   app.use('/keiba-events/*',requireAdmin,requireCsrf);
+  app.use('/economy/casino-live',requireAdmin);
+  app.use('/economy/casino-live/*',requireAdmin,requireCsrf);
+  app.get('/economy/casino-live',c=>{
+    const session=c.get('session');
+    if(!['guji','shinshoku'].includes(session.level)||session.pages&&!session.pages.includes('economy'))return c.text('経済のページ権限がある運営だけ確認できます。',403);
+    c.header('Cache-Control','private, no-store');
+    return c.html(<Layout title="実ゲームの新デザイン確認" session={session} nav="casinotest"><h1>全ゲームの実画面を確認</h1><p>新しい部屋・卓・カード・結果演出を、実際のゲームで確認できます。固定見本ではありません。</p><p><strong>通常のプレイと同じく、遊んだ分は実際の銭と戦績に反映されます。</strong>無料の演出見本だけを見る場合は、下のリンクを使ってください。</p><p>社務所とカジノの両方に、同じDiscordアカウントでログインしてください。ID・パスワードの運営アカウントでは、Discordでの社務所ログインに切り替えてください。</p><form method="post" action="/economy/casino-live/enable"><input type="hidden" name="_csrf" value={session.csrfToken}/><button type="submit">新デザインを有効にしてカジノへ</button></form><p><a href="/economy/casino-scenes">銭が動かない固定の演出見本へ</a></p></Layout>);
+  });
+  app.post('/economy/casino-live/enable',async c=>{
+    const session=c.get('session');
+    if(!['guji','shinshoku'].includes(session.level)||session.pages&&!session.pages.includes('economy'))return c.text('経済のページ権限がある運営だけ確認できます。',403);
+    setCookie(c,CASINO_PRESENTATION_COOKIE,'1',{httpOnly:true,secure,sameSite:'Lax',path:'/casino',maxAge:12*3600});
+    await audit(db,{actorId:session.userId,action:'casino.presentation.enable',via:'web'});
+    return c.redirect('/casino/hall',303);
+  });
+  app.use('/economy/casino-scenes',requireAdmin);
+  app.get('/economy/casino-scenes', c => {
+    const session=c.get('session');
+    if(!session || !['guji','shinshoku'].includes(session.level) || session.pages && !session.pages.includes('economy')) return c.text('経済のページ権限がある運営だけ確認できます。',403);
+    c.header('Cache-Control','private, no-store');
+    try { return c.html(<CasinoScenes m={scenePreview(new URL(c.req.url).searchParams)}/>); }
+    catch { return c.html(<Layout title="全ゲームの演出見本" session={session} nav="casinotest"><p>ゲーム・見本・場面を選び直してください。</p><a href="/economy/casino-scenes">演出見本へ戻る</a></Layout>,400); }
+  });
   app.use('/economy/casino-test',requireAdmin);
   app.get('/economy/casino-test', c => {
     const session=c.get('session');
