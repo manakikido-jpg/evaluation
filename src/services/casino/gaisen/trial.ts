@@ -3,7 +3,7 @@ import type {Db} from '../../../db/client.js';
 import {settings} from '../../../db/schema.js';
 import {audit} from '../../audit.js';
 import {cryptoRng,type Rng} from '../cards.js';
-import {isProtected,lever,newGaisen,scenario,SCENARIOS,stop,type GaisenState,type Setting,type Scenario} from './engine.js';
+import {isProtected,lever,newGaisen,visibleReels,scenario,SCENARIOS,stop,type GaisenState,type Setting,type Scenario} from './engine.js';
 
 export const TRIAL_KEY='casino.gaisenTrial.v1';
 const INITIAL:Setting[]=[1,1,2,2,4];
@@ -89,5 +89,5 @@ export async function writeTrial(db:Db,uid:string,name:string,a:TrialAction,now:
  });
 }
 /** 自分の保存分だけ返す。未停止の役/内部モード/次の押し順をHTMLへ出さない。 */
-export function trialView(f:TrialFloor,uid:string){const own=f.machines.find(m=>m.owner===uid);const p=f.players[playerKey(uid)];return {revision:f.revision,points:own?.state.balance??p?.points??100000,saved:!!p?.saved,machines:f.machines.map(m=>({id:m.id,ownerName:m.ownerName,mine:m.owner===uid,occupied:m.owner!==null,setting:m.state.setting,reservedSetting:m.reservedSetting,lastAction:m.lastAction,protected:isProtected(m.state),stat:m.stat,lastScenario:m.lastScenario})),own:own?{id:own.id,phase:own.state.phase,ggLeft:own.state.ggLeft,sets:own.state.sets,stocks:own.state.stocks,gstopLeft:own.state.gstopLeft,sggLeft:own.state.sggLeft,medusa:own.state.medusa,ex:own.state.ex,resumed:!!own.base,normalGames:own.state.normalGames,lastPaid:own.state.lastPaid,chainWon:own.state.chainWon,message:own.state.message,history:own.state.history,display:own.state.pending?own.state.pending.symbols:own.state.display,stopped:own.state.pending?.stops??[],spinning:!!own.state.pending,navi:own.state.pending?.role==='bell'&&['gg','sgg','gzone'].includes(own.state.phase)?own.state.pending.order:null}:null};}
+export function trialView(f:TrialFloor,uid:string){const own=f.machines.find(m=>m.owner===uid);const p=f.players[playerKey(uid)];return {revision:f.revision,points:own?.state.balance??p?.points??100000,saved:!!p?.saved,machines:f.machines.map(m=>({id:m.id,ownerName:m.ownerName,mine:m.owner===uid,occupied:m.owner!==null,setting:m.state.setting,reservedSetting:m.reservedSetting,lastAction:m.lastAction,protected:isProtected(m.state),stat:m.stat,lastScenario:m.lastScenario})),own:own?{id:own.id,phase:own.state.phase,ggLeft:own.state.ggLeft,sets:own.state.sets,stocks:own.state.stocks,gstopLeft:own.state.gstopLeft,sggLeft:own.state.sggLeft,medusa:own.state.medusa,ex:own.state.ex,resumed:!!own.base,normalGames:own.state.normalGames,lastPaid:own.state.lastPaid,chainWon:own.state.chainWon,message:own.state.message,history:own.state.history,reels:visibleReels(own.state),reelPhase:own.state.pending?.phase??own.state.reelPhase??own.state.phase,resultRole:own.state.pending?null:own.state.lastRole,spins:own.state.spins,display:own.state.pending?own.state.pending.symbols:own.state.display,stopped:own.state.pending?.stops??[],spinning:!!own.state.pending,navi:own.state.pending?.role==='bell'&&['gg','sgg','gzone'].includes(own.state.phase)?own.state.pending.order:null}:null};}
 export type TrialView=ReturnType<typeof trialView>;

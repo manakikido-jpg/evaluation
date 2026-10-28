@@ -11,15 +11,15 @@ function symbolFor(value: string | null, index: number): ReelSymbol {
   if (value === '赤7') return 'red7';
   if (value && ['G','O','D'].includes(value)) return 'god';
   if (value === '◆') return 'crest';
+  if (value === '桜') return 'flower';
   return STRIP[(Number(value) || index + 1) % STRIP.length]!;
 }
 /** 公開済みの停止表示だけ使う。未停止の役/停止予定位置は受け取らない。 */
 export function reelPresentation(own: Own) {
   return own.display.map((value, index) => {
     const spinning = own.spinning && !own.stopped.includes(index);
-    const center = symbolFor(value, index);
-    const pos = STRIP.indexOf(center);
-    const rows = [STRIP[(pos + STRIP.length - 1) % STRIP.length]!, center, STRIP[(pos + 1) % STRIP.length]!];
+    const center = symbolFor(own.reels[index]??null, index);
+    const rows: ReelSymbol[] = [(['flower','crest','blue7'] as const)[index]!, center, (['crest','red7','flower'] as const)[index]!];
     // 2巡分で継ぎ目なく縦に流す。回転中の絵柄は停止結果の予告ではない。
     const cycle = [...STRIP.slice(index), ...STRIP.slice(0, index)];
     const strip = spinning ? [...cycle, ...cycle] : rows;
@@ -42,15 +42,16 @@ function SymbolArt({symbol}: {symbol: ReelSymbol}) {
 export function GaisenReels({own}: {own: Own}) {
   const reels = reelPresentation(own);
   return <div class="gt-reel-deck">
-    <div class="gt-reel-heading"><span>神殿の三連リール</span><small>上段・中段・下段</small></div>
+    <div class="gt-reel-heading"><span>神殿の三連リール</span><small>{own.reelPhase==='gstop'?'G-STOP：上部で抽選':'有効ライン：中段'}</small></div>
     <div class="gt-reels" role="group" aria-label="左・中・右の3リール、それぞれ縦3段">
       {reels.map((reel, index) => <div class={'gt-reel' + (reel.spinning ? ' is-spinning' : ' is-stopped')}
-        data-gt-reel={index} role="img" aria-label={`${['左','中','右'][index]}リール：${reel.label}`}>
+        data-gt-reel={index} data-center={reel.spinning?'':reel.rows[1]} role="img" aria-label={`${['左','中','右'][index]}リール：${reel.label}`}>
         <div class="gt-reel-strip" aria-hidden="true">{reel.strip.map(symbol => <SymbolArt symbol={symbol}/>)}</div>
         <span class="gt-reel-glass" aria-hidden="true"/>
         {reel.spinning && <span class="gt-reel-motion-label">回転中</span>}
       </div>)}
     </div>
+    <p class="gt-settlement" data-gt-settlement>{own.spinning?'STOPで結果を確定':own.spins===0?'レバーで次のゲームへ':own.resultRole==='red7'?'赤7成立 · GG獲得（払出0ポイント）':own.resultRole==='replay'?'リプレイ · 30ポイント返却':own.resultRole==='bell'&&own.lastPaid===0?'押し順不一致 · 払出0ポイント':`払出 ${own.lastPaid.toLocaleString('ja-JP')}ポイント`}</p>
     <div class="gt-reel-labels" aria-hidden="true">{['左','中','右'].map((label, index) => <span>{label}<b>{reels[index]!.spinning ? '回転中' : '停止'}</b></span>)}</div>
   </div>;
 }
