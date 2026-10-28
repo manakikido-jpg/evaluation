@@ -1,6 +1,6 @@
 import type {Child} from 'hono/jsx';
 import {CASINO_GAMES} from '../../config.js';
-import {GAME_SCENES,type ScenePreview} from '../../services/casino/scenePreview.js';
+import {GAME_SCENES,SCENE_CUES,sceneOutcome,type ScenePreview} from '../../services/casino/scenePreview.js';
 import {lifeBoard} from '../../services/casino/tables/life.js';
 import {legalMoves,countStones} from '../../services/casino/othello.js';
 import {CasinoLayout,PlayingCard} from './casino.js';
@@ -45,15 +45,17 @@ function SceneSurface(p:{m:ScenePreview;phase:number}){
 export function CasinoScenes(p:{m:ScenePreview}){
  const {m}=p;
  return <CasinoLayout title="全ゲームの演出見本" adminPreview="casino"><link rel="stylesheet" href={assetUrl('casino-scenes.css')}/><script src={assetUrl('casino-scenes.js')} defer/>
- <main class="csp-page" data-casino-scenes data-scene-initial={m.stage} data-scene-family={m.spec.family}>
+ <main class="csp-page" data-casino-scenes data-scene-initial={m.stage} data-scene-family={m.spec.family} data-scene-outcome={sceneOutcome(m)}>
  <header class="csp-heading"><div><p>咲楽ノ宮 · 運営専用</p><h1>遊技の間</h1><span>すべてのゲームに、その席だけのひとときを。</span></div><div class="csp-tools"><button type="button" data-scene-audio aria-pressed="false">音 OFF</button><label>演出<select data-scene-motion><option value="normal">通常</option><option value="low">控えめ</option><option value="instant">即表示</option></select></label><button type="button" data-scene-fullscreen>全画面</button><a href="/economy/casino">社務所へ</a></div></header>
  <p class="csp-notice">運営専用の固定された演出見本です。対戦・賭け・報酬の受取はできず、実際の銭や戦績は変わりません。下のボタンで場面を進めて確認できます。</p>
  <p data-scene-status role="status" class="csp-status" hidden/>
  <div class="csp-picker"><form method="get" action={SCENE_PATH}><label>ゲーム<select name="game" data-scene-game>{CASINO_GAMES.map(game=><option value={game} selected={game===m.game}>{GAME_SCENES[game].name}</option>)}</select></label><label>見本<select name="sample">{[1,2,3].map(n=><option value={n} selected={n===m.sample}>見本 {n}</option>)}</select></label><button>開く</button></form><span>全{CASINO_GAMES.length}ゲーム · {m.spec.group==='solo'?'ひとりで遊ぶ':'みんなで遊ぶ'}</span></div>
  <section class={`csp-stage csp-art-${m.spec.art} csp-family-${m.spec.family}`} aria-label={m.spec.room}>
  <header class="csp-room-heading"><p>{m.spec.room}</p><h2>{m.spec.name}</h2></header>
+ <div class="csp-cinema-tools"><button type="button" class="csp-button csp-button-gold" data-scene-play aria-pressed="false">▶ 連続で演出を見る</button><button type="button" class="csp-button" data-scene-skip>結果をすぐ見る</button><span>固定の演出見本 · 勝率や報酬は変わりません</span></div>
+ <div class="csp-cue" role="status" data-scene-cue-live>{SCENE_CUES[m.spec.family][m.stage]}</div>
  <div class="csp-progress" role="group" aria-label="見本の場面">{m.spec.steps.map((label,i)=><button type="button" data-scene-phase={i} aria-pressed={i===m.stage}><small>0{i+1}</small>{label}</button>)}</div>
- {[0,1,2,3].map(phase=><section class={`csp-phase csp-phase-${phase}`} data-scene-panel={phase} hidden={phase!==m.stage} aria-label={TITLE[phase]}><Seats m={m} phase={phase}/><div class="csp-surface"><SceneSurface m={m} phase={phase}/></div>{phase===3&&<div class="csp-finale" aria-hidden="true">{Array.from({length:12},(_,i)=><i class={`csp-spark csp-spark-${i}`}>✿</i>)}</div>}</section>)}
+ {[0,1,2,3].map(phase=><section class={`csp-phase csp-phase-${phase}`} data-scene-panel={phase} data-scene-cue={SCENE_CUES[m.spec.family][phase]} hidden={phase!==m.stage} aria-label={TITLE[phase]}><Seats m={m} phase={phase}/><div class="csp-spotlight" aria-hidden="true"/><div class="csp-surface"><SceneSurface m={m} phase={phase}/></div>{phase===3&&<div class="csp-finale" aria-hidden="true">{Array.from({length:12},(_,i)=><i class={`csp-spark csp-spark-${i}`}>✿</i>)}</div>}</section>)}
  <footer class="csp-stage-footer"><p data-scene-caption>{m.spec.steps[m.stage]}の見本</p><div><button type="button" class="csp-button" data-scene-prev>ひとつ前</button><button type="button" class="csp-button csp-button-gold" data-scene-next>次の場面</button></div></footer>
  </section>
  <section class="csp-detail"><h2>この席の演出</h2><p>{m.spec.note}</p>{(['blackjack','highlow','roulette']as string[]).includes(m.game)&&<a href={`/economy/casino-test?game=${m.game}`}>実際に操作する運営試遊を開く →</a>}{m.game==='keiba'&&<a href="/economy/keiba-test">馬券・3D映像の運営試遊を開く →</a>}<p>この見本の進行は固定です。本番の勝敗・料金・配当・対戦ルールは変更していません。</p></section>

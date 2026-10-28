@@ -19,7 +19,7 @@ describe('全ゲームの運営専用演出見本',()=>{
  });
  it('宮司と神職が全19ゲームの4場面とカタログを開け、POSTや実ゲームの操作先を持たない',async()=>{
   for(const level of ['guji','shinshoku']as const){const token=await createSession(db,user,{level,pages:['economy']},now);
-   for(const game of CASINO_GAMES){const response=await app.request(path+'?game='+game+'&stage=3',{headers:headers(token)});expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toContain('no-store');const text=await response.text();expect(text).toContain('data-casino-scenes');expect(text.match(/data-scene-panel="\d"/g)).toHaveLength(4);expect(text).toContain('全19ゲーム');expect(text).toContain('固定された演出見本');expect(text).not.toContain('method="post"');expect(text).not.toContain('href="/casino/');expect(text).not.toContain('action="/casino/');expect(text).toContain('/static/casino-scenes.css?v=');}
+   for(const game of CASINO_GAMES){const response=await app.request(path+'?game='+game+'&stage=3',{headers:headers(token)});expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toContain('no-store');const text=await response.text();expect(text).toContain('data-casino-scenes');expect(text).toContain('data-scene-outcome=');expect(text).toContain('data-scene-play');expect(text).toContain('data-scene-skip');expect(text.match(/data-scene-cue="/g)).toHaveLength(4);expect(text.match(/data-scene-panel="\d"/g)).toHaveLength(4);expect(text).toContain('全19ゲーム');expect(text).toContain('固定された演出見本');expect(text).not.toContain('method="post"');expect(text).not.toContain('href="/casino/');expect(text).not.toContain('action="/casino/');expect(text).toContain('/static/casino-scenes.css?v=');}
   }
  });
  it('場面や見本を変えても財布・ゲーム・卓・会員セッションを変更しない',async()=>{

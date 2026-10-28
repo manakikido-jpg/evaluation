@@ -59,3 +59,11 @@
 ### 全ゲームの完成見本
 
 [一覧](previews/casino-all-overview.webp)・[バカラ](previews/casino-all-baccarat.webp)・[スロット](previews/casino-all-slots.webp)・[白狐AT](previews/casino-all-atslot.webp)・[ちんちろ](previews/casino-all-chinchiro.webp)・[ポーカー](previews/casino-all-poker.webp)・[大富豪](previews/casino-all-daifugo.webp)・[麻雀](previews/casino-all-mahjong.webp)・[人生ゲーム](previews/casino-all-life.webp)・[スマホ](previews/casino-all-mobile.webp)。固定演出見本を実ブラウザで撮影したものです。PNGの撮影原稿は`/workspace/artifacts/casino-all-scenes/`、Gitには軽いWebPで保存します。
+
+### 連続演出と結果の区別
+
+全19ゲームに場面ごとの溜めの言葉、卓を横切る柔らかな光、配札/オープン、停止と結果の余韻を追加。「連続で演出を見る」は固定見本の4場面を進め、スキップ/停止/非表示/移動でタイマーを取り消します。音声の終了処理と進行を分け、音OFFで進行が止まらないようにしています。
+
+実際の判定を持つ見本はwin/lose/draw、賭け先を選ばない役の表示はneutral、装飾の進行はdemo。負けには勝利の桜/ファンファーレを使いません。動き低減時は溜めの光や大量の桜を省略します。
+
+[連続演出の録画（無音・固定見本）](previews/casino-excitement-slots.mp4)。実ブラウザの80フレームを10fpsでまとめた8秒の確認動画です。本番の録画ではありません。

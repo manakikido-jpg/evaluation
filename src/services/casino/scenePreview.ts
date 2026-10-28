@@ -49,3 +49,32 @@ export function scenePreview(q:URLSearchParams){
  };
 }
 export type ScenePreview=ReturnType<typeof scenePreview>;
+
+export type SceneOutcome='win'|'lose'|'draw'|'neutral'|'demo';
+/** 勝敗のある見本だけ実際の判定で分ける。装飾の進行を本物の勝ちにしない。 */
+export function sceneOutcome(m:ScenePreview):SceneOutcome{
+ switch(m.spec.family){
+  case 'blackjack': return m.bj.result==='push'?'draw':m.bj.result==='win'||m.bj.result==='blackjack'?'win':'lose';
+  case 'slots':return m.slots.role==='none'?'lose':'win';
+  case 'othello':return m.othello.counts.B===m.othello.counts.W?'draw':m.othello.counts.B>m.othello.counts.W?'win':'lose';
+  case 'poker':return m.poker.result==='あなたの勝ち'?'win':m.poker.result==='引き分け'?'draw':'lose';
+  case 'baccarat':case 'dice':return 'neutral';
+  default:return 'demo';
+ }
+}
+export const SCENE_CUES:Record<SceneFamily,[string,string,string,string]>={
+ blackjack:['静かな卓に、カードが届く。','最後の1枚を待つひととき。','カード、オープン。','勝負の余韻を、卓の上に。'],
+ highlow:['狐面の勝負師と向かい合う。','上か、下か。次のカードへ。','運命の1枚を、開く。','灯籠が照らす、連勝の見本。'],
+ baccarat:['貴賓室に、ふたつの手札。','プレイヤーか、バンカーか。','両者のカードを、オープン。','数字が揃い、勝負は決着。'],
+ roulette:['金色の光に、願いを乗せる。','玉の行方を、目で追う。','ゆっくりと、停止の瞬間へ。','出た数字を、白い光で。'],
+ slots:['桜灯の遊技席へようこそ。','3つのリールが、走り出す。','最後のSTOP、その瞬間。','揃った段を、光で確かめる。'],
+ atslot:['月夜の祭殿に、白狐の気配。','押し順に合わせて、ひとつずつ。','リールが止まり、場面が変わる。','白狐の告知演出を体験。'],
+ dice:['賽を構え、息を合わせる。','どんぶりに響く、3つの音。','跳ねた賽が、静かに止まる。','決まった役を、大きく見せる。'],
+ othello:['盤を挟んで、向かい合う。','一手を選ぶ、静かな緊張。','石が返り、景色が変わる。','最後の石まで、見届ける。'],
+ poker:['夜藤の席で、勝負を待つ。','共有カードに、視線が集まる。','最後の1枚、リバー。','ショーダウン。手札を開く。'],
+ daifugo:['手札を広げ、勝負の席へ。','いまは、あなたの手番。','場へ出すカードを、鮮やかに。','上がりの余韻と、順位の見本。'],
+ babanuki:['隣の手札へ、そっと手を伸ばす。','どの1枚か、迷うひととき。','ペアが揃い、手札が軽くなる。','最後の1枚まで、どきどき。'],
+ mahjong:['牌の並ぶ音と、対局の始まり。','静かな卓に、次のツモ。','引いた1枚を、手牌の横へ。','和了の瞬間を、金桜で。'],
+ keiba:['8頭が揃い、スタートを待つ。','歓声の中を、追走する。','ゴール前、最後の直線。','一走を見届ける、中継の余韻。'],
+ life:['桜の旅路が、ここから始まる。','サイコロに、次の行き先を。','止まった先で、できごとが待つ。','ゴールで振り返る、旅の思い出。'],
+};
