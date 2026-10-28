@@ -88,6 +88,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
     ...roomArt,
     'casino-rooms.css': {body:roomCss(),type:'text/css; charset=utf-8'},
+    'casino-live.css': {body:roomCss('casino-live.css'),type:'text/css; charset=utf-8'},
+    'casino-live.js': {body:readText(path.join(here,'public/casino-live.js')),type:'text/javascript; charset=utf-8'},
     'casino-scenes.css': {body:roomCss('casino-scenes.css'),type:'text/css; charset=utf-8'},
     'casino-scenes.js': {body:readText(path.join(here,'public/casino-scenes.js')),type:'text/javascript; charset=utf-8'},
     'casino-rooms.js': {body:readText(path.join(here,'public/casino-rooms.js')),type:'text/javascript; charset=utf-8'},

@@ -98,7 +98,7 @@ export function ChinchiroPage(p: GamePage) {
   const at = !s ? 0 : s.child ? childAt + (s.child.length - 1) * ROLL_STEP + 6 : childAt;
   const me = s ? revealMe(p.me, p.row, fresh ? at : 0) : p.me;
   return (
-    <CasinoLayout title="ちんちろりん" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="chinchiro" title="ちんちろりん" me={me} back>
       <h1 class="c-h1">🎲 ちんちろりん</h1>
       {p.msg && <Msg msg={p.msg} />}
       <section class="c-table c-chin">

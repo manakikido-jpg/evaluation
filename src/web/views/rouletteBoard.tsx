@@ -29,6 +29,7 @@ export function RouletteBoard(p: {
   memoryKey: string;
   disabled?: boolean;
   preview?: boolean;
+  immersive?: boolean;
   /** 運営試遊の確定したBETを表示する。操作は固定する。 */
   settledStakes?: { on: RouletteBet; amount: number }[];
 }) {
@@ -38,7 +39,7 @@ export function RouletteBoard(p: {
   const settled = p.preview && p.settledStakes !== undefined;
   const stakes = settled ? p.settledStakes! : [];
   const amountOf = (bet: RouletteBet) => stakes.find(s => s.on === bet)?.amount ?? 0;
-  const covered = (bet: RouletteBet) => p.preview ? Array.from({length:37},(_,n)=>n).filter(n=>rouletteMultiplier(bet,n)>0).join(',') : undefined;
+  const covered = (bet: RouletteBet) => p.preview || p.immersive ? Array.from({length:37},(_,n)=>n).filter(n=>rouletteMultiplier(bet,n)>0).join(',') : undefined;
   const mark = (bet: RouletteBet) => amountOf(bet) ? ` placed${rouletteMultiplier(bet,p.number!)>0?' ir-bet-won':' ir-bet-lost'}` : '';
   const Badge = (q: {bet:RouletteBet}) => amountOf(q.bet) ? <span class="c-rb-chip">{fmt(amountOf(q.bet))}</span> : null;
   const hit = (bet: RouletteBet) => (p.number !== undefined && p.number !== null && rouletteMultiplier(bet, p.number) > 0 ? ' hit' : '');
@@ -140,13 +141,14 @@ export function RouletteStakes(p: { stakes: { on: RouletteBet; amount: number; p
  * 回るルーレット。盤は勝った数字が上（▼）に来るように止まり、玉は逆に回って減速し、跳ねてそのポケットに落ちる。
  * 止まるまで（約 5 秒）当たりの数字・結果は見せない（CSS の遅れ）。回していないときはゆっくり回り続ける
  */
-export function RouletteWheel(p: { number: number | null | undefined; previewStakes?: {on:RouletteBet;amount:number}[] }) {
+export function RouletteWheel(p: { number: number | null | undefined; previewStakes?: {on:RouletteBet;amount:number}[]; highlightStakes?: {on:RouletteBet;amount:number}[] }) {
+  const highlights=p.highlightStakes??p.previewStakes;
   const spun = p.number !== null && p.number !== undefined;
   return (
     <div class={`c-wheel2${spun ? ' spun' : ' idle'}`} aria-label={spun ? `出た数字 ${p.number}` : 'ルーレット'}>
       <div class={`c-wheel c-wheel2-disc${spun ? ` land-${p.number}` : ''}`} aria-hidden="true">
         {ROULETTE_ORDER.map((n, i) => (
-          <span class={`pk pk-${i}${p.previewStakes?.some(s=>rouletteMultiplier(s.on,n)>0)?' ir-pocket-bet':''}${p.previewStakes && p.number===n?' ir-pocket-result':''}`} data-ir-pocket={p.previewStakes ? n : undefined}>
+          <span class={`pk pk-${i}${highlights?.some(s=>rouletteMultiplier(s.on,n)>0)?' ir-pocket-bet':''}${highlights && p.number===n?' ir-pocket-result':''}`} data-ir-pocket={highlights ? n : undefined}>
             <b>{n}</b>
           </span>
         ))}

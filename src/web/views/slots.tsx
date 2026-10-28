@@ -175,7 +175,7 @@ function SlotCounter(p: { machine: number; today: MachineDay; yesterday: Machine
 /** 台を選ぶ（島）。台ごとの今日のデータとグラフ */
 export function SlotFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; seats?: Record<number, SlotSeat>; msg?: string }) {
   return (
-    <CasinoLayout title="スロット" me={p.me} back>
+    <CasinoLayout game="slots" title="スロット" me={p.me} back>
       <SlotIslands on="slots" games={p.casino.games} atOpen={p.casino.atOpen} />
       <h1 class="c-h1">🎰 スロット（台を選ぶ）</h1>
       {p.msg && <Msg msg={p.msg} />}
@@ -239,7 +239,7 @@ export function SlotsPage(p: GamePage & { machine: number; data: FloorData; seat
   const winLine = s && row?.status === 'done' && s.mult > 0 ? judge(stops).line : -1;
   const leverBet = Math.min(p.casino.maxBet, Math.max(p.casino.minBet, row?.bet ?? 100));
   return (
-    <CasinoLayout title="スロット" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="slots" title="スロット" me={me} back>
       <h1 class="c-h1">🎰 スロット・{p.machine} 番台</h1>
       {p.msg && <Msg msg={p.msg} />}
       <SlotSeatControls seat={p.seat} me={p.me.session.userId} csrf={csrf} machine={p.machine} game="slots" busy={row?.status === 'playing'} />

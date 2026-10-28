@@ -110,7 +110,7 @@ function PreviewNote() {
 export function AtFloor(p: { me: GamePage['me']; casino: GamePage['casino']; data: FloorData; machines: AtMachineView[]; msg?: string; now: number; preview?: boolean }) {
   const uid = p.me.session.userId;
   return (
-    <CasinoLayout title="鬼斬り白狐（AT 機）" me={p.me} back>
+    <CasinoLayout game="atslot" title="鬼斬り白狐（AT 機）" me={p.me} back>
       <SlotIslands on="atslot" games={p.casino.games} atOpen={p.casino.atOpen} />
       <h1 class="c-h1">🦊 鬼斬り白狐の島（台を選ぶ）</h1>
       {p.preview && <PreviewNote />}
@@ -290,7 +290,7 @@ export function AtSlotPage(p: GamePage & { machine: number; view: AtMachineView;
   // 前兆の鬼の近さは、止まったあとも残す（AT に入ったら消える）
   const oni = p.view.state.phase === 'at' ? 0 : (s?.show?.oni ?? 0);
   return (
-    <CasinoLayout title="鬼斬り白狐（AT 機）" me={me} back>
+    <CasinoLayout roundKey={p.row?String(p.row.id):undefined} game="atslot" title="鬼斬り白狐（AT 機）" me={me} back>
       <SlotIslands on="atslot" games={p.casino.games} atOpen={p.casino.atOpen} />
       <h1 class="c-h1">{p.demo ? '🎬 鬼斬り白狐の演出を見る' : `🦊 鬼斬り白狐・${p.machine} 番台`}</h1>
       {p.preview && <PreviewNote />}

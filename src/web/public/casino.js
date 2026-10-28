@@ -63,12 +63,13 @@ window.addEventListener('pageshow', () => {
 
 // ───── 🔊 音 ─────
 const Sound = (() => {
-  const KEY = 'casino-sound';
+  const livePresentation=document.body.hasAttribute('data-casino-immersive');
+  const KEY = livePresentation?'casino-live-audio':'casino-sound';
   let on = true;
   try {
-    on = localStorage.getItem(KEY) !== 'off';
+    on = livePresentation?localStorage.getItem(KEY)==='on':localStorage.getItem(KEY) !== 'off';
   } catch {
-    on = true;
+    on = !livePresentation;
   }
   let ctx = null;
   let master = null;
@@ -288,6 +289,7 @@ const Sound = (() => {
     notes,
     /** 今の音の時刻（鳴らせないときは null） */
     time: () => ready()?.currentTime ?? null,
+    stopPending: () => { const old=ctx;ctx=null;master=null;if(old)void old.close().catch(()=>{}); },
   };
   return api;
 })();
@@ -381,19 +383,21 @@ Sound.bigWin = (at = 0) => { originalBigWin(at); styleVictory(at); };
 /** 画面の中の動きに合わせて音を鳴らす */
 const playFx = (root, tableEnd) => {
   if(document.querySelector('[data-immersive-room],[data-casino-scenes]')) return;
+  const mode=document.body.hasAttribute('data-casino-immersive')?document.body.dataset.ciMotion:'normal';
+  const when=d=>mode==='instant'?0:mode==='low'?Math.min(.8,d):d;
   root.querySelectorAll('.fc:not(.still)').forEach((el) => {
-    const d = delayOf(el);
+    const d = when(delayOf(el));
     Sound.deal(d);
     if (!el.classList.contains('down')) Sound.flip(d + (el.classList.contains('slow') ? 1.0 : 0.34));
   });
-  if (root.querySelector('.c-wheel2.spun')) Sound.wheel();
+  if (root.querySelector('.c-wheel2.spun')&&(!mode||mode==='normal')) Sound.wheel();
   // サイコロがどんぶりに入る（ちんちろりん）
-  root.querySelectorAll('.c-roll:not(.still)').forEach((el) => Sound.dice(delayOf(el)));
+  if(!mode||mode==='normal')root.querySelectorAll('.c-roll:not(.still)').forEach((el) => Sound.dice(delayOf(el)));
   // 結果（スロットは initSlots が鳴らす）
   const res = root.querySelector('.c-jug, .c-atm') ? null : root.querySelector('.c-later:not(.wait) .c-result, .c-rl-outcome .c-result');
   if (res) {
     const holder = res.closest('.c-later, .c-rl-outcome');
-    const d = holder?.classList.contains('c-rl-outcome') ? 5.2 : holder ? delayOf(holder) : 0;
+    const d = when(holder?.classList.contains('c-rl-outcome') ? 5.2 : holder ? delayOf(holder) : 0);
     const big = holder?.classList.contains('c-fx-burst');
     if (res.classList.contains('win')) big ? Sound.bigWin(d) : Sound.win(d);
     else if (res.classList.contains('lose')) Sound.lose(d);
@@ -402,7 +406,7 @@ const playFx = (root, tableEnd) => {
   // 卓: 自分の席の結果
   const mine = root.querySelector('.c-seat.me .c-seat-result');
   if (mine && tableEnd !== undefined) {
-    const d = tableEnd + (root.querySelector('.c-wheel2.spun') ? 5.2 : 0);
+    const d = when(tableEnd + (root.querySelector('.c-wheel2.spun') ? 5.2 : 0));
     if (mine.classList.contains('win')) Sound.win(d);
     else if (mine.classList.contains('lose')) Sound.lose(d);
   }
@@ -411,17 +415,20 @@ const playFx = (root, tableEnd) => {
 // ───── 送るボタン: 画面ごと読み直さず、中身だけ差し替える ─────
 const swapPage = (html, url) => {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const main = doc.querySelector('.c-main');
+  let main = doc.querySelector('.c-main');
   // htmx が要るページ（オセロ対戦）に、今のページに htmx がなければ、ふつうに開く
   const needsHtmx = doc.querySelector('script[src*="htmx"]') && !document.querySelector('script[src*="htmx"]');
   if (!main) throw new Error('カジノの画面を確認できませんでした');
+  if(doc.body.hasAttribute('data-casino-immersive')!==document.body.hasAttribute('data-casino-immersive')){location.assign(url);return;}
   if (needsHtmx) { location.href = url; return; }
   const before = cardKeys(document.querySelector('.c-main'));
   const samePath = new URL(url, location.href).pathname === location.pathname;
-  document.querySelector('.c-main')?.replaceWith(main);
+  const oldMain=document.querySelector('.c-main');
+  if(document.body.hasAttribute('data-casino-immersive')&&document.fullscreenElement===oldMain){oldMain.className=main.className;oldMain.replaceChildren(...main.childNodes);main=oldMain;}else oldMain?.replaceWith(main);
   const top = doc.querySelector('.c-top');
   if (top) document.querySelector('.c-top')?.replaceWith(top);
   document.body.className = doc.body.className;
+  for(const key of ['ciGame','ciFamily','ciArt','ciRound','ciViewer']){if(doc.body.dataset[key]!==undefined)document.body.dataset[key]=doc.body.dataset[key];else delete document.body.dataset[key];}
   document.body.dataset.styleSound = doc.body.dataset.styleSound || '';
   document.body.dataset.styleEffect = doc.body.dataset.styleEffect || '';
   document.body.dataset.styleUntil = doc.body.dataset.styleUntil || '';
@@ -521,6 +528,7 @@ const initLive = () => {
         return;
       }
       const j = await res.json();
+      if(j.presentation===false&&document.body.hasAttribute('data-casino-immersive')){location.reload();return;}
       share(j.now);
       for (const cls of [...document.body.classList]) if (/^cs-(background|table|ornament|chips|cards|effect|sound|title)-/.test(cls)) document.body.classList.remove(cls);
       for (const [slot, key] of Object.entries(j.styles || {})) document.body.classList.add(`cs-${slot}-${key}`);
