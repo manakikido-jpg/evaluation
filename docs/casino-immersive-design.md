@@ -55,3 +55,7 @@
 固定見本は新しいプレイ可能なゲームエンジンではありません。既存3ゲームと競馬の試遊は別の入口で維持します。BJ/バカラ/賽/スロットの役/オセロの盤/ポーカーの役は既存の純粋関数で生成します。ATの告知・麻雀の和了表示・パーティーゲームの進行は装飾用の決められた見本で、確率/点数/順位の計算や実対戦を保証しません。
 
 新規背景は遊技殿/サロン/対局室の3点で、合計約690KiBのWebP。原稿は`/workspace/generated_images/exec-b62b8ac0-19a3-4c56-9dc6-fe5d5cc0501f.png`（遊技殿）、`exec-b1839d12-a429-411f-8415-6428beb03bd8.png`（サロン）、`exec-ccb12646-51e8-4995-bf7d-a954b6abd6d0.png`（対局室）に保持。Gitには軽量なWebPを保存します。専用CSSの接頭辞は`csp-`にして既存着せ替えの`cs-`と分けます。
+
+### 全ゲームの完成見本
+
+[一覧](previews/casino-all-overview.webp)・[バカラ](previews/casino-all-baccarat.webp)・[スロット](previews/casino-all-slots.webp)・[白狐AT](previews/casino-all-atslot.webp)・[ちんちろ](previews/casino-all-chinchiro.webp)・[ポーカー](previews/casino-all-poker.webp)・[大富豪](previews/casino-all-daifugo.webp)・[麻雀](previews/casino-all-mahjong.webp)・[人生ゲーム](previews/casino-all-life.webp)・[スマホ](previews/casino-all-mobile.webp)。固定演出見本を実ブラウザで撮影したものです。PNGの撮影原稿は`/workspace/artifacts/casino-all-scenes/`、Gitには軽いWebPで保存します。
