@@ -588,6 +588,28 @@ export async function setCastStatus(db: Db, id: string, status: Cast['status'], 
   return row;
 }
 
+/**
+ * 🗑 キャストの登録を消す（宮司だけ）。始まる前・途中の予約があるときは消さない。
+ * 消すもの: キャストの行・写真・紹介の投稿の記録。予約の記録（売上・履歴）は残す。
+ * 戻り値の posts は、Discord から消す紹介の投稿
+ */
+export async function deleteCast(db: Db, id: string): Promise<{ status: 'ok'; posts: { channelId: string; messageId: string }[] } | { status: 'not_found' | 'busy' }> {
+  if (!sf(id)) return { status: 'not_found' };
+  return db.transaction(async (tx) => {
+    const [cur] = await tx.select().from(casts).where(eq(casts.memberId, id)).for('update');
+    if (!cur) return { status: 'not_found' as const };
+    const [open] = await tx.select({ id: castSessions.id }).from(castSessions).where(and(eq(castSessions.castId, id), inArray(castSessions.status, OPEN))).limit(1);
+    if (open) return { status: 'busy' as const };
+    const posts = (await tx.delete(settings).where(sql`${settings.key} like ${`cast_intro:${id}:%`}`).returning()).flatMap((r) => {
+      const v = r.value as { channelId?: unknown; messageId?: unknown } | null;
+      return v && typeof v.channelId === 'string' && typeof v.messageId === 'string' ? [{ channelId: v.channelId, messageId: v.messageId }] : [];
+    });
+    await tx.delete(castImages).where(eq(castImages.key, `profile:${id}`));
+    await tx.delete(casts).where(eq(casts.memberId, id));
+    return { status: 'ok' as const, posts };
+  });
+}
+
 /** 待機する（hours 時間。0 でお休み） */
 export async function setWaiting(db: Db, id: string, hours: number, now = new Date()): Promise<Cast | undefined> {
   const [row] = await db

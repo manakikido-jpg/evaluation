@@ -16,6 +16,10 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   sync_pending: { text: '保存しました。紹介投稿の更新は待機中です。BOTの権限を確認してください。毎分再試行します。', kind: 'warn' },
   photo_saved: { text: '写真を保存し、登録済みの紹介投稿にも反映しました。', kind: 'ok' },
   photo_removed: { text: 'キャストの写真を外しました。', kind: 'ok' },
+  deleted: { text: 'キャストの登録を消しました（予約の記録は残っています）。', kind: 'ok' },
+  delete_busy: { text: '始まる前・途中の予約があるので消せません。予約が終わるか取り消してから消してください。', kind: 'warn' },
+  delete_confirm: { text: '「消してよい」にチェックを入れてから押してください。', kind: 'warn' },
+  delete_forbidden: { text: 'キャストの登録を消せるのは宮司だけです。', kind: 'warn' },
   image_bad: { text: '画像（PNG・JPEG・GIF・WebP、8MB まで）を選んでください。', kind: 'warn' },
   image_removed: { text: 'メニューの画像を外しました。', kind: 'ok' },
   posted: { text: 'メニューを出しました。', kind: 'ok' },
@@ -73,6 +77,23 @@ type Opt = { id: string; name: string; category?: string | null };
 
 function Csrf(props: { session: AdminSession }) {
   return <input type="hidden" name="_csrf" value={props.session.csrfToken} />;
+}
+
+/** 🗑 キャストの登録を消す（宮司だけ使える・元に戻せない） */
+function CastDelete(props: { id: string; session: AdminSession }) {
+  return (
+    <details class="row-actions">
+      <summary>🗑 消す</summary>
+      <form method="post" action={`/cast/casts/${props.id}/delete`}>
+        <Csrf session={props.session} />
+        <p class="note">キャストの登録・メニュー・写真・紹介の投稿を消します。元に戻せません。予約の記録（売上・履歴）は残ります。宮司だけが消せます。</p>
+        <label>
+          <input type="checkbox" name="confirm" value="yes" required /> 消してよい
+        </label>
+        <button type="submit" class="danger">登録を消す</button>
+      </form>
+    </details>
+  );
 }
 
 function Select(props: { name: string; value?: string; options: Opt[]; empty: string; label: string }) {
@@ -253,6 +274,7 @@ export function CastPage(props: {
   const f = props.flash && Object.hasOwn(CAST_FLASH, props.flash) ? CAST_FLASH[props.flash] : undefined;
   const pending = props.casts.filter((x) => x.status === 'pending');
   const members = props.casts.filter((x) => x.status === 'active' || x.status === 'paused');
+  const removed = props.casts.filter((x) => x.status === 'removed');
   const disputed = props.sessions.filter((s) => s.status === 'disputed');
   const stat = (id: string) => props.stats.find((s) => s.castId === id);
   return (
@@ -522,6 +544,7 @@ export function CastPage(props: {
                         外す
                       </button>
                     </form>
+                    <CastDelete id={x.memberId} session={session} />
                   </span>
                 </li>
               );
@@ -531,6 +554,21 @@ export function CastPage(props: {
           <p class="note ch-empty">まだキャストはいません。</p>
         )}
       </section>
+
+      {removed.length > 0 && (
+        <details class="card anchor fold" id="cast-removed">
+          <summary><h2>🚪 外したキャスト（{removed.length}）</h2></summary>
+          <p class="note">「外す」「断る」をした人の登録です。もう使わない登録は「🗑 消す」で消せます（宮司だけ）。</p>
+          <ul class="ch-list">
+            {removed.map((x) => (
+              <li class="ch-row off" id={`cast-${x.memberId}`}>
+                <div class="ch-main"><a class="ch-name" href={`/members/${x.memberId}`}>{name(x.memberId)}</a></div>
+                <span class="ch-actions"><CastDelete id={x.memberId} session={session} /></span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <details class="card anchor fold" id="cast-template">
         <summary><h2>📋 メニューのテンプレ</h2></summary>

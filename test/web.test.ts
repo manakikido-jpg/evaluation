@@ -3514,6 +3514,30 @@ describe('キャスト（管理画面）', () => {
     expect((await listAudit(db, { action: 'cast.cancel' })).length).toBe(1);
   });
 
+  it('🗑 キャストの登録を消す（宮司だけ・確認が必要・予約があると消せない・予約の記録は残る）', async () => {
+    const cs = await import('../src/services/cast.js');
+    const { castSessions: ct, casts: kt, members: mt } = await import('../src/db/schema.js');
+    const { eq: eqq } = await import('drizzle-orm');
+    const id = '880000000000000041';
+    await recordJoin(db, { id, username: 'ucast', displayName: 'けすひと', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
+    await db.update(mt).set({ ageGroup: 'adult' }).where(eqq(mt.id, id));
+    const conf = await cs.loadCastConfig(db);
+    const r = await cs.registerCast(db, conf, { id, adult: true }, { bio: 'x', tags: [], minorOk: false }, { name: '雑談', note: '', minutes: 30, price: 300, night: false }, GUJI);
+    if (r.status !== 'ok') throw new Error(r.status);
+    const [busy] = await db.insert(ct).values({ castId: id, customerId: USER, plan: '30', minutes: 30, price: 300, status: 'reserved' }).returning();
+    const staff = await login(STAFF);
+    expect((await form(staff, `/cast/casts/${id}/delete`, { confirm: 'yes' })).headers.get('location')).toBe('/cast?msg=delete_forbidden');
+    const s = await login(GUJI);
+    expect(await (await get('/cast', s)).text()).toContain(`/cast/casts/${id}/delete`);
+    expect((await form(s, `/cast/casts/${id}/delete`, {})).headers.get('location')).toBe(`/cast?msg=delete_confirm#cast-${id}`);
+    expect((await form(s, `/cast/casts/${id}/delete`, { confirm: 'yes' })).headers.get('location')).toBe(`/cast?msg=delete_busy#cast-${id}`);
+    await db.update(ct).set({ status: 'done' }).where(eqq(ct.id, busy!.id));
+    expect((await form(s, `/cast/casts/${id}/delete`, { confirm: 'yes' })).headers.get('location')).toBe('/cast?msg=deleted');
+    expect(await db.select().from(kt).where(eqq(kt.memberId, id))).toEqual([]);
+    expect((await db.select().from(ct).where(eqq(ct.castId, id))).length).toBe(1);
+    expect((await listAudit(db, { action: 'cast.delete' })).length).toBe(1);
+  });
+
   it('➕ キャストを社務所Web で登録する（18 歳以上だけ・すぐ承認・ロールと DM）', async () => {
     const { getCast } = await import('../src/services/cast.js');
     const { members: mt } = await import('../src/db/schema.js');

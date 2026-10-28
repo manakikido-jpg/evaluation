@@ -299,7 +299,7 @@ import { castRanking, monthKey, monthOf, parseMonth } from '../services/castRank
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, deleteCast, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -6406,7 +6406,7 @@ export function createWebApp(deps: WebDeps) {
       loadCastConfig(db),
       loadChannels().catch(() => [] as GuildChannel[]),
       loadRoles(),
-      listCasts(db, ['pending', 'active', 'paused']),
+      listCasts(db, ['pending', 'active', 'paused', 'removed']),
       castStats(db, monthStart(now())),
       recentSessions(db, 100),
       loadMenuImage(db),
@@ -6743,6 +6743,23 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.schedule', detail: { schedule: list }, via: 'web' });
     await refreshCastViews(db, deps.discord, id).catch((err: unknown) => logger.warn({ err }, 'cast views refresh failed'));
     return c.redirect(`/cast?msg=schedule_saved#cast-${id}`);
+  });
+
+  // 🗑 キャストの登録を消す（宮司だけ・元に戻せない）
+  app.post('/cast/casts/:id/delete', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.parseBody();
+    if (!gujiOnly(c)) return c.redirect('/cast?msg=delete_forbidden');
+    if (!validId(id) || body.confirm !== 'yes') return c.redirect(`/cast?msg=delete_confirm#cast-${id}`);
+    const r = await deleteCast(db, id);
+    if (r.status === 'busy') return c.redirect(`/cast?msg=delete_busy#cast-${id}`);
+    if (r.status !== 'ok') return c.redirect('/cast');
+    for (const p of r.posts) await deps.discord.deleteMessage(p.channelId, p.messageId).catch((err: unknown) => logger.warn({ err }, 'cast intro delete failed'));
+    const conf = await loadCastConfig(db);
+    if (conf.roleId) await deps.discord.removeRole(cfg.guildId, id, conf.roleId, 'キャストの登録を消した').catch(() => undefined);
+    await audit(db, { actorId: c.get('session').userId, targetId: id, action: 'cast.delete', detail: { posts: r.posts.length }, via: 'web' });
+    await castPanelNow();
+    return c.redirect('/cast?msg=deleted');
   });
 
   app.post('/cast/casts/:id/:status', async (c) => {
