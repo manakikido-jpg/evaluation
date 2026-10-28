@@ -29,7 +29,8 @@ export type CasinoMe = { presentation?:'immersive'; presentationRequested?:boole
 /** back: ロビーへ戻る（'gate' は入口へ）。jansou: 雀荘の看板。wide: 横に広く（麻雀の卓） */
 export function CasinoLayout(props: { title: string; me?: CasinoMe; children: Child; htmx?: boolean; back?: boolean | 'gate'; jansou?: boolean; wide?: boolean; lobby?: boolean; adminPreview?: boolean | 'casino'; game?:CasinoGame; roundKey?:string }) {
   const me = props.me;
-  const immersive=me?.presentation==='immersive';
+  // 🎰 スロット（通常・AT 機）は、運営の確認中でも、もとの見た目のまま
+  const immersive=me?.presentation==='immersive'&&props.game!=='slots'&&props.game!=='atslot';
   const scene=immersive&&props.game?GAME_SCENES[props.game]:undefined;
   return (
     <html lang="ja">
