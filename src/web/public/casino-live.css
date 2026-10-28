@@ -14,3 +14,15 @@ body[data-casino-immersive][data-ci-motion=low] :is(.fc,.fc-in,.c-roll .c-die){a
 
 /* 着せ替えの背景を装備している人は、その背景の絵と色を使う（新しい表示でも消さない） */
 body[data-casino-immersive][class*="cs-background-"] .ci-stage{background-image:linear-gradient(#070d1760,#070d17a8),var(--cs-art)}
+/* 🎴 カジノテストの見本と同じ見た目: 部屋いっぱいの背景に、木のふちの楕円の卓（カードのゲーム） */
+body[data-casino-immersive] .ci-stage{min-height:min(760px,92vh);padding:35px 32px 24px;border-color:#c2a168aa;border-radius:16px;box-shadow:0 15px 50px #0007,inset 0 0 0 4px #1c1c1b}
+body[data-casino-immersive] .ci-stage:before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(#050c1477,#08102010 38%,#050c14d9);pointer-events:none}
+body[data-casino-immersive] .ci-room h2{font:600 clamp(25px,3vw,38px)/1.4 'Yu Mincho','Hiragino Mincho ProN',serif;letter-spacing:.12em}
+body[data-casino-immersive]:is([data-ci-game=blackjack],[data-ci-game=baccarat]) .ci-game>.c-table.c-felt{position:relative;border:8px solid #6a452d;border-radius:42%;padding:42px 55px 36px;background:radial-gradient(ellipse,#164c49ee,#102a37f2 70%);box-shadow:inset 0 0 0 2px #d7b878,inset 0 0 0 12px #07162577,0 14px 0 #25160f,0 24px 30px #0009;text-align:center;max-width:880px;margin:0 auto 18px;min-height:360px}
+body[data-casino-immersive]:is([data-ci-game=blackjack],[data-ci-game=baccarat]) .ci-game>.c-table.c-felt:before{display:block;font:600 13px serif;letter-spacing:.14em;color:#e2c588;margin:0 0 18px}
+body[data-casino-immersive][data-ci-game=blackjack] .ci-game>.c-table.c-felt:before{content:'咲楽ノ宮 · BLACKJACK'}
+body[data-casino-immersive][data-ci-game=baccarat] .ci-game>.c-table.c-felt:before{content:'紫苑の貴賓室 · BACCARAT'}
+body[data-casino-immersive][data-ci-game=highlow] .ci-game>.c-table.c-felt,body[data-casino-immersive][data-ci-game=roulette] .ci-game>.c-table.c-felt{background:radial-gradient(ellipse at 50% 35%,#164c49dd,#0b2233ee 75%);border:2px solid #c9a86a99;box-shadow:inset 0 0 0 6px #07162566,0 18px 30px #0008}
+@media(max-width:760px){body[data-casino-immersive]:is([data-ci-game=blackjack],[data-ci-game=baccarat]) .ci-game>.c-table.c-felt{border-width:6px;padding:26px 15px;border-radius:25%;min-height:300px}body[data-casino-immersive] .ci-stage{padding:22px 12px;min-height:0}}
+@media(max-width:480px){body[data-casino-immersive]:is([data-ci-game=blackjack],[data-ci-game=baccarat]) .ci-game>.c-table.c-felt{border-radius:18%}}
+body[data-casino-immersive]:is([data-ci-game=blackjack],[data-ci-game=baccarat]) .ci-game>.c-table.c-felt>.c-shoe{top:auto;bottom:40px;right:13%}
