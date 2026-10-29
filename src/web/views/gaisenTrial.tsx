@@ -1,3 +1,4 @@
+import {HISTORY_NAMES} from '../../services/casino/gaisen/historyRules.js';
 import type {AdminSession} from '../../db/schema.js';
 import type {TrialView} from '../../services/casino/gaisen/trial.js';
 import {PHASE_NAMES,SCENARIOS,type Scenario,type RuleVersion} from '../../services/casino/gaisen/engine.js';
@@ -25,6 +26,7 @@ export function GaisenTrial({m,session,error,version='trial-1'}:{m:TrialView;ses
  <div class="gt-marquee"><span>SAKURA · DIVINE PALACE</span><b>第{own.id}神殿</b><small>{own.resumed?'本人の保存分を再開中':'無料試遊 · 独自の神殿デザイン'}</small></div>
  <div class="gt-lcd"><div class="gt-temple" aria-hidden="true"><i/><i/><i/><i/><i/></div><p>{PHASE_NAMES[own.phase]}</p><div class="gt-digits" aria-label="数字の演出画面">{reelPresentation(own).map(reel=><span class={reel.spinning?'gt-digit-spinning':''}>{reel.digit}</span>)}</div><strong class="gt-message" role="status">{own.message}</strong></div>
  <div class="gt-meters"><span>通常 <b>{own.normalGames}G</b></span><span>GG残り <b>{own.ggLeft}G</b></span><span>セット <b>{own.sets}</b></span><span>ストック <b>{own.stocks}</b></span><span>G-STOP <b>{own.gstopLeft}G</b></span><span>SGG <b>{own.sggLeft}G</b>{own.medusa>0?` · 時間停止${own.medusa}G`:''}{own.ex?' · EX':''}</span></div>
+ {isV2&&<section class="gt-symbol-history" aria-label="直近5ゲームの小役履歴"><span>小役履歴 <small>古い → 新しい</small></span><ol>{own.symbolHistory.map(symbol=><li class={'gt-history-'+symbol}>{HISTORY_NAMES[symbol]}</li>)}</ol>{own.symbolHistory.length===0&&<small>3つのSTOPで履歴が増えます</small>}{own.gstopQueue>0&&<strong>G-STOP待機 {own.gstopQueue}回</strong>}</section>}
  <WinResult event={own.winEvent}/>
  <GaisenReels own={own}/>
  {own.navi&&<p class="gt-navi">押し順ナビ：{own.navi.map(i=>['左','中','右'][i]).join(' → ')}</p>}
@@ -36,6 +38,6 @@ export function GaisenTrial({m,session,error,version='trial-1'}:{m:TrialView;ses
  </section>:<div class="gt-empty"><h2>{m.saved?'保存した進捗があります':'神殿へようこそ'}</h2><p>{m.saved?'空席へ着席すると、保存時の設定で続きを再開します。':'上の5台から空席を選んでください。レバー→左・中・右のSTOPで遊べます。'}</p></div>}
  {own&&floor}
  <GaisenWinStage/>
- <details class="gt-rules"><summary>試遊の仕様・未再現部分</summary><p>1ゲーム30ポイント、1枚相当10ポイント。戻りと差引を区別します。GODの基本フラグ、GG100G、G-STOPの停止時抽選、SGG16Gの構成を確認できます。</p><p>{isV2?'区間別の役は公開資料の概数に基づく試遊モデルです。目押しは自動補助。':'役の分布は暫定です。'}表裏モード、上乗せ・ループ率、設定変更時の天井短縮、SGG-EX移行などは未照合または暫定です。実機同等の勝率・還元率ではありません。G-STOPのリーチ目やHOLDの一部も簡略化しています。当選時は独自の神殿演出と合成音が流れます。実機の映像・音源は使いません。</p></details>
+ <details class="gt-rules"><summary>試遊の仕様・未再現部分</summary>{isV2&&<p>小役履歴は直近5ゲーム。通常は青7の3連で抽選・4連でG-STOP、GG中は青7の5連でG-STOPです。黄7・宝石・SGG中の赤7などでもGGを抽選します。G-STOPの追加当選は待機して順番に消化します。前兆やループの詳細は引き続き暫定です。</p>}<p>1ゲーム30ポイント、1枚相当10ポイント。戻りと差引を区別します。GODの基本フラグ、GG100G、G-STOPの停止時抽選、SGG16Gの構成を確認できます。</p><p>{isV2?'区間別の役は公開資料の概数に基づく試遊モデルです。目押しは自動補助。':'役の分布は暫定です。'}表裏モード、上乗せ・ループ率、設定変更時の天井短縮、SGG-EX移行などは未照合または暫定です。実機同等の勝率・還元率ではありません。G-STOPのリーチ目やHOLDの一部も簡略化しています。当選時は独自の神殿演出と合成音が流れます。実機の映像・音源は使いません。</p></details>
  </div></Layout>;
 }

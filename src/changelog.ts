@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {id:'2026-10-30-gaisen-history-trial',date:'2026-10-30',kind:'improve',where:['社務所Web'],title:'神殿スロット新版に小役履歴と履歴からの上乗せ',items:['直近5ゲームの青7・黄7・宝石・赤7などを表示し、区間ごとの連続/個数でGGやG-STOPを抽選します。','G-STOP中の追加当選は待機し、今の残りゲームやHOLDを守って順番に消化します。履歴と待機分も途中保存できます。'],announcement:{priority:'none',audience:'新版スロットを確認する運営',steps:['開発版の社務所→カジノから新版の無料試遊へ進む。','3STOP後の小役履歴と当選理由、G-STOP待機回数を確認する。'],postText:'',imagePrompt:'',notes:'PR120は依頼により合流保留。本番ではまだ利用できない。運営限定・実財布未接続。モード/前兆/天井/ループ/SGG-EX等は暫定。'}},
   {id:'2026-10-30-gaisen-phase-trial',date:'2026-10-30',kind:'improve',where:['社務所Web'],title:'神殿スロットに区間別抽選の新しい無料試遊',items:['通常・GG・SGGで役の抽選と払出を分け、SGGの赤7チャンスと3枚役の押し順ナビを追加しました。リプレイ・1枚・15枚の戻りを区別します。','旧版の台や保存した続きは残し、新版の5台・試遊ポイントを別に用意しました。'],announcement:{priority:'none',audience:'新台を確認する運営',steps:['社務所のカジノ管理から「神殿スロットの新しい無料試遊（区間別抽選）」を開く。','空席へ着席し、通常は左から、ナビが出たらその順番で停止する。','SGGは場面確認からも試せる。旧版の保存分は「旧版の続き」から開く。'],postText:'',imagePrompt:'',notes:'運営専用・実際の銭は変わらない。公開解析の概数を使う試遊で、モード/天井/履歴/SGG-EXなどは引き続き暫定。一般公開開始ではない。'}},
 
   {

@@ -69,7 +69,7 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
   const rev=String((await readTrial(db,now,'trial-2')).revision);
   const responses=await Promise.all([postV2('stop',{index:'0',revision:rev}),postV2('stop',{index:'0',revision:rev})]);expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
   const result=await readTrial(db,now,'trial-2');expect(result.machines[0]!.state.version).toBe('trial-2');expect(result.machines[0]!.state.lastPaid).toBe(30);expect(result.machines[0]!.state.stocks).toBe(2);
-  const html=await(await app.request(v2,{headers:headers()})).text();expect(html).toContain('赤7成立');expect(html).toContain('リプレイ · 30ポイント返却');
+  const html=await(await app.request(v2,{headers:headers()})).text();expect(html).toContain('赤7成立');expect(html).toContain('リプレイ · 30ポイント返却');expect(html).toContain('直近5ゲームの小役履歴');expect(html).toContain('gt-history-red');expect(result.machines[0]!.state.symbolHistory).toEqual(['red']);
   await postV2('leave');await postV2('seat',{machine:'2'});expect((await readTrial(db,now,'trial-2')).machines[1]!.state.version).toBe('trial-2');
   expect((await db.select().from(settings).where(eq(settings.key,TRIAL_KEY)))[0]).toEqual(legacy);
   expect((await walletOf(db,id)).balance).toBe(3210);expect(await count()).toEqual(before);

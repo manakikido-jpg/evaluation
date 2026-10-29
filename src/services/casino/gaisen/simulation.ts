@@ -72,7 +72,7 @@ export function simulateGaisen(setting:Setting,games:number,seed:number,policy:S
   awardedSets,startedSets,completedChains,maxChainSets,maxNormalGames,
   unfinished:{phase:s.phase,ggLeft:s.ggLeft,stocks:s.stocks,sets:s.sets,normalGames:s.normalGames,
    omen:s.omen,gstopLeft:s.gstopLeft,hold:s.hold,sggLeft:s.sggLeft,medusa:s.medusa,ex:s.ex,
-   gstopReturn:s.gstopReturn,sggReturn:s.sggReturn},provisional:true};
+   gstopReturn:s.gstopReturn,sggReturn:s.sggReturn,gstopQueue:s.gstopQueue??0,symbolHistory:s.symbolHistory??[]},provisional:true};
 }
 export type GaisenSimulation=ReturnType<typeof simulateGaisen>;
 /** 同一ゲーム数・同一設定・同じ操作条件の試算だけまとめる。 */
