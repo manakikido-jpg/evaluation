@@ -38,6 +38,13 @@ it('初回に男女共通のテキスト窓口を1つ作り、同時予約にも
  expect(f.threadCreate).toHaveBeenCalledWith(expect.objectContaining({name:`📅 予約｜桜ねこ｜10/21 22:00｜#${s.id}`,type:ChannelType.PrivateThread,invitable:false}));
  expect((await getSession(db,s.id))?.threadId).toBe('990000000000000004');
 });
+it('📦 納品のスレッド名には、何を買ったか（メニューの名前）を出す',async()=>{
+ await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,reservationChannelId:HUB},'staff');
+ const f=fixture();f.cache.set(HUB,f.hub);
+ const [s]=await db.insert(castSessions).values({castId:CAST,customerId:CUSTOMER,plan:'1',menuName:'ボイス<@x>',minutes:0,price:300,status:'ordered'}).returning();
+ await f.app.openThread(s!,'📦 納品');
+ expect(f.threadCreate).toHaveBeenCalledWith(expect.objectContaining({name:`📦 納品｜キャスト｜ボイスx｜#${s!.id}`}));
+});
 it('設定した予約先を使い、男女の一覧や既存の予約は変更しない',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE,femaleChannelId:FEMALE,reservationChannelId:HUB},'staff');
  const f=fixture();f.cache.set(HUB,f.hub);const s=await session();
@@ -100,7 +107,7 @@ it('日時の変更が確定すると、スレッド名も新しい日本時間�
  const proposal = await proposeSessionTime(db,s.id,CAST,new Date('2026-10-21T14:00:00Z'));
  if(proposal.status !== 'ok') throw Error(proposal.status);
  await f.app.proposeAccept({user:{id:CUSTOMER},deferReply:vi.fn(),editReply:vi.fn()},proposal.proposal.id);
- expect(setName).toHaveBeenCalledWith(`📅 予約｜キャスト｜10/21 23:00｜#${s.id}`);
+ expect(setName).toHaveBeenCalledWith(`✅ 確定｜キャスト｜10/21 23:00｜#${s.id}`);
 });
 it('窓口の作成権限がなければ、公開にはせず、前と同じ一覧のチャンネルに非公開で作って運営の記録に理由を知らせる',async()=>{
  await saveCastConfig(db,{...CAST_DEFAULTS,channelId:MALE},'staff');

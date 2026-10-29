@@ -1091,6 +1091,27 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
   });
 }
 
+export type DeclineExtensionResult = { status: 'ok'; session: CastSession; refund: number } | { status: 'not_cast' | 'changed' | 'too_late' };
+
+/**
+ * ⏰ キャストが延長を断る: いちばん新しい延長 30 分を取り消し、その分の銭をお客に全額戻す。
+ * 延長の時間が始まる前（元の終わりの時刻まで）だけ。同時に押されても 1 回だけ戻す
+ */
+export async function declineExtension(db: Db, id: number, castId: string, expectedExtensions: number, now = new Date()): Promise<DeclineExtensionResult> {
+  return db.transaction(async (tx) => {
+    const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
+    if (!s || s.castId !== castId) return { status: 'not_cast' as const };
+    if (s.status !== 'active' || !s.endsAt || s.extensions !== expectedExtensions || s.extensions < 1 || !s.extensionPrice) return { status: 'changed' as const };
+    const endsAt = new Date(s.endsAt.getTime() - 30 * MIN);
+    if (endsAt <= now) return { status: 'too_late' as const };
+    const refund = Math.min(s.extensionPrice, s.price);
+    const row = await move(tx, id, ['active'], { minutes: s.minutes - 30, price: s.price - refund, extensions: s.extensions - 1, endsAt, warned: false });
+    if (!row) return { status: 'changed' as const };
+    if (refund > 0) await addCoins(tx, s.customerId, refund, 'cast_refund', { sessionId: id, extendDeclined: true });
+    return { status: 'ok' as const, session: row, refund };
+  });
+}
+
 /**
  * 終える: 時間が来た・お客が終えた → 全額（手数料を引いて）キャストに。
  * キャストが途中で終えた → 話した時間の分だけキャストに、残りはお客に戻す

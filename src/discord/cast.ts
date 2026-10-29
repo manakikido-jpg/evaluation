@@ -52,6 +52,7 @@ import {
   castTick,
   disputeSession,
   extendSession,
+  declineExtension,
   finishSession,
   getCast,
   getSession,
@@ -681,6 +682,7 @@ export class CastApp {
       if (action === 'noshow') return await this.noShow(interaction, id);
       if (action === 'extconfirm') return await this.confirmExtend(interaction, id, b === undefined ? 0 : Number(b), rest[0]);
       if (action === 'ext') return await this.extend(interaction, id, b === undefined ? 0 : Number(b));
+      if (action === 'extok' || action === 'extno') return await this.answerExtend(interaction, id, Number(b), action === 'extok');
       if (action === 'end') return await this.end(interaction, id);
       if (action === 'report') return await this.report(interaction, id);
       if (action === 'rate') return await this.rate(interaction, id, Number(b));
@@ -1262,6 +1264,7 @@ export class CastApp {
     if (!s) return void (await i.reply({ content: '受けられるのは、指名されたキャストだけです（もう終わっているかもしれません）。', ...(i.guildId ? EPHEMERAL : {}) }));
     if (s.status === 'accepted') {
       await this.afterCast(i, s);
+      await this.renameReservation(s);
       await this.discord.sendDm(s.customerId, `📅 予約を受けてもらえました（<t:${unix(s.startAt!)}:f>）。時刻になったら部屋ができます。`).catch(() => false);
       return;
     }
@@ -1448,7 +1451,28 @@ export class CastApp {
     }
     await audit(this.db, { actorId: i.user.id, targetId: r.session.castId, action: 'cast.extend', detail: { sessionId: id, extensions: r.session.extensions, price: extensionPriceOf(r.session) }, via: 'discord' });
     this.refresh();
-    await i.followUp({ content: `⏰ 30 分のばしました（残り ${fmt(r.balance)} 枚）。`, ...EPHEMERAL });
+    await i.followUp({ content: `⏰ 30 分のばしました（残り ${fmt(r.balance)} 枚）。キャストが延長を断ったときは、全額戻ります。`, ...EPHEMERAL });
+    // 確かめずに延長されたときのために、キャストに「受ける・断る」を聞く（断ると全額戻す）
+    const n = r.session.extensions;
+    if (i.channel?.isSendable()) await i.channel.send({
+      content: `⏰ <@${r.session.castId}> さん、<@${r.session.customerId}> さんが **30 分の延長** を申し込みました（${fmt(extensionPriceOf(r.session))} ${this.coin()}）。\n受けられないときは「断る」を押してください。延長の分の銭は全額お客に戻ります（元の終わりの時刻まで）。`,
+      components: [row(button(`cast:extok:${id}:${n}`, '延長を受ける', 3, '✅'), button(`cast:extno:${id}:${n}`, '断る（全額戻す）', 4))],
+      allowedMentions: { users: [r.session.castId] },
+    }).catch((err: unknown) => logger.warn({ err, sessionId: id }, 'cast extend confirm post failed'));
+  }
+
+  /** ⏰ キャストが延長を受ける・断る */
+  private async answerExtend(i: ButtonInteraction<'cached'>, id: number, expected: number, ok: boolean): Promise<void> {
+    const s = await getSession(this.db, id);
+    if (!s || s.castId !== i.user.id) return void await i.reply({ content: 'このボタンは、指名されたキャストだけが押せます。', ...EPHEMERAL });
+    if (ok) return void await i.update({ content: `✅ <@${s.castId}> さんが延長を受けました。`, components: [], allowedMentions: { parse: [] } });
+    const r = await declineExtension(this.db, id, i.user.id, Number.isSafeInteger(expected) ? expected : -1);
+    if (r.status === 'too_late') return void await i.reply({ content: '延長の時間が始まっているので、もう断れません。', ...EPHEMERAL });
+    if (r.status !== 'ok') return void await i.reply({ content: 'この延長は、もう変わっています（終わった・ほかの延長が入ったなど）。', ...EPHEMERAL });
+    await i.update({ content: `🙅 <@${s.castId}> さんが延長を断りました。<@${s.customerId}> さんに **${fmt(r.refund)} ${this.coin()}** を戻しました。終わりの時刻は <t:${unix(r.session.endsAt!)}:t> です。`, components: [], allowedMentions: { users: [s.customerId] } });
+    await audit(this.db, { actorId: i.user.id, targetId: s.customerId, action: 'cast.extend_decline', detail: { sessionId: id, refund: r.refund }, via: 'discord' });
+    await this.discord.sendDm(s.customerId, `🙅 キャストが 30 分の延長を断りました。${fmt(r.refund)} ${this.coin()} を戻しました。`).catch(() => false);
+    this.refresh();
   }
 
   private async end(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
@@ -1643,7 +1667,7 @@ export class CastApp {
       return void (await i.editReply({ content: 'やり取りの場所を作れなかったので、取り消して銭を戻しました。神職に知らせてください。', components: [] }));
     }
     const s = (await getSession(this.db, r.session.id)) ?? r.session;
-    await thread.send({ content: [r.drawn ? `🎰 ガチャの結果: **${r.drawn}**` : '', wish ? `📝 お願い:\n> ${wish.replace(/\n/g, '\n> ')}` : ''].filter(Boolean).join('\n') || '📦 注文', allowedMentions: { parse: [] } }).catch(() => undefined);
+    await thread.send({ content: [s.menuName ? `📦 注文：**${s.menuName}**${s.optionNames.length ? `（＋${s.optionNames.join('・')}）` : ''}` : '', r.drawn ? `🎰 ガチャの結果: **${r.drawn}**` : '', wish ? `📝 お願い:\n> ${wish.replace(/\n/g, '\n> ')}` : ''].filter(Boolean).join('\n') || '📦 注文', allowedMentions: { parse: [] } }).catch(() => undefined);
     const dm = await this.dmCast(s);
     await thread.send({ ...(dm ? {} : { content: `<@${castId}>` }), ...this.reserveMessage(s, !dm), allowedMentions: { users: dm ? [] : [castId] } } as never).catch(() => undefined);
     await i.editReply({ content: `${r.drawn ? `🎰 ガチャの結果は **${r.drawn}** でした！ ` : '📦 '}注文しました。キャストが ${DELIVERY.deadlineLabel}以内に <#${thread.id}> へ届けます（残り ${fmt(r.balance)} 枚）。`, components: [row({ type: 2, style: 5, label: '納品のお部屋はこちら', url: `https://discord.com/channels/${i.guildId}/${thread.id}` })] });
@@ -1709,11 +1733,27 @@ export class CastApp {
     }
   }
 
+  /** 予約のスレッドの名前を、いまの日時・状態に合わせる */
+  private async renameReservation(s: CastSession): Promise<void> {
+    if (!s.threadId) return;
+    try {
+      const thread = this.guild?.channels.cache.get(s.threadId) ?? await this.guild?.channels.fetch(s.threadId);
+      const name = await this.reservationName(s, '予約');
+      if (thread?.isThread() && thread.name !== name) await thread.setName(name);
+    } catch (err) { logger.warn({ err, sessionId: s.id }, 'cast reservation rename failed'); }
+  }
+
   private async reservationName(s: CastSession, name: string): Promise<string> {
     const names = await namesOf(this.db, [s.castId]);
     const who = (names.get(s.castId) ?? 'キャスト').replace(/[@#`<>\r\n]/g, '').trim().slice(0, 24) || 'キャスト';
     const at = s.startAt ? new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(s.startAt) : '受付';
-    return `${name.startsWith('📦') ? '📦 納品' : '📅 予約'}｜${who}｜${at}｜#${s.id}`;
+    // 何を買ったか（メニューの名前）も名前に出す
+    const what = s.menuName.replace(/[@#`<>\r\n｜]/g, '').trim().slice(0, 30);
+    // 📦 納品は、日時より「何の注文か」を出す
+    if (name.startsWith('📦') || isDeliverySession(s)) return `📦 納品｜${who}｜${what || '注文'}｜#${s.id}`.slice(0, 100);
+    // 📅 通話: キャストが受けて時間が決まったら「✅ 確定」にする
+    const fixed = s.status === 'accepted' || s.status === 'active' || s.status === 'done';
+    return `${fixed ? '✅ 確定' : '📅 予約'}｜${who}｜${at}${what ? `｜${what}` : ''}｜#${s.id}`.slice(0, 100);
   }
 
   /**
@@ -1869,8 +1909,7 @@ export class CastApp {
     if (r.status!=='ok') return void(await i.editReply(this.timeChangeError(r.status)));
     const s=r.session;
     if (s.threadId) {
-      try { const thread = this.guild?.channels.cache.get(s.threadId)??await this.guild?.channels.fetch(s.threadId);if(thread?.isThread())await thread.setName(await this.reservationName(s,'予約')); }
-      catch(err){logger.warn({err,sessionId:s.id},'cast reservation rename failed');}
+      await this.renameReservation(s);
       await this.discord.sendMessage(s.threadId,{...this.reserveMessage(s),allowed_mentions:{parse:[]}} as MessageBody).catch(()=>undefined);
     }
     await i.editReply('✅ 相手の提案を承認し、予約日時を変更しました。');

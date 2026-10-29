@@ -19,6 +19,7 @@ import {
   castTick,
   disputeSession,
   extendSession,
+  declineExtension,
   finishSession,
   getSession,
   setSessionPlace,
@@ -385,6 +386,23 @@ describe('🎀 キャスト', () => {
     expect((await walletOf(db, ADULT)).balance).toBe(9400);
     await finishSession(db, c, r.session.id, 'system', at);
     expect((await walletOf(db, CAST)).balance).toBe(540);
+  });
+
+  it('⏰ キャストは延長を断れる: 延長分を全額戻し、時間を元に戻す（同時に押しても1回・本人だけ・延長が始まったら断れない）', async () => {
+    const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30' }, T20);
+    if (r.status !== 'ok') throw new Error(r.status);
+    await acceptSession(db, r.session.id, CAST, T20);
+    const ext = await extendSession(db, r.session.id, ADULT, T20, 0);
+    if (ext.status !== 'ok') throw new Error(ext.status);
+    expect((await walletOf(db, ADULT)).balance).toBe(9400);
+    expect((await declineExtension(db, r.session.id, ADULT, 1, T20)).status).toBe('not_cast');
+    expect((await declineExtension(db, r.session.id, CAST, 1, new Date(T20.getTime() + 30 * MIN))).status).toBe('too_late');
+    const both = await Promise.all([declineExtension(db, r.session.id, CAST, 1, T20), declineExtension(db, r.session.id, CAST, 1, T20)]);
+    expect(both.map((x) => x.status).sort()).toEqual(['changed', 'ok']);
+    expect((await walletOf(db, ADULT)).balance).toBe(9700);
+    expect(await getSession(db, r.session.id)).toMatchObject({ minutes: 30, price: 300, extensions: 0, endsAt: new Date(T20.getTime() + 30 * MIN) });
+    await finishSession(db, c, r.session.id, 'system', new Date(T20.getTime() + 30 * MIN));
+    expect((await walletOf(db, CAST)).balance).toBe(270);
   });
 
   it('予約の部屋を作れなかったら開始せず全額を1回だけ戻す', async () => {

@@ -399,7 +399,7 @@ describe('キャスト予約内容の公開範囲', () => {
     const app = await setup(create);
     const session = await booking({ isPublic });
     expect(await app.openThread(session, '📅 予約 #' + session.id)).toMatchObject({ id: THREAD });
-    expect(create).toHaveBeenCalledExactlyOnceWith({ name: `📅 予約｜キャスト｜10/02 00:00｜#${session.id}`, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' });
+    expect(create).toHaveBeenCalledExactlyOnceWith({ name: `✅ 確定｜キャスト｜10/02 00:00｜#${session.id}`, type: ChannelType.PrivateThread, invitable: false, reason: 'キャストの予約・納品（非公開）' });
     expect(add.mock.calls).toEqual([[CAST], [CUSTOMER]]);
     const { getSession } = await import('../src/services/cast.js');
     expect(await getSession(db, session.id)).toMatchObject({ threadId: THREAD, isPublic });
