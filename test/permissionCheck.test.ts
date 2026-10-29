@@ -57,6 +57,19 @@ describe('権限の点検', () => {
     expect(issues.some(i => i.key.startsWith('missing-channel:'))).toBe(true);
     expect(issues.some(i => i.key.startsWith('rank:'))).toBe(true);
   });
+  it('「スレッドの管理」で非公開スレッドが見える一般ロールを知らせる（宮司・神職と管理者はのぞく）', () => {
+    const c = ch(); c.permission_overwrites = [{ id: A, type: 0, allow: bits(34), deny: '0' }];
+    const issues = permissionIssues([c], roles, cfg);
+    const hit = issues.find(i => i.key === `threads:${c.id}`);
+    expect(hit?.level).toBe('warn');
+    expect(hit?.question).toContain(A);
+    expect(hit?.question).not.toContain(B);
+    c.permission_overwrites = [];
+    expect(permissionIssues([c], roles, cfg).some(i => i.key.startsWith('threads:'))).toBe(false);
+    const staff = cfg.admin?.gujiRoleIds[0] ?? cfg.ranks.find(r => r.key === 'guji')!.roleId;
+    c.permission_overwrites = [{ id: staff, type: 0, allow: bits(34), deny: '0' }];
+    expect(permissionIssues([c], [...roles, role(staff, '0')], cfg).some(i => i.key.startsWith('threads:'))).toBe(false);
+  });
   it('取得失敗や一部欠落を正常として判定しない', () => {
     expect(() => validatePermissionSnapshot([ch()], roles, G)).not.toThrow();
     expect(() => validatePermissionSnapshot([], roles, G)).toThrow();
