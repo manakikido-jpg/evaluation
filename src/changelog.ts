@@ -30,6 +30,8 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {id:'2026-10-30-gaisen-phase-trial',date:'2026-10-30',kind:'improve',where:['社務所Web'],title:'神殿スロットに区間別抽選の新しい無料試遊',items:['通常・GG・SGGで役の抽選と払出を分け、SGGの赤7チャンスと3枚役の押し順ナビを追加しました。リプレイ・1枚・15枚の戻りを区別します。','旧版の台や保存した続きは残し、新版の5台・試遊ポイントを別に用意しました。'],announcement:{priority:'none',audience:'新台を確認する運営',steps:['社務所のカジノ管理から「神殿スロットの新しい無料試遊（区間別抽選）」を開く。','空席へ着席し、通常は左から、ナビが出たらその順番で停止する。','SGGは場面確認からも試せる。旧版の保存分は「旧版の続き」から開く。'],postText:'',imagePrompt:'',notes:'運営専用・実際の銭は変わらない。公開解析の概数を使う試遊で、モード/天井/履歴/SGG-EXなどは引き続き暫定。一般公開開始ではない。'}},
+
   {
     id: '2026-10-30-keiba-purse-double', date: '2026-10-30', kind: 'improve', where: ['Discord', '社務所Web'],
     title: '競馬の馬主賞金：本人の賭けだけで保証上乗せの対象に',
