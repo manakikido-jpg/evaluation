@@ -6800,12 +6800,19 @@ export function createWebApp(deps: WebDeps) {
   app.post('/cast/sessions/:id/:action', async (c) => {
     const id = Number(c.req.param('id'));
     const action = c.req.param('action');
-    if (!Number.isSafeInteger(id) || (action !== 'pay' && action !== 'refund')) return c.redirect('/cast');
+    if (!Number.isSafeInteger(id) || (action !== 'pay' && action !== 'refund' && action !== 'noshow_customer')) return c.redirect('/cast');
     const by = c.get('session').userId;
-    const s = await resolveSession(db, await loadCastConfig(db), id, action, by, now());
+    const castConfig = await loadCastConfig(db);
+    const s = await resolveSession(db, castConfig, id, action, by, now());
     if (!s) return c.redirect('/cast?msg=done_already');
     await audit(db, { actorId: by, targetId: action === 'pay' ? s.castId : s.customerId, action: `cast.${action}`, detail: { sessionId: id, price: s.price, paid: s.paid }, via: 'web' });
     const e = cfg.economy;
+    if (action === 'noshow_customer') {
+      const refund = s.price - Math.floor(s.price * castConfig.noShowPercent / 100);
+      const text = `🚫 予約 #${id} は運営の確認でお客様欠席として精算しました。キャスト受取：${s.paid}${e.currencyName}、お客様への返金：${refund}${e.currencyName}。指名本数には加算しません。`;
+      for (const memberId of [s.castId, s.customerId]) await deps.discord.sendDm(memberId, text).catch(() => false);
+      return c.redirect('/cast?msg=paid');
+    }
     await deps.discord.sendDm(s.castId, action === 'pay' ? `🎀 指名 #${id} は運営の判断で、${e.currencyEmoji} ${s.paid} 枚をお渡ししました。` : `🎀 指名 #${id} は運営の判断で、お客に戻しました。`).catch(() => false);
     await deps.discord.sendDm(s.customerId, action === 'pay' ? `🎀 指名 #${id} は運営の判断で、キャストに渡しました。` : `🎀 指名 #${id} は運営の判断で、${e.currencyEmoji} ${s.price} 枚をお戻ししました。`).catch(() => false);
     return c.redirect(`/cast?msg=${action === 'pay' ? 'paid' : 'refunded'}`);

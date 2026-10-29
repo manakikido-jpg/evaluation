@@ -305,7 +305,7 @@ export function CastPage(props: {
       {disputed.length > 0 && (
         <section class="card ch-group">
           <div class="ch-cat">
-            <span class="ch-cat-name">🚨 通報（運営が決める）</span>
+            <span class="ch-cat-name">🚨 通報・入室確認（運営が決める）</span>
             <span class="ch-count">{disputed.length}</span>
           </div>
           <ul class="ch-list">
@@ -325,6 +325,7 @@ export function CastPage(props: {
                   </div>
                   <div class="ch-topic">
                     {sessionLabel(s)} ・ {sessionTime(s)} ・ {s.isPublic ? '公開の部屋' : '2 人だけの部屋'} ・ {fmtDateTime(s.createdAt)}
+                    {s.decidedBy === 'attendance_review' && <p>入室履歴を確認できません。接客したかを確かめてから精算してください。お客様欠席の精算は指名本数に入りません。</p>}
                   </div>
                 </div>
                 <span class="ch-actions">
@@ -339,6 +340,10 @@ export function CastPage(props: {
                     <button type="submit" class="danger">
                       お客に戻す
                     </button>
+                  </form>
+                  <form method="post" action={`/cast/sessions/${s.id}/noshow_customer`} class="row-actions" data-confirm="お客様が来なかった予約として、欠席料金を精算しますか？ 指名本数には加算しません。">
+                    <Csrf session={session} />
+                    <button type="submit">お客様欠席として精算（本数対象外）</button>
                   </form>
                 </span>
               </li>
