@@ -155,6 +155,11 @@ export async function onTable(
         if (error) throw new Stop(error);
         return t;
       }
+      // 別の競馬卓が同時に精算しても、日額の残りを二重に使わない。
+      // 全受取人の入金より先に共通のロックを取る（途中で取ると持分の順で待ち合う）。
+      if (t.kind === 'keiba' && fxs.some(fx => fx.credits?.some(c => c.reason === 'keiba_prize'))) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('casino:keiba:prize'))`);
+      }
       for (const fx of fxs) await applyFx(tx, cfg, fx, now, t.id, t.kind);
       const saved = await save(tx, t, engine, state, now);
       return error ? { saved, error } : saved;

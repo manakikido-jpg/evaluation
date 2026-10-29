@@ -74,7 +74,7 @@ const rngOf = (seed: number): Rng => {
   };
 };
 // 前からの賞金の決まりを確かめるので、2026-10-26 に足した条件（最低の賭け・ほかの人の賭け・1 日の上限・出走料）は外しておく
-const tcfg: GuildConfig = { ...cfg, casino: { ...cfg.casino, keibaPurseMinBet: 0, keibaPurseOthersMin: 0, keibaBetDailyCap: 0, keibaEntryFee: 0, dailyBetLimit: 0 } };
+const tcfg: GuildConfig = { ...cfg, casino: { ...cfg.casino, keibaBetPurseMult: 10, keibaPurseMinBet: 0, keibaPurseOthersMin: 0, keibaBetDailyCap: 0, keibaEntryFee: 0, dailyBetLimit: 0 } };
 const A = { id: '760000000000000001', name: 'さくら' };
 const B = { id: '760000000000000002', name: 'もみじ' };
 const C = { id: '760000000000000003', name: 'かえで' };
