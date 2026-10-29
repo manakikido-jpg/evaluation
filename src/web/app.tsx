@@ -685,6 +685,8 @@ export function createWebApp(deps: WebDeps) {
   });
   app.use('/economy/gaisen-trial',requireAdmin,requireCsrf);
   mountGaisenTrial(app,db,now);
+  app.use('/economy/gaisen-trial-v2',requireAdmin,requireCsrf);
+  mountGaisenTrial(app,db,now,'trial-2');
   app.use('/economy/casino-test',requireAdmin);
   app.get('/economy/casino-test', c => {
     const session=c.get('session');
