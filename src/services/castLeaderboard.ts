@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { castChampagnes, castSessions, coinTx } from '../db/schema.js';
-import { monthKey, monthOf } from './castRank.js';
+import { monthKey, monthOf, rankingHidden } from './castRank.js';
+export { rankingHidden, setRankingHidden } from './castRank.js';
 export type CastLeaderboardRow = { castId:string; count:number; revenue:number };
 /** 完了通話の本数と、返金を除いた手数料前売上。シャンパンは支払済みだけ。 */
 export async function castLeaderboard(db:Db, now=new Date()) {
@@ -20,5 +21,6 @@ export async function castLeaderboard(db:Db, now=new Date()) {
    where ${c.paidAt}>=${start} and ${c.paidAt}<${end} and ${c.paidAt}<=${now} group by ${c.castId}
  ) totals group by cast_id`);
  const rows:CastLeaderboardRow[]=(result as {rows:{cast_id:string;calls:number;revenue:string}[]}).rows.map(r=>({castId:String(r.cast_id),count:Number(r.calls),revenue:Number(r.revenue)}));
- return {month:monthKey(start),rows:rows.filter(r=>r.count>0||r.revenue>0)};
+ const hidden=await rankingHidden(db);
+ return {month:monthKey(start),rows:rows.filter(r=>(r.count>0||r.revenue>0)&&!hidden.has(r.castId))};
 }

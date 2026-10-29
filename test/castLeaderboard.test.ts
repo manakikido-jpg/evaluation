@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { castSessions, castChampagnes, coinTx, settings } from '../src/db/schema.js';
-import { castLeaderboard } from '../src/services/castLeaderboard.js';
+import { castLeaderboard, setRankingHidden, rankingHidden } from '../src/services/castLeaderboard.js';
+import { castTop } from '../src/services/castRank.js';
 import { castLeaderboardBody, refreshCastLeaderboard } from '../src/discord/castLeaderboard.js';
 import { DiscordHttpError } from '../src/lib/discordRest.js';
 import { makeDb } from './helpers.js';
@@ -23,6 +24,15 @@ it('本数は完了通話、売上は返金を除く通常と納品＋支払済�
  expect(data.rows.find(r=>r.castId===A)).toMatchObject({count:1,revenue:3000});
  expect(data.rows.find(r=>r.castId===B)).toMatchObject({count:1,revenue:5500});
  expect((await castLeaderboard(db,new Date('2026-10-31T15:00:00Z'))).month).toBe('2026-11');
+});
+it('🙈 名前を消したキャストは、ランキングと上位（表彰）に出さない。戻すとまた出る',async()=>{
+ await session();await session(B);
+ await setRankingHidden(db,A,true,U);await setRankingHidden(db,A,true,U);
+ expect([...await rankingHidden(db)]).toEqual([A]);
+ expect((await castLeaderboard(db,NOW)).rows.map(r=>r.castId)).toEqual([B]);
+ expect((await castTop(db,new Date('2026-09-30T15:00:00Z'))).map(r=>r.castId)).toEqual([B]);
+ await setRankingHidden(db,A,false,U);
+ expect((await castLeaderboard(db,NOW)).rows.map(r=>r.castId).sort()).toEqual([A,B].sort());
 });
 it('本数と売上を別々に並べ、同順位・長い名前・通知なし・空月を扱う',()=>{
  const rows=[{castId:A,count:2,revenue:100},{castId:B,count:2,revenue:200},{castId:U,count:1,revenue:300}];

@@ -16,6 +16,8 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   sync_pending: { text: '保存しました。紹介投稿の更新は待機中です。BOTの権限を確認してください。毎分再試行します。', kind: 'warn' },
   photo_saved: { text: '写真を保存し、登録済みの紹介投稿にも反映しました。', kind: 'ok' },
   photo_removed: { text: 'キャストの写真を外しました。', kind: 'ok' },
+  ranking_hidden: { text: 'このキャストを、ランキングに出さないようにしました（記録はそのままです）。', kind: 'ok' },
+  ranking_shown: { text: 'このキャストを、ランキングにまた出すようにしました。', kind: 'ok' },
   deleted: { text: 'キャストの登録を消しました（予約の記録は残っています）。', kind: 'ok' },
   delete_busy: { text: '始まる前・途中の予約があるので消せません。予約が終わるか取り消してから消してください。', kind: 'warn' },
   delete_confirm: { text: '「消してよい」にチェックを入れてから押してください。', kind: 'warn' },
@@ -244,6 +246,8 @@ function MenuFields(props: { c: CastConfig; optional?: boolean }) {
 
 export function CastPage(props: {
   session: AdminSession;
+  /** ランキングに名前を出さないキャスト */
+  rankingHidden?: ReadonlySet<string>;
   config: CastConfig;
   channels: Opt[];
   categories: Opt[];
@@ -548,6 +552,11 @@ export function CastPage(props: {
                       <button type="submit" class="danger">
                         外す
                       </button>
+                    </form>
+                    <form method="post" action={`/cast/casts/${x.memberId}/ranking`} class="row-actions">
+                      <Csrf session={session} />
+                      <input type="hidden" name="hide" value={props.rankingHidden?.has(x.memberId) ? 'no' : 'yes'} />
+                      <button type="submit">{props.rankingHidden?.has(x.memberId) ? '🙈 ランキングに出す' : 'ランキングから名前を消す'}</button>
                     </form>
                     <CastDelete id={x.memberId} session={session} />
                   </span>

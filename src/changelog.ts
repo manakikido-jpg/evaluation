@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-10-30-cast-ranking-hide', date: '2026-10-30', kind: 'new', where: ['社務所Web'], title: '🙈 キャストランキングから名前を消せるように', items: ['社務所のキャスト画面で、キャストごとに「ランキングから名前を消す」を押せます。ランキングパネル・ランキングボタン・毎月の上位発表から外れます。', '指名・売上の記録は消えません。「🙈 ランキングに出す」で戻せます。'], announcement: { priority: 'none', audience: '宮司・神職', steps: ['社務所のキャスト画面を開く。', '名前を消したいキャストの「ランキングから名前を消す」を押す。'], postText: '', imagePrompt: '', notes: '外した人は、毎月の1位の銭と称号も受け取らない。' } },
   {
     id: '2026-10-30-keiba-purse-double', date: '2026-10-30', kind: 'improve', where: ['Discord', '社務所Web'],
     title: '競馬の馬主賞金：本人の賭けだけで保証上乗せの対象に',

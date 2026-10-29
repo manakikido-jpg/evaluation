@@ -3,6 +3,7 @@ import type { Db } from '../db/client.js';
 import { castSessions, settings } from '../db/schema.js';
 import { castStats, monthStart, type CastConfig } from './cast.js';
 import { addCoins } from './economy.js';
+import { audit } from './audit.js';
 
 /**
  * 🏆 キャストのランキング。月ごと（日本時間）に、終わった指名の回数の多い順（同じなら売り上げの多い順）。
@@ -88,9 +89,26 @@ export async function castRanking(db: Db, start: Date): Promise<CastRankRow[]> {
   return [...rows.values()].sort((a, b) => b.count - a.count || b.earned - a.earned || a.castId.localeCompare(b.castId));
 }
 
-/** 上位（終わった指名が 1 回以上の人だけ） */
+const HIDDEN = 'cast.ranking_hidden';
+/** 🙈 ランキングに名前を出さないキャスト（運営が決める。売上・本数の記録は消さない） */
+export async function rankingHidden(db: Db): Promise<Set<string>> {
+ const [row] = await db.select().from(settings).where(eq(settings.key, HIDDEN));
+ return new Set(Array.isArray(row?.value) ? (row.value as unknown[]).filter((x): x is string => typeof x === 'string') : []);
+}
+export async function setRankingHidden(db: Db, castId: string, hidden: boolean, by: string): Promise<void> {
+ await db.transaction(async tx => {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${HIDDEN}))`);
+  const set = await rankingHidden(tx as Db);
+  if (hidden) set.add(castId); else set.delete(castId);
+  const value = [...set];
+  await tx.insert(settings).values({ key: HIDDEN, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+  await audit(tx as Db, { actorId: by, targetId: castId, action: hidden ? 'cast.ranking_hide' : 'cast.ranking_show', via: 'web' });
+ });
+}
+/** 上位（終わった指名が 1 回以上の人だけ。ランキングに名前を出さない人はのぞく） */
 export async function castTop(db: Db, start: Date, n = 3) {
-  return (await castStats(db, start, undefined, monthOf(start, 1))).filter((x) => x.count > 0).slice(0, n);
+  const hidden = await rankingHidden(db);
+  return (await castStats(db, start, undefined, monthOf(start, 1))).filter((x) => x.count > 0 && !hidden.has(x.castId)).slice(0, n);
 }
 
 export type CastRankAward = { month: string; top: Awaited<ReturnType<typeof castTop>>; winnerId?: string; bonus: number };

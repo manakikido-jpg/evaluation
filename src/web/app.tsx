@@ -28,6 +28,7 @@ import { GalleryRewardsPage } from './views/galleryRewards.js';
 import { GalleryError, GALLERY_KINDS, cancelGalleryPost, galleryPricesSchema, loadGalleryPrices, recentGalleryPosts, registerGalleryPost, saveGalleryPrices, type GalleryKind } from '../services/galleryRewards.js';
 import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
+import { rankingHidden, setRankingHidden } from '../services/castLeaderboard.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
 import { lotteryFinances, recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
@@ -6432,6 +6433,7 @@ export function createWebApp(deps: WebDeps) {
         hasFemaleImage={Boolean(femaleImage)}
         photos={new Map((await Promise.all(list.map(async (x) => [x.memberId, (await loadCastPhoto(db, x.memberId))?.hash] as const))).filter((x): x is readonly [string, string] => Boolean(x[1])))}
         casts={list}
+        rankingHidden={await rankingHidden(db)}
         members={await activeMemberNames(db)}
         template={templateOf(conf)}
         stats={stats}
@@ -6452,6 +6454,16 @@ export function createWebApp(deps: WebDeps) {
     const img = await loadMenuImage(db, c.req.query('g') === 'female' ? 'female' : 'male');
     if (!img) return c.notFound();
     return c.body(Buffer.from(img.data), 200, { 'content-type': img.contentType, 'x-content-type-options': 'nosniff' });
+  });
+
+  // 🙈 キャストランキングに名前を出す・出さない
+  app.post('/cast/casts/:id/ranking', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.parseBody();
+    if (!validId(id) || !(await getCast(db, id))) return c.redirect('/cast');
+    await setRankingHidden(db, id, body.hide === 'yes', c.get('session').userId);
+    await refreshCastLeaderboard(db, deps.discord, cfg.economy.currencyName, { force: true }).catch((err: unknown) => logger.warn({ err }, 'cast leaderboard refresh failed'));
+    return c.redirect(`/cast?msg=${body.hide === 'yes' ? 'ranking_hidden' : 'ranking_shown'}#cast-${id}`);
   });
 
   app.post('/cast/ranking-panel', async (c) => {
