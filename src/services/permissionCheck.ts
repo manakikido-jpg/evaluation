@@ -85,6 +85,11 @@ export function permissionIssues(channels: GuildChannel[], roles: GuildRole[], c
       const broader = [cfg.guildId, ...normal.map(r => r.id)].filter(id => effectivePermissions(c, roles, cfg.guildId, [id]).view && !effectivePermissions(parent, roles, cfg.guildId, [id]).view);
       if (broader.length) out.push({ key: `broader:${c.id}`, level: 'warn', title: `${c.name} はカテゴリより公開範囲が広い`, question: `${broader.map(id => roles.find(r => r.id === id)?.name ?? id).join('・')}が子チャンネルを見られます。公開してよい場所ですか？`, channelId: c.id });
     }
+    // 「スレッドの管理」がある人には、このチャンネルの非公開スレッドがすべて見える（予約・案内・取引など）
+    if (c.type === 0 || c.type === 5) {
+      const seers = [cfg.guildId, ...normal.map(r => r.id)].filter(id => { const p = effectivePermissions(c, roles, cfg.guildId, [id]); return !p.admin && p.view && has(p.bits, 34); });
+      if (seers.length) out.push({ key: `threads:${c.id}`, level: 'warn', title: `${c.name} の非公開スレッドが見えるロール`, question: `${seers.map(id => (id === cfg.guildId ? '@everyone' : roles.find(r => r.id === id)?.name ?? id)).join('・')}に「スレッドの管理」があり、このチャンネルの非公開スレッドがすべて見えます。見えてよい人ですか？`, channelId: c.id });
+    }
     for (const o of c.permission_overwrites ?? []) {
       if (o.type === 0 && !roleIds.has(o.id)) out.push({ key: `missing-role:${c.id}:${o.id}`, level: 'check', title: `${c.name} に消えたロールの指定`, question: `ロール ${o.id} の上書きが残っています。必要な指定ですか？`, channelId: c.id });
       if (BigInt(o.allow) & BigInt(o.deny)) out.push({ key: `conflict:${c.id}:${o.id}`, level: 'warn', title: `${c.name} に許可と拒否の重なり`, question: '同じ権限が両方に入っています。Discord側の設定を確認してください。', channelId: c.id });
