@@ -1,4 +1,6 @@
 import { prepareCastCharge, confirmCastCharge, pruneCastChargeQuotes, CastPricingError, type ChargePayload, type PaidCastCharge } from '../services/castPricing.js';
+import { prepareCastSleep, confirmCastSleep, getCastSleepReport, castSleepReceipt, CastSleepError, type CastSleepActor } from '../services/castSleep.js';
+import { activeCastCalls, observeCastAttendance, recordCastVoice, markCastAttendanceUncertain } from '../services/castAttendance.js';
 import { closeFinishedReservationThreads } from '../services/castThreadClose.js';
 import { refreshCastLeaderboard, castLeaderboardBody } from './castLeaderboard.js';
 import { castLeaderboard } from '../services/castLeaderboard.js';
@@ -29,6 +31,7 @@ import {
   type UserSelectMenuInteraction,
   type VoiceChannel,
   type TextChannel,
+  type VoiceState,
 } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -367,7 +370,8 @@ const rateButtons = (id: number) => [1, 2, 3, 4, 5].map((n) => button(`cast:rate
 export function sessionMessage(s: CastSession, c: CastConfig, coin: string, opts: { rateInRoom?: boolean } = {}) {
   const who = `<@${s.customerId}> さん → <@${s.castId}> さん`;
   const plan = `${sessionLabel(s)}${s.extensions ? `＋延長 ${s.extensions * 30} 分` : ''}`;
-  const lines: string[] = [`${who} ・ ${plan} ・ ${coin} ${fmt(s.price)} 枚（社務所が預かり中）`];
+  const held = ['requested', 'reserved', 'accepted', 'active', 'ordered', 'delivered', 'disputed'].includes(s.status);
+  const lines: string[] = [`${who} ・ ${plan} ・ ${coin} ${fmt(s.price)} 枚${held ? '（社務所が預かり中）' : '（契約額）'}`];
   let buttons: Btn[] = [];
   let title = '🎀 指名';
   if (s.status === 'requested') {
@@ -376,10 +380,11 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string, opts
     buttons = [button(`cast:accept:${s.id}`, '受ける', 3, '✅'), button(`cast:decline:${s.id}`, '断る', 4), button(`cast:cancel:${s.id}`, '取り消す（お客）')];
   } else if (s.status === 'active') {
     title = '📞 通話中';
-    lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。時間が来たら終わって、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。` : '');
+    lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。通常の完了なら、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。欠席や入室確認が必要な場合は、別途精算します。` : '');
     if (s.isPublic) lines.push(`-# 公開の部屋です（18 歳未満の方との雑談。${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`);
     lines.push(`-# 始まってから ${c.noShowMinutes} 分たっても相手が来ないときは「🚫 相手が来ない」（来ている人だけ押せます）。`);
-    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨'), button(`cast:champagne:${s.id}`, 'シャンパンを贈る（お客）', 1, '🍾')];
+    buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨'), button(`cast:champagne:${s.id}`, 'シャンパンを贈る（お客）', 1, '🍾'), ...(isFreeSession(s) ? [] : [button(`cast:sleep:${s.id}`, '寝落ちを報告する', 2, '💤')])];
+    lines.push(isFreeSession(s) ? '-# 時間フリーの寝落ち精算は「通報」から運営に相談してください。' : '-# キャストが先に寝た場合は「寝落ちを報告する」。利用分を精算し、残りを返金します。お客様の寝落ちは対象外です。');
   } else if (s.status === 'done') {
     title = '🎉 おつかれさまでした';
     if (opts.rateInRoom === false) {
@@ -400,13 +405,13 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string, opts
     lines.push('預かっていた銭は全部戻しました。');
   } else if (s.status === 'noshow_customer') {
     title = '🚫 お客が来ませんでした';
-    lines.push(`決まりにより、キャストに ${fmt(s.paid)} 枚（手数料を引いたあと）を渡し、残りを戻しました。`);
+    lines.push(`決まりにより、キャストに ${fmt(s.paid)} 枚（手数料を引いたあと）を渡し、残りを戻しました。指名本数には数えません。`);
   } else if (s.status === 'disputed') {
-    title = '🚨 通報がありました';
-    lines.push('運営が確認します。銭は、運営が決めるまで預かったままにします。');
+    title = s.decidedBy === 'attendance_review' ? '🚨 入室履歴の確認が必要です' : '🚨 通報がありました';
+    lines.push(s.decidedBy === 'attendance_review' ? '入室履歴だけでは接客を確認できないため、運営が確認します。銭は運営が決めるまで預かったままです。' : '運営が確認します。銭は、運営が決めるまで預かったままにします。');
   }
   lines.push(RULES);
-  const rows = buttons.length > 5 ? [row(...buttons.slice(0, 5))] : buttons.length ? [row(...buttons)] : [];
+  const rows = Array.from({ length: Math.ceil(buttons.length / 5) }, (_, n) => row(...buttons.slice(n * 5, n * 5 + 5)));
   return { embeds: [{ title, description: lines.filter(Boolean).join('\n'), color: s.status === 'disputed' ? 0xd7003a : PINK }], components: rows };
 }
 
@@ -447,6 +452,9 @@ export class CastApp {
   /** 起動して 1 回だけ、進行中の予約のスレッドのメッセージを、いまの形（ボタン・時間の表示）に書き換えた */
   private threadsRefreshed = false;
   private creatingReservationHub?: Promise<TextChannel | undefined>;
+  private attendanceEpoch = randomUUID();
+  private presencePending: Promise<void> = Promise.resolve();
+  private sleepPanelsRefreshed = false;
 
   constructor(
     private readonly db: Db,
@@ -460,6 +468,25 @@ export class CastApp {
 
   attach(guild: Guild): void {
     this.guild = guild;
+  }
+
+  invalidateAttendance(): void { this.attendanceEpoch = randomUUID(); }
+
+  onVoiceStateUpdate(before: VoiceState, after: VoiceState): Promise<void> {
+    if (after.guild.id !== this.cfg().guildId || before.channelId === after.channelId) return Promise.resolve();
+    const now = new Date(), epoch = this.attendanceEpoch;
+    const snapshots = [...new Set([before.channelId, after.channelId].filter((id): id is string => !!id))].map(id => ({ id, members: [...(this.voice(id)?.members?.keys() ?? [])] }));
+    this.presencePending = this.presencePending.then(async () => {
+      for (const s of snapshots) await recordCastVoice(this.db, s.id, epoch, s.members, after.id, now);
+    }).catch(err => { this.invalidateAttendance(); logger.warn({ err }, 'cast attendance failed'); });
+    return this.presencePending;
+  }
+
+  private async observePresence(s: CastSession, now: Date, starting = false): Promise<void> {
+    const room = this.voice(s.channelId);
+    // Discordの状態を読めないときは「空室」という観測を作らない。
+    if (!room?.members || this.guild?.available === false || (this.guild?.client?.isReady && !this.guild.client.isReady())) { await markCastAttendanceUncertain(this.db, s.id, now); return; }
+    await observeCastAttendance(this.db, s.id, { epoch: this.attendanceEpoch, members: [...room.members.keys()], starting }, now);
   }
 
   /** 従来の紹介投稿も、キャスト用チャンネルの最新100件から引き継ぐ */
@@ -668,6 +695,7 @@ export class CastApp {
       if (action === 'rplan') return await this.reserveModal(interaction, a ?? '', b ?? '', rest[0] ? rest[0].split(',') : undefined);
       if (action === 'priceconfirm') return await this.priceConfirm(interaction, a ?? '');
       if (action === 'champagnebuy') return await this.champagneBuy(interaction, a ?? '');
+      if (action === 'sleepconfirm') return await this.sleepConfirm(interaction, a ?? '');
       const id = Number(a);
       if (!Number.isSafeInteger(id)) return;
       if (action === 'champagne') return await this.champagneMenu(interaction, id);
@@ -680,6 +708,7 @@ export class CastApp {
       if (action === 'decline' || action === 'cancel') return await this.cancel(interaction, id, action === 'decline' ? 'declined' : 'canceled');
       if (action === 'cancelok') return await this.cancel(interaction, id, 'canceled', true);
       if (action === 'noshow') return await this.noShow(interaction, id);
+      if (action === 'sleep') return await this.sleepReport(interaction, id);
       if (action === 'extconfirm') return await this.confirmExtend(interaction, id, b === undefined ? 0 : Number(b), rest[0]);
       if (action === 'ext') return await this.extend(interaction, id, b === undefined ? 0 : Number(b));
       if (action === 'extok' || action === 'extno') return await this.answerExtend(interaction, id, Number(b), action === 'extok');
@@ -1269,6 +1298,7 @@ export class CastApp {
       return;
     }
     await i.update({ ...sessionMessage(s, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
+    await this.observePresence(s, new Date(), true);
     const room = this.voice(s.channelId);
     await room?.send({ content: `<@${s.customerId}> さん、始まります 🎀`, allowedMentions: { users: [s.customerId] } }).catch(() => undefined);
     this.refresh();
@@ -1308,6 +1338,59 @@ export class CastApp {
     await mine?.edit({ ...this.reserveMessage(s), allowedMentions: { parse: [] } } as Parameters<typeof mine.edit>[0]).catch(() => undefined);
   }
 
+  private sleepActor(i: ButtonInteraction<'cached'>, s: CastSession | undefined): CastSleepActor {
+    const room = s ? this.voice(s.channelId) : undefined;
+    return { id: i.user.id, channelId: i.channelId, staff: !!adminLevelOf(this.cfg(), this.roles(i)), present: room?.members?.has(i.user.id) ?? false, castPresent: s ? room?.members?.has(s.castId) ?? false : false, customerPresent: s ? room?.members?.has(s.customerId) ?? false : false };
+  }
+
+  private async sleepReport(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
+    const reportedAt = new Date();
+    await i.deferReply(EPHEMERAL);
+    try {
+      const s = await getSession(this.db, id);
+      const r = await prepareCastSleep(this.db, await loadCastConfig(this.db, this.cfg().coreTime), id, this.sleepActor(i, s), reportedAt);
+      await i.editReply({ content: `${castSleepReceipt(r, this.cfg().economy.currencyName)}\n\n**キャストが寝落ちした場合だけ**確定してください。お客様の寝落ちは対象外です。確定すると接客を終了し、精算後に専用VCを片付けます（ほかの接客で使用中なら残します）。\n90秒以内に確定してください。確定前は支払いません。`, components: [row(button(`cast:sleepconfirm:${r.id}`, 'この内容で報告・精算する', 4, '💤'))], allowedMentions: { parse: [] } });
+    } catch (err) {
+      if (!(err instanceof CastSleepError)) throw err;
+      await i.editReply({ content: err.message, components: [] });
+    }
+  }
+
+  private async sleepConfirm(i: ButtonInteraction<'cached'>, reportId: string): Promise<void> {
+    await i.deferUpdate();
+    try {
+      const report = await getCastSleepReport(this.db, reportId);
+      const before = report ? await getSession(this.db, report.sessionId) : undefined;
+      const r = await confirmCastSleep(this.db, await loadCastConfig(this.db, this.cfg().coreTime), reportId, this.sleepActor(i, before));
+      const receipt = `${castSleepReceipt(r.report, this.cfg().economy.currencyName)}\n✅ 精算が完了しました。`;
+      await i.editReply({ content: receipt, components: [], allowedMentions: { parse: [] } }).catch(err => logger.warn({ err, sessionId: r.session.id }, 'cast sleep receipt reply failed'));
+      for (const member of [r.session.customerId, r.session.castId]) await this.discord.sendDm(member, receipt).catch(err => { logger.warn({ err, sessionId: r.session.id }, 'cast sleep receipt DM failed'); return false; });
+      if (r.session.threadId) await this.discord.sendMessage(r.session.threadId, { content: receipt, allowed_mentions: { parse: [] } }).catch(err => logger.warn({ err, sessionId: r.session.id }, 'cast sleep receipt thread failed'));
+      await this.cleanupSessionRoom(r.session);
+      this.refresh();
+    } catch (err) {
+      if (!(err instanceof CastSleepError)) throw err;
+      await i.editReply({ content: err.message, components: [] });
+    }
+  }
+
+  /** 精算済みの接客用VCだけ片付ける。取得・削除に失敗したら次のtickで再試行。 */
+  private async cleanupSessionRoom(s: CastSession): Promise<void> {
+    if (!s.channelId) return;
+    if (await roomInUse(this.db, s.channelId, s.id)) { await roomDeleted(this.db, s.id); return; }
+    try {
+      const room = this.guild?.channels.cache.get(s.channelId) ?? await this.guild?.channels.fetch(s.channelId);
+      if (room) {
+        if (room.type !== ChannelType.GuildVoice) throw new Error('接客用VC以外は削除しません');
+        await room.delete('キャストの指名が終わった');
+      }
+      await roomDeleted(this.db, s.id);
+    } catch (err) {
+      if ((err as { code?: number }).code === 10003) await roomDeleted(this.db, s.id);
+      else logger.warn({ err, sessionId: s.id }, 'cast room delete failed');
+    }
+  }
+
   /** 🚫 相手が来ない（来ている人が押す。押した人が部屋にいて、相手がいないときだけ） */
   private async noShow(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
@@ -1318,13 +1401,18 @@ export class CastApp {
     const other = i.user.id === before.castId ? before.customerId : before.castId;
     if (!room?.members.has(i.user.id)) return void (await i.reply({ content: 'この部屋（通話）に入ってから押してください。', ...EPHEMERAL }));
     if (room.members.has(other)) return void (await i.reply({ content: '相手は部屋にいます。', ...EPHEMERAL }));
+    await i.deferUpdate();
+    await this.presencePending;
+    await this.observePresence(before, new Date());
     const r = await reportNoShow(this.db, c, id, i.user.id);
-    if (r.status === 'too_early') return void (await i.reply({ content: `始まってから ${c.noShowMinutes} 分たつまで待ってください。`, ...EPHEMERAL }));
-    if (r.status !== 'ok') return void (await i.reply({ content: 'この指名は、もう終わっています。', ...EPHEMERAL }));
-    await i.update({ ...sessionMessage(r.session, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.update>[0]);
+    if (r.status === 'too_early') return void (await i.followUp({ content: `始まってから ${c.noShowMinutes} 分たつまで待ってください。`, ...EPHEMERAL }));
+    if (r.status === 'attended') return void (await i.followUp({ content: '相手の入室記録があります。途中で抜けた場合は「通報」から運営へ連絡してください。', ...EPHEMERAL }));
+    if (r.status !== 'ok' && r.status !== 'review') return void (await i.followUp({ content: 'この指名は、もう終わっています。', ...EPHEMERAL }));
+    await i.editReply({ ...sessionMessage(r.session, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
+    if (r.status === 'review') { await this.notifyAttendanceResult(r.session, c); this.refresh(); return; }
     const castAbsent = r.session.status === 'noshow_cast';
     await this.discord.sendDm(r.session.customerId, castAbsent ? `🚫 キャストが来なかったので、${fmt(r.refund)} 枚を全部戻しました。` : `🚫 予約の時間に来られなかったので、決まりにより ${fmt(r.session.price - r.refund)} 枚をキャストに渡し、${fmt(r.refund)} 枚を戻しました。`).catch(() => false);
-    await this.discord.sendDm(r.session.castId, castAbsent ? '🚫 予約の時間に来られなかったので、お客に全額戻しました。続くときは、運営から連絡することがあります。' : `🚫 お客が来なかったので、${fmt(r.pay)} 枚を渡しました。`).catch(() => false);
+    await this.discord.sendDm(r.session.castId, castAbsent ? '🚫 予約の時間に来られなかったので、お客に全額戻しました。続くときは、運営から連絡することがあります。' : `🚫 お客が来なかったので、${fmt(r.pay)} 枚を渡しました。指名本数には加算しません。`).catch(() => false);
     this.refresh();
   }
 
@@ -1476,14 +1564,26 @@ export class CastApp {
   }
 
   private async end(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
+    await i.deferUpdate();
+    await this.presencePending;
+    const before = await getSession(this.db, id);
+    if (before) await this.observePresence(before, new Date());
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
     const s = await finishSession(this.db, c, id, i.user.id);
-    if (!s) return void (await i.reply({ content: '終えられるのは、キャストと指名した人だけです（もう終わっているかもしれません）。', ...EPHEMERAL }));
-    await i.deferUpdate();
+    if (!s) return void (await i.followUp({ content: '終えられるのは、キャストと指名した人だけです（もう終わっているかもしれません）。', ...EPHEMERAL }));
     const dm = await this.askRating(s);
     await i.editReply({ ...sessionMessage(s, c, this.coin(), { rateInRoom: !dm }), allowedMentions: { parse: [] } } as Parameters<typeof i.editReply>[0]);
     await audit(this.db, { actorId: i.user.id, action: 'cast.end', detail: { sessionId: id, paid: s.paid }, via: 'discord' });
+    await this.notifyAttendanceResult(s, c);
     this.refresh();
+  }
+
+  private async notifyAttendanceResult(s: CastSession, c: CastConfig): Promise<void> {
+    if (s.status !== 'noshow_customer' && s.status !== 'noshow_cast' && s.status !== 'disputed') return;
+    const body = sessionMessage(s, c, this.coin());
+    for (const memberId of [s.castId, s.customerId]) await this.discord.sendDm(memberId, body.embeds[0]!.description).catch(() => false);
+    if (s.threadId) await this.discord.sendMessage(s.threadId, { ...body, allowed_mentions: { parse: [] } } as MessageBody).catch(() => undefined);
+    if (s.decidedBy === 'attendance_review' && this.cfg().channels.log) await this.discord.sendMessage(this.cfg().channels.log!, { content: `予約 #${s.id} の入室履歴を確認できません。社務所のキャスト画面で精算を選んでください。`, allowed_mentions: { parse: [] } }).catch(() => undefined);
   }
 
   private async report(i: ButtonInteraction<'cached'>, id: number): Promise<void> {
@@ -2069,7 +2169,9 @@ export class CastApp {
   }
 
   private async runTick(now: Date): Promise<void> {
-
+    await this.presencePending;
+    const active = await activeCastCalls(this.db);
+    for (const s of active) await this.observePresence(s, now);
     await pruneCastChargeQuotes(this.db, now);
     // 更新の前に出した予約のメッセージにも「日時変更を提案」などの新しいボタンを出す（起動して 1 回だけ）
     if (!this.threadsRefreshed) {
@@ -2079,6 +2181,20 @@ export class CastApp {
     // 📌 メニューがいちばん下になければ出し直す（BOT が止まっていた間の書き込みなど）
     await this.keepPanelAtBottom();
     const c = await loadCastConfig(this.db, this.cfg().coreTime);
+    if (!this.sleepPanelsRefreshed) {
+      let ready = true;
+      for (const s of active) {
+        const room = this.voice(s.channelId);
+        if (!room?.messages?.fetch) continue;
+        try {
+          const messages = await room.messages.fetch({ limit: 30 });
+          const panel = messages.find(m => m.author.id === this.guild!.client.user.id && m.components.some(r => 'components' in r && r.components.some(b => 'customId' in b && b.customId === `cast:end:${s.id}`)));
+          if (panel) await panel.edit({ ...sessionMessage(s, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof panel.edit>[0]);
+          else await room.send({ ...sessionMessage(s, c, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof room.send>[0]);
+        } catch (err) { ready = false; logger.warn({ err, sessionId: s.id }, 'cast sleep panel refresh failed'); }
+      }
+      this.sleepPanelsRefreshed = ready;
+    }
     const r = await castTick(this.db, c, now, async (s) => Boolean(await this.openRoom(s).catch((err: unknown) => { logger.warn({ err }, 'cast reserved room failed'); return undefined; })));
     let changed = r.waitingOff > 0;
     // ⏰ 予約の前の知らせ（キャストとお客に DM・スレッドにも）
@@ -2097,6 +2213,7 @@ export class CastApp {
     }
     for (const s of r.started) {
       changed = true;
+      await this.observePresence(s, now, true);
       const room = this.voice(s.channelId);
       if (!room) continue;
       await this.discord.sendDm(s.customerId, `📅 予約の部屋ができました。${roomEntry(this.guild!.id, room.id).url}`).catch(() => false);
@@ -2114,20 +2231,9 @@ export class CastApp {
       await room?.send({ ...sessionMessage(s, c, this.coin(), { rateInRoom: !dm }), allowedMentions: { parse: [] } } as Parameters<typeof room.send>[0]).catch(() => undefined);
       if (isDeliverySession(s) && s.threadId) await this.discord.sendMessage(s.threadId, { ...this.reserveMessage(s), allowed_mentions: { parse: [] } } as MessageBody).catch(() => undefined);
       if (s.paid > 0) await this.discord.sendDm(s.castId, `🎀 指名 #${s.id} が終わりました。${this.coin()} ${fmt(s.paid)} 枚をお渡ししました。`).catch(() => false);
+      await this.notifyAttendanceResult(s, c);
     }
-    for (const s of r.cleanup) {
-      // 👥 いっしょの部屋で、まだほかのキャストの指名が続いていれば、部屋は消さない
-      if (s.channelId && (await roomInUse(this.db, s.channelId, s.id))) {
-        await roomDeleted(this.db, s.id);
-        continue;
-      }
-      const room = s.channelId ? this.guild?.channels.cache.get(s.channelId) : undefined;
-      if (room) {
-        try { await room.delete('キャストの指名が終わった'); }
-        catch (err) { logger.warn({ err }, 'cast room delete failed'); continue; }
-      }
-      await roomDeleted(this.db, s.id);
-    }
+    for (const s of r.cleanup) await this.cleanupSessionRoom(s);
     await closeFinishedReservationThreads(this.db, async id => {
       let thread;
       try { thread = await this.guild!.channels.fetch(id); }

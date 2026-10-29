@@ -8,6 +8,7 @@ import { castTimeChanges, castChampagnes, castImages, castSessions, casts, membe
 import { addCoins, spendWithin, walletOf } from './economy.js';
 import { audit } from './audit.js';
 import { detectImage } from './notices.js';
+import { attendanceAtFinish } from './castAttendance.js';
 
 /**
  * 🎀 キャスト: 寝落ち・雑談などの通話を、銭で受ける人（18 歳以上・運営が承認）。
@@ -971,7 +972,7 @@ export function lateCancelShare(c: Pick<CastConfig, 'lateCancelMinutes' | 'lateC
  * 🚫 来なかった: 始まってから c.noShowMinutes 分たっても相手が来ない。押せるのは来ている側（来たかは呼び出し側が確かめる）。
  * お客が押す（キャストが来ない）→ 全額戻す / キャストが押す（お客が来ない）→ c.noShowPercent をキャストへ（手数料を引く）、残りを戻す
  */
-export type NoShowResult = { status: 'ok'; session: CastSession; pay: number; refund: number } | { status: 'not_found' | 'not_member' | 'too_early' };
+export type NoShowResult = { status: 'ok'; session: CastSession; pay: number; refund: number } | { status: 'review'; session: CastSession } | { status: 'not_found' | 'not_member' | 'too_early' | 'attended' };
 export async function reportNoShow(db: Db, c: CastConfig, id: number, by: string, now = new Date()): Promise<NoShowResult> {
   return db.transaction(async (tx) => {
     const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
@@ -980,6 +981,12 @@ export async function reportNoShow(db: Db, c: CastConfig, id: number, by: string
     const started = s.startedAt ?? s.startAt;
     if (!started || now.getTime() < started.getTime() + c.noShowMinutes * MIN) return { status: 'too_early' as const };
     const castAbsent = by === s.customerId;
+    // 一度来てから抜けた相手を「一度も来なかった」扱いにしない。
+    if (castAbsent ? s.attendance?.castJoinedAt : s.attendance?.customerJoinedAt) return { status: 'attended' as const };
+    if (s.attendance && attendanceAtFinish(s, now, c.noShowMinutes) === 'review') {
+      const session = await move(tx, id, ['active'], { status: 'disputed', closedAt: null, decidedBy: 'attendance_review', deleteAt: null });
+      return session ? { status: 'review' as const, session } : { status: 'not_found' as const };
+    }
     const share = castAbsent ? 0 : Math.floor((s.price * c.noShowPercent) / 100);
     const pay = share - castFee(c, share);
     const row = await move(tx, id, ['active'], { status: castAbsent ? 'noshow_cast' : 'noshow_customer', closedAt: now, endsAt: now, decidedBy: by, deleteAt: now, paid: pay });
@@ -1122,6 +1129,14 @@ export async function finishSession(db: Db, c: CastConfig, id: number, by: strin
     if (!s || s.status !== 'active') return undefined;
     if (by === 'system' && s.endsAt && s.endsAt > now) return undefined;
     if (by !== 'system' && by !== s.castId && by !== s.customerId) return undefined;
+    const presence = attendanceAtFinish(s, now, c.noShowMinutes);
+    if (presence === 'customer_absent' || presence === 'cast_absent') {
+      const result = await reportNoShow(tx, c, id, presence === 'customer_absent' ? s.castId : s.customerId, now);
+      return result.status === 'ok' ? result.session : undefined;
+    }
+    if (presence === 'review') {
+      return move(tx, id, ['active'], { status: 'disputed', closedAt: null, decidedBy: 'attendance_review', deleteAt: null });
+    }
     let earned = s.price;
     // 時間フリーは、キャストが終えても全額（時間で割らない）
     if (by === s.castId && s.startedAt && s.endsAt && now < s.endsAt && !isFreeSession(s)) {
@@ -1147,15 +1162,16 @@ export async function disputeSession(db: Db, id: number, by: string): Promise<Ca
 }
 
 /** 運営: 通報された指名を、キャストに渡す（手数料を引く）か、お客に戻す */
-export async function resolveSession(db: Db, c: CastConfig, id: number, action: 'pay' | 'refund', by: string, now = new Date()): Promise<CastSession | undefined> {
+export async function resolveSession(db: Db, c: CastConfig, id: number, action: 'pay' | 'refund' | 'noshow_customer', by: string, now = new Date()): Promise<CastSession | undefined> {
   return db.transaction(async (tx) => {
     const s = (await tx.select().from(castSessions).where(eq(castSessions.id, id)).for('update'))[0];
     if (!s || s.status !== 'disputed') return undefined;
-    const pay = action === 'pay' ? s.price - castFee(c, s.price) : 0;
-    const row = await move(tx, id, ['disputed'], { status: action === 'pay' ? 'done' : 'refunded', closedAt: now, paid: pay, decidedBy: by, deleteAt: now });
+    const charge = action === 'pay' ? s.price : action === 'noshow_customer' ? Math.floor(s.price * c.noShowPercent / 100) : 0;
+    const pay = charge - castFee(c, charge);
+    const row = await move(tx, id, ['disputed'], { status: action === 'pay' ? 'done' : action === 'noshow_customer' ? 'noshow_customer' : 'refunded', closedAt: now, paid: pay, decidedBy: by, deleteAt: now });
     if (!row) return undefined;
-    if (action === 'pay' && pay > 0) await addCoins(tx, s.castId, pay, 'cast_reward', { sessionId: id, from: s.customerId, fee: s.price - pay, staff: by });
-    if (action === 'refund' && s.price > 0) await addCoins(tx, s.customerId, s.price, 'cast_refund', { sessionId: id, staff: by });
+    if (pay > 0) await addCoins(tx, s.castId, pay, 'cast_reward', { sessionId: id, from: s.customerId, fee: charge - pay, staff: by, ...(action === 'noshow_customer' ? { noShow: true } : {}) });
+    if (s.price > charge) await addCoins(tx, s.customerId, s.price - charge, 'cast_refund', { sessionId: id, staff: by });
     return row;
   });
 }
@@ -1257,7 +1273,7 @@ export async function roomInUse(db: Db, channelId: string, except: number): Prom
   const [row] = await db
     .select({ id: castSessions.id })
     .from(castSessions)
-    .where(and(eq(castSessions.channelId, channelId), sql`${castSessions.id} <> ${except}`, inArray(castSessions.status, ['requested', 'accepted', 'active'])));
+    .where(and(eq(castSessions.channelId, channelId), sql`${castSessions.id} <> ${except}`, or(inArray(castSessions.status, ['requested', 'accepted', 'active']), and(eq(castSessions.status, 'disputed'), sql`${castSessions.deleteAt} is null`))));
   return Boolean(row);
 }
 
@@ -1275,13 +1291,13 @@ export async function castStats(db: Db, since: Date, castId?: string, until?: Da
   const rows = await db
     .select({
       castId: castSessions.castId,
-      count: sql<number>`count(*)::int`,
+      count: sql<number>`count(*) filter (where ${castSessions.status} = 'done')::int`,
       earned: sql<number>`coalesce(sum(${castSessions.paid}), 0)::int`,
       ratingAvg: sql<number | null>`avg(${castSessions.rating})::float`,
       ratings: sql<number>`count(${castSessions.rating})::int`,
     })
     .from(castSessions)
-    .where(and(eq(castSessions.status, 'done'), gte(castSessions.closedAt, since), castId ? eq(castSessions.castId, castId) : undefined, until ? lt(castSessions.closedAt, until) : undefined))
+    .where(and(inArray(castSessions.status, ['done', 'noshow_customer']), gte(castSessions.closedAt, since), castId ? eq(castSessions.castId, castId) : undefined, until ? lt(castSessions.closedAt, until) : undefined))
     .groupBy(castSessions.castId);
   const champagne = await db.select({castId:castChampagnes.castId,earned:sql<number>`coalesce(sum(${castChampagnes.price} - ${castChampagnes.fee}),0)::int`}).from(castChampagnes).where(and(gte(castChampagnes.paidAt,since),castId?eq(castChampagnes.castId,castId):undefined,until?lt(castChampagnes.paidAt,until):undefined)).groupBy(castChampagnes.castId);
   for(const gift of champagne){const row=rows.find(r=>r.castId===gift.castId);if(row)row.earned+=gift.earned;else rows.push({castId:gift.castId,count:0,earned:gift.earned,ratingAvg:null,ratings:0});}
@@ -1361,9 +1377,9 @@ export async function castStatement(db: Db, castId: string, from: Date, to: Date
   const list = await db
     .select()
     .from(castSessions)
-    .where(and(eq(castSessions.castId, castId), eq(castSessions.status, 'done'), gte(castSessions.closedAt, from), lt(castSessions.closedAt, to)))
+    .where(and(eq(castSessions.castId, castId), inArray(castSessions.status, ['done', 'noshow_customer']), gte(castSessions.closedAt, from), lt(castSessions.closedAt, to)))
     .orderBy(desc(castSessions.closedAt));
-  const rows:CastStatementRow[] = list.map((s) => ({ id: s.id, closedAt: s.closedAt!, customerId: s.customerId, label: sessionLabel(s), price: s.price, paid: s.paid, delivery: isDeliverySession(s) }));
+  const rows:CastStatementRow[] = list.map((s) => ({ id: s.id, closedAt: s.closedAt!, customerId: s.customerId, label: `${s.status === 'noshow_customer' ? 'お客様欠席（指名本数対象外）・' : ''}${sessionLabel(s)}`, price: s.price, paid: s.paid, delivery: isDeliverySession(s) }));
   const gifts=await db.select().from(castChampagnes).where(and(eq(castChampagnes.castId,castId),gte(castChampagnes.paidAt,from),lt(castChampagnes.paidAt,to)));
   rows.push(...gifts.map(g=>({id:g.id,closedAt:g.paidAt!,customerId:g.customerId,label:'🍾 '+g.bottleName,price:g.price,paid:g.price-g.fee,delivery:false})));
   rows.sort((a,b)=>b.closedAt.getTime()-a.closedAt.getTime());

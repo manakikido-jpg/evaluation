@@ -1780,6 +1780,11 @@ export const casts = pgTable('casts', {
 export type Cast = typeof casts.$inferSelect;
 
 /** 🎀 指名。銭は先に預かり、終わってからキャストに渡す（手数料を引く） */
+export type CastAttendance = {
+  epoch: string; checkedAt: string; uncertain: boolean;
+  customerJoinedAt: string | null; castJoinedAt: string | null;
+  customerPresent: boolean; castPresent: boolean;
+};
 export const castSessions = pgTable(
   'cast_sessions',
   {
@@ -1817,6 +1822,8 @@ export const castSessions = pgTable(
     /** この時刻までに返事がなければ断ったことにする */
     acceptBy: timestamp('accept_by', { withTimezone: true }),
     startedAt: timestamp('started_at', { withTimezone: true }),
+    /** 専用VCの入室確認。旧予約・BOT停止中は欠席と断定しない。 */
+    attendance: jsonb('attendance').$type<CastAttendance>(),
     endsAt: timestamp('ends_at', { withTimezone: true }),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     /** 部屋を消す時刻（終わってから少し残して評価してもらう） */
@@ -1840,6 +1847,21 @@ export const castSessions = pgTable(
   (t) => [index('cast_sessions_status_idx').on(t.status), index('cast_sessions_cast_idx').on(t.castId, t.createdAt), check('cast_sessions_price', sql`${t.price} >= 0`)],
 );
 export type CastSession = typeof castSessions.$inferSelect;
+
+export type CastSleepCalculation = { elapsedMs: number; durationMs: number; charge: number; pay: number; refund: number; fee: number };
+/** 寝落ち報告の確認画面と精算記録。時刻・金額はサーバーで確定する。 */
+export const castSleepReports = pgTable('cast_sleep_reports', {
+  id: text('id').primaryKey(),
+  sessionId: bigint('session_id', { mode: 'number' }).notNull().references(() => castSessions.id),
+  reporterId: text('reporter_id').notNull(),
+  channelId: text('channel_id').notNull(),
+  reportedAt: timestamp('reported_at', { withTimezone: true }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  snapshot: jsonb('snapshot').$type<{ price: number; startedAt: string; endsAt: string; extensions: number; feePercent: number }>().notNull(),
+  calculation: jsonb('calculation').$type<CastSleepCalculation>().notNull(),
+  settledAt: timestamp('settled_at', { withTimezone: true }),
+}, t => [index('cast_sleep_reports_session_idx').on(t.sessionId)]);
+export type CastSleepReport = typeof castSleepReports.$inferSelect;
 
 /** 通話中のシャンパン。確認条件と購入・表示を分けて保存する。 */
 export const castChampagnes = pgTable('cast_champagnes', {
