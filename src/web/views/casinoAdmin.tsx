@@ -319,7 +319,7 @@ export function CasinoAdminPage(p: {
                 <input type="number" name="keibaPrizeMult" min={0} max={1000} value={String(c.keibaPrizeMult)} required />
               </label>
               <div class="field">
-                <span>最低保証の 1 着賞金（賭けが少なくても、この額は出る。2〜5 着はその 4・2.6・2・1.4 割。胴元が出す）</span>
+                <span>最低保証の 1 着基準額（賭け額の倍率・日額上限・出走料で受取額は下がる。2〜5 着はその 4・2.6・2・1.4 割。胴元が出す）</span>
                 <div class="purse-grid">
                   {KB_CLASSES.map((name, i) => (
                     <label>
@@ -336,7 +336,7 @@ export function CasinoAdminPage(p: {
                 <textarea name="keibaBigRaces" rows={3}>{formatBigRaces(c.keibaBigRaces)}</textarea>
               </label>
               <label class="field">
-                <span>馬主がそのレースに賭けたとき: 最低保証で足す分は、賭けた額の何倍まで（1 日の上限なし。0 で足さない）</span>
+                <span>馬主がそのレースに賭けたとき: 最低保証で足す分は、賭けた額の何倍まで（下の日額上限も適用。0 で足さない）</span>
                 <input type="number" name="keibaBetPurseMult" min={0} max={1000} value={String(c.keibaBetPurseMult)} required />
               </label>
               <label class="field">
@@ -348,15 +348,15 @@ export function CasinoAdminPage(p: {
                 <input type="number" name="keibaNoBetDailyCap" min={0} max={100000000} value={String(c.keibaNoBetDailyCap)} required />
               </label>
               <label class="field">
-                <span>満額の最低保証をもらうのに、馬主がそのレースに賭ける最低の額（足りなければ「賭けていない」と同じ）</span>
+                <span>保証上乗せの対象になる本人の最低賭け額（初期値1で少額から対象。0でも賭けなしは対象外）</span>
                 <input type="number" name="keibaPurseMinBet" min={0} max={1000000} value={String(c.keibaPurseMinBet)} required />
               </label>
               <label class="field">
-                <span>満額の最低保証は、馬主以外のメンバーがそのレースで合計この額以上賭けたときだけ（0 で条件なし）</span>
+                <span>追加条件：ほかの人の賭け合計（初期値0で不要。設定するとこの額以上が必要）</span>
                 <input type="number" name="keibaPurseOthersMin" min={0} max={10000000} value={String(c.keibaPurseOthersMin)} required />
               </label>
               <label class="field">
-                <span>満額の最低保証で足す分を、1 人が 1 日に受け取れる上限（0 で上限なし）</span>
+                <span>賭けたレースの保証上乗せを、1 人が 1 日に受け取れる上限（日本時間0時区切り。0で上限なし）</span>
                 <input type="number" name="keibaBetDailyCap" min={0} max={100000000} value={String(c.keibaBetDailyCap)} required />
               </label>
               <label class="field">

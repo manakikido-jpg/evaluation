@@ -3318,6 +3318,27 @@ describe('キャスト（管理画面）', () => {
     });
   };
 
+  it('入室確認の保留を運営が欠席精算できる。未認証・CSRF不一致・二重精算は拒否する', async () => {
+    const { castSessions } = await import('../src/db/schema.js');
+    const { walletOf } = await import('../src/services/economy.js');
+    const { castStats } = await import('../src/services/cast.js');
+    const CAST = '880000000000000931', CUSTOMER = '880000000000000932';
+    await addCoins(db, CUSTOMER, 750, 'adjust');
+    const [booking] = await db.insert(castSessions).values({ castId: CAST, customerId: CUSTOMER, plan: '60', price: 250, minutes: 60, status: 'disputed', decidedBy: 'attendance_review' }).returning();
+    const path = `/cast/sessions/${booking!.id}/noshow_customer`;
+    expect((await app.request(path, { method: 'POST' })).status).toBe(302);
+    const s = await login(STAFF);
+    const html = await (await get('/cast', s)).text();
+    expect(html).toContain('入室履歴を確認できません');expect(html).toContain(path);
+    expect((await app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${s}` } })).status).toBe(403);
+    expect((await walletOf(db, CAST)).balance).toBe(0);
+    expect((await form(s, path, {})).headers.get('location')).toBe('/cast?msg=paid');
+    expect((await walletOf(db, CAST)).balance).toBe(113);expect((await walletOf(db, CUSTOMER)).balance).toBe(875);
+    expect((await castStats(db, new Date('2026-09-01')))[0]?.count).toBe(0);
+    expect((await form(s, path, {})).headers.get('location')).toBe('/cast?msg=done_already');
+    expect((await walletOf(db, CAST)).balance).toBe(113);expect((await listAudit(db, { action: 'cast.noshow_customer' })).length).toBe(1);
+  });
+
   it('お問い合わせに未設定の希望役職と管理への入口を出し、宮司だけが役職を作れる', async () => {
     const { loadTicketConfig } = await import('../src/services/supportTickets.js');
     const g = await login(GUJI), staff = await login(STAFF);
@@ -3667,7 +3688,7 @@ describe('キャスト（管理画面）', () => {
     if (r.status !== 'ok') throw new Error(r.status);
     await acceptSession(db, r.session.id, CAST);
     await disputeSession(db, r.session.id, GUEST);
-    expect(await (await get('/cast', s)).text()).toContain('通報（運営が決める）');
+    expect(await (await get('/cast', s)).text()).toContain('通報・入室確認（運営が決める）');
     expect((await form(s, `/cast/sessions/${r.session.id}/refund`, {})).headers.get('location')).toBe('/cast?msg=refunded');
     expect((await walletOf(db, GUEST)).balance).toBe(1000);
     expect((await form(s, `/cast/sessions/${r.session.id}/pay`, {})).headers.get('location')).toBe('/cast?msg=done_already');

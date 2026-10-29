@@ -379,9 +379,10 @@ async function main(): Promise<void> {
     every10();
     omairiTicker = setInterval(every10, 10 * 60_000);
   });
-  client.on(Events.GuildUnavailable, (g) => { if (g.id === cfg().guildId) emaCounter.invalidate(); });
+  client.on(Events.GuildUnavailable, (g) => { if (g.id === cfg().guildId) { emaCounter.invalidate(); cast.invalidateAttendance(); } });
   client.on(Events.GuildAvailable, (g) => emaCounter.schedule(g.id));
-  client.on(Events.ShardResume, () => { emaCounter.invalidate(); emaCounter.schedule(cfg().guildId); });
+  client.on(Events.ShardResume, () => { emaCounter.invalidate(); emaCounter.schedule(cfg().guildId); cast.invalidateAttendance(); });
+  client.on(Events.ShardDisconnect, () => cast.invalidateAttendance());
   client.on(Events.GuildMemberAdd, (m) => {
     emaCounter.memberChanged(m.guild.id, m.id, true);
     void app.onMemberAdd(m);
@@ -415,6 +416,7 @@ async function main(): Promise<void> {
     })();
   });
   client.on(Events.VoiceStateUpdate, (before, after) => {
+    void cast.onVoiceStateUpdate(before, after);
     recording.onVoiceStateUpdate(before, after);
     // 社務所Web のホームの「いま通話にいる人」を、すぐ書きかえる
     if (before.channelId !== after.channelId) app.voiceChanged(after.guild);

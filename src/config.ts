@@ -569,18 +569,18 @@ export const casinoSchema = z.object({
   keibaPurse: z.array(z.number().int().min(0).max(1_000_000)).length(9).default([300, 300, 400, 500, 700, 1000, 2000, 3000, 5000]),
   /** （前の決まり。いまは使わない）最低保証で足す分の 1 日の上限 */
   keibaPurseDailyCap: z.number().int().min(0).max(100_000_000).default(20000),
-  /** 🏇 馬主がそのレースに賭けたとき: 最低保証で足す分は、そのレースで賭けた額の何倍まで（1 日の上限なし） */
-  keibaBetPurseMult: z.number().int().min(0).max(1000).default(10),
+  /** 🏇 馬主がそのレースに賭けたとき: 最低保証で足す分は、そのレースで賭けた額の何倍まで（日額上限も適用） */
+  keibaBetPurseMult: z.number().int().min(0).max(1000).default(2),
   /** 🏇 馬主がそのレースに賭けていないとき: 最低保証の 1 着賞金（2〜5 着はその割合。クラスに関係なく） */
   keibaNoBetPurse: z.number().int().min(0).max(1_000_000).default(50),
   /** 🏇 賭けていないレースの最低保証で足す分を、1 人が 1 日（日本時間）に受け取れる上限（0 で上限なし） */
   keibaNoBetDailyCap: z.number().int().min(0).max(100_000_000).default(1000),
-  /** 🏇 最低保証（満額）をもらうのに、馬主がそのレースに賭ける最低の額（足りなければ「賭けていない」と同じ扱い） */
-  keibaPurseMinBet: z.number().int().min(0).max(1_000_000).default(100),
-  /** 🏇 最低保証（満額）は、馬主以外のメンバーがそのレースで合計この額以上賭けたときだけ（自作自演で増やさない） */
-  keibaPurseOthersMin: z.number().int().min(0).max(10_000_000).default(500),
-  /** 🏇 最低保証（満額）で足す分を、1 人が 1 日（日本時間）に受け取れる上限（0 で上限なし） */
-  keibaBetDailyCap: z.number().int().min(0).max(100_000_000).default(3000),
+  /** 🏇 クラス保証の上乗せ対象になる本人の最低賭け額（0でも正の賭けが必要。倍率・日額制限は別） */
+  keibaPurseMinBet: z.number().int().min(0).max(1_000_000).default(1),
+  /** 🏇 クラス保証の追加条件: 他人の賭け合計がこの額以上（0で条件なし） */
+  keibaPurseOthersMin: z.number().int().min(0).max(10_000_000).default(0),
+  /** 🏇 クラス保証で足す分を、1 人が 1 日（日本時間）に受け取れる上限（0 で上限なし） */
+  keibaBetDailyCap: z.number().int().min(0).max(100_000_000).default(1000),
   /** 🏇 出走料: 馬主のいる馬が走るたび、その馬の賞金・手当から引く額（もらう額より多くは引かない） */
   keibaEntryFee: z.number().int().min(0).max(1_000_000).default(50),
   /** 🏇 応援金: その馬の単勝・複勝に、馬主でない人が賭けた額の何 % を馬主へ */

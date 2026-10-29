@@ -1,3 +1,4 @@
+import {keibaPurseGuide} from './keibaPurseGuide.js';
 import type {KeibaPreviewData} from '../../services/casino/keibaPreview.js';
 import {KeibaTheme, KeibaNav, KeibaHero} from './keibaTheme.js';
 import {KeibaPreviewContent} from './keibaPreview.js';
@@ -921,7 +922,7 @@ export function KeibaView(p: {
               ))}
               <details class="kb-prize">
                 <summary>
-                🏆 1 着賞金 {me.coin.emoji}
+                🏆 1 着賞金の目安 {me.coin.emoji}
                 {fmt(
                   (s.prizes ??
                     racePrizes(s.race.cls, s.real, kbPayConf(p.casino)))[0] ??
@@ -929,15 +930,8 @@ export function KeibaView(p: {
                 )}
                 </summary>
                 <small>
-                  （賭けが増えるほど上がる。最低{" "}
-                  {fmt(p.casino.keibaPurse[s.race.cls] ?? 0)}
-                  は、馬主がこのレースに賭けたとき（足す分は賭けた額の{" "}
-                  {p.casino.keibaBetPurseMult} 倍まで）。賭けていなければ最低{" "}
-                  {fmt(p.casino.keibaNoBetPurse)}
-                  {p.casino.keibaNoBetDailyCap > 0
-                    ? `（足す分は 1 日 ${fmt(p.casino.keibaNoBetDailyCap)} まで）`
-                    : ""}
-                  。馬主の馬が 1〜5 着なら馬主に）
+                  クラスの1着保証基準は{fmt(p.casino.keibaPurse[s.race.cls] ?? 0)}。表示額は出走料・日額上限・持分分配を適用する前の目安です。
+                  {keibaPurseGuide(p.casino)}
                 </small>
               </details>
             </div>
@@ -1771,7 +1765,7 @@ export function KbStablePage(p: {
             1〜5 着に入ると賞金（メンバーが賭けた合計の数
             %・クラスが上ほど多い）。
             {p.pay && p.pay.keibaPurse.some((v) => v > 0)
-              ? `賭けが少なくても、1 着なら最低 ${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜 ${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）は出ます。ただし、あなたがそのレースに ${fmt(Math.max(1, p.pay.keibaPurseMinBet))} 以上の馬券を買い${p.pay.keibaPurseOthersMin > 0 ? `、ほかの人も合計 ${fmt(p.pay.keibaPurseOthersMin)} 以上賭けた` : ''}ときだけです（最低保証で足す分は、賭けた額の ${p.pay.keibaBetPurseMult} 倍まで${p.pay.keibaBetDailyCap > 0 ? `・1 日 ${fmt(p.pay.keibaBetDailyCap)} まで` : ''}）。${p.pay.keibaEntryFee > 0 ? `走るたびに出走料 ${fmt(p.pay.keibaEntryFee)} を、その馬がもらう分から引きます（大レースはなし）。` : ''}買っていないレースは、1 着でも最低 ${fmt(p.pay.keibaNoBetPurse)}${p.pay.keibaNoBetDailyCap > 0 ? `（足す分は 1 日 ${fmt(p.pay.keibaNoBetDailyCap)} まで）` : ''}。勝ち鞍は、どちらでも馬の成績に残ります。`
+              ? `1着保証の基準額は${fmt(p.pay.keibaPurse[0] ?? 0)}（新馬）〜${fmt(p.pay.keibaPurse[8] ?? 0)}（G1）。${keibaPurseGuide(p.pay)}勝ち鞍は賭けの有無にかかわらず成績に残ります。`
               : ""}
             着外でも出走手当が入ります。
           </li>

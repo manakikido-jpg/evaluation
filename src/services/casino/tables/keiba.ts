@@ -200,7 +200,7 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
   }
   // 1〜5 着の賞金（メンバーが賭けた合計の数 % に倍率・最低保証）と出走手当・応援金（馬主のいる馬はみんな）。馬主に払う
   // 最低保証で足す分は、馬主がそのレースに賭けたかで変わる:
-  // ・賭けた: クラスの最低保証まで。ただし足す分は、そのレースで賭けた額の keibaBetPurseMult 倍まで（1 日の上限なし）
+  // ・賭けた: クラスの最低保証まで。ただし足す分は、そのレースで賭けた額の keibaBetPurseMult 倍まで（受取人ごとに keibaBetDailyCap の日額上限）
   // ・賭けていない: 1 着 keibaNoBetPurse（2〜5 着はその割合）まで。足す分は 1 人 1 日 keibaNoBetDailyCap まで
   const c = ctx.cfg.casino;
   const conf = kbPayConf(c);
@@ -219,7 +219,7 @@ function finish(state: KbState, ctx: Ctx): Step<KbState> {
     let top: number;
     let capped = false;
     let betCapped = false;
-    // 満額の最低保証は、馬主が最低の額以上賭け、ほかの人も合計で一定の額以上賭けたレースだけ（自作自演で増やさない）
+    // 保証の対象条件。標準は本人の正の賭けだけ（他人の賭け条件は0で無効）。倍率予算と日額上限は別に適用する
     const enough = bet >= Math.max(1, c.keibaPurseMinBet) && totalBet - bet >= c.keibaPurseOthersMin;
     if (s.big && !s.big.key.startsWith('event:')) {
       // 🏆 大レース: 最低保証は満額（1 日に数回だけなので、賭けた額に関係なく）
