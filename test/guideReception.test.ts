@@ -341,6 +341,18 @@ describe('案内から参拝者ロールを付与', () => {
     expect(controls('done')[1]?.components[0]?.disabled).toBe(true);
     expect(guideVisitorPanel(r, config).components).toHaveLength(2);
   });
+  it('🔰 案内で参拝者を付けるとき、設定した縁人などのロールも一緒に付ける', async () => {
+    await configure();
+    const EN = '600000000000000777';
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), withRoleIds: [EN] }, GUIDE);
+    const m = mockGuild();
+    const r = await reception();
+    await assignGuide(db, r.id, GUIDE, { roleVerified: true });
+    await m.app.onInteraction(m.interaction(r.id, GUIDE, 'role') as never);
+    expect(m.visitor.roles.cache.has(RANK_ROLE.sanpaisha)).toBe(true);
+    expect(m.visitor.roles.cache.has(EN)).toBe(true);
+    expect(m.visitor.roles.cache.has(PENDING)).toBe(false);
+  });
   it('担当者が参拝者を付けてから案内待ちを外す。同時押しでも初期通貨・記録は1回', async () => {
     await configure();
     const m = mockGuild();

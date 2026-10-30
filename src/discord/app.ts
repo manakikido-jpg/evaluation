@@ -38,7 +38,6 @@ import type { Db } from '../db/client.js';
 import { decidePromotion, highestRank, voiceCapPercentOf, voicePercentOf, type Promotion } from '../domain/ranks.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
-import { loadGuideConfig } from '../services/guideReception.js';
 import { giveFlow, revokeFlow, type MemberInfo } from '../services/flows.js';
 import { addHourlyActivity, addMessageCounts, eligibleVoiceMembers, voiceTick } from '../services/activity.js';
 import { walletOf } from '../services/economy.js';
@@ -200,9 +199,6 @@ export class ShuinApp {
           return { id: sent.id };
         },
       }, m.id).catch((err) => logger.error({ err }, 'initial currency failed'));
-      // 🔰 参拝者になったら、一緒に付けるロール（縁人など）も付ける（案内・絵馬・手で付けた、どの道でも）
-      const extra = (await loadGuideConfig(this.db).catch(() => undefined))?.withRoleIds.filter(id => !m.roles.cache.has(id)) ?? [];
-      if (extra.length) await m.roles.add(extra, '参拝者ロールと一緒に付ける').catch((err) => logger.warn({ err }, 'with roles add failed'));
     }
     await this.rewardInvites(m);
   }
