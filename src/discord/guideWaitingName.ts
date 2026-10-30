@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
-import { guideDuty, waitingGuides, type GuideConfig } from '../services/guideReception.js';
+import { guideDuty, type GuideConfig } from '../services/guideReception.js';
 import { logger } from '../lib/logger.js';
 
 const KEY = 'guide.waiting_channel_names';
@@ -25,11 +25,10 @@ export class GuideWaitingNames {
       const state = parsed.data;
       let waiting: boolean | undefined = false;
       if (config.voiceChannelIds.length) {
-        const [standby, duty] = await Promise.all([waitingGuides(this.db), guideDuty(this.db)]);
-        const dutyIds = new Set(duty);
-        const candidates = new Set([...duty, ...standby]);
-        let uncertain = candidates.size > 0 && !config.roleId;
-        if (config.roleId) for (const id of candidates) {
+        // 「入室⭕」は、🙋 案内担当がいるときだけ（「案内担当なし」の表示と合わせる。待機中の案内人だけでは付けない）
+        const duty = await guideDuty(this.db);
+        let uncertain = duty.length > 0 && !config.roleId;
+        if (config.roleId) for (const id of duty) {
           const member = await guild.members.fetch({ user: id, force: true }).catch((err: unknown) => {
             // 退会は確定している。不明な取得失敗は「不在」と決めつけない。
             if (!(err && typeof err === 'object' && 'code' in err && err.code === 10007)) {
@@ -39,13 +38,9 @@ export class GuideWaitingNames {
             return undefined;
           });
           if (!member || member.user.bot || !member.roles.cache.has(config.roleId)) continue;
-          const status = member.presence?.status;
-          // 明示的な担当中は終了するまで有効。VC接続中ならオフライン表示でも在席。
-          if (dutyIds.has(id) || !this.presence || member.voice?.channelId || (status !== undefined && status !== 'offline')) {
-            waiting = true;
-            break;
-          }
-          if (status === undefined) uncertain = true;
+          // 担当中は、Discord でオフライン表示でも在席とする（担当を終えるまで）
+          waiting = true;
+          break;
         }
         if (!waiting && uncertain) waiting = undefined;
       }
