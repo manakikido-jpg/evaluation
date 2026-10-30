@@ -47,6 +47,21 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
   const f=await readTrial(db,now,'trial-2');
   return app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:'1',action,...extra})});
  }
+ it('前兆の場面確認を保存し、別台再開後のGODと二重STOPでも確定権利を守る',async()=>{
+  await postV2('seat');expect((await postV2('scenario',{scenario:'omen'})).status).toBe(303);
+  const html=await(await app.request(v2,{headers:headers()})).text();
+  expect(html).toContain('前兆（当選済み）');expect(html).toContain('data-phase="omen"');expect(html).not.toContain('omenStocks');
+  await postV2('leave');await postV2('seat',{machine:'2'});await postV2('lever',{machine:'2'});
+  const f=await readTrial(db,now,'trial-2'),s=f.machines[1]!.state;
+  expect(s).toMatchObject({omenStocks:1,omen:5,setting:1,sample:true});
+  s.pending!.role='god';s.pending!.model={flag:'god',missUnits:0};await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{machine:'2',index:'0'});await postV2('stop',{machine:'2',index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{machine:'2',index:'2',revision}),postV2('stop',{machine:'2',index:'2',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state).toMatchObject({phase:'gg',stocks:5,sets:1,omenStocks:0,firsts:1});
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
  it('新版にも運営・経済権限・CSRFが必要で、表示だけでは保存しない',async()=>{
   expect((await app.request(v2)).status).toBe(302);
   for(const access of [{level:'shinshoku',pages:['members']},{level:'member',pages:['economy']}] as const){

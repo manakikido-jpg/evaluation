@@ -1,4 +1,4 @@
-import {BET,UNIT,lever,newGaisen,stop,type Phase,type Role,type Setting,type Spin,type RuleVersion} from './engine.js';
+import {BET,UNIT,lever,newGaisen,stop,pendingOmenSets,type Phase,type Role,type Setting,type Spin,type RuleVersion} from './engine.js';
 
 import {spinNavi,phaseOutcome} from './phaseRules.js';
 
@@ -71,7 +71,7 @@ export function simulateGaisen(setting:Setting,games:number,seed:number,policy:S
   phases,byPhase,transitions,god:s.gods,ggFirsts:s.firsts,sgg:s.sggs,
   awardedSets,startedSets,completedChains,maxChainSets,maxNormalGames,
   unfinished:{phase:s.phase,ggLeft:s.ggLeft,stocks:s.stocks,sets:s.sets,normalGames:s.normalGames,
-   omen:s.omen,gstopLeft:s.gstopLeft,hold:s.hold,sggLeft:s.sggLeft,medusa:s.medusa,ex:s.ex,
+   omen:s.omen,omenStocks:pendingOmenSets(s),gstopLeft:s.gstopLeft,hold:s.hold,sggLeft:s.sggLeft,medusa:s.medusa,ex:s.ex,
    gstopReturn:s.gstopReturn,sggReturn:s.sggReturn,gstopQueue:s.gstopQueue??0,symbolHistory:s.symbolHistory??[]},provisional:true};
 }
 export type GaisenSimulation=ReturnType<typeof simulateGaisen>;

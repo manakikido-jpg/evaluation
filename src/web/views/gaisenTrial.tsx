@@ -7,7 +7,7 @@ import {assetUrl} from '../assets.js';
 import {GaisenReels,reelPresentation} from './gaisenReels.js';
 import {WinResult,GaisenWinStage} from './gaisenWin.js';
 const fmt=(n:number)=>n.toLocaleString('ja-JP');
-const SCENE:Record<Scenario,string>={normal:'通常時',gg:'GG',god:'GOD降臨後',gstop:'G-STOP',sgg:'SGG',ceiling:'天井直前'};
+const SCENE:Record<Scenario,string>={normal:'通常時',gg:'GG',god:'GOD降臨後',gstop:'G-STOP',sgg:'SGG',ceiling:'天井直前',omen:'前兆（当選済み）'};
 export function GaisenTrial({m,session,error,version='trial-1'}:{m:TrialView;session:AdminSession;error?:string;version?:RuleVersion}){
  const isV2=version==='trial-2',PATH=isV2?'/economy/gaisen-trial-v2':'/economy/gaisen-trial';
  const own=m.own;
@@ -33,11 +33,11 @@ export function GaisenTrial({m,session,error,version='trial-1'}:{m:TrialView;ses
  <div class="gt-play"><form class="gt-lever-form" method="post" action={PATH}>{fields(own.id,'lever')}<button class="gt-lever" disabled={own.spinning||m.points<30}>レバー<small>30ポイント</small></button></form><div class="gt-stop-row">{[0,1,2].map(i=><form method="post" action={PATH}>{fields(own.id,'stop')}<input type="hidden" name="index" value={i}/><button class="gt-stop" disabled={!own.spinning||own.stopped.includes(i)||own.phase==='gstop'&&i!==[0,1,2].find(n=>!own.stopped.includes(n))}>{['左','中','右'][i]}STOP</button></form>)}</div></div>
  <div class="gt-bottom"><span>今回の戻り <b>{fmt(own.lastPaid)}</b>ポイント · 特別区間の差引 {fmt(own.chainWon)}</span><form method="post" action={PATH}>{fields(own.id,'leave')}<button disabled={own.spinning&&own.phase==='normal'}>離席{own.phase!=='normal'?'して進捗を保存':''}</button></form><form method="post" action={PATH}>{fields(own.id,'refill')}<button disabled={own.spinning}>試遊10万ポイント補充</button></form></div>
  <p class="gt-caption">最後のゲーム操作から通常10分、GG・前兆・G-STOP・SGG・G-ZONEは1時間保護。閲覧・再読込では延長しません。</p>
- <details class="gt-scenes"><summary>場面を選んで動作確認（自然抽選の収支確認とは別）</summary><p>同じ台の試遊状態と当日グラフを入れ替えます。実際の当選ではありません。保存分の再開中は使えません。</p><div>{SCENARIOS.map(key=><form method="post" action={PATH}>{fields(own.id,'scenario')}<input type="hidden" name="scenario" value={key}/><button disabled={own.spinning||own.resumed}>{SCENE[key]}</button></form>)}</div></details>
+ <details class="gt-scenes"><summary>場面を選んで動作確認（自然抽選の収支確認とは別）</summary><p>同じ台の試遊状態と当日グラフを入れ替えます。実際の当選ではありません。保存分の再開中は使えません。</p><div>{SCENARIOS.filter(key=>isV2||key!=='omen').map(key=><form method="post" action={PATH}>{fields(own.id,'scenario')}<input type="hidden" name="scenario" value={key}/><button disabled={own.spinning||own.resumed}>{SCENE[key]}</button></form>)}</div></details>
  <details open><summary>あなたの試遊履歴</summary><ol class="gt-history">{own.history.slice(0,20).map(x=><li>{x}</li>)}</ol></details>
  </section>:<div class="gt-empty"><h2>{m.saved?'保存した進捗があります':'神殿へようこそ'}</h2><p>{m.saved?'空席へ着席すると、保存時の設定で続きを再開します。':'上の5台から空席を選んでください。レバー→左・中・右のSTOPで遊べます。'}</p></div>}
  {own&&floor}
  <GaisenWinStage/>
- <details class="gt-rules"><summary>試遊の仕様・未再現部分</summary>{isV2&&<p>小役履歴は直近5ゲーム。通常は青7の3連で抽選・4連でG-STOP、GG中は青7の5連でG-STOPです。黄7・宝石・SGG中の赤7などでもGGを抽選します。G-STOPの追加当選は待機して順番に消化します。前兆やループの詳細は引き続き暫定です。</p>}<p>1ゲーム30ポイント、1枚相当10ポイント。戻りと差引を区別します。GODの基本フラグ、GG100G、G-STOPの停止時抽選、SGG16Gの構成を確認できます。</p><p>{isV2?'区間別の役は公開資料の概数に基づく試遊モデルです。目押しは自動補助。':'役の分布は暫定です。'}表裏モード、上乗せ・ループ率、設定変更時の天井短縮、SGG-EX移行などは未照合または暫定です。実機同等の勝率・還元率ではありません。G-STOPのリーチ目やHOLDの一部も簡略化しています。当選時は独自の神殿演出と合成音が流れます。実機の映像・音源は使いません。</p></details>
+ <details class="gt-rules"><summary>試遊の仕様・未再現部分</summary>{isV2&&<p>小役履歴は直近5ゲーム。通常は青7の3連で抽選・4連でG-STOP、GG中は青7の5連でG-STOPです。黄7・宝石・SGG中の赤7などでもGGを抽選します。G-STOPの追加当選は待機して順番に消化します。前兆中の当選分は、GODやほかの当選が重なっても保持します。「場面を選んで動作確認」の前兆から、途中保存・再開も試せます。前兆の長さやループの詳細は引き続き暫定です。</p>}<p>1ゲーム30ポイント、1枚相当10ポイント。戻りと差引を区別します。GODの基本フラグ、GG100G、G-STOPの停止時抽選、SGG16Gの構成を確認できます。</p><p>{isV2?'区間別の役は公開資料の概数に基づく試遊モデルです。目押しは自動補助。':'役の分布は暫定です。'}表裏モード、上乗せ・ループ率、設定変更時の天井短縮、SGG-EX移行などは未照合または暫定です。実機同等の勝率・還元率ではありません。G-STOPのリーチ目やHOLDの一部も簡略化しています。当選時は独自の神殿演出と合成音が流れます。実機の映像・音源は使いません。</p></details>
  </div></Layout>;
 }

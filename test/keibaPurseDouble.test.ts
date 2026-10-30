@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { eq, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../src/config.js';
-import { members, settings } from '../src/db/schema.js';
+import { coinTx, members, settings } from '../src/db/schema.js';
 import { newStable, seeded } from '../src/services/casino/keiba.js';
 import { keiba, type KbState } from '../src/services/casino/tables/keiba.js';
 import { payCredit } from '../src/services/casino/tables/service.js';
@@ -121,7 +121,12 @@ describe('保存設定の移行と実際の入金', () => {
     const db = made.db;
     await db.insert(members).values([A, B].map(m => ({ id: m.id, username: m.name, displayName: m.name })));
     const before = new Date('2026-10-30T14:59:59Z');
-    const pay = (c: Credit, at = before) => payCredit(db, cfg, c, at, 'keiba', 1);
+    // 使い捨てDBの記録時計も判定時計へ合わせる。実行日が変わっても境界を検証する。
+    await db.execute(sql`alter table coin_tx alter column at set default current_setting('test.credit_now')::timestamptz`);
+    const pay = async (c: Credit, at = before) => {
+      await db.execute(sql`select set_config('test.credit_now', ${at.toISOString()}, false)`);
+      return payCredit(db, cfg, c, at, 'keiba', 1);
+    };
     const credit: Credit = { memberId: A.id, amount: 990, reason: 'keiba_prize', cap: 'keiba_purse_bet' };
     expect(await pay(credit)).toBe(990);
     const shared = settle(100, { shares: true });
@@ -133,6 +138,11 @@ describe('保存設定の移行と実際の入金', () => {
     expect(await pay(shared.credits[0]!)).toBe(0);
     expect(await pay({ ...credit, cap: 'keiba_purse', amount: 50 })).toBe(50);
     expect((await walletOf(db, A.id)).balance).toBe(1050);
-    expect(await pay({ ...credit, amount: 1000 }, new Date('2026-10-30T15:00:00Z'))).toBe(1000);
+    expect((await db.select().from(coinTx)).every(row => row.at.getTime() === before.getTime())).toBe(true);
+    const after = new Date('2026-10-30T15:00:00Z');
+    expect(await pay({ ...credit, amount: 1000 }, after)).toBe(1000);
+    expect(await pay({ ...credit, amount: 1 }, after)).toBe(0);
+    const nextDay = await db.select().from(coinTx).where(eq(coinTx.at, after));
+    expect(nextDay.map(row => row.amount)).toEqual([1000]);
   });
 });
