@@ -19,6 +19,8 @@ export const guideConfigSchema = z.object({
   salary: z.number().int().min(0).max(1_000_000).default(150),
   /** 🙋 名前を「案内担当：○○」／「案内担当なし」に変えるチャンネル（なければ変えない） */
   dutyChannelId: snowflake.optional(),
+  /** 🔰 参拝者ロールと一緒に付けるロール（縁人など。5 つまで） */
+  withRoleIds: z.array(snowflake).max(5).default([]),
   links: z.array(z.object({ emojiId: snowflake, emojiName: z.string().regex(/^\w{1,32}$/), channelIds: z.array(snowflake).min(1).max(3) })).max(10).default(GUIDE_LINKS),
 });
 /** 絵文字とDiscordのチャンネルリンクを、そのまま設定欄に貼れる */

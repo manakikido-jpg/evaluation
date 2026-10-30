@@ -357,6 +357,17 @@ describe('参拝者ロールで初期通貨を発行', () => {
     expect(sent).toHaveLength(1);
     expect((await walletOf(db, id)).balance).toBe(cfg.economy.joinBonus);
   });
+  it('🔰 参拝者になったら、案内の設定で選んだロール（縁人など）も一緒に付ける', async () => {
+    const { saveGuideConfig, guideConfigSchema } = await import('../src/services/guideReception.js');
+    const EN = '600000000000000777';
+    await saveGuideConfig(db, guideConfigSchema.parse({ withRoleIds: [EN] }), 'staff');
+    const m = add('700000000000000096', ROLE.sanpaisha);
+    await app.onMemberUpdate(m as never, fakeMember(m.id, []) as never);
+    expect(m.roles.add).toHaveBeenCalledWith([EN], '参拝者ロールと一緒に付ける');
+    const other = add('700000000000000097', ROLE.ujiko);
+    await app.onMemberUpdate(other as never, fakeMember(other.id, []) as never);
+    expect(other.roles.add).not.toHaveBeenCalled();
+  });
   it('DMが届かなくても発行し、運営の記録を出す', async () => {
     const m = add('700000000000000091', ROLE.sanpaisha);
     m.send.mockRejectedValue(new Error('DM disabled'));

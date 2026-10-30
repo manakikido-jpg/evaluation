@@ -99,6 +99,8 @@ export class GuideReceptionApp {
         if (!visitor.roles.cache.has(first.roleId)) await this.discord.addRole(guild.id, r.visitorId, first.roleId, '案内人が参拝者ロールを付与');
         visitor = await guild.members.fetch({ user: r.visitorId, force: true });
         if (!visitor.roles.cache.has(first.roleId)) return { error: '参拝者ロールを確認できませんでした。案内待ちは残しています。時間をおいてもう一度押してください。' };
+        // 🔰 一緒に付けるロール（縁人など）
+        for (const extra of c.withRoleIds) if (extra !== c.pendingRoleId && !visitor.roles.cache.has(extra)) await this.discord.addRole(guild.id, r.visitorId, extra, '参拝者ロールと一緒に付ける');
       } catch (err) {
         logger.warn({ err, receptionId: id }, 'guide visitor role add failed');
         return { error: '参拝者ロールを付与できませんでした。BOTの「ロールの管理」と、参拝者ロールより上にBOTがいるか確認してください。' };
@@ -111,7 +113,7 @@ export class GuideReceptionApp {
         logger.warn({ err, receptionId: id }, 'guide pending role remove failed');
         return { error: '参拝者ロールは付きましたが、案内待ちを外せませんでした。BOTの権限・ロールの位置を確認して、もう一度押してください。' };
       }
-      await audit(tx as Db, { actorId, targetId: r.visitorId, action: 'guide.role_grant', detail: { receptionId: id, roleId: first.roleId, removedRoleId: c.pendingRoleId }, via: 'discord' });
+      await audit(tx as Db, { actorId, targetId: r.visitorId, action: 'guide.role_grant', detail: { receptionId: id, roleId: first.roleId, withRoleIds: c.withRoleIds, removedRoleId: c.pendingRoleId }, via: 'discord' });
       return { reception: r, changed: true, ...ids };
     });
   }

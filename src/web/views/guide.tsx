@@ -44,6 +44,10 @@ export function GuidePage(p: { session: AdminSession; config: GuideConfig; emplo
       <label>🙋 名前を「案内担当：○○」に変えるチャンネル<select name="dutyChannelId"><option value="">変えない</option>{p.channels.filter(c => c.type !== 4).map(c => <option value={c.id} selected={p.config.dutyChannelId === c.id}>{c.type === 2 ? '🔊' : '#'}{c.name}</option>)}</select></label>
       <label>通知先<select name="staffChannelId"><option value="">設定済みの「記録」</option>{p.config.staffChannelId && !p.channels.some(c => c.type === 0 && c.id === p.config.staffChannelId) && <option value={p.config.staffChannelId} selected>現在の通知先（{p.config.staffChannelId}・取得できませんでした）</option>}{p.channels.filter(c => c.type === 0).map(c => <option value={c.id} selected={p.config.staffChannelId === c.id}>{c.name}</option>)}</select></label>
       <label>案内人ロール<select name="roleId"><option value="">名前に「案内人」を含むロール（1つだけのとき）</option>{p.config.roleId && !p.roles.some(r => !r.managed && r.id === p.config.roleId) && <option value={p.config.roleId} selected>現在のロール（{p.config.roleId}・取得できませんでした）</option>}{p.roles.filter(r => !r.managed).map(r => <option value={r.id} selected={p.config.roleId === r.id}>{r.name}</option>)}</select></label>
+      <fieldset><legend>🔰 参拝者ロールと一緒に付けるロール（縁人など・5つまで）</legend>
+        <p class="note">案内人が「参拝者ロールを付与」を押したとき、ここで選んだロールも一緒に付けます。</p>
+        {p.roles.filter(r => !r.managed).map(r => <label><input type="checkbox" name="withRoleIds" value={r.id} checked={p.config.withRoleIds.includes(r.id)} /> {r.name}</label>)}
+      </fieldset>
       <label>完了1件の給与（銭。0で支払い停止）<input type="number" name="salary" min={0} max={1000000} value={p.config.salary} required /></label>
       <button type="submit">設定を保存</button>
       <h3 id="guide-links">2. 案内リンク（上から順に表示）</h3><p>絵文字を貼り付け、チャンネルのリンクまたはIDを入れてください。1行に3つまで、空白で区切って入れられます。空欄の行は表示しません。</p>
