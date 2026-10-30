@@ -91,3 +91,33 @@ it('本人の今日のVC時間を合算し、前の日や他人の時間は混�
     expect(body.embeds[0]!.fields[1]!.value).toContain('1時間33分');
   } finally { vi.useRealTimers(); await close(); }
 });
+
+describe('📒 銭の通帳', () => {
+  it('本人の分だけ、期間の増えた・減ったを理由ごとに合計し、1件ずつをページで出す', async () => {
+    const { coinSummary, coinTxPage, addCoins, spendWithin } = await import('../src/services/economy.js');
+    const { coinBookView } = await import('../src/discord/wallet.js');
+    const { db, close } = await makeDb();
+    try {
+      const ME = '700000000000000301', OTHER = '700000000000000302';
+      await addCoins(db, ME, 1000, 'join_bonus');
+      await addCoins(db, ME, 50, 'voice'); await addCoins(db, ME, 30, 'voice');
+      await spendWithin(db, ME, 200, 'shop');
+      await addCoins(db, OTHER, 9999, 'voice');
+      const s = await coinSummary(db, ME, new Date(Date.now() - 86_400_000));
+      expect(s.plus).toEqual([{ reason: 'join_bonus', amount: 1000, count: 1 }, { reason: 'voice', amount: 80, count: 2 }]);
+      expect(s.minus).toEqual([{ reason: 'shop', amount: 200, count: 1 }]);
+      expect(await coinSummary(db, ME, new Date(Date.now() + 60_000))).toEqual({ plus: [], minus: [] });
+      const first = await coinTxPage(db, ME, 0, 3);
+      expect(first).toHaveLength(4);
+      expect((await coinTxPage(db, ME, 1, 3))).toHaveLength(1);
+      const v = coinBookView(cfg.economy, { days: 30, page: 0, summary: s, rows: first.slice(0, 3), hasNext: true, balance: 880 });
+      const text = JSON.stringify(v.embeds);
+      expect(text).toContain('＋1,080枚');
+      expect(text).toContain('－200枚');
+      expect(text).toContain('＋880枚');
+      expect(text).toContain('通話（2回）');
+      expect(v.components[0]!.components[0]).toMatchObject({ custom_id: 'wallet:book:0:30', disabled: true });
+      expect(v.components[0]!.components[1]).toMatchObject({ custom_id: 'wallet:book:1:30', disabled: false });
+    } finally { await close(); }
+  });
+});

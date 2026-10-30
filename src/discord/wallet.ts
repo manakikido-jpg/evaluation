@@ -1,4 +1,4 @@
-import { MessageFlags, type ChatInputCommandInteraction, type Interaction } from 'discord.js';
+import { MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction, type Interaction } from 'discord.js';
 import { and, eq, sql } from 'drizzle-orm';
 import type { EconomyConfig, GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -8,7 +8,7 @@ import { voiceCapPercentOf, voicePercentOf } from '../domain/ranks.js';
 import { jstDate } from '../services/activity.js';
 import { buffsOf, type Buffs } from '../services/buffs.js';
 import { customHoldingsOf } from '../services/customTickets.js';
-import { COIN_REASON_LABEL, recentCoinTx, walletOf } from '../services/economy.js';
+import { COIN_REASON_LABEL, coinSummary, coinTxPage, recentCoinTx, walletOf } from '../services/economy.js';
 import { TICKET_LABEL, ticketsOf } from '../services/tickets.js';
 import type { CustomTicket } from '../db/schema.js';
 
@@ -77,8 +77,45 @@ export function walletView(
       { name: '📒 最近の出入り', value: d.recent.length ? d.recent.slice(0, 8).map(t => `**${t.amount > 0 ? '＋' : '－'}${fmt(Math.abs(t.amount))}枚**　${COIN_REASON_LABEL[t.reason] ?? t.reason}\n<t:${unix(t.at)}:R>`).join('\n').slice(0, 1000) : 'まだありません', inline: false },
     ],
     footer: { text: '使いみち：授与所・市場・/物御籤・/免罪符' },
-  }] };
+  }], components: [{ type: 1, components: [button('wallet:book:0:30', '📒 通帳を見る（どこで増えた・減った）', false, 1)] }] };
 
+}
+
+const PAGE = 10;
+const PERIODS = [7, 30] as const;
+const button = (custom_id: string, label: string, disabled = false, style = 2) => ({ type: 2, style, custom_id, label, disabled });
+const bookRow = (page: number, days: number, hasNext = true) => ({ type: 1, components: [
+  button(`wallet:book:${Math.max(0, page - 1)}:${days}`, '◀ 新しい方へ', page <= 0),
+  button(`wallet:book:${page + 1}:${days}`, '古い方へ ▶', !hasNext),
+  ...PERIODS.map(d => button(`wallet:book:0:${d}`, `${d}日の合計`, false, d === days ? 1 : 2)),
+] });
+
+/** 📒 銭の通帳（本人にだけ）: 期間の増えた・減った内訳と、1 件ずつの出入り */
+export function coinBookView(
+  e: EconomyConfig,
+  d: { days: number; page: number; summary: Awaited<ReturnType<typeof coinSummary>>; rows: Pick<CoinTx, 'amount' | 'reason' | 'at'>[]; hasNext: boolean; balance: number },
+) {
+  const label = (r: string) => COIN_REASON_LABEL[r] ?? r;
+  const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
+  const plus = sum(d.summary.plus), minus = sum(d.summary.minus);
+  const list = (xs: { reason: string; amount: number; count: number }[], sign: string) => xs.length
+    ? [...xs.slice(0, 8).map(x => `${sign}**${fmt(x.amount)}枚**　${label(x.reason)}（${fmt(x.count)}回）`), ...(xs.length > 8 ? [`ほか ${xs.length - 8} 種類：${sign}${fmt(sum(xs.slice(8)))}枚`] : [])].join('\n').slice(0, 1000)
+    : 'ありません';
+  const net = plus - minus;
+  return {
+    embeds: [{
+      title: '📒 銭の通帳',
+      description: `いまの残高：**${fmt(d.balance)}** 枚\nこの${d.days}日：＋${fmt(plus)}枚 ／ －${fmt(minus)}枚 ＝ **${net >= 0 ? '＋' : '－'}${fmt(Math.abs(net))}枚**`,
+      color: 0xd4a017,
+      fields: [
+        { name: `➕ 増えたところ（${d.days}日）`, value: list(d.summary.plus, '＋'), inline: false },
+        { name: `➖ 減ったところ（${d.days}日）`, value: list(d.summary.minus, '－'), inline: false },
+        { name: `🧾 1件ずつ（新しい順・${d.page * PAGE + 1}件目から）`, value: d.rows.length ? d.rows.map(t => `<t:${unix(t.at)}:f>　**${t.amount > 0 ? '＋' : '－'}${fmt(Math.abs(t.amount))}枚**　${label(t.reason)}`).join('\n').slice(0, 1000) : 'ありません', inline: false },
+      ],
+      footer: { text: 'あなたにだけ見えています' },
+    }],
+    components: [bookRow(d.page, d.days, d.hasNext)],
+  };
 }
 
 /** /残高: 自分の銭・券・最近の出入り */
@@ -89,6 +126,9 @@ export class WalletApp {
   ) {}
 
   async onInteraction(interaction: Interaction): Promise<void> {
+    if (interaction.isButton?.() && interaction.customId.startsWith('wallet:book:') && interaction.inCachedGuild() && interaction.guildId === this.cfg().guildId) {
+      return void await this.book(interaction).catch(err => logger.error({ err }, 'coin book failed'));
+    }
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'zandaka') return;
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     try {
@@ -98,6 +138,18 @@ export class WalletApp {
       const msg = { content: '残高を出せませんでした。時間をおいてもう一度お試しください。', ...EPHEMERAL };
       await (interaction.replied || interaction.deferred ? interaction.followUp(msg) : interaction.reply(msg)).catch(() => undefined);
     }
+  }
+
+  /** 📒 通帳を開く・ページを変える（押した本人の分だけ出す） */
+  private async book(i: ButtonInteraction<'cached'>): Promise<void> {
+    const [, , p, dd] = i.customId.split(':');
+    const page = Math.min(500, Math.max(0, Number(p) || 0));
+    const days = PERIODS.includes(Number(dd) as 7 | 30) ? Number(dd) : 30;
+    const fromWallet = i.message.embeds[0]?.title === '💰 残高';
+    await (fromWallet ? i.deferReply(EPHEMERAL) : i.deferUpdate());
+    const id = i.user.id;
+    const [w, summary, rows] = await Promise.all([walletOf(this.db, id), coinSummary(this.db, id, new Date(Date.now() - days * 86_400_000)), coinTxPage(this.db, id, page, PAGE)]);
+    await i.editReply({ ...coinBookView(this.cfg().economy, { days, page, summary, rows: rows.slice(0, PAGE), hasNext: rows.length > PAGE, balance: w.balance }), allowedMentions: { parse: [] } } as never);
   }
 
   private async show(i: ChatInputCommandInteraction<'cached'>): Promise<void> {

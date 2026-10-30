@@ -120,7 +120,9 @@ describe('保存設定の移行と実際の入金', () => {
     const made = await makeDb(); close = made.close;
     const db = made.db;
     await db.insert(members).values([A, B].map(m => ({ id: m.id, username: m.name, displayName: m.name })));
-    const before = new Date('2026-10-30T14:59:59Z');
+    // 銭の記録の時刻は本物の時計なので、日付の境目も今の時刻から作る（決まった日付だと、その日を過ぎると落ちる）
+    const before = new Date();
+    const nextDay = new Date(`${new Date(before.getTime() + 9 * 3_600_000 + 86_400_000).toISOString().slice(0, 10)}T00:00:00+09:00`);
     const pay = (c: Credit, at = before) => payCredit(db, cfg, c, at, 'keiba', 1);
     const credit: Credit = { memberId: A.id, amount: 990, reason: 'keiba_prize', cap: 'keiba_purse_bet' };
     expect(await pay(credit)).toBe(990);
@@ -133,6 +135,6 @@ describe('保存設定の移行と実際の入金', () => {
     expect(await pay(shared.credits[0]!)).toBe(0);
     expect(await pay({ ...credit, cap: 'keiba_purse', amount: 50 })).toBe(50);
     expect((await walletOf(db, A.id)).balance).toBe(1050);
-    expect(await pay({ ...credit, amount: 1000 }, new Date('2026-10-30T15:00:00Z'))).toBe(1000);
+    expect(await pay({ ...credit, amount: 1000 }, nextDay)).toBe(1000);
   });
 });

@@ -180,6 +180,20 @@ export async function recentCoinTx(db: Db, memberId: string, limit = 20) {
   return db.select().from(coinTx).where(eq(coinTx.memberId, memberId)).orderBy(desc(coinTx.at), desc(coinTx.id)).limit(limit);
 }
 
+/** 📒 銭の通帳: 期間の中で、理由ごとに増えた・減った合計（本人の分だけ） */
+export async function coinSummary(db: Db, memberId: string, since: Date): Promise<{ plus: { reason: string; amount: number; count: number }[]; minus: { reason: string; amount: number; count: number }[] }> {
+  const rows = await db
+    .select({ reason: coinTx.reason, plus: sql<number>`coalesce(sum(${coinTx.amount}) filter (where ${coinTx.amount} > 0), 0)::bigint`, minus: sql<number>`coalesce(sum(${coinTx.amount}) filter (where ${coinTx.amount} < 0), 0)::bigint`, pc: sql<number>`count(*) filter (where ${coinTx.amount} > 0)::int`, mc: sql<number>`count(*) filter (where ${coinTx.amount} < 0)::int` })
+    .from(coinTx).where(and(eq(coinTx.memberId, memberId), gte(coinTx.at, since))).groupBy(coinTx.reason);
+  const plus = rows.filter(r => Number(r.plus) > 0).map(r => ({ reason: r.reason, amount: Number(r.plus), count: Number(r.pc) })).sort((a, b) => b.amount - a.amount);
+  const minus = rows.filter(r => Number(r.minus) < 0).map(r => ({ reason: r.reason, amount: -Number(r.minus), count: Number(r.mc) })).sort((a, b) => b.amount - a.amount);
+  return { plus, minus };
+}
+/** 📒 銭の通帳の 1 ページ（新しい順） */
+export async function coinTxPage(db: Db, memberId: string, page: number, size = 10) {
+  return db.select().from(coinTx).where(eq(coinTx.memberId, memberId)).orderBy(desc(coinTx.at), desc(coinTx.id)).limit(size + 1).offset(Math.max(0, page) * size);
+}
+
 /**
  * 初期配布: まだもらっていない人にだけ配る（1 人 1 回。入り直しても、管理画面から何度押しても 2 回目はない）。
  * 配った量を返す（もらい済み・量が 0 なら 0）
