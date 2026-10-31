@@ -11,6 +11,7 @@ vi.mock('@discordjs/voice', () => ({
 }));
 import { DiscordEventRelay } from '../src/readAloud/discordRelay.js';
 import { RELAY_FRAME_BYTES } from '../src/readAloud/relayAudio.js';
+import { logger } from '../src/lib/logger.js';
 class Connection extends EventEmitter {
   state = { status: 'ready' };
   inputs = new Map<string, PassThrough>();
@@ -89,6 +90,93 @@ it('実際のOpus音声を混ぜて配信し、客席に戻った人の音声は
     s.clients[0]!.emit(Events.VoiceStateUpdate);
     expect(s.connections[0]!.inputs.has('audience')).toBe(true);
   } finally { codec.delete(); }
+});
+it('不正なOpusが1回届いても全9部屋を維持し、次の正常音声を配信する', async () => {
+  const s = fixture(9); await s.relay.start(s.abort.signal);
+  const codec = new OpusScript(48000, 2, OpusScript.Application.AUDIO);
+  try {
+    const pcm = Buffer.alloc(RELAY_FRAME_BYTES);
+    for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(Math.round(Math.sin(i / 10) * 9000), i);
+    const stream = s.connections[0]!.inputs.get('speaker')!;
+    const invalid = Buffer.from([0xff]);
+    expect(() => codec.decode(invalid)).toThrow('Invalid packet');
+    stream.emit('data', invalid);
+    expect(s.fault).not.toHaveBeenCalled();
+    stream.emit('data', codec.encode(pcm, 960));
+    vi.advanceTimersByTime(20);
+    expect(codec.decode(s.output().read() as Buffer).some(byte => byte !== 0)).toBe(true);
+    expect(s.relay.metrics().packets).toBe(1);
+    for (const c of s.connections) expect(c.destroy).not.toHaveBeenCalled();
+  } finally { codec.delete(); }
+});
+it.each(['invalid', 'empty', 'oversize', 'veryLarge'])('同じ話者の%sが50回続く場合は、ほかの話者が正常でも理由を示して全室停止する', async kind => {
+  const s = fixture(9); await s.relay.start(s.abort.signal);
+  const bad = kind === 'invalid' ? Buffer.from([0xff]) : Buffer.alloc(kind === 'empty' ? 0 : kind === 'oversize' ? OpusScript.MAX_PACKET_SIZE + 1 : 8193);
+  const source = s.connections[0]!;
+  for (let n = 0; n < 49; n++) {
+    source.inputs.get('speaker')!.emit('data', bad);
+    source.inputs.get('second')!.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+  }
+  expect(s.fault).not.toHaveBeenCalled();
+  source.inputs.get('speaker')!.emit('data', bad);
+  expect(s.fault).toHaveBeenCalledExactlyOnceWith('同じ登壇者の受信音声を50回続けて変換できないため停止しました。');
+  for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
+});
+it('正常な受信で話者ごとの連続失敗をリセットする', async () => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  const source = s.connections[0]!.inputs.get('speaker')!;
+  for (let round = 0; round < 3; round++) {
+    for (let n = 0; n < 49; n++) source.emit('data', Buffer.from([0xff]));
+    source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+  }
+  expect(s.fault).not.toHaveBeenCalled(); expect(s.relay.metrics().packets).toBe(3);
+});
+it.each([120, 240, 480, 960, 1920, 2880])('正常な%sサンプルのOpusとDiscordの無音パケットを受信できる', async samples => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  const codec = new OpusScript(48000, 2, OpusScript.Application.AUDIO);
+  try {
+    const source = s.connections[0]!.inputs.get('speaker')!;
+    source.emit('data', codec.encode(Buffer.alloc(samples * 4), samples));
+    source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+    expect(s.fault).not.toHaveBeenCalled(); expect(s.relay.metrics().packets).toBe(2);
+  } finally { codec.delete(); }
+});
+it('5分時点の不正パケットを挟んで6分間配信を続ける（時計とDiscord接続を模擬）', async () => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  const source = s.connections[0]!.inputs.get('speaker')!;
+  for (let frame = 0; frame < 18_000; frame++) {
+    source.emit('data', frame === 15_000 ? Buffer.from([0xff]) : Buffer.from([0xf8, 0xff, 0xfe]));
+    vi.advanceTimersByTime(20);
+    expect(s.output().read()).toBeInstanceOf(Buffer);
+  }
+  expect(s.fault).not.toHaveBeenCalled(); expect(s.relay.metrics().packets).toBe(17_999);
+});
+it('診断ログは分類だけを中継ごとに1回とし、任意の例外文は出さない', async () => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  const warning = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  const decode = vi.spyOn(OpusScript.prototype, 'decode');
+  try {
+    const source = s.connections[0]!.inputs.get('speaker')!;
+    for (let n = 0; n < 3; n++) {
+      source.emit('data', Buffer.from([0xff]));
+      source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+    }
+    expect(warning).toHaveBeenCalledExactlyOnceWith({ reason: 'invalid-packet' }, 'event relay receive decode failed');
+    decode.mockImplementationOnce(() => { throw Error('private diagnostic detail'); });
+    source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+    expect(warning).toHaveBeenLastCalledWith({ reason: 'decoder-error' }, 'event relay receive decode failed');
+    expect(s.fault).toHaveBeenCalledExactlyOnceWith('受信音声の変換器に異常が起きたため停止しました。');
+    for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
+  } finally { decode.mockRestore(); warning.mockRestore(); }
+});
+it('変換器を初期化できない場合は接続を残さず停止する', async () => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  const reset = vi.spyOn(OpusScript.prototype, 'decoderCTL').mockImplementationOnce(() => { throw Error('reset failed'); });
+  try {
+    s.connections[0]!.inputs.get('speaker')!.emit('data', Buffer.from([0xff]));
+    expect(s.fault).toHaveBeenCalledExactlyOnceWith('受信音声の変換器を初期化できないため停止しました。');
+    for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
+  } finally { reset.mockRestore(); }
 });
 it.each(['permission', 'inactive', 'occupied', 'afk'])('準備失敗：%sは接続も通知もしない', async kind => {
   const s = fixture();

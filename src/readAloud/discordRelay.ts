@@ -4,8 +4,16 @@ import { ChannelType, Events, PermissionFlagsBits, type Client, type GuildMember
 import { createAudioPlayer, createAudioResource, entersState, EndBehaviorType, NoSubscriberBehavior, StreamType, VoiceConnectionStatus, type VoiceConnection, joinVoiceChannel } from '@discordjs/voice';
 import { RelayMixer } from './relayAudio.js';
 import { RelayError, type RelayMetrics, type RelayPlan, type RelayTransport } from './relay.js';
+import { logger } from '../lib/logger.js';
 
-type Decoder = { codec: OpusScript; stream: ReturnType<VoiceConnection['receiver']['subscribe']> };
+type Decoder = { codec: OpusScript; stream: ReturnType<VoiceConnection['receiver']['subscribe']>; failures: number };
+const MAX_DECODE_FAILURES = 50;
+const OPUS_RESET_STATE = 4028;
+const recoverableDecodeErrors = new Map([
+  ['Decode error: Invalid packet', 'invalid-packet'],
+  ['Decode error: Bad argument', 'bad-argument'],
+  ['Decode error: Buffer too small', 'buffer-too-small'],
+]);
 const receivePerms = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.SendMessages];
 const sendPerms = [...receivePerms, PermissionFlagsBits.Speak];
 const permissionNames = new Map([[PermissionFlagsBits.ViewChannel, 'チャンネルを見る'], [PermissionFlagsBits.Connect, '接続'],
@@ -17,6 +25,7 @@ export class DiscordEventRelay implements RelayTransport {
   private outputs: VoiceChannel[] = [];
   private connections: VoiceConnection[] = [];
   private decoders = new Map<string, Decoder>();
+  private reportedDecodeErrors = new Set<string>();
   private mixer = new RelayMixer();
   private encoder?: OpusScript;
   private stream?: Readable;
@@ -128,18 +137,44 @@ export class DiscordEventRelay implements RelayTransport {
         let stream: Decoder['stream'];
         try { stream = this.connections[0]!.receiver.subscribe(id, { end: { behavior: EndBehaviorType.Manual } }); }
         catch (error) { codec.delete(); this.mixer.remove(id); throw error; }
-        this.decoders.set(id, { codec, stream });
+        const decoder: Decoder = { codec, stream, failures: 0 };
+        this.decoders.set(id, decoder);
         stream.on('error', () => { if (!this.closed && this.decoders.get(id)?.stream === stream) this.fault('登壇者の音声を受信できなくなったため停止しました。'); });
         stream.on('end', () => { if (!this.closed && this.decoders.get(id)?.stream === stream) this.fault('登壇者の音声接続が終了したため停止しました。'); });
         stream.on('data', (packet: Buffer) => {
           const member = this.source?.members.get(id);
           if (this.closed || this.signal?.aborted || !member || !this.eligible(member)) { this.removeDecoder(id); return; }
-          if (!packet.length || packet.length > 8192) return;
-          try { this.mixer.push(id, codec.decode(packet)); this.received++; this.receivedAt = Date.now(); }
-          catch { this.fault('受信音声を変換できないため停止しました。'); }
+          let pcm: Buffer;
+          // OpusScriptの入力バッファは3828バイト。上限外も連続失敗に数える。
+          if (!packet.length || packet.length > OpusScript.MAX_PACKET_SIZE) { this.decodeFailed(id, decoder, 'packet-size'); return; }
+          try { pcm = codec.decode(packet); }
+          catch (error) {
+            const kind = error instanceof Error ? recoverableDecodeErrors.get(error.message) : undefined;
+            this.decodeFailed(id, decoder, kind ?? 'decoder-error'); return;
+          }
+          decoder.failures = 0;
+          try { this.mixer.push(id, pcm); this.received++; this.receivedAt = Date.now(); }
+          catch { this.fault('受信音声を混ぜられないため停止しました。'); }
         });
       }
     } catch { this.fault('登壇者の変更に対応できませんでした。登壇者は20人までです。'); }
+  }
+  private decodeFailed(id: string, decoder: Decoder, kind: string): void {
+    // 分類だけを中継ごとに1回記録する。音声・話者ID・任意の例外文は保存しない。
+    if (!this.reportedDecodeErrors.has(kind)) {
+      this.reportedDecodeErrors.add(kind);
+      logger.warn({ reason: kind }, 'event relay receive decode failed');
+    }
+    if (kind === 'decoder-error') { this.fault('受信音声の変換器に異常が起きたため停止しました。'); return; }
+    if (++decoder.failures >= MAX_DECODE_FAILURES) {
+      this.fault('同じ登壇者の受信音声を50回続けて変換できないため停止しました。'); return;
+    }
+    if (decoder.failures === 1) {
+      // 失敗した話者だけを初期化する。購読は維持し、次の正常パケットで復帰する。
+      this.mixer.remove(id); this.mixer.add(id);
+      try { decoder.codec.decoderCTL(OPUS_RESET_STATE, 0); }
+      catch { this.fault('受信音声の変換器を初期化できないため停止しました。'); }
+    }
   }
   private checkChannels(): void {
     if (!this.source?.stageInstance) { this.fault('ステージが終了したため停止しました。'); return; }
