@@ -1,10 +1,24 @@
 import { randomInt } from 'node:crypto';
 import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { bingoEvents, bingoCards, members, type BingoSummary } from '../db/schema.js';
+import { bingoEvents, bingoCards, members, settings, type BingoSummary } from '../db/schema.js';
 import { audit } from './audit.js';
 
 export class BingoError extends Error {}
+const HOSTS='bingo.host_roles';
+/** 🎯 ビンゴを回せるロール（宮司・神職のほかに。イベントメンバーなど） */
+export async function bingoHostRoles(db:Db):Promise<string[]>{
+ const [row]=await db.select().from(settings).where(eq(settings.key,HOSTS));
+ return Array.isArray(row?.value)?(row.value as unknown[]).filter((x):x is string=>typeof x==='string'&&/^\d{17,20}$/.test(x)):[];
+}
+export async function saveBingoHostRoles(db:Db,roleIds:string[],by:string){
+ const value=[...new Set(roleIds.filter(x=>/^\d{17,20}$/.test(x)))].slice(0,10);
+ await db.transaction(async tx=>{
+  await tx.insert(settings).values({key:HOSTS,value,updatedBy:by}).onConflictDoUpdate({target:settings.key,set:{value,updatedBy:by,updatedAt:new Date()}});
+  await audit(tx as Db,{actorId:by,action:'bingo.host_roles',detail:{roleIds:value},via:'web'});
+ });
+ return value;
+}
 const LINES=Array.from({length:5},(_,r)=>Array.from({length:5},(_,c)=>r*5+c))
  .concat(Array.from({length:5},(_,c)=>Array.from({length:5},(_,r)=>r*5+c)),[[0,6,12,18,24],[4,8,12,16,20]]);
 export function makeBingoCard(){
@@ -37,7 +51,7 @@ function summarize(cards:Card[],draws:number[]):BingoSummary{
  return {participants:cards.length,reaches:progress.filter(x=>!x.p.lines&&x.p.reachNumbers.length).length,
   winners:winners.map((x,i)=>{if(x.p.bingoAt!==lastAt){rank=i+1;lastAt=x.p.bingoAt!;}return {memberId:x.card.memberId,name:x.card.name,rank,at:x.p.bingoAt!,lines:x.p.lines,doubleAt:x.p.doubleAt,claimed:!!x.card.claimedAt,claimedAt:x.card.claimedAt?.getTime()??null};})};
 }
-const staffOnly=(staff:boolean)=>{if(!staff)throw new BingoError('抽選の操作は宮司・神職だけが使えます。');};
+const staffOnly=(staff:boolean)=>{if(!staff)throw new BingoError('抽選の操作は宮司・神職とビンゴの担当だけが使えます。');};
 const versionOf=(event:Event,version:number)=>{if(event.version!==version)throw new BingoError('画面が更新されています。最新の状態で操作してください。');};
 async function locked(db:Db,id:string){const [event]=await db.select().from(bingoEvents).where(eq(bingoEvents.id,id)).for('update');if(!event)throw new BingoError('イベントが見つかりません。');return event;}
 async function revealWithin(db:Db,event:Event,now:Date){

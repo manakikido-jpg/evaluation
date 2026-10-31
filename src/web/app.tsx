@@ -29,6 +29,7 @@ import { GalleryError, GALLERY_KINDS, cancelGalleryPost, galleryPricesSchema, lo
 import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { rankingHidden, setRankingHidden } from '../services/castLeaderboard.js';
+import { bingoHostRoles, saveBingoHostRoles } from '../services/bingo.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
 import { lotteryFinances, recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
@@ -4990,7 +4991,7 @@ export function createWebApp(deps: WebDeps) {
       members: role.id === cfg.guildId ? total : (counts.get(role.id) ?? 0),
       locked: roleLocked(role, roles ?? []),
     }));
-    return c.html(<RolesPage session={c.get('session')} rows={rows} flash={c.req.query('msg')} loadFailed={!roles} templates={await allRoleTemplates(db)} />);
+    return c.html(<RolesPage session={c.get('session')} rows={rows} flash={c.req.query('msg')} loadFailed={!roles} templates={await allRoleTemplates(db)} bingoHosts={await bingoHostRoles(db)} />);
   });
 
   app.get('/roles/:id', async (c) => {
@@ -5062,6 +5063,15 @@ export function createWebApp(deps: WebDeps) {
 
   /** ロールを作る（いちばん下にできる。権限はなしで作って、あとからロールのページで付ける） */
   // 📋 権限のテンプレート: 今のロールの権限から作る（同じ名前なら上書き）・消す
+  // 🎯 ビンゴを回せるロール（宮司だけ。/roles は宮司だけ）
+  app.post('/roles/bingo-hosts', async (c) => {
+    const b = await c.req.parseBody({ all: true });
+    const ids = (Array.isArray(b.roleIds) ? b.roleIds : b.roleIds ? [b.roleIds] : []).filter((x): x is string => typeof x === 'string');
+    const roles = await loadRoles() ?? [];
+    await saveBingoHostRoles(db, ids.filter(id => roles.some(r => r.id === id && !r.managed && r.id !== cfg.guildId)), c.get('session').userId);
+    return c.redirect('/roles?msg=bingo_hosts#bingo-hosts');
+  });
+
   app.post('/roles/templates', async (c) => {
     const body = await c.req.parseBody();
     const roleId = typeof body.roleId === 'string' && /^\d{17,20}$/.test(body.roleId) ? body.roleId : '';

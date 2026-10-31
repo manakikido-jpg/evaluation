@@ -5,6 +5,7 @@ import { bitLabels, bitList, TEMPLATE_MAX, type RoleTemplate } from '../../servi
 import { Avatar, Layout } from './layout.js';
 
 export const ROLE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  bingo_hosts: { text: 'ビンゴを回せるロールを保存しました。', kind: 'ok' },
   saved: { text: '保存しました。Discord に反映しました。', kind: 'ok' },
   unchanged: { text: '変わったところがありませんでした。', kind: 'ok' },
   invalid: { text: '入力を確かめてください（名前は 1〜100 文字、色は #rrggbb）。', kind: 'warn' },
@@ -121,7 +122,7 @@ function Swatch(props: { color: number }) {
 
 export type RoleRow = { role: GuildRole; kind?: string; members: number; locked: boolean };
 
-export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash?: string; loadFailed?: boolean; templates?: RoleTemplate[] }) {
+export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash?: string; loadFailed?: boolean; templates?: RoleTemplate[]; bingoHosts?: string[] }) {
   // @everyone は位置 0
   const editable = props.rows.filter((r) => !r.locked && r.role.position !== 0);
   const offCount = editable.filter((r) => !r.role.mentionable).length;
@@ -247,6 +248,15 @@ export function RolesPage(props: { session: AdminSession; rows: RoleRow[]; flash
           })}
         </ul>
       </section>
+      <form method="post" action="/roles/bingo-hosts" class="card anchor" id="bingo-hosts">
+        <input type="hidden" name="_csrf" value={props.session.csrfToken} />
+        <h2>🎯 ビンゴを回せるロール</h2>
+        <p class="note">選んだロールの人は、宮司・神職と同じように、イベントビンゴを作る・始める・回す・締め切るができます（イベントメンバーなど）。10個まで。</p>
+        {props.rows.filter((r) => !r.role.managed && r.role.position !== 0).map((r) => (
+          <label><input type="checkbox" name="roleIds" value={r.role.id} checked={(props.bingoHosts ?? []).includes(r.role.id)} /> {r.role.name}</label>
+        ))}
+        <button type="submit">保存</button>
+      </form>
       <form method="post" action="/roles/new" class="card anchor" id="new-role">
         <input type="hidden" name="_csrf" value={props.session.csrfToken} />
         <h2>➕ ロールを作る</h2>

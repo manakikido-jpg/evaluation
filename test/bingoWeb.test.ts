@@ -50,3 +50,16 @@ it('自動更新の在籍確認は短く共有し、操作時は必ずDiscordへ
  await get('/visit/bingo/state');await get('/visit/bingo/state');expect(calls).toBe(1);staff=false;expect((await post('create',{id:randomUUID(),title:'権限は失効'})).status).toBe(403);expect(calls).toBe(2);expect((await (await get('/visit/bingo/state')).json() as any).staff).toBe(false);
  now=new Date(now.getTime()+31000);await get('/visit/bingo/state');expect(calls).toBe(3);
 });
+it('🎯 ビンゴを回せるロール（イベントメンバーなど）を持つ人は、作る・回すができる',async()=>{
+ const {saveBingoHostRoles}=await import('../src/services/bingo.js');
+ const EVENT='890000000000000777';
+ api.memberRoles=async(_g:string,id:string)=>id===B?[EVENT]:[];
+ expect((await post('create',{id:randomUUID(),title:'まだ'},B)).status).toBe(403);
+ await saveBingoHostRoles(db,[EVENT,'bad'],A);
+ const r=await post('create',{id:randomUUID(),title:'イベントのビンゴ'},B);expect(r.status).toBe(200);
+ const state=await r.json() as any;expect(state.staff).toBe(true);
+ await post('join',{id:state.event.id},A);
+ const lobby=await (await get('/visit/bingo/state?id='+state.event.id,B)).json() as any;
+ const active=await (await post('start',{id:state.event.id,version:String(lobby.event.version)},B)).json() as any;
+ expect((await post('draw',{id:state.event.id,version:String(active.event.version)},B)).status).toBe(200);
+});
