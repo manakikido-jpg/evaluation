@@ -14,16 +14,16 @@ function setup(action = '開始', count = 1) {
   const app = new EventRelayApp('guild', relay as unknown as EventRelay);
   return { relay, channels, i, run: () => app.interaction(i as unknown as ChatInputCommandInteraction) };
 }
-it('登録は運営専用・ステージ＋通常VC最大6部屋', () => {
+it('登録は運営専用・ステージ＋通常VC最大9部屋', () => {
   const data = eventRelayCommand.toJSON();
   expect(data.default_member_permissions).toBe(String(PermissionFlagsBits.ManageGuild));
   expect(data.dm_permission).toBe(false);
   expect(data.options!.map(o => o.name)).toEqual(['開始', '停止', '状態']);
   const start = data.options![0] as { options: { required?: boolean; channel_types?: number[] }[] };
-  expect(start.options).toHaveLength(7);
+  expect(start.options).toHaveLength(10);
   expect(start.options[0]).toMatchObject({ required: true, channel_types: [ChannelType.GuildStageVoice] });
   expect(start.options[1]).toMatchObject({ required: true, channel_types: [ChannelType.GuildVoice] });
-  expect(start.options[6]!.required).toBe(false);
+  expect(start.options[9]!.required).toBe(false);
 });
 it.each(['開始', '停止', '状態'])('運営権限のない人は%sも操作できない', async action => {
   const s = setup(action); s.i.memberPermissions.has.mockReturnValue(false); await s.run();
@@ -33,7 +33,7 @@ it.each(['開始', '停止', '状態'])('運営権限のない人は%sも操作�
 it('別サーバーからの操作は受け付けない', async () => {
   const s = setup(); s.i.guildId = 'other'; await s.run(); expect(s.relay.start).not.toHaveBeenCalled(); expect(s.i.reply).not.toHaveBeenCalled();
 });
-it.each([1, 6])('%s部屋へ開始するときは権限確認の前に応答を保留する', async count => {
+it.each([1, 6, 9])('%s部屋へ開始するときは権限確認の前に応答を保留する', async count => {
   const s = setup('開始', count); await s.run();
   expect(s.i.deferReply.mock.invocationCallOrder[0]).toBeLessThan(s.i.guild.channels.fetch.mock.invocationCallOrder[0]!);
   expect(s.relay.start).toHaveBeenCalledWith({ source: 'stage', targets: s.channels.slice(1).map(c => c.id), actor: 'operator' });

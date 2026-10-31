@@ -17,6 +17,24 @@ describe('中継と読み上げのBOT予約',()=>{
   expect(lease.indices.map(i=>workers[i]!).every(w=>vi.mocked(w.connect).mock.calls.length===0)).toBe(true);
   lease.release();lease.release();expect(await pool.start('a')).toBe('started');pool.close();
  });
+ it('9部屋で拾と壱〜玖の全10体を使い、停止後は読み上げ9体へ戻す',async()=>{
+  const workers=Array.from({length:10},worker),pool=new SpeechPool(workers,20);
+  const targets=Array.from({length:9},(_,i)=>`target${i}`);
+  const factory=vi.fn((_plan:RelayPlan,indices:number[])=>({...fakeTransport(),botIds:indices.map(i=>`bot${i}`)})),relay=new EventRelay(pool,factory);
+  await relay.start({...plan,targets});expect(factory.mock.calls[0]![1]).toEqual([9,0,1,2,3,4,5,6,7,8]);
+  expect(relay.status()).toMatchObject({receiver:'bot9',senders:['bot0','bot1','bot2','bot3','bot4','bot5','bot6','bot7','bot8'],targets});
+  expect(await pool.start('other')).toBe('busy');expect(await pool.start('target8')).toBe('busy');
+  await relay.stop();
+  expect(await Promise.all(Array.from({length:10},(_,i)=>pool.start(`room${i}`)))).toEqual([...Array(9).fill('started'),'busy']);
+  expect(workers[9]!.connect).not.toHaveBeenCalled();pool.close();
+ });
+ it('読み上げ1体使用中の9部屋開始は一括で断り、8部屋なら残りで開始できる',async()=>{
+  const pool=new SpeechPool(Array.from({length:10},worker),20),factory=vi.fn<RelayFactory>().mockImplementation(fakeTransport),relay=new EventRelay(pool,factory);
+  const targets=Array.from({length:9},(_,i)=>`target${i}`);await pool.start('reading');
+  await expect(relay.start({...plan,targets})).rejects.toThrow('空きBOT');expect(factory).not.toHaveBeenCalled();expect(pool.active('reading')).toBe(true);
+  await relay.start({...plan,targets:targets.slice(0,8)});expect(factory.mock.calls[0]![1]).toEqual([9,1,2,3,4,5,6,7,8]);
+  await relay.stop();expect(pool.active('reading')).toBe(true);pool.close();
+ });
  it('対象VCやBOTが使用中なら奪わず、失敗時に部分予約を残さない',async()=>{
   const pool=new SpeechPool(Array.from({length:10},worker),20);await pool.start('a');
   expect(pool.reserve(7,['stage',...plan.targets])).toBeNull();expect(pool.active('a')).toBe(true);
@@ -27,7 +45,7 @@ describe('中継と読み上げのBOT予約',()=>{
  });
  it('部屋の重複・上限・BOT不足を接続前に拒否する',async()=>{
   const factory=vi.fn(fakeTransport),relay=new EventRelay(new SpeechPool(Array.from({length:10},worker),20),factory);
-  for(const targets of [[],['stage'],['a','a'],['a','b','c','d','e','f','g']])await expect(relay.start({...plan,targets})).rejects.toThrow();
+  for(const targets of [[],['stage'],['a','a'],Array.from({length:10},(_,i)=>`target${i}`)])await expect(relay.start({...plan,targets})).rejects.toThrow();
   expect(factory).not.toHaveBeenCalled();
   const short=new EventRelay(new SpeechPool([worker()],20),factory);await expect(short.start({...plan,targets:['a']})).rejects.toThrow('受信専用の拾');
  });

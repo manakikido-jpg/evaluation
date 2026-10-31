@@ -1,4 +1,4 @@
-import type { SpeechPool } from './pool.js';
+import { RELAY_MAX_TARGETS, type SpeechPool } from './pool.js';
 
 export type RelayPlan = { source: string; targets: string[]; actor: string };
 export type RelayMetrics = { packets: number; lastPacketAt: number | null };
@@ -23,8 +23,8 @@ export class EventRelay {
   }
   async start(plan: RelayPlan): Promise<void> {
     if (this.session) throw new RelayError('中継中か準備中です。停止してから開始してください。');
-    if (!plan.source || plan.targets.length < 1 || plan.targets.length > 6 || new Set([plan.source, ...plan.targets]).size !== plan.targets.length + 1)
-      throw new RelayError('中継先は重複しない1〜6部屋を選んでください。');
+    if (!plan.source || plan.targets.length < 1 || plan.targets.length > RELAY_MAX_TARGETS || new Set([plan.source, ...plan.targets]).size !== plan.targets.length + 1)
+      throw new RelayError(`中継先は重複しない1〜${RELAY_MAX_TARGETS}部屋を選んでください。`);
     if (!this.pool.receiverReady()) throw new RelayError('受信専用の拾（設定順10番目）が使えません。10体の設定と接続状態を確認してください。ほかのBOTでは代用しません。');
     const lease = this.pool.reserve(plan.targets.length + 1, [plan.source, ...plan.targets]);
     if (!lease) throw new RelayError('壱〜玖の空きBOTが足りないか、対象の部屋は読み上げ中です。対象部屋の読み上げを停止して、空きを確認してください。');

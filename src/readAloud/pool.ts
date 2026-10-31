@@ -8,6 +8,7 @@ export interface SpeechWorker {
 type Session = { worker: SpeechWorker; channelId: string; queue: string[]; connecting: boolean; running: boolean; lifetime: AbortController; speech?: AbortController; lastPost: Map<string, number> };
 /** 既存のトークン順：拾は受信専用。名前や空き順では選ばない。 */
 export const RELAY_RECEIVER_INDEX = 9;
+export const RELAY_MAX_TARGETS = 9;
 /** 予約を同期的に確保し、同時開始でも同じBOTを2部屋に配らない。 */
 export class SpeechPool {
   private sessions = new Map<string, Session>();
@@ -40,7 +41,7 @@ export class SpeechPool {
   }
   /** 中継の受信/配信BOTと部屋を同期的に一括確保。使用中の読み上げは奪わない。 */
   reserve(count: number, channels: readonly string[]): { indices: number[]; release: () => void } | null {
-    if (!Number.isInteger(count) || count < 2 || count > 7 || channels.length !== count || new Set(channels).size !== count
+    if (!Number.isInteger(count) || count < 2 || count > RELAY_MAX_TARGETS + 1 || channels.length !== count || new Set(channels).size !== count
       || channels.some(id => this.sessions.has(id) || this.relayChannels.has(id))) return null;
     if (!this.receiverReady()) return null;
     const senders = this.workers.flatMap((w, index) => index < RELAY_RECEIVER_INDEX && this.available(w) ? [index] : []).slice(0, count - 1);

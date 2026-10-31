@@ -1,13 +1,14 @@
 import { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
 import { logger } from '../lib/logger.js';
 import { EventRelay, RelayError } from './relay.js';
+import { RELAY_MAX_TARGETS } from './pool.js';
 
 export const eventRelayCommand = new SlashCommandBuilder().setName('イベント中継').setDescription('ステージの声をほかのVCへ中継する（運営用）')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false)
   .addSubcommand(s => {
-    s.setName('開始').setDescription('まず1部屋で確認し、最大6部屋へ中継する')
+    s.setName('開始').setDescription(`まず1部屋で確認し、最大${RELAY_MAX_TARGETS}部屋へ中継する`)
       .addChannelOption(o => o.setName('ステージ').setDescription('開催中のステージ').addChannelTypes(ChannelType.GuildStageVoice).setRequired(true));
-    for (let n = 1; n <= 6; n++) s.addChannelOption(o => o.setName(`配信先${n}`).setDescription(`${n}部屋目の通常VC`).addChannelTypes(ChannelType.GuildVoice).setRequired(n === 1));
+    for (let n = 1; n <= RELAY_MAX_TARGETS; n++) s.addChannelOption(o => o.setName(`配信先${n}`).setDescription(`${n}部屋目の通常VC`).addChannelTypes(ChannelType.GuildVoice).setRequired(n === 1));
     return s;
   })
   .addSubcommand(s => s.setName('停止').setDescription('中継を止めて、使っていたBOTを返す'))
@@ -34,8 +35,8 @@ export class EventRelayApp {
     }
     try {
       const sourceId = i.options.getChannel('ステージ', true).id;
-      const targets = Array.from({ length: 6 }, (_, n) => i.options.getChannel(`配信先${n + 1}`)?.id).filter((id): id is string => !!id);
-      if (!targets.length || new Set([sourceId, ...targets]).size !== targets.length + 1) throw new RelayError('配信先は重複しない1〜6部屋を選んでください。');
+      const targets = Array.from({ length: RELAY_MAX_TARGETS }, (_, n) => i.options.getChannel(`配信先${n + 1}`)?.id).filter((id): id is string => !!id);
+      if (!targets.length || new Set([sourceId, ...targets]).size !== targets.length + 1) throw new RelayError(`配信先は重複しない1〜${RELAY_MAX_TARGETS}部屋を選んでください。`);
       const ids = [sourceId, ...targets];
       for (const [index, id] of ids.entries()) {
         const channel = await i.guild.channels.fetch(id);
