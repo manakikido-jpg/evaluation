@@ -51,11 +51,11 @@ function fixture(n = 1) { const s = setup(n); opened.push(s); return s; }
 beforeEach(() => { vi.clearAllMocks(); vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'performance'] }); });
 afterEach(async () => { for (const s of opened.splice(0)) await s.relay.close('test end'); vi.useRealTimers(); });
 
-it('受信1＋配信6は別のBOT接続で、配信先は同じプレイヤーを購読する', async () => {
-  const s = fixture(6); await s.relay.start(s.abort.signal);
-  expect(mock.join).toHaveBeenCalledTimes(7);
+it.each([6, 9])('受信1＋配信%sは別のBOT接続で、配信先は同じプレイヤーを購読する', async count => {
+  const s = fixture(count); await s.relay.start(s.abort.signal);
+  expect(mock.join).toHaveBeenCalledTimes(count + 1);
   expect(mock.join.mock.calls[0]![0]).toMatchObject({ group: 'bot9', channelId: 'stage', selfDeaf: false, selfMute: true });
-  for (let n = 1; n <= 6; n++) {
+  for (let n = 1; n <= count; n++) {
     expect(mock.join.mock.calls[n]![0]).toMatchObject({ group: `bot${n - 1}`, channelId: `vc${n}`, selfDeaf: true, selfMute: false });
     expect(s.connections[n]!.subscribe).toHaveBeenCalledWith(s.player);
     expect(s.connections[n]!.receiver.subscribe).not.toHaveBeenCalled();

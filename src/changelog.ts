@@ -31,6 +31,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-10-31-event-relay-nine-rooms', date: '2026-10-31', kind: 'improve', where: ['Discord', '運用'],
+    title: 'イベント音声を最大9部屋へ中継できるように',
+    items: ['受信専用の拾を維持し、壱〜玖の9体すべてを配信に使えます。開始コマンドで配信先1〜9を選べます。', '9部屋へ配信すると全10体を使います。通常の読み上げにも使いたい場合は、配信先を減らしてください。'],
+    announcement: { priority: 'none', audience: 'イベント運営・BOT管理者',
+      steps: ['読み上げ専用サービスを更新する。', '1部屋で音声を確認する。', '中継を停止し、/イベント中継 開始 の配信先1〜9から必要な部屋を選ぶ。9部屋へ配信する前に、壱〜玖の読み上げを停止して空きを確保する。'],
+      postText: '', imagePrompt: '', notes: '受信は引き続き拾固定。通常の読み上げ中のBOTを自動で奪わない。使用中の中継へ部屋を追加するときは停止して開始し直す。VPS更新と実通話確認は別途必要。' },
+  },
+  {
     id: '2026-10-31-event-relay-receiver-ten', date: '2026-10-31', kind: 'improve', where: ['Discord', '運用'],
     title: 'イベント中継の受信を拾に固定',
     items: ['拾を受信専用に固定し、配信と通常の読み上げは壱〜玖の空きBOTから選びます。拾が使えないときは代用せず開始を止めます。', '中継の状態に使用BOTを表示。権限不足のときは、どのBOT・部屋・権限か分かるようにしました。'],
