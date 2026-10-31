@@ -56,8 +56,10 @@ it('予期しないエラーの内部情報は返事へ出さない', async () =
 });
 it('停止と、受信できていても実際に聞こえるか確認が必要な状態表示', async () => {
   const stop = setup('停止'); await stop.run(); expect(stop.relay.stop).toHaveBeenCalledOnce();
-  const s = setup('状態'); s.relay.status.mockReturnValue({ source: 'stage', targets: ['vc1'], phase: 'active', packets: 4, lastPacketAt: Date.now() }); await s.run();
+  const s = setup('状態'); s.relay.status.mockReturnValue({ source: 'stage', targets: ['vc1'], phase: 'active', receiver: 'receiver-ten', senders: ['sender-one'], packets: 4, lastPacketAt: Date.now() }); await s.run();
+  expect(s.i.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('受信：拾 <@receiver-ten>') }));
+  expect(s.i.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('<#vc1>＝<@sender-one>') }));
   expect(s.i.reply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('受信数だけで各部屋に聞こえることまでは確認できません') }));
-  s.relay.status.mockReturnValue({ source: 'stage', targets: ['vc1'], phase: 'active', packets: 0, lastPacketAt: null }); await s.run();
+  s.relay.status.mockReturnValue({ source: 'stage', targets: ['vc1'], phase: 'active', receiver: 'receiver-ten', senders: ['sender-one'], packets: 0, lastPacketAt: null }); await s.run();
   expect(s.i.reply).toHaveBeenLastCalledWith(expect.objectContaining({ content: expect.stringContaining('まだ受信していません') }));
 });

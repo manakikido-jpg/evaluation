@@ -22,9 +22,9 @@ export class EventRelayApp {
     const action = i.options.getSubcommand();
     if (action === '状態') {
       const s = this.relay.status();
-      if (!s) { await reply(`中継は停止中です。${this.relay.lastStop ?? ''}`); return; }
+      if (!s) { await reply(`中継は停止中です。受信は拾、配信は壱〜玖です。${this.relay.lastStop ?? ''}`); return; }
       const age = s.lastPacketAt === null ? 'まだ受信していません。登壇者が声を出して確認してください。' : `最後の受信は${Math.max(0, Math.floor((Date.now() - s.lastPacketAt) / 1000))}秒前です。`;
-      await reply(`${s.phase === 'active' ? '📡 中継中' : s.phase === 'starting' ? '中継を準備中' : '停止処理中'}：<#${s.source}> → ${s.targets.map(id => `<#${id}>`).join('・')}\n使用BOT：${s.targets.length + 1}体／受信パケット：${s.packets}件\n${age}\n受信数だけで各部屋に聞こえることまでは確認できません。配信先でも音を確認してください。`); return;
+      await reply(`${s.phase === 'active' ? '📡 中継中' : s.phase === 'starting' ? '中継を準備中' : '停止処理中'}：<#${s.source}> → ${s.targets.map(id => `<#${id}>`).join('・')}\n受信：拾 <@${s.receiver}>\n配信：${s.targets.map((id, n) => `<#${id}>＝<@${s.senders[n]}>`).join('・')}\n使用BOT：${s.targets.length + 1}体／受信パケット：${s.packets}件\n${age}\n受信数だけで各部屋に聞こえることまでは確認できません。配信先でも音を確認してください。`); return;
     }
     if (action !== '開始' && action !== '停止') return;
     await i.deferReply({ flags: MessageFlags.Ephemeral });
@@ -46,7 +46,7 @@ export class EventRelayApp {
       }
       await this.relay.start({ source: sourceId, targets, actor: i.user.id });
       logger.info({ actor: i.user.id, source: sourceId, targets }, 'event relay started');
-      await i.editReply({ content: `📡 ${targets.length}部屋への中継を開始しました。「/イベント中継 状態」で受信を確認し、配信先でも声が聞こえるか試してください。録音・保存はしません。`, allowedMentions: { parse: [] } });
+      await i.editReply({ content: `📡 拾を受信専用にして、壱〜玖から${targets.length}部屋への中継を開始しました。「/イベント中継 状態」で受信を確認し、配信先でも声が聞こえるか試してください。録音・保存はしません。`, allowedMentions: { parse: [] } });
     } catch (error) {
       logger.warn('event relay start failed');
       await i.editReply({ content: error instanceof RelayError ? error.message : '中継を開始できませんでした。BOTの権限・音声接続を確認してください。', allowedMentions: { parse: [] } });

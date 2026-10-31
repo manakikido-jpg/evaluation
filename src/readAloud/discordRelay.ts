@@ -8,6 +8,8 @@ import { RelayError, type RelayMetrics, type RelayPlan, type RelayTransport } fr
 type Decoder = { codec: OpusScript; stream: ReturnType<VoiceConnection['receiver']['subscribe']> };
 const receivePerms = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.SendMessages];
 const sendPerms = [...receivePerms, PermissionFlagsBits.Speak];
+const permissionNames = new Map([[PermissionFlagsBits.ViewChannel, 'チャンネルを見る'], [PermissionFlagsBits.Connect, '接続'],
+  [PermissionFlagsBits.SendMessages, 'メッセージを送信'], [PermissionFlagsBits.Speak, '発言']]);
 /** 音声は短いメモリバッファだけ。自分/BOT/客席/配信先の音は取り込まない。 */
 export class DiscordEventRelay implements RelayTransport {
   readonly botIds: string[];
@@ -47,9 +49,11 @@ export class DiscordEventRelay implements RelayTransport {
         const me = await guild?.members.fetchMe(); this.check();
         if (!guild || !channel || !me || (index === 0 ? channel.type !== ChannelType.GuildStageVoice : channel.type !== ChannelType.GuildVoice)
           || channel.id === guild.afkChannelId) throw new RelayError('ステージと通常VCを選んでください。AFKは対象外です。');
-        if (!channel.permissionsFor(me)?.has(index === 0 ? receivePerms : sendPerms))
-          throw new RelayError('中継BOTの閲覧・接続・メッセージ送信権限と、配信先の発言権限を確認してください。');
-        if (me.voice.channelId) throw new RelayError('中継に使うBOTが別の通話にいます。先に退出させてください。');
+        const permissions = channel.permissionsFor(me);
+        const missing = (index === 0 ? receivePerms : sendPerms).filter(permission => !permissions?.has(permission));
+        const label = index === 0 ? '受信専用の拾' : '配信用BOT';
+        if (missing.length) throw new RelayError(`${label} <@${client.user!.id}> の <#${channel.id}> で「${missing.map(p => permissionNames.get(p)).join('・')}」が不足しています。チャンネルの権限を確認してください。`);
+        if (me.voice.channelId) throw new RelayError(`${label} <@${client.user!.id}> が別の通話にいます。先に退出させてください。`);
         if (index === 0) {
           this.source = channel as StageChannel;
           if (!this.source.stageInstance) throw new RelayError('先にステージのイベントを開始してください。');
