@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough, type Readable } from 'node:stream';
 import OpusScript from 'opusscript';
-import { ChannelType, Collection, Events, type Client } from 'discord.js';
+import { ChannelType, Collection, Events, PermissionFlagsBits, type Client } from 'discord.js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const mock = vi.hoisted(() => ({ join: vi.fn(), player: vi.fn(), enter: vi.fn(), resource: vi.fn() }));
 vi.mock('@discordjs/voice', () => ({
@@ -26,13 +26,13 @@ function setup(count = 1) {
   const people = new Collection([['speaker', member('speaker')], ['second', member('second')],
     ['audience', member('audience', { voice: { channelId: 'stage', suppress: true } })], ['bot', member('bot', { user: { bot: true } })]]);
   const channels = ids.map((id, index) => ({ id, type: index ? ChannelType.GuildVoice : ChannelType.GuildStageVoice,
-    stageInstance: {} as object | null, members: people, allowed: true, permissionsFor() { return { has: () => this.allowed }; },
+    stageInstance: {} as object | null, members: people, allowed: true, permissionsFor() { return { has: (_permission?: bigint | bigint[]) => this.allowed }; },
     message: { edit: vi.fn(async () => {}) }, send: vi.fn(async function (this: { message: object }) { return this.message; }) }));
   const clients = ids.map((_, n) => {
     const me = { voice: { channelId: null as string | null, serverDeaf: false, serverMute: false } };
     const guild = { id: 'guild', afkChannelId: 'afk', voiceAdapterCreator: `adapter${n}`, members: { me, fetchMe: vi.fn(async () => me) },
       channels: { cache: new Map(channels.map(c => [c.id, c])), fetch: vi.fn(async (id: string) => channels.find(c => c.id === id)) } };
-    return Object.assign(new EventEmitter(), { user: { id: `bot${n}` }, guild, guilds: { cache: new Map([['guild', guild]]) } });
+    return Object.assign(new EventEmitter(), { user: { id: n === 0 ? 'bot9' : `bot${n - 1}` }, guild, guilds: { cache: new Map([['guild', guild]]) } });
   });
   const connections: Connection[] = [];
   mock.join.mockImplementation((options: { group: string; channelId: string }) => {
@@ -54,9 +54,9 @@ afterEach(async () => { for (const s of opened.splice(0)) await s.relay.close('t
 it('受信1＋配信6は別のBOT接続で、配信先は同じプレイヤーを購読する', async () => {
   const s = fixture(6); await s.relay.start(s.abort.signal);
   expect(mock.join).toHaveBeenCalledTimes(7);
-  expect(mock.join.mock.calls[0]![0]).toMatchObject({ group: 'bot0', channelId: 'stage', selfDeaf: false, selfMute: true });
+  expect(mock.join.mock.calls[0]![0]).toMatchObject({ group: 'bot9', channelId: 'stage', selfDeaf: false, selfMute: true });
   for (let n = 1; n <= 6; n++) {
-    expect(mock.join.mock.calls[n]![0]).toMatchObject({ group: `bot${n}`, channelId: `vc${n}`, selfDeaf: true, selfMute: false });
+    expect(mock.join.mock.calls[n]![0]).toMatchObject({ group: `bot${n - 1}`, channelId: `vc${n}`, selfDeaf: true, selfMute: false });
     expect(s.connections[n]!.subscribe).toHaveBeenCalledWith(s.player);
     expect(s.connections[n]!.receiver.subscribe).not.toHaveBeenCalled();
   }
@@ -138,4 +138,20 @@ it('音声の購読に失敗しても確保したコーデックを解放する'
     expect(s.fault).toHaveBeenCalledOnce(); expect(deleted).toHaveBeenCalledTimes(2);
     for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
   } finally { deleted.mockRestore(); }
+});
+
+it('不足権限を、受信専用の拾/配信BOTと部屋ごとに表示する', async () => {
+  const source = fixture(); source.channels[0]!.allowed = false;
+  await expect(source.relay.start(source.abort.signal)).rejects.toThrow('受信専用の拾 <@bot9> の <#stage> で「チャンネルを見る・接続・メッセージを送信」');
+  expect(mock.join).not.toHaveBeenCalled();
+  const target = fixture();
+  target.channels[1]!.permissionsFor = () => ({ has: ((p?: bigint | bigint[]) => (Array.isArray(p) ? p : [p]).every(x => x !== PermissionFlagsBits.Speak)) });
+  await expect(target.relay.start(target.abort.signal)).rejects.toThrow('配信用BOT <@bot0> の <#vc1> で「発言」');
+  expect(mock.join).not.toHaveBeenCalled();
+});
+it('拾にはステージの発言権限を要求しない', async () => {
+  const s = fixture();
+  s.channels[0]!.permissionsFor = () => ({ has: ((p?: bigint | bigint[]) => (Array.isArray(p) ? p : [p]).every(x => x !== PermissionFlagsBits.Speak)) });
+  await s.relay.start(s.abort.signal); expect(s.fault).not.toHaveBeenCalled();
+  expect(mock.join.mock.calls[0]![0]).toMatchObject({ group: 'bot9', selfMute: true, selfDeaf: false });
 });
