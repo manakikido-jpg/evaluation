@@ -9,10 +9,13 @@ type Session = { worker: SpeechWorker; channelId: string; queue: string[]; conne
 /** 予約を同期的に確保し、同時開始でも同じBOTを2部屋に配らない。 */
 export class SpeechPool {
   private sessions = new Map<string, Session>();
+  private leased = new Set<SpeechWorker>();
+  private relayChannels = new Set<string>();
   constructor(private workers: SpeechWorker[], private queueLimit: number, private failed: () => void = () => {}) {}
   async start(channelId: string): Promise<'started' | 'already' | 'busy' | 'failed'> {
+    if (this.relayChannels.has(channelId)) return 'busy';
     if (this.sessions.has(channelId)) return 'already';
-    const worker = this.workers.find((w) => w.ready() && ![...this.sessions.values()].some((s) => s.worker === w));
+    const worker = this.workers.find((w) => w.ready() && !this.leased.has(w) && ![...this.sessions.values()].some((s) => s.worker === w));
     if (!worker) return 'busy';
     const s: Session = { worker, channelId, queue: [], connecting: true, running: false, lifetime: new AbortController(), lastPost: new Map() };
     this.sessions.set(channelId, s);
@@ -26,6 +29,22 @@ export class SpeechPool {
     }
   }
   active(channelId: string): boolean { const s = this.sessions.get(channelId); return !!s && !s.connecting; }
+  /** 中継の受信/配信BOTと部屋を同期的に一括確保。使用中の読み上げは奪わない。 */
+  reserve(count: number, channels: readonly string[]): { indices: number[]; release: () => void } | null {
+    if (!Number.isInteger(count) || count < 2 || count > 7 || channels.length !== count || new Set(channels).size !== count
+      || channels.some(id => this.sessions.has(id) || this.relayChannels.has(id))) return null;
+    const indices = this.workers.flatMap((w, index) => w.ready() && !this.leased.has(w)
+      && ![...this.sessions.values()].some(s => s.worker === w) ? [index] : []).slice(0, count);
+    if (indices.length !== count) return null;
+    for (const index of indices) this.leased.add(this.workers[index]!);
+    for (const id of channels) this.relayChannels.add(id);
+    let released = false;
+    return { indices, release: () => {
+      if (released) return; released = true;
+      for (const index of indices) this.leased.delete(this.workers[index]!);
+      for (const id of channels) this.relayChannels.delete(id);
+    } };
+  }
   channels(): string[] { return [...this.sessions.keys()]; }
   enqueue(channelId: string, memberId: string, text: string, now = Date.now()): 'queued' | 'off' | 'limited' {
     const s = this.sessions.get(channelId);

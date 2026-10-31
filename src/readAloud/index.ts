@@ -4,6 +4,9 @@ import { logger } from '../lib/logger.js';
 import { ReadAloudApp, readAloudCommand } from './app.js';
 import { DiscordSpeechWorker } from './discordWorker.js';
 import { SpeechPool } from './pool.js';
+import { EventRelay } from './relay.js';
+import { DiscordEventRelay } from './discordRelay.js';
+import { EventRelayApp, eventRelayCommand } from './relayApp.js';
 import { STAGE_HINT, startupReason, type StartupStage } from './diagnose.js';
 
 /** どこで失敗したか（何番目の BOT か）。秘密は入れない */
@@ -20,18 +23,23 @@ async function main(): Promise<void> {
   const workers = clients.map((client) => new DiscordSpeechWorker(client, cfg, (channelId) => pool.stop(channelId)));
   pool = new SpeechPool(workers, cfg.READ_ALOUD_QUEUE_LIMIT, () => logger.warn('read aloud synthesis or playback failed'));
   const app = new ReadAloudApp(cfg, pool);
+  const relay = new EventRelay(pool, (plan, indices, fault) => new DiscordEventRelay(indices.map(index => clients[index]!), cfg.READ_ALOUD_GUILD_ID, plan, fault));
+  const relayApp = new EventRelayApp(cfg.READ_ALOUD_GUILD_ID, relay);
   const leader = clients[0]!;
   // 受付は先頭の専用BOTだけ。複数の接続で同じ投稿を重ねて読まない。
   leader.on(Events.MessageCreate, (m) => app.message(m));
   leader.on(Events.VoiceStateUpdate, (before, after) => app.voice(before, after));
-  const stop = () => { pool.close(); for (const client of clients) void client.destroy(); };
+  const stop = () => { pool.close(); void relay.stop('BOTの終了のため停止しました。').finally(() => { for (const client of clients) void client.destroy(); }); };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   for (const client of clients) {
-    client.on(Events.InteractionCreate, (i) => { if (i.isChatInputCommand()) void app.interaction(i).catch(() => logger.warn('read aloud command failed')); });
+    client.on(Events.InteractionCreate, (i) => { if (i.isChatInputCommand()) {
+      void app.interaction(i).catch(() => logger.warn('read aloud command failed'));
+      void relayApp.interaction(i).catch(() => logger.warn('event relay command failed'));
+    } });
     client.on(Events.Error, () => logger.warn('read aloud gateway error'));
-    client.on(Events.ShardDisconnect, () => pool.close());
+    client.on(Events.ShardDisconnect, () => { pool.close(); if (client.user) relay.lostBot(client.user.id); });
     client.on(Events.VoiceStateUpdate, (before, after) => {
-      if (after.id === client.user?.id && before.channelId && before.channelId !== after.channelId) pool.stop(before.channelId);
+      if (after.id === client.user?.id && before.channelId && before.channelId !== after.channelId) { pool.stop(before.channelId); relay.lostBot(after.id); }
     });
   }
   try {
@@ -49,7 +57,7 @@ async function main(): Promise<void> {
     if (missing >= 0) throw new StartupError('guild', missing + 1, 'not_in_guild');
     const guild = leader.guilds.cache.get(cfg.READ_ALOUD_GUILD_ID)!;
     // このアプリ専用のBOTにだけ登録する。社務所BOTのコマンドは変更しない。
-    try { await guild.commands.create(readAloudCommand.toJSON()); } catch (err) { throw new StartupError('command', 1, startupReason(err)); }
+    try { await guild.commands.create(readAloudCommand.toJSON()); await guild.commands.create(eventRelayCommand.toJSON()); } catch (err) { throw new StartupError('command', 1, startupReason(err)); }
     logger.info({ workers: clients.length }, 'read aloud ready');
   } catch (err) { stop(); throw err; }
 }
