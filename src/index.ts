@@ -39,6 +39,7 @@ import { AfkMuteApp } from './discord/afkMute.js';
 import { BellApp, BellStickyApp } from './discord/bell.js';
 import { DiaryApp } from './discord/diary.js';
 import { GachaApp } from './discord/gacha.js';
+import { removeIntroMessages } from './services/intros.js';
 import { PresentApp } from './discord/presents.js';
 import { retireOmamori } from './discord/retireOmamori.js';
 import { MaikuraApp } from './discord/maikura.js';
@@ -516,6 +517,9 @@ async function main(): Promise<void> {
   client.on(Events.MessageDelete, m => { if (m.guildId === cfg().guildId) void invalidateGalleryPosts(db, [m.id]).catch(err => logger.warn({ err }, 'gallery deletion check failed')); });
   client.on(Events.MessageBulkDelete, (list, ch) => { if (ch.guildId === cfg().guildId) void invalidateGalleryPosts(db, [...list.keys()]).catch(err => logger.warn({ err }, 'gallery bulk deletion check failed')); });
   client.on(Events.MessageUpdate, (_old, m) => { if (m.guildId === cfg().guildId) void galleryRewardsApp.onUpdate(m.id).catch(err => logger.warn({ err }, 'gallery update check failed')); });
+  client.on(Events.MessageUpdate, (_old, m) => void admission.onIntroUpdate(m).catch(err => logger.warn({ err }, 'intro update failed')));
+  client.on(Events.MessageDelete, m => { if (m.guildId === cfg().guildId) void removeIntroMessages(db, [m.id]).catch(err => logger.warn({ err }, 'intro deletion failed')); });
+  client.on(Events.MessageBulkDelete, (list, ch) => { if (ch.guildId === cfg().guildId) void removeIntroMessages(db, [...list.keys()]).catch(err => logger.warn({ err }, 'intro bulk deletion failed')); });
   // 🗑 Discordへの削除通知は停止中。Webの保存・削除後の処理は続ける。
   const messageLog = new MessageLogApp(cfg, actions, env.DISCORD_MESSAGE_CONTENT === 'on');
   // 🧹 抜けた人の書き込みを消す（書き込みの番号だけ覚えておく）

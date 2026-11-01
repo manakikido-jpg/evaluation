@@ -10,6 +10,8 @@ export type GalleryMessage = {
   attachments: { id: string; content_type?: string }[];
 };
 export interface DiscordActions {
+  /** 絵馬の招待者欄を読み直す。記録済みの投稿だけを対象にする。 */
+  introMessage?(channelId: string, messageId: string): Promise<{ id: string; channel_id: string; timestamp: string; content: string; author: { id: string; bot?: boolean } }>;
   /** 写真館報酬の確認用。画像・動画本体は取得しない。 */
   galleryMessage?(channelId: string, messageId: string): Promise<GalleryMessage>;
 
@@ -195,6 +197,7 @@ export function createDiscordActions(botToken: string): DiscordActions {
 
   return {
     galleryMessage: async (c, m) => (await call('GET', `/channels/${c}/messages/${m}`)) as GalleryMessage,
+    introMessage: async (c, m) => (await call('GET', `/channels/${c}/messages/${m}`)) as Awaited<ReturnType<NonNullable<DiscordActions['introMessage']>>>,
     guildStickers: async g => (await call('GET', `/guilds/${g}/stickers`)) as GuildSticker[],
     guildEmojis: async g => (await call('GET', `/guilds/${g}/emojis`)) as GuildEmoji[],
     async createGuildSticker(g, input, reason) {
