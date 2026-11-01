@@ -7,7 +7,7 @@ import {createSession,findSession} from '../src/web/sessions.js';
 import {recordJoin} from '../src/services/members.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
 import {casinoGames,casinoTables,memberSessions,settings} from '../src/db/schema.js';
-import {readTrial,TRIAL_KEY,type TrialFloor} from '../src/services/casino/gaisen/trial.js';
+import {readTrial,TRIAL_KEY,TRIAL_V2_KEY,type TrialFloor} from '../src/services/casino/gaisen/trial.js';
 const now=new Date('2026-10-28T03:00:00Z'),id='760000000000000001',user={id,username:'sample',displayName:'試遊の運営',avatarUrl:null},path='/economy/gaisen-trial';
 let db:Db,close:()=>Promise<void>,app:ReturnType<typeof createWebApp>,token:string,csrf:string;
 const headers=(t=token)=>({cookie:'shamusho_session='+t});
@@ -39,4 +39,78 @@ describe('運営用の神殿スロット無料試遊',()=>{
 it('同じ版からの同時レバーを1回に制限し、失敗操作をロールバックする',async()=>{
  await post('seat');const f=await readTrial(db,now);const revision=String(f.revision);
  const responses=await Promise.all([post('lever',1,{revision}),post('lever',1,{revision})]);expect(responses.map(r=>r.status).sort()).toEqual([303,409]);expect((await readTrial(db,now)).machines[0]!.state.balance).toBe(99970);
+});
+
+describe('新版の神殿スロットの入口と保存領域',()=>{
+ const v2='/economy/gaisen-trial-v2';
+ async function postV2(action:string,extra:Record<string,string>={}){
+  const f=await readTrial(db,now,'trial-2');
+  return app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:'1',action,...extra})});
+ }
+ it('天井直前から24G前兆へ進み、二重STOP・別台再開でも天井権利を一度だけ保全する',async()=>{
+  await postV2('seat');await postV2('scenario',{scenario:'ceiling'});await postV2('lever');
+  let f=await readTrial(db,now,'trial-2');let s=f.machines[0]!.state;
+  s.pending!.role='none';s.pending!.model={flag:'none',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{index:'2',revision}),postV2('stop',{index:'2',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  f=await readTrial(db,now,'trial-2');s=f.machines[0]!.state;
+  expect(s).toMatchObject({phase:'omen',ceilingStocks:1,ceilingLeft:24,normalGames:1480,sets:0});
+  // ループの率は別の境界テストで検証。この経路は保存済み落選後の状態に固定する。
+  s.ceilingLoop=0;await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('leave');await postV2('seat',{machine:'2'});await postV2('lever',{machine:'2'});
+  f=await readTrial(db,now,'trial-2');s=f.machines[1]!.state;
+  expect(s).toMatchObject({ceilingStocks:1,ceilingLeft:24,setting:1});
+  s.pending!.role='god';s.pending!.model={flag:'god',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  for(const index of ['0','1','2'])await postV2('stop',{machine:'2',index});
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state).toMatchObject({phase:'gg',sets:1,stocks:5,ceilingStocks:0});
+  const html=await(await app.request(v2,{headers:headers()})).text();
+  for(const field of ['ceilingLoop','ceilingStocks','ceilingHit','ceilingLeft'])expect(html).not.toContain(field);
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
+ it('前兆の場面確認を保存し、別台再開後のGODと二重STOPでも確定権利を守る',async()=>{
+  await postV2('seat');expect((await postV2('scenario',{scenario:'omen'})).status).toBe(303);
+  const html=await(await app.request(v2,{headers:headers()})).text();
+  expect(html).toContain('前兆（当選済み）');expect(html).toContain('data-phase="omen"');expect(html).not.toContain('omenStocks');
+  await postV2('leave');await postV2('seat',{machine:'2'});await postV2('lever',{machine:'2'});
+  const f=await readTrial(db,now,'trial-2'),s=f.machines[1]!.state;
+  expect(s).toMatchObject({omenStocks:1,omen:5,setting:1,sample:true});
+  s.pending!.role='god';s.pending!.model={flag:'god',missUnits:0};await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{machine:'2',index:'0'});await postV2('stop',{machine:'2',index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{machine:'2',index:'2',revision}),postV2('stop',{machine:'2',index:'2',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state).toMatchObject({phase:'gg',stocks:5,sets:1,omenStocks:0,firsts:1});
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
+ it('新版にも運営・経済権限・CSRFが必要で、表示だけでは保存しない',async()=>{
+  expect((await app.request(v2)).status).toBe(302);
+  for(const access of [{level:'shinshoku',pages:['members']},{level:'member',pages:['economy']}] as const){
+   const t=await createSession(db,user,access as never,now);expect((await app.request(v2,{headers:headers(t)})).status).toBe(403);
+  }
+  expect((await app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({action:'seat',machine:'1',revision:'0'})})).status).toBe(403);
+  const r=await app.request(v2,{headers:headers()}),html=await r.text();expect(r.status).toBe(200);expect(r.headers.get('cache-control')).toContain('no-store');
+  expect(html).toContain('新版：区間別の抽選・払出');expect(html).toContain('action="'+v2+'"');expect(html).not.toContain('action="'+path+'"');
+  expect(await db.select().from(settings).where(eq(settings.key,TRIAL_V2_KEY))).toHaveLength(0);
+ });
+ it('旧版の回転途中・保存分を保持し、新版だけ進め、再送で二重払いせず実財布を変えない',async()=>{
+  await post('seat');await post('scenario',1,{scenario:'sgg'});await post('lever');await post('stop',1,{index:'0'});
+  const legacy=(await db.select().from(settings).where(eq(settings.key,TRIAL_KEY)))[0]!;
+  const count=()=>Promise.all([casinoGames,casinoTables,memberSessions].map(async t=>(await db.select({n:sql<number>`count(*)::int`}).from(t))[0]!.n)),before=await count();
+  expect((await postV2('seat',{version:'trial-1'})).status).toBe(303);await postV2('scenario',{scenario:'sgg'});await postV2('lever');
+  const f=await readTrial(db,now,'trial-2'),p=f.machines[0]!.state.pending!;
+  // 本番の乱数には触れず、保存済み抽選をDBからの再開テスト用に固定。
+  p.role='red7';p.order=[2,1,0];p.model={flag:'reverseRed',missUnits:0};await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{index:'2'});await postV2('stop',{index:'1'});
+  const rev=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{index:'0',revision:rev}),postV2('stop',{index:'0',revision:rev})]);expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  const result=await readTrial(db,now,'trial-2');expect(result.machines[0]!.state.version).toBe('trial-2');expect(result.machines[0]!.state.lastPaid).toBe(30);expect(result.machines[0]!.state.stocks).toBe(2);
+  const html=await(await app.request(v2,{headers:headers()})).text();expect(html).toContain('赤7成立');expect(html).toContain('リプレイ · 30ポイント返却');expect(html).toContain('直近5ゲームの小役履歴');expect(html).toContain('gt-history-red');expect(result.machines[0]!.state.symbolHistory).toEqual(['red']);
+  await postV2('leave');await postV2('seat',{machine:'2'});expect((await readTrial(db,now,'trial-2')).machines[1]!.state.version).toBe('trial-2');
+  expect((await db.select().from(settings).where(eq(settings.key,TRIAL_KEY)))[0]).toEqual(legacy);
+  expect((await walletOf(db,id)).balance).toBe(3210);expect(await count()).toEqual(before);
+ });
 });

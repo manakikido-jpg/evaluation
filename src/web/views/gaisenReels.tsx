@@ -51,7 +51,7 @@ export function GaisenReels({own}: {own: Own}) {
         {reel.spinning && <span class="gt-reel-motion-label">回転中</span>}
       </div>)}
     </div>
-    <p class="gt-settlement" data-gt-settlement>{own.spinning?'STOPで結果を確定':own.spins===0?'レバーで次のゲームへ':own.resultRole==='red7'?'赤7成立 · GG獲得（払出0ポイント）':own.resultRole==='replay'?'リプレイ · 30ポイント返却':own.resultRole==='bell'&&own.lastPaid===0?'押し順不一致 · 払出0ポイント':`払出 ${own.lastPaid.toLocaleString('ja-JP')}ポイント`}</p>
+    <p class="gt-settlement" data-gt-settlement>{own.spinning?'STOPで結果を確定':own.spins===0?'レバーで次のゲームへ':own.resultRole==='red7'?`赤7成立 · GG獲得（${own.lastPaid===30?'リプレイ · 30ポイント返却':`払出${own.lastPaid}ポイント`}）`:own.resultReplay||own.resultRole==='replay'?'リプレイ · 30ポイント返却':own.resultRole==='bell'&&own.lastPaid===0?'押し順不一致 · 払出0ポイント':`払出 ${own.lastPaid.toLocaleString('ja-JP')}ポイント`}</p>
     <div class="gt-reel-labels" aria-hidden="true">{['左','中','右'].map((label, index) => <span>{label}<b>{reels[index]!.spinning ? '回転中' : '停止'}</b></span>)}</div>
   </div>;
 }
