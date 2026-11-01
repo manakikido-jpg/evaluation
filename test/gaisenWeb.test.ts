@@ -47,6 +47,30 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
   const f=await readTrial(db,now,'trial-2');
   return app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:'1',action,...extra})});
  }
+ it('天井直前から24G前兆へ進み、二重STOP・別台再開でも天井権利を一度だけ保全する',async()=>{
+  await postV2('seat');await postV2('scenario',{scenario:'ceiling'});await postV2('lever');
+  let f=await readTrial(db,now,'trial-2');let s=f.machines[0]!.state;
+  s.pending!.role='none';s.pending!.model={flag:'none',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{index:'2',revision}),postV2('stop',{index:'2',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  f=await readTrial(db,now,'trial-2');s=f.machines[0]!.state;
+  expect(s).toMatchObject({phase:'omen',ceilingStocks:1,ceilingLeft:24,normalGames:1480,sets:0});
+  // ループの率は別の境界テストで検証。この経路は保存済み落選後の状態に固定する。
+  s.ceilingLoop=0;await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('leave');await postV2('seat',{machine:'2'});await postV2('lever',{machine:'2'});
+  f=await readTrial(db,now,'trial-2');s=f.machines[1]!.state;
+  expect(s).toMatchObject({ceilingStocks:1,ceilingLeft:24,setting:1});
+  s.pending!.role='god';s.pending!.model={flag:'god',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  for(const index of ['0','1','2'])await postV2('stop',{machine:'2',index});
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state).toMatchObject({phase:'gg',sets:1,stocks:5,ceilingStocks:0});
+  const html=await(await app.request(v2,{headers:headers()})).text();
+  for(const field of ['ceilingLoop','ceilingStocks','ceilingHit','ceilingLeft'])expect(html).not.toContain(field);
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
  it('前兆の場面確認を保存し、別台再開後のGODと二重STOPでも確定権利を守る',async()=>{
   await postV2('seat');expect((await postV2('scenario',{scenario:'omen'})).status).toBe(303);
   const html=await(await app.request(v2,{headers:headers()})).text();

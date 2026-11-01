@@ -14,9 +14,8 @@ function missGstop(s:GaisenState){
 describe('trial-2の前兆権利',()=>{
  it('通常の当選を確定権利として保存し、前兆終了時に一度だけGGへ渡す',()=>{
   const s=newGaisen(1,'trial-2');round(s,'none',()=>0);
-  expect(s).toMatchObject({phase:'omen',omen:3,omenStocks:1,stocks:0,sets:0,firsts:0});
+  expect(s).toMatchObject({phase:'omen',omen:1,omenStocks:1,stocks:0,sets:0,firsts:0});
   const saved=JSON.parse(JSON.stringify(s)) as GaisenState;
-  for(let i=0;i<2;i++){round(saved);expect(saved.phase).toBe('omen');expect(saved.omenStocks).toBe(1);}
   round(saved);expect(saved).toMatchObject({phase:'gg',ggLeft:100,stocks:0,sets:1,omen:0,omenStocks:0,firsts:1});
   expect(saved.winEvent).toMatchObject({kind:'gg',added:1});round(saved);expect(saved.winEvent).toBeNull();
  });
@@ -58,10 +57,15 @@ describe('trial-2の前兆権利',()=>{
   for(let i=0;i<5;i++)missGstop(s);
   expect(s).toMatchObject({phase:'gg',stocks:1,sets:1,omenStocks:0});
  });
- it('天井に届く前に確定した前兆は追加の天井当選として二重加算しない',()=>{
+ it('告知前の本前兆でも天井を一度だけ獲得し、既存分と合わせて開始する',()=>{
   const s=scenario(1,'omen','trial-2');s.normalGames=1479;round(s);
-  expect(s).toMatchObject({phase:'gg',stocks:0,sets:1,omenStocks:0});expect(s.winEvent?.added).toBe(1);
-  const ceiling=scenario(1,'ceiling','trial-2');round(ceiling);expect(ceiling).toMatchObject({phase:'gg',stocks:0,sets:1});
+  expect(s).toMatchObject({phase:'omen',omen:4,omenStocks:1,ceilingStocks:1,ceilingLeft:24});
+  for(let i=0;i<4;i++)round(s);
+  expect(s).toMatchObject({phase:'gg',stocks:1,sets:1,omenStocks:0,ceilingStocks:0});expect(s.winEvent?.added).toBe(2);
+  const ceiling=scenario(1,'ceiling','trial-2');round(ceiling);
+  expect(ceiling).toMatchObject({phase:'omen',ceilingLeft:24,ceilingStocks:1,sets:0});
+  for(let i=0;i<24;i++)round(ceiling);
+  expect(ceiling).toMatchObject({phase:'gg',stocks:0,sets:1});
  });
  it('旧trial-2の前兆/特殊区間/停止途中を補完し、JSON再読込で増殖しない',()=>{
   for(const phase of ['omen','gstop','sgg'] as const){
