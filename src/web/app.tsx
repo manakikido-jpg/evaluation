@@ -30,6 +30,8 @@ import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { rankingHidden, setRankingHidden } from '../services/castLeaderboard.js';
 import { bingoHostRoles, saveBingoHostRoles } from '../services/bingo.js';
+import { excludeShofuku, markShofukuAchievement, rewardShofuku, saveShofukuConfig, shofukuConfig, shofukuRanking, shofukuRows } from '../services/shofuku.js';
+import { ShofukuPage } from './views/shofuku.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
 import { lotteryFinances, recentLotteryRounds, scratchFinances, scratchPeriod } from '../services/casino/fortuneStats.js';
@@ -1485,6 +1487,50 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 🔗 招待: だれのリンクか・だれがだれを招待したか（Discord の設定では BOT のリンクは全部「BOT」と出るので）
+  // 🎍 招福詣（招待イベント）の集計・授与
+  app.get('/invites/shofuku', async (c) => {
+    const config = await shofukuConfig(db);
+    const rows = await shofukuRows(db, cfg, config, now());
+    const roles = ((await loadRoles()) ?? []).filter(r => !r.managed && r.id !== cfg.guildId).sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name }));
+    return c.html(<ShofukuPage session={c.get('session')} config={config} rows={rows} ranking={await shofukuRanking(db, rows)} roles={roles} msg={c.req.query('msg')} coin={cfg.economy.currencyName} />);
+  });
+  app.post('/invites/shofuku/settings', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/invites/shofuku?msg=guji');
+    const b = await c.req.parseBody();
+    const num = (k: string) => Number(b[k]);
+    try {
+      await saveShofukuConfig(db, { enabled: b.enabled === 'yes', start: b.start, end: b.end, malePoints: num('malePoints'), femalePoints: num('femalePoints'), targetPoints: num('targetPoints'), minMinutes: num('minMinutes'), stayDays: num('stayDays'), reward: num('reward'), extendDays: num('extendDays'), roleId: typeof b.roleId === 'string' ? b.roleId : '' }, c.get('session').userId);
+      return c.redirect('/invites/shofuku?msg=saved');
+    } catch { return c.redirect('/invites/shofuku?msg=invalid'); }
+  });
+  app.post('/invites/shofuku/reward/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/invites/shofuku');
+    return c.redirect(`/invites/shofuku?msg=${{ ok: 'rewarded', not_qualified: 'not_qualified', done: 'done' }[await rewardShofuku(db, cfg, id, c.get('session').userId, now())]}`);
+  });
+  app.post('/invites/shofuku/reward-all', async (c) => {
+    const rows = await shofukuRows(db, cfg, await shofukuConfig(db), now());
+    for (const r of rows.filter(x => x.qualified && !x.rewardedAt)) await rewardShofuku(db, cfg, r.memberId, c.get('session').userId, now());
+    return c.redirect('/invites/shofuku?msg=rewarded_all');
+  });
+  for (const action of ['exclude', 'include'] as const) app.post(`/invites/shofuku/${action}/:id`, async (c) => {
+    const id = c.req.param('id');
+    const b = await c.req.parseBody();
+    const inviterId = typeof b.inviterId === 'string' ? b.inviterId : '';
+    if (!validId(id) || !validId(inviterId)) return c.redirect('/invites/shofuku');
+    const ok = await excludeShofuku(db, id, inviterId, action === 'exclude', typeof b.note === 'string' ? b.note : '', c.get('session').userId);
+    return c.redirect(`/invites/shofuku?msg=${ok ? (action === 'exclude' ? 'excluded' : 'included') : 'locked'}`);
+  });
+  app.post('/invites/shofuku/achieve/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/invites/shofuku');
+    const config = await shofukuConfig(db);
+    const rank = (await shofukuRanking(db, await shofukuRows(db, cfg, config, now()))).find(r => r.inviterId === id);
+    if (!rank || rank.points < config.targetPoints) return c.redirect('/invites/shofuku?msg=not_qualified');
+    const ok = await markShofukuAchievement(db, id, rank.points, c.get('session').userId);
+    return c.redirect(`/invites/shofuku?msg=${ok ? 'achieved' : 'done'}`);
+  });
+
   app.get('/invites', async (c) => {
     const [joins, links, known, rewards, candidates] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db), inviteRewardRows(db), activeMemberNames(db)]);
     const discordInvites = deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => null) : null;

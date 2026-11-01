@@ -2594,3 +2594,26 @@ export const keibaReplays=pgTable('keiba_replays',{
   id:bigserial('id',{mode:'number'}).primaryKey(),tableId:bigint('table_id',{mode:'number'}).notNull(),key:text('race_key').notNull(),
   data:jsonb('data').$type<Record<string,unknown>>().notNull(),at:timestamp('at',{withTimezone:true}).notNull().defaultNow(),
 },t=>[uniqueIndex('keiba_replays_table_key').on(t.tableId,t.key)]);
+
+/** 🎍 招福詣（招待イベント）: 招かれた人ごとの記録。お参り延長・招いた人への授与を1回だけにする */
+export const shofukuEntries = pgTable('shofuku_entries', {
+  memberId: text('member_id').primaryKey(),
+  inviterId: text('inviter_id').notNull(),
+  /** お参り期間を延ばした日時 */
+  omairiExtendedAt: timestamp('omairi_extended_at', { withTimezone: true }),
+  /** 招いた人に銭を渡した日時と額 */
+  rewardedAt: timestamp('rewarded_at', { withTimezone: true }),
+  reward: integer('reward').notNull().default(0),
+  /** 運営が対象外にした（自作自演など） */
+  excluded: boolean('excluded').notNull().default(false),
+  note: text('note').notNull().default(''),
+  decidedBy: text('decided_by'),
+});
+
+/** 🎍 招福詣の達成報酬（目標ポイント）を渡したかの記録 */
+export const shofukuAchievements = pgTable('shofuku_achievements', {
+  inviterId: text('inviter_id').primaryKey(),
+  points: integer('points').notNull(),
+  awardedAt: timestamp('awarded_at', { withTimezone: true }).notNull().defaultNow(),
+  awardedBy: text('awarded_by').notNull(),
+});

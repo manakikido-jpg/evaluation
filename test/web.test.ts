@@ -3535,6 +3535,18 @@ describe('キャスト（管理画面）', () => {
     expect((await listAudit(db, { action: 'cast.cancel' })).length).toBe(1);
   });
 
+  it('🎍 招福詣の集計画面を開け、設定は宮司だけが保存できる', async () => {
+    const s = await login(GUJI);
+    const page = await (await get('/invites/shofuku', s)).text();
+    expect(page).toContain('招福詣');
+    expect(page).not.toContain('style=');
+    const r = await form(s, '/invites/shofuku/settings', { enabled: 'yes', start: '2026-11-02', end: '2026-11-20', malePoints: '1', femalePoints: '2', targetPoints: '75', minMinutes: '240', stayDays: '5', reward: '300', extendDays: '3', roleId: '' });
+    expect(r.headers.get('location')).toBe('/invites/shofuku?msg=saved');
+    const staff = await login(STAFF);
+    expect((await form(staff, '/invites/shofuku/settings', { start: '2026-11-02', end: '2026-11-20' })).headers.get('location')).toBe('/invites/shofuku?msg=guji');
+    expect((await form(s, '/invites/shofuku/settings', { start: '2026-11-21', end: '2026-11-20', malePoints: '1', femalePoints: '2', targetPoints: '75', minMinutes: '240', stayDays: '5', reward: '300', extendDays: '3' })).headers.get('location')).toBe('/invites/shofuku?msg=invalid');
+  });
+
   it('🗑 キャストの登録を消す（宮司だけ・確認が必要・予約があると消せない・予約の記録は残る）', async () => {
     const cs = await import('../src/services/cast.js');
     const { castSessions: ct, casts: kt, members: mt } = await import('../src/db/schema.js');

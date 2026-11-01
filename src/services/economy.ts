@@ -21,6 +21,7 @@ export type CoinReason =
   | 'onboarding'
   | 'invite'
   | 'invite_active'
+  | 'shofuku_reward'
   | 'shop'
   | 'visit_design_reward'
   | 'shop_refund'
@@ -321,6 +322,7 @@ export const COIN_REASON_LABEL: Record<string, string> = {
   omikuji_streak: 'おみくじの連続日数のおまけ',
   invite: '招待のお礼',
   invite_active: '招待した人の浮上ボーナス',
+  shofuku_reward: '🎍 招福詣（招待イベント）の福',
   market_buy: '市場で買った',
   market_sell: '市場で売れた',
   visit_design_reward: '参拝帳の作品の売上',

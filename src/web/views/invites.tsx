@@ -119,7 +119,7 @@ export function InvitesPage(props: {
   return (
     <Layout title="招待" session={session} nav="invites" scripts={session.level === 'guji' ? ['invite-selection.js'] : []}>
       <div class="page-head">
-        <div><p class="eyebrow">メンバー対応</p><h1>招待・報酬</h1><p class="note">招待元の確認と、昇格ごとのお礼をまとめて管理します。</p></div>
+        <div><p class="eyebrow">メンバー対応</p><h1>招待・報酬</h1><p class="note">招待元の確認と、昇格ごとのお礼をまとめて管理します。</p><p><a href="/invites/shofuku">🎍 招福詣（招待イベント）の集計へ</a></p></div>
       </div>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       {props.bulkResult && <p class="flash ok">不明として{props.bulkResult.added}人を登録しました。登録済み・退出などで対象外の{props.bulkResult.skipped}人は変更していません。</p>}

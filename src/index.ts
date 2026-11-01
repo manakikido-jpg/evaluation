@@ -48,6 +48,7 @@ import { SecurityApp } from './discord/security.js';
 import { GuidePendingApp } from './discord/guidePending.js';
 import { GuideThreadApp } from './discord/guideThreads.js';
 import { WalletApp } from './discord/wallet.js';
+import { ShofukuApp } from './discord/shofuku.js';
 import { UpdateDeskApp } from './discord/updateDesk.js';
 import { LeaverCleanupApp } from './discord/leaverCleanup.js';
 import { MessageArchiveApp } from './discord/messageArchive.js';
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
   const diary = new DiaryApp(db, cfg, actions);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
+  const shofuku = new ShofukuApp(db, cfg);
   const stickerDesk = new StickerDeskApp(db, cfg, env.WEB_BASE_URL);
   const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
   const sokin = new SokinApp(db, cfg);
@@ -261,6 +263,8 @@ async function main(): Promise<void> {
       // 🎫 週末宝くじ: 抽選して、結果を DM と売り場に知らせる
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
       void roomKnock.tick(guild).catch(err => logger.warn({ err }, 'room knock tick failed'));
+      // 🎍 招福詣: 招かれた人のお参り延長と『招福』ロール
+      void shofuku.tick(guild).catch(err => logger.warn({ err }, 'shofuku tick failed'));
       // 🧵 案内スレッド: 10 分前のお知らせ・案内が終わった人のスレッドを閉じる
       void guideThreads.tick(guild).catch((err) => logger.warn({ err }, 'guide thread tick failed'));
       void guideReception.tick(guild).catch(err => logger.warn({ err }, 'guide tick failed'));
