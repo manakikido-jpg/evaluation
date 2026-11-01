@@ -21,6 +21,51 @@ const base: ShopItem = {
 };
 
 describe('ショップの見た目', () => {
+  const values = (view: ReturnType<typeof shopList>) => view.components.flatMap(row => row.components.flatMap(c => 'options' in c ? c.options.map(o => o.value) : []));
+
+  it('6種類以上・25品を超えても、ページ送りで名前変更の札まで選べる', () => {
+    const items: ShopItem[] = [
+      ...Array.from({ length: 26 }, (_, n) => ({ ...base, id: n + 1 })),
+      { ...base, id: 27, roleGroup: 'title' }, { ...base, id: 28, roleGroup: 'vip' },
+      { ...base, id: 29, kind: 'hanafubuki' }, { ...base, id: 30, kind: 'name_change', name: '名前変更の札' },
+      { ...base, id: 31, kind: 'menzaifu' }, { ...base, id: 32, roleGroup: null },
+    ];
+    const first = shopList(items, cfg.economy, 3000);
+    const second = shopList(items, cfg.economy, 3000, false, new Map(), 1);
+    expect(JSON.stringify(first.components)).toContain('shop:page:1');
+    expect(JSON.stringify(second.components)).toContain('shop:page:0');
+    expect([...values(first), ...values(second)]).toEqual(items.map(i => String(i.id)));
+    expect(values(second)).toContain('30');
+    expect(JSON.stringify(second.embeds)).toContain('名前変更の札');
+    for (const view of [first, second]) {
+      expect(view.components.length).toBeLessThanOrEqual(5);
+      for (const row of view.components) {
+        expect(row.components.length).toBeLessThanOrEqual(5);
+        for (const component of row.components) if ('options' in component) expect(component.options.length).toBeLessThanOrEqual(25);
+      }
+    }
+  });
+
+  it('1種類に26品以上あっても、全ページで重複や欠落なく選べる', () => {
+    const items = Array.from({ length: 60 }, (_, n) => ({ ...base, id: n + 1 }));
+    const pages = [0, 1, 2].map(page => shopList(items, cfg.economy, 3000, false, new Map(), page));
+    expect(pages.flatMap(values)).toEqual(items.map(i => String(i.id)));
+    expect(pages.map(p => values(p).length)).toEqual([25, 25, 10]);
+    expect(pages[2]!.embeds[0]!.description).toContain('3 / 3');
+    expect(values(shopList(items, cfg.economy, 3000, false, new Map(), 999))).toEqual(values(pages[2]!));
+    expect(values(shopList(items, cfg.economy, 3000, false, new Map(), -1))).toEqual(values(pages[0]!));
+    expect(values(shopList(items, cfg.economy, 3000, false, new Map(), NaN))).toEqual(values(pages[0]!));
+  });
+
+  it('複数ページに5種類ある場合も、移動ボタン用の行を確保する', () => {
+    const items: ShopItem[] = [base, { ...base, id: 2, roleGroup: 'title' }, { ...base, id: 3, roleGroup: 'vip' },
+      { ...base, id: 4, kind: 'hanafubuki' }, ...Array.from({ length: 25 }, (_, n) => ({ ...base, id: n + 5, kind: 'name_change' as const }))];
+    const view = shopList(items, cfg.economy, 3000);
+    expect(values(view)).toHaveLength(25);
+    expect(view.components.length).toBeLessThanOrEqual(5);
+    expect(JSON.stringify(view.components)).toContain('shop:page:1');
+  });
+
   it('一覧: 残高・受けているもの・種類ごとのカードと選ぶメニュー。足りない分も出す', () => {
     const title = { ...base, id: 4, name: '称号「常連」', emoji: '🎋', roleGroup: 'title', price: 5000, durationDays: null };
     const m = shopList(

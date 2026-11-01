@@ -98,6 +98,7 @@ export class ShopApp {
     try {
       if (interaction.isButton()) {
         if (id === 'shop:open') return await this.open(interaction);
+        if (/^shop:page:\d+$/.test(id)) return await this.open(interaction, Number(id.split(':')[2]));
         if (id === 'shop:cancel') return void (await interaction.update(done('やめました。')));
         if (id.startsWith('shop:buy:')) {
           const [, , itemId, ticket] = id.split(':');
@@ -157,7 +158,9 @@ export class ShopApp {
     return (await walletOf(this.db, userId)).balance;
   }
 
-  private async open(i: ButtonInteraction<'cached'>): Promise<void> {
+  private async open(i: ButtonInteraction<'cached'>, page = 0): Promise<void> {
+    if (i.customId === 'shop:open') await i.deferReply(EPHEMERAL);
+    else await i.deferUpdate();
     const [items, purchases, mine] = await Promise.all([listItems(this.db, { enabledOnly: true }), activeRolePurchases(this.db, i.user.id), activeMyColor(this.db, i.user.id)]);
     // 受けている授与品（ロールをまだ持っているものだけ）
     const owned = new Map<number, Date | null>();
@@ -166,7 +169,7 @@ export class ShopApp {
       if (item?.roleId && i.member.roles.cache.has(item.roleId)) owned.set(p.itemId, p.expiresAt ?? null);
     }
     if (mine?.roleId && i.member.roles.cache.has(mine.roleId)) owned.set(mine.itemId, mine.expiresAt ?? null);
-    await i.reply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id), isBooster(i), owned), ...EPHEMERAL });
+    await i.editReply({ ...shopList(items, this.cfg().economy, await this.balance(i.user.id), isBooster(i), owned, page), allowedMentions: { parse: [] } });
   }
 
   private async pick(i: StringSelectMenuInteraction<'cached'>): Promise<void> {

@@ -38,7 +38,7 @@ export const SHOP_CATEGORIES: Record<ShopCategory, { title: string; note: string
   title: { title: '🏷 称号', note: 'プロフィール（御朱印帳）に称号が付きます', color: 0xd4a017, pick: '🏷 称号を選ぶ' },
   vip: { title: '💎 極（遊郭の VIP）', note: '宵参りの方だけ。遊郭の「💎 極の部屋」をひらける・入れる', color: 0xe6b422, pick: '💎 極の VIP を選ぶ' },
   gift: { title: '🎁 贈る', note: 'ほかの人に贈ります', color: 0xf4a7b9, pick: '🎁 贈るものを選ぶ' },
-  fun: { title: '🎐 おみくじ・絵馬', note: 'おみくじをもう 1 回・自己紹介のピン留め', color: 0x5b8def, pick: '🎐 おみくじ・絵馬を選ぶ' },
+  fun: { title: '🎐 札・おみくじ・絵馬', note: '名前変更の札・大勝負の札・おみくじをもう 1 回・自己紹介のピン留め', color: 0x5b8def, pick: '🎐 札・おみくじ・絵馬を選ぶ' },
   menzaifu: { title: '🧾 厄払い', note: '厄を 1 つ祓います', color: 0x7a6d71, pick: '🧾 免罪符を選ぶ' },
   other: { title: '✨ そのほか', note: '', color: SHU, pick: '✨ そのほかを選ぶ' },
 };
@@ -65,16 +65,22 @@ export function shopList(
   booster = false,
   /** 受けている（ロールの）授与品: 品物の ID → 期限（ずっとなら null） */
   owned: Map<number, Date | null> = new Map(),
+  requestedPage = 0,
 ) {
+  // 1つの選択欄は25品まで。種類が多い場合も、後ろの品を切り捨てずページで見せる。
+  const ordered = ORDER.flatMap(c => items.filter(i => categoryOf(i) === c));
+  const pages = Math.max(1, Math.ceil(ordered.length / 25));
+  const page = Number.isFinite(requestedPage) ? Math.max(0, Math.min(pages - 1, Math.trunc(requestedPage))) : 0;
+  const visible = ordered.slice(page * 25, (page + 1) * 25);
   const thanks = booster && e.boostDiscountPercent > 0 ? [`🏮 奉納ありがとうございます。授与品が **${e.boostDiscountPercent}% 引き** です（免罪符・贈り物・小判をのぞく）`] : [];
   const sale = e.shopSalePercent > 0 ? [`🎉 **期間限定セール中！** 授与品が **${e.shopSalePercent}% 引き** です（免罪符・贈り物・小判をのぞく）`] : [];
-  const mine = items
+  const mine = visible
     .filter((i) => owned.has(i.id))
     .map((i) => {
       const until = owned.get(i.id);
       return `- ${label(i)} … ${until ? `${fmtDay(until)} まで` : 'ずっと'}`;
     });
-  const groups = ORDER.map((c) => ({ c, items: items.filter((i) => categoryOf(i) === c) })).filter((g) => g.items.length);
+  const groups = ORDER.map((c) => ({ c, items: visible.filter((i) => categoryOf(i) === c) })).filter((g) => g.items.length);
   const tile = (i: ShopItem, withNote = true) => {
     const price = priceOf(i, e, booster);
     const lack = i.kind !== 'gift' && i.kind !== 'otoshidama' && !(i.boosterOnly && !booster) && price > balance ? price - balance : 0;
@@ -103,7 +109,8 @@ export function shopList(
         '🌸 参拝プロフィール：背景・フレームのお店と着せ替えは下のボタンか /参拝プロフィール から。',
         '🪙 小判：下の「小判を買う」か `/持ち物` →「小判」から購入・送付できます。',
         `👛 いまの${coin(e)}: **${balance.toLocaleString('ja-JP')} 枚**`,
-        ...(mine.length ? ['', '**受けているもの**', ...mine] : []),
+        ...(pages > 1 ? [`📄 ${page + 1} / ${pages} ページ（全 ${items.length} 品）・下の「前へ」「次へ」でほかの品も選べます`] : []),
+        ...(mine.length ? ['', pages > 1 ? '**このページで受けているもの**' : '**受けているもの**', ...mine] : []),
         ...(items.length ? [] : ['', 'いまは授与品がありません。']),
       ].join('\n'),
       color: SHU,
@@ -128,14 +135,20 @@ export function shopList(
     description: `${owned.has(i.id) ? '✅ 受けている・' : ''}${priceText(i, e, booster)}${durationText(i) ? `・${durationText(i)}` : ''}`.slice(0, 100),
     ...(i.emoji ? { emoji: { name: i.emoji } } : {}),
   });
-  // 種類ごとに選ぶメニュー（最大5つ。日記のボタンは空きがあるときに出す）
+  // 複数ページでは移動ボタン用に1行空ける。種類が多ければ、このページの品を1つの欄にまとめる。
   const menus =
-    groups.length <= 5
-      ? groups.map((g) => ({ custom_id: `shop:pick:${g.c}`, placeholder: SHOP_CATEGORIES[g.c].pick, options: g.items.slice(0, 25).map(option) }))
-      : [{ custom_id: 'shop:pick', placeholder: '授与品を選ぶ', options: groups.flatMap((g) => g.items).slice(0, 25).map(option) }];
+    groups.length <= (pages > 1 ? 4 : 5)
+      ? groups.map((g) => ({ custom_id: `shop:pick:${g.c}`, placeholder: SHOP_CATEGORIES[g.c].pick, options: g.items.map(option) }))
+      : [{ custom_id: 'shop:pick', placeholder: '授与品を選ぶ', options: visible.map(option) }];
   return {
     embeds,
-    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [{ type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }, { type: 2, style: 2, label: '🪙 小判を買う', custom_id: 'koban:shop' }, { type: 2, style: 2, label: '🌸 背景・フレーム', custom_id: 'visit:open' }] }] : [])],
+    components: [...menus.map((m) => ({ type: 1, components: [{ type: 3, ...m }] })), ...(menus.length < 5 ? [{ type: 1, components: [
+      ...(pages > 1 ? [
+        { type: 2, style: 2, label: '← 前へ', custom_id: `shop:page:${Math.max(0, page - 1)}`, disabled: page === 0 },
+        { type: 2, style: 2, label: '次へ →', custom_id: `shop:page:${Math.min(pages - 1, page + 1)}`, disabled: page === pages - 1 },
+      ] : []),
+      { type: 2, style: 2, label: '📖 日記（2 週間ごと・自動更新）', custom_id: 'diary:open' }, { type: 2, style: 2, label: '🪙 小判を買う', custom_id: 'koban:shop' }, { type: 2, style: 2, label: '🌸 背景・フレーム', custom_id: 'visit:open' },
+    ] }] : [])],
   };
 }
 
