@@ -5,7 +5,7 @@ import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
 /** 📚 書き込みの記録（宮司だけ） */
-export function MessageArchivePage(p: { session: AdminSession; rows: ArchivedMessage[]; channels: GuildChannel[]; names: Map<string, string>; q: Record<string, string> }) {
+export function MessageArchivePage(p: { session: AdminSession; rows: ArchivedMessage[]; channels: GuildChannel[]; names: Map<string, string>; q: Record<string, string>; back?: string }) {
   const name = (id: string | null) => (id && p.names.get(id)) || id || '';
   return <Layout title="書き込みの記録" nav="msgarchive" session={p.session}>
     <h1>📚 書き込みの記録</h1>
@@ -18,9 +18,19 @@ export function MessageArchivePage(p: { session: AdminSession; rows: ArchivedMes
       <label class="field"><span>日付（まで）</span><input type="date" name="to" value={p.q.to ?? ''} /></label>
       <label class="check"><input type="checkbox" name="deleted" value="yes" checked={p.q.deleted === 'yes'} /><span>消されたものだけ</span></label>
     </div><button type="submit">さがす</button></form>
+    {p.q.msg === 'deleted' && <p class="flash ok">記録から {p.q.n ?? 0} 件を消しました。</p>}
+    {p.q.msg === 'confirm' && <p class="flash warn">消す書き込みを選び、「消してよい」にチェックを入れてください。</p>}
+    <form method="post" action="/message-archive/delete" id="archive-delete" class="card">
+      <input type="hidden" name="_csrf" value={p.session.csrfToken} />
+      <input type="hidden" name="back" value={p.back ?? '/message-archive'} />
+      <p class="note">下の表で消したい書き込みにチェックを入れて押すと、この記録から消します（写真の中身も）。元に戻せません。Discord の書き込みは消えません。宮司だけが使えます。</p>
+      <label class="check"><input type="checkbox" name="confirm" value="yes" /><span>消してよい</span></label>
+      <button type="submit" class="danger">🗑 選んだ書き込みを記録から消す</button>
+    </form>
     <section class="card"><h2>新しい順（{p.rows.length} 件）</h2>
-      {!p.rows.length ? <p class="note">ありません。</p> : <div class="table-wrap"><table class="compact"><thead><tr><th>時刻</th><th>書いた人</th><th>チャンネル</th><th>内容</th><th>消した</th></tr></thead><tbody>
+      {!p.rows.length ? <p class="note">ありません。</p> : <div class="table-wrap"><table class="compact"><thead><tr><th>消す</th><th>時刻</th><th>書いた人</th><th>チャンネル</th><th>内容</th><th>消した</th></tr></thead><tbody>
         {p.rows.map((r) => <tr class={r.deletedAt ? 'row-deleted' : ''}>
+          <td><input type="checkbox" name="ids" value={r.messageId} form="archive-delete" aria-label="この書き込みを選ぶ" /></td>
           <td>{fmtDateTime(r.createdAt)}</td>
           <td>{r.authorName || name(r.authorId)}<div class="note">{r.authorId}</div></td>
           <td>#{p.channels.find((c) => c.id === r.channelId)?.name ?? (r.channelName || r.channelId)}</td>

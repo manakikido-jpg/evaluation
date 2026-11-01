@@ -52,7 +52,7 @@ import { desc, eq } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { UpdatePostsPage } from './views/updatePosts.js';
 import { MessageArchivePage } from './views/messageArchive.js';
-import { archiveFile, searchArchive } from '../services/messageArchive.js';
+import { archiveFile, removeArchived, searchArchive } from '../services/messageArchive.js';
 import { mountUpdateDesk } from './updateDesk.js';
 import { approveUpdatePost, editPendingUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
@@ -711,7 +711,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/members/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/message-archive', requireAdmin);
-  app.use('/message-archive/*', requireAdmin);
+  app.use('/message-archive/*', requireAdmin, requireCsrf);
   app.use('/yaku', requireAdmin);
   app.use('/security', requireAdmin);
   app.use('/security/*', requireAdmin, requireCsrf);
@@ -2064,7 +2064,18 @@ export function createWebApp(deps: WebDeps) {
     });
     const names = await namesOf(db, rows.flatMap(r => [r.authorId, r.deletedBy ?? '']).filter(Boolean));
     await audit(db, { actorId: c.get('session').userId, action: 'message_archive.view', detail: { author: q.author ?? null, channel: q.channel ?? null }, via: 'web' });
-    return c.html(<MessageArchivePage session={c.get('session')} rows={rows} channels={await loadChannels().catch(() => [])} names={names} q={q} />);
+    return c.html(<MessageArchivePage session={c.get('session')} rows={rows} channels={await loadChannels().catch(() => [])} names={names} q={q} back={c.req.url.replace(/^https?:\/\/[^/]+/, '').replace(/[?&](msg|n)=[^&]*/g, '')} />);
+  });
+  // 🗑 書き込みの記録から消す（宮司だけ。中身は記録に残さず、件数だけ残す）
+  app.post('/message-archive/delete', async c => {
+    if (!gujiOnly(c)) return c.text('宮司だけが消せます。', 403);
+    const b = await c.req.parseBody({ all: true });
+    const back = typeof b.back === 'string' && b.back.startsWith('/message-archive') ? b.back : '/message-archive';
+    const ids = (Array.isArray(b.ids) ? b.ids : b.ids ? [b.ids] : []).filter((x): x is string => typeof x === 'string');
+    if (b.confirm !== 'yes' || !ids.length) return c.redirect(back + (back.includes('?') ? '&' : '?') + 'msg=confirm');
+    const n = await removeArchived(db, ids);
+    await audit(db, { actorId: c.get('session').userId, action: 'message_archive.delete', detail: { count: n }, via: 'web' });
+    return c.redirect(back + (back.includes('?') ? '&' : '?') + `msg=deleted&n=${n}`);
   });
   app.get('/message-archive/file/:id', async c => {
     if (!gujiOnly(c)) return c.text('宮司だけが見られます。', 403);

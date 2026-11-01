@@ -71,6 +71,16 @@ export async function searchArchive(db: Db, q: ArchiveQuery): Promise<ArchivedMe
   return db.select().from(messageArchive).where(where.length ? and(...where) : undefined).orderBy(desc(messageArchive.createdAt)).limit(Math.min(q.limit ?? 200, 500));
 }
 
+/** 🗑 宮司が選んだ書き込みを、記録から消す（写真の中身も）。消した件数 */
+export async function removeArchived(db: Db, ids: string[]): Promise<number> {
+  const list = [...new Set(ids.filter(id => /^\d{17,20}$/.test(id)))].slice(0, 200);
+  if (!list.length) return 0;
+  return db.transaction(async tx => {
+    await tx.delete(messageArchiveFiles).where(inArray(messageArchiveFiles.messageId, list));
+    return (await tx.delete(messageArchive).where(inArray(messageArchive.messageId, list)).returning({ id: messageArchive.messageId })).length;
+  });
+}
+
 export async function archiveFile(db: Db, id: number) {
   const [row] = await db.select().from(messageArchiveFiles).where(eq(messageArchiveFiles.id, id));
   return row;

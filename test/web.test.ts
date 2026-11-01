@@ -4472,6 +4472,25 @@ it('📚 書き込みの記録: 宮司だけが見られる（神職は 403）',
   expect((await get('/message-archive', s)).status).toBe(403);
 });
 
+it('🗑 書き込みの記録から消せるのは宮司だけ。確認が必要で、写真の中身も消える', async () => {
+  const { archiveMessage } = await import('../src/services/messageArchive.js');
+  const { messageArchive, messageArchiveFiles } = await import('../src/db/schema.js');
+  const ID = '920000000000000001', KEEP = '920000000000000002';
+  const form = async (session: string, path: string, data: Record<string, string> = {}) => {
+    const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', session)).text())![1]!;
+    return app.request(path, { method: 'POST', headers: { cookie: `shamusho_session=${session}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
+  };
+  for (const id of [ID, KEEP]) await archiveMessage(db, { id, channelId: '910000000000000002', authorId: USER, authorName: 'さくら', content: '消したい話' + id, createdAt: new Date(), attachments: [{ name: 'a.png', size: 10, contentType: 'image/png', url: 'https://cdn.example/a.png' }] }, async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0]));
+  const s = await login(STAFF);
+  expect((await form(s, '/message-archive/delete', { ids: ID, confirm: 'yes' })).status).toBe(403);
+  const g = await login(GUJI);
+  expect((await form(g, '/message-archive/delete', { ids: ID })).headers.get('location')).toBe('/message-archive?msg=confirm');
+  expect((await form(g, '/message-archive/delete', { ids: ID, confirm: 'yes', back: '/message-archive?text=x' })).headers.get('location')).toBe('/message-archive?text=x&msg=deleted&n=1');
+  expect((await db.select().from(messageArchive)).map(r => r.messageId)).toEqual([KEEP]);
+  expect((await db.select().from(messageArchiveFiles)).map(r => r.messageId)).toEqual([KEEP]);
+  expect((await form(g, '/message-archive/delete', { ids: KEEP, confirm: 'yes', back: 'https://evil.example/' })).headers.get('location')).toBe('/message-archive?msg=deleted&n=1');
+});
+
 it('💴 ホームの「今やること」に、案内の給与が未決定の件数と招待元不明を出す', async () => {
   const { guideReceptions } = await import('../src/db/schema.js');
   const recent = new Date(Date.now() - 86_400_000), old = new Date('2000-01-01T00:00:00Z');
