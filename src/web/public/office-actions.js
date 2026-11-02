@@ -60,6 +60,15 @@
         return;
       }
       const next = doc.getElementById('main-content');
+      // 転送されずに別のURLの結果画面が返った（1回だけ出るパスワードなど）。GETで開き直すと結果が消えて「見つかりません」になるので、その場に出す
+      if (!response.redirected && url.pathname !== location.pathname && next) {
+        main.replaceChildren(...next.childNodes);
+        document.title = doc.title;
+        window.htmx?.process(main);
+        dirty.delete(form);
+        message(main.querySelector('.flash')?.textContent.trim() || '送信が完了しました。画面の結果を確認してください。');
+        return;
+      }
       // ログイン切れや、別ページ・専用スクリプトへ移る処理はGETで開く。POSTは繰り返さない。
       if (url.pathname !== location.pathname || !next?.hasAttribute('data-office-inplace') || scripts(doc) !== scripts(document)) {
         location.assign(url.href); return;

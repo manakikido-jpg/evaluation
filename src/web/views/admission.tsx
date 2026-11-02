@@ -627,7 +627,8 @@ function AccountRow(props: { session: AdminSession; account: WebAccount; memberN
         </div>
       </form>
       <div class="inline-actions">
-        <form method="post" action={`/settings/accounts/${a.id}/reset`}>
+        {/* 新しいパスワードの画面を出すので、その場の書きかえ（office-actions.js）を使わずに送る */}
+        <form method="post" action={`/settings/accounts/${a.id}/reset`} data-native-submit>
           <Hidden />
           <button type="submit">🔁 パスワードを作り直す</button>
         </form>
@@ -1817,7 +1818,7 @@ export function SettingsPage(props: {
         ) : (
           <p class="note">まだアカウントがありません。</p>
         )}
-        <form method="post" action="/settings/accounts" class="webaccess-add">
+        <form method="post" action="/settings/accounts" class="webaccess-add" data-native-submit>
           <Csrf session={props.session} />
           <h3>＋ 発行する</h3>
           <AccountFields />
