@@ -3828,6 +3828,8 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
     const s = me.session!;
     expect((await get('/', s)).status).toBe(200);
     expect(await (await get('/settings', s)).text()).toContain('社務所Web のアカウント');
+    // 1回だけ出るパスワードの画面を、その場の書きかえ（office-actions.js）で開き直して消さない
+    expect(await (await get('/settings', s)).text()).toMatch(/action="\/settings\/accounts" class="webaccess-add" data-native-submit/);
     // 神職のアカウントを発行（掲示板だけ）→ パスワードはこの画面だけ
     const csrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/', s)).text())![1]!;
     const issued = await app.request('/settings/accounts', {
@@ -3852,6 +3854,15 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
       body: new URLSearchParams({ _csrf: csrf }).toString(),
     });
     expect(stop.headers.get('location')).toBe('/settings?msg=account_disabled&at=accounts#sec-accounts');
+    // 🔑 パスワードの再発行: 新しいパスワードが出て、前のパスワードでは入れない
+    const reissued = await app.request(`/settings/accounts/${id}/reset`, {
+      method: 'POST',
+      headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ _csrf: csrf }).toString(),
+    });
+    expect(reissued.status).toBe(200);
+    expect(/<code class="secret">([^<]+)<\/code>/.exec(await reissued.text())?.[1]).toBeTruthy();
+    expect(await (await get('/settings', s)).text()).toMatch(new RegExp(`action="/settings/accounts/${id}/reset" data-native-submit`));
     expect((await get('/board', shin.session!)).status).toBe(404);
     expect((await app.request('/board', { headers: { cookie: `${entry}; shamusho_session=${shin.session}` } })).headers.get('location')).toBe('/login?e=expired');
   });

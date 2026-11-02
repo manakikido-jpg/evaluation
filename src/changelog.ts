@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-02-account-reset-notfound', date: '2026-11-02', kind: 'fix', where: ['社務所Web'], title: '🪪 アカウントの発行・パスワードの作り直しで「見つかりません」になるのを直した', items: ['社務所Web のアカウントを発行したときや「🔁 パスワードを作り直す」を押したとき、新しいパスワードの画面がすぐ「見つかりません」に変わっていたのを直しました。', 'パスワードはできていたのに見られなかったので、前に作り直した人は、もう一度作り直してください。'], announcement: { priority: 'none', audience: '宮司', steps: ['「設定」→「🪪 社務所Web のアカウント」で、パスワードを作り直す。', '出たパスワードを本人に伝える。'], postText: '', imagePrompt: '', notes: '前に押したときも新しいパスワードには変わっていたため、その人は前のパスワードで入れない。' } },
   { id: '2026-11-02-lottery-panel-bottom', date: '2026-11-02', kind: 'improve', where: ['Discord'], title: '🎫 宝くじ売り場のパネルを、いつもいちばん下に', items: ['売り場のチャンネルに書き込みがあると、宝くじ売り場のパネルをいちばん下に出し直すようにしました（古いパネルは消えます）。'], announcement: { priority: 'none', audience: '神職・宮司', steps: ['一度だけ、売り場のチャンネルで /パネル 宝くじ を打ってパネルを置き直す。'], postText: '', imagePrompt: '', notes: '置き直す前のパネルは、場所を覚えていないため動かない。' } },
   {
     id: '2026-11-02-intro-inviter-suggestions', date: '2026-11-02', kind: 'improve', where: ['社務所Web'],
