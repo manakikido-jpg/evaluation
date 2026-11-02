@@ -9,12 +9,16 @@ import { jstShort, remaining } from '../../services/tempGrants.js';
 import { Layout } from './layout.js';
 import type { InviteBlock } from '../../services/inviteBlock.js';
 import { alertLabel, INVITE_ALERT_RULES, type InviteAlert } from '../../services/inviteGuard.js';
+import type { IntroInviterSuggestion } from '../../services/introInviterSuggestions.js';
 
 function Csrf(props: { session: AdminSession }) {
   return <input type="hidden" name="_csrf" value={props.session.csrfToken} />;
 }
 
 export const INVITES_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  intro_refreshed: { text: '絵馬の招待者欄を読み直しました。候補を確認してから選んでください。招待の登録や報酬の支払いはしていません。', kind: 'ok' },
+  intro_missing: { text: '読み直せる絵馬が見つかりませんでした。消された投稿の候補は外しました。', kind: 'warn' },
+  intro_unavailable: { text: '絵馬の本文を読めませんでした。BOTの閲覧・履歴の権限と、本文を読む設定を確認してください。', kind: 'warn' },
   blocked: { text: '登録しました。この人に招待された人は 👁 要注意になります（本人には知らせません）。', kind: 'ok' },
   alert_cleared: { text: '警戒を外しました。この人に招待された人は、要注意でなくなります。', kind: 'ok' },
   unblocked: { text: '招待を作れない人から外しました。', kind: 'ok' },
@@ -53,6 +57,7 @@ export function InvitesPage(props: {
   joins: Invite[];
   rewards: InviteRewardRow[];
   candidates: { id: string; name: string }[];
+  introSuggestions?: Map<string, IntroInviterSuggestion>;
   cfg: GuildConfig;
   filter: 'all' | 'unknown' | 'waiting' | 'paid';
   sort: InviteSort;
@@ -242,9 +247,22 @@ export function InvitesPage(props: {
                     {r.inviterId ? <a href={`/members/${r.inviterId}`}>{name(r.inviterId)}</a> : sharedLabelOf(r.source) ? `🔗 共通リンク: ${sharedLabelOf(r.source)}` : r.source === STAFF_NO_INVITER ? '招待なし（運営）' : r.source === UNKNOWN_INVITER ? '不明（確認済み）' : '不明'}
                     <div class="note">{r.source === 'link' ? '招待リンクで入った' : r.source === 'answer' ? '申請で選んだ' : r.source === 'admin' ? '運営が登録した' : r.source === STAFF_NO_INVITER ? '招待報酬の対象外' : sharedLabelOf(r.source) ? 'SNS・宣伝サイトなどの共通リンクで入った（招待報酬の対象外）' : r.source === UNKNOWN_INVITER ? '運営が不明として登録・報酬は保留' : '招待元の記録なし'}</div>
                     {!r.inviterId && r.source !== STAFF_NO_INVITER && !sharedLabelOf(r.source) && !r.leftAt && session.level === 'guji' && <details><summary>招待した人を登録</summary>
+                      {(() => {
+                        const suggestion = props.introSuggestions?.get(r.memberId);
+                        return suggestion ? <div class="invite-help">
+                          <p><strong>絵馬の招待者欄</strong>：{suggestion.text || '記入を確認できませんでした'}</p>
+                          <p class="note">{suggestion.candidates.length ? `${suggestion.candidates.length}人の候補があります。元の記入を確かめてから選んでください。` : '一致する在籍者が見つかりません。元の絵馬を確かめて、名簿から選んでください。'}候補だけでは登録・支払いは行いません。</p>
+                          {suggestion.fromExcerpt && <p class="note">古い記録の冒頭だけを読んでいます。末尾の記入がない場合は読み直してください。</p>}
+                          <p><a href={suggestion.url} target="_blank" rel="noopener noreferrer">元の絵馬を見る</a></p>
+                          <form method="post" action={`/invites/members/${r.memberId}/refresh-intro`}><Csrf session={session} /><button type="submit">絵馬を読み直す</button></form>
+                        </div> : <p class="note">絵馬の記録がありません。招待元を確認して名簿から選んでください。</p>;
+                      })()}
                       <form method="post" action={`/invites/members/${r.memberId}/assign`}>
                         <Csrf session={session} />
-                        <label class="field"><span>招待した人</span><select name="inviterId" required><option value="">選んでください</option><option value={UNKNOWN_INVITER} selected={r.source === UNKNOWN_INVITER}>不明</option>{adminLevelOf(props.cfg, r.roleIds) && <option value={STAFF_NO_INVITER}>招待なし（運営）</option>}{props.candidates.filter(m => m.id !== r.memberId).map(m => <option value={m.id}>{m.name}（{m.id}）</option>)}</select></label>
+                        <label class="field"><span>招待した人</span><select name="inviterId" required><option value="">選んでください</option><option value={UNKNOWN_INVITER} selected={r.source === UNKNOWN_INVITER}>不明</option>{adminLevelOf(props.cfg, r.roleIds) && <option value={STAFF_NO_INVITER}>招待なし（運営）</option>}
+                          {!!props.introSuggestions?.get(r.memberId)?.candidates.length && <optgroup label="絵馬からの候補（未確定）">{props.introSuggestions.get(r.memberId)!.candidates.map(m => <option value={m.id}>{m.name}（{m.id}・{m.reason}）</option>)}</optgroup>}
+                          <optgroup label="在籍者から選ぶ">{props.candidates.filter(m => m.id !== r.memberId && !props.introSuggestions?.get(r.memberId)?.candidates.some(candidate => candidate.id === m.id)).map(m => <option value={m.id}>{m.name}（{m.id}）</option>)}</optgroup>
+                        </select></label>
                         <label class="field"><span><input type="checkbox" name="confirm" value="yes" required /> 招待元を確認しました。個人を選んだ場合は達成済みの未払い報酬を支払います。「不明」は報酬を保留し、「招待なし（運営）」は報酬対象外です。</span></label>
                         <button type="submit">登録して報酬を確認</button>
                       </form>

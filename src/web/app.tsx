@@ -90,6 +90,7 @@ import { describeCoreTime } from '../services/coreTime.js';
 import { coreTimeMembers, coreTimeRegulars, coreTimeRows, coreTimeSessions } from '../services/coreTimeAttendance.js';
 import { boostMembers, cancelBoost, createBoost, giftBoost, listBoosts, updateBoost } from '../services/boostTimes.js';
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { introInviterSuggestions, refreshIntroInviter } from '../services/introInviterSuggestions.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountShinpu } from './shinpu.js';
@@ -1533,6 +1534,9 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/invites', async (c) => {
     const [joins, links, known, rewards, candidates] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db), inviteRewardRows(db), activeMemberNames(db)]);
+    const introSuggestions = c.get('session').level === 'guji'
+      ? await introInviterSuggestions(db, cfg, rewards.filter(r => !r.inviterId && (!r.source || r.source === 'unknown')).map(r => r.memberId))
+      : new Map();
     const discordInvites = deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => null) : null;
     const others = discordInvites ? discordInvites.filter((i) => !known.has(i.code) && !i.inviter?.bot && (!deps.botId || i.inviter?.id !== deps.botId)) : null;
     const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
@@ -1546,6 +1550,7 @@ export function createWebApp(deps: WebDeps) {
         joins={joins}
         rewards={rewards}
         candidates={candidates}
+        introSuggestions={introSuggestions}
         bulkResult={c.req.query('msg') === 'bulk_unknown' ? { added: Math.min(200, Math.max(0, Number.parseInt(c.req.query('added') ?? '0') || 0)), skipped: Math.min(200, Math.max(0, Number.parseInt(c.req.query('skipped') ?? '0') || 0)) } : undefined}
         sort={inviteSort(c.req.query('sort'))}
         order={inviteOrder(c.req.query('order'))}
@@ -1582,6 +1587,13 @@ export function createWebApp(deps: WebDeps) {
     if (body.confirm !== 'yes') return c.redirect('/invites?msg=assign_confirm#invite-rewards');
     const result = await assignUnknownInviter({ db, cfg, discord: deps.discord }, c.req.param('id'), body.inviterId, c.get('session').userId, now());
     return c.redirect(`/invites?msg=assign_${result}#invite-rewards`);
+  });
+
+  app.post('/invites/members/:id/refresh-intro', async c => {
+    if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    if (!validId(c.req.param('id'))) return c.redirect('/invites?msg=intro_missing#invite-rewards');
+    const result = await refreshIntroInviter(db, cfg, deps.discord, c.req.param('id'), c.get('session').userId);
+    return c.redirect(`/invites?msg=intro_${result}#invite-rewards`);
   });
 
   // 🚫 招待を作れない人（登録すると、今ある招待リンクも消す）

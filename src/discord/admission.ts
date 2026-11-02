@@ -13,6 +13,7 @@ import {
   type Client,
   type Interaction,
   type Message,
+  type PartialMessage,
   type MessageActionRowComponentBuilder,
   type ModalSubmitInteraction,
   type UserSelectMenuInteraction,
@@ -243,6 +244,14 @@ export class AdmissionApp {
     }
     if (done.length) logger.info({ count: done.length }, 'intro catch-up');
     return done;
+  }
+
+  /** 編集では絵馬の記録だけを更新する。案内完了や報酬の処理は繰り返さない。 */
+  async onIntroUpdate(message: Message | PartialMessage): Promise<void> {
+    if (message.guildId !== this.cfg.guildId || ![this.cfg.channels.ema, this.cfg.channels.emaFemale].includes(message.channelId)) return;
+    const msg = message.partial ? await message.fetch() : message;
+    if (msg.author.bot || msg.webhookId || msg.system) return;
+    await recordIntro(this.db, { memberId: msg.author.id, channelId: msg.channelId, messageId: msg.id, content: msg.content, postedAt: msg.createdAt });
   }
 
   /** 入った人に、はじめの流れを DM で案内（BOT・もう参拝者以上の人にはしない） */

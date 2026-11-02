@@ -1155,6 +1155,8 @@ export const intros = pgTable('intros', {
   messageId: text('message_id').notNull(),
   /** 本文のはじめ（BOT が本文を読めないときは空） */
   excerpt: text('excerpt').notNull().default(''),
+  /** 招待者欄だけを保存。nullは旧記録（まだ全文から読み取っていない）。 */
+  inviterText: text('inviter_text'),
   postedAt: timestamp('posted_at', { withTimezone: true }).notNull(),
 });
 
