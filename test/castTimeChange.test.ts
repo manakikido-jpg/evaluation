@@ -90,3 +90,11 @@ it('別経路で日時が変わった提案も古いものとして止める',as
  const p=await quote();await db.update(castSessions).set({startAt:new Date(OLD.getTime()+1800000)}).where(eq(castSessions.id,s.id));
  expect((await acceptSessionTime(db,p.id,CUSTOMER,NOW)).status).toBe('stale');
 });
+
+it('公開通話も22時以降・朝6時前へ日時変更でき、相手の承認が必要',async()=>{
+ await db.update(castSessions).set({isPublic:true,minutes:180}).where(eq(castSessions.id,s.id));
+ const late=new Date('2026-10-21T15:00:00Z');
+ const p=await quote(CAST,late);expect((await db.select().from(castSessions))[0]!.startAt).toEqual(OLD);
+ expect((await acceptSessionTime(db,p.id,CAST,NOW)).status).toBe('not_receiver');
+ expect(await acceptSessionTime(db,p.id,CUSTOMER,NOW)).toMatchObject({status:'ok',session:{startAt:late,isPublic:true,minutes:180}});
+});

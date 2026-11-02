@@ -13,8 +13,7 @@ import { attendanceAtFinish } from './castAttendance.js';
 /**
  * 🎀 キャスト: 寝落ち・雑談などの通話を、銭で受ける人（18 歳以上・運営が承認）。
  * - 指名すると、銭は社務所が先に預かり、終わったらキャストに渡す（手数料を引く。手数料の分は消える）
- * - 2 人だけの部屋・寝落ち・予約は 18 歳以上どうしだけ。未成年（と年齢の分からない）人は、
- *   運営も見える公開の部屋での雑談だけ（1 回 60 分まで・6 時〜22 時）
+ * - 18歳未満（年齢不明を含む）は、キャストの受付ONなら全メニュー・全時間帯を利用できる。通話は公開の部屋。
  * - 返事がない・断られた・取り消しは全額戻す。通報すると銭を止めて、運営が決める
  */
 
@@ -22,8 +21,6 @@ export type CastPlan = '30' | '60' | 'night';
 export const PLAN_LABEL: Record<CastPlan, string> = { '30': '30 分', '60': '1 時間', night: '🌙 寝落ち（朝 7 時まで）' };
 export const CAST_TAGS = ['寝落ち', '雑談', 'ゲーム', '相談', '歌', 'ASMR', '作業通話'] as const;
 
-/** 未成年の人の決まり */
-export const MINOR = { startHour: 6, endHour: 22, maxMinutes: 60 } as const;
 const NIGHT_END_HOUR = 7;
 const MIN = 60_000;
 const JST = 9 * 3_600_000;
@@ -232,12 +229,6 @@ export function nightEnd(start: Date): Date {
   return end;
 }
 
-/** 未成年の人の雑談が、6 時〜22 時に収まるか */
-export function minorWindowOk(start: Date, minutes: number): boolean {
-  const end = new Date(start.getTime() + minutes * MIN);
-  return jstHour(start) >= MINOR.startHour && end.getTime() <= jstAt(start, MINOR.endHour).getTime();
-}
-
 export function planMinutes(plan: CastPlan, start: Date): number {
   return plan === '30' ? 30 : plan === '60' ? 60 : Math.round((nightEnd(start).getTime() - start.getTime()) / MIN);
 }
@@ -291,8 +282,8 @@ export function sessionTime(s: Pick<CastSession, 'plan' | 'minutes' | 'extension
   const end = s.endsAt ?? (start ? new Date(start.getTime() + total * 60_000) : undefined);
   return `⏱ ${durationText(total)}${start && end ? `（${hm(start)}〜${hm(end)}）` : ''}`;
 }
-/** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
-export const minorMenuOk = (m: CastMenuItem) => !m.delivery && !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes;
+/** 年齢未設定も18歳未満と同じ受付条件。メニュー・時間による年齢制限はない。 */
+export const acceptsCastCustomer = (cast: Pick<Cast, 'minorOk'>, adult: boolean) => adult || cast.minorOk;
 /** メニューを 1 行で（紹介・一覧） */
 export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) =>
   menuOf(c).map((m) => (m.consult ? `${m.name} 相談` : `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`)).join('・');
@@ -719,7 +710,7 @@ export async function busyCast(db: Db, castId: string): Promise<CastSession | un
 export type RequestResult =
   | { status: 'ok'; session: CastSession; balance: number; /** ガチャで出たもの */ drawn?: string }
   | { status: 'insufficient'; price: number; balance: number }
-  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_plan' | 'minor_hours' | 'minor_off' | 'minor_reserve' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' | 'off_hours' | 'already_ordered' };
+  | { status: 'not_cast' | 'self' | 'blocked' | 'closed' | 'busy' | 'no_plan' | 'minor_off' | 'has_open' | 'bad_time' | 'overlap' | 'self_overlap' | 'off_hours' | 'already_ordered' };
 
 /** 同じキャストの利用時間が重なるか（終わりと次の始まりが同じならよい） */
 /** 1 人のお客が同時に持てる指名（予約・返事待ち・通話中）の数（はじめの値。社務所Web の設定 customerOpenMax で変えられる） */
@@ -756,7 +747,7 @@ async function lockCast(tx: Db, castId: string): Promise<void> {
 
 /**
  * 指名する（今すぐ、または予約 startAt）。銭を預かる。
- * 未成年（か年齢の分からない）人: 30 分・1 時間の雑談だけ・公開の部屋・6 時〜22 時・予約なし
+ * 18歳未満（年齢不明を含む）: キャストの受付ONが必要。通話は公開の部屋。
  */
 export async function requestSession(
   db: Db,
@@ -771,6 +762,7 @@ export async function requestSession(
   if (cast.blocked.includes(input.customerId)) return { status: 'blocked' };
   // キャストが「受付停止」にしている
   if (cast.available !== 'waiting') return { status: 'closed' };
+  if (!acceptsCastCustomer(cast, input.customerAdult)) return { status: 'minor_off' };
   const found = menuOf(cast).find((m) => m.id === input.plan);
   // 相談のメニューは、キャストが出した時間と値段で（ほかのメニューに値段は付けられない）
   // 📦 納品の相談: 時間はなく、値段だけ（注文と同じように、キャストの納品を待つ）
@@ -802,12 +794,6 @@ export async function requestSession(
   const minutes = item.night ? planMinutes('night', start) : free ? FREE_MINUTES : item.minutes;
   // 🗓 出勤予定の外は予約できない（予定がなければいつでも）
   if (input.startAt && !inSchedule(cast.schedule, start, item.night ? nightEnd(start) : new Date(start.getTime() + minutes * MIN), item.night)) return { status: 'off_hours' };
-  if (!input.customerAdult) {
-    // 18 歳未満の人も予約できる（公開の部屋・60 分まで・22 時までに終わる）
-    if (!minorMenuOk(item)) return { status: 'minor_plan' };
-    if (!cast.minorOk) return { status: 'minor_off' };
-    if (!minorWindowOk(start, minutes)) return { status: 'minor_hours' };
-  }
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);
     await lockCast(tx, input.castId);
@@ -856,9 +842,8 @@ export async function requestSession(
   });
 }
 
-/** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 1 週間）。18 歳以上だけ。通話の時間とは重ならない */
+/** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 1 週間）。受付条件は呼び出し元で確認。通話の時間とは重ならない */
 async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean; threadId?: string }, now: Date, rand: () => number, openMax: number): Promise<RequestResult> {
-  if (!input.customerAdult) return { status: 'minor_plan' };
   const drawn = item.gacha?.length ? item.gacha[Math.min(item.gacha.length - 1, Math.floor(rand() * item.gacha.length))] : undefined;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);
@@ -1023,11 +1008,11 @@ export async function sessionsBetween(db: Db, from: Date, to: Date): Promise<Cas
 }
 export const sessionStart = (s: Pick<CastSession, 'startAt' | 'startedAt' | 'createdAt'>) => s.startAt ?? s.startedAt ?? s.createdAt;
 
-export type RescheduleResult = { status: 'ok'; session: CastSession } | { status: 'not_found' | 'not_customer' | 'bad_time' | 'minor_hours' | 'overlap' | 'self_overlap' };
+export type RescheduleResult = { status: 'ok'; session: CastSession } | { status: 'not_found' | 'not_customer' | 'bad_time' | 'overlap' | 'self_overlap' };
 
 /**
  * キャストが出した別の日時に、お客が「この日時にする」: 予約の時刻を変えて、受けた（確定）にする。
- * キャストとお客のほかの指名と重ならないか・18 歳未満の人は 22 時までに終わるかを確かめる
+ * キャストとお客のほかの指名と重ならないかを確かめる
  */
 export async function rescheduleSession(db: Db, id: number, customerId: string, startAt: Date, now = new Date()): Promise<RescheduleResult> {
   const before = await getSession(db, id);
@@ -1039,7 +1024,6 @@ export async function rescheduleSession(db: Db, id: number, customerId: string, 
     if (s.customerId !== customerId) return { status: 'not_customer' as const };
     if (startAt.getTime() < now.getTime() + 10 * MIN || startAt.getTime() > now.getTime() + 7 * 24 * 60 * MIN) return { status: 'bad_time' as const };
     const minutes = s.plan === 'night' ? planMinutes('night', startAt) : s.minutes;
-    if (s.isPublic && !minorWindowOk(startAt, minutes)) return { status: 'minor_hours' as const };
     const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime() + minutes * MIN);
     if (await overlaps(tx, s.castId, startAt, end, now, id)) return { status: 'overlap' as const };
     if (await customerFull(tx, s.customerId, startAt, end, now, id)) return { status: 'self_overlap' as const };
@@ -1064,9 +1048,9 @@ export async function startReserved(db: Db, id: number, now = new Date()): Promi
 
 export const extensionPriceOf = (s: Pick<CastSession, 'extensionPrice' | 'price' | 'optionPrice' | 'minutes'>) => s.extensionPrice ?? Math.ceil(((s.price - s.optionPrice) * 30) / Math.max(1, s.minutes));
 
-export type ExtendResult = { status: 'ok'; session: CastSession; balance: number } | { status: 'insufficient'; price: number; balance: number } | { status: 'not_active' | 'minor_limit' | 'not_customer' | 'already_extended' | 'overlap' };
+export type ExtendResult = { status: 'ok'; session: CastSession; balance: number } | { status: 'insufficient'; price: number; balance: number } | { status: 'not_active' | 'not_customer' | 'already_extended' | 'overlap' };
 
-/** 30 分のばす（お客）。未成年の人は合わせて 60 分・22 時まで */
+/** 30 分のばす（お客）。成立済みの通話は年齢による時間制限なし */
 export async function extendSession(db: Db, id: number, customerId: string, now = new Date(), expectedExtensions?: number, priceLock?: CastPriceLock): Promise<ExtendResult> {
   const before = await getSession(db, id);
   if (!before) return { status: 'not_active' };
@@ -1086,7 +1070,6 @@ export async function extendSession(db: Db, id: number, customerId: string, now 
     if (priceLock && (priceLock.base !== base || priceLock.at !== s.endsAt.toISOString())) return { status: 'already_extended' as const };
     const add = priceLock?.price ?? extensionPriceOf(s);
     if (!cast || add <= 0) return { status: 'not_active' as const };
-    if (s.isPublic && (s.minutes + 30 > MINOR.maxMinutes || !minorWindowOk(s.startedAt ?? now, s.minutes + 30))) return { status: 'minor_limit' as const };
     const endsAt = new Date(s.endsAt.getTime() + 30 * MIN);
     if (await overlaps(tx, s.castId, now, endsAt, now, id)) return { status: 'overlap' as const };
     if (!(await spendWithin(tx, customerId, add, 'cast_pay', { sessionId: id, extend: true }))) return { status: 'insufficient' as const, price: add, balance: (await walletOf(tx, customerId)).balance };
@@ -1396,7 +1379,7 @@ export async function openReservationsWithThread(db: Db, now = new Date()) {
 export async function changeableReservations(db: Db, memberId: string, now = new Date()) {
   return db.select().from(castSessions).where(and(or(eq(castSessions.castId, memberId), eq(castSessions.customerId, memberId)), inArray(castSessions.status, ['reserved', 'accepted']), sql`${castSessions.startAt} > ${now}`)).orderBy(asc(castSessions.startAt));
 }
-type TimeChangeResult = { status: 'ok'; proposal: CastTimeChange; session: CastSession } | { status: 'not_found' | 'not_member' | 'not_receiver' | 'already' | 'expired' | 'stale' | 'bad_time' | 'minor_hours' | 'overlap' | 'self_overlap' };
+type TimeChangeResult = { status: 'ok'; proposal: CastTimeChange; session: CastSession } | { status: 'not_found' | 'not_member' | 'not_receiver' | 'already' | 'expired' | 'stale' | 'bad_time' | 'overlap' | 'self_overlap' };
 function timeChangeOpen(s: CastSession | undefined, now: Date): s is CastSession {
   return !!s && (s.status === 'reserved' || s.status === 'accepted') && !!s.startAt && s.startAt > now;
 }
@@ -1410,7 +1393,6 @@ export async function proposeSessionTime(db: Db, id: number, by: string, startAt
     if (by !== s.castId && by !== s.customerId) return { status: 'not_member' };
     if (!Number.isFinite(startAt.getTime()) || startAt < new Date(now.getTime()+10*MIN) || startAt > new Date(now.getTime()+7*24*60*MIN) || startAt.getTime() === s.startAt!.getTime()) return { status: 'bad_time' };
     const minutes = s.plan === 'night' ? planMinutes('night', startAt) : s.minutes;
-    if (s.isPublic && !minorWindowOk(startAt, minutes)) return { status: 'minor_hours' };
     const end = s.plan === 'night' ? nightEnd(startAt) : new Date(startAt.getTime()+minutes*MIN);
     if (await overlaps(tx,s.castId,startAt,end,now,id)) return { status: 'overlap' };
     if (await customerFull(tx,s.customerId,startAt,end,now,id)) return { status: 'self_overlap' };

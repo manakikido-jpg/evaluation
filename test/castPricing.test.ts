@@ -75,3 +75,22 @@ it('まとめ予約の1人が失敗したら全員分の支払いと予約をロ
  await expect(confirmCastCharge(db,c,q.id,USER,true,now)).rejects.toThrow();
  expect(await db.select().from(castSessions)).toHaveLength(0);expect((await walletOf(db,USER)).balance).toBe(100000);
 });
+
+it('18歳未満も夜の長時間予約・納品を支払え、確認後の受付OFFは課金前に拒否する',async()=>{
+ await addMenuItem(db,c,CAST,{name:'長時間',note:'',minutes:180,price:600,night:false});
+ await addMenuItem(db,c,CAST,{name:'納品',note:'',minutes:0,price:400,night:false,delivery:true});
+ const menu=(await getCast(db,CAST))!.menu,call=menu.find(m=>m.name==='長時間')!,delivery=menu.find(m=>m.delivery)!;
+ const start=new Date(now.getTime()+24*3600000);start.setUTCHours(15,0,0,0);
+ for(const req of [{castId:CAST,plan:call.id,startAt:start.toISOString()},{castId:CAST,plan:delivery.id}]){
+  const q=await prepareCastCharge(db,c,USER,{route:req.startAt?'reserve':'delivery',requests:[req]},now);
+  await db.update(casts).set({minorOk:false}).where(eq(casts.memberId,CAST));
+  const before=(await walletOf(db,USER)).balance;
+  await expect(confirmCastCharge(db,c,q.id,USER,false,now)).rejects.toThrow('minor_off');
+  expect((await walletOf(db,USER)).balance).toBe(before);
+  expect((await db.select().from(castChargeQuotes).where(eq(castChargeQuotes.id,q.id)))[0]!.consumedAt).toBeNull();
+  await db.update(casts).set({minorOk:true}).where(eq(casts.memberId,CAST));
+  const paid=await confirmCastCharge(db,c,q.id,USER,false,now);expect(paid.sessions).toHaveLength(1);
+  expect(paid.sessions[0]!.status).toBe(req.startAt?'reserved':'ordered');
+  if(req.startAt)expect(paid.sessions[0]).toMatchObject({isPublic:true,minutes:180});
+ }
+});

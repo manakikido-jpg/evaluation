@@ -66,7 +66,6 @@ import {
   loadCastReception,
   loadCastPhoto,
   loadMenuImage,
-  MINOR,
   monthStart,
   parsePrice,
   parseTags,
@@ -101,7 +100,7 @@ import {
   validQuote,
   menuOf,
   menuText,
-  minorMenuOk,
+  acceptsCastCustomer,
   sessionLabel,
   sessionTime,
   rateSession,
@@ -199,7 +198,7 @@ export function castPanel(list: { cast: Cast; name: string; state: 'busy' | 'wai
           `🟢 予約受付中 **${open}** 人 ・ 在籍 ${list.length} 人`,
           ...(top.length ? [`🏆 今月の上位: ${top.slice(0, 3).map((t, k) => `${medal[k]} ${t.name}（${t.count} 回）`).join('　')}`] : []),
           '-# 銭は社務所が預かり、受けてもらえなければ全額戻ります',
-          '-# 2 人だけの部屋・寝落ち・納品は 18 歳以上だけ。18 歳未満の方は、公開の部屋での雑談（1 時間まで・22 時まで）を予約できます',
+          '-# 18歳未満の方も、キャストが受付ONなら全メニュー・全時間帯を利用できます。通話は公開の部屋です（出勤予定・予約枠は共通）',
         ].join('\n'),
         color: PINK,
         ...(image ? { image: { url: `attachment://cast-menu.${ext}` } } : {}),
@@ -381,7 +380,7 @@ export function sessionMessage(s: CastSession, c: CastConfig, coin: string, opts
   } else if (s.status === 'active') {
     title = '📞 通話中';
     lines.push(s.endsAt ? `⏰ <t:${unix(s.endsAt)}:t> まで（<t:${unix(s.endsAt)}:R>）。通常の完了なら、キャストに ${fmt(s.price - castFee(c, s.price))} 枚を渡します。欠席や入室確認が必要な場合は、別途精算します。` : '');
-    if (s.isPublic) lines.push(`-# 公開の部屋です（18 歳未満の方との雑談。${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`);
+    if (s.isPublic) lines.push('-# 公開の部屋です（18歳未満の方との通話）');
     lines.push(`-# 始まってから ${c.noShowMinutes} 分たっても相手が来ないときは「🚫 相手が来ない」（来ている人だけ押せます）。`);
     buttons = [...(isFreeSession(s) ? [] : [button(`cast:ext:${s.id}:${s.extensions}`, '30 分のばす（お客）', 1, '⏰')]), button(`cast:end:${s.id}`, '終える'), button(`cast:noshow:${s.id}`, '相手が来ない', 2, '🚫'), button(`cast:report:${s.id}`, '通報', 4, '🚨'), button(`cast:champagne:${s.id}`, 'シャンパンを贈る（お客）', 1, '🍾'), ...(isFreeSession(s) ? [] : [button(`cast:sleep:${s.id}`, '寝落ちを報告する', 2, '💤')])];
     lines.push(isFreeSession(s) ? '-# 時間フリーの寝落ち精算は「通報」から運営に相談してください。' : '-# キャストが先に寝た場合は「寝落ちを報告する」。利用分を精算し、残りを返金します。お客様の寝落ちは対象外です。');
@@ -430,7 +429,7 @@ export function castReceptionBody(d: CastReception, name: string, names: Readonl
     components: [
       row(button('cast:wait:1', '予約を受け付ける', 3, '🟢', off || d.cast.available === 'waiting'), button('cast:wait:0', '受付停止', 2, '💤', off || d.cast.available !== 'waiting'), button('cast:refresh', '更新', 1, '🔄'), button('cast:changes:0', '予約日時の変更', 2, '📅')),
       row(...d.current.filter((s) => s.channelId).slice(0, 2).map((s, k) => ({ ...roomEntry(guildId, s.channelId!), label: k ? '部屋へ入る（2）' : '部屋へ入る' })), button('cast:schedule:0', '予約一覧', 2, '📅'), button('cast:sales:0', '売上の明細', 2, '💰'), button('cast:shift', '出勤予定', 2, '🗓')),
-      row(button('cast:edit', '紹介を変える', 1, '✏️'), ...(officeUrl ? [{ type: 2 as const, style: 5 as const, label: '🖊 メニュー・写真を編集', url: officeUrl }] : []), button('cast:minor', d.cast.minorOk ? '18歳未満の雑談を受けない' : '18歳未満の雑談を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
+      row(button('cast:edit', '紹介を変える', 1, '✏️'), ...(officeUrl ? [{ type: 2 as const, style: 5 as const, label: '🖊 メニュー・写真を編集', url: officeUrl }] : []), button('cast:minor', d.cast.minorOk ? '18歳未満の依頼を受けない' : '18歳未満の依頼を受ける'), button('cast:blockui', 'ブロック', 4), button('cast:unblockui', 'ブロックを外す')),
     ],
   };
 }
@@ -732,7 +731,7 @@ export class CastApp {
     const photo = await loadCastPhoto(this.db, cast.memberId);
     const state = STATE[states.get(cast.memberId) ?? 'off'];
     const st = stats.find((x) => x.castId === cast.memberId);
-    const plans = menuOf(cast).filter((m) => (m.price > 0 || m.consult) && (adult || (minorMenuOk(m) && cast.minorOk)));
+    const plans = menuOf(cast).filter((m) => (m.price > 0 || m.consult) && acceptsCastCustomer(cast, adult));
     // カードにせず、文と写真（切りぬかない全体）をそのまま出す
     return {
       content: [
@@ -744,7 +743,7 @@ export class CastApp {
             castMenuText(menuOf(cast)),
             castOptionsText(cast),
             st ? `🏆 今月 ${st.count} 回${st.ratingAvg !== null ? ` ・ ⭐ ${st.ratingAvg}（${st.ratings} 件）` : ''}` : '',
-            adult ? '' : !cast.minorOk ? '-# このキャストは、18 歳未満の方の指名を受けていません' : `-# 18 歳未満の方は、公開の部屋での雑談（30 分・1 時間・${MINOR.endHour} 時まで）だけです`,
+            adult ? '' : !cast.minorOk ? '-# このキャストは、18 歳未満の方の指名を受けていません' : '-# 18歳未満の方も全メニュー・全時間帯を利用できます。通話は公開の部屋です（出勤予定・予約枠は共通）',
           ]
             .filter((l, i) => l || i === 3)
             .join('\n'),
@@ -949,8 +948,8 @@ export class CastApp {
     const item = cast && menuOf(cast).find((m) => m.id === plan);
     if (!cast || cast.status !== 'active' || !item) return void (await this.answer(i, { content: 'このキャストは、いまは指名できません（メニューが変わったかもしれません）。', embeds: [], components: [], attachments: [] }));
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
+    if (!acceptsCastCustomer(cast, adult)) return void (await this.answer(i, { content: 'このキャストは、18歳未満の方の受付を停止しています。', embeds: [], components: [], attachments: [] }));
     if (item.consult) {
-      if (!adult) return void (await this.answer(i, { content: '相談のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
       // まず、どんな相談か（通話・納品・そのほか）を選ぶ
       return void (await this.answer(i, {
         content: [`💬 <@${castId}> さんの **${item.name}**（内容により相談）`, 'どんなことを頼みたいですか？ 選ぶと、お願いを書く欄が出ます（まだ銭は払いません。キャストが値段を出します）。'].join('\n'),
@@ -965,7 +964,6 @@ export class CastApp {
       }));
     }
     if (item.delivery) {
-      if (!adult) return void (await this.answer(i, { content: '📦 納品のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
       return void (await i.showModal(
         new ModalBuilder()
           .setCustomId(`cast:omodal:${castId}:${item.id}`)
@@ -1001,7 +999,7 @@ export class CastApp {
     await this.answer(i, {
       content: [
         `🎀 <@${castId}> さんを **${menuLabel(item)}**${opts.length ? ` ＋ ${opts.map((o) => o.name).join('・')}` : ''} ・ 通常 ${this.coin()} **${fmt(price)} 枚** で予約しますか？（次に日時を入れます。コアタイムは割増料金を再確認）`,
-        adult ? '-# 2 人だけの部屋ができます（運営は見守りのために見られます）' : `-# 公開の部屋での雑談になります（${MINOR.maxMinutes} 分・${MINOR.endHour} 時まで）`,
+        adult ? '-# 2 人だけの部屋ができます（運営は見守りのために見られます）' : '-# 公開の部屋での通話になります',
         '-# キャストは予約だけです。銭は社務所が預かり、受けてもらえなければ全額戻ります。途中でのばすこともできます',
         RULES,
       ].join('\n'),
@@ -1055,7 +1053,7 @@ export class CastApp {
     const item = cast && menuOf(cast).find((m) => m.id === itemId && m.consult);
     if (!cast || cast.status !== 'active' || !item) return void (await i.editReply('このメニューは、いまは選べません。'));
     if (cast.blocked.includes(i.user.id) || castId === i.user.id) return void (await i.editReply('このキャストには相談できません。'));
-    if (!(await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.editReply('相談のメニューは 18 歳以上の方だけです。'));
+    if (!acceptsCastCustomer(cast, await isAdult(this.db, this.cfg(), i.user.id, this.roles(i)))) return void (await i.editReply('このキャストは、18歳未満の方の受付を停止しています。'));
     const wish = i.fields.getTextInputValue('wish').trim().slice(0, 500);
     // 前のボタンから開いた欄には「希望」がない
     const when = (() => { try { return i.fields.getTextInputValue('when').trim().slice(0, 100); } catch { return ''; } })();
@@ -1211,9 +1209,7 @@ export class CastApp {
       closed: 'このキャストは、いまは予約・注文の受付を止めています。',
       busy: 'このキャストは、いま通話中か返事待ちです。少しあとか、予約でどうぞ。',
       no_plan: 'このキャストは、その時間では受けていません。',
-      minor_plan: '寝落ちは 18 歳以上の方だけです。',
       minor_off: 'このキャストは、18 歳未満の方の指名を受けていません。',
-      minor_hours: `18 歳未満の方の雑談は ${MINOR.startHour} 時〜${MINOR.endHour} 時に終わる時間だけです。`,
       has_open: '指名（返事待ち・確定・通話中の予約）が、1 人が同時に持てる数の上限です。終わってからどうぞ。',
       already_ordered: 'この相談では、もう注文しています。',
       self_overlap: `同じ時間に指名・予約できるのは、キャスト ${CUSTOMER_TOGETHER_MAX} 人までです。ちがう時間にしてください。`,
@@ -1632,8 +1628,8 @@ export class CastApp {
     const cast = await getCast(this.db, castId);
     if (!cast || cast.status !== 'active') return void (await this.answer(i, { content: 'このキャストは、いまは指名できません。', embeds: [], components: [] }));
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
-    // 18 歳未満の人は、公開の部屋で 60 分までのメニューだけ
-    const plans = menuOf(cast).filter((m) => m.price > 0 && !m.consult && !m.delivery && (adult || (minorMenuOk(m) && cast.minorOk)));
+    // 18歳未満の人も受付ONなら、同じ通話メニューを選べる
+    const plans = menuOf(cast).filter((m) => m.price > 0 && !m.consult && !m.delivery && acceptsCastCustomer(cast, adult));
     if (!plans.length) return void (await this.answer(i, { content: 'このキャストは、いま予約できるメニューがありません。', embeds: [], components: [], attachments: [] }));
     await this.answer(i, { content: '📅 予約するメニューを選んでください。', embeds: [], components: [menuSelect(`cast:rplansel:${castId}`, '📅 予約するメニュー', plans)], attachments: [] });
   }
@@ -1983,7 +1979,7 @@ export class CastApp {
   }
 
   private timeChangeError(status: string): string {
-    return ({not_found:'開始前の予約だけ変更できます。',not_member:'この予約のお客とキャストだけが提案できます。',not_receiver:'承認できるのは提案された相手だけです。自分の提案は承認できません。',already:'この提案はすでに確定済みです。日時を再変更していません。',expired:'提案の期限が切れました。もう一度提案してください。',stale:'予約日時がすでに変わっています。最新の予約から提案し直してください。',bad_time:'日時は10分後〜7日後で、今の予約と異なる時刻を選んでください。',minor_hours:'18歳未満の方は、22時までに終わる時間だけです。',overlap:'キャストのほかの予約と重なっています。別の日時を選んでください。',self_overlap:`お客の同じ時間の予約が、キャスト ${CUSTOMER_TOGETHER_MAX} 人分うまっています。別の日時を選んでください。`} as Record<string,string>)[status]??'変更できませんでした。';
+    return ({not_found:'開始前の予約だけ変更できます。',not_member:'この予約のお客とキャストだけが提案できます。',not_receiver:'承認できるのは提案された相手だけです。自分の提案は承認できません。',already:'この提案はすでに確定済みです。日時を再変更していません。',expired:'提案の期限が切れました。もう一度提案してください。',stale:'予約日時がすでに変わっています。最新の予約から提案し直してください。',bad_time:'日時は10分後〜7日後で、今の予約と異なる時刻を選んでください。',overlap:'キャストのほかの予約と重なっています。別の日時を選んでください。',self_overlap:`お客の同じ時間の予約が、キャスト ${CUSTOMER_TOGETHER_MAX} 人分うまっています。別の日時を選んでください。`} as Record<string,string>)[status]??'変更できませんでした。';
   }
 
   private async proposeSubmit(i: ModalSubmitInteraction, id: number): Promise<void> {
@@ -2071,7 +2067,7 @@ export class CastApp {
     for (const id of ids) {
       const cast = await getCast(this.db, id);
       if (!cast || cast.status !== 'active') continue;
-      for (const m of menuOf(cast).filter((m) => m.price > 0 && !m.consult && !m.delivery && (adult || (minorMenuOk(m) && cast.minorOk)))) {
+      for (const m of menuOf(cast).filter((m) => m.price > 0 && !m.consult && !m.delivery && acceptsCastCustomer(cast, adult))) {
         options.push({ label: `${names.get(id) ?? 'キャスト'} ・ ${menuLabel(m)}`.slice(0, 100), value: `${id}~${m.id}`, description: `${fmt(m.price)} 枚`.slice(0, 100) });
       }
     }
@@ -2222,7 +2218,7 @@ export class CastApp {
     }
     for (const s of r.warn) {
       const room = this.voice(s.channelId);
-      await room?.send({ content: `⏰ あと 5 分です。${s.isPublic ? '' : 'のばすときは「30 分のばす」を。'}`, allowedMentions: { parse: [] } }).catch(() => undefined);
+      await room?.send({ content: '⏰ あと 5 分です。のばすときは「30 分のばす」を。', allowedMentions: { parse: [] } }).catch(() => undefined);
     }
     for (const s of r.finished) {
       changed = true;
