@@ -1091,11 +1091,21 @@ export class MarketApp {
             const channel = this.marketChannel();
             if (!channel || !('messages' in channel)) throw new Error('market channel unavailable');
             const body = listing ? await this.card(listing) : requestCard(request!, this.cfg(), await bidCount(this.db, id));
+            // カードの書き込み・チャンネルが Discord で消されていたら、書きかえをくり返さない（出品中なら出し直す）
+            const gone = (err: unknown) => [10003, 10008].includes((err as { code?: number })?.code ?? 0);
+            let edited = false;
             if (record.messageId && record.channelId) {
-              const target = await this.guild.channels.fetch(record.channelId);
-              if (!target?.isTextBased() || !('messages' in target)) throw new Error('market card channel unavailable');
-              await target.messages.edit(record.messageId, { ...body, allowedMentions: { parse: [] } });
-            } else if (record.status === 'open') {
+              try {
+                const target = await this.guild.channels.fetch(record.channelId);
+                if (!target?.isTextBased() || !('messages' in target)) throw new Error('market card channel unavailable');
+                await target.messages.edit(record.messageId, { ...body, allowedMentions: { parse: [] } });
+                edited = true;
+              } catch (err) {
+                if (!gone(err)) throw err;
+                logger.info({ targetKind: job.targetKind, id }, 'market card was deleted on Discord');
+              }
+            }
+            if (!edited && record.status === 'open') {
               // 📷 市場Web で付けた見本の写真も、カードに上げる
               const [img] = listing ? await this.db.select().from(marketListingImages).where(eq(marketListingImages.listingId, id)) : [];
               const imgName = img ? `listing-${id}.${img.contentType.split('/')[1] === 'jpeg' ? 'jpg' : img.contentType.split('/')[1]}` : undefined;

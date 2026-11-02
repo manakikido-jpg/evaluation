@@ -74,3 +74,14 @@ it('出品者のページのボタンと /市場 は、出品者のページへ�
  await app.onInteraction(cmd as never);
  const top=new URL(cmd.editReply.mock.calls[0]![0].components[0].components[0].url);expect(top.searchParams.get('next')).toBeNull();
 });
+it('カードの書き込みが Discord で消されていても、書きかえをくり返さない（受付終了ならそのまま終わる）',async()=>{
+ await command(A,'listing-new',0,{category:'illust',title:'消されるカード',price:'1000',capacity:'0'});
+ await app.syncWebUpdates(now);expect(messages).toHaveLength(1);
+ const id=(await db.select().from(marketListings))[0]!.id;
+ channel.messages.edit=vi.fn(async()=>{throw Object.assign(new Error('Unknown Message'),{code:10008});});
+ await command(A,'listing-close',id,{confirm:'yes'});
+ await app.syncWebUpdates(now);
+ expect(channel.messages.edit).toHaveBeenCalledOnce();
+ expect(messages).toHaveLength(1);
+ expect((await db.select().from(marketWebActions)).every(a=>a.syncStatus==='done')).toBe(true);
+});
