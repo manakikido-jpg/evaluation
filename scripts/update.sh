@@ -24,8 +24,8 @@ if [ -n "$changed" ] && ! git diff --quiet HEAD -- $changed; then
   exit 1
 fi
 
-# 念のため先にバックアップ
-./scripts/backup.sh
+# 念のため先にバックアップ（更新の前の分は、新しい 5 個だけ残す）
+BACKUP_KIND=update ./scripts/backup.sh
 git merge -q --ff-only "origin/$branch"
 
 # bot と web が healthy になるまで待つ（最大 3 分）
@@ -54,4 +54,6 @@ fi
 # セットアップ用も新しいコードで作っておく（docker compose run --rm setup で使う）
 docker compose --profile setup build -q setup || true
 docker image prune -f >/dev/null
+# 組み立てのたびにたまる古いキャッシュを消す（ディスクがいっぱいになって更新が止まらないように）
+docker builder prune -f --filter until=24h >/dev/null || true
 docker compose ps
