@@ -1,0 +1,78 @@
+.office-dock { display: none; }
+.office-search-dialog, .office-outline-dialog {
+  border: 1px solid var(--line); border-radius: 24px; padding: 0; background: var(--card); color: var(--ink);
+  box-shadow: 0 24px 80px #15112630; max-height: min(760px, 85dvh); width: min(660px, calc(100vw - 32px)); overflow: auto;
+}
+.office-search-dialog::backdrop, .office-outline-dialog::backdrop { background: #17132265; backdrop-filter: blur(4px); }
+.office-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 24px 24px 12px; }
+.office-dialog-head h2 { margin: 0; border: 0; font-size: 1.2rem; }
+.office-dialog-head p { margin: 0 0 6px; }
+.office-dialog-head form { margin: 0; }
+.office-dialog-head button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.office-search-field { display: flex; align-items: center; gap: 12px; margin: 8px 24px; padding: 4px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.office-search-field > span { font-size: 1.6rem; color: var(--accent-text); }
+.office-search-field input { border: 0; width: 100%; min-width: 0; padding: 12px 0; color: var(--ink); background: transparent; font: inherit; }
+.office-search-field:focus-within { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.office-search-field input:focus-visible { outline: none; }
+.office-search-status, .office-dialog-hint { padding: 0 24px; font-size: .8rem; color: var(--muted); }
+.office-dialog-hint { margin: 16px 0; }
+.office-search-results { max-height: 48dvh; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px; }
+.office-search-results h3 { padding: 8px; color: var(--muted); font-size: .75rem; letter-spacing: .06em; margin: 12px 0 2px; }
+.office-search-results a { display: flex; align-items: center; gap: 12px; padding: 12px; margin: 3px; border-radius: 12px; color: var(--ink); text-decoration: none; }
+.office-search-results a:hover, .office-search-results a:focus-visible { background: var(--sakura); color: var(--accent-text); }
+.office-search-results [hidden] { display: none; }
+.office-search-arrow { margin-left: auto; color: var(--muted); }
+.office-outline-dialog { width: min(380px, calc(100vw - 32px)); }
+[data-office-outline-list] { display: grid; gap: 6px; padding: 4px 20px 24px; }
+[data-office-outline-list] button { text-align: left; padding: 12px; border: 1px solid transparent; border-radius: 12px; font: inherit; color: var(--ink); background: var(--bg); cursor: pointer; overflow-wrap: anywhere; }
+[data-office-outline-list] button:hover { border-color: var(--shu); background: var(--sakura); }
+[data-office-outline-list] .office-outline-child { margin-left: 16px; font-size: .9rem; }
+.office-shell main :is(h1, h2, h3) { scroll-margin-top: 110px; }
+.office-shell .popup-head { align-items: center; gap: 16px; background: var(--card); padding: 12px 0; z-index: 1; border-bottom: 1px solid var(--line); }
+.office-shell .popup-head h2 { margin: 0 auto 0 0; font-size: 1rem; border: 0; }
+.office-shell .popup-head a { font-size: .82rem; white-space: nowrap; }
+.office-shell .popup-head button { min-height: 40px; white-space: nowrap; }
+.office-shell #popup-body { padding-top: 14px; }
+@media (min-width: 901px) {
+  html:has(body.office-shell) { scroll-padding-top: 100px; scroll-padding-bottom: 110px; }
+  .office-dock[data-compact="true"] button:not([data-office-dock-toggle]) { display: none; }
+  body.office-shell { grid-template-columns: 248px minmax(0, 1fr); }
+  .office-shell .topbar { top: 10px; margin: 10px 16px 0; border: 1px solid var(--line); border-radius: 18px; height: 64px; padding: 0 18px; box-shadow: 0 6px 26px #15112608; }
+  .office-shell .topbar-page { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .office-shell .topbar-search { flex: 0 1 240px; min-width: 130px; }
+  .office-shell .topbar-search input { width: 100%; }
+  .office-shell .brand small { display: none; }
+  .office-shell .side { top: 90px; height: calc(100dvh - 108px); margin: 16px 0 18px 16px; border: 1px solid var(--line); border-radius: 20px; scrollbar-width: thin; box-shadow: 0 6px 26px #15112606; }
+  .office-shell .side-nav { padding: 14px 10px; gap: 16px; }
+  .office-shell .side .nav-title { font-size: .72rem; }
+  .office-shell .side a.on { background: var(--sakura); border-left: 3px solid var(--accent-text); }
+  .office-shell main { max-width: 1520px; padding: 30px clamp(20px, 2.6vw, 48px) 118px; }
+  .office-shell main.wide { max-width: none; }
+  .office-shell .card { border: 1px solid var(--line); }
+  .office-shell .office-action-status { bottom: 108px; right: 28px; }
+  .office-shell.office-desktop-ready .office-dock { display: flex; align-items: center; gap: 4px; position: fixed; z-index: 31; right: 28px; bottom: 20px; padding: 8px; border: 1px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: 0 12px 36px #15112620; max-width: calc(100vw - 280px); }
+  .office-dock button { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 10px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); font: inherit; font-size: .83rem; cursor: pointer; white-space: nowrap; }
+  .office-dock button:first-child { background: var(--sakura); color: var(--accent-text); }
+  .office-dock button:hover { background: var(--bg); }
+  .office-dock button > span { font-size: 1.25rem; }
+  .office-dock kbd { font: inherit; font-size: .67rem; color: var(--muted); padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; }
+  .office-outline-dialog { margin: 90px 28px 96px auto; max-height: calc(100dvh - 186px); }
+  .office-shell dialog.popup { margin: 16px 16px 16px auto; width: min(680px, calc(100vw - 64px)); height: calc(100dvh - 32px); max-height: none; padding: 12px 24px 24px; border-radius: 24px; box-shadow: -12px 0 60px #15112625; }
+  .office-shell dialog.popup::backdrop { background: #17132250; backdrop-filter: blur(2px); }
+  .office-shell #office-panel { margin: 90px 28px 96px auto; max-height: calc(100dvh - 186px); }
+}
+@media (min-width: 901px) and (max-width: 1150px) {
+  .office-dock kbd { display: none; }
+  .office-shell .topbar-page { display: none; }
+}
+@media (max-width: 900px) {
+  .office-shell .popup-head { flex-wrap: wrap; gap: 8px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .office-search-dialog[open], .office-outline-dialog[open] { animation: office-panel-enter .16s ease-out; }
+  @keyframes office-panel-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+}
+
+@media (min-width: 1400px) {
+  .office-shell .office-inbox { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     search.addEventListener('input', filter);
     document.addEventListener('keydown', event => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
+      if (event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]') || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'k') return;
       event.preventDefault();
       set(!media.matches);
       search.focus(); search.select();

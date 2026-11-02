@@ -158,6 +158,7 @@ function ThemeChoice() {
 export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'org.js' | 'nav-order.js' | 'recordings.js' | 'home-voice.js' | 'copy-text.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
+  const visibleGroups = session ? arrangeNav(session.navLayout).map(g => ({ ...g, items: g.items.filter(i => (!i.gujiOnly || session.level === 'guji') && (!session.pages || session.pages.includes((i.page ?? i.key) as never))) })).filter(g => g.items.length) : [];
   return (
     <html lang="ja">
       <head>
@@ -170,6 +171,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         <script src={assetUrl('theme.js')}></script>
         <link rel="stylesheet" href={assetUrl('style.css')} />
         {session && <link rel="stylesheet" href={assetUrl('office-mobile.css')} />}
+        {session && <link rel="stylesheet" href={assetUrl('office-desktop.css')} />}
         <script src={assetUrl('htmx.min.js')} defer></script>
         {(props.scripts ?? []).map((s) => (
           <script src={assetUrl(s)} defer></script>
@@ -209,9 +211,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                 <p class="nav-find-status" data-nav-status role="status" aria-live="polite"></p>
               </div>
               <nav class="side-nav" aria-label="メニュー">
-                {arrangeNav(session.navLayout).map((g) => {
+                {visibleGroups.map((g) => {
                   // 宮司だけのページ・見られるページを選ばれている人の、ほかのページは出さない
-                  const items = g.items.filter((i) => (!i.gujiOnly || session.level === 'guji') && (!session.pages || session.pages.includes((i.page ?? i.key) as never)));
+                  const items = g.items;
                   if (!items.length) return null;
                   // 見出しを押すと折りたためる（閉じたかは menu.js が覚える。今いるページの仲間は開いておく）
                   return (
@@ -266,6 +268,29 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         <main id="main-content" tabindex={-1} data-office-inplace={session && !props.scripts?.length ? "" : undefined} class={props.wide ? 'wide' : undefined}>{props.children}</main>
         {session && <script src={assetUrl('office-ui.js')} defer></script>}
         {session && <script src={assetUrl('office-app.js')} defer></script>}
+        {session && <>
+          <nav id="office-dock" class="office-dock" aria-label="画面の操作">
+            <button type="button" data-office-search-open aria-controls="office-search"><span aria-hidden="true">⌕</span>ページを探す<kbd>Ctrl / ⌘ K</kbd></button>
+            <button type="button" data-office-outline-open aria-controls="office-outline"><span aria-hidden="true">☷</span>この画面の目次</button>
+            <button type="button" data-office-panel aria-controls="office-panel"><span aria-hidden="true">♧</span>お知らせ</button>
+            <button type="button" data-office-top aria-label="本文の先頭へ戻る"><span aria-hidden="true">↑</span></button>
+            <button type="button" data-office-dock-toggle aria-controls="office-dock" aria-expanded="true" aria-label="操作バーを小さくする"><span aria-hidden="true">−</span></button>
+          </nav>
+          <dialog id="office-search" class="office-search-dialog" aria-labelledby="office-search-title">
+            <div class="office-dialog-head"><div><p class="office-eyebrow">ページへ移動</p><h2 id="office-search-title">どの仕事を開きますか？</h2></div><form method="dialog"><button type="submit" aria-label="検索を閉じる">✕</button></form></div>
+            <label class="office-search-field"><span aria-hidden="true">⌕</span><input type="search" data-office-search-input aria-label="ページ名で検索" aria-controls="office-search-results" placeholder="案内、経済、相談…" autocomplete="off" /></label>
+            <p class="office-search-status" data-office-search-status role="status" aria-live="polite"></p>
+            <nav id="office-search-results" class="office-search-results" aria-label="検索結果">
+              {visibleGroups.map(g => <section data-office-search-group><h3>{g.title}</h3>{g.items.map(i => <a href={i.href} data-office-search-item data-search-category={g.title}><span aria-hidden="true">{i.icon}</span><span>{i.label}</span><span class="office-search-arrow" aria-hidden="true">↗</span></a>)}</section>)}
+              <section data-office-search-group><h3>社務所の使い方</h3><a href="/office/app" data-office-search-item>🔔 アプリ・お知らせ</a><a href="/updates" data-office-search-item>📰 更新履歴</a>{session.level === 'guji' && <a href="/office/access" data-office-search-item>🔑 権限を渡す</a>}</section>
+            </nav><p class="office-dialog-hint">↑ ↓ で移動 · Enter で開く · Esc で閉じる</p>
+          </dialog>
+          <dialog id="office-outline" class="office-outline-dialog" aria-labelledby="office-outline-title">
+            <div class="office-dialog-head"><div><p class="office-eyebrow">{props.title}</p><h2 id="office-outline-title">この画面の目次</h2></div><form method="dialog"><button type="submit" aria-label="目次を閉じる">✕</button></form></div>
+            <p class="office-dialog-hint">見出しを選ぶと、その場所へ移動します。</p><nav data-office-outline-list aria-label="この画面の見出し"></nav>
+          </dialog>
+          <script src={assetUrl('office-desktop.js')} defer></script>
+        </>}
         {session && <dialog id="office-panel" class="office-sheet" aria-labelledby="office-panel-title"><div class="office-section-heading"><h2 id="office-panel-title">アプリ・お知らせ</h2><form method="dialog"><button aria-label="閉じる" class="secondary">✕</button></form></div><p>対応待ちと通知設定を、ここから。</p><a class="office-sheet-link" href="/office/app">🔔 対応待ち・通知を確認 →</a>{session.level === 'guji' && <a class="office-sheet-link" href="/office/access">🔑 担当別の権限を整理 →</a>}<button type="button" data-office-install>ホーム画面に追加する</button><p data-office-install-help role="status">iPhoneはSafariの共有メニューから「ホーム画面に追加」を選びます。</p></dialog>}
         {session && <script src={assetUrl('office-actions.js')} defer></script>}
         {session && <nav class="mobile-nav" aria-label="よく使うページ">
@@ -279,8 +304,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         {session && (
           <>
             {/* ポップアップ（data-popup の付いたものを押すと、ここに中身を出す） */}
-            <dialog id="popup" class="popup">
+            <dialog id="popup" class="popup" aria-labelledby="popup-title">
               <div class="popup-head">
+                <h2 id="popup-title">詳細を確認</h2><a data-popup-full href="/" hidden>ページで開く ↗</a>
                 <button type="button" class="link" data-popup-close>
                   ✕ 閉じる
                 </button>
