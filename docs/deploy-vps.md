@@ -200,6 +200,26 @@ VPS の中のバックアップは、VPS が壊れると一緒に消えます。
 
 あとは毎日 4 時のバックアップのあとに 1 回送ります。Webhook の URL とあいことばはパスワードと同じに扱ってください（だれにも見せない・チャットに貼らない）。
 
+### Google ドライブにも置く（おすすめ）
+毎日 4 時のバックアップを暗号にして、Google ドライブにも置けます（30 日分。古いものは自動で消す）。あいことばは Discord に置くときと同じ `BACKUP_PASSPHRASE` を使います（まだなければ上の 4〜6 で `.env` に入れる）。
+
+1. VPS に rclone を入れる: `sudo apt install -y rclone`
+2. 自分の PC にも rclone を入れる（Windows: https://rclone.org/downloads/ から zip を落として開く。PowerShell でそのフォルダに `cd`）
+3. VPS で `rclone config` を打ち、次のように答える:
+   - `n`（新しくつなぐ）→ 名前は `gdrive`
+   - Storage は `drive`（Google Drive の番号）
+   - client_id・client_secret は何も入れず Enter
+   - scope は `drive.file`（rclone が作ったファイルだけ触れる。ほかのファイルは見えない）
+   - service_account_file は Enter・Edit advanced config は `n`
+   - **Use auto config? は `n`**（VPS にはブラウザがないため）→ `rclone authorize "drive" "…"` という 1 行が出る
+4. その 1 行を **自分の PC の PowerShell** に貼って Enter → ブラウザが開くので、バックアップを置く Google アカウントでログインして「許可」
+5. PC の画面に出た長い文字列（`{"access_token":…}` ではなく、`Paste the following into your remote machine` の下の 1 行）を VPS の `config_token>` に貼る
+6. Shared Drive は `n` → `y`（保存）→ `q`（終わる）
+7. ためしに送る: `FORCE=1 ./scripts/gdrive-backup.sh $(ls -t backups/sakuranomiya-2*.sql.gz | head -1)` →「gdrive: 送りました」と出て、ドライブの「sakuranomiya-backups」フォルダにファイルができれば OK
+
+あとは毎日 4 時のバックアップのあとに 1 回送ります。置く場所・残す日数は `.env` の `GDRIVE_DIR`（既定 sakuranomiya-backups）・`GDRIVE_KEEP_DAYS`（既定 30）で変えられます。rclone の設定（`~/.config/rclone/rclone.conf`）には Google の鍵が入るので、だれにも見せないでください。
+戻すときは、ドライブからファイルを落として VPS に置き、`./scripts/decrypt-backup.sh sakuranomiya-….sql.gz.enc` → `./scripts/restore.sh backups/sakuranomiya-….sql.gz`。
+
 **戻すとき**（VPS が壊れて作り直したときなど）
 1. Discord のチャンネルから、戻したい日のファイルを全部（`….enc.part00`・`part01` …）ダウンロードして VPS の `~/evaluation` に置く（`scp` か WinSCP などで）
 2. `./scripts/decrypt-backup.sh sakuranomiya-…enc.part00 sakuranomiya-…enc.part01`（分かれていれば全部。あいことばを聞かれる）

@@ -32,3 +32,7 @@ ls -1t backups/sakuranomiya-update-*.sql.gz 2>/dev/null | tail -n +"$((KEEP_UPDA
 echo "backup: $file ($(du -h "$file" | cut -f1))"
 # 鯖の外（Discord の宮司だけのチャンネル）にも 1 日 1 回。.env に設定がなければ何もしない。失敗しても、ここのバックアップはできている
 ./scripts/offsite-backup.sh "$file" || echo "offsite: 失敗しました（ここのバックアップはできています）" >&2
+# Google ドライブにも 1 日 1 回（rclone とあいことばがなければ何もしない）。更新の前のバックアップでは送らない
+if [ "${BACKUP_KIND:-}" != update ]; then
+  ./scripts/gdrive-backup.sh "$file" || echo "gdrive: 失敗しました（ここのバックアップはできています）" >&2
+fi
