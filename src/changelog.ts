@@ -30,6 +30,12 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-03-gaisen-sgg-rules', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの無料試遊にメデューサ・EXの役別抽選を追加',
+    items: ['SGGの時間停止を成立役ごとの10・20・30Gと無限に分け、3枚役の当選分は最終Gで告知します。', '時間停止の最終Gでも巻き戻しを抽選し、赤7やGODによる巻き戻しで現在の時間停止を終えます。EXの突入と上乗せも役別に分けました。', 'メデューサ・SGG-EXの確認場面を追加。途中の保存・別台再開でも当選済みの時間停止を保持します。'],
+    announcement: { priority: 'none', audience: '神殿スロットの試遊を確認する運営', steps: ['社務所のカジノから「神殿スロットの新しい無料試遊（区間別抽選）」を開く。', '着席し「場面を選んで動作確認」でメデューサまたはSGG-EXを選ぶ。'], postText: '', imagePrompt: '架空の無料試遊画面でSGGの時間停止と新しい確認場面を示す。実在メンバーの名前・秘密の入口URLは含めない。', notes: '運営用の無料試遊のみ。表裏モード・SGG追加ループなどは未完成。実財布接続と一般公開は含まない。' },
+  },
   { id: '2026-11-02-market-card-deleted', date: '2026-11-02', kind: 'fix', where: ['運用'], title: '🏪 市場のカードが消されていても、書きかえの失敗をくり返さないように', items: ['市場Webで出品を変えたとき、Discord のカードの書き込みが消されていると、書きかえの失敗を毎分くり返して記録に残していました。', '消されていたら、受付終了ならそのまま終わり、出品中ならカードを出し直します。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: 'BOT のログの「market web sync deferred / Unknown Message」が止まる。' } },
   {
     id: '2026-11-02-office-desktop-ui', date: '2026-11-02', kind: 'improve', where: ['社務所Web'],

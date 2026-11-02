@@ -1,5 +1,15 @@
 # 作業の引き継ぎメモ
 
+## 2026年11月3日：GODのSGG・メデューサ・EXを進める
+- 依頼「GODすすめよう」。最新本番51d0448からcodex/gaisen-sgg-rulesを作成。以前のPR120/128の実装は本番枝に含まれる。以前の合流保留を解除せず、新しいDraft PRで確認する。運営限定無料試遊・実財布未接続を継続。
+- 開始：初当たり前兆/通常天井まで実装済み。Web検索の初回呼出は失敗したが、なな徹のSGG/メデューサ/EXと一撃のSGG本文を取得できた。今回の出典はdocs/gaisen-sgg-rules.mdへ保存する。
+- 範囲：trial-2のメデューサ突入/長さ/後告知/巻き戻しとEX突入/役別上乗せを照合して実装。旧trial-1、既存の確定権利/保存/二重STOP防止を保持。通常/裏モード、SGGの追加ループ等の残件を完成扱いにしない。
+- 実装：sggRules.tsで役別時間停止/巻き戻し/EX突入・上乗せを分離。無限/後告知の保存、最後の時間停止G、赤7/GODでの停止終了、メデューサ/EX確認場面を追加。追加ループ・救済・通常/裏モード・重複の差分はdocs/gaisen-sgg-rules.mdへ明記。
+- 途中検証：関連10ファイル100件、型・ビルド成功。Chromiumで1440/390px、場面の切替、無限表示、はみ出し/JSエラーなし。/workspace/artifacts/gaisen-sgg/に確認画像。ローカルの架空データで確認し、本番には接続していない。
+- 試算：72条件2,340万G、設定1〜6のナビ遵守払出/投入は99.312/101.444/104.809/108.641/113.496/119.380%。全条件の会計・セット数・天井権利の内数と6ソースのハッシュが一致。docs/gaisen-sgg-audit.jsonへ保存。全231ファイル2,570件成功（709.49秒、npm test -- --maxWorkers=3 --testTimeout=60000）。ログ/tmp/gaisen-sgg-{types,build,related,all,browser}.log。ローカルプレビューは停止済み。
+- 保存先：codex/gaisen-sgg-rules、[この枝のDraft PR](https://github.com/manakikido-jpg/evaluation/pulls?q=is%3Apr+head%3Acodex%2Fgaisen-sgg-rules)。検証済みの差分と記録をcommit/pushする。最終commit/PR番号はPR本文とGit履歴で確認する。本番合流・一般公開・実財布接続は行わない。
+- 次：SGGの追加ループ/救済、通常/裏モードの移行/当選、フェイク分類と時間停止/EXの重複を照合する。今回の収支を実機再現の完成値とは扱わない。
+
 ## 2026年11月2日：PCでも社務所のUI・UXを改善
 - 依頼：スマホだけでなくPCでもUI/UXを改善し、ポップアップとフローティング操作を活用する。
 - 開始：PR126/127は合流済み。本番4fba8d8からcodex/office-desktop-uiを作成（作業フォルダは/workspace/office-mobile-accessを継続）。DB・権限モデル・通知送信は変更しない。

@@ -1,3 +1,4 @@
+import {drawMedusa,drawMedusaReset,drawEx,drawExStock} from './sggRules.js';
 import type {Rng} from '../cards.js';
 import {historySymbol,historyAward,type HistorySymbol} from './historyRules.js';
 import {drawPhaseFlag,preparePhaseSpin,phaseOutcome,phaseReels,type PhaseSpin} from './phaseRules.js';
@@ -24,6 +25,8 @@ export type GaisenState={
  symbolHistory?:HistorySymbol[];gstopQueue?:number;
  // 前兆の残りGと確定権利を分離。旧trial-2の未設定は残りGから一度だけ補完する。
  omenStocks?:number;
+ // 無限の時間停止と、まだ告知していない当選分。旧保存の未設定はfalse相当。
+ medusaInfinite?:boolean;medusaDeferred?:boolean;
  // 天井の前兆/権利/ループを通常の前兆と分離。旧保存では未設定。
  ceilingStocks?:number;ceilingLeft?:number;ceilingHit?:boolean;ceilingLoop?:0|1|80;
  // 表示用。旧保存データでは未設定。抽選や払出の判定には使わない。
@@ -43,7 +46,7 @@ function startGG(s:GaisenState){
 function beginOmen(s:GaisenState,games:number){if(s.version==='trial-2')s.omenStocks=ordinaryOmenSets(s)+1;s.omen=games;}
 function award(s:GaisenState,n:number){if(s.sets===0&&s.stocks===0){s.firsts++;s.chainWon=0;}s.stocks+=n;}
 function enterGstop(s:GaisenState){s.gstopReturn=s.phase;s.phase='gstop';s.gstopLeft=5;s.hold=null;note(s,'G-STOP · 自分でSTOPを押して抽選');}
-function enterSGG(s:GaisenState){s.sggReturn=s.phase==='gstop'?s.gstopReturn:s.phase;s.phase='sgg';s.sggLeft=16;s.medusa=0;s.ex=false;s.sggs++;note(s,'SGG開始 · 16GのST');}
+function enterSGG(s:GaisenState,rng?:Rng){s.sggReturn=s.phase==='gstop'?s.gstopReturn:s.phase;s.phase='sgg';s.sggLeft=16;s.medusa=0;s.ex=s.version==='trial-2'&&!!rng&&drawEx(s.setting,true,rng);if(s.version==='trial-2'){s.medusaInfinite=false;s.medusaDeferred=false;}s.sggs++;note(s,'SGG開始 · 16GのST');}
 function restore(s:GaisenState,phase:Phase){s.phase=phase;if((phase==='normal'||phase==='omen')&&s.stocks>0)startGG(s);else if(phase==='gg'&&s.ggLeft<=0){s.phase='gzone';s.zoneLeft=5;}}
 /** GOD/赤7の基礎フラグ以外は暫定の役分布。実機の全役抽選表ではない。 */
 export function drawRole(rng:Rng):Role{const n=rng(65536);return n<8?'god':n<20?'red7':n<1184?'rare':n<17568?'replay':n<31986?'bell':n<56890?'smallBell':'none';}
@@ -160,8 +163,8 @@ function finishNormalV2(s:GaisenState,p:Spin,rng:Rng,role:Role){
 }
 function finishPhase(s:GaisenState,p:Spin,rng:Rng,role:Role){
  // 特別役は区間を問わず優先。SGG/G-STOPも残りを失わない。
- if(role==='god'){s.gods++;award(s,5);if(p.phase==='normal'||p.phase==='omen'||p.phase==='gzone')startGG(s);else if(p.phase==='sgg')s.sggLeft=16;note(s,'神降臨 · GG5セット追加（追加ループは未照合）');return;}
- if(role==='red7'){award(s,1);if(p.phase==='sgg'){s.sggLeft=16;note(s,'赤7 · GG＋1、残り16Gへ');}else enterSGG(s);return;}
+ if(role==='god'){s.gods++;award(s,5);if(p.phase==='normal'||p.phase==='omen'||p.phase==='gzone')startGG(s);else if(p.phase==='sgg'){if(p.model)resetSGGV2(s);else s.sggLeft=16;}note(s,'神降臨 · GG5セット追加（追加ループは未照合）');return;}
+ if(role==='red7'){award(s,1);if(p.phase==='sgg'){if(p.model){const medusa=s.medusa>0||!!s.medusaInfinite;resetSGGV2(s);if(!s.ex)s.ex=p.model.flag==='red'||(!medusa&&drawEx(s.setting,false,rng));}else s.sggLeft=16;note(s,'赤7 · GG＋1、残り16Gへ');}else enterSGG(s,rng);return;}
  switch(p.phase){
   case 'normal':case 'omen':{
    if(p.model){finishNormalV2(s,p,rng,role);break;}
@@ -179,7 +182,7 @@ function finishPhase(s:GaisenState,p:Spin,rng:Rng,role:Role){
   case 'gstop':{
    const a=p.symbols as GSymbol[];const same=a.every(x=>x===a[0]);
    const reach=a.join('')==='135'||a.join('')==='V31';
-   if(same){const n=a[0]==='7'?5:a[0]==='V'?3:1;award(s,n);s.hold=null;if(a[0]==='S')enterSGG(s);else{restore(s,s.gstopReturn);note(s,`G-STOP ${a.join('')} · GG＋${n}`);}break;}
+   if(same){const n=a[0]==='7'?5:a[0]==='V'?3:1;award(s,n);s.hold=null;if(a[0]==='S')enterSGG(s,rng);else{restore(s,s.gstopReturn);note(s,`G-STOP ${a.join('')} · GG＋${n}`);}break;}
    if(reach){award(s,1);note(s,'リーチ目 · GG＋1、G-STOP継続');}
    if(!p.hold)s.gstopLeft--;
    s.hold=!p.hold&&a[0]===a[2]&&['V','S','7'].includes(a[0]!)?a[0]!:null;
@@ -187,6 +190,7 @@ function finishPhase(s:GaisenState,p:Spin,rng:Rng,role:Role){
    break;
   }
   case 'sgg':{
+   if(p.model){finishSGGV2(s,p,rng);break;}
    if(s.medusa>0)s.medusa--;else s.sggLeft--;
    if(role==='rare'){if(s.medusa>0){s.sggLeft=16;award(s,1);s.ex=true;note(s,'巻き戻し · GG＋1、EXへ');}else if(rng(4)===0){s.medusa=10;note(s,'時が止まる · 10Gの減算停止');}}
    if(s.ex&&rng(3)===0){award(s,1);note(s,'EX · GG＋1');}
@@ -195,7 +199,33 @@ function finishPhase(s:GaisenState,p:Spin,rng:Rng,role:Role){
   }
  }
 }
-export const SCENARIOS=['normal','gg','god','gstop','sgg','ceiling','omen']as const;
+/** 巻き戻しは現在の時間停止を終了。後告知の当選済み分は失わず残す試遊規則。 */
+function resetSGGV2(s:GaisenState){s.sggLeft=16;s.medusa=0;s.medusaInfinite=false;}
+function finishSGGV2(s:GaisenState,p:Spin,rng:Rng){
+ const flag=p.model!.flag,wasMedusa=s.medusa>0||!!s.medusaInfinite,wasEx=s.ex;
+ // 最後の時間停止Gも、減算前の区間で抽選する。
+ if(wasMedusa){
+  const reset=drawMedusaReset(flag,rng);
+  if(reset){resetSGGV2(s);award(s,1);s.ex ||=reset==='ex';note(s,'巻き戻し · GG＋1、残り16Gへ');return;}
+  if(!s.medusaInfinite)s.medusa--;
+ }else{
+  s.sggLeft--;
+  // EX中との重複は未照合。試遊ではEXを優先し、新規の時間停止を抽選しない。
+  if(!wasEx){
+   const next=drawMedusa(flag,rng);
+   if(next==='deferred')s.medusaDeferred=true;
+   else if(next==='infinite'){s.medusaInfinite=true;note(s,'時が止まる · 巻き戻しまで継続');}
+   else if(next){s.medusa=next;note(s,`時が止まる · ${next}Gの減算停止`);}
+  }
+ }
+ // 昇格した同じゲームの役にEX抽選を重ねない。
+ if(wasEx&&drawExStock(flag,rng)){award(s,1);note(s,'GG＋1');}
+ if(s.sggLeft<=0&&s.medusa<=0&&!s.medusaInfinite){
+  if(s.medusaDeferred){s.medusaDeferred=false;s.medusaInfinite=true;note(s,'時が止まる · 巻き戻しまで継続');}
+  else restore(s,s.sggReturn);
+ }
+}
+export const SCENARIOS=['normal','gg','god','gstop','sgg','ceiling','omen','medusa','sgg-ex']as const;
 export type Scenario=typeof SCENARIOS[number];
 /** 無料の場面確認。実際の成立率の統計には混ぜない。 */
-export function scenario(setting:Setting,name:Scenario,version:RuleVersion=RULE_VERSION):GaisenState{const s=newGaisen(setting,version);s.sample=name!=='normal';if(name==='gg'){award(s,1);startGG(s);}if(name==='god'){s.display=['G','O','D'];s.gods=1;award(s,5);startGG(s);note(s,'場面確認 · 神降臨から開始');}if(name==='gstop')enterGstop(s);if(name==='sgg'){award(s,1);enterSGG(s);}if(name==='ceiling')s.normalGames=1479;if(name==='omen'){beginOmen(s,5);s.phase='omen';note(s,'場面確認 · 前兆から開始（残り5G）');}return s;}
+export function scenario(setting:Setting,name:Scenario,version:RuleVersion=RULE_VERSION):GaisenState{const s=newGaisen(setting,version);s.sample=name!=='normal';if(name==='gg'){award(s,1);startGG(s);}if(name==='god'){s.display=['G','O','D'];s.gods=1;award(s,5);startGG(s);note(s,'場面確認 · 神降臨から開始');}if(name==='gstop')enterGstop(s);if(name==='sgg'){award(s,1);enterSGG(s);}if(version==='trial-2'&&(name==='medusa'||name==='sgg-ex')){award(s,1);enterSGG(s);s.sggLeft=8;if(name==='medusa')s.medusa=10;else s.ex=true;note(s,'場面確認 · '+(name==='medusa'?'時間停止10Gから開始':'SGG-EXから開始'));}if(name==='ceiling')s.normalGames=1479;if(name==='omen'){beginOmen(s,5);s.phase='omen';note(s,'場面確認 · 前兆から開始（残り5G）');}return s;}

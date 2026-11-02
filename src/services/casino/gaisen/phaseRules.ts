@@ -51,7 +51,7 @@ function table(kind:PhaseTable):Weight[]{
 }
 export const PHASE_TABLES:Record<PhaseTable,Weight[]>={normal:table('normal'),gg:table('gg'),sgg:table('sgg'),'sgg-high':table('sgg-high')};
 export function phaseTable(s:GaisenState):PhaseTable{
- if(s.phase==='sgg')return s.medusa>0||s.ex?'sgg-high':'sgg';
+ if(s.phase==='sgg')return s.medusa>0||s.medusaInfinite||s.ex?'sgg-high':'sgg';
  if(s.phase==='gg'||s.phase==='gstop'&&s.gstopReturn==='gg')return 'gg';
  return 'normal';
 }
