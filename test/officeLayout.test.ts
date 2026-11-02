@@ -35,3 +35,15 @@ it('通常画面はその場保存に対応し、専用エディタとログイ�
   expect(guest).not.toContain('office-actions.js');
   expect(guest).not.toContain('data-office-inplace');
 });
+
+it('PCのページ検索も本人の閲覧範囲だけを含み、ログイン前には出さない', () => {
+  const restricted = Layout({ title: '案内', session: { ...session, level: 'shinshoku', pages: ['guide'], writePages: [] }, children: '案内' }).toString();
+  const search = restricted.match(/<dialog id="office-search"[\s\S]*?<\/dialog>/)?.[0] ?? '';
+  expect(search).toContain('href="/guide"');
+  for (const forbidden of ['/settings', '/soudan', '/economy', '/office/access', '/members']) expect(search).not.toContain(`href="${forbidden}"`);
+  expect(search).toContain('href="/office/app"');
+  expect(restricted).toContain('aria-controls="office-outline"');
+  const guest = Layout({ title: 'ログイン', children: 'ログイン' }).toString();
+  expect(guest).not.toContain('id="office-search"');
+  expect(guest).not.toContain('office-desktop.js');
+});
