@@ -3,7 +3,7 @@ import { Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { auditLogs, employeePayroll, guideEmployees, guideReceptions } from '../src/db/schema.js';
-import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides, listedGuides } from '../src/services/guideReception.js';
+import { assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, parseGuideLinks, parsePanelReactions, registerGuide, saveGuideConfig, setGuideStatus, setGuideWaiting, waitingGuides, listedGuides } from '../src/services/guideReception.js';
 import { GuideReceptionApp, guideVisitorPanel } from '../src/discord/guideReception.js';
 import * as economy from '../src/services/economy.js';
 import { recordJoin } from '../src/services/members.js';
@@ -205,6 +205,12 @@ describe('案内完了で案内リンクのメッセージを消す', () => {
 });
 
 
+describe('インチャットのリアクションの入力', () => {
+  it('空白・読点で区切り、重なりを消して5つまで', () => {
+    expect(parsePanelReactions('✅ 💴、⭕ ✅ <:sumi:870000000000000777> a b c')).toEqual(['✅', '💴', '⭕', '<:sumi:870000000000000777>', 'a']);
+  });
+});
+
 describe('案内待ちだけの受付と案内人の開始', () => {
   it('入室イベントと再起動の確認は、案内待ちの人だけを数える', async () => {
     await configure();
@@ -219,6 +225,18 @@ describe('案内待ちだけの受付と案内人の開始', () => {
     m.guide.roles.cache.set(PENDING, { id: PENDING });
     await m.app.tick(m.guild as never);
     expect(await db.select().from(guideReceptions)).toHaveLength(1);
+  });
+  it('✅ インチャットの案内に、決めたリアクション（済・銭・〇）を自動で付ける', async () => {
+    await configure();
+    await saveGuideConfig(db, { ...(await loadGuideConfig(db)), panelReactions: ['✅', '<:zeni:870000000000000777>', '⭕'] }, GUIDE);
+    const m = mockGuild();
+    const addReaction = vi.fn(async () => undefined);
+    (m.discord as Record<string, unknown>).addReaction = addReaction;
+    await m.app.onVoiceStateUpdate({ channelId: null } as never, { channelId: VOICE, guild: m.guild, member: m.visitor, id: m.visitor.id } as never);
+    await m.app.tick(m.guild as never);
+    expect(addReaction.mock.calls).toEqual([[VOICE, 'message', encodeURIComponent('✅')], [VOICE, 'message', encodeURIComponent('zeni:870000000000000777')], [VOICE, 'message', encodeURIComponent('⭕')]]);
+    await m.app.tick(m.guild as never);
+    expect(addReaction).toHaveBeenCalledTimes(3);
   });
   it('👁 要注意の人（見張る人の招待）は本人に何もせず、案内人を呼ばず、運営だけに知らせる', async () => {
     await configure();

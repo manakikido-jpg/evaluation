@@ -1,4 +1,5 @@
 import { GuideWaitingNames } from './guideWaitingName.js';
+import { emojiPath } from '../services/reactionRoles.js';
 import { GUIDE_HOLD_ROLE_NAME, watchReason } from '../services/inviteGuard.js';
 import { adminLevelOf } from '../config.js';
 import { watchOf } from '../services/securityWatch.js';
@@ -182,6 +183,8 @@ export class GuideReceptionApp {
             const message = await this.discord.sendMessage(r.channelId, guideVisitorPanel(r, c));
             [r] = await this.db.update(guideReceptions).set({ messageId: message.id }).where(eq(guideReceptions.id, r.id)).returning() as [typeof r];
             this.visitorMessages.add(message.id);
+            // ✅ 済・💴 銭・⭕ など、案内人が押して使うリアクションを先に付けておく
+            for (const e of c.panelReactions) await this.discord.addReaction?.(r.channelId, message.id, emojiPath(e)).catch((err: unknown) => logger.warn({ err, emoji: e }, 'guide panel reaction failed'));
           } else if (!this.visitorMessages.has(r.messageId)) {
             const first = autoRanks(this.cfg().ranks)[0];
             const granted = Boolean(first && visitor?.roles.cache.has(first.roleId) && c.pendingRoleId && !visitor.roles.cache.has(c.pendingRoleId));

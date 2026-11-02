@@ -48,6 +48,7 @@ export function GuidePage(p: { session: AdminSession; config: GuideConfig; emplo
         <p class="note">案内人が「参拝者ロールを付与」を押したとき、ここで選んだロールも一緒に付けます。</p>
         {p.roles.filter(r => !r.managed).map(r => <label><input type="checkbox" name="withRoleIds" value={r.id} checked={p.config.withRoleIds.includes(r.id)} /> {r.name}</label>)}
       </fieldset>
+      <label>インチャットの案内に自動で付けるリアクション（空白で区切る・5つまで。サーバーの絵文字は Discord で「\:済:」と打つと出る &lt;:名前:ID&gt; を貼る）<input type="text" name="panelReactions" maxlength={300} value={p.config.panelReactions.join(' ')} /></label>
       <label>完了1件の給与（銭。0で支払い停止）<input type="number" name="salary" min={0} max={1000000} value={p.config.salary} required /></label>
       <button type="submit">設定を保存</button>
       <h3 id="guide-links">2. 案内リンク（上から順に表示）</h3><p>絵文字を貼り付け、チャンネルのリンクまたはIDを入れてください。1行に3つまで、空白で区切って入れられます。空欄の行は表示しません。</p>

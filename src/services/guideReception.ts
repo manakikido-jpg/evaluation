@@ -21,8 +21,14 @@ export const guideConfigSchema = z.object({
   dutyChannelId: snowflake.optional(),
   /** 🔰 参拝者ロールと一緒に付けるロール（縁人など。5 つまで） */
   withRoleIds: z.array(snowflake).max(5).default([]),
+  /** 案内VCのインチャットに出る案内の書き込みに、BOT が自動で付けるリアクション（済・銭・〇 など。サーバーの絵文字は <:名前:ID>） */
+  panelReactions: z.array(z.string().regex(/^(<a?:[\w~]{1,32}:\d{17,20}>|[^\s<>]{1,16})$/)).max(5).default(['✅', '💴', '⭕']),
   links: z.array(z.object({ emojiId: snowflake, emojiName: z.string().regex(/^\w{1,32}$/), channelIds: z.array(snowflake).min(1).max(3) })).max(10).default(GUIDE_LINKS),
 });
+/** 「✅ 💴 <:sumi:123…>」のような入力を、リアクションの一覧にする（空白・読点区切り。5つまで） */
+export function parsePanelReactions(text: string): string[] {
+  return [...new Set(text.split(/[\s,、]+/).filter(Boolean))].slice(0, 5);
+}
 /** 絵文字とDiscordのチャンネルリンクを、そのまま設定欄に貼れる */
 export function parseGuideLinks(body: Record<string, unknown>): GuideConfig['links'] {
   if (typeof body.bulkLinks === 'string' && body.bulkLinks.trim()) {

@@ -56,7 +56,7 @@ import { archiveFile, removeArchived, searchArchive } from '../services/messageA
 import { mountUpdateDesk } from './updateDesk.js';
 import { approveUpdatePost, editPendingUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
-import { guideConfigSchema, parseGuideLinks, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide, countUndecidedGuide, guideDuty, guideDutySince, guideDutyChannelName, setGuideDuty } from '../services/guideReception.js';
+import { guideConfigSchema, parseGuideLinks, parsePanelReactions, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide, countUndecidedGuide, guideDuty, guideDutySince, guideDutyChannelName, setGuideDuty } from '../services/guideReception.js';
 import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
@@ -2166,7 +2166,7 @@ export function createWebApp(deps: WebDeps) {
     const b = await c.req.parseBody({ all: true });
     try {
       const voiceChannelIds = (Array.isArray(b.voiceChannelIds) ? b.voiceChannelIds : b.voiceChannelIds ? [b.voiceChannelIds] : []);
-      const config = guideConfigSchema.parse({ voiceChannelIds, staffChannelId: b.staffChannelId || undefined, roleId: b.roleId || undefined, salary: Number(b.salary), dutyChannelId: typeof b.dutyChannelId === 'string' ? b.dutyChannelId || undefined : (await loadGuideConfig(db)).dutyChannelId, links: parseGuideLinks(b), withRoleIds: (Array.isArray(b.withRoleIds) ? b.withRoleIds : b.withRoleIds ? [b.withRoleIds] : []).filter(x => typeof x === 'string' && x) });
+      const config = guideConfigSchema.parse({ voiceChannelIds, staffChannelId: b.staffChannelId || undefined, roleId: b.roleId || undefined, salary: Number(b.salary), dutyChannelId: typeof b.dutyChannelId === 'string' ? b.dutyChannelId || undefined : (await loadGuideConfig(db)).dutyChannelId, links: parseGuideLinks(b), withRoleIds: (Array.isArray(b.withRoleIds) ? b.withRoleIds : b.withRoleIds ? [b.withRoleIds] : []).filter(x => typeof x === 'string' && x), panelReactions: typeof b.panelReactions === 'string' ? parsePanelReactions(b.panelReactions) : (await loadGuideConfig(db)).panelReactions });
       const channels = await loadChannels(true);
       const roles = await loadRoles() ?? [];
       if (config.voiceChannelIds.some(id => !channels.some(ch => ch.id === id && ch.type === 2)) || (config.staffChannelId && !channels.some(ch => ch.id === config.staffChannelId && ch.type === 0)) || (config.dutyChannelId && !channels.some(ch => ch.id === config.dutyChannelId && ch.type !== 4)) || (config.roleId && !roles.some(r => r.id === config.roleId && !r.managed && r.id !== cfg.guildId)) || config.withRoleIds.some(id => !roles.some(r => r.id === id && !r.managed && r.id !== cfg.guildId))) return c.redirect('/guide?msg=invalid');
