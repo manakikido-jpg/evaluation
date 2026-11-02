@@ -12,11 +12,12 @@ export const WEB_PAGES = [
   { key: 'home', label: 'ホーム', href: '/', prefixes: [''] },
   { key: 'stats', label: '推移', href: '/stats', prefixes: ['stats'] },
   { key: 'recordings', label: '録音・録画', href: '/recordings', prefixes: ['recordings'] },
-  { key: 'voice', label: '通話の記録', href: '/voice', prefixes: ['voice'] },
-  { key: 'audit', label: '記録', href: '/audit', prefixes: ['audit'] },
+  { key: 'voice', label: '通話の記録', href: '/voice', prefixes: ['voice', 'voice-now.json'] },
+  { key: 'audit', label: '記録', href: '/audit', prefixes: ['audit', 'message-archive'] },
   { key: 'commands', label: 'コマンド', href: '/commands', prefixes: ['commands'] },
   { key: 'members', label: 'メンバー', href: '/members', prefixes: ['members'] },
   { key: 'applications', label: '申請・お参り期間', href: '/applications', prefixes: ['applications', 'omairi'] },
+  { key: 'security', label: '治安・警戒', href: '/security', prefixes: ['security'] },
   { key: 'yaku', label: '厄', href: '/yaku', prefixes: ['yaku'] },
   { key: 'soudan', label: '相談', href: '/soudan', prefixes: ['soudan'] },
   { key: 'tickets', label: 'お問い合わせ', href: '/tickets', prefixes: ['tickets'] },
@@ -46,6 +47,8 @@ export const webAccessEntrySchema = z.object({
   kind: z.enum(['role', 'member']),
   id: snowflake,
   pages: z.array(z.enum(['*', ...WEB_PAGE_KEYS])).max(WEB_PAGE_KEYS.length + 1),
+  /** 未指定は従来どおり。空配列は閲覧だけ。 */
+  writePages: z.array(z.enum(WEB_PAGE_KEYS)).max(WEB_PAGE_KEYS.length).optional(),
 });
 
 export const rankSchema = z.object({
@@ -1010,7 +1013,7 @@ export function webPageOf(path: string): WebPage | undefined {
 }
 
 /** 社務所Web に入れる人（role: そのロールの人 / member: その人だけ）。pages の '*' は「全部（これから増えるページも）」 */
-export type WebAccessEntry = { kind: 'role' | 'member'; id: string; pages: (WebPage | '*')[] };
+export type WebAccessEntry = { kind: 'role' | 'member'; id: string; pages: (WebPage | '*')[]; writePages?: WebPage[] };
 
 /** 前の「ロールを選ぶだけ」の分も、全部のページの行として並べる */
 export function webAccessEntries(cfg: GuildConfig): WebAccessEntry[] {
@@ -1021,7 +1024,7 @@ export function webAccessEntries(cfg: GuildConfig): WebAccessEntry[] {
 }
 
 /** pages: 見られるページ（null は全部） */
-export type WebAccess = { level: AdminLevel; pages: WebPage[] | null };
+export type WebAccess = { level: AdminLevel; pages: WebPage[] | null; writePages?: WebPage[] | null };
 
 /**
  * 社務所Web に入れるか・どのページを見られるか（Discord の運営コマンドは adminLevelOf のまま）。
@@ -1030,10 +1033,12 @@ export type WebAccess = { level: AdminLevel; pages: WebPage[] | null };
  */
 export function webAccessOf(cfg: GuildConfig, userId: string, roleIds: readonly string[], orgPages: readonly WebPage[] = []): WebAccess | undefined {
   const base = webAccessBase(cfg, userId, roleIds);
+  // 個別調整を保存した人は、組織図やほかのロールで制限を広げない。
+  if (webAccessEntries(cfg).some(e => e.kind === 'member' && e.id === userId && e.writePages !== undefined)) return base;
   // 🏯 組織図の部署で選ばれたページも使える（全部見られる人はそのまま）
   if (!orgPages.length || base?.pages === null) return base;
   const pages = WEB_PAGE_KEYS.filter((k) => orgPages.includes(k) || base?.pages?.includes(k));
-  return { level: base?.level ?? 'shinshoku', pages };
+  return { level: base?.level ?? 'shinshoku', pages, ...(base?.writePages ? { writePages: WEB_PAGE_KEYS.filter(k => orgPages.includes(k) || base.writePages!.includes(k)) } : {}) };
 }
 function webAccessBase(cfg: GuildConfig, userId: string, roleIds: readonly string[]): WebAccess | undefined {
   const admin = adminLevelOf(cfg, roleIds);
@@ -1041,14 +1046,18 @@ function webAccessBase(cfg: GuildConfig, userId: string, roleIds: readonly strin
   const entries = webAccessEntries(cfg);
   const pagesOf = (list: WebAccessEntry[]): WebPage[] | null =>
     list.some((e) => e.pages.includes('*')) ? null : WEB_PAGE_KEYS.filter((k) => list.some((e) => e.pages.includes(k)));
+  const writesOf = (list: WebAccessEntry[]): Pick<WebAccess, 'writePages'> => {
+    if (list.every(e => e.writePages === undefined)) return {};
+    return { writePages: WEB_PAGE_KEYS.filter(k => list.some(e => (e.pages.includes('*') || e.pages.includes(k)) && (e.writePages === undefined || e.writePages.includes(k)))) };
+  };
   const mine = entries.find((e) => e.kind === 'member' && e.id === userId);
   if (mine) {
     const pages = pagesOf([mine]);
-    return pages?.length === 0 ? undefined : { level: 'shinshoku', pages };
+    return pages?.length === 0 ? undefined : { level: 'shinshoku', pages, ...writesOf([mine]) };
   }
   if (admin) return { level: admin, pages: null };
   const hits = entries.filter((e) => e.kind === 'role' && roleIds.includes(e.id) && e.pages.length);
-  return hits.length ? { level: 'shinshoku', pages: pagesOf(hits) } : undefined;
+  return hits.length ? { level: 'shinshoku', pages: pagesOf(hits), ...writesOf(hits) } : undefined;
 }
 
 /** ロールから管理画面の権限を決める（宮司が上） */

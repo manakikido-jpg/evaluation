@@ -1,3 +1,4 @@
+import { WEB_PAGES } from '../../config.js';
 import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
 import { assetUrl } from '../assets.js';
@@ -161,18 +162,20 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
     <html lang="ja">
       <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <link rel="icon" href="/office-icon/192.png" /><link rel="manifest" href="/manifest.webmanifest" /><link rel="apple-touch-icon" href="/office-icon/180.png" /><meta name="theme-color" content="#a33659" /><meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="robots" content="noindex, nofollow" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false}' />
         <title>{`${props.title} | 社務所 Web`}</title>
         <script src={assetUrl('theme.js')}></script>
         <link rel="stylesheet" href={assetUrl('style.css')} />
+        {session && <link rel="stylesheet" href={assetUrl('office-mobile.css')} />}
         <script src={assetUrl('htmx.min.js')} defer></script>
         {(props.scripts ?? []).map((s) => (
           <script src={assetUrl(s)} defer></script>
         ))}
       </head>
-      <body class={session ? 'with-side' : ''}>
+      <body class={session ? 'with-side office-shell' : ''} data-office-writes={session?.level !== 'guji' && session?.writePages != null ? JSON.stringify(WEB_PAGES.filter(p => session.writePages!.includes(p.key) && (!session.pages || session.pages.includes(p.key))).flatMap(p => p.prefixes)) : undefined}>
         <a class="skip-link" href="#main-content">本文へ移動</a>
         {!session && <div class="guest-theme"><ThemeChoice /></div>}
         {session && (
@@ -192,7 +195,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
               </a>
               <span class="topbar-page">{props.title}</span>
               {(!session.pages || session.pages.includes('members')) && <form class="topbar-search" method="get" action="/members"><label class="sr-only" for="nav-search">メンバーを検索</label><input id="nav-search" type="search" name="q" placeholder="メンバーを検索" /><button type="submit" aria-label="メンバーを検索">⌕</button></form>}
-              <div class="topbar-tools"><ThemeChoice /></div>
+              <div class="topbar-tools"><ThemeChoice /><button type="button" class="office-app-trigger" data-office-panel aria-controls="office-panel">🔔<span class="sr-only">アプリと通知</span></button></div>
               {unseen > 0 && (
                 <a class="topbar-updates" href="/updates" title="新しい更新">
                   📰 <span class="badge">{unseen}</span>
@@ -240,6 +243,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                     )}
                   </a>
                 </div>
+                <div class="nav-group"><a href="/office/app">🔔 アプリ・お知らせ</a>{session.level === 'guji' && <a href="/office/access">🔑 権限を渡す</a>}</div>
                 <div class="me">
                   {session.avatarUrl && <img src={session.avatarUrl} alt="" width="28" height="28" />}
                   <span>
@@ -261,6 +265,8 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         )}
         <main id="main-content" tabindex={-1} data-office-inplace={session && !props.scripts?.length ? "" : undefined} class={props.wide ? 'wide' : undefined}>{props.children}</main>
         {session && <script src={assetUrl('office-ui.js')} defer></script>}
+        {session && <script src={assetUrl('office-app.js')} defer></script>}
+        {session && <dialog id="office-panel" class="office-sheet" aria-labelledby="office-panel-title"><div class="office-section-heading"><h2 id="office-panel-title">アプリ・お知らせ</h2><form method="dialog"><button aria-label="閉じる" class="secondary">✕</button></form></div><p>対応待ちと通知設定を、ここから。</p><a class="office-sheet-link" href="/office/app">🔔 対応待ち・通知を確認 →</a>{session.level === 'guji' && <a class="office-sheet-link" href="/office/access">🔑 担当別の権限を整理 →</a>}<button type="button" data-office-install>ホーム画面に追加する</button><p data-office-install-help role="status">iPhoneはSafariの共有メニューから「ホーム画面に追加」を選びます。</p></dialog>}
         {session && <script src={assetUrl('office-actions.js')} defer></script>}
         {session && <nav class="mobile-nav" aria-label="よく使うページ">
           {[
@@ -268,7 +274,7 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
             { key: 'members', href: '/members', icon: '♙', label: 'メンバー' },
             { key: 'invites', href: '/invites', icon: '↗', label: '招待' },
           ].filter(item => !session.pages || session.pages.includes(item.key as never)).map(item => <a href={item.href} class={nav === item.key ? 'on' : ''} aria-current={nav === item.key ? 'page' : undefined}><span aria-hidden="true">{item.icon}</span>{item.label}</a>)}
-          <button type="button" data-nav-toggle aria-controls="main-navigation" aria-expanded="false"><span aria-hidden="true">☰</span>メニュー</button>
+          <a href="/office/app"><span aria-hidden="true">♧</span>お知らせ</a><button type="button" data-nav-toggle aria-controls="main-navigation" aria-expanded="false"><span aria-hidden="true">☰</span>メニュー</button>
         </nav>}
         {session && (
           <>

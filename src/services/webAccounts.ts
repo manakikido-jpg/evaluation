@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { and, asc, eq, ne } from 'drizzle-orm';
 import { WEB_PAGE_KEYS, type WebAccess, type WebPage } from '../config.js';
 import type { Db } from '../db/client.js';
-import { adminSessions, webAccounts, type WebAccount } from '../db/schema.js';
+import { adminSessions, officeSubscriptions, webAccounts, type WebAccount } from '../db/schema.js';
 
 /**
  * 社務所Web の ID とパスワード。宮司が発行する（最初の 1 人は VPS のコマンドで作る）。
@@ -39,7 +39,7 @@ export function generatePassword(length = 14): string {
   return Array.from({ length }, () => chars[randomInt(chars.length)]).join('');
 }
 
-export type AccountInput = { loginId: string; name: string; level: 'guji' | 'shinshoku'; pages: WebPage[] | null; memberId?: string | null };
+export type AccountInput = { loginId: string; name: string; level: 'guji' | 'shinshoku'; pages: WebPage[] | null; writePages?: WebPage[] | null; memberId?: string | null };
 
 export type CreateResult = { status: 'ok'; account: WebAccount; password: string } | { status: 'bad_id' } | { status: 'taken' } | { status: 'bad_name' };
 
@@ -53,7 +53,7 @@ export async function createAccount(db: Db, input: AccountInput, by: string, now
   const password = generatePassword();
   const [account] = await db
     .insert(webAccounts)
-    .values({ loginId, name, level: input.level, pages: cleanPages(input.level, input.pages), memberId: input.memberId ?? null, passwordHash: await hashPassword(password), createdBy: by, createdAt: now })
+    .values({ loginId, name, level: input.level, pages: cleanPages(input.level, input.pages), writePages: input.writePages ?? null, memberId: input.memberId ?? null, passwordHash: await hashPassword(password), createdBy: by, createdAt: now })
     .returning();
   return { status: 'ok', account: account!, password };
 }
@@ -87,7 +87,7 @@ async function otherActiveGuji(db: Db, id: number): Promise<boolean> {
 
 export type ChangeResult = 'ok' | 'not_found' | 'last_guji' | 'bad_name';
 
-export async function updateAccount(db: Db, id: number, patch: { name: string; level: 'guji' | 'shinshoku'; pages: WebPage[] | null; memberId?: string | null }): Promise<ChangeResult> {
+export async function updateAccount(db: Db, id: number, patch: { name: string; level: 'guji' | 'shinshoku'; pages: WebPage[] | null; writePages?: WebPage[] | null; memberId?: string | null }): Promise<ChangeResult> {
   const a = await getAccount(db, id);
   if (!a) return 'not_found';
   const name = patch.name.trim().slice(0, 40);
@@ -95,7 +95,7 @@ export async function updateAccount(db: Db, id: number, patch: { name: string; l
   if (a.level === 'guji' && patch.level !== 'guji' && !a.disabled && !(await otherActiveGuji(db, id))) return 'last_guji';
   await db
     .update(webAccounts)
-    .set({ name, level: patch.level, pages: cleanPages(patch.level, patch.pages), memberId: patch.memberId ?? null })
+    .set({ name, level: patch.level, pages: cleanPages(patch.level, patch.pages), ...(patch.writePages !== undefined ? { writePages: patch.writePages } : {}), memberId: patch.memberId ?? null })
     .where(eq(webAccounts.id, id));
   return 'ok';
 }
@@ -106,6 +106,7 @@ export async function resetPassword(db: Db, id: number): Promise<{ status: 'ok';
   if (!a) return { status: 'not_found' };
   const password = generatePassword();
   await db.update(webAccounts).set({ passwordHash: await hashPassword(password), failedCount: 0, lockedUntil: null }).where(eq(webAccounts.id, id));
+  await db.delete(officeSubscriptions).where(eq(officeSubscriptions.accountId, id));
   await db.delete(adminSessions).where(eq(adminSessions.accountId, id));
   return { status: 'ok', password, account: a };
 }
@@ -116,7 +117,10 @@ export async function setDisabled(db: Db, id: number, disabled: boolean): Promis
   if (!a) return 'not_found';
   if (disabled && a.level === 'guji' && !(await otherActiveGuji(db, id))) return 'last_guji';
   await db.update(webAccounts).set({ disabled, ...(disabled ? {} : { failedCount: 0, lockedUntil: null }) }).where(eq(webAccounts.id, id));
-  if (disabled) await db.delete(adminSessions).where(eq(adminSessions.accountId, id));
+  if (disabled) {
+    await db.delete(officeSubscriptions).where(eq(officeSubscriptions.accountId, id));
+    await db.delete(adminSessions).where(eq(adminSessions.accountId, id));
+  }
   return 'ok';
 }
 
@@ -124,6 +128,7 @@ export async function deleteAccount(db: Db, id: number): Promise<ChangeResult> {
   const a = await getAccount(db, id);
   if (!a) return 'not_found';
   if (a.level === 'guji' && !a.disabled && !(await otherActiveGuji(db, id))) return 'last_guji';
+  await db.delete(officeSubscriptions).where(eq(officeSubscriptions.accountId, id));
   await db.delete(adminSessions).where(eq(adminSessions.accountId, id));
   await db.delete(webAccounts).where(eq(webAccounts.id, id));
   return 'ok';
@@ -156,10 +161,10 @@ export async function checkLogin(db: Db, loginId: string, password: string, now 
 }
 
 /** アカウントで入れるページ（止めていれば undefined） */
-export function accountAccess(a: Pick<WebAccount, 'level' | 'pages' | 'disabled'>): WebAccess | undefined {
+export function accountAccess(a: Pick<WebAccount, 'level' | 'pages' | 'disabled' | 'writePages'>): WebAccess | undefined {
   if (a.disabled) return undefined;
   if (a.level === 'guji') return { level: 'guji', pages: null };
-  return { level: 'shinshoku', pages: (a.pages as WebPage[] | null) ?? null };
+  return { level: 'shinshoku', pages: (a.pages as WebPage[] | null) ?? null, ...(a.writePages ? { writePages: a.writePages as WebPage[] } : {}) };
 }
 
 /** セッションの userId（Discord の人を結びつけていればその ID、なければ acct:番号） */

@@ -131,6 +131,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'bingo.js': { body: readText(path.join(here, 'public/bingo.js')), type: 'text/javascript; charset=utf-8' },
     'member-filters.js': { body: readText(path.join(here, 'public/member-filters.js')), type: 'text/javascript; charset=utf-8' },
     'office-actions.js': { body: readText(path.join(here, 'public/office-actions.js')), type: 'text/javascript; charset=utf-8' },
+    ...Object.fromEntries(['office-app.js', 'office-sw.js'].map(name => [name, { body: readText(path.join(here, 'public', name)), type: 'text/javascript; charset=utf-8' }])),
+    'office-mobile.css': { body: readText(path.join(here, 'public/office-mobile.css')), type: 'text/css; charset=utf-8' },
     'office-ui.js': { body: readText(path.join(here, 'public/office-ui.js')), type: 'text/javascript; charset=utf-8' },
     'invite-selection.js': { body: readText(path.join(here, 'public/invite-selection.js')), type: 'text/javascript; charset=utf-8' },
     'perms.js': { body: readText(path.join(here, 'public/perms.js')), type: 'text/javascript; charset=utf-8' },

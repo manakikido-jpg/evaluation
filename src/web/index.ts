@@ -1,3 +1,4 @@
+import { deliverOfficePush, pushAccess } from '../services/officeNotifications.js';
 import { serve } from '@hono/node-server';
 import { loadGuildConfig, loadWebEnv } from '../config.js';
 import { connectDb } from '../db/client.js';
@@ -16,6 +17,17 @@ async function main(): Promise<void> {
   const store = new ConfigStore(db, fileCfg);
   await store.refresh();
   store.start();
+
+  const api = createDiscordApi({ clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET, botToken: env.DISCORD_TOKEN });
+  let notifying = false;
+  const notifications = setInterval(() => {
+    if (notifying) return;
+    notifying = true;
+    void deliverOfficePush(db, pushAccess(db, () => store.current, api), env.WEB_BASE_URL)
+      .catch(() => logger.warn('office notification check failed'))
+      .finally(() => { notifying = false; });
+  }, 60_000);
+  notifications.unref();
 
   const app = createWebApp({
     db,
@@ -42,6 +54,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'shutting down');
     server.close();
     store.stop();
+    clearInterval(notifications);
     await close();
     process.exit(0);
   };
