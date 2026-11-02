@@ -1,3 +1,5 @@
+import { mountOffice } from './office.js';
+import { unsubscribeOffice } from '../services/officeNotifications.js';
 import {mountGaisenTrial} from './gaisenTrial.js';
 import {CASINO_PRESENTATION_COOKIE} from './casinoPresentation.js';
 import {CasinoScenes} from './views/casinoScenes.js';
@@ -90,6 +92,7 @@ import { describeCoreTime } from '../services/coreTime.js';
 import { coreTimeMembers, coreTimeRegulars, coreTimeRows, coreTimeSessions } from '../services/coreTimeAttendance.js';
 import { boostMembers, cancelBoost, createBoost, giftBoost, listBoosts, updateBoost } from '../services/boostTimes.js';
 import { countUnknownInviters, markUnknownInviters, assignUnknownInviter, inviteCountOf, inviteRewardRows, inviterOf, knownLinkCodes, liveLinks, recentInviteJoins, revokeLink } from '../services/invites.js';
+import { introInviterSuggestions, refreshIntroInviter } from '../services/introInviterSuggestions.js';
 import { AT_FILE_ART, STATIC } from './assets.js';
 import { allRoleTemplates, deleteRoleTemplate, editRoleTemplate, findRoleTemplate, saveRoleTemplate } from '../services/roleTemplates.js';
 import { mountShinpu } from './shinpu.js';
@@ -416,6 +419,8 @@ export function createWebApp(deps: WebDeps) {
       ? bodyLimit({ maxSize: 1024 * 1024, onError: c => c.text('送る内容が大きすぎます。', 413) })(c, next)
       : c.req.method !== 'POST'
       ? smallBody(c, next)
+      : c.req.path === '/office/icon'
+      ? artBody(c, next)
       : c.req.path === '/visit/order'
       ? orderBody(c, next)
       : (/^\/notices(?:\/\d+)?$/.test(c.req.path) || c.req.path.startsWith('/sticker-desk/drafts') || c.req.path === '/visit/designs' || c.req.path === '/shop/visit/staff-designs' || /^\/shop\/visit\/orders\/\d+\/done$/.test(c.req.path) || c.req.path === '/cast/image' || c.req.path === '/cast-office/photo' || /^\/update-desk\/posts(?:\/\d+)?$/.test(c.req.path) || /^\/cast\/casts\/\d{17,20}\/photo$/.test(c.req.path))
@@ -600,6 +605,7 @@ export function createWebApp(deps: WebDeps) {
       await markChecked(db, session.id, access, now());
       session.level = access.level;
       session.pages = access.pages;
+      session.writePages = access.writePages ?? null;
       session.username = account.name;
     }
     // 一定時間ごとに、今も神職・宮司のロールを持っているか Discord に確かめる
@@ -615,20 +621,19 @@ export function createWebApp(deps: WebDeps) {
         }
         roles = undefined;
       }
-      if (roles === undefined) {
-        c.set('session', await withUpdates(session));
-        return next();
+      if (roles !== undefined) {
+        const access = roles && !(await isStaffAlt(db, session.userId)) ? webAccessOf(cfg, session.userId, roles, orgPagesOf(await loadOrg(db), session.userId)) : undefined;
+        if (!access) {
+          await deleteSession(db, session.id);
+          await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
+          deleteCookie(c, SESSION_COOKIE, { path: '/' });
+          return toLogin(c, 'forbidden');
+        }
+        await markChecked(db, session.id, access, now());
+        session.level = access.level;
+        session.pages = access.pages;
+        session.writePages = access.writePages ?? null;
       }
-      const access = roles && !(await isStaffAlt(db, session.userId)) ? webAccessOf(cfg, session.userId, roles, orgPagesOf(await loadOrg(db), session.userId)) : undefined;
-      if (!access) {
-        await deleteSession(db, session.id);
-        await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });
-        deleteCookie(c, SESSION_COOKIE, { path: '/' });
-        return toLogin(c, 'forbidden');
-      }
-      await markChecked(db, session.id, access, now());
-      session.level = access.level;
-      session.pages = access.pages;
     }
     c.set('session', await withUpdates(session));
     // 見られるページを選ばれている人は、ほかのページに入れない（ホームがなければ最初のページへ）
@@ -638,6 +643,10 @@ export function createWebApp(deps: WebDeps) {
       if (page === 'home' && c.req.method === 'GET') return c.redirect(first?.href ?? '/updates');
       if (c.req.method !== 'GET') return c.text('このページは開けません。', 403);
       return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    }
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && session.level !== 'guji' && session.writePages != null) {
+      const personal = ['/logout', '/updates/seen', '/office/push/subscribe', '/office/push/unsubscribe'].includes(c.req.path);
+      if (!personal && (!page || !session.writePages.includes(page))) return c.text('このページは閲覧のみです。操作権限を宮司にご相談ください。', 403);
     }
     await next();
   };
@@ -661,6 +670,9 @@ export function createWebApp(deps: WebDeps) {
     if (c.req.header('hx-request')) return c.body(null, 401, { 'hx-redirect': url });
     return c.redirect(url);
   };
+
+  app.use('/office/*', requireAdmin, requireCsrf);
+  mountOffice(app, { db, cfg: () => cfg, loadRoles: () => loadRoles(), onSettingsSaved: deps.onSettingsSaved, now });
 
   app.use('/keiba-events',requireAdmin,requireCsrf);
   app.use('/keiba-events/*',requireAdmin,requireCsrf);
@@ -761,6 +773,8 @@ export function createWebApp(deps: WebDeps) {
 
   app.post('/logout', requireCsrf, async (c) => {
     const s = c.get('session');
+    const logoutBody = await c.req.parseBody();
+    await unsubscribeOffice(db, s, typeof logoutBody.pushEndpoint === 'string' ? logoutBody.pushEndpoint : undefined);
     await deleteSession(db, s.id);
     await audit(db, { actorId: s.userId, action: 'auth.logout', via: 'web' });
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
@@ -1533,6 +1547,9 @@ export function createWebApp(deps: WebDeps) {
 
   app.get('/invites', async (c) => {
     const [joins, links, known, rewards, candidates] = await Promise.all([recentInviteJoins(db, 200), liveLinks(db), knownLinkCodes(db), inviteRewardRows(db), activeMemberNames(db)]);
+    const introSuggestions = c.get('session').level === 'guji'
+      ? await introInviterSuggestions(db, cfg, rewards.filter(r => !r.inviterId && (!r.source || r.source === 'unknown')).map(r => r.memberId))
+      : new Map();
     const discordInvites = deps.discord.guildInvites ? await deps.discord.guildInvites(cfg.guildId).catch(() => null) : null;
     const others = discordInvites ? discordInvites.filter((i) => !known.has(i.code) && !i.inviter?.bot && (!deps.botId || i.inviter?.id !== deps.botId)) : null;
     const uses = new Map((discordInvites ?? []).map((i) => [i.code, i.uses ?? 0]));
@@ -1546,6 +1563,7 @@ export function createWebApp(deps: WebDeps) {
         joins={joins}
         rewards={rewards}
         candidates={candidates}
+        introSuggestions={introSuggestions}
         bulkResult={c.req.query('msg') === 'bulk_unknown' ? { added: Math.min(200, Math.max(0, Number.parseInt(c.req.query('added') ?? '0') || 0)), skipped: Math.min(200, Math.max(0, Number.parseInt(c.req.query('skipped') ?? '0') || 0)) } : undefined}
         sort={inviteSort(c.req.query('sort'))}
         order={inviteOrder(c.req.query('order'))}
@@ -1582,6 +1600,13 @@ export function createWebApp(deps: WebDeps) {
     if (body.confirm !== 'yes') return c.redirect('/invites?msg=assign_confirm#invite-rewards');
     const result = await assignUnknownInviter({ db, cfg, discord: deps.discord }, c.req.param('id'), body.inviterId, c.get('session').userId, now());
     return c.redirect(`/invites?msg=assign_${result}#invite-rewards`);
+  });
+
+  app.post('/invites/members/:id/refresh-intro', async c => {
+    if (!gujiOnly(c)) return c.html(<NotFoundPage session={c.get('session')} />, 403);
+    if (!validId(c.req.param('id'))) return c.redirect('/invites?msg=intro_missing#invite-rewards');
+    const result = await refreshIntroInviter(db, cfg, deps.discord, c.req.param('id'), c.get('session').userId);
+    return c.redirect(`/invites?msg=intro_${result}#invite-rewards`);
   });
 
   // 🚫 招待を作れない人（登録すると、今ある招待リンクも消す）
@@ -3885,7 +3910,8 @@ export function createWebApp(deps: WebDeps) {
     if (kind === 'role' && !pages.length) return c.redirect(webAccessBack('webaccess_no_pages'));
     const rest = webAccessEntries(cfg).filter((e) => !(e.kind === kind && e.id === id));
     if (rest.length >= 50) return c.redirect(webAccessBack('invalid'));
-    await saveWebAccess(c, [...rest, { kind, id, pages }], { kind, id, pages });
+    const previous = webAccessEntries(cfg).find(e => e.kind === kind && e.id === id);
+    await saveWebAccess(c, [...rest, { kind, id, pages, ...(previous?.writePages !== undefined ? { writePages: previous.writePages.filter(k => pages.includes('*') || pages.includes(k)) } : {}) }], { kind, id, pages });
     return c.redirect(webAccessBack('saved'));
   });
 

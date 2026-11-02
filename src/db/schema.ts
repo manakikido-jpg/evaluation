@@ -132,6 +132,8 @@ export const adminSessions = pgTable('admin_sessions', {
   level: text('level').notNull(),
   /** 見られるページ（null は全部。社務所Web の「設定」で人・ロールごとに選ぶ） */
   pages: text('pages').array(),
+  /** null は従来どおり、空配列は閲覧だけ */
+  writePages: text('write_pages').array(),
   /** ID とパスワードでログインしたとき、そのアカウント（Discord でログインしたときは null） */
   accountId: bigint('account_id', { mode: 'number' }),
   csrfToken: text('csrf_token').notNull(),
@@ -291,6 +293,8 @@ export const webAccounts = pgTable('web_accounts', {
   level: text('level').$type<'guji' | 'shinshoku'>().notNull(),
   /** 見られるページ（null は全部。神職のとき） */
   pages: text('pages').array(),
+  /** null は従来どおり、空配列は閲覧だけ */
+  writePages: text('write_pages').array(),
   /** 結びつけた Discord の人（記録に名前を出す。なくてもよい） */
   memberId: text('member_id'),
   disabled: boolean('disabled').notNull().default(false),
@@ -302,12 +306,12 @@ export const webAccounts = pgTable('web_accounts', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export type WebAccount = typeof webAccounts.$inferSelect;
+export type WebAccount = Omit<typeof webAccounts.$inferSelect, 'writePages'> & { writePages?: string[] | null };
 
 export type Member = typeof members.$inferSelect;
 export type MemberEvent = typeof memberEvents.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
-export type AdminSession = typeof adminSessions.$inferSelect;
+export type AdminSession = Omit<typeof adminSessions.$inferSelect, 'writePages'> & { writePages?: string[] | null };
 
 /** 通貨（花びら）の残高。変更は必ず coin_tx と同じトランザクションで行う */
 export const wallets = pgTable(
@@ -1155,6 +1159,8 @@ export const intros = pgTable('intros', {
   messageId: text('message_id').notNull(),
   /** 本文のはじめ（BOT が本文を読めないときは空） */
   excerpt: text('excerpt').notNull().default(''),
+  /** 招待者欄だけを保存。nullは旧記録（まだ全文から読み取っていない）。 */
+  inviterText: text('inviter_text'),
   postedAt: timestamp('posted_at', { withTimezone: true }).notNull(),
 });
 
@@ -2617,3 +2623,25 @@ export const shofukuAchievements = pgTable('shofuku_achievements', {
   awardedAt: timestamp('awarded_at', { withTimezone: true }).notNull().defaultNow(),
   awardedBy: text('awarded_by').notNull(),
 });
+
+/** Web Push の鍵はサーバー内だけで使う。設定一覧や監査ログへ出さない。 */
+export const officeApp = pgTable('office_app', {
+  id: integer('id').primaryKey(),
+  publicKey: text('public_key').notNull(),
+  privateKey: text('private_key').notNull(),
+  icon: text('icon'),
+  iconVersion: text('icon_version').notNull().default('default'),
+});
+/** 端末ごとの通知。購読URLと暗号鍵はクライアントへ読み返さない。 */
+export const officeSubscriptions = pgTable('office_subscriptions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  accountId: bigint('account_id', { mode: 'number' }),
+  sessionId: text('session_id').notNull(),
+  subscription: jsonb('subscription').$type<{ endpoint: string; keys: { p256dh: string; auth: string } }>().notNull(),
+  topics: text('topics').array().notNull(),
+  lastKeys: text('last_keys').array().notNull().default([]),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [index('office_subscriptions_owner_idx').on(t.userId)]);

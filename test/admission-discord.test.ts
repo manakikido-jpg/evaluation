@@ -72,6 +72,24 @@ afterEach(async () => {
   await close();
 });
 
+it('絵馬の編集で招待者欄だけを更新し、案内完了や報酬は繰り返さない', async () => {
+  const { introOf, recordIntro } = await import('../src/services/intros.js');
+  const channelId = '790000000000000011', messageId = '790000000000000021';
+  const postedAt = new Date('2026-11-01T00:00:00Z');
+  const app2 = new AdmissionApp(client as never, db, () => ({ ...cfg, channels: { ...cfg.channels, ema: channelId } }), discord);
+  await recordIntro(db, { memberId: USER, channelId, messageId, content: '【招待者】前の名前', postedAt });
+  let reads = 0;
+  const message = { guildId: cfg.guildId, channelId, id: messageId, content: `【招待者】<@${STAFF}>`, createdAt: postedAt, author: { id: USER, bot: false }, partial: false };
+  await app2.onIntroUpdate({ ...message, partial: true, fetch: async () => { reads++; return message; } } as never);
+  expect(reads).toBe(1);
+  expect((await introOf(db, USER))!.inviterText).toBe(`<@${STAFF}>`);
+  expect(calls).toEqual([]);
+  await app2.onIntroUpdate({ ...message, channelId: '別の部屋', partial: true, fetch: async () => { reads++; return message; } } as never);
+  await app2.onIntroUpdate({ ...message, author: { id: USER, bot: true }, content: '【招待者】BOT' } as never);
+  expect(reads).toBe(1);
+  expect((await introOf(db, USER))!.inviterText).toBe(`<@${STAFF}>`);
+});
+
 type Reply = { content?: string; components?: { components: { data: { custom_id?: string; label?: string } }[] }[] };
 
 function base(userId: string, roleIds: string[]) {

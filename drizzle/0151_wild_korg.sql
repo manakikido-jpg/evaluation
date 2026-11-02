@@ -1,0 +1,1 @@
+ALTER TABLE "intros" ADD COLUMN "inviter_text" text;

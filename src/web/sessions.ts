@@ -29,6 +29,7 @@ export async function createSession(db: Db, user: DiscordUser, access: WebAccess
     avatarUrl: user.avatarUrl,
     level: access.level,
     pages: access.pages,
+    writePages: access.writePages ?? null,
     accountId: accountId ?? null,
     csrfToken: randomToken(),
     checkedAt: now,
@@ -46,7 +47,7 @@ export async function findSession(db: Db, token: string, now = new Date()): Prom
 }
 
 export async function markChecked(db: Db, id: string, access: WebAccess, now = new Date()): Promise<void> {
-  await db.update(adminSessions).set({ checkedAt: now, level: access.level, pages: access.pages }).where(eq(adminSessions.id, id));
+  await db.update(adminSessions).set({ checkedAt: now, level: access.level, pages: access.pages, writePages: access.writePages ?? null }).where(eq(adminSessions.id, id));
 }
 
 /** 入れる人・ページを変えたとき: 次に開いたときに全員を確かめ直す */
