@@ -179,6 +179,7 @@ crontab -e
 0 4 * * * /home/shamusho/evaluation/scripts/backup.sh >> /home/shamusho/backup.log 2>&1
 ```
 - 手動でとるときは `./scripts/backup.sh`（`backups/` に保存）
+- 更新の前にも自動でとる（`backups/sakuranomiya-update-….sql.gz`）。こちらは新しい5つだけ残す（`KEEP_UPDATES` で変えられる）。毎日のもの（`sakuranomiya-YYYYmmdd-….sql.gz`）は `KEEP_DAYS`（7日）分。2026-11-03 より前は更新の前の分も7日残していて、70GB までたまった。古い分を消すには `du -sh backups` で大きさを見てから、毎日4時台のもの（ファイル名の時刻が 04 で始まる）と新しい10個をのこして消す: `ls -1t backups/sakuranomiya-2*.sql.gz | grep -v -- '-04[0-9][0-9][0-9][0-9]\.sql\.gz$' | tail -n +11 | xargs -r rm -f --`
 - 戻すときは `./scripts/restore.sh backups/（ファイル名）`（今のデータは消えるので注意）
 - VPS が壊れたときに備えて、VPS 会社の「自動バックアップ／スナップショット」も使うと安心
 
