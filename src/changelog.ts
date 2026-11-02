@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-03-update-builder-prune', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🧹 更新のたびに Docker の古い組み立てキャッシュを消すように', items: ['自動更新のたびに Docker の組み立てキャッシュがたまり、VPS のディスクがいっぱいになって更新が止まっていました。', '更新のあとに、1日より古いキャッシュを消すようにしました。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: ['ディスクがいっぱいのときは docker builder prune -af と docker image prune -af で空きを作ってから ./scripts/auto-update.sh を打つ。'], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-02-market-card-deleted', date: '2026-11-02', kind: 'fix', where: ['運用'], title: '🏪 市場のカードが消されていても、書きかえの失敗をくり返さないように', items: ['市場Webで出品を変えたとき、Discord のカードの書き込みが消されていると、書きかえの失敗を毎分くり返して記録に残していました。', '消されていたら、受付終了ならそのまま終わり、出品中ならカードを出し直します。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: 'BOT のログの「market web sync deferred / Unknown Message」が止まる。' } },
   {
     id: '2026-11-02-office-desktop-ui', date: '2026-11-02', kind: 'improve', where: ['社務所Web'],

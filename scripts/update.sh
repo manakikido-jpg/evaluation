@@ -54,4 +54,6 @@ fi
 # セットアップ用も新しいコードで作っておく（docker compose run --rm setup で使う）
 docker compose --profile setup build -q setup || true
 docker image prune -f >/dev/null
+# 組み立てのたびにたまる古いキャッシュを消す（ディスクがいっぱいになって更新が止まらないように）
+docker builder prune -f --filter until=24h >/dev/null || true
 docker compose ps
