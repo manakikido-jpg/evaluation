@@ -117,3 +117,26 @@ describe('🏆 週末宝くじの等（1等・2等…）', () => {
     expect(fortuneGamesSchema.parse({}).lotteryTiers).toEqual([{ name: '1等', count: 1, pct: 100 }]);
   });
 });
+
+describe('🎫 宝くじ売り場のパネルをいちばん下に', () => {
+  it('売り場に書き込みがあると、3秒後に新しいパネルを出して古いパネルを消す。パネル自身や別のチャンネルでは動かない', async () => {
+    vi.useFakeTimers();
+    const { db, close } = await makeDb();
+    try {
+      const { lotteryPanelMessage } = await import('../src/services/casino/lotteryNotice.js');
+      await setLotteryChannel(db, CH, 'staff', 'panel-1');
+      const app = new LotteryApp(db, () => cfg, { sendDm: vi.fn(), sendMessage: vi.fn() } as never, undefined);
+      const channel = { id: CH, lastMessageId: 'user-msg', send: vi.fn(async () => ({ id: 'panel-2' })), messages: { delete: vi.fn(async () => undefined) } };
+      const msg = (id: string, over: Record<string, unknown> = {}) => ({ id, channelId: CH, guildId: cfg.guildId, inGuild: () => true, author: { id: 'u1' }, client: { user: { id: 'bot' } }, components: [], channel, ...over });
+      await app.onMessage(msg('other', { channelId: '910000000000000098' }) as never);
+      await app.onMessage(msg('user-msg') as never);
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(channel.send).toHaveBeenCalledOnce();
+      expect(channel.messages.delete).toHaveBeenCalledWith('panel-1');
+      expect((await lotteryPanelMessage(db))?.messageId).toBe('panel-2');
+      await app.onMessage(msg('panel-2', { author: { id: 'bot' }, components: lotteryPanel().components.map(c => c.toJSON()).map(c => ({ components: c.components.map(x => ({ customId: (x as { custom_id?: string }).custom_id })) })) }) as never);
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(channel.send).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); await close(); }
+  });
+});

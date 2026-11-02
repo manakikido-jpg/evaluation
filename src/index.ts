@@ -500,6 +500,8 @@ async function main(): Promise<void> {
     recruit.onMessage(m);
     void boost.onMessage(m);
     void sticky.onMessage(m);
+    // 🎫 宝くじ売り場のパネルを、いつもいちばん下に
+    void lottery.onMessage(m).catch((err) => logger.warn({ err }, 'lottery panel message failed'));
     // 🎀 #キャスト一覧 のメニューを、いつもいちばん下に
     cast.onMessage(m);
     // 通話のチャット: 「この通話の人のプロフィールを見る」をいちばん下へ（15 秒に 1 回まで）

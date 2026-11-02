@@ -1,10 +1,10 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, type Interaction } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, type Interaction, type Message } from 'discord.js';
 import { adminLevelOf, type GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { audit } from '../services/audit.js';
-import { claimLotteryResults, lotteryChannel, lotteryDm, lotteryWinnerPost, roundWinners, setLotteryChannel } from '../services/casino/lotteryNotice.js';
+import { claimLotteryResults, lotteryChannel, lotteryDm, lotteryPanelMessage, lotteryWinnerPost, roundWinners, setLotteryChannel } from '../services/casino/lotteryNotice.js';
 import { createLoginLink, LINK_MINUTES } from '../services/casino/loginLinks.js';
 
 /**
@@ -52,8 +52,10 @@ export class LotteryApp {
         await i.deferReply({ flags: MessageFlags.Ephemeral });
         if (!adminLevelOf(this.cfg(), [...i.member.roles.cache.keys()])) return void (await i.editReply('神職・宮司のみ置けます。'));
         if (!i.channel?.isSendable()) return void (await i.editReply('このチャンネルには置けません。'));
-        await i.channel.send(lotteryPanel());
-        await setLotteryChannel(this.db, i.channelId, i.user.id);
+        const old = await lotteryPanelMessage(this.db);
+        const sent = await i.channel.send(lotteryPanel());
+        await setLotteryChannel(this.db, i.channelId, i.user.id, sent.id);
+        if (old?.messageId && old.messageId !== sent.id) await i.client.channels.fetch(old.channelId).then(ch => (ch?.isTextBased() ? ch.messages.delete(old.messageId!) : undefined)).catch(() => undefined);
         await audit(this.db, { actorId: i.user.id, action: 'lottery.panel', detail: { channelId: i.channelId }, via: 'discord' });
         return void (await i.editReply('🎫 宝くじ売り場のボタンを置きました。当選の知らせも、このチャンネルに出します。'));
       }
@@ -66,6 +68,28 @@ export class LotteryApp {
     } catch (err) {
       logger.warn({ err }, 'lottery interaction failed');
     }
+  }
+
+  private restickTimer: NodeJS.Timeout | undefined;
+  private restickQueue: Promise<void> = Promise.resolve();
+  /** 売り場のチャンネルに書き込み（当選の知らせも）があったら、3 秒落ち着いてからパネルをいちばん下に置き直す */
+  async onMessage(msg: Message): Promise<void> {
+    if (!msg.inGuild() || msg.guildId !== this.cfg().guildId) return;
+    // 自分が置いたパネル自身では動かない（置き直しをくり返さない）
+    if (msg.author.id === msg.client.user.id && msg.components.some(r => 'components' in r && r.components.some(c => 'customId' in c && c.customId === 'lottery:enter'))) return;
+    const panel = await lotteryPanelMessage(this.db).catch(() => undefined);
+    if (!panel?.messageId || panel.channelId !== msg.channelId || msg.id === panel.messageId) return;
+    clearTimeout(this.restickTimer);
+    const channel = msg.channel;
+    this.restickTimer = setTimeout(() => {
+      this.restickQueue = this.restickQueue.then(async () => {
+        const now = await lotteryPanelMessage(this.db);
+        if (!now?.messageId || now.channelId !== channel.id || channel.lastMessageId === now.messageId) return;
+        const sent = await channel.send(lotteryPanel());
+        await setLotteryChannel(this.db, channel.id, 'system', sent.id);
+        await channel.messages.delete(now.messageId).catch(() => undefined);
+      }).catch(err => logger.warn({ err }, 'lottery panel restick failed'));
+    }, 3_000);
   }
 
   /** 抽選が終わった回の結果を知らせる（1 分ごとに呼ぶ）。DM を送った人数を返す */

@@ -18,11 +18,18 @@ export async function lotteryChannel(db: Db): Promise<string | undefined> {
   return typeof v?.channelId === 'string' ? v.channelId : undefined;
 }
 
-export async function setLotteryChannel(db: Db, channelId: string, by: string): Promise<void> {
+export async function setLotteryChannel(db: Db, channelId: string, by: string, messageId?: string): Promise<void> {
+  const value = { channelId, ...(messageId ? { messageId } : {}) };
   await db
     .insert(settings)
-    .values({ key: CHANNEL_KEY, value: { channelId }, updatedBy: by })
-    .onConflictDoUpdate({ target: settings.key, set: { value: { channelId }, updatedBy: by, updatedAt: new Date() } });
+    .values({ key: CHANNEL_KEY, value, updatedBy: by })
+    .onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+}
+/** いちばん下に置いている売り場のパネル（なければ undefined） */
+export async function lotteryPanelMessage(db: Db): Promise<{ channelId: string; messageId?: string } | undefined> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, CHANNEL_KEY));
+  const v = row?.value as { channelId?: unknown; messageId?: unknown } | undefined;
+  return typeof v?.channelId === 'string' ? { channelId: v.channelId, ...(typeof v.messageId === 'string' ? { messageId: v.messageId } : {}) } : undefined;
 }
 
 export type LotteryResult = { round: FortuneRound; holders: { memberId: string; numbers: number[] }[] };
