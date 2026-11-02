@@ -32,7 +32,7 @@
    ```
 4. セットアップを実行（テストは `--minimal` で最小構成）
    ```bash
-   docker compose run --rm --build setup --guild （サーバー ID） --minimal
+   docker compose build bot && docker compose run --rm setup --guild （サーバー ID） --minimal
    ```
    - ロール 12 個・チャンネルを作り、見える範囲も設定し、`config/guild.json` に ID を書き込む
    - `#社務所` に入鯖申請・宵参り申請のボタンも置く

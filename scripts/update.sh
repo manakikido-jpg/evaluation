@@ -45,7 +45,7 @@ wait_healthy() {
 }
 
 # 組み立ては 1 つずつ（同時に 3 つ組み立てると TypeScript の変換でメモリが足りなくなる）。
-# bot を先に組み立てれば、同じ中身の web・setup はキャッシュを使うので、変換は 1 回で済む
+# web・setup は bot と同じイメージ（sakuranomiya-app）を使うので、組み立ては bot の 1 回だけ
 if ! docker compose build bot || ! docker compose up -d --build || ! wait_healthy; then
   echo "❌ 新しいコード（${target:0:7}）で起動できませんでした。前のコード（${before:0:7}）に戻します"
   docker compose logs --tail 30 bot web || true
@@ -54,8 +54,7 @@ if ! docker compose build bot || ! docker compose up -d --build || ! wait_health
   docker compose up -d --build
   exit 1
 fi
-# セットアップ用も新しいコードで作っておく（docker compose run --rm setup で使う）
-docker compose --profile setup build -q setup || true
+# セットアップ用（docker compose run --rm setup）も bot と同じイメージを使う
 docker image prune -f >/dev/null
 # 組み立てのたびにたまる古いキャッシュを消す（ディスクがいっぱいになって更新が止まらないように）
 docker builder prune -f --filter until=24h >/dev/null || true

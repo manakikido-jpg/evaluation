@@ -118,8 +118,8 @@ SHAMUSHO_DOMAIN=shamusho.（あなたのドメイン）
 2. サーバー名を右クリック →「サーバー ID をコピー」（開発者モードを ON にしておく）
 3. 実行:
 ```bash
-docker compose run --rm --build setup --guild （サーバー ID） --dry-run   # 何を作るか確認だけ
-docker compose run --rm --build setup --guild （サーバー ID）             # 本当に作る（テスト用は --minimal を付ける）
+docker compose build bot && docker compose run --rm setup --guild （サーバー ID） --dry-run   # 何を作るか確認だけ
+docker compose build bot && docker compose run --rm setup --guild （サーバー ID）             # 本当に作る（テスト用は --minimal を付ける）
 ```
 - ロール 12 個（役職・厄年・宵参り・お守り）・カテゴリ 7 個・チャンネル 31 個を作り、見える範囲も設定する
 - `config/guild.json` に ID を書き込み、`#社務所` に申請ボタンを置く
@@ -247,7 +247,7 @@ crontab -e
 - 前に 5 分ごと（`*/5 * * * *`）で入れていたら、次の 1 行で 1 分ごとに変えられる（`crontab -l` で確かめる）:
   `crontab -l | sed 's#^\*/5 \(\* \* \* \* /home/shamusho/evaluation/scripts/auto-update.sh\)#* \1#' | crontab -`
 - 更新したかどうかは `tail ~/auto-update.log` で見られる
-- 組み立ての途中で `Aborted (core dumped)`・`exit code: 134` で止まるのは、メモリ不足。`free -h` でメモリを見る。2026-11-03 から組み立ては1つずつにした（BOT を先に組み立て、Web などはキャッシュを使う）。それでも足りなければ、スワップ（`sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`、再起動後も使うなら `/etc/fstab` に `/swapfile none swap sw 0 0`）を足す
+- 組み立ての途中で `Aborted (core dumped)`・`exit code: 134` で止まるのは、メモリ不足。`free -h` でメモリを見る。2026-11-03 から、Web・セットアップ用は BOT と同じイメージ（`sakuranomiya-app`）を使い、組み立ては BOT の1回だけにした。組み立てのときだけ Node のメモリの上限を 3GB に広げている（Dockerfile）。メモリ 2GB の VPS では、スワップを合わせて 4GB 以上にする。それでも足りなければ、スワップ（`sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`、再起動後も使うなら `/etc/fstab` に `/swapfile none swap sw 0 0`）を足す
 - 「No space left on device」で失敗していたら、ディスクがいっぱい。`df -h /` と `docker system df` で確かめ、`docker builder prune -af` と `docker image prune -af` で空きを作ってから `./scripts/auto-update.sh` を打つ（2026-11-03 から、更新のたびに1日より古い組み立てキャッシュを自動で消す）
 - 手で `./scripts/auto-update.sh` を打つと、待たずに 1 回だけ確かめる（自動の更新とぶつからない。`./scripts/update.sh` を直接打つより安全）
 - 確かめる間隔は `AUTO_UPDATE_EVERY`（秒）で変えられる。前と同じ 1 分に 1 回にするなら、crontab の行の先頭に `AUTO_UPDATE_EVERY=60 ` を付ける

@@ -16,6 +16,8 @@ services:
   # 朱印 BOT
   bot:
     build: .
+    # web・setup も同じイメージを使う（組み立ては bot の 1 回だけ。同時に組み立てるとメモリが足りなくなる）
+    image: sakuranomiya-app:latest
     restart: unless-stopped
     env_file: .env
     depends_on:
@@ -27,7 +29,8 @@ services:
 
   # 管理画面（社務所 Web）
   web:
-    build: .
+    image: sakuranomiya-app:latest
+    pull_policy: never
     command: ["node", "dist/web/index.js"]
     restart: unless-stopped
     env_file: .env
@@ -46,7 +49,8 @@ services:
   # ロールとチャンネルを自動で作る（必要なときだけ実行）
   #   docker compose run --rm setup --guild <サーバー ID> [--minimal] [--dry-run]
   setup:
-    build: .
+    image: sakuranomiya-app:latest
+    pull_policy: never
     profiles: ["setup"]
     entrypoint: ["node", "dist/scripts/setup-guild.js"]
     env_file: .env
