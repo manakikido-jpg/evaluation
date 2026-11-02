@@ -247,6 +247,7 @@ crontab -e
 - 前に 5 分ごと（`*/5 * * * *`）で入れていたら、次の 1 行で 1 分ごとに変えられる（`crontab -l` で確かめる）:
   `crontab -l | sed 's#^\*/5 \(\* \* \* \* /home/shamusho/evaluation/scripts/auto-update.sh\)#* \1#' | crontab -`
 - 更新したかどうかは `tail ~/auto-update.log` で見られる
+- 組み立ての途中で `Aborted (core dumped)`・`exit code: 134` で止まるのは、メモリ不足。`free -h` でメモリを見る。2026-11-03 から組み立ては1つずつにした（BOT を先に組み立て、Web などはキャッシュを使う）。それでも足りなければ、スワップ（`sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`、再起動後も使うなら `/etc/fstab` に `/swapfile none swap sw 0 0`）を足す
 - 「No space left on device」で失敗していたら、ディスクがいっぱい。`df -h /` と `docker system df` で確かめ、`docker builder prune -af` と `docker image prune -af` で空きを作ってから `./scripts/auto-update.sh` を打つ（2026-11-03 から、更新のたびに1日より古い組み立てキャッシュを自動で消す）
 - 手で `./scripts/auto-update.sh` を打つと、待たずに 1 回だけ確かめる（自動の更新とぶつからない。`./scripts/update.sh` を直接打つより安全）
 - 確かめる間隔は `AUTO_UPDATE_EVERY`（秒）で変えられる。前と同じ 1 分に 1 回にするなら、crontab の行の先頭に `AUTO_UPDATE_EVERY=60 ` を付ける

@@ -44,10 +44,13 @@ wait_healthy() {
   return 1
 }
 
-if ! docker compose up -d --build || ! wait_healthy; then
+# 組み立ては 1 つずつ（同時に 3 つ組み立てると TypeScript の変換でメモリが足りなくなる）。
+# bot を先に組み立てれば、同じ中身の web・setup はキャッシュを使うので、変換は 1 回で済む
+if ! docker compose build bot || ! docker compose up -d --build || ! wait_healthy; then
   echo "❌ 新しいコード（${target:0:7}）で起動できませんでした。前のコード（${before:0:7}）に戻します"
   docker compose logs --tail 30 bot web || true
   git reset -q --hard "$before"
+  docker compose build bot || true
   docker compose up -d --build
   exit 1
 fi
