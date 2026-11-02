@@ -1,7 +1,7 @@
 import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastChampagne, CastSession } from '../../db/schema.js';
 import type { CastBreakdown, CastProfit } from '../../services/castProfit.js';
-import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
+import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -226,15 +226,15 @@ function MenuFields(props: { c: CastConfig; optional?: boolean }) {
       <p class="note">同じ内容で 30 分と 1 時間など、時間と値段の組を 3 つまで一度に足せます（使わない組は空のまま）。</p>
       <label class="field check">
         <input type="checkbox" name="menuNight" value="yes" />
-        <span>🌙 寝落ち（朝 7 時まで。値段は 1 つめだけ・18 歳以上だけ）</span>
+        <span>🌙 寝落ち（朝 7 時まで。値段は 1 つめだけ）</span>
       </label>
       <label class="field check">
         <input type="checkbox" name="menuConsult" value="yes" />
-        <span>💬 内容により相談（時間と値段は入れない。お客がお願いを書き、キャストがそのつど時間と値段を出す・18 歳以上だけ）</span>
+        <span>💬 内容により相談（時間と値段は入れない。お客がお願いを書き、キャストがそのつど時間と値段を出す）</span>
       </label>
       <label class="field check">
         <input type="checkbox" name="menuDelivery" value="yes" />
-        <span>📦 納品（シチュエーションボイスなど。通話しない。時間は入れず、値段は 1 つめだけ・18 歳以上だけ。キャストが1週間（7日）以内に納品し、お客の「受け取った」で渡す）</span>
+        <span>📦 納品（シチュエーションボイスなど。通話しない。時間は入れず、値段は 1 つめだけ。キャストが1週間（7日）以内に納品し、お客の「受け取った」で渡す）</span>
       </label>
       <label class="field">
         <span>🎰 ガチャの中身（納品のときだけ。1 行に 1 つ・{DELIVERY.gachaMax} こまで。空ならふつうの納品。どれか 1 つが同じ確率で出る）</span>
@@ -303,7 +303,7 @@ export function CastPage(props: {
         <a href="#cast-settings">⚙ 設定</a>
       </nav>
       <p class="note">
-        寝落ち・雑談などの通話を銭で受けるキャスト（18 歳以上・運営が承認）。お客が指名すると銭を社務所が預かり、キャストが受けると部屋ができ、時間が来たら手数料を引いてキャストに渡します。2 人だけの部屋・寝落ち・予約は 18 歳以上どうしだけ。18 歳未満（と年齢の分からない）人は、公開の部屋での雑談だけ（{MINOR.maxMinutes} 分まで・{MINOR.startHour}〜{MINOR.endHour} 時）。2 人だけの部屋も運営は見守りのために見られます。
+        寝落ち・雑談などの通話を銭で受けるキャスト（18 歳以上・運営が承認）。お客が指名すると銭を社務所が預かり、キャストが受けると部屋ができ、時間が来たら手数料を引いてキャストに渡します。18歳未満（と年齢の分からない）人も、キャストの受付がONなら全メニュー・全時間帯を利用できます。通話は公開の部屋です。出勤予定・予約枠・料金は共通です。2 人だけの部屋も運営は見守りのために見られます。
       </p>
 
       {disputed.length > 0 && (
@@ -436,7 +436,7 @@ export function CastPage(props: {
           <MenuFields c={c} optional />
           <label class="field check">
             <input type="checkbox" name="minorOk" value="yes" checked />
-            <span>18 歳未満の人の雑談も受ける（公開の部屋だけ）</span>
+            <span>18歳未満の依頼も受ける（全メニュー・全時間帯。通話は公開）</span>
           </label>
         </div>
         <button type="submit" class="ok">登録する</button>
@@ -632,7 +632,7 @@ export function CastPage(props: {
           <Select name="reservationChannelId" label="📅 予約・納品のお部屋をまとめるチャンネル（男女共通）" value={c.reservationChannelId} options={[...props.channels, ...(c.reservationChannelId && !props.channels.some(ch => ch.id === c.reservationChannelId) ? [{ id: c.reservationChannelId, name: '設定済みの予約窓口' }] : [])]} empty="自動で作成（📅 キャスト予約）" />
           <p class="note">一覧は紹介と予約ボタン、やり取りは専用窓口の非公開のお部屋へ分けます。既存の予約は元の場所を使います。指定する場合は参加者がチャンネルを見られ、運営以外がスレッドを管理できない権限にしてください。</p>
           <Select name="privateCategoryId" label="2 人だけの部屋を作るカテゴリ（遊郭など）" value={c.privateCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
-          <Select name="publicCategoryId" label="公開の部屋（18 歳未満の方の雑談）を作るカテゴリ" value={c.publicCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
+          <Select name="publicCategoryId" label="公開の部屋（18 歳未満の方の通話）を作るカテゴリ" value={c.publicCategoryId} options={props.categories} empty="メニューと同じカテゴリ" />
           <Select name="roleId" label="キャストのロール" value={c.roleId} options={props.roles} empty="なし（付けない）" />
           <p class="note">メニュー・オプション・相談の値段に上限はありません（1 枚から）。</p>
           <label class="field">

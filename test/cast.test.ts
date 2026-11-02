@@ -23,7 +23,7 @@ import {
   finishSession,
   getSession,
   setSessionPlace,
-  minorWindowOk,
+  acceptsCastCustomer,
   nightEnd,
   parsePrice,
   parseTags,
@@ -69,6 +69,15 @@ afterEach(async () => {
   await close();
 });
 
+async function expectMinorAllowed(input:Parameters<typeof requestSession>[2],at:Date){
+ const before=(await walletOf(db,input.customerId)).balance;
+ const r=await requestSession(db,c,input,at);expect(r.status).toBe('ok');if(r.status!=='ok')throw Error(r.status);
+ if(!r.session.plan.startsWith('dlv:'))expect(r.session.isPublic).toBe(true);
+ expect(r.balance).toBe(before-r.session.price);
+ expect(await cancelSession(db,r.session.id,'system','canceled',at)).toBeDefined();
+ expect((await walletOf(db,input.customerId)).balance).toBe(before);
+}
+
 describe('🎀 キャスト', () => {
   it('申し込み: 18 歳以上だけ・値段は範囲の中。読みやすい数とタグ', async () => {
     expect((await applyCast(db, c, { id: MINOR, adult: false }, profile, T20)).status).toBe('not_adult');
@@ -80,11 +89,11 @@ describe('🎀 キャスト', () => {
     expect(parseTags('寝落ち、雑談・ゲーム 雑談')).toEqual(['寝落ち', '雑談', 'ゲーム']);
   });
 
-  it('時刻: 寝落ちは朝 7 時まで。未成年の人の雑談は 6〜22 時に収まるときだけ', () => {
+  it('寝落ちは朝7時まで。18歳未満の受付はキャスト設定で判定する', () => {
     expect(nightEnd(T20).toISOString()).toBe('2026-09-30T22:00:00.000Z'.replace('09-30', '10-01'));
-    expect(minorWindowOk(T20, 60)).toBe(true);
-    expect(minorWindowOk(new Date('2026-10-01T12:30:00Z'), 60)).toBe(false);
-    expect(minorWindowOk(new Date('2026-09-30T20:00:00Z'), 30)).toBe(false);
+    expect(acceptsCastCustomer({minorOk:true},false)).toBe(true);
+    expect(acceptsCastCustomer({minorOk:false},false)).toBe(false);
+    expect(acceptsCastCustomer({minorOk:false},true)).toBe(true);
   });
 
   it('今すぐ: 預かる → 受ける → 時間で終わって手数料を引いて渡す → 評価', async () => {
@@ -112,18 +121,18 @@ describe('🎀 キャスト', () => {
     expect((await castTick(db, c, new Date(T20.getTime() + 95 * MIN))).cleanup).toHaveLength(0);
   });
 
-  it('未成年の人: 公開の雑談だけ（寝落ち・予約・22 時をこえる・60 分をこえる延長はできない）', async () => {
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: 'night' }, T20)).status).toBe('minor_plan');
-    // 予約だけになったので、18 歳未満の人も予約できる（公開の部屋・22 時までに終わる 60 分まで）。ここでは 21:00 からの 60 分なので 22 時をこえない
+  it('18歳未満も受付ONなら寝落ち・夜の予約・60分を超える延長ができる', async () => {
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: 'night' }, T20);
+    // 18歳未満の通話は公開。予約と通常指名の両方を確認する
     const minorRsv = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60', startAt: new Date(T20.getTime() + 60 * MIN) }, T20);
     expect(minorRsv.status === 'ok' ? minorRsv.session.isPublic : minorRsv.status).toBe(true);
     if (minorRsv.status === 'ok') await cancelSession(db, minorRsv.session.id, MINOR, 'canceled', T20);
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60' }, new Date('2026-10-01T12:30:00Z'))).status).toBe('minor_hours');
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: '60' }, new Date('2026-10-01T12:30:00Z'));
     const r = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: '60' }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
     expect(r.session.isPublic).toBe(true);
     await acceptSession(db, r.session.id, CAST, T20);
-    expect((await extendSession(db, r.session.id, MINOR, T20)).status).toBe('minor_limit');
+    expect(await extendSession(db, r.session.id, MINOR, T20)).toMatchObject({status:'ok',session:{minutes:90,isPublic:true}});
     // 受けないキャストには指名できない
     await finishSession(db, c, r.session.id, MINOR, T20);
     await setCastStatus(db, CAST, 'active', 'staff');
@@ -269,7 +278,7 @@ describe('🎀 キャスト', () => {
     expect(await addMenuItem(db, c, CAST, { name: 'ボイスガチャ', note: '', minutes: 0, price: 300, night: false, delivery: true, gacha: ['おはよう', 'おやすみ'] })).toBe('ok');
     const [voice, gacha] = menuOf((await getCast(db, CAST))!).slice(-2);
     expect(voice).toMatchObject({ delivery: true, minutes: 0 });
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: voice!.id }, T20)).status).toBe('minor_plan');
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: voice!.id }, T20);
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: voice!.id }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
     expect(r.session).toMatchObject({ status: 'ordered', plan: `dlv:${voice!.id}`, acceptBy: new Date(T20.getTime() + 7 * 24 * 60 * MIN) });
@@ -858,8 +867,8 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     const game = cast.menu.find((m) => m.name === 'ゲーム')!;
     await addCoins(db, ADULT, 10000, 'adjust');
     await addCoins(db, MINOR, 10000, 'adjust');
-    // 未成年の人は 60 分をこえるメニューを選べない
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: game.id }, T20)).status).toBe('minor_plan');
+    // 受付ONなら18歳未満も60分をこえるメニューを選べる
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: game.id }, T20);
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: 'nope' }, T20)).status).toBe('no_plan');
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: game.id }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
@@ -873,7 +882,7 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect((await getSession(db, r.session.id))?.status).toBe('active');
   });
 
-  it('💬 内容により相談: キャストが出した時間と値段でだけ指名できる（未成年は不可）', async () => {
+  it('💬 内容により相談: キャストが出した時間と値段でだけ指名できる（受付ONなら18歳未満も可）', async () => {
     await upsertMember(db, { id: CAST, username: 'c', displayName: 'C', avatarUrl: null, roleIds: [], isBot: false, joinedAt: null });
     await applyCast(db, c, { id: CAST, adult: true }, profile);
     await setCastStatus(db, CAST, 'active', 'staff');
@@ -885,7 +894,7 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id }, T20)).status).toBe('no_plan');
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', quote: { minutes: 30, price: 100 } }, T20)).status).toBe('no_plan');
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 30, price: 0 } }, T20)).status).toBe('no_plan');
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 30, price: 500 } }, T20)).status).toBe('minor_plan');
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 30, price: 500 } }, T20);
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 45, price: 700 } }, T20);
     expect(r).toMatchObject({ status: 'ok', session: { menuName: 'おねがい（相談）', minutes: 45, price: 700 } });
     expect(r.status === 'ok' && r.balance).toBe(19300);
@@ -948,7 +957,7 @@ describe('🎀 キャストごとのメニュー（内容・時間・値段）',
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 30, price: 800, delivery: true } }, T20)).status).toBe('no_plan');
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 0, price: 0, delivery: true } }, T20)).status).toBe('no_plan');
     expect((await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: '30', quote: { minutes: 0, price: 800, delivery: true } }, T20)).status).toBe('no_plan');
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 0, price: 800, delivery: true } }, T20)).status).toBe('minor_plan');
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: item.id, quote: { minutes: 0, price: 800, delivery: true } }, T20);
     const [a, b] = await Promise.all([0, 1].map(() => requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: item.id, quote: { minutes: 0, price: 800, delivery: true }, threadId: THREAD }, T20)));
     const ok = [a, b].find((x) => x!.status === 'ok')!;
     expect([a, b].map((x) => x!.status).sort()).toEqual(['already_ordered', 'ok']);
@@ -1071,7 +1080,7 @@ describe('⏳ 時間フリーのメニュー（時間 0）', () => {
     expect(menuLabel(free)).toBe('まったり（時間フリー）');
     await addCoins(db, ADULT, 10000, 'adjust');
     await addCoins(db, MINOR, 10000, 'adjust');
-    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: free.id }, T20)).status).toBe('minor_plan');
+    await expectMinorAllowed({ castId: CAST, customerId: MINOR, customerAdult: false, plan: free.id }, T20);
     const r = await requestSession(db, c, { castId: CAST, customerId: ADULT, customerAdult: true, plan: free.id }, T20);
     if (r.status !== 'ok') throw new Error(r.status);
     expect(r.session).toMatchObject({ plan: `free:${free.id}`, minutes: FREE_MINUTES, price: 1000 });

@@ -30,6 +30,12 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-03-cast-minor-access', date: '2026-11-03', kind: 'improve', where: ['Discord', '社務所Web'],
+    title: 'キャストの受付ONなら18歳未満も全メニュー・全時間帯を利用できるように',
+    items: ['18歳未満の受付がONのキャストでは、寝落ち・時間フリー・長時間・相談・納品も利用できます。60分上限と6〜22時の年齢別制限を外しました。', '受付OFFのキャストへは新規依頼できません。古いメニュー画面や支払い確認後も、確定時に受付を確認します。', '通話は公開の部屋、予約や相談のやり取りは非公開のままです。料金・出勤予定・予約枠の条件は共通です。'],
+    announcement: { priority: 'required', audience: 'キャストと利用者・運営', steps: ['キャストは /キャスト の受付、または専用Webの紹介文で「18歳未満の依頼を受ける」の設定を確認する。', '利用者はキャスト一覧を開き直してメニューから予約・相談・注文する。'], postText: 'キャストの「18歳未満の受付」がONなら、全メニュー・全時間帯を利用できるようになります。寝落ち・時間フリー・長時間・相談・納品も対象です。通話は公開の部屋、予約や相談のやり取りは非公開です。キャストの出勤予定・料金・予約枠はこれまでどおりです。キャストの皆さんは受付設定をご確認ください。', imagePrompt: '架空のキャスト受付画面と「受付ONなら全メニュー・全時間帯」の文字。実在メンバーの名前・写真・予約内容を使わない。', notes: '既存の受付ON/OFFを引き継ぐ。BOT/Web更新後に適用。キャスト登録は引き続き18歳以上。' },
+  },
   { id: '2026-11-03-gdrive-backup', date: '2026-11-03', kind: 'new', where: ['運用'], title: '🗄 毎日のバックアップを Google ドライブにも置けるように', items: ['毎日4時のバックアップを暗号にして、Google ドライブにも送れるようにしました（30日分。古いものは自動で消す）。', 'VPS に rclone を入れて Google ドライブをつなぐと動きます。つないでいなければ何もしません。'], announcement: { priority: 'none', audience: '宮司（VPS）', steps: ['deploy-vps.md の「Google ドライブにも置く」の手順で rclone をつなぐ。', 'FORCE=1 ./scripts/gdrive-backup.sh で、ためしに送る。'], postText: '', imagePrompt: '', notes: 'あいことばは BACKUP_PASSPHRASE（Discord に置くときと同じ）。' } },
   { id: '2026-11-03-update-backup-keep', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🗄 更新の前のバックアップを、新しい5つだけ残すように', items: ['自動更新のたびにとる DB のバックアップを7日分残していたため、1日に何十回もの更新で70GBまでたまり、VPS のディスクがいっぱいになっていました。', '更新の前のバックアップは backups/sakuranomiya-update-….sql.gz にして、新しい5つだけ残します。毎日4時のバックアップは今までどおり7日分です。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: ['今たまっている古い更新前のバックアップは、手で消す（deploy-vps.md の手順）。'], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-03-update-builder-prune', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🧹 更新のたびに Docker の古い組み立てキャッシュを消すように', items: ['自動更新のたびに Docker の組み立てキャッシュがたまり、VPS のディスクがいっぱいになって更新が止まっていました。', '更新のあとに、1日より古いキャッシュを消すようにしました。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: ['ディスクがいっぱいのときは docker builder prune -af と docker image prune -af で空きを作ってから ./scripts/auto-update.sh を打つ。'], postText: '', imagePrompt: '', notes: '' } },
