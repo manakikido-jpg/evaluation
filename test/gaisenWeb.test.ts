@@ -47,6 +47,24 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
   const f=await readTrial(db,now,'trial-2');
   return app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:'1',action,...extra})});
  }
+ it('救済は最終STOPで一度だけ保存し、別台再開でも内部条件を公開しない',async()=>{
+  await postV2('seat');await postV2('scenario',{scenario:'sgg'});await postV2('lever');
+  let f=await readTrial(db,now,'trial-2');const s=f.machines[0]!.state;
+  s.sggLeft=1;s.sggRescueEligible=true;s.pending!.role='none';s.pending!.model={flag:'none',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{index:'2',revision}),postV2('stop',{index:'2',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  f=await readTrial(db,now,'trial-2');const result=f.machines[0]!.state;
+  expect(result).toMatchObject({sggRescueEligible:false,sets:1,stocks:0});expect(result.sggLoops).toHaveLength(1);
+  expect([50,75]).toContain(result.sggLoops![0]);
+  await postV2('leave');await postV2('seat',{machine:'2'});
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state.sggLoops).toEqual(result.sggLoops);
+  const html=await(await app.request(v2,{headers:headers()})).text();
+  expect(html).not.toContain('sggLoops');expect(html).not.toContain('sggRescueEligible');
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
  it('メデューサとEXの確認場面・無限の保存と同時STOPをWebで扱い、実財布を変えない',async()=>{
   await postV2('seat');await postV2('scenario',{scenario:'medusa'});
   let html=await(await app.request(v2,{headers:headers()})).text();expect(html).toContain('時間停止10G');expect(html).toContain('value="sgg-ex"');
