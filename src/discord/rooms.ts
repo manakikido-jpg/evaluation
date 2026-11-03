@@ -51,15 +51,20 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const EDIT_TIMEOUT_MS = 5000;
 
 /** シクレの目印は名前を変えても残す。運営が公開に戻したら外す */
-export function roomChannelName(name: string, kind: RoomKind): string {
+/** 宿の目印（🏨 24時間の宿・⏱ 1時間ごとの宿）。名前を変えても頭に残す */
+export function stayMarkOf(row: { keepUntil?: Date | null; renewHourly?: boolean }): string {
+  return row.keepUntil ? (row.renewHourly ? '⏱ ' : '🏨 ') : '';
+}
+
+export function roomChannelName(name: string, kind: RoomKind, stayMark = ''): string {
   const prefix = '🔒';
-  let base = name;
-  // 前の目印（🤫 シクレ｜）も外して付け直す
+  let base = name.trimStart();
+  // 前の目印（🔒・🤫 シクレ｜・🏨・⏱）も外して付け直す
   for (let again = true; again;) {
     again = false;
-    for (const p of [prefix, '🤫 シクレ｜']) while (base.startsWith(p)) { base = base.slice(p.length); again = true; }
+    for (const p of [prefix, '🤫 シクレ｜', '🏨', '⏱']) while (base.startsWith(p)) { base = base.slice(p.length).trimStart(); again = true; }
   }
-  const head = kind === 'secret' ? prefix : '';
+  const head = (kind === 'secret' ? prefix : '') + stayMark;
   return head + base.slice(0, 100 - head.length);
 }
 
@@ -321,7 +326,7 @@ export class RoomApp {
       list.map((o) => ({ id: o.id, type: o.type, allow: o.allow, deny: o.deny })),
       `部屋の種類: ${ROOM_KINDS[kind].label}`,
     );
-    const name = roomChannelName(ch.name, kind);
+    const name = roomChannelName(ch.name, kind, stayMarkOf(row));
     if (name !== ch.name) {
       // 名前の制限待ちで、権限の変更や返事を止めない
       await withTimeout(ch.setName(name, '部屋の種類の目印')).catch((err) => logger.warn({ err, channelId: ch.id }, '部屋の目印を変更できませんでした'));
@@ -485,7 +490,7 @@ export class RoomApp {
   private async rename(i: ModalSubmitInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, name: string, v: PanelView = {}): Promise<void> {
     if (!name) return void (await i.reply({ content: '名前を入れてください。', ...EPHEMERAL }));
     await i.deferUpdate();
-    name = roomChannelName(name, row.kind);
+    name = roomChannelName(name, row.kind, stayMarkOf(row));
     const r = await withTimeout(ch.setName(name.slice(0, 100), v.staff ? '部屋の名前（運営）' : '部屋の名前（作った人）'));
     const note = r === 'timeout' ? 'チャンネル名を変えています（Discord が混んでいるので、反映まで少しかかります。名前は 10 分に 2 回まで変えられます）' : `チャンネル名を「${name}」にしました`;
     await i.editReply(roomPanel(this.cfg(), row, { name: r === 'timeout' ? ch.name : name.slice(0, 100), userLimit: ch.userLimit }, note, v, await this.knockOf(row.channelId, v)));

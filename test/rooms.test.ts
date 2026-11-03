@@ -322,11 +322,27 @@ describe('部屋名のシクレ表示', () => {
     expect(JSON.stringify(roomPanel(cfg, { ownerId: OWNER, hubId: YOIMIYA, kind: 'public', kindLocked: false, invited: [] }, { name: 'x', userLimit: 0 }))).not.toContain('rkn:mode');
     expect(roomChannelName('aisの部屋', 'secret')).toBe('🔒aisの部屋');
     expect(roomChannelName('🔒🔒aisの部屋', 'secret')).toBe('🔒aisの部屋');
+    // 🏨・⏱ の宿の目印は、名前を変えても頭に残す（ほかの名前で消しても付け直す）
+    expect(roomChannelName('新しい名前', 'public', '🏨 ')).toBe('🏨 新しい名前');
+    expect(roomChannelName('🏨 🏨 新しい名前', 'secret', '🏨 ')).toBe('🔒🏨 新しい名前');
+    expect(roomChannelName('⏱ 部屋', 'invite', '⏱ ')).toBe('⏱ 部屋');
+    expect(roomChannelName('🏨 部屋', 'public')).toBe('部屋');
     expect(roomChannelName('🤫 シクレ｜aisの部屋', 'secret')).toBe('🔒aisの部屋');
     expect(roomChannelName('新しい名前', 'secret')).toBe('🔒新しい名前');
     expect(roomChannelName('🔒aisの部屋', 'public')).toBe('aisの部屋');
     expect(roomChannelName('🤫 シクレ｜aisの部屋', 'public')).toBe('aisの部屋');
     expect(roomChannelName('招待の部屋', 'invite')).toBe('招待の部屋');
     expect(roomChannelName('あ'.repeat(100), 'secret')).toHaveLength(100);
+  });
+});
+
+describe('🏨 宿が自動で並ぶ', () => {
+  it('24時間の宿 → 1時間ごとの宿 → ふつうの部屋。入口など、ほかのチャンネルの場所は動かさない', async () => {
+    const { stayOrder } = await import('../src/discord/tempVoice.js');
+    const day = { keepUntil: new Date(), renewHourly: false }, hour = { keepUntil: new Date(), renewHourly: true }, plain = { keepUntil: null, renewHourly: false };
+    const rows = new Map<string, { keepUntil: Date | null; renewHourly: boolean }>([['normal', plain], ['hourly', hour], ['day', day]]);
+    const channels = [{ id: 'hub', position: 0 }, { id: 'normal', position: 1 }, { id: 'hourly', position: 2 }, { id: 'lobby', position: 3 }, { id: 'day', position: 4 }];
+    expect(stayOrder(channels, rows)).toEqual([{ id: 'day', position: 1 }, { id: 'hourly', position: 2 }, { id: 'normal', position: 4 }]);
+    expect(stayOrder([{ id: 'day', position: 1 }, { id: 'hourly', position: 2 }, { id: 'normal', position: 4 }], rows)).toEqual([]);
   });
 });

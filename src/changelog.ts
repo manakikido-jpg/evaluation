@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-03-inn-name-mark', date: '2026-11-03', kind: 'fix', where: ['Discord'], title: '🏨 宿の名前の目印が消えないように・宿が自動で並ぶように', items: ['宿（24時間の宿・1時間ごとの宿）の名前を変えると、頭の 🏨・⏱ の目印が消えていたのを直しました。名前を変えても付けたままになります。', '宿は同じカテゴリの中で、🏨 24時間の宿 → ⏱ 1時間ごとの宿 → ふつうの部屋 の順に自動で並ぶようにしました。'], announcement: { priority: 'none', audience: '宿を使うメンバー', steps: [], postText: '', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-03-inn-day-extension', date: '2026-11-03', kind: 'new', where: ['Discord'],
     title: '🏨 24時間の宿を1日ずつ延長',

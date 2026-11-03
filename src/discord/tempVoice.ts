@@ -4,6 +4,7 @@ import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import { claimSecretRoom, cleanupRooms, createSecretRoom, createStayRoom, onVoiceJoin, onVoiceLeave, removeRoom, SECRET_PENDING_MS, type TempVoiceCtx, type VoiceOps } from '../services/tempVoice.js';
 import { planOf, roomOverwrites } from '../services/rooms.js';
+import { tempVoice } from '../db/schema.js';
 import { adminLevelOf } from '../config.js';
 import type { MessageBody } from '../lib/discordRest.js';
 
@@ -63,6 +64,20 @@ export function discordVoiceOps(guild: Guild): VoiceOps {
   };
 }
 
+/** 宿の並ぶ順: 🏨 24時間の宿 → ⏱ 1時間ごとの宿 → ふつうの部屋 */
+const stayRank = (r: { keepUntil: Date | null; renewHourly: boolean } | undefined) => (r?.keepUntil ? (r.renewHourly ? 1 : 0) : 2);
+
+/**
+ * 同じカテゴリの中で、自分の通話部屋が今いる場所（入口などほかのチャンネルの場所は動かさない）に、
+ * 宿の順で並べ直した結果（{ id, position }）。並びが変わらなければ空
+ */
+export function stayOrder(channels: { id: string; position: number }[], rows: Map<string, { keepUntil: Date | null; renewHourly: boolean }>): { id: string; position: number }[] {
+  const rooms = channels.filter((c) => rows.has(c.id)).sort((a, b) => a.position - b.position);
+  const sorted = [...rooms].sort((a, b) => stayRank(rows.get(a.id)) - stayRank(rows.get(b.id)) || a.position - b.position);
+  if (sorted.every((c, n) => c.id === rooms[n]!.id)) return [];
+  return sorted.map((c, n) => ({ id: c.id, position: rooms[n]!.position }));
+}
+
 export class TempVoiceApp {
   private ctx?: TempVoiceCtx;
 
@@ -86,6 +101,7 @@ export class TempVoiceApp {
     this.ctx.cfg = this.cfg();
     const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId });
     if (r.status === 'created') await this.onCreated?.(r.channelId, userId, { stay: true }).catch((err) => logger.warn({ err }, 'stay room created hook failed'));
+    if (r.status === 'created') await this.sortStays().catch((err) => logger.warn({ err }, 'stay sort failed'));
     return r;
   }
 
@@ -95,7 +111,26 @@ export class TempVoiceApp {
   }
 
   /** 起動したとき。権限を確かめて、止まっていた間に空になった部屋を消す */
+  private guild?: Guild;
+  private sorting = false;
+  /** 🏨 宿を、カテゴリの中で 24時間の宿 → 1時間ごとの宿 → ふつうの部屋 の順に並べる（変わったときだけ動かす） */
+  async sortStays(): Promise<void> {
+    const guild = this.guild;
+    if (!guild || this.sorting) return;
+    this.sorting = true;
+    try {
+      const rows = new Map((await this.db.select({ channelId: tempVoice.channelId, keepUntil: tempVoice.keepUntil, renewHourly: tempVoice.renewHourly }).from(tempVoice)).map((r) => [r.channelId, r]));
+      const parents = new Set([...rows.keys()].map((id) => guild.channels.cache.get(id)?.parentId).filter((id): id is string => Boolean(id)));
+      for (const parentId of parents) {
+        const voices = guild.channels.cache.filter((c) => c.parentId === parentId && c.type === ChannelType.GuildVoice).map((c) => ({ id: c.id, position: (c as { position: number }).position }));
+        const moves = stayOrder(voices, rows);
+        if (moves.length) await guild.channels.setPositions(moves.map((m) => ({ channel: m.id, position: m.position })));
+      }
+    } finally { this.sorting = false; }
+  }
+
   async attach(guild: Guild): Promise<void> {
+    this.guild = guild;
     const ops = discordVoiceOps(guild);
     this.ctx = { db: this.db, cfg: this.cfg(), ops };
     if (this.cfg().tempVoice.hubs.length) {
@@ -112,6 +147,7 @@ export class TempVoiceApp {
     this.ctx.cfg = this.cfg();
     const n = await cleanupRooms(this.ctx).catch((err) => (logger.warn({ err }, 'temp voice cleanup failed'), 0));
     if (n) logger.info({ removed: n }, 'empty temp voice rooms removed');
+    await this.sortStays().catch((err) => logger.warn({ err }, 'stay sort failed'));
   }
 
   async onVoiceStateUpdate(before: VoiceState, after: VoiceState): Promise<void> {
