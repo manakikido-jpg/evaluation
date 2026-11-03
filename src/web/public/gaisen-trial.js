@@ -11,7 +11,7 @@
   cancelAnimationFrame(frame);frame=0;
   const r=root();if(!r||document.hidden)return;
   const elapsed=performance.now()-startAt;
-  const speed=actualMotion()==='normal'&&elapsed<480?.15+.85*Math.min(1,elapsed/480):1;
+  const speed=actualMotion()==='normal'&&elapsed<360?.12+.88*Math.min(1,elapsed/360):1;
   r.querySelectorAll('.gt-reel.is-spinning .gt-reel-strip').forEach(el=>{const a=el.getAnimations()[0];if(a)a.playbackRate=speed;});
   if(speed<1)frame=requestAnimationFrame(ramp);
  }
@@ -35,13 +35,13 @@
   const w=activeWin;if(!w)return;activeWin=null;
   w.timers.forEach(clearTimeout);bank?.stopGroup('win');
   if(w.dialog.open)w.dialog.close();
-  if(w.focus?.isConnected)w.focus.focus({preventScroll:true});
+  if(w.sample&&w.focus?.isConnected)w.focus.focus({preventScroll:true});
  }
  function readWin(){const e=root()?.querySelector('[data-gt-win]');return e?{kind:e.dataset.winKind,added:Number(e.dataset.winAdded),set:Number(e.dataset.winSet),ggGames:Number(e.dataset.winGg),sggGames:Number(e.dataset.winSgg)}:null;}
  function celebrate(event,sample=false){
   endWin();if(!event||document.hidden||(!sample&&actualMotion()==='instant'))return;
   const d=root()?.querySelector('[data-gt-celebration]');if(!d||!['gg','sgg','god','stock'].includes(event.kind))return;
-  const kind=event.kind,short=actualMotion()!=='normal',scene=d.querySelector('.gt-award-scene');
+  const kind=event.kind,short=actualMotion()!=='normal',scene=(!sample&&root()?.querySelector('[data-gt-lcd-award]'))||d.querySelector('.gt-award-scene');
   const title={gg:'GOD GAME',sgg:'SPECIAL GOD GAME',god:'GOD',stock:'GG BOOST'}[kind];
   const prefix={gg:event.added?'神殿の扉が開く':'次なる神殿へ',sgg:'紅紫の覚醒',god:'神 降 臨',stock:'上乗せ確定'}[kind];
   const set=(name,value)=>d.querySelector('[data-gt-win-'+name+']').textContent=value;
@@ -58,7 +58,7 @@
   const chime=()=>{void bank?.play(kind,{group:'win',level:short?.55:.8});};
   scene.dataset.stage=short?'award':kind==='stock'?'reveal':'charge';
   if(kind==='god')bank?.stopAll();
-  d.showModal();
+  if(sample)d.showModal();else w.focus?.focus({preventScroll:true});
   if(short){chime();if(!sample)later(endWin,2200);return;}
   const reveal=kind==='god'?1050:kind==='stock'?0:450,award=kind==='god'?2050:kind==='stock'?350:1050;
   later(()=>{scene.dataset.stage='reveal';chime();},reveal);
@@ -75,15 +75,27 @@
  document.addEventListener('cancel',e=>{if(e.target.matches?.('[data-gt-celebration]')){e.preventDefault();endWin();}},true);
  document.addEventListener('close',e=>{if(e.target===activeWin?.dialog)endWin();},true);
  document.addEventListener('click',e=>{if(!e.target.closest?.('[data-gt-audio]'))return;audio=!audio;if(!audio)mutePending();else prepareAudio();try{localStorage.setItem('gaisen-trial-audio',audio?'on':'off');}catch{}prefs();});
- document.addEventListener('click',e=>{const b=e.target.closest?.('[data-gt-focus]');if(!b)return;focusMode=!focusMode;try{localStorage.setItem('gaisen-trial-focus',focusMode?'on':'off');}catch{}prefs();root()?.querySelector('.gt-console')?.scrollIntoView({block:'nearest',behavior:'instant'});});
+ document.addEventListener('click',e=>{const b=e.target.closest?.('[data-gt-focus]');if(!b)return;focusMode=!focusMode;try{localStorage.setItem('gaisen-trial-focus',focusMode?'on':'off');}catch{}prefs();root()?.querySelector('.gt-machine')?.scrollIntoView({block:'start',behavior:'instant'});});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-volume]'))return;volume=Number(e.target.value);bank?.setVolume(volume);prepareAudio();try{localStorage.setItem('gaisen-trial-volume',String(volume));}catch{}});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-motion]'))return;motion=e.target.value;try{localStorage.setItem('gaisen-trial-motion',motion);}catch{}prefs();});
+ // キーを押し続けても連続送信しない。入力欄・別の操作・ダイアログは奪わない。
+ document.addEventListener('keydown',e=>{
+  if(e.isComposing||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||document.hidden)return;
+  const r=root(),target=e.target;
+  if(!r||!r.querySelector('.gt-machine')||activeWin?.sample||document.querySelector('dialog[open]'))return;
+  if(target?.closest?.('input,select,textarea,[contenteditable]:not([contenteditable="false"]),a,summary,[role="textbox"]'))return;
+  if(target?.closest?.('button')&&!target.closest('[data-gt-key]'))return;
+  const key=e.code==='Space'?'lever':({'1':'stop-0','2':'stop-1','3':'stop-2'})[e.key];
+  if(!key)return;
+  const button=r.querySelector(`[data-gt-key="${key}"]`);if(!button)return;
+  e.preventDefault();if(e.repeat||busy||button.disabled)return;button.click();
+ });
  document.addEventListener('submit',async e=>{
   const form=e.target;if(!(form instanceof HTMLFormElement)||!form.closest('[data-gaisen-trial]'))return;
   e.preventDefault();if(busy)return;endWin();busy=true;root().setAttribute('aria-busy','true');
   const action=form.elements.namedItem('action')?.value,index=Number(form.elements.namedItem('index')?.value);
   const hadWin=!!root().querySelector('[data-gt-win]'),before=root().querySelector('.gt-machine');
-  const focusedKey=document.activeElement?.dataset?.gtKey;prepareAudio();
+  const focusedKey=document.activeElement?.dataset?.gtKey,pressed=form.querySelector('[data-gt-key]');if(pressed)pressed.dataset.pressed='true';prepareAudio();
   try{
    const r=await fetch(form.getAttribute('action'),{method:'POST',body:new FormData(form),credentials:'same-origin'});
    const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
@@ -99,12 +111,15 @@
     if(focusedKey&&!win){const target=root().querySelector(`[data-gt-key="${focusedKey}"]:not(:disabled)`)||root().querySelector('.gt-stop.is-next:not(:disabled)')||root().querySelector('.gt-lever:not(:disabled)');target?.focus({preventScroll:true});}
     if(!win&&action==='stop'&&Number.isInteger(index)&&actualMotion()!=='instant'&&!document.hidden){
      const el=root().querySelector(`[data-gt-reel="${index}"].is-stopped .gt-reel-strip`);
-     const distance=actualMotion()==='low'?2:7;
-     el?.animate([{transform:`translateY(-${distance}px)`},{transform:`translateY(${distance/2}px)`,offset:.45},{transform:'translateY(0)'}],{duration:actualMotion()==='low'?120:210,easing:'ease-out'});
+     // 前後の絵柄を余白に置き、窓を空けずに減速して定位置へ収める。
+     const height=el?.querySelector('.gt-symbol')?.getBoundingClientRect().height;
+     if(height){const travel=actualMotion()==='low'?2:height*.72;
+      el.animate([{transform:`translateY(${-height-travel}px)`,filter:actualMotion()==='low'?'none':'blur(.6px)'},{transform:`translateY(${-height+2}px)`,filter:'none',offset:.82},{transform:`translateY(${-height}px)`,filter:'none'}],{duration:actualMotion()==='low'?100:180,easing:'cubic-bezier(.12,.65,.22,1)'});
+     }
     }
    }
   }catch(e){const error=root()?.querySelector('[data-gt-error]');if(error){error.hidden=false;error.textContent=e.message||'通信できませんでした。最新の状態を確認してください。';}}
-  finally{busy=false;root()?.removeAttribute('aria-busy');}
+  finally{if(pressed)delete pressed.dataset.pressed;busy=false;root()?.removeAttribute('aria-busy');}
  });
  document.addEventListener('visibilitychange',()=>{if(document.hidden){endWin();mutePending();root()?.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));}prefs();});
  window.addEventListener('pagehide',()=>{endWin();cancelAnimationFrame(frame);mutePending();});
