@@ -44,6 +44,7 @@ import {
 import { OWNER_ALLOW } from './tempVoice.js';
 import { KeyedLock } from '../lib/lock.js';
 import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
+import { extendStayRoom, stayDayPrice, STAY_MS } from '../services/tempVoice.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 名前の変更は Discord が 10 分に 2 回までにしているので、待ちすぎないように */
@@ -62,7 +63,7 @@ export function roomChannelName(name: string, kind: RoomKind): string {
   return head + base.slice(0, 100 - head.length);
 }
 
-type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'> & { payerId?: string | null; keepUntil?: Date | null };
+type PanelRow = Pick<RoomRow, 'ownerId' | 'hubId' | 'kind' | 'kindLocked' | 'invited'> & { payerId?: string | null; keepUntil?: Date | null; renewHourly?: boolean };
 type Btn = { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; emoji?: { name: string }; disabled?: boolean };
 const button = (custom_id: string, label: string, emoji: string, style: Btn['style'] = 2, disabled = false): Btn => ({
   type: 2,
@@ -94,7 +95,7 @@ export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hub
       '',
       row.renewHourly
         ? `⏱ **1時間ごとの宿**です（1 時間ごとに <@${row.ownerId}> さんが ${cfg.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}を自動で払います（🏮 奉納している人は無料）。払う時刻にだれもいないか、${cfg.economy.currencyName}が足りなければ、宿は消えます）。`
-        : `🏨 **24時間残る宿**です（${row.keepUntil.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで、だれもいなくても残ります）。`,
+        : `🏨 **24時間残る宿**です（${row.keepUntil.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで、だれもいなくても残ります）。部屋主は「部屋の設定」→「1日延長」から延長できます。`,
       ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label}（${ROOM_KINDS[key].description}）`),
       '-# 部屋の種類（オープン・招待のみ・シクレなど）は、何度でも変えられます。追加の部屋代はかかりません',
     );
@@ -143,6 +144,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
     ...(v.staff ? [`🛡 運営として開いています（<@${row.ownerId}> さんの部屋）`, ''] : []),
     ...(note ? [`✅ ${note}`, ''] : []),
     `・チャンネル名: **${ch.name}**`,
+    ...(row.keepUntil && !row.renewHourly ? [`・宿が残る期限: <t:${Math.floor(row.keepUntil.getTime() / 1000)}:F>`, '・「1日延長」から、部屋主が24時間ずつ追加できます。'] : []),
     ...(plan !== 'none' ? [`・部屋の種類: ${k.emoji} ${k.label}${row.keepUntil && !row.kindLocked ? '（🏨 何度でも変えられます）' : row.kindLocked ? '（決定済み）' : '（まだ 1 回選べます）'}`] : []),
     ...(knock ? [`・受付（こんこん）: ${ROOM_MODES[knock.mode]}`] : []),
     `・人数制限: ${ch.userLimit ? `${ch.userLimit} 人まで` : 'なし'}`,
@@ -165,6 +167,7 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
         button(sid('room:xfer', v), '権限を譲渡', '👑'),
         button(sid('room:close', v), '閉じる', '✖️'),
       ),
+      ...(row.keepUntil && !row.renewHourly && !v.staff ? [buttons(button(sid('room:extend', v), '1日延長', '🏨', 1))] : []),
       // 🚪 受付の状態（3 つから 1 つ。部屋にいる人が切り替える。今の状態は上の文に出すので、ボタンは同じ色）
       ...(knock ? [buttons(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${knock.room}:${m}`, ROOM_MODES[m].replace(/^\S+ /, ''), ROOM_MODES[m].split(' ')[0]!)))] : []),
     ],
@@ -225,13 +228,15 @@ export class RoomApp {
     });
   }
 
-  /** 古い案内に廃止した種類が残っていれば、同じ投稿を書きかえる。 */
+  /** 廃止した種類や、延長前の期限が残っていれば、同じ投稿を書きかえる。 */
   private async refreshLegacyNotice(message: Message, row: RoomRow) {
-    if (!message.embeds?.some(e => e.description?.includes('ツーショット'))) return;
+    if (!message.embeds?.some(e => e.description?.includes('ツーショット')) && !(row.keepUntil && !row.renewHourly && message.embeds?.length)) return;
     const current = await roomOf(this.db, row.channelId);
     if (!current) return;
     const secret = this.cfg().tempVoice.hubs.find(h => h.channelId === current.hubId)?.kind === 'secret';
-    await message.edit(roomNotice(this.cfg(), current, { secret }));
+    const notice = roomNotice(this.cfg(), current, { secret });
+    if (message.embeds[0]?.description === notice.embeds[0]!.description) return;
+    await message.edit(notice);
   }
 
   /** 消えていた設定入口だけを復旧する。購入や設定の変更はしない。 */
@@ -357,6 +362,7 @@ export class RoomApp {
         if (id === 'room:invite') return void (await i.update(this.invitePicker(row, v)));
         if (id === 'room:kind') return void (await i.update(this.kindPicker(row, v)));
         if (id === 'room:xfer') return await this.transferPicker(i, row, ch, v);
+        if (id === 'room:extend' || id.startsWith('room:extendok:')) return await this.extendStay(i, row, ch, id, v);
         if (id.startsWith('room:xferok:')) {
           const [, , to, pay] = id.split(':');
           if (to && (pay === 'new' || pay === 'keep')) return await this.transfer(i, row, ch, to, pay === 'keep' && !staff, v);
@@ -415,6 +421,50 @@ export class RoomApp {
   private async closePanel(i: ButtonInteraction<'cached'>): Promise<void> {
     await i.deferUpdate();
     await i.deleteReply().catch(() => i.editReply({ content: '閉じました。', embeds: [], components: [] }));
+  }
+
+  private async extendStay(i: ButtonInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, id: string, v: PanelView): Promise<void> {
+    if (i.user.id !== row.ownerId) return void (await i.reply({ content: '1日延長は、部屋主本人だけが使えます。', ...EPHEMERAL }));
+    if (!row.keepUntil || row.renewHourly) return void (await i.reply({ content: '1日延長は、24時間の宿で使えます。', ...EPHEMERAL }));
+    await i.deferUpdate();
+    const cfg = this.cfg();
+    if (id === 'room:extend') {
+      const price = await stayDayPrice(this.db, cfg, i.user.id);
+      const next = new Date(Math.max(row.keepUntil.getTime(), Date.now()) + STAY_MS);
+      await i.editReply({
+        embeds: [{ title: '🏨 宿を1日延長しますか？', color: 0x6b5b95, description: [
+          `部屋主のあなたが払う料金: **${price.toLocaleString('ja-JP')} ${cfg.economy.currencyName}**`,
+          `今の期限: <t:${Math.floor(row.keepUntil.getTime() / 1000)}:F>`,
+          `延長後の期限: <t:${Math.floor(next.getTime() / 1000)}:F>`,
+          '期限が残っていれば、そこから24時間追加します。期限が過ぎていれば、確定した時刻から24時間です。',
+          '奉納（ブースト）している方は無料です。確定するまで料金はかかりません。',
+        ].join('\n') }],
+        components: [buttons(
+          button(sid(`room:extendok:${row.keepUntil.getTime()}:${price}`, v), 'この料金で1日延長する', '🏨', 3),
+          button(sid('room:back', v), 'やめる', '↩️'),
+        )], allowedMentions: { parse: [] },
+      });
+      return;
+    }
+    const match = /^room:extendok:(\d+):(\d+)$/.exec(id);
+    const r = match ? await extendStayRoom(this.db, cfg, {
+      channelId: row.channelId, userId: i.user.id, expectedUntil: Number(match[1]), expectedPrice: Number(match[2]),
+    }) : { status: 'changed' as const };
+    if (r.status !== 'ok') {
+      const content = r.status === 'insufficient' ? `${cfg.economy.currencyName}が足りません（${r.price.toLocaleString('ja-JP')} 枚必要）。`
+        : r.status === 'not_found' ? 'この宿はもうありません。'
+          : r.status === 'not_owner' ? '部屋主が変わったため、延長できません。'
+            : r.status === 'not_daily' ? '1日延長は、24時間の宿で使えます。'
+              : '期限か料金が変わりました。すでに延長されている場合もあります。設定を開き直して確認してください。';
+      await i.editReply({ content, embeds: [], components: [], allowedMentions: { parse: [] } });
+      return;
+    }
+    await this.done(i, { ...row, keepUntil: r.keepUntil }, ch, `1日延長しました（${r.charged.toLocaleString('ja-JP')} ${cfg.economy.currencyName}）。`, v);
+    // 支払い成功後の案内更新に失敗しても、失敗した支払いとして案内しない。次の復旧でも再確認する。
+    await this.noticeLock.run(ch.id, async () => {
+      const noticeId = this.noticeIds.get(ch.id);
+      if (noticeId) await this.refreshLegacyNotice(await ch.messages.fetch({ message: noticeId, force: true }), row);
+    }).catch(err => logger.warn({ err, channelId: ch.id }, 'extended stay notice refresh failed'));
   }
 
   private async textModal(i: ButtonInteraction<'cached'>, customId: string, label: string, value: string, max: number, required = true): Promise<void> {

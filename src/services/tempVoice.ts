@@ -101,6 +101,22 @@ export async function onVoiceLeave(ctx: TempVoiceCtx, channelId: string, now = n
   if (row.pendingUntil && row.pendingUntil > now) return false;
   // 🏨 買った宿は、期限まではだれもいなくても残す
   if (row.keepUntil && row.keepUntil > now) return false;
+  // 1日延長と空室の削除を同じ行のロックで順番にする。古い期限を見て消さない。
+  if (row.keepUntil && !row.renewHourly) {
+    return ctx.db.transaction(async (tx) => {
+      const [current] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, channelId)).for('update');
+      if (!current || !current.keepUntil || current.renewHourly || current.keepUntil > now) return false;
+      const n = ctx.ops.occupancy(channelId);
+      if (n === undefined) {
+        await tx.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
+        return false;
+      }
+      if (n > 0) return false;
+      await ctx.ops.remove(channelId);
+      await tx.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
+      return true;
+    });
+  }
   const n = ctx.ops.occupancy(channelId);
   if (n === undefined) {
     await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
@@ -181,6 +197,38 @@ export const STAY_MS = 24 * 60 * 60_000;
 /** ⏱ 1 時間ごとの宿の、1 回分 */
 export const HOURLY_STAY_MS = 60 * 60_000;
 export type StayMode = 'day' | 'hourly';
+
+/** 1日延長も、新しく24時間の宿を立てるときと同じ値段。 */
+export async function stayDayPrice(db: Db, cfg: GuildConfig, ownerId: string): Promise<number> {
+  return (await isBoosting(db, ownerId)) ? 0 : cfg.rooms.stayPrice;
+}
+
+export type ExtendStayResult =
+  | { status: 'ok'; keepUntil: Date; charged: number }
+  | { status: 'not_found' | 'not_owner' | 'not_daily' | 'changed' }
+  | { status: 'insufficient'; price: number };
+
+/** 確認した期限・料金が今も同じときだけ、部屋主が1日分を払う。削除処理とも排他する。 */
+export async function extendStayRoom(db: Db, cfg: GuildConfig, input: {
+  channelId: string; userId: string; expectedUntil: number; expectedPrice: number;
+}, at?: Date): Promise<ExtendStayResult> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, input.channelId)).for('update');
+    if (!row) return { status: 'not_found' };
+    if (row.ownerId !== input.userId) return { status: 'not_owner' };
+    if (!row.keepUntil || row.renewHourly) return { status: 'not_daily' };
+    const price = await stayDayPrice(tx, cfg, row.ownerId);
+    if (row.keepUntil.getTime() !== input.expectedUntil || price !== input.expectedPrice) return { status: 'changed' };
+    const now = at ?? new Date();
+    const keepUntil = new Date(Math.max(row.keepUntil.getTime(), now.getTime()) + STAY_MS);
+    if (price > 0 && !(await spendWithin(tx, row.ownerId, price, 'room', {
+      channelId: row.channelId, stay: true, extension: true, hours: 24,
+      previousUntil: row.keepUntil.toISOString(), keepUntil: keepUntil.toISOString(),
+    }))) return { status: 'insufficient', price };
+    await tx.update(tempVoice).set({ keepUntil }).where(eq(tempVoice.channelId, row.channelId));
+    return { status: 'ok', keepUntil, charged: price };
+  });
+}
 
 /** ⏱ 次の 1 時間を払って延ばす。同じ時刻の分は 1 回だけ（keep_until が変わっていれば払わない）。払えなければ false */
 async function renewHourlyStay(ctx: TempVoiceCtx, channelId: string, ownerId: string, due: Date, now: Date): Promise<boolean> {
