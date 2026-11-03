@@ -11,7 +11,7 @@
   cancelAnimationFrame(frame);frame=0;
   const r=root();if(!r||document.hidden)return;
   const elapsed=performance.now()-startAt;
-  const speed=actualMotion()==='normal'&&elapsed<480?.15+.85*Math.min(1,elapsed/480):1;
+  const speed=actualMotion()==='normal'&&elapsed<360?.12+.88*Math.min(1,elapsed/360):1;
   r.querySelectorAll('.gt-reel.is-spinning .gt-reel-strip').forEach(el=>{const a=el.getAnimations()[0];if(a)a.playbackRate=speed;});
   if(speed<1)frame=requestAnimationFrame(ramp);
  }
@@ -78,12 +78,24 @@
  document.addEventListener('click',e=>{const b=e.target.closest?.('[data-gt-focus]');if(!b)return;focusMode=!focusMode;try{localStorage.setItem('gaisen-trial-focus',focusMode?'on':'off');}catch{}prefs();root()?.querySelector('.gt-console')?.scrollIntoView({block:'nearest',behavior:'instant'});});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-volume]'))return;volume=Number(e.target.value);bank?.setVolume(volume);prepareAudio();try{localStorage.setItem('gaisen-trial-volume',String(volume));}catch{}});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-motion]'))return;motion=e.target.value;try{localStorage.setItem('gaisen-trial-motion',motion);}catch{}prefs();});
+ // キーを押し続けても連続送信しない。入力欄・別の操作・ダイアログは奪わない。
+ document.addEventListener('keydown',e=>{
+  if(e.isComposing||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||document.hidden)return;
+  const r=root(),target=e.target;
+  if(!r||!r.querySelector('.gt-machine')||activeWin||document.querySelector('dialog[open]'))return;
+  if(target?.closest?.('input,select,textarea,[contenteditable]:not([contenteditable="false"]),a,summary,[role="textbox"]'))return;
+  if(target?.closest?.('button')&&!target.closest('[data-gt-key]'))return;
+  const key=e.code==='Space'?'lever':({'1':'stop-0','2':'stop-1','3':'stop-2'})[e.key];
+  if(!key)return;
+  const button=r.querySelector(`[data-gt-key="${key}"]`);if(!button)return;
+  e.preventDefault();if(e.repeat||busy||button.disabled)return;button.click();
+ });
  document.addEventListener('submit',async e=>{
   const form=e.target;if(!(form instanceof HTMLFormElement)||!form.closest('[data-gaisen-trial]'))return;
   e.preventDefault();if(busy)return;endWin();busy=true;root().setAttribute('aria-busy','true');
   const action=form.elements.namedItem('action')?.value,index=Number(form.elements.namedItem('index')?.value);
   const hadWin=!!root().querySelector('[data-gt-win]'),before=root().querySelector('.gt-machine');
-  const focusedKey=document.activeElement?.dataset?.gtKey;prepareAudio();
+  const focusedKey=document.activeElement?.dataset?.gtKey,pressed=form.querySelector('[data-gt-key]');if(pressed)pressed.dataset.pressed='true';prepareAudio();
   try{
    const r=await fetch(form.getAttribute('action'),{method:'POST',body:new FormData(form),credentials:'same-origin'});
    const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
@@ -99,12 +111,15 @@
     if(focusedKey&&!win){const target=root().querySelector(`[data-gt-key="${focusedKey}"]:not(:disabled)`)||root().querySelector('.gt-stop.is-next:not(:disabled)')||root().querySelector('.gt-lever:not(:disabled)');target?.focus({preventScroll:true});}
     if(!win&&action==='stop'&&Number.isInteger(index)&&actualMotion()!=='instant'&&!document.hidden){
      const el=root().querySelector(`[data-gt-reel="${index}"].is-stopped .gt-reel-strip`);
-     const distance=actualMotion()==='low'?2:7;
-     el?.animate([{transform:`translateY(-${distance}px)`},{transform:`translateY(${distance/2}px)`,offset:.45},{transform:'translateY(0)'}],{duration:actualMotion()==='low'?120:210,easing:'ease-out'});
+     // 前後の絵柄を余白に置き、窓を空けずに減速して定位置へ収める。
+     const height=el?.querySelector('.gt-symbol')?.getBoundingClientRect().height;
+     if(height){const travel=actualMotion()==='low'?2:height*.72;
+      el.animate([{transform:`translateY(${-height-travel}px)`,filter:actualMotion()==='low'?'none':'blur(.6px)'},{transform:`translateY(${-height+2}px)`,filter:'none',offset:.82},{transform:`translateY(${-height}px)`,filter:'none'}],{duration:actualMotion()==='low'?100:180,easing:'cubic-bezier(.12,.65,.22,1)'});
+     }
     }
    }
   }catch(e){const error=root()?.querySelector('[data-gt-error]');if(error){error.hidden=false;error.textContent=e.message||'通信できませんでした。最新の状態を確認してください。';}}
-  finally{busy=false;root()?.removeAttribute('aria-busy');}
+  finally{if(pressed)delete pressed.dataset.pressed;busy=false;root()?.removeAttribute('aria-busy');}
  });
  document.addEventListener('visibilitychange',()=>{if(document.hidden){endWin();mutePending();root()?.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));}prefs();});
  window.addEventListener('pagehide',()=>{endWin();cancelAnimationFrame(frame);mutePending();});

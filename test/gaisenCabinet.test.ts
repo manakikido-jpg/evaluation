@@ -7,6 +7,14 @@ import {GaisenTrial} from '../src/web/views/gaisenTrial.js';
 const session={userId:'sample',username:'試遊係',level:'guji',pages:null,csrfToken:'test-only'} as AdminSession;
 function fixture(){const floor=freshFloor(0,'trial-2');floor.machines[0]!.owner='sample';return {floor,machine:floor.machines[0]!,html:()=>jsx(GaisenTrial,{m:trialView(floor,'sample'),session,version:'trial-2'}).toString()};}
 describe('神殿の筐体と操作案内',()=>{
+ it('操作卓の数字は現在の試遊ポイントと保存済み払出を表示し、装飾で状態を変えない',async()=>{
+  const f=fixture();f.machine.state.balance=98765;f.machine.state.lastPaid=150;
+  const before=structuredClone(f.floor),html=await f.html();
+  expect(html).toContain('data-gt-credit="true">98,765</b>');expect(html).toContain('data-gt-payout="true">150</b>');
+  expect(html).toContain('gt-lever-hardware');expect(html.match(/class="gt-stop-lamp"/g)).toHaveLength(3);
+  expect(html).toContain('class="gt-apron" aria-hidden="true"');expect(html).toContain('class="gt-medal-tray" aria-hidden="true"');
+  expect(html).not.toMatch(/on(?:click|keydown)=|<script>/);expect(f.floor).toEqual(before);
+ });
  it('公開済みの区間から時間停止とEXを区別し、描画で進捗を変えない',async()=>{
   const f=fixture();
   for(const [name,scene] of [['normal','normal'],['gg','gg'],['gstop','gstop'],['medusa','medusa'],['sgg-ex','ex']] as const){
