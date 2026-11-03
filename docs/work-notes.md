@@ -9,7 +9,11 @@
 - 実装：リール表示とボタンが同じstopGuidanceを使い、回転中だけ押し順の番号と次STOPを表示。HOLDの左右と停止済みの絵柄は案内で隠さない。表示画像だけを差し替え、抽選/払出/停止表示モデルは維持。実画面で小さく見えたため絵柄を拡大し、下の小さな装飾文字を整理。
 - 途中検証：型成功、関連4ファイル32件成功。Chromiumの4サイズ/6区間/4当選見本と実GOD、音/低減/途中再読込/409/通信失敗/JSなしを確認。追加の全6押し順・停止済み絵柄の固定・押し順不一致の払出0・HOLD中央のみの案内が成功。WebP6点はすべて復号でき、3段の窓を維持、JS例外0、試験の実財布12,345を維持。サイズ調整後に最終確認する。
 - 最終画面確認：拡大した絵柄と中段の反射調整後も、4画面幅・金7/GOD/赤7/青7/宝石の実停止・全6押し順・HOLDが成功。JS例外0、横はみ出しなし、試験用の実財布12,345維持。確認画像はdocs/previews/gaisen-reel-art-*.webp。型/ビルド/全件を最終版で確認する（DBフック60秒・3並列）。
-- 次：素材生成/検品→表示と案内の実装→押し順/再読込/低減/4サイズ/音/通信失敗の検証→型/ビルド/全件検証→保存。全件はDBフックの待ち時間も指定し、前回の実行環境起因の10秒タイムアウトに対応する。
+- 全件結果（bee7b21）：型/ビルド成功。全237ファイル2,643件を実行し、234ファイル2,640件成功、残り3件はオセロCPUのテスト60秒・シャンパンGIFのテスト120秒・Web設定保存のDB準備フック60秒のタイムアウト。機能の期待値不一致はなし。1514.50秒、3並列/testTimeout=60000/hookTimeout=60000。対象3ファイルを1並列/testTimeout=180000/hookTimeout=180000で再確認する。テスト/期待値/skipを変更せず、単一全件コマンドが全成功したとは扱わない。ログ/tmp/gaisen-reel-art-all.log。
+- 最終再確認：同じ実装bee7b21で対象3ファイル（test/castChampagne.test.ts、test/casinoEngines.test.ts、test/web.test.ts）214件がすべて成功（688.82秒、maxWorkers=1、testTimeout=180000、hookTimeout=180000）。全件実行の2,640件成功と合わせ全2,643ケースを確認。単一の全件実行が全成功したとは扱わず、初回のタイムアウト3件も記録に残す。テスト/期待値/skipの変更なし。ログ/tmp/gaisen-reel-art-recheck.log。
+- その他の最終結果：型/ビルド成功、関連4ファイル32件成功（42.15秒）。4画面幅/6区間/4当選見本・実GOD/払出/時間停止終了、全6押し順・誤順の払出0・HOLD・部分停止再読込・409・通信失敗・低減・音・JSなしを確認。金7/GOD/赤7/青7/宝石の最終停止、横はみ出しなし、JS例外0、試験用の実財布12,345維持。ログ/tmp/gaisen-reel-art-{focused-final,types-final,build-final,browser-final,visual-final}.logと/tmp/gaisen-reel-guide-browser-final.log。
+- 成果物：透過WebP6点はsrc/web/public/gaisen-media/symbol-*.webp、生成プロンプト/原画SHA256はassets/gaisen-media/reel-art-provenance.json、確認画像はdocs/previews/gaisen-reel-art-*.webp。配布用ZIPは/workspace/artifacts/gaisen-reel-art/gaisen-reel-symbols-webp.zip（6点/93,094バイト、CRC確認済み）。原画PNGは/workspace/generated_images/へ維持。ローカル検証サーバーは停止済み。実スマホの聴感/性能・VPS反映は未確認。
+- 保存：既存の[Draft PR132](https://github.com/manakikido-jpg/evaluation/pull/132)を同じcodex/gaisen-cabinet-polishから更新する。最終実装bee7b21、以降はこの検証記録のみ。保存前のfetchでも本番1680474から追加変更なし。抽選/払出/保存/認証に差分なし。本番合流・一般公開・銭接続は保留。次は運営の実端末での見た目/操作/聴感確認とレビュー。
 
 ## 2026年11月3日：画像と音源を別ファイルで生成して質感を改善
 - 依頼：「画像や音源は別で生成してよりリアルにしたい」。既存のSVG/CSSと短い発振音だけの表現から、制作した画像・音声ファイルを組み込む方向へ進める。
