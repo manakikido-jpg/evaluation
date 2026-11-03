@@ -2,7 +2,7 @@
 # データベースのバックアップ（毎日 cron で実行する想定。更新の前にも自動で実行される）
 #   保存先: backups/sakuranomiya-YYYYmmdd-HHMMSS.sql.gz
 #   KEEP_DAYS（既定 7）日より古いものは消す
-#   BACKUP_KIND=update（更新の前）のときは backups/sakuranomiya-update-….sql.gz にして、新しい KEEP_UPDATES（既定 5）個だけ残す
+#   BACKUP_KIND=update（更新の前）のときは backups/sakuranomiya-update-….sql.gz にして、新しい KEEP_UPDATES（既定 5）個だけ残す。書き込みの記録の写真は入れない
 #   （更新は 1 日に何十回もあるので、7 日分を残すとディスクがいっぱいになる）
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -21,7 +21,11 @@ else
 fi
 tmp="$file.tmp"
 trap 'rm -f "$tmp"' EXIT
-docker compose exec -T db pg_dump -U sakura -d sakuranomiya --no-owner | gzip > "$tmp"
+# 更新の前の分は、書き込みの記録の写真（message_archive_files。DB のほとんどを占める）の中身を入れない（表の形は入れる）。
+# 更新で壊れたときに戻すためのもので、写真がなくても困らない。毎日の分と鯖の外には、写真も入れる
+extra=()
+[ "${BACKUP_KIND:-}" = update ] && extra=(--exclude-table-data=message_archive_files)
+docker compose exec -T db pg_dump -U sakura -d sakuranomiya --no-owner "${extra[@]}" | gzip > "$tmp"
 # 壊れたファイルを「バックアップ」として残さない
 gunzip -t "$tmp"
 mv "$tmp" "$file"
