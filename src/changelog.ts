@@ -31,6 +31,12 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-03-gaisen-trial-finish', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの無料試遊にモード・追加抽選・G-STOPの詳細を追加',
+    items: ['表8種類・裏3種類のモードと成立役別の当選、履歴や特別役の追加ループを実装しました。', 'G-STOPの図柄候補・鏡・HOLD・リーチ目を整理。設定変更時の天井と開始モードを一度だけ抽選して保存します。', '天国ショート・裏天国・GG中の鏡高確の確認場面を追加。未公表の抽選は説明に残し、実機と同じ勝率とは扱いません。'],
+    announcement: {priority: 'none', audience: '神殿スロットの無料試遊を確認する運営', steps: ['社務所のカジノから「神殿スロットの新しい無料試遊（区間別抽選）」を開く。', '着席し「場面を選んで動作確認」で天国ショート・裏天国・GG中の鏡高確を選ぶ。', '設定変更は通常時の離席後、ボーナス終了後に反映される。'], postText: '', imagePrompt: '', notes: 'Draft PRで開発中。合流保留・一般公開なし・実財布未接続。採用表と資料差はdocs/gaisen-completion.md参照。'},
+  },
+  {
     id: '2026-11-03-gaisen-sgg-loops', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットの無料試遊にSGGの追加抽選・救済を追加',
     items: ['通常SGGの赤7巻き戻しで、残りゲーム数に応じた追加ストック抽選を行います。', '赤7・フェイク・GODや時間停止・EXなどを引かずに終えたSGGに救済抽選を追加。追加セットの当選を保証するものではありません。', '抽選待ちと救済条件を途中保存・別台再開へ引き継ぎ、二重STOPでは増やしません。'],

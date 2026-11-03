@@ -1,3 +1,4 @@
+import {resetFrontMode,resetCeiling,type FrontMode} from './modeRules.js';
 import {eq} from 'drizzle-orm';
 import type {Db} from '../../../db/client.js';
 import {settings} from '../../../db/schema.js';
@@ -11,7 +12,7 @@ export const TRIAL_V2_KEY='casino.gaisenTrial.v2';
 const trialKey=(version:RuleVersion)=>version==='trial-2'?TRIAL_V2_KEY:TRIAL_KEY;
 const INITIAL:Setting[]=[1,1,2,2,4];
 type Stat={day:string;spins:number;input:number;output:number;god:number;gg:number;sgg:number;resumed:boolean;sample:boolean;graph:number[]};
-export type TrialMachine={id:number;state:GaisenState;owner:string|null;ownerName:string|null;lastAction:number;reservedSetting:Setting|null;base:GaisenState|null;checkpoint:GaisenState|null;stat:Stat;lastScenario:string};
+export type TrialMachine={id:number;state:GaisenState;owner:string|null;ownerName:string|null;lastAction:number;reservedSetting:Setting|null;reservedReset?:{front:FrontMode;ceiling:510|1000|1480};base:GaisenState|null;checkpoint:GaisenState|null;stat:Stat;lastScenario:string};
 type Player={points:number;saved:GaisenState|null;history:string[]};
 export type TrialFloor={v:1;revision:number;machines:TrialMachine[];players:Record<string,Player>};
 export class TrialError extends Error{constructor(message:string,public status:400|403|409=400){super(message);}}
@@ -20,7 +21,13 @@ const stat=(now:number):Stat=>({day:day(now),spins:0,input:0,output:0,god:0,gg:0
 export const freshFloor=(now:number,version:RuleVersion='trial-1'):TrialFloor=>({v:1,revision:0,machines:INITIAL.map((setting,i)=>({id:i+1,state:newGaisen(setting,version),owner:null,ownerName:null,lastAction:0,reservedSetting:null,base:null,checkpoint:null,stat:stat(now),lastScenario:'自然抽選（暫定）'})),players:{}});
 const playerKey=(id:string)=>'u:'+id;
 function player(f:TrialFloor,id:string):Player{return f.players[playerKey(id)]??={points:100000,saved:null,history:[]};}
-function applySetting(m:TrialMachine){if(m.reservedSetting!==null&&m.owner===null&&!isProtected(m.state)&&!m.state.pending){m.state=newGaisen(m.reservedSetting,m.state.version);m.reservedSetting=null;}}
+function consumeSetting(m:TrialMachine){
+ const next=newGaisen(m.reservedSetting!,m.state.version);
+ // 設定予約のPOSTで一度だけ引いた値を使う。GETや期限処理では抽選しない。
+ if(next.version==='trial-2'){next.frontMode=m.reservedReset?.front??'low1';next.backMode='low';next.ceilingLimit=m.reservedReset?.ceiling??1480;}
+ m.state=next;m.reservedSetting=null;m.reservedReset=undefined;
+}
+function applySetting(m:TrialMachine){if(m.reservedSetting!==null&&m.owner===null&&!isProtected(m.state)&&!m.state.pending)consumeSetting(m);}
 function release(f:TrialFloor,m:TrialMachine){
  if(m.owner===null)return;
  const p=player(f,m.owner);p.points=m.state.balance;p.history=m.state.history.slice();
@@ -45,7 +52,9 @@ export function actTrial(f:TrialFloor,uid:string,name:string,a:TrialAction,now:n
  const m=f.machines.find(x=>x.id===a.machine);if(!m)throw new TrialError('台を選び直してください。');
  if(a.action==='setting'){
   if(!Number.isInteger(a.setting)||a.setting!<1||a.setting!>6)throw new TrialError('設定は1〜6です。');
-  m.reservedSetting=a.setting as Setting;applySetting(m);f.revision++;return;
+  m.reservedSetting=a.setting as Setting;
+  if(m.state.version==='trial-2')m.reservedReset={front:resetFrontMode(m.reservedSetting,rng),ceiling:resetCeiling(m.reservedSetting,rng)};
+  applySetting(m);f.revision++;return;
  }
  const p=player(f,uid),mine=f.machines.find(x=>x.owner===uid);
  if(a.action==='seat'){
@@ -61,7 +70,7 @@ export function actTrial(f:TrialFloor,uid:string,name:string,a:TrialAction,now:n
   case 'lever':if(!isProtected(m.state)&&!m.state.pending)m.checkpoint=structuredClone(m.state);lever(m.state,rng);m.lastAction=now;break;
   case 'stop':if(stop(m.state,a.index!,rng))m.checkpoint=null;m.lastAction=now;break;
   case 'scenario':{
-   if(!SCENARIOS.includes(a.scenario as Scenario)||(m.state.version==='trial-1'&&['medusa','sgg-ex'].includes(a.scenario!)))throw new TrialError('場面を選び直してください。');
+   if(!SCENARIOS.includes(a.scenario as Scenario)||(m.state.version==='trial-1'&&['medusa','sgg-ex','heaven','back-high','gstop-high'].includes(a.scenario!)))throw new TrialError('場面を選び直してください。');
    if(m.state.pending||m.base)throw new TrialError('回転中・保存分の再開中は場面を切り替えられません。');
    const points=m.state.balance;m.state=scenario(m.state.setting,a.scenario as Scenario,m.state.version);m.state.balance=points;m.lastScenario='場面確認：'+a.scenario;m.stat=stat(now);m.stat.sample=m.state.sample;m.lastAction=now;f.revision++;return;
   }
@@ -76,7 +85,7 @@ export function actTrial(f:TrialFloor,uid:string,name:string,a:TrialAction,now:n
    // 再開分の終了で受入台を復元。通常遊技を保存分の状態で続けない。
    if(m.base){m.state=m.base;m.base=null;m.state.balance=p.points;}
    // 通常時の変更は離席後、ボーナス後の予約はここで反映する。
-   if(a.action==='stop'&&before.phase!=='normal'&&m.reservedSetting!==null){const setting=m.reservedSetting;m.reservedSetting=null;m.state=newGaisen(setting,m.state.version);m.state.balance=p.points;}
+   if(a.action==='stop'&&before.phase!=='normal'&&m.reservedSetting!==null){consumeSetting(m);m.state.balance=p.points;}
   }
  }
  f.revision++;

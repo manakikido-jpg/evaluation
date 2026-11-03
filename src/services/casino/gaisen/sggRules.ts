@@ -32,5 +32,5 @@ export function drawMedusaReset(flag:PhaseFlag,rng:Rng):'sgg'|'ex'|null{
 /** 赤7/GODの基本獲得と別に抽選しない。逆押しフェイク/3枚役も対象外。 */
 export function drawExStock(flag:PhaseFlag,rng:Rng):boolean{
  if(flag==='blue'||flag==='bell')return rng(2)===0;
- return ['coinB','coinC','middleBlue','yellowLeft','yellowCommon','yellowMiddle','special','fake'].includes(flag);
+ return ['coinB','coinC','middleBlue','yellowLeft','yellowCommon','yellowMiddle','special'].includes(flag);
 }

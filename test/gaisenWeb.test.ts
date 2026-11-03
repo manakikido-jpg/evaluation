@@ -47,10 +47,28 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
   const f=await readTrial(db,now,'trial-2');
   return app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:'1',action,...extra})});
  }
+ it('新しい場面と設定抽選を保存し、GET/同時再送で引き直さず内部情報を隠す',async()=>{
+  await postV2('seat');
+  for(const scene of ['heaven','back-high','gstop-high'])expect((await postV2('scenario',{scenario:scene})).status).toBe(303);
+  let html=await(await app.request(v2,{headers:headers()})).text();
+  expect(html).toContain('GG中のG-STOP（鏡高確）');
+  await postV2('scenario',{scenario:'omen'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('setting',{setting:'6',revision}),postV2('setting',{setting:'6',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  const saved=(await readTrial(db,now,'trial-2')).machines[0]!.reservedReset;
+  expect(saved).toBeDefined();
+  for(let i=0;i<2;i++)html=await(await app.request(v2,{headers:headers()})).text();
+  expect((await readTrial(db,now,'trial-2')).machines[0]!.reservedReset).toEqual(saved);
+  for(const field of ['frontMode','backMode','bonusLoops','reservedReset','ceilingLimit','holdGroup'])expect(html).not.toContain(field);
+  await postV2('leave');
+  expect((await readTrial(db,now,'trial-2')).machines[0]!.state).toMatchObject({setting:6,frontMode:saved!.front,ceilingLimit:saved!.ceiling});
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
  it('救済は最終STOPで一度だけ保存し、別台再開でも内部条件を公開しない',async()=>{
   await postV2('seat');await postV2('scenario',{scenario:'sgg'});await postV2('lever');
   let f=await readTrial(db,now,'trial-2');const s=f.machines[0]!.state;
-  s.sggLeft=1;s.sggRescueEligible=true;s.pending!.role='none';s.pending!.model={flag:'none',missUnits:0};
+  s.sggLeft=1;s.sggRescueEligible=true;s.pending!.role='replay';s.pending!.model={flag:'blue',missUnits:0};
   await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
   await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
   const revision=String((await readTrial(db,now,'trial-2')).revision);
@@ -85,7 +103,7 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
  it('天井直前から24G前兆へ進み、二重STOP・別台再開でも天井権利を一度だけ保全する',async()=>{
   await postV2('seat');await postV2('scenario',{scenario:'ceiling'});await postV2('lever');
   let f=await readTrial(db,now,'trial-2');let s=f.machines[0]!.state;
-  s.pending!.role='none';s.pending!.model={flag:'none',missUnits:0};
+  s.pending!.role='replay';s.pending!.model={flag:'yellowReplay',missUnits:0};
   await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
   await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
   const revision=String((await readTrial(db,now,'trial-2')).revision);

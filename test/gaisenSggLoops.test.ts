@@ -26,9 +26,9 @@ describe('SGGの通常巻き戻しと救済ループ',()=>{
   const selected=s.sggLoops![0]!;spin(s,'none',n=>n===100?selected-1:miss(n));expect(s.stocks).toBe(3);
   spin(s,'none',n=>n===100?selected:miss(n));expect(s.stocks).toBe(3);expect(s.sggLoops).toEqual([]);
  });
- it('メデューサ/EX/GOD/逆押しミスに未照合の巻き戻しループを付けない',()=>{
-  for(const name of ['medusa','sgg-ex'] as const){const s=scenario(1,name,'trial-2');spin(s,'reverseRed');expect(s.sggLoops).toEqual([]);}
-  const god=scenario(1,'sgg','trial-2');spin(god,'god');expect(god.sggLoops).toEqual([]);
+ it('メデューサ/EXには巻き戻し、GODには別ループを付け、逆押しミスには付けない',()=>{
+  for(const name of ['medusa','sgg-ex'] as const){const s=scenario(1,name,'trial-2');spin(s,'reverseRed');expect(s.sggLoops).toEqual([75]);}
+  const god=scenario(1,'sgg','trial-2');spin(god,'god');expect(god.sggLoops).toEqual([]);expect(god.bonusLoops).toEqual([75]);
   const s=scenario(1,'sgg','trial-2');begin(s,'reverseRed');for(const i of [0,1,2])stop(s,i,miss);
   expect(s).toMatchObject({sggRescueEligible:false,sggLeft:15,stocks:1,sggLoops:[]});
  });

@@ -52,8 +52,8 @@ describe('SGGの役別抽選と時間停止',()=>{
  });
  it('EXの上乗せは成立役別で、通常の3枚役や非対象役では増えない',()=>{
   for(const flag of ['blue','bell'] as const){expect(drawExStock(flag,()=>0)).toBe(true);expect(drawExStock(flag,()=>1)).toBe(false);}
-  for(const flag of ['coinB','coinC','middleBlue','yellowLeft','yellowCommon','yellowMiddle','special','fake'] as const)expect(drawExStock(flag,miss)).toBe(true);
-  for(const flag of ['small','none','god','red','reverseRed','reverseFake'] as const)expect(drawExStock(flag,()=>0)).toBe(false);
+  for(const flag of ['coinB','coinC','middleBlue','yellowLeft','yellowCommon','yellowMiddle','special'] as const)expect(drawExStock(flag,miss)).toBe(true);
+  for(const flag of ['small','none','god','red','reverseRed','reverseFake','fake'] as const)expect(drawExStock(flag,()=>0)).toBe(false);
   const s=scenario(1,'sgg-ex','trial-2');spin(s,'small',()=>0);expect(s.stocks).toBe(1);expect(s.medusaDeferred).toBe(false);
   spin(s,'coinB');expect(s.stocks).toBe(2);expect(s.sggLeft).toBe(6);
  });

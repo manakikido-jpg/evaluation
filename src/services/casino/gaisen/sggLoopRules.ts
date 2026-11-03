@@ -8,8 +8,9 @@ export const SGG_LOOP_WEIGHTS={
  special:[[1,7500],[25,2070],[50,313],[67,78],[75,39]],
  last:[[25,7500],[50,2266],[67,156],[75,78]],
 } as const;
-export function drawSggResetLoop(remaining:number,rng:Rng):SggLoopRate{
- const rows=remaining===0?SGG_LOOP_WEIGHTS.last:remaining===7||remaining===11?SGG_LOOP_WEIGHTS.special:SGG_LOOP_WEIGHTS.ordinary;
+export function drawSggResetLoop(remaining:number,rng:Rng,mode:'ordinary'|'medusa'|'ex'='ordinary'):SggLoopRate{
+ const special=remaining===7||remaining===11;
+ const rows=mode==='ex'?SGG_LOOP_WEIGHTS.ordinary:remaining===0||mode==='medusa'&&special?SGG_LOOP_WEIGHTS.last:special||mode==='medusa'?SGG_LOOP_WEIGHTS.special:SGG_LOOP_WEIGHTS.ordinary;
  let n=rng(10000);for(const [rate,weight] of rows){if(n<weight)return rate;n-=weight;}
  throw Error('SGGの抽選範囲を確認してください。');
 }
