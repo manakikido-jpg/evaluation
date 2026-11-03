@@ -1,7 +1,8 @@
 import {describe, expect, it} from 'vitest';
 import {freshFloor, trialView} from '../src/services/casino/gaisen/trial.js';
 import {lever, stop, ORDERS} from '../src/services/casino/gaisen/engine.js';
-import {reelPresentation} from '../src/web/views/gaisenReels.js';
+import {jsx} from 'hono/jsx';
+import {GaisenReels,stopGuidance,reelPresentation} from '../src/web/views/gaisenReels.js';
 
 describe('神殿の3リール表示', () => {
   function fixture() {
@@ -88,4 +89,30 @@ describe('神殿の3リール表示', () => {
       expect(f.state.lastPaid).toBe(paid);expect(reelPresentation(f.view()).every(r=>r.rows[1]===symbol)).toBe(true);
     }
   });
+  it('全押し順でリール上の次STOPがボタンの案内と一致し、停止後に残らない', async () => {
+    for(const order of ORDERS){
+      const f=fixture();f.state.phase='gg';f.state.ggLeft=100;lever(f.state,()=>0,'bell');f.state.pending!.order=[...order];
+      for(const index of order){
+        const view=f.view(),before=structuredClone(f.state),html=await jsx(GaisenReels,{own:view}).toString();
+        expect(stopGuidance(view).next).toBe(index);
+        expect(html).toContain(`data-gt-reel="${index}" data-gt-reel-next="true"`);
+        expect(html.match(/gt-reel-cue is-next/g)).toHaveLength(1);
+        expect(f.state).toEqual(before);stop(f.state,index,()=>1);
+      }
+      const html=await jsx(GaisenReels,{own:f.view()}).toString();expect(html).not.toContain('gt-reel-cue');expect(stopGuidance(f.view()).next).toBeUndefined();
+    }
+  });
+  it('HOLDの停止済み左右には案内を重ねず、中だけに次のSTOPを表示する', async () => {
+    const f=fixture();f.state.phase='gstop';f.state.gstopLeft=5;f.state.hold='V';lever(f.state,()=>1,'none');
+    const view=f.view(),html=await jsx(GaisenReels,{own:view}).toString();
+    expect(stopGuidance(view).next).toBe(1);expect(html).toContain('data-gt-reel="1" data-gt-reel-next="true"');expect(html.match(/gt-reel-cue/g)).toHaveLength(1);
+    expect(view.stopped).toEqual([0,2]);
+  });
+  it('回転中の画像と案内は未停止の役を漏らさず、生成した6種類のWebPを使う', async () => {
+    const a=fixture(),b=fixture();lever(a.state,()=>1,'god');lever(b.state,()=>1,'none');
+    const html=await jsx(GaisenReels,{own:a.view()}).toString();expect(html).toBe(await jsx(GaisenReels,{own:b.view()}).toString());
+    for(const symbol of ['gold7','blue7','red7','god','flower','crest'])expect(html).toContain(`gaisen-media-symbol-${symbol}.webp?v=`);
+    expect(html).toContain('aria-hidden="true"');
+  });
+
 });

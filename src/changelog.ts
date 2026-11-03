@@ -30,6 +30,24 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-03-gaisen-reel-art', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの絵柄を立体的なWebP素材にし、停止位置を案内',
+    items: ['金・青・赤の7、神紋、桜、宝石を独自に生成した透過WebPへ変えました。', '次に止めるリールへ押し順の番号と「次のSTOP」を重ね、停止後は消します。ボタンとリールの案内をそろえました。', '表示だけの変更です。抽選・払出・停止済みの出目や保存権利は維持し、一般公開と銭への接続は保留します。'],
+    announcement: {priority: 'none', audience: '無料試遊を確認する運営', steps: ['新版の無料試遊へ着席する。', 'レバーで回転し、リールの番号と次のSTOPを確認する。'], postText: '', imagePrompt: '', notes: 'Draft PR132の続行。独自の透過WebP6点。未停止の役は画像や案内に反映しない。'},
+  },
+  {
+    id: '2026-11-03-gaisen-generated-media', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットに生成した背景画像と独自音源を追加',
+    items: ['石造神殿と金色の扉の背景を画像生成で制作し、PC用・スマホ用のWebPで表示します。', 'レバー・STOP・払出・当選など13種類の効果音を独立した音源として制作しました。機械の衝撃や金属の響きと残響を重ねた独自の合成音です。', '音量・ミュート・スキップを維持し、遅れて届いた操作音は後から鳴らしません。一般公開と銭への接続は保留です。'],
+    announcement: {priority: 'none', audience: '神殿スロットの無料試遊を確認する運営', steps: ['新版の無料試遊を開く。', '「音：ON」と音量を選び、レバーとSTOPを試す。', '「当選演出だけを見る」でGODなどを確認する。'], postText: '', imagePrompt: '', notes: 'Draft PR132の続行。音声生成AIや実機の録音ではなく、別ファイルに制作した物理モデル合成音。画像は画像生成ツールを使用。'},
+  },
+  {
+    id: '2026-11-03-gaisen-cabinet-polish', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの筐体・背景・音とスマホ操作を改善',
+    items: ['独自の神殿背景と区間ごとの光で筐体を整え、時間停止とEXも見分けやすくしました。', '次のSTOPを表示し、スマホの「操作に集中」でリールと操作部をまとめます。音量を選べ、成功した停止後の払出・区間移行に効果音が流れます。', '音OFF・動きの低減・途中再開に対応。運営用の無料試遊のみで、抽選・払出額・銭残高は変えません。'],
+    announcement: {priority: 'none', audience: '無料試遊を確認する運営', steps: ['社務所のカジノから新版の無料試遊へ着席する。', '「操作に集中」で表示を切り替える。音をONにし音量を選ぶ。'], postText: '', imagePrompt: '', notes: '一般公開・銭接続は保留。独自のSVG背景と合成音。'},
+  },
   { id: '2026-11-03-inn-name-mark', date: '2026-11-03', kind: 'fix', where: ['Discord'], title: '🏨 宿の名前の目印が消えないように・宿が自動で並ぶように', items: ['宿（24時間の宿・1時間ごとの宿）の名前を変えると、頭の 🏨・⏱ の目印が消えていたのを直しました。名前を変えても付けたままになります。', '宿は同じカテゴリの中で、🏨 24時間の宿 → ⏱ 1時間ごとの宿 → ふつうの部屋 の順に自動で並ぶようにしました。'], announcement: { priority: 'none', audience: '宿を使うメンバー', steps: [], postText: '', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-03-inn-day-extension', date: '2026-11-03', kind: 'new', where: ['Discord'],

@@ -1,9 +1,11 @@
 // 無料試遊専用。抽選/ポイント/着席は全てサーバー側。自動プレイはしない。
 (() => {
- let busy=false,audio=false,ctx=null,motion='normal',startAt=0,frame=0;
+ let busy=false,audio=false,motion='normal',startAt=0,frame=0;
  try{audio=localStorage.getItem('gaisen-trial-audio')==='on';motion=localStorage.getItem('gaisen-trial-motion')||'normal';}catch{}
- let activeWin=null;const sounds=new Set();
+ let activeWin=null,volume=.65,focusMode=false;
+ try{const saved=Number(localStorage.getItem('gaisen-trial-volume'));if([.3,.65,1].includes(saved))volume=saved;focusMode=localStorage.getItem('gaisen-trial-focus')==='on';}catch{}
  const root=()=>document.querySelector('[data-gaisen-trial]');
+ const bank=window.GaisenSampleBank?new window.GaisenSampleBank(JSON.parse(root()?.dataset.gtSounds||'{}')):null;
  const actualMotion=()=>matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':motion;
  function ramp(){
   cancelAnimationFrame(frame);frame=0;
@@ -13,21 +15,25 @@
   r.querySelectorAll('.gt-reel.is-spinning .gt-reel-strip').forEach(el=>{const a=el.getAnimations()[0];if(a)a.playbackRate=speed;});
   if(speed<1)frame=requestAnimationFrame(ramp);
  }
- function prefs(){if(activeWin&&actualMotion()==='instant'&&!activeWin.sample)endWin();const r=root();if(!r)return;r.dataset.hidden=String(document.hidden);r.dataset.motion=actualMotion();r.querySelector('[data-gt-audio]').textContent='音：'+(audio?'ON':'OFF');r.querySelector('[data-gt-motion]').value=motion;r.querySelectorAll('[data-gt-win-mute]').forEach(b=>b.hidden=!audio);if(actualMotion()==='instant')r.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));ramp();}
- function prepareAudio(){if(!audio||document.hidden)return;try{ctx??=new AudioContext();void ctx.resume().catch(()=>{});}catch{}}
- function stopSounds(pool){for(const o of [...pool]){try{o.stop();}catch{}sounds.delete(o);}pool.clear();}
- function pulse(type,from,to,delay,duration,volume,pool=sounds){
-  if(!audio||document.hidden||!ctx)return;
-  try{const t=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type=type;o.connect(g);g.connect(ctx.destination);o.frequency.setValueAtTime(from,t+delay);o.frequency.exponentialRampToValueAtTime(to,t+delay+duration);g.gain.setValueAtTime(.0001,t+delay);g.gain.exponentialRampToValueAtTime(volume,t+delay+.008);g.gain.exponentialRampToValueAtTime(.0001,t+delay+duration);sounds.add(o);pool.add(o);o.onended=()=>{sounds.delete(o);pool.delete(o);o.disconnect();g.disconnect();};o.start(t+delay);o.stop(t+delay+duration+.01);}catch{}
+ function prefs(){bank?.setVolume(volume);bank?.setEnabled(audio&&!document.hidden);if(activeWin&&actualMotion()==='instant'&&!activeWin.sample)endWin();const r=root();if(!r)return;r.dataset.focus=String(focusMode&&!!r.querySelector('.gt-machine'));r.querySelectorAll('[data-gt-focus]').forEach(b=>{b.textContent=focusMode?'全体に戻る':'操作に集中';b.setAttribute('aria-pressed',String(focusMode));});r.querySelector('[data-gt-volume]').value=String(volume);r.querySelector('[data-gt-audio]').setAttribute('aria-pressed',String(audio));r.dataset.hidden=String(document.hidden);r.dataset.motion=actualMotion();r.querySelector('[data-gt-audio]').textContent='音：'+(audio?'ON':'OFF');r.querySelector('[data-gt-motion]').value=motion;r.querySelectorAll('[data-gt-win-mute]').forEach(b=>b.hidden=!audio);if(actualMotion()==='instant')r.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));ramp();}
+ function prepareAudio(){bank?.setEnabled(audio&&!document.hidden);bank?.prepare();}
+ function resultTone(before,after){
+  if(!after)return;
+  if(before?.dataset.scene!==after.dataset.scene){
+   void bank?.play(['medusa','ex'].includes(after.dataset.scene)?after.dataset.scene:'phase');
+   after.dataset.feedback='phase';
+  }else if(after.dataset.spinning==='false'&&Number(after.dataset.paid)>0){
+   // 最終STOPの成功時だけ。読込み・場面設定・再送では鳴らさない。
+   const replay=!!after.querySelector('[data-gt-settlement]')?.textContent.includes('リプレイ');
+   void bank?.play(replay?'replay':'payout');
+   after.dataset.feedback='paid';
+  }
  }
- function tone(action,index){
-  if(action==='lever'){pulse('triangle',150,55,0,.1,.04);pulse('sine',90,310,.04,.28,.018);}
-  else if(action==='stop'){pulse('triangle',510+index*70,150,0,.08,.035);pulse('sine',900+index*90,400,.018,.1,.012);}
- }
- function mutePending(){stopSounds(sounds);const old=ctx;ctx=null;if(old)void old.close().catch(()=>{});}
+ function tone(action,index){if(action==='lever')void bank?.play('lever');else if(action==='stop'&&Number.isInteger(index))void bank?.play(['stop-left','stop-middle','stop-right'][index]);}
+ function mutePending(){bank?.setEnabled(false);}
  function endWin(){
   const w=activeWin;if(!w)return;activeWin=null;
-  w.timers.forEach(clearTimeout);stopSounds(w.sounds);
+  w.timers.forEach(clearTimeout);bank?.stopGroup('win');
   if(w.dialog.open)w.dialog.close();
   if(w.focus?.isConnected)w.focus.focus({preventScroll:true});
  }
@@ -47,11 +53,11 @@
   set('detail',detail.join(' · '));set('hint',sample?'表示だけの見本です':'結果は保存済みです');set('skip',short?'閉じる':'演出をスキップ');
   d.querySelector('[data-gt-win-mute]').hidden=!audio;
   const focused=document.activeElement;
-  const w={dialog:d,timers:new Set(),sounds:new Set(),sample,focus:sample?focused:root()?.querySelector('.gt-lever')};activeWin=w;
+  const w={dialog:d,timers:new Set(),sample,focus:sample?focused:root()?.querySelector('.gt-lever')};activeWin=w;
   const later=(fn,delay)=>{const id=setTimeout(()=>{w.timers.delete(id);if(activeWin===w&&!document.hidden)fn();},delay);w.timers.add(id);};
-  const chime=()=>{const notes=kind==='sgg'?[261.63,311.13,392,523.25]:kind==='stock'?[392,523.25,659.25]:[261.63,329.63,392,523.25];notes.forEach((n,i)=>pulse('sine',n,n,i*.11,short?.3:.7,short?.012:.018,w.sounds));if(kind==='god'&&!short)pulse('triangle',65.4,130.8,0,1.5,.025,w.sounds);};
+  const chime=()=>{void bank?.play(kind,{group:'win',level:short?.55:.8});};
   scene.dataset.stage=short?'award':kind==='stock'?'reveal':'charge';
-  if(kind==='god')stopSounds(sounds);
+  if(kind==='god')bank?.stopAll();
   d.showModal();
   if(short){chime();if(!sample)later(endWin,2200);return;}
   const reveal=kind==='god'?1050:kind==='stock'?0:450,award=kind==='god'?2050:kind==='stock'?350:1050;
@@ -69,12 +75,15 @@
  document.addEventListener('cancel',e=>{if(e.target.matches?.('[data-gt-celebration]')){e.preventDefault();endWin();}},true);
  document.addEventListener('close',e=>{if(e.target===activeWin?.dialog)endWin();},true);
  document.addEventListener('click',e=>{if(!e.target.closest?.('[data-gt-audio]'))return;audio=!audio;if(!audio)mutePending();else prepareAudio();try{localStorage.setItem('gaisen-trial-audio',audio?'on':'off');}catch{}prefs();});
+ document.addEventListener('click',e=>{const b=e.target.closest?.('[data-gt-focus]');if(!b)return;focusMode=!focusMode;try{localStorage.setItem('gaisen-trial-focus',focusMode?'on':'off');}catch{}prefs();root()?.querySelector('.gt-console')?.scrollIntoView({block:'nearest',behavior:'instant'});});
+ document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-volume]'))return;volume=Number(e.target.value);bank?.setVolume(volume);prepareAudio();try{localStorage.setItem('gaisen-trial-volume',String(volume));}catch{}});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-motion]'))return;motion=e.target.value;try{localStorage.setItem('gaisen-trial-motion',motion);}catch{}prefs();});
  document.addEventListener('submit',async e=>{
   const form=e.target;if(!(form instanceof HTMLFormElement)||!form.closest('[data-gaisen-trial]'))return;
   e.preventDefault();if(busy)return;endWin();busy=true;root().setAttribute('aria-busy','true');
   const action=form.elements.namedItem('action')?.value,index=Number(form.elements.namedItem('index')?.value);
-  const hadWin=!!root().querySelector('[data-gt-win]');prepareAudio();
+  const hadWin=!!root().querySelector('[data-gt-win]'),before=root().querySelector('.gt-machine');
+  const focusedKey=document.activeElement?.dataset?.gtKey;prepareAudio();
   try{
    const r=await fetch(form.getAttribute('action'),{method:'POST',body:new FormData(form),credentials:'same-origin'});
    const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
@@ -86,7 +95,8 @@
    root().querySelectorAll('.gt-reel.is-spinning').forEach(el=>{const i=Number(el.dataset.gtReel),a=el.querySelector('.gt-reel-strip').getAnimations()[0];if(a&&times[i]!=null&&action!=='lever')a.currentTime=times[i];});
    if(r.ok){
     const win=action==='stop'&&!hadWin?readWin():null;
-    if(win){celebrate(win);}else tone(action,index);
+    if(win){celebrate(win);}else {tone(action,index);if(action==='stop')resultTone(before,root().querySelector('.gt-machine'));}
+    if(focusedKey&&!win){const target=root().querySelector(`[data-gt-key="${focusedKey}"]:not(:disabled)`)||root().querySelector('.gt-stop.is-next:not(:disabled)')||root().querySelector('.gt-lever:not(:disabled)');target?.focus({preventScroll:true});}
     if(!win&&action==='stop'&&Number.isInteger(index)&&actualMotion()!=='instant'&&!document.hidden){
      const el=root().querySelector(`[data-gt-reel="${index}"].is-stopped .gt-reel-strip`);
      const distance=actualMotion()==='low'?2:7;

@@ -83,10 +83,19 @@ const roomArt = Object.fromEntries(['roulette','blackjack','highlow','slots','sa
 }));
 const roomCss = (name='casino-rooms.css') => readText(path.join(here,'public',name)).replace(/\/static\/(casino-room-[a-z]+\.webp)/g, (_url,name:string) => `/static/${name}?v=${createHash('sha256').update(roomArt[name]!.body).digest('hex').slice(0,10)}`);
 
+/** 新台の独自生成素材。実在するファイルだけを固定の配信名へ登録する。 */
+const gaisenMedia = Object.fromEntries(readdirSync(path.join(here,'public/gaisen-media'))
+  .filter(f=>/^[a-z][a-z0-9-]*\.(webp|mp3)$/.test(f)).map(file=>[
+    'gaisen-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/gaisen-media',file))),type:file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
+  ]));
+
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
     ...roomArt,
+    ...gaisenMedia,
+    'gaisen-audio.js': {body:readText(path.join(here,'public/gaisen-audio.js')),type:'text/javascript; charset=utf-8'},
+    'gaisen-palace.svg': {body:readText(path.join(here,'public/gaisen-palace.svg')),type:'image/svg+xml'},
     'gaisen-trial.css': {body:readText(path.join(here,'public/gaisen-trial.css')),type:'text/css; charset=utf-8'},
     'gaisen-trial.js': {body:readText(path.join(here,'public/gaisen-trial.js')),type:'text/javascript; charset=utf-8'},
     'casino-rooms.css': {body:roomCss(),type:'text/css; charset=utf-8'},

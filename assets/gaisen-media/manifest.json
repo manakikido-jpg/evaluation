@@ -1,0 +1,205 @@
+{
+  "v": 1,
+  "imageMethod": "image_genによる独自生成。背景は1600px/800px、リール絵柄は透過256pxのWebPへ変換。実機素材の流用なし。",
+  "audioMethod": "build_audio.pyの機械衝撃/金属モード/鐘の倍音/初期反射を使う物理モデル合成。録音・音声生成AIの出力ではない。",
+  "files": [
+    {
+      "file": "award-1600.webp",
+      "bytes": 214160,
+      "sha256": "cc53fcf9a62500feef6cb02f148e8fcd6fbd229e8ed90abf2062d62263be9ec9"
+    },
+    {
+      "file": "award-800.webp",
+      "bytes": 73832,
+      "sha256": "0a523da9b3d853371d97038cc241dabf06b9c3bef1a3dac290323006929e62d1"
+    },
+    {
+      "file": "ex.mp3",
+      "bytes": 29718,
+      "sha256": "88e16ee95b1167e1725fab3d0a11be772b371b38853d5654fb44977c07903ecd",
+      "duration": 1.828571,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68157,
+      "rmsDbFS": -18.35
+    },
+    {
+      "file": "gg.mp3",
+      "bytes": 46018,
+      "sha256": "eac48d79158fb24ebe580eeec4da569ffff421f88500f02b10d18447c5a55495",
+      "duration": 2.847347,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68481,
+      "rmsDbFS": -17.64
+    },
+    {
+      "file": "god.mp3",
+      "bytes": 69842,
+      "sha256": "a5a09419c1d74fb52e815d0e38ed8d4bb92b7000c3ff2fba8958463ef15ac58e",
+      "duration": 4.336327,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.6838,
+      "rmsDbFS": -18.92
+    },
+    {
+      "file": "lever.mp3",
+      "bytes": 10074,
+      "sha256": "d2be1538f22d664b09145476a02c95a73468051388a88c5c50a28165d042a5f6",
+      "duration": 0.600816,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68315,
+      "rmsDbFS": -22.77
+    },
+    {
+      "file": "medusa.mp3",
+      "bytes": 29718,
+      "sha256": "a43693b445e20be30116156a6fc1191f93a9edd072124dbda94ba58ce2475480",
+      "duration": 1.828571,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68576,
+      "rmsDbFS": -17.47
+    },
+    {
+      "file": "night-1600.webp",
+      "bytes": 207680,
+      "sha256": "4fb203e996c912163835d25265e0cbb789f1fefd8e6da7acb93290e6c79d9467"
+    },
+    {
+      "file": "night-800.webp",
+      "bytes": 69188,
+      "sha256": "af94acd8575aafbba6d77e76df98d6a618c23434eb06911a09f5f841b1660f5e"
+    },
+    {
+      "file": "payout.mp3",
+      "bytes": 20941,
+      "sha256": "33b429acaf8c87aff00e444b46ea8bf8fd1d4e207ebc56ca29727bdadcd65d4b",
+      "duration": 1.28,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68847,
+      "rmsDbFS": -17.96
+    },
+    {
+      "file": "phase.mp3",
+      "bytes": 23448,
+      "sha256": "edb39733217917497b1d86cfe1bd4f46829a4373a9a662b61043897c2723635c",
+      "duration": 1.436735,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68586,
+      "rmsDbFS": -17.38
+    },
+    {
+      "file": "replay.mp3",
+      "bytes": 15507,
+      "sha256": "f3aa66093a05e90b21d886a4a39096b8c9d64ee320e921e5f462113cfdd86b1f",
+      "duration": 0.940408,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68642,
+      "rmsDbFS": -17.33
+    },
+    {
+      "file": "sgg.mp3",
+      "bytes": 46018,
+      "sha256": "27dc61ad5abdfc92b7dfc84051add4204e8b4491ba89e8d75fa83fd1aa98e473",
+      "duration": 2.847347,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.6823,
+      "rmsDbFS": -18.68
+    },
+    {
+      "file": "stock.mp3",
+      "bytes": 29718,
+      "sha256": "912fdad8f2a207ee52acf206c13fbe6e517db9134fd464eb66057749e028eb2f",
+      "duration": 1.828571,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68479,
+      "rmsDbFS": -17.51
+    },
+    {
+      "file": "stop-left.mp3",
+      "bytes": 5476,
+      "sha256": "1cf44900eb82618229a5285e77e6ce2f355f4535c030e1e97f079b930094993a",
+      "duration": 0.313469,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.66644,
+      "rmsDbFS": -20.57
+    },
+    {
+      "file": "stop-middle.mp3",
+      "bytes": 5476,
+      "sha256": "01326a6e205f0a2826aee4673d8848999ce24e1796184bc57f44437bd4f49efb",
+      "duration": 0.313469,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.68311,
+      "rmsDbFS": -22.7
+    },
+    {
+      "file": "stop-right.mp3",
+      "bytes": 5476,
+      "sha256": "2ef5662274bfc410c83b75c15ac0099d31145d8eae68c8a659c833c800bb11b8",
+      "duration": 0.313469,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.69064,
+      "rmsDbFS": -22.04
+    },
+    {
+      "file": "symbol-gold7.webp",
+      "bytes": 12286,
+      "sha256": "cf7056ab4dccda41524001b1a46a9bf91f421b65e1dff46e4c88551f12ee318e",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-blue7.webp",
+      "bytes": 16380,
+      "sha256": "0ec3ab9091c1b967daa15b353231c013971a1daba96e7564c31cc3d4305dd95f",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-red7.webp",
+      "bytes": 15520,
+      "sha256": "d936666540d1ea746eef617dfc5cb557af7ae4b4793b2bf61b9d839900c60e1f",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-god.webp",
+      "bytes": 18044,
+      "sha256": "7cfa20857388d987eece1d255b381fb490b0fdc4e77c00b2253f9817e83d6662",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-flower.webp",
+      "bytes": 16206,
+      "sha256": "509a658d550e67149f3eace0a287f3b5c05fde10ea02c3144c5bc61526169f1e",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-crest.webp",
+      "bytes": 13980,
+      "sha256": "5d2cc5057895ba21200c7dd97fe02ebd7f40fbd4418532d010d7e4136cc2ba72",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" fill="none">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#080f2c"/><stop offset=".55" stop-color="#444778"/><stop offset="1" stop-color="#d8a77c"/></linearGradient>
+ <linearGradient id="stone"><stop stop-color="#24283e"/><stop offset=".35" stop-color="#bba789"/><stop offset=".52" stop-color="#e2cbaa"/><stop offset="1" stop-color="#423749"/></linearGradient>
+ <linearGradient id="floor" x2="0" y2="1"><stop stop-color="#84728a"/><stop offset="1" stop-color="#0d1226"/></linearGradient>
+ <radialGradient id="glow"><stop stop-color="#fff1bd" stop-opacity=".8"/><stop offset="1" stop-color="#eec397" stop-opacity="0"/></radialGradient>
+ <g id="column"><path d="M-24 0H24L20 16H-20Z" fill="#c5ad8f"/><path d="M-17 16H17L21 250H-21Z" fill="url(#stone)"/><path d="M-25 250H25V262H-25Z" fill="#ad987f"/><path d="M-9 24V242M0 24V242M9 24V242" stroke="#e5d6bb" stroke-opacity=".25" stroke-width="2"/></g>
+ <g id="temple"><path d="M-190 20L0-65 190 20Z" fill="#8c7b7e" stroke="#e2c8a0" stroke-width="3"/><path d="M-148 9L0-49 148 9Z" fill="#34344f" stroke="#bba789"/><path d="M-186 24H186V39H-186Z" fill="url(#stone)"/><path d="M-143 38H143V260H-143Z" fill="#24263f"/><path d="M-38 111Q0 67 38 111V260H-38Z" fill="#edcb99" opacity=".5"/><use href="#column" x="-132" y="40" transform="scale(1 .84)"/><use href="#column" x="-80" y="40" transform="scale(1 .84)"/><use href="#column" x="80" y="40" transform="scale(1 .84)"/><use href="#column" x="132" y="40" transform="scale(1 .84)"/><path d="M-175 260H175L200 290H-200Z" fill="#90808a"/><path d="M-180 269H180M-188 279H188M-198 289H198" stroke="#d5b997" stroke-width="3"/></g>
+</defs>
+<path fill="url(#sky)" d="M0 0H1200V600H0Z"/>
+<g fill="#e8e1c7" opacity=".55"><circle cx="96" cy="76" r="1.5"/><circle cx="226" cy="39" r="1"/><circle cx="344" cy="99" r="1.5"/><circle cx="816" cy="54" r="1"/><circle cx="1046" cy="83" r="1.6"/><circle cx="914" cy="131" r="1"/><circle cx="713" cy="28" r="1.5"/></g>
+<circle cx="600" cy="255" r="265" fill="url(#glow)"/>
+<path d="M0 325L95 262 160 299 265 227 359 307 470 279 562 331 704 265 825 302 958 231 1055 296 1140 254 1200 309V440H0Z" fill="#1d2646" opacity=".7"/>
+<path d="M0 409Q300 346 600 376T1200 409V600H0Z" fill="url(#floor)"/>
+<use href="#temple" transform="translate(600 127) scale(.96)"/>
+<path d="M0 480L600 399 1200 480M0 545L600 417 1200 545M0 599L600 434 1200 599M165 600L600 413 1035 600M388 600L600 413 812 600" stroke="#ba9e8d" stroke-opacity=".2"/>
+<g opacity=".6"><use href="#column" transform="translate(145 173) scale(1.5)"/><use href="#column" transform="translate(1055 173) scale(1.5)"/><use href="#column" transform="translate(31 100) scale(2)"/><use href="#column" transform="translate(1169 100) scale(2)"/></g>
+<path d="M0 68L315 133M1200 68L885 133" stroke="#d2b58e" stroke-width="22" opacity=".4"/>
+<g fill="#f9d7a1"><circle cx="296" cy="365" r="3"/><circle cx="904" cy="365" r="3"/><circle cx="436" cy="406" r="2"/><circle cx="764" cy="406" r="2"/></g>
+</svg>
