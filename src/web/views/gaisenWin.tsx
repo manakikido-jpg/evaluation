@@ -1,3 +1,4 @@
+import {assetUrl} from '../assets.js';
 import type {WinEvent} from '../../services/casino/gaisen/engine.js';
 
 export function WinResult({event}:{event:WinEvent|null}) {
@@ -16,6 +17,7 @@ export function GaisenWinStage(){return <>
  <div>{(['gg','sgg','god','stock'] as const).map((kind,i)=><button type="button" data-gt-win-preview={kind}>{['GG当選','SGG突入','GOD降臨','上乗せ'][i]}</button>)}</div></details>
  <dialog class="gt-celebration" data-gt-celebration aria-labelledby="gt-win-title" aria-describedby="gt-win-benefit">
   <div class="gt-award-scene" data-stage="reveal">
+   <img class="gt-award-background" src={assetUrl('gaisen-media-award-1600.webp')} srcset={`${assetUrl('gaisen-media-award-800.webp')} 800w, ${assetUrl('gaisen-media-award-1600.webp')} 1600w`} sizes="(max-width: 520px) 100vw, 900px" alt="" aria-hidden="true" loading="lazy" decoding="async"/>
    <div class="gt-award-orbit" aria-hidden="true"/><div class="gt-award-rays" aria-hidden="true"/>
    <div class="gt-award-shrine" aria-hidden="true"><div class="gt-award-roof"/><div class="gt-award-columns"><i/><i/><i/><i/><i/><i/></div><div class="gt-award-stairs"/></div>
    <div class="gt-award-petals" aria-hidden="true">{Array.from({length:12},(_,i)=><i class={'gt-petal-'+i}>✦</i>)}</div>

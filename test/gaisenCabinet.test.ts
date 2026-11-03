@@ -11,7 +11,7 @@ describe('神殿の筐体と操作案内',()=>{
   const f=fixture();
   for(const [name,scene] of [['normal','normal'],['gg','gg'],['gstop','gstop'],['medusa','medusa'],['sgg-ex','ex']] as const){
    f.machine.state=scenario(1,name,'trial-2');const before=structuredClone(f.floor),html=await f.html();
-   expect(html).toContain(`data-scene="${scene}"`);expect(html).toContain('gaisen-palace.svg?v=');expect(f.floor).toEqual(before);
+   expect(html).toContain(`data-scene="${scene}"`);expect(html).toContain('gaisen-media-night-1600.webp?v=');expect(f.floor).toEqual(before);
    expect(html).not.toContain('frontMode');expect(html).not.toContain('backMode');
   }
  });
