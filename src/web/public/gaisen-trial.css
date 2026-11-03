@@ -194,3 +194,6 @@ body:has(.gt-root[data-focus=true]) .mobile-nav{display:none}
 @media(max-width:520px){.gt-root[data-focus=true] .gt-marquee>.gt-speaker{width:23px;top:9px;bottom:9px}}
 /* 消灯しても金属の枠は暗くしない。ランプとレンズで操作可否を分ける。 */
 .gt-root .gt-stop:disabled{opacity:1}
+
+/* 多い桁でも全額を枠内へ。通常の数字の大きさは維持する。 */
+.gt-instruments .gt-readout-wide{font-size:clamp(11px,2.7vw,18px);letter-spacing:-.25px}

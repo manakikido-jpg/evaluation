@@ -15,6 +15,12 @@ describe('神殿の筐体と操作案内',()=>{
   expect(html).toContain('class="gt-apron" aria-hidden="true"');expect(html).toContain('class="gt-medal-tray" aria-hidden="true"');
   expect(html).not.toMatch(/on(?:click|keydown)=|<script>/);expect(f.floor).toEqual(before);
  });
+ it('1,000万ポイント付近も省略せず表示し、桁の多い数字だけ縮める',async()=>{
+  const f=fixture();f.machine.state.balance=10100000;
+  const before=structuredClone(f.floor),html=await f.html();
+  expect(html).toContain('class="gt-readout-wide" data-gt-credit="true">10,100,000</b>');
+  expect(html).toContain('data-gt-payout="true">0</b>');expect(f.floor).toEqual(before);
+ });
  it('公開済みの区間から時間停止とEXを区別し、描画で進捗を変えない',async()=>{
   const f=fixture();
   for(const [name,scene] of [['normal','normal'],['gg','gg'],['gstop','gstop'],['medusa','medusa'],['sgg-ex','ex']] as const){
