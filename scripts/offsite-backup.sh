@@ -11,7 +11,7 @@ file="${1:?使い方: ./scripts/offsite-backup.sh backups/xxx.sql.gz}"
 # .env から 1 つ読む（引用符は外す）
 env_value() {
   [ -f .env ] || return 0
-  grep -E "^$1=" .env | tail -n 1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//'
+  { grep -E "^$1=" .env || true; } | tail -n 1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//'
 }
 url="${BACKUP_WEBHOOK_URL:-$(env_value BACKUP_WEBHOOK_URL)}"
 pass="${BACKUP_PASSPHRASE:-$(env_value BACKUP_PASSPHRASE)}"
