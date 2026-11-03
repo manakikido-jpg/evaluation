@@ -4,7 +4,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev
+# メモリの少ない VPS では Node が使えるメモリを自動で小さくするので、組み立て（TypeScript の変換。約 1.5GB）のときだけ上限を広げる
+RUN NODE_OPTIONS=--max-old-space-size=3072 npm run build && npm prune --omit=dev
 
 FROM node:22-slim
 WORKDIR /app
