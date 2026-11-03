@@ -2,20 +2,20 @@ import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('../src/web/public/gaisen-audio.js',import.meta.url),'utf8');
-function fixture(){
- let clock=0,calls=0,defer=false;const pending:Array<()=>void>=[],started:any[]=[],contexts:any[]=[],fail=new Set<string>();
+function fixture(motor=false){
+ let clock=0,calls=0,defer=false,unlock=false;let resumeDone:(()=>void)|null=null;const pending:Array<()=>void>=[],started:any[]=[],contexts:any[]=[],fail=new Set<string>();
  class Context{
-  currentTime=0;destination={};closed=false;
+  currentTime=0;destination={};closed=false;state='running';
   constructor(){contexts.push(this);}
-  async resume(){} async close(){this.closed=true;}
+  async resume(){if(unlock){this.state='suspended';await new Promise<void>(r=>resumeDone=()=>{this.state='running';r();});}} async close(){this.closed=true;}
   async decodeAudioData(buffer:ArrayBuffer){return {buffer};}
   createGain(){return {gain:{value:0,setTargetAtTime(value:number){this.value=value;}},connect(){},disconnect(){}};}
   createBufferSource(){const node={buffer:null as any,stopped:false,onended:null as null|(()=>void),connect(){},disconnect(){},start(){started.push(node);},stop(){this.stopped=true;this.onended?.();}};return node;}
  }
  const window:any={};
  runInNewContext(source,{window,AudioContext:Context,performance:{now:()=>clock},fetch:async(url:string)=>{calls++;if(defer)await new Promise<void>(r=>pending.push(r));return {ok:!fail.has(url),arrayBuffer:async()=>new ArrayBuffer(8)};}});
- const bank=new window.GaisenSampleBank({lever:'/lever.mp3',god:'/god.mp3'});
- return {bank,started,contexts,fail,calls:()=>calls,delay:()=>{defer=true;},release:()=>pending.splice(0).forEach(r=>r()),tick:(ms:number)=>{clock+=ms;},ready:()=>Promise.all([...bank.loading.values()])};
+ const bank=new window.GaisenSampleBank({lever:'/lever.mp3',god:'/god.mp3',...(motor?{'reel-motor':'/motor.mp3'}:{})});
+ return {bank,started,contexts,fail,calls:()=>calls,delay:()=>{defer=true;},waitUnlock:()=>{unlock=true;},unlock:()=>{resumeDone?.();},release:()=>pending.splice(0).forEach(r=>r()),tick:(ms:number)=>{clock+=ms;},ready:()=>Promise.all([...bank.loading.values()])};
 }
 describe('新台の別生成音源',()=>{
  it('音OFFでは音源取得もAudioContext作成も行わず、ON後は取得/復号を再利用する',async()=>{
@@ -41,4 +41,27 @@ describe('新台の別生成音源',()=>{
  it('音量変更を再生中にも適用し、MP3に設定した音量を重ねる',async()=>{
   const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();await f.bank.play('lever',{level:.5});f.bank.setVolume(.3);expect([...f.bank.nodes.values()][0].gain.gain.value).toBeCloseTo(.15);
  });
+ it('回転音は一つのループを使い、回転中の本数で音量を変え、最後の停止で止める',async()=>{
+  const f=fixture(true);f.bank.setEnabled(true);f.bank.prepare();await f.ready();f.bank.setMotor(3);await f.bank.motorLoading;
+  expect(f.started).toHaveLength(1);expect(f.started[0].loop).toBe(true);expect(f.started[0].loopStart).toBe(.25);expect(f.started[0].loopEnd).toBe(2.25);
+  const entry=[...f.bank.nodes.values()][0];expect(entry.level).toBeCloseTo(.16);
+  f.bank.setMotor(2);f.bank.setMotor(1);expect(f.started).toHaveLength(1);expect(entry.level).toBeCloseTo(.09);
+  f.bank.setVolume(.5);expect(entry.gain.gain.value).toBeCloseTo(.045);f.bank.setMotor(0);expect(f.started[0].stopped).toBe(true);expect(f.bank.motor).toBeNull();
+ });
+ it('回転音のロード待ち中に全停止・ミュートしたら後から回り始めない',async()=>{
+  for(const cancel of ['stop','mute']){const f=fixture(true);f.delay();f.bank.setEnabled(true);f.bank.prepare();f.bank.setMotor(3);const waiting=f.bank.motorLoading;
+   if(cancel==='stop')f.bank.setMotor(0);else f.bank.setEnabled(false);f.release();await waiting;await f.ready();expect(f.started).toHaveLength(0);}
+ });
+ it('ロード中に回転本数が変わっても最新の本数で一つだけ始まる',async()=>{
+  const f=fixture(true);f.delay();f.bank.setEnabled(true);f.bank.prepare();f.bank.setMotor(3);f.bank.setMotor(1);f.release();await f.ready();await f.bank.motorLoading;await f.bank.motorLoading;
+  expect(f.started).toHaveLength(1);expect([...f.bank.nodes.values()][0].level).toBeCloseTo(.09);f.bank.stopAll();expect(f.started[0].stopped).toBe(true);
+ });
+
+ it('音の開始許可待ちで遅れた操作音は鳴らさず、許可後の操作だけ鳴る',async()=>{
+  const f=fixture();f.waitUnlock();f.bank.setEnabled(true);f.bank.prepare();await f.ready();const old=f.bank.play('lever');f.tick(200);f.unlock();await old;expect(f.started).toHaveLength(0);await f.bank.play('lever');expect(f.started).toHaveLength(1);
+ });
+ it('AudioContextが中断中なら操作音を鳴らさない',async()=>{
+  const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();f.contexts[0].state='interrupted';await f.bank.play('lever');expect(f.started).toHaveLength(0);
+ });
+
 });
