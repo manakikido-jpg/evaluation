@@ -1,5 +1,12 @@
 # 作業の引き継ぎメモ
 
+## 2026年11月4日：縦長液晶のPR133を合流する
+- 依頼：「合流して」。PR133の合流をCodexがGitHubのPRから行うことを明示的に許可。一般公開・銭接続の保留は継続。
+- 開始：codex/gaisen-machine-feel、13ab331。PR133はDraft/open/mergeable、レビュー/未解決スレッドなし。本番は7c68889から追加変更なし。
+- 根拠：最終実装b9137aaの型/ビルド・全238ファイル2,649件成功とブラウザー確認を記録済み。13ab331までは検証と保存先の文書のみ。今回も依頼と決定だけを記録し、実装/テストは変更しない。
+- 次：記録を専用枝へ保存し、最新headのCIを確認。Draftを解除してhead SHAを指定しPR133を合流する。合流結果は[PR133](https://github.com/manakikido-jpg/evaluation/pull/133)のmerged状態・merge commit・説明を確認する。本番枝への直接pushはしない。
+- 残すこと：運営限定無料試遊のまま。VPS反映完了・実端末の聴感/性能は別途確認が必要。
+
 ## 2026年11月4日：押し順ナビを液晶の演出へ変更
 - 最終結果（実装b9137aa）：型チェック・ビルド成功。関連5ファイル38件、追加の音/当選通知2ファイル15件成功（4.39秒）。全238ファイル2,649件が単一の全件実行ですべて成功（1904.55秒、npm test -- --maxWorkers=2 --testTimeout=180000 --hookTimeout=180000）。途中で中止した旧デザインの全件実行は成功扱いに含めない。ログ/tmp/gaisen-upright-{types-release,build-release,sound-wins-release,all-release}.log。以降はこの検証記録のみ更新し、実装は変えない。
 - 保存済み：[Draft PR133](https://github.com/manakikido-jpg/evaluation/pull/133)、codex/gaisen-machine-feel。最終実装b9137aa、dfefe4f以降は検証/保存先の記録のみ。保存前fetchでも本番7c68889（PR132合流）から追加変更なし。PR132の合流許可は完了済みであり、この新変更の合流/一般公開/銭接続は行わない。実スマホの聴感/性能・VPS反映は未確認。次は新PRと確認画像を使うレビュー。
