@@ -9,7 +9,7 @@ function round(s:GaisenState,role:Role='none',rng=max){
 function missGstop(s:GaisenState){
  lever(s,max,'none');s.pending!.group=['1','3','5'];
  // 153は揃い/リーチ/HOLDのいずれでもない。
- stop(s,0,()=>0);stop(s,1,()=>2);stop(s,2,()=>1);
+ stop(s,0,()=>0);stop(s,1,()=>2);stop(s,2,n=>n===3?1:max(n));
 }
 describe('trial-2の前兆権利',()=>{
  it('通常の当選を確定権利として保存し、前兆終了時に一度だけGGへ渡す',()=>{
@@ -72,7 +72,7 @@ describe('trial-2の前兆権利',()=>{
    const s=scenario(1,'omen','trial-2');delete s.omenStocks;s.phase=phase;s.gstopReturn='omen';s.sggReturn='omen';s.gstopLeft=5;s.sggLeft=16;
    lever(s,max,'god');stop(s,0,max);const loaded=JSON.parse(JSON.stringify(s)) as GaisenState;
    stop(loaded,1,max);stop(loaded,2,max);
-   if(phase==='omen')expect(loaded).toMatchObject({phase:'gg',stocks:5,sets:1,omenStocks:0});
+   if(phase==='omen'||phase==='gstop')expect(loaded).toMatchObject({phase:'gg',stocks:5,sets:1,omenStocks:0});
    else{expect(loaded).toMatchObject({stocks:5,omenStocks:1});round(loaded,'god');expect(loaded.omenStocks).toBe(1);expect(loaded.stocks).toBe(11);}
   }
   const noOmen=newGaisen(1,'trial-2');round(noOmen,'god');expect(noOmen.stocks).toBe(4);

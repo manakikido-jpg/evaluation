@@ -1,3 +1,4 @@
+import {resetFrontMode,resetCeiling} from './modeRules.js';
 import {BET,UNIT,lever,newGaisen,stop,pendingOmenSets,type Phase,type Role,type Setting,type Spin,type RuleVersion} from './engine.js';
 
 import {spinNavi,phaseOutcome} from './phaseRules.js';
@@ -23,11 +24,14 @@ export function simulationRng(seed:number){
  return (max:number)=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return Math.floor(n/4294967296*max);};
 }
 /** 自然抽選のみ。補充は払出へ混ぜず、未消化権利は最後に別記する。 */
-export function simulateGaisen(setting:Setting,games:number,seed:number,policy:StopPolicy='follow-navi',version:RuleVersion='trial-1'){
+export function simulateGaisen(setting:Setting,games:number,seed:number,policy:StopPolicy='follow-navi',version:RuleVersion='trial-1',start:'normal'|'reset'='normal'){
  if(!Number.isInteger(setting)||setting<1||setting>6)throw Error('設定は1〜6です。');
  if(!Number.isSafeInteger(games)||games<1||games>1000000)throw Error('試算は1〜100万ゲームです。');
  if(!['follow-navi','left-only','miss-navi'].includes(policy))throw Error('押し順の条件を確認してください。');
+ if(!['normal','reset'].includes(start)||version==='trial-1'&&start!=='normal')throw Error('開始条件を確認してください。');
  const rng=simulationRng(seed),s=newGaisen(setting,version),initialBalance=s.balance;
+ if(start==='reset'){s.frontMode=resetFrontMode(setting,rng);s.backMode='low';s.ceilingLimit=resetCeiling(setting,rng);}
+ const initialState={frontMode:s.frontMode??'low1',backMode:s.backMode??'low',ceilingLimit:s.ceilingLimit??1480};
  let minNet=0,maxNet=0,refills=0,maxDrawdown=0,peak=0,paidGames=0,replayCredits=0;
  let maxNormalGames=0,maxChainSets=0,completedChains=0,awardedSets=0,startedSets=0;
  const phases:Record<string,number>={};
@@ -62,7 +66,7 @@ export function simulateGaisen(setting:Setting,games:number,seed:number,policy:S
   if(s.pending||s.balance!==initialBalance+refills*100000+net||s.stocks<0||s.ggLeft<0||s.sggLeft<0)
    throw Error('試算で状態または収支の不整合を検出しました。');
  }
- return {version,setting,games,seed,policy,input:s.input,output:s.output,
+ return {version,setting,games,seed,policy,...(version==='trial-2'?{start,initialState}:{}),input:s.input,output:s.output,
   // 旧試算と互換の投入/払出。リプレイ返却を両辺に含む。
   returnPercent:Number((s.output/s.input*100).toFixed(3)),net:s.output-s.input,
   // 実消費の観点も別記。実機媒体の機械割と同じ定義とは断言しない。
@@ -71,7 +75,7 @@ export function simulateGaisen(setting:Setting,games:number,seed:number,policy:S
   phases,byPhase,transitions,god:s.gods,ggFirsts:s.firsts,sgg:s.sggs,
   awardedSets,startedSets,completedChains,maxChainSets,maxNormalGames,
   unfinished:{phase:s.phase,ggLeft:s.ggLeft,stocks:s.stocks,sets:s.sets,normalGames:s.normalGames,
-   omen:s.omen,omenStocks:pendingOmenSets(s),gstopLeft:s.gstopLeft,hold:s.hold,sggLeft:s.sggLeft,medusa:s.medusa,ex:s.ex,
+   omen:s.omen,omenStocks:pendingOmenSets(s),gstopLeft:s.gstopLeft,hold:s.hold,sggLeft:s.sggLeft,medusa:s.medusa,...(version==='trial-2'?{frontMode:s.frontMode??'low1',backMode:s.backMode??'low',ceilingLimit:s.ceilingLimit??1480,bonusLoops:s.bonusLoops??[],holdGroup:s.holdGroup??[],mirrorHigh:!!s.mirrorHigh,medusaInfinite:!!s.medusaInfinite,medusaDeferred:!!s.medusaDeferred,sggRescueEligible:s.sggRescueEligible===true,sggLoops:s.sggLoops??[]}:{}),ex:s.ex,
    gstopReturn:s.gstopReturn,sggReturn:s.sggReturn,gstopQueue:s.gstopQueue??0,symbolHistory:s.symbolHistory??[],
    ...(version==='trial-2'?{ceilingStocks:s.ceilingStocks??0,ceilingLeft:s.ceilingLeft??0,ceilingLoop:s.ceilingLoop??0,ceilingHit:s.ceilingHit??false}:{})},provisional:true};
 }
@@ -79,7 +83,7 @@ export type GaisenSimulation=ReturnType<typeof simulateGaisen>;
 /** 同一ゲーム数・同一設定・同じ操作条件の試算だけまとめる。 */
 export function summarizeGaisen(samples:GaisenSimulation[]){
  const first=samples[0];
- if(!first||samples.some(s=>s.setting!==first.setting||s.games!==first.games||s.policy!==first.policy||s.version!==first.version)
+ if(!first||samples.some(s=>s.setting!==first.setting||s.games!==first.games||s.policy!==first.policy||s.version!==first.version||s.start!==first.start)
   ||new Set(samples.map(s=>s.seed)).size!==samples.length)throw Error('異なるseedで、同じ設定・ゲーム数・操作条件を指定してください。');
  const total=(f:(s:GaisenSimulation)=>number)=>samples.reduce((n,s)=>n+f(s),0);
  const range=(f:(s:GaisenSimulation)=>number)=>{const v=samples.map(f).sort((a,b)=>a-b);return {
@@ -94,7 +98,7 @@ export function summarizeGaisen(samples:GaisenSimulation[]){
    bellHits:total(s=>s.byPhase[phase].bellHits),bellMisses:total(s=>s.byPhase[phase].bellMisses),
    awardedSets:total(s=>s.byPhase[phase].awardedSets)}];
  }));
- return {version:first.version,setting:first.setting,policy:first.policy,runs:samples.length,gamesPerRun:first.games,games:total(s=>s.games),
+ return {version:first.version,...(first.version==='trial-2'?{start:first.start}:{}),setting:first.setting,policy:first.policy,runs:samples.length,gamesPerRun:first.games,games:total(s=>s.games),
   input,output,returnPercent:output/input*100,runReturnPercent:range(s=>s.output/s.input*100),
   sessionNet:range(s=>s.net),maxDrawdown:range(s=>s.maxDrawdown),positiveRuns:samples.filter(s=>s.net>0).length,
   zeroRuns:samples.filter(s=>s.net===0).length,refills:total(s=>s.refills),

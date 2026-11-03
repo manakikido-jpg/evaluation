@@ -47,10 +47,63 @@ describe('新版の神殿スロットの入口と保存領域',()=>{
   const f=await readTrial(db,now,'trial-2');
   return app.request(v2,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:'1',action,...extra})});
  }
+ it('新しい場面と設定抽選を保存し、GET/同時再送で引き直さず内部情報を隠す',async()=>{
+  await postV2('seat');
+  for(const scene of ['heaven','back-high','gstop-high'])expect((await postV2('scenario',{scenario:scene})).status).toBe(303);
+  let html=await(await app.request(v2,{headers:headers()})).text();
+  expect(html).toContain('GG中のG-STOP（鏡高確）');
+  await postV2('scenario',{scenario:'omen'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('setting',{setting:'6',revision}),postV2('setting',{setting:'6',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  const saved=(await readTrial(db,now,'trial-2')).machines[0]!.reservedReset;
+  expect(saved).toBeDefined();
+  for(let i=0;i<2;i++)html=await(await app.request(v2,{headers:headers()})).text();
+  expect((await readTrial(db,now,'trial-2')).machines[0]!.reservedReset).toEqual(saved);
+  for(const field of ['frontMode','backMode','bonusLoops','reservedReset','ceilingLimit','holdGroup'])expect(html).not.toContain(field);
+  await postV2('leave');
+  expect((await readTrial(db,now,'trial-2')).machines[0]!.state).toMatchObject({setting:6,frontMode:saved!.front,ceilingLimit:saved!.ceiling});
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
+ it('救済は最終STOPで一度だけ保存し、別台再開でも内部条件を公開しない',async()=>{
+  await postV2('seat');await postV2('scenario',{scenario:'sgg'});await postV2('lever');
+  let f=await readTrial(db,now,'trial-2');const s=f.machines[0]!.state;
+  s.sggLeft=1;s.sggRescueEligible=true;s.pending!.role='replay';s.pending!.model={flag:'blue',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{index:'2',revision}),postV2('stop',{index:'2',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  f=await readTrial(db,now,'trial-2');const result=f.machines[0]!.state;
+  expect(result).toMatchObject({sggRescueEligible:false,sets:1,stocks:0});expect(result.sggLoops).toHaveLength(1);
+  expect([50,75]).toContain(result.sggLoops![0]);
+  await postV2('leave');await postV2('seat',{machine:'2'});
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state.sggLoops).toEqual(result.sggLoops);
+  const html=await(await app.request(v2,{headers:headers()})).text();
+  expect(html).not.toContain('sggLoops');expect(html).not.toContain('sggRescueEligible');
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
+ it('メデューサとEXの確認場面・無限の保存と同時STOPをWebで扱い、実財布を変えない',async()=>{
+  await postV2('seat');await postV2('scenario',{scenario:'medusa'});
+  let html=await(await app.request(v2,{headers:headers()})).text();expect(html).toContain('時間停止10G');expect(html).toContain('value="sgg-ex"');
+  let f=await readTrial(db,now,'trial-2');f.machines[0]!.state.medusa=0;f.machines[0]!.state.medusaInfinite=true;f.machines[0]!.state.medusaDeferred=true;
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  await postV2('leave');await postV2('seat',{machine:'2'});await postV2('lever',{machine:'2'});
+  f=await readTrial(db,now,'trial-2');const s=f.machines[1]!.state;s.pending!.role='red7';s.pending!.model={flag:'red',missUnits:0};
+  await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
+  html=await(await app.request(v2,{headers:headers()})).text();expect(html).toContain('時間停止（巻き戻しまで）');expect(html).not.toContain('medusaDeferred');
+  await postV2('stop',{machine:'2',index:'2'});await postV2('stop',{machine:'2',index:'1'});
+  const revision=String((await readTrial(db,now,'trial-2')).revision);
+  const responses=await Promise.all([postV2('stop',{machine:'2',index:'0',revision}),postV2('stop',{machine:'2',index:'0',revision})]);
+  expect(responses.map(r=>r.status).sort()).toEqual([303,409]);
+  expect((await readTrial(db,now,'trial-2')).machines[1]!.state).toMatchObject({stocks:2,sggLeft:16,medusaInfinite:false,medusaDeferred:true,ex:true});
+  expect((await walletOf(db,id)).balance).toBe(3210);
+  const old=await(await app.request(path,{headers:headers()})).text();expect(old).not.toContain('value="sgg-ex"');expect(old).not.toContain('value="medusa"');
+ });
  it('天井直前から24G前兆へ進み、二重STOP・別台再開でも天井権利を一度だけ保全する',async()=>{
   await postV2('seat');await postV2('scenario',{scenario:'ceiling'});await postV2('lever');
   let f=await readTrial(db,now,'trial-2');let s=f.machines[0]!.state;
-  s.pending!.role='none';s.pending!.model={flag:'none',missUnits:0};
+  s.pending!.role='replay';s.pending!.model={flag:'yellowReplay',missUnits:0};
   await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_V2_KEY));
   await postV2('stop',{index:'0'});await postV2('stop',{index:'1'});
   const revision=String((await readTrial(db,now,'trial-2')).revision);

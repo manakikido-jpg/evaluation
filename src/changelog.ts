@@ -32,6 +32,24 @@ export type ChangelogEntry = {
 export const CHANGELOG: ChangelogEntry[] = [
   { id: '2026-11-03-backup-env-silent-fix', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🗄 鯖の外へのバックアップが、何も言わずに止まるのを直した', items: ['.env に無い設定（GDRIVE_REMOTE など）を読もうとしたところで、Google ドライブ・Discord へ送るスクリプトが、何も表示せずに失敗していました。', '無い設定は「既定の値」として進むようにしました。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: ['もう一度 FORCE=1 ./scripts/gdrive-backup.sh で送る。'], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-03-update-backup-no-photos', date: '2026-11-03', kind: 'improve', where: ['運用'], title: '🗄 更新の前のバックアップに、書き込みの記録の写真を入れないように', items: ['書き込みの記録の写真が DB の大部分（約1.5GB）を占め、更新のたびのバックアップが1.7GBになっていました。', '更新の前のバックアップには写真の中身を入れないようにしました（小さく・速くなります）。毎日4時のバックアップと Google ドライブには、今までどおり写真も入れます。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: [], postText: '', imagePrompt: '', notes: '更新の前のバックアップから戻すと、書き込みの記録の写真は空になる。写真も戻すときは毎日のバックアップを使う。' } },
+  {
+    id: '2026-11-03-gaisen-trial-finish', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの無料試遊にモード・追加抽選・G-STOPの詳細を追加',
+    items: ['表8種類・裏3種類のモードと成立役別の当選、履歴や特別役の追加ループを実装しました。', 'G-STOPの図柄候補・鏡・HOLD・リーチ目を整理。設定変更時の天井と開始モードを一度だけ抽選して保存します。', '天国ショート・裏天国・GG中の鏡高確の確認場面を追加。未公表の抽選は説明に残し、実機と同じ勝率とは扱いません。'],
+    announcement: {priority: 'none', audience: '神殿スロットの無料試遊を確認する運営', steps: ['社務所のカジノから「神殿スロットの新しい無料試遊（区間別抽選）」を開く。', '着席し「場面を選んで動作確認」で天国ショート・裏天国・GG中の鏡高確を選ぶ。', '設定変更は通常時の離席後、ボーナス終了後に反映される。'], postText: '', imagePrompt: '', notes: 'Draft PRで開発中。合流保留・一般公開なし・実財布未接続。採用表と資料差はdocs/gaisen-completion.md参照。'},
+  },
+  {
+    id: '2026-11-03-gaisen-sgg-loops', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの無料試遊にSGGの追加抽選・救済を追加',
+    items: ['通常SGGの赤7巻き戻しで、残りゲーム数に応じた追加ストック抽選を行います。', '赤7・フェイク・GODや時間停止・EXなどを引かずに終えたSGGに救済抽選を追加。追加セットの当選を保証するものではありません。', '抽選待ちと救済条件を途中保存・別台再開へ引き継ぎ、二重STOPでは増やしません。'],
+    announcement: { priority: 'none', audience: '神殿スロットの無料試遊を確認する運営', steps: ['社務所のカジノから「神殿スロットの新しい無料試遊（区間別抽選）」を開く。', '着席し「場面を選んで動作確認」でSGGを選ぶ。'], postText: '', imagePrompt: '', notes: 'Draft PRで開発中。運営用無料試遊のみ。通常/裏モードやメデューサ・EXの追加ループ等は未完成。一般公開・実財布接続は含まない。' },
+  },
+  {
+    id: '2026-11-03-gaisen-sgg-rules', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの無料試遊にメデューサ・EXの役別抽選を追加',
+    items: ['SGGの時間停止を成立役ごとの10・20・30Gと無限に分け、3枚役の当選分は最終Gで告知します。', '時間停止の最終Gでも巻き戻しを抽選し、赤7やGODによる巻き戻しで現在の時間停止を終えます。EXの突入と上乗せも役別に分けました。', 'メデューサ・SGG-EXの確認場面を追加。途中の保存・別台再開でも当選済みの時間停止を保持します。'],
+    announcement: { priority: 'none', audience: '神殿スロットの試遊を確認する運営', steps: ['社務所のカジノから「神殿スロットの新しい無料試遊（区間別抽選）」を開く。', '着席し「場面を選んで動作確認」でメデューサまたはSGG-EXを選ぶ。'], postText: '', imagePrompt: '架空の無料試遊画面でSGGの時間停止と新しい確認場面を示す。実在メンバーの名前・秘密の入口URLは含めない。', notes: '運営用の無料試遊のみ。表裏モード・SGG追加ループなどは未完成。実財布接続と一般公開は含まない。' },
+  },
   { id: '2026-11-03-update-build-sequential', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🧱 更新の組み立てを1つずつにして、メモリ不足で止まらないように', items: ['BOT・Web・セットアップ用を同時に組み立てていたため、TypeScript の変換でメモリが足りなくなり（Aborted・終了コード134）、更新が失敗していました。', 'Web とセットアップ用は自分で組み立てず、BOT と同じイメージ（sakuranomiya-app）を使うようにしました。組み立ては BOT の1回だけです。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: [], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-03-gdrive-backup', date: '2026-11-03', kind: 'new', where: ['運用'], title: '🗄 毎日のバックアップを Google ドライブにも置けるように', items: ['毎日4時のバックアップを暗号にして、Google ドライブにも送れるようにしました（30日分。古いものは自動で消す）。', 'VPS に rclone を入れて Google ドライブをつなぐと動きます。つないでいなければ何もしません。'], announcement: { priority: 'none', audience: '宮司（VPS）', steps: ['deploy-vps.md の「Google ドライブにも置く」の手順で rclone をつなぐ。', 'FORCE=1 ./scripts/gdrive-backup.sh で、ためしに送る。'], postText: '', imagePrompt: '', notes: 'あいことばは BACKUP_PASSPHRASE（Discord に置くときと同じ）。' } },
   { id: '2026-11-03-update-backup-keep', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🗄 更新の前のバックアップを、新しい5つだけ残すように', items: ['自動更新のたびにとる DB のバックアップを7日分残していたため、1日に何十回もの更新で70GBまでたまり、VPS のディスクがいっぱいになっていました。', '更新の前のバックアップは backups/sakuranomiya-update-….sql.gz にして、新しい5つだけ残します。毎日4時のバックアップは今までどおり7日分です。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: ['今たまっている古い更新前のバックアップは、手で消す（deploy-vps.md の手順）。'], postText: '', imagePrompt: '', notes: '' } },
