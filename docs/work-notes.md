@@ -18,7 +18,7 @@
 - 追加の回帰：初回pageshowで切替を維持、OS低減の通知後に光と扉を解除、切替中の通信失敗でrevisionと結果を変えず演出を取消。全6押し順の各150払出、G-STOP/HOLD、GODの液晶内表示/次レバー取消、JavaScriptなしも成功。テストサーバー停止済み。実装をcommitして全件テストへ進む。新しいPRは未作成/未push。
 - 最終結果：実装6a09bfeで型チェック・ビルド成功。全239ファイル2,665件成功（1441.72秒、npm test -- --maxWorkers=4 --testTimeout=180000 --hookTimeout=180000）。型/ビルドのログは/tmp/gaisen-sync-{types,build}-final.log、全件は/tmp/gaisen-sync-all-final.log。以後は検証と保存先の文書のみ更新する。
 - 検証範囲の補足：非表示/復元はdocument.hiddenとvisibilitychange/pagehide/pageshowを試験側で模擬したイベント処理の確認。実OSのタブ停止/画面ロックや実端末での聴感・発熱を確認済みとは扱わない。手順書とPRにも区別を記載する。
-- 保存前の確認：全件成功後のfetchでも本番fcc02e2から追加変更なし。専用枝codex/gaisen-synchronized-cabinetへ保存して新しいDraft PRを作成する。今回の合流・一般公開・銭接続は行わない。実端末の聴感/発熱/電池/画面ロック復帰とVPS反映は未確認。
+- 保存済み：[Draft PR135](https://github.com/manakikido-jpg/evaluation/pull/135)、codex/gaisen-synchronized-cabinet。実装6a09bfe、66e25a4以降は検証/保存先の文書のみ。全件成功後のfetchでも本番fcc02e2から追加変更なしを確認して専用枝へpushした。今回の合流・一般公開・銭接続は行っていない。実端末の聴感/発熱/電池/画面ロック復帰とVPS反映は未確認。次はPR135と確認画像のレビュー、実機の確認手順はdocs/gaisen-smartphone-check.md。
 
 ## 2026年11月4日：新台のPR134を合流する
 - 依頼：「合流して」。CodexがPR134をGitHubのPRから合流することを明示的に許可。一般公開・銭接続の保留は継続。
