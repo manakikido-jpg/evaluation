@@ -30,6 +30,18 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-03-inn-day-extension', date: '2026-11-03', kind: 'new', where: ['Discord'],
+    title: '🏨 24時間の宿を1日ずつ延長',
+    items: ['部屋主が「部屋の設定」から料金と期限を確認して、宿を24時間ずつ延長できるようにしました。', '料金は現在の24時間宿と同じで、奉納している方は無料です。残っている時間もそのまま引き継ぎます。'],
+    announcement: {
+      priority: 'required', audience: '24時間の宿を使う方',
+      steps: ['自分の宿で「部屋の設定」→「1日延長」を押す。', '料金と期限を確認し、「この料金で1日延長する」を押す。'],
+      postText: '🏨 24時間の宿を1日ずつ延長できるようになりました！ 部屋主の方は「部屋の設定」→「1日延長」へ。料金と期限を確認してから確定できます。料金は現在の24時間宿と同じで、奉納している方は無料です。',
+      imagePrompt: '神社の宿をモチーフに、桜色を添えた案内画像。「24時間の宿」「1日延長」「部屋の設定から」の3つを読みやすく置く。料金の固定額や実在しない画面は描かない。',
+      notes: '部屋主本人だけ。1時間ごとの宿は対象外。期限切れでも宿が残っていれば確定時から24時間。BOTの更新が必要。',
+    },
+  },
   { id: '2026-11-03-backup-env-silent-fix', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🗄 鯖の外へのバックアップが、何も言わずに止まるのを直した', items: ['.env に無い設定（GDRIVE_REMOTE など）を読もうとしたところで、Google ドライブ・Discord へ送るスクリプトが、何も表示せずに失敗していました。', '無い設定は「既定の値」として進むようにしました。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: ['もう一度 FORCE=1 ./scripts/gdrive-backup.sh で送る。'], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-03-update-backup-no-photos', date: '2026-11-03', kind: 'improve', where: ['運用'], title: '🗄 更新の前のバックアップに、書き込みの記録の写真を入れないように', items: ['書き込みの記録の写真が DB の大部分（約1.5GB）を占め、更新のたびのバックアップが1.7GBになっていました。', '更新の前のバックアップには写真の中身を入れないようにしました（小さく・速くなります）。毎日4時のバックアップと Google ドライブには、今までどおり写真も入れます。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: [], postText: '', imagePrompt: '', notes: '更新の前のバックアップから戻すと、書き込みの記録の写真は空になる。写真も戻すときは毎日のバックアップを使う。' } },
   { id: '2026-11-03-update-build-sequential', date: '2026-11-03', kind: 'fix', where: ['運用'], title: '🧱 更新の組み立てを1つずつにして、メモリ不足で止まらないように', items: ['BOT・Web・セットアップ用を同時に組み立てていたため、TypeScript の変換でメモリが足りなくなり（Aborted・終了コード134）、更新が失敗していました。', 'Web とセットアップ用は自分で組み立てず、BOT と同じイメージ（sakuranomiya-app）を使うようにしました。組み立ては BOT の1回だけです。'], announcement: { priority: 'none', audience: '運営（VPS）', steps: [], postText: '', imagePrompt: '', notes: '' } },
