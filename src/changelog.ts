@@ -30,6 +30,12 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-03-gaisen-cabinet-polish', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの筐体・背景・音とスマホ操作を改善',
+    items: ['独自の神殿背景と区間ごとの光で筐体を整え、時間停止とEXも見分けやすくしました。', '次のSTOPを表示し、スマホの「操作に集中」でリールと操作部をまとめます。音量を選べ、成功した停止後の払出・区間移行に効果音が流れます。', '音OFF・動きの低減・途中再開に対応。運営用の無料試遊のみで、抽選・払出額・銭残高は変えません。'],
+    announcement: {priority: 'none', audience: '無料試遊を確認する運営', steps: ['社務所のカジノから新版の無料試遊へ着席する。', '「操作に集中」で表示を切り替える。音をONにし音量を選ぶ。'], postText: '', imagePrompt: '', notes: '一般公開・銭接続は保留。独自のSVG背景と合成音。'},
+  },
   { id: '2026-11-03-inn-name-mark', date: '2026-11-03', kind: 'fix', where: ['Discord'], title: '🏨 宿の名前の目印が消えないように・宿が自動で並ぶように', items: ['宿（24時間の宿・1時間ごとの宿）の名前を変えると、頭の 🏨・⏱ の目印が消えていたのを直しました。名前を変えても付けたままになります。', '宿は同じカテゴリの中で、🏨 24時間の宿 → ⏱ 1時間ごとの宿 → ふつうの部屋 の順に自動で並ぶようにしました。'], announcement: { priority: 'none', audience: '宿を使うメンバー', steps: [], postText: '', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-03-inn-day-extension', date: '2026-11-03', kind: 'new', where: ['Discord'],
