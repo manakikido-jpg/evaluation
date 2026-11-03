@@ -31,6 +31,12 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-04-gaisen-synchronized-cabinet', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの液晶・筐体の光・音を連動',
+    items: ['公開済みの区間が変わると、短い扉や光で背景をつなぎます。', '当選時は上部・側面・GODパネルが段階に合わせて光ります。', '音が重なった時は当選・払出を優先して音量を自動調整します。', '一般公開と銭接続は保留のままです。'],
+    announcement: {priority: 'none', audience: '宮司の無料試遊', steps: ['社務所Web → カジノ管理 → 神殿スロットの無料試遊'], postText: '', imagePrompt: '', notes: '運営内の改善。実スマホの聴感・発熱・電池消費の確認は別途必要。'},
+  },
+  {
     id: '2026-11-04-gaisen-immersive-effects', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットの回転音・液晶・当選演出とスマホ操作を改善',
     items: ['リールの加速と停止、回転中の本数に合わせた音、左右の停止音を調整しました。', '区間別の奥行きと数字、GOD当選の暗転から出現までを液晶内に加えました。', '横向きの集中表示を調整しました。一般公開・銭との接続は保留のままです。'],

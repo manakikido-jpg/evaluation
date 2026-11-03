@@ -3,15 +3,15 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('../src/web/public/gaisen-trial.js',import.meta.url),'utf8');
 function fixture(){
- const handlers=new Map<string,Function[]>(),clicked:string[]=[];
+ const handlers=new Map<string,Function[]>(),windowHandlers=new Map<string,Function[]>(),clicked:string[]=[];let stageCancels=0;
  let dialog=false,hidden=false;
  const buttons=Object.fromEntries(['lever','stop-0','stop-1','stop-2'].map(key=>[key,{disabled:false,click:()=>clicked.push(key)}]));
  const control={value:'',textContent:'',setAttribute(){}};
  const root={dataset:{},style:{setProperty(){}},querySelectorAll:()=>[],querySelector:(selector:string)=>selector==='.gt-machine'?{}:selector.startsWith('[data-gt-key=')?buttons[selector.match(/"([^"]+)"/)![1]!]:control};
  const document={get hidden(){return hidden;},querySelector:(s:string)=>s==='[data-gaisen-trial]'?root:s==='dialog[open]'&&dialog?{}:null,addEventListener:(name:string,fn:Function)=>handlers.set(name,[...(handlers.get(name)||[]),fn])};
- runInNewContext(source,{window:{addEventListener(){}},document,localStorage:{getItem:()=>null},performance:{now:()=>1000},cancelAnimationFrame(){},matchMedia:()=>({matches:false,addEventListener(){}})});
+ runInNewContext(source,{window:{addEventListener:(name:string,fn:Function)=>windowHandlers.set(name,[...(windowHandlers.get(name)||[]),fn]),GaisenStageDirector:class{cancel(){stageCancels++;}}},document,localStorage:{getItem:()=>null},performance:{now:()=>1000},cancelAnimationFrame(){},matchMedia:()=>({matches:false,addEventListener(){}})});
  function key(key:string,extras:Record<string,unknown>={}){let prevented=false;const e={key,code:key===' '?'Space':'Digit'+key,target:{closest:()=>null},preventDefault:()=>{prevented=true;},...extras};for(const fn of handlers.get('keydown')||[])fn(e);return prevented;}
- return {clicked,buttons,key,dialog:(v:boolean)=>{dialog=v;},hide:()=>{hidden=true;}};
+ return {clicked,buttons,key,show:(persisted:boolean)=>{for(const fn of windowHandlers.get('pageshow')||[])fn({persisted});},stageCancels:()=>stageCancels,dialog:(v:boolean)=>{dialog=v;},hide:()=>{hidden=true;}};
 }
 describe('新台のキー操作',()=>{
  it('Spaceと1/2/3を現在の操作ボタンへ渡し、長押しや無効な位置では送らない',()=>{
@@ -31,4 +31,8 @@ describe('新台のキー操作',()=>{
   const f=fixture(),button={};const target={closest:(query:string)=>query==='button'||query==='[data-gt-key]'?button:null};
   expect(f.key(' ',{target})).toBe(true);expect(f.clicked).toEqual(['lever']);expect(f.key('ArrowDown')).toBe(false);expect(f.key('4')).toBe(false);
  });
+ it('初回表示の完了で開始済みの演出を消さず、ページ復元時だけ後片付けする',()=>{
+  const f=fixture();f.show(false);expect(f.stageCancels()).toBe(0);f.show(true);expect(f.stageCancels()).toBe(1);expect(f.key('1')).toBe(true);
+ });
+
 });

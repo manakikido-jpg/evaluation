@@ -13,7 +13,7 @@ describe('神殿の筐体と操作案内',()=>{
   expect(html).toContain('data-gt-credit="true">98,765</b>');expect(html).toContain('data-gt-payout="true">150</b>');
   expect(html).toContain('gt-lever-hardware');expect(html.match(/class="gt-stop-lamp"/g)).toHaveLength(3);
   expect(html).toContain('class="gt-apron" aria-hidden="true"');expect(html).toContain('class="gt-medal-tray" aria-hidden="true"');
-  expect(html).not.toMatch(/on(?:click|keydown)=|<script>/);expect(f.floor).toEqual(before);
+  expect(html).toContain('gaisen-stage.js?v=');expect(html).not.toMatch(/data-transition=|data-light-stage=/);expect(html).not.toMatch(/on(?:click|keydown)=|<script>/);expect(f.floor).toEqual(before);
  });
  it('1,000万ポイント付近も省略せず表示し、桁の多い数字だけ縮める',async()=>{
   const f=fixture();f.machine.state.balance=10100000;

@@ -2,20 +2,21 @@ import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('../src/web/public/gaisen-audio.js',import.meta.url),'utf8');
-function fixture(motor=false){
- let clock=0,calls=0,defer=false,unlock=false;let resumeDone:(()=>void)|null=null;const pending:Array<()=>void>=[],started:any[]=[],contexts:any[]=[],fail=new Set<string>();
+function fixture(motor=false,limiter=false){
+ let clock=0,calls=0,defer=false,unlock=false;let resumeDone:(()=>void)|null=null;const pending:Array<()=>void>=[],started:any[]=[],contexts:any[]=[],compressors:any[]=[],fail=new Set<string>();
  class Context{
   currentTime=0;destination={};closed=false;state='running';
   constructor(){contexts.push(this);}
   async resume(){if(unlock){this.state='suspended';await new Promise<void>(r=>resumeDone=()=>{this.state='running';r();});}} async close(){this.closed=true;}
   async decodeAudioData(buffer:ArrayBuffer){return {buffer};}
+  createDynamicsCompressor(){if(!limiter)return undefined;const node:any={connect(){}};for(const key of ['threshold','knee','ratio','attack','release'])node[key]={value:0};compressors.push(node);return node;}
   createGain(){return {gain:{value:0,setTargetAtTime(value:number){this.value=value;}},connect(){},disconnect(){}};}
   createBufferSource(){const node={buffer:null as any,stopped:false,onended:null as null|(()=>void),connect(){},disconnect(){},start(){started.push(node);},stop(){this.stopped=true;this.onended?.();}};return node;}
  }
  const window:any={};
  runInNewContext(source,{window,AudioContext:Context,performance:{now:()=>clock},fetch:async(url:string)=>{calls++;if(defer)await new Promise<void>(r=>pending.push(r));return {ok:!fail.has(url),arrayBuffer:async()=>new ArrayBuffer(8)};}});
  const bank=new window.GaisenSampleBank({lever:'/lever.mp3',god:'/god.mp3',...(motor?{'reel-motor':'/motor.mp3'}:{})});
- return {bank,started,contexts,fail,calls:()=>calls,delay:()=>{defer=true;},waitUnlock:()=>{unlock=true;},unlock:()=>{resumeDone?.();},release:()=>pending.splice(0).forEach(r=>r()),tick:(ms:number)=>{clock+=ms;},ready:()=>Promise.all([...bank.loading.values()])};
+ return {bank,started,contexts,compressors,fail,calls:()=>calls,delay:()=>{defer=true;},waitUnlock:()=>{unlock=true;},unlock:()=>{resumeDone?.();},release:()=>pending.splice(0).forEach(r=>r()),tick:(ms:number)=>{clock+=ms;},ready:()=>Promise.all([...bank.loading.values()])};
 }
 describe('新台の別生成音源',()=>{
  it('音OFFでは音源取得もAudioContext作成も行わず、ON後は取得/復号を再利用する',async()=>{
@@ -62,6 +63,23 @@ describe('新台の別生成音源',()=>{
  });
  it('AudioContextが中断中なら操作音を鳴らさない',async()=>{
   const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();f.contexts[0].state='interrupted';await f.bank.play('lever');expect(f.started).toHaveLength(0);
+ });
+
+ it('当選音を優先して回転音・操作音を抑え、終了後は現在の音量へ戻す',async()=>{
+  const f=fixture(true);f.bank.setEnabled(true);f.bank.prepare();await f.ready();f.bank.setMotor(3);await f.bank.motorLoading;await f.bank.play('lever');
+  const motor=[...f.bank.nodes.values()].find(e=>e.group==='motor');await f.bank.play('god',{group:'win'});const play=[...f.bank.nodes.values()].find(e=>e.group==='play');expect(play.gain.gain.value).toBeCloseTo(.65*.65*.35);expect(motor.gain.gain.value).toBeCloseTo(.65*.16*.14);
+  f.bank.setVolume(.3);f.bank.stopGroup('win');expect(play.gain.gain.value).toBeCloseTo(.3*.65);expect(motor.gain.gain.value).toBeCloseTo(.3*.16*.65);
+ });
+ it('同時に重なった操作音の音量を抑え、片方が終われば戻す',async()=>{
+  const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();await f.bank.play('lever');await f.bank.play('lever');for(const entry of f.bank.nodes.values())expect(entry.gain.gain.value).toBeCloseTo(.65*.65/Math.sqrt(2));f.started[0].stop();expect([...f.bank.nodes.values()][0].gain.gain.value).toBeCloseTo(.65*.65);
+ });
+
+ it('払出音の間は操作と回転音を抑え、払出が終わると戻す',async()=>{
+  const f=fixture(true);f.bank.urls.payout='/payout.mp3';f.bank.setEnabled(true);f.bank.prepare();await f.ready();f.bank.setMotor(3);await f.bank.motorLoading;await f.bank.play('lever');await f.bank.play('payout');
+  const motor=[...f.bank.nodes.values()].find(e=>e.group==='motor'),operation=[...f.bank.nodes.values()].find(e=>e.priority===1);expect(motor.gain.gain.value).toBeCloseTo(.65*.16*.35);expect(operation.gain.gain.value).toBeCloseTo(.65*.65*.7);f.started.at(-1).stop();expect(operation.gain.gain.value).toBeCloseTo(.65*.65);
+ });
+ it('重なりのピークを抑える出力を一度だけ作り、ミュートで閉じて再ONで作り直す',async()=>{
+  const f=fixture(false,true);f.bank.setEnabled(true);f.bank.prepare();f.bank.prepare();expect(f.compressors).toHaveLength(1);expect(f.compressors[0].threshold.value).toBe(-8);expect(f.compressors[0].ratio.value).toBe(8);f.bank.setEnabled(false);expect(f.contexts[0].closed).toBe(true);f.bank.setEnabled(true);f.bank.prepare();expect(f.compressors).toHaveLength(2);
  });
 
 });
