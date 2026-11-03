@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "imageMethod": "image_genによる独自生成。1600px/800pxのWebPへ変換。実機素材の流用なし。",
+  "imageMethod": "image_genによる独自生成。背景は1600px/800px、リール絵柄は透過256pxのWebPへ変換。実機素材の流用なし。",
   "audioMethod": "build_audio.pyの機械衝撃/金属モード/鐘の倍音/初期反射を使う物理モデル合成。録音・音声生成AIの出力ではない。",
   "files": [
     {
@@ -152,6 +152,54 @@
       "channels": 2,
       "decodedPeak": 0.69064,
       "rmsDbFS": -22.04
+    },
+    {
+      "file": "symbol-gold7.webp",
+      "bytes": 12286,
+      "sha256": "cf7056ab4dccda41524001b1a46a9bf91f421b65e1dff46e4c88551f12ee318e",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-blue7.webp",
+      "bytes": 16380,
+      "sha256": "0ec3ab9091c1b967daa15b353231c013971a1daba96e7564c31cc3d4305dd95f",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-red7.webp",
+      "bytes": 15520,
+      "sha256": "d936666540d1ea746eef617dfc5cb557af7ae4b4793b2bf61b9d839900c60e1f",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-god.webp",
+      "bytes": 18044,
+      "sha256": "7cfa20857388d987eece1d255b381fb490b0fdc4e77c00b2253f9817e83d6662",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-flower.webp",
+      "bytes": 16206,
+      "sha256": "509a658d550e67149f3eace0a287f3b5c05fde10ea02c3144c5bc61526169f1e",
+      "width": 256,
+      "height": 256,
+      "transparent": true
+    },
+    {
+      "file": "symbol-crest.webp",
+      "bytes": 13980,
+      "sha256": "5d2cc5057895ba21200c7dd97fe02ebd7f40fbd4418532d010d7e4136cc2ba72",
+      "width": 256,
+      "height": 256,
+      "transparent": true
     }
   ]
 }

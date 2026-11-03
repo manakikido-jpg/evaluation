@@ -4,7 +4,7 @@ import type {TrialView} from '../../services/casino/gaisen/trial.js';
 import {PHASE_NAMES,SCENARIOS,type Scenario,type RuleVersion} from '../../services/casino/gaisen/engine.js';
 import {Layout} from './layout.js';
 import {assetUrl} from '../assets.js';
-import {GaisenReels,reelPresentation} from './gaisenReels.js';
+import {GaisenReels,reelPresentation,stopGuidance} from './gaisenReels.js';
 import {WinResult,GaisenWinStage} from './gaisenWin.js';
 const fmt=(n:number)=>n.toLocaleString('ja-JP');
 const SCENE:Record<Scenario,string>={normal:'通常時',gg:'GG',god:'GOD降臨後',gstop:'G-STOP',sgg:'SGG',ceiling:'天井直前',omen:'前兆（当選済み）',medusa:'メデューサ（時間停止）','sgg-ex':'SGG-EX',heaven:'天国ショート', 'back-high':'裏天国', 'gstop-high':'GG中のG-STOP（鏡高確）'};
@@ -15,8 +15,7 @@ export function GaisenTrial({m,session,error,version='trial-1'}:{m:TrialView;ses
  const soundUrls=Object.fromEntries(soundKeys.map(key=>[key,assetUrl('gaisen-media-'+key+'.mp3')]));
  // 公開済みの区間と押し順だけを見た目に使う。内部モードは参照しない。
  const scene=own?.phase==='sgg'?(own.ex?'ex':own.medusa>0||own.medusaInfinite?'medusa':'sgg'):own?.phase??'normal';
- const order=own?.phase==='gstop'?[0,1,2]:own?.navi??[0,1,2];
- const nextStop=own?.spinning?order.find(i=>!own.stopped.includes(i)):undefined;
+ const {order,next:nextStop}=own?stopGuidance(own):{order:[0,1,2],next:undefined};
  const guide=own?.spinning?`${['左','中','右'][nextStop??0]}STOP${own.navi?'（押し順ナビ）':''}`:m.points<30?'ポイントを補充してください':'レバーで次のゲームへ';
  const fields=(machine:number,action:string)=><><input type="hidden" name="_csrf" value={session.csrfToken}/><input type="hidden" name="revision" value={m.revision}/><input type="hidden" name="machine" value={machine}/><input type="hidden" name="action" value={action}/></>;
  const floor=<section class="gt-floor" aria-label="5台の試遊台">{m.machines.map(t=><article class={'gt-tile'+(t.mine?' mine':'')}><b>第{t.id}神殿</b><span>{t.ownerName?`${t.ownerName} が着席中`:'空席'}</span><small>設定{t.setting}{t.reservedSetting!==null?` → ${t.reservedSetting}予約`:''}</small>{t.occupied?<small>{t.mine?'あなたが操作できます':'着席した本人のみ操作可能'}</small>:<form method="post" action={PATH}>{fields(t.id,'seat')}<button disabled={!!own}>着席{m.saved?'して保存分を再開':''}</button></form>}<form method="post" action={PATH}>{fields(t.id,'setting')}<label>設定<select name="setting" aria-label={`第${t.id}神殿の設定`}>{[1,2,3,4,5,6].map(n=><option value={n} selected={n===t.setting}>{n}</option>)}</select></label><button>変更予約</button></form><small>{t.stat.sample?'場面確認を含む':t.lastScenario}</small><small>本日 {t.stat.spins}G · GOD {t.stat.god} / GG初当たり {t.stat.gg} / SGG {t.stat.sgg}</small><small>差枚 {fmt((t.stat.output-t.stat.input)/10)}枚相当{t.stat.resumed?' · 保存分再開あり':''}</small><svg viewBox="0 0 200 44" role="img" aria-label={`第${t.id}神殿の本日の差枚推移`}><path d="M0 22 H200" class="gt-zero"/><polyline points={t.stat.graph.map((x,i,arr)=>`${arr.length===1?0:i*200/(arr.length-1)},${22-x/Math.max(1,...arr.map(Math.abs))*20}`).join(' ')} class="gt-line"/></svg></article>)}</section>;

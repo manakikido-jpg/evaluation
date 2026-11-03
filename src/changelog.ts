@@ -31,6 +31,12 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: '2026-11-03-gaisen-reel-art', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの絵柄を立体的なWebP素材にし、停止位置を案内',
+    items: ['金・青・赤の7、神紋、桜、宝石を独自に生成した透過WebPへ変えました。', '次に止めるリールへ押し順の番号と「次のSTOP」を重ね、停止後は消します。ボタンとリールの案内をそろえました。', '表示だけの変更です。抽選・払出・停止済みの出目や保存権利は維持し、一般公開と銭への接続は保留します。'],
+    announcement: {priority: 'none', audience: '無料試遊を確認する運営', steps: ['新版の無料試遊へ着席する。', 'レバーで回転し、リールの番号と次のSTOPを確認する。'], postText: '', imagePrompt: '', notes: 'Draft PR132の続行。独自の透過WebP6点。未停止の役は画像や案内に反映しない。'},
+  },
+  {
     id: '2026-11-03-gaisen-generated-media', date: '2026-11-03', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットに生成した背景画像と独自音源を追加',
     items: ['石造神殿と金色の扉の背景を画像生成で制作し、PC用・スマホ用のWebPで表示します。', 'レバー・STOP・払出・当選など13種類の効果音を独立した音源として制作しました。機械の衝撃や金属の響きと残響を重ねた独自の合成音です。', '音量・ミュート・スキップを維持し、遅れて届いた操作音は後から鳴らしません。一般公開と銭への接続は保留です。'],

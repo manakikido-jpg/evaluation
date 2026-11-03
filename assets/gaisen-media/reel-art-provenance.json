@@ -1,0 +1,47 @@
+{
+  "method": "image_gen独自生成。透過の余白を整えて256pxのWebPに変換。原画PNGは上書きしない。",
+  "records": [
+    {
+      "symbol": "gold7",
+      "prompt": "Create exactly ONE original premium slot reel symbol on a square transparent canvas, true alpha background. Cinematic physically based 3D product rendering, polished metal, realistic material highlights, crisp silhouette, softly rounded bevels, near frontal view with only a slight depth visible. The icon should occupy about 75 percent of the canvas, centered with clear transparent margin on every edge. It must be readable at 50 pixels tall. No ground plane, no rectangular background, no plate filling the canvas, no external drop shadow, no multiple copies, no scene, no border around the image, no brand logo, no caption or small text, no sparkles floating outside the icon. Consistent luxury bronze/gold material accents and high quality reflections, elegant and substantial rather than cartoon-like. A single bold classic numeral 7, upright with a slightly slanted descending stroke, thick extruded body made of polished warm champagne gold with darker bronze sides and a pale gold beveled rim. The numeral is the entire symbol, not inside a badge. The only visible character is 7.",
+      "original": "/workspace/generated_images/exec-ce6461dd-41f6-4abb-8797-3448f0de9e2e.png",
+      "file": "symbol-gold7.webp",
+      "originalSha256": "7af96f5b9934c5552808795e2b54df3b5d1473983cb0efd8ef07fad27f739797"
+    },
+    {
+      "symbol": "blue7",
+      "prompt": "Create exactly ONE original premium slot reel symbol on a square transparent canvas, true alpha background. Cinematic physically based 3D product rendering, polished metal, realistic material highlights, crisp silhouette, softly rounded bevels, near frontal view with only a slight depth visible. The icon should occupy about 75 percent of the canvas, centered with clear transparent margin on every edge. It must be readable at 50 pixels tall. No ground plane, no rectangular background, no plate filling the canvas, no external drop shadow, no multiple copies, no scene, no border around the image, no brand logo, no caption or small text, no sparkles floating outside the icon. Consistent luxury bronze/gold material accents and high quality reflections, elegant and substantial rather than cartoon-like. A single bold classic numeral 7, upright with a slightly slanted descending stroke, thick extruded body of rich sapphire blue enamel with polished gold beveled edges and bronze metal sides. The numeral is the entire symbol, not inside a badge. The only visible character is 7.",
+      "original": "/workspace/generated_images/exec-c6d6ccbd-7c69-40b2-8ee7-713fc6625397.png",
+      "file": "symbol-blue7.webp",
+      "originalSha256": "eb8c1e75c676e3b8c50df5ea72d2e00fa8946b9e399b3e60f8616bcbba183dd9"
+    },
+    {
+      "symbol": "red7",
+      "prompt": "Create exactly ONE original premium slot reel symbol on a square transparent canvas, true alpha background. Cinematic physically based 3D product rendering, polished metal, realistic material highlights, crisp silhouette, softly rounded bevels, near frontal view with only a slight depth visible. The icon should occupy about 75 percent of the canvas, centered with clear transparent margin on every edge. It must be readable at 50 pixels tall. No ground plane, no rectangular background, no plate filling the canvas, no external drop shadow, no multiple copies, no scene, no border around the image, no brand logo, no caption or small text, no sparkles floating outside the icon. Consistent luxury bronze/gold material accents and high quality reflections, elegant and substantial rather than cartoon-like. A single bold classic numeral 7, upright with a slightly slanted descending stroke, thick extruded body of deep ruby crimson enamel with polished gold beveled edges and bronze metal sides. The numeral is the entire symbol, not inside a badge. The only visible character is 7.",
+      "original": "/workspace/generated_images/exec-665f05f1-6a5b-4d3a-b6c8-ea5860fb75f8.png",
+      "file": "symbol-red7.webp",
+      "originalSha256": "9d60d3ca4d786671293ee35a3cfec91c672765b1c7527a4be0c7a0b0ef61dd0d"
+    },
+    {
+      "symbol": "god",
+      "prompt": "Create exactly ONE original premium slot reel symbol on a square transparent canvas, true alpha background. Cinematic physically based 3D product rendering, polished metal, realistic material highlights, crisp silhouette, softly rounded bevels, near frontal view with only a slight depth visible. The icon should occupy about 75 percent of the canvas, centered with clear transparent margin on every edge. It must be readable at 50 pixels tall. No ground plane, no rectangular background, no plate filling the canvas, no external drop shadow, no multiple copies, no scene, no border around the image, no brand logo, no caption or small text, no sparkles floating outside the icon. Consistent luxury bronze/gold material accents and high quality reflections, elegant and substantial rather than cartoon-like. A majestic gold winged laurel medallion, broad compact silhouette, a small central ancient temple pediment with three clear columns embossed into a dark bronze shield. Short sculpted gold wings extend left and right and polished laurel leaves frame the base. A single integrated emblem. No letters or words anywhere. Keep the center composition simple enough to place a separate HTML word across the lower portion.",
+      "original": "/workspace/generated_images/exec-fe9bcca6-c98b-428f-9829-2bcd8d37578b.png",
+      "file": "symbol-god.webp",
+      "originalSha256": "1acca2e7ed24a02a647e4d89520bcf320b5473f4760fc977a1cf4eccb3da898a"
+    },
+    {
+      "symbol": "flower",
+      "prompt": "Create exactly ONE original premium slot reel symbol on a square transparent canvas, true alpha background. Cinematic physically based 3D product rendering, polished metal, realistic material highlights, crisp silhouette, softly rounded bevels, near frontal view with only a slight depth visible. The icon should occupy about 75 percent of the canvas, centered with clear transparent margin on every edge. It must be readable at 50 pixels tall. No ground plane, no rectangular background, no plate filling the canvas, no external drop shadow, no multiple copies, no scene, no border around the image, no brand logo, no caption or small text, no sparkles floating outside the icon. Consistent luxury bronze/gold material accents and high quality reflections, elegant and substantial rather than cartoon-like. A single five-petaled Japanese cherry blossom symbol, sculpted glossy soft pink ceramic petals with a deeper rose pink center, tiny gold stamens and a very thin subtle champagne gold outline on the petal edges. Frontal five-lobed flower silhouette, rounded thick petals, no stalk, no leaves, no branches. No characters.",
+      "original": "/workspace/generated_images/exec-b78eeb07-c369-4528-abaa-26f76753a735.png",
+      "file": "symbol-flower.webp",
+      "originalSha256": "43833a28a4c8423c046bd0a6e3c5952ec9ada3467594d3314ab61a9f5b656a0e"
+    },
+    {
+      "symbol": "crest",
+      "prompt": "Create exactly ONE original premium slot reel symbol on a square transparent canvas, true alpha background. Cinematic physically based 3D product rendering, polished metal, realistic material highlights, crisp silhouette, softly rounded bevels, near frontal view with only a slight depth visible. The icon should occupy about 75 percent of the canvas, centered with clear transparent margin on every edge. It must be readable at 50 pixels tall. No ground plane, no rectangular background, no plate filling the canvas, no external drop shadow, no multiple copies, no scene, no border around the image, no brand logo, no caption or small text, no sparkles floating outside the icon. Consistent luxury bronze/gold material accents and high quality reflections, elegant and substantial rather than cartoon-like. A single bold faceted teal emerald diamond jewel, rhombus silhouette, eight broad glass facets in dark turquoise and luminous sea green, restrained antique gold metal claws at the corners, polished bronze side depth. No words, no characters, no extra gems. Easy to recognize as a diamond rather than a square.",
+      "original": "/workspace/generated_images/exec-a36e0230-125f-4f2a-a4c5-4b13a1d237f3.png",
+      "file": "symbol-crest.webp",
+      "originalSha256": "860ecf3b0ac9fcc6f25de2366ad60e7045fdcd40f629d74b57817d631f34c68c"
+    }
+  ]
+}
