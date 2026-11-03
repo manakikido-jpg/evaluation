@@ -200,6 +200,18 @@
       "width": 256,
       "height": 256,
       "transparent": true
+    },
+    {
+      "file": "reel-motor.mp3",
+      "bytes": 48944,
+      "sha256": "0955cff5373751e3106a766ec8a9dcf5ce80706322a2621e2cdd8114be1e9be3",
+      "duration": 3,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.39898,
+      "rmsDbFS": -14.88,
+      "loopStart": 0.25,
+      "loopEnd": 2.25
     }
   ]
 }

@@ -26,16 +26,16 @@ describe('神殿の筐体と操作案内',()=>{
   expect(await f.html()).not.toContain('data-gt-lcd-award');
   for(const i of [0,1]){stop(f.machine.state,i,()=>1);expect(await f.html()).not.toContain('data-gt-lcd-award');}
   stop(f.machine.state,2,()=>1);const before=structuredClone(f.floor),html=await f.html();
-  expect(html).toContain('class="gt-lcd-award" data-gt-lcd-award="true" data-kind="god"');
+  expect(html).toContain('class="gt-lcd-award" data-gt-lcd-award="true" data-kind="god"');expect(html).not.toContain('data-win-stage');
   expect(html.indexOf('class="gt-display"')).toBeLessThan(html.indexOf('class="gt-reel-shelf"'));
   expect(html.indexOf('class="gt-reel-shelf"')).toBeLessThan(html.indexOf('class="gt-console"'));
   expect(f.floor).toEqual(before);
  });
  it('公開済みの区間から時間停止とEXを区別し、描画で進捗を変えない',async()=>{
   const f=fixture();
-  for(const [name,scene] of [['normal','normal'],['gg','gg'],['gstop','gstop'],['medusa','medusa'],['sgg-ex','ex']] as const){
+  for(const [name,scene] of [['normal','normal'],['gg','gg'],['gstop','gstop'],['sgg','sgg'],['medusa','medusa'],['sgg-ex','ex']] as const){
    f.machine.state=scenario(1,name,'trial-2');const before=structuredClone(f.floor),html=await f.html();
-   expect(html).toContain(`data-scene="${scene}"`);expect(html).toContain('class="gt-lcd-hud"');expect(html).toContain(`gaisen-media-${scene==='gg'?'award':'night'}-1600.webp?v=`);expect(f.floor).toEqual(before);
+   expect(html).toContain(`data-scene="${scene}"`);expect(html).toContain('class="gt-lcd-hud"');expect(html).toContain('class="gt-scene-depth" aria-hidden="true"');expect(html).toContain('class="gt-win-flare" aria-hidden="true"');expect(html).not.toContain('data-win-stage');expect(html).toContain(`gaisen-media-${scene==='gg'?'award':'night'}-1600.webp?v=`);expect(f.floor).toEqual(before);
    expect(html).not.toContain('frontMode');expect(html).not.toContain('backMode');
   }
  });

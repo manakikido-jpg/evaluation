@@ -7,7 +7,7 @@ function fixture(){
  let dialog=false,hidden=false;
  const buttons=Object.fromEntries(['lever','stop-0','stop-1','stop-2'].map(key=>[key,{disabled:false,click:()=>clicked.push(key)}]));
  const control={value:'',textContent:'',setAttribute(){}};
- const root={dataset:{},querySelectorAll:()=>[],querySelector:(selector:string)=>selector==='.gt-machine'?{}:selector.startsWith('[data-gt-key=')?buttons[selector.match(/"([^"]+)"/)![1]!]:control};
+ const root={dataset:{},style:{setProperty(){}},querySelectorAll:()=>[],querySelector:(selector:string)=>selector==='.gt-machine'?{}:selector.startsWith('[data-gt-key=')?buttons[selector.match(/"([^"]+)"/)![1]!]:control};
  const document={get hidden(){return hidden;},querySelector:(s:string)=>s==='[data-gaisen-trial]'?root:s==='dialog[open]'&&dialog?{}:null,addEventListener:(name:string,fn:Function)=>handlers.set(name,[...(handlers.get(name)||[]),fn])};
  runInNewContext(source,{window:{addEventListener(){}},document,localStorage:{getItem:()=>null},performance:{now:()=>1000},cancelAnimationFrame(){},matchMedia:()=>({matches:false,addEventListener(){}})});
  function key(key:string,extras:Record<string,unknown>={}){let prevented=false;const e={key,code:key===' '?'Space':'Digit'+key,target:{closest:()=>null},preventDefault:()=>{prevented=true;},...extras};for(const fn of handlers.get('keydown')||[])fn(e);return prevented;}

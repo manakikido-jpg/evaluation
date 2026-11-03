@@ -12,7 +12,7 @@ const SCENE:Record<Scenario,string>={normal:'通常時',gg:'GG',god:'GOD降臨�
 export function GaisenTrial({m,session,error,version='trial-1'}:{m:TrialView;session:AdminSession;error?:string;version?:RuleVersion}){
  const isV2=version==='trial-2',PATH=isV2?'/economy/gaisen-trial-v2':'/economy/gaisen-trial';
  const own=m.own;
- const soundKeys=['lever','stop-left','stop-middle','stop-right','payout','replay','phase','medusa','ex','gg','sgg','stock','god'];
+ const soundKeys=['lever','stop-left','stop-middle','stop-right','payout','replay','phase','medusa','ex','gg','sgg','stock','god','reel-motor'];
  const soundUrls=Object.fromEntries(soundKeys.map(key=>[key,assetUrl('gaisen-media-'+key+'.mp3')]));
  // 公開済みの区間と押し順だけを見た目に使う。内部モードは参照しない。
  const scene=own?.phase==='sgg'?(own.ex?'ex':own.medusa>0||own.medusaInfinite?'medusa':'sgg'):own?.phase??'normal';
