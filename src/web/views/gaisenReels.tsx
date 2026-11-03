@@ -48,12 +48,12 @@ export function GaisenReels({own}: {own: Own}) {
   // 停止後の前後1コマは減速用の余白。公開済みの絵柄だけを複製し、窓は3段を保つ。
   return <div class="gt-reel-deck">
     <div class="gt-reel-heading"><span>神殿の三連リール</span><small>{own.reelPhase==='gstop'?'G-STOP：上部で抽選':'有効ライン：中段'}</small></div>
-    <div class="gt-reels" role="group" aria-label="左・中・右の3リール、それぞれ縦3段">
+    <div class="gt-reels" role="group" aria-label={`左・中・右の3リール、それぞれ縦3段。${own.reelPhase==='gstop'?'G-STOPは上部で抽選':'有効ラインは中段'}`}>
       {reels.map((reel, index) => <div class={'gt-reel' + (reel.spinning ? ' is-spinning' : ' is-stopped')}
         data-gt-reel={index} data-gt-reel-next={String(guidance.next===index)} data-center={reel.spinning?'':reel.rows[1]} role="img" aria-label={`${['左','中','右'][index]}リール：${reel.label}${guidance.next===index?' · 次のSTOP':''}`} >
         <div class="gt-reel-strip" aria-hidden="true">{!reel.spinning&&<SymbolArt symbol={reel.rows[0]!}/>}{reel.strip.map(symbol => <SymbolArt symbol={symbol}/>)}{!reel.spinning&&<SymbolArt symbol={reel.rows[2]!}/>}</div>
         <span class="gt-reel-glass" aria-hidden="true"/>
-        {reel.spinning && <><span class="gt-reel-motion-label">回転中</span><span class={'gt-reel-cue'+(guidance.next===index?' is-next':'')} aria-hidden="true"><b>{guidance.order.indexOf(index)+1}</b>{guidance.next===index&&<small>次のSTOP</small>}</span></>}
+        {reel.spinning && <span class="gt-reel-motion-label">回転中</span>}
       </div>)}
     </div>
     <p class="gt-settlement" data-gt-settlement>{own.spinning?'STOPで結果を確定':own.spins===0?'レバーで次のゲームへ':own.resultRole==='red7'?`赤7成立 · GG獲得（${own.lastPaid===30?'リプレイ · 30ポイント返却':`払出${own.lastPaid}ポイント`}）`:own.resultReplay||own.resultRole==='replay'?'リプレイ · 30ポイント返却':own.resultRole==='bell'&&own.lastPaid===0?'押し順不一致 · 払出0ポイント':`払出 ${own.lastPaid.toLocaleString('ja-JP')}ポイント`}</p>
