@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-04-otoshidama-secret-room', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '🧧 シクレの宿にいる間は、お年玉を受け取れないように', items: ['お年玉袋は通話にいる人だけが受け取れますが、ほかの人から見えないシクレの宿にいる間は受け取れないようにしました。', '公開・招待限定の宿や、ふつうの通話にいれば、今までどおり受け取れます。'], announcement: { priority: 'optional', audience: 'お年玉袋を受け取るメンバー', steps: ['シクレの宿にいるときは、ほかの通話に移ってから「🧧 もらう」を押す。'], postText: 'お年玉袋は、シクレの宿にいる間は受け取れなくなりました。ほかの通話に移ってから「🧧 もらう」を押してください。', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-04-gaisen-immersive-effects', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットの回転音・液晶・当選演出とスマホ操作を改善',

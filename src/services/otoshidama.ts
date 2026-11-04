@@ -2,7 +2,7 @@ import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm';
 import { currentAutoRank } from '../domain/ranks.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { otoshidamaBags, otoshidamaClaims, type OtoshidamaBag, type OtoshidamaClaim } from '../db/schema.js';
+import { otoshidamaBags, otoshidamaClaims, tempVoice, type OtoshidamaBag, type OtoshidamaClaim } from '../db/schema.js';
 import { addCoins, spendWithin, walletOf } from './economy.js';
 
 /**
@@ -146,12 +146,15 @@ export async function setBagMessage(db: Db, id: number, messageId: string): Prom
 
 export type ClaimResult =
   | { status: 'ok'; amount: number; order: number; left: number; bag: OtoshidamaBag }
-  | { status: 'gone' | 'ended' | 'own' | 'already' | 'not_member' | 'not_in_voice' };
+  | { status: 'gone' | 'ended' | 'own' | 'already' | 'not_member' | 'not_in_voice' | 'secret_room' };
 
 /** ボタンを押した: 次の 1 人分を受け取る */
 export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: { id: string; roleIds: readonly string[]; bot?: boolean; voiceChannelId: string | null }, now = new Date()): Promise<ClaimResult> {
   if (member.bot || !cfg.ranks.some((r) => member.roleIds.includes(r.roleId))) return { status: 'not_member' };
   if (!member.voiceChannelId) return { status: 'not_in_voice' };
+  // 🤫 シクレの宿（ほかの人から見えない部屋）にいる間は受け取れない
+  const [room] = await db.select({ kind: tempVoice.kind }).from(tempVoice).where(eq(tempVoice.channelId, member.voiceChannelId));
+  if (room?.kind === 'secret') return { status: 'secret_room' };
   return db.transaction(async (tx) => {
     await lock(tx, `otoshidama:${bagId}`);
     const [bag] = await tx.select().from(otoshidamaBags).where(eq(otoshidamaBags.id, bagId));
@@ -247,6 +250,7 @@ export function bagMessage(bag: OtoshidamaBag, claims: OtoshidamaClaim[], coin: 
 
 export const CLAIM_MESSAGES: Record<Exclude<ClaimResult['status'], 'ok'>, string> = {
   not_in_voice: 'お年玉を受け取れるのは、今このサーバーの通話にいる人だけです。通話に入ってから、もう一度押してください。',
+  secret_room: 'シクレの宿にいる間は、お年玉を受け取れません。ほかの通話に移ってから、もう一度押してください。',
   gone: 'このお年玉袋は見つかりませんでした。',
   ended: 'このお年玉袋は、もう空か締め切りです。',
   own: '自分で置いたお年玉袋は受け取れません。',

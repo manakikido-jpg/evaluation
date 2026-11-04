@@ -28,6 +28,18 @@ afterEach(async () => {
 const base = { ownerId: OWNER, roleIds: [ROLE.ujiko], channelId: CH, note: 'あけおめ', fee: 50, itemId: 1, itemName: 'お年玉袋' };
 
 describe('🧧 お年玉袋', () => {
+  it('🤫 シクレの宿にいる人は受け取れない（ほかの宿・ふつうの通話なら受け取れる）', async () => {
+    const { tempVoice } = await import('../src/db/schema.js');
+    const SECRET = '910000000000000101', INVITE = '910000000000000102';
+    await db.insert(tempVoice).values([{ channelId: SECRET, ownerId: OWNER, hubId: CH, kind: 'secret' }, { channelId: INVITE, ownerId: OWNER, hubId: CH, kind: 'invite' }] as never);
+    await addCoins(db, OWNER, 1000, 'adjust');
+    const r = await putBag(db, cfg, { ...base, fee: 0, total: 300, count: 3 }, T0);
+    if (r.status !== 'ok') throw new Error(r.status);
+    const who = (id: string, voiceChannelId: string) => ({ id, roleIds: [ROLE.sanpaisha], voiceChannelId });
+    expect((await claimBag(db, cfg, r.bag.id, who(A, SECRET), T0)).status).toBe('secret_room');
+    expect((await claimBag(db, cfg, r.bag.id, who(A, INVITE), T0)).status).toBe('ok');
+    expect((await claimBag(db, cfg, r.bag.id, who(B, CH), T0)).status).toBe('ok');
+  });
   it('運営の袋: 置いた人の財布は減らない・受け取れる・残りは運営に戻る（置いた人に入らない）・出せなければ元どおり', async () => {
     const who = (id: string) => ({ id, roleIds: [ROLE.sanpaisha], voiceChannelId: CH });
     expect((await putStaffBag(db, { by: OWNER, channelId: CH, total: 50, count: 2, note: '' }, T0)).status).toBe('bad_amount');
