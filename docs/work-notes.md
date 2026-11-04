@@ -15,7 +15,7 @@
 - 確認画像：docs/previews/gaisen-comfort-{settings,landscape,resume}.webp。設定画面・横向きの停止待ち表示・復帰案内の例。実端末の同期・発熱等は未確認として手順書を更新済み。
 - 最終の回帰：両エンジンで通信待ち中の設定/選択/focus保持とdialog中のキー操作POST0を確認。全6押し順の各150払出・G-STOP/HOLD・実当選の液晶内表示と次レバー取消・明示的見本/スキップ・JavaScriptなしも成功。型/ビルド成功。本番は全件前のfetchでもafe1b2bのまま。テストサーバー停止済み、実装をcommitして全件へ進む。
 - 最終結果：本番afe1b2bを取り込んだ実装39b494eで型チェック・ビルド成功。全240ファイル2,677件成功（1545.68秒、npm test -- --maxWorkers=4 --testTimeout=180000 --hookTimeout=180000）。型/ビルドは/tmp/gaisen-comfort-{types,build}-final.log、全件は/tmp/gaisen-comfort-all-final.log。以後は検証/保存先の文書のみ更新。
-- 保存前の確認：全件成功後のfetchでも本番afe1b2bから追加変更なし、PR135はDraft/未合流/head53957f1で他の更新なし。専用枝へpushしてPR135のタイトル/本文を全体の実装へ更新する。合流・一般公開・銭接続は行わず、実端末の同期/聴感/発熱/電池/画面ロック復帰とVPS反映は未確認。
+- 保存済み：[Draft PR135](https://github.com/manakikido-jpg/evaluation/pull/135)、codex/gaisen-synchronized-cabinet。実装39b494e、53a94ee以降は検証/保存先の文書のみ。全件成功後のfetchでも本番afe1b2bから追加変更なしを確認し、専用枝へpushしてPRのタイトル/本文を全体の実装へ更新した。合流・一般公開・銭接続は行っていない。実端末の同期/聴感/発熱/電池/画面ロック復帰とVPS反映は未確認。次は更新したPR135と確認画像のレビュー。
 
 ## 2026年11月4日：区間切替・筐体発光・音量調整・スマホ検証を採用
 - 依頼：「それ全部使用」。直前の提案4項目（区間切替、上下/側面の連動発光、音の重なりの自動音量調整、iPhone/Android確認）を採用。
