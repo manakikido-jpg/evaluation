@@ -11,7 +11,7 @@ function fixture(motor=false,limiter=false){
   async decodeAudioData(buffer:ArrayBuffer){return {buffer};}
   createDynamicsCompressor(){if(!limiter)return undefined;const node:any={connect(){}};for(const key of ['threshold','knee','ratio','attack','release'])node[key]={value:0};compressors.push(node);return node;}
   createGain(){return {gain:{value:0,setTargetAtTime(value:number){this.value=value;}},connect(){},disconnect(){}};}
-  createBufferSource(){const node={buffer:null as any,stopped:false,onended:null as null|(()=>void),connect(){},disconnect(){},start(){started.push(node);},stop(){this.stopped=true;this.onended?.();}};return node;}
+  createBufferSource(){const node={buffer:null as any,playbackRate:{value:1},stopped:false,onended:null as null|(()=>void),connect(){},disconnect(){},start(){started.push(node);},stop(){this.stopped=true;this.onended?.();}};return node;}
  }
  const window:any={};
  runInNewContext(source,{window,AudioContext:Context,performance:{now:()=>clock},fetch:async(url:string)=>{calls++;if(defer)await new Promise<void>(r=>pending.push(r));return {ok:!fail.has(url),arrayBuffer:async()=>new ArrayBuffer(8)};}});
@@ -81,5 +81,7 @@ describe('新台の別生成音源',()=>{
  it('重なりのピークを抑える出力を一度だけ作り、ミュートで閉じて再ONで作り直す',async()=>{
   const f=fixture(false,true);f.bank.setEnabled(true);f.bank.prepare();f.bank.prepare();expect(f.compressors).toHaveLength(1);expect(f.compressors[0].threshold.value).toBe(-8);expect(f.compressors[0].ratio.value).toBe(8);f.bank.setEnabled(false);expect(f.contexts[0].closed).toBe(true);f.bank.setEnabled(true);f.bank.prepare();expect(f.compressors).toHaveLength(2);
  });
+
+ it('装飾音の高さは小さな範囲に収め、通常の停止音は変えない',async()=>{const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();await f.bank.play('lever');await f.bank.play('god',{group:'win',rate:9});await f.bank.play('god',{group:'win',rate:.1});expect(f.started.map(s=>s.playbackRate.value)).toEqual([1,1.04,.96]);});
 
 });

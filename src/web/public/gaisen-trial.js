@@ -4,25 +4,52 @@
  try{audio=localStorage.getItem('gaisen-trial-audio')==='on';motion=localStorage.getItem('gaisen-trial-motion')||'normal';}catch{}
  let activeWin=null,volume=.65,focusMode=false;
  try{const saved=Number(localStorage.getItem('gaisen-trial-volume'));if([.3,.65,1].includes(saved))volume=saved;focusMode=localStorage.getItem('gaisen-trial-focus')==='on';}catch{}
+ let quality='auto',glow=.7,syncOffset=0,perfFrame=0,needsRecovery=false,contact=null,probeTimer=0,probeSequence=0;
+ try{const q=localStorage.getItem('gaisen-trial-quality');if(['auto','full','light'].includes(q))quality=q;const g=Number(localStorage.getItem('gaisen-trial-glow'));if([.35,.7,1].includes(g))glow=g;const offset=Number(localStorage.getItem('gaisen-trial-sync'));if([0,40,80].includes(offset))syncOffset=offset;}catch{}
+ const save=(key,value)=>{try{localStorage.setItem('gaisen-trial-'+key,String(value));}catch{}};
+ if(!['normal','low','instant'].includes(motion))motion='normal';
  const root=()=>document.querySelector('[data-gaisen-trial]');
  const bank=window.GaisenSampleBank?new window.GaisenSampleBank(JSON.parse(root()?.dataset.gtSounds||'{}')):null;
  const actualMotion=()=>matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':motion;
- const stageDirector=window.GaisenStageDirector?new window.GaisenStageDirector({motion:actualMotion,hidden:()=>document.hidden}):null;
+ const comfort=window.GaisenComfort?new window.GaisenComfort({onChange:()=>prefs()}):null;
+ const isLight=()=>quality==='light'||quality==='auto'&&!!comfort?.light;
+ const pitch=variant=>({a:1,b:.98,c:1.02})[variant]||1;
+ const stageDirector=window.GaisenStageDirector?new window.GaisenStageDirector({motion:actualMotion,hidden:()=>document.hidden,variant:()=>comfort?.nextVariant()||'a'}):null;
  function ramp(){
   cancelAnimationFrame(frame);frame=0;
   const r=root();if(!r||document.hidden)return;
   const elapsed=performance.now()-startAt;
   const speed=actualMotion()==='normal'&&elapsed<360?.12+.88*Math.min(1,elapsed/360):1;
-  r.dataset.drive=speed<1?'starting':'running';r.style.setProperty('--gt-reel-blur',actualMotion()==='normal'?`${.15+speed*.95}px`:'0px');
+  r.dataset.drive=speed<1?'starting':'running';r.style.setProperty('--gt-reel-blur',actualMotion()==='normal'&&!isLight()?`${.15+speed*.95}px`:'0px');
   r.querySelectorAll('.gt-reel.is-spinning .gt-reel-strip').forEach(el=>{const a=el.getAnimations()[0];if(a)a.playbackRate=speed;});
   if(speed<1)frame=requestAnimationFrame(ramp);
  }
- function prefs(){if(actualMotion()!=='normal'||document.hidden)stageDirector?.cancel();bank?.setVolume(volume);bank?.setEnabled(audio&&!document.hidden);if(activeWin&&actualMotion()!=='normal'&&!activeWin.sample)endWin();const r=root();if(!r)return;r.dataset.focus=String(focusMode&&!!r.querySelector('.gt-machine'));r.querySelectorAll('[data-gt-focus]').forEach(b=>{b.textContent=focusMode?'全体に戻る':'操作に集中';b.setAttribute('aria-pressed',String(focusMode));});r.querySelector('[data-gt-volume]').value=String(volume);r.querySelector('[data-gt-audio]').setAttribute('aria-pressed',String(audio));r.dataset.hidden=String(document.hidden);r.dataset.motion=actualMotion();r.querySelector('[data-gt-audio]').textContent='音：'+(audio?'ON':'OFF');r.querySelector('[data-gt-motion]').value=motion;r.querySelectorAll('[data-gt-win-mute]').forEach(b=>b.hidden=!audio);if(actualMotion()==='instant')r.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));bank?.setMotor(actualMotion()==='instant'?0:r.querySelectorAll('.gt-reel.is-spinning').length);ramp();}
+ function monitor(){
+  if(!comfort||quality!=='auto'||comfort.light||document.hidden||actualMotion()!=='normal'){cancelAnimationFrame(perfFrame);perfFrame=0;return;}
+  const active=()=>{const m=root()?.querySelector('.gt-machine');return !!(m?.dataset?.spinning==='true'||m?.dataset?.transition||activeWin);};
+  if(perfFrame||!active())return;
+  perfFrame=requestAnimationFrame(time=>{perfFrame=0;const moving=active();comfort.sample(time,{visible:!document.hidden,active:moving});if(moving)monitor();});
+ }
+ function prefs(){
+  comfort?.setMode(quality);if(actualMotion()!=='normal'||document.hidden)stageDirector?.cancel();bank?.setVolume(volume);bank?.setEnabled(audio&&!document.hidden);if(activeWin&&actualMotion()!=='normal'&&!activeWin.sample)endWin();const r=root();if(!r)return;
+  r.dataset.focus=String(focusMode&&!!r.querySelector('.gt-machine'));r.dataset.hidden=String(document.hidden);r.dataset.motion=actualMotion();r.dataset.quality=isLight()?'light':'full';r.style.setProperty('--gt-glow-alpha',String(glow));
+  const machine=r.querySelector('.gt-machine');if(machine?.dataset)machine.dataset.ambient=comfort?.ambient(machine.dataset.spins)||'a';
+  r.querySelectorAll('[data-gt-focus]').forEach(b=>{b.textContent=focusMode?'全体に戻る':'操作に集中';b.setAttribute('aria-pressed',String(focusMode));});
+  r.querySelectorAll('[data-gt-audio],[data-gt-settings-audio]').forEach(b=>{b.textContent='音：'+(audio?'ON':'OFF');b.setAttribute('aria-pressed',String(audio));});
+  for(const [key,value] of Object.entries({volume,motion,quality,glow,sync:syncOffset})){const control=r.querySelector('[data-gt-'+key+']');if(control)control.value=String(value);}
+  const note=r.querySelector('[data-gt-quality-note]');if(note)note.hidden=!(quality==='auto'&&isLight());const probe=r.querySelector('[data-gt-sync-probe]');if(probe)probe.disabled=!audio||document.hidden;const probeNote=r.querySelector('[data-gt-probe-note]');if(!audio&&probeNote)probeNote.textContent='音ONで確認できます。ゲームの進行は変わりません。';
+  r.querySelectorAll('[data-gt-win-mute]').forEach(b=>b.hidden=!audio);if(actualMotion()==='instant')r.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));bank?.setMotor(actualMotion()==='instant'?0:r.querySelectorAll('.gt-reel.is-spinning').length);ramp();monitor();
+ }
+ function showRecovery(){const r=root(),notice=r?.querySelector('[data-gt-recovery]'),text=r?.querySelector('[data-gt-recovery-text]');if(!notice||!text)return;const m=r.querySelector('.gt-machine'),guide=r.querySelector('[data-gt-guide]')?.textContent.trim();text.textContent=window.GaisenComfort?.recovery(guide,m?.dataset?.spinning==='true')||((m?.dataset?.spinning==='true'?'停止待ち：':'画面の続き：')+(guide||'台を選んで続けられます'));notice.hidden=false;needsRecovery=false;}
+ function releaseContact(){if(contact)delete contact.dataset.contact;contact=null;}
+ function stopProbe(){probeSequence++;clearTimeout(probeTimer);probeTimer=0;bank?.stopGroup('probe');const lamp=root()?.querySelector('[data-gt-sync-lamp]');if(lamp)delete lamp.dataset.flash;}
+ function openSettings(focusId){const d=root()?.querySelector('[data-gt-preferences]');if(!d)return;if(!d.open)d.showModal();if(['gt-volume','gt-motion','gt-glow','gt-quality','gt-sync'].includes(focusId))d.querySelector('#'+focusId)?.focus();}
+ function closeSettings(){stopProbe();root()?.querySelector('[data-gt-preferences]')?.close();}
  function prepareAudio(){bank?.setEnabled(audio&&!document.hidden);bank?.prepare();}
  function resultTone(before,after){
   if(!after)return;
   if(before?.dataset.scene!==after.dataset.scene){
-   void bank?.play(['medusa','ex'].includes(after.dataset.scene)?after.dataset.scene:'phase');
+   void bank?.play(['medusa','ex'].includes(after.dataset.scene)?after.dataset.scene:'phase',{rate:pitch(after.dataset.ambient)});
    after.dataset.feedback='phase';
   }else if(after.dataset.spinning==='false'&&Number(after.dataset.paid)>0){
    // 最終STOPの成功時だけ。読込み・場面設定・再送では鳴らさない。
@@ -35,7 +62,7 @@
  function mutePending(){bank?.setEnabled(false);}
  function endWin(){
   const w=activeWin;if(!w)return;activeWin=null;
-  w.timers.forEach(clearTimeout);stageDirector?.cancel();bank?.stopGroup('win');if(w.panel){delete w.panel.dataset.winStage;delete w.panel.dataset.winKind;}
+  w.timers.forEach(clearTimeout);stageDirector?.cancel();bank?.stopGroup('win');if(w.panel){delete w.panel.dataset.winStage;delete w.panel.dataset.winKind;delete w.panel.dataset.variation;}
   if(w.dialog.open)w.dialog.close();
   if(w.sample&&w.focus?.isConnected)w.focus.focus({preventScroll:true});
  }
@@ -43,11 +70,11 @@
  function celebrate(event,sample=false){
   endWin();if(!event||document.hidden||(!sample&&actualMotion()==='instant'))return;
   const d=root()?.querySelector('[data-gt-celebration]');if(!d||!['gg','sgg','god','stock'].includes(event.kind))return;
-  const kind=event.kind,short=actualMotion()!=='normal',scene=(!sample&&root()?.querySelector('[data-gt-lcd-award]'))||d.querySelector('.gt-award-scene');
+  const variant=comfort?.nextVariant()||'a';const kind=event.kind,short=actualMotion()!=='normal',scene=(!sample&&root()?.querySelector('[data-gt-lcd-award]'))||d.querySelector('.gt-award-scene');
   const title={gg:'GOD GAME',sgg:'SPECIAL GOD GAME',god:'GOD',stock:'GG BOOST'}[kind];
   const prefix={gg:event.added?'神殿の扉が開く':'次なる神殿へ',sgg:'紅紫の覚醒',god:'神 降 臨',stock:'上乗せ確定'}[kind];
   const set=(name,value)=>d.querySelector('[data-gt-win-'+name+']').textContent=value;
-  d.dataset.kind=kind;d.dataset.sample=String(sample);
+  d.dataset.variation=variant;d.dataset.kind=kind;d.dataset.sample=String(sample);
   set('kicker',sample?'演出見本 · ポイントや進行は変わりません':'咲楽ノ宮 · 当選結果');set('title',title);set('prefix',prefix);
   set('count',event.added>0?'＋'+event.added:'第'+event.set);set('unit','SET');
   const detail=[event.added>0?'GG '+event.added+'セット獲得（開始分を含む）':'保存済みの次セットを開始'];
@@ -57,18 +84,22 @@
   const focused=document.activeElement,panel=sample?null:root()?.querySelector('.gt-display');
   const w={dialog:d,panel,timers:new Set(),sample,focus:sample?focused:root()?.querySelector('.gt-lever')};activeWin=w;
   const later=(fn,delay)=>{const id=setTimeout(()=>{w.timers.delete(id);if(activeWin===w&&!document.hidden)fn();},delay);w.timers.add(id);};
-  const chime=()=>{void bank?.play(kind,{group:'win',level:short?.55:.8});};
-  const stage=value=>{scene.dataset.stage=value;if(panel&&!short){panel.dataset.winKind=kind;panel.dataset.winStage=value;stageDirector?.win(root()?.querySelector('.gt-machine'),kind,value);}};
+  const chime=()=>{void bank?.play(kind,{group:'win',level:short?.55:.8,rate:pitch(variant)});};
+  const stage=value=>{scene.dataset.stage=value;if(panel&&!short){panel.dataset.winKind=kind;panel.dataset.winStage=value;panel.dataset.variation=variant;stageDirector?.win(root()?.querySelector('.gt-machine'),kind,value,variant);}};
   stage(short?'award':kind==='stock'?'reveal':'charge');
   if(kind==='god')bank?.stopAll();
-  if(sample)d.showModal();else w.focus?.focus({preventScroll:true});
+  if(sample)d.showModal();else w.focus?.focus({preventScroll:true});monitor();
   if(short){chime();if(!sample)later(endWin,2200);return;}
   const reveal=kind==='god'?1050:kind==='stock'?0:450,award=kind==='god'?2050:kind==='stock'?350:1050;
   later(()=>{stage('reveal');chime();},reveal);
   later(()=>{stage('award');},award);
   later(endWin,kind==='god'?6000:kind==='stock'?2800:4300);
  }
- document.addEventListener('pointerdown',e=>{if(e.target.closest?.('.gt-play,[data-gt-audio],[data-gt-volume],[data-gt-win-preview]'))prepareAudio();},{passive:true});
+ document.addEventListener('pointerdown',e=>{const b=e.target.closest?.('.gt-play button');if(b&&!b.disabled&&!busy){releaseContact();contact=b;b.dataset.contact='true';}if(e.target.closest?.('.gt-play,[data-gt-audio],[data-gt-settings-audio],[data-gt-volume],[data-gt-win-preview],[data-gt-sync-probe]'))prepareAudio();},{passive:true});
+ document.addEventListener('pointerup',releaseContact,{passive:true});document.addEventListener('pointercancel',releaseContact,{passive:true});window.addEventListener('blur',releaseContact);
+ document.addEventListener('click',e=>{if(e.target.closest?.('[data-gt-settings]'))openSettings();if(e.target.closest?.('[data-gt-settings-close]'))closeSettings();if(e.target.closest?.('[data-gt-recovery-dismiss]')){const n=root()?.querySelector('[data-gt-recovery]');if(n)n.hidden=true;}});
+ document.addEventListener('close',e=>{if(e.target.matches?.('[data-gt-preferences]')){stopProbe();if(!document.hidden)root()?.querySelector('[data-gt-settings]')?.focus({preventScroll:true});}},true);
+ document.addEventListener('click',e=>{if(!e.target.closest?.('[data-gt-sync-probe]')||!audio)return;stopProbe();prepareAudio();const ticket=probeSequence,note=root()?.querySelector('[data-gt-probe-note]');if(!bank?.buffers.has('stop-middle')){if(note)note.textContent='音を準備しています。少し待ってもう一度お試しください。';return;}void Promise.resolve(bank.resuming).then(()=>{if(ticket!==probeSequence||!audio||document.hidden||!root()?.querySelector('[data-gt-preferences]')?.open)return;if(note)note.textContent='ランプと停止音を比べて調整できます。ゲームの進行は変わりません。';void bank.play('stop-middle',{group:'probe'});probeTimer=setTimeout(()=>{const lamp=root()?.querySelector('[data-gt-sync-lamp]');if(lamp)lamp.dataset.flash='true';probeTimer=setTimeout(()=>{if(lamp)delete lamp.dataset.flash;},180);},actualMotion()==='instant'?0:syncOffset);});});
  document.addEventListener('click',e=>{
   if(e.target.closest?.('[data-gt-win-skip]')){endWin();return;}
   if(e.target.closest?.('[data-gt-win-mute]')){audio=false;mutePending();try{localStorage.setItem('gaisen-trial-audio','off');}catch{}prefs();return;}
@@ -78,10 +109,11 @@
  });
  document.addEventListener('cancel',e=>{if(e.target.matches?.('[data-gt-celebration]')){e.preventDefault();endWin();}},true);
  document.addEventListener('close',e=>{if(e.target===activeWin?.dialog)endWin();},true);
- document.addEventListener('click',e=>{if(!e.target.closest?.('[data-gt-audio]'))return;audio=!audio;if(!audio)mutePending();else prepareAudio();try{localStorage.setItem('gaisen-trial-audio',audio?'on':'off');}catch{}prefs();});
+ document.addEventListener('click',e=>{if(!e.target.closest?.('[data-gt-audio],[data-gt-settings-audio]'))return;audio=!audio;if(!audio){stopProbe();mutePending();}else prepareAudio();try{localStorage.setItem('gaisen-trial-audio',audio?'on':'off');}catch{}prefs();});
  document.addEventListener('click',e=>{const b=e.target.closest?.('[data-gt-focus]');if(!b)return;focusMode=!focusMode;try{localStorage.setItem('gaisen-trial-focus',focusMode?'on':'off');}catch{}prefs();root()?.querySelector('.gt-machine')?.scrollIntoView({block:'start',behavior:'instant'});});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-volume]'))return;volume=Number(e.target.value);bank?.setVolume(volume);prepareAudio();try{localStorage.setItem('gaisen-trial-volume',String(volume));}catch{}});
  document.addEventListener('change',e=>{if(!e.target.matches?.('[data-gt-motion]'))return;motion=e.target.value;try{localStorage.setItem('gaisen-trial-motion',motion);}catch{}prefs();});
+ document.addEventListener('change',e=>{if(e.target.matches?.('[data-gt-quality]')){quality=['auto','full','light'].includes(e.target.value)?e.target.value:'auto';save('quality',quality);prefs();}else if(e.target.matches?.('[data-gt-glow]')){const value=Number(e.target.value);if([.35,.7,1].includes(value))glow=value;save('glow',glow);prefs();}else if(e.target.matches?.('[data-gt-sync]')){const value=Number(e.target.value);if([0,40,80].includes(value))syncOffset=value;save('sync',syncOffset);stopProbe();prefs();}});
  // キーを押し続けても連続送信しない。入力欄・別の操作・ダイアログは奪わない。
  document.addEventListener('keydown',e=>{
   if(e.isComposing||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||document.hidden)return;
@@ -104,29 +136,32 @@
    const r=await fetch(form.getAttribute('action'),{method:'POST',body:new FormData(form),credentials:'same-origin'});
    const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
    if(!next)throw Error('操作結果を確認できませんでした。再送せず「最新の状態を確認」から確認してください。');
+   const settingsOpen=!!root().querySelector('[data-gt-preferences]')?.open,settingId=document.activeElement?.id;
    const times=[...root().querySelectorAll('.gt-reel')].map(el=>el.classList.contains('is-spinning')?el.querySelector('.gt-reel-strip').getAnimations()[0]?.currentTime:null);
    root().replaceWith(next);
    if(r.ok&&action==='lever')startAt=performance.now();
-   prefs();
+   prefs();if(settingsOpen)openSettings(settingId);
    root().querySelectorAll('.gt-reel.is-spinning').forEach(el=>{const i=Number(el.dataset.gtReel),a=el.querySelector('.gt-reel-strip').getAnimations()[0];if(a&&times[i]!=null&&action!=='lever')a.currentTime=times[i];});
    if(r.ok){
+    if(['lever','stop','seat','leave'].includes(action)){needsRecovery=false;const notice=root().querySelector('[data-gt-recovery]');if(notice)notice.hidden=true;}
     const win=action==='stop'&&!hadWin?readWin():null;
     if(win){celebrate(win);}else {if(['lever','stop'].includes(action))stageDirector?.transition(before?.dataset.scene,root().querySelector('.gt-machine'));tone(action,index);if(action==='stop'||action==='lever'&&before?.dataset.scene!==root().querySelector('.gt-machine')?.dataset.scene)resultTone(before,root().querySelector('.gt-machine'));}
-    if(focusedKey&&!win){const target=root().querySelector(`[data-gt-key="${focusedKey}"]:not(:disabled)`)||root().querySelector('.gt-stop.is-next:not(:disabled)')||root().querySelector('.gt-lever:not(:disabled)');target?.focus({preventScroll:true});}
+    monitor();
+    if(focusedKey&&!win&&!settingsOpen){const target=root().querySelector(`[data-gt-key="${focusedKey}"]:not(:disabled)`)||root().querySelector('.gt-stop.is-next:not(:disabled)')||root().querySelector('.gt-lever:not(:disabled)');target?.focus({preventScroll:true});}
     if(!win&&action==='stop'&&Number.isInteger(index)&&actualMotion()!=='instant'&&!document.hidden){
      const el=root().querySelector(`[data-gt-reel="${index}"].is-stopped .gt-reel-strip`);
      // 前後の絵柄を余白に置き、窓を空けずに減速して定位置へ収める。
      const height=el?.querySelector('.gt-symbol')?.getBoundingClientRect().height;
-     if(height){const low=actualMotion()==='low',travel=low?2:height*.86,rebound=low?0:Math.min(3,height*.06);
-      el.animate([{transform:`translateY(${-height-travel}px)`,filter:low?'none':'blur(.8px)'},{transform:`translateY(${-height+rebound}px)`,filter:'none',offset:.77},{transform:`translateY(${-height-(low?0:.7)}px)`,filter:'none',offset:.92},{transform:`translateY(${-height}px)`,filter:'none'}],{duration:low?100:205,easing:'cubic-bezier(.12,.65,.22,1)'});
+     if(height){const low=actualMotion()==='low'||isLight(),travel=low?2:height*.86,rebound=low?0:Math.min(3,height*.06);
+      el.animate([{transform:`translateY(${-height-travel}px)`,filter:low?'none':'blur(.8px)'},{transform:`translateY(${-height+rebound}px)`,filter:'none',offset:.77},{transform:`translateY(${-height-(low?0:.7)}px)`,filter:'none',offset:.92},{transform:`translateY(${-height}px)`,filter:'none'}],{duration:low?100:205,delay:syncOffset,fill:'backwards',easing:'cubic-bezier(.12,.65,.22,1)'});
      }
     }
    }
   }catch(e){const error=root()?.querySelector('[data-gt-error]');if(error){error.hidden=false;error.textContent=e.message||'通信できませんでした。最新の状態を確認してください。';}}
   finally{if(pressed)delete pressed.dataset.pressed;busy=false;root()?.removeAttribute('aria-busy');}
  });
- document.addEventListener('visibilitychange',()=>{if(document.hidden){endWin();stageDirector?.cancel();mutePending();root()?.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));}prefs();});
- window.addEventListener('pagehide',()=>{endWin();stageDirector?.cancel();cancelAnimationFrame(frame);mutePending();});
- window.addEventListener('pageshow',e=>{if(e.persisted){stageDirector?.cancel();prefs();}});
- matchMedia('(prefers-reduced-motion:reduce)').addEventListener('change',prefs);prefs();
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){needsRecovery=true;releaseContact();stopProbe();comfort?.pause();cancelAnimationFrame(perfFrame);perfFrame=0;endWin();stageDirector?.cancel();mutePending();root()?.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));}prefs();if(!document.hidden&&needsRecovery)showRecovery();});
+ window.addEventListener('pagehide',()=>{needsRecovery=true;releaseContact();stopProbe();comfort?.pause();cancelAnimationFrame(perfFrame);perfFrame=0;endWin();stageDirector?.cancel();cancelAnimationFrame(frame);mutePending();});
+ window.addEventListener('pageshow',e=>{if(e.persisted){stageDirector?.cancel();prefs();showRecovery();}});
+ matchMedia('(prefers-reduced-motion:reduce)').addEventListener('change',prefs);prefs();if(root()?.querySelector('.gt-machine')?.dataset?.spinning==='true')showRecovery();
 })();

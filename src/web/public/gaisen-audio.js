@@ -29,20 +29,20 @@
    this.loading.set(key,request);void request.finally(()=>this.loading.delete(key));return request;
   }
   running(context){return !context.state||context.state==='running';}
-  createNode(buffer,{group,level,pan=0,loop=false,priority=group==='win'?3:group==='motor'?0:1}){
-   const context=this.context,source=context.createBufferSource(),gain=context.createGain();source.buffer=buffer;
+  createNode(buffer,{group,level,pan=0,loop=false,rate=1,priority=group==='win'?3:group==='motor'?0:1}){
+   const context=this.context,source=context.createBufferSource(),gain=context.createGain();source.buffer=buffer;if(source.playbackRate)source.playbackRate.value=Math.max(.96,Math.min(1.04,rate));
    const panner=context.createStereoPanner?.();gain.gain.value=loop?0:this.volume*level;source.connect(gain);
    if(panner){panner.pan.value=Math.max(-1,Math.min(1,pan));gain.connect(panner);panner.connect(this.output||context.destination);}else gain.connect(this.output||context.destination);
    if(loop){source.loop=true;source.loopStart=.25;source.loopEnd=Math.min(2.25,buffer.duration||3);gain.gain.setTargetAtTime(this.volume*level,context.currentTime,.035);}
    this.nodes.set(source,{gain,group,level,priority});source.onended=()=>{this.nodes.delete(source);if(this.motor===source)this.motor=null;source.disconnect();gain.disconnect();panner?.disconnect();this.rebalance();};this.rebalance();try{source.start();}catch(error){source.onended();throw error;}return source;
   }
-  async play(key,{group='play',level=.65,pan=0}={}){
+  async play(key,{group='play',level=.65,pan=0,rate=1}={}){
    if(!this.enabled||!this.context)return;
    const context=this.context,generation=this.generation,groupGeneration=this.groups.get(group)||0,queued=performance.now();
    const buffer=await this.load(key);await this.resuming;
    // Safariの音の開始待ちも含め、遅れた操作音や取消済みの音を後から鳴らさない。
    if(!buffer||!this.enabled||context!==this.context||!this.running(context)||generation!==this.generation||groupGeneration!==(this.groups.get(group)||0)||performance.now()-queued>180)return;
-   try{this.createNode(buffer,{group,level,pan,priority:group==='win'?3:['payout','replay'].includes(key)?2:1});}catch{}
+   try{this.createNode(buffer,{group,level,pan,rate,priority:group==='win'?3:['payout','replay'].includes(key)?2:1});}catch{}
   }
   setMotor(count){
    count=this.enabled?Math.max(0,Math.min(3,Math.trunc(count))):0;

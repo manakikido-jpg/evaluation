@@ -30,4 +30,6 @@ describe('公開区間と筐体の連動',()=>{
   for(const mode of ['low','instant']){const f=fixture(),m=f.machine('gg');f.motion(mode);f.stage.transition('normal',m);f.stage.win(m,'god','charge');expect(m.dataset).toEqual({scene:'gg'});}
   const f=fixture(),m=f.machine('gg');f.stage.transition('normal',m);f.hide();f.tick(180);expect(m.dataset).toEqual({scene:'gg'});expect(f.jobs.size).toBe(0);f.stage.win(m,'god','award');expect(m.dataset).toEqual({scene:'gg'});
  });
+ it('当選の各段階で選んだ装飾を保ち、取消で消す',()=>{const f=fixture(),m=f.machine('gg');for(const step of ['charge','reveal','award']){f.stage.win(m,'god',step,'b');expect(m.dataset.variation).toBe('b');}f.stage.cancel();expect(m.dataset.variation).toBeUndefined();});
+
 });
