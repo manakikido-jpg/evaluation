@@ -9,6 +9,9 @@
  const save=(key,value)=>{try{localStorage.setItem('gaisen-trial-'+key,String(value));}catch{}};
  if(!['normal','low','instant'].includes(motion))motion='normal';
  const root=()=>document.querySelector('[data-gaisen-trial]');
+ const diagnosticBuild={build:root()?.dataset.gtBuild,diagnosticBuild:root()?.dataset.gtDiagnosticBuild};
+ let diagnosticPress=null,diagnosticInput=null,lastDiagnosticReport='',diagnosticCopyTicket=0,diagnosticCopyPending=false;
+ const diagnostics=window.GaisenDiagnostics?new window.GaisenDiagnostics({onChange:()=>{if(root()?.querySelector('[data-gt-preferences]')?.open)renderDiagnostics();}}):null;
  const bank=window.GaisenSampleBank?new window.GaisenSampleBank(JSON.parse(root()?.dataset.gtSounds||'{}')):null;
  const actualMotion=()=>matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':motion;
  const comfort=window.GaisenComfort?new window.GaisenComfort({onChange:()=>prefs()}):null;
@@ -38,12 +41,26 @@
   r.querySelectorAll('[data-gt-audio],[data-gt-settings-audio]').forEach(b=>{b.textContent='音：'+(audio?'ON':'OFF');b.setAttribute('aria-pressed',String(audio));});
   for(const [key,value] of Object.entries({volume,motion,quality,glow,sync:syncOffset})){const control=r.querySelector('[data-gt-'+key+']');if(control)control.value=String(value);}
   const note=r.querySelector('[data-gt-quality-note]');if(note)note.hidden=!(quality==='auto'&&isLight());const probe=r.querySelector('[data-gt-sync-probe]');if(probe)probe.disabled=!audio||document.hidden;const probeNote=r.querySelector('[data-gt-probe-note]');if(!audio&&probeNote)probeNote.textContent='音ONで確認できます。ゲームの進行は変わりません。';
-  r.querySelectorAll('[data-gt-win-mute]').forEach(b=>b.hidden=!audio);if(actualMotion()==='instant')r.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));bank?.setMotor(actualMotion()==='instant'?0:r.querySelectorAll('.gt-reel.is-spinning').length);ramp();monitor();
+  r.querySelectorAll('[data-gt-win-mute]').forEach(b=>b.hidden=!audio);if(actualMotion()==='instant')r.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));bank?.setMotor(actualMotion()==='instant'?0:r.querySelectorAll('.gt-reel.is-spinning').length);ramp();monitor();renderDiagnostics();
  }
+ function diagnosticSettings(){return {audio,volume,motion:actualMotion(),mode:quality,quality:isLight()?'light':'full',glow,sync:syncOffset};}
+ function renderDiagnostics(){
+  const r=root();if(!r)return;const toggle=r.querySelector('[data-gt-diagnostic-toggle]');if(!toggle)return;
+  if(!diagnostics){toggle.disabled=true;return;}
+  const summary=diagnostics.summary(),api=window.GaisenDiagnostics;
+  toggle.textContent=diagnostics.enabled?'記録停止':'記録開始';toggle.setAttribute('aria-pressed',String(diagnostics.enabled));
+  const badge=r.querySelector('[data-gt-diagnostic-badge]');if(badge)badge.hidden=!diagnostics.enabled;
+  const clear=r.querySelector('[data-gt-diagnostic-clear]'),copy=r.querySelector('[data-gt-diagnostic-copy]');if(clear)clear.disabled=!summary.count&&!summary.active;if(copy)copy.disabled=!summary.count||diagnosticCopyPending;
+  const status=r.querySelector('[data-gt-diagnostic-status]');if(status)status.textContent=`記録${diagnostics.enabled?'中':'OFF'} · ${summary.count}件（成功${summary.successful}件） · 計測中${summary.active}件。設定変更なしの成功${summary.stable}件の中央値：応答待ち ${api.ms(summary.response)} / 表示までの目安 ${api.ms(summary.frame)}`;
+  if(!r.querySelector('[data-gt-preferences]')?.open)return;
+  const body=r.querySelector('[data-gt-diagnostic-rows]');if(body){body.replaceChildren();for(const row of diagnostics.rows){const tr=document.createElement('tr');for(const value of [row.action+'（'+({pointer:'押下',keyboard:'キー',click:'クリック',submit:'送信開始'})[row.inputKind]+'）',api.ms(row.inputMs),api.ms(row.responseMs),api.ms(row.updateMs),api.ms(row.frameMs),api.state(row.state)+(row.changed?'（設定変更）':'')]){const td=document.createElement('td');td.textContent=value;tr.append(td);}const settings=document.createElement('small');settings.textContent=api.settingsText(row.settings);tr.firstElementChild?.append(settings);body.append(tr);}}
+  const report=r.querySelector('[data-gt-diagnostic-report]');if(report){report.value=lastDiagnosticReport;report.hidden=!lastDiagnosticReport;}
+ }
+ function interruptDiagnostics(){diagnosticPress=null;diagnosticInput=null;diagnostics?.interrupt();}
  function showRecovery(){const r=root(),notice=r?.querySelector('[data-gt-recovery]'),text=r?.querySelector('[data-gt-recovery-text]');if(!notice||!text)return;const m=r.querySelector('.gt-machine'),guide=r.querySelector('[data-gt-guide]')?.textContent.trim();text.textContent=window.GaisenComfort?.recovery(guide,m?.dataset?.spinning==='true')||((m?.dataset?.spinning==='true'?'停止待ち：':'画面の続き：')+(guide||'台を選んで続けられます'));notice.hidden=false;needsRecovery=false;}
- function releaseContact(){if(contact)delete contact.dataset.contact;contact=null;}
+ function releaseContact(event){if(contact)delete contact.dataset.contact;contact=null;if(event?.type==='pointercancel'||event?.type==='blur'){diagnosticPress=null;diagnosticInput=null;}}
  function stopProbe(){probeSequence++;clearTimeout(probeTimer);probeTimer=0;bank?.stopGroup('probe');const lamp=root()?.querySelector('[data-gt-sync-lamp]');if(lamp)delete lamp.dataset.flash;}
- function openSettings(focusId){const d=root()?.querySelector('[data-gt-preferences]');if(!d)return;if(!d.open)d.showModal();if(['gt-volume','gt-motion','gt-glow','gt-quality','gt-sync'].includes(focusId))d.querySelector('#'+focusId)?.focus();}
+ function openSettings(focusId,scroll){const d=root()?.querySelector('[data-gt-preferences]');if(!d)return;if(!d.open)d.showModal();renderDiagnostics();if(['gt-volume','gt-motion','gt-glow','gt-quality','gt-sync','gt-diagnostic-toggle','gt-diagnostic-clear','gt-diagnostic-copy','gt-diagnostic-report','gt-diagnostic-region','gt-diagnostic-summary'].includes(focusId))d.querySelector('#'+focusId)?.focus({preventScroll:true});if(Number.isFinite(scroll))d.scrollTop=scroll;}
  function closeSettings(){stopProbe();root()?.querySelector('[data-gt-preferences]')?.close();}
  function prepareAudio(){bank?.setEnabled(audio&&!document.hidden);bank?.prepare();}
  function resultTone(before,after){
@@ -95,7 +112,17 @@
   later(()=>{stage('award');},award);
   later(endWin,kind==='god'?6000:kind==='stock'?2800:4300);
  }
- document.addEventListener('pointerdown',e=>{const b=e.target.closest?.('.gt-play button');if(b&&!b.disabled&&!busy){releaseContact();contact=b;b.dataset.contact='true';}if(e.target.closest?.('.gt-play,[data-gt-audio],[data-gt-settings-audio],[data-gt-volume],[data-gt-win-preview],[data-gt-sync-probe]'))prepareAudio();},{passive:true});
+ document.addEventListener('pointerdown',e=>{const b=e.target.closest?.('.gt-play button');if(b&&!b.disabled&&!busy){releaseContact();contact=b;b.dataset.contact='true';if(diagnostics?.enabled)diagnosticPress={button:b,at:performance.now(),kind:'pointer'};}if(e.target.closest?.('.gt-play,[data-gt-audio],[data-gt-settings-audio],[data-gt-volume],[data-gt-win-preview],[data-gt-sync-probe]'))prepareAudio();},{passive:true});
+ document.addEventListener('click',e=>{const button=e.target.closest?.('[data-gt-key]');if(!diagnostics?.enabled||!button||button.disabled||busy||document.hidden){diagnosticInput=null;diagnosticPress=null;return;}const press=diagnosticPress?.button===button?diagnosticPress:null;diagnosticInput={button,at:press?.at??performance.now(),kind:press?.kind||'click'};diagnosticPress=null;});
+ document.addEventListener('toggle',e=>{if(e.target.matches?.('[data-gt-diagnostics]'))renderDiagnostics();},true);
+ document.addEventListener('click',async e=>{
+  if(e.target.closest?.('[data-gt-diagnostic-toggle]')){diagnosticInput=null;diagnosticPress=null;diagnostics?.setEnabled(!diagnostics.enabled);renderDiagnostics();}
+  if(e.target.closest?.('[data-gt-diagnostic-clear]')){diagnosticCopyTicket++;lastDiagnosticReport='';diagnosticInput=null;diagnosticPress=null;diagnostics?.clear();renderDiagnostics();const note=root()?.querySelector('[data-gt-diagnostic-copy-note]');if(note)note.textContent='記録を消しました。ゲームの進行は変わりません。';}
+  if(!e.target.closest?.('[data-gt-diagnostic-copy]')||!diagnostics?.rows.length||diagnosticCopyPending)return;
+  const ticket=++diagnosticCopyTicket;lastDiagnosticReport=diagnostics.report({...diagnosticBuild,width:innerWidth,height:innerHeight});const reportText=lastDiagnosticReport;diagnosticCopyPending=true;renderDiagnostics();
+  let copied=false;try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(reportText);copied=true;}}catch{}finally{diagnosticCopyPending=false;renderDiagnostics();}if(ticket!==diagnosticCopyTicket)return;
+  const r=root(),note=r?.querySelector('[data-gt-diagnostic-copy-note]'),report=r?.querySelector('[data-gt-diagnostic-report]');if(note)note.textContent=copied?'診断結果をコピーしました。':'コピー用テキストを表示しました。選択してコピーできます。';if(!copied&&report?.isConnected&&r.querySelector('[data-gt-preferences]')?.open){report.focus();report.select();}
+ });
  document.addEventListener('pointerup',releaseContact,{passive:true});document.addEventListener('pointercancel',releaseContact,{passive:true});window.addEventListener('blur',releaseContact);
  document.addEventListener('click',e=>{if(e.target.closest?.('[data-gt-settings]'))openSettings();if(e.target.closest?.('[data-gt-settings-close]'))closeSettings();if(e.target.closest?.('[data-gt-recovery-dismiss]')){const n=root()?.querySelector('[data-gt-recovery]');if(n)n.hidden=true;}});
  document.addEventListener('close',e=>{if(e.target.matches?.('[data-gt-preferences]')){stopProbe();if(!document.hidden)root()?.querySelector('[data-gt-settings]')?.focus({preventScroll:true});}},true);
@@ -121,10 +148,11 @@
   if(!r||!r.querySelector('.gt-machine')||activeWin?.sample||document.querySelector('dialog[open]'))return;
   if(target?.closest?.('input,select,textarea,[contenteditable]:not([contenteditable="false"]),a,summary,[role="textbox"]'))return;
   if(target?.closest?.('button')&&!target.closest('[data-gt-key]'))return;
+  if(e.key==='Enter'&&diagnostics?.enabled){const b=target?.closest?.('[data-gt-key]');if(b&&!b.disabled&&!busy)diagnosticPress={button:b,at:performance.now(),kind:'keyboard'};}
   const key=e.code==='Space'?'lever':({'1':'stop-0','2':'stop-1','3':'stop-2'})[e.key];
   if(!key)return;
   const button=r.querySelector(`[data-gt-key="${key}"]`);if(!button)return;
-  e.preventDefault();if(e.repeat||busy||button.disabled)return;button.click();
+  e.preventDefault();if(e.repeat||busy||button.disabled)return;if(diagnostics?.enabled)diagnosticPress={button,at:performance.now(),kind:'keyboard'};button.click();
  });
  document.addEventListener('submit',async e=>{
   const form=e.target;if(!(form instanceof HTMLFormElement)||!form.closest('[data-gaisen-trial]'))return;
@@ -132,15 +160,16 @@
   const action=form.elements.namedItem('action')?.value,index=Number(form.elements.namedItem('index')?.value);
   const hadWin=!!root().querySelector('[data-gt-win]'),before=root().querySelector('.gt-machine');
   const focusedKey=document.activeElement?.dataset?.gtKey,pressed=form.querySelector('[data-gt-key]');if(pressed)pressed.dataset.pressed='true';prepareAudio();
+  const input=diagnosticInput?.button===pressed?diagnosticInput:null;diagnosticInput=null;diagnosticPress=null;const diagnostic=diagnostics?.begin({action,index,inputAt:input?.at,inputKind:input?.kind,settings:diagnosticSettings(),visible:!document.hidden});let diagnosticOutcome=null,receivedBody=false;
   try{
    const r=await fetch(form.getAttribute('action'),{method:'POST',body:new FormData(form),credentials:'same-origin'});
-   const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
+   diagnostics?.mark(diagnostic,'headers');const html=await r.text();receivedBody=true;diagnostics?.mark(diagnostic,'body');const doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
    if(!next)throw Error('操作結果を確認できませんでした。再送せず「最新の状態を確認」から確認してください。');
-   const settingsOpen=!!root().querySelector('[data-gt-preferences]')?.open,settingId=document.activeElement?.id;
+   const settingsOpen=!!root().querySelector('[data-gt-preferences]')?.open,diagnosticOpen=!!root().querySelector('[data-gt-diagnostics]')?.open,settingsScroll=root().querySelector('[data-gt-preferences]')?.scrollTop,diagnosticNotice=root().querySelector('[data-gt-diagnostic-copy-note]')?.textContent,settingId=document.activeElement?.id;
    const times=[...root().querySelectorAll('.gt-reel')].map(el=>el.classList.contains('is-spinning')?el.querySelector('.gt-reel-strip').getAnimations()[0]?.currentTime:null);
    root().replaceWith(next);
    if(r.ok&&action==='lever')startAt=performance.now();
-   prefs();if(settingsOpen)openSettings(settingId);
+   const detail=root().querySelector('[data-gt-diagnostics]');if(detail)detail.open=diagnosticOpen;const copyNote=root().querySelector('[data-gt-diagnostic-copy-note]');if(copyNote)copyNote.textContent=diagnosticNotice||'';prefs();if(settingsOpen)openSettings(settingId,settingsScroll);
    root().querySelectorAll('.gt-reel.is-spinning').forEach(el=>{const i=Number(el.dataset.gtReel),a=el.querySelector('.gt-reel-strip').getAnimations()[0];if(a&&times[i]!=null&&action!=='lever')a.currentTime=times[i];});
    if(r.ok){
     if(['lever','stop','seat','leave'].includes(action)){needsRecovery=false;const notice=root().querySelector('[data-gt-recovery]');if(notice)notice.hidden=true;}
@@ -157,11 +186,12 @@
      }
     }
    }
-  }catch(e){const error=root()?.querySelector('[data-gt-error]');if(error){error.hidden=false;error.textContent=e.message||'通信できませんでした。最新の状態を確認してください。';}}
-  finally{if(pressed)delete pressed.dataset.pressed;busy=false;root()?.removeAttribute('aria-busy');}
+   diagnosticOutcome=r.ok?'ok':r.status===409?'conflict':'http';
+  }catch(e){diagnostics?.finish(diagnostic,receivedBody?'display':'network');const error=root()?.querySelector('[data-gt-error]');if(error){error.hidden=false;error.textContent=e.message||'通信できませんでした。最新の状態を確認してください。';}}
+  finally{if(pressed)delete pressed.dataset.pressed;busy=false;root()?.removeAttribute('aria-busy');if(diagnosticOutcome)diagnostics?.complete(diagnostic,diagnosticOutcome,!document.hidden,diagnosticSettings());}
  });
- document.addEventListener('visibilitychange',()=>{if(document.hidden){needsRecovery=true;releaseContact();stopProbe();comfort?.pause();cancelAnimationFrame(perfFrame);perfFrame=0;endWin();stageDirector?.cancel();mutePending();root()?.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));}prefs();if(!document.hidden&&needsRecovery)showRecovery();});
- window.addEventListener('pagehide',()=>{needsRecovery=true;releaseContact();stopProbe();comfort?.pause();cancelAnimationFrame(perfFrame);perfFrame=0;endWin();stageDirector?.cancel();cancelAnimationFrame(frame);mutePending();});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){interruptDiagnostics();needsRecovery=true;releaseContact();stopProbe();comfort?.pause();cancelAnimationFrame(perfFrame);perfFrame=0;endWin();stageDirector?.cancel();mutePending();root()?.querySelectorAll('.gt-reel.is-stopped .gt-reel-strip').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));}prefs();if(!document.hidden&&needsRecovery)showRecovery();});
+ window.addEventListener('pagehide',()=>{interruptDiagnostics();needsRecovery=true;releaseContact();stopProbe();comfort?.pause();cancelAnimationFrame(perfFrame);perfFrame=0;endWin();stageDirector?.cancel();cancelAnimationFrame(frame);mutePending();});
  window.addEventListener('pageshow',e=>{if(e.persisted){stageDirector?.cancel();prefs();showRecovery();}});
  matchMedia('(prefers-reduced-motion:reduce)').addEventListener('change',prefs);prefs();if(root()?.querySelector('.gt-machine')?.dataset?.spinning==='true')showRecovery();
 })();
