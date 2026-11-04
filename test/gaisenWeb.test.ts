@@ -14,6 +14,34 @@ const headers=(t=token)=>({cookie:'shamusho_session='+t});
 beforeEach(async()=>{({db,close}=await makeDb());await recordJoin(db,{...user,roleIds:[ROLE.guji],isBot:false,joinedAt:now});await addCoins(db,id,3210,'adjust');app=createWebApp({db,cfg:()=>cfg,api:{memberRoles:async()=>[ROLE.guji]}as never,discord:{guildChannels:async()=>[]}as never,baseUrl:'https://example.test',now:()=>now});token=await createSession(db,user,{level:'guji',pages:null},now);csrf=(await findSession(db,token,now))!.csrfToken;});afterEach(async()=>close());
 async function post(action:string,machine=1,more:Record<string,string>={}){const f=await readTrial(db,now);return app.request(path,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,revision:String(f.revision),machine:String(machine),action,...more})});}
 describe('運営用の神殿スロット無料試遊',()=>{
+ it('JSの保存成功は新旧どちらもHTMLを直接返し、通常フォームは303を維持する',async()=>{
+  for(const [url,version] of [[path,'trial-1'],['/economy/gaisen-trial-v2','trial-2']] as const){
+   const update=async(action:string,extra:Record<string,string>={})=>app.request(url,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:new URLSearchParams({_csrf:csrf,machine:'1',revision:String((await readTrial(db,now,version)).revision),action,...extra})});
+   const seat=await update('seat');expect(seat.status).toBe(200);expect(seat.headers.get('location')).toBeNull();expect(seat.headers.get('cache-control')).toContain('no-store');expect(seat.headers.get('content-type')).toContain('text/html');
+   let html=await seat.text();expect(html).toContain('data-gaisen-trial');expect(html).toContain('data-revision="1"');expect(html).not.toContain('frontMode');
+   const lever=await update('lever');expect(lever.status).toBe(200);html=await lever.text();expect(html).toContain('data-spinning="true"');
+   for(const index of ['0','1','2']){const r=await update('stop',{index});expect(r.status).toBe(200);html=await r.text();}
+   expect(html).toContain('data-spinning="false"');expect((await readTrial(db,now,version)).machines[0]!.state.pending).toBeNull();
+   const f=await readTrial(db,now,version);const normal=await app.request(url,{method:'POST',headers:headers(),body:new URLSearchParams({_csrf:csrf,machine:'1',revision:String(f.revision),action:'leave'})});expect(normal.status).toBe(303);expect(normal.headers.get('location')).toBe(url);
+  }
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
+ it('画面更新ヘッダーでも認証/経済権限/CSRF/所有者/同時操作を迂回できない',async()=>{
+  for(const [url,version] of [[path,'trial-1'],['/economy/gaisen-trial-v2','trial-2']] as const){
+   const body=(action:string,revision='0')=>new URLSearchParams({_csrf:csrf,machine:'1',revision,action});
+   expect((await app.request(url,{method:'POST',headers:{'X-Gaisen-Update':'1'},body:body('seat')})).status).toBe(302);
+   const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now),limitedCsrf=(await findSession(db,limited,now))!.csrfToken;
+   expect((await app.request(url,{method:'POST',headers:{...headers(limited),'X-Gaisen-Update':'1'},body:new URLSearchParams({_csrf:limitedCsrf,machine:'1',revision:'0',action:'seat'})})).status).toBe(403);
+   expect((await app.request(url,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:new URLSearchParams({action:'seat',machine:'1',revision:'0'})})).status).toBe(403);
+   expect((await app.request(url,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:body('seat')})).status).toBe(200);
+   const other={...user,id:'760000000000000002'},t=await createSession(db,other,{level:'shinshoku',pages:['economy']},now),s=(await findSession(db,t,now))!;
+   expect((await app.request(url,{method:'POST',headers:{...headers(t),'X-Gaisen-Update':'1'},body:new URLSearchParams({_csrf:s.csrfToken,machine:'1',revision:'1',action:'lever'})})).status).toBe(403);
+   const rev=String((await readTrial(db,now,version)).revision);
+   const replies=await Promise.all([1,2].map(()=>app.request(url,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:body('lever',rev)})));expect(replies.map(r=>r.status).sort()).toEqual([200,409]);
+   const html=await replies.find(r=>r.status===409)!.text();expect(html).toContain('data-gaisen-trial');expect((await readTrial(db,now,version)).machines[0]!.state.balance).toBe(99970);
+  }
+  expect((await walletOf(db,id)).balance).toBe(3210);
+ });
  it('運営ログイン・経済権限・CSRFを必要としGETで状態を書かない',async()=>{expect((await app.request(path)).status).toBe(302);const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now);expect((await app.request(path,{headers:headers(limited)})).status).toBe(403);expect((await app.request(path,{method:'POST',headers:headers(),body:new URLSearchParams({action:'seat',machine:'1',revision:'0'})})).status).toBe(403);const r=await app.request(path,{headers:headers()});expect(r.status).toBe(200);expect(r.headers.get('cache-control')).toContain('no-store');expect(await db.select().from(settings).where(eq(settings.key,TRIAL_KEY))).toHaveLength(0);});
  it('本人だけレバー/STOPを操作でき、古い版の再送では課金/上乗せを繰り返さない',async()=>{
   expect((await post('seat')).status).toBe(303);const v=(await readTrial(db,now)).revision;expect((await post('lever')).status).toBe(303);const balance=(await readTrial(db,now)).machines[0]!.state.balance;

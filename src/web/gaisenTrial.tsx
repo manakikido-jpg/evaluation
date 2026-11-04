@@ -13,7 +13,13 @@ export function mountGaisenTrial(app:Hono<Env>,db:Db,now:()=>Date,version:RuleVe
  app.post(PATH,async c=>{
   if(!allowed(c))return c.text('経済のページ権限がある運営だけ確認できます。',403);c.header('Cache-Control','private, no-store');
   const b=await c.req.parseBody(),s=c.get('session');
-  try{await writeTrial(db,s.userId,s.username,{action:String(b.action??''),machine:Number(b.machine),revision:Number(b.revision),index:Number(b.index),setting:Number(b.setting),scenario:String(b.scenario??'')},now(),undefined,version);return c.redirect(PATH,303);}
+  try{
+   await writeTrial(db,s.userId,s.username,{action:String(b.action??''),machine:Number(b.machine),revision:Number(b.revision),index:Number(b.index),setting:Number(b.setting),scenario:String(b.scenario??'')},now(),undefined,version);
+   // JSの画面更新は、保存後のHTMLを直接返して追従GETの通信を省く。
+   // 通常フォームは再読込で操作を繰り返さないよう303のまま。
+   if(c.req.header('X-Gaisen-Update')==='1')return c.html(<GaisenTrial m={trialView(await readTrial(db,now(),version),s.userId)} session={s} version={version}/>);
+   return c.redirect(PATH,303);
+  }
   catch(e){if(!(e instanceof TrialError))throw e;return c.html(<GaisenTrial m={trialView(await readTrial(db,now(),version),s.userId)} session={s} version={version} error={e.message}/>,e.status);}
  });
 }
