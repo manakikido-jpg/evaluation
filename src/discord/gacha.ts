@@ -345,7 +345,7 @@ export function casinoBoostText(c: CasinoConfig, coin: string, r: BoostUse, ex =
   const stack = r.level > 1 && !r.ex ? `（${r.level} 枚重ね）` : '';
   if (r.status === 'active') return `🎰 ${name}がもう効いています${stack}（${at} まで・${limits}）。1 日 1 枚までです。札は減っていません。`;
   return [
-    `🎰 ${name}を使いました${stack}。${at} まで、カジノで${coin}を ${limits} 賭けられます（ふだんは 1 回 ${fmt(c.maxBet)} 枚${c.dailyBetLimit > 0 ? `・1 日 ${fmt(c.dailyBetLimit)} 枚` : ''}）。`,
+    `🎰 ${name}を使いました${stack}${r.status === 'ok' && r.upgraded ? '（ふつうの札の上から、極に上書きしました）' : ''}。${at} まで、カジノで${coin}を ${limits} 賭けられます（ふだんは 1 回 ${fmt(c.maxBet)} 枚${c.dailyBetLimit > 0 ? `・1 日 ${fmt(c.dailyBetLimit)} 枚` : ''}）。`,
     '-# 1 日 1 枚までです（日本時間の 0 時をすぎると、また使えます）',
     '-# みんなで払う卓の参加費・ブラインドは、ふだんの上限のままです',
   ].filter(Boolean).join('\n');

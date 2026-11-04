@@ -195,4 +195,19 @@ describe('🎰 大勝負の札の設定', () => {
     expect(styleChances({ ...cfg.casinoGacha }, []).find((i) => i.key === 'boost_ex')!.chance).toBe(0);
     expect(styleChances({ ...cfg.casinoGacha, boostExPercent: 5 }, []).find((i) => i.key === 'boost_ex')!.chance).toBe(5);
   });
+
+  it('🎰 ふつうの札のあとに極の札: 極に上書きして元の上限の 20 倍（終わる時はそのまま）。極のあとはもう使えない', async () => {
+    const c = { ...c0 };
+    expect(boostCasino(c, 1, true).maxBet).toBe(20000);
+    await addTickets(db, A.id, 'casino_boost', 1);
+    await addTickets(db, A.id, 'casino_boost_ex', 2);
+    const first = await useCasinoBoost(db, A.id, now);
+    expect(first).toMatchObject({ status: 'ok', level: 1 });
+    const up = await useCasinoBoost(db, A.id, now, {}, true);
+    expect(up).toMatchObject({ status: 'ok', ex: true, upgraded: true, until: (first as { until: Date }).until });
+    expect(casinoBoostText(c, '銭', up, true)).toContain('極に上書き');
+    expect((await casinoCfgFor(db, { ...cfg, casino: c } as GuildConfig, A.id, now)).casino.maxBet).toBe(20000);
+    expect(await useCasinoBoost(db, A.id, now, {}, true)).toMatchObject({ status: 'active', ex: true });
+    expect((await ticketsOf(db, A.id)).casino_boost_ex).toBe(1);
+  });
 });

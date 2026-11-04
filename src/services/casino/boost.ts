@@ -69,7 +69,7 @@ export async function casinoCfgFor(db: Db, cfg: GuildConfig, memberId: string, n
 
 
 export type BoostUse =
-  | { status: 'ok'; until: Date; level: number; ex?: boolean }
+  | { status: 'ok'; until: Date; level: number; ex?: boolean; upgraded?: boolean }
   | { status: 'no_ticket' }
   | { status: 'active'; until: Date; level: number; ex?: boolean }
   /** 今日はもう使える枚数まで使った（効いていない） */
@@ -92,7 +92,16 @@ export async function useCasinoBoost(db: Db, memberId: string, now = new Date(),
     const level = active ? Math.max(1, row!.remaining) : 0;
     const today = jstDate(now);
     const usesToday = row?.day === today ? row.uses : 0;
-    // ふつうの札と極の札をあわせて 1 日 1 枚
+    // 極の札は、今日ふつうの札しか使っていなければ、上から使える（効いていれば極に上書き。終わる時はそのまま）
+    const exToday = row?.day === today && row.ex;
+    if (ex && !exToday && usesToday >= 1) {
+      if (!(await useTicket(tx, memberId, 'casino_boost_ex'))) return { status: 'no_ticket' as const };
+      const until = active ? row!.until! : hours > 0 ? new Date(now.getTime() + hours * 3_600_000) : nextJstMidnight(now);
+      const next = { until, remaining: 1, day: today, uses: usesToday + 1, ex: true };
+      await tx.update(memberBuffs).set(next).where(and(eq(memberBuffs.memberId, memberId), eq(memberBuffs.kind, 'casino')));
+      return { status: 'ok' as const, until, level: 1, ex: true, upgraded: true };
+    }
+    // それ以外は、ふつうの札と極の札をあわせて 1 日 1 枚
     if (usesToday >= perDay || (active && level >= perDay)) return active ? { status: 'active' as const, until: row!.until!, level, ...(row!.ex ? { ex: true } : {}) } : { status: 'limit' as const };
     if (!(await useTicket(tx, memberId, ex ? 'casino_boost_ex' : 'casino_boost'))) return { status: 'no_ticket' as const };
     const until = active ? row!.until! : hours > 0 ? new Date(now.getTime() + hours * 3_600_000) : nextJstMidnight(now);
