@@ -15,6 +15,9 @@
 - 全件実行：検証head c3e726c（アプリ実装5413dbc）で241ファイル/2,692件を実行。Node24・4workersでは238ファイル/2,689件成功、未変更のAT還元率/先読みBOT/専用GIFの3件が各テスト固有の60/120秒上限で時間切れ（3102.78秒）。単独Node24でもBOTが上限超過、実行制限外Node24の確認は途中停止し成功に数えていない。全件一括成功とは記載しない。
 - 再確認：公式配布のSHA256と照合したNode22.23.4を/tmpだけに展開（CIはNode22、既定環境は24.19.0）。同じhead・同じ期待値/入力/時間上限のまま、3失敗ケースを1workerで指定して実行しAT/GIFの2件成功、BOTのみ時間切れ。BOT1件はNode22＋--execArgv=--max-semi-space-size=64（GCの若い世代用メモリー枠だけを実行時調整）で成功、計89.17秒。対象外テスト/アプリ/リポジトリ設定は変更していない。全2,692件について成功した実行を確認したが、全件の一括実行は時間切れを含むことを明記する。
 - 検証保存：型は/tmp/gaisen-latency-types-final.log、ビルドは/tmp/gaisen-latency-build.log。全件/tmp/gaisen-latency-all-final-fixed.log、Node22再実行/tmp/gaisen-latency-timeout-node22.log、BOT成功/tmp/gaisen-latency-bot-memory.log。関連3ファイル32件＋更新履歴2件、両エンジンの比較/設定保持/JavaScriptなしは成功済み。以後は結果/保存先の文書だけを更新してDraft PRへ保存する。反映後の元端末での改善幅は未確認。
+- 最新本番の統合：保存前fetchで別機能の2commit（8f0bc71/0fba649）が増えていたため、履歴を保ってmergeしd82e068とした。本番0fba649のCI1021（41846731648）はsuccess。神殿の実装は5413dbcから変更なし。d82e068でNode22の型/ビルド成功、神殿/更新履歴/本番追加修正の関連6ファイル96件成功。統合後のローカル全件一括再実行はせず、上記全件/再確認と本番CIの結果を分けて扱う。
+- 保存先：[Draft PR138](https://github.com/manakikido-jpg/evaluation/pull/138)、codex/gaisen-device-latency。実装5413dbc、補正済み検証c3e726c、最新本番統合d82e068。d82e068とGitHubのrefs/pull/138/mergeのツリーは5715b81256a71c49eb15d065e8505bad9fc99a89で一致した。head7131816のCI1023（41860557754）がこの組み合わせを検証中。以後は結果/保存先の文書だけ。PRはDraft/未合流、一般公開・銭接続は保留。
+- 次：PR138のレビュー時に標準Node22の全件CIを確認し、合流後に元の端末/回線/音ON0.65/演出通常/自動画質/発光0.7/映像待ち0msで数ゲーム→直近20件の診断を再比較。実スマホの改善幅・聴感は未確認。元の端末種別も未回答のまま、iPhone/Androidのどちらかを推測しない。
 
 ## 2026年11月4日：PR136の合流と実スマホ確認へ進む
 - 依頼：「次は？」に対する「PR136の合流→実iPhone/Androidで確認→結果に沿った調整」の提案へ「じゃあすすめて」。今回はCodexがPR136をGitHubのPRから合流する許可として進める。一般公開・銭接続の保留を継続。
