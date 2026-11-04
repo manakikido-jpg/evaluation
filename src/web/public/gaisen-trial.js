@@ -181,9 +181,7 @@
      const el=root().querySelector(`[data-gt-reel="${index}"].is-stopped .gt-reel-strip`);
      // 前後の絵柄を余白に置き、窓を空けずに減速して定位置へ収める。
      const height=el?.querySelector('.gt-symbol')?.getBoundingClientRect().height;
-     if(height){const low=actualMotion()==='low'||isLight(),travel=low?2:height*.86,rebound=low?0:Math.min(3,height*.06);
-      el.animate([{transform:`translateY(${-height-travel}px)`,filter:low?'none':'blur(.8px)'},{transform:`translateY(${-height+rebound}px)`,filter:'none',offset:.77},{transform:`translateY(${-height-(low?0:.7)}px)`,filter:'none',offset:.92},{transform:`translateY(${-height}px)`,filter:'none'}],{duration:low?100:205,delay:syncOffset,fill:'backwards',easing:'cubic-bezier(.12,.65,.22,1)'});
-     }
+     const settle=window.GaisenComfort?.stopMotion?.(height,{motion:actualMotion(),light:isLight(),sync:syncOffset});if(settle)el.animate(settle.frames,settle.timing);
     }
    }
    diagnosticOutcome=r.ok?'ok':r.status===409?'conflict':'http';

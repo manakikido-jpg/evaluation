@@ -15,6 +15,13 @@
   }
   nextVariant(){return ['a','b','c'][this.sequence++%3];}
   ambient(spins){return ['a','b','c'][Math.abs(Math.trunc(Number(spins)||0))%3];}
+  // 保存成功後の停止表示だけ。待ち時間は増やさず、小さい揺り戻しで機械の収まりを作る。
+  static stopMotion(height,{motion='normal',light=false,sync=0}={}){
+   if(!Number.isFinite(height)||height<=0||height>2048||!['normal','low'].includes(motion))return null;
+   const low=motion==='low'||light,travel=low?Math.min(1.5,height*.06):Math.min(30,height*.72),rebound=low?0:Math.min(1.8,height*.04);
+   const position=value=>`translateY(${value}px)`;
+   return {frames:[{transform:position(-height-travel),filter:low?'none':'blur(.45px)'},{transform:position(-height-Math.min(travel*.14,2.4)),filter:'none',offset:.48},{transform:position(-height+rebound),filter:'none',offset:.76},{transform:position(-height-(low?0:.35)),filter:'none',offset:.93},{transform:position(-height),filter:'none'}],timing:{duration:low?100:205,delay:[0,40,80].includes(sync)?sync:0,fill:'backwards',easing:'cubic-bezier(.12,.65,.22,1)'}};
+  }
   static recovery(guide,spinning){return spinning?'停止待ち：'+(guide||'操作できるSTOPから続けられます'):'画面の続き：'+(guide||'台を選んで続けられます');}
  }
  window.GaisenComfort=GaisenComfort;
