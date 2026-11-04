@@ -7,6 +7,16 @@ import {GaisenTrial} from '../src/web/views/gaisenTrial.js';
 const session={userId:'sample',username:'試遊係',level:'guji',pages:null,csrfToken:'test-only'} as AdminSession;
 function fixture(){const floor=freshFloor(0,'trial-2');floor.machines[0]!.owner='sample';return {floor,machine:floor.machines[0]!,html:()=>jsx(GaisenTrial,{m:trialView(floor,'sample'),session,version:'trial-2'}).toString()};}
 describe('神殿の筐体と操作案内',()=>{
+ it('診断は初期OFFの本人操作で、CSPを守って版つきのJSを読む',async()=>{
+  const html=await fixture().html();
+  expect(html).toMatch(/gaisen-diagnostics\.js\?v=[a-f0-9]{10}/);
+  expect(html).toMatch(/data-gt-diagnostic-build="[a-f0-9]{10}"/);
+  expect(html).toMatch(/data-gt-build="[a-f0-9]{10}"/);
+  expect(html).toContain('data-gt-diagnostic-toggle="true" aria-pressed="false"');
+  for(const control of ['toggle','clear','copy'])expect(html).toMatch(new RegExp(`type="button"[^>]*data-gt-diagnostic-${control}`));
+  expect(html).toContain('data-gt-diagnostic-rows="true"></tbody>');
+  expect(html).not.toMatch(/on(?:click|change)=|<script>|style=/);
+ });
  it('操作卓の数字は現在の試遊ポイントと保存済み払出を表示し、装飾で状態を変えない',async()=>{
   const f=fixture();f.machine.state.balance=98765;f.machine.state.lastPaid=150;
   const before=structuredClone(f.floor),html=await f.html();
