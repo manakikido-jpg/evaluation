@@ -689,12 +689,18 @@ export class GachaApp {
         return void (await i.update({ content: casinoBoostText(cfg.casino, coin, r), components: [] }));
       }
       case 'gacha_free':
-        return void (await i.update({ content: '🎫 下の「無料券で引く」から引けます（/物御籤 をひらき直してください）。', components: [] }));
+        return void (await i.update({
+          content: '🎫 下のボタンで、無料券を使って 1 回引けます。',
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('gacha:draw:free').setLabel('無料券で引く').setEmoji('🎫').setStyle(ButtonStyle.Success))],
+        }));
       case 'gacha_gold10':
-        return void (await i.update({ content: '🌟 /物御籤 をひらき直して、「金の10連券で引く」から引けます。', components: [] }));
+        return void (await i.update({
+          content: '🌟 下のボタンで、金の10連券を使って引けます。',
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('gacha:draw:gold').setLabel('金の10連券で引く').setEmoji('🌟').setStyle(ButtonStyle.Success))],
+        }));
       case 'gacha_gift':
         return void (await i.update({
-          content: '💝 物御籤の無料券を贈る相手を選んでください。',
+          content: '💝 物御籤の無料券を贈る相手を選んでください（贈り券は、ほかの人にあげる券です。自分では引けません）。',
           components: [new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(new UserSelectMenuBuilder().setCustomId('gacha:giftto').setPlaceholder('贈る相手'))],
         }));
       case 'name_change': {
