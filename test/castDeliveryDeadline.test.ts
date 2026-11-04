@@ -46,3 +46,22 @@ describe('既存のキャスト納品も注文から1週間へ',()=>{
   expect(await deliverSession(db,expired.id,CAST,at(7))).toBeUndefined();
  });
 });
+
+describe('📦 「納品した」を押せないときは、理由をはっきり出す',()=>{
+ it('もう納品ずみ・キャスト以外・受け取りずみで、ちがうメッセージ',async()=>{
+  const { CastApp } = await import('../src/discord/cast.js');
+  const { cfg } = await import('./helpers.js');
+  const { vi } = await import('vitest');
+  const app = new CastApp(db, () => cfg, { sendDm: vi.fn(async () => true), sendMessage: vi.fn(async () => ({ id: 'm' })) } as never);
+  const press = async (id: number, user: string) => {
+   const reply = vi.fn(async () => undefined);
+   await (app as unknown as { deliver(i: unknown, id: number): Promise<void> }).deliver({ user: { id: user }, guildId: null, channelId: 'x', reply }, id);
+   return (reply.mock.calls[0] as unknown as [{ content: string }])[0].content;
+  };
+  const delivered = await order({ status: 'delivered', endsAt: at(3), acceptBy: null });
+  expect(await press(delivered.id, CAST)).toContain('もう納品ずみです');
+  expect(await press(delivered.id, CUSTOMER)).toContain('注文を受けたキャストだけ');
+  const done = await order({ status: 'done', paid: 900, acceptBy: null });
+  expect(await press(done.id, CAST)).toContain('もう受け取ってもらえています');
+ });
+});

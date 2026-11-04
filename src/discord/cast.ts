@@ -1735,7 +1735,7 @@ export class CastApp {
     if (!i.guildId) {
       if (i.isButton()) await i.update(this.castDmMessage(s) as never);
       else await i.reply(this.castDmMessage(s) as never);
-      if (s.threadId) await this.discord.sendMessage(s.threadId, { ...this.reserveMessage(s), allowed_mentions: { parse: [] } } as MessageBody).catch(() => undefined);
+      if (s.threadId) await this.discord.sendMessage(s.threadId, { ...this.reserveMessage(s), allowed_mentions: { parse: [] } } as MessageBody).catch((err: unknown) => logger.warn({ err, sessionId: s.id }, 'cast thread notice failed'));
       return;
     }
     if (i.isButton()) await i.update({ ...(guildBody ?? this.reserveMessage(s)), allowedMentions: { parse: [] } } as never);
@@ -1945,8 +1945,21 @@ export class CastApp {
       return void (await i.reply({ content: `📦 まだスレッドに納品のファイル（かリンク）が見つかりません。${before.threadId ? `<#${before.threadId}> に出してから` : '出してから'}、もう一度「納品した」を押してください。`, ...(i.guildId ? EPHEMERAL : {}) }));
     }
     const s = await deliverSession(this.db, id, i.user.id);
-    if (!s) return void (await i.reply({ content: '納品できるのは、注文を受けたキャストだけです（期限が過ぎたか、もう納品ずみかもしれません）。', ...(i.guildId ? EPHEMERAL : {}) }));
+    if (!s) {
+      // なぜ押せないのかを、はっきり伝える（もう納品ずみなのに「できない」と思われないように）
+      const now = await getSession(this.db, id);
+      const why = !now || now.castId !== i.user.id ? '納品できるのは、注文を受けたキャストだけです。'
+        : now.status === 'delivered' ? `📦 もう納品ずみです。お客さまの「受け取った」を待っています${now.endsAt ? `（押されなくても <t:${unix(now.endsAt)}:f> に自動で受け取りになり、銭が渡ります）` : ''}。`
+        : now.status === 'done' ? '🎉 もう受け取ってもらえています（銭も渡しました）。'
+        : now.status === 'ordered' ? '納品の期限が過ぎています。運営に知らせてください。'
+        : 'この注文は、もう取り消されたか、運営が決めました。';
+      return void (await i.reply({ content: why, ...(i.guildId ? EPHEMERAL : {}) }));
+    }
     await this.afterCast(i, s);
+    // スレッドの外（お知らせ・ほかの書き込み）で押したときも、スレッドに「届きました・受け取った」を出す
+    if (i.guildId && s.threadId && i.channelId !== s.threadId) {
+      await this.discord.sendMessage(s.threadId, { ...this.reserveMessage(s), allowed_mentions: { parse: [] } } as MessageBody).catch((err: unknown) => logger.warn({ err, sessionId: s.id }, 'cast delivered thread notice failed'));
+    }
     await this.discord.sendDm(s.customerId, `📦 ${sessionLabel(s)} が届きました。${s.threadId ? `<#${s.threadId}> で確かめて「受け取った」を押してください。` : ''}`).catch(() => false);
   }
 

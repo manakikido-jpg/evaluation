@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-04-cast-deliver-message', date: '2026-11-04', kind: 'fix', where: ['Discord'], title: '📦 納品ずみなのに「納品できない」と出て分かりにくいのを直した', items: ['もう納品できているのに、もう一度「納品した」を押すと「納品できるのは、注文を受けたキャストだけです（期限が過ぎたか…）」と出て、納品できていないように見えていました。', '「もう納品ずみです。お客さまの受け取り待ちです（○日に自動で受け取り）」のように、理由ごとにはっきり出すようにしました。スレッドの外で押したときも、スレッドに「届きました・受け取った」を出します。'], announcement: { priority: 'none', audience: 'キャスト', steps: [], postText: '', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-04-gaisen-diagnostics', date: '2026-11-04', kind: 'new', where: ['社務所Web'],
     title: '神殿スロットで操作の待ち時間を確認できます',
