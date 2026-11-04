@@ -162,7 +162,7 @@
   const focusedKey=document.activeElement?.dataset?.gtKey,pressed=form.querySelector('[data-gt-key]');if(pressed)pressed.dataset.pressed='true';prepareAudio();
   const input=diagnosticInput?.button===pressed?diagnosticInput:null;diagnosticInput=null;diagnosticPress=null;const diagnostic=diagnostics?.begin({action,index,inputAt:input?.at,inputKind:input?.kind,settings:diagnosticSettings(),visible:!document.hidden});let diagnosticOutcome=null,receivedBody=false;
   try{
-   const r=await fetch(form.getAttribute('action'),{method:'POST',body:new FormData(form),credentials:'same-origin'});
+   const r=await fetch(form.getAttribute('action'),{method:'POST',headers:{'X-Gaisen-Update':'1'},body:new FormData(form),credentials:'same-origin'});
    diagnostics?.mark(diagnostic,'headers');const html=await r.text();receivedBody=true;diagnostics?.mark(diagnostic,'body');const doc=new DOMParser().parseFromString(html,'text/html'),next=doc.querySelector('[data-gaisen-trial]');
    if(!next)throw Error('操作結果を確認できませんでした。再送せず「最新の状態を確認」から確認してください。');
    const settingsOpen=!!root().querySelector('[data-gt-preferences]')?.open,diagnosticOpen=!!root().querySelector('[data-gt-diagnostics]')?.open,settingsScroll=root().querySelector('[data-gt-preferences]')?.scrollTop,diagnosticNotice=root().querySelector('[data-gt-diagnostic-copy-note]')?.textContent,settingId=document.activeElement?.id;
