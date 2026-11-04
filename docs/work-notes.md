@@ -12,6 +12,7 @@
 - WebKitは応答で消去案内の2行が失われ、dialogの高さが32px変わるためスクロールが縮むことを検出。案内文も応答前後で保持し、focusはpreventScrollで戻すよう修正。最終の両エンジンを再確認してから全件へ進む。
 - 最終ブラウザー：修正後のChromium/WebKitを順に実行し、上記全項目と設定/details/focus/scroll保持が成功。財布12,345維持・JS例外0。非表示は模擬イベント、実端末の遅延/聴感/画面ロックは未確認。関連は6ファイル53件＋Web/キー/素材3ファイル21件成功、型/ビルド成功。確認画像docs/previews/gaisen-diagnostics-settings.webpを保存。次は実装を固定して全件、その後Draft PRへ保存。
 - 全件結果：実装f0b333cで型/ビルド成功、全241ファイル2,690件成功（1394.50秒、npm test -- --maxWorkers=4 --testTimeout=180000 --hookTimeout=180000）。JavaScriptなしのレバー/STOPも成功。サーバー停止済み。ログは/tmp/gaisen-diagnostics-{types,build,all}-final.log、ブラウザーは/tmp/gaisen-diagnostics-{chromium,webkit}-final.log。以後は検証/保存先の文書のみ更新し、専用枝のDraft PRへ保存する。
+- 保存先：[Draft PR136](https://github.com/manakikido-jpg/evaluation/pull/136)、codex/gaisen-operation-diagnostics。実装f0b333c、7440e5a以後は検証/保存先の文書のみ。本番は保存前のfetchでも3235f72のまま。合流・一般公開・銭接続は行っていない。次はPR136のレビュー、実端末の手順に沿った確認。実iPhone/Androidの遅延/聴感/発熱/実画面ロック復帰とVPS反映は未確認。
 
 ## 2026年11月4日：新台のPR135を合流する
 - 依頼：「合流して」。CodexがPR135をGitHubのPRから合流することを明示的に許可。一般公開・銭接続の保留は継続。
