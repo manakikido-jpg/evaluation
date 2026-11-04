@@ -40,6 +40,25 @@ describe('🧧 お年玉袋', () => {
     expect((await claimBag(db, cfg, r.bag.id, who(A, INVITE), T0)).status).toBe('ok');
     expect((await claimBag(db, cfg, r.bag.id, who(B, CH), T0)).status).toBe('ok');
   });
+  it('🏮 縁側の通話にいる人だけ受け取れる（縁側が1つもないサーバーでは、どの通話でもよい）', async () => {
+    const { inEngawa } = await import('../src/discord/otoshidama.js');
+    const { Collection } = await import('discord.js');
+    const vc = (id: string, name: string, parent?: string) => ({ id, name, parent: parent ? { name: parent } : null, isVoiceBased: () => true });
+    const guild = (chs: ReturnType<typeof vc>[]) => ({ channels: { cache: new Collection(chs.map((c) => [c.id, c])) } }) as never;
+    const g = guild([vc('1', '大きな縁側 1'), vc('2', 'おしゃべり', '🏮 縁側'), vc('3', '宿坊')]);
+    expect(inEngawa(g, '1')).toBe(true);
+    expect(inEngawa(g, '2')).toBe(true);
+    expect(inEngawa(g, '3')).toBe(false);
+    expect(inEngawa(g, null)).toBe(false);
+    expect(inEngawa(guild([vc('3', '宿坊')]), '3')).toBeUndefined();
+    await addCoins(db, OWNER, 1000, 'adjust');
+    const r = await putBag(db, cfg, { ...base, fee: 0, total: 300, count: 3 }, T0);
+    if (r.status !== 'ok') throw new Error(r.status);
+    const who = (id: string, ok?: boolean) => ({ id, roleIds: [ROLE.sanpaisha], voiceChannelId: CH, inEngawa: ok });
+    expect((await claimBag(db, cfg, r.bag.id, who(A, false), T0)).status).toBe('not_engawa');
+    expect((await claimBag(db, cfg, r.bag.id, who(A, true), T0)).status).toBe('ok');
+    expect((await claimBag(db, cfg, r.bag.id, who(B), T0)).status).toBe('ok');
+  });
   it('運営の袋: 置いた人の財布は減らない・受け取れる・残りは運営に戻る（置いた人に入らない）・出せなければ元どおり', async () => {
     const who = (id: string) => ({ id, roleIds: [ROLE.sanpaisha], voiceChannelId: CH });
     expect((await putStaffBag(db, { by: OWNER, channelId: CH, total: 50, count: 2, note: '' }, T0)).status).toBe('bad_amount');
