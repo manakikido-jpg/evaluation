@@ -18,6 +18,8 @@
 
 - 最終の全ケース確認：残ったオセロ6対戦はNode24.19.0の単独・名前指定再実行で1件成功（130.59秒、他33件は選択対象外で初回に通過済み）。Node22の全件一括成功とは記載しない。初回3ファイル43件＋残り238ファイル2,651件＋casino.test.tsの再実行＋最後の1件で、重複を除いた全241ファイル2,696ケースの通過を確認した。コード/期待値/試行数/時間上限の変更やskip追加はない。検証対象27491fe以後は文書のみ。ログは/tmp/gaisen-finish-{heavy,all,othello-rerun,othello-node24}.log。型/ビルドとブラウザーは上記のとおり成功。これからfetch後に専用枝をpushしDraft PRへ保存する。
 
+- 保存先：[Draft PR140](https://github.com/manakikido-jpg/evaluation/pull/140)、codex/gaisen-cabinet-finish。実装27491fe、検証記録e88cccc以後は文書のみ。本番は直前fetchでもa02a93cのまま。環境の接続復帰後、明示的なネットワーク権限でfetch/push成功。一般公開/銭接続と合流は行っていない。次はPR140の標準Node22 CI結果/レビューを確認する。追加の速度計測は前提とせず、実iPhone/Androidでの見え方/聴感/打感とVPS反映は未確認。
+
 ## 2026年11月5日：PR138の合流
 - 依頼：「そのまま合流して」。CodexがPR138をGitHubのPRから合流することを許可。一般公開・銭接続の保留は継続。部分更新/即時接触音などの追加提案は未採用で、今回は実装を増やさない。
 - 開始：codex/gaisen-device-latency、21f2419。PR138はDraft/未合流、mergeable、レビュー/未解決スレッドなし。head21f2419のCI1025はqueued。d82e068からの差分はdocs/work-notes.mdだけ。head7131816のCI1023は最新本番0fba649と結合したツリー5715b812を検証しており、d82e068と一致することを前回確認済み。
