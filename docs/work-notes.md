@@ -14,6 +14,8 @@
 - 追加確認：WebKitの通信待ち試験は最初のリクエストが保持されず待機タイムアウトになった。試験側を初期JS待ち/Context.route/Service Worker blockへ変更し、実HTTP応答を保持して再実行。設定dialog・選択・入力中のfocus維持、キー操作のPOSTなし、150払出を確認。製品のWorkerは変更していない。両エンジンの通常20G検証はWorker許可の通常設定で成功済み。
 - 確認画像：docs/previews/gaisen-comfort-{settings,landscape,resume}.webp。設定画面・横向きの停止待ち表示・復帰案内の例。実端末の同期・発熱等は未確認として手順書を更新済み。
 - 最終の回帰：両エンジンで通信待ち中の設定/選択/focus保持とdialog中のキー操作POST0を確認。全6押し順の各150払出・G-STOP/HOLD・実当選の液晶内表示と次レバー取消・明示的見本/スキップ・JavaScriptなしも成功。型/ビルド成功。本番は全件前のfetchでもafe1b2bのまま。テストサーバー停止済み、実装をcommitして全件へ進む。
+- 最終結果：本番afe1b2bを取り込んだ実装39b494eで型チェック・ビルド成功。全240ファイル2,677件成功（1545.68秒、npm test -- --maxWorkers=4 --testTimeout=180000 --hookTimeout=180000）。型/ビルドは/tmp/gaisen-comfort-{types,build}-final.log、全件は/tmp/gaisen-comfort-all-final.log。以後は検証/保存先の文書のみ更新。
+- 保存前の確認：全件成功後のfetchでも本番afe1b2bから追加変更なし、PR135はDraft/未合流/head53957f1で他の更新なし。専用枝へpushしてPR135のタイトル/本文を全体の実装へ更新する。合流・一般公開・銭接続は行わず、実端末の同期/聴感/発熱/電池/画面ロック復帰とVPS反映は未確認。
 
 ## 2026年11月4日：区間切替・筐体発光・音量調整・スマホ検証を採用
 - 依頼：「それ全部使用」。直前の提案4項目（区間切替、上下/側面の連動発光、音の重なりの自動音量調整、iPhone/Android確認）を採用。
