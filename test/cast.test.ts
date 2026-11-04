@@ -263,6 +263,34 @@ describe('🎀 キャスト', () => {
     expect(ok.status === 'ok' ? [ok.session.status, ok.session.startAt?.getTime()] : ok.status).toEqual(['accepted', next.getTime()]);
   });
 
+  it('📦 運営が「全年齢」にした納品だけ、18 歳未満も買える（キャストが受けているとき）。寝落ち・相談は 18 歳以上のまま。書きかえても印は残る', async () => {
+    const { setMenuAllAges, updateMenuItem, minorMenuOk } = await import('../src/services/cast.js');
+    const { casts } = await import('../src/db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    expect(await addMenuItem(db, c, CAST, { name: 'イラスト', note: '', minutes: 0, price: 500, night: false, delivery: true })).toBe('ok');
+    expect(await addMenuItem(db, c, CAST, { name: 'おはなし', note: '', minutes: 0, price: 0, night: false, consult: true })).toBe('ok');
+    const items = menuOf((await getCast(db, CAST))!);
+    const illust = items.find((m) => m.name === 'イラスト')!, consult = items.find((m) => m.name === 'おはなし')!, night = items.find((m) => m.night);
+    await addCoins(db, MINOR, 5000, 'adjust');
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: illust.id }, T20)).status).toBe('minor_plan');
+    expect(await setMenuAllAges(db, CAST, consult.id, true, 'staff')).toBe('not_delivery');
+    if (night) expect(await setMenuAllAges(db, CAST, night.id, true, 'staff')).toBe('not_delivery');
+    expect(await setMenuAllAges(db, CAST, illust.id, true, 'staff')).toBe('ok');
+    await db.update(casts).set({ minorOk: false }).where(eq(casts.memberId, CAST));
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: illust.id }, T20)).status).toBe('minor_off');
+    await db.update(casts).set({ minorOk: true }).where(eq(casts.memberId, CAST));
+    // キャストが書きかえても、全年齢の印は残る
+    expect(await updateMenuItem(db, c, CAST, illust.id, { name: 'イラスト（新）', note: '', minutes: 0, price: 500, night: false, delivery: true })).toBe('ok');
+    const now = menuOf((await getCast(db, CAST))!).find((m) => m.id === illust.id)!;
+    expect(now).toMatchObject({ name: 'イラスト（新）', allAges: true });
+    expect(minorMenuOk(now)).toBe(true);
+    expect(minorMenuOk(consult)).toBe(false);
+    const ok = await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: illust.id }, T20);
+    expect(ok.status).toBe('ok');
+    expect(await setMenuAllAges(db, CAST, illust.id, false, 'staff')).toBe('ok');
+    expect(menuOf((await getCast(db, CAST))!).find((m) => m.id === illust.id)!.allAges).toBeUndefined();
+  });
+
   it('📦 納品・🎰 ガチャ: 預かる → 納品 → お客の受け取りで渡す。期限が過ぎたら戻す。受け取らなければ 3 日で渡す', async () => {
     const { deliverSession, receiveSession } = await import('../src/services/cast.js');
     expect(await addMenuItem(db, c, CAST, { name: 'ボイス', note: '', minutes: 0, price: 1000, night: false, delivery: true })).toBe('ok');
