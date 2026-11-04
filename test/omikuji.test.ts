@@ -169,7 +169,8 @@ describe('おみくじ', () => {
     expect(e.title).toBe('⛩ おみくじ ― 大吉');
     expect(e.description).toContain('**さくら** さんの運勢');
     expect(e.description).toContain('📞 待ち人 … 来る。音信あり');
-    expect(e.description).toContain('🪙銭 **+30**（いま 30 枚）');
+    expect(e.description).toContain('🪙銭 **+30**');
+    expect(e.description).not.toContain('いま 30 枚');
   });
 
   it('一言: 同じ人には、その運勢の文を出し切るまで同じ文を出さない（第〇番つき）', async () => {
@@ -255,7 +256,7 @@ describe('おみくじ', () => {
     const sc = { rewards: [{ days: 7, repeat: true, coins: 50, ticket: 'none' as const, tickets: 0 }] };
     const r = await drawOmikuji(db, cfg.economy, 'A', new Date('2026-10-06T03:00:00Z'), () => 0, { streak: sc });
     if (r.status !== 'drawn') throw new Error('not drawn');
-    expect(slipFoot(r, cfg.economy, sc)).toEqual([`${cfg.economy.currencyName} +30（いま 30 枚）`, '連続 1 日目・あと 6 日でおまけ']);
+    expect(slipFoot(r, cfg.economy, sc)).toEqual([`${cfg.economy.currencyName} +30`, '連続 1 日目・あと 6 日でおまけ']);
     expect(slipFoot({ ...r, amount: 0, streak: 0 }, cfg.economy)).toEqual([]);
     const { omikujiMessage } = await import('../src/discord/omikuji.js');
     const m = await omikujiMessage(db, { ...cfg, omikujiStreak: sc }, { ...r, streak: 7, bonus: sc.rewards }, 'さくら', { streak: true });
