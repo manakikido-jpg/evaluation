@@ -39,7 +39,8 @@ const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 function footLines(r: Drawn, economy: EconomyConfig, streak?: OmikujiStreakConfig): string[] {
   const coin = `${economy.currencyEmoji}${economy.currencyName}`;
   return [
-    ...(r.amount > 0 ? [`${coin} **+${r.amount}**（いま ${r.balance} 枚）`] : []),
+    // 残高は出さない（おみくじはみんなに見えるので）
+    ...(r.amount > 0 ? [`${coin} **+${r.amount}**`] : []),
     ...streakLines(r.streak, r.bonus, streak, economy),
     `-# おみくじは 1 日 1 回。日本時間の 0 時にまた引けます${streak?.rewards.length ? '（毎日続けるとおまけがあります。1 日空けると 1 日目から）' : ''}`,
   ];
@@ -57,7 +58,7 @@ export function omikujiEmbed(r: Drawn, name: string, economy: EconomyConfig, str
 export function slipFoot(r: Drawn, economy: Pick<EconomyConfig, 'currencyName'>, streak?: OmikujiStreakConfig): string[] {
   const next = streak && r.streak ? nextStreakReward(streak, r.streak) : undefined;
   return [
-    ...(r.amount > 0 ? [`${economy.currencyName} +${r.amount.toLocaleString('ja-JP')}（いま ${r.balance.toLocaleString('ja-JP')} 枚）`] : []),
+    ...(r.amount > 0 ? [`${economy.currencyName} +${r.amount.toLocaleString('ja-JP')}`] : []),
     ...(r.streak ? [`連続 ${r.streak} 日目${next ? `・あと ${next.left} 日でおまけ` : ''}`] : []),
   ];
 }

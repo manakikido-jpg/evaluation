@@ -30,6 +30,9 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-04-omikuji-no-balance', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '⛩ おみくじの結果に、残高を出さないように', items: ['おみくじの結果はみんなに見えるので、「いま ○ 枚」の残高を出さないようにしました。もらった銭（+30 など）は今までどおり出ます。', '残高は /残高 で自分だけが見られます。'], announcement: { priority: 'optional', audience: 'すべてのメンバー', steps: ['残高は /残高 で見る。'], postText: 'おみくじの結果に、自分の残高が出なくなりました。もらった銭は今までどおり出ます。残高は /残高 で確かめてください。', imagePrompt: '', notes: '' } },
+  { id: '2026-11-04-otoshidama-engawa', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '🏮 お年玉は、縁側の通話にいる人だけが受け取れるように', items: ['お年玉袋を受け取れるのは、縁側の通話（チャンネルかカテゴリの名前に「縁側」があるもの）にいる人だけにしました。', '宿や屋台など、ほかの通話にいるときは、縁側に移ってから「🧧 もらう」を押します。'], announcement: { priority: 'required', audience: 'お年玉袋を受け取るメンバー', steps: ['縁側の通話に入る。', '「🧧 もらう」を押す。'], postText: '【お年玉袋の受け取り方が変わりました】お年玉袋を受け取れるのは、縁側の通話にいる人だけになりました。宿や屋台にいるときは、縁側に移ってから「🧧 もらう」を押してください。', imagePrompt: '', notes: 'サーバーに縁側の通話が1つもないときは、どの通話でも受け取れる。' } },
+  { id: '2026-11-04-otoshidama-secret-room', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '🧧 シクレの宿にいる間は、お年玉を受け取れないように', items: ['お年玉袋は通話にいる人だけが受け取れますが、ほかの人から見えないシクレの宿にいる間は受け取れないようにしました。', '公開・招待限定の宿や、ふつうの通話にいれば、今までどおり受け取れます。'], announcement: { priority: 'optional', audience: 'お年玉袋を受け取るメンバー', steps: ['シクレの宿にいるときは、ほかの通話に移ってから「🧧 もらう」を押す。'], postText: 'お年玉袋は、シクレの宿にいる間は受け取れなくなりました。ほかの通話に移ってから「🧧 もらう」を押してください。', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-04-gaisen-synchronized-cabinet', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットの液晶・筐体の光・音を連動',

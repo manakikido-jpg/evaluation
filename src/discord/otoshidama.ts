@@ -1,11 +1,24 @@
-import { MessageFlags, type Interaction } from 'discord.js';
+import { MessageFlags, type Guild, type Interaction } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import type { DiscordActions } from '../lib/discordRest.js';
 import { logger } from '../lib/logger.js';
 import { bagMessage, bagState, claimBag, CLAIM_MESSAGES, expireBags } from '../services/otoshidama.js';
+import { isEngawaName } from './talkTopic.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
+
+/**
+ * 🏮 縁側の通話にいるか（チャンネルかカテゴリの名前に「縁側」）。
+ * サーバーに縁側が 1 つもなければ、どの通話でもよい（undefined）
+ */
+export function inEngawa(guild: Guild, voiceChannelId: string | null): boolean | undefined {
+  const engawa = (c: { name: string; parent?: { name: string } | null }) => isEngawaName(c.name) || Boolean(c.parent && isEngawaName(c.parent.name));
+  const cache = guild.channels?.cache;
+  if (!cache?.some((c) => c.isVoiceBased() && engawa(c))) return undefined;
+  const ch = voiceChannelId ? cache.get(voiceChannelId) : undefined;
+  return Boolean(ch && ch.isVoiceBased() && engawa(ch));
+}
 
 /** 🧧 お年玉袋: 「もらう」ボタンと、期限が来た袋の片付け（置くのは授与所から） */
 export class OtoshidamaApp {
@@ -25,7 +38,8 @@ export class OtoshidamaApp {
     if (!interaction.inCachedGuild() || interaction.guildId !== this.cfg().guildId) return;
     const bagId = Number(interaction.customId.split(':')[2]);
     try {
-      const r = await claimBag(this.db, this.cfg(), bagId, { id: interaction.user.id, roleIds: [...interaction.member.roles.cache.keys()], bot: interaction.user.bot, voiceChannelId: interaction.guild.voiceStates.cache.get(interaction.user.id)?.channelId ?? null });
+      const voiceChannelId = interaction.guild.voiceStates.cache.get(interaction.user.id)?.channelId ?? null;
+      const r = await claimBag(this.db, this.cfg(), bagId, { id: interaction.user.id, roleIds: [...interaction.member.roles.cache.keys()], bot: interaction.user.bot, voiceChannelId, inEngawa: inEngawa(interaction.guild, voiceChannelId) });
       if (r.status !== 'ok') return void (await interaction.reply({ content: CLAIM_MESSAGES[r.status], ...EPHEMERAL }));
       const state = await bagState(this.db, bagId);
       if (state) await interaction.update({ ...bagMessage(state.bag, state.claims, this.coin()), allowedMentions: { parse: [] } } as Parameters<typeof interaction.update>[0]);
