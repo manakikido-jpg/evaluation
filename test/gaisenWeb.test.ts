@@ -30,8 +30,8 @@ describe('運営用の神殿スロット無料試遊',()=>{
   for(const [url,version] of [[path,'trial-1'],['/economy/gaisen-trial-v2','trial-2']] as const){
    const body=(action:string,revision='0')=>new URLSearchParams({_csrf:csrf,machine:'1',revision,action});
    expect((await app.request(url,{method:'POST',headers:{'X-Gaisen-Update':'1'},body:body('seat')})).status).toBe(302);
-   const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now);
-   expect((await app.request(url,{method:'POST',headers:{...headers(limited),'X-Gaisen-Update':'1'},body:body('seat')})).status).toBe(403);
+   const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now),limitedCsrf=(await findSession(db,limited,now))!.csrfToken;
+   expect((await app.request(url,{method:'POST',headers:{...headers(limited),'X-Gaisen-Update':'1'},body:new URLSearchParams({_csrf:limitedCsrf,machine:'1',revision:'0',action:'seat'})})).status).toBe(403);
    expect((await app.request(url,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:new URLSearchParams({action:'seat',machine:'1',revision:'0'})})).status).toBe(403);
    expect((await app.request(url,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:body('seat')})).status).toBe(200);
    const other={...user,id:'760000000000000002'},t=await createSession(db,other,{level:'shinshoku',pages:['economy']},now),s=(await findSession(db,t,now))!;
