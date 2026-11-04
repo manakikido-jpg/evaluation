@@ -1,0 +1,14 @@
+import {describe,it,expect} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+const source=readFileSync(new URL('../src/web/public/gaisen-comfort.js',import.meta.url),'utf8');
+function fixture(){const window:any={},changes:boolean[]=[];runInNewContext(source,{window});const comfort=new window.GaisenComfort({onChange:(value:boolean)=>changes.push(value)});let time=0;const frames=(count:number,delta:number)=>{for(let i=0;i<count;i++)comfort.sample(time+=delta);};return{comfort,changes,frames,advance:(ms:number)=>{time+=ms;},Class:window.GaisenComfort};}
+describe('神殿の表示負荷と装飾',()=>{
+ it('滑らかな動作は維持し、継続した遅いフレームで一度だけ軽量化する',()=>{const f=fixture();f.frames(100,16);expect(f.comfort.light).toBe(false);f.frames(190,34);expect(f.comfort.light).toBe(true);expect(f.changes).toEqual([true]);f.frames(200,34);expect(f.changes).toEqual([true]);});
+ it('表示中に極端に遅いフレームが続く場合も軽量化する',()=>{const f=fixture();f.frames(91,500);expect(f.comfort.light).toBe(true);});
+ it('隠れた時間や一度の大きな停止を負荷として数えない',()=>{const f=fixture();f.frames(40,16);f.comfort.sample(100000,{visible:false});f.advance(200000);f.frames(91,16);expect(f.comfort.light).toBe(false);f.advance(10000);f.frames(91,16);expect(f.changes).toEqual([]);});
+ it('ゲームの間の待ち時間を除き、短い動作の測定を積み重ねる',()=>{const f=fixture();for(let i=0;i<10;i++){f.frames(12,34);f.comfort.sample(0,{active:false});f.advance(5000);}expect(f.comfort.light).toBe(true);});
+ it('本人が選んだ通常/軽めを優先し、自動に戻せば測定し直す',()=>{const f=fixture();f.comfort.setMode('full');f.frames(200,40);expect(f.comfort.light).toBe(false);f.comfort.setMode('light');expect(f.comfort.light).toBe(true);f.comfort.setMode('auto');expect(f.comfort.light).toBe(false);f.frames(91,40);expect(f.comfort.light).toBe(true);});
+ it('装飾の循環と構図は抽選や結果を受け取らず、同じ公開ゲーム数は同じになる',()=>{const f=fixture();expect(Array.from({length:6},()=>f.comfort.nextVariant())).toEqual(['a','b','c','a','b','c']);expect(f.comfort.ambient(8)).toBe(f.comfort.ambient('8'));expect(f.comfort.ambient('invalid')).toBe('a');});
+ it('復帰時は公開済みの操作案内を使い、停止待ちと次ゲームを区別する',()=>{const f=fixture();expect(f.Class.recovery('中STOP（押し順ナビ）',true)).toContain('停止待ち：中STOP');expect(f.Class.recovery('レバーで次のゲームへ',false)).toContain('画面の続き：レバー');expect(f.Class.recovery('',false)).toContain('台を選んで');});
+});

@@ -30,9 +30,21 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-04-gaisen-comfort', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの設定・操作感・再開案内を改善',
+    items: ['集中表示でも音量・演出・発光・画質・停止の同期を設定できます。', '停止音と確認ランプを比べる機能と、装飾演出の変化を加えました。', '動作が重いときに表示を軽くし、中断から戻ると次の操作を案内します。', '一般公開・銭接続は保留のままです。'],
+    announcement: {priority: 'none', audience: '宮司の無料試遊', steps: ['社務所Web → カジノ管理 → 神殿スロットの無料試遊 → 設定'], postText: '', imagePrompt: '', notes: '実端末の同期・聴感・発熱は未確認。ブラウザー検証と区別。'},
+  },
   { id: '2026-11-04-omikuji-no-balance', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '⛩ おみくじの結果に、残高を出さないように', items: ['おみくじの結果はみんなに見えるので、「いま ○ 枚」の残高を出さないようにしました。もらった銭（+30 など）は今までどおり出ます。', '残高は /残高 で自分だけが見られます。'], announcement: { priority: 'optional', audience: 'すべてのメンバー', steps: ['残高は /残高 で見る。'], postText: 'おみくじの結果に、自分の残高が出なくなりました。もらった銭は今までどおり出ます。残高は /残高 で確かめてください。', imagePrompt: '', notes: '' } },
   { id: '2026-11-04-otoshidama-engawa', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '🏮 お年玉は、縁側の通話にいる人だけが受け取れるように', items: ['お年玉袋を受け取れるのは、縁側の通話（チャンネルかカテゴリの名前に「縁側」があるもの）にいる人だけにしました。', '宿や屋台など、ほかの通話にいるときは、縁側に移ってから「🧧 もらう」を押します。'], announcement: { priority: 'required', audience: 'お年玉袋を受け取るメンバー', steps: ['縁側の通話に入る。', '「🧧 もらう」を押す。'], postText: '【お年玉袋の受け取り方が変わりました】お年玉袋を受け取れるのは、縁側の通話にいる人だけになりました。宿や屋台にいるときは、縁側に移ってから「🧧 もらう」を押してください。', imagePrompt: '', notes: 'サーバーに縁側の通話が1つもないときは、どの通話でも受け取れる。' } },
   { id: '2026-11-04-otoshidama-secret-room', date: '2026-11-04', kind: 'improve', where: ['Discord'], title: '🧧 シクレの宿にいる間は、お年玉を受け取れないように', items: ['お年玉袋は通話にいる人だけが受け取れますが、ほかの人から見えないシクレの宿にいる間は受け取れないようにしました。', '公開・招待限定の宿や、ふつうの通話にいれば、今までどおり受け取れます。'], announcement: { priority: 'optional', audience: 'お年玉袋を受け取るメンバー', steps: ['シクレの宿にいるときは、ほかの通話に移ってから「🧧 もらう」を押す。'], postText: 'お年玉袋は、シクレの宿にいる間は受け取れなくなりました。ほかの通話に移ってから「🧧 もらう」を押してください。', imagePrompt: '', notes: '' } },
+  {
+    id: '2026-11-04-gaisen-synchronized-cabinet', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
+    title: '神殿スロットの液晶・筐体の光・音を連動',
+    items: ['公開済みの区間が変わると、短い扉や光で背景をつなぎます。', '当選時は上部・側面・GODパネルが段階に合わせて光ります。', '音が重なった時は当選・払出を優先して音量を自動調整します。', '一般公開と銭接続は保留のままです。'],
+    announcement: {priority: 'none', audience: '宮司の無料試遊', steps: ['社務所Web → カジノ管理 → 神殿スロットの無料試遊'], postText: '', imagePrompt: '', notes: '運営内の改善。実スマホの聴感・発熱・電池消費の確認は別途必要。'},
+  },
   {
     id: '2026-11-04-gaisen-immersive-effects', date: '2026-11-04', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットの回転音・液晶・当選演出とスマホ操作を改善',

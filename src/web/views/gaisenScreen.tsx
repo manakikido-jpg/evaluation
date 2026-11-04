@@ -15,6 +15,7 @@ export function GaisenScreen({own,scene}:{own:Own;scene:string}){
   <img class="gt-landscape" src={assetUrl(`gaisen-media-${landscape}-1600.webp`)} srcset={`${assetUrl(`gaisen-media-${landscape}-800.webp`)} 800w, ${assetUrl(`gaisen-media-${landscape}-1600.webp`)} 1600w`} sizes="(max-width: 620px) 100vw, 600px" decoding="async" alt="" aria-hidden="true"/>
   <div class="gt-scene-light" aria-hidden="true"/>
   <div class="gt-scene-depth" aria-hidden="true"><i class="gt-scene-horizon"/><i class="gt-scene-orbit"/><i class="gt-scene-mirrors"/><div class="gt-scene-sparks">{Array.from({length:6},(_,i)=><i class={'gt-scene-spark-'+i}/>)}</div></div>
+  <div class="gt-transition-gates" aria-hidden="true"><i/><i/></div>
   <div class="gt-win-flare" aria-hidden="true"/>
   <div class="gt-lcd">
    <div class="gt-lcd-hud" aria-label="区間の状況"><span>{label} <b>{remaining}G</b></span><span>SET <b>{own.sets}</b></span><span>STOCK <b>{own.stocks}</b></span>{(own.medusaInfinite||own.medusa>0)&&<span>停止 <b>{own.medusaInfinite?'∞':`${own.medusa}G`}</b></span>}</div>
