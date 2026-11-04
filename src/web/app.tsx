@@ -2521,6 +2521,7 @@ export function createWebApp(deps: WebDeps) {
       profitSharePercent: typeof body.profitSharePercent === 'string' ? int('profitSharePercent') : cfg.casino.profitSharePercent,
       // 🎰 大勝負の札の倍率（欄がない古い画面から送られたら、今のまま）
       boostMult: typeof body.boostMult === 'string' ? int('boostMult') : cfg.casino.boostMult,
+      boostExMult: typeof body.boostExMult === 'string' ? int('boostExMult') : cfg.casino.boostExMult,
       ...(['boostHours', 'boostMaxBetMult', 'boostRouletteMult', 'boostDailyMult'] as const).reduce<Record<string, number>>((o, k) => {
         o[k] = typeof body[k] === 'string' ? int(k) : cfg.casino[k];
         return o;
@@ -2614,6 +2615,7 @@ export function createWebApp(deps: WebDeps) {
           pity: num('pity'),
           cosmeticPercent: num('cosmeticPercent'),
           boostPercent: num('boostPercent'),
+          boostExPercent: typeof body.boostExPercent === 'string' ? num('boostExPercent') : (current.casinoGacha ?? cfg.casinoGacha).boostExPercent,
           items,
         },
       });

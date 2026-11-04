@@ -102,9 +102,13 @@ export function CasinoGachaAdminPage(p: {
             <span>大勝負の札の割合（％）</span>
             <input type="number" name="boostPercent" min={0} max={100} step="0.1" value={String(g.boostPercent)} required disabled={off} />
           </label>
+          <label class="field">
+            <span>大勝負の札（極）の割合（％）</span>
+            <input type="number" name="boostExPercent" min={0} max={100} step="0.1" value={String(g.boostExPercent)} required disabled={off} />
+          </label>
         </div>
         <p class="note">
-          残り（100％ − 見た目の品 − 大勝負の札）は見た目のお試し券です。見た目の品の割合は、その人がまだ持っていない「出す」品の中で、出やすさ（重み）に合わせて分けます。全部そろった人は、見た目の品の分もお試し券になります。
+          残り（100％ − 見た目の品 − 大勝負の札 − 大勝負の札（極））は見た目のお試し券です。見た目の品の割合は、その人がまだ持っていない「出す」品の中で、出やすさ（重み）に合わせて分けます。全部そろった人は、見た目の品の分もお試し券になります。
         </p>
 
         <h2>🎁 品ごと（出す・出やすさ・名前）</h2>
@@ -137,7 +141,7 @@ export function CasinoGachaAdminPage(p: {
                       {i.emoji} {i.name}
                       {(o?.name || o?.emoji || o?.note) && <small class="reason">はじめ: {base.emoji} {base.name}</small>}
                     </td>
-                    <td>{base.slot ? STYLE_SLOTS[base.slot] : base.key === 'boost' ? '券（持ち物）' : '券（着せ替え）'}</td>
+                    <td>{base.slot ? STYLE_SLOTS[base.slot] : base.key === 'boost' || base.key === 'boost_ex' ? '券（持ち物）' : '券（着せ替え）'}</td>
                     <td>
                       {fixed ? (
                         <span class="note">いつも（残り）</span>

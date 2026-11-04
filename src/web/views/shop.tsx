@@ -35,6 +35,7 @@ const KIND_LABEL: Record<ShopItem['kind'], string> = {
   otoshidama: 'お年玉袋',
   mycolor: '自分だけの色',
   casino_boost: '🎰 大勝負の札（持ち物に 1 枚）',
+  casino_boost_ex: '🎰 大勝負の札（極）（持ち物に 1 枚）',
   casino_style: '🎴 勝負の御籤の品',
   name_change: '✏️ 名前変更の札（持ち物に 1 枚）',
 };

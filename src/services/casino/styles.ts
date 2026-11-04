@@ -38,6 +38,7 @@ export const STYLE_ITEMS: StyleItem[] = [
   { key: 'lucky', name: '幸運の持ち主', emoji: '🍀', slot: 'title', note: '名前に添えるカジノの称号' },
   { key: 'trial', name: '見た目のお試し券', emoji: '🎟', note: '未所持の背景か卓のふちを1つ、24時間お試し' },
   { key: 'boost', name: '大勝負の札', emoji: '🎰', note: '持ち物から使うと、その日だけ賭けの上限が上がる' },
+  { key: 'boost_ex', name: '大勝負の札（極）', emoji: '🎰', note: '持ち物から使うと、その日だけ賭けの上限がもっと上がる' },
 ];
 
 // ───────── 社務所Web の調整（名前・絵文字・説明・出す・出やすさ） ─────────
@@ -62,7 +63,7 @@ export const styleItems = (): StyleItem[] => STYLE_ITEMS.map(applied);
 /** 見た目の品（背景・称号など。お試し券・大勝負の札はのぞく） */
 export const STYLE_COSMETICS = STYLE_ITEMS.filter((i) => i.slot);
 
-type Gacha = Pick<CasinoGachaConfig, 'cosmeticPercent' | 'boostPercent' | 'pity'> & { items?: CasinoGachaConfig['items'] };
+type Gacha = Pick<CasinoGachaConfig, 'cosmeticPercent' | 'boostPercent' | 'pity'> & Partial<Pick<CasinoGachaConfig, 'boostExPercent'>> & { items?: CasinoGachaConfig['items'] };
 /** 見た目の品の出やすさ（重み）。外した品・重み 0 は 0 */
 export const styleWeight = (g: Gacha, key: string): number => {
   const o = g.items?.[key];
@@ -71,6 +72,7 @@ export const styleWeight = (g: Gacha, key: string): number => {
 };
 /** 大勝負の札を御籤から出すか */
 const boostOn = (g: Gacha) => g.items?.boost?.enabled !== false;
+const boostExOn = (g: Gacha) => g.items?.boost_ex?.enabled !== false;
 /** まだ持っていなくて、御籤から出る見た目の品 */
 export const drawableStyles = (g: Gacha, owned: readonly string[]) => STYLE_COSMETICS.filter((i) => !owned.includes(i.key) && styleWeight(g, i.key) > 0);
 /** 引く値段（10 連は決めた値段。0 なら 1 回 × 10） */
@@ -140,6 +142,7 @@ export function styleChances(g: Gacha, owned: readonly string[]) {
   const available = drawableStyles(g, owned);
   const total = available.reduce((n, i) => n + styleWeight(g, i.key), 0);
   const boost = boostOn(g) ? g.boostPercent : 0;
+  const boostEx = boostExOn(g) ? (g.boostExPercent ?? 0) : 0;
   return styleItems().map((i) => ({
     ...i,
     chance: i.slot
@@ -148,7 +151,9 @@ export function styleChances(g: Gacha, owned: readonly string[]) {
         : 0
       : i.key === 'boost'
         ? boost
-        : 100 - boost - (available.length ? g.cosmeticPercent : 0),
+        : i.key === 'boost_ex'
+          ? boostEx
+          : 100 - boost - boostEx - (available.length ? g.cosmeticPercent : 0),
   }));
 }
 export type StyleDrawResult = { status: 'ok'; results: string[]; cost: number; replay: boolean } | { status: 'off' | 'invalid' | 'funds' };
@@ -211,7 +216,7 @@ export async function drawStyles(
       } else {
         pity = available.length ? pity + 1 : 0;
         if (key === 'trial') tickets++;
-        else await addTickets(tx, memberId, 'casino_boost', 1);
+        else await addTickets(tx, memberId, key === 'boost_ex' ? 'casino_boost_ex' : 'casino_boost', 1);
       }
       results.push(key);
     }

@@ -1000,7 +1000,7 @@ describe('夜桜の新しいカジノロビー', () => {
     const { cookie } = await casinoLogin(A);
     await db.insert(casinoStyles).values({ memberId: A, owned: ['stars', 'lucky', 'fox'], equipped: { background: 'stars', title: 'lucky', ornament: 'fox' }, tickets: 2 });
     const html = await (await get('/casino/hall', cookie!)).text();
-    for (const text of ['c-lobby-page', 'casino-lobby.css', '今夜は、どの遊びから？', 'あなたの着せ替え', '景品 18種類', '星降る遊技場', '幸運の持ち主', '5,000', 'お試し券 2枚']) expect(html).toContain(text);
+    for (const text of ['c-lobby-page', 'casino-lobby.css', '今夜は、どの遊びから？', 'あなたの着せ替え', '景品 19種類', '星降る遊技場', '幸運の持ち主', '5,000', 'お試し券 2枚']) expect(html).toContain(text);
     expect(html).toContain(`https://discord.com/channels/${cfg.guildId}/1553587045073551000`);
     expect(html).not.toContain('/casino/style-gacha/draw');
     expect(html).not.toContain('onclick=');

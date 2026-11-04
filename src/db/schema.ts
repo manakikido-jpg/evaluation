@@ -623,7 +623,7 @@ export const shopItems = pgTable(
     id: bigserial('id', { mode: 'number' }).primaryKey(),
     /** otoshidama: お年玉袋（値段は手数料）/ mycolor: 自分だけの色（BOT がロールを作る） */
     /** casino_style: 🎴 勝負の御籤の品（見た目の品・お試し券。style_key で決める） */
-    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_style' | 'name_change' | 'koban_1000' | 'koban_3000' | 'koban_5000' | 'koban_10000'>().notNull(),
+    kind: text('kind').$type<'role' | 'hanafubuki' | 'gift' | 'ema_pin' | 'omikuji_extra' | 'menzaifu' | 'otoshidama' | 'mycolor' | 'casino_boost' | 'casino_boost_ex' | 'casino_style' | 'name_change' | 'koban_1000' | 'koban_3000' | 'koban_5000' | 'koban_10000'>().notNull(),
     name: text('name').notNull(),
     emoji: text('emoji').notNull().default(''),
     description: text('description').notNull().default(''),
@@ -1351,6 +1351,8 @@ export const memberBuffs = pgTable(
     /** 🎰 大勝負の札: 今日（日本時間）使った枚数を数える日と枚数（重ねて使える枚数の上限に使う） */
     day: text('day'),
     uses: integer('uses').notNull().default(0),
+    /** 🎰 大勝負の札（極）で効いている */
+    ex: boolean('ex').notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.memberId, t.kind] })],
 );

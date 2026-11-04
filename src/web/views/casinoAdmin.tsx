@@ -247,6 +247,12 @@ export function CasinoAdminPage(p: {
               </span>
               <input type="number" name="boostMult" min={2} max={20} value={String(c.boostMult)} required />
             </label>
+            <label class="field">
+              <span>
+                🎰 大勝負の札（極）の倍率（2〜100 倍。使った日だけ、1 回の最高・ルーレットの 1 か所の最高・1 日の合計がこの倍になる。いまなら 1 回 {fmt(Math.min(c.maxBet * c.boostExMult, 1_000_000))}。ふつうの札とあわせて 1 日 1 枚）
+              </span>
+              <input type="number" name="boostExMult" min={2} max={100} value={String(c.boostExMult)} required />
+            </label>
             <fieldset>
               <legend>🎰 大勝負の札（くわしく）</legend>
               <label class="field">

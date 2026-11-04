@@ -284,6 +284,7 @@ export const TICKET_KINDS = [
   'name_deco',
   'casino_boost',
   'name_change',
+  'casino_boost_ex',
 ] as const;
 export type TicketKind = (typeof TICKET_KINDS)[number];
 /** 廃止前の設定ファイルも読み込めるよう、旧券IDだけを引き継ぐ。新規の選択肢には出さない。 */
@@ -650,6 +651,8 @@ export const casinoSchema = z.object({
   profitSharePercent: z.number().int().min(0).max(50).default(25),
   /** 🎰 大勝負の札（その日だけ、カジノの上限を上げる）: 1 回の最高と 1 日の合計を何倍にするか */
   boostMult: z.number().int().min(2).max(20).default(5),
+  /** 🎰 大勝負の札（極）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計を何倍にするか（社務所Web で決める） */
+  boostExMult: z.number().int().min(2).max(100).default(10),
   /** 札が効く長さ（時間。0 なら使った日の日本時間の 0 時まで） */
   boostHours: z.number().int().min(0).max(168).default(0),
   /** 上がる上限を別々に（0 なら boostMult と同じ・1 なら上げない）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計 */
@@ -677,6 +680,8 @@ export const casinoGachaSchema = z.object({
   pity: z.number().int().min(1).max(1000).default(30),
   cosmeticPercent: z.number().min(0).max(100).default(70),
   boostPercent: z.number().min(0).max(100).default(10),
+  /** 🎰 大勝負の札（極）の出る割合（％。0 なら出さない） */
+  boostExPercent: z.number().min(0).max(100).default(0),
   /** 10 連の値段（0 なら 1 回の値段 × 10） */
   tenPrice: z.number().int().min(0).max(1_000_000).default(0),
   /** 品ごとの調整（社務所Web の「🎰 勝負の御籤」）。書いていない品は、出す・重み 1・はじめの名前 */
@@ -694,7 +699,7 @@ export const casinoGachaSchema = z.object({
       }),
     )
     .default({}),
-}).refine((g) => g.cosmeticPercent + g.boostPercent <= 100, '出る割合の合計は100％までです');
+}).refine((g) => g.cosmeticPercent + g.boostPercent + g.boostExPercent <= 100, '出る割合の合計は100％までです');
 export type CasinoGachaConfig = z.infer<typeof casinoGachaSchema>;
 
 export const recordingSchema = z.object({

@@ -11,6 +11,7 @@ import { actTable, createTable } from '../src/services/casino/tables/service.js'
 import { addCoins, spendWithin, walletOf } from '../src/services/economy.js';
 import { buySimple, listItems, seedDefaultItems } from '../src/services/shop.js';
 import { addTickets, emptyTickets, ticketsOf } from '../src/services/tickets.js';
+import { styleChances } from '../src/services/casino/styles.js';
 import { cfg, makeDb } from './helpers.js';
 
 let db: Db;
@@ -166,5 +167,32 @@ describe('🎰 大勝負の札の設定', () => {
     expect(await useCasinoBoost(db, A.id, new Date(end.getTime() + 1000), opts)).toEqual({ status: 'limit' });
     expect((await ticketsOf(db, A.id)).casino_boost).toBe(4);
     expect(casinoBoostText(c0, '銭', { status: 'limit' })).toContain('今日はもう大勝負の札を 1 枚使いました');
+  });
+
+  it('🎰 大勝負の札（極）: 極の倍率で上がる・ふつうの札とあわせて 1 日 1 枚・授与所と勝負の御籤から手に入る', async () => {
+    const c = { ...c0, boostExMult: 20 };
+    const g = { ...cfg, casino: c } as GuildConfig;
+    expect(boostCasino(c, 1, true).maxBet).toBe(20000);
+    await addTickets(db, A.id, 'casino_boost_ex', 1);
+    await addTickets(db, A.id, 'casino_boost', 1);
+    const r = await useCasinoBoost(db, A.id, now, {}, true);
+    expect(r).toMatchObject({ status: 'ok', ex: true });
+    expect(casinoBoostText(c, '銭', r, true)).toContain('大勝負の札（極）を使いました');
+    expect(casinoBoostText(c, '銭', r, true)).toContain('1 回 **20,000** 枚まで');
+    expect((await casinoCfgFor(db, g, A.id, now)).casino.maxBet).toBe(20000);
+    expect((await useCasinoBoost(db, A.id, now)).status).toBe('active');
+    expect((await ticketsOf(db, A.id)).casino_boost).toBe(1);
+    expect((await ticketsOf(db, A.id)).casino_boost_ex).toBe(0);
+    expect(await useCasinoBoost(db, A.id, now, {}, true)).toMatchObject({ status: 'active', ex: true });
+    // 授与所
+    await seedDefaultItems(db, { colors: [], titles: [] });
+    const item = (await listItems(db)).find((i) => i.kind === 'casino_boost_ex')!;
+    expect(item).toMatchObject({ name: '大勝負の札（極）', enabled: true });
+    await addCoins(db, A.id, item.price, 'adjust');
+    expect((await buySimple(db, item, A.id, {}, now)).status).toBe('ok');
+    expect((await ticketsOf(db, A.id)).casino_boost_ex).toBe(1);
+    // 勝負の御籤: 割合を決めると出る（はじめは 0）
+    expect(styleChances({ ...cfg.casinoGacha }, []).find((i) => i.key === 'boost_ex')!.chance).toBe(0);
+    expect(styleChances({ ...cfg.casinoGacha, boostExPercent: 5 }, []).find((i) => i.key === 'boost_ex')!.chance).toBe(5);
   });
 });

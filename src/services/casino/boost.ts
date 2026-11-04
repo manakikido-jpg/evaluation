@@ -18,12 +18,12 @@ const DAY = 86_400_000;
 export const nextJstMidnight = (now: Date) => new Date(new Date(`${jstDate(now)}T00:00:00+09:00`).getTime() + DAY);
 
 /** 札が効いていれば、終わる時と重ねた枚数（効いていなければ undefined） */
-export async function casinoBoostOf(db: Db, memberId: string, now = new Date()): Promise<{ until: Date; level: number } | undefined> {
+export async function casinoBoostOf(db: Db, memberId: string, now = new Date()): Promise<{ until: Date; level: number; ex: boolean } | undefined> {
   const [row] = await db
-    .select({ until: memberBuffs.until, level: memberBuffs.remaining })
+    .select({ until: memberBuffs.until, level: memberBuffs.remaining, ex: memberBuffs.ex })
     .from(memberBuffs)
     .where(and(eq(memberBuffs.memberId, memberId), eq(memberBuffs.kind, 'casino'), gt(memberBuffs.until, now)));
-  return row?.until ? { until: row.until, level: Math.max(1, row.level) } : undefined;
+  return row?.until ? { until: row.until, level: Math.max(1, row.level), ex: row.ex } : undefined;
 }
 
 /** 札が効いていれば、終わる時（効いていなければ undefined） */
@@ -38,16 +38,18 @@ export const boostRate = (base: number, mult: number, level: number) => {
 };
 
 /** 札を効かせた上限（もう効かせてあれば、そのまま）。level は重ねた枚数 */
-export function boostCasino(c: CasinoConfig, level = 1): CasinoConfig {
+export function boostCasino(c: CasinoConfig, level = 1, ex = false): CasinoConfig {
   if (c.boostBase) return c;
   const cap = (n: number, rate: number, max: number) => Math.min(n * rate, max);
+  // 極の札は、どの上限も boostExMult 倍
+  const rate = (base: number | undefined) => (ex ? Math.max(2, c.boostExMult ?? 10) : boostRate(base ?? 0, c.boostMult, level));
   return {
     ...c,
     boostBase: { maxBet: c.maxBet, rouletteMaxBet: c.rouletteMaxBet, dailyBetLimit: c.dailyBetLimit },
-    maxBet: cap(c.maxBet, boostRate(c.boostMaxBetMult ?? 0, c.boostMult, level), 1_000_000),
-    rouletteMaxBet: cap(c.rouletteMaxBet, boostRate(c.boostRouletteMult ?? 0, c.boostMult, level), 10_000_000),
+    maxBet: cap(c.maxBet, rate(c.boostMaxBetMult), 1_000_000),
+    rouletteMaxBet: cap(c.rouletteMaxBet, rate(c.boostRouletteMult), 10_000_000),
     // 0 は「上限なし」のまま
-    dailyBetLimit: cap(c.dailyBetLimit, boostRate(c.boostDailyMult ?? 0, c.boostMult, level), 100_000_000),
+    dailyBetLimit: cap(c.dailyBetLimit, rate(c.boostDailyMult), 100_000_000),
   };
 }
 
@@ -62,14 +64,14 @@ export function baseCasino(c: CasinoConfig): CasinoConfig {
 export async function casinoCfgFor(db: Db, cfg: GuildConfig, memberId: string, now = new Date()): Promise<GuildConfig> {
   const base = cfg.casino.boostBase ? { ...cfg, casino: baseCasino(cfg.casino) } : cfg;
   const b = await casinoBoostOf(db, memberId, now);
-  return b ? { ...base, casino: boostCasino(base.casino, b.level) } : base;
+  return b ? { ...base, casino: boostCasino(base.casino, b.level, b.ex) } : base;
 }
 
 
 export type BoostUse =
-  | { status: 'ok'; until: Date; level: number }
+  | { status: 'ok'; until: Date; level: number; ex?: boolean }
   | { status: 'no_ticket' }
-  | { status: 'active'; until: Date; level: number }
+  | { status: 'active'; until: Date; level: number; ex?: boolean }
   /** 今日はもう使える枚数まで使った（効いていない） */
   | { status: 'limit' };
 
@@ -77,7 +79,7 @@ export type BoostUse =
  * 札を使う。1 日に使える枚数（boostPerDay）まで。効いている間にもう 1 枚使うと重ねる（1 枚までなら、使わずに active）。
  * 効く長さは、boostHours が 0 なら日本時間の 0 時まで、ほかは使ったときから ○ 時間（重ねても延びない）
  */
-export async function useCasinoBoost(db: Db, memberId: string, now = new Date(), c: Partial<Pick<CasinoConfig, 'boostHours' | 'boostPerDay'>> = {}): Promise<BoostUse> {
+export async function useCasinoBoost(db: Db, memberId: string, now = new Date(), c: Partial<Pick<CasinoConfig, 'boostHours' | 'boostPerDay'>> = {}, ex = false): Promise<BoostUse> {
   // 1 日 1 枚だけ（運営の決まり。boostPerDay の設定があっても見ない）
   const perDay = 1;
   void c.boostPerDay;
@@ -90,14 +92,15 @@ export async function useCasinoBoost(db: Db, memberId: string, now = new Date(),
     const level = active ? Math.max(1, row!.remaining) : 0;
     const today = jstDate(now);
     const usesToday = row?.day === today ? row.uses : 0;
-    if (usesToday >= perDay || (active && level >= perDay)) return active ? { status: 'active' as const, until: row!.until!, level } : { status: 'limit' as const };
-    if (!(await useTicket(tx, memberId, 'casino_boost'))) return { status: 'no_ticket' as const };
+    // ふつうの札と極の札をあわせて 1 日 1 枚
+    if (usesToday >= perDay || (active && level >= perDay)) return active ? { status: 'active' as const, until: row!.until!, level, ...(row!.ex ? { ex: true } : {}) } : { status: 'limit' as const };
+    if (!(await useTicket(tx, memberId, ex ? 'casino_boost_ex' : 'casino_boost'))) return { status: 'no_ticket' as const };
     const until = active ? row!.until! : hours > 0 ? new Date(now.getTime() + hours * 3_600_000) : nextJstMidnight(now);
-    const next = { until, remaining: level + 1, day: today, uses: usesToday + 1 };
+    const next = { until, remaining: level + 1, day: today, uses: usesToday + 1, ex };
     await tx
       .insert(memberBuffs)
       .values({ memberId, kind: 'casino', ...next })
       .onConflictDoUpdate({ target: [memberBuffs.memberId, memberBuffs.kind], set: next });
-    return { status: 'ok' as const, until, level: level + 1 };
+    return { status: 'ok' as const, until, level: level + 1, ...(ex ? { ex: true } : {}) };
   });
 }

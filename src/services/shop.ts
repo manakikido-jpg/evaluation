@@ -126,6 +126,7 @@ export async function seedDefaultItems(
     { kind: 'otoshidama', name: 'お年玉袋', emoji: '🧧', description: '銭を入れた袋をチャンネルに置くと、通話中の人が先着でボタンから受け取れる（量は運しだい）', price: 0 },
     { kind: 'mycolor', name: '自分だけの色', emoji: '🎨', description: '好きな色の、自分専用の色ロールを BOT が作る（色守りより上に出る）', price: 5000, durationDays: 30 },
     { kind: 'casino_boost', name: '大勝負の札', emoji: '🎰', description: '使った日（日本時間の 0 時まで）だけ、カジノで賭けられる上限（1 回・1 日の合計）が上がる。/持ち物 から使う', price: 1000 },
+    { kind: 'casino_boost_ex', name: '大勝負の札（極）', emoji: '🎰', description: '使った日（日本時間の 0 時まで）だけ、カジノで賭けられる上限が、ふつうの札よりもっと上がる。/持ち物 から使う', price: 10000 },
     { kind: 'name_change', name: '名前変更の札', emoji: '✏️', description: 'このサーバーでの自分の名前（ニックネーム）を 1 回変えられる。/持ち物 から使う', price: 1000 },
   );
   for (const value of KOBAN_VALUES) singles.push({ kind: `koban_${value}` as KobanKind, name: `小判 ${value.toLocaleString('ja-JP')}銭`, emoji: '🪙', description: `贈ると相手に${value.toLocaleString('ja-JP')}銭が入る小判。購入後は /持ち物 の「小判」から贈れます`, price: kobanPrice(value) });
@@ -307,7 +308,7 @@ export async function buySimple(
   price = item.price,
   discount?: DiscountTicket,
 ): Promise<BuyResult> {
-  if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra', 'casino_boost', 'casino_style', 'name_change'].includes(item.kind)) return { status: 'disabled' };
+  if (!item.enabled || !['hanafubuki', 'ema_pin', 'omikuji_extra', 'casino_boost', 'casino_boost_ex', 'casino_style', 'name_change'].includes(item.kind)) return { status: 'disabled' };
   // 🎴 勝負の御籤の品: 決めた品がないものは売らない
   if (item.kind === 'casino_style' && !isGivableStyle(item.styleKey)) return { status: 'disabled' };
   return withDiscount(discount, () => db.transaction(async (tx) => {
@@ -326,7 +327,7 @@ export async function buySimple(
     // 🎴 勝負の御籤の品: 払うのと同じトランザクションで渡す（渡せなければ全部戻す）
     if (item.kind === 'casino_style' && (await giveStyle(tx, memberId, item.styleKey!)) !== 'ok') throw new Error('casino style give failed');
     // 🎰 大勝負の札: 持ち物に 1 枚（使うのは /持ち物 から。払うのと同じトランザクションで）
-    if (item.kind === 'casino_boost') await addTickets(tx, memberId, 'casino_boost', 1);
+    if (item.kind === 'casino_boost' || item.kind === 'casino_boost_ex') await addTickets(tx, memberId, item.kind, 1);
     // ✏️ 名前変更の札: 持ち物に 1 枚（使うのは /持ち物 から）
     if (item.kind === 'name_change') await addTickets(tx, memberId, 'name_change', 1);
     const expiresAt = item.durationDays ? new Date(now.getTime() + item.durationDays * DAY) : null;
