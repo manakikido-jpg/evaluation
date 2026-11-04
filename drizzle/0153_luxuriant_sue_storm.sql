@@ -1,0 +1,1 @@
+ALTER TABLE "member_buffs" ADD COLUMN "ex" boolean DEFAULT false NOT NULL;

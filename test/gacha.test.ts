@@ -420,7 +420,7 @@ describe('券を使う', () => {
     const { TICKET_LABEL, MANUAL_TICKETS } = await import('../src/services/tickets.js');
     for (const k of TICKET_KINDS) expect(TICKET_LABEL[k]?.name).toBeTruthy();
     expect(TICKET_LABEL.room_half_invite.name).toBe('🔑招待限定の部屋代半額券');
-    expect(MANUAL_TICKETS).toEqual(['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco', 'casino_boost', 'name_change']);
+    expect(MANUAL_TICKETS).toEqual(['fuku', 'luck', 'omikuji_extra', 'gacha_free', 'gacha_gold10', 'gacha_gift', 'name_deco', 'casino_boost', 'name_change', 'casino_boost_ex']);
   });
 
   it('市場: 手数料なし券があれば、売れたとき全部受け取る', async () => {

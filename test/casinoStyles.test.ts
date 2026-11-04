@@ -18,8 +18,8 @@ beforeEach(async () => {
 });
 afterEach(async () => close());
 describe('カジノの景品と着せ替え', () => {
-  it('18種類・率は100％。未所持だけ出て、そろったら券になる', () => {
-    expect(STYLE_ITEMS).toHaveLength(18);
+  it('19種類・率は100％。未所持だけ出て、そろったら券になる', () => {
+    expect(STYLE_ITEMS).toHaveLength(19);
     const owned = ['yozakura'];
     const c = styleChances(g, owned);
     expect(c.reduce((n, i) => n + i.chance, 0)).toBeCloseTo(100);

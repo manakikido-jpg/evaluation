@@ -65,8 +65,8 @@ const fmtDate = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/
 type Buyable = ButtonInteraction<'cached'> | ModalSubmitInteraction<'cached'>;
 
 /** 🎰 大勝負の札を受ける前の説明（上がる前と後の上限） */
-export function casinoBoostNote(c: CasinoConfig): string {
-  const b = boostCasino(c);
+export function casinoBoostNote(c: CasinoConfig, ex = false): string {
+  const b = boostCasino(c, 1, ex);
   const f = (n: number) => n.toLocaleString('ja-JP');
   return [
     `-# 持ち物に 1 枚入ります。\`/持ち物\` で「✨ 使う」を押してから${(c.boostHours ?? 0) > 0 ? ` ${c.boostHours} 時間` : 'その日（日本時間の 0 時まで）'}だけ効きます（1 日 1 枚まで。効いている間にもう 1 枚使うことはできません）`,
@@ -200,7 +200,7 @@ export class ShopApp {
       const t = (await ticketsOf(this.db, i.user.id)).ema_pin;
       if (t > 0 && priceOf(item, this.cfg().economy, isBooster(i)) > 0) note = `📌 **絵馬のピン留め券を 1 枚使うので、${this.coinName}は減りません**（いま ${t} 枚）\n${note}`;
     }
-    if (item.kind === 'casino_boost') note = casinoBoostNote(this.cfg().casino);
+    if (item.kind === 'casino_boost' || item.kind === 'casino_boost_ex') note = casinoBoostNote(this.cfg().casino, item.kind === 'casino_boost_ex');
     if (item.kind === 'name_change') note = '-# 持ち物に 1 枚入ります。`/持ち物` で選んで「✨ 使う」を押し、新しい名前（32 文字まで）を入れると BOT が変えます';
     if (item.kind === 'casino_style') {
       const st = styleItem(item.styleKey ?? '');
@@ -333,11 +333,13 @@ export class ShopApp {
         return this.omikujiExtra(i, item, discount);
       case 'ema_pin':
         return this.emaPin(i, item, discount);
-      case 'casino_boost': {
+      case 'casino_boost':
+      case 'casino_boost_ex': {
+        const ex = item.kind === 'casino_boost_ex';
         const r = await buySimple(this.db, item, userId, {}, new Date(), this.price(i, item), discount);
         if (r.status !== 'ok') return this.insufficientText(r)!;
-        const have = (await ticketsOf(this.db, userId)).casino_boost;
-        return `🎰 大勝負の札を 1 枚受けました（持っている: ${have} 枚）${this.discountNote(r)}。残り ${r.balance} 枚。\n\`/持ち物\` で選んで「✨ 使う」を押すと、その日（日本時間の 0 時まで）だけ、カジノの上限が ${cfg.casino.boostMult} 倍になります。`;
+        const have = (await ticketsOf(this.db, userId))[item.kind];
+        return `🎰 ${ex ? '大勝負の札（極）' : '大勝負の札'}を 1 枚受けました（持っている: ${have} 枚）${this.discountNote(r)}。残り ${r.balance} 枚。\n\`/持ち物\` で選んで「✨ 使う」を押すと、その日（日本時間の 0 時まで）だけ、カジノの上限が ${ex ? cfg.casino.boostExMult : cfg.casino.boostMult} 倍になります。`;
       }
       case 'name_change': {
         const r = await buySimple(this.db, item, userId, {}, new Date(), this.price(i, item), discount);
