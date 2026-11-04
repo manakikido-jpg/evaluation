@@ -1762,7 +1762,7 @@ export const casts = pgTable('casts', {
    * night: 寝落ち（朝 7 時まで。minutes は使わない）/ consult: 内容により相談（値段と時間は、キャストがそのつど出す）
    * delivery: 📦 納品（シチュエーションボイスなど。通話しない）/ gacha: 納品のガチャの中身（どれか 1 つが出る）
    */
-  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; delivery?: boolean; gacha?: string[] }[]>().notNull().default(sql`'[]'::jsonb`),
+  menu: jsonb('menu').$type<{ id: string; name: string; note: string; minutes: number; price: number; night: boolean; consult?: boolean; delivery?: boolean; gacha?: string[]; /** 📦 運営が「全年齢」にした納品（18 歳未満も買える） */ allAges?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
   /** オプション（指名に足す追加。名前と値段。運営が社務所Web で足す） */
   options: jsonb('options').$type<{ id: string; name: string; price: number; note?: string; enabled?: boolean }[]>().notNull().default(sql`'[]'::jsonb`),
   /** male 男性 / female 女性 / '' まだ決めていない（両方のメニューに出る）。メニューを出すチャンネルを分ける */

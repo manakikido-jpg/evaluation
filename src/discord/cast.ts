@@ -965,7 +965,8 @@ export class CastApp {
       }));
     }
     if (item.delivery) {
-      if (!adult) return void (await this.answer(i, { content: '📦 納品のメニューは 18 歳以上の方だけです。', embeds: [], components: [], attachments: [] }));
+      if (!adult && !item.allAges) return void (await this.answer(i, { content: '📦 この納品のメニューは 18 歳以上の方だけです（運営が「全年齢」にしたメニューだけ、18 歳未満の方も頼めます）。', embeds: [], components: [], attachments: [] }));
+      if (!adult && !cast.minorOk) return void (await this.answer(i, { content: 'このキャストは、18 歳未満の方の注文を受けていません。', embeds: [], components: [], attachments: [] }));
       return void (await i.showModal(
         new ModalBuilder()
           .setCustomId(`cast:omodal:${castId}:${item.id}`)
@@ -1211,7 +1212,7 @@ export class CastApp {
       closed: 'このキャストは、いまは予約・注文の受付を止めています。',
       busy: 'このキャストは、いま通話中か返事待ちです。少しあとか、予約でどうぞ。',
       no_plan: 'このキャストは、その時間では受けていません。',
-      minor_plan: '寝落ちは 18 歳以上の方だけです。',
+      minor_plan: 'このメニューは 18 歳以上の方だけです（寝落ち・相談・全年齢でない納品）。',
       minor_off: 'このキャストは、18 歳未満の方の指名を受けていません。',
       minor_hours: `18 歳未満の方の雑談は ${MINOR.startHour} 時〜${MINOR.endHour} 時に終わる時間だけです。`,
       has_open: '指名（返事待ち・確定・通話中の予約）が、1 人が同時に持てる数の上限です。終わってからどうぞ。',
@@ -1767,6 +1768,20 @@ export class CastApp {
       return void (await i.editReply({ content: 'やり取りの場所を作れなかったので、取り消して銭を戻しました。神職に知らせてください。', components: [] }));
     }
     const s = (await getSession(this.db, r.session.id)) ?? r.session;
+    // 👀 18 歳未満の人の注文（全年齢の納品）: 神職・宮司をスレッドに呼んで見守り、連絡先の交換をしない注意を出す
+    if (!adult) {
+      const staff = [...new Set([...(this.cfg().admin?.shinshokuRoleIds ?? []), ...(this.cfg().admin?.gujiRoleIds ?? [])])].slice(0, 10);
+      await thread.send({
+        content: [
+          ...(staff.length ? [staff.map((id) => `<@&${id}>`).join(' ')] : []),
+          '👀 **18 歳未満の方の注文です。運営も、このスレッドを見守っています。**',
+          '・やり取りは、このスレッドの中だけでしてください。',
+          '・Discord の外の連絡先（LINE・SNS など）を教え合わない・個人的に会う話をしないでください。',
+          '・困ったこと・いやなことがあったら「🚨 通報」を押してください。',
+        ].join('\n'),
+        allowedMentions: { parse: [], roles: staff },
+      }).catch((err: unknown) => logger.warn({ err, sessionId: s.id }, 'cast minor order notice failed'));
+    }
     await thread.send({ content: [s.menuName ? `📦 注文：**${s.menuName}**${s.optionNames.length ? `（＋${s.optionNames.join('・')}）` : ''}` : '', r.drawn ? `🎰 ガチャの結果: **${r.drawn}**` : '', wish ? `📝 お願い:\n> ${wish.replace(/\n/g, '\n> ')}` : ''].filter(Boolean).join('\n') || '📦 注文', allowedMentions: { parse: [] } }).catch(() => undefined);
     const dm = await this.dmCast(s);
     await thread.send({ ...(dm ? {} : { content: `<@${castId}>` }), ...this.reserveMessage(s, !dm), allowedMentions: { users: dm ? [] : [castId] } } as never).catch(() => undefined);

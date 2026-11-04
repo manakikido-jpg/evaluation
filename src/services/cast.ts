@@ -291,8 +291,8 @@ export function sessionTime(s: Pick<CastSession, 'plan' | 'minutes' | 'extension
   const end = s.endsAt ?? (start ? new Date(start.getTime() + total * 60_000) : undefined);
   return `⏱ ${durationText(total)}${start && end ? `（${hm(start)}〜${hm(end)}）` : ''}`;
 }
-/** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで） */
-export const minorMenuOk = (m: CastMenuItem) => !m.delivery && !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes;
+/** 18 歳未満の人も選べるメニューか（寝落ちでなく、60 分まで。📦 納品は運営が「全年齢」にしたものだけ） */
+export const minorMenuOk = (m: CastMenuItem) => (m.delivery ? Boolean(m.allAges) && !m.consult : !m.night && !m.consult && !isFreeMenu(m) && m.minutes <= MINOR.maxMinutes);
 /** メニューを 1 行で（紹介・一覧） */
 export const menuText = (c: Pick<Cast, 'menu' | 'price30' | 'price60' | 'priceNight'>) =>
   menuOf(c).map((m) => (m.consult ? `${m.name} 相談` : `${menuLabel(m)} ${m.price.toLocaleString('ja-JP')}`)).join('・');
@@ -486,6 +486,24 @@ export async function editTemplate(db: Db, c: CastConfig, by: string, op: { add:
 }
 
 /** キャストのメニューを 1 つ書きかえる（内容・説明・時間・値段・種類。種類を入れなければ前のまま）。もう入っている指名・注文はそのまま */
+/**
+ * 📦 運営が、納品のメニューを「全年齢（18 歳未満も買える）」にする・戻す。
+ * 納品のメニューだけ（寝落ち・相談・通話は 18 歳以上のまま）。キャスト本人は変えられない（社務所Web の運営の画面だけ）
+ */
+export async function setMenuAllAges(db: Db, castId: string, itemId: string, on: boolean, by: string): Promise<'ok' | 'none' | 'not_delivery'> {
+  return db.transaction(async (tx) => {
+    const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
+    if (!cast) return 'none' as const;
+    const menu = menuOf(cast);
+    const item = menu.find((m) => m.id === itemId);
+    if (!item) return 'none' as const;
+    if (!item.delivery || item.consult) return 'not_delivery' as const;
+    await tx.update(casts).set({ menu: menu.map((m) => (m.id === itemId ? (on ? { ...m, allAges: true } : (({ allAges: _a, ...rest }) => rest)(m)) : m)) }).where(eq(casts.memberId, castId));
+    await audit(tx as Db, { actorId: by, targetId: castId, action: on ? 'cast.menu_all_ages' : 'cast.menu_adult_only', detail: { itemId, name: item.name }, via: 'web' });
+    return 'ok' as const;
+  });
+}
+
 export async function updateMenuItem(db: Db, c: CastConfig, castId: string, itemId: string, input: MenuInput): Promise<'ok' | 'invalid' | 'none'> {
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
@@ -495,7 +513,7 @@ export async function updateMenuItem(db: Db, c: CastConfig, castId: string, item
     if (!old) return 'none' as const;
     const fixed = withKind(input, old);
     if (!validMenuItem(c, fixed) || ((input.kind ?? menuKindOf(old)) === 'gacha' && !fixed.gacha?.length)) return 'invalid' as const;
-    await tx.update(casts).set({ menu: menu.map((m) => (m.id === itemId ? { ...asItem(fixed), id: m.id } : m)), price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
+    await tx.update(casts).set({ menu: menu.map((m) => (m.id === itemId ? { ...asItem(fixed), id: m.id, ...(m.allAges && fixed.delivery ? { allAges: true } : {}) } : m)), price30: 0, price60: 0, priceNight: 0 }).where(eq(casts.memberId, castId));
     return 'ok' as const;
   });
 }
@@ -782,6 +800,11 @@ export async function requestSession(
     if (input.startAt || (q && !found?.consult) || input.options?.length) return { status: 'no_plan' };
     const locked = input.priceLock ?? castPriceLock(c,item.price,0,now);
     if (locked.base !== item.price) return { status: 'no_plan' };
+    // 18 歳未満は、運営が「全年齢」にした納品だけ（キャストが 18 歳未満を受けているとき）
+    if (!input.customerAdult) {
+      if (q || !item.allAges) return { status: 'minor_plan' };
+      if (!cast.minorOk) return { status: 'minor_off' };
+    }
     return orderDelivery(db, cast.memberId, { ...item, price: locked.price }, input, now, rand, c.customerOpenMax);
   }
   const opts = pickOptions(cast, input.options);
@@ -858,7 +881,7 @@ export async function requestSession(
 
 /** 📦 納品の注文: 銭を預かり、キャストの納品を待つ（期限 1 週間）。18 歳以上だけ。通話の時間とは重ならない */
 async function orderDelivery(db: Db, castId: string, item: CastMenuItem, input: { customerId: string; customerAdult: boolean; threadId?: string }, now: Date, rand: () => number, openMax: number): Promise<RequestResult> {
-  if (!input.customerAdult) return { status: 'minor_plan' };
+  if (!input.customerAdult && !item.allAges) return { status: 'minor_plan' };
   const drawn = item.gacha?.length ? item.gacha[Math.min(item.gacha.length - 1, Math.floor(rand() * item.gacha.length))] : undefined;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast-customer:' + input.customerId}))`);

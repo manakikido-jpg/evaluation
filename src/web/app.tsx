@@ -306,7 +306,7 @@ import { castRanking, monthKey, monthOf, parseMonth } from '../services/castRank
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, deleteCast, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, deleteCast, setMenuAllAges, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -6765,6 +6765,17 @@ export function createWebApp(deps: WebDeps) {
     const r = await editTemplate(db, await loadCastConfig(db), c.get('session').userId, { update: c.req.param('item'), input });
     if (r === 'ok') await audit(db, { actorId: c.get('session').userId, action: 'cast.template', detail: { op: 'edit', item: c.req.param('item') }, via: 'web' });
     return c.redirect(`/cast?msg=${r === 'ok' ? 'menu_saved' : `menu_${r}`}#cast-template`);
+  });
+
+  // 📦 納品のメニューを「全年齢（18 歳未満も買える）」にする・戻す（運営だけ。キャスト本人は変えられない）
+  app.post('/cast/casts/:id/menu/:item/all-ages', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.parseBody();
+    if (!validId(id)) return c.redirect('/cast');
+    const on = body.on === 'yes';
+    const r = await setMenuAllAges(db, id, c.req.param('item'), on, c.get('session').userId);
+    if (r === 'none') return c.redirect('/cast?msg=invalid');
+    return c.redirect(`/cast?msg=${r === 'not_delivery' ? 'all_ages_bad' : on ? 'all_ages_on' : 'all_ages_off'}#cast-${id}`);
   });
 
   app.post('/cast/casts/:id/menu/:item/delete', async (c) => {

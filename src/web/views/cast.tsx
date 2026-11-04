@@ -16,6 +16,9 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   sync_pending: { text: '保存しました。紹介投稿の更新は待機中です。BOTの権限を確認してください。毎分再試行します。', kind: 'warn' },
   photo_saved: { text: '写真を保存し、登録済みの紹介投稿にも反映しました。', kind: 'ok' },
   photo_removed: { text: 'キャストの写真を外しました。', kind: 'ok' },
+  all_ages_on: { text: 'この納品のメニューを全年齢にしました。18 歳未満の方も買えます（キャストが 18 歳未満を受けているとき）。', kind: 'ok' },
+  all_ages_off: { text: 'この納品のメニューを、18 歳以上だけに戻しました。', kind: 'ok' },
+  all_ages_bad: { text: '全年齢にできるのは、納品のメニューだけです（寝落ち・相談・通話は 18 歳以上のまま）。', kind: 'warn' },
   ranking_hidden: { text: 'このキャストを、ランキングに出さないようにしました（記録はそのままです）。', kind: 'ok' },
   ranking_shown: { text: 'このキャストを、ランキングにまた出すようにしました。', kind: 'ok' },
   deleted: { text: 'キャストの登録を消しました（予約の記録は残っています）。', kind: 'ok' },
@@ -140,6 +143,14 @@ function MenuList(props: { items: CastMenuItem[]; base: string; session: AdminSe
             <li>
               {menuLabel(m)} ・ {menuPriceText(m)}
               {m.note ? ` ・ ${m.note}` : ''}
+              {m.delivery && m.allAges ? <span class="tag green">全年齢（18歳未満も買える）</span> : ''}
+              {m.delivery && !m.consult && props.base.startsWith('/cast/casts/') && (
+                <form method="post" action={`${props.base}/${m.id}/all-ages`} class="row-actions">
+                  <Csrf session={props.session} />
+                  <input type="hidden" name="on" value={m.allAges ? 'no' : 'yes'} />
+                  <button type="submit">{m.allAges ? '18歳以上だけに戻す' : '全年齢にする（18歳未満も買える）'}</button>
+                </form>
+              )}
               <details>
                 <summary>書きかえる</summary>
                 <form method="post" action={`${props.base}/${m.id}`} class="fields">
