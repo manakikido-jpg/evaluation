@@ -652,7 +652,7 @@ export const casinoSchema = z.object({
   /** 🎰 大勝負の札（その日だけ、カジノの上限を上げる）: 1 回の最高と 1 日の合計を何倍にするか */
   boostMult: z.number().int().min(2).max(20).default(5),
   /** 🎰 大勝負の札（極）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計を何倍にするか（社務所Web で決める） */
-  boostExMult: z.number().int().min(2).max(100).default(10),
+  boostExMult: z.number().int().min(2).max(100).default(20),
   /** 札が効く長さ（時間。0 なら使った日の日本時間の 0 時まで） */
   boostHours: z.number().int().min(0).max(168).default(0),
   /** 上がる上限を別々に（0 なら boostMult と同じ・1 なら上げない）: 1 回の最高・ルーレットの 1 か所の最高・1 日の合計 */
