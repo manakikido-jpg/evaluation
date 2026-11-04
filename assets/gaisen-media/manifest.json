@@ -1,7 +1,7 @@
 {
   "v": 1,
   "imageMethod": "image_genによる独自生成。背景は1600px/800px、リール絵柄は透過256pxのWebPへ変換。実機素材の流用なし。",
-  "audioMethod": "独自の物理モデル合成。基本音はbuild_audio.py、回転音はbuild_motor.py、操作4音はbuild_controls.pyで短い衝撃/樹脂の胴鳴り/ばね/ラッチ/近い反射へ調整。録音・音声生成AIではない。",
+  "audioMethod": "独自の物理モデル合成。基本音はbuild_audio.py、回転音はbuild_motor.py、操作4音はbuild_controls.pyで短い衝撃/樹脂の胴鳴り/ばね/ラッチ/近い反射へ調整。録音・音声生成AIではない。 通常時の風/遠雷/光の3音はbuild_normal.pyで別合成。",
   "files": [
     {
       "file": "award-1600.webp",
@@ -212,6 +212,36 @@
       "rmsDbFS": -14.88,
       "loopStart": 0.25,
       "loopEnd": 2.25
+    },
+    {
+      "file": "cue-wind.mp3",
+      "bytes": 12163,
+      "sha256": "0323213dc72ec8bcd77514c5f55cd0db502b54ea319dd310fe8d8c9a400fe0e9",
+      "duration": 0.731429,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.42473,
+      "rmsDbFS": -22.99
+    },
+    {
+      "file": "cue-thunder.mp3",
+      "bytes": 12581,
+      "sha256": "c435298ca997838cc928020011fd0d39103c9f836b5db56a36fe60501f35f3d8",
+      "duration": 0.757551,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.42705,
+      "rmsDbFS": -22.47
+    },
+    {
+      "file": "cue-glint.mp3",
+      "bytes": 9238,
+      "sha256": "c36e34ed024b6af6801719bcf13d11e9a9e9ba9990bde04a65dba920a1282243",
+      "duration": 0.548571,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.42752,
+      "rmsDbFS": -21.26
     }
   ]
 }
