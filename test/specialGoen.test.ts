@@ -5,6 +5,7 @@ import { listMembers, recordJoin } from '../src/services/members.js';
 import { giveShuin, goenOf, goshuinchoOf } from '../src/services/shuin.js';
 import { grantSpecialGoen, revokeSpecialGoen, specialGoenDm, specialGoenLog, takeUncheckedSpecialGoen, validSpecialGoen } from '../src/services/specialGoen.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
+import { shuin, voiceUsage, voiceChannels } from '../src/db/schema.js';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -41,24 +42,32 @@ describe('✨ 特別ご縁', () => {
     expect(specialGoenLog('grant', A, G, 5, 'お礼', 7)).toBe(`✨ <@${G}> が <@${A}> に特別ご縁 +5（お礼）→ ご縁 7`);
   });
 
-  it('BOT が 1 分ごとに、振られた人の昇格を確かめる（1 回だけ）', async () => {
+  it('特別ご縁だけでは氏子へ上げず、40個・20時間を満たした後の再確認で1回昇格する', async () => {
     await recordJoin(db, { id: A, username: 'a', displayName: 'A', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: null });
     await grantSpecialGoen(db, { memberId: A, amount: 20, reason: 'お礼', by: G, nonce: nonce(3) });
     const roles = new Map<string, object>([[ROLE.sanpaisha, {}]]);
     const add = vi.fn(async (id: string) => void roles.set(id, {}));
     const remove = vi.fn(async (ids: string[]) => void ids.forEach((id) => roles.delete(id)));
     const send = vi.fn(async () => ({ id: 'm' }));
-    const member: Record<string, unknown> = { id: A, user: { id: A, bot: false, username: 'a' }, displayName: 'A', roles: { cache: roles, add, remove } };
+    const member: Record<string, unknown> = { id: A, user: { id: A, bot: false, username: 'a' }, displayName: 'A', displayAvatarURL: () => 'https://example.com/a.png', roles: { cache: roles, add, remove } };
     const guild = { id: cfg.guildId, members: { fetch: async () => member } };
     member.guild = guild;
     const client = { users: { fetch: async () => ({ send: vi.fn() }) }, channels: { fetch: async () => ({ isSendable: () => true, send }) } };
     const app = new ShuinApp(client as never, db, cfg);
     await app.checkSpecialGoen(guild as never);
-    expect(add).toHaveBeenCalledWith(ROLE.ujiko, expect.stringContaining('ご縁 20'));
-    expect(roles.has(ROLE.ujiko)).toBe(true);
+    expect(add).not.toHaveBeenCalled();
+    expect(roles.has(ROLE.sanpaisha)).toBe(true);
     // もう確かめたので、次は何もしない
     expect(await takeUncheckedSpecialGoen(db)).toEqual([]);
     await app.checkSpecialGoen(guild as never);
+    expect(add).not.toHaveBeenCalled();
+    await db.insert(shuin).values(Array.from({ length: 40 }, (_, i) => ({ giverId: String(890000000000000000n + BigInt(i)), receiverId: A, weight: 1, giverRank: 'sanpaisha' })));
+    await db.insert(voiceChannels).values({ channelId: '960000000000000001', name: '縁側1' });
+    await db.insert(voiceUsage).values({ memberId: A, channelId: '960000000000000001', date: '2026-11-05', minutes: 1200 });
+    await app.checkEvaluationPromotions(guild as never);
+    expect(add).toHaveBeenCalledWith(ROLE.ujiko, expect.stringContaining('ご縁 60'));
+    expect(roles.has(ROLE.ujiko)).toBe(true);
+    await app.checkEvaluationPromotions(guild as never);
     expect(add).toHaveBeenCalledTimes(1);
   });
 });

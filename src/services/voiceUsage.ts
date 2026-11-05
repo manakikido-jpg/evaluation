@@ -15,7 +15,7 @@ import { jstDate } from './activity.js';
 /** 装飾や人数が付いていても、縁側の名前を識別する。 */
 export const isEngawaName = (name: string): boolean => name.normalize('NFKC').includes('縁側');
 
-export type PresenceChannel = { id: string; name: string; categoryId: string | null; categoryName: string | null; memberIds: string[]; /** 指定時は役職確認済み。空配列は参拝者なし、未指定は過去互換。 */ sanpaishaMemberIds?: string[] };
+export type PresenceChannel = { id: string; name: string; categoryId: string | null; categoryName: string | null; memberIds: string[]; /** 指定時は役職確認済み。空配列は参拝者なし、未指定は過去互換。 */ sanpaishaMemberIds?: string[]; /** 指定時は新しいミュート判定済み。参拝者かつこのID内なら評価へ加算。 */ evaluationEligibleMemberIds?: string[] };
 
 /** 1 つの通話で組み合わせを数える上限（人が多すぎると組み合わせが増えすぎるため） */
 const PAIR_MAX_MEMBERS = 25;
@@ -45,10 +45,14 @@ export async function recordPresence(db: Db, channels: PresenceChannel[], now = 
   await db
     .insert(voiceUsage)
     .values(active.flatMap((c) => {
-      const sanpaisha = new Set(c.sanpaishaMemberIds);
-      return c.memberIds.map((memberId) => ({ memberId, date, channelId: c.id, minutes: 1, rankRecordedMinutes: c.sanpaishaMemberIds === undefined ? 0 : 1, sanpaishaMinutes: now.getTime() >= EVALUATION_START_AT && isEngawaName(c.name) && sanpaisha.has(memberId) ? 1 : 0 }));
+      const sanpaisha = new Set(c.sanpaishaMemberIds), eligible = new Set(c.evaluationEligibleMemberIds);
+      return c.memberIds.map((memberId) => {
+        const visitor = now.getTime() >= EVALUATION_START_AT && isEngawaName(c.name) && sanpaisha.has(memberId);
+        const checked = visitor && c.evaluationEligibleMemberIds !== undefined;
+        return { memberId, date, channelId: c.id, minutes: 1, rankRecordedMinutes: c.sanpaishaMemberIds === undefined ? 0 : 1, sanpaishaMinutes: visitor ? 1 : 0, evaluationRecordedMinutes: checked ? 1 : 0, evaluationEligibleMinutes: checked && eligible.has(memberId) ? 1 : 0 };
+      });
     }))
-    .onConflictDoUpdate({ target: [voiceUsage.memberId, voiceUsage.date, voiceUsage.channelId], set: { minutes: sql`${voiceUsage.minutes} + 1`, rankRecordedMinutes: sql`${voiceUsage.rankRecordedMinutes} + excluded.rank_recorded_minutes`, sanpaishaMinutes: sql`${voiceUsage.sanpaishaMinutes} + excluded.sanpaisha_minutes` } });
+    .onConflictDoUpdate({ target: [voiceUsage.memberId, voiceUsage.date, voiceUsage.channelId], set: { minutes: sql`${voiceUsage.minutes} + 1`, rankRecordedMinutes: sql`${voiceUsage.rankRecordedMinutes} + excluded.rank_recorded_minutes`, sanpaishaMinutes: sql`${voiceUsage.sanpaishaMinutes} + excluded.sanpaisha_minutes`, evaluationRecordedMinutes: sql`${voiceUsage.evaluationRecordedMinutes} + excluded.evaluation_recorded_minutes`, evaluationEligibleMinutes: sql`${voiceUsage.evaluationEligibleMinutes} + excluded.evaluation_eligible_minutes` } });
   const pairs: { memberA: string; memberB: string; date: string; minutes: number }[] = [];
   for (const c of active) {
     const ids = [...c.memberIds].sort().slice(0, PAIR_MAX_MEMBERS);

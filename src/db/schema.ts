@@ -1179,9 +1179,24 @@ export const voiceUsage = pgTable(
     rankRecordedMinutes: integer('rank_recorded_minutes').notNull().default(0),
     /** 当時の最上位の格が参拝者で、縁側にいた分 */
     sanpaishaMinutes: integer('sanpaisha_minutes').notNull().default(0),
+    /** 参拝者の縁側時間のうち、新しいミュート判定を行った分 */
+    evaluationRecordedMinutes: integer('evaluation_recorded_minutes').notNull().default(0),
+    /** そのうちマイク/スピーカーの非ミュートを確認できた分 */
+    evaluationEligibleMinutes: integer('evaluation_eligible_minutes').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`)],
+  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`), check('voice_usage_evaluation_minutes', sql`${t.evaluationEligibleMinutes} >= 0 and ${t.evaluationEligibleMinutes} <= ${t.evaluationRecordedMinutes} and ${t.evaluationRecordedMinutes} <= ${t.sanpaishaMinutes}`)],
 );
+
+/** 根拠が確認できた過去分の控除。原本は残し、同じ日/部屋の値を更新する。 */
+export const evaluationTimeDeductions = pgTable('evaluation_time_deductions', {
+  memberId: text('member_id').notNull(),
+  date: text('date').notNull(),
+  channelId: text('channel_id').notNull(),
+  minutes: integer('minutes').notNull(),
+  reason: text('reason').notNull(),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), check('evaluation_deduction_minutes', sql`${t.minutes} >= 0`)]);
 
 /** 同じ通話にいた時間（2 人 × 日。member_a < member_b） */
 export const voicePairs = pgTable(

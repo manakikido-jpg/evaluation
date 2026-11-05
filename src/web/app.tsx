@@ -729,7 +729,7 @@ export function createWebApp(deps: WebDeps) {
   app.use('/', requireAdmin);
   app.use('/members/*', requireAdmin);
   app.use('/evaluation', requireAdmin);
-  app.use('/evaluation/*', requireAdmin);
+  app.use('/evaluation/*', requireAdmin, requireCsrf);
   app.use('/audit', requireAdmin);
   app.use('/message-archive', requireAdmin);
   app.use('/message-archive/*', requireAdmin, requireCsrf);

@@ -5,6 +5,8 @@ import { ShuinApp } from '../src/discord/app.js';
 import { shuinId } from '../src/discord/ids.js';
 import { walletOf, grantJoinBonus } from '../src/services/economy.js';
 import { giveShuin } from '../src/services/shuin.js';
+import { shuin, voiceChannels, voiceUsage, evaluationTimeDeductions } from '../src/db/schema.js';
+import { recordJoin } from '../src/services/members.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
 /* Discord のオブジェクトを最小限まねた偽物で、ShuinApp の動きを確かめる */
@@ -117,7 +119,97 @@ const G = '400000000000000001';
 const G2 = '400000000000000002';
 const R = '400000000000000009';
 
+async function seedEligibility(count = 38, minutes = 1200) {
+  await recordJoin(db, { id: R, username: 'r', displayName: 'あいて', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: null });
+  await db.insert(voiceChannels).values({ channelId: '950000000000000001', name: '縁側1' });
+  await db.insert(voiceUsage).values({ memberId: R, channelId: '950000000000000001', date: '2026-11-05', minutes });
+  if (count) await db.insert(shuin).values(Array.from({ length: count }, (_, i) => ({ giverId: String(470000000000000000n + BigInt(i)), receiverId: R, weight: 1, giverRank: 'sanpaisha' })));
+}
+
 describe('ShuinApp', () => {
+  it('ご縁が多くても御朱印39個の間は氏子以上へ飛び級せず、40個で条件を満たす', async () => {
+    const receiver = add(R, ROLE.sanpaisha);
+    await seedEligibility(39);
+    const { grantSpecialGoen } = await import('../src/services/specialGoen.js');
+    await grantSpecialGoen(db, { memberId: R, amount: 500, reason: '試験の特別ご縁', by: G, nonce: '00000000-0000-0000-0000-000000000091' });
+    await app.checkSpecialGoen(guild as never);
+    const viewer = add(G, ROLE.ujiko);
+    await app.onInteraction(interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => receiver.user, getBoolean: () => null } }).i as never);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+    expect(sent.filter(s => s.channelId === cfg.channels.keiji)).toHaveLength(0);
+    await giveShuin(db, { giverId: G2, receiverId: R, weight: 1, giverRank: 'sanpaisha' });
+    await app.checkEvaluationPromotions(guild as never);
+    expect(receiver.roles.add).toHaveBeenCalledTimes(1);
+    expect(receiver.roles.cache.has(ROLE.sodai)).toBe(true);
+  });
+
+  it('40個でも19時間59分では上がらず、毎分の非ミュート観測で20時間に届けば1回昇格する', async () => {
+    const receiver = add(R, ROLE.sanpaisha);
+    await seedEligibility(40, 1199);
+    const now = new Date('2026-11-06T03:00:00Z');
+    await app.checkEvaluationPromotions(guild as never, now);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+    const room = { id: '950000000000000001', name: '縁側1', parentId: null, parent: null, isVoiceBased: () => true,
+      members: new Map([[R, { ...receiver, voice: { mute: true, deaf: false } }]]) };
+    const voiceGuild = { ...guild, afkChannelId: null, channels: { cache: new Map([[room.id, room]]) } };
+    await app.everyMinute(voiceGuild as never, now);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+    room.members.get(R)!.voice.mute = false;
+    await app.everyMinute(voiceGuild as never, new Date(now.getTime() + 60000));
+    expect(receiver.roles.add).toHaveBeenCalledWith(ROLE.ujiko, expect.any(String));
+    await app.everyMinute(voiceGuild as never, new Date(now.getTime() + 120000));
+    expect(receiver.roles.add).toHaveBeenCalledTimes(1);
+    expect(sent.filter(s => s.channelId === cfg.channels.keiji)).toHaveLength(1);
+  });
+
+  it('過去控除で20時間を割る人は御朱印帳からも昇格せず、控除後も達成なら再確認で上がる', async () => {
+    const receiver = add(R, ROLE.sanpaisha);
+    await seedEligibility(40);
+    await db.insert(evaluationTimeDeductions).values({ memberId: R, date: '2026-11-05', channelId: '950000000000000001', minutes: 1, reason: '確認済みの過去ミュート', updatedBy: G });
+    const viewer = add(G, ROLE.ujiko);
+    await app.onInteraction(interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => receiver.user, getBoolean: () => null } }).i as never);
+    await app.checkEvaluationPromotions(guild as never);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+    await db.insert(voiceUsage).values({ memberId: R, date: '2026-11-06', channelId: '950000000000000001', minutes: 1, rankRecordedMinutes: 1, sanpaishaMinutes: 1, evaluationRecordedMinutes: 1, evaluationEligibleMinutes: 1 });
+    await app.checkEvaluationPromotions(guild as never, new Date('2026-11-06T03:00:00Z'));
+    expect(receiver.roles.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('取消済みの御朱印は40個条件に含めない', async () => {
+    const receiver = add(R, ROLE.sanpaisha);
+    await seedEligibility(40);
+    const { revokeShuin } = await import('../src/services/shuin.js');
+    await revokeShuin(db, { giverId: '470000000000000000', receiverId: R });
+    await app.checkEvaluationPromotions(guild as never);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+  });
+
+  it('既に氏子の人の上位昇格は、従来のご縁条件を使う', async () => {
+    const receiver = add(R, ROLE.ujiko);
+    await giveShuin(db, { giverId: G2, receiverId: R, weight: 100, giverRank: 'guji' });
+    const viewer = add(G, ROLE.ujiko);
+    await app.onInteraction(interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => receiver.user, getBoolean: () => null } }).i as never);
+    expect(receiver.roles.add).toHaveBeenCalledWith(ROLE.sewayaku, expect.any(String));
+  });
+
+  it('条件を満たしていても運営サブは自動昇格しない', async () => {
+    const receiver = add(R, ROLE.sanpaisha);
+    await seedEligibility(40);
+    const { setStaffAlt } = await import('../src/services/staffAlts.js');
+    await setStaffAlt(db, R, true, G);
+    await app.checkEvaluationPromotions(guild as never);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+  });
+
+  it('条件を満たした記録があっても退出者は自動昇格しない', async () => {
+    const receiver = add(R, ROLE.sanpaisha);
+    await seedEligibility(40);
+    const { recordLeave } = await import('../src/services/members.js');
+    await recordLeave(db, R);
+    await app.checkEvaluationPromotions(guild as never);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+  });
+
   it('通話の一覧は昇格後に開き直すとチェックが外れ、押し直すと戻る', async () => {
     const giver = add(G, ROLE.sanpaisha);
     const receiver = add(R, ROLE.sanpaisha);
@@ -173,7 +265,8 @@ describe('ShuinApp', () => {
     expect(sent).toEqual([expect.objectContaining({ channelId: cfg.channels.log, content: expect.stringContaining('朱印') })]);
   });
 
-  it('右クリックの「朱印を押す」でも押せて、基準を超えたら昇格して #慶事 で発表する', async () => {
+  it('右クリックの朱印も40個と20時間に達してから昇格し、#慶事で発表する', async () => {
+    await seedEligibility();
     const receiver = add(R, ROLE.sanpaisha);
     const g1 = add(G, ROLE.guji);
     const g2 = add(G2, ROLE.guji);
@@ -188,11 +281,12 @@ describe('ShuinApp', () => {
     const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
     expect(keiji).toHaveLength(1);
     expect(keiji[0]?.content).toBe(cfg.ranks.map((r) => `<@&${r.roleId}>`).join(' ') + ' 新しい仲間をお迎えください。');
-    expect(keiji[0]?.embeds).toEqual([expect.objectContaining({ description: expect.stringContaining('**🍃 氏子** になられました。'), fields: expect.arrayContaining([{ name: 'ご縁', value: '20', inline: true }]) })]);
+    expect(keiji[0]?.embeds).toEqual([expect.objectContaining({ description: expect.stringContaining('**🍃 氏子** になられました。'), fields: expect.arrayContaining([{ name: 'ご縁', value: '58', inline: true }]) })]);
     expect(keiji[0]?.allowedMentions).toEqual({ parse: [], users: [], roles: cfg.ranks.map((r) => r.roleId) });
   });
 
   it('役職全体への昇格通知も通知OKだけに届け、通知NGの設定を守る', async () => {
+    await seedEligibility();
     const original = cfg.notify;
     cfg.notify = { okRoleId: '100000000000000080', ngRoleId: '100000000000000081' };
     try {
@@ -208,6 +302,7 @@ describe('ShuinApp', () => {
   });
 
   it('同じ相手に同時に押されても、昇格の発表は 1 回だけ', async () => {
+    await seedEligibility();
     const receiver = add(R, ROLE.sanpaisha);
     await giveShuin(db, { giverId: '400000000000000100', receiverId: R, weight: 10, giverRank: 'guji' });
     const givers = ['400000000000000101', '400000000000000102', '400000000000000103'].map((id) => add(id, ROLE.guji));
@@ -221,6 +316,7 @@ describe('ShuinApp', () => {
   });
 
   it('キャッシュのロールが古くても、最新のロールで確かめて二重に昇格しない', async () => {
+    await seedEligibility();
     // キャッシュ上はまだ参拝者だが、実際はもう氏子になっている
     const stale = fakeMember(R, [ROLE.sanpaisha]);
     const fresh = fakeMember(R, [ROLE.ujiko]);
@@ -259,6 +355,7 @@ describe('ShuinApp', () => {
   });
 
   it('/goshuin は御朱印帳を表示し、昇格漏れがあれば直す', async () => {
+    await seedEligibility(39);
     const owner = add(R, ROLE.sanpaisha);
     await giveShuin(db, { giverId: G, receiverId: R, weight: 25, giverRank: 'guji' });
     const viewer = add(G, ROLE.ujiko);
@@ -440,6 +537,16 @@ describe('毎分の浮上ボーナス', () => {
     expect(rows).toHaveLength(2);
     expect(rows.find(r => r.memberId === visitor.id)).toMatchObject({ minutes: 3, rankRecordedMinutes: 3, sanpaishaMinutes: 1 });
     expect(rows.find(r => r.memberId === upper.id)).toMatchObject({ minutes: 3, rankRecordedMinutes: 3, sanpaishaMinutes: 0 });
+  });
+
+  it('評価は本人/サーバーのマイクとスピーカーの全ミュートを除外し、原本の滞在を保つ', async () => {
+    const { voiceUsage } = await import('../src/db/schema.js');
+    const visitor=add('700000000000000095',ROLE.sanpaisha),clear={mute:false,deaf:false,selfMute:false,serverMute:false,selfDeaf:false,serverDeaf:false};
+    const member={...visitor,voice:{...clear}},room={id:'engawa-mute',name:'縁側１',parentId:null,parent:null,isVoiceBased:()=>true,members:new Map([[visitor.id,member]])};
+    const voiceGuild={...guild,afkChannelId:'afk',channels:{cache:new Map([[room.id,room]])}};
+    const states=[clear,...Object.keys(clear).map(key=>({...clear,[key]:true})),{}];
+    for(const [index,state]of states.entries()){member.voice=state as typeof clear;await app.everyMinute(voiceGuild as never,new Date(new Date('2026-11-06T04:00:00Z').getTime()+index*60000));}
+    const rows=await db.select().from(voiceUsage);expect(rows).toHaveLength(1);expect(rows[0]).toMatchObject({minutes:8,sanpaishaMinutes:8,evaluationRecordedMinutes:8,evaluationEligibleMinutes:1});
   });
 
   it('1人のVCも数えて7時間で慶事へ通知し、AFKとBOTは数えない', async () => {
