@@ -217,13 +217,13 @@ describe('/menzaifu', () => {
 describe('1 分ごとの処理', () => {
   it('通話している人（2 人以上）に通話時間、発言数も書き込む', async () => {
     const app = new ShuinApp({} as never, db, cfg);
-    const vm = (id: string, deaf = false) => [id, { id, user: { bot: false }, voice: { deaf } }] as const;
+    const vm = (id: string, deaf = false) => [id, { ...member(id, id === STAFF ? [ROLE.shinshoku] : [ROLE.ujiko]), user: { bot: false }, voice: { deaf } }] as const;
     const guild = {
       afkChannelId: 'afk',
       channels: {
         cache: new Map([
-          ['vc1', { id: 'vc1', isVoiceBased: () => true, members: new Map([vm(USER), vm(OTHER)]) }],
-          ['vc2', { id: 'vc2', isVoiceBased: () => true, members: new Map([vm(STAFF)]) }],
+          ['vc1', { id: 'vc1', name: '通話1', isVoiceBased: () => true, members: new Map([vm(USER), vm(OTHER)]) }],
+          ['vc2', { id: 'vc2', name: '通話2', isVoiceBased: () => true, members: new Map([vm(STAFF)]) }],
           ['txt', { id: 'txt', isVoiceBased: () => false }],
         ]),
       },
