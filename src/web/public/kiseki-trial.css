@@ -131,3 +131,8 @@
 @media(prefers-reduced-motion:reduce){.kt-root .kt-award-digits b{animation:none!important}}
 @media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-award-digits{position:absolute;right:0;bottom:0;gap:5px}.kt-root[data-focus=true] .kt-award-digits b{font-size:18px}.kt-root[data-focus=true] .gt-lcd-award[data-kind=god] strong{font-size:42px}}
 .kt-stop-notes{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:#ddcda7}
+/* 獲得セット数まで液晶内へ収める。狭い横画面では重複する装飾数字を省く。 */
+.kt-root .gt-display .gt-lcd-award{flex:0 1 auto;min-height:0;gap:1px;margin:1px auto}
+.kt-root .gt-lcd-award[data-kind=god] strong{font-size:clamp(34px,12vw,76px)}
+.kt-root .kt-award-digits b{font-size:clamp(20px,6vw,36px)}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-award-digits{display:none}.kt-root[data-focus=true] .gt-display .gt-lcd-award{gap:0;margin:0}.kt-root[data-focus=true] .gt-lcd-award strong,.kt-root[data-focus=true] .gt-lcd-award[data-kind=god] strong{font-size:28px}.kt-root[data-focus=true] .gt-lcd-award small{font-size:6px;letter-spacing:2px}.kt-root[data-focus=true] .gt-lcd-award>span{font-size:7px}}
