@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-05-stay-order', date: '2026-11-05', kind: 'improve', where: ['Discord', '社務所Web'], title: '🔃 宿の並ぶ順を、運営が決められるように', items: ['社務所Web の部屋代の設定に「🔃 宿の並ぶ順」を足しました。🏨 24時間の宿・⏱ 1時間ごとの宿・ふつうの宿（公開・招待限定・シークレット）の順番を 1〜9 で決められます（小さい数が上）。', '同じ順番の中は、新しい宿が上に並びます。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '並びは BOT が自動で直す。' } },
   {
     id:'2026-11-05-gaisen-reel-control',date:'2026-11-05',kind:'new',where:['社務所Web'],
     title:'神殿スロットに20コマ配列表と目押し・滑りを追加',

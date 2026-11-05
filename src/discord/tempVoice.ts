@@ -64,16 +64,21 @@ export function discordVoiceOps(guild: Guild): VoiceOps {
   };
 }
 
-/** 宿の並ぶ順: 🏨 24時間の宿 → ⏱ 1時間ごとの宿 → ふつうの部屋 */
-const stayRank = (r: { keepUntil: Date | null; renewHourly: boolean } | undefined) => (r?.keepUntil ? (r.renewHourly ? 1 : 0) : 2);
+export type StayRow = { keepUntil: Date | null; renewHourly: boolean; kind?: 'public' | 'invite' | 'secret'; createdAt?: Date };
+export type StayOrderCfg = { day: number; hourly: number; public: number; invite: number; secret: number };
+const DEFAULT_ORDER: StayOrderCfg = { day: 1, hourly: 2, public: 3, invite: 3, secret: 3 };
+/** 宿の並ぶ順（運営が決めた数。小さいほど上） */
+const stayRank = (r: StayRow | undefined, o: StayOrderCfg) => (r?.keepUntil ? (r.renewHourly ? o.hourly : o.day) : o[r?.kind ?? 'public']);
 
 /**
  * 同じカテゴリの中で、自分の通話部屋が今いる場所（入口などほかのチャンネルの場所は動かさない）に、
  * 宿の順で並べ直した結果（{ id, position }）。並びが変わらなければ空
  */
-export function stayOrder(channels: { id: string; position: number }[], rows: Map<string, { keepUntil: Date | null; renewHourly: boolean }>): { id: string; position: number }[] {
+export function stayOrder(channels: { id: string; position: number }[], rows: Map<string, StayRow>, order: StayOrderCfg = DEFAULT_ORDER): { id: string; position: number }[] {
   const rooms = channels.filter((c) => rows.has(c.id)).sort((a, b) => a.position - b.position);
-  const sorted = [...rooms].sort((a, b) => stayRank(rows.get(a.id)) - stayRank(rows.get(b.id)) || a.position - b.position);
+  // 同じ順の中は、新しい宿が上
+  const made = (id: string) => rows.get(id)?.createdAt?.getTime() ?? 0;
+  const sorted = [...rooms].sort((a, b) => stayRank(rows.get(a.id), order) - stayRank(rows.get(b.id), order) || made(b.id) - made(a.id) || a.position - b.position);
   if (sorted.every((c, n) => c.id === rooms[n]!.id)) return [];
   return sorted.map((c, n) => ({ id: c.id, position: rooms[n]!.position }));
 }
@@ -113,17 +118,18 @@ export class TempVoiceApp {
   /** 起動したとき。権限を確かめて、止まっていた間に空になった部屋を消す */
   private guild?: Guild;
   private sorting = false;
-  /** 🏨 宿を、カテゴリの中で 24時間の宿 → 1時間ごとの宿 → ふつうの部屋 の順に並べる（変わったときだけ動かす） */
+  /** 🏨 宿を、カテゴリの中で運営が決めた順（社務所Web）に並べる。同じ順の中は新しい宿が上（変わったときだけ動かす） */
   async sortStays(): Promise<void> {
     const guild = this.guild;
     if (!guild || this.sorting) return;
     this.sorting = true;
     try {
-      const rows = new Map((await this.db.select({ channelId: tempVoice.channelId, keepUntil: tempVoice.keepUntil, renewHourly: tempVoice.renewHourly }).from(tempVoice)).map((r) => [r.channelId, r]));
+      const rows = new Map((await this.db.select({ channelId: tempVoice.channelId, keepUntil: tempVoice.keepUntil, renewHourly: tempVoice.renewHourly, kind: tempVoice.kind, createdAt: tempVoice.createdAt }).from(tempVoice)).map((r) => [r.channelId, r]));
+      const order = this.cfg().rooms.stayOrder;
       const parents = new Set([...rows.keys()].map((id) => guild.channels.cache.get(id)?.parentId).filter((id): id is string => Boolean(id)));
       for (const parentId of parents) {
         const voices = guild.channels.cache.filter((c) => c.parentId === parentId && c.type === ChannelType.GuildVoice).map((c) => ({ id: c.id, position: (c as { position: number }).position }));
-        const moves = stayOrder(voices, rows);
+        const moves = stayOrder(voices, rows, order);
         if (moves.length) await guild.channels.setPositions(moves.map((m) => ({ channel: m.id, position: m.position })));
       }
     } finally { this.sorting = false; }

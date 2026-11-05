@@ -3593,6 +3593,10 @@ export function createWebApp(deps: WebDeps) {
         stayHourlyPrice: typeof body.roomStayHourlyPrice === 'string' ? num('roomStayHourlyPrice') : prev.rooms.stayHourlyPrice ?? cfg.rooms.stayHourlyPrice,
         // 💎 極（VIP）はショップのページで作る（ここでは残す）
         ...(prev.rooms.vip ? { vip: prev.rooms.vip } : {}),
+        // 🏨 宿の並ぶ順（この欄があるフォームから送ったときだけ変える）
+        ...(typeof body['stayOrder.day'] === 'string'
+          ? { stayOrder: Object.fromEntries((['day', 'hourly', 'public', 'invite', 'secret'] as const).map((k) => [k, num(`stayOrder.${k}`)])) }
+          : prev.rooms.stayOrder ? { stayOrder: prev.rooms.stayOrder } : {}),
         // 🤫 シクレの入口は、下の「入口を作る・外す」で変える（ここでは残す）
         ...(prev.rooms.secretHubs ? { secretHubs: prev.rooms.secretHubs } : {}),
       },
