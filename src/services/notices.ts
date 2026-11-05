@@ -1,4 +1,4 @@
-import { and, asc, eq, max } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, max } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { createHash } from 'node:crypto';
@@ -414,6 +414,86 @@ export async function deleteNotice(ctx: NoticeCtx, id: number, by: string): Prom
 
 // ───────── 投稿 ─────────
 
+// ───────── 差出人（掲示を BOT とは別の名前・アイコンで出す） ─────────
+
+const SENDER_KEY = 'notices.sender';
+const HOOKS_KEY = 'notices.webhooks';
+export type NoticeSender = { name: string; avatarUrl?: string };
+
+/** 掲示の差出人（決めていなければ undefined = BOT の名前で出す） */
+export async function noticeSender(db: Db): Promise<NoticeSender | undefined> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, SENDER_KEY));
+  const v = row?.value as Partial<NoticeSender> | undefined;
+  return v && typeof v.name === 'string' && v.name.trim() ? { name: v.name.trim(), ...(typeof v.avatarUrl === 'string' && v.avatarUrl ? { avatarUrl: v.avatarUrl } : {}) } : undefined;
+}
+
+/** 差出人を決める（name が空なら BOT の名前に戻す）。アイコンは https の URL だけ */
+export async function setNoticeSender(db: Db, input: { name: string; avatarUrl: string }, by: string): Promise<'ok' | 'invalid'> {
+  const name = input.name.trim().slice(0, 80);
+  const avatarUrl = input.avatarUrl.trim();
+  if (avatarUrl && !/^https:\/\/\S+$/.test(avatarUrl)) return 'invalid';
+  // Discord で使えない名前
+  if (/discord|clyde/i.test(name)) return 'invalid';
+  const value = name ? { name, ...(avatarUrl ? { avatarUrl } : {}) } : {};
+  const before = await noticeSender(db);
+  const changed = (before?.name ?? '') !== name || (before?.avatarUrl ?? '') !== (name ? avatarUrl : '');
+  // 差出人が変わったら、投稿済みの掲示を「未反映」にする（反映すると新しい名前で出し直す）
+  if (changed) await db.update(notices).set({ postedText: '' }).where(isNotNull(notices.messageId));
+  await db.insert(settings).values({ key: SENDER_KEY, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
+  await audit(db, { actorId: by, action: 'notice.sender', detail: value, via: 'web' });
+  return 'ok';
+}
+
+type Hooks = Record<string, { id: string; token: string }>;
+async function hooksOf(db: Db): Promise<Hooks> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, HOOKS_KEY));
+  return (row?.value as Hooks | undefined) ?? {};
+}
+async function saveHooks(db: Db, value: Hooks) {
+  await db.insert(settings).values({ key: HOOKS_KEY, value, updatedBy: 'system' }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: 'system', updatedAt: new Date() } });
+}
+
+/** 掲示を投稿する。差出人が決まっていればウェブフックで（できなければ BOT で） */
+async function postMessage(ctx: NoticeCtx, channelId: string, body: MessageBody): Promise<{ id: string }> {
+  const sender = await noticeSender(ctx.db);
+  const d = ctx.discord;
+  if (sender && d.createWebhook && d.webhookSend) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const hooks = await hooksOf(ctx.db);
+        let hook = hooks[channelId];
+        if (!hook) {
+          hook = await d.createWebhook(channelId, '掲示');
+          await saveHooks(ctx.db, { ...hooks, [channelId]: hook });
+        }
+        return await d.webhookSend(hook.id, hook.token, body, { username: sender.name, avatarUrl: sender.avatarUrl });
+      } catch (err) {
+        // ウェブフックが消されていたら、作り直して 1 回だけやり直す
+        if (attempt === 0 && err instanceof DiscordHttpError && err.status === 404) {
+          const { [channelId]: _gone, ...rest } = await hooksOf(ctx.db);
+          await saveHooks(ctx.db, rest);
+          continue;
+        }
+        logger.warn({ err, channelId }, 'notice webhook post failed, using bot');
+        break;
+      }
+    }
+  }
+  return d.sendMessage(channelId, body);
+}
+
+/** 掲示を書き換える（差出人が決まっていればウェブフックで）。書き換えられないときは投げる */
+async function editPosted(ctx: NoticeCtx, channelId: string, messageId: string, body: MessageBody): Promise<void> {
+  const sender = await noticeSender(ctx.db);
+  const hook = sender ? (await hooksOf(ctx.db))[channelId] : undefined;
+  if (sender && ctx.discord.webhookEdit && ctx.discord.webhookSend) {
+    // まだこのチャンネルのウェブフックがない = 前の書きこみは BOT のもの。出し直してもらう
+    if (!hook) throw new DiscordHttpError('posted by bot', 404);
+    return ctx.discord.webhookEdit(hook.id, hook.token, messageId, body);
+  }
+  return ctx.discord.editMessage(channelId, messageId, body);
+}
+
 export type PublishResult = 'posted' | 'edited' | 'reposted' | 'unchanged' | 'too_long' | 'pin_failed';
 
 /**
@@ -446,15 +526,18 @@ export async function publishNotice(ctx: NoticeCtx, id: number, by: string): Pro
     result = 'edited';
   } else if (messageId) {
     try {
-      await ctx.discord.editMessage(n.channelId, messageId, body);
+      await editPosted(ctx, n.channelId, messageId, body);
       result = 'edited';
     } catch (err) {
-      if (!(err instanceof DiscordHttpError && err.status === 404)) throw err;
-      messageId = (await ctx.discord.sendMessage(n.channelId, body)).id;
+      // 消されていた（404）・差出人を変えて書き換えられない（403 や、ウェブフックから見えない 404）: 新しく出して、前のものは消す
+      if (!(err instanceof DiscordHttpError && (err.status === 404 || err.status === 403))) throw err;
+      const old = messageId;
+      messageId = (await postMessage(ctx, n.channelId, body)).id;
+      await deleteMessageQuietly(ctx.discord, n.channelId, old);
       result = 'reposted';
     }
   } else {
-    messageId = (await ctx.discord.sendMessage(n.channelId, n.mention ? { ...body, allowed_mentions: mentionAllowed(mentionFor(ctx, n.mention)) } : body)).id;
+    messageId = (await postMessage(ctx, n.channelId, n.mention ? { ...body, allowed_mentions: mentionAllowed(mentionFor(ctx, n.mention)) } : body)).id;
     result = 'posted';
   }
   // 新しく投稿したメッセージは、まだピン留めされていない
@@ -487,11 +570,11 @@ export async function stickyNotices(db: Db, channelId?: string): Promise<Notice[
  */
 export async function restickNotice(ctx: NoticeCtx, id: number): Promise<boolean> {
   const n = await getNotice(ctx.db, id);
-  if (!n?.sticky || !n.messageId || n.postedText === null) return false;
+  if (!n?.sticky || !n.messageId || !n.postedText) return false;
   // 投稿済みの写真（そのあと差し替えていれば、写真なしで出し直す）
   const [hash, pos] = (n.postedImage ?? '').split(':');
   const image = hash ? await imageFor(ctx.db, n, isImagePosition(pos) ? pos : 'bottom', hash) : undefined;
-  const { id: messageId } = await ctx.discord.sendMessage(n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText, mentionFor(ctx, n.postedMention), image, n.postedShuinButton));
+  const { id: messageId } = await postMessage(ctx, n.channelId, messageBody(n.postedStyle ?? n.style, n.postedText, mentionFor(ctx, n.postedMention), image, n.postedShuinButton));
   await ctx.db
     .update(notices)
     .set({ messageId, postedPinned: false, ...(hash && !image ? { postedImage: null } : {}) })
@@ -547,7 +630,7 @@ export async function repostChannel(ctx: NoticeCtx, channelId: string, by: strin
   // 並べ直しなので、メンションの通知は鳴らさない
   for (const { n, text } of rendered) {
     const image = await imageFor(ctx.db, n, n.imagePosition);
-    const { id } = await ctx.discord.sendMessage(channelId, messageBody(n.style, text, mentionFor(ctx, n.mention), image, n.shuinButton));
+    const { id } = await postMessage(ctx, channelId, messageBody(n.style, text, mentionFor(ctx, n.mention), image, n.shuinButton));
     const postedPinned = await applyPin(ctx.discord, channelId, id, wantPinned(n), false);
     if (postedPinned !== wantPinned(n)) pinFailed.push(n.title);
     await ctx.db

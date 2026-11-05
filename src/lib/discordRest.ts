@@ -31,6 +31,12 @@ export interface DiscordActions {
   /** チャンネルにメッセージを投稿する（掲示など）。メンションで通知は飛ばさない */
   sendMessage(channelId: string, body: MessageBody): Promise<{ id: string }>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
+  /** 掲示を別の名前で出すためのウェブフックを作る（BOT に「ウェブフックの管理」の権限が要る） */
+  createWebhook?(channelId: string, name: string): Promise<{ id: string; token: string }>;
+  /** ウェブフックで投稿する（名前・アイコンを変えられる） */
+  webhookSend?(webhookId: string, token: string, body: MessageBody, as: { username: string; avatarUrl?: string }): Promise<{ id: string }>;
+  /** ウェブフックで投稿したメッセージを書き換える */
+  webhookEdit?(webhookId: string, token: string, messageId: string, body: MessageBody): Promise<void>;
   /** BOT がスタンプを付ける（emoji は URL 用に書いたもの） */
   addReaction?(channelId: string, messageId: string, emoji: string): Promise<void>;
   /** そのスタンプをみんなの分まとめて外す */
@@ -231,6 +237,17 @@ export function createDiscordActions(botToken: string): DiscordActions {
         files,
       })) as { id: string },
     deleteMessage: async (c, m) => void (await call('DELETE', `/channels/${c}/messages/${m}`)),
+    createWebhook: async (c, name) => {
+      const w = (await call('POST', `/channels/${c}/webhooks`, { body: { name }, reason: '掲示を別の名前で出す' })) as { id: string; token: string };
+      return { id: w.id, token: w.token };
+    },
+    webhookSend: async (id, token, { files, ...body }, as) =>
+      (await call('POST', `/webhooks/${id}/${token}?wait=true`, {
+        body: { ...withAttachments(body, files), username: as.username, ...(as.avatarUrl ? { avatar_url: as.avatarUrl } : {}), allowed_mentions: body.allowed_mentions ?? { parse: [] } },
+        files,
+      })) as { id: string },
+    webhookEdit: async (id, token, m, { files, ...body }) =>
+      void (await call('PATCH', `/webhooks/${id}/${token}/messages/${m}`, { body: { ...withAttachments(body, files), allowed_mentions: { parse: [] } }, files })),
     addReaction: async (c, m, e) => void (await call('PUT', `/channels/${c}/messages/${m}/reactions/${e}/@me`)),
     removeReactionEmoji: async (c, m, e) => void (await call('DELETE', `/channels/${c}/messages/${m}/reactions/${e}`)),
     async pinMessage(c, m, pin) {

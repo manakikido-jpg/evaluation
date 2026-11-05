@@ -192,7 +192,7 @@ import { applicationsOf, getOmairi, omairiList, pendingApplications, recentDecid
 import { changeAgeGroup, closeSoudan, decide, decideOmairi, removeYoimairi, replySoudan, revealSoudanSender, type OmairiAction } from '../services/admission.js';
 import { getSoudan, listSoudan, soudanMessagesOf } from '../services/soudan.js';
 import { applyOverrides, loadOverrides, overridesSchema, saveOverrides, type Overrides } from '../services/settings.js';
-import {
+import { noticeSender, setNoticeSender,
   createNotice,
   deleteNotice,
   getNotice,
@@ -4090,7 +4090,14 @@ export function createWebApp(deps: WebDeps) {
       .filter((ch) => ch.type === 4)
       .sort((a, b) => a.position - b.position)
       .map((ch) => ({ id: ch.id, name: ch.name }));
-    return c.html(<NoticesPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} now={now()} categories={categories} />);
+    return c.html(<NoticesPage session={c.get('session')} groups={groups} flash={c.req.query('msg')} now={now()} categories={categories} sender={await noticeSender(db)} />);
+  });
+
+  /** 掲示の差出人（BOT とは別の名前・アイコン。空で BOT の名前に戻す） */
+  app.post('/notices/sender', async (c) => {
+    const body = await c.req.parseBody();
+    const r = await setNoticeSender(db, { name: typeof body.name === 'string' ? body.name : '', avatarUrl: typeof body.avatarUrl === 'string' ? body.avatarUrl : '' }, c.get('session').userId);
+    return c.redirect(`/notices?msg=${r === 'ok' ? 'sender_saved' : 'sender_invalid'}`);
   });
 
   const editPage = async (c: Context<Env>, notice: Awaited<ReturnType<typeof getNotice>>, body: string, error?: string) => {

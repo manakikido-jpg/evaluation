@@ -23,6 +23,8 @@ export const NOTICE_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }>
   published_all: { text: '未反映の掲示をすべて反映しました。', kind: 'ok' },
   reposted_channel: { text: 'チャンネルの掲示を順番どおりに投稿し直しました。', kind: 'ok' },
   deleted: { text: '削除しました（Discord のメッセージも消しました）。', kind: 'ok' },
+  sender_saved: { text: '差出人を保存しました。「反映」を押すと、新しい名前で出し直します。', kind: 'ok' },
+  sender_invalid: { text: '差出人を保存できませんでした（アイコンは https の URL・名前に discord は使えません）。', kind: 'warn' },
   seeded: { text: '標準の文面を入れました。内容を確認して「すべて反映」を押すと Discord に投稿されます。', kind: 'ok' },
   seed_missing: { text: '#鳥居・#しきたり が見つからなかったため、見つかったチャンネルの分だけ入れました。', kind: 'warn' },
   guides_seeded: {
@@ -69,6 +71,8 @@ export function NoticesPage(props: {
   now: Date;
   /** カテゴリ（「朱印を押す」ボタンをまとめて置く先を選ぶ） */
   categories?: { id: string; name: string }[];
+  /** 差出人（BOT とは別の名前で出すとき） */
+  sender?: { name: string; avatarUrl?: string };
 }) {
   const { session } = props;
   const rows = props.groups.flatMap((g) => g.rows);
@@ -94,6 +98,23 @@ export function NoticesPage(props: {
         BOT が Discord に投稿するメッセージです（{rows.length} 件・未反映 {pending} 件）。ここで直して「反映」を押すと Discord のメッセージが書き換わります。本文の{' '}
         <code>{'{免罪符の値段}'}</code> などは今の設定の値に、<code>{'{#しきたり}'}</code> はチャンネルへのリンクになります。設定を変えると、投稿済みの掲示の数字も自動で書き換わります。
       </p>
+
+      <details class="card tools">
+        <summary>✒️ 差出人（いま: {props.sender ? props.sender.name : 'BOT の名前'}）</summary>
+        <form method="post" action="/notices/sender" class="fields">
+          <Csrf session={session} />
+          <p class="note">決めると、掲示を BOT とは別の名前・アイコンで出します（Discord のウェブフック。BOT のロールに「ウェブフックの管理」の権限が要ります）。名前を空にすると、BOT の名前に戻ります。変えたあとは「反映」を押すと、前の書きこみを消して新しい名前で出し直します（メンションは鳴りません）。</p>
+          <label class="field">
+            <span>名前（80 文字まで。「discord」は使えません）</span>
+            <input type="text" name="name" maxlength={80} value={props.sender?.name ?? ''} placeholder="例: 咲楽ノ宮 社務所" />
+          </label>
+          <label class="field">
+            <span>アイコンの画像の URL（https。空なら Discord の標準のアイコン）</span>
+            <input type="url" name="avatarUrl" maxlength={500} value={props.sender?.avatarUrl ?? ''} placeholder="https://…" />
+          </label>
+          <button type="submit">差出人を保存</button>
+        </form>
+      </details>
 
       <details class="card tools">
         <summary>🧰 まとめて入れる（標準の文面・チャンネルの案内・朱印ボタン）</summary>
