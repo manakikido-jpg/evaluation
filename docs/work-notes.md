@@ -3,6 +3,8 @@
 ## 2026年11月5日：リール配列表・目押し・滑り制御
 - 直前fetch：本番は26a9772へ進行（宿の並び順、神殿スロットのソース差分なし）。git merge-treeの読み取り確認は自動結合成功（競合なし、結合tree fbacaa43）。実装ブランチへ未検証の別作業を取り込まず、PRの本番向け結合と標準CIの対象として記載する。実際の合流は行わない。
 
+- 完了保存：[Draft PR142](https://github.com/manakikido-jpg/evaluation/pull/142)を作成し、タスクへ添付。codex/gaisen-reel-guide、PR作成時head b23e509。本番向け、Draft/open/未合流。作成後の標準Node22の結合CIは未完了。今回の実装・確認画像・関連説明・全ケース確認の条件はPR本文へ保存済み。次はPRレビューと標準CIの結果確認。新しい合流の依頼があるまで合流・一般公開・銭接続をしない。7b8e8ab以後のsrc/test差分はなく、型/ビルド/全ケース確認は同じコードの結果を使う。
+
 - 最終確認：GIF対象13件はNode22.23.4/1workerで成功（76.04秒、GIF個別120秒のまま）。全件初回2,718件＋BOT対象1件＋GIF再実行で、重複を除く全243ファイル2,720ケースの通過を確認。初回の単一実行はexit1であり、単一全件成功とは記載しない。型/ビルドも成功。7b8e8ab以後は説明書・確認画像・記録のみでsrc/testを変更せず、コードの検証対象と一致する。ログ/tmp/gaisen-reels-{final-types,final-build,all,bot-rerun,gif-rerun}.log。
 - 保存先：codex/gaisen-reel-guideへpushし、本番向けの新Draft PRを作成する。標準Node22のPR結合CIは作成後に実行されるため、手元の分割確認と区別する。新しい合流・一般公開・銭接続は行わない。
 
