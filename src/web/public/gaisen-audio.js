@@ -29,11 +29,11 @@
    this.loading.set(key,request);void request.finally(()=>this.loading.delete(key));return request;
   }
   running(context){return !context.state||context.state==='running';}
-  createNode(buffer,{group,level,pan=0,loop=false,rate=1,priority=group==='win'?3:group==='motor'?0:group==='normal'?.5:1}){
+  createNode(buffer,{group,level,pan=0,loop=false,rate=1,loopStart=.25,loopEnd=2.25,priority=group==='win'?3:group==='motor'?0:group==='normal'?.5:1}){
    const context=this.context,source=context.createBufferSource(),gain=context.createGain();source.buffer=buffer;if(source.playbackRate)source.playbackRate.value=Math.max(.96,Math.min(1.04,rate));
    const panner=context.createStereoPanner?.();gain.gain.value=loop?0:this.volume*level;source.connect(gain);
    if(panner){panner.pan.value=Math.max(-1,Math.min(1,pan));gain.connect(panner);panner.connect(this.output||context.destination);}else gain.connect(this.output||context.destination);
-   if(loop){source.loop=true;source.loopStart=.25;source.loopEnd=Math.min(2.25,buffer.duration||3);gain.gain.setTargetAtTime(this.volume*level,context.currentTime,.035);}
+   if(loop){source.loop=true;source.loopStart=loopStart;source.loopEnd=Math.min(loopEnd,buffer.duration||3);gain.gain.setTargetAtTime(this.volume*level,context.currentTime,.035);}
    this.nodes.set(source,{gain,group,level,priority});source.onended=()=>{this.nodes.delete(source);if(this.motor===source)this.motor=null;source.disconnect();gain.disconnect();panner?.disconnect();this.rebalance();};this.rebalance();try{source.start();}catch(error){source.onended();throw error;}return source;
   }
   async play(key,{group='play',level=.65,pan=0,rate=1}={}){

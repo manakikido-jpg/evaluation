@@ -9,7 +9,7 @@ export function mountKisekiTrial(app:Hono<Env>,db:Db,now:()=>Date){
  app.get(PATH+'/guide',c=>{if(!allowed(c))return c.text('経済のページ権限がある運営だけ確認できます。',403);c.header('Cache-Control','private, no-store');return c.html(<KisekiGuide session={c.get('session')}/>);});
  app.get(PATH,async c=>{if(!allowed(c))return c.text('経済のページ権限がある運営だけ確認できます。',403);c.header('Cache-Control','private, no-store');const s=c.get('session');return c.html(<KisekiTrial m={trialView(await readTrial(db,now()),s.userId)} session={s}/>);});
  app.post(PATH,async c=>{if(!allowed(c))return c.text('経済のページ権限がある運営だけ確認できます。',403);c.header('Cache-Control','private, no-store');const b=await c.req.parseBody(),s=c.get('session');
-  try{await writeTrial(db,s.userId,s.username,{action:String(b.action??''),machine:Number(b.machine),revision:Number(b.revision),index:Number(b.index),setting:Number(b.setting),scenario:String(b.scenario??'')},now());
+  try{await writeTrial(db,s.userId,s.username,{action:String(b.action??''),machine:Number(b.machine),revision:Number(b.revision),index:Number(b.index),setting:Number(b.setting),scenario:String(b.scenario??''),control:String(b.control??''),position:b.position===undefined?undefined:/^(?:[0-9]|1[0-9])$/.test(String(b.position))?Number(b.position):NaN},now());
    if(c.req.header('X-Gaisen-Update')==='1')return c.html(<KisekiTrial m={trialView(await readTrial(db,now()),s.userId)} session={s}/>);
    return c.redirect(PATH,303);
   }catch(e){if(!(e instanceof KisekiError))throw e;return c.html(<KisekiTrial m={trialView(await readTrial(db,now()),s.userId)} session={s} error={e.message}/>,e.status);}

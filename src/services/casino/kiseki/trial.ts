@@ -5,6 +5,7 @@ import {audit} from '../../audit.js';
 import {cryptoRng,type Rng} from '../cards.js';
 import {newKiseki,protectedState,lever,stop,scenario,SCENARIOS,navi,type KisekiState} from './engine.js';
 import {rows} from './rules.js';
+import {kisekiDigits} from './presentation.js';
 export const TRIAL_KEY='casino.kisekiTrial.v1';
 export class KisekiError extends Error{constructor(message:string,public status:400|403|409=400){super(message);}}
 type Stat={day:string;spins:number;input:number;output:number;god:number;gg:number;sgg:number;sample:boolean;resumed:boolean;graph:number[]};
@@ -17,7 +18,7 @@ export const freshFloor=(n:number):Floor=>({version:'kiseki-floor-1',revision:0,
 const player=(f:Floor,id:string)=>f.players['u:'+id]??={points:100000,saved:null};
 function consume(m:Machine){m.state=newKiseki(m.reservedSetting!);m.state.ceiling=m.reservedCeiling??1480;m.reservedSetting=null;m.reservedCeiling=null;}
 /** 受入台の通常状態を復元しても、いま確定した払出と停止窓は消さない。 */
-function carryResult(from:KisekiState,to:KisekiState){to.lastPaid=from.lastPaid;to.lastRole=from.lastRole;to.lastLayout=from.lastLayout;to.lastReplay=from.lastReplay;to.lastCorrect=from.lastCorrect;to.lastPositions=from.lastPositions.slice();to.message=from.message;to.winEvent=from.winEvent;}
+function carryResult(from:KisekiState,to:KisekiState){to.lastPaid=from.lastPaid;to.lastRole=from.lastRole;to.lastLayout=from.lastLayout;to.lastReplay=from.lastReplay;to.lastCorrect=from.lastCorrect;to.lastPositions=from.lastPositions.slice();to.lastReelStops=from.lastReelStops?.map(v=>v?{...v}:null);to.lastDigits=from.lastDigits?.slice();to.message=from.message;to.winEvent=from.winEvent;}
 function apply(m:Machine){if(m.reservedSetting!==null&&m.owner===null&&!protectedState(m.state)&&!m.state.pending)consume(m);}
 function release(f:Floor,m:Machine){if(!m.owner)return;const p=player(f,m.owner);p.points=m.state.balance;
  if(protectedState(m.state)||m.base||m.state.pending){if(p.saved)throw new KisekiError('保存状態を確認してください。',409);p.saved=structuredClone(m.state);m.state=m.base??m.checkpoint??newKiseki(m.state.setting);m.base=null;m.checkpoint=null;}
@@ -25,7 +26,7 @@ function release(f:Floor,m:Machine){if(!m.owner)return;const p=player(f,m.owner)
 }
 export function expire(f:Floor,n:number){for(const m of f.machines){if(m.stat.day!==day(n)){m.stat=stat(n);f.revision++;}if(m.owner!==null&&n-m.lastAction>=(protectedState(m.state)?3600000:600000)){release(f,m);f.revision++;}}}
 export async function readTrial(db:Db,now:Date):Promise<Floor>{const [r]=await db.select().from(settings).where(eq(settings.key,TRIAL_KEY));const f=r?structuredClone(r.value) as Floor:freshFloor(now.getTime());if(f.version!=='kiseki-floor-1')throw new KisekiError('軌跡版の保存形式を確認してください。',409);expire(f,now.getTime());return f;}
-export type Action={action:string;machine:number;revision:number;index?:number;setting?:number;scenario?:string};
+export type Action={action:string;machine:number;revision:number;index?:number;setting?:number;scenario?:string;control?:string;position?:number};
 export function act(f:Floor,id:string,name:string,a:Action,now:number,rng:Rng=cryptoRng){
  expire(f,now);if(!Number.isSafeInteger(a.revision)||a.revision!==f.revision)throw new KisekiError('表示が更新されています。最新の画面を確認してください。',409);
  const m=f.machines.find(m=>m.id===a.machine);if(!m)throw new KisekiError('台を選び直してください。');
@@ -36,8 +37,8 @@ export function act(f:Floor,id:string,name:string,a:Action,now:number,rng:Rng=cr
  const old={phase:m.state.phase,spins:m.state.spins,input:m.state.input,output:m.state.output,gods:m.state.gods,firsts:m.state.firsts,sggs:m.state.sggs};
  try{switch(a.action){
   case 'leave':if(m.state.pending&&!protectedState(m.state))throw new KisekiError('先に3つのSTOPを押してください。');release(f,m);break;
-  case 'lever':if(!protectedState(m.state)&&!m.state.pending)m.checkpoint=structuredClone(m.state);lever(m.state,rng);m.lastAction=now;break;
-  case 'stop':if(stop(m.state,a.index!,rng))m.checkpoint=null;m.lastAction=now;break;
+  case 'lever':if(!protectedState(m.state)&&!m.state.pending)m.checkpoint=structuredClone(m.state);lever(m.state,rng,undefined,a.control==='timing');m.lastAction=now;break;
+  case 'stop':if(stop(m.state,a.index!,rng,a.position))m.checkpoint=null;m.lastAction=now;break;
   case 'refill':if(m.state.pending)throw new KisekiError('STOP後に補充してください。');if(m.state.balance>10000000)throw new KisekiError('試遊ポイントは十分にあります。');m.state.balance+=100000;p.points=m.state.balance;break;
   case 'scenario':if(!(SCENARIOS as readonly string[]).includes(a.scenario!)||m.state.pending||m.base)throw new KisekiError('回転中・保存分の再開中は場面を変更できません。');{const balance=m.state.balance;m.state=scenario(m.state.setting,a.scenario!);m.state.balance=balance;m.stat=stat(now);m.stat.sample=m.state.sample;m.lastScenario='場面確認：'+a.scenario;m.lastAction=now;}break;
   default:throw new KisekiError('操作を選び直してください。');
@@ -56,6 +57,6 @@ export async function writeTrial(db:Db,id:string,name:string,a:Action,now:Date,r
  });}
 /** 公開済みの停止位置・残りGだけ返す。役/モード/ループ率/未停止予定位置は渡さない。 */
 export function trialView(f:Floor,id:string){const own=f.machines.find(m=>m.owner===id),p=f.players['u:'+id],s=own?.state;
- return {revision:f.revision,points:s?.balance??p?.points??100000,saved:!!p?.saved,machines:f.machines.map(m=>({id:m.id,ownerName:m.ownerName,mine:m.owner===id,occupied:m.owner!==null,setting:m.state.setting,reservedSetting:m.reservedSetting,stat:m.stat,lastScenario:m.lastScenario})),own:own&&s?{id:own.id,phase:s.phase,left:['normal','omen','zgame'].includes(s.phase)?null:s.left,normalGames:s.normalGames,stocks:s.stocks,sets:s.sets,sggSet:s.sggSet,sggStocks:s.sggStocks,zRun:s.zRun,spins:s.spins,lastPaid:s.lastPaid,lastRole:s.pending?null:s.lastRole,lastLayout:s.pending?null:s.lastLayout,lastReplay:!s.pending&&s.lastReplay,lastCorrect:s.pending?true:s.lastCorrect,chainWon:s.chainWon,history:s.history.slice(),message:s.message,trail:s.trail.slice(),winEvent:s.pending?null:s.winEvent,resumed:!!own.base,spinning:!!s.pending,stopped:s.pending?.stops.slice()??[],positions:s.pending?s.pending.positions.slice():s.lastPositions.slice(),reels:(s.pending?s.pending.positions:s.lastPositions).map((p,i)=>p===null?null:rows(i,p)),navi:navi(s)}:null};
+ return {revision:f.revision,points:s?.balance??p?.points??100000,saved:!!p?.saved,machines:f.machines.map(m=>({id:m.id,ownerName:m.ownerName,mine:m.owner===id,occupied:m.owner!==null,setting:m.state.setting,reservedSetting:m.reservedSetting,stat:m.stat,lastScenario:m.lastScenario})),own:own&&s?{id:own.id,phase:s.phase,left:['normal','omen','zgame'].includes(s.phase)?null:s.left,normalGames:s.normalGames,stocks:s.stocks,sets:s.sets,sggSet:s.sggSet,sggStocks:s.sggStocks,zRun:s.zRun,spins:s.spins,lastPaid:s.lastPaid,lastRole:s.pending?null:s.lastRole,lastLayout:s.pending?null:s.lastLayout,lastReplay:!s.pending&&s.lastReplay,lastCorrect:s.pending?true:s.lastCorrect,chainWon:s.chainWon,history:s.history.slice(),message:s.message,trail:s.trail.slice(),winEvent:s.pending?null:s.winEvent,resumed:!!own.base,spinning:!!s.pending,timing:!!s.pending?.timing,digits:s.pending?kisekiDigits(s.spins,s.pending.positions,true):s.lastDigits?.slice()??kisekiDigits(s.spins,s.lastPositions,false),reelStops:(s.pending?.reelStops??(!s.pending?s.lastReelStops:undefined)??[null,null,null]).map(v=>v?{...v}:null),stopped:s.pending?.stops.slice()??[],positions:s.pending?s.pending.positions.slice():s.lastPositions.slice(),reels:(s.pending?s.pending.positions:s.lastPositions).map((p,i)=>p===null?null:rows(i,p)),navi:navi(s)}:null};
 }
 export type View=ReturnType<typeof trialView>;

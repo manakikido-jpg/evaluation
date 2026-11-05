@@ -1,5 +1,9 @@
 # 軌跡版の液晶素材
 
+追加：special-scenes-atlas.pngはimage_genで独自生成した3等分のGG/PGG/SGG背景。左から夕日の海上神殿、雲上の黄金宮殿、環のある惑星と紫の宇宙。sharpで各512×1024pxのセルを切り出し、scene-{gg,pgg,sgg}.webpへ変換しています。造形の編集は行っていません。
+
+generate-audio.pyは独自の和音/旋律/倍音/打音から、GG・PGG・SGGのBGM3点（19.2/24/15秒）と突入音3点を作る再現用スクリプト。既存曲/録音/実機音を使用しません。BGMは両端をゼロへ収めた全長ループ、44.1kHz/2ch/128kbpsのMP3です。配信はsrc/web/public/kiseki-media、実行時のPython依存はありません。
+
 2026年11月5日。image_genで独自生成。spring/garden/ruins.pngは泉・庭園・遺跡の背景。altar.pngは本人提供の三神を参考にした金/ブロンズ主体の透過装飾です。左が紫髪、中央が白髪/赤、右が青髪の人物。識別色は縁だけに抑えています。実機の画像・ロゴは転載していません。
 
 配信用はsrc/web/public/kiseki-mediaのWebP。背景800/1440px、装飾1200px。PNGは比較と再変換用に保存します。

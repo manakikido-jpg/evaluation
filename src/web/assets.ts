@@ -90,8 +90,8 @@ const gaisenMedia = Object.fromEntries(readdirSync(path.join(here,'public/gaisen
   ]));
 
 const kisekiMedia = Object.fromEntries(readdirSync(path.join(here,'public/kiseki-media'))
-  .filter(f=>/^[a-z][a-z0-9-]*\.webp$/.test(f)).map(file=>[
-    'kiseki-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/kiseki-media',file))),type:'image/webp'},
+  .filter(f=>/^[a-z][a-z0-9-]*\.(webp|mp3)$/.test(f)).map(file=>[
+    'kiseki-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/kiseki-media',file))),type:file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
   ]));
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
@@ -106,6 +106,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'gaisen-normal.js': {body:readText(path.join(here,'public/gaisen-normal.js')),type:'text/javascript; charset=utf-8'},
     'gaisen-audio.js': {body:readText(path.join(here,'public/gaisen-audio.js')),type:'text/javascript; charset=utf-8'},
     'gaisen-palace.svg': {body:readText(path.join(here,'public/gaisen-palace.svg')),type:'image/svg+xml'},
+    'kiseki-live.js': {body:readText(path.join(here,'public/kiseki-live.js')),type:'text/javascript; charset=utf-8'},
     'kiseki-trial.css': {body:readText(path.join(here,'public/kiseki-trial.css')),type:'text/css; charset=utf-8'},
     'gaisen-trial.css': {body:readText(path.join(here,'public/gaisen-trial.css')),type:'text/css; charset=utf-8'},
     'gaisen-trial.js': {body:readText(path.join(here,'public/gaisen-trial.js')),type:'text/javascript; charset=utf-8'},

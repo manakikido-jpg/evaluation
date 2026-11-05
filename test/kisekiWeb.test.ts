@@ -63,3 +63,19 @@ it('公開された押し順だけを三神のメダルへ表示し、右から�
  for(const index of ['1','0'])expect((await post('stop',{index})).status).toBe(200);
  html=await read();expect(html).not.toContain('data-gt-lcd-navigation');expect(html).toContain('払出150ポイント');expect(html).toContain('kiseki-media-altar-1200.webp');
 });
+
+it('目押し位置を検査して記録し、再読込と再送でも停止窓と残高を保つ',async()=>{
+ await post('seat');await post('lever',{control:'timing'});const before=await readTrial(db,now);
+ for(const position of ['','-1','20','1.5','NaN','Infinity','0x10',' 1']){expect((await post('stop',{index:'0',position})).status).toBe(400);expect(await readTrial(db,now)).toEqual(before);}
+ expect((await post('stop',{index:'0',position:'19'})).status).toBe(200);const partial=await readTrial(db,now);expect(partial.machines[0]!.state.pending!.reelStops![0]!.input).toBe(19);
+ const html=await(await app.request(path,{headers:headers()})).text();expect(html).toContain('is-timed-stop');expect(html).toContain('kiseki-live.js?v=');expect(html).toContain('data-kt-bgm');expect(html).not.toMatch(/onclick=|style=|"(?:plan|mode|loops|omenLeft)":/);expect(await readTrial(db,now)).toEqual(partial);
+ expect((await post('stop',{index:'0',position:'0'})).status).toBe(400);expect(await readTrial(db,now)).toEqual(partial);
+ for(const index of ['1','2'])expect((await post('stop',{index,position:'19'})).status).toBe(200);
+ expect((await walletOf(db,id)).balance).toBe(3210);
+});
+it('GG/PGG/SGGに別の背景と音源を配信し、閲覧で区間やポイントを書き換えない',async()=>{
+ await post('seat');
+ for(const phase of ['gg','pgg','sgg']){await post('scenario',{scenario:phase});const before=await readTrial(db,now),html=await(await app.request(path,{headers:headers()})).text();expect(html).toContain(`kiseki-media-scene-${phase}.webp?v=`);expect(html).toContain(`data-kt-theme="${phase}"`);expect(await readTrial(db,now)).toEqual(before);}
+ for(const key of ['bgm-gg','bgm-pgg','bgm-sgg','gg','god','sgg']){const r=await app.request(`/static/kiseki-media-${key}.mp3`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('audio/mpeg');expect((await r.arrayBuffer()).byteLength).toBeGreaterThan(10000);}
+ for(const key of ['gg','pgg','sgg']){const r=await app.request(`/static/kiseki-media-scene-${key}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
+});
