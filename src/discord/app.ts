@@ -282,6 +282,7 @@ export class ShuinApp {
         categoryId: c.parentId ?? null,
         categoryName: c.parent?.name ?? null,
         memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [],
+        sanpaishaMemberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot && highestRank(this.cfg.ranks, m.roles.cache.keys())?.key === 'sanpaisha').map((m) => m.id) : [],
       }));
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));

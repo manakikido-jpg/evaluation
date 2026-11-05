@@ -16,6 +16,7 @@ export const WEB_PAGES = [
   { key: 'audit', label: '記録', href: '/audit', prefixes: ['audit', 'message-archive'] },
   { key: 'commands', label: 'コマンド', href: '/commands', prefixes: ['commands'] },
   { key: 'members', label: 'メンバー', href: '/members', prefixes: ['members'] },
+  { key: 'evaluation', label: '評価', href: '/evaluation', prefixes: ['evaluation'] },
   { key: 'applications', label: '申請・お参り期間', href: '/applications', prefixes: ['applications', 'omairi'] },
   { key: 'security', label: '治安・警戒', href: '/security', prefixes: ['security'] },
   { key: 'yaku', label: '厄', href: '/yaku', prefixes: ['yaku'] },

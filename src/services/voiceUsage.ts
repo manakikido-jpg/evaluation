@@ -1,3 +1,4 @@
+import { EVALUATION_START_AT } from '../domain/ujikoEvaluation.js';
 import { and, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { coinTx, tempVoice, voiceChannels, voicePairs, voiceUsage } from '../db/schema.js';
@@ -11,7 +12,10 @@ import { jstDate } from './activity.js';
  * を足していく。社務所Web の「通話の記録」とメンバーのページで見る。
  */
 
-export type PresenceChannel = { id: string; name: string; categoryId: string | null; categoryName: string | null; memberIds: string[] };
+/** 装飾や人数が付いていても、縁側の名前を識別する。 */
+export const isEngawaName = (name: string): boolean => name.normalize('NFKC').includes('縁側');
+
+export type PresenceChannel = { id: string; name: string; categoryId: string | null; categoryName: string | null; memberIds: string[]; /** 指定時は役職確認済み。空配列は参拝者なし、未指定は過去互換。 */ sanpaishaMemberIds?: string[] };
 
 /** 1 つの通話で組み合わせを数える上限（人が多すぎると組み合わせが増えすぎるため） */
 const PAIR_MAX_MEMBERS = 25;
@@ -40,8 +44,11 @@ export async function recordPresence(db: Db, channels: PresenceChannel[], now = 
   }
   await db
     .insert(voiceUsage)
-    .values(active.flatMap((c) => c.memberIds.map((memberId) => ({ memberId, date, channelId: c.id, minutes: 1 }))))
-    .onConflictDoUpdate({ target: [voiceUsage.memberId, voiceUsage.date, voiceUsage.channelId], set: { minutes: sql`${voiceUsage.minutes} + 1` } });
+    .values(active.flatMap((c) => {
+      const sanpaisha = new Set(c.sanpaishaMemberIds);
+      return c.memberIds.map((memberId) => ({ memberId, date, channelId: c.id, minutes: 1, rankRecordedMinutes: c.sanpaishaMemberIds === undefined ? 0 : 1, sanpaishaMinutes: now.getTime() >= EVALUATION_START_AT && isEngawaName(c.name) && sanpaisha.has(memberId) ? 1 : 0 }));
+    }))
+    .onConflictDoUpdate({ target: [voiceUsage.memberId, voiceUsage.date, voiceUsage.channelId], set: { minutes: sql`${voiceUsage.minutes} + 1`, rankRecordedMinutes: sql`${voiceUsage.rankRecordedMinutes} + excluded.rank_recorded_minutes`, sanpaishaMinutes: sql`${voiceUsage.sanpaishaMinutes} + excluded.sanpaisha_minutes` } });
   const pairs: { memberA: string; memberB: string; date: string; minutes: number }[] = [];
   for (const c of active) {
     const ids = [...c.memberIds].sort().slice(0, PAIR_MAX_MEMBERS);

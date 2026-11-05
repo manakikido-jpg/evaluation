@@ -421,6 +421,27 @@ describe('起動と定期確認で未払い招待報酬を拾う', () => {
 
 
 describe('毎分の浮上ボーナス', () => {
+  it('評価用の時間は当時の参拝者と縁側に限り、昇格後・別の部屋・BOT・AFKを足さない', async () => {
+    const { voiceUsage } = await import('../src/db/schema.js');
+    const visitor = add('700000000000000091', ROLE.sanpaisha);
+    const upper = add('700000000000000092', ROLE.sanpaisha, ROLE.ujiko);
+    const afk = add('700000000000000093', ROLE.sanpaisha);
+    const bot = fakeMember('700000000000000094', [ROLE.sanpaisha], true);
+    const room = { id: 'engawa', name: '🌸 大きな縁側１', parentId: null, parent: null, isVoiceBased: () => true,
+      members: new Map([visitor, upper, bot].map(m => [m.id, { ...m, voice: { deaf: false } }])) };
+    const afkRoom = { ...room, id: 'afk', members: new Map([[afk.id, { ...afk, voice: { deaf: false } }]]) };
+    const voiceGuild = { ...guild, afkChannelId: 'afk', channels: { cache: new Map([['engawa', room], ['afk', afkRoom]]) } };
+    await app.everyMinute(voiceGuild as never, new Date('2026-11-06T03:00:00Z'));
+    visitor.roles.cache.set(ROLE.ujiko, {});
+    await app.everyMinute(voiceGuild as never, new Date('2026-11-06T03:01:00Z'));
+    visitor.roles.cache.delete(ROLE.ujiko); room.name = '宿坊';
+    await app.everyMinute(voiceGuild as never, new Date('2026-11-06T03:02:00Z'));
+    const rows = await db.select().from(voiceUsage);
+    expect(rows).toHaveLength(2);
+    expect(rows.find(r => r.memberId === visitor.id)).toMatchObject({ minutes: 3, rankRecordedMinutes: 3, sanpaishaMinutes: 1 });
+    expect(rows.find(r => r.memberId === upper.id)).toMatchObject({ minutes: 3, rankRecordedMinutes: 3, sanpaishaMinutes: 0 });
+  });
+
   it('1人のVCも数えて7時間で慶事へ通知し、AFKとBOTは数えない', async () => {
     const { voiceUsage } = await import('../src/db/schema.js');
     const { recordJoin } = await import('../src/services/members.js');

@@ -1,3 +1,4 @@
+import { mountEvaluation } from './evaluation.js';
 import { mountOffice } from './office.js';
 import { unsubscribeOffice } from '../services/officeNotifications.js';
 import {mountKisekiTrial} from './kisekiTrial.js';
@@ -727,6 +728,8 @@ export function createWebApp(deps: WebDeps) {
 
   app.use('/', requireAdmin);
   app.use('/members/*', requireAdmin);
+  app.use('/evaluation', requireAdmin);
+  app.use('/evaluation/*', requireAdmin);
   app.use('/audit', requireAdmin);
   app.use('/message-archive', requireAdmin);
   app.use('/message-archive/*', requireAdmin, requireCsrf);
@@ -1865,6 +1868,8 @@ export function createWebApp(deps: WebDeps) {
     await audit(db, { actorId: by, action: 'boost.gift', detail: { id, kind: input.kind, ticketKind: input.kind === 'ticket' ? input.ticketKind : null, amount, note, count: r.count }, via: 'web' });
     return back('gift_given');
   });
+
+  mountEvaluation(app, db, () => cfg, now);
 
   app.get('/voice', async (c) => {
     const d = Number(c.req.query('days'));
