@@ -223,7 +223,7 @@ it.each(['stageEnd', 'disconnect', 'permission', 'move', 'deaf', 'backpressure']
   if (['permission', 'move', 'deaf'].includes(kind)) {
     for (let n = 0; n < 50; n++) { vi.advanceTimersByTime(20); s.output().read(); }
   }
-  if (kind === 'backpressure') vi.advanceTimersByTime(220);
+  if (kind === 'backpressure') vi.advanceTimersByTime(220 + 250 * 20);
   expect(s.fault).toHaveBeenCalledOnce(); expect(s.abort.signal.aborted).toBe(true);
   for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
   expect(s.output().destroyed).toBe(true);
@@ -253,4 +253,14 @@ it('拾にはステージの発言権限を要求しない', async () => {
   s.channels[0]!.permissionsFor = () => ({ has: ((p?: bigint | bigint[]) => (Array.isArray(p) ? p : [p]).every(x => x !== PermissionFlagsBits.Speak)) });
   await s.relay.start(s.abort.signal); expect(s.fault).not.toHaveBeenCalled();
   expect(mock.join.mock.calls[0]![0]).toMatchObject({ group: 'bot9', selfMute: true, selfDeaf: false });
+});
+it('送り待ちが一瞬たまっても止めず、5秒続いたときだけ止める', async () => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  vi.advanceTimersByTime(20 * 100);
+  expect(s.fault).not.toHaveBeenCalled();
+  while (s.output().read() !== null) { /* 読み出して追いつく */ }
+  vi.advanceTimersByTime(20 * 100);
+  expect(s.fault).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(20 * 300);
+  expect(s.fault).toHaveBeenCalledExactlyOnceWith('音声の配信が追いつかないため停止しました。');
 });

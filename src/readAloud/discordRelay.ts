@@ -105,15 +105,26 @@ export class DiscordEventRelay implements RelayTransport {
       client.on(Events.VoiceStateUpdate, update); client.on(Events.StageInstanceDelete, deleted);
       this.cleanups.push(() => client.off(Events.VoiceStateUpdate, update), () => client.off(Events.StageInstanceDelete, deleted));
       this.running = true; this.syncSpeakers(); this.check();
-      let lastTick = performance.now(), checks = 0;
+      let lastTick = performance.now(), checks = 0, fullTicks = 0;
+      const stalls: number[] = [];
       this.interval = setInterval(() => {
         if (this.closed || signal.aborted) return;
         const now = performance.now();
-        if (now - lastTick > 500 || this.stream!.readableLength >= 10) { this.fault('音声の配信が追いつかないため停止しました。'); return; }
+        // 一瞬つまった（BOT の処理が重い・送信が遅い）だけでは止めない。続くときだけ止める
+        if (now - lastTick > 500) {
+          stalls.push(now);
+          while (stalls.length && now - stalls[0]! > 60_000) stalls.shift();
+          if (stalls.length >= 10) { this.fault('音声の配信が追いつかないため停止しました。'); return; }
+        }
         lastTick = now;
+        const full = this.stream!.readableLength >= 10;
+        fullTicks = full ? fullTicks + 1 : 0;
+        if (fullTicks >= 250) { this.fault('音声の配信が追いつかないため停止しました。'); return; }
         try {
           if (++checks % 50 === 0) this.checkChannels();
-          if (!this.closed && !signal.aborted) this.stream!.push(this.encoder!.encode(this.mixer.take(), 960));
+          // 送り待ちがたまっている間は、新しい音声を積まない（遅れを広げない）
+          if (!full && !this.closed && !signal.aborted) this.stream!.push(this.encoder!.encode(this.mixer.take(), 960));
+          else if (full) this.mixer.take();
         } catch { this.fault('音声を処理できなかったため停止しました。'); }
       }, 20);
       this.timeout = setTimeout(() => this.fault('中継が6時間に達したため停止しました。'), 6 * 3600_000);
