@@ -20,7 +20,7 @@ async function stamps(id: string, n: number, weight = 1) {
   await db.insert(shuin).values(Array.from({ length: n }, (_, i) => ({ giverId: String(820000000000000000n + BigInt(i)), receiverId: id, weight, giverRank: 'ujiko' })));
 }
 const voice = (id: string, minutes: number, confirmed: number, recorded = confirmed, channelId = ENG, date = '2026-11-06') =>
-  db.insert(voiceUsage).values({ memberId: id, date, channelId, minutes, sanpaishaMinutes: confirmed, rankRecordedMinutes: recorded });
+  db.insert(voiceUsage).values({ memberId: id, date, channelId, minutes, sanpaishaMinutes: confirmed, rankRecordedMinutes: recorded, evaluationRecordedMinutes: date >= '2026-11-06' ? confirmed : 0, evaluationEligibleMinutes: date >= '2026-11-06' ? confirmed : 0 });
 
 it('40個と1200分を別々に判定し、過去取込は加算し、重み・特別ご縁・取消し・対象外時間は足さない', async () => {
   await stamps(A, 40, 10); await stamps(B, 39, 100); await stamps(C, 40); await stamps(D, 40);
@@ -107,7 +107,7 @@ it('毎分の記録で過去・確認済みの参拝者・上位職・縁側以�
 
 it('確認済み計測は11月6日0時から。直前の分は過去取込として重複せず合計へ足す', async () => {
   const before = new Date('2026-11-05T14:59:00Z'), start = new Date('2026-11-05T15:00:00Z');
-  const ch = { id: ENG, name: '縁側１', categoryId: null, categoryName: null, memberIds: [A], sanpaishaMemberIds: [A] };
+  const ch = { id: ENG, name: '縁側１', categoryId: null, categoryName: null, memberIds: [A], sanpaishaMemberIds: [A], evaluationEligibleMemberIds: [A] };
   await recordPresence(db, [ch], before);
   expect((await ujikoEvaluation(db, cfg, filter, before)).rows.find(r => r.memberId === A)).toMatchObject({ minutes: 1, confirmedMinutes: 0, pastMinutes: 1 });
   await recordPresence(db, [ch], start);
@@ -123,5 +123,5 @@ it('CSVでは名前の数式と改行を引用し、Discord IDの桁を守る', 
   expect(csv.startsWith('\ufeff')).toBe(true);
   expect(csv).toContain('"\'=1+1,""危険""\n名前"');
   expect(csv).toContain('"\'' + A + '"');
-  expect(csv).toContain('うち過去取込（分・当時役職未確認）');
+  expect(csv).toContain('うち過去取込（分・控除後・役職またはミュート未確認）');
 });

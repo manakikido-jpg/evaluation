@@ -108,6 +108,14 @@ describe('表示', () => {
     expect(mine).toContain('まだありません');
   });
 
+  it('参拝者の御朱印帳は、ご縁の次の役職ではなく40個・20時間の条件を案内する', () => {
+    const r = goshuinchoReply(cfg.ranks, { id: B, displayName: 'さくら', roleIds: [ROLE.sanpaisha] },
+      { goen: 200, receivedCount: 39, byRank: {}, recentGiverIds: [], givenCount: 0 });
+    expect(r.embeds![0]!.description).toContain('御朱印40個＋縁側20時間');
+    expect(r.embeds![0]!.description).toContain('特別ご縁は個数に含めません');
+    expect(r.embeds![0]!.description).not.toContain('総代まで');
+  });
+
   it('いちばん上の役職なら「あと○○」は出ない', () => {
     const r = goshuinchoReply(
       cfg.ranks,

@@ -122,7 +122,9 @@ export function goshuinchoReply(
   const rank = highestRank(ranks, owner.roleIds);
   const auto = currentAutoRank(ranks, owner.roleIds);
   const next = auto ? nextAutoRank(ranks, data.goen, auto) : undefined;
-  const nextText = next ? `（${next.rank.name}まで あと ${next.remaining}）` : '';
+  const nextText = auto?.key === 'sanpaisha'
+    ? '（氏子の条件：御朱印40個＋縁側20時間。ご縁の重み・特別ご縁は個数に含めません）'
+    : next ? `（${next.rank.name}まで あと ${next.remaining}）` : '';
 
   const received = data.receivedCount
     ? `${data.receivedCount} 人\n${breakdownLine(ranks, data.byRank)}`

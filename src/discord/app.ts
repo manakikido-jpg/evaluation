@@ -26,7 +26,9 @@ import {
 import { channelPosters, posterPage, type Poster } from '../services/posters.js';
 import { SHUIN_PICK_ID } from '../services/notices.js';
 import { awardLongVoiceBonuses, notifyLongVoiceBonuses } from '../services/longVoiceBonus.js';
+import { isEvaluationUnmuted } from '../domain/voiceEvaluation.js';
 import { recordPresence } from '../services/voiceUsage.js';
+import { ujikoEvaluation } from '../services/ujikoEvaluation.js';
 import { issueInitialCurrency } from '../services/initialCurrency.js';
 import { autoRanks } from '../domain/ranks.js';
 import { reconcileInviteRewards, rewardInviteRanks } from '../services/invites.js';
@@ -283,8 +285,10 @@ export class ShuinApp {
         categoryName: c.parent?.name ?? null,
         memberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot).map((m) => m.id) : [],
         sanpaishaMemberIds: c.isVoiceBased() ? [...c.members.values()].filter((m) => !m.user.bot && highestRank(this.cfg.ranks, m.roles.cache.keys())?.key === 'sanpaisha').map((m) => m.id) : [],
+        evaluationEligibleMemberIds: c.isVoiceBased() ? [...c.members.values()].filter(m => !m.user.bot && isEvaluationUnmuted(m.voice)).map(m => m.id) : [],
       }));
     await recordPresence(this.db, presence, now).catch((err) => logger.warn({ err }, 'voice presence record failed'));
+    await this.checkEvaluationPromotions(guild, now).catch(err => logger.warn({ err }, 'evaluation promotion check failed'));
     await awardLongVoiceBonuses(this.db, this.cfg, now).catch(err => logger.warn({ err }, 'long voice bonus tick failed'));
     await notifyLongVoiceBonuses(this.db, this.cfg, { sendMessage: async (channelId, body) => {
       const ch = await this.client.channels.fetch(channelId);
@@ -552,8 +556,24 @@ export class ShuinApp {
     }
   }
 
-  private async ensurePromotion(member: GuildMember): Promise<void> {
-    await this.promoteIfNeeded(member, await goenOf(this.db, member.id));
+  private async ensurePromotion(member: GuildMember, now = new Date()): Promise<void> {
+    await this.promoteIfNeeded(member, await goenOf(this.db, member.id), now);
+  }
+
+  private checkingEvaluationPromotions = false;
+  /** 時間が最後の条件だった人も、追加の朱印操作なしで昇格を確かめる。 */
+  async checkEvaluationPromotions(guild: Guild, now = new Date()): Promise<void> {
+    if (guild.id !== this.cfg.guildId || this.checkingEvaluationPromotions) return;
+    this.checkingEvaluationPromotions = true;
+    try {
+      const data = await ujikoEvaluation(this.db, this.cfg, { q: '', status: 'met' }, now);
+      for (const row of data.rows) {
+        const member = await guild.members.fetch(row.memberId).catch(() => undefined);
+        if (!member || member.user.bot) continue;
+        await this.lock.run(row.memberId, () => this.ensurePromotion(member, now))
+          .catch(err => logger.warn({ err, memberId: row.memberId }, 'evaluation promotion failed'));
+      }
+    } finally { this.checkingEvaluationPromotions = false; }
   }
 
   /**
@@ -561,12 +581,18 @@ export class ShuinApp {
    * ロールの付け替えはキャッシュにすぐ反映されないことがあるため、
    * 昇格しそうなときだけ Discord から最新のロールを取り直して確かめる（二重昇格・二重発表を防ぐ）。
    */
-  private async promoteIfNeeded(member: GuildMember, goen: number): Promise<void> {
+  private async promoteIfNeeded(member: GuildMember, goen: number, now = new Date()): Promise<void> {
     if (!decidePromotion(this.cfg.ranks, member.roles.cache.keys(), goen)) return;
     const fresh = await member.guild.members.fetch({ user: member.id, force: true }).catch(() => undefined);
     if (!fresh) return;
     const promotion = decidePromotion(this.cfg.ranks, fresh.roles.cache.keys(), goen);
-    if (promotion) await this.promote(fresh, promotion, goen);
+    if (!promotion) return;
+    if (promotion.from.key === 'sanpaisha') {
+      // ご縁の重み・特別ご縁だけで氏子以上へ上がらない。評価と同じ既定の全縁側・控除後の値で確かめる。
+      const data = await ujikoEvaluation(this.db, this.cfg, { q: fresh.id, status: 'met' }, now);
+      if (!data.rows.some(row => row.memberId === fresh.id)) return;
+    }
+    await this.promote(fresh, promotion, goen);
   }
 
   /** 役職ロールを付け替えて #慶事 で発表する */

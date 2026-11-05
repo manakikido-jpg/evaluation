@@ -14,9 +14,9 @@ beforeEach(async () => {
   await db.insert(members).values([{ id: ID, username: 'staff', displayName: '運営', roleIds: [ROLE.guji] },
     { id: A, username: 'alpha', displayName: '先に達成', roleIds: [ROLE.sanpaisha] }, { id: B, username: 'beta', displayName: '過去分で達成', roleIds: [ROLE.sanpaisha] }, { id: C, username: 'gamma', displayName: 'あと一分', roleIds: [ROLE.sanpaisha] }]);
   await db.insert(voiceChannels).values({ channelId: ENG, name: '縁側１' });
-  await db.insert(voiceUsage).values([{ memberId: A, date: '2026-11-06', channelId: ENG, minutes: 1300, rankRecordedMinutes: 1200, sanpaishaMinutes: 1200 },
-    { memberId: B, date: '2026-11-06', channelId: ENG, minutes: 10000, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199 },
-    { memberId: C, date: '2026-11-06', channelId: ENG, minutes: 1199, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199 }]);
+  await db.insert(voiceUsage).values([{ memberId: A, date: '2026-11-06', channelId: ENG, minutes: 1300, rankRecordedMinutes: 1200, sanpaishaMinutes: 1200, evaluationRecordedMinutes: 1200, evaluationEligibleMinutes: 1200 },
+    { memberId: B, date: '2026-11-06', channelId: ENG, minutes: 10000, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199, evaluationRecordedMinutes: 1199, evaluationEligibleMinutes: 1199 },
+    { memberId: C, date: '2026-11-06', channelId: ENG, minutes: 1199, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199, evaluationRecordedMinutes: 1199, evaluationEligibleMinutes: 1199 }]);
   await db.insert(shuin).values([A, B, C].flatMap((receiverId, i) => Array.from({ length: 40 + (i === 1 ? 1 : 0) }, (_, j) => ({ receiverId, giverId: String(840000000000000000n + BigInt(j)), weight: 10, giverRank: 'guji' }))));
   app = createWebApp({ db, cfg: () => cfg, api: { memberRoles: async () => [ROLE.guji] } as never,
     discord: { guildChannels: async () => [] } as never, baseUrl: 'https://example.test', now: () => now });
@@ -42,7 +42,7 @@ it('過去分も20時間へ加算し、内訳を表示する。読むだけで�
   expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toContain('no-store');
   expect(html).toContain('2026年11月6日（金）0:00（日本時間）');
   expect(html).toContain('href="/evaluation"'); expect(html).toContain('40個 / 40個'); expect(html).toContain('41個 / 40個');
-  expect(html).toContain('19時間59分 / 20時間'); expect(html).toContain('あと1分'); expect(html).toContain('過去取込'); expect(html).toContain('過去分の当時役職は未確認');
+  expect(html).toContain('19時間59分 / 20時間'); expect(html).toContain('あと1分'); expect(html).toContain('過去取込'); expect(html).toContain('過去分の役職またはミュートは未確認');
   expect(html).not.toMatch(/<details class="evaluation-targets"[^>]*\bopen/);
   expect(html.indexOf('href="/members/' + B)).toBeLessThan(html.indexOf('href="/members/' + A));
   expect(html).not.toMatch(/onclick=|style=/);
@@ -74,4 +74,27 @@ it('100名ずつ表示し、CSVでは同じ条件に当てはまる全員を保�
   expect((html.match(/scope="row"/g) ?? []).length).toBe(4);
   const csv = await (await app.request('/evaluation/export.csv?page=2', { headers: headers() })).text();
   expect(csv).toContain('先に達成'); expect(csv).toContain('追加100'); expect(csv.split('\r\n')).toHaveLength(106);
+});
+
+it('過去控除は宮司・評価権限・CSRFを要求し、保存後に一覧とCSVへ反映する',async()=>{
+ const {findSession}=await import('../src/web/sessions.js');const {evaluationTimeDeductions,auditLogs}=await import('../src/db/schema.js');
+ const csrf=(await findSession(db,token,now))!.csrfToken,limited=await createSession(db,user,{level:'shinshoku',pages:['evaluation'],writePages:['evaluation']},now);
+ const target='/evaluation/corrections?member='+A;
+ expect((await app.request(target)).status).toBe(302);expect((await app.request(target,{headers:headers(limited)})).status).toBe(403);
+ const read=await app.request(target,{headers:headers()});expect(read.status).toBe(200);expect(read.headers.get('cache-control')).toContain('no-store');expect(await read.text()).toContain('控除する合計分数');
+ const post=(extra:Record<string,string>={},t=token)=>app.request('/evaluation/corrections',{method:'POST',headers:{...headers(t),origin:'https://example.test','sec-fetch-site':'same-origin'},body:new URLSearchParams({_csrf:csrf,member:A,date:'2026-11-06',channel:ENG,minutes:'100',expected:'0',reason:'本人のミュート記録で100分を確認',...extra})});
+ expect((await post({_csrf:''})).status).toBe(403);
+ const limitedCsrf=(await findSession(db,limited,now))!.csrfToken;expect((await post({_csrf:limitedCsrf},limited)).status).toBe(403);expect(await db.select().from(evaluationTimeDeductions)).toHaveLength(0);
+ const original=await db.select().from(voiceUsage);expect((await post()).status).toBe(303);expect((await post()).status).toBe(409);
+ const csv=await(await app.request('/evaluation/export.csv?q=alpha',{headers:headers()})).text();expect(csv).toContain('"1200"');expect(csv).toContain('過去の控除（分）');const values=csv.split('\r\n')[1]!.split(',');expect(values[4]).toBe('"1200"');expect(values[8]).toBe('"0"');expect(values[11]).toBe('"100"');
+ expect(await db.select().from(voiceUsage)).toEqual(original);expect(await db.select().from(evaluationTimeDeductions)).toHaveLength(1);expect((await db.select().from(auditLogs)).filter(r=>r.action==='evaluation.time_deduction')).toHaveLength(1);
+ const html=await(await app.request('/evaluation',{headers:headers(limited)})).text();expect(html).not.toContain('/evaluation/corrections?member=');
+});
+it('控除フォームは不正な日付/分数/参拝者以外/評価閲覧権限なしを拒否する',async()=>{
+ const {findSession}=await import('../src/web/sessions.js');const csrf=(await findSession(db,token,now))!.csrfToken;
+ for(const change of [{minutes:'101'},{minutes:''},{minutes:'1.5'},{date:'2026-02-30'},{reason:' '},{member:ID}]){
+  const r=await app.request('/evaluation/corrections',{method:'POST',headers:{...headers(),origin:'https://example.test','sec-fetch-site':'same-origin'},body:new URLSearchParams({_csrf:csrf,member:A,date:'2026-11-06',channel:ENG,minutes:'1',expected:'0',reason:'本人記録',...change})});expect(r.status).toBe(400);
+ }
+ const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now);expect((await app.request('/evaluation/corrections?member='+A,{headers:headers(limited)})).status).toBe(403);
+ for(const q of ['member=bad','member='+A+'&page=0'])expect((await app.request('/evaluation/corrections?'+q,{headers:headers()})).status).toBe(400);
 });
