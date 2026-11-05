@@ -1,6 +1,9 @@
 # 作業の引き継ぎメモ
 
 ## 2026年11月5日：PR144の合流
+- 完了：PR144は2026-11-05 06:44:09 UTCにGitHubから合流済み。head376e48e38af7ddb50b0bf70c527bc57bce2ffc19、merge f7b1007f3041d0edb13ef5c27219d053db6f2db7。PRはmerged/closed、本番refも同じmerge SHAでheadの祖先関係をfetch後に確認した。一般公開・銭接続は保留。VPS実反映は未確認。
+- 根拠：標準Node22 CI1065/run41981061036/job127091004418はhead1768b02＋本番1a79a19の組合せで型・全245ファイル2,746件・ビルド成功（全件563.57秒）。head376e48eとの差分はwork-notes/user-decisionsだけでsrc/test/assets/.githubに差分なし。記録の文書リンクも成功済み。レビュー/未解決スレッドなし、最新本番の追加変更なしを再確認し、Draft解除後にhead指定で合流した。
+- 次：社務所Web→カジノ管理→神殿スロット・軌跡版の無料試遊（/economy/kiseki-trial）を再読み込みして反映を確認。三風景・金の三神（左紫/中央赤/右青）とメダル上のナビを確認する。合流後の追記は記録のみ。二重の自動下書きPR作成を避けるため、この完了記録commitはCIを省略する。保存先はPR144とcodex/kiseki-landscape-lcd。
 - 依頼：「合流して」。CodexがPR144（軌跡の三風景・金の三神メダル）を検証後にGitHubから合流する。一般公開・銭接続の保留は維持。
 - 開始：codex/kiseki-landscape-lcd、caf397b、作業ツリー変更なし。本番をfetchし、PR/CI/レビュー/競合を確認する。前節の型・ビルド・全2,746ケースの確認とブラウザー結果は同じ実装e555995に対するもの。
 - 次：標準CIと最新head/baseを確認→担当許可の記録を保存→Draft解除→head指定で合流→PR状態/本番祖先関係を確認し完了を記録。VPS実反映は別途。
