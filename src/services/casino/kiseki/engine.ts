@@ -1,7 +1,7 @@
 import type {Rng} from '../cards.js';
-import {BET,UNIT,ROLES,drawRole,stopPlan,missPosition,sggGames,type KisekiRole} from './rules.js';
+import {BET,UNIT,ROLES,drawRole,stopPlan,sggGames,type KisekiRole} from './rules.js';
 import {kisekiDigits} from './presentation.js';
-import {controlKisekiReel,type KisekiStop} from './reelControl.js';
+import {controlKisekiReel,automaticReelStart,type KisekiStop} from './reelControl.js';
 export type Phase='normal'|'omen'|'gaia'|'gg'|'pgg'|'gzone'|'sgg'|'sgg-retry'|'zzone'|'zgame';
 export const PHASE_NAMES:Record<Phase,string>={normal:'参道',omen:'神殿の前兆',gaia:'GAIA STAGE',gg:'GOD GAME',pgg:'PREMIUM GOD GAME',gzone:'G-ZONE',sgg:'SUPER GOD GAME','sgg-retry':'SGG · 引き戻し',zzone:'Z-ZONE',zgame:'Z-GAME'};
 export type Win={kind:'gg'|'god'|'sgg'|'stock';added:number;set:number;ggGames:number;sggGames:number};
@@ -32,8 +32,8 @@ export function stop(s:KisekiState,index:number,rng:Rng,input?:number):boolean{
  const p=s.pending;if(!p||!Number.isInteger(index)||index<0||index>2||p.stops.includes(index))throw Error('このSTOPは押せません。');
  if(input!==undefined&&(!Number.isInteger(input)||input<0||input>=20))throw Error('停止位置は0〜19です。');
  if(p.role==='bell'&&index!==p.order[p.stops.length])p.correct=false;
- if(p.timing){const result=controlKisekiReel(p.correct?p.layout:'none',index,p.positions,input);(p.reelStops??=[null,null,null])[index]=result;p.positions[index]=result.position;}
- else p.positions[index]=p.correct?p.plan[index]!:missPosition(index,p.positions);p.stops.push(index);if(p.stops.length<3)return false;
+ if(p.timing){const result=controlKisekiReel(p.correct?p.layout:'none',index,p.positions,input,automaticReelStart(s.spins,index));(p.reelStops??=[null,null,null])[index]=result;p.positions[index]=result.position;}
+ else p.positions[index]=p.correct&&p.layout!=='none'?p.plan[index]!:controlKisekiReel('none',index,p.positions,undefined,automaticReelStart(s.spins,index)).position;p.stops.push(index);if(p.stops.length<3)return false;
  const before={sets:s.sets,stocks:s.stocks,gods:s.gods,sggs:s.sggs};
  s.lastDigits=kisekiDigits(s.spins,p.positions,false,index) as number[];s.lastReelStops=p.reelStops?.map(v=>v?{...v}:null);s.lastPositions=p.positions as number[];s.lastRole=p.role;s.lastLayout=p.layout;s.lastCorrect=p.correct;s.lastReplay=['blue','middleBlue','fake'].includes(p.role);
  // AT中のガイアベルは左からの下段黄7（15枚）表示へ変えるが、停止済みの帯は書き換えない。

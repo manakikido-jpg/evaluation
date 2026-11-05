@@ -1,6 +1,6 @@
 import {expect,it} from 'vitest';
 import {newKiseki,lever,stop} from '../src/services/casino/kiseki/engine.js';
-import {ROLES,pattern,roleRows,rows,winningLines,type KisekiRole} from '../src/services/casino/kiseki/rules.js';
+import {ROLES,pattern,roleRows,rows,winningLines,LINES,type KisekiRole} from '../src/services/casino/kiseki/rules.js';
 import {kisekiDigits,kisekiTheme} from '../src/services/casino/kiseki/presentation.js';
 import {controlKisekiReel} from '../src/services/casino/kiseki/reelControl.js';
 import {freshFloor,trialView,act,expire} from '../src/services/casino/kiseki/trial.js';
@@ -17,6 +17,7 @@ it('全役・全押し順・20入力位置で停止窓を固定し、払出と�
   const correct=role!=='bell'||order.join()===expected.join();expect(s.lastPaid).toBe(correct?ROLES[role].units*10:0);expect(s.balance).toBe(100000-30+s.lastPaid);
   const p=pattern(role);if(correct&&p)expect(s.lastPositions.map((v,i)=>rows(i,v)[roleRows(role)[i]!])).toEqual(p.symbols);
   if(!correct||!p)expect(winningLines(s.lastPositions)).toEqual([]);
+  for(const line of LINES){const symbols=line.map((row,i)=>rows(i,s.lastPositions[i]!)[row]);expect(symbols.every(s=>s==='flower')||symbols.every(s=>s==='crest')).toBe(false);}
  }
 });
 it('0〜4コマで届く窓と、届かない場合の補助を区別し、不正入力で変更しない',()=>{
