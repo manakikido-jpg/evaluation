@@ -1175,8 +1175,12 @@ export const voiceUsage = pgTable(
     date: text('date').notNull(),
     channelId: text('channel_id').notNull(),
     minutes: integer('minutes').notNull().default(0),
+    /** 当時の役職を確認して記録した分（追加前の過去分と区別） */
+    rankRecordedMinutes: integer('rank_recorded_minutes').notNull().default(0),
+    /** 当時の最上位の格が参拝者で、縁側にいた分 */
+    sanpaishaMinutes: integer('sanpaisha_minutes').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date)],
+  (t) => [primaryKey({ columns: [t.memberId, t.date, t.channelId] }), index('voice_usage_date_idx').on(t.date), check('voice_usage_rank_minutes', sql`${t.sanpaishaMinutes} >= 0 and ${t.sanpaishaMinutes} <= ${t.rankRecordedMinutes} and ${t.rankRecordedMinutes} <= ${t.minutes}`)],
 );
 
 /** 同じ通話にいた時間（2 人 × 日。member_a < member_b） */

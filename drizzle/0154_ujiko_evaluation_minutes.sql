@@ -1,0 +1,3 @@
+ALTER TABLE "voice_usage" ADD COLUMN "rank_recorded_minutes" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "voice_usage" ADD COLUMN "sanpaisha_minutes" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "voice_usage" ADD CONSTRAINT "voice_usage_rank_minutes" CHECK ("voice_usage"."sanpaisha_minutes" >= 0 and "voice_usage"."sanpaisha_minutes" <= "voice_usage"."rank_recorded_minutes" and "voice_usage"."rank_recorded_minutes" <= "voice_usage"."minutes");
