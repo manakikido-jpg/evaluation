@@ -30,9 +30,16 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {id:'2026-11-05-kiseki-separate-trial',date:'2026-11-05',kind:'new',where:['社務所Web'],title:'凱旋を残し、神殿スロットの軌跡版を別台で追加',items:['軌跡専用の5台・無料試遊ポイント・本人保存・設定・集計を追加しました。凱旋の進捗はそのままです。','GG50G・PGG基本4セット・セット制SGG・ガイア・Z-ZONE/Z-GAMEと専用の配列表/停止形を確認できます。','独自素材の筐体・音・スマホ操作を共用します。未照合の抽選は試遊用として明記し、一般公開・銭接続は保留です。'],announcement:{priority:'none',audience:'運営の無料試遊担当',steps:['社務所Web→カジノ管理→神殿スロット・軌跡版の無料試遊を開く。','空席に着席し、通常は左から/ナビ時は順番優先でSTOPする。場面確認からGG/PGG/SGG/ガイア/Z系を試せる。','配列・打ち方は別タブ。離席すると特別区間を本人用に保存し、軌跡の別台で再開できる。'],postText:'',imagePrompt:'軌跡版と凱旋版の別入口、軌跡のGG50G/PGG/SGG/Z系の実画面を撮影。実機の画像/音を転載しない。',notes:'運営限定・銭非接続。実機同等の機械割や実端末の打感は保証しない。'}},
   { id: '2026-11-05-relay-decode-recover', date: '2026-11-05', kind: 'fix', where: ['Discord'], title: '🎙 音声中継が「変換器に異常」ですぐ止まるのを直した', items: ['登壇者の音声に、読めないパケットが 1 つ混ざっただけで「受信音声の変換器に異常が起きたため停止しました」と止まることがありました。', '読めないパケットはその部分だけ飛ばして続けます。変換器を初期化できないときも作り直して続けます。同じ登壇者で 50 回続けて失敗したときだけ止めます。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-05-notice-sender', date: '2026-11-05', kind: 'new', where: ['社務所Web', 'Discord'], title: '✒️ 掲示（#しきたり など）を、BOT とは別の名前・アイコンで出せるように', items: ['社務所Web の「掲示」に「✒️ 差出人」を足しました。名前とアイコンの画像の URL を決めると、#しきたり などの掲示を、その名前で出します（Discord のウェブフックを使います）。', '差出人を変えたら「反映」を押すと、新しい名前で出し直します。名前を空にすると BOT の名前に戻ります。', 'BOT のロールに「ウェブフックの管理」の権限が要ります。'], announcement: { priority: 'none', audience: '運営（宮司）', steps: [], postText: '', imagePrompt: '', notes: 'BOT のロールに「ウェブフックの管理」を付ける。' } },
   { id: '2026-11-05-stay-order', date: '2026-11-05', kind: 'improve', where: ['Discord', '社務所Web'], title: '🔃 宿の並ぶ順を、運営が決められるように', items: ['社務所Web の部屋代の設定に「🔃 宿の並ぶ順」を足しました。🏨 24時間の宿・⏱ 1時間ごとの宿・ふつうの宿（公開・招待限定・シークレット）の順番を 1〜9 で決められます（小さい数が上）。', '同じ順番の中は、新しい宿が上に並びます。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '並びは BOT が自動で直す。' } },
+  {
+    id:'2026-11-05-gaisen-reel-control',date:'2026-11-05',kind:'new',where:['社務所Web'],
+    title:'神殿スロットに20コマ配列表と目押し・滑りを追加',
+    items:['新版はSTOPを押した位置から最大4コマを引き込み、停止番号と滑りを保存します。小役が届かないと払出0です。','独自20コマの配列を回転帯・停止窓・配列表に共通使用し、打ち方と停止形のガイドを別タブで確認できます。','自動補助も選べます。控えめ・即表示・動作低減・JSなしと旧版は補助です。実機完全再現ではなく、一般公開・銭接続は保留です。'],
+    announcement:{priority:'none',audience:'運営の無料試遊担当',steps:['社務所Web→カジノ管理→神殿スロットの新版無料試遊を開く。','配列・打ち方を開き、通常表示でSTOPのタイミングと停止番号・滑りを確認する。設定→リール操作で自動補助へ変更できる。'],postText:'',imagePrompt:'独自素材の20コマ配列表と3段の停止窓を撮影。実機の配列・画像を転載しない。',notes:'運営限定の無料試遊。実iPhone/Androidの打感は未確認。'},
+  },
   {
     id: '2026-11-05-gaisen-normal-effects', date: '2026-11-05', kind: 'improve', where: ['社務所Web'],
     title: '神殿スロットの通常時に風・雷・扉の気配を追加',

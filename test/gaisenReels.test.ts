@@ -14,7 +14,7 @@ describe('神殿の3リール表示', () => {
     const a = fixture(), b = fixture();
     lever(a.state, () => 0, 'god'); lever(b.state, () => 0, 'none');
     expect(reelPresentation(a.view())).toEqual(reelPresentation(b.view()));
-    expect(reelPresentation(a.view()).every(r => r.spinning && r.strip.length === 18)).toBe(true);
+    expect(reelPresentation(a.view()).every(r => r.spinning && r.strip.length === 40)).toBe(true);
   });
   it('右→左→中で押しても対応するリールだけ停止し、各停止窓に3段が残る', () => {
     const f = fixture(); lever(f.state, () => 0, 'red7');

@@ -12,9 +12,9 @@ export function WinResult({event}:{event:WinEvent|null}) {
 }
 
 /** 表示だけの演出。閉じる/スキップはゲームへのPOSTを行わない。 */
-export function GaisenWinStage(){return <>
- <details class="gt-effect-preview"><summary>当選演出だけを見る</summary><p>演出の見本です。試遊ポイント・セット・進行は変わりません。</p>
- <div>{(['gg','sgg','god','stock'] as const).map((kind,i)=><button type="button" data-gt-win-preview={kind}>{['GG当選','SGG突入','GOD降臨','上乗せ'][i]}</button>)}</div></details>
+export function GaisenWinStage({preview=true}:{preview?:boolean}={}){return <>
+ {preview&&<details class="gt-effect-preview"><summary>当選演出だけを見る</summary><p>演出の見本です。試遊ポイント・セット・進行は変わりません。</p>
+ <div>{(['gg','sgg','god','stock'] as const).map((kind,i)=><button type="button" data-gt-win-preview={kind}>{['GG当選','SGG突入','GOD降臨','上乗せ'][i]}</button>)}</div></details>}
  <dialog class="gt-celebration" data-gt-celebration aria-labelledby="gt-win-title" aria-describedby="gt-win-benefit">
   <div class="gt-award-scene" data-stage="reveal">
    <img class="gt-award-background" src={assetUrl('gaisen-media-award-1600.webp')} srcset={`${assetUrl('gaisen-media-award-800.webp')} 800w, ${assetUrl('gaisen-media-award-1600.webp')} 1600w`} sizes="(max-width: 520px) 100vw, 900px" alt="" aria-hidden="true" loading="lazy" decoding="async"/>

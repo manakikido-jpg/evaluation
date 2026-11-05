@@ -1,0 +1,41 @@
+import {beforeEach,afterEach,it,expect} from 'vitest';
+import {eq} from 'drizzle-orm';
+import {makeDb,cfg,ROLE} from './helpers.js';
+import type {Db} from '../src/db/client.js';
+import {settings} from '../src/db/schema.js';
+import {createWebApp} from '../src/web/app.js';
+import {createSession,findSession} from '../src/web/sessions.js';
+import {recordJoin} from '../src/services/members.js';
+import {addCoins,walletOf} from '../src/services/economy.js';
+import {readTrial,TRIAL_KEY} from '../src/services/casino/kiseki/trial.js';
+import {readTrial as readGaisen,TRIAL_KEY as OLD_KEY,TRIAL_V2_KEY} from '../src/services/casino/gaisen/trial.js';
+const now=new Date('2026-11-05T03:00:00Z'),id='760000000000000001',user={id,username:'sample',displayName:'試遊の運営',avatarUrl:null},path='/economy/kiseki-trial';
+let db:Db,close:()=>Promise<void>,app:ReturnType<typeof createWebApp>,token:string,csrf:string;
+const headers=(t=token)=>({cookie:'shamusho_session='+t,origin:'https://example.test','sec-fetch-site':'same-origin'});
+beforeEach(async()=>{({db,close}=await makeDb());await recordJoin(db,{...user,roleIds:[ROLE.guji],isBot:false,joinedAt:now});await addCoins(db,id,3210,'adjust');app=createWebApp({db,cfg:()=>cfg,api:{memberRoles:async()=>[ROLE.guji]}as never,discord:{guildChannels:async()=>[]}as never,baseUrl:'https://example.test',now:()=>now});token=await createSession(db,user,{level:'guji',pages:null},now);csrf=(await findSession(db,token,now))!.csrfToken;});afterEach(async()=>close());
+async function post(action:string,extra:Record<string,string>={},js=true){return app.request(path,{method:'POST',headers:{...headers(),...(js?{'X-Gaisen-Update':'1'}:{})},body:new URLSearchParams({_csrf:csrf,revision:String((await readTrial(db,now)).revision),machine:'1',action,...extra})});}
+it('カジノ管理に別入口を置き、凱旋の2版・財布・保存キーを変えずに軌跡を遊べる',async()=>{
+ expect((await(await app.request('/economy/casino',{headers:headers()})).text())).toContain(path);
+ const old=await readGaisen(db,now),v2=await readGaisen(db,now,'trial-2');
+ expect((await post('seat')).status).toBe(200);expect((await post('lever')).status).toBe(200);for(const index of ['0','1','2'])expect((await post('stop',{index})).status).toBe(200);
+ expect((await readTrial(db,now)).machines[0]!.state.spins).toBe(1);expect(await readGaisen(db,now)).toEqual(old);expect(await readGaisen(db,now,'trial-2')).toEqual(v2);
+ expect((await db.select().from(settings).where(eq(settings.key,OLD_KEY)))).toHaveLength(0);expect((await db.select().from(settings).where(eq(settings.key,TRIAL_V2_KEY)))).toHaveLength(0);expect((await db.select().from(settings).where(eq(settings.key,TRIAL_KEY)))).toHaveLength(1);expect((await walletOf(db,id)).balance).toBe(3210);
+});
+it('認証・経済ページ権限・CSRF・本人操作・revisionをすべて検査する',async()=>{
+ for(const url of [path,path+'/guide'])expect((await app.request(url)).status).toBe(302);
+ const limited=await createSession(db,user,{level:'shinshoku',pages:['members']},now);for(const url of [path,path+'/guide'])expect((await app.request(url,{headers:headers(limited)})).status).toBe(403);
+ expect((await app.request(path,{method:'POST',headers:headers(),body:new URLSearchParams({action:'seat',machine:'1',revision:'0'})})).status).toBe(403);expect((await post('lever')).status).toBe(403);expect((await post('seat')).status).toBe(200);
+ const other={...user,id:'760000000000000002'},t=await createSession(db,other,{level:'shinshoku',pages:['economy']},now),s=(await findSession(db,t,now))!;
+ expect((await app.request(path,{method:'POST',headers:headers(t),body:new URLSearchParams({_csrf:s.csrfToken,action:'lever',machine:'1',revision:'1'})})).status).toBe(403);
+ const rev=String((await readTrial(db,now)).revision),body=()=>new URLSearchParams({_csrf:csrf,action:'lever',machine:'1',revision:rev});const replies=await Promise.all([0,1].map(()=>app.request(path,{method:'POST',headers:{...headers(),'X-Gaisen-Update':'1'},body:body()})));expect(replies.map(r=>r.status).sort()).toEqual([200,409]);expect((await readTrial(db,now)).machines[0]!.state.input).toBe(30);
+});
+it('ガイドは20コマ/11役を独自画像で示し、台の状態も期限も変更しない',async()=>{
+ await post('seat');const before=await readTrial(db,now),r=await app.request(path+'/guide',{headers:headers()});expect(r.status).toBe(200);expect(r.headers.get('cache-control')).toContain('no-store');const html=await r.text();expect((html.match(/scope="row"/g)||[])).toHaveLength(20);expect((html.match(/class="gt-pattern"/g)||[])).toHaveLength(11);expect(html).toContain('PGG50G＋GG3ストック');expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>|onclick=|style=/);expect(await readTrial(db,now)).toEqual(before);
+});
+it('非JSフォームも動き、更新ヘッダーはHTMLを返す。不正STOP・再送・回転中の場面変更は保存しない',async()=>{
+ const seat=await post('seat',{},false);expect(seat.status).toBe(303);expect(seat.headers.get('location')).toBe(path);expect((await post('lever')).status).toBe(200);const before=await readTrial(db,now);
+ expect((await post('scenario',{scenario:'pgg'})).status).toBe(400);expect((await post('stop',{index:'3'})).status).toBe(400);expect(await readTrial(db,now)).toEqual(before);
+ expect((await post('stop',{index:'0'})).status).toBe(200);const partial=await readTrial(db,now);expect((await post('stop',{index:'0'})).status).toBe(400);expect(await readTrial(db,now)).toEqual(partial);
+ const html=await(await app.request(path,{headers:headers()})).text();expect(html).toContain('data-spinning="true"');expect(html).not.toMatch(/"(plan|loops|mode|omenLeft)":/);expect(html).toContain('gaisen-trial.js?v=');expect(html).toContain('kiseki-trial.css?v=');
+ for(const index of ['1','2'])expect((await post('stop',{index})).status).toBe(200);
+});
