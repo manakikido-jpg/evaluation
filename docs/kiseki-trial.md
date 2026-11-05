@@ -56,3 +56,9 @@ POSTはCSRF・本人・revisionを確認し、専用行をロックしたトラ�
 軌跡の外装は、赤金のGOD GAME銘板、左右の広いスピーカー、細い黒金の枠、左右グリップ付き操作台、赤3STOP、深い赤と金の大きなGOD腰パネル、メッシュの受け皿で統一。実機画像や公式ロゴを貼る形ではなく、独自の素材・文字・CSSで仕上げます。凱旋版の外装は変更しません。
 
 一体化後の確認画像：[筐体全体](previews/kiseki-integrated-cabinet-1440.webp)・[液晶](previews/kiseki-integrated-lcd-390.webp)・[押し順](previews/kiseki-integrated-nav-390.webp)・[腰パネル](previews/kiseki-integrated-apron-390.webp)。
+
+### 金属・印刷ガラスの質感
+
+三神/側柱/下のバルコニーを描いた透過の立体造形に、実際に動くHTMLの3リールをはめています。銘板と腰パネルの文字も彫りと反射を含む独自画像へ変更。軌跡専用の横長図柄6点は配列表と停止形ガイドにも共通使用し、図柄を横へ潰さず表示します。STOPは赤い樹脂の見た目にし、読上げ名と44px以上の操作面は維持。静止画の台を貼る方式ではなく、リールと操作は従来の仕組みで動きます。凱旋・抽選・払出・保存は変更しません。
+
+確認画像：[筐体全体](previews/kiseki-real-cabinet-1440.webp)・[スマホの液晶](previews/kiseki-real-lcd-390.webp)・[押し順](previews/kiseki-real-nav-390.webp)・[腰パネル](previews/kiseki-real-apron-390.webp)・[横向き集中表示](previews/kiseki-real-focus-844.webp)。

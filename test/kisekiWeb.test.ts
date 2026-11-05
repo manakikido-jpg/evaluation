@@ -52,7 +52,7 @@ it('風景は公開G数だけで切り替わり、内部モードを映さず、
    expect(await readTrial(db,now)).toEqual(f);
   }
  }
- for(const file of ['spring-800','spring-1440','garden-800','ruins-800','altar-1200']){const r=await app.request(`/static/kiseki-media-${file}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
+ for(const file of ['spring-800','spring-1440','garden-800','ruins-800','altar-1200','apron-1200','marquee-720','symbol-gold7','symbol-red7','symbol-blue7','symbol-god','symbol-flower','symbol-crest']){const r=await app.request(`/static/kiseki-media-${file}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
 });
 it('公開された押し順だけを三神のメダルへ表示し、右からの停止と再読込でも位置を維持する',async()=>{
  await post('seat');const f=await readTrial(db,now);f.machines[0]!.state=scenario(1,'gg');lever(f.machines[0]!.state,n=>n-1,'bell');await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_KEY));
