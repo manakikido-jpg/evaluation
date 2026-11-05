@@ -7,12 +7,13 @@ import { highestRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { staffAlts } from './staffAlts.js';
 import { isEngawaName } from './voiceUsage.js';
+import { coreName } from '../lib/names.js';
 
 export class EvaluationSelectionError extends Error {}
-export type EvaluationChannel = { id: string; name: string; renamed: boolean };
+export type EvaluationChannel = { id: string; ids: string[]; name: string; categoryName: string; renamed: boolean };
 export type EvaluationRow = {
   rank: number; memberId: string; name: string; username: string;
-  shuinCount: number; minutes: number; referenceMinutes: number;
+  shuinCount: number; minutes: number; confirmedMinutes: number; pastMinutes: number;
   remainingShuin: number; remainingMinutes: number; achieved: boolean;
 };
 export type EvaluationFilter = { q: string; status: 'all' | 'met' | 'unmet'; channelIds?: string[] };
@@ -21,42 +22,66 @@ export type EvaluationData = {
   total: number; achieved: number;
 };
 
-/** 当時の参拝者・縁側を確認できた分だけを条件に使う。既存の役職不明分は参考値。 */
+/** 人数表示と飾りを除く。部屋番号は残し、別カテゴリは別の対象にする。 */
+function roomName(name: string): string {
+  return name.normalize('NFKC').replace(/^[^\p{L}\p{N}]*\d+\s*人\s*[|:/・]\s*/u, '')
+    .replace(/^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/gu, '').trim();
+}
+
+/** 過去の部屋IDを表示上だけ束ねる。元の記録やIDは変更しない。 */
+function groupChannels(rows: { id: string; name: string; categoryId: string | null; categoryName: string | null; lastSeen: Date }[]): EvaluationChannel[] {
+  const grouped = new Map<string, EvaluationChannel>();
+  for (const c of [...rows].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime() || a.id.localeCompare(b.id))) {
+    const name = roomName(c.name) || c.name, key = JSON.stringify([c.categoryId, coreName(name) || c.id]);
+    const group = grouped.get(key);
+    if (group) group.ids.push(c.id);
+    else grouped.set(key, { id: c.id, ids: [c.id], name, categoryName: c.categoryName ?? 'カテゴリなし', renamed: !isEngawaName(c.name) });
+  }
+  for (const group of grouped.values()) { group.ids.sort(); group.id = group.ids[0]!; }
+  return [...grouped.values()].sort((a, b) => a.categoryName.localeCompare(b.categoryName, 'ja') || a.name.localeCompare(b.name, 'ja', { numeric: true }) || a.id.localeCompare(b.id));
+}
+
+/** 確認済み時間＋過去取込。過去分の当時役職が未確認であることは内訳へ残す。 */
 export async function ujikoEvaluation(db: Db, cfg: GuildConfig, filter: EvaluationFilter, now = new Date()): Promise<EvaluationData> {
   const today = jstDate(now);
   const [people, alts, channelRows, previouslyEngawa] = await Promise.all([
     db.select({ id: members.id, name: members.displayName, username: members.username, roleIds: members.roleIds })
       .from(members).where(and(eq(members.isBot, false), isNull(members.leftAt))),
     staffAlts(db),
-    db.select({ id: voiceChannels.channelId, name: voiceChannels.name }).from(voiceChannels),
+    db.select({ id: voiceChannels.channelId, name: voiceChannels.name, categoryId: voiceChannels.categoryId,
+      categoryName: voiceChannels.categoryName, lastSeen: voiceChannels.lastSeen }).from(voiceChannels),
     db.selectDistinct({ id: voiceUsage.channelId }).from(voiceUsage)
       .where(and(sql`${voiceUsage.sanpaishaMinutes} > 0`, lte(voiceUsage.date, today))),
   ]);
   const oldEngawa = new Set(previouslyEngawa.map(c => c.id));
-  const channels = channelRows.filter(c => isEngawaName(c.name) || oldEngawa.has(c.id))
-    .map(c => ({ ...c, renamed: !isEngawaName(c.name) })).sort((a, b) => a.name.localeCompare(b.name, 'ja') || a.id.localeCompare(b.id));
-  const available = new Set(channels.map(c => c.id));
+  const channels = groupChannels(channelRows.filter(c => isEngawaName(c.name) || oldEngawa.has(c.id)));
+  const available = new Set(channels.flatMap(c => c.ids));
   if (filter.channelIds?.some(id => !available.has(id))) throw new EvaluationSelectionError('対象の縁側が見つかりません。画面を開き直してください。');
-  const selectedIds = [...new Set(filter.channelIds ?? channels.map(c => c.id))];
+  // 旧URLの過去IDも受け付け、同じ縁側の履歴をひとまとまりとして選ぶ。
+  const requested = filter.channelIds === undefined ? undefined : new Set(filter.channelIds);
+  const selected = channels.filter(c => requested === undefined || c.ids.some(id => requested.has(id)));
+  const selectedIds = selected.map(c => c.id);
+  const selectedChannelIds = [...new Set(selected.flatMap(c => c.ids))];
   const hidden = new Set(alts.map(a => a.id));
   const candidates = people.filter(p => !hidden.has(p.id) && highestRank(cfg.ranks, p.roleIds)?.key === 'sanpaisha');
   const ids = candidates.map(p => p.id);
   const [stamps, usage] = await Promise.all([
     ids.length ? db.select({ id: shuin.receiverId, n: count() }).from(shuin)
       .where(and(inArray(shuin.receiverId, ids), isNull(shuin.revokedAt))).groupBy(shuin.receiverId) : [],
-    ids.length && selectedIds.length ? db.select({
+    ids.length && selectedChannelIds.length ? db.select({
       id: voiceUsage.memberId,
-      minutes: sql<number>`sum(case when ${voiceUsage.date} >= ${EVALUATION_START_DATE} then ${voiceUsage.sanpaishaMinutes} else 0 end)::int`,
-      reference: sql<number>`sum(case when ${voiceUsage.date} < ${EVALUATION_START_DATE} then ${voiceUsage.minutes} else ${voiceUsage.minutes} - ${voiceUsage.rankRecordedMinutes} end)::int`,
-    }).from(voiceUsage).where(and(inArray(voiceUsage.memberId, ids), inArray(voiceUsage.channelId, selectedIds), lte(voiceUsage.date, today)))
+      confirmed: sql<number>`sum(case when ${voiceUsage.date} >= ${EVALUATION_START_DATE} then ${voiceUsage.sanpaishaMinutes} else 0 end)::int`,
+      past: sql<number>`sum(case when ${voiceUsage.date} < ${EVALUATION_START_DATE} then ${voiceUsage.minutes} else ${voiceUsage.minutes} - ${voiceUsage.rankRecordedMinutes} end)::int`,
+    }).from(voiceUsage).where(and(inArray(voiceUsage.memberId, ids), inArray(voiceUsage.channelId, selectedChannelIds), lte(voiceUsage.date, today)))
       .groupBy(voiceUsage.memberId) : [],
   ]);
   const stampMap = new Map(stamps.map(s => [s.id, s.n]));
   const usageMap = new Map(usage.map(u => [u.id, u]));
   const all: EvaluationRow[] = candidates.map(p => {
-    const shuinCount = stampMap.get(p.id) ?? 0, u = usageMap.get(p.id), minutes = u?.minutes ?? 0;
+    const shuinCount = stampMap.get(p.id) ?? 0, u = usageMap.get(p.id), confirmedMinutes = u?.confirmed ?? 0, pastMinutes = u?.past ?? 0;
+    const minutes = confirmedMinutes + pastMinutes;
     return { rank: 0, memberId: p.id, name: p.name, username: p.username, shuinCount, minutes,
-      referenceMinutes: u?.reference ?? 0, remainingShuin: Math.max(0, UJIKO_SHUIN - shuinCount),
+      confirmedMinutes, pastMinutes, remainingShuin: Math.max(0, UJIKO_SHUIN - shuinCount),
       remainingMinutes: Math.max(0, UJIKO_MINUTES - minutes), achieved: shuinCount >= UJIKO_SHUIN && minutes >= UJIKO_MINUTES };
   }).sort((a, b) => Number(b.achieved) - Number(a.achieved) || b.shuinCount - a.shuinCount || b.minutes - a.minutes || a.memberId.localeCompare(b.memberId));
   all.forEach((row, i) => {
@@ -76,7 +101,8 @@ const csvCell = (value: string | number): string => {
   return '"' + s.replaceAll('"', '""') + '"';
 };
 export function evaluationCsv(data: EvaluationData): string {
-  const rows: (string | number)[][] = [['順位', '名前', 'Discord ID', '御朱印の個数', '参拝者の縁側時間（分）', '不足する御朱印', '不足する縁側時間（分）', '達成状況', '開始前・役職不明の参考時間（分・条件に含めない）', '縁側集計開始（日本時間）'],
-    ...data.rows.map(r => [r.rank, r.name, "'" + r.memberId, r.shuinCount, r.minutes, r.remainingShuin, r.remainingMinutes, r.achieved ? '両条件達成' : '未達成', r.referenceMinutes, EVALUATION_START_DATE + ' 00:00'])];
+  const target = data.channels.filter(c => data.selectedIds.includes(c.id)).map(c => `${c.categoryName} / ${c.name}`).join('・');
+  const rows: (string | number)[][] = [['順位', '名前', 'Discord ID', '御朱印の個数', '縁側の合計時間（分・過去分を含む）', '不足する御朱印', '不足する縁側時間（分）', '達成状況', 'うち過去取込（分・当時役職未確認）', 'うち確認済み参拝者時間（分）', '確認済み計測の開始（日本時間）', '対象の縁側'],
+    ...data.rows.map(r => [r.rank, r.name, "'" + r.memberId, r.shuinCount, r.minutes, r.remainingShuin, r.remainingMinutes, r.achieved ? '両条件達成' : '未達成', r.pastMinutes, r.confirmedMinutes, EVALUATION_START_DATE + ' 00:00', target])];
   return '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }

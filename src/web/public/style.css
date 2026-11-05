@@ -1554,3 +1554,10 @@ form.inline { display: inline; margin: 0; }
   body:has(.evaluation-page) .topbar-updates .badge { display: none; }
   body:has(.evaluation-page) .theme-choice select { max-width: 100px; }
 }
+
+.evaluation-targets { flex: 1 1 100%; min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; }
+.evaluation-targets > summary { color: var(--ink); }
+.evaluation-targets > summary::before { content: '▸'; margin-right: 8px; }
+.evaluation-targets[open] > summary::before { content: '▾'; }
+.evaluation-targets fieldset { margin-bottom: 12px; }
+.evaluation-targets small { color: var(--muted); }
