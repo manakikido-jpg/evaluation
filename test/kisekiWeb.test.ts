@@ -7,6 +7,7 @@ import {createWebApp} from '../src/web/app.js';
 import {createSession,findSession} from '../src/web/sessions.js';
 import {recordJoin} from '../src/services/members.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
+import {lever,scenario} from '../src/services/casino/kiseki/engine.js';
 import {readTrial,TRIAL_KEY} from '../src/services/casino/kiseki/trial.js';
 import {readTrial as readGaisen,TRIAL_KEY as OLD_KEY,TRIAL_V2_KEY} from '../src/services/casino/gaisen/trial.js';
 const now=new Date('2026-11-05T03:00:00Z'),id='760000000000000001',user={id,username:'sample',displayName:'試遊の運営',avatarUrl:null},path='/economy/kiseki-trial';
@@ -38,4 +39,27 @@ it('非JSフォームも動き、更新ヘッダーはHTMLを返す。不正STOP
  expect((await post('stop',{index:'0'})).status).toBe(200);const partial=await readTrial(db,now);expect((await post('stop',{index:'0'})).status).toBe(400);expect(await readTrial(db,now)).toEqual(partial);
  const html=await(await app.request(path,{headers:headers()})).text();expect(html).toContain('data-spinning="true"');expect(html).not.toMatch(/"(plan|loops|mode|omenLeft)":/);expect(html).toContain('gaisen-trial.js?v=');expect(html).toContain('kiseki-trial.css?v=');
  for(const index of ['1','2'])expect((await post('stop',{index})).status).toBe(200);
+});
+
+it('風景は公開G数だけで切り替わり、内部モードを映さず、閲覧で保存を変えない',async()=>{
+ await post('seat');const f=await readTrial(db,now),state=f.machines[0]!.state;
+ for(const [normalGames,name] of [[0,'spring'],[40,'garden'],[80,'ruins']] as const){
+  state.normalGames=normalGames;
+  for(const mode of ['low','high'] as const){state.mode=mode;await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_KEY));
+   const html=await(await app.request(path,{headers:headers()})).text();
+   expect(html).toContain(`data-landscape="${name}"`);expect(html).toContain(`kiseki-media-${name}-800.webp?v=`);expect(html).toContain(`kiseki-media-${name}-1440.webp?v=`);
+   expect(html).toContain('kiseki-media-altar-1200.webp?v=');expect(html).not.toContain('data-gt-lcd-navigation');expect(html).not.toMatch(/onclick=|style=/);
+   expect(await readTrial(db,now)).toEqual(f);
+  }
+ }
+ for(const file of ['spring-800','spring-1440','garden-800','ruins-800','altar-1200']){const r=await app.request(`/static/kiseki-media-${file}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
+});
+it('公開された押し順だけを三神のメダルへ表示し、右からの停止と再読込でも位置を維持する',async()=>{
+ await post('seat');const f=await readTrial(db,now);f.machines[0]!.state=scenario(1,'gg');lever(f.machines[0]!.state,n=>n-1,'bell');await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_KEY));
+ const read=async()=>await(await app.request(path,{headers:headers()})).text();let html=await read();
+ const altar=html.slice(html.indexOf('class="kt-altar"'),html.indexOf('class="gt-reel-shelf"'));
+ expect(altar).toContain('押し順ナビ：右→中→左');expect(altar).toMatch(/data-gt-lcd-position="2" data-gt-lcd-next="true"[^>]*><i[^>]*><\/i><b>1<\/b>/);
+ expect((await post('stop',{index:'2'})).status).toBe(200);html=await read();expect(html).toMatch(/is-stopped" data-gt-lcd-position="2"/);expect(html).toContain('data-gt-lcd-position="1" data-gt-lcd-next="true"');
+ for(const index of ['1','0'])expect((await post('stop',{index})).status).toBe(200);
+ html=await read();expect(html).not.toContain('data-gt-lcd-navigation');expect(html).toContain('払出150ポイント');expect(html).toContain('kiseki-media-altar-1200.webp');
 });

@@ -8,3 +8,26 @@
 
 .kt-cosmos{display:none;position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 75% 25%,#65387b88,transparent 45%),radial-gradient(ellipse at 15% 60%,#243365aa,transparent 60%),linear-gradient(160deg,#070714,#1b102d 55%,#080c1e)}
 .kt-machine[data-kiseki-phase=sgg] .kt-cosmos,.kt-machine[data-kiseki-phase=sgg-retry] .kt-cosmos{display:block}.kt-cosmos:before{content:'';position:absolute;inset:0;opacity:.7;background:radial-gradient(circle,#e4d6ffbb 0 1px,transparent 1.6px) 0 0/37px 47px,radial-gradient(circle,#9eacda99 0 .6px,transparent 1.4px) 15px 23px/61px 71px}.kt-cosmos:after{content:'';position:absolute;width:60%;height:5%;left:-10%;top:30%;transform:rotate(-25deg);border-radius:50%;background:linear-gradient(90deg,transparent,#cf78ed55,#cd78eeaa,transparent);box-shadow:0 0 30px #a85ce177}.kt-cosmos i{position:absolute;right:-7%;top:17%;width:45%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 25% 30%,#cdc1dd,#696b8b 37%,#2a204a 70%,#100e26);box-shadow:inset -15px -8px 30px #070818,0 0 30px #9660d744;opacity:.6}.kt-cosmos i:after{content:'';position:absolute;width:170%;height:32%;left:-35%;top:35%;border:7px solid #a49ab766;border-left-color:#e8c8ee99;border-radius:50%;transform:rotate(-30deg)}
+
+/* 軌跡だけの風景と、液晶下端の金の肖像メダル。背景の選択は公開済みG数だけ。 */
+.kt-root .gt-display{aspect-ratio:1/1.04}
+.kt-machine:not([data-landscape=special]) .gt-landscape{height:79%;object-position:center;filter:none;opacity:1}
+.kt-machine:not([data-landscape=special]) .gt-scene-depth{opacity:0}
+.kt-machine:not([data-landscape=special]) .gt-scene-light{background:linear-gradient(#06162642,transparent 20% 65%,#07131e22),linear-gradient(90deg,#07131e25,transparent 18% 82%,#07131e25)}
+.kt-root .gt-display .gt-lcd{justify-content:space-between;padding:32px 12px 4px}
+.kt-root .gt-display .gt-screen-mode{align-self:flex-start;max-width:100%;font-size:clamp(10px,2.5vw,16px);letter-spacing:2px;padding:2px 8px;border-left:2px solid #ffe7a0;color:#fff4d3;text-shadow:0 2px 2px #183137,0 0 6px #102731}
+.kt-root .gt-display .gt-digits{gap:clamp(12px,4vw,34px);margin:0;min-height:0}
+.kt-root .gt-display .gt-digits>span{font-family:Georgia,'Times New Roman',serif;font-weight:900;font-style:italic;font-size:clamp(58px,16vw,118px);color:#ffe89c;-webkit-text-stroke:1px #9f5a1d;text-shadow:0 -1px 0 #fff6cc,0 2px 0 #f5b749,0 4px 0 #8e4b14,0 6px 0 #4e2b19,2px 8px 5px #122027c9}
+.kt-root .gt-display .gt-message{padding:3px 10px;border-radius:3px;background:#07131e8c;color:#fff9e8;text-shadow:0 1px 2px #000;font-size:clamp(8px,1.8vw,11px)}
+.kt-altar{position:relative;isolation:isolate;flex:0 0 auto;aspect-ratio:4/1;width:100%;overflow:hidden;z-index:2;pointer-events:none}
+.kt-altar-art{position:absolute;width:100%;height:auto;left:0;top:50%;transform:translateY(-50%);pointer-events:none}
+.kt-root .gt-display .kt-medallion-navigation{position:absolute;inset:0 10%;width:80%;height:100%;min-height:0;max-height:none;margin:0;gap:0;z-index:1}
+.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue{justify-content:center;gap:0}
+.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue:after{content:'';position:absolute;inset:18% 3%;border-radius:50%;background:radial-gradient(ellipse,#51310ad6,transparent 72%);z-index:-1}
+.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(30px,9vw,68px);letter-spacing:-2px;line-height:1;color:#fff2a9;-webkit-text-stroke:1px #714010;opacity:.9;text-shadow:0 2px 0 #a15e13,0 4px 0 #3c250d,0 0 6px #000}
+.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue small{font-size:clamp(6px,1.5vw,9px);line-height:1;min-height:7px;letter-spacing:2px;margin:1px 0 0}
+.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue.is-next b{color:#fff9de;opacity:1;text-shadow:0 2px 0 #ad6b22,0 4px 0 #3c250d,0 0 12px #fff4a8}
+.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue.is-stopped b,.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue.is-stopped small,.kt-root .gt-display .kt-medallion-navigation .gt-lcd-cue.is-stopped:after{opacity:0}
+.kt-root .gt-display .gt-reel-shelf{padding-bottom:4%}
+@media(max-width:620px){.kt-root .gt-display .gt-lcd{padding:27px 7px 3px}.kt-root .gt-display .gt-screen-mode{letter-spacing:1px;padding:1px 5px}.kt-root .gt-display .gt-message{padding:2px 6px}.kt-root .gt-display .gt-digits>span{font-size:clamp(52px,17vw,90px)}}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .gt-display .gt-lcd{padding:23px 5px 0}.kt-root[data-focus=true] .gt-display .gt-digits>span{font-size:40px}.kt-root[data-focus=true] .kt-altar{aspect-ratio:4/1;width:min(100%,224px);height:56px;align-self:center}.kt-root[data-focus=true] .gt-display .kt-medallion-navigation{min-height:0;max-height:none;height:100%}.kt-root[data-focus=true] .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:34px}}
