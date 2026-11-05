@@ -47,4 +47,18 @@ POSTはCSRF・本人・revisionを確認し、専用行をロックしたトラ�
 
 背景は800/1440pxのWebPを画面幅に応じて選択し、金の枠は透過WebP。生成元PNGはassets/kiseki-lcd-source、配信用はsrc/web/public/kiseki-media。実機の画像・ロゴ・音源は転載していません。
 
-確認画像：[泉の液晶](previews/kiseki-landscape-lcd-390.webp)・[庭園](previews/kiseki-landscape-garden-390.webp)・[遺跡](previews/kiseki-landscape-ruins-390.webp)・[押し順ナビ](previews/kiseki-landscape-nav-390.webp)・[横向き集中表示](previews/kiseki-landscape-focus-844.webp)。
+初版の確認画像：[泉の液晶](previews/kiseki-landscape-lcd-390.webp)・[庭園](previews/kiseki-landscape-garden-390.webp)・[遺跡](previews/kiseki-landscape-ruins-390.webp)・[押し順ナビ](previews/kiseki-landscape-nav-390.webp)・[横向き集中表示](previews/kiseki-landscape-focus-844.webp)。
+
+### リールとの一体化
+
+三神は控えめな小さなメダルにし、各リール列の上へ揃えます。金の上枠・側枠・土台をつなぎ、通常背景は液晶の下まで続けます。リールを広げて白さを抑え、独立した横長パネルに見えにくくしています。ナビの順番・停止後の肖像・通常G数による風景・保存の扱いは同じです。
+
+軌跡の外装は、赤金のGOD GAME銘板、左右の広いスピーカー、細い黒金の枠、左右グリップ付き操作台、赤3STOP、深い赤と金の大きなGOD腰パネル、メッシュの受け皿で統一。実機画像や公式ロゴを貼る形ではなく、独自の素材・文字・CSSで仕上げます。凱旋版の外装は変更しません。
+
+一体化後の確認画像：[筐体全体](previews/kiseki-integrated-cabinet-1440.webp)・[液晶](previews/kiseki-integrated-lcd-390.webp)・[押し順](previews/kiseki-integrated-nav-390.webp)・[腰パネル](previews/kiseki-integrated-apron-390.webp)。
+
+### 金属・印刷ガラスの質感
+
+三神/側柱/下のバルコニーを描いた透過の立体造形に、実際に動くHTMLの3リールをはめています。銘板と腰パネルの文字も彫りと反射を含む独自画像へ変更。軌跡専用の横長図柄6点は配列表と停止形ガイドにも共通使用し、図柄を横へ潰さず表示します。STOPは赤い樹脂の見た目にし、読上げ名と44px以上の操作面は維持。静止画の台を貼る方式ではなく、リールと操作は従来の仕組みで動きます。凱旋・抽選・払出・保存は変更しません。
+
+確認画像：[筐体全体](previews/kiseki-real-cabinet-1440.webp)・[スマホの液晶](previews/kiseki-real-lcd-390.webp)・[押し順](previews/kiseki-real-nav-390.webp)・[腰パネル](previews/kiseki-real-apron-390.webp)・[横向き集中表示](previews/kiseki-real-focus-844.webp)。
