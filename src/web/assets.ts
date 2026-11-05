@@ -89,11 +89,17 @@ const gaisenMedia = Object.fromEntries(readdirSync(path.join(here,'public/gaisen
     'gaisen-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/gaisen-media',file))),type:file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
   ]));
 
+const kisekiMedia = Object.fromEntries(readdirSync(path.join(here,'public/kiseki-media'))
+  .filter(f=>/^[a-z][a-z0-9-]*\.webp$/.test(f)).map(file=>[
+    'kiseki-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/kiseki-media',file))),type:'image/webp'},
+  ]));
+
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
   Object.entries({
     ...Object.fromEntries(Object.keys(VISIT_BADGE_ART).map(id => ['visit-badge-' + id + '.png', { body: new Uint8Array(visitBadgeImage(id)!), type: 'image/png' }])),
     ...roomArt,
     ...gaisenMedia,
+    ...kisekiMedia,
     'gaisen-diagnostics.js': {body:readText(path.join(here,'public/gaisen-diagnostics.js')),type:'text/javascript; charset=utf-8'},
     'gaisen-comfort.js': {body:readText(path.join(here,'public/gaisen-comfort.js')),type:'text/javascript; charset=utf-8'},
     'gaisen-stage.js': {body:readText(path.join(here,'public/gaisen-stage.js')),type:'text/javascript; charset=utf-8'},
