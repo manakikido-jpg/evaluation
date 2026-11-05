@@ -169,14 +169,25 @@ it('診断ログは分類だけを中継ごとに1回とし、任意の例外文
     for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
   } finally { decode.mockRestore(); warning.mockRestore(); }
 });
-it('変換器を初期化できない場合は接続を残さず停止する', async () => {
+it('変換器を初期化できないときは作り直して続ける', async () => {
   const s = fixture(); await s.relay.start(s.abort.signal);
   const reset = vi.spyOn(OpusScript.prototype, 'decoderCTL').mockImplementationOnce(() => { throw Error('reset failed'); });
   try {
-    s.connections[0]!.inputs.get('speaker')!.emit('data', Buffer.from([0xff]));
-    expect(s.fault).toHaveBeenCalledExactlyOnceWith('受信音声の変換器を初期化できないため停止しました。');
-    for (const c of s.connections) expect(c.destroy).toHaveBeenCalledOnce();
+    const source = s.connections[0]!.inputs.get('speaker')!;
+    source.emit('data', Buffer.from([0xff]));
+    source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+    expect(s.fault).not.toHaveBeenCalled(); expect(s.relay.metrics().packets).toBe(1);
   } finally { reset.mockRestore(); }
+});
+it.each(['Internal error', 'Unimplemented', 'Invalid state'])('読めないパケット（%s）は、続けて起きたときだけ止める', async name => {
+  const s = fixture(); await s.relay.start(s.abort.signal);
+  const decode = vi.spyOn(OpusScript.prototype, 'decode').mockImplementationOnce(() => { throw Error(`Decode error: ${name}`); });
+  try {
+    const source = s.connections[0]!.inputs.get('speaker')!;
+    source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+    source.emit('data', Buffer.from([0xf8, 0xff, 0xfe]));
+    expect(s.fault).not.toHaveBeenCalled(); expect(s.relay.metrics().packets).toBe(1);
+  } finally { decode.mockRestore(); }
 });
 it.each(['permission', 'inactive', 'occupied', 'afk'])('準備失敗：%sは接続も通知もしない', async kind => {
   const s = fixture();
