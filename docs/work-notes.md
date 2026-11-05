@@ -1,3 +1,9 @@
+## 2026年11月6日・軌跡15分野：GitHubへ保存済み
+- PR：https://github.com/manakikido-jpg/evaluation/pull/151 （Draft/open、未合流、本番未反映）。ブランチ `codex/kiseki-live-play`。実装固定4bc32df、検証記録e72da21をpush済み。この欄だけの後続commitでは動作コードを変えない。
+- GitHub確認時baseはc69ae324b931d6df109dead853f003c316a961ae、headはe72da21e489cc596131ac6195b1806cc03efb55c、mergeable=true、merged=false。CI1108は実行中で成功扱いにしない。後続記録pushで起動するCIは別途確認する。
+- 最終ローカル全253ファイル2,815件/型/ビルド/Chromium/WebKit成功。停止した古い全runは流用していない。実装・音源・WebP・再生成手順・検証CLI・公開資料との照合・未確認事項をPR説明とdocs/kiseki-realism.mdにまとめた。
+- 再開先は `/workspace/kiseki-display`。最初にfetchしてPR151の最新head/CI/状態を確認する。一般公開・銭接続・合流の許可はまだないため、勝手に本番へ入れない。実端末/非公開仕様の未確認を完了扱いにしない。
+
 ## 2026年11月6日・軌跡15分野：検証完了、PR更新準備
 - 実装固定commit `4bc32dfb9b121f66dc2d21b74a8dca3764cba615`。246/装飾見かけ揃いの修正4168956を含む。Node22で型チェック/ビルド成功。
 - 最終全テストは253ファイル・2,815件すべて成功（1720.28秒）。2worker、既存の個別120秒制限/試行数/期待値は維持。旧4168956の途中停止runを流用せず、新しい固定版で全件確認した。
