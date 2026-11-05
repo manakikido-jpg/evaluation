@@ -68,3 +68,7 @@ POSTはCSRF・本人・revisionを確認し、専用行をロックしたトラ�
 三神/側柱/下のバルコニーを描いた透過の立体造形に、実際に動くHTMLの3リールをはめています。銘板と腰パネルの文字も彫りと反射を含む独自画像へ変更。軌跡専用の横長図柄6点は配列表と停止形ガイドにも共通使用し、図柄を横へ潰さず表示します。STOPは赤い樹脂の見た目にし、読上げ名と44px以上の操作面は維持。静止画の台を貼る方式ではなく、リールと操作は従来の仕組みで動きます。凱旋・抽選・払出・保存は変更しません。
 
 確認画像：[筐体全体](previews/kiseki-real-cabinet-1440.webp)・[スマホの液晶](previews/kiseki-real-lcd-390.webp)・[押し順](previews/kiseki-real-nav-390.webp)・[腰パネル](previews/kiseki-real-apron-390.webp)・[横向き集中表示](previews/kiseki-real-focus-844.webp)。
+
+### 液晶・区間映像・目押し追加後の見本
+
+架空データの静止画：[通常の停止途中](previews/kiseki-live-normal-stop-390.webp)・[泉](previews/kiseki-live-spring-1440.webp)・[GG](previews/kiseki-live-gg-390.webp)・[PGG](previews/kiseki-live-pgg-390.webp)・[SGG](previews/kiseki-live-sgg-390.webp)・[GOD確定後](previews/kiseki-live-god-390.webp)・[横向き集中](previews/kiseki-live-focus-844.webp)。音源の再生成手順と画像の出所は[素材メモ](../assets/kiseki-lcd-source/README.md)に記載しています。
