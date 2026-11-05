@@ -1271,6 +1271,16 @@ export function SettingsPage(props: {
               <input type="number" name="roomBoosterDiscount" value={String(cfg.rooms.boosterDiscountPercent)} min={0} max={100} required />
             </label>
           </div>
+          <h3>🔃 宿の並ぶ順</h3>
+          <p class="note">小さい数ほど上に並びます（1〜9）。同じ数の中は、新しい宿が上です。宿ができたとき・変わったときに、BOT が自動で並べます。</p>
+          <div class="fields">
+            {([['day', '🏨 24時間の宿'], ['hourly', '⏱ 1時間ごとの宿'], ['public', 'ふつうの宿（公開）'], ['invite', 'ふつうの宿（招待限定）'], ['secret', 'ふつうの宿（シークレット）']] as const).map(([k, label]) => (
+              <label class="field">
+                <span>{label}</span>
+                <input type="number" name={`stayOrder.${k}`} value={String(cfg.rooms.stayOrder[k])} min={1} max={9} required />
+              </label>
+            ))}
+          </div>
           <h3>🏨 24時間の宿・⏱ 1時間ごとの宿・🤫 シクレ部屋</h3>
           <p class="note">パネルのボタンを押すと、銭を払って宿を立てます。全員が抜けても 24 時間は残り、そのあとは、いつもの宿と同じく全員が抜けたら消えます（人がいれば残ります）。宿代には公開の部屋代もふくみ、招待・シークレットなどに変えるときは、いつもどおり差額を払います。いつもの「抜けたらなくなる宿」は、これまでどおり入口の通話から立てられます。Discord の <code>/パネル 宿24時間</code> でも置けます。</p>
           <div class="fields">

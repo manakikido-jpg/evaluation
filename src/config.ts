@@ -185,6 +185,10 @@ export const roomsSchema = z.object({
   vip: z.object({ roleId: snowflake, hubId: snowflake }).optional(),
   /** 🤫 シクレ専用の入口（社務所Web で作る）。baseHubId の入口と同じ値段・名前で、最初から見えない部屋を作る */
   secretHubs: z.array(z.object({ hubId: snowflake, baseHubId: snowflake })).max(10).default([]),
+  /** 宿の並ぶ順（小さい数が上）。🏨 24時間・⏱ 1時間ごと・ふつうの部屋の公開・招待・シクレ。同じ数の中は新しい宿が上 */
+  stayOrder: z
+    .object({ day: z.number().int().min(1).max(9), hourly: z.number().int().min(1).max(9), public: z.number().int().min(1).max(9), invite: z.number().int().min(1).max(9), secret: z.number().int().min(1).max(9) })
+    .default({ day: 1, hourly: 2, public: 3, invite: 3, secret: 3 }),
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
