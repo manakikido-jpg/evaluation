@@ -1,3 +1,4 @@
+import {controlReel,reelSymbol,reelValue,REEL_STRIPS,type ReelControl,type ReelStop} from './reelRules.js';
 import {drawFrontMode,frontHitPercent,backTransition,backHitPercent,hitPercent,type FrontMode,type BackMode,type ModeContext} from './modeRules.js';
 import {drawLoop,normalLoopTable,roleLoopTable,historyLoopTable} from './loopRules.js';
 import {drawGstopGroup,drawHoldGroup,isHold,isReach} from './gstopRules.js';
@@ -19,7 +20,7 @@ export const ORDERS=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
 export const PHASE_NAMES:Record<Phase,string>={normal:'参道',omen:'神殿の前兆',gg:'GOD GAME',gstop:'G-STOP',sgg:'SPECIAL GOD GAME',gzone:'G-ZONE'};
 export const ROLE_NAMES:Record<Role,string>={god:'GOD揃い',red7:'赤7揃い',rare:'レア役',replay:'リプレイ',bell:'黄7',smallBell:'3枚役',none:'ハズレ'};
 export type GSymbol='1'|'3'|'5'|'V'|'S'|'7'|'鏡';
-export type Spin={role:Role;order:number[];stops:number[];symbols:(string|null)[];group:GSymbol[];hold:boolean;phase:Phase;model?:PhaseSpin};
+export type Spin={role:Role;order:number[];stops:number[];symbols:(string|null)[];group:GSymbol[];hold:boolean;phase:Phase;model?:PhaseSpin;control?:ReelControl};
 export type WinEvent={kind:'gg'|'sgg'|'god'|'stock';added:number;set:number;ggGames:number;sggGames:number};
 export type GaisenState={
  version:RuleVersion;sample:boolean;setting:Setting;phase:Phase;normalGames:number;mode:0|1|2;omen:number;ggLeft:number;stocks:number;sets:number;zoneLeft:number;
@@ -39,7 +40,7 @@ export type GaisenState={
  // 天井の前兆/権利/ループを通常の前兆と分離。旧保存では未設定。
  ceilingStocks?:number;ceilingLeft?:number;ceilingHit?:boolean;ceilingLoop?:0|1|80;
  // 表示用。旧保存データでは未設定。抽選や払出の判定には使わない。
- reelDisplay?:string[];reelPhase?:Phase;lastReplay?:boolean;winEvent?:WinEvent|null;
+ reelDisplay?:string[];lastReelStops?:(ReelStop|null)[];reelPhase?:Phase;lastReplay?:boolean;winEvent?:WinEvent|null;
 };
 export function newGaisen(setting:Setting=1,version:RuleVersion=RULE_VERSION):GaisenState{return {version,sample:false,setting,phase:'normal',normalGames:0,mode:0,omen:0,ggLeft:0,stocks:0,sets:0,zoneLeft:0,gstopLeft:0,gstopReturn:'normal',hold:null,sggLeft:0,sggReturn:'normal',medusa:0,ex:false,yellow:0,blue:0,pending:null,balance:100000,spins:0,input:0,output:0,lastPaid:0,lastRole:null,display:['0','1','2'],message:'レバーで開始。実際の銭は使いません。',history:[],gods:0,firsts:0,sggs:0,chainWon:0};}
 const ordinaryOmenSets=(s:GaisenState)=>s.version==='trial-2'?(s.omenStocks??(s.omen>0?1:0)):0;
@@ -60,7 +61,7 @@ function enterSGG(s:GaisenState,rng?:Rng){s.sggReturn=s.phase==='gstop'?s.gstopR
 function restore(s:GaisenState,phase:Phase){s.phase=phase;if((phase==='normal'||phase==='omen')&&s.stocks>0)startGG(s);else if(phase==='gg'&&s.ggLeft<=0){s.phase='gzone';s.zoneLeft=5;}}
 /** GOD/赤7の基礎フラグ以外は暫定の役分布。実機の全役抽選表ではない。 */
 export function drawRole(rng:Rng):Role{const n=rng(65536);return n<8?'god':n<20?'red7':n<1184?'rare':n<17568?'replay':n<31986?'bell':n<56890?'smallBell':'none';}
-export function lever(s:GaisenState,rng:Rng,forced?:Role):void{
+export function lever(s:GaisenState,rng:Rng,forced?:Role,timing=false):void{
  if(s.pending)throw Error('先に3つのSTOPを押してください。');if(s.balance<BET)throw Error('試遊ポイントが足りません。');
  s.balance-=BET;s.input+=BET;s.spins++;s.lastPaid=0;s.winEvent=null;
  const next=s.version==='trial-2'?preparePhaseSpin(forced?({god:'god',red7:'red',rare:'yellowCommon',replay:'blue',bell:'bell',smallBell:'small',none:'none'} as const)[forced]:drawPhaseFlag(s,rng),rng):null;
@@ -74,6 +75,7 @@ export function lever(s:GaisenState,rng:Rng,forced?:Role):void{
    :drawGstopGroup(s.gstopReturn==='gg'?(s.mirrorHigh?'high':'low'):'normal',next.model.flag,rng)):[];
  }else{group=rng(4)===0?['1','3','5','7','S']:['1','3','5','V','S'];if(rng(3)===0)group[0]='鏡';if(role==='rare')group[2]='鏡';}
  s.pending={role,phase,order:next?.order??ORDERS[rng(6)]!.slice(),stops:hold?[0,2]:[],symbols:hold?[s.hold,null,s.hold]:[null,null,null],group,hold,...(next?{model:next.model}:{})};
+ if(timing&&s.version==='trial-2'&&phase!=='gstop')s.pending.control={stops:[null,null,null],miss:false};
  s.message=hold?'HOLD · 中STOPで抽選':'3つのSTOPを押してください。';
 }
 function gstopStop(p:Spin,index:number,rng:Rng){
@@ -84,7 +86,7 @@ function gstopStop(p:Spin,index:number,rng:Rng){
  if(symbol!=='鏡')for(let i=0;i<3;i++)if(p.symbols[i]==='鏡')p.symbols[i]=symbol;
 }
 /** 停止した帯だけを返す。押し順を外した時点以降は金7を止めない。 */
-export function reelStops(p:Spin):(string|null)[]{
+function logicalReelStops(p:Spin):(string|null)[]{
  if(p.model)return phaseReels(p);
  return [0,1,2].map(index=>{
   const at=p.stops.indexOf(index);if(at<0)return null;
@@ -93,6 +95,10 @@ export function reelStops(p:Spin):(string|null)[]{
   if(p.role==='bell')return p.stops.slice(0,at+1).every((v,i)=>v===p.order[i])?'黄7':['◆','桜','青7'][index]!;
   return roleReels(p.role)[index]!;
  });
+}
+export function reelStops(p:Spin):(string|null)[]{
+ if(p.control)return p.control.stops.map((s,i)=>s?reelValue(REEL_STRIPS[i]![s.position]!,i):null);
+ return logicalReelStops(p);
 }
 function roleReels(role:Role|null):string[]{
  return role==='god'?['G','O','D']:role==='red7'?['赤7','赤7','赤7']:role==='replay'?['青7','青7','青7']
@@ -106,14 +112,20 @@ export function visibleReels(s:GaisenState):(string|null)[]{
  if(s.lastRole===null&&s.display.join('')==='GOD')return roleReels('god');
  return roleReels(s.lastRole);
 }
-export function stop(s:GaisenState,index:number,rng:Rng):boolean{
+export function stop(s:GaisenState,index:number,rng:Rng,position?:number):boolean{
  const p=s.pending;if(!p||!Number.isInteger(index)||index<0||index>2||p.stops.includes(index))throw Error('このSTOPは押せません。');
+ if(position!==undefined&&(!Number.isInteger(position)||position<0||position>=20))throw Error('停止位置は0〜19です。');
  if(p.phase==='gstop'&&index!==[0,1,2].find(i=>!p.stops.includes(i)))throw Error('G-STOPは左から順に停止します。');
  if(p.phase==='gstop'&&p.role!=='god'&&p.role!=='red7')gstopStop(p,index,rng);
  else if(p.model){const preview={...p,stops:[...p.stops,index]};p.symbols[index]=phaseReels(preview)[index]!;}
  else p.symbols[index]=p.role==='god'?['G','O','D'][index]!:p.role==='red7'?'赤7':p.role==='replay'?'青7':p.role==='bell'?'黄7':p.role==='smallBell'?'◆':p.role==='rare'?['黄7','青7','黄7'][index]!:['2','4','6'][index]!;
+ if(p.control){
+  const target=reelSymbol(logicalReelStops({...p,stops:[...p.stops,index]})[index]!,index);
+  const result=controlReel(index,target,position,p.control);
+  p.control.stops[index]=result;p.control.miss ||=result.miss;
+ }
  p.stops.push(index);if(p.stops.length<3)return false;
- s.reelDisplay=reelStops(p).map(x=>x!);s.reelPhase=p.phase;
+ s.reelDisplay=reelStops(p).map(x=>x!);s.lastReelStops=p.control?structuredClone(p.control.stops):undefined;s.reelPhase=p.phase;
  const before={total:s.stocks+s.sets,sets:s.sets,gods:s.gods,sggs:s.sggs};
  if(p.model)s.lastReplay=phaseOutcome(p).replay;
  s.pending=null;s.lastRole=p.model?phaseOutcome(p).role:p.role;s.display=p.symbols.map(x=>x??'0');finish(s,p,rng);
@@ -132,7 +144,7 @@ function finish(s:GaisenState,p:Spin,rng:Rng){
  s.balance+=paid;s.output+=paid;s.lastPaid=paid;if(p.phase!=='normal'&&p.phase!=='omen')s.chainWon+=paid-BET;
  // blue/yellowは旧版用の連続カウンタ。新版の履歴抽選はsymbolHistoryだけを使う。
  s.yellow=(outcome?outcome.mark==='yellow':p.role==='bell'&&correct)?s.yellow+1:0;s.blue=(outcome?outcome.mark==='blue':p.role==='replay')?s.blue+1:0;
- note(s,`${outcome?.name??ROLE_NAMES[p.role]} · 戻り${paid}ポイント${(outcome||p.role==='bell')&&!correct?'（押し順不一致）':''}`);
+ note(s,`${outcome?.name??ROLE_NAMES[p.role]} · 戻り${paid}ポイント${p.control?.miss?'（目押しが届きませんでした）':(outcome||p.role==='bell')&&!correct?'（押し順不一致）':''}`);
  let loopAdded=0;const frontAtStart=s.frontMode??'low1';
  const modeContext:ModeContext=p.phase==='gzone'?(s.stocks>0||pendingOmenSets(s)>0?'omen':'normal'):p.phase==='normal'&&pendingOmenSets(s)>0?'omen':p.phase;
  if(p.model){
