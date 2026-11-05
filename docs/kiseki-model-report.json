@@ -1,0 +1,138 @@
+{
+  "model": "独自の暫定試遊モデル（実機の機械割ではありません）",
+  "seed": 20261106,
+  "games": 3000,
+  "draws": 1000000,
+  "mode": "assist",
+  "drawCalls": 7989,
+  "roles": [
+    {
+      "role": "god",
+      "name": "GOD揃い",
+      "weight": 1024,
+      "probability": 6.103515625e-05,
+      "observed": 57,
+      "observedProbability": 5.7e-05
+    },
+    {
+      "role": "red",
+      "name": "赤7揃い",
+      "weight": 2431,
+      "probability": 0.0001448988914489746,
+      "observed": 152,
+      "observedProbability": 0.000152
+    },
+    {
+      "role": "sp",
+      "name": "SP役",
+      "weight": 256,
+      "probability": 1.52587890625e-05,
+      "observed": 13,
+      "observedProbability": 1.3e-05
+    },
+    {
+      "role": "middleBlue",
+      "name": "中段リプレイ",
+      "weight": 153638,
+      "probability": 0.009157538414001465,
+      "observed": 9206,
+      "observedProbability": 0.009206
+    },
+    {
+      "role": "diagonal",
+      "name": "右上がり黄7",
+      "weight": 90103,
+      "probability": 0.0053705573081970215,
+      "observed": 5477,
+      "observedProbability": 0.005477
+    },
+    {
+      "role": "middleGold",
+      "name": "中段黄7",
+      "weight": 17407,
+      "probability": 0.0010375380516052246,
+      "observed": 1009,
+      "observedProbability": 0.001009
+    },
+    {
+      "role": "fake",
+      "name": "赤7フェイクリプレイ",
+      "weight": 17921,
+      "probability": 0.0010681748390197754,
+      "observed": 1129,
+      "observedProbability": 0.001129
+    },
+    {
+      "role": "blue",
+      "name": "上段リプレイ",
+      "weight": 2123698,
+      "probability": 0.12658226490020752,
+      "observed": 127200,
+      "observedProbability": 0.1272
+    },
+    {
+      "role": "small",
+      "name": "下段黄7B",
+      "weight": 911805,
+      "probability": 0.05434781312942505,
+      "observed": 54656,
+      "observedProbability": 0.054656
+    },
+    {
+      "role": "gaia",
+      "name": "ガイアベル",
+      "weight": 446203,
+      "probability": 0.026595771312713623,
+      "observed": 26460,
+      "observedProbability": 0.02646
+    },
+    {
+      "role": "bell",
+      "name": "押し順黄7",
+      "weight": 9868951,
+      "probability": 0.5882353186607361,
+      "observed": 587310,
+      "observedProbability": 0.58731
+    },
+    {
+      "role": "none",
+      "name": "ハズレ",
+      "weight": 3143779,
+      "probability": 0.18738383054733276,
+      "observed": 187331,
+      "observedProbability": 0.187331
+    }
+  ],
+  "gameRoles": {
+    "god": 0,
+    "red": 1,
+    "sp": 0,
+    "middleBlue": 28,
+    "diagonal": 16,
+    "middleGold": 3,
+    "fake": 2,
+    "blue": 389,
+    "small": 158,
+    "gaia": 83,
+    "bell": 1787,
+    "none": 533
+  },
+  "phases": {
+    "normal": 1649,
+    "omen": 56,
+    "gg": 850,
+    "gzone": 85,
+    "sgg": 300,
+    "sgg-retry": 32,
+    "gaia": 16,
+    "zzone": 5,
+    "zgame": 7
+  },
+  "input": 90000,
+  "returned": 170350,
+  "netPoints": 80350,
+  "modelReturnPercent": 189.27777777777777,
+  "invariants": true,
+  "realWalletUsed": false,
+  "verificationNote": "固定seedの暫定モデルの標本。実機の機械割・期待枚数・勝率を示さない。目押し/自動補助の同一seedでは抽選・収支が完全一致した。"
+}

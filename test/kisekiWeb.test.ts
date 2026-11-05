@@ -15,6 +15,12 @@ let db:Db,close:()=>Promise<void>,app:ReturnType<typeof createWebApp>,token:stri
 const headers=(t=token)=>({cookie:'shamusho_session='+t,origin:'https://example.test','sec-fetch-site':'same-origin'});
 beforeEach(async()=>{({db,close}=await makeDb());await recordJoin(db,{...user,roleIds:[ROLE.guji],isBot:false,joinedAt:now});await addCoins(db,id,3210,'adjust');app=createWebApp({db,cfg:()=>cfg,api:{memberRoles:async()=>[ROLE.guji]}as never,discord:{guildChannels:async()=>[]}as never,baseUrl:'https://example.test',now:()=>now});token=await createSession(db,user,{level:'guji',pages:null},now);csrf=(await findSession(db,token,now))!.csrfToken;});afterEach(async()=>close());
 async function post(action:string,extra:Record<string,string>={},js=true){return app.request(path,{method:'POST',headers:{...headers(),...(js?{'X-Gaisen-Update':'1'}:{})},body:new URLSearchParams({_csrf:csrf,revision:String((await readTrial(db,now)).revision),machine:'1',action,...extra})});}
+it('個別音量・振動・休憩・診断を備え、回転中は確定役をデータ属性へ出さない',async()=>{
+ await post('seat');await post('lever');const html=await(await app.request(path,{headers:headers()})).text();
+ for(const text of ['kiseki-realism.js?v=','gaisen-diagnostics.js?v=','data-gt-diagnostic-build=','data-kt-pref="density"','data-kt-pref="operationsVolume"','data-kt-pref="effectsVolume"','data-kt-pref="bgmVolume"','data-kt-pref="haptics"','data-kt-pref="rest"','data-gt-diagnostic-toggle','data-kt-audio-state','data-kt-break-note','data-kt-replay-win'])expect(html).toContain(text);
+ expect(html).toContain('data-kt-role=""');expect(html).toContain('data-kt-pattern="spinning"');expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>|onclick=|style=/);
+ expect((await walletOf(db,id)).balance).toBe(3210);
+});
 it('カジノ管理に別入口を置き、凱旋の2版・財布・保存キーを変えずに軌跡を遊べる',async()=>{
  expect((await(await app.request('/economy/casino',{headers:headers()})).text())).toContain(path);
  const old=await readGaisen(db,now),v2=await readGaisen(db,now,'trial-2');

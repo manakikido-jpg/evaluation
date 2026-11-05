@@ -1,0 +1,79 @@
+{
+  "model": "軌跡版の暫定試遊。実機完全再現ではない",
+  "sources": [
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/3/",
+      "savedHtmlSha256": "1badf03345f38206ff59d737737e85eef83bfbe8a92a584f22151057dfa6ca5f",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "今回未再取得（保存HTMLだけ照合）"
+    },
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/4/",
+      "savedHtmlSha256": "ebf412ca66ff3149b62290d840c6e8fd44b7be39f7fbf158a313956573485ceb",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "HTTP403"
+    },
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/5/",
+      "savedHtmlSha256": "1315e2c1075c2df15832121963d5901ab88fbc1ed663ad2bbe316be6828fc750",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "HTTP403"
+    },
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/47/",
+      "savedHtmlSha256": "0e238764074a5c5702223660e84cd2a4fd6e9e417a78c31e4884296a5a9a24a8",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "今回未再取得（保存HTMLだけ照合）"
+    },
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/49/",
+      "savedHtmlSha256": "a6c5f6e5f463ea70c73f49fd9bdb03e9f2e294c0186444b06568daeb8fec8301",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "今回未再取得（保存HTMLだけ照合）"
+    },
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/81/",
+      "savedHtmlSha256": "bef8236103dca06beda674d310b92929bcedf833b28aa38c045d0fcce462af19",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "今回未再取得（保存HTMLだけ照合）"
+    },
+    {
+      "url": "https://1geki.jp/slot/l_milliongod_kiseki/85/",
+      "savedHtmlSha256": "da6cbc83c3614d9fd054dc9fc2f7b5ec8a2da37b3f34871871abad927097516f",
+      "recordedVerificationDate": "2026-11-05",
+      "latestFetchDate": "2026-11-06",
+      "latestFetch": "今回未再取得（保存HTMLだけ照合）"
+    }
+  ],
+  "verifiedFromSavedHtml": {
+    "godDenominator": 16384,
+    "redDenominator": 6900,
+    "spDenominator": 65536,
+    "ggGames": 50,
+    "pggGames": 50,
+    "pggRemainingStocks": 3,
+    "sggGames": [
+      10,
+      20,
+      30,
+      50,
+      100
+    ],
+    "sggRetryGames": 3,
+    "spGgChance": 0.5,
+    "spLoop": 80
+  },
+  "notClaimedVerified": [
+    "実機の全リール配列と滑り制御表",
+    "表裏モードの完全な遷移と履歴当選表",
+    "現在のサイトの更新内容",
+    "実iPhone/Androidの打感・聴感・発熱・電池の実測"
+  ],
+  "note": "HTML全体/実機画像/音源は転載せず、根拠URLと保存物の照合ハッシュだけを記録する。抽選に関する既存の暫定規則はkiseki-trial.md参照。"
+}

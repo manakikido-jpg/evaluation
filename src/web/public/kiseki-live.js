@@ -3,16 +3,16 @@
  class KisekiLiveDirector {
   constructor({bank,root,motion,light,hidden}){Object.assign(this,{bank,root,motion,light,hidden});this.key=null;this.ticket=0;this.source=null;this.music=true;this.used=false;try{this.music=localStorage.getItem('kiseki-trial-bgm')!=='off';}catch{}}
   active(){return this.root()?.classList.contains('kt-root');}
-  stop(){this.ticket++;this.key=null;this.source=null;this.bank?.stopGroup('bgm');}
+  stop(fade=0){this.ticket++;this.key=null;this.source=null;this.bank?.stopGroup('bgm',fade);}
   async sync(){
    if(!this.active())return;
    const r=this.root(),machine=r.querySelector('.kt-machine'),theme=machine?.dataset.ktTheme;
    const charge=machine?.querySelector('.gt-display')?.dataset.winKind==='god';
    const key=!charge&&this.music&&this.used&&!this.hidden()&&this.bank?.enabled&&['gg','pgg','sgg'].includes(theme)?'bgm-'+theme:null;
    r.querySelectorAll('[data-kt-bgm]').forEach(e=>e.value=this.music?'on':'off');
-   if(!key){if(this.key)this.stop();return;}
+   if(!key){if(this.key)this.stop(!charge&&!this.hidden()&&this.bank?.enabled&&this.music?140:0);return;}
    if(this.key===key)return;
-   this.stop();this.key=key;const ticket=this.ticket,context=this.bank.context;
+   this.stop(140);this.key=key;const ticket=this.ticket,context=this.bank.context;
    if(!context){this.key=null;return;}
    const buffer=await this.bank.load(key);await this.bank.resuming;
    if(ticket!==this.ticket||context!==this.bank.context||!this.bank.enabled||this.hidden()||!this.bank.running(context)){if(ticket===this.ticket)this.key=null;return;}

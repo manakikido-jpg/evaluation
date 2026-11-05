@@ -13,3 +13,7 @@ generate-audio.pyは独自の和音/旋律/倍音/打音から、GG・PGG・SGG�
 実機らしい質感の再調整：reel-housing.pngは三神/側柱/下のバルコニーを一体で描いた透過造形。中央の透明窓に実際のHTMLリールを配置し、配信用altar-1200.webpの現行元とします。apron-relief.pngは立体GOD文字を含む腰パネル（現行apron-1200.webp）、marquee-relief.pngは独自の赤金GOD GAME銘板（marquee-720.webp）。旧文字なし素材は比較用に維持。
 
 symbol-atlas.pngは2列×3段の独自図柄シート。上段左=黄7/右=赤7、中段左=青7/右=GOD、下段左=花/右=紋章。等分した各セルを配信用384×128pxの透過WebP6点へ切り出しています。造形の編集はimage_gen、sharpはセルの分割・サイズ変更・WebP変換だけに使用。全て軌跡専用、凱旋の図柄/配列/停止ロジックを変更しません。
+
+## 接触・ブレーキ・払出しなどの短い独自音
+
+`python3 assets/kiseki-lcd-source/generate-effects.py` で8点の `fx-*.mp3` を生成します。numpyとffmpegが必要です。録音素材は使わず、固定した波形・ノイズから合成します。デコード後の8点すべてでクリップしたサンプルがないことを確認しました。端末のスピーカーでの聴感とは別の確認です。

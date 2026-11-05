@@ -107,6 +107,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'gaisen-audio.js': {body:readText(path.join(here,'public/gaisen-audio.js')),type:'text/javascript; charset=utf-8'},
     'gaisen-palace.svg': {body:readText(path.join(here,'public/gaisen-palace.svg')),type:'image/svg+xml'},
     'kiseki-live.js': {body:readText(path.join(here,'public/kiseki-live.js')),type:'text/javascript; charset=utf-8'},
+    'kiseki-realism.js': {body:readText(path.join(here,'public/kiseki-realism.js')),type:'text/javascript; charset=utf-8'},
     'kiseki-trial.css': {body:readText(path.join(here,'public/kiseki-trial.css')),type:'text/css; charset=utf-8'},
     'gaisen-trial.css': {body:readText(path.join(here,'public/gaisen-trial.css')),type:'text/css; charset=utf-8'},
     'gaisen-trial.js': {body:readText(path.join(here,'public/gaisen-trial.js')),type:'text/javascript; charset=utf-8'},

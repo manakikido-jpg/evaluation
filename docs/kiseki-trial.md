@@ -72,3 +72,9 @@ POSTはCSRF・本人・revisionを確認し、専用行をロックしたトラ�
 ### 液晶・区間映像・目押し追加後の見本
 
 架空データの静止画：[通常の停止途中](previews/kiseki-live-normal-stop-390.webp)・[泉](previews/kiseki-live-spring-1440.webp)・[GG](previews/kiseki-live-gg-390.webp)・[PGG](previews/kiseki-live-pgg-390.webp)・[SGG](previews/kiseki-live-sgg-390.webp)・[GOD確定後](previews/kiseki-live-god-390.webp)・[横向き集中](previews/kiseki-live-focus-844.webp)。音源の再生成手順と画像の出所は[素材メモ](../assets/kiseki-lcd-source/README.md)に記載しています。
+
+## 実機らしさの追加確認（2026年11月6日）
+
+[15分野の確認表](kiseki-realism.md)、[資料の照合記録](kiseki-source-check.json)、[ローカル検証結果](kiseki-model-report.json)に実装と限界を分けています。最終停止の数字は確定小役に応じた独自の傾向です。実機の全出目法則を再現したとは扱いません。
+
+DBや銭を使わない検証は `npx tsx src/scripts/verify-kiseki.ts --games=3000 --draws=1000000 --mode=assist` で実行できます。保存済みの短期サンプル収支は暫定モデルの結果で、実機の機械割ではありません。公表されていないモード移行や抽選表は推測で補いません。

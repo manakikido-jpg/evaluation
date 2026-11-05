@@ -131,8 +131,59 @@
 @media(prefers-reduced-motion:reduce){.kt-root .kt-award-digits b{animation:none!important}}
 @media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-award-digits{position:absolute;right:0;bottom:0;gap:5px}.kt-root[data-focus=true] .kt-award-digits b{font-size:18px}.kt-root[data-focus=true] .gt-lcd-award[data-kind=god] strong{font-size:42px}}
 .kt-stop-notes{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:#ddcda7}
+
+/* 金属・ガラス・樹脂の反射を分け、公開された操作/区間だけを光へ反映する。 */
+.kt-machine{--kt-accent:#dfbe7c;isolation:isolate}
+.kt-machine[data-kt-theme=pgg]{--kt-accent:#ffe8b1}
+.kt-machine[data-kt-theme=sgg]{--kt-accent:#c2a3d7}
+.kt-root .gt-display{box-shadow:inset 0 0 18px #02050acc,0 0 0 1px #e8cc8b55}
+.kt-root .gt-display:after{background:linear-gradient(112deg,transparent 0 19%,#fff8df08 19.3%,transparent 20% 73%,#e3f3ff08 73.2%,transparent 74%);box-shadow:inset 0 1px 2px #f8ecc488,inset 0 0 20px #0006}
+.kt-root .gt-reel-glass{background:linear-gradient(#0008,transparent 22% 40%,#fff5 48%,transparent 56% 78%,#0009),linear-gradient(90deg,#0006,transparent 15% 85%,#0006);box-shadow:inset 0 0 5px #0008}
+.kt-root .gt-reel.is-spinning .gt-reel-strip{animation-duration:.7s}
+.kt-root .gt-speaker{box-shadow:inset 0 2px 5px #000c,0 1px 1px #fff3}
+.kt-root .gt-console{background-image:repeating-linear-gradient(98deg,#fff1 0 1px,transparent 1px 4px),linear-gradient(125deg,#10171c,#252a2e 36%,#090e13 65%,#24272b);background-blend-mode:soft-light,normal}
+.kt-root .gt-stop[data-kt-contact=true]:after{transform:translateY(2px);filter:brightness(.83);box-shadow:inset 0 4px 8px #4b080c,0 0 0 1px #e89a6c33}
+.kt-root .gt-lever[data-kt-contact=true] .gt-lever-hardware{transform:translateY(3px) rotate(-12deg);transform-origin:50% 100%}
+.kt-root .gt-play{touch-action:manipulation;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;scroll-margin-block:90px calc(20px + env(safe-area-inset-bottom))}
+.kt-root .gt-play button{-webkit-tap-highlight-color:transparent}
+.kt-root .gt-play button:focus-visible{outline:3px solid #ffe2a0;outline-offset:3px}
+.kt-lamp-rail{position:absolute;inset:2px;pointer-events:none;z-index:8;border-radius:inherit;overflow:hidden}
+.kt-lamp-rail i{position:absolute;display:block;opacity:0;transition:opacity .16s;background:var(--kt-accent);box-shadow:0 0 12px 3px var(--kt-accent)}
+.kt-lamp-rail i:nth-child(1){left:4%;right:4%;top:1px;height:2px}
+.kt-lamp-rail i:nth-child(2){left:0;right:0;top:10%;bottom:33%;background:none;border-left:2px solid var(--kt-accent);border-right:2px solid var(--kt-accent);box-shadow:inset 0 0 9px #f0c57155}
+.kt-lamp-rail i:nth-child(3){left:7%;right:7%;bottom:29%;height:2px}
+.kt-machine[data-kt-stage=top] .kt-lamp-rail i:nth-child(1),.kt-machine[data-light-stage=top] .kt-lamp-rail i:nth-child(1),.kt-machine[data-kt-stage=rails] .kt-lamp-rail i:nth-child(2),.kt-machine[data-light-stage=rails] .kt-lamp-rail i:nth-child(2),.kt-machine[data-kt-stage=console] .kt-lamp-rail i:nth-child(3),.kt-machine[data-light-stage=apron] .kt-lamp-rail i:nth-child(3){opacity:calc(.65 * var(--gt-glow-alpha,.7))}
+.kt-machine[data-kt-feedback=paid] .kt-god-lights i{opacity:.4}
+.kt-machine[data-kt-feedback=stop][data-kt-stop="0"] [data-kt-god="0"],.kt-machine[data-kt-feedback=stop][data-kt-stop="1"] [data-kt-god="1"],.kt-machine[data-kt-feedback=stop][data-kt-stop="2"] [data-kt-god="2"]{opacity:.7}
+.kt-machine[data-kt-role=middleGold][data-kt-feedback=paid] [data-kt-god="1"],.kt-machine[data-kt-role=diagonal][data-kt-feedback=paid] [data-kt-god="2"]{opacity:.85}
+.kt-machine[data-kt-award=strong] .gt-display[data-win-stage=award],.kt-machine[data-kt-award=grand] .gt-display[data-win-stage=reveal],.kt-machine[data-kt-award=grand] .gt-display[data-win-stage=award]{box-shadow:inset 0 0 22px #f5c16555,0 0 0 1px #ffe3a888}
+.kt-machine[data-kt-payout="1"] .gt-instruments>div:last-child{box-shadow:inset 0 0 9px #ffc95d66}
+.kt-phase-banner{position:absolute;z-index:6;left:10%;right:10%;top:19%;pointer-events:none;text-align:center;color:#ffe6a8;font:700 clamp(12px,3.2vw,22px)/1.5 'Yu Mincho',serif;letter-spacing:.12em;opacity:0}
+.kt-phase-banner:not(:empty){opacity:1;padding:6px;background:linear-gradient(90deg,transparent,#101018dd 22% 78%,transparent);text-shadow:0 2px 4px #000}
+.kt-realism-preferences{border:1px solid #ac8c5055;border-radius:9px;padding:10px;min-width:0;margin:14px 0}
+.kt-device-check{font-size:13px;line-height:1.7;margin:12px 0}
+.kt-break-note{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #c7a66955;border-radius:8px;background:#241c17;color:#f2ddb1;font-size:13px}
+.kt-break-note[hidden]{display:none}
+.kt-root [data-gt-diagnostic-report]{box-sizing:border-box;width:100%;max-width:100%}
+.kt-root[data-motion=low] .kt-lamp-rail i,.kt-root[data-motion=instant] .kt-lamp-rail i,.kt-root[data-quality=light] .kt-lamp-rail i,.kt-root[data-hidden=true] .kt-lamp-rail i{opacity:0!important;transition:none}
+.kt-root[data-motion=low] .kt-phase-banner,.kt-root[data-motion=instant] .kt-phase-banner,.kt-root[data-hidden=true] .kt-phase-banner{display:none}
+@media(prefers-reduced-motion:reduce){.kt-root .kt-lamp-rail i{opacity:0!important;transition:none}.kt-root .kt-phase-banner{display:none}}
 /* 獲得セット数まで液晶内へ収める。狭い横画面では重複する装飾数字を省く。 */
 .kt-root .gt-display .gt-lcd-award{flex:0 1 auto;min-height:0;gap:1px;margin:1px auto}
 .kt-root .gt-lcd-award[data-kind=god] strong{font-size:clamp(34px,12vw,76px)}
 .kt-root .kt-award-digits b{font-size:clamp(20px,6vw,36px)}
 @media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-award-digits{display:none}.kt-root[data-focus=true] .gt-display .gt-lcd-award{gap:0;margin:0}.kt-root[data-focus=true] .gt-lcd-award strong,.kt-root[data-focus=true] .gt-lcd-award[data-kind=god] strong{font-size:28px}.kt-root[data-focus=true] .gt-lcd-award small{font-size:6px;letter-spacing:2px}.kt-root[data-focus=true] .gt-lcd-award>span{font-size:7px}}
+
+.kt-lcd-actions{position:absolute;right:5px;top:12%;z-index:12;display:none;gap:4px}.kt-lcd-actions button{min-height:44px;padding:5px 7px;border:1px solid #e0bf7866;border-radius:6px;background:#101821e8;color:#f5dfaf;font-size:11px}.kt-root .gt-display[data-win-stage] .kt-lcd-actions{display:flex}@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-lcd-actions{top:3px;right:3px}.kt-lcd-actions button{font-size:10px;padding:3px}}
+
+/* 狭い横向きでは告知を左、三神とリールを右へ置き、復帰案内があっても重ねない。 */
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .gt-display:has(.gt-lcd-award) .gt-lcd-award{position:absolute;left:12px;top:32px;width:min(40%,180px);height:auto;margin:0}.kt-root[data-focus=true] .gt-display:has(.gt-lcd-award) .kt-reel-assembly{width:min(48%,220px);margin-left:auto;margin-right:6px}}
+
+/* 告知文字と44pxの操作面を分ける。 */
+.kt-root .gt-display .gt-lcd-award{width:calc(100% - 100px);margin-left:0}
+.kt-lcd-actions{top:38px;flex-direction:column}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-lcd-actions{top:92px;left:12px;right:auto;flex-direction:row}}
+/* 長いSGG内訳も小さい画面の集計枠へ折り返す。 */
+.kt-root .gt-meters{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kt-root .gt-meters>span{min-width:0;overflow-wrap:anywhere}
+.kt-root .gt-meters b{white-space:normal}

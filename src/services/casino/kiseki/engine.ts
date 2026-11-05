@@ -35,7 +35,7 @@ export function stop(s:KisekiState,index:number,rng:Rng,input?:number):boolean{
  if(p.timing){const result=controlKisekiReel(p.correct?p.layout:'none',index,p.positions,input,automaticReelStart(s.spins,index));(p.reelStops??=[null,null,null])[index]=result;p.positions[index]=result.position;}
  else p.positions[index]=p.correct&&p.layout!=='none'?p.plan[index]!:controlKisekiReel('none',index,p.positions,undefined,automaticReelStart(s.spins,index)).position;p.stops.push(index);if(p.stops.length<3)return false;
  const before={sets:s.sets,stocks:s.stocks,gods:s.gods,sggs:s.sggs};
- s.lastDigits=kisekiDigits(s.spins,p.positions,false,index) as number[];s.lastReelStops=p.reelStops?.map(v=>v?{...v}:null);s.lastPositions=p.positions as number[];s.lastRole=p.role;s.lastLayout=p.layout;s.lastCorrect=p.correct;s.lastReplay=['blue','middleBlue','fake'].includes(p.role);
+ s.lastDigits=kisekiDigits(s.spins,p.positions,false,index,p.correct?p.role:'none') as number[];s.lastReelStops=p.reelStops?.map(v=>v?{...v}:null);s.lastPositions=p.positions as number[];s.lastRole=p.role;s.lastLayout=p.layout;s.lastCorrect=p.correct;s.lastReplay=['blue','middleBlue','fake'].includes(p.role);
  // AT中のガイアベルは左からの下段黄7（15枚）表示へ変えるが、停止済みの帯は書き換えない。
  const paid=p.correct?(p.role==='gaia'&&p.layout==='bell'?15:ROLES[p.role].units)*UNIT:0;s.lastPaid=paid;s.balance+=paid;s.output+=paid;if(!['normal','omen','gaia'].includes(p.phase))s.chainWon+=paid-BET;
  s.pending=null;
