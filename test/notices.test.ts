@@ -12,6 +12,8 @@ import {
   publishAll,
   publishNotice,
   renderNotice,
+  noticeSender,
+  setNoticeSender,
   repostChannel,
   restickNotice,
   seedChannelGuides,
@@ -787,3 +789,48 @@ describe('修正・要望窓口のテンプレート', () => {
     expect(await getNotice(db, n.id)).toMatchObject({ body: '窓口専用に直した文面' });
   });
 });
+
+describe('✒️ 差出人', () => {
+  it('差出人を決めると、ウェブフックで別の名前で出す。変えると「未反映」になり、反映で出し直して前のものを消す', async () => {
+    const d = fakeDiscord();
+    const hooks: string[] = [];
+    const byHook = new Set<string>();
+    let n = 0;
+    d.discord.createWebhook = async (c) => { hooks.push(c); return { id: `w${hooks.length}`, token: 't' }; };
+    d.discord.webhookSend = async (_id, _t, b, as) => {
+      const id = `h${++n}`;
+      d.messages.set(id, { channelId: CH.torii, content: b.content || b.embeds?.[0]?.description || '' });
+      byHook.add(id);
+      d.log.push(`hook ${as.username} ${id}`);
+      return { id };
+    };
+    d.discord.webhookEdit = async (_id, _t, m) => {
+      if (!byHook.has(m)) throw new DiscordHttpError('Unknown Message', 404);
+      d.log.push(`hookedit ${m}`);
+    };
+    const ctx = { db, cfg, discord: d.discord };
+    const a = await createNotice(db, { channelId: CH.torii, title: 'ようこそ', body: 'こんにちは', by: GUJI });
+    expect(await publishNotice(ctx, a.id, GUJI)).toBe('posted');
+    const first = (await getNotice(db, a.id))!.messageId!;
+    expect(byHook.has(first)).toBe(false);
+    expect(await setNoticeSender(db, { name: 'discord係', avatarUrl: '' }, GUJI)).toBe('invalid');
+    expect(await setNoticeSender(db, { name: '咲楽ノ宮 社務所', avatarUrl: 'http://x' }, GUJI)).toBe('invalid');
+    expect(await setNoticeSender(db, { name: '咲楽ノ宮 社務所', avatarUrl: 'https://example.com/a.png' }, GUJI)).toBe('ok');
+    expect(await noticeSender(db)).toEqual({ name: '咲楽ノ宮 社務所', avatarUrl: 'https://example.com/a.png' });
+    expect((await getNotice(db, a.id))!.postedText).toBe('');
+    expect(await publishNotice(ctx, a.id, GUJI)).toBe('reposted');
+    const second = (await getNotice(db, a.id))!.messageId!;
+    expect(byHook.has(second)).toBe(true);
+    expect(d.messages.has(first)).toBe(false);
+    expect(d.log).toContain('hook 咲楽ノ宮 社務所 h1');
+    // 本文を変えると、ウェブフックで書き換える（ウェブフックは 1 つだけ作る）
+    await db.update(notices).set({ body: 'こんばんは' }).where(eq(notices.id, a.id));
+    expect(await publishNotice(ctx, a.id, GUJI)).toBe('edited');
+    expect(d.log).toContain(`hookedit ${second}`);
+    expect(hooks).toEqual([CH.torii]);
+    // 名前を空にすると BOT に戻る
+    expect(await setNoticeSender(db, { name: '', avatarUrl: '' }, GUJI)).toBe('ok');
+    expect(await noticeSender(db)).toBeUndefined();
+  });
+});
+
