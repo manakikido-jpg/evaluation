@@ -13,6 +13,10 @@ const recoverableDecodeErrors = new Map([
   ['Decode error: Invalid packet', 'invalid-packet'],
   ['Decode error: Bad argument', 'bad-argument'],
   ['Decode error: Buffer too small', 'buffer-too-small'],
+  // 壊れた・読めないパケット（暗号の切り替わりなど）でも出る。続けて起きたときだけ止める
+  ['Decode error: Internal error', 'internal-error'],
+  ['Decode error: Unimplemented', 'unimplemented'],
+  ['Decode error: Invalid state', 'invalid-state'],
 ]);
 const receivePerms = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.SendMessages];
 const sendPerms = [...receivePerms, PermissionFlagsBits.Speak];
@@ -147,7 +151,7 @@ export class DiscordEventRelay implements RelayTransport {
           let pcm: Buffer;
           // OpusScriptの入力バッファは3828バイト。上限外も連続失敗に数える。
           if (!packet.length || packet.length > OpusScript.MAX_PACKET_SIZE) { this.decodeFailed(id, decoder, 'packet-size'); return; }
-          try { pcm = codec.decode(packet); }
+          try { pcm = decoder.codec.decode(packet); }
           catch (error) {
             const kind = error instanceof Error ? recoverableDecodeErrors.get(error.message) : undefined;
             this.decodeFailed(id, decoder, kind ?? 'decoder-error'); return;
@@ -173,7 +177,11 @@ export class DiscordEventRelay implements RelayTransport {
       // 失敗した話者だけを初期化する。購読は維持し、次の正常パケットで復帰する。
       this.mixer.remove(id); this.mixer.add(id);
       try { decoder.codec.decoderCTL(OPUS_RESET_STATE, 0); }
-      catch { this.fault('受信音声の変換器を初期化できないため停止しました。'); }
+      catch {
+        // 初期化できなければ、変換器を作り直す（作り直せなければ止める）
+        try { decoder.codec.delete(); decoder.codec = new OpusScript(48000, 2, OpusScript.Application.AUDIO); }
+        catch { this.fault('受信音声の変換器を初期化できないため停止しました。'); }
+      }
     }
   }
   private checkChannels(): void {
