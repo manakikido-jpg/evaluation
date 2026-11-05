@@ -16,6 +16,8 @@ const stat=(n:number):Stat=>({day:day(n),spins:0,input:0,output:0,god:0,gg:0,sgg
 export const freshFloor=(n:number):Floor=>({version:'kiseki-floor-1',revision:0,machines:[1,1,2,2,4].map((setting,i)=>({id:i+1,state:newKiseki(setting),owner:null,ownerName:null,lastAction:0,reservedSetting:null,reservedCeiling:null,base:null,checkpoint:null,stat:stat(n),lastScenario:'自然抽選（試遊用の暫定部分あり）'})),players:{}});
 const player=(f:Floor,id:string)=>f.players['u:'+id]??={points:100000,saved:null};
 function consume(m:Machine){m.state=newKiseki(m.reservedSetting!);m.state.ceiling=m.reservedCeiling??1480;m.reservedSetting=null;m.reservedCeiling=null;}
+/** 受入台の通常状態を復元しても、いま確定した払出と停止窓は消さない。 */
+function carryResult(from:KisekiState,to:KisekiState){to.lastPaid=from.lastPaid;to.lastRole=from.lastRole;to.lastLayout=from.lastLayout;to.lastReplay=from.lastReplay;to.lastCorrect=from.lastCorrect;to.lastPositions=from.lastPositions.slice();to.message=from.message;to.winEvent=from.winEvent;}
 function apply(m:Machine){if(m.reservedSetting!==null&&m.owner===null&&!protectedState(m.state)&&!m.state.pending)consume(m);}
 function release(f:Floor,m:Machine){if(!m.owner)return;const p=player(f,m.owner);p.points=m.state.balance;
  if(protectedState(m.state)||m.base||m.state.pending){if(p.saved)throw new KisekiError('保存状態を確認してください。',409);p.saved=structuredClone(m.state);m.state=m.base??m.checkpoint??newKiseki(m.state.setting);m.base=null;m.checkpoint=null;}
@@ -42,7 +44,7 @@ export function act(f:Floor,id:string,name:string,a:Action,now:number,rng:Rng=cr
  }}catch(e){if(e instanceof KisekiError)throw e;throw new KisekiError(e instanceof Error?e.message:'操作できませんでした。');}
  if(a.action==='lever'||a.action==='stop'){
   const s=m.state,t=m.stat;t.spins+=s.spins-old.spins;t.input+=s.input-old.input;t.output+=s.output-old.output;t.god+=s.gods-old.gods;t.gg+=s.firsts-old.firsts;t.sgg+=s.sggs-old.sggs;p.points=s.balance;
-  if(!s.pending){t.graph.push((t.output-t.input)/10);t.graph=t.graph.slice(-200);if(!protectedState(s)){if(m.base){m.state=m.base;m.base=null;m.state.balance=p.points;}if(m.reservedSetting!==null&&!(['normal','omen','gaia'] as string[]).includes(old.phase)){consume(m);m.state.balance=p.points;}}}
+  if(!s.pending){t.graph.push((t.output-t.input)/10);t.graph=t.graph.slice(-200);if(!protectedState(s)){if(m.base){m.state=m.base;m.base=null;m.state.balance=p.points;carryResult(s,m.state);}if(m.reservedSetting!==null&&!(['normal','omen','gaia'] as string[]).includes(old.phase)){consume(m);m.state.balance=p.points;carryResult(s,m.state);}}}
  }
  f.revision++;
 }

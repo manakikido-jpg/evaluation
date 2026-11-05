@@ -61,6 +61,13 @@ describe('軌跡版の独立した遊技',()=>{
   let seed=771;const rng=(n:number)=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed%n;};
   const s=newKiseki(6);for(let game=0;game<1000;game++){lever(s,rng);const nav=(s.pending!.role==='bell'&&!['normal','omen','gaia'].includes(s.phase))?s.pending!.order.slice():[0,1,2];for(const i of nav)stop(s,i,rng);expect(s.balance).toBe(100000-s.input+s.output);expect(s.spins).toBe(game+1);expect(s.left).toBeGreaterThanOrEqual(0);expect(s.stocks).toBeGreaterThanOrEqual(0);expect(s.pending).toBeNull();}
  });
+ it('期限で保存した通常ゲームの最終払出も、受入台の復元後に表示を保持する',()=>{
+  const f=freshFloor(0),rng=last;act(f,'u','試遊',{action:'seat',machine:1,revision:0},0,rng);
+  lever(f.machines[0]!.state,rng,'middleGold');expire(f,600001);
+  act(f,'u','試遊',{action:'seat',machine:2,revision:f.revision},600001,rng);const base=f.machines[1]!.base!;base.normalGames=357;base.mode='high';
+  for(const index of [0,1,2])act(f,'u','試遊',{action:'stop',index,machine:2,revision:f.revision},600001,rng);
+  const v=trialView(f,'u');expect(v.points).toBe(100120);expect(v.own!.lastPaid).toBe(150);expect(v.own!.lastRole).toBe('middleGold');expect(v.own!.positions).toEqual(stopPlan('middleGold'));expect(v.own!.normalGames).toBe(357);expect(f.machines[1]!.state.mode).toBe('high');expect(f.machines[1]!.base).toBeNull();
+ });
  it('時限は閲覧で延長せず、設定予約の天井は1回だけ選ぶ',()=>{
   const f=freshFloor(0);act(f,'u','試遊',{action:'seat',machine:1,revision:0},0,last);const a={action:'setting',machine:1,revision:f.revision,setting:6};act(f,'u','試遊',a,0,()=>0);expect(f.machines[0]!.reservedCeiling).toBe(510);const before=structuredClone(f);trialView(f,'u');expect(f).toEqual(before);expire(f,599999);expect(f.machines[0]!.owner).toBe('u');expire(f,600000);expect(f.machines[0]!.owner).toBeNull();expect(f.machines[0]!.state.setting).toBe(6);expect(f.machines[0]!.state.ceiling).toBe(510);
   expect(protectedState(scenario(1,'sgg-retry'))).toBe(true);
