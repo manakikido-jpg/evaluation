@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {id:'2026-11-05-kiseki-separate-trial',date:'2026-11-05',kind:'new',where:['社務所Web'],title:'凱旋を残し、神殿スロットの軌跡版を別台で追加',items:['軌跡専用の5台・無料試遊ポイント・本人保存・設定・集計を追加しました。凱旋の進捗はそのままです。','GG50G・PGG基本4セット・セット制SGG・ガイア・Z-ZONE/Z-GAMEと専用の配列表/停止形を確認できます。','独自素材の筐体・音・スマホ操作を共用します。未照合の抽選は試遊用として明記し、一般公開・銭接続は保留です。'],announcement:{priority:'none',audience:'運営の無料試遊担当',steps:['社務所Web→カジノ管理→神殿スロット・軌跡版の無料試遊を開く。','空席に着席し、通常は左から/ナビ時は順番優先でSTOPする。場面確認からGG/PGG/SGG/ガイア/Z系を試せる。','配列・打ち方は別タブ。離席すると特別区間を本人用に保存し、軌跡の別台で再開できる。'],postText:'',imagePrompt:'軌跡版と凱旋版の別入口、軌跡のGG50G/PGG/SGG/Z系の実画面を撮影。実機の画像/音を転載しない。',notes:'運営限定・銭非接続。実機同等の機械割や実端末の打感は保証しない。'}},
   { id: '2026-11-05-stay-order', date: '2026-11-05', kind: 'improve', where: ['Discord', '社務所Web'], title: '🔃 宿の並ぶ順を、運営が決められるように', items: ['社務所Web の部屋代の設定に「🔃 宿の並ぶ順」を足しました。🏨 24時間の宿・⏱ 1時間ごとの宿・ふつうの宿（公開・招待限定・シークレット）の順番を 1〜9 で決められます（小さい数が上）。', '同じ順番の中は、新しい宿が上に並びます。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '並びは BOT が自動で直す。' } },
   {
     id:'2026-11-05-gaisen-reel-control',date:'2026-11-05',kind:'new',where:['社務所Web'],
