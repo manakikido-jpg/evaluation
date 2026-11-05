@@ -1,6 +1,7 @@
 # 作業の引き継ぎメモ
 
 ## 2026年11月5日：軌跡版の液晶を神話の風景へ
+- 完了保存：[Draft PR144](https://github.com/manakikido-jpg/evaluation/pull/144)を作成しタスクへ添付。codex/kiseki-landscape-lcd、作成時head1768b02/base1a79a19、Draft/open/未合流。液晶の風景3点、左紫/中央赤/右青の金主体の三神メダル、メダル上のナビ、WebP7点/元PNG4点/確認画像7点と検証条件を保存済み。標準Node22のPR結合CIは未完了。次はPRレビュー/CI確認、合流は新しい明示指示まで保留。一般公開・銭接続も維持。e555995以後は記録のみでコード/テスト/画像/依存関係に変更なし。試験用サーバーは停止済み。
 - 保存前の最終確認：同じ実装e555995に対する型チェック再確認と文書リンク1件（2.21秒）も成功。ビルドはtscとpublicの配布先コピーまで実施済み。以後はこの記録のみ。専用枝codex/kiseki-landscape-lcdから本番向けDraft PRを作る。
 - 再確認完了：GIF13件はNode22/1worker/GC128MiBで成功（93.90秒）。BOT対象1件77.57秒と合わせ、重複を除く245ファイル2,746ケースの通過を確認した。全件初回はexit1であり、単一全件成功とは記載しない。テスト削除/skip追加/期待値/16対戦/明示個別120秒の変更はない。以後は記録のみでコード/テスト/画像に変更なし。最終文書リンクと型を確認して専用枝へpushし、新Draft PRへ保存する。一般公開・銭接続・合流は保留。ログ/tmp/kiseki-landscape-{types,build,related,all,bot-rerun,gif-rerun,chromium,webkit,focus-chromium,focus-webkit,focus-webkit-rotate}.log。
 - BOT再確認：Node24/1worker/GC128MiB/CLIで対象名を指定し1件成功（77.57秒）。元の16対戦・明示個別120秒のまま。他12件は選択対象外で、全件初回で成功済み。GIF13件はNode22/1workerで実行中。直前fetchで本番1a79a19を再確認し、追加変更なし。
