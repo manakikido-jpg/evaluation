@@ -1,7 +1,7 @@
 {
   "v": 1,
   "imageMethod": "image_genによる独自生成。背景は1600px/800px、リール絵柄は透過256pxのWebPへ変換。実機素材の流用なし。",
-  "audioMethod": "build_audio.pyの機械衝撃/金属モード/鐘の倍音/初期反射を使う物理モデル合成。録音・音声生成AIの出力ではない。",
+  "audioMethod": "独自の物理モデル合成。基本音はbuild_audio.py、回転音はbuild_motor.py、操作4音はbuild_controls.pyで短い衝撃/樹脂の胴鳴り/ばね/ラッチ/近い反射へ調整。録音・音声生成AIではない。 通常時の風/遠雷/光の3音はbuild_normal.pyで別合成。",
   "files": [
     {
       "file": "award-1600.webp",
@@ -45,13 +45,13 @@
     },
     {
       "file": "lever.mp3",
-      "bytes": 10074,
-      "sha256": "d2be1538f22d664b09145476a02c95a73468051388a88c5c50a28165d042a5f6",
-      "duration": 0.600816,
+      "bytes": 5894,
+      "sha256": "fb326f234debfab68d61889f4aab7c3701392bcd03e5caf1648c15a9a4ec3232",
+      "duration": 0.339592,
       "sampleRate": 44100,
       "channels": 2,
-      "decodedPeak": 0.68315,
-      "rmsDbFS": -22.77
+      "decodedPeak": 0.60883,
+      "rmsDbFS": -25.72
     },
     {
       "file": "medusa.mp3",
@@ -125,33 +125,33 @@
     },
     {
       "file": "stop-left.mp3",
-      "bytes": 5476,
-      "sha256": "1cf44900eb82618229a5285e77e6ce2f355f4535c030e1e97f079b930094993a",
-      "duration": 0.313469,
+      "bytes": 3804,
+      "sha256": "99a6c6bd04218f631697b1df9a64577b24cfe47fab291a1053a9006dfd284a05",
+      "duration": 0.20898,
       "sampleRate": 44100,
       "channels": 2,
-      "decodedPeak": 0.66644,
-      "rmsDbFS": -20.57
+      "decodedPeak": 0.54363,
+      "rmsDbFS": -26.76
     },
     {
       "file": "stop-middle.mp3",
-      "bytes": 5476,
-      "sha256": "01326a6e205f0a2826aee4673d8848999ce24e1796184bc57f44437bd4f49efb",
-      "duration": 0.313469,
+      "bytes": 3804,
+      "sha256": "3dd1d7231931566b677e65ff3b00deaa29768fa250a228b09fb22b30c86f7d88",
+      "duration": 0.20898,
       "sampleRate": 44100,
       "channels": 2,
-      "decodedPeak": 0.68311,
-      "rmsDbFS": -22.7
+      "decodedPeak": 0.54838,
+      "rmsDbFS": -27.6
     },
     {
       "file": "stop-right.mp3",
-      "bytes": 5476,
-      "sha256": "2ef5662274bfc410c83b75c15ac0099d31145d8eae68c8a659c833c800bb11b8",
-      "duration": 0.313469,
+      "bytes": 3804,
+      "sha256": "ffdbcc4d37eed0046eda694f7cec1ee3dd33b623ee813cc7b653602c87799df0",
+      "duration": 0.20898,
       "sampleRate": 44100,
       "channels": 2,
-      "decodedPeak": 0.69064,
-      "rmsDbFS": -22.04
+      "decodedPeak": 0.55933,
+      "rmsDbFS": -24.86
     },
     {
       "file": "symbol-gold7.webp",
@@ -212,6 +212,36 @@
       "rmsDbFS": -14.88,
       "loopStart": 0.25,
       "loopEnd": 2.25
+    },
+    {
+      "file": "cue-wind.mp3",
+      "bytes": 12163,
+      "sha256": "0323213dc72ec8bcd77514c5f55cd0db502b54ea319dd310fe8d8c9a400fe0e9",
+      "duration": 0.731429,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.42473,
+      "rmsDbFS": -22.99
+    },
+    {
+      "file": "cue-thunder.mp3",
+      "bytes": 12581,
+      "sha256": "c435298ca997838cc928020011fd0d39103c9f836b5db56a36fe60501f35f3d8",
+      "duration": 0.757551,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.42705,
+      "rmsDbFS": -22.47
+    },
+    {
+      "file": "cue-glint.mp3",
+      "bytes": 9238,
+      "sha256": "c36e34ed024b6af6801719bcf13d11e9a9e9ba9990bde04a65dba920a1282243",
+      "duration": 0.548571,
+      "sampleRate": 44100,
+      "channels": 2,
+      "decodedPeak": 0.42752,
+      "rmsDbFS": -21.26
     }
   ]
 }

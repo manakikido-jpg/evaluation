@@ -7,6 +7,10 @@ import {GaisenTrial} from '../src/web/views/gaisenTrial.js';
 const session={userId:'sample',username:'試遊係',level:'guji',pages:null,csrfToken:'test-only'} as AdminSession;
 function fixture(){const floor=freshFloor(0,'trial-2');floor.machines[0]!.owner='sample';return {floor,machine:floor.machines[0]!,html:()=>jsx(GaisenTrial,{m:trialView(floor,'sample'),session,version:'trial-2'}).toString()};}
 describe('神殿の筐体と操作案内',()=>{
+ it('通常演出を版つきJS/空の装飾層として読み、前兆をGGの残りGと誤表示しない',async()=>{
+  const f=fixture();f.machine.state=scenario(1,'omen','trial-2');f.machine.state.normalGames=321;const before=structuredClone(f.floor),html=await f.html();
+  expect(html).toMatch(/gaisen-normal\.js\?v=[a-f0-9]{10}/);expect(html).toContain('class="gt-normal-effects" aria-hidden="true"');expect(html).toContain('通常累計 <b>321G</b>');expect(html).not.toMatch(/data-normal-cue=|data-normal-mood=/);expect(f.floor).toEqual(before);
+ });
  it('診断は初期OFFの本人操作で、CSPを守って版つきのJSを読む',async()=>{
   const html=await fixture().html();
   expect(html).toMatch(/gaisen-diagnostics\.js\?v=[a-f0-9]{10}/);
@@ -30,6 +34,9 @@ describe('神殿の筐体と操作案内',()=>{
   const before=structuredClone(f.floor),html=await f.html();
   expect(html).toContain('class="gt-readout-wide" data-gt-credit="true">10,100,000</b>');
   expect(html).toContain('data-gt-payout="true">0</b>');expect(f.floor).toEqual(before);
+ });
+ it('通常の数字回転は役と独立した固定列で、停止すると公開済み数字へ置き換える',async()=>{
+  const f=fixture();lever(f.machine.state,()=>1,'none');const before=structuredClone(f.floor);expect((await f.html()).match(/class="gt-number-cycle"/g)).toHaveLength(3);expect(f.floor).toEqual(before);stop(f.machine.state,0,()=>1);expect((await f.html()).match(/class="gt-number-cycle"/g)).toHaveLength(2);
  });
  it('GODは最終STOP後に液晶内へ表示し、未停止の役では告知しない',async()=>{
   const f=fixture();lever(f.machine.state,()=>1,'god');

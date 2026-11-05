@@ -84,4 +84,8 @@ describe('新台の別生成音源',()=>{
 
  it('装飾音の高さは小さな範囲に収め、通常の停止音は変えない',async()=>{const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();await f.bank.play('lever');await f.bank.play('god',{group:'win',rate:9});await f.bank.play('god',{group:'win',rate:.1});expect(f.started.map(s=>s.playbackRate.value)).toEqual([1,1.04,.96]);});
 
+ it('通常演出の音より操作音を優先し、次操作で通常演出の音だけ取り消せる',async()=>{
+  const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();await f.bank.play('god',{group:'normal'});await f.bank.play('lever');
+  const cue=[...f.bank.nodes.values()].find(e=>e.group==='normal'),play=[...f.bank.nodes.values()].find(e=>e.group==='play');expect(cue.priority).toBeLessThan(play.priority);expect(play.gain.gain.value).toBeCloseTo(.65*.65);expect(cue.gain.gain.value).toBeLessThan(play.gain.gain.value);f.bank.stopGroup('normal');expect(f.started[0].stopped).toBe(true);expect(f.started[1].stopped).toBe(false);
+ });
 });

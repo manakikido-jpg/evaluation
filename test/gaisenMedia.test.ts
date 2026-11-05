@@ -6,7 +6,7 @@ import {STATIC,assetUrl} from '../src/web/assets.js';
 const manifest=JSON.parse(readFileSync(new URL('../assets/gaisen-media/manifest.json',import.meta.url),'utf8')) as {files:Array<{file:string;bytes:number;sha256:string;channels?:number;sampleRate?:number}>};
 describe('新台の生成画像と音源の配信',()=>{
  it('保存した全素材をハッシュ付きURLと正しいMIMEで配信し、記録のSHA256と一致する',()=>{
-  expect(manifest.files).toHaveLength(24);
+  expect(manifest.files).toHaveLength(27);
   for(const item of manifest.files){
    const name='gaisen-media-'+item.file,asset=STATIC[name]!;expect(asset).toBeDefined();expect(asset.type).toBe(item.file.endsWith('.mp3')?'audio/mpeg':'image/webp');
    expect(asset.body.length).toBe(item.bytes);expect(createHash('sha256').update(asset.body).digest('hex')).toBe(item.sha256);expect(assetUrl(name)).toContain('?v=');
