@@ -5,18 +5,19 @@ import { createWebApp } from '../src/web/app.js';
 import { createSession } from '../src/web/sessions.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
-const now = new Date('2026-11-07T03:00:00Z'), ID = '830000000000000001', A = '830000000000000002', B = '830000000000000003', ENG = '930000000000000001';
+const now = new Date('2026-11-07T03:00:00Z'), ID = '830000000000000001', A = '830000000000000002', B = '830000000000000003', C = '830000000000000004', ENG = '930000000000000001';
 const user = { id: ID, username: 'staff', displayName: '運営', avatarUrl: null };
 let db: Db, close: () => Promise<void>, app: ReturnType<typeof createWebApp>, token: string;
 const headers = (t = token) => ({ cookie: 'shamusho_session=' + t });
 beforeEach(async () => {
   ({ db, close } = await makeDb());
   await db.insert(members).values([{ id: ID, username: 'staff', displayName: '運営', roleIds: [ROLE.guji] },
-    { id: A, username: 'alpha', displayName: '先に達成', roleIds: [ROLE.sanpaisha] }, { id: B, username: 'beta', displayName: 'あと一分', roleIds: [ROLE.sanpaisha] }]);
+    { id: A, username: 'alpha', displayName: '先に達成', roleIds: [ROLE.sanpaisha] }, { id: B, username: 'beta', displayName: '過去分で達成', roleIds: [ROLE.sanpaisha] }, { id: C, username: 'gamma', displayName: 'あと一分', roleIds: [ROLE.sanpaisha] }]);
   await db.insert(voiceChannels).values({ channelId: ENG, name: '縁側１' });
   await db.insert(voiceUsage).values([{ memberId: A, date: '2026-11-06', channelId: ENG, minutes: 1300, rankRecordedMinutes: 1200, sanpaishaMinutes: 1200 },
-    { memberId: B, date: '2026-11-06', channelId: ENG, minutes: 10000, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199 }]);
-  await db.insert(shuin).values([A, B].flatMap((receiverId, i) => Array.from({ length: 40 + i }, (_, j) => ({ receiverId, giverId: String(840000000000000000n + BigInt(j)), weight: 10, giverRank: 'guji' }))));
+    { memberId: B, date: '2026-11-06', channelId: ENG, minutes: 10000, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199 },
+    { memberId: C, date: '2026-11-06', channelId: ENG, minutes: 1199, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199 }]);
+  await db.insert(shuin).values([A, B, C].flatMap((receiverId, i) => Array.from({ length: 40 + (i === 1 ? 1 : 0) }, (_, j) => ({ receiverId, giverId: String(840000000000000000n + BigInt(j)), weight: 10, giverRank: 'guji' }))));
   app = createWebApp({ db, cfg: () => cfg, api: { memberRoles: async () => [ROLE.guji] } as never,
     discord: { guildChannels: async () => [] } as never, baseUrl: 'https://example.test', now: () => now });
   token = await createSession(db, user, { level: 'guji', pages: null }, now);
@@ -35,25 +36,27 @@ it('一覧とCSVのどちらも認証と独立した評価ページ権限を要�
   expect(menu).not.toContain('href="/evaluation"');
 });
 
-it('重みなし40個と1200分を表示し、過去の参考値を判定から外す。読むだけで役職や記録を変えない', async () => {
+it('過去分も20時間へ加算し、内訳を表示する。読むだけで役職や元の記録を変えない', async () => {
   const beforeMembers = await db.select().from(members), beforeVoice = await db.select().from(voiceUsage);
   const response = await app.request('/evaluation', { headers: headers() }), html = await response.text();
   expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toContain('no-store');
   expect(html).toContain('2026年11月6日（金）0:00（日本時間）');
   expect(html).toContain('href="/evaluation"'); expect(html).toContain('40個 / 40個'); expect(html).toContain('41個 / 40個');
-  expect(html).toContain('19時間59分 / 20時間'); expect(html).toContain('あと1分'); expect(html).toContain('役職不明・条件に含めない');
-  expect(html.indexOf('href="/members/' + A)).toBeLessThan(html.indexOf('href="/members/' + B));
+  expect(html).toContain('19時間59分 / 20時間'); expect(html).toContain('あと1分'); expect(html).toContain('過去取込'); expect(html).toContain('過去分の当時役職は未確認');
+  expect(html).not.toMatch(/<details class="evaluation-targets"[^>]*\bopen/);
+  expect(html.indexOf('href="/members/' + B)).toBeLessThan(html.indexOf('href="/members/' + A));
   expect(html).not.toMatch(/onclick=|style=/);
   expect(await db.select().from(members)).toEqual(beforeMembers); expect(await db.select().from(voiceUsage)).toEqual(beforeVoice);
 });
 
 it('検索・達成状況・縁側選択をCSVへ引き継ぎ、絞り込み後も全体順位を保つ', async () => {
-  const html = await (await app.request('/evaluation?q=beta&status=unmet', { headers: headers() })).text();
-  expect(html).toContain('2位'); expect(html).not.toContain('href="/members/' + A);
+  const html = await (await app.request('/evaluation?q=beta&status=met', { headers: headers() })).text();
+  expect(html).toContain('1位'); expect(html).not.toContain('href="/members/' + A);
   expect(html).toContain('/evaluation/export.csv?');
-  const response = await app.request('/evaluation/export.csv?q=beta&status=unmet', { headers: headers() }), csv = await response.text();
+  const response = await app.request('/evaluation/export.csv?q=beta&status=met', { headers: headers() }), csv = await response.text();
   expect(response.headers.get('content-disposition')).toContain('attachment'); expect(response.headers.get('content-type')).toContain('text/csv');
-  expect(csv).toContain('2026-11-06 00:00'); expect(csv).toContain('あと一分'); expect(csv).not.toContain('先に達成'); expect(csv).toContain('"2","あと一分"');
+  expect(csv).toContain('2026-11-06 00:00'); expect(csv).toContain('過去分で達成'); expect(csv).not.toContain('先に達成'); expect(csv).toContain('"1","過去分で達成"');
+  expect(csv).toContain('うち過去取込'); expect(csv).toContain('"8801"');
   const none = await (await app.request('/evaluation?scope=1&status=met', { headers: headers() })).text();
   expect(none).toContain('未選択'); expect(none).toContain('この条件に合う参拝者はいません');
 });
@@ -67,8 +70,8 @@ it('不正な検索条件や縁側以外のIDは400とし、全通話へすり�
 it('100名ずつ表示し、CSVでは同じ条件に当てはまる全員を保存できる', async () => {
   await db.insert(members).values(Array.from({ length: 101 }, (_, i) => ({ id: String(850000000000000000n + BigInt(i)), username: `extra${i}`, displayName: `追加${i}`, roleIds: [ROLE.sanpaisha] })));
   const html = await (await app.request('/evaluation?page=2', { headers: headers() })).text();
-  expect(html).toContain('2 / 2ページ'); expect(html).toContain('103名');
-  expect((html.match(/scope="row"/g) ?? []).length).toBe(3);
+  expect(html).toContain('2 / 2ページ'); expect(html).toContain('104名');
+  expect((html.match(/scope="row"/g) ?? []).length).toBe(4);
   const csv = await (await app.request('/evaluation/export.csv?page=2', { headers: headers() })).text();
-  expect(csv).toContain('先に達成'); expect(csv).toContain('追加100'); expect(csv.split('\r\n')).toHaveLength(105);
+  expect(csv).toContain('先に達成'); expect(csv).toContain('追加100'); expect(csv.split('\r\n')).toHaveLength(106);
 });
