@@ -346,6 +346,16 @@ describe('🏨 宿が自動で並ぶ', () => {
     expect(stayOrder(channels, rows)).toEqual([{ id: 'day', position: 1 }, { id: 'hourly', position: 2 }, { id: 'normal', position: 4 }]);
     expect(stayOrder([{ id: 'day', position: 1 }, { id: 'hourly', position: 2 }, { id: 'normal', position: 4 }], rows)).toEqual([]);
   });
+  it('Discord に保存する番号に直す（番号が重なっていても、1 ずつ振り直す）', async () => {
+    const { rawPositions, stayOrder } = await import('../src/discord/tempVoice.js');
+    const day = { keepUntil: new Date(), renewHourly: false }, plain = { keepUntil: null, renewHourly: false };
+    const rows = new Map<string, { keepUntil: Date | null; renewHourly: boolean }>([['normal', plain], ['day', day]]);
+    // 見えている順: hub, normal, day（Discord の番号は全部 5 で重なっている）
+    const voices = [{ id: 'hub', position: 0, raw: 5 }, { id: 'normal', position: 1, raw: 5 }, { id: 'day', position: 2, raw: 5 }];
+    const moves = stayOrder(voices, rows);
+    expect(rawPositions(voices, moves)).toEqual([{ id: 'hub', position: 5 }, { id: 'day', position: 6 }, { id: 'normal', position: 7 }].filter((m) => m.id !== 'hub'));
+    expect(rawPositions(voices, [])).toEqual([]);
+  });
   it('運営が決めた順に並ぶ。同じ順の中は新しい宿が上', async () => {
     const { stayOrder } = await import('../src/discord/tempVoice.js');
     const t = (h: number) => new Date(Date.UTC(2026, 10, 5, h));

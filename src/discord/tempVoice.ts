@@ -85,6 +85,19 @@ export function stayOrder(channels: { id: string; position: number }[], rows: Ma
   return sorted.map((c, n) => ({ id: c.id, position: rooms[n]!.position }));
 }
 
+/**
+ * 並べ直した結果を、Discord に保存する番号（rawPosition）に直す。
+ * 番号が重なっていると動かないので、いちばん小さい番号から 1 ずつ振り直し、変わるものだけ返す
+ */
+export function rawPositions(voices: { id: string; position: number; raw: number }[], moves: { id: string; position: number }[]): { id: string; position: number }[] {
+  if (!moves.length) return [];
+  const shown = [...voices].sort((a, b) => a.position - b.position).map((v) => v.id);
+  for (const m of moves) shown[m.position] = m.id;
+  const base = Math.min(...voices.map((v) => v.raw));
+  const rawOf = new Map(voices.map((v) => [v.id, v.raw]));
+  return shown.map((id, n) => ({ id, position: base + n })).filter((m) => rawOf.get(m.id) !== m.position);
+}
+
 export class TempVoiceApp {
   private ctx?: TempVoiceCtx;
 
@@ -130,9 +143,11 @@ export class TempVoiceApp {
       const order = this.cfg().rooms.stayOrder;
       const parents = new Set([...rows.keys()].map((id) => guild.channels.cache.get(id)?.parentId).filter((id): id is string => Boolean(id)));
       for (const parentId of parents) {
-        const voices = guild.channels.cache.filter((c) => c.parentId === parentId && c.type === ChannelType.GuildVoice).map((c) => ({ id: c.id, position: (c as { position: number }).position }));
+        // position は「見えている順番」、rawPosition は Discord に保存されている番号（setPositions はこちら）
+        const voices = guild.channels.cache.filter((c) => c.parentId === parentId && c.type === ChannelType.GuildVoice).map((c) => ({ id: c.id, position: (c as { position: number }).position, raw: (c as { rawPosition: number }).rawPosition }));
         const moves = stayOrder(voices, rows, order);
-        if (moves.length) await guild.channels.setPositions(moves.map((m) => ({ channel: m.id, position: m.position })));
+        const raw = rawPositions(voices, moves);
+        if (raw.length) await guild.channels.setPositions(raw.map((m) => ({ channel: m.id, position: m.position })));
       }
     } finally { this.sorting = false; }
   }
