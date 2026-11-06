@@ -1,0 +1,15 @@
+export function KisekiPreferences(){return <>
+ <fieldset class="kt-realism-preferences"><legend>音と打ち心地</legend><div class="gt-preferences-grid">
+  <label>演出の頻度<select data-kt-pref="density"><option value="quiet">静か</option><option value="normal" selected>ふつう</option><option value="rich">にぎやか</option></select></label>
+  <label>操作音<select data-kt-pref="operationsVolume"><option value="0">OFF</option><option value="0.5">小さめ</option><option value="1" selected>ふつう</option></select></label>
+  <label>演出・払出音<select data-kt-pref="effectsVolume"><option value="0">OFF</option><option value="0.5">小さめ</option><option value="1" selected>ふつう</option></select></label>
+  <label>BGMの大きさ<select data-kt-pref="bgmVolume"><option value="0.25">小さめ</option><option value="0.5" selected>ふつう</option><option value="1">大きめ</option></select></label>
+  <label>ボタンの接触音<select data-kt-pref="contact"><option value="on" selected>ON（音ON時）</option><option value="off">OFF</option></select></label>
+  <label>振動<select data-kt-pref="haptics"><option value="off" selected>OFF</option><option value="on">ON（対応端末のみ）</option></select></label>
+  <label>休憩の目安<select data-kt-pref="rest"><option value="0" selected>表示しない</option><option value="30">30分</option><option value="60">60分</option></select></label>
+ </div><p class="gt-preferences-note" data-kt-haptics-note>振動に対応した端末だけで使えます。</p><p class="gt-preferences-note">頻度は飾りの出やすさだけを変え、抽選・払出しは変えません。休憩の表示で遊技を止めることはありません。</p></fieldset>
+ <details class="kt-device-check"><summary>この画面の記録と端末の状態</summary><p data-kt-session-stats>この画面で確定したゲームを数えます。</p><p data-kt-audio-state>音声処理の状態は音ON後に表示します。</p><p class="gt-preferences-note">記録は直近120ゲームまで、この画面のメモリー内だけです。再読込で消え、送信・保存しません。音声処理の遅延は端末の申告値で、実際に音が聞こえる時間とは別です。</p></details>
+ <details class="gt-diagnostics" data-gt-diagnostics><summary id="gt-diagnostic-summary">操作の時間を確認</summary><p class="gt-preferences-note">記録中のレバー・STOPを直近20件まで、この画面だけに保持します。外部へ送信しません。</p><div class="gt-diagnostic-actions"><button id="gt-diagnostic-toggle" type="button" data-gt-diagnostic-toggle aria-pressed="false">記録開始</button><button id="gt-diagnostic-clear" type="button" data-gt-diagnostic-clear disabled>記録を消す</button><button id="gt-diagnostic-copy" type="button" data-gt-diagnostic-copy disabled>結果をコピー</button></div><p data-gt-diagnostic-status role="status">記録OFF · 0件</p><p class="gt-preferences-note">通信・DOM更新・2回目の描画コールバックまでの目安です。停止演出の完了・実描画・実音声の開始は測りません。</p>
+ <div id="gt-diagnostic-region" class="gt-diagnostic-scroll" role="region" aria-label="直近の操作時間" tabindex={0}><table><thead><tr><th>操作</th><th>入力待ち</th><th>応答待ち</th><th>画面更新</th><th>表示の目安</th><th>結果</th></tr></thead><tbody data-gt-diagnostic-rows/></table></div><p data-gt-diagnostic-copy-note role="status"/><textarea id="gt-diagnostic-report" data-gt-diagnostic-report aria-label="診断結果のコピー用テキスト" readonly hidden rows={8}/></details>
+ </>;}
+export function KisekiBreakNote(){return <p class="kt-break-note" data-kt-break-note hidden role="status"><span>画面を開いてから休憩の目安になりました。進行は保存されているので、ご自身のタイミングで休めます。</span><button type="button" data-kt-break-dismiss>閉じる</button></p>;}

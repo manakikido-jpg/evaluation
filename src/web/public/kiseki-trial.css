@@ -88,3 +88,102 @@
 /* 回復案内が出る横向き表示でも、透過窓の幅を保つ。 */
 .kt-root[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{width:100%;--symbol-h:7.15cqw}
 @media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .gt-display .gt-lcd{flex:1;min-height:40px;display:block;padding:22px 5px 0}.kt-root[data-focus=true] .gt-display .gt-screen-mode{position:absolute;left:5px;top:24px;font-size:8px}.kt-root[data-focus=true] .gt-display .gt-digits{position:absolute;right:8px;top:27px;height:36px;gap:8px}.kt-root[data-focus=true] .gt-display .gt-digits>span{font-size:30px}.kt-root[data-focus=true] .gt-display .gt-message{position:absolute;left:5px;bottom:1px;font-size:7px;max-width:42%}.kt-root[data-focus=true] .kt-reel-assembly{width:min(96%,240px)}.kt-root[data-focus=true]:has(.gt-recovery:not([hidden])) .kt-reel-assembly{width:min(96%,220px)}}
+
+/* 軌跡の公開区間専用映像。動きは奥の環境とメダルに留める。 */
+.kt-machine[data-kt-theme=gg] .gt-landscape,.kt-machine[data-kt-theme=pgg] .gt-landscape,.kt-machine[data-kt-theme=sgg] .gt-landscape{height:100%;object-fit:cover;object-position:50% 42%;filter:none;opacity:1}
+.kt-machine[data-kt-theme=sgg] .kt-cosmos{display:none}
+.kt-machine[data-kt-theme] .gt-scene-depth{opacity:0}
+.kt-environment{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.kt-environment i{position:absolute;display:block;pointer-events:none}
+.kt-clouds{inset:4% -12% 35%;background:radial-gradient(ellipse at 30% 30%,#fff8e51a,transparent 55%),radial-gradient(ellipse at 70% 60%,#fff6dd15,transparent 55%);animation:kt-cloud-drift 24s ease-in-out infinite alternate}
+.kt-water{inset:48% -10% 28%;background:repeating-linear-gradient(178deg,transparent 0 14px,#d3f4f81b 16px,transparent 18px 27px);mask-image:linear-gradient(transparent,#0008,transparent);animation:kt-water-drift 6s ease-in-out infinite alternate}
+.kt-machine[data-landscape=garden] .kt-water,.kt-machine[data-landscape=ruins] .kt-water,.kt-machine[data-kt-theme=pgg] .kt-water,.kt-machine[data-kt-theme=sgg] .kt-water{display:none}
+.kt-flames{left:4%;right:4%;top:60%;height:12%;background:radial-gradient(ellipse at 4% 85%,#ffc85255,transparent 10%),radial-gradient(ellipse at 96% 85%,#ffc85255,transparent 10%);animation:kt-flame-breath 2.6s ease-in-out infinite alternate}
+.kt-petals{inset:-20% 0;background:radial-gradient(ellipse at 10% 18%,#ffe4dba3 0 2px,transparent 3px),radial-gradient(ellipse at 66% 48%,#fff1d77a 0 1px,transparent 3px),radial-gradient(ellipse at 36% 77%,#ffd7d077 0 2px,transparent 3px);background-size:190px 260px;animation:kt-petal-fall 20s linear infinite;opacity:.45}
+.kt-machine[data-kt-theme=sgg] .kt-petals{background:radial-gradient(circle,#ffe8ff99 0 1px,transparent 2px) 0 0/63px 83px;animation-duration:35s;opacity:.4}
+.kt-god-lights{position:absolute;inset:1% 9% auto;width:82%;height:28%;display:flex;z-index:4;pointer-events:none}
+.kt-god-lights i{position:relative;flex:1;opacity:0;transition:opacity .2s}
+.kt-god-lights i:after{content:'';position:absolute;inset:6% 12%;border-radius:50%;box-shadow:inset 0 0 14px #fff0b8aa,0 0 16px #e4ba5788;border:1px solid #ffe7a988;background:radial-gradient(ellipse,#f9df9c22,transparent 65%)}
+.kt-god-lights i:first-child:after{border-color:#cdb2e577}.kt-god-lights i:last-child:after{border-color:#a9cce577}
+.kt-machine[data-normal-cue=wind] [data-kt-god="0"],.kt-machine[data-normal-cue=glint] [data-kt-god="2"],.kt-machine[data-normal-cue=dim] [data-kt-god="1"],.kt-machine[data-normal-cue=thunder] .kt-god-lights i,.kt-machine[data-normal-cue=gates] .kt-god-lights i{opacity:1}
+.kt-divine-vision{position:absolute;left:12%;width:76%;height:30%;top:-42%;overflow:hidden;pointer-events:none;z-index:4;opacity:0;transform:translateX(-8%);mask-image:linear-gradient(transparent,#000 25% 75%,transparent);transition:opacity .25s,transform .3s;filter:drop-shadow(0 0 12px #ffe4a377)}
+.kt-divine-vision img{width:100%;height:auto;display:block}
+.kt-machine[data-normal-cue=gates] .kt-divine-vision{opacity:.86;transform:translateX(0)}
+.kt-machine[data-kt-tenpai=true] .gt-digits{filter:drop-shadow(0 0 8px #ffe2a1bb)}
+.kt-machine[data-kt-tenpai=true] .kt-god-lights i{opacity:.65}
+.kt-root .gt-reel.is-timed-stop .gt-reel-strip{transform:translateY(calc(-5 * var(--symbol-h)))}
+@keyframes kt-cloud-drift{to{transform:translate(5%,2%)}}
+@keyframes kt-water-drift{to{transform:translate(2%,4%)}}
+@keyframes kt-flame-breath{to{opacity:.55;transform:scaleY(.92)}}
+@keyframes kt-petal-fall{to{transform:translate(18px,260px)}}
+.kt-root[data-motion=low] .kt-environment i,.kt-root[data-motion=instant] .kt-environment i,.kt-root[data-quality=light] .kt-environment i,.kt-root[data-hidden=true] .kt-environment i{animation:none!important}
+.kt-root[data-motion=low] .kt-divine-vision,.kt-root[data-motion=instant] .kt-divine-vision,.kt-root[data-quality=light] .kt-divine-vision,.kt-root[data-hidden=true] .kt-divine-vision{opacity:0!important;transition:none}
+.kt-root[data-motion=instant] .kt-god-lights i,.kt-root[data-motion=low] .kt-god-lights i{opacity:0!important;transition:none}
+@media(prefers-reduced-motion:reduce){.kt-root .kt-environment i{animation:none!important}.kt-root .kt-divine-vision,.kt-root .kt-god-lights i{opacity:0!important;transition:none}}
+.kt-root .gt-lcd-award[data-kind=god] strong{font-size:clamp(42px,16vw,98px)}
+.kt-award-digits{display:flex;gap:clamp(14px,4vw,28px);line-height:1}
+.kt-award-digits b{font:italic 900 clamp(24px,7vw,44px)/1 Georgia,serif;color:#ffe7a1;text-shadow:0 2px 0 #af7626,0 4px 0 #4e2b19}
+.kt-root .gt-display[data-win-stage=reveal] .kt-award-digits b{animation:kt-digit-lock .22s ease-out both}
+.kt-root .gt-display[data-win-stage=reveal] .kt-award-digits b:nth-child(2){animation-delay:.07s}.kt-root .gt-display[data-win-stage=reveal] .kt-award-digits b:nth-child(3){animation-delay:.14s}
+.kt-root .gt-lcd-award[data-kind=sgg] .kt-award-digits b{color:#ffc2d5;text-shadow:0 2px 0 #9f3c62,0 0 12px #c2477988}
+@keyframes kt-digit-lock{from{transform:translateY(-10px);opacity:.2}to{transform:translateY(0);opacity:1}}
+.kt-root[data-motion=low] .kt-award-digits b,.kt-root[data-motion=instant] .kt-award-digits b{animation:none!important}
+@media(prefers-reduced-motion:reduce){.kt-root .kt-award-digits b{animation:none!important}}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-award-digits{position:absolute;right:0;bottom:0;gap:5px}.kt-root[data-focus=true] .kt-award-digits b{font-size:18px}.kt-root[data-focus=true] .gt-lcd-award[data-kind=god] strong{font-size:42px}}
+.kt-stop-notes{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:#ddcda7}
+
+/* 金属・ガラス・樹脂の反射を分け、公開された操作/区間だけを光へ反映する。 */
+.kt-machine{--kt-accent:#dfbe7c;isolation:isolate}
+.kt-machine[data-kt-theme=pgg]{--kt-accent:#ffe8b1}
+.kt-machine[data-kt-theme=sgg]{--kt-accent:#c2a3d7}
+.kt-root .gt-display{box-shadow:inset 0 0 18px #02050acc,0 0 0 1px #e8cc8b55}
+.kt-root .gt-display:after{background:linear-gradient(112deg,transparent 0 19%,#fff8df08 19.3%,transparent 20% 73%,#e3f3ff08 73.2%,transparent 74%);box-shadow:inset 0 1px 2px #f8ecc488,inset 0 0 20px #0006}
+.kt-root .gt-reel-glass{background:linear-gradient(#0008,transparent 22% 40%,#fff5 48%,transparent 56% 78%,#0009),linear-gradient(90deg,#0006,transparent 15% 85%,#0006);box-shadow:inset 0 0 5px #0008}
+.kt-root .gt-reel.is-spinning .gt-reel-strip{animation-duration:.7s}
+.kt-root .gt-speaker{box-shadow:inset 0 2px 5px #000c,0 1px 1px #fff3}
+.kt-root .gt-console{background-image:repeating-linear-gradient(98deg,#fff1 0 1px,transparent 1px 4px),linear-gradient(125deg,#10171c,#252a2e 36%,#090e13 65%,#24272b);background-blend-mode:soft-light,normal}
+.kt-root .gt-stop[data-kt-contact=true]:after{transform:translateY(2px);filter:brightness(.83);box-shadow:inset 0 4px 8px #4b080c,0 0 0 1px #e89a6c33}
+.kt-root .gt-lever[data-kt-contact=true] .gt-lever-hardware{transform:translateY(3px) rotate(-12deg);transform-origin:50% 100%}
+.kt-root .gt-play{touch-action:manipulation;user-select:none;-webkit-user-select:none;overscroll-behavior:contain;scroll-margin-block:90px calc(20px + env(safe-area-inset-bottom))}
+.kt-root .gt-play button{-webkit-tap-highlight-color:transparent}
+.kt-root .gt-play button:focus-visible{outline:3px solid #ffe2a0;outline-offset:3px}
+.kt-lamp-rail{position:absolute;inset:2px;pointer-events:none;z-index:8;border-radius:inherit;overflow:hidden}
+.kt-lamp-rail i{position:absolute;display:block;opacity:0;transition:opacity .16s;background:var(--kt-accent);box-shadow:0 0 12px 3px var(--kt-accent)}
+.kt-lamp-rail i:nth-child(1){left:4%;right:4%;top:1px;height:2px}
+.kt-lamp-rail i:nth-child(2){left:0;right:0;top:10%;bottom:33%;background:none;border-left:2px solid var(--kt-accent);border-right:2px solid var(--kt-accent);box-shadow:inset 0 0 9px #f0c57155}
+.kt-lamp-rail i:nth-child(3){left:7%;right:7%;bottom:29%;height:2px}
+.kt-machine[data-kt-stage=top] .kt-lamp-rail i:nth-child(1),.kt-machine[data-light-stage=top] .kt-lamp-rail i:nth-child(1),.kt-machine[data-kt-stage=rails] .kt-lamp-rail i:nth-child(2),.kt-machine[data-light-stage=rails] .kt-lamp-rail i:nth-child(2),.kt-machine[data-kt-stage=console] .kt-lamp-rail i:nth-child(3),.kt-machine[data-light-stage=apron] .kt-lamp-rail i:nth-child(3){opacity:calc(.65 * var(--gt-glow-alpha,.7))}
+.kt-machine[data-kt-feedback=paid] .kt-god-lights i{opacity:.4}
+.kt-machine[data-kt-feedback=stop][data-kt-stop="0"] [data-kt-god="0"],.kt-machine[data-kt-feedback=stop][data-kt-stop="1"] [data-kt-god="1"],.kt-machine[data-kt-feedback=stop][data-kt-stop="2"] [data-kt-god="2"]{opacity:.7}
+.kt-machine[data-kt-role=middleGold][data-kt-feedback=paid] [data-kt-god="1"],.kt-machine[data-kt-role=diagonal][data-kt-feedback=paid] [data-kt-god="2"]{opacity:.85}
+.kt-machine[data-kt-award=strong] .gt-display[data-win-stage=award],.kt-machine[data-kt-award=grand] .gt-display[data-win-stage=reveal],.kt-machine[data-kt-award=grand] .gt-display[data-win-stage=award]{box-shadow:inset 0 0 22px #f5c16555,0 0 0 1px #ffe3a888}
+.kt-machine[data-kt-payout="1"] .gt-instruments>div:last-child{box-shadow:inset 0 0 9px #ffc95d66}
+.kt-phase-banner{position:absolute;z-index:6;left:10%;right:10%;top:19%;pointer-events:none;text-align:center;color:#ffe6a8;font:700 clamp(12px,3.2vw,22px)/1.5 'Yu Mincho',serif;letter-spacing:.12em;opacity:0}
+.kt-phase-banner:not(:empty){opacity:1;padding:6px;background:linear-gradient(90deg,transparent,#101018dd 22% 78%,transparent);text-shadow:0 2px 4px #000}
+.kt-realism-preferences{border:1px solid #ac8c5055;border-radius:9px;padding:10px;min-width:0;margin:14px 0}
+.kt-device-check{font-size:13px;line-height:1.7;margin:12px 0}
+.kt-break-note{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px;border:1px solid #c7a66955;border-radius:8px;background:#241c17;color:#f2ddb1;font-size:13px}
+.kt-break-note[hidden]{display:none}
+.kt-root [data-gt-diagnostic-report]{box-sizing:border-box;width:100%;max-width:100%}
+.kt-root[data-motion=low] .kt-lamp-rail i,.kt-root[data-motion=instant] .kt-lamp-rail i,.kt-root[data-quality=light] .kt-lamp-rail i,.kt-root[data-hidden=true] .kt-lamp-rail i{opacity:0!important;transition:none}
+.kt-root[data-motion=low] .kt-phase-banner,.kt-root[data-motion=instant] .kt-phase-banner,.kt-root[data-hidden=true] .kt-phase-banner{display:none}
+@media(prefers-reduced-motion:reduce){.kt-root .kt-lamp-rail i{opacity:0!important;transition:none}.kt-root .kt-phase-banner{display:none}}
+/* 獲得セット数まで液晶内へ収める。狭い横画面では重複する装飾数字を省く。 */
+.kt-root .gt-display .gt-lcd-award{flex:0 1 auto;min-height:0;gap:1px;margin:1px auto}
+.kt-root .gt-lcd-award[data-kind=god] strong{font-size:clamp(34px,12vw,76px)}
+.kt-root .kt-award-digits b{font-size:clamp(20px,6vw,36px)}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-award-digits{display:none}.kt-root[data-focus=true] .gt-display .gt-lcd-award{gap:0;margin:0}.kt-root[data-focus=true] .gt-lcd-award strong,.kt-root[data-focus=true] .gt-lcd-award[data-kind=god] strong{font-size:28px}.kt-root[data-focus=true] .gt-lcd-award small{font-size:6px;letter-spacing:2px}.kt-root[data-focus=true] .gt-lcd-award>span{font-size:7px}}
+
+.kt-lcd-actions{position:absolute;right:5px;top:12%;z-index:12;display:none;gap:4px}.kt-lcd-actions button{min-height:44px;padding:5px 7px;border:1px solid #e0bf7866;border-radius:6px;background:#101821e8;color:#f5dfaf;font-size:11px}.kt-root .gt-display[data-win-stage] .kt-lcd-actions{display:flex}@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-lcd-actions{top:3px;right:3px}.kt-lcd-actions button{font-size:10px;padding:3px}}
+
+/* 狭い横向きでは告知を左、三神とリールを右へ置き、復帰案内があっても重ねない。 */
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .gt-display:has(.gt-lcd-award) .gt-lcd-award{position:absolute;left:12px;top:32px;width:min(40%,180px);height:auto;margin:0}.kt-root[data-focus=true] .gt-display:has(.gt-lcd-award) .kt-reel-assembly{width:min(48%,220px);margin-left:auto;margin-right:6px}}
+
+/* 告知文字と44pxの操作面を分ける。 */
+.kt-root .gt-display .gt-lcd-award{width:calc(100% - 100px);margin-left:0}
+.kt-lcd-actions{top:38px;flex-direction:column}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-lcd-actions{top:92px;left:12px;right:auto;flex-direction:row}}
+/* 長いSGG内訳も小さい画面の集計枠へ折り返す。 */
+.kt-root .gt-meters{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kt-root .gt-meters>span{min-width:0;overflow-wrap:anywhere}
+.kt-root .gt-meters b{white-space:normal}

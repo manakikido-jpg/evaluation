@@ -19,6 +19,19 @@ function fixture(motor=false,limiter=false){
  return {bank,started,contexts,compressors,fail,calls:()=>calls,delay:()=>{defer=true;},waitUnlock:()=>{unlock=true;},unlock:()=>{resumeDone?.();},release:()=>pending.splice(0).forEach(r=>r()),tick:(ms:number)=>{clock+=ms;},ready:()=>Promise.all([...bank.loading.values()])};
 }
 describe('新台の別生成音源',()=>{
+ it('音量0のグループでBGMを抑えず、ミキサーは既存の全体音量と組み合わせる',async()=>{
+  const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();const loop=f.bank.createNode({duration:3},{group:'bgm',level:.2,loop:true,priority:-1});
+  const before=f.bank.nodes.get(loop).gain.gain.value;f.bank.setGroupLevel('win',0);await f.bank.play('god',{group:'win'});expect(f.bank.nodes.get(loop).gain.gain.value).toBe(before);
+  const win=f.started.at(-1);expect(f.bank.nodes.get(win).gain.gain.value).toBe(0);f.bank.setGroupLevel('bgm',.5);expect(f.bank.nodes.get(loop).gain.gain.value).toBeCloseTo(before/2);
+ });
+ it('フェード中のBGMも管理に残し、後からの即時停止で確実に消す',async()=>{
+  const f=fixture();f.bank.setEnabled(true);f.bank.prepare();await f.ready();const loop=f.bank.createNode({duration:3},{group:'bgm',level:.2,loop:true,priority:-1}),stops:unknown[]=[];
+  loop.stop=(when:unknown)=>stops.push(when);f.bank.stopGroup('bgm',140);expect(stops[0]).toBe(.14);expect(f.bank.nodes.has(loop)).toBe(true);expect(f.bank.nodes.get(loop).level).toBe(0);
+  f.bank.stopGroup('bgm');expect(stops.at(-1)).toBeUndefined();expect(f.bank.nodes.has(loop)).toBe(false);
+ });
+ it('明示した同時音数の上限で古い単発音を片付け、無制限に増やさない',async()=>{
+  const f=fixture();f.bank.maxNodes=2;f.bank.setEnabled(true);f.bank.prepare();await f.ready();for(let i=0;i<10;i++)await f.bank.play('lever');expect(f.bank.nodes.size).toBe(2);expect(f.started[0].stopped).toBe(true);
+ });
  it('音OFFでは音源取得もAudioContext作成も行わず、ON後は取得/復号を再利用する',async()=>{
   const f=fixture();f.bank.prepare();await f.bank.play('lever');expect(f.calls()).toBe(0);expect(f.contexts).toHaveLength(0);
   f.bank.setEnabled(true);f.bank.prepare();await f.ready();await f.bank.play('lever');f.bank.prepare();await f.bank.play('lever');expect(f.calls()).toBe(2);expect(f.started).toHaveLength(2);

@@ -25,6 +25,11 @@ export const STRIPS:readonly (readonly ReelSymbol[])[]=[
 ];
 export const LINES=[[0,0,0],[1,1,1],[2,2,2],[2,1,0],[0,1,2]];
 export function rows(reel:number,pos:number):ReelSymbol[]{const s=STRIPS[reel]!;return [s[(pos+1)%20]!,s[pos]!,s[(pos+19)%20]!];}
+/** 桜・紋章は払出役ではないため、新しい停止候補では3つの見せかけ揃いを避ける。 */
+export function decorationLine(positions:(number|null)[]):boolean{
+ if(positions.some(p=>p===null))return false;
+ return LINES.some(line=>{const symbols=line.map((row,i)=>rows(i,positions[i]!)[row]!);return ['flower','crest'].includes(symbols[0]!)&&symbols.every(s=>s===symbols[0]);});
+}
 export function winningLines(positions:(number|null)[]):{line:number;symbols:ReelSymbol[]}[]{
  if(positions.some(p=>p===null))return [];
  return LINES.flatMap((line,n)=>{const symbols=line.map((row,i)=>rows(i,positions[i]!)[row]!);return symbols.every(s=>s===symbols[0])&&['god','red7','blue7','gold7'].includes(symbols[0]!)||symbols.join(',')==='red7,red7,god'?[{line:n,symbols}]:[];});
@@ -42,11 +47,11 @@ export function stopPlan(role:KisekiRole):number[]{
  if(plans.has(role))return plans.get(role)!.slice();
  const p=pattern(role),line=roleRows(role);
  const options=STRIPS.map((_,reel)=>Array.from({length:20},(_,i)=>i).filter(i=>!p||rows(reel,i)[line[reel]!]===p.symbols[reel]).filter(i=>reel!==1||role!=='small'||rows(reel,i)[0]==='god'&&rows(reel,i)[1]==='red7').filter(i=>reel!==1||role!=='bell'||rows(reel,i)[1]!=='red7'));
- for(const a of options[0]!)for(const b of options[1]!)for(const c of options[2]!){const pos=[a,b,c],wins=winningLines(pos);if(wins.every(w=>role==='fake'&&w.symbols.every(s=>s==='blue7')||p&&w.line===p.line&&w.symbols.join()===p.symbols.join())){plans.set(role,pos);return pos.slice();}}
+ for(const a of options[0]!)for(const b of options[1]!)for(const c of options[2]!){const pos=[a,b,c],wins=winningLines(pos);if(!decorationLine(pos)&&wins.every(w=>role==='fake'&&w.symbols.every(s=>s==='blue7')||p&&w.line===p.line&&w.symbols.join()===p.symbols.join())){plans.set(role,pos);return pos.slice();}}
  throw Error('停止形を作れません：'+role);
 }
 export function missPosition(reel:number,stopped:(number|null)[]):number{
- for(let p=0;p<20;p++){const a=stopped.slice();a[reel]=p;if(a.some(v=>v===null)||!winningLines(a).length)return p;}
+ for(let p=0;p<20;p++){const a=stopped.slice();a[reel]=p;if(a.some(v=>v===null)||!winningLines(a).length&&!decorationLine(a))return p;}
  throw Error('外れの停止位置を確認してください。');
 }
 export const SGG_GAMES=[10,20,30,50,100];

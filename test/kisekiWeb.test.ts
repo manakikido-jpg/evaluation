@@ -15,6 +15,12 @@ let db:Db,close:()=>Promise<void>,app:ReturnType<typeof createWebApp>,token:stri
 const headers=(t=token)=>({cookie:'shamusho_session='+t,origin:'https://example.test','sec-fetch-site':'same-origin'});
 beforeEach(async()=>{({db,close}=await makeDb());await recordJoin(db,{...user,roleIds:[ROLE.guji],isBot:false,joinedAt:now});await addCoins(db,id,3210,'adjust');app=createWebApp({db,cfg:()=>cfg,api:{memberRoles:async()=>[ROLE.guji]}as never,discord:{guildChannels:async()=>[]}as never,baseUrl:'https://example.test',now:()=>now});token=await createSession(db,user,{level:'guji',pages:null},now);csrf=(await findSession(db,token,now))!.csrfToken;});afterEach(async()=>close());
 async function post(action:string,extra:Record<string,string>={},js=true){return app.request(path,{method:'POST',headers:{...headers(),...(js?{'X-Gaisen-Update':'1'}:{})},body:new URLSearchParams({_csrf:csrf,revision:String((await readTrial(db,now)).revision),machine:'1',action,...extra})});}
+it('個別音量・振動・休憩・診断を備え、回転中は確定役をデータ属性へ出さない',async()=>{
+ await post('seat');await post('lever');const html=await(await app.request(path,{headers:headers()})).text();
+ for(const text of ['kiseki-realism.js?v=','gaisen-diagnostics.js?v=','data-gt-diagnostic-build=','data-kt-pref="density"','data-kt-pref="operationsVolume"','data-kt-pref="effectsVolume"','data-kt-pref="bgmVolume"','data-kt-pref="haptics"','data-kt-pref="rest"','data-gt-diagnostic-toggle','data-kt-audio-state','data-kt-break-note','data-kt-replay-win'])expect(html).toContain(text);
+ expect(html).toContain('data-kt-role=""');expect(html).toContain('data-kt-pattern="spinning"');expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>|onclick=|style=/);
+ expect((await walletOf(db,id)).balance).toBe(3210);
+});
 it('カジノ管理に別入口を置き、凱旋の2版・財布・保存キーを変えずに軌跡を遊べる',async()=>{
  expect((await(await app.request('/economy/casino',{headers:headers()})).text())).toContain(path);
  const old=await readGaisen(db,now),v2=await readGaisen(db,now,'trial-2');
@@ -62,4 +68,20 @@ it('公開された押し順だけを三神のメダルへ表示し、右から�
  expect((await post('stop',{index:'2'})).status).toBe(200);html=await read();expect(html).toMatch(/is-stopped" data-gt-lcd-position="2"/);expect(html).toContain('data-gt-lcd-position="1" data-gt-lcd-next="true"');
  for(const index of ['1','0'])expect((await post('stop',{index})).status).toBe(200);
  html=await read();expect(html).not.toContain('data-gt-lcd-navigation');expect(html).toContain('払出150ポイント');expect(html).toContain('kiseki-media-altar-1200.webp');
+});
+
+it('目押し位置を検査して記録し、再読込と再送でも停止窓と残高を保つ',async()=>{
+ await post('seat');await post('lever',{control:'timing'});const before=await readTrial(db,now);
+ for(const position of ['','-1','20','1.5','NaN','Infinity','0x10',' 1']){expect((await post('stop',{index:'0',position})).status).toBe(400);expect(await readTrial(db,now)).toEqual(before);}
+ expect((await post('stop',{index:'0',position:'19'})).status).toBe(200);const partial=await readTrial(db,now);expect(partial.machines[0]!.state.pending!.reelStops![0]!.input).toBe(19);
+ const html=await(await app.request(path,{headers:headers()})).text();expect(html).toContain('is-timed-stop');expect(html).toContain('kiseki-live.js?v=');expect(html).toContain('data-kt-bgm');expect(html).not.toMatch(/onclick=|style=|"(?:plan|mode|loops|omenLeft)":/);expect(await readTrial(db,now)).toEqual(partial);
+ expect((await post('stop',{index:'0',position:'0'})).status).toBe(400);expect(await readTrial(db,now)).toEqual(partial);
+ for(const index of ['1','2'])expect((await post('stop',{index,position:'19'})).status).toBe(200);
+ expect((await walletOf(db,id)).balance).toBe(3210);
+});
+it('GG/PGG/SGGに別の背景と音源を配信し、閲覧で区間やポイントを書き換えない',async()=>{
+ await post('seat');
+ for(const phase of ['gg','pgg','sgg']){await post('scenario',{scenario:phase});const before=await readTrial(db,now),html=await(await app.request(path,{headers:headers()})).text();expect(html).toContain(`kiseki-media-scene-${phase}.webp?v=`);expect(html).toContain(`data-kt-theme="${phase}"`);expect(await readTrial(db,now)).toEqual(before);}
+ for(const key of ['bgm-gg','bgm-pgg','bgm-sgg','gg','god','sgg']){const r=await app.request(`/static/kiseki-media-${key}.mp3`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('audio/mpeg');expect((await r.arrayBuffer()).byteLength).toBeGreaterThan(10000);}
+ for(const key of ['gg','pgg','sgg']){const r=await app.request(`/static/kiseki-media-scene-${key}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
 });

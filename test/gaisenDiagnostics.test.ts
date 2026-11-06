@@ -12,6 +12,11 @@ function fixture(){
  return{d,Class:window.GaisenDiagnostics,frames,advance,frame,begin,finish,hide:()=>{visible=false;}};
 }
 describe('神殿の任意の操作時間診断',()=>{
+ it('軌跡の個別音量・演出密度の変更も中央値から除外し、許可した設定だけを報告する',()=>{
+  const f=fixture();f.d.setEnabled(true);const initial={kiseki:{density:'normal',operationsVolume:1,effectsVolume:1,bgmVolume:.5,contact:'on',haptics:'off',rest:0,privateRole:'SECRET_ROLE'}};
+  f.finish(f.begin({settings:initial}),'ok',{kiseki:{...initial.kiseki,effectsVolume:0}});expect(f.d.summary().stable).toBe(0);expect(f.d.rows[0].changed).toBe(true);
+  const report=f.d.report();expect(report).toContain('演出音0');expect(report).toContain('軌跡頻度ふつう');expect(report).not.toContain('SECRET_ROLE');
+ });
  it('初期OFFでは記録せず、ONでもゲームのレバーと有効なSTOPだけ受け付ける',()=>{const f=fixture();expect(f.begin()).toBeNull();expect(f.frames.size).toBe(0);f.d.setEnabled(true);for(const action of ['seat','leave','scenario','other'])expect(f.begin({action})).toBeNull();for(const index of [-1,3,NaN,.5])expect(f.begin({action:'stop',index})).toBeNull();expect(f.begin({visible:false})).toBeNull();expect(f.begin({action:'stop',index:2}).action).toBe('右STOP');});
  it('本文全体までの応答待ちとDOM更新を分け、2回の描画コールバックを待つ',()=>{const f=fixture();f.d.setEnabled(true);const t=f.begin();f.advance(10);f.d.mark(t,'headers');f.advance(20);f.d.mark(t,'body');f.advance(4);f.d.complete(t);expect(f.d.rows).toHaveLength(0);f.frame();expect(f.d.rows).toHaveLength(0);f.frame();expect(f.d.rows[0]).toMatchObject({action:'レバー',inputKind:'pointer',state:'ok',inputMs:5,responseMs:30,updateMs:4,frameMs:71});expect(f.d.summary()).toMatchObject({count:1,successful:1,stable:1,response:30,frame:71,active:0});});
  it('入力時刻不明や不正なら送信開始を基準にし、段階の逆行や重複を受け付けない',()=>{const f=fixture();f.d.setEnabled(true);const t=f.begin({inputAt:9999,inputKind:'secret'});f.d.mark(t,'body');expect(t.body).toBeNull();f.d.mark(t,'headers');f.advance(2);f.d.mark(t,'headers');expect(t.headers).toBe(100);f.finish(t);expect(f.d.rows[0]).toMatchObject({inputKind:'submit',inputMs:0});});
