@@ -74,7 +74,7 @@ export function phaseOrderCorrect(p:Spin,stops=p.stops):boolean{
  return stops.every((reel,i)=>reel===p.order[i]);
 }
 export function phaseOutcome(p:Spin){
- const d=FLAGS[p.model!.flag],correct=phaseOrderCorrect(p),units=d.replay?3:correct?d.units:p.model!.missUnits;
+ const d=FLAGS[p.model!.flag],correct=phaseOrderCorrect(p)&&!p.control?.miss,units=p.control?.miss?0:d.replay?3:correct?d.units:p.model!.missUnits;
  const role:Role=!correct&&d.role==='red7'?'replay':d.role;
  return {units,role,replay:d.replay,correct,name:!correct&&d.role==='red7'?'赤7チャンス・リプレイ':d.name,mark:correct?d.mark:undefined};
 }

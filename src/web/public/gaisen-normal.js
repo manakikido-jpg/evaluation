@@ -1,8 +1,8 @@
 // 通常時の装飾だけ。公開済みの区間/数字を使い、抽選・未停止役・前兆残りGを受け取らない。
 (() => {
  class GaisenNormalDirector {
-  constructor({motion,hidden,light=()=>false,sound=()=>{},stopSound=()=>{},random=()=>{const n=new Uint32Array(1);crypto.getRandomValues(n);return n[0]/4294967296;}}){
-   Object.assign(this,{motion,hidden,light,sound,stopSound,random});this.generation=0;this.machine=null;this.timers=new Set();this.animations=new Set();this.chain=null;this.last=null;
+  constructor({motion,hidden,light=()=>false,sound=()=>{},stopSound=()=>{},density=()=>1,random=()=>{const n=new Uint32Array(1);crypto.getRandomValues(n);return n[0]/4294967296;}}){
+   Object.assign(this,{motion,hidden,light,sound,stopSound,random,density});this.generation=0;this.machine=null;this.timers=new Set();this.animations=new Set();this.chain=null;this.last=null;this.lastCue=null;
   }
   enabled(){return this.motion()==='normal'&&!this.hidden()&&!this.light();}
   cancel(){this.generation++;for(const t of this.timers)clearTimeout(t);this.timers.clear();for(const a of this.animations)a.cancel();this.animations.clear();this.stopSound();if(this.machine){for(const k of ['normalCue','normalMood','normalHold'])delete this.machine.dataset[k];const c=this.machine.querySelector('[data-gt-normal-caption]');if(c)c.textContent='';}this.machine=null;}
@@ -11,6 +11,7 @@
   later(fn,ms){const generation=this.generation,t=setTimeout(()=>{this.timers.delete(t);if(generation!==this.generation)return;if(this.enabled())fn();else this.suspend();},ms);this.timers.add(t);}
   animate(el,frames,timing){if(!el?.animate)return;const a=el.animate(frames,timing);this.animations.add(a);a.onfinish=()=>this.animations.delete(a);}
   cue(machine,kind,mood=1){
+   if((this.avoidRepeat?.()||this.density()!==1)&&kind===this.lastCue&&['wind','glint','thunder','dim'].includes(kind))kind=kind==='wind'?'glint':'wind';this.lastCue=kind;
    this.machine=machine;machine.dataset.normalCue=kind;machine.dataset.normalMood=String(mood);
    const caption=machine.querySelector('[data-gt-normal-caption]');if(caption)caption.textContent=({wind:'風が通る…',glint:'光が集まる…',thunder:'遠くで雷鳴…',dim:'灯りが揺らぐ…',gates:'神殿の扉に気配…',quiet:'気配が静まる'})[kind]||'';
    if(kind!=='quiet')this.sound(kind);
@@ -31,7 +32,7 @@
     else if(this.chain?.kind==='tease'){
      this.chain.age++;this.cue(machine,this.chain.age===2?'thunder':'gates',Math.min(3,this.chain.age));
     }else{
-     let p;try{p=this.random();}catch{return;}if(!Number.isFinite(p)||p<0||p>=1)return;
+     let p;try{p=this.random();}catch{return;}if(!Number.isFinite(p)||p<0||p>=1)return;const density=Math.max(.1,Math.min(1.3,this.density()));p=(p-(1-density))/density;
      if(p>=.97){this.chain={kind:'tease',age:1};this.cue(machine,'wind');}
      else if(p>=.94)this.cue(machine,'dim');else if(p>=.88)this.cue(machine,'thunder');else if(p>=.8)this.cue(machine,'glint');else if(p>=.7)this.cue(machine,'wind');
     }
