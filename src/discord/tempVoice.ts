@@ -153,7 +153,8 @@ export class TempVoiceApp {
       // 種類ごとのカテゴリへ移す（決めた種類だけ。部屋の権限はそのまま）
       const cats = this.cfg().rooms.stayCategories ?? {};
       for (const [id, row] of rows) {
-        const target = cats[stayType(row)];
+        // シクレの宿は、24時間・1時間ごとでも、人がいなくても、シクレのカテゴリへ（決めてあれば）
+        const target = (row.kind === 'secret' ? cats.secret : undefined) ?? cats[stayType(row)];
         const ch = guild.channels.cache.get(id);
         if (!target || !ch || ch.type !== ChannelType.GuildVoice || ch.parentId === target) continue;
         if (guild.channels.cache.get(target)?.type !== ChannelType.GuildCategory) continue;
