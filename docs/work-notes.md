@@ -1,3 +1,14 @@
+### 軌跡の当選告知・修正とブラウザー確認
+- 原因：演出操作ボタンが消えた後も幅calc(100%-100px)と左寄せが残り、告知中心が液晶中心より50px左だった。狭い操作中の枠ではGOD GAMEが2行になり、flex縮小で数字/SETの高さが足りなかった。
+- 修正は軌跡CSSだけ。終了後の余白を戻して中央揃え、告知枠幅に応じたGOD GAMEの字サイズ/折返し防止、数字と獲得数の高さ/間隔を確保。狭い画面は重複する区間名を省く。演出ボタンの44pxも維持する。抽選/払出/凱旋/API/試験/依存関係は変更なし。
+- Chromium/WebKitともGG/GOD/SGG/上乗せ×320/390/844/1440px×通常/集中×告知操作中/終了後の各64パターンで、数字・SET・リール・ボタンの非重複と収まり、終了後の中央、44px、JS例外0を確認。横向き集中は既存の左右分割を維持。WebKitは既知の描画時計の制限でscreenshotの安定待ちが止まるため、矩形を同期確認し、見本はChromiumで保存。実スマホの実描画は未確認。
+- 関連4ファイル19件成功（44.67秒）。基底8563eddの標準CI42264068076は型/全test/build成功。今回の差分はCSSと更新履歴/記録だけで、ゲームやWeb APIのコードは基底と同じ。型/build/public配布コピーも成功。見本はdocs/previews/kiseki-award-centered-gg.webp（架空の確認台）。合流・本番反映はまだ行わない。
+
+## 2026年11月7日：軌跡の当選告知のずれを修正
+- 本人の画像指摘「これずれてるよね」。GG告知の111と獲得セットが近接/重なり、中央位置も不自然。まず実画面のcomputed layoutで再現し、軌跡の告知だけを修正する。抽選/払出/凱旋/一般公開/銭接続は変えず、合流は未指示。
+- 専用worktree/workspace/kiseki-award-layout、codex/kiseki-award-layout、最新本番8563eddから開始。イベント配信PR155は別件、未合流のまま維持する。旧GOD枝/元evaluationのローカルメモも保持する。
+- 次：GG/GOD/SGGとstockの告知を再現→数字/SETの重なりと中央揃えを修正→縦横/集中/演出中/終了後を確認→関連/型/必要な全体検証→専用PRへ保存。本番にはまだ変更しない。
+
 ## 2026年11月6日・軌跡15分野：GitHubへ保存済み
 - PR：https://github.com/manakikido-jpg/evaluation/pull/151 （Draft/open、未合流、本番未反映）。ブランチ `codex/kiseki-live-play`。実装固定4bc32df、検証記録e72da21をpush済み。この欄だけの後続commitでは動作コードを変えない。
 - GitHub確認時baseはc69ae324b931d6df109dead853f003c316a961ae、headはe72da21e489cc596131ac6195b1806cc03efb55c、mergeable=true、merged=false。CI1108は実行中で成功扱いにしない。後続記録pushで起動するCIは別途確認する。

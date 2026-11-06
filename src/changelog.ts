@@ -30,6 +30,12 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-07-kiseki-award-layout', date: '2026-11-07', kind: 'fix', where: ['社務所Web'],
+    title: '軌跡版の当選告知の中央位置と数字の間隔を修正',
+    items: ['演出の操作ボタンが消えても残っていた余白を戻し、当選告知を中央に揃えます。', 'GOD GAMEの折り返しと、111/777・獲得セット数の重なりを防ぐようにしました。'],
+    announcement: {priority: 'none', audience: '運営の無料試遊担当', steps: ['社務所Web → カジノ管理 → 軌跡版を再読み込みする。', '当選告知の数字とセット数が重ならず、告知が中央に収まることを確認する。'], postText: '', imagePrompt: '架空のGG告知で、修正後の中央揃えと数字・セット数の間隔を撮影する。', notes: '表示だけの修正。抽選・払出・銭接続・凱旋版は変更しない。'},
+  },
   { id: '2026-11-06-guide-panel-command', date: '2026-11-06', kind: 'improve', where: ['Discord'], title: '🙋 案内人の受付パネルを /パネル 案内人 で置けるように', items: ['パネルを置きたいチャンネルで `/パネル 案内人` を打つと、案内人の受付（登録・待機・案内担当など）のパネルを置けます。そのチャンネルのいちばん下に表示し続けます。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-06-stay-occupied-category', date: '2026-11-06', kind: 'improve', where: ['Discord', '社務所Web'], title: '🏨 人がいる宿を上に・宿を種類ごとのカテゴリに分けられるように', items: ['人がいる宿が上、だれもいない宿が下に並びます。その中は、種類の順（社務所Web の「🔃 宿の並ぶ順」）です。', '社務所Web の「📁 宿を種類ごとのカテゴリに分ける」で、24時間・1時間ごと・公開・招待限定・シークレットごとにカテゴリを選ぶと、BOT が宿をそのカテゴリへ自動で移します。'], announcement: { priority: 'optional', audience: '宿を使う人', steps: ['人がいる宿は上に、空いている宿は下に並びます。'], postText: '宿の並びが変わりました。人がいる宿が上に並ぶので、にぎやかな宿を見つけやすくなります。', imagePrompt: '', notes: 'カテゴリ分けは運営が設定したときだけ。' } },
   { id: '2026-11-06-stay-order-fix', date: '2026-11-06', kind: 'fix', where: ['Discord'], title: '🔃 宿が決めた順に並ばないのを直した', items: ['宿を並べ直すとき、Discord に渡す場所の番号をまちがえていて、並びが変わっていませんでした。', '毎分の確認で、社務所Web の「🔃 宿の並ぶ順」のとおりに並べ直します。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
