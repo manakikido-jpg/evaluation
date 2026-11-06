@@ -10,7 +10,8 @@ import { isStaffAlt } from './staffAlts.js';
  * - サブアカウントは、申告して運営が承認すれば使ってよい（申告しないサブはルール違反）
  * - 申告は、サブの人が Discord の /サブ垢 申告 で本アカウントを選ぶ。運営が社務所Web で承認・却下する（運営が直接登録もできる）
  * - 承認したサブは、銭が入らず、朱印を押せず・押されず、招待の記録とお礼に入らない（二重に稼げないように）
- * - 承認したとき、サブが持っていた銭は本アカウントへ移す
+ * - 承認したとき、サブが持っていた銭は本アカウントへ移す（本アカウント側が申告したものは、移さない）
+ * - 申告は、サブ側（/サブ垢 申告・パネル）でも、本アカウント側（/サブ垢 本アカから申告・パネル）でもできる
  */
 export type MemberAlt = typeof memberAlts.$inferSelect;
 const ID = /^\d{17,20}$/;
@@ -49,14 +50,16 @@ export async function requestMemberAlt(db: Db, input: { altId: string; mainId: s
 }
 
 /** 承認する。サブの銭は本アカウントへ移す（同じトランザクションで） */
-export async function approveMemberAlt(db: Db, altId: string, by: string, now = new Date()): Promise<{ status: 'ok'; moved: number } | { status: 'not_found' | 'done' }> {
+export async function approveMemberAlt(db: Db, altId: string, by: string, now = new Date()): Promise<{ status: 'ok'; moved: number; kept: boolean } | { status: 'not_found' | 'done' }> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('member_alts'))`);
     const row = await memberAltOf(tx, altId);
     if (!row) return { status: 'not_found' as const };
     if (row.status === 'approved') return { status: 'done' as const };
+    // 本アカウント側が申告したものは、サブの銭を移さない（他人のアカウントを「自分のサブ」と申告して、銭を取れないように）
+    const kept = row.requestedBy === row.mainId;
     const [w] = await tx.select().from(wallets).where(eq(wallets.memberId, altId)).for('update');
-    const moved = Math.max(0, w?.balance ?? 0);
+    const moved = kept ? 0 : Math.max(0, w?.balance ?? 0);
     // 先に銭を移してから承認にする（承認のあとはサブに銭が入らないため）
     if (moved > 0) {
       if (!(await spendWithin(tx, altId, moved, 'adjust', { kind: 'member_alt', to: row.mainId, by }))) throw new Error('alt wallet move failed');
@@ -64,7 +67,7 @@ export async function approveMemberAlt(db: Db, altId: string, by: string, now = 
     }
     await tx.update(memberAlts).set({ status: 'approved', decidedBy: by, decidedAt: now }).where(and(eq(memberAlts.altId, altId), eq(memberAlts.status, 'pending')));
     await audit(tx, { actorId: by, targetId: altId, action: 'member_alt.approve', detail: { mainId: row.mainId, moved }, via: 'web' });
-    return { status: 'ok' as const, moved };
+    return { status: 'ok' as const, moved, kept };
   });
 }
 

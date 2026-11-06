@@ -4132,7 +4132,7 @@ export function createWebApp(deps: WebDeps) {
   });
   app.post('/alts/:id/approve', async (c) => {
     const r = await approveMemberAlt(db, c.req.param('id'), c.get('session').userId);
-    return c.redirect(`/alts?msg=${r.status === 'ok' ? 'approved' : 'removed'}`);
+    return c.redirect(`/alts?msg=${r.status === 'ok' ? (r.kept ? 'approved_kept' : 'approved') : 'removed'}`);
   });
   app.post('/alts/:id/remove', async (c) => {
     await removeMemberAlt(db, c.req.param('id'), c.get('session').userId);

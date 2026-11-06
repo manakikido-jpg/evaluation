@@ -38,6 +38,24 @@ describe('🔗 メンバーのサブアカウント', () => {
   });
   it('申告パネル: /パネル サブ垢申告 で置け、ボタンで本アカウントを選ぶ', () => {
     expect(commandDefinitions(cfg).find((c) => c.name === 'panel')!.options?.some((o) => o.name === 'alt')).toBe(true);
-    expect(altPanelBody().components[0]!.components[0]!.custom_id).toBe('alt:declare');
+    expect(altPanelBody().components[0]!.components.map((c) => c.custom_id)).toContain('alt:declare');
+  });
+  it('本アカウント側の申告は、承認してもサブの銭を移さない（他人のアカウントの銭を取れない）', async () => {
+    await addCoins(db, ALT, 500, 'adjust');
+    expect(await requestMemberAlt(db, { altId: ALT, mainId: MAIN, by: MAIN })).toBe('ok');
+    const r = await approveMemberAlt(db, ALT, 'staff');
+    expect(r).toMatchObject({ status: 'ok', moved: 0, kept: true });
+    expect((await walletOf(db, ALT)).balance).toBe(500);
+    expect((await walletOf(db, MAIN)).balance).toBe(0);
+    // 承認のあとは、サブに銭が入らない
+    expect(await isRestrictedAccount(db, ALT)).toBe(true);
+    await addCoins(db, ALT, 100, 'adjust');
+    expect((await walletOf(db, ALT)).balance).toBe(500);
+  });
+  it('申告パネルに、本アカウントから・サブからの 2 つのボタンがある', () => {
+    const ids = altPanelBody().components[0]!.components.map((c) => c.custom_id);
+    expect(ids).toEqual(['alt:declare_main', 'alt:declare']);
+    const alt = commandDefinitions(cfg).find((c) => c.name === 'alt')!;
+    expect(alt.options?.map((o) => o.name)).toEqual(['declare', 'declare-main']);
   });
 });
