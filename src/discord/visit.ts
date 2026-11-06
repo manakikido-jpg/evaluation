@@ -14,7 +14,7 @@ import { logger } from '../lib/logger.js';
 const PANEL_KEY='visit_panel';
 const sf=(x:unknown)=>typeof x==='string'&&/^\d{17,20}$/.test(x)?x:undefined;
 /** 🪪 「参拝プロフィールを出す」ボタン（/パネル 参拝プロフィール。御神籤と同じく、いちばん下に出し続ける） */
-export const visitPanelBody=()=>({embeds:[{title:'🪪 参拝プロフィール',description:'下のボタンを押すと、あなたの参拝プロフィールをこのチャンネルに出します。',color:0xd7003a}],components:[{type:1,components:[{type:2,style:1,label:'参拝プロフィールを出す',emoji:{name:'🪪'},custom_id:'visit:show'}]}]});
+export const visitPanelBody=()=>({components:[{type:1,components:[{type:2,style:1,label:'参拝プロフィールを出す',emoji:{name:'🪪'},custom_id:'visit:show'}]}]});
 
 export class VisitApp{
  private guild?:Guild;
