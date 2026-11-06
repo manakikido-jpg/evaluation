@@ -66,11 +66,15 @@ export function discordVoiceOps(guild: Guild): VoiceOps {
   };
 }
 
-export type StayRow = { keepUntil: Date | null; renewHourly: boolean; kind?: 'public' | 'invite' | 'secret'; createdAt?: Date };
+export type StayRow = { keepUntil: Date | null; renewHourly: boolean; kind?: 'public' | 'invite' | 'secret'; createdAt?: Date; occupied?: boolean };
+/** 宿の種類（並ぶ順・カテゴリ分けに使う） */
+export const stayType = (r: StayRow): 'day' | 'hourly' | 'public' | 'invite' | 'secret' => (r.keepUntil ? (r.renewHourly ? 'hourly' : 'day') : (r.kind ?? 'public'));
 export type StayOrderCfg = { day: number; hourly: number; public: number; invite: number; secret: number };
 const DEFAULT_ORDER: StayOrderCfg = { day: 1, hourly: 2, public: 3, invite: 3, secret: 3 };
 /** 宿の並ぶ順（運営が決めた数。小さいほど上） */
-const stayRank = (r: StayRow | undefined, o: StayOrderCfg) => (r?.keepUntil ? (r.renewHourly ? o.hourly : o.day) : o[r?.kind ?? 'public']);
+const stayRank = (r: StayRow | undefined, o: StayOrderCfg) => (r ? o[stayType(r)] : o.public);
+/** 人がいる宿が先 */
+const emptyRank = (r: StayRow | undefined) => (r?.occupied === false ? 1 : 0);
 
 /**
  * 同じカテゴリの中で、自分の通話部屋が今いる場所（入口などほかのチャンネルの場所は動かさない）に、
@@ -80,7 +84,8 @@ export function stayOrder(channels: { id: string; position: number }[], rows: Ma
   const rooms = channels.filter((c) => rows.has(c.id)).sort((a, b) => a.position - b.position);
   // 同じ順の中は、新しい宿が上
   const made = (id: string) => rows.get(id)?.createdAt?.getTime() ?? 0;
-  const sorted = [...rooms].sort((a, b) => stayRank(rows.get(a.id), order) - stayRank(rows.get(b.id), order) || made(b.id) - made(a.id) || a.position - b.position);
+  // 人がいる宿が先 → 種類の順 → 新しい宿が上
+  const sorted = [...rooms].sort((a, b) => emptyRank(rows.get(a.id)) - emptyRank(rows.get(b.id)) || stayRank(rows.get(a.id), order) - stayRank(rows.get(b.id), order) || made(b.id) - made(a.id) || a.position - b.position);
   if (sorted.every((c, n) => c.id === rooms[n]!.id)) return [];
   return sorted.map((c, n) => ({ id: c.id, position: rooms[n]!.position }));
 }
@@ -139,8 +144,21 @@ export class TempVoiceApp {
     if (!guild || this.sorting) return;
     this.sorting = true;
     try {
-      const rows = new Map((await this.db.select({ channelId: tempVoice.channelId, keepUntil: tempVoice.keepUntil, renewHourly: tempVoice.renewHourly, kind: tempVoice.kind, createdAt: tempVoice.createdAt }).from(tempVoice)).map((r) => [r.channelId, r]));
+      const all = await this.db.select({ channelId: tempVoice.channelId, keepUntil: tempVoice.keepUntil, renewHourly: tempVoice.renewHourly, kind: tempVoice.kind, createdAt: tempVoice.createdAt }).from(tempVoice);
+      const rows = new Map<string, StayRow>(all.map((r) => {
+        const ch = guild.channels.cache.get(r.channelId);
+        return [r.channelId, { ...r, occupied: ch?.isVoiceBased() ? ch.members.filter((m) => !m.user.bot).size > 0 : true }];
+      }));
       const order = this.cfg().rooms.stayOrder;
+      // 種類ごとのカテゴリへ移す（決めた種類だけ。部屋の権限はそのまま）
+      const cats = this.cfg().rooms.stayCategories ?? {};
+      for (const [id, row] of rows) {
+        const target = cats[stayType(row)];
+        const ch = guild.channels.cache.get(id);
+        if (!target || !ch || ch.type !== ChannelType.GuildVoice || ch.parentId === target) continue;
+        if (guild.channels.cache.get(target)?.type !== ChannelType.GuildCategory) continue;
+        await ch.setParent(target, { lockPermissions: false, reason: '宿を種類ごとのカテゴリへ' }).catch((err: unknown) => logger.warn({ err, channelId: id }, 'stay category move failed'));
+      }
       const parents = new Set([...rows.keys()].map((id) => guild.channels.cache.get(id)?.parentId).filter((id): id is string => Boolean(id)));
       for (const parentId of parents) {
         // position は「見えている順番」、rawPosition は Discord に保存されている番号（setPositions はこちら）

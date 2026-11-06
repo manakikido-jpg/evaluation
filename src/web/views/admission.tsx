@@ -1069,6 +1069,8 @@ export function SettingsPage(props: {
   textChannels?: { id: string; name: string; category?: string }[];
   voiceChannels?: { id: string; name: string; category: string | null; categoryId?: string | null }[];
   forumChannels?: { id: string; name: string }[];
+  /** カテゴリ（宿を種類ごとに分ける先） */
+  categories?: { id: string; name: string }[];
   /** ロール（呼び鈴で呼べるロールを選ぶ） */
   roles?: { id: string; name: string }[];
   /** 🔔 通知 OK／NG */
@@ -1272,12 +1274,25 @@ export function SettingsPage(props: {
             </label>
           </div>
           <h3>🔃 宿の並ぶ順</h3>
-          <p class="note">小さい数ほど上に並びます（1〜9）。同じ数の中は、新しい宿が上です。宿ができたとき・変わったときに、BOT が自動で並べます。</p>
+          <p class="note">人がいる宿が先、いない宿があとに並びます。その中で、小さい数ほど上です（1〜9）。同じ数の中は、新しい宿が上です。宿ができたときと毎分の確認で、BOT が自動で並べます。</p>
           <div class="fields">
             {([['day', '🏨 24時間の宿'], ['hourly', '⏱ 1時間ごとの宿'], ['public', 'ふつうの宿（公開）'], ['invite', 'ふつうの宿（招待限定）'], ['secret', 'ふつうの宿（シークレット）']] as const).map(([k, label]) => (
               <label class="field">
                 <span>{label}</span>
                 <input type="number" name={`stayOrder.${k}`} value={String(cfg.rooms.stayOrder[k])} min={1} max={9} required />
+              </label>
+            ))}
+          </div>
+          <h3>📁 宿を種類ごとのカテゴリに分ける</h3>
+          <p class="note">カテゴリを選んだ種類の宿は、BOT がそのカテゴリへ自動で移します（毎分の確認で。部屋の権限はそのまま）。カテゴリは Discord で先に作ってください。「分けない」なら今のカテゴリのままです。</p>
+          <div class="fields">
+            {([['day', '🏨 24時間の宿'], ['hourly', '⏱ 1時間ごとの宿'], ['public', 'ふつうの宿（公開）'], ['invite', 'ふつうの宿（招待限定）'], ['secret', 'ふつうの宿（シークレット）']] as const).map(([k, label]) => (
+              <label class="field">
+                <span>{label}</span>
+                <select name={`stayCat.${k}`}>
+                  <option value="">分けない</option>
+                  {(props.categories ?? []).map((c) => <option value={c.id} selected={cfg.rooms.stayCategories?.[k] === c.id}>📁 {c.name}</option>)}
+                </select>
               </label>
             ))}
           </div>

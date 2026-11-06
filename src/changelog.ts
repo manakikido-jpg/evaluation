@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-06-stay-occupied-category', date: '2026-11-06', kind: 'improve', where: ['Discord', '社務所Web'], title: '🏨 人がいる宿を上に・宿を種類ごとのカテゴリに分けられるように', items: ['人がいる宿が上、だれもいない宿が下に並びます。その中は、種類の順（社務所Web の「🔃 宿の並ぶ順」）です。', '社務所Web の「📁 宿を種類ごとのカテゴリに分ける」で、24時間・1時間ごと・公開・招待限定・シークレットごとにカテゴリを選ぶと、BOT が宿をそのカテゴリへ自動で移します。'], announcement: { priority: 'optional', audience: '宿を使う人', steps: ['人がいる宿は上に、空いている宿は下に並びます。'], postText: '宿の並びが変わりました。人がいる宿が上に並ぶので、にぎやかな宿を見つけやすくなります。', imagePrompt: '', notes: 'カテゴリ分けは運営が設定したときだけ。' } },
   { id: '2026-11-06-stay-order-fix', date: '2026-11-06', kind: 'fix', where: ['Discord'], title: '🔃 宿が決めた順に並ばないのを直した', items: ['宿を並べ直すとき、Discord に渡す場所の番号をまちがえていて、並びが変わっていませんでした。', '毎分の確認で、社務所Web の「🔃 宿の並ぶ順」のとおりに並べ直します。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-06-staff-multi-stay', date: '2026-11-06', kind: 'improve', where: ['Discord'], title: '🏨 運営は宿を 2 つ目からも立てられるように', items: ['運営（任命制の役職・神職・宮司）は、パネルから宿を同時に 5 つまで立てられます（1 つごとに宿代を払います）。', '運営でない人は、今までどおり 1 人 1 つです。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
   {
