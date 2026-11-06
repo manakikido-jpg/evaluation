@@ -3183,6 +3183,7 @@ export function createWebApp(deps: WebDeps) {
         webRecruitPanels={(await loadOverrides(db)).recruitPanels.map((p) => p.channelId)}
         textChannels={textChannels.map((ch) => ({ id: ch.id, name: ch.name, ...(catName(ch.parent_id) ? { category: catName(ch.parent_id)! } : {}) }))}
         voiceChannels={voiceChannelsOf(channels)}
+        categories={channels.filter((ch) => ch.type === 4).sort((a, b) => a.position - b.position).map((ch) => ({ id: ch.id, name: ch.name }))}
         forumChannels={channels.filter((ch) => ch.type === 15).map((ch) => ({ id: ch.id, name: ch.name }))}
         roles={roles.map((r) => ({ id: r.id, name: r.name }))}
         streakRoles={allRoles.filter((r) => giftableRole(cfg, r, allRoles, deps.botId)).map((r) => ({ id: r.id, name: r.name }))}
@@ -3605,6 +3606,9 @@ export function createWebApp(deps: WebDeps) {
         // 💎 極（VIP）はショップのページで作る（ここでは残す）
         ...(prev.rooms.vip ? { vip: prev.rooms.vip } : {}),
         // 🏨 宿の並ぶ順（この欄があるフォームから送ったときだけ変える）
+        ...(typeof body['stayCat.day'] === 'string'
+          ? { stayCategories: Object.fromEntries((['day', 'hourly', 'public', 'invite', 'secret'] as const).flatMap((k) => (typeof body[`stayCat.${k}`] === 'string' && /^\d{17,20}$/.test(body[`stayCat.${k}`] as string) ? [[k, body[`stayCat.${k}`]]] : []))) }
+          : prev.rooms.stayCategories ? { stayCategories: prev.rooms.stayCategories } : {}),
         ...(typeof body['stayOrder.day'] === 'string'
           ? { stayOrder: Object.fromEntries((['day', 'hourly', 'public', 'invite', 'secret'] as const).map((k) => [k, num(`stayOrder.${k}`)])) }
           : prev.rooms.stayOrder ? { stayOrder: prev.rooms.stayOrder } : {}),

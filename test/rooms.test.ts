@@ -37,7 +37,7 @@ const cfg: GuildConfig = {
     stayPrice: 3000,
     stayHourlyPrice: 300,
     secretHubs: [],
-    stayOrder: { day: 1, hourly: 2, public: 3, invite: 3, secret: 3 },
+    stayOrder: { day: 1, hourly: 2, public: 3, invite: 3, secret: 3 }, stayCategories: {},
   },
 };
 const T0 = new Date('2026-09-26T12:00:00Z');
@@ -355,6 +355,20 @@ describe('🏨 宿が自動で並ぶ', () => {
     const moves = stayOrder(voices, rows);
     expect(rawPositions(voices, moves)).toEqual([{ id: 'hub', position: 5 }, { id: 'day', position: 6 }, { id: 'normal', position: 7 }].filter((m) => m.id !== 'hub'));
     expect(rawPositions(voices, [])).toEqual([]);
+  });
+  it('人がいる宿が先、いない宿があと。その中で種類の順', async () => {
+    const { stayOrder, stayType } = await import('../src/discord/tempVoice.js');
+    const t = new Date();
+    const rows = new Map([
+      ['dayEmpty', { keepUntil: t, renewHourly: false, occupied: false }],
+      ['pubIn', { keepUntil: null, renewHourly: false, kind: 'public' as const, occupied: true }],
+      ['dayIn', { keepUntil: t, renewHourly: false, occupied: true }],
+      ['secEmpty', { keepUntil: null, renewHourly: false, kind: 'secret' as const, occupied: false }],
+    ]);
+    const ch = [...rows.keys()].map((id, n) => ({ id, position: n }));
+    expect(stayOrder(ch, rows).map((m) => m.id)).toEqual(['dayIn', 'pubIn', 'dayEmpty', 'secEmpty']);
+    expect(stayType(rows.get('secEmpty')!)).toBe('secret');
+    expect(stayType({ keepUntil: t, renewHourly: true })).toBe('hourly');
   });
   it('運営が決めた順に並ぶ。同じ順の中は新しい宿が上', async () => {
     const { stayOrder } = await import('../src/discord/tempVoice.js');

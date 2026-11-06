@@ -190,6 +190,10 @@ export const roomsSchema = z.object({
   stayOrder: z
     .object({ day: z.number().int().min(1).max(9), hourly: z.number().int().min(1).max(9), public: z.number().int().min(1).max(9), invite: z.number().int().min(1).max(9), secret: z.number().int().min(1).max(9) })
     .default({ day: 1, hourly: 2, public: 3, invite: 3, secret: 3 }),
+  /** 宿を種類ごとのカテゴリに分ける（決めた種類だけ、BOT がそのカテゴリへ移す） */
+  stayCategories: z
+    .object({ day: snowflake.optional(), hourly: snowflake.optional(), public: snowflake.optional(), invite: snowflake.optional(), secret: snowflake.optional() })
+    .default({}),
 });
 export type RoomsConfig = z.infer<typeof roomsSchema>;
 
