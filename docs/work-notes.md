@@ -1,3 +1,14 @@
+## 2026年11月6日：PR151合流完了
+- https://github.com/manakikido-jpg/evaluation/pull/151 をGitHubの通常mergeで合流。merged=true/closed、merge commit `f2a9de381989fc16a53fe4169c7bd5eea6739641`。expected head `1c1408085d37682776eb426e398e075e79783f04` を固定して実行した。
+- 合流前CI1110でNode22の型/全テスト/buildが成功。baseはc69ae32から変更なし、競合なし、レビュー/未解決スレッド0。ローカル全253ファイル2815件とブラウザー確認の版から動作変更なし。
+- fetch後、本番ブランチにmerge commitが含まれることを確認。VPSの実稼働・表示画面への反映は未確認。一般公開/銭接続は保留、実端末と実機非公開仕様の未確認は継続。
+- 今回の後続commitは依頼・決定・合流結果の記録だけ。動作コード/試験/依存関係は同一のため成功済み検証を再利用して専用枝へ保存する。本番へ直接pushしない。次は利用画面を再読み込みして打感を確認するか、追加改善の指示を待つ。
+
+## 2026年11月6日：PR151合流の依頼・実行前確認
+- 依頼「一回合流して」。最新の明示指示によりCodexのGitHub合流を許可。一般公開/銭接続は保留、実端末/非公開仕様の確認限界は維持。本番へ直接pushしない。
+- 開始head1c1408085d37682776eb426e398e075e79783f04/basec69ae324b931d6df109dead853f003c316a961ae。PR151はDraft/open、mergeable=true、CI1110成功、レビュー/未解決スレッド0。ローカル全253ファイル2815件/型/ビルド/両ブラウザー成功の版から動作変更なし。
+- 次：Draft解除→headを固定した通常merge→merged状態と本番祖先/CIを確認→結果の記録だけを専用枝へ保存。現時点ではまだ未合流。
+
 ## 2026年11月6日・軌跡15分野：GitHubへ保存済み
 - PR：https://github.com/manakikido-jpg/evaluation/pull/151 （Draft/open、未合流、本番未反映）。ブランチ `codex/kiseki-live-play`。実装固定4bc32df、検証記録e72da21をpush済み。この欄だけの後続commitでは動作コードを変えない。
 - GitHub確認時baseはc69ae324b931d6df109dead853f003c316a961ae、headはe72da21e489cc596131ac6195b1806cc03efb55c、mergeable=true、merged=false。CI1108は実行中で成功扱いにしない。後続記録pushで起動するCIは別途確認する。
