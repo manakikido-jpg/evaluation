@@ -315,7 +315,7 @@ export class GuideReceptionApp {
       return;
     }
     // /パネル 案内人: このチャンネルに受付パネルを置く（いちばん下に表示し続ける）
-    if (i.isChatInputCommand() && i.commandName === 'panel' && i.options.getSubcommand(false) === 'guide') {
+    if (typeof i.isChatInputCommand === 'function' && i.isChatInputCommand() && i.commandName === 'panel' && i.options.getSubcommand(false) === 'guide') {
       if (!i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
       if (!i.channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', flags: MessageFlags.Ephemeral }));
       await this.discord.sendMessage(i.channelId, guideEmployeePanel());
