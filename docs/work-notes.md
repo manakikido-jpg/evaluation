@@ -1,3 +1,9 @@
+## 2026年11月7日：新しいチャットへの引き継ぎ
+- 本人が新しいチャットへの移行を希望。現在の主題は神殿スロット・軌跡版の通常演出/予告/ステージ/当選映像/音をさらに実機へ近づけること。凱旋別台、本人の三神（中央赤・金主体）、一般公開/銭接続の保留を維持。新しい合流指示はない。
+- PR157 https://github.com/manakikido-jpg/evaluation/pull/157 はDraft/open、未合流、競合なし。確認したremote headは1c1806e943015227da158e4437b0f0a830170593。push側CI42303430401はtest成功、PR側CI42303407401はまだ実行中。全Checks成功とはまだ言わず、再開時に取り直す。PR156は合流済み、配信PR155は今回の対象外で未合流。
+- 実装/検証/限界は下記。次はPR157のCI/レビューを確認し、実機6ステージの専用背景・成立役に応じた演出法則・音の照合を進める。参考 https://1geki.jp/slot/l_milliongod_kiseki/ の41/43/5。curlは403だがWeb閲覧ツールでは本文が読める。現在の背景3種/独自頻度/独自合成音を実機完全再現と呼ばない。
+- 作業場所/workspace/kiseki-fidelity、ソースの保存先codex/kiseki-fidelity。今回の引き継ぎcommitは記録専用handoff/kiseki-fidelity-chatへ保存し、CI確認中のremote codex/kiseki-fidelityは1c1806eのまま保持する。記録だけなので型/試験/buildは既存の結果を再利用。新チャットはhandoff/kiseki-fidelity-chatのこのメモも参照し、自分のcodex枝で再開する。本番直接push・rebase・force pushは禁止。
+
 ## 2026年11月7日：軌跡の予告・移行・告知音をPR157へ保存
 - Draft PR157：https://github.com/manakikido-jpg/evaluation/pull/157 。codex/kiseki-fidelity、表示/音の実装50fea25、ガード/見本/検証記録6ee19b3。作成時head6ee19b33cb177a33af87150374e5153f2fb7b1fc。PR作成時に本番がd9a89d2からc6341bcへ進んだが、追加分はサブアカウントの申告パネルで軌跡と独立。fetchと差分確認、PRのmergeable=trueを確認した。不要な本番取込や直接pushはしない。
 - 型/build成功、初回の全255ファイル2,828件の失敗7件をガード修正と既定フックでの再確認（3ファイル16件）で解消。共通JSを使う29ファイル294件も全成功。単独の全件コマンドは初回失敗であり、成功と偽らない。PR標準CIは実行中、再開時に最新head/CIを確認する。
