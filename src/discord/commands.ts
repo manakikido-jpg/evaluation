@@ -28,9 +28,8 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
     new SlashCommandBuilder().setName('bingo').setNameLocalizations({ ja: 'ビンゴ' }).setDescription('Open the event bingo').setDescriptionLocalizations({ ja: 'イベントビンゴの本人用入口を開く' }).setContexts(InteractionContextType.Guild).toJSON(),
     new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
       .setDescription('Post your activity profile in this channel')
-      .setDescriptionLocalizations({ ja: 'このチャンネルへ参拝プロフィールを表示（省略で自分）' })
+      .setDescriptionLocalizations({ ja: 'このチャンネルへ自分の参拝プロフィールを表示' })
       .setContexts(InteractionContextType.Guild)
-      .addUserOption(o => o.setName('user').setNameLocalizations({ ja: '相手' }).setDescription('Whose profile (default: yourself)'))
       .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: true; false: only you)').setDescriptionLocalizations({ ja: '省略はチャンネルへ表示。いいえにすると自分だけに表示' }))
       .toJSON(),
     new SlashCommandBuilder().setName('recording').setNameLocalizations({ ja: '録音' })
@@ -296,6 +295,7 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .addSubcommand(s => s.setName('invite').setNameLocalizations({ ja: '招待リンク' }).setDescription('Personal invite link panel').setDescriptionLocalizations({ ja: '本人用の招待リンクを発行するボタンを置く' }))
       .addSubcommand(s => s.setName('request-template').setNameLocalizations({ ja: '修正要望' }).setDescription('Correction and request template').setDescriptionLocalizations({ ja: '修正・要望窓口の記入テンプレートを、このチャンネルのいちばん下に表示する' }))
       .addSubcommand((s) => s.setName('stayroom').setNameLocalizations({ ja: '宿24時間' }).setDescription('24h lodging panel').setDescriptionLocalizations({ ja: '🏨 銭を払って立てる宿（24 時間・1 時間ごと）のボタンを置く' }))
+      .addSubcommand((s) => s.setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' }).setDescription('Visit profile button').setDescriptionLocalizations({ ja: '🪪 自分の参拝プロフィールを出すボタンを、このチャンネルのいちばん下に置く' }))
       .addSubcommand((s) => s.setName('guide').setNameLocalizations({ ja: '案内人' }).setDescription('Guide reception panel').setDescriptionLocalizations({ ja: '🙋 案内人の受付（登録・待機・案内担当など）のボタンを置く' }))
       .addSubcommand((s) => s.setName('secretroom').setNameLocalizations({ ja: 'シクレ部屋' }).setDescription('Secret room panel').setDescriptionLocalizations({ ja: '🤫 だれにも見られずにシクレ部屋を作るボタンを置く' }))
       .addSubcommand((s) => s.setName('maikura').setNameLocalizations({ ja: '舞倉' }).setDescription('Minecraft participation').setDescriptionLocalizations({ ja: '舞倉のPOPと参加ロールのボタンを置く' }))

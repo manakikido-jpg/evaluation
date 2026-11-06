@@ -237,6 +237,7 @@ async function main(): Promise<void> {
     bellSticky.attach(guild);
     // ⛩ 「御神籤を引く」ボタンを #おみくじ のいちばん下に
     await omikuji.attach(guild).catch((err) => logger.warn({ err }, 'omikuji panel attach failed'));
+    await visitProfile.attach(guild).catch((err) => logger.warn({ err }, 'visit panel attach failed'));
     market.attach(guild);
     board.attach(guild);
     // 止まっていた間に消された募集のカードを出し直す
@@ -513,6 +514,7 @@ async function main(): Promise<void> {
     bellSticky.onMessage(m);
     // ⛩ 御神籤のボタン: 書き込みが落ち着いたらいちばん下へ
     omikuji.onMessage(m);
+    visitProfile.onMessage(m);
     // 絵馬待ちの人が自己紹介を書いたら、🔰参拝者 に
     void admission.onMessage(m).catch((err) => logger.warn({ err }, 'intro check failed'));
   });
@@ -541,6 +543,7 @@ async function main(): Promise<void> {
   client.on(Events.MessageDelete, (m) => void messageLog.onDelete(m).catch((err) => logger.warn({ err }, 'deleted message log failed')));
   client.on(Events.MessageBulkDelete, (list) => void messageLog.onBulkDelete([...list.values()]).catch((err) => logger.warn({ err }, 'bulk deleted message log failed')));
   client.on(Events.MessageDelete, (m) => void omikuji.onMessageDelete(m).catch((err) => logger.warn({ err }, 'omikuji panel delete failed')));
+  client.on(Events.MessageDelete, (m) => void visitProfile.onMessageDelete(m).catch((err) => logger.warn({ err }, 'visit panel delete failed')));
   client.on(Events.Error, (err) => logger.error({ err }, 'client error'));
 
   const health =

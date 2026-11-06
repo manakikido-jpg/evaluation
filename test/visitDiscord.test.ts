@@ -16,7 +16,7 @@ beforeEach(async()=>{({db,close}=await makeDb());await db.insert(members).values
 afterEach(async()=>close());
 const interaction=(target?:string,publicPost:boolean|null=null)=>({
  inCachedGuild:()=>true,guildId:cfg.guildId,isChatInputCommand:()=>true,isButton:()=>false,isRepliable:()=>true,
- commandName:'visitprofile',user:who(A),options:{getUser:()=>target?who(target):null,getBoolean:()=>publicPost},
+ commandName:'visitprofile',user:who(target??A),options:{getUser:()=>null,getBoolean:()=>publicPost},
  guild:{members:{fetch:async(input:{user:string;force:boolean})=>({user:who(input.user),displayAvatarURL:()=> 'https://example.invalid/avatar.png'})}},
  deferReply:vi.fn(),editReply:vi.fn(),deferred:true,
 });
@@ -38,20 +38,25 @@ it('公開いいえなら本人だけにプレビューし、非公開でも自�
 });
 it('本人が非公開にした記録は、自分の公開投稿にも他人からの表示にも出さない',async()=>{
  await visitData(db,A);await visitData(db,B);await db.update(visitProfiles).set({publicStats:false});
- for(const i of [interaction(),interaction(A,true),interaction(B),interaction(B,false)]){
-  await app.onInteraction(i as any);const id=i.options.getUser()?.id??A;
+ for(const i of [interaction(),interaction(A,true),interaction(B)]){
+  await app.onInteraction(i as any);const id=i.user.id;
   expect(i.editReply.mock.calls[0]![0].content).toContain('非公開');
   expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(await visitData(db,id)))).toBe(true);
  }
  expect((await visitData(db,A)).profile.publicStats).toBe(false);
 });
-it('相手を指定するとその人の公開カードを実行したチャンネルへ表示する',async()=>{
- await recordVisitMinute(db,[B],new Date());const i=interaction(B);await app.onInteraction(i as any);
+it('出せるのは自分のカードだけ（相手は選べない）。ボタンでも自分のカードをチャンネルへ出す',async()=>{
+ const definition=commandDefinitions(cfg).find(c=>c.name==='visitprofile')!;
+ expect(definition.options?.some(o=>o.name==='user')).toBe(false);
+ await recordVisitMinute(db,[B],new Date());
+ const i={...interaction(B),isChatInputCommand:()=>false,isButton:()=>true,customId:'visit:show'};await app.onInteraction(i as any);
  expect(i.deferReply).toHaveBeenCalledWith({});
  expect(i.editReply.mock.calls[0]![0].files[0].attachment.equals(renderVisitCard(await visitData(db,B)))).toBe(true);
+ const panel=commandDefinitions(cfg).find(c=>c.name==='panel')!;
+ expect(panel.options?.some(o=>o.name==='visitprofile')).toBe(true);
 });
 it('公開カードの着せ替えボタンでも、リンクは押した本人だけに渡す',async()=>{
- const i={...interaction(B),isChatInputCommand:()=>false,isButton:()=>true,customId:'visit:open',member:{displayName:'本人'}};
+ const i={...interaction(),isChatInputCommand:()=>false,isButton:()=>true,customId:'visit:open',member:{displayName:'本人'}};
  await app.onInteraction(i as any);expect(i.deferReply).toHaveBeenCalledWith({flags:MessageFlags.Ephemeral});
  const url=i.editReply.mock.calls[0]![0].components[0].components[0].url;
  const token=new URL(url).pathname.split('/').at(-1)!;expect((await peekLoginLink(db,token))!.id).toBe(A);
