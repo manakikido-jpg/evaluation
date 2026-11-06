@@ -18,7 +18,7 @@
  const comfort=window.GaisenComfort?new window.GaisenComfort({onChange:()=>prefs()}):null;
  const isLight=()=>quality==='light'||quality==='auto'&&!!comfort?.light;
  const pitch=variant=>({a:1,b:.98,c:1.02})[variant]||1;
- const isKiseki=!!root()?.classList.contains('kt-root');
+ const isKiseki=!!root()?.classList?.contains('kt-root');
  const StageDirector=isKiseki?window.KisekiStageDirector:window.GaisenStageDirector;
  const NormalDirector=isKiseki?window.KisekiNormalDirector:window.GaisenNormalDirector;
  const stageDirector=StageDirector?new StageDirector({motion:actualMotion,hidden:()=>document.hidden,variant:()=>comfort?.nextVariant()||'a'}):null;

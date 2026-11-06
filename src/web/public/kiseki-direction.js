@@ -31,7 +31,7 @@
    plan.seen=step;this.machine=machine;
    machine.dataset.ktCue=plan.kind;machine.dataset.ktCueStep=String(step);
    const caption=machine.querySelector('[data-gt-normal-caption]');
-   // 派手な文字で期待度を断定しない。説明は読上げ向け、画面は映像を主体にする。
+   // 画面は映像を主体にし、期待度や当選を断定する文字は出さない。
    if(caption)caption.textContent=({wind:'光の風',glint:'光の粒',thunder:'雷',gates:'神殿の扉'})[plan.kind];
    this.sound(plan.kind,step);
    if(action==='stop'){

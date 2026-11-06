@@ -239,6 +239,8 @@
 .kt-stage-curtain>i{position:absolute;inset:0 50% 0 0;background:linear-gradient(90deg,#080c15ef,#c3a76bdb);border-inline-end:3px ridge #d6bb7a}
 .kt-stage-curtain>i+i{inset:0 0 0 50%;transform:scaleX(-1)}
 .kt-stage-curtain>b{position:absolute;inset:35% 4% auto;text-align:center;color:#ffedb8;font:700 clamp(15px,3vw,25px) Georgia,serif;letter-spacing:.12em;text-shadow:0 2px 5px #000}
+/* 区間名は既存の読み上げ用バナーに任せ、重ねて二重に出さない。 */
+.kt-machine:not([data-kt-transition=landscape]) .kt-stage-curtain>b{display:none}
 .kt-machine[data-kt-transition] .kt-stage-curtain{display:block;animation:kt-stage-curtain 1.1s ease-in-out both}
 .kt-machine[data-kt-transition=landscape] .kt-stage-curtain>i,.kt-machine[data-kt-transition=return] .kt-stage-curtain>i{background:linear-gradient(90deg,#101c32cc,#97baca66);border:0}
 .kt-machine[data-kt-transition=waiting] .kt-stage-curtain>i{background:linear-gradient(90deg,#130e1bf2,#6c4a83aa)}
