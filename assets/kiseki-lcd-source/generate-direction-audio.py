@@ -78,7 +78,50 @@ def build(name):
     print(f'{target.name}: {duration:.2f}s, peak={np.max(np.abs(stereo)):.3f}')
 
 
+def build_response(kind, ending):
+    # 停止は短い打音、終了は低く減衰する音。開始音の再生速度変更だけにしない。
+    duration = .55 if ending else .28
+    t = np.arange(int(duration * RATE)) / RATE
+    y = np.zeros_like(t)
+    number = ['wind', 'glint', 'thunder', 'gates'].index(kind)
+    rng = np.random.default_rng(110710 + number * 2 + int(ending))
+    noise = rng.normal(0, 1, len(t))
+    soft = np.convolve(noise, np.ones(41) / 41, mode='same')
+    low = np.convolve(noise, np.ones(161) / 161, mode='same')
+    frequency = [580, 1174.66, 73.42, 146.83][number] * (.75 if ending else 1)
+    if kind == 'wind':
+        y += soft * np.sin(np.pi * t / duration) ** 2 * .55
+    elif kind == 'glint':
+        tone(y, frequency * 1.5, .025, duration - .04, .07, True)
+    else:
+        y += low * np.exp(-t * (10 if ending else 24)) * 1.4
+    tone(y, frequency, 0, duration - .015, .13, kind in ['glint', 'gates'])
+    stereo = np.stack([y.copy(), y.copy()], axis=1)
+    for channel in range(2):
+        delay = int((.047 + channel * .011) * RATE)
+        stereo[delay:, channel] += y[:-delay] * .12
+    fade = int(.012 * RATE)
+    stereo[:fade] *= np.linspace(0, 1, fade)[:, None]
+    stereo[-fade:] *= np.linspace(1, 0, fade)[:, None]
+    target = DEST / ('cue-' + kind + ('-end' if ending else '-stop') + '.mp3')
+    with tempfile.TemporaryDirectory(prefix='kiseki-response-') as directory:
+        source = Path(directory) / 'sound.wav'
+        with wave.open(str(source), 'wb') as output:
+            output.setnchannels(2)
+            output.setsampwidth(2)
+            output.setframerate(RATE)
+            output.writeframes((stereo * 32767).astype('<i2').tobytes())
+        subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(source),
+                        '-codec:a', 'libmp3lame', '-b:a', '128k', str(target)], check=True)
+    print(f'{target.name}: {duration:.2f}s, peak={np.max(np.abs(stereo)):.3f}')
+
+
 NAMES = ['wind', 'glint', 'thunder', 'gates', 'win-gg', 'win-god', 'win-sgg']
 if __name__ == '__main__':
-    for sound in NAMES:
-        build(sound)
+    import sys
+    if '--responses-only' not in sys.argv:
+        for sound in NAMES:
+            build(sound)
+    for kind in ['wind', 'glint', 'thunder', 'gates']:
+        for ending in [False, True]:
+            build_response(kind, ending)

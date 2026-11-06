@@ -6,7 +6,7 @@ function fixture(){
  const window:any={},jobs=new Map<number,()=>void>(),sounds:any[]=[];let timer=0,p=.9,hidden=false,motion='normal',light=false,draws=0;
  const context={window,setTimeout:(fn:()=>void)=>{jobs.set(++timer,fn);return timer;},clearTimeout:(id:number)=>jobs.delete(id)};
  for(const file of ['gaisen-normal','gaisen-stage','kiseki-direction'])runInNewContext(readFileSync(new URL('../src/web/public/'+file+'.js',import.meta.url),'utf8'),context);
- const options={motion:()=>motion,hidden:()=>hidden,light:()=>light,random:()=>{draws++;return p;},sound:(kind:string,step:number)=>sounds.push([kind,step]),stopSound:()=>{}};
+ const options={motion:()=>motion,hidden:()=>hidden,light:()=>light,random:()=>{draws++;return p;},sound:(kind:string,step:number,index:number|null)=>sounds.push([kind,step,index]),stopSound:()=>{}};
  const director=new window.KisekiNormalDirector(options),stage=new window.KisekiStageDirector(options);
  const machine=(spins=1,stopped:number[]=[],phase='normal',id='1',landscape='spring')=>{
   const caption={textContent:''},title={textContent:''},mode={textContent:phase==='normal'?'蒼泉の神殿':phase};
@@ -16,14 +16,14 @@ function fixture(){
  };
  const update=(machine:any,action='lever',index=0,before=machine)=>{const ticket=director.begin();director.update({before,machine,action,index,ticket});};
  const start=(phase='normal')=>{const m=machine(1,[],phase);update(m,'lever',0,machine(0,[],phase));return m;};
- return {director,stage,machine,update,start,jobs,sounds,draws:()=>draws,value:(v:number)=>p=v,hide:()=>hidden=true,low:()=>motion='low',light:()=>light=true,flush:()=>{for(const [id,fn]of [...jobs]){jobs.delete(id);fn();}}};
+ return {playCue:window.KisekiNormalDirector.playCue,director,stage,machine,update,start,jobs,sounds,draws:()=>draws,value:(v:number)=>p=v,hide:()=>hidden=true,low:()=>motion='low',light:()=>light=true,flush:()=>{for(const [id,fn]of [...jobs]){jobs.delete(id);fn();}}};
 }
 
 it('予告は1G1抽選、HTML差替え後も実際の停止順に第3停止まで引き継ぐ',()=>{
  for(const order of [[0,1,2],[2,0,1],[1,2,0]]){
   const f=fixture(),first=f.start(),kind=first.dataset.ktCue;expect(kind).toBeTruthy();
-  const seen:number[]=[];for(const i of order){seen.push(i);const m=f.machine(1,seen);f.update(m,'stop',i);expect(m.dataset.ktCue).toBe(kind);expect(m.dataset.ktCueStep).toBe(String(seen.length));if(seen.length===3)expect(m.dataset.ktCueEnding).toBe('true');}
-  expect(f.draws()).toBe(1);expect(f.sounds.map(v=>v[1])).toEqual([0,1,2,3]);expect(f.director.plan).toBeNull();f.flush();expect(f.jobs.size).toBe(0);
+  const seen:number[]=[];for(const i of order){seen.push(i);const m=f.machine(1,seen);f.update(m,'stop',i);expect(m.dataset.ktCue).toBe(kind);expect(m.dataset.ktCueStep).toBe(String(seen.length));expect(m.dataset.ktCueReel).toBe(String(i));if(seen.length===3)expect(m.dataset.ktCueEnding).toBe('true');}
+  expect(f.draws()).toBe(1);expect(f.sounds.map(v=>v[1])).toEqual([0,1,2,3]);expect(f.sounds.map(v=>v[2])).toEqual([null,...order]);expect(f.director.plan).toBeNull();f.flush();expect(f.jobs.size).toBe(0);
  }
 });
 it('短い装飾が終わっても、同じゲームの次のSTOPで同じ予告を再開する',()=>{
@@ -41,7 +41,7 @@ it('再送・不正なSTOP・別台・別ゲームへ予告を引き継がない
  }
 });
 it('非表示・低減・軽量・失敗の中断で音と装飾を取り消し、後で勝手に復活しない',()=>{
- for(const mode of ['hide','low','light','error'] as const){const f=fixture(),m=f.start();if(mode==='error')f.director.suspend();else {f[mode]();f.update(f.machine(1,[0]),'stop',0);}f.flush();expect(m.dataset.ktCue).toBeUndefined();expect(f.director.plan).toBeNull();expect(f.jobs.size).toBe(0);}
+ for(const mode of ['hide','low','light','error'] as const){const f=fixture(),m=f.start();if(mode==='error')f.director.suspend();else {f[mode]();f.update(f.machine(1,[0]),'stop',0);}f.flush();expect(m.dataset.ktCue).toBeUndefined();expect(m.dataset.ktCueReel).toBeUndefined();expect(f.director.plan).toBeNull();expect(f.jobs.size).toBe(0);}
 });
 it('古い通信結果を新しい予告へ反映せず、特別区間では通常予告を止める',()=>{
  const f=fixture();f.start();const ticket=f.director.begin();f.director.begin();const m=f.machine(1,[0]);f.director.update({machine:m,action:'stop',index:0,ticket});expect(m.dataset.ktCue).toBeUndefined();
@@ -56,4 +56,17 @@ it('風景だけの変更と、突入・待ち・復帰・前兆の移行を区�
 it('同じ区間のSTOP/再読込では突入映像を再演せず、中断後のタイマーを残さない',()=>{
  const f=fixture(),m=f.machine();f.stage.transition(f.machine(),m);expect(f.jobs.size).toBe(0);f.stage.transition(undefined,m);expect(f.jobs.size).toBe(0);
  const gg=f.machine(1,[],'gg');f.stage.transition(m,gg);expect(f.jobs.size).toBe(3);f.hide();f.flush();expect(f.jobs.size).toBe(0);expect(gg.dataset.ktTransition).toBeUndefined();
+});
+
+it('予告音は開始・短い停止・終了を使い分け、左右定位を実際の停止位置へ合わせる',()=>{
+ const f=fixture(),calls:any[]=[],bank={play:(key:string,options:any)=>calls.push({key,...options})};
+ for(const kind of ['wind','glint','thunder','gates']){
+  f.playCue(bank,kind,0,null);f.playCue(bank,kind,1,2);f.playCue(bank,kind,2,0);f.playCue(bank,kind,3,1);
+  expect(calls.slice(-4).map(c=>c.key)).toEqual(['kt-cue-'+kind,'kt-cue-'+kind+'-stop','kt-cue-'+kind+'-stop','kt-cue-'+kind+'-end']);
+  expect(calls.slice(-4).map(c=>c.pan)).toEqual([0,.35,-.35,0]);
+  expect(calls.slice(-4).every(c=>c.group==='normal'&&c.level<=.32)).toBe(true);
+ }
+ const count=calls.length;
+ for(const args of [['wrong',0,null],['wind',-1,0],['wind',4,0],['wind',1,null],['wind',1,3],['wind',1,.5]])f.playCue(bank,...args);
+ f.playCue(null,'wind',0,null);expect(calls).toHaveLength(count);
 });

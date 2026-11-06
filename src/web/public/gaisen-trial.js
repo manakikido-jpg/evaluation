@@ -22,7 +22,7 @@
  const StageDirector=isKiseki?window.KisekiStageDirector:window.GaisenStageDirector;
  const NormalDirector=isKiseki?window.KisekiNormalDirector:window.GaisenNormalDirector;
  const stageDirector=StageDirector?new StageDirector({motion:actualMotion,hidden:()=>document.hidden,variant:()=>comfort?.nextVariant()||'a'}):null;
- const normalDirector=NormalDirector?new NormalDirector({motion:actualMotion,hidden:()=>document.hidden,light:isLight,sound:(kind,step=0)=>{if(isKiseki){void bank?.play('kt-cue-'+kind,{group:'normal',level:step===3?.22:.32,rate:1+step*.025});return;}const key=kind==='thunder'?'cue-thunder':kind==='wind'?'cue-wind':'cue-glint';void bank?.play(key,{group:'normal',level:kind==='dim'?.15:.38});},stopSound:()=>bank?.stopGroup('normal')}):null;
+ const normalDirector=NormalDirector?new NormalDirector({motion:actualMotion,hidden:()=>document.hidden,light:isLight,sound:(kind,step=0,index=null)=>{if(isKiseki){NormalDirector.playCue(bank,kind,step,index);return;}const key=kind==='thunder'?'cue-thunder':kind==='wind'?'cue-wind':'cue-glint';void bank?.play(key,{group:'normal',level:kind==='dim'?.15:.38});},stopSound:()=>bank?.stopGroup('normal')}):null;
  const kisekiLive=window.KisekiLiveDirector?new window.KisekiLiveDirector({bank,root,motion:actualMotion,light:isLight,hidden:()=>document.hidden}):null;
  const kisekiRealism=window.KisekiRealismDirector?new window.KisekiRealismDirector({bank,root,motion:actualMotion,light:isLight,hidden:()=>document.hidden}):null;
  if(normalDirector&&kisekiRealism){normalDirector.density=()=>kisekiRealism.density();normalDirector.avoidRepeat=()=>!!root()?.classList.contains('kt-root');}

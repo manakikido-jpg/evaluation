@@ -1,9 +1,14 @@
 // 軌跡専用の演出進行。公開済みの停止/区間だけを使い、抽選や操作を待たせない。
 (() => {
  class KisekiNormalDirector extends window.GaisenNormalDirector {
+  static playCue(bank,kind,step,index){
+   if(!['wind','glint','thunder','gates'].includes(kind)||!Number.isInteger(step)||step<0||step>3)return;
+   if(step>0&&(!Number.isInteger(index)||index<0||index>2))return;
+   void bank?.play('kt-cue-'+kind+(step===3?'-end':step>0?'-stop':''),{group:'normal',level:step===0?.32:step===3?.22:.25,pan:step===0?0:[-.35,0,.35][index],rate:step===2?1.025:1});
+  }
   constructor(options){super(options);this.plan=null;}
   clearFrame(){
-   if(this.machine)for(const key of ['ktCue','ktCueStep','ktCueEnding'])delete this.machine.dataset[key];
+   if(this.machine)for(const key of ['ktCue','ktCueStep','ktCueEnding','ktCueReel'])delete this.machine.dataset[key];
   }
   cancel(){this.clearFrame();super.cancel();}
   suspend(){super.suspend();this.plan=null;this.last=null;this.omenAge=0;}
@@ -33,7 +38,8 @@
    const caption=machine.querySelector('[data-gt-normal-caption]');
    // 画面は映像を主体にし、期待度や当選を断定する文字は出さない。
    if(caption)caption.textContent=({wind:'光の風',glint:'光の粒',thunder:'雷',gates:'神殿の扉'})[plan.kind];
-   this.sound(plan.kind,step);
+   if(action==='stop')machine.dataset.ktCueReel=String(index);
+   this.sound(plan.kind,step,action==='stop'?index:null);
    if(action==='stop'){
     const digit=digits[index];this.animate(digit,[{transform:'translateY(-8px) scale(1.04)',opacity:.75},{transform:'translateY(2px) scale(1)',opacity:1,offset:.7},{transform:'translateY(0)',opacity:1}],{duration:170,easing:'ease-out'});
    }

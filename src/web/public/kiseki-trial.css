@@ -228,6 +228,19 @@
 .kt-machine[data-kt-cue-step="2"] .gt-normal-doors{gap:3%;filter:brightness(1.15)}
 .kt-machine[data-kt-cue-ending=true] .gt-normal-doors{animation:kt-cue-door-away .8s ease-in both}
 .kt-machine[data-kt-cue-ending=true] .gt-normal-shade{opacity:.2;animation:kt-cue-light .8s ease-out both}
+/* 停止した位置に光を寄せる。扉は登場を繰り返さず、閉じたまま反応して退場する。 */
+.kt-machine[data-kt-cue]{--kt-cue-x:50%}
+.kt-machine[data-kt-cue-reel="0"]{--kt-cue-x:19%}
+.kt-machine[data-kt-cue-reel="2"]{--kt-cue-x:81%}
+.kt-machine[data-kt-cue-reel] .gt-normal-glint{background:radial-gradient(ellipse at var(--kt-cue-x) 65%,#fff0c480,transparent 48%);animation:kt-cue-stop-light .42s ease-out both}
+.kt-machine[data-kt-cue=thunder][data-kt-cue-reel] .gt-normal-bolt{left:calc(var(--kt-cue-x) - 20%);right:auto;width:40%;animation:kt-cue-stop-light .38s ease-out both}
+.kt-machine[data-kt-cue=wind][data-kt-cue-reel] .gt-normal-wind{animation:kt-cue-stop-wind .48s ease-out both}
+.kt-machine[data-kt-cue=gates][data-kt-cue-step="1"] .gt-normal-doors{animation:kt-cue-door-knock .3s ease-out both}
+.kt-machine[data-kt-cue=gates][data-kt-cue-step="2"] .gt-normal-doors{gap:0;animation:kt-cue-door-knock .3s ease-out both;filter:brightness(1.2);box-shadow:inset 0 0 24px #efc76666}
+.kt-machine[data-kt-cue=gates][data-kt-cue-ending=true] .gt-normal-doors{animation:kt-cue-door-away .8s ease-in both}
+@keyframes kt-cue-stop-light{0%{opacity:0;transform:scale(.95)}24%{opacity:.7}100%{opacity:0;transform:scale(1.07)}}
+@keyframes kt-cue-stop-wind{from{transform:translateX(-8%);opacity:.4}to{transform:translateX(12%);opacity:0}}
+@keyframes kt-cue-door-knock{0%{transform:scale(1)}35%{transform:scale(1.018)}100%{transform:scale(1)}}
 @keyframes kt-cue-wind{0%{transform:translateX(-24%) skewY(2deg);opacity:0}30%{opacity:.6}100%{transform:translateX(24%) skewY(-2deg);opacity:0}}
 @keyframes kt-cue-light{0%{opacity:0;transform:scale(.9)}32%{opacity:.55}100%{opacity:0;transform:scale(1.1)}}
 @keyframes kt-cue-bolt{0%{opacity:0}12%{opacity:.85}27%{opacity:.3}100%{opacity:0}}

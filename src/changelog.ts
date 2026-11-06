@@ -30,6 +30,10 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-07-kiseki-cue-responses', date: '2026-11-07', kind: 'improve', where: ['社務所Web'],
+    title: '軌跡の予告に停止ごとの光と短い音を追加',
+    items: ['予告の開始・停止・終了で音を分け、止めた左・中・右に光と音の位置を合わせます。', '扉は停止ごとに登場を繰り返さず、閉じたまま反応して最後に退場します。'],
+    announcement: { priority: 'none', audience: '無料試遊を確認する運営', steps: ['カジノ管理から軌跡版を開き、音をONにする。', '通常時の予告が出たら左右から止め、光と音の位置と最後の短い音を確認する。'], postText: '', imagePrompt: '', notes: '自作映像と音の調整。実機同一性は未確認。一般公開・銭接続・合流は保留。' } },
   { id: '2026-11-07-kiseki-direction', date: '2026-11-07', kind: 'improve', where: ['社務所Web'],
     title: '軌跡の予告を停止につなげ、ステージ切替と告知の音を改善',
     items: ['風・光・雷・扉の予告を、レバーから第3停止まで引き継ぐようにしました。', '風景切替・特別区間への突入・引き戻し待ち・通常への復帰で映像を分けました。', '予告4音とGG・GOD・SGGの告知3音を独自制作しました。消音・低減・非表示で演出を止めても、抽選と払出しは変わりません。'],
