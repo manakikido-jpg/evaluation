@@ -17,7 +17,7 @@ beforeEach(async()=>{({db,close}=await makeDb());await recordJoin(db,{...user,ro
 async function post(action:string,extra:Record<string,string>={},js=true){return app.request(path,{method:'POST',headers:{...headers(),...(js?{'X-Gaisen-Update':'1'}:{})},body:new URLSearchParams({_csrf:csrf,revision:String((await readTrial(db,now)).revision),machine:'1',action,...extra})});}
 it('個別音量・振動・休憩・診断を備え、回転中は確定役をデータ属性へ出さない',async()=>{
  await post('seat');await post('lever');const html=await(await app.request(path,{headers:headers()})).text();
- for(const text of ['kiseki-realism.js?v=','gaisen-diagnostics.js?v=','data-gt-diagnostic-build=','data-kt-pref="density"','data-kt-pref="operationsVolume"','data-kt-pref="effectsVolume"','data-kt-pref="bgmVolume"','data-kt-pref="haptics"','data-kt-pref="rest"','data-gt-diagnostic-toggle','data-kt-audio-state','data-kt-break-note','data-kt-replay-win'])expect(html).toContain(text);
+ for(const text of ['kiseki-direction.js?v=','kiseki-realism.js?v=','gaisen-diagnostics.js?v=','data-gt-diagnostic-build=','data-kt-pref="density"','data-kt-pref="operationsVolume"','data-kt-pref="effectsVolume"','data-kt-pref="bgmVolume"','data-kt-pref="haptics"','data-kt-pref="rest"','data-gt-diagnostic-toggle','data-kt-audio-state','data-kt-break-note','data-kt-replay-win'])expect(html).toContain(text);
  expect(html).toContain('data-kt-role=""');expect(html).toContain('data-kt-pattern="spinning"');expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>|onclick=|style=/);
  expect((await walletOf(db,id)).balance).toBe(3210);
 });
@@ -58,6 +58,7 @@ it('風景は公開G数だけで切り替わり、内部モードを映さず、
    expect(await readTrial(db,now)).toEqual(f);
   }
  }
+ for(const file of ['cue-wind','cue-glint','cue-thunder','cue-gates','win-gg','win-god','win-sgg']){const r=await app.request(`/static/kiseki-media-${file}.mp3`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('audio/mpeg');expect((await r.arrayBuffer()).byteLength).toBeGreaterThan(1000);}
  for(const file of ['spring-800','spring-1440','garden-800','ruins-800','altar-1200','apron-1200','marquee-720','symbol-gold7','symbol-red7','symbol-blue7','symbol-god','symbol-flower','symbol-crest']){const r=await app.request(`/static/kiseki-media-${file}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
 });
 it('公開された押し順だけを三神のメダルへ表示し、右からの停止と再読込でも位置を維持する',async()=>{

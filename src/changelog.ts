@@ -30,6 +30,10 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-07-kiseki-direction', date: '2026-11-07', kind: 'improve', where: ['社務所Web'],
+    title: '軌跡の予告を停止につなげ、ステージ切替と告知の音を改善',
+    items: ['風・光・雷・扉の予告を、レバーから第3停止まで引き継ぐようにしました。', '風景切替・特別区間への突入・引き戻し待ち・通常への復帰で映像を分けました。', '予告4音とGG・GOD・SGGの告知3音を独自制作しました。消音・低減・非表示で演出を止めても、抽選と払出しは変わりません。'],
+    announcement: { priority: 'none', audience: '無料試遊を確認する運営', steps: ['カジノ管理から軌跡版の無料試遊を開く。', '音をONにして通常時の予告、場面確認で特別区間の演出を確認する。'], postText: '', imagePrompt: '', notes: '運営限定の改善。実機の音源や全演出の同一再現ではない。一般公開・銭接続は保留。' } },
   {
     id: '2026-11-07-kiseki-award-layout', date: '2026-11-07', kind: 'fix', where: ['社務所Web'],
     title: '軌跡版の当選告知の中央位置と数字の間隔を修正',
