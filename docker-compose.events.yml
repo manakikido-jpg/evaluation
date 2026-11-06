@@ -18,6 +18,7 @@ services:
     volumes:
       - ./deploy/event-stream/mediamtx.yml:/mediamtx.yml:ro
       - ${EVENT_STREAM_TLS_DIR:?set a directory containing server.crt and server.key}:/tls:ro
+    user: "${EVENT_STREAM_UID:-1000}:${EVENT_STREAM_GID:-1000}"
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
