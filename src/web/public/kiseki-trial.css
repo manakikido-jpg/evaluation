@@ -187,3 +187,28 @@
 .kt-root .gt-meters{grid-template-columns:repeat(3,minmax(0,1fr))}
 .kt-root .gt-meters>span{min-width:0;overflow-wrap:anywhere}
 .kt-root .gt-meters b{white-space:normal}
+
+/* 告知の操作ボタンが消えた後は、そのための右余白も戻して中央へ揃える。 */
+.kt-root .gt-display:not([data-win-stage]) .gt-lcd-award{width:100%;margin-inline:auto}
+.kt-root .gt-display .gt-lcd-award{gap:3px}
+.kt-root .gt-lcd-award>small,.kt-root .gt-lcd-award>strong,.kt-root .gt-lcd-award>span,.kt-root .kt-award-digits{flex-shrink:0}
+.kt-root .kt-award-digits{align-items:baseline;justify-content:center;padding-bottom:4px;overflow:hidden}
+.kt-root .kt-award-digits b{flex-shrink:0;min-width:.65em;text-align:center;line-height:1.1;font-variant-numeric:tabular-nums}
+.kt-root .gt-display .gt-lcd-award>span{margin-top:2px}
+/* 小さい液晶は重複する区間名を省き、111/777と獲得数の高さを確保する。 */
+@media(max-width:620px){
+ .kt-root .gt-lcd:has(.gt-lcd-award)>.gt-screen-mode{display:none}
+ .kt-root .gt-lcd:has(.gt-lcd-award)>.gt-message{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0;min-height:0}
+ .kt-root .gt-lcd-award>small{font-size:8px;letter-spacing:1.5px;white-space:nowrap}
+ .kt-root .gt-lcd-award>span{font-size:10px}
+ .kt-root .gt-lcd-award[data-kind=god]>strong{font-size:clamp(30px,10vw,56px)}
+}
+@media(max-height:500px) and (min-width:600px){
+ .kt-root[data-focus=true] .gt-display:not([data-win-stage]) .gt-lcd-award{width:min(40%,180px);margin:0}
+ .kt-root[data-focus=true] .gt-display .gt-lcd-award{gap:2px}
+ .kt-root[data-focus=true] .gt-display .gt-lcd-award>span{margin-top:0}
+}
+/* 「GOD GAME」は画面全体ではなく、実際の告知枠の幅で縮める。 */
+.kt-root .gt-lcd-award{container-type:inline-size}
+.kt-root .gt-lcd-award[data-kind=gg]>strong{font-size:clamp(22px,12.5cqw,68px);white-space:nowrap}
+.kt-root .kt-lcd-actions button{min-height:44px}
