@@ -1,0 +1,27 @@
+# opt-in: docker compose -f docker-compose.yml -f docker-compose.events.yml up -d web event-media
+# .envの値は画面やログに表示しない。1936/TCPと配信用FQDNの証明書が別途必要。
+services:
+  web:
+    environment:
+      EVENT_STREAM_SECRET: ${EVENT_STREAM_SECRET:?set a random secret of at least 43 characters}
+      EVENT_STREAM_INGEST_URL: ${EVENT_STREAM_INGEST_URL:?set rtmps://your-stream-host:1936/event}
+      EVENT_STREAM_MEDIA_URL: http://event-media:8888
+      EVENT_STREAM_API_URL: http://event-media:9997
+  event-media:
+    image: bluenviron/mediamtx:1.15.6@sha256:2001b73159ec146478df64d5fe5a973ae0d978a1648138cbbc6bc6f9c4cc9c82
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "1936:1936"
+    volumes:
+      - ./deploy/event-stream/mediamtx.yml:/mediamtx.yml:ro
+      - ${EVENT_STREAM_TLS_DIR:?set a directory containing server.crt and server.key}:/tls:ro
+    user: "${EVENT_STREAM_UID:-1000}:${EVENT_STREAM_GID:-1000}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128

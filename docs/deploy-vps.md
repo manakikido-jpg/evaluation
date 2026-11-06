@@ -269,3 +269,7 @@ crontab -e
 | 全部止める / 動かす | `docker compose down` / `docker compose up -d` |
 
 ログを送るときは、**トークンや Client Secret が写っていないか確認してから**送ってください。
+
+## 任意：イベント映像の配信
+
+映像配信は既定では起動しません。`docker-compose.events.yml` を追加すると、OBS用RTMPSの入口とDocker内だけのHLS/管理APIを持つMediaMTXを起動できます。TLS証明書・認証用秘密・1936/TCP・回線容量が別途必要です。既存のCOMPOSE_FILE指定を残して追加し、証明書の更新運用も用意してください。手順と別サーバーに分ける場合の注意は[イベント映像の導入手順](event-stream.md)へまとめています。

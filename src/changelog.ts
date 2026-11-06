@@ -30,6 +30,12 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-07-event-stream', date: '2026-11-07', kind: 'new', where: ['社務所Web'],
+    title: 'イベント映像を共通のWeb画面で見られる入口を追加',
+    items: ['Discord認証した在籍メンバー向けに、イベントのライブ視聴画面を追加しました。', '宮司・神職が準備・開始・終了を操作し、OBS用の期限付き配信鍵を取得できます。', '配信基盤は任意の追加構成です。実際の設置と配信の確認を終えてから使います。'],
+    announcement: {priority: 'none', audience: 'イベント配信の運営担当', steps: ['docs/event-stream.mdに沿って配信基盤とTLS・秘密を設定する。', '参拝帳 → イベント配信で準備し、OBSの接続と運営の開始操作後にテスト視聴する。'], postText: '', imagePrompt: '配信鍵・参加者情報を映さず、人工のテスト映像で視聴画面を撮影する。', notes: '本番の設置・配信は未実施。Discord内のBOT画面共有ではなく、各部屋から同じWebページを見る。録画・自動外部投稿なし。'},
+  },
   { id: '2026-11-06-guide-panel-command', date: '2026-11-06', kind: 'improve', where: ['Discord'], title: '🙋 案内人の受付パネルを /パネル 案内人 で置けるように', items: ['パネルを置きたいチャンネルで `/パネル 案内人` を打つと、案内人の受付（登録・待機・案内担当など）のパネルを置けます。そのチャンネルのいちばん下に表示し続けます。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
   { id: '2026-11-06-stay-occupied-category', date: '2026-11-06', kind: 'improve', where: ['Discord', '社務所Web'], title: '🏨 人がいる宿を上に・宿を種類ごとのカテゴリに分けられるように', items: ['人がいる宿が上、だれもいない宿が下に並びます。その中は、種類の順（社務所Web の「🔃 宿の並ぶ順」）です。', '社務所Web の「📁 宿を種類ごとのカテゴリに分ける」で、24時間・1時間ごと・公開・招待限定・シークレットごとにカテゴリを選ぶと、BOT が宿をそのカテゴリへ自動で移します。'], announcement: { priority: 'optional', audience: '宿を使う人', steps: ['人がいる宿は上に、空いている宿は下に並びます。'], postText: '宿の並びが変わりました。人がいる宿が上に並ぶので、にぎやかな宿を見つけやすくなります。', imagePrompt: '', notes: 'カテゴリ分けは運営が設定したときだけ。' } },
   { id: '2026-11-06-stay-order-fix', date: '2026-11-06', kind: 'fix', where: ['Discord'], title: '🔃 宿が決めた順に並ばないのを直した', items: ['宿を並べ直すとき、Discord に渡す場所の番号をまちがえていて、並びが変わっていませんでした。', '毎分の確認で、社務所Web の「🔃 宿の並ぶ順」のとおりに並べ直します。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },

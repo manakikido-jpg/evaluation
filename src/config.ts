@@ -1009,6 +1009,10 @@ const webEnvSchema = z.object({
     .or(z.literal('').transform(() => undefined)),
   /** Discord でのログイン（on にすると使える。標準は止めて、ID とパスワードだけ） */
   WEB_DISCORD_LOGIN: z.enum(['on', 'off']).default('off'),
+  EVENT_STREAM_SECRET: z.string().min(43).optional().or(z.literal('').transform(()=>undefined)),
+  EVENT_STREAM_INGEST_URL: z.string().optional(),
+  EVENT_STREAM_MEDIA_URL: z.string().default('http://event-media:8888'),
+  EVENT_STREAM_API_URL: z.string().default('http://event-media:9997'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
