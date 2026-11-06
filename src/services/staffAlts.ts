@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { settings, wallets } from '../db/schema.js';
+import { memberAlts, settings, wallets } from '../db/schema.js';
 import { audit } from './audit.js';
 import { spendWithin } from './economy.js';
 
@@ -22,6 +22,17 @@ export async function staffAlts(db: Db): Promise<StaffAlt[]> {
 
 export async function isStaffAlt(db: Db, memberId: string): Promise<boolean> {
   return (await staffAlts(db)).some((a) => a.id === memberId);
+}
+
+/** 🔗 承認ずみのメンバーのサブアカウントか */
+export async function isApprovedAlt(db: Db, memberId: string): Promise<boolean> {
+  const [row] = await db.select({ status: memberAlts.status }).from(memberAlts).where(eq(memberAlts.altId, memberId));
+  return row?.status === 'approved';
+}
+
+/** 銭・朱印・招待のお礼を受けないアカウント（運営のサブ・承認ずみのメンバーのサブ） */
+export async function isRestrictedAccount(db: Db, memberId: string): Promise<boolean> {
+  return (await isStaffAlt(db, memberId)) || (await isApprovedAlt(db, memberId));
 }
 
 /** 登録する（on）・外す（off）。登録したときは、持っている銭を 0 にする */

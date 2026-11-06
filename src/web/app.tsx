@@ -1,4 +1,6 @@
 import { mountEvaluation } from './evaluation.js';
+import { approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
+import { MemberAltLinks, MemberAltsPage } from './views/memberAlts.js';
 import { mountOffice } from './office.js';
 import { unsubscribeOffice } from '../services/officeNotifications.js';
 import {mountKisekiTrial} from './kisekiTrial.js';
@@ -52,7 +54,7 @@ import { parseBigRaces } from '../services/casino/keibaBig.js';
 import { secretRoomHubs, secretRoomPanel, stayRoomPanel } from '../discord/tempVoice.js';
 import { mountCastOffice } from './castOffice.js';
 import { mountMyPage } from './myPage.js';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { GuidePage } from './views/guide.js';
 import { UpdatePostsPage } from './views/updatePosts.js';
 import { MessageArchivePage } from './views/messageArchive.js';
@@ -61,7 +63,7 @@ import { mountUpdateDesk } from './updateDesk.js';
 import { approveUpdatePost, editPendingUpdatePost, getUpdatePost, listUpdatePosts, postableUpdateChannels, loadUpdatePostConfig, rejectUpdatePost, saveUpdatePostConfig, updatePostConfigSchema } from '../services/updatePosts.js';
 import { guideEmployeePanel } from '../discord/guideReception.js';
 import { guideConfigSchema, parseGuideLinks, parsePanelReactions, loadGuideConfig, saveGuideConfig, setGuideStatus, addGuidePanelChannel, adminSetGuide, countUndecidedGuide, guideDuty, guideDutySince, guideDutyChannelName, setGuideDuty } from '../services/guideReception.js';
-import { guideEmployees, guideReceptions, employeePayroll } from '../db/schema.js';
+import { guideEmployees, guideReceptions, employeePayroll, members } from '../db/schema.js';
 import { inviteSort, inviteOrder } from '../services/inviteList.js';
 import { PermissionCheckPage } from './views/permissionCheck.js';
 import { permissionIssues, validatePermissionSnapshot } from '../services/permissionCheck.js';
@@ -758,6 +760,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/guide', requireAdmin);
   app.use('/guide/*', requireAdmin);
   app.use('/guide/*', requireCsrf);
+  app.use('/alts', requireAdmin);
+  app.use('/alts/*', requireAdmin, requireCsrf);
   app.use('/cast', requireAdmin);
   app.use('/tickets', requireAdmin);
   app.use('/voice', requireAdmin);
@@ -1094,6 +1098,7 @@ export function createWebApp(deps: WebDeps) {
             coinsNonce={session.level === 'guji' && !member.isBot ? randomUUID() : undefined}
           />
           <StaffAltSection memberId={id} csrf={session.csrfToken} alt={(await staffAlts(db)).find((a) => a.id === id)} guji={session.level === 'guji' && !member.isBot} />
+          <MemberAltLinks memberId={id} asAlt={await memberAltOf(db, id)} alts={await altsOfMain(db, id)} />
           <CasinoStyleMemberSection memberId={id} csrf={session.csrfToken} state={await stylesOf(db, id)} guji={session.level === 'guji' && !member.isBot} />
           <SpecialGoenSection
             memberId={id}
@@ -4109,6 +4114,31 @@ export function createWebApp(deps: WebDeps) {
   });
 
   /** 掲示の差出人（BOT とは別の名前・アイコン。空で BOT の名前に戻す） */
+  /** 🔗 メンバーのサブアカウント */
+  app.get('/alts', async (c) => {
+    const alts = await listMemberAlts(db);
+    const ids = [...new Set(alts.flatMap((a) => [a.altId, a.mainId]))];
+    const rows = ids.length ? await db.select({ id: members.id, name: members.displayName }).from(members).where(inArray(members.id, ids)) : [];
+    return c.html(<MemberAltsPage session={c.get('session')} alts={alts} names={new Map(rows.map((r) => [r.id, r.name]))} msg={c.req.query('msg')} />);
+  });
+  app.post('/alts/add', async (c) => {
+    const body = await c.req.parseBody();
+    const by = c.get('session').userId;
+    const altId = typeof body.altId === 'string' ? body.altId.trim() : '';
+    const r = await requestMemberAlt(db, { altId, mainId: typeof body.mainId === 'string' ? body.mainId.trim() : '', note: typeof body.note === 'string' ? body.note : '', by, via: 'web' });
+    if (r !== 'ok') return c.redirect(`/alts?msg=${r}`);
+    await approveMemberAlt(db, altId, by);
+    return c.redirect('/alts?msg=added');
+  });
+  app.post('/alts/:id/approve', async (c) => {
+    const r = await approveMemberAlt(db, c.req.param('id'), c.get('session').userId);
+    return c.redirect(`/alts?msg=${r.status === 'ok' ? 'approved' : 'removed'}`);
+  });
+  app.post('/alts/:id/remove', async (c) => {
+    await removeMemberAlt(db, c.req.param('id'), c.get('session').userId);
+    return c.redirect('/alts?msg=removed');
+  });
+
   app.post('/notices/sender', async (c) => {
     const body = await c.req.parseBody();
     const r = await setNoticeSender(db, { name: typeof body.name === 'string' ? body.name : '', avatarUrl: typeof body.avatarUrl === 'string' ? body.avatarUrl : '' }, c.get('session').userId);

@@ -1,4 +1,4 @@
-import { isStaffAlt } from './staffAlts.js';
+import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { autoRanks } from '../domain/ranks.js';
 import { adminLevelOf, type GuildConfig, type Rank } from '../config.js';

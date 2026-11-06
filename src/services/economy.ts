@@ -1,4 +1,4 @@
-import { isStaffAlt } from './staffAlts.js';
+import { isRestrictedAccount } from './staffAlts.js';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { coinTx, members, wallets } from '../db/schema.js';
@@ -92,8 +92,8 @@ export async function addCoins(
 ): Promise<number> {
   if (!Number.isInteger(amount) || amount <= 0) throw new Error('amount must be a positive integer');
   return db.transaction(async (tx) => {
-    // 🕶 運営のサブアカウントは銭を持たない（入れずに、今の残高を返す）
-    if (await isStaffAlt(tx, memberId)) {
+    // 🕶 運営のサブアカウント・🔗 承認ずみのサブアカウントは銭を受けない（入れずに、今の残高を返す）
+    if (await isRestrictedAccount(tx, memberId)) {
       const [cur] = await tx.select({ balance: wallets.balance }).from(wallets).where(eq(wallets.memberId, memberId));
       return cur?.balance ?? 0;
     }

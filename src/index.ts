@@ -1,4 +1,5 @@
 import { eventTick } from './services/casino/keibaEvents.js';
+import { onMemberAltInteraction } from './discord/memberAlts.js';
 import { RoomKnockApp } from './discord/roomKnock.js';
 import { VisitApp } from './discord/visit.js';
 import { KobanApp } from './discord/koban.js';
@@ -453,6 +454,7 @@ async function main(): Promise<void> {
     void maikura.onInteraction(i);
     void roomKnock.onInteraction(i).catch(err => logger.warn({ err }, 'room knock interaction failed'));
     void guideReception.onInteraction(i);
+    void onMemberAltInteraction(db, cfg, i).catch((err) => logger.warn({ err }, 'member alt interaction failed'));
     void guideThreads.onInteraction(i).catch((err) => logger.warn({ err }, 'guide thread interaction failed'));
     void app.onInteraction(i);
     void staff.onInteraction(i);

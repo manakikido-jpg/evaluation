@@ -1,4 +1,4 @@
-import { isStaffAlt } from './staffAlts.js';
+import { isRestrictedAccount as isStaffAlt } from './staffAlts.js';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { shuin } from '../db/schema.js';

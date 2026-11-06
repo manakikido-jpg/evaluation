@@ -21,6 +21,10 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
   // 神職用: 「メンバーをタイムアウト」の権限がある人にだけ表示（使えるかどうかは BOT がロールで確認する）
   const staff = PermissionFlagsBits.ModerateMembers;
   return [
+    new SlashCommandBuilder().setName('alt').setNameLocalizations({ ja: 'サブ垢' }).setDescription('Declare your sub account').setDescriptionLocalizations({ ja: 'サブアカウントの申告（サブのアカウントで打つ）' })
+      .addSubcommand((s) => s.setName('declare').setNameLocalizations({ ja: '申告' }).setDescription('Declare this account as a sub account').setDescriptionLocalizations({ ja: 'このアカウントが、だれのサブかを申告する（運営が承認します）' })
+        .addUserOption((o) => o.setName('main').setNameLocalizations({ ja: '本アカウント' }).setDescription('Your main account').setDescriptionLocalizations({ ja: 'あなたの本アカウント' }).setRequired(true)))
+      .setContexts(InteractionContextType.Guild).toJSON(),
     new SlashCommandBuilder().setName('bingo').setNameLocalizations({ ja: 'ビンゴ' }).setDescription('Open the event bingo').setDescriptionLocalizations({ ja: 'イベントビンゴの本人用入口を開く' }).setContexts(InteractionContextType.Guild).toJSON(),
     new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
       .setDescription('Post your activity profile in this channel')

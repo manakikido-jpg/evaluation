@@ -2666,3 +2666,21 @@ export const officeSubscriptions = pgTable('office_subscriptions', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [index('office_subscriptions_owner_idx').on(t.userId)]);
+
+/** 🔗 メンバーのサブアカウント（申告して運営が承認したもの）。承認したサブは銭・朱印・招待のお礼を受けない */
+export const memberAlts = pgTable(
+  'member_alts',
+  {
+    altId: text('alt_id').primaryKey(),
+    mainId: text('main_id').notNull(),
+    /** pending = 申告中、approved = 承認ずみ */
+    status: text('status').$type<'pending' | 'approved'>().notNull().default('pending'),
+    note: text('note').notNull().default(''),
+    requestedBy: text('requested_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: text('decided_by'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => [index('member_alts_main_idx').on(t.mainId)],
+);
+
