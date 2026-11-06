@@ -3,7 +3,9 @@ import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
 import { approveMemberAlt, altsOfMain, removeMemberAlt, requestMemberAlt } from '../src/services/memberAlts.js';
 import { isRestrictedAccount } from '../src/services/staffAlts.js';
-import { makeDb } from './helpers.js';
+import { cfg, makeDb } from './helpers.js';
+import { altPanelBody } from '../src/discord/memberAlts.js';
+import { commandDefinitions } from '../src/discord/commands.js';
 
 const MAIN = '700000000000000901', ALT = '700000000000000902', OTHER = '700000000000000903';
 let db: Db, close: () => Promise<void>;
@@ -33,5 +35,9 @@ describe('🔗 メンバーのサブアカウント', () => {
     expect(await removeMemberAlt(db, ALT, 'staff')).toBe(true);
     await addCoins(db, ALT, 300, 'adjust');
     expect((await walletOf(db, ALT)).balance).toBe(300);
+  });
+  it('申告パネル: /パネル サブ垢申告 で置け、ボタンで本アカウントを選ぶ', () => {
+    expect(commandDefinitions(cfg).find((c) => c.name === 'panel')!.options?.some((o) => o.name === 'alt')).toBe(true);
+    expect(altPanelBody().components[0]!.components[0]!.custom_id).toBe('alt:declare');
   });
 });
