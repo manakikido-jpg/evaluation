@@ -1,3 +1,14 @@
+## 2026年11月7日：PR156合流完了
+- 本人の合流指示により https://github.com/manakikido-jpg/evaluation/pull/156 をDraft解除し、確認したhead d10c5934351f986a1325e27563a932c8da3facaaをexpected_head_shaに指定して通常mergeした。mergeは9f0f9c4f68dcc4975439cffec5eee308a089b304、GitHubのclosed/mergedとfetch後の本番先頭一致を確認。本番への直接pushはしていない。
+- 標準CI1127（run42272678199）：型チェック・全253ファイル2,819件・build成功。全件919.30秒。既存のChromium/WebKit各64パターンの確認と合わせて合流。PR本文も結果へ更新。
+- 今回は軌跡の当選告知の中央/数字とSETの重なり修正のみ。イベント配信PR155は未合流。一般公開/銭接続は保留。VPSの自動反映と実画面は未確認。次は反映後の軌跡の再読み込みで表示確認。
+- 合流後の記録はローカルcodex/kiseki-award-layoutでcommitし、記録専用handoff/kiseki-award-mergeへ保存する。リモートのcodex/kiseki-award-layoutはCI確認済みd10c593のままにして、合流済み枝の自動Draft PR再作成を避ける。この記録差分はdocsの2ファイルのみで、CI済みの製品/試験/依存関係を変更しない。
+
+## 2026年11月7日：PR156合流依頼・確認中
+- 本人の「合流して」により、最新の告知修正PR156のGitHub合流を許可。配信PR155は対象外。一般公開/銭接続は保留、本番への直接pushはしない。
+- head d10c5934351f986a1325e27563a932c8da3facaa/base4a16eb8802a1eca60f8c42d5cc0ca417bb81ff32。fetchでも一致。PRはDraft/open、競合なし、レビュー/未解決スレッド0。最新標準CI1127（run42272678199）は実行中。表示修正3038a9cからCSS/試験/依存関係に変更なし、型/build/関連46件/両ブラウザー各64パターンは成功済み。
+- 指示記録だけをローカルで保持し、PR headは動かさずCI成功を待つ。成功後Draft解除→expected headを指定して通常merge→合流結果を確認する。現時点は未合流。
+
 ## 2026年11月7日：当選告知の修正をPR156へ保存
 - Draft PR156：https://github.com/manakikido-jpg/evaluation/pull/156 。codex/kiseki-award-layout、作成時head1c9b01827fcf72eb9406884274c249f1951dbc6c/base4a16eb8802a1eca60f8c42d5cc0ca417bb81ff32。表示修正3038a9c、最新本番は576c5d4で保持。未合流・本番未反映、一般公開/銭接続保留。PR155の配信実装とは別件。
 - 型/build成功、関連19件、最新の宿取込後46件成功、両ブラウザー各64パターンの矩形/中央/非重複/44px/JS例外0を確認。見本docs/previews/kiseki-award-centered-gg.webp。WebKitの自然な描画時計/実スマホは未確認。最新標準CIはPR156のChecksで確認する。
