@@ -1,3 +1,4 @@
+import { streamConfig, streamEvent, changeStream, kickPublisher } from '../services/eventStream.js';
 import { deliverOfficePush, pushAccess } from '../services/officeNotifications.js';
 import { serve } from '@hono/node-server';
 import { loadGuildConfig, loadWebEnv } from '../config.js';
@@ -29,7 +30,21 @@ async function main(): Promise<void> {
   }, 60_000);
   notifications.unref();
 
+  const eventStream = streamConfig({secret:env.EVENT_STREAM_SECRET,ingestUrl:env.EVENT_STREAM_INGEST_URL,mediaUrl:env.EVENT_STREAM_MEDIA_URL,apiUrl:env.EVENT_STREAM_API_URL});
+  if(env.EVENT_STREAM_SECRET&&!eventStream)throw new Error('イベント配信の接続設定を確認してください。');
+  let endingStream=false;
+  const streamExpiry=setInterval(()=>{
+    if(!eventStream||endingStream)return;
+    endingStream=true;
+    void (async()=>{const event=await streamEvent(db);if(event&&(event.status==='closed'||event.expiresAt<=Date.now())){
+      if(event.status!=='closed')
+      await changeStream(db,{action:'stop',actorId:'system:event-stream',id:event.id,version:event.version,via:'system'},new Date());
+      await kickPublisher(eventStream,event.id);
+    }})().catch(()=>logger.warn('event stream expiry check failed')).finally(()=>{endingStream=false;});
+  },30000);
+  streamExpiry.unref();
   const app = createWebApp({
+    eventStream,
     db,
     cfg: () => store.current,
     fileCfg,
@@ -55,6 +70,7 @@ async function main(): Promise<void> {
     server.close();
     store.stop();
     clearInterval(notifications);
+    clearInterval(streamExpiry);
     await close();
     process.exit(0);
   };

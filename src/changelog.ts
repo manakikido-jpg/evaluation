@@ -30,6 +30,12 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-07-event-stream', date: '2026-11-07', kind: 'new', where: ['社務所Web'],
+    title: 'イベント映像を共通のWeb画面で見られる入口を追加',
+    items: ['Discord認証した在籍メンバー向けに、イベントのライブ視聴画面を追加しました。', '宮司・神職が準備・開始・終了を操作し、OBS用の期限付き配信鍵を取得できます。', '配信基盤は任意の追加構成です。実際の設置と配信の確認を終えてから使います。'],
+    announcement: {priority: 'none', audience: 'イベント配信の運営担当', steps: ['docs/event-stream.mdに沿って配信基盤とTLS・秘密を設定する。', '参拝帳 → イベント配信で準備し、OBSの接続と運営の開始操作後にテスト視聴する。'], postText: '', imagePrompt: '配信鍵・参加者情報を映さず、人工のテスト映像で視聴画面を撮影する。', notes: '本番の設置・配信は未実施。Discord内のBOT画面共有ではなく、各部屋から同じWebページを見る。録画・自動外部投稿なし。'},
+  },
   { id: '2026-11-06-staff-multi-stay', date: '2026-11-06', kind: 'improve', where: ['Discord'], title: '🏨 運営は宿を 2 つ目からも立てられるように', items: ['運営（任命制の役職・神職・宮司）は、パネルから宿を同時に 5 つまで立てられます（1 つごとに宿代を払います）。', '運営でない人は、今までどおり 1 人 1 つです。'], announcement: { priority: 'none', audience: '運営', steps: [], postText: '', imagePrompt: '', notes: '' } },
   {
     id: '2026-11-06-kiseki-realism', date: '2026-11-06', kind: 'improve', where: ['社務所Web'],
