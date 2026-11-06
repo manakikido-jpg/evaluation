@@ -87,6 +87,23 @@ describe('🤫 パネルで作るシクレ部屋', () => {
     expect(v.rooms.has(r2.channelId)).toBe(false);
   });
 
+  it('🏨 運営は宿を 5 つまで同時に立てられる（運営でない人は 1 つ）', async () => {
+    const { addCoins } = await import('../src/services/economy.js');
+    const v = fakeVoice();
+    const c = { ...cfg, rooms: { ...cfg.rooms, stayPrice: 100 } } as GuildConfig;
+    const ctx = { db, cfg: c, ops: v.ops };
+    const now = new Date();
+    await addCoins(db, 's1', 10000, 'adjust');
+    const ids = new Set<string>();
+    for (let n = 0; n < 5; n++) {
+      const r = await createStayRoom(ctx, { hubId: HUB, userId: 's1', displayName: '運営', staff: true }, now);
+      expect(r.status).toBe('created');
+      if (r.status === 'created') ids.add(r.channelId);
+    }
+    expect(ids.size).toBe(5);
+    expect((await createStayRoom(ctx, { hubId: HUB, userId: 's1', displayName: '運営', staff: true }, now)).status).toBe('exists');
+  });
+
   it('🏨 24 時間の宿: 銭を払って立て、24 時間はだれもいなくても残り、そのあとは空いたら消える。足りなければ部屋を残さない', async () => {
     const { addCoins, walletOf } = await import('../src/services/economy.js');
     const v = fakeVoice();

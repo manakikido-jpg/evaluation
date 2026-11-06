@@ -1,4 +1,6 @@
 import { ButtonStyle, ChannelType, DiscordAPIError, MessageFlags, OverwriteType, PermissionFlagsBits, type Guild, type GuildMember, type Interaction, type VoiceState } from 'discord.js';
+import { staffRoleIds } from '../services/meetings.js';
+import { STAFF_STAY_LIMIT } from '../services/tempVoice.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
@@ -101,10 +103,10 @@ export class TempVoiceApp {
   }
 
   /** 🏨 パネルから 24 時間の宿（⏱ 1 時間ごとの宿）を買って立てる */
-  async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day', parentId?: string) {
+  async openStay(hubId: string, userId: string, displayName: string, mode: 'day' | 'hourly' = 'day', parentId?: string, staff = false) {
     if (!this.ctx) return { status: 'failed' as const };
     this.ctx.cfg = this.cfg();
-    const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId });
+    const r = await createStayRoom(this.ctx, { hubId, userId, displayName, mode, parentId, staff });
     if (r.status === 'created') await this.onCreated?.(r.channelId, userId, { stay: true }).catch((err) => logger.warn({ err }, 'stay room created hook failed'));
     if (r.status === 'created') await this.sortStays().catch((err) => logger.warn({ err }, 'stay sort failed'));
     return r;
@@ -317,13 +319,15 @@ export async function onStayRoomInteraction(app: TempVoiceApp, cfg: () => GuildC
   if (!i.message.flags.has(MessageFlags.Ephemeral) && i.message.author.id === i.client.user.id) {
     await i.message.edit({ ...stayRoomPanel(current), content: null, allowedMentions: { parse: [] } } as never).catch((err) => logger.warn({ err }, 'stay room panel update failed'));
   }
-  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day', picked.parentId);
+  const staffRoles = staffRoleIds(current);
+  const staff = i.member.roles.cache.some((r) => staffRoles.has(r.id));
+  const r = await app.openStay(pick.channelId, i.user.id, i.member.displayName, hourly ? 'hourly' : 'day', picked.parentId, staff);
   if (r.status === 'insufficient') return void (await i.editReply(`${current.economy.currencyName}が足りません（${r.price.toLocaleString('ja-JP')} 枚必要）。`));
   if (r.status !== 'created' && r.status !== 'exists') return void (await i.editReply(r.status === 'busy' ? 'いま作っています。少し待ってください。' : `宿を作れませんでした。神職に知らせてください。${'reason' in r && r.reason ? `\n-# 理由: ${r.reason}` : ''}`));
   const url = `https://discord.com/channels/${i.guildId}/${r.channelId}`;
   await i.editReply({
     content: r.status === 'exists'
-      ? `🏨 あなたの宿はもうあります（${jst(r.keepUntil)} まで残ります）。<#${r.channelId}>`
+      ? `🏨 あなたの宿はもうあります（${jst(r.keepUntil)} まで残ります）。<#${r.channelId}>${staff ? `\n-# 運営は ${STAFF_STAY_LIMIT} つまで同時に立てられます。` : ''}`
       : hourly
         ? `⏱ 1時間ごとの宿を立てました（${r.charged === 0 ? '🏮 奉納しているので無料' : `${current.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}を払いました`}）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} に次の 1 時間分を自動で払います。そのときだれもいなければ、宿は消えます（${current.economy.currencyName}が足りなくても消えます）。`
         : `🏨 宿を立てました（${r.charged === 0 ? '🏮 奉納しているので無料' : `${current.rooms.stayPrice.toLocaleString('ja-JP')} ${current.economy.currencyName}`}）。<#${r.channelId}>\n-# ${jst(r.keepUntil)} までは、だれもいなくても残ります。そのあとは、全員が抜けたら消えます。`,

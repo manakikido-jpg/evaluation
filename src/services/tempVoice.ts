@@ -253,20 +253,25 @@ export type StayRoomResult = { status: 'created' | 'exists'; channelId: string; 
  * 🏨 パネルで銭を払って、24 時間残る宿を立てる。作れてから払う（足りなければ部屋を消す）。
  * 同じ入口の自分の宿がまだ残っていれば、それを返す（二重には買わない）
  */
-export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string; mode?: StayMode; parentId?: string }, now = new Date()): Promise<StayRoomResult> {
+/** 運営は宿をいくつまで同時に持てるか（運営でない人は 1 つ） */
+export const STAFF_STAY_LIMIT = 5;
+export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; userId: string; displayName: string; mode?: StayMode; parentId?: string; staff?: boolean }, now = new Date()): Promise<StayRoomResult> {
   const hourly = input.mode === 'hourly';
   const hub = ctx.cfg.tempVoice.hubs.find((h) => h.channelId === input.hubId);
   if (!hub) return { status: 'failed' };
   if (busy.has(input.userId)) return { status: 'busy' };
   busy.add(input.userId);
   try {
+    // 運営は 2 つ目からも立てられる（STAFF_STAY_LIMIT まで）。運営でない人は、残っている宿を返す
+    const live: { channelId: string; keepUntil: Date }[] = [];
     for (const row of await ctx.db.select().from(tempVoice).where(and(eq(tempVoice.ownerId, input.userId), eq(tempVoice.hubId, hub.channelId)))) {
       if (ctx.ops.occupancy(row.channelId) === undefined) {
         await ctx.db.delete(tempVoice).where(eq(tempVoice.channelId, row.channelId));
         continue;
       }
-      if (row.keepUntil && row.keepUntil > now) return { status: 'exists', channelId: row.channelId, keepUntil: row.keepUntil };
+      if (row.keepUntil && row.keepUntil > now) live.push({ channelId: row.channelId, keepUntil: row.keepUntil });
     }
+    if (live.length >= (input.staff ? STAFF_STAY_LIMIT : 1)) return { status: 'exists', ...live[live.length - 1]! };
     let channelId: string;
     try {
       channelId = await ctx.ops.create({ hubId: hub.channelId, name: `${hourly ? '⏱' : '🏨'} ${roomName(hub.name, input.displayName)}`.slice(0, 100), ownerId: input.userId, ...(input.parentId ? { parentId: input.parentId } : {}) });
