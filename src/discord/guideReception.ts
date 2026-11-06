@@ -314,6 +314,15 @@ export class GuideReceptionApp {
       if (i.guildId === this.cfg().guildId) await this.nicknameInteraction(i);
       return;
     }
+    // /パネル 案内人: このチャンネルに受付パネルを置く（いちばん下に表示し続ける）
+    if (i.isChatInputCommand() && i.commandName === 'panel' && i.options.getSubcommand(false) === 'guide') {
+      if (!i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
+      if (!i.channel?.isSendable()) return void (await i.reply({ content: 'このチャンネルには置けません。', flags: MessageFlags.Ephemeral }));
+      await this.discord.sendMessage(i.channelId, guideEmployeePanel());
+      this.panelChannels.add(i.channelId);
+      await addGuidePanelChannel(this.db, i.channelId, i.user.id);
+      return void (await i.reply({ content: '🙋 案内人の受付パネルを置きました（このチャンネルのいちばん下に表示し続けます）。', flags: MessageFlags.Ephemeral }));
+    }
     if (!i.isButton() || !i.customId.startsWith('guide:') || !i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     // 前に出したパネルも、押されたらそのチャンネルを覚えて、いちばん下に置き直す
     if (i.message && isGuidePanel(i.message) && !this.panelChannels.has(i.channelId)) {
