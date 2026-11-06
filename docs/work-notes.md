@@ -1,3 +1,8 @@
+## 2026年11月7日：当選告知の修正をPR156へ保存
+- Draft PR156：https://github.com/manakikido-jpg/evaluation/pull/156 。codex/kiseki-award-layout、作成時head1c9b01827fcf72eb9406884274c249f1951dbc6c/base4a16eb8802a1eca60f8c42d5cc0ca417bb81ff32。表示修正3038a9c、最新本番は576c5d4で保持。未合流・本番未反映、一般公開/銭接続保留。PR155の配信実装とは別件。
+- 型/build成功、関連19件、最新の宿取込後46件成功、両ブラウザー各64パターンの矩形/中央/非重複/44px/JS例外0を確認。見本docs/previews/kiseki-award-centered-gg.webp。WebKitの自然な描画時計/実スマホは未確認。最新標準CIはPR156のChecksで確認する。
+- この後続commitは保存先の記録だけでCSS/更新履歴/試験/依存関係を変えない。再開時はfetch後にPR156の最新head/base/CIを確認。合流は本人の別指示を待つ。
+
 ### 軌跡告知の保存前・確認完了
 - CSS修正3038a9cの型/build/public配布コピーが成功。基底8563eddの全件は標準CI42264068076で成功済み。今回の自分の製品差分は軌跡CSSと更新履歴だけで、抽選/払出/Web API/試験/依存関係は変更していない。表示は実ブラウザーで確認し、CSS値をなぞる単体試験は足さない。
 - 最新4a16eb8の宿条件修正を576c5d4で取り込み、対象tempVoiceの型と、既存roomsを加えた5ファイル46件が成功（57.06秒）。軌跡のCSSは3038a9cから同一。Chromium/WebKitの各64パターンとJS例外0、中央/数字/SET/リール/44px操作面の確認結果を維持。
