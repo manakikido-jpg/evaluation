@@ -35,14 +35,26 @@ export const fortuneErrorMessage = (err: unknown) => err instanceof FortuneError
 const fail = (message: string): never => { throw new FortuneError(message); };
 const validNonce = (id: string) => nonce.safeParse(id).success || fail('購入番号を確認してください。画面を開き直してください。');
 export type LotteryTier = { name: string; count: number; pct: number };
-/** その回の等（前の回は 1 等 1 本に全額） */
-export const roundTiers = (r: { tiers?: LotteryTier[] | null }): LotteryTier[] => r.tiers?.length ? r.tiers : [{ name: '1等', count: 1, pct: 100 }];
-/** 等ごとの、1 本あたりの賞金（今の売上で計算。端数は切り捨て） */
-export const tierPrizes = (r: Parameters<typeof projectedPrize>[0] & { tiers?: LotteryTier[] | null }) => {
-  const pool = projectedPrize(r);
-  return roundTiers(r).map((t) => ({ ...t, each: Math.floor((pool * t.pct) / 100 / t.count) }));
+type RoundLike = { price: number; sold: number; returnPct: number; bonus: number; tiers?: LotteryTier[] | null };
+/**
+ * その回の等。pct は「1 本あたり、売上の何 %」（2等 3 本 5% なら、1 本ずつ売上の 5%）。
+ * 等がない前の回は、1 等 1 本に売上の returnPct%（前と同じ配当）
+ */
+export const roundTiers = (r: { tiers?: LotteryTier[] | null; returnPct?: number }): LotteryTier[] => r.tiers?.length ? r.tiers : [{ name: '1等', count: 1, pct: r.returnPct ?? 70 }];
+/** 売上に対する配当の合計 %（1 本あたりの割合 × 本数の合計） */
+export const tiersTotalPct = (tiers: readonly LotteryTier[]) => tiers.reduce((n, t) => n + t.pct * t.count, 0);
+/** 等ごとの、1 本あたりの賞金（今の売上で計算）。売上 × pct% に、上乗せを割合どおりに分けて足す。端数は切り捨て */
+export const tierPrizes = (r: RoundLike) => {
+  const tiers = roundTiers(r), total = tiersTotalPct(tiers), sales = r.price * r.sold;
+  return tiers.map((t) => ({ ...t, each: r.sold ? Math.floor((sales * t.pct) / 100 + (total > 0 ? (r.bonus * t.pct) / total : 0)) : 0 }));
 };
-export const projectedPrize = (r: { price: number; sold: number; returnPct: number; bonus: number }) => r.sold ? Math.floor(r.price * r.sold * r.returnPct / 100) + r.bonus : 0;
+/** 賞金の合計（売上 × 配当の合計 % ＋ 上乗せ）。販売 0 枚なら 0 */
+export const projectedPrize = (r: RoundLike) => r.sold ? Math.floor(r.price * r.sold * tiersTotalPct(roundTiers(r)) / 100) + r.bonus : 0;
+/** 保存した等を、まだ抽選していない回（今売っている回）にも当てる。書き換えた回の数を返す */
+export async function applyTiersToOpenRounds(db: Db, tiers: LotteryTier[]): Promise<number> {
+  const rows = await db.update(fortuneRounds).set({ tiers, returnPct: tiersTotalPct(tiers) }).where(isNull(fortuneRounds.settledAt)).returning({ id: fortuneRounds.id });
+  return rows.length;
+}
 
 export async function buyScratch(db: Db, memberId: string, id: string, raw: FortuneGamesConfig, clock = () => new Date(), pick = randomInt) {
   validNonce(id);
@@ -82,7 +94,7 @@ export async function revealScratch(db: Db, memberId: string, id: string, clock 
 export async function ensureLotteryRound(db: Db, raw: FortuneGamesConfig, now = new Date()) {
   const cfg = fortuneGamesSchema.parse(raw), drawAt = nextLotteryDraw(now), id = drawAt.toISOString();
   if (!cfg.enabled) return (await db.select().from(fortuneRounds).where(eq(fortuneRounds.id, id)))[0];
-  await db.insert(fortuneRounds).values({ id, drawAt, price: cfg.lotteryPrice, perMember: cfg.lotteryLimit, returnPct: cfg.lotteryReturnPct, bonus: cfg.lotteryBonus, tiers: cfg.lotteryTiers }).onConflictDoNothing();
+  await db.insert(fortuneRounds).values({ id, drawAt, price: cfg.lotteryPrice, perMember: cfg.lotteryLimit, returnPct: tiersTotalPct(cfg.lotteryTiers), bonus: cfg.lotteryBonus, tiers: cfg.lotteryTiers }).onConflictDoNothing();
   return (await db.select().from(fortuneRounds).where(eq(fortuneRounds.id, id)))[0]!;
 }
 export async function buyLottery(db: Db, memberId: string, id: string, roundId: string, raw: FortuneGamesConfig, clock = () => new Date()) {

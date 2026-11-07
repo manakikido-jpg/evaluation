@@ -81,9 +81,10 @@ it('社務所の設定は宮司とページ権限・CSRFを確認し、他の設
  expect(scratchTab).toContain('スクラッチの売上・払戻・回収');expect(scratchTab).not.toContain('これまでの抽選');
  const lotteryTab=await(await app.request('/economy/fortune?tab=lottery',{headers})).text();
  expect(lotteryTab).toContain('等と賞金の分け方');
- const tiersSaved=await app.request('/economy/fortune/tiers',{method:'POST',headers,body:new URLSearchParams({_csrf:s.csrfToken,tierName0:'1等',tierCount0:'1',tierPct0:'60',tierName1:'2等',tierCount1:'3',tierPct1:'30',tierName2:'',tierCount2:'1',tierPct2:'10'})});
+ expect(lotteryTab).toContain('1本あたり、売上の割合');expect(lotteryTab).toContain('今の設定の合計');expect(lotteryTab).not.toContain('name="lotteryReturnPct"');
+ const tiersSaved=await app.request('/economy/fortune/tiers',{method:'POST',headers,body:new URLSearchParams({_csrf:s.csrfToken,tierName0:'1等',tierCount0:'1',tierPct0:'55',tierName1:'2等',tierCount1:'3',tierPct1:'5',tierName2:'',tierCount2:'1',tierPct2:'10'})});
  expect(tiersSaved.headers.get('location')).toBe('/economy/fortune?tab=lottery&msg=saved');
- expect(current.fortuneGames.lotteryTiers).toEqual([{name:'1等',count:1,pct:60},{name:'2等',count:3,pct:30}]);
+ expect(current.fortuneGames.lotteryTiers).toEqual([{name:'1等',count:1,pct:55},{name:'2等',count:3,pct:5}]);
  expect(current.fortuneGames.lotteryPrice).toBe(200);
  expect((await app.request('/economy/fortune/tiers',{method:'POST',headers,body:new URLSearchParams({_csrf:s.csrfToken,tierName0:'1等',tierCount0:'1',tierPct0:'90',tierName1:'2等',tierCount1:'1',tierPct1:'20'})})).headers.get('location')).toContain('tiers_invalid');
  // ほかの設定を保存しても、等は消えない
