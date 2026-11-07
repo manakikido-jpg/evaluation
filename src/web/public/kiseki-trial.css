@@ -356,3 +356,8 @@
 .kt-root.kt-reference-layout .gt-display .gt-lcd .gt-lcd-award>span{font-size:clamp(9px,2.7cqw,14px);line-height:1.15;margin:0}
 .kt-root.kt-reference-layout .gt-display .kt-award-digits{padding:0;gap:10px}
 .kt-root.kt-reference-layout .gt-display .kt-award-digits b{font-size:clamp(16px,6cqw,30px);line-height:1.1}
+/* 追加の液晶写真：暗いリール窓と、その左右の連続した金の柱。 */
+.kt-root.kt-reference-layout .kt-reel-assembly:before{content:'';position:absolute;inset:27% 0 15%;z-index:1;pointer-events:none;background:url('/static/kiseki-media-altar-1200.webp') center 60%/100% 240% no-repeat;clip-path:polygon(0 0,11% 0,11% 100%,0 100%,0 0,100% 0,89% 0,89% 100%,100% 100%,100% 0)}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-symbol{background:linear-gradient(90deg,#030609,#17202a 9%,#050a10 43% 70%,#121922 93%,#020509)}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reels{gap:3px;background:linear-gradient(90deg,#f7e9b3,#655937,#fff5d4,#746743,#eee3b7)}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reel{box-shadow:inset 0 0 0 1px #f8e9bb}
