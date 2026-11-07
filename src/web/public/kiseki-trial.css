@@ -330,3 +330,46 @@
 .kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(9.3333cqw - 4.667px);width:100%}
 .kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation{min-height:0;max-height:none;height:78%}
 .kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(12px,5cqw,30px)}
+
+/* 全台写真の黒金外装。遊技窓の上下位置は保ち、筐体と液晶の比率をそろえる。 */
+.kt-root.kt-reference-layout .kt-machine{max-width:580px;padding:10px 7% 12px;border:3px ridge #e7c65a;border-radius:15px 15px 9px 9px;background:linear-gradient(90deg,#c69b22,#fff08b .8%,#8e6415 1.7%,#080a0c 2.5% 5%,#303033 5.6%,#07090d 7% 93%,#303033 94.4%,#080a0c 95% 97.5%,#8e6415 98.3%,#fff08b 99.2%,#c69b22);box-shadow:0 0 0 2px #201700,0 12px 30px #000c,inset 0 3px 2px #fff4a4,inset 0 0 12px #eecb6255}
+.kt-root.kt-reference-layout .gt-cabinet-rails{inset:9px 2.5% 28px}
+.kt-root.kt-reference-layout .gt-cabinet-rails i{width:5px;border-radius:40%;box-shadow:0 0 5px #e7cc5688,inset 0 0 1px #fff}
+.kt-root.kt-reference-layout .gt-marquee{min-height:64px;padding:9px 20% 6px;margin:0 -4% 0;border:0;border-top:2px solid #f4d55d;border-radius:40% 40% 0 0 / 15% 15% 0 0;background:repeating-linear-gradient(90deg,transparent 0 7%,#f8d35525 7.2% 7.7%,transparent 8% 14%) top/100% 7px no-repeat,linear-gradient(#cda932,#fff0a8 5%,#8b661a 11%,#141216 15%,#040609 90%,#27262b);box-shadow:inset 0 1px 1px #fff5b4,inset 0 -3px 8px #000}
+.kt-root.kt-reference-layout .gt-marquee .kt-cabinet-title{width:150px;max-width:100%;height:34px;opacity:.46;filter:brightness(.6) saturate(.75)}
+.kt-root.kt-reference-layout .gt-marquee>span:not(.gt-speaker){font-size:5px;letter-spacing:2px;color:#85764c}
+.kt-root.kt-reference-layout .gt-marquee small{font-size:5px;color:#a59c7a}
+.kt-root.kt-reference-layout .gt-marquee .gt-speaker{top:14px;bottom:15px;width:21%;max-width:90px;border:1px solid #927c31;border-radius:40% 40% 20% 20%;background:radial-gradient(ellipse,#020306 0 2.5px,#bda143 3px 3.6px,#15151a 4px) 0 0/11px 7px;box-shadow:inset 0 2px 4px #000}
+.kt-root.kt-reference-layout .gt-display{border:2px ridge #bfb16d;border-radius:1px;box-shadow:0 0 0 3px #02070d,inset 0 0 8px #02070d;isolation:isolate}
+.kt-root.kt-reference-layout .gt-display:before{content:'';position:absolute;inset:1% 0;z-index:4;pointer-events:none;border-left:5px ridge #d1ae3f;border-right:5px ridge #d1ae3f;background:repeating-linear-gradient(0deg,#fff1a6 0 2px,#9b711f 2px 5px,#443111 6px 10px,#d5af43 11px 13px,transparent 14px 28px) left/5px 100% no-repeat,repeating-linear-gradient(0deg,#fff1a6 0 2px,#9b711f 2px 5px,#443111 6px 10px,#d5af43 11px 13px,transparent 14px 28px) right/5px 100% no-repeat;clip-path:polygon(0 0,4% 0,2% 42%,7% 48%,7% 77%,3% 85%,6% 100%,0 100%,0 0,100% 0,96% 0,98% 42%,93% 48%,93% 77%,97% 85%,94% 100%,100% 100%,100% 0)}
+.kt-root.kt-reference-layout .gt-display .gt-lcd{padding-top:21px;background:linear-gradient(#03418422,transparent 65%)}
+.kt-root.kt-reference-layout .gt-display .gt-lcd-hud{font-size:5px;min-height:14px;padding:2px 8px;gap:9px;background:linear-gradient(#001b3fbb,transparent)}
+.kt-root.kt-reference-layout .gt-display .gt-lcd-hud b{font-size:8px}
+.kt-root.kt-reference-layout .gt-display .gt-digits{gap:clamp(8px,3cqw,18px);padding-top:3%;padding-bottom:1%}
+.kt-root.kt-reference-layout .gt-display .gt-digits>span{font-family:Georgia,'Times New Roman',serif;font-style:normal;font-weight:900;line-height:1.15;font-size:clamp(48px,20cqw,112px);color:#ffd83c;-webkit-text-stroke:1px #f2d263;text-shadow:0 1px 0 #fff3aa,1px 2px 0 #ad6c08,2px 3px 0 #75410a,3px 4px 0 #392908,0 0 2px #ffffbc;filter:drop-shadow(0 2px 1px #132b45)}
+.kt-root.kt-reference-layout .gt-display .gt-digits>span:is([data-kt-digit="0"],[data-kt-digit="1"],[data-kt-digit="3"],[data-kt-digit="5"],[data-kt-digit="9"]){color:#e92014;-webkit-text-stroke:1.5px #ffe46d;text-shadow:0 1px 0 #ffbe36,1px 2px 0 #b77812,2px 3px 0 #65330b,3px 4px 0 #241706,0 0 4px #ffe68d}
+.kt-root.kt-reference-layout .gt-display .gt-digits>span[data-kt-digit="7"]{color:#f2cd29;text-shadow:0 1px #fff1a1,1px 2px #b26c03,2px 3px #67400b,0 0 9px #ffe66d}
+.kt-root.kt-reference-layout .gt-display .gt-message{font-weight:800;font-size:clamp(7px,1.85cqw,10px);color:#fffde3;text-shadow:0 1px 2px #1a2026,0 0 2px #061823}
+.kt-root.kt-reference-layout .kt-altar-art{filter:saturate(1.3) brightness(1.12) drop-shadow(0 2px 1px #392006)}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reel-shelf{border-color:#e4d69b;border-top-color:#fff2c8;border-bottom-color:#c1ae71;background:linear-gradient(90deg,#454033,#ffedbd,#8b7d52,#fff4cd,#625b45);box-shadow:0 0 0 1px #715419,0 0 0 2px #dfb840,0 3px 3px #152026aa}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-symbol{background:linear-gradient(90deg,#96958c,#faf8dd 12%,#fffdeb 50%,#eeeaca 85%,#999487)}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-symbol-art{width:94%;height:calc(var(--symbol-h)*.98);filter:saturate(1.2) drop-shadow(0 1px #5b481c)}
+.kt-root.kt-reference-layout .kt-stage-footer{isolation:isolate;overflow:hidden;background:#05437e}
+.kt-stage-landscape{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 70%;z-index:-1;filter:saturate(1.3) brightness(.85)}
+.kt-root.kt-reference-layout .gt-display .kt-stage-footer .gt-screen-mode{align-self:center;font-size:clamp(9px,2.7cqw,17px);color:#b8eea4;background:linear-gradient(90deg,transparent,#00142caa,transparent);text-shadow:0 1px #102c44,0 0 3px #00112c}
+.kt-root.kt-reference-layout .gt-console{margin:3px -3% 8px;border-top:2px solid #f0d66f;border-bottom-color:#a98727;background:linear-gradient(176deg,#a09362,#1a1c23 7%,#05080c 42%,#25252d 80%,#080b10)}
+.kt-root.kt-reference-layout .gt-apron{height:110px}
+@media(max-width:620px){.kt-root.kt-reference-layout .kt-machine{padding:7px 5% 9px;border-radius:12px 12px 8px 8px}.kt-root.kt-reference-layout .gt-marquee{min-height:49px;padding-top:6px;padding-bottom:4px}.kt-root.kt-reference-layout .gt-marquee .kt-cabinet-title{height:25px;width:115px}.kt-root.kt-reference-layout .gt-marquee .gt-speaker{top:12px;bottom:11px}.kt-root.kt-reference-layout .gt-apron{height:80px}}
+@media(max-height:500px) and (min-width:600px){.kt-root.kt-reference-layout[data-focus=true] .gt-display .gt-digits>span{font-size:clamp(48px,20cqw,70px)}.kt-root.kt-reference-layout[data-focus=true] .kt-machine{padding:5px 5%}}
+.kt-root.kt-reference-layout .gt-display .gt-lcd .gt-lcd-award{gap:1px;margin:0;transform:none;max-height:100%;justify-content:center}
+.kt-root.kt-reference-layout .gt-display .gt-lcd .gt-lcd-award>strong{font-size:clamp(20px,10cqw,50px);line-height:1.05}
+.kt-root.kt-reference-layout .gt-display .gt-lcd .gt-lcd-award[data-kind=god]>strong{font-size:clamp(24px,13cqw,60px)}
+.kt-root.kt-reference-layout .gt-display .gt-lcd .gt-lcd-award>small{font-size:7px;line-height:1.1}
+.kt-root.kt-reference-layout .gt-display .gt-lcd .gt-lcd-award>span{font-size:clamp(9px,2.7cqw,14px);line-height:1.15;margin:0}
+.kt-root.kt-reference-layout .gt-display .kt-award-digits{padding:0;gap:10px}
+.kt-root.kt-reference-layout .gt-display .kt-award-digits b{font-size:clamp(16px,6cqw,30px);line-height:1.1}
+/* 写真の中心は縦液晶。大きな腰ロゴを縮め、黒い操作部へつなぐ。 */
+.kt-root.kt-reference-layout .gt-apron{height:35px;border-width:2px;background:#06090c;box-shadow:inset 0 0 8px #000}
+.kt-root.kt-reference-layout .gt-apron img{opacity:.25;object-fit:contain}
+.kt-root.kt-reference-layout .gt-medal-tray{height:18px}
+@media(max-width:620px){.kt-root.kt-reference-layout .kt-machine{padding-left:8%;padding-right:8%}.kt-root.kt-reference-layout .gt-console{margin-left:-7%;margin-right:-7%}.kt-root.kt-reference-layout .gt-apron{height:28px}.kt-root.kt-reference-layout .gt-medal-tray{height:14px}}
