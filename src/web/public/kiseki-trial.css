@@ -333,7 +333,6 @@
 
 /* 参考写真に合わせる対象は液晶内だけ。外装と操作部は維持。 */
 .kt-root.kt-reference-layout .gt-display{border:2px ridge #bfb16d;border-radius:1px;box-shadow:0 0 0 3px #02070d,inset 0 0 8px #02070d;isolation:isolate}
-.kt-root.kt-reference-layout .gt-display:before{content:'';position:absolute;inset:1% 0;z-index:4;pointer-events:none;border-left:5px ridge #d1ae3f;border-right:5px ridge #d1ae3f;background:repeating-linear-gradient(0deg,#fff1a6 0 2px,#9b711f 2px 5px,#443111 6px 10px,#d5af43 11px 13px,transparent 14px 28px) left/5px 100% no-repeat,repeating-linear-gradient(0deg,#fff1a6 0 2px,#9b711f 2px 5px,#443111 6px 10px,#d5af43 11px 13px,transparent 14px 28px) right/5px 100% no-repeat;clip-path:polygon(0 0,4% 0,2% 42%,7% 48%,7% 77%,3% 85%,6% 100%,0 100%,0 0,100% 0,96% 0,98% 42%,93% 48%,93% 77%,97% 85%,94% 100%,100% 100%,100% 0)}
 .kt-root.kt-reference-layout .gt-display .gt-lcd{padding-top:21px;background:linear-gradient(#03418422,transparent 65%)}
 .kt-root.kt-reference-layout .gt-display .gt-lcd-hud{font-size:5px;min-height:14px;padding:2px 8px;gap:9px;background:linear-gradient(#001b3fbb,transparent)}
 .kt-root.kt-reference-layout .gt-display .gt-lcd-hud b{font-size:8px}
