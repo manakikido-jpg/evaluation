@@ -1,4 +1,4 @@
-import {beforeEach,afterEach,it,expect} from 'vitest';
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import {eq} from 'drizzle-orm';
 import {makeDb} from './helpers.js';
@@ -7,7 +7,7 @@ import {members,eventLotteries,eventLotteryDraws} from '../src/db/schema.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
 import {createEventLottery,eventLotteryView,enterEventLottery,changeEventLottery,drawEventLottery,markEventDelivered,sendEventLotteryNotices,retryEventLotteryNotices} from '../src/services/eventLottery.js';
 let db:Db,close:()=>Promise<void>,id:string;const now=new Date('2026-11-08T04:00:00Z');
-beforeEach(async()=>{({db,close}=await makeDb());for(const id of ['a','b','c']){await db.insert(members).values({id,username:id,displayName:id});await addCoins(db,id,1000,'adjust');}id=await createEventLottery(db,{name:'イベント',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:[{name:'景品',count:2,coins:200,item:'品物'}]},'guji');});afterEach(async()=>close());
+beforeEach(async()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(now);({db,close}=await makeDb());for(const id of ['a','b','c']){await db.insert(members).values({id,username:id,displayName:id});await addCoins(db,id,1000,'adjust');}id=await createEventLottery(db,{name:'イベント',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:[{name:'景品',count:2,coins:200,item:'品物'}]},'guji');});afterEach(async()=>{vi.useRealTimers();await close();});
 const state=()=>eventLotteryView(db,id);const action=async(a:string)=>changeEventLottery(db,id,'guji',(await state()).event.version,a);
 async function draw(op=randomUUID(),at=now){const e=(await state()).event;return drawEventLottery(db,id,e.prizes[0]!.id,'guji',e.version,op,at,()=>0);}
 it('受付/銭/一人一口/残高不足を原子的に扱い、受付後は登録内容を変えない',async()=>{
