@@ -75,5 +75,23 @@
     "現在のサイトの更新内容",
     "実iPhone/Androidの打感・聴感・発熱・電池の実測"
   ],
-  "note": "HTML全体/実機画像/音源は転載せず、根拠URLと保存物の照合ハッシュだけを記録する。抽選に関する既存の暫定規則はkiseki-trial.md参照。"
+  "note": "HTML全体/実機画像/音源は転載せず、根拠URLと保存物の照合ハッシュだけを記録する。抽選に関する既存の暫定規則はkiseki-trial.md参照。",
+  "browserVerification20261107": {
+    "access": "Web閲覧ツールで本文取得可。curlは403のまま。過去の取得履歴は保持。",
+    "urls": [
+      "https://1geki.jp/slot/l_milliongod_kiseki/41/",
+      "https://1geki.jp/slot/l_milliongod_kiseki/43/",
+      "https://1geki.jp/slot/l_milliongod_kiseki/5/"
+    ],
+    "confirmedScope": [
+      "通常6ステージの名称と役割",
+      "通常予告の停止連動構成",
+      "確定役の演出種別"
+    ],
+    "notReproduced": [
+      "今回の予告の頻度/期待度/タイミングは独自",
+      "6ステージの背景と内部モード連動",
+      "実機録音・全演出の完全再現"
+    ]
+  }
 }

@@ -18,8 +18,11 @@
  const comfort=window.GaisenComfort?new window.GaisenComfort({onChange:()=>prefs()}):null;
  const isLight=()=>quality==='light'||quality==='auto'&&!!comfort?.light;
  const pitch=variant=>({a:1,b:.98,c:1.02})[variant]||1;
- const stageDirector=window.GaisenStageDirector?new window.GaisenStageDirector({motion:actualMotion,hidden:()=>document.hidden,variant:()=>comfort?.nextVariant()||'a'}):null;
- const normalDirector=window.GaisenNormalDirector?new window.GaisenNormalDirector({motion:actualMotion,hidden:()=>document.hidden,light:isLight,sound:kind=>{const key=kind==='thunder'?'cue-thunder':kind==='wind'?'cue-wind':'cue-glint';void bank?.play(key,{group:'normal',level:kind==='dim'?.15:.38});},stopSound:()=>bank?.stopGroup('normal')}):null;
+ const isKiseki=!!root()?.classList?.contains('kt-root');
+ const StageDirector=isKiseki?window.KisekiStageDirector:window.GaisenStageDirector;
+ const NormalDirector=isKiseki?window.KisekiNormalDirector:window.GaisenNormalDirector;
+ const stageDirector=StageDirector?new StageDirector({motion:actualMotion,hidden:()=>document.hidden,variant:()=>comfort?.nextVariant()||'a'}):null;
+ const normalDirector=NormalDirector?new NormalDirector({motion:actualMotion,hidden:()=>document.hidden,light:isLight,sound:(kind,step=0,index=null)=>{if(isKiseki){NormalDirector.playCue(bank,kind,step,index);return;}const key=kind==='thunder'?'cue-thunder':kind==='wind'?'cue-wind':'cue-glint';void bank?.play(key,{group:'normal',level:kind==='dim'?.15:.38});},stopSound:()=>bank?.stopGroup('normal')}):null;
  const kisekiLive=window.KisekiLiveDirector?new window.KisekiLiveDirector({bank,root,motion:actualMotion,light:isLight,hidden:()=>document.hidden}):null;
  const kisekiRealism=window.KisekiRealismDirector?new window.KisekiRealismDirector({bank,root,motion:actualMotion,light:isLight,hidden:()=>document.hidden}):null;
  if(normalDirector&&kisekiRealism){normalDirector.density=()=>kisekiRealism.density();normalDirector.avoidRepeat=()=>!!root()?.classList.contains('kt-root');}
@@ -203,7 +206,7 @@
    if(r.ok){
     if(['lever','stop','seat','leave'].includes(action)){needsRecovery=false;const notice=root().querySelector('[data-gt-recovery]');if(notice)notice.hidden=true;}
     const win=action==='stop'&&!hadWin?readWin():null;
-    if(win){normalDirector?.suspend();celebrate(win);}else {if(['lever','stop'].includes(action))stageDirector?.transition(before?.dataset.scene,root().querySelector('.gt-machine'));tone(action,index);if(action==='stop'||action==='lever'&&before?.dataset.scene!==root().querySelector('.gt-machine')?.dataset.scene)resultTone(before,root().querySelector('.gt-machine'));}
+    if(win){normalDirector?.suspend();celebrate(win);}else {if(['lever','stop'].includes(action))stageDirector?.transition(isKiseki?before:before?.dataset.scene,root().querySelector('.gt-machine'));tone(action,index);if(action==='stop'||action==='lever'&&before?.dataset.scene!==root().querySelector('.gt-machine')?.dataset.scene)resultTone(before,root().querySelector('.gt-machine'));}
     if(!win)normalDirector?.update({before,machine:root().querySelector('.gt-machine'),action,index,ticket:normalTicket});
     monitor();
     if(focusedKey&&!win&&!settingsOpen){const target=root().querySelector(`[data-gt-key="${focusedKey}"]:not(:disabled)`)||root().querySelector('.gt-stop.is-next:not(:disabled)')||root().querySelector('.gt-lever:not(:disabled)');target?.focus({preventScroll:true});}

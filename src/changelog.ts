@@ -30,6 +30,17 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-07-kiseki-role-trail', date: '2026-11-07', kind: 'improve', where: ['社務所Web'], title: '軌跡の液晶右側に金枠の5マス履歴を追加',
+    items: ['確定済みの直近5ゲームを、金枠と緑の光を添えた小役履歴で表示します。白7・青7・黄7などを区別し、空欄も残します。', '履歴は第3停止で更新し、回転中・停止途中や再読み込みだけでは増えません。'],
+    announcement: { priority: 'none', audience: '運営の無料試遊担当', steps: ['カジノ管理から軌跡版を開き、3つのSTOPを押す。', '液晶右側の5マスが確定後にだけ更新されることを確認する。'], postText: '', imagePrompt: '', notes: '表示のみ。履歴抽選の追加、凱旋版、一般公開、銭接続は対象外。' } },
+  { id: '2026-11-07-kiseki-cue-responses', date: '2026-11-07', kind: 'improve', where: ['社務所Web'],
+    title: '軌跡の予告に停止ごとの光と短い音を追加',
+    items: ['予告の開始・停止・終了で音を分け、止めた左・中・右に光と音の位置を合わせます。', '扉は停止ごとに登場を繰り返さず、閉じたまま反応して最後に退場します。'],
+    announcement: { priority: 'none', audience: '無料試遊を確認する運営', steps: ['カジノ管理から軌跡版を開き、音をONにする。', '通常時の予告が出たら左右から止め、光と音の位置と最後の短い音を確認する。'], postText: '', imagePrompt: '', notes: '自作映像と音の調整。実機同一性は未確認。一般公開・銭接続・合流は保留。' } },
+  { id: '2026-11-07-kiseki-direction', date: '2026-11-07', kind: 'improve', where: ['社務所Web'],
+    title: '軌跡の予告を停止につなげ、ステージ切替と告知の音を改善',
+    items: ['風・光・雷・扉の予告を、レバーから第3停止まで引き継ぐようにしました。', '風景切替・特別区間への突入・引き戻し待ち・通常への復帰で映像を分けました。', '予告4音とGG・GOD・SGGの告知3音を独自制作しました。消音・低減・非表示で演出を止めても、抽選と払出しは変わりません。'],
+    announcement: { priority: 'none', audience: '無料試遊を確認する運営', steps: ['カジノ管理から軌跡版の無料試遊を開く。', '音をONにして通常時の予告、場面確認で特別区間の演出を確認する。'], postText: '', imagePrompt: '', notes: '運営限定の改善。実機の音源や全演出の同一再現ではない。一般公開・銭接続は保留。' } },
   {
     id: '2026-11-07-kiseki-award-layout', date: '2026-11-07', kind: 'fix', where: ['社務所Web'],
     title: '軌跡版の当選告知の中央位置と数字の間隔を修正',
