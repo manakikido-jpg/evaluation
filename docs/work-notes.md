@@ -1,3 +1,10 @@
+## 2026年11月7日：イベントくじPR160・最終引き継ぎ
+- 実装保存先：PR #160（https://github.com/manakikido-jpg/evaluation/pull/160）、codex/event-lottery、head d5098d73cba9f5cad55a147e90f3de2dead9ca50。本番cc067754を通常merge済み。旧handoff/event-lottery-pr160は取込前の記録なので、今回のhandoff/event-lottery-pr160-finalを再開元とする。
+- ローカル：Node22型/build成功、全261ファイル2,865件成功（441.98秒）。関連13件成功。Chromiumは390/1440px・抽選直後の名前切替/当選者非表示→約3秒後表示・再読込・受渡・入力エラー保持を確認しJS例外0。ログ/tmp/event-merged-{types,build,all}.log、/tmp/event-browser-final.log。見本docs/previews/event-lottery-{admin,draw}-390.webp。
+- 最新headのPR結合CI 42373661288は成功。push CI 42373657736の初回は既存test/casinoBots.test.ts:292の30秒制限で失敗。同テストはソース変更・制限延長・除外をせず単独実行9.85秒で成功（/tmp/event-casino-timeout-check.log）。同一headの失敗ジョブを再実行し、attempt 2は全テスト/buildを含め成功。ログ/tmp/event-merged-ci-push-rerun.log。PR160はReady/未合流、最新headの結合/単独CIとも成功。
+- 最終保存はこのメモのみ。実装・試験・依存関係は検証済みd5098d73と同一で、型/build/全2,865件と最新headのCI成功結果を継承する。
+- 今回は実装/検証/PRまで。本番への合流・デプロイ、実イベント作成、Discord実投稿、実参加費回収は未実施。合流は本人の別指示待ち。導入後、経済権限のある宮司が「イベントくじ」で具体的な参加費/景品/投稿先を設定する。
+
 ## 2026年11月7日：11月8日向けイベントくじの実装
 - 本人の実装依頼と環境復旧後の「そのまますすめて」。Discord受付/宮司のWeb運営、銭定額1口、回収銭は消費、景品指定で未当選者から1人ずつ均等抽選。賞金は新規発行、品物は受け渡し記録。手動受付締切、抽選前中止は全額返金。Web約3秒演出とDiscord結果、通知だけ再送。開始後設定固定、抽選後取消/個別取消なし。
 - 最新本番からcodex/event-lotteryを作成。既存の銭API/サブアカ制限/権限/通知へ接続し、新テーブル/マイグレーションを追加。抽選/支払い/返金の原子性と冪等性を検証する。本番合流・公開は別途指示待ち。以前の軌跡修正は再適用しない。
