@@ -9,6 +9,7 @@ import { coinTx, members, wallets } from '../db/schema.js';
  */
 
 export type CoinReason =
+  | 'event_entry' | 'event_refund' | 'event_prize'
   | 'long_voice_bonus'
   | 'voice'
   | 'shuin_give'
@@ -298,6 +299,7 @@ export async function adminTake(
 
 /** 銭の出入りの理由（社務所Web・/残高 で表示） */
 export const COIN_REASON_LABEL: Record<string, string> = {
+  event_entry: 'イベント参加費', event_refund: 'イベント中止の返金', event_prize: 'イベントの当選賞金',
   scratch_buy: 'スクラッチを買った', scratch_prize: 'スクラッチの払戻', lottery_buy: '宝くじを買った', lottery_prize: '宝くじの当選賞金',
   voice: '通話',
   long_voice_bonus: '7時間の浮上ボーナス',

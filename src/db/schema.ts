@@ -2702,3 +2702,31 @@ export const memberAltTries = pgTable('member_alt_tries', {
   since: timestamp('since', { withTimezone: true }).notNull().defaultNow(),
 });
 
+
+/** 運営が一人ずつ引くイベントくじ。受付後の景品は固定。 */
+export type EventPrize = { id: string; name: string; count: number; coins: number; item: string };
+export const eventLotteries = pgTable('event_lotteries', {
+ id: text('id').primaryKey(), name: text('name').notNull(), fee: integer('fee').notNull(),
+ channelId: text('channel_id').notNull(), resultChannelId: text('result_channel_id').notNull(),
+ state: text('state').notNull().default('draft'), version: integer('version').notNull().default(0),
+ prizes: jsonb('prizes').$type<EventPrize[]>().notNull(), createdBy: text('created_by').notNull(),
+ createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[check('event_fee_positive',sql`${t.fee}>0`)]);
+export const eventLotteryEntries = pgTable('event_lottery_entries', {
+ eventId: text('event_id').notNull().references(()=>eventLotteries.id), memberId: text('member_id').notNull(),
+ displayName: text('display_name').notNull(), paid: integer('paid').notNull(), refunded: boolean('refunded').notNull().default(false),
+ createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[primaryKey({columns:[t.eventId,t.memberId]})]);
+export const eventLotteryDraws = pgTable('event_lottery_draws', {
+ id: text('id').primaryKey(), eventId: text('event_id').notNull().references(()=>eventLotteries.id),
+ memberId: text('member_id').notNull(), displayName: text('display_name').notNull(), prizeId: text('prize_id').notNull(),
+ prizeName: text('prize_name').notNull(), coins: integer('coins').notNull(), item: text('item').notNull(),
+ delivered: boolean('delivered').notNull().default(false), actorId: text('actor_id').notNull(),
+ createdAt: timestamp('created_at',{withTimezone:true}).notNull(),
+},t=>[uniqueIndex('event_winner_once').on(t.eventId,t.memberId)]);
+export const eventLotteryNotices = pgTable('event_lottery_notices', {
+ id: text('id').primaryKey(), eventId: text('event_id').notNull().references(()=>eventLotteries.id),
+ channelId: text('channel_id').notNull(), body: jsonb('body').$type<Record<string,unknown>>().notNull(),
+ dueAt: timestamp('due_at',{withTimezone:true}).notNull(), sentAt: timestamp('sent_at',{withTimezone:true}),
+ messageId: text('message_id'), attempts: integer('attempts').notNull().default(0), error: text('error'),
+});
