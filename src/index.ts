@@ -1,3 +1,4 @@
+import { EventLotteryApp } from './discord/eventLottery.js';
 import { eventTick } from './services/casino/keibaEvents.js';
 import { onMemberAltInteraction, onSubAltJoin } from './discord/memberAlts.js';
 import { RoomKnockApp } from './discord/roomKnock.js';
@@ -137,6 +138,7 @@ async function main(): Promise<void> {
   const sokin = new SokinApp(db, cfg);
   const visitProfile = new VisitApp(db, cfg, env.WEB_BASE_URL);
   const casino = new CasinoApp(cfg, env.WEB_BASE_URL, db);
+  const eventLottery = new EventLotteryApp(db,cfg,actions);
   const lottery = new LotteryApp(db, cfg, actions, env.WEB_BASE_URL);
   const glossary = new GlossaryApp(db, cfg);
   const tempGrants = new TempGrantApp(db, cfg, actions);
@@ -180,6 +182,7 @@ async function main(): Promise<void> {
   const vcHelp = new VcHelpApp(cfg);
   const innGuest = new InnGuestApp(db, cfg);
   new ReactionRoleApp(db, cfg).attach(client);
+  let eventLotteryTicker: NodeJS.Timeout | undefined;
   let ticker: NodeJS.Timeout | undefined;
   let omairiTicker: NodeJS.Timeout | undefined;
 
@@ -262,6 +265,7 @@ async function main(): Promise<void> {
     await recruit.attach(guild).catch((err) => logger.warn({ err }, 'recruit panels failed'));
     // 1 分ごと: 通話時間・花びら・発言数、空の通話部屋の片付け（念のため）
     void settleLotteries(db).catch(err => logger.warn({ err }, 'lottery settlement failed'));
+    eventLotteryTicker=setInterval(()=>{void eventLottery.notify().catch(err=>logger.warn({err},'event lottery notice failed'));},1000);
     ticker = setInterval(() => {
       // 🎫 週末宝くじ: 抽選して、結果を DM と売り場に知らせる
       void settleLotteries(db).then(() => lottery.notify()).catch(err => logger.warn({ err }, 'lottery settlement failed'));
@@ -473,6 +477,7 @@ async function main(): Promise<void> {
     void sokin.onInteraction(i);
     void visitProfile.onInteraction(i);
     void casino.onInteraction(i);
+    void eventLottery.onInteraction(i).catch(err=>logger.warn({err},'event lottery interaction failed'));
     void lottery.onInteraction(i);
     void glossary.onInteraction(i);
     void tempGrants.onInteraction(i);
@@ -563,6 +568,7 @@ async function main(): Promise<void> {
     logger.info({ signal }, 'shutting down');
     health?.close();
     emaCounter.close();
+    if (eventLotteryTicker) clearInterval(eventLotteryTicker);
     if (ticker) clearInterval(ticker);
     if (omairiTicker) clearInterval(omairiTicker);
     store.stop();

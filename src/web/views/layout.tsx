@@ -6,6 +6,7 @@ import { LEVEL_LABEL } from '../format.js';
 import type { NavLayout } from '../../services/navLayout.js';
 
 type Nav =
+  | 'eventlottery'
   | 'gallery'
   | 'fortune'
   | 'shinpu'
@@ -106,6 +107,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'casinotest', href: '/economy/casino-test', icon: '🌸', label: 'カジノの没入感テスト', page: 'economy' },
       { key: 'keibatest', href: '/economy/keiba-test', icon: '🏇', label: '競馬（運営テスト）', page: 'economy' },
       { key: 'shinpu', href: '/economy/shinpu', icon: '⚔', label: '神符合戦（管理者テスト）', page: 'economy' },
+      { key: 'eventlottery', href: '/economy/event-lottery', icon: '🎟', label: 'イベントくじ', page: 'economy' },
       { key: 'fortune', href: '/economy/fortune', icon: '🎟', label: 'スクラッチ・宝くじ', page: 'economy' },
       { key: 'casino', href: '/economy/casino', icon: '🎰', label: 'カジノ', page: 'economy' },
       { key: 'gift', href: '/gacha#gacha-gift', icon: '🎁', label: 'みんなに配る', gujiOnly: true },
