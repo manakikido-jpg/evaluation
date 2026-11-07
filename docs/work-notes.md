@@ -19,6 +19,8 @@
 - PR160 head ec0623bcのpush/PR CIは両方成功しReadyへ変更済み。その後の最終fetchで本番cc067754（宿の削除・入室許可者削除）が追加され、更新履歴先頭だけに競合を確認。以前の検証は63e67f44基点の結果として保持し、新本番と混同しない。
 - codex/event-lotteryへ本番cc067754を通常mergeし、src/changelog.tsはイベントくじと宿の両項目を保持して解消。部屋の変更はそのまま取り込み、イベントの金融/抽選処理には変更しない。合流版の型/build/全件を再確認してからPR160のheadを更新する。旧handoff/event-lottery-pr160はこの更新前の記録であり、最終保存先は後で追加する。本番への合流は引続き未承認。
 
+- 最新本番取込版c7b09d0fでNode22型/build、単一全261ファイル2,865件成功（441.98秒、2worker、既定制限）。ログ/tmp/event-merged-{types,build,all}.log。金融/抽選/通知/画面のイベント実装はec0623bcと同一で、追加された宿管理の5件を含む検証結果。以降は記録のみ。push前のfetchとmerge-treeでcc067754との競合解消を確認し、PR160の新headへ保存する。旧headのCI成功を新headへ流用せず、新しいCIを待つ。
+
 ## 2026年11月7日：三神なじませ版をWebへ組込み本番へ反映
 - 本人の「これで本番に反映させて」で、frame-three-people-harmonized.pngのWeb組込み・PR159更新・検証後の合流を承認。以前の合流保留は今回分に限り解除。一般公開/銭接続は保留のまま。
 - 開始：codex/kiseki-reel-first、57ff4d81。前依頼のメモと生成素材2点が未commitで存在し保持。PR159はDraft/未合流で既存headのCIは実行中。本番76181e4cをfetch。
