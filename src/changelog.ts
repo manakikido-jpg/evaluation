@@ -30,6 +30,7 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id:'2026-11-08-event-lottery-restore-panel',date:'2026-11-08',kind:'fix',where:['Discord','社務所Web'],title:'消した受付パネルを同じイベントへ出し直せるように',items:['受付中のイベントで「受付パネルを更新」を押すと、削除済みの投稿は同じイベントのパネルに出し直します。','参加者・支払い・回収額は保持します。権限不足や通信失敗では新しい投稿を作りません。'],announcement:{priority:'none',audience:'イベントを運営する宮司',steps:['消したパネルの元のイベントを開き「受付パネルを更新」を押す。','Discordへの送信状況を確認する。参加者の再登録や再支払いは不要。'],postText:'',imagePrompt:'',notes:'受付投稿の復旧のみ。新しいイベントを作らず、抽選・徴収・賞金は再実行しない。'} },
   { id:'2026-11-08-event-lottery-private-prizes',date:'2026-11-08',kind:'improve',where:['Discord','社務所Web'],title:'イベントくじの受付パネルに景品を載せないように',items:['受付パネルはイベント名・参加費・参加条件・参加ボタンだけを表示します。','送信待ちの旧案内も景品を外し、受付中は同じ投稿を更新できます。景品の設定・抽選・当選発表は維持します。'],announcement:{priority:'none',audience:'イベントを運営する宮司',steps:['既に受付パネルを出している場合は、受付中のイベントで「受付パネルを更新」を押す。','更新失敗は未送信の通知だけを再送する。'],postText:'',imagePrompt:'',notes:'参加者向けに景品一覧を告知しない方針。参加費と参加条件の表示、徴収・抽選・賞金は変えない。'} },
   { id:'2026-11-07-event-lottery-goods-input',date:'2026-11-07',kind:'fix',where:['社務所Web'],title:'イベントくじの品物を名前と本数だけで登録できるように',items:['賞金が0銭で品物欄が空欄なら、景品名を品物名にして保存します。','作成・編集の入力エラーに、参加費や景品の本数など、確認する項目を表示します。'],announcement:{priority:'none',audience:'イベントを準備する宮司',steps:['イベントくじで景品名と本数を入力し、品物だけの景品は賞金を0銭にする。','必要な場合だけ品物・受け渡し内容を補足し、準備中として保存する。'],postText:'',imagePrompt:'',notes:'運営の準備画面の修正。参加費・抽選・賞金付与・受付開始後の固定は変えない。'} },
 
