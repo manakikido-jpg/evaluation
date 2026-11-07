@@ -24,6 +24,9 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
     new SlashCommandBuilder().setName('alt').setNameLocalizations({ ja: 'サブ垢' }).setDescription('Declare your sub account').setDescriptionLocalizations({ ja: 'サブアカウントの申告（サブのアカウントで打つ）' })
       .addSubcommand((s) => s.setName('declare').setNameLocalizations({ ja: '申告' }).setDescription('Declare this account as a sub account').setDescriptionLocalizations({ ja: 'このアカウントが、だれのサブかを申告する（運営が承認します）' })
         .addUserOption((o) => o.setName('main').setNameLocalizations({ ja: '本アカウント' }).setDescription('Your main account').setDescriptionLocalizations({ ja: 'あなたの本アカウント' }).setRequired(true)))
+      .addSubcommand((s) => s.setName('code').setNameLocalizations({ ja: '合言葉' }).setDescription('Get a code (main account)').setDescriptionLocalizations({ ja: '本アカウントで、サブをつなぐ合言葉をもらう（10 分・1 回だけ）' }))
+      .addSubcommand((s) => s.setName('enter').setNameLocalizations({ ja: '合言葉入力' }).setDescription('Enter the code (sub account)').setDescriptionLocalizations({ ja: 'サブのアカウントで、本アカウントでもらった合言葉を入れる' })
+        .addStringOption((o) => o.setName('code').setNameLocalizations({ ja: '合言葉' }).setDescription('The code').setDescriptionLocalizations({ ja: '本アカウントで出した合言葉（6 文字）' }).setRequired(true).setMinLength(6).setMaxLength(12)))
       .addSubcommand((s) => s.setName('declare-main').setNameLocalizations({ ja: '本アカから申告' }).setDescription('Declare your sub account from the main account').setDescriptionLocalizations({ ja: '本アカウントから、サブアカウントを申告する（運営が承認します）' })
         .addUserOption((o) => o.setName('sub').setNameLocalizations({ ja: 'サブアカウント' }).setDescription('Your sub account').setDescriptionLocalizations({ ja: 'あなたのサブアカウント' }).setRequired(true)))
       .setContexts(InteractionContextType.Guild).toJSON(),

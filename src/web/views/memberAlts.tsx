@@ -3,6 +3,8 @@ import type { MemberAlt } from '../../services/memberAlts.js';
 import { Layout } from './layout.js';
 
 const MSG: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
+  settings: { text: '設定を保存しました。', kind: 'ok' },
+  guji: { text: '設定を変えられるのは宮司だけです。', kind: 'warn' },
   approved: { text: '承認しました（サブの銭は本アカウントへ移しました）。', kind: 'ok' },
   approved_kept: { text: '承認しました（本アカウント側の申告なので、サブの銭は移していません）。', kind: 'ok' },
   removed: { text: '外しました。', kind: 'ok' },
@@ -16,11 +18,11 @@ const MSG: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   staff_alt: { text: '運営のサブアカウントは、ここでは登録できません。', kind: 'warn' },
 };
 /** 申告した人（サブ本人・本アカウント側・運営） */
-const whoDeclared = (a: MemberAlt) => (a.requestedBy === a.altId ? 'サブ本人' : a.requestedBy === a.mainId ? '本アカウント側' : '運営');
+const whoDeclared = (a: MemberAlt) => (a.verified ? '合言葉（両方確認ずみ）' : a.requestedBy === a.altId ? 'サブ本人' : a.requestedBy === a.mainId ? '本アカウント側' : '運営');
 const fmt = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
 
 /** 🔗 メンバーのサブアカウント（申告の承認・一覧・直接の登録） */
-export function MemberAltsPage(p: { session: AdminSession; alts: MemberAlt[]; names: Map<string, string>; msg?: string }) {
+export function MemberAltsPage(p: { session: AdminSession; alts: MemberAlt[]; names: Map<string, string>; msg?: string; requireApproval?: boolean; guji?: boolean }) {
   const csrf = <input type="hidden" name="_csrf" value={p.session.csrfToken} />;
   const flash = p.msg ? MSG[p.msg] : undefined;
   const name = (id: string) => <a href={`/members/${id}`}>{p.names.get(id) ?? id}</a>;
@@ -31,12 +33,20 @@ export function MemberAltsPage(p: { session: AdminSession; alts: MemberAlt[]; na
     {flash && <p class={`flash ${flash.kind}`}>{flash.text}</p>}
     <p class="note">サブアカウントは、申告して運営が承認すれば使えます（申告しないサブはルール違反）。申告は、サブの人が <code>/サブ垢 申告</code> で本アカウントを選ぶか、本アカウントの人が <code>/サブ垢 本アカから申告</code> でサブを選びます（パネルのボタンでも）。承認したサブは、銭が入らず、朱印を押せず・押されず、招待の記録とお礼に入りません。承認したとき、サブが持っていた銭は本アカウントへ移します（本アカウント側が申告したものは、他人のアカウントの銭を取れないように、移しません）。</p>
 
+    <form method="post" action="/alts/settings" class="card">
+      {csrf}
+      <h2>🔑 合言葉でつなぐ</h2>
+      <p class="note">本アカウントで合言葉をもらい（<code>/サブ垢 合言葉</code>・パネルのボタン）、サブのアカウントで入れる（<code>/サブ垢 合言葉入力</code>）と、両方の操作を確かめたことになります。つないだサブの銭は、本アカウントへ移します。</p>
+      <label><input type="checkbox" name="requireApproval" value="yes" checked={p.requireApproval} disabled={!p.guji} /> 合言葉が合っても、運営が承認するまでつながない（はじめは、その場で自動でつなぐ）</label>
+      {p.guji ? <button type="submit">保存</button> : <p class="note">変えられるのは宮司だけです。</p>}
+    </form>
+
     <section class="card">
       <h2>📨 申告中（{pending.length}件）</h2>
       {pending.length ? <div class="table-wrap"><table>
         <thead><tr><th>申告</th><th>申告した人</th><th>サブ</th><th>本アカウント</th><th>メモ</th><th>運営</th></tr></thead>
         <tbody>{pending.map((a) => <tr>
-          <td>{fmt(a.createdAt)}</td><td>{whoDeclared(a)}{a.requestedBy === a.mainId ? <div class="note">銭は移しません</div> : ''}</td><td>{name(a.altId)}</td><td>{name(a.mainId)}</td><td>{a.note}</td>
+          <td>{fmt(a.createdAt)}</td><td>{whoDeclared(a)}{a.requestedBy === a.mainId && !a.verified ? <div class="note">銭は移しません</div> : ''}</td><td>{name(a.altId)}</td><td>{name(a.mainId)}</td><td>{a.note}</td>
           <td>
             <form method="post" action={`/alts/${a.altId}/approve`}>{csrf}<button type="submit" class="ok">承認する</button></form>
             <form method="post" action={`/alts/${a.altId}/remove`}>{csrf}<button type="submit" class="danger">却下する</button></form>

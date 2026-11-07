@@ -2680,7 +2680,23 @@ export const memberAlts = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     decidedBy: text('decided_by'),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /** 合言葉で、本アカウントとサブの両方の操作を確かめた */
+    verified: boolean('verified').notNull().default(false),
   },
   (t) => [index('member_alts_main_idx').on(t.mainId)],
 );
+
+/** 🔑 サブアカウントの合言葉（本アカウントが出す。10 分・1 回だけ。合言葉そのものは持たず、ハッシュだけ） */
+export const memberAltCodes = pgTable('member_alt_codes', {
+  mainId: text('main_id').primaryKey(),
+  codeHash: text('code_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+/** 合言葉を間違えた回数（総当たりを防ぐ） */
+export const memberAltTries = pgTable('member_alt_tries', {
+  memberId: text('member_id').primaryKey(),
+  fails: integer('fails').notNull().default(0),
+  since: timestamp('since', { withTimezone: true }).notNull().defaultNow(),
+});
 

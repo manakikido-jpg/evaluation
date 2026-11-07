@@ -1,5 +1,5 @@
 import { mountEvaluation } from './evaluation.js';
-import { approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
+import { altRequireApproval, setAltRequireApproval, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
 import { MemberAltLinks, MemberAltsPage } from './views/memberAlts.js';
 import { mountOffice } from './office.js';
 import { unsubscribeOffice } from '../services/officeNotifications.js';
@@ -4119,7 +4119,13 @@ export function createWebApp(deps: WebDeps) {
     const alts = await listMemberAlts(db);
     const ids = [...new Set(alts.flatMap((a) => [a.altId, a.mainId]))];
     const rows = ids.length ? await db.select({ id: members.id, name: members.displayName }).from(members).where(inArray(members.id, ids)) : [];
-    return c.html(<MemberAltsPage session={c.get('session')} alts={alts} names={new Map(rows.map((r) => [r.id, r.name]))} msg={c.req.query('msg')} />);
+    return c.html(<MemberAltsPage session={c.get('session')} alts={alts} names={new Map(rows.map((r) => [r.id, r.name]))} msg={c.req.query('msg')} requireApproval={await altRequireApproval(db)} guji={gujiOnly(c)} />);
+  });
+  app.post('/alts/settings', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/alts?msg=guji');
+    const body = await c.req.parseBody();
+    await setAltRequireApproval(db, body.requireApproval === 'yes', c.get('session').userId);
+    return c.redirect('/alts?msg=settings');
   });
   app.post('/alts/add', async (c) => {
     const body = await c.req.parseBody();
