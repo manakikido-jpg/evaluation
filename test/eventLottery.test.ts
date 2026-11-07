@@ -56,3 +56,11 @@ it('公開済みパネルは同じ投稿を更新し、更新失敗の再送で�
  expect(sends).toBe(0);expect(edits).toBe(2);v=await state();expect(v.messages[0]!.sentAt).not.toBeNull();expect(v.participants).toHaveLength(1);expect(v.results).toHaveLength(0);expect((await walletOf(db,'a')).balance).toBe(900);
  await action('close');await expect(refreshEventLotteryPanel(db,id,'guji')).rejects.toThrow('受付中');
 });
+
+it('締切後の旧パネルもnonceが旧投稿を返したら本文を編集して景品を外す',async()=>{
+ await action('open');const n=(await state()).messages[0]!;let publicText='景品：非公開の景品';
+ await db.update(eventLotteryNotices).set({body:{...n.body,content:publicText}}).where(eq(eventLotteryNotices.id,n.id));
+ vi.setSystemTime(new Date(now.getTime()+1000));await action('close');let posts=0,edits=0;
+ await sendEventLotteryNotices(db,async()=>({id:++posts===1?'old-panel':'closing-notice'}),new Date(now.getTime()+2000),async(_c,m,b)=>{edits++;expect(m).toBe('old-panel');publicText=String(b.content);});
+ expect(edits).toBe(1);expect(publicText).not.toContain('非公開の景品');expect(publicText).toContain('受付を締め切りました');
+});

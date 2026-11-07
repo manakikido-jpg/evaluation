@@ -93,8 +93,8 @@ export async function markEventDelivered(db:Db,eventId:string,drawId:string,acto
 export async function sendEventLotteryNotices(db:Db,send:(channelId:string,body:Record<string,unknown>)=>Promise<{id:string}>,now=new Date(),edit?: (channelId:string,messageId:string,body:Record<string,unknown>)=>Promise<void>){
  for(let i=0;i<20;i++){
   const found=await db.transaction(async tx=>{const [n]=await tx.select().from(notices).where(and(isNull(notices.sentAt),lte(notices.dueAt,now))).orderBy(asc(notices.dueAt)).limit(1).for('update',{skipLocked:true});if(!n)return false;
-   let body=n.body;const isPanel=n.id===`panel:${n.eventId}`&&Array.isArray(body.components);
-   if(isPanel){const [e]=await tx.select().from(events).where(eq(events.id,n.eventId));body=e?.state==='open'?panel(e):{content:'このイベントは現在、参加を受け付けていません。',allowed_mentions:{parse:[]}};}
+   let body=n.body;const isPanel=n.id===`panel:${n.eventId}`;
+   if(isPanel&&Array.isArray(body.components)){const [e]=await tx.select().from(events).where(eq(events.id,n.eventId));body=e?.state==='open'?panel(e):{content:'このイベントは現在、参加を受け付けていません。',allowed_mentions:{parse:[]}};}
    let messageId=n.messageId;
    try{
     if(messageId){if(!edit)throw new Error('message edit unavailable');await edit(n.channelId,messageId,body);}
