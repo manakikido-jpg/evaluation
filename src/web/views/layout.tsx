@@ -21,6 +21,7 @@ type Nav =
   | 'voice'
   | 'coretime'
   | 'boosttime'
+  | 'rooms'
   | 'updates'
   | 'stickers'
   | 'posts'
@@ -73,6 +74,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: 'voice', href: '/voice', icon: '🎙', label: '通話の記録' },
       { key: 'coretime', href: '/voice/core', icon: '⏰', label: 'コアタイム', page: 'voice' },
       { key: 'boosttime', href: '/voice/boost', icon: '⏱', label: '浮上の記録', page: 'voice' },
+      { key: 'rooms', href: '/voice/rooms', icon: '🏨', label: '宿の一覧', page: 'voice' },
       { key: 'audit', href: '/audit', icon: '📜', label: '記録' },
       { key: 'msgarchive', href: '/message-archive', icon: '📚', label: '書き込みの記録', gujiOnly: true, page: 'audit' },
       { key: 'commands', href: '/commands', icon: '⌨', label: 'コマンド' },

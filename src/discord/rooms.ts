@@ -24,6 +24,7 @@ import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
 import {
   addInvites,
+  removeInvites,
   changeRoomKind,
   hourlyPerPerson,
   listRooms,
@@ -44,7 +45,7 @@ import {
 import { OWNER_ALLOW } from './tempVoice.js';
 import { KeyedLock } from '../lib/lock.js';
 import { ROOM_MODES, roomKnockConfig, roomKnockState, type RoomMode } from '../services/roomKnock.js';
-import { extendStayRoom, stayDayPrice, STAY_MS } from '../services/tempVoice.js';
+import { closeRoomNow, extendStayRoom, stayDayPrice, STAY_MS } from '../services/tempVoice.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 /** 名前の変更は Discord が 10 分に 2 回までにしているので、待ちすぎないように */
@@ -168,11 +169,15 @@ export function roomPanel(cfg: GuildConfig, row: PanelRow, ch: { name: string; u
       ),
       buttons(
         button(sid('room:invite', v), '入室許可者を追加', '➕', 1),
+        ...(row.invited.length ? [button(sid('room:uninvite', v), '入室許可者を外す', '➖')] : []),
         ...(canChoose ? [button(sid('room:kind', v), v.staff ? '部屋の種類を変える（運営）' : '部屋の種類を選ぶ（1 回だけ）', '🔒', 2)] : []),
         button(sid('room:xfer', v), '権限を譲渡', '👑'),
         button(sid('room:close', v), '閉じる', '✖️'),
       ),
-      ...(row.keepUntil && !row.renewHourly && !v.staff ? [buttons(button(sid('room:extend', v), '1日延長', '🏨', 1))] : []),
+      buttons(
+        ...(row.keepUntil && !row.renewHourly && !v.staff ? [button(sid('room:extend', v), '1日延長', '🏨', 1)] : []),
+        button(sid('room:delete', v), '宿を削除する', '🗑', 4),
+      ),
       // 🚪 受付の状態（3 つから 1 つ。部屋にいる人が切り替える。今の状態は上の文に出すので、ボタンは同じ色）
       ...(knock ? [buttons(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${knock.room}:${m}`, ROOM_MODES[m].replace(/^\S+ /, ''), ROOM_MODES[m].split(' ')[0]!)))] : []),
     ],
@@ -368,6 +373,9 @@ export class RoomApp {
         if (id === 'room:kind') return void (await i.update(this.kindPicker(row, v)));
         if (id === 'room:xfer') return await this.transferPicker(i, row, ch, v);
         if (id === 'room:extend' || id.startsWith('room:extendok:')) return await this.extendStay(i, row, ch, id, v);
+        if (id === 'room:uninvite') return await this.uninvitePicker(i, row, v);
+        if (id === 'room:delete') return void (await i.update(this.deleteConfirm(row, v)));
+        if (id === 'room:deleteok') return await this.deleteRoom(i, row, ch, v);
         if (id.startsWith('room:xferok:')) {
           const [, , to, pay] = id.split(':');
           if (to && (pay === 'new' || pay === 'keep')) return await this.transfer(i, row, ch, to, pay === 'keep' && !staff, v);
@@ -382,6 +390,7 @@ export class RoomApp {
       if (i.isStringSelectMenu() && id === 'room:kindpick') return await this.kind(i, row, ch, v);
       if (i.isUserSelectMenu() && id === 'room:invitepick') return await this.invite(i, row, ch, v);
       if (i.isStringSelectMenu() && id === 'room:xferpick') return await this.transferConfirm(i, row, ch, v);
+      if (i.isStringSelectMenu() && id === 'room:uninvitepick') return await this.uninvite(i, row, ch, v);
     } catch (err) {
       logger.warn({ err }, 'room settings failed');
       const content = 'うまくいきませんでした。BOT に「チャンネルの管理」「ロールの管理」の権限があるか、神職に確かめてもらってください。';
@@ -649,6 +658,68 @@ export class RoomApp {
       content: `👑 ${v.staff ? '運営が、' : ''}<@${row.ownerId}> さんから <@${to}> さんに、部屋主の権限を譲渡しました。${money}\n-# 部屋の設定は「⚙ 部屋の設定」から <@${to}> さんが使えます`,
       allowedMentions: { users: [to] },
     });
+  }
+
+  /** 🗑 宿を削除する前の確認 */
+  private deleteConfirm(row: RoomRow, v: PanelView) {
+    const stay = row.keepUntil ? (row.renewHourly ? '⏱ 1時間ごとの宿' : '🏨 24時間の宿') : '';
+    return {
+      embeds: [{ title: '🗑 宿を削除しますか？', color: 0xd7003a, description: [
+        ...(v.staff ? [`🛡 運営として、<@${row.ownerId}> さんの部屋を削除します。`] : []),
+        'この通話チャンネルを、今すぐ消します。中にいる人は、全員通話から抜けます。',
+        ...(stay ? [`${stay}の期限が残っていても、払った宿代は戻りません。`] : []),
+        '消したあとは、元に戻せません。',
+      ].join('\n') }],
+      components: [buttons(button(sid('room:deleteok', v), '削除する', '🗑', 4), button(sid('room:back', v), 'やめる', '↩️'))],
+      allowedMentions: { parse: [] as const },
+    };
+  }
+
+  /** 🗑 宿を削除する（部屋主・運営）。返事を先に書きかえてから消す（パネルが部屋のチャットにあるため） */
+  private async deleteRoom(i: ButtonInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
+    await i.update({ content: '🗑 宿を削除しました。', embeds: [], components: [] }).catch(() => undefined);
+    const r = await closeRoomNow(this.db, ch.id, async () => void (await ch.delete(v.staff ? `運営が宿を削除（${i.user.id}）` : '部屋主が宿を削除')), i.user.id, 'discord');
+    if (r === 'not_found') await i.followUp({ content: 'この宿はもうありません。', ...EPHEMERAL }).catch(() => undefined);
+    logger.info({ channelId: ch.id, by: i.user.id, staff: Boolean(v.staff), ownerId: row.ownerId }, 'room deleted by hand');
+  }
+
+  /** ➖ 入室許可者を外す: 外す人を選んでもらう */
+  private async uninvitePicker(i: ButtonInteraction<'cached'>, row: RoomRow, v: PanelView = {}): Promise<void> {
+    const people = row.invited.slice(0, 25);
+    if (!people.length) return void (await i.reply({ content: '入室許可者はいません。', ...EPHEMERAL }));
+    await i.update({
+      embeds: [{ title: '➖ 入室許可者を外す', description: '外す人を選んでください（何人でも）。招待限定・シクレの部屋では、外した人が中にいれば通話から抜けます。', color: 0x6b5b95 }],
+      components: [
+        new ActionRowBuilder<StringSelectMenuBuilder>()
+          .addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId(sid('room:uninvitepick', v))
+              .setPlaceholder('外す人を選ぶ')
+              .setMinValues(1)
+              .setMaxValues(people.length)
+              .addOptions(people.map((id) => ({ label: (i.guild.members.cache.get(id)?.displayName ?? id).slice(0, 100), value: id }))),
+          )
+          .toJSON(),
+        buttons(button(sid('room:back', v), '設定一覧に戻る', '↩️')),
+      ],
+    });
+  }
+
+  private async uninvite(i: StringSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
+    const ids = i.values.filter((id) => row.invited.includes(id));
+    if (!ids.length) return void (await i.reply({ content: 'その人は入室許可者ではありません。', ...EPHEMERAL }));
+    const updated = await removeInvites(this.db, ch.id, ids);
+    if (!updated) return;
+    await this.apply(ch, updated, updated.kind);
+    // 鍵のかかった部屋では、外した人が中にいれば抜けてもらう（部屋主・運営はのぞく）
+    if (updated.kind !== 'public') {
+      for (const id of ids) {
+        const m = ch.members.get(id);
+        if (!m || m.id === updated.ownerId || adminLevelOf(this.cfg(), [...m.roles.cache.keys()])) continue;
+        await m.voice.disconnect('入室許可者から外れたため').catch((err: unknown) => logger.warn({ err, memberId: id }, 'uninvite disconnect failed'));
+      }
+    }
+    await this.done(i, updated, ch, `${ids.map((id) => `<@${id}>`).join(' ')} さんを入室許可者から外しました`, v);
   }
 
   private async invite(i: UserSelectMenuInteraction<'cached'>, row: RoomRow, ch: VoiceChannel, v: PanelView = {}): Promise<void> {
