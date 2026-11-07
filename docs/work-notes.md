@@ -16,6 +16,10 @@
 - 最終単一全件：75069320で全260ファイル2,860件成功（439.69秒、2worker、既定制限）。製品/試験を固定後の実行。型チェック最終/tmp/event-types-clock.logはexit0、build成功と最終JSコピーを確認済み。関連3ファイル13件/最終Chromiumの演出・入力保持・再送・再読込・受渡・JS例外0も成功。ログ/tmp/event-all-final.log。以降はこの記録のみ。
 - 保存前に本番63e67f44を再fetchし競合なしを確認。今回のマイグレーション0159は新規テーブルのみ。最終headをcodex/event-lotteryへpushし、専用PRで最新CIを確認する。本番合流/実イベント作成/実告知/実参加費回収は行わない。
 
+- 完了・保存：PR160 https://github.com/manakikido-jpg/evaluation/pull/160 、codex/event-lottery head ec0623bcdaee88b24f9a99fe75e946c5da790fbd。push CI42371707989とPR結合CI42371735664が両方成功（型/全件/ビルド）。Readyへ変更し、未合流/本番未反映を維持。本番63e67f44との競合なし。最終全260ファイル2,860件（439.69秒）、関連13件、Chromium 390/1440px・抽選演出/再読込/受渡/入力エラー保持と再送・JS例外0を確認済み。
+- 入口は社務所Web→イベントくじ（/economy/event-lottery）。合流後、宮司が参加費・景品・受付/発表チャンネルを設定し、BOTの投稿権限を確認して受付開始する。マイグレーション0159は通常起動時に適用される。実イベント作成/実Discord告知/実参加費回収はしていない。次は本人/担当Claudeのレビューと別途の合流指示。
+- 最終引継ぎはhandoff/event-lottery-pr160。本追記だけの文書コミットで製品/試験/依存はCI成功headと同じ。最終見本docs/previews/event-lottery-{admin,draw}-390.webp。今回の依頼の実装残りはなく、本番合流と実際のイベント設定は未実施。
+
 ## 2026年11月7日：三神なじませ版をWebへ組込み本番へ反映
 - 本人の「これで本番に反映させて」で、frame-three-people-harmonized.pngのWeb組込み・PR159更新・検証後の合流を承認。以前の合流保留は今回分に限り解除。一般公開/銭接続は保留のまま。
 - 開始：codex/kiseki-reel-first、57ff4d81。前依頼のメモと生成素材2点が未commitで存在し保持。PR159はDraft/未合流で既存headのCIは実行中。本番76181e4cをfetch。
