@@ -6,6 +6,7 @@
 - 途中検証：関連9件成功。最初の型検査はテストのJSON型/nullableを明示せず失敗し、検査したレスポンス型をテストへ明記して最終型/buildは成功。実装の権限/結果判定を弱めていない。Chromiumで全画面、待機→抽選→当選、再読込、通信失敗→復旧、連続2当選の順次表示、5幅(390/844横/1280/1440/1920)、長い名前/HTML文字列、省演出、横はみ出しなし、JS例外0を確認。中止/完了の表示も追加確認。架空データのみで実イベント/実Discord/実徴収は操作していない。
 - 95fd3ee8の全262ファイル2,885件成功（606.62秒、既定制限、2worker）。push前fetchで本番2bc83cba（案内人の階級ロール対応）を検出したため、旧bb05af6d基点の結果と区別し、最新本番を取り込んで最終検証する。ログ/tmp/event-screen-{types-final,build-final,web-test-final,browser-final,terminal,all}.log。サンプルdocs/previews/event-lottery-screen-{waiting-1440,drawing-1440,winner-1440,winner-390}.webp。次は全テスト→fetch→PR。今回の追加変更は未合流/本番未反映。
 - 最終統合：2bc83cbaを通常mergeし、更新履歴の競合は両項目を保持して解消。352f2229で最終型/build成功、全262ファイル2,886件成功（533.36秒、既定制限、4worker。実行環境4CPU/32GiBを確認）。ログ/tmp/event-screen-integrated-{types,build,all}.log。共有表示の実装/試験は以後変更せず、この記録のみ追加。最新本番2bc83cbaを含むことを再fetch/祖先判定で確認。未合流・本番未反映。
+- 保存先：codex/event-lottery-presentation、PR164（https://github.com/manakikido-jpg/evaluation/pull/164）。検証済みの実装/試験は変えず、この保存先記録だけ追加。GitHub CIは開始済み/結果待ち。今回の追加変更は未合流・本番未反映。次はCI/レビュー結果と本人の表示確認。
 
 
 ## 2026年11月8日：軌跡の液晶バランスPR163の合流完了
