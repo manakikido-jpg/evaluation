@@ -88,6 +88,20 @@ describe('🎰 大勝負の札', () => {
     expect((await playRoulette(db, bcfg, A.id, stake, () => 0, now)).status).toBe('ok');
   });
 
+  it('ルーレット: 札が効いていても、合計の上限は「1 か所の最高 × 所の数」（ふつうの 1 回の最高 × 倍率で断らない）', async () => {
+    await addCoins(db, A.id, 100_000, 'adjust');
+    await addTickets(db, A.id, 'casino_boost', 1);
+    await useCasinoBoost(db, A.id, now);
+    // 札で 1 回の最高は 1,000 × 5 = 5,000。1 か所 1,000 を 7 か所 = 7,000（5,000 をこえる）
+    const many = (['red', 'odd', 'low', 'dozen1', 'col1', 'n1', 'n3'] as const).map((on) => ({ on, amount: 1000 }));
+    expect((await playRoulette(db, bcfg, A.id, many, () => 0, now)).status).toBe('ok');
+    // 1 か所が最高（5,000）をこえるのは、今までどおり断る
+    expect((await playRoulette(db, bcfg, A.id, [{ on: 'red' as const, amount: 5001 }], () => 0, now)).status).toBe('bad_bet');
+    // 1 日の上限（20,000 × 5 = 100,000）は、今までどおり見る
+    const tight: GuildConfig = { ...bcfg, casino: { ...c0, dailyBetLimit: 1000 } };
+    expect((await playRoulette(db, tight, A.id, many, () => 0, now)).status).toBe('limit');
+  });
+
   it('卓: 自分の賭けは上がる。みんなで払う参加費は元の上限のまま', async () => {
     const tcfg: GuildConfig = { ...bcfg, casino: { ...c0, dailyBetLimit: 0 } };
     await addCoins(db, A.id, 100_000, 'adjust');
