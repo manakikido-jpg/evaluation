@@ -206,4 +206,36 @@ describe('案内所の待機表示', () => {
     await names.sync(guild, { ...config, voiceChannelIds: [] }, 2000);
     expect(ch.name).toBe(original);
   });
+  it('階級で案内人のロールが分かれても、担当・終了のボタンが使え、お知らせは案内人のロール全部に届く', async () => {
+    const G1 = '870000000000000011', G2 = '870000000000000012', OTHER = '870000000000000013';
+    const { ch, guild, people } = fixture();
+    // 元の「案内人」ロールは外して、階級のロールだけにする（名前に「案内人」が入る G1 と、入らない G2）
+    (guild.roles.cache as Collection<string, unknown>).set(G1, { id: G1, name: '案内人（一級）' }).set(G2, { id: G2, name: '見習い' }).set(OTHER, { id: OTHER, name: '参拝者' });
+    people.get(A)!.roles.cache = new Collection([[G1, {}]]);
+    people.get(B)!.roles.cache = new Collection([[G2, {}]]);
+    await saveGuideConfig(db, config, A);
+    const send = vi.fn(async () => undefined);
+    const app = new GuideReceptionApp(db, () => cfg, {} as never);
+    const interaction = (user: string, action: string) => ({ isButton: () => true, inCachedGuild: () => true, customId: `guide:${action}`, guildId: cfg.guildId, guild, channel: { isSendable: () => true, send }, user: { id: user }, deferReply: vi.fn(), editReply: vi.fn() });
+    const a = interaction(A, 'duty');
+    await app.onInteraction(a as never);
+    expect(a.editReply).toHaveBeenCalledWith(expect.stringContaining('案内担当をはじめました'));
+    expect(ch.name).toBe('案内所（入室⭕）');
+    const notice = (send.mock.calls[0] as unknown as [{ content: string; allowedMentions: { roles: string[] } }])[0];
+    expect(notice.allowedMentions.roles).toEqual([ROLE, G1]);
+    expect(notice.content).toContain(`<@&${G1}>`);
+    // 名前に「案内人」がない階級ロールは、社務所Web で足すまでは案内人ではない
+    const b = interaction(B, 'duty');
+    await app.onInteraction(b as never);
+    expect(b.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('案内人ロールが必要です') }));
+    await saveGuideConfig(db, { ...config, extraRoleIds: [G2] }, A);
+    const b2 = interaction(B, 'duty');
+    await app.onInteraction(b2 as never);
+    expect(b2.editReply).toHaveBeenCalledWith(expect.stringContaining('案内担当をはじめました'));
+    const end = interaction(A, 'dutyoff');
+    await app.onInteraction(end as never);
+    expect(end.editReply).toHaveBeenCalledWith('案内担当を終了しました。');
+    await app.onInteraction(interaction(B, 'dutyoff') as never);
+    expect(ch.name).toBe('案内所（案内人不在）');
+  });
 });

@@ -10,7 +10,7 @@ import type { Db } from '../db/client.js';
 import type { GuildConfig } from '../config.js';
 import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { guideEmployees, guideReceptions } from '../db/schema.js';
-import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutySince, guideDutyChannelName, type GuideConfig } from '../services/guideReception.js';
+import { addGuidePanelChannel, guidePanelChannels, assignGuide, completeGuide, leaveGuideReception, loadGuideConfig, openGuideReception, registerGuide, setGuideWaiting, activeGuides, listedGuides, setGuideDuty, guideDuty, guideDutySince, guideDutyChannelName, guideRoleIdsFor, hasGuideRole, guideRoleMentions, type GuideConfig } from '../services/guideReception.js';
 import { guideRoleOf } from './guidePending.js';
 import { autoRanks } from '../domain/ranks.js';
 import { audit } from '../services/audit.js';
@@ -57,11 +57,12 @@ export class GuideReceptionApp {
   constructor(private db: Db, private cfg: () => GuildConfig, private discord: DiscordActions, private presence = false) { this.waitingNames = new GuideWaitingNames(db, presence); }
   private async options(guild: Guild) {
     const c = await loadGuideConfig(this.db);
-    const matches = guild.roles.cache.filter(r => r.name.includes('案内人'));
-    return { ...c, pendingRoleId: guideRoleOf(this.cfg(), guild.roles.cache.values()), staffChannelId: c.staffChannelId ?? this.cfg().channels.log, roleId: c.roleId ?? (matches.size === 1 ? matches.first()!.id : undefined) };
+    // 案内人のロール（階級などで分かれていても、どれか 1 つがあれば案内人）
+    const guideRoleIds = guideRoleIdsFor(c, guild.roles.cache.values(), guild.id);
+    return { ...c, pendingRoleId: guideRoleOf(this.cfg(), guild.roles.cache.values()), staffChannelId: c.staffChannelId ?? this.cfg().channels.log, guideRoleIds };
   }
-  private isVisitor(member: GuildMember | null | undefined, config: GuideConfig & { pendingRoleId?: string }) {
-    return Boolean(member && !member.user.bot && config.pendingRoleId && member.roles.cache.has(config.pendingRoleId) && (!config.roleId || !member.roles.cache.has(config.roleId)));
+  private isVisitor(member: GuildMember | null | undefined, config: GuideConfig & { pendingRoleId?: string; guideRoleIds: string[] }) {
+    return Boolean(member && !member.user.bot && config.pendingRoleId && member.roles.cache.has(config.pendingRoleId) && !hasGuideRole(member, config.guideRoleIds));
   }
   private async refresh(r: typeof guideReceptions.$inferSelect, config: GuideConfig, roleGranted = false) {
     if (r.messageId) {
@@ -81,7 +82,7 @@ export class GuideReceptionApp {
       if (!r || r.status !== 'assigned' || r.departedAt || r.guideId !== actorId || r.visitorId === actorId) return { error: '案内を開始した担当者だけが、案内中にロールを付与できます。' };
       const actor = await guild.members.fetch({ user: actorId, force: true });
       let visitor = await guild.members.fetch({ user: r.visitorId, force: true });
-      if (actor.user.bot || !c.roleId || !actor.roles.cache.has(c.roleId)) return { error: '案内人ロールが必要です。運営に確認してください。' };
+      if (!hasGuideRole(actor, c.guideRoleIds)) return { error: '案内人ロールが必要です。運営に確認してください。' };
       if (visitor.user.bot || !c.voiceChannelIds.includes(r.channelId) || actor.voice.channelId !== r.channelId || visitor.voice.channelId !== r.channelId) return { error: '担当者と利用者が、同じ案内VCにいるときに操作してください。' };
       const ids = { addedRoleId: first.roleId, removedRoleId: c.pendingRoleId! };
       if (visitor.roles.cache.has(first.roleId) && !visitor.roles.cache.has(c.pendingRoleId!)) return { reception: r, changed: false, ...ids };
@@ -190,16 +191,16 @@ export class GuideReceptionApp {
             const granted = Boolean(first && visitor?.roles.cache.has(first.roleId) && c.pendingRoleId && !visitor.roles.cache.has(c.pendingRoleId));
             await this.refresh(r, c, granted);
           }
-          if (!r.notifiedAt && c.staffChannelId && c.roleId) {
+          if (!r.notifiedAt && c.staffChannelId && c.guideRoleIds.length) {
             const watched = await watchOf(this.db, r.visitorId);
             const visitorUser = guild.members?.cache?.get(r.visitorId)?.user;
             const fresh = visitorUser?.createdAt instanceof Date ? isNewAccount(visitorUser.createdAt, this.cfg().security?.newAccountDays ?? 0) : false;
-            await this.discord.sendMessage(c.staffChannelId, { content: `<@&${c.roleId}>\n<@${r.visitorId}> さんが <#${r.channelId}> に来ました。${watched ? '\n🛡 **要注意リストの人です。** 案内人はロールを付けられません。神職・宮司に知らせてください。' : ''}${fresh ? '\n🐣 作ったばかりのアカウントです。サブアカウントや荒らしでないか気をつけてください。' : ''}\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`, allowed_mentions: { parse: [], roles: [c.roleId] } });
+            await this.discord.sendMessage(c.staffChannelId, { content: `${guideRoleMentions(c.guideRoleIds)}\n<@${r.visitorId}> さんが <#${r.channelId}> に来ました。${watched ? '\n🛡 **要注意リストの人です。** 案内人はロールを付けられません。神職・宮司に知らせてください。' : ''}${fresh ? '\n🐣 作ったばかりのアカウントです。サブアカウントや荒らしでないか気をつけてください。' : ''}\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`, allowed_mentions: { parse: [], roles: c.guideRoleIds } });
             await this.db.update(guideReceptions).set({ notifiedAt: new Date() }).where(eq(guideReceptions.id, r.id));
             const employees = await this.db.select().from(guideEmployees).where(and(eq(guideEmployees.status, 'active'), eq(guideEmployees.waiting, true)));
             for (const e of employees) {
               const member = await guild.members.fetch({ user: e.memberId, force: true }).catch(() => undefined);
-              if (member && !member.user.bot && member.roles.cache.has(c.roleId)) await this.discord.sendDm(e.memberId, `<@${e.memberId}> さん、案内の受付です。<@${r.visitorId}> さんが <#${r.channelId}> に来ました。\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`).catch(err => logger.warn({ err }, 'guide dm failed'));
+              if (hasGuideRole(member, c.guideRoleIds)) await this.discord.sendDm(e.memberId, `<@${e.memberId}> さん、案内の受付です。<@${r.visitorId}> さんが <#${r.channelId}> に来ました。\nhttps://discord.com/channels/${guild.id}/${r.channelId}/${r.messageId}`).catch(err => logger.warn({ err }, 'guide dm failed'));
             }
           }
         } catch (err) { logger.warn({ err, receptionId: r.id }, 'guide notification failed'); }
@@ -241,7 +242,7 @@ export class GuideReceptionApp {
     try {
       const c = await this.options(i.guild);
       const actor = await i.guild.members.fetch({ user: i.user.id, force: true });
-      if (actor.user.bot || !c.roleId || !actor.roles.cache.has(c.roleId)) {
+      if (!hasGuideRole(actor, c.guideRoleIds)) {
         await i.reply({ content: '案内人ロールの人だけが使えます。', flags: MessageFlags.Ephemeral });
         return;
       }
@@ -265,7 +266,7 @@ export class GuideReceptionApp {
       const first = autoRanks(this.cfg().ranks)[0];
       const ids = target ? [...target.roles.cache.keys()] : [];
       const eligible = target && target.id !== actor.id && !target.user.bot &&
-        !adminLevelOf(this.cfg(), ids) && !target.roles.cache.has(c.roleId) &&
+        !adminLevelOf(this.cfg(), ids) && !c.guideRoleIds.some(id => target.roles.cache.has(id)) &&
         !this.cfg().ranks.some(r => r.roleId !== first?.roleId && target.roles.cache.has(r.roleId)) &&
         ((c.pendingRoleId && target.roles.cache.has(c.pendingRoleId)) || (first && target.roles.cache.has(first.roleId)));
       if (!eligible || !actor.voice.channelId || !c.voiceChannelIds.includes(actor.voice.channelId) || target.voice.channelId !== actor.voice.channelId) {
@@ -364,7 +365,11 @@ export class GuideReceptionApp {
         ];
         return void await i.editReply({ content: lines.join('\n'), allowedMentions: { parse: [] } });
       }
-      if (member.user.bot || !c.roleId || !member.roles.cache.has(c.roleId)) return void await i.editReply('案内人ロールが必要です。運営に確認してください。');
+      if (!hasGuideRole(member, c.guideRoleIds)) {
+        // 階級などでロールが分かれたときに気づけるよう、案内人として見ているロールを出す（通知は飛ばさない）
+        const known = c.guideRoleIds.length ? `いま案内人として見ているロール: ${c.guideRoleIds.map(id => `<@&${id}>`).join('・')}` : '案内人のロールが見つかりません。';
+        return void await i.editReply({ content: `案内人ロールが必要です。運営に確認してください。\n${known}\n（運営へ: 社務所Web の「案内・給与」で、案内人のロールを足せます）`, allowedMentions: { parse: [] } });
+      }
       // 🙋 案内担当を始める・終える（チャンネル名を変えて、案内人に知らせる）
       if (action === 'duty' || action === 'dutyoff') {
         const on = action === 'duty';
@@ -380,13 +385,13 @@ export class GuideReceptionApp {
         // 社務所Web で決めたチャンネルの名前を変える（Discord の決まりで 10 分に 2 回まで。こえた分は少し待ってから変わる）
         const named = c.dutyChannelId ? i.guild.channels.cache.get(c.dutyChannelId) : undefined;
         if (named && 'setName' in named) void named.setName(guideDutyChannelName(r.after.map(nameOf)), '案内担当が変わった').catch((err: unknown) => logger.warn({ err }, 'guide duty rename failed'));
-        const ping = c.roleId ? `<@&${c.roleId}> ` : '';
+        const ping = c.guideRoleIds.length ? `${guideRoleMentions(c.guideRoleIds)} ` : '';
         const content = on
           ? `${ping}🙋 ${nameOf(i.user.id)} **が案内担当をはじめました。**`
           : r.after.length
             ? `🔚 ${nameOf(i.user.id)} が案内担当を終了しました（いまの担当: ${r.after.map(nameOf).join('・')}）。`
             : `${ping}⚠️ **案内担当が不在です。案内できるかたは「🙋 案内を担当する」を押してください。**`;
-        if (channel?.isSendable()) await channel.send({ content, allowedMentions: { parse: [], roles: c.roleId && (on || !r.after.length) ? [c.roleId] : [] } }).catch((err: unknown) => logger.warn({ err }, 'guide duty notice failed'));
+        if (channel?.isSendable()) await channel.send({ content, allowedMentions: { parse: [], roles: on || !r.after.length ? c.guideRoleIds : [] } }).catch((err: unknown) => logger.warn({ err }, 'guide duty notice failed'));
         await i.editReply(on ? '案内担当をはじめました。終わるときは「🔚 案内担当を終了する」を押してください。' : '案内担当を終了しました。');
         await this.waitingNames.sync(i.guild, c).catch(err => logger.warn({ err }, 'guide waiting sync failed'));
         return;

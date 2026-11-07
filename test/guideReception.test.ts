@@ -282,7 +282,7 @@ describe('案内待ちだけの受付と案内人の開始', () => {
     const r = await reception();
     const i = m.interaction(r.id);
     await m.app.onInteraction(i as never);
-    expect(i.editReply).toHaveBeenCalledWith('案内人ロールが必要です。運営に確認してください。');
+    expect(i.editReply).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('案内人ロールが必要です。運営に確認してください。') }));
     expect((await db.select().from(guideReceptions))[0]?.guideId).toBeNull();
     expect(await db.select().from(employeePayroll)).toHaveLength(0);
   });

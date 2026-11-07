@@ -2,26 +2,27 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, MessageFlags
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { loadGuideConfig } from '../services/guideReception.js';
+import { guideRoleIdsFor, guideRoleMentions, loadGuideConfig } from '../services/guideReception.js';
 import { setScheduleMessage, bookSlot, closeThread, guideThreadConfig, openSlots, openThreads, recordThread, takeDueReminders, threadById, threadOf, validSlot, type GuideThreadConfig } from '../services/guideThreads.js';
 import { watchReason } from '../services/inviteGuard.js';
-import { guideRoleIdsOf, guideRoleOf, scheduleChannelOf } from './guidePending.js';
+import { guideRoleOf, scheduleChannelOf } from './guidePending.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral } as const;
 
 /** スレッドに送る、あいさつと時間のボタン */
-export function guideThreadMessage(c: GuideThreadConfig, memberId: string, now = new Date(), guideRoleId?: string) {
+export function guideThreadMessage(c: GuideThreadConfig, memberId: string, now = new Date(), guideRole?: string | string[]) {
+  const roles = (Array.isArray(guideRole) ? guideRole : guideRole ? [guideRole] : []).slice(0, 20);
   const slots = openSlots(c, now);
   const timeRow = slots.length ? [new ActionRowBuilder<ButtonBuilder>().addComponents(slots.map(s => new ButtonBuilder().setCustomId(`gth:slot:${s.date}:${s.time}`).setLabel((s.tomorrow ? '明日 ' : '') + s.time).setStyle(ButtonStyle.Primary)))] : [];
   return {
     // @案内人 を呼ぶと、そのロールの人がスレッドに入る（人数の上限なし・あとから案内人になった人も呼べば入る）
-    content: `<@${memberId}> さん${guideRoleId ? `\n<@&${guideRoleId}> 新しい方が来ました。` : ''}`,
+    content: `<@${memberId}> さん${roles.length ? `\n${guideRoleMentions(roles)} 新しい方が来ました。` : ''}`,
     embeds: [{ description: c.message.slice(0, 4000), color: 0xf4a7b9 }],
     components: [...timeRow, new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('gth:now').setLabel('今から').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('gth:other').setLabel('時間外').setStyle(ButtonStyle.Secondary),
     )],
-    allowedMentions: { users: [memberId], roles: guideRoleId ? [guideRoleId] : [] },
+    allowedMentions: { users: [memberId], roles },
   };
 }
 
@@ -30,12 +31,9 @@ export class GuideThreadApp {
   private ticking = false;
   constructor(private db: Db, private cfg: () => GuildConfig) {}
 
-  /** @案内人 のロール（案内の設定のロール。なければ、名前に「案内人」が入るロールが 1 つだけのとき） */
-  private async guideRole(guild: Guild): Promise<string | undefined> {
-    const set = (await loadGuideConfig(this.db)).roleId;
-    if (set) return set;
-    const ids = [...guideRoleIdsOf(guild.roles.cache.values())];
-    return ids.length === 1 ? ids[0] : undefined;
+  /** @案内人 のロール（案内の設定のロールと、名前に「案内人」が入るロール。階級などで分かれていれば全部） */
+  private async guideRole(guild: Guild): Promise<string[]> {
+    return guideRoleIdsFor(await loadGuideConfig(this.db), guild.roles.cache.values(), guild.id);
   }
   /** 案内所の通話（「今から」の案内に出す） */
   private async lobby(): Promise<string> {
@@ -80,7 +78,7 @@ export class GuideThreadApp {
       await thread.send({ content: `<@${memberId}> さん: ${text}`, allowedMentions: { users: [memberId] } });
       return;
     }
-    await thread.send({ content: `${role ? `<@&${role}> ` : ''}<@${memberId}> さん: ${text}`, allowedMentions: { users: [memberId], roles: role ? [role] : [] } });
+    await thread.send({ content: `${role.length ? `${guideRoleMentions(role)} ` : ''}<@${memberId}> さん: ${text}`, allowedMentions: { users: [memberId], roles: role } });
   }
 
   async onInteraction(i: Interaction) {
