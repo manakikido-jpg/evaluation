@@ -1,5 +1,6 @@
 import { development, trained, inherited, isTraining, type TrainingKind } from './keibaDevelopment.js';
 import { hasCoOwners, payByShares, sharesOf } from './keibaShares.js';
+import { isRestrictedAccount } from '../staffAlts.js';
 import { rivalPairsAmong } from './keibaHonors.js';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { isOutfit, KB_AURAS, KB_AURA_PRICE, KB_CUSTOM_AURA_PRICE, isAuraColor, KB_DEFAULT_OUTFIT, type KbAura, type KbAuraKey, type KbOutfit } from './keibaOutfit.js';
@@ -354,6 +355,8 @@ export const KB_SALE_FEE = 5;
 /** 売りに出す（price）・取り下げる（null） */
 export async function setSale(db: Db, memberId: string, id: number, price: number | null): Promise<boolean> {
   if (price !== null && !(Number.isInteger(price) && price >= 100 && price <= 10_000_000)) return false;
+  // 🔗 サブアカウントは馬を売りに出せない（サブから本アカウントへ馬を渡せないように。売るのをやめるのはよい）
+  if (price !== null && (await isRestrictedAccount(db, memberId))) return false;
   // 🤝 口をほかの人も持っている馬は売れない（一口の募集中も）
   if (price !== null && (await hasCoOwners(db, id))) return false;
   const r = await db
@@ -443,6 +446,8 @@ export const KB_FOAL_STA_SWING = 50;
 /** 種牡馬の種付け料を決める（自分の繁殖入りした牡馬） */
 export async function setStudFee(db: Db, memberId: string, id: number, fee: number): Promise<boolean> {
   if (!Number.isInteger(fee) || fee < 0 || fee > KB_STUD_FEE_MAX) return false;
+  // 🔗 サブアカウントは種付けに出せない
+  if (fee > 0 && (await isRestrictedAccount(db, memberId))) return false;
   const rows = await db
     .update(keibaHorses)
     .set({ studFee: fee })

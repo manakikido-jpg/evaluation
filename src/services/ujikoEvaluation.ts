@@ -2,7 +2,7 @@ import { EVALUATION_START_DATE, UJIKO_GOEN, UJIKO_MINUTES } from '../domain/ujik
 import { and, count, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { evaluationTimeDeductions, members, shuin, specialGoen, voiceChannels, voiceUsage } from '../db/schema.js';
+import { evaluationTimeDeductions, memberAlts, members, shuin, specialGoen, voiceChannels, voiceUsage } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { staffAlts } from './staffAlts.js';
@@ -50,10 +50,12 @@ export const legacyEvaluationMinutesSql = sql<number>`case when ${voiceUsage.dat
 /** 確認済み時間＋過去取込。過去分の当時役職が未確認であることは内訳へ残す。 */
 export async function ujikoEvaluation(db: Db, cfg: GuildConfig, filter: EvaluationFilter, now = new Date()): Promise<EvaluationData> {
   const today = jstDate(now);
-  const [people, alts, channelRows, previouslyEngawa] = await Promise.all([
+  const [people, alts, memberAltRows, channelRows, previouslyEngawa] = await Promise.all([
     db.select({ id: members.id, name: members.displayName, username: members.username, roleIds: members.roleIds })
       .from(members).where(and(eq(members.isBot, false), isNull(members.leftAt))),
     staffAlts(db),
+    // 🔗 承認ずみのサブアカウントも、評価・昇格の対象にしない（多重を防ぐ）
+    db.select({ id: memberAlts.altId }).from(memberAlts).where(eq(memberAlts.status, 'approved')),
     db.select({ id: voiceChannels.channelId, name: voiceChannels.name, categoryId: voiceChannels.categoryId,
       categoryName: voiceChannels.categoryName, lastSeen: voiceChannels.lastSeen }).from(voiceChannels),
     db.selectDistinct({ id: voiceUsage.channelId }).from(voiceUsage)
@@ -68,7 +70,7 @@ export async function ujikoEvaluation(db: Db, cfg: GuildConfig, filter: Evaluati
   const selected = channels.filter(c => requested === undefined || c.ids.some(id => requested.has(id)));
   const selectedIds = selected.map(c => c.id);
   const selectedChannelIds = [...new Set(selected.flatMap(c => c.ids))];
-  const hidden = new Set(alts.map(a => a.id));
+  const hidden = new Set([...alts.map(a => a.id), ...memberAltRows.map(a => a.id)]);
   const candidates = people.filter(p => !hidden.has(p.id) && highestRank(cfg.ranks, p.roleIds)?.key === 'sanpaisha');
   const ids = candidates.map(p => p.id);
   const [stamps, specials, usage] = await Promise.all([

@@ -501,6 +501,7 @@ export class MarketApp {
         disabled: '市場はまだ準備中です。',
         no_license: '🏪 出品するには「開業権利」が要ります。',
         adult_only: '通話の出品は 18 歳以上の方だけです。',
+        restricted: 'サブアカウントは出品できません。',
         invalid: `入力を確かめてください（品名は 60 文字まで、値段は 1〜${fmt(MARKET_PRICE_MAX)}、受付の上限は 0〜${MARKET_CAPACITY_MAX}）。`,
       }[r.status];
       return void (await i.editReply(text));

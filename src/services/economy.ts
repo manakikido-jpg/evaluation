@@ -128,8 +128,24 @@ export async function spendCoins(
   return db.transaction((tx) => spendWithin(tx, memberId, amount, reason, detail));
 }
 
-/** spendCoins の中身。すでにトランザクションの中にいるときに使う */
+/**
+ * spendCoins の中身。すでにトランザクションの中にいるときに使う。
+ * 🕶 運営のサブアカウント・🔗 承認ずみのサブアカウントは、銭を使えない（false。カジノ・ショップ・送金・市場などの多重を防ぐ）
+ */
 export async function spendWithin(
+  tx: Db,
+  memberId: string,
+  amount: number,
+  reason: CoinReason,
+  detail: Record<string, unknown> = {},
+): Promise<boolean> {
+  if (!Number.isInteger(amount) || amount <= 0) throw new Error('amount must be a positive integer');
+  if (await isRestrictedAccount(tx, memberId)) return false;
+  return spendWithinUnchecked(tx, memberId, amount, reason, detail);
+}
+
+/** サブアカウントかどうかを見ずに使う（サブにしたときの残高の片付けだけで使う） */
+export async function spendWithinUnchecked(
   tx: Db,
   memberId: string,
   amount: number,

@@ -1,3 +1,4 @@
+import { isRestrictedAccount } from './staffAlts.js';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
@@ -46,6 +47,9 @@ export async function ownedKoban(db: Db, memberId: string, id: string) {
 /** 送ると1枚を使い切り、受取人には額面だけが入る。追加の手数料はない。 */
 export async function sendKoban(db: Db, memberId: string, id: string, targetId: string, now = new Date()) {
   if (!/^\d{17,20}$/.test(targetId) || memberId === targetId) throw new KobanError('自分以外のサーバーメンバーを選んでください。');
+  // 🔗 サブアカウントからも、サブアカウントへも送れない（多重を防ぐ）
+  if (await isRestrictedAccount(db, memberId)) throw new KobanError('サブアカウントは、小判を送れません。');
+  if (await isRestrictedAccount(db, targetId)) throw new KobanError('サブアカウントには、小判を送れません。');
   return db.transaction(async tx => {
     await activeMember(tx, memberId); await activeMember(tx, targetId);
     const [receipt] = await tx.update(kobanPurchases).set({ targetId, sentAt: now }).where(and(eq(kobanPurchases.id, id), eq(kobanPurchases.memberId, memberId), isNull(kobanPurchases.sentAt))).returning();

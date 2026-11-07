@@ -1,3 +1,4 @@
+import { isRestrictedAccount } from './staffAlts.js';
 import { and, desc, eq, gt, sql } from 'drizzle-orm';
 import { TICKET_KINDS, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -69,6 +70,8 @@ export async function ticketsOf(db: Db, memberId: string): Promise<Record<Ticket
 
 export async function addTickets(tx: Db, memberId: string, kind: TicketKind, count: number): Promise<void> {
   if (count <= 0) return;
+  // 🕶🔗 サブアカウントには、券（札）も入れない（多重を防ぐ）
+  if (await isRestrictedAccount(tx, memberId)) return;
   await tx
     .insert(tickets)
     .values({ memberId, kind, count })

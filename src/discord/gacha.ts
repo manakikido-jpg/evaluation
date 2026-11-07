@@ -786,6 +786,7 @@ export class GachaApp {
     if (!toId || i.users.get(toId)?.bot || !i.members.get(toId)) return void (await i.update({ content: 'その方には贈れません（BOT や、サーバーにいない方）。', components: [] }));
     const r = await giftGacha(this.db, i.user.id, toId);
     if (r === 'self') return void (await i.update({ content: '自分には贈れません。', components: [] }));
+    if (r === 'restricted') return void (await i.update({ content: 'サブアカウントからは贈れません。サブアカウントへも贈れません。', components: [] }));
     if (r === 'no_ticket') return void (await i.update({ content: '💝 物御籤の贈り券がありません。', components: [] }));
     await i.client.users
       .send(toId, `💝 ${i.member.displayName} さんから、物御籤の無料券が届きました（咲楽ノ宮）。\n\`/物御籤\` の「🎫 無料券で引く」から、タダで 1 回引けます。`)

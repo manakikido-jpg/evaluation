@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { memberAlts, settings, wallets } from '../db/schema.js';
 import { audit } from './audit.js';
-import { spendWithin } from './economy.js';
+import { spendWithinUnchecked } from './economy.js';
 
 /**
  * 🕶 運営のサブアカウント（見え方の確認・BOT やカジノを試す・名前を出さずに見回る）。
@@ -48,7 +48,7 @@ export async function setStaffAlt(db: Db, memberId: string, on: boolean, by: str
     if (on) {
       const [w] = await tx.select().from(wallets).where(eq(wallets.memberId, memberId)).for('update');
       cleared = w?.balance ?? 0;
-      if (cleared && !(await spendWithin(tx, memberId, cleared, 'adjust', { kind: 'staff_alt', by }))) throw new Error('staff alt wallet clear failed');
+      if (cleared && !(await spendWithinUnchecked(tx, memberId, cleared, 'adjust', { kind: 'staff_alt', by }))) throw new Error('staff alt wallet clear failed');
     }
     await audit(tx, { actorId: by, targetId: memberId, action: on ? 'staff_alt.add' : 'staff_alt.remove', detail: { ownerId, note: note.slice(0, 200), cleared }, via: 'web' });
     return true;

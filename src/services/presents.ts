@@ -1,3 +1,4 @@
+import { isRestrictedAccount } from './staffAlts.js';
 import { spendWithin } from './economy.js';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { TICKET_KINDS, type GuildConfig, type TicketKind } from '../config.js';
@@ -43,7 +44,7 @@ export type PresentMember = { id: string; roleIds: readonly string[]; bot?: bool
 
 export type PresentResult =
   | { status: 'ok'; label: string; count: number; left: number }
-  | { status: 'self' | 'not_member' | 'invalid' | 'no_rank' }
+  | { status: 'self' | 'not_member' | 'invalid' | 'no_rank' | 'restricted' }
   | { status: 'rank_too_low'; rankName: string }
   | { status: 'insufficient'; fee: number; balance: number }
   | { status: 'not_enough'; label: string; have: number };
@@ -52,6 +53,8 @@ export type PresentResult =
 export async function sendPresent(db: Db, cfg: GuildConfig, from: PresentMember, to: PresentMember, item: PresentItem, count: number): Promise<PresentResult> {
   if (!Number.isInteger(count) || count < 1 || count > PRESENT_MAX) return { status: 'invalid' };
   if (from.id === to.id) return { status: 'self' };
+  // 🔗 サブアカウントからも、サブアカウントへも贈れない（多重を防ぐ）
+  if ((await isRestrictedAccount(db, from.id)) || (await isRestrictedAccount(db, to.id))) return { status: 'restricted' };
   const hasRank = (roleIds: readonly string[]) => cfg.ranks.some((r) => roleIds.includes(r.roleId));
   if (to.bot || !hasRank(to.roleIds)) return { status: 'not_member' };
   if (!hasRank(from.roleIds)) return { status: 'no_rank' };
@@ -111,4 +114,5 @@ export const PRESENT_MESSAGES: Record<Exclude<PresentResult['status'], 'ok' | 'r
   not_member: 'その方には贈れません（BOT や、まだ役職のない方・サーバーにいない方）。',
   invalid: '贈るものか数が正しくありません（候補から選んで、数は 1〜100）。',
   no_rank: '役職のある方だけ贈れます。',
+  restricted: 'サブアカウントからは贈れません。サブアカウントへも贈れません。',
 };

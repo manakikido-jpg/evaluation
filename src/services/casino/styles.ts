@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { isRestrictedAccount } from '../staffAlts.js';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { CasinoGachaConfig, GuildConfig } from '../../config.js';
 import type { Db } from '../../db/client.js';
@@ -167,6 +168,8 @@ export async function drawStyles(
   rng = () => randomInt(1000000) / 1000000,
 ): Promise<StyleDrawResult> {
   if (!requestId || requestId.length > 100 || ![1, 10].includes(times)) return { status: 'invalid' };
+  // 🕶🔗 サブアカウントは引けない（景品の多重を防ぐ）
+  if (await isRestrictedAccount(db, memberId)) return { status: 'off' };
   return db.transaction(async (tx) => {
     const s = await lock(tx, memberId);
     const [receipt] = await tx

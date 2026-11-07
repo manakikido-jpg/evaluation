@@ -1,3 +1,4 @@
+import { isRestrictedAccount } from './staffAlts.js';
 import { and, eq, gt, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { memberBuffs, nameDecos, type NameDeco } from '../db/schema.js';
@@ -77,8 +78,10 @@ export async function takeLuck(tx: Db, memberId: string): Promise<boolean> {
 }
 
 /** 💝 贈り券を使う: 相手に「物御籤の無料券」を 1 枚 */
-export async function giftGacha(db: Db, fromId: string, toId: string): Promise<'ok' | 'no_ticket' | 'self'> {
+export async function giftGacha(db: Db, fromId: string, toId: string): Promise<'ok' | 'no_ticket' | 'self' | 'restricted'> {
   if (fromId === toId) return 'self';
+  // 🔗 サブアカウントからも、サブアカウントへも贈れない（多重を防ぐ）
+  if ((await isRestrictedAccount(db, fromId)) || (await isRestrictedAccount(db, toId))) return 'restricted';
   return db.transaction(async (tx) => {
     if (!(await useTicket(tx, fromId, 'gacha_gift'))) return 'no_ticket' as const;
     await addTickets(tx, toId, 'gacha_free', 1);

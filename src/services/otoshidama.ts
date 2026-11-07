@@ -1,3 +1,4 @@
+import { isRestrictedAccount } from './staffAlts.js';
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm';
 import { currentAutoRank } from '../domain/ranks.js';
 import type { GuildConfig } from '../config.js';
@@ -151,6 +152,8 @@ export type ClaimResult =
 /** ボタンを押した: 次の 1 人分を受け取る */
 export async function claimBag(db: Db, cfg: GuildConfig, bagId: number, member: { id: string; roleIds: readonly string[]; bot?: boolean; voiceChannelId: string | null; /** 縁側の通話にいるか（undefined は確かめない） */ inEngawa?: boolean }, now = new Date()): Promise<ClaimResult> {
   if (member.bot || !cfg.ranks.some((r) => member.roleIds.includes(r.roleId))) return { status: 'not_member' };
+  // 🔗 サブアカウントは受け取れない（銭が入らないので、ほかの人の分が減るだけになる）
+  if (await isRestrictedAccount(db, member.id)) return { status: 'not_member' };
   if (!member.voiceChannelId) return { status: 'not_in_voice' };
   // 🤫 シクレの宿（ほかの人から見えない部屋）にいる間は受け取れない
   const [room] = await db.select({ kind: tempVoice.kind }).from(tempVoice).where(eq(tempVoice.channelId, member.voiceChannelId));

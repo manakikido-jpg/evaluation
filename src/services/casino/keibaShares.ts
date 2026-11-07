@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { keibaHorses, keibaShares, members } from '../../db/schema.js';
 import { addCoins, spendWithin } from '../economy.js';
+import { isRestrictedAccount } from '../staffAlts.js';
 
 /**
  * 🤝 共同所有（一口馬主）。馬は 10 口。馬主が 1 口の値段を決めて売りに出し、ほかの人が 1 口ずつ買う。
@@ -59,6 +60,8 @@ export async function payByShares(tx: Db, horseId: number, ownerId: string, amou
 export async function offerShares(db: Db, memberId: string, horseId: number, price: number | null, horsePrice: number): Promise<'ok' | 'not_found' | 'invalid'> {
   const [lo, hi] = sharePriceRange(horsePrice);
   if (price !== null && !(Number.isInteger(price) && price >= lo && price <= hi)) return 'invalid';
+  // 🔗 サブアカウントは一口を募集できない（サブから本アカウントへ馬を渡せないように。やめるのはよい）
+  if (price !== null && (await isRestrictedAccount(db, memberId))) return 'invalid';
   return db.transaction(async (tx) => {
     const [h] = await tx.select().from(keibaHorses).where(and(eq(keibaHorses.id, horseId), eq(keibaHorses.ownerId, memberId), isNull(keibaHorses.retiredAt))).for('update');
     if (!h) return 'not_found' as const;

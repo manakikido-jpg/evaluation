@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { isRestrictedAccount } from './staffAlts.js';
 import { salePrice } from './economyEvents.js';
 import { GACHA_TIERS, type GachaConfig, type GachaTier, type TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -265,6 +266,8 @@ export async function drawGacha(
   const kinds = [opts.free, opts.gold, opts.first].filter(Boolean).length;
   if (!g.enabled || !Number.isInteger(times) || times < 1 || times > 10 || kinds > 1 || ((opts.free || opts.first) && times !== 1) || (opts.gold && times !== 10))
     return { status: 'disabled' };
+  // 🕶🔗 サブアカウントは引けない（無料券・はじめての 1 回でも。景品の多重を防ぐ）
+  if (await isRestrictedAccount(db, memberId)) return { status: 'disabled' };
   await ensureGachaPrizes(db, g);
   const prizes = await listPrizes(db);
   const shop = new Map((await db.select().from(shopItems)).map((i) => [i.id, i]));

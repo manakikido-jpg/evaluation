@@ -1,3 +1,4 @@
+import { isRestrictedAccount } from './staffAlts.js';
 import { and, avg, count, desc, eq, inArray, isNotNull, isNull, gt, or, lte, ne, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -92,7 +93,7 @@ export async function marketLicenseItem(db: Db) {
 
 export type ListingResult =
   | { status: 'ok'; listing: MarketListing }
-  | { status: 'no_license' | 'adult_only' | 'invalid' | 'disabled' };
+  | { status: 'no_license' | 'adult_only' | 'invalid' | 'disabled' | 'restricted' };
 
 export async function createListing(
   db: Db,
@@ -100,6 +101,8 @@ export async function createListing(
   seller: { id: string; roleIds: readonly string[] },
   input: { category: string; title: string; description: string; price: number; pricing?: 'fixed' | 'offer'; subcategory?: string | null; capacity?: number; imageUrl?: string | null },
 ): Promise<ListingResult> {
+  // 🔗 サブアカウントは出品できない（サブから本アカウントへ品物を渡せないように）
+  if (await isRestrictedAccount(db, seller.id)) return { status: 'restricted' };
   const license = await marketLicenseAccess(db, cfg, seller);
   if (!license.configured) return { status: 'disabled' };
   if (!license.allowed) return { status: 'no_license' };
