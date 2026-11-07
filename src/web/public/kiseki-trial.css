@@ -362,16 +362,18 @@
 .kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reels{gap:3px;background:linear-gradient(90deg,#f7e9b3,#655937,#fff5d4,#746743,#eee3b7)}
 .kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reel{box-shadow:inset 0 0 0 1px #f8e9bb}
 
-/* 採用した三神版の透過レイヤー。1218×1292の3窓へ動くリールを合わせる。 */
+/* 参考写真の配分：上部38%、三神14%、リール28%、下部20%。
+   上端の角飾りは固定し、三神・窓・柱を同じ素材のまま下へ移す。 */
 .kt-root.kt-reference-layout.kt-composite .gt-display{aspect-ratio:1218/1292;display:block;container-type:inline-size}
-.kt-reference-frame{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
-.kt-root.kt-reference-layout.kt-composite .gt-display .gt-lcd{position:absolute;inset:0 0 auto;height:25.6%;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:14px 5px 0;background:none}
+.kt-reference-frame{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;clip-path:inset(0 0 88%)}
+.kt-root.kt-reference-layout.kt-composite .kt-reference-frame-main{inset:12% auto auto -6%;width:112%;height:100%;max-width:none;clip-path:inset(22% 0 0)}
+.kt-root.kt-reference-layout.kt-composite .gt-display .gt-lcd{position:absolute;inset:0 0 auto;height:37.6%;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:14px 5px 0;background:none}
 .kt-root.kt-reference-layout.kt-composite .gt-display .gt-digits{position:static;width:auto;height:auto;min-height:0;flex:1;margin:0;padding:0;gap:3cqw;align-items:center}
 .kt-root.kt-reference-layout.kt-composite .gt-display .gt-digits>span{font-size:clamp(22px,15cqw,85px);line-height:1.1}
 .kt-root.kt-reference-layout.kt-composite .gt-display .gt-message{position:static;min-height:0;margin:0;padding:0 4px 2px;max-width:100%;font-size:clamp(6px,1.5cqw,9px);line-height:1.2}
-.kt-root.kt-reference-layout.kt-composite .kt-reel-assembly{position:absolute;inset:40.4% 0 auto;width:100%;height:27.6%;aspect-ratio:auto;margin:0;isolation:auto;z-index:4}
+.kt-root.kt-reference-layout.kt-composite .kt-reel-assembly{position:absolute;inset:52.4% 0 auto;width:100%;height:27.6%;aspect-ratio:auto;margin:0;isolation:auto;z-index:4}
 .kt-root.kt-reference-layout.kt-composite .kt-reel-assembly:before{display:none}
-.kt-root.kt-reference-layout.kt-composite .kt-reel-assembly .gt-reel-shelf{inset:7.6% 16.5% 6.7%;padding:0;border:0;background:none;box-shadow:none}
+.kt-root.kt-reference-layout.kt-composite .kt-reel-assembly .gt-reel-shelf{inset:7.6% 12.48% 6.7%;padding:0;border:0;background:none;box-shadow:none}
 .kt-root.kt-reference-layout.kt-composite .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(8.365cqw + .02px);width:100%;height:100%;background:none;box-shadow:none}
 .kt-root.kt-reference-layout.kt-composite .gt-display .kt-reel-assembly .gt-reels{gap:6.42%;background:none;box-shadow:none}
 .kt-root.kt-reference-layout.kt-composite .gt-display .kt-reel-assembly .gt-reel{box-shadow:none}
@@ -381,7 +383,7 @@
 .kt-root.kt-reference-layout.kt-composite .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(12px,5cqw,30px)}
 .kt-root.kt-reference-layout.kt-composite .kt-god-lights,.kt-root.kt-reference-layout.kt-composite .kt-divine-vision{display:none}
 .kt-root.kt-reference-layout.kt-composite .kt-role-trail{top:-18%;right:1.2%;width:16%;z-index:6}
-.kt-root.kt-reference-layout.kt-composite .kt-stage-footer{position:absolute;inset:68% 0 0;display:block;z-index:0;background:none}
+.kt-root.kt-reference-layout.kt-composite .kt-stage-footer{position:absolute;inset:80% 0 0;display:block;z-index:0;background:none}
 .kt-root.kt-reference-layout.kt-composite .gt-display .kt-stage-footer .gt-screen-mode{position:absolute;left:30%;right:auto;bottom:4%;width:40%;padding:2px 0;margin:0;font-size:clamp(8px,2.3cqw,15px);line-height:1.1;background:none;transform:none}
 .kt-root.kt-reference-layout.kt-composite .kt-stage-footer .gt-screen-mode:after{width:90%;margin-top:3px}
 .kt-root.kt-reference-layout.kt-composite .kt-lcd-actions{top:auto;bottom:3%;right:3%;z-index:7}
@@ -391,8 +393,8 @@
 .kt-root.kt-reference-layout.kt-composite .gt-display .gt-lcd .gt-lcd-award[data-kind=god]>strong{font-size:clamp(16px,8cqw,45px)}
 .kt-root.kt-reference-layout.kt-composite .gt-display .gt-lcd .gt-lcd-award>span{font-size:clamp(7px,2cqw,12px);line-height:1.1}
 .kt-root.kt-reference-layout.kt-composite .gt-display .kt-award-digits b{font-size:clamp(12px,4cqw,24px);line-height:1.05}
-.kt-root.kt-reference-layout.kt-composite .gt-normal-effects{height:25.6%}
-.kt-root.kt-reference-layout.kt-composite .kt-stage-curtain{inset:0 0 74.4%}
+.kt-root.kt-reference-layout.kt-composite .gt-normal-effects{height:37.6%}
+.kt-root.kt-reference-layout.kt-composite .kt-stage-curtain{inset:0 0 62.4%}
 @media(max-height:500px) and (min-width:600px){.kt-root.kt-reference-layout.kt-composite[data-focus=true] .gt-display{height:auto;width:min(100%,300px);aspect-ratio:1218/1292}}
 .kt-root.kt-reference-layout.kt-composite[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display{height:auto;aspect-ratio:1218/1292}
 .kt-root.kt-reference-layout.kt-composite[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(8.365cqw + .02px);width:100%}
