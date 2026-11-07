@@ -1,5 +1,8 @@
 import { mountEventLottery } from './eventLottery.js';
 import { mountEvaluation } from './evaluation.js';
+import { RoomsPage } from './views/rooms.js';
+import { listRooms } from '../services/rooms.js';
+import { closeRoomNow } from '../services/tempVoice.js';
 import { altConfig, saveAltConfig, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
 import { MemberAltLinks, MemberAltsPage } from './views/memberAlts.js';
 import { mountOffice } from './office.js';
@@ -772,6 +775,8 @@ export function createWebApp(deps: WebDeps) {
   app.use('/voice/core', requireAdmin);
   app.use('/voice/core.csv', requireAdmin);
   app.use('/voice/core/*', requireAdmin, requireCsrf);
+  app.use('/voice/rooms', requireAdmin);
+  app.use('/voice/rooms/*', requireAdmin, requireCsrf);
   app.use('/voice/boost', requireAdmin);
   app.use('/voice/boost/*', requireAdmin, requireCsrf);
   app.use('/updates', requireAdmin);
@@ -1892,6 +1897,29 @@ export function createWebApp(deps: WebDeps) {
   });
 
   mountEvaluation(app, db, () => cfg, now);
+
+  /** 🏨 宿の一覧（運営が削除できる） */
+  app.get('/voice/rooms', async (c) => {
+    const [rooms, channels] = await Promise.all([listRooms(db), loadChannels().catch(() => [] as GuildChannel[])]);
+    const names = await namesOf(db, rooms.map((r) => r.ownerId));
+    const rows = rooms.map((r) => ({ channelId: r.channelId, name: channels.find((ch) => ch.id === r.channelId)?.name ?? null, ownerId: r.ownerId, ownerName: names.get(r.ownerId) ?? r.ownerId,
+      kind: r.kind, stay: r.keepUntil ? (r.renewHourly ? 'hourly' as const : 'day' as const) : null, keepUntil: r.keepUntil, invited: r.invited.length, createdAt: r.createdAt }))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return c.html(<RoomsPage session={c.get('session')} rows={rows} msg={c.req.query('msg')} />);
+  });
+  app.post('/voice/rooms/:id/delete', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/voice/rooms?msg=not_found');
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/voice/rooms?msg=confirm');
+    try {
+      const r = await closeRoomNow(db, id, (ch) => deps.discord.deleteChannel(ch, `社務所Webで宿を削除（${c.get('session').userId}）`), c.get('session').userId, 'web');
+      return c.redirect(`/voice/rooms?msg=${r === 'ok' ? 'deleted' : 'not_found'}`);
+    } catch (err) {
+      logger.warn({ err, channelId: id }, 'web room delete failed');
+      return c.redirect('/voice/rooms?msg=failed');
+    }
+  });
 
   app.get('/voice', async (c) => {
     const d = Number(c.req.query('days'));

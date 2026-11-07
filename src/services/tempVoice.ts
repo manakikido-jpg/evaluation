@@ -1,7 +1,8 @@
 import { and, eq, isNotNull } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { tempVoice } from '../db/schema.js';
+import { roomPayers, tempVoice } from '../db/schema.js';
+import { audit } from './audit.js';
 import { logger } from '../lib/logger.js';
 import { spendWithin } from './economy.js';
 import { isBoosting } from './rooms.js';
@@ -296,6 +297,27 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
   } finally {
     busy.delete(input.userId);
   }
+}
+
+/**
+ * 🗑 宿を今すぐ消す（部屋主・運営が手で消すとき）。払った宿代は返さない。
+ * 1日延長・1時間ごとの払い・空いたときの自動削除と同じ鍵（select … for update）を取り、ぶつからないようにする。
+ * removeChannel（Discord のチャンネルを消す）が失敗したら、記録は消さずに全部戻す。もう消えていた（10003・404）のは成功あつかい
+ */
+export async function closeRoomNow(db: Db, channelId: string, removeChannel: (channelId: string) => Promise<void>, by: string, via: 'discord' | 'web'): Promise<'ok' | 'not_found'> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(tempVoice).where(eq(tempVoice.channelId, channelId)).for('update');
+    if (!row) return 'not_found' as const;
+    try { await removeChannel(channelId); }
+    catch (err) {
+      const code = err && typeof err === 'object' ? ((err as { code?: unknown }).code ?? (err as { status?: unknown }).status) : undefined;
+      if (code !== 10003 && code !== 404) throw err;
+    }
+    await tx.delete(roomPayers).where(eq(roomPayers.channelId, channelId));
+    await tx.delete(tempVoice).where(eq(tempVoice.channelId, channelId));
+    await audit(tx, { actorId: by, targetId: row.ownerId, action: 'room.delete', detail: { channelId, kind: row.kind, keepUntil: row.keepUntil?.toISOString() ?? null, renewHourly: row.renewHourly }, via });
+    return 'ok' as const;
+  });
 }
 
 export async function removeRoom(ctx: TempVoiceCtx, channelId: string): Promise<void> {

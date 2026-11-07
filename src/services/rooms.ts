@@ -218,6 +218,15 @@ export async function addInvites(db: Db, channelId: string, ids: string[]): Prom
   return updated;
 }
 
+/** 入室許可者から外す（外した人の権限は、部屋の権限を付け直すと消える） */
+export async function removeInvites(db: Db, channelId: string, ids: string[]): Promise<RoomRow | undefined> {
+  const [row] = await db.select().from(tempVoice).where(eq(tempVoice.channelId, channelId));
+  if (!row) return undefined;
+  const invited = row.invited.filter((id) => !ids.includes(id));
+  const [updated] = await db.update(tempVoice).set({ invited }).where(eq(tempVoice.channelId, channelId)).returning();
+  return updated;
+}
+
 export type PersonAction =
   | { action: 'paid'; channelId: string; memberId: string; charged: number }
   | { action: 'warned'; channelId: string; memberId: string; price: number }
