@@ -1,4 +1,5 @@
 import { mountEvaluation } from './evaluation.js';
+import { applyTiersToOpenRounds } from '../services/casino/fortune.js';
 import { RoomsPage } from './views/rooms.js';
 import { listRooms } from '../services/rooms.js';
 import { closeRoomNow } from '../services/tempVoice.js';
@@ -847,7 +848,7 @@ export function createWebApp(deps: WebDeps) {
     return c.redirect(`/economy/fortune?tab=${tab}&msg=saved`, 303);
   });
 
-  // 🎫 週末宝くじの等（1等・2等…）。賞金を等ごとの割合で分ける。次の回から効く
+  // 🎫 週末宝くじの等（1等・2等…）。1 本あたり売上の何 % か。まだ抽選していない回にも効く
   app.post('/economy/fortune/tiers', requireCsrf, async (c) => {
     if (!gujiOnly(c)) return c.text('宮司だけ変更できます。', 403);
     const body = await c.req.parseBody();
@@ -859,7 +860,9 @@ export function createWebApp(deps: WebDeps) {
     const prev = await loadOverrides(db);
     await saveOverrides(db, { ...prev, fortuneGames: parsed.data }, c.get('session').userId);
     await deps.onSettingsSaved?.();
-    await audit(db, { actorId: c.get('session').userId, action: 'fortune.tiers', detail: { tiers: parsed.data.lotteryTiers }, via: 'web' });
+    // 今売っている（まだ抽選していない）回にも、すぐ当てる
+    const openRounds = await applyTiersToOpenRounds(db, parsed.data.lotteryTiers);
+    await audit(db, { actorId: c.get('session').userId, action: 'fortune.tiers', detail: { tiers: parsed.data.lotteryTiers, openRounds }, via: 'web' });
     return c.redirect('/economy/fortune?tab=lottery&msg=saved', 303);
   });
 

@@ -551,15 +551,16 @@ export const fortuneGamesSchema = z.object({
   lotteryReturnPct: z.number().int().min(10).max(100).default(70),
   lotteryBonus: z.number().int().min(0).max(1000000).default(1000),
   /**
-   * 🎫 週末宝くじの等（1等・2等…）。賞金（売上の lotteryReturnPct％＋上乗せ）を、等ごとに pct％ ずつ分け、その等の本数で割る。
-   * 合計は 100％ まで（残りは運営に残る）。はじめは 1等 1 本に 100％（前と同じ）。変えると次の回から効く
+   * 🎫 週末宝くじの等（1等・2等…）。pct は「1 本あたり、売上の何 %」（2等 3 本 5% なら、1 本ずつ売上の 5%）。
+   * 上乗せ（lotteryBonus）は、割合どおりに分けて足す。割合 × 本数の合計は 100％ まで。はじめは 1等 1 本に売上の 70％。
+   * 保存すると、まだ抽選していない回にも効く。lotteryReturnPct は前の名残で、配当には使わない（合計は等から決まる）
    */
   lotteryTiers: z
     .array(z.object({ name: z.string().min(1).max(20), count: z.number().int().min(1).max(100), pct: z.number().int().min(1).max(100) }))
     .min(1)
     .max(5)
-    .refine((t) => t.reduce((n, x) => n + x.pct, 0) <= 100, '等の割合の合計は 100％ までです')
-    .default([{ name: '1等', count: 1, pct: 100 }]),
+    .refine((t) => t.reduce((n, x) => n + x.pct * x.count, 0) <= 100, '1本あたりの割合 × 本数の合計は 100％ までです')
+    .default([{ name: '1等', count: 1, pct: 70 }]),
 });
 export type FortuneGamesConfig = z.infer<typeof fortuneGamesSchema>;
 

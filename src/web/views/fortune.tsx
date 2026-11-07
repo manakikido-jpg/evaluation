@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SCRATCH_PERIODS, type ScratchFinances, type LotteryFinances } from '../../services/casino/fortuneStats.js';
-import { SCRATCH_PRIZES, projectedPrize, roundTiers, tierPrizes, type fortuneState } from '../../services/casino/fortune.js';
+import { SCRATCH_PRIZES, projectedPrize, roundTiers, tierPrizes, tiersTotalPct, type fortuneState } from '../../services/casino/fortune.js';
 import { roundWinners } from '../../services/casino/lotteryNotice.js';
 import type { FortuneGamesConfig } from '../../config.js';
 import type { Child } from 'hono/jsx';
@@ -53,9 +53,9 @@ export function FortunePage({ me, cfg, state, selected, error }: { me: FortuneMe
           <p>1枚 {round.price} {me.coin.name} · 1人 {round.perMember} 枚まで。あなたは {mine.length} 枚。</p>
           <p>現在 {round.sold} 枚 · 現在の賞金の合計 <strong>{projectedPrize(round).toLocaleString('ja-JP')} {me.coin.name}</strong></p>
           <table class="fortune-tiers"><thead><tr><th>等</th><th>本数</th><th>1本あたり（今の売上なら）</th></tr></thead><tbody>
-            {tierPrizes(round).map((t) => <tr><td>{t.name}</td><td>{t.count} 本</td><td><strong>{t.each.toLocaleString('ja-JP')} {me.coin.name}</strong>（賞金の{t.pct}％）</td></tr>)}
+            {tierPrizes(round).map((t) => <tr><td>{t.name}</td><td>{t.count} 本</td><td><strong>{t.each.toLocaleString('ja-JP')} {me.coin.name}</strong>（売上の{t.pct}％＋上乗せの一部）</td></tr>)}
           </tbody></table>
-          <p>賞金は売上の{round.returnPct}％＋運営の{round.bonus} {me.coin.name}。売れるほど増えます。等の順に、まだ当たっていない券から引き、自動入金。売れた枚数より当たりが多いときは、出ない等があります。販売0枚なら賞金は出しません。</p>
+          <p>賞金は売上の{tiersTotalPct(roundTiers(round))}％＋運営の{round.bonus} {me.coin.name}（上乗せは、等の割合どおりに分けます）。売れるほど増えます。等の順に、まだ当たっていない券から引き、自動入金。売れた枚数より当たりが多いときは、出ない等があります。販売0枚なら賞金は出しません。</p>
           <details><summary>抽選のしくみ・販売上限</summary><p>1枚あたりの当選確率は最終販売枚数分の1です。売上からの賞金は端数切り捨て。販売0枚なら抽選・上乗せ・繰越はありません。全体の販売上限は100,000枚です。抽選は通常1分以内に処理し、BOT停止中の分は再起動後に精算します。</p></details>
           <form method="post" action="/lottery/tickets" data-fortune-buy><Hidden me={me} /><input type="hidden" name="nonce" value={randomUUID()} /><input type="hidden" name="roundId" value={round.id} />
             <button class="c-btn" disabled={!cfg.enabled || mine.length >= round.perMember || round.sold >= 100000}>1枚買う（{round.price} {me.coin.name}）</button>
@@ -124,24 +124,30 @@ export function FortuneAdminPage({ session, tab, cfg, round, rounds, finances, l
           {round && <div class="health-item"><span class="health-label">販売中の回の売上</span><div class="health-value">{(round.price * round.sold).toLocaleString('ja-JP')} {coinName}</div><span class="note">{round.sold} 枚（抽選前なので上の合計には入れない）</span></div>}
         </div>
       </section>
-      {round && <section class="card"><h2>販売中の回の固定条件</h2><p>{date(round.drawAt)}（日本時間） / 1枚{round.price} / 1人{round.perMember}枚 / 売上{round.returnPct}％＋{round.bonus} / 販売{round.sold}枚</p></section>}
+      {round && <section class="card"><h2>販売中の回の固定条件</h2><p>{date(round.drawAt)}（日本時間） / 1枚{round.price} / 1人{round.perMember}枚 / 売上{tiersTotalPct(roundTiers(round))}％＋{round.bonus} / 販売{round.sold}枚</p></section>}
       <section class="card"><h2>これまでの抽選（新しい順）</h2>
         {rounds.length ? <div class="table-wrap"><table class="compact"><thead><tr><th>抽選日時（日本時間）</th><th class="num">販売</th><th class="num">売上</th><th class="num">当選番号</th><th class="num">賞金</th><th class="num">運営の収支</th></tr></thead><tbody>
           {rounds.map(r => { const sales = r.price * r.sold; return <tr><td>{date(r.drawAt)}</td><td class="num">{r.sold} 枚</td><td class="num">{sales.toLocaleString('ja-JP')} {coinName}</td><td class="num">{roundWinners(r).length ? roundWinners(r).map(w => `${w.tier} ${w.number}番`).join('・') : '―'}</td><td class="num">{r.payout.toLocaleString('ja-JP')} {coinName}</td><td class="num">{(sales - r.payout).toLocaleString('ja-JP')} {coinName}</td></tr>; })}
         </tbody></table></div> : <p class="note">まだ抽選はありません。</p>}
       </section>
       <section class="card"><h2>🏆 等と賞金の分け方</h2>
-        <p class="note">賞金の合計（売上の{cfg.lotteryReturnPct}％＋上乗せ {cfg.lotteryBonus.toLocaleString('ja-JP')} {coinName}）を、等ごとの割合で分け、本数で割ります。割合の合計は100％まで（残りは運営に残ります）。いつでも変えられ、<strong>次の回から</strong>効きます（販売中の回は、始めたときの等のまま）。名前を空にした行は使いません。</p>
+        <p class="note">割合は<strong>1本あたり、売上の何％か</strong>です（2等のように本数が複数のときは、1本ずつこの割合）。割合 × 本数の合計が、売上から配る割合になります（100％まで）。上乗せ {cfg.lotteryBonus.toLocaleString('ja-JP')} {coinName}は、割合どおりに分けて足します。保存すると、<strong>まだ抽選していない回（販売中の回）にも、すぐ効きます</strong>。名前を空にした行は使いません。</p>
+        {(() => {
+          const total = tiersTotalPct(cfg.lotteryTiers), sold = round?.sold || 100;
+          const sample = tierPrizes({ price: cfg.lotteryPrice, sold, returnPct: total, bonus: cfg.lotteryBonus, tiers: cfg.lotteryTiers });
+          return <p><strong>今の設定の合計：売上の {total}％</strong>（{sold.toLocaleString('ja-JP')} 枚売れたら、{sample.map(t => `${t.name} 1本 ${t.each.toLocaleString('ja-JP')} ${coinName}`).join('・')}、合計 {sample.reduce((n, t) => n + t.each * t.count, 0).toLocaleString('ja-JP')} {coinName}）</p>;
+        })()}
         {round && <p>販売中の回の等：{roundTiers(round).map(t => `${t.name} ${t.count}本・${t.pct}％`).join(' ／ ')}（今の売上なら {tierPrizes(round).map(t => `${t.name} ${t.each.toLocaleString('ja-JP')} ${coinName}`).join('・')}）</p>}
         <form method="post" action="/economy/fortune/tiers"><input type="hidden" name="_csrf" value={session.csrfToken} />
           <fieldset class="fields" disabled={session.level !== 'guji'}><legend>宮司だけ変更できます</legend>
-          <table class="compact"><thead><tr><th>名前</th><th>本数</th><th>賞金の割合（％）</th></tr></thead><tbody>
+          <table class="compact"><thead><tr><th>名前</th><th>本数</th><th>1本あたり、売上の割合（％）</th></tr></thead><tbody>
             {[0, 1, 2, 3, 4].map(k => { const t = cfg.lotteryTiers[k]; return <tr><td><input type="text" name={`tierName${k}`} maxlength={20} value={t?.name ?? ''} placeholder={`${k + 1}等`} /></td><td><input type="number" name={`tierCount${k}`} min={1} max={100} value={String(t?.count ?? 1)} /></td><td><input type="number" name={`tierPct${k}`} min={1} max={100} value={String(t?.pct ?? 10)} /></td></tr>; })}
           </tbody></table>
           <button type="submit">等を保存する</button></fieldset>
         </form>
       </section>
-      {form([['lotteryPrice','宝くじ1枚の銭',10,10000],['lotteryLimit','宝くじ1人1回の上限',1,100],['lotteryReturnPct','宝くじ売上から賞金に戻す割合（％）',10,100],['lotteryBonus','宝くじに運営が上乗せする銭',0,1000000]] as const)}
+      {form([['lotteryPrice','宝くじ1枚の銭',10,10000],['lotteryLimit','宝くじ1人1回の上限',1,100],['lotteryBonus','宝くじに運営が上乗せする銭',0,1000000]] as const)}
+      <p class="note">売上から賞金に配る割合は、上の「等と賞金の分け方」の割合から自動で決まります（今は売上の {tiersTotalPct(cfg.lotteryTiers)}％）。</p>
     </>}
   </Layout>;
 }
