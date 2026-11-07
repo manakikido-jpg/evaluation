@@ -22,18 +22,19 @@ async function stamps(id: string, n: number, weight = 1) {
 const voice = (id: string, minutes: number, confirmed: number, recorded = confirmed, channelId = ENG, date = '2026-11-06') =>
   db.insert(voiceUsage).values({ memberId: id, date, channelId, minutes, sanpaishaMinutes: confirmed, rankRecordedMinutes: recorded, evaluationRecordedMinutes: date >= '2026-11-06' ? confirmed : 0, evaluationEligibleMinutes: date >= '2026-11-06' ? confirmed : 0 });
 
-it('40個と1200分を別々に判定し、過去取込は加算し、重み・特別ご縁・取消し・対象外時間は足さない', async () => {
-  await stamps(A, 40, 10); await stamps(B, 39, 100); await stamps(C, 40); await stamps(D, 40);
+it('ご縁40と1200分を別々に判定し、重み・特別ご縁は足し、過去取込は加算し、取消し・対象外時間は足さない', async () => {
+  // A: 4 人 × 重み 10 = ご縁 40 / B: 39 人 × 1 = ご縁 39 / C: 30 人 + 特別ご縁 10 = ご縁 40 / D: 取消し済み
+  await stamps(A, 4, 10); await stamps(B, 39, 1); await stamps(C, 30); await stamps(D, 40);
   await db.update(shuin).set({ revokedAt: now }).where(eq(shuin.receiverId, D));
-  await db.insert(specialGoen).values({ memberId: B, amount: 1000, reason: 'test', grantedBy: A, nonce: 'evaluation-test' });
+  await db.insert(specialGoen).values({ memberId: C, amount: 10, reason: 'test', grantedBy: A, nonce: 'evaluation-test' });
   await voice(A, 1440, 1200); await voice(B, 1200, 1200); await voice(C, 10000, 1199, 2000); await voice(D, 1200, 1200);
   await voice(C, 8000, 0, 0, OTHER); await voice(C, 3000, 3000, 3000, ENG, '2026-11-08');
   const data = await ujikoEvaluation(db, cfg, filter, now), by = new Map(data.rows.map(r => [r.memberId, r]));
   expect(data.achieved).toBe(2);
-  expect(by.get(A)).toMatchObject({ shuinCount: 40, minutes: 1440, confirmedMinutes: 1200, pastMinutes: 240, achieved: true, remainingMinutes: 0 });
-  expect(by.get(B)).toMatchObject({ shuinCount: 39, achieved: false, remainingShuin: 1 });
-  expect(by.get(C)).toMatchObject({ shuinCount: 40, minutes: 9199, confirmedMinutes: 1199, pastMinutes: 8000, remainingMinutes: 0, achieved: true });
-  expect(by.get(D)).toMatchObject({ shuinCount: 0, achieved: false });
+  expect(by.get(A)).toMatchObject({ goen: 40, shuinCount: 4, minutes: 1440, confirmedMinutes: 1200, pastMinutes: 240, achieved: true, remainingMinutes: 0, remainingGoen: 0 });
+  expect(by.get(B)).toMatchObject({ goen: 39, shuinCount: 39, achieved: false, remainingGoen: 1 });
+  expect(by.get(C)).toMatchObject({ goen: 40, shuinCount: 30, minutes: 9199, confirmedMinutes: 1199, pastMinutes: 8000, remainingMinutes: 0, achieved: true });
+  expect(by.get(D)).toMatchObject({ goen: 0, shuinCount: 0, achieved: false });
 });
 
 it('達成者が先、次に個数と時間、同点は同順位。検索しても元の順位を保つ', async () => {

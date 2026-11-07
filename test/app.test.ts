@@ -127,23 +127,19 @@ async function seedEligibility(count = 38, minutes = 1200) {
 }
 
 describe('ShuinApp', () => {
-  it('ご縁が多くても御朱印39個の間は氏子以上へ飛び級せず、40個で条件を満たす', async () => {
+  it('ご縁39の間は氏子以上へ上がらず、ご縁40になって20時間を満たすと上がる（特別ご縁もご縁に数える）', async () => {
     const receiver = add(R, ROLE.sanpaisha);
     await seedEligibility(39);
-    const { grantSpecialGoen } = await import('../src/services/specialGoen.js');
-    await grantSpecialGoen(db, { memberId: R, amount: 500, reason: '試験の特別ご縁', by: G, nonce: '00000000-0000-0000-0000-000000000091' });
-    await app.checkSpecialGoen(guild as never);
-    const viewer = add(G, ROLE.ujiko);
-    await app.onInteraction(interaction('slash', viewer, { commandName: 'goshuin', options: { getUser: () => receiver.user, getBoolean: () => null } }).i as never);
-    expect(receiver.roles.add).not.toHaveBeenCalled();
-    expect(sent.filter(s => s.channelId === cfg.channels.keiji)).toHaveLength(0);
-    await giveShuin(db, { giverId: G2, receiverId: R, weight: 1, giverRank: 'sanpaisha' });
     await app.checkEvaluationPromotions(guild as never);
+    expect(receiver.roles.add).not.toHaveBeenCalled();
+    const { grantSpecialGoen } = await import('../src/services/specialGoen.js');
+    await grantSpecialGoen(db, { memberId: R, amount: 1, reason: '試験の特別ご縁', by: G, nonce: '00000000-0000-0000-0000-000000000091' });
+    await app.checkSpecialGoen(guild as never);
     expect(receiver.roles.add).toHaveBeenCalledTimes(1);
-    expect(receiver.roles.cache.has(ROLE.sodai)).toBe(true);
+    expect(receiver.roles.add).toHaveBeenCalledWith(ROLE.ujiko, expect.any(String));
   });
 
-  it('40個でも19時間59分では上がらず、毎分の非ミュート観測で20時間に届けば1回昇格する', async () => {
+  it('ご縁40でも19時間59分では上がらず、毎分の非ミュート観測で20時間に届けば1回昇格する', async () => {
     const receiver = add(R, ROLE.sanpaisha);
     await seedEligibility(40, 1199);
     const now = new Date('2026-11-06T03:00:00Z');
@@ -175,7 +171,7 @@ describe('ShuinApp', () => {
     expect(receiver.roles.add).toHaveBeenCalledTimes(1);
   });
 
-  it('取消済みの御朱印は40個条件に含めない', async () => {
+  it('取消済みの御朱印はご縁40に含めない', async () => {
     const receiver = add(R, ROLE.sanpaisha);
     await seedEligibility(40);
     const { revokeShuin } = await import('../src/services/shuin.js');
@@ -265,8 +261,8 @@ describe('ShuinApp', () => {
     expect(sent).toEqual([expect.objectContaining({ channelId: cfg.channels.log, content: expect.stringContaining('朱印') })]);
   });
 
-  it('右クリックの朱印も40個と20時間に達してから昇格し、#慶事で発表する', async () => {
-    await seedEligibility();
+  it('右クリックの朱印も、ご縁40と20時間に達してから昇格し、#慶事で発表する', async () => {
+    await seedEligibility(20);
     const receiver = add(R, ROLE.sanpaisha);
     const g1 = add(G, ROLE.guji);
     const g2 = add(G2, ROLE.guji);
@@ -281,7 +277,7 @@ describe('ShuinApp', () => {
     const keiji = sent.filter((s) => s.channelId === cfg.channels.keiji);
     expect(keiji).toHaveLength(1);
     expect(keiji[0]?.content).toBe(cfg.ranks.map((r) => `<@&${r.roleId}>`).join(' ') + ' 新しい仲間をお迎えください。');
-    expect(keiji[0]?.embeds).toEqual([expect.objectContaining({ description: expect.stringContaining('**🍃 氏子** になられました。'), fields: expect.arrayContaining([{ name: 'ご縁', value: '58', inline: true }]) })]);
+    expect(keiji[0]?.embeds).toEqual([expect.objectContaining({ description: expect.stringContaining('**🍃 氏子** になられました。'), fields: expect.arrayContaining([{ name: 'ご縁', value: '40', inline: true }]) })]);
     expect(keiji[0]?.allowedMentions).toEqual({ parse: [], users: [], roles: cfg.ranks.map((r) => r.roleId) });
   });
 

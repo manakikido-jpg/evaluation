@@ -1,8 +1,8 @@
-import { EVALUATION_START_DATE, UJIKO_SHUIN, UJIKO_MINUTES } from '../domain/ujikoEvaluation.js';
+import { EVALUATION_START_DATE, UJIKO_GOEN, UJIKO_MINUTES } from '../domain/ujikoEvaluation.js';
 import { and, count, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
-import { evaluationTimeDeductions, members, shuin, voiceChannels, voiceUsage } from '../db/schema.js';
+import { evaluationTimeDeductions, members, shuin, specialGoen, voiceChannels, voiceUsage } from '../db/schema.js';
 import { highestRank } from '../domain/ranks.js';
 import { jstDate } from './activity.js';
 import { staffAlts } from './staffAlts.js';
@@ -13,8 +13,11 @@ export class EvaluationSelectionError extends Error {}
 export type EvaluationChannel = { id: string; ids: string[]; name: string; categoryName: string; renamed: boolean };
 export type EvaluationRow = {
   rank: number; memberId: string; name: string; username: string;
+  /** ご縁（朱印の重みの合計＋特別ご縁）。氏子の条件はこちら */
+  goen: number; remainingGoen: number;
+  /** 頂いた朱印の個数（人数） */
   shuinCount: number; minutes: number; confirmedMinutes: number; pastMinutes: number; deductedMinutes: number; excludedMinutes: number;
-  remainingShuin: number; remainingMinutes: number; achieved: boolean;
+  remainingMinutes: number; achieved: boolean;
 };
 export type EvaluationFilter = { q: string; status: 'all' | 'met' | 'unmet'; channelIds?: string[] };
 export type EvaluationData = {
@@ -68,9 +71,11 @@ export async function ujikoEvaluation(db: Db, cfg: GuildConfig, filter: Evaluati
   const hidden = new Set(alts.map(a => a.id));
   const candidates = people.filter(p => !hidden.has(p.id) && highestRank(cfg.ranks, p.roleIds)?.key === 'sanpaisha');
   const ids = candidates.map(p => p.id);
-  const [stamps, usage] = await Promise.all([
-    ids.length ? db.select({ id: shuin.receiverId, n: count() }).from(shuin)
+  const [stamps, specials, usage] = await Promise.all([
+    ids.length ? db.select({ id: shuin.receiverId, n: count(), weight: sql<number>`coalesce(sum(${shuin.weight}), 0)::int` }).from(shuin)
       .where(and(inArray(shuin.receiverId, ids), isNull(shuin.revokedAt))).groupBy(shuin.receiverId) : [],
+    ids.length ? db.select({ id: specialGoen.memberId, total: sql<number>`coalesce(sum(${specialGoen.amount}), 0)::int` }).from(specialGoen)
+      .where(and(inArray(specialGoen.memberId, ids), isNull(specialGoen.revokedAt))).groupBy(specialGoen.memberId) : [],
     ids.length && selectedChannelIds.length ? db.select({
       id: voiceUsage.memberId,
       confirmed: sql<number>`sum(case when ${voiceUsage.date} >= ${EVALUATION_START_DATE} then ${voiceUsage.evaluationEligibleMinutes} else 0 end)::int`,
@@ -81,17 +86,19 @@ export async function ujikoEvaluation(db: Db, cfg: GuildConfig, filter: Evaluati
       .groupBy(voiceUsage.memberId) : [],
   ]);
   const stampMap = new Map(stamps.map(s => [s.id, s.n]));
+  const goenMap = new Map(stamps.map(s => [s.id, s.weight]));
+  const specialMap = new Map(specials.map(s => [s.id, s.total]));
   const usageMap = new Map(usage.map(u => [u.id, u]));
   const all: EvaluationRow[] = candidates.map(p => {
-    const shuinCount = stampMap.get(p.id) ?? 0, u = usageMap.get(p.id), confirmedMinutes = u?.confirmed ?? 0, deductedMinutes = u?.deducted ?? 0, excludedMinutes = u?.excluded ?? 0, pastMinutes = (u?.past ?? 0) - deductedMinutes;
+    const shuinCount = stampMap.get(p.id) ?? 0, goen = (goenMap.get(p.id) ?? 0) + (specialMap.get(p.id) ?? 0), u = usageMap.get(p.id), confirmedMinutes = u?.confirmed ?? 0, deductedMinutes = u?.deducted ?? 0, excludedMinutes = u?.excluded ?? 0, pastMinutes = (u?.past ?? 0) - deductedMinutes;
     const minutes = confirmedMinutes + pastMinutes;
-    return { rank: 0, memberId: p.id, name: p.name, username: p.username, shuinCount, minutes,
-      confirmedMinutes, pastMinutes, deductedMinutes, excludedMinutes, remainingShuin: Math.max(0, UJIKO_SHUIN - shuinCount),
-      remainingMinutes: Math.max(0, UJIKO_MINUTES - minutes), achieved: shuinCount >= UJIKO_SHUIN && minutes >= UJIKO_MINUTES };
-  }).sort((a, b) => Number(b.achieved) - Number(a.achieved) || b.shuinCount - a.shuinCount || b.minutes - a.minutes || a.memberId.localeCompare(b.memberId));
+    return { rank: 0, memberId: p.id, name: p.name, username: p.username, goen, remainingGoen: Math.max(0, UJIKO_GOEN - goen), shuinCount, minutes,
+      confirmedMinutes, pastMinutes, deductedMinutes, excludedMinutes,
+      remainingMinutes: Math.max(0, UJIKO_MINUTES - minutes), achieved: goen >= UJIKO_GOEN && minutes >= UJIKO_MINUTES };
+  }).sort((a, b) => Number(b.achieved) - Number(a.achieved) || b.goen - a.goen || b.minutes - a.minutes || a.memberId.localeCompare(b.memberId));
   all.forEach((row, i) => {
     const prev = all[i - 1];
-    row.rank = prev && prev.achieved === row.achieved && prev.shuinCount === row.shuinCount && prev.minutes === row.minutes ? prev.rank : i + 1;
+    row.rank = prev && prev.achieved === row.achieved && prev.goen === row.goen && prev.minutes === row.minutes ? prev.rank : i + 1;
   });
   const q = filter.q.normalize('NFKC').toLocaleLowerCase('ja');
   return { channels, selectedIds, total: all.length, achieved: all.filter(r => r.achieved).length,
@@ -107,7 +114,7 @@ const csvCell = (value: string | number): string => {
 };
 export function evaluationCsv(data: EvaluationData): string {
   const target = data.channels.filter(c => data.selectedIds.includes(c.id)).map(c => `${c.categoryName} / ${c.name}`).join('・');
-  const rows: (string | number)[][] = [['順位', '名前', 'Discord ID', '御朱印の個数', '縁側の合計時間（分・過去分を含む）', '不足する御朱印', '不足する縁側時間（分）', '達成状況', 'うち過去取込（分・控除後・役職またはミュート未確認）', 'うち参拝者・非ミュート確認済み（分）', '今後のミュート等除外（分）', '過去の控除（分）', '参拝者計測の開始（日本時間）', '非ミュート計測の範囲', '対象の縁側'],
-    ...data.rows.map(r => [r.rank, r.name, "'" + r.memberId, r.shuinCount, r.minutes, r.remainingShuin, r.remainingMinutes, r.achieved ? '両条件達成' : '未達成', r.pastMinutes, r.confirmedMinutes, r.excludedMinutes, r.deductedMinutes, EVALUATION_START_DATE + ' 00:00', 'ミュート除外に対応した反映後の確認分', target])];
+  const rows: (string | number)[][] = [['順位', '名前', 'Discord ID', 'ご縁', '頂いた朱印の個数（人数）', '縁側の合計時間（分・過去分を含む）', '不足するご縁', '不足する縁側時間（分）', '達成状況', 'うち過去取込（分・控除後・役職またはミュート未確認）', 'うち参拝者・非ミュート確認済み（分）', '今後のミュート等除外（分）', '過去の控除（分）', '参拝者計測の開始（日本時間）', '非ミュート計測の範囲', '対象の縁側'],
+    ...data.rows.map(r => [r.rank, r.name, "'" + r.memberId, r.goen, r.shuinCount, r.minutes, r.remainingGoen, r.remainingMinutes, r.achieved ? '両条件達成' : '未達成', r.pastMinutes, r.confirmedMinutes, r.excludedMinutes, r.deductedMinutes, EVALUATION_START_DATE + ' 00:00', 'ミュート除外に対応した反映後の確認分', target])];
   return '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }

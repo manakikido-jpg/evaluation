@@ -1,4 +1,5 @@
-export const UJIKO_SHUIN = 40;
+/** 氏子の条件のご縁（朱印の重みの合計＋特別ご縁） */
+export const UJIKO_GOEN = 40;
 export const UJIKO_MINUTES = 20 * 60;
 /** 2026年11月6日（金）0:00 日本時間。御朱印の個数は従来の累計。 */
 export const EVALUATION_START_DATE = '2026-11-06';

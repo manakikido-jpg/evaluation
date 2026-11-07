@@ -17,7 +17,7 @@ beforeEach(async () => {
   await db.insert(voiceUsage).values([{ memberId: A, date: '2026-11-06', channelId: ENG, minutes: 1300, rankRecordedMinutes: 1200, sanpaishaMinutes: 1200, evaluationRecordedMinutes: 1200, evaluationEligibleMinutes: 1200 },
     { memberId: B, date: '2026-11-06', channelId: ENG, minutes: 10000, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199, evaluationRecordedMinutes: 1199, evaluationEligibleMinutes: 1199 },
     { memberId: C, date: '2026-11-06', channelId: ENG, minutes: 1199, rankRecordedMinutes: 1199, sanpaishaMinutes: 1199, evaluationRecordedMinutes: 1199, evaluationEligibleMinutes: 1199 }]);
-  await db.insert(shuin).values([A, B, C].flatMap((receiverId, i) => Array.from({ length: 40 + (i === 1 ? 1 : 0) }, (_, j) => ({ receiverId, giverId: String(840000000000000000n + BigInt(j)), weight: 10, giverRank: 'guji' }))));
+  await db.insert(shuin).values([A, B, C].flatMap((receiverId, i) => Array.from({ length: 40 + (i === 1 ? 1 : 0) }, (_, j) => ({ receiverId, giverId: String(840000000000000000n + BigInt(j)), weight: 1, giverRank: 'guji' }))));
   app = createWebApp({ db, cfg: () => cfg, api: { memberRoles: async () => [ROLE.guji] } as never,
     discord: { guildChannels: async () => [] } as never, baseUrl: 'https://example.test', now: () => now });
   token = await createSession(db, user, { level: 'guji', pages: null }, now);
@@ -41,7 +41,7 @@ it('過去分も20時間へ加算し、内訳を表示する。読むだけで�
   const response = await app.request('/evaluation', { headers: headers() }), html = await response.text();
   expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toContain('no-store');
   expect(html).toContain('2026年11月6日（金）0:00（日本時間）');
-  expect(html).toContain('href="/evaluation"'); expect(html).toContain('40個 / 40個'); expect(html).toContain('41個 / 40個');
+  expect(html).toContain('href="/evaluation"'); expect(html).toContain('40 / 40'); expect(html).toContain('41 / 40'); expect(html).toContain('朱印 41 個');
   expect(html).toContain('19時間59分 / 20時間'); expect(html).toContain('あと1分'); expect(html).toContain('過去取込'); expect(html).toContain('過去分の役職またはミュートは未確認');
   expect(html).not.toMatch(/<details class="evaluation-targets"[^>]*\bopen/);
   expect(html.indexOf('href="/members/' + B)).toBeLessThan(html.indexOf('href="/members/' + A));
@@ -86,7 +86,7 @@ it('過去控除は宮司・評価権限・CSRFを要求し、保存後に一覧
  expect((await post({_csrf:''})).status).toBe(403);
  const limitedCsrf=(await findSession(db,limited,now))!.csrfToken;expect((await post({_csrf:limitedCsrf},limited)).status).toBe(403);expect(await db.select().from(evaluationTimeDeductions)).toHaveLength(0);
  const original=await db.select().from(voiceUsage);expect((await post()).status).toBe(303);expect((await post()).status).toBe(409);
- const csv=await(await app.request('/evaluation/export.csv?q=alpha',{headers:headers()})).text();expect(csv).toContain('"1200"');expect(csv).toContain('過去の控除（分）');const values=csv.split('\r\n')[1]!.split(',');expect(values[4]).toBe('"1200"');expect(values[8]).toBe('"0"');expect(values[11]).toBe('"100"');
+ const csv=await(await app.request('/evaluation/export.csv?q=alpha',{headers:headers()})).text();expect(csv).toContain('"1200"');expect(csv).toContain('過去の控除（分）');const values=csv.split('\r\n')[1]!.split(',');expect(values[3]).toBe('"40"');expect(values[5]).toBe('"1200"');expect(values[9]).toBe('"0"');expect(values[12]).toBe('"100"');
  expect(await db.select().from(voiceUsage)).toEqual(original);expect(await db.select().from(evaluationTimeDeductions)).toHaveLength(1);expect((await db.select().from(auditLogs)).filter(r=>r.action==='evaluation.time_deduction')).toHaveLength(1);
  const html=await(await app.request('/evaluation',{headers:headers(limited)})).text();expect(html).not.toContain('/evaluation/corrections?member=');
 });

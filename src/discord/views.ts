@@ -123,7 +123,7 @@ export function goshuinchoReply(
   const auto = currentAutoRank(ranks, owner.roleIds);
   const next = auto ? nextAutoRank(ranks, data.goen, auto) : undefined;
   const nextText = auto?.key === 'sanpaisha'
-    ? '（氏子の条件：御朱印40個＋縁側20時間。ご縁の重み・特別ご縁は個数に含めません）'
+    ? '（氏子の条件：ご縁40＋縁側20時間）'
     : next ? `（${next.rank.name}まで あと ${next.remaining}）` : '';
 
   const received = data.receivedCount

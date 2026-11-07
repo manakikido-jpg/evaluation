@@ -573,11 +573,11 @@ export function MemberPage(props: {
             </div>
             <div>
               <dt>頂いた朱印</dt>
-              <dd>{card.receivedCount} 人</dd>
+              <dd>{card.receivedCount} 個（{card.receivedCount} 人）</dd>
             </div>
             <div>
               <dt>押した朱印</dt>
-              <dd>{card.givenCount} 人</dd>
+              <dd>{card.givenCount} 個（{card.givenCount} 人）</dd>
             </div>
             <div>
               <dt>参加日</dt>

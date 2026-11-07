@@ -42,7 +42,7 @@ describe('✨ 特別ご縁', () => {
     expect(specialGoenLog('grant', A, G, 5, 'お礼', 7)).toBe(`✨ <@${G}> が <@${A}> に特別ご縁 +5（お礼）→ ご縁 7`);
   });
 
-  it('特別ご縁だけでは氏子へ上げず、40個・20時間を満たした後の再確認で1回昇格する', async () => {
+  it('特別ご縁だけでは（ご縁40に届かず）氏子へ上げず、ご縁40と20時間を満たした後の再確認で1回昇格する', async () => {
     await recordJoin(db, { id: A, username: 'a', displayName: 'A', avatarUrl: null, roleIds: [ROLE.sanpaisha], isBot: false, joinedAt: null });
     await grantSpecialGoen(db, { memberId: A, amount: 20, reason: 'お礼', by: G, nonce: nonce(3) });
     const roles = new Map<string, object>([[ROLE.sanpaisha, {}]]);

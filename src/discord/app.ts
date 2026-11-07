@@ -588,7 +588,7 @@ export class ShuinApp {
     const promotion = decidePromotion(this.cfg.ranks, fresh.roles.cache.keys(), goen);
     if (!promotion) return;
     if (promotion.from.key === 'sanpaisha') {
-      // ご縁の重み・特別ご縁だけで氏子以上へ上がらない。評価と同じ既定の全縁側・控除後の値で確かめる。
+      // ご縁40と縁側20時間の両方を、評価と同じ既定の全縁側・控除後の値で確かめる。
       const data = await ujikoEvaluation(this.db, this.cfg, { q: fresh.id, status: 'met' }, now);
       if (!data.rows.some(row => row.memberId === fresh.id)) return;
     }
