@@ -4,7 +4,7 @@
 - 開始：最新本番bb05af6d＋合流記録69c83801からcodex/event-lottery-presentation。現行は管理画面内の小さな名前切替演出。共有向けに独立した全画面表示と読み取りだけの状態取得を追加する。
 - 実装：同じ宮司権限のGET ?screen=1で独立した全画面表示、?screen=dataで最小の表示データを返す。抽選から3秒までは当選者/賞金を返さず、操作フォーム・CSRF・参加者一覧・未発表の景品一覧・受け渡しメモを含めない。約1秒ごとに読取専用で追従。未表示の結果を順番に取得し、当選者を約2.5秒以上表示してから次へ進む。再読込は最新の保存済み結果から再開。抽選/徴収/賞金の処理は無変更。
 - 途中検証：関連9件成功。最初の型検査はテストのJSON型/nullableを明示せず失敗し、検査したレスポンス型をテストへ明記して最終型/buildは成功。実装の権限/結果判定を弱めていない。Chromiumで全画面、待機→抽選→当選、再読込、通信失敗→復旧、連続2当選の順次表示、5幅(390/844横/1280/1440/1920)、長い名前/HTML文字列、省演出、横はみ出しなし、JS例外0を確認。中止/完了の表示も追加確認。架空データのみで実イベント/実Discord/実徴収は操作していない。
-- 全件実行中。ログ/tmp/event-screen-{types-final,build-final,web-test-final,browser-final,terminal,all}.log。サンプルdocs/previews/event-lottery-screen-{waiting-1440,drawing-1440,winner-1440,winner-390}.webp。次は全テスト→fetch→PR。今回の追加変更は未合流/本番未反映。
+- 95fd3ee8の全262ファイル2,885件成功（606.62秒、既定制限、2worker）。push前fetchで本番2bc83cba（案内人の階級ロール対応）を検出したため、旧bb05af6d基点の結果と区別し、最新本番を取り込んで最終検証する。ログ/tmp/event-screen-{types-final,build-final,web-test-final,browser-final,terminal,all}.log。サンプルdocs/previews/event-lottery-screen-{waiting-1440,drawing-1440,winner-1440,winner-390}.webp。次は全テスト→fetch→PR。今回の追加変更は未合流/本番未反映。
 
 ## 2026年11月8日：軌跡の液晶バランスPR163の合流完了
 - 本人の「合流して」でPR163の検証後の本番合流を承認。今回分の合流保留を解除。一般公開/銭接続は保留を維持する。
