@@ -8,6 +8,9 @@
 - 関連3ファイル13件成功（6.79秒）。初回のテスト用setStaffAlt引数順と型エラーを修正し成功後、再送で3秒待ちを短縮しないよう失敗通知だけ再送へ限定。途中の全件はSIGINTで中断してログ/tmp/event-all-before-notice-fix.logへ保持し、最終版の型/build/全件をやり直し中。Discord参加イベントの通信エラーもdispatchのcatchで回収する。
 - Chromium：390/1440px、横はみ出しなし、抽選→表示→再読込で同じ当選→受渡済み、JS例外0。見本docs/previews/event-lottery-{admin,draw}-390.webp（架空DB/参加者/銭）。ログ/tmp/event-browser.log。次：最終型/build/全件→fetch/PR保存→CI確認。本番合流はしない。
 
+- 全件結果：バックエンド固定版c69a43f4でNode22型/build、単一全260ファイル2,860件成功（448.54秒、2worker、制限変更なし）。全件中にフロントの画面内更新時の再初期化と入力エラー表示を補正。初回は演出終了後の結果だけを検査していたため、最終Chromiumでは開始直後の当選者非表示/名前切替→3秒後表示、エラー時の入力保持と再送可能も追加して成功。最終フロントで関連13件（6.73秒）と型/buildも成功、配信用JSを最終内容へコピー。金融/抽選/DB処理は全件開始後に変更なし。
+- 最終見本docs/previews/event-lottery-{admin,draw}-390.webpを更新。ログ/tmp/event-{all,types-final,build-final,related-verified,browser-final}.log。全件の前段階2回は通知再送/dispatch例外回収の修正で中断し、ログをbefore-notice-fix/before-dispatch-checkへ保持。未成功を成功扱いにしない。次はfetch・push・PR作成と最終headのCI確認。
+
 ## 2026年11月7日：三神なじませ版をWebへ組込み本番へ反映
 - 本人の「これで本番に反映させて」で、frame-three-people-harmonized.pngのWeb組込み・PR159更新・検証後の合流を承認。以前の合流保留は今回分に限り解除。一般公開/銭接続は保留のまま。
 - 開始：codex/kiseki-reel-first、57ff4d81。前依頼のメモと生成素材2点が未commitで存在し保持。PR159はDraft/未合流で既存headのCIは実行中。本番76181e4cをfetch。
