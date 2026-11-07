@@ -272,3 +272,15 @@
 .kt-root .gt-display[data-win-stage=award] .gt-lcd-award{background:radial-gradient(ellipse,#10121b50,transparent 72%)}
 .kt-root[data-motion=low] .kt-stage-curtain,.kt-root[data-motion=instant] .kt-stage-curtain,.kt-root[data-quality=light] .kt-stage-curtain,.kt-root[data-hidden=true] .kt-stage-curtain{display:none}
 @media(prefers-reduced-motion:reduce){.kt-stage-curtain{display:none!important}}
+
+/* 風景の右下に組み込む5マスの小役履歴。光は履歴枠の装飾で、期待度を示さない。 */
+.kt-root .kt-role-trail{position:relative;isolation:isolate;flex:0 0 auto;align-self:flex-end;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;width:58%;margin:7px -3px 3px 0;padding:7px 6px 8px;list-style:none;border:2px solid #d7a744;border-top:4px ridge #ffda69;border-bottom:5px ridge #c58c28;border-radius:1px;background:linear-gradient(180deg,#182c1a,#203222 22%,#766023 25%,#171a13 30% 82%,#c39738 85%,#493211);box-shadow:inset 0 1px 0 #fff0a7,0 2px 3px #090e0c99;pointer-events:none}
+.kt-root .kt-role-trail:before{content:'';position:absolute;inset:-9px -2px auto;height:8px;z-index:-1;border-top:2px solid #ffda6b;border-bottom:2px solid #8e5716;background:repeating-linear-gradient(135deg,#6c4416 0 7px,#d1a447 8px 9px,#314827 10px 15px);box-shadow:0 -1px 0 #3d270c;transform:skewY(-2deg);transform-origin:right}
+.kt-root .kt-role-trail:after{content:'';position:absolute;inset:auto -5px -9px;height:5px;border-top:2px solid #fbe289;background:repeating-linear-gradient(90deg,#714814 0 9%,#f4c852 10% 12%,#9e6b1c 13% 20%);box-shadow:0 2px 0 #50310f;clip-path:polygon(0 0,100% 0,96% 100%,4% 100%)}
+.kt-root .kt-role-trail>li{position:relative;display:grid;place-items:center;min-width:0;aspect-ratio:1.5;overflow:hidden;border:1px solid #ffeb9d;background:radial-gradient(ellipse,#18382c,#071a17 75%);box-shadow:0 0 3px 1px #b9ed6ba6,inset 0 0 4px #c0ee7944}
+.kt-root .kt-role-trail img{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 1px 0 #04100e)}
+.kt-root .kt-role-trail [data-kt-trail-mark=white] img{filter:grayscale(1) brightness(1.65) drop-shadow(0 0 1px #fff)}
+.kt-root .kt-role-trail [data-kt-trail-mark=gem] img{filter:hue-rotate(45deg) saturate(.7)}
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .kt-role-trail{position:absolute;right:4px;bottom:5px;width:34%;margin:0;padding:4px;gap:2px;border-width:1px 1px 3px}.kt-root[data-focus=true] .kt-role-trail>li{aspect-ratio:1.7}.kt-root[data-focus=true] .gt-display .gt-message{max-width:55%}}
+
+@media(max-height:500px) and (min-width:600px){.kt-root[data-focus=true] .gt-display .gt-digits{top:16px;height:30px}}
