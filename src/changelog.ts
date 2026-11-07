@@ -30,6 +30,9 @@ export type ChangelogEntry = {
 };
 
 export const CHANGELOG: ChangelogEntry[] = [
+  { id: '2026-11-07-kiseki-trail-layout', date: '2026-11-07', kind: 'fix', where: ['社務所Web'], title: '軌跡の5マス履歴をリール上の金枠に沿う位置へ修正',
+    items: ['数字直下に浮いていた履歴を小さくし、リール上部の装飾に沿う右側へ配置しました。', '数字と結果文の領域を分け、画面幅や告知の有無で履歴が移動しないようにしました。'],
+    announcement: { priority: 'none', audience: '無料試遊を確認する運営', steps: ['軌跡版の「最新の状態を確認」を開く。', '履歴がリール装飾の右上に沿い、数字や結果文と重ならないことを確認する。'], postText: '', imagePrompt: '', notes: '履歴の内容・確定後更新・抽選・払出・凱旋は変更なし。一般公開・銭接続は保留。' } },
   { id: '2026-11-07-kiseki-role-trail', date: '2026-11-07', kind: 'improve', where: ['社務所Web'], title: '軌跡の液晶右側に金枠の5マス履歴を追加',
     items: ['確定済みの直近5ゲームを、金枠と緑の光を添えた小役履歴で表示します。白7・青7・黄7などを区別し、空欄も残します。', '履歴は第3停止で更新し、回転中・停止途中や再読み込みだけでは増えません。'],
     announcement: { priority: 'none', audience: '運営の無料試遊担当', steps: ['カジノ管理から軌跡版を開き、3つのSTOPを押す。', '液晶右側の5マスが確定後にだけ更新されることを確認する。'], postText: '', imagePrompt: '', notes: '表示のみ。履歴抽選の追加、凱旋版、一般公開、銭接続は対象外。' } },
