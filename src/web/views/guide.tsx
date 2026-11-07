@@ -43,7 +43,12 @@ export function GuidePage(p: { session: AdminSession; config: GuideConfig; emplo
       </fieldset>
       <label>🙋 名前を「案内担当：○○」に変えるチャンネル<select name="dutyChannelId"><option value="">変えない</option>{p.channels.filter(c => c.type !== 4).map(c => <option value={c.id} selected={p.config.dutyChannelId === c.id}>{c.type === 2 ? '🔊' : '#'}{c.name}</option>)}</select></label>
       <label>通知先<select name="staffChannelId"><option value="">設定済みの「記録」</option>{p.config.staffChannelId && !p.channels.some(c => c.type === 0 && c.id === p.config.staffChannelId) && <option value={p.config.staffChannelId} selected>現在の通知先（{p.config.staffChannelId}・取得できませんでした）</option>}{p.channels.filter(c => c.type === 0).map(c => <option value={c.id} selected={p.config.staffChannelId === c.id}>{c.name}</option>)}</select></label>
-      <label>案内人ロール<select name="roleId"><option value="">名前に「案内人」を含むロール（1つだけのとき）</option>{p.config.roleId && !p.roles.some(r => !r.managed && r.id === p.config.roleId) && <option value={p.config.roleId} selected>現在のロール（{p.config.roleId}・取得できませんでした）</option>}{p.roles.filter(r => !r.managed).map(r => <option value={r.id} selected={p.config.roleId === r.id}>{r.name}</option>)}</select></label>
+      <label>案内人ロール<select name="roleId"><option value="">決めない（名前に「案内人」を含むロール）</option>{p.config.roleId && !p.roles.some(r => !r.managed && r.id === p.config.roleId) && <option value={p.config.roleId} selected>現在のロール（{p.config.roleId}・取得できませんでした）</option>}{p.roles.filter(r => !r.managed).map(r => <option value={r.id} selected={p.config.roleId === r.id}>{r.name}</option>)}</select></label>
+      <fieldset><legend>🎖 階級などで分かれた、ほかの案内人のロール（10こまで）</legend>
+        <p class="note">ここで選んだロールのどれか 1 つがあれば、案内人として「案内を担当する」などのボタンを使えます。名前に「案内人」が入るロールは、選ばなくても案内人として扱います。案内人へのお知らせは、案内人のロール全部に届きます（同じ人に何回も通知は飛びません）。</p>
+        <input type="hidden" name="extraRoleIdsShown" value="1" />
+        {p.roles.filter(r => !r.managed).map(r => <label><input type="checkbox" name="extraRoleIds" value={r.id} checked={p.config.extraRoleIds.includes(r.id)} /> {r.name}{r.name.includes('案内人') ? '（名前に「案内人」があるので自動で案内人）' : ''}</label>)}
+      </fieldset>
       <fieldset><legend>🔰 参拝者ロールと一緒に付けるロール（縁人など・5つまで）</legend>
         <p class="note">案内人が「参拝者ロールを付与」を押したとき、ここで選んだロールも一緒に付けます。</p>
         {p.roles.filter(r => !r.managed).map(r => <label><input type="checkbox" name="withRoleIds" value={r.id} checked={p.config.withRoleIds.includes(r.id)} /> {r.name}</label>)}

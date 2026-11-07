@@ -16,6 +16,8 @@ export const GUIDE_LINKS = [
 ].map(([emojiId, ...channelIds], i) => ({ emojiId: emojiId!, emojiName: `a_00${i + 1}`, channelIds }));
 export const guideConfigSchema = z.object({
   voiceChannelIds: z.array(snowflake).max(20).default([]), staffChannelId: snowflake.optional(), roleId: snowflake.optional(),
+  /** 🎖 階級などで分かれた、ほかの案内人のロール（どれか 1 つがあれば案内人として扱う。10 こまで） */
+  extraRoleIds: z.array(snowflake).max(10).default([]),
   salary: z.number().int().min(0).max(1_000_000).default(150),
   /** 🙋 名前を「案内担当：○○」／「案内担当なし」に変えるチャンネル（なければ変えない） */
   dutyChannelId: snowflake.optional(),
@@ -60,6 +62,19 @@ export function parseGuideLinks(body: Record<string, unknown>): GuideConfig['lin
   return guideConfigSchema.shape.links.parse(links);
 }
 export type GuideConfig = z.infer<typeof guideConfigSchema>;
+/**
+ * 案内人として扱うロールの一覧。
+ * 設定の「案内人ロール」・階級などで足したロール・名前に「案内人」が入るロール（階級で「案内人 一級」などに分けたとき）の、どれでもよい。
+ */
+export function guideRoleIdsFor(config: Pick<GuideConfig, 'roleId' | 'extraRoleIds'>, roles: Iterable<{ id: string; name?: string; managed?: boolean }>, guildId?: string): string[] {
+  const named = [...roles].filter(r => !r.managed && typeof r.name === 'string' && r.name.includes('案内人')).map(r => r.id);
+  return [...new Set([config.roleId, ...(config.extraRoleIds ?? []), ...named])].filter((id): id is string => Boolean(id) && id !== guildId).slice(0, 20);
+}
+/** 案内人のロールのどれかを持っているか */
+export const hasGuideRole = (member: { user?: { bot?: boolean }; roles: { cache: { has(id: string): boolean } } } | null | undefined, roleIds: readonly string[]) =>
+  Boolean(member && !member.user?.bot && roleIds.some(id => member.roles.cache.has(id)));
+/** 案内人へのお知らせのメンション（ロールが分かれていても全員に届く。同じ人に何回も通知は飛ばない） */
+export const guideRoleMentions = (roleIds: readonly string[]) => roleIds.map(id => `<@&${id}>`).join(' ');
 export async function loadGuideConfig(db: Db): Promise<GuideConfig> {
   const [r] = await db.select().from(settings).where(eq(settings.key, 'guide_reception'));
   const parsed = guideConfigSchema.safeParse(r?.value ?? {});

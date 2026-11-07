@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
 import { settings } from '../db/schema.js';
-import { guideDuty, type GuideConfig } from '../services/guideReception.js';
+import { guideDuty, hasGuideRole, type GuideConfig } from '../services/guideReception.js';
 import { logger } from '../lib/logger.js';
 
 const KEY = 'guide.waiting_channel_names';
@@ -14,7 +14,7 @@ const stateSchema = z.record(z.string(), z.object({ base: z.string(), managed: z
 export class GuideWaitingNames {
   private busy = false;
   constructor(private db: Db, private presence = false) {}
-  async sync(guild: Guild, config: GuideConfig, now = Date.now()) {
+  async sync(guild: Guild, config: GuideConfig & { guideRoleIds?: string[] }, now = Date.now()) {
     if (this.busy) return;
     this.busy = true;
     try {
@@ -27,8 +27,10 @@ export class GuideWaitingNames {
       if (config.voiceChannelIds.length) {
         // 「入室⭕」は、🙋 案内担当がいるときだけ（「案内担当なし」の表示と合わせる。待機中の案内人だけでは付けない）
         const duty = await guideDuty(this.db);
-        let uncertain = duty.length > 0 && !config.roleId;
-        if (config.roleId) for (const id of duty) {
+        // 案内人のロール（階級などで分かれていても、どれか 1 つがあればよい）
+        const roleIds = config.guideRoleIds ?? [config.roleId, ...(config.extraRoleIds ?? [])].filter((x): x is string => Boolean(x));
+        let uncertain = duty.length > 0 && !roleIds.length;
+        if (roleIds.length) for (const id of duty) {
           const member = await guild.members.fetch({ user: id, force: true }).catch((err: unknown) => {
             // 退会は確定している。不明な取得失敗は「不在」と決めつけない。
             if (!(err && typeof err === 'object' && 'code' in err && err.code === 10007)) {
@@ -37,7 +39,7 @@ export class GuideWaitingNames {
             }
             return undefined;
           });
-          if (!member || member.user.bot || !member.roles.cache.has(config.roleId)) continue;
+          if (!hasGuideRole(member, roleIds)) continue;
           // 担当中は、Discord でオフライン表示でも在席とする（担当を終えるまで）
           waiting = true;
           break;

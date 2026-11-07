@@ -4187,6 +4187,20 @@ it('宮司はチェックボックスで不明を一括登録でき、CSRFと確
     expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=invalid');
     expect((await loadGuideConfig(db)).links).toEqual(config.links);
     form.delete('bulkLinks');
+    // 🎖 階級などで分かれた案内人のロールを足す。欄がない保存では消さず、すべて外すと空にする
+    const grade = '980000000000000081';
+    roleList = [...roleList, { id: grade, name: '見習い', position: 2, managed: false, color: 0 }];
+    expect(await (await get('/guide', s)).text()).toContain('name="extraRoleIds"');
+    form.set('extraRoleIdsShown', '1'); form.append('extraRoleIds', grade);
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
+    expect((await loadGuideConfig(db)).extraRoleIds).toEqual([grade]);
+    form.delete('extraRoleIdsShown'); form.delete('extraRoleIds');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
+    expect((await loadGuideConfig(db)).extraRoleIds).toEqual([grade]);
+    form.set('extraRoleIdsShown', '1');
+    expect((await postGuide('/guide/settings', s, form)).headers.get('location')).toBe('/guide?msg=saved');
+    expect((await loadGuideConfig(db)).extraRoleIds).toEqual([]);
+    form.delete('extraRoleIdsShown');
     await registerGuide(db, USER);
     expect((await postGuide(`/guide/employees/${USER}`, s, new URLSearchParams({ _csrf: csrf, status: 'active' }))).headers.get('location')).toBe('/guide?msg=status');
     expect(actions).toContain(`addRole ${USER} ${roleId}`);
