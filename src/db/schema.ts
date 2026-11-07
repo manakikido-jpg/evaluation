@@ -2682,6 +2682,8 @@ export const memberAlts = pgTable(
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     /** 合言葉で、本アカウントとサブの両方の操作を確かめた */
     verified: boolean('verified').notNull().default(false),
+    /** 申請の理由（運営が承認するときに見る） */
+    reason: text('reason').notNull().default(''),
   },
   (t) => [index('member_alts_main_idx').on(t.mainId)],
 );

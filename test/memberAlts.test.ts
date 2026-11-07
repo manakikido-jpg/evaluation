@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Db } from '../src/db/client.js';
 import { addCoins, walletOf } from '../src/services/economy.js';
-import { approveMemberAlt, altsOfMain, issueAltCode, normalizeAltCode, redeemAltCode, removeMemberAlt, requestMemberAlt, setAltRequireApproval, ALT_CODE_TTL_MS } from '../src/services/memberAlts.js';
+import { approveMemberAlt, altsOfMain, issueAltCode, normalizeAltCode, redeemAltCode, removeMemberAlt, requestMemberAlt, setAltRequireApproval, saveAltConfig, altConfig, subJoinPlan, ALT_CODE_TTL_MS } from '../src/services/memberAlts.js';
 import { isRestrictedAccount } from '../src/services/staffAlts.js';
 import { cfg, makeDb } from './helpers.js';
-import { altPanelBody } from '../src/discord/memberAlts.js';
+import { altPanelBody, onSubAltJoin } from '../src/discord/memberAlts.js';
 import { commandDefinitions } from '../src/discord/commands.js';
 
 const MAIN = '700000000000000901', ALT = '700000000000000902', OTHER = '700000000000000903';
@@ -57,6 +57,9 @@ describe('🔗 メンバーのサブアカウント', () => {
     expect(ids).toEqual(['alt:code_get', 'alt:code_enter', 'alt:declare_main', 'alt:declare']);
     const alt = commandDefinitions(cfg).find((c) => c.name === 'alt')!;
     expect(alt.options?.map((o) => o.name)).toEqual(['declare', 'code', 'enter', 'declare-main']);
+    // 本アカウントから申請するときは理由が必要
+    const dm = alt.options!.find((o) => o.name === 'declare-main') as unknown as { options: { name: string; required?: boolean }[] };
+    expect(dm.options.find((o) => o.name === 'reason')?.required).toBe(true);
   });
 
   it('🔑 合言葉: 本アカウントが出し、サブが入れると、その場でつながってサブの銭が本アカウントへ移る', async () => {
@@ -121,6 +124,33 @@ describe('🔗 メンバーのサブアカウント', () => {
     // 承認すると、両方の確認ずみなので銭を移す
     expect(await approveMemberAlt(db, ALT, 'staff')).toMatchObject({ status: 'ok', moved: 200, kept: false });
     expect((await walletOf(db, MAIN)).balance).toBe(200);
+  });
+
+  it('本アカウントから、まだサーバーにいないアカウントを理由つきで申請 → 承認 → 入ったとき自動でサブになり、決めたロール（縁人など）が付く', async () => {
+    const ENJIN = '700000000000000950', SHOFUKU = '700000000000000951', GONE = '700000000000000952';
+    expect(await requestMemberAlt(db, { altId: ALT, mainId: MAIN, by: MAIN, reason: '  通話用に分けたい  ' })).toBe('ok');
+    expect((await altsOfMain(db, MAIN))[0]).toMatchObject({ reason: '通話用に分けたい', status: 'pending' });
+    await saveAltConfig(db, { joinRoleIds: [ENJIN, SHOFUKU] }, 'staff');
+    expect((await altConfig(db)).joinRoleIds).toEqual([ENJIN, SHOFUKU]);
+    // 承認まで（申請中）は、ふつうの入り方
+    expect(await subJoinPlan(db, ALT)).toBeUndefined();
+    const added: string[] = [], logs: string[] = [];
+    const member = (id: string) => ({
+      id, user: { bot: false },
+      guild: { id: cfg.guildId, roles: { cache: new Map([[ENJIN, {}], [SHOFUKU, {}]]) }, channels: { cache: new Map([[cfg.channels.log!, { isSendable: () => true, send: async (m: { content: string }) => void logs.push(m.content) }]]) } },
+      roles: { add: async (r: string) => void added.push(`${id}:${r}`) },
+    });
+    expect(await onSubAltJoin(db, () => cfg, member(ALT) as never)).toBe(false);
+    expect(await approveMemberAlt(db, ALT, 'staff')).toMatchObject({ status: 'ok', moved: 0, kept: true });
+    // 承認ずみ: 入ると、ロールが付いて、案内などは出さない（true）
+    expect(await onSubAltJoin(db, () => cfg, member(ALT) as never)).toBe(true);
+    expect(added).toEqual([`${ALT}:${ENJIN}`, `${ALT}:${SHOFUKU}`]);
+    expect(logs[0]).toContain('サブアカウントが入りました');
+    // ほかの人は、ふつうの入り方
+    expect(await onSubAltJoin(db, () => cfg, member(GONE) as never)).toBe(false);
+    // 付けるロールが決まっていなければ、ふつうの入り方
+    await saveAltConfig(db, { joinRoleIds: [] }, 'staff');
+    expect(await onSubAltJoin(db, () => cfg, member(ALT) as never)).toBe(false);
   });
 });
 

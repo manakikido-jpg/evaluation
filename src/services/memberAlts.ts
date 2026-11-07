@@ -32,7 +32,7 @@ export async function altsOfMain(db: Db, mainId: string): Promise<MemberAlt[]> {
 export type AltRequestResult = 'ok' | 'invalid' | 'self' | 'exists' | 'main_is_alt' | 'alt_has_alts' | 'staff_alt';
 
 /** 申告する（申告中にする）。via: discord = 本人の申告、web = 運営が入れた */
-export async function requestMemberAlt(db: Db, input: { altId: string; mainId: string; note?: string; by: string; via?: 'discord' | 'web'; verified?: boolean }): Promise<AltRequestResult> {
+export async function requestMemberAlt(db: Db, input: { altId: string; mainId: string; note?: string; reason?: string; by: string; via?: 'discord' | 'web'; verified?: boolean }): Promise<AltRequestResult> {
   const { altId, mainId } = input;
   if (!ID.test(altId) || !ID.test(mainId)) return 'invalid';
   if (altId === mainId) return 'self';
@@ -44,8 +44,8 @@ export async function requestMemberAlt(db: Db, input: { altId: string; mainId: s
     // サブにする人に、もうサブがいれば紐づけない
     if ((await altsOfMain(tx, altId)).length) return 'alt_has_alts';
     if ((await isStaffAlt(tx, altId)) || (await isStaffAlt(tx, mainId))) return 'staff_alt';
-    await tx.insert(memberAlts).values({ altId, mainId, note: (input.note ?? '').slice(0, 200), requestedBy: input.by, verified: input.verified ?? false });
-    await audit(tx, { actorId: input.by, targetId: altId, action: 'member_alt.request', detail: { mainId }, via: input.via ?? 'discord' });
+    await tx.insert(memberAlts).values({ altId, mainId, note: (input.note ?? '').slice(0, 200), requestedBy: input.by, verified: input.verified ?? false, reason: (input.reason ?? '').trim().slice(0, 300) });
+    await audit(tx, { actorId: input.by, targetId: altId, action: 'member_alt.request', detail: { mainId, reason: (input.reason ?? '').trim().slice(0, 300) }, via: input.via ?? 'discord' });
     return 'ok';
   });
 }
@@ -96,15 +96,31 @@ const hashCode = (code: string) => createHash('sha256').update(code).digest('hex
 /** 大文字にして、数字と英字だけにする（空白・「-」は無視） */
 export const normalizeAltCode = (raw: string) => raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+export type AltConfig = { requireApproval: boolean; joinRoleIds: string[] };
+/** 設定（合言葉のあと運営の承認を待つか・申請ずみのサブが入ったときに付けるロール） */
+export async function altConfig(db: Db): Promise<AltConfig> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, CFG_KEY));
+  const v = (row?.value ?? {}) as { requireApproval?: unknown; joinRoleIds?: unknown };
+  const ids = Array.isArray(v.joinRoleIds) ? v.joinRoleIds.filter((x): x is string => typeof x === 'string' && ID.test(x)) : [];
+  return { requireApproval: v.requireApproval === true, joinRoleIds: ids.slice(0, 5) };
+}
 /** 合言葉が合ったあと、運営の承認を待つか（はじめは待たずに、その場でつなぐ） */
 export async function altRequireApproval(db: Db): Promise<boolean> {
-  const [row] = await db.select().from(settings).where(eq(settings.key, CFG_KEY));
-  return (row?.value as { requireApproval?: unknown } | undefined)?.requireApproval === true;
+  return (await altConfig(db)).requireApproval;
 }
-export async function setAltRequireApproval(db: Db, on: boolean, by: string): Promise<void> {
-  const value = { requireApproval: on };
+export async function saveAltConfig(db: Db, patch: Partial<AltConfig>, by: string): Promise<void> {
+  const value = { ...(await altConfig(db)), ...patch, joinRoleIds: (patch.joinRoleIds ?? (await altConfig(db)).joinRoleIds).slice(0, 5) };
   await db.insert(settings).values({ key: CFG_KEY, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
   await audit(db, { actorId: by, action: 'member_alt.config', detail: value, via: 'web' });
+}
+export const setAltRequireApproval = (db: Db, on: boolean, by: string) => saveAltConfig(db, { requireApproval: on }, by);
+
+/** 承認ずみのサブが入ったときに、自動で付けるロール（なければ undefined。そのときは、ふつうの入り方になる） */
+export async function subJoinPlan(db: Db, altId: string): Promise<{ mainId: string; roleIds: string[] } | undefined> {
+  const row = await memberAltOf(db, altId);
+  if (!row || row.status !== 'approved') return undefined;
+  const { joinRoleIds } = await altConfig(db);
+  return joinRoleIds.length ? { mainId: row.mainId, roleIds: joinRoleIds } : undefined;
 }
 
 /** 本アカウントが合言葉をもらう（前の合言葉は使えなくなる） */

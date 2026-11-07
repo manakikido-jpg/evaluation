@@ -1,13 +1,14 @@
-import { MessageFlags, type Guild, type Interaction } from 'discord.js';
+import { MessageFlags, type Guild, type GuildMember, type Interaction } from 'discord.js';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
 import { logger } from '../lib/logger.js';
-import { ALT_CODE_TTL_MS, issueAltCode, redeemAltCode, requestMemberAlt, type AltRequestResult } from '../services/memberAlts.js';
+import { audit } from '../services/audit.js';
+import { ALT_CODE_TTL_MS, issueAltCode, redeemAltCode, requestMemberAlt, subJoinPlan, type AltRequestResult } from '../services/memberAlts.js';
 
 const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 const TEXT: Record<AltRequestResult | 'okMain', string> = {
   ok: '🔗 サブアカウントの申告を受け付けました。運営が確かめて承認します。\n-# 承認されると、このアカウントには銭が入らず、朱印・招待のお礼も受けません。今の銭は本アカウントへ移します。',
-  okMain: '🔗 サブアカウントの申告を受け付けました。運営が確かめて承認します。\n-# 承認されると、サブのアカウントには銭が入らず、朱印・招待のお礼も受けません。サブが今持っている銭は、そのままです（本アカウントへは移しません）。',
+  okMain: '🔗 サブアカウントの申告を受け付けました。運営が理由を確かめて承認します。\n-# 承認されると、サブのアカウントには銭が入らず、朱印・招待のお礼も受けません。サブが今持っている銭は、そのままです（本アカウントへは移しません）。\n-# まだサーバーに入っていないアカウントでも申告できます。承認のあとで入ると、自動でサブになり、決めたロール（縁人など）が付きます。',
   invalid: '申告できませんでした。',
   self: '本アカウントには、別のアカウントを選んでください（サブのアカウントで打ちます）。',
   exists: 'このアカウントは、もう申告ずみです（運営の確認待ち、または承認ずみ）。',
@@ -72,13 +73,13 @@ export const altPanelBody = () => ({
 });
 
 /** by: 申告した人（サブ本人か、本アカウントの人） */
-async function declare(db: Db, cfg: () => GuildConfig, guild: Guild, altId: string, mainId: string, by: string): Promise<string> {
-  const r = await requestMemberAlt(db, { altId, mainId, by, via: 'discord' });
+async function declare(db: Db, cfg: () => GuildConfig, guild: Guild, altId: string, mainId: string, by: string, reason = ''): Promise<string> {
+  const r = await requestMemberAlt(db, { altId, mainId, by, via: 'discord', reason });
   if (r === 'ok') {
     // 運営に知らせる（記録のチャンネル）
     const log = cfg().channels.log ? guild.channels.cache.get(cfg().channels.log!) : undefined;
     if (log?.isSendable()) {
-      await log.send({ content: `🔗 サブアカウントの申告: <@${altId}> は <@${mainId}> のサブです（${by === altId ? 'サブ本人の申告' : '本アカウント側の申告'}）。社務所Web の「🔗 サブアカウント」で承認・却下してください。`, allowedMentions: { parse: [] } })
+      await log.send({ content: `🔗 サブアカウントの申告: <@${altId}> は <@${mainId}> のサブです（${by === altId ? 'サブ本人の申告' : '本アカウント側の申告'}）。社務所Web の「🔗 サブアカウント」で承認・却下してください。${reason.trim() ? `\n理由: ${reason.trim().slice(0, 300)}` : ''}`, allowedMentions: { parse: [] } })
         .catch((err: unknown) => logger.warn({ err }, 'member alt notify failed'));
     }
   }
@@ -111,13 +112,17 @@ export async function onMemberAltInteraction(db: Db, cfg: () => GuildConfig, i: 
       ...EPHEMERAL,
     } as never));
   }
-  // パネルのボタン（本アカウントから）: サブを選んでもらう
+  // パネルのボタン（本アカウントから）: サブの ID と理由を入れてもらう（まだサーバーにいないアカウントも申請できる）
   if (i.isButton() && i.customId === 'alt:declare_main') {
-    return void (await i.reply({
-      content: '🔗 あなたの**サブアカウント**を選んでください（このボタンは、本アカウントで押します）。',
-      components: [{ type: 1, components: [{ type: 5, custom_id: 'alt:sub', placeholder: 'サブアカウントを選ぶ', min_values: 1, max_values: 1 }] }],
-      ...EPHEMERAL,
-    } as never));
+    return void (await i.showModal({ custom_id: 'alt:main_modal', title: 'サブアカウントを申請する', components: [
+      { type: 1, components: [{ type: 4, custom_id: 'subId', label: 'サブアカウントのユーザー ID（数字 17〜20 桁）', style: 1, min_length: 17, max_length: 20, required: true, placeholder: '開発者モードで、サブを右クリック →「ユーザーIDをコピー」' }] },
+      { type: 1, components: [{ type: 4, custom_id: 'reason', label: '申請の理由', style: 2, min_length: 1, max_length: 300, required: true, placeholder: '例: 通話用に分けたい／作り直したアカウント' }] },
+    ] } as never));
+  }
+  if (i.isModalSubmit() && i.customId === 'alt:main_modal') {
+    await i.deferReply(EPHEMERAL);
+    const subId = i.fields.getTextInputValue('subId').trim();
+    return void (await i.editReply({ content: await declare(db, cfg, i.guild, subId, i.user.id, i.user.id, i.fields.getTextInputValue('reason')), allowedMentions: { parse: [] } }));
   }
   if (i.isUserSelectMenu() && i.customId === 'alt:main') {
     const main = i.users.first();
@@ -138,10 +143,34 @@ export async function onMemberAltInteraction(db: Db, cfg: () => GuildConfig, i: 
     if (i.options.getSubcommand(false) === 'declare-main') {
       const sub = i.options.getUser('sub', true);
       if (sub.bot) return void (await i.reply({ content: 'BOT はサブアカウントにできません。', ...EPHEMERAL }));
-      return void (await i.reply({ content: await declare(db, cfg, i.guild, sub.id, i.user.id, i.user.id), ...EPHEMERAL }));
+      return void (await i.reply({ content: await declare(db, cfg, i.guild, sub.id, i.user.id, i.user.id, i.options.getString('reason', true)), ...EPHEMERAL }));
     }
     const main = i.options.getUser('main', true);
     if (main.bot) return void (await i.reply({ content: 'BOT は本アカウントにできません。', ...EPHEMERAL }));
-    await i.reply({ content: await declare(db, cfg, i.guild, i.user.id, main.id, i.user.id), ...EPHEMERAL });
+    await i.reply({ content: await declare(db, cfg, i.guild, i.user.id, main.id, i.user.id, i.options.getString('reason') ?? ''), ...EPHEMERAL });
   }
 }
+
+/**
+ * 🔗 承認ずみのサブが、サーバーに入ったとき: 自動でサブとして扱い、決めたロール（縁人など）を付ける。
+ * 付けるロールが決まっていなければ何もしない（false。ふつうの入り方になる）。付けたら true（案内待ちなどは出さない）
+ */
+export async function onSubAltJoin(db: Db, cfg: () => GuildConfig, member: GuildMember): Promise<boolean> {
+  if (member.guild.id !== cfg().guildId || member.user.bot) return false;
+  const plan = await subJoinPlan(db, member.id);
+  if (!plan) return false;
+  const added: string[] = [];
+  for (const id of plan.roleIds) {
+    if (!member.guild.roles.cache.has(id)) continue;
+    await member.roles.add(id, 'サブアカウントが入ったので').then(() => added.push(id)).catch((err: unknown) => logger.warn({ err, roleId: id }, 'sub alt join role failed'));
+  }
+  if (!added.length) return false;
+  await audit(db, { actorId: 'system', targetId: member.id, action: 'member_alt.join', detail: { mainId: plan.mainId, roleIds: added }, via: 'system' });
+  const log = cfg().channels.log ? member.guild.channels.cache.get(cfg().channels.log!) : undefined;
+  if (log?.isSendable()) {
+    await log.send({ content: `🔗 サブアカウントが入りました: <@${member.id}> は <@${plan.mainId}> のサブです（承認ずみ）。決めたロール（${added.map((id) => `<@&${id}>`).join('・')}）を付けました。`, allowedMentions: { parse: [] } })
+      .catch((err: unknown) => logger.warn({ err }, 'sub alt join notify failed'));
+  }
+  return true;
+}
+

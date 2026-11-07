@@ -1,0 +1,1 @@
+ALTER TABLE "member_alts" ADD COLUMN "reason" text DEFAULT '' NOT NULL;

@@ -1,5 +1,5 @@
 import { eventTick } from './services/casino/keibaEvents.js';
-import { onMemberAltInteraction } from './discord/memberAlts.js';
+import { onMemberAltInteraction, onSubAltJoin } from './discord/memberAlts.js';
 import { RoomKnockApp } from './discord/roomKnock.js';
 import { VisitApp } from './discord/visit.js';
 import { KobanApp } from './discord/koban.js';
@@ -395,12 +395,16 @@ async function main(): Promise<void> {
     void app.onMemberAdd(m);
     // だれの招待リンクで入ったか
     void inviteLinks.onMemberAdd(m);
-    // 入った瞬間に 🧭案内待ち
-    void guidePending.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide pending add failed'));
-    // 🧵 本人と案内人だけの案内スレッド
-    void guideThreads.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide thread create failed'));
-    // 入った人に、はじめの流れを DM で案内
-    void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
+    // 🔗 承認ずみのサブアカウントは、自動でサブとして扱い、決めたロール（縁人など）を付ける。案内待ち・案内は出さない
+    void (async () => {
+      if (await onSubAltJoin(db, cfg, m).catch((err) => (logger.warn({ err }, 'sub alt join failed'), false))) return;
+      // 入った瞬間に 🧭案内待ち
+      void guidePending.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide pending add failed'));
+      // 🧵 本人と案内人だけの案内スレッド
+      void guideThreads.onMemberAdd(m).catch((err) => logger.warn({ err }, 'guide thread create failed'));
+      // 入った人に、はじめの流れを DM で案内
+      void admission.onMemberAdd(m).catch((err) => logger.warn({ err }, 'join guide dm failed'));
+    })();
     // 🛡 要注意リストの人が入ったら運営に知らせる
     void security.onMemberAdd(m).catch((err) => logger.warn({ err }, 'security join check failed'));
   });

@@ -1,5 +1,5 @@
 import { mountEvaluation } from './evaluation.js';
-import { altRequireApproval, setAltRequireApproval, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
+import { altConfig, saveAltConfig, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
 import { MemberAltLinks, MemberAltsPage } from './views/memberAlts.js';
 import { mountOffice } from './office.js';
 import { unsubscribeOffice } from '../services/officeNotifications.js';
@@ -4119,19 +4119,25 @@ export function createWebApp(deps: WebDeps) {
     const alts = await listMemberAlts(db);
     const ids = [...new Set(alts.flatMap((a) => [a.altId, a.mainId]))];
     const rows = ids.length ? await db.select({ id: members.id, name: members.displayName }).from(members).where(inArray(members.id, ids)) : [];
-    return c.html(<MemberAltsPage session={c.get('session')} alts={alts} names={new Map(rows.map((r) => [r.id, r.name]))} msg={c.req.query('msg')} requireApproval={await altRequireApproval(db)} guji={gujiOnly(c)} />);
+    const roles = ((await loadRoles()) ?? []).filter((r) => !r.managed && r.id !== cfg.guildId).sort((a, b) => b.position - a.position).map((r) => ({ id: r.id, name: r.name }));
+    const conf = await altConfig(db);
+    return c.html(<MemberAltsPage session={c.get('session')} alts={alts} names={new Map(rows.map((r) => [r.id, r.name]))} msg={c.req.query('msg')} requireApproval={conf.requireApproval} joinRoleIds={conf.joinRoleIds} roles={roles} guji={gujiOnly(c)} />);
   });
   app.post('/alts/settings', async (c) => {
     if (!gujiOnly(c)) return c.redirect('/alts?msg=guji');
     const body = await c.req.parseBody();
-    await setAltRequireApproval(db, body.requireApproval === 'yes', c.get('session').userId);
+    const roles = ((await loadRoles()) ?? []).filter((r) => !r.managed && r.id !== cfg.guildId);
+    const picked = (Array.isArray(body.joinRoleIds) ? body.joinRoleIds : body.joinRoleIds ? [body.joinRoleIds] : []).filter((x): x is string => typeof x === 'string' && x !== '');
+    // 付けられるロールは 5 つまで。サーバーにあるロールだけ
+    if (picked.length > 5 || picked.some((id) => !roles.some((r) => r.id === id))) return c.redirect('/alts?msg=invalid_roles');
+    await saveAltConfig(db, { requireApproval: body.requireApproval === 'yes', joinRoleIds: picked }, c.get('session').userId);
     return c.redirect('/alts?msg=settings');
   });
   app.post('/alts/add', async (c) => {
     const body = await c.req.parseBody();
     const by = c.get('session').userId;
     const altId = typeof body.altId === 'string' ? body.altId.trim() : '';
-    const r = await requestMemberAlt(db, { altId, mainId: typeof body.mainId === 'string' ? body.mainId.trim() : '', note: typeof body.note === 'string' ? body.note : '', by, via: 'web' });
+    const r = await requestMemberAlt(db, { altId, mainId: typeof body.mainId === 'string' ? body.mainId.trim() : '', reason: typeof body.reason === 'string' ? body.reason : '', by, via: 'web' });
     if (r !== 'ok') return c.redirect(`/alts?msg=${r}`);
     await approveMemberAlt(db, altId, by);
     return c.redirect('/alts?msg=added');
