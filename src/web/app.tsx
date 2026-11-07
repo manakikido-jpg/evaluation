@@ -1,3 +1,4 @@
+import { mountEventLottery } from './eventLottery.js';
 import { mountEvaluation } from './evaluation.js';
 import { altConfig, saveAltConfig, approveMemberAlt, altsOfMain, listMemberAlts, memberAltOf, removeMemberAlt, requestMemberAlt } from '../services/memberAlts.js';
 import { MemberAltLinks, MemberAltsPage } from './views/memberAlts.js';
@@ -674,6 +675,9 @@ export function createWebApp(deps: WebDeps) {
     if (c.req.header('hx-request')) return c.body(null, 401, { 'hx-redirect': url });
     return c.redirect(url);
   };
+
+  app.use('/economy/event-lottery',requireAdmin,requireCsrf);
+  mountEventLottery(app,db,()=>deps.discord.guildChannels(cfg.guildId),now);
 
   app.use('/office/*', requireAdmin, requireCsrf);
   mountOffice(app, { db, cfg: () => cfg, loadRoles: () => loadRoles(), onSettingsSaved: deps.onSettingsSaved, now });
