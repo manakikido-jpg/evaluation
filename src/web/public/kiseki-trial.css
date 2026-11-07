@@ -292,58 +292,41 @@
 
 @media(max-width:620px){.kt-root .gt-display .gt-lcd-award{gap:1px;transform:scale(.85);transform-origin:top center}.kt-root .kt-award-digits{padding-bottom:0}.kt-root .gt-display .gt-lcd-award>span{margin-top:0}}
 
-/* 実機全体の比率：三神→大きな3リール→下部のステージ。履歴は三神右横の小さい帯。 */
-.kt-root.kt-reel-first .gt-display{aspect-ratio:1/1.08}
-.kt-root.kt-reel-first .kt-reel-assembly{order:0;width:100%;aspect-ratio:5/3;margin:0;flex:0 0 auto;z-index:3}
-.kt-root.kt-reel-first .gt-display .gt-lcd{order:1;display:block;flex:1;min-height:0;padding:12px 10px;background:linear-gradient(#04131b20,transparent 35%,#04131b30)}
-.kt-root.kt-reel-first .kt-altar{inset:0 0 auto;height:27%;overflow:hidden}
-.kt-root.kt-reel-first .kt-altar-art{left:5%;width:90%;height:auto;max-width:none}
-.kt-root.kt-reel-first .gt-display .kt-medallion-navigation{inset:6% 13.1% auto;width:73.8%;height:78%;min-height:0;max-height:none}
-.kt-root.kt-reel-first .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(12px,6cqw,36px)}
-.kt-root.kt-reel-first .gt-display .kt-reel-assembly .gt-reel-shelf{inset:29% 9% 15%;padding:3px;border:4px ridge #b58a36;border-top-color:#ffe29a;border-bottom-color:#9b651b;background:linear-gradient(90deg,#392408,#f2c765,#805213);box-shadow:0 0 0 1px #39260e,inset 0 0 3px #fff1b3,0 3px 4px #08090d99}
-.kt-root.kt-reel-first .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(11.2cqw - 4.667px);width:100%;height:100%}
-.kt-root.kt-reel-first .gt-display .kt-reel-assembly .gt-symbol-art{height:calc(var(--symbol-h)*.93);width:94%}
-.kt-root.kt-reel-first .kt-reel-plinth{position:absolute;inset:auto 0 0;height:15%;overflow:hidden;z-index:4;pointer-events:none}
-.kt-root.kt-reel-first .kt-reel-plinth img{position:absolute;bottom:0;left:0;width:100%;height:auto;max-width:none}
-.kt-root.kt-reel-first .kt-role-trail{right:1.2%;top:13.5%;bottom:auto;transform:translateY(-50%);width:17%;padding:1px 2px 2px;gap:1px;border-width:1px 1px 2px;z-index:5}
-.kt-root.kt-reel-first .kt-role-trail>li{aspect-ratio:1.6;box-shadow:0 0 2px #b9ed6b88,inset 0 0 2px #c0ee7944}
-.kt-root.kt-reel-first .kt-role-trail:before{inset:-3px -1px auto;height:3px;border-width:1px}
-.kt-root.kt-reel-first .kt-role-trail:after{inset:auto -2px -4px;height:2px;border-width:1px}
-.kt-root.kt-reel-first .gt-display .gt-screen-mode{position:absolute;left:5%;right:5%;bottom:23%;width:90%;max-width:none;margin:0;padding:6px 5px;text-align:center;font:700 clamp(13px,4vw,25px)/1.2 Georgia,serif;letter-spacing:.08em;color:#fff4d0;border:0;background:linear-gradient(90deg,transparent,#0c263e88,transparent);text-shadow:0 2px 3px #061220,0 0 4px #061220}
-.kt-root.kt-reel-first .gt-display .gt-screen-mode:after{content:'';display:block;width:65%;height:3px;margin:5px auto 0;border-top:1px solid #e5cc8a;border-bottom:1px solid #5a4025;background:linear-gradient(90deg,transparent,#d3b26d,transparent)}
-.kt-root.kt-reel-first .gt-display .gt-lcd-hud{top:5%;left:3%;right:auto;width:58%;min-height:16px;padding:0;gap:8px;justify-content:flex-start;background:none;font-size:6px}
-.kt-root.kt-reel-first .gt-display .gt-lcd-hud b{font-size:9px}
-.kt-root.kt-reel-first .gt-display .gt-digits{position:absolute;right:4%;top:3%;left:auto;width:30%;height:36px;min-height:0;gap:6px;margin:0;flex:none}
-.kt-root.kt-reel-first .gt-display .gt-digits>span{font-size:clamp(16px,4.5vw,30px);line-height:1.2;-webkit-text-stroke:.5px #9f5a1d;text-shadow:0 1px 0 #f5b749,0 2px 2px #122027}
-.kt-root.kt-reel-first .gt-display .gt-message{left:4%;right:4%;bottom:4px;width:92%;max-width:92%;font-size:clamp(7px,1.8vw,10px);line-height:1.3;text-align:center}
-.kt-root.kt-reel-first .gt-display .gt-lcd .gt-lcd-award{position:absolute;inset:8% 4% auto;width:92%;height:80%;margin:0;gap:2px;justify-content:center;transform:none}
-.kt-root.kt-reel-first .gt-display .gt-lcd-award>strong{font-size:clamp(18px,8cqw,54px);line-height:1.1}
-.kt-root.kt-reel-first .gt-display .gt-lcd-award[data-kind=god]>strong{font-size:clamp(20px,9cqw,54px)}
-.kt-root.kt-reel-first .gt-display .gt-lcd-award>small{font-size:8px;line-height:1.1}
-.kt-root.kt-reel-first .gt-display .gt-lcd-award>span{margin:0;font-size:clamp(10px,3cqw,16px);line-height:1.2}
-.kt-root.kt-reel-first .kt-award-digits{position:static;gap:12px;padding:0}
-.kt-root.kt-reel-first .kt-award-digits b{font-size:clamp(16px,6cqw,32px)}
-.kt-root.kt-reel-first .gt-lcd:has(.gt-lcd-award)>.gt-screen-mode{visibility:hidden}
-.kt-root.kt-reel-first .gt-lcd:has(.gt-lcd-award)>.gt-message{width:1px;height:1px;overflow:hidden;clip-path:inset(50%);padding:0}
-.kt-root.kt-reel-first .kt-lcd-actions{top:auto;bottom:3px;right:4%;max-width:92%;flex-wrap:wrap;justify-content:flex-end}
-.kt-root.kt-reel-first .gt-display[data-win-stage] .gt-lcd .gt-lcd-award{height:calc(100% - 54px);inset:2% 4% auto;gap:1px}
-.kt-root.kt-reel-first .gt-display[data-win-stage] .gt-lcd-award>small{display:none}
+/* 参考写真の上下構成：大きい数字→三神/履歴→下寄りのリール→細いステージ表示。 */
+.kt-root.kt-reference-layout .gt-display{aspect-ratio:1/1.08}
+.kt-root.kt-reference-layout .gt-display .gt-lcd{order:0;flex:1;min-height:0;display:flex;padding:28px 10px 3px;justify-content:center}
+.kt-root.kt-reference-layout .gt-display .gt-digits{flex:1;min-height:0;margin:0;align-items:center}
+.kt-root.kt-reference-layout .gt-display .gt-digits>span{font-size:clamp(48px,20cqw,118px)}
+.kt-root.kt-reference-layout .gt-display .gt-message{position:static;margin:0;max-width:100%;font-size:clamp(7px,1.8cqw,10px);padding:2px 5px}
+.kt-root.kt-reference-layout .kt-reel-assembly{order:1;width:100%;aspect-ratio:2/1;margin:0;flex:0 0 auto;z-index:3}
+.kt-root.kt-reference-layout .kt-altar{inset:0 0 auto;height:27%;overflow:hidden}
+.kt-root.kt-reference-layout .kt-altar-art{left:5%;width:90%;height:auto;max-width:none}
+.kt-root.kt-reference-layout .gt-display .kt-medallion-navigation{inset:6% 13.1% auto;width:73.8%;height:78%;min-height:0;max-height:none}
+.kt-root.kt-reference-layout .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(12px,5cqw,30px)}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reel-shelf{inset:29% 9% 15%;padding:3px;border:4px ridge #b58a36;border-top-color:#ffe29a;border-bottom-color:#9b651b;background:linear-gradient(90deg,#392408,#f2c765,#805213);box-shadow:0 0 0 1px #39260e,inset 0 0 3px #fff1b3,0 3px 4px #08090d99}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(9.3333cqw - 4.667px);width:100%;height:100%}
+.kt-root.kt-reference-layout .gt-display .kt-reel-assembly .gt-symbol-art{height:calc(var(--symbol-h)*.93);width:94%}
+.kt-root.kt-reference-layout .kt-reel-plinth{position:absolute;inset:auto 0 0;height:15%;overflow:hidden;z-index:4;pointer-events:none}
+.kt-root.kt-reference-layout .kt-reel-plinth img{position:absolute;bottom:0;left:0;width:100%;height:auto;max-width:none}
+.kt-root.kt-reference-layout .kt-role-trail{right:1.2%;top:13.5%;bottom:auto;transform:translateY(-50%);width:17%;padding:1px 2px 2px;gap:1px;border-width:1px 1px 2px;z-index:5}
+.kt-root.kt-reference-layout .kt-role-trail>li{aspect-ratio:1.6;box-shadow:0 0 2px #b9ed6b88,inset 0 0 2px #c0ee7944}
+.kt-root.kt-reference-layout .kt-role-trail:before{inset:-3px -1px auto;height:3px;border-width:1px}
+.kt-root.kt-reference-layout .kt-role-trail:after{inset:auto -2px -4px;height:2px;border-width:1px}
+.kt-stage-footer{order:2;position:relative;flex:0 0 13%;display:grid;place-items:center;background:linear-gradient(90deg,#021b2455,transparent,#021b2455)}
+.kt-root.kt-reference-layout .gt-display .kt-stage-footer .gt-screen-mode{position:static;width:90%;max-width:none;margin:0;padding:5px;text-align:center;font:700 clamp(10px,3cqw,20px)/1.2 Georgia,serif;letter-spacing:.08em;color:#fff4d0;border:0;background:linear-gradient(90deg,transparent,#0c263e88,transparent);text-shadow:0 2px 3px #061220}
+.kt-root.kt-reference-layout .kt-stage-footer .gt-screen-mode:after{content:'';display:block;width:65%;height:3px;margin:4px auto 0;border-top:1px solid #e5cc8a;border-bottom:1px solid #5a4025}
+.kt-root.kt-reference-layout .gt-normal-effects{height:43%;bottom:auto;top:0}
+.kt-root.kt-reference-layout .kt-stage-curtain{inset:0 0 57%}
 @media(max-height:500px) and (min-width:600px){
- .kt-root.kt-reel-first[data-focus=true] .gt-display{height:auto;min-height:0;width:min(100%,260px);aspect-ratio:1/1.08;justify-self:center}
- .kt-root.kt-reel-first[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display{height:auto;width:min(100%,230px)}
- .kt-root.kt-reel-first[data-focus=true] .kt-reel-assembly,.kt-root.kt-reel-first[data-focus=true]:has(.gt-recovery:not([hidden])) .kt-reel-assembly{width:100%;margin:0}
- .kt-root.kt-reel-first[data-focus=true] .gt-display .gt-lcd{display:block;min-height:0;padding:10px 8px;flex:1}
- .kt-root.kt-reel-first[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(11.2cqw - 4.667px);width:100%}
- .kt-root.kt-reel-first[data-focus=true] .gt-display .gt-screen-mode{top:auto;left:5%;right:5%;bottom:23%;font-size:13px}
- .kt-root.kt-reel-first[data-focus=true] .gt-display .gt-digits{top:3%;right:4%;height:30px}
- .kt-root.kt-reel-first[data-focus=true] .gt-display .gt-message{left:4%;right:4%;bottom:4px;max-width:92%}
- .kt-root.kt-reel-first[data-focus=true] .gt-display:not([data-win-stage]) .gt-lcd .gt-lcd-award{inset:4% 4% auto;width:92%;height:88%;margin:0}
- .kt-root.kt-reel-first[data-focus=true] .kt-award-digits{display:flex;position:static}
+ .kt-root.kt-reference-layout[data-focus=true] .gt-display{height:auto;min-height:0;width:min(100%,300px);aspect-ratio:1/1.08;justify-self:center}
+ .kt-root.kt-reference-layout[data-focus=true] .kt-reel-assembly,.kt-root.kt-reference-layout[data-focus=true] .gt-display:has(.gt-lcd-award) .kt-reel-assembly{width:100%;margin:0}
+ .kt-root.kt-reference-layout[data-focus=true] .gt-display .gt-digits{position:static;height:auto;gap:8px}
+ .kt-root.kt-reference-layout[data-focus=true] .gt-display .gt-digits>span{font-size:clamp(48px,20cqw,70px)}
+ .kt-root.kt-reference-layout[data-focus=true] .gt-display .gt-lcd{display:flex;flex:1;min-height:0;padding:22px 6px 2px}
+ .kt-root.kt-reference-layout[data-focus=true] .gt-display .gt-message{position:static;max-width:100%}
 }
-
-.kt-root.kt-reel-first .gt-normal-effects{top:auto;bottom:0;height:44%}
-.kt-root.kt-reel-first .kt-stage-curtain{inset:56% 0 0}
-
-.kt-root.kt-reel-first[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(11.2cqw - 4.667px);width:100%}
-.kt-root.kt-reel-first[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation{min-height:0;max-height:none;height:78%}
-.kt-root.kt-reel-first[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(12px,6cqw,36px)}
+.kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display{height:auto;aspect-ratio:1/1.08}
+.kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .kt-reel-assembly{width:100%;margin:0}
+.kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(9.3333cqw - 4.667px);width:100%}
+.kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation{min-height:0;max-height:none;height:78%}
+.kt-root.kt-reference-layout[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation .gt-lcd-cue b{font-size:clamp(12px,5cqw,30px)}
