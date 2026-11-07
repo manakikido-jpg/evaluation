@@ -7,6 +7,7 @@
 - 型/関連3ファイル26件成功。全件はDOM固定後に開始、途中で小画面告知のCSSだけを調整（ロジック/試験/依存は同一）。最終CSSの80表示が成功し、ビルドと関連確認を最終版でも再実行する。見本docs/previews/kiseki-trail-layout-{390,630}.webpは固定の架空台。未push/未合流。
 - 最終：実装1b1366bc、Node22型/最終build成功。単一全256ファイル2,837件成功（659.71秒、2worker、既定制限）。全件中のCSS調整後、最終版の関連3ファイル26件も成功（11.39秒）。通常10/告知80のブラウザー確認、実STOP/再読込、JS例外0。ログ/tmp/kiseki-trail-layout-{types,build-final,related-final,browser,award-browser,all}.log。後続はこの記録だけで製品/試験/依存関係は固定。
 - 保存前fetch：本番1d303320へ進行（サブ垢/招福の別件2commit）。merge-treeはexit0で競合なし、今回の軌跡修正は取込み不要。ローカル全件は基底68b2e241上の結果であり、最新本番との結合CIは専用PR側で別確認する。専用codex/kiseki-trail-layoutをDraft PRへ保存し、今回の修正は未合流/本番未反映のままとする。
+- 保存済み：Draft PR158 https://github.com/manakikido-jpg/evaluation/pull/158 、codex/kiseki-trail-layout。実装1b1366bc/検証記録52a002b0をpush済み。本追記はPR保存先の記録のみ。未合流/本番未反映。新headのCIはまだ未完了として扱い、次は本人の見本確認とCI確認。
 
 ## 2026年11月7日：右側の金枠5マス履歴を追加
 - 依頼：本人の参考画像（右側の金枠/黄緑の光/白と青の7/5マス）を受けた「すすめて」。軌跡の液晶へ履歴を組み込み、凱旋・抽選・払出は維持。一般公開/銭接続/合流は保留。
