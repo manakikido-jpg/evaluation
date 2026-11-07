@@ -56,12 +56,16 @@ export async function todayBets(db: Db, memberId: string, now = new Date(), game
   return row?.n ?? 0;
 }
 
-export async function checkBet(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, now = new Date()): Promise<BetCheck> {
+/**
+ * limits.maxBet: 札を効かせたあとで当てる、1 回（合計）の最高の上書き（ルーレットの「1 か所の最高 × 所の数」など）。
+ * cfg を広げて渡すと、札が効いている人では casinoCfgFor が元の上限に戻してしまうため、こちらで渡す
+ */
+export async function checkBet(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, now = new Date(), limits: { maxBet?: number } = {}): Promise<BetCheck> {
   // 🎰 大勝負の札が効いていれば、上限が上がる
   const c = (await casinoCfgFor(db, cfg, memberId, now)).casino;
   if (!c.enabled) return 'closed';
   if (!c.games.includes(game)) return 'game_off';
-  if (!Number.isInteger(bet) || bet < c.minBet || bet > c.maxBet) return 'bad_bet';
+  if (!Number.isInteger(bet) || bet < c.minBet || bet > (limits.maxBet ?? c.maxBet)) return 'bad_bet';
   // ⚫ オセロ（CPU）は 1 回 OTHELLO_MAX_BET 枚まで（利益の上限があるので、それより大きく賭けても得をしない）
   if (game === 'othello' && bet > OTHELLO_MAX_BET) return 'othello_max';
   if (c.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + bet > c.dailyBetLimit) return 'limit';
@@ -110,10 +114,10 @@ class NotEnough extends Error {}
 type Outcome = { state: unknown; done: boolean; payout: number };
 
 /** 賭けて始める。始めた時点で終わるもの（スロットなど）は、そのまま払い戻す */
-async function start(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, init: () => Outcome, now: Date, seat?: (tx: Db) => Promise<void>): Promise<Played> {
+async function start(db: Db, cfg: GuildConfig, memberId: string, game: CasinoGame, bet: number, init: () => Outcome, now: Date, seat?: (tx: Db) => Promise<void>, limits: { maxBet?: number } = {}): Promise<Played> {
   const busy = await activeGame(db, memberId, game);
   if (busy) return { status: 'busy', row: busy };
-  const check = await checkBet(db, cfg, memberId, game, bet, now);
+  const check = await checkBet(db, cfg, memberId, game, bet, now, limits);
   if (check !== 'ok') return { status: check };
   const o = init();
   const row = await db.transaction(async (tx) => {
@@ -273,14 +277,14 @@ export async function playRoulette(db: Db, cfg: GuildConfig, memberId: string, s
   const max = rouletteMaxOf(c);
   if (!stakes.length || stakes.some((x) => !isRouletteBet(x.on) || !Number.isSafeInteger(x.amount) || x.amount < c.minBet || x.amount > max)) return { status: 'bad_bet' };
   const total = stakesTotal(stakes);
-  // 合計の上限は「1 か所の最高 × 所の数」（1 日の上限・残高はそのまま確かめる）
-  const wide = { ...cfg, casino: { ...c, maxBet: max * ROULETTE_SPOT_COUNT } };
-  return start(db, wide, memberId, 'roulette', total, () => {
+  // 合計の上限は「1 か所の最高 × 所の数」（1 日の上限・残高はそのまま確かめる）。
+  // 設定を広げて渡すと、札が効いている人では元の上限に戻ってしまうので、上書きとして渡す
+  return start(db, cfg, memberId, 'roulette', total, () => {
     const n = rouletteSpin(rng);
     const results = stakes.map((x) => ({ ...x, payout: stakePayout(x, n) }));
     const payout = results.reduce((sum, x) => sum + x.payout, 0);
     return { state: { number: n, stakes: results } satisfies RouletteState, done: true, payout };
-  }, now);
+  }, now, undefined, { maxBet: max * ROULETTE_SPOT_COUNT });
 }
 
 // ───────── 🎲 ちんちろりん（CPU の親と勝負） ─────────
