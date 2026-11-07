@@ -90,17 +90,17 @@ export async function drawEventLottery(db:Db,id:string,prizeId:string,actorId:st
 }
 export async function markEventDelivered(db:Db,eventId:string,drawId:string,actorId:string){await db.transaction(async tx=>{await lock(tx,eventId);const [d]=await tx.select().from(draws).where(and(eq(draws.id,drawId),eq(draws.eventId,eventId))).for('update');if(!d||!d.item)return fail('受け渡し対象がありません。');if(d.delivered)return;await tx.update(draws).set({delivered:true}).where(eq(draws.id,drawId));await audit(tx,{actorId,action:'event_lottery.deliver',via:'web',detail:{eventId,drawId}});});}
 /** 失敗しても賞金や抽選は再実行せず、通知だけを再送する。送信中は同じ行を他workerが取らない。 */
-export async function sendEventLotteryNotices(db:Db,send:(channelId:string,body:Record<string,unknown>)=>Promise<{id:string}>,now=new Date(),edit?: (channelId:string,messageId:string,body:Record<string,unknown>)=>Promise<void>){
+export async function sendEventLotteryNotices(db:Db,send:(channelId:string,body:Record<string,unknown>)=>Promise<{id:string}>,now=new Date(),edit?: (channelId:string,messageId:string,body:Record<string,unknown>)=>Promise<void|{id:string}>){
  for(let i=0;i<20;i++){
   const found=await db.transaction(async tx=>{const [n]=await tx.select().from(notices).where(and(isNull(notices.sentAt),lte(notices.dueAt,now))).orderBy(asc(notices.dueAt)).limit(1).for('update',{skipLocked:true});if(!n)return false;
    let body=n.body;const isPanel=n.id===`panel:${n.eventId}`;
    if(isPanel&&Array.isArray(body.components)){const [e]=await tx.select().from(events).where(eq(events.id,n.eventId));body=e?.state==='open'?panel(e):{content:'このイベントは現在、参加を受け付けていません。',allowed_mentions:{parse:[]}};}
    let messageId=n.messageId;
    try{
-    if(messageId){if(!edit)throw new Error('message edit unavailable');await edit(n.channelId,messageId,body);}
+    if(messageId){if(!edit)throw new Error('message edit unavailable');const changed=await edit(n.channelId,messageId,body);if(changed)messageId=changed.id;}
     else{const nonce=BigInt('0x'+createHash('sha256').update(n.id).digest('hex').slice(0,16)).toString();messageId=(await send(n.channelId,{...body,nonce,enforce_nonce:true})).id;
      // nonceで旧投稿が返った場合にも、景品のない本文へ揃える。
-     if(isPanel&&edit)await edit(n.channelId,messageId,body);
+     if(isPanel&&edit){const changed=await edit(n.channelId,messageId,body);if(changed)messageId=changed.id;}
     }
     await tx.update(notices).set({body,sentAt:now,messageId,attempts:n.attempts+1,error:null}).where(eq(notices.id,n.id));
    }catch{await tx.update(notices).set({body,messageId,attempts:n.attempts+1,error:'Discordへの送信に失敗しました。',dueAt:new Date(now.getTime()+60000)}).where(eq(notices.id,n.id));}return true;});if(!found)break;

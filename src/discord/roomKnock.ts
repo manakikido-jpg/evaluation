@@ -139,7 +139,7 @@ export class RoomKnockApp {
       const s = await roomKnockState(this.db, room);
       return void await i.showModal({ custom_id: `rkn:topicmodal:${room}`, title: '💬 今の話題', components: [{ type: 1, components: [{ type: 4, custom_id: 'topic', label: `今こんな話をしています（${TOPIC_MAX}文字まで・空で消す）`, style: 1, max_length: TOPIC_MAX, required: false, ...(s.topic?.text ? { value: s.topic.text } : {}), placeholder: '例: ゆるく雑談中／ゲームの話／作業しながら' }] }] } as never);
     }
-    if (i.isModalSubmit() && i.customId.startsWith('rkn:topicmodal:') && i.inCachedGuild() && i.guildId === this.cfg().guildId) {
+    if (typeof i.isModalSubmit === 'function' && i.isModalSubmit() && i.customId.startsWith('rkn:topicmodal:') && i.inCachedGuild() && i.guildId === this.cfg().guildId) {
       await i.deferReply(PRIVATE);
       const room = i.customId.split(':')[2] ?? '';
       const ch = i.guild.channels.cache.get(room);
