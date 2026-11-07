@@ -36,7 +36,7 @@ import { mountStickerDesk, mountStickerAdmin } from './stickerDesk.js';
 import { refreshCastLeaderboard } from '../discord/castLeaderboard.js';
 import { rankingHidden, setRankingHidden } from '../services/castLeaderboard.js';
 import { bingoHostRoles, saveBingoHostRoles } from '../services/bingo.js';
-import { excludeShofuku, markShofukuAchievement, rewardShofuku, saveShofukuConfig, shofukuConfig, shofukuRanking, shofukuRows } from '../services/shofuku.js';
+import { grantShofukuSince, shofukuGrantTargets, excludeShofuku, markShofukuAchievement, rewardShofuku, saveShofukuConfig, shofukuConfig, shofukuRanking, shofukuRows } from '../services/shofuku.js';
 import { ShofukuPage } from './views/shofuku.js';
 import { fortuneGamesSchema } from '../config.js';
 import { ensureLotteryRound } from '../services/casino/fortune.js';
@@ -1520,7 +1520,20 @@ export function createWebApp(deps: WebDeps) {
     const config = await shofukuConfig(db);
     const rows = await shofukuRows(db, cfg, config, now());
     const roles = ((await loadRoles()) ?? []).filter(r => !r.managed && r.id !== cfg.guildId).sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name }));
-    return c.html(<ShofukuPage session={c.get('session')} config={config} rows={rows} ranking={await shofukuRanking(db, rows)} roles={roles} msg={c.req.query('msg')} coin={cfg.economy.currencyName} />);
+    const since = c.req.query('since') ?? '2026-11-01';
+    const grantTargets = await shofukuGrantTargets(db, since);
+    const granted = c.req.query('n') ? { n: Number(c.req.query('n')) || 0, f: Number(c.req.query('f')) || 0, r: Number(c.req.query('r')) || 0 } : undefined;
+    return c.html(<ShofukuPage session={c.get('session')} config={config} rows={rows} ranking={await shofukuRanking(db, rows)} roles={roles} msg={c.req.query('msg')} coin={cfg.economy.currencyName} grant={{ since, count: grantTargets?.ids.length ?? 0, hasRole: Boolean(grantTargets?.roleId), valid: Boolean(grantTargets), guji: gujiOnly(c) }} granted={granted} />);
+  });
+  /** 指定の日から入った人に、まとめて『招福』ロールを付ける（宮司だけ） */
+  app.post('/invites/shofuku/grant-since', async (c) => {
+    if (!gujiOnly(c)) return c.redirect('/invites/shofuku?msg=guji');
+    const b = await c.req.parseBody();
+    const since = typeof b.since === 'string' ? b.since : '';
+    if (b.confirm !== 'yes') return c.redirect(`/invites/shofuku?msg=grant_confirm&since=${encodeURIComponent(since)}`);
+    const r = await grantShofukuSince(db, deps.discord, cfg.guildId, since, c.get('session').userId);
+    if (r.status !== 'ok') return c.redirect(`/invites/shofuku?msg=${r.status === 'no_role' ? 'grant_no_role' : 'grant_invalid'}`);
+    return c.redirect(`/invites/shofuku?msg=grant_done&since=${encodeURIComponent(since)}&n=${r.granted}&f=${r.failed}&r=${r.remaining}`);
   });
   app.post('/invites/shofuku/settings', async (c) => {
     if (!gujiOnly(c)) return c.redirect('/invites/shofuku?msg=guji');

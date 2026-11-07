@@ -14,12 +14,16 @@ const MSG: Record<string, { text: string; kind: 'ok' | 'warn' }> = {
   included: { text: '対象に戻しました。', kind: 'ok' },
   locked: { text: '銭を渡したあとは、対象外にできません。', kind: 'warn' },
   achieved: { text: '達成報酬を渡した印を付けました。', kind: 'ok' },
+  grant_done: { text: '『招福』ロールを付けました。', kind: 'ok' },
+  grant_confirm: { text: '「確かめました」にチェックを入れてから押してください。', kind: 'warn' },
+  grant_no_role: { text: '先に、下の設定で『招福』ロールを選んで保存してください。', kind: 'warn' },
+  grant_invalid: { text: '日付を確かめてください。', kind: 'warn' },
 };
 const fmt = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
 const hm = (m: number) => `${Math.floor(m / 60)}時間${m % 60}分`;
 
 /** 🎍 招福詣（招待イベント）の集計 */
-export function ShofukuPage(p: { session: AdminSession; config: ShofukuConfig; rows: ShofukuRow[]; ranking: ShofukuRank[]; roles: { id: string; name: string }[]; msg?: string; coin: string }) {
+export function ShofukuPage(p: { session: AdminSession; config: ShofukuConfig; rows: ShofukuRow[]; ranking: ShofukuRank[]; roles: { id: string; name: string }[]; msg?: string; coin: string; grant?: { since: string; count: number; hasRole: boolean; valid: boolean; guji: boolean }; granted?: { n: number; f: number; r: number } }) {
   const c = p.config;
   const csrf = <input type="hidden" name="_csrf" value={p.session.csrfToken} />;
   const flash = p.msg ? MSG[p.msg] : undefined;
@@ -64,6 +68,22 @@ export function ShofukuPage(p: { session: AdminSession; config: ShofukuConfig; r
       </table></div> : <p class="note">まだいません。</p>}
       <p class="note">🎍 は、お参り期間を延ばした人です（🔰参拝者になったあと、毎分の確認で延ばし、『招福』ロールを付けます）。</p>
     </section>
+
+    {p.grant && <section class="card">
+      <h2>🎍 まとめて『招福』ロールを付ける</h2>
+      <p class="note">指定した日（日本時間 0:00）から入った、いま在籍中の人全員に『招福』ロールを付けます（BOT・もう付いている人はのぞく）。招待リンクで入ったかどうかは見ません。1 回に 300 人までなので、残りがあるときは、もう一度押してください。</p>
+      {p.granted && <p class="flash ok">付けた人: {p.granted.n}人{p.granted.f ? `／付けられなかった人: ${p.granted.f}人（BOT のロールの位置・権限を確かめてください）` : ''}{p.granted.r ? `／残り: ${p.granted.r}人（もう一度押すと続きから）` : ''}</p>}
+      <form method="get" action="/invites/shofuku" class="fields">
+        <label class="field"><span>この日から入った人</span><input type="date" name="since" value={p.grant.since} required /></label>
+        <button type="submit" class="small">対象の人数を確かめる</button>
+      </form>
+      {!p.grant.valid ? <p class="note">日付を確かめてください。</p> : !p.grant.hasRole ? <p class="note">先に、下の設定で『招福』ロールを選んで保存してください。</p> : <p><strong>いまの対象: {p.grant.count}人</strong>（{p.grant.since} 以降に入って、まだ『招福』がない人）</p>}
+      {p.grant.guji ? p.grant.valid && p.grant.hasRole && p.grant.count > 0 && <form method="post" action="/invites/shofuku/grant-since">
+        {csrf}<input type="hidden" name="since" value={p.grant.since} />
+        <label><input type="checkbox" name="confirm" value="yes" /> 対象 {p.grant.count}人に『招福』ロールを付けることを確かめました</label>
+        <button type="submit" class="ok">まとめて付ける</button>
+      </form> : <p class="note">付けられるのは宮司だけです。</p>}
+    </section>}
 
     <form method="post" action="/invites/shofuku/settings" class="card">
       {csrf}

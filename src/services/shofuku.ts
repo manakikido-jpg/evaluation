@@ -8,6 +8,7 @@ import { extendOmairi } from './applications.js';
 import { audit } from './audit.js';
 import { addCoins } from './economy.js';
 import { returningMemberIds } from './members.js';
+import type { DiscordActions } from '../lib/discordRest.js';
 
 /**
  * 🎍 招福詣（招待イベント）。
@@ -175,3 +176,35 @@ export async function markShofukuAchievement(db: Db, inviterId: string, points: 
     return Boolean(row);
   });
 }
+
+// ───────── 指定の日から入った人に、まとめて『招福』ロールを付ける ─────────
+
+const GRANT_LIMIT = 300;
+const validDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00+09:00`));
+
+/** 指定の日（日本時間 0:00）から入った、在籍中の人（BOT のぞく）で、まだ『招福』ロールがない人 */
+export async function shofukuGrantTargets(db: Db, since: string): Promise<{ roleId: string; ids: string[] } | undefined> {
+  if (!validDay(since)) return undefined;
+  const { roleId } = await shofukuConfig(db);
+  if (!roleId) return { roleId: '', ids: [] };
+  const rows = await db.select({ id: members.id, roleIds: members.roleIds }).from(members)
+    .where(and(eq(members.isBot, false), isNull(members.leftAt), gte(members.joinedAt, new Date(`${since}T00:00:00+09:00`))));
+  return { roleId, ids: rows.filter((r) => !r.roleIds.includes(roleId)).map((r) => r.id).sort() };
+}
+
+/** まとめて付ける（1 回に 300 人まで。もう付いている人はとばすので、残りは、もう一度押せば続きから） */
+export async function grantShofukuSince(db: Db, discord: Pick<DiscordActions, 'addRole'>, guildId: string, since: string, by: string):
+  Promise<{ status: 'ok'; targets: number; granted: number; failed: number; remaining: number } | { status: 'invalid' | 'no_role' }> {
+  const t = await shofukuGrantTargets(db, since);
+  if (!t) return { status: 'invalid' };
+  if (!t.roleId) return { status: 'no_role' };
+  const batch = t.ids.slice(0, GRANT_LIMIT);
+  let granted = 0, failed = 0;
+  for (const id of batch) {
+    try { await discord.addRole(guildId, id, t.roleId, `招福ロールをまとめて付与（${since} から入った人）`); granted++; }
+    catch { failed++; }
+  }
+  await audit(db, { actorId: by, action: 'shofuku.grant_since', detail: { since, roleId: t.roleId, targets: t.ids.length, granted, failed }, via: 'web' });
+  return { status: 'ok', targets: t.ids.length, granted, failed, remaining: Math.max(0, t.ids.length - batch.length) };
+}
+

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../src/db/client.js';
 import { invites, memberEvents, members, omairi, voiceUsage } from '../src/db/schema.js';
-import { excludeShofuku, markShofukuAchievement, rewardShofuku, saveShofukuConfig, shofukuConfig, shofukuPerks, shofukuRanking, shofukuRows } from '../src/services/shofuku.js';
+import { grantShofukuSince, shofukuGrantTargets, excludeShofuku, markShofukuAchievement, rewardShofuku, saveShofukuConfig, shofukuConfig, shofukuPerks, shofukuRanking, shofukuRows } from '../src/services/shofuku.js';
 import { walletOf } from '../src/services/economy.js';
 import { cfg, makeDb, ROLE } from './helpers.js';
 
@@ -60,4 +60,33 @@ describe('🎍 招福詣', () => {
     expect(await markShofukuAchievement(db, INV, 3, 'staff')).toBe(true);
     expect(await markShofukuAchievement(db, INV, 3, 'staff')).toBe(false);
   });
+
+  it('指定の日から入った在籍中の人（BOT・もう付いている人・抜けた人・前に入った人のぞく）にまとめて招福ロールを付ける', async () => {
+    const LATE = '700000000000000511', HAS = '700000000000000512', LEFT = '700000000000000513', BOT = '700000000000000514', NEWBIE = '700000000000000515';
+    const d = (iso: string) => new Date(iso);
+    await db.insert(members).values([
+      { id: LATE, username: 'late', displayName: 'あ', roleIds: [], joinedAt: d('2026-11-01T00:30:00+09:00') },
+      { id: HAS, username: 'has', displayName: 'い', roleIds: [SHOFUKU], joinedAt: d('2026-11-02T03:00:00Z') },
+      { id: LEFT, username: 'left', displayName: 'う', roleIds: [], joinedAt: d('2026-11-03T03:00:00Z'), leftAt: d('2026-11-04T03:00:00Z') },
+      { id: BOT, username: 'bot', displayName: 'え', roleIds: [], isBot: true, joinedAt: d('2026-11-03T03:00:00Z') },
+      { id: NEWBIE, username: 'newbie', displayName: 'お', roleIds: [], joinedAt: d('2026-10-31T23:59:00+09:00') },
+    ]);
+    // INV・A・B・BACK・OLD は beforeEach で入っている（11/3 入り）。OLD は前に入った。
+    const targets = await shofukuGrantTargets(db, '2026-11-01');
+    expect(targets!.roleId).toBe(SHOFUKU);
+    expect(targets!.ids).toContain(LATE);
+    for (const id of [HAS, LEFT, BOT, NEWBIE]) expect(targets!.ids).not.toContain(id);
+    expect(await shofukuGrantTargets(db, 'あした')).toBeUndefined();
+    const calls: string[] = [];
+    const discord = { addRole: async (_g: string, u: string, r: string) => { if (u === A) throw new Error('boom'); calls.push(`${u}:${r}`); } };
+    const r = await grantShofukuSince(db, discord, 'g', '2026-11-01', 'staff');
+    expect(r).toMatchObject({ status: 'ok', failed: 1, remaining: 0 });
+    expect(calls).toContain(`${LATE}:${SHOFUKU}`);
+    expect(calls.every((c) => c.endsWith(`:${SHOFUKU}`))).toBe(true);
+    expect(calls.some((c) => c.startsWith(HAS) || c.startsWith(LEFT) || c.startsWith(BOT) || c.startsWith(NEWBIE))).toBe(false);
+    expect(await grantShofukuSince(db, discord, 'g', 'x', 'staff')).toEqual({ status: 'invalid' });
+    await saveShofukuConfig(db, { enabled: true, malePoints: 1, femalePoints: 2, targetPoints: 3, roleId: '' }, 'staff');
+    expect(await grantShofukuSince(db, discord, 'g', '2026-11-01', 'staff')).toEqual({ status: 'no_role' });
+  });
 });
+
