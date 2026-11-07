@@ -35,6 +35,7 @@ type Nav =
   | 'gacha'
   | 'interview'
   | 'members'
+  | 'alts'
   | 'evaluation'
   | 'applications'
   | 'yaku'
@@ -81,6 +82,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'メンバー対応',
     items: [
       { key: 'members', href: '/members', icon: '👥', label: 'メンバー' },
+      { key: 'alts', href: '/alts', icon: '🔗', label: 'サブアカウント' },
       { key: 'evaluation', href: '/evaluation', icon: '📋', label: '評価' },
       { key: 'applications', href: '/applications', icon: '📝', label: '申請' },
       { key: 'yaku', href: '/yaku', icon: '👹', label: '厄' },

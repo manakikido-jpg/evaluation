@@ -29,7 +29,7 @@ export function MemberAltsPage(p: { session: AdminSession; alts: MemberAlt[]; na
   const name = (id: string) => <a href={`/members/${id}`}>{p.names.get(id) ?? id}</a>;
   const pending = p.alts.filter((a) => a.status === 'pending');
   const approved = p.alts.filter((a) => a.status === 'approved');
-  return <Layout title="サブアカウント" nav="members" session={p.session}>
+  return <Layout title="サブアカウント" nav="alts" session={p.session}>
     <div class="page-head"><h1>🔗 サブアカウント</h1></div>
     {flash && <p class={`flash ${flash.kind}`}>{flash.text}</p>}
     <p class="note">サブアカウントは、申告して運営が承認すれば使えます（申告しないサブはルール違反）。申告は、サブの人が <code>/サブ垢 申告</code> で本アカウントを選ぶか、本アカウントの人が <code>/サブ垢 本アカから申告</code> でサブと理由を入れます（パネルのボタンでも。まだサーバーに入っていないアカウントも申請できます）。承認したサブは、銭が入らず、朱印を押せず・押されず、招待の記録とお礼に入りません。承認したとき、サブが持っていた銭は本アカウントへ移します（本アカウント側が申告したものは、他人のアカウントの銭を取れないように、移しません）。</p>
