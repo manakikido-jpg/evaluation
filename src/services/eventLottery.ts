@@ -1,8 +1,8 @@
 import { randomInt, randomUUID, createHash } from 'node:crypto';
-import { and, asc, desc, eq, isNull, isNotNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, isNotNull, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type {Db} from '../db/client.js';
-import {eventLotteries as events,eventLotteryEntries as entries,eventLotteryDraws as draws,eventLotteryNotices as notices,members,type EventPrize} from '../db/schema.js';
+import {eventLotteries as events,eventLotteryEntries as entries,eventLotteryDraws as draws,eventLotteryNotices as notices,members,coinTx,type EventPrize} from '../db/schema.js';
 import {addCoins,spendWithin} from './economy.js';
 import {isRestrictedAccount} from './staffAlts.js';
 import {audit} from './audit.js';
@@ -23,7 +23,7 @@ export async function eventLotteryView(db:Db,id:string){
 }
 export async function listEventLotteries(db:Db){return db.select().from(events).orderBy(desc(events.createdAt));}
 async function lock(db:Db,id:string){const [event]=await db.select().from(events).where(eq(events.id,id)).for('update');return event??fail('イベントがありません。');}
-function panel(e:typeof events.$inferSelect){return {content:`🎟 ${e.name}\n参加費：${e.fee.toLocaleString('ja-JP')}銭（1人1口・1人1当選）\n受付終了後、運営が景品ごとに当選者を引きます。落選時の返金はありません。\n景品：${e.prizes.map(p=>`${p.name}×${p.count}（${p.coins}銭${p.item?'＋'+p.item:''}）`).join(' / ')}`.slice(0,1900),components:[{type:1,components:[{type:2,style:3,label:`参加する（${e.fee}銭）`,custom_id:`eventlottery:${e.id}`}]}],allowed_mentions:{parse:[]}};}
+function panel(e:typeof events.$inferSelect){const body={content:`🎟 ${e.name}\n参加費：${e.fee.toLocaleString('ja-JP')}銭（1人1口・1人1当選）\n受付終了後、運営が景品ごとに当選者を引きます。落選時の返金はありません。\n景品：${e.prizes.map(p=>`${p.name}×${p.count}（${p.coins}銭${p.item?'＋'+p.item:''}）`).join(' / ')}`,components:[{type:1,components:[{type:2,style:3,label:`参加する（${e.fee}銭）`,custom_id:`eventlottery:${e.id}`}]}],allowed_mentions:{parse:[]}};if(body.content.length>1900)return fail('景品の案内が長すぎます。全員が全文を確認できるよう、イベント名・景品名・受け渡し内容を短くしてください（案内は1900文字まで）。');return body;}
 export async function enterEventLottery(db:Db,id:string,memberId:string,displayName:string){return db.transaction(async tx=>{
  const e=await lock(tx,id);const [old]=await tx.select().from(entries).where(and(eq(entries.eventId,id),eq(entries.memberId,memberId)));if(old)return '参加済みです。追加の支払いはありません。';
  if(e.state!=='open')return fail('このイベントは受付中ではありません。');
@@ -41,7 +41,7 @@ export async function changeEventLottery(db:Db,id:string,actorId:string,version:
  else if(action==='cancel'&&['draft','open','closed'].includes(state)&&!results.length){
   const ps=await tx.select().from(entries).where(and(eq(entries.eventId,id),eq(entries.refunded,false)));
   // サブアカへ変更済みの人を飛ばして返金済みにしない。
-  for(const p of ps){if(await isRestrictedAccount(tx,p.memberId))return fail('返金先に制限アカウントがあります。アカウント設定を確認してください。');await addCoins(tx,p.memberId,p.paid,'event_refund',{eventId:id});await tx.update(entries).set({refunded:true}).where(and(eq(entries.eventId,id),eq(entries.memberId,p.memberId)));}
+  for(const p of ps){if(await isRestrictedAccount(tx,p.memberId))return fail('返金先に制限アカウントがあります。アカウント設定を確認してください。');const refundId=randomUUID();await addCoins(tx,p.memberId,p.paid,'event_refund',{eventId:id,refundId});const [credited]=await tx.select({id:coinTx.id}).from(coinTx).where(and(eq(coinTx.memberId,p.memberId),eq(coinTx.reason,'event_refund'),eq(coinTx.amount,p.paid),sql`${coinTx.detail}->>'refundId' = ${refundId}`));if(!credited)return fail('返金を確認できませんでした。アカウント設定を確認してから、もう一度中止してください。');await tx.update(entries).set({refunded:true}).where(and(eq(entries.eventId,id),eq(entries.memberId,p.memberId)));}
   state='cancelled';
  }else if(action==='complete'&&state==='closed'){
   const ps=await tx.select().from(entries).where(eq(entries.eventId,id));const remaining=e.prizes.some(p=>results.filter(r=>r.prizeId===p.id).length<p.count);

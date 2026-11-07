@@ -3,8 +3,9 @@ import {randomUUID} from 'node:crypto';
 import {eq} from 'drizzle-orm';
 import {makeDb} from './helpers.js';
 import type {Db} from '../src/db/client.js';
-import {members,eventLotteries,eventLotteryDraws} from '../src/db/schema.js';
+import {members,eventLotteries,eventLotteryDraws,coinTx} from '../src/db/schema.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
+import * as economy from '../src/services/economy.js';
 import {createEventLottery,eventLotteryView,enterEventLottery,changeEventLottery,drawEventLottery,markEventDelivered,sendEventLotteryNotices,retryEventLotteryNotices} from '../src/services/eventLottery.js';
 let db:Db,close:()=>Promise<void>,id:string;const now=new Date('2026-11-08T04:00:00Z');
 beforeEach(async()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(now);({db,close}=await makeDb());for(const id of ['a','b','c']){await db.insert(members).values({id,username:id,displayName:id});await addCoins(db,id,1000,'adjust');}id=await createEventLottery(db,{name:'イベント',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:[{name:'景品',count:2,coins:200,item:'品物'}]},'guji');});afterEach(async()=>{vi.useRealTimers();await close();});
@@ -21,3 +22,25 @@ it('残数があっても残る参加者が退出済みなら完了できる',as
 it('同時参加と同じ版の同時抽選でも二重徴収・二重抽選しない',async()=>{await action('open');await Promise.all([enterEventLottery(db,id,'a','A'),enterEventLottery(db,id,'a','A')]);expect((await walletOf(db,'a')).balance).toBe(900);await enterEventLottery(db,id,'b','B');await action('close');const e=(await state()).event;const rs=await Promise.allSettled([drawEventLottery(db,id,e.prizes[0]!.id,'guji',e.version,randomUUID(),now,()=>0),drawEventLottery(db,id,e.prizes[0]!.id,'guji',e.version,randomUUID(),now,()=>0)]);expect(rs.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect((await state()).results).toHaveLength(1);});
 it('制限アカウントや退出者は受付・抽選に入らない',async()=>{const {setStaffAlt}=await import('../src/services/staffAlts.js');await action('open');await setStaffAlt(db,'c',true,'operator','operator','test');await expect(enterEventLottery(db,id,'c','C')).rejects.toThrow('アカウント');await db.update(members).set({leftAt:now}).where(eq(members.id,'b'));await expect(enterEventLottery(db,id,'b','B')).rejects.toThrow('アカウント');await expect(enterEventLottery(db,id,'missing','M')).rejects.toThrow('アカウント');});
 it('発表を3秒待ち、再送も同じnonceで通知し、賞金をやり直さない',async()=>{await action('open');await enterEventLottery(db,id,'a','A');await action('close');const drawn=await draw();await retryEventLotteryNotices(db,id,'operator');await sendEventLotteryNotices(db,async()=>({id:'panel'}),new Date(now.getTime()+2000));expect((await state()).messages.find(n=>n.id===drawn.id)!.sentAt).toBeNull();const nonces:unknown[]=[];await sendEventLotteryNotices(db,async(_c,b)=>{nonces.push(b.nonce);throw Error('network');},new Date(now.getTime()+4000));await retryEventLotteryNotices(db,id,'operator');await sendEventLotteryNotices(db,async(_c,b)=>{nonces.push(b.nonce);expect(b.enforce_nonce).toBe(true);return {id:'result'};},new Date('2027-01-01'));expect(nonces).toHaveLength(2);expect(nonces[0]).toBe(nonces[1]);expect((await walletOf(db,'a')).balance).toBe(1100);});
+
+it('返金の事前検査後に制限へ変わり銭APIが入金を省略したら、中止全体を戻す',async()=>{
+ await action('open');for(const p of ['a','b'])await enterEventLottery(db,id,p,p);
+ const {setStaffAlt}=await import('../src/services/staffAlts.js');const realAdd=economy.addCoins;
+ // 検査と入金の間に制限変更が確定した順序を再現する。入金API自体は実物を使う。
+ const spy=vi.spyOn(economy,'addCoins').mockImplementation(async(tx,memberId,amount,reason,detail)=>{
+  if(reason==='event_refund'&&memberId==='b')await setStaffAlt(tx,'b',true,'operator');
+  return realAdd(tx,memberId,amount,reason,detail);
+ });
+ try{await expect(action('cancel')).rejects.toThrow('返金を確認できません');}finally{spy.mockRestore();}
+ const v=await state();expect(v.event.state).toBe('open');expect(v.refunded).toBe(0);expect(v.participants.every(p=>!p.refunded)).toBe(true);
+ expect((await walletOf(db,'a')).balance).toBe(900);expect((await walletOf(db,'b')).balance).toBe(900);
+ expect(await db.select().from(coinTx).where(eq(coinTx.reason,'event_refund'))).toHaveLength(0);
+ await action('cancel');expect((await state()).refunded).toBe(200);expect((await walletOf(db,'b')).balance).toBe(1000);
+});
+it('長すぎる景品案内は切り捨てず、受付を始める前に拒否する',async()=>{
+ const longId=await createEventLottery(db,{name:'長い案内',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:Array.from({length:10},(_,i)=>({name:'景品'+i,count:1,coins:0,item:'品'.repeat(210)}))},'guji');
+ await expect(changeEventLottery(db,longId,'guji',0,'open')).rejects.toThrow('案内が長すぎます');const v=await eventLotteryView(db,longId);expect(v.event.state).toBe('draft');expect(v.messages).toHaveLength(0);await expect(enterEventLottery(db,longId,'a','A')).rejects.toThrow('受付中');expect((await walletOf(db,'a')).balance).toBe(1000);
+});
+it('受付パネルには全景品の案内を最後まで載せる',async()=>{
+ await action('open');const v=await state();const body=v.messages.find(n=>n.id.startsWith('panel:'))!.body as {content:string};expect(body.content).toContain('景品×2（200銭＋品物）');
+});
