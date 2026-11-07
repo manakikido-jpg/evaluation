@@ -11,6 +11,14 @@
 - 検証完了：製品3270964cをNode22で型/build、単一全256ファイル2,839件成功（628.13秒、2worker、既定制限）。全件開始前に製品/試験を固定。ログ/tmp/kiseki-composite-{types-final,build,all,browser,controls,awards,screens}.log。最終CSSの通常10/当選80/42STOP/4予告/再読込成功、JS例外0。以降は記録のみ。
 - push前fetch：本番76181e4c、merge-tree exit0。ローカル全件はa6568a53基点で、最新本番との結合は今回のPR159 CIで別確認する。今回分の合流は本人承認済み。次はPR159最新headのCI/レビュー/競合確認→合流→本番ブランチに新素材があることを確認。実サイトへの通信制限は継続。
 
+- 保存済み：PR159 head9a934720へpushしReadyへ変更。最新CIはPR42334115138 / push42334109440を監視中（/tmp/kiseki-composite-{pr,push}-ci.log）。PRタイトル/本文は採用素材を組込んだ最終実装へ更新済み。未解決レビュー0、競合なし、合流はCI待ち。
+- 待機中に本番b0ac9711（サブアカウント制限）が追加。履歴を維持し、/tmp/kiseki-merged-validation のdetached worktreeへhead9a934720と本番b0ac9711をno-commit合流、競合なし/合成tree b4b1c3c3ab44b61e61809af00f30562341b166be。node_modulesは共有リンクで、型/build/全件を/tmp/kiseki-merged-{types,build,all}.logへ実行中（session48584）。PR headは変えず、新本番との合成状態の追加検証として扱う。根の今回の未commit差分はこの進捗記録のみ。
+
+- 完了：head9a934720のPR CI42334115138/push CI42334109440とも成功。最新本番b0ac9711との合成版でも型/build/全257ファイル2,847件成功（629.05秒）。merge-treeと一時worktreeのtree b4b1c3c3ab44b61e61809af00f30562341b166beが一致。
+- 本人承認に従いPR159を2026-11-07 03:45:57 UTC（12:45:57 JST）に合流。merge63e67f44560b9ea080559a732bf8ceb034e3a52f、本番ブランチのtreeも検証済みb4b1c3c3と一致し、新WebPとkt-compositeの組込みを確認。凱旋/抽選/払出/銭接続/一般公開/外装は変更していない。
+- 本番ドメインの素材を合流後にも確認したが、この実行環境のCONNECT許可で403となり未到達。VPSの実表示/配信完了は未確認であり、GitHubの合流と混同しない。既存の自動更新が本番ブランチを取り込む構成。次は本人の本番表示確認、または環境の通信許可が追加された後の新素材配信確認。
+- 引継ぎ保存先handoff/kiseki-pr159-merged。本追記は合流/検証結果の文書のみで、製品/試験/依存は全件成功した本番treeと同じ。未完了の製品実装はなく、残るのはVPS実表示の確認。見本docs/previews/kiseki-composite-lcd-{390,630}.webp。tmp検証worktreeは結果照合のため残している。
+
 ## 2026年11月7日：高解像度参考画像の液晶を正確に再現する依頼
 - 本人の「全く再現できてない、完璧に再現して」と高解像度の全台画像。従来の独自素材/CSSによる近似は本人の要求を満たしていない。対象は引続き液晶のみで外装/抽選/保存/凱旋/一般公開/銭接続/合流には触れない。
 - 開始：codex/kiseki-reel-first、57ff4d81、tree clean。AGENTS/決定/作業メモを再確認しfetch。本画像の元データを作業用ファイルとして取得できるか調査したが、ローカルの添付ファイル/IDは見当たらない。会話の画像としては視認できる。WindowsのパスはこのLinux環境の実ファイルではない。
