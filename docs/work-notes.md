@@ -1,3 +1,18 @@
+## 2026年11月7日：PR157の合流を再開
+- 本人が再度「合流して」と指示。環境公開後の待機を解除し、CodexがPR157を検証後にGitHubから合流する。一般公開/銭接続は引き続き保留。
+- 開始：head b4b72610、前回の接続許可待ち記録だけ未commitで保持。API疎通成功。本番9d4d17eaをfetchしmerge-treeはexit0。PRはopen/Draft/mergeable、レビュー0/未解決スレッド0。標準CIは型成功・全テスト実行中でbuild待ち。
+- 次：headを動かさずCI完了を待つ→最新head/base/レビュー/競合再確認→Draft解除→同じhead指定でGitHubのmerge方式で合流→PR状態/マージcommit/本番の祖先関係を確認。今回の指示と結果はheadを動かさないよう合流後に記録保存する。VPS実反映は別確認。
+- 合流完了：PR157のhead b4b72610、base9d4d17eaでCIのpush run42319329921/pull_request run42319334359がともに成功（型/全テスト/build）。レビュー0/未解決0/競合なしを再確認。Draft解除後もhead同一/CLEANを確認し、--merge --match-head-commitで合流。
+- 結果：GitHub state=MERGED、merge commit68b2e2419cca746d1f6999c7d656d8eb2dfe22d7、2026年11月7日09:54:17（日本時間）。本番をfetchし検証済みheadが祖先に含まれることを確認。VPSの実反映は接続がなく未確認。一般公開/銭接続の保留は維持。
+- 保存：合流指示/接続許可待ち/完了の記録だけをhandoff/kiseki-pr157-mergedへ保存する。製品/試験/依存関係は検証済みheadと同一で、型/全件は上記CIおよびローカル全256ファイル2,831件の成功結果を再利用。直接本番へpushしない。次はVPSでの実画面確認と、残るBGM/6ステージ/演出法則の具体化。
+
+## 2026年11月7日：PR157の合流指示・接続許可待ち
+- 本人が「合流して」と明示。CodexがPR157を最新CI/レビュー/競合確認後にGitHubから合流する。以前の合流保留は本PRのみ解除。一般公開/銭接続の保留は維持。
+- 開始：tree clean、ローカル/remote head b4b72610。本番7b1ef068をfetch。PR157はDraft/未合流。git merge-treeによる競合検査はexit0（作業ツリー/本番は不変）。実装fd23f4aaの型/build/全256ファイル2,831件とブラウザー確認は成功済み。
+- 最新CI：PR側run42319329921/push側run42319334359は実行中。成功扱いにしない。レビュー/未解決スレッドのAPI確認は未完了。
+- 障害：gh pr viewはForbidden。curlでapi.github.comへのCONNECTがproxy403と確認。Git読み書き/GitHub Web閲覧の許可とは別。既存許可を保持しapi.github.comだけ追加する環境下書きを保存（requires_publish=true）。設定の保存・環境公開後にAPIの実アクセス/認証を再確認する。認証情報は要求/抽出していない。
+- 未合流/本番未反映。次：API疎通→最新head/base/CI/レビュー/競合再確認→Draft解除→検証済みhead指定のGitHubマージ→PR状態と本番祖先関係の確認。直接本番pushはしない。この記録はheadとCIを動かさないためローカルのみ・未commit/未push。
+
 ## 2026年11月7日：右側の金枠5マス履歴を追加
 - 依頼：本人の参考画像（右側の金枠/黄緑の光/白と青の7/5マス）を受けた「すすめて」。軌跡の液晶へ履歴を組み込み、凱旋・抽選・払出は維持。一般公開/銭接続/合流は保留。
 - 開始：codex/kiseki-fidelity-next、37e2ea12、tree clean。本番7b1ef068をfetch。既存の軌跡engineに確定後だけ更新する5個のtrailがあり、trialViewも公開済み履歴として返すが、液晶では未表示。
