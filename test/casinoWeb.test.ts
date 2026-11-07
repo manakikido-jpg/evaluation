@@ -134,6 +134,23 @@ describe('🎰 カジノ: 入口とログイン', () => {
     expect(admin.status).toBe(404);
   });
 
+  it('大勝負の札（極）を使うと、ロビーの上限が極の倍率（20 倍）で出る（ふつうの札のあとでも）', async () => {
+    const { addTickets } = await import('../src/services/tickets.js');
+    const { useCasinoBoost } = await import('../src/services/casino/boost.js');
+    await addTickets(db, A, 'casino_boost', 1);
+    await addTickets(db, A, 'casino_boost_ex', 1);
+    const { cookie } = await casinoLogin(A);
+    await useCasinoBoost(db, A, clock, current.casino);
+    // ふつうの札: 1 回 1,000 × 5 / 1 日 20,000 × 5
+    const h1 = await (await get('/casino/hall', cookie!)).text();
+    expect(h1).toContain('10〜5,000'); expect(h1).toContain('0 / 100,000');
+    // ふつうの札のあとに極を使うと、極に上書きされる
+    expect((await useCasinoBoost(db, A, clock, current.casino, true)).status).toBe('ok');
+    const html = await (await get('/casino/hall', cookie!)).text();
+    expect(html).toContain('10〜20,000'); expect(html).toContain('0 / 400,000');
+    expect(html).toContain('（極）');
+  });
+
   it('「カジノ」のロールを決めたら、そのロールがある人だけ（位は見ない）。外されたら次に確かめたときにログアウト', async () => {
     current = { ...cfg, casino: { ...cfg.casino, accessRoleId: '760000000000000555', accessRoleName: '🎰 カジノ' } };
     roles.set(B, [ROLE.ujiko, '760000000000000555']);

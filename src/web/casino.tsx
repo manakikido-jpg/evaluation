@@ -181,11 +181,12 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     const [w, boost, wardrobe] = await Promise.all([walletOf(db, session.userId), casinoBoostOf(db, session.userId, d.now()), stylesOf(db, session.userId)]);
     const boostUntil = boost?.until;
     const boostLevel = boost?.level ?? 1;
+    const boostEx = boost?.ex ?? false;
     if(getCookie(c,CASINO_PRESENTATION_COOKIE)==='1')c.header('Cache-Control','private, no-store');
-    return { session, presentationRequested:getCookie(c,CASINO_PRESENTATION_COOKIE)==='0', presentation:casinoPresentation(c), styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel } : {}) };
+    return { session, presentationRequested:getCookie(c,CASINO_PRESENTATION_COOKIE)==='0', presentation:casinoPresentation(c), styleUntil: wardrobe.trialUntil && wardrobe.trialUntil > d.now() ? wardrobe.trialUntil.getTime() : undefined, baseStyles: activeStyles({ ...wardrobe, trialUntil: null }, d.now()), styles: activeStyles(wardrobe, d.now()), balance: w.balance, coin: coin(), ...(boostUntil ? { boostUntil, boostLevel, boostEx } : {}) };
   };
   /** その人の上限（🎰 大勝負の札が効いていれば上がる）。画面に出す用。賭けるときは、それぞれのゲームが確かめ直す */
-  const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino, me.boostLevel ?? 1) : d.cfg().casino);
+  const casinoOf = (me: Me) => (me.boostUntil ? boostCasino(d.cfg().casino, me.boostLevel ?? 1, me.boostEx) : d.cfg().casino);
 
   /** ログインが要るページ。お休み中はお休みの画面 */
   const page =

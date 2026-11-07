@@ -255,7 +255,7 @@ export function CasinoLobbyContent(p: LobbyProps) {
               </>
             )}
           </p>
-          {p.me.boostUntil && <p class="c-boost">🎰 大勝負の札が効いています（今日の夜0時まで）。卓の参加費・ブラインドはふだんの上限です。</p>}
+          {p.me.boostUntil && <p class="c-boost">🎰 大勝負の札{p.me.boostEx ? '（極）' : ''}が効いています（今日の夜0時まで）。卓の参加費・ブラインドはふだんの上限です。</p>}
         </section>
       </div>
       <aside class="cl-aside" aria-label="着せ替えと御籤">
