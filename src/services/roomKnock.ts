@@ -7,7 +7,8 @@ export const KNOCK_MS = 3 * 60_000;
 export const ROOM_MODES = { open: '🟢 出入り自由', knock: '🔔 こんこん歓迎', busy: '🌙 取り込み中' } as const;
 export type RoomMode = keyof typeof ROOM_MODES;
 const pendingSchema = z.object({ id: z.string(), users: z.array(z.string()).max(20), expires: z.number(), messageId: z.string().optional(), answered: z.boolean().default(false) });
-const stateSchema = z.object({ mode: z.enum(['open', 'knock', 'busy']).default('open'), last: z.record(z.string(), z.number()).default({}), pending: pendingSchema.optional(), controlId: z.string().optional() });
+const topicSchema = z.object({ text: z.string().max(200), by: z.string(), at: z.number() });
+const stateSchema = z.object({ mode: z.enum(['open', 'knock', 'busy']).default('open'), last: z.record(z.string(), z.number()).default({}), pending: pendingSchema.optional(), controlId: z.string().optional(), /** 💬 今の話題（VC にいる人が書く。全員いなくなると消える） */ topic: topicSchema.optional() });
 export type KnockState = z.infer<typeof stateSchema>;
 const key = (room: string) => `room_knock:${room}`;
 
@@ -18,6 +19,8 @@ export const knockConfigSchema = z.object({
   channelId: z.string().regex(/^(\d{17,20})?$/).default(''),
   cooldownSec: z.number().int().min(30).max(3600).default(180),
   windowSec: z.number().int().min(30).max(3600).default(180),
+  /** 🏨 いまの部屋の掲示板を出すチャンネル（空なら出さない） */
+  boardChannelId: z.string().regex(/^(\d{17,20})?$/).default(''),
 });
 export type KnockConfig = z.infer<typeof knockConfigSchema>;
 export async function roomKnockConfig(db: Db): Promise<KnockConfig> {
@@ -25,7 +28,7 @@ export async function roomKnockConfig(db: Db): Promise<KnockConfig> {
   const r = knockConfigSchema.safeParse(row?.value ?? {});
   return r.success ? r.data : knockConfigSchema.parse({});
 }
-export async function saveRoomKnockConfig(db: Db, input: KnockConfig, by: string) {
+export async function saveRoomKnockConfig(db: Db, input: z.input<typeof knockConfigSchema>, by: string) {
   const value = knockConfigSchema.parse(input);
   await db.insert(settings).values({ key: CONFIG_KEY, value, updatedBy: by }).onConflictDoUpdate({ target: settings.key, set: { value, updatedBy: by, updatedAt: new Date() } });
   return value;
@@ -54,7 +57,14 @@ export async function setRoomKnockMode(db: Db, room: string, mode: RoomMode) {
   return change(db, room, s => { s.mode = mode; if (mode !== 'knock') delete s.pending; });
 }
 export async function resetRoomKnock(db: Db, room: string) {
-  return change(db, room, s => { s.mode = 'open'; delete s.pending; });
+  return change(db, room, s => { s.mode = 'open'; delete s.pending; delete s.topic; });
+}
+/** 今の話題の長さ（Discord の VC のステータスにも出す） */
+export const TOPIC_MAX = 80;
+/** 💬 今の話題を書く（改行は空白に・80 文字まで・空で消す）。書いた文（消したら ''）を返す */
+export async function setRoomTopic(db: Db, room: string, raw: string, by: string, now = Date.now()): Promise<string> {
+  const text = [...raw.replace(/\s+/g, ' ').trim()].slice(0, TOPIC_MAX).join('');
+  return change(db, room, s => { if (text) s.topic = { text, by, at: now }; else delete s.topic; return text; });
 }
 export async function setKnockControl(db: Db, room: string, id: string) {
   return change(db, room, s => { s.controlId = id; });

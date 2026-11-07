@@ -5,7 +5,7 @@ import type { GuildConfig } from '../config.js';
 import { settings } from '../db/schema.js';
 import { KeyedLock } from '../lib/lock.js';
 import { logger } from '../lib/logger.js';
-import { fmtSec, roomKnockConfig, ROOM_MODES, answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode, type KnockState, type RoomMode } from '../services/roomKnock.js';
+import { fmtSec, roomKnockConfig, ROOM_MODES, setRoomTopic, TOPIC_MAX, answerRoomKnock, cancelKnock, recordKnockMessage, requestRoomKnock, resetRoomKnock, roomKnockState, setKnockControl, setRoomKnockMode, type KnockState, type RoomMode } from '../services/roomKnock.js';
 
 const PRIVATE = { flags: MessageFlags.Ephemeral } as const;
 const noPing = { parse: [] as never[] };
@@ -15,9 +15,19 @@ const humans = (ch: VoiceChannel) => ch.members.filter(m => !m.user.bot);
 const link = (ch: VoiceChannel) => new ButtonBuilder().setLabel('部屋を開く').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${ch.guild.id}/${ch.id}`);
 const REPLIES = { yes: '⭕ どうぞ', wait: '⏳ 少し待ってね', no: '🌙 今はごめんね' } as const;
 export const roomDirectoryPanel = () => ({ content: '**🌸 お部屋案内**\n宿のお部屋を選んでください。部屋一覧と操作は、押した本人だけに表示します。\n🟢 出入り自由　🔔 こんこん歓迎　🌙 取り込み中\nこんこんは入室前の声かけです。入室の権限は変わりません。', components: [row(button('rkn:list:0', '🌸 部屋一覧を見る', ButtonStyle.Primary))], allowedMentions: noPing });
-export function roomKnockControls(room: string, mode: RoomMode) {
-  return { content: `**🌸 この部屋の受付：${ROOM_MODES[mode]}**\n在室している人が切り替えられます。全員退出すると「出入り自由」に戻ります。`, components: [row(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${room}:${m}`, ROOM_MODES[m])))], allowedMentions: noPing };
+export function roomKnockControls(room: string, mode: RoomMode, topic?: string) {
+  return {
+    content: `**🌸 この部屋の受付：${ROOM_MODES[mode]}**\n💬 今の話題：${topic ? escapeMarkdown(topic) : '（まだありません）'}\n在室している人が切り替えられます。全員退出すると「出入り自由」に戻り、話題も消えます。`,
+    components: [
+      row(...(Object.keys(ROOM_MODES) as RoomMode[]).map(m => button(`rkn:mode:${room}:${m}`, ROOM_MODES[m]))),
+      row(button(`rkn:topic:${room}`, '💬 今の話題を書く', ButtonStyle.Primary)),
+    ],
+    allowedMentions: noPing,
+  };
 }
+/** Discord の VC の「ステータス」（VC の名前の下に出る一言）。できなくても止めない */
+const setVoiceStatus = (ch: VoiceChannel, status: string) =>
+  ch.client.rest.put(`/channels/${ch.id}/voice-status`, { body: { status } }).catch((err: unknown) => logger.warn({ err, channelId: ch.id }, 'voice status update failed'));
 function notice(room: string, p: NonNullable<KnockState['pending']>, result?: string, window = '3分') {
   return { content: `🔔 **こんこん**\n${p.users.map(id => `<@${id}>`).join(' ')} さんが声をかけています。\n${result ?? '入っても大丈夫ですか？ 在室者だけが返事できます（${window}以内）。'}`, components: result ? [] : [row(...(Object.keys(REPLIES) as (keyof typeof REPLIES)[]).map(k => button(`rkn:reply:${room}:${p.id}:${k}`, REPLIES[k])))], allowedMentions: noPing };
 }
@@ -25,7 +35,9 @@ function notice(room: string, p: NonNullable<KnockState['pending']>, result?: st
 export class RoomKnockApp {
   private readonly lock = new KeyedLock();
   private ticking = false;
-  constructor(private db: Db, private cfg: () => GuildConfig, private included: (id: string) => Promise<boolean> = async () => false) {}
+  constructor(private db: Db, private cfg: () => GuildConfig, private included: (id: string) => Promise<boolean> = async () => false, /** 受付・話題が変わったとき（いまの部屋の掲示板を書きかえる） */ private onChange: () => void = () => undefined) {}
+  /** こんこんを使える宿の VC か（いまの部屋の掲示板も、同じ VC を出す） */
+  isEligible(ch: VoiceChannel) { return this.eligible(ch); }
   private async eligible(ch: VoiceChannel) {
     const cfg = this.cfg();
     return ch.id !== ch.guild.afkChannelId && !cfg.tempVoice.hubs.some(h => h.channelId === ch.id) && (await this.included(ch.id));
@@ -65,6 +77,7 @@ export class RoomKnockApp {
         if (!humans(ch).size && (s.mode !== 'open' || s.pending)) {
           if (s.pending?.messageId) await ch.messages.edit(s.pending.messageId, notice(ch.id, s.pending, '部屋が空になったため受付を終了しました。')).catch(() => undefined);
           if (s.controlId) await ch.messages.edit(s.controlId, roomKnockControls(ch.id, 'open')).catch(() => undefined);
+          if (s.topic) await setVoiceStatus(ch, '');
           await resetRoomKnock(this.db, ch.id);
           s = await roomKnockState(this.db, ch.id);
         }
@@ -79,9 +92,10 @@ export class RoomKnockApp {
   private async control(ch: VoiceChannel) {
     const s = await roomKnockState(this.db, ch.id);
     const msg = s.controlId ? await ch.messages.fetch(s.controlId).catch(() => undefined) : undefined;
-    const body = roomKnockControls(ch.id, s.mode);
+    const body = roomKnockControls(ch.id, s.mode, s.topic?.text);
     if (msg?.author.id === ch.guild.client.user.id) {
-      if (msg.content !== body.content) await msg.edit(body);
+      // 前の形（話題のボタンがない）のメッセージも、ボタンを足して書きかえる
+      if (msg.content !== body.content || msg.components.length !== body.components.length) await msg.edit(body);
       return;
     }
     const recent = await ch.messages.fetch({ limit: 30 });
@@ -95,7 +109,8 @@ export class RoomKnockApp {
     if (left?.type === ChannelType.GuildVoice && !humans(left).size) await this.lock.run(left.id, async () => {
       const s = await roomKnockState(this.db, left.id);
       if (s.pending?.messageId) await left.messages.edit(s.pending.messageId, notice(left.id, s.pending, '部屋が空になったため受付を終了しました。')).catch(() => undefined);
-      if (s.mode !== 'open' || s.pending) await resetRoomKnock(this.db, left.id);
+      if (s.mode !== 'open' || s.pending || s.topic) await resetRoomKnock(this.db, left.id);
+      if (s.topic) await setVoiceStatus(left, '');
       if (s.controlId) await left.messages.edit(s.controlId, roomKnockControls(left.id, 'open')).catch(() => undefined);
     });
     const joined = after.channel;
@@ -117,6 +132,29 @@ export class RoomKnockApp {
     return { content: `**🌸 お部屋一覧（${page + 1}/${max + 1}）**\n${options.length ? '部屋を選ぶと、受付の状態と操作が表示されます。' : '利用できる宿のお部屋はありません。'}`, components, allowedMentions: noPing };
   }
   async onInteraction(i: Interaction) {
+    // 💬 今の話題を書く: モーダルは返事を待たせる前に出す
+    if (i.isButton() && i.customId.startsWith('rkn:topic:') && i.inCachedGuild() && i.guildId === this.cfg().guildId) {
+      const room = i.customId.split(':')[2] ?? '';
+      if (i.member.voice.channelId !== room) return void await i.reply({ content: 'この部屋にいる人だけが書けます。', ...PRIVATE });
+      const s = await roomKnockState(this.db, room);
+      return void await i.showModal({ custom_id: `rkn:topicmodal:${room}`, title: '💬 今の話題', components: [{ type: 1, components: [{ type: 4, custom_id: 'topic', label: `今こんな話をしています（${TOPIC_MAX}文字まで・空で消す）`, style: 1, max_length: TOPIC_MAX, required: false, ...(s.topic?.text ? { value: s.topic.text } : {}), placeholder: '例: ゆるく雑談中／ゲームの話／作業しながら' }] }] } as never);
+    }
+    if (i.isModalSubmit() && i.customId.startsWith('rkn:topicmodal:') && i.inCachedGuild() && i.guildId === this.cfg().guildId) {
+      await i.deferReply(PRIVATE);
+      const room = i.customId.split(':')[2] ?? '';
+      const ch = i.guild.channels.cache.get(room);
+      if (ch?.type !== ChannelType.GuildVoice || !(await this.eligible(ch))) return void await i.editReply('この部屋では使えません。');
+      const actor = await i.guild.members.fetch({ user: i.user.id, force: true }).catch(() => undefined);
+      if (actor?.voice.channelId !== room) return void await i.editReply('この部屋にいる人だけが書けます。');
+      const text = await this.lock.run(room, async () => {
+        const t = await setRoomTopic(this.db, room, i.fields.getTextInputValue('topic'), i.user.id);
+        await this.control(ch).catch(err => logger.warn({ err, channelId: room }, 'room knock control failed'));
+        return t;
+      });
+      await setVoiceStatus(ch, text);
+      this.onChange();
+      return void await i.editReply({ content: text ? `💬 今の話題を「${escapeMarkdown(text)}」にしました。` : '💬 今の話題を消しました。', allowedMentions: noPing });
+    }
     if (!(i.isButton() || i.isStringSelectMenu()) || !i.customId.startsWith('rkn:') || !i.inCachedGuild() || i.guildId !== this.cfg().guildId) return;
     await i.deferReply(PRIVATE);
     const conf = await roomKnockConfig(this.db);
@@ -145,6 +183,7 @@ export class RoomKnockApp {
           if (mode !== 'knock' && s.pending?.messageId) await ch.messages.edit(s.pending.messageId, notice(ch.id, s.pending, '受付の状態が変わりました。')).catch(() => undefined);
           await setRoomKnockMode(this.db, ch.id, mode);
           await this.control(ch);
+          this.onChange();
           await i.editReply(`${ROOM_MODES[mode]}にしました。`);
         } else if (parts[1] === 'knock') {
           if (inside || !humans(ch).size) return void await i.editReply(inside ? 'この部屋にいる人はこんこんできません。' : '空室です。こんこんせずに利用できます。');

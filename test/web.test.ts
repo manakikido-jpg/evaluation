@@ -4575,8 +4575,12 @@ it('🚪 宿のこんこんの設定を保存し、受付中の部屋を一覧�
   const send = (f: [string, string][]) => app.request('/room-knock', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(f) });
   expect((await send([['_csrf', 'x'], ['cooldownSec', '60'], ['windowSec', '120']])).status).toBe(403);
   expect((await send([['_csrf', csrf], ['cooldownSec', '5'], ['windowSec', '120']])).status).toBe(400);
+  expect(page).toContain('いまの部屋の掲示板');
+  expect((await send([['_csrf', csrf], ['channelId', '910000000000000002'], ['boardChannelId', '910000000000000003'], ['cooldownSec', '60'], ['windowSec', '120']])).status).toBe(303);
+  expect(await roomKnockConfig(db)).toEqual({ enabled: false, channelId: '910000000000000002', cooldownSec: 60, windowSec: 120, boardChannelId: '910000000000000003' });
+  // 欄のない古い画面から送っても、掲示板のチャンネルは消えない
   expect((await send([['_csrf', csrf], ['channelId', '910000000000000002'], ['cooldownSec', '60'], ['windowSec', '120']])).status).toBe(303);
-  expect(await roomKnockConfig(db)).toEqual({ enabled: false, channelId: '910000000000000002', cooldownSec: 60, windowSec: 120 });
+  expect((await roomKnockConfig(db)).boardChannelId).toBe('910000000000000003');
 });
 
 it('🎭 スタンプでロールのパネルを作る・直す・消す（神職）', async () => {

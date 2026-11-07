@@ -67,7 +67,7 @@ describe('宿のこんこんの永続状態', () => {
 
 describe('社務所Web の設定', () => {
   it('初期は使う・自動・3分。時間を変えると間かくと受付時間に効く', async () => {
-    expect(await roomKnockConfig(db)).toEqual({ enabled: true, channelId: '', cooldownSec: 180, windowSec: 180 });
+    expect(await roomKnockConfig(db)).toEqual({ enabled: true, channelId: '', cooldownSec: 180, windowSec: 180, boardChannelId: '' });
     await saveRoomKnockConfig(db, { enabled: true, channelId: '', cooldownSec: 60, windowSec: 90 }, 'admin');
     await setRoomKnockMode(db, R, 'knock');
     const r = await requestRoomKnock(db, R, A, '1', 0, { cooldownMs: 60_000, windowMs: 90_000 });

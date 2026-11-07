@@ -2105,7 +2105,8 @@ export function createWebApp(deps: WebDeps) {
   app.get('/room-knock', c => roomKnockView(c));
   app.post('/room-knock', async c => {
     const b = await c.req.parseBody();
-    const parsed = knockConfigSchema.safeParse({ enabled: b.enabled === 'yes', channelId: typeof b.channelId === 'string' ? b.channelId : '', cooldownSec: Number(b.cooldownSec), windowSec: Number(b.windowSec) });
+    const prevKnock = await roomKnockConfig(db);
+    const parsed = knockConfigSchema.safeParse({ enabled: b.enabled === 'yes', channelId: typeof b.channelId === 'string' ? b.channelId : '', cooldownSec: Number(b.cooldownSec), windowSec: Number(b.windowSec), boardChannelId: typeof b.boardChannelId === 'string' ? b.boardChannelId : prevKnock.boardChannelId });
     if (!parsed.success) return roomKnockView(c, '時間は 30〜3600 秒の整数で入れてください。');
     const value = await saveRoomKnockConfig(db, parsed.data, c.get('session').userId);
     await audit(db, { actorId: c.get('session').userId, action: 'room_knock.config', detail: value, via: 'web' });
