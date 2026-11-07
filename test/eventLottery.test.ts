@@ -3,10 +3,10 @@ import {randomUUID} from 'node:crypto';
 import {eq} from 'drizzle-orm';
 import {makeDb} from './helpers.js';
 import type {Db} from '../src/db/client.js';
-import {members,eventLotteries,eventLotteryDraws,coinTx} from '../src/db/schema.js';
+import {members,eventLotteries,eventLotteryDraws,coinTx,eventLotteryNotices} from '../src/db/schema.js';
 import {addCoins,walletOf} from '../src/services/economy.js';
 import * as economy from '../src/services/economy.js';
-import {createEventLottery,eventLotteryView,enterEventLottery,changeEventLottery,drawEventLottery,markEventDelivered,sendEventLotteryNotices,retryEventLotteryNotices} from '../src/services/eventLottery.js';
+import {createEventLottery,eventLotteryView,enterEventLottery,changeEventLottery,drawEventLottery,markEventDelivered,sendEventLotteryNotices,retryEventLotteryNotices,refreshEventLotteryPanel} from '../src/services/eventLottery.js';
 let db:Db,close:()=>Promise<void>,id:string;const now=new Date('2026-11-08T04:00:00Z');
 beforeEach(async()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(now);({db,close}=await makeDb());for(const id of ['a','b','c']){await db.insert(members).values({id,username:id,displayName:id});await addCoins(db,id,1000,'adjust');}id=await createEventLottery(db,{name:'イベント',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:[{name:'景品',count:2,coins:200,item:'品物'}]},'guji');});afterEach(async()=>{vi.useRealTimers();await close();});
 const state=()=>eventLotteryView(db,id);const action=async(a:string)=>changeEventLottery(db,id,'guji',(await state()).event.version,a);
@@ -37,10 +37,30 @@ it('返金の事前検査後に制限へ変わり銭APIが入金を省略した�
  expect(await db.select().from(coinTx).where(eq(coinTx.reason,'event_refund'))).toHaveLength(0);
  await action('cancel');expect((await state()).refunded).toBe(200);expect((await walletOf(db,'b')).balance).toBe(1000);
 });
-it('長すぎる景品案内は切り捨てず、受付を始める前に拒否する',async()=>{
- const longId=await createEventLottery(db,{name:'長い案内',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:Array.from({length:10},(_,i)=>({name:'景品'+i,count:1,coins:0,item:'品'.repeat(210)}))},'guji');
- await expect(changeEventLottery(db,longId,'guji',0,'open')).rejects.toThrow('案内が長すぎます');const v=await eventLotteryView(db,longId);expect(v.event.state).toBe('draft');expect(v.messages).toHaveLength(0);await expect(enterEventLottery(db,longId,'a','A')).rejects.toThrow('受付中');expect((await walletOf(db,'a')).balance).toBe(1000);
+it('景品説明が長くても受付でき、受付パネルへ景品を載せない',async()=>{
+ const secret='非公開の景品';const longId=await createEventLottery(db,{name:'催し',fee:100,channelId:'100000000000000001',resultChannelId:'100000000000000002',prizes:Array.from({length:10},(_,i)=>({name:secret+i,count:1,coins:200,item:'秘'.repeat(210)}))},'guji');
+ await changeEventLottery(db,longId,'guji',0,'open');const v=await eventLotteryView(db,longId);expect(v.event.state).toBe('open');expect(v.event.prizes).toHaveLength(10);expect(v.event.prizes[0]!.item).toHaveLength(210);
+ const body=v.messages[0]!.body as {content:string;components:unknown[]};expect(body.content).toContain('催し');expect(body.content).toContain('参加費：100銭');expect(JSON.stringify(body)).not.toContain(secret);expect(JSON.stringify(body)).not.toContain('200銭');expect(JSON.stringify(body)).not.toContain('秘');expect(body.components).toHaveLength(1);
+ await enterEventLottery(db,longId,'a','A');expect((await walletOf(db,'a')).balance).toBe(900);
 });
-it('受付パネルには全景品の案内を最後まで載せる',async()=>{
- await action('open');const v=await state();const body=v.messages.find(n=>n.id.startsWith('panel:'))!.body as {content:string};expect(body.content).toContain('景品×2（200銭＋品物）');
+it('旧版の景品付き送信待ちパネルも失敗/再送時に景品を隠す',async()=>{
+ await action('open');const n=(await state()).messages[0]!;const old={...n.body,content:'催し\n参加費：100銭\n景品：非公開品×2（200銭＋秘密の受け渡し）'};await db.update(eventLotteryNotices).set({body:old}).where(eq(eventLotteryNotices.id,n.id));
+ const received:Record<string,unknown>[]=[];await sendEventLotteryNotices(db,async(_c,b)=>{received.push(b);throw Error('down');},now);await retryEventLotteryNotices(db,id,'guji');await sendEventLotteryNotices(db,async(_c,b)=>{received.push(b);return {id:'panel'};},now,async(_c,_m,b)=>{received.push(b);});
+ expect(received).toHaveLength(3);for(const b of received){expect(JSON.stringify(b)).not.toMatch(/非公開品|秘密の受け渡し|200銭/);expect(String(b.content)).toContain('参加費：100銭');}
+ expect((await state()).messages[0]!.sentAt).not.toBeNull();
+});
+it('公開済みパネルは同じ投稿を更新し、更新失敗の再送でも投稿/徴収を重複しない',async()=>{
+ await action('open');await enterEventLottery(db,id,'a','A');await sendEventLotteryNotices(db,async()=>({id:'existing-panel'}),now,async()=>{});await refreshEventLotteryPanel(db,id,'guji');let sends=0,edits=0;
+ const send=async()=>{sends++;return {id:'duplicate'};};await sendEventLotteryNotices(db,send,now,async()=>{edits++;throw Error('down');});let v=await state();expect(v.messages[0]!.messageId).toBe('existing-panel');expect(v.messages[0]!.sentAt).toBeNull();
+ await retryEventLotteryNotices(db,id,'guji');await sendEventLotteryNotices(db,send,now,async(_c,m,b)=>{edits++;expect(m).toBe('existing-panel');expect(String(b.content)).not.toContain('景品');});
+ expect(sends).toBe(0);expect(edits).toBe(2);v=await state();expect(v.messages[0]!.sentAt).not.toBeNull();expect(v.participants).toHaveLength(1);expect(v.results).toHaveLength(0);expect((await walletOf(db,'a')).balance).toBe(900);
+ await action('close');await expect(refreshEventLotteryPanel(db,id,'guji')).rejects.toThrow('受付中');
+});
+
+it('締切後の旧パネルもnonceが旧投稿を返したら本文を編集して景品を外す',async()=>{
+ await action('open');const n=(await state()).messages[0]!;let publicText='景品：非公開の景品';
+ await db.update(eventLotteryNotices).set({body:{...n.body,content:publicText}}).where(eq(eventLotteryNotices.id,n.id));
+ vi.setSystemTime(new Date(now.getTime()+1000));await action('close');let posts=0,edits=0;
+ await sendEventLotteryNotices(db,async()=>({id:++posts===1?'old-panel':'closing-notice'}),new Date(now.getTime()+2000),async(_c,m,b)=>{edits++;expect(m).toBe('old-panel');publicText=String(b.content);});
+ expect(edits).toBe(1);expect(publicText).not.toContain('非公開の景品');expect(publicText).toContain('受付を締め切りました');
 });

@@ -9,10 +9,24 @@ import {audit} from './audit.js';
 export class EventLotteryError extends Error {}
 const fail=(message:string):never=>{throw new EventLotteryError(message);};
 const text=z.string().trim().min(1).max(100);
-export const eventLotteryInput=z.object({name:text,fee:z.coerce.number().int().min(1).max(100000000),channelId:z.string().regex(/^\d{17,20}$/),resultChannelId:z.string().regex(/^\d{17,20}$/),prizes:z.array(z.object({name:text,count:z.coerce.number().int().min(1).max(10000),coins:z.coerce.number().int().min(0).max(100000000),item:z.string().trim().max(500)}).refine(p=>p.coins>0||p.item.length>0,'銭か景品を設定してください。')).min(1).max(50)});
+export const eventLotteryInput=z.object({name:text,fee:z.coerce.number().int().min(1).max(100000000),channelId:z.string().regex(/^\d{17,20}$/),resultChannelId:z.string().regex(/^\d{17,20}$/),prizes:z.array(z.object({name:text,count:z.coerce.number().int().min(1).max(10000),coins:z.coerce.number().int().min(0).max(100000000),item:z.string().trim().max(500)}).transform(p=>({...p,item:p.coins===0&&!p.item?p.name:p.item}))).min(1).max(50)});
+/** 作成/編集で同じ入力条件と、日本語の項目名を使う。 */
+function parseEventLotteryInput(input:unknown){
+ const parsed=eventLotteryInput.safeParse(input);if(parsed.success)return parsed.data;
+ const issue=parsed.error.issues[0]!,[field,index,part]=issue.path;
+ const messages:Record<string,string>={name:'イベント名：1〜100文字で入力してください。',fee:'参加費：1〜100,000,000銭の整数で入力してください。',channelId:'受付チャンネルのID：17〜20桁の数字を入力してください。',resultChannelId:'結果発表チャンネルのID：17〜20桁の数字を入力してください。',prizes:'景品：名前を入れた景品を1種類以上用意してください（最大50種類）。'};
+ if(field==='prizes'&&typeof index==='number'){
+  const raw=input&&typeof input==='object'&&'prizes' in input?input.prizes:undefined;
+  const prize=Array.isArray(raw)?raw[index]:undefined;
+  const label=prize&&typeof prize.name==='string'&&prize.name.trim()?`景品「${Array.from(prize.name.trim()).slice(0,40).join('')}」`:'景品';
+  const details:Record<string,string>={name:'名前は1〜100文字で入力してください。',count:'本数は1〜10,000の整数で入力してください。',coins:'賞金は0〜100,000,000銭の整数で入力してください。',item:'品物・受け渡し内容は500文字以内で入力してください。'};
+  return fail(`${label}：${details[String(part)]??'入力を確認してください。'}`);
+ }
+ return fail(messages[String(field)]??'イベントの入力を確認してください。');
+}
 export async function createEventLottery(db:Db,input:unknown,actorId:string){
- const p=eventLotteryInput.safeParse(input);if(!p.success)return fail('名前・参加費・チャンネルID・景品の入力を確認してください。');
- return db.transaction(async tx=>{const id=randomUUID();await tx.insert(events).values({...p.data,id,createdBy:actorId,prizes:p.data.prizes.map(p=>({...p,id:randomUUID()}))});await audit(tx,{actorId,action:'event_lottery.create',via:'web',detail:{eventId:id}});return id;});
+ const data=parseEventLotteryInput(input);
+ return db.transaction(async tx=>{const id=randomUUID();await tx.insert(events).values({...data,id,createdBy:actorId,prizes:data.prizes.map(p=>({...p,id:randomUUID()}))});await audit(tx,{actorId,action:'event_lottery.create',via:'web',detail:{eventId:id}});return id;});
 }
 export async function eventLotteryView(db:Db,id:string){
  const [event]=await db.select().from(events).where(eq(events.id,id));if(!event)return fail('イベントがありません。');
@@ -23,7 +37,15 @@ export async function eventLotteryView(db:Db,id:string){
 }
 export async function listEventLotteries(db:Db){return db.select().from(events).orderBy(desc(events.createdAt));}
 async function lock(db:Db,id:string){const [event]=await db.select().from(events).where(eq(events.id,id)).for('update');return event??fail('イベントがありません。');}
-function panel(e:typeof events.$inferSelect){const body={content:`🎟 ${e.name}\n参加費：${e.fee.toLocaleString('ja-JP')}銭（1人1口・1人1当選）\n受付終了後、運営が景品ごとに当選者を引きます。落選時の返金はありません。\n景品：${e.prizes.map(p=>`${p.name}×${p.count}（${p.coins}銭${p.item?'＋'+p.item:''}）`).join(' / ')}`,components:[{type:1,components:[{type:2,style:3,label:`参加する（${e.fee}銭）`,custom_id:`eventlottery:${e.id}`}]}],allowed_mentions:{parse:[]}};if(body.content.length>1900)return fail('景品の案内が長すぎます。全員が全文を確認できるよう、イベント名・景品名・受け渡し内容を短くしてください（案内は1900文字まで）。');return body;}
+function panel(e:typeof events.$inferSelect){return {content:`🎟 ${e.name}\n参加費：${e.fee.toLocaleString('ja-JP')}銭（1人1口・1人1当選）\n受付終了後、運営が一人ずつ抽選します。落選時の返金はありません。`,components:[{type:1,components:[{type:2,style:3,label:`参加する（${e.fee}銭）`,custom_id:`eventlottery:${e.id}`}]}],allowed_mentions:{parse:[]}};}
+/** 設定や参加者を変えず、既存の受付投稿だけを更新待ちにする。 */
+export async function refreshEventLotteryPanel(db:Db,id:string,actorId:string){await db.transaction(async tx=>{
+ const e=await lock(tx,id);if(e.state!=='open')return fail('受付中のパネルだけ更新できます。');
+ const [n]=await tx.select().from(notices).where(eq(notices.id,`panel:${id}`)).for('update');if(!n)return fail('受付パネルがありません。');
+ await tx.update(notices).set({body:panel(e),sentAt:null,error:null,dueAt:new Date()}).where(eq(notices.id,n.id));
+ await audit(tx,{actorId,action:'event_lottery.refresh_panel',via:'web',detail:{eventId:id}});
+});}
+
 export async function enterEventLottery(db:Db,id:string,memberId:string,displayName:string){return db.transaction(async tx=>{
  const e=await lock(tx,id);const [old]=await tx.select().from(entries).where(and(eq(entries.eventId,id),eq(entries.memberId,memberId)));if(old)return '参加済みです。追加の支払いはありません。';
  if(e.state!=='open')return fail('このイベントは受付中ではありません。');
@@ -68,12 +90,21 @@ export async function drawEventLottery(db:Db,id:string,prizeId:string,actorId:st
 }
 export async function markEventDelivered(db:Db,eventId:string,drawId:string,actorId:string){await db.transaction(async tx=>{await lock(tx,eventId);const [d]=await tx.select().from(draws).where(and(eq(draws.id,drawId),eq(draws.eventId,eventId))).for('update');if(!d||!d.item)return fail('受け渡し対象がありません。');if(d.delivered)return;await tx.update(draws).set({delivered:true}).where(eq(draws.id,drawId));await audit(tx,{actorId,action:'event_lottery.deliver',via:'web',detail:{eventId,drawId}});});}
 /** 失敗しても賞金や抽選は再実行せず、通知だけを再送する。送信中は同じ行を他workerが取らない。 */
-export async function sendEventLotteryNotices(db:Db,send:(channelId:string,body:Record<string,unknown>)=>Promise<{id:string}>,now=new Date()){
+export async function sendEventLotteryNotices(db:Db,send:(channelId:string,body:Record<string,unknown>)=>Promise<{id:string}>,now=new Date(),edit?: (channelId:string,messageId:string,body:Record<string,unknown>)=>Promise<void>){
  for(let i=0;i<20;i++){
   const found=await db.transaction(async tx=>{const [n]=await tx.select().from(notices).where(and(isNull(notices.sentAt),lte(notices.dueAt,now))).orderBy(asc(notices.dueAt)).limit(1).for('update',{skipLocked:true});if(!n)return false;
-   try{const nonce=BigInt('0x'+createHash('sha256').update(n.id).digest('hex').slice(0,16)).toString();const m=await send(n.channelId,{...n.body,nonce,enforce_nonce:true});await tx.update(notices).set({sentAt:now,messageId:m.id,attempts:n.attempts+1,error:null}).where(eq(notices.id,n.id));}
-   catch{await tx.update(notices).set({attempts:n.attempts+1,error:'Discordへの送信に失敗しました。',dueAt:new Date(now.getTime()+60000)}).where(eq(notices.id,n.id));}return true;});if(!found)break;
+   let body=n.body;const isPanel=n.id===`panel:${n.eventId}`;
+   if(isPanel&&Array.isArray(body.components)){const [e]=await tx.select().from(events).where(eq(events.id,n.eventId));body=e?.state==='open'?panel(e):{content:'このイベントは現在、参加を受け付けていません。',allowed_mentions:{parse:[]}};}
+   let messageId=n.messageId;
+   try{
+    if(messageId){if(!edit)throw new Error('message edit unavailable');await edit(n.channelId,messageId,body);}
+    else{const nonce=BigInt('0x'+createHash('sha256').update(n.id).digest('hex').slice(0,16)).toString();messageId=(await send(n.channelId,{...body,nonce,enforce_nonce:true})).id;
+     // nonceで旧投稿が返った場合にも、景品のない本文へ揃える。
+     if(isPanel&&edit)await edit(n.channelId,messageId,body);
+    }
+    await tx.update(notices).set({body,sentAt:now,messageId,attempts:n.attempts+1,error:null}).where(eq(notices.id,n.id));
+   }catch{await tx.update(notices).set({body,messageId,attempts:n.attempts+1,error:'Discordへの送信に失敗しました。',dueAt:new Date(now.getTime()+60000)}).where(eq(notices.id,n.id));}return true;});if(!found)break;
  }
 }
 export async function retryEventLotteryNotices(db:Db,eventId:string,actorId:string){await db.transaction(async tx=>{await lock(tx,eventId);await tx.update(notices).set({dueAt:new Date()}).where(and(eq(notices.eventId,eventId),isNull(notices.sentAt),isNotNull(notices.error)));await audit(tx,{actorId,action:'event_lottery.retry',via:'web',detail:{eventId}});});}
-export async function editEventLottery(db:Db,id:string,input:unknown,actorId:string,version:number){const p=eventLotteryInput.safeParse(input);if(!p.success)return fail('入力を確認してください。');await db.transaction(async tx=>{const e=await lock(tx,id);if(e.state!=='draft'||e.version!==version)return fail('準備中の最新画面でだけ変更できます。');await tx.update(events).set({...p.data,prizes:p.data.prizes.map(p=>({...p,id:randomUUID()})),version:e.version+1}).where(eq(events.id,id));await audit(tx,{actorId,action:'event_lottery.edit',via:'web',detail:{eventId:id}});});}
+export async function editEventLottery(db:Db,id:string,input:unknown,actorId:string,version:number){const data=parseEventLotteryInput(input);await db.transaction(async tx=>{const e=await lock(tx,id);if(e.state!=='draft'||e.version!==version)return fail('準備中の最新画面でだけ変更できます。');await tx.update(events).set({...data,prizes:data.prizes.map(p=>({...p,id:randomUUID()})),version:e.version+1}).where(eq(events.id,id));await audit(tx,{actorId,action:'event_lottery.edit',via:'web',detail:{eventId:id}});});}
