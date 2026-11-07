@@ -9,10 +9,24 @@ import {audit} from './audit.js';
 export class EventLotteryError extends Error {}
 const fail=(message:string):never=>{throw new EventLotteryError(message);};
 const text=z.string().trim().min(1).max(100);
-export const eventLotteryInput=z.object({name:text,fee:z.coerce.number().int().min(1).max(100000000),channelId:z.string().regex(/^\d{17,20}$/),resultChannelId:z.string().regex(/^\d{17,20}$/),prizes:z.array(z.object({name:text,count:z.coerce.number().int().min(1).max(10000),coins:z.coerce.number().int().min(0).max(100000000),item:z.string().trim().max(500)}).refine(p=>p.coins>0||p.item.length>0,'銭か景品を設定してください。')).min(1).max(50)});
+export const eventLotteryInput=z.object({name:text,fee:z.coerce.number().int().min(1).max(100000000),channelId:z.string().regex(/^\d{17,20}$/),resultChannelId:z.string().regex(/^\d{17,20}$/),prizes:z.array(z.object({name:text,count:z.coerce.number().int().min(1).max(10000),coins:z.coerce.number().int().min(0).max(100000000),item:z.string().trim().max(500)}).transform(p=>({...p,item:p.coins===0&&!p.item?p.name:p.item}))).min(1).max(50)});
+/** 作成/編集で同じ入力条件と、日本語の項目名を使う。 */
+function parseEventLotteryInput(input:unknown){
+ const parsed=eventLotteryInput.safeParse(input);if(parsed.success)return parsed.data;
+ const issue=parsed.error.issues[0]!,[field,index,part]=issue.path;
+ const messages:Record<string,string>={name:'イベント名：1〜100文字で入力してください。',fee:'参加費：1〜100,000,000銭の整数で入力してください。',channelId:'受付チャンネルのID：17〜20桁の数字を入力してください。',resultChannelId:'結果発表チャンネルのID：17〜20桁の数字を入力してください。',prizes:'景品：名前を入れた景品を1種類以上用意してください（最大50種類）。'};
+ if(field==='prizes'&&typeof index==='number'){
+  const raw=input&&typeof input==='object'&&'prizes' in input?input.prizes:undefined;
+  const prize=Array.isArray(raw)?raw[index]:undefined;
+  const label=prize&&typeof prize.name==='string'&&prize.name.trim()?`景品「${Array.from(prize.name.trim()).slice(0,40).join('')}」`:'景品';
+  const details:Record<string,string>={name:'名前は1〜100文字で入力してください。',count:'本数は1〜10,000の整数で入力してください。',coins:'賞金は0〜100,000,000銭の整数で入力してください。',item:'品物・受け渡し内容は500文字以内で入力してください。'};
+  return fail(`${label}：${details[String(part)]??'入力を確認してください。'}`);
+ }
+ return fail(messages[String(field)]??'イベントの入力を確認してください。');
+}
 export async function createEventLottery(db:Db,input:unknown,actorId:string){
- const p=eventLotteryInput.safeParse(input);if(!p.success)return fail('名前・参加費・チャンネルID・景品の入力を確認してください。');
- return db.transaction(async tx=>{const id=randomUUID();await tx.insert(events).values({...p.data,id,createdBy:actorId,prizes:p.data.prizes.map(p=>({...p,id:randomUUID()}))});await audit(tx,{actorId,action:'event_lottery.create',via:'web',detail:{eventId:id}});return id;});
+ const data=parseEventLotteryInput(input);
+ return db.transaction(async tx=>{const id=randomUUID();await tx.insert(events).values({...data,id,createdBy:actorId,prizes:data.prizes.map(p=>({...p,id:randomUUID()}))});await audit(tx,{actorId,action:'event_lottery.create',via:'web',detail:{eventId:id}});return id;});
 }
 export async function eventLotteryView(db:Db,id:string){
  const [event]=await db.select().from(events).where(eq(events.id,id));if(!event)return fail('イベントがありません。');
@@ -76,4 +90,4 @@ export async function sendEventLotteryNotices(db:Db,send:(channelId:string,body:
  }
 }
 export async function retryEventLotteryNotices(db:Db,eventId:string,actorId:string){await db.transaction(async tx=>{await lock(tx,eventId);await tx.update(notices).set({dueAt:new Date()}).where(and(eq(notices.eventId,eventId),isNull(notices.sentAt),isNotNull(notices.error)));await audit(tx,{actorId,action:'event_lottery.retry',via:'web',detail:{eventId}});});}
-export async function editEventLottery(db:Db,id:string,input:unknown,actorId:string,version:number){const p=eventLotteryInput.safeParse(input);if(!p.success)return fail('入力を確認してください。');await db.transaction(async tx=>{const e=await lock(tx,id);if(e.state!=='draft'||e.version!==version)return fail('準備中の最新画面でだけ変更できます。');await tx.update(events).set({...p.data,prizes:p.data.prizes.map(p=>({...p,id:randomUUID()})),version:e.version+1}).where(eq(events.id,id));await audit(tx,{actorId,action:'event_lottery.edit',via:'web',detail:{eventId:id}});});}
+export async function editEventLottery(db:Db,id:string,input:unknown,actorId:string,version:number){const data=parseEventLotteryInput(input);await db.transaction(async tx=>{const e=await lock(tx,id);if(e.state!=='draft'||e.version!==version)return fail('準備中の最新画面でだけ変更できます。');await tx.update(events).set({...data,prizes:data.prizes.map(p=>({...p,id:randomUUID()})),version:e.version+1}).where(eq(events.id,id));await audit(tx,{actorId,action:'event_lottery.edit',via:'web',detail:{eventId:id}});});}
