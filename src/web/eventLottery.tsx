@@ -5,7 +5,7 @@ import type {AdminSession} from '../db/schema.js';
 import type {GuildChannel} from '../lib/discordRest.js';
 import {Layout} from './views/layout.js';
 import {assetUrl} from './assets.js';
-import {createEventLottery,editEventLottery,eventLotteryView,listEventLotteries,changeEventLottery,drawEventLottery,markEventDelivered,retryEventLotteryNotices,EventLotteryError} from '../services/eventLottery.js';
+import {createEventLottery,editEventLottery,eventLotteryView,listEventLotteries,changeEventLottery,drawEventLottery,markEventDelivered,retryEventLotteryNotices,refreshEventLotteryPanel,EventLotteryError} from '../services/eventLottery.js';
 type Env={Variables:{session:AdminSession}};
 const PATH='/economy/event-lottery';
 const states:Record<string,string>={draft:'準備中',open:'受付中',closed:'受付終了',completed:'完了',cancelled:'中止'};
@@ -24,7 +24,7 @@ export function mountEventLottery(app:Hono<Env>,db:Db,channels:()=>Promise<Guild
   <section class="card"><h2>景品と残数</h2>{model.event.prizes.map(p=>{const left=p.count-model!.results.filter(r=>r.prizeId===p.id).length;return <article><h3>{p.name} · 残り{left}/{p.count}</h3><p>{p.coins.toLocaleString()}銭 {p.item}</p>{model!.event.state==='closed'&&left>0&&form('draw','この景品の当選者を引く',{prizeId:p.id,operationId:randomUUID()})}</article>;})}</section>
   <section class="card"><h2>当選・受け渡し履歴</h2>{model.results.map(r=><article data-el-history-at={r.createdAt.getTime()+3000} hidden={r.createdAt.getTime()+3000>now().getTime()}><h3>{r.prizeName}：{r.displayName} さん</h3><p>{r.coins.toLocaleString()}銭 {r.item} · {r.createdAt.toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}</p>{r.item&&(r.delivered?<p>受け渡し済み</p>:form('deliver','受け渡し済みにする',{drawId:r.id}))}</article>)}</section>
   <section class="card"><h2>参加者</h2><ul>{model.participants.map(p=><li>{p.displayName} · {p.paid.toLocaleString()}銭 {p.refunded?'返金済み':''}</li>)}</ul></section>
-  <section class="card"><h2>Discordへの送信</h2>{model.messages.map(n=><p>{n.id.startsWith('panel:')?'受付案内':n.id.startsWith('state:')?'受付状態':'当選発表'}：{n.sentAt?'送信済み':n.error??'送信待ち'}（試行{n.attempts}回）</p>)}{form('retry','未送信の通知を再送')}</section><a href={PATH}>別のイベントを作る</a></> }</Layout>);
+  <section class="card"><h2>Discordへの送信</h2><p>受付パネルには景品を載せません。既に出した受付パネルは、更新すると同じ投稿から景品を外せます。</p>{model.event.state==='open'&&form('refresh-panel','受付パネルを更新')}{model.messages.map(n=><p>{n.id.startsWith('panel:')?'受付案内':n.id.startsWith('state:')?'受付状態':'当選発表'}：{n.sentAt?'送信済み':n.error??'送信待ち'}（試行{n.attempts}回）</p>)}{form('retry','未送信の通知を再送')}</section><a href={PATH}>別のイベントを作る</a></> }</Layout>);
  });
  app.post(PATH,async c=>{const b=await c.req.parseBody(),s=c.get('session');let id=String(b.eventId??'');try{
   const action=String(b.action??'');let draw='';
@@ -33,6 +33,7 @@ export function mountEventLottery(app:Hono<Env>,db:Db,channels:()=>Promise<Guild
    const input={name:b.name,fee:b.fee,channelId:b.channelId,resultChannelId:b.resultChannelId,prizes:Array.from({length:10},(_,i)=>({name:b['name'+i],count:b['count'+i],coins:b['coins'+i],item:b['item'+i]??''})).filter(p=>String(p.name??'').trim())};if(action==='create')id=await createEventLottery(db,input,s.userId);else await editEventLottery(db,id,input,s.userId,Number(b.version));
   }else if(action==='draw'){const r=await drawEventLottery(db,id,String(b.prizeId),s.userId,Number(b.version),String(b.operationId),now());draw=r.id;}
   else if(action==='deliver')await markEventDelivered(db,id,String(b.drawId),s.userId);
+  else if(action==='refresh-panel')await refreshEventLotteryPanel(db,id,s.userId);
   else if(action==='retry')await retryEventLotteryNotices(db,id,s.userId);
   else await changeEventLottery(db,id,s.userId,Number(b.version),action);
   return c.redirect(PATH+'?event='+id+(draw?'&draw='+draw:''),303);
