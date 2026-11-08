@@ -399,3 +399,14 @@
 .kt-root.kt-reference-layout.kt-composite[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display{height:auto;aspect-ratio:1218/1292}
 .kt-root.kt-reference-layout.kt-composite[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-reel-assembly .gt-reel-deck{--symbol-h:calc(8.365cqw + .02px);width:100%}
 .kt-root.kt-reference-layout.kt-composite[data-focus=true]:has(.gt-recovery:not([hidden])) .gt-display .kt-medallion-navigation{height:90%;min-height:0;max-height:none}
+/* 資料で確認できる12の風景。独自生成の4列×3行の背景を窓内へ表示する。 */
+.kt-root.kt-reference-layout .gt-display .kt-atlas-scene{position:absolute;inset:auto;left:calc(var(--kt-col,0)*-100%);top:calc(var(--kt-row,0)*-100%);width:400%;height:300%;max-width:none;object-fit:fill;animation:none;transform:none}
+.kt-atlas-scene[data-kt-scene=aphrodite]{--kt-col:1}.kt-atlas-scene[data-kt-scene=artemis]{--kt-col:2}.kt-atlas-scene[data-kt-scene=acropolis]{--kt-col:3}
+.kt-atlas-scene[data-kt-scene=athena]{--kt-row:1}.kt-atlas-scene[data-kt-scene=olympus]{--kt-col:1;--kt-row:1}.kt-atlas-scene[data-kt-scene=poseidon]{--kt-col:2;--kt-row:1}.kt-atlas-scene[data-kt-scene=zeus]{--kt-col:3;--kt-row:1}
+.kt-atlas-scene[data-kt-scene=god]{--kt-row:2}.kt-atlas-scene[data-kt-scene=gaia]{--kt-col:1;--kt-row:2}.kt-atlas-scene[data-kt-scene=zzone]{--kt-col:2;--kt-row:2}.kt-atlas-scene[data-kt-scene=zgame]{--kt-col:3;--kt-row:2}
+.kt-root .kt-machine[data-reel-set=reference] .gt-symbol-flower .gt-symbol-art{transform:scaleY(-1)}
+.kt-root .gt-number-cycle{animation-name:kt-reference-number-cycle}@keyframes kt-reference-number-cycle{to{transform:translateY(-90.90909%)}}
+.kt-root .gt-digits>span[data-kt-digit="0"],.kt-root .gt-digits>span[data-kt-digit="8"]{color:#f1d664}.kt-root .gt-digits>span[data-kt-digit=V]{color:#e44c36;text-shadow:0 1px #fff0a0,1px 1px 2px #ffe8a1,2px 3px 2px #501500}
+.kt-root .kt-z-panel{position:absolute;inset:14% 2% auto;text-align:center;color:#ffe194}.kt-z-panel>b{font-size:clamp(20px,7cqw,44px);text-shadow:0 2px 4px #130c00}.kt-z-panel ol{display:flex;justify-content:center;gap:3%;list-style:none;padding:0;margin:8px 0}.kt-z-panel li{width:12%;aspect-ratio:1;border:2px solid #87723b;border-radius:50%;overflow:hidden;background:#130e0c;opacity:.32;box-shadow:inset 0 0 8px #000}.kt-z-panel li[data-filled=true]{opacity:1;border-color:#ffdf72;box-shadow:0 0 12px #ffb900}.kt-z-panel img{width:100%;height:100%;object-fit:cover}.kt-z-panel small{font-size:clamp(7px,1.8cqw,12px)}
+.kt-root .kt-machine:is([data-kiseki-phase=zzone],[data-kiseki-phase=zgame]) .gt-lcd>.gt-digits{visibility:hidden}.kt-root .kt-machine:has(.gt-lcd-award) .kt-z-panel{display:none}
+.kt-payline-figure{display:block;width:min(100%,360px);height:auto;margin:12px auto}.kt-payline-figure rect{fill:#171e26;stroke:#9d8348;stroke-width:2}.kt-payline-figure path{fill:none;stroke:#e7b95d;stroke-width:6}.kt-payline-figure circle{fill:#e7b95d}
