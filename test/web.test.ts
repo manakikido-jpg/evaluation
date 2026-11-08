@@ -3440,6 +3440,33 @@ describe('キャスト（管理画面）', () => {
     expect((await get(`/tickets/${r.ticket.id}/transcript`, '')).status).toBe(302);
   });
 
+  it('📦 納品のメニューを、まとめて全年齢にする・戻す（1 人分・全員分は確かめのチェックが要る・CSRF が要る）', async () => {
+    const { applyCast, addMenuItem, CAST_DEFAULTS, setCastStatus, getCast, menuOf } = await import('../src/services/cast.js');
+    const id = '880000000000000029';
+    await applyCast(db, CAST_DEFAULTS, { id, adult: true }, { bio: '紹介', tags: [], price30: 300, price60: 500, priceNight: 0, minorOk: false });
+    await setCastStatus(db, id, 'active', STAFF);
+    expect(await addMenuItem(db, CAST_DEFAULTS, id, { name: 'イラスト', note: '', minutes: 0, price: 500, night: false, delivery: true })).toBe('ok');
+    const s = await login(STAFF);
+    const page = await (await get('/cast', s)).text();
+    expect(page).toContain(`/cast/casts/${id}/menu-all-ages`);
+    expect(page).toContain('/cast/menu-all-ages');
+    expect(page).toContain('全年齢でも 18 歳未満は注文できません');
+    const allAges = async () => menuOf((await getCast(db, id))!).find((m) => m.delivery)?.allAges;
+    expect((await app.request(`/cast/casts/${id}/menu-all-ages`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: 'on=yes&_csrf=wrong' })).status).toBe(403);
+    expect(await allAges()).toBeUndefined();
+    expect((await form(s, `/cast/casts/${id}/menu-all-ages`, { on: 'yes' })).headers.get('location')).toBe(`/cast?msg=all_ages_bulk_on&n=1-1#cast-${id}`);
+    expect(await allAges()).toBe(true);
+    expect(await (await get('/cast?msg=all_ages_bulk_on&n=1-1', s)).text()).toContain('（1 人・1 つ）');
+    expect((await form(s, `/cast/casts/${id}/menu-all-ages`, { on: 'no' })).headers.get('location')).toBe(`/cast?msg=all_ages_bulk_off&n=1-1#cast-${id}`);
+    expect(await allAges()).toBeUndefined();
+    // 全員分: チェックがなければ何も変えない
+    expect((await form(s, '/cast/menu-all-ages', { on: 'yes' })).headers.get('location')).toBe('/cast?msg=all_ages_confirm#cast-list');
+    expect(await allAges()).toBeUndefined();
+    expect((await form(s, '/cast/menu-all-ages', { on: 'yes', confirm: 'yes' })).headers.get('location')).toBe('/cast?msg=all_ages_bulk_on&n=1-1#cast-list');
+    expect(await allAges()).toBe(true);
+    expect((await form(s, '/cast/menu-all-ages', { on: 'yes', confirm: 'yes' })).headers.get('location')).toBe('/cast?msg=all_ages_bulk_none#cast-list');
+  });
+
   it('写真・メニューの保存で紹介投稿を更新し、更新失敗は保存内容を残して待機を表示する', async () => {
     const { applyCast, CAST_DEFAULTS, setCastStatus, getCast } = await import('../src/services/cast.js');
     const { postCastIntro, refreshCastIntros } = await import('../src/discord/cast.js');

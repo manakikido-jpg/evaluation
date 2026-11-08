@@ -291,6 +291,45 @@ describe('🎀 キャスト', () => {
     expect(menuOf((await getCast(db, CAST))!).find((m) => m.id === illust.id)!.allAges).toBeUndefined();
   });
 
+  it('📦 納品・ガチャのメニューを、まとめて全年齢にする・戻す（1 人分・全員分）。寝落ち・相談・通話は変えず、外したキャストも変えない', async () => {
+    const { setAllDeliveriesAllAges } = await import('../src/services/cast.js');
+    const { listAudit } = await import('../src/services/audit.js');
+    const { casts } = await import('../src/db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    expect(await addMenuItem(db, c, CAST, { name: 'イラスト', note: '', minutes: 0, price: 500, night: false, delivery: true })).toBe('ok');
+    expect(await addMenuItem(db, c, CAST, { name: 'ボイスガチャ', note: '', minutes: 0, price: 300, night: false, delivery: true, gacha: ['おはよう', 'おやすみ'] })).toBe('ok');
+    expect(await addMenuItem(db, c, CAST, { name: 'おはなし', note: '', minutes: 0, price: 0, night: false, consult: true })).toBe('ok');
+    const CAST2 = '880000000000000009', GONE = '880000000000000010';
+    for (const id of [CAST2, GONE]) {
+      await applyCast(db, c, { id, adult: true }, profile, T20);
+      await setCastStatus(db, id, 'active', 'staff', T20);
+      expect(await addMenuItem(db, c, id, { name: '似顔絵', note: '', minutes: 0, price: 400, night: false, delivery: true })).toBe('ok');
+    }
+    await setCastStatus(db, GONE, 'removed', 'staff', T20);
+    // 1 人分: 納品とガチャだけに印が付く
+    expect(await setAllDeliveriesAllAges(db, CAST, true, 'staff')).toEqual({ casts: 1, items: 2 });
+    const menu = menuOf((await getCast(db, CAST))!);
+    expect(menu.filter((m) => m.allAges).map((m) => m.name).sort()).toEqual(['イラスト', 'ボイスガチャ']);
+    expect(menu.filter((m) => !m.delivery).every((m) => !m.allAges)).toBe(true);
+    expect(await setAllDeliveriesAllAges(db, CAST, true, 'staff')).toEqual({ casts: 0, items: 0 });
+    expect(await listAudit(db, { action: 'cast.menu_all_ages_bulk' })).toHaveLength(1);
+    // 18 歳未満も注文できる。キャストが 18 歳未満を受けていなければできない
+    const illust = menu.find((m) => m.name === 'イラスト')!;
+    await db.update(casts).set({ minorOk: false }).where(eq(casts.memberId, CAST));
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: illust.id }, T20)).status).toBe('minor_off');
+    await db.update(casts).set({ minorOk: true }).where(eq(casts.memberId, CAST));
+    expect((await requestSession(db, c, { castId: CAST, customerId: MINOR, customerAdult: false, plan: illust.id }, T20)).status).toBe('ok');
+    // 全員分: 外したキャストは変えない
+    expect(await setAllDeliveriesAllAges(db, undefined, true, 'staff')).toEqual({ casts: 1, items: 1 });
+    expect(menuOf((await getCast(db, CAST2))!).find((m) => m.delivery)?.allAges).toBe(true);
+    const gone = await db.select().from(casts).where(eq(casts.memberId, GONE));
+    expect(gone[0]!.menu.some((m) => m.allAges)).toBe(false);
+    // 戻す
+    expect(await setAllDeliveriesAllAges(db, CAST, false, 'staff')).toEqual({ casts: 1, items: 2 });
+    expect(menuOf((await getCast(db, CAST))!).some((m) => m.allAges)).toBe(false);
+    expect(await listAudit(db, { action: 'cast.menu_adult_only_bulk' })).toHaveLength(1);
+  });
+
   it('📦 納品・🎰 ガチャ: 預かる → 納品 → お客の受け取りで渡す。期限が過ぎたら戻す。受け取らなければ 3 日で渡す', async () => {
     const { deliverSession, receiveSession } = await import('../src/services/cast.js');
     expect(await addMenuItem(db, c, CAST, { name: 'ボイス', note: '', minutes: 0, price: 1000, night: false, delivery: true })).toBe('ok');

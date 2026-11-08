@@ -315,7 +315,7 @@ import { castRanking, monthKey, monthOf, parseMonth } from '../services/castRank
 import { refreshTicketPanel } from '../discord/supportTickets.js';
 import { closedTickets, getTicket as getSupportTicket, loadTicketConfig, openTickets, saveTicketConfig, TICKET_QUESTIONS_MAX, TICKET_TYPES_MAX, type TicketType } from '../services/supportTickets.js';
 import { TicketsPage } from './views/supportTickets.js';
-import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, deleteCast, setMenuAllAges, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
+import { castStats, deleteCastPhoto, loadCastPhoto, saveCastPhoto, deleteMenuImage, listCasts, loadCastConfig, loadMenuImage, monthStart, recentSessions, resolveSession, saveCastConfig, saveMenuImage, setCastStatus, deleteCast, setMenuAllAges, setAllDeliveriesAllAges, isAdult, parsePrice, parseTags, registerCast, addMenuItem, removeMenuItem, getCast, castHomeChannel, setCastGender, templateOf, pickTemplate, applyTemplate, editTemplate, updateMenuItem, isMenuKind, addOption, removeOption, cancelSession, getSession, noShowCounts, parseSchedule, sessionsBetween, setSchedule, type MenuInput } from '../services/cast.js';
 import { closePost, completeEntry, entriesFor, entriesOf, getEntry, getPost, loadBoardPlace, recentPosts, refundEntry, saveBoardPlace } from '../services/board.js';
 import { ADMINISTRATOR, botTopPosition, dangerLabels, mergePermissions, permDiff, permsOf, roleKind } from '../services/roles.js';
 import {
@@ -6660,6 +6660,7 @@ export function createWebApp(deps: WebDeps) {
         name={(id) => names.get(id) ?? id}
         coin={`${cfg.economy.currencyEmoji}${cfg.economy.currencyName}`}
         flash={c.req.query('msg')}
+        flashCount={/^\d{1,4}-\d{1,6}$/.test(c.req.query('n') ?? '') ? { casts: Number(c.req.query('n')!.split('-')[0]), items: Number(c.req.query('n')!.split('-')[1]) } : undefined}
       />,
     );
   });
@@ -6887,6 +6888,22 @@ export function createWebApp(deps: WebDeps) {
   });
 
   // 📦 納品のメニューを「全年齢（18 歳未満も買える）」にする・戻す（運営だけ。キャスト本人は変えられない）
+  // 📦 まとめて全年齢にする・戻す（キャスト 1 人分・全員分）。寝落ち・相談・通話は変えない
+  const bulkAllAgesRedirect = (r: { casts: number; items: number }, on: boolean, hash: string) =>
+    `/cast?msg=${r.items ? (on ? 'all_ages_bulk_on' : 'all_ages_bulk_off') : 'all_ages_bulk_none'}${r.items ? `&n=${r.casts}-${r.items}` : ''}${hash}`;
+  app.post('/cast/casts/:id/menu-all-ages', async (c) => {
+    const id = c.req.param('id');
+    if (!validId(id)) return c.redirect('/cast');
+    const on = (await c.req.parseBody()).on === 'yes';
+    return c.redirect(bulkAllAgesRedirect(await setAllDeliveriesAllAges(db, id, on, c.get('session').userId), on, `#cast-${id}`));
+  });
+  app.post('/cast/menu-all-ages', async (c) => {
+    const body = await c.req.parseBody();
+    if (body.confirm !== 'yes') return c.redirect('/cast?msg=all_ages_confirm#cast-list');
+    const on = body.on === 'yes';
+    return c.redirect(bulkAllAgesRedirect(await setAllDeliveriesAllAges(db, undefined, on, c.get('session').userId), on, '#cast-list'));
+  });
+
   app.post('/cast/casts/:id/menu/:item/all-ages', async (c) => {
     const id = c.req.param('id');
     const body = await c.req.parseBody();
