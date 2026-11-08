@@ -11,6 +11,8 @@
 
 - 最終検証：ソース921ccffbで型チェック・build成功、全263ファイル2,896件成功（529.56秒、4worker、既定制限）。ログ/tmp/kiseki-reference-{final-types2,final-build2,all-final,browser-final}.log。目押しの向きと旧表示の修正を含む最終版で、ブラウザーの全項目も成功。以降はこの記録とPR本文だけを更新する。最新本番ddca634aを再fetchして更新なし。codex/kiseki-reference-fidelityへ保存し、PRを作成する。合流/一般公開/銭接続は未実施。本番表示・実機音の同一性は未確認。
 
+- 保存先：PR165 https://github.com/manakikido-jpg/evaluation/pull/165 （codex/kiseki-reference-fidelity、実装921ccffb、結果記録7286ecc6）。GitHubへpush/PR作成済み、OPEN・未合流。最終buildを/tmp/kiseki-reference-build-final.logでも成功確認。型・全件・ブラウザー成功後の実装/試験の変更はなく、このPR保存先の記録のみ追加。GitHub CIは実行結果待ちで、ローカル2,896件成功とは区別する。次は最新CI/レビューと本人の画面確認、合流は別指示待ち。
+
 ## 2026年11月8日：軌跡の台データ画像7枚を受領・照合する
 - 本人がmilliongod_kiseki_01/02/03/04/05/06/08.webpの画像を「台のデータです」と提供。軌跡版の資料として読み取り、現行との違いを記録する。今回の発言は仕様データの提供であり、全ルールの即時差し替え/画像配布/本番合流は依頼されていない。
 - 守ること：三人の金浮彫り/筐体外装/凱旋維持、一般公開/銭接続の保留を継続。画像にある「チャンス」「!?」「約」「最高」「OVER」を確定値/保証へ変えない。全て80%/正確に75%などと推定しない。
