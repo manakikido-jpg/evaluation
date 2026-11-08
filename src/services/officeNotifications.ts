@@ -6,7 +6,7 @@ import { webAccessOf, type GuildConfig, type WebAccess, type WebPage } from '../
 import type { Db } from '../db/client.js';
 import { applications, auditLogs, guideReceptions, officeApp, officeSubscriptions, soudan, type AdminSession } from '../db/schema.js';
 import { canViewOffice } from '../domain/officeAccess.js';
-import { getAccount, accountAccess } from './webAccounts.js';
+import { getAccount, accountAccessWithOrg } from './webAccounts.js';
 import { loadOrg, orgPagesOf } from './orgChart.js';
 import { isStaffAlt } from './staffAlts.js';
 import type { DiscordApi } from '../web/discordApi.js';
@@ -77,7 +77,7 @@ export async function unsubscribeOffice(db: Db, session: AdminSession, endpoint?
 export type PushAccess = (owner: { userId: string; accountId: number | null }) => Promise<WebAccess | undefined>;
 export function pushAccess(db: Db, cfg: () => GuildConfig, api: DiscordApi): PushAccess {
   return async owner => {
-    if (owner.accountId !== null) { const a = await getAccount(db, owner.accountId); return a ? accountAccess(a) : undefined; }
+    if (owner.accountId !== null) { const a = await getAccount(db, owner.accountId); return a ? accountAccessWithOrg(db, a) : undefined; }
     if (await isStaffAlt(db, owner.userId)) return undefined;
     const c = cfg();
     const roles = await api.memberRoles(c.guildId, owner.userId);

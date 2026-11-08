@@ -181,7 +181,7 @@ import type { DiscordActions, MessageBody } from '../lib/discordRest.js';
 import { DiscordHttpError } from '../lib/discordRest.js';
 import type { DiscordApi } from './discordApi.js';
 import { startOfTodayJst } from './format.js';
-import { accountAccess, accountUserId, checkLogin, createAccount, deleteAccount, getAccount, listAccounts, normalizeLoginId, resetPassword, setDisabled, updateAccount } from '../services/webAccounts.js';
+import { accountAccessWithOrg, accountUserId, checkLogin, createAccount, deleteAccount, getAccount, listAccounts, normalizeLoginId, resetPassword, setDisabled, updateAccount } from '../services/webAccounts.js';
 import { createSession, deleteSession, findSession, markChecked, randomToken, recheckAllSessions, RECHECK_MS, safeEqual, SESSION_HOURS } from './sessions.js';
 
 /** ロールの確かめ直しに失敗しても使い続けてよい時間 */
@@ -528,7 +528,8 @@ export function createWebApp(deps: WebDeps) {
       return c.redirect(`/login?e=${r.status === 'locked' ? 'locked' : r.status === 'disabled' ? 'disabled' : 'wrong'}`);
     }
     ipFails.delete(ip);
-    const access = accountAccess(r.account)!;
+    // 🏯 Discord の人を結びつけていれば、組織図で置いた四角のページも使える
+    const access = (await accountAccessWithOrg(db, r.account))!;
     const token = await createSession(db, { id: accountUserId(r.account), username: r.account.loginId, displayName: r.account.name, avatarUrl: null }, access, now(), r.account.id);
     deleteCookie(c, LOGIN_COOKIE, { path: '/login' });
     setCookie(c, SESSION_COOKIE, token, { httpOnly: true, secure, sameSite: 'Lax', path: '/', maxAge: SESSION_HOURS * 3600 });
@@ -604,7 +605,7 @@ export function createWebApp(deps: WebDeps) {
     // ID とパスワードのアカウント: 止めた・消した・ページを変えたら、次に開いたときから
     if (session.accountId !== null && now().getTime() - session.checkedAt.getTime() > RECHECK_MS) {
       const account = await getAccount(db, session.accountId);
-      const access = account ? accountAccess(account) : undefined;
+      const access = account ? await accountAccessWithOrg(db, account) : undefined;
       if (!account || !access) {
         await deleteSession(db, session.id);
         await audit(db, { actorId: session.userId, action: 'auth.revoked', via: 'system' });

@@ -4,6 +4,8 @@ import { and, asc, eq, ne } from 'drizzle-orm';
 import { WEB_PAGE_KEYS, type WebAccess, type WebPage } from '../config.js';
 import type { Db } from '../db/client.js';
 import { adminSessions, officeSubscriptions, webAccounts, type WebAccount } from '../db/schema.js';
+import { loadOrg, orgPagesOf } from './orgChart.js';
+import { isStaffAlt } from './staffAlts.js';
 
 /**
  * 社務所Web の ID とパスワード。宮司が発行する（最初の 1 人は VPS のコマンドで作る）。
@@ -165,6 +167,24 @@ export function accountAccess(a: Pick<WebAccount, 'level' | 'pages' | 'disabled'
   if (a.disabled) return undefined;
   if (a.level === 'guji') return { level: 'guji', pages: null };
   return { level: 'shinshoku', pages: (a.pages as WebPage[] | null) ?? null, ...(a.writePages ? { writePages: a.writePages as WebPage[] } : {}) };
+}
+
+/**
+ * 🏯 ID とパスワードのアカウントに、組織図で置いた四角のページを足す（Discord の人を結びつけているときだけ）。
+ * 全部見られる人はそのまま。書きこめるページを決めているアカウントは、足したページも書きこめるようにする（Discord でのログインと同じ）
+ */
+export function withOrgPages(access: WebAccess | undefined, orgPages: readonly WebPage[]): WebAccess | undefined {
+  if (!access || access.pages === null || !orgPages.length) return access;
+  const pages = WEB_PAGE_KEYS.filter((k) => orgPages.includes(k) || access.pages!.includes(k));
+  return { ...access, pages, ...(access.writePages ? { writePages: WEB_PAGE_KEYS.filter((k) => orgPages.includes(k) || access.writePages!.includes(k)) } : {}) };
+}
+
+/** ID とパスワードのアカウントで使えるページ（組織図の分も足す。運営のサブアカウントには足さない） */
+export async function accountAccessWithOrg(db: Db, a: Pick<WebAccount, 'level' | 'pages' | 'disabled' | 'writePages' | 'memberId'>): Promise<WebAccess | undefined> {
+  const base = accountAccess(a);
+  if (!base || !a.memberId || base.pages === null) return base;
+  if (await isStaffAlt(db, a.memberId)) return base;
+  return withOrgPages(base, orgPagesOf(await loadOrg(db), a.memberId));
 }
 
 /** セッションの userId（Discord の人を結びつけていればその ID、なければ acct:番号） */

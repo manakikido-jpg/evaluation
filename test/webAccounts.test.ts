@@ -73,4 +73,25 @@ describe('🪪 社務所Web のアカウント', () => {
     expect((await checkLogin(db, 'shin', s.password, T0)).status).toBe('wrong');
     expect((await checkLogin(db, 'shin', r.password, T0)).status).toBe('ok');
   });
+
+  it('🏯 Discord の人を結びつけたアカウントは、組織図で置いた四角のページも使える（結びつけていない・全部見られる・サブアカウントは変えない）', async () => {
+    const { accountAccessWithOrg, withOrgPages } = await import('../src/services/webAccounts.js');
+    const { saveOrg, DEFAULT_ORG } = await import('../src/services/orgChart.js');
+    const { setStaffAlt } = await import('../src/services/staffAlts.js');
+    const A = '890000000000000101', ALT = '890000000000000102';
+    await saveOrg(db, { ranks: DEFAULT_ORG.ranks, nodes: [{ id: 'g', name: '案内', pages: ['guide', 'members'], x: 0, y: 0 }], placements: [{ memberId: A, nodeId: 'g', rankId: 'member' }, { memberId: ALT, nodeId: 'g', rankId: 'member' }] }, 'admin');
+    const base = { level: 'shinshoku' as const, pages: ['board'], disabled: false, writePages: null };
+    const linked = await accountAccessWithOrg(db, { ...base, memberId: A });
+    expect(linked?.level).toBe('shinshoku');
+    expect([...linked!.pages!].sort()).toEqual(['board', 'guide', 'members']);
+    expect(await accountAccessWithOrg(db, { ...base, memberId: null })).toEqual({ level: 'shinshoku', pages: ['board'] });
+    expect(await accountAccessWithOrg(db, { ...base, pages: null, memberId: A })).toEqual({ level: 'shinshoku', pages: null });
+    expect(await accountAccessWithOrg(db, { ...base, disabled: true, memberId: A })).toBeUndefined();
+    // 書きこめるページを決めているアカウントは、足したページも書きこめる
+    expect(withOrgPages({ level: 'shinshoku', pages: ['board'], writePages: [] }, ['guide'])).toMatchObject({ writePages: ['guide'] });
+    // 運営のサブアカウントには足さない
+    await setStaffAlt(db, ALT, true, 'admin', '890000000000000103');
+    expect(await accountAccessWithOrg(db, { ...base, memberId: ALT })).toEqual({ level: 'shinshoku', pages: ['board'] });
+  });
 });
+

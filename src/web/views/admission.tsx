@@ -590,7 +590,7 @@ function AccountFields(props: { account?: WebAccount; memberName?: string }) {
           </select>
         </label>
         <label class="field">
-          <span>Discord の人（ID・ユーザー名・表示名。なくてもよい。記録に名前が出る）</span>
+          <span>Discord の人（ID・ユーザー名・表示名。なくてもよい。記録に名前が出る。🏯 組織図に置いた人なら、その四角のページも使えるようになる）</span>
           <input type="text" name="member" maxlength={100} value={a?.memberId ?? ''} placeholder={props.memberName ? `今: ${props.memberName}` : '例: 123456789012345678'} />
         </label>
       </div>
