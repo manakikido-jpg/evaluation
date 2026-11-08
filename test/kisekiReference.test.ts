@@ -1,3 +1,5 @@
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import {expect,it} from 'vitest';
 import {STRIPS,LEGACY_STRIPS,PAYLINES,REFERENCE_COMBINATIONS,ROLES,effectiveRole,stopPlan,rows,drawRole,DRAW_SIZE,type KisekiRole} from '../src/services/casino/kiseki/rules.js';
 import {newKiseki,lever,stop,scenario} from '../src/services/casino/kiseki/engine.js';
@@ -37,4 +39,15 @@ it('資料の通常/GG/ガイア/Zのステージを分け、通常風景だけ�
  const normal=new Set();for(const mode of NORMAL_MODES)for(let n=0;n<100;n++){const s=newKiseki();s.normalMode=mode;s.mode=modeGroup(mode);s.normalGames=n*20;normal.add(kisekiStage(s));}expect([...normal]).toEqual(expect.arrayContaining(['apollon','aphrodite','artemis','acropolis','athena']));
  for(const [phase,key]of [['pgg','god'],['gaia','gaia'],['zzone','zzone'],['zgame','zgame'],['sgg','sgg']] as const)expect(kisekiStage(scenario(1,phase))).toBe(key);
  const zero=scenario(1,'gg');zero.stocks=0;expect(kisekiStage(zero)).toBe('olympus');
+});
+
+it('回転帯の目押し位置は新配列の順で取り、旧配列と凱旋は従来の向きを維持する',()=>{
+ const source=readFileSync(new URL('../src/web/public/gaisen-trial.js',import.meta.url),'utf8');
+ const fn=source.slice(source.indexOf(' function timingPosition('),source.indexOf(' function clearTiming('));
+ for(const set of ['reference','legacy','gaisen'])for(let cell=0;cell<40;cell++){
+  const button={dataset:{gtKey:'stop-0'}},animation={animationName:'gt-reel-roll'},strip={getAnimations:()=>[animation],querySelector:()=>({getBoundingClientRect:()=>({height:40})})};
+  const machine={dataset:{reelSet:set}},r={querySelector:(q:string)=>q.includes('data-timing')?machine:q==='.kt-machine'?(set==='gaisen'?null:machine):{querySelector:()=>strip}};
+  const value=runInNewContext(fn+';timingPosition(button)',{button,root:()=>r,control:'timing',actualMotion:()=> 'normal',document:{hidden:false},getComputedStyle:()=>({transform:'matrix'}),DOMMatrixReadOnly:class{m42=-(cell-1)*40;}});
+  expect(value.position).toBe(set==='reference'?cell%20:19-cell%20);expect(value.animation).toBe(animation);
+ }
 });

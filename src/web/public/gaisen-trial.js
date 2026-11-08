@@ -75,7 +75,8 @@
   if(!animation||!height)return null;
   const y=new DOMMatrixReadOnly(getComputedStyle(strip).transform).m42;
   const cell=((Math.round(-y/height+1)%20)+20)%20;
-  return {button,position:19-cell,animation};
+  const reference=root().querySelector('.kt-machine')?.dataset.reelSet==='reference';
+  return {button,position:reference?cell:19-cell,animation};
  }
  function clearTiming(){if(timingPress?.animation?.playState==='paused')timingPress.animation.play();timingPress=null;}
  function releaseContact(event){kisekiRealism?.release();if(contact)delete contact.dataset.contact;contact=null;if(event?.type==='pointercancel'||event?.type==='blur'){clearTiming();diagnosticPress=null;diagnosticInput=null;}}
@@ -216,7 +217,7 @@
      // 前後の絵柄を余白に置き、窓を空けずに減速して定位置へ収める。
      const height=el?.querySelector('.gt-symbol')?.getBoundingClientRect().height;
      const timed=el?.closest('.is-timed-stop'),slip=Number(timed?.dataset.slip);
-     if(timed&&height){const travel=timed.dataset.assisted==='true'?0:slip;el.animate([{transform:`translateY(${-height*(5+travel)}px)`},{transform:`translateY(${-height*5}px)`}],{duration:Math.min(205,55+travel*35),easing:'cubic-bezier(.15,.65,.25,1)'});}
+     if(timed&&height){const travel=timed.dataset.assisted==='true'?0:slip,direction=root().querySelector('.kt-machine')?.dataset.reelSet==='reference'?-1:1;el.animate([{transform:`translateY(${-height*(5+direction*travel)}px)`},{transform:`translateY(${-height*5}px)`}],{duration:Math.min(205,55+travel*35),easing:'cubic-bezier(.15,.65,.25,1)'});}
      else {const settle=window.GaisenComfort?.stopMotion?.(height,{motion:actualMotion(),light:isLight(),sync:syncOffset});if(settle)el.animate(settle.frames,settle.timing);}
     }
    }
