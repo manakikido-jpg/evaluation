@@ -1,7 +1,7 @@
 import type { CastRankRow } from '../../services/castRank.js';
 import type { AdminSession, Cast, CastChampagne, CastSession } from '../../db/schema.js';
 import type { CastBreakdown, CastProfit } from '../../services/castProfit.js';
-import { GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
+import { allAgesAllowed, GROUP_LABEL, MENU_KINDS, MENU_KIND_LABEL, menuKindOf, type CastMenuItem, MENU_MAX, OPTION_MAX, MENU_MINUTES, MINOR, DELIVERY, menuLabel, menuPriceText, menuOf, menuText, scheduleInput, scheduleText, sessionLabel, sessionStart, sessionTime, type CastConfig, type CastStat } from '../../services/cast.js';
 import { fmtDateTime } from '../format.js';
 import { Layout } from './layout.js';
 
@@ -19,6 +19,10 @@ export const CAST_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> =
   all_ages_on: { text: 'この納品のメニューを全年齢にしました。18 歳未満の方も買えます（キャストが 18 歳未満を受けているとき）。', kind: 'ok' },
   all_ages_off: { text: 'この納品のメニューを、18 歳以上だけに戻しました。', kind: 'ok' },
   all_ages_bad: { text: '全年齢にできるのは、納品のメニューだけです（寝落ち・相談・通話は 18 歳以上のまま）。', kind: 'warn' },
+  all_ages_bulk_on: { text: '納品のメニューをまとめて全年齢にしました。18 歳未満の方も買えます（キャストが 18 歳未満を受けているとき）。', kind: 'ok' },
+  all_ages_bulk_off: { text: '納品のメニューをまとめて、18 歳以上だけに戻しました。', kind: 'ok' },
+  all_ages_bulk_none: { text: '変える納品のメニューはありませんでした（もうそうなっているか、納品のメニューがありません）。', kind: 'ok' },
+  all_ages_confirm: { text: '全員の納品を変えるときは、確かめのチェックを入れてください。何も変えていません。', kind: 'warn' },
   ranking_hidden: { text: 'このキャストを、ランキングに出さないようにしました（記録はそのままです）。', kind: 'ok' },
   ranking_shown: { text: 'このキャストを、ランキングにまた出すようにしました。', kind: 'ok' },
   deleted: { text: 'キャストの登録を消しました（予約の記録は残っています）。', kind: 'ok' },
@@ -284,9 +288,12 @@ export function CastPage(props: {
   name: (id: string) => string;
   coin: string;
   flash?: string;
+  /** まとめて変えた数（「○人・○つ」） */
+  flashCount?: { casts: number; items: number };
 }) {
   const { session, config: c, name } = props;
   const f = props.flash && Object.hasOwn(CAST_FLASH, props.flash) ? CAST_FLASH[props.flash] : undefined;
+  const allAgesBulk = props.flash === 'all_ages_bulk_on' || props.flash === 'all_ages_bulk_off';
   const pending = props.casts.filter((x) => x.status === 'pending');
   const members = props.casts.filter((x) => x.status === 'active' || x.status === 'paused');
   const removed = props.casts.filter((x) => x.status === 'removed');
@@ -298,7 +305,7 @@ export function CastPage(props: {
         <h1>🎀 キャスト</h1>
         <a href="/cast-office/login" class="btn">キャスト本人の編集用ログイン</a>
       </div>
-      {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
+      {f && <p class={`flash ${f.kind}`}>{f.text}{allAgesBulk && props.flashCount ? `（${props.flashCount.casts} 人・${props.flashCount.items} つ）` : ''}</p>}
       {/* 見たい項目へとぶ（とんだ先は開く。ふだんは閉じている） */}
       <nav class="inline-actions jump-nav" aria-label="キャストのページの中">
         <a href="#cast-list">🎀 キャスト一覧</a>
@@ -459,6 +466,17 @@ export function CastPage(props: {
           <span class="ch-count">{members.length}</span>
           <span class="note">今月の指名・売り上げ・評価</span>
         </div>
+        {members.some((x) => menuOf(x).some(allAgesAllowed)) && (
+          <form method="post" action="/cast/menu-all-ages" class="inline-actions">
+            <Csrf session={session} />
+            <input type="hidden" name="on" value="yes" />
+            <label class="field check">
+              <input type="checkbox" name="confirm" value="yes" />
+              <span>📦 全員の納品・ガチャのメニューを、まとめて全年齢（18 歳未満も買える）にする（寝落ち・相談・通話は 18 歳以上のまま。「18 歳未満は受けない」のキャストには、全年齢でも 18 歳未満は注文できません。このあとで足したメニューには付きません）</span>
+            </label>
+            <button type="submit">全員の納品を全部 全年齢にする</button>
+          </form>
+        )}
         {members.length ? (
           <ul class="ch-list">
             {members.map((x) => {
@@ -523,6 +541,21 @@ export function CastPage(props: {
                         </label>
                         <button type="submit">📋 チェックしたテンプレのメニューを入れる</button>
                       </form>
+                      {menuOf(x).some(allAgesAllowed) && (
+                        <div class="row-actions">
+                          {!x.minorOk && <p class="note">⚠ このキャストは 18 歳未満を受けていないので、全年齢でも 18 歳未満は注文できません。</p>}
+                          <form method="post" action={`/cast/casts/${x.memberId}/menu-all-ages`} class="row-actions">
+                            <Csrf session={session} />
+                            <input type="hidden" name="on" value="yes" />
+                            <button type="submit">📦 この人の納品を全部 全年齢にする</button>
+                          </form>
+                          <form method="post" action={`/cast/casts/${x.memberId}/menu-all-ages`} class="row-actions">
+                            <Csrf session={session} />
+                            <input type="hidden" name="on" value="no" />
+                            <button type="submit">全部 18 歳以上だけに戻す</button>
+                          </form>
+                        </div>
+                      )}
                       <MenuList items={menuOf(x)} base={`/cast/casts/${x.memberId}/menu`} session={session} c={c} empty="メニューがありません（指名できません）。テンプレを入れるか、下から足してください。" />
                       <h3>➕ オプション（{x.options.length}／{OPTION_MAX}）</h3>
                       <p class="note">お客がメニューを選んだあと、確かめの画面でいくつでも付けられます。値段はメニューに足して払います（30 分のばす値段には入りません）。</p>

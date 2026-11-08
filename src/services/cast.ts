@@ -504,6 +504,34 @@ export async function setMenuAllAges(db: Db, castId: string, itemId: string, on:
   });
 }
 
+/** 全年齢の印を付けられるメニューか（📦 納品・🎰 ガチャ。相談・寝落ち・通話はだめ） */
+export const allAgesAllowed = (m: CastMenuItem) => Boolean(m.delivery) && !m.consult && !m.night;
+
+/**
+ * 📦 運営が、納品のメニューをまとめて「全年齢」にする・戻す（1 つずつ押さなくてよいように）。
+ * castId があればその人だけ、なければ外していないキャスト全員。寝落ち・相談・通話は変えない。
+ * このあとで足したメニューには印は付かない（もう一度押すか、1 つずつ）
+ */
+export async function setAllDeliveriesAllAges(db: Db, castId: string | undefined, on: boolean, by: string): Promise<{ casts: number; items: number }> {
+  const ids = castId ? [castId] : (await db.select({ id: casts.memberId }).from(casts).where(inArray(casts.status, ['pending', 'active', 'paused']))).map((r) => r.id);
+  let castCount = 0, itemCount = 0;
+  for (const id of ids) {
+    const changed = await db.transaction(async (tx) => {
+      const [cast] = await tx.select().from(casts).where(eq(casts.memberId, id)).for('update');
+      if (!cast || cast.status === 'removed') return [];
+      const menu = menuOf(cast);
+      const targets = menu.filter((m) => allAgesAllowed(m) && Boolean(m.allAges) !== on);
+      if (!targets.length) return [];
+      const hit = new Set(targets.map((m) => m.id));
+      await tx.update(casts).set({ menu: menu.map((m) => (!hit.has(m.id) ? m : on ? { ...m, allAges: true } : (({ allAges: _a, ...rest }) => rest)(m))) }).where(eq(casts.memberId, id));
+      await audit(tx as Db, { actorId: by, targetId: id, action: on ? 'cast.menu_all_ages_bulk' : 'cast.menu_adult_only_bulk', detail: { count: targets.length, names: targets.map((m) => m.name).slice(0, 30) }, via: 'web' });
+      return targets;
+    });
+    if (changed.length) { castCount++; itemCount += changed.length; }
+  }
+  return { casts: castCount, items: itemCount };
+}
+
 export async function updateMenuItem(db: Db, c: CastConfig, castId: string, itemId: string, input: MenuInput): Promise<'ok' | 'invalid' | 'none'> {
   return db.transaction(async (tx) => {
     const [cast] = await tx.select().from(casts).where(eq(casts.memberId, castId)).for('update');
