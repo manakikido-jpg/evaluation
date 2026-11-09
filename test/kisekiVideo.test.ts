@@ -35,7 +35,7 @@ it('自動再生拒否でも待機を残さず既存背景へ戻す',async()=>{
  f.director.play(original,'god');await new Promise<void>(resolve=>setImmediate(resolve));expect(f.director.current).toBeNull();expect(f.jobs.size).toBe(0);
 });
 it('確定した同じ台の区間移行だけで再生し、再読込・同一区間では再発火しない',()=>{
- const f=fixture();f.director.transition(null,f.machine('gaia'));f.director.transition(f.machine('gaia'),f.machine('gaia'));f.director.transition(f.machine('normal','2'),f.machine('gaia'));expect(f.videos).toHaveLength(0);
+ const f=fixture();f.director.transition(null,f.machine('gaia'));f.director.transition(f.machine('gg'),null);f.director.transition(f.machine('gaia'),f.machine('gaia'));f.director.transition(f.machine('normal','2'),f.machine('gaia'));expect(f.videos).toHaveLength(0);
  for(const phase of ['gaia','zzone','zgame']){f.director.transition(f.machine(),f.machine(phase));expect(f.videos.at(-1).src).toContain(`veo-${phase}.mp4`);}
  f.director.win(f.machine('zzone'),'stock');expect(f.videos.at(-1).src).toContain('veo-zzone.mp4');f.director.cancel();expect(f.jobs.size).toBe(0);
 });

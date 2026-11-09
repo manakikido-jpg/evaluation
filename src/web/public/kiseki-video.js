@@ -28,7 +28,7 @@
   win(machine,kind){this.play(machine,kind==='stock'&&machine?.dataset.kisekiPhase==='zzone'?'zzone':kind);}
   transition(before,machine){
    const from=before?.dataset.kisekiPhase,to=machine?.dataset.kisekiPhase;
-   if(!from||from===to||before.dataset.gtMachineId!==machine.dataset.gtMachineId)return;
+   if(!from||!to||from===to||before.dataset.gtMachineId!==machine.dataset.gtMachineId)return;
    if(['gaia','zzone','zgame'].includes(to))this.play(machine,to);
   }
  }
