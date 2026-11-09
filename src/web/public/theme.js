@@ -2,9 +2,10 @@
 (() => {
   'use strict';
   const KEY = 'shamusho-theme';
-  const valid = value => ['light', 'dark', 'auto'].includes(value) ? value : 'auto';
   const root = document.documentElement;
-  let mode = 'auto';
+  const fallback = root.dataset.officeConsole === 'true' ? 'light' : 'auto';
+  const valid = value => ['light', 'dark', 'auto'].includes(value) ? value : fallback;
+  let mode = fallback;
   try { mode = valid(localStorage.getItem(KEY)); } catch { /* 保存できなくても切り替えは使える */ }
   let media;
   try { media = window.matchMedia('(prefers-color-scheme: dark)'); } catch { /* 端末設定が読めなければライト */ }

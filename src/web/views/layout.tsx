@@ -1,3 +1,4 @@
+import {OfficeIcon,OFFICE_HINTS} from './officeIcon.js';
 import { WEB_PAGES } from '../../config.js';
 import type { Child } from 'hono/jsx';
 import type { AdminSession } from '../../db/schema.js';
@@ -156,6 +157,9 @@ export function arrangeNav(layout?: NavLayout): { title: string; items: NavItem[
   return groups;
 }
 
+/** ナビとホームの近道で、同じ権限判定を使う。 */
+export function visibleNavigation(session:SessionView){return arrangeNav(session.navLayout).map(g=>({...g,items:g.items.filter(i=>(!i.gujiOnly||session.level==='guji')&&(!session.pages||session.pages.includes((i.page??i.key) as never)))})).filter(g=>g.items.length);}
+export function officeShortcuts(session:SessionView){const visible=visibleNavigation(session).flatMap(g=>g.items),order=['members','cast','guide','applications','economy','org','stats','channels'];return order.flatMap(key=>visible.filter(i=>i.key===key)).slice(0,6);}
 function ThemeChoice() {
   return <label class="theme-choice"><span aria-hidden="true">◐</span><span class="sr-only">表示モード</span>
     <select data-theme-choice aria-label="表示モード" disabled><option value="auto">端末に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select>
@@ -166,13 +170,14 @@ function ThemeChoice() {
 export function Layout(props: { title: string; session?: SessionView; nav?: Nav; scripts?: ('editor.js' | 'perms.js' | 'charts.js' | 'invite-selection.js' | 'guide.js' | 'org.js' | 'nav-order.js' | 'recordings.js' | 'home-voice.js' | 'copy-text.js')[]; /** 画面の横いっぱいに使う（大きな表のページ） */ wide?: boolean; children: Child }) {
   const { session, nav } = props;
   const unseen = session?.updatesUnseen ?? 0;
-  const visibleGroups = session ? arrangeNav(session.navLayout).map(g => ({ ...g, items: g.items.filter(i => (!i.gujiOnly || session.level === 'guji') && (!session.pages || session.pages.includes((i.page ?? i.key) as never))) })).filter(g => g.items.length) : [];
+  const consoleTheme=!['casinotest','keibatest'].includes(nav??'');
+  const visibleGroups = session ? visibleNavigation(session) : [];
   return (
-    <html lang="ja">
+    <html lang="ja" data-office-console={consoleTheme?'true':undefined}>
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <link rel="icon" href="/office-icon/192.png" /><link rel="manifest" href="/manifest.webmanifest" /><link rel="apple-touch-icon" href="/office-icon/180.png" /><meta name="theme-color" content="#a33659" /><meta name="apple-mobile-web-app-capable" content="yes" />
+        <link rel="icon" href="/office-icon/192.png" /><link rel="manifest" href="/manifest.webmanifest" /><link rel="apple-touch-icon" href="/office-icon/180.png" /><meta name="theme-color" content={consoleTheme?'#2563eb':'#a33659'} /><meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="robots" content="noindex, nofollow" />
         <meta name="htmx-config" content='{"includeIndicatorStyles":false}' />
         <title>{`${props.title} | 社務所 Web`}</title>
@@ -180,12 +185,13 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
         <link rel="stylesheet" href={assetUrl('style.css')} />
         {session && <link rel="stylesheet" href={assetUrl('office-mobile.css')} />}
         {session && <link rel="stylesheet" href={assetUrl('office-desktop.css')} />}
+        {consoleTheme&&<link rel="stylesheet" href={assetUrl('office-console.css')}/> }
         <script src={assetUrl('htmx.min.js')} defer></script>
         {(props.scripts ?? []).map((s) => (
           <script src={assetUrl(s)} defer></script>
         ))}
       </head>
-      <body class={session ? 'with-side office-shell' : ''} data-office-writes={session?.level !== 'guji' && session?.writePages != null ? JSON.stringify(WEB_PAGES.filter(p => session.writePages!.includes(p.key) && (!session.pages || session.pages.includes(p.key))).flatMap(p => p.prefixes)) : undefined}>
+      <body class={session ? 'with-side office-shell'+(consoleTheme?' office-console':'') : consoleTheme?'office-console-guest':''} data-office-writes={session?.level !== 'guji' && session?.writePages != null ? JSON.stringify(WEB_PAGES.filter(p => session.writePages!.includes(p.key) && (!session.pages || session.pages.includes(p.key))).flatMap(p => p.prefixes)) : undefined}>
         <a class="skip-link" href="#main-content">本文へ移動</a>
         {!session && <div class="guest-theme"><ThemeChoice /></div>}
         {session && (
@@ -200,21 +206,23 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                 <span></span>
               </label>
               <a class="brand" href="/">
-                <span class="torii">⛩</span> 社務所 Web
+                {consoleTheme?<OfficeIcon name="home"/>:<span class="torii">⛩</span>} 社務所 Web
                 <small>咲楽ノ宮</small>
               </a>
               <span class="topbar-page">{props.title}</span>
               {(!session.pages || session.pages.includes('members')) && <form class="topbar-search" method="get" action="/members"><label class="sr-only" for="nav-search">メンバーを検索</label><input id="nav-search" type="search" name="q" placeholder="メンバーを検索" /><button type="submit" aria-label="メンバーを検索">⌕</button></form>}
-              <div class="topbar-tools"><ThemeChoice /><button type="button" class="office-app-trigger" data-office-panel aria-controls="office-panel">🔔<span class="sr-only">アプリと通知</span></button></div>
+              <div class="topbar-tools"><ThemeChoice /><button type="button" class="office-app-trigger" data-office-panel aria-controls="office-panel">{consoleTheme?<OfficeIcon name="notices"/>:'🔔'}<span class="sr-only">アプリと通知</span></button></div>
               {unseen > 0 && (
                 <a class="topbar-updates" href="/updates" title="新しい更新">
                   📰 <span class="badge">{unseen}</span>
                 </a>
               )}
+              {consoleTheme&&<div class="office-account"><span class="office-account-avatar">{session.avatarUrl?<img src={session.avatarUrl} alt="" width="32" height="32"/>:session.username.slice(0,1)}</span><span class="office-account-name"><b>{session.username}</b><small>{LEVEL_LABEL[session.level]}</small></span><form method="post" action="/logout"><input type="hidden" name="_csrf" value={session.csrfToken}/><button type="submit">ログアウト</button></form></div>}
             </header>
             <aside class="side" id="main-navigation">
+              {consoleTheme&&<a class="office-side-brand" href="/"><span class="office-brand-symbol"><OfficeIcon name="home"/></span><span><b>社務所 Web</b><small>咲楽ノ宮 · 運営システム</small></span></a>}
               <div class="nav-tools">
-                <div class="nav-tools-head"><span>運営メニュー</span><button type="button" data-nav-close aria-label="メニューを閉じる">✕</button></div>
+                <div class="nav-tools-head"><span>{consoleTheme?'機能を探す':'運営メニュー'}</span><button type="button" data-nav-close aria-label="メニューを閉じる">✕</button></div>
                 <label class="nav-find"><span class="sr-only">ページを探す</span><input type="search" data-nav-search placeholder="ページを探す" autocomplete="off" disabled /></label>
                 <p class="nav-find-status" data-nav-status role="status" aria-live="polite"></p>
               </div>
@@ -231,9 +239,9 @@ export function Layout(props: { title: string; session?: SessionView; nav?: Nav;
                         {items.map((i) => (
                           <a href={i.href} class={nav === i.key ? 'on' : ''} aria-current={nav === i.key ? 'page' : undefined}>
                             <span class="nav-icon" aria-hidden="true">
-                              {i.icon}
+                              {consoleTheme?<OfficeIcon name={i.key}/>:i.icon}
                             </span>
-                            {i.label}
+                            {consoleTheme?<span class="office-nav-copy"><b>{i.label}</b>{OFFICE_HINTS[i.key]&&<small>{OFFICE_HINTS[i.key]}</small>}</span>:i.label}
                           </a>
                         ))}
                       </div>
