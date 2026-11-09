@@ -2992,13 +2992,14 @@ describe('推移（管理画面）', () => {
     expect(await (await get('/stats?from=2026-13-01&to=2026-01-20', s)).text()).toMatch(/aria-current="page"[^>]*>30 日/);
   });
 
-  it('ホームは対応待ち、30 日の人数のグラフ、人数の順で出る', async () => {
+  it('ホームは対応待ちと近道、今日の状況、30日の人数グラフの順で出る', async () => {
     const s = await login(STAFF);
     const home = await (await get('/', s)).text();
     expect(home.indexOf('今やること')).toBeGreaterThan(-1);
     expect(home.indexOf('今やること')).toBeLessThan(home.indexOf('メンバーの推移'));
     expect(home.indexOf('メンバーの推移')).toBeGreaterThan(-1);
-    expect(home.indexOf('メンバーの推移')).toBeLessThan(home.indexOf('class="stats"'));
+    expect(home.indexOf('class="stats"')).toBeLessThan(home.indexOf('メンバーの推移'));
+    expect(home).toContain('よく使う機能');
     expect(home).toContain('<svg');
   });
 });

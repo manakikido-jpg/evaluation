@@ -1,3 +1,5 @@
+import {OfficeIcon,OFFICE_HINTS} from './officeIcon.js';
+import {officeShortcuts} from './layout.js';
 import { assetUrl } from '../assets.js';
 import type { GuildRole } from '../../lib/discordRest.js';
 import type { InviteRewardRow } from '../../services/invites.js';
@@ -106,8 +108,16 @@ export function HomePage(props: {
 
   return (
     <Layout title="ホーム" session={props.session} nav="home" scripts={['charts.js', 'home-voice.js']}>
-      <div class="home-welcome"><div><p class="eyebrow">咲楽ノ宮 / 社務所Web</p><h1>おつかれさまです</h1><p class="note">今日の社務所 — 対応と鯖の状況をまとめて確認できます。</p></div><time datetime={props.now.toISOString()}>{new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'long' }).format(props.now)}</time></div>
-      <section class="card home-attention"><div class="section-head"><h2>今やること</h2><span class="note">対応待ち</span></div><ul class="task-list">{tasks.map(task => <li class={task.count ? 'pending' : 'clear'}><span class="task-icon" aria-hidden="true">{task.icon}</span><div class="task-copy"><strong>{task.label}</strong><span>{task.hint}</span></div><span class="task-count">{task.count === null ? '未取得' : <>{task.count}<small>{task.unit}</small></>}</span>{task.href ? <a class="task-action" href={task.href}>確認する<span aria-hidden="true"> →</span></a> : <span class="task-action note">Discordで確認</span>}</li>)}</ul></section>
+      <div class="home-welcome"><div><p class="eyebrow">咲楽ノ宮 / 社務所Web</p><h1>今日のホーム</h1><p class="note">今日の社務所 — 対応と鯖の状況をまとめて確認できます。</p></div><time datetime={props.now.toISOString()}>{new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'long' }).format(props.now)}</time></div>
+      <div class="home-overview">      <section class="card home-attention"><div class="section-head"><h2>今やること</h2><span class="note">対応待ち</span></div><ul class="task-list">{tasks.map(task => <li class={task.count ? 'pending' : 'clear'}><span class="task-icon" aria-hidden="true">{task.icon}</span><div class="task-copy"><strong>{task.label}</strong><span>{task.hint}</span></div><span class="task-count">{task.count === null ? '未取得' : <>{task.count}<small>{task.unit}</small></>}</span>{task.href ? <a class="task-action" href={task.href}>確認する<span aria-hidden="true"> →</span></a> : <span class="task-action note">Discordで確認</span>}</li>)}</ul></section><section class="home-shortcuts"><h2>よく使う機能</h2><div class="home-shortcut-grid">{officeShortcuts(props.session).map(i=><a href={i.href}><OfficeIcon name={i.key}/><span><strong>{i.label}</strong><small>{OFFICE_HINTS[i.key]??'一覧を開いて確認する'}</small></span><span class="home-shortcut-arrow" aria-hidden="true">→</span></a>)}</div></section></div>
+      <section class="home-today"><h2>今日の状況</h2>      <div class="stats">
+        <Stat label="メンバー" value={stats.members.toLocaleString('ja-JP')} unit="人" />
+        <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" href={canSee('members') ? '/members/diff?since=today' : undefined} popup={canSee('members') ? '/members/diff?since=today&popup=1' : undefined} />
+        <Stat label="今日の退出" value={`-${stats.left}`} unit="人" href={canSee('members') ? '/members/diff?since=today' : undefined} popup={canSee('members') ? '/members/diff?since=today&popup=1' : undefined} />
+        <Stat label="今日の朱印" value={String(stats.shuin)} unit="件" />
+        <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
+        <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href={canSee('yaku') ? '/yaku' : undefined} />
+      </div></section>
       {props.voiceNow && <VoiceNowCard channels={props.voiceNow} links={canSee('members')} />}
       {canSee('stats') && trend && trend.length > 0 && (
         <section class="card">
@@ -123,14 +133,7 @@ export function HomePage(props: {
           </p>
         </section>
       )}
-      <div class="stats">
-        <Stat label="メンバー" value={stats.members.toLocaleString('ja-JP')} unit="人" />
-        <Stat label="今日の参加" value={`+${stats.joined}`} unit="人" href={canSee('members') ? '/members/diff?since=today' : undefined} popup={canSee('members') ? '/members/diff?since=today&popup=1' : undefined} />
-        <Stat label="今日の退出" value={`-${stats.left}`} unit="人" href={canSee('members') ? '/members/diff?since=today' : undefined} popup={canSee('members') ? '/members/diff?since=today&popup=1' : undefined} />
-        <Stat label="今日の朱印" value={String(stats.shuin)} unit="件" />
-        <Stat label="今日の昇格" value={String(stats.promoted)} unit="人" />
-        <Stat label="👹 厄が付いている方" value={String(stats.yaku)} unit="人" href={canSee('yaku') ? '/yaku' : undefined} />
-      </div>
+
 
       {props.inviteRows && <section class="card home-invites"><div class="section-head"><h2>最近の招待・報酬</h2><a href="/invites">一覧を開く →</a></div><div class="home-invite-grid">{props.inviteRows.map(r => <article><a class="home-invite-name" href={canSee('members') ? `/members/${r.memberId}` : '/invites'}>{who(props.names, r.memberId)}</a><span class="tag gray">{props.cfg && highestRank(props.cfg.ranks, r.roleIds) ? memberRankLabel(props.cfg, r.roleIds) : '案内待ち'}</span><dl><dt>招待した人</dt><dd>{r.source === STAFF_NO_INVITER ? '招待なし（運営）' : r.inviterId ? who(props.names, r.inviterId) : r.source === UNKNOWN_INVITER ? '不明（確認済み）' : '不明'}</dd><dt>報酬</dt><dd>{r.source === STAFF_NO_INVITER ? '対象外' : !r.inviterId ? '保留' : r.rewardedAt && r.ujikoRewardedAt ? '支払済み' : '段階待ち・未払い'}</dd></dl></article>)}</div>{!props.inviteRows.length && <p class="note">表示する記録はありません。</p>}</section>}
 
