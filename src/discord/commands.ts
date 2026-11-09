@@ -34,10 +34,10 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setContexts(InteractionContextType.Guild).toJSON(),
     new SlashCommandBuilder().setName('bingo').setNameLocalizations({ ja: 'ビンゴ' }).setDescription('Open the event bingo').setDescriptionLocalizations({ ja: 'イベントビンゴの本人用入口を開く' }).setContexts(InteractionContextType.Guild).toJSON(),
     new SlashCommandBuilder().setName('visitprofile').setNameLocalizations({ ja: '参拝プロフィール' })
-      .setDescription('Post your activity profile in this channel')
-      .setDescriptionLocalizations({ ja: 'このチャンネルへ自分の参拝プロフィールを表示' })
+      .setDescription('Show your activity profile (only you, unless public)')
+      .setDescriptionLocalizations({ ja: '自分の参拝プロフィールを見る（省略すると自分だけ。公開: はい でチャンネルへ表示）' })
       .setContexts(InteractionContextType.Guild)
-      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: true; false: only you)').setDescriptionLocalizations({ ja: '省略はチャンネルへ表示。いいえにすると自分だけに表示' }))
+      .addBooleanOption(o => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: false; only you)').setDescriptionLocalizations({ ja: 'はい にするとチャンネルのみんなに見せる（省略すると自分だけ）' }))
       .toJSON(),
     new SlashCommandBuilder().setName('recording').setNameLocalizations({ ja: '録音' })
       .setDescription('Prepare a voice recording with everyone’s consent')

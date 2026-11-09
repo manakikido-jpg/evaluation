@@ -83,7 +83,8 @@ export class VisitApp{
    }else if(command&&(i.isChatInputCommand()||i.isButton())){
     // 出せるのは自分のプロフィールだけ
     const target=i.user;
-    const isPublic=i.isChatInputCommand()?(i.options.getBoolean('public')??true):true;
+    // コマンドは省略すると自分だけ（まちがえて雑談に出しても消せないため。公開: はい でチャンネルへ）。パネルのボタンは今までどおり
+    const isPublic=i.isChatInputCommand()?(i.options.getBoolean('public')??false):true;
     await i.deferReply(isPublic?{}:{flags:MessageFlags.Ephemeral});
     const member=await i.guild.members.fetch({user:target.id,force:true}).catch(()=>undefined);
     if(!member||member.user.bot){await i.editReply({content:'在籍中のメンバーを選んでください。',allowedMentions:{parse:[]}});return;}
@@ -91,7 +92,7 @@ export class VisitApp{
     data.staffTheme=!!adminLevelOf(this.cfg(),[...(member.roles?.cache.keys()??[])]);
     const privateView=target.id===i.user.id&&!isPublic;
     const png=renderVisitCard(data,{privateView,avatar:await loadReceptionAvatar(member.displayAvatarURL({size:128}))});
-    await i.editReply({content:privateView?'自分用の参拝プロフィールです。/参拝プロフィール だけでチャンネルに表示できます。活動記録の公開設定はWebで変更できます。':data.profile.publicStats?'参拝プロフィールです。':'活動記録は本人の設定で非公開です。',files:[{attachment:png,name:'sakura-profile.png'}],components:[{type:1,components:[{type:2,style:2,label:'背景・フレームと着せ替え',custom_id:'visit:open'}]}],allowedMentions:{parse:[]}});
+    await i.editReply({content:privateView?'自分用の参拝プロフィールです。/参拝プロフィール で「公開: はい」を選ぶと、チャンネルに表示できます。活動記録の公開設定はWebで変更できます。':data.profile.publicStats?'参拝プロフィールです。':'活動記録は本人の設定で非公開です。',files:[{attachment:png,name:'sakura-profile.png'}],components:[{type:1,components:[{type:2,style:2,label:'背景・フレームと着せ替え',custom_id:'visit:open'}]}],allowedMentions:{parse:[]}});
    }
   }catch(e){
    logger.warn({err:e},'visit interaction failed');
