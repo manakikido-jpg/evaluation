@@ -47,19 +47,19 @@ it('非JSフォームも動き、更新ヘッダーはHTMLを返す。不正STOP
  for(const index of ['1','2'])expect((await post('stop',{index})).status).toBe(200);
 });
 
-it('風景は公開G数だけで切り替わり、内部モードを映さず、閲覧で保存を変えない',async()=>{
+it('資料の5通常ステージを使い、内部モード値や予定を渡さず、閲覧で保存を変えない',async()=>{
  await post('seat');const f=await readTrial(db,now),state=f.machines[0]!.state;
- for(const [normalGames,name] of [[0,'spring'],[40,'garden'],[80,'ruins']] as const){
+ for(const normalGames of [0,40,80]){
   state.normalGames=normalGames;
   for(const mode of ['low','high'] as const){state.mode=mode;await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_KEY));
    const html=await(await app.request(path,{headers:headers()})).text();
-   expect(html).toContain(`data-landscape="${name}"`);expect(html).toContain(`kiseki-media-${name}-800.webp?v=`);expect(html).toContain(`kiseki-media-${name}-1440.webp?v=`);
+   expect(html).toMatch(/data-kt-scene="(?:apollon|aphrodite|artemis|acropolis|athena)"/);expect(html).toContain('kiseki-media-reference-stages-v1.webp?v=');expect(html).not.toMatch(/"(?:mode|normalMode|lcdDigits|plan)":/);
    expect(html).toContain('kiseki-media-lcd-frame-three-people.webp?v=');expect(html).toContain('class="kt-reference-frame"');expect(html).not.toContain('data-gt-lcd-navigation');expect(html).not.toMatch(/onclick=|style=/);
    expect(await readTrial(db,now)).toEqual(f);
   }
  }
  for(const file of [...['wind','glint','thunder','gates'].flatMap(k=>['','-stop','-end'].map(part=>'cue-'+k+part)),'win-gg','win-god','win-sgg']){const r=await app.request(`/static/kiseki-media-${file}.mp3`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('audio/mpeg');expect((await r.arrayBuffer()).byteLength).toBeGreaterThan(1000);}
- for(const file of ['lcd-frame-three-people','spring-800','spring-1440','garden-800','ruins-800','altar-1200','apron-1200','marquee-720','symbol-gold7','symbol-red7','symbol-blue7','symbol-god','symbol-flower','symbol-crest']){const r=await app.request(`/static/kiseki-media-${file}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
+ for(const file of ['reference-stages-v1','lcd-frame-three-people','spring-800','spring-1440','garden-800','ruins-800','altar-1200','apron-1200','marquee-720','symbol-gold7','symbol-red7','symbol-blue7','symbol-god','symbol-flower','symbol-crest']){const r=await app.request(`/static/kiseki-media-${file}.webp`);expect(r.status).toBe(200);expect(r.headers.get('content-type')).toContain('image/webp');}
 });
 it('公開された押し順だけを三神のメダルへ表示し、右からの停止と再読込でも位置を維持する',async()=>{
  await post('seat');const f=await readTrial(db,now);f.machines[0]!.state=scenario(1,'gg');lever(f.machines[0]!.state,n=>n-1,'bell');await db.update(settings).set({value:f}).where(eq(settings.key,TRIAL_KEY));

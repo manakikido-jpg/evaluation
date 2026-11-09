@@ -14,7 +14,7 @@ describe('軌跡版の独立した遊技',()=>{
   expect(STRIPS.map(s=>s.length)).toEqual([20,20,20]);
   for(const role of Object.keys(ROLES) as KisekiRole[]){const pos=stopPlan(role),p=pattern(role);if(p)expect(pos.map((v,i)=>rows(i,v)[roleRows(role)[i]!])).toEqual(p.symbols);else expect(winningLines(pos)).toEqual([]);}
   const small=stopPlan('small');expect(rows(1,small[1]!)).toEqual(['god','red7','gold7']);
-  expect(rows(0,19)[0]).toBe(STRIPS[0]![0]);
+  expect(rows(0,19)[2]).toBe(STRIPS[0]![0]);
  });
  it('GODは15枚とPGG50G＋GG3ストック、赤7も15枚でセット制SGGへ',()=>{
   const god=newKiseki();play(god,'god');expect(god.lastPaid).toBe(150);expect(god.phase).toBe('pgg');expect(god.left).toBe(50);expect(god.stocks+god.sets).toBe(4);expect(god.gods).toBe(1);expect(god.loops).toEqual([80]);expect(god.winEvent).toMatchObject({kind:'god',added:4});
@@ -44,7 +44,7 @@ describe('軌跡版の独立した遊技',()=>{
  });
  it('Z-ZONEは黄7で減算を止め、5連で1ストック、Z-GAMEは黄7ごとに加算し青7で終了',()=>{
   const s=scenario(1,'zzone');for(let i=0;i<4;i++){play(s,'bell');expect(s.phase).toBe('zzone');expect(s.left).toBe(5);}play(s,'bell');expect(s.phase).toBe('zgame');expect(s.stocks).toBe(2);play(s,'bell');expect(s.stocks).toBe(3);play(s,'blue');expect(s.phase).toBe('gg');expect(s.stocks).toBe(2);
-  const fail=scenario(1,'zzone');play(fail,'bell');play(fail,'none');expect(fail.phase).toBe('gg');
+  const fail=scenario(1,'zzone');play(fail,'bell');play(fail,'none');expect(fail.phase).toBe('zzone');expect(fail.left).toBe(4);expect(fail.zRun).toBe(0);for(let i=0;i<4;i++)play(fail,'none');expect(fail.phase).toBe('gg');
   const zero=scenario(1,'zzone');for(let i=0;i<5;i++)play(zero,'none',()=>0);expect(zero.loops).toContain(80);
  });
  it('天井1480Gの権利、ループ、割込み前の区間を保存し、再読込で再抽選しない',()=>{
