@@ -1,3 +1,4 @@
+import {ARCADE_KINDS,ARCADE_LABELS} from '../../domain/casinoArcade.js';
 import type {Child} from 'hono/jsx';
 import {CASINO_GAMES} from '../../config.js';
 import {GAME_SCENES,SCENE_CUES,sceneOutcome,type ScenePreview} from '../../services/casino/scenePreview.js';
@@ -21,6 +22,7 @@ function Seats(p:{m:ScenePreview;phase:number}){
 }
 function SceneSurface(p:{m:ScenePreview;phase:number}){
  const {m,phase}=p,f=m.spec.family,open=phase>=2,result=phase===3;
+ if(f==='arcade')return <div class="csp-arcade"><h2>咲楽の遊技回廊</h2><p>11種類の正式版の入口。ここは銭を使わない台名の見本です。</p><div class="csp-stages">{ARCADE_KINDS.map(k=><span>{ARCADE_LABELS[k].emoji} {ARCADE_LABELS[k].name}</span>)}</div></div>;
  if(f==='blackjack')return <div class="csp-card-table"><p class="csp-table-crest">咲楽ノ宮 · BLACKJACK</p><div class="csp-hand"><p>ディーラー <b>{open?m.bj.dealerTotal:'?'}</b></p><Cards cards={m.bj.dealer.slice(0,open?undefined:2)} limit={phase<2?1:undefined} backs={phase===0}/></div><p class="csp-table-rule">BLACKJACK · 花灯りの奥座敷</p><div class="csp-hand"><p>あなた <b>{phase?m.bj.playerTotal:'?'}</b></p><Cards cards={m.bj.player} backs={phase===0}/></div>{result&&<strong class="csp-verdict">{BJ_RESULT[m.bj.result!]}</strong>}</div>;
  if(f==='highlow')return <div class="csp-highlow"><div class="csp-hand"><p>いまのカード</p><PlayingCard c={7}/><p class="csp-versus">HIGH ／ LOW</p><div class="csp-cards">{open?<PlayingCard c={9}/>:<Back/>}</div></div><Panel title="灯籠の連勝記録"><div class="csp-lanterns">{Array.from({length:12},(_,i)=><span class={i<(open?3:2)?'lit':''}>✿</span>)}</div><p>連勝演出の見本</p>{result&&<strong class="csp-verdict">灯籠がひとつ灯る</strong>}</Panel></div>;
  if(f==='baccarat')return <div class="csp-card-table"><p class="csp-table-crest">紫苑の貴賓室 · BACCARAT</p><div class="csp-baccarat-hands">{[['PLAYER',m.bac.player,m.bac.playerTotal],['BANKER',m.bac.banker,m.bac.bankerTotal]].map(([name,cards,total])=><div class={`csp-hand${result&&((name==='PLAYER'&&m.bac.winner==='player')||(name==='BANKER'&&m.bac.winner==='banker'))?' csp-winning-hand':''}`}><p>{name as string} <b>{open?total as number:'?'}</b></p><Cards cards={cards as number[]} backs={!open}/></div>)}</div><div class="csp-bet-zones"><span>PLAYER</span><span>TIE</span><span>BANKER</span></div>{result&&<strong class="csp-verdict">{m.bac.winner==='tie'?'TIE · 引き分け':m.bac.winner==='player'?'PLAYER 勝ち':'BANKER 勝ち'}</strong>}</div>;

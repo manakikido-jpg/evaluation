@@ -1,3 +1,4 @@
+import {ARCADE_KINDS,ARCADE_LABELS} from '../../domain/casinoArcade.js';
 import { formatBigRaces } from '../../services/casino/keibaBig.js';
 import type { GuildConfig } from '../../config.js';
 import type { CasinoConfig, CasinoGame } from '../../config.js';
@@ -426,6 +427,7 @@ export function CasinoAdminPage(p: {
                 </label>
               ))}
             </fieldset>
+            <fieldset class="perms"><legend>🎯 新しいカジノ台の公開</legend><input type="hidden" name="arcadeGamesPresent" value="1"/><p>上の「新しいカジノ台」がONのとき、チェックした台で銭を賭けられます。OFFにした台でも進行中の回の精算はできます。参考元の配当と同一とは限らず、各台の表を使います。</p>{ARCADE_KINDS.map(k=><label class="check"><input type="checkbox" name="arcadeGames" value={k} checked={c.arcadeGames.includes(k)}/>{ARCADE_LABELS[k].emoji} {ARCADE_LABELS[k].name}</label>)}</fieldset>
             <fieldset class="perms slot-fieldset">
               <legend>🎰 スロットの台と設定</legend>
               <label class="field">

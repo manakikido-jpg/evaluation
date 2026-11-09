@@ -43,6 +43,8 @@ export type LobbyResume = { game: CasinoGame; id: number };
 /** 進行中のひとり遊びだけ。中身は読まない */
 export async function lobbyResumes(db: Db, memberId: string, games: CasinoGame[]): Promise<LobbyResume[]> {
   const solo = games.filter((g) => !LOBBY_TABLE_GAMES.includes(g));
+  // 新規受付を止めても、銭を預けた進行中の回へ戻れるようにする。
+  if(!solo.includes('arcade'))solo.push('arcade');
   if (!solo.length) return [];
   const rows = await db
     .select({ game: casinoGames.game, id: casinoGames.id })

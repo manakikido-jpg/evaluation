@@ -1,3 +1,4 @@
+import {ARCADE_KINDS,isArcadeKind} from '../domain/casinoArcade.js';
 import { deployRuns, reflectedTimes } from '../services/deployInfo.js';
 import { loadAppointRoles, saveAppointRoles } from '../services/appointRoles.js';
 import { mountEventLottery } from './eventLottery.js';
@@ -2618,6 +2619,7 @@ export function createWebApp(deps: WebDeps) {
       }, {}),
       games: CASINO_GAMES.filter((g) => list.includes(g)),
       knownGames: [...CASINO_GAMES],
+      arcadeGames: body.arcadeGamesPresent==='1'?ARCADE_KINDS.filter(k=>(Array.isArray(body.arcadeGames)?body.arcadeGames:[body.arcadeGames]).includes(k)):cfg.casino.arcadeGames,
       slotMachines: slotMachinesOf(body),
       atMachines: atMachinesOf(body),
       atBet: typeof body.atBet === 'string' ? int('atBet') : cfg.casino.atBet,

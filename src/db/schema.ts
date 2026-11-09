@@ -191,6 +191,12 @@ export const casinoGames = pgTable(
   (t) => [index('casino_games_member_idx').on(t.memberId, t.status), index('casino_games_created_idx').on(t.createdAt)],
 );
 
+/** 新しい台の操作ID。徴収・途中受取・払戻の再送を一度にする。 */
+export const casinoArcadeRequests=pgTable('casino_arcade_requests',{
+ memberId:text('member_id').notNull(),operationId:text('operation_id').notNull(),fingerprint:text('fingerprint').notNull(),
+ gameId:bigint('game_id',{mode:'number'}).notNull().references(()=>casinoGames.id),createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
+},t=>[primaryKey({columns:[t.memberId,t.operationId]}),index('casino_arcade_requests_game_idx').on(t.gameId)]);
+
 export type CasinoGameRow = typeof casinoGames.$inferSelect;
 
 /** メンバー同士の対戦（オセロ）。賭けた銭は両方から預かり、勝った人がまとめてもらう */

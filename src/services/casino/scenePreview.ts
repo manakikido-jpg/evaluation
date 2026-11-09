@@ -8,7 +8,7 @@ import { initialBoard, legalMoves, applyMove, nextTurn, countStones, type Stone 
 import { stopsFor, REELS, judge, SLOT_SYMBOLS, PAYLINES } from './slots.js';
 import { bestHand, handName } from './tables/pokerHands.js';
 
-export type SceneFamily = 'blackjack'|'highlow'|'baccarat'|'roulette'|'slots'|'atslot'|'dice'|'othello'|'poker'|'daifugo'|'babanuki'|'mahjong'|'keiba'|'life';
+export type SceneFamily = 'blackjack'|'highlow'|'baccarat'|'roulette'|'slots'|'atslot'|'dice'|'othello'|'poker'|'daifugo'|'babanuki'|'mahjong'|'keiba'|'life'|'arcade';
 type SceneSpec = {name:string;room:string;family:SceneFamily;art:'roulette'|'blackjack'|'highlow'|'slots'|'salon'|'club';group:'solo'|'table';seats:number;steps:[string,string,string,string];note:string};
 const cardSteps:[string,string,string,string]=['着席','配札','オープン','結果'];
 const solo=(name:string,room:string,family:SceneFamily,art:SceneSpec['art'],note:string,steps=cardSteps):SceneSpec=>({name,room,family,art,note,group:'solo',seats:0,steps});
@@ -19,6 +19,7 @@ const rl=solo('ルーレット','夜桜の迎賓館','roulette','roulette','BET�
 const dice=solo('ちんちろ','月見の賽座敷','dice','club','どんぶりに落ちる賽と、決まった役を大きく見せます。',['構える','振る','目を確認','役']);
 const ot=solo('オセロ','碧月の対局室','othello','club','置ける場所・最後の一手・石の反転を分けて伝えます。',['対局前','手番','石の反転','終局']);
 export const GAME_SCENES:Record<CasinoGame,SceneSpec>={
+ arcade:solo('新しいカジノ台','咲楽の遊技回廊','arcade','club','11種類の台の入口です。実際の賭けは会員用の各台で行います。',['台を選ぶ','賭ける','進める','受取']),
  blackjack:bj,highlow:solo('ハイ＆ロー','狐面の勝負処','highlow','highlow','次のカードと灯籠の連勝記録を同じ視線に置きます。',['構える','選ぶ','カードを開く','連勝']),baccarat:bac,roulette:rl,
  slots:solo('スロット','桜灯の遊技殿','slots','slots','回るリール・STOP・揃ったライン・ランプを順番に見せます。',['着席','回す','STOP','結果']),
  atslot:solo('白狐ATスロット','白狐の祭殿','atslot','slots','押し順とリールを読みやすくし、液晶の場面と告知を連動させます。',['着席','押し順','STOP','告知']),
@@ -63,6 +64,7 @@ export function sceneOutcome(m:ScenePreview):SceneOutcome{
  }
 }
 export const SCENE_CUES:Record<SceneFamily,[string,string,string,string]>={
+ arcade:['新しい台の回廊へ。','11種類から遊ぶ台を選ぶ。','それぞれの台で、銭を賭ける。','確定した結果と履歴を確認する。'],
  blackjack:['静かな卓に、カードが届く。','最後の1枚を待つひととき。','カード、オープン。','勝負の余韻を、卓の上に。'],
  highlow:['狐面の勝負師と向かい合う。','上か、下か。次のカードへ。','運命の1枚を、開く。','灯籠が照らす、連勝の見本。'],
  baccarat:['貴賓室に、ふたつの手札。','プレイヤーか、バンカーか。','両者のカードを、オープン。','数字が揃い、勝負は決着。'],

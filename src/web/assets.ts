@@ -186,6 +186,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'casino-request.js': { body: readText(path.join(here, 'public/casino-request.js')), type: 'text/javascript; charset=utf-8' },
     'fortune.js': { body: readText(path.join(here, 'public/fortune.js')), type: 'text/javascript; charset=utf-8' },
     'fortune.css': { body: readText(path.join(here, 'public/fortune.css')), type: 'text/css; charset=utf-8' },
+    'casino-arcade.css': {body:readText(path.join(here,'public/casino-arcade.css')),type:'text/css; charset=utf-8'},
+    'casino-arcade.js': {body:readText(path.join(here,'public/casino-arcade.js')),type:'text/javascript; charset=utf-8'},
     'casino.js': { body: readText(path.join(here, 'public/casino.js')), type: 'text/javascript; charset=utf-8' },
     'atslot.js': { body: readText(path.join(here, 'public/atslot.js')), type: 'text/javascript; charset=utf-8' },
     'popup.js': { body: readText(path.join(here, 'public/popup.js')), type: 'text/javascript; charset=utf-8' },
