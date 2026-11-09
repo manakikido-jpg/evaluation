@@ -126,3 +126,14 @@ it('CSVでは名前の数式と改行を引用し、Discord IDの桁を守る', 
   expect(csv).toContain('"\'' + A + '"');
   expect(csv).toContain('うち過去取込（分・控除後・役職またはミュート未確認）');
 });
+
+it('🌙 宵宮の宵縁側にいた時間は、縁側の時間に数えない（縁側は今までどおり数える）', async () => {
+  const YOI = '910000000000000099', at = new Date('2026-11-09T03:00:00Z');
+  const ch = (id: string, name: string) => ({ id, name, categoryId: null, categoryName: null, memberIds: [A], sanpaishaMemberIds: [A], evaluationEligibleMemberIds: [A] });
+  for (let i = 0; i < 3; i++) await recordPresence(db, [ch(YOI, '🌙 大きな宵縁側１'), ch(ENG, '🌸 2人｜大きな縁側１')], new Date(at.getTime() + i * 60_000));
+  const rows = await db.select().from(voiceUsage).where(eq(voiceUsage.memberId, A));
+  expect(rows.find(r => r.channelId === YOI)).toMatchObject({ minutes: 3, sanpaishaMinutes: 0, evaluationRecordedMinutes: 0 });
+  expect(rows.find(r => r.channelId === ENG)).toMatchObject({ minutes: 3, sanpaishaMinutes: 3, evaluationRecordedMinutes: 3 });
+  const data = await ujikoEvaluation(db, cfg, filter, new Date(at.getTime() + 3_600_000));
+  expect(data.channels.map(c => c.id)).not.toContain(YOI);
+});

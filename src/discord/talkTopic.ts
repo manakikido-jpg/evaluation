@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, StringSelectMenuBuilder, type Interaction } from 'discord.js';
 import { logger } from '../lib/logger.js';
+import { isEngawaName } from '../services/voiceUsage.js';
 import { TOPIC_CATEGORIES, isTopicCategory, type TopicCategory } from '../domain/talkTopics.js';
 import { nextTopicDraw, startTopicDraw, topicIndex, type TopicDraw } from '../domain/talkTopicDraw.js';
 
@@ -39,8 +40,8 @@ function parseDraw(id: string): TopicDraw | undefined {
   return { category, seed, step };
 }
 
-/** チャンネル名・親の名前に「縁側」がある場所は対象外。変更も毎回取得する。 */
-export const isEngawaName = (name: string): boolean => name.normalize('NFKC').replace(/[\s\u200b-\u200d\ufeff]/g, '').includes('縁側');
+/** チャンネル名・親の名前に「縁側」がある場所は対象外。変更も毎回取得する（🌙 宵縁側は縁側に数えない） */
+export { isEngawaName };
 async function allowsAdult(i: Interaction<'cached'>): Promise<boolean> {
   let id: string | null = i.channelId;
   const visited = new Set<string>();

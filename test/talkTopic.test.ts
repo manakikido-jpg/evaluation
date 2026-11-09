@@ -55,18 +55,22 @@ describe('ジャンル別の無料トークテーマ', () => {
     expect(command.contexts).toEqual([0]);
   });
   it('公開メニューを表示し、縁側ではHなテーマだけ隠す', async () => {
-    for (const name of ['宿坊', '🌸 大きな縁側 1']) {
+    // 🌙 宵宮の宵縁側は縁側ではないので、Hなテーマも出す
+    for (const name of ['宿坊', '🌸 大きな縁側 1', '🌙 大きな宵縁側 1']) {
       const i = interaction('command', '', name);
       await run(i);
       expect(i.deferReply).toHaveBeenCalledWith();
       const body = i.editReply.mock.calls[0]![0];
       expect(body.allowedMentions).toEqual({ parse: [] });
       const options = body.components[0].toJSON().components[0].options;
-      expect(options.some((o: { value: string }) => o.value === 'adult')).toBe(!name.includes('縁側'));
+      expect(options.some((o: { value: string }) => o.value === 'adult')).toBe(!isEngawaName(name));
       expect(options.some((o: { value: string }) => o.value === 'love')).toBe(true);
     }
     expect(availableTopicCategories(false)).toHaveLength(4);
     expect(isEngawaName('🌸 縁　側 ２')).toBe(true);
+    expect(isEngawaName('🌙 大きな宵縁側 1')).toBe(false);
+    expect(isEngawaName('宵 縁側')).toBe(false);
+    expect(isEngawaName('縁側と宵縁側')).toBe(true);
   });
   it('選んだジャンルを同じ投稿に表示する', async () => {
     const i = interaction('select', 'talktopic:category'); i.values = ['entertainment'];
