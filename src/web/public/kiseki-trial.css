@@ -411,5 +411,11 @@
 .kt-root .kt-machine:is([data-kiseki-phase=zzone],[data-kiseki-phase=zgame]) .gt-lcd>.gt-digits{visibility:hidden}.kt-root .kt-machine:has(.gt-lcd-award) .kt-z-panel{display:none}
 .kt-payline-figure{display:block;width:min(100%,360px);height:auto;margin:12px auto}.kt-payline-figure rect{fill:#171e26;stroke:#9d8348;stroke-width:2}.kt-payline-figure path{fill:none;stroke:#e7b95d;stroke-width:6}.kt-payline-figure circle{fill:#e7b95d}
 
-/* 新配列のコマ番号が増す回転方向へ、目押しと停止の移動を揃える。 */
-.kt-root .kt-machine[data-reel-set=reference] .gt-reel.is-spinning .gt-reel-strip{animation-direction:reverse}
+/* 配列の見え方・目押し・ブレーキを、実機と同じ上から下へ揃える。 */
+.kt-root .kt-machine[data-reel-set=reference] .gt-reel.is-spinning .gt-reel-strip{animation-direction:normal}
+/* 映像は上部の背景だけ。三人・履歴・リール・数字は既存の表示を重ねる。 */
+.kt-root.kt-reference-layout.kt-composite .gt-display .kt-video{position:absolute;inset:0 0 auto;width:100%;height:37.6%;object-fit:cover;z-index:1;pointer-events:none;opacity:0}
+.kt-root.kt-reference-layout.kt-composite .gt-display .kt-video[data-playing=true]{opacity:1}
+.kt-root.kt-reference-layout.kt-composite .gt-display .gt-lcd{z-index:2}
+@media(prefers-reduced-motion:reduce){.kt-root .kt-video{display:none}}
+.kt-root[data-motion=low] .kt-video,.kt-root[data-motion=instant] .kt-video,.kt-root[data-quality=light] .kt-video{display:none}

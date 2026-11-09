@@ -22,8 +22,10 @@ export function controlKisekiReel(role:KisekiRole,reel:number,positions:(number|
  const available=plans(role,set).filter(p=>positions.every((v,i)=>i===reel||v===null||p[i]===v));
  if(!available.length)throw Error('停止済みの配列を確認してください。');
  const start=input??automaticStart;
- const choice=available.reduce((a,b)=>(b[reel]!-start+20)%20<(a[reel]!-start+20)%20?b:a);
- const position=choice[reel]!,slip=(position-start+20)%20;
+ // 上→下の配列を下へ回すと、窓中央のコマ番号は減る。旧配列は従来どおり。
+ const distance=(position:number)=>set==='reference'?(start-position+20)%20:(position-start+20)%20;
+ const choice=available.reduce((a,b)=>distance(b[reel]!)<distance(a[reel]!)?b:a);
+ const position=choice[reel]!,slip=distance(position);
  return {input:start,position,slip,assisted:input===undefined||slip>4};
 }
 /** 自動補助の開始コマ。公開ゲーム数だけを使い、抽選用の乱数は消費しない。 */

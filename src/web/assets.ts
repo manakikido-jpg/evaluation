@@ -90,8 +90,8 @@ const gaisenMedia = Object.fromEntries(readdirSync(path.join(here,'public/gaisen
   ]));
 
 const kisekiMedia = Object.fromEntries(readdirSync(path.join(here,'public/kiseki-media'))
-  .filter(f=>/^[a-z][a-z0-9-]*\.(webp|mp3)$/.test(f)).map(file=>[
-    'kiseki-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/kiseki-media',file))),type:file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
+  .filter(f=>/^[a-z][a-z0-9-]*\.(webp|mp3|mp4)$/.test(f)).map(file=>[
+    'kiseki-media-'+file,{body:new Uint8Array(readFileSync(path.join(here,'public/kiseki-media',file))),type:file.endsWith('.mp4')?'video/mp4':file.endsWith('.mp3')?'audio/mpeg':'image/webp'},
   ]));
 
 export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; type: string; version: string }> = Object.fromEntries(
@@ -108,6 +108,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'gaisen-palace.svg': {body:readText(path.join(here,'public/gaisen-palace.svg')),type:'image/svg+xml'},
     'kiseki-experience.js': {body:readText(path.join(here,'public/kiseki-experience.js')),type:'text/javascript; charset=utf-8'},
     'kiseki-experience.css': {body:readText(path.join(here,'public/kiseki-experience.css')),type:'text/css; charset=utf-8'},
+    'kiseki-video.js': {body:readText(path.join(here,'public/kiseki-video.js')),type:'text/javascript; charset=utf-8'},
     'kiseki-direction.js': {body:readText(path.join(here,'public/kiseki-direction.js')),type:'text/javascript; charset=utf-8'},
     'kiseki-live.js': {body:readText(path.join(here,'public/kiseki-live.js')),type:'text/javascript; charset=utf-8'},
     'kiseki-realism.js': {body:readText(path.join(here,'public/kiseki-realism.js')),type:'text/javascript; charset=utf-8'},
@@ -212,3 +213,8 @@ function artOf(dir: string, name: string): string | undefined {
   }
   return undefined;
 }
+
+/** 検品して追加した動画だけ。未納品の映像への通信はしない。 */
+export const kisekiVideoSources = () => Object.fromEntries(['god','gg','gaia','zzone','zgame'].flatMap(key=>{
+ const file=`kiseki-media-veo-${key}.mp4`;return Object.hasOwn(STATIC,file)?[[key,assetUrl(file)]]:[];
+}));
