@@ -12,7 +12,7 @@ it('全役・全押し順・20入力位置で停止窓を固定し、払出と�
   for(const i of order){const from=(input+i*7)%20;stop(s,i,last,from);const positions=s.pending?.positions??s.lastPositions;
    for(const [j,p] of seen)expect(positions[j]).toBe(p);seen.set(i,positions[i]!);
    const result=(s.pending?.reelStops??s.lastReelStops)?.[i];
-   if(result){expect(result.input).toBe(from);expect(result.slip).toBe((result.position-from+20)%20);if(!result.assisted)expect(result.slip).toBeLessThanOrEqual(4);}
+   if(result){expect(result.input).toBe(from);expect(result.slip).toBe((from-result.position+20)%20);if(!result.assisted)expect(result.slip).toBeLessThanOrEqual(4);}
   }
   const correct=role!=='bell'||order.join()===expected.join();expect(s.lastPaid).toBe(correct?ROLES[role].units*10:0);expect(s.balance).toBe(100000-30+s.lastPaid);
   const p=pattern(role);if(correct&&p)expect(s.lastPositions.map((v,i)=>rows(i,v)[roleRows(role)[i]!])).toEqual(p.symbols);
@@ -22,7 +22,7 @@ it('全役・全押し順・20入力位置で停止窓を固定し、払出と�
 });
 it('0〜4コマで届く窓と、届かない場合の補助を区別し、不正入力で変更しない',()=>{
  const zero=controlKisekiReel('god',0,[null,null,null],4);expect(zero).toEqual({input:4,position:4,slip:0,assisted:false});
- const fallback=controlKisekiReel('red',0,[null,null,null],3);expect(fallback.slip).toBeGreaterThan(4);expect(fallback.assisted).toBe(true);
+ const fallback=controlKisekiReel('red',0,[null,null,null],7);expect(fallback.slip).toBeGreaterThan(4);expect(fallback.assisted).toBe(true);
  const s=newKiseki();lever(s,last,'bell',true);const before=structuredClone(s);
  for(const n of [-1,20,1.5,NaN,Infinity]){expect(()=>stop(s,0,last,n)).toThrow();expect(s).toEqual(before);}
 });
@@ -68,4 +68,9 @@ it('通常ゲームの保存再開で受入台へ戻っても、先に止めた�
  for(const index of [1,2])act(f,'u','試遊',{action:'stop',machine:2,revision:f.revision,index,position:3},600001,last);
  const own=trialView(f,'u').own!;expect(own.spins).toBe(0);expect(own.lastPaid).toBe(150);expect(own.digits[0]).toBe(first);
  expect(own.digits).toEqual(f.machines[1]!.state.lastDigits);expect(trialView(JSON.parse(JSON.stringify(f)),'u').own!.digits).toEqual(own.digits);
+});
+
+it('下方向に届くGODを選び、旧配列の上下面の規則を変えない',()=>{
+ expect(controlKisekiReel('god',0,[null,null,null],1)).toEqual({input:1,position:19,slip:2,assisted:false});
+ for(let input=0;input<20;input++){const v=controlKisekiReel('god',0,[null,null,null],input,0,'legacy');expect(v.slip).toBe((v.position-input+20)%20);}
 });
