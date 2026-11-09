@@ -17,6 +17,8 @@ export const RANKS_FLASH: Record<string, { text: string; kind: 'ok' | 'warn' }> 
   reset_confirm: { text: 'リセットするときは、確かめの欄に「リセット」と入れてください。', kind: 'warn' },
   reset_already: { text: '評価のリセットはもう行っています（一度だけです）。', kind: 'warn' },
   reset_undone: { text: '朱印を元に戻しました（役職は戻していません）。', kind: 'ok' },
+  appoint_saved: { text: '🎖 任命したときに一緒に付けるロールを保存しました。これから付けた人から効きます（今いる人には付けません）。', kind: 'ok' },
+  appoint_invalid: { text: '🎖 保存できませんでした。役職そのもののロールや、BOT が付けられないロールは選べません。', kind: 'warn' },
 };
 
 function Csrf(props: { session: AdminSession }) {
@@ -57,6 +59,8 @@ export function RanksPage(props: {
   flash?: string;
   /** 評価のリセット（していなければ undefined） */
   reset?: ResetState;
+  /** 🎖 任命したときに一緒に付けるロール（役職の key → ロール） */
+  appointRoles?: Record<string, string>;
 }) {
   const { session, cfg, fileCfg } = props;
   const f = props.flash && Object.hasOwn(RANKS_FLASH, props.flash) ? RANKS_FLASH[props.flash] : undefined;
@@ -204,6 +208,28 @@ export function RanksPage(props: {
           保存
         </button>
       </form>
+
+      {props.roles && (
+        <section class="card anchor" id="rank-appoint">
+          <h2>🎖 任命したときに一緒に付けるロール</h2>
+          <p class="note">任命制の役職のロールが付いたとき（Discord で手で付けても、社務所Web で付けても）、ここで選んだロールも BOT が一緒に付けます（例: 衛士 ＋ 新役衛士）。もっと格の高い役職のロールが付いたとき（役職が上がったとき）と、その役職のロールが外れたときに、BOT が外します。今もう役職を持っている人には付けません。BOT のロールより下にあるロールだけ付けられます。</p>
+          <form method="post" action="/ranks/appoint-roles" class="fields">
+            <Csrf session={session} />
+            {ranks.filter((r) => !r.auto).map((r) => (
+              <label class="field">
+                <span>{r.emoji}{r.name}</span>
+                <select name={`appoint.${r.key}`}>
+                  <option value="">付けない</option>
+                  {props.roles!.filter((x) => !used.has(x.id)).map((x) => (
+                    <option value={x.id} selected={props.appointRoles?.[r.key] === x.id}>{x.name}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            <button type="submit" class="ok">保存</button>
+          </form>
+        </section>
+      )}
 
       {props.roles && (
         <section class="card anchor" id="rank-add">

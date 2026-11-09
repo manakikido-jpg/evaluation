@@ -907,6 +907,26 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(page).toContain('最近の「ブーストしました」');
   });
 
+  it('🎖 任命したときに一緒に付けるロール: 宮司だけ保存でき、役職そのもののロールは選べない', async () => {
+    const { loadAppointRoles } = await import('../src/services/appointRoles.js');
+    const NEW = '980000000000000301';
+    const shinshoku = cfg.ranks.find((r) => r.key === 'shinshoku')!;
+    roleList = [{ id: NEW, name: '新役神職', position: 1, managed: false, color: 0 }, { id: shinshoku.roleId, name: '神職', position: 2, managed: false, color: 0 }];
+    try {
+      const s = await login(STAFF);
+      expect((await post('/ranks/appoint-roles', s, { _csrf: await csrfOf(s), 'appoint.shinshoku': NEW })).status).toBe(403);
+      const g = await login(GUJI);
+      expect(await (await get('/ranks', g)).text()).toContain('name="appoint.shinshoku"');
+      expect((await post('/ranks/appoint-roles', g, { _csrf: await csrfOf(g), 'appoint.shinshoku': shinshoku.roleId })).headers.get('location')).toBe('/ranks?msg=appoint_invalid#rank-appoint');
+      expect(await loadAppointRoles(db)).toEqual({});
+      expect((await post('/ranks/appoint-roles', g, { _csrf: await csrfOf(g), 'appoint.shinshoku': NEW })).headers.get('location')).toBe('/ranks?msg=appoint_saved#rank-appoint');
+      expect(await loadAppointRoles(db)).toEqual({ shinshoku: NEW });
+      expect(await (await get('/ranks', g)).text()).toMatch(new RegExp(`value="${NEW}"[^>]*selected`));
+      expect((await post('/ranks/appoint-roles', g, { _csrf: await csrfOf(g), 'appoint.shinshoku': '' })).headers.get('location')).toBe('/ranks?msg=appoint_saved#rank-appoint');
+      expect(await loadAppointRoles(db)).toEqual({});
+    } finally { roleList = []; }
+  });
+
   it('評価のリセット: 宮司だけ・「リセット」と入れたときだけ・一度だけ', async () => {
     const s = await login(STAFF);
     expect((await post('/ranks/reset', s, { _csrf: await csrfOf(s), confirm: 'リセット' })).status).toBe(403);
