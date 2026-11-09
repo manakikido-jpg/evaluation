@@ -21,7 +21,7 @@ export function OrgChartPage(p: { session: AdminSession; chart: OrgChart; groups
         <li><kbd>Delete</kbd> で選んだものを消す、<kbd>Ctrl</kbd>+<kbd>Z</kbd> で戻す、<kbd>Ctrl</kbd>+<kbd>Y</kbd> でやり直す、<kbd>Ctrl</kbd>+<kbd>D</kbd> で四角を複製。矢印キーで少しずつ動かせます。</li>
       </ul></details>
       : <p>見るだけです（変えられるのは宮司だけ）。</p>}
-    <p class="note">Discord のロールは変わりません。四角を選ぶと右に出る「社務所Webで使えるページ」を選ぶと、その四角に置いた人がログインしてそのページを使えます（宮司・神職はもとから全部）。</p>
+    <p class="note">Discord のロールは変わりません。四角を選ぶと右に出る「社務所Webで使えるページ」を選ぶと、その四角に置いた人がログインしてそのページを使えます（宮司・神職はもとから全部）。ID とパスワードで入る人は、アカウントに Discord の人を結びつけておくと、アカウントのページにこのページが足されます（次に開いたときから。結びつけていないアカウントは変わりません）。</p>
     <div class="org-app" data-org={JSON.stringify(data)} data-csrf={p.session.csrfToken}>
       <noscript><p class="flash warn">組織図には JavaScript が必要です。</p></noscript>
     </div>

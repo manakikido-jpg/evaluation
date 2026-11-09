@@ -3873,8 +3873,18 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
     expect(home.headers.get('location')).toBe('/board');
     expect((await get('/economy', shin.session!)).status).toBe(403);
     // 止めると、ログイン中でもすぐ入れない
-    const { listAccounts } = await import('../src/services/webAccounts.js');
+    const { listAccounts, updateAccount } = await import('../src/services/webAccounts.js');
     const id = (await listAccounts(db)).find((a) => a.loginId === 'shin')!.id;
+    // 🏯 組織図に置いた人をアカウントに結びつけると、その四角のページも使える（結びつけるまでは使えない）
+    const { saveOrg, DEFAULT_ORG } = await import('../src/services/orgChart.js');
+    const SHIN = '890000000000000201';
+    await saveOrg(db, { ranks: DEFAULT_ORG.ranks, nodes: [{ id: 'k', name: '会計', pages: ['economy'], x: 0, y: 0 }], placements: [{ memberId: SHIN, nodeId: 'k', rankId: 'member' }] }, 'admin');
+    expect((await get('/economy', (await loginAs('shin', pw)).session!)).status).toBe(403);
+    expect(await updateAccount(db, id, { name: '神職さん', level: 'shinshoku', pages: ['board'], memberId: SHIN })).toBe('ok');
+    const linked = (await loginAs('shin', pw)).session!;
+    expect((await get('/economy', linked)).status).toBe(200);
+    expect((await get('/board', linked)).status).toBe(200);
+    expect((await get('/members', linked)).status).toBe(403);
     const stop = await app.request(`/settings/accounts/${id}/toggle`, {
       method: 'POST',
       headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' },
