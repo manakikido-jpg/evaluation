@@ -1,0 +1,2 @@
+ALTER TABLE "kiseki_tickets" DROP CONSTRAINT "kiseki_ticket_period";--> statement-breakpoint
+ALTER TABLE "kiseki_tickets" ADD CONSTRAINT "kiseki_ticket_period" CHECK (("kiseki_tickets"."started_at" is null and "kiseki_tickets"."ends_at" is null) or ("kiseki_tickets"."started_at" is not null and "kiseki_tickets"."ends_at" is not null and "kiseki_tickets"."ends_at"="kiseki_tickets"."started_at"+interval '1 hour'));

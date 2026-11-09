@@ -70,7 +70,7 @@
     "spLoop": 80
   },
   "notClaimedVerified": [
-    "実機の全リール配列と滑り制御表",
+    "実機の全滑り制御表と全停止位置の払出対応",
     "表裏モードの完全な遷移と履歴当選表",
     "現在のサイトの更新内容",
     "実iPhone/Androidの打感・聴感・発熱・電池の実測"
@@ -92,6 +92,31 @@
       "今回の予告の頻度/期待度/タイミングは独自",
       "6ステージの背景と内部モード連動",
       "実機録音・全演出の完全再現"
+    ]
+  },
+  "userImages20261108": {
+    "files": [
+      "milliongod_kiseki_01.webp",
+      "milliongod_kiseki_02.webp",
+      "milliongod_kiseki_03.webp",
+      "milliongod_kiseki_04.webp",
+      "milliongod_kiseki_05.webp",
+      "milliongod_kiseki_06.webp",
+      "milliongod_kiseki_08.webp"
+    ],
+    "record": "docs/kiseki-reference-images-2026-11-08.md",
+    "confirmedScope": [
+      "掲載された各20コマの配列と有効1LINE",
+      "表6モードの名称",
+      "通常5・GG4・ガイア・Zの画面構成",
+      "0・8・Vと掲載出目",
+      "Z-ZONEの黄7HOLD・5連続・レア黄7直行"
+    ],
+    "limits": [
+      "全滑り制御表は未掲載",
+      "16組の払出対応は掲載停止型と既存試遊モデルから構成した部分表",
+      "モード移行率・ステージ振分・Zのレア役振分は試遊用",
+      "BGM・SE・正確な尺は未確認"
     ]
   }
 }

@@ -75,7 +75,8 @@
   if(!animation||!height)return null;
   const y=new DOMMatrixReadOnly(getComputedStyle(strip).transform).m42;
   const cell=((Math.round(-y/height+1)%20)+20)%20;
-  return {button,position:19-cell,animation};
+  const reference=root().querySelector('.kt-machine')?.dataset.reelSet==='reference';
+  return {button,position:reference?cell:19-cell,animation};
  }
  function clearTiming(){if(timingPress?.animation?.playState==='paused')timingPress.animation.play();timingPress=null;}
  function releaseContact(event){kisekiRealism?.release();if(contact)delete contact.dataset.contact;contact=null;if(event?.type==='pointercancel'||event?.type==='blur'){clearTiming();diagnosticPress=null;diagnosticInput=null;}}
@@ -108,10 +109,11 @@
  function celebrate(event,sample=false){
   endWin();if(!event||document.hidden||(!sample&&actualMotion()==='instant'))return;
   const d=root()?.querySelector('[data-gt-celebration]');if(!d||!['gg','sgg','god','stock'].includes(event.kind))return;
-  if(root()?.classList.contains('kt-root')){const background=root().querySelector('.kt-machine .gt-landscape'),image=d.querySelector('.gt-award-background');if(background&&image){image.src=background.currentSrc||background.src;image.removeAttribute('srcset');}}
+  if(root()?.classList.contains('kt-root')){const background=root().querySelector('.kt-machine .gt-landscape'),image=d.querySelector('.gt-award-background');if(background&&image){image.src=background.dataset?.ktAwardSrc||background.currentSrc||background.src;image.removeAttribute('srcset');}}
   const variant=comfort?.nextVariant()||'a';const kind=event.kind,short=actualMotion()!=='normal',scene=(!sample&&root()?.querySelector('[data-gt-lcd-award]'))||d.querySelector('.gt-award-scene');
-  const title={gg:'GOD GAME',sgg:root()?.classList.contains('kt-root')?'SUPER GOD GAME':'SPECIAL GOD GAME',god:'GOD',stock:'GG BOOST'}[kind];
-  const prefix={gg:event.added?'神殿の扉が開く':'次なる神殿へ',sgg:'紅紫の覚醒',god:'神 降 臨',stock:'上乗せ確定'}[kind];
+  const zEntry=root()?.classList.contains('kt-root')&&root()?.querySelector('.kt-machine')?.dataset.kisekiPhase==='zzone'&&kind==='stock';
+  const title=zEntry?'Z-ZONE':{gg:'GOD GAME',sgg:root()?.classList.contains('kt-root')?'SUPER GOD GAME':'SPECIAL GOD GAME',god:'GOD',stock:'GG BOOST'}[kind];
+  const prefix=zEntry?'ゼロ揃い':{gg:event.added?'神殿の扉が開く':'次なる神殿へ',sgg:'紅紫の覚醒',god:'神 降 臨',stock:'上乗せ確定'}[kind];
   const set=(name,value)=>d.querySelector('[data-gt-win-'+name+']').textContent=value;
   d.dataset.variation=variant;d.dataset.kind=kind;d.dataset.sample=String(sample);
   set('kicker',sample?'演出見本 · ポイントや進行は変わりません':'咲楽ノ宮 · 当選結果');set('title',title);set('prefix',prefix);
@@ -215,7 +217,7 @@
      // 前後の絵柄を余白に置き、窓を空けずに減速して定位置へ収める。
      const height=el?.querySelector('.gt-symbol')?.getBoundingClientRect().height;
      const timed=el?.closest('.is-timed-stop'),slip=Number(timed?.dataset.slip);
-     if(timed&&height){const travel=timed.dataset.assisted==='true'?0:slip;el.animate([{transform:`translateY(${-height*(5+travel)}px)`},{transform:`translateY(${-height*5}px)`}],{duration:Math.min(205,55+travel*35),easing:'cubic-bezier(.15,.65,.25,1)'});}
+     if(timed&&height){const travel=timed.dataset.assisted==='true'?0:slip,direction=root().querySelector('.kt-machine')?.dataset.reelSet==='reference'?-1:1;el.animate([{transform:`translateY(${-height*(5+direction*travel)}px)`},{transform:`translateY(${-height*5}px)`}],{duration:Math.min(205,55+travel*35),easing:'cubic-bezier(.15,.65,.25,1)'});}
      else {const settle=window.GaisenComfort?.stopMotion?.(height,{motion:actualMotion(),light:isLight(),sync:syncOffset});if(settle)el.animate(settle.frames,settle.timing);}
     }
    }

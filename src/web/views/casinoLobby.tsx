@@ -102,6 +102,7 @@ export function CasinoLobbyContent(p: LobbyProps) {
             {p.msg}
           </p>
         )}
+        {p.godExperience&&p.group!=='table'&&<section class="cl-panel"><p>プレリリース</p><h2>神域体験券 · GOD先行体験</h2><p>1,500銭 / 使用開始から60分。専用ポイントで遊ぶ開発中の試遊版です。換金はできません。</p><a class="c-btn" href="/casino/god">体験券を購入・使用する</a></section>}
         {games.includes('daifugo') && <section class="cl-panel"><h2>👥 人同士で大富豪</h2><p>人だけの卓で遊ぼう。募集文をコピーして友達も誘えます。</p><a class="c-btn" href="/casino/tables/daifugo">人だけの卓を探す・立てる</a>{p.openTables.filter(t => t.kind === 'daifugo' && t.humansOnly).slice(0,3).map(t => <p><a href={`/casino/t/${t.id}`}>募集中：卓 #{t.id} · {t.players}/{t.capacity}人 · 人だけ</a></p>)}</section>}
         {(p.mine || p.resumes.length > 0) && (
           <section class="cl-panel cl-resume" aria-labelledby="cl-resume-title">

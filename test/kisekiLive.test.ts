@@ -21,8 +21,8 @@ it('全役・全押し順・20入力位置で停止窓を固定し、払出と�
  }
 });
 it('0〜4コマで届く窓と、届かない場合の補助を区別し、不正入力で変更しない',()=>{
- const zero=controlKisekiReel('god',0,[null,null,null],0);expect(zero).toEqual({input:0,position:0,slip:0,assisted:false});
- const fallback=controlKisekiReel('small',1,[null,null,null],7);expect(fallback.slip).toBeGreaterThan(4);expect(fallback.assisted).toBe(true);
+ const zero=controlKisekiReel('god',0,[null,null,null],4);expect(zero).toEqual({input:4,position:4,slip:0,assisted:false});
+ const fallback=controlKisekiReel('red',0,[null,null,null],3);expect(fallback.slip).toBeGreaterThan(4);expect(fallback.assisted).toBe(true);
  const s=newKiseki();lever(s,last,'bell',true);const before=structuredClone(s);
  for(const n of [-1,20,1.5,NaN,Infinity]){expect(()=>stop(s,0,last,n)).toThrow();expect(s).toEqual(before);}
 });

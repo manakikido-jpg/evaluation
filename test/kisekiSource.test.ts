@@ -11,5 +11,5 @@ it('保存済み公開資料の確率・PGG基本構成を守り、丸め誤差�
  expect(ROLE_WEIGHTS.reduce((sum,value)=>sum+value.weight,0)).toBe(DRAW_SIZE);expect(SGG_GAMES).toEqual(facts.sggGames);
  const state=newKiseki();lever(state,n=>n-1,'god',true);for(const i of [0,1,2])stop(state,i,n=>n-1,19);
  expect(state.phase).toBe('pgg');expect(state.left).toBe(facts.pggGames);expect(state.stocks).toBe(facts.pggRemainingStocks);expect(state.lastPaid).toBe(150);
- expect(evidence.notClaimedVerified).toContain('実機の全リール配列と滑り制御表');expect(evidence.sources.find((source:any)=>source.url.endsWith('/4/')).latestFetch).toBe('HTTP403');
+ expect(evidence.userImages20261108.confirmedScope).toContain('掲載された各20コマの配列と有効1LINE');expect(evidence.notClaimedVerified).toContain('実機の全滑り制御表と全停止位置の払出対応');expect(evidence.sources.find((source:any)=>source.url.endsWith('/4/')).latestFetch).toBe('HTTP403');
 });

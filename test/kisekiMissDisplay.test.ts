@@ -46,7 +46,7 @@ it('途中の期限保存を別台で再開しても、停止済みの窓と数�
 });
 
 it('旧保存の確定済み窓を閲覧で書き換えず、新しいゲームから見せかけ揃いを避ける',()=>{
- const f=freshFloor(0),m=f.machines[0]!;m.owner='u';m.state.spins=10;m.state.lastPositions=[0,0,0];const before=structuredClone(f);
+ const f=freshFloor(0),m=f.machines[0]!;m.owner='u';m.state.spins=10;m.state.lastPositions=[0,0,0];delete m.state.reelSet;const before=structuredClone(f);
  expect(trialView(f,'u').own!.reels.map(reel=>reel![2])).toEqual(['flower','flower','flower']);expect(f).toEqual(before);
  lever(m.state,last,'none',true);for(const i of [0,1,2])stop(m.state,i,last);expectNoDecorationLine(m.state.lastPositions);expect(m.state.lastPaid).toBe(0);
 });

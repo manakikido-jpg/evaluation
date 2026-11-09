@@ -66,6 +66,7 @@ export const REASON_FLOW: Record<string, Flow> = {
   ticket_refund: 'income',
   scratch_buy: 'income',
   scratch_prize: 'issue',
+  kiseki_ticket: 'income',
   event_entry: 'income', event_refund: 'income', event_prize: 'issue',
   lottery_buy: 'income',
   lottery_prize: 'issue',
