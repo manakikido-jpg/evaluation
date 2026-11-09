@@ -1,3 +1,4 @@
+import { isEngawaName } from './voiceUsage.js';
 import type { VoiceCounter, VoiceGroup } from '../config.js';
 import { groupMembers, type GroupChannel } from './voiceGroups.js';
 
@@ -9,7 +10,8 @@ export function countInGroups(channels: GroupChannel[], groups: readonly VoiceGr
   const seen = new Set<string>();
   let n = 0;
   for (const g of groups) {
-    if (!g.name.includes(match)) continue;
+    // 「縁側」で数えるときは、🌙 宵宮の宵縁側は入れない（宵縁側は縁側に数えない）
+    if (match === '縁側' ? !isEngawaName(g.name) : !g.name.includes(match)) continue;
     for (const c of groupMembers(channels, g)) {
       if (seen.has(c.id)) continue;
       seen.add(c.id);

@@ -16,6 +16,10 @@ describe('👥 縁側の人数', () => {
   it('名前に「縁側」がある仲間の人数を合わせる（ほかの通話は数えない）', () => {
     const channels = [ch('1', '大きな縁側 1', 3), ch('2', '大きな縁側 2', 2), ch('3', '小さな縁側 1', 1), ch('4', '作業部屋 1', 5), ch('5', '雑談', 9)];
     expect(countInGroups(channels, groups, '縁側')).toBe(6);
+    // 🌙 宵宮の宵縁側は「縁側」の人数に入れない
+    const withYoi = [...groups, { name: '大きな宵縁側', min: 2, max: 10 }];
+    expect(countInGroups([...channels, ch('6', '🌙 大きな宵縁側 1', 4)], withYoi, '縁側')).toBe(6);
+    expect(countInGroups([...channels, ch('6', '🌙 大きな宵縁側 1', 4)], withYoi, '宵縁側')).toBe(4);
     const vc = { name: '{icon} {n}人｜縁側', midAt: 5, highAt: 10 };
     expect(counterName(vc, 0)).toBe('💤 0人｜縁側');
     expect(counterName(vc, 4)).toBe('🟢 4人｜縁側');

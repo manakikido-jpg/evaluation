@@ -12,8 +12,15 @@ import { jstDate } from './activity.js';
  * を足していく。社務所Web の「通話の記録」とメンバーのページで見る。
  */
 
-/** 装飾や人数が付いていても、縁側の名前を識別する。 */
-export const isEngawaName = (name: string): boolean => name.normalize('NFKC').includes('縁側');
+/**
+ * 装飾や人数が付いていても、縁側の名前を識別する（空白・見えない文字は無視）。
+ * 🌙 宵宮の「宵縁側」は縁側に数えない（評価の縁側の時間・お年玉・お題の決まり。2026-11-09）
+ */
+export const isEngawaName = (name: string): boolean => {
+  const n = name.normalize('NFKC').replace(/[\s\u200b-\u200d\ufeff]/g, '');
+  // 「宵縁側」の分を除いても「縁側」が残るときだけ縁側（「縁側と宵縁側」のような名前は縁側）
+  return n.replaceAll('宵縁側', '').includes('縁側');
+};
 
 export type PresenceChannel = { id: string; name: string; categoryId: string | null; categoryName: string | null; memberIds: string[]; /** 指定時は役職確認済み。空配列は参拝者なし、未指定は過去互換。 */ sanpaishaMemberIds?: string[]; /** 指定時は新しいミュート判定済み。参拝者かつこのID内なら評価へ加算。 */ evaluationEligibleMemberIds?: string[] };
 
