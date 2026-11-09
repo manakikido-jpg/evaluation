@@ -44,3 +44,13 @@ it('宮司だけが新台の個別ON/OFFを保存し、従来フォームでは�
  const b=data();b.set('arcadeGamesPresent','1');b.set('arcadeGames','keno');expect((await settingsApp.request('/economy/casino',{method:'POST',headers:h,body:b})).headers.get('location')).toBe('/economy/casino?msg=saved');expect((await loadOverrides(db)).casino?.arcadeGames).toEqual(['keno']);
  const denied=data();expect((await settingsApp.request('/economy/casino',{method:'POST',headers:headers(),body:denied})).status).toBeGreaterThanOrEqual(300);
 });
+
+it('一覧は11台の専用図柄と入口を持ち、盤面の操作を筐体の中に残す',async()=>{
+ const hub=await(await app.request('/casino/arcade',{headers:headers()})).text();
+ expect(hub.match(/class="ag-art"/g)).toHaveLength(11);expect(hub).toContain('今夜は、どの台へ。');
+ const ids=[...hub.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);expect(new Set(ids).size).toBe(ids.length);
+ const mines=await commandForMines();const response=await app.request('/casino/arcade/mines?round='+mines,{headers:headers()}),html=await response.text();
+ expect(html).toContain('class="ag-machine"');expect(html).toContain('name="choice" value="24"');expect(html).toContain('aria-label="25番のマス hidden"');expect(html).not.toContain('💎');expect(html).not.toMatch(/onclick=|style=/);
+ const keno=await(await app.request('/casino/arcade/keno',{headers:headers()})).text();expect(keno).toContain('name="picks" value="40"');
+});
+async function commandForMines(){const r=await post('mines',{});expect(r.status).toBe(303);return new URL(r.headers.get('location')!,base).searchParams.get('round')!;}
