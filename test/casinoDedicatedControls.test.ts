@@ -15,3 +15,12 @@ it('体験開始の画面差し替えでは外部スクリプトを読み込む�
  runInNewContext(text+";swapPage('html','https://example.test/casino/god/play');",{DOMParser:class{parseFromString(){return doc;}},document:{querySelector:()=>null,body:{hasAttribute:()=>false}},location:{assign:(url:string)=>target=url}});
  expect(target).toBe('https://example.test/casino/god/play');
 });
+
+it('ピンボールの入場・退出でも専用スクリプトをページ全体で読み直す',()=>{
+ const text=source.slice(source.indexOf('const swapPage ='),source.indexOf("document.addEventListener('submit', async"));
+ for(const entering of [true,false]){let target='';const selector=(hasPinball:boolean)=>(q:string)=>q==='.c-main'||q.split(',').includes('[data-pinball]')&&hasPinball?{}:null;
+ const doc={querySelector:selector(entering),body:{hasAttribute:()=>false}};
+ runInNewContext(text+";swapPage('html','https://example.test/casino/pinball');",{DOMParser:class{parseFromString(){return doc;}},document:{querySelector:selector(!entering),body:{hasAttribute:()=>false}},location:{assign:(url:string)=>target=url}});
+ expect(target).toBe('https://example.test/casino/pinball');
+ }
+});

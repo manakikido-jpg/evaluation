@@ -424,7 +424,7 @@ const swapPage = (html, url) => {
   if(doc.body.hasAttribute('data-casino-immersive')!==document.body.hasAttribute('data-casino-immersive')){location.assign(url);return;}
   if (needsHtmx) { location.href = url; return; }
   // 体験開始で専用画面へ移るときは、音・停止・時計の外部スクリプトも読み込む。
-  if (doc.querySelector('[data-gaisen-trial]') || document.querySelector('[data-gaisen-trial]')) { location.assign(url); return; }
+  if (doc.querySelector('[data-gaisen-trial]') || document.querySelector('[data-gaisen-trial]') || doc.querySelector('[data-pinball]') || document.querySelector('[data-pinball]')) { location.assign(url); return; }
   const before = cardKeys(document.querySelector('.c-main'));
   const samePath = new URL(url, location.href).pathname === location.pathname;
   const oldMain=document.querySelector('.c-main');
