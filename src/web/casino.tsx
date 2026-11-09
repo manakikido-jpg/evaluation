@@ -1,3 +1,4 @@
+import {PinballPage} from './views/pinball.js';
 import {randomUUID} from 'node:crypto';
 import {experienceState,experienceVisible,buyExperience,startExperience,playExperience} from '../services/casino/kiseki/experience.js';
 import {KisekiError} from '../services/casino/kiseki/trial.js';
@@ -212,6 +213,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
     };
 
   // 神域体験券。既存カジノと同じ会員認証・CSRFを通し、試遊ポイントは別保存。
+  app.get('/casino/pinball',page((c,me)=>{c.header('Cache-Control','private, no-store');return c.html(<PinballPage me={me}/>);}));
   const passPage=async(c:Context,me:Me,error?:string,status:400|403|409=400)=>{c.header('Cache-Control','private, no-store');return c.html(<KisekiExperience me={await meOf(me.session,c)} state={await experienceState(db,me.session.userId,d.now())} requestId={randomUUID()} error={error} message={c.req.query('done')==='buy'?'体験券を購入しました。使う券を選んで開始してください。':undefined}/>,error?status:200);};
   app.get('/casino/god',page((c,me)=>passPage(c,me)));
   app.post('/casino/god/buy',page(async(c,me)=>{try{const b=await c.req.parseBody();if(b.agree!=='1')throw new KisekiError('料金・利用時間・換金不可を確認してください。');await buyExperience(db,me.session.userId,String(b.requestId??''),d.now());return c.redirect('/casino/god?done=buy',303);}catch(e){if(!(e instanceof KisekiError))throw e;return passPage(c,me,e.message,e.status);}},{post:true}));
