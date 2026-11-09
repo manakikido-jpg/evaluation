@@ -3,9 +3,9 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
 const script = readFileSync(new URL('../src/web/public/theme.js', import.meta.url), 'utf8');
-function browser(saved: string | null = null, dark = false, blocked = false) {
+function browser(saved: string | null = null, dark = false, blocked = false, office = false) {
   const events = new Map<string, (e?: any) => void>();
-  const root = { dataset: {} as Record<string, string> };
+  const root = { dataset: (office ? {officeConsole:'true'} : {}) as Record<string, string> };
   const status = { textContent: '' };
   const select = { value: '', disabled: true, addEventListener: (key: string, fn: () => void) => events.set(`select:${key}`, fn) };
   const media = { matches: dark, addEventListener: (_: string, fn: () => void) => events.set('media', fn) };
@@ -51,4 +51,11 @@ describe('社務所の表示色', () => {
     expect(b.select.value).toBe('auto');
     expect(b.root.dataset.theme).toBe('dark');
   });
+});
+
+it('新しい管理画面はライトを既定にし、保存済みダークと自動選択を維持する',()=>{
+ const fresh=browser(null,true,false,true);expect(fresh.root.dataset.theme).toBe('light');expect(fresh.select.value).toBe('light');
+ expect(browser('dark',false,false,true).root.dataset.theme).toBe('dark');const auto=browser('auto',true,false,true);expect(auto.root.dataset.theme).toBe('dark');auto.system(false);expect(auto.root.dataset.theme).toBe('light');
+ fresh.choose('dark');fresh.otherTab(null);expect(fresh.select.value).toBe('light');expect(fresh.root.dataset.theme).toBe('light');
+ expect(browser(null,true,false,false).root.dataset.theme).toBe('dark');
 });

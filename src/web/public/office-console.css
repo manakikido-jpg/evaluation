@@ -1,0 +1,115 @@
+/* 社務所の管理画面用。ゲーム・会員ページの色や造形には適用しない。 */
+:root[data-office-console="true"]{color-scheme:light;--shu:#2563eb;--shu-dark:#1d4ed8;--accent-text:#1d4ed8;--sakura:#eff6ff;--sakura-2:#dbeafe;--ink:#183650;--muted:#587089;--line:#dce8f2;--bg:#fff;--card:#fff;--gray:#f1f6fa;--shadow:none;--console-panel:#f1faff;--console-rule:#b8dff4;--console-blue:#2563eb;--console-action:#2563eb}
+:root[data-office-console="true"][data-theme="dark"]{color-scheme:dark;--shu:#80b1ff;--shu-dark:#a8caff;--accent-text:#a8caff;--sakura:#182e4d;--sakura-2:#244263;--ink:#e1edfa;--muted:#a9bfd4;--line:#30445d;--bg:#101c2d;--card:#142237;--gray:#1a2c42;--console-panel:#162e46;--console-rule:#335e81;--console-blue:#80b1ff;--console-action:#1d4ed8}
+.office-console,.office-console-guest{font-size:14px;background:var(--bg);color:var(--ink);line-height:1.65}
+body.office-console .office-icon,.office-console-guest .office-icon{display:inline-block;flex-shrink:0;vertical-align:middle;color:var(--console-blue)}
+body.office-console a,.office-console-guest a{color:var(--accent-text)}
+body.office-console .topbar{margin:0;top:0;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;background:var(--card);height:66px;padding:0 24px;gap:16px}
+body.office-console .topbar-page{border:0;padding-left:0;font-size:13px;font-weight:500;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.office-console .topbar-search{flex:0 1 210px;min-width:100px;margin:0}
+body.office-console .topbar-search input{background:var(--card);border:1px solid var(--line);border-radius:6px;font-size:12px;min-height:36px}
+body.office-console .topbar-tools{margin-left:0;display:flex;align-items:center;gap:14px;flex:none}
+body.office-console .theme-choice select{width:90px;max-width:90px;min-height:34px;border-radius:6px;border-color:var(--line);font-size:12px;background:var(--card);color:var(--muted)}
+body.office-console .office-app-trigger{width:42px;height:42px;min-width:42px;border:2px solid var(--console-blue);border-radius:50%;background:var(--card);display:grid;place-items:center;padding:0}
+body.office-console .office-app-trigger .office-icon{color:var(--muted);width:22px;height:22px}
+body.office-console .topbar-updates{margin-left:0;font-size:12px;white-space:nowrap}
+.office-account{display:flex;align-items:center;gap:12px;flex:none}
+.office-account-avatar{width:36px;height:36px;border:1px solid var(--console-rule);border-radius:50%;display:grid;place-items:center;background:var(--console-panel);color:var(--accent-text);font-size:13px;overflow:hidden}
+.office-account-avatar img{width:100%;height:100%;object-fit:cover}
+.office-account-name{display:flex;flex-direction:column;max-width:120px;line-height:1.4;overflow:hidden}
+.office-account-name b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.office-account-name small{font-size:11px;color:var(--muted)}
+.office-account form{margin:0}.office-account button{border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font:inherit;font-size:12px;min-height:36px;padding:6px 16px;cursor:pointer}
+body.office-console .side{border:0;border-right:1px solid var(--line);border-radius:0;background:var(--card);box-shadow:none;margin:0;display:flex;flex-direction:column;overflow:hidden;scrollbar-width:thin}
+.office-side-brand{display:flex;align-items:center;gap:12px;min-height:66px;flex-shrink:0;padding:13px 20px;color:var(--ink)!important;border-bottom:1px solid var(--line);text-decoration:none!important}
+.office-side-brand>span:last-child{display:flex;flex-direction:column;line-height:1.4}.office-side-brand b{font-size:18px;letter-spacing:.02em}.office-side-brand small{font-size:11px;color:var(--muted)}
+.office-brand-symbol{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--console-rule);border-radius:8px;background:var(--sakura)}.office-brand-symbol .office-icon{width:25px;height:25px}
+body.office-console .nav-tools{padding:16px 18px 10px;border-bottom:1px solid var(--console-rule);margin:0 11px;background:var(--card);flex-shrink:0}
+body.office-console .nav-tools-head{font-size:12px;color:var(--ink);margin-bottom:7px;font-weight:500}body.office-console .nav-tools-head [data-nav-close]{font-size:14px}
+body.office-console .nav-find input{border:1px solid #b4cce6;border-radius:6px;background:var(--card);color:var(--ink);padding:10px 12px;min-height:44px;font-size:13px;width:100%}
+body.office-console .nav-find-status{font-size:11px;margin:6px 0 0}body.office-console .nav-find-status:empty{display:none}
+body.office-console .side-nav{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;flex:1;min-height:0;gap:0;padding:0 11px 20px}
+body.office-console .side-nav>.nav-group{border-bottom:1px solid var(--console-rule);padding:13px 0 12px;margin:0}
+body.office-console details.nav-group>summary.nav-title{font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);padding:5px 12px 10px;border-radius:0}
+body.office-console details.nav-group>summary.nav-title::after{font-size:10px;opacity:.6}
+body.office-console .nav-items{gap:0}body.office-console .side-nav a{padding:12px 12px;gap:11px;border-radius:0;color:var(--ink);min-height:46px;font-size:14px}
+body.office-console .nav-items>a{border-bottom:1px solid var(--line)}body.office-console .nav-items>a:last-child{border-bottom:0}
+body.office-console .side-nav a:hover{background:var(--sakura);text-decoration:none}
+body.office-console .side-nav a.on{border-left:3px solid var(--console-blue);background:var(--sakura);box-shadow:none;padding-left:9px;border-radius:6px;color:var(--ink)}
+body.office-console .nav-icon{width:18px;min-width:18px;align-self:flex-start;margin-top:2px;font-size:16px;color:var(--console-blue)}body.office-console .nav-icon .office-icon{width:18px;height:18px}
+.office-nav-copy{min-width:0;display:flex;flex-direction:column;gap:2px}.office-nav-copy b{font-size:14px;font-weight:600;line-height:1.55}.office-nav-copy small{font-size:11px;font-weight:400;color:var(--muted);line-height:1.5}
+body.office-console .badge{background:var(--console-blue)}
+body.office-console .side .me{padding:16px 10px;margin-top:8px;border-top:1px solid var(--line)}
+body.office-console main{max-width:1320px;padding:28px 40px 100px;margin:0 auto;min-width:0}body.office-console main.wide{max-width:none}
+body.office-console main h1{font-size:28px;line-height:1.5;letter-spacing:0;margin:0 0 22px;color:var(--ink)}body.office-console main h1 small{font-size:14px}
+body.office-console main h2{font-size:16px;line-height:1.6;position:relative;border-left:0;border-bottom:2px solid var(--console-rule);padding:0 0 12px;margin:0 0 18px}
+body.office-console main h2::after{content:'';position:absolute;left:0;bottom:-2px;width:56px;height:3px;background:var(--console-blue)}
+body.office-console main h2 small{font-size:12px;font-weight:400}body.office-console main h3{font-size:14px}
+body.office-console .card{padding:22px;border:1px solid var(--line);border-radius:8px;box-shadow:none;background:var(--card);margin-bottom:24px}
+body.office-console .grid2{gap:24px}body.office-console .stat{background:var(--console-panel);box-shadow:none;border-radius:0;border:1px solid var(--console-rule);padding:20px 16px}
+body.office-console .stats{gap:0;margin:0 0 28px}body.office-console .stat .label{font-size:12px;color:var(--muted)}body.office-console .stat .value{font-size:24px;color:var(--accent-text);margin:6px 0 0}body.office-console .stat .value small{font-size:12px;color:var(--muted)}
+body.office-console table{border-color:var(--line);font-size:13px}body.office-console th{background:var(--console-panel);color:var(--ink);font-weight:600;border-color:var(--line);padding:12px}
+body.office-console td{border-color:var(--line);padding:12px;vertical-align:middle}body.office-console tbody tr:hover{background:var(--sakura)}
+body.office-console .table-wrap,body.office-console .scroll-x{border-radius:6px;border-color:var(--line)}
+body.office-console main :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=color]),select,textarea){border-color:#bfd1e3;border-radius:6px;background:var(--card);color:var(--ink);font:inherit;min-height:40px;box-shadow:none}
+body.office-console main textarea{line-height:1.7}body.office-console main input[type=checkbox],body.office-console main input[type=radio]{accent-color:var(--console-blue)}
+body.office-console main :is(button,.button){border-radius:6px;box-shadow:none;font-size:13px;min-height:38px}
+body.office-console main button:not(.link):not(.secondary):not(.danger):not(.ghost){background:var(--console-action);border-color:var(--console-action);color:#fff}
+body.office-console main :is(button.secondary,.button.secondary,button.ghost){background:var(--card);border:1px solid var(--line);color:var(--ink)}
+body.office-console main :is(button.danger,.button.danger){background:#b42335;border-color:#b42335;color:#fff}
+body.office-console main button.link{background:none;color:var(--accent-text);border:0;padding:4px;min-height:32px}
+body.office-console main :is(button,.button):disabled{background:var(--gray)!important;border-color:var(--line)!important;color:var(--muted)!important;opacity:1;cursor:not-allowed}
+body.office-console main fieldset{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:18px;margin:18px 0}body.office-console main legend{font-size:14px;font-weight:600;color:var(--ink);padding:0 8px}
+body.office-console .note{font-size:12px;color:var(--muted)}body.office-console .tag{border-radius:4px;font-size:11px}
+body.office-console :is(.notice,.notice-info,.office-readonly){background:var(--console-panel);border-color:var(--console-rule);color:var(--ink);border-radius:6px}
+body.office-console :focus-visible{outline:2px solid var(--console-blue);outline-offset:3px}
+body.office-console :is(.office-sheet,.office-search-dialog,.office-outline-dialog,dialog.popup){border-radius:10px;border-color:var(--line);box-shadow:0 14px 50px #10233c20}
+body.office-console .office-sheet button.secondary{color:var(--ink);background:var(--card)}
+body.office-console .office-dock{border-radius:8px;box-shadow:0 4px 18px #10233c0c}body.office-console .office-dock button{font-size:12px;border-radius:6px}body.office-console .office-dock button:first-child{background:var(--sakura)}
+/* ホーム。実際の業務データと、本人が見られる近道だけを表示。 */
+body.office-console .home-welcome{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin:0 0 26px;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+body.office-console .home-welcome .eyebrow{font-size:12px;color:var(--muted);letter-spacing:0}body.office-console .home-welcome h1{margin:0 0 6px;font-size:30px;font-weight:700}body.office-console .home-welcome .note{margin:0}body.office-console .home-welcome time{color:var(--muted);font-size:12px;white-space:nowrap;padding-top:12px}
+.home-overview{display:grid;grid-template-columns:1.05fr 1fr;gap:28px;margin-bottom:30px;align-items:start}.home-overview>*{min-width:0}
+body.office-console .home-attention{border:0;padding:0;margin:0;box-shadow:none}body.office-console .section-head{gap:16px;align-items:start}body.office-console .home-attention .section-head>h2{flex:1}body.office-console .home-attention .section-head>.note{display:none}
+body.office-console .task-list{display:block;margin:0;padding:0;list-style:none}body.office-console .task-list li{display:flex;align-items:center;gap:12px;min-height:66px;padding:12px 0;border:0;border-bottom:1px solid var(--console-rule);border-radius:0;background:none}
+body.office-console .task-icon{display:none}body.office-console .task-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}body.office-console .task-copy strong{font-size:13px;font-weight:600}body.office-console .task-copy>span{font-size:11px;line-height:1.5;color:var(--muted)}
+body.office-console .task-count{font-size:22px;white-space:nowrap;color:var(--ink);margin-left:auto}body.office-console .task-count small{font-size:11px;font-weight:400;color:var(--muted)}body.office-console .task-list .pending .task-count{color:var(--accent-text)}
+body.office-console .task-action{font-size:11px;white-space:nowrap;min-width:0;padding:0;background:none;border:0;color:var(--muted);text-align:right}
+.home-shortcut-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.home-shortcut-grid>a{display:flex;gap:10px;align-items:flex-start;min-height:92px;padding:16px 12px;border:1px solid var(--console-rule);border-radius:6px;background:var(--console-panel);color:var(--ink);text-decoration:none}.home-shortcut-grid>a:hover{border-color:var(--console-blue);background:var(--sakura)}
+.home-shortcut-grid>a>span:not(.home-shortcut-arrow){display:flex;flex-direction:column;gap:5px;min-width:0}.home-shortcut-grid strong{font-size:13px;font-weight:600}.home-shortcut-grid small{font-size:11px;color:var(--muted);line-height:1.5}.home-shortcut-arrow{margin-left:auto;align-self:center;color:var(--ink)}
+.home-today{margin-bottom:30px}body.office-console .home-today .stat{border-left:0}body.office-console .home-today .stat:first-child{border-left:1px solid var(--console-rule)}
+body.office-console .home-invite-grid article{background:var(--console-panel);border:1px solid var(--console-rule);border-radius:6px;box-shadow:none}
+.office-console-guest .login{border-radius:10px;border-color:var(--line);box-shadow:0 8px 36px #1634520a}.office-console-guest .button.primary{background:var(--shu)}
+@media(min-width:901px){
+ body.office-console{grid-template-columns:254px minmax(0,1fr);grid-template-rows:66px auto;grid-template-areas:"side top" "side main"}
+ body.office-console .side{position:fixed;left:0;top:0;bottom:0;width:254px;height:100dvh}
+ body.office-console .topbar .brand{display:none}body.office-console .side .me{display:none}
+ body.office-console:has(.nav-toggle:checked){grid-template-columns:0 minmax(0,1fr)}body.office-console:has(.nav-toggle:checked) .topbar .brand{display:flex}
+ body.office-console .office-dock{bottom:16px;right:24px;padding:5px}body.office-console .office-dock button{min-height:36px;padding:7px 10px}body.office-console .office-dock kbd{font-size:10px}
+}
+@media(min-width:901px) and (max-width:1350px){body.office-console .office-account-name{display:none}body.office-console .topbar-search{flex-basis:160px}body.office-console .topbar{gap:12px;padding:0 20px}body.office-console main{padding:26px 28px 100px}}
+@media(min-width:901px) and (max-width:1120px){body.office-console .topbar-search{display:none}body.office-console .home-overview{grid-template-columns:1fr}body.office-console .home-shortcut-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){
+ body.office-console .topbar{height:calc(62px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0;gap:12px}body.office-console .topbar .brand{font-size:14px;gap:7px;white-space:nowrap}body.office-console .topbar-page,body.office-console .topbar-search,body.office-console .office-account{display:none}
+ body.office-console .topbar-tools{margin-left:auto;gap:8px}body.office-console .theme-choice select{width:74px;max-width:74px}body.office-console .theme-choice>span:first-child{display:none}body.office-console .office-app-trigger{width:36px;height:36px;min-width:36px;min-height:36px}body.office-console .hamburger{width:22px;min-width:22px}
+ body.office-console .side{top:calc(62px + env(safe-area-inset-top));width:min(292px,88vw);height:calc(100dvh - 62px - env(safe-area-inset-top));z-index:40}body.office-console .office-side-brand{min-height:62px}body.office-console .nav-tools{padding:12px 8px}body.office-console .nav-tools-head [data-nav-close]{min-width:32px;min-height:32px}
+ body.office-console .backdrop{inset:calc(62px + env(safe-area-inset-top)) 0 0}body.office-console main{padding:24px 18px calc(104px + env(safe-area-inset-bottom))}body.office-console main h1{font-size:25px}body.office-console .card{padding:18px 16px}body.office-console main :is(button,.button){min-height:44px}body.office-console main :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,textarea){font-size:16px}
+ body.office-console .mobile-nav{left:0;right:0;bottom:0;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:6px 8px calc(6px + env(safe-area-inset-bottom));width:100%}body.office-console .mobile-nav a,body.office-console .mobile-nav button{border-radius:6px;min-height:48px}body.office-console .mobile-nav a.on{background:var(--sakura);color:var(--accent-text)}
+ .home-overview{grid-template-columns:1fr;gap:26px}.home-shortcut-grid{grid-template-columns:1fr 1fr}body.office-console .home-welcome{gap:8px;flex-wrap:wrap;margin-bottom:24px}body.office-console .home-welcome time{padding:0}body.office-console .home-welcome h1{font-size:27px}body.office-console .home-today .stats{grid-template-columns:repeat(2,minmax(0,1fr))}body.office-console .home-today .stat:nth-child(odd){border-left:1px solid var(--console-rule)}
+}
+@media(prefers-reduced-motion:reduce){body.office-console *, body.office-console *::before,body.office-console *::after{scroll-behavior:auto!important}}
+
+/* 旧共通CSSの高い詳細度を、管理画面の範囲内で上書きする。 */
+body.office-console .home-welcome{padding:0;border:0;border-radius:0;background:none}
+body.office-console .task-list li.pending{background:none;border-color:var(--console-rule)}
+body.office-console .task-list li.pending .task-action{background:none}
+.office-console.office-desktop-ready .office-dock{border-radius:8px;box-shadow:0 4px 18px #10233c0c}
+body.office-console main .button.primary{background:var(--console-action);border-color:var(--console-action);color:#fff}
+
+@media(max-width:600px){body.office-console .topbar-updates{display:none}}
+
+body.office-console .office-hero{border:1px solid var(--line);border-radius:8px;background:var(--console-panel);box-shadow:none;padding:24px}
+body.office-console .office-inbox-item,body.office-console .office-sheet-link{border-radius:6px;box-shadow:none}
+/* 大画面でも本文の行長を参考画面と同じ読みやすい幅に保つ。 */
+body.office-console>main:not(.wide){max-width:1320px}
+@media(max-width:900px){body.office-console .nav-find input{font-size:16px}body.office-console .theme-choice select{font-size:16px;padding:4px 18px 4px 6px}}

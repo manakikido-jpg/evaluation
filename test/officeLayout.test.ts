@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Layout } from '../src/web/views/layout.js';
+import { Layout,officeShortcuts } from '../src/web/views/layout.js';
 import type { AdminSession } from '../src/db/schema.js';
 const session: AdminSession = { id:'preview', userId:'700000000000000001', username:'運営', avatarUrl:null, level:'guji', pages:null, accountId:null, csrfToken:'test', checkedAt:new Date(), expiresAt:new Date(), createdAt:new Date() };
 
@@ -46,4 +46,15 @@ it('PCのページ検索も本人の閲覧範囲だけを含み、ログイン�
   const guest = Layout({ title: 'ログイン', children: 'ログイン' }).toString();
   expect(guest).not.toContain('id="office-search"');
   expect(guest).not.toContain('office-desktop.js');
+});
+
+it('管理画面だけ新しいシェルを使い、ゲーム試遊には色・シェルを適用しない',()=>{
+ const admin=Layout({title:'メンバー',session,nav:'members',children:'一覧'}).toString();expect(admin).toContain('data-office-console="true"');expect(admin).toContain('office-console.css?v=');expect(admin).toContain('office-side-brand');expect(admin).toContain('office-account');
+ for(const nav of ['casinotest','keibatest'] as const){const game=Layout({title:'試遊',session,nav,children:'ゲーム'}).toString();expect(game).not.toContain('data-office-console');expect(game).not.toContain('office-console.css');expect(game).not.toContain('office-side-brand');}
+});
+
+it('ホームの近道は左メニューと同じ閲覧権限・宮司制限を守る',()=>{
+ const restricted=officeShortcuts({...session,level:'shinshoku',pages:['home','guide']});expect(restricted.map(i=>i.href)).toEqual(['/guide']);
+ const all=officeShortcuts(session);expect(all).toHaveLength(6);expect(new Set(all.map(i=>i.key)).size).toBe(6);
+ const none=officeShortcuts({...session,level:'shinshoku',pages:['home']});expect(none).toEqual([]);
 });
