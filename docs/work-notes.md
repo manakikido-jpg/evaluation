@@ -1,3 +1,16 @@
+## 2026年11月9日：追加カジノ台のデザインPR171を合流する（合流完了）
+- 完了：2026-11-09 11:40:20 UTCにPR171を承認head e416000e指定・通常のmerge APIで合流。merge commit6b79e4f0f2164cc5e260918f1bd97be1d8535e5d。PR状態MERGED、本番ブランチへの包含、検証済みe416000eとのsrc/test/drizzle/依存関係の差分なしを確認。--admin/force/直接本番pushは使用していない。
+- 検証：本番fc127415を含む統合e416000eの型/build・全2,965件成功。カジノ実装が同一の692d528では最新CI2本SUCCESS・コードレビュー指摘なし。統合head e416000eのGitHub CIは更新後の別実行であり、成功済みとは扱わない。通常merge APIが保護を尊重したうえで合流を受理した。
+- 実反映：本番自動更新の対象ブランチへ入ったことは確認済み。公開URLのHEADを通常経路で試したが、接続プロキシのCONNECT403で接続できず、VPS反映/実画面は未確認。サイト自体が403を返した事実ではない。本人には/casino/arcadeの再読込で確認する導線を案内する。実利用者の賭け/残高やDiscord投稿は操作していない。
+- 保存：今回の承認/結果はhandoff/casino-pr171-productionへ分離。検証済みソースと同じ本番mergeへfast-forwardし、この記録だけを追加して保存する。次は公開画面の確認、必要なら統合headのCI確認。コードの再適用や再公開は不要。
+- 本人から直前のPR171への合流指示を受領。今回の改善版について本番合流の保留を解除。新規のルール/確率/配当/DB変更や他ゲームの変更は含めない。
+- 開始：PR171 OPEN/DRAFT/MERGEABLE、head692d52857e465459323e47500cc384c020cbf9e2。最新headのCIは42606689681/42606683640とも実行中。レビューなし。ローカルは本番1171db67を含む統合d2efee26で型/build・全2,964件成功。以降は記録だけで実装は不変。
+- 合流直前：最新692d528のCI42606683640/42606689681は両方SUCCESS、コードレビュー指摘なし。ただし待機中に本番fc127415（大きな宵縁側）が追加され、更新履歴の先頭だけCONFLICTINGとなった。通常mergeし、最新の宵宮項目→今回のカジノ項目の順で双方を保持。カジノ実装は692d528から不変。統合後の型/build/全件をローカルで実行する。GitHubの必須チェック/保護を回避せず、ローカルの統合検証後に通常mergeする。新しいheadのCI結果は既存692d528の成功と区別する。
+- 統合e416000e（本番fc127415を含む）で型/build・全274ファイル2,965件成功（557.73秒、4worker）。直前fetchの本番もfc127415のまま。カジノの4実装ファイルは692d528から差分なし。統合headをpushし、通常mergeで保護を尊重して合流する。692d528のCI2本SUCCESSと、更新後headのCIは区別する。
+- 現在：feature worktree /workspace/evaluation-gamble-catalog のcodex/casino-arcade-cabinetsに統合e416000eを保存済み（未push）。ローカル検証ログ/tmp/pr171-production-{types,build,all}.log、全件は実行中。記録はこのhandoff枝だけで更新し、PRの既存CI成功を無用に再起動しない。保護設定の読取APIは権限不足でFORBIDDENだったため未確認。設定なしとは断定せず、通常merge操作でサーバーの保護を尊重する。
+- 下書き解除済み。最新692d528のコードレビューは2026-11-09 11:16 UTCに完了し、指摘/未解決事項なし。CI2本は依存準備/型チェック成功後に全件テスト実行中。合流はまだ行っていない。
+- PRのCIを再起動しないよう、今回の記録はhandoff/casino-pr171-production（/workspace/evaluation-pr171-release）へ分離。次：最新headのCI/本番/差分を確認→下書き解除→承認head指定で通常merge→本番ブランチへの包含/公開サイトを可能な範囲で確認。GitHub合流とVPSでの実反映を区別する。公開URLはhttps://sakuranomiya.syamusyo.work/、以前は接続プロキシCONNECT403で未確認。
+
 ## 2026年11月9日：追加カジノ台の見た目を作り直す（検証完了・下書きPR保存）
 - 統合後の保存：本番1171db67を含む統合d2efee26で型/build・全274ファイル2,964件成功（551.76秒、4worker）。直前fetchの本番も1171db67のまま。ゲームUIは実装06b83109から変更なし。統合とこの記録をcodex/casino-arcade-cabinetsへ保存し、下書きPR171（https://github.com/manakikido-jpg/evaluation/pull/171）を更新する。ソース/画像はGitHubへ保存、CIは最新headを別途確認。本番合流/公開は未実行で別指示待ち。次は本人の見た目確認とCI確認。画像の本文貼付と直リンクで案内する。
 - 統合検証：初版の改善実装06b83109をcodex/casino-arcade-cabinetsへpush済み。直前fetchで本番1171db67（キャスト写真のDiscord送信時WebP化）を検出。通常mergeし、唯一の競合src/changelog.tsは両方の項目を保持。写真処理/試験は本番版のまま取り込み、今回のゲームUIに変更なし。型/build/全件を統合後のコードで再実行する。下記2,963件は51af848a基準の成功で、統合後の成功とは区別する。画像の保存先は06b83109でも閲覧可能。
