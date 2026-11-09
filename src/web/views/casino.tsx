@@ -238,6 +238,7 @@ export function CasinoGate(p: { me: CasinoMe; casinoOn: boolean; jansouOn: boole
 }
 
 export type LobbyProps = {
+  godExperience?: boolean;
   me: CasinoMe;
   casino: CasinoConfig;
   casinoGacha: GuildConfig['casinoGacha'];

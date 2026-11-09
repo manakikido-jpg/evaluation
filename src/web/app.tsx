@@ -714,6 +714,7 @@ export function createWebApp(deps: WebDeps) {
   });
   app.use('/economy/kiseki-trial/guide',requireAdmin);
   app.use('/economy/kiseki-trial',requireAdmin,requireCsrf);
+  app.use('/economy/kiseki-experience',requireAdmin,requireCsrf);
   mountKisekiTrial(app,db,now);
   app.use('/economy/gaisen-trial/guide',requireAdmin);
   app.use('/economy/gaisen-trial',requireAdmin,requireCsrf);

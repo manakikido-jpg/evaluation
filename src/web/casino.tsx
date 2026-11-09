@@ -1,3 +1,8 @@
+import {randomUUID} from 'node:crypto';
+import {experienceState,experienceVisible,buyExperience,startExperience,playExperience} from '../services/casino/kiseki/experience.js';
+import {KisekiError} from '../services/casino/kiseki/trial.js';
+import {KisekiExperience} from './views/kisekiExperience.js';
+import {KisekiTrial,KisekiGuide} from './views/kisekiTrial.js';
 import {casinoPresentation,CASINO_PRESENTATION_COOKIE} from './casinoPresentation.js';
 import { PublicOwnerPage,ClubPage,EventPage,ReplayList,TicketPage } from './views/keibaClub.js';
 import { clubHorse,equipSkills,matingPreview,ownerLedger,ownerProfile,racingMonth,racingRankings,replays } from '../services/casino/keibaClub.js';
@@ -206,6 +211,16 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       return handler(c, me);
     };
 
+  // 神域体験券。既存カジノと同じ会員認証・CSRFを通し、試遊ポイントは別保存。
+  const passPage=async(c:Context,me:Me,error?:string,status:400|403|409=400)=>{c.header('Cache-Control','private, no-store');return c.html(<KisekiExperience me={await meOf(me.session,c)} state={await experienceState(db,me.session.userId,d.now())} requestId={randomUUID()} error={error} message={c.req.query('done')==='buy'?'体験券を購入しました。使う券を選んで開始してください。':undefined}/>,error?status:200);};
+  app.get('/casino/god',page((c,me)=>passPage(c,me)));
+  app.post('/casino/god/buy',page(async(c,me)=>{try{const b=await c.req.parseBody();if(b.agree!=='1')throw new KisekiError('料金・利用時間・換金不可を確認してください。');await buyExperience(db,me.session.userId,String(b.requestId??''),d.now());return c.redirect('/casino/god?done=buy',303);}catch(e){if(!(e instanceof KisekiError))throw e;return passPage(c,me,e.message,e.status);}},{post:true}));
+  app.post('/casino/god/start',page(async(c,me)=>{try{const b=await c.req.parseBody();await startExperience(db,me.session.userId,me.session.displayName,String(b.ticketId??''),d.now());return c.redirect('/casino/god/play',303);}catch(e){if(!(e instanceof KisekiError))throw e;return passPage(c,me,e.message,e.status);}},{post:true}));
+  const playPage=async(c:Context,me:Me,error?:string,status:400|403|409=400)=>{c.header('Cache-Control','private, no-store');const state=await experienceState(db,me.session.userId,d.now());return c.html(<KisekiTrial m={state.view} experience={{me,endsAt:state.active?.endsAt?.getTime()??null,now:state.now,finishSaved:state.finishSaved,result:state.result}} error={error}/>,error?status:200);};
+  app.get('/casino/god/play',page(async(c,me)=>{const s=await experienceState(db,me.session.userId,d.now());if(!s.active&&!s.view.own&&!s.finishSaved)return c.redirect('/casino/god',303);return playPage(c,me);}));
+  app.get('/casino/god/play/guide',page((c,me)=>{c.header('Cache-Control','private, no-store');return c.html(<KisekiGuide me={me}/>);}));
+  app.post('/casino/god/play',page(async(c,me)=>{try{const b=await c.req.parseBody();await playExperience(db,me.session.userId,me.session.displayName,{action:String(b.action??''),machine:Number(b.machine),revision:Number(b.revision),index:Number(b.index),control:String(b.control??''),position:b.position===undefined?undefined:/^(?:[0-9]|1[0-9])$/.test(String(b.position))?Number(b.position):NaN},d.now());if(c.req.header('X-Gaisen-Update')==='1')return playPage(c,me);return c.redirect('/casino/god/play',303);}catch(e){if(!(e instanceof KisekiError))throw e;return playPage(c,me,e.message,e.status);}},{post:true}));
+
   app.post('/casino/presentation/exit',page(async(c,me)=>{
     await audit(db,{actorId:me.session.userId,action:'casino.presentation.exit',via:'web'});
     // 元の表示を選んだことを覚える（1 年）
@@ -331,6 +346,7 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
         me={me}
         casino={casinoOf(me)}
         casinoGacha={cfg.casinoGacha}
+        godExperience={await experienceVisible(db,me.session.userId)}
         wardrobe={wardrobe}
         prayerHref={prayerHref(cfg)}
         group={group === 'solo' || group === 'table' ? group : 'all'}

@@ -3,14 +3,15 @@ import type {Db} from '../../../db/client.js';
 import {settings} from '../../../db/schema.js';
 import {audit} from '../../audit.js';
 import {cryptoRng,type Rng} from '../cards.js';
-import {newKiseki,protectedState,lever,stop,scenario,SCENARIOS,navi,type KisekiState} from './engine.js';
+import {newKiseki,protectedState,lever,stop,scenario,SCENARIOS,navi,type KisekiState,type Win} from './engine.js';
 import {rows} from './rules.js';
 import {kisekiDigits,kisekiStage} from './presentation.js';
 export const TRIAL_KEY='casino.kisekiTrial.v1';
 export class KisekiError extends Error{constructor(message:string,public status:400|403|409=400){super(message);}}
 type Stat={day:string;spins:number;input:number;output:number;god:number;gg:number;sgg:number;sample:boolean;resumed:boolean;graph:number[]};
 type Machine={id:number;state:KisekiState;owner:string|null;ownerName:string|null;lastAction:number;reservedSetting:number|null;reservedCeiling:number|null;base:KisekiState|null;checkpoint:KisekiState|null;stat:Stat;lastScenario:string};
-type Player={points:number;saved:KisekiState|null};
+export type ExperienceReceipt={paid:number;role:string|null;message:string;winEvent:Win|null};
+type Player={points:number;saved:KisekiState|null;receipt?:ExperienceReceipt;experienceRevision?:number};
 export type Floor={version:'kiseki-floor-1';revision:number;machines:Machine[];players:Record<string,Player>};
 const day=(n:number)=>new Date(n+9*3600000).toISOString().slice(0,10);
 const stat=(n:number):Stat=>({day:day(n),spins:0,input:0,output:0,god:0,gg:0,sgg:0,sample:false,resumed:false,graph:[0]});
@@ -24,6 +25,8 @@ function release(f:Floor,m:Machine){if(!m.owner)return;const p=player(f,m.owner)
  if(protectedState(m.state)||m.base||m.state.pending){if(p.saved)throw new KisekiError('保存状態を確認してください。',409);p.saved=structuredClone(m.state);m.state=m.base??m.checkpoint??newKiseki(m.state.setting);m.base=null;m.checkpoint=null;}
  m.owner=null;m.ownerName=null;m.lastAction=0;apply(m);
 }
+/** 体験券の終了時も無料版と同じ保存処理で本人の権利を残す。 */
+export function releasePlayer(f:Floor,id:string){const m=f.machines.find(m=>m.owner===id);if(m){release(f,m);f.revision++;}}
 export function expire(f:Floor,n:number){for(const m of f.machines){if(m.stat.day!==day(n)){m.stat=stat(n);f.revision++;}if(m.owner!==null&&n-m.lastAction>=(protectedState(m.state)?3600000:600000)){release(f,m);f.revision++;}}}
 export async function readTrial(db:Db,now:Date):Promise<Floor>{const [r]=await db.select().from(settings).where(eq(settings.key,TRIAL_KEY));const f=r?structuredClone(r.value) as Floor:freshFloor(now.getTime());if(f.version!=='kiseki-floor-1')throw new KisekiError('軌跡版の保存形式を確認してください。',409);expire(f,now.getTime());return f;}
 export type Action={action:string;machine:number;revision:number;index?:number;setting?:number;scenario?:string;control?:string;position?:number};

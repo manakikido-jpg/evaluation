@@ -2730,3 +2730,13 @@ export const eventLotteryNotices = pgTable('event_lottery_notices', {
  dueAt: timestamp('due_at',{withTimezone:true}).notNull(), sentAt: timestamp('sent_at',{withTimezone:true}),
  messageId: text('message_id'), attempts: integer('attempts').notNull().default(0), error: text('error'),
 });
+
+/** 神域体験券。試遊ポイントと銭の出入りは別に保存する。 */
+export const kisekiTickets = pgTable('kiseki_tickets', {
+ id: text('id').primaryKey(), memberId: text('member_id').notNull(), requestId: text('request_id').notNull(),
+ price: integer('price').notNull(), seconds: integer('seconds').notNull(),
+ createdAt: timestamp('created_at',{withTimezone:true}).notNull(),
+ startedAt: timestamp('started_at',{withTimezone:true}), endsAt: timestamp('ends_at',{withTimezone:true}),
+},t=>[uniqueIndex('kiseki_ticket_request').on(t.memberId,t.requestId),index('kiseki_ticket_member').on(t.memberId),
+ check('kiseki_ticket_price_time',sql`${t.price}=1500 and ${t.seconds}=3600`),
+ check('kiseki_ticket_period',sql`(${t.startedAt} is null and ${t.endsAt} is null) or (${t.startedAt} is not null and ${t.endsAt} is not null and ${t.endsAt}=${t.startedAt}+interval '1 hour')`)]);
