@@ -190,6 +190,8 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'pinball.css': {body:readText(path.join(here,'public/pinball.css')),type:'text/css; charset=utf-8'},
     'pinball-physics.js': {body:readText(path.join(here,'public/pinball-physics.js')),type:'text/javascript; charset=utf-8'},
     'pinball.js': {body:readText(path.join(here,'public/pinball.js')),type:'text/javascript; charset=utf-8'},
+    'casino-arcade.css': {body:readText(path.join(here,'public/casino-arcade.css')),type:'text/css; charset=utf-8'},
+    'casino-arcade.js': {body:readText(path.join(here,'public/casino-arcade.js')),type:'text/javascript; charset=utf-8'},
     'casino.js': { body: readText(path.join(here, 'public/casino.js')), type: 'text/javascript; charset=utf-8' },
     'atslot.js': { body: readText(path.join(here, 'public/atslot.js')), type: 'text/javascript; charset=utf-8' },
     'popup.js': { body: readText(path.join(here, 'public/popup.js')), type: 'text/javascript; charset=utf-8' },

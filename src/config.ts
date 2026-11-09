@@ -1,3 +1,4 @@
+import {ARCADE_KINDS} from './domain/casinoArcade.js';
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { DEFAULT_ITEMS, DEFAULT_MESSAGES, DEFAULT_PLACES, FORTUNE_KEYS, type FortuneKey } from './omikujiTexts.js';
@@ -534,7 +535,7 @@ export const opsWatchSchema = z.object({
 export type OpsWatchConfig = z.infer<typeof opsWatchSchema>;
 
 /** カジノ（社務所Web の /casino。メンバーが Discord でログインして銭で遊ぶ） */
-export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'atslot', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba', 'life'] as const;
+export const CASINO_GAMES = ['blackjack', 'highlow', 'baccarat', 'slots', 'atslot', 'roulette', 'chinchiro', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'chinchiro_table', 'poker', 'daifugo', 'babanuki', 'mahjong', 'keiba', 'life', 'arcade'] as const;
 /** ゲームの一覧を保存したとき（knownGames がない）にあったゲーム。あとから足したゲームは、保存した一覧になくても遊べる */
 export const CASINO_GAMES_V1: readonly string[] = ['blackjack', 'highlow', 'baccarat', 'slots', 'roulette', 'othello', 'versus', 'bj_table', 'baccarat_table', 'roulette_table', 'poker', 'daifugo', 'babanuki'];
 /** みんなで座る卓（ゲームの種類） */
@@ -634,6 +635,8 @@ export const casinoSchema = z.object({
     .default({ easy: 110, normal: 130, hard: 160 }),
   /** 遊べるゲーム */
   games: z.array(z.enum(CASINO_GAMES)).default([...CASINO_GAMES]),
+  /** 新しい台カテゴリの中で遊べる台 */
+  arcadeGames: z.array(z.enum(ARCADE_KINDS)).default([...ARCADE_KINDS]),
   /** games を保存したときにあったゲーム（これにないゲームは、あとから足したものなので遊べるようにする） */
   knownGames: z.array(z.string()).optional(),
   /** 位のロールがある人だけ入れる（accessRoleId を決めたときは、そちらを使う） */

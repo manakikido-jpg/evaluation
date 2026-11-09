@@ -1,4 +1,7 @@
 import {PinballPage} from './views/pinball.js';
+import {ArcadeHub,ArcadePage} from './views/casinoArcade.js';
+import {ARCADE_KINDS,isArcadeKind} from '../domain/casinoArcade.js';
+import {arcadeRows,arcadeRound,arcadeById,commandArcade,ArcadeError,type ArcadeCommand} from '../services/casino/arcade.js';
 import {randomUUID} from 'node:crypto';
 import {experienceState,experienceVisible,buyExperience,startExperience,playExperience} from '../services/casino/kiseki/experience.js';
 import {KisekiError} from '../services/casino/kiseki/trial.js';
@@ -211,6 +214,25 @@ export function mountCasino(app: Hono<any>, d: Deps): void {
       if (!d.cfg().casino.enabled) return c.html(<CasinoClosed me={me} />);
       return handler(c, me);
     };
+
+  const arcadeData=async(me:Me)=>{const rows=(await arcadeRows(db,me.session.userId)).map(r=>arcadeRound(r,d.now()));return {rows,active:rows.find(r=>r.status==='playing')};};
+  app.get('/casino/arcade',page(async(c,me)=>{c.header('Cache-Control','private, no-store');return c.html(<ArcadeHub me={me} c={casinoOf(me)} rows={(await arcadeData(me)).rows}/>);}));
+  app.get('/casino/arcade/round/:id/state',page(async(c,me)=>{c.header('Cache-Control','private, no-store');const id=Number(c.req.param('id'));if(!Number.isSafeInteger(id)||id<1)return c.json({error:'回が見つかりません。'},404);const r=await arcadeById(db,me.session.userId,id);return r?c.json(arcadeRound(r,d.now())):c.json({error:'回が見つかりません。'},404);}));
+  app.get('/casino/arcade/:kind',page(async(c,me)=>{
+   c.header('Cache-Control','private, no-store');const kind=c.req.param('kind');if(!isArcadeKind(kind))return c.notFound();const data=await arcadeData(me),id=c.req.query('round');let round;
+   if(id){const n=Number(id);if(!Number.isSafeInteger(n)||n<1)return c.notFound();const row=await arcadeById(db,me.session.userId,n);if(!row)return c.notFound();round=arcadeRound(row,d.now());if(round.model.kind!==kind)return c.notFound();}
+   else round=data.rows.find(r=>r.model.kind===kind);
+   return c.html(<ArcadePage me={me} c={casinoOf(me)} kind={kind} round={round} {...data}/>);
+  }));
+  app.post('/casino/arcade/:kind',page(async(c,me)=>{
+   c.header('Cache-Control','private, no-store');const kind=c.req.param('kind');if(!isArcadeKind(kind))return c.notFound();
+   try{const b=await c.req.parseBody({all:true}),action=b.action;
+    if(typeof action!=='string'||!['start','pick','collect','roll','step','draw','settle','giveup'].includes(action))throw new ArcadeError('操作を選び直してください。');
+    const raw=b.picks,picks=raw===undefined?undefined:(Array.isArray(raw)?raw:[raw]);if(picks&&picks.length>10)throw new ArcadeError('選択は10個までです。');
+    const row=await commandArcade(db,d.cfg(),me.session.userId,{kind,action:action as ArcadeCommand['action'],operationId:typeof b.operationId==='string'?b.operationId:'',bet:b.bet===undefined?undefined:Number(b.bet),id:b.id===undefined?undefined:Number(b.id),version:b.version===undefined?undefined:Number(b.version),choice:b.choice===undefined?undefined:Number(b.choice),picks:picks?.map(n=>typeof n==='string'&&/^\d{1,2}$/.test(n)?Number(n):NaN)},d.now());
+    return c.redirect('/casino/arcade/'+kind+'?round='+row.id,303);
+   }catch(e){if(!(e instanceof ArcadeError))throw e;const data=await arcadeData(me);return c.html(<ArcadePage me={me} c={casinoOf(me)} kind={kind} round={data.rows.find(r=>r.model.kind===kind)} {...data} error={e.message}/>,e.status);}
+  },{post:true}));
 
   // 神域体験券。既存カジノと同じ会員認証・CSRFを通し、試遊ポイントは別保存。
   app.get('/casino/pinball',page((c,me)=>{c.header('Cache-Control','private, no-store');return c.html(<PinballPage me={me}/>);}));

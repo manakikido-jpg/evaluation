@@ -7,8 +7,8 @@ import {roomRng} from '../src/services/casino/roomPreview.js';
 import {judge} from '../src/services/casino/slots.js';
 const preview=(q:string)=>scenePreview(new URLSearchParams(q));
 describe('全ゲームの固定演出見本',()=>{
- it('実在する全19ゲームを漏れや重複なく持ち、4つの場面を用意する',()=>{
-  expect(Object.keys(GAME_SCENES).sort()).toEqual([...CASINO_GAMES].sort());expect(CASINO_GAMES).toHaveLength(19);
+ it('実在する全20カテゴリを漏れや重複なく持ち、4つの場面を用意する',()=>{
+  expect(Object.keys(GAME_SCENES).sort()).toEqual([...CASINO_GAMES].sort());expect(CASINO_GAMES).toHaveLength(20);
   for(const game of CASINO_GAMES){const m=preview('game='+game);expect(m.game).toBe(game);expect(m.spec.steps).toHaveLength(4);expect(m.spec.name).toBeTruthy();expect(m.spec.note).toBeTruthy();}
  });
  it('同じ見本は同じカード・盤面・役を再現し、バカラとスロットは既存の判定を使う',()=>{

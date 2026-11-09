@@ -22,6 +22,7 @@ import { claimSlotSeat, SlotOccupied } from './slotSeats.js';
  */
 
 export const CASINO_LABEL: Record<CasinoGame, { emoji: string; name: string; note: string }> = {
+  arcade:{emoji:'🎯',name:'新しいカジノ台',note:'11種類の台。ホイール・地雷・レース・途中受取も'},
   blackjack: { emoji: '🃏', name: 'ブラックジャック', note: '21 に近いほうが勝ち。ブラックジャックは 2.5 倍' },
   highlow: { emoji: '🔼', name: 'ハイ＆ロー', note: '次のカードが上か下か。同じ数字はドローで続行' },
   baccarat: { emoji: '🎴', name: 'バカラ', note: 'プレイヤー・バンカー・タイ、どれが勝つか' },
@@ -186,6 +187,7 @@ export async function actBlackjack(db: Db, cfg: GuildConfig, id: number, memberI
     if (row && row.memberId === memberId && cfg.casino.dailyBetLimit > 0 && (await todayBets(db, memberId, now)) + row.bet > cfg.casino.dailyBetLimit) return { status: 'invalid' };
   }
   return act(db, id, memberId, (row) => {
+    if(row.game!=='blackjack')return undefined;
     const s = row.state as BjState;
     if (action === 'double' && !canDouble(s)) return undefined;
     const next = action === 'hit' ? bjHit(s) : action === 'stand' ? bjStand(s) : bjDouble(s);
@@ -203,6 +205,7 @@ export function startHighLow(db: Db, cfg: GuildConfig, memberId: string, bet: nu
 
 export function actHighLow(db: Db, id: number, memberId: string, action: HlGuess | 'cashout', rng: Rng = cryptoRng, now = new Date()): Promise<Acted> {
   return act(db, id, memberId, (row) => {
+    if(row.game!=='highlow')return undefined;
     const s = row.state as HlState;
     const next = action === 'cashout' ? hlCashout(s) : hlGuess(s, action, rng);
     if (next === s) return undefined;
@@ -253,6 +256,7 @@ export async function playSlots(db: Db, cfg: GuildConfig, memberId: string, bet:
 /** 7 を狙う（pressed: STOP を押したときのコマ・左から）。'assist' はおまかせでそろえる。狙う回は賭けない */
 export function aimSlots(db: Db, id: number, memberId: string, pressed: number[] | 'assist', now = new Date()): Promise<Acted> {
   return act(db, id, memberId, (row) => {
+    if(row.game!=='slots')return undefined;
     const s = row.state as SlotsState;
     if (s.v !== 2 || s.phase !== 'aim' || !isBonus(s.role)) return undefined;
     if (pressed !== 'assist' && (pressed.length !== 3 || pressed.some((x) => !Number.isInteger(x) || x < 0 || x >= REEL_LEN))) return undefined;
@@ -349,6 +353,7 @@ export function startOthello(db: Db, cfg: GuildConfig, memberId: string, bet: nu
 
 export function actOthello(db: Db, id: number, memberId: string, move: number | 'resign', rng: Rng = cryptoRng, now = new Date()): Promise<Acted> {
   return act(db, id, memberId, (row) => {
+    if(row.game!=='othello')return undefined;
     const s = row.state as OthelloCpuState;
     if (move === 'resign') {
       const next: OthelloCpuState = { ...s, turn: null, result: 'resign' };

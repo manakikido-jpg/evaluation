@@ -38,7 +38,7 @@ document.addEventListener('submit', (e) => {
   if (e.defaultPrevented) return;
   const form = e.target;
   // 専用リール画面は専用コントローラーだけが送信する。
-  if (form instanceof HTMLFormElement && form.closest('[data-gaisen-trial]')) return;
+  if (form instanceof HTMLFormElement && (form.closest('[data-gaisen-trial]')||form.closest('[data-casino-arcade]'))) return;
   if (window.CasinoRequests?.blocked()) { e.preventDefault(); return; }
   if (!(form instanceof HTMLFormElement) || form.dataset.sent === '1') {
     if (form instanceof HTMLFormElement) e.preventDefault();
@@ -424,7 +424,7 @@ const swapPage = (html, url) => {
   if(doc.body.hasAttribute('data-casino-immersive')!==document.body.hasAttribute('data-casino-immersive')){location.assign(url);return;}
   if (needsHtmx) { location.href = url; return; }
   // 体験開始で専用画面へ移るときは、音・停止・時計の外部スクリプトも読み込む。
-  if (doc.querySelector('[data-gaisen-trial]') || document.querySelector('[data-gaisen-trial]') || doc.querySelector('[data-pinball]') || document.querySelector('[data-pinball]')) { location.assign(url); return; }
+  if (['[data-gaisen-trial]', '[data-pinball]', '[data-casino-arcade]'].some((q) => doc.querySelector(q) || document.querySelector(q))) { location.assign(url); return; }
   const before = cardKeys(document.querySelector('.c-main'));
   const samePath = new URL(url, location.href).pathname === location.pathname;
   const oldMain=document.querySelector('.c-main');
@@ -451,7 +451,7 @@ const swapPage = (html, url) => {
 document.addEventListener('submit', async (e) => {
   if (e.defaultPrevented) return;
   const form = e.target;
-  if (!(form instanceof HTMLFormElement) || form.closest('[data-gaisen-trial]') || (form.getAttribute('method') || '').toLowerCase() !== 'post') return;
+  if (!(form instanceof HTMLFormElement) || (form.closest('[data-gaisen-trial]')||form.closest('[data-casino-arcade]')) || (form.getAttribute('method') || '').toLowerCase() !== 'post') return;
   // form.action は「action」という名前のボタンがあるとそちらを指すので、属性から読む
   const action = new URL(form.getAttribute('action') || location.href, location.href);
   if (action.origin !== location.origin || !action.pathname.startsWith('/casino') || action.pathname === '/casino/logout') return;
