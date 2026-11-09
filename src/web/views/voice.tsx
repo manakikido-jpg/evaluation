@@ -1,3 +1,4 @@
+import { UJIKO_MINUTES } from '../../domain/ujikoEvaluation.js';
 import type { AdminSession, VoiceChannelRow } from '../../db/schema.js';
 import { fmtMinutes, type CategoryMinutes, type MemberUsage } from '../../services/voiceUsage.js';
 import { BarList, ColumnChart } from './charts.js';
@@ -212,17 +213,26 @@ export function MemberVoiceSection(props: {
   channels: { channelId: string; name: string; hubId: string | null; kind: string | null; minutes: number }[];
   partners: { memberId: string; minutes: number }[];
   names: Names;
+  /** 🏮 縁側の浮上時間と、全期間の通話の合計 */
+  engawa?: { evaluation: number; recent: number; total: number };
 }) {
+  const e = props.engawa;
   return (
     <section class="card">
       <h2>通話の記録（30 日）</h2>
+      {e && (
+        <p class="note">
+          🏮 氏子の条件に数える縁側の時間 <strong>{fmtMinutes(e.evaluation)}</strong> / {fmtMinutes(UJIKO_MINUTES)}（評価のページと同じ数え方。過去分をふくむ全期間・ミュート中は数えない） ・ 全期間の通話 <strong>{fmtMinutes(e.total)}</strong>
+        </p>
+      )}
       {props.total === 0 ? (
         <p class="empty">この 30 日は通話にいません。</p>
       ) : (
         <div class="grid2">
           <div>
             <p>
-              合計 <strong>{fmtMinutes(props.total)}</strong>
+              合計（この 30 日） <strong>{fmtMinutes(props.total)}</strong>
+              {e ? <> ・ 🏮 縁側 <strong>{fmtMinutes(e.recent)}</strong></> : ''}
             </p>
             {props.daily && (
               <ColumnChart

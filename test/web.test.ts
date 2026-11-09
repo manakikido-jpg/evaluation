@@ -1861,6 +1861,14 @@ describe('通話の記録（管理画面）', () => {
     expect(member).toContain('通話の記録（30 日）');
     expect(member).toContain('この人の日ごとの通話時間');
     expect(member).toContain('1分');
+    // 🏮 30 日の合計の横に縁側の浮上時間、全期間の通話と、氏子の条件に数える縁側の時間も出す
+    expect(member).toContain('合計（この 30 日）');
+    expect(member).toContain('🏮 縁側 <strong>0分</strong>');
+    expect(member).toContain('全期間の通話 <strong>1分</strong>');
+    await recordPresence(db, [{ id: '990000000000000002', name: '🌸 大きな縁側 1', categoryId: null, categoryName: null, memberIds: [USER] }], new Date(clock.getTime() + 60_000));
+    const after = await (await get(`/members/${USER}`, s)).text();
+    expect(after).toContain('🏮 縁側 <strong>1分</strong>');
+    expect(after).toContain('全期間の通話 <strong>2分</strong>');
   });
 });
 

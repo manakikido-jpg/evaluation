@@ -1,3 +1,4 @@
+import { memberEngawaMinutes } from '../services/ujikoEvaluation.js';
 import {ARCADE_KINDS,isArcadeKind} from '../domain/casinoArcade.js';
 import { deployRuns, reflectedTimes } from '../services/deployInfo.js';
 import { loadAppointRoles, saveAppointRoles } from '../services/appointRoles.js';
@@ -1023,6 +1024,7 @@ export function createWebApp(deps: WebDeps) {
     ]);
     const gRoleNames = gDraws.some((d) => d.roleId) ? await roleNameMap() : new Map<string, string>();
     const vcByCategory = (await usageByMember(db, since30)).find((m) => m.memberId === id);
+    const engawa = await memberEngawaMinutes(db, id, since30, now());
     const [card, history, events, audits, yakuRows, activeYaku, used, wallet, coinTx, activity, memoRows, denied] = await Promise.all([
       goshuinchoOf(db, id),
       shuinHistory(db, id),
@@ -1072,6 +1074,7 @@ export function createWebApp(deps: WebDeps) {
             channels={vcChannels}
             partners={vcPartners}
             names={names}
+            engawa={engawa}
           />
           <MemberAdmissionSection
             session={session}

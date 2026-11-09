@@ -137,3 +137,14 @@ it('🌙 宵宮の宵縁側にいた時間は、縁側の時間に数えない�
   const data = await ujikoEvaluation(db, cfg, filter, new Date(at.getTime() + 3_600_000));
   expect(data.channels.map(c => c.id)).not.toContain(YOI);
 });
+
+it('🏮 メンバーのページの縁側の時間は、評価のページと同じ数え方。30 日の縁側と全期間の通話も出す', async () => {
+  const { memberEngawaMinutes } = await import('../src/services/ujikoEvaluation.js');
+  await voice(A, 1200, 1200, 1200, OLD); await voice(A, 300, 300); await voice(A, 9000, 0, 9000, OTHER); await voice(A, 50, 50, 50, ENG, '2026-10-01');
+  const row = (await ujikoEvaluation(db, cfg, filter, now)).rows.find(r => r.memberId === A)!;
+  const m = await memberEngawaMinutes(db, A, '2026-10-08', now);
+  expect(m.evaluation).toBe(row.minutes);
+  expect(m.recent).toBe(1500);
+  expect(m.total).toBe(1200 + 300 + 9000 + 50);
+  expect(await memberEngawaMinutes(db, B, '2026-10-08', now)).toEqual({ evaluation: 0, recent: 0, total: 0 });
+});

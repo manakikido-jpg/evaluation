@@ -120,3 +120,30 @@ export function evaluationCsv(data: EvaluationData): string {
     ...data.rows.map(r => [r.rank, r.name, "'" + r.memberId, r.goen, r.shuinCount, r.minutes, r.remainingGoen, r.remainingMinutes, r.achieved ? '両条件達成' : '未達成', r.pastMinutes, r.confirmedMinutes, r.excludedMinutes, r.deductedMinutes, EVALUATION_START_DATE + ' 00:00', 'ミュート除外に対応した反映後の確認分', target])];
   return '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
+
+/**
+ * 🏮 1 人の縁側の浮上時間（メンバーのページ用）。
+ * - evaluation: 氏子の条件「縁側 20 時間」に数える時間（評価のページと同じ数え方: 確認済み＋過去取込−控除。全部の縁側・全期間）
+ * - recent: この日から後に、縁側の通話にいた時間（ミュート・役職に関係なく、いた時間そのまま）
+ * - total: 全期間に、どこかの通話にいた時間
+ */
+export async function memberEngawaMinutes(db: Db, memberId: string, since: string, now = new Date()): Promise<{ evaluation: number; recent: number; total: number }> {
+  const today = jstDate(now);
+  const [channelRows, previouslyEngawa, [all]] = await Promise.all([
+    db.select({ id: voiceChannels.channelId, name: voiceChannels.name }).from(voiceChannels),
+    db.selectDistinct({ id: voiceUsage.channelId }).from(voiceUsage).where(and(sql`${voiceUsage.sanpaishaMinutes} > 0`, lte(voiceUsage.date, today))),
+    db.select({ minutes: sql<number>`coalesce(sum(${voiceUsage.minutes}), 0)::int` }).from(voiceUsage).where(and(eq(voiceUsage.memberId, memberId), lte(voiceUsage.date, today))),
+  ]);
+  const old = new Set(previouslyEngawa.map((c) => c.id));
+  const ids = channelRows.filter((c) => isEngawaName(c.name) || old.has(c.id)).map((c) => c.id);
+  if (!ids.length) return { evaluation: 0, recent: 0, total: all?.minutes ?? 0 };
+  const [u] = await db.select({
+    confirmed: sql<number>`coalesce(sum(case when ${voiceUsage.date} >= ${EVALUATION_START_DATE} then ${voiceUsage.evaluationEligibleMinutes} else 0 end), 0)::int`,
+    past: sql<number>`coalesce(sum(${legacyEvaluationMinutesSql}), 0)::int`,
+    deducted: sql<number>`coalesce(sum(least(${legacyEvaluationMinutesSql}, coalesce(${evaluationTimeDeductions.minutes}, 0))), 0)::int`,
+    recent: sql<number>`coalesce(sum(case when ${voiceUsage.date} >= ${since} then ${voiceUsage.minutes} else 0 end), 0)::int`,
+  }).from(voiceUsage)
+    .leftJoin(evaluationTimeDeductions, and(eq(evaluationTimeDeductions.memberId, voiceUsage.memberId), eq(evaluationTimeDeductions.date, voiceUsage.date), eq(evaluationTimeDeductions.channelId, voiceUsage.channelId)))
+    .where(and(eq(voiceUsage.memberId, memberId), inArray(voiceUsage.channelId, ids), lte(voiceUsage.date, today)));
+  return { evaluation: (u?.confirmed ?? 0) + (u?.past ?? 0) - (u?.deducted ?? 0), recent: u?.recent ?? 0, total: all?.minutes ?? 0 };
+}
