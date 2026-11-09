@@ -1,3 +1,5 @@
+import { CHANGELOG } from './changelog.js';
+import { recordDeploy, runningCommit } from './services/deployInfo.js';
 import { AppointRolesApp } from './discord/appointRoles.js';
 import { EventLotteryApp } from './discord/eventLottery.js';
 import { RoomBoardApp } from './discord/roomBoard.js';
@@ -100,6 +102,8 @@ async function main(): Promise<void> {
   const fileCfg = loadGuildConfig(env.GUILD_CONFIG);
   const { db, close } = await connectDb(env.DATABASE_URL);
   logger.info('database ready');
+  // 🚀 本番に反映した時間（いま動いている版と、更新履歴の「反映した時間」）
+  await recordDeploy(db, 'bot', CHANGELOG.map((e) => e.id), runningCommit()).catch((err) => logger.warn({ err }, 'deploy record failed'));
   // 管理画面で変えた設定を重ねる（1 分ごとに読み直す）
   const store = new ConfigStore(db, fileCfg);
   await store.refresh();

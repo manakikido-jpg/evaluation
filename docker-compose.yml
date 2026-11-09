@@ -15,7 +15,11 @@ services:
 
   # 朱印 BOT
   bot:
-    build: .
+    build:
+      context: .
+      # 🚀 いま動いている版（update.sh が入れる。なければ空）
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}
     # web・setup も同じイメージを使う（組み立ては bot の 1 回だけ。同時に組み立てるとメモリが足りなくなる）
     image: sakuranomiya-app:latest
     restart: unless-stopped

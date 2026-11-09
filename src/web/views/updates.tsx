@@ -122,7 +122,10 @@ function NewsSettings(props: {
   );
 }
 
-function Entry(props: { e: ChangelogEntry; isNew: boolean; post?: { csrf: string } }) {
+/** 「11月9日 15:32」（日本時間） */
+const fmtReflected = (d: Date) => new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
+
+function Entry(props: { e: ChangelogEntry; isNew: boolean; post?: { csrf: string }; reflectedAt?: Date }) {
   const { e } = props;
   return (
     <li class="update">
@@ -131,6 +134,7 @@ function Entry(props: { e: ChangelogEntry; isNew: boolean; post?: { csrf: string
         <strong>{e.title}</strong>
         {props.isNew && <span class="tag new">NEW</span>}
         <small>{e.where.join('・')}</small>
+        {props.reflectedAt && <small class="tag green" title="本番の BOT・社務所Web が、この更新を入れて動き始めた時間">🚀 反映 {fmtReflected(props.reflectedAt)}</small>}
         {props.post && (
           <form method="post" action="/updates/news/post" class="inline">
             <input type="hidden" name="_csrf" value={props.post.csrf} />
@@ -158,8 +162,13 @@ export function UpdatesPage(props: {
   flash?: string;
   /** 宮司だけ: 更新速報の設定 */
   news?: { settings: UpdateNewsSettings; channels: { id: string; name: string; category: string | null }[]; currentChannel?: string };
+  /** 🚀 更新ごとの、本番に反映した時間 */
+  reflected?: ReadonlyMap<string, Date>;
+  /** 🚀 いま動いている BOT・社務所Web の版と、起動した時間 */
+  runs?: Partial<Record<'bot' | 'web', { commit: string; startedAt: Date }>>;
 }) {
   const f = props.flash && Object.hasOwn(NEWS_FLASH, props.flash) ? NEWS_FLASH[props.flash] : undefined;
+  const run = (label: string, r?: { commit: string; startedAt: Date }) => r ? `${label} ${fmtReflected(r.startedAt)} から${r.commit ? `（${r.commit}）` : ''}` : `${label} まだ記録がありません`;
   const post = props.news ? { csrf: props.session.csrfToken } : undefined;
   const days: { date: string; entries: ChangelogEntry[] }[] = [];
   for (const e of CHANGELOG) {
@@ -172,15 +181,16 @@ export function UpdatesPage(props: {
       <h1>📰 更新履歴</h1>
       {f && <p class={`flash ${f.kind}`}>{f.text}</p>}
       <p class="note">
-        アップデートで変わったことです（新しい順）。「Discord」はメンバーにも見える変更、「社務所Web」は運営だけ、「運用」は VPS・セットアップの変更です。
+        アップデートで変わったことです（新しい順）。「Discord」はメンバーにも見える変更、「社務所Web」は運営だけ、「運用」は VPS・セットアップの変更です。「🚀 反映」は、本番でその更新が動き始めた時間です（2026年11月9日から記録）。
       </p>
+      {props.runs && <p class="note">🚀 いま本番で動いている版: {run('BOT', props.runs.bot)} ・ {run('社務所Web', props.runs.web)}</p>}
       {props.news && <NewsSettings session={props.session} news={props.news.settings} channels={props.news.channels} currentChannel={props.news.currentChannel} />}
       {days.map((d) => (
         <section class="card">
           <h2>{fmtDay(d.date)}</h2>
           <ul class="updates">
             {d.entries.map((e) => (
-              <Entry e={e} isNew={props.unseenIds.has(e.id)} post={post} />
+              <Entry e={e} isNew={props.unseenIds.has(e.id)} post={post} reflectedAt={props.reflected?.get(e.id)} />
             ))}
           </ul>
         </section>

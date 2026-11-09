@@ -1,3 +1,5 @@
+import { CHANGELOG } from '../changelog.js';
+import { recordDeploy, runningCommit } from '../services/deployInfo.js';
 import { deliverOfficePush, pushAccess } from '../services/officeNotifications.js';
 import { serve } from '@hono/node-server';
 import { loadGuildConfig, loadWebEnv } from '../config.js';
@@ -13,6 +15,8 @@ async function main(): Promise<void> {
   const env = loadWebEnv();
   const fileCfg = loadGuildConfig(env.GUILD_CONFIG);
   const { db, close } = await connectDb(env.DATABASE_URL);
+  // 🚀 本番に反映した時間（いま動いている版と、更新履歴の「反映した時間」）
+  await recordDeploy(db, 'web', CHANGELOG.map((e) => e.id), runningCommit()).catch((err) => logger.warn({ err }, 'deploy record failed'));
   // 設定画面で変えた値を重ねる
   const store = new ConfigStore(db, fileCfg);
   await store.refresh();
