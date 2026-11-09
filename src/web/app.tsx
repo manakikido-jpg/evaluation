@@ -1,3 +1,4 @@
+import { deployRuns, reflectedTimes } from '../services/deployInfo.js';
 import { loadAppointRoles, saveAppointRoles } from '../services/appointRoles.js';
 import { mountEventLottery } from './eventLottery.js';
 import { mountEvaluation } from './evaluation.js';
@@ -1728,7 +1729,8 @@ export function createWebApp(deps: WebDeps) {
       news = { settings, channels: postableChannels(channels).filter((ch) => ch.type === 0 || ch.type === 5), currentChannel: newsChannelOf(settings, channels)?.name };
     }
     // このページを開いたら読んだことにする（メニューの印も消す）
-    return c.html(<UpdatesPage session={{ ...s, updatesUnseen: 0 }} unseenIds={unseenIds} flash={c.req.query('msg')} news={news} />);
+    const [reflected, runs] = await Promise.all([reflectedTimes(db), deployRuns(db)]);
+    return c.html(<UpdatesPage session={{ ...s, updatesUnseen: 0 }} unseenIds={unseenIds} flash={c.req.query('msg')} news={news} reflected={reflected} runs={runs} />);
   });
 
   /** 📰 更新速報の設定（宮司） */

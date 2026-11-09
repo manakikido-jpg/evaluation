@@ -3065,6 +3065,17 @@ describe('更新履歴（管理画面）', () => {
     expect(again).not.toContain('新しい更新 ');
     expect(await (await get('/updates', s)).text()).not.toContain('>NEW<');
   });
+  it('🚀 本番に反映した時間と、いま動いている版が出る', async () => {
+    const { CHANGELOG } = await import('../src/changelog.js');
+    const { recordDeploy } = await import('../src/services/deployInfo.js');
+    const s = await login(STAFF);
+    expect(await (await get('/updates', s)).text()).toContain('BOT まだ記録がありません');
+    await recordDeploy(db, 'bot', CHANGELOG.map((e) => e.id), 'abc1234', new Date('2026-11-09T06:32:00Z'));
+    const page = await (await get('/updates', s)).text();
+    expect(page).toContain('🚀 反映 11/9 15:32');
+    expect(page.match(/🚀 反映 /g)).toHaveLength(1);
+    expect(page).toContain('BOT 11/9 15:32 から（abc1234）');
+  });
 });
 
 describe('ロール（管理画面）', () => {
