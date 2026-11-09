@@ -205,6 +205,25 @@ export async function loadCastPhoto(db: Db, memberId: string) {
   return row && { contentType: row.contentType, data: row.data, hash: row.hash };
 }
 
+/**
+ * 🖼 Discord に送る写真（WebP）。保存は PNG のまま（社務所Web の見本などに使う）。
+ * PNG の写真は数 MB〜10MB 近くになり、Discord のファイルの上限にかかって写真が出ないことがあるので、送るときだけ小さくする。
+ * 同じ写真を何度も変換しないよう、写真ごとに覚えておく
+ */
+export const CAST_PHOTO_FILE = 'cast-profile.webp';
+const discordPhotoCache = new Map<string, Promise<Uint8Array>>();
+export async function castPhotoForDiscord(photo: { data: Uint8Array; hash: string }): Promise<{ name: string; contentType: string; data: Uint8Array }> {
+  let job = discordPhotoCache.get(photo.hash);
+  if (!job) {
+    job = sharp(photo.data).webp({ quality: 85 }).toBuffer().then((b) => new Uint8Array(b));
+    discordPhotoCache.set(photo.hash, job);
+    job.catch(() => discordPhotoCache.delete(photo.hash));
+    // 古い写真は忘れる（キャストの人数ぶんあれば足りる）
+    while (discordPhotoCache.size > 100) discordPhotoCache.delete(discordPhotoCache.keys().next().value!);
+  }
+  return { name: CAST_PHOTO_FILE, contentType: 'image/webp', data: await job };
+}
+
 export async function deleteCastPhoto(db: Db, memberId: string): Promise<void> {
   if (sf(memberId)) await db.delete(castImages).where(eq(castImages.key, `profile:${memberId}`));
 }

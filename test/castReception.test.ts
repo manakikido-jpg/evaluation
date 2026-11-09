@@ -46,6 +46,21 @@ describe('キャストの写真', () => {
     expect(await loadCastPhoto(db, CAST)).toBeUndefined();
     expect(await loadCastPhoto(db, OTHER)).toBeDefined();
   });
+  it('🖼 Discord に送るときは WebP にして、大きな写真もずっと小さくする（同じ大きさ・透過はそのまま）', async () => {
+    const { castPhotoForDiscord } = await import('../src/services/cast.js');
+    // 写真らしい細かい模様（PNG だと大きくなる）
+    const w = 1200, h = 1200, raw = Buffer.alloc(w * h * 4);
+    for (let i = 0; i < w * h; i++) { raw[i * 4] = (i * 37) % 251; raw[i * 4 + 1] = (i * 91) % 241; raw[i * 4 + 2] = (i * 13) % 239; raw[i * 4 + 3] = i % w < 100 ? 0 : 255; }
+    const png = await sharp(raw, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer();
+    expect(await saveCastPhoto(db, CAST, png)).toBeTruthy();
+    const stored = (await loadCastPhoto(db, CAST))!;
+    const file = await castPhotoForDiscord(stored);
+    expect(file).toMatchObject({ name: 'cast-profile.webp', contentType: 'image/webp' });
+    expect(file.data.length).toBeLessThan(stored.data.length / 2);
+    expect(await sharp(file.data).metadata()).toMatchObject({ width: w, height: h, format: 'webp', hasAlpha: true });
+    // 同じ写真は、2 回目は覚えている分を使う
+    expect((await castPhotoForDiscord(stored)).data).toBe(file.data);
+  });
 });
 
 describe('キャスト本人の受付情報', () => {
@@ -195,7 +210,12 @@ describe('本人向けDiscord受付', () => {
     expect(body.components.at(-1)?.type).toBe(14);
     expect(body.components.some(c => c.type === 17)).toBe(false);
     expect(body.components[1]?.content).not.toContain('🎀');
-    expect(body.files[0]?.name).toBe('cast-profile.png');
+    // Discord には小さくした WebP を送り、写真の欄もその名前を指す
+    const file = (body.files as unknown as { name: string; contentType: string; data: Uint8Array }[])[0]!;
+    expect(file.name).toBe('cast-profile.webp');
+    expect(file.contentType).toBe('image/webp');
+    expect(Buffer.from(file.data).subarray(8, 12).toString('ascii')).toBe('WEBP');
+    expect(JSON.stringify(body.components)).toContain('attachment://cast-profile.webp');
     expect(body.components.flatMap((r) => (r.components ?? []).map((x) => x.custom_id))).toEqual([`cast:plansel:${CAST}`, `cast:rsv:${CAST}`]);
     expect(body.allowed_mentions).toEqual({ parse: [] });
     expect(await postCastIntro(db, { sendMessage: send } as never, CUSTOMER, '990000000000000123', '銭')).toBe(false);
@@ -230,7 +250,10 @@ describe('本人向けDiscord受付', () => {
     // カードにせず、文と写真の全体をそのまま出す
     expect(body.embeds).toEqual([]);
     expect(body.content).toContain('銭**');
-    expect(Buffer.from(body.files[0]!.attachment)).toEqual(Buffer.from((await loadCastPhoto(db, CAST))!.data));
+    // 送るのは、保存した写真を WebP にしたもの（同じ大きさ）
+    const sent = Buffer.from(body.files[0]!.attachment);
+    expect(sent.subarray(8, 12).toString('ascii')).toBe('WEBP');
+    expect(await sharp(sent).metadata()).toMatchObject({ width: 20, height: 20, format: 'webp' });
   });
 
   it('本人の写真を受付に使い、Discordのアイコンを取りにいかない', async () => {

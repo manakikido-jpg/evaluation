@@ -65,6 +65,7 @@ import {
   castMultiplierAt,
   loadCastReception,
   loadCastPhoto,
+  castPhotoForDiscord,
   loadMenuImage,
   MINOR,
   monthStart,
@@ -287,6 +288,8 @@ async function castIntroBody(db: Db, castId: string) {
   const cast = await getCast(db, castId);
   if (!cast) return undefined;
   const [name, photo, stats, busy] = await Promise.all([namesOf(db, [castId]).then((m) => m.get(castId) ?? castId), loadCastPhoto(db, castId), castStats(db, monthStart()), busySlots(db, castId)]);
+  // Discord に送るのは小さくした WebP（PNG のままだと大きすぎて写真が出ないことがある）
+  const file = photo ? await castPhotoForDiscord(photo) : undefined;
   const st = stats.find((x) => x.castId === castId);
   const menu = menuOf(cast).filter((m) => m.price > 0 || m.consult);
   const header = [`## ${name}`, cast.tags.length ? cast.tags.map((t) => `#${t}`).join(' ') : '', cast.bio].filter(Boolean).join('\n');
@@ -294,11 +297,11 @@ async function castIntroBody(db: Db, castId: string) {
     flags: MessageFlags.IsComponentsV2,
     allowed_mentions: { parse: [] },
     attachments: [],
-    ...(photo ? { files: [{ name: 'cast-profile.png', contentType: photo.contentType, data: photo.data }] } : {}),
+    ...(file ? { files: [file] } : {}),
     components: [
       { type: 14, divider: true, spacing: 2 },
       { type: 10, content: header },
-      ...(photo ? [{ type: 12, items: [{ media: { url: 'attachment://cast-profile.png' }, description: `${name}のメニュー画像` }] }] : []),
+      ...(file ? [{ type: 12, items: [{ media: { url: `attachment://${file.name}` }, description: `${name}のメニュー画像` }] }] : []),
       { type: 10, content: castMenuText(menu) },
       ...(activeOptions(cast).length ? [{ type: 10, content: castOptionsText(cast) }] : []),
       { type: 10, content: shiftText(cast.schedule, busy) },
@@ -729,7 +732,8 @@ export class CastApp {
   private async castCard(cast: Cast, adult: boolean) {
     const [states, stats] = await Promise.all([castStates(this.db), castStats(this.db, monthStart())]);
     const name = (await namesOf(this.db, [cast.memberId])).get(cast.memberId) ?? cast.memberId;
-    const photo = await loadCastPhoto(this.db, cast.memberId);
+    const stored = await loadCastPhoto(this.db, cast.memberId);
+    const photo = stored ? await castPhotoForDiscord(stored) : undefined;
     const state = STATE[states.get(cast.memberId) ?? 'off'];
     const st = stats.find((x) => x.castId === cast.memberId);
     const plans = menuOf(cast).filter((m) => (m.price > 0 || m.consult) && (adult || (minorMenuOk(m) && cast.minorOk)));
@@ -750,7 +754,7 @@ export class CastApp {
             .join('\n'),
       embeds: [],
       allowedMentions: { parse: [] as never[] },
-      ...(photo ? { files: [new AttachmentBuilder(Buffer.from(photo.data), { name: 'cast-profile.png' })] } : {}),
+      ...(photo ? { files: [new AttachmentBuilder(Buffer.from(photo.data), { name: photo.name })] } : {}),
       components: plans.length
         ? [menuSelect(`cast:plansel:${cast.memberId}`, '📅 メニューを選んで予約する', plans)]
         : [],
