@@ -1,3 +1,4 @@
+import { AppointRolesApp } from './discord/appointRoles.js';
 import { EventLotteryApp } from './discord/eventLottery.js';
 import { RoomBoardApp } from './discord/roomBoard.js';
 import { eventTick } from './services/casino/keibaEvents.js';
@@ -154,6 +155,8 @@ async function main(): Promise<void> {
   const guideThreads = new GuideThreadApp(db, cfg);
   const security = new SecurityApp(db, cfg, actions);
   const roleGuard = new RoleGuardApp(db, cfg, actions);
+  // 🎖 任命したときに一緒に付けるロール（衛士 ＋ 新役衛士 など）
+  const appointRoles = new AppointRolesApp(db, cfg);
   const onboarding = new OnboardingApp(db, cfg);
   const inviteLinks = new InviteLinkApp(db, cfg);
   const gifts = new GiftApp(db, cfg, actions);
@@ -430,6 +433,7 @@ async function main(): Promise<void> {
       await guidePending.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'guide pending update failed'));
       // 🛡 BOT を通さないロールの変更を見張る（待つので後ろで）
       void roleGuard.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'role guard failed'));
+      void appointRoles.onMemberUpdate(old, m).catch((err) => logger.warn({ err }, 'appoint roles failed'));
       // ブースト（奉納）を始めた・やめたら、すぐお礼を
       if ((old.premiumSince?.getTime() ?? null) !== (m.premiumSince?.getTime() ?? null)) await boost.tick(m.id);
     })();

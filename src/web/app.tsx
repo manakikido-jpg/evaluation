@@ -1,3 +1,4 @@
+import { loadAppointRoles, saveAppointRoles } from '../services/appointRoles.js';
 import { mountEventLottery } from './eventLottery.js';
 import { mountEvaluation } from './evaluation.js';
 import { applyTiersToOpenRounds } from '../services/casino/fortune.js';
@@ -5497,7 +5498,24 @@ export function createWebApp(deps: WebDeps) {
     const [roles, { counts }, reset] = await Promise.all([rankRoles(), roleMemberCounts(db), resetState(db)]);
     // 役職の付け替えが途中なら続ける（再起動したあとなど）
     if (reset && !reset.finishedAt) kickReset();
-    return c.html(<RanksPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} roles={roles} counts={counts} flash={c.req.query('msg')} reset={reset} />);
+    return c.html(<RanksPage session={c.get('session')} cfg={cfg} fileCfg={fileCfg()} roles={roles} counts={counts} flash={c.req.query('msg')} reset={reset} appointRoles={await loadAppointRoles(db)} />);
+  });
+
+  // 🎖 任命したときに一緒に付けるロール（衛士 ＋ 新役衛士 など。宮司だけ）
+  app.post('/ranks/appoint-roles', async (c) => {
+    const body = await c.req.parseBody();
+    const roles = await rankRoles();
+    if (!roles) return c.redirect('/ranks?msg=no_roles#rank-appoint');
+    const rankRoleIds = new Set(cfg.ranks.map((r) => r.roleId));
+    const value: Record<string, string> = {};
+    for (const r of cfg.ranks.filter((x) => !x.auto)) {
+      const v = body[`appoint.${r.key}`];
+      if (typeof v !== 'string' || !v) continue;
+      if (rankRoleIds.has(v) || !roles.some((x) => x.id === v)) return c.redirect('/ranks?msg=appoint_invalid#rank-appoint');
+      value[r.key] = v;
+    }
+    await saveAppointRoles(db, value, c.get('session').userId);
+    return c.redirect('/ranks?msg=appoint_saved#rank-appoint');
   });
 
   /** 🔄 評価のリセット（一度だけ・宮司）。役職の付け替えは裏で少しずつ */
