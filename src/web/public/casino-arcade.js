@@ -3,22 +3,26 @@
  let dispose=()=>{};
  function init(){
   dispose();const root=document.querySelector('[data-casino-arcade]');if(!root)return;
-  const listeners=new AbortController(),reduced=()=>matchMedia('(prefers-reduced-motion:reduce)').matches,animations=new Set();
+  const listeners=new AbortController(),reduced=()=>matchMedia('(prefers-reduced-motion:reduce)').matches||document.body.dataset.ciMotion==='instant',animations=new Set();
   let timer=0,soundTimer=0,controller=null,stopped=false,polling=false,submitting=false,model;
   try{model=JSON.parse(root.dataset.agModel||'null');}catch{return;}
-  const bet=Number(root.dataset.agBet||0),animate=(el,frames,options)=>{if(!el||reduced()||document.hidden)return;const a=el.animate(frames,options);animations.add(a);a.onfinish=()=>animations.delete(a);};
+  const bet=Number(root.dataset.agBet||0),animate=(el,frames,options)=>{if(!el||reduced()||document.hidden)return;const timing=document.body.dataset.ciMotion==='low'?{...options,duration:Math.min(700,options.duration),delay:0}:options;const a=el.animate(frames,timing);animations.add(a);a.onfinish=()=>animations.delete(a);};
   const show=(selector,value)=>{const el=root.querySelector(selector);if(el&&el.textContent!==value)el.textContent=value;},pretty=n=>(n/1000).toFixed(3).replace(/\.?0+$/,'')+'倍';
   const stop=()=>{stopped=true;clearTimeout(timer);clearTimeout(soundTimer);controller?.abort();controller=null;for(const a of animations)a.cancel();animations.clear();listeners.abort();};dispose=stop;
   if(model?.done){
+   for(const [i,cell]of [...root.querySelectorAll('.ag-mines [data-state=safe],.ag-mines [data-state=bomb],.ag-keno-result [data-hit=true]')].entries())animate(cell,[{opacity:.1,transform:'translateY(8px) scale(.85)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:380,delay:i*45,easing:'ease-out'});
+   if(model.kind==='craps')for(const [i,die]of [...root.querySelectorAll('.ag-die')].entries())animate(die,[{transform:'translateY(-25px) rotate(-35deg)'},{transform:`translateY(${i?17:0}px) rotate(${i?12:-14}deg)`}],{duration:650,delay:i*80,easing:'cubic-bezier(.2,.8,.3,1)'});
+   if(model.kind==='videopoker')for(const [i,card]of [...root.querySelectorAll('.ag-hold .pc')].entries())animate(card,[{opacity:.4,transform:'translateY(15px) rotateY(70deg)'},{opacity:1,transform:'translateY(0) rotateY(0deg)'}],{duration:450,delay:i*65,easing:'ease-out'});
    const wheel=root.querySelector('[data-ag-wheel]');if(wheel){const target=model.kind==='moneywheel'?[85.5,220.5,292.5,337.5][model.index]:(model.index+.5)*36,degrees=1800-target;wheel.style.transform=`rotate(${degrees}deg)`;animate(wheel,[{transform:'rotate(0deg)'},{transform:`rotate(${degrees}deg)`}],{duration:2600,easing:'cubic-bezier(.12,.65,.18,1)'});}
    if(model.kind==='duckrace')for(const el of root.querySelectorAll('[data-ag-duck]')){const winner=Number(el.dataset.agDuck)===model.index,distance=el.parentElement.clientWidth-85;el.style.transform=`translateX(${distance*(winner?1:.65+Number(el.dataset.agDuck)*.04)}px)`;animate(el,[{transform:'translateX(0px)'},{transform:el.style.transform}],{duration:winner?2900:3300,easing:'cubic-bezier(.25,.35,.4,1)'});}
    if(model.kind==='plinko'){
-    const ball=root.querySelector('[data-ag-ball]');if(ball){const points=[[240,25]];let x=240;model.path.forEach((n,i)=>{points.push([x,65+i*43]);x+=n?20:-20;points.push([x,90+i*43]);});points.push([x,470]);ball.setAttribute('cx','0');ball.setAttribute('cy','0');ball.style.transform=`translate(${x}px,470px)`;animate(ball,points.map(([px,py])=>({transform:`translate(${px}px,${py}px)`})),{duration:3000,easing:'linear'});}
+    const ball=root.querySelector('[data-ag-ball]');if(ball){const points=[[240,25]];let x=240;model.path.forEach((n,i)=>{points.push([x,65+i*43]);x+=n?20:-20;points.push([x,90+i*43]);});points.push([x,494]);ball.setAttribute('cx','0');ball.setAttribute('cy','0');ball.style.transform=`translate(${x}px,494px)`;animate(ball,points.map(([px,py])=>({transform:`translate(${px}px,${py}px)`})),{duration:3000,easing:'linear'});}
    }
    let fresh=true;try{const key='sakura-arcade-seen-'+root.dataset.agRound+'-'+root.dataset.agVersion;fresh=!sessionStorage.getItem(key);sessionStorage.setItem(key,'1');}catch{}
    if(fresh)soundTimer=setTimeout(()=>{if(!stopped&&!document.hidden)window.CasinoSound?.tone(model.mult?700:180,0,.12,{type:'sine',vol:.06});},reduced()?100:['fortune','moneywheel','plinko','duckrace'].includes(model.kind)?3000:150);
   }
   const start=root.querySelector('[data-ag-start]');if(start){const picks=[...start.querySelectorAll('input[name=picks]')];if(picks.length)start.addEventListener('change',()=>{const count=picks.filter(x=>x.checked).length;show('[data-ag-keno-count]',`選択 ${count} / 10個`);for(const p of picks)p.disabled=!p.checked&&count>=10;});}
+  document.addEventListener('change',event=>{if(event.target.matches?.('[data-ci-motion]')){for(const a of animations)a.cancel();animations.clear();clearTimeout(soundTimer);}},{signal:listeners.signal});
   root.addEventListener('submit',async event=>{
    event.preventDefault();if(submitting)return;const form=event.target;if(!(form instanceof HTMLFormElement))return;
    const destination=new URL(form.getAttribute('action')||location.href,location.href).href;
