@@ -41,9 +41,15 @@ export function generatePassword(length = 14): string {
   return Array.from({ length }, () => chars[randomInt(chars.length)]).join('');
 }
 
-export type AccountInput = { loginId: string; name: string; level: 'guji' | 'shinshoku'; pages: WebPage[] | null; writePages?: WebPage[] | null; memberId?: string | null };
+export type AccountInput = { loginId: string; name: string; level: 'guji' | 'shinshoku'; pages: WebPage[] | null; writePages?: WebPage[] | null; memberId?: string | null; /** 宮司が決めたパスワード（なければおまかせで作る） */ password?: string };
 
-export type CreateResult = { status: 'ok'; account: WebAccount; password: string } | { status: 'bad_id' } | { status: 'taken' } | { status: 'bad_name' };
+export type CreateResult = { status: 'ok'; account: WebAccount; password: string; custom: boolean } | { status: 'bad_id' } | { status: 'taken' } | { status: 'bad_name' } | { status: 'bad_password' };
+
+/** 宮司が決めるパスワードの決まり: 8〜128 文字・空白だけはだめ・ID と同じはだめ */
+export const PASSWORD_MIN = 8;
+export function passwordOk(password: string, loginId: string): boolean {
+  return password.length >= PASSWORD_MIN && password.length <= 128 && password.trim().length > 0 && normalizeLoginId(password) !== normalizeLoginId(loginId);
+}
 
 export async function createAccount(db: Db, input: AccountInput, by: string, now = new Date()): Promise<CreateResult> {
   const loginId = normalizeLoginId(input.loginId);
@@ -52,12 +58,14 @@ export async function createAccount(db: Db, input: AccountInput, by: string, now
   if (!name) return { status: 'bad_name' };
   const [dup] = await db.select({ id: webAccounts.id }).from(webAccounts).where(eq(webAccounts.loginId, loginId));
   if (dup) return { status: 'taken' };
-  const password = generatePassword();
+  const custom = Boolean(input.password);
+  if (custom && !passwordOk(input.password!, loginId)) return { status: 'bad_password' };
+  const password = custom ? input.password! : generatePassword();
   const [account] = await db
     .insert(webAccounts)
     .values({ loginId, name, level: input.level, pages: cleanPages(input.level, input.pages), writePages: input.writePages ?? null, memberId: input.memberId ?? null, passwordHash: await hashPassword(password), createdBy: by, createdAt: now })
     .returning();
-  return { status: 'ok', account: account!, password };
+  return { status: 'ok', account: account!, password, custom };
 }
 
 /** 宮司はいつも全部。神職は選んだページ（null は全部） */
@@ -102,15 +110,17 @@ export async function updateAccount(db: Db, id: number, patch: { name: string; l
   return 'ok';
 }
 
-/** パスワードを作り直す（ロックも外す）。ログイン中の分はログアウトさせる */
-export async function resetPassword(db: Db, id: number): Promise<{ status: 'ok'; password: string; account: WebAccount } | { status: 'not_found' }> {
+/** パスワードを作り直す（宮司が決めたものか、おまかせ。ロックも外す）。ログイン中の分はログアウトさせる */
+export async function resetPassword(db: Db, id: number, chosen?: string): Promise<{ status: 'ok'; password: string; account: WebAccount; custom: boolean } | { status: 'not_found' } | { status: 'bad_password' }> {
   const a = await getAccount(db, id);
   if (!a) return { status: 'not_found' };
-  const password = generatePassword();
+  const custom = Boolean(chosen);
+  if (custom && !passwordOk(chosen!, a.loginId)) return { status: 'bad_password' };
+  const password = custom ? chosen! : generatePassword();
   await db.update(webAccounts).set({ passwordHash: await hashPassword(password), failedCount: 0, lockedUntil: null }).where(eq(webAccounts.id, id));
   await db.delete(officeSubscriptions).where(eq(officeSubscriptions.accountId, id));
   await db.delete(adminSessions).where(eq(adminSessions.accountId, id));
-  return { status: 'ok', password, account: a };
+  return { status: 'ok', password, account: a, custom };
 }
 
 /** 止める・戻す。止めたらログイン中の分もログアウトさせる */

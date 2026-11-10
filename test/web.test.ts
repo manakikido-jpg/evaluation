@@ -3918,7 +3918,7 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
     expect(home.headers.get('location')).toBe('/board');
     expect((await get('/economy', shin.session!)).status).toBe(403);
     // 止めると、ログイン中でもすぐ入れない
-    const { listAccounts, updateAccount } = await import('../src/services/webAccounts.js');
+    const { listAccounts, updateAccount, getAccount } = await import('../src/services/webAccounts.js');
     const id = (await listAccounts(db)).find((a) => a.loginId === 'shin')!.id;
     // 🏯 組織図に置いた人をアカウントに結びつけると、その四角のページも使える（結びつけるまでは使えない）
     const { saveOrg, DEFAULT_ORG } = await import('../src/services/orgChart.js');
@@ -3947,6 +3947,39 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
     expect(await (await get('/settings', s)).text()).toMatch(new RegExp(`action="/settings/accounts/${id}/reset" data-native-submit`));
     expect((await get('/board', shin.session!)).status).toBe(404);
     expect((await app.request('/board', { headers: { cookie: `${entry}; shamusho_session=${shin.session}` } })).headers.get('location')).toBe('/login?e=expired');
+    // 🔑 宮司がパスワードを決めて発行する（画面には出さない）。✍ 見る・操作するページを分ける
+    const issue = (pairs: [string, string][]) => app.request('/settings/accounts', { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ...pairs]).toString() });
+    const base: [string, string][] = [['loginId', 'tokatsu'], ['name', '統括さん'], ['level', 'shinshoku'], ['pages', 'board'], ['pages', 'members'], ['writePagesShown', '1'], ['writePages', 'board']];
+    expect((await issue([...base, ['password', 'sakura-2026'], ['passwordConfirm', 'sakura-2027']])).headers.get('location')).toBe('/settings?msg=account_password_mismatch&at=accounts#sec-accounts');
+    expect((await issue([...base, ['password', 'short'], ['passwordConfirm', 'short']])).headers.get('location')).toBe('/settings?msg=account_bad_password&at=accounts#sec-accounts');
+    const made = await issue([...base, ['password', 'sakura-2026'], ['passwordConfirm', 'sakura-2026']]);
+    const madeHtml = await made.text();
+    expect(madeHtml).toContain('アカウントを発行しました');
+    expect(madeHtml).not.toContain('sakura-2026');
+    expect(madeHtml).not.toContain('class="secret"');
+    const tokatsu = (await listAccounts(db)).find((x) => x.loginId === 'tokatsu')!;
+    expect([...(tokatsu.pages ?? [])].sort()).toEqual(['board', 'members']);
+    expect(tokatsu.writePages).toEqual(['board']);
+    const t = await loginAs('tokatsu', 'sakura-2026');
+    expect(t.location).toBe('/');
+    expect((await get('/members', t.session!)).status).toBe(200);
+    // 見るだけのページ（メンバー）では操作できない。操作できるページ（掲示板）は今までどおり
+    const tcsrf = /name="_csrf" value="([^"]+)"/.exec(await (await get('/members', t.session!)).text())![1]!;
+    const denied = await app.request(`/members/${USER}/memo`, { method: 'POST', headers: { cookie: `shamusho_session=${t.session}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: tcsrf, text: 'メモ' }).toString() });
+    expect(denied.status).toBe(403);
+    expect(await denied.text()).toContain('閲覧のみ');
+    // 編集画面に「操作できる」の欄が出て、保存すると変えられる
+    expect(await (await get('/settings', s)).text()).toContain('name="writePages"');
+    const saved = await app.request(`/settings/accounts/${tokatsu.id}`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ['name', '統括さん'], ['level', 'shinshoku'], ['pages', 'board'], ['pages', 'members'], ['writePagesShown', '1'], ['writePages', '*']]).toString() });
+    expect(saved.headers.get('location')).toBe('/settings?msg=account_saved&at=accounts#sec-accounts');
+    expect((await getAccount(db, tokatsu.id))?.writePages).toBeNull();
+    // パスワードを決めて作り直す（前のパスワードでは入れない）
+    const re = await app.request(`/settings/accounts/${tokatsu.id}/reset`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, password: 'momiji-2026', passwordConfirm: 'momiji-2026' }).toString() });
+    expect(re.status).toBe(200);
+    expect(await re.text()).not.toContain('momiji-2026');
+    expect((await loginAs('tokatsu', 'sakura-2026')).location).toBe('/login?e=wrong');
+    expect((await loginAs('tokatsu', 'momiji-2026')).location).toBe('/');
+    expect(JSON.stringify(await listAudit(db, { action: 'account.create' }))).not.toContain('sakura-2026');
   });
 });
 

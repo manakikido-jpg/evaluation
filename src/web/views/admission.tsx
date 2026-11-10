@@ -71,6 +71,8 @@ export const ADMISSION_FLASH: Record<string, { text: string; kind: 'ok' | 'warn'
   webaccess_removed: { text: '外しました。次に開いたときから入れなくなります。', kind: 'ok' },
   account_bad_id: { text: 'ID は英小文字・数字・「_ . -」で 3〜32 文字にしてください。', kind: 'warn' },
   account_taken: { text: 'その ID はもう使われています。', kind: 'warn' },
+  account_bad_password: { text: 'パスワードは 8〜128 文字で、ID と同じにはできません。', kind: 'warn' },
+  account_password_mismatch: { text: 'パスワードと、確かめのパスワードが合いません。もう一度入れてください。', kind: 'warn' },
   account_bad_name: { text: '名前を入れてください。', kind: 'warn' },
   account_saved: { text: 'アカウントを保存しました（ログイン中の人にも、次に開いたときから効きます）。', kind: 'ok' },
   account_disabled: { text: '止めました。ログイン中だった人も入れなくなりました。', kind: 'ok' },
@@ -560,6 +562,46 @@ function PageChecks(props: { pages: WebAccessEntry['pages'] }) {
   );
 }
 
+/** ✍ 操作できるページ（見られるページのうち、ボタン・保存などの操作ができるページ。チェックしないページは見るだけ） */
+function WriteChecks(props: { writePages: string[] | null }) {
+  const all = props.writePages === null;
+  return (
+    <>
+      <input type="hidden" name="writePagesShown" value="1" />
+      <div class="role-checks page-checks">
+        <label class="check">
+          <input type="checkbox" name="writePages" value="*" checked={all} />
+          <span>
+            <b>全部</b>（見られるページは、全部操作できる）
+          </span>
+        </label>
+        {WEB_PAGES.map((p) => (
+          <label class="check">
+            <input type="checkbox" name="writePages" value={p.key} checked={!all && props.writePages!.includes(p.key)} />
+            <span>{p.label}</span>
+          </label>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** 🔑 パスワードを決める欄（空ならおまかせで作る） */
+function PasswordFields(props: { optionalNote: string }) {
+  return (
+    <div class="grid2">
+      <label class="field">
+        <span>パスワード（8〜128 文字。{props.optionalNote}）</span>
+        <input type="password" name="password" minlength={8} maxlength={128} autocomplete="new-password" />
+      </label>
+      <label class="field">
+        <span>パスワード（確かめのため、もう一度）</span>
+        <input type="password" name="passwordConfirm" minlength={8} maxlength={128} autocomplete="new-password" />
+      </label>
+    </div>
+  );
+}
+
 const LEVEL_NAME = { guji: '⛩ 宮司', shinshoku: '🎐 神職' } as const;
 
 /** アカウントの入力欄（発行・直す）。a があれば今の値 */
@@ -594,8 +636,11 @@ function AccountFields(props: { account?: WebAccount; memberName?: string }) {
           <input type="text" name="member" maxlength={100} value={a?.memberId ?? ''} placeholder={props.memberName ? `今: ${props.memberName}` : '例: 123456789012345678'} />
         </label>
       </div>
-      <p class="note">神職のとき見られるページ:</p>
+      {!a && <PasswordFields optionalNote="空にするとおまかせで作り、次の画面に 1 回だけ出します" />}
+      <p class="note">神職のとき<b>見られる</b>ページ:</p>
       <PageChecks pages={a?.pages ? (a.pages as WebAccessEntry['pages']) : ['*']} />
+      <p class="note">神職のとき<b>操作できる</b>ページ（見られるページのうち。チェックしないページは見るだけで、ボタンや保存は使えません）:</p>
+      <WriteChecks writePages={a?.writePages ?? null} />
     </>
   );
 }
@@ -630,7 +675,11 @@ function AccountRow(props: { session: AdminSession; account: WebAccount; memberN
         {/* 新しいパスワードの画面を出すので、その場の書きかえ（office-actions.js）を使わずに送る */}
         <form method="post" action={`/settings/accounts/${a.id}/reset`} data-native-submit>
           <Hidden />
-          <button type="submit">🔁 パスワードを作り直す</button>
+          <details>
+            <summary>🔁 パスワードを作り直す</summary>
+            <PasswordFields optionalNote="空にするとおまかせで作ります" />
+            <button type="submit">作り直す（ログイン中の分はログアウトします）</button>
+          </details>
         </form>
         <form method="post" action={`/settings/accounts/${a.id}/toggle`}>
           <Hidden />
@@ -652,7 +701,7 @@ function AccountRow(props: { session: AdminSession; account: WebAccount; memberN
 }
 
 /** 発行・作り直したパスワード（この画面だけで見せる） */
-export function AccountIssuedPage(props: { session: AdminSession; loginId: string; name: string; password: string; reset?: boolean; entryHint?: boolean }) {
+export function AccountIssuedPage(props: { session: AdminSession; loginId: string; name: string; /** おまかせで作ったときだけ（宮司が決めたパスワードは出さない） */ password?: string; reset?: boolean; entryHint?: boolean }) {
   return (
     <Layout title="アカウント" session={props.session} nav="settings">
       <h1>🪪 {props.reset ? 'パスワードを作り直しました' : 'アカウントを発行しました'}</h1>
@@ -666,11 +715,9 @@ export function AccountIssuedPage(props: { session: AdminSession; loginId: strin
             <code>{props.loginId}</code>
           </dd>
           <dt>パスワード</dt>
-          <dd>
-            <code class="secret">{props.password}</code>
-          </dd>
+          <dd>{props.password ? <code class="secret">{props.password}</code> : '宮司が決めたパスワード（ここには出しません）'}</dd>
         </dl>
-        <p class="flash warn">パスワードはこの画面だけで見られます。閉じたり戻ったりすると、もう出ません（わからなくなったら作り直してください）。</p>
+        {props.password ? <p class="flash warn">パスワードはこの画面だけで見られます。閉じたり戻ったりすると、もう出ません（わからなくなったら作り直してください）。</p> : <p class="note">決めたパスワードは、どこにも残していません（わからなくなったら作り直してください）。</p>}
         {props.entryHint && <p class="note">ログインの画面は、秘密の入口の URL から開きます（入口の URL も一緒に伝えてください）。</p>}
         <a class="button" href="/settings?at=accounts#sec-accounts">
           設定に戻る

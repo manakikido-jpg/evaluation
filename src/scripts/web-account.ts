@@ -32,6 +32,7 @@ async function main(): Promise<void> {
       if (r.status === 'bad_id') throw new Error('ID は英小文字・数字・「_ . -」で 3〜32 文字にしてください');
       if (r.status === 'taken') throw new Error('その ID はもうあります（パスワードを作り直すなら reset）');
       if (r.status === 'bad_name') throw new Error('名前を入れてください');
+      if (r.status !== 'ok') throw new Error('作れませんでした');
       console.log(`\n✅ ${level === 'guji' ? '宮司' : '神職'}のアカウントを作りました\n   ID: ${r.account.loginId}\n   パスワード: ${r.password}\n\n（パスワードはこの 1 回だけ出ます。メモしてから、この画面を閉じてください）\n`);
       return;
     }

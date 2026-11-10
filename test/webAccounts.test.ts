@@ -93,5 +93,25 @@ describe('🪪 社務所Web のアカウント', () => {
     await setStaffAlt(db, ALT, true, 'admin', '890000000000000103');
     expect(await accountAccessWithOrg(db, { ...base, memberId: ALT })).toEqual({ level: 'shinshoku', pages: ['board'] });
   });
+  it('🔑 宮司が決めたパスワードで発行・作り直しができる（8〜128 文字・ID と同じはだめ）', async () => {
+    const { passwordOk } = await import('../src/services/webAccounts.js');
+    expect(passwordOk('sakura-26', 'tokatsu')).toBe(true);
+    expect(passwordOk('short', 'tokatsu')).toBe(false);
+    expect(passwordOk('Tokatsu1', 'tokatsu1')).toBe(false);
+    expect(passwordOk('        ', 'tokatsu')).toBe(false);
+    expect((await createAccount(db, { loginId: 'tokatsu', name: '統括', level: 'shinshoku', pages: ['board'], password: 'short' }, 'g', T0)).status).toBe('bad_password');
+    const r = await createAccount(db, { loginId: 'tokatsu', name: '統括', level: 'shinshoku', pages: ['board'], writePages: [], password: 'sakura-2026' }, 'g', T0);
+    if (r.status !== 'ok') throw new Error(r.status);
+    expect(r).toMatchObject({ custom: true, password: 'sakura-2026' });
+    expect(r.account.writePages).toEqual([]);
+    expect((await checkLogin(db, 'tokatsu', 'sakura-2026', T0)).status).toBe('ok');
+    expect((await resetPassword(db, r.account.id, 'tokatsu')).status).toBe('bad_password');
+    const again = await resetPassword(db, r.account.id, 'momiji-2026');
+    expect(again).toMatchObject({ status: 'ok', custom: true });
+    expect((await checkLogin(db, 'tokatsu', 'sakura-2026', T0)).status).not.toBe('ok');
+    expect((await checkLogin(db, 'tokatsu', 'momiji-2026', T0)).status).toBe('ok');
+    const auto = await resetPassword(db, r.account.id);
+    expect(auto).toMatchObject({ status: 'ok', custom: false });
+  });
 });
 

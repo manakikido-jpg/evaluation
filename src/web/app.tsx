@@ -126,7 +126,7 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { secureHeaders } from 'hono/secure-headers';
 import { bodyLimit } from 'hono/body-limit';
-import { adminLevelOf, webAccessOf, webAccessEntries, webPageOf, WEB_PAGES, WEB_PAGE_KEYS, type WebAccessEntry, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
+import { adminLevelOf, webAccessOf, webAccessEntries, webPageOf, WEB_PAGES, WEB_PAGE_KEYS, type WebAccessEntry, type WebPage, GACHA_TIERS, TICKET_KINDS, type GachaTier, type GuildConfig, type TicketKind } from '../config.js';
 import {
   createPrize,
   deletePrize,
@@ -4017,7 +4017,21 @@ export function createWebApp(deps: WebDeps) {
       if (!found || found === 'ambiguous') return undefined;
       memberId = found.id;
     } else if (memberRaw) memberId = current ?? null;
-    return { name: field(body, 'name', 40), level, pages, memberId };
+    // ✍ 操作できるページ（欄があるときだけ。「全部」なら見られるページは全部操作できる。チェックしないページは見るだけ）
+    let writePages: WebPage[] | null | undefined;
+    if (body.writePagesShown) {
+      const wraw = body.writePages === undefined ? [] : Array.isArray(body.writePages) ? body.writePages : [body.writePages];
+      const wpicked = wraw.filter((v): v is string => typeof v === 'string');
+      writePages = level === 'guji' || wpicked.includes('*') ? null : WEB_PAGE_KEYS.filter((k) => wpicked.includes(k) && (!pages || pages.includes(k)));
+    }
+    return { name: field(body, 'name', 40), level, pages, memberId, ...(writePages !== undefined ? { writePages } : {}) };
+  };
+  /** 🔑 宮司が決めたパスワード（空ならおまかせ）。確かめの欄と合わないときは 'mismatch' */
+  const chosenPassword = (body: Record<string, unknown>): string | undefined | 'mismatch' => {
+    const pw = typeof body.password === 'string' ? body.password.slice(0, 200) : '';
+    const again = typeof body.passwordConfirm === 'string' ? body.passwordConfirm.slice(0, 200) : '';
+    if (!pw && !again) return undefined;
+    return pw === again ? pw : 'mismatch';
   };
 
   app.post('/settings/accounts', async (c) => {
@@ -4025,10 +4039,13 @@ export function createWebApp(deps: WebDeps) {
     const body = await c.req.parseBody({ all: true });
     const f = await accountForm(body);
     if (!f) return c.redirect(accountsBack('account_member_not_found'));
-    const r = await createAccount(db, { loginId: field(body, 'loginId', 64), ...f }, c.get('session').userId, now());
+    const password = chosenPassword(body);
+    if (password === 'mismatch') return c.redirect(accountsBack('account_password_mismatch'));
+    const r = await createAccount(db, { loginId: field(body, 'loginId', 64), ...f, ...(password ? { password } : {}) }, c.get('session').userId, now());
     if (r.status !== 'ok') return c.redirect(accountsBack(`account_${r.status}`));
-    await audit(db, { actorId: c.get('session').userId, action: 'account.create', detail: { account: r.account.loginId, level: r.account.level, pages: r.account.pages }, via: 'web' });
-    return c.html(<AccountIssuedPage session={c.get('session')} loginId={r.account.loginId} name={r.account.name} password={r.password} entryHint={Boolean(deps.entryKey)} />);
+    // パスワードそのものは記録に残さない（決めたかどうかだけ）
+    await audit(db, { actorId: c.get('session').userId, action: 'account.create', detail: { account: r.account.loginId, level: r.account.level, pages: r.account.pages, writePages: r.account.writePages, customPassword: r.custom }, via: 'web' });
+    return c.html(<AccountIssuedPage session={c.get('session')} loginId={r.account.loginId} name={r.account.name} password={r.custom ? undefined : r.password} entryHint={Boolean(deps.entryKey)} />);
   });
 
   app.post('/settings/accounts/:id/:action?', async (c) => {
@@ -4039,13 +4056,16 @@ export function createWebApp(deps: WebDeps) {
     if (!a) return c.redirect(accountsBack('invalid'));
     const by = c.get('session').userId;
     const log = (what: string, detail: Record<string, unknown> = {}) => audit(db, { actorId: by, action: `account.${what}`, detail: { account: a.loginId, ...detail }, via: 'web' });
-    if (action === 'reset') {
-      const r = await resetPassword(db, id);
-      if (r.status !== 'ok') return c.redirect(accountsBack('invalid'));
-      await log('reset');
-      return c.html(<AccountIssuedPage session={c.get('session')} loginId={a.loginId} name={a.name} password={r.password} reset entryHint={Boolean(deps.entryKey)} />);
-    }
     const body = await c.req.parseBody({ all: true });
+    if (action === 'reset') {
+      const chosen = chosenPassword(body);
+      if (chosen === 'mismatch') return c.redirect(accountsBack('account_password_mismatch'));
+      const r = await resetPassword(db, id, chosen);
+      if (r.status === 'bad_password') return c.redirect(accountsBack('account_bad_password'));
+      if (r.status !== 'ok') return c.redirect(accountsBack('invalid'));
+      await log('reset', { customPassword: r.custom });
+      return c.html(<AccountIssuedPage session={c.get('session')} loginId={a.loginId} name={a.name} password={r.custom ? undefined : r.password} reset entryHint={Boolean(deps.entryKey)} />);
+    }
     if (action === 'toggle') {
       const r = await setDisabled(db, id, !a.disabled);
       if (r !== 'ok') return c.redirect(accountsBack(r === 'last_guji' ? 'account_last_guji' : 'invalid'));
@@ -4066,7 +4086,7 @@ export function createWebApp(deps: WebDeps) {
     if (r !== 'ok') return c.redirect(accountsBack(r === 'last_guji' ? 'account_last_guji' : r === 'bad_name' ? 'account_bad_name' : 'invalid'));
     // ログイン中の人にも、次に開いたときから効かせる
     await recheckAllSessions(db);
-    await log('update', { level: f.level, pages: f.level === 'guji' ? null : f.pages });
+    await log('update', { level: f.level, pages: f.level === 'guji' ? null : f.pages, ...('writePages' in f ? { writePages: f.writePages } : {}) });
     return c.redirect(accountsBack('account_saved'));
   });
 
