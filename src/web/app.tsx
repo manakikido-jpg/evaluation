@@ -4009,7 +4009,12 @@ export function createWebApp(deps: WebDeps) {
     const level = body.level === 'guji' ? ('guji' as const) : ('shinshoku' as const);
     const raw = body.pages === undefined ? [] : Array.isArray(body.pages) ? body.pages : [body.pages];
     const picked = raw.filter((v): v is string => typeof v === 'string');
-    const pages = picked.includes('*') ? null : WEB_PAGE_KEYS.filter((k) => picked.includes(k));
+    const wraw = body.writePages === undefined ? [] : Array.isArray(body.writePages) ? body.writePages : [body.writePages];
+    const wchecked = body.writePagesShown ? wraw.filter((v): v is string => typeof v === 'string') : [];
+    // 「全部」のまま 1 つずつチェックしたときは、1 つずつの方にする（はじめは「全部」にチェックが入っているため）
+    const wpicked = wchecked.some((k) => k !== '*') ? wchecked.filter((k) => k !== '*') : wchecked;
+    // 「操作できる」にしたページは、「見られる」にチェックしていなくても見られるようにする（だまって消さない）
+    const pages = picked.includes('*') ? null : WEB_PAGE_KEYS.filter((k) => picked.includes(k) || (!wpicked.includes('*') && wpicked.includes(k)));
     const memberRaw = field(body, 'member', 100);
     let memberId: string | null = null;
     if (memberRaw && memberRaw !== current) {
@@ -4019,11 +4024,7 @@ export function createWebApp(deps: WebDeps) {
     } else if (memberRaw) memberId = current ?? null;
     // ✍ 操作できるページ（欄があるときだけ。「全部」なら見られるページは全部操作できる。チェックしないページは見るだけ）
     let writePages: WebPage[] | null | undefined;
-    if (body.writePagesShown) {
-      const wraw = body.writePages === undefined ? [] : Array.isArray(body.writePages) ? body.writePages : [body.writePages];
-      const wpicked = wraw.filter((v): v is string => typeof v === 'string');
-      writePages = level === 'guji' || wpicked.includes('*') ? null : WEB_PAGE_KEYS.filter((k) => wpicked.includes(k) && (!pages || pages.includes(k)));
-    }
+    if (body.writePagesShown) writePages = level === 'guji' || wpicked.includes('*') ? null : WEB_PAGE_KEYS.filter((k) => wpicked.includes(k));
     return { name: field(body, 'name', 40), level, pages, memberId, ...(writePages !== undefined ? { writePages } : {}) };
   };
   /** 🔑 宮司が決めたパスワード（空ならおまかせ）。確かめの欄と合わないときは 'mismatch' */

@@ -639,7 +639,7 @@ function AccountFields(props: { account?: WebAccount; memberName?: string }) {
       {!a && <PasswordFields optionalNote="空にするとおまかせで作り、次の画面に 1 回だけ出します" />}
       <p class="note">神職のとき<b>見られる</b>ページ:</p>
       <PageChecks pages={a?.pages ? (a.pages as WebAccessEntry['pages']) : ['*']} />
-      <p class="note">神職のとき<b>操作できる</b>ページ（見られるページのうち。チェックしないページは見るだけで、ボタンや保存は使えません）:</p>
+      <p class="note">神職のとき<b>操作できる</b>ページ（チェックしないページは見るだけで、ボタンや保存は使えません。ここでチェックしたページは、上で選んでいなくても見られるようになります。1 つずつチェックすると、「全部」より 1 つずつの方が優先されます）:</p>
       <WriteChecks writePages={a?.writePages ?? null} />
     </>
   );

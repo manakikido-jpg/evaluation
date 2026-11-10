@@ -3980,6 +3980,16 @@ describe('🪪 ID とパスワード・秘密の入口', () => {
     expect((await loginAs('tokatsu', 'sakura-2026')).location).toBe('/login?e=wrong');
     expect((await loginAs('tokatsu', 'momiji-2026')).location).toBe('/');
     expect(JSON.stringify(await listAudit(db, { action: 'account.create' }))).not.toContain('sakura-2026');
+    // 「見られる」にチェックしていないページを「操作できる」にしたら、見られるページにも足す（だまって消さない）
+    const both = await app.request(`/settings/accounts/${tokatsu.id}`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ['name', '統括さん'], ['level', 'shinshoku'], ['pages', 'board'], ['writePagesShown', '1'], ['writePages', 'members']]).toString() });
+    expect(both.headers.get('location')).toBe('/settings?msg=account_saved&at=accounts#sec-accounts');
+    const afterBoth = (await getAccount(db, tokatsu.id))!;
+    expect([...(afterBoth.pages ?? [])].sort()).toEqual(['board', 'members']);
+    expect(afterBoth.writePages).toEqual(['members']);
+    expect(await (await get('/settings', s)).text()).toMatch(/name="writePages" value="members" checked/);
+    // 「全部」にチェックが残ったまま 1 つずつ選んでも、1 つずつの方で保存する
+    await app.request(`/settings/accounts/${tokatsu.id}`, { method: 'POST', headers: { cookie: `shamusho_session=${s}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams([['_csrf', csrf], ['name', '統括さん'], ['level', 'shinshoku'], ['pages', '*'], ['writePagesShown', '1'], ['writePages', '*'], ['writePages', 'board']]).toString() });
+    expect((await getAccount(db, tokatsu.id))).toMatchObject({ pages: null, writePages: ['board'] });
   });
 });
 
