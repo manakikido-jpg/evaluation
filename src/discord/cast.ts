@@ -640,6 +640,7 @@ export class CastApp {
         if (action === 'opts') return await this.confirm(interaction, a ?? '', b ?? '', interaction.values);
         if (action === 'rplansel') return await this.reserveModal(interaction, a ?? '', interaction.values[0] ?? '');
         if (action === 'gcasts') return await this.groupMenus(interaction, interaction.values);
+        if (action === 'gpick') return await this.groupPick(interaction, Number(a) || 0, b ?? '-', (rest[0] ?? '').split(',').filter((x) => /^\d{17,20}$/.test(x)));
         if (action === 'gplans') return await this.groupModal(interaction, interaction.values);
         if (action === 'cmin') return void (await interaction.showModal(this.consultModal(a ?? '', b ?? '', 'call', CONSULT_MINUTES.includes(Number(interaction.values[0])) ? Number(interaction.values[0]) : 60)));
         return;
@@ -675,6 +676,11 @@ export class CastApp {
       }
       if (action === 'rank') return await this.ranking(interaction, isCastGroup(a) ? a : undefined);
       if (action === 'group') return await this.groupCasts(interaction, isCastGroup(a) ? a : undefined);
+      if (action === 'gok') {
+        const ids = [...new Set((a ?? '').split(',').filter((x) => /^\d{17,20}$/.test(x)))];
+        if (ids.length < 2) return void (await this.answer(interaction, { content: 'キャストを 2〜3 人選んでから押してください。', components: [] }));
+        return await this.groupMenus(interaction, ids);
+      }
       if (action === 'apply') return await this.applyModal(interaction);
       if (action === 'me') return await this.mine(interaction);
       if (action === 'refresh') return await this.mine(interaction, true);
@@ -2082,12 +2088,54 @@ export class CastApp {
 
   // ───────── 👥 まとめて予約（2〜3 人のキャストを、同じ時間・同じ部屋で） ─────────
 
+  /** まとめて予約で選べるキャスト（🟢 予約受付中の人を先に、名前順） */
+  private async groupCandidates(userId: string, group?: CastGroup) {
+    const list = (await listCasts(this.db, ['active'])).filter((x) => !group || inGroup(x, group)).filter((x) => x.memberId !== userId && menuOf(x).some((m) => m.price > 0 && !m.consult && !m.delivery));
+    const names = await namesOf(this.db, list.map((x) => x.memberId));
+    const name = (id: string) => names.get(id) ?? 'キャスト';
+    list.sort((a, b) => Number(b.available === 'waiting') - Number(a.available === 'waiting') || name(a.memberId).localeCompare(name(b.memberId), 'ja'));
+    return { list, name };
+  }
+
+  /**
+   * 👥 キャストが 25 人をこえるとき（Discord の選ぶ欄は 25 人まで）: 選ぶ欄を何本かに分けて全員を出す（4 本 × 25 人 = 100 人まで）。
+   * 選んだ人はボタンと選ぶ欄の番号に入れておき、どの欄で選んでもまとめて数える（BOT が再起動しても消えない）
+   */
+  private groupPickerBody(list: Cast[], name: (id: string) => string, group: CastGroup | undefined, picks: string[], note = '') {
+    const g = group ?? '-';
+    const chunks = Array.from({ length: Math.min(4, Math.ceil(list.length / 25)) }, (_, k) => list.slice(k * 25, k * 25 + 25));
+    const chosen = picks.map(name).join('・');
+    return {
+      content: [`👥 **まとめて予約** ― 同じ時間に、1 つの部屋で話すキャストを 2〜3 人選んで、「選んだキャストで進む」を押してください（${list.length} 人・🟢 予約受付中の人が先）。表示は通常料金です。`, picks.length ? `選んでいる人: **${chosen}**（${picks.length} 人）` : '', note].filter(Boolean).join('\n'),
+      components: [
+        ...chunks.map((chunk, k) => ({ type: 1, components: [{ type: 3, custom_id: `cast:gpick:${k}:${g}:${picks.join(',')}`, placeholder: `キャストを選ぶ（${k * 25 + 1}〜${k * 25 + chunk.length} 人目）`, min_values: 0, max_values: Math.min(CUSTOMER_TOGETHER_MAX, chunk.length), options: chunk.map((x) => ({ label: `${x.available === 'waiting' ? '🟢 ' : ''}${name(x.memberId)}`.slice(0, 100), value: x.memberId, default: picks.includes(x.memberId) })) }] })),
+        row(button(`cast:gok:${picks.join(',')}`, `選んだキャストで進む（${picks.length} 人）`, 1, '👥', picks.length < 2)),
+      ],
+    };
+  }
+
+  /** 分けた選ぶ欄の 1 本で選んだとき: その欄の分だけ入れかえて、全部の欄の選んだ人を合わせる */
+  private async groupPick(i: StringSelectMenuInteraction<'cached'>, rowIndex: number, g: string, before: string[]): Promise<void> {
+    const group = isCastGroup(g) ? g : undefined;
+    const { list, name } = await this.groupCandidates(i.user.id, group);
+    const inRow = new Set(list.slice(rowIndex * 25, rowIndex * 25 + 25).map((x) => x.memberId));
+    const known = new Set(list.map((x) => x.memberId));
+    const picks = [...new Set([...before.filter((id) => known.has(id) && !inRow.has(id)), ...i.values.filter((id) => known.has(id))])];
+    if (picks.length > CUSTOMER_TOGETHER_MAX) {
+      const keep = before.filter((id) => known.has(id));
+      return void (await this.answer(i, this.groupPickerBody(list, name, group, keep, `⚠️ 選べるのは ${CUSTOMER_TOGETHER_MAX} 人までです。ほかの欄で選んだ人を外してから選んでください。`)));
+    }
+    await this.answer(i, this.groupPickerBody(list, name, group, picks));
+  }
+
   /** ① 呼びたいキャストを 2〜3 人選ぶ */
   private async groupCasts(i: ButtonInteraction<'cached'>, group?: CastGroup): Promise<void> {
     await i.deferReply(EPHEMERAL);
-    const list = (await listCasts(this.db, ['active'])).filter((x) => !group || inGroup(x, group)).filter((x) => x.memberId !== i.user.id && menuOf(x).some((m) => m.price > 0 && !m.consult && !m.delivery));
+    const { list, name } = await this.groupCandidates(i.user.id, group);
     if (list.length < 2) return void (await i.editReply({ content: 'いま、まとめて予約できるキャストが 2 人いません。' }));
-    const names = await namesOf(this.db, list.map((x) => x.memberId));
+    // 25 人をこえると 1 つの選ぶ欄に入らないので、欄を分ける
+    if (list.length > 25) return void (await i.editReply(this.groupPickerBody(list, name, group, []) as never));
+    const names = new Map(list.map((x) => [x.memberId, name(x.memberId)]));
     await i.editReply({
       content: '👥 **まとめて予約** ― 同じ時間に、1 つの部屋で話すキャストを 2〜3 人選んでください。表示は通常料金です。日時入力後にコアタイム料金を確認できます。',
       components: [{ type: 1, components: [{ type: 3, custom_id: 'cast:gcasts', placeholder: 'キャストを 2〜3 人選ぶ', min_values: 2, max_values: Math.min(CUSTOMER_TOGETHER_MAX, list.length), options: list.slice(0, 25).map((x) => ({ label: (names.get(x.memberId) ?? 'キャスト').slice(0, 100), value: x.memberId })) }] }],
@@ -2095,7 +2143,7 @@ export class CastApp {
   }
 
   /** ② キャストごとのメニューを選ぶ（1 つの選ぶ欄に、キャストごとに並べる） */
-  private async groupMenus(i: StringSelectMenuInteraction<'cached'>, castIds: string[]): Promise<void> {
+  private async groupMenus(i: StringSelectMenuInteraction<'cached'> | ButtonInteraction<'cached'>, castIds: string[]): Promise<void> {
     const ids = [...new Set(castIds)].slice(0, CUSTOMER_TOGETHER_MAX);
     const adult = await isAdult(this.db, this.cfg(), i.user.id, this.roles(i));
     const names = await namesOf(this.db, ids);

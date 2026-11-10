@@ -689,6 +689,58 @@ describe('🎀 キャストのDiscord操作', () => {
     expect(JSON.stringify(f.interaction.editReply.mock.calls)).toContain('銭を戻しました');
   });
 
+  it('👥 まとめて予約: キャストが 25 人をこえても全員選べる（欄を分け、欄をまたいで 2〜3 人。🟢 予約受付中が先）', async () => {
+    const ids = Array.from({ length: 30 }, (_, k) => String(881000000000000100n + BigInt(k)));
+    for (const id of ids) {
+      await applyCast(db, c, { id, adult: true }, profile, T20);
+      await setCastStatus(db, id, 'active', 'staff', T20);
+    }
+    const { setWaiting } = await import('../src/services/cast.js');
+    // 30 人目だけ 🟢 予約受付中、ほかは受付停止
+    for (const id of ids.slice(0, 29)) await setWaiting(db, id, 0);
+    const f = fixture();
+    const update = vi.fn(async () => undefined);
+    const base = { ...f.interaction, deferReply: vi.fn(async () => undefined), update, message: { flags: { has: () => true } } };
+    const open = { ...base, customId: 'cast:group' };
+    await f.app.onInteraction(open as unknown as Interaction);
+    const body = (open.editReply.mock.calls as unknown as unknown[][])[0]![0] as unknown as { components: { components: { custom_id: string; options?: { value: string; label: string }[]; disabled?: boolean }[] }[] };
+    const selects = body.components.flatMap((r) => r.components).filter((x) => x.custom_id.startsWith('cast:gpick:'));
+    // 31 人（今いるキャスト＋30 人）を 2 本の欄に分けて、全員出す
+    const all = selects.flatMap((x) => x.options!.map((o) => o.value));
+    expect(selects).toHaveLength(2);
+    expect(new Set(all).size).toBe(31);
+    expect(all).toEqual(expect.arrayContaining([CAST, ...ids]));
+    // 🟢 予約受付中の人が先頭
+    const flat = selects.flatMap((x) => x.options!);
+    const green = flat.map((o) => o.label.startsWith('🟢'));
+    expect(green.lastIndexOf(true)).toBeLessThan(green.indexOf(false));
+    expect(flat.find((o) => o.value === ids[29])!.label).toContain('🟢');
+    const ok = body.components.flatMap((r) => r.components).find((x) => x.custom_id.startsWith('cast:gok:'))!;
+    expect(ok.disabled).toBe(true);
+    // 1 本目で 1 人、2 本目で 1 人 → 合わせて 2 人
+    const first = selects[0]!.options![1]!.value, second = selects[1]!.options![0]!.value;
+    const pick1 = { ...base, customId: selects[0]!.custom_id, values: [first], isStringSelectMenu: () => true, isButton: () => false };
+    await f.app.onInteraction(pick1 as unknown as Interaction);
+    const after1 = (update.mock.calls as unknown as unknown[][]).at(-1)![0] as unknown as typeof body;
+    const row2 = after1.components.flatMap((r) => r.components).find((x) => x.custom_id.startsWith('cast:gpick:1:'))!;
+    const pick2 = { ...base, customId: row2.custom_id, values: [second], isStringSelectMenu: () => true, isButton: () => false };
+    await f.app.onInteraction(pick2 as unknown as Interaction);
+    const after2 = (update.mock.calls as unknown as unknown[][]).at(-1)![0] as unknown as { content: string } & typeof body;
+    expect(after2.content).toContain('（2 人）');
+    const go = after2.components.flatMap((r) => r.components).find((x) => x.custom_id.startsWith('cast:gok:'))!;
+    expect(go.disabled).toBeFalsy();
+    expect(go.custom_id.split(':')[2]!.split(',').sort()).toEqual([first, second].sort());
+    // 4 人目は選べない（3 人まで）
+    const row1 = after2.components.flatMap((r) => r.components).find((x) => x.custom_id.startsWith('cast:gpick:0:'))!;
+    const tooMany = { ...base, customId: row1.custom_id, values: [first, selects[0]!.options![2]!.value, selects[0]!.options![3]!.value], isStringSelectMenu: () => true, isButton: () => false };
+    await f.app.onInteraction(tooMany as unknown as Interaction);
+    expect(((update.mock.calls as unknown as unknown[][]).at(-1)![0] as unknown as { content: string }).content).toContain('3 人までです');
+    // 進む → キャストごとのメニューを選ぶ画面
+    const press = { ...base, customId: go.custom_id };
+    await f.app.onInteraction(press as unknown as Interaction);
+    expect(JSON.stringify(update.mock.calls.at(-1))).toContain('cast:gplans');
+  });
+
   it('👥 まとめて予約: 全員ぶん入れて合計を払う。1 人でもだめなら全部取り消して戻す', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });vi.setSystemTime(T20);
     const CAST2 = '880000000000000009';
