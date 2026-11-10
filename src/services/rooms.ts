@@ -1,3 +1,4 @@
+import {roomAmountAt,roomAmountLabel} from './roomPricing.js';
 import { and, eq, sql } from 'drizzle-orm';
 import type { GuildConfig, TicketKind } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -38,14 +39,14 @@ export function planOf(cfg: GuildConfig, hubId: string): RoomPlan {
   return 'none';
 }
 
-export function roomPrice(cfg: GuildConfig, plan: RoomPlan, kind: RoomKind): number {
-  return plan === 'none' || plan === 'free' ? 0 : cfg.rooms[plan][kind];
+export function roomPrice(cfg: GuildConfig, plan: RoomPlan, kind: RoomKind, now = new Date()): number {
+  return plan === 'none' || plan === 'free' ? 0 : roomAmountAt(cfg, cfg.rooms[plan][kind], now);
 }
 
 export function priceLabel(cfg: GuildConfig, plan: RoomPlan, kind: RoomKind): string {
-  const p = roomPrice(cfg, plan, kind);
+  const p = plan === 'none' || plan === 'free' ? 0 : cfg.rooms[plan][kind];
   if (p <= 0) return '無料';
-  return plan === 'hourly' ? `1 時間 ${p.toLocaleString('ja-JP')} 枚` : `${p.toLocaleString('ja-JP')} 枚`;
+  return `${plan === 'hourly' ? '1 時間 ' : ''}${roomAmountLabel(cfg,p,'枚')}`;
 }
 
 // ───────── 見える・入れる範囲 ─────────
@@ -91,8 +92,8 @@ export async function isBoosting(db: Db, memberId: string): Promise<boolean> {
 }
 
 /** その人が払う値段（奉納している人は割引。100% なら無料） */
-async function priceFor(db: Db, cfg: GuildConfig, plan: RoomPlan, kind: RoomKind, memberId: string): Promise<number> {
-  const price = roomPrice(cfg, plan, kind);
+async function priceFor(db: Db, cfg: GuildConfig, plan: RoomPlan, kind: RoomKind, memberId: string, now: Date): Promise<number> {
+  const price = roomPrice(cfg, plan, kind, now);
   if (price <= 0) return 0;
   const off = cfg.rooms.boosterDiscountPercent;
   if (off <= 0 || !(await isBoosting(db, memberId))) return price;
@@ -151,7 +152,7 @@ export async function startRoom(db: Db, cfg: GuildConfig, channelId: string, now
     const plan = planOf(cfg, row.hubId);
     // 1 時間ごとの部屋は、入った人それぞれが払う（payEntry）
     if (plan !== 'once') return { status: 'ok' as const, charged: 0 };
-    const price = await priceFor(tx, cfg, plan, 'public', row.ownerId);
+    const price = await priceFor(tx, cfg, plan, 'public', row.ownerId, now);
     const paid = price > 0 ? await payRoom(tx, row.ownerId, price, 'public', { channelId, kind: 'public', plan }, now) : { charged: 0, free: false };
     if (!paid) return { status: 'insufficient' as const, price };
     // 券で無料なら、この部屋は種類を変えても払わない。半額券でも、払った扱いは元の値段
@@ -187,9 +188,9 @@ export async function changeRoomKind(
     }
     const plan = planOf(cfg, row.hubId);
     const payer = payerOf(row, row.ownerId);
-    const price = await priceFor(tx, cfg, plan, kind, payer);
+    const price = await priceFor(tx, cfg, plan, kind, payer, now);
     // 部屋代無料券を使った部屋（1 回払い）は、種類を変えても払わない
-    const charge = plan === 'once' ? (row.freeTicket ? 0 : Math.max(0, price - row.paid)) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, payer)));
+    const charge = kind === row.kind ? 0 : plan === 'once' ? (row.freeTicket ? 0 : Math.max(0, price - row.paid)) : Math.max(0, price - (await priceFor(tx, cfg, plan, row.kind, payer, now)));
     const paid = charge > 0 ? await payRoom(tx, payer, charge, kind, { channelId, kind, plan }, now) : { charged: 0, free: false };
     if (!paid) return { status: 'insufficient' as const, price: charge };
     await tx
@@ -249,7 +250,7 @@ export async function payEntry(
   const row = await roomOf(db, channelId);
   if (!row || planOf(cfg, row.hubId) !== 'hourly') return { status: 'free', charged: 0 };
   const payerId = payerOf(row, memberId);
-  const price = await priceFor(db, cfg, 'hourly', row.kind, payerId);
+  const price = await priceFor(db, cfg, 'hourly', row.kind, payerId, now);
   if (price <= 0) return { status: 'free', charged: 0 };
   return db.transaction(async (tx) => {
     await lockPayer(tx, channelId, memberId);
@@ -286,10 +287,10 @@ export async function hourlyPerPerson(
   for (const room of present) {
     const row = await roomOf(db, room.channelId);
     if (!row || planOf(cfg, row.hubId) !== 'hourly') continue;
-    if (roomPrice(cfg, 'hourly', row.kind) <= 0) continue;
+    if (roomPrice(cfg, 'hourly', row.kind, now) <= 0) continue;
     for (const memberId of new Set(room.memberIds)) {
       const payerId = payerOf(row, memberId);
-      const price = await priceFor(db, cfg, 'hourly', row.kind, payerId);
+      const price = await priceFor(db, cfg, 'hourly', row.kind, payerId, now);
       if (price <= 0) continue;
       const a = await db.transaction(async (tx): Promise<PersonAction | undefined> => {
         await lockPayer(tx, room.channelId, memberId);

@@ -173,6 +173,8 @@ const roomPrices = z.object({
 });
 /** 自分の通話部屋の値段: once = ひらくたびに 1 回、hourly = 1 時間ごと */
 export const roomsSchema = z.object({
+  /** コアタイムの宿代の倍率。1なら割増なし。 */
+  coreTimeMultiplier: z.number().int().min(1).max(10).default(3),
   once: roomPrices.default(roomPrices.parse({})),
   hourly: roomPrices.default(roomPrices.parse({})),
   /** 奉納（ブースト）している人の部屋代の割引（%。100 で無料） */

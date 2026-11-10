@@ -23,6 +23,7 @@ const CONNECT = 1n << 20n;
 
 const cfg: GuildConfig = {
   ...baseCfg,
+  coreTime: {...baseCfg.coreTime, slots: []},
   tempVoice: {
     hubs: [
       { channelId: NEOCHI, name: '🌙 {name}の宿坊' },
@@ -31,6 +32,7 @@ const cfg: GuildConfig = {
     ],
   },
   rooms: {
+    ...baseCfg.rooms,
     once: { public: 50, invite: 200, secret: 300 },
     hourly: { public: 100, invite: 200, secret: 300 },
     boosterDiscountPercent: 100,

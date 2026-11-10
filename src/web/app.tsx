@@ -3663,6 +3663,7 @@ export function createWebApp(deps: WebDeps) {
           ]),
         ),
         boosterDiscountPercent: num('roomBoosterDiscount'),
+        coreTimeMultiplier: typeof body.roomCoreTimeMultiplier === 'string' ? num('roomCoreTimeMultiplier') : prev.rooms.coreTimeMultiplier ?? cfg.rooms.coreTimeMultiplier,
         stayPrice: typeof body.roomStayPrice === 'string' ? num('roomStayPrice') : prev.rooms.stayPrice ?? cfg.rooms.stayPrice,
         stayHourlyPrice: typeof body.roomStayHourlyPrice === 'string' ? num('roomStayHourlyPrice') : prev.rooms.stayHourlyPrice ?? cfg.rooms.stayHourlyPrice,
         // 💎 極（VIP）はショップのページで作る（ここでは残す）
