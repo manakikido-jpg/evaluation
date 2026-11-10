@@ -1233,6 +1233,8 @@ export function SettingsPage(props: {
         </section>
         <section class="card anchor" id="sec-rooms">
           <h2>🚪 通話部屋の値段（宿坊・宵宮）</h2>
+          <p class="note">入力額は通常料金です。コアタイム中の新規利用・更新は下の倍率を掛けます。払い済み期間の追加徴収はありません。無料特典・割引・券は引き続き使えます。</p>
+          <label class="field"><span>コアタイム中の宿代の倍率（1で割増なし。宿坊・宵宮・購入宿に共通）</span><input type="number" name="roomCoreTimeMultiplier" value={cfg.rooms.coreTimeMultiplier} min={1} max={10} step={1} required/></label>
           <p class="note">
             「➕ 宿坊をひらく」「➕ 宵宮の部屋をひらく」でできた部屋は、作った人が部屋のチャットの「⚙ 部屋の設定」から種類・人数・招待を選べます。値段は{e.currencyName}の枚数（0 で無料）。宿坊は作った人がひらくたびに 1 回（種類を変えたら差額）。宵宮は入っている人それぞれが 1 時間ごと（入ったときに最初の 1 時間。足りなければ入れず、途中で払えなくなると 5 分後に通話から抜ける）。
           </p>

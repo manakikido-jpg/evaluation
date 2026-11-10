@@ -89,6 +89,7 @@ export function coreTimeNoticeMessage(n: CoreTimeNotice, cfg: GuildConfig): Mess
         description: [
           head,
           `この時間の通話は、${e.currencyEmoji}${e.currencyName}が **${coreTimeRate(e)} 倍**（増えた分は 1 日の上限に数えません）。`,
+          ...(cfg.rooms.coreTimeMultiplier>1?[`この時間に支払う宿代は通常の **${cfg.rooms.coreTimeMultiplier}倍** です（無料特典・割引・券は引き続き利用できます）。`]:[]),
           'みんなで通話しましょう！',
         ].join('\n'),
         color: 0xd7003a,

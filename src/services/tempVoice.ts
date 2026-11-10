@@ -1,3 +1,4 @@
+import {roomAmountAt} from './roomPricing.js';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import type { GuildConfig } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -200,8 +201,8 @@ export const HOURLY_STAY_MS = 60 * 60_000;
 export type StayMode = 'day' | 'hourly';
 
 /** 1日延長も、新しく24時間の宿を立てるときと同じ値段。 */
-export async function stayDayPrice(db: Db, cfg: GuildConfig, ownerId: string): Promise<number> {
-  return (await isBoosting(db, ownerId)) ? 0 : cfg.rooms.stayPrice;
+export async function stayDayPrice(db: Db, cfg: GuildConfig, ownerId: string, now = new Date()): Promise<number> {
+  return (await isBoosting(db, ownerId)) ? 0 : roomAmountAt(cfg, cfg.rooms.stayPrice, now);
 }
 
 export type ExtendStayResult =
@@ -218,9 +219,9 @@ export async function extendStayRoom(db: Db, cfg: GuildConfig, input: {
     if (!row) return { status: 'not_found' };
     if (row.ownerId !== input.userId) return { status: 'not_owner' };
     if (!row.keepUntil || row.renewHourly) return { status: 'not_daily' };
-    const price = await stayDayPrice(tx, cfg, row.ownerId);
-    if (row.keepUntil.getTime() !== input.expectedUntil || price !== input.expectedPrice) return { status: 'changed' };
     const now = at ?? new Date();
+    const price = await stayDayPrice(tx, cfg, row.ownerId, now);
+    if (row.keepUntil.getTime() !== input.expectedUntil || price !== input.expectedPrice) return { status: 'changed' };
     const keepUntil = new Date(Math.max(row.keepUntil.getTime(), now.getTime()) + STAY_MS);
     if (price > 0 && !(await spendWithin(tx, row.ownerId, price, 'room', {
       channelId: row.channelId, stay: true, extension: true, hours: 24,
@@ -234,7 +235,7 @@ export async function extendStayRoom(db: Db, cfg: GuildConfig, input: {
 /** ⏱ 次の 1 時間を払って延ばす。同じ時刻の分は 1 回だけ（keep_until が変わっていれば払わない）。払えなければ false */
 async function renewHourlyStay(ctx: TempVoiceCtx, channelId: string, ownerId: string, due: Date, now: Date): Promise<boolean> {
   // 🏮 奉納（ブースト）している人は、宿代が無料
-  const price = (await isBoosting(ctx.db, ownerId)) ? 0 : ctx.cfg.rooms.stayHourlyPrice;
+  const price = (await isBoosting(ctx.db, ownerId)) ? 0 : roomAmountAt(ctx.cfg, ctx.cfg.rooms.stayHourlyPrice, now);
   return ctx.db.transaction(async (tx) => {
     // 止まっていた間の分はさかのぼらず、今から 1 時間
     const next = new Date(Math.max(due.getTime(), now.getTime()) + HOURLY_STAY_MS);
@@ -281,7 +282,7 @@ export async function createStayRoom(ctx: TempVoiceCtx, input: { hubId: string; 
       return { status: 'failed', reason: err instanceof Error ? err.message : String(err) };
     }
     // 🏮 奉納（ブースト）している人は、宿代が無料
-    const price = (await isBoosting(ctx.db, input.userId)) ? 0 : hourly ? ctx.cfg.rooms.stayHourlyPrice : ctx.cfg.rooms.stayPrice;
+    const price = (await isBoosting(ctx.db, input.userId)) ? 0 : roomAmountAt(ctx.cfg, hourly ? ctx.cfg.rooms.stayHourlyPrice : ctx.cfg.rooms.stayPrice, now);
     const keepUntil = new Date(now.getTime() + (hourly ? HOURLY_STAY_MS : STAY_MS));
     // 宿代で公開の部屋代もふくむ（種類を変えたときは、公開との差額だけ払う）
     const ok = await ctx.db.transaction(async (tx) => {

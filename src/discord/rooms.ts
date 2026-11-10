@@ -1,3 +1,4 @@
+import {roomAmountLabel,roomCoreTimeNote} from '../services/roomPricing.js';
 import {
   ActionRowBuilder,
   ModalBuilder,
@@ -100,8 +101,9 @@ export function roomNotice(cfg: GuildConfig, row: Pick<RoomRow, 'ownerId' | 'hub
     lines.push(
       '',
       row.renewHourly
-        ? `⏱ **1時間ごとの宿**です（1 時間ごとに <@${row.ownerId}> さんが ${cfg.rooms.stayHourlyPrice.toLocaleString('ja-JP')} ${cfg.economy.currencyName}を自動で払います（🏮 奉納している人は無料）。払う時刻にだれもいないか、${cfg.economy.currencyName}が足りなければ、宿は消えます）。`
+        ? `⏱ **1時間ごとの宿**です（1 時間ごとに <@${row.ownerId}> さんが ${roomAmountLabel(cfg,cfg.rooms.stayHourlyPrice)}を自動で払います（🏮 奉納している人は無料）。払う時刻にだれもいないか、${cfg.economy.currencyName}が足りなければ、宿は消えます）。`
         : `🏨 **24時間残る宿**です（${row.keepUntil.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで、だれもいなくても残ります）。部屋主は「部屋の設定」→「1日延長」から延長できます。`,
+      ...(roomCoreTimeNote(cfg)?[roomCoreTimeNote(cfg)]:[]),
       ...(Object.keys(ROOM_KINDS) as RoomKind[]).map((key) => `${ROOM_KINDS[key].emoji} ${ROOM_KINDS[key].label}（${ROOM_KINDS[key].description}）`),
       '-# 部屋の種類（オープン・招待のみ・シクレなど）は、何度でも変えられます。追加の部屋代はかかりません',
     );

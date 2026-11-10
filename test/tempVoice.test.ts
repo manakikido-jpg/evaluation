@@ -6,7 +6,7 @@ import { claimSecretRoom, cleanupRooms, createSecretRoom, createStayRoom, HOURLY
 import { cfg as baseCfg, makeDb } from './helpers.js';
 
 const HUB = '920000000000000001';
-const cfg: GuildConfig = { ...baseCfg, tempVoice: { hubs: [{ channelId: HUB, name: '🍵 {name}の縁側' }] } };
+const cfg: GuildConfig = { ...baseCfg, coreTime: {...baseCfg.coreTime,slots:[]}, tempVoice: { hubs: [{ channelId: HUB, name: '🍵 {name}の縁側' }] } };
 
 /** 偽の Discord: 通話ごとにいる人 */
 function fakeVoice() {

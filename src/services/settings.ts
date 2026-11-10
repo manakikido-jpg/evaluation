@@ -85,7 +85,7 @@ export const overridesSchema = z.object({
   omikujiTexts: omikujiTextsSchema.optional(),
   omairi: z.object({ days: z.number().int().positive().max(365), extendDays: z.number().int().min(0).max(365) }).partial().default({}),
   coreTime: coreTimeSchema.partial().default({}),
-  rooms: roomsSchema.partial().default({}),
+  rooms: roomsSchema.partial().extend({ coreTimeMultiplier: roomsSchema.shape.coreTimeMultiplier.removeDefault().optional() }).default({}),
   market: marketSchema.partial().default({}),
   /** 自動で増える通話（送られたときは全部置きかえる） */
   voiceGroups: z.array(voiceGroupSchema).max(10).optional(),

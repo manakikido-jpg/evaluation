@@ -718,6 +718,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const page = await (await get('/settings', g)).text();
     expect(page).toContain('免罪符の値段');
     expect(page).toContain('7時間の浮上ボーナス');
+    expect(page).toContain('name="roomCoreTimeMultiplier"');
     expect(page).toContain('name="longVoiceBonusChannel"');
     expect(page).toContain('チャンネルへのブースト通知は出さず、本人にお礼の DM を送ります');
     expect(page).not.toContain('name="boostAnnounce"');
@@ -766,6 +767,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     await saveOverrides(
       db,
       os.parse({
+        rooms: {coreTimeMultiplier:5},
         fortuneGames: { enabled: true, lotteryBonus: 1234 },
         recording: { enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] },
         gacha: { price: 777, enabled: false },
@@ -778,6 +780,7 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     const res = await post('/settings', g, form);
     expect(res.headers.get('location')).toBe('/settings?msg=saved');
     expect(store.current.economy.menzaifuPrice).toBe(800);
+    expect(store.current.rooms.coreTimeMultiplier).toBe(5);
     expect(store.current.recording).toMatchObject({ enabled: true, retentionDays: 3, maxMinutes: 10, voiceChannelIds: ['910000000000000004'] });
     expect(store.current.fortuneGames).toMatchObject({ enabled: true, lotteryBonus: 1234 });
     expect(store.current.gacha).toMatchObject({ price: 777, enabled: false });
@@ -785,6 +788,8 @@ describe('申請・お参り期間・相談・設定（管理画面）', () => {
     expect(store.current.omikujiStreak.rewards).toEqual([{ days: 5, repeat: false, coins: 9, ticket: 'none', tickets: 0 }]);
     expect(store.current.omikujiSpecial.list.map((x) => x.name)).toEqual(['小林吉']);
     expect((await listAudit(db, { action: 'settings.update' }))[0]?.detail).toMatchObject({ economy: { menzaifuPrice: [300, 800] } });
+    await post('/settings',g,{...form,_csrf:await csrfOf(g),roomCoreTimeMultiplier:'3'});
+    expect(store.current.rooms.coreTimeMultiplier).toBe(3);
     await post('/settings', g, { ...form, _csrf: await csrfOf(g), longVoiceBonusAmount: '600', longVoiceBonusChannel: '910000000000000003' });
     expect(store.current.economy.longVoiceBonusAmount).toBe(600);
     expect(store.current.economy.longVoiceBonusChannelId).toBe('910000000000000003');
