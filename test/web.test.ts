@@ -3676,12 +3676,12 @@ describe('キャスト（管理画面）', () => {
     const s = await login(STAFF);
     expect(await (await get('/cast', s)).text()).toContain('/cast/register');
     const reg = (member: string, menuPrice = '300') => form(s, '/cast/register', { member, bio: 'よろしく', tags: '雑談、ゲーム', menuName: '雑談', menuNote: '', menuMinutes: '30', menuPrice, minorOk: 'yes' });
-    expect((await reg('だれもいない')).headers.get('location')).toBe('/cast?msg=no_member#cast-register');
-    expect((await reg('こども')).headers.get('location')).toBe('/cast?msg=reg_not_adult#cast-register');
-    expect((await reg('おとな', '0')).headers.get('location')).toBe('/cast?msg=reg_invalid#cast-register');
+    expect((await reg('だれもいない')).status).toBe(422);
+    expect((await reg('こども')).status).toBe(422);
+    expect((await reg('おとな', '0')).status).toBe(422);
     expect((await reg('おとな')).headers.get('location')).toBe('/cast?msg=registered');
     expect(await getCast(db, adult)).toMatchObject({ status: 'active', approvedBy: STAFF, tags: ['雑談', 'ゲーム'], priceNight: 0, minorOk: true, menu: [{ name: '雑談', minutes: 30, price: 300, night: false }] });
-    expect((await reg(adult)).headers.get('location')).toBe('/cast?msg=reg_already#cast-register');
+    expect((await reg(adult)).status).toBe(422);
     expect((await listAudit(db, { action: 'cast.register' })).length).toBe(1);
     // メニューを足す・外す
     const add = (data: Record<string, string>) => form(s, `/cast/casts/${adult}/menu`, { menuNote: '', menuMinutes: '', ...data });

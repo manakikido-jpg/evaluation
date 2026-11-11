@@ -349,6 +349,8 @@ describe('⚔ メンバー対戦（画面）', () => {
     const id = room.split('/').pop()!;
     expect(await (await get(room, a)).text()).toContain('相手が入るのを待っています');
     const lobby = await (await get('/casino/versus', b)).text();
+    // 厳しいCSPを維持し、HTMXが埋め込みCSSを追加しない。
+    expect(lobby).toContain('content="{&quot;includeIndicatorStyles&quot;:false}"');
     expect(lobby).toContain('あや&lt;b&gt; さん');
     const joined = await post(`/casino/versus/${id}/join`, b, {});
     expect(joined.headers.get('location')).toBe(room);

@@ -58,3 +58,12 @@
   .office-shell .topbar-updates { display: none; }
   .office-shell .theme-choice select { max-width: 112px; font-size: 13px; }
 }
+/* 狭い画面でも下の5項目の名前を途中で折り返さない。 */
+@media(max-width:900px) {
+  .office-shell .mobile-nav a,.office-shell .mobile-nav button { flex: 1 1 0; min-width: 0; padding-inline: 2px; white-space: nowrap; }
+}
+@media(max-width:350px) {
+  body.with-side:not(.office-console) .topbar .brand { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+  body.with-side:not(.office-console) .theme-choice > span:first-child { display: none; }
+  body.with-side:not(.office-console) .theme-choice select { max-width: 100px; }
+}

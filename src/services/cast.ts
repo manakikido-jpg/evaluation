@@ -637,11 +637,14 @@ export async function registerCast(db: Db, c: CastConfig, who: { id: string; adu
   const profile = { ...rest, price30: 0, price60: 0, priceNight: 0 };
   const first = Array.isArray(firstInput) ? firstInput : [firstInput];
   if (!validProfile(c, profile) || !first.length || first.length > MENU_MAX || !first.every((m) => validMenuItem(c, m))) return { status: 'invalid' };
-  const cur = await getCast(db, who.id);
-  if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
-  const values = { memberId: who.id, status: 'active' as const, available: 'waiting' as const, ...profile, gender, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
-  const [row] = await db.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
-  return { status: 'ok', cast: row! };
+  return db.transaction(async tx => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'cast.register:' + who.id}))`);
+    const cur = await getCast(tx, who.id);
+    if (cur && (cur.status === 'active' || cur.status === 'paused')) return { status: 'already' };
+    const values = { memberId: who.id, status: 'active' as const, available: 'waiting' as const, ...profile, gender, menu: first.map(asItem), appliedAt: now, approvedAt: now, approvedBy: by };
+    const [row] = await tx.insert(casts).values(values).onConflictDoUpdate({ target: casts.memberId, set: values }).returning();
+    return { status: 'ok', cast: row! };
+  });
 }
 
 /** 運営: 承認・お休み・外す（断る） */

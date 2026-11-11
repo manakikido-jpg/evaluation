@@ -166,6 +166,7 @@ export const STATIC: Record<string, { body: string | Uint8Array<ArrayBuffer>; ty
     'office-desktop.js': { body: readText(path.join(here, 'public/office-desktop.js')), type: 'text/javascript; charset=utf-8' },
     'office-console.css': {body:readText(path.join(here,'public/office-console.css')),type:'text/css; charset=utf-8'},
     'office-desktop.css': { body: readText(path.join(here, 'public/office-desktop.css')), type: 'text/css; charset=utf-8' },
+    'cast-register.js': {body:readText(path.join(here,'public/cast-register.js')),type:'text/javascript; charset=utf-8'},
     'office-ui.js': { body: readText(path.join(here, 'public/office-ui.js')), type: 'text/javascript; charset=utf-8' },
     'invite-selection.js': { body: readText(path.join(here, 'public/invite-selection.js')), type: 'text/javascript; charset=utf-8' },
     'perms.js': { body: readText(path.join(here, 'public/perms.js')), type: 'text/javascript; charset=utf-8' },
