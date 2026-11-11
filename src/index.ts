@@ -1,3 +1,4 @@
+import { VoiceTimeApp } from './discord/voiceTime.js';
 import { CHANGELOG } from './changelog.js';
 import { recordDeploy, runningCommit } from './services/deployInfo.js';
 import { AppointRolesApp } from './discord/appointRoles.js';
@@ -138,6 +139,8 @@ async function main(): Promise<void> {
   const diary = new DiaryApp(db, cfg, actions);
   const presents = new PresentApp(db, cfg);
   const wallet = new WalletApp(db, cfg);
+  // ⏱ /浮上: 自分の浮上時間（全体と縁側）
+  const voiceTime = new VoiceTimeApp(db, cfg);
   const shofuku = new ShofukuApp(db, cfg);
   const stickerDesk = new StickerDeskApp(db, cfg, env.WEB_BASE_URL);
   const updateDesk = new UpdateDeskApp(db, cfg, env.WEB_BASE_URL);
@@ -485,6 +488,7 @@ async function main(): Promise<void> {
     void gacha.onInteraction(i);
     void presents.onInteraction(i);
     void wallet.onInteraction(i);
+    void voiceTime.onInteraction(i).catch((err) => logger.warn({ err }, 'voice time interaction failed'));
     void stickerDesk.onInteraction(i);
     void updateDesk.onInteraction(i);
     void sokin.onInteraction(i);

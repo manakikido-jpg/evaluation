@@ -86,6 +86,15 @@ export function commandDefinitions(cfg?: GuildConfig): RESTPostAPIApplicationCom
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
+    new SlashCommandBuilder()
+      .setName('fujo')
+      .setNameLocalizations({ ja: '浮上' })
+      .setDescription('Check your voice time (total and engawa)')
+      .setDescriptionLocalizations({ ja: '自分の浮上時間（全体と縁側）を見る（省略すると自分だけに表示）' })
+      .setContexts(InteractionContextType.Guild)
+      .addBooleanOption((o) => o.setName('public').setNameLocalizations({ ja: '公開' }).setDescription('Post in channel (default: only you)').setDescriptionLocalizations({ ja: 'はい にするとチャンネルのみんなに見せる（省略すると自分だけ）' }))
+      .toJSON(),
+
     new SlashCommandBuilder().setName('stickerdesk').setNameLocalizations({ ja: 'スタンプ製作' }).setDescription('Open the sticker creator desk').setDescriptionLocalizations({ ja: 'スタンプ製作者専用のページを開く（リンクは自分だけ）' }).setContexts(InteractionContextType.Guild).toJSON(),
 
     new SlashCommandBuilder()

@@ -148,3 +148,22 @@ it('🏮 メンバーのページの縁側の時間は、評価のページと�
   expect(m.total).toBe(1200 + 300 + 9000 + 50);
   expect(await memberEngawaMinutes(db, B, '2026-10-08', now)).toEqual({ evaluation: 0, recent: 0, total: 0 });
 });
+
+it('⏱ /浮上 の時間: 今日・7 日・30 日・全期間を、全体と縁側で（宵縁側は縁側に入れない）', async () => {
+  const { memberVoiceSummary } = await import('../src/services/ujikoEvaluation.js');
+  const YOI = '910000000000000098';
+  await db.insert(voiceChannels).values({ channelId: YOI, name: '🌙 大きな宵縁側１' });
+  const at = new Date('2026-11-11T03:00:00Z'); // 日本時間 11/11
+  await voice(A, 60, 60, 60, ENG, '2026-11-11'); await voice(A, 30, 0, 0, OTHER, '2026-11-11'); await voice(A, 20, 0, 0, YOI, '2026-11-11');
+  await voice(A, 100, 100, 100, ENG, '2026-11-06'); await voice(A, 40, 0, 0, OTHER, '2026-10-20'); await voice(A, 500, 500, 500, ENG, '2026-09-01');
+  const s = await memberVoiceSummary(db, A, at);
+  expect(s.today).toEqual({ total: 110, engawa: 60 });
+  expect(s.week).toEqual({ total: 210, engawa: 160 });
+  expect(s.month).toEqual({ total: 250, engawa: 160 });
+  expect(s.all).toEqual({ total: 750, engawa: 660 });
+  expect(s.evaluation).toBe((await memberEngawaMinutesOf(A, at)));
+});
+async function memberEngawaMinutesOf(id: string, at: Date) {
+  const { memberEngawaMinutes } = await import('../src/services/ujikoEvaluation.js');
+  return (await memberEngawaMinutes(db, id, '2026-01-01', at)).evaluation;
+}

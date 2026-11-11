@@ -127,15 +127,22 @@ export function evaluationCsv(data: EvaluationData): string {
  * - recent: この日から後に、縁側の通話にいた時間（ミュート・役職に関係なく、いた時間そのまま）
  * - total: 全期間に、どこかの通話にいた時間
  */
-export async function memberEngawaMinutes(db: Db, memberId: string, since: string, now = new Date()): Promise<{ evaluation: number; recent: number; total: number }> {
-  const today = jstDate(now);
-  const [channelRows, previouslyEngawa, [all]] = await Promise.all([
+/** 縁側の通話（今の名前に「縁側」がある・前に縁側として数えた）。評価のページと同じ選び方 */
+async function engawaChannelIds(db: Db, today: string): Promise<string[]> {
+  const [channelRows, previouslyEngawa] = await Promise.all([
     db.select({ id: voiceChannels.channelId, name: voiceChannels.name }).from(voiceChannels),
     db.selectDistinct({ id: voiceUsage.channelId }).from(voiceUsage).where(and(sql`${voiceUsage.sanpaishaMinutes} > 0`, lte(voiceUsage.date, today))),
-    db.select({ minutes: sql<number>`coalesce(sum(${voiceUsage.minutes}), 0)::int` }).from(voiceUsage).where(and(eq(voiceUsage.memberId, memberId), lte(voiceUsage.date, today))),
   ]);
   const old = new Set(previouslyEngawa.map((c) => c.id));
-  const ids = channelRows.filter((c) => isEngawaName(c.name) || old.has(c.id)).map((c) => c.id);
+  return channelRows.filter((c) => isEngawaName(c.name) || old.has(c.id)).map((c) => c.id);
+}
+
+export async function memberEngawaMinutes(db: Db, memberId: string, since: string, now = new Date()): Promise<{ evaluation: number; recent: number; total: number }> {
+  const today = jstDate(now);
+  const [ids, [all]] = await Promise.all([
+    engawaChannelIds(db, today),
+    db.select({ minutes: sql<number>`coalesce(sum(${voiceUsage.minutes}), 0)::int` }).from(voiceUsage).where(and(eq(voiceUsage.memberId, memberId), lte(voiceUsage.date, today))),
+  ]);
   if (!ids.length) return { evaluation: 0, recent: 0, total: all?.minutes ?? 0 };
   const [u] = await db.select({
     confirmed: sql<number>`coalesce(sum(case when ${voiceUsage.date} >= ${EVALUATION_START_DATE} then ${voiceUsage.evaluationEligibleMinutes} else 0 end), 0)::int`,
@@ -146,4 +153,32 @@ export async function memberEngawaMinutes(db: Db, memberId: string, since: strin
     .leftJoin(evaluationTimeDeductions, and(eq(evaluationTimeDeductions.memberId, voiceUsage.memberId), eq(evaluationTimeDeductions.date, voiceUsage.date), eq(evaluationTimeDeductions.channelId, voiceUsage.channelId)))
     .where(and(eq(voiceUsage.memberId, memberId), inArray(voiceUsage.channelId, ids), lte(voiceUsage.date, today)));
   return { evaluation: (u?.confirmed ?? 0) + (u?.past ?? 0) - (u?.deducted ?? 0), recent: u?.recent ?? 0, total: all?.minutes ?? 0 };
+}
+
+export type VoiceSummaryPeriod = { total: number; engawa: number };
+/**
+ * ⏱ /浮上: 本人の浮上時間（通話にいた時間・AFK を除く。ミュートも数える）を、全体と縁側で。日付は日本時間。
+ * evaluation は氏子の条件「縁側 20 時間」に数える時間（評価のページと同じ）
+ */
+export async function memberVoiceSummary(db: Db, memberId: string, now = new Date()): Promise<{ today: VoiceSummaryPeriod; week: VoiceSummaryPeriod; month: VoiceSummaryPeriod; all: VoiceSummaryPeriod; evaluation: number }> {
+  const today = jstDate(now);
+  const back = (days: number) => jstDate(new Date(now.getTime() - days * 86_400_000));
+  const week = back(6), month = back(29);
+  const ids = await engawaChannelIds(db, today);
+  const engawa = ids.length ? sql`${voiceUsage.channelId} in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})` : sql`false`;
+  const sum = (cond: ReturnType<typeof sql>) => sql<number>`coalesce(sum(case when ${cond} then ${voiceUsage.minutes} else 0 end), 0)::int`;
+  const [r] = await db.select({
+    todayTotal: sum(sql`${voiceUsage.date} = ${today}`), todayEngawa: sum(sql`${voiceUsage.date} = ${today} and ${engawa}`),
+    weekTotal: sum(sql`${voiceUsage.date} >= ${week}`), weekEngawa: sum(sql`${voiceUsage.date} >= ${week} and ${engawa}`),
+    monthTotal: sum(sql`${voiceUsage.date} >= ${month}`), monthEngawa: sum(sql`${voiceUsage.date} >= ${month} and ${engawa}`),
+    allTotal: sum(sql`true`), allEngawa: sum(engawa),
+  }).from(voiceUsage).where(and(eq(voiceUsage.memberId, memberId), lte(voiceUsage.date, today)));
+  const { evaluation } = await memberEngawaMinutes(db, memberId, month, now);
+  return {
+    today: { total: r?.todayTotal ?? 0, engawa: r?.todayEngawa ?? 0 },
+    week: { total: r?.weekTotal ?? 0, engawa: r?.weekEngawa ?? 0 },
+    month: { total: r?.monthTotal ?? 0, engawa: r?.monthEngawa ?? 0 },
+    all: { total: r?.allTotal ?? 0, engawa: r?.allEngawa ?? 0 },
+    evaluation,
+  };
 }
