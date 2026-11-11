@@ -1270,3 +1270,53 @@ a {
     animation: none;
   }
 }
+
+/* 完成カードの銀枠・文字・イラストを、そのまま対戦で見せる。 */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.board { grid-template-columns: 190px minmax(0, 1fr); }
+.hand { align-items: flex-start; gap: 12px; padding: 12px 8px; }
+.hand-card { flex: 1 0 144px; max-width: 190px; min-width: 0; display: grid; gap: 8px; scroll-snap-align: start; }
+.hand-card .card, .selected-cards .card { border: 0; padding: 0; background: transparent; border-radius: 9px; box-shadow: 0 5px 12px #221d3240; overflow: visible; }
+.hand-card .card { width: 100%; max-width: none; min-height: 0; display: block; }
+.hand-card .card-art, .selected-cards .card-art { display: block; width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: contain; border: 0; border-radius: 8px; background: #17223b; }
+.hand-card .card:hover:not(:disabled) { transform: translateY(-5px); box-shadow: 0 8px 18px #221d3260; }
+.hand-card .card.selected { outline: 3px solid #d43627; outline-offset: 3px; transform: translateY(-5px); }
+.card-detail-button, .card-zoom { padding: 7px 8px; margin: 0; font-size: 12px; font-family: 'Yu Gothic', sans-serif; }
+.selected-cards { flex: 0 1 auto; max-width: 52%; overflow-x: auto; justify-content: flex-start; padding: 12px 8px; }
+.selected-cards .card { width: 200px; flex: 0 0 200px; max-width: 200px; display: grid; gap: 8px; }
+.selected-cards .card.selected { outline: none; transform: none; }
+.selected-cards .card.selected:after { content: none; }
+.selected-cards .card + .card:before { content: none; }
+.selection-stage { min-height: 170px; }
+#card-detail { width: min(94vw, 620px); max-height: 94dvh; overflow-y: auto; }
+#card-detail-image { width: min(100%, 430px); height: auto; object-fit: contain; margin: 0 auto; }
+#card-detail-text { line-height: 1.8; font-size: 16px; }
+.card-play { position: fixed; z-index: 20; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.card-play-art { display: flex; justify-content: center; gap: 10px; max-width: 90vw; }
+.card-play-art img { width: min(190px, 24vw); height: auto; aspect-ratio: 3 / 4; object-fit: contain; border-radius: 8px; box-shadow: 0 0 0 2px #f7d69c, 0 16px 70px #17223b99; }
+.card-play-caption { max-width: 90vw; padding: 10px 20px; border-radius: 8px; background: #19243cf2; color: #fff2cc; box-shadow: 0 3px 22px #0004; overflow-wrap: anywhere; }
+.card-play.playing { animation: shinpu-card-play 1.2s ease-out both; }
+@keyframes shinpu-card-play { 0% { opacity: 0; transform: translateY(45px) scale(.8); } 20%, 75% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-25px) scale(1.04); } }
+@media (max-width: 950px) {
+  .board { grid-template-columns: minmax(0, 1fr); }
+  .hand-card { flex: 0 0 164px; }
+  .selected-cards .card { width: 180px; flex-basis: 180px; }
+}
+@media (max-width: 560px) {
+  header { gap: 8px; padding: 10px; flex-wrap: wrap; }
+  .brand { font-size: 17px; }
+  header nav { width: 100%; justify-content: flex-end; }
+  header nav button { padding: 7px 10px; }
+  .hand-card { flex-basis: 156px; }
+  .selection-stage { flex-wrap: wrap; gap: 12px; }
+  .selected-cards { max-width: 100%; flex-basis: 100%; justify-content: flex-start; }
+  .selected-cards .card { width: 190px; flex-basis: 190px; margin: 0 auto; }
+  .calculation { min-width: 0; flex: 1 1 180px; max-width: 100%; }
+  .target-preview { min-width: 60px; }
+  .card-play-art img { width: min(165px, 26vw); }
+  .card-play-art img:only-child { width: 180px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-play.playing { animation: none; }
+  .hand-card .card, .hand-card .card:hover:not(:disabled), .hand-card .card.selected { transition: none; transform: none; }
+}

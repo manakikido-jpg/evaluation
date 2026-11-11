@@ -9,6 +9,7 @@ let view = null,
   target = 1,
   busy = false,
   stopped = false;
+let lastPlayedAttack = '', playTimer;
 let choiceSelected = [], useTarget = 0, secondTarget = -1, chosenElement = '火', optionalPay = false;
 const ART = JSON.parse(document.body.dataset.art || '{}');
 const FULL_ART = JSON.parse(document.body.dataset.artFull || '{}');
@@ -80,7 +81,16 @@ function apply(data) {
     $('waiting-seats').textContent = data.seats.map((p) => p.name).join(' / ') + `（${data.seats.length} / ${data.capacity}人）`;
     $('invite').value = location.origin + location.pathname + '?room=' + data.roomId;
     $('start').hidden = !data.owner;
-  } else if (changed) render();
+  } else if (changed) {
+    render();
+    if (state.phase === 'defense' && state.pending) {
+      const p = state.pending, key = `${data.roomId}:${state.turns}:${p.from}:${p.to}:${p.cards.map(c => c.uid).join(',')}`;
+      if (key !== lastPlayedAttack) {
+        lastPlayedAttack = key;
+        showPlayedCards(p.cards, `${state.players[p.from].name}の攻撃`);
+      }
+    }
+  }
 }
 async function refresh() {
   if (busy || stopped) return;
@@ -104,6 +114,7 @@ async function refresh() {
 }
 async function send(body) {
   if (busy || stopped) return;
+  const played = body.operation === 'move' ? (state?.players[myIndex]?.hand || []).filter(c => (body.ids || []).includes(c.uid)) : [];
   busy = true;
   for (const b of document.querySelectorAll('button')) b.disabled = true;
   try {
@@ -117,7 +128,10 @@ async function send(body) {
       $('game').hidden = true;
       $('waiting').hidden = true;
       $('lobby').hidden = false;
-    } else apply(data);
+    } else {
+      apply(data);
+      if (played.length && ['use', 'defend'].includes(body.action)) showPlayedCards(played, body.action === 'defend' ? '防御の札' : '札を使用');
+    }
   } catch (e) {
     toast(e.message);
   } finally {
@@ -291,6 +305,7 @@ function render() {
       ? '通常攻撃は1枚まで。＋付きは追加できます。条件付き効果の最終値はサーバーで決まります。'
       : '相手の返事を待っています。CPUは自動で行動します。';
   $('hand-title').textContent = `あなたの神器　${me.hand.length}枚 / 10枚`;
+  const handScroll = $('hand').scrollLeft;
   $('hand').replaceChildren();
   renderCardOptions(a);
   renderChoice();
@@ -300,6 +315,7 @@ function render() {
     b.setAttribute('aria-label', `${cardName(c)}、${label[c.type]} ${c.power}、MP ${c.cost}。${c.text}`);
     b.disabled = !(humanAction() || humanDefense()) || (humanDefense() && c.type !== 'guard');
     b.dataset.element = c.element;
+    b.dataset.cardUid = c.uid;
     b.append(...cardContent(c));
     b.addEventListener('click', () => {
       if (selected.includes(c.uid)) selected = selected.filter((id) => id !== c.uid);
@@ -318,9 +334,16 @@ function render() {
       }
       toast('');
       render();
+      document.querySelector(`#hand [data-card-uid="${c.uid}"]`)?.focus({preventScroll:true});
     });
-    $('hand').append(b);
+    const item = el('div', 'hand-card'), detail = el('button', 'card-detail-button', '拡大・効果');
+    detail.type = 'button';
+    detail.setAttribute('aria-label', cardName(c) + 'を拡大して効果を見る');
+    detail.addEventListener('click', () => openCardDetail(c));
+    item.append(b, detail);
+    $('hand').append(item);
   });
+  $('hand').scrollLeft = handScroll;
   renderSummon();
   updateExchange();
   for (const id of ['log', 'history-log']) {
@@ -404,18 +427,24 @@ function metric(title, value, cls) {
   e.append(el('span', '', title), el('strong', '', value));
   return e;
 }
-function cardContent(c) {
+/** 完成したカードの枠・文字・絵を切らずに見せる。 */
+function cardContent(c, full = false) {
   const image = el('img', 'card-art');
-  image.src = ART[c.id] || '';
+  image.src = (full ? FULL_ART[c.id] : ART[c.id]) || ART[c.id] || '';
   image.alt = '';
-  image.width = 360;
-  image.height = 480;
+  image.width = full ? 900 : 360;
+  image.height = full ? 1200 : 480;
   image.loading = 'eager';
-  const power = el('div', 'cardpower');
-  power.append(el('span', '', `${label[c.type]} `), el('strong', '', (c.stackable === true ? '+' : '') + c.power));
-  if (c.cost) power.append(el('small', '', ` / MP ${c.cost}`));
-  return [el('div', 'cardtitle', cardName(c)), image, power, el('div', 'carddesc', c.text)];
+  return [image, el('span', 'sr-only', `${cardName(c)}。${label[c.type]} ${c.power}。MP ${c.cost}。${c.text}`)];
 }
+function openCardDetail(c) {
+  $('card-detail-title').textContent = cardName(c);
+  $('card-detail-image').src = FULL_ART[c.id] || ART[c.id];
+  $('card-detail-image').alt = c.name + 'のカード全体';
+  $('card-detail-text').textContent = `${label[c.type]} ${c.stackable ? '+' : ''}${c.power} ／ MP ${c.cost} ／ ${c.element}属性。${c.text}`;
+  if (!$('card-detail').open) $('card-detail').showModal();
+}
+
 function renderCardOptions(a) {
   const active = humanAction() || humanDefense();
   const healing = active && a.length === 1 && ['heal_small', 'heal_medium', 'heal_large', 'great_heal_cleanse', 'cleanse'].includes(a[0].effect);
@@ -473,16 +502,11 @@ $('optional-pay').addEventListener('change', e => { optionalPay=e.target.checked
 function card(c, interactive) {
   const e = el(interactive ? 'button' : 'article', 'card ' + c.type + (selected.includes(c.uid) ? ' selected' : ''));
   e.dataset.element = c.element;
-  e.append(...cardContent(c));
+  e.setAttribute('aria-label', cardName(c));
+  e.append(...cardContent(c, true));
   if (!interactive) {
-    const zoom=el('button','card-zoom','大きく見る');zoom.type='button';
-    zoom.addEventListener('click',()=>{
-      $('card-detail-title').textContent=cardName(c);
-      $('card-detail-image').src=FULL_ART[c.id] || ART[c.id];
-      $('card-detail-image').alt=c.name+'のカード';
-      $('card-detail-text').textContent=c.text;
-      $('card-detail').showModal();
-    });
+    const zoom=el('button','card-zoom','拡大・効果');zoom.type='button';
+    zoom.addEventListener('click', () => openCardDetail(c));
     e.append(zoom);
   }
   return e;
@@ -536,4 +560,20 @@ function renderSummon() {
   panel.classList.remove('appearing');
   void panel.offsetWidth;
   panel.classList.add('appearing');
+}
+
+/** サーバーが受理した札だけを場へ出す。演出は操作や計算を止めない。 */
+function showPlayedCards(cards, caption) {
+  if (!cards.length) return;
+  clearTimeout(playTimer);
+  const panel = $('card-play'), art = el('div', 'card-play-art');
+  for (const c of cards.slice(0, 3)) {
+    const img = el('img');
+    img.src = FULL_ART[c.id] || ART[c.id]; img.alt = c.name;
+    img.width = 900; img.height = 1200; art.append(img);
+  }
+  panel.replaceChildren(el('strong', 'card-play-caption', caption + (cards.length > 3 ? `・${cards.length}枚` : '')), art);
+  panel.hidden = false;
+  panel.classList.remove('playing'); void panel.offsetWidth; panel.classList.add('playing');
+  playTimer = setTimeout(() => { panel.hidden = true; panel.replaceChildren(); }, 1200);
 }

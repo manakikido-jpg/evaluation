@@ -92,12 +92,13 @@ export function ShinpuTestPage({ csrf, name }: { csrf: string; name: string }) {
             </section>
             <section class="handarea">
               <div class="handheading">
-                <span id="hand-title">あなたの神器</span><span class="small">札を押して選択・もう一度押すと解除</span>
+                <span id="hand-title">あなたの神器</span><span class="small">札を押して選択・「拡大・効果」で詳しく見る</span>
               </div>
               <div class="hand" id="hand" aria-label="あなたの手札"></div>
             </section>
           </div>
         </main>
+        <div id="card-play" class="card-play" role="status" aria-live="polite" hidden></div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
         <footer>
           神符合戦・運営テスト · 運営同士＋CPU / テスト専用<br />対戦内の「霊銭」はサーバーの銭と別です。本番の残高には影響しません。
