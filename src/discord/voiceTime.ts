@@ -20,7 +20,7 @@ export function voiceTimeView(name: string, s: Awaited<ReturnType<typeof memberV
         line('全期間', s.all),
         '',
         `🏮 **氏子の条件に数える縁側の時間**: ${walletDuration(s.evaluation)} / ${walletDuration(UJIKO_MINUTES)}${left > 0 ? `（あと ${walletDuration(left)}）` : '（達成）'}`,
-        '-# 浮上時間は通話にいた時間（AFK はのぞく・ミュート中もふくむ）。日付は日本時間。🌙 宵縁側は縁側に入りません。',
+        '-# 浮上時間は、奥の院（AFK）以外の通話にいた時間です。1 人だけの時間・ミュートやスピーカーミュートの時間もふくみます（通話の銭がもらえる時間とはちがいます。そちらは /残高 の「報酬対象の時間」）。日付は日本時間。🌙 宵縁側は縁側に入りません。',
         '-# 氏子の条件の時間は、ミュート中を数えず、過去分をふくみます（社務所Web の評価と同じ数え方）。',
       ].join('\n'),
       color: 0xd4a017,
